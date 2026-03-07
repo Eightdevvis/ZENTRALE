@@ -1,0 +1,15 @@
+[Unit]
+Description=ZENTRALE Core Service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/zentrale
+ExecStart=/opt/zentrale/.venv/bin/python /opt/zentrale/core/main.py
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

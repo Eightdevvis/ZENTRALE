@@ -1,0 +1,137 @@
+ZENTRALE
+========
+
+Event-getriebene Zentrale für einen Wand-Monitor auf Raspberry Pi.
+
+Ziel: Sensor-/Zeit-Inputs sammeln, als Events verarbeiten, passende Aktionen ausführen (Display, Sound, Mechanik, weitere Funktionen).
+
+Aktueller Scope (V1): Morning-Wakeup-Flow (Uhrzeit erkannt -> System reagiert -> Welcome-Output).
+
+
+Projektstruktur
+---------------
+
+```
+ZENTRALE/
+├── core/
+│   ├── __init__.py
+│   ├── main.py          # Event-Loop / Polling / Dispatch
+│   ├── clock.py         # Uhrzeit-Trigger
+│   ├── events.py        # Event-Konstanten
+│   ├── brain.py         # Event -> neue Events
+│   ├── actions.py       # Event -> Aktion
+│   └── sensors.py       # Eingänge (derzeit simuliert per Tastatur)
+├── deploy/
+│   └── zentrale.service # systemd Service-Template für Pi
+└── scripts/
+	└── deploy_pi.sh     # Schnell-Deploy per rsync + systemd
+```
+
+
+Quick Deployment auf Raspberry Pi (jetzt)
+----------------------------------------
+
+### 1) Auf dem Pi vorbereiten
+
+```bash
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip rsync
+```
+
+### 2) Einmalig Projekt deployen
+
+Auf deinem PC im Projektordner:
+
+```bash
+chmod +x scripts/deploy_pi.sh
+./scripts/deploy_pi.sh <pi-user>@<pi-host> /opt/zentrale
+```
+
+Beispiel:
+
+```bash
+./scripts/deploy_pi.sh pi@192.168.1.44 /opt/zentrale
+```
+
+Das Script macht:
+1. Sync von Projektdateien auf den Pi
+2. Erstellen/Update einer Python venv
+3. Installieren von Python-Paketen (falls `requirements.txt` existiert)
+4. Installieren + Aktivieren von `systemd` Service
+5. Starten des Dienstes
+
+### 3) Logs prüfen
+
+```bash
+ssh <pi-user>@<pi-host> "sudo journalctl -u zentrale.service -f"
+```
+
+
+Autostart + "OS verstecken" (Kiosk)
+-------------------------------------
+
+Für "ich will Linux nicht sehen" gibt es zwei Ebenen:
+
+1. **Headless Core Service** (bereits mit `systemd`): startet immer im Hintergrund.
+2. **Fullscreen UI/Kiosk Layer**: startet beim Login direkt fullscreen (z. B. Chromium Kiosk oder eigene GUI).
+
+Empfohlene Reihenfolge:
+- Erst Core stabil als Service betreiben.
+- Danach UI als separaten Prozess im Kiosk-Modus starten.
+
+
+Workflow für die Zukunft (PC oder Pi?)
+--------------------------------------
+
+### Empfohlen: **Edit auf PC, Run auf Pi**
+
+**Warum:**
+- Schnellere Entwicklung (Editor, Git, Testing)
+- Pi bleibt stabile Laufzeit-Umgebung
+- Reproduzierbares Deployment per Script
+
+**Standard-Flow:**
+1. Lokal auf PC entwickeln
+2. Lokal kurz testen (`python3 core/main.py`)
+3. Mit `scripts/deploy_pi.sh` deployen
+4. Pi-Logs prüfen (`journalctl`)
+
+### Alternative: Direkt auf Pi editieren
+
+Nur für Hotfixes sinnvoll. Risiko: Drift zwischen Pi und Git-Repo.
+
+
+Interface-Plan (nächster Schritt)
+---------------------------------
+
+Core ist bereits event-driven. Für ein sichtbares Interface auf dem Monitor:
+
+1. **UI Adapter einführen** (separate Schicht, z. B. `interface/`)
+2. Actions senden nicht nur `print`, sondern UI-Kommandos
+3. Kiosk-Start konfigurieren (autostart)
+
+Minimaler MVP für Interface:
+- Fullscreen Welcome-Screen
+- Uhrzeit + Statuszeile
+- Event-basierte Text-/Icon-Updates
+
+
+Graph-Software einbetten (nächster Schritt danach)
+---------------------------------------------------
+
+Wenn mit "graph" Visualisierung/Charts gemeint ist, starte pragmatisch mit:
+
+- **Option A (einfach):** Plotly in lokaler Web-UI
+- **Option B (live metrics):** Grafana + InfluxDB/Prometheus (mehr Setup)
+
+Empfohlener MVP:
+1. Event- und Sensorwerte in JSON/CSV loggen
+2. Kleine lokale Webansicht mit einem Live-Graph
+3. Graph in derselben Fullscreen UI anzeigen
+
+
+Hinweise zum aktuellen Code
+---------------------------
+
+- `clock.check_time()` blockiert aktuell bis zur Zielzeit; für produktive Event-Loops sollte das non-blocking werden.
+- `sensors.py` nutzt Tastatur als Simulation, ideal für Entwicklung, später gegen echte Sensor-Adapter austauschen.
