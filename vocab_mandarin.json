@@ -1,0 +1,17 @@
+[
+	{
+		"word": "你好",
+		"correct_use": 0,
+		"confirmed": false
+	},
+	{
+		"word": "谢谢",
+		"correct_use": 0,
+		"confirmed": false
+	},
+	{
+		"word": "再见",
+		"correct_use": 0,
+		"confirmed": false
+	}
+]

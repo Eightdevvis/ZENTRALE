@@ -1,0 +1,173 @@
+Zeile 1: #!/usr/bin/env bash
+Shebang: sagt dem System, dass das Skript mit bash ausgeführt werden soll.
+
+Zeile 2: set -euo pipefail
+Strenger Modus:
+
+-e: bei Fehler sofort abbrechen
+-u: Fehler bei nicht gesetzten Variablen
+pipefail: Pipeline gilt als fehlgeschlagen, wenn ein Teil fehlschlägt
+Zeile 4: if [[ $# -lt 2 ]]; then
+Prüft, ob weniger als 2 Argumente übergeben wurden.
+
+Zeile 5: echo "Usage: $0 <pi-user@pi-host> <remote-dir>"
+Zeigt die allgemeine Aufrufsyntax an ($0 = Skriptname).
+
+Zeile 6: echo "Example: $0 pi@192.168.1.44 /opt/zentrale"
+Zeigt ein konkretes Beispiel.
+
+Zeile 7: exit 1
+Bricht mit Fehlercode 1 ab (ungültiger Aufruf).
+
+Zeile 8: fi
+Ende des if-Blocks.
+
+Zeile 10: TARGET="$1"
+Erstes Argument wird in TARGET gespeichert (z. B. pi@192.168.1.44).
+
+Zeile 11: REMOTE_DIR="$2"
+Zweites Argument wird in REMOTE_DIR gespeichert (z. B. /opt/zentrale).
+
+Zeile 12: SERVICE_NAME="zentrale.service"
+Name des systemd-Dienstes.
+
+Zeile 14: SCRIPT_DIR=...
+Ermittelt den Ordner, in dem das Skript selbst liegt.
+
+Zeile 15: PROJECT_ROOT=...
+Geht eine Ebene hoch zum Projekt-Root.
+
+Zeile 17: echo "[1/6] Sync project to $TARGET:$REMOTE_DIR"
+Statusausgabe Schritt 1.
+
+Zeile 18: rsync -az --delete \op
+Startet Dateisync:
+
+-a: Archivmodus (rekursiv + Rechte/Zeitstempel)
+-z: Kompression beim Transfer
+--delete: löscht auf Ziel Dateien, die lokal nicht mehr existieren
+Zeilen 19–21: --exclude ...
+Schließt __pycache__, .git, .venv vom Upload aus.
+
+Zeile 22: "$PROJECT_ROOT/" "$TARGET:$REMOTE_DIR/"
+Quelle = lokales Projekt, Ziel = Ordner auf dem Pi.
+
+Zeile 24: echo "[2/6] Ensure Python venv exists"
+Statusausgabe Schritt 2.
+
+Zeile 25: ssh "$TARGET" "python3 -m venv '$REMOTE_DIR/.venv'"
+Erstellt auf dem Pi eine virtuelle Umgebung im Zielordner.
+
+Zeile 27: echo "[3/6] Upgrade pip"
+Statusausgabe Schritt 3.
+
+Zeile 28: ssh "$TARGET" "'$REMOTE_DIR/.venv/bin/pip' install --upgrade pip"
+Updatet pip in der venv auf dem Pi.
+
+Zeile 30: echo "[4/6] Install requirements if present"
+Statusausgabe Schritt 4.
+
+Zeile 31: ssh "$TARGET" "if [[ -f ... ]]; then ...; fi"
+Installiert nur dann requirements.txt, wenn die Datei existiert.
+
+Zeile 33: echo "[5/6] Install/refresh systemd service"
+Statusausgabe Schritt 5.
+
+Zeile 34: ssh "$TARGET" "true"
+No-op (macht nichts). Effektiv nur ein Connectivity-Check per SSH.
+
+Zeile 36: Kommentar
+Erklärt: Service-User wird dynamisch aus user@host abgeleitet.
+
+Zeile 37: SERVICE_USER="${TARGET%@*}"
+Nimmt alles vor @, z. B. aus pi@192.168.1.44 wird pi.
+
+Zeile 38: TMP_SERVICE="$(mktemp)"
+Erstellt eine temporäre Datei lokal.
+
+Zeile 39: sed "s|^User=.*$|User=$SERVICE_USER|" ... > "$TMP_SERVICE"
+Ersetzt in der Service-Datei die User=-Zeile durch den Ziel-User.
+
+Zeile 41: scp "$TMP_SERVICE" "$TARGET:/tmp/$SERVICE_NAME"
+Kopiert die temporäre Service-Datei auf den Pi nach tmp.
+
+Zeile 42: rm -f "$TMP_SERVICE"
+Löscht die temporäre lokale Datei.
+
+Zeile 44: ssh "$TARGET" "sudo mv ..."
+Verschiebt Service-Datei auf dem Pi nach system.
+
+Zeile 45: ssh "$TARGET" "sudo systemctl daemon-reload"
+Lädt systemd-Konfiguration neu.
+
+Zeile 46: ssh "$TARGET" "sudo systemctl enable '$SERVICE_NAME'"
+Aktiviert Autostart beim Booten.
+
+Zeile 48: echo "[6/6] Restart service + status"
+Statusausgabe Schritt 6.
+
+Zeile 49: ssh "$TARGET" "sudo systemctl restart '$SERVICE_NAME'"
+Startet/neu startet den Dienst sofort.
+
+Zeile 50: ssh "$TARGET" "sudo systemctl --no-pager --full status '$SERVICE_NAME' || true"
+Zeigt Service-Status komplett an; || true verhindert Abbruch, falls Status fehlschlägt.
+
+Zeile 52: echo "Deploy complete. Tail logs with:"
+Abschlusshinweis.
+
+Zeile 53: echo "ssh $TARGET \"sudo journalctl -u $SERVICE_NAME -f\""
+Gibt den fertigen Log-Befehl aus, um live mitzulesen.
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -lt 2 ]]; then
+  echo "Usage: $0 <pi-user@pi-host> <remote-dir>"
+  echo "Example: $0 pi@192.168.1.44 /opt/zentrale"
+  exit 1
+fi
+
+TARGET="$1"
+REMOTE_DIR="$2"
+SERVICE_NAME="zentrale.service"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+echo "[1/6] Sync project to $TARGET:$REMOTE_DIR"
+rsync -az --delete \
+  --exclude '__pycache__' \
+  --exclude '.git' \
+  --exclude '.venv' \
+  "$PROJECT_ROOT/" "$TARGET:$REMOTE_DIR/"
+
+echo "[2/6] Ensure Python venv exists"
+ssh "$TARGET" "python3 -m venv '$REMOTE_DIR/.venv'"
+
+echo "[3/6] Upgrade pip"
+ssh "$TARGET" "'$REMOTE_DIR/.venv/bin/pip' install --upgrade pip"
+
+echo "[4/6] Install requirements if present"
+ssh "$TARGET" "if [[ -f '$REMOTE_DIR/requirements.txt' ]]; then '$REMOTE_DIR/.venv/bin/pip' install -r '$REMOTE_DIR/requirements.txt'; fi"
+
+echo "[5/6] Install/refresh systemd service"
+ssh "$TARGET" "true"
+
+# Set service user dynamically from target prefix (user@host -> user)
+SERVICE_USER="${TARGET%@*}"
+TMP_SERVICE="$(mktemp)"
+sed "s|^User=.*$|User=$SERVICE_USER|" "$PROJECT_ROOT/deploy/$SERVICE_NAME" > "$TMP_SERVICE"
+
+scp "$TMP_SERVICE" "$TARGET:/tmp/$SERVICE_NAME"
+rm -f "$TMP_SERVICE"
+
+ssh "$TARGET" "sudo mv '/tmp/$SERVICE_NAME' '/etc/systemd/system/$SERVICE_NAME'"
+ssh "$TARGET" "sudo systemctl daemon-reload"
+ssh "$TARGET" "sudo systemctl enable '$SERVICE_NAME'"
+
+echo "[6/6] Restart service + status"
+ssh "$TARGET" "sudo systemctl restart '$SERVICE_NAME'"
+ssh "$TARGET" "sudo systemctl --no-pager --full status '$SERVICE_NAME' || true"
+
+echo "Deploy complete. Tail logs with:"
+echo "ssh $TARGET \"sudo journalctl -u $SERVICE_NAME -f\""

@@ -1,12 +1,24 @@
 # core/sensors.py
 
-import keyboard  # pip3 install keyboard
+try:
+    import keyboard  # pip3 install keyboard
+except Exception:
+    keyboard = None
+
+
+def _is_pressed(key):
+    if keyboard is None:
+        return False
+    try:
+        return keyboard.is_pressed(key)
+    except Exception:
+        return False
 
 def read_button():
     """
     Taste 'b' simuliert Button Press
     """
-    if keyboard.is_pressed('b'):
+    if _is_pressed('b'):
         return True
     return False
 
@@ -14,6 +26,6 @@ def read_light_sensor():
     """
     Taste 'l' simuliert Light Sensor Trigger
     """
-    if keyboard.is_pressed('l'):
+    if _is_pressed('l'):
         return True
     return False

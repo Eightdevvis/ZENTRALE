@@ -4,10 +4,10 @@ from brain import process_event
 from actions import handle_action
 from clock import check_time
 from sensors import read_light_sensor, read_button
-from events import TIME_REACHED, LIGHT_SENSOR_TRIGGER, BUTTON_PRESS
+from events import LIGHT_SENSOR_TRIGGER, BUTTON_PRESS, SYSTEM_BOOT
 
 def main():
-    event_queue = []
+    event_queue = [SYSTEM_BOOT]
 
     # Optional: initialer Start
     print("ZENTRALE SYSTEM STARTED")
@@ -22,7 +22,8 @@ def main():
         # 2️⃣ Clock prüfen (nur stündlich oder minütlich)
         # Für Test: jede Minute 07:00 simulieren
         now = check_time(7, 0)
-        event_queue.append(now)
+        if now:
+            event_queue.append(now)
 
         # 3️⃣ Event-Loop
         while event_queue:
