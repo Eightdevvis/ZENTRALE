@@ -29,3 +29,12 @@ def read_light_sensor():
     if _is_pressed('l'):
         return True
     return False
+
+def read_motion_sensor():
+    """
+    Taste 'm' simuliert Motion Sensor (Presence Detection).
+    Später: echter PIR-Sensor via GPIO (z.B. RPi.GPIO).
+    """
+    if _is_pressed('m'):
+        return True
+    return False

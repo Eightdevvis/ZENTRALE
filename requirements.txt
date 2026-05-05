@@ -1,1 +1,21 @@
+# ZENTRALE – Python-Abhängigkeiten
+# Installieren: venv/bin/pip install -r requirements.txt
+
+# Web-Framework (Dashboard + REST API)
+flask
+
+# Tastatur-Simulation (Sensor-Simulation ohne echte Hardware, braucht sudo)
 keyboard
+
+# Spracherkennung (STT) – faster-whisper läuft auf CPU ohne GPU
+faster-whisper
+
+# Text-to-Speech (TTS) – offline, chinesische Stimmen enthalten
+sherpa-onnx
+
+# Audio-Aufnahme und -Wiedergabe (für spätere Pi-Nutzung)
+sounddevice
+soundfile
+
+# HTTP-Client (für Whisper/TTS Services, falls nicht über stdlib)
+requests

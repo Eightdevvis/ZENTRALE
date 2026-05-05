@@ -1,0 +1,46 @@
+# REST API Endpoints
+
+Alle Endpoints werden von `ui/app.py` bedient. Streaming-Endpoints
+nutzen Server-Sent Events (SSE).
+
+## Dashboard / State
+
+| Endpoint              | Methode | Beschreibung                          |
+|-----------------------|---------|---------------------------------------|
+| `/`                   | GET     | Dashboard HTML                        |
+| `/api/state`          | GET     | Aktueller State (Events, Sensoren, Vokabel, Logs) – wird vom Frontend jede Sekunde gepollt |
+
+## Data Collection
+
+| Endpoint              | Methode | Beschreibung                          |
+|-----------------------|---------|---------------------------------------|
+| `/api/categories`     | GET     | Verfügbare Kategorien                 |
+| `/api/data/<id>`      | GET     | Geloggte Einträge einer Kategorie     |
+| `/api/log`            | POST    | Neuen Eintrag speichern               |
+
+## Chat
+
+| Endpoint              | Methode | Beschreibung                          |
+|-----------------------|---------|---------------------------------------|
+| `/api/chat`           | POST    | Chat-Nachricht senden (SSE-Stream)    |
+| `/api/chat/history`   | GET     | Chat-History                          |
+| `/api/chat/clear`     | POST    | Chat-History leeren                   |
+
+## KI-Memory
+
+| Endpoint              | Methode | Beschreibung                          |
+|-----------------------|---------|---------------------------------------|
+| `/api/memory`         | GET     | KI-Memory-Einträge auflisten          |
+| `/api/memory/<id>`    | DELETE  | Memory-Eintrag löschen                |
+| `/api/ai/status`      | GET     | Ollama-Verfügbarkeit                  |
+
+## Tutor
+
+| Endpoint                     | Methode | Beschreibung                          |
+|------------------------------|---------|---------------------------------------|
+| `/api/tutor/status`          | GET     | Session-Status + Audio-Service-Status |
+| `/api/tutor/start`           | POST    | Session starten, KI-Begrüßung streamen (SSE) |
+| `/api/tutor/respond`         | POST    | User-Text → KI-Antwort (SSE)          |
+| `/api/tutor/transcribe`      | POST    | Audio-Datei → Text (Whisper)          |
+| `/api/tutor/speak`           | POST    | Text → WAV-Audio (TTS)                |
+| `/api/tutor/stop`            | POST    | Session beenden                       |

@@ -1,0 +1,20 @@
+# ZENTRALE Auto-Pull
+# ------------------------------------------------------------------
+# Prueft alle 5 Minuten ob im Remote-Repo eine neue RELEASE-Nummer
+# steht. Wenn ja: pullt, ggf. pip install, Service-Neustart. Wenn
+# nein: tut gar nichts.
+#
+# AKTIVIEREN (auf dem Pi, als der User der den Service betreiben soll):
+#   crontab /opt/zentrale/deploy/zentrale-autopull.cron
+#
+# ANSCHAUEN:
+#   crontab -l
+#
+# DEAKTIVIEREN:
+#   crontab -r
+#
+# DEBUG (jeden Tick loggen statt nur Aktionen):
+#   AUTOPULL_VERBOSE=1 vor dem Cron-Befehl setzen.
+# ------------------------------------------------------------------
+
+*/5 * * * * /opt/zentrale/scripts/pi_autopull.sh
