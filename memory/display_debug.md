@@ -1,102 +1,106 @@
 # Display-Debug (Pi-Kiosk Bildschirm schwarz)
 
-Status: **Root Cause gefunden 2026-05-12** — der HDMI-Tunnel war eine
-Sackgasse, der echte Bug saß im XFCE-Session-Start. Diese Datei
-dokumentiert Symptom, Befund, Fix und das dabei entstandene
-Diagnose-Tooling.
+**Status: GELOEST am 2026-05-12.** Echte Ursache war ein vc4-KMS-Bug
+auf Pi 3 B + diesem Monitor, NICHT die xfce4-Session-Geschichte aus
+dem ersten Anlauf. Fix dokumentiert unten — diese Datei in dieser
+Reihenfolge lesen, sonst geht man wieder in die Sackgassen die wir
+schon abgelaufen haben.
+
+## Der echte Fix
+
+`/boot/firmware/config.txt`:
+
+```diff
+- dtoverlay=vc4-kms-v3d
++ dtoverlay=vc4-fkms-v3d
+```
+
+Backup vorher: `cp /boot/firmware/config.txt /boot/firmware/config.txt.bak-kms`.
+
+`fkms` = „fake KMS" — andere Pipeline auf Pi 3 B, gibt das Framebuffer-
+Setup an die Firmware/VideoCore zurueck statt den vollen KMS-Stack
+durch den vc4-Treiber zu fahren. Auf Pi 4/5 ist Full-KMS Default,
+auf Pi 3 B mit Bookworm hat es bei dieser Monitor-Kombination dazu
+gefuehrt dass X einen Frame in den Framebuffer rendert (Screenshot
+zeigt vollen Desktop), aber der vc4-HDMI-Encoder am Output diesen
+Frame nicht an den Monitor weitergibt — schwarzer Frame mit
+korrektem Sync, Backlight bleibt an. **Nach `fkms`-Wechsel und
+Reboot kommt das Bild direkt sauber raus.**
 
 ## Symptom
 
-Pi 3 B (Bookworm, KMS/vc4) zeigte:
+Pi 3 B (Bookworm, vc4-kms-v3d) zeigte:
 
 - Boot: kurzer Vollbild-Farbverlauf (KMS-Modeset, 1920x1080) ✓
 - Konsole im `multi-user.target` ✓
-- Sobald `lightdm` / X startet → **Monitor schwarz** (Backlight an)
-- Nach `systemctl stop lightdm` → **bleibt schwarz**, erst Reboot
+- Sobald lightdm/X startet → **Monitor schwarz** (Backlight an,
+  Sync valid, „aktives schwarzes Signal" — kein „No Signal"
+  und kein „Out of Range")
+- Nach `systemctl stop lightdm` → bleibt schwarz, erst Reboot
   setzt KMS-Konsole zurueck
+- `scrot` vom Display :0 zeigt **vollen XFCE-Desktop bzw. Kiosk** —
+  X rendert korrekt, der Bruch sitzt zwischen Framebuffer und
+  HDMI-Encoder
 
-## Root Cause
+## Wie diagnostiziert
 
-**`xfce4-session` startet auf dem Pi unvollstaendig**: weder `xfwm4`
-(Window Manager) noch `xfdesktop` (Desktop-Renderer) werden
-automatisch hochgezogen. Ohne WM und ohne Desktop-Renderer malt
-keine App auf das Root-Window — X gibt deshalb einen schwarzen
-Frame raus, der HDMI-Encoder schickt ihn brav an den Monitor.
+Schluessel-Erkenntnis war: **Screenshot per `scrot -d :0` zeigt was
+X intern gerendert hat, unabhaengig vom HDMI-Output.** Wenn der
+Screenshot was Sinnvolles zeigt aber der Monitor schwarz ist, ist
+es zu 100 % eine Output-Layer-Sache (vc4/fkms/EDID/Pixel-Format)
+und keine X-/WM-/Session-Geschichte.
 
-Indizien:
+Ausgeschlossene Theorien (alle in mehreren Sessions getestet,
+NICHT erneut angehen):
 
-- `pgrep -af xfce` zeigt nur `xfce4-session` + `xfce4-panel`,
-  **kein** `xfwm4`, **kein** `xfdesktop`
-- `~/.xsession-errors`:
-  - `/usr/bin/startxfce4: X server already running on display :0`
-  - `Failed to fetch _NET_NUMBER_OF_DESKTOPS; assuming 1`
-  - `Failed to get _NET_WORKAREA; using full screen dimensions`
-  - `Failed to fetch _NET_CURRENT_DESKTOP; assuming 0`
-  (die `_NET_*` werden vom WM gesetzt — fehlen weil xfwm4 nicht läuft)
-- System-`/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml`
-  hat die Failsafe-Komponenten (xfwm4, xfsettingsd, xfce4-panel,
-  Thunar, xfdesktop) korrekt drin — aber xfce4-session greift sie
-  beim Auto-Login nicht
-- `~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml`
-  fehlt (User-Session-Konfig nicht angelegt)
-- `~/.cache/sessions/` ist leer (keine gespeicherte Session, die wir
-  loeschen muessten)
+- light-locker, DPMS, Screensaver
+- xfwm4-Compositor an/aus
+- 1024x768@99.97 Hz Mode-Issue (Mode-Switch zu 1280x720@60 oder
+  1920x1080@60 aenderte am Monitor-Output nichts)
+- Broadcast RGB Auto/Full/Limited
+- xrandr-Force fuer beliebige Modes
+- Pixel-Clock / Refresh-Rate-Hypothesen
+- xorg.conf.d Force-Mode
+- xfce4-session ohne xfwm4/xfdesktop (war zwischenzeitlich auch
+  ein Bug, autostart-Files gefixt — aber das war nicht die
+  Ursache des schwarzen Monitors, X rendert auch ohne WM was
+  Sinnvolles in den Framebuffer)
+- Strom/Throttling (`vcgencmd get_throttled = 0x0`)
+- HDMI-Kabel, Monitor, Adapter (mehrere getestet)
 
-Beweis dass HDMI nicht das Problem ist:
+## Komplette Workflow zum Reproduzieren des Setups
 
-- **Xvfb-Test**: Firefox-ESR + ZENTRALE-Dashboard rendern auf Pi 3B
-  bei 1920x1080 korrekt (Screenshot via scrot bestaetigt)
-- **X-Display-Screenshot bei laufendem lightdm**: komplett schwarz
-- **Nach manuellem `xfwm4 --replace && xfdesktop`**: voller
-  XFCE-Desktop sichtbar (Applications-Menu, Panel, Icons, Maus-Logo)
-
-## Fix
-
-`scripts/install_xfce_autostart.sh` legt zwei
-XDG-Autostart-`.desktop`-Files in `~/.config/autostart/` an:
-
-- `xfwm4.desktop` — startet xfwm4 nach XFCE-Session-Start
-- `xfdesktop.desktop` — startet xfdesktop
-
-Damit umgehen wir die Frage warum xfce4-session die Failsafe-Defaults
-nicht selbst lädt; autostart-Files greifen unabhängig davon.
-
-Anwenden:
+Auf einem frischen Pi 3 B mit Bookworm + ZENTRALE deployed:
 
 ```bash
-# auf dem Pi, als sasha (NICHT root):
+# 1. config.txt auf fkms umstellen
+sudo cp /boot/firmware/config.txt /boot/firmware/config.txt.bak-kms
+sudo sed -i 's/^dtoverlay=vc4-kms-v3d/dtoverlay=vc4-fkms-v3d/' \
+    /boot/firmware/config.txt
+
+# 2. XFCE-Autostart-Files (xfwm4 + xfdesktop) wegen unrelated
+#    session-Bug auch noch noetig
 cd /opt/zentrale && git pull
 bash scripts/install_xfce_autostart.sh
 
-# testen:
-sudo systemctl start lightdm
-# Monitor sollte XFCE-Desktop zeigen
-sudo systemctl stop lightdm
-
-# Wenn ok: Kiosk-Autostart reaktivieren
+# 3. Kiosk-Autostart aktivieren falls disabled
 mv ~/.config/autostart/zentrale.desktop.disabled \
-   ~/.config/autostart/zentrale.desktop
+   ~/.config/autostart/zentrale.desktop 2>/dev/null || true
+
+# 4. Boot ins X-Target setzen
+sudo systemctl enable lightdm
+sudo systemctl set-default graphical.target
+
+# 5. Reboot — Pi kommt mit Kiosk im Vollbild hoch
 sudo reboot
-# Beim Boot startet jetzt lightdm -> XFCE -> xfwm4 + xfdesktop
-# -> Firefox-Kiosk auf localhost:5000
 ```
 
-## Bekannte Folge-Probleme
-
-- **Dashboard-Layout zerquetscht auf 1920x1080**: das CSS rendert
-  nur in den linken ~1260px, rechts daneben ein schwarzer Streifen.
-  Vermutlich feste `max-width` ohne fluid responsive Skalierung.
-  Nicht kritisch — Kiosk wirkt nur wie ein hoehlerer Slot.
-  Siehe Task „Dashboard CSS für 1920x1080 fluid machen".
-
-## Diagnose-Tooling
-
-Beim Debugging entstanden, weiter nuetzlich falls am Pi was am
-Display-Stack umgebaut wird.
+## Diagnose-Tooling (bleibt nuetzlich)
 
 ### `scripts/display_debug.sh`
 
-Snapshot des Display-States in `~sasha/zentrale-display-debug.log`:
+Snapshot des kompletten Display-States in
+`~sasha/zentrale-display-debug.log`. Was rein geht:
 
 - systemd-Status lightdm/zentrale + Xorg-Prozessliste
 - DRM/KMS connector-State (sysfs: status, enabled, modes)
@@ -106,57 +110,64 @@ Snapshot des Display-States in `~sasha/zentrale-display-debug.log`:
 - dmesg-Tail (drm/hdmi/vc4)
 - Xorg.0.log Fehler/Warnungen
 
-Manueller Aufruf (jeder Label-String erlaubt):
+Aufruf manuell mit beliebigem Label:
 
 ```bash
-./scripts/display_debug.sh                  # Label "manual"
-./scripts/display_debug.sh vor_fix          # eigenes Label
+./scripts/display_debug.sh
+./scripts/display_debug.sh nach_aenderung_x
 ```
 
-Auto-Modus (`autostart` als erstes Argument) macht 3 Snapshots im
-Abstand T+0 / T+5s / T+15s — wird vom lightdm-Hook genutzt.
+Auto-Modus (`autostart`) macht 3 Snapshots T+0/T+5s/T+15s, wird
+vom lightdm-Hook genutzt.
 
 ### `scripts/install_display_debug.sh`
 
-Installiert den lightdm-Hook fuer den Auto-Modus. Einmalig auf dem
-Pi als root:
+Installiert den lightdm-Hook fuer den Auto-Modus.
+
+### `scripts/install_xfce_autostart.sh`
+
+Legt die XDG-autostart-Files fuer `xfwm4` und `xfdesktop` an —
+loest einen anderen Bug bei dem `xfce4-session` die Komponenten
+nicht automatisch hochzieht.
+
+### Schneller Diagnose-Workflow bei neuen Display-Problemen
+
+**Erste Frage: Screenshot vom Display :0** machen, BEVOR HDMI/KMS-
+Theorien aufgestellt werden:
 
 ```bash
-sudo bash /opt/zentrale/scripts/install_display_debug.sh
+sudo DISPLAY=:0 XAUTHORITY=/home/sasha/.Xauthority scrot -z /tmp/x.png
 ```
 
-Legt `/etc/lightdm/lightdm.conf.d/60-zentrale-display-debug.conf` an
-mit `display-setup-script=...display_debug.sh autostart`.
+- **Screenshot zeigt erwarteten Inhalt + Monitor schwarz**
+  → Output-Layer (vc4, HDMI, fkms vs kms, EDID). Fkms ausprobieren.
+- **Screenshot ist komplett schwarz + Monitor schwarz**
+  → X-/WM-/Session-Schicht. xfwm4 + xfdesktop checken (`pgrep`).
+- **Screenshot zeigt was Erwartet + Monitor zeigt es auch**
+  → kein Problem.
 
-Deinstallation:
-`sudo rm /etc/lightdm/lightdm.conf.d/60-zentrale-display-debug.conf`
+Das spart Stunden vs. „in Treiber-Theorien graben ohne Output-vs-
+Render-Trennung".
 
-### Render-Verifikation via Xvfb
+## Beobachtungen die wir VOR-Tunneling nicht ernst genommen haben
 
-Wenn man das Frontend isoliert vom HDMI testen will:
+Der User hatte zwei Beobachtungen, die spaeter exakt die Loesung
+bestaetigt haben — beim naechsten Mal ernster nehmen:
 
-```bash
-sudo apt install -y xvfb scrot
-Xvfb :99 -screen 0 1920x1080x24 &
-DISPLAY=:99 firefox-esr --kiosk http://localhost:5000 &
-sleep 20
-DISPLAY=:99 scrot -z ~/kiosk-test.png
-pkill firefox-esr; pkill Xvfb
-```
+1. „Falsche Aufloesung wuerde quetschen, nicht komplett schwarz machen."
+   Stimmt: out-of-range gibt OSD-Message oder „No Signal", nicht
+   schwarz mit valider Sync. → Mode-Theorie war damit eigentlich
+   schon entschaerft.
+2. „Monitor geht aus, dann an, dann schwarz" beim X-Start. Aus =
+   Mode-Switch (no-sync kurz), an = neuer Mode-Sync etabliert,
+   schwarz = aktiver schwarzer Frame. Genau der Output-Layer-Bug.
 
-PNG anschauen — wenn das Dashboard rendert, ist Frontend + Browser +
-Backend okay und das Problem sitzt im X-/Session-Stack.
+Verwandte Lehre: `[[feedback-debug-tunnel-vision]]` (Claude-Memory).
 
-## Lehren
+## Bekannte Folge-Probleme
 
-Die Fehlsuche hat ~einen Tag gefressen, weil zu lange in der
-HDMI/KMS/vc4-Richtung gegraben wurde, ohne die Grundannahme
-„X rendert irgendwas und der Encoder schickt es schwarz an den
-Monitor" zu verifizieren. Ein einzelner Screenshot von Display :0
-am Anfang haette die Richtung sofort umgelenkt.
-
-Faustregel fuer naechstes Mal: **bevor man tief in die Hardware-
-oder Treiber-Schicht graebt, einen Screenshot von dem was die
-Software rendert, an den Tisch legen.** Das ist 1 Befehl (`scrot`)
-und entscheidet zwischen „X-/UI-Schicht" vs. „Display-Output-
-Schicht" — zwei voellig verschiedene Bug-Klassen.
+- **Dashboard-Layout auf 1920x1080**: das CSS rendert nur in den
+  linken ~1260 px, rechts daneben schwarzer Streifen. Auf dem
+  echten Pi-Monitor (1024x768) faellt das nicht stark auf weil
+  da gerade fast passt. Auf einem 1920x1080-Monitor offensichtlich
+  hässlich. Task „Dashboard CSS für 1920x1080 fluid machen".
