@@ -61,3 +61,22 @@ WHISPER_URL=http://192.168.1.42:5050 sudo venv/bin/python core/main.py
 Egal. Die Services hängen lose über HTTP zusammen – wenn ZENTRALE einen
 Service nicht erreicht, loggt sie das im Terminal und versucht es beim
 nächsten Request erneut.
+
+## Auf dem Pi: alles via systemd
+
+Lokal sind es drei Terminals (s. oben). Auf dem Pi laufen die gleichen
+drei Prozesse als systemd-Units, die beim Boot automatisch starten:
+
+- `zentrale.service` — Core, normale Priorität.
+- `whisper.service` — Nice=19 + SCHED_IDLE, läuft nur wenn der Core
+  gerade nichts will (Modell-Load darf den Dashboard-Boot nicht
+  ausbremsen).
+- `tts.service` — gleich wie Whisper.
+
+Logs gemeinsam tailen:
+
+```bash
+sudo journalctl -u zentrale.service -u whisper.service -u tts.service -f
+```
+
+Details + Setup: `deployment.md`.

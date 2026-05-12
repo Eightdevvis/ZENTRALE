@@ -1,0 +1,33 @@
+[Unit]
+# Whisper STT-Service auf dem Pi. Hoert auf Port 5050, der ZENTRALE-
+# Core spricht ihn ueber WHISPER_URL an. Lazy/low-prio-Setup: startet
+# nach dem Core und laeuft mit minimaler Scheduling-Prio, damit der
+# Modell-Load (~500 MB) den Boot des Dashboards nicht ausbremst.
+Description=ZENTRALE Whisper STT Service (low-priority)
+After=network.target zentrale.service
+Wants=zentrale.service
+
+[Service]
+Type=simple
+# User wird beim Deploy von deploy_pi.sh auf den SSH-User gepatcht
+# (analog zu zentrale.service). Default 'pi' damit das File auch ohne
+# Patch syntaktisch korrekt ist.
+User=pi
+WorkingDirectory=/opt/zentrale
+ExecStart=/opt/zentrale/.venv/bin/python /opt/zentrale/services/whisper_service.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+Environment=WHISPER_MODEL=small
+# Low-priority Scheduling: Nice=19 gibt den niedrigsten "normalen"
+# CPU-Anteil, IOSchedulingClass=idle stellt Disk-IO hinter alles
+# andere. SCHED_IDLE (CPUSchedulingPolicy=idle) heisst zusaetzlich:
+# bekommt nur CPU-Zeit wenn sonst kein normaler Prozess will.
+# Damit darf Whisper sein 500-MB-Modell laden ohne den Event-Loop
+# des Cores zu beeintraechtigen.
+Nice=19
+CPUSchedulingPolicy=idle
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

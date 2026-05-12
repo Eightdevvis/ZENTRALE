@@ -21,6 +21,17 @@ ohne Inputs).
 | `t`    | Mandarin-Tutor starten                |
 | `ESC`  | Zurück zum Haupt-Dashboard            |
 
+## System-Hotkey (Pi-Kiosk, OS-Ebene)
+
+| Taste              | Funktion                                              |
+|--------------------|-------------------------------------------------------|
+| `Ctrl+Alt+Esc`     | **Notaus** — stoppt `lightdm`, Pi landet auf TTY1.    |
+
+Wirkt auf OS-Ebene (XFCE-Keyboard-Shortcut, nicht in der Webapp).
+Backend-Services (`zentrale`, `whisper`, `tts`) laufen weiter. Zurück
+zum Kiosk: `sudo systemctl start lightdm`. Details:
+`deployment.md` → „Notaus-Hotkey".
+
 ## Im Tutor-Modus (zusätzlich)
 
 | Taste   | Funktion                            |

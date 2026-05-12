@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 .history/
 data/tts_model/
+
+# lokale Debug-Artefakte (Screenshots, Scratchpad) — gehoeren nicht ins Repo
+/*.png
+/notes.md

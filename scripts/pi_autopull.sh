@@ -36,8 +36,10 @@ set -euo pipefail
 # Wo das Repo auf dem Pi liegt. Standardpfad aus deploy_pi.sh.
 REPO_DIR="${REPO_DIR:-/opt/zentrale}"
 
-# systemd-Service der nach Deploy neu gestartet wird.
-SERVICE_NAME="${SERVICE_NAME:-zentrale.service}"
+# systemd-Services die nach Deploy neu gestartet werden. Reihenfolge
+# matters: zentrale (Core) zuerst, whisper/tts danach (die haben ein
+# After=zentrale.service in ihren Unit-Files).
+SERVICES=(zentrale.service whisper.service tts.service)
 
 # Branch der ueberwacht wird. Aktuell: main.
 BRANCH="${BRANCH:-main}"
@@ -130,18 +132,30 @@ fi
 log "RELEASE-Bump erkannt: '$CURRENT_RELEASE' -> '$REMOTE_RELEASE'. Deploy startet."
 
 # -----------------------------------------------------------------------------
-# Schritt 3: Brauchen wir pip install?
+# Schritt 3: Brauchen wir pip install? Service-Files geaendert?
 # -----------------------------------------------------------------------------
 # `pip install -r requirements.txt` dauert auf dem Pi gerne 30+ Sekunden,
 # auch wenn nichts neu ist. Wir machen das daher nur dann, wenn sich die
 # requirements.txt zwischen lokalem HEAD und origin/$BRANCH ueberhaupt
 # geaendert hat.
 #
+# Genauso bei den systemd-Unit-Files: wenn eines der deploy/*.service-
+# Files sich geaendert hat, muss install_pi_services.sh laufen damit das
+# Patch nach /etc/systemd/system/ + daemon-reload + enable durchkommt.
+# Sonst ruft systemctl restart das alte Unit-File ab und neue Features
+# (z.B. die low-prio whisper/tts-Units) wuerden nie wirklich starten.
+#
 # `git diff --quiet A B -- pfad` -> Exit 0 wenn keine Aenderung, sonst 1.
 NEEDS_PIP=0
 if ! git diff --quiet "HEAD" "origin/$BRANCH" -- requirements.txt; then
   NEEDS_PIP=1
   log "requirements.txt geaendert -> pip install noetig"
+fi
+
+NEEDS_UNIT_RELOAD=0
+if ! git diff --quiet "HEAD" "origin/$BRANCH" -- 'deploy/*.service' 'deploy/lightdm-*.conf'; then
+  NEEDS_UNIT_RELOAD=1
+  log "systemd-Unit oder lightdm-Drop-in geaendert -> install_pi_services.sh wird gefeuert"
 fi
 
 # -----------------------------------------------------------------------------
@@ -175,15 +189,45 @@ if [[ $NEEDS_PIP -eq 1 ]]; then
 fi
 
 # -----------------------------------------------------------------------------
-# Schritt 6: Service neu starten
+# Schritt 6: Unit-Files sync (nur falls geaendert)
+# -----------------------------------------------------------------------------
+# install_pi_services.sh patcht User= in den drei Unit-Files, kopiert
+# nach /etc/systemd/system/, macht daemon-reload + enable. Wird per
+# passwordless sudo aufgerufen — der Pfad ist in
+# /etc/sudoers.d/zentrale freigegeben (install_pi_sudoers.sh).
+if [[ $NEEDS_UNIT_RELOAD -eq 1 ]]; then
+  if sudo -n "$REPO_DIR/scripts/install_pi_services.sh" >>"$LOG_FILE" 2>&1; then
+    log "Service-Units synchronisiert + daemon-reload."
+  else
+    log "ERROR: install_pi_services.sh fehlgeschlagen — sudoers-Eintrag pruefen."
+    exit 1
+  fi
+fi
+
+# -----------------------------------------------------------------------------
+# Schritt 7: Services neu starten
 # -----------------------------------------------------------------------------
 # `sudo -n` -> non-interactive: wenn ein Passwort verlangt wuerde, schlaegt
 # das sofort fehl statt zu haengen. Damit das im Cron klappt braucht der
-# ausfuehrende Pi-User passwordless sudo fuer EXAKT diesen Befehl
-# (siehe memory/deployment.md, Abschnitt "Auto-Update via RELEASE-Marker").
-if sudo -n systemctl restart "$SERVICE_NAME" >>"$LOG_FILE" 2>&1; then
-  log "Deploy fertig. Service '$SERVICE_NAME' neu gestartet."
+# ausfuehrende Pi-User passwordless sudo fuer EXAKT diese Restart-Befehle
+# (siehe scripts/install_pi_sudoers.sh).
+#
+# Reihenfolge: zentrale zuerst, dann whisper/tts. Whisper/TTS haben
+# After=zentrale.service in den Units, beim Boot ist das wichtig.
+# Beim Restart ist die Reihenfolge "nice to have" — wenn whisper start
+# bevor zentrale wieder da ist, faellt es einfach zurueck (Restart=always).
+RESTART_FAIL=0
+for SVC in "${SERVICES[@]}"; do
+  if sudo -n systemctl restart "$SVC" >>"$LOG_FILE" 2>&1; then
+    log "$SVC neu gestartet."
+  else
+    log "WARN: systemctl restart $SVC fehlgeschlagen (sudoers-Eintrag fuer $SVC?)."
+    RESTART_FAIL=1
+  fi
+done
+
+if [[ $RESTART_FAIL -eq 0 ]]; then
+  log "Deploy fertig. Alle Services neu gestartet."
 else
-  log "ERROR: systemctl restart fehlgeschlagen. Sudoers-Eintrag pruefen."
-  exit 1
+  log "Deploy fertig — aber mindestens ein Restart hat gewarnt, siehe oben."
 fi

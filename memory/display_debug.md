@@ -126,9 +126,18 @@ Installiert den lightdm-Hook fuer den Auto-Modus.
 
 ### `scripts/install_xfce_autostart.sh`
 
-Legt die XDG-autostart-Files fuer `xfwm4` und `xfdesktop` an —
-loest einen anderen Bug bei dem `xfce4-session` die Komponenten
-nicht automatisch hochzieht.
+**Aktuelles Setup (Stand 2026-05-12, nach Kiosk-Lockdown):**
+Schreibt eine minimale `~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml`
+die nur `xfwm4` + `xfsettingsd` startet (kein Panel, kein xfdesktop,
+kein Thunar). Plus `xfwm4`-XDG-autostart als Backup. xfdesktop ist
+ABSICHTLICH WEG — wir wollen das Root-Window schwarz haben, damit
+zwischen lightdm-Login und Firefox-Kiosk nichts sichtbar ist.
+
+Historischer Kontext: in einer früheren Variante hatten wir
+xfdesktop hier mit drin, weil unter dem alten vc4-KMS-Display-Bug
+das Root-Window sonst „komplett schwarz" blieb (HDMI gab leeren
+Frame raus). Mit fkms-Fix ist das geheilt → schwarzes Root-Window
+zeigt der Monitor jetzt korrekt als schwarz an, was wir wollen.
 
 ### Schneller Diagnose-Workflow bei neuen Display-Problemen
 

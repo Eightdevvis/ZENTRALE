@@ -30,33 +30,80 @@ Das deploy-Script erstellt automatisch `.venv` auf dem Pi und der
 systemd-Service erwartet ebenfalls `.venv`. Wenn du manuell auf dem Pi
 arbeitest: nutze `.venv/bin/python`, nicht `venv/bin/python`.
 
-## 3) systemd-Service
+## 3) systemd-Services
 
-Template liegt in `deploy/zentrale.service`. Wird vom Deploy-Script
-nach `/etc/systemd/system/` kopiert und enabled.
+Drei Unit-Templates liegen in `deploy/`:
+
+| Unit                  | Was lauft     | Scheduling                       |
+|-----------------------|---------------|----------------------------------|
+| `zentrale.service`    | `core/main.py` (Event-Loop + Flask) | normal |
+| `whisper.service`     | `services/whisper_service.py` (Port 5050) | Nice=19, SCHED_IDLE, IO idle |
+| `tts.service`         | `services/tts_service.py` (Port 5051) | Nice=19, SCHED_IDLE, IO idle |
+
+Alle drei werden vom Deploy-Script nach `/etc/systemd/system/` kopiert
+und enabled. **Whisper und TTS haben `After=zentrale.service`** und
+laufen mit niedrigster Scheduling-Priorität, damit der Boot des
+Dashboards nicht durch den 500-MB-Modell-Load von Whisper ausgebremst
+wird — sobald der Core idle ist, kriegen sie CPU.
 
 **Wichtig:**
-- Der Service startet **nur `core/main.py`** – Whisper und TTS laufen
-  NICHT automatisch via systemd. Wenn der Tutor auf dem Pi voll
-  funktionieren soll, brauchst du eigene `whisper.service` und
-  `tts.service` Units (oder ein Master-Skript).
 - `User=<dein-pi-user>` (vom Deploy-Script gesetzt) – also **kein**
   `sudo`. Das heißt die Tastatur-Simulation funktioniert auf dem Pi
   nicht, was ja eh ok ist, weil dort der echte PIR-Sensor (geplant)
   übernehmen soll.
+- Die Templates haben `User=pi` als Platzhalter, der zur Laufzeit
+  durch den SSH-User ersetzt wird.
 
-## 4) Kiosk-Modus (Auto-Start im Vollbild)
+## 4) Kiosk-Modus (Auto-Start im Vollbild, ohne XFCE-UI)
 
-`~/.config/autostart/zentrale.desktop`:
+Ziel: Pi bootet → kurze Konsole → schwarzer Bildschirm → Firefox-Kiosk.
+**Kein XFCE-Panel, kein Wallpaper, kein Mauszeiger** dazwischen.
 
-```ini
-[Desktop Entry]
-Type=Application
-Exec=firefox-esr --kiosk http://localhost:5000
+`scripts/install_xfce_autostart.sh` macht das komplett (User-Ebene):
+
+1. **Custom `xfce4-session.xml`** (`~/.config/xfce4/xfconf/xfce-perchannel-xml/`):
+   überschreibt die Default-Failsafe-Session der XFCE-Installation.
+   Startet **nur xfwm4 + xfsettingsd** — kein xfce4-panel, kein
+   xfdesktop, kein Thunar. Root-Window bleibt schwarz bis Firefox
+   übernimmt.
+2. **xfwm4 backup-autostart** in `~/.config/autostart/xfwm4.desktop`.
+   Belt-and-Suspenders falls die Session-XML mal nicht greift —
+   Firefox-Kiosk-Fullscreen braucht den WM.
+3. **`~/.xprofile`** mit `xrandr --mode 1920x1080`.
+4. **`~/.config/autostart/zentrale.desktop`** mit Firefox-Kiosk auf
+   `http://localhost:5000` — **wartet vorher per `curl` bis der Core
+   auf Port 5000 antwortet**, damit man nicht initial die Fehlerseite
+   sieht.
+5. **Notaus-Hotkey `Ctrl+Alt+Esc`** → `scripts/emergency_exit.sh`
+   (lightdm-stop → Pi auf TTY1).
+
+Plus auf Root-Ebene (via `install_pi_services.sh`):
+
+6. **lightdm-Drop-in** `/etc/lightdm/lightdm.conf.d/10-zentrale.conf`
+   aus `deploy/lightdm-zentrale.conf`. Setzt `xserver-command=X -nocursor`
+   → kein Mauszeiger ab X-Start (wir haben keine Maus am Kiosk).
+
+Aufruf auf dem Pi nach jedem RE-Setup:
+
+```bash
+bash /opt/zentrale/scripts/install_xfce_autostart.sh
 ```
 
-Wenn der Pi hochfährt, startet automatisch Firefox im Kiosk-Modus auf
-das Dashboard. Kein Desktop, kein Browser-UI – nur ZENTRALE.
+Idempotent. Der Hotkey-Teil funktioniert nur aus einer aktiven
+XFCE-Session (DBus muss laufen).
+
+### Notaus-Hotkey: Ctrl+Alt+Esc
+
+Wenn der Kiosk zickt oder man ans Terminal will:
+
+- **Drücken:** `Ctrl+Alt+Esc` → `lightdm` stoppt, Pi landet auf
+  **TTY1** (Konsole, Login-Prompt).
+- **Zurück zum Kiosk:** `sudo systemctl start lightdm`.
+- **`zentrale.service` läuft weiter** im Hintergrund — wenn man auch
+  das stoppen will, dann manuell: `sudo systemctl stop zentrale whisper tts`.
+- Voraussetzung: `scripts/install_pi_sudoers.sh` wurde einmal mit
+  `sudo` ausgeführt, sonst kann `emergency_exit.sh` lightdm nicht
+  stoppen (siehe unten).
 
 ## 5) Logs prüfen
 
@@ -138,15 +185,25 @@ Host github.com
 Test: `ssh -T git@github.com` muss „Hi <user>! You've successfully
 authenticated…" sagen.
 
-**d) Passwordless sudo für genau den Restart-Befehl:**
+**d) Passwordless sudo für autopull + Notaus:**
 
 ```bash
-echo "$USER ALL=(ALL) NOPASSWD: /bin/systemctl restart zentrale.service" \
-  | sudo tee /etc/sudoers.d/zentrale-autopull
-sudo chmod 440 /etc/sudoers.d/zentrale-autopull
+sudo bash /opt/zentrale/scripts/install_pi_sudoers.sh
 ```
 
-Bewusst eng: nur dieser eine Befehl, kein Generalfreibrief.
+Schreibt `/etc/sudoers.d/zentrale` mit fünf eng definierten Befehlen:
+
+- `systemctl restart zentrale.service` (autopull-Restart)
+- `systemctl restart whisper.service` (autopull-Restart)
+- `systemctl restart tts.service` (autopull-Restart)
+- `systemctl stop lightdm` (Notaus-Hotkey)
+- `chvt 1` (Notaus → TTY1)
+- `/opt/zentrale/scripts/install_pi_services.sh` (autopull patcht
+  Unit-Files wenn sich `deploy/*.service` im Repo ändert)
+
+Bewusst eng — keine `ALL`-Freibriefe. Die alte
+`/etc/sudoers.d/zentrale-autopull`-Datei wird vom Skript automatisch
+aufgeräumt.
 
 **e) Manueller Trockenlauf** vor Cron-Aktivierung:
 
@@ -180,6 +237,11 @@ crontab -l
   weggeräumt werden (`git stash` oder commit + push).
 - **`pip install`** läuft nur wenn sich `requirements.txt` zwischen
   HEAD und origin geändert hat (Optimierung, sonst 30+ Sek pro Deploy).
+- **Unit-File-Sync** läuft nur wenn sich `deploy/*.service` zwischen
+  HEAD und origin geändert hat → ruft `install_pi_services.sh` via
+  passwordless sudo. Patched User=, kopiert nach `/etc/systemd/system/`,
+  daemon-reload + enable.
+- **Restart** trifft alle drei Units: zentrale, whisper, tts.
 - **Pull ist `--ff-only`**: Merges aus dem Cron sind ausgeschlossen.
   Wenn auf dem Pi ein lokaler Commit existiert, schlägt der Pull fehl
   statt heimlich zu mergen.
@@ -187,6 +249,3 @@ crontab -l
   Wenn der Key woanders liegt als `~/.ssh/id_*`, muss er entweder über
   die `~/.ssh/config` (siehe oben) gefunden werden oder im Script via
   `GIT_SSH_COMMAND` gesetzt werden.
-- **Whisper/TTS-Services** werden hier nicht neu gestartet, nur
-  `zentrale.service`. Wenn dort später Änderungen einfließen, eigene
-  systemd-Units bauen und das Script erweitern.

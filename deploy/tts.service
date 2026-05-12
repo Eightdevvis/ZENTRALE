@@ -1,0 +1,23 @@
+[Unit]
+# TTS-Service auf dem Pi. Hoert auf Port 5051, der ZENTRALE-Core
+# spricht ihn ueber TTS_URL an. Selbe Low-Prio-Logik wie whisper.service
+# (siehe dort fuer Begruendung).
+Description=ZENTRALE TTS Service (low-priority)
+After=network.target zentrale.service
+Wants=zentrale.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/zentrale
+ExecStart=/opt/zentrale/.venv/bin/python /opt/zentrale/services/tts_service.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+# Low-priority Scheduling — siehe whisper.service.
+Nice=19
+CPUSchedulingPolicy=idle
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target
