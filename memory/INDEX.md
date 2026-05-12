@@ -26,6 +26,7 @@ hier sofort mitziehen, sonst tote Links.
 | Starten (lokal, 3 Terminals)       | memory/starten.md                   |
 | Hardware (Pi, Mikro, PIR)          | memory/hardware.md                  |
 | Deployment (Pi, systemd, Kiosk)    | memory/deployment.md                |
+| Display-Debug (Pi-Monitor schwarz) | memory/display_debug.md             |
 | Dateizugriffe (Whitelist, Ignore)  | memory/datei_zugriffe.md            |
 | Claude-spezifische Hinweise        | memory/claude_hinweise.md           |
 
