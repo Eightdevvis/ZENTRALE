@@ -1,93 +1,162 @@
-# Display-Debug (Pi-Monitor schwarz)
+# Display-Debug (Pi-Kiosk Bildschirm schwarz)
 
-Hintergrund + Tooling fuer das laufende Debugging des schwarzen
-Pi-Monitors. Ergaenzt das memory-File
-`~/.claude/projects/-home-sasha-codicus-ZENTRALE/memory/project_pi_display_debug.md`
-(Claude-Memory, ausserhalb des Repos).
+Status: **Root Cause gefunden 2026-05-12** — der HDMI-Tunnel war eine
+Sackgasse, der echte Bug saß im XFCE-Session-Start. Diese Datei
+dokumentiert Symptom, Befund, Fix und das dabei entstandene
+Diagnose-Tooling.
 
 ## Symptom
 
-Pi 3 B (Bookworm, KMS/vc4) zeigt:
+Pi 3 B (Bookworm, KMS/vc4) zeigte:
 
 - Boot: kurzer Vollbild-Farbverlauf (KMS-Modeset, 1920x1080) ✓
-- Konsole im multi-user.target ✓
+- Konsole im `multi-user.target` ✓
 - Sobald `lightdm` / X startet → **Monitor schwarz** (Backlight an)
 - Nach `systemctl stop lightdm` → **bleibt schwarz**, erst Reboot
-  setzt zurueck
+  setzt KMS-Konsole zurueck
 
-## Stand der Diagnose (2026-05-12)
+## Root Cause
 
-- KMS-Framebuffer ist auf **1920x1080** (preferred Mode laut EDID)
-- X (modesetting-Treiber) waehlt **1024x768 @ 99.97 Hz**, Pixel-Clock
-  113.274 MHz — ein ungewoehnlicher Mode aus der EDID, den der HDMI-
-  Encoder oder der Monitor offenbar nicht sauber ausgibt
-- Nach dem fehlgeschlagenen Mode-Set bleibt der vc4-HDMI-Encoder im
-  broken State haengen — Konsole bleibt schwarz bis Reboot
-- Xorg.0.log keine `(EE)`, nur harmlose Warnungen
-- `vcgencmd display_power=1`, `throttled=0x0` (Strom OK)
-- `/etc/X11/xorg.conf.d/` ist leer (keine Force-Mode-Config aktiv)
+**`xfce4-session` startet auf dem Pi unvollstaendig**: weder `xfwm4`
+(Window Manager) noch `xfdesktop` (Desktop-Renderer) werden
+automatisch hochgezogen. Ohne WM und ohne Desktop-Renderer malt
+keine App auf das Root-Window — X gibt deshalb einen schwarzen
+Frame raus, der HDMI-Encoder schickt ihn brav an den Monitor.
 
-Volle Liste der ausgeschlossenen Theorien siehe Claude-Memory
-`project_pi_display_debug.md`.
+Indizien:
 
-## Tooling
+- `pgrep -af xfce` zeigt nur `xfce4-session` + `xfce4-panel`,
+  **kein** `xfwm4`, **kein** `xfdesktop`
+- `~/.xsession-errors`:
+  - `/usr/bin/startxfce4: X server already running on display :0`
+  - `Failed to fetch _NET_NUMBER_OF_DESKTOPS; assuming 1`
+  - `Failed to get _NET_WORKAREA; using full screen dimensions`
+  - `Failed to fetch _NET_CURRENT_DESKTOP; assuming 0`
+  (die `_NET_*` werden vom WM gesetzt — fehlen weil xfwm4 nicht läuft)
+- System-`/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml`
+  hat die Failsafe-Komponenten (xfwm4, xfsettingsd, xfce4-panel,
+  Thunar, xfdesktop) korrekt drin — aber xfce4-session greift sie
+  beim Auto-Login nicht
+- `~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml`
+  fehlt (User-Session-Konfig nicht angelegt)
+- `~/.cache/sessions/` ist leer (keine gespeicherte Session, die wir
+  loeschen muessten)
+
+Beweis dass HDMI nicht das Problem ist:
+
+- **Xvfb-Test**: Firefox-ESR + ZENTRALE-Dashboard rendern auf Pi 3B
+  bei 1920x1080 korrekt (Screenshot via scrot bestaetigt)
+- **X-Display-Screenshot bei laufendem lightdm**: komplett schwarz
+- **Nach manuellem `xfwm4 --replace && xfdesktop`**: voller
+  XFCE-Desktop sichtbar (Applications-Menu, Panel, Icons, Maus-Logo)
+
+## Fix
+
+`scripts/install_xfce_autostart.sh` legt zwei
+XDG-Autostart-`.desktop`-Files in `~/.config/autostart/` an:
+
+- `xfwm4.desktop` — startet xfwm4 nach XFCE-Session-Start
+- `xfdesktop.desktop` — startet xfdesktop
+
+Damit umgehen wir die Frage warum xfce4-session die Failsafe-Defaults
+nicht selbst lädt; autostart-Files greifen unabhängig davon.
+
+Anwenden:
+
+```bash
+# auf dem Pi, als sasha (NICHT root):
+cd /opt/zentrale && git pull
+bash scripts/install_xfce_autostart.sh
+
+# testen:
+sudo systemctl start lightdm
+# Monitor sollte XFCE-Desktop zeigen
+sudo systemctl stop lightdm
+
+# Wenn ok: Kiosk-Autostart reaktivieren
+mv ~/.config/autostart/zentrale.desktop.disabled \
+   ~/.config/autostart/zentrale.desktop
+sudo reboot
+# Beim Boot startet jetzt lightdm -> XFCE -> xfwm4 + xfdesktop
+# -> Firefox-Kiosk auf localhost:5000
+```
+
+## Bekannte Folge-Probleme
+
+- **Dashboard-Layout zerquetscht auf 1920x1080**: das CSS rendert
+  nur in den linken ~1260px, rechts daneben ein schwarzer Streifen.
+  Vermutlich feste `max-width` ohne fluid responsive Skalierung.
+  Nicht kritisch — Kiosk wirkt nur wie ein hoehlerer Slot.
+  Siehe Task „Dashboard CSS für 1920x1080 fluid machen".
+
+## Diagnose-Tooling
+
+Beim Debugging entstanden, weiter nuetzlich falls am Pi was am
+Display-Stack umgebaut wird.
 
 ### `scripts/display_debug.sh`
 
-Snapshot-Skript. Schreibt vollstaendigen Display-State nach
-`~sasha/zentrale-display-debug.log`. Erfasst:
+Snapshot des Display-States in `~sasha/zentrale-display-debug.log`:
 
 - systemd-Status lightdm/zentrale + Xorg-Prozessliste
 - DRM/KMS connector-State (sysfs: status, enabled, modes)
 - Framebuffer (`fbset -i`)
 - Pi-Firmware-View (`vcgencmd display_power | get_throttled | ...`)
-- X-Display via xrandr + xset (probiert lightdm-auth UND user-auth)
+- X-Display via xrandr + xset
 - dmesg-Tail (drm/hdmi/vc4)
 - Xorg.0.log Fehler/Warnungen
 
-**Manueller Aufruf** (jeder Label-String erlaubt, landet im Header):
+Manueller Aufruf (jeder Label-String erlaubt):
 
 ```bash
 ./scripts/display_debug.sh                  # Label "manual"
 ./scripts/display_debug.sh vor_fix          # eigenes Label
 ```
 
-**Auto-Modus** (`autostart` als erstes Argument) macht 3 Snapshots
-im Abstand T+0/T+5s/T+15s — wird vom lightdm-Hook genutzt, sollte
-manuell selten gebraucht werden.
+Auto-Modus (`autostart` als erstes Argument) macht 3 Snapshots im
+Abstand T+0 / T+5s / T+15s — wird vom lightdm-Hook genutzt.
 
 ### `scripts/install_display_debug.sh`
 
-Installiert den lightdm-Hook. Einmalig auf dem Pi als root:
+Installiert den lightdm-Hook fuer den Auto-Modus. Einmalig auf dem
+Pi als root:
 
 ```bash
 sudo bash /opt/zentrale/scripts/install_display_debug.sh
 ```
 
 Legt `/etc/lightdm/lightdm.conf.d/60-zentrale-display-debug.conf` an
-mit `display-setup-script=/opt/zentrale/scripts/display_debug.sh autostart`.
-Damit triggert jeder `systemctl start lightdm` automatisch das
-Snapshot-Triple.
+mit `display-setup-script=...display_debug.sh autostart`.
 
-Deinstallation: `sudo rm /etc/lightdm/lightdm.conf.d/60-zentrale-display-debug.conf`.
+Deinstallation:
+`sudo rm /etc/lightdm/lightdm.conf.d/60-zentrale-display-debug.conf`
 
-### Log abgreifen
+### Render-Verifikation via Xvfb
+
+Wenn man das Frontend isoliert vom HDMI testen will:
 
 ```bash
-# Vom Entwicklungs-Rechner aus:
-ssh zentrale "tail -200 ~/zentrale-display-debug.log"
-
-# Live mitlesen waehrend Test:
-ssh zentrale "tail -F ~/zentrale-display-debug.log"
+sudo apt install -y xvfb scrot
+Xvfb :99 -screen 0 1920x1080x24 &
+DISPLAY=:99 firefox-esr --kiosk http://localhost:5000 &
+sleep 20
+DISPLAY=:99 scrot -z ~/kiosk-test.png
+pkill firefox-esr; pkill Xvfb
 ```
 
-## Workflow fuer einen Debug-Cycle
+PNG anschauen — wenn das Dashboard rendert, ist Frontend + Browser +
+Backend okay und das Problem sitzt im X-/Session-Stack.
 
-1. Pi rebooten (Encoder zuruecksetzen, Konsole wieder da)
-2. Pi pullen: `cd /opt/zentrale && git pull` (kein RELEASE-Bump
-   noetig, wir wollen den Service nicht restartet bekommen)
-3. Wenn neu: `sudo bash scripts/install_display_debug.sh` (einmal)
-4. `sudo systemctl start lightdm`
-5. ~20 Sekunden warten (T+15s-Snapshot ist drin)
-6. `sudo systemctl stop lightdm` falls wir was aendern wollen
-7. Log abgreifen, naechste Hypothese, Loop
+## Lehren
+
+Die Fehlsuche hat ~einen Tag gefressen, weil zu lange in der
+HDMI/KMS/vc4-Richtung gegraben wurde, ohne die Grundannahme
+„X rendert irgendwas und der Encoder schickt es schwarz an den
+Monitor" zu verifizieren. Ein einzelner Screenshot von Display :0
+am Anfang haette die Richtung sofort umgelenkt.
+
+Faustregel fuer naechstes Mal: **bevor man tief in die Hardware-
+oder Treiber-Schicht graebt, einen Screenshot von dem was die
+Software rendert, an den Tisch legen.** Das ist 1 Befehl (`scrot`)
+und entscheidet zwischen „X-/UI-Schicht" vs. „Display-Output-
+Schicht" — zwei voellig verschiedene Bug-Klassen.
