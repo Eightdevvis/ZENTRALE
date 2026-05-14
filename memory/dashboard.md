@@ -26,19 +26,48 @@ Streaming wird **nur** dort benutzt, wo es wirklich nötig ist:
   erscheinen.
 - `POST /api/tutor/start` und `POST /api/tutor/respond` – ebenfalls SSE.
 
+## Layout (CSS-Grid mit named areas)
+
+`#view-main` ist ein 3-Spalten-Grid:
+
+```
++---------+---------------------+----------+
+| sensors |        ai           |  graph   |
++---------+---------------------+----------+
+|              term (Footer)              |
++-----------------------------------------+
+```
+
+Spaltenbreiten: `auto  minmax(0,1fr)  clamp(220px, 22vw, 340px)`.
+Grid-areas: `sensors ai graph` / `term term term`. Areas sind bewusst
+benannt, damit später AI- und Graph-Panel per JS-Class swappable sind
+ohne jede Card einzeln umzubauen.
+
 ## Modi
 
-Das Frontend hat ein zentrales Layout mit „Karten". Je nach Modus wird
-die linke Hauptkarte ausgetauscht.
+Das Frontend hat eine zentrale „AI-Card" in der Mitte (`#main-display`).
+Je nach Modus wird der Inhalt dieser Card ausgetauscht
+(`#panel-ai` / `#panel-chat` / `#panel-tutor`). Sensoren-Spalte links
+und Mini-Graph rechts bleiben dabei sichtbar.
 
-### Haupt-Ansicht (default)
-- **Haupt-Karte**: Sleep-Quality-Chart (SVG).
-- **Sensoren**: Button, Light, Motion als Statusanzeige.
-- **Mandarin**: Vokabel des Tages mit Schriftzeichen + Pinyin.
-- **Terminal**: Live-Log der letzten System-Ausgaben. Speist sich aus
-  `state.push_log(...)`, das von `net.py` (`NET →` / `NET ←`),
+### Haupt-Ansicht (default, `#panel-ai`)
+- **AI-Orb** (`#ai-orb`): pixelierte Neon-Sonne als SVG. Idle = ruhiger
+  Glow + solider Kreis-Outline + ultra-langsame Pixel-Ring-Rotation.
+  Active (`.ai-orb.active`) = Strahlen erscheinen, schneller Halo-Pulse,
+  Partikel fliegen radial.
+- **Mini-Chat-Log** (`#mini-log`): unter dem Orb, zeigt die letzten 5
+  Konversations-Zeilen (User+AI), Polling alle 2.5s gegen
+  `/api/chat/history`.
+- **Sensoren-Spalte** (links): Button + Light Sensor.
+- **Side-Graph** (rechts): Sleep-Quality-Chart (kompakt).
+- **Terminal** (unten): Live-Log der letzten System-Ausgaben. Speist
+  sich aus `state.push_log(...)`, das von `net.py` (`NET →` / `NET ←`),
   `audio.py` (`STT →` / `TTS →`) und `main.py` (`EVENT IN:` / `EVENT OUT:`)
   befüllt wird.
+
+Stil: cyberpunk dark-HUD — eckige Cards, Neon-Grün auf dunkel-
+durchscheinendem Background, CRT-Scanlines als statisches Overlay
+(ohne `mix-blend-mode`, das war auf der Pi-VC4-GPU zu teuer).
 
 ### Chat-Modus (Taste `C`)
 - KI-Chat mit Mistral, Tokens streamen live.

@@ -20,6 +20,7 @@ hier sofort mitziehen, sonst tote Links.
 | Mandarin-Tutor                     | memory/tutor_system.md              |
 | Audio (Whisper STT + TTS)          | memory/audio_system.md              |
 | Dashboard & Frontend               | memory/dashboard.md                 |
+| UI-Schnittstellen (DOM/JS-Hooks)   | memory/ui_hooks.md                  |
 | Tastatur-Belegung (alle Modi)      | memory/tastatur.md                  |
 | REST API Endpoints                 | memory/api_endpoints.md             |
 | Setup & Installation               | memory/setup.md                     |

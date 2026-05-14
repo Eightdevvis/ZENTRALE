@@ -6,8 +6,13 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    /* Body: tiefschwarzer Untergrund mit hauchdünnem Cyan-Schimmer in der
+       Mitte → wirkt wie eine schwach beleuchtete Maschinen-Konsole.
+       Radial-Gradient ist subtil (5% Opacity), damit Text lesbar bleibt. */
     body {
-      background: #0a0a0a;
+      background:
+        radial-gradient(ellipse at center, rgba(0, 80, 60, 0.08) 0%, transparent 60%),
+        #050708;
       color: #e0e0e0;
       font-family: 'Courier New', monospace;
       height: 100vh;
@@ -16,6 +21,30 @@
       padding: 1.5rem;
       gap: 1rem;
       overflow: hidden;
+      position: relative;
+    }
+
+    /* CRT-Scanlines: 1px-Streifen alle 3px über den ganzen Viewport.
+       pointer-events: none → blockiert keine Klicks.
+       fixed → bleibt beim Scrollen.
+       Bewusst KEIN mix-blend-mode: das ist auf Pi-GPU (VC4) extrem teuer,
+       weil es Per-Pixel-Compositing ohne Hardware-Beschleunigung erzwingt
+       und einen globalen Layer baut, der bei jeder Frame-Animation neu
+       evaluiert wird. Statt blend-mode reicht eine niedrige Alpha-Stufe
+       als simples Overlay → visuell fast identisch, ein Bruchteil der Last. */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent           0px,
+        transparent           2px,
+        rgba(0, 255, 136, 0.05) 2px,
+        rgba(0, 255, 136, 0.05) 3px
+      );
+      z-index: 9999;
     }
 
     /* ── Header (immer sichtbar) ── */
@@ -36,36 +65,77 @@
 
     .date {
       font-size: 0.9rem;
-      color: #555;
-      letter-spacing: 0.1em;
+      color: rgba(0, 255, 136, 0.5);
+      letter-spacing: 0.2em;
+      text-shadow: 0 0 6px rgba(0, 255, 136, 0.25);
     }
 
-    /* ── Main View ── */
+    /* ── Main View ──
+       3-Spalten-Layout mit benannten Grid-Areas:
+         sensors  |  ai (mittig, nimmt den Rest)  |  graph (kompakt rechts)
+         term term term  (Footer über alle Spalten)
+
+       Warum named areas: später wollen wir den AI- und den Graph-Bereich
+       per JS swappen können (z.B. Graph groß, AI klein und rechts). Mit
+       areas reicht es, an einer Stelle die Reihenfolge zu tauschen statt
+       jede Card einzeln umzubauen.
+
+       Spaltenbreiten:
+         - auto              → Sensoren-Spalte so schmal wie Inhalt
+         - minmax(0, 1fr)    → AI-Mitte nimmt den Rest, minmax(0,...) damit
+                               flex/overflow-Kinder nicht aufblasen
+         - clamp(220, 22vw, 340) → Graph-Spalte responsiv: zwischen 220px
+                                   und 340px, sonst 22% der Viewport-Breite */
     #view-main {
       flex: 1;
       display: grid;
       grid-template-rows: 1fr auto;
-      grid-template-columns: 2fr 1fr;
+      grid-template-columns: auto minmax(0, 1fr) clamp(220px, 22vw, 340px);
+      grid-template-areas:
+        "sensors ai graph"
+        "term    term term";
       gap: 1rem;
       min-height: 0;
     }
 
+    /* Grid-Area-Zuweisungen für die einzelnen Panels */
+    .side-col      { grid-area: sensors; }
+    #main-display  { grid-area: ai; }
+    .side-graph    { grid-area: graph; }
+    .terminal      { grid-area: term; }
+
+    /* ── Cyberpunk-Card ──
+       Eckig + Neon-HUD-Look:
+       - 1px Border in Neon-Grün-Glas (rgba) → schon ohne Glow erkennbar als
+         „aktive" Tafel.
+       - box-shadow doppelt: außen ein weicher Cyan-Glow für die Neon-Optik,
+         innen ein dunklerer Vignette-Schatten damit die Karte „eingebettet"
+         wirkt statt aufgesetzt.
+       - Hintergrund bleibt dunkel-durchscheinend, damit der scanline-Overlay
+         vom body::after (siehe weiter unten) leicht durchscheint. */
     .card {
-      background: #141414;
-      border: 1px solid #2a2a2a;
-      border-radius: 8px;
+      background: rgba(8, 14, 18, 0.65);
+      border: 1px solid rgba(0, 255, 136, 0.35);
+      border-radius: 0;
       padding: 1rem 1.25rem;
       overflow: hidden;
+      /* Nur ein einziger outer-Glow. Inset-Shadow weg, weil der bei jeder
+         Repaint-Aktion neu gerastert wird — auf Pi-GPU spürbar teuer. */
+      box-shadow: 0 0 10px rgba(0, 255, 136, 0.07);
+      position: relative;
     }
 
+    /* Card-Header: Neon-Cyan/Mint mit Glow, klassischer HUD-Label-Look.
+       border-bottom als „Trennlinie" wird ebenfalls neongrün. */
     .card h2 {
-      color: #555;
+      color: #00ff88;
       font-size: 0.7rem;
       text-transform: uppercase;
-      letter-spacing: 0.25em;
+      letter-spacing: 0.3em;
       margin-bottom: 0.75rem;
       padding-bottom: 0.5rem;
-      border-bottom: 1px solid #222;
+      border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+      text-shadow: 0 0 8px rgba(0, 255, 136, 0.55);
     }
 
     #main-display {
@@ -83,7 +153,10 @@
       letter-spacing: 0.1em;
     }
 
-    .right-col {
+    /* Side-Col = Sensoren-Spalte. Liegt links neben dem Graph.
+       Keine eigene Breite gesetzt → übernimmt das `auto` aus dem Grid,
+       also exakt so breit wie der breiteste Sensor-Eintrag. */
+    .side-col {
       display: flex;
       flex-direction: column;
       gap: 1rem;
@@ -113,50 +186,31 @@
       box-shadow: 0 0 8px rgba(0, 255, 136, 0.7);
     }
 
-    .vocab-word {
-      font-size: 2.8rem;
-      text-align: center;
-      padding: 1rem 0 0.5rem;
-      color: #ff9900;
-      letter-spacing: 0.1em;
-    }
-
-    .vocab-pinyin {
-      text-align: center;
-      color: #666;
-      font-size: 0.8rem;
-      letter-spacing: 0.05em;
-      margin-top: -0.3rem;
-      margin-bottom: 0.3rem;
-    }
-
-    .vocab-hint {
-      text-align: center;
-      color: #444;
-      font-size: 0.7rem;
-    }
-
-    /* ── Terminal ── */
+    /* Terminal-Footer: neon-grüne HUD-Console.
+       Dunkler-getuntes Background als die Cards → wirkt wie eine eigene
+       „Hardware-Konsole" unter den Hauptpanels. Grid-Platzierung erfolgt
+       weiter oben über grid-area: term (spannt alle 3 Spalten). */
     .terminal {
-      grid-column: 1 / -1;
-      background: #0d0d0d;
-      border: 1px solid #2a2a2a;
-      border-radius: 8px;
+      background: rgba(4, 8, 10, 0.78);
+      border: 1px solid rgba(0, 255, 136, 0.35);
+      border-radius: 0;
       padding: 0.6rem 1rem;
       height: 9rem;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
       gap: 0.1rem;
+      box-shadow: 0 0 10px rgba(0, 255, 136, 0.07);
     }
 
     .terminal-header {
-      color: #444;
+      color: rgba(0, 255, 136, 0.55);
       font-size: 0.65rem;
       text-transform: uppercase;
-      letter-spacing: 0.2em;
+      letter-spacing: 0.3em;
       margin-bottom: 0.4rem;
       flex-shrink: 0;
+      text-shadow: 0 0 6px rgba(0, 255, 136, 0.35);
     }
 
     .log-line {
@@ -168,6 +222,243 @@
     .log-line .log-time {
       color: #333;
       margin-right: 0.75rem;
+    }
+
+    /* ════════════════════════════════════════════════════════════════
+       ── AI-Orb-Panel ──
+       Cyberpunk-„Kopf" der AI: pixelierte Sonne mit Halo, rotierenden
+       Strahlen, gegenläufigem Pixel-Ring, pulsierendem Kern und einer
+       Partikelwolke. Im idle-State ruhige Animation, mit
+       .ai-orb.active wird's schneller/intensiver → JS toggelt das
+       sobald die AI tatsächlich Tokens streamt.
+       ════════════════════════════════════════════════════════════════ */
+
+    /* panel-ai = Default-Inhalt von #main-display (statt vorher panel-graph).
+       Vertikale Aufteilung: Orb oben (nimmt allen Raum), Mini-Log unten. */
+    #panel-ai {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      gap: 0.75rem;
+      align-items: stretch;
+    }
+
+    /* Wrapper für den Orb: zentriert, square. flex: 1 + min-height: 0
+       damit der Mini-Log unten Platz behält und der Orb nicht überfließt. */
+    .ai-orb-wrap {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    /* Der Orb selbst: quadratisch via aspect-ratio.
+       Breite ist min(parent, 480px-Cap) — aspect-ratio rechnet die Höhe daraus.
+       Falls die berechnete Höhe größer als der Parent ist, klemmt max-height
+       und der Browser passt die Breite entsprechend nach unten an. */
+    .ai-orb {
+      position: relative;
+      aspect-ratio: 1 / 1;
+      width: min(100%, 480px);
+      max-height: 100%;
+    }
+
+    /* Fallback für alte Browser ohne aspect-ratio (ungewahrscheinlich auf FF-ESR). */
+    @supports not (aspect-ratio: 1) {
+      .ai-orb { height: 100%; width: auto; }
+    }
+
+    /* SVG füllt den Orb komplett. shape-rendering: crispEdges sorgt
+       dafür dass Quadrate/Strahlen NICHT antialiased werden → Pixel-Look. */
+    .orb-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      shape-rendering: crispEdges;
+      overflow: visible;
+    }
+
+    /* Damit CSS-Animationen auf SVG-<g>-Elemente sauber um deren Zentrum
+       drehen, brauchen wir transform-box: fill-box. Sonst rotiert die
+       Group um (0,0) des Hosting-CSS-Box-Modells, nicht des SVG-Viewports. */
+    .orb-halo, .orb-rays, .orb-ring, .orb-core {
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+
+    /* ── Idle-State (Default, "standby") ──
+       Bewusst minimalistisch wegen Pi-3-GPU:
+       - Halo sehr neblig & langsam pulsierend (8s Zyklus, kaum Scale-Change)
+       - Strahlen GANZ AUS → stattdessen ein solider Kreis-Outline (orb-disk)
+       - Pixel-Ring rotiert extrem langsam (240s = 4min volle Umdrehung)
+       - Core atmet sehr sanft (5s)
+       - Partikel komplett aus
+       Eine GPU-arme Konfiguration mit nur 3 wirklich animierten Eigenschaften
+       (halo opacity/scale, ring transform, core opacity). */
+
+    .orb-halo {
+      opacity: 0.25;
+      animation: orb-halo-idle 8s ease-in-out infinite;
+    }
+    .orb-rays {
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+    .orb-disk {
+      opacity: 0.55;
+      transition: opacity 0.6s ease;
+    }
+    .orb-ring {
+      opacity: 0.6;
+      animation: orb-rays-rot 240s linear infinite reverse;
+    }
+    .orb-core {
+      animation: orb-core-pulse 5s ease-in-out infinite;
+    }
+
+    /* ── Active-State ──
+       Volle Cyberpunk-Performance: schnelles Halo-Pulsen, sichtbare
+       rotierende Strahlen, schneller Pixel-Ring, intensives Core-Flackern,
+       Partikel fliegen. Wird durch JS via setOrbActive(true) angeschaltet
+       während die AI tatsächlich Tokens streamt. */
+    .ai-orb.active .orb-halo {
+      animation: orb-halo-active 0.9s ease-in-out infinite;
+    }
+    .ai-orb.active .orb-rays {
+      opacity: 1;
+      animation: orb-rays-rot 8s linear infinite;
+    }
+    .ai-orb.active .orb-disk {
+      opacity: 0;          /* Solider Idle-Kreis verblasst */
+    }
+    .ai-orb.active .orb-ring {
+      opacity: 1;
+      animation-duration: 16s;
+    }
+    .ai-orb.active .orb-core {
+      animation: orb-core-pulse 0.5s ease-in-out infinite;
+    }
+    .ai-orb.active .particles span {
+      animation: orb-particle 1.6s linear infinite;
+      animation-delay: var(--delay, 0s);
+    }
+
+    /* ── Keyframes ── */
+
+    /* Idle-Halo: kaum-sichtbare Atmung. Geringe Opacity, minimale Skalierung. */
+    @keyframes orb-halo-idle {
+      0%, 100% { opacity: 0.20; transform: scale(1); }
+      50%      { opacity: 0.32; transform: scale(1.025); }
+    }
+    /* Active-Halo: kräftiger, schneller Glow-Puls. */
+    @keyframes orb-halo-active {
+      0%, 100% { opacity: 0.50; transform: scale(1); }
+      50%      { opacity: 0.85; transform: scale(1.10); }
+    }
+    @keyframes orb-rays-rot {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes orb-core-pulse {
+      0%, 100% { opacity: 0.75; }
+      50%      { opacity: 1; }
+    }
+
+    /* ── Partikel-Layer ──
+       Liegt absolut über dem Orb. Jedes Pixel-Quadrat bekommt im HTML eine
+       individuelle Flug-Richtung (--tx, --ty) und einen --delay,
+       sodass sie unterschiedlich gestaffelt nach außen fliegen.
+       Pure CSS, keine Canvas/JS-Schleife → günstig für den Pi. */
+    .particles {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: visible;
+    }
+    .particles span {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 3px;
+      height: 3px;
+      background: #00ff88;
+      box-shadow: 0 0 4px rgba(0, 255, 136, 0.8);
+      opacity: 0;
+      /* Im Idle: keine Animation, opacity bleibt 0 → unsichtbar.
+         Wird erst durch .ai-orb.active aktiviert (siehe unten). */
+    }
+    @keyframes orb-particle {
+      0%   { transform: translate(-50%, -50%); opacity: 0; }
+      8%   { opacity: 1; }
+      100% { transform: translate(calc(-50% + var(--tx)),
+                                  calc(-50% + var(--ty)));
+             opacity: 0; }
+    }
+
+    /* ── Mini-Chat-Log unter dem Orb ──
+       Zeigt die letzten ~5 Konversationszeilen. Wird vom fetchState-Loop
+       (oder einem dedizierten Poll) aktualisiert. Kein scroll, weil es
+       immer nur die jüngsten Zeilen anzeigt. */
+    .mini-log {
+      flex-shrink: 0;
+      max-height: 8rem;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid rgba(0, 255, 136, 0.15);
+      font-size: 0.75rem;
+      line-height: 1.4;
+    }
+    .mini-log-row {
+      display: flex;
+      gap: 0.6rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .mini-log-role {
+      flex-shrink: 0;
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      min-width: 2.5rem;
+    }
+    .mini-log-role.user { color: #00aaff; }
+    .mini-log-role.ai   { color: #00ff88; text-shadow: 0 0 4px rgba(0,255,136,0.5); }
+    .mini-log-text {
+      color: #bbb;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .mini-log-empty {
+      color: #333;
+      text-align: center;
+      font-size: 0.7rem;
+      padding: 0.5rem 0;
+      letter-spacing: 0.1em;
+    }
+
+    /* ── Side-Graph (rechte Spalte, Mini-Chart) ──
+       Hier landet der vorher zentrale Sleep-Quality-Graph in kompakter Form. */
+    .side-graph {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .side-graph #panel-graph {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .side-graph #panel-graph svg {
+      flex: 1;
+      min-height: 0;
     }
 
     /* ── Chat Panel (tauscht den Graph-Bereich aus) ── */
@@ -343,11 +634,11 @@
     }
 
     .form-field {
-      background: #141414;
-      border: 1px solid #2a2a2a;
-      border-radius: 8px;
+      background: rgba(8, 14, 18, 0.65);
+      border: 1px solid rgba(0, 255, 136, 0.2);
+      border-radius: 0;
       padding: 0.9rem 1.25rem;
-      transition: border-color 0.15s;
+      transition: border-color 0.15s, box-shadow 0.15s;
     }
 
     .form-field.focused {
@@ -494,11 +785,116 @@
     <span class="date" id="date">--. --- ----</span>
   </div>
 
-  <!-- ── Main View ── -->
+  <!-- ── Main View ──
+       DOM-Reihenfolge entspricht den Grid-Areas:
+         1) side-col   → grid-area: sensors (links, schmal)
+         2) main-display → grid-area: ai      (mittig, quadratisch via Inhalt)
+         3) side-graph → grid-area: graph    (rechts, kompakt)
+         4) terminal   → grid-area: term     (Footer, volle Breite) -->
   <div id="view-main">
+
+    <div class="side-col">
+      <div class="card">
+        <h2>Sensoren</h2>
+        <div class="sensor-row">
+          <div class="dot" id="dot-button"></div>
+          <span>Button</span>
+        </div>
+        <div class="sensor-row">
+          <div class="dot" id="dot-light"></div>
+          <span>Light Sensor</span>
+        </div>
+      </div>
+    </div>
+
     <div class="card" id="main-display">
-      <!-- Graph-Panel: standard Ansicht -->
-      <div id="panel-graph"></div>
+      <!-- ── AI-Panel (Default-Inhalt) ──
+           Pixelierter Sonnen-Orb + Mini-Chat-Log darunter.
+           Wird beim Wechsel in Chat- oder Tutor-Modus per JS versteckt. -->
+      <div id="panel-ai">
+        <div class="ai-orb-wrap">
+          <div class="ai-orb" id="ai-orb">
+
+            <!-- SVG mit Halo, Strahlen, Pixel-Ring, Core -->
+            <svg class="orb-svg" viewBox="-100 -100 200 200" aria-hidden="true">
+              <defs>
+                <!-- Halo-Gradient: Neon-Grün im Zentrum, weich nach außen aus -->
+                <radialGradient id="halo-grad" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%"   stop-color="#00ff88" stop-opacity="0.45"/>
+                  <stop offset="55%"  stop-color="#00ff88" stop-opacity="0.10"/>
+                  <stop offset="100%" stop-color="#00ff88" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+
+              <!-- Halo: pulsierender Glow-Kreis hinter allem -->
+              <circle class="orb-halo" cx="0" cy="0" r="92" fill="url(#halo-grad)"/>
+
+              <!-- Idle-Disk: solider Kreis-Outline, ersetzt die einzelnen
+                   Strahlen im Standby. Wird im Active-State auf opacity:0 gefadet. -->
+              <circle class="orb-disk" cx="0" cy="0" r="64"
+                      fill="none" stroke="#00ff88" stroke-width="1.5"/>
+
+              <!-- Strahlen: 8 Stück, rotieren langsam.
+                   Master-Rect oben (12-Uhr), <use> kopiert es mit rotate-transforms.
+                   So muss man die Geometrie nur einmal anpassen. -->
+              <g class="orb-rays">
+                <rect id="ray-px" x="-2" y="-72" width="4" height="14" fill="#00ff88"/>
+                <use href="#ray-px" transform="rotate(45)"/>
+                <use href="#ray-px" transform="rotate(90)"/>
+                <use href="#ray-px" transform="rotate(135)"/>
+                <use href="#ray-px" transform="rotate(180)"/>
+                <use href="#ray-px" transform="rotate(225)"/>
+                <use href="#ray-px" transform="rotate(270)"/>
+                <use href="#ray-px" transform="rotate(315)"/>
+              </g>
+
+              <!-- Pixel-Ring: 12 Quadrate auf R=42, gegenläufige Rotation.
+                   Master-Pixel sitzt 12-Uhr, <use> rotiert um Mehrfache von 30°. -->
+              <g class="orb-ring">
+                <rect id="ring-px" x="-2" y="-42" width="4" height="4" fill="#00ff88"/>
+                <use href="#ring-px" transform="rotate(30)"/>
+                <use href="#ring-px" transform="rotate(60)"/>
+                <use href="#ring-px" transform="rotate(90)"/>
+                <use href="#ring-px" transform="rotate(120)"/>
+                <use href="#ring-px" transform="rotate(150)"/>
+                <use href="#ring-px" transform="rotate(180)"/>
+                <use href="#ring-px" transform="rotate(210)"/>
+                <use href="#ring-px" transform="rotate(240)"/>
+                <use href="#ring-px" transform="rotate(270)"/>
+                <use href="#ring-px" transform="rotate(300)"/>
+                <use href="#ring-px" transform="rotate(330)"/>
+              </g>
+
+              <!-- Core-Cluster: Plus-förmiger Pixel-Klumpen im Zentrum -->
+              <g class="orb-core">
+                <rect x="-6"  y="-6"  width="12" height="12" fill="#00ff88"/>
+                <rect x="-10" y="-2"  width="4"  height="4"  fill="#00ff88"/>
+                <rect x="6"   y="-2"  width="4"  height="4"  fill="#00ff88"/>
+                <rect x="-2"  y="-10" width="4"  height="4"  fill="#00ff88"/>
+                <rect x="-2"  y="6"   width="4"  height="4"  fill="#00ff88"/>
+              </g>
+            </svg>
+
+            <!-- Partikel-Layer: 8 Pixel, jeder mit eigener Flug-Richtung (--tx,--ty)
+                 und Stagger-Delay. Pure-CSS-Animation, kein JS-RAF nötig. -->
+            <div class="particles" aria-hidden="true">
+              <span style="--tx: 130px;  --ty:   0px;  --delay: 0.0s"></span>
+              <span style="--tx:  92px;  --ty: -92px;  --delay: 0.45s"></span>
+              <span style="--tx:   0px;  --ty:-115px;  --delay: 0.9s"></span>
+              <span style="--tx: -85px;  --ty: -85px;  --delay: 1.35s"></span>
+              <span style="--tx:-140px;  --ty:   0px;  --delay: 1.8s"></span>
+              <span style="--tx: -88px;  --ty:  88px;  --delay: 2.25s"></span>
+              <span style="--tx:   0px;  --ty: 110px;  --delay: 2.7s"></span>
+              <span style="--tx:  95px;  --ty:  95px;  --delay: 3.15s"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini-Chat-Log: letzte ~5 Zeilen User+AI, scrolllos. -->
+        <div class="mini-log" id="mini-log">
+          <div class="mini-log-empty">// listening …</div>
+        </div>
+      </div>
 
       <!-- Tutor-Panel: wird per T-Taste oder Motion-Sensor eingeblendet -->
       <div id="panel-tutor">
@@ -524,25 +920,9 @@
       </div>
     </div>
 
-    <div class="right-col">
-      <div class="card">
-        <h2>Sensoren</h2>
-        <div class="sensor-row">
-          <div class="dot" id="dot-button"></div>
-          <span>Button</span>
-        </div>
-        <div class="sensor-row">
-          <div class="dot" id="dot-light"></div>
-          <span>Light Sensor</span>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>Mandarin</h2>
-        <div class="vocab-word" id="vocab">—</div>
-        <div class="vocab-pinyin" id="vocab-pinyin"></div>
-        <div class="vocab-hint">Vokabel des Tages</div>
-      </div>
+    <!-- Side-Graph: der ehemals zentrale Sleep-Quality-Graph in kompakter Form -->
+    <div class="card side-graph">
+      <div id="panel-graph"></div>
     </div>
 
     <div class="terminal" id="terminal">
@@ -617,9 +997,8 @@
         document.getElementById('dot-button').classList.toggle('active', data.sensors.button);
         document.getElementById('dot-light').classList.toggle('active', data.sensors.light);
 
-        const v = data.vocab;
-        document.getElementById('vocab').textContent       = v ? v.word   : '—';
-        document.getElementById('vocab-pinyin').textContent = v ? v.pinyin : '';
+        // Mandarin-Vokabel-Block ist in dieser UI-Phase entfernt – `data.vocab`
+        // wird vom Backend weiter geliefert, hier aber nicht mehr angezeigt.
 
         const terminal = document.getElementById('terminal');
         const wasAtBottom = terminal.scrollHeight - terminal.scrollTop <= terminal.clientHeight + 5;
@@ -639,8 +1018,46 @@
       }
     }
 
-    setInterval(fetchState, 1000);
+    // ═══════════════════════════════════════════════════════
+    //  Mini-Chat-Log unter dem Orb
+    // ═══════════════════════════════════════════════════════
+    /* Holt die letzten paar Konversations-Zeilen und rendert sie unter
+       dem Orb. Läuft nur im Main-Modus → im Chat- oder Tutor-Mode wäre
+       das redundant (dort sieht man die volle Konversation).
+       Limit 5 Zeilen damit es nicht zur Wand wird. */
+    async function fetchMiniLog() {
+      if (appMode !== 'main') return;
+      try {
+        const res     = await fetch('/api/chat/history');
+        const history = await res.json();
+        renderMiniLog(history.slice(-5));
+      } catch (e) { /* offline-tolerant: stille Schleife */ }
+    }
+
+    function renderMiniLog(items) {
+      const container = document.getElementById('mini-log');
+      if (!container) return;
+      if (!items || items.length === 0) {
+        container.innerHTML = '<div class="mini-log-empty">// listening …</div>';
+        return;
+      }
+      // Roles aus /api/chat/history: 'user' | 'assistant'
+      // → Label kürzen für die schmale Spalte.
+      container.innerHTML = items.map(m => {
+        const role  = m.role === 'user' ? 'user' : 'ai';
+        const label = m.role === 'user' ? 'du'   : 'ai';
+        return `
+          <div class="mini-log-row">
+            <span class="mini-log-role ${role}">${label}</span>
+            <span class="mini-log-text">${escHtml(m.content || '')}</span>
+          </div>`;
+      }).join('');
+    }
+
+    setInterval(fetchState,    1000);
+    setInterval(fetchMiniLog,  2500);
     fetchState();
+    fetchMiniLog();
     fetchChart();
     checkAiStatus();
 
@@ -648,12 +1065,21 @@
     //  Mode-Wechsel
     // ═══════════════════════════════════════════════════════
     function goToMain() {
+      // Main-Display zeigt jetzt den AI-Orb als Default (panel-graph wurde
+      // in die rechte Side-Spalte verschoben und bleibt dort dauerhaft sichtbar).
       appMode = 'main';
       document.getElementById('view-main').style.display = 'grid';
       document.getElementById('view-datacollection').style.display = 'none';
       document.getElementById('panel-chat').style.display  = 'none';
       document.getElementById('panel-tutor').style.display = 'none';
-      document.getElementById('panel-graph').style.display = 'flex';
+      document.getElementById('panel-ai').style.display    = 'flex';
+    }
+
+    /* Orb-State umschalten: aktiv = schnellere/intensivere Animationen.
+       Wird genutzt während AI-Tokens streamen (Chat- oder Voice-Antwort). */
+    function setOrbActive(active) {
+      const orb = document.getElementById('ai-orb');
+      if (orb) orb.classList.toggle('active', active);
     }
 
     // ═══════════════════════════════════════════════════════
@@ -666,7 +1092,7 @@
 
     async function goToTutor() {
       appMode = 'tutor';
-      document.getElementById('panel-graph').style.display = 'none';
+      document.getElementById('panel-ai').style.display    = 'none';
       document.getElementById('panel-chat').style.display  = 'none';
       document.getElementById('panel-tutor').style.display = 'flex';
       setTutorHint('Starte Session...');
@@ -714,6 +1140,7 @@
       // Streamt KI-Antwort, spielt danach TTS ab und geht in Hör-Modus
       if (tutorWaiting) return;
       tutorWaiting = true;
+      setOrbActive(true);   // Orb-Animation hochfahren während AI streamt
       setMicStatus('KI denkt...', '');
       setTutorHint('');
 
@@ -757,6 +1184,7 @@
         contentEl.textContent = '[Fehler: ' + e.message + ']';
       } finally {
         tutorWaiting = false;
+        setOrbActive(false);
         // Jetzt ist die KI fertig → User kann sprechen
         setMicStatus('bereit', 'listening');
         setTutorHint('Space = Aufnahme starten');
@@ -863,8 +1291,10 @@
 
     async function goToChat() {
       appMode = 'chat';
-      // view-main bleibt sichtbar – nur das Panel innerhalb tauscht
-      document.getElementById('panel-graph').style.display = 'none';
+      // view-main bleibt sichtbar – nur das Panel innerhalb tauscht.
+      // panel-ai (Orb) raus, panel-chat rein. panel-graph in side-graph
+      // bleibt unverändert sichtbar.
+      document.getElementById('panel-ai').style.display   = 'none';
       document.getElementById('panel-chat').style.display = 'flex';
       await renderChatHistory();
       // Direkt fokussieren → sofort tippen ohne Klick
@@ -941,6 +1371,7 @@
 
       input.value = '';
       chatWaiting = true;
+      setOrbActive(true);   // Orb-Pulse hochfahren, solange der Stream läuft
 
       const container = document.getElementById('chat-messages');
 
@@ -1012,6 +1443,7 @@
         contentEl.innerHTML = '<span style="color:#ff4444">[Verbindungsfehler]</span>';
       } finally {
         chatWaiting = false;
+        setOrbActive(false);  // Orb wieder in Idle-Pulse
         if (appMode === 'chat') document.getElementById('chat-input').focus();
       }
     }

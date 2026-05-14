@@ -68,6 +68,43 @@ def api_state():
     return jsonify(snapshot)
 
 
+# ── Sensor-Webhook ─────────────────────────────────────────────────────
+#
+# POST /api/sensor/<name> – Eingangskanal fuer externe Sensor-Trigger.
+#
+# Seit der PC↔Pi-Topologie-Migration laeuft das Backend auf dem PC. Echte
+# Sensoren (Pi-PIR, Tuersensor, Mikrocontroller) haengen aber physisch
+# am Pi (oder spaeter direkt am LAN). Damit sie Events ins System bringen
+# koennen, ohne dass main.py auf jedem Knoten laufen muss, schicken sie
+# einen HTTP-POST an diesen Endpoint. Der Sensor-Name wird gequeued, der
+# Event-Loop in main.py mapped ihn auf den jeweiligen Event.
+#
+# Whitelist gegen Tippfehler und gegen Querschuss aus dem LAN (Hotspot
+# ist nicht streng abgeschottet). Bewusst nicht aus events.py generiert –
+# Sensor-Namen sind die "physischen" Eingangskanaele, Events sind die
+# internen logischen Ereignisse. Beide Welten getrennt halten.
+
+_ALLOWED_SENSORS = {"button", "light", "motion", "door"}
+
+
+@app.route('/api/sensor/<name>', methods=['POST'])
+def api_sensor_trigger(name):
+    """
+    Externes Sensor-Signal entgegennehmen und in die Verarbeitungs-
+    Queue stellen. Antwortet sofort – die eigentliche Verarbeitung
+    macht der Event-Loop asynchron.
+
+    Body wird aktuell ignoriert (reines Trigger-Signal reicht). Spaeter
+    kann hier z.B. ein Wert (Helligkeit, Tueroffen-Dauer) mitgegeben
+    werden – dann erweitern wir queue_sensor() um ein meta-Dict.
+    """
+    if name not in _ALLOWED_SENSORS:
+        return jsonify({"error": f"unbekannter Sensor: {name}"}), 400
+    state.queue_sensor(name)
+    state.push_log(f"WEBHOOK: sensor/{name} von {request.remote_addr}")
+    return jsonify({"ok": True})
+
+
 # ── Data Collection ────────────────────────────────────────────────────
 
 @app.route('/api/categories')

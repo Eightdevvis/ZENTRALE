@@ -47,6 +47,19 @@ _logs = deque(maxlen=100)
 # WICHTIG: Wird NICHT auf Disk gespeichert – beim Neustart weg.
 _chat_history = deque(maxlen=50)
 
+# ── Externe Sensor-Trigger (über Webhook) ─────────────────────────────
+# Seit der PC↔Pi-Topologie-Migration kommen Sensor-Signale nicht mehr
+# nur lokal aus der Tastatur-Simulation (sensors.py), sondern auch via
+# HTTP-POST von externen Quellen (Pi-Bridge → POST /api/sensor/<name>).
+#
+# Der Flask-Handler legt den Sensor-Namen hier rein, der Event-Loop in
+# main.py drainet die Queue pro Tick und mapped sie auf Events.
+#
+# Bewusst eine Liste, nicht ein "letztes Pending"-Flag: schnelle
+# Doppel-Trigger gehen sonst verloren. maxlen=100 als Sicherheitsnetz
+# falls der Loop mal hängt – ältester Trigger fliegt dann raus.
+_sensor_queue = deque(maxlen=100)
+
 
 def push_event(name: str):
     """Fügt ein neues Event an den Anfang der Event-Liste."""
@@ -112,6 +125,34 @@ def clear_chat_history():
     """Löscht die gesamte Chat-History (z.B. bei /clear im Chat)."""
     with _lock:
         _chat_history.clear()
+
+
+def queue_sensor(name: str):
+    """
+    Reiht einen extern eingegangenen Sensor-Trigger in die Queue.
+    Aufrufer: ui/app.py POST /api/sensor/<name>.
+
+    name: Sensor-Bezeichner wie "button", "light", "motion", "door".
+          Validierung passiert im Flask-Handler – hier landet nur, was
+          schon durch die Whitelist durch ist.
+    """
+    with _lock:
+        _sensor_queue.append(name)
+
+
+def drain_sensor_queue() -> list:
+    """
+    Gibt alle gequeueten Sensor-Trigger zurück und leert die Queue
+    in einem Rutsch. Aufrufer: main.py einmal pro Tick.
+
+    Kopiert atomar (Lock!) und gibt eine normale Liste raus – der
+    Aufrufer kann frei darüber iterieren, ohne dass nebenher noch
+    was reinkommt und die Reihenfolge verwirrt.
+    """
+    with _lock:
+        items = list(_sensor_queue)
+        _sensor_queue.clear()
+        return items
 
 
 def get_snapshot() -> dict:

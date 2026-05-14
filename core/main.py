@@ -10,8 +10,23 @@ from brain import process_event
 from actions import handle_action
 from clock import check_time
 from sensors import read_light_sensor, read_button, read_motion_sensor
-from events import LIGHT_SENSOR_TRIGGER, BUTTON_PRESS, SYSTEM_BOOT, PRESENCE_DETECTED
+from events import (
+    LIGHT_SENSOR_TRIGGER, BUTTON_PRESS, SYSTEM_BOOT, PRESENCE_DETECTED,
+    DOOR_TOGGLE,
+)
 import state
+
+
+# Mapping: Sensor-Name aus dem Webhook -> intern verwendeter Event-Name.
+# Lokal definiert (nicht in events.py), weil es eine Adapter-Schicht ist:
+# physikalischer Eingang -> logisches Ereignis. Die Webhook-Whitelist in
+# ui/app.py muss synchron bleiben.
+_SENSOR_TO_EVENT = {
+    "button": BUTTON_PRESS,
+    "light":  LIGHT_SENSOR_TRIGGER,
+    "motion": PRESENCE_DETECTED,
+    "door":   DOOR_TOGGLE,
+}
 
 
 def log(msg: str):
@@ -66,6 +81,15 @@ def main():
             event_queue.append(BUTTON_PRESS)
         if motion:
             event_queue.append(PRESENCE_DETECTED)
+
+        # 1b️⃣ Externe Sensor-Trigger einsammeln (vom Webhook).
+        # Damit kann die Pi-Sensor-Bridge (oder ein anderer LAN-Client)
+        # via POST /api/sensor/<name> Events feuern, ohne dass main.py
+        # selbst am GPIO haengt. Adapter-Mapping in _SENSOR_TO_EVENT.
+        for sensor_name in state.drain_sensor_queue():
+            mapped = _SENSOR_TO_EVENT.get(sensor_name)
+            if mapped:
+                event_queue.append(mapped)
 
         # 2️⃣ Clock prüfen
         now = check_time(7, 0)

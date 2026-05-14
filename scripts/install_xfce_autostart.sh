@@ -63,6 +63,25 @@ AUTOSTART_DIR="$HOME/.config/autostart"
 XFCONF_DIR="$HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
 mkdir -p "$AUTOSTART_DIR" "$XFCONF_DIR"
 
+# ---------------------------------------------------------------------
+# Backend-URL fuer den Kiosk.
+#
+# Seit der Topologie-Migration laeuft das schwere Backend (Flask/AI/
+# Whisper/TTS) NICHT mehr auf dem Pi, sondern auf dem PC. Der Pi ist
+# nur noch Display-Klient + (kuenftig) Sensor-Bridge. Firefox-Kiosk
+# muss deshalb auf den PC zeigen, nicht mehr auf localhost.
+#
+# Quelle der URL: env-Variable ZENTRALE_BACKEND_URL (z.B.
+# "http://10.117.205.127:5000"). Default ist weiterhin localhost,
+# damit das Skript ohne Argumente lokal sinnvoll bleibt (alt-Modus
+# / Solo-Test direkt am PC).
+#
+# Aenderung der IP nach Hotspot-Wechsel: Skript neu aufrufen mit
+# neuer URL, alte zentrale.desktop wird einfach ueberschrieben.
+# ---------------------------------------------------------------------
+BACKEND_URL="${ZENTRALE_BACKEND_URL:-http://localhost:5000}"
+echo "Kiosk-Backend-URL: $BACKEND_URL"
+
 # --- xfce4-session: Minimal-Failsafe -----------------------------------------
 # Diese Datei steuert was xfce4-session beim Start hochzieht. Default
 # (aus /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml) hat
@@ -150,12 +169,16 @@ EOF
 # wenn der Core spinnt; der User sieht dann zwar die Fehlerseite, kann
 # aber den Hotkey nutzen statt einen dunklen Bildschirm zu kriegen.
 rm -f "$AUTOSTART_DIR/zentrale.desktop.disabled"
-cat > "$AUTOSTART_DIR/zentrale.desktop" << 'EOF'
+# Heredoc OHNE Quotes -> $BACKEND_URL wird expandiert.
+# Die `$(seq ...)`-Substitution soll dagegen LITERAL im File stehen
+# (wird erst beim Firefox-Start ausgewertet, nicht jetzt), deshalb
+# escapen wir das Dollar-Zeichen.
+cat > "$AUTOSTART_DIR/zentrale.desktop" << EOF
 [Desktop Entry]
 Type=Application
 Name=ZENTRALE Kiosk
 Comment=Firefox auf das ZENTRALE-Dashboard, nach Boot automatisch
-Exec=bash -c 'for i in $(seq 1 60); do curl -fs http://localhost:5000/ >/dev/null && break; sleep 1; done; firefox-esr --kiosk http://localhost:5000'
+Exec=bash -c 'for i in \$(seq 1 60); do curl -fs ${BACKEND_URL}/ >/dev/null && break; sleep 1; done; firefox-esr --kiosk ${BACKEND_URL}'
 X-GNOME-Autostart-enabled=true
 EOF
 
