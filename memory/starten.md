@@ -1,5 +1,9 @@
 # Starten (lokal)
 
+Seit der PC↔Pi-Migration (siehe `topologie.md`) laufen alle drei
+Backend-Prozesse auf dem **PC**, nicht mehr auf dem Pi. Der Pi
+ist Display-Kiosk + Sensor-Bridge.
+
 ZENTRALE besteht aus **drei Prozessen**, die in eigenen Terminals laufen
 sollten – jeder hat sein eigenes Terminal-Logging und Crash-Verhalten.
 
@@ -62,21 +66,24 @@ Egal. Die Services hängen lose über HTTP zusammen – wenn ZENTRALE einen
 Service nicht erreicht, loggt sie das im Terminal und versucht es beim
 nächsten Request erneut.
 
-## Auf dem Pi: alles via systemd
+## Auf dem Pi: Bridge + Kiosk, KEIN Backend
 
-Lokal sind es drei Terminals (s. oben). Auf dem Pi laufen die gleichen
-drei Prozesse als systemd-Units, die beim Boot automatisch starten:
+Seit der Migration läuft auf dem Pi nur noch:
 
-- `zentrale.service` — Core, normale Priorität.
-- `whisper.service` — Nice=19 + SCHED_IDLE, läuft nur wenn der Core
-  gerade nichts will (Modell-Load darf den Dashboard-Boot nicht
-  ausbremsen).
-- `tts.service` — gleich wie Whisper.
+- `pi_sensor_bridge.service` — leitet GPIO/Tastatur-Trigger per HTTP
+  an das PC-Backend (`/api/sensor/<name>`).
+- Firefox-Kiosk auf `http://<PC-IP>:5000` (via XFCE-Autostart, siehe
+  `deployment.md`).
 
-Logs gemeinsam tailen:
+`zentrale.service`, `whisper.service`, `tts.service` sind auf dem Pi
+**deaktiviert** (`systemctl disable`). Sie liegen physisch in
+`/etc/systemd/system/`, weil das deploy-Script sie installiert hat,
+aber sie werden nicht mehr beim Boot gestartet.
+
+Logs der Pi-Bridge:
 
 ```bash
-sudo journalctl -u zentrale.service -u whisper.service -u tts.service -f
+ssh zentrale "sudo journalctl -u pi_sensor_bridge.service -f"
 ```
 
-Details + Setup: `deployment.md`.
+Setup + IP-Wechsel-Pfad: `topologie.md` und `deployment.md`.

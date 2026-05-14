@@ -1,5 +1,30 @@
 # Deployment auf Raspberry Pi
 
+**Stand (2026-05):** Seit der PC↔Pi-Migration (siehe `topologie.md`)
+hostet der Pi **kein Backend mehr**. Auf dem Pi laufen nur noch:
+
+- Firefox-Kiosk (zeigt das PC-Dashboard)
+- `pi_sensor_bridge.service` (Hardware-Sensoren → HTTP an PC)
+
+Die unten beschriebenen `zentrale.service` / `whisper.service` /
+`tts.service` sind auf dem Pi `disabled`. Die Anleitung bleibt
+trotzdem hier dokumentiert – falls ein Setup mal ohne PC laufen soll
+oder ein zweiter Pi mit eigenem Backend aufgesetzt wird.
+
+## Pi-Sensor-Bridge (neu, aktiver Service)
+
+Einmalig auf dem Pi:
+
+```bash
+sudo cp /opt/zentrale/deploy/pi_sensor_bridge.service /etc/systemd/system/
+sudo systemctl daemon-reload
+echo 'ZENTRALE_BACKEND_URL=http://<PC-IP>:5000' | sudo tee /etc/zentrale-bridge.env
+sudo systemctl enable --now pi_sensor_bridge.service
+```
+
+Bei IP-Wechsel: nur `/etc/zentrale-bridge.env` updaten und Service
+neu starten (`sudo systemctl restart pi_sensor_bridge.service`).
+
 ## 1) Pi vorbereiten (einmalig)
 
 ```bash

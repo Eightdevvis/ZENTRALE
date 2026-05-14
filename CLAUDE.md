@@ -19,6 +19,7 @@ hält die Antworten fokussiert.
 | Was du wissen willst                      | Wo es steht                          |
 |-------------------------------------------|--------------------------------------|
 | Was ist ZENTRALE, aktueller Stand         | `memory/ueberblick.md`               |
+| Wer läuft wo (PC ↔ Pi)                    | `memory/topologie.md`                |
 | Threads, Datenfluss, Modul-Übersicht      | `memory/architektur.md`              |
 | Sensoren, Events, Brain, Actions          | `memory/event_system.md`             |
 | Ollama, Memory, Tools, Net-Logging        | `memory/ki_system.md`                |

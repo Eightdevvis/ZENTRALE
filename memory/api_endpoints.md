@@ -10,6 +10,16 @@ nutzen Server-Sent Events (SSE).
 | `/`                   | GET     | Dashboard HTML                        |
 | `/api/state`          | GET     | Aktueller State (Events, Sensoren, Vokabel, Logs) – wird vom Frontend jede Sekunde gepollt |
 
+## Sensor-Webhook
+
+| Endpoint                  | Methode | Beschreibung                          |
+|---------------------------|---------|---------------------------------------|
+| `/api/sensor/<name>`      | POST    | Externes Sensor-Signal entgegennehmen und in die Event-Queue legen. Erlaubte `<name>`: `button`, `light`, `motion`, `door` (Whitelist `_ALLOWED_SENSORS` in `ui/app.py`). Body wird aktuell ignoriert. |
+
+Verwendet von `scripts/pi_sensor_bridge.py` (Pi → PC) und kann von
+beliebigen LAN-Clients aufgerufen werden (Mikrocontroller, anderer Pi,
+manueller curl-Test). Siehe `topologie.md`.
+
 ## Data Collection
 
 | Endpoint              | Methode | Beschreibung                          |

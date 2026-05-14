@@ -1,0 +1,47 @@
+# =============================================================================
+# pi_sensor_bridge.service
+# -----------------------------------------------------------------------------
+# Laeuft auf dem Pi und schickt Hardware-Sensor-Trigger (Tuersensor, PIR,
+# Buttons) per HTTP an das PC-Backend. Siehe scripts/pi_sensor_bridge.py
+# fuer Details.
+#
+# INSTALLATION (einmalig, auf dem Pi):
+#   sudo cp /opt/zentrale/deploy/pi_sensor_bridge.service \
+#           /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   echo 'ZENTRALE_BACKEND_URL=http://10.117.205.127:5000' \
+#       | sudo tee /etc/zentrale-bridge.env
+#   sudo systemctl enable --now pi_sensor_bridge.service
+#
+# IP-WECHSEL (z.B. neuer Hotspot, neue PC-IP):
+#   sudo nano /etc/zentrale-bridge.env   # neue URL eintragen
+#   sudo systemctl restart pi_sensor_bridge.service
+#
+# WARUM User=root:
+#   Die keyboard-Library liest globale Keypress-Events ueber /dev/input/
+#   und braucht dafuer root. Sobald die Bridge ausschliesslich auf GPIO
+#   umgestellt ist und der User in der Gruppe gpio ist, kann das auf
+#   User=sasha (oder den eigentlichen Pi-User) zurueckwandern – dann
+#   ohne sudo, ohne /dev/input-Zugriff.
+# =============================================================================
+
+[Unit]
+Description=ZENTRALE Sensor-Bridge (Pi -> PC)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/zentrale
+# EnvironmentFile statt hartcodierter URL: bei Hotspot-/IP-Wechsel muss
+# nur diese eine Datei angepasst werden, nicht die Service-Unit selbst
+# (sonst muesste man jedes Mal daemon-reload machen).
+EnvironmentFile=-/etc/zentrale-bridge.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/zentrale/.venv/bin/python /opt/zentrale/scripts/pi_sensor_bridge.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

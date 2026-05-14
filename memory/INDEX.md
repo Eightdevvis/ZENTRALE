@@ -14,6 +14,7 @@ hier sofort mitziehen, sonst tote Links.
 | Thema                              | Pfad                                |
 |------------------------------------|-------------------------------------|
 | Projekt-Überblick & Status         | memory/ueberblick.md                |
+| Topologie (PC ↔ Pi, wer macht was) | memory/topologie.md                 |
 | Gesamt-Architektur & Threads       | memory/architektur.md               |
 | Event-System (Sensoren → Actions)  | memory/event_system.md              |
 | KI-System (Ollama, Memory, Tools)  | memory/ki_system.md                 |
