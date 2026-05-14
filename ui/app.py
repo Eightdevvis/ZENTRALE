@@ -254,6 +254,71 @@ def api_ai_status():
     })
 
 
+# ── Voice-Pipeline (sprachneutral) ─────────────────────────────────────
+#
+# Diese Endpoints sind die generische Voice-API der ZENTRALE. Sie
+# nehmen einen `lang`-Parameter entgegen und reichen ihn an die
+# Audio-Services durch. Welche Sprachen wirklich funktionieren, haengt
+# vom geladenen TTS-/Whisper-Modell ab (siehe services/tts_service.py
+# bzw. WHISPER_LANG-env in services/whisper_service.py).
+#
+# Tutor-spezifische Aliase (/api/tutor/speak, /api/tutor/transcribe)
+# sind weiter unten – sie hardcoden lang='zh' und nutzen ansonsten
+# dieselbe Logik. Heisst: die Pipeline gehoert dem Core, der Tutor ist
+# nur ein Aufrufer.
+
+
+@app.route('/api/speak', methods=['POST'])
+def api_speak():
+    """
+    Text -> WAV. Sprachneutral.
+
+    Body (JSON):
+      text     – Pflichtfeld
+      lang     – Sprachcode (default 'de' via DEFAULT_LANG in core/audio.py)
+      speed    – Sprechgeschwindigkeit (default 0.9)
+      speaker  – Sprecher-ID (default 0; bedeutung modellabhaengig)
+
+    Response: audio/wav, oder 503 wenn das Modell fuer die Sprache fehlt.
+    """
+    body    = request.get_json() or {}
+    text    = (body.get('text') or '').strip()
+    lang    = (body.get('lang') or '').strip() or None
+    speed   = float(body.get('speed', 0.9))
+    speaker = int(body.get('speaker', 0))
+
+    if not text:
+        return jsonify({"error": "kein Text"}), 400
+
+    wav = audio.synthesize(text, lang=lang, speed=speed, speaker=speaker)
+    if not wav:
+        # core/audio.py loggt den Grund. Wir geben dem Browser einen
+        # einfachen 503 zurueck – das Mini-Log zeigt die Details.
+        return jsonify({"error": "TTS nicht verfuegbar"}), 503
+
+    return Response(wav, content_type='audio/wav')
+
+
+@app.route('/api/transcribe', methods=['POST'])
+def api_transcribe():
+    """
+    Audio (WAV) -> Text. Sprachneutral.
+
+    multipart/form-data:
+      audio    – WAV-Datei (Pflichtfeld)
+      lang     – Sprachcode (default 'de'). Wird als Whisper-Hint genutzt.
+
+    Response: JSON {"text": "..."}.
+    """
+    if 'audio' not in request.files:
+        return jsonify({"error": "kein 'audio'-Feld"}), 400
+
+    audio_bytes = request.files['audio'].read()
+    lang        = (request.form.get('lang') or '').strip() or None
+    text        = audio.transcribe(audio_bytes, lang=lang)
+    return jsonify({"text": text})
+
+
 # ── Tutor ─────────────────────────────────────────────────────────────
 
 @app.route('/api/tutor/status')
@@ -324,37 +389,37 @@ def api_tutor_respond():
 @app.route('/api/tutor/transcribe', methods=['POST'])
 def api_tutor_transcribe():
     """
-    Nimmt eine WAV-Datei vom Browser entgegen (MediaRecorder-Output),
-    schickt sie an den Whisper-Service und gibt den transkribierten Text zurück.
-
-    Browser sendet: multipart/form-data mit Feld 'audio'
-    Response: JSON {"text": "我很好"}
+    Tutor-Alias fuer /api/transcribe mit lang='zh' (Mandarin).
+    Existiert aus Rueckwaerts-Kompatibilitaet; das Frontend kann
+    weiterhin den Tutor-Pfad verwenden, ohne den lang-Param mitzugeben.
     """
     if 'audio' not in request.files:
         return jsonify({"error": "kein 'audio'-Feld"}), 400
 
     audio_bytes = request.files['audio'].read()
-    text        = audio.transcribe(audio_bytes)
+    text        = audio.transcribe(audio_bytes, lang='zh')
     return jsonify({"text": text})
 
 
 @app.route('/api/tutor/speak', methods=['POST'])
 def api_tutor_speak():
     """
-    Lässt den TTS-Service einen Text auf Mandarin sprechen und gibt
-    die WAV-Datei direkt zurück – der Browser spielt sie mit Web Audio ab.
+    Tutor-Alias fuer /api/speak mit lang='zh' (Mandarin). Wie oben:
+    nur ein duenner Wrapper damit der Tutor-Code im Frontend nicht
+    geaendert werden muss.
 
-    Body: JSON {"text": "你好！", "speed": 0.9}
+    Body: JSON {"text": "你好！", "speed": 0.9, "speaker": 0}
     Response: audio/wav
     """
-    body  = request.get_json() or {}
-    text  = body.get('text', '').strip()
-    speed = float(body.get('speed', 0.9))
+    body    = request.get_json() or {}
+    text    = body.get('text', '').strip()
+    speed   = float(body.get('speed', 0.9))
+    speaker = int(body.get('speaker', 0))
 
     if not text:
         return jsonify({"error": "kein Text"}), 400
 
-    wav = audio.synthesize(text, speed=speed)
+    wav = audio.synthesize(text, lang='zh', speed=speed, speaker=speaker)
     if not wav:
         return jsonify({"error": "TTS nicht verfügbar"}), 503
 

@@ -1,11 +1,24 @@
 # Mandarin-Tutor
 
+## Position in der Architektur
+
+Tutor ist ein **Addon** auf der Core-AI, nicht der Owner der
+Voice-Pipeline. STT (Whisper) und TTS (sherpa-onnx / Piper) leben
+zentral in `services/whisper_service.py` und `services/tts_service.py`
+und sind sprachneutral nutzbar via `/api/transcribe` und `/api/speak`
+(siehe `audio_system.md`). Der Tutor ruft diese Endpoints **als
+Aufrufer** mit `lang='zh'` auf – er besitzt sie nicht.
+
+Die alten Pfade `/api/tutor/transcribe` und `/api/tutor/speak` existieren
+als dünne Aliase mit `lang='zh'`-Default, damit das Tutor-Frontend ohne
+Änderung weiterläuft.
+
 ## Idee
 
 Smalltalk auf Mandarin mit der KI – mit Spracheingabe (Whisper-STT)
-und Sprachausgabe (sherpa-onnx-TTS, hardcoded). Vokabeln kommen
-aus `vocab_mandarin.json`. Die KI nutzt 80 % bekannte Vokabeln
-(zur Festigung) und 20 % neue (zum Erweitern).
+und Sprachausgabe (sherpa-onnx-TTS, Modell `vits-zh-aishell3`).
+Vokabeln kommen aus `vocab_mandarin.json`. Die KI nutzt 80 % bekannte
+Vokabeln (zur Festigung) und 20 % neue (zum Erweitern).
 
 ## Vokabel-Daten-Modell
 

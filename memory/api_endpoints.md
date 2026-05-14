@@ -44,13 +44,29 @@ manueller curl-Test). Siehe `topologie.md`.
 | `/api/memory/<id>`    | DELETE  | Memory-Eintrag löschen                |
 | `/api/ai/status`      | GET     | Ollama-Verfügbarkeit                  |
 
+## Voice (sprachneutral, Core)
+
+Die Voice-Pipeline gehört zur Core-AI, nicht zum Tutor. Sprache wird
+per Parameter mitgegeben.
+
+| Endpoint              | Methode | Beschreibung                          |
+|-----------------------|---------|---------------------------------------|
+| `/api/speak`          | POST    | Text → WAV. JSON-Body: `{text, lang?, speed?, speaker?}`. `lang` Default `de`. Andere Sprachen ohne Modell → 503. |
+| `/api/transcribe`     | POST    | Audio → Text. Multipart: `audio` + `lang?`. `lang` Default `de`.  |
+
+Details zu Modellen + Sprachen: `audio_system.md`.
+
 ## Tutor
+
+Tutor ist ein Aufrufer der Voice-Pipeline mit `lang='zh'`. Die
+Tutor-Endpoints unterhalb sind dünne Aliase mit Hardcode `lang='zh'`
+für Rückwärtskompatibilität des Tutor-Frontend.
 
 | Endpoint                     | Methode | Beschreibung                          |
 |------------------------------|---------|---------------------------------------|
 | `/api/tutor/status`          | GET     | Session-Status + Audio-Service-Status |
 | `/api/tutor/start`           | POST    | Session starten, KI-Begrüßung streamen (SSE) |
 | `/api/tutor/respond`         | POST    | User-Text → KI-Antwort (SSE)          |
-| `/api/tutor/transcribe`      | POST    | Audio-Datei → Text (Whisper)          |
-| `/api/tutor/speak`           | POST    | Text → WAV-Audio (TTS)                |
+| `/api/tutor/transcribe`      | POST    | Alias für `/api/transcribe` mit `lang='zh'` |
+| `/api/tutor/speak`           | POST    | Alias für `/api/speak` mit `lang='zh'` |
 | `/api/tutor/stop`            | POST    | Session beenden                       |

@@ -32,18 +32,27 @@ WHISPER_MODEL=small  venv/bin/python services/whisper_service.py  # ~500 MB (def
 WHISPER_MODEL=medium venv/bin/python services/whisper_service.py  # ~1.5 GB
 ```
 
-## TTS-Modell (sherpa-onnx)
+## TTS-Modelle (sherpa-onnx + Piper)
 
-Einmaliger Download nach `data/tts_model/vits-zh-aishell3/` (~120 MB):
+Zwei Modelle pro Sprache, beide werden parallel von
+`tts_service.py` geladen (Engine-Registry):
+
+- `zh` – sherpa-onnx `vits-zh-aishell3` (~120 MB, Tutor-Modus)
+- `de` – Piper `de_DE-thorsten-medium` (~60 MB, Haupt-Chat)
+
+Einmaliger Download nach `data/tts_model/<voice>/`:
 
 ```bash
 sudo chown -R $USER:$USER data/   # falls data/ root gehört
-venv/bin/python services/download_tts_model.py
+venv/bin/python services/download_tts_model.py        # beide laden
+# oder gezielt:
+venv/bin/python services/download_tts_model.py zh
+venv/bin/python services/download_tts_model.py de
 ```
 
-`tts_service.py` ist **hardcoded** auf sherpa-onnx mit diesem Modell –
-es gibt aktuell keinen Auto-Switch zu MeloTTS oder anderen Engines.
-Wer MeloTTS will, müsste `services/tts_service.py` selbst anpassen.
+Neue Sprache hinzufügen: Modell-Loader in `services/tts_service.py`
+ergänzen (`_try_load_<lang>()`) und in `download_tts_model.py` einen
+neuen `download_<lang>()` anlegen.
 
 ## System-Pakete (für Pi)
 

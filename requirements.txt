@@ -10,8 +10,13 @@ keyboard
 # Spracherkennung (STT) – faster-whisper läuft auf CPU ohne GPU
 faster-whisper
 
-# Text-to-Speech (TTS) – offline, chinesische Stimmen enthalten
+# Text-to-Speech (TTS) – offline
+# sherpa-onnx liefert die chinesische Stimme (vits-zh-aishell3, Tutor-Modus).
+# piper-tts liefert die deutsche Stimme (thorsten-medium, Haupt-Chat).
+# Beide werden parallel im services/tts_service.py geladen – pro Sprache
+# eine Engine. Modell-Download via services/download_tts_model.py.
 sherpa-onnx
+piper-tts
 
 # Audio-Aufnahme und -Wiedergabe (für spätere Pi-Nutzung)
 sounddevice

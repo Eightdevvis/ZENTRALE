@@ -59,25 +59,28 @@ und im CSS:
 Sensoren-Spalte ist `auto`-breit (so schmal wie der längste Sensor-Text),
 Graph-Spalte `clamp(220px, 22vw, 340px)`, AI-Mitte nimmt den Rest.
 
-## Voice-Pipeline (Stand: NOCH NICHT GEBAUT)
+## Voice-Pipeline (Backend ready, Main-Mode-Frontend offen)
 
-Was schon existiert (kann wiederverwendet werden):
+Backend-Endpoints (sprachneutral, Core):
 
-- **STT**: `POST /api/tutor/transcribe` – Audio-Blob → Text via Whisper.
-  Generisch, Sprache wird via Whisper-Modell entschieden.
-- **LLM**: `POST /api/chat` (deutsch, Mistral, mit Memory) oder
-  `POST /api/tutor/respond` (Mandarin-System-Prompt). SSE-Token-Stream.
-- **TTS**: `POST /api/tutor/speak` – Text → WAV. Aktuell für den Tutor
-  konfiguriert; ob die Stimme deutsch/Mandarin kann muss vor Voice-Bau
-  geklärt werden (siehe `memory/audio_system.md`).
+- **STT**: `POST /api/transcribe` – multipart `audio` + `lang` (default `de`).
+  Liefert `{"text": "...", "language": "...", "confidence": ...}`.
+- **LLM**: `POST /api/chat` (deutsch, Mistral, mit Memory) – SSE-Stream.
+  Tutor nutzt `POST /api/tutor/respond` (Mandarin-System-Prompt).
+- **TTS**: `POST /api/speak` – JSON `{text, lang?, speed?, speaker?}`.
+  `lang='de'` → Piper (thorsten-medium), `lang='zh'` → sherpa-onnx
+  (vits-zh-aishell3), andere → 503.
 
-Was fehlt für Main-Mode-Voice:
+Legacy-Aliase für den Tutor: `/api/tutor/transcribe` und `/api/tutor/speak`
+mit hartkodiertem `lang='zh'`.
+
+Was fehlt für Main-Mode-Voice (Frontend):
 
 - **Trigger** im Main-Mode (Space-Taste belegt bisher den Tutor; eigene
   Voice-Geste wählen, z.B. lang-drücken Space oder PIR-Motion ohne
   Tutor-Session).
-- **Frontend-Flow** in `panel-ai`: Mikrofon → Whisper → AI-Stream →
-  TTS-Wiedergabe.
+- **Frontend-Flow** in `panel-ai`: Mikrofon → `/api/transcribe?lang=de`
+  → `/api/chat` (SSE) → `/api/speak?lang=de` → `<audio>`-Wiedergabe.
 - **Orb-Lebenszyklus** im Main-Mode (das einzig schon Verdrahtete):
   ```js
   setOrbActive(true);

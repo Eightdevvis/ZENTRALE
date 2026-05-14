@@ -1,9 +1,15 @@
 # services/tts_service.py
 #
-# Offline Mandarin-TTS mit sherpa-onnx – läuft auf dem Linux-PC.
+# Offline TTS-Service – läuft auf dem Linux-PC.
 #
-# Modell: vits-zh-aishell3 (Apache 2.0, 174 Sprecher, ~120MB)
-# Kein Internet nötig nach dem einmaligen Modell-Download.
+# Multi-Engine: pro Sprache kann ein anderes Modell geladen sein.
+# Aktuell installiert:
+#   - 'zh' (Mandarin)  – sherpa-onnx mit vits-zh-aishell3 (174 Sprecher,
+#                         Apache 2.0, ~120MB)
+#   - 'de' (Deutsch)   – NOCH NICHT installiert (Iteration B, vermutlich
+#                         Piper "thorsten-medium")
+# Andere Sprachen → 503 mit klarer Fehlermeldung, damit der Aufrufer weiß
+# dass die Pipeline existiert aber das Modell nicht.
 #
 # ── Setup (einmalig) ──────────────────────────────────────────────────
 #   pip install sherpa-onnx soundfile
@@ -14,16 +20,21 @@
 #
 # ── Endpoint ──────────────────────────────────────────────────────────
 #   POST http://<PC-IP>:5051/speak
-#   Body: JSON {"text": "你好，今天天气怎么样？", "speed": 1.0, "speaker": 0}
-#   Response: audio/wav
+#   Body: JSON {"text": "...", "lang": "de", "speed": 0.9, "speaker": 0}
+#         lang     – ISO-Sprachcode. Default 'de'.
+#         speed    – Sprechgeschwindigkeit (1.0 = normal).
+#         speaker  – Sprecher-ID, modellabhängig.
+#   Response (200): audio/wav  – generierte Sprache
+#   Response (503): JSON-Error wenn für die Sprache kein Modell geladen ist
 #
 #   GET http://<PC-IP>:5051/health
-#   Response: {"ok": true, "engine": "sherpa-onnx", "speakers": 174}
+#   Response: {"ok": true, "engines": {"zh": {...}, "de": {...}}}
 #
-# ── Warum sherpa-onnx? ────────────────────────────────────────────────
-#   Keine Systemabhängigkeiten (kein MeCab, kein espeak).
-#   Läuft auf CPU, gute Mandarin-Qualität, MIT/Apache-Modelle.
-#   Wenn MeloTTS später installiert ist, kann man auf dieses wechseln.
+# ── Warum sherpa-onnx für Mandarin? ────────────────────────────────────
+#   Keine Systemabhängigkeiten (kein MeCab, kein espeak), CPU-only,
+#   gute Mandarin-Qualität, freie Modelle. Für Deutsch wechseln wir
+#   bewusst die Engine (Piper) statt zu versuchen sherpa-onnx
+#   deutsche Stimmen einzusperren.
 
 import io
 import logging
@@ -38,75 +49,175 @@ log = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Pfad zum heruntergeladenen Modell (download_tts_model.py legt es dort ab)
-_MODEL_DIR  = os.path.join(os.path.dirname(__file__), '..', 'data', 'tts_model', 'vits-zh-aishell3')
-_MODEL_FILE = os.path.join(_MODEL_DIR, 'vits-aishell3.onnx')
-_LEXICON    = os.path.join(_MODEL_DIR, 'lexicon.txt')
-_TOKENS     = os.path.join(_MODEL_DIR, 'tokens.txt')
+_DATA_ROOT = os.path.join(os.path.dirname(__file__), '..', 'data', 'tts_model')
 
-# ── TTS-Modell laden ──────────────────────────────────────────────────
-tts = None
-try:
-    import sherpa_onnx
-    if os.path.exists(_MODEL_FILE):
+# Default-Sprache wenn der Aufrufer nichts schickt. Per env-var
+# umstellbar (z.B. wenn das Setup primaer Mandarin nutzt).
+DEFAULT_LANG = os.environ.get("TTS_DEFAULT_LANG", "de")
+
+# Engine-Registry: lang -> Dict mit
+#   - "speak"   Callable(text, speed, speaker) -> (samples_np, sample_rate)
+#   - "info"    Dict fuer /health
+# Wird beim Start befuellt. Eintrag fehlt = Sprache nicht verfuegbar -> 503.
+_engines = {}
+
+
+# ── Engine: Mandarin via sherpa-onnx (vits-zh-aishell3) ───────────────
+def _try_load_sherpa_zh():
+    """Versucht das Mandarin-Modell zu laden und registriert die Engine
+    fuer lang='zh'. Stille No-Op wenn Modell-Datei oder Library fehlen."""
+    model_dir  = os.path.join(_DATA_ROOT, 'vits-zh-aishell3')
+    model_file = os.path.join(model_dir, 'vits-aishell3.onnx')
+    if not os.path.exists(model_file):
+        log.warning(f"sherpa-onnx Modell nicht gefunden: {model_file}")
+        log.warning("Fuer Mandarin: 'python services/download_tts_model.py' ausfuehren.")
+        return
+
+    try:
+        import sherpa_onnx
+    except ImportError:
+        log.error("sherpa-onnx nicht installiert (pip install sherpa-onnx).")
+        return
+
+    try:
         tts_config = sherpa_onnx.OfflineTtsConfig(
             model=sherpa_onnx.OfflineTtsModelConfig(
                 vits=sherpa_onnx.OfflineTtsVitsModelConfig(
-                    model=_MODEL_FILE,
-                    lexicon=_LEXICON,
-                    tokens=_TOKENS,
-                    # data_dir enthält weitere Ressourcen des Modells
-                    data_dir=os.path.join(_MODEL_DIR, 'espeak-ng-data'),
+                    model=model_file,
+                    lexicon=os.path.join(model_dir, 'lexicon.txt'),
+                    tokens=os.path.join(model_dir, 'tokens.txt'),
+                    data_dir=os.path.join(model_dir, 'espeak-ng-data'),
                 ),
-                # Anzahl Threads für Inferenz (2–4 gut für CPU)
                 num_threads=2,
-                # debug=False damit kein Spam in der Konsole
                 debug=False,
             ),
         )
-        tts = sherpa_onnx.OfflineTts(tts_config)
-        log.info(f"sherpa-onnx TTS geladen. Sprecher verfügbar: {tts.num_speakers}")
-    else:
-        log.warning(f"Modell nicht gefunden: {_MODEL_FILE}")
-        log.warning("Bitte 'python services/download_tts_model.py' ausführen.")
-except ImportError:
-    log.error("sherpa-onnx nicht installiert. 'pip install sherpa-onnx' ausführen.")
-except Exception as e:
-    log.error(f"TTS-Ladefehler: {e}")
+        engine = sherpa_onnx.OfflineTts(tts_config)
+    except Exception as e:
+        log.error(f"sherpa-onnx Ladefehler: {e}")
+        return
+
+    def speak_zh(text, speed, speaker):
+        audio = engine.generate(text, sid=speaker, speed=speed)
+        return audio.samples, audio.sample_rate
+
+    _engines["zh"] = {
+        "speak": speak_zh,
+        "info": {
+            "engine":   "sherpa-onnx / vits-zh-aishell3",
+            "speakers": engine.num_speakers,
+        },
+    }
+    log.info(f"TTS-Engine zh geladen (sherpa-onnx, {engine.num_speakers} Sprecher).")
+
+
+# ── Engine: Deutsch via Piper (de_DE-thorsten-medium) ─────────────────
+def _try_load_de():
+    """Versucht das deutsche Piper-Modell zu laden und registriert die
+    Engine fuer lang='de'. Stille No-Op wenn Modell oder Library fehlen –
+    /speak gibt dann 503 mit klarer Meldung zurueck.
+
+    Piper hat KEINE Sprecher-Auswahl wie sherpa-onnx (thorsten-medium ist
+    eine Single-Speaker-Voice). Der `speaker`-Param wird daher ignoriert.
+    Die `speed`-Steuerung geht ueber SynthesisConfig.length_scale – das
+    ist invers: niedriger Wert = schneller. Wir mappen daher
+    length_scale = 1.0 / speed, damit der gleiche speed-Param vom
+    Aufrufer wie bei sherpa-onnx funktioniert (1.0 = normal, 0.9 = leicht
+    langsamer)."""
+    model_dir  = os.path.join(_DATA_ROOT, 'de_DE-thorsten-medium')
+    model_file = os.path.join(model_dir, 'de_DE-thorsten-medium.onnx')
+    cfg_file   = os.path.join(model_dir, 'de_DE-thorsten-medium.onnx.json')
+    if not (os.path.exists(model_file) and os.path.exists(cfg_file)):
+        log.warning(f"Piper-DE Modell nicht gefunden: {model_file}")
+        log.warning("Fuer Deutsch: 'python services/download_tts_model.py de' ausfuehren.")
+        return
+
+    try:
+        from piper import PiperVoice
+        from piper.config import SynthesisConfig
+    except ImportError:
+        log.error("piper-tts nicht installiert (pip install piper-tts).")
+        return
+
+    try:
+        voice = PiperVoice.load(model_file, config_path=cfg_file)
+    except Exception as e:
+        log.error(f"Piper-DE Ladefehler: {e}")
+        return
+
+    def speak_de(text, speed, speaker):
+        # Piper streamt AudioChunks pro Satz – wir konkatenieren in ein
+        # einziges numpy-Array, damit das Engine-Interface
+        # (samples, sample_rate) konsistent bleibt.
+        import numpy as np
+        # length_scale ist der einzige Speed-Knopf, den Piper hat.
+        # Werte > 1 = langsamer, < 1 = schneller.
+        cfg = SynthesisConfig(length_scale=(1.0 / max(0.1, speed)))
+        chunks = list(voice.synthesize(text, syn_config=cfg))
+        if not chunks:
+            return np.zeros(0, dtype="float32"), 22050
+        sample_rate = chunks[0].sample_rate
+        # AudioChunk.audio_int16_array ist ein numpy-Array (int16) –
+        # soundfile schreibt int16 direkt sauber als PCM_16-WAV.
+        # Falls die Property fehlen sollte, faellt das aufrufende
+        # try/except in der /speak-Route den Fehler ab.
+        samples = np.concatenate([c.audio_int16_array for c in chunks])
+        return samples, sample_rate
+
+    _engines["de"] = {
+        "speak": speak_de,
+        "info": {
+            "engine":   "piper / de_DE-thorsten-medium",
+            "speakers": 1,
+        },
+    }
+    log.info("TTS-Engine de geladen (piper, thorsten-medium).")
+
+
+# Beim Modul-Start beide Versuche durchlaufen lassen.
+_try_load_sherpa_zh()
+_try_load_de()
 
 
 @app.route('/speak', methods=['POST'])
 def speak():
     """
-    Generiert Mandarin-Sprache aus Text und gibt WAV-Audio zurück.
+    Generiert Sprache aus Text und gibt WAV-Audio zurueck.
 
     JSON-Body:
-      text     – der zu sprechende Text (Mandarin)
-      speed    – Sprechgeschwindigkeit (default 0.9, langsamer als 1.0 für Klarheit)
-      speaker  – Sprecher-ID 0–173 (default 0)
+      text     – der zu sprechende Text (Pflicht)
+      lang     – ISO-Sprachcode, default DEFAULT_LANG (env). Muss in
+                 _engines registriert sein, sonst 503.
+      speed    – Sprechgeschwindigkeit (default 0.9, leicht langsamer
+                 als 1.0 fuer Klarheit). Modell-abhaengig ob das wirkt.
+      speaker  – Sprecher-ID. Modell-abhaengig. Default 0.
     """
-    if tts is None:
-        return jsonify({"error": "TTS-Modell nicht geladen. download_tts_model.py ausführen."}), 503
-
     data = request.get_json()
     if not data or not data.get('text'):
         return jsonify({"error": "kein 'text' in der Anfrage"}), 400
 
-    text     = data['text']
-    speed    = float(data.get('speed', 0.9))    # leicht langsamer für Lern-Kontext
-    speaker  = int(data.get('speaker', 0))
+    text    = data['text']
+    lang    = (data.get('lang') or DEFAULT_LANG).lower()
+    speed   = float(data.get('speed', 0.9))
+    speaker = int(data.get('speaker', 0))
 
-    log.info(f"TTS Sprecher {speaker}: '{text[:60]}'")
+    engine = _engines.get(lang)
+    if not engine:
+        available = sorted(_engines.keys()) or ["(keine)"]
+        return jsonify({
+            "error":   f"Kein TTS-Modell fuer lang='{lang}' geladen.",
+            "available_langs": available,
+            "hint":    "Modell installieren (siehe services/download_tts_model.py) oder anderen lang-Wert schicken.",
+        }), 503
+
+    log.info(f"TTS lang={lang} sprecher={speaker}: '{text[:60]}'")
 
     try:
-        # audio.samples = numpy-Array (float32), audio.sample_rate = 22050
-        audio = tts.generate(text, sid=speaker, speed=speed)
-
-        # In WAV-Bytes umwandeln (in-memory, keine Temp-Datei nötig)
+        samples, sample_rate = engine["speak"](text, speed, speaker)
+        # In WAV-Bytes umwandeln (in-memory, keine Temp-Datei noetig)
         buf = io.BytesIO()
-        sf.write(buf, audio.samples, audio.sample_rate, format='WAV', subtype='PCM_16')
+        sf.write(buf, samples, sample_rate, format='WAV', subtype='PCM_16')
         buf.seek(0)
-
         return send_file(buf, mimetype='audio/wav')
 
     except Exception as e:
@@ -116,11 +227,12 @@ def speak():
 
 @app.route('/health')
 def health():
-    """Health-Check für ZENTRALE."""
+    """Health-Check fuer ZENTRALE. Liefert pro Sprache die geladene Engine."""
+    engines_info = {lang: e["info"] for lang, e in _engines.items()}
     return jsonify({
-        "ok":      tts is not None,
-        "engine":  "sherpa-onnx / vits-zh-aishell3",
-        "speakers": tts.num_speakers if tts else 0,
+        "ok":            len(_engines) > 0,
+        "default_lang":  DEFAULT_LANG,
+        "engines":       engines_info,
     })
 
 
