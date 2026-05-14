@@ -14,8 +14,10 @@ Drei separate Polling-Loops im Frontend, jeder mit eigener Frequenz:
 | Endpoint              | Intervall | Was es liefert                                  |
 |-----------------------|-----------|-------------------------------------------------|
 | `GET /api/state`      | 1 s       | Events, Sensoren, Vokabel, Logs (Haupt-State)   |
-| `GET /api/tutor/status` | 3 s     | Session aktiv? + Whisper/TTS verfügbar?          |
 | `GET /api/ai/status`  | 30 s      | Ollama erreichbar? + Modell-Name                |
+
+> Das frühere 3 s-Polling gegen `/api/tutor/status` ist raus (Tutor
+> pausiert, siehe `tutor_system.md`).
 
 Kein WebSocket, kein SSE für Statusdaten – Polling reicht für
 ein Single-User-Dashboard und ist deutlich simpler.
@@ -24,7 +26,6 @@ Streaming wird **nur** dort benutzt, wo es wirklich nötig ist:
 
 - `POST /api/chat` – Server-Sent Events (SSE), damit Tokens live
   erscheinen.
-- `POST /api/tutor/start` und `POST /api/tutor/respond` – ebenfalls SSE.
 
 ## Layout (CSS-Grid mit named areas)
 
@@ -47,8 +48,11 @@ ohne jede Card einzeln umzubauen.
 
 Das Frontend hat eine zentrale „AI-Card" in der Mitte (`#main-display`).
 Je nach Modus wird der Inhalt dieser Card ausgetauscht
-(`#panel-ai` / `#panel-chat` / `#panel-tutor`). Sensoren-Spalte links
-und Mini-Graph rechts bleiben dabei sichtbar.
+(`#panel-ai` / `#panel-chat`). Sensoren-Spalte links und Mini-Graph
+rechts bleiben dabei sichtbar.
+
+> `#panel-tutor` und die zugehörigen JS-Funktionen existieren noch im
+> HTML, sind aber dormant (Tutor pausiert, siehe `tutor_system.md`).
 
 ### Haupt-Ansicht (default, `#panel-ai`)
 - **AI-Orb** (`#ai-orb`): pixelierte Neon-Sonne als SVG. Idle = ruhiger
@@ -73,11 +77,6 @@ durchscheinendem Background, CRT-Scanlines als statisches Overlay
 - KI-Chat mit Mistral, Tokens streamen live.
 - Slash-Commands: `/memory`, `/forget N`, `/clear`.
 - Details zur KI: `ki_system.md`.
-
-### Tutor-Modus (Taste `T` oder Motion-Sensor)
-- Mandarin-Smalltalk mit STT + TTS.
-- `Space` = Aufnahme starten/stoppen.
-- Details: `tutor_system.md`.
 
 ### Data-Collection-Modus (Taste `K`)
 - Tastaturgesteuerte Datenerfassung.

@@ -42,16 +42,15 @@ state.py     brain.py      actions.py     event-queue
    ▼
 index.html  (Browser pollt /api/state jede Sekunde)
    │
-   ┌────┴──────────────┐
-   │                   │
- ai.py             tutor_session.py
-   │                   │
- memory.py         audio.py
- context.py            │
-   │              ┌────┴────┐
- Ollama       Whisper    TTS
-(Mistral)   (Port 5050) (Port 5051)
+   ▼
+ ai.py ── memory.py ── context.py
+   │
+   ├──▶ Ollama (Mistral)
+   └──▶ audio.py ──▶ Whisper (Port 5050) / TTS (Port 5051)
 ```
+
+> `tutor_session.py` und `tutor.py` existieren noch im Repo, sind im
+> Laufzeit-Pfad aber pausiert – siehe `tutor_system.md`.
 
 `brain.process_event(e)` und `actions.handle_action(e)` werden vom
 Event-Loop **parallel pro Event** aufgerufen, nicht hintereinander.
@@ -77,8 +76,8 @@ ZENTRALE/
 │   ├── memory.py            # KI-Memory (data/ai_memory.json)
 │   ├── context.py           # Whitelist-Dateizugriff (Cap 8000 Zeichen)
 │   ├── audio.py             # HTTP-Client für Whisper + TTS
-│   ├── tutor.py             # Tutor-Tools + Tool-Dispatcher (TUTOR_TOOLS)
-│   └── tutor_session.py     # Tutor Session-State + System-Prompt
+│   ├── tutor.py             # Tutor-Tools (PAUSIERT, siehe tutor_system.md)
+│   └── tutor_session.py     # Tutor Session-State (PAUSIERT, ungenutzt)
 ├── ui/
 │   ├── app.py               # Flask Backend + REST API
 │   └── templates/

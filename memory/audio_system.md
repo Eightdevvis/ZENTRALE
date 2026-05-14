@@ -1,20 +1,20 @@
 # Audio-System
 
-## Position: Core, nicht Tutor
+## Position: Core, sprachneutral
 
-Die Voice-Pipeline (STT + TTS) gehört zur **Core-AI**, nicht zum
-Tutor. Sprache ist ein Parameter:
+Die Voice-Pipeline (STT + TTS) gehört zur **Core-AI**. Sprache ist ein
+Parameter:
 
 | Aufrufer       | Endpoint              | `lang`-Default                 |
 |----------------|-----------------------|--------------------------------|
 | Haupt-Chat     | `POST /api/speak`     | `de` (Piper / thorsten-medium) |
 | Haupt-Chat     | `POST /api/transcribe`| `de` (Whisper)                 |
-| Tutor (Alias)  | `POST /api/tutor/speak`      | `zh` (sherpa-onnx / vits-zh-aishell3) |
-| Tutor (Alias)  | `POST /api/tutor/transcribe` | `zh` (Whisper)                 |
 
-Was eigentlich passiert: beide Tutor-Endpoints sind dünne Wrapper, die
-auf den Core-Endpoints mit hartkodiertem `lang='zh'` aufsetzen. Frontend
-kann den Tutor-Pfad ohne Anpassung weiternutzen.
+> Die früheren Tutor-Aliase `/api/tutor/speak` und `/api/tutor/transcribe`
+> (hardcoded `lang='zh'`) sind raus. Tutor pausiert, siehe
+> `tutor_system.md`. Wer Mandarin sprechen will, ruft die generischen
+> Endpoints mit `lang='zh'` auf – die Modelle (`vits-zh-aishell3`,
+> Whisper) liegen weiter auf der Platte.
 
 ## Grundprinzip: nichts auf dem Pi direkt
 
@@ -37,7 +37,7 @@ Das hat zwei Vorteile:
 Browser MediaRecorder
    │  WAV (Browser sendet als multipart 'audio' + 'lang')
    ▼
-POST /api/transcribe   (oder /api/tutor/transcribe → lang='zh')
+POST /api/transcribe   (lang='zh' für Mandarin)
    │
    ▼
 audio.py  ──HTTP──▶  whisper_service.py  (Port 5050)
@@ -48,7 +48,7 @@ audio.py  ──HTTP──▶  whisper_service.py  (Port 5050)
    │
    ▼ KI-Antwort generieren (Mistral)
    │
-POST /api/speak   (oder /api/tutor/speak → lang='zh')
+POST /api/speak   (lang='zh' für Mandarin)
    │  Body: {text, lang, speed, speaker}
    ▼
 audio.py  ──HTTP──▶  tts_service.py  (Port 5051)
@@ -83,8 +83,9 @@ audio.py  ──HTTP──▶  tts_service.py  (Port 5051)
   CPU). Modellgröße einstellbar via `WHISPER_MODEL` (Default: `small`,
   ca. 500 MB). Andere Optionen: `tiny`, `base`, `medium`.
 - **Sprache parametrisch** über das Multipart-Feld `lang`. Default
-  über `WHISPER_LANG`-env (default `de`). Tutor schickt explizit
-  `lang=zh`, Haupt-Chat lässt Default greifen.
+  über `WHISPER_LANG`-env (default `de`). Haupt-Chat lässt Default
+  greifen; für Mandarin würde der Aufrufer `lang=zh` mitschicken
+  (Tutor pausiert, siehe `tutor_system.md`).
 - Endpoints: `POST /transcribe` (Felder: `audio`, `lang`), `GET /health`.
 
 ### `services/tts_service.py`
@@ -120,7 +121,7 @@ venv/bin/python scripts/test_audio.py --tts-only     # nur TTS
 ```
 
 Spricht direkt gegen `localhost:5050` und `localhost:5051` – nützlich
-zum Debuggen wenn der Tutor-Modus im Dashboard nicht reagiert.
+zum Debuggen wenn STT oder TTS im Dashboard nicht reagieren.
 
 ## Warum drei separate Prozesse?
 

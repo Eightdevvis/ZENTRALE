@@ -404,7 +404,10 @@
     .mini-log {
       flex-shrink: 0;
       max-height: 8rem;
-      overflow: hidden;
+      /* overflow-y: auto statt hidden → wenn der gewrappte Text mehr Höhe
+         braucht als max-height, kann der User scrollen statt dass Inhalt
+         abgeschnitten wird. JS scrollt nach jedem Render ans Ende. */
+      overflow-y: auto;
       display: flex;
       flex-direction: column;
       gap: 0.25rem;
@@ -416,9 +419,11 @@
     .mini-log-row {
       display: flex;
       gap: 0.6rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      /* KEIN nowrap/ellipsis hier mehr – sonst werden lange AI-Antworten
+         mit "..." abgeschnitten und der User sieht nie den ganzen Text.
+         align-items: flex-start damit das Role-Label oben bleibt, auch
+         wenn der Text-Span mehrzeilig wird. */
+      align-items: flex-start;
     }
     .mini-log-role {
       flex-shrink: 0;
@@ -426,14 +431,19 @@
       letter-spacing: 0.15em;
       text-transform: uppercase;
       min-width: 2.5rem;
+      padding-top: 0.15rem;   /* leicht runter, sodass das Label auf Höhe der ersten Textzeile sitzt */
     }
     .mini-log-role.user { color: #00aaff; }
     .mini-log-role.ai   { color: #00ff88; text-shadow: 0 0 4px rgba(0,255,136,0.5); }
     .mini-log-text {
       color: #bbb;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      /* Wrap erlauben: lange AI-Antworten brechen in die nächste Zeile
+         statt in ellipsis zu enden. word-break: break-word für extreme
+         Fälle wie URLs ohne Leerzeichen. */
+      white-space: pre-wrap;
+      word-break: break-word;
+      flex: 1;
+      min-width: 0;
     }
     .mini-log-empty {
       color: #333;
@@ -1052,6 +1062,10 @@
             <span class="mini-log-text">${escHtml(m.content || '')}</span>
           </div>`;
       }).join('');
+      // Auto-Scroll ans Ende: damit die neuste Nachricht (= die volle AI-
+      // Antwort die der User gerade erwartet) sichtbar ist, auch wenn der
+      // gewrappte Text mehr als max-height beansprucht.
+      container.scrollTop = container.scrollHeight;
     }
 
     setInterval(fetchState,    1000);
@@ -1271,18 +1285,10 @@
       mediaRecorder.stop();
     }
 
-    // Tutor-Status polling: startet Tutor automatisch wenn Motion-Event kommt
-    async function checkTutorStatus() {
-      try {
-        const res  = await fetch('/api/tutor/status');
-        const data = await res.json();
-        // Wenn brain.py eine Session aktiviert hat (Motion-Sensor) und wir nicht schon im Tutor-Mode sind
-        if (data.active && appMode !== 'tutor') {
-          goToTutor();
-        }
-      } catch (e) { /* ignore */ }
-    }
-    setInterval(checkTutorStatus, 3000);  // alle 3s prüfen
+    // Tutor-Status-Polling ist raus (Tutor pausiert).
+    // goToTutor/stopTutor/tutorAiRespond etc. unten sind dormant –
+    // nichts ruft sie mehr auf. Reaktivierung: T-Hotkey + 3s-Poller
+    // wieder aktivieren und Routes in ui/app.py zurueckholen.
 
     // ═══════════════════════════════════════════════════════
     //  Chat
@@ -1582,16 +1588,7 @@
       if (appMode === 'main') {
         if (e.key === 'k') goToCategory();
         if (e.key === 'c') goToChat();
-        if (e.key === 't') goToTutor();
-
-      } else if (appMode === 'tutor') {
-        if (e.key === 'Escape') { stopTutor(); return; }
-        if (e.key === ' ') {
-          e.preventDefault();  // Scrollen verhindern
-          if (!tutorWaiting) {
-            tutorRecording ? tutorStopRecording() : tutorStartRecording();
-          }
-        }
+        // T-Hotkey (Tutor) ist pausiert – siehe memory/tutor_system.md
 
       } else if (appMode === 'category') {
         const num = parseInt(e.key);

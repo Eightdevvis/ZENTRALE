@@ -1,7 +1,9 @@
 # Hardware (Raspberry Pi)
 
-Für den vollen Tutor-Betrieb auf dem Pi brauchst du Mikrofon, Speaker
-und (geplant) einen PIR-Sensor.
+Für den vollen Voice-Betrieb auf dem Pi brauchst du Mikrofon, Speaker
+und (geplant) einen PIR-Sensor. (Der Mandarin-Tutor, der diese Hardware
+ursprünglich am stärksten brauchte, ist aktuell pausiert – siehe
+`tutor_system.md`.)
 
 ## Empfohlene Komponenten
 
@@ -15,8 +17,8 @@ und (geplant) einen PIR-Sensor.
 
 - Auf dem **Linux-PC** funktioniert alles – eingebautes Mikrofon und
   Speaker reichen für Whisper und TTS.
-- Auf dem **Pi ohne USB-Mikro/Speaker**: Tutor-Audio geht nicht. Alles
-  andere (Dashboard, Chat, Data Collection) läuft normal.
+- Auf dem **Pi ohne USB-Mikro/Speaker**: Voice-Pipeline (STT/TTS) geht
+  nicht. Alles andere (Dashboard, Chat, Data Collection) läuft normal.
 
 ## GPIO – aktueller Stand
 

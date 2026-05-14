@@ -30,7 +30,6 @@ import categories   # type: ignore
 import ai           # type: ignore
 import memory       # type: ignore
 import audio        # type: ignore
-import tutor_session  # type: ignore
 
 app = Flask(__name__)
 
@@ -262,10 +261,10 @@ def api_ai_status():
 # vom geladenen TTS-/Whisper-Modell ab (siehe services/tts_service.py
 # bzw. WHISPER_LANG-env in services/whisper_service.py).
 #
-# Tutor-spezifische Aliase (/api/tutor/speak, /api/tutor/transcribe)
-# sind weiter unten – sie hardcoden lang='zh' und nutzen ansonsten
-# dieselbe Logik. Heisst: die Pipeline gehoert dem Core, der Tutor ist
-# nur ein Aufrufer.
+# Die frueheren Tutor-Aliase (/api/tutor/speak, /api/tutor/transcribe)
+# sind raus – der Mandarin-Tutor ist pausiert (siehe
+# memory/tutor_system.md). Wer Mandarin sprechen will, ruft die
+# generische API mit `lang='zh'` auf.
 
 
 @app.route('/api/speak', methods=['POST'])
@@ -320,117 +319,13 @@ def api_transcribe():
 
 
 # ── Tutor ─────────────────────────────────────────────────────────────
-
-@app.route('/api/tutor/status')
-def api_tutor_status():
-    """Gibt zurück ob gerade eine Tutor-Session aktiv ist + Audio-Service-Status."""
-    return jsonify({
-        "active":  tutor_session.is_active(),
-        "whisper": audio.whisper_available(),
-        "tts":     audio.tts_available(),
-    })
-
-
-@app.route('/api/tutor/start', methods=['POST'])
-def api_tutor_start():
-    """
-    Startet eine Tutor-Session manuell (oder bestätigt einen durch brain.py
-    ausgelösten Start) und streamt die erste KI-Begrüßung.
-
-    Die KI lädt zu Beginn automatisch die Vokabeln via get_confirmed_vocab()
-    und get_testing_vocab() (Tool-Calls) und begrüßt dann auf Mandarin.
-    """
-    if not tutor_session.is_active():
-        tutor_session.activate()
-
-    def generate():
-        full = []
-        # user_text=None → KI beginnt das Gespräch
-        for token in tutor_session.respond_stream(user_text=None):
-            full.append(token)
-            yield f"data: {json.dumps({'token': token})}\n\n"
-        yield f"data: {json.dumps({'done': True})}\n\n"
-
-    return Response(
-        stream_with_context(generate()),
-        content_type='text/event-stream',
-        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
-    )
-
-
-@app.route('/api/tutor/respond', methods=['POST'])
-def api_tutor_respond():
-    """
-    Nimmt transkribierten Text entgegen, schickt ihn an die KI (Tutor-Modus)
-    und streamt die Antwort zurück.
-
-    Body: JSON {"text": "我很好"}
-    """
-    if not tutor_session.is_active():
-        return jsonify({"error": "Keine aktive Tutor-Session"}), 400
-
-    body      = request.get_json() or {}
-    user_text = body.get('text', '').strip()
-    if not user_text:
-        return jsonify({"error": "kein Text"}), 400
-
-    def generate():
-        for token in tutor_session.respond_stream(user_text=user_text):
-            yield f"data: {json.dumps({'token': token})}\n\n"
-        yield f"data: {json.dumps({'done': True})}\n\n"
-
-    return Response(
-        stream_with_context(generate()),
-        content_type='text/event-stream',
-        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
-    )
-
-
-@app.route('/api/tutor/transcribe', methods=['POST'])
-def api_tutor_transcribe():
-    """
-    Tutor-Alias fuer /api/transcribe mit lang='zh' (Mandarin).
-    Existiert aus Rueckwaerts-Kompatibilitaet; das Frontend kann
-    weiterhin den Tutor-Pfad verwenden, ohne den lang-Param mitzugeben.
-    """
-    if 'audio' not in request.files:
-        return jsonify({"error": "kein 'audio'-Feld"}), 400
-
-    audio_bytes = request.files['audio'].read()
-    text        = audio.transcribe(audio_bytes, lang='zh')
-    return jsonify({"text": text})
-
-
-@app.route('/api/tutor/speak', methods=['POST'])
-def api_tutor_speak():
-    """
-    Tutor-Alias fuer /api/speak mit lang='zh' (Mandarin). Wie oben:
-    nur ein duenner Wrapper damit der Tutor-Code im Frontend nicht
-    geaendert werden muss.
-
-    Body: JSON {"text": "你好！", "speed": 0.9, "speaker": 0}
-    Response: audio/wav
-    """
-    body    = request.get_json() or {}
-    text    = body.get('text', '').strip()
-    speed   = float(body.get('speed', 0.9))
-    speaker = int(body.get('speaker', 0))
-
-    if not text:
-        return jsonify({"error": "kein Text"}), 400
-
-    wav = audio.synthesize(text, lang='zh', speed=speed, speaker=speaker)
-    if not wav:
-        return jsonify({"error": "TTS nicht verfügbar"}), 503
-
-    return Response(wav, content_type='audio/wav')
-
-
-@app.route('/api/tutor/stop', methods=['POST'])
-def api_tutor_stop():
-    """Beendet die aktive Tutor-Session."""
-    tutor_session.deactivate()
-    return jsonify({"ok": True})
+#
+# Der Mandarin-Tutor ist pausiert (siehe memory/tutor_system.md). Die
+# frueheren Endpoints /api/tutor/{status,start,respond,transcribe,speak,
+# stop} sind raus. core/tutor.py, core/tutor_session.py und
+# data/vocab_mandarin.json bleiben unangetastet – fuers spaetere Wieder-
+# Anschalten reicht es, die Routes plus den brain-Trigger zurueckzu-
+# holen (git-History) und tutor_session wieder zu importieren.
 
 
 # ── Start ──────────────────────────────────────────────────────────────

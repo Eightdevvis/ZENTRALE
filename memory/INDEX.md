@@ -18,7 +18,7 @@ hier sofort mitziehen, sonst tote Links.
 | Gesamt-Architektur & Threads       | memory/architektur.md               |
 | Event-System (Sensoren → Actions)  | memory/event_system.md              |
 | KI-System (Ollama, Memory, Tools)  | memory/ki_system.md                 |
-| Mandarin-Tutor                     | memory/tutor_system.md              |
+| Mandarin-Tutor (pausiert)          | memory/tutor_system.md              |
 | Audio (Whisper STT + TTS)          | memory/audio_system.md              |
 | Dashboard & Frontend               | memory/dashboard.md                 |
 | UI-Schnittstellen (DOM/JS-Hooks)   | memory/ui_hooks.md                  |

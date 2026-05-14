@@ -23,7 +23,7 @@ hält die Antworten fokussiert.
 | Threads, Datenfluss, Modul-Übersicht      | `memory/architektur.md`              |
 | Sensoren, Events, Brain, Actions          | `memory/event_system.md`             |
 | Ollama, Memory, Tools, Net-Logging        | `memory/ki_system.md`                |
-| Mandarin-Tutor                            | `memory/tutor_system.md`             |
+| Mandarin-Tutor (pausiert)                 | `memory/tutor_system.md`             |
 | Whisper STT + TTS, Audio-Architektur      | `memory/audio_system.md`             |
 | Dashboard-UI, Modi, Polling               | `memory/dashboard.md`                |
 | Tastatur in jedem Modus                   | `memory/tastatur.md`                 |

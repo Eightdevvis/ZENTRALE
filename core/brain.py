@@ -2,9 +2,8 @@
 
 from events import (
     TIME_REACHED, MORNING_WAKEUP, BUTTON_PRESS,
-    LIGHT_SENSOR_TRIGGER, PRESENCE_DETECTED, TUTOR_START,
+    LIGHT_SENSOR_TRIGGER, PRESENCE_DETECTED,
 )
-import tutor_session  # Session-State für den Sprachtutor
 
 
 def process_event(event, data=None):
@@ -26,17 +25,9 @@ def process_event(event, data=None):
         print("Brain: Light sensor triggered")
 
     elif event == PRESENCE_DETECTED:
-        # Jemand ist in der Nähe – Tutor starten wenn noch keine Session läuft.
-        # Cooldown verhindert dass jede Bewegung eine neue Session startet.
-        if not tutor_session.is_active():
-            print("Brain: Presence erkannt → Tutor wird gestartet")
-            new_events.append(TUTOR_START)
-
-    elif event == TUTOR_START:
-        # Tutor-Session aktivieren – die KI schickt die erste Nachricht
-        # über den /api/tutor/start Endpoint, ausgelöst vom Dashboard via SSE.
-        # Hier nur State setzen; die KI-Kommunikation läuft über Flask.
-        tutor_session.activate()
-        print("Brain: Tutor-Session aktiviert")
+        # Presence wird zwar weiter ge-queued (main.py + Webhook), aber
+        # aktuell ohne Folgewirkung. Tutor-Auto-Start ist pausiert
+        # (siehe memory/tutor_system.md).
+        print("Brain: Presence erkannt (kein Trigger aktiv)")
 
     return new_events

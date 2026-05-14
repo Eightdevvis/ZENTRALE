@@ -1,5 +1,21 @@
 # Mandarin-Tutor
 
+> **Status (2026-05-14): PAUSIERT.** Der Tutor ist „weich deaktiviert":
+> - `core/brain.py`: kein `PRESENCE_DETECTED → TUTOR_START` mehr,
+>   kein `TUTOR_START`-Handler.
+> - `ui/app.py`: `/api/tutor/{status,start,respond,transcribe,speak,stop}`
+>   sind entfernt, `tutor_session`-Import ist raus.
+> - `ui/templates/index.html`: `T`-Hotkey weg, `setInterval`-Polling
+>   gegen `/api/tutor/status` weg. Panel-Markup + JS-Funktionen sind
+>   dormant (werden nicht mehr aufgerufen).
+> - `core/tutor.py`, `core/tutor_session.py`, `data/vocab_mandarin.json`,
+>   das Event `TUTOR_START` in `core/events.py` und die Audio-Modelle
+>   (`zh` TTS, Whisper) sind **unangetastet** – reaktivierbar per
+>   git-Revert dieser Cleanup-Commits.
+>
+> Der Rest dieses Files beschreibt das *frühere* Design und gilt nicht
+> für den aktuellen Laufzeit-Zustand.
+
 ## Position in der Architektur
 
 Tutor ist ein **Addon** auf der Core-AI, nicht der Owner der

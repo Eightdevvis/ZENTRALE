@@ -15,11 +15,12 @@ ohne Inputs).
 |--------|---------------------------------------|
 | `b`    | Button gedrückt (Sensor)              |
 | `l`    | Light Sensor Trigger                  |
-| `m`    | Motion Sensor (Presence) – startet den Tutor, sofern keine Session läuft |
+| `m`    | Motion Sensor (Presence) – aktuell ohne Folgewirkung, Tutor-Trigger pausiert |
 | `k`    | Data-Collection-Modus öffnen          |
 | `c`    | Chat-Panel öffnen                     |
-| `t`    | Mandarin-Tutor starten                |
 | `ESC`  | Zurück zum Haupt-Dashboard            |
+
+> `t` (Mandarin-Tutor) ist pausiert – siehe `tutor_system.md`.
 
 ## System-Hotkey (Pi-Kiosk, OS-Ebene)
 
@@ -31,13 +32,6 @@ Wirkt auf OS-Ebene (XFCE-Keyboard-Shortcut, nicht in der Webapp).
 Backend-Services (`zentrale`, `whisper`, `tts`) laufen weiter. Zurück
 zum Kiosk: `sudo systemctl start lightdm`. Details:
 `deployment.md` → „Notaus-Hotkey".
-
-## Im Tutor-Modus (zusätzlich)
-
-| Taste   | Funktion                            |
-|---------|-------------------------------------|
-| `Space` | Aufnahme starten / stoppen          |
-| `ESC`   | Session beenden                     |
 
 ## Im Data-Collection-Modus (zusätzlich)
 

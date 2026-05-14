@@ -36,6 +36,9 @@ Simulation gegen echten GPIO-Trigger tauschen ohne `brain.py` anzufassen).
 - Aktuelle Events: `TIME_REACHED`, `MORNING_WAKEUP`, `BUTTON_PRESS`,
   `LIGHT_SENSOR_TRIGGER`, `SYSTEM_BOOT`, `DATA_COLLECTION`,
   `PRESENCE_DETECTED`, `TUTOR_START`, `DOOR_TOGGLE`, `HOMECOMING`.
+- `TUTOR_START` existiert als Konstante weiter, hat aber aktuell
+  keinen Sender und keinen Handler (Tutor pausiert, siehe
+  `tutor_system.md`).
 - `DOOR_TOGGLE` feuert jedes Mal wenn der Türsensor durchgeht
   (auf ODER zu). `HOMECOMING` ist die abgeleitete Bedeutung, sobald
   `brain.py` daraus „User war > X Std weg und ist jetzt zurück"
@@ -45,9 +48,9 @@ Simulation gegen echten GPIO-Trigger tauschen ohne `brain.py` anzufassen).
 - **Reine Logik-Schicht**: wandelt Input-Events in neue Events um.
 - Aktuelle Mappings:
   - `TIME_REACHED` → `MORNING_WAKEUP`
-  - `PRESENCE_DETECTED` → `TUTOR_START` (nur wenn `tutor_session.is_active()`
-    `False` ist – also kein Tageszeit-Check, nur Cooldown via aktiver Session)
-  - `TUTOR_START` → ruft `tutor_session.activate()` auf (kein neuer Event)
+  - `PRESENCE_DETECTED` → No-Op (loggt nur „Presence erkannt").
+    Vor dem Tutor-Pause-Cleanup hat das hier `TUTOR_START` ausgelöst;
+    siehe `tutor_system.md` für den Status.
 - Macht keine HTTP-Calls oder File-Writes.
 
 ### `core/actions.py`

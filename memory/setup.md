@@ -37,7 +37,7 @@ WHISPER_MODEL=medium venv/bin/python services/whisper_service.py  # ~1.5 GB
 Zwei Modelle pro Sprache, beide werden parallel von
 `tts_service.py` geladen (Engine-Registry):
 
-- `zh` – sherpa-onnx `vits-zh-aishell3` (~120 MB, Tutor-Modus)
+- `zh` – sherpa-onnx `vits-zh-aishell3` (~120 MB; früherer Tutor-Modus, aktuell pausiert)
 - `de` – Piper `de_DE-thorsten-medium` (~60 MB, Haupt-Chat)
 
 Einmaliger Download nach `data/tts_model/<voice>/`:
