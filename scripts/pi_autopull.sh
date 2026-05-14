@@ -39,7 +39,14 @@ REPO_DIR="${REPO_DIR:-/opt/zentrale}"
 # systemd-Services die nach Deploy neu gestartet werden. Reihenfolge
 # matters: zentrale (Core) zuerst, whisper/tts danach (die haben ein
 # After=zentrale.service in ihren Unit-Files).
-SERVICES=(zentrale.service whisper.service tts.service)
+#
+# Seit der PC↔Pi-Topologie-Migration (siehe memory/topologie.md) sind
+# auf einem reinen Display-Pi die ersten drei `disabled` und nur
+# pi_sensor_bridge.service ist aktiv. Wir behalten die alte Liste hier
+# fuer Solo-Setups (Pi laeuft auch als Backend) und filtern in Schritt 7
+# nach `systemctl is-enabled` – so wird jedes Setup richtig bedient
+# ohne Konfiguration.
+SERVICES=(zentrale.service whisper.service tts.service pi_sensor_bridge.service)
 
 # Branch der ueberwacht wird. Aktuell: main.
 BRANCH="${BRANCH:-main}"
@@ -216,8 +223,15 @@ fi
 # After=zentrale.service in den Units, beim Boot ist das wichtig.
 # Beim Restart ist die Reihenfolge "nice to have" — wenn whisper start
 # bevor zentrale wieder da ist, faellt es einfach zurueck (Restart=always).
+# Nur enabled-Services werden restartet. Damit haut der Autopull nach
+# einer Topologie-Migration nicht die disabled-Services wieder hoch.
 RESTART_FAIL=0
 for SVC in "${SERVICES[@]}"; do
+  if ! systemctl is-enabled --quiet "$SVC" 2>/dev/null; then
+    # Disabled (oder gar nicht installiert) -> ueberspringen, kein Warning.
+    # Dieser Pi nutzt diesen Service einfach nicht.
+    continue
+  fi
   if sudo -n systemctl restart "$SVC" >>"$LOG_FILE" 2>&1; then
     log "$SVC neu gestartet."
   else
