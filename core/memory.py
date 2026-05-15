@@ -322,6 +322,54 @@ def forget(entry_id: int) -> str:
     return f"✓ Gelöscht: {removed['content']}"
 
 
+def user_profile_for_prompt(max_entries: int = 30) -> str:
+    """
+    Liefert das "User-Profil" als statischen Prompt-Block: alle LTM-
+    Einträge mit who_said='user' UND type in {fact, preference}.
+
+    Wird IMMER injiziert, ohne Embedding-Retrieval. Begründung: bei
+    breiten Fragen wie "was weißt du über mich?" liegen alle Profil-
+    Fakten semantisch im 0.4-Bereich gegenüber dem Query - kein
+    einzelner Treffer ist klar relevant, aber zusammen sind sie's.
+    Über Retrieval würden sie alle untergehen.
+
+    Dieser Block ist also die "Bio über den User" - was die KI über
+    Sasha als Person weiß, jederzeit verfügbar. Spezifischere Fakten
+    (technical, capability, limit, oder AI-eigene Aussagen) bleiben
+    im query-aware Retrieval.
+
+    max_entries als Schutz gegen Prompt-Bloat falls das LTM mal sehr
+    groß wird. Bei Überschreitung werden die ältesten weggelassen
+    (jüngste sind tendenziell relevanter, weil Konsolidierung redundantes
+    rausgefiltert haben sollte). Standardmäßig 30 - das deckt einen
+    User-Profil-Umfang ab den ein 14B-Modell noch sinnvoll integrieren
+    kann.
+
+    Loggt ins Dashboard-Terminal damit live nachvollziehbar ist welche
+    Profil-Einträge die KI gerade sieht.
+    """
+    entries = load()
+    profile = [
+        e for e in entries
+        if e.get('who_said') == 'user' and e.get('type') in ('fact', 'preference')
+    ]
+    if not profile:
+        _log("MEM →  User-Profil: leer")
+        return ""
+
+    # Bei Überschreitung jüngste behalten - created_at als Tie-Breaker.
+    if len(profile) > max_entries:
+        profile.sort(key=lambda e: e.get('created_at', ''), reverse=True)
+        profile = profile[:max_entries]
+
+    _log(f"MEM ⨁  User-Profil: {len(profile)} Einträge injiziert")
+    lines = ["## Was du über den User Sasha weißt (Profil, immer aktuell):"]
+    for e in profile:
+        # Typ mitgeben damit die KI fact vs preference unterscheiden kann
+        lines.append(f"  [{e['type']}] {e['content']}")
+    return "\n".join(lines)
+
+
 def format_for_prompt(query: str = None, k: int = 5) -> str:
     """
     Formatiert relevante LTM-Einträge als Text für den System-Prompt.

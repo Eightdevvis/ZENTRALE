@@ -444,12 +444,15 @@ def chat(messages: list, model: str = None, system: str = None) -> str:
     # k relevantesten Einträge in den Prompt - statt wie früher die
     # komplette Memory zu dumpen (skaliert nicht).
     user_query = _last_user_query(messages)
+    profile    = memory.user_profile_for_prompt()
     ltm        = memory.format_for_prompt(query=user_query)
     stm        = memory.stm_format_for_prompt()
-    # Reihenfolge: Charakter → Selbstbild → Session-Kontext (STM) → LTM.
-    # Selbstbild immer dabei. STM hat Vorrang vor LTM (aktueller Kontext
-    # vor historischem). Beide Memory-Blöcke sind optional.
+    # Reihenfolge: Charakter → Selbstbild → User-Profil (immer) → STM →
+    # LTM (query-aware). Profil VOR STM/LTM weil's der stabile "wer ist
+    # der User"-Layer ist, gegen den die anderen Schichten arbeiten.
     sys_prompt = (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
+    if profile:
+        sys_prompt += "\n\n" + profile
     if stm:
         sys_prompt += "\n\n" + stm
     if ltm:
@@ -504,14 +507,20 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     # Tutor-Modus (Tutor hat eigenen System-Prompt der schon vollständig
     # ist und andere Tool-Sets nutzt).
     if tools is None:
-        # Phase C: Top-K-Retrieval auf die letzte User-Message statt
-        # die komplette Memory zu dumpen. Skaliert auch bei viel LTM.
-        # Phase D: zusätzlich rollender Session-Summary aus STM, damit
-        # die KI weiß was sie selbst schon in dieser Session gesagt hat.
+        # Drei Memory-Schichten:
+        #   User-Profil (immer):  basale "wer ist Sasha"-Fakten + Vorlieben.
+        #                         Schutz gegen Konfabulation bei breiten
+        #                         Fragen wo Embedding-Retrieval versagt.
+        #   STM-Summary (Phase D): rollender Session-Kontext.
+        #   LTM Top-K  (Phase C):  query-aware semantische Suche für alles
+        #                         was nicht ins Profil gehört.
+        profile    = memory.user_profile_for_prompt()
         ltm        = memory.format_for_prompt(query=user_query)
         stm        = memory.stm_format_for_prompt()
-        # Reihenfolge: Charakter → Selbstbild → Session (STM) → LTM.
+        # Reihenfolge: Charakter → Selbstbild → Profil → STM → LTM.
         sys_prompt = (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
+        if profile:
+            sys_prompt += "\n\n" + profile
         if stm:
             sys_prompt += "\n\n" + stm
         if ltm:
