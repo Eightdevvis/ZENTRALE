@@ -87,12 +87,21 @@ def set_vocab(word):
 
 
 def push_log(line: str):
-    """Fügt eine neue Log-Zeile an (erscheint im Dashboard-Terminal)."""
+    """
+    Fügt eine neue Log-Zeile an. Sichtbar an zwei Stellen:
+
+      1. Dashboard-Terminal (cyberpunk-Panel in der Browser-UI),
+         pollt /api/state und rendert _logs.
+      2. stdout des start_local-Terminals - praktisch wenn man in der
+         Shell live mitlesen will und das Browser-Fenster nicht offen
+         hat oder wenn man einen bestimmten Logflow debugged. flush=True
+         damit Zeilen nicht durch start_local.sh-Buffering verschluckt
+         werden.
+    """
+    stamp = datetime.now().strftime("%H:%M:%S")
     with _lock:
-        _logs.append({
-            "text": line,
-            "time": datetime.now().strftime("%H:%M:%S"),
-        })
+        _logs.append({"text": line, "time": stamp})
+    print(f"{stamp}  {line}", flush=True)
 
 
 def push_chat_message(role: str, content: str):

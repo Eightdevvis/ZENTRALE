@@ -343,21 +343,64 @@ def format_for_prompt(query: str = None, k: int = 5) -> str:
       - Wenn KEINER der Einträge ein Embedding hat (z.B. direkt nach
         Migration vor Backfill): alle Einträge nehmen, sicher ist sicher.
 
+    Jeder Aufruf loggt ins Dashboard-Terminal (MEM → / MEM ← Zeilen),
+    damit live sichtbar ist was die KI nachschlägt. Stille Retrieval-
+    Pfade waren bei Debug-Sessions hinderlich.
+
     Format jeder Zeile: [id][type][who_said] content
     """
     entries = load()
     if not entries:
+        _log("MEM →  LTM leer, kein Inject")
         return ""
+
+    if query:
+        _log(f"MEM →  LTM Query '{query[:60]}' (k={k})")
 
     relevant = _select_relevant_entries(entries, query, k)
     if not relevant:
+        _log("MEM ←  LTM: keine Treffer (Embed-Fail oder alle Einträge ohne Vektor)")
         return ""
+
+    # Log: pro Treffer eine Zeile mit Score wenn verfügbar
+    if query:
+        # _select_relevant_entries hat Scores schon weggeworfen - wir
+        # rechnen sie hier kurz neu damit das Log informativ ist.
+        # Kosten: ein Cosinus pro Treffer, das ist nichts.
+        import embeddings  # lazy import um Circular-Refs zu vermeiden
+        qvec = embeddings.embed_query(query)
+        if qvec:
+            for e in relevant:
+                vec = e.get('embedding')
+                if vec:
+                    sim = embeddings.cosine_similarity(qvec, vec)
+                    _log(f"MEM ←  LTM {sim:.2f} [{e['type']}/{e.get('who_said','?')}] {e['content'][:70]}")
+                else:
+                    _log(f"MEM ←  LTM ---- [{e['type']}/{e.get('who_said','?')}] {e['content'][:70]} (kein Embed)")
+        else:
+            for e in relevant:
+                _log(f"MEM ←  LTM ---- [{e['type']}/{e.get('who_said','?')}] {e['content'][:70]}")
+    else:
+        _log(f"MEM ←  LTM (no-query mode): {len(relevant)} Einträge gedumpt")
 
     lines = ["## Deine persistente Memory (über Sitzungen hinweg gespeichert):"]
     for e in relevant:
         who = e.get('who_said', 'user')
         lines.append(f"  [{e['id']}][{e['type']}][{who}] {e['content']}")
     return "\n".join(lines)
+
+
+def _log(line: str):
+    """
+    Wrapper um state.push_log mit Lazy-Import, damit memory.py auch
+    in Test-Skripten ohne lebenden state-Kontext importierbar bleibt.
+    Wenn state nicht da ist: stillschweigend weiter (kein Crash).
+    """
+    try:
+        import state
+        state.push_log(line)
+    except Exception:
+        pass
 
 
 def _select_relevant_entries(entries: list, query: str, k: int) -> list:
@@ -494,10 +537,15 @@ def stm_format_for_prompt() -> str:
     NICHT die stm_list mitschicken: die Browser-Chat-History enthält
     die letzten Turns schon vollständig (als Ollama-messages). Den
     Summary dagegen sieht das Modell sonst nirgends.
+
+    Loggt ins Dashboard-Terminal wenn Summary injiziert wird (oder eben
+    nicht), damit live sichtbar ist welche Memory-Quellen die KI sieht.
     """
     summary = stm_get_summary().strip()
     if not summary:
+        _log("MEM →  STM-Summary leer, kein Inject")
         return ""
+    _log(f"MEM ⨁  STM-Summary ({len(summary)} chars): {summary[:80]}")
     return f"## Aktuelle Session (was bisher in diesem Chat lief)\n\n{summary}"
 
 
