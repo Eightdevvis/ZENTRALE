@@ -30,6 +30,8 @@ import categories   # type: ignore
 import ai           # type: ignore
 import memory       # type: ignore
 import audio        # type: ignore
+import consolidation # type: ignore  – Phase E: STM → LTM Konsolidierung
+import threading
 
 app = Flask(__name__)
 
@@ -182,6 +184,45 @@ def api_chat():
     message = (body.get('message') or '').strip()
     if not message:
         return jsonify({"error": "no message"}), 400
+
+    # ── /sleep-Command: STM → LTM Konsolidierung (Phase E) ────────────
+    # Wir nehmen den User-Trigger als sichtbaren Chat-Turn auf damit es
+    # in der History erkennbar ist, und antworten mit einem Status-Text
+    # statt einem normalen AI-Generate.
+    if message.lower().strip() in ('/sleep', '/sleep ', '/konsolidieren'):
+        state.push_chat_message("user", message)
+
+        def sleep_generate():
+            yield f"data: {json.dumps({'token': '[Konsolidierung läuft – extrahiere Fakten aus STM...]\\n'})}\n\n"
+            stats   = consolidation.consolidate_stm()
+            summary = (
+                f"OK. {stats['turns_seen']} Turns gesehen, "
+                f"{stats['facts_extracted']} Fakten extrahiert, "
+                f"{stats['facts_saved']} ins LTM gespeichert. "
+                f"STM ist jetzt leer."
+            )
+            yield f"data: {json.dumps({'token': summary})}\n\n"
+            state.push_chat_message("assistant", summary)
+            yield f"data: {json.dumps({'done': True})}\n\n"
+
+        return Response(
+            stream_with_context(sleep_generate()),
+            content_type='text/event-stream',
+            headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+        )
+
+    # ── Lazy-Inaktivitäts-Check ───────────────────────────────────────
+    # Wenn seit dem letzten User-Turn >30 Min vergangen sind, im
+    # Hintergrund konsolidieren bevor wir die neue Nachricht verarbeiten.
+    # Reihenfolge wichtig: erst maybe_consolidate (vergleicht gegen
+    # alten Timestamp), dann note_user_turn (setzt neuen Timestamp).
+    def _bg_inactivity_check():
+        try:
+            consolidation.maybe_consolidate_due_to_inactivity()
+        except Exception as e:
+            state.push_log(f"[consolidation] FEHLER: {e}")
+    threading.Thread(target=_bg_inactivity_check, daemon=True, name='ai-inactivity-check').start()
+    consolidation.note_user_turn()
 
     state.push_chat_message("user", message)
     history = state.get_chat_history()

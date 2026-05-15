@@ -1,0 +1,300 @@
+# core/consolidation.py
+#
+# STM → LTM Konsolidierung (Phase E des Memory-Plans).
+#
+# Was hier passiert:
+#   1. Wir nehmen alle rohen Turns aus dem STM (User + AI, role-getrennt).
+#   2. Ein LLM-Call extrahiert daraus geerdete Fakten - nur was WIRKLICH
+#      gesagt wurde, keine Interpretationen, keine Schlüsse.
+#   3. Jeder extrahierte Fakt landet via memory.save() im LTM (mit
+#      Embedding, automatischem Timestamp, who_said).
+#   4. STM wird komplett geleert (Liste + Summary).
+#
+# Trigger:
+#   - /sleep-Command im Chat (manueller Trigger durch User)
+#   - Inaktivität > X Min (lazy-check beim nächsten User-Turn)
+#
+# Warum diese Architektur:
+#   - GROUNDED: Der Konsolidator sieht die ROHEN Turns, nicht den
+#     bereits-fabulierten STM-Summary. Damit kann kein "ich habe X
+#     gelöscht"-Halluzinations-Drama der KI ins LTM rüber-rutschen.
+#     Der Summary war hilfreich für In-Session-Kontext, aber für die
+#     Persistenz vertrauen wir nur dem was wörtlich gesagt wurde.
+#   - LLM-EXTRAKTION statt naivem Save-All: nicht jeder Turn ist
+#     LTM-würdig (Smalltalk, Tool-Diskussionen, Hin-und-Her). Das LLM
+#     ist ein guter Filter mit klaren Regeln.
+#   - LEEREN nach Konsolidierung: STM ist Session-Speicher. Nach dem
+#     Konsolidieren startet die nächste Session bewusst leer - der
+#     wichtige Kram lebt im LTM weiter, der Rest verfällt.
+
+import os
+import json as _json
+from datetime import datetime
+from threading import Lock
+
+import net      # HTTP-Wrapper mit Logging
+import memory   # LTM/STM CRUD
+
+# ── Konfiguration ──────────────────────────────────────────────────────
+OLLAMA_URL   = os.environ.get("OLLAMA_URL",   "http://localhost:11434")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
+
+# Inaktivitäts-Schwelle in Sekunden. Nach so langer Stille beim nächsten
+# Turn lazy-getriggertes Konsolidieren. 30 Minuten = 1800 Sekunden.
+INACTIVITY_THRESHOLD_SEC = 30 * 60
+
+# Tracking: letzter User-Turn (für Lazy-Inaktivitäts-Check) und letzter
+# Konsolidierungs-Lauf. Lock weil Flask-Thread und Auto-Save-Threads
+# alle hier reinschreiben können.
+_state_lock         = Lock()
+_last_user_turn_at  = None   # datetime
+_last_consolidate_at = None  # datetime
+
+
+# ── Extraktor-Prompt ──────────────────────────────────────────────────
+# Strenges JSON-Format, klare Regeln gegen Halluzination. Das LLM darf
+# NUR Fakten extrahieren, die explizit ausgesprochen wurden. Keine
+# Schlüsse, keine "wahrscheinlich meinte X dass...".
+_EXTRACTOR_SYSTEM_PROMPT = """Du bist ein strenger Memory-Konsolidator. Du liest eine Liste von Chat-Turns zwischen Sasha (User) und einer KI, und extrahierst nur die Fakten daraus, die langfristig wertvoll sind.
+
+ABSOLUTE REGELN:
+1. Extrahiere NUR Sachen die WÖRTLICH gesagt wurden. Keine Schlüsse, keine Interpretationen, keine "vermutlich meinte X". Wenn der Fakt nicht explizit im Text steht, taucht er auch nicht im Output auf.
+2. Smalltalk, Begrüßungen, Floskeln, Tool-Diskussionen und Klärungsfragen NICHT extrahieren.
+3. Wenn die KI etwas behauptet zu tun (z.B. "ich speichere das ab", "ich vergesse das jetzt") und dabei KEINEN Tool-Call hatte: das ist eine Lüge der KI, NICHT als Fakt extrahieren.
+4. Bei Widersprüchen oder Korrekturen (User sagt "nein das war anders"): nimm die letzte Version, ignoriere die alte.
+5. Fakten vom User (über sich, seine Projekte, Hardware) → who_said = "user".
+6. Aussagen der KI über sich selbst, ihre Fähigkeiten/Grenzen → who_said = "ai".
+
+TYPEN:
+- fact: Objektive Information über User, System, Welt
+- preference: Wie der User Dinge mag (Stil, Reaktionsart, Tonfall)
+- commitment: Was die KI versprochen hat / offene TODOs
+- technical: Configs, Code-Details, technische Internals
+- capability: Was die KI nachweislich kann (im Gespräch belegt)
+- limit: Was die KI NICHT kann (vom User korrigiert)
+
+OUTPUT-FORMAT: gültiges JSON-Objekt mit einem Feld "facts", das ein ARRAY enthält. Auch bei nur einem Fakt: das Array haben. Bei keinen Fakten: leeres Array.
+
+WICHTIG: Extrahiere ALLE wertvollen Fakten aus der Liste, nicht nur einen. Wenn die Liste 5 Fakten enthält, müssen 5 Einträge im Array stehen.
+
+Beispiel (zwei verschiedene Fakten aus einer Turn-Liste):
+{
+  "facts": [
+    {"content": "Sashas Pi ist ein Raspberry Pi 3 Model B mit 1 GB RAM", "type": "fact", "who_said": "user"},
+    {"content": "Sasha bevorzugt direkte, knappe Antworten ohne Floskeln", "type": "preference", "who_said": "user"}
+  ]
+}
+
+Beispiel (keine extrahierbaren Fakten):
+{"facts": []}"""
+
+
+def _format_stm_for_extractor(stm_list: list) -> str:
+    """
+    Formatiert die rohe STM-Liste als nummeriertes Transcript für den
+    Extraktor-Prompt. Wir nutzen "user:"/"ai:"-Präfixe damit das Modell
+    die Rollen sauber trennt.
+    """
+    lines = []
+    for i, e in enumerate(stm_list):
+        role = e.get('role', 'user')
+        text = e.get('text', '').strip()
+        if not text:
+            continue
+        lines.append(f"{i:2d}. {role}: {text}")
+    return "\n".join(lines)
+
+
+def _call_extractor(stm_list: list) -> list:
+    """
+    Macht den LLM-Call der die STM-Liste in strukturierte Fakten umwandelt.
+
+    Returns: Liste von dicts mit Schlüsseln 'content', 'type', 'who_said'.
+    Bei Fehlern oder leerer Antwort: leere Liste.
+    """
+    if not stm_list:
+        return []
+
+    transcript = _format_stm_for_extractor(stm_list)
+    user_body = f"Hier ist die Turn-Liste:\n\n{transcript}\n\nExtrahiere die langfristig wertvollen Fakten als JSON-Array:"
+
+    try:
+        resp = net.post(
+            f"{OLLAMA_URL}/api/chat",
+            {
+                "model":    OLLAMA_MODEL,
+                "messages": [
+                    {"role": "system", "content": _EXTRACTOR_SYSTEM_PROMPT},
+                    {"role": "user",   "content": user_body},
+                ],
+                "stream":   False,
+                # Ollama unterstützt format="json" - zwingt das Modell
+                # zu wohlgeformtem JSON. Wir kapseln das Array in einem
+                # Objekt damit Ollama's JSON-Modus glücklich ist.
+                "format":   "json",
+            },
+            timeout=120,
+        )
+        content = resp.get("message", {}).get("content", "").strip()
+    except Exception:
+        return []
+
+    return _parse_extractor_output(content)
+
+
+def _parse_extractor_output(content: str) -> list:
+    """
+    Parsed die LLM-Antwort defensiv. Das Modell sollte ein JSON-Array
+    liefern, aber wir tolerieren auch:
+      - Ein Objekt mit "facts"/"results"-Key
+      - JSON in Markdown-Code-Fence (```json ... ```)
+      - Leading/trailing whitespace
+
+    Returns: Liste von dicts oder [].
+    """
+    if not content:
+        return []
+
+    # Markdown-Fences abstreifen falls vorhanden
+    s = content.strip()
+    if s.startswith("```"):
+        # Erste Zeile (```json oder ```) wegwerfen, letzte Zeile (```) auch
+        lines = s.splitlines()
+        s = "\n".join(lines[1:-1]) if len(lines) > 2 else ""
+
+    try:
+        parsed = _json.loads(s)
+    except Exception:
+        return []
+
+    # Erlaubte Formen, sortiert nach Wahrscheinlichkeit:
+    #   {"facts": [...]}            – unser standard-prompted Format
+    #   [{...}, {...}]              – direktes Array (alternativ)
+    #   {"content": ..., ...}       – Single-Fact als Objekt (qwen2.5
+    #                                  macht das gelegentlich) → wrappen
+    if isinstance(parsed, list):
+        return [e for e in parsed if isinstance(e, dict)]
+    if isinstance(parsed, dict):
+        # Wrapper-Objekt mit Array-Wert
+        for key in ('facts', 'results', 'entries', 'items'):
+            v = parsed.get(key)
+            if isinstance(v, list):
+                return [e for e in v if isinstance(e, dict)]
+        # Single-Fact-Objekt: hat 'content' und sieht aus wie ein Fakt
+        if 'content' in parsed:
+            return [parsed]
+    return []
+
+
+def _save_extracted_facts(facts: list) -> int:
+    """
+    Speichert die extrahierten Fakten via memory.save() ins LTM.
+
+    Validiert defensiv: ungültige type-/who_said-Werte fallen auf
+    Defaults zurück (memory.save handhabt das schon, hier nochmal Gürtel
+    plus Hosenträger). Leere oder zu kurze Inhalte werden geskippt.
+
+    Returns: Anzahl der tatsächlich gespeicherten Einträge.
+    """
+    saved = 0
+    for f in facts:
+        content = (f.get('content') or '').strip()
+        if len(content) < 5:
+            continue
+        type_    = f.get('type',     'fact')
+        who_said = f.get('who_said', 'user')
+        memory.save(
+            content  = content,
+            type     = type_,
+            who_said = who_said,
+        )
+        saved += 1
+    return saved
+
+
+# ── Öffentliche API ────────────────────────────────────────────────────
+
+def consolidate_stm() -> dict:
+    """
+    Hauptfunktion: STM → LTM Konsolidierung.
+
+    Ablauf:
+      1. STM laden (Liste + Summary).
+      2. Wenn Liste leer: nichts zu tun, früh raus.
+      3. LLM-Extraktor aufrufen → strukturierte Fakten.
+      4. Fakten ins LTM speichern (memory.save mit Embedding).
+      5. STM komplett leeren (Liste + Summary).
+      6. Tracking-Zeitpunkt aktualisieren.
+
+    Returns: Statistik-Dict für Logging/UI:
+        {
+          'turns_seen':     int,   # wie viele STM-Einträge wir sahen
+          'facts_extracted': int,   # wie viele das LLM extrahiert hat
+          'facts_saved':     int,   # wie viele tatsächlich im LTM landeten
+          'cleared':         bool,  # wurde STM danach geleert
+        }
+    """
+    stm = memory.stm_load()
+    stm_list = stm.get('list', [])
+
+    stats = {
+        'turns_seen':      len(stm_list),
+        'facts_extracted': 0,
+        'facts_saved':     0,
+        'cleared':         False,
+    }
+
+    if not stm_list:
+        return stats
+
+    facts = _call_extractor(stm_list)
+    stats['facts_extracted'] = len(facts)
+    stats['facts_saved']     = _save_extracted_facts(facts)
+
+    # STM in jedem Fall leeren - auch wenn der Extraktor 0 Fakten fand.
+    # Begründung: wenn der Extraktor nichts wertvolles fand, ist der
+    # Inhalt eh nicht erhaltenswert. Wenn er was übersehen hat, wird
+    # der User das beim nächsten Mal erneut erwähnen (Wiederholung ist
+    # in diesem System okay, sie kostet nur einen weiteren Save).
+    memory.stm_clear()
+    stats['cleared'] = True
+
+    with _state_lock:
+        global _last_consolidate_at
+        _last_consolidate_at = datetime.now()
+
+    return stats
+
+
+def note_user_turn():
+    """
+    Wird bei jedem User-Turn aufgerufen (von ai.chat_stream). Aktualisiert
+    den Inaktivitäts-Tracking-Zeitpunkt. Sehr leichtgewichtig - blockt
+    nichts.
+    """
+    with _state_lock:
+        global _last_user_turn_at
+        _last_user_turn_at = datetime.now()
+
+
+def maybe_consolidate_due_to_inactivity() -> dict | None:
+    """
+    Lazy-Trigger: wird ebenfalls bei jedem User-Turn aufgerufen, prüft
+    ob seit dem LETZTEN User-Turn mehr als INACTIVITY_THRESHOLD_SEC
+    vergangen sind. Wenn ja → konsolidieren.
+
+    Achtung Reihenfolge: erst maybe_consolidate_due_to_inactivity()
+    aufrufen (vergleicht GEGEN den letzten Turn-Timestamp), DANN
+    note_user_turn() (setzt den neuen Timestamp). Sonst sieht man die
+    eigene "Inaktivität" nie.
+
+    Returns: Stats-Dict wenn konsolidiert wurde, sonst None.
+    """
+    with _state_lock:
+        prev = _last_user_turn_at
+    if prev is None:
+        return None  # Erster Turn der Session → keine "Inaktivität"
+    gap = (datetime.now() - prev).total_seconds()
+    if gap < INACTIVITY_THRESHOLD_SEC:
+        return None
+    return consolidate_stm()
