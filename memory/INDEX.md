@@ -18,6 +18,7 @@ hier sofort mitziehen, sonst tote Links.
 | Gesamt-Architektur & Threads       | memory/architektur.md               |
 | Event-System (Sensoren → Actions)  | memory/event_system.md              |
 | KI-System (Ollama, Memory, Tools)  | memory/ki_system.md                 |
+| Memory-System v2 (Plan + Phasen)   | memory/ki_memory_plan.md            |
 | Mandarin-Tutor (pausiert)          | memory/tutor_system.md              |
 | Audio (Whisper STT + TTS)          | memory/audio_system.md              |
 | Dashboard & Frontend               | memory/dashboard.md                 |
