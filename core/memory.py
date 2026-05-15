@@ -33,6 +33,8 @@ import shutil
 from datetime import datetime
 from threading import Lock
 
+import embeddings  # Phase B: Vektoren für semantische Suche generieren
+
 # ── Dateipfade ─────────────────────────────────────────────────────────
 # Alle Memory-Files leben unter ../data/ (relativ zu core/).
 _DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
@@ -213,13 +215,21 @@ def save(content: str,
     if tags is None:
         tags = []
 
+    # Embedding wird VOR dem Lock generiert. Ollama-Embed-Call dauert
+    # ~50–200 ms je nach Text-Länge - wir wollen den Lock nicht so lange
+    # halten und andere Threads (Auto-Save in Phase D) blockieren. Wenn
+    # Ollama down ist liefert embed() None, der Eintrag wird trotzdem
+    # gespeichert (kann später per backfill_missing_embeddings nachgereicht
+    # werden).
+    vec = embeddings.embed(content)
+
     with _ltm_lock:
         data = _load_ltm_raw()
         new_id = data['next_id']
         data['entries'].append({
             'id':         new_id,
             'content':    content,
-            'embedding':  None,     # Phase B befüllt das direkt nach dem Save
+            'embedding':  vec,
             'type':       type,
             'who_said':   who_said,
             'created_at': datetime.now().isoformat(),
@@ -229,6 +239,54 @@ def save(content: str,
         _write_ltm_raw(data)
 
     return f"✓ Gespeichert [{type}/{who_said}]: {content}"
+
+
+def backfill_missing_embeddings() -> int:
+    """
+    Generiert Embeddings für alle LTM-Einträge, die noch keines haben
+    (embedding == None). Wird genutzt für v1→v2-migrierte Einträge und
+    für Einträge, die gespeichert wurden während Ollama gerade down war.
+
+    Returns: Anzahl der nachgefüllten Einträge.
+
+    Läuft sequenziell. Bei sehr großem LTM kann das einen Moment dauern -
+    pro Eintrag ein HTTP-Call an Ollama. Aber: 100 Einträge × 100 ms =
+    10 Sekunden, das ist OK für eine einmalige Maintenance-Operation.
+    """
+    # Erst außerhalb des Locks alle Embeddings generieren - jeder
+    # einzelne Embed-Call dauert ~50–200 ms, und wir wollen den Lock
+    # nicht für die ganze Dauer halten. Wir lesen den aktuellen Stand
+    # einmal, generieren die fehlenden Vektoren, und schreiben dann
+    # alles in einem atomaren Block zurück.
+    with _ltm_lock:
+        data = _load_ltm_raw()
+        missing = [e for e in data['entries'] if e.get('embedding') is None and e.get('content')]
+
+    if not missing:
+        return 0
+
+    # Embeddings außerhalb des Locks generieren
+    generated = {}  # id → vector
+    for e in missing:
+        vec = embeddings.embed(e['content'])
+        if vec is not None:
+            generated[e['id']] = vec
+
+    if not generated:
+        return 0  # Ollama nicht erreichbar - nichts geändert
+
+    # Jetzt mit Lock zurückschreiben. Frischer Reload, falls ein anderer
+    # Thread in der Zwischenzeit gespeichert hat - dann wachsen die IDs
+    # einfach weiter, unsere Updates greifen trotzdem auf die richtigen
+    # Einträge (per ID).
+    with _ltm_lock:
+        data = _load_ltm_raw()
+        for e in data['entries']:
+            if e['id'] in generated:
+                e['embedding'] = generated[e['id']]
+        _write_ltm_raw(data)
+
+    return len(generated)
 
 
 def forget(entry_id: int) -> str:
