@@ -997,7 +997,12 @@
     //  Polling (nur im Main-Mode aktiv)
     // ═══════════════════════════════════════════════════════
     async function fetchState() {
-      if (appMode !== 'main') return;
+      // Polling läuft IMMER, kein appMode-Guard. Das Terminal-Panel
+      // ist die Transparenz-Schicht der ZENTRALE - wenn es Logs nicht
+      // in Echtzeit zeigt, ist es nutzlos. Date/Sensoren-Updates
+      // kosten quasi nichts, also gibt's keinen Grund mode-abhängig
+      // zu drosseln. (Früher hier ein Guard - hat im Chat-Modus
+      // dafür gesorgt dass das Terminal nach Boot eingefroren blieb.)
       try {
         const res  = await fetch('/api/state');
         const data = await res.json();
