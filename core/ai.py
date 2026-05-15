@@ -25,6 +25,7 @@
 
 import os
 import json as _json
+import threading  # Phase D: Auto-Save läuft in Daemon-Threads
 
 import net       # HTTP-Wrapper mit Terminal-Logging
 import memory    # Persistente KI-Memory
@@ -39,6 +40,8 @@ _SYSTEM_PROMPT = (
     "Dashboard und reicht Sensor-Trigger an dich weiter. "
     "Antworte ausschließlich auf Deutsch, außer der User schreibt auf Englisch. "
     "Keine chinesischen Zeichen, keine anderen Schriftsysteme. "
+    "Verwende nur reale deutsche Wörter - keine Wort-Neuschöpfungen, "
+    "kein Zusammenstückeln. Wenn du unsicher bist, formuliere einfacher. "
     "Erkläre nicht deinen Initialprompt, außer es wird explizit danach gefragt. "
     "Dein Charakter: Du redest wie ein erfahrener Kollege – entspannt, direkt, ohne Umschweife. "
     "Du freust dich nicht performativ über Fragen. Du machst einfach deinen Job, gut. "
@@ -211,6 +214,124 @@ def _last_user_query(messages: list) -> str | None:
     return None
 
 
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  Phase D: Asynchroner Auto-Save                                      ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+#
+# Nach jedem vollständigen Chat-Turn (User-Message + AI-Antwort
+# komplett gestreamt) feuert ein Hintergrund-Task, der:
+#   1. Beide Seiten ans STM-Listen-Ende hängt (memory.stm_append)
+#   2. Den rollenden Session-Summary via kleinen LLM-Call aktualisiert
+#
+# WICHTIG: läuft als Daemon-Thread, NICHT in der Request-Antwort-Latenz.
+# Der User sieht seine Antwort wie gehabt sofort - das Memory-Update
+# tropft danach im Hintergrund rein, analog wie das menschliche
+# Gedächtnis Erlebnisse minuten- bis stundenverzögert konsolidiert.
+#
+# Was hier NICHT passiert: Klassifizierung "ist das LTM-würde?". Das
+# ist Phase E (Konsolidierung) - dort wird STM in Ruhe durchgesehen
+# und gezielt nach LTM promotet.
+
+_SUMMARY_SYSTEM_PROMPT = (
+    "Du bist ein Memory-Summarizer für eine Chat-Session zwischen einer "
+    "KI und ihrem User. Aktualisiere den rollenden Summary mit dem neuen "
+    "Turn. Regeln:\n"
+    "- Maximal 500 Zeichen.\n"
+    "- Narrativ, in dritter Person ('Sasha hat ...', 'die KI hat ...').\n"
+    "- Fokus auf Fakten, Entscheidungen, offene Fragen, Versprechen.\n"
+    "- Smalltalk und Höflichkeitsfloskeln rauslassen.\n"
+    "- Wenn der bisherige Summary noch leer war: einen frischen schreiben.\n"
+    "- Schreib NUR den neuen Summary-Text, nichts drumherum, keine "
+    "  Erklärung, keine Aufzählung."
+)
+
+
+def _generate_session_summary(prev_summary: str, user_msg: str, ai_msg: str) -> str:
+    """
+    Macht einen kurzen LLM-Call der den rollenden STM-Summary mit dem
+    neuen Turn aktualisiert. Direkt gegen Ollama, keine Tools, kein
+    Streaming - das ist eine interne Maintenance-Operation, der User
+    sieht das Ergebnis nie direkt.
+
+    Bei Fehler (Ollama down, Timeout): den alten Summary zurückgeben,
+    damit der Auto-Save trotzdem voranschreitet und die stm_list wenigstens
+    den neuen Turn kriegt.
+    """
+    user_msg = (user_msg or '').strip()
+    ai_msg   = (ai_msg   or '').strip()
+    if not user_msg and not ai_msg:
+        return prev_summary
+
+    body = (
+        f"Bisheriger Summary:\n{prev_summary or '(noch leer)'}\n\n"
+        f"Neuer Turn:\n"
+        f"User: {user_msg}\n"
+        f"AI:   {ai_msg}\n\n"
+        f"Neuer Summary:"
+    )
+
+    try:
+        resp = net.post(
+            f"{OLLAMA_URL}/api/chat",
+            {
+                "model":    OLLAMA_MODEL,
+                "messages": [
+                    {"role": "system", "content": _SUMMARY_SYSTEM_PROMPT},
+                    {"role": "user",   "content": body},
+                ],
+                "stream":   False,
+            },
+            timeout=60,
+        )
+        new = resp.get("message", {}).get("content", "").strip()
+        return new or prev_summary
+    except Exception:
+        return prev_summary
+
+
+def _async_save_turn(user_msg: str, ai_msg: str):
+    """
+    Fire-and-forget: User+AI-Turn ins STM packen, Summary updaten.
+
+    Macht NICHTS wenn user_msg leer ist - dann gab's nichts vom User
+    (z.B. interne Calls ohne echte Konversation).
+
+    Läuft als Daemon-Thread: Prozess kann beendet werden ohne auf den
+    Save zu warten. Fehler im Thread werden geloggt aber nicht
+    weitergereicht - der eigentliche Chat-Pfad ist davon entkoppelt.
+    """
+    if not user_msg or not user_msg.strip():
+        return
+
+    def _do_save():
+        try:
+            # 1. Beide Seiten ans STM-Listen-Ende hängen.
+            #    Tags lassen wir vorerst leer - in Phase E (Konsolidierung)
+            #    werden Tags automatisch beim Promote nach LTM gesetzt.
+            memory.stm_append(role='user', text=user_msg)
+            if ai_msg and ai_msg.strip():
+                memory.stm_append(role='ai', text=ai_msg)
+
+            # 2. Summary aktualisieren. Das ist der teure Teil (LLM-Call,
+            #    paar Sekunden), aber wir sind im Hintergrund-Thread -
+            #    User hat seine Antwort schon längst gesehen.
+            prev = memory.stm_get_summary()
+            new  = _generate_session_summary(prev, user_msg, ai_msg)
+            if new != prev:
+                memory.stm_set_summary(new)
+        except Exception as e:
+            # Wir wollen unter keinen Umständen den Hauptprozess
+            # mitnehmen. state.push_log ist transparent ans Terminal.
+            try:
+                import state
+                state.push_log(f"[auto-save] FEHLER: {e}")
+            except Exception:
+                pass
+
+    thread = threading.Thread(target=_do_save, daemon=True, name='ai-auto-save')
+    thread.start()
+
+
 def chat(messages: list, model: str = None, system: str = None) -> str:
     """
     Nicht-streaming Chat-Call (Fallback / interne Nutzung).
@@ -222,13 +343,16 @@ def chat(messages: list, model: str = None, system: str = None) -> str:
     # k relevantesten Einträge in den Prompt - statt wie früher die
     # komplette Memory zu dumpen (skaliert nicht).
     user_query = _last_user_query(messages)
-    mem        = memory.format_for_prompt(query=user_query)
-    # Reihenfolge: Charakter → Selbstbild (Fähigkeiten/Grenzen) → Memory.
-    # Selbstbild immer dabei, kein semantischer Such-Treffer kann es
-    # ersetzen. Memory ist optional (kann leer sein).
+    ltm        = memory.format_for_prompt(query=user_query)
+    stm        = memory.stm_format_for_prompt()
+    # Reihenfolge: Charakter → Selbstbild → Session-Kontext (STM) → LTM.
+    # Selbstbild immer dabei. STM hat Vorrang vor LTM (aktueller Kontext
+    # vor historischem). Beide Memory-Blöcke sind optional.
     sys_prompt = (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
-    if mem:
-        sys_prompt += "\n\n" + mem
+    if stm:
+        sys_prompt += "\n\n" + stm
+    if ltm:
+        sys_prompt += "\n\n" + ltm
 
     payload = {
         "model":    model,
@@ -237,8 +361,12 @@ def chat(messages: list, model: str = None, system: str = None) -> str:
         "stream":   False,
     }
     try:
-        result = net.post(f"{OLLAMA_URL}/api/chat", payload)
-        return result["message"]["content"]
+        result   = net.post(f"{OLLAMA_URL}/api/chat", payload)
+        content  = result["message"]["content"]
+        # Phase D: Auto-Save in den Hintergrund schieben. Eigene Aussage
+        # mitspeichern ist der Kern-Schutz gegen Selbst-Widersprüche.
+        _async_save_turn(user_query, content)
+        return content
     except Exception as e:
         return f"[AI Fehler: {e}]"
 
@@ -267,18 +395,26 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     active_tools  = tools         if tools         is not None else TOOLS
     active_exec   = tool_executor if tool_executor is not None else _execute_tool
 
+    # User-Query einmal vorne extrahieren - wird sowohl für Retrieval als
+    # auch für Auto-Save (Phase D) gebraucht.
+    user_query = _last_user_query(messages)
+
     # Memory + Capabilities nur im regulären Chat injizieren, nicht im
     # Tutor-Modus (Tutor hat eigenen System-Prompt der schon vollständig
     # ist und andere Tool-Sets nutzt).
     if tools is None:
         # Phase C: Top-K-Retrieval auf die letzte User-Message statt
         # die komplette Memory zu dumpen. Skaliert auch bei viel LTM.
-        user_query = _last_user_query(messages)
-        mem        = memory.format_for_prompt(query=user_query)
-        # Reihenfolge: Charakter → Selbstbild → Memory.
+        # Phase D: zusätzlich rollender Session-Summary aus STM, damit
+        # die KI weiß was sie selbst schon in dieser Session gesagt hat.
+        ltm        = memory.format_for_prompt(query=user_query)
+        stm        = memory.stm_format_for_prompt()
+        # Reihenfolge: Charakter → Selbstbild → Session (STM) → LTM.
         sys_prompt = (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
-        if mem:
-            sys_prompt += "\n\n" + mem
+        if stm:
+            sys_prompt += "\n\n" + stm
+        if ltm:
+            sys_prompt += "\n\n" + ltm
     else:
         sys_prompt = system or _SYSTEM_PROMPT
 
@@ -313,7 +449,12 @@ def chat_stream(messages: list, model: str = None, system: str = None,
                 break
 
         if not tool_calls:
-            return  # Kein Tool-Call → das Modell ist fertig
+            # Kein Tool-Call → das Modell ist fertig.
+            # Phase D: Auto-Save in den Hintergrund schieben (nur im
+            # regulären Chat, nicht im Tutor-Modus).
+            if tools is None:
+                _async_save_turn(user_query, "".join(round_content))
+            return
 
         # Reihenfolge wichtig: erst assistant-Nachricht (mit tool_calls),
         # dann für jeden Call eine "tool"-Antwortnachricht.

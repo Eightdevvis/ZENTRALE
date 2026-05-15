@@ -482,6 +482,25 @@ def stm_set_summary(summary: str):
         _write_stm_raw(data)
 
 
+def stm_format_for_prompt() -> str:
+    """
+    Formatiert den rollenden Session-Summary fürs Prompt-Injection.
+
+    Wird in ai.py vor das LTM-Retrieval injiziert: aktueller Kontext hat
+    Vorrang vor historischem. Wenn STM-Summary leer ist (frische Session,
+    noch kein Auto-Save gelaufen) wird leerer String zurückgegeben - die
+    Sektion wird dann gar nicht erst injiziert.
+
+    NICHT die stm_list mitschicken: die Browser-Chat-History enthält
+    die letzten Turns schon vollständig (als Ollama-messages). Den
+    Summary dagegen sieht das Modell sonst nirgends.
+    """
+    summary = stm_get_summary().strip()
+    if not summary:
+        return ""
+    return f"## Aktuelle Session (was bisher in diesem Chat lief)\n\n{summary}"
+
+
 def stm_clear():
     """
     Leert das STM komplett: Liste UND Summary. Wird in Phase E vom
