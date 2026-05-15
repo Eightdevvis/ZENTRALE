@@ -177,6 +177,38 @@ def _execute_tool(name: str, args: dict) -> str:
     """
     Führt ein Tool aus und gibt das Ergebnis als String zurück.
     Der String wird als 'tool'-Nachricht zurück an das Modell geschickt.
+
+    Jeder Tool-Call wird streng ans Dashboard-Terminal geloggt - sowohl
+    die Anfrage (mit Args) als auch das Ergebnis. Damit kann man im UI
+    live mitlesen wann die KI WIRKLICH ein Tool ruft. Wichtig weil
+    LLMs sonst gerne behaupten "ich speichere das ab", ohne den Tool-
+    Call tatsächlich abzusetzen - dieses Log macht den Unterschied
+    sichtbar zwischen "AI hat es getan" und "AI hat es behauptet".
+    """
+    import state  # state.push_log feuert ins UI-Terminal
+    try:
+        args_str = _json.dumps(args, ensure_ascii=False)
+    except Exception:
+        args_str = str(args)
+    # Args kürzen damit das Terminal nicht zugemüllt wird
+    state.push_log(f"AI →  TOOL {name}({args_str[:200]})")
+
+    try:
+        result = _dispatch_tool(name, args)
+    except Exception as e:
+        state.push_log(f"AI ✗  TOOL {name} FEHLER: {e}")
+        raise
+
+    # Ergebnis auch loggen (gekürzt, sonst Spam bei großen read_file-Treffern)
+    result_str = result if isinstance(result, str) else str(result)
+    state.push_log(f"AI ←  TOOL {name} → {result_str[:160]}")
+    return result_str
+
+
+def _dispatch_tool(name: str, args: dict) -> str:
+    """
+    Reine Tool-Logik ohne Logging - wird von _execute_tool umschlossen.
+    Hier neue Tools eintragen.
     """
     if name == "save_memory":
         return memory.save(
