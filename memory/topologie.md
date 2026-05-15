@@ -2,7 +2,7 @@
 
 Seit der Migration im Mai 2026 läuft ZENTRALE **nicht mehr alles auf
 dem Pi**, sondern aufgeteilt zwischen Linux-PC und Raspberry Pi. Grund:
-Pi-RAM ist zu knapp für Ollama/Mistral (~4.4 GB Modell), Whisper
+Pi-RAM ist zu knapp für Ollama (~5–9 GB je Modell), Whisper
 (~500 MB) und TTS gleichzeitig. Der Pi war ursprünglich als Core
 gedacht – das war für die AI-Last zu schwer.
 
@@ -35,7 +35,7 @@ gedacht – das war für die AI-Last zu schwer.
 
 | Komponente              | Host | Begründung                                |
 |-------------------------|------|-------------------------------------------|
-| Ollama (Mistral)        | PC   | 4.4 GB Modell, Pi-RAM reicht nicht.       |
+| Ollama (qwen2.5:14b)    | PC   | ~9 GB Modell, läuft auf RTX 4070-GPU.     |
 | Whisper STT             | PC   | ~500 MB Modell + CPU-intensiv.            |
 | TTS (sherpa-onnx)       | PC   | ~120 MB Modell + CPU-intensiv.            |
 | Flask + Event-Loop      | PC   | Damit AI-Calls direkt lokal sind (kein   |

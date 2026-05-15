@@ -46,7 +46,7 @@ audio.py  ──HTTP──▶  whisper_service.py  (Port 5050)
                        Text + Konfidenz
    ◀──────────────────────┘
    │
-   ▼ KI-Antwort generieren (Mistral)
+   ▼ KI-Antwort generieren (Ollama)
    │
 POST /api/speak   (lang='zh' für Mandarin)
    │  Body: {text, lang, speed, speaker}

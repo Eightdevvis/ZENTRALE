@@ -20,7 +20,7 @@ Praktisch als „Schmierzettel" für Hinweise an die KI.
 **Größenbegrenzung**: gelesene Dateien werden nach `_MAX_CHARS = 8000`
 Zeichen abgeschnitten (`core/context.py`). Wer der KI längere Texte
 geben will: aufteilen oder das Limit dort hochsetzen – aber bitte mit
-Bedacht, damit das Mistral-Context-Window nicht überläuft.
+Bedacht, damit das Context-Window des Modells nicht überläuft.
 
 ## Was NICHT committet werden soll
 

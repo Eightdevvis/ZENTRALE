@@ -7,7 +7,7 @@ Event-getriebene Zentrale für einen Wand-Monitor auf Raspberry Pi
 erzeugen Events, der Core verarbeitet sie, das Web-Dashboard zeigt alles
 an – **vollständig offline**.
 
-Die KI ist lokal (Ollama + Mistral). Kein Cloud-Zugriff, keine Daten
+Die KI ist lokal (Ollama + qwen2.5:14b). Kein Cloud-Zugriff, keine Daten
 verlassen das Heimnetz. Die KI hat Lese-Zugriff auf eine fest definierte
 Whitelist von Projektdateien (siehe `datei_zugriffe.md`) und eine
 persistente Memory über Sessions hinweg.

@@ -74,7 +74,7 @@ durchscheinendem Background, CRT-Scanlines als statisches Overlay
 (ohne `mix-blend-mode`, das war auf der Pi-VC4-GPU zu teuer).
 
 ### Chat-Modus (Taste `C`)
-- KI-Chat mit Mistral, Tokens streamen live.
+- KI-Chat (lokales Ollama-Modell), Tokens streamen live.
 - Slash-Commands: `/memory`, `/forget N`, `/clear`.
 - Details zur KI: `ki_system.md`.
 

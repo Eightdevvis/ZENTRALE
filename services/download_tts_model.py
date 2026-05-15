@@ -7,7 +7,7 @@
 #   - 'zh' – vits-zh-aishell3 (sherpa-onnx, ~120MB, 174 Sprecher, Apache 2.0)
 #            Wird vom Tutor-Modus genutzt.
 #   - 'de' – de_DE-thorsten-medium (Piper, ~60MB, 1 Sprecher, MIT)
-#            Wird vom Haupt-Chat (Mistral-Antworten) genutzt.
+#            Wird vom Haupt-Chat (KI-Antworten) genutzt.
 #
 # Aufruf:
 #   python services/download_tts_model.py            # beide laden

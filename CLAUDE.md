@@ -1,7 +1,8 @@
 # ZENTRALE – Entwicklungshinweise für Claude
 
 Event-getriebenes Dashboard (Raspberry Pi + Linux-PC), vollständig
-offline. KI läuft lokal via Ollama (Mistral).
+offline. KI läuft lokal via Ollama (Default-Modell: qwen2.5:14b, per
+`OLLAMA_MODEL` umstellbar).
 
 ## Wo die Doku liegt
 

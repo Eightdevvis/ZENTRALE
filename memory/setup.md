@@ -7,15 +7,17 @@ python3 -m venv venv
 venv/bin/pip install -r requirements.txt
 ```
 
-## Ollama + Mistral
+## Ollama + Modell
 
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
-ollama pull mistral
+ollama pull qwen2.5:14b
 ```
 
 Standardmäßig erwartet ZENTRALE Ollama unter `http://localhost:11434`
-(siehe `starten.md` für Env-Override).
+und greift auf das Modell `qwen2.5:14b` zu (siehe `starten.md` für
+Env-Override `OLLAMA_MODEL`). Andere Tool-Use-fähige Ollama-Modelle
+funktionieren ohne Code-Änderung, einfach pullen und Env-Var setzen.
 
 ## Whisper-Modell
 

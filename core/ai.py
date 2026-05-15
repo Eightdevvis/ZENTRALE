@@ -3,13 +3,16 @@
 # Ollama-Client für ZENTRALE – mit Tool-Use und persistenter Memory.
 #
 # ── Wie Tool-Use funktioniert ─────────────────────────────────────────
-# Statt immer Text zu antworten kann Mistral "Tools aufrufen":
+# Statt immer Text zu antworten kann das Modell "Tools aufrufen":
 # es antwortet mit einem strukturierten Objekt wie:
 #   {"tool_calls": [{"function": {"name": "read_file", "arguments": {"path": "..."}}}]}
 #
 # ZENTRALE führt das Tool aus, schickt das Ergebnis zurück,
-# Mistral antwortet dann mit dem eigentlichen Text. Das läuft
-# transparent in einer Schleife bis Mistral fertig ist.
+# das Modell antwortet dann mit dem eigentlichen Text. Das läuft
+# transparent in einer Schleife bis das Modell fertig ist.
+#
+# Das aktive Modell ist konfigurierbar (siehe OLLAMA_MODEL unten);
+# jedes Tool-Use-fähige Ollama-Modell sollte funktionieren.
 #
 # ── Wie Memory-Injection funktioniert ────────────────────────────────
 # Vor jedem Request wird memory.format_for_prompt() aufgerufen und
@@ -18,7 +21,7 @@
 #
 # ── Konfiguration ────────────────────────────────────────────────────
 #   OLLAMA_URL   – default: http://localhost:11434
-#   OLLAMA_MODEL – default: mistral
+#   OLLAMA_MODEL – default: qwen2.5:14b
 
 import os
 import json as _json
@@ -28,7 +31,7 @@ import memory    # Persistente KI-Memory
 import context   # Whitelist-basierter Dateizugriff
 
 OLLAMA_URL   = os.environ.get("OLLAMA_URL",   "http://localhost:11434")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "mistral")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
 
 _SYSTEM_PROMPT = (
     "Du bist die KI der ZENTRALE, dem Hauptknotenpunkt für die Projekte von Sasha. "
@@ -43,7 +46,7 @@ _SYSTEM_PROMPT = (
 
 # ── Tool-Definitionen ─────────────────────────────────────────────────
 # Diese Liste wird bei jedem Request an Ollama mitgeschickt.
-# Mistral weiß damit welche Tools es aufrufen darf und was sie tun.
+# Damit weiß das Modell welche Tools es aufrufen darf und was sie tun.
 
 TOOLS = [
     {
@@ -111,7 +114,7 @@ TOOLS = [
 def _execute_tool(name: str, args: dict) -> str:
     """
     Führt ein Tool aus und gibt das Ergebnis als String zurück.
-    Der String wird als 'tool'-Nachricht zurück an Mistral geschickt.
+    Der String wird als 'tool'-Nachricht zurück an das Modell geschickt.
     """
     if name == "save_memory":
         return memory.save(
@@ -171,7 +174,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     Ablauf pro Runde:
       1. Streaming-Call an Ollama (mit Tools und Memory im System-Prompt)
       2. Tokens werden sofort an den Browser weitergereicht (yield)
-      3. Im letzten Chunk (done=true) prüfen: hat Mistral Tool-Calls angefragt?
+      3. Im letzten Chunk (done=true) prüfen: hat das Modell Tool-Calls angefragt?
       4. Falls ja: Tools ausführen, Ergebnisse anhängen, zurück zu 1
       5. Falls nein: fertig
 
@@ -226,7 +229,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
                 break
 
         if not tool_calls:
-            return  # Kein Tool-Call → Mistral ist fertig
+            return  # Kein Tool-Call → das Modell ist fertig
 
         # Reihenfolge wichtig: erst assistant-Nachricht (mit tool_calls),
         # dann für jeden Call eine "tool"-Antwortnachricht.

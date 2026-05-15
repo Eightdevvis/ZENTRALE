@@ -65,7 +65,7 @@ Backend-Endpoints (sprachneutral, Core):
 
 - **STT**: `POST /api/transcribe` – multipart `audio` + `lang` (default `de`).
   Liefert `{"text": "...", "language": "...", "confidence": ...}`.
-- **LLM**: `POST /api/chat` (deutsch, Mistral, mit Memory) – SSE-Stream.
+- **LLM**: `POST /api/chat` (deutsch, lokales Ollama-Modell, mit Memory) – SSE-Stream.
   Tutor nutzt `POST /api/tutor/respond` (Mandarin-System-Prompt).
 - **TTS**: `POST /api/speak` – JSON `{text, lang?, speed?, speaker?}`.
   `lang='de'` → Piper (thorsten-medium), `lang='zh'` → sherpa-onnx

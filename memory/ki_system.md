@@ -3,7 +3,7 @@
 ## Architektur
 
 ```
-Browser  ──POST /api/chat──▶  app.py  ──▶  ai.py  ──▶  Ollama (Mistral)
+Browser  ──POST /api/chat──▶  app.py  ──▶  ai.py  ──▶  Ollama (qwen2.5:14b)
                                               │
                                          memory.py  (data/ai_memory.json)
                                          context.py (Datei-Whitelist)
@@ -49,8 +49,10 @@ Caching, Logging und spätere Modell-Wechsel trivial.
 
 ## Tool-Use
 
-Mistral kann Tools „aufrufen" – ZENTRALE führt sie aus und schickt das
-Ergebnis zurück in den Kontext. Die KI ruft Tools nur wenn nötig.
+Das Modell kann Tools „aufrufen" – ZENTRALE führt sie aus und schickt
+das Ergebnis zurück in den Kontext. Die KI ruft Tools nur wenn nötig.
+Funktioniert mit jedem Tool-Use-fähigen Ollama-Modell; aktuell läuft
+`qwen2.5:14b` (Default in `core/ai.py`, per `OLLAMA_MODEL` umstellbar).
 
 | Tool          | Funktion                                            |
 |---------------|-----------------------------------------------------|
@@ -82,7 +84,7 @@ So sieht man bei jedem Run live, was die KI tut – kein Black-Box-Gefühl.
 
 ## Chat-Modus
 
-- KI-Chat mit Mistral, Antworten werden token-weise gestreamt.
+- KI-Chat mit dem konfigurierten Ollama-Modell, Antworten werden token-weise gestreamt.
 - KI hat Zugriff auf Whitelist-Dateien und persistente Memory.
 - Slash-Commands im Chat:
   - `/memory` – gespeicherte Memory-Einträge anzeigen

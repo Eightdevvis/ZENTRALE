@@ -4,10 +4,40 @@ Seit der PC↔Pi-Migration (siehe `topologie.md`) laufen alle drei
 Backend-Prozesse auf dem **PC**, nicht mehr auf dem Pi. Der Pi
 ist Display-Kiosk + Sensor-Bridge.
 
-ZENTRALE besteht aus **drei Prozessen**, die in eigenen Terminals laufen
-sollten – jeder hat sein eigenes Terminal-Logging und Crash-Verhalten.
+ZENTRALE besteht aus **drei Prozessen** (Event-Loop+Flask, Whisper, TTS).
+Zwei Wege sie hochzufahren:
 
-## 3 Terminals
+## Variante A — Ein-Befehl-Start (Default)
+
+```bash
+zentrale
+```
+
+(Symlink in `~/.local/bin/zentrale` → `scripts/start_local.sh`. Funktioniert
+von jedem Verzeichnis aus. Falls der Symlink mal fehlt:
+`ln -s "$PWD/scripts/start_local.sh" ~/.local/bin/zentrale` aus dem
+Projekt-Root.)
+
+Startet alle drei Services parallel in einem Terminal, jede Zeile mit
+farbigem `[main]`/`[whisper]`/`[tts]`-Prefix. Kein `sudo`, dafür auch
+keine Tastatur-Sensor-Simulation – Sensoren manuell triggern via:
+
+```bash
+curl -X POST http://localhost:5000/api/sensor/button
+curl -X POST http://localhost:5000/api/sensor/motion
+curl -X POST http://localhost:5000/api/sensor/light
+curl -X POST http://localhost:5000/api/sensor/door
+```
+
+Mit `./scripts/start_local.sh --with-keyboard` läuft `core/main.py`
+unter `sudo`, dann geht auch die `b`/`l`/`m`-Tasten-Sim.
+
+`Ctrl+C` beendet alle drei sauber.
+
+## Variante B — 3 Terminals manuell
+
+Sinnvoll wenn man einen einzelnen Service oft neustartet oder dessen
+stdin braucht (z.B. zum Debuggen).
 
 ```bash
 # Terminal 1 – ZENTRALE (Event-Loop + Flask)
@@ -46,7 +76,7 @@ willst:
 ```bash
 # ZENTRALE (core/main.py) verwendet:
 OLLAMA_URL=http://localhost:11434   # default
-OLLAMA_MODEL=mistral                # default
+OLLAMA_MODEL=qwen2.5:14b            # default
 WHISPER_URL=http://localhost:5050   # default (gegen den Whisper-Service)
 TTS_URL=http://localhost:5051       # default (gegen den TTS-Service)
 

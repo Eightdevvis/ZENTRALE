@@ -34,7 +34,7 @@ Workflow-Regeln, die nicht aus dem Code allein hervorgehen.
   Im Tutor-Modus (`tools=...` an `chat_stream` gesetzt) bleibt der
   System-Prompt rein der Tutor-Prompt. Wer das ändern will: in
   `ai.py` die `if tools is None`-Bedingung anpassen.
-- Tool-Use: Mistral schickt `tool_calls` im **letzten** Streaming-Chunk
+- Tool-Use: Ollama schickt `tool_calls` im **letzten** Streaming-Chunk
   (`done=true`). Nicht früher abbrechen, sonst gehen Tool-Calls verloren.
 - Tool-Loop ist via `max_rounds = 5` gegen Endlosschleifen abgesichert.
 

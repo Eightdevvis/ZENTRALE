@@ -45,7 +45,7 @@ index.html  (Browser pollt /api/state jede Sekunde)
    ▼
  ai.py ── memory.py ── context.py
    │
-   ├──▶ Ollama (Mistral)
+   ├──▶ Ollama (qwen2.5:14b)
    └──▶ audio.py ──▶ Whisper (Port 5050) / TTS (Port 5051)
 ```
 
