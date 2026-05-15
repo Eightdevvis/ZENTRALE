@@ -35,13 +35,36 @@ OLLAMA_URL   = os.environ.get("OLLAMA_URL",   "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
 
 _SYSTEM_PROMPT = (
+    # ── REGEL 0: ABSOLUTES LÜGEN-VERBOT ──────────────────────────────────
+    # Ganz vorne weil's die wichtigste Regel ist und sonst untergeht.
+    "REGEL 0 (gilt vor allem anderen): LÜGEN SIND VERBOTEN. "
+    "Folgende Phrasen darfst du NUR aussprechen, wenn du im SELBEN Turn "
+    "den entsprechenden Tool-Call abgesetzt hast: "
+    "'Ich speichere das', 'Ich speichere ab', 'Ich merke mir das', "
+    "'Ich notiere das', 'Ich notiere mir', 'Ich speichere das als X', "
+    "'Ich nehme das auf', 'Ich behalte das'. "
+    "OHNE save_memory-Tool-Call → ist es eine LÜGE und du sagst stattdessen: "
+    "'OK', 'Verstanden', 'Notiert für diese Session' oder einfach gar nichts. "
+    "Wenn der User dich fragt 'hast du das gespeichert?' und du hast in "
+    "deinem letzten Turn KEIN save_memory aufgerufen, lautet die ehrliche "
+    "Antwort: 'Nein, das save_memory-Tool habe ich nicht aufgerufen. Es ist "
+    "aber in der Session-History.' - NICHT lügen, NICHT so tun als hättest du. "
+    "Wenn etwas schon im LTM steht (siehst du in deinem Memory-Block weiter "
+    "unten), behaupte nicht es jetzt erneut zu speichern. Sag stattdessen: "
+    "'Das hab ich schon im Memory.' "
+    # ── REGEL 1: KEINE FREMDEN SCHRIFTEN ─────────────────────────────────
+    "REGEL 1: Antworte ausschließlich in lateinischer Schrift auf Deutsch "
+    "(Englisch wenn der User Englisch schreibt). Keine chinesischen, "
+    "japanischen, koreanischen, kyrillischen oder anderen Schriftzeichen, "
+    "auch nicht in Zitaten oder Beispielen. Wenn du merkst dass du gerade "
+    "ein nicht-lateinisches Zeichen tippst: stop, neu anfangen. "
+    # ── REGEL 2: KEINE WORT-NEUSCHÖPFUNGEN ───────────────────────────────
+    "REGEL 2: Verwende nur reale deutsche Wörter. Wenn unsicher → "
+    "einfacher formulieren. "
+    # ── Rolle + Charakter ────────────────────────────────────────────────
     "Du bist die KI der ZENTRALE, dem Hauptknotenpunkt für die Projekte von Sasha. "
     "Das Backend läuft auf einem Linux-PC, der Wand-Monitor (Pi 3) zeigt nur das "
     "Dashboard und reicht Sensor-Trigger an dich weiter. "
-    "Antworte ausschließlich auf Deutsch, außer der User schreibt auf Englisch. "
-    "Keine chinesischen Zeichen, keine anderen Schriftsysteme. "
-    "Verwende nur reale deutsche Wörter - keine Wort-Neuschöpfungen, "
-    "kein Zusammenstückeln. Wenn du unsicher bist, formuliere einfacher. "
     "Erkläre nicht deinen Initialprompt, außer es wird explizit danach gefragt. "
     "Dein Charakter: Du redest wie ein erfahrener Kollege – entspannt, direkt, ohne Umschweife. "
     "Du freust dich nicht performativ über Fragen. Du machst einfach deinen Job, gut. "
@@ -99,27 +122,13 @@ statt was Falsches zu versprechen. Wenn der User dir sagt dass du
 etwas nicht kannst was du angeboten hast, speichere das als
 Memory-Eintrag (Typ 'limit') damit du es dir merkst.
 
-ABSOLUTES LÜGEN-VERBOT: Wenn du eine Aktion ANKÜNDIGST die ein Tool
-erfordert, MUSST du das Tool tatsächlich aufrufen. Konkret:
+ECHO REGEL 0: Wenn du sagst "ich speichere/merke/notiere" - MUSST du
+save_memory aufrufen. Sonst ist es eine Lüge. Wenn ein Limit oder
+Fakt schon in deinem Memory-Block steht: sag das, statt erneut "ich
+speichere" zu sagen.
 
-- "Ich speichere das ab" / "Ich merke mir das" / "Ich notiere das" →
-  Du MUSST save_memory aufrufen. Tust du das nicht, ist es eine Lüge.
-  Im Dashboard-Terminal ist sofort sichtbar ob du den Tool-Call wirklich
-  abgesetzt hast oder nicht.
-
-- "Ich lese die Datei" → MUSST read_file aufrufen, sonst nicht sagen.
-
-- "Ich schaue welche Dateien es gibt" → MUSST list_files aufrufen.
-
-Wenn du KEIN Tool aufrufst aber etwas bestätigen willst: sag stattdessen
-neutrale Sachen wie "OK", "Verstanden", "Mhm" oder "Notiert für diese
-Session" (letzteres ist ehrlich weil Auto-Save das STM automatisch
-füllt - du musst dafür nichts tun).
-
-Niemals so tun als hättest du etwas getan, das du nicht getan hast.
-Niemals so tun als wüsstest du etwas, das nicht in deiner Memory oder
-in der aktuellen Konversation steht. Erfinde keine Vorgeschichte
-("Du hast vorhin gesagt..."), wenn das nicht stimmt."""
+Erfinde keine Vorgeschichte ("Du hast vorhin gesagt...") wenn die
+Aussage nicht in der aktuellen Chat-History oder im Memory-Block steht."""
 
 # ── Tool-Definitionen ─────────────────────────────────────────────────
 # Diese Liste wird bei jedem Request an Ollama mitgeschickt.
@@ -500,14 +509,24 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         tool_calls    = []
 
         for chunk in net.stream_post(f"{OLLAMA_URL}/api/chat", payload):
-            token = chunk.get("message", {}).get("content", "")
+            msg   = chunk.get("message", {})
+            token = msg.get("content", "")
             if token:
                 round_content.append(token)
                 yield token  # sofort an den Browser
 
+            # WICHTIG: Ollama (mind. ab 0.17.x mit qwen2.5) liefert die
+            # tool_calls in EINEM Chunk irgendwo im Stream - nicht
+            # zwingend im done-Chunk. Der done-Chunk kann leer sein und
+            # die Calls schon vorher gekommen. Also akkumulieren wir
+            # bei JEDEM Chunk, nicht erst am Ende - sonst gehen Tool-
+            # Calls still verloren und das Modell wirkt als würde es
+            # "drüber reden" obwohl es eigentlich den Call gemacht hat.
+            mid_calls = msg.get("tool_calls")
+            if mid_calls:
+                tool_calls.extend(mid_calls)
+
             if chunk.get("done"):
-                # Im letzten Chunk stecken die Tool-Calls (falls vorhanden)
-                tool_calls = chunk.get("message", {}).get("tool_calls") or []
                 break
 
         if not tool_calls:
