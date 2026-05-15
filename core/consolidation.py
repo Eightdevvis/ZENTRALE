@@ -29,11 +29,12 @@
 
 import os
 import json as _json
-from datetime import datetime
+from datetime import datetime, date
 from threading import Lock
 
 import net      # HTTP-Wrapper mit Logging
-import memory   # LTM/STM CRUD
+import memory   # LTM/STM CRUD (Legacy, wird in Phase G durch graph ersetzt)
+import graph    # Konzept-Graph (Phase G)
 
 # ── Konfiguration ──────────────────────────────────────────────────────
 OLLAMA_URL   = os.environ.get("OLLAMA_URL",   "http://localhost:11434")
@@ -275,6 +276,129 @@ def note_user_turn():
     with _state_lock:
         global _last_user_turn_at
         _last_user_turn_at = datetime.now()
+
+
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  Phase G: Konzept-Graph-Extraktion pro Turn                          ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+#
+# Statt am Session-Ende flache Fakten ins LTM zu konsolidieren, läuft
+# der Graph-Extraktor nach JEDEM Chat-Turn (async im Hintergrund-Thread,
+# siehe ai._async_save_turn). Er extrahiert Konzepte (Knoten) und
+# Beziehungen (Edges) und merged sie in den persistierten Graphen.
+#
+# Grundgedanke: Memory wird sofort assoziativ aufgebaut, nicht erst
+# nach /sleep. Damit ist der Graph immer aktuell und Retrieval kann
+# direkt darauf operieren.
+
+_GRAPH_EXTRACTOR_PROMPT = """Du bist ein Konzept-Extraktor für Sashas persönliches Memory-System. Du liest einen Chat-Turn (User: Sasha, AI: die KI) und extrahierst die konkreten Konzepte aus SASHAS REALITÄT und ihre Beziehungen als Graph-Knoten und -Kanten.
+
+ABSOLUTE REGELN:
+
+1. NUR SASHA-SPEZIFISCH: ihre Sachen, Personen in ihrem Leben, Orte, Zustände, Projekte, Erfahrungen. NIE generische Welt-Konzepte definieren oder einbauen (was eine Wasserkanne ist, was Müdigkeit allgemein bedeutet, dass Couches in Wohnzimmern stehen) - das weiß das LLM schon.
+
+2. KNOTEN sind kurze deutsche LABELS, KEINE Definitionen. Beispiele: "Sasha", "Pi", "müde", "ZENTRALE", "1 GB RAM", "Wohnzimmer", "Hut".
+
+3. SUBJEKT bei User-Aussagen über sich: immer "Sasha". Wenn die KI über sich spricht: "KI".
+
+4. EDGES haben kurze deutsche Relations-Labels: "besitzt", "ist", "arbeitet-an", "zustand", "wohnt-in", "geschah-am", "hat", "kann", "kann-nicht", "mag", "fühlt".
+
+5. ZEIT: bei Aussagen wie "ich war heute müde" extrahiere das heutige Datum als Knoten im ISO-Format ("2026-05-15"). Edges: {Sasha→müde, rel=zustand}, {müde→2026-05-15, rel=geschah-am}. NIE "heute"/"gestern"/"morgen" als Knoten - immer absolutes Datum.
+
+6. AI-LÜGEN NICHT EXTRAHIEREN: wenn die KI im Turn behauptet "ich speichere das ab" / "ich notiere" / "ich vergesse das" OHNE dass im selben Turn ein echter Tool-Call ablief (sichtbar an dem `[TOOL save_memory: ...]`-Marker den ich gleich beschreibe), dann ist das eine Lüge der KI - NICHT als Fakt extrahieren.
+
+7. SMALLTALK weglassen: Begrüßungen, Höflichkeitsfloskeln, "ja"/"ok"/"nein"-Replies, Klärungsfragen. Wenn der Turn nichts substantielles bringt: {"nodes": [], "edges": []}.
+
+8. KEINE redundanten Konzepte: wenn der User sagt "mein Pi", reicht der Knoten "Pi" (das "mein" wird durch die `besitzt`-Edge zu Sasha modelliert).
+
+KNOTEN-TYPEN: "person", "object", "place", "project", "state", "concept", "property", "event". Im Zweifel: "concept".
+
+OUTPUT: gültiges JSON mit zwei Arrays. Auch bei nur einem Knoten/Edge ein Array verwenden. Bei nichts extrahierbarem: leere Arrays.
+
+{
+  "nodes": [
+    {"name": "Pi", "type": "object"},
+    {"name": "1 GB RAM", "type": "property"}
+  ],
+  "edges": [
+    {"from": "Sasha", "to": "Pi", "rel": "besitzt"},
+    {"from": "Pi", "to": "1 GB RAM", "rel": "hat"}
+  ]
+}"""
+
+
+def _call_graph_extractor(user_msg: str, ai_msg: str, today: str) -> tuple[list[dict], list[dict]]:
+    """
+    LLM-Call der einen Chat-Turn in (nodes, edges) übersetzt.
+
+    Returns Tupel von (nodes, edges) Listen. Bei Fehlern: leere Listen.
+    """
+    body = (
+        f"Heutiges Datum: {today}\n\n"
+        f"Chat-Turn:\n"
+        f"User (Sasha): {user_msg}\n"
+        f"AI:           {ai_msg}\n\n"
+        f"Extrahiere als JSON mit 'nodes' und 'edges' Arrays:"
+    )
+    try:
+        resp = net.post(
+            f"{OLLAMA_URL}/api/chat",
+            {
+                "model":    OLLAMA_MODEL,
+                "messages": [
+                    {"role": "system", "content": _GRAPH_EXTRACTOR_PROMPT},
+                    {"role": "user",   "content": body},
+                ],
+                "stream":   False,
+                "format":   "json",
+            },
+            timeout=90,
+        )
+        content = resp.get("message", {}).get("content", "").strip()
+    except Exception:
+        return ([], [])
+
+    if not content:
+        return ([], [])
+
+    try:
+        parsed = _json.loads(content)
+    except Exception:
+        return ([], [])
+
+    if not isinstance(parsed, dict):
+        return ([], [])
+
+    nodes = parsed.get("nodes", [])
+    edges = parsed.get("edges", [])
+    if not isinstance(nodes, list): nodes = []
+    if not isinstance(edges, list): edges = []
+
+    # Defensive Filterung: nur Dicts mit minimal benötigten Feldern
+    nodes = [n for n in nodes if isinstance(n, dict) and n.get("name")]
+    edges = [e for e in edges if isinstance(e, dict)
+             and e.get("from") and e.get("to") and e.get("rel")]
+    return (nodes, edges)
+
+
+def extract_turn_into_graph(user_msg: str, ai_msg: str):
+    """
+    Hauptweg um einen Turn in den Graphen zu kippen. Wird async von
+    ai._async_save_turn aufgerufen. Macht den LLM-Extraktor-Call und
+    füttert das Ergebnis in graph.add_turn_extraction.
+
+    Blockiert nichts: Caller sollte das in einem Thread laufen lassen.
+    """
+    user_msg = (user_msg or '').strip()
+    ai_msg   = (ai_msg   or '').strip()
+    if not user_msg and not ai_msg:
+        return
+
+    today = date.today().isoformat()
+    nodes, edges = _call_graph_extractor(user_msg, ai_msg, today)
+    if not nodes and not edges:
+        return
+    graph.add_turn_extraction(nodes, edges)
 
 
 def maybe_consolidate_due_to_inactivity() -> dict | None:

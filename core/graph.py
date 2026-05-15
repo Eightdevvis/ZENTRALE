@@ -1,0 +1,528 @@
+# core/graph.py
+#
+# Konzept-Graph Memory (Phase G des Memory-Plans).
+#
+# WAS: Knoten = Konzepte als Labels (Entitäten, Zustände, Orte, Konzepte,
+# Zeit-Punkte). Edges = typisierte/gewichtete Relationen. Speichert
+# Sashas konkrete Realität - NICHT generisches Weltwissen (das macht
+# das LLM beim Output-Synthesizing).
+#
+# WARUM: Memory ist assoziativ, nicht kategorial. Flache Listen + Top-K-
+# Embedding-Retrieval versagen bei breiten Fragen ("was weißt du über
+# mich"), bei zeitbasierten Fragen, und bei der Verbindung zwischen
+# Konzepten die linguistisch unähnlich aber konzeptuell verwandt sind
+# (Konto → broke). Aktivierungs-Spread durch typed edges modelliert das.
+#
+# DREI ROLLEN VON EMBEDDINGS hier:
+#   1. Alias-Resolution beim Schreiben ("der Pi" == "mein Raspberry"
+#      == Pi-Knoten via Cosinus-Schwelle)
+#   2. Fuzzy Entry-Point beim Lesen (Query → nächste Knoten finden)
+#   3. KEIN Top-K-Retrieval mehr - das macht Aktivierungs-Spread
+#
+# ZEIT als Knoten: Tage/Monate/Jahre sind eigene Knoten in einer
+# Hierarchie. Jedes erwähnte Konzept kriegt automatisch eine
+# `erwähnt-am`-Kante zum heutigen Datum-Knoten. "heute"/"gestern"
+# werden NIE als Knoten gespeichert - immer zu absoluten ISO-Dates
+# aufgelöst, sonst verschiebt sich "heute" jeden Tag.
+#
+# Detail-Plan: memory/ki_memory_plan.md (Phase-G-Abschnitt kommt nach).
+
+import json
+import os
+from datetime import datetime, date
+from threading import Lock
+
+import embeddings
+
+
+_DATA_DIR    = os.path.join(os.path.dirname(__file__), '..', 'data')
+_GRAPH_FILE  = os.path.join(_DATA_DIR, 'ai_graph.json')
+
+SCHEMA_VERSION = 1
+
+# Cosinus-Schwelle für Alias-Resolution. Bei Werten >= das wird ein
+# neu erwähnter Knotenname als bestehender Knoten erkannt und mit
+# dem alten gemerged. Zu niedrig → unterschiedliche Konzepte werden
+# fusioniert. Zu hoch → Aliasse bleiben getrennt. 0.85 ist
+# konservativ - kann später nachjustiert werden wenn wir Praxis-
+# Beobachtungen haben.
+ALIAS_THRESHOLD = 0.85
+
+# Activation-Spread-Parameter
+DEFAULT_HOPS  = 2     # wie weit propagieren
+DEFAULT_DECAY = 0.5   # pro Hop mit diesem Faktor multiplizieren
+NOISE_FLOOR   = 0.05  # Aktivierung unter diesem Wert nicht weiterspreaden
+
+_lock = Lock()
+
+
+# ── Helpers ────────────────────────────────────────────────────────────
+
+def _now_iso() -> str:
+    return datetime.now().isoformat()
+
+
+def _today_str() -> str:
+    return date.today().isoformat()
+
+
+def _is_date(s: str) -> bool:
+    """Looks like ISO date YYYY-MM-DD?"""
+    try:
+        date.fromisoformat(s)
+        return True
+    except Exception:
+        return False
+
+
+def _log(line: str):
+    """Lazy state-import damit Tests ohne live state importieren können."""
+    try:
+        import state
+        state.push_log(line)
+    except Exception:
+        pass
+
+
+def _normalize_name(name: str) -> str:
+    """
+    Knotennamen normalisieren: Whitespace trimmen, deutsche Artikel
+    am Anfang entfernen. Lässt Groß/Klein-Schreibung intact (Sasha
+    bleibt Sasha, der pi wird Pi).
+
+    Beispiele:
+      "der Pi"          → "Pi"
+      "  mein Hut "     → "Hut"
+      "Sasha"           → "Sasha"
+      "eine Wasserkanne" → "Wasserkanne"
+    """
+    s = (name or '').strip()
+    lower = s.lower()
+    articles = (
+        'der ', 'die ', 'das ', 'den ', 'dem ', 'des ',
+        'ein ', 'eine ', 'einen ', 'einer ', 'eines ',
+        'mein ', 'meine ', 'meinen ', 'meiner ', 'meines ',
+        'dein ', 'deine ', 'deinen ', 'deiner ', 'deines ',
+        'sein ', 'seine ', 'seinen ', 'seiner ', 'seines ',
+        'ihr ', 'ihre ', 'ihren ', 'ihrer ', 'ihres ',
+    )
+    for prefix in articles:
+        if lower.startswith(prefix):
+            s = s[len(prefix):]
+            break
+    return s.strip()
+
+
+# ── Persistence ───────────────────────────────────────────────────────
+
+def _load_raw() -> dict:
+    """Internes Load - Caller muss Lock halten."""
+    if not os.path.exists(_GRAPH_FILE):
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "nodes":          {},
+            "edges":          [],
+        }
+    with open(_GRAPH_FILE, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    data.setdefault("schema_version", SCHEMA_VERSION)
+    data.setdefault("nodes", {})
+    data.setdefault("edges", [])
+    return data
+
+
+def _write_atomic(data: dict):
+    """Atomic write: tmp + rename, gegen halbgeschriebene Files."""
+    os.makedirs(_DATA_DIR, exist_ok=True)
+    tmp = _GRAPH_FILE + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, _GRAPH_FILE)
+
+
+# ── Node Operations ───────────────────────────────────────────────────
+
+def _find_alias(name: str, data: dict, threshold: float = ALIAS_THRESHOLD) -> str | None:
+    """
+    Sucht ob ein bestehender Knoten dem `name` semantisch (Embedding)
+    ähnlich ist. Returns kanonischer Knotenname oder None.
+
+    Erstmal exakter Match (case-insensitiv normalisiert). Dann
+    Embedding-Vergleich gegen alle Knoten mit Embedding.
+
+    Zeit-Knoten haben kein Embedding und werden über exakten String-
+    Vergleich gefunden (ISO-Dates haben keine Aliase).
+    """
+    if name in data["nodes"]:
+        return name
+
+    # Case-insensitive exact match
+    name_lower = name.lower()
+    for existing in data["nodes"]:
+        if existing.lower() == name_lower:
+            return existing
+
+    # Embedding-similarity
+    new_emb = embeddings.embed_document(name)
+    if not new_emb:
+        return None
+    best_score = 0.0
+    best_name  = None
+    for existing_name, node in data["nodes"].items():
+        ex_emb = node.get("embedding")
+        if not ex_emb:
+            continue
+        sim = embeddings.cosine_similarity(new_emb, ex_emb)
+        if sim > best_score:
+            best_score = sim
+            best_name  = existing_name
+    if best_score >= threshold:
+        return best_name
+    return None
+
+
+def _add_or_get_node(name: str, node_type: str, data: dict) -> str:
+    """
+    Fügt einen Knoten hinzu falls noch nicht da (oder findet Alias).
+    Returns kanonischer Knotenname. Updated mentions/last_seen bei
+    bestehendem Knoten.
+    """
+    name = _normalize_name(name)
+    if not name:
+        return ""
+    alias = _find_alias(name, data)
+    if alias is not None:
+        node = data["nodes"][alias]
+        node["last_seen"] = _now_iso()
+        node["mentions"]  = node.get("mentions", 1) + 1
+        return alias
+
+    # Neuer Knoten - Embedding generieren falls kein Zeit-Knoten
+    emb = None
+    if not _is_date(name) and node_type not in ("time-day", "time-month", "time-year"):
+        emb = embeddings.embed_document(name)
+    data["nodes"][name] = {
+        "type":       node_type or "concept",
+        "embedding":  emb,
+        "first_seen": _now_iso(),
+        "last_seen":  _now_iso(),
+        "mentions":   1,
+    }
+    return name
+
+
+def _add_edge(from_node: str, to_node: str, rel: str, data: dict, weight_delta: float = 1.0):
+    """
+    Fügt eine Kante hinzu oder verstärkt eine existierende mit
+    gleichem (from, to, rel)-Tripel. Edge-Weight akkumuliert über
+    Co-Erwähnungen - häufig zusammen genannt = stark verbunden.
+    """
+    if not from_node or not to_node or not rel:
+        return
+    if from_node == to_node:
+        return  # Selbst-Schleifen sind nutzlos für Activation-Spread
+    for edge in data["edges"]:
+        if edge["from"] == from_node and edge["to"] == to_node and edge["rel"] == rel:
+            edge["weight"]    = edge.get("weight", 1.0) + weight_delta
+            edge["last_seen"] = _now_iso()
+            return
+    data["edges"].append({
+        "from":       from_node,
+        "to":         to_node,
+        "rel":        rel,
+        "weight":     weight_delta,
+        "first_seen": _now_iso(),
+        "last_seen":  _now_iso(),
+    })
+
+
+# ── Time-Knoten Hierarchie ─────────────────────────────────────────────
+
+def _ensure_time_node(date_str: str, data: dict):
+    """
+    Stellt sicher dass der Tag-Knoten + Monat + Jahr existieren und
+    via `enthält`-Kanten hierarchisch verknüpft sind.
+
+      2026 ─[enthält]─► 2026-05 ─[enthält]─► 2026-05-15
+    """
+    if not _is_date(date_str):
+        return
+    if date_str in data["nodes"]:
+        # Day existiert schon → Hierarchie auch
+        node = data["nodes"][date_str]
+        node["last_seen"] = _now_iso()
+        return
+
+    year, month, day = date_str.split('-')
+    year_str  = year
+    month_str = f"{year}-{month}"
+
+    # Year
+    if year_str not in data["nodes"]:
+        data["nodes"][year_str] = {
+            "type": "time-year", "embedding": None,
+            "first_seen": _now_iso(), "last_seen": _now_iso(), "mentions": 1,
+        }
+    # Month
+    if month_str not in data["nodes"]:
+        data["nodes"][month_str] = {
+            "type": "time-month", "embedding": None,
+            "first_seen": _now_iso(), "last_seen": _now_iso(), "mentions": 1,
+        }
+        _add_edge(year_str, month_str, "enthält", data, weight_delta=1.0)
+    # Day
+    data["nodes"][date_str] = {
+        "type": "time-day", "embedding": None,
+        "first_seen": _now_iso(), "last_seen": _now_iso(), "mentions": 1,
+    }
+    _add_edge(month_str, date_str, "enthält", data, weight_delta=1.0)
+
+
+# ── Public Write API ──────────────────────────────────────────────────
+
+def add_turn_extraction(nodes_in: list[dict], edges_in: list[dict]):
+    """
+    Hauptweg um den Graphen zu erweitern. Wird vom Extraktor in
+    consolidation.py nach jedem Turn (async) aufgerufen.
+
+    Args:
+        nodes_in: Liste von {"name": str, "type": str}
+        edges_in: Liste von {"from": str, "to": str, "rel": str}
+
+    Macht:
+      1. Alle Knoten via Alias-Resolution adden (Mapping orig→canonical).
+      2. Heutigen Time-Node garantieren.
+      3. Alle Edges adden, dabei from/to durch Alias-Map ersetzen.
+      4. Jeden gemenagten Knoten zusätzlich mit dem heutigen Datum
+         per `erwähnt-am`-Kante verbinden - das ist die Temporal-
+         Anker für Aktivierungs-Spread "was war heute".
+
+    Loggt was extrahiert wurde damit man im Dashboard live mitliest.
+    """
+    if not nodes_in and not edges_in:
+        return
+
+    with _lock:
+        data = _load_raw()
+        name_map = {}
+
+        # 1. Nodes adden mit Alias-Resolution
+        for n in nodes_in:
+            orig = (n.get("name") or "").strip()
+            if not orig:
+                continue
+            node_type = (n.get("type") or "concept").strip()
+            canonical = _add_or_get_node(orig, node_type, data)
+            if canonical:
+                name_map[orig] = canonical
+
+        # 2. Heutiger Time-Node
+        today = _today_str()
+        _ensure_time_node(today, data)
+
+        # 3. Edges
+        for e in edges_in:
+            from_orig = (e.get("from") or "").strip()
+            to_orig   = (e.get("to")   or "").strip()
+            rel       = (e.get("rel")  or "").strip()
+            if not from_orig or not to_orig or not rel:
+                continue
+
+            # Mapping. Wenn nicht im name_map: vielleicht ein Date oder
+            # ein impliziter Knoten den der Extraktor nicht in nodes_in
+            # aufgeführt hat. Defensiv lazy-anlegen.
+            def _resolve(orig: str) -> str:
+                if orig in name_map:
+                    return name_map[orig]
+                if _is_date(orig):
+                    _ensure_time_node(orig, data)
+                    return orig
+                # Fallback: anlegen
+                canon = _add_or_get_node(orig, "concept", data)
+                if canon:
+                    name_map[orig] = canon
+                return canon
+
+            from_canon = _resolve(from_orig)
+            to_canon   = _resolve(to_orig)
+            _add_edge(from_canon, to_canon, rel, data)
+
+        # 4. Erwähnt-am-Kanten zum heutigen Tag für alle Knoten dieses Turns
+        for canon in set(name_map.values()):
+            if canon and canon != today:
+                _add_edge(canon, today, "erwähnt-am", data, weight_delta=0.3)
+
+        _write_atomic(data)
+
+    # Logging außerhalb des Locks
+    nlist = list(set(name_map.values()))
+    _log(f"GRAPH ⊕ Turn-Extraktion: {len(nlist)} Knoten, {len(edges_in)} Kanten ({', '.join(nlist[:6])}{'...' if len(nlist)>6 else ''})")
+
+
+# ── Public Read API ───────────────────────────────────────────────────
+
+def _neighbors(node_name: str, data: dict):
+    """Generator über (other_node, edge) für alle anliegenden Kanten."""
+    for edge in data["edges"]:
+        if edge["from"] == node_name:
+            yield (edge["to"], edge)
+        elif edge["to"] == node_name:
+            yield (edge["from"], edge)
+
+
+def _activate(entry_nodes: list[str], data: dict,
+              hops: int = DEFAULT_HOPS, decay: float = DEFAULT_DECAY) -> dict[str, float]:
+    """
+    Aktivierungs-Spread: ausgehend von entry_nodes, breitet sich
+    Aktivierung durch den Graphen aus. Pro Hop wird's um `decay`
+    verringert, Edge-Weight moduliert.
+
+    Returns: {node_name: score} mit Werten in (0, 1].
+    """
+    activation = {n: 1.0 for n in entry_nodes if n in data["nodes"]}
+    frontier   = set(activation.keys())
+
+    for _ in range(hops):
+        next_frontier = set()
+        for node in list(frontier):
+            for neighbor, edge in _neighbors(node, data):
+                # Edge-Weight normalisieren: 1 mention ≈ 1.0, stärkere
+                # Kanten bringen mehr Aktivierung mit. Cap bei 1.5
+                # damit eine einzelne überstarke Kante nicht alles
+                # dominiert.
+                ew = min(1.5, edge.get("weight", 1.0))
+                contrib = activation[node] * decay * (ew / 1.5)
+                if contrib < NOISE_FLOOR:
+                    continue
+                if contrib > activation.get(neighbor, 0):
+                    activation[neighbor] = contrib
+                    next_frontier.add(neighbor)
+        frontier = next_frontier
+
+    return activation
+
+
+def _find_entry_points(query: str, data: dict,
+                       top_k: int = 3, threshold: float = 0.45) -> list[str]:
+    """
+    Findet die top_k Knoten mit höchster Embedding-Ähnlichkeit zum
+    Query. Wird genutzt um den Aktivierungs-Spread zu starten.
+
+    threshold: niedriger als bei normalem Retrieval (0.45 statt 0.6),
+    weil wir nur Entry-Points brauchen - der Graph-Spread holt dann
+    den Rest.
+    """
+    qvec = embeddings.embed_query(query)
+    if not qvec:
+        return []
+    scored = []
+    for name, node in data["nodes"].items():
+        emb = node.get("embedding")
+        if not emb:
+            continue
+        sim = embeddings.cosine_similarity(qvec, emb)
+        if sim >= threshold:
+            scored.append((name, sim))
+    scored.sort(key=lambda x: -x[1])
+    return [n for n, _ in scored[:top_k]]
+
+
+def context_for_query(query: str | None,
+                      hops: int = DEFAULT_HOPS,
+                      max_nodes: int = 25) -> str:
+    """
+    Hauptweg um Memory-Kontext für einen Chat-Turn zu holen.
+
+    Strategie:
+      1. Entry-Points = Query-Embedding-Match (top_k) + "Sasha"-Knoten
+         (immer als zentraler Anker) + heutiger Time-Knoten (Recency-
+         Bias).
+      2. Aktivierungs-Spread von Entry-Points aus, hops mal.
+      3. Top-N nach Aktivierungs-Score nehmen.
+      4. Relevante Edges zwischen diesen Knoten dazu.
+      5. Als strukturierter Text-Block für den System-Prompt formatieren.
+
+    Wenn der Graph leer ist oder kein Entry-Point findbar: leerer String.
+    """
+    with _lock:
+        data = _load_raw()
+
+    if not data["nodes"]:
+        _log("GRAPH →  leer, kein Kontext")
+        return ""
+
+    # Entry-Points sammeln
+    entries: list[str] = []
+    if query:
+        entries.extend(_find_entry_points(query, data))
+
+    # Sasha + Heute IMMER als Anker (wenn Graph sie kennt)
+    if "Sasha" in data["nodes"] and "Sasha" not in entries:
+        entries.append("Sasha")
+    today = _today_str()
+    if today in data["nodes"] and today not in entries:
+        entries.append(today)
+
+    if not entries:
+        _log(f"GRAPH →  Query '{(query or '')[:40]}': keine Entry-Points")
+        return ""
+
+    _log(f"GRAPH →  Entry-Points: {', '.join(entries)}")
+
+    activation = _activate(entries, data, hops=hops)
+
+    # Top-N
+    sorted_nodes = sorted(activation.items(), key=lambda x: -x[1])[:max_nodes]
+    node_set     = {n for n, _ in sorted_nodes}
+
+    # Relevante Edges - nur zwischen aktivierten Knoten
+    relevant_edges = [
+        e for e in data["edges"]
+        if e["from"] in node_set and e["to"] in node_set
+    ]
+
+    _log(f"GRAPH ←  {len(sorted_nodes)} Knoten, {len(relevant_edges)} Kanten aktiv")
+
+    if not sorted_nodes:
+        return ""
+
+    # Kontext-Block bauen. Format ist bewusst graph-strukturiert -
+    # das LLM kann das gut lesen und beim Output narrativieren.
+    lines = ["## Aktiviertes Wissen über Sashas Welt"]
+    lines.append("")
+    lines.append("Konzepte (mit Aktivierungs-Score, höher = relevanter):")
+    for name, score in sorted_nodes:
+        ntype = data["nodes"][name].get("type", "concept")
+        # Score nur wenn nicht 1.0 (Entry-Points sind 1.0)
+        if score >= 0.999:
+            lines.append(f"  - {name} [{ntype}]")
+        else:
+            lines.append(f"  - {name} [{ntype}] (a={score:.2f})")
+    if relevant_edges:
+        lines.append("")
+        lines.append("Verbindungen:")
+        for e in relevant_edges[:40]:  # cap
+            w = e.get("weight", 1.0)
+            w_str = f" w={w:.1f}" if w != 1.0 else ""
+            lines.append(f"  {e['from']} ─[{e['rel']}{w_str}]─► {e['to']}")
+
+    return "\n".join(lines)
+
+
+# ── Debug/Inspection API ──────────────────────────────────────────────
+
+def stats() -> dict:
+    """Schnelle Übersicht für Debug/UI."""
+    with _lock:
+        data = _load_raw()
+    return {
+        "nodes": len(data["nodes"]),
+        "edges": len(data["edges"]),
+        "schema_version": data["schema_version"],
+    }
+
+
+def dump() -> dict:
+    """Roher Zugriff auf den Graph (Read-Only-Snapshot)."""
+    with _lock:
+        return _load_raw()

@@ -27,9 +27,11 @@ import os
 import json as _json
 import threading  # Phase D: Auto-Save läuft in Daemon-Threads
 
-import net       # HTTP-Wrapper mit Terminal-Logging
-import memory    # Persistente KI-Memory
-import context   # Whitelist-basierter Dateizugriff
+import net           # HTTP-Wrapper mit Terminal-Logging
+import memory        # Persistente KI-Memory (LTM/STM, Legacy)
+import context       # Whitelist-basierter Dateizugriff
+import graph         # Phase G: Konzept-Graph Memory (assoziativ, primary)
+import consolidation # Phase G: Graph-Extraktor
 
 OLLAMA_URL   = os.environ.get("OLLAMA_URL",   "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
@@ -392,37 +394,37 @@ def _generate_session_summary(prev_summary: str, user_msg: str, ai_msg: str) -> 
 
 def _async_save_turn(user_msg: str, ai_msg: str):
     """
-    Fire-and-forget: User+AI-Turn ins STM packen, Summary updaten.
+    Fire-and-forget: User+AI-Turn extrahieren und in den Konzept-
+    Graphen einarbeiten (Phase G).
 
-    Macht NICHTS wenn user_msg leer ist - dann gab's nichts vom User
-    (z.B. interne Calls ohne echte Konversation).
+    Vorher (Phase D): STM-Liste + LLM-Summary-Generation. Beides ist
+    weggefallen mit dem Graph - der LLM-Extraktor produziert direkt
+    strukturierte Konzepte+Edges, und Recent-Context kommt automatisch
+    durch Aktivierung des heutigen Time-Knotens.
 
-    Läuft als Daemon-Thread: Prozess kann beendet werden ohne auf den
-    Save zu warten. Fehler im Thread werden geloggt aber nicht
-    weitergereicht - der eigentliche Chat-Pfad ist davon entkoppelt.
+    Wir behalten stm_append für Rohaufzeichnung der Turns - das ist
+    eine Art Konversations-Log das beim Debug nützlich ist und einen
+    Backup-Pfad gibt falls der Extraktor mal was übersieht.
+
+    Läuft als Daemon-Thread: blockiert nichts, der User hat seine
+    Antwort schon lange. Fehler werden geloggt, nicht weitergereicht.
     """
     if not user_msg or not user_msg.strip():
         return
 
     def _do_save():
         try:
-            # 1. Beide Seiten ans STM-Listen-Ende hängen.
-            #    Tags lassen wir vorerst leer - in Phase E (Konsolidierung)
-            #    werden Tags automatisch beim Promote nach LTM gesetzt.
+            # 1. Roh-Turns ins STM-Log (Debug/Backup-Pfad)
             memory.stm_append(role='user', text=user_msg)
             if ai_msg and ai_msg.strip():
                 memory.stm_append(role='ai', text=ai_msg)
 
-            # 2. Summary aktualisieren. Das ist der teure Teil (LLM-Call,
-            #    paar Sekunden), aber wir sind im Hintergrund-Thread -
-            #    User hat seine Antwort schon längst gesehen.
-            prev = memory.stm_get_summary()
-            new  = _generate_session_summary(prev, user_msg, ai_msg)
-            if new != prev:
-                memory.stm_set_summary(new)
+            # 2. Phase G: LLM-Extraktor zieht Konzepte+Edges raus und
+            #    merged sie in den Graphen. Das ist der teure Teil
+            #    (LLM-Call, paar Sekunden) - aber wir sind im
+            #    Hintergrund-Thread, User merkt nichts.
+            consolidation.extract_turn_into_graph(user_msg, ai_msg)
         except Exception as e:
-            # Wir wollen unter keinen Umständen den Hauptprozess
-            # mitnehmen. state.push_log ist transparent ans Terminal.
             try:
                 import state
                 state.push_log(f"[auto-save] FEHLER: {e}")
@@ -444,19 +446,13 @@ def chat(messages: list, model: str = None, system: str = None) -> str:
     # k relevantesten Einträge in den Prompt - statt wie früher die
     # komplette Memory zu dumpen (skaliert nicht).
     user_query = _last_user_query(messages)
-    profile    = memory.user_profile_for_prompt()
-    ltm        = memory.format_for_prompt(query=user_query)
-    stm        = memory.stm_format_for_prompt()
-    # Reihenfolge: Charakter → Selbstbild → User-Profil (immer) → STM →
-    # LTM (query-aware). Profil VOR STM/LTM weil's der stabile "wer ist
-    # der User"-Layer ist, gegen den die anderen Schichten arbeiten.
+    # Phase G: ein einziger Memory-Kontext aus dem Konzept-Graph statt
+    # drei separaten Schichten. Aktivierungs-Spread holt was relevant
+    # ist, inklusive Zeit-Anker und Sasha-Profil über die Graph-Topologie.
+    mem_ctx = graph.context_for_query(user_query)
     sys_prompt = (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
-    if profile:
-        sys_prompt += "\n\n" + profile
-    if stm:
-        sys_prompt += "\n\n" + stm
-    if ltm:
-        sys_prompt += "\n\n" + ltm
+    if mem_ctx:
+        sys_prompt += "\n\n" + mem_ctx
 
     payload = {
         "model":    model,
@@ -507,24 +503,16 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     # Tutor-Modus (Tutor hat eigenen System-Prompt der schon vollständig
     # ist und andere Tool-Sets nutzt).
     if tools is None:
-        # Drei Memory-Schichten:
-        #   User-Profil (immer):  basale "wer ist Sasha"-Fakten + Vorlieben.
-        #                         Schutz gegen Konfabulation bei breiten
-        #                         Fragen wo Embedding-Retrieval versagt.
-        #   STM-Summary (Phase D): rollender Session-Kontext.
-        #   LTM Top-K  (Phase C):  query-aware semantische Suche für alles
-        #                         was nicht ins Profil gehört.
-        profile    = memory.user_profile_for_prompt()
-        ltm        = memory.format_for_prompt(query=user_query)
-        stm        = memory.stm_format_for_prompt()
-        # Reihenfolge: Charakter → Selbstbild → Profil → STM → LTM.
+        # Phase G: Memory-Kontext kommt jetzt vollständig aus dem
+        # Konzept-Graphen. Aktivierungs-Spread ausgehend von Query-
+        # Entry-Points + Sasha-Anker + heutiger Time-Node ersetzt
+        # die alten getrennten Schichten (User-Profil, STM-Summary,
+        # LTM-Top-K). Der Graph weiß welche Konzepte mit der aktuellen
+        # Frage assoziiert sind und liefert sie alle mit Beziehungen.
+        mem_ctx    = graph.context_for_query(user_query)
         sys_prompt = (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
-        if profile:
-            sys_prompt += "\n\n" + profile
-        if stm:
-            sys_prompt += "\n\n" + stm
-        if ltm:
-            sys_prompt += "\n\n" + ltm
+        if mem_ctx:
+            sys_prompt += "\n\n" + mem_ctx
     else:
         sys_prompt = system or _SYSTEM_PROMPT
 
