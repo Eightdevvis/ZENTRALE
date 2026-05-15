@@ -31,26 +31,50 @@ import net  # HTTP-Wrapper mit Terminal-Logging (NET → / NET ← Zeilen)
 # Code auch mit anderen Embedding-Providern arbeiten könnte (z.B. ein
 # zweiter Pi als Embedding-Server). Default ist lokales Ollama.
 OLLAMA_URL    = os.environ.get("OLLAMA_URL",          "http://localhost:11434")
-EMBED_MODEL   = os.environ.get("OLLAMA_EMBED_MODEL",  "nomic-embed-text")
+EMBED_MODEL   = os.environ.get("OLLAMA_EMBED_MODEL",  "bge-m3")
 
-# nomic-embed-text liefert 768-dimensionale Vektoren. Wir hardcoden das
-# nicht - falls jemand das Modell wechselt, passt sich alles automatisch
-# an. Aber als Referenz: 768 ist der erwartete Default.
+# Vektor-Dimensionen je nach Modell:
+#   bge-m3          → 1024 (multilingual, default seit Phase C-Quality-Fix)
+#   nomic-embed-text→ 768  (primär Englisch, frühere Default-Wahl)
+# Wir hardcoden die Dimension nicht - der Code passt sich an alles an,
+# was Ollama zurückgibt.
+
+# ── Task-Prefixes (modell-spezifisch) ─────────────────────────────────
+# Manche Embedding-Modelle wurden mit asymmetrischen Task-Prefixes
+# trainiert: Dokumente und Suchanfragen leben dann in unterschiedlichen
+# Regionen des Vektorraums, was Retrieval-Qualität deutlich verbessert.
+#
+#   nomic-embed-text: braucht "search_document:" / "search_query:" -
+#                     ohne Prefix matcht es zu sehr auf Lexikalisches
+#                     (Eigennamen wie "Sasha") statt aufs Thema.
+#
+#   bge-m3 (BAAI):    funktioniert ohne Prefix - die Trainings-
+#                     Objective ist symmetrisch genug, dass der gleiche
+#                     Encoder beide Seiten gut darstellt.
+#
+# Wenn jemand ein anderes Modell setzt: hier ergänzen, sonst kriegt es
+# leere Prefixe (was für die meisten modernen Modelle OK ist).
+_PREFIXES_BY_MODEL = {
+    'nomic-embed-text': ('search_document: ', 'search_query: '),
+    'bge-m3':           ('', ''),
+}
+_PREFIX_DOC, _PREFIX_QUERY = _PREFIXES_BY_MODEL.get(EMBED_MODEL, ('', ''))
 
 
-def embed(text: str) -> list[float] | None:
+def _embed_raw(text: str) -> list[float] | None:
     """
-    Erzeugt ein Embedding für den gegebenen Text via Ollama.
+    Erzeugt ein Embedding für den exakten Text via Ollama (kein Prefix).
 
     Returns:
-        list[float]: der Embedding-Vektor (768 Dimensionen bei
-                     nomic-embed-text).
+        list[float]: der Embedding-Vektor (768 dim bei nomic-embed-text).
         None: wenn Ollama nicht erreichbar war oder das Modell fehlt.
-              Caller müssen diesen Fall handhaben (kein Crash).
 
-    Der Ollama-Endpoint /api/embed nimmt ein 'input'-Feld (entweder
-    String oder Liste von Strings) und liefert 'embeddings' als Liste
-    von Vektor-Listen zurück. Bei Einzeleingabe nehmen wir [0].
+    Der Ollama-Endpoint /api/embed nimmt ein 'input'-Feld (String oder
+    Liste) und liefert 'embeddings' als Liste von Vektor-Listen zurück.
+    Bei Einzeleingabe nehmen wir [0].
+
+    Nicht direkt aufrufen - die Caller sollten embed_document() oder
+    embed_query() benutzen, damit die Prefixe konsistent gesetzt sind.
     """
     if not text or not text.strip():
         return None
@@ -62,19 +86,50 @@ def embed(text: str) -> list[float] | None:
                 "model": EMBED_MODEL,
                 "input": text,
             },
-            timeout=30,  # Embedding ist deutlich schneller als Chat, 30s ist großzügig
+            timeout=30,
         )
-        # Response-Form bei nomic-embed-text:
-        #   { "model": ..., "embeddings": [[0.12, -0.45, ...]], "total_duration": ..., ... }
-        embeddings = resp.get("embeddings")
-        if not embeddings or not isinstance(embeddings, list) or not embeddings[0]:
+        # Response: { "model": ..., "embeddings": [[0.12, -0.45, ...]], ... }
+        out = resp.get("embeddings")
+        if not out or not isinstance(out, list) or not out[0]:
             return None
-        return embeddings[0]
+        return out[0]
     except Exception:
-        # Wir loggen das nicht doppelt - net.post hat den Fehler bereits
-        # über state.push_log als "NET ✗ FAIL" sichtbar gemacht. Hier
-        # nur None zurückgeben, damit der Caller weiterlaufen kann.
+        # net.post hat den Fehler bereits über state.push_log geloggt.
+        # Hier nur None zurückgeben, damit Caller weiterlaufen kann.
         return None
+
+
+def embed_document(text: str) -> list[float] | None:
+    """
+    Embedding für etwas, das ins LTM eingelagert wird (Dokument-Seite
+    der asymmetrischen Suche).
+
+    Wird in memory.save() und backfill_missing_embeddings() genutzt.
+    """
+    if not text or not text.strip():
+        return None
+    return _embed_raw(_PREFIX_DOC + text)
+
+
+def embed_query(text: str) -> list[float] | None:
+    """
+    Embedding für eine Suchanfrage (Query-Seite der asymmetrischen Suche).
+
+    Wird in memory._select_relevant_entries() und überall sonst genutzt,
+    wo die KI semantisch im LTM sucht.
+    """
+    if not text or not text.strip():
+        return None
+    return _embed_raw(_PREFIX_QUERY + text)
+
+
+# Backward-compatibility: alter Name embed() bleibt verfügbar, aber wir
+# behandeln es als Document-Embedding (das war der häufigere Use Case
+# vor der Prefix-Trennung). Phase B-Saves davor brauchen ggf. ein
+# Re-Backfill, damit Doc und Query in derselben Raum-Hälfte sitzen.
+def embed(text: str) -> list[float] | None:
+    """Alias für embed_document. Existiert nur für Backward-Compatibility."""
+    return embed_document(text)
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:

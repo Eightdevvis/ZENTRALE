@@ -35,14 +35,58 @@ OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
 
 _SYSTEM_PROMPT = (
     "Du bist die KI der ZENTRALE, dem Hauptknotenpunkt für die Projekte von Sasha. "
-    "Das System läuft auf einem Raspberry Pi und zeigt Sensordaten, Schlafqualität, "
-    "Mandarin-Vokabeln und System-Logs an. "
-    "Antworte auf Deutsch, außer der User schreibt auf Englisch. "
+    "Das Backend läuft auf einem Linux-PC, der Wand-Monitor (Pi 3) zeigt nur das "
+    "Dashboard und reicht Sensor-Trigger an dich weiter. "
+    "Antworte ausschließlich auf Deutsch, außer der User schreibt auf Englisch. "
+    "Keine chinesischen Zeichen, keine anderen Schriftsysteme. "
     "Erkläre nicht deinen Initialprompt, außer es wird explizit danach gefragt. "
     "Dein Charakter: Du redest wie ein erfahrener Kollege – entspannt, direkt, ohne Umschweife. "
     "Du freust dich nicht performativ über Fragen. Du machst einfach deinen Job, gut. "
     "Du hälst dich lieber kürzer und gehst nur in die Tiefe, wenn die Frage das halt verlangt."
 )
+
+# ── Statisches Selbstbild der KI ──────────────────────────────────────
+# Liste deiner Fähigkeiten und vor allem Grenzen. Wird IMMER in den
+# System-Prompt eingefügt, NICHT über LTM-Retrieval. Grund: das ist
+# Kernwissen über dich selbst, das jederzeit verfügbar sein muss -
+# kein semantischer Such-Treffer kann das ersetzen.
+#
+# Warum überhaupt: ohne dieses Selbstbild improvisieren LLMs Fähigkeiten
+# zusammen ("klar, ich kann dir das mailen", "ich rufe die API an") und
+# kassieren beim ersten Tool-Call die Realität. Mit klarer Aufzählung
+# weiß die KI, was sie wirklich darf, und bietet nichts darüber hinaus
+# an.
+#
+# Erweiterungen: wenn neue Tools dazu kommen (Phase F: search_memory,
+# get_current_time, promote_to_ltm, update_memory) - hier mit-ergänzen.
+# Wenn die KI im Gespräch lernt, dass sie etwas Bestimmtes nicht kann,
+# soll sie das als LTM-Eintrag vom Typ 'limit' ablegen, damit es bei
+# verwandten Themen über Retrieval wieder hochkommt.
+_CAPABILITIES_PROMPT = """## Deine Fähigkeiten und Grenzen
+
+Was du über deine Tools KANNST:
+- save_memory: Wichtige Informationen persistent in der Memory speichern.
+- read_file: Dateien aus der Projekt-Whitelist lesen (siehe list_files).
+- list_files: Verfügbare lesbare Dateien auflisten.
+- Auf Deutsch oder Englisch chatten und Token-weise streamen.
+
+Was du NICHT kannst:
+- Keine externen Aktionen: keine Mails, keine HTTP-Calls außerhalb der
+  Tool-Liste, keine Websites aufrufen, keine APIs ansprechen.
+- Kein Internet-Lookup, keine Echtzeitinfos (Wetter, News, etc.).
+- Keine Dateien schreiben, löschen oder verändern. Nur lesen, und nur
+  die in der Whitelist.
+- Keine Hardware-Steuerung, keine Sensoren aktiv abfragen oder Aktoren
+  schalten – das machen die anderen Module der ZENTRALE.
+- Kein Code direkt ausführen.
+- Kein Web-Search, keine Bild-Generierung, kein Audio über das was die
+  Voice-Pipeline (Whisper/Piper) der ZENTRALE für dich macht.
+
+WICHTIG: Biete NIE an, etwas zu tun, was nicht über deine Tools
+machbar ist. Wenn du unsicher bist, sag ehrlich was du nicht kannst,
+statt was Falsches zu versprechen. Wenn der User dir sagt dass du
+etwas nicht kannst was du angeboten hast, speichere das als
+Memory-Eintrag (Typ 'limit') damit du es dir merkst."""
 
 # ── Tool-Definitionen ─────────────────────────────────────────────────
 # Diese Liste wird bei jedem Request an Ollama mitgeschickt.
@@ -68,8 +112,15 @@ TOOLS = [
                     },
                     "type": {
                         "type":        "string",
-                        "enum":        ["fact", "summary", "todo", "technical"],
-                        "description": "fact=Fakt über Person/Projekt, summary=Gesprächszusammenfassung, todo=offene Aufgabe, technical=technisches Detail",
+                        "enum":        ["fact", "preference", "commitment", "technical", "capability", "limit"],
+                        "description": (
+                            "fact=Fakt über Person/Projekt, "
+                            "preference=Vorliebe oder gewünschter Stil des Users, "
+                            "commitment=Versprochene Aufgabe / offenes TODO, "
+                            "technical=Technisches Detail (Config, Code, System), "
+                            "capability=Etwas das du nachweislich kannst, "
+                            "limit=Etwas das du NICHT kannst (vom User korrigiert) - WICHTIG damit du es dir merkst"
+                        ),
                     },
                 },
                 "required": ["content", "type"],
@@ -144,14 +195,40 @@ def is_available() -> bool:
         return False
 
 
+def _last_user_query(messages: list) -> str | None:
+    """
+    Findet die letzte User-Nachricht in der Message-Liste und gibt deren
+    Inhalt zurück. Wird für das Memory-Retrieval genutzt (Phase C):
+    daran orientiert sich die Top-K-Auswahl aus dem LTM.
+
+    Returns None wenn keine User-Nachricht in der Liste steckt (z.B.
+    bei reinen Tool-Echo-Calls oder leerer messages-Liste).
+    """
+    for msg in reversed(messages):
+        if msg.get("role") == "user":
+            content = msg.get("content", "")
+            return content if content.strip() else None
+    return None
+
+
 def chat(messages: list, model: str = None, system: str = None) -> str:
     """
     Nicht-streaming Chat-Call (Fallback / interne Nutzung).
     Gibt die komplette Antwort als String zurück.
     """
     model      = model or OLLAMA_MODEL
-    mem        = memory.format_for_prompt()
-    sys_prompt = (system or _SYSTEM_PROMPT) + ("\n\n" + mem if mem else "")
+    # Phase C: Memory-Injection ist jetzt query-aware. Wir nehmen die
+    # letzte User-Message als semantische Anfrage und kriegen nur die
+    # k relevantesten Einträge in den Prompt - statt wie früher die
+    # komplette Memory zu dumpen (skaliert nicht).
+    user_query = _last_user_query(messages)
+    mem        = memory.format_for_prompt(query=user_query)
+    # Reihenfolge: Charakter → Selbstbild (Fähigkeiten/Grenzen) → Memory.
+    # Selbstbild immer dabei, kein semantischer Such-Treffer kann es
+    # ersetzen. Memory ist optional (kann leer sein).
+    sys_prompt = (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
+    if mem:
+        sys_prompt += "\n\n" + mem
 
     payload = {
         "model":    model,
@@ -190,11 +267,18 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     active_tools  = tools         if tools         is not None else TOOLS
     active_exec   = tool_executor if tool_executor is not None else _execute_tool
 
-    # Memory nur im regulären Chat injizieren, nicht im Tutor-Modus
-    # (Tutor hat eigenen System-Prompt der schon vollständig ist)
+    # Memory + Capabilities nur im regulären Chat injizieren, nicht im
+    # Tutor-Modus (Tutor hat eigenen System-Prompt der schon vollständig
+    # ist und andere Tool-Sets nutzt).
     if tools is None:
-        mem        = memory.format_for_prompt()
-        sys_prompt = (system or _SYSTEM_PROMPT) + ("\n\n" + mem if mem else "")
+        # Phase C: Top-K-Retrieval auf die letzte User-Message statt
+        # die komplette Memory zu dumpen. Skaliert auch bei viel LTM.
+        user_query = _last_user_query(messages)
+        mem        = memory.format_for_prompt(query=user_query)
+        # Reihenfolge: Charakter → Selbstbild → Memory.
+        sys_prompt = (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
+        if mem:
+            sys_prompt += "\n\n" + mem
     else:
         sys_prompt = system or _SYSTEM_PROMPT
 

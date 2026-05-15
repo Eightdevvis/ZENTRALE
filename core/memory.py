@@ -51,7 +51,16 @@ STM_SCHEMA_VERSION = 1
 
 # Erlaubte Enum-Werte. Werden bei Save validiert; unerlaubte Werte
 # fallen defensiv auf den Default zurück (kein Crash bei buggy AI-Calls).
-LTM_TYPES  = ['fact', 'preference', 'commitment', 'technical']
+#
+# Typen-Bedeutungen:
+#   fact:        objektive Information über User, System, Welt
+#   preference:  wie der User Dinge bevorzugt (Stil, Reaktionsart)
+#   commitment:  was die AI versprochen hat / TODOs
+#   technical:   Konfigurationen, Code-Details, System-Internals
+#   capability:  was die AI nachweislich kann (gelernt im Gespräch)
+#   limit:       was die AI nicht kann (User-Korrektur, vermeidet
+#                erneutes falsches Versprechen am gleichen Thema)
+LTM_TYPES  = ['fact', 'preference', 'commitment', 'technical', 'capability', 'limit']
 WHO_VALUES = ['user', 'ai']
 STM_ROLES  = ['user', 'ai']
 
@@ -218,10 +227,13 @@ def save(content: str,
     # Embedding wird VOR dem Lock generiert. Ollama-Embed-Call dauert
     # ~50–200 ms je nach Text-Länge - wir wollen den Lock nicht so lange
     # halten und andere Threads (Auto-Save in Phase D) blockieren. Wenn
-    # Ollama down ist liefert embed() None, der Eintrag wird trotzdem
-    # gespeichert (kann später per backfill_missing_embeddings nachgereicht
-    # werden).
-    vec = embeddings.embed(content)
+    # Ollama down ist liefert embed_document() None, der Eintrag wird
+    # trotzdem gespeichert (kann später per backfill_missing_embeddings
+    # nachgereicht werden).
+    #
+    # WICHTIG: embed_document, nicht embed_query. nomic-embed-text legt
+    # Dokumente und Queries in unterschiedlichen Vektorraum-Regionen ab.
+    vec = embeddings.embed_document(content)
 
     with _ltm_lock:
         data = _load_ltm_raw()
@@ -265,10 +277,11 @@ def backfill_missing_embeddings() -> int:
     if not missing:
         return 0
 
-    # Embeddings außerhalb des Locks generieren
+    # Embeddings außerhalb des Locks generieren - alles Document-Seite,
+    # weil die Einträge ja im LTM liegen (keine Queries).
     generated = {}  # id → vector
     for e in missing:
-        vec = embeddings.embed(e['content'])
+        vec = embeddings.embed_document(e['content'])
         if vec is not None:
             generated[e['id']] = vec
 
@@ -309,25 +322,76 @@ def forget(entry_id: int) -> str:
     return f"✓ Gelöscht: {removed['content']}"
 
 
-def format_for_prompt() -> str:
+def format_for_prompt(query: str = None, k: int = 5) -> str:
     """
-    Formatiert alle LTM-Einträge als Text für den System-Prompt.
+    Formatiert relevante LTM-Einträge als Text für den System-Prompt.
 
-    Phase A-Verhalten: dump everything, wie v1 - skaliert nur bis ~50
-    Einträge. In Phase C wird das auf Top-K-Retrieval umgebaut: dann
-    nicht mehr alle Einträge, sondern nur die für die aktuelle Frage
-    relevantesten Treffer (semantisch via Embedding-Suche).
+    Modi:
+      - query=None  → backward-compatible: dumpt alle Einträge. Sinnvoll
+                      für Fälle wo es noch keinen User-Query gibt (z.B.
+                      Tutor-Initialisierung) oder fürs Debugging.
+      - query=str   → semantische Top-K-Suche via Embedding-Cosinus.
+                      Nur die k relevantesten Einträge landen im Prompt.
+
+    Phase C umgeleitet: vorher Phase-A-Verhalten (dump everything) -
+    skaliert nur bis ~50 Einträge bevor das Context-Window leidet.
+
+    Fallback-Verhalten bei query!=None:
+      - Wenn Embedding-Call fehlschlägt (Ollama down): keine LTM-Injection
+        in den Prompt (lieber leer als die ganze Memory dumpen, was bei
+        großem LTM den Context killt).
+      - Wenn KEINER der Einträge ein Embedding hat (z.B. direkt nach
+        Migration vor Backfill): alle Einträge nehmen, sicher ist sicher.
 
     Format jeder Zeile: [id][type][who_said] content
     """
     entries = load()
     if not entries:
         return ""
+
+    relevant = _select_relevant_entries(entries, query, k)
+    if not relevant:
+        return ""
+
     lines = ["## Deine persistente Memory (über Sitzungen hinweg gespeichert):"]
-    for e in entries:
+    for e in relevant:
         who = e.get('who_said', 'user')
         lines.append(f"  [{e['id']}][{e['type']}][{who}] {e['content']}")
     return "\n".join(lines)
+
+
+def _select_relevant_entries(entries: list, query: str, k: int) -> list:
+    """
+    Wählt die Einträge aus, die im Prompt landen sollen.
+
+    Ausgegliedert aus format_for_prompt, weil die Logik mehrere
+    Sonderfälle hat und sich in Phase E (Konsolidierung) wahrscheinlich
+    nochmal erweitert (Recency-Bias, Type-Filter etc.).
+    """
+    # Mode 1: kein Query → alle Einträge (backward compat)
+    if not query:
+        return entries
+
+    # Mode 2: Query da → semantisches Top-K. embed_query, NICHT
+    # embed_document - asymmetrische Suche, sonst matchen wir den
+    # Dokumenten-Vektorraum mit einem Dokumenten-Vektor und kriegen
+    # lexikalisches Geräusch (Eigennamen-Matches statt Thema).
+    qvec = embeddings.embed_query(query)
+    if qvec is None:
+        # Embedding-Service down. Lieber gar keine LTM-Injection als
+        # alle dumpen - bei großem LTM würde das den Context sprengen.
+        return []
+
+    # Wir geben k aus den Einträgen mit Embedding zurück, sortiert nach
+    # Cosinus-Ähnlichkeit. Einträge ohne Embedding fallen raus.
+    scored = embeddings.top_k(qvec, entries, k=k)
+    if scored:
+        return [e for e, _score in scored]
+
+    # Kein einziger Eintrag hatte ein Embedding → vermutlich noch nicht
+    # gebackfilled (z.B. direkt nach v1-Migration). Dann lieber alle
+    # zeigen, damit die KI überhaupt was hat.
+    return entries
 
 
 # ╔══════════════════════════════════════════════════════════════════════╗

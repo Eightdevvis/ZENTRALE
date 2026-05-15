@@ -9,6 +9,25 @@ Aktuelles System siehe `ki_system.md`. Diese Datei dokumentiert nur
 das, was sich ändert / neu dazukommt. Wird beim Bauen abgehakt und
 angepasst.
 
+## System-Prompt-Komposition
+
+Reihenfolge im System-Prompt (in `core/ai.py`):
+
+1. `_SYSTEM_PROMPT` – Charakter (entspannt, direkt, deutsch).
+2. `_CAPABILITIES_PROMPT` – Statisches Selbstbild der KI: was sie über
+   ihre Tools kann, was sie definitiv NICHT kann (kein Internet, keine
+   Mails, keine Hardware-Steuerung, kein Code-Eval, etc.). Wird IMMER
+   injiziert, nicht über Retrieval geholt - Kernwissen über sich selbst
+   darf nicht von einem Such-Treffer abhängen.
+3. `memory.format_for_prompt(query)` – Top-K LTM-Einträge zur aktuellen
+   User-Frage. Kann leer sein.
+
+Begründung für #2 separat: ohne diesen Block improvisieren 14B-Modelle
+zuverlässig Fähigkeiten zusammen ("ich kann dir das mailen", "ich rufe
+die API auf"). Mit klarer Aufzählung bleibt die KI ehrlich. Erlernte
+Begrenzungen ("user hat mich korrigiert, das geht nicht") landen als
+LTM-Typ `limit` zusätzlich im retrievten Kontext.
+
 ## Designprinzipien
 
 - **Speichern by default, prune später.** 7–14B-Modelle sind miese
@@ -26,6 +45,11 @@ angepasst.
   Graph (für Single-User-Chat overengineered, siehe Diskussion
   2026-05-15). Wenn Multi-Hop-Reasoning irgendwann mal wirklich
   klemmt, baut man den Graph dann nachträglich auf die Statements.
+- **Embedding-Modell ist multilingual.** Aktuell `bge-m3` (BAAI,
+  1024-dim, ~569 MB). Frühere Wahl `nomic-embed-text` war zu
+  englischlastig - deutsche Queries fanden den Bezug schlecht. Modell
+  ist per `OLLAMA_EMBED_MODEL` umstellbar, prefix-Logik in
+  `core/embeddings.py:_PREFIXES_BY_MODEL` erweitern wenn nötig.
 
 ## Architektur
 
@@ -108,6 +132,16 @@ Pro Turn:
   ]
 }
 ```
+
+Erlaubte `type`-Werte:
+- `fact` – objektive Information über User, System, Welt.
+- `preference` – wie der User Dinge mag (Stil, Reaktionsart).
+- `commitment` – was die AI versprochen hat / offenes TODO.
+- `technical` – Configs, Code-Details, Internals.
+- `capability` – was die AI nachweislich kann (gelernt im Gespräch).
+- `limit` – was die AI NICHT kann (vom User korrigiert), damit sie's
+  bei verwandten Themen über Retrieval wiederfindet und nicht erneut
+  fälschlich anbietet.
 
 `next_id` zählt nur hoch, IDs werden **nicht** wiederverwendet – sonst
 könnten alte AI-Referenzen auf eine andere Aussage zeigen.
