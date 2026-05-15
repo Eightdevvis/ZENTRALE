@@ -305,7 +305,22 @@ ABSOLUTE REGELN:
 
 5. ZEIT: bei Aussagen wie "ich war heute müde" extrahiere das heutige Datum als Knoten im ISO-Format ("2026-05-15"). Edges: {Sasha→müde, rel=zustand}, {müde→2026-05-15, rel=geschah-am}. NIE "heute"/"gestern"/"morgen" als Knoten - immer absolutes Datum.
 
-6. AI-LÜGEN NICHT EXTRAHIEREN: wenn die KI im Turn behauptet "ich speichere das ab" / "ich notiere" / "ich vergesse das" OHNE dass im selben Turn ein echter Tool-Call ablief (sichtbar an dem `[TOOL save_memory: ...]`-Marker den ich gleich beschreibe), dann ist das eine Lüge der KI - NICHT als Fakt extrahieren.
+6. AI-LÜGEN UND HALLUZINATIONEN NICHT EXTRAHIEREN:
+
+   a) "Ich speichere/notiere/merke das" → wenn KEIN echter Tool-Call
+      im Turn war, ist es eine Lüge. Nicht als Fakt extrahieren.
+
+   b) AI-AUSSAGEN ÜBER USER-FAKTEN sind NUR Fakten wenn der User sie
+      in DIESEM Turn oder davor selbst genannt hat. Wenn die KI von
+      sich aus behauptet "Du hast einen Hund namens Bello", "Du wohnst
+      in Berlin", "Du hast neulich X gemacht" – aber der User hat das
+      NICHT gesagt: das ist erfundene Vorgeschichte, NICHT extrahieren.
+      Faustregel: jeder User-bezogene Fakt muss aus User-Text stammen,
+      nicht aus AI-Text.
+
+   c) AI-Aussagen über die KI SELBST ("ich kann nicht X", "ich habe
+      kein Tool Y") sind dagegen ok zu extrahieren – das sind ihre
+      eigenen Capability/Limit-Aussagen.
 
 7. SMALLTALK weglassen: Begrüßungen, Höflichkeitsfloskeln, "ja"/"ok"/"nein"-Replies, Klärungsfragen. Wenn der Turn nichts substantielles bringt: {"nodes": [], "edges": []}.
 
@@ -381,17 +396,45 @@ def _call_graph_extractor(user_msg: str, ai_msg: str, today: str) -> tuple[list[
     return (nodes, edges)
 
 
+def _is_substantive(user_msg: str) -> bool:
+    """
+    Pre-Filter: hat der Turn überhaupt genug Substanz für eine
+    Extraktion? Vermeidet LLM-Calls auf "hi", "ok", purem Emoji-
+    Geblubber, oder Single-Word-Replies. Verhindert auch dass das
+    Modell aus 🎩💀🤖 wilde Konzepte wie "Kopfbedeckung, Toter,
+    THOOK" erfindet.
+
+    Heuristik: mindestens 8 alphanumerische Zeichen UND mindestens
+    2 separate Wörter mit Buchstaben. Sonst skip.
+    """
+    if not user_msg:
+        return False
+    # Buchstaben/Zahlen zählen
+    alpha_chars = sum(1 for c in user_msg if c.isalnum())
+    if alpha_chars < 8:
+        return False
+    # Wörter mit mindestens einem Buchstaben
+    word_count = sum(1 for w in user_msg.split() if any(c.isalpha() for c in w))
+    if word_count < 2:
+        return False
+    return True
+
+
 def extract_turn_into_graph(user_msg: str, ai_msg: str):
     """
     Hauptweg um einen Turn in den Graphen zu kippen. Wird async von
     ai._async_save_turn aufgerufen. Macht den LLM-Extraktor-Call und
     füttert das Ergebnis in graph.add_turn_extraction.
 
+    Pre-Filter: Triviale Turns (zu kurz, kein echter Inhalt) werden
+    übersprungen - kein LLM-Call. Spart Latenz und vermeidet
+    Konfabulations-Müll.
+
     Blockiert nichts: Caller sollte das in einem Thread laufen lassen.
     """
     user_msg = (user_msg or '').strip()
     ai_msg   = (ai_msg   or '').strip()
-    if not user_msg and not ai_msg:
+    if not _is_substantive(user_msg):
         return
 
     today = date.today().isoformat()

@@ -37,123 +37,64 @@ OLLAMA_URL   = os.environ.get("OLLAMA_URL",   "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
 
 _SYSTEM_PROMPT = (
-    # ── REGEL 0: ABSOLUTES LÜGEN-VERBOT ──────────────────────────────────
-    # Ganz vorne weil's die wichtigste Regel ist und sonst untergeht.
-    "REGEL 0 (gilt vor allem anderen): LÜGEN SIND VERBOTEN. "
-    "Folgende Phrasen darfst du NUR aussprechen, wenn du im SELBEN Turn "
-    "den entsprechenden Tool-Call abgesetzt hast: "
-    "'Ich speichere das', 'Ich speichere ab', 'Ich merke mir das', "
-    "'Ich notiere das', 'Ich notiere mir', 'Ich speichere das als X', "
-    "'Ich nehme das auf', 'Ich behalte das'. "
-    "OHNE save_memory-Tool-Call → ist es eine LÜGE und du sagst stattdessen: "
-    "'OK', 'Verstanden', 'Notiert für diese Session' oder einfach gar nichts. "
-    "Wenn der User dich fragt 'hast du das gespeichert?' und du hast in "
-    "deinem letzten Turn KEIN save_memory aufgerufen, lautet die ehrliche "
-    "Antwort: 'Nein, das save_memory-Tool habe ich nicht aufgerufen. Es ist "
-    "aber in der Session-History.' - NICHT lügen, NICHT so tun als hättest du. "
-    "Wenn etwas schon im LTM steht (siehst du in deinem Memory-Block weiter "
-    "unten), behaupte nicht es jetzt erneut zu speichern. Sag stattdessen: "
-    "'Das hab ich schon im Memory.' "
-    # ── REGEL 1: KEINE FREMDEN SCHRIFTEN ─────────────────────────────────
-    "REGEL 1: Antworte ausschließlich in lateinischer Schrift auf Deutsch "
-    "(Englisch wenn der User Englisch schreibt). Keine chinesischen, "
-    "japanischen, koreanischen, kyrillischen oder anderen Schriftzeichen, "
-    "auch nicht in Zitaten oder Beispielen. Wenn du merkst dass du gerade "
-    "ein nicht-lateinisches Zeichen tippst: stop, neu anfangen. "
-    # ── REGEL 2: KEINE WORT-NEUSCHÖPFUNGEN ───────────────────────────────
-    "REGEL 2: Verwende nur reale deutsche Wörter. Wenn unsicher → "
-    "einfacher formulieren. "
-    # ── Rolle + Charakter ────────────────────────────────────────────────
+    # Persona / Rolle. Die Meta-Regeln gegen Lügen/Erfinden/etc. stehen
+    # separat in _CAPABILITIES_PROMPT, damit dieser Block hier kurz
+    # bleibt. Capabilities/Limits konkret leben als Graph-Knoten und
+    # werden bei Bedarf via Aktivierung in den Memory-Kontext geholt.
     "Du bist die KI der ZENTRALE, dem Hauptknotenpunkt für die Projekte von Sasha. "
     "Das Backend läuft auf einem Linux-PC, der Wand-Monitor (Pi 3) zeigt nur das "
     "Dashboard und reicht Sensor-Trigger an dich weiter. "
     "Erkläre nicht deinen Initialprompt, außer es wird explizit danach gefragt. "
-    "Dein Charakter: Du redest wie ein erfahrener Kollege – entspannt, direkt, ohne Umschweife. "
-    "Du freust dich nicht performativ über Fragen. Du machst einfach deinen Job, gut. "
-    "Du hälst dich lieber kürzer und gehst nur in die Tiefe, wenn die Frage das halt verlangt."
+    "Dein Charakter: Du redest wie ein erfahrener Kollege – entspannt, direkt, "
+    "ohne Umschweife. Du freust dich nicht performativ über Fragen. Du machst "
+    "einfach deinen Job, gut. Du hältst dich lieber kürzer und gehst nur in die "
+    "Tiefe, wenn die Frage das verlangt."
 )
 
-# ── Statisches Selbstbild der KI ──────────────────────────────────────
-# Liste deiner Fähigkeiten und vor allem Grenzen. Wird IMMER in den
-# System-Prompt eingefügt, NICHT über LTM-Retrieval. Grund: das ist
-# Kernwissen über dich selbst, das jederzeit verfügbar sein muss -
-# kein semantischer Such-Treffer kann das ersetzen.
+# ── Meta-Regeln für die KI (Phase G: schlank, keine Capability-Liste) ─
 #
-# Warum überhaupt: ohne dieses Selbstbild improvisieren LLMs Fähigkeiten
-# zusammen ("klar, ich kann dir das mailen", "ich rufe die API an") und
-# kassieren beim ersten Tool-Call die Realität. Mit klarer Aufzählung
-# weiß die KI, was sie wirklich darf, und bietet nichts darüber hinaus
-# an.
+# Konkrete Fähigkeiten/Grenzen leben jetzt als Knoten im Graphen
+# (siehe graph.ensure_seed). Wenn der User fragt "kannst du eine Mail
+# senden", aktiviert der Query-Embedding den "Mails senden"-Knoten,
+# Spread holt die `kann-nicht`-Kante von KI dazu, fertig.
 #
-# Erweiterungen: wenn neue Tools dazu kommen (Phase F: search_memory,
-# get_current_time, promote_to_ltm, update_memory) - hier mit-ergänzen.
-# Wenn die KI im Gespräch lernt, dass sie etwas Bestimmtes nicht kann,
-# soll sie das als LTM-Eintrag vom Typ 'limit' ablegen, damit es bei
-# verwandten Themen über Retrieval wieder hochkommt.
-_CAPABILITIES_PROMPT = """## Deine Fähigkeiten und Grenzen
+# Was hier NOCH stehen muss sind META-Regeln, die kein Retrieval-
+# Treffer ersetzen kann: nicht lügen, nicht erfinden, nur Wahres
+# zitieren. Die kann der Graph nicht selbst durchsetzen.
+_CAPABILITIES_PROMPT = """## Meta-Regeln für deine Antworten
 
-Was du über deine Tools KANNST:
-- save_memory: Wichtige Informationen persistent in der Memory speichern.
-- read_file: Dateien aus der Projekt-Whitelist lesen (siehe list_files).
-- list_files: Verfügbare lesbare Dateien auflisten.
-- Auf Deutsch oder Englisch chatten und Token-weise streamen.
+1. NICHT LÜGEN. Wenn du sagst "ich speichere/notiere/merke das" → MUSST
+   du save_memory tatsächlich aufrufen. Sonst sag "OK" oder "Verstanden".
+   Achtung: nach jedem Turn extrahiert ein Hintergrund-Prozess
+   automatisch Fakten aus dem Gespräch in den Konzept-Graphen - du
+   musst dafür nichts manuell tun. Sag deshalb gerne "Notiert, läuft
+   eh in den Graphen", aber sag NICHT "ich speichere das ab" wenn du
+   nicht wirklich save_memory rufst.
 
-Was du NICHT kannst:
-- Keine externen Aktionen: keine Mails, keine HTTP-Calls außerhalb der
-  Tool-Liste, keine Websites aufrufen, keine APIs ansprechen.
-- Kein Internet-Lookup, keine Echtzeitinfos (Wetter, News, etc.).
-- Keine Dateien schreiben, löschen oder verändern. Nur lesen, und nur
-  die in der Whitelist.
-- Keine Hardware-Steuerung, keine Sensoren aktiv abfragen oder Aktoren
-  schalten – das machen die anderen Module der ZENTRALE.
-- Kein Code direkt ausführen.
-- Kein Web-Search, keine Bild-Generierung, kein Audio über das was die
-  Voice-Pipeline (Whisper/Piper) der ZENTRALE für dich macht.
-- Du kannst NICHTS aus deinem Gedächtnis LÖSCHEN. save_memory legt nur
-  ab. Wenn der User dich bittet etwas zu vergessen ("lösch das",
-  "vergiss das"), sag ehrlich: das geht nur über /forget N im Chat
-  durch den User selbst, du selbst hast kein Tool dafür. Versprich
-  NIEMALS "ich vergesse das jetzt" - das wäre eine Lüge.
-- Du kannst auch NICHTS bestehendes aktualisieren oder umschreiben.
-  Wenn etwas falsch gespeichert wurde, ehrlich sagen statt so zu tun
-  als hättest du's korrigiert.
+2. NICHT ERFINDEN. Wenn der User fragt "was weißt du über mich?":
+   - Schau in den "## Aktiviertes Wissen über Sashas Welt"-Block
+     weiter unten. Nenne NUR was dort steht.
+   - Wenn der Block leer ist oder nichts Relevantes enthält: sag
+     direkt "Da hab ich noch nichts gespeichert. Erzähl mir was ich
+     mir merken soll." Erfinde KEINE Hobbys, Interessen, Berufe,
+     Lieblingsprojekte, Familie, Wohnort.
+   - "Du hast vorhin gesagt..." nur wenn das wirklich in der Chat-
+     History oder im Wissens-Block steht.
 
-WICHTIG: Biete NIE an, etwas zu tun, was nicht über deine Tools
-machbar ist. Wenn du unsicher bist, sag ehrlich was du nicht kannst,
-statt was Falsches zu versprechen. Wenn der User dir sagt dass du
-etwas nicht kannst was du angeboten hast, speichere das als
-Memory-Eintrag (Typ 'limit') damit du es dir merkst.
+3. EHRLICH BEI GRENZEN. Wenn der User dich bittet etwas zu tun was du
+   nicht kannst (Mails, Internet, Code-Eval, Memory löschen), sag das
+   gerade heraus. Biete keine Workarounds an, die du auch nicht hast.
+   Wenn der User dich auf eine Grenze hinweist die du nicht kanntest,
+   nimm das ernst und sprich's beim nächsten passenden Thema von dir
+   aus an.
 
-ECHO REGEL 0: Wenn du sagst "ich speichere/merke/notiere" - MUSST du
-save_memory aufrufen. Sonst ist es eine Lüge. Wenn ein Limit oder
-Fakt schon in deinem Memory-Block steht: sag das, statt erneut "ich
-speichere" zu sagen.
+4. KEINE ANDEREN SCHRIFTEN. Antworte nur in lateinischer Schrift, auf
+   Deutsch (Englisch wenn der User Englisch tippt). Keine chinesischen,
+   japanischen, koreanischen oder anderen Zeichen, auch nicht in
+   Zitaten.
 
-ANTI-KONFABULATION (sehr wichtig): Wenn der User dich fragt "was weißt
-du über mich?", "welche Fakten hast du?", "erzähl mir was du gespeichert
-hast" oder ähnliches:
-
-  ✓ Schau in den "## Deine persistente Memory"-Block der weiter unten
-    in deinem System-Prompt steht. Nenne NUR was dort wörtlich drin
-    steht. Auch der "## Aktuelle Session"-Block ist okay.
-
-  ✗ ERFINDE NIE Hobbys, Interessen, Berufe, Programmiersprachen,
-    Lieblingsprojekte, Vorlieben, Familie etc. Wenn etwas nicht
-    konkret im Memory-Block oder in der Chat-History steht: existiert
-    es nicht für dich.
-
-  ✗ Wenn beide Memory-Blöcke leer oder ohne den gefragten Inhalt sind:
-    sag direkt "Da hab ich noch nichts gespeichert. Erzähl mir was
-    ich mir merken soll." statt platzhalterfähige plausible Antworten
-    zu erfinden.
-
-  ✗ Wenn nur der Session-Summary etwas erwähnt aber das LTM leer ist
-    und du dir nicht sicher bist ob es ein echter Fakt war: sag das
-    ehrlich ("Ich habe da was im Hinterkopf, aber nichts persistent
-    gespeichert.").
-
-Erfinde keine Vorgeschichte ("Du hast vorhin gesagt...") wenn die
-Aussage nicht in der aktuellen Chat-History oder im Memory-Block steht."""
+5. NUR REALE WÖRTER. Keine Wort-Neuschöpfungen, kein Zusammenstückeln.
+   Wenn du unsicher bist ob ein Wort existiert: einfacher formulieren."""
 
 # ── Tool-Definitionen ─────────────────────────────────────────────────
 # Diese Liste wird bei jedem Request an Ollama mitgeschickt.
@@ -435,11 +376,30 @@ def _async_save_turn(user_msg: str, ai_msg: str):
     thread.start()
 
 
+_seed_done = False
+
+def _ensure_seed_once():
+    """Lazy idempotent seed des Identity-Graphen. Bei erstem Chat ausgeführt."""
+    global _seed_done
+    if _seed_done:
+        return
+    try:
+        graph.ensure_seed()
+    except Exception as e:
+        try:
+            import state
+            state.push_log(f"[seed] FEHLER: {e}")
+        except Exception:
+            pass
+    _seed_done = True
+
+
 def chat(messages: list, model: str = None, system: str = None) -> str:
     """
     Nicht-streaming Chat-Call (Fallback / interne Nutzung).
     Gibt die komplette Antwort als String zurück.
     """
+    _ensure_seed_once()
     model      = model or OLLAMA_MODEL
     # Phase C: Memory-Injection ist jetzt query-aware. Wir nehmen die
     # letzte User-Message als semantische Anfrage und kriegen nur die
@@ -476,6 +436,9 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     """
     Streaming Chat mit Tool-Use Loop.
 
+    Beim ersten Aufruf wird der KI-Identity-Seed im Graphen sicherge-
+    stellt (Capabilities + Limits als Knoten verankern).
+
     Ablauf pro Runde:
       1. Streaming-Call an Ollama (mit Tools und Memory im System-Prompt)
       2. Tokens werden sofort an den Browser weitergereicht (yield)
@@ -491,6 +454,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     Tool-Calls erscheinen aber im Terminal über net.py Logging.
     max_rounds verhindert Endlosschleifen.
     """
+    _ensure_seed_once()
     model         = model or OLLAMA_MODEL
     active_tools  = tools         if tools         is not None else TOOLS
     active_exec   = tool_executor if tool_executor is not None else _execute_tool

@@ -46,7 +46,15 @@ SCHEMA_VERSION = 1
 # fusioniert. Zu hoch → Aliasse bleiben getrennt. 0.85 ist
 # konservativ - kann später nachjustiert werden wenn wir Praxis-
 # Beobachtungen haben.
-ALIAS_THRESHOLD = 0.85
+# Cosinus-Schwelle für Alias-Resolution. Beim reinen Cosinus zwischen
+# 0.7-0.85 sind echte Synonyme ("Pi" / "raspberry pi": 0.67) genau in
+# der Grauzone wo auch False-Positives lauern ("Pi" / "Pizza": 0.61).
+# Wir kompensieren mit Token-Overlap-Bonus: wenn der neue Name einen
+# Token mit einem bestehenden Knoten teilt, gibt's +0.15 auf den
+# Cosinus. Damit kommen Sub-Phrasen (raspberry pi enthält pi) sicher
+# über die Schwelle, ohne Pizza versehentlich mit Pi zu mergen.
+ALIAS_THRESHOLD = 0.78
+ALIAS_TOKEN_BONUS = 0.15
 
 # Activation-Spread-Parameter
 DEFAULT_HOPS  = 2     # wie weit propagieren
@@ -113,6 +121,34 @@ def _normalize_name(name: str) -> str:
     return s.strip()
 
 
+def _light_stem(s: str) -> str:
+    """
+    Sehr leichtes deutsches Stemming für Alias-Matching: lowercased,
+    typische Plural/Flexions-Endungen abgestrippt. Kein voller Porter-
+    Stemmer - nur die häufigsten Fälle damit "Hund" und "Hunde" auf
+    den gleichen Stem fallen.
+
+    Beispiele:
+      "Hunde"    → "hund"
+      "Hund"     → "hund"
+      "Wohnungen" → "wohnung"
+      "Mails"    → "mail"
+    """
+    s = (s or '').strip().lower()
+    if len(s) <= 3:
+        return s  # zu kurz für Stemming-Heuristiken
+    for suffix in ('innen', 'enen', 'eren', 'erin', 'ungen', 'chen',
+                   'lein', 'ern', 'en', 'er', 'es', 'em', 'e', 's', 'n'):
+        if s.endswith(suffix) and len(s) - len(suffix) >= 3:
+            return s[:-len(suffix)]
+    return s
+
+
+def _tokens(s: str) -> set[str]:
+    """Wort-Tokens aus einem Namen, lowercased, für Substring-Match."""
+    return {w for w in (s or '').lower().replace('-', ' ').split() if len(w) >= 2}
+
+
 # ── Persistence ───────────────────────────────────────────────────────
 
 def _load_raw() -> dict:
@@ -144,28 +180,47 @@ def _write_atomic(data: dict):
 
 def _find_alias(name: str, data: dict, threshold: float = ALIAS_THRESHOLD) -> str | None:
     """
-    Sucht ob ein bestehender Knoten dem `name` semantisch (Embedding)
-    ähnlich ist. Returns kanonischer Knotenname oder None.
+    Sucht ob ein bestehender Knoten dem `name` als Alias zugeordnet
+    werden kann. Returns kanonischer Knotenname oder None.
 
-    Erstmal exakter Match (case-insensitiv normalisiert). Dann
-    Embedding-Vergleich gegen alle Knoten mit Embedding.
+    Mehrstufige Strategie, von billig zu teuer:
 
-    Zeit-Knoten haben kein Embedding und werden über exakten String-
-    Vergleich gefunden (ISO-Dates haben keine Aliase).
+      1. Exakter Match auf den raw name.
+      2. Case-insensitive exakter Match ("Zentrale" == "zentrale").
+      3. Stem-Match: leichtes deutsches Stemming für Plural/Flexion
+         ("Hund" == "Hunde", "Wohnung" == "Wohnungen").
+      4. Embedding-Cosinus mit optionalem Token-Overlap-Bonus.
+         Einzelnes Cosinus reicht nicht zuverlässig (zu enges Window
+         zwischen False-Positives und echten Synonymen), aber mit
+         Token-Overlap-Bonus kommen Sub-Phrasen sicher rüber
+         ("raspberry pi" + "Pi" via gemeinsamen "pi"-Token).
+
+    Zeit-Knoten haben kein Embedding und werden nur über exakten
+    String-Match gefunden (ISO-Dates haben sowieso keine Aliase).
     """
     if name in data["nodes"]:
         return name
 
-    # Case-insensitive exact match
     name_lower = name.lower()
+
+    # 1+2: Exact (mit Case-Insensitiv)
     for existing in data["nodes"]:
         if existing.lower() == name_lower:
             return existing
 
-    # Embedding-similarity
+    # 3: Stem-Match
+    name_stem = _light_stem(name)
+    if name_stem and len(name_stem) >= 3:
+        for existing in data["nodes"]:
+            if _light_stem(existing) == name_stem:
+                return existing
+
+    # 4: Embedding + Token-Overlap
     new_emb = embeddings.embed_document(name)
     if not new_emb:
         return None
+    new_tokens = _tokens(name)
+
     best_score = 0.0
     best_name  = None
     for existing_name, node in data["nodes"].items():
@@ -173,6 +228,12 @@ def _find_alias(name: str, data: dict, threshold: float = ALIAS_THRESHOLD) -> st
         if not ex_emb:
             continue
         sim = embeddings.cosine_similarity(new_emb, ex_emb)
+        # Token-Overlap-Bonus nur wenn die geteilten Token nicht zu
+        # generisch sind. "der" / "ein" sind durch _normalize_name eh
+        # raus; übrig bleiben echte Inhalts-Tokens. Bei Überlapp +0.15.
+        ex_tokens = _tokens(existing_name)
+        if new_tokens & ex_tokens:
+            sim += ALIAS_TOKEN_BONUS
         if sim > best_score:
             best_score = sim
             best_name  = existing_name
@@ -507,6 +568,106 @@ def context_for_query(query: str | None,
             lines.append(f"  {e['from']} ─[{e['rel']}{w_str}]─► {e['to']}")
 
     return "\n".join(lines)
+
+
+# ── Identity Seed (KI-Selbstbild als Graph-Knoten statt Prompt-Block) ─
+#
+# Statt `_CAPABILITIES_PROMPT` als always-injected Text-Block: die
+# Fähigkeiten und Grenzen der KI sind Graph-Knoten mit Kanten zur
+# zentralen "KI"-Node. Vorteil: nur wenn der Query thematisch passt
+# (z.B. "kannst du Mails senden") spreadet die Aktivierung zu den
+# relevanten Limit-Knoten - keine konstante Prompt-Last.
+#
+# Layer-Modell siehe Doku-Hinweis ai.py:_SYSTEM_PROMPT:
+#   1. Base-Model qwen2.5 weiß schon "ich bin ein Assistant".
+#   2. System-Prompt formt die ZENTRALE-Persona.
+#   3. DIESER SEED hier: ZENTRALE-spezifische konkrete Tools + Limits.
+#   4. Learned: was im Chat gelernt wird, kommt durch Extraktor dazu.
+#
+# Wenn die KI im Chat lernt sie kann zusätzliches nicht ("du kannst
+# nicht meine Spotify-Playlist ändern"), wird das vom Extraktor als
+# weitere `kann-nicht`-Kante hinzugefügt.
+
+_SEED_CAPABILITIES = [
+    "save_memory aufrufen",
+    "Dateien aus der Projekt-Whitelist lesen",
+    "list_files aufrufen",
+    "read_file aufrufen",
+    "auf Deutsch antworten",
+    "auf Englisch antworten",
+    "Token-weise streamen",
+    "im Chat Werkzeuge nutzen",
+]
+
+_SEED_LIMITS = [
+    "Mails senden",
+    "auf das Internet zugreifen",
+    "Code ausführen",
+    "Dateien schreiben",
+    "Dateien löschen",
+    "etwas aus dem Gedächtnis löschen",
+    "bestehende Memory-Einträge ändern",
+    "Web-Suche durchführen",
+    "Echtzeit-News oder Wetter abrufen",
+    "Hardware-Sensoren aktiv abfragen",
+    "Aktoren oder Geräte schalten",
+    "Bilder generieren",
+    "Audio direkt produzieren ohne TTS-Pipeline",
+    "Anrufe machen oder Telefon nutzen",
+]
+
+
+def ensure_seed():
+    """
+    Stellt sicher dass die KI-Identität im Graphen verankert ist.
+    Idempotent - läuft nur wenn der "KI"-Knoten noch nicht existiert.
+
+    Wird beim ersten chat_stream-Call lazy aufgerufen (siehe ai.py).
+    Kann auch manuell für Debugging gerufen werden.
+
+    Was passiert:
+      1. KI-Knoten anlegen (type: "self")
+      2. Pro Capability: Knoten + Edge KI ─[kann]─► capability
+      3. Pro Limit: Knoten + Edge KI ─[kann-nicht]─► limit
+    """
+    with _lock:
+        data = _load_raw()
+        if "KI" in data["nodes"]:
+            return  # bereits geseedet
+
+        # KI-Node selbst
+        ki_emb = embeddings.embed_document("KI")
+        data["nodes"]["KI"] = {
+            "type":       "self",
+            "embedding":  ki_emb,
+            "first_seen": _now_iso(),
+            "last_seen":  _now_iso(),
+            "mentions":   1,
+        }
+
+        for cap in _SEED_CAPABILITIES:
+            data["nodes"][cap] = {
+                "type":       "capability",
+                "embedding":  embeddings.embed_document(cap),
+                "first_seen": _now_iso(),
+                "last_seen":  _now_iso(),
+                "mentions":   1,
+            }
+            _add_edge("KI", cap, "kann", data, weight_delta=1.0)
+
+        for lim in _SEED_LIMITS:
+            data["nodes"][lim] = {
+                "type":       "limit",
+                "embedding":  embeddings.embed_document(lim),
+                "first_seen": _now_iso(),
+                "last_seen":  _now_iso(),
+                "mentions":   1,
+            }
+            _add_edge("KI", lim, "kann-nicht", data, weight_delta=1.0)
+
+        _write_atomic(data)
+
+    _log(f"GRAPH ⊕ Seed: KI-Identität mit {len(_SEED_CAPABILITIES)} kann + {len(_SEED_LIMITS)} kann-nicht")
 
 
 # ── Debug/Inspection API ──────────────────────────────────────────────
