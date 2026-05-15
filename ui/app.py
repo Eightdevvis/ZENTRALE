@@ -229,8 +229,16 @@ def api_chat_clear():
 
 @app.route('/api/memory')
 def api_memory_list():
-    """Gibt alle gespeicherten Memory-Einträge zurück (für /memory Befehl im Chat)."""
-    return jsonify(memory.load())
+    """
+    Gibt alle gespeicherten Memory-Einträge zurück (für /memory Befehl im Chat).
+
+    Embeddings (1024 floats pro Eintrag bei bge-m3) werden vor dem Versand
+    rausgestrippt - der User braucht die im UI nicht sehen, und sie würden
+    die JSON-Response um Faktor ~50 aufblähen.
+    """
+    entries = memory.load()
+    slim    = [{k: v for k, v in e.items() if k != 'embedding'} for e in entries]
+    return jsonify(slim)
 
 
 @app.route('/api/memory/<int:index>', methods=['DELETE'])
