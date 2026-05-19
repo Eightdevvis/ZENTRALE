@@ -1,0 +1,20 @@
+[Unit]
+# Core-Service auf dem PC: Event-Loop + Flask (Dashboard, REST, SSE).
+# Pendant zu deploy/zentrale.service, der nur noch fuer den (jetzt
+# deaktivierten) Pi-Backend-Fall gedacht ist.
+Description=ZENTRALE Core (PC) - main + Flask
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sasha
+Group=sasha
+WorkingDirectory=/home/sasha/codicus/ZENTRALE
+ExecStart=/home/sasha/codicus/ZENTRALE/venv/bin/python /home/sasha/codicus/ZENTRALE/core/main.py
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

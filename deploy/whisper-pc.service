@@ -1,0 +1,22 @@
+[Unit]
+# Whisper-STT-Service auf dem PC. Nice=19 + idle-IO damit der Modell-
+# Load (500 MB) beim Boot das Hochkommen des Dashboards nicht blockiert.
+Description=ZENTRALE Whisper STT (PC)
+After=zentrale-pc.service
+Wants=zentrale-pc.service
+
+[Service]
+Type=simple
+User=sasha
+Group=sasha
+WorkingDirectory=/home/sasha/codicus/ZENTRALE
+ExecStart=/home/sasha/codicus/ZENTRALE/venv/bin/python /home/sasha/codicus/ZENTRALE/services/whisper_service.py
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+Nice=19
+IOSchedulingClass=idle
+CPUSchedulingPolicy=idle
+
+[Install]
+WantedBy=multi-user.target

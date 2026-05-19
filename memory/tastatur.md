@@ -22,16 +22,16 @@ ohne Inputs).
 
 > `t` (Mandarin-Tutor) ist pausiert – siehe `tutor_system.md`.
 
-## System-Hotkey (Pi-Kiosk, OS-Ebene)
+## System-Hotkeys (Pi-Kiosk, OS-Ebene)
+
+Wirken auf OS-Ebene (XFCE-Keyboard-Shortcuts, nicht in der Webapp).
+Verdrahtung passiert in `scripts/install_xfce_autostart.sh` via
+`xfconf-query` und ist persistent.
 
 | Taste              | Funktion                                              |
 |--------------------|-------------------------------------------------------|
-| `Ctrl+Alt+Esc`     | **Notaus** — stoppt `lightdm`, Pi landet auf TTY1.    |
-
-Wirkt auf OS-Ebene (XFCE-Keyboard-Shortcut, nicht in der Webapp).
-Backend-Services (`zentrale`, `whisper`, `tts`) laufen weiter. Zurück
-zum Kiosk: `sudo systemctl start lightdm`. Details:
-`deployment.md` → „Notaus-Hotkey".
+| `Ctrl+Alt+Esc`     | **Notaus** — stoppt `lightdm`, Pi landet auf TTY1. Backend-Services laufen weiter. Zurueck zum Kiosk: `sudo systemctl start lightdm`. Details: `deployment.md` → „Notaus-Hotkey". |
+| `Ctrl+Alt+T`       | **Pi-Terminal aufrufen** — oeffnet ein xterm floating ueber dem Firefox-Kiosk. Zum Schliessen `Ctrl+D` oder Fenster zu, dann ist der Kiosk wieder vorn. Nuetzlich um schnell etwas auf dem Pi zu checken ohne SSH-Umweg. |
 
 ## Im Data-Collection-Modus (zusätzlich)
 

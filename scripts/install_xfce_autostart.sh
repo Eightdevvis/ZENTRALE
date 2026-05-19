@@ -182,26 +182,46 @@ Exec=bash -c 'for i in \$(seq 1 60); do curl -fs ${BACKEND_URL}/ >/dev/null && b
 X-GNOME-Autostart-enabled=true
 EOF
 
-# --- Notaus-Hotkey Ctrl+Alt+Esc ----------------------------------------------
-# Setzt einen Custom-Command-Shortcut im XFCE-Keyboard-Channel. Funktioniert
-# nur wenn xfconf-query gegen einen laufenden xfconfd reden kann, d.h.
-# wir brauchen DBus-Session. Beim Aufruf aus einer Terminal-Session im
-# XFCE-Login ist das gegeben; aus dem Autopull-Cron (kein DISPLAY/DBus)
-# nicht — in dem Fall ueberspringen wir den Schritt und melden es.
-HOTKEY='/commands/custom/<Primary><Alt>Escape'
-HOTKEY_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/emergency_exit.sh"
+# --- Hotkeys: Notaus + xterm-Toggle ------------------------------------------
+# Setzt Custom-Command-Shortcuts im XFCE-Keyboard-Channel:
+#
+#   Ctrl+Alt+Esc  -> emergency_exit.sh (stoppt lightdm, Pi auf TTY1)
+#   Ctrl+Alt+T    -> xterm (floating ueber Firefox-Kiosk, schliessen
+#                    bringt einen zurueck in den Kiosk)
+#
+# xfconf-query braucht DBus-Session. Wenn DBUS_SESSION_BUS_ADDRESS nicht
+# gesetzt ist (z.B. via SSH ohne X-Forwarding), versuchen wir die Session-
+# Bus-Adresse aus /run/user/<uid>/bus zu raten — das funktioniert auf
+# Debian/Bookworm + systemd-User-Sessions zuverlaessig.
+
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+    if [ -S "/run/user/$(id -u)/bus" ]; then
+        export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
+        echo "DBUS_SESSION_BUS_ADDRESS aus /run/user/$(id -u)/bus uebernommen"
+    fi
+fi
 
 if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] && command -v xfconf-query >/dev/null 2>&1; then
-    # Erst alten Wert wegraeumen (falls schon mal gesetzt), dann frisch
-    # anlegen. `-n` legt den Pfad an wenn er nicht existiert.
-    xfconf-query -c xfce4-keyboard-shortcuts -p "$HOTKEY" -r 2>/dev/null || true
-    xfconf-query -c xfce4-keyboard-shortcuts -p "$HOTKEY" -n -t string -s "$HOTKEY_CMD"
-    echo "Notaus-Hotkey verdrahtet: Ctrl+Alt+Esc -> $HOTKEY_CMD"
+    # Notaus
+    EMERG_HOTKEY='/commands/custom/<Primary><Alt>Escape'
+    EMERG_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/emergency_exit.sh"
+    xfconf-query -c xfce4-keyboard-shortcuts -p "$EMERG_HOTKEY" -r 2>/dev/null || true
+    xfconf-query -c xfce4-keyboard-shortcuts -p "$EMERG_HOTKEY" -n -t string -s "$EMERG_CMD"
+    echo "Notaus-Hotkey verdrahtet: Ctrl+Alt+Esc -> $EMERG_CMD"
+
+    # xterm-Toggle. -fa/-fs setzt eine lesbare Schrift (Standard-xterm
+    # ist tiny). -bg/-fg dunkles Theme, damit's am Wand-Monitor nicht
+    # blendet. xfwm4 macht das Fenster floating, der Kiosk bleibt
+    # darunter sichtbar — Schliessen via Ctrl+D oder Window-Close.
+    TERM_HOTKEY='/commands/custom/<Primary><Alt>t'
+    TERM_CMD='xterm -fa Monospace -fs 13 -bg black -fg white -title "ZENTRALE Pi terminal"'
+    xfconf-query -c xfce4-keyboard-shortcuts -p "$TERM_HOTKEY" -r 2>/dev/null || true
+    xfconf-query -c xfce4-keyboard-shortcuts -p "$TERM_HOTKEY" -n -t string -s "$TERM_CMD"
+    echo "xterm-Hotkey verdrahtet: Ctrl+Alt+T -> $TERM_CMD"
 else
     echo
-    echo "HINWEIS: Hotkey NICHT gesetzt — DBUS_SESSION_BUS_ADDRESS fehlt"
-    echo "         oder xfconf-query nicht installiert. Skript einmal"
-    echo "         aus einem Terminal innerhalb der XFCE-Session ausfuehren."
+    echo "HINWEIS: Hotkeys NICHT gesetzt — DBUS-Session nicht erreichbar"
+    echo "         und auch nicht ueber /run/user/<uid>/bus aufzubauen."
 fi
 
 # --- Ausgabe ------------------------------------------------------------------

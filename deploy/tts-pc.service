@@ -1,0 +1,22 @@
+[Unit]
+# TTS-Service auf dem PC. Wie whisper-pc auf niedrigster Prioritaet,
+# damit Boot-Last den Dashboard-Start nicht ausbremst.
+Description=ZENTRALE TTS (PC)
+After=zentrale-pc.service
+Wants=zentrale-pc.service
+
+[Service]
+Type=simple
+User=sasha
+Group=sasha
+WorkingDirectory=/home/sasha/codicus/ZENTRALE
+ExecStart=/home/sasha/codicus/ZENTRALE/venv/bin/python /home/sasha/codicus/ZENTRALE/services/tts_service.py
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+Nice=19
+IOSchedulingClass=idle
+CPUSchedulingPolicy=idle
+
+[Install]
+WantedBy=multi-user.target

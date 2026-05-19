@@ -8,25 +8,28 @@ gedacht – das war für die AI-Last zu schwer.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  PC  (pop-os, aktuell 10.117.205.127 im Hotspot-Subnetz)     │
+│  PC  (pop-os, enp4s0 = 192.168.50.1, fest)                   │
 │                                                              │
 │   ollama           (Port 11434, localhost)                   │
 │   whisper_service  (Port 5050, 0.0.0.0)                      │
 │   tts_service      (Port 5051, 0.0.0.0)                      │
 │   core/main.py + ui/app.py (Flask, Port 5000, 0.0.0.0)       │
 │                                                              │
-└────────────────────────┬─────────────────────────────────────┘
-                         │  HTTP über LAN
-                         │   – Pi-Browser GET /api/state etc.
-                         │   – Pi-Bridge POST /api/sensor/<name>
-                         ▼
-┌──────────────────────────────────────────────────────────────┐
-│  Pi  (zentrale, aktuell 10.117.205.165)                      │
+│   WLAN (Hotspot, dyn. IP)  → nur fuer Internet               │
 │                                                              │
-│   Firefox-Kiosk → http://<PC-IP>:5000                        │
+└──────────┬───────────────────────────────────────────────────┘
+           │  Gigabit-Switch (kein Router, vergibt nichts)
+           │  192.168.50.0/24 — stabil, unabh. vom Hotspot
+           ▼
+┌──────────────────────────────────────────────────────────────┐
+│  Pi  (zentrale, eth0 = 192.168.50.10, fest)                  │
+│                                                              │
+│   Firefox-Kiosk → http://192.168.50.1:5000                   │
 │   scripts/pi_sensor_bridge.py                                │
 │      liest GPIO/Tastatur                                     │
-│      pusht Trigger via HTTP an PC                            │
+│      pusht Trigger via HTTP an 192.168.50.1                  │
+│                                                              │
+│   WLAN (Hotspot, dyn. IP)  → nur fuer Internet (Apt-Updates) │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -63,21 +66,33 @@ Wenn ein neuer Sensor dazukommt: an drei Stellen ergänzen
 
 ## Netzwerk
 
-Aktuell: beide Hosts hängen am Handy-Hotspot „Bigme" und liegen im
-selben /24-Subnetz. AP-Isolation ist aus → Pi↔PC erreichen sich (Ping
-~6 ms, getestet). Bei Hotspot-Reconnect wechseln die IPs (siehe
-`feedback`-Memory zur SSH-Topologie) – dann muss man:
+Seit 2026-05-19 hängen PC und Pi an einem **unmanaged Gigabit-Switch**
+mit festen IPs im LAN-Subnetz `192.168.50.0/24`:
 
-1. PC: keine Aktion nötig (Flask lauscht auf `0.0.0.0`).
-2. Pi: `~/.config/autostart/zentrale.desktop` neu mit der aktuellen
-   PC-IP überschreiben (oder `install_xfce_autostart.sh` mit
-   `ZENTRALE_BACKEND_URL=...` neu aufrufen).
-3. Pi: `/etc/zentrale-bridge.env` mit neuer PC-IP, dann
-   `sudo systemctl restart pi_sensor_bridge.service`.
+| Host | Interface | LAN-IP        | Methode    |
+|------|-----------|---------------|------------|
+| PC   | enp4s0    | 192.168.50.1  | NetworkManager static (ipv4.method manual, never-default) |
+| Pi   | eth0      | 192.168.50.10 | NetworkManager static (ipv4.method manual, never-default) |
 
-Mittel- bis langfristig: kabelgebundenes Haus-LAN (siehe
-`project_netz_topologie`-Memory) mit stabilen IPs / `.local`-Hostnamen,
-sodass diese Schritte entfallen.
+Wichtig:
+- Der „Switch" ist kein Router – er hat keinen DHCP-Server, vergibt
+  keine IPs, kennt keine Subnetze. Wir definieren das LAN selbst.
+- `never-default yes` auf beiden LAN-Connections: Default-Route bleibt
+  am WLAN/Hotspot. Das LAN ist nur fuer Pi↔PC.
+- Latenz Pi↔PC ueber LAN: ~0.5 ms (vs. ~6 ms ueber Hotspot).
+
+**Hotspot ist damit unkritisch.** WLAN-Reconnects wechseln zwar
+weiterhin die Hotspot-IP, aber `192.168.50.1` und `192.168.50.10`
+bleiben stabil → Pi-Kiosk und Bridge muessen nie wieder umgebogen
+werden. Der Hotspot dient PC und Pi nur noch fuer Internet (Apt,
+Modell-Downloads). Wer kein Internet braucht, kann WLAN ganz abdrehen.
+
+### Wenn das LAN doch mal nicht da ist
+
+Fallback-Pfad zum Pi ueber WLAN: `find-zentrale` scant per ARP nach
+der Pi-WLAN-MAC `b8:27:eb:34:8b:1c` und schreibt eine passende IP in
+`~/.ssh/config`. Nur als Notfall-Tool gedacht – im Normalbetrieb laeuft
+`ssh zentrale` ueber die feste LAN-IP `192.168.50.10`.
 
 ## Was der Pi NICHT mehr macht
 

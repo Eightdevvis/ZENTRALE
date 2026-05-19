@@ -11,19 +11,103 @@ Die unten beschriebenen `zentrale.service` / `whisper.service` /
 trotzdem hier dokumentiert – falls ein Setup mal ohne PC laufen soll
 oder ein zweiter Pi mit eigenem Backend aufgesetzt wird.
 
-## Pi-Sensor-Bridge (neu, aktiver Service)
+## Pi-Sensor-Bridge (aktiver Service)
 
 Einmalig auf dem Pi:
 
 ```bash
 sudo cp /opt/zentrale/deploy/pi_sensor_bridge.service /etc/systemd/system/
 sudo systemctl daemon-reload
-echo 'ZENTRALE_BACKEND_URL=http://<PC-IP>:5000' | sudo tee /etc/zentrale-bridge.env
+echo 'ZENTRALE_BACKEND_URL=http://192.168.50.1:5000' | sudo tee /etc/zentrale-bridge.env
 sudo systemctl enable --now pi_sensor_bridge.service
 ```
 
-Bei IP-Wechsel: nur `/etc/zentrale-bridge.env` updaten und Service
-neu starten (`sudo systemctl restart pi_sensor_bridge.service`).
+Die PC-IP `192.168.50.1` ist seit der LAN-Migration (siehe
+`topologie.md`) **fest**. Frueher musste man bei jedem Hotspot-Wechsel
+die env-Datei updaten – das entfaellt jetzt. Sollte sich die IP doch
+mal aendern (anderes LAN-Subnetz), beide Endpunkte konsistent
+anpassen: hier, im Pi-Kiosk-Autostart (`install_xfce_autostart.sh`
+mit `ZENTRALE_BACKEND_URL=...`) und in den PC-systemd-Services.
+
+## PC-systemd-Services (zentrale-pc, whisper-pc, tts-pc)
+
+Damit ZENTRALE beim PC-Boot automatisch hochkommt (ohne Login,
+ohne manuellen `zentrale`-Aufruf), gibt es drei System-Units analog
+zum Pi-Schema. Liegen in `deploy/*-pc.service`:
+
+| Unit                 | Was laeuft                           | Scheduling |
+|----------------------|--------------------------------------|------------|
+| `zentrale-pc.service`| `core/main.py` (Event-Loop + Flask)  | normal     |
+| `whisper-pc.service` | `services/whisper_service.py`        | Nice=19, IO idle, CPU idle |
+| `tts-pc.service`     | `services/tts_service.py`            | Nice=19, IO idle, CPU idle |
+
+Whisper + TTS haben `After=zentrale-pc.service`, damit das Dashboard
+zuerst erreichbar ist und der Modell-Load nicht den Boot ausbremst.
+Alle drei laufen als `User=sasha`, **kein** sudo → Tastatur-Sensor-Sim
+geht hier nicht (das war eh nur Dev-Modus, im echten Betrieb liefert
+der Pi die Sensor-Events ueber `/api/sensor/<name>`).
+
+Einmalig installieren:
+
+```bash
+cd /home/sasha/codicus/ZENTRALE
+sudo cp deploy/zentrale-pc.service deploy/whisper-pc.service deploy/tts-pc.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable zentrale-pc.service whisper-pc.service tts-pc.service
+sudo systemctl start zentrale-pc.service whisper-pc.service tts-pc.service
+```
+
+Status / Logs:
+
+```bash
+systemctl status zentrale-pc.service whisper-pc.service tts-pc.service
+journalctl -u zentrale-pc.service -f      # live tail
+```
+
+Manueller Dev-Modus (Tastatur-Sim, Farb-Prefixe, alles in einem
+Terminal) bleibt parallel verfuegbar: erst die System-Services
+stoppen, dann `zentrale --with-keyboard` aufrufen. Sonst Port-Konflikt
+auf 5000/5050/5051.
+
+## Wake-on-LAN (Pi weckt PC)
+
+Damit man nicht erst zum PC laufen und ihn anschalten muss, wenn man
+heimkommt, kann der Pi den PC ueber Wake-on-LAN aus S5 (soft-off)
+booten. Das Pi bleibt 24/7 an, der PC darf schlafen.
+
+**PC-Seite (einmalig):**
+
+1. NIC-WoL persistent ueber NetworkManager:
+   ```bash
+   sudo nmcli con mod "Wired connection 1" 802-3-ethernet.wake-on-lan magic
+   sudo ethtool -s enp4s0 wol g
+   sudo ethtool enp4s0 | grep -iE 'wake'
+   # erwartet: "Wake-on: g"
+   ```
+2. BIOS: „Wake on LAN" / „Power On by PCI-E" aktivieren, „ErP Ready" /
+   „EuP 2013" deaktivieren (sonst killt EU-Standby den NIC im
+   Soft-Off). Mainboard-Hersteller-Manual lesen, Bezeichnungen
+   variieren.
+
+**Pi-Seite:**
+
+`scripts/wake_pc.sh` schickt das Magic-Packet:
+
+```bash
+bash /opt/zentrale/scripts/wake_pc.sh
+```
+
+Idempotent: prueft erst per `curl` ob die ZENTRALE auf
+`http://192.168.50.1:5000/` antwortet. Falls ja, kein Paket – PC ist
+schon wach. Falls nein, wird das Magic-Packet als UDP-Broadcast
+(`192.168.50.255`) an die PC-eth-MAC (`a8:a1:59:ab:c0:02`) gesendet
+und das Script wartet bis zu 90s auf eine ZENTRALE-Antwort.
+
+Konfig per Env-Vars: `PC_MAC`, `LAN_BROADCAST`, `PROBE_URL`.
+
+Spaeter sinnvoll: Aufruf aus `pi_sensor_bridge.py` bei PIR-/Tuer-/
+Button-Trigger, damit der Heim-kehr-Flow automatisch laeuft. Aktuell
+nur manuell.
 
 ## 1) Pi vorbereiten (einmalig)
 

@@ -5,9 +5,16 @@ Backend-Prozesse auf dem **PC**, nicht mehr auf dem Pi. Der Pi
 ist Display-Kiosk + Sensor-Bridge.
 
 ZENTRALE besteht aus **drei Prozessen** (Event-Loop+Flask, Whisper, TTS).
-Zwei Wege sie hochzufahren:
+Drei Wege sie hochzufahren:
 
-## Variante A — Ein-Befehl-Start (Default)
+## Variante 0 — systemd Auto-Start (Headless, Boot-getriggert)
+
+Fuer den Alltag: drei System-Units in `deploy/*-pc.service`, die ohne
+Login beim Boot starten. Setup + Befehle: siehe `deployment.md`,
+Abschnitt „PC-systemd-Services". Vorteil: PC anschalten reicht – nichts
+zu tippen. Nachteil: keine Tastatur-Sensor-Sim (sudo waere noetig).
+
+## Variante A — Ein-Befehl-Start (interaktiv, Dev)
 
 ```bash
 zentrale

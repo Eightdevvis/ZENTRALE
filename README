@@ -1,12 +1,14 @@
 ZENTRALE
 ========
 
-Event-getriebene Zentrale für einen Wand-Monitor auf Raspberry Pi.
-Sensoren und Zeitgeber erzeugen Events, der Core verarbeitet sie,
-das Web-Dashboard zeigt alles an – vollständig offline.
+Event-getriebene Zentrale für einen Wand-Monitor. Backend läuft auf
+einem Linux-PC, der Raspberry Pi ist nur noch Display-Kiosk +
+Sensor-Bridge (siehe `memory/topologie.md`). Sensoren und Zeitgeber
+erzeugen Events, der Core verarbeitet sie, das Web-Dashboard zeigt
+alles an – vollständig offline.
 
-KI läuft lokal via Ollama (Mistral). Kein Cloud-Zugriff, keine Daten
-verlassen das Heimnetz.
+KI läuft lokal via Ollama (Default: `qwen2.5:14b`, per `OLLAMA_MODEL`
+umstellbar). Kein Cloud-Zugriff, keine Daten verlassen das Heimnetz.
 
 
 Quick Start
@@ -17,14 +19,28 @@ Quick Start
 python3 -m venv venv
 venv/bin/pip install -r requirements.txt
 curl -fsSL https://ollama.com/install.sh | sh
-ollama pull mistral
+ollama pull qwen2.5:14b
 venv/bin/python services/download_tts_model.py
 
-# 3 Terminals – jedes eigenes Logging
-sudo venv/bin/python core/main.py            # ZENTRALE (Port 5000)
-venv/bin/python services/whisper_service.py  # STT     (Port 5050)
-venv/bin/python services/tts_service.py      # TTS     (Port 5051)
+# Start (alle drei Services in einem Terminal, mit Farb-Prefixen)
+zentrale
 ```
+
+`zentrale` ist ein Symlink in `~/.local/bin/` auf
+`scripts/start_local.sh` und fährt Event-Loop + Flask, Whisper-STT
+und TTS parallel hoch. `Ctrl+C` beendet alles sauber.
+
+Sensoren werden im Default-Modus per HTTP getriggert:
+
+```bash
+curl -X POST http://localhost:5000/api/sensor/button
+curl -X POST http://localhost:5000/api/sensor/motion
+```
+
+Für Tastatur-Sim (`b`/`l`/`m`): `./scripts/start_local.sh --with-keyboard`
+(läuft `core/main.py` unter `sudo`, sonst hört die `keyboard`-Lib nichts).
+
+Drei-Terminal-Variante und Env-Vars: `memory/starten.md`.
 
 Dashboard: http://localhost:5000
 
