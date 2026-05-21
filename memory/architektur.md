@@ -43,9 +43,11 @@ state.py     brain.py      actions.py     event-queue
 index.html  (Browser pollt /api/state jede Sekunde)
    │
    ▼
- ai.py ── memory.py ── context.py
+ ai.py ── graph.py / consolidation.py / embeddings.py
+   │       └─ memory.py (Legacy LTM/STM für save_memory-Tool)
+   │       └─ context.py (Datei-Whitelist)
    │
-   ├──▶ Ollama (qwen2.5:14b)
+   ├──▶ Ollama (qwen2.5:14b Chat, bge-m3 Embeddings)
    └──▶ audio.py ──▶ Whisper (Port 5050) / TTS (Port 5051)
 ```
 
@@ -73,7 +75,10 @@ ZENTRALE/
 │   ├── categories.py        # Data-Collection-Kategorien (Sleep, Food)
 │   ├── ai.py                # Ollama-Client (Chat, Streaming, Tools)
 │   ├── net.py               # HTTP-Wrapper mit Terminal-Logging
-│   ├── memory.py            # KI-Memory (data/ai_memory.json)
+│   ├── graph.py             # Konzept-Graph Memory (PRIMARY, data/ai_graph.json)
+│   ├── consolidation.py     # async Fakt-Extraktor in den Graphen
+│   ├── embeddings.py        # bge-m3 via Ollama (Alias-Resolution, Entry-Points)
+│   ├── memory.py            # Legacy LTM/STM (data/ai_ltm.json, data/ai_stm.json)
 │   ├── context.py           # Whitelist-Dateizugriff (Cap 8000 Zeichen)
 │   ├── audio.py             # HTTP-Client für Whisper + TTS
 │   ├── tutor.py             # Tutor-Tools (PAUSIERT, siehe tutor_system.md)
@@ -88,7 +93,9 @@ ZENTRALE/
 │   └── download_tts_model.py
 ├── data/                    # Auto-generiert, nicht committen
 │   ├── sleep_quality.json   # Geloggte Einträge
-│   └── ai_memory.json       # KI-Memory
+│   ├── ai_graph.json        # Konzept-Graph (primary memory)
+│   ├── ai_ltm.json          # Legacy LTM (save_memory-Tool)
+│   └── ai_stm.json          # Legacy STM (Session-Turns)
 ├── deploy/
 │   ├── zentrale.service          # systemd-Template
 │   ├── RELEASE                   # Trigger für Auto-Update auf dem Pi

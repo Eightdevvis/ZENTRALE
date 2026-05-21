@@ -22,6 +22,18 @@ ohne Inputs).
 
 > `t` (Mandarin-Tutor) ist pausiert – siehe `tutor_system.md`.
 
+## Im Chat-Modus (zusätzlich)
+
+| Taste     | Funktion                                                    |
+|-----------|-------------------------------------------------------------|
+| `Enter`   | Nachricht senden                                            |
+| `Alt + M` | Mikrofon-Toggle (Aufnahme an/aus → Whisper-Transkription)   |
+| `ESC`     | zurück zum Haupt-Dashboard                                  |
+
+Alt-Modifier verhindert dass das `m` als Buchstabe ins Input-Feld geht.
+Same Mechanik wie Click auf `#chat-mic-btn`. Siehe `dashboard.md`,
+`audio_system.md`.
+
 ## System-Hotkeys (Pi-Kiosk, OS-Ebene)
 
 Wirken auf OS-Ebene (XFCE-Keyboard-Shortcuts, nicht in der Webapp).

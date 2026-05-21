@@ -1,13 +1,18 @@
-# KI-Memory-System v2 – Plan
+# KI-Memory-System v2 – Plan (HISTORIE, Phasen A–F)
 
-Status: **in Implementation**. Ablöse-Plan für die aktuelle flache
-`data/ai_memory.json`-Memory. Ziel: eine KI, die nicht mehr wegsabbert –
-mit echtem Kurz- und Langzeitgedächtnis, asynchroner Konsolidierung
-und semantischer Suche.
-
-Aktuelles System siehe `ki_system.md`. Diese Datei dokumentiert nur
-das, was sich ändert / neu dazukommt. Wird beim Bauen abgehakt und
-angepasst.
+> ⚠️ **Status: archiviert.** Phasen A–F sind durch, Phase G (Konzept-Graph)
+> hat das LTM/STM-Setup als *primary memory* abgelöst. Aktueller Stand:
+> → `ki_system.md`.
+>
+> Dieses File bleibt als Entscheidungs-Historie liegen – die Begründungen
+> (warum `bge-m3`, warum `who_said`, warum `recency`-Enum, warum Tool-Set
+> so geschnitten) sind weiterhin gültig und haben das Graph-Design
+> mitgeformt. Der Abschnitt "Designprinzipien" enthält bewusst die alte
+> Festlegung "Kein Graph (für Single-User-Chat overengineered)" – die
+> wurde nach Stresstests im Mai 2026 verworfen, weil flaches Top-K bei
+> assoziativen Queries ("was weißt du über mich") und zeitbasierten
+> Fragen versagt hat. Siehe Commits `9b76766` (Phase G) und `9023407`
+> (Stresstest-Findings).
 
 ## System-Prompt-Komposition
 
@@ -228,24 +233,23 @@ Ablauf:
 3. Promovierte STM-Einträge löschen, Summary leeren.
 4. Übrig gebliebene STM-Einträge bleiben für die nächste Session.
 
-## Bau-Reihenfolge (Phasen)
+## Bau-Reihenfolge (Phasen) – alle durch
 
-- [ ] **A** – Datenmodell + Migration v1 → v2 (kein Embedding, kein
-      neuer Flow, nur Schema steht).
-- [ ] **B** – `nomic-embed-text` einbinden, Embeddings beim Speichern
-      generieren, Backfill für migrierte Einträge.
-- [ ] **C** – Retrieval (Top-K Cosinus-Suche) + neuer
-      Prompt-Injection-Pfad. Ab hier antwortet die AI bereits smarter.
-- [ ] **D** – Async Auto-Save: Hintergrund-Task nach Stream-Ende,
-      legt Turn in STM ab, pflegt Summary.
-- [ ] **E** – Konsolidierung: `/sleep`-Command + Inaktivitäts-Timer,
-      STM → LTM Promotion-Logik.
-- [ ] **F** – Neue Memory-Tools für die AI exposen
-      (`search_memory`, `promote_to_ltm`, etc.).
+- [x] **A** – Datenmodell + Migration v1 → v2.
+- [x] **B** – Embeddings beim Speichern, später Wechsel von
+      `nomic-embed-text` → `bge-m3` (multilingual).
+- [x] **C** – Retrieval (Top-K Cosinus-Suche) + Prompt-Injection-Pfad.
+- [x] **D** – Async Auto-Save nach Stream-Ende.
+- [x] **E** – Konsolidierung (STM → LTM) + Anti-Lügen-Schraube.
+- [x] **F** – `_CAPABILITIES_PROMPT` als Selbstbild + Anti-Konfabulation
+      bei leerem LTM.
+- [x] **G** – **Konzept-Graph ersetzt LTM/STM/Profil-Schichten als
+      primary memory.** Siehe `ki_system.md`.
 
-Phasen A–C zusammen sind bereits ein lieferbarer Zustand – die AI hat
-dann zwar noch keinen Auto-Save, aber semantische Suche und sauberen
-Memory-Layer.
+Phase G hat die Designprinzipien-Festlegung "Kein Graph" umgeworfen –
+in der Praxis sind assoziative und zeitbasierte Queries der Hauptfall,
+genau dort versagt flaches Top-K. LTM/STM laufen noch parallel mit
+(`save_memory`-Tool), sind aber nicht mehr der primäre Antwortpfad.
 
 ## Offene Detail-Fragen (zur Bau-Zeit zu klären)
 

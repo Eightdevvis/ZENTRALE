@@ -5,6 +5,10 @@ __pycache__/
 .history/
 data/tts_model/
 
+# Auto-generierte Daten - persoenliche Logs + KI-Memory, gehoeren nicht
+# ins Repo. Siehe memory/datei_zugriffe.md.
+data/*.json
+
 # lokale Debug-Artefakte (Screenshots, Scratchpad) — gehoeren nicht ins Repo
 /*.png
 /notes.md

@@ -17,8 +17,9 @@ hier sofort mitziehen, sonst tote Links.
 | Topologie (PC ↔ Pi, wer macht was) | memory/topologie.md                 |
 | Gesamt-Architektur & Threads       | memory/architektur.md               |
 | Event-System (Sensoren → Actions)  | memory/event_system.md              |
-| KI-System (Ollama, Memory, Tools)  | memory/ki_system.md                 |
-| Memory-System v2 (Plan + Phasen)   | memory/ki_memory_plan.md            |
+| KI-System (Ollama, Graph-Memory)   | memory/ki_system.md                 |
+| Memory-Plan v2 (Historie, A–G)     | memory/ki_memory_plan.md            |
+| Personality-Plan (Fine-Tuning)     | memory/ki_personality_plan.md       |
 | Mandarin-Tutor (pausiert)          | memory/tutor_system.md              |
 | Audio (Whisper STT + TTS)          | memory/audio_system.md              |
 | Dashboard & Frontend               | memory/dashboard.md                 |
@@ -30,6 +31,7 @@ hier sofort mitziehen, sonst tote Links.
 | Hardware (Pi, Mikro, PIR)          | memory/hardware.md                  |
 | Deployment (Pi, systemd, Kiosk)    | memory/deployment.md                |
 | Display-Debug (Pi-Monitor schwarz) | memory/display_debug.md             |
+| Sicherheit (Bedrohungsmodell, LUKS)| memory/sicherheit.md                |
 | Dateizugriffe (Whitelist, Ignore)  | memory/datei_zugriffe.md            |
 | Claude-spezifische Hinweise        | memory/claude_hinweise.md           |
 

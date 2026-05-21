@@ -32,7 +32,7 @@ manueller curl-Test). Siehe `topologie.md`.
 
 | Endpoint              | Methode | Beschreibung                          |
 |-----------------------|---------|---------------------------------------|
-| `/api/chat`           | POST    | Chat-Nachricht senden (SSE-Stream)    |
+| `/api/chat`           | POST    | Chat-Nachricht senden (SSE-Stream). JSON-Body: `{message: str, via_mic?: bool}`. `via_mic=true` triggert `_MIC_INPUT_HINT` im System-Prompt (Whisper-Fehler-Awareness, siehe `ki_system.md`). |
 | `/api/chat/history`   | GET     | Chat-History                          |
 | `/api/chat/clear`     | POST    | Chat-History leeren                   |
 

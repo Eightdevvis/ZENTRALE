@@ -26,14 +26,20 @@ Workflow-Regeln, die nicht aus dem Code allein hervorgehen.
 
 ### Ollama-Anbindung
 
-- `ai.py` ist der **einzige** Ollama-Client. Andere Module gehen durch
-  `ai.py`. Keine direkten Requests zu Ollama von woanders.
+- `ai.py` ist der primäre Ollama-Client für **Chat**. Daneben reden
+  `embeddings.py` (Embed-Calls) und `consolidation.py` (Extraktor-LLM)
+  direkt mit Ollama – aber alle drei gehen durch `net.py`, also fliegt
+  kein Request unter dem Radar.
 - `net.py` wrapt alle HTTP-Calls (außer Audio – `audio.py` loggt selbst,
   weil multipart-Upload Sonderbehandlung braucht) und loggt sie.
-- `memory.py` wird **nur im Chat-Modus** in den System-Prompt injiziert.
-  Im Tutor-Modus (`tools=...` an `chat_stream` gesetzt) bleibt der
-  System-Prompt rein der Tutor-Prompt. Wer das ändern will: in
-  `ai.py` die `if tools is None`-Bedingung anpassen.
+- **Memory-Injection im Chat-Modus:** `graph.context_for_query(user_query)`
+  liefert das "Aktiviertes Wissen"-Stück in den System-Prompt
+  (Spread-Aktivierung im Konzept-Graph). Im Tutor-Modus
+  (`tools=...` an `chat_stream` gesetzt) wird **nichts** injiziert –
+  der System-Prompt bleibt rein der Tutor-Prompt. Wer das ändern will:
+  in `ai.py` die `if tools is None`-Bedingung anpassen.
+- `memory.py` (Legacy LTM/STM) wird nur noch vom `save_memory`-Tool
+  geschrieben – nicht mehr automatisch in den Prompt injiziert.
 - Tool-Use: Ollama schickt `tool_calls` im **letzten** Streaming-Chunk
   (`done=true`). Nicht früher abbrechen, sonst gehen Tool-Calls verloren.
 - Tool-Loop ist via `max_rounds = 5` gegen Endlosschleifen abgesichert.

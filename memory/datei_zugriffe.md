@@ -27,7 +27,9 @@ Bedacht, damit das Context-Window des Modells nicht überläuft.
 | Pfad                  | Grund                                                         |
 |-----------------------|---------------------------------------------------------------|
 | `data/*.json`         | persönliche Daten / Logs                                      |
-| `data/ai_memory.json` | KI-Memory, lokal & privat                                     |
+| `data/ai_graph.json`  | Konzept-Graph (primary memory), lokal & privat                |
+| `data/ai_ltm.json`    | Legacy LTM (save_memory-Tool)                                 |
+| `data/ai_stm.json`    | Legacy STM (Session-Turns)                                    |
 | `data/tts_model/`     | Modelldateien, viel zu groß für Git                           |
 | `venv/`               | Python-Virtualenv (lokal); auf dem Pi heißt der Ordner `.venv` |
 | `core/__pycache__/`   | Python-Bytecode                                               |
@@ -40,5 +42,7 @@ Diese Pfade gehören in `.gitignore`. Falls dort noch nicht drin: ergänzen.
 vorhanden:
 
 - `data/sleep_quality.json` (sobald der erste Eintrag geloggt wird)
-- `data/ai_memory.json` (sobald die KI das erste Mal `save_memory` aufruft)
+- `data/ai_graph.json` (sobald der erste Turn in den Graphen extrahiert wird)
+- `data/ai_ltm.json` (sobald die KI das erste Mal `save_memory` aufruft)
+- `data/ai_stm.json` (sobald der erste Chat-Turn passiert)
 - `data/<kategorie>.json` (für jede neue Data-Collection-Kategorie)

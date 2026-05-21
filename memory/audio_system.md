@@ -31,6 +31,48 @@ Das hat zwei Vorteile:
 2. Funktioniert sofort sowohl auf dem Linux-PC als auch auf dem Pi,
    weil der Browser den Krempel macht.
 
+## Spracheingabe im Chat-Modus
+
+Im Chat-Modus liegt neben dem Text-Input ein **Mic-Button**
+(`#chat-mic-btn`). Toggle-Verhalten:
+
+1. Click 1 → `getUserMedia` + MediaRecorder.start(1000), Button rot/blinkt.
+2. Click 2 → UI sofort auf "transcribing" (orange), `MediaRecorder.stop()`,
+   Blob → POST `/api/transcribe`. **Wichtig:** UI-State wird beim Click
+   sofort umgestellt, nicht erst in `onstop` – `onstop` kann je nach
+   Browser-Audio-Backend hunderte ms verzögern, sonst wirkt's wie „Click
+   hat nicht funktioniert".
+3. Zurückgekommener Text landet im Input-Feld (kein Auto-Send).
+   Sasha kann editieren, mit Enter senden oder ESC abbrechen.
+
+**Audio-Format:** Browser-MediaRecorder liefert in Chromium/Firefox
+**WebM/Opus**, nicht WAV (kein Browser kann live PCM-WAV erzeugen).
+Frontend setzt den MIME-Type explizit auf `audio/webm;codecs=opus`
+und benennt die Datei `speech.webm`. faster-whisper liest WebM via
+ffmpeg-Backend transparent – kein extra Konvertierungsschritt nötig.
+
+`MediaRecorder.start(1000)` mit 1-s-Timeslice statt `start()` ohne
+Argument: `ondataavailable` feuert jede Sekunde mit einem Chunk, statt
+beim `stop()` alles auf einmal zu encodieren. Garantiert dass `onstop`
+zuverlässig kurz nach `stop()` durchkommt – Bug-Fix gegen verzögerte
+Transkription (Aufnahme erschien erst beim nächsten Start).
+
+**Qualitäts-Hinweis:** WebM/Opus mit Browser-Default-Bitrate ist
+kompressionsbehafteter als das WAV aus `scripts/test_audio.py`
+(sounddevice → PCM_16, 16 kHz). Erwartung: leicht schlechtere Whisper-
+Erkennung im Browser-Pfad als im Smoke-Test, vor allem bei seltenen
+Wörtern. Wenn das Ärger macht: ffmpeg-Konvertierung server-seitig oder
+höhere Bitrate per `audioBitsPerSecond` im MediaRecorder-Constructor.
+
+**`via_mic`-Flag-Tracking** (Frontend):
+- `chatViaMic = true` nach erfolgreicher Transkription.
+- `chatViaMic = false` sobald der User tippt (`input`-Event ändert den
+  Text) oder die Nachricht gesendet wurde.
+- Beim POST an `/api/chat` wird der Flag als `via_mic` mitgesendet, was
+  serverseitig den `_MIC_INPUT_HINT` im System-Prompt aktiviert.
+
+Backend-Reaktion: siehe `ki_system.md` → System-Prompt-Komposition.
+
 ## Pipeline
 
 ```
@@ -81,11 +123,24 @@ audio.py  ──HTTP──▶  tts_service.py  (Port 5051)
 - Eigenständiger Flask-Service, Port 5050.
 - Verwendet `faster-whisper` (CTranslate2-Backend, schnell genug auf
   CPU). Modellgröße einstellbar via `WHISPER_MODEL` (Default: `small`,
-  ca. 500 MB). Andere Optionen: `tiny`, `base`, `medium`.
+  ca. 500 MB). Andere Optionen: `tiny`, `base`, `medium`. Auf Alltags-
+  Deutsch ist `small` erstaunlich gut; bei Tech-Jargon-Diktaten
+  („asynchron", „Embeddings", „thread-safe") zeigt es Grenzen – dann
+  `medium` (~1.5 GB).
 - **Sprache parametrisch** über das Multipart-Feld `lang`. Default
   über `WHISPER_LANG`-env (default `de`). Haupt-Chat lässt Default
   greifen; für Mandarin würde der Aufrufer `lang=zh` mitschicken
   (Tutor pausiert, siehe `tutor_system.md`).
+- **VAD-Vorfilter** (Silero VAD über faster-whisper integriert):
+  schneidet Stille raus, bevor Whisper transkribiert. Schutz gegen
+  YouTube-Halluzinationen aus leeren Aufnahmen („Vielen Dank fürs
+  Zuschauen" etc.). Standard: an. Per Env:
+  - `WHISPER_VAD=0` deaktiviert komplett (default `1`).
+  - `WHISPER_VAD_MIN_SILENCE_MS` (default `500`): Mindest-Stille die
+    Silero als Pausen-Ende wertet. Default 500 ms statt faster-whisper-
+    default 2000 ms, weil Push-to-Talk-Inputs typischerweise Stottern
+    und kurze Pausen enthalten – 2 s würde legitime Sprechpausen als
+    Segment-Ende werten und Satzteile abschneiden.
 - Endpoints: `POST /transcribe` (Felder: `audio`, `lang`), `GET /health`.
 
 ### `services/tts_service.py`

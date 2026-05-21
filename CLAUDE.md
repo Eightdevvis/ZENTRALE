@@ -24,6 +24,7 @@ hält die Antworten fokussiert.
 | Threads, Datenfluss, Modul-Übersicht      | `memory/architektur.md`              |
 | Sensoren, Events, Brain, Actions          | `memory/event_system.md`             |
 | Ollama, Memory, Tools, Net-Logging        | `memory/ki_system.md`                |
+| KI-Persönlichkeit & Fine-Tuning-Plan      | `memory/ki_personality_plan.md`      |
 | Mandarin-Tutor (pausiert)                 | `memory/tutor_system.md`             |
 | Whisper STT + TTS, Audio-Architektur      | `memory/audio_system.md`             |
 | Dashboard-UI, Modi, Polling               | `memory/dashboard.md`                |
@@ -33,6 +34,7 @@ hält die Antworten fokussiert.
 | Starten (3 Terminals, Env-Vars)           | `memory/starten.md`                  |
 | Hardware (Pi, Mikro, PIR, GPIO)           | `memory/hardware.md`                 |
 | Deployment (rsync, systemd, Kiosk)        | `memory/deployment.md`               |
+| Sicherheit (Bedrohungsmodell, LUKS, EvilMaid)| `memory/sicherheit.md`            |
 | Whitelist, .gitignore-relevantes          | `memory/datei_zugriffe.md`           |
 | Architektur-Entscheidungen für Claude     | `memory/claude_hinweise.md`          |
 

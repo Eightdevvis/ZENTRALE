@@ -64,10 +64,22 @@ rechts bleiben dabei sichtbar.
   `/api/chat/history`.
 - **Sensoren-Spalte** (links): Button + Light Sensor.
 - **Side-Graph** (rechts): Sleep-Quality-Chart (kompakt).
-- **Terminal** (unten): Live-Log der letzten System-Ausgaben. Speist
-  sich aus `state.push_log(...)`, das von `net.py` (`NET →` / `NET ←`),
-  `audio.py` (`STT →` / `TTS →`) und `main.py` (`EVENT IN:` / `EVENT OUT:`)
-  befüllt wird.
+- **Terminal** (unten, in zwei Panels gesplittet):
+  - **Links (`#terminal`, neon-grün):** voller Log-Stream. Speist sich
+    aus `state.push_log(...)`, das von `net.py` (`NET →` / `NET ←`),
+    `audio.py` (`STT →` / `TTS →`), `main.py` (`EVENT IN:` / `EVENT OUT:`),
+    `graph.py` (`GRAPH ⊕` / `GRAPH →` / `GRAPH ←`) etc. befüllt wird.
+  - **Rechts (`#terminal-net`, orange):** **nur** Internet-Traffic.
+    Spiegel-Channel `state._internet_logs`, befüllt aus `net.py` wenn
+    `net._is_internet(url)` True liefert (localhost/RFC1918/link-local
+    /`*.local` → False, alles andere → True). Idle-Hinweis
+    `// keine outbound-Pakete · offline ✓` wenn leer. Das Panel ist als
+    **Tripwire** gedacht: ZENTRALE läuft per Design offline – sobald da
+    eine Zeile auftaucht, ging tatsächlich was raus, und du siehst es
+    sofort statt es im großen stdout zu übersehen.
+    > Erfasst werden nur Calls, die durch `core/net.py` laufen. Browser-
+    > Polling, externe Prozesse (`ollama pull`, `git pull`, APT) und
+    > `audio.py` (loggt selbst, lokal-only) sind nicht im Panel.
 
 Stil: cyberpunk dark-HUD — eckige Cards, Neon-Grün auf dunkel-
 durchscheinendem Background, CRT-Scanlines als statisches Overlay
@@ -76,6 +88,14 @@ durchscheinendem Background, CRT-Scanlines als statisches Overlay
 ### Chat-Modus (Taste `C`)
 - KI-Chat (lokales Ollama-Modell), Tokens streamen live.
 - Slash-Commands: `/memory`, `/forget N`, `/clear`.
+- **Mic-Button** (`#chat-mic-btn`) im Input-Row neben dem Text-Feld.
+  Toggle-Verhalten: erster Click startet Aufnahme (rot, blinkt), zweiter
+  Click stoppt und schickt das WAV an `/api/transcribe`. Transkribierter
+  Text landet im Input-Feld (kein Auto-Send) – User kann editieren oder
+  mit Enter senden. Beim Senden geht ein `via_mic`-Flag an `/api/chat`
+  mit, der die KI über den Spracheingabe-Kontext informiert
+  (Whisper-Fehler-Awareness, siehe `ki_system.md`). Sobald der User
+  tippt nachdem der Text aus dem Mic kam, kippt das Flag auf `false`.
 - Details zur KI: `ki_system.md`.
 
 ### Data-Collection-Modus (Taste `K`)
