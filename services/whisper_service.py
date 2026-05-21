@@ -47,9 +47,31 @@ app = Flask(__name__)
 # device="cpu", compute_type="int8" = schnellste CPU-Variante.
 WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL", "small")
 WHISPER_LANG_DEFAULT = os.environ.get("WHISPER_LANG", "de")
+
+# VAD (Voice Activity Detection) als Vorfilter vor der eigentlichen
+# Transkription. faster-whisper benutzt dafuer Silero-VAD intern und
+# schneidet Stille-Segmente raus, BEVOR Whisper sie sieht. Wirkung:
+#   - Keine YouTube-Halluzinationen ("Vielen Dank fuers Zuschauen") aus
+#     leeren Audio-Bereichen.
+#   - Bei Tests deutlich gehalten: "leeres Mikro" => kein Text-Output
+#     statt zufaelliger Fantasie-Saetze.
+#   - Kein nennenswerter Qualitaetsverlust auf realer Sprache.
+#
+# Per Env abschaltbar (WHISPER_VAD=0), Min-Silence-Schwelle tune-bar
+# (WHISPER_VAD_MIN_SILENCE_MS, default 500ms). Default 500 statt
+# faster-whisper-default 2000ms, weil unsere User-Inputs eher kurze
+# Push-to-Talk-Saetze mit Stottern sind - 2s Silence-Schwelle wuerde
+# legitime Sprechpausen verschlucken.
+WHISPER_VAD_ENABLED        = os.environ.get("WHISPER_VAD", "1") not in ("0", "false", "False")
+WHISPER_VAD_MIN_SILENCE_MS = int(os.environ.get("WHISPER_VAD_MIN_SILENCE_MS", "500"))
+
 log.info(f"Lade Whisper-Modell '{WHISPER_MODEL_SIZE}' (erster Start dauert etwas – Download)...")
 model = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8")
-log.info(f"Whisper bereit. Default-Sprache: {WHISPER_LANG_DEFAULT}")
+log.info(
+    f"Whisper bereit. Default-Sprache: {WHISPER_LANG_DEFAULT}, "
+    f"VAD: {'AN' if WHISPER_VAD_ENABLED else 'AUS'} "
+    f"(min_silence={WHISPER_VAD_MIN_SILENCE_MS}ms)"
+)
 
 
 @app.route('/transcribe', methods=['POST'])
@@ -84,11 +106,19 @@ def transcribe():
 
         # language=<lang> zwingt Whisper auf eine konkrete Sprache.
         # beam_size=5 = bessere Qualität auf Kosten von etwas mehr Zeit.
-        segments, info = model.transcribe(
-            tmp_path,
-            language=lang,
-            beam_size=5,
-        )
+        # vad_filter=True (per Env abschaltbar) laesst Silero-VAD vorher
+        # Stille raus - das ist der Anti-Halluzinations-Hebel.
+        transcribe_kwargs = {
+            "language":  lang,
+            "beam_size": 5,
+        }
+        if WHISPER_VAD_ENABLED:
+            transcribe_kwargs["vad_filter"]     = True
+            transcribe_kwargs["vad_parameters"] = dict(
+                min_silence_duration_ms=WHISPER_VAD_MIN_SILENCE_MS,
+            )
+
+        segments, info = model.transcribe(tmp_path, **transcribe_kwargs)
 
         # Segments sind ein Generator – zusammensetzen
         text = "".join(seg.text for seg in segments).strip()

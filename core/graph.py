@@ -150,30 +150,116 @@ def _tokens(s: str) -> set[str]:
 
 
 # ── Persistence ───────────────────────────────────────────────────────
+#
+# Wir cachen den geparsten Graph in-memory mit mtime-Invalidierung:
+#   - Pro Chat-Turn wurde die ~700 KB große JSON sonst frisch von Disk
+#     gelesen und geparst, obwohl sich oft nichts ändert. Das tropft
+#     sich auf der wahrgenommenen Latenz bemerkbar.
+#   - Cache-Key ist (mtime, size) der Datei. Bei Write via _write_atomic
+#     ändert os.replace die mtime → Cache invalidiert automatisch beim
+#     nächsten Read.
+#   - Read-Pfad gibt eine TIEFE KOPIE zurück. Wir vertrauen den Callern
+#     im Read-Pfad zwar dass sie nicht mutieren (sie tun's heute nicht),
+#     aber Defensiv-Kopie verhindert Bugs wenn das mal aus Versehen
+#     passiert - und der Speed-Gewinn liegt im gesparten JSON-Parse,
+#     nicht in der Kopie selbst.
 
-def _load_raw() -> dict:
-    """Internes Load - Caller muss Lock halten."""
-    if not os.path.exists(_GRAPH_FILE):
+_cache_lock = Lock()
+_cache_key  = None   # (mtime_ns, size) der zuletzt geladenen Datei
+_cache_data = None   # das geparste dict
+
+
+def _file_key() -> tuple | None:
+    """Schnüre einen Cache-Key aus dem Dateizustand. None wenn Datei fehlt."""
+    try:
+        st = os.stat(_GRAPH_FILE)
+        return (st.st_mtime_ns, st.st_size)
+    except FileNotFoundError:
+        return None
+
+
+def _empty_graph() -> dict:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "nodes":          {},
+        "edges":          [],
+    }
+
+
+def _load_raw(for_write: bool = False) -> dict:
+    """
+    Lädt den Graphen. Im Read-Pfad (for_write=False) kommt's aus dem
+    in-memory Cache wenn die Datei seit dem letzten Load unverändert ist;
+    sonst frisch von Disk.
+
+    Im Write-Pfad (for_write=True) immer von Disk lesen - der Caller wird
+    das dict mutieren und _write_atomic rufen. Wir geben hier nicht das
+    Cache-dict zurück, damit der Cache durch Caller-Mutation nicht
+    schleichend mit halbfertigem Stand befallen wird.
+
+    Caller muss den _lock halten (Write-Pfade tun das schon). Cache-Lock
+    schützt zusätzlich die _cache_*-Globals gegen Race zwischen
+    Async-Save-Thread und Request-Thread.
+    """
+    global _cache_key, _cache_data
+
+    key = _file_key()
+    if key is None:
+        # Datei existiert nicht → frisches leeres Schema, nichts cachen
+        return _empty_graph()
+
+    if for_write:
+        # Direkt von Disk, keine Cache-Bedienung
+        with open(_GRAPH_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        data.setdefault("schema_version", SCHEMA_VERSION)
+        data.setdefault("nodes", {})
+        data.setdefault("edges", [])
+        return data
+
+    # Read-Pfad mit Cache
+    with _cache_lock:
+        if _cache_key == key and _cache_data is not None:
+            # Defensiv-Kopie der Top-Level-Container; die Werte (Knoten-Dicts,
+            # Edge-Dicts) bleiben geteilt - der Read-Pfad mutiert sie eh nicht
+            # und das spart ggü. deepcopy einiges. Falls ein Read-Pfad doch
+            # mal anfängt zu mutieren: zu copy.deepcopy wechseln.
+            return {
+                "schema_version": _cache_data["schema_version"],
+                "nodes":          dict(_cache_data["nodes"]),
+                "edges":          list(_cache_data["edges"]),
+            }
+
+        with open(_GRAPH_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        data.setdefault("schema_version", SCHEMA_VERSION)
+        data.setdefault("nodes", {})
+        data.setdefault("edges", [])
+
+        _cache_key  = key
+        _cache_data = data
+        # Selbe shallow-Kopier-Strategie wie oben
         return {
-            "schema_version": SCHEMA_VERSION,
-            "nodes":          {},
-            "edges":          [],
+            "schema_version": data["schema_version"],
+            "nodes":          dict(data["nodes"]),
+            "edges":          list(data["edges"]),
         }
-    with open(_GRAPH_FILE, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    data.setdefault("schema_version", SCHEMA_VERSION)
-    data.setdefault("nodes", {})
-    data.setdefault("edges", [])
-    return data
 
 
 def _write_atomic(data: dict):
     """Atomic write: tmp + rename, gegen halbgeschriebene Files."""
+    global _cache_key, _cache_data
     os.makedirs(_DATA_DIR, exist_ok=True)
     tmp = _GRAPH_FILE + '.tmp'
     with open(tmp, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
     os.replace(tmp, _GRAPH_FILE)
+    # Cache nach Write aktualisieren: wir haben gerade frische Daten in
+    # der Hand, also einlagern statt nächsten Read auf Disk zu schicken.
+    # Neuer Cache-Key kommt aus der frisch geschriebenen Datei.
+    with _cache_lock:
+        _cache_data = data
+        _cache_key  = _file_key()
 
 
 # ── Node Operations ───────────────────────────────────────────────────
@@ -364,7 +450,7 @@ def add_turn_extraction(nodes_in: list[dict], edges_in: list[dict]):
         return
 
     with _lock:
-        data = _load_raw()
+        data = _load_raw(for_write=True)
         name_map = {}
 
         # 1. Nodes adden mit Alias-Resolution
@@ -631,7 +717,7 @@ def ensure_seed():
       3. Pro Limit: Knoten + Edge KI ─[kann-nicht]─► limit
     """
     with _lock:
-        data = _load_raw()
+        data = _load_raw(for_write=True)
         if "KI" in data["nodes"]:
             return  # bereits geseedet
 

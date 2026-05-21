@@ -102,7 +102,18 @@
     .side-col      { grid-area: sensors; }
     #main-display  { grid-area: ai; }
     .side-graph    { grid-area: graph; }
-    .terminal      { grid-area: term; }
+    .terminal-row  { grid-area: term; }
+
+    /* Terminal-Row: Container für die zwei stdout-Panels (allgemein +
+       internet-only). Side-by-side, allgemein bekommt mehr Platz weil
+       dort der meiste Traffic landet; das Internet-Panel ist im Idealfall
+       leer und braucht entsprechend weniger Breite. */
+    .terminal-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 1rem;
+      min-height: 0;
+    }
 
     /* ── Cyberpunk-Card ──
        Eckig + Neon-HUD-Look:
@@ -188,8 +199,9 @@
 
     /* Terminal-Footer: neon-grüne HUD-Console.
        Dunkler-getuntes Background als die Cards → wirkt wie eine eigene
-       „Hardware-Konsole" unter den Hauptpanels. Grid-Platzierung erfolgt
-       weiter oben über grid-area: term (spannt alle 3 Spalten). */
+       „Hardware-Konsole" unter den Hauptpanels. Die äußere .terminal-row
+       sitzt in grid-area: term und enthält zwei dieser .terminal-Panels
+       nebeneinander (allgemein + internet-only). */
     .terminal {
       background: rgba(4, 8, 10, 0.78);
       border: 1px solid rgba(0, 255, 136, 0.35);
@@ -201,6 +213,32 @@
       flex-direction: column;
       gap: 0.1rem;
       box-shadow: 0 0 10px rgba(0, 255, 136, 0.07);
+    }
+
+    /* Internet-Variante: leicht andere Akzentfarbe (warmes Orange/Gelb),
+       weil dieses Panel im Idealfall leer ist – wenn da was reinläuft,
+       soll's optisch sofort als "anders" auffallen. Die ZENTRALE ist
+       als vollständig offline gedacht; dieses Panel ist ein Tripwire. */
+    .terminal-net {
+      border-color: rgba(255, 170, 60, 0.45);
+      box-shadow: 0 0 10px rgba(255, 170, 60, 0.08);
+    }
+    .terminal-net .terminal-header {
+      color: rgba(255, 170, 60, 0.75);
+      text-shadow: 0 0 8px rgba(255, 170, 60, 0.4);
+    }
+    .terminal-net .log-line {
+      color: rgba(255, 200, 130, 0.95);
+    }
+    /* Idle-Hinweis: wird nur sichtbar wenn .terminal-net leer ist
+       (außer dem Header). Macht klar dass "keine Zeile" eine gute
+       Nachricht ist, nicht ein kaputtes Panel. */
+    .terminal-net .terminal-idle {
+      color: rgba(0, 255, 136, 0.55);
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      margin-top: 0.3rem;
+      font-style: italic;
     }
 
     .terminal-header {
@@ -543,6 +581,51 @@
     }
 
     .chat-prompt { color: #00ff88; font-size: 1.1rem; }
+
+    /* Mic-Button im Chat-Input-Row. Drei Zustaende:
+       - idle (Default): neon-gruener Rand, transparent. Wartet auf Click.
+       - recording: rot, blinkt. Aufnahme laeuft, naechster Click stoppt.
+       - transcribing: orange, Spinner-aehnliche Statik. Whisper arbeitet,
+         User wartet auf Text - Button waehrenddessen disabled. */
+    .chat-mic-btn {
+      background: transparent;
+      border: 1px solid rgba(0, 255, 136, 0.45);
+      color: #00ff88;
+      width: 1.9rem;
+      height: 1.9rem;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 0.85rem;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.15s, box-shadow 0.15s, border-color 0.15s;
+      font-family: inherit;
+      padding: 0;
+    }
+    .chat-mic-btn:hover {
+      background: rgba(0, 255, 136, 0.1);
+      box-shadow: 0 0 8px rgba(0, 255, 136, 0.35);
+    }
+    .chat-mic-btn.recording {
+      border-color: #ff3300;
+      color: #ff3300;
+      background: rgba(255, 51, 0, 0.12);
+      box-shadow: 0 0 10px rgba(255, 51, 0, 0.5);
+      animation: blink 0.8s infinite;
+    }
+    .chat-mic-btn.transcribing {
+      border-color: #ff9900;
+      color: #ff9900;
+      background: rgba(255, 153, 0, 0.08);
+      animation: none;
+    }
+    .chat-mic-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
 
     .chat-input {
       background: transparent;
@@ -924,9 +1007,11 @@
           <span class="chat-prompt">&gt;</span>
           <input type="text" id="chat-input" class="chat-input"
                  autocomplete="off" spellcheck="false" placeholder="Nachricht eingeben..."/>
+          <button type="button" id="chat-mic-btn" class="chat-mic-btn"
+                  title="Mikrofon (Click an, nochmal Click stoppt + transkribiert)">●</button>
           <span class="chat-status" id="chat-status">checking...</span>
         </div>
-        <p class="form-hint">Enter senden &nbsp;·&nbsp; /memory &nbsp;·&nbsp; /forget N &nbsp;·&nbsp; /clear &nbsp;·&nbsp; Esc zurück</p>
+        <p class="form-hint">Enter senden &nbsp;·&nbsp; Alt+M Mic &nbsp;·&nbsp; /memory &nbsp;·&nbsp; /forget N &nbsp;·&nbsp; /clear &nbsp;·&nbsp; Esc zurück</p>
       </div>
     </div>
 
@@ -935,8 +1020,18 @@
       <div id="panel-graph"></div>
     </div>
 
-    <div class="terminal" id="terminal">
-      <div class="terminal-header">// stdout</div>
+    <!-- Zwei stdout-Panels nebeneinander:
+         - links:  allgemeiner stdout (alle Log-Zeilen)
+         - rechts: NUR Internet-Traffic (Public-IPs / nicht-LAN Hosts).
+         Die ZENTRALE soll offline sein - das rechte Panel ist im
+         Idealfall leer. Sobald da was läuft, geht ein Paket raus. -->
+    <div class="terminal-row">
+      <div class="terminal" id="terminal">
+        <div class="terminal-header">// stdout</div>
+      </div>
+      <div class="terminal terminal-net" id="terminal-net">
+        <div class="terminal-header">// stdout: internet</div>
+      </div>
     </div>
   </div>
 
@@ -1015,18 +1110,37 @@
         // Mandarin-Vokabel-Block ist in dieser UI-Phase entfernt – `data.vocab`
         // wird vom Backend weiter geliefert, hier aber nicht mehr angezeigt.
 
-        const terminal = document.getElementById('terminal');
-        const wasAtBottom = terminal.scrollHeight - terminal.scrollTop <= terminal.clientHeight + 5;
-        const header = terminal.querySelector('.terminal-header');
-        terminal.innerHTML = '';
-        terminal.appendChild(header);
-        data.logs.forEach(l => {
-          const line = document.createElement('div');
-          line.className = 'log-line';
-          line.innerHTML = `<span class="log-time">${l.time}</span>${l.text}`;
-          terminal.appendChild(line);
-        });
-        if (wasAtBottom) terminal.scrollTop = terminal.scrollHeight;
+        // Helper: rendert eine Log-Liste in ein Terminal-Panel ohne den
+        // Header zu verlieren. Behält den Scroll am Ende, wenn der User
+        // gerade unten war - so kann er bei Bedarf nach oben scrollen
+        // ohne dass das nächste Polling ihn zurückreißt.
+        function renderTerminal(elId, logs, idleHint) {
+          const term = document.getElementById(elId);
+          if (!term) return;
+          const wasAtBottom = term.scrollHeight - term.scrollTop <= term.clientHeight + 5;
+          const header = term.querySelector('.terminal-header');
+          term.innerHTML = '';
+          term.appendChild(header);
+          if (logs && logs.length) {
+            logs.forEach(l => {
+              const line = document.createElement('div');
+              line.className = 'log-line';
+              line.innerHTML = `<span class="log-time">${l.time}</span>${l.text}`;
+              term.appendChild(line);
+            });
+          } else if (idleHint) {
+            // Leeres Internet-Panel = positives Signal. Hinweis statt
+            // leerer Box, damit klar ist dass das so gewollt ist.
+            const hint = document.createElement('div');
+            hint.className = 'terminal-idle';
+            hint.textContent = idleHint;
+            term.appendChild(hint);
+          }
+          if (wasAtBottom) term.scrollTop = term.scrollHeight;
+        }
+
+        renderTerminal('terminal',     data.logs,          null);
+        renderTerminal('terminal-net', data.internet_logs, '// keine outbound-Pakete · offline ✓');
 
       } catch (e) {
         console.error('Fetch failed:', e);
@@ -1300,6 +1414,17 @@
     // ═══════════════════════════════════════════════════════
     let chatWaiting = false;
 
+    // Chat-Mic-State. chatViaMic ist der "Provenienz-Flag" der mit der
+    // naechsten Nachricht gesendet wird - true direkt nach einer
+    // Whisper-Transkription, false sobald der User tippt oder Enter
+    // drueckt. Damit weiss die KI ob der Text aus dem Mic kam (und
+    // potentiell Transkriptionsfehler haben kann) oder direkt getippt
+    // wurde (woertlich).
+    let chatRecording      = false;
+    let chatViaMic         = false;
+    let chatMediaRecorder  = null;
+    let chatAudioChunks    = [];
+
     async function goToChat() {
       appMode = 'chat';
       // view-main bleibt sichtbar – nur das Panel innerhalb tauscht.
@@ -1336,6 +1461,118 @@
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+    }
+
+    // Mic-Toggle im Chat. Erster Click startet die Aufnahme, zweiter
+    // Click stoppt sie und schickt das WAV an /api/transcribe.
+    // Der zurueckkommende Text landet im Input-Feld (nicht auto-send) -
+    // Sasha kann nochmal druebersehen / editieren / verwerfen, bevor
+    // Enter den eigentlichen Chat-Call ausloest. Wenn der Text unveraendert
+    // gesendet wird, geht via_mic=true mit; wird er editiert, kippt der
+    // Flag (siehe input-keydown Listener weiter unten).
+    async function toggleChatMic() {
+      const btn = document.getElementById('chat-mic-btn');
+      if (!btn || chatWaiting) return;
+
+      // Bereits laufende Aufnahme: stoppen. UI-State SOFORT umstellen,
+      // nicht erst in onstop - onstop kann je nach Browser-Audio-Backend
+      // mehrere hundert ms bis Sekunden verzoegert feuern. Wenn wir
+      // darauf warten, denkt der User "nichts passiert" und klickt
+      // nochmal - genau der vorherige Bug.
+      if (chatRecording && chatMediaRecorder) {
+        chatRecording = false;
+        btn.classList.remove('recording');
+        btn.classList.add('transcribing');
+        btn.disabled = true;
+        try { chatMediaRecorder.stop(); } catch (e) { console.warn(e); }
+        return;
+      }
+
+      // Neue Aufnahme starten
+      try {
+        const stream  = await navigator.mediaDevices.getUserMedia({ audio: true });
+        chatAudioChunks   = [];
+        // MIME-Type explizit setzen: Browser schickt sowieso WebM/Opus
+        // (kein Browser kann live WAV erzeugen), das anzulügen mit
+        // 'audio/wav' verwirrt nur den Server. faster-whisper liest
+        // WebM problemlos via ffmpeg-Backend.
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '');
+        chatMediaRecorder = mimeType
+          ? new MediaRecorder(stream, { mimeType })
+          : new MediaRecorder(stream);
+
+        chatMediaRecorder.ondataavailable = e => {
+          if (e.data.size > 0) chatAudioChunks.push(e.data);
+        };
+
+        chatMediaRecorder.onstop = async () => {
+          // Track stoppen damit das Mic-Icon im Browser-Tab verschwindet
+          stream.getTracks().forEach(t => t.stop());
+          // chatRecording, classlist und disabled sind oben beim Click
+          // schon gesetzt - hier nur defensiv idempotent halten falls
+          // wir mal anders hier reinrutschen.
+          chatRecording = false;
+          btn.classList.remove('recording');
+          if (!btn.classList.contains('transcribing')) {
+            btn.classList.add('transcribing');
+            btn.disabled = true;
+          }
+
+          const blobType = chatMediaRecorder.mimeType || 'audio/webm';
+          // Dateiendung am MIME ausrichten - whisper liest's anhand des
+          // Inhalts, aber ein konsistenter Filename hilft beim Debuggen.
+          const ext      = blobType.includes('webm') ? 'webm'
+                         : blobType.includes('ogg')  ? 'ogg'
+                         : blobType.includes('wav')  ? 'wav'
+                         : 'bin';
+          const blob     = new Blob(chatAudioChunks, { type: blobType });
+          const formData = new FormData();
+          formData.append('audio', blob, `speech.${ext}`);
+
+          try {
+            const res  = await fetch('/api/transcribe', { method: 'POST', body: formData });
+            const data = await res.json();
+            const text = (data.text || '').trim();
+
+            if (text) {
+              const input = document.getElementById('chat-input');
+              // An bestehenden Text anhaengen falls Input nicht leer (z.B. nach
+              // halb getipptem Satz noch Mic dazu). Sonst direkt setzen.
+              input.value = input.value
+                ? (input.value.trimEnd() + ' ' + text)
+                : text;
+              chatViaMic = true;
+              input.focus();
+              // Cursor ans Ende setzen
+              input.setSelectionRange(input.value.length, input.value.length);
+            }
+          } catch (e) {
+            console.warn('Transcribe failed:', e);
+          } finally {
+            btn.classList.remove('transcribing');
+            btn.disabled = false;
+          }
+        };
+
+        // Timeslice 1000ms: ondataavailable feuert jede Sekunde mit
+        // einem Chunk, statt erst beim stop() ALLES auf einmal zu
+        // liefern. Vorteile:
+        //  - Keine verlorene Aufnahme falls der Tab kurz vor stop()
+        //    geschlossen wird
+        //  - onstop kommt zuverlaessig kurz nach stop() durch, weil
+        //    der Audio-Worker nicht mehr einen riesigen Final-Chunk
+        //    encodieren muss
+        chatMediaRecorder.start(1000);
+        chatRecording = true;
+        btn.classList.add('recording');
+      } catch (e) {
+        // Mic-Zugriff verweigert, Hardware-Fehler etc.
+        console.warn('Mic access failed:', e);
+        chatRecording = false;
+        btn.classList.remove('recording');
+      }
     }
 
     async function sendChatMessage() {
@@ -1406,10 +1643,16 @@
       container.scrollTop = container.scrollHeight;
 
       try {
+        // via_mic-Flag nur einmal mitsenden, dann zuruecksetzen - sonst
+        // wuerde die naechste Tastatur-Eingabe auch noch als Spracheingabe
+        // markiert. Snapshot machen damit der Reset nicht das Body-Field
+        // wegzieht falls beides parallel passiert.
+        const sendingViaMic = chatViaMic;
+        chatViaMic = false;
         const resp = await fetch('/api/chat', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ message }),
+          body:    JSON.stringify({ message, via_mic: sendingViaMic }),
         });
 
         // ReadableStream: wir lesen den SSE-Response Chunk für Chunk
@@ -1474,11 +1717,32 @@
     // AI-Status alle 30s aktualisieren
     setInterval(checkAiStatus, 30000);
 
-    // Chat-Input: Enter = senden, Escape = zurück zum Dashboard
-    document.getElementById('chat-input').addEventListener('keydown', (e) => {
+    // Chat-Input: Enter = senden, Escape = zurück zum Dashboard.
+    // 'input'-Event (anders als keydown) feuert NUR wenn sich der Wert
+    // tatsaechlich aendert - also kein false positive bei Pfeiltasten,
+    // Shift, Strg etc. Sobald sich der Text aendert, kippt das via_mic-
+    // Flag auf false (User hat angefangen zu tippen, ist nicht mehr
+    // "pure Spracheingabe").
+    const chatInputEl = document.getElementById('chat-input');
+    chatInputEl.addEventListener('keydown', (e) => {
       if (e.key === 'Enter')  { e.preventDefault(); sendChatMessage(); }
       if (e.key === 'Escape') { e.preventDefault(); goToMain(); }
+      // Alt+M = Mic-Toggle. Alt als Modifier verhindert dass das 'm'
+      // als Buchstabe ins Input-Feld geschrieben wird. Funktioniert
+      // identisch zum Click auf #chat-mic-btn (gleicher Toggle-Mechanismus).
+      if (e.altKey && (e.key === 'm' || e.key === 'M')) {
+        e.preventDefault();
+        toggleChatMic();
+      }
     });
+    chatInputEl.addEventListener('input', () => {
+      // User hat etwas getippt → ab jetzt Tastatur-Eingabe
+      chatViaMic = false;
+    });
+
+    // Mic-Button-Click feuert toggleChatMic. Separater Listener weil
+    // der Button kein form-submit ist.
+    document.getElementById('chat-mic-btn').addEventListener('click', toggleChatMic);
 
     async function goToCategory() {
       if (categories.length === 0) {

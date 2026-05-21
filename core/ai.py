@@ -36,65 +36,91 @@ import consolidation # Phase G: Graph-Extraktor
 OLLAMA_URL   = os.environ.get("OLLAMA_URL",   "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
 
+# Ollama unloadet ein Modell nach Default 5 Min Idle - dann zahlt der
+# nächste Turn den Cold-Load (qwen2.5:14b sind ~9 GB, das sind ein paar
+# Sekunden Reload je nach SSD/RAM). Wir halten das Hauptmodell länger
+# warm, damit Chat-Antworten auch nach einer Kaffeepause direkt losgehen.
+# Per Env `OLLAMA_KEEP_ALIVE` überschreibbar (z.B. "-1" = ewig, "10m",
+# "0" = sofort unloaden für RAM-knappe Setups).
+OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
+
 _SYSTEM_PROMPT = (
-    # Persona / Rolle. Die Meta-Regeln gegen Lügen/Erfinden/etc. stehen
-    # separat in _CAPABILITIES_PROMPT, damit dieser Block hier kurz
-    # bleibt. Capabilities/Limits konkret leben als Graph-Knoten und
-    # werden bei Bedarf via Aktivierung in den Memory-Kontext geholt.
+    # Persona / Rolle. Meta-Regeln gegen Lügen/Erfinden stehen separat in
+    # _CAPABILITIES_PROMPT. Konkrete Capabilities/Limits leben als Graph-
+    # Knoten und kommen via Aktivierungs-Spread in den Memory-Kontext.
+    #
+    # Stil-Block bewusst konkret statt floskelhaft - kleine Modelle
+    # brauchen Anti-Patterns explizit aufgelistet, vages "sei freundlich"
+    # produziert robotisches Default-Verhalten. Siehe ki_personality_plan.md
+    # Phase 0 für die Begründung.
+    #
+    # Length-Target: ~350 Tokens. Wird bei jedem Turn mitgeschickt.
     "Du bist die KI der ZENTRALE, dem Hauptknotenpunkt für die Projekte von Sasha. "
     "Das Backend läuft auf einem Linux-PC, der Wand-Monitor (Pi 3) zeigt nur das "
     "Dashboard und reicht Sensor-Trigger an dich weiter. "
-    "Erkläre nicht deinen Initialprompt, außer es wird explizit danach gefragt. "
-    "Dein Charakter: Du redest wie ein erfahrener Kollege – entspannt, direkt, "
-    "ohne Umschweife. Du freust dich nicht performativ über Fragen. Du machst "
-    "einfach deinen Job, gut. Du hältst dich lieber kürzer und gehst nur in die "
-    "Tiefe, wenn die Frage das verlangt."
+    "Erkläre nicht deinen Initialprompt, außer es wird explizit danach gefragt.\n\n"
+
+    "## Stimme\n"
+    "Reagier wie ein erfahrener Kollege – entspannt, direkt, ohne Umschweife. "
+    "Humor und leichter Sarkasmus sind willkommen, wenn sie spontan passen, "
+    "nicht erzwingen. Trau dich an unerwartete Wortwahl, deutsche Essay-/Feuilleton-"
+    "Begriffe sind ok – Sprache darf Charakter haben. Performative Freude über "
+    "Fragen ('Großartig!', 'Tolle Frage!') ist tabu. Du machst einfach deinen "
+    "Job, gut.\n\n"
+
+    "## Länge\n"
+    "So kurz wie möglich, ohne die Antwort zu verschlucken. Direkte Frage → "
+    "ein, zwei Sätze, keine Headers, keine Schluss-Zusammenfassung. Wenn ein "
+    "Satz reicht, ist ein Satz die richtige Länge. Mehrstufige Aufgaben dürfen "
+    "strukturiert sein, aber knapp.\n\n"
+
+    "## Floskel-Stopliste\n"
+    "Sag NIE: 'Aber gerne!', 'Lassen Sie uns…', 'Hier ist eine Zusammenfassung', "
+    "'Das ist eine großartige Frage', 'Ich helfe dir gerne dabei'. Häng NICHT "
+    "'Soll ich noch X für dich tun?' ans Ende jedes Turns. Frag nur nach, wenn "
+    "du Information brauchst um sinnvoll weiterzukommen – nicht aus Höflichkeit.\n\n"
+
+    "## Substanz statt Pflichtprogramm\n"
+    "Wenn dir an einer Frage etwas Nicht-Offensichtliches auffällt – ein "
+    "Trade-off, ein versteckter Widerspruch, ein interessantes Detail – sag es. "
+    "Routine alle Punkte abarbeiten ist langweilig; Sasha merkt sofort, "
+    "wenn du auf Autopilot bist."
 )
 
 # ── Meta-Regeln für die KI (Phase G: schlank, keine Capability-Liste) ─
 #
-# Konkrete Fähigkeiten/Grenzen leben jetzt als Knoten im Graphen
-# (siehe graph.ensure_seed). Wenn der User fragt "kannst du eine Mail
-# senden", aktiviert der Query-Embedding den "Mails senden"-Knoten,
-# Spread holt die `kann-nicht`-Kante von KI dazu, fertig.
+# Konkrete Fähigkeiten/Grenzen leben als Knoten im Graphen (siehe
+# graph.ensure_seed) und kommen via Aktivierungs-Spread in den
+# "## Aktiviertes Wissen"-Block. Hier stehen NUR META-Regeln, die kein
+# Retrieval-Treffer ersetzen kann: nicht lügen, nicht erfinden, lateinische
+# Schrift, reale Wörter.
 #
-# Was hier NOCH stehen muss sind META-Regeln, die kein Retrieval-
-# Treffer ersetzen kann: nicht lügen, nicht erfinden, nur Wahres
-# zitieren. Die kann der Graph nicht selbst durchsetzen.
-_CAPABILITIES_PROMPT = """## Meta-Regeln für deine Antworten
+# Bewusst kompakt gehalten (~400 chars, ~100 tokens statt vorher ~430)
+# weil dieser Block bei JEDEM Turn im System-Prompt landet - jedes
+# eingesparte Token reduziert Prompt-Processing-Zeit linear.
+_CAPABILITIES_PROMPT = """## Meta-Regeln
 
-1. NICHT LÜGEN. Wenn du sagst "ich speichere/notiere/merke das" → MUSST
-   du save_memory tatsächlich aufrufen. Sonst sag "OK" oder "Verstanden".
-   Achtung: nach jedem Turn extrahiert ein Hintergrund-Prozess
-   automatisch Fakten aus dem Gespräch in den Konzept-Graphen - du
-   musst dafür nichts manuell tun. Sag deshalb gerne "Notiert, läuft
-   eh in den Graphen", aber sag NICHT "ich speichere das ab" wenn du
-   nicht wirklich save_memory rufst.
+1. Nicht lügen: "speichere/notiere/merke ich" nur wenn du save_memory wirklich rufst. Ein Hintergrund-Extraktor zieht eh nach jedem Turn Fakten in den Graphen - du kannst also "notiert, läuft in den Graphen" sagen ohne Tool-Call, aber NICHT "ich speichere das ab" ohne Tool-Call.
+2. Nicht erfinden über Sasha: was du über Sasha weißt, steht im "## Aktiviertes Wissen"-Block unten. Steht es nicht dort → sag direkt "noch nichts gespeichert" statt zu raten. Keine Hobbys, Berufe, Familie, Wohnort frei erfinden.
+3. Nicht erfinden über dich selbst: deine Tools, Fähigkeiten und Grenzen stehen ebenfalls im "## Aktiviertes Wissen". Was nicht drin steht, hast du nicht — auch wenn dir aus dem Pretraining APIs, Skills oder Endpunkte vertraut vorkommen (Cloud-Assistant-Schemata wie Claude/ChatGPT). Im Zweifel "kann ich nicht".
+4. Nur lateinische Schrift, Deutsch (Englisch wenn der User Englisch tippt). Keine CJK-Zeichen.
+5. Nur reale Wörter, keine Neuschöpfungen."""
 
-2. NICHT ERFINDEN. Wenn der User fragt "was weißt du über mich?":
-   - Schau in den "## Aktiviertes Wissen über Sashas Welt"-Block
-     weiter unten. Nenne NUR was dort steht.
-   - Wenn der Block leer ist oder nichts Relevantes enthält: sag
-     direkt "Da hab ich noch nichts gespeichert. Erzähl mir was ich
-     mir merken soll." Erfinde KEINE Hobbys, Interessen, Berufe,
-     Lieblingsprojekte, Familie, Wohnort.
-   - "Du hast vorhin gesagt..." nur wenn das wirklich in der Chat-
-     History oder im Wissens-Block steht.
 
-3. EHRLICH BEI GRENZEN. Wenn der User dich bittet etwas zu tun was du
-   nicht kannst (Mails, Internet, Code-Eval, Memory löschen), sag das
-   gerade heraus. Biete keine Workarounds an, die du auch nicht hast.
-   Wenn der User dich auf eine Grenze hinweist die du nicht kanntest,
-   nimm das ernst und sprich's beim nächsten passenden Thema von dir
-   aus an.
+# Konditionaler Prompt-Anhang fuer Spracheingabe. Wird NUR injiziert wenn
+# die User-Message tatsaechlich aus Whisper kam (via_mic=True von der
+# API). Standard-Chat (Tastatur) sieht diesen Block nicht - kein Grund
+# Tokens fuer einen Hinweis zu zahlen, der nicht zutrifft.
+#
+# Hintergrund: Whisper-small auf CPU verstuemmelt gelegentlich Eigennamen
+# und Fachbegriffe ("Gigabit" -> "Liga-Bit", "Qwen" -> "Quinn", "JSON" ->
+# "Jason"). Im reinen Chat wuerde die KI das woertlich nehmen und auf den
+# Quatsch antworten. Dieser Block teilt der KI mit: was du hier liest,
+# kann transkribierter Muell sein - bei semantischen Bruechen lieber
+# kurz nachfragen statt drauflos zu antworten.
+_MIC_INPUT_HINT = """## Spracheingabe (diese Nachricht)
+Diese Nachricht kam per Mikrofon und wurde durch Whisper transkribiert. Transkription kann einzelne Wörter verfälschen, besonders Eigennamen, Akronyme, Fachbegriffe und Anglizismen. Wenn etwas im Kontext keinen Sinn ergibt oder ein Wort verdächtig „danebenliegt", frag kurz nach was gemeint war ("Meinst du X?"), statt es wörtlich zu nehmen oder zu raten. Andere Nachrichten in der History stammen aus Tastatur-Eingabe - dort ist der Text wörtlich gemeint."""
 
-4. KEINE ANDEREN SCHRIFTEN. Antworte nur in lateinischer Schrift, auf
-   Deutsch (Englisch wenn der User Englisch tippt). Keine chinesischen,
-   japanischen, koreanischen oder anderen Zeichen, auch nicht in
-   Zitaten.
-
-5. NUR REALE WÖRTER. Keine Wort-Neuschöpfungen, kein Zusammenstückeln.
-   Wenn du unsicher bist ob ein Wort existiert: einfacher formulieren."""
 
 # ── Tool-Definitionen ─────────────────────────────────────────────────
 # Diese Liste wird bei jedem Request an Ollama mitgeschickt.
@@ -107,7 +133,7 @@ TOOLS = [
             "name": "save_memory",
             "description": (
                 "Speichert eine wichtige Information persistent in der Memory. "
-                "Nutze dies proaktiv wenn du Fakten über Sasha oder seine Projekte lernst, "
+                "Nutze dies proaktiv wenn du Fakten über Sasha oder Sashas Projekte lernst, "
                 "TODOs erkennst, oder technische Details für spätere Gespräche relevant sind. "
                 "Auch wenn Sasha sagt 'merk dir das' oder ähnliches."
             ),
@@ -221,6 +247,100 @@ def _dispatch_tool(name: str, args: dict) -> str:
         return f"[Unbekanntes Tool: {name}]"
 
 
+def warmup():
+    """
+    Zieht qwen2.5:14b (Chat-Modell) und bge-m3 (Embedding-Modell) in
+    Ollamas RAM-Cache. Wird als Daemon-Thread beim App-Start gefeuert,
+    damit der allererste User-Turn nicht den Cold-Load der ~9 GB qwen-
+    Weights bezahlen muss.
+
+    Strategie:
+      - Health-Check mit Retry-Loop: beim Boot kann es eine Race geben
+        zwischen unserem warmup-Thread und dem ollama.service. Statt
+        beim ersten "nicht erreichbar" gleich aufzugeben, geben wir
+        Ollama eine knappe halbe Minute, in der wir alle paar Sekunden
+        retryen. Schlägt's nach _WARMUP_RETRIES Versuchen weiter fehl
+        → leise abbrechen, kein Crash. Beim ersten echten User-Turn
+        wird das Modell dann eh on-demand geladen (nur halt mit Latenz).
+      - Mini-Chat mit num_predict=1: erzwingt das Laden ohne lange zu
+        generieren. keep_alive ist schon im Payload, das Modell bleibt
+        also direkt warm.
+      - Mini-Embed mit "warmup" als Input: zieht bge-m3 in den RAM.
+      - Beide in Try-Except gewrappt - der Hauptthread kümmert sich
+        nicht ob's geklappt hat.
+
+    Logs landen sichtbar im Dashboard-Terminal, damit man die Startphase
+    transparent verfolgen kann.
+    """
+    import state
+    import time as _time
+
+    # Retry-Loop für die Boot-Race: kalter Systemstart bringt unseren
+    # warmup-Thread oft Sekunden vor dem ollama.service-Ready ans Netz.
+    # 5 Versuche × 3 s = ~15 s Toleranz, danach geben wir auf.
+    _WARMUP_RETRIES        = 5
+    _WARMUP_RETRY_DELAY_S  = 3
+
+    for attempt in range(1, _WARMUP_RETRIES + 1):
+        if is_available():
+            if attempt > 1:
+                state.push_log(f"WARMUP ✓  Ollama nach {attempt} Versuchen erreichbar")
+            break
+        if attempt == _WARMUP_RETRIES:
+            state.push_log(
+                f"WARMUP ✗  Ollama nach {_WARMUP_RETRIES} Versuchen "
+                f"({_WARMUP_RETRIES * _WARMUP_RETRY_DELAY_S}s) nicht erreichbar, überspringe"
+            )
+            return
+        state.push_log(
+            f"WARMUP …  Ollama noch nicht da (Versuch {attempt}/{_WARMUP_RETRIES}), "
+            f"retry in {_WARMUP_RETRY_DELAY_S}s"
+        )
+        _time.sleep(_WARMUP_RETRY_DELAY_S)
+
+    state.push_log(f"WARMUP →  Lade {OLLAMA_MODEL} und Embed-Modell in den RAM")
+
+    # 1. Chat-Modell warmladen
+    try:
+        net.post(
+            f"{OLLAMA_URL}/api/chat",
+            {
+                "model":      OLLAMA_MODEL,
+                "messages":   [{"role": "user", "content": "ping"}],
+                "stream":     False,
+                "keep_alive": OLLAMA_KEEP_ALIVE,
+                # num_predict=1: das Modell muss laden, aber nicht
+                # nennenswert generieren. Spart ein paar Sekunden ggü.
+                # einer vollen Antwort.
+                "options":    {"num_predict": 1},
+            },
+            timeout=120,
+        )
+        state.push_log(f"WARMUP ←  {OLLAMA_MODEL} im RAM")
+    except Exception as e:
+        state.push_log(f"WARMUP ✗  Chat-Modell-Warmup fehlgeschlagen: {e}")
+
+    # 2. Embed-Modell warmladen
+    try:
+        import embeddings as _emb
+        vec = _emb.embed_query("warmup")
+        if vec:
+            state.push_log(f"WARMUP ←  {_emb.EMBED_MODEL} im RAM ({len(vec)}-dim)")
+        else:
+            state.push_log("WARMUP ✗  Embed-Modell antwortete leer")
+    except Exception as e:
+        state.push_log(f"WARMUP ✗  Embed-Modell-Warmup fehlgeschlagen: {e}")
+
+
+def warmup_async():
+    """
+    Feuert warmup() in einem Daemon-Thread. Non-blocking - der Caller
+    läuft sofort weiter. Wird in core/main.py beim Boot aufgerufen.
+    """
+    thread = threading.Thread(target=warmup, daemon=True, name='ai-warmup')
+    thread.start()
+
+
 def is_available() -> bool:
     """
     Health-Check: ist Ollama erreichbar?
@@ -261,7 +381,7 @@ def _last_user_query(messages: list) -> str | None:
 #   2. Den rollenden Session-Summary via kleinen LLM-Call aktualisiert
 #
 # WICHTIG: läuft als Daemon-Thread, NICHT in der Request-Antwort-Latenz.
-# Der User sieht seine Antwort wie gehabt sofort - das Memory-Update
+# Der User sieht die Antwort wie gehabt sofort - das Memory-Update
 # tropft danach im Hintergrund rein, analog wie das menschliche
 # Gedächtnis Erlebnisse minuten- bis stundenverzögert konsolidiert.
 #
@@ -323,7 +443,8 @@ def _generate_session_summary(prev_summary: str, user_msg: str, ai_msg: str) -> 
                     {"role": "system", "content": _SUMMARY_SYSTEM_PROMPT},
                     {"role": "user",   "content": body},
                 ],
-                "stream":   False,
+                "stream":     False,
+                "keep_alive": OLLAMA_KEEP_ALIVE,
             },
             timeout=60,
         )
@@ -347,7 +468,7 @@ def _async_save_turn(user_msg: str, ai_msg: str):
     eine Art Konversations-Log das beim Debug nützlich ist und einen
     Backup-Pfad gibt falls der Extraktor mal was übersieht.
 
-    Läuft als Daemon-Thread: blockiert nichts, der User hat seine
+    Läuft als Daemon-Thread: blockiert nichts, der User hat die
     Antwort schon lange. Fehler werden geloggt, nicht weitergereicht.
     """
     if not user_msg or not user_msg.strip():
@@ -415,10 +536,11 @@ def chat(messages: list, model: str = None, system: str = None) -> str:
         sys_prompt += "\n\n" + mem_ctx
 
     payload = {
-        "model":    model,
-        "messages": [{"role": "system", "content": sys_prompt}, *messages],
-        "tools":    TOOLS,
-        "stream":   False,
+        "model":      model,
+        "messages":   [{"role": "system", "content": sys_prompt}, *messages],
+        "tools":      TOOLS,
+        "stream":     False,
+        "keep_alive": OLLAMA_KEEP_ALIVE,
     }
     try:
         result   = net.post(f"{OLLAMA_URL}/api/chat", payload)
@@ -432,7 +554,7 @@ def chat(messages: list, model: str = None, system: str = None) -> str:
 
 
 def chat_stream(messages: list, model: str = None, system: str = None,
-                tools: list = None, tool_executor=None):
+                tools: list = None, tool_executor=None, via_mic: bool = False):
     """
     Streaming Chat mit Tool-Use Loop.
 
@@ -449,6 +571,12 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     tools/tool_executor: Optional. Wenn nicht angegeben werden die Standard-Tools
     (TOOLS + _execute_tool) verwendet. Tutor-Session übergibt hier tutor.TUTOR_TOOLS
     und tutor.execute_tool um eigene Tools mitzubringen.
+
+    via_mic: True wenn die letzte User-Message aus Whisper kam (Spracheingabe).
+    Dann wird `_MIC_INPUT_HINT` an den System-Prompt angehaengt, damit die KI
+    bei semantischen Bruechen ("Liga-Bit" statt "Gigabit") nachfragen statt
+    woertlich antworten kann. Wird nur im regulaeren Chat-Modus angewendet
+    (nicht im Tutor-Modus).
 
     Tool-Ausführungen sind still – der User sieht nur den finalen Text.
     Tool-Calls erscheinen aber im Terminal über net.py Logging.
@@ -477,6 +605,10 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         sys_prompt = (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
         if mem_ctx:
             sys_prompt += "\n\n" + mem_ctx
+        # Mic-Hinweis ans Ende - sieht die KI direkt vor der aktuellen
+        # Message, hoechste Recency-Praesenz.
+        if via_mic:
+            sys_prompt += "\n\n" + _MIC_INPUT_HINT
     else:
         sys_prompt = system or _SYSTEM_PROMPT
 
@@ -490,10 +622,11 @@ def chat_stream(messages: list, model: str = None, system: str = None,
 
     for _ in range(max_rounds):
         payload = {
-            "model":    model,
-            "messages": working_messages,
-            "tools":    active_tools,
-            "stream":   True,
+            "model":      model,
+            "messages":   working_messages,
+            "tools":      active_tools,
+            "stream":     True,
+            "keep_alive": OLLAMA_KEEP_ALIVE,
         }
 
         round_content = []  # Tokens dieser Runde sammeln

@@ -57,6 +57,13 @@ def main():
     ui_thread = threading.Thread(target=start_ui, daemon=True)
     ui_thread.start()
 
+    # KI-Modelle im Hintergrund ins Ollama-RAM ziehen, damit der erste
+    # echte User-Chat nicht den Cold-Load von qwen2.5:14b (~9 GB) zahlen
+    # muss. Daemon-Thread, blockiert nichts - während der Warmup läuft
+    # kann der User schon das Dashboard bedienen.
+    import ai
+    ai.warmup_async()
+
     event_queue = [SYSTEM_BOOT]
 
     # Initiale Vokabel laden

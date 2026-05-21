@@ -182,6 +182,13 @@ def api_chat():
     """
     body    = request.get_json()
     message = (body.get('message') or '').strip()
+    # via_mic-Flag aus dem Body. True bedeutet: diese Message kam aus
+    # Whisper-Transkription, nicht aus Tastatur. Wird an chat_stream()
+    # durchgereicht, das daraus einen Mic-Hint an den System-Prompt
+    # haengt - damit die KI bei Transkriptionsfehlern nachfragen kann
+    # statt woertlich zu antworten. Default False fuer alle Legacy-
+    # Clients die das Feld nicht mitschicken.
+    via_mic = bool(body.get('via_mic', False))
     if not message:
         return jsonify({"error": "no message"}), 400
 
@@ -231,7 +238,7 @@ def api_chat():
         # Tokens sammeln um am Ende die komplette Antwort zu speichern
         collected = []
 
-        for token in ai.chat_stream(history):
+        for token in ai.chat_stream(history, via_mic=via_mic):
             collected.append(token)
             # SSE-Format: "data: " + JSON + zwei Newlines
             # JSON.dumps schützt vor Sonderzeichen (Newlines im Token, etc.)

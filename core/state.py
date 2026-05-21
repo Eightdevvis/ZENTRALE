@@ -40,6 +40,15 @@ _vocab = None
 # Letzte 100 Log-Zeilen (stdout-Ausgaben, sichtbar im Dashboard-Terminal)
 _logs = deque(maxlen=100)
 
+# Letzte 100 Log-Zeilen, die NUR Internet-Traffic betreffen (Public-IPs /
+# Public-Hostnames). Wird von core/net.py gespiegelt, wenn _is_internet(url)
+# True ist. Sinn: ein dediziertes Panel im Dashboard, das ausschließlich
+# zeigt was die ZENTRALE wirklich raus ins Internet schickt - alles Lokale
+# und LAN bleibt im normalen stdout-Panel, läuft aber NICHT hier rein.
+# Wenn dieses Panel leer bleibt, ist die "vollständig offline"-Garantie
+# der ZENTRALE gerade tatsächlich eingehalten.
+_internet_logs = deque(maxlen=100)
+
 # Chat-History für die AI-Konversation.
 # maxlen=50 Nachrichten → älteste fliegen raus wenn voll.
 # Diese History wird 1:1 an Ollama geschickt – das Modell sieht
@@ -102,6 +111,22 @@ def push_log(line: str):
     with _lock:
         _logs.append({"text": line, "time": stamp})
     print(f"{stamp}  {line}", flush=True)
+
+
+def push_internet_log(line: str):
+    """
+    Hängt eine Log-Zeile an den Internet-Traffic-Channel.
+
+    Aufrufer: core/net.py, sobald eine Request-URL als Public-Ziel
+    klassifiziert wurde (siehe net._is_internet). Die gleiche Zeile
+    landet parallel über push_log() im normalen stdout - dieser Channel
+    ist nur die zusätzliche, gefilterte Sicht für das Internet-Panel.
+
+    KEIN print()-Side-Effect: das hat push_log() schon gemacht.
+    """
+    stamp = datetime.now().strftime("%H:%M:%S")
+    with _lock:
+        _internet_logs.append({"text": line, "time": stamp})
 
 
 def push_chat_message(role: str, content: str):
@@ -175,8 +200,9 @@ def get_snapshot() -> dict:
     """
     with _lock:
         return {
-            "events":  list(_events),
-            "sensors": dict(_sensors),
-            "vocab":   _vocab,
-            "logs":    list(_logs),
+            "events":        list(_events),
+            "sensors":       dict(_sensors),
+            "vocab":         _vocab,
+            "logs":          list(_logs),
+            "internet_logs": list(_internet_logs),
         }

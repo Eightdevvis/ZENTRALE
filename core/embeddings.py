@@ -23,6 +23,8 @@
 # noch persistent gespeicherter Text.
 
 import os
+from collections import OrderedDict
+from threading import Lock
 
 import net  # HTTP-Wrapper mit Terminal-Logging (NET → / NET ← Zeilen)
 
@@ -32,6 +34,32 @@ import net  # HTTP-Wrapper mit Terminal-Logging (NET → / NET ← Zeilen)
 # zweiter Pi als Embedding-Server). Default ist lokales Ollama.
 OLLAMA_URL    = os.environ.get("OLLAMA_URL",          "http://localhost:11434")
 EMBED_MODEL   = os.environ.get("OLLAMA_EMBED_MODEL",  "bge-m3")
+
+# Embed-Modell warmhalten - bge-m3 ist zwar nur ~570 MB, aber wenn es
+# zwischendurch unloadet, kostet der erste Call beim nächsten Chat-Turn
+# einen unnötigen Reload. Gleicher Mechanismus wie beim Chat-Modell.
+EMBED_KEEP_ALIVE = os.environ.get("OLLAMA_EMBED_KEEP_ALIVE", "30m")
+
+# ── Query-Embedding-Cache ─────────────────────────────────────────────
+# Vor jedem Chat-Turn wird die User-Frage in einen Vektor übersetzt -
+# das ist ein synchroner Ollama-Round-Trip *bevor* das Hauptmodell auch
+# nur anfängt zu generieren. Bei Folge-Fragen mit identischem Wortlaut
+# (z.B. wenn der User "was meinst du?" mehrfach hintereinander schickt
+# nachdem die KI nichts gerafft hat, oder bei Test-Sessions) sparen
+# wir den kompletten Round-Trip aus dem Cache.
+#
+# Cache-Politik:
+#   - LRU mit 64 Einträgen. Klein, weil der Hit-Effekt mit Variations-
+#     reichtum sowieso sinkt.
+#   - Nur Query-Seite cachen, nicht Document-Seite: Dokumente werden
+#     einmal beim Speichern embedded und dann persistiert, ein Cache
+#     hätte da keinen Hit-Wert. Queries sind das wo wir wiederholten
+#     Traffic sehen.
+#   - Key ist (model, prefix+text), damit ein Modell-/Prefix-Wechsel
+#     den Cache nicht silently falsch beantwortet.
+_QUERY_CACHE_MAX = 64
+_query_cache: OrderedDict[tuple, list[float]] = OrderedDict()
+_query_cache_lock = Lock()
 
 # Vektor-Dimensionen je nach Modell:
 #   bge-m3          → 1024 (multilingual, default seit Phase C-Quality-Fix)
@@ -83,8 +111,9 @@ def _embed_raw(text: str) -> list[float] | None:
         resp = net.post(
             f"{OLLAMA_URL}/api/embed",
             {
-                "model": EMBED_MODEL,
-                "input": text,
+                "model":      EMBED_MODEL,
+                "input":      text,
+                "keep_alive": EMBED_KEEP_ALIVE,
             },
             timeout=30,
         )
@@ -115,12 +144,37 @@ def embed_query(text: str) -> list[float] | None:
     """
     Embedding für eine Suchanfrage (Query-Seite der asymmetrischen Suche).
 
-    Wird in memory._select_relevant_entries() und überall sonst genutzt,
-    wo die KI semantisch im LTM sucht.
+    Wird in memory._select_relevant_entries(), graph._find_entry_points()
+    und überall sonst genutzt, wo die KI semantisch sucht.
+
+    LRU-gecacht: identische Folge-Queries (gleicher Wortlaut, gleicher
+    Whitespace nach strip()) sparen einen kompletten Ollama-Round-Trip.
     """
     if not text or not text.strip():
         return None
-    return _embed_raw(_PREFIX_QUERY + text)
+    full_input = _PREFIX_QUERY + text.strip()
+    cache_key  = (EMBED_MODEL, full_input)
+
+    # Cache-Lookup
+    with _query_cache_lock:
+        cached = _query_cache.get(cache_key)
+        if cached is not None:
+            # LRU-Touch: ans Ende der OrderedDict verschieben
+            _query_cache.move_to_end(cache_key)
+            return cached
+
+    # Cache-Miss → frisches Embedding holen
+    vec = _embed_raw(full_input)
+    if vec is None:
+        return None
+
+    # Speichern + Eviction wenn voll
+    with _query_cache_lock:
+        _query_cache[cache_key] = vec
+        _query_cache.move_to_end(cache_key)
+        while len(_query_cache) > _QUERY_CACHE_MAX:
+            _query_cache.popitem(last=False)  # oldest raus
+    return vec
 
 
 # Backward-compatibility: alter Name embed() bleibt verfügbar, aber wir

@@ -15,6 +15,7 @@
 
 import argparse
 import io
+import os
 import sys
 import time
 import urllib.request
@@ -24,8 +25,11 @@ import json
 WHISPER_URL = "http://localhost:5050"
 TTS_URL     = "http://localhost:5051"
 
-# Aufnahme-Dauer in Sekunden (kurz für schnellen Test)
-RECORD_SECONDS = 4
+# Aufnahme-Dauer in Sekunden. Per Env RECORD_SECONDS ueberschreibbar,
+# damit man pro Test-Lauf flexibel zwischen kurzen Smoke-Checks (4s)
+# und laengeren, anspruchsvolleren Saetzen (15-20s) wechseln kann ohne
+# das Skript editieren zu muessen.
+RECORD_SECONDS = int(os.environ.get("RECORD_SECONDS", "4"))
 
 
 def check_service(name, url):

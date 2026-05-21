@@ -14,9 +14,51 @@
 #   body = net.post("http://localhost:11434/api/chat", payload_dict)
 
 import json
+import ipaddress
 import urllib.request
 import urllib.error
+from urllib.parse import urlparse
 import state  # für push_log – zeigt Requests im Dashboard-Terminal
+
+
+# Hostnames die wir als "lokal" einstufen (treffen keinen Netzwerk-Stack).
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+
+
+def _is_internet(url: str) -> bool:
+    """
+    Klassifiziert eine URL als Internet-Ziel (True) oder lokal/LAN (False).
+
+    Heuristik:
+      - localhost-Varianten          → lokal     (False)
+      - private IP-Ranges (RFC1918)  → LAN       (False)
+      - Link-local / loopback IPs    → lokal     (False)
+      - mDNS-Namen (*.local)         → LAN       (False)
+      - Alles andere (Public-IPs, normale Hostnames) → Internet (True)
+
+    Wird vom Internet-Panel im Dashboard genutzt: nur True-Calls landen
+    dort. Die regulären NET-Logs (im großen stdout) bleiben unverändert.
+
+    Bei Parse-Fehlern oder leerem Hostname: defensiv False – wir wollen
+    keine Fehl-Alarme im Internet-Panel.
+    """
+    try:
+        host = (urlparse(url).hostname or "").lower()
+    except Exception:
+        return False
+    if not host:
+        return False
+    if host in _LOCAL_HOSTS:
+        return False
+    # IP-Literal? → über ipaddress klassifizieren (private/loopback/link-local)
+    try:
+        ip = ipaddress.ip_address(host)
+        return not (ip.is_private or ip.is_loopback or ip.is_link_local)
+    except ValueError:
+        # Hostname (kein IP-Literal). mDNS *.local ist LAN, sonst Internet.
+        if host.endswith(".local"):
+            return False
+        return True
 
 
 def get(url: str, timeout: int = 10) -> bytes:
@@ -122,14 +164,26 @@ def stream_post(url: str, payload: dict, timeout: int = 60):
 
 def _log_out(method: str, url: str):
     """Logt eine ausgehende Anfrage."""
-    state.push_log(f"NET →  {method} {url}")
+    line = f"NET →  {method} {url}"
+    state.push_log(line)
+    # Internet-Traffic zusätzlich in den dedizierten Channel spiegeln,
+    # damit das Internet-Panel im Dashboard nur die "wirklich raus"-Calls
+    # zeigt. Lokale/LAN-Calls landen nur im normalen stdout.
+    if _is_internet(url):
+        state.push_internet_log(line)
 
 
 def _log_in(status: int, url: str, size_bytes: int):
     """Logt eine eingehende Antwort mit Status und Größe."""
-    state.push_log(f"NET ←  {status} {url} ({size_bytes} B)")
+    line = f"NET ←  {status} {url} ({size_bytes} B)"
+    state.push_log(line)
+    if _is_internet(url):
+        state.push_internet_log(line)
 
 
 def _log_err(url: str, reason: str):
     """Logt einen fehlgeschlagenen Request."""
-    state.push_log(f"NET ✗  FAIL {url} – {reason}")
+    line = f"NET ✗  FAIL {url} – {reason}"
+    state.push_log(line)
+    if _is_internet(url):
+        state.push_internet_log(line)

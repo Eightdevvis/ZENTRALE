@@ -37,8 +37,12 @@ import memory   # LTM/STM CRUD (Legacy, wird in Phase G durch graph ersetzt)
 import graph    # Konzept-Graph (Phase G)
 
 # ── Konfiguration ──────────────────────────────────────────────────────
-OLLAMA_URL   = os.environ.get("OLLAMA_URL",   "http://localhost:11434")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
+OLLAMA_URL        = os.environ.get("OLLAMA_URL",        "http://localhost:11434")
+OLLAMA_MODEL      = os.environ.get("OLLAMA_MODEL",      "qwen2.5:14b")
+# Modell warmhalten - dieser Extraktor läuft async nach jedem Turn,
+# wenn das Modell zwischendurch unloadet wird kostet jeder Lauf den
+# Reload. Default 30m, per Env überschreibbar.
+OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
 
 # Inaktivitäts-Schwelle in Sekunden. Nach so langer Stille beim nächsten
 # Turn lazy-getriggertes Konsolidieren. 30 Minuten = 1800 Sekunden.
@@ -128,11 +132,12 @@ def _call_extractor(stm_list: list) -> list:
                     {"role": "system", "content": _EXTRACTOR_SYSTEM_PROMPT},
                     {"role": "user",   "content": user_body},
                 ],
-                "stream":   False,
+                "stream":     False,
                 # Ollama unterstützt format="json" - zwingt das Modell
                 # zu wohlgeformtem JSON. Wir kapseln das Array in einem
                 # Objekt damit Ollama's JSON-Modus glücklich ist.
-                "format":   "json",
+                "format":     "json",
+                "keep_alive": OLLAMA_KEEP_ALIVE,
             },
             timeout=120,
         )
@@ -364,8 +369,9 @@ def _call_graph_extractor(user_msg: str, ai_msg: str, today: str) -> tuple[list[
                     {"role": "system", "content": _GRAPH_EXTRACTOR_PROMPT},
                     {"role": "user",   "content": body},
                 ],
-                "stream":   False,
-                "format":   "json",
+                "stream":     False,
+                "format":     "json",
+                "keep_alive": OLLAMA_KEEP_ALIVE,
             },
             timeout=90,
         )
