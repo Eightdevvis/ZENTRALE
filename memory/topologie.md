@@ -80,6 +80,18 @@ Wichtig:
 - `never-default yes` auf beiden LAN-Connections: Default-Route bleibt
   am WLAN/Hotspot. Das LAN ist nur fuer Pi↔PC.
 - Latenz Pi↔PC ueber LAN: ~0.5 ms (vs. ~6 ms ueber Hotspot).
+- **Kein** `ip=...`-Kernel-Boot-Parameter fuer enp4s0 in
+  `/etc/kernelstub/configuration`. NetworkManager macht die IP-Config
+  ohnehin, der Kernel-Boot-Param ist nur fuer NFS-Root / Diskless-
+  Setups gedacht. Wenn dort `ip=<ip>:::<mask>::<iface>:off` steht und
+  das Gateway-Feld leer ist, schreibt der Kernel-IP-Stack eine
+  `default dev enp4s0 scope link`-Route in die Routing-Tabelle, die
+  NM nicht aufraeumen kann. Symptom: viele Websites laden nicht
+  (ARP-Aufloesung schlaegt im LAN-Subnetz fehl, weil dort nur der Pi
+  sitzt). Aufraeumen mit
+  `sudo kernelstub --delete-options "ip=..."` und einmal
+  `sudo ip route del default dev enp4s0 scope link`. War 2026-05-26
+  ein Tag lang das Mystery „Internet kaputt nach LAN-Setup".
 
 **Hotspot ist damit unkritisch.** WLAN-Reconnects wechseln zwar
 weiterhin die Hotspot-IP, aber `192.168.50.1` und `192.168.50.10`

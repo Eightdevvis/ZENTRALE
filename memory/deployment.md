@@ -201,6 +201,48 @@ bash /opt/zentrale/scripts/install_xfce_autostart.sh
 Idempotent. Der Hotkey-Teil funktioniert nur aus einer aktiven
 XFCE-Session (DBus muss laufen).
 
+### Mikrofon-Berechtigung im Kiosk
+
+Der Pi-Kiosk laedt das Dashboard von `http://192.168.50.1:5000` (PC-LAN-
+IP). Damit der Mic-Button (`#chat-mic-btn`, siehe `audio_system.md`)
+funktioniert, mussten zwei Hindernisse weg:
+
+1. **Insecure-Origin-Block:** Firefox laesst `getUserMedia()` per default
+   nur auf HTTPS oder `localhost` zu. Eine LAN-HTTP-Origin ist „insecure"
+   und wird komplett geblockt — bevor irgendein Permission-Dialog
+   ueberhaupt erschiene.
+2. **Permission-Dialog im Kiosk:** Selbst wenn der Insecure-Block weg
+   waere, gibt's im `--kiosk`-Modus keine Toolbar und damit keinen
+   anklickbaren Doorhanger.
+
+Beides wird vom `install_xfce_autostart.sh` mit-installiert:
+
+- **Insecure-Prefs** (Profil-spezifisch, weil Mozilla diese Prefs nicht
+  per Policy zulaesst): in `~/.zentrale-kiosk-profile/user.js` werden
+  `media.devices.insecure.enabled` und `media.getusermedia.insecure.enabled`
+  auf `true` gesetzt. Der Kiosk-Autostart startet Firefox mit
+  `--profile ~/.zentrale-kiosk-profile --no-remote`, damit dieses Profil
+  garantiert genutzt wird.
+- **Permission-Whitelist** (systemweit ueber Enterprise-Policy):
+  `scripts/install_firefox_mic_policy.sh` schreibt
+  `/etc/firefox-esr/policies/policies.json` mit
+  `Permissions.Microphone.Allow = ["http://192.168.50.1:5000"]` und
+  `BlockNewRequests=true`. Das Skript wird vom Autostart-Skript per
+  passwordless sudo gerufen (siehe `install_pi_sudoers.sh`).
+
+Reihenfolge beim Erstsetup: erst `sudo install_pi_sudoers.sh`, dann
+`install_xfce_autostart.sh` — sonst fehlt die NOPASSWD-Berechtigung
+und die Policy wird nicht geschrieben (laute Warnung, restliches
+Autostart laeuft trotzdem durch).
+
+Aenderung der Kiosk-URL (z.B. neues LAN-Subnetz):
+
+```bash
+sudo KIOSK_ORIGIN=http://<neue-ip>:5000 bash /opt/zentrale/scripts/install_firefox_mic_policy.sh
+ZENTRALE_BACKEND_URL=http://<neue-ip>:5000 bash /opt/zentrale/scripts/install_xfce_autostart.sh
+sudo systemctl restart lightdm
+```
+
 ### Notaus-Hotkey: Ctrl+Alt+Esc
 
 Wenn der Kiosk zickt oder man ans Terminal will:
@@ -300,7 +342,7 @@ authenticated…" sagen.
 sudo bash /opt/zentrale/scripts/install_pi_sudoers.sh
 ```
 
-Schreibt `/etc/sudoers.d/zentrale` mit fünf eng definierten Befehlen:
+Schreibt `/etc/sudoers.d/zentrale` mit eng definierten Befehlen:
 
 - `systemctl restart zentrale.service` (autopull-Restart)
 - `systemctl restart whisper.service` (autopull-Restart)
@@ -309,6 +351,10 @@ Schreibt `/etc/sudoers.d/zentrale` mit fünf eng definierten Befehlen:
 - `chvt 1` (Notaus → TTY1)
 - `/opt/zentrale/scripts/install_pi_services.sh` (autopull patcht
   Unit-Files wenn sich `deploy/*.service` im Repo ändert)
+- `/opt/zentrale/scripts/install_firefox_mic_policy.sh`
+  (`install_xfce_autostart.sh` laesst damit die Kiosk-Mic-Policy
+  ohne Passwort schreiben — siehe Abschnitt "Mikrofon-Berechtigung
+  im Kiosk")
 
 Bewusst eng — keine `ALL`-Freibriefe. Die alte
 `/etc/sudoers.d/zentrale-autopull`-Datei wird vom Skript automatisch

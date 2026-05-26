@@ -33,6 +33,12 @@ Das hat zwei Vorteile:
 
 ## Spracheingabe im Chat-Modus
 
+> **Pi-Kiosk-Hinweis:** Der Kiosk laedt das Backend ueber die LAN-IP
+> (`http://192.168.50.1:5000`), also keine secure origin und kein
+> sichtbarer Permission-Dialog. Mic-Permission wird stattdessen via
+> `policies.json` + Profil-`user.js` pre-konfiguriert — Details in
+> `deployment.md` → "Mikrofon-Berechtigung im Kiosk".
+
 Im Chat-Modus liegt neben dem Text-Input ein **Mic-Button**
 (`#chat-mic-btn`). Toggle-Verhalten:
 

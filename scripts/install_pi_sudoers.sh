@@ -10,9 +10,13 @@
 #   - systemctl restart tts.service          (autopull)
 #   - systemctl stop lightdm                 (fuer emergency_exit.sh)
 #   - chvt 1                                 (emergency_exit -> TTY1)
+#   - install_pi_services.sh                 (autopull patcht systemd-Units)
+#   - install_firefox_mic_policy.sh          (install_xfce_autostart.sh
+#                                             schreibt damit policies.json
+#                                             fuer Kiosk-Mikrofon-Permission)
 #
 # BEWUSST ENG GESCHNITTEN: kein Generalfreibrief, nur exakt diese
-# fuenf Kommandos. Wenn neue gebraucht werden, dieses File erweitern
+# Kommandos. Wenn neue gebraucht werden, dieses File erweitern
 # und nicht einfach "ALL" eintragen.
 #
 # AUFRUF (auf dem Pi):
@@ -53,11 +57,17 @@ SUDOERS_FILE="/etc/sudoers.d/zentrale"
 #                                                         Unit-Files wenn
 #                                                         sich deploy/*.service
 #                                                         im Repo aendert
+#  - install_firefox_mic_policy.sh                     -> install_xfce_autostart.sh
+#                                                         laesst damit das
+#                                                         Kiosk-Mikrofon
+#                                                         pre-allowen
+#                                                         (policies.json)
 cat > "$SUDOERS_FILE" <<EOF
 # Auto-generiert von scripts/install_pi_sudoers.sh.
 # Gibt dem User '$TARGET_USER' passwordless sudo fuer genau die
-# Befehle die ZENTRALE-Automatisierung braucht (autopull + Notaus).
-$TARGET_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart zentrale.service, /bin/systemctl restart whisper.service, /bin/systemctl restart tts.service, /bin/systemctl stop lightdm, /usr/bin/chvt 1, /opt/zentrale/scripts/install_pi_services.sh
+# Befehle die ZENTRALE-Automatisierung braucht (autopull + Notaus +
+# Kiosk-Mic-Policy).
+$TARGET_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart zentrale.service, /bin/systemctl restart whisper.service, /bin/systemctl restart tts.service, /bin/systemctl stop lightdm, /usr/bin/chvt 1, /opt/zentrale/scripts/install_pi_services.sh, /opt/zentrale/scripts/install_firefox_mic_policy.sh
 EOF
 
 # Permissions wie sudoers es verlangt — sonst ignoriert sudo das File
@@ -77,4 +87,4 @@ fi
 rm -f /etc/sudoers.d/zentrale-autopull
 
 echo "OK: $SUDOERS_FILE geschrieben fuer User '$TARGET_USER'."
-echo "Test mit:  sudo -n -l    # sollte die fuenf Befehle listen"
+echo "Test mit:  sudo -n -l    # sollte die Befehle listen"
