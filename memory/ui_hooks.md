@@ -18,6 +18,8 @@ sonst raten Future-Claude/User wo sie ansetzen sollen.
 | `#panel-graph`      | Sleep-Quality-Chart (liegt in `.side-graph`)        |
 | `#terminal`         | stdout-Footer (volle Breite)                        |
 | `#chat-input`       | Chat-Texteingabe                                    |
+| `#chat-mic-btn`     | Mic-Toggle (Aufnahme → Whisper), Alt+M              |
+| `#chat-mute-btn`    | Stimme an/aus (🔊/🔇), Toggle in `localStorage`     |
 | `#chat-status`      | Ollama-Verfügbarkeitsanzeige im Chat-Mode           |
 
 ## JS-Hooks
@@ -31,6 +33,11 @@ sonst raten Future-Claude/User wo sie ansetzen sollen.
 | `goToChat()`            | Chat-Panel rein, AI-Panel raus, History laden       |
 | `goToTutor()`           | Tutor-Panel rein, Tutor-Session starten             |
 | `goToCategory()`        | Data-Collection-View aufrufen (Taste K)             |
+| `toggleChatMute()`      | Stimme an/aus, merkt sich Zustand in `localStorage` (`zentraleChatMuted`); stoppt beim Muten laufende Wiedergabe |
+| `enqueueSpeak(text)`    | Einen Satz in `speakQueue` legen + `drainSpeakQueue` anstossen |
+| `drainSpeakQueue()`     | Queue seriell: `/api/speak` → `<audio>` → nächster Satz (kein Überlappen) |
+| `stopSpeaking()`        | Queue leeren + laufendes `<audio>` pausieren (auch in `goToMain`) |
+| `extractSentences(txt)` | Streaming-Text → `[fertigeSätze[], rest]`; Satzende = `.!?…\n` + Whitespace |
 
 ## CSS-Grid-Areas (swappable)
 

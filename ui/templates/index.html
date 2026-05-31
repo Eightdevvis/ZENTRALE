@@ -626,6 +626,17 @@
       opacity: 0.3;
       cursor: not-allowed;
     }
+    /* Mute-Button im stummgeschalteten Zustand: grau-neutral statt gruen,
+       damit auf einen Blick klar ist dass die Stimme aus ist. */
+    .chat-mic-btn.muted {
+      border-color: rgba(136, 136, 136, 0.55);
+      color: #888;
+      background: rgba(136, 136, 136, 0.08);
+    }
+    .chat-mic-btn.muted:hover {
+      background: rgba(136, 136, 136, 0.16);
+      box-shadow: 0 0 8px rgba(136, 136, 136, 0.35);
+    }
 
     .chat-input {
       background: transparent;
@@ -1009,9 +1020,11 @@
                  autocomplete="off" spellcheck="false" placeholder="Nachricht eingeben..."/>
           <button type="button" id="chat-mic-btn" class="chat-mic-btn"
                   title="Mikrofon (Click an, nochmal Click stoppt + transkribiert)">●</button>
+          <button type="button" id="chat-mute-btn" class="chat-mic-btn"
+                  title="Stimme stummschalten (Toggle, wird gemerkt)">&#128266;</button>
           <span class="chat-status" id="chat-status">checking...</span>
         </div>
-        <p class="form-hint">Enter senden &nbsp;·&nbsp; Alt+M Mic &nbsp;·&nbsp; /memory &nbsp;·&nbsp; /forget N &nbsp;·&nbsp; /clear &nbsp;·&nbsp; Esc zurück</p>
+        <p class="form-hint">Enter senden &nbsp;·&nbsp; Alt+M Mic &nbsp;·&nbsp; /clear &nbsp;·&nbsp; Esc zurück</p>
       </div>
     </div>
 
@@ -1206,6 +1219,8 @@
       document.getElementById('panel-chat').style.display  = 'none';
       document.getElementById('panel-tutor').style.display = 'none';
       document.getElementById('panel-ai').style.display    = 'flex';
+      // Chat verlassen → laufende Stimme verstummen lassen.
+      stopSpeaking();
     }
 
     /* Orb-State umschalten: aktiv = schnellere/intensivere Animationen.
@@ -1425,6 +1440,16 @@
     let chatMediaRecorder  = null;
     let chatAudioChunks    = [];
 
+    // ── Stimme (TTS) ──────────────────────────────────────────────────
+    // chatMuted wird in localStorage gemerkt, uebersteht also Reload und
+    // Kiosk-Neustart. speakQueue haelt die noch nicht gesprochenen Saetze;
+    // currentSpeakAudio ist das gerade laufende <audio>, damit Muten die
+    // Wiedergabe sofort abbrechen kann.
+    let chatMuted          = localStorage.getItem('zentraleChatMuted') === '1';
+    let speakQueue         = [];     // ausstehende Saetze fuer Piper-TTS
+    let speakDraining      = false;  // laeuft drainSpeakQueue gerade?
+    let currentSpeakAudio  = null;   // aktuell spielendes Audio-Objekt
+
     async function goToChat() {
       appMode = 'chat';
       // view-main bleibt sichtbar – nur das Panel innerhalb tauscht.
@@ -1588,34 +1613,9 @@
         return;
       }
 
-      // /memory – zeigt alle gespeicherten Memory-Einträge an
-      if (message === '/memory') {
-        input.value = '';
-        const res  = await fetch('/api/memory');
-        const entries = await res.json();
-        const container = document.getElementById('chat-messages');
-        if (entries.length === 0) {
-          container.innerHTML += `<div class="chat-msg"><span class="chat-msg-role assistant">sys</span><span class="chat-msg-content" style="color:#555">Memory ist leer.</span></div>`;
-        } else {
-          const lines = entries.map(e => `[${e.id}][${e.type}] ${escHtml(e.content)}`).join('\n');
-          container.innerHTML += `<div class="chat-msg"><span class="chat-msg-role assistant">mem</span><span class="chat-msg-content" style="color:#ff9900">${lines}</span></div>`;
-        }
-        container.scrollTop = container.scrollHeight;
-        return;
-      }
-
-      // /forget N – löscht Memory-Eintrag mit ID N
-      const forgetMatch = message.match(/^\/forget\s+(\d+)$/);
-      if (forgetMatch) {
-        input.value = '';
-        const id  = parseInt(forgetMatch[1]);
-        const res = await fetch(`/api/memory/${id}`, { method: 'DELETE' });
-        const data = await res.json();
-        const container = document.getElementById('chat-messages');
-        container.innerHTML += `<div class="chat-msg"><span class="chat-msg-role assistant">sys</span><span class="chat-msg-content" style="color:#555">${escHtml(data.message)}</span></div>`;
-        container.scrollTop = container.scrollHeight;
-        return;
-      }
+      // /memory und /forget N wurden mit dem Legacy-LTM-Pfad entfernt.
+      // Der Graph ist primary - Konzept-Browser/Stats kommen über
+      // einen eigenen Endpoint zurück sobald wir den brauchen.
 
       input.value = '';
       chatWaiting = true;
@@ -1660,6 +1660,11 @@
         const decoder = new TextDecoder();
         let buffer    = '';  // Puffer für unvollständige Zeilen zwischen Chunks
         let fullText  = '';  // Kompletter Text für den finalen Zustand
+        let ttsCursor = 0;   // bis hierhin wurde fullText schon zum Sprechen weggegeben
+
+        // Evtl. noch laufende Stimme der vorigen Antwort abbrechen, bevor
+        // die neue Antwort zu sprechen beginnt.
+        stopSpeaking();
 
         while (true) {
           const { done, value } = await reader.read();
@@ -1686,12 +1691,28 @@
               // Token in die AI-Bubble schreiben + Cursor ans Ende setzen
               contentEl.innerHTML = escHtml(fullText) + '<span class="chat-cursor">▍</span>';
               container.scrollTop = container.scrollHeight;
+
+              // Satzweise sprechen: jeden fertigen Satz im noch nicht
+              // gesprochenen Tail in die Sprach-Queue legen. ttsCursor
+              // wandert um die Laenge der konsumierten Saetze weiter.
+              const tail = fullText.slice(ttsCursor);
+              const [sentences, rest] = extractSentences(tail);
+              if (sentences.length) {
+                sentences.forEach(enqueueSpeak);
+                ttsCursor += tail.length - rest.length;
+              }
             }
           }
         }
 
         // Cursor entfernen wenn fertig
         contentEl.textContent = fullText;
+
+        // Rest sprechen: was nach dem letzten Satzzeichen noch im Puffer
+        // steht (Antwort ohne abschliessenden Punkt o.ae.) wird jetzt,
+        // wo feststeht dass nichts mehr kommt, ebenfalls gesprochen.
+        const leftover = fullText.slice(ttsCursor).trim();
+        if (leftover) { enqueueSpeak(leftover); ttsCursor = fullText.length; }
 
       } catch (e) {
         contentEl.innerHTML = '<span style="color:#ff4444">[Verbindungsfehler]</span>';
@@ -1743,6 +1764,116 @@
     // Mic-Button-Click feuert toggleChatMic. Separater Listener weil
     // der Button kein form-submit ist.
     document.getElementById('chat-mic-btn').addEventListener('click', toggleChatMic);
+
+    // ── Stimme der ZENTRALE ───────────────────────────────────────────
+    // Die KI-Antwort wird WAEHREND des Streamings satzweise gesprochen:
+    // sobald ein vollstaendiger Satz im Text steht (siehe extractSentences
+    // in sendChatMessage), wandert er in speakQueue und wird der Reihe
+    // nach via /api/speak (Piper, thorsten-medium) abgespielt. Die Queue
+    // ist noetig, weil Piper pro Request einen ganzen Satz auf einmal
+    // synthetisiert - ohne serielle Abarbeitung wuerden sich mehrere
+    // Saetze ueberlappen.
+
+    // Icon + Titel des Mute-Buttons an den chatMuted-State angleichen.
+    function renderMuteBtn() {
+      const btn = document.getElementById('chat-mute-btn');
+      if (!btn) return;
+      btn.innerHTML = chatMuted ? '&#128263;' : '&#128266;';  // 🔇 / 🔊
+      btn.classList.toggle('muted', chatMuted);
+      btn.title = chatMuted
+        ? 'Stimme ist aus – Click zum Einschalten'
+        : 'Stimme ist an – Click zum Stummschalten';
+    }
+
+    // Mute umschalten und in localStorage merken. Beim Stummschalten sofort
+    // die laufende Wiedergabe stoppen und die Queue leeren, sonst wuerde
+    // der angefangene Satz noch zu Ende reden.
+    function toggleChatMute() {
+      chatMuted = !chatMuted;
+      localStorage.setItem('zentraleChatMuted', chatMuted ? '1' : '0');
+      if (chatMuted) stopSpeaking();
+      renderMuteBtn();
+    }
+
+    // Laufende Wiedergabe abbrechen und alle ausstehenden Saetze verwerfen.
+    function stopSpeaking() {
+      speakQueue = [];
+      if (currentSpeakAudio) {
+        try { currentSpeakAudio.pause(); } catch (e) { /* egal */ }
+        currentSpeakAudio = null;
+      }
+    }
+
+    // Einen fertigen Satz in die Queue legen und die Abarbeitung anstossen.
+    function enqueueSpeak(text) {
+      const clean = text.trim();
+      if (!clean || chatMuted) return;
+      speakQueue.push(clean);
+      drainSpeakQueue();
+    }
+
+    // Queue sequentiell abarbeiten: Satz holen → /api/speak → abspielen →
+    // naechster. speakDraining verhindert, dass zwei Durchlaeufe parallel
+    // laufen (drainSpeakQueue wird pro enqueueSpeak erneut aufgerufen).
+    async function drainSpeakQueue() {
+      if (speakDraining) return;
+      speakDraining = true;
+      try {
+        while (speakQueue.length && !chatMuted) {
+          const text = speakQueue.shift();
+          let url = null;
+          try {
+            const resp = await fetch('/api/speak', {
+              method:  'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body:    JSON.stringify({ text, speed: 0.9 }),
+            });
+            if (!resp.ok) continue;   // TTS nicht verfuegbar → Satz still ueberspringen
+            if (chatMuted) return;    // waehrend des Fetch gemutet → abbrechen
+            const blob = await resp.blob();
+            url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            currentSpeakAudio = audio;
+            // Warten bis dieser Satz fertig oder abgebrochen ist, dann naechster.
+            // onerror/catch loesen ebenfalls auf, damit die Queue nie haengt
+            // (z.B. wenn der Browser Autoplay blockt).
+            await new Promise(resolve => {
+              audio.onended = resolve;
+              audio.onerror = resolve;
+              audio.play().catch(resolve);
+            });
+          } catch (e) {
+            console.warn('TTS Fehler:', e);
+          } finally {
+            if (url) URL.revokeObjectURL(url);
+            currentSpeakAudio = null;
+          }
+        }
+      } finally {
+        speakDraining = false;
+      }
+    }
+
+    // Fortlaufenden Text in fertige Saetze zerlegen. Liefert [saetze[], rest].
+    // Satz-Ende = . ! ? … oder Zeilenumbruch, GEFOLGT von Whitespace. Das
+    // trailing-Whitespace ist die Garantie, dass nach dem Satzzeichen schon
+    // das naechste Token angekommen ist – sonst wuerde mitten im Stream
+    // z.B. "3." in "3.14" faelschlich als Satzende gewertet. Der Rest ohne
+    // abschliessendes Whitespace bleibt im Puffer, bis mehr reinkommt.
+    function extractSentences(text) {
+      const re = /[^.!?…\n]*[.!?…\n]+\s+/g;
+      const sentences = [];
+      let lastIndex = 0;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        sentences.push(m[0]);
+        lastIndex = re.lastIndex;
+      }
+      return [sentences, text.slice(lastIndex)];
+    }
+
+    renderMuteBtn();
+    document.getElementById('chat-mute-btn').addEventListener('click', toggleChatMute);
 
     async function goToCategory() {
       if (categories.length === 0) {

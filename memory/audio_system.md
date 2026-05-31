@@ -79,6 +79,39 @@ höhere Bitrate per `audioBitsPerSecond` im MediaRecorder-Constructor.
 
 Backend-Reaktion: siehe `ki_system.md` → System-Prompt-Komposition.
 
+## Sprachausgabe im Chat-Modus (Auto-Speak)
+
+Die KI-Antwort wird im Chat **automatisch gesprochen**, sobald sie kommt –
+nicht erst auf Knopfdruck. Weil Piper pro Request einen ganzen Satz auf
+einmal synthetisiert (kein Token-Streaming), läuft das **satzweise
+während des SSE-Streamings**:
+
+1. Tokens strömen in `sendChatMessage` rein und füllen `fullText`.
+2. Nach jedem Token zerlegt `extractSentences(tail)` den noch nicht
+   gesprochenen Teil. Satz-Ende = `. ! ? … \n` **gefolgt von Whitespace**
+   – das trailing-Whitespace garantiert, dass nach dem Satzzeichen schon
+   das nächste Token da ist (sonst würde `3.` in `3.14` mitten im Stream
+   fälschlich als Satzende gewertet).
+3. Jeder fertige Satz geht via `enqueueSpeak` in die `speakQueue`.
+4. `drainSpeakQueue` arbeitet die Queue **seriell** ab: `/api/speak`
+   (Piper, `lang=de`) → `<audio>` abspielen → `onended` → nächster Satz.
+   Seriell, weil sich sonst mehrere Sätze überlappen würden.
+5. Am Stream-Ende wird der Rest ohne abschließendes Satzzeichen
+   nachgesprochen (`leftover`).
+
+Effekt: die Stimme beginnt nach dem **ersten** fertigen Satz, nicht erst
+wenn die ganze Antwort generiert ist – fühlt sich „live" an.
+
+**Mute-Button** (`#chat-mute-btn`, neben dem Mic-Button): Toggle 🔊/🔇.
+Zustand liegt in `localStorage` (`zentraleChatMuted`), übersteht also
+Reload und Kiosk-Neustart. Beim Stummschalten bricht `stopSpeaking()`
+die laufende Wiedergabe sofort ab und leert die Queue. `goToMain()` (Chat
+verlassen) ruft ebenfalls `stopSpeaking()`. DOM/JS-Hooks: siehe
+`ui_hooks.md`.
+
+> **Main-Mode (panel-ai) ist davon getrennt** – dort ist die Voice noch
+> nicht verdrahtet (siehe `ui_hooks.md` → Voice-Pipeline).
+
 ## Pipeline
 
 ```
