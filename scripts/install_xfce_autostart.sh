@@ -188,9 +188,13 @@ EOF
 #
 # Der Exec wartet bis der Core auf Port 5000 antwortet, BEVOR Firefox
 # startet — sonst sieht der User initial "Connection refused" und muesste
-# manuell F5 druecken. Timeout 60s damit der Kiosk auch dann hochkommt
-# wenn der Core spinnt; der User sieht dann zwar die Fehlerseite, kann
-# aber den Hotkey nutzen statt einen dunklen Bildschirm zu kriegen.
+# manuell F5 druecken. Timeout 240s (= 4 min) damit der Kiosk auch dann
+# noch sauber hochkommt wenn der PC erst per WoL geweckt werden muss:
+# zentrale-wake-pc.service schickt das Magic-Packet, dann braucht der
+# PC BIOS + LUKS-Eingabe + Pop-Boot + systemd-Services. Realistisch
+# 90-180s, mit Puffer 240s. Wenn der PC trotzdem nicht hochkommt,
+# laeuft Firefox in die Fehlerseite — der User kann dann den
+# Hotkey nutzen statt einen dunklen Bildschirm zu kriegen.
 rm -f "$AUTOSTART_DIR/zentrale.desktop.disabled"
 # Heredoc OHNE Quotes -> $BACKEND_URL und $KIOSK_PROFILE_DIR werden expandiert.
 # Die `$(seq ...)`-Substitution soll dagegen LITERAL im File stehen
@@ -207,7 +211,7 @@ cat > "$AUTOSTART_DIR/zentrale.desktop" << EOF
 Type=Application
 Name=ZENTRALE Kiosk
 Comment=Firefox auf das ZENTRALE-Dashboard, nach Boot automatisch
-Exec=bash -c 'for i in \$(seq 1 60); do curl -fs ${BACKEND_URL}/ >/dev/null && break; sleep 1; done; firefox-esr --no-remote --profile ${KIOSK_PROFILE_DIR} --kiosk ${BACKEND_URL}'
+Exec=bash -c 'for i in \$(seq 1 240); do curl -fs ${BACKEND_URL}/ >/dev/null && break; sleep 1; done; firefox-esr --no-remote --profile ${KIOSK_PROFILE_DIR} --kiosk ${BACKEND_URL}'
 X-GNOME-Autostart-enabled=true
 EOF
 

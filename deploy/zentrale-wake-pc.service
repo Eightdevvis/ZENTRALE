@@ -1,0 +1,54 @@
+# =============================================================================
+# zentrale-wake-pc.service
+# -----------------------------------------------------------------------------
+# Feuert beim Pi-Boot einmal scripts/wake_pc.sh, damit der ZENTRALE-PC ueber
+# Wake-on-LAN aus S5 (soft-off) hochfaehrt. Ohne diesen Service wuerde der
+# Pi zwar selbst hochkommen und Firefox-Kiosk starten, aber das Backend
+# (PC) bliebe aus -> Kiosk landet auf "connection refused".
+#
+# WARUM oneshot + RemainAfterExit=true:
+#   wake_pc.sh ist idempotent: prueft erst per curl ob das PC-Backend schon
+#   antwortet, schickt nur dann das Magic-Packet, pollt bis zu 90s ob der
+#   PC hochkommt. Type=oneshot passt: einmal ausfuehren, fertig.
+#   RemainAfterExit=true sorgt dafuer dass systemd den Service als "active"
+#   listet auch nach Beendigung — sonst sieht status verwirrend nach
+#   "inactive (dead)" aus obwohl alles geklappt hat.
+#
+# WARUM nach network-online.target:
+#   Magic-Packet braucht ein konfiguriertes Netzwerk-Interface. Vor
+#   network-online ist enp4s0/eth0 evtl. noch nicht mit IP belegt, das
+#   Broadcast-Paket geht ins Leere.
+#
+# WARUM TimeoutSec=120:
+#   wake_pc.sh laeuft bis zu 90s (curl-Poll auf das PC-Backend). Mit etwas
+#   Reserve fuer NetworkManager-Setup + Magic-Packet-Delay sind 120s der
+#   sichere Wert. systemd killt den Service danach, der Boot laeuft
+#   trotzdem weiter (multi-user.target hat keinen Strict-Wait).
+#
+# WARUM User=pi (Platzhalter):
+#   install_pi_services.sh patched das auf den echten Pi-User (z.B. sasha)
+#   via sed. wakeonlan braucht KEIN root — UDP-Broadcast auf Port 9 ist
+#   User-allowed.
+# =============================================================================
+
+[Unit]
+Description=ZENTRALE: Wake PC via Wake-on-LAN at Pi boot
+Documentation=https://github.com/Eightdevvis/ZENTRALE
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=pi
+WorkingDirectory=/opt/zentrale
+ExecStart=/opt/zentrale/scripts/wake_pc.sh
+TimeoutSec=120
+RemainAfterExit=true
+# StandardOutput/Error in journal, damit man per journalctl -u zentrale-wake-pc
+# nachschauen kann ob das Magic-Packet rausging und ob der PC innerhalb
+# der 90s geantwortet hat.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

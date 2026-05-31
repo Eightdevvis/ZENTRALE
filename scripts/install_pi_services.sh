@@ -47,8 +47,9 @@ REPO_DIR="${REPO_DIR:-/opt/zentrale}"
 
 # Reihenfolge: zentrale zuerst, weil whisper/tts ein After=zentrale.service
 # haben — daemon-reload sortiert das hinterher selbst, aber enable einzeln
-# liest klarer.
-SERVICES=(zentrale.service whisper.service tts.service)
+# liest klarer. zentrale-wake-pc kommt mit weil der ZENTRALE-Pi-Boot-Flow
+# ohne den Magic-Packet-Trigger den PC nicht hochkriegt.
+SERVICES=(zentrale.service whisper.service tts.service zentrale-wake-pc.service)
 
 for SVC in "${SERVICES[@]}"; do
     SRC="$REPO_DIR/deploy/$SVC"

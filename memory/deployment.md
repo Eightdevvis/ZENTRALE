@@ -72,8 +72,8 @@ auf 5000/5050/5051.
 ## Wake-on-LAN (Pi weckt PC)
 
 Damit man nicht erst zum PC laufen und ihn anschalten muss, wenn man
-heimkommt, kann der Pi den PC ueber Wake-on-LAN aus S5 (soft-off)
-booten. Das Pi bleibt 24/7 an, der PC darf schlafen.
+heimkommt, weckt der Pi den PC ueber Wake-on-LAN aus S5 (soft-off).
+Das Pi bleibt 24/7 an, der PC darf schlafen.
 
 **PC-Seite (einmalig):**
 
@@ -89,25 +89,45 @@ booten. Das Pi bleibt 24/7 an, der PC darf schlafen.
    Soft-Off). Mainboard-Hersteller-Manual lesen, Bezeichnungen
    variieren.
 
-**Pi-Seite:**
+**Pi-Seite (automatisch beim Boot):**
 
-`scripts/wake_pc.sh` schickt das Magic-Packet:
+`zentrale-wake-pc.service` (in `deploy/`) feuert nach
+`network-online.target` einmal `scripts/wake_pc.sh`. Wird vom
+`install_pi_services.sh` mit-installiert und enabled. Type=oneshot
+mit `TimeoutSec=120` — das deckt die bis zu 90s `wake_pc.sh`-Polling-
+Phase ab.
 
+Status / Log nachschauen:
 ```bash
-bash /opt/zentrale/scripts/wake_pc.sh
+ssh zentrale 'systemctl status zentrale-wake-pc.service; journalctl -u zentrale-wake-pc.service -n 50'
 ```
 
-Idempotent: prueft erst per `curl` ob die ZENTRALE auf
-`http://192.168.50.1:5000/` antwortet. Falls ja, kein Paket – PC ist
-schon wach. Falls nein, wird das Magic-Packet als UDP-Broadcast
+Manueller Trigger zum Testen (PC vorher in S5 bringen):
+```bash
+ssh zentrale 'sudo systemctl start zentrale-wake-pc.service'
+# oder direkt das Skript:
+ssh zentrale 'bash /opt/zentrale/scripts/wake_pc.sh'
+```
+
+`wake_pc.sh` ist idempotent: prueft erst per `curl` ob die ZENTRALE
+auf `http://192.168.50.1:5000/` antwortet. Falls ja, kein Paket – PC
+ist schon wach. Falls nein, wird das Magic-Packet als UDP-Broadcast
 (`192.168.50.255`) an die PC-eth-MAC (`a8:a1:59:ab:c0:02`) gesendet
 und das Script wartet bis zu 90s auf eine ZENTRALE-Antwort.
 
 Konfig per Env-Vars: `PC_MAC`, `LAN_BROADCAST`, `PROBE_URL`.
 
-Spaeter sinnvoll: Aufruf aus `pi_sensor_bridge.py` bei PIR-/Tuer-/
-Button-Trigger, damit der Heim-kehr-Flow automatisch laeuft. Aktuell
-nur manuell.
+**Kiosk-Wartezeit angepasst:** Der Firefox-Kiosk-Autostart
+(`install_xfce_autostart.sh`) wartet bis zu 240s (4 min) per `curl`
+auf das Backend, bevor Firefox startet. Grund: PC-Boot inkl. LUKS-
+Eingabe + Pop-Boot + systemd-Services kann 90-180s dauern, mit
+Puffer 240s. Vorher waren das nur 60s, was bei WoL-Boot regelmaessig
+zu fruehzeitigem Firefox-Start auf einer toten URL fuehrte.
+
+Spaeter sinnvoll: zusaetzlicher Aufruf aus `pi_sensor_bridge.py` bei
+PIR-/Tuer-/Button-Trigger fuer den „Sasha kommt zur Tuer rein"-Flow.
+Der Boot-Trigger deckt nur das „Pi geht an"-Szenario (Stromausfall,
+manueller Pi-Start).
 
 ## 1) Pi vorbereiten (einmalig)
 
