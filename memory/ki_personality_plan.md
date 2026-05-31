@@ -54,31 +54,36 @@ nur kleine Adapter-Matrizen. Senkt VRAM-Bedarf um Größenordnungen.
 
 **Ziel:** Den größten Stil-Shift ohne FT herausholen.
 
-**Status:** Erster Pass durch (`_SYSTEM_PROMPT` in `core/ai.py` erweitert
-auf ~350 Tokens, vier Sektionen: Stimme / Länge / Floskel-Stopliste /
-Substanz statt Pflichtprogramm). Adressiert die drei beobachteten
-Probleme aus der Bestandsaufnahme:
+**Status:** Zweiter Pass (`_SYSTEM_PROMPT` in `core/ai.py`, ~410 Tokens,
+fünf Sektionen: Stimme / Länge / Floskel-Stopliste / So endet ein Turn
+(Beispiel) / Substanz statt Pflichtprogramm). Adressiert die drei
+beobachteten Probleme aus der Bestandsaufnahme:
 - *Robotisch* → konkrete Stimm-Beschreibung mit Wortwahl-Erlaubnis
-- *„Soll ich noch X für dich tun?" als Reflex* → explizit verboten
+- *„Soll ich noch X für dich tun?" als Reflex* → **2026-05-31 nachgeschärft.**
+  Erster Pass hatte das per Negativ-Liste verboten („häng NICHT 'Soll ich
+  noch…' an") — half nicht: der Reflex kam bei jeder Antwort. Zwei
+  Ursachen: (a) 14B-Instruct-Modelle prallen an Verboten ab, der
+  RLHF-Helpfulness-Default gewinnt; (b) die wörtlich genannte Floskel
+  *primt* das Modell, sie auszugeben. Fix: Verbot → positive Regel
+  („Beende den Turn mit dem letzten inhaltlichen Satz"), wörtliche Floskel
+  raus, plus Few-shot-Beispiel das ein sauberes Turn-Ende vormacht.
 - *Trocken, predictable, keine Insights* → Substanz-Sektion verlangt
   proaktiv nicht-offensichtliche Beobachtungen
 
 **Noch offen in Phase 0:**
 
-1. **Beobachtungs-Phase** – mindestens eine Woche normal nutzen, prüfen:
-   - Sind die Floskeln tatsächlich weg, oder fallen neue ein?
-   - Wirkt der Substanz-Push echt oder produziert er nur erzwungene
-     „interessante" Kommentare?
-   - Bleibt die Antwort-Länge knapp, oder verlangt der Stil-Push neue
-     Wortmengen?
-2. **Optional: 3–5 In-Context-Beispiel-Dialoge** als Few-Shot in den
-   System-Prompt einschieben (`system`/`user`/`assistant`-Turns vor
-   dem echten Verlauf). Wirkt bei 14B oft stärker als reine
-   Anweisungen. Nur ziehen, wenn die reine Instruction-Version nach
-   einer Woche unzureichend bleibt – Few-Shot kostet pro Turn deutlich
-   mehr Tokens.
+1. **Beobachtungs-Phase** – prüfen, ob der Service-Nachklapp mit
+   positiver Regel + Few-shot tatsächlich verschwindet, oder ob neue
+   Floskeln einfallen. Ebenso: bleibt die Länge knapp, wirkt der
+   Substanz-Push echt?
+2. ~~**Optional: Few-Shot-Beispiel**~~ → **2026-05-31 gezogen.** Der
+   Trigger („nur ziehen, wenn die reine Instruction-Version unzureichend
+   bleibt") trat ein: der Nachklapp-Reflex überlebte die reine Stopliste.
+   Vorerst nur EIN knappes Beispiel (Turn-Ende), nicht 3–5 — Token-Kosten
+   pro Turn niedrig halten, eskalieren falls ein Beispiel nicht reicht.
 3. **Iterations-Loop** – konkrete Floskeln/Tics die der Model trotz
-   Stopliste noch produziert, werden in die Stopliste nachgetragen.
+   Regel noch produziert, werden nachgetragen (positiv formuliert bzw.
+   per zusätzlichem Beispiel, nicht als wörtliches Verbot).
 
 Wenn nach Iteration ≥80% des Zielstils erreicht → Phase 1 sparen.
 

@@ -45,6 +45,19 @@ OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
 # "0" = sofort unloaden für RAM-knappe Setups).
 OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
 
+# Kontextfenster-Groesse in Token. KRITISCH: ohne explizites num_ctx nimmt
+# Ollama seinen winzigen Default (2048-4096) - voellig unabhaengig davon,
+# dass qwen2.5 eigentlich 32768 koennte. Folge: sobald System-Prompt +
+# Graph-Kontext + Chat-History (deque maxlen=50 in state.py) diese Grenze
+# sprengen, schiebt Ollama das Fenster und schneidet VORNE ab - genau dort,
+# wo der System-Prompt mit der "nur lateinische Schrift"-Regel sitzt. Faellt
+# die Regel raus, kommt qwens bilinguale zh/en-Ader durch -> Chinesisch
+# blutet mitten im Gespraech ein. 8192 haelt die 50er-History + Prompt
+# bequem im Fenster und passt noch in 12 GB VRAM neben dem ~9 GB Modell
+# (KV-Cache waechst linear mit num_ctx; groesser ginge, riskiert aber
+# Auslagerung ins RAM = langsam). Per Env feinjustierbar.
+OLLAMA_NUM_CTX = int(os.environ.get("OLLAMA_NUM_CTX", "8192"))
+
 
 # ── Jetzt-Block ───────────────────────────────────────────────────────
 # Wird bei JEDEM Turn frisch gebaut und ganz vorne in den System-Prompt
@@ -102,7 +115,8 @@ _SYSTEM_PROMPT = (
     # produziert robotisches Default-Verhalten. Siehe ki_personality_plan.md
     # Phase 0 für die Begründung.
     #
-    # Length-Target: ~350 Tokens. Wird bei jedem Turn mitgeschickt.
+    # Length-Target: ~410 Tokens (inkl. Few-shot-Beispiel). Wird bei jedem
+    # Turn mitgeschickt.
     "Du bist die KI der ZENTRALE, dem Hauptknotenpunkt für die Projekte von Sasha. "
     "Das Backend läuft auf einem Linux-PC, der Wand-Monitor (Pi 3) zeigt nur das "
     "Dashboard und reicht Sensor-Trigger an dich weiter. "
@@ -122,11 +136,24 @@ _SYSTEM_PROMPT = (
     "Satz reicht, ist ein Satz die richtige Länge. Mehrstufige Aufgaben dürfen "
     "strukturiert sein, aber knapp.\n\n"
 
+    # Bewusst KEINE Negativ-Liste mehr fuer den Service-Nachklapp ("haeng
+    # NICHT 'Soll ich noch...' an"): bei 14B-Instruct-Modellen prallen
+    # Verbote ab UND die woertlich genannte Floskel primt das Modell, sie
+    # auszugeben. Stattdessen positiv formuliert WIE ein Turn endet, plus
+    # ein Few-shot weiter unten, das ein sauberes Ende vormacht. Imitation
+    # eines Beispiels sitzt bei kleinen Modellen zuverlaessiger als eine Regel.
     "## Floskel-Stopliste\n"
-    "Sag NIE: 'Aber gerne!', 'Lassen Sie uns…', 'Hier ist eine Zusammenfassung', "
-    "'Das ist eine großartige Frage', 'Ich helfe dir gerne dabei'. Häng NICHT "
-    "'Soll ich noch X für dich tun?' ans Ende jedes Turns. Frag nur nach, wenn "
-    "du Information brauchst um sinnvoll weiterzukommen – nicht aus Höflichkeit.\n\n"
+    "Keine Aufwärm-Floskeln ('Aber gerne!', 'Lassen Sie uns…', 'Hier ist "
+    "eine Zusammenfassung', 'Das ist eine großartige Frage', 'Ich helfe dir "
+    "gerne dabei'). Beende den Turn mit dem letzten inhaltlichen Satz – kein "
+    "Service-Nachklapp, keine Rückfrage aus Höflichkeit. Frag nur nach, wenn "
+    "dir konkret Information fehlt, um sinnvoll weiterzumachen.\n\n"
+
+    "## So endet ein Turn (Beispiel)\n"
+    "Frage: »Läuft das Backend auf dem Pi?«\n"
+    "Antwort: »Nein, auf dem Linux-PC – der Pi zeigt nur das Dashboard und "
+    "reicht Sensor-Trigger weiter.« ← Hier ist die Antwort fertig. Es folgt "
+    "nichts mehr; kein angehängtes Hilfsangebot.\n\n"
 
     "## Substanz statt Pflichtprogramm\n"
     "Wenn dir an einer Frage etwas Nicht-Offensichtliches auffällt – ein "
@@ -613,6 +640,9 @@ def chat(messages: list, model: str = None, system: str = None) -> str:
         "tools":      TOOLS,
         "stream":     False,
         "keep_alive": OLLAMA_KEEP_ALIVE,
+        # Gleiches num_ctx wie im Streaming-Pfad - sonst haette der
+        # Fallback-Call ein anderes Kontextverhalten als der echte Chat.
+        "options":    {"num_ctx": OLLAMA_NUM_CTX},
     }
     try:
         result   = net.post(f"{OLLAMA_URL}/api/chat", payload)
@@ -702,6 +732,10 @@ def chat_stream(messages: list, model: str = None, system: str = None,
             "tools":      active_tools,
             "stream":     True,
             "keep_alive": OLLAMA_KEEP_ALIVE,
+            # num_ctx explizit setzen, sonst clampt Ollama auf seinen
+            # Mini-Default und schneidet die Sprach-Regel aus dem Fenster
+            # (siehe OLLAMA_NUM_CTX-Doku oben - Ursache fuers Chinesisch).
+            "options":    {"num_ctx": OLLAMA_NUM_CTX},
         }
 
         round_content = []  # Tokens dieser Runde sammeln

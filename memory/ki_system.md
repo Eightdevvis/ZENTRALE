@@ -189,6 +189,21 @@ Docs) sich als eigene Fähigkeit ausgibt.
 - Mini-Embed-Call zieht bge-m3 in den RAM.
 - `OLLAMA_KEEP_ALIVE=30m` hält beide Modelle warm (Env-überschreibbar:
   `-1` = ewig, `0` = sofort unloaden für RAM-knappe Setups).
+- `OLLAMA_NUM_CTX=8192` setzt das Kontextfenster **explizit** (Env-über-
+  schreibbar). Ohne diese Option clampt Ollama auf seinen Mini-Default
+  (2048–4096), obwohl qwen2.5 32768 könnte. Beide Chat-Payloads
+  (`chat_stream` + `chat`) tragen jetzt `options={"num_ctx": …}`.
+  **Hintergrund (2026-05-31):** Das war die Ursache fürs „Chinesisch-
+  Durchbluten" mitten im Gespräch. Sobald System-Prompt + Graph-Kontext +
+  Chat-History (deque `maxlen=50`) den kleinen Default sprengten, schnitt
+  Ollama das Fenster vorne ab — genau wo die „nur lateinische Schrift"-
+  Regel (`_CAPABILITIES_PROMPT` #4) sitzt. Regel weg → qwens bilinguale
+  zh/en-Ader kam durch. Tutor-Reste wurden als Ursache **ausgeschlossen**
+  (Graph CJK-frei, kein aktiver Tutor-Prompt im Chat-Pfad). 8192 hält die
+  50er-History + Prompt im Fenster und passt in 12 GB VRAM neben dem ~9 GB
+  Modell. Plan B falls's wiederkommt: `maxlen` kleiner (Graph hält ältere
+  Fakten eh) oder nicht-bilinguales Modell — beides teurer, daher erst der
+  num_ctx-Fix.
 
 ## Network-Transparenz
 
