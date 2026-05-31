@@ -35,6 +35,8 @@ sonst raten Future-Claude/User wo sie ansetzen sollen.
 | `goToCategory()`        | Data-Collection-View aufrufen (Taste K)             |
 | `toggleChatMute()`      | Stimme an/aus (Shortcut `Alt+S`), merkt sich Zustand in `localStorage` (`zentraleChatMuted`); stoppt beim Muten laufende Wiedergabe |
 | `renderMuteHint()`      | Footer-Hinweis `#chat-mute-hint` an Mute-State angleichen (zeigt nächste Aktion) |
+| `changeVolume(delta)`   | Lautstärke ± (klemmt 0..1), in `localStorage` (`zentraleChatVolume`) + live aufs laufende `<audio>`; Shortcut `Alt+S`+`↑`/`↓` |
+| `showVolumeFeedback()`  | Zeigt kurz „Lautstärke X%" im `#chat-mute-hint`, nach 1.2s zurück auf den Mute-Hinweis |
 | `enqueueSpeak(text)`    | Einen Satz in `speakQueue` legen + `drainSpeakQueue` anstossen |
 | `drainSpeakQueue()`     | Queue seriell: `/api/speak` → `<audio>` → nächster Satz (kein Überlappen) |
 | `stopSpeaking()`        | Queue leeren + laufendes `<audio>` pausieren (auch in `goToMain`) |

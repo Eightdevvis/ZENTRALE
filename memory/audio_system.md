@@ -110,6 +110,15 @@ die Sprachausgabe. Zustand liegt in `localStorage` (`zentraleChatMuted`),
 state-aware Footer-Hinweis `#chat-mute-hint` zeigt, was Alt+S als
 nächstes tut. DOM/JS-Hooks: siehe `ui_hooks.md`, Tasten: `tastatur.md`.
 
+**Lautstärke per `Alt+S` halten + `↑`/`↓`** (Schritt 10%): `chatVolume`
+(0..1) liegt in `localStorage` (`zentraleChatVolume`) und wird auf jedes
+abgespielte `<audio>` angewandt sowie live auf die laufende Wiedergabe.
+Kurzes Feedback „Lautstärke X%" im `#chat-mute-hint`, danach zurück auf
+den Mute-Hinweis. Der Trick gegen Kollision mit dem Mute-Toggle: `Alt+S`
+markiert beim keydown nur den Chord und feuert das Mute erst beim **keyup**
+— aber nur, wenn zwischendurch *keine* Pfeiltaste kam. Tap = Mute,
+Halten + Pfeil = Lautstärke.
+
 > **Main-Mode (panel-ai) ist davon getrennt** – dort ist die Voice noch
 > nicht verdrahtet (siehe `ui_hooks.md` → Voice-Pipeline).
 
