@@ -15,9 +15,9 @@
 # jedes Tool-Use-fähige Ollama-Modell sollte funktionieren.
 #
 # ── Wie Memory-Injection funktioniert ────────────────────────────────
-# Vor jedem Request wird memory.format_for_prompt() aufgerufen und
-# an den System-Prompt angehängt. Die KI "sieht" ihre eigenen
-# gespeicherten Einträge und kann darauf Bezug nehmen.
+# Vor jedem Request wird graph.context_for_query() aufgerufen und
+# an den System-Prompt angehängt. Die KI "sieht" das aktivierte
+# Wissen aus dem Konzept-Graphen und kann darauf Bezug nehmen.
 #
 # ── Konfiguration ────────────────────────────────────────────────────
 #   OLLAMA_URL   – default: http://localhost:11434
@@ -26,12 +26,13 @@
 import os
 import json as _json
 import threading  # Phase D: Auto-Save läuft in Daemon-Threads
+from datetime import datetime  # für den Jetzt-Block (Fix Zeit-Blindheit)
 
 import net           # HTTP-Wrapper mit Terminal-Logging
-import memory        # Persistente KI-Memory (LTM/STM, Legacy)
 import context       # Whitelist-basierter Dateizugriff
 import graph         # Phase G: Konzept-Graph Memory (assoziativ, primary)
 import consolidation # Phase G: Graph-Extraktor
+import kalender              # Kalender-Layer (Termine, Routinen, erlebt)
 
 OLLAMA_URL   = os.environ.get("OLLAMA_URL",   "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
@@ -43,6 +44,53 @@ OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
 # Per Env `OLLAMA_KEEP_ALIVE` überschreibbar (z.B. "-1" = ewig, "10m",
 # "0" = sofort unloaden für RAM-knappe Setups).
 OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
+
+
+# ── Jetzt-Block ───────────────────────────────────────────────────────
+# Wird bei JEDEM Turn frisch gebaut und ganz vorne in den System-Prompt
+# gehängt. Schließt die strukturelle Zeit-Blindheit: vorher lebte das
+# heutige Datum nur als Aktivierungs-Anker im Graphen - die KI konnte
+# Time-Nodes sehen, aber nicht wissen welche davon "jetzt" ist. Resultat
+# war dass sie bei "welcher Tag ist heute" oder "wann war unsere letzte
+# Konversation" aus den aktivierten Time-Knoten geraten hat - und das
+# war oft historisches statt aktuelles.
+#
+# Hart und explizit reinschreiben ist billiger als ein Tool-Call und
+# eindeutig: das LLM kann das nicht halluzinieren weg.
+_WEEKDAYS_DE = ["Montag", "Dienstag", "Mittwoch", "Donnerstag",
+                "Freitag", "Samstag", "Sonntag"]
+_MONTHS_DE = ["", "Januar", "Februar", "März", "April", "Mai", "Juni",
+              "Juli", "August", "September", "Oktober", "November", "Dezember"]
+
+
+def _now_prompt() -> str:
+    """
+    Baut den Jetzt-Block mit Datum/Uhrzeit und der aktuellen Wochen-
+    Ansicht aus dem Kalender. Wird bei jedem Turn frisch erzeugt, damit
+    Datum, Uhrzeit und Termine immer aktuell sind.
+    """
+    now = datetime.now()
+    weekday = _WEEKDAYS_DE[now.weekday()]
+    month   = _MONTHS_DE[now.month]
+    head = (
+        "## Jetzt\n"
+        f"Heute ist {weekday}, der {now.day}. {month} {now.year}. "
+        f"Aktuelle Uhrzeit: {now.strftime('%H:%M')}. "
+        "Dieser Block ist die einzige verlässliche Zeitquelle - aktivierte "
+        "Datums-Knoten aus dem Konzept-Graph sind Erinnerungen an frühere "
+        "Tage, NICHT der aktuelle Tag."
+    )
+    # Wochenkalender mit anhängen. Fehler schlucken - der Kalender ist
+    # optional, der Chat soll auch funktionieren wenn die Datei fehlt
+    # oder kaputt ist.
+    try:
+        week = kalender.render_week_for_prompt()
+        if week:
+            return head + "\n\n" + week
+    except Exception:
+        pass
+    return head
+
 
 _SYSTEM_PROMPT = (
     # Persona / Rolle. Meta-Regeln gegen Lügen/Erfinden stehen separat in
@@ -100,7 +148,7 @@ _SYSTEM_PROMPT = (
 # eingesparte Token reduziert Prompt-Processing-Zeit linear.
 _CAPABILITIES_PROMPT = """## Meta-Regeln
 
-1. Nicht lügen: "speichere/notiere/merke ich" nur wenn du save_memory wirklich rufst. Ein Hintergrund-Extraktor zieht eh nach jedem Turn Fakten in den Graphen - du kannst also "notiert, läuft in den Graphen" sagen ohne Tool-Call, aber NICHT "ich speichere das ab" ohne Tool-Call.
+1. Nicht lügen über Memory-Aktionen: ein Hintergrund-Extraktor zieht nach jedem Turn automatisch Fakten in den Konzept-Graphen. Du kannst sagen "notiert, läuft in den Graphen" - das stimmt. Aber NICHT "ich speichere das gerade ab als X" oder ähnliche Tool-Call-Imitationen.
 2. Nicht erfinden über Sasha: was du über Sasha weißt, steht im "## Aktiviertes Wissen"-Block unten. Steht es nicht dort → sag direkt "noch nichts gespeichert" statt zu raten. Keine Hobbys, Berufe, Familie, Wohnort frei erfinden.
 3. Nicht erfinden über dich selbst: deine Tools, Fähigkeiten und Grenzen stehen ebenfalls im "## Aktiviertes Wissen". Was nicht drin steht, hast du nicht — auch wenn dir aus dem Pretraining APIs, Skills oder Endpunkte vertraut vorkommen (Cloud-Assistant-Schemata wie Claude/ChatGPT). Im Zweifel "kann ich nicht".
 4. Nur lateinische Schrift, Deutsch (Englisch wenn der User Englisch tippt). Keine CJK-Zeichen.
@@ -127,37 +175,107 @@ Diese Nachricht kam per Mikrofon und wurde durch Whisper transkribiert. Transkri
 # Damit weiß das Modell welche Tools es aufrufen darf und was sie tun.
 
 TOOLS = [
+    # save_memory wurde mit dem Legacy-LTM-Pfad entfernt. Der Graph-
+    # Extraktor läuft eh nach jedem Turn automatisch - die KI braucht
+    # kein manuelles Speicher-Tool mehr.
     {
         "type": "function",
         "function": {
-            "name": "save_memory",
+            "name": "read_calendar",
             "description": (
-                "Speichert eine wichtige Information persistent in der Memory. "
-                "Nutze dies proaktiv wenn du Fakten über Sasha oder Sashas Projekte lernst, "
-                "TODOs erkennst, oder technische Details für spätere Gespräche relevant sind. "
-                "Auch wenn Sasha sagt 'merk dir das' oder ähnliches."
+                "Liest Kalender-Einträge in einem Zeitraum (Termine, Routinen, "
+                "Erlebt-Layer). Nutze dies wenn der User nach Terminen, Plänen, "
+                "Vergangenheit oder regelmäßigen Aktivitäten fragt und der Zeitraum "
+                "größer als 'diese Woche' ist (die kriegt die KI eh im Jetzt-Block). "
+                "Beispiele: 'was hatte ich letzten Monat?', 'wann ist mein nächster Arzt?'"
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "content": {
+                    "start_date": {
                         "type":        "string",
-                        "description": "Der zu speichernde Inhalt – präzise, ein Satz",
+                        "description": "Start-Datum YYYY-MM-DD (inklusive)",
                     },
-                    "type": {
+                    "end_date": {
                         "type":        "string",
-                        "enum":        ["fact", "preference", "commitment", "technical", "capability", "limit"],
-                        "description": (
-                            "fact=Fakt über Person/Projekt, "
-                            "preference=Vorliebe oder gewünschter Stil des Users, "
-                            "commitment=Versprochene Aufgabe / offenes TODO, "
-                            "technical=Technisches Detail (Config, Code, System), "
-                            "capability=Etwas das du nachweislich kannst, "
-                            "limit=Etwas das du NICHT kannst (vom User korrigiert) - WICHTIG damit du es dir merkst"
-                        ),
+                        "description": "End-Datum YYYY-MM-DD (inklusive)",
+                    },
+                    "layers": {
+                        "type":        "array",
+                        "items":       {"type": "string"},
+                        "description": "Optional: nur diese Layer (z.B. ['termine']). Default: alle.",
                     },
                 },
-                "required": ["content", "type"],
+                "required": ["start_date", "end_date"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_calendar_entry",
+            "description": (
+                "Trägt einen Einmal-Eintrag in einen Kalender-Layer ein. "
+                "Nutze dies wenn der User einen Termin nennt, eine Frist, ein "
+                "Ereignis: 'Arzt am 10. Juni um 14:30', 'TÜV-Frist 3. Juni'. "
+                "Im Zweifel Layer 'termine'. Datum-Format: YYYY-MM-DD."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "layer": {
+                        "type":        "string",
+                        "description": "Layer-Name: 'termine' für Einmal-Termine/Fristen, sonst spezifisch",
+                    },
+                    "day": {
+                        "type":        "string",
+                        "description": "YYYY-MM-DD",
+                    },
+                    "label": {
+                        "type":        "string",
+                        "description": "Kurzer Titel des Eintrags",
+                    },
+                    "time": {
+                        "type":        "string",
+                        "description": "Optional HH:MM (24h). Weglassen wenn ganztags.",
+                    },
+                },
+                "required": ["layer", "day", "label"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_calendar_routine",
+            "description": (
+                "Trägt eine Wiederholungs-Regel in einen Kalender-Layer ein (iCal RRULE). "
+                "Nutze dies bei regelmäßigen Aktivitäten: 'jeden Dienstag Geige', "
+                "'jeden 1. im Monat Miete', 'Mo/Mi/Fr Sport'. Layer-Default: 'routinen'. "
+                "RRULE-Beispiele: FREQ=WEEKLY;BYDAY=TU | FREQ=WEEKLY;BYDAY=MO,WE,FR | "
+                "FREQ=MONTHLY;BYMONTHDAY=1 | FREQ=MONTHLY;BYDAY=2TU (2. Dienstag/Monat)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "layer": {
+                        "type":        "string",
+                        "description": "Layer-Name, im Zweifel 'routinen'",
+                    },
+                    "label": {
+                        "type":        "string",
+                        "description": "Kurzer Titel",
+                    },
+                    "rrule": {
+                        "type":        "string",
+                        "description": "iCal RRULE ohne DTSTART, z.B. 'FREQ=WEEKLY;BYDAY=TU'",
+                    },
+                    "time": {
+                        "type":        "string",
+                        "description": "Optional HH:MM (24h)",
+                    },
+                },
+                "required": ["layer", "label", "rrule"],
             },
         },
     },
@@ -233,16 +351,45 @@ def _dispatch_tool(name: str, args: dict) -> str:
     Reine Tool-Logik ohne Logging - wird von _execute_tool umschlossen.
     Hier neue Tools eintragen.
     """
-    if name == "save_memory":
-        return memory.save(
-            content=args.get("content", ""),
-            type=args.get("type", "fact"),
-        )
-    elif name == "read_file":
+    if name == "read_file":
         return context.read_file(args.get("path", ""))
     elif name == "list_files":
         files = context.list_available_files()
         return "Verfügbare Dateien:\n" + "\n".join(f"  {f}" for f in files)
+    elif name == "read_calendar":
+        from datetime import date as _date
+        try:
+            start = _date.fromisoformat(args.get("start_date", ""))
+            end   = _date.fromisoformat(args.get("end_date", ""))
+        except ValueError as e:
+            return f"[Fehler: ungültiges Datum – {e}]"
+        layers = args.get("layers") or None
+        days = kalender.entries_in_range(start, end, layers=layers)
+        if not days:
+            return "Kein Eintrag in diesem Zeitraum."
+        lines = []
+        for day_iso, entries in days.items():
+            lines.append(day_iso + ":")
+            for e in entries:
+                t = f"{e['time']} " if e.get("time") else ""
+                lines.append(f"  [{e['layer']}] {t}{e['label']}")
+        return "\n".join(lines)
+    elif name == "add_calendar_entry":
+        ok = kalender.add_entry(
+            layer = args.get("layer", "termine"),
+            day   = args.get("day", ""),
+            label = args.get("label", ""),
+            time  = args.get("time"),
+        )
+        return "OK, eingetragen." if ok else "[Fehler: Layer existiert nicht oder Eingabe ungültig]"
+    elif name == "add_calendar_routine":
+        ok = kalender.add_routine(
+            layer     = args.get("layer", "routinen"),
+            label     = args.get("label", ""),
+            rrule_str = args.get("rrule", ""),
+            time      = args.get("time"),
+        )
+        return "OK, Routine eingetragen." if ok else "[Fehler: Layer existiert nicht oder rrule ungültig]"
     else:
         return f"[Unbekanntes Tool: {name}]"
 
@@ -336,7 +483,14 @@ def warmup_async():
     """
     Feuert warmup() in einem Daemon-Thread. Non-blocking - der Caller
     läuft sofort weiter. Wird in core/main.py beim Boot aufgerufen.
+
+    Zusätzlich: Kalender-Datei + Default-Layer sicherstellen, sodass
+    der Jetzt-Block beim ersten Chat schon eine Wochen-Ansicht hat.
     """
+    try:
+        kalender.ensure_init()
+    except Exception as e:
+        state.push_log(f"[calendar] init fehlgeschlagen: {e}")
     thread = threading.Thread(target=warmup, daemon=True, name='ai-warmup')
     thread.start()
 
@@ -372,101 +526,26 @@ def _last_user_query(messages: list) -> str | None:
 
 
 # ╔══════════════════════════════════════════════════════════════════════╗
-# ║  Phase D: Asynchroner Auto-Save                                      ║
+# ║  Asynchroner Auto-Save in den Konzept-Graphen (Phase G)              ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 #
 # Nach jedem vollständigen Chat-Turn (User-Message + AI-Antwort
-# komplett gestreamt) feuert ein Hintergrund-Task, der:
-#   1. Beide Seiten ans STM-Listen-Ende hängt (memory.stm_append)
-#   2. Den rollenden Session-Summary via kleinen LLM-Call aktualisiert
-#
-# WICHTIG: läuft als Daemon-Thread, NICHT in der Request-Antwort-Latenz.
-# Der User sieht die Antwort wie gehabt sofort - das Memory-Update
-# tropft danach im Hintergrund rein, analog wie das menschliche
-# Gedächtnis Erlebnisse minuten- bis stundenverzögert konsolidiert.
-#
-# Was hier NICHT passiert: Klassifizierung "ist das LTM-würde?". Das
-# ist Phase E (Konsolidierung) - dort wird STM in Ruhe durchgesehen
-# und gezielt nach LTM promotet.
-
-_SUMMARY_SYSTEM_PROMPT = (
-    "Du bist ein Memory-Summarizer für eine Chat-Session zwischen einer "
-    "KI und ihrem User. Aktualisiere den rollenden Summary mit dem neuen "
-    "Turn. Regeln:\n"
-    "- Maximal 500 Zeichen.\n"
-    "- Narrativ, in dritter Person ('Sasha hat ...', 'die KI hat ...').\n"
-    "- Fokus auf Fakten die der User AUSGESPROCHEN hat - nicht auf das "
-    "  was die KI darüber behauptet hat.\n"
-    "- Smalltalk und Höflichkeitsfloskeln rauslassen.\n"
-    "- WICHTIG: Schreibe NIE Phrasen wie 'die KI hat Fakten gesammelt', "
-    "  'die KI hat sich gemerkt', 'die KI hat gespeichert', wenn das im "
-    "  Konversationstext bloß behauptet aber nicht durch einen sichtbaren "
-    "  Tool-Call belegt wurde. Das wäre Spekulation und führt zu "
-    "  Konfabulations-Loops im nächsten Turn. Wenn unklar: bleib bei dem "
-    "  was der User wörtlich gesagt hat.\n"
-    "- Wenn der bisherige Summary noch leer war: einen frischen schreiben.\n"
-    "- Schreib NUR den neuen Summary-Text, nichts drumherum, keine "
-    "  Erklärung, keine Aufzählung."
-)
-
-
-def _generate_session_summary(prev_summary: str, user_msg: str, ai_msg: str) -> str:
-    """
-    Macht einen kurzen LLM-Call der den rollenden STM-Summary mit dem
-    neuen Turn aktualisiert. Direkt gegen Ollama, keine Tools, kein
-    Streaming - das ist eine interne Maintenance-Operation, der User
-    sieht das Ergebnis nie direkt.
-
-    Bei Fehler (Ollama down, Timeout): den alten Summary zurückgeben,
-    damit der Auto-Save trotzdem voranschreitet und die stm_list wenigstens
-    den neuen Turn kriegt.
-    """
-    user_msg = (user_msg or '').strip()
-    ai_msg   = (ai_msg   or '').strip()
-    if not user_msg and not ai_msg:
-        return prev_summary
-
-    body = (
-        f"Bisheriger Summary:\n{prev_summary or '(noch leer)'}\n\n"
-        f"Neuer Turn:\n"
-        f"User: {user_msg}\n"
-        f"AI:   {ai_msg}\n\n"
-        f"Neuer Summary:"
-    )
-
-    try:
-        resp = net.post(
-            f"{OLLAMA_URL}/api/chat",
-            {
-                "model":    OLLAMA_MODEL,
-                "messages": [
-                    {"role": "system", "content": _SUMMARY_SYSTEM_PROMPT},
-                    {"role": "user",   "content": body},
-                ],
-                "stream":     False,
-                "keep_alive": OLLAMA_KEEP_ALIVE,
-            },
-            timeout=60,
-        )
-        new = resp.get("message", {}).get("content", "").strip()
-        return new or prev_summary
-    except Exception:
-        return prev_summary
-
+# komplett gestreamt) feuert ein Hintergrund-Task, der den Turn durch
+# den Graph-Extraktor schickt und Konzepte+Edges in den Graphen
+# merged. Läuft als Daemon-Thread, NICHT in der Request-Antwort-Latenz
+# - der User sieht die Antwort sofort, das Memory-Update tropft
+# Sekunden später hinterher.
 
 def _async_save_turn(user_msg: str, ai_msg: str):
     """
     Fire-and-forget: User+AI-Turn extrahieren und in den Konzept-
     Graphen einarbeiten (Phase G).
 
-    Vorher (Phase D): STM-Liste + LLM-Summary-Generation. Beides ist
-    weggefallen mit dem Graph - der LLM-Extraktor produziert direkt
-    strukturierte Konzepte+Edges, und Recent-Context kommt automatisch
-    durch Aktivierung des heutigen Time-Knotens.
-
-    Wir behalten stm_append für Rohaufzeichnung der Turns - das ist
-    eine Art Konversations-Log das beim Debug nützlich ist und einen
-    Backup-Pfad gibt falls der Extraktor mal was übersieht.
+    Der LLM-Extraktor produziert strukturierte Konzepte+Edges, die
+    via graph.add_turn_extraction in den Graphen gemerged werden
+    (mit Alias-Resolution und Sanity-Filter). Recent-Context kommt
+    automatisch durch Aktivierung des heutigen Time-Knotens, daher
+    keine separate STM-Schicht mehr.
 
     Läuft als Daemon-Thread: blockiert nichts, der User hat die
     Antwort schon lange. Fehler werden geloggt, nicht weitergereicht.
@@ -476,15 +555,6 @@ def _async_save_turn(user_msg: str, ai_msg: str):
 
     def _do_save():
         try:
-            # 1. Roh-Turns ins STM-Log (Debug/Backup-Pfad)
-            memory.stm_append(role='user', text=user_msg)
-            if ai_msg and ai_msg.strip():
-                memory.stm_append(role='ai', text=ai_msg)
-
-            # 2. Phase G: LLM-Extraktor zieht Konzepte+Edges raus und
-            #    merged sie in den Graphen. Das ist der teure Teil
-            #    (LLM-Call, paar Sekunden) - aber wir sind im
-            #    Hintergrund-Thread, User merkt nichts.
             consolidation.extract_turn_into_graph(user_msg, ai_msg)
         except Exception as e:
             try:
@@ -531,7 +601,9 @@ def chat(messages: list, model: str = None, system: str = None) -> str:
     # drei separaten Schichten. Aktivierungs-Spread holt was relevant
     # ist, inklusive Zeit-Anker und Sasha-Profil über die Graph-Topologie.
     mem_ctx = graph.context_for_query(user_query)
-    sys_prompt = (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
+    # Jetzt-Block ganz vorne - die KI soll wissen welcher Tag heute ist,
+    # bevor sie irgendetwas anderes liest (siehe _now_prompt-Doku).
+    sys_prompt = _now_prompt() + "\n\n" + (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
     if mem_ctx:
         sys_prompt += "\n\n" + mem_ctx
 
@@ -602,7 +674,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         # LTM-Top-K). Der Graph weiß welche Konzepte mit der aktuellen
         # Frage assoziiert sind und liefert sie alle mit Beziehungen.
         mem_ctx    = graph.context_for_query(user_query)
-        sys_prompt = (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
+        # Jetzt-Block ganz vorne (siehe _now_prompt-Doku).
+        sys_prompt = _now_prompt() + "\n\n" + (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
         if mem_ctx:
             sys_prompt += "\n\n" + mem_ctx
         # Mic-Hinweis ans Ende - sieht die KI direkt vor der aktuellen
@@ -610,7 +683,9 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         if via_mic:
             sys_prompt += "\n\n" + _MIC_INPUT_HINT
     else:
-        sys_prompt = system or _SYSTEM_PROMPT
+        # Tutor-Modus: eigener System-Prompt, aber Jetzt-Block kriegt er
+        # trotzdem - "welcher Tag ist heute" ist sprach-/modus-unabhängig.
+        sys_prompt = _now_prompt() + "\n\n" + (system or _SYSTEM_PROMPT)
 
     # Arbeits-Nachrichtenliste – wird pro Runde mit Tool-Ergebnissen erweitert
     working_messages = [

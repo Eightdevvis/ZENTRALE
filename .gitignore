@@ -8,6 +8,9 @@ data/tts_model/
 # Auto-generierte Daten - persoenliche Logs + KI-Memory, gehoeren nicht
 # ins Repo. Siehe memory/datei_zugriffe.md.
 data/*.json
+# Graph-/Memory-Backups (z.B. ai_graph.json.bak.<timestamp>) - ebenfalls
+# privater KI-Inhalt, niemals committen.
+data/*.bak*
 
 # lokale Debug-Artefakte (Screenshots, Scratchpad) — gehoeren nicht ins Repo
 /*.png

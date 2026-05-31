@@ -102,12 +102,13 @@ während des SSE-Streamings**:
 Effekt: die Stimme beginnt nach dem **ersten** fertigen Satz, nicht erst
 wenn die ganze Antwort generiert ist – fühlt sich „live" an.
 
-**Mute-Button** (`#chat-mute-btn`, neben dem Mic-Button): Toggle 🔊/🔇.
-Zustand liegt in `localStorage` (`zentraleChatMuted`), übersteht also
-Reload und Kiosk-Neustart. Beim Stummschalten bricht `stopSpeaking()`
-die laufende Wiedergabe sofort ab und leert die Queue. `goToMain()` (Chat
-verlassen) ruft ebenfalls `stopSpeaking()`. DOM/JS-Hooks: siehe
-`ui_hooks.md`.
+**Mute per `Alt+S`** (kein Button, der Pi-Kiosk hat keine Maus): toggelt
+die Sprachausgabe. Zustand liegt in `localStorage` (`zentraleChatMuted`),
+übersteht also Reload und Kiosk-Neustart. Beim Stummschalten bricht
+`stopSpeaking()` die laufende Wiedergabe sofort ab und leert die Queue.
+`goToMain()` (Chat verlassen) ruft ebenfalls `stopSpeaking()`. Der
+state-aware Footer-Hinweis `#chat-mute-hint` zeigt, was Alt+S als
+nächstes tut. DOM/JS-Hooks: siehe `ui_hooks.md`, Tasten: `tastatur.md`.
 
 > **Main-Mode (panel-ai) ist davon getrennt** – dort ist die Voice noch
 > nicht verdrahtet (siehe `ui_hooks.md` → Voice-Pipeline).

@@ -24,3 +24,6 @@ soundfile
 
 # HTTP-Client (für Whisper/TTS Services, falls nicht über stdlib)
 requests
+
+# Recurrence-Rules (iCal RRULE) für Routinen im Kalender-System
+python-dateutil

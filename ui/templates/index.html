@@ -626,17 +626,6 @@
       opacity: 0.3;
       cursor: not-allowed;
     }
-    /* Mute-Button im stummgeschalteten Zustand: grau-neutral statt gruen,
-       damit auf einen Blick klar ist dass die Stimme aus ist. */
-    .chat-mic-btn.muted {
-      border-color: rgba(136, 136, 136, 0.55);
-      color: #888;
-      background: rgba(136, 136, 136, 0.08);
-    }
-    .chat-mic-btn.muted:hover {
-      background: rgba(136, 136, 136, 0.16);
-      box-shadow: 0 0 8px rgba(136, 136, 136, 0.35);
-    }
 
     .chat-input {
       background: transparent;
@@ -1020,11 +1009,9 @@
                  autocomplete="off" spellcheck="false" placeholder="Nachricht eingeben..."/>
           <button type="button" id="chat-mic-btn" class="chat-mic-btn"
                   title="Mikrofon (Click an, nochmal Click stoppt + transkribiert)">●</button>
-          <button type="button" id="chat-mute-btn" class="chat-mic-btn"
-                  title="Stimme stummschalten (Toggle, wird gemerkt)">&#128266;</button>
           <span class="chat-status" id="chat-status">checking...</span>
         </div>
-        <p class="form-hint">Enter senden &nbsp;·&nbsp; Alt+M Mic &nbsp;·&nbsp; /clear &nbsp;·&nbsp; Esc zurück</p>
+        <p class="form-hint">Enter senden &nbsp;·&nbsp; Alt+M Mic &nbsp;·&nbsp; <span id="chat-mute-hint">Alt+S Ton aus</span> &nbsp;·&nbsp; /clear &nbsp;·&nbsp; Esc zurück</p>
       </div>
     </div>
 
@@ -1755,6 +1742,12 @@
         e.preventDefault();
         toggleChatMic();
       }
+      // Alt+S = Mute-Toggle fuer die Stimme. Alt als Modifier, damit kein
+      // 's' ins Eingabefeld getippt wird (gleiche Logik wie Alt+M beim Mic).
+      if (e.altKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        toggleChatMute();
+      }
     });
     chatInputEl.addEventListener('input', () => {
       // User hat etwas getippt → ab jetzt Tastatur-Eingabe
@@ -1774,15 +1767,14 @@
     // synthetisiert - ohne serielle Abarbeitung wuerden sich mehrere
     // Saetze ueberlappen.
 
-    // Icon + Titel des Mute-Buttons an den chatMuted-State angleichen.
-    function renderMuteBtn() {
-      const btn = document.getElementById('chat-mute-btn');
-      if (!btn) return;
-      btn.innerHTML = chatMuted ? '&#128263;' : '&#128266;';  // 🔇 / 🔊
-      btn.classList.toggle('muted', chatMuted);
-      btn.title = chatMuted
-        ? 'Stimme ist aus – Click zum Einschalten'
-        : 'Stimme ist an – Click zum Stummschalten';
+    // Mute-Hinweis im Shortcut-Footer an den State angleichen: zeigt, was
+    // Alt+S als NAECHSTES tut. Nicht gemutet -> "Ton aus" (schaltet stumm),
+    // gemutet -> "Ton an" (schaltet wieder ein). Reines Tastatur-Feedback,
+    // weil der Pi-Kiosk keine Maus hat (kein klickbarer Button mehr).
+    function renderMuteHint() {
+      const el = document.getElementById('chat-mute-hint');
+      if (!el) return;
+      el.textContent = chatMuted ? 'Alt+S Ton an' : 'Alt+S Ton aus';
     }
 
     // Mute umschalten und in localStorage merken. Beim Stummschalten sofort
@@ -1792,7 +1784,7 @@
       chatMuted = !chatMuted;
       localStorage.setItem('zentraleChatMuted', chatMuted ? '1' : '0');
       if (chatMuted) stopSpeaking();
-      renderMuteBtn();
+      renderMuteHint();
     }
 
     // Laufende Wiedergabe abbrechen und alle ausstehenden Saetze verwerfen.
@@ -1872,8 +1864,7 @@
       return [sentences, text.slice(lastIndex)];
     }
 
-    renderMuteBtn();
-    document.getElementById('chat-mute-btn').addEventListener('click', toggleChatMute);
+    renderMuteHint();
 
     async function goToCategory() {
       if (categories.length === 0) {

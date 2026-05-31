@@ -19,7 +19,7 @@ sonst raten Future-Claude/User wo sie ansetzen sollen.
 | `#terminal`         | stdout-Footer (volle Breite)                        |
 | `#chat-input`       | Chat-Texteingabe                                    |
 | `#chat-mic-btn`     | Mic-Toggle (Aufnahme → Whisper), Alt+M              |
-| `#chat-mute-btn`    | Stimme an/aus (🔊/🔇), Toggle in `localStorage`     |
+| `#chat-mute-hint`   | State-aware Footer-Hinweis für Alt+S (Mute); kein Button (Pi hat keine Maus) |
 | `#chat-status`      | Ollama-Verfügbarkeitsanzeige im Chat-Mode           |
 
 ## JS-Hooks
@@ -33,7 +33,8 @@ sonst raten Future-Claude/User wo sie ansetzen sollen.
 | `goToChat()`            | Chat-Panel rein, AI-Panel raus, History laden       |
 | `goToTutor()`           | Tutor-Panel rein, Tutor-Session starten             |
 | `goToCategory()`        | Data-Collection-View aufrufen (Taste K)             |
-| `toggleChatMute()`      | Stimme an/aus, merkt sich Zustand in `localStorage` (`zentraleChatMuted`); stoppt beim Muten laufende Wiedergabe |
+| `toggleChatMute()`      | Stimme an/aus (Shortcut `Alt+S`), merkt sich Zustand in `localStorage` (`zentraleChatMuted`); stoppt beim Muten laufende Wiedergabe |
+| `renderMuteHint()`      | Footer-Hinweis `#chat-mute-hint` an Mute-State angleichen (zeigt nächste Aktion) |
 | `enqueueSpeak(text)`    | Einen Satz in `speakQueue` legen + `drainSpeakQueue` anstossen |
 | `drainSpeakQueue()`     | Queue seriell: `/api/speak` → `<audio>` → nächster Satz (kein Überlappen) |
 | `stopSpeaking()`        | Queue leeren + laufendes `<audio>` pausieren (auch in `goToMain`) |

@@ -28,11 +28,14 @@ ohne Inputs).
 |-----------|-------------------------------------------------------------|
 | `Enter`   | Nachricht senden                                            |
 | `Alt + M` | Mikrofon-Toggle (Aufnahme an/aus → Whisper-Transkription)   |
+| `Alt + S` | Stimme stumm/an (Auto-Speak der KI-Antwort, Zustand gemerkt) |
 | `ESC`     | zurück zum Haupt-Dashboard                                  |
 
-Alt-Modifier verhindert dass das `m` als Buchstabe ins Input-Feld geht.
-Same Mechanik wie Click auf `#chat-mic-btn`. Siehe `dashboard.md`,
-`audio_system.md`.
+Alt-Modifier verhindert dass das `m`/`s` als Buchstabe ins Input-Feld
+geht. `Alt + S` toggelt die Sprachausgabe (Zustand in `localStorage`,
+übersteht Reload/Kiosk-Neustart) — bewusst **nur** als Shortcut, kein
+klickbarer Button, weil der Pi-Kiosk keine Maus hat. Der Footer-Hinweis
+`#chat-mute-hint` ist state-aware. Siehe `dashboard.md`, `audio_system.md`.
 
 ## System-Hotkeys (Pi-Kiosk, OS-Ebene)
 
