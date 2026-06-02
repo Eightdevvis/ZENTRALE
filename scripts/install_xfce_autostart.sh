@@ -186,6 +186,15 @@ cat > "$HOME/.xprofile" << 'EOF'
 # Force HDMI output to the monitor's native 1080p mode (otherwise we
 # land in 1024x768 with a shifted/pink image on the kiosk monitor).
 xrandr --output HDMI-1 --mode 1920x1080 --rate 60 || true
+
+# Bildschirm-Blanking: kein X-Screensaver, Monitor erst nach 20 min
+# (1200s) per DPMS aus — statt der X-Defaults (waren 600s = 10 min).
+# Das Wand-Dashboard soll lange anbleiben. Spaeter kann der Geraeusch-/
+# PIR-Sensor den Schirm per Motion wieder aufwecken (dann ggf. wieder
+# kuerzer stellen + Wake-on-Motion verdrahten).
+xset s off || true
+xset +dpms || true
+xset dpms 0 0 1200 || true
 EOF
 
 # --- zentrale.desktop: Kiosk-Autostart ---------------------------------------
