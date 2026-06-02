@@ -87,14 +87,23 @@ mkdir -p "$AUTOSTART_DIR" "$XFCONF_DIR"
 # muss deshalb auf den PC zeigen, nicht mehr auf localhost.
 #
 # Quelle der URL: env-Variable ZENTRALE_BACKEND_URL (z.B.
-# "http://10.117.205.127:5000"). Default ist weiterhin localhost,
-# damit das Skript ohne Argumente lokal sinnvoll bleibt (alt-Modus
-# / Solo-Test direkt am PC).
+# "http://192.168.50.1:5000"). Default ist die feste PC-LAN-IP
+# (192.168.50.1, siehe memory/topologie.md) — denn der Normalfall
+# fuer dieses Skript IST der Pi-Kiosk, und der MUSS auf den PC zeigen,
+# nicht auf sich selbst.
 #
-# Aenderung der IP nach Hotspot-Wechsel: Skript neu aufrufen mit
-# neuer URL, alte zentrale.desktop wird einfach ueberschrieben.
+# Historie/Footgun: bis 2026-06-02 war der Default localhost. Wer
+# install_xfce_autostart.sh ohne ZENTRALE_BACKEND_URL aufrief (genau so
+# stand's in der deploy_pi.sh-Anleitung), bekam einen Kiosk der das
+# Backend auf der Pi SELBST suchte -> "unable to connect" den ganzen
+# Tag, egal wie gesund der PC war. Default jetzt = LAN-IP, damit der
+# Footgun nicht mehr zuschlagen kann.
+#   Solo-Test direkt am PC: ZENTRALE_BACKEND_URL=http://localhost:5000 setzen.
+#
+# Aenderung der IP: Skript neu aufrufen (ggf. mit neuer URL), die alte
+# zentrale.desktop wird einfach ueberschrieben.
 # ---------------------------------------------------------------------
-BACKEND_URL="${ZENTRALE_BACKEND_URL:-http://localhost:5000}"
+BACKEND_URL="${ZENTRALE_BACKEND_URL:-http://192.168.50.1:5000}"
 echo "Kiosk-Backend-URL: $BACKEND_URL"
 
 # Dediziertes Firefox-Profil fuer den Kiosk. Liegt unter $HOME, gehoert
@@ -186,32 +195,39 @@ EOF
 # Varianten (auch .disabled) werden geloescht und durch das frische
 # File ersetzt.
 #
-# Der Exec wartet bis der Core auf Port 5000 antwortet, BEVOR Firefox
-# startet — sonst sieht der User initial "Connection refused" und muesste
-# manuell F5 druecken. Timeout 240s (= 4 min) damit der Kiosk auch dann
-# noch sauber hochkommt wenn der PC erst per WoL geweckt werden muss:
-# zentrale-wake-pc.service schickt das Magic-Packet, dann braucht der
-# PC BIOS + LUKS-Eingabe + Pop-Boot + systemd-Services. Realistisch
-# 90-180s, mit Puffer 240s. Wenn der PC trotzdem nicht hochkommt,
-# laeuft Firefox in die Fehlerseite — der User kann dann den
-# Hotkey nutzen statt einen dunklen Bildschirm zu kriegen.
-rm -f "$AUTOSTART_DIR/zentrale.desktop.disabled"
-# Heredoc OHNE Quotes -> $BACKEND_URL und $KIOSK_PROFILE_DIR werden expandiert.
-# Die `$(seq ...)`-Substitution soll dagegen LITERAL im File stehen
-# (wird erst beim Firefox-Start ausgewertet, nicht jetzt), deshalb
-# escapen wir das Dollar-Zeichen.
+# Der Exec ist eine SELBSTHEILENDE Schleife statt eines Einmal-Starts:
 #
-# --profile <dir>: Firefox nutzt das dedizierte Kiosk-Profil mit der
-# user.js die wir weiter unten schreiben (Mic-Insecure-Prefs).
-# --no-remote: damit Firefox nicht versucht eine evtl. parallel laufende
-# Default-Instanz zu reusieren — der Kiosk soll garantiert mit dem
-# Kiosk-Profil starten.
+#   1. Warten bis der Core auf $BACKEND_URL antwortet (endlos, in 2s-
+#      Schritten) BEVOR Firefox startet — sonst Firefox-Fehlerseite,
+#      die nie von selbst neu laedt.
+#   2. Firefox-Kiosk starten.
+#   3. Solange Firefox laeuft, das Backend weiter pollen. Faellt es
+#      3x in Folge (~30s) aus — PC im Suspend, Netz-Abriss, Deploy-
+#      Restart — Firefox killen, zurueck zu Schritt 1. Sobald das
+#      Backend wieder da ist, kommt der Kiosk frisch hoch.
+#
+# Warum nicht der alte "240s warten, dann EINMAL starten"-Ansatz:
+# Die Pi bootet regelmaessig VOR dem PC (PC braucht BIOS + manuelle
+# LUKS-Eingabe + Pop-Boot + Warmup). Lief das 240s-Fenster ab bevor
+# der PC bereit war, hing Firefox FUER IMMER auf der Fehlerseite —
+# genau der Bug vom 2026-06-02. Die Endlos-Schleife kennt kein
+# Timeout und erholt sich auch nach spaetem PC-Start oder Suspend.
+rm -f "$AUTOSTART_DIR/zentrale.desktop.disabled"
+# Heredoc OHNE Quotes -> $BACKEND_URL und $KIOSK_PROFILE_DIR werden JETZT
+# (zur Install-Zeit) in die Exec-Zeile eingebacken. Die Runtime-Variablen
+# der Schleife ($U, $P, $F, $n) und die Subshells muessen dagegen LITERAL
+# im File landen (werden erst beim Kiosk-Start ausgewertet), deshalb sind
+# deren Dollar-Zeichen mit \$ escaped.
+#
+# --profile <dir>: dediziertes Kiosk-Profil mit der user.js von weiter
+# unten (Mic-Insecure-Prefs). --no-remote: keine parallele Default-
+# Instanz reusieren, garantiert Start mit dem Kiosk-Profil.
 cat > "$AUTOSTART_DIR/zentrale.desktop" << EOF
 [Desktop Entry]
 Type=Application
 Name=ZENTRALE Kiosk
-Comment=Firefox auf das ZENTRALE-Dashboard, nach Boot automatisch
-Exec=bash -c 'for i in \$(seq 1 240); do curl -fs ${BACKEND_URL}/ >/dev/null && break; sleep 1; done; firefox-esr --no-remote --profile ${KIOSK_PROFILE_DIR} --kiosk ${BACKEND_URL}'
+Comment=Firefox auf das ZENTRALE-Dashboard, selbstheilend (wartet aufs Backend, laedt bei Abriss neu)
+Exec=bash -c 'U=${BACKEND_URL}; P=${KIOSK_PROFILE_DIR}; while true; do until curl -fs "\$U/" >/dev/null 2>&1; do sleep 2; done; firefox-esr --no-remote --profile "\$P" --kiosk "\$U" & F=\$!; n=0; while kill -0 \$F 2>/dev/null; do if curl -fs "\$U/" >/dev/null 2>&1; then n=0; else n=\$((n+1)); [ \$n -ge 3 ] && { kill \$F 2>/dev/null; break; }; fi; sleep 10; done; sleep 2; done'
 X-GNOME-Autostart-enabled=true
 EOF
 

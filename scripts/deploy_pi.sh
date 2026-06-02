@@ -70,4 +70,4 @@ echo "  ssh $TARGET \"sudo journalctl -u whisper.service -u tts.service -f\""
 echo
 echo "Einmalig auf dem Pi noch erledigen (falls noch nicht):"
 echo "  ssh $TARGET 'sudo bash $REMOTE_DIR/scripts/install_pi_sudoers.sh'  # Notaus + autopull sudo"
-echo "  ssh $TARGET 'bash $REMOTE_DIR/scripts/install_xfce_autostart.sh'   # Kiosk + Hotkey"
+echo "  ssh $TARGET 'ZENTRALE_BACKEND_URL=http://192.168.50.1:5000 bash $REMOTE_DIR/scripts/install_xfce_autostart.sh'   # Kiosk + Hotkey (URL = PC-LAN-IP, sonst localhost-Footgun!)"

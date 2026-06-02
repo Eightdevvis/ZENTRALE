@@ -117,12 +117,16 @@ und das Script wartet bis zu 90s auf eine ZENTRALE-Antwort.
 
 Konfig per Env-Vars: `PC_MAC`, `LAN_BROADCAST`, `PROBE_URL`.
 
-**Kiosk-Wartezeit angepasst:** Der Firefox-Kiosk-Autostart
-(`install_xfce_autostart.sh`) wartet bis zu 240s (4 min) per `curl`
-auf das Backend, bevor Firefox startet. Grund: PC-Boot inkl. LUKS-
-Eingabe + Pop-Boot + systemd-Services kann 90-180s dauern, mit
-Puffer 240s. Vorher waren das nur 60s, was bei WoL-Boot regelmaessig
-zu fruehzeitigem Firefox-Start auf einer toten URL fuehrte.
+**Kiosk-Start ist selbstheilend (seit 2026-06-02):** Der Firefox-
+Kiosk-Autostart (`install_xfce_autostart.sh`) ist KEINE Einmal-
+Sache mehr (frueher: „240s warten, dann starten"). Stattdessen eine
+Endlos-Schleife: wartet beliebig lange auf das Backend, startet
+Firefox, pollt weiter und laedt bei 3 Fehlern in Folge (~30s) neu.
+Grund fuer den Umbau: die Pi bootet regelmaessig VOR dem PC (PC
+braucht BIOS + manuelle LUKS-Eingabe + Pop-Boot + Warmup). Lief das
+alte 240s-Fenster ab, hing Firefox FUER IMMER auf der Fehlerseite —
+der „unable to connect den ganzen Tag"-Bug. Die Schleife erholt sich
+auch nach spaetem PC-Start, Suspend oder Deploy-Restart von selbst.
 
 Spaeter sinnvoll: zusaetzlicher Aufruf aus `pi_sensor_bridge.py` bei
 PIR-/Tuer-/Button-Trigger fuer den „Sasha kommt zur Tuer rein"-Flow.
@@ -200,9 +204,11 @@ Ziel: Pi bootet → kurze Konsole → schwarzer Bildschirm → Firefox-Kiosk.
    Firefox-Kiosk-Fullscreen braucht den WM.
 3. **`~/.xprofile`** mit `xrandr --mode 1920x1080`.
 4. **`~/.config/autostart/zentrale.desktop`** mit Firefox-Kiosk auf
-   `http://localhost:5000` — **wartet vorher per `curl` bis der Core
-   auf Port 5000 antwortet**, damit man nicht initial die Fehlerseite
-   sieht.
+   `$ZENTRALE_BACKEND_URL` (Default **`http://192.168.50.1:5000`** =
+   PC-LAN-IP, NICHT mehr localhost — siehe Footgun-Warnung unten).
+   Der Exec ist eine **selbstheilende Schleife**: wartet endlos bis
+   der Core antwortet, startet Firefox, und laedt bei Backend-Abriss
+   (3× Fehler in Folge) automatisch neu. Kein 240s-Timeout mehr.
 5. **Notaus-Hotkey `Ctrl+Alt+Esc`** → `scripts/emergency_exit.sh`
    (lightdm-stop → Pi auf TTY1).
 
@@ -216,10 +222,22 @@ Aufruf auf dem Pi nach jedem RE-Setup:
 
 ```bash
 bash /opt/zentrale/scripts/install_xfce_autostart.sh
+# Solo-Test direkt am PC stattdessen:
+#   ZENTRALE_BACKEND_URL=http://localhost:5000 bash .../install_xfce_autostart.sh
 ```
 
 Idempotent. Der Hotkey-Teil funktioniert nur aus einer aktiven
 XFCE-Session (DBus muss laufen).
+
+> **FOOTGUN (real passiert 2026-06-02):** Bis dahin war der URL-Default
+> `http://localhost:5000`. Wer das Skript auf dem Pi OHNE
+> `ZENTRALE_BACKEND_URL` aufrief — genau so stand's frueher in der
+> `deploy_pi.sh`-Anleitung —, bekam einen Kiosk, der das Backend auf der
+> **Pi selbst** suchte. Ergebnis: „unable to connect" den ganzen Tag,
+> egal wie gesund der PC war. Seitdem ist der Default die PC-LAN-IP
+> `192.168.50.1:5000`. Diagnose-Merker: wenn der Kiosk tot ist, ZUERST
+> `grep kiosk ~/.config/autostart/zentrale.desktop` auf der Pi — zeigt
+> die URL, auf die Firefox wirklich zielt.
 
 ### Mikrofon-Berechtigung im Kiosk
 
