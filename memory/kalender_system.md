@@ -29,8 +29,9 @@ Datei: `data/ai_calendar.json`. Format:
 
 - **entries** – Einmal-Einträge pro Datum (Liste, mehrere am gleichen Tag möglich).
 - **routines** – iCal-RRULE-basierte Wiederholungen, beim Lesen pro Zeitfenster expandiert.
-- **default_visible** – steuert ob ein Layer im Standard-Jetzt-Block der KI auftaucht
-  (`erlebt` ist standardmäßig aus, sonst wird der Prompt zu noisy).
+- **default_visible** – Sichtbarkeits-Flag für die Dashboard-UI (`erlebt`
+  ist standardmäßig aus). Seit dem Glue-Wegfall (2026-06) NICHT mehr für den
+  Jetzt-Block relevant — `read_calendar` liefert per Default alle Layer.
 
 ## Default-Layer beim ersten Boot
 
@@ -56,8 +57,15 @@ Public API:
 - `auto_capture(concept, day_iso)` – Spiegelung vom Graph-Extraktor.
 - `entries_in_range(start, end, layers=None)` – Range-Query, Routinen werden expandiert.
 - `week_view(reference=None, only_default_visible=True)` – laufende Woche um `reference`.
-- `render_week_for_prompt(reference=None)` – Zwei-Wochen-Block (diese +
-  nächste Woche) für `ai._now_prompt`.
+- `resolve_range(zeitraum, reference=None)` – relativer Bucket-Name
+  (`dieser_monat`, `naechste_woche`, …) → konkretes `(start, end)`-Paar.
+  Python rechnet die Datumsgrenzen, nicht das Modell. `None` bei
+  unbekanntem Bucket (Aufrufer fällt dann auf ISO-Daten zurück).
+- `render_range_for_tool(start, end, layers=None)` – Tool-Antwort für
+  `read_calendar`, jeder Tag MIT ausgeschriebenem Wochentag
+  („Dienstag, 09.06.2026: …").
+- `RANGE_BUCKETS` – Liste der erlaubten `zeitraum`-Werte (Quelle für das
+  Tool-Enum).
 
 Warum nicht `core/calendar.py`: Python's stdlib hat ein `calendar`-Modul,
 und `dateutil.rrule` importiert intern `from calendar import monthrange`.
@@ -77,12 +85,19 @@ damit dasselbe Konzept bei mehrfachem Erwähnen nicht mehrfach im
 
 | Tool                    | Wann                                                |
 |-------------------------|-----------------------------------------------------|
-| `read_calendar`         | Vergangenheit oder Zeitraum > diese+nächste Woche   |
+| `read_calendar`         | JEDE Frage nach Terminen/Plänen/Daten (Pflicht)     |
 | `add_calendar_entry`    | User nennt einmaligen Termin/Frist                  |
 | `add_calendar_routine`  | User nennt regelmäßige Aktivität                    |
 
-`read_calendar(start_date, end_date, layers?)` liefert pro-Tag-Liste,
-Routinen werden expandiert. `add_calendar_entry(layer, day, label, time?)`
+`read_calendar(zeitraum?, start_date?, end_date?, layers?)`. **Kein
+Calendar-Glue mehr im Prompt** — die KI hat keine Termine im Gedächtnis und
+MUSS dieses Tool bei jeder zeitlichen Frage rufen (Regel steht im
+Jetzt-Block + in der Tool-Beschreibung). Zeitraum bevorzugt über `zeitraum`
+(Bucket aus `RANGE_BUCKETS`, z.B. `dieser_monat`, `naechste_woche`,
+`diese_und_naechste_woche`, `letzter_monat`); Python löst den Bucket in
+exakte Daten auf. Für krumme Spannen („ab dem 15.", „in 3 Monaten")
+`start_date`+`end_date` (ISO). Ausgabe pro Tag mit Wochentag, Routinen
+expandiert. `add_calendar_entry(layer, day, label, time?)`
 und `add_calendar_routine(layer, label, rrule, time?)` schreiben in
 benannte Layer. Default-Layer im Tool-Prompt: `termine` bzw. `routinen`.
 
@@ -93,55 +108,58 @@ RRULE-Beispiele die die KI im Prompt kennt:
 - `FREQ=MONTHLY;BYDAY=2TU` – zweiter Dienstag im Monat
 - `FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=25` – jedes Jahr 25.12.
 
-## Integration in den Jetzt-Block
+## Integration in den Jetzt-Block (kein Glue mehr)
 
-`core/ai.py:_now_prompt()` baut bei jedem Turn:
+`core/ai.py:_now_prompt()` baut bei jedem Turn NUR einen Zeit-Anker plus
+die Pflicht-Regel zum Tool — **kein Kalender-Listing**:
 
 ```
 ## Jetzt
 Heute ist Sonntag, der 31. Mai 2026. Aktuelle Uhrzeit: 13:46.
 [Hinweis: nur diese Zeile ist verlässliche Zeitquelle.]
 
-## Diese und nächste Woche
-Diese Woche:
-So 31.5. (heute) — (leer)
-
-Nächste Woche:
-Mo 1.6. — (leer)
-Di 2.6. — 18:00 Geige
-...
-
-Diese und die nächste Woche stehen hier vollständig - Fragen dazu
-(auch „diese oder nächste") ohne Tool und ohne Rückfrage direkt aus der
-Liste beantworten. Frühere Tage / >2 Wochen voraus: read_calendar-Tool.
+Kalender/Termine: du hast keine Termine im Kopf. Für JEDE Frage nach
+Plänen, Terminen oder Daten (heute, diese/nächste Woche, Monat,
+Vergangenheit, beliebiger Zeitraum) rufst du zuerst read_calendar -
+nie raten, nie ohne Tool zurückfragen.
 ```
 
-**Warum zwei Wochen statt einer:** „diese oder nächste Woche" ist die
-häufigste Kalender-Frage. Lag die nächste Woche NICHT im Prompt, hatte
-das 14B-Modell für den „nächste"-Teil keine Daten und fragte unnötig
-zurück (statt `read_calendar` zu feuern). Daten-Auswahl fixen schlägt
-Prompt-Hints stapeln (vgl. `feedback_data_vs_model`) — kostet ~7 Zeilen.
+**Warum kein Glue (Designwechsel 2026-06):** Vorher wurde die laufende
+(später: laufende + nächste) Woche fest in den Prompt geklebt. Das hatte
+zwei Probleme:
 
-**Bewusst nur Zukunft, keine Vergangenheit** — wenn der User „was steht
-an" fragt, soll die KI nicht erst durch vergangene Termine waten und
-dabei in den Tempus-Default rutschen („diese Woche **hast** du am
-Dienstag…" obwohl Dienstag schon vorbei ist). Erster Versuch mit
-Klammer-Markern
-(`(vergangen)`) und Sektion-Headern hat das Modell ignoriert. Lehrgeld:
-**bei Modell-Schwäche nicht mehr Hints stapeln, sondern die Daten-
-Auswahl ändern.** Vergangenheit ist über `read_calendar`-Tool erreichbar.
+1. **Skaliert nicht.** „Was steht den Monat an?" / „in 3 Monaten?" lässt
+   sich nicht mitkleben, ohne den Prompt zu fluten.
+2. **Split-Brain.** Mit geklebter Woche hatte das Modell einen faulen
+   Halb-Weg: nahe Termine aus dem Block beantworten, für den Rest
+   zurückfragen — statt konsequent das Tool zu rufen. Genau das war der
+   Bug („steht diese oder nächste Woche was an?" → nur diese beantwortet,
+   nach „nächste" unnötig gefragt).
 
-Default-sichtbare Layer (`termine`, `routinen`) gehen in den Block,
-der `erlebt`-Layer ist `default_visible=False` und kommt nur per
-explizitem `read_calendar`-Aufruf — sonst flutet er den Prompt jeden
-Turn neu.
+Konsequenz: **ein** Mechanismus statt zwei. Der Kalender wird nicht mehr
+mitgeschleppt, sondern ausschließlich per `read_calendar` gegriffen — für
+JEDEN Zeitraum. Verlässlichkeit messbar gemacht (qwen2.5:14b, 4× dieselbe
+Frage): 4/4 Tool gerufen, 0/4 Rückfrage, Wochentag korrekt.
+
+**Zwei Reliability-Lecks, die der Wechsel mitgefixt hat:**
+
+- *Datums-Arithmetik beim Modell* → schwach. Jetzt klassifiziert das
+  Modell nur in einen `zeitraum`-Bucket, `resolve_range` rechnet die
+  Grenzen in Python.
+- *Nackte ISO-Ausgabe* → das Modell rechnete den Wochentag selbst aus und
+  verrechnete sich („Montag" statt „Dienstag"). `render_range_for_tool`
+  liefert den Wochentag jetzt fertig.
+
+`feedback_data_vs_model` gilt weiter — nur war die richtige Daten-Auswahl
+hier „gar nichts kleben, sauber greppen", nicht „mehr kleben".
 
 ## Cross-Reference Graph ↔ Kalender (typisches Beispiel)
 
 User: „wie war Geige letzte Woche?"
 
-1. Aus dem Jetzt-Block weiß die KI: heute Sonntag 31.5., letzter Di = 26.5.
-2. Kalender sagt: 26.5. → Routine „Geige 18:00" (also fand statt).
+1. Aus dem Zeit-Anker weiß die KI: heute Sonntag 31.5.
+2. `read_calendar(zeitraum="letzte_woche")` → 26.5. Routine „Geige 18:00"
+   (also fand statt).
 3. Graph-Aktivierung um Time-Node `2026-05-26` liefert verknüpfte
    Konzepte (Stimmung, was danach kam, falls erwähnt).
 4. Antwort kombiniert beides.

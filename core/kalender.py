@@ -72,6 +72,8 @@ _DEFAULT_LAYERS = {
 }
 
 _WEEKDAYS_SHORT_DE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+_WEEKDAYS_FULL_DE  = ["Montag", "Dienstag", "Mittwoch", "Donnerstag",
+                      "Freitag", "Samstag", "Sonntag"]
 
 
 # ── Persistenz ─────────────────────────────────────────────────────────
@@ -328,84 +330,122 @@ def week_view(reference: date | None = None,
     }
 
 
-# ── Prompt-Renderer ────────────────────────────────────────────────────
-def render_week_for_prompt(reference: date | None = None) -> str:
+# ── Range-Auflösung & Tool-Renderer ────────────────────────────────────
+#
+# Designentscheidung (2026-06): der Kalender wird NICHT mehr in den Prompt
+# geklebt. Die KI greift ihn ausschließlich über das read_calendar-Tool ab
+# - für JEDEN Zeitraum (Woche, Monat, Quartal, Vergangenheit). Grund: Glue
+# skaliert nicht ("was steht in 3 Monaten an?" lässt sich nicht mitkleben)
+# und erzeugt einen faulen Halb-Weg, auf dem das 14B-Modell aus dem
+# geklebten Block antwortet statt das Tool zu rufen → unnötige Rückfragen.
+#
+# Die Datums-Arithmetik macht hier Python, NICHT das Modell. Ein 14B kann
+# eine Frage gut in einen Bucket KLASSIFIZIEREN ("den Monat" → dieser_monat),
+# aber schlecht ISO-Grenzen RECHNEN. Also: Modell wählt den Bucket, resolve_range
+# liefert die exakten Daten. Beliebige Sonderfälle ("ab dem 15." / weit in der
+# Zukunft) gehen weiter über explizite start/end-Daten.
+
+# Erlaubte Buckets für das `zeitraum`-Arg von read_calendar. Reihenfolge =
+# Reihenfolge im Tool-Enum. Werte sind bewusst sprechend, damit das Modell
+# sie aus der User-Frage ableiten kann.
+RANGE_BUCKETS = [
+    "heute", "morgen", "gestern",
+    "diese_woche", "naechste_woche", "diese_und_naechste_woche", "letzte_woche",
+    "dieser_monat", "naechster_monat", "letzter_monat",
+    "naechste_7_tage", "naechste_30_tage", "naechste_90_tage",
+    "letzte_7_tage", "letzte_30_tage",
+]
+
+
+def _month_last_day(d: date) -> date:
+    """Letzter Tag des Monats, in dem `d` liegt (über 1. des Folgemonats - 1)."""
+    if d.month == 12:
+        first_next = date(d.year + 1, 1, 1)
+    else:
+        first_next = date(d.year, d.month + 1, 1)
+    return first_next - timedelta(days=1)
+
+
+def resolve_range(zeitraum: str, reference: date | None = None
+                  ) -> tuple[date, date] | None:
     """
-    Baut einen kompakten Block für ai._now_prompt: heute + Rest der
-    laufenden Woche UND die komplette nächste Woche (bis übernächster
-    Sonntag). Vergangene Tage werden bewusst NICHT gezeigt - wenn der
-    User "was steht an" fragt, soll die KI nicht erst alte Termine
-    durchgehen müssen (und stolpert dann beim Tempus). Vergangenes hat
-    seinen Platz im `erlebt`-Layer und kann per read_calendar-Tool
-    gezielt geholt werden.
+    Übersetzt einen relativen Bucket-Namen in ein konkretes (start, end)-Paar
+    (beide inklusive). Gibt None zurück wenn der Bucket unbekannt ist - dann
+    soll der Aufrufer auf explizite start/end-Daten zurückfallen.
 
-    Warum zwei Wochen statt einer: "diese oder nächste Woche" ist die
-    mit Abstand häufigste Kalender-Frage. Lag die nächste Woche NICHT
-    im Prompt, musste das Modell für den "nächste"-Teil entweder das
-    read_calendar-Tool feuern oder - was es bei 14B faktisch tat -
-    unnötig zurückfragen. Beides löst sich, wenn die Daten direkt da
-    sind: Daten-Auswahl fixen schlägt Prompt-Hints stapeln (vgl.
-    feedback_data_vs_model). Kostet nur ~7 Zeilen Prompt extra.
-
-    Pro Tag eine Zeile, leere Tage als "(leer)" - damit die KI den
-    Unterschied "nichts geplant" vs. "weiß ich nicht" sieht. Die beiden
-    Wochen sind mit Unter-Überschriften getrennt, damit das Modell
-    "diese" und "nächste" sauber auseinanderhält.
+    "Aktuelle"-Buckets (diese_woche, dieser_monat) starten bei HEUTE, nicht
+    am Perioden-Anfang: wer "was steht diese Woche an?" fragt, will keine
+    bereits vergangenen Tage. Vergangenes holt man gezielt über start/end.
     """
-    if reference is None:
-        reference = date.today()
-    monday = reference - timedelta(days=reference.weekday())
-    sunday = monday + timedelta(days=6)
-    next_sunday = sunday + timedelta(days=7)   # Ende der nächsten Woche
-    today = date.today()
+    today = reference or date.today()
+    if zeitraum == "heute":
+        return today, today
+    if zeitraum == "morgen":
+        t = today + timedelta(days=1)
+        return t, t
+    if zeitraum == "gestern":
+        t = today - timedelta(days=1)
+        return t, t
+    if zeitraum == "diese_woche":
+        sunday = today + timedelta(days=6 - today.weekday())
+        return today, sunday
+    if zeitraum == "naechste_woche":
+        next_monday = today + timedelta(days=7 - today.weekday())
+        return next_monday, next_monday + timedelta(days=6)
+    if zeitraum == "diese_und_naechste_woche":
+        # heute bis Sonntag der NÄCHSTEN Woche - die häufigste Frage
+        # ("steht diese oder nächste Woche was an?") in einem Call.
+        return today, today + timedelta(days=13 - today.weekday())
+    if zeitraum == "letzte_woche":
+        prev_monday = today - timedelta(days=today.weekday() + 7)
+        return prev_monday, prev_monday + timedelta(days=6)
+    if zeitraum == "dieser_monat":
+        return today, _month_last_day(today)
+    if zeitraum == "naechster_monat":
+        first_next = _month_last_day(today) + timedelta(days=1)
+        return first_next, _month_last_day(first_next)
+    if zeitraum == "letzter_monat":
+        last_prev  = date(today.year, today.month, 1) - timedelta(days=1)
+        first_prev = date(last_prev.year, last_prev.month, 1)
+        return first_prev, last_prev
+    if zeitraum == "naechste_7_tage":
+        return today, today + timedelta(days=6)
+    if zeitraum == "naechste_30_tage":
+        return today, today + timedelta(days=29)
+    if zeitraum == "naechste_90_tage":
+        return today, today + timedelta(days=89)
+    if zeitraum == "letzte_7_tage":
+        return today - timedelta(days=6), today
+    if zeitraum == "letzte_30_tage":
+        return today - timedelta(days=29), today
+    return None
 
-    # Range-Start = ab heute (vergangene Tage der laufenden Woche raus).
-    range_start = max(reference, today)
-    if range_start > sunday:
-        # reference liegt in einer kommenden Woche - dann eben die ganze
-        # Woche von reference.monday bis reference.sunday
-        range_start = monday
-    # Nur default-sichtbare Layer (sonst flutet der auto-erlebt-Layer
-    # bei jedem Turn den Prompt).
-    raw = _load_raw()
-    visible_layers = [
-        name for name, lyr in raw.get("layers", {}).items()
-        if lyr.get("default_visible", True)
-    ]
-    # Einträge für den GANZEN Zwei-Wochen-Block in einem Rutsch holen.
-    days = entries_in_range(range_start, next_sunday, layers=visible_layers)
 
-    def _day_line(d: date) -> str:
-        """Eine Tageszeile rendern - Termine kommasepariert oder '(leer)'."""
-        iso = d.isoformat()
-        wd = _WEEKDAYS_SHORT_DE[d.weekday()]
-        marker = " (heute)" if d == today else ""
-        if iso in days and days[iso]:
-            parts = []
-            for e in days[iso]:
-                t = f"{e['time']} " if e.get("time") else ""
-                parts.append(f"{t}{e['label']}")
-            return f"{wd} {d.day}.{d.month}.{marker} — " + ", ".join(parts)
-        return f"{wd} {d.day}.{d.month}.{marker} — (leer)"
+def render_range_for_tool(start: date, end: date,
+                          layers: list[str] | None = None) -> str:
+    """
+    Formatiert die Einträge in [start, end] als Tool-Antwort für die KI.
 
-    lines = ["## Diese und nächste Woche", "Diese Woche:"]
-    d = range_start
-    while d <= sunday:                     # Rest der laufenden Woche
-        lines.append(_day_line(d))
-        d += timedelta(days=1)
-    lines.append("")
-    lines.append("Nächste Woche:")
-    while d <= next_sunday:                # komplette nächste Woche
-        lines.append(_day_line(d))
-        d += timedelta(days=1)
-    lines.append("")
-    # Knapper Hinweis NUR zur Abgrenzung nach außerhalb des Fensters.
-    # Bewusst KEIN "steht alles oben, antworte aus der Liste" mehr: solche
-    # Meta-Saetze verleiten das 14B-Modell dazu, ÜBER den Block zu reden
-    # ("steht ja im Jetzt-Block") statt ihn zu LESEN - und es leakt den
-    # internen Begriff. Die Daten selbst genügen; siehe feedback_data_vs_model.
-    lines.append(
-        "Frühere Tage oder Termine weiter als zwei Wochen voraus stehen "
-        "nicht hier - dann read_calendar-Tool mit passendem Range."
-    )
+    Kernpunkt gegen die Wochentag-Halluzination: jeder Tag kommt MIT
+    ausgeschriebenem Wochentag ("Dienstag, 09.06.2026: …"). Vorher gab das
+    Tool nackte ISO-Daten zurück und das Modell rechnete den Wochentag selbst
+    aus - und verrechnete sich regelmäßig ("Montag" statt "Dienstag"). Steht
+    der Wochentag fertig da, muss das Modell nur noch abschreiben.
+
+    Leerer Zeitraum → klare Ansage, damit die KI "nichts geplant" von
+    "weiß ich nicht" unterscheiden kann.
+    """
+    days = entries_in_range(start, end, layers=layers)
+    head = (f"Kalender {start.strftime('%d.%m.%Y')} bis "
+            f"{end.strftime('%d.%m.%Y')}:")
+    if not days:
+        return head + "\nKeine Einträge in diesem Zeitraum."
+    lines = [head]
+    for day_iso, entries in days.items():
+        d = date.fromisoformat(day_iso)
+        wd = _WEEKDAYS_FULL_DE[d.weekday()]
+        lines.append(f"{wd}, {d.strftime('%d.%m.%Y')}:")
+        for e in entries:
+            t = f"{e['time']} " if e.get("time") else ""
+            lines.append(f"  [{e['layer']}] {t}{e['label']}")
     return "\n".join(lines)

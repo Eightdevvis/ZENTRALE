@@ -94,15 +94,18 @@ def _now_prompt() -> str:
         "Datums-Knoten aus dem Konzept-Graph sind Erinnerungen an frühere "
         "Tage, NICHT der aktuelle Tag."
     )
-    # Wochenkalender mit anhängen. Fehler schlucken - der Kalender ist
-    # optional, der Chat soll auch funktionieren wenn die Datei fehlt
-    # oder kaputt ist.
-    try:
-        week = kalender.render_week_for_prompt()
-        if week:
-            return head + "\n\n" + week
-    except Exception:
-        pass
+    # Bewusst KEIN Kalender-Listing mehr im Jetzt-Block. Der Kalender wird
+    # nicht mitgeschleppt, sondern ausschließlich über das read_calendar-Tool
+    # abgefragt (siehe kalender.resolve_range / render_range_for_tool). Hier
+    # steht nur ein knapper Verweis, damit das Modell weiß, dass es für
+    # JEDE zeitliche Frage das Tool nutzen muss statt aus dem Gedächtnis zu
+    # antworten oder zurückzufragen.
+    head += (
+        "\n\nKalender/Termine: du hast keine Termine im Kopf. Für JEDE Frage "
+        "nach Plänen, Terminen oder Daten (heute, diese/nächste Woche, Monat, "
+        "Vergangenheit, beliebiger Zeitraum) rufst du zuerst read_calendar - "
+        "nie raten, nie ohne Tool zurückfragen."
+    )
     return head
 
 
@@ -211,22 +214,35 @@ TOOLS = [
         "function": {
             "name": "read_calendar",
             "description": (
-                "Liest Kalender-Einträge in einem Zeitraum (Termine, Routinen, "
-                "Erlebt-Layer). Diese und die nächste Woche kennst du bereits - "
-                "dafür KEIN Tool nötig. Nutze dies nur für Vergangenheit oder für "
-                "Termine weiter als zwei Wochen voraus. "
-                "Beispiele: 'was hatte ich letzten Monat?', 'wann ist mein nächster Arzt?'"
+                "Liest Kalender-Einträge (Termine, Routinen, Erlebtes). Du hast "
+                "KEINE Termine im Gedächtnis - rufe dieses Tool bei JEDER Frage "
+                "nach Plänen, Terminen, freien/vollen Tagen, Vergangenheit oder "
+                "Zukunft auf, bevor du antwortest. Nie aus dem Kopf raten, nie "
+                "ohne vorher gelesen zu haben zurückfragen. "
+                "Zeitraum am liebsten über 'zeitraum' (z.B. 'dieser_monat'); "
+                "für krumme Spannen ('ab dem 15.', 'in 3 Monaten') stattdessen "
+                "start_date+end_date. Bei 'diese oder nächste Woche' zwei Aufrufe "
+                "(diese_woche, naechste_woche) oder naechste_30_tage."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "zeitraum": {
+                        "type":        "string",
+                        "enum":        kalender.RANGE_BUCKETS,
+                        "description": (
+                            "Relativer Zeitraum - bevorzugt nutzen, dann muss "
+                            "kein Datum gerechnet werden. Einer von: "
+                            + ", ".join(kalender.RANGE_BUCKETS) + "."
+                        ),
+                    },
                     "start_date": {
                         "type":        "string",
-                        "description": "Start-Datum YYYY-MM-DD (inklusive)",
+                        "description": "Nur falls kein 'zeitraum' passt: Start YYYY-MM-DD (inkl.)",
                     },
                     "end_date": {
                         "type":        "string",
-                        "description": "End-Datum YYYY-MM-DD (inklusive)",
+                        "description": "Nur falls kein 'zeitraum' passt: Ende YYYY-MM-DD (inkl.)",
                     },
                     "layers": {
                         "type":        "array",
@@ -234,7 +250,7 @@ TOOLS = [
                         "description": "Optional: nur diese Layer (z.B. ['termine']). Default: alle.",
                     },
                 },
-                "required": ["start_date", "end_date"],
+                "required": [],
             },
         },
     },
@@ -386,22 +402,27 @@ def _dispatch_tool(name: str, args: dict) -> str:
         return "Verfügbare Dateien:\n" + "\n".join(f"  {f}" for f in files)
     elif name == "read_calendar":
         from datetime import date as _date
-        try:
-            start = _date.fromisoformat(args.get("start_date", ""))
-            end   = _date.fromisoformat(args.get("end_date", ""))
-        except ValueError as e:
-            return f"[Fehler: ungültiges Datum – {e}]"
         layers = args.get("layers") or None
-        days = kalender.entries_in_range(start, end, layers=layers)
-        if not days:
-            return "Kein Eintrag in diesem Zeitraum."
-        lines = []
-        for day_iso, entries in days.items():
-            lines.append(day_iso + ":")
-            for e in entries:
-                t = f"{e['time']} " if e.get("time") else ""
-                lines.append(f"  [{e['layer']}] {t}{e['label']}")
-        return "\n".join(lines)
+        # Bevorzugt: relativer Bucket -> Python rechnet die Grenzen.
+        zeitraum = (args.get("zeitraum") or "").strip()
+        if zeitraum:
+            rng = kalender.resolve_range(zeitraum)
+            if rng is None:
+                return (f"[Fehler: unbekannter zeitraum {zeitraum!r}. "
+                        f"Erlaubt: {', '.join(kalender.RANGE_BUCKETS)} "
+                        f"- oder start_date+end_date angeben.]")
+            start, end = rng
+        else:
+            # Fallback: explizite ISO-Daten (für krumme Spannen).
+            try:
+                start = _date.fromisoformat(args.get("start_date", ""))
+                end   = _date.fromisoformat(args.get("end_date", ""))
+            except ValueError as e:
+                return (f"[Fehler: weder gültiger 'zeitraum' noch start/end-Datum "
+                        f"– {e}]")
+        if start > end:                      # vertauschte Grenzen tolerieren
+            start, end = end, start
+        return kalender.render_range_for_tool(start, end, layers=layers)
     elif name == "add_calendar_entry":
         ok = kalender.add_entry(
             layer = args.get("layer", "termine"),
