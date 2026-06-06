@@ -56,7 +56,8 @@ Public API:
 - `auto_capture(concept, day_iso)` – Spiegelung vom Graph-Extraktor.
 - `entries_in_range(start, end, layers=None)` – Range-Query, Routinen werden expandiert.
 - `week_view(reference=None, only_default_visible=True)` – laufende Woche um `reference`.
-- `render_week_for_prompt(reference=None)` – Wochen-Block für `ai._now_prompt`.
+- `render_week_for_prompt(reference=None)` – Zwei-Wochen-Block (diese +
+  nächste Woche) für `ai._now_prompt`.
 
 Warum nicht `core/calendar.py`: Python's stdlib hat ein `calendar`-Modul,
 und `dateutil.rrule` importiert intern `from calendar import monthrange`.
@@ -76,7 +77,7 @@ damit dasselbe Konzept bei mehrfachem Erwähnen nicht mehrfach im
 
 | Tool                    | Wann                                                |
 |-------------------------|-----------------------------------------------------|
-| `read_calendar`         | User fragt nach Zeitraum > diese Woche              |
+| `read_calendar`         | Vergangenheit oder Zeitraum > diese+nächste Woche   |
 | `add_calendar_entry`    | User nennt einmaligen Termin/Frist                  |
 | `add_calendar_routine`  | User nennt regelmäßige Aktivität                    |
 
@@ -101,17 +102,31 @@ RRULE-Beispiele die die KI im Prompt kennt:
 Heute ist Sonntag, der 31. Mai 2026. Aktuelle Uhrzeit: 13:46.
 [Hinweis: nur diese Zeile ist verlässliche Zeitquelle.]
 
-## Heute und der Rest der Woche
+## Diese und nächste Woche
+Diese Woche:
 So 31.5. (heute) — (leer)
 
-Frühere Tage stehen nicht hier - wenn der User danach fragt, ruf das
-read_calendar-Tool mit Vergangenheits-Range.
+Nächste Woche:
+Mo 1.6. — (leer)
+Di 2.6. — 18:00 Geige
+...
+
+Diese und die nächste Woche stehen hier vollständig - Fragen dazu
+(auch „diese oder nächste") ohne Tool und ohne Rückfrage direkt aus der
+Liste beantworten. Frühere Tage / >2 Wochen voraus: read_calendar-Tool.
 ```
 
-**Bewusst nur heute + Zukunft** — wenn der User „was steht an" fragt,
-soll die KI nicht erst durch vergangene Termine waten und dabei in den
-Tempus-Default rutschen („diese Woche **hast** du am Dienstag…"
-obwohl Dienstag schon vorbei ist). Erster Versuch mit Klammer-Markern
+**Warum zwei Wochen statt einer:** „diese oder nächste Woche" ist die
+häufigste Kalender-Frage. Lag die nächste Woche NICHT im Prompt, hatte
+das 14B-Modell für den „nächste"-Teil keine Daten und fragte unnötig
+zurück (statt `read_calendar` zu feuern). Daten-Auswahl fixen schlägt
+Prompt-Hints stapeln (vgl. `feedback_data_vs_model`) — kostet ~7 Zeilen.
+
+**Bewusst nur Zukunft, keine Vergangenheit** — wenn der User „was steht
+an" fragt, soll die KI nicht erst durch vergangene Termine waten und
+dabei in den Tempus-Default rutschen („diese Woche **hast** du am
+Dienstag…" obwohl Dienstag schon vorbei ist). Erster Versuch mit
+Klammer-Markern
 (`(vergangen)`) und Sektion-Headern hat das Modell ignoriert. Lehrgeld:
 **bei Modell-Schwäche nicht mehr Hints stapeln, sondern die Daten-
 Auswahl ändern.** Vergangenheit ist über `read_calendar`-Tool erreichbar.

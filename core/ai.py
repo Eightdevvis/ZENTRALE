@@ -212,9 +212,9 @@ TOOLS = [
             "name": "read_calendar",
             "description": (
                 "Liest Kalender-Einträge in einem Zeitraum (Termine, Routinen, "
-                "Erlebt-Layer). Nutze dies wenn der User nach Terminen, Plänen, "
-                "Vergangenheit oder regelmäßigen Aktivitäten fragt und der Zeitraum "
-                "größer als 'diese Woche' ist (die kriegt die KI eh im Jetzt-Block). "
+                "Erlebt-Layer). Diese und die nächste Woche kennst du bereits - "
+                "dafür KEIN Tool nötig. Nutze dies nur für Vergangenheit oder für "
+                "Termine weiter als zwei Wochen voraus. "
                 "Beispiele: 'was hatte ich letzten Monat?', 'wann ist mein nächster Arzt?'"
             ),
             "parameters": {

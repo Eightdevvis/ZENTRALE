@@ -332,22 +332,34 @@ def week_view(reference: date | None = None,
 def render_week_for_prompt(reference: date | None = None) -> str:
     """
     Baut einen kompakten Block für ai._now_prompt: heute + Rest der
-    laufenden Woche (bis Sonntag). Vergangene Tage werden bewusst NICHT
-    gezeigt - wenn der User "was steht an" fragt, soll die KI nicht
-    erst alte Termine durchgehen müssen (und stolpert dann beim Tempus).
-    Vergangenes hat seinen Platz im `erlebt`-Layer und kann per
-    read_calendar-Tool gezielt geholt werden.
+    laufenden Woche UND die komplette nächste Woche (bis übernächster
+    Sonntag). Vergangene Tage werden bewusst NICHT gezeigt - wenn der
+    User "was steht an" fragt, soll die KI nicht erst alte Termine
+    durchgehen müssen (und stolpert dann beim Tempus). Vergangenes hat
+    seinen Platz im `erlebt`-Layer und kann per read_calendar-Tool
+    gezielt geholt werden.
+
+    Warum zwei Wochen statt einer: "diese oder nächste Woche" ist die
+    mit Abstand häufigste Kalender-Frage. Lag die nächste Woche NICHT
+    im Prompt, musste das Modell für den "nächste"-Teil entweder das
+    read_calendar-Tool feuern oder - was es bei 14B faktisch tat -
+    unnötig zurückfragen. Beides löst sich, wenn die Daten direkt da
+    sind: Daten-Auswahl fixen schlägt Prompt-Hints stapeln (vgl.
+    feedback_data_vs_model). Kostet nur ~7 Zeilen Prompt extra.
 
     Pro Tag eine Zeile, leere Tage als "(leer)" - damit die KI den
-    Unterschied "nichts geplant" vs. "weiß ich nicht" sieht.
+    Unterschied "nichts geplant" vs. "weiß ich nicht" sieht. Die beiden
+    Wochen sind mit Unter-Überschriften getrennt, damit das Modell
+    "diese" und "nächste" sauber auseinanderhält.
     """
     if reference is None:
         reference = date.today()
     monday = reference - timedelta(days=reference.weekday())
     sunday = monday + timedelta(days=6)
+    next_sunday = sunday + timedelta(days=7)   # Ende der nächsten Woche
     today = date.today()
 
-    # Range = von heute (oder reference) bis Sonntag der laufenden Woche
+    # Range-Start = ab heute (vergangene Tage der laufenden Woche raus).
     range_start = max(reference, today)
     if range_start > sunday:
         # reference liegt in einer kommenden Woche - dann eben die ganze
@@ -360,11 +372,11 @@ def render_week_for_prompt(reference: date | None = None) -> str:
         name for name, lyr in raw.get("layers", {}).items()
         if lyr.get("default_visible", True)
     ]
-    days = entries_in_range(range_start, sunday, layers=visible_layers)
+    # Einträge für den GANZEN Zwei-Wochen-Block in einem Rutsch holen.
+    days = entries_in_range(range_start, next_sunday, layers=visible_layers)
 
-    lines = ["## Heute und der Rest der Woche"]
-    d = range_start
-    while d <= sunday:
+    def _day_line(d: date) -> str:
+        """Eine Tageszeile rendern - Termine kommasepariert oder '(leer)'."""
         iso = d.isoformat()
         wd = _WEEKDAYS_SHORT_DE[d.weekday()]
         marker = " (heute)" if d == today else ""
@@ -373,13 +385,27 @@ def render_week_for_prompt(reference: date | None = None) -> str:
             for e in days[iso]:
                 t = f"{e['time']} " if e.get("time") else ""
                 parts.append(f"{t}{e['label']}")
-            lines.append(f"{wd} {d.day}.{d.month}.{marker} — " + ", ".join(parts))
-        else:
-            lines.append(f"{wd} {d.day}.{d.month}.{marker} — (leer)")
+            return f"{wd} {d.day}.{d.month}.{marker} — " + ", ".join(parts)
+        return f"{wd} {d.day}.{d.month}.{marker} — (leer)"
+
+    lines = ["## Diese und nächste Woche", "Diese Woche:"]
+    d = range_start
+    while d <= sunday:                     # Rest der laufenden Woche
+        lines.append(_day_line(d))
         d += timedelta(days=1)
     lines.append("")
+    lines.append("Nächste Woche:")
+    while d <= next_sunday:                # komplette nächste Woche
+        lines.append(_day_line(d))
+        d += timedelta(days=1)
+    lines.append("")
+    # Knapper Hinweis NUR zur Abgrenzung nach außerhalb des Fensters.
+    # Bewusst KEIN "steht alles oben, antworte aus der Liste" mehr: solche
+    # Meta-Saetze verleiten das 14B-Modell dazu, ÜBER den Block zu reden
+    # ("steht ja im Jetzt-Block") statt ihn zu LESEN - und es leakt den
+    # internen Begriff. Die Daten selbst genügen; siehe feedback_data_vs_model.
     lines.append(
-        "Frühere Tage stehen nicht hier - wenn der User danach fragt, "
-        "ruf das read_calendar-Tool mit Vergangenheits-Range."
+        "Frühere Tage oder Termine weiter als zwei Wochen voraus stehen "
+        "nicht hier - dann read_calendar-Tool mit passendem Range."
     )
     return "\n".join(lines)
