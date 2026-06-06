@@ -241,7 +241,10 @@ TOOLS = [
                 "Zeitraum am liebsten über 'zeitraum' (z.B. 'dieser_monat'); "
                 "für krumme Spannen ('ab dem 15.', 'in 3 Monaten') stattdessen "
                 "start_date+end_date. Bei 'diese oder nächste Woche' zwei Aufrufe "
-                "(diese_woche, naechste_woche) oder naechste_30_tage."
+                "(diese_woche, naechste_woche) oder naechste_30_tage. "
+                "Fragt der User nach EINER bestimmten Aktivität ('wann hab ich "
+                "Fahrschule?', 'wann ist Geige?'), setze 'suche' auf das Stichwort "
+                "- dann kommen nur die passenden Termine zurück."
             ),
             "parameters": {
                 "type": "object",
@@ -253,6 +256,15 @@ TOOLS = [
                             "Relativer Zeitraum - bevorzugt nutzen, dann muss "
                             "kein Datum gerechnet werden. Einer von: "
                             + ", ".join(kalender.RANGE_BUCKETS) + "."
+                        ),
+                    },
+                    "suche": {
+                        "type":        "string",
+                        "description": (
+                            "Optional: nur Termine deren Titel diesen Text "
+                            "enthält (z.B. 'Fahrschule', 'Geige'). Bei Fragen "
+                            "nach einer bestimmten Aktivität nutzen, damit du "
+                            "nicht die ganze Liste durchsuchen musst."
                         ),
                     },
                     "start_date": {
@@ -422,26 +434,37 @@ def _dispatch_tool(name: str, args: dict) -> str:
     elif name == "read_calendar":
         from datetime import date as _date
         layers = args.get("layers") or None
-        # Bevorzugt: relativer Bucket -> Python rechnet die Grenzen.
+        suche  = (args.get("suche") or "").strip() or None
         zeitraum = (args.get("zeitraum") or "").strip()
+        has_dates = bool(args.get("start_date")) and bool(args.get("end_date"))
         if zeitraum:
+            # Bevorzugt: relativer Bucket -> Python rechnet die Grenzen.
             rng = kalender.resolve_range(zeitraum)
             if rng is None:
                 return (f"[Fehler: unbekannter zeitraum {zeitraum!r}. "
                         f"Erlaubt: {', '.join(kalender.RANGE_BUCKETS)} "
                         f"- oder start_date+end_date angeben.]")
             start, end = rng
-        else:
-            # Fallback: explizite ISO-Daten (für krumme Spannen).
+        elif has_dates:
+            # Explizite ISO-Daten (für krumme Spannen).
             try:
-                start = _date.fromisoformat(args.get("start_date", ""))
-                end   = _date.fromisoformat(args.get("end_date", ""))
+                start = _date.fromisoformat(args["start_date"])
+                end   = _date.fromisoformat(args["end_date"])
             except ValueError as e:
-                return (f"[Fehler: weder gültiger 'zeitraum' noch start/end-Datum "
-                        f"– {e}]")
+                return (f"[Fehler: ungültiges start/end-Datum – {e}. "
+                        f"Besser 'zeitraum' nutzen: {', '.join(kalender.RANGE_BUCKETS)}.]")
+        else:
+            # NICHTS angegeben -> nicht bestrafen, sinnvoll defaulten. "wann hab
+            # ich X?" (mit suche) ist die natürlichste Formulierung und kommt oft
+            # ganz ohne Zeitraum; ein Fehler hier schickt das Modell in eine
+            # Korrektur-Schleife (es schreibt den Retry-Call dann als Roh-XML ins
+            # Thinking, der verpufft -> leere Antwort). Also: mit suche weiter nach
+            # vorn schauen (Quartal, fängt wiederkehrende Termine), sonst nahe Zukunft.
+            start, end = kalender.resolve_range(
+                "naechste_90_tage" if suche else "diese_und_naechste_woche")
         if start > end:                      # vertauschte Grenzen tolerieren
             start, end = end, start
-        return kalender.render_range_for_tool(start, end, layers=layers)
+        return kalender.render_range_for_tool(start, end, layers=layers, suche=suche)
     elif name == "add_calendar_entry":
         ok = kalender.add_entry(
             layer = args.get("layer", "termine"),
@@ -847,8 +870,17 @@ def chat_stream(messages: list, model: str = None, system: str = None,
             msg   = chunk.get("message", {})
             token = msg.get("content", "")
             if token:
+                # NICHT sofort yielden. Content aus einer Runde, die mit einem
+                # Tool-Call endet, ist Modell-Geschwätz ("Ich prüfe den
+                # Kalender...") und darf den User NIE erreichen - er würde es
+                # sehen UND per TTS vorgelesen bekommen (das Frontend spricht
+                # Sätze noch während des Streams). Wir puffern die ganze Runde
+                # und geben sie erst am Rundenende aus, falls KEIN Tool-Call
+                # kam. Tradeoff: kein Token-für-Token-Streaming mehr, die
+                # Antwort erscheint am Stück. Bei den (per System-Prompt
+                # erzwungen) kurzen Antworten minimal, und für Voice sogar
+                # sauberer (kein gesprochener Fehlstart).
                 round_content.append(token)
-                yield token  # sofort an den Browser
 
             # WICHTIG: Ollama (mind. ab 0.17.x mit qwen2.5) liefert die
             # tool_calls in EINEM Chunk irgendwo im Stream - nicht
@@ -865,12 +897,18 @@ def chat_stream(messages: list, model: str = None, system: str = None,
                 break
 
         if not tool_calls:
-            # Kein Tool-Call → das Modell ist fertig.
+            # Kein Tool-Call → das Modell ist fertig. JETZT die gepufferte
+            # Antwort am Stück ausgeben (echte Antwort, kein Tool-Geschwätz).
+            answer = "".join(round_content)
+            if answer:
+                yield answer
             # Phase D: Auto-Save in den Hintergrund schieben (nur im
             # regulären Chat, nicht im Tutor-Modus).
             if tools is None:
-                _async_save_turn(user_query, "".join(round_content))
+                _async_save_turn(user_query, answer)
             return
+        # sonst: round_content war das Tool-Runden-Geschwätz → an Ollama als
+        # Assistant-Turn zurück (Kontext), aber NICHT an den User geyieldet.
 
         # Reihenfolge wichtig: erst assistant-Nachricht (mit tool_calls),
         # dann für jeden Call eine "tool"-Antwortnachricht.

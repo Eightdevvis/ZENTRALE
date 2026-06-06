@@ -422,7 +422,8 @@ def resolve_range(zeitraum: str, reference: date | None = None
 
 
 def render_range_for_tool(start: date, end: date,
-                          layers: list[str] | None = None) -> str:
+                          layers: list[str] | None = None,
+                          suche: str | None = None) -> str:
     """
     Formatiert die Einträge in [start, end] als Tool-Antwort für die KI.
 
@@ -432,14 +433,35 @@ def render_range_for_tool(start: date, end: date,
     aus - und verrechnete sich regelmäßig ("Montag" statt "Dienstag"). Steht
     der Wochentag fertig da, muss das Modell nur noch abschreiben.
 
+    `suche`: optionaler Label-Substring-Filter (case-insensitive). Bei Fragen
+    nach EINER Aktivität ("wann hab ich Fahrschule?") gibt das Tool damit nur
+    die passenden Zeilen zurück, statt der ganzen Monatswand. Grund: schwache
+    Modelle (qwen3-Familie) scheitern daran, eine lange Liste selbst nach
+    einem Begriff zu durchsuchen - sie sagen dann "keine gefunden" obwohl der
+    Eintrag dasteht, kotzen die Rohliste aus oder übersehen Treffer (z.B. den
+    Donnerstag). Filtern ist deterministische Arbeit → macht Python, nicht das
+    Modell. Selbes Prinzip wie resolve_range fürs Datums-Rechnen.
+
     Leerer Zeitraum → klare Ansage, damit die KI "nichts geplant" von
     "weiß ich nicht" unterscheiden kann.
     """
     days = entries_in_range(start, end, layers=layers)
-    head = (f"Kalender {start.strftime('%d.%m.%Y')} bis "
-            f"{end.strftime('%d.%m.%Y')}:")
+    # Label-Filter in Python anwenden, BEVOR gerendert wird.
+    if suche:
+        needle = suche.casefold()
+        days = {
+            day_iso: matches
+            for day_iso, entries in days.items()
+            if (matches := [e for e in entries
+                            if needle in e.get("label", "").casefold()])
+        }
+    span = (f"Kalender {start.strftime('%d.%m.%Y')} bis "
+            f"{end.strftime('%d.%m.%Y')}")
+    head = f"{span} (gefiltert nach {suche!r}):" if suche else f"{span}:"
     if not days:
-        return head + "\nKeine Einträge in diesem Zeitraum."
+        leer = (f"Keine Einträge mit {suche!r} in diesem Zeitraum."
+                if suche else "Keine Einträge in diesem Zeitraum.")
+        return head + "\n" + leer
     lines = [head]
     for day_iso, entries in days.items():
         d = date.fromisoformat(day_iso)
