@@ -63,7 +63,13 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
 _CORE = os.path.join(_ROOT, "core")
 sys.path.insert(0, _CORE)
-for _m in ("net", "context", "graph", "consolidation", "kalender", "state"):
+# kalender wird NICHT gestubbt: ai.py liest kalender.RANGE_BUCKETS auf
+# Modul-Ebene (in der TOOLS-Definition), ein leerer Stub wuerfe da einen
+# AttributeError. Das echte kalender ist harmlos (nur json/datetime/dateutil +
+# state-Logging, kein privater Graph) und laedt beim Import keine Daten.
+# graph/consolidation/net/context/state bleiben gestubbt - die nutzt ai.py nur
+# INNERHALB von Funktionen, nie auf Modul-Ebene.
+for _m in ("net", "context", "graph", "consolidation", "state"):
     if _m not in sys.modules:
         sys.modules[_m] = types.ModuleType(_m)
 

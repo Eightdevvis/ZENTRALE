@@ -19,3 +19,4 @@ data/*.bak*
 # Benchmark-Ergebnisse (Output von scripts/bench_models.py) — Mess-Artefakt
 # mit Zeitstempel, kein Code. Das Skript selbst wird versioniert.
 scripts/bench_results_*.json
+scripts/reasoning_results_*.md
