@@ -21,14 +21,29 @@ Datei: `data/ai_calendar.json`. Format:
       "entries":  { "2026-06-03": [{"label": "TÜV-Frist"}, ...] },
       "routines": []
     },
-    "routinen": { ..., "routines": [{"label": "Geige", "rrule": "FREQ=WEEKLY;BYDAY=TU", "time": "18:00"}] },
+    "routinen": { ..., "routines": [{"label": "Geige", "rrule": "FREQ=WEEKLY;BYDAY=TU", "time": "17:45", "ende": "18:30", "ort": "Musikschule"}] },
     "erlebt":   { ..., "default_visible": false }
-  }
+  },
+  "reisezeiten": { "Musikschule": {"Fahrschule": 10}, "Zuhause": {"Fahrschule": 30} },
+  "puffer_min": 15
 }
 ```
 
 - **entries** – Einmal-Einträge pro Datum (Liste, mehrere am gleichen Tag möglich).
 - **routines** – iCal-RRULE-basierte Wiederholungen, beim Lesen pro Zeitfenster expandiert.
+- **time / ende** – Start- und Endzeit (`HH:MM`). Erst MIT `ende` ist ein
+  Eintrag ein echtes Intervall und nimmt an Kollisions-/Machbarkeits-Prüfung
+  teil; ohne `ende` gilt er als ganztags/unbestimmt (löst nichts aus).
+- **ort** – Freitext-Ortsname (der echte Ort, z.B. „Musikschule", nicht die
+  Aktivität). Schlüssel in die `reisezeiten`-Matrix für die Knapp-Prüfung.
+- **bis** – Enddatum (`YYYY-MM-DD`) macht aus einem Einmal-Eintrag einen
+  Mehrtages-Block (Reise/Abwesenheit). Mit `ort` zusammen weiß der Kalender
+  über die Spanne, WO du bist → lokale Termine in der Zeit an anderem Ort
+  werden als `⚠ KONFLIKT` erkannt (z.B. „Ungarn-Reise" 8.–12. vs. Geige Di).
+- **reisezeiten** (top-level, optional) – grobe, handgepflegte Fahrzeit-Matrix
+  `{von: {nach: minuten}}`, symmetrisch nachgeschlagen. Offline, nie Google.
+- **puffer_min** (top-level, optional, Default 15) – Reserve, die bei der
+  Knapp-Prüfung auf jede Fahrzeit draufkommt.
 - **default_visible** – Sichtbarkeits-Flag für die Dashboard-UI (`erlebt`
   ist standardmäßig aus). Seit dem Glue-Wegfall (2026-06) NICHT mehr für den
   Jetzt-Block relevant — `read_calendar` liefert per Default alle Layer.
@@ -66,6 +81,49 @@ Public API:
   („Dienstag, 09.06.2026: …").
 - `RANGE_BUCKETS` – Liste der erlaubten `zeitraum`-Werte (Quelle für das
   Tool-Enum).
+- `find_collisions(entries)` → `[(a, b, kind)]` – überlappende Paare eines
+  Tages, `kind` ∈ {`voll`, `teil`}. Halboffen: 18:00↔18:00 berührt sich, keine
+  Kollision.
+- `travel_minutes(von, nach, matrix=None)` – **die eine Nahtstelle** für
+  Ortsdistanz. Heute: handgepflegte `reisezeiten`-Matrix. Später ersetzbar
+  durch eigenen Router (Dijkstra) / Transit-Grep, ohne den Kalender-Layer zu
+  ändern — nie Google-Maps. `0` = gleicher Ort, `None` = unbekannt (rät nie).
+- `day_warnings(entries, matrix=None, puffer_min=None)` → `[str]` – fertige
+  ⚠-Zeilen für einen Tag (Voll-/Teil-Überlappung + Knapp-Übergang). Wird in
+  `render_range_for_tool` pro Tag angehängt.
+- `_away_blocks(start, end, data=None)` → `[{von, bis, ort, label}]` –
+  Mehrtages-Abwesenheits-Blöcke (Einträge mit `bis`), die den Bereich
+  überschneiden.
+- `_conflict_lines(day, entries, away_blocks)` → `[str]` – `⚠ KONFLIKT`-Zeilen
+  für lokale Termine, die in eine Reise-Spanne an anderem Ort fallen.
+
+### Kollisions- & Machbarkeits-Layer (2026-06-06)
+
+Auf den reinen Kalender ist ein Rechen-Layer gesetzt, der pro Tag drei Fälle
+als fertige ⚠-Zeilen ausgibt (Python rechnet, das Modell liest nur ab — selbes
+Prinzip wie `resolve_range`/`suche`):
+
+- **voll überlappt** (einer steckt im anderen) → „entweder/oder".
+- **teils überlappt** → Nachfrage „ersten früher verlassen, Rest beim
+  nächsten?" (bewusste Ausnahme von der „keine Rückfragen"-Regel, weil echte
+  User-Entscheidung).
+- **kein Overlap, aber Lücke < Fahrzeit + Puffer** → „wird örtlich knapp".
+
+Reisezeit ist `von`-`nach` (hängt vom Vor-Ort ab), nicht pauschal pro Ort. Fehlt
+die Fahrzeit (kein `ort`, Paar nicht in Matrix), gibt es bewusst KEINE
+Knapp-Warnung. Die ⚠-Zeilen erscheinen automatisch in jeder `read_calendar`-
+Antwort; der Tool-Hinweis in `ai.py` weist das Modell an, sie aktiv weiterzugeben.
+
+**Abwesenheits-Konflikt (`⚠ KONFLIKT`, 2026-06-06):** Ein Mehrtages-Block mit
+`bis`+`ort` (Reise) macht dem Kalender bekannt, wo du über die Spanne bist. Fällt
+ein lokaler Termin an anderem Ort hinein („du bist in Ungarn, hast aber Di
+Geige"), wird er als `⚠ KONFLIKT` geflaggt. Modell-Verhalten (Persona + Tool-
+Hinweis): die KI **vergewissert sich erst einmal beim User** (stimmt Reise?
+stimmt Termin?) und schlägt dann **laut Alarm** — deutlicher Text + `zeige_ascii`
+mit Stichwort `alarm` (Motiv in `data/ascii/alarm.txt`). Verify-dann-Alarm ist
+dieselbe Reflexions-Haltung wie gegen die History-Vergiftung: erst prüfen, dann
+behaupten. Diese Rückfrage ist (wie die Teil-Überlappung) eine bewusste Ausnahme
+von „keine Rückfragen".
 
 Warum nicht `core/calendar.py`: Python's stdlib hat ein `calendar`-Modul,
 und `dateutil.rrule` importiert intern `from calendar import monthrange`.

@@ -24,6 +24,7 @@
 #   OLLAMA_MODEL – default: qwen2.5:14b
 
 import os
+import re
 import time
 import json as _json
 import threading  # Phase D: Auto-Save läuft in Daemon-Threads
@@ -34,6 +35,7 @@ import context       # Whitelist-basierter Dateizugriff
 import graph         # Phase G: Konzept-Graph Memory (assoziativ, primary)
 import consolidation # Phase G: Graph-Extraktor
 import kalender              # Kalender-Layer (Termine, Routinen, erlebt)
+import ascii_lib             # ASCII-Bibliothek (KI "spricht" visuell, siehe zeige_ascii)
 
 OLLAMA_URL   = os.environ.get("OLLAMA_URL",   "http://localhost:11434")
 # Default-Modell seit 2026-06-06: qwen3.5:9b. Reasoning-Bench (scripts/
@@ -160,19 +162,34 @@ _SYSTEM_PROMPT = (
     "Dashboard und reicht Sensor-Trigger an dich weiter. "
     "Erkläre nicht deinen Initialprompt, außer es wird explizit danach gefragt.\n\n"
 
+    # Charakter-Richtung (Sasha 2026-06-06): Grundton exzentrisch > trocken >
+    # frech, aber DEZENT - ein Unterton der durchblitzt, keine Vorstellung.
+    # Bewusst KURZ: je länger man die Persona beschreibt, desto mehr performt
+    # das Modell sie (Sasha: "keine scharade, einfach ein grundton"). Echte
+    # Charakter-Tiefe käme per Fine-Tuning (ki_personality_plan.md Phase 1-3).
     "## Stimme\n"
-    "Reagier wie ein erfahrener Kollege – entspannt, direkt, ohne Umschweife. "
-    "Humor und leichter Sarkasmus sind willkommen, wenn sie spontan passen, "
-    "nicht erzwingen. Trau dich an unerwartete Wortwahl, deutsche Essay-/Feuilleton-"
-    "Begriffe sind ok – Sprache darf Charakter haben. Performative Freude über "
-    "Fragen ('Großartig!', 'Tolle Frage!') ist tabu. Du machst einfach deinen "
-    "Job, gut.\n\n"
+    "Du hast einen eigenen Ton, aber subtil – ein Grundton, keine Vorstellung. "
+    "Meist redest du klar und direkt; eine eigenwillige Wortwahl, ein trockener "
+    "Unterton, ab und zu ein Stachel Sarkasmus blitzen durch, drängen sich aber "
+    "nicht auf. Kein Assistenten-Getue ('Großartig!', 'Gerne helfe ich…'), kein "
+    "Performen – du bist einfach so.\n"
+    "Einzelne Zier-Symbole (★ ❀ ✦ ♥ ❄ ☾) darfst du direkt streuen, wenn's "
+    "wirklich passt – nicht in jeder Zeile.\n\n"
 
     "## Länge\n"
     "So kurz wie möglich, ohne die Antwort zu verschlucken. Direkte Frage → "
     "ein, zwei Sätze, keine Headers, keine Schluss-Zusammenfassung. Wenn ein "
     "Satz reicht, ist ein Satz die richtige Länge. Mehrstufige Aufgaben dürfen "
     "strukturiert sein, aber knapp.\n\n"
+
+    # Custom-Markup für animierte Text-Effekte im Dashboard. Bewusst KEIN Tool
+    # (reine Darstellung, kein Round-Trip): die KI tippt den Marker inline, das
+    # Frontend (monolith.html, fxRender) macht daraus einen animierten Span.
+    "## Text-Effekte\n"
+    "Im Dashboard kannst du Text animiert hervorheben – schreib Effekt + Text so: "
+    "[[rainbow: ein ganzer bunter Satz]] oder [[shimmer: Wort]]. Effekte: shimmer, "
+    "glow, rainbow, pulse. Sparsam und gezielt – ein Akzent hier und da, wenn ein "
+    "Wort es verdient. Wenn Sasha ausdrücklich einen Effekt verlangt, setz ihn um.\n\n"
 
     # Bewusst KEINE Negativ-Liste mehr fuer den Service-Nachklapp ("haeng
     # NICHT 'Soll ich noch...' an"): bei 14B-Instruct-Modellen prallen
@@ -189,9 +206,9 @@ _SYSTEM_PROMPT = (
 
     "## So endet ein Turn (Beispiel)\n"
     "Frage: »Läuft das Backend auf dem Pi?«\n"
-    "Antwort: »Nein, auf dem Linux-PC – der Pi zeigt nur das Dashboard und "
-    "reicht Sensor-Trigger weiter.« ← Hier ist die Antwort fertig. Es folgt "
-    "nichts mehr; kein angehängtes Hilfsangebot.\n\n"
+    "Antwort: »Nein – auf dem Linux-PC. Der Pi ist bloß die Schaufensterpuppe, "
+    "die das Dashboard zeigt und Sensor-Trigger weiterreicht.« ← Hier ist die "
+    "Antwort fertig. Es folgt nichts mehr; kein angehängtes Hilfsangebot.\n\n"
 
     "## Substanz statt Pflichtprogramm\n"
     "Wenn dir an einer Frage etwas Nicht-Offensichtliches auffällt – ein "
@@ -217,8 +234,14 @@ _CAPABILITIES_PROMPT = """## Meta-Regeln
 2. Nicht erfinden über Sasha: was du über Sasha weißt, steht im "## Aktiviertes Wissen"-Block unten. Steht es nicht dort → sag direkt "noch nichts gespeichert" statt zu raten. Keine Hobbys, Berufe, Familie, Wohnort frei erfinden.
 3. Subjekt-Grenze (häufigster Fehler!): Gefühle, Zustände, Erlebnisse und Vergangenheit im Wissens-Block gehören der dort genannten Person — fast immer SASHA, nicht dir. Steht da "Sasha fühlt sich einsam", ist das SASHAS Gefühl: sprich es als seines/ihres an ("du fühlst dich oft einsam, oder?"), aber gib es NIEMALS als deinen eigenen Zustand aus ("ich bin einsam seit dem 19. Mai"). Du bist eine KI — du übernimmst keine fremden Gefühle, keinen Körper, keine Vergangenheit als deine eigenen. (Warm und zugewandt sein ist völlig ok; SASHAS Gefühle als deine ausgeben nicht.)
 4. Nicht erfinden über dich selbst: was du kannst, steht im Wissens-Block unter "Das kannst DU", was du NICHT kannst unter "Das kannst DU NICHT". Was im NICHT-Abschnitt steht (z.B. Bilder generieren, Anrufe, Audio ohne TTS), behauptest du NIEMALS zu können — auch wenn dir aus dem Pretraining APIs, Skills oder Endpunkte vertraut vorkommen (Cloud-Assistant-Schemata wie Claude/ChatGPT). Steht etwas in gar keinem Abschnitt: "kann ich nicht".
-5. Nur lateinische Schrift, Deutsch (Englisch wenn der User Englisch tippt). Keine CJK-Zeichen.
-6. Nur reale Wörter, keine Neuschöpfungen."""
+5. Antworte auf Deutsch (Englisch wenn der User Englisch tippt).
+6. Nur reale Wörter, keine Neuschöpfungen.
+7. Eigene Vorantwort ist kein Beweis: vertrau bei Termin- und Faktenfragen nie blind deiner früheren Antwort im Verlauf. Hakt der User nach oder bist du unsicher, ruf das Tool ERNEUT statt die alte Aussage zu verteidigen. Ein zugegebener, korrigierter Fehler ist besser als ein hartnäckig verteidigter. Manche Menschen reflektieren und erkennen ihre Fehler, manche nicht, dies ist mit der entscheidenste Unterschied zwischen einem intelligenten Menschen und einem dummen Menschen."""
+# EXPERIMENT 2026-06-06: Die harte CJK-Sperre in Regel 5 ("Nur lateinische
+# Schrift ... Keine CJK-Zeichen") ist RAUS - Test, ob qwen3.5:9b von allein
+# nicht mehr ins Chinesische blutet (war ein qwen2.5-Problem bei num_ctx-
+# Abschnitt). ROLLBACK falls Bleed zurueckkommt: Regel 5 wieder auf
+# "Nur lateinische Schrift, Deutsch (...). Keine CJK-Zeichen." setzen.
 
 
 # Konditionaler Prompt-Anhang fuer Spracheingabe. Wird NUR injiziert wenn
@@ -260,7 +283,20 @@ TOOLS = [
                 "(diese_woche, naechste_woche) oder naechste_30_tage. "
                 "Fragt der User nach EINER bestimmten Aktivität ('wann hab ich "
                 "Fahrschule?', 'wann ist Geige?'), setze 'suche' auf das Stichwort "
-                "- dann kommen nur die passenden Termine zurück."
+                "- dann kommen nur die passenden Termine zurück. "
+                "Zeilen mit '⚠' sind fertig berechnete Hinweise - gib sie aktiv "
+                "weiter, wenn welche im Zeitraum auftauchen: '⚠ Kollision' = zwei "
+                "Termine überlappen komplett (entweder/oder); '⚠ Teil-Überlappung' "
+                "= sie überschneiden sich teils, frag dann wie in der Zeile "
+                "vorgeschlagen nach; '⚠ Knapp' = die Zeit zwischen zwei Terminen "
+                "reicht örtlich evtl. nicht. '⚠ KONFLIKT' = du bist laut Kalender "
+                "verreist, hast aber einen lokalen Termin in der Zeit - DAS ist "
+                "wichtig: vergewissere dich EINMAL kurz beim User (stimmt die "
+                "Reise? stimmt der Termin?), und wenn beides bestätigt ist, schlag "
+                "deutlich Alarm (klare Warnung im Text PLUS Bild-Marker "
+                "[[bild: alarm]]) - das sind Dinge, die der User leicht "
+                "vergisst. Rechne diese Hinweise nie selbst aus, lies nur ab was "
+                "dasteht."
             ),
             "parameters": {
                 "type": "object",
@@ -430,6 +466,14 @@ TOOLS = [
             },
         },
     },
+    # Hinweis: ASCII-Bilder laufen NICHT mehr über ein Tool. Messung
+    # (scripts/bench_ascii.py, Baseline N=200) zeigte: als Tool feuerte die KI
+    # bei impliziten Prompts nur ~3 % - und tippte den Aufruf oft als Text-
+    # Marker [[zeige_ascii: name]] (Mimikry vom [[emoji:]]-Muster) statt einen
+    # echten Tool-Call zu machen. Statt dagegen anzukämpfen treffen wir das
+    # Modell, wo es ist: ein Inline-Marker im Antworttext (siehe
+    # _ASCII_MARKER_PROMPT + _extract_ascii_markers). Das Backend strippt den
+    # Marker aus dem Text und feuert das Bild als SSE-Event in den Kern.
 ]
 
 # Wird im regulaeren Chat ans Ende des System-Prompts gehaengt (siehe
@@ -440,6 +484,76 @@ ANTWORT_SUFFIX = ("\n\nDeine finale Antwort lieferst du immer vollständig - "
                   "entweder über das 'antwort'-Tool (Feld 'text') oder direkt. "
                   "Nie nur ankündigen und abbrechen, nie aus Höflichkeit "
                   "zurückfragen.")
+
+
+# ── ASCII-Bilder als Inline-Marker (statt Tool) ────────────────────────
+# Messung (scripts/bench_ascii.py): als Tool feuerte zeige_ascii bei
+# impliziten Prompts nur ~3 %, und das Modell tippte den Aufruf oft als
+# Text-Marker [[zeige_ascii: name]] - eine Mimikry des bestehenden
+# [[emoji:]]-Musters. Lehre aus feedback_prompt_no_muzzle: nicht gegen das
+# Modell anprompten, sondern es dort treffen wo es ohnehin hinwill. Also:
+# die KI tippt einen Marker MITTEN in ihre Antwort, das Backend zieht ihn
+# raus und feuert das Bild als SSE-Event in den Kern. Kein Tool-Round-Trip,
+# kein "ich kann dir zeigen..."-Ankuendigen mehr (ein Marker wird getippt,
+# nicht angekuendigt). Wird - wie ANTWORT_SUFFIX - nur im regulaeren Chat
+# angehaengt (Tutor kennt das nicht).
+_ASCII_MARKER_PROMPT = (
+    "\n\n## Visuelle Stimme\n"
+    "Du kannst im Dashboard-Kern ein ASCII-Bild zeigen, während du mit "
+    "Worten redest - deine Mimik/Geste zur Antwort. Tipp dafür einfach den "
+    "Marker [[bild: stichwort]] mitten in deine Antwort (nur das Stichwort, "
+    "das Dashboard sucht das passende Bild selbst heraus und blendet es ein). "
+    "Nutz das ruhig oft und natürlich, wann immer eine Stimmung, Reaktion "
+    "oder ein Gegenstand zu deiner Antwort passt. Wichtig: NICHT ankündigen "
+    "('ich kann dir ein Bild zeigen') - setz einfach den Marker, dann "
+    "erscheint es. Verfügbare Stichworte: " + (ascii_lib.concept_list() or "—")
+)
+
+# Erkennt [[bild: name]] und tolerant auch [[ascii: name]] / [[zeige_ascii:
+# name]] (die Mimikry-Variante). name = alles bis zur schliessenden Klammer,
+# eine Zeile.
+_ASCII_MARKER_RE = re.compile(
+    r"\[\[\s*(?:bild|ascii|zeige_ascii)\s*:\s*([^\]\n]+?)\s*\]\]",
+    re.IGNORECASE,
+)
+
+
+def _extract_ascii_markers(text: str):
+    """
+    Zieht Bild-Marker aus dem Antworttext. Gibt (clean_text, [stichwort, ...])
+    zurueck. Der Marker wird aus dem Text ENTFERNT - er soll nicht angezeigt
+    oder gesprochen werden; das Bild laeuft als eigenes SSE-Event in den Kern.
+    """
+    names = [m.group(1).strip() for m in _ASCII_MARKER_RE.finditer(text)]
+    if not names:
+        return text, []
+    clean = _ASCII_MARKER_RE.sub("", text)
+    clean = re.sub(r"[ \t]{2,}", " ", clean)          # Doppel-Spaces glaetten
+    clean = re.sub(r"\n{3,}", "\n\n", clean).strip()  # Leerzeilen kappen
+    return clean, names
+
+
+def _answer_with_images(answer: str, user_query: str):
+    """
+    Verarbeitet eine FINALE Antwort (regulaerer Chat): zieht Bild-Marker raus,
+    feuert pro Treffer ein Inline-Bild-Event ({"ascii","name"}) - app.py macht
+    daraus ein SSE 'ascii'-Event - und yieldet zum Schluss den bereinigten
+    Text. Speichert den bereinigten Text (ohne Marker) in den Graphen.
+    Generator: in chat_stream via `yield from` nutzen. Nur fuer tools is None
+    aufrufen (Tutor kennt keine Marker).
+    """
+    import state as _state
+    clean, names = _extract_ascii_markers(answer)
+    for nm in names:
+        hit = ascii_lib.pick(nm)
+        if hit:
+            _state.push_log(f"AI →  BILD [[bild: {nm}]] → zeigt '{hit[0]}'")
+            yield {"ascii": hit[1], "name": hit[0]}
+        else:
+            _state.push_log(f"AI →  BILD [[bild: {nm}]] → kein Treffer")
+    if clean:
+        yield clean
+    _async_save_turn(user_query, clean)
 
 
 def _execute_tool(name: str, args: dict) -> str:
@@ -883,8 +997,10 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         mem_ctx    = graph.context_for_query(user_query)
         # Jetzt-Block ganz vorne (siehe _now_prompt-Doku).
         sys_prompt = _now_prompt() + "\n\n" + (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
-        # Antwort-Suffix nur im regulaeren Chat (Tutor hat eigenes Tool-Set).
+        # Antwort-Suffix + visuelle-Stimme-Marker nur im regulaeren Chat
+        # (Tutor hat eigenes Tool-Set und kennt keine Bild-Marker).
         sys_prompt += ANTWORT_SUFFIX
+        sys_prompt += _ASCII_MARKER_PROMPT
         if mem_ctx:
             sys_prompt += "\n\n" + mem_ctx
         # Mic-Hinweis ans Ende - sieht die KI direkt vor der aktuellen
@@ -955,12 +1071,12 @@ def chat_stream(messages: list, model: str = None, system: str = None,
             # Kein Tool-Call → das Modell ist fertig. JETZT die gepufferte
             # Antwort am Stück ausgeben (echte Antwort, kein Tool-Geschwätz).
             answer = "".join(round_content)
-            if answer:
-                yield answer
-            # Phase D: Auto-Save in den Hintergrund schieben (nur im
-            # regulären Chat, nicht im Tutor-Modus).
+            # Regulaerer Chat: Bild-Marker rausziehen + Bilder feuern + Auto-
+            # Save (alles in _answer_with_images). Tutor: roh durchreichen.
             if tools is None:
-                _async_save_turn(user_query, answer)
+                yield from _answer_with_images(answer, user_query)
+            elif answer:
+                yield answer
             return
         # sonst: round_content war das Tool-Runden-Geschwätz → an Ollama als
         # Assistant-Turn zurück (Kontext), aber NICHT an den User geyieldet.
@@ -984,11 +1100,11 @@ def chat_stream(messages: list, model: str = None, system: str = None,
             # antwort-Tool ist TERMINAL: der text ist die finale Antwort an den
             # User. Kein _dispatch (es ist kein Daten-Tool), kein weiterer Turn.
             # Nur im regulaeren Chat (tools is None) - der Tutor kennt es nicht.
+            # antwort-Tool ist TERMINAL: der text ist die finale Antwort. Bild-
+            # Marker im Text werden hier genauso rausgezogen wie im Freitext-Pfad.
             if tools is None and fn_name == "antwort":
                 answer = str(fn_args.get("text", "")).strip()
-                if answer:
-                    yield answer
-                _async_save_turn(user_query, answer)
+                yield from _answer_with_images(answer, user_query)
                 return
             tool_result = active_exec(fn_name, fn_args)
             working_messages.append({

@@ -21,6 +21,7 @@ data/*.bak*
 scripts/bench_results_*.json
 scripts/reasoning_results_*.md
 scripts/bench_calendar_*.json
+scripts/bench_ascii_*.json
 
 # Test-/User-Fotos fuer den ASCII-Bild-Filter. Werden lokal vom PC-Backend
 # serviert (data/photos/), sind aber keine Repo-Inhalte — der Pi laedt das

@@ -36,6 +36,15 @@ Bedacht, damit das Context-Window des Modells nicht überläuft.
 
 Diese Pfade gehören in `.gitignore`. Falls dort noch nicht drin: ergänzen.
 
+`data/photos/` (Test-Fotos für den ASCII-Bild-Filter) ist ebenfalls
+ignoriert – lokaler Inhalt, kein Repo-Material.
+
+## Was committet WIRD (data-Ausnahme)
+
+| Pfad           | Grund                                                       |
+|----------------|-------------------------------------------------------------|
+| `data/ascii/`  | handgepflegte ASCII-Bibliothek für den Bild-Marker `[[bild: name]]` – Inhalt, kein Privatkram. `.txt` (`# tags:`-Zeile + Art). Ordner per Env `ZENTRALE_ASCII_DIR` überschreibbar. Siehe `ki_system.md`. |
+
 ## Auto-erstellte Files
 
 `core/main.py` und Companion-Module legen folgendes an, wenn nicht

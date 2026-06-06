@@ -138,14 +138,57 @@ Das Modell kann Tools "aufrufen" – ZENTRALE führt sie aus und schickt
 das Ergebnis zurück in den Kontext. Funktioniert mit jedem Tool-Use-
 fähigen Ollama-Modell; Default `qwen3.5:9b` (Env `OLLAMA_MODEL`).
 
-| Tool         | Funktion                                            |
-|--------------|-----------------------------------------------------|
-| `read_file`  | Datei aus der Whitelist lesen                       |
-| `list_files` | Verfügbare lesbare Dateien auflisten                |
+| Tool          | Funktion                                            |
+|---------------|-----------------------------------------------------|
+| `read_file`   | Datei aus der Whitelist lesen                       |
+| `list_files`  | Verfügbare lesbare Dateien auflisten                |
 
 Tool-Calls werden streng ans Dashboard-Terminal geloggt
 (`AI → TOOL read_file(...)` / `AI ← TOOL read_file → ok`). Sichtbar
 machen ob die KI ein Tool wirklich gerufen hat oder es nur behauptet.
+
+### Visuelle Stimme – Bild-Marker `[[bild: name]]`
+
+Die KI zeigt Mimik/Gesten, *während* sie mit Worten antwortet: ein
+passendes ASCII-Bild übernimmt kurz den Dashboard-Kern. Sie **malt nicht
+selbst** – ein 9b-Modell ist mies im freien ASCII-Malen (2D-Layout über
+1D-Tokenstrom), aber gut im Greppen. Also kuratiert es aus einer hand-
+gepflegten Bibliothek (`data/ascii/*.txt`, Modul
+[`core/ascii_lib.py`](../core/ascii_lib.py); Ordner per Env
+`ZENTRALE_ASCII_DIR`).
+
+**Kein Tool, sondern ein Inline-Marker.** Das war eine bewusste Kehrt-
+wende, gemessen mit [`scripts/bench_ascii.py`](../scripts/bench_ascii.py):
+als Tool (`zeige_ascii`) feuerte die KI bei impliziten Prompts nur **2,7 %**
+(N=200) – und tippte den Aufruf oft als Text-Marker `[[zeige_ascii: name]]`
+statt einen echten Tool-Call zu machen (Mimikry vom alten `[[emoji:]]`-
+Muster). Lehre aus [[feedback_prompt_no_muzzle]]: nicht gegen das Modell
+anprompten, sondern es dort treffen wo es hinwill. Umbau auf einen Inline-
+Marker hob die Quote auf **~93 %**. Die KI tippt `[[bild: stichwort]]`
+mitten in ihre Antwort; das Backend zieht den Marker raus, sucht das Bild
+und feuert es separat. Kein „ich kann dir zeigen…"-Ankündigen mehr (ein
+Marker wird getippt, nicht angekündigt).
+
+- **Datei-Format:** optionale erste Zeile `# tags: a, b, c`, danach reine
+  ASCII-Art. Fehlt die tags-Zeile → Dateiname ist der einzige Tag. Neue
+  Bilder einfach als `.txt` reinlegen (Backend neu starten, damit die
+  Stichwort-Liste im Prompt `_ASCII_MARKER_PROMPT` aktuell wird).
+- **Matching (Hybrid):** Stufe 1 Tag/Keyword (exakt > Substring >
+  Token-Überlappung), schnell + vorhersehbar. Greift nichts → Stufe 2
+  Embedding-Fallback (bge-m3, Stichwort=query gegen Tags=document) mit
+  Cosinus-Schwellwert `0.55`. Auch darunter → **kein Bild** (lieber keins
+  als ein falsches). Verfügbare Stichworte stehen im Prompt (wie
+  `RANGE_BUCKETS` beim Kalender), damit die KI nicht blind rät.
+- **Pipeline:** `_extract_ascii_markers` (Regex, tolerant: `[[bild:]]`,
+  `[[ascii:]]`, `[[zeige_ascii:]]`) zieht im regulären Chat die Marker aus
+  der finalen Antwort, `ascii_lib.pick` matcht, `chat_stream` yieldet pro
+  Treffer ein **Inline-Event** (`dict {"ascii","name"}`); `app.py` macht
+  daraus ein SSE-Event `ascii`. Der bereinigte Text (ohne Marker) wird
+  gesprochen/gespeichert. Tutor-Modus kennt die Marker NICHT. Frontend:
+  siehe „ASCII-Kern / Bild-Marker" in [dashboard.md](dashboard.md).
+- **Alt-Namen:** die 15 Namen des früheren `[[emoji:]]`-Kanals (shrug,
+  happy, flip, …) sind als englische Alias-Tags in der Bibliothek
+  hinterlegt, lösen also weiter auf.
 
 `save_memory` ist mit dem Legacy-Pfad rausgeflogen – der Graph-Extraktor
 läuft eh nach jedem Turn automatisch. Kalender-Tools (`read_calendar`,

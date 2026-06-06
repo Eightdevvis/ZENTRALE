@@ -289,6 +289,13 @@ def entries_in_range(start: date, end: date,
                     entry: dict = {"layer": layer_name, "label": r["label"]}
                     if r.get("time"):
                         entry["time"] = r["time"]
+                    # Ende + Ort mitschleppen, sonst sieht weder die Kollisions-
+                    # Prüfung (find_collisions, braucht ende) noch der Knapp-Check
+                    # (day_warnings/travel_minutes, braucht ort) die Routine.
+                    if r.get("ende"):
+                        entry["ende"] = r["ende"]
+                    if r.get("ort"):
+                        entry["ort"] = r["ort"]
                     out.setdefault(day_iso, []).append(entry)
             except Exception as e:
                 state.push_log(
@@ -421,6 +428,283 @@ def resolve_range(zeitraum: str, reference: date | None = None
     return None
 
 
+def _to_minutes(hhmm: str) -> int | None:
+    """'17:45' → 1065 (Minuten seit Mitternacht). None bei Murks."""
+    try:
+        h, m = hhmm.split(":")
+        return int(h) * 60 + int(m)
+    except (ValueError, AttributeError):
+        return None
+
+
+# Default-Puffer (Minuten), der bei der Reisezeit-Prüfung auf JEDE Fahrt
+# draufkommt - Reserve, falls was schiefläuft. Pro Kalender-Datei über das
+# Feld "puffer_min" überschreibbar (Entscheidung 2026-06-06).
+DEFAULT_PUFFER_MIN = 15
+
+
+def _interval(e: dict) -> tuple[int, int] | None:
+    """
+    (start_min, end_min) eines Eintrags in Minuten-seit-Mitternacht, oder
+    None wenn er KEIN echtes Zeit-Intervall ist (time/ende fehlt oder
+    ende <= start). Ganztags-Einträge (nur 'label') fallen so bewusst raus.
+    """
+    s  = _to_minutes(e.get("time", ""))
+    en = _to_minutes(e.get("ende", ""))
+    if s is None or en is None or en <= s:
+        return None
+    return s, en
+
+
+def _fmt_min(m: int) -> str:
+    """1065 → '17:45' (für Warnzeilen-Zeitangaben)."""
+    return f"{m // 60:02d}:{m % 60:02d}"
+
+
+def _fmt_entry(e: dict) -> str:
+    """'Geigenstunde (17:45-18:30)' für eine ⚠-Zeile."""
+    return f"{e.get('label', '?')} ({e.get('time', '?')}-{e.get('ende', '?')})"
+
+
+def find_collisions(entries: list[dict]) -> list[tuple[dict, dict, str]]:
+    """
+    Findet überlappende Termin-Paare an EINEM Tag und klassifiziert die Art.
+
+    Kollisions-Modell (entschieden 2026-06-06): ein Eintrag zählt nur dann
+    mit, wenn er SOWOHL 'time' ALS AUCH 'ende' hat - erst dann ist er ein
+    echtes Zeit-Intervall. Einträge ohne Ende gelten als ganztags/unbestimmt
+    und lösen bewusst keine Kollision aus (sonst würde jeder zeitlose Eintrag
+    mit allem "kollidieren").
+
+    Reine Intervall-Mathematik → gehört in Python, nicht ins Modell (selbes
+    Prinzip wie resolve_range fürs Datum, suche fürs Filtern). Das Modell
+    bekommt nur die fertige ⚠-Zeile serviert.
+
+    Rückgabe: Liste von (a, b, kind), a startet nicht nach b. kind ist:
+      'voll' – einer steckt komplett im anderen (oder identisch) →
+               entweder/oder, splitten bringt nichts.
+      'teil' – sie überschneiden sich nur teilweise, jeder hat Exklusiv-Zeit
+               → man könnte den ersten früher verlassen.
+
+    Overlap (halboffen): a_start < b_end und b_start < a_end. Termine, die
+    sich nur an der Grenze berühren (18:00↔18:00), kollidieren NICHT.
+    """
+    timed = []
+    for e in entries:
+        iv = _interval(e)
+        if iv:
+            timed.append((iv[0], iv[1], e))
+    timed.sort(key=lambda t: (t[0], t[1]))
+
+    out: list[tuple[dict, dict, str]] = []
+    for i in range(len(timed)):
+        a_s, a_e, a = timed[i]
+        for j in range(i + 1, len(timed)):
+            b_s, b_e, b = timed[j]
+            if not (a_s < b_e and b_s < a_e):
+                continue  # kein Overlap
+            # Umschließt einer den anderen vollständig? Dann 'voll', sonst nur
+            # teilweise. (Beide Richtungen prüfen, falls gleicher Startzeit-
+            # punkt aber unterschiedliche Länge.)
+            a_contains_b = a_s <= b_s and a_e >= b_e
+            b_contains_a = b_s <= a_s and b_e >= a_e
+            kind = "voll" if (a_contains_b or b_contains_a) else "teil"
+            out.append((a, b, kind))
+    return out
+
+
+def _load_config() -> tuple[dict, int]:
+    """
+    (reisezeiten-Matrix, puffer_min) aus der Kalender-Datei. Beide Felder sind
+    optional - fehlen sie, gilt leere Matrix bzw. DEFAULT_PUFFER_MIN. Die Matrix
+    ist {von: {nach: minuten}} und darf unvollständig/asymmetrisch sein
+    (travel_minutes schaut in beide Richtungen).
+    """
+    try:
+        data = _load_raw()
+    except Exception:
+        return {}, DEFAULT_PUFFER_MIN
+    matrix = data.get("reisezeiten") or {}
+    try:
+        puffer = int(data.get("puffer_min", DEFAULT_PUFFER_MIN))
+    except (TypeError, ValueError):
+        puffer = DEFAULT_PUFFER_MIN
+    return matrix, puffer
+
+
+def travel_minutes(von: str | None, nach: str | None,
+                   matrix: dict | None = None) -> int | None:
+    """
+    Grobe Reisezeit zwischen zwei Orten in Minuten - die EINE Nahtstelle für
+    Ortsdistanz. Heute liest sie eine handgepflegte, symmetrische Matrix aus
+    der Kalender-Datei ('reisezeiten'). Später kann hier ein eigener Router
+    (Dijkstra o.ä.) oder ein Transit-Grep andocken, OHNE dass der Kalender-
+    Layer drumherum sich ändert - bewusst NIE eine Google-Maps-Anbindung.
+
+    Rückgabe:
+      0    – gleicher Ort (kein Weg nötig)
+      int  – bekannte grobe Fahrzeit
+      None – Orte fehlen oder Paar nicht in der Matrix → KEINE Aussage
+             (lieber schweigen als eine Distanz erfinden)
+    """
+    if not von or not nach:
+        return None
+    if von == nach:
+        return 0
+    if matrix is None:
+        matrix, _ = _load_config()
+    if von in matrix and nach in matrix[von]:
+        return matrix[von][nach]
+    if nach in matrix and von in matrix[nach]:
+        return matrix[nach][von]
+    return None
+
+
+def day_warnings(entries: list[dict],
+                 matrix: dict | None = None,
+                 puffer_min: int | None = None) -> list[str]:
+    """
+    Baut die ⚠-Warnzeilen für einen Tag - genau die drei Fälle, die wir
+    festgelegt haben (2026-06-06):
+
+      • voll überlappt   → entweder/oder
+      • teils überlappt  → ersten früher verlassen + Rest beim nächsten?
+                           (bewusste Nachfrage - Ausnahme von "keine Rückfragen")
+      • kein Overlap, aber Lücke < Fahrzeit+Puffer → wird örtlich knapp
+
+    Reisezeit kommt aus travel_minutes (handgepflegte Matrix, offline). Fehlt
+    sie (Ort unbekannt / Paar nicht gepflegt / gleicher Ort), gibt es KEINE
+    Knapp-Warnung - der Layer rät nie über Distanzen.
+    """
+    if matrix is None or puffer_min is None:
+        m, p = _load_config()
+        matrix     = m if matrix     is None else matrix
+        puffer_min = p if puffer_min is None else puffer_min
+
+    warns: list[str] = []
+
+    # 1) Überlappungen (voll / teil)
+    for a, b, kind in find_collisions(entries):
+        if kind == "voll":
+            warns.append(
+                f"⚠ Kollision: {_fmt_entry(a)} und {_fmt_entry(b)} "
+                "überlappen sich komplett - entweder/oder."
+            )
+        else:
+            # Teil von b, der nach a-Ende noch übrig wäre (lohnt das Hinrennen?)
+            rest = _interval(b)[1] - _interval(a)[1]
+            warns.append(
+                f"⚠ Teil-Überlappung: {_fmt_entry(a)} und {_fmt_entry(b)} "
+                f"überschneiden sich. {a.get('label', '?')} früher verlassen "
+                f"und die restlichen {rest} min zu {b.get('label', '?')}?"
+            )
+
+    # 2) Knappe Übergänge zwischen direkt aufeinanderfolgenden Terminen.
+    #    Nur benachbarte Paare prüfen - eine Lücke gibt es immer nur zum
+    #    unmittelbar nächsten Termin.
+    timed = []
+    for e in entries:
+        iv = _interval(e)
+        if iv:
+            timed.append((iv[0], iv[1], e))
+    timed.sort(key=lambda t: (t[0], t[1]))
+    for i in range(len(timed) - 1):
+        _a_s, a_e, a = timed[i]
+        b_s, _b_e, b = timed[i + 1]
+        if b_s < a_e:
+            continue  # überlappt → schon unter (1) behandelt
+        tt = travel_minutes(a.get("ort"), b.get("ort"), matrix=matrix)
+        if not tt:  # None (unbekannt) oder 0 (gleicher Ort) → kein Hinweis
+            continue
+        gap  = b_s - a_e
+        need = tt + puffer_min
+        if gap < need:
+            warns.append(
+                f"⚠ Knapp: zwischen {a.get('label', '?')} (Ende {_fmt_min(a_e)}) "
+                f"und {b.get('label', '?')} ({_fmt_min(b_s)}) nur {gap} min - "
+                f"du brauchst ~{need} min (Fahrt {tt} + {puffer_min} Puffer)."
+            )
+    return warns
+
+
+def _away_blocks(start: date, end: date, data: dict | None = None) -> list[dict]:
+    """
+    Findet Mehrtages-Abwesenheits-Blöcke, die den Bereich [start, end]
+    überschneiden. Ein Block ist ein Einmal-Eintrag mit `bis`-Feld (Enddatum)
+    UND `ort` - z.B. eine Reise:
+
+        "2026-06-08": [{"label": "Ungarn-Reise", "bis": "2026-06-12", "ort": "Ungarn"}]
+
+    Damit weiß der Kalender über mehrere Tage, WO du bist - die Voraussetzung,
+    um lokale Termine in der Spanne (Geige daheim, während du in Ungarn bist)
+    als unmöglich zu erkennen. Ohne `bis` ist ein Eintrag ein Punkt und löst
+    keine Abwesenheit aus.
+
+    Rückgabe: Liste von {von, bis, ort, label} (von/bis als date).
+    """
+    if data is None:
+        data = _load_raw()
+    blocks: list[dict] = []
+    for layer in data.get("layers", {}).values():
+        for day_iso, day_entries in layer.get("entries", {}).items():
+            for e in day_entries:
+                bis = e.get("bis")
+                if not bis:
+                    continue
+                try:
+                    von_d = date.fromisoformat(day_iso)
+                    bis_d = date.fromisoformat(bis)
+                except ValueError:
+                    continue
+                if bis_d < von_d:
+                    continue
+                # Überschneidet der Block den abgefragten Bereich?
+                if bis_d >= start and von_d <= end:
+                    blocks.append({"von": von_d, "bis": bis_d,
+                                   "ort": e.get("ort"), "label": e.get("label", "?")})
+    return blocks
+
+
+def _conflict_lines(day: date, entries: list[dict],
+                    away_blocks: list[dict]) -> list[str]:
+    """
+    Prüft für EINEN Tag, ob ein konkreter Termin in eine Abwesenheits-Spanne
+    fällt, in der du an einem ANDEREN Ort bist - der „du bist in Ungarn, hast
+    aber Dienstag Geige"-Fall. Liefert fertige ⚠-KONFLIKT-Zeilen.
+
+    Modell-Verhalten (Persona): bei so einem KONFLIKT vergewissert sich die KI
+    einmal beim User (stimmt die Reise? stimmt der Termin?) und schlägt dann
+    laut Alarm (Text + zeige_ascii 'alarm') - statt blind oder stumm. Python
+    liefert nur das Signal, die KI führt die Verifikation.
+
+    Kein Konflikt, wenn der Termin am selben Ort wie das Reiseziel liegt
+    (du hast vor Ort was geplant). Ort unbekannt → trotzdem flaggen: du bist
+    verreist, lokale Termine sind dann höchst wahrscheinlich nicht machbar.
+    """
+    lines: list[str] = []
+    for blk in away_blocks:
+        if not (blk["von"] <= day <= blk["bis"]):
+            continue
+        for e in entries:
+            if not e.get("time"):
+                continue  # nur konkrete (zeitlich verortete) Termine
+            if e.get("label") == blk["label"]:
+                continue  # der Reise-Eintrag nicht gegen sich selbst
+            appt_ort = e.get("ort")
+            if blk["ort"] and appt_ort and appt_ort == blk["ort"]:
+                continue  # gleicher Ort wie Reiseziel → kein Konflikt
+            wd = _WEEKDAYS_FULL_DE[day.weekday()]
+            ort_str = f" @ {appt_ort}" if appt_ort else ""
+            lines.append(
+                f"⚠ KONFLIKT: {blk['von'].strftime('%d.%m.')}-"
+                f"{blk['bis'].strftime('%d.%m.')} bist du in "
+                f"{blk['ort'] or 'einer Reise'} ({blk['label']}), aber {wd} "
+                f"{day.strftime('%d.%m.')} {e['label']}{ort_str} - du kannst "
+                f"nicht an beiden Orten sein. Beim User rückversichern, dann Alarm."
+            )
+    return lines
+
+
 def render_range_for_tool(start: date, end: date,
                           layers: list[str] | None = None,
                           suche: str | None = None) -> str:
@@ -462,12 +746,40 @@ def render_range_for_tool(start: date, end: date,
         leer = (f"Keine Einträge mit {suche!r} in diesem Zeitraum."
                 if suche else "Keine Einträge in diesem Zeitraum.")
         return head + "\n" + leer
+    # Reisezeit-Matrix + Puffer EINMAL laden (nicht pro Tag/Paar die Datei
+    # neu lesen) und in day_warnings durchreichen. Abwesenheits-Blöcke
+    # (Reisen) ebenfalls einmal für den ganzen Bereich bestimmen.
+    matrix, puffer = _load_config()
+    away_blocks = _away_blocks(start, end)
     lines = [head]
     for day_iso, entries in days.items():
         d = date.fromisoformat(day_iso)
         wd = _WEEKDAYS_FULL_DE[d.weekday()]
         lines.append(f"{wd}, {d.strftime('%d.%m.%Y')}:")
         for e in entries:
-            t = f"{e['time']} " if e.get("time") else ""
-            lines.append(f"  [{e['layer']}] {t}{e['label']}")
+            # Zeit MIT Ende anzeigen, wenn vorhanden ('17:45-18:30'),
+            # sonst nur Startzeit - das Modell sieht so die Dauer direkt.
+            if e.get("time") and e.get("ende"):
+                t = f"{e['time']}-{e['ende']} "
+            elif e.get("time"):
+                t = f"{e['time']} "
+            else:
+                t = ""
+            ort = f" @ {e['ort']}" if e.get("ort") else ""
+            # Mehrtages-Block: Spanne sichtbar machen ('… (bis 12.06.)').
+            bis = ""
+            if e.get("bis"):
+                try:
+                    bis = f" (bis {date.fromisoformat(e['bis']).strftime('%d.%m.')})"
+                except ValueError:
+                    pass
+            lines.append(f"  [{e['layer']}] {t}{e['label']}{bis}{ort}")
+        # Warnungen dieses Tages anhängen. Python rechnet, das Modell liest die
+        # fertige ⚠-Zeile nur ab:
+        #  - Voll-/Teil-Überlappung + zu-knapp (day_warnings)
+        #  - Abwesenheits-Konflikt: lokaler Termin während einer Reise
+        for w in day_warnings(entries, matrix=matrix, puffer_min=puffer):
+            lines.append("  " + w)
+        for w in _conflict_lines(d, entries, away_blocks):
+            lines.append("  " + w)
     return "\n".join(lines)

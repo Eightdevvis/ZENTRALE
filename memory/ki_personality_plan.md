@@ -54,10 +54,15 @@ nur kleine Adapter-Matrizen. Senkt VRAM-Bedarf um Größenordnungen.
 
 **Ziel:** Den größten Stil-Shift ohne FT herausholen.
 
-**Status:** Zweiter Pass (`_SYSTEM_PROMPT` in `core/ai.py`, ~410 Tokens,
-fünf Sektionen: Stimme / Länge / Floskel-Stopliste / So endet ein Turn
-(Beispiel) / Substanz statt Pflichtprogramm). Adressiert die drei
-beobachteten Probleme aus der Bestandsaufnahme:
+**Status:** Dritter Pass (`_SYSTEM_PROMPT` in `core/ai.py`, sechs Sektionen:
+Stimme / Länge / Floskel-Stopliste / So endet ein Turn (Beispiel) / Substanz
+statt Pflichtprogramm / Text-Effekte). 2026-06-06: Stimme auf eine echte
+Charakter-Richtung umgestellt (Sasha gewählt: exzentrisch/Feuilleton > trocken-
+lakonisch > frech/sarkastisch, nicht ernst), bewusst erlaubend statt geknebelt
+formuliert (Verbote/Einschränkungen primen & produzieren Verweigerung). Neue
+Text-Effekte-Sektion (`[[effekt: text]]`, großzügig statt sparsam). Inhalt im
+Code, hier nur Status. Adressiert die drei beobachteten Probleme aus der
+Bestandsaufnahme:
 - *Robotisch* → konkrete Stimm-Beschreibung mit Wortwahl-Erlaubnis
 - *„Soll ich noch X für dich tun?" als Reflex* → **2026-05-31 nachgeschärft.**
   Erster Pass hatte das per Negativ-Liste verboten („häng NICHT 'Soll ich

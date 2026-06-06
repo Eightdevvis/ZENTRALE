@@ -102,6 +102,37 @@ durchscheinendem Background, CRT-Scanlines als statisches Overlay
 - Tastaturgesteuerte Datenerfassung.
 - Details siehe unten.
 
+## Monolith-Dashboard (`/monolith`)
+
+Separate, neuere Dashboard-Variante (`ui/templates/monolith.html`, ein
+einziges großes HTML mit mehreren IIFE-Script-Blöcken). Herzstück ist ein
+animierter **ASCII-Kern** (`#core`), gesteuert vom *Exhibit-Direktor*
+(`frameTick`, 90 ms/Frame). Umschaltbare Exhibits über Tabs: `gesicht`
+(Avatar), `torus`, `würfel`, `globus`, `welt` (Weltkarte), `filter`
+(Bild→ASCII-Filter aus `data/photos/`, mono/farbe per Re-Klick).
+
+> Die IIFEs sind getrennte Scopes. Cross-Scope-Signale laufen über den
+> CustomEvent-Bus auf `window` (`zentrale:logged`, `zentrale:ascii`),
+> nicht über geteilte Funktionen.
+
+### ASCII-Kern / Bild-Marker (KI redet visuell)
+
+Tippt die KI in ihrer Antwort den Marker `[[bild: stichwort]]` (Backend-
+Pipeline + Begründung der Marker-statt-Tool-Entscheidung siehe
+`ki_system.md`), übernimmt das gematchte ASCII-Bild den Kern **auf Zeit**:
+
+- **Transport:** Das Backend zieht den Marker aus dem Antworttext und
+  yieldet das Bild **inline** im SSE-Antwort-Stream → Event `data.ascii`
+  (der Marker selbst erreicht das Frontend nie als Text). Der Chat-IIFE-
+  Leser feuert daraus ein `window`-Event `zentrale:ascii` `{art, name}`;
+  der Exhibit-Direktor (andere IIFE) hört darauf und ruft `showAiArt()`.
+  So erscheint das Bild synchron, während die Worte streamen.
+- **Anzeige:** `showAiArt` setzt `aiArt` (Vorrang vor allen Exhibits).
+  `frameTick` blendet das Bild zeilenweise ein (`AI_ART_REVEAL` ≈ 14
+  Frames), hält es `AI_ART_HOLD` ≈ 110 Frames (~10 s) und kehrt dann
+  automatisch zum normalen Auto-Programm zurück (`syncTabs`).
+- Kein Text → nicht im Minilog, kein TTS. Reine Mimik zur Antwort.
+
 ## Data Collection
 
 Taste `K` öffnet den Data-Collection-Modus.

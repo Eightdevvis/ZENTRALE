@@ -131,7 +131,11 @@
   .minilog { flex-shrink: 0; height: 100px; overflow: hidden; display: flex; flex-direction: column; gap: 5px; margin-top: 8px; position: relative; z-index: 2; background: var(--bg); }
   .ml-row { display: grid; grid-template-columns: 64px 1fr; gap: 9px; font-size: 13px; line-height: 1.42; }
   .ml-role { font-size: 12px; letter-spacing: 0.05em; } .ml-role.user { color: var(--warn); } .ml-role.ai { color: var(--acc); }
-  .ml-text { color: var(--ink); } .ml-text .cur { color: var(--bright); animation: blink .8s step-start infinite; }
+  /* Symbol-Fonts NUR an der KI-Prosa (Fallback für ★ ❀ ✦ ♥ …) – NICHT am
+     #core/ASCII-Grid, sonst klauen sie Box-/Block-Zeichen und brechen die
+     Monospace-Ausrichtung der Gesichter/Balken. */
+  .ml-text { color: var(--ink); font-family: 'JetBrains Mono', 'Noto Sans Symbols', 'Noto Sans Symbols 2', ui-monospace, monospace; }
+  .ml-text .cur { color: var(--bright); animation: blink .8s step-start infinite; }
   @keyframes blink { 50% { opacity: 0; } }
 
   /* Tracker */
@@ -192,6 +196,35 @@
   .dc-smiley.sel { color: var(--acc); }
   .dc-smiley.hov { color: var(--acc); filter: drop-shadow(0 0 7px color-mix(in srgb, var(--acc) 70%, transparent)); }
   .dc-hint { margin-top: 14px; font-size: 11px; letter-spacing: 0.08em; color: var(--dim); text-transform: uppercase; }
+
+  /* ── Text-Effekte ([[effekt: wort]] in KI-Antworten) ──
+     Eigene Inline-Spezialeffekte, die die KI gezielt setzen kann. Neuen
+     Effekt hinzufügen = eine .fx-<name>-Klasse hier + den Namen in FX_OK
+     (im Skript) whitelisten. Sonst nichts. */
+  .fx-shimmer {
+    /* orange Basis mit hell gelb-grünem Schimmer, der drüberläuft */
+    background: linear-gradient(100deg, #e8852c 0%, #e8852c 42%, #eaff8a 50%, #e8852c 58%, #e8852c 100%);
+    background-size: 240% 100%; -webkit-background-clip: text; background-clip: text;
+    color: transparent; -webkit-text-fill-color: transparent; font-weight: 600;
+    animation: fxshimmer 2.6s linear infinite;
+  }
+  @keyframes fxshimmer { from { background-position: 130% 0; } to { background-position: -130% 0; } }
+  .fx-glow { color: var(--acc); animation: fxglow 1.6s ease-in-out infinite; }
+  @keyframes fxglow { 0%,100% { text-shadow: 0 0 4px var(--acc); } 50% { text-shadow: 0 0 12px var(--acc), 0 0 20px var(--acc); } }
+  /* echter Regenbogen-Verlauf über die Buchstaben (clip-text), der durchfließt
+     — sieht bei einem ganzen Satz viel mehr nach Regenbogen aus als ein
+     gemeinsam zyklierendes Wort */
+  .fx-rainbow {
+    background: linear-gradient(90deg, #ff5252, #ff9f1c, #ffe14d, #5cff95, #4dd2ff, #9b5cff, #ff5252);
+    background-size: 200% 100%; -webkit-background-clip: text; background-clip: text;
+    color: transparent; -webkit-text-fill-color: transparent; font-weight: 600;
+    animation: fxrainbow 3s linear infinite;
+  }
+  @keyframes fxrainbow { from { background-position: 0 0; } to { background-position: 200% 0; } }
+  .fx-pulse { display: inline-block; animation: fxpulse 1.3s ease-in-out infinite; }
+  @keyframes fxpulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  /* Diagnose: von der KI erfundene/ungültige Marker rot + gepunktet markiert */
+  .fx-bad { color: #ff5252; text-decoration: underline dotted; }
 </style>
 </head>
 <body>
@@ -567,8 +600,37 @@
       else { EX.mode = 'manual'; gestureLeft = 0; setCurrent(ex); }
     });
 
+    // ── KI-Bild-Übernahme (zeige_ascii) ──────────────────────────────────
+    // Schickt die KI über zeige_ascii ein ASCII-Bild, übernimmt es den Kern
+    // für eine Weile ("Übernahme auf Zeit") und blendet sich zeilenweise ein
+    // (Reveal/Typewriter). Danach kehrt der Exhibit-Direktor automatisch zum
+    // normalen Auto-Programm zurück. Hat Vorrang vor allen anderen Exhibits.
+    var aiArt = null;            // { lines:[...], born:fi, name }
+    var AI_ART_HOLD   = 110;     // Standzeit in Frames (~10 s bei 90 ms/Frame)
+    var AI_ART_REVEAL = 14;      // Frames bis das Bild voll eingeblendet ist
+    function showAiArt(text, name) {
+      aiArt = { lines: String(text).replace(/\s+$/, '').split('\n'),
+                born: fi, name: name || 'ki-bild' };
+      coreEl.classList.remove('filtimg');
+      aiMeta.textContent = 'ki zeigt: ' + aiArt.name;
+    }
+    // Brücke aus der Chat-IIFE: zeige_ascii-Event aus dem SSE-Stream.
+    window.addEventListener('zentrale:ascii', function (e) {
+      showAiArt(e.detail.art, e.detail.name);
+    });
+
     function frameTick() {
       fi++;
+      // KI-Bild hat Vorrang und übernimmt den Kern auf Zeit.
+      if (aiArt) {
+        var age = fi - aiArt.born;
+        if (age > AI_ART_HOLD) { aiArt = null; syncTabs(); }   // Zeit um → zurück
+        else {
+          var shown = Math.max(1, Math.ceil(aiArt.lines.length * age / AI_ART_REVEAL));
+          coreEl.textContent = aiArt.lines.slice(0, shown).join('\n');
+          return;
+        }
+      }
       var c = EX.current;
       coreEl.classList.toggle('filtimg', c === 'filter');   // kleine Schrift nur im Bild-Filter
       if (c === 'gesicht') coreEl.textContent = ASCII.personFrame(people[avatar], ZS.aiState, fi);
@@ -652,10 +714,28 @@
 
     // ── KI-Zustand + Minilog ──
     var aiState = document.getElementById('ai-state');
+
+    // Text-Effekte: HTML escapen, dann [[effekt: wort]] → animierter Span.
+    // Nur Whitelist-Effekte (shimmer/glow/rainbow/pulse); unbekannte/erfundene
+    // Marker (z.B. [[hallo: hallo]]) werden im DIAGNOSE-MODUS rot markiert
+    // sichtbar gemacht (.fx-bad). Neuer Effekt = Name hier + CSS-Klasse.
+    var FX_OK = { shimmer: 1, glow: 1, rainbow: 1, pulse: 1 };
+    function _esc(t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function fxRender(raw) {
+      var s = _esc(raw || '');
+      return s.replace(/\[\[(\w+):\s*([^\]]+)\]\]/g, function (m, name, txt) {
+        name = name.toLowerCase();
+        // DIAGNOSE-MODUS: unbekannter/erfundener Marker (z.B. [[hallo: hallo]])
+        // → SICHTBAR rot markiert, damit Sasha beurteilen kann wie oft die KI
+        // falsche Marker baut. Zum Verstecken später: ': txt' (nur Text).
+        return FX_OK[name] ? '<span class="fx-' + name + '">' + txt + '</span>' : '<span class="fx-bad">' + m + '</span>';
+      });
+    }
+
     function renderMini() {
       document.getElementById('minilog').innerHTML = ZS.aiHistory.slice(-2).map(function (it) {
         var cur = (it.role==='ai' && ZS.aiState==='streaming' && it===ZS.aiHistory[ZS.aiHistory.length-1]) ? '<span class="cur">█</span>' : '';
-        return '<div class="ml-row"><span class="ml-role ' + (it.role==='user'?'user':'ai') + '">' + (it.role==='user'?'DU ›':'KI ›') + '</span><span class="ml-text">' + it.text + cur + '</span></div>';
+        return '<div class="ml-row"><span class="ml-role ' + (it.role==='user'?'user':'ai') + '">' + (it.role==='user'?'DU ›':'KI ›') + '</span><span class="ml-text">' + fxRender(it.text) + cur + '</span></div>';
       }).join('');
     }
     // Spinner
@@ -733,7 +813,13 @@
       if (currentSpeakAudio) { try { currentSpeakAudio.pause(); } catch (e) {} currentSpeakAudio = null; }
     }
     function enqueueSpeak(text) {
-      var clean = text.trim();
+      // Effekt-Marker [[shimmer: wort]] → nur das Wort vorlesen (nicht die Syntax).
+      var clean = (text || '').replace(/\[\[\w+:\s*([^\]]+)\]\]/g, '$1');
+      // Zier-Symbole (Sterne/Blumen/Herzen/Pfeile/Box-/Block-Zeichen) nicht
+      // vorlesen – Bereiche: Pfeile (2190–21FF), Misc-Technical…Dingbats
+      // (2300–27BF), Misc-Symbols-and-Arrows (2B00–2BFF).
+      clean = clean.replace(/[←-⇿⌀-➿⬀-⯿]/g, '');
+      clean = clean.replace(/\s{2,}/g, ' ').trim();
       if (!clean || chatMuted) return;
       speakQueue.push(clean); drainSpeakQueue();
     }
@@ -846,6 +932,15 @@
             if (line.indexOf('data: ') !== 0) continue;
             var data = JSON.parse(line.slice(6));
             if (data.done) break;
+            // Inline-Bild-Event (zeige_ascii): KI zeigt ein ASCII-Bild im
+            // Kern, parallel zum Text. Kein Antworttext → nicht ins Minilog,
+            // nicht sprechen. Der Exhibit-Direktor lebt in einer anderen
+            // IIFE → über den CustomEvent-Bus signalisieren (wie zentrale:logged).
+            if (data.ascii) {
+              window.dispatchEvent(new CustomEvent('zentrale:ascii',
+                { detail: { art: data.ascii, name: data.name } }));
+              continue;
+            }
             if (data.token) {
               if (!streamingStarted) { streamingStarted = true; ZS.pushHistory('ai', ''); ZS.setAi('streaming'); }
               fullText += data.token;

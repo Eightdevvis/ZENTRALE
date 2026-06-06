@@ -312,6 +312,13 @@ def api_chat():
         collected = []
 
         for token in ai.chat_stream(history, via_mic=via_mic):
+            # zeige_ascii liefert ein Dict statt eines Text-Tokens: ein
+            # Inline-Bild-Event. Es geht als eigenes SSE-Event 'ascii' raus
+            # und NICHT in collected - es ist kein Antworttext, wird also
+            # weder gesprochen noch in der History gespeichert.
+            if isinstance(token, dict) and 'ascii' in token:
+                yield f"data: {json.dumps({'ascii': token['ascii'], 'name': token.get('name')})}\n\n"
+                continue
             collected.append(token)
             # SSE-Format: "data: " + JSON + zwei Newlines
             # JSON.dumps schützt vor Sonderzeichen (Newlines im Token, etc.)
