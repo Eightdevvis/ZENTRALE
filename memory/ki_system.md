@@ -3,7 +3,7 @@
 ## Architektur
 
 ```
-Browser ──POST /api/chat──▶ ui/app.py ──▶ core/ai.py ──▶ Ollama (qwen2.5:14b)
+Browser ──POST /api/chat──▶ ui/app.py ──▶ core/ai.py ──▶ Ollama (qwen3.5:9b)
                                              │
                                              ├─▶ graph.py        (Konzept-Graph, primary memory)
                                              ├─▶ embeddings.py   (bge-m3, Alias-Resolution + Entry-Points)
@@ -15,6 +15,17 @@ Browser ──POST /api/chat──▶ ui/app.py ──▶ core/ai.py ──▶ O
 `consolidation.py` reden ebenfalls direkt mit Ollama (Embeddings bzw.
 Extraktor-LLM), aber alle gehen durch `core/net.py` – damit landet jeder
 Request im Terminal (siehe Network-Transparenz unten).
+
+**Modell-Update (2026-06-06):** Default ist jetzt **qwen3.5:9b** (vorher
+qwen2.5:14b). Begründung: Reasoning-Bench (`scripts/bench_reasoning.py`)
+zeigte es gleichstark zu qwen3:14b (10/11 ohne Thinking), aber schneller
+(68 vs 47 tok/s) und kleiner (8.8 statt 11 GB VRAM → ~3 GB frei für
+Browser/Desktop, behebt die VRAM-Contention-Crashes). Tool-Calling 100%,
+kein Leak (`scripts/bench_models.py`). **Wichtig:** qwen3/qwen3.5 denken
+per Default vor jeder Antwort (30–80 s Latenz!) → `ai.py` und
+`consolidation.py` schicken `think=false` (nur für qwen3*, siehe
+`_think_opts` / `SUPPORTS_THINK`). Per Env `OLLAMA_MODEL` umstellbar
+(Fallback qwen3:14b / qwen2.5:14b).
 
 ## Memory-Architektur (Phase G – Konzept-Graph)
 
@@ -125,7 +136,7 @@ Endpoint – die alte `/api/memory`-Form ist nicht mehr passend
 
 Das Modell kann Tools "aufrufen" – ZENTRALE führt sie aus und schickt
 das Ergebnis zurück in den Kontext. Funktioniert mit jedem Tool-Use-
-fähigen Ollama-Modell; Default `qwen2.5:14b` (Env `OLLAMA_MODEL`).
+fähigen Ollama-Modell; Default `qwen3.5:9b` (Env `OLLAMA_MODEL`).
 
 | Tool         | Funktion                                            |
 |--------------|-----------------------------------------------------|
@@ -197,7 +208,8 @@ Docs) sich als eigene Fähigkeit ausgibt.
   `WARMUP ✗  Ollama nach 5 Versuchen … nicht erreichbar, überspringe`.
   Klappt's beim zweiten Versuch, kommt `WARMUP ✓  Ollama nach 2
   Versuchen erreichbar` ins Log.
-- Mini-Chat mit `num_predict=1` zieht qwen2.5:14b (~9 GB) in den RAM.
+- Mini-Chat mit `num_predict=1` (plus `think=false`) zieht qwen3.5:9b
+  (~8.8 GB) in den RAM.
 - Mini-Embed-Call zieht bge-m3 in den RAM.
 - `OLLAMA_KEEP_ALIVE=30m` hält beide Modelle warm (Env-überschreibbar:
   `-1` = ewig, `0` = sofort unloaden für RAM-knappe Setups).
@@ -262,7 +274,7 @@ Tests: `scripts/test_net_internet.py` (48 Cases, untracked).
 
 ## Chat-Modus
 
-- KI-Chat mit qwen2.5:14b (oder via `OLLAMA_MODEL`), tokenweise gestreamt.
+- KI-Chat mit qwen3.5:9b (oder via `OLLAMA_MODEL`), tokenweise gestreamt.
 - KI hat Zugriff auf Whitelist-Dateien + Graph-Memory.
 - Slash-Commands im Chat:
   - `/memory` – Memory-Stats anzeigen (Graph + LTM)

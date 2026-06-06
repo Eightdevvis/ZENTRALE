@@ -36,7 +36,25 @@ import consolidation # Phase G: Graph-Extraktor
 import kalender              # Kalender-Layer (Termine, Routinen, erlebt)
 
 OLLAMA_URL   = os.environ.get("OLLAMA_URL",   "http://localhost:11434")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
+# Default-Modell seit 2026-06-06: qwen3.5:9b. Reasoning-Bench (scripts/
+# bench_reasoning.py) zeigte es gleichstark zu qwen3:14b (10/11 ohne Thinking),
+# aber schneller (68 vs 47 tok/s) und kleiner (8.8 statt 11 GB VRAM -> laesst
+# Luft fuer Browser/Desktop, behebt die VRAM-Contention-Crashes). Tool-Calling
+# 100%. Per Env OLLAMA_MODEL umstellbar (Fallback z.B. qwen3:14b / qwen2.5:14b).
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3.5:9b")
+
+# qwen3/qwen3.5 "denken" per Default vor JEDER Antwort (lange Reasoning-Traces
+# -> 30-80 s Latenz pro Turn; gemessen 55 s fuer ein blankes "Hallo"). Fuer den
+# Voice-/Chat-Use-Case toedlich, also schalten wir Thinking explizit AUS. Das
+# `think`-Feld ist nur fuer Thinking-faehige Modelle (qwen3*) gueltig; bei
+# aelteren (qwen2.5) wuerfe Ollama 400, deshalb nur dann setzen.
+SUPPORTS_THINK = OLLAMA_MODEL.startswith("qwen3")
+
+
+def _think_opts() -> dict:
+    """{'think': False} fuer Thinking-Modelle, sonst {} - zum Spreaden in die
+    /api/chat-Payloads (siehe SUPPORTS_THINK)."""
+    return {"think": False} if SUPPORTS_THINK else {}
 
 # Ollama unloadet ein Modell nach Default 5 Min Idle - dann zahlt der
 # nächste Turn den Cold-Load (qwen2.5:14b sind ~9 GB, das sind ein paar
@@ -502,6 +520,7 @@ def warmup():
             f"{OLLAMA_URL}/api/chat",
             {
                 "model":      OLLAMA_MODEL,
+                **_think_opts(),   # Thinking aus - sonst "denkt" der Warmup minutenlang
                 "messages":   [{"role": "user", "content": "ping"}],
                 "stream":     False,
                 "keep_alive": OLLAMA_KEEP_ALIVE,
@@ -716,6 +735,7 @@ def chat(messages: list, model: str = None, system: str = None) -> str:
 
     payload = {
         "model":      model,
+        **_think_opts(),
         "messages":   [{"role": "system", "content": sys_prompt}, *messages],
         "tools":      TOOLS,
         "stream":     False,
@@ -808,6 +828,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     for _ in range(max_rounds):
         payload = {
             "model":      model,
+            **_think_opts(),
             "messages":   working_messages,
             "tools":      active_tools,
             "stream":     True,

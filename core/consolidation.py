@@ -25,7 +25,7 @@ import kalender              # Auto-Capture in den erlebt-Layer
 
 # ── Konfiguration ──────────────────────────────────────────────────────
 OLLAMA_URL        = os.environ.get("OLLAMA_URL",        "http://localhost:11434")
-OLLAMA_MODEL      = os.environ.get("OLLAMA_MODEL",      "qwen2.5:14b")
+OLLAMA_MODEL      = os.environ.get("OLLAMA_MODEL",      "qwen3.5:9b")
 # Modell warmhalten - dieser Extraktor läuft async nach jedem Turn,
 # wenn das Modell zwischendurch unloadet wird kostet jeder Lauf den
 # Reload. Default 30m, per Env überschreibbar.
@@ -37,6 +37,10 @@ OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
 # (Chat@8192 → Konsolidierung@default → naechster Chat@8192 = 2 Reloads
 # pro Frage, ~17 s je Reload). Gleicher Wert = eine Instanz, kein Reload.
 OLLAMA_NUM_CTX    = int(os.environ.get("OLLAMA_NUM_CTX", "8192"))
+# qwen3/qwen3.5 denken per Default vor jeder Antwort -> dieser JSON-Extraktor
+# wuerde pro Turn minutenlang "nachdenken" statt nur Fakten zu liefern.
+# Thinking aus. Nur fuer qwen3* gueltig (qwen2.5 -> Ollama 400), daher kond.
+SUPPORTS_THINK    = OLLAMA_MODEL.startswith("qwen3")
 
 
 # ── Sanitization für extrahierte Edges ────────────────────────────────
@@ -187,6 +191,7 @@ def _call_graph_extractor(user_msg: str, ai_msg: str, today: str) -> tuple[list[
             f"{OLLAMA_URL}/api/chat",
             {
                 "model":    OLLAMA_MODEL,
+                **({"think": False} if SUPPORTS_THINK else {}),
                 "messages": [
                     {"role": "system", "content": _GRAPH_EXTRACTOR_PROMPT},
                     {"role": "user",   "content": body},
