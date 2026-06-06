@@ -5,6 +5,14 @@
 Description=ZENTRALE Core (PC) - main + Flask
 After=network-online.target
 Wants=network-online.target
+# Audio-Sidecars mitziehen: `systemctl restart zentrale-pc` startet damit den
+# ganzen Stack (whisper/STT + tts), nicht nur das Backend. NUR Wants=, KEIN
+# After= auf die Sidecars: die deklarieren selbst schon `After=zentrale-pc`
+# (starten nach dem Core). Ein After= hier zurueck erzeugte einen Ordering-
+# Cycle (Core nach Sidecars UND Sidecars nach Core), den systemd durch
+# Verwerfen des Sidecar-Starts bricht -> sie kamen nie hoch. Wants ist
+# ordering-frei = sauber. Stop von zentrale-pc laesst die Sidecars laufen.
+Wants=whisper-pc.service tts-pc.service
 
 [Service]
 Type=simple
