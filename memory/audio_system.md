@@ -7,7 +7,7 @@ Parameter:
 
 | Aufrufer       | Endpoint              | `lang`-Default                 |
 |----------------|-----------------------|--------------------------------|
-| Haupt-Chat     | `POST /api/speak`     | `de` (Piper / thorsten-medium) |
+| Haupt-Chat     | `POST /api/speak`     | `de` (Piper / `PIPER_DE_VOICE`) |
 | Haupt-Chat     | `POST /api/transcribe`| `de` (Whisper)                 |
 
 > Die früheren Tutor-Aliase `/api/tutor/speak` und `/api/tutor/transcribe`
@@ -146,7 +146,7 @@ audio.py  ──HTTP──▶  tts_service.py  (Port 5051)
                           │
                           ▼ Engine-Registry, eine Engine pro Sprache:
                           ▼   zh → sherpa-onnx vits-zh-aishell3 (174 Sprecher)
-                          ▼   de → piper de_DE-thorsten-medium  (1 Sprecher)
+                          ▼   de → piper, Voice via PIPER_DE_VOICE (1 Sprecher)
                           ▼   andere → 503 + Hinweis
                        WAV-Bytes (audio/wav)
    ◀──────────────────────┘
@@ -197,7 +197,7 @@ audio.py  ──HTTP──▶  tts_service.py  (Port 5051)
 - **Engine-Registry**: pro Sprache ein eigenes Modell, alle parallel
   geladen:
   - `zh` – sherpa-onnx mit `vits-zh-aishell3` (174 Sprecher, Apache-2.0)
-  - `de` – Piper mit `de_DE-thorsten-medium` (1 Sprecher, MIT)
+  - `de` – Piper, Voice via Env `PIPER_DE_VOICE` (Default `de_DE-kerstin-low`, 1 Sprecher, MIT)
   - andere `lang`-Werte → 503 mit Liste der verfügbaren Sprachen.
 - `TTS_DEFAULT_LANG` env-Variable (default `de`).
 - Endpoints: `POST /speak` (`{text, lang, speed, speaker}` → `audio/wav`
@@ -210,7 +210,7 @@ audio.py  ──HTTP──▶  tts_service.py  (Port 5051)
   - `python services/download_tts_model.py de` → nur Deutsch (~60 MB)
 - Ablage:
   - `data/tts_model/vits-zh-aishell3/` (sherpa-onnx)
-  - `data/tts_model/de_DE-thorsten-medium/` (Piper)
+  - `data/tts_model/<PIPER_DE_VOICE>/` (Piper, Default `de_DE-kerstin-low`)
 - Idempotent: schon vorhandene Modelle werden übersprungen.
 
 ## Smoke-Test

@@ -78,7 +78,7 @@ Backend-Endpoints (sprachneutral, Core):
 - **LLM**: `POST /api/chat` (deutsch, lokales Ollama-Modell, mit Memory) – SSE-Stream.
   Tutor nutzt `POST /api/tutor/respond` (Mandarin-System-Prompt).
 - **TTS**: `POST /api/speak` – JSON `{text, lang?, speed?, speaker?}`.
-  `lang='de'` → Piper (thorsten-medium), `lang='zh'` → sherpa-onnx
+  `lang='de'` → Piper (Voice via `PIPER_DE_VOICE`), `lang='zh'` → sherpa-onnx
   (vits-zh-aishell3), andere → 503.
 
 Legacy-Aliase für den Tutor: `/api/tutor/transcribe` und `/api/tutor/speak`

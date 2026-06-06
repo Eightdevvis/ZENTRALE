@@ -40,7 +40,7 @@ Zwei Modelle pro Sprache, beide werden parallel von
 `tts_service.py` geladen (Engine-Registry):
 
 - `zh` – sherpa-onnx `vits-zh-aishell3` (~120 MB; früherer Tutor-Modus, aktuell pausiert)
-- `de` – Piper `de_DE-thorsten-medium` (~60 MB, Haupt-Chat)
+- `de` – Piper, Voice via Env `PIPER_DE_VOICE` (Default `de_DE-kerstin-low`, ~20 MB, Haupt-Chat)
 
 Einmaliger Download nach `data/tts_model/<voice>/`:
 

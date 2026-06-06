@@ -6,8 +6,8 @@
 # Aktuell installiert:
 #   - 'zh' (Mandarin)  – sherpa-onnx mit vits-zh-aishell3 (174 Sprecher,
 #                         Apache 2.0, ~120MB)
-#   - 'de' (Deutsch)   – NOCH NICHT installiert (Iteration B, vermutlich
-#                         Piper "thorsten-medium")
+#   - 'de' (Deutsch)   – Piper, Voice via Env PIPER_DE_VOICE
+#                         (Default: de_DE-kerstin-low)
 # Andere Sprachen → 503 mit klarer Fehlermeldung, damit der Aufrufer weiß
 # dass die Pipeline existiert aber das Modell nicht.
 #
@@ -54,6 +54,14 @@ _DATA_ROOT = os.path.join(os.path.dirname(__file__), '..', 'data', 'tts_model')
 # Default-Sprache wenn der Aufrufer nichts schickt. Per env-var
 # umstellbar (z.B. wenn das Setup primaer Mandarin nutzt).
 DEFAULT_LANG = os.environ.get("TTS_DEFAULT_LANG", "de")
+
+# Welche deutsche Piper-Stimme geladen wird. Voice-ID exakt wie im
+# rhasspy/piper-voices-Repo (z.B. 'de_DE-kerstin-low',
+# 'de_DE-thorsten-medium'). Der Ordnername unter data/tts_model/ und
+# die Dateinamen leiten sich daraus ab. Stimme wechseln =
+# download_tts_model.py mit gleicher Env-Var laufen lassen, dann hier
+# umstellen – kein Code-Edit noetig.
+DE_VOICE = os.environ.get("PIPER_DE_VOICE", "de_DE-kerstin-low")
 
 # Engine-Registry: lang -> Dict mit
 #   - "speak"   Callable(text, speed, speaker) -> (samples_np, sample_rate)
@@ -111,22 +119,24 @@ def _try_load_sherpa_zh():
     log.info(f"TTS-Engine zh geladen (sherpa-onnx, {engine.num_speakers} Sprecher).")
 
 
-# ── Engine: Deutsch via Piper (de_DE-thorsten-medium) ─────────────────
+# ── Engine: Deutsch via Piper (Voice via PIPER_DE_VOICE env) ──────────
 def _try_load_de():
     """Versucht das deutsche Piper-Modell zu laden und registriert die
     Engine fuer lang='de'. Stille No-Op wenn Modell oder Library fehlen –
     /speak gibt dann 503 mit klarer Meldung zurueck.
 
-    Piper hat KEINE Sprecher-Auswahl wie sherpa-onnx (thorsten-medium ist
-    eine Single-Speaker-Voice). Der `speaker`-Param wird daher ignoriert.
+    Welche Stimme geladen wird steht in DE_VOICE (Env PIPER_DE_VOICE).
+
+    Piper hat KEINE Sprecher-Auswahl wie sherpa-onnx (die Voices sind
+    Single-Speaker). Der `speaker`-Param wird daher ignoriert.
     Die `speed`-Steuerung geht ueber SynthesisConfig.length_scale – das
     ist invers: niedriger Wert = schneller. Wir mappen daher
     length_scale = 1.0 / speed, damit der gleiche speed-Param vom
     Aufrufer wie bei sherpa-onnx funktioniert (1.0 = normal, 0.9 = leicht
     langsamer)."""
-    model_dir  = os.path.join(_DATA_ROOT, 'de_DE-thorsten-medium')
-    model_file = os.path.join(model_dir, 'de_DE-thorsten-medium.onnx')
-    cfg_file   = os.path.join(model_dir, 'de_DE-thorsten-medium.onnx.json')
+    model_dir  = os.path.join(_DATA_ROOT, DE_VOICE)
+    model_file = os.path.join(model_dir, f'{DE_VOICE}.onnx')
+    cfg_file   = os.path.join(model_dir, f'{DE_VOICE}.onnx.json')
     if not (os.path.exists(model_file) and os.path.exists(cfg_file)):
         log.warning(f"Piper-DE Modell nicht gefunden: {model_file}")
         log.warning("Fuer Deutsch: 'python services/download_tts_model.py de' ausfuehren.")
@@ -167,11 +177,11 @@ def _try_load_de():
     _engines["de"] = {
         "speak": speak_de,
         "info": {
-            "engine":   "piper / de_DE-thorsten-medium",
+            "engine":   f"piper / {DE_VOICE}",
             "speakers": 1,
         },
     }
-    log.info("TTS-Engine de geladen (piper, thorsten-medium).")
+    log.info(f"TTS-Engine de geladen (piper, {DE_VOICE}).")
 
 
 # Beim Modul-Start beide Versuche durchlaufen lassen.

@@ -6,8 +6,8 @@
 # Aktuell zwei Modelle (eines pro Sprache):
 #   - 'zh' – vits-zh-aishell3 (sherpa-onnx, ~120MB, 174 Sprecher, Apache 2.0)
 #            Wird vom Tutor-Modus genutzt.
-#   - 'de' – de_DE-thorsten-medium (Piper, ~60MB, 1 Sprecher, MIT)
-#            Wird vom Haupt-Chat (KI-Antworten) genutzt.
+#   - 'de' – Piper-Voice via Env PIPER_DE_VOICE (Default de_DE-kerstin-low,
+#            ~20MB, 1 Sprecher, MIT). Wird vom Haupt-Chat genutzt.
 #
 # Aufruf:
 #   python services/download_tts_model.py            # beide laden
@@ -58,34 +58,55 @@ def download_zh():
     print(f"zh: Fertig. {target}")
 
 
+# Welche deutsche Stimme geladen wird – exakt dieselbe Env-Var wie
+# tts_service.py, damit Download und Service nie auseinanderlaufen.
+DE_VOICE = os.environ.get("PIPER_DE_VOICE", "de_DE-kerstin-low")
+
+
+def _piper_voice_url(voice):
+    """Baut die HuggingFace-Basis-URL fuer eine Piper-Voice-ID.
+
+    Die Voice-ID ist nach dem Schema '<locale>-<name>-<quality>' aufgebaut,
+    z.B. 'de_DE-kerstin-low'. Im rhasspy/piper-voices-Repo liegt sie unter
+    '<lang>/<locale>/<name>/<quality>/', also 'de/de_DE/kerstin/low/'.
+    Wir zerlegen die ID einmal und setzen den Pfad daraus zusammen –
+    so funktioniert der Downloader fuer jede Piper-Voice, nicht nur fuer
+    eine fest verdrahtete.
+    """
+    locale, name, quality = voice.split("-")          # de_DE / kerstin / low
+    lang = locale.split("_")[0]                        # de
+    return (f"https://huggingface.co/rhasspy/piper-voices/resolve/main/"
+            f"{lang}/{locale}/{name}/{quality}")
+
+
 def download_de():
-    """Laedt das Piper-Modell de_DE-thorsten-medium fuer den Haupt-Chat.
+    """Laedt die deutsche Piper-Voice (DE_VOICE) fuer den Haupt-Chat.
 
     Piper-Modelle bestehen aus zwei Dateien:
-      - .onnx       (Modellgewichte, ~60MB)
+      - .onnx       (Modellgewichte, ~20-60MB je nach Quality)
       - .onnx.json  (Config, ~5KB)
     Beide liegen flach im Voice-Ordner, kein Tar/Zip noetig.
     """
-    target_dir = os.path.join(MODEL_DIR, "de_DE-thorsten-medium")
-    onnx_file  = os.path.join(target_dir, "de_DE-thorsten-medium.onnx")
-    json_file  = os.path.join(target_dir, "de_DE-thorsten-medium.onnx.json")
+    target_dir = os.path.join(MODEL_DIR, DE_VOICE)
+    onnx_file  = os.path.join(target_dir, f"{DE_VOICE}.onnx")
+    json_file  = os.path.join(target_dir, f"{DE_VOICE}.onnx.json")
 
     if os.path.exists(onnx_file) and os.path.exists(json_file):
         print(f"de: Modell schon vorhanden: {target_dir}")
         return
 
     os.makedirs(target_dir, exist_ok=True)
-    base = "https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/medium"
+    base = _piper_voice_url(DE_VOICE)
 
-    print(f"de: Lade Piper-Modell herunter (~60MB) von {base} ...")
+    print(f"de: Lade Piper-Voice '{DE_VOICE}' herunter von {base} ...")
     urllib.request.urlretrieve(
-        f"{base}/de_DE-thorsten-medium.onnx",
+        f"{base}/{DE_VOICE}.onnx",
         onnx_file,
         reporthook=_progress_reporter("de onnx", 60),
     )
     print()
     urllib.request.urlretrieve(
-        f"{base}/de_DE-thorsten-medium.onnx.json",
+        f"{base}/{DE_VOICE}.onnx.json",
         json_file,
     )
     print(f"de: Fertig. {target_dir}")
