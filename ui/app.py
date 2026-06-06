@@ -23,15 +23,22 @@ import json
 # und ai importieren können (die liegen in core/, nicht in ui/).
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'core'))
 
-from flask import Flask, jsonify, render_template, request, Response, stream_with_context
+from flask import Flask, jsonify, render_template, request, Response, stream_with_context, send_from_directory
 from datetime import datetime
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
 import categories   # type: ignore
 import ai           # type: ignore
 import audio        # type: ignore
 import consolidation # type: ignore  – Phase E: STM → LTM Konsolidierung
+import telemetry    # type: ignore  – PC-Host-Telemetrie (CPU/GPU/VRAM/Temp/RAM)
 
 app = Flask(__name__)
+
+# Templates bei Änderung neu einlesen, ohne den ganzen Server neu zu starten.
+# debug bleibt aus (use_reloader würde im Thread Probleme machen) – das hier
+# betrifft NUR das Jinja-Template-Caching. Spart bei UI-Arbeit den Neustart;
+# Kosten: ein stat() pro Render, bei Single-User-Dashboard vernachlässigbar.
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 # Absoluter Pfad zum data/-Verzeichnis (liegt im Projektroot, nicht in ui/).
 # os.path.abspath + join macht den Pfad robust gegen "von wo starte ich das Skript".
@@ -48,6 +55,25 @@ def index():
     r = make_response(resp)
     # Cache deaktivieren: der Browser soll immer die aktuelle Version laden,
     # nicht eine gecachte – wichtig bei Entwicklung und Pi-Restart.
+    r.headers['Cache-Control'] = 'no-store'
+    return r
+
+
+@app.route('/monolith')
+def monolith():
+    """
+    Neues Monolith-Dashboard (zentrale-new-design). Liegt waehrend der
+    Integration parallel zur alten UI unter /monolith, damit / (das taegliche
+    Arbeits-Frontend inkl. Chat) unberuehrt weiterlaeuft. Sobald das Design
+    voll integriert + abgenommen ist, wird es nach / gezogen.
+
+    Statische Assets (engine.js = echter Daten-Adapter, viz.js, ascii.js,
+    fonts/) liegen in ui/static/ und werden von Flask automatisch unter
+    /static/<file> ausgeliefert.
+    """
+    resp = render_template('monolith.html')
+    from flask import make_response
+    r = make_response(resp)
     r.headers['Cache-Control'] = 'no-store'
     return r
 
@@ -84,6 +110,45 @@ def api_state():
 # internen logischen Ereignisse. Beide Welten getrennt halten.
 
 _ALLOWED_SENSORS = {"button", "light", "motion", "door"}
+
+
+# ── Telemetrie ─────────────────────────────────────────────────────────
+#
+# Zwei Maschinen, zwei Wege:
+#   PC : lokal aus /proc + /sys + nvidia-smi (core/telemetry.pc_snapshot)
+#   Pi : der Pi POSTet seine Werte an /api/telemetry/pi (FS read-only, kann
+#        nicht selbst anzeigen) → wir halten den letzten Stand in state.py.
+# GET /api/telemetry liefert beides kombiniert ans Dashboard.
+
+# Welche Top-Level-Keys wir vom Pi akzeptieren (gegen Muell/Querschuss aus
+# dem LAN). Werte werden nicht weiter geparst - der Pi baut die Shape selbst
+# (scripts/pi_sensor_bridge.py), wir nehmen nur bekannte Schluessel.
+_ALLOWED_PI_METRICS = {"cpu", "temp", "ram", "disk"}
+
+
+@app.route('/api/telemetry')
+def api_telemetry():
+    """PC- und Pi-Telemetrie kombiniert. Wird vom Dashboard alle ~2s gepollt."""
+    return jsonify({
+        "pc": telemetry.pc_snapshot(),
+        "pi": state.get_pi_telemetry(),   # {} solange der Pi noch nichts gesendet hat
+    })
+
+
+@app.route('/api/telemetry/pi', methods=['POST'])
+def api_telemetry_pi():
+    """
+    Telemetrie-Push vom Pi entgegennehmen. Body (JSON) hat die gleiche
+    Shape wie ein Meter-Block im Frontend, z.B.:
+      {"cpu": {"v": 12.3}, "temp": {"v": 51.0},
+       "ram": {"v": 38, "used": 0.6, "total": 1.0},
+       "disk": {"v": 47, "used": 14.1, "total": 30.0}}
+    Nur bekannte Schluessel werden uebernommen.
+    """
+    body = request.get_json(silent=True) or {}
+    clean = {k: v for k, v in body.items() if k in _ALLOWED_PI_METRICS}
+    state.set_pi_telemetry(clean)
+    return jsonify({"ok": True})
 
 
 @app.route('/api/sensor/<name>', methods=['POST'])
@@ -126,6 +191,19 @@ def api_data(category_id):
         return jsonify(json.load(f))
 
 
+@app.route('/api/debug', methods=['POST'])
+def api_debug():
+    """
+    Temporärer Debug-Endpoint (2026-06-01): Frontend kann beliebige JSON
+    hierhin POSTen, landet zeilenweise in /tmp/zentrale_debug.log. Wird
+    nur fürs Mic-Debugging gebraucht und sollte danach wieder raus.
+    """
+    payload = request.get_json(silent=True) or {}
+    with open('/tmp/zentrale_debug.log', 'a', encoding='utf-8') as f:
+        f.write(json.dumps({"t": datetime.now().isoformat(), **payload}, ensure_ascii=False) + "\n")
+    return jsonify({"ok": True})
+
+
 @app.route('/api/log', methods=['POST'])
 def api_log():
     """
@@ -154,6 +232,42 @@ def api_log():
 
     state.push_log(f"LOGGED: {category_id} → {data}")
     return jsonify({"ok": True})
+
+
+# ── Fotos (Quelle für den ASCII-Bild-Filter) ──────────────────────────
+#
+# Bilder werden LOKAL vom Backend serviert (gleicher Origin wie das
+# Dashboard), nicht direkt vom Netz geladen. Grund: nur same-origin-Bilder
+# darf der Browser-Canvas per getImageData() auslesen - sonst ist der
+# Canvas "tainted" und der ASCII-Filter (canvasToAscii) bekommt keine
+# Pixel. Ordner per Env überschreibbar; Default data/photos/.
+# (Das ist zugleich der erste echte Baustein von "Fotos zeigen".)
+
+_PHOTO_DIR = os.environ.get(
+    "ZENTRALE_PHOTO_DIR",
+    os.path.join(_DATA_DIR, "photos"),
+)
+_PHOTO_EXTS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp")
+
+
+@app.route('/api/photos')
+def api_photos():
+    """Liste der verfügbaren Bild-Dateinamen (sortiert). Leere Liste wenn kein Ordner."""
+    if not os.path.isdir(_PHOTO_DIR):
+        return jsonify([])
+    names = [f for f in sorted(os.listdir(_PHOTO_DIR))
+             if f.lower().endswith(_PHOTO_EXTS)]
+    return jsonify(names)
+
+
+@app.route('/api/photos/<path:name>')
+def api_photo_file(name):
+    """
+    Liefert eine einzelne Bild-Datei aus _PHOTO_DIR aus.
+    send_from_directory schützt gegen Path-Traversal (../) - der Name darf
+    den Ordner nicht verlassen.
+    """
+    return send_from_directory(_PHOTO_DIR, name)
 
 
 # ── AI / Chat ──────────────────────────────────────────────────────────
@@ -274,7 +388,7 @@ def api_speak():
     Body (JSON):
       text     – Pflichtfeld
       lang     – Sprachcode (default 'de' via DEFAULT_LANG in core/audio.py)
-      speed    – Sprechgeschwindigkeit (default 0.9)
+      speed    – Sprechgeschwindigkeit (default 1.2 = ZENTRALE-Chat; 1.0 natuerlich, <1.0 langsamer)
       speaker  – Sprecher-ID (default 0; bedeutung modellabhaengig)
 
     Response: audio/wav, oder 503 wenn das Modell fuer die Sprache fehlt.
@@ -282,7 +396,7 @@ def api_speak():
     body    = request.get_json() or {}
     text    = (body.get('text') or '').strip()
     lang    = (body.get('lang') or '').strip() or None
-    speed   = float(body.get('speed', 0.9))
+    speed   = float(body.get('speed', 1.2))
     speaker = int(body.get('speaker', 0))
 
     if not text:

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<title>ZENTRALE · BERNSTEIN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --amber: #ffb000;
+    --amber-br: #ffe0a0;
+    --amber-dim: #a76a08;
+    --amber-deep: #5c3a04;
+    --bg: #0c0700;
+    --panel: rgba(28, 16, 2, 0.5);
+    --line: rgba(255, 176, 0, 0.28);
+    --warn: #ff5d3b;
+    --vt: 'VT323', monospace;
+    --stm: 'Share Tech Mono', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+
+  #stage {
+    position: absolute; left: 50%; top: 50%;
+    width: 1920px; height: 1080px;
+    transform: translate(-50%, -50%);
+    transform-origin: center center;
+    background:
+      radial-gradient(ellipse 70% 60% at 50% 45%, rgba(120, 70, 0, 0.22) 0%, transparent 60%),
+      var(--bg);
+    color: var(--amber);
+    font-family: var(--stm);
+    display: grid;
+    grid-template-rows: 104px 1fr;
+    padding: 30px 36px;
+    gap: 18px;
+    overflow: hidden;
+    border-radius: 22px;
+    box-shadow: inset 0 0 140px rgba(0,0,0,0.9), inset 0 0 50px rgba(0,0,0,0.7);
+  }
+  /* Phosphor-Glow auf allem Text */
+  #stage { text-shadow: 0 0 4px rgba(255, 176, 0, 0.5); }
+  /* CRT-Scanlines (dicht) + Vignette-Krümmung */
+  #stage::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 60;
+    background: repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 1px, rgba(0,0,0,0.32) 1px 2px);
+  }
+  /* kein bewegter Sweep, kein Flicker mehr (war fake & lästig) — nur die
+     statischen Scanlines oben + Vignette via box-shadow. */
+  #stage > * { position: relative; z-index: 1; }
+
+  /* Header */
+  .top { display: flex; align-items: center; justify-content: space-between; }
+  .brand { font-family: var(--vt); font-size: 74px; line-height: 0.8; letter-spacing: 0.08em; color: var(--amber-br);
+    text-shadow: 2px 0 rgba(255,90,40,0.4), -2px 0 rgba(0,200,255,0.12), 0 0 18px rgba(255,176,0,0.6); }
+  .brand-sub { font-family: var(--vt); font-size: 24px; letter-spacing: 0.3em; color: var(--amber-dim); margin-top: 2px; }
+  .pills { display: flex; gap: 16px; flex-shrink: 0; }
+  .pill { font-family: var(--vt); font-size: 21px; letter-spacing: 0.1em; padding: 4px 13px; border: 1px solid var(--line); color: var(--amber-dim); background: var(--panel); display: flex; align-items: center; gap: 8px; white-space: nowrap; flex-shrink: 0; }
+  .pill b { color: var(--amber-br); }
+  .pill .led { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 10px var(--amber); animation: blink 2s infinite; }
+  .clock { font-family: var(--vt); font-size: 56px; line-height: 0.8; color: var(--amber-br); letter-spacing: 0.04em; text-align: right; }
+  .date { font-family: var(--vt); font-size: 22px; letter-spacing: 0.24em; color: var(--amber-dim); text-align: right; }
+  @keyframes blink { 50% { opacity: 0.35; } }
+
+  /* Body */
+  .body { display: grid; grid-template-columns: 340px 1fr 380px; gap: 18px; min-height: 0; }
+  .col { display: flex; flex-direction: column; gap: 18px; min-height: 0; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); padding: 12px 16px; position: relative; display: flex; flex-direction: column; min-height: 0; }
+  /* eckige Klammern an den Ecken */
+  .panel::before, .panel::after { content: ''; position: absolute; width: 12px; height: 12px; border: 1px solid var(--amber); }
+  .panel::before { left: -1px; top: -1px; border-right: 0; border-bottom: 0; }
+  .panel::after { right: -1px; bottom: -1px; border-left: 0; border-top: 0; }
+  .panel > h2 { font-family: var(--vt); font-size: 26px; letter-spacing: 0.18em; color: var(--amber); text-transform: uppercase; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+  .panel > h2 .tag { margin-left: auto; font-size: 18px; color: var(--amber-dim); letter-spacing: 0.12em; }
+
+  /* Sensoren */
+  .sensor { display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 12px; padding: 7px 0; font-family: var(--vt); font-size: 25px; letter-spacing: 0.08em; border-bottom: 1px dashed rgba(255,176,0,0.14); }
+  .sensor:last-child { border-bottom: 0; }
+  .sensor .dot { width: 13px; height: 13px; background: var(--amber-deep); border: 1px solid var(--amber-dim); }
+  .sensor.on .dot { background: var(--amber); box-shadow: 0 0 12px var(--amber); }
+  .sensor .nm { color: var(--amber); }
+  .sensor.on .nm { color: var(--amber-br); }
+  .sensor .val { color: var(--amber-dim); font-family: var(--stm); font-size: 16px; }
+  .sensor.on .val { color: var(--amber-br); }
+
+  /* Telemetrie als ASCII-Meter */
+  .meter { font-family: var(--stm); margin: 9px 0; }
+  .meter .ml { display: flex; justify-content: space-between; font-size: 16px; letter-spacing: 0.1em; color: var(--amber-dim); margin-bottom: 2px; }
+  .meter .ml b { color: var(--amber-br); }
+  .meter .mb { font-family: var(--vt); font-size: 24px; line-height: 1; color: var(--amber); letter-spacing: 1px; white-space: pre; }
+
+  /* Oszilloskop */
+  .scope-panel { flex: 1; min-height: 0; }
+  .scope-wrap { flex: 1; min-height: 0; position: relative; border: 1px solid var(--line); background: rgba(0,0,0,0.4); }
+  #scope { width: 100%; height: 100%; display: block; }
+  .scope-readout { display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px; font-family: var(--vt); }
+  .ai-state { font-size: 30px; letter-spacing: 0.16em; color: var(--amber-br); text-transform: uppercase; }
+  .ai-state .blip { display: inline-block; width: 10px; height: 10px; background: var(--amber-dim); margin-right: 10px; }
+  .ai-state.busy .blip { background: var(--amber); box-shadow: 0 0 12px var(--amber); animation: blink 0.8s infinite; }
+  .ai-model { font-size: 20px; color: var(--amber-dim); letter-spacing: 0.1em; }
+  .ai-model b { color: var(--amber); }
+
+  .minilog { flex-shrink: 0; max-height: 150px; overflow: hidden; display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+  .ml-row { display: grid; grid-template-columns: 56px 1fr; gap: 12px; font-family: var(--stm); font-size: 17px; line-height: 1.4; }
+  .ml-role { font-family: var(--vt); font-size: 19px; letter-spacing: 0.1em; }
+  .ml-role.user { color: var(--warn); }
+  .ml-role.ai { color: var(--amber); }
+  .ml-text { color: var(--amber-br); }
+  .ml-text .cur { animation: blink 0.7s step-start infinite; }
+
+  /* Tracker */
+  .track-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .track-lbl { font-family: var(--vt); font-size: 20px; letter-spacing: 0.14em; color: var(--amber-dim); text-transform: uppercase; margin-bottom: 4px; }
+  .track-svg { width: 100%; display: block; }
+  .legend { font-family: var(--stm); font-size: 14px; color: var(--amber-dim); letter-spacing: 0.08em; display: flex; justify-content: space-between; margin-top: 3px; }
+  .proj { margin: 8px 0; font-family: var(--vt); }
+  .proj-top { display: flex; justify-content: space-between; font-size: 22px; letter-spacing: 0.06em; margin-bottom: 3px; }
+  .proj-top .pn { color: var(--amber-br); white-space: nowrap; }
+  .proj-top .ps { color: var(--amber-dim); font-size: 16px; font-family: var(--stm); letter-spacing: 0.12em; white-space: nowrap; }
+  .pbar { font-family: var(--vt); font-size: 18px; color: var(--amber); letter-spacing: 1px; white-space: pre; line-height: 1; }
+
+  /* Terminals */
+  .bottom { display: grid; grid-template-columns: 2.4fr 1fr; gap: 18px; min-height: 0; }
+  .term-body { flex: 1; overflow: hidden; display: flex; flex-direction: column-reverse; font-family: var(--stm); font-size: 17px; line-height: 1.42; }
+  .lg { display: flex; gap: 12px; white-space: pre; }
+  .lg .tt { color: var(--amber-deep); }
+  .lg .tx { color: var(--amber); }
+  .term-net { border-color: rgba(255,93,59,0.45); }
+  .term-net::before, .term-net::after { border-color: var(--warn); }
+  .term-net h2 { color: var(--warn); }
+  .term-net .tx { color: #ff9270; }
+  .term-idle { color: var(--amber); font-family: var(--vt); font-size: 22px; letter-spacing: 0.06em; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <header class="top">
+      <div>
+        <div class="brand">ZENTRALE</div>
+        <div class="brand-sub">// bernstein-terminal · phosphor</div>
+      </div>
+      <div class="pills">
+        <div class="pill"><span class="led"></span>OLLAMA <b>qwen2.5:14b</b></div>
+        <div class="pill">OFFLINE <b>✓</b></div>
+        <div class="pill">UPTIME <b id="p-up">04:12:38</b></div>
+      </div>
+      <div>
+        <div class="clock" id="clock">--:--:--</div>
+        <div class="date" id="date">--</div>
+      </div>
+    </header>
+
+    <div class="body">
+      <!-- LINKS -->
+      <div class="col">
+        <div class="panel" style="flex:0 0 auto">
+          <h2>Sensoren</h2>
+          <div class="sensor on" id="s-button"><span class="dot"></span><span class="nm">BUTTON</span><span class="val">bereit</span></div>
+          <div class="sensor on" id="s-light"><span class="dot"></span><span class="nm">LICHT</span><span class="val" id="s-light-v">612 lux</span></div>
+          <div class="sensor" id="s-motion"><span class="dot"></span><span class="nm">BEWEGUNG</span><span class="val">PIR</span></div>
+          <div class="sensor" id="s-door"><span class="dot"></span><span class="nm">TÜR</span><span class="val">zu</span></div>
+        </div>
+        <div class="panel" style="flex:0 0 auto">
+          <h2>Telemetrie <span class="tag">PI-4</span></h2>
+          <div id="meters"></div>
+        </div>
+        <div class="panel" style="flex:1 1 auto;min-height:0">
+          <h2>stdout <span class="tag">live</span></h2>
+          <div class="term-body" id="term"></div>
+        </div>
+      </div>
+
+      <!-- MITTE: Oszilloskop -->
+      <div class="col">
+        <div class="panel scope-panel">
+          <h2>KI-Zustand <span class="tag">CH1 · träger · audio-spur folgt</span></h2>
+          <div class="scope-wrap"><canvas id="scope" width="900" height="440"></canvas></div>
+          <div class="scope-readout">
+            <div class="ai-state" id="ai-state"><span class="blip"></span>BEREIT</div>
+            <div class="ai-model">MODELL <b>qwen2.5:14b</b> · 9.0&nbsp;GB · CTX 8K</div>
+          </div>
+          <div class="minilog" id="minilog"></div>
+        </div>
+      </div>
+
+      <!-- RECHTS -->
+      <div class="col">
+        <div class="panel" style="flex:0 0 auto">
+          <h2>Lifestyle &amp; Gesundheit</h2>
+          <div class="track-grid">
+            <div><div class="track-lbl">Schlafqualität</div><svg class="track-svg" id="t-sleep" viewBox="0 0 200 60" preserveAspectRatio="none"></svg><div class="legend"><span id="t-sleep-from"></span><span id="t-sleep-avg"></span></div></div>
+            <div><div class="track-lbl">Stimmung</div><svg class="track-svg" id="t-mood" viewBox="0 0 200 60" preserveAspectRatio="none"></svg><div class="legend"><span id="t-mood-from"></span><span id="t-mood-avg"></span></div></div>
+            <div><div class="track-lbl">Aktivität km</div><svg class="track-svg" id="t-steps" viewBox="0 0 200 60" preserveAspectRatio="none"></svg><div class="legend"><span>14 T</span><span id="t-steps-now"></span></div></div>
+            <div><div class="track-lbl">Fokus %</div><svg class="track-svg" id="t-focus" viewBox="0 0 200 60" preserveAspectRatio="none"></svg><div class="legend"><span>Ø</span><span id="t-focus-avg"></span></div></div>
+          </div>
+        </div>
+        <div class="panel" style="flex:0 0 auto">
+          <h2>Projekte</h2>
+          <div id="projects"></div>
+        </div>
+        <div class="panel term-net" style="flex:1 1 auto;min-height:0">
+          <h2>Outbound-Tripwire <span class="tag">letzte 3</span></h2>
+          <div class="term-body" id="term-net"><div class="term-idle">// offline ✓</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="engine.js"></script>
+  <script src="viz.js"></script>
+  <script>
+  (function () {
+    var AMBER = '#ffb000';
+    // ── Telemetrie als ASCII-Meter ──
+    function meterRow(label, val, unit) {
+      return '<div class="meter"><div class="ml"><span>' + label + '</span><b>' + Math.round(val) + unit + '</b></div><div class="mb" data-mb="' + label + '"></div></div>';
+    }
+    var meters = document.getElementById('meters');
+    meters.innerHTML = ['CPU','TEMP','RAM','GPU','DISK'].map(function(l){ return meterRow(l, 0, ''); }).join('');
+    function setMeter(label, pct, val, unit) {
+      var box = meters.querySelector('[data-mb="' + label + '"]');
+      if (box) box.textContent = VZ.asciiBar(pct, 22, '█', '░');
+      var b = box.closest('.meter').querySelector('.ml b');
+      b.textContent = Math.round(val) + unit;
+    }
+
+    // ── Tracker ──
+    var d = ZS.data;
+    function renderBars(id, vals, maxv, hotColor) {
+      var bars = VZ.bars(vals, 200, 60, 4, maxv), s = '';
+      bars.forEach(function (b, i) {
+        var hot = i === bars.length - 1;
+        s += '<rect x="' + b.x.toFixed(1) + '" y="' + b.y.toFixed(1) + '" width="' + b.w.toFixed(1) + '" height="' + b.h.toFixed(1) + '" fill="' + (hot ? (hotColor||'#ffe0a0') : AMBER) + '" opacity="' + (hot?1:0.7) + '"/>';
+      });
+      document.getElementById(id).innerHTML = s;
+    }
+    function renderLine(id, vals) {
+      var line = VZ.sparkPath(vals, 200, 60, 3);
+      document.getElementById(id).innerHTML = '<path d="' + line + '" fill="none" stroke="' + AMBER + '" stroke-width="2" style="filter:drop-shadow(0 0 3px ' + AMBER + ')"/>';
+    }
+    renderBars('t-sleep', d.sleep, 5);
+    renderLine('t-mood', d.mood);
+    renderBars('t-steps', d.steps);
+    renderLine('t-focus', d.focus);
+    document.getElementById('t-sleep-from').textContent = d.dayLabels[0];
+    document.getElementById('t-sleep-avg').textContent = 'avg ' + (d.sleep.reduce((a,b)=>a+b,0)/d.sleep.length).toFixed(1);
+    document.getElementById('t-mood-from').textContent = d.dayLabels[0];
+    document.getElementById('t-mood-avg').textContent = 'avg ' + (d.mood.reduce((a,b)=>a+b,0)/d.mood.length).toFixed(1);
+    document.getElementById('t-steps-now').textContent = d.steps[d.steps.length-1].toFixed(1) + 'k';
+    document.getElementById('t-focus-avg').textContent = Math.round(d.focus.reduce((a,b)=>a+b,0)/d.focus.length) + '%';
+
+    document.getElementById('projects').innerHTML = d.projects.map(function (p) {
+      return '<div class="proj"><div class="proj-top"><span class="pn">' + p.name + '</span><span class="ps">' + p.status + '</span></div><div class="pbar">[' + VZ.asciiBar(p.pct, 26, '█', '·') + '] ' + p.pct + '%</div></div>';
+    }).join('');
+
+    // ── Oszilloskop (Canvas) ──
+    var cv = document.getElementById('scope'), cx = cv.getContext('2d');
+    var phase = 0, amp = 0.08, targetAmp = 0.08;
+    function drawScope() {
+      var W = cv.width, H = cv.height;
+      cx.clearRect(0, 0, W, H);
+      // Grid
+      cx.strokeStyle = 'rgba(255,176,0,0.12)'; cx.lineWidth = 1;
+      for (var gx = 0; gx <= W; gx += W/12) { cx.beginPath(); cx.moveTo(gx, 0); cx.lineTo(gx, H); cx.stroke(); }
+      for (var gy = 0; gy <= H; gy += H/6) { cx.beginPath(); cx.moveTo(0, gy); cx.lineTo(W, gy); cx.stroke(); }
+      // Mittelachse
+      cx.strokeStyle = 'rgba(255,176,0,0.3)'; cx.beginPath(); cx.moveTo(0, H/2); cx.lineTo(W, H/2); cx.stroke();
+      // Saubere Träger-Welle (KEIN Zufalls-Rauschen → kein Fake-Signal).
+      // Amplitude/Frequenz = reiner Zustands-Indikator (bereit/denkt/spricht).
+      // Echtes Oszilloskop kommt später, wenn die TTS-Audiospur dranhängt.
+      amp += (targetAmp - amp) * 0.08;
+      cx.strokeStyle = AMBER; cx.lineWidth = 2.6;
+      cx.beginPath();
+      for (var x = 0; x <= W; x++) {
+        var t = x / W;
+        var y = H/2
+          + Math.sin(t * Math.PI * 6 + phase) * H * amp
+          + Math.sin(t * Math.PI * 15 + phase * 1.7) * H * amp * 0.28;
+        if (x === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+      }
+      cx.stroke();
+      phase += (ZS.aiState === 'idle' ? 0.05 : 0.17);
+    }
+    drawScope();
+    setInterval(drawScope, 40);   // ~25 fps, kein shadowBlur → Pi-schonend
+
+    // ── Live ──
+    var upStart = Date.now() - 4 * 3600 * 1000 - 758 * 1000;
+    ZS.on('tick', function (e) {
+      document.getElementById('clock').textContent = e.time;
+      document.getElementById('date').textContent = e.date;
+      var up = Math.floor((Date.now() - upStart) / 1000);
+      document.getElementById('p-up').textContent = [Math.floor(up/3600), Math.floor(up/60)%60, up%60].map(n=>('0'+n).slice(-2)).join(':');
+      var m = e.metrics;
+      setMeter('CPU', m.cpu.v, m.cpu.v, '%');
+      setMeter('TEMP', (m.temp.v-38)/40*100, m.temp.v, '°C');
+      setMeter('RAM', m.ram.v, m.ram.v, '%');
+      setMeter('GPU', m.gpu.v, m.gpu.v, '%');
+      setMeter('DISK', m.disk.v, m.disk.v, '%');
+      document.getElementById('s-light-v').textContent = e.sensors.light.value + ' lux';
+    });
+    ZS.on('sensor', function (e) {
+      if (e.name === 'light') return;
+      var el = document.getElementById('s-' + e.name); if (!el) return;
+      el.classList.toggle('on', e.active);
+      el.querySelector('.val').textContent = e.active ? 'TRIGGER' : (e.name === 'door' ? 'zu' : (e.name === 'motion' ? 'PIR' : 'bereit'));
+    });
+    function appendLog(id, e, cap) {
+      var c = document.getElementById(id);
+      var idle = c.querySelector('.term-idle'); if (idle) idle.remove();
+      var row = document.createElement('div'); row.className = 'lg';
+      row.innerHTML = '<span class="tt">' + e.t + '</span><span class="tx">' + e.text + '</span>';
+      c.insertBefore(row, c.firstChild);
+      while (c.children.length > (cap||40)) c.removeChild(c.lastChild);
+    }
+    ZS.on('log', function (e) { appendLog('term', e, 60); });
+    ZS.on('net', function (e) { appendLog('term-net', e, 3); });
+
+    var aiState = document.getElementById('ai-state');
+    function renderMini() {
+      var items = ZS.aiHistory.slice(-3);
+      document.getElementById('minilog').innerHTML = items.map(function (it) {
+        var cur = (it.role === 'ai' && ZS.aiState === 'streaming' && it === ZS.aiHistory[ZS.aiHistory.length-1]) ? '<span class="cur">█</span>' : '';
+        return '<div class="ml-row"><span class="ml-role ' + (it.role==='user'?'user':'ai') + '">' + (it.role==='user'?'DU>':'KI>') + '</span><span class="ml-text">' + it.text + cur + '</span></div>';
+      }).join('');
+    }
+    ZS.on('ai', function (e) {
+      if (e.state === 'thinking') { targetAmp = 0.22; aiState.classList.add('busy'); aiState.innerHTML = '<span class="blip"></span>DENKT'; }
+      else if (e.state === 'streaming') { targetAmp = 0.34; aiState.classList.add('busy'); aiState.innerHTML = '<span class="blip"></span>ANTWORTET'; }
+      else { targetAmp = 0.08; aiState.classList.remove('busy'); aiState.innerHTML = '<span class="blip"></span>BEREIT'; }
+      renderMini();
+    });
+    renderMini();
+
+    ZS.start();
+    fitStage('#stage');
+  })();
+  </script>
+</body>
+</html>

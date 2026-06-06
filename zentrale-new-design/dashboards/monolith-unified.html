@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<title>ZENTRALE · MONOLITH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet" />
+<style>
+  /* ── Theme: TAG (hell/papier) ── */
+  [data-theme="day"] {
+    --bg: #ece7dc; --paper: rgba(255,255,255,0.25);
+    --ink: #232019; --bright: #000; --dim: #7c7768; --faint: #bdb6a4; --line: #cbc4b3;
+    --acc: #2f6b48; --acc-soft: #6f8f7c;
+    --t-net: #1d6a8c; --t-graph: #8a3fb0; --t-event: #3a7d3a; --t-audio: #2f6b48;
+    --t-hook: #9a6a2c; --t-num: #9a6a2c; --t-dim: #9a9482; --warn: #9a6a2c;
+    --scan: rgba(0,0,0,0.045);
+  }
+  /* ── Theme: NACHT (code-dark / tech-dark) ── */
+  [data-theme="night"] {
+    --bg: #0d1017; --paper: rgba(255,255,255,0.018);
+    --ink: #c5cdd6; --bright: #eaf0f6; --dim: #5c6773; --faint: #2b323c; --line: #222a33;
+    --acc: #7ec699; --acc-soft: #4f6353;
+    --t-net: #56b6c2; --t-graph: #c678dd; --t-event: #98c379; --t-audio: #7ec699;
+    --t-hook: #e0a458; --t-num: #d19a66; --t-dim: #5c6773; --warn: #e0a458;
+    --scan: rgba(0,0,0,0.16);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+
+  #stage {
+    position: absolute; left: 50%; top: 50%;
+    width: 1920px; height: 1080px;
+    transform: translate(-50%, -50%); transform-origin: center;
+    background: var(--bg); color: var(--ink);
+    font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; line-height: 1.5;
+    display: grid; grid-template-rows: 86px 1fr; padding: 22px 28px; gap: 14px; overflow: hidden;
+    transition: background .8s ease, color .8s ease;
+  }
+  #stage::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 60;
+    background: repeating-linear-gradient(to bottom, transparent 0 3px, var(--scan) 3px 4px); }
+  #stage > * { position: relative; z-index: 1; }
+
+  .vt { font-family: 'VT323', monospace; }
+
+  /* Header */
+  .top { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+  .brand { font-weight: 700; font-size: 46px; letter-spacing: 0.24em; color: var(--bright); line-height: 1; }
+  .brand .blk { background: var(--ink); color: var(--bg); padding: 0 8px; }
+  .brand-sub { font-size: 11px; letter-spacing: 0.32em; color: var(--dim); text-transform: uppercase; margin-top: 7px; }
+  .meta { display: flex; gap: 22px; align-items: center; }
+  .kv { font-size: 11px; letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; white-space: nowrap; }
+  .kv b { color: var(--ink); font-weight: 600; }
+  .kv .ok { color: var(--acc); }
+  .clock { font-family: 'VT323', monospace; font-size: 50px; letter-spacing: 0.04em; color: var(--bright); text-align: right; line-height: 0.8; }
+  .date { font-size: 11px; letter-spacing: 0.22em; color: var(--dim); text-align: right; text-transform: uppercase; margin-top: 2px; }
+  /* Theme-Schalter */
+  .theme-ctl { display: flex; border: 1px solid var(--line); }
+  .theme-ctl button { font-family: 'VT323', monospace; font-size: 17px; letter-spacing: 0.08em; background: transparent; color: var(--dim); border: 0; padding: 4px 11px; cursor: pointer; border-right: 1px solid var(--line); }
+  .theme-ctl button:last-child { border-right: 0; }
+  .theme-ctl button.on { background: var(--acc); color: var(--bg); }
+
+  /* Body */
+  .body { display: grid; grid-template-columns: 320px 1fr 360px; gap: 14px; min-height: 0; }
+  .col { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+
+  .box { border: 1px solid var(--line); padding: 23px 15px 12px; position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--paper); }
+  .box > .bt { position: absolute; top: -11px; left: 13px; background: var(--bg); padding: 0 9px; font-family: 'VT323', monospace; font-size: 19px; line-height: 1; letter-spacing: 0.14em; color: var(--acc); text-transform: uppercase; }
+  .box > .bt::before { content: '┤ '; color: var(--faint); } .box > .bt::after { content: ' ├'; color: var(--faint); }
+  .box > .bt2 { position: absolute; top: -9px; right: 13px; background: var(--bg); padding: 0 7px; font-size: 10px; letter-spacing: 0.12em; color: var(--dim); }
+
+  /* Sensoren */
+  .srow { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 9px; padding: 5px 0; font-size: 14px; letter-spacing: 0.04em; border-bottom: 1px dotted var(--line); }
+  .srow:last-child { border-bottom: 0; }
+  .srow .ind { color: var(--faint); } .srow.on .ind { color: var(--acc); }
+  .srow .nm { color: var(--ink); } .srow.on .nm { color: var(--bright); }
+  .srow .val { color: var(--dim); font-size: 12px; } .srow.on .val { color: var(--acc); }
+
+  /* Meter (Game-Balken, VT323) */
+  .meter { display: grid; grid-template-columns: 58px 1fr 48px; align-items: center; gap: 9px; padding: 4px 0; }
+  .meter .ml { font-size: 12px; color: var(--dim); letter-spacing: 0.1em; }
+  .meter .mb { font-family: 'VT323', monospace; font-size: 19px; line-height: 1; color: var(--acc); white-space: pre; overflow: hidden; }
+  .meter .mv { font-family: 'VT323', monospace; font-size: 19px; color: var(--bright); text-align: right; }
+
+  /* Exhibit / KI-Kern */
+  .core-box { flex: 1; min-height: 0; }
+  .core-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: nowrap; }
+  .core-head .bt { white-space: nowrap; }
+  .tabs { display: flex; gap: 6px; margin-left: auto; }
+  .tab { font-family: 'VT323', monospace; font-size: 16px; letter-spacing: 0.06em; color: var(--dim); border: 1px solid var(--line); padding: 1px 8px; cursor: pointer; text-transform: uppercase; }
+  .tab.on { color: var(--bg); background: var(--acc); border-color: var(--acc); }
+  .tab:hover:not(.on) { color: var(--ink); }
+  .core-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  #core { font-size: 15px; line-height: 1.0; letter-spacing: 0; color: var(--acc); text-align: center; contain: content; white-space: pre; overflow: hidden; }
+  .core-readout { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 9px; flex-shrink: 0; position: relative; z-index: 2; background: var(--bg); }
+  .ai-state { font-family: 'VT323', monospace; font-size: 24px; letter-spacing: 0.12em; color: var(--bright); text-transform: uppercase; }
+  .ai-state .sp { color: var(--acc); display: inline-block; width: 1.1em; }
+  .ai-model { font-size: 11px; color: var(--dim); letter-spacing: 0.08em; } .ai-model b { color: var(--ink); font-weight: 500; }
+
+  .minilog { flex-shrink: 0; height: 100px; overflow: hidden; display: flex; flex-direction: column; gap: 5px; margin-top: 8px; position: relative; z-index: 2; background: var(--bg); }
+  .ml-row { display: grid; grid-template-columns: 64px 1fr; gap: 9px; font-size: 13px; line-height: 1.42; }
+  .ml-role { font-size: 12px; letter-spacing: 0.05em; } .ml-role.user { color: var(--warn); } .ml-role.ai { color: var(--acc); }
+  .ml-text { color: var(--ink); } .ml-text .cur { color: var(--bright); animation: blink .8s step-start infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* Tracker */
+  .trk { display: grid; grid-template-columns: 82px 1fr 60px; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px dotted var(--line); }
+  .trk:last-child { border-bottom: 0; }
+  .trk .tl { font-size: 12px; color: var(--dim); letter-spacing: 0.08em; text-transform: uppercase; }
+  .trk .ts { font-family: 'VT323', monospace; font-size: 20px; color: var(--acc); white-space: pre; overflow: hidden; line-height: 1; }
+  .trk .tv { font-family: 'VT323', monospace; font-size: 18px; color: var(--bright); text-align: right; }
+  .proj { padding: 5px 0; }
+  .proj-top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 1px; }
+  .proj-top .pn { color: var(--ink); white-space: nowrap; } .proj-top .ps { color: var(--dim); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
+  .proj .pb { font-family: 'VT323', monospace; font-size: 17px; color: var(--acc); white-space: pre; line-height: 1; }
+
+  /* Terminals (token-coloriert) */
+  .term-body { flex: 1; overflow: hidden; display: flex; flex-direction: column-reverse; font-size: 13px; line-height: 1.5; }
+  .lg { display: flex; gap: 10px; white-space: pre; }
+  .lg .tt { color: var(--faint); } .lg .tx { color: var(--ink); }
+  .t-net { color: var(--t-net); } .t-graph { color: var(--t-graph); } .t-event { color: var(--t-event); }
+  .t-audio { color: var(--t-audio); } .t-hook { color: var(--t-hook); } .t-num { color: var(--t-num); }
+  .t-dim { color: var(--t-dim); } .t-acc { color: var(--acc); }
+  .box.net > .bt { color: var(--warn); } .box.net { border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
+  .box.net .tx { color: var(--warn); }
+  .term-idle { color: var(--acc-soft); font-size: 13px; letter-spacing: 0.03em; }
+</style>
+</head>
+<body>
+  <div id="stage" data-theme="day">
+    <header class="top">
+      <div>
+        <div class="brand"><span class="blk">ZEN</span>TRALE</div>
+        <div class="brand-sub">monolith · adaptive konsole</div>
+      </div>
+      <div class="meta">
+        <div class="kv">OLLAMA <b>qwen2.5:14b</b></div>
+        <div class="kv">NET <b class="ok">OFFLINE ✓</b></div>
+        <div class="kv">UP <b id="p-up">04:12:38</b></div>
+        <div class="theme-ctl" id="theme-ctl">
+          <button data-tm="auto" class="on">AUTO</button>
+          <button data-tm="day">HELL</button>
+          <button data-tm="night">DUNKEL</button>
+        </div>
+        <div>
+          <div class="clock" id="clock">--:--:--</div>
+          <div class="date" id="date">--</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="body">
+      <!-- LINKS -->
+      <div class="col">
+        <div class="box" style="flex:0 0 auto">
+          <span class="bt">sensoren</span>
+          <div class="srow on" id="s-button"><span class="ind">[●]</span><span class="nm">BUTTON</span><span class="val">bereit</span></div>
+          <div class="srow on" id="s-light"><span class="ind">[●]</span><span class="nm">LICHT</span><span class="val" id="s-light-v">612 lux</span></div>
+          <div class="srow" id="s-motion"><span class="ind">[ ]</span><span class="nm">BEWEGUNG</span><span class="val">PIR</span></div>
+          <div class="srow" id="s-door"><span class="ind">[ ]</span><span class="nm">TÜR</span><span class="val">zu</span></div>
+        </div>
+        <div class="box" style="flex:0 0 auto">
+          <span class="bt">telemetrie</span><span class="bt2">pi-3b</span>
+          <div id="meters"></div>
+        </div>
+        <div class="box" style="flex:1 1 auto;min-height:0">
+          <span class="bt">stdout</span><span class="bt2">live</span>
+          <div class="term-body" id="term"></div>
+        </div>
+      </div>
+
+      <!-- MITTE: Exhibit -->
+      <div class="col">
+        <div class="box core-box">
+          <div class="core-head">
+            <span class="bt" style="position:static;background:none;padding:0">ki-kern</span>
+            <div class="tabs" id="tabs">
+              <span class="tab" data-ex="gesicht">Gesicht</span>
+              <span class="tab" data-ex="torus">Torus</span>
+              <span class="tab" data-ex="wuerfel">Würfel</span>
+              <span class="tab" data-ex="globus">Globus</span>
+              <span class="tab" data-ex="welt">Welt</span>
+              <span class="tab on" data-ex="auto">Auto</span>
+            </div>
+          </div>
+          <div class="core-wrap"><pre id="core"></pre></div>
+          <div class="core-readout">
+            <div class="ai-state" id="ai-state"><span class="sp">·</span> BEREIT</div>
+            <div class="ai-model" id="ai-meta">zeigt: gesicht · 8K ctx · 9.0 GB</div>
+          </div>
+          <div class="minilog" id="minilog"></div>
+        </div>
+      </div>
+
+      <!-- RECHTS -->
+      <div class="col">
+        <div class="box" style="flex:0 0 auto">
+          <span class="bt">lifestyle</span>
+          <div id="trackers"></div>
+        </div>
+        <div class="box" style="flex:0 0 auto">
+          <span class="bt">projekte</span>
+          <div id="projects"></div>
+        </div>
+        <div class="box net" style="flex:1 1 auto;min-height:0">
+          <span class="bt">outbound</span><span class="bt2">letzte 3</span>
+          <div class="term-body" id="term-net"><div class="term-idle">// offline ✓</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="engine.js"></script>
+  <script src="viz.js"></script>
+  <script src="ascii.js"></script>
+  <script>
+  (function () {
+    var stage = document.getElementById('stage');
+
+    // ── Theme (Tag/Nacht) ──
+    var themeMode = 'auto';
+    function computeTheme() { var h = new Date().getHours(); return (h >= 5 && h < 21) ? 'day' : 'night'; } // hell 05–21, sonst dunkel
+    function applyTheme() { stage.setAttribute('data-theme', themeMode === 'auto' ? computeTheme() : themeMode); }
+    document.getElementById('theme-ctl').addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      themeMode = b.getAttribute('data-tm');
+      [].forEach.call(this.children, function (c) { c.classList.toggle('on', c === b); });
+      applyTheme();
+    });
+    applyTheme();
+
+    // ── Telemetrie (Game-Balken) ──
+    var meters = document.getElementById('meters');
+    var METList = [['CPU','cpu','%'],['TEMP','temp','°C'],['RAM','ram','%'],['GPU','gpu','%'],['DISK','disk','%']];
+    meters.innerHTML = METList.map(function (m) { return '<div class="meter" data-m="' + m[1] + '"><span class="ml">' + m[0] + '</span><span class="mb"></span><span class="mv">–</span></div>'; }).join('');
+    function setMeter(key, pct, val, unit) {
+      var el = meters.querySelector('[data-m="' + key + '"]'); if (!el) return;
+      el.querySelector('.mb').textContent = VZ.asciiBar(pct, 16, '█', '░');
+      el.querySelector('.mv').textContent = Math.round(val) + unit;
+    }
+
+    // ── Tracker ──
+    var d = ZS.data, trk = document.getElementById('trackers');
+    function trackRow(label, vals, sfx) { return '<div class="trk"><span class="tl">' + label + '</span><span class="ts">' + VZ.blockSpark(vals) + '</span><span class="tv">' + sfx + '</span></div>'; }
+    trk.innerHTML =
+      trackRow('Schlaf', d.sleep, 'Ø' + (d.sleep.reduce((a,b)=>a+b,0)/d.sleep.length).toFixed(1)) +
+      trackRow('Gemüt', d.mood, 'Ø' + (d.mood.reduce((a,b)=>a+b,0)/d.mood.length).toFixed(1)) +
+      trackRow('Aktiv', d.steps, d.steps[d.steps.length-1].toFixed(1)+'k') +
+      trackRow('Fokus', d.focus, Math.round(d.focus.reduce((a,b)=>a+b,0)/d.focus.length)+'%');
+    document.getElementById('projects').innerHTML = d.projects.map(function (p) {
+      return '<div class="proj"><div class="proj-top"><span class="pn">' + p.name + '</span><span class="ps">' + p.status + '</span></div><div class="pb">' + VZ.asciiBar(p.pct, 24, '█', '·') + ' ' + ('  '+p.pct).slice(-3) + '%</div></div>';
+    }).join('');
+
+    // ── ASCII-Bibliothek aufbauen ──
+    var books = {
+      torus:  ASCII.torusFlipbook({ cols: 60, rows: 28, frames: 60 }),
+      wuerfel: ASCII.cubeFlipbook({ cols: 50, rows: 26, frames: 60 }),
+      globus: VZ.sphereFlipbook({ cols: 56, rows: 28, frames: 72, ramp: ' .·:-=+o*#@', fill: 0.45 })
+    };
+    var world = ASCII.buildWorld({ cols: 78, rows: 30 });
+    var people = ASCII.buildPeople({ cols: 48, rows: 46 });
+    var avatar = 0;
+
+    // ── Exhibit-Direktor ──
+    var coreEl = document.getElementById('core'), aiMeta = document.getElementById('ai-meta');
+    var EX = { mode: 'auto', current: 'gesicht' };
+    var EXNAMES = { gesicht: 'gesicht', torus: 'torus', wuerfel: 'würfel', globus: 'globus', welt: 'weltkarte' };
+    var fi = 0, gestureLeft = 0, autoT = 0;
+    var tabs = document.getElementById('tabs');
+    function syncTabs() {
+      [].forEach.call(tabs.children, function (t) {
+        var ex = t.getAttribute('data-ex');
+        t.classList.toggle('on', EX.mode === 'auto' ? ex === 'auto' : ex === EX.current);
+      });
+      aiMeta.textContent = (EX.current === 'gesicht')
+        ? 'avatar: ' + people[avatar].name + ' · ' + (avatar+1) + '/' + people.length + ' · klick zum wechseln'
+        : 'zeigt: ' + EXNAMES[EX.current] + ' · 8K ctx · 9.0 GB';
+    }
+    function setCurrent(name) { EX.current = name; syncTabs(); }
+    tabs.addEventListener('click', function (e) {
+      var t = e.target.closest('.tab'); if (!t) return;
+      var ex = t.getAttribute('data-ex');
+      if (ex === 'auto') { EX.mode = 'auto'; gestureLeft = 0; setCurrent('gesicht'); }
+      else if (ex === 'gesicht' && EX.mode === 'manual' && EX.current === 'gesicht') { avatar = (avatar + 1) % people.length; syncTabs(); }
+      else { EX.mode = 'manual'; gestureLeft = 0; setCurrent(ex); }
+    });
+
+    function frameTick() {
+      fi++;
+      var c = EX.current;
+      if (c === 'gesicht') coreEl.textContent = ASCII.personFrame(people[avatar], ZS.aiState, fi);
+      else if (c === 'welt') coreEl.textContent = world.frame(Math.floor(fi / 6));
+      else { var b = books[c]; var spd = (ZS.aiState !== 'idle' ? 2 : 1); coreEl.textContent = b.frames[(fi * spd) % b.frames.length]; }
+    }
+    setInterval(frameTick, 90); syncTabs(); frameTick();
+
+    function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+    function gestureLog(name) { var t = new Date(); var ts = [t.getHours(),t.getMinutes(),t.getSeconds()].map(n=>('0'+n).slice(-2)).join(':'); appendLog('term', { t: ts, text: 'GESTURE → zeigt ' + name }, 60); }
+
+    // Auto-Direktor: im Leerlauf gelegentlich ein Objekt „zeigen", sonst Gesicht
+    setInterval(function () {
+      if (EX.mode !== 'auto') return;
+      if (gestureLeft > 0) { gestureLeft--; if (gestureLeft === 0) setCurrent('gesicht'); return; }
+      if (ZS.aiState === 'idle') {
+        autoT++;
+        if (autoT >= 11) { autoT = 0; var ex = pick(['torus','wuerfel','globus','welt']); gestureLeft = 6; setCurrent(ex); gestureLog(EXNAMES[ex]); }
+        else setCurrent('gesicht');
+      } else { autoT = 0; setCurrent('gesicht'); }
+    }, 1000);
+
+    // ── Live ──
+    var upStart = Date.now() - 4*3600*1000 - 758*1000;
+    ZS.on('tick', function (e) {
+      document.getElementById('clock').textContent = e.time;
+      document.getElementById('date').textContent = e.date;
+      if (themeMode === 'auto') applyTheme();
+      var up = Math.floor((Date.now()-upStart)/1000);
+      document.getElementById('p-up').textContent = [Math.floor(up/3600),Math.floor(up/60)%60,up%60].map(n=>('0'+n).slice(-2)).join(':');
+      var m = e.metrics;
+      setMeter('cpu', m.cpu.v, m.cpu.v, '%'); setMeter('temp', (m.temp.v-38)/40*100, m.temp.v, '°C');
+      setMeter('ram', m.ram.v, m.ram.v, '%'); setMeter('gpu', m.gpu.v, m.gpu.v, '%'); setMeter('disk', m.disk.v, m.disk.v, '%');
+      document.getElementById('s-light-v').textContent = e.sensors.light.value + ' lux';
+    });
+    var wardSt = { button: 'bereit', motion: 'PIR', door: 'zu' };
+    ZS.on('sensor', function (e) {
+      if (e.name === 'light') return;
+      var el = document.getElementById('s-' + e.name); if (!el) return;
+      el.classList.toggle('on', e.active);
+      el.querySelector('.ind').textContent = e.active ? '[●]' : '[ ]';
+      el.querySelector('.val').textContent = e.active ? 'TRIGGER' : (wardSt[e.name] || '·');
+    });
+
+    function colorize(text) {
+      var t = text.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+      var m = t.match(/^([A-ZÄÖÜ]+)/);
+      var cls = { NET:'t-net', GRAPH:'t-graph', EVENT:'t-event', STT:'t-audio', TTS:'t-audio', WEBHOOK:'t-hook', CONSOLIDATE:'t-graph', STATE:'t-dim', CLOCK:'t-num', GESTURE:'t-acc', LOGGED:'t-event' };
+      if (m && cls[m[1]]) t = '<span class="' + cls[m[1]] + '">' + m[1] + '</span>' + t.slice(m[1].length);
+      t = t.replace(/(\d+[\d.:]*)/g, '<span class="t-num">$1</span>');
+      return t;
+    }
+    function appendLog(id, e, cap) {
+      var c = document.getElementById(id); var idle = c.querySelector('.term-idle'); if (idle) idle.remove();
+      var row = document.createElement('div'); row.className = 'lg';
+      row.innerHTML = '<span class="tt">' + e.t + '</span><span class="tx">' + colorize(e.text) + '</span>';
+      c.insertBefore(row, c.firstChild); while (c.children.length > (cap||60)) c.removeChild(c.lastChild);
+    }
+    ZS.on('log', function (e) { appendLog('term', e, 60); });
+    ZS.on('net', function (e) { appendLog('term-net', e, 3); });
+
+    var aiState = document.getElementById('ai-state');
+    function renderMini() {
+      document.getElementById('minilog').innerHTML = ZS.aiHistory.slice(-2).map(function (it) {
+        var cur = (it.role==='ai' && ZS.aiState==='streaming' && it===ZS.aiHistory[ZS.aiHistory.length-1]) ? '<span class="cur">█</span>' : '';
+        return '<div class="ml-row"><span class="ml-role ' + (it.role==='user'?'user':'ai') + '">' + (it.role==='user'?'DU ›':'KI ›') + '</span><span class="ml-text">' + it.text + cur + '</span></div>';
+      }).join('');
+    }
+    // Spinner
+    var spF = ['|','/','-','\\'], spi = 0;
+    setInterval(function () { var s = document.querySelector('.ai-state .sp'); if (s) s.textContent = (ZS.aiState !== 'idle') ? spF[spi++ % 4] : '·'; }, 120);
+
+    ZS.on('ai', function (e) {
+      if (e.state === 'thinking') aiState.innerHTML = '<span class="sp">|</span> DENKT';
+      else if (e.state === 'streaming') aiState.innerHTML = '<span class="sp">|</span> ANTWORTET';
+      else aiState.innerHTML = '<span class="sp">·</span> BEREIT';
+      // Während des Sprechens „gestikuliert" sie manchmal mit einem Objekt/Karte
+      if (e.state === 'streaming' && EX.mode === 'auto' && Math.random() < 0.5) {
+        var ex = pick(['globus','welt','torus','wuerfel']); gestureLeft = 9; setCurrent(ex); gestureLog(EXNAMES[ex]);
+      } else if (e.state === 'idle' && EX.mode === 'auto') { gestureLeft = 0; setCurrent('gesicht'); }
+      renderMini();
+    });
+    renderMini();
+
+    ZS.start();
+    fitStage('#stage');
+  })();
+  </script>
+</body>
+</html>

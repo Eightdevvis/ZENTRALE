@@ -1042,6 +1042,96 @@
 
   <script>
     // ═══════════════════════════════════════════════════════
+    //  [DEBUG-MIC] Diagnose-Wrapper — temporär 2026-06-01
+    //  Zweck: rausfinden warum Firefox-Kiosk auf Pi keinen
+    //  echten Mic-Stream öffnet. Loggt jeden getUserMedia-
+    //  Call mit Stream-Info + Track-Events. Wenn die Diagnose
+    //  durch ist: diesen Block wieder rauswerfen.
+    // ═══════════════════════════════════════════════════════
+    // Schickt das Diagnose-Objekt an /api/debug — landet in /tmp/zentrale_debug.log
+    // damit wir die Daten serverseitig auswerten koennen statt sie am Pi-Monitor
+    // abzutippen.
+    // [DEBUG-MIC] Version-Marker — bumpe diesen String wenn das Wrapper-Code
+    // sich ändert. Dann kannst du im Log sehen welche Version der Pi geladen hat.
+    const _DEBUG_VERSION = 'v2-mr-wrapper-2026-06-01';
+
+    function _debugMicSend(tag, payload) {
+      try {
+        fetch('/api/debug', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({tag, ua: navigator.userAgent.slice(0, 80), payload}),
+          keepalive: true,
+        }).catch(()=>{});
+      } catch (e) {}
+      console.log('[DEBUG-MIC ' + tag + ']', payload);
+    }
+
+    if (navigator.mediaDevices) {
+      const _origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      navigator.mediaDevices.getUserMedia = async function(constraints) {
+        _debugMicSend('gUM-call', {constraints});
+        try {
+          const stream = await _origGUM(constraints);
+          const info = {
+            active: stream.active,
+            id: stream.id,
+            tracks: stream.getTracks().map(t => ({
+              kind: t.kind, label: t.label, id: t.id,
+              enabled: t.enabled, muted: t.muted, readyState: t.readyState,
+              settings: t.getSettings ? t.getSettings() : null,
+            })),
+          };
+          _debugMicSend('gUM-stream', info);
+          stream.getTracks().forEach(t => {
+            t.onmute = () => _debugMicSend('track-mute', {label: t.label, id: t.id});
+            t.onunmute = () => _debugMicSend('track-unmute', {label: t.label, id: t.id});
+            t.onended = () => _debugMicSend('track-ended', {label: t.label, id: t.id});
+          });
+          return stream;
+        } catch (e) {
+          _debugMicSend('gUM-error', {name: e.name, message: e.message});
+          throw e;
+        }
+      };
+      const _origEnum = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
+      navigator.mediaDevices.enumerateDevices = async function() {
+        const devs = await _origEnum();
+        _debugMicSend('enumerate', devs.map(d => ({
+          kind: d.kind, label: d.label || '(no label)', deviceId: d.deviceId.slice(0, 16) + '…',
+        })));
+        return devs;
+      };
+    }
+
+    // MediaRecorder-Wrapper — loggt Construct, State, Blob-Groessen.
+    if (window.MediaRecorder) {
+      const _OrigMR = window.MediaRecorder;
+      function _WrappedMR(stream, options) {
+        const mr = new _OrigMR(stream, options);
+        _debugMicSend('mr-construct', {
+          options, stream_id: stream.id, state: mr.state,
+          mimeType: mr.mimeType, audioBitsPerSecond: mr.audioBitsPerSecond,
+          opusSupported: _OrigMR.isTypeSupported('audio/webm;codecs=opus'),
+          webmSupported: _OrigMR.isTypeSupported('audio/webm'),
+        });
+        mr.addEventListener('dataavailable', (e) => {
+          _debugMicSend('mr-data', {blob_size: e.data.size, type: e.data.type, state: mr.state});
+        });
+        mr.addEventListener('start', () => _debugMicSend('mr-start', {state: mr.state}));
+        mr.addEventListener('stop', () => _debugMicSend('mr-stop', {state: mr.state}));
+        mr.addEventListener('error', (e) => _debugMicSend('mr-error', {error: String(e.error || e)}));
+        return mr;
+      }
+      _WrappedMR.isTypeSupported = _OrigMR.isTypeSupported.bind(_OrigMR);
+      window.MediaRecorder = _WrappedMR;
+    }
+
+    // Page-Load-Marker: feuert beim Initial-Load. Damit sehen wir im Log
+    // ob der Browser die aktuelle Wrapper-Version geladen hat.
+    _debugMicSend('page-load', {version: _DEBUG_VERSION, href: location.href});
+
+    // ═══════════════════════════════════════════════════════
     //  State
     // ═══════════════════════════════════════════════════════
     let appMode    = 'main';      // 'main' | 'category' | 'form' | 'chat'
@@ -1877,7 +1967,7 @@
             const resp = await fetch('/api/speak', {
               method:  'POST',
               headers: { 'Content-Type': 'application/json' },
-              body:    JSON.stringify({ text, speed: 0.9 }),
+              body:    JSON.stringify({ text, speed: 1.2 }),
             });
             if (!resp.ok) continue;   // TTS nicht verfuegbar → Satz still ueberspringen
             if (chatMuted) return;    // waehrend des Fetch gemutet → abbrechen

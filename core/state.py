@@ -15,12 +15,18 @@
 # der andere wartet, bis der erste fertig ist.
 
 import threading
+import time
 from datetime import datetime
 from collections import deque
 
 # Der Lock ist ein Mutex (mutual exclusion).
 # Er wird einmal erstellt und von allen Funktionen dieses Moduls geteilt.
 _lock = threading.Lock()
+
+# Prozess-Start (monotone Uhr) – Basis fuer die Backend-Uptime im Dashboard.
+# state.py wird beim Prozessstart importiert, also ist das ~der Start des
+# Backends. monotonic() ist immun gegen Systemzeit-Spruenge (NTP/Zeitzone).
+_started = time.monotonic()
 
 # deque (double-ended queue) aus collections ist wie eine Liste,
 # aber mit maxlen: wenn das Limit erreicht ist, fliegt automatisch
@@ -68,6 +74,34 @@ _chat_history = deque(maxlen=50)
 # Doppel-Trigger gehen sonst verloren. maxlen=100 als Sicherheitsnetz
 # falls der Loop mal hängt – ältester Trigger fliegt dann raus.
 _sensor_queue = deque(maxlen=100)
+
+# ── Pi-Telemetrie (Push vom Pi) ───────────────────────────────────────
+# Das Backend laeuft auf dem PC, der Pi-FS ist read-only. Der Pi kann
+# seine Telemetrie (CPU/Temp/RAM/SD) also nicht lokal anzeigen - er POSTet
+# sie periodisch an /api/telemetry/pi. Wir halten hier nur den LETZTEN
+# Stand plus den Empfangs-Zeitpunkt (monotone Uhr), damit das Dashboard
+# erkennen kann ob der Pi noch frisch sendet oder offline ist (stale).
+_pi_telemetry = {"data": None, "ts": 0.0}
+
+
+def set_pi_telemetry(data: dict):
+    """Letzten Pi-Telemetrie-Push speichern (mit Empfangs-Zeitstempel)."""
+    with _lock:
+        _pi_telemetry["data"] = data
+        _pi_telemetry["ts"] = time.monotonic()
+
+
+def get_pi_telemetry() -> dict:
+    """
+    Letzte Pi-Telemetrie + Alter in Sekunden. Gibt {} zurueck wenn der Pi
+    noch nie gesendet hat. age_s erlaubt dem Frontend die Stale-Anzeige.
+    """
+    with _lock:
+        data = _pi_telemetry["data"]
+        ts = _pi_telemetry["ts"]
+    if data is None:
+        return {}
+    return {**data, "age_s": round(time.monotonic() - ts, 1)}
 
 
 def push_event(name: str):
@@ -205,4 +239,5 @@ def get_snapshot() -> dict:
             "vocab":         _vocab,
             "logs":          list(_logs),
             "internet_logs": list(_internet_logs),
+            "uptime_s":      round(time.monotonic() - _started),
         }

@@ -20,6 +20,18 @@ Verwendet von `scripts/pi_sensor_bridge.py` (Pi → PC) und kann von
 beliebigen LAN-Clients aufgerufen werden (Mikrocontroller, anderer Pi,
 manueller curl-Test). Siehe `topologie.md`.
 
+## Telemetrie
+
+Zwei Maschinen: PC liest lokal (`/proc` + `/sys` + `nvidia-smi` via
+`core/host_metrics.py` → `core/telemetry.pc_snapshot()`), der Pi POSTet
+seine Werte rüber (FS read-only, kann nicht selbst anzeigen). Quelle ist
+dependency-frei (kein psutil), voll offline.
+
+| Endpoint              | Methode | Beschreibung                          |
+|-----------------------|---------|---------------------------------------|
+| `/api/telemetry`      | GET     | PC + Pi kombiniert: `{pc:{cpu,gpu,vram,temp,ram}, pi:{cpu,temp,ram,disk,age_s}}`. Jede Metrik ist ein `{v, …}`-Objekt; `v=null` = Quelle fehlt. `pi={}` solange der Pi nie gesendet hat, `age_s` = Alter des letzten Pushes (Frontend zeigt Pi ab >90s als stale). Dashboard pollt ~2s. |
+| `/api/telemetry/pi`   | POST    | Telemetrie-Push vom Pi. JSON-Body mit Top-Level-Keys aus `{cpu,temp,ram,disk}` (Whitelist `_ALLOWED_PI_METRICS`), gleiche Shape wie ein Meter-Block. Landet via `state.set_pi_telemetry()`. Sender: `scripts/pi_sensor_bridge.py`. |
+
 ## Data Collection
 
 | Endpoint              | Methode | Beschreibung                          |

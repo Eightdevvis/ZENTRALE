@@ -88,7 +88,7 @@ def transcribe(audio_bytes: bytes, filename: str = "audio.wav",
 
 
 def synthesize(text: str, lang: str = None,
-               speed: float = 0.9, speaker: int = 0) -> bytes:
+               speed: float = 1.2, speaker: int = 0) -> bytes:
     """
     Schickt Text an den TTS-Service und gibt WAV-Audio-Bytes zurück.
     Flask proxied die Bytes direkt an den Browser.
@@ -97,7 +97,8 @@ def synthesize(text: str, lang: str = None,
     lang:    Zielsprache. None → DEFAULT_LANG. Werte: 'de', 'zh', …
              Welche Sprachen wirklich gehen, entscheidet tts_service.py
              (abhängig von den geladenen Modellen).
-    speed:   Sprechgeschwindigkeit (0.9 = leicht langsamer, gut zum Lernen)
+    speed:   Sprechgeschwindigkeit (ZENTRALE-Chat-Default 1.2 = etwas flotter;
+             1.0 = natuerlich, <1.0 dehnt/langsamer, z.B. 0.9 fuer den Tutor)
     speaker: Sprecher-ID (modellabhängig: vits-zh-aishell3 hat 174,
              Piper-Modelle haben typischerweise 1)
     Rückgabe: WAV-Datei als bytes, oder leeres bytes bei Fehler

@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ZENTRALE · MONOLITH</title>
+<!-- Fonts lokal vendored (offline-Pflicht): keine Google-Fonts-Anfrage übers Netz -->
+<link rel="stylesheet" href="/static/fonts/fonts.css" />
+<style>
+  /* ── Theme: TAG (hell/papier) ── */
+  [data-theme="day"] {
+    --bg: #ece7dc; --paper: rgba(255,255,255,0.25);
+    --ink: #232019; --bright: #000; --dim: #7c7768; --faint: #bdb6a4; --line: #cbc4b3;
+    --acc: #2f6b48; --acc-soft: #6f8f7c;
+    --t-net: #1d6a8c; --t-graph: #8a3fb0; --t-event: #3a7d3a; --t-audio: #2f6b48;
+    --t-hook: #9a6a2c; --t-num: #9a6a2c; --t-dim: #9a9482; --warn: #9a6a2c;
+    --scan: rgba(0,0,0,0.045);
+  }
+  /* ── Theme: NACHT (code-dark / tech-dark) ── */
+  [data-theme="night"] {
+    --bg: #0d1017; --paper: rgba(255,255,255,0.018);
+    --ink: #c5cdd6; --bright: #eaf0f6; --dim: #909eae; --faint: #44505f; --line: #222a33;
+    --acc: #7ec699; --acc-soft: #4f6353;
+    --t-net: #56b6c2; --t-graph: #c678dd; --t-event: #98c379; --t-audio: #7ec699;
+    --t-hook: #e0a458; --t-num: #d19a66; --t-dim: #5c6773; --warn: #e0a458;
+    --scan: rgba(0,0,0,0.16);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+
+  #stage {
+    position: absolute; left: 50%; top: 50%;
+    width: 1920px; height: 1080px;
+    transform: translate(-50%, -50%); transform-origin: center;
+    background: var(--bg); color: var(--ink);
+    font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; line-height: 1.5;
+    display: grid; grid-template-rows: 86px 1fr; padding: 22px 28px; gap: 14px; overflow: hidden;
+    transition: background .8s ease, color .8s ease;
+  }
+  #stage::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 60;
+    background: repeating-linear-gradient(to bottom, transparent 0 3px, var(--scan) 3px 4px); }
+  #stage > * { position: relative; z-index: 1; }
+
+  .vt { font-family: 'VT323', monospace; }
+
+  /* Header */
+  .top { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+  .brand { font-weight: 700; font-size: 46px; letter-spacing: 0.24em; color: var(--bright); line-height: 1; }
+  .brand .blk { background: var(--ink); color: var(--bg); padding: 0 8px; }
+  /* "TRALE" flackert bunt — jeder Buchstabe eigene Farb-/Flacker-Animation,
+     versetzt in Dauer + Delay, damit es lebendig/asynchron wirkt. */
+  .brand .flick span { display: inline-block; animation: brandflick 1.1s infinite; }
+  .brand .flick span:nth-child(1) { animation-duration: 1.00s; animation-delay: 0s; }
+  .brand .flick span:nth-child(2) { animation-duration: 1.30s; animation-delay: .15s; }
+  .brand .flick span:nth-child(3) { animation-duration: .90s;  animation-delay: .30s; }
+  .brand .flick span:nth-child(4) { animation-duration: 1.50s; animation-delay: .10s; }
+  .brand .flick span:nth-child(5) { animation-duration: 1.15s; animation-delay: .40s; }
+  @keyframes brandflick {
+    0%   { color: #ff5252; opacity: 1;   }
+    14%  { color: #ff9f1c; opacity: .45; }
+    28%  { color: #ffe14d; opacity: 1;   }
+    42%  { color: #5cff95; opacity: .6;  }
+    56%  { color: #4dd2ff; opacity: 1;   }
+    70%  { color: #9b5cff; opacity: .35; }
+    84%  { color: #ff5ce1; opacity: 1;   }
+    100% { color: #ff5252; opacity: .85; }
+  }
+  .brand-sub { font-size: 11px; letter-spacing: 0.32em; color: var(--dim); text-transform: uppercase; margin-top: 7px; }
+  .meta { display: flex; gap: 22px; align-items: center; }
+  .kv { font-size: 11px; letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; white-space: nowrap; }
+  .kv b { color: var(--ink); font-weight: 600; }
+  .kv .ok { color: var(--acc); }
+  .kv .warn { color: var(--warn); }
+  .clock { font-family: 'VT323', monospace; font-size: 50px; letter-spacing: 0.04em; color: var(--bright); text-align: right; line-height: 0.8; }
+  .date { font-size: 11px; letter-spacing: 0.22em; color: var(--dim); text-align: right; text-transform: uppercase; margin-top: 2px; }
+  /* Theme-Schalter */
+  .theme-ctl { display: flex; border: 1px solid var(--line); }
+  .theme-ctl button { font-family: 'VT323', monospace; font-size: 17px; letter-spacing: 0.08em; background: transparent; color: var(--dim); border: 0; padding: 4px 11px; cursor: pointer; border-right: 1px solid var(--line); }
+  .theme-ctl button:last-child { border-right: 0; }
+  .theme-ctl button.on { background: var(--acc); color: var(--bg); }
+
+  /* Body */
+  .body { display: grid; grid-template-columns: 320px 1fr 360px; gap: 14px; min-height: 0; }
+  .col { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+
+  .box { border: 1px solid var(--line); padding: 23px 15px 12px; position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--paper); }
+  .box > .bt { position: absolute; top: -11px; left: 13px; background: var(--bg); padding: 0 9px; font-family: 'VT323', monospace; font-size: 19px; line-height: 1; letter-spacing: 0.14em; color: var(--acc); text-transform: uppercase; }
+  .box > .bt::before { content: '┤ '; color: var(--faint); } .box > .bt::after { content: ' ├'; color: var(--faint); }
+  .box > .bt2 { position: absolute; top: -9px; right: 13px; background: var(--bg); padding: 0 7px; font-size: 10px; letter-spacing: 0.12em; color: var(--dim); }
+
+  /* Platzhalter für (noch) unverkabelte Daten-Panels — ehrlich, kein Fake-Wert */
+  .nodata { color: var(--faint); font-size: 12px; letter-spacing: 0.06em; padding: 8px 2px; font-style: italic; }
+
+  /* Sensoren */
+  .srow { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 9px; padding: 5px 0; font-size: 14px; letter-spacing: 0.04em; border-bottom: 1px dotted var(--line); }
+  .srow:last-child { border-bottom: 0; }
+  .srow .ind { color: var(--faint); } .srow.on .ind { color: var(--acc); }
+  .srow .nm { color: var(--ink); } .srow.on .nm { color: var(--bright); }
+  .srow .val { color: var(--dim); font-size: 12px; } .srow.on .val { color: var(--acc); }
+
+  /* Meter (Game-Balken, VT323) */
+  .meter { display: grid; grid-template-columns: 58px 1fr 48px; align-items: center; gap: 9px; padding: 4px 0; }
+  .meter .ml { font-size: 12px; color: var(--dim); letter-spacing: 0.1em; }
+  .meter .mb { font-family: 'VT323', monospace; font-size: 19px; line-height: 1; color: var(--acc); white-space: pre; overflow: hidden; }
+  .meter .mv { font-family: 'VT323', monospace; font-size: 19px; color: var(--bright); text-align: right; }
+  /* Telemetrie: EIN rotierendes Meter (wechselt durch alle Werte) */
+  .tele-rot { grid-template-columns: 84px 1fr 56px; padding: 6px 0 2px; }
+  .tele-rot .ml { color: var(--acc); letter-spacing: 0.1em; font-size: 13px; }
+  .tele-rot .ml.stale { color: var(--warn); }
+  .tele-rot .mb, .tele-rot .mv { font-size: 18px; }
+  /* zweifarbiger Balken: gefüllt = Akzent, leer = matt → Füllstand eindeutig */
+  .tele-rot .mbf { color: var(--acc); }
+  .tele-rot .mbe { color: var(--faint); }
+
+  /* Exhibit / KI-Kern */
+  .core-box { flex: 1; min-height: 0; }
+  .core-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: nowrap; }
+  .core-head .bt { white-space: nowrap; }
+  .tabs { display: flex; gap: 6px; margin-left: auto; }
+  .tab { font-family: 'VT323', monospace; font-size: 16px; letter-spacing: 0.06em; color: var(--dim); border: 1px solid var(--line); padding: 1px 8px; cursor: pointer; text-transform: uppercase; }
+  .tab.on { color: var(--bg); background: var(--acc); border-color: var(--acc); }
+  .tab:hover:not(.on) { color: var(--ink); }
+  .core-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  #core { font-size: 15px; line-height: 1.0; letter-spacing: 0; color: var(--acc); text-align: center; contain: content; white-space: pre; overflow: hidden; }
+  #core.filtimg { font-size: 10px; line-height: 1.0; }   /* Bild-Filter: kleine Schrift, hohe Zeichen-Auflösung */
+  .core-readout { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 9px; flex-shrink: 0; position: relative; z-index: 2; background: var(--bg); }
+  .ai-state { font-family: 'VT323', monospace; font-size: 24px; letter-spacing: 0.12em; color: var(--bright); text-transform: uppercase; }
+  .ai-state .sp { color: var(--acc); display: inline-block; width: 1.1em; }
+  .ai-model { font-size: 11px; color: var(--dim); letter-spacing: 0.08em; } .ai-model b { color: var(--ink); font-weight: 500; }
+
+  .minilog { flex-shrink: 0; height: 100px; overflow: hidden; display: flex; flex-direction: column; gap: 5px; margin-top: 8px; position: relative; z-index: 2; background: var(--bg); }
+  .ml-row { display: grid; grid-template-columns: 64px 1fr; gap: 9px; font-size: 13px; line-height: 1.42; }
+  .ml-role { font-size: 12px; letter-spacing: 0.05em; } .ml-role.user { color: var(--warn); } .ml-role.ai { color: var(--acc); }
+  .ml-text { color: var(--ink); } .ml-text .cur { color: var(--bright); animation: blink .8s step-start infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* Tracker */
+  .trk { display: grid; grid-template-columns: 82px 1fr 60px; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px dotted var(--line); }
+  .trk:last-child { border-bottom: 0; }
+  .trk .tl { font-size: 12px; color: var(--dim); letter-spacing: 0.08em; text-transform: uppercase; }
+  .trk .ts { font-family: 'VT323', monospace; font-size: 20px; color: var(--acc); white-space: pre; overflow: hidden; line-height: 1; }
+  .trk .tv { font-family: 'VT323', monospace; font-size: 18px; color: var(--bright); text-align: right; }
+  .proj { padding: 5px 0; }
+  .proj-top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 1px; }
+  .proj-top .pn { color: var(--ink); white-space: nowrap; } .proj-top .ps { color: var(--dim); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
+  .proj .pb { font-family: 'VT323', monospace; font-size: 17px; color: var(--acc); white-space: pre; line-height: 1; }
+
+  /* Terminals (token-coloriert) */
+  .term-body { flex: 1; overflow: hidden; display: flex; flex-direction: column-reverse; font-size: 13px; line-height: 1.5; }
+  .lg { display: flex; gap: 10px; white-space: pre; }
+  .lg .tt { color: var(--faint); } .lg .tx { color: var(--ink); }
+  .t-net { color: var(--t-net); } .t-graph { color: var(--t-graph); } .t-event { color: var(--t-event); }
+  .t-audio { color: var(--t-audio); } .t-hook { color: var(--t-hook); } .t-num { color: var(--t-num); }
+  .t-dim { color: var(--t-dim); } .t-acc { color: var(--acc); }
+  .box.net > .bt { color: var(--warn); } .box.net { border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
+  .box.net .tx { color: var(--warn); }
+  .term-idle { color: var(--acc-soft); font-size: 13px; letter-spacing: 0.03em; }
+
+  /* ── Konsole (Chat-Eingabe + Mic) ── */
+  .console { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 16px 14px 11px; }
+  .console .prompt { font-family: 'VT323', monospace; font-size: 24px; line-height: 1; color: var(--acc); flex-shrink: 0; }
+  .console input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; letter-spacing: 0.01em; color: var(--ink); }
+  .console input::placeholder { color: var(--dim); }
+  .mic-btn { flex-shrink: 0; width: 30px; height: 30px; border: 1px solid var(--line); background: transparent;
+    color: var(--dim); font-size: 13px; line-height: 1; cursor: pointer; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; transition: color .2s, border-color .2s; }
+  .mic-btn:hover { color: var(--ink); border-color: var(--dim); }
+  .mic-btn.recording { color: #fff; background: #c0392b; border-color: #c0392b; animation: micblink .8s step-start infinite; }
+  .mic-btn.transcribing { color: var(--warn); border-color: var(--warn); }
+  @keyframes micblink { 50% { opacity: 0.35; } }
+
+  /* ── Data-Collection-Overlay (Taste Alt+K) ── */
+  #dc-overlay { position: absolute; inset: 0; z-index: 80; display: none; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--bg) 84%, transparent); }
+  #dc-overlay.on { display: flex; }
+  .dc-panel { width: 520px; max-width: 78%; border: 1px solid var(--line); background: var(--bg); padding: 30px 26px 18px; position: relative; }
+  .dc-panel > .bt { position: absolute; top: -11px; left: 16px; background: var(--bg); padding: 0 9px; font-family: 'VT323', monospace; font-size: 19px; letter-spacing: 0.14em; color: var(--acc); text-transform: uppercase; }
+  .dc-panel > .bt::before { content: '┤ '; color: var(--faint); } .dc-panel > .bt::after { content: ' ├'; color: var(--faint); }
+  .dc-title { font-family: 'VT323', monospace; font-size: 30px; letter-spacing: 0.1em; color: var(--bright); text-transform: uppercase; margin-bottom: 16px; }
+  .dc-q { color: var(--dim); font-size: 13px; letter-spacing: 0.08em; margin-bottom: 14px; text-transform: uppercase; }
+  .dc-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .dc-item { display: flex; align-items: center; gap: 14px; padding: 10px 12px; border: 1px solid var(--line); font-size: 15px; color: var(--ink); }
+  .dc-item .num { font-family: 'VT323', monospace; font-size: 22px; color: var(--acc); width: 24px; text-align: center; }
+  .dc-field { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px; border: 1px solid var(--line); margin-bottom: 8px; }
+  .dc-field.focused { border-color: var(--acc); background: var(--paper); }
+  .dc-field .lbl { font-size: 12px; letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; }
+  .dc-val { font-family: 'VT323', monospace; font-size: 22px; color: var(--bright); }
+  .dc-val.editing { color: var(--acc); }
+  .dc-smileys { display: flex; gap: 10px; align-items: center; }
+  .dc-smiley { color: var(--faint); display: flex; transition: color .1s, filter .1s; }
+  .dc-smiley.sel { color: var(--acc); }
+  .dc-smiley.hov { color: var(--acc); filter: drop-shadow(0 0 7px color-mix(in srgb, var(--acc) 70%, transparent)); }
+  .dc-hint { margin-top: 14px; font-size: 11px; letter-spacing: 0.08em; color: var(--dim); text-transform: uppercase; }
+</style>
+</head>
+<body>
+  <div id="stage" data-theme="day">
+    <header class="top">
+      <div>
+        <div class="brand"><span class="blk">ZEN</span><span class="flick"><span>T</span><span>R</span><span>A</span><span>L</span><span>E</span></span></div>
+        <div class="brand-sub">monolith · adaptive konsole</div>
+      </div>
+      <div class="meta">
+        <div class="kv">OLLAMA <b id="h-model">…</b></div>
+        <div class="kv">NET <b id="h-net" class="ok">OFFLINE ✓</b></div>
+        <div class="kv">UP <b id="p-up">—</b></div>
+        <div class="theme-ctl" id="theme-ctl">
+          <button data-tm="auto" class="on">AUTO</button>
+          <button data-tm="day">HELL</button>
+          <button data-tm="night">DUNKEL</button>
+        </div>
+        <div>
+          <div class="clock" id="clock">--:--:--</div>
+          <div class="date" id="date">--</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="body">
+      <!-- LINKS -->
+      <div class="col">
+        <div class="box" style="flex:0 0 auto">
+          <span class="bt">sensoren</span>
+          <div class="srow" id="s-button"><span class="ind">[ ]</span><span class="nm">BUTTON</span><span class="val">bereit</span></div>
+          <div class="srow" id="s-light"><span class="ind">[ ]</span><span class="nm">LICHT</span><span class="val">—</span></div>
+          <div class="srow" id="s-motion"><span class="ind">[ ]</span><span class="nm">BEWEGUNG</span><span class="val">PIR</span></div>
+          <div class="srow" id="s-door"><span class="ind">[ ]</span><span class="nm">TÜR</span><span class="val">zu</span></div>
+        </div>
+        <div class="box" style="flex:0 0 auto">
+          <span class="bt">telemetrie</span><span class="bt2" id="tele-src">…</span>
+          <div class="meter tele-rot">
+            <span class="ml" id="tsg-lbl">PC·CPU</span>
+            <span class="mb" id="tsg-bar"></span>
+            <span class="mv" id="tsg-val">–</span>
+          </div>
+        </div>
+        <div class="box" style="flex:1 1 auto;min-height:0">
+          <span class="bt">stdout</span><span class="bt2">live</span>
+          <div class="term-body" id="term"></div>
+        </div>
+      </div>
+
+      <!-- MITTE: Exhibit -->
+      <div class="col">
+        <div class="box core-box">
+          <div class="core-head">
+            <span class="bt" style="position:static;background:none;padding:0">ki-kern</span>
+            <div class="tabs" id="tabs">
+              <span class="tab" data-ex="gesicht">Gesicht</span>
+              <span class="tab" data-ex="torus">Torus</span>
+              <span class="tab" data-ex="wuerfel">Würfel</span>
+              <span class="tab" data-ex="globus">Globus</span>
+              <span class="tab" data-ex="welt">Welt</span>
+              <span class="tab" data-ex="filter">Filter</span>
+              <span class="tab on" data-ex="auto">Auto</span>
+            </div>
+          </div>
+          <div class="core-wrap"><pre id="core"></pre></div>
+          <div class="core-readout">
+            <div class="ai-state" id="ai-state"><span class="sp">·</span> BEREIT</div>
+            <div class="ai-model" id="ai-meta">zeigt: gesicht</div>
+          </div>
+          <div class="minilog" id="minilog"></div>
+        </div>
+
+        <!-- Chat-Konsole: immer sichtbar, Enter sendet. Die Konversation
+             erscheint live im Minilog oben (letzte 2 Zeilen, KI-Antwort
+             streamt mit Cursor). -->
+        <div class="box console" style="flex:0 0 auto">
+          <span class="bt">konsole</span>
+          <span class="bt2" id="chat-mute-hint">Alt+S Ton aus</span>
+          <span class="prompt">›</span>
+          <input id="chat-input" type="text" autocomplete="off" spellcheck="false"
+                 placeholder="sprich mit der KI …  (Enter senden · Alt+M Mic · /clear)" />
+          <button id="chat-mic-btn" class="mic-btn" title="Mic (Alt+M)">●</button>
+        </div>
+      </div>
+
+      <!-- RECHTS -->
+      <div class="col">
+        <div class="box" style="flex:0 0 auto">
+          <span class="bt">lifestyle</span>
+          <div id="trackers"></div>
+        </div>
+        <div class="box net" style="flex:1 1 auto;min-height:0">
+          <span class="bt">outbound</span><span class="bt2">tripwire</span>
+          <div class="term-body" id="term-net"><div class="term-idle">// offline ✓</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data-Collection-Overlay: per Alt+K geöffnet, Tastatur-gesteuert -->
+    <div id="dc-overlay"><div class="dc-panel" id="dc-panel"></div></div>
+  </div>
+
+  <!-- viz.js + ascii.js: unveränderte Helfer (ascii.js trägt auch den Bild→ASCII-Filter).
+       engine.js: ECHTER Daten-Adapter (ersetzt die frühere Simulation). -->
+  <script src="/static/engine.js"></script>
+  <script src="/static/viz.js"></script>
+  <script src="/static/ascii.js"></script>
+  <script>
+  (function () {
+    var stage = document.getElementById('stage');
+
+    // ── Theme (Tag/Nacht) ──
+    var themeMode = 'auto';
+    function computeTheme() { var h = new Date().getHours(); return (h >= 5 && h < 21) ? 'day' : 'night'; } // hell 05–21, sonst dunkel
+    function applyTheme() { stage.setAttribute('data-theme', themeMode === 'auto' ? computeTheme() : themeMode); }
+    document.getElementById('theme-ctl').addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      themeMode = b.getAttribute('data-tm');
+      [].forEach.call(this.children, function (c) { c.classList.toggle('on', c === b); });
+      applyTheme();
+    });
+    applyTheme();
+
+    // ── Telemetrie: EIN rotierendes Meter ──
+    // Statt 9 Balken zeigt ein einziges Meter nacheinander jeden Wert und
+    // wechselt alle paar Sekunden weiter. Reihenfolge PC zuerst, dann Pi.
+    //   [grp, label, quelle('pc'|'pi'), key, einheit]
+    // PC = lokal (/proc+/sys+nvidia-smi), Pi = gepusht (offline → übersprungen).
+    var ROT = [
+      ['PC', 'CPU',  'pc', 'cpu',  '%'],
+      ['PC', 'GPU',  'pc', 'gpu',  '%'],
+      ['PC', 'VRAM', 'pc', 'vram', 'G'],   // Sonderfall: Anzeige in GB
+      ['PC', 'TEMP', 'pc', 'temp', '°C'],
+      ['PC', 'RAM',  'pc', 'ram',  '%'],
+      ['PI', 'CPU',  'pi', 'cpu',  '%'],
+      ['PI', 'TEMP', 'pi', 'temp', '°C'],
+      ['PI', 'RAM',  'pi', 'ram',  '%'],
+      ['PI', 'SD',   'pi', 'disk', '%']
+    ];
+    var rotIdx = 0, lastMetrics = null, piDead = true;
+    var tsgLbl = document.getElementById('tsg-lbl'), tsgBar = document.getElementById('tsg-bar'), tsgVal = document.getElementById('tsg-val');
+
+    // Wert einer Rotations-Definition aus den letzten Metriken holen.
+    // null = nicht verfügbar (Quelle fehlt, oder Pi offline) → wird übersprungen.
+    function rotValue(def) {
+      if (def[2] === 'pi' && piDead) return null;
+      var src = lastMetrics && lastMetrics[def[2]];
+      var m = src && src[def[3]];
+      if (!m || m.v == null) return null;
+      var key = def[3];
+      var pct = key === 'temp' ? (m.v - 38) / 40 * 100 : m.v;   // Temp grob auf 38–78°C
+      var text = (key === 'vram' && m.used != null) ? m.used.toFixed(1) + 'G' : Math.round(m.v) + def[4];
+      return { pct: pct, text: text };
+    }
+    // Aktuelles Meter zeichnen — überspringt nicht-verfügbare Werte vorwärts.
+    function renderRot() {
+      var tries = 0, def = null, val = null;
+      while (tries < ROT.length) {
+        def = ROT[rotIdx]; val = rotValue(def);
+        if (val) break;
+        rotIdx = (rotIdx + 1) % ROT.length; tries++;
+      }
+      if (!val) { tsgLbl.textContent = '—'; tsgLbl.classList.remove('stale'); tsgBar.innerHTML = ''; tsgVal.textContent = '–'; return; }
+      tsgLbl.textContent = def[0] + '·' + def[1];
+      tsgLbl.classList.toggle('stale', def[2] === 'pi');   // Pi-Werte leicht abgesetzt
+      // Zweifarbiger Balken: n gefüllte █ (Akzent) + Rest ░ (matt) → Füllstand klar.
+      var n = Math.round(Math.max(0, Math.min(100, val.pct)) / 100 * 16);
+      tsgBar.innerHTML = '<span class="mbf">' + '█'.repeat(n) + '</span><span class="mbe">' + '░'.repeat(16 - n) + '</span>';
+      tsgVal.textContent = val.text;
+    }
+    // Weiterrotieren (alle 2.6s); der angezeigte Wert selbst frischt im tick.
+    setInterval(function () { rotIdx = (rotIdx + 1) % ROT.length; renderRot(); }, 2600);
+
+    // ── Tracker (lifestyle) ──
+    // Config-getrieben und leicht erweiterbar: NEUEN TRACKER HINZUFÜGEN =
+    // einen Eintrag an TRACKERS anhängen (+ die Kategorie in
+    // core/categories.py anlegen, damit Alt+K sie erfassen kann). Sonst
+    // nichts. Werte kommen aus /api/data/<category> — dieselbe Quelle wie
+    // die Data-Collection (Alt+K).
+    //   { label, category, field, fmt(values)->String }
+    var TRACKERS = [
+      { label: 'Schlaf', category: 'sleep_quality', field: 'quality',
+        fmt: function (v) { return 'Ø' + (v.reduce(function (a, b) { return a + b; }, 0) / v.length).toFixed(1); } }
+      // Beispiel für später:
+      // { label: 'Gemüt', category: 'mood', field: 'mood', fmt: ... },
+    ];
+    var trkEl = document.getElementById('trackers');
+
+    async function fetchTrackers() {
+      var rows = [];
+      for (var i = 0; i < TRACKERS.length; i++) {
+        var t = TRACKERS[i];
+        try {
+          var entries = await (await fetch('/api/data/' + t.category)).json();
+          var vals = (entries || [])
+            .filter(function (e) { return e[t.field] !== null && e[t.field] !== undefined; })
+            .sort(function (a, b) { return String(a.date || '').localeCompare(String(b.date || '')); })
+            .map(function (e) { return Number(e[t.field]); })
+            .slice(-14);                               // letzte 14 Einträge
+          if (vals.length) {
+            rows.push('<div class="trk"><span class="tl">' + t.label + '</span><span class="ts">'
+              + VZ.blockSpark(vals) + '</span><span class="tv">' + t.fmt(vals) + '</span></div>');
+          }
+        } catch (e) { /* Kategorie evtl. noch leer → überspringen */ }
+      }
+      trkEl.innerHTML = rows.length ? rows.join('') : '<div class="nodata">— noch keine daten (Alt+K) —</div>';
+    }
+    fetchTrackers();
+    setInterval(fetchTrackers, 60000);                 // langsam (manuell geloggte Daten)
+    // Nach dem Erfassen (Alt+K → speichern) sofort neu laden:
+    window.addEventListener('zentrale:logged', fetchTrackers);
+
+    // ── ASCII-Bibliothek aufbauen (rein Frontend, einmalig) ──
+    var books = {
+      torus:  ASCII.torusFlipbook({ cols: 60, rows: 28, frames: 60 }),
+      wuerfel: ASCII.cubeFlipbook({ cols: 50, rows: 26, frames: 60 }),
+      globus: VZ.sphereFlipbook({ cols: 56, rows: 28, frames: 72, ramp: ' .·:-=+o*#@', fill: 0.45 })
+    };
+    var world = ASCII.buildWorld({ cols: 78, rows: 30 });
+    var people = ASCII.buildPeople({ cols: 48, rows: 46 });
+    var avatar = 0;
+
+    // ── ASCII-Bild-Filter (der Knackpunkt) ──────────────────────────────────
+    // ASCII.canvasToAscii(canvas, cols, rows) mittelt die Helligkeit pro
+    // Block und mappt sie auf eine Zeichen-Rampe — exakt das, was jp2a/chafa
+    // tun. Die EINZIGE Quelle ist der Canvas: was immer da drin steht, wird
+    // gefiltert.
+    //
+    // ►►► HIER IST DIE NAHT ◄◄◄
+    // Aktuell zeichnet drawTestImage() ein animiertes Test-Motiv hinein, damit
+    // man den Filter live sieht (animiert = beweist Frame-für-Frame-Filterung,
+    // genau wie Video/Webcam später). Um eine ECHTE Quelle anzubinden, ersetzt
+    // man drawTestImage(...) durch EINE Zeile, die ein Frame in fctx zeichnet:
+    //   fctx.drawImage(imgElement, 0, 0, FW, FH);     // Foto
+    //   fctx.drawImage(videoElement, 0, 0, FW, FH);   // <video>/Webcam-Frame
+    // Der Rest (canvasToAscii → #core) bleibt identisch.
+    var FW = 512, FH = 288;                 // Canvas-Aufloesung (16:9), hoeher = mehr Bilddetail
+    var fcv = document.createElement('canvas'); fcv.width = FW; fcv.height = FH;
+    var fctx = fcv.getContext('2d');
+
+    // Echte Fotos laden (vom Backend, same-origin → Canvas lesbar). Liste via
+    // /api/photos, jedes Bild als <img src="/api/photos/<name>">. Erst wenn
+    // ein Bild fertig geladen ist, landet es in photoReady und wird gefiltert.
+    var photoReady = [];   // [{img, name}]
+    fetch('/api/photos').then(function (r) { return r.json(); }).then(function (names) {
+      (names || []).forEach(function (n) {
+        var img = new Image();
+        img.onload = function () { photoReady.push({ img: img, name: n }); };
+        img.src = '/api/photos/' + encodeURIComponent(n);
+      });
+    }).catch(function () { /* keine Fotos → Test-Bild-Fallback */ });
+
+    // Bild "cover" in den Canvas zeichnen (formatfüllend, mittig beschnitten).
+    function drawImageCover(img) {
+      fctx.fillStyle = '#000'; fctx.fillRect(0, 0, FW, FH);
+      var ar = img.width / img.height, far = FW / FH, dw, dh;
+      if (ar > far) { dh = FH; dw = FH * ar; } else { dw = FW; dh = FW / ar; }
+      fctx.drawImage(img, (FW - dw) / 2, (FH - dh) / 2, dw, dh);
+    }
+
+    // Kontrast-Stretch (Auto-Levels): jeden Farbkanal aufs volle 0–255-Spektrum
+    // ziehen, anhand des 1%/99%-Perzentils (robust gegen einzelne Ausreißer-
+    // Pixel). Holt flaue/mittige Fotos (Wald, Hauttöne) auseinander → im ASCII
+    // viel besser erkennbar. Läuft auf dem Quell-Canvas, also wirken beide
+    // Filter-Pfade (mono + farbe) auf dem gestreckten Bild.
+    function stretchCanvas() {
+      var imgd = fctx.getImageData(0, 0, FW, FH), d = imgd.data, N = d.length, total = N / 4;
+      for (var ch = 0; ch < 3; ch++) {
+        var hist = new Array(256).fill(0), i;
+        for (i = ch; i < N; i += 4) hist[d[i]]++;
+        var acc = 0, lo = 0, hi = 255, cut = total * 0.01;
+        for (var v = 0; v < 256; v++) { acc += hist[v]; if (acc >= cut) { lo = v; break; } }
+        acc = 0; for (var w = 255; w >= 0; w--) { acc += hist[w]; if (acc >= cut) { hi = w; break; } }
+        if (hi <= lo) continue;                       // Kanal flach → unverändert lassen
+        var sc = 255 / (hi - lo);
+        for (var j = ch; j < N; j += 4) { var nv = (d[j] - lo) * sc; d[j] = nv < 0 ? 0 : (nv > 255 ? 255 : nv); }
+      }
+      fctx.putImageData(imgd, 0, 0);
+    }
+
+    function drawTestImage(t) {
+      // Hintergrund: dunkler Verlauf, leicht driftend
+      var p = (Math.sin(t * 0.02) + 1) / 2;
+      var g = fctx.createLinearGradient(0, 0, FW, FH);
+      g.addColorStop(0, '#0a0a12');
+      g.addColorStop(1, 'rgb(' + Math.round(36 + p * 60) + ',' + Math.round(28 + p * 38) + ',' + Math.round(58 + p * 80) + ')');
+      fctx.fillStyle = g; fctx.fillRect(0, 0, FW, FH);
+      // bewegte helle Scheibe = das "Motiv" (zeigt schoene Graustufen-Rampe)
+      var cx = FW / 2 + Math.cos(t * 0.05) * FW * 0.28;
+      var cy = FH / 2 + Math.sin(t * 0.07) * FH * 0.30;
+      var r = Math.min(FW, FH) * 0.30;
+      var rg = fctx.createRadialGradient(cx, cy, r * 0.08, cx, cy, r);
+      rg.addColorStop(0, '#ffffff'); rg.addColorStop(0.55, '#bfe0ff'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+      fctx.fillStyle = rg; fctx.beginPath(); fctx.arc(cx, cy, r, 0, 7); fctx.fill();
+      // wandernde Balken fuer Kanten/Struktur
+      fctx.fillStyle = 'rgba(255,255,255,0.10)';
+      for (var i = 0; i < 5; i++) { var bx = (t * 1.5 + i * FW / 5) % FW; fctx.fillRect(bx, 0, 3, FH); }
+    }
+
+    // Farb-Variante des Filters: wie canvasToAscii, aber jedes Zeichen bekommt
+    // zusätzlich die Durchschnittsfarbe seines Blocks (als <span>-Farbe). Das
+    // Zeichen kommt weiter aus der Helligkeit, die Farbe aus dem RGB-Mittel →
+    // buntes ASCII. Leerzeichen brauchen keinen Span (spart DOM).
+    // Hohe ASCII-Aufloesung + feinere Rampe (17 Stufen) = Foto erkennbar.
+    // 160×45 Zeichen passen bei kleiner Schrift (#core.filtimg) in den Kern.
+    var COLS = 160, ROWS = 45, RAMP = ' .,:;-~=+ox*#%8B@';
+    function asciiColorHTML(cv) {
+      var ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+      var data = ctx.getImageData(0, 0, W, H).data;
+      var cw = W / COLS, ch = H / ROWS, out = '';
+      for (var r = 0; r < ROWS; r++) {
+        for (var c = 0; c < COLS; c++) {
+          var x0 = (c * cw) | 0, y0 = (r * ch) | 0, x1 = ((c + 1) * cw) | 0, y1 = ((r + 1) * ch) | 0;
+          var sr = 0, sg = 0, sb = 0, n = 0;
+          for (var y = y0; y < y1; y++) { var ro = y * W * 4; for (var x = x0; x < x1; x++) { var i = ro + x * 4; sr += data[i]; sg += data[i + 1]; sb += data[i + 2]; n++; } }
+          n = n || 1; var R = (sr / n) | 0, G = (sg / n) | 0, B = (sb / n) | 0;
+          var l = (0.299 * R + 0.587 * G + 0.114 * B) / 255;
+          var glyph = RAMP[(l * (RAMP.length - 1)) | 0];
+          out += glyph === ' ' ? ' ' : '<span style="color:rgb(' + R + ',' + G + ',' + B + ')">' + glyph + '</span>';
+        }
+        out += '\n';
+      }
+      return out;
+    }
+
+    // Filter-Render. Fotos sind statisch → nur bei Bild-/Modus-Wechsel neu
+    // bauen (Caching via _lastFilterKey). Test-Bild ist animiert → pro Frame.
+    // Setzt #core selbst (textContent für mono, innerHTML für farbe).
+    var filterColor = false, _lastFilterKey = '';
+    function filterFrame(t) {
+      if (photoReady.length) {
+        var idx = Math.floor(t / 44) % photoReady.length, cur = photoReady[idx];
+        var key = idx + '|' + (filterColor ? 'c' : 'm');
+        if (key === _lastFilterKey) return;                // unverändert → nichts tun
+        _lastFilterKey = key;
+        drawImageCover(cur.img);                           // ← echtes Frame in den Canvas
+        stretchCanvas();                                   // Kontrast aufs volle Spektrum
+        aiMeta.textContent = 'ascii-filter · ' + cur.name + ' · farbe ' + (filterColor ? 'an' : 'aus') + ' · klick=umschalten';
+        if (filterColor) coreEl.innerHTML = asciiColorHTML(fcv);
+        else coreEl.textContent = ASCII.canvasToAscii(fcv, COLS, ROWS, { ramp: RAMP, gamma: 1.0 });
+      } else {
+        _lastFilterKey = '';
+        drawTestImage(t);                                  // Fallback bis Fotos geladen sind
+        aiMeta.textContent = 'ascii-filter · test-bild · lade fotos…';
+        coreEl.textContent = ASCII.canvasToAscii(fcv, COLS, ROWS, { ramp: RAMP, gamma: 1.0 });
+      }
+    }
+
+    // ── Exhibit-Direktor ──
+    var coreEl = document.getElementById('core'), aiMeta = document.getElementById('ai-meta');
+    var EX = { mode: 'auto', current: 'gesicht' };
+    var EXNAMES = { gesicht: 'gesicht', torus: 'torus', wuerfel: 'würfel', globus: 'globus', welt: 'weltkarte', filter: 'ascii-filter' };
+    var fi = 0, gestureLeft = 0, autoT = 0;
+    var tabs = document.getElementById('tabs');
+    function syncTabs() {
+      [].forEach.call(tabs.children, function (t) {
+        var ex = t.getAttribute('data-ex');
+        t.classList.toggle('on', EX.mode === 'auto' ? ex === 'auto' : ex === EX.current);
+      });
+      aiMeta.textContent = (EX.current === 'gesicht')
+        ? 'avatar: ' + people[avatar].name + ' · ' + (avatar+1) + '/' + people.length + ' · klick zum wechseln'
+        : (EX.current === 'filter')
+          ? 'ascii-filter · test-bild · quelle foto/video/cam folgt'
+          : 'zeigt: ' + EXNAMES[EX.current];
+    }
+    function setCurrent(name) { EX.current = name; syncTabs(); }
+    tabs.addEventListener('click', function (e) {
+      var t = e.target.closest('.tab'); if (!t) return;
+      var ex = t.getAttribute('data-ex');
+      if (ex === 'auto') { EX.mode = 'auto'; gestureLeft = 0; setCurrent('gesicht'); }
+      else if (ex === 'gesicht' && EX.mode === 'manual' && EX.current === 'gesicht') { avatar = (avatar + 1) % people.length; syncTabs(); }
+      else if (ex === 'filter' && EX.mode === 'manual' && EX.current === 'filter') { filterColor = !filterColor; _lastFilterKey = ''; }   // Re-Klick: mono↔farbe
+      else { EX.mode = 'manual'; gestureLeft = 0; setCurrent(ex); }
+    });
+
+    function frameTick() {
+      fi++;
+      var c = EX.current;
+      coreEl.classList.toggle('filtimg', c === 'filter');   // kleine Schrift nur im Bild-Filter
+      if (c === 'gesicht') coreEl.textContent = ASCII.personFrame(people[avatar], ZS.aiState, fi);
+      else if (c === 'welt') coreEl.textContent = world.frame(Math.floor(fi / 6));
+      else if (c === 'filter') filterFrame(fi);   // setzt #core selbst (mono/farbe)
+      else { var b = books[c]; var spd = (ZS.aiState !== 'idle' ? 2 : 1); coreEl.textContent = b.frames[(fi * spd) % b.frames.length]; }
+    }
+    setInterval(frameTick, 90); syncTabs(); frameTick();
+
+    function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+    function gestureLog(name) { var t = new Date(); var ts = [t.getHours(),t.getMinutes(),t.getSeconds()].map(function(n){return ('0'+n).slice(-2);}).join(':'); appendLog('term', { t: ts, text: 'GESTURE → zeigt ' + name }, 60); }
+
+    // Auto-Direktor: im Leerlauf gelegentlich ein Objekt „zeigen", sonst Gesicht
+    setInterval(function () {
+      if (EX.mode !== 'auto') return;
+      if (gestureLeft > 0) { gestureLeft--; if (gestureLeft === 0) setCurrent('gesicht'); return; }
+      if (ZS.aiState === 'idle') {
+        autoT++;
+        if (autoT >= 11) { autoT = 0; var ex = pick(['torus','wuerfel','globus','welt']); gestureLeft = 6; setCurrent(ex); gestureLog(EXNAMES[ex]); }
+        else setCurrent('gesicht');
+      } else { autoT = 0; setCurrent('gesicht'); }
+    }, 1000);
+
+    // ── Live: Uhr / Datum / Telemetrie / Sensoren ──
+    ZS.on('tick', function (e) {
+      document.getElementById('clock').textContent = e.time;
+      document.getElementById('date').textContent = e.date;
+      if (themeMode === 'auto') applyTheme();
+      // Backend-Uptime (echte Laufzeit vom /api/state). Stunden unbegrenzt.
+      if (e.uptime_s != null) {
+        var u = e.uptime_s;
+        document.getElementById('p-up').textContent =
+          [Math.floor(u / 3600), Math.floor(u / 60) % 60, u % 60].map(function (n) { return ('0' + n).slice(-2); }).join(':');
+      }
+      // Telemetrie: PC immer (lokal), Pi nur wenn frisch (Push <90s alt).
+      var m = e.metrics;
+      if (m) {
+        lastMetrics = m;
+        var pi = m.pi; piDead = !pi || pi.age_s == null || pi.age_s > 90;
+        document.getElementById('tele-src').textContent = 'pc live · pi ' + (piDead ? 'offline' : 'live');
+        renderRot();   // aktuellen Wert frisch zeichnen (Wert tickt, Rotation alle 2.6s)
+      }
+    });
+
+    // Sensoren: real button/light (bool). motion/door zeigt das Backend (noch)
+    // nicht aktiv – sie bleiben ruhend bis eine echte Quelle sie triggert.
+    var wardSt = { button: 'bereit', light: 'dunkel', motion: 'PIR', door: 'zu' };
+    var wardOn = { button: 'TRIGGER', light: 'hell', motion: 'TRIGGER', door: 'offen' };
+    ZS.on('sensor', function (e) {
+      var el = document.getElementById('s-' + e.name); if (!el) return;
+      el.classList.toggle('on', e.active);
+      el.querySelector('.ind').textContent = e.active ? '[●]' : '[ ]';
+      el.querySelector('.val').textContent = e.active ? (wardOn[e.name] || 'TRIGGER') : (wardSt[e.name] || '·');
+    });
+
+    // ── stdout + Tripwire ──
+    function colorize(text) {
+      var t = text.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+      var m = t.match(/^([A-ZÄÖÜ]+)/);
+      var cls = { NET:'t-net', GRAPH:'t-graph', EVENT:'t-event', STT:'t-audio', TTS:'t-audio', WEBHOOK:'t-hook', CONSOLIDATE:'t-graph', STATE:'t-dim', CLOCK:'t-num', GESTURE:'t-acc', LOGGED:'t-event' };
+      if (m && cls[m[1]]) t = '<span class="' + cls[m[1]] + '">' + m[1] + '</span>' + t.slice(m[1].length);
+      t = t.replace(/(\d+[\d.:]*)/g, '<span class="t-num">$1</span>');
+      return t;
+    }
+    function appendLog(id, e, cap) {
+      var c = document.getElementById(id); var idle = c.querySelector('.term-idle'); if (idle) idle.remove();
+      var row = document.createElement('div'); row.className = 'lg';
+      row.innerHTML = '<span class="tt">' + e.t + '</span><span class="tx">' + colorize(e.text) + '</span>';
+      c.insertBefore(row, c.firstChild); while (c.children.length > (cap||100)) c.removeChild(c.lastChild);
+    }
+    ZS.on('log', function (e) { appendLog('term', e, 100); });
+    ZS.on('net', function (e) { appendLog('term-net', e, 100); });
+
+    // ── Header-Status (Modell / Tripwire) ──
+    ZS.on('status', function (e) {
+      document.getElementById('h-model').textContent = e.model;
+      var net = document.getElementById('h-net');
+      if (e.online) { net.textContent = 'TRAFFIC !'; net.className = 'warn'; }
+      else { net.textContent = 'OFFLINE ✓'; net.className = 'ok'; }
+    });
+
+    // ── KI-Zustand + Minilog ──
+    var aiState = document.getElementById('ai-state');
+    function renderMini() {
+      document.getElementById('minilog').innerHTML = ZS.aiHistory.slice(-2).map(function (it) {
+        var cur = (it.role==='ai' && ZS.aiState==='streaming' && it===ZS.aiHistory[ZS.aiHistory.length-1]) ? '<span class="cur">█</span>' : '';
+        return '<div class="ml-row"><span class="ml-role ' + (it.role==='user'?'user':'ai') + '">' + (it.role==='user'?'DU ›':'KI ›') + '</span><span class="ml-text">' + it.text + cur + '</span></div>';
+      }).join('');
+    }
+    // Spinner
+    var spF = ['|','/','-','\\'], spi = 0;
+    setInterval(function () { var s = document.querySelector('.ai-state .sp'); if (s) s.textContent = (ZS.aiState !== 'idle') ? spF[spi++ % 4] : '·'; }, 120);
+
+    ZS.on('ai', function (e) {
+      if (e.state === 'thinking') aiState.innerHTML = '<span class="sp">|</span> DENKT';
+      else if (e.state === 'streaming') aiState.innerHTML = '<span class="sp">|</span> ANTWORTET';
+      else aiState.innerHTML = '<span class="sp">·</span> BEREIT';
+      // Während des Sprechens „gestikuliert" sie manchmal mit einem Objekt/Karte
+      if (e.state === 'streaming' && EX.mode === 'auto' && Math.random() < 0.5) {
+        var ex = pick(['globus','welt','torus','wuerfel']); gestureLeft = 9; setCurrent(ex); gestureLog(EXNAMES[ex]);
+      } else if (e.state === 'idle' && EX.mode === 'auto') { gestureLeft = 0; setCurrent('gesicht'); }
+      renderMini();
+    });
+    ZS.on('history', function () { renderMini(); });
+    renderMini();
+
+    ZS.start();
+    fitStage('#stage');
+  })();
+  </script>
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       Chat-Konsole (Interaktions-Layer)
+       Portiert aus der alten UI (ui/templates/index.html), aber an den
+       ZS-Adapter verdrahtet statt an die alten View-Panels:
+         - ZS.setAi('thinking'|'streaming'|'idle')  treibt KI-Zustand + Kern
+         - ZS.pushHistory / updateLastHistory        treibt das Minilog live
+       SSE-Streaming, satzweises Piper-TTS, Lautstärke/Mute (localStorage)
+       und der via_mic-Flag bleiben identisch zur alten UI.
+       ════════════════════════════════════════════════════════════════════ -->
+  <script>
+  (function () {
+    // ── State ──
+    var chatWaiting = false;
+    var chatRecording = false, chatViaMic = false, chatMediaRecorder = null, chatAudioChunks = [];
+
+    // ── Stimme (TTS) — localStorage übersteht Reload/Kiosk-Neustart ──
+    var chatMuted = localStorage.getItem('zentraleChatMuted') === '1';
+    var speakQueue = [], speakDraining = false, currentSpeakAudio = null;
+    var chatVolume = parseFloat(localStorage.getItem('zentraleChatVolume'));
+    if (!(chatVolume >= 0 && chatVolume <= 1)) chatVolume = 1.0;
+    // Alt+S-Chord: aktiv solange S gehalten; "used" merkt, ob dazwischen ein
+    // Pfeil (= Lautstärke) kam. Beim Loslassen → Tap=Mute, sonst nichts.
+    var altSChordActive = false, altSChordUsed = false, volHintTimer = null;
+
+    var inputEl = document.getElementById('chat-input');
+    var micBtn  = document.getElementById('chat-mic-btn');
+
+    function escHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+    // ── Mute / Lautstärke ──
+    function renderMuteHint() {
+      var el = document.getElementById('chat-mute-hint'); if (!el) return;
+      el.textContent = chatMuted ? 'Alt+S Ton an' : 'Alt+S Ton aus';
+    }
+    function changeVolume(delta) {
+      chatVolume = Math.min(1, Math.max(0, Math.round((chatVolume + delta) * 10) / 10));
+      localStorage.setItem('zentraleChatVolume', String(chatVolume));
+      if (currentSpeakAudio) currentSpeakAudio.volume = chatVolume;
+      var el = document.getElementById('chat-mute-hint'); if (!el) return;
+      el.textContent = 'Lautstärke ' + Math.round(chatVolume * 100) + '%';
+      clearTimeout(volHintTimer); volHintTimer = setTimeout(renderMuteHint, 1200);
+    }
+    function toggleChatMute() {
+      chatMuted = !chatMuted;
+      localStorage.setItem('zentraleChatMuted', chatMuted ? '1' : '0');
+      if (chatMuted) stopSpeaking();
+      renderMuteHint();
+    }
+    function stopSpeaking() {
+      speakQueue = [];
+      if (currentSpeakAudio) { try { currentSpeakAudio.pause(); } catch (e) {} currentSpeakAudio = null; }
+    }
+    function enqueueSpeak(text) {
+      var clean = text.trim();
+      if (!clean || chatMuted) return;
+      speakQueue.push(clean); drainSpeakQueue();
+    }
+    async function drainSpeakQueue() {
+      if (speakDraining) return; speakDraining = true;
+      try {
+        while (speakQueue.length && !chatMuted) {
+          var text = speakQueue.shift(); var url = null;
+          try {
+            var resp = await fetch('/api/speak', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: text, speed: 1.2 })
+            });
+            if (!resp.ok) continue;       // TTS nicht verfügbar → Satz still überspringen
+            if (chatMuted) return;        // während des Fetch gemutet → abbrechen
+            var blob = await resp.blob();
+            url = URL.createObjectURL(blob);
+            var audio = new Audio(url);
+            audio.volume = chatVolume;
+            currentSpeakAudio = audio;
+            await new Promise(function (resolve) { audio.onended = resolve; audio.onerror = resolve; audio.play().catch(resolve); });
+          } catch (e) { console.warn('TTS Fehler:', e); }
+          finally { if (url) URL.revokeObjectURL(url); currentSpeakAudio = null; }
+        }
+      } finally { speakDraining = false; }
+    }
+    // Fortlaufenden Text in fertige Sätze zerlegen → [sätze[], rest].
+    // Satz-Ende = . ! ? … oder \n, GEFOLGT von Whitespace (verhindert dass
+    // "3." in "3.14" als Satzende zählt). Rest bleibt im Puffer.
+    function extractSentences(text) {
+      var re = /[^.!?…\n]*[.!?…\n]+\s+/g, sentences = [], lastIndex = 0, m;
+      while ((m = re.exec(text)) !== null) { sentences.push(m[0]); lastIndex = re.lastIndex; }
+      return [sentences, text.slice(lastIndex)];
+    }
+
+    // ── Mic-Toggle (identisch zur alten UI; Text landet im Input, kein Auto-Send) ──
+    async function toggleChatMic() {
+      if (!micBtn || chatWaiting) return;
+      if (chatRecording && chatMediaRecorder) {
+        chatRecording = false;
+        micBtn.classList.remove('recording'); micBtn.classList.add('transcribing'); micBtn.disabled = true;
+        try { chatMediaRecorder.stop(); } catch (e) { console.warn(e); }
+        return;
+      }
+      try {
+        var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        chatAudioChunks = [];
+        var mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
+                     : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '');
+        chatMediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+        chatMediaRecorder.ondataavailable = function (e) { if (e.data.size > 0) chatAudioChunks.push(e.data); };
+        chatMediaRecorder.onstop = async function () {
+          stream.getTracks().forEach(function (t) { t.stop(); });
+          chatRecording = false; micBtn.classList.remove('recording');
+          if (!micBtn.classList.contains('transcribing')) { micBtn.classList.add('transcribing'); micBtn.disabled = true; }
+          var blobType = chatMediaRecorder.mimeType || 'audio/webm';
+          var ext = blobType.includes('webm') ? 'webm' : blobType.includes('ogg') ? 'ogg' : blobType.includes('wav') ? 'wav' : 'bin';
+          var blob = new Blob(chatAudioChunks, { type: blobType });
+          var formData = new FormData(); formData.append('audio', blob, 'speech.' + ext);
+          try {
+            var res = await fetch('/api/transcribe', { method: 'POST', body: formData });
+            var data = await res.json(); var text = (data.text || '').trim();
+            if (text) {
+              inputEl.value = inputEl.value ? (inputEl.value.trimEnd() + ' ' + text) : text;
+              chatViaMic = true; inputEl.focus();
+              inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+            }
+          } catch (e) { console.warn('Transcribe failed:', e); }
+          finally { micBtn.classList.remove('transcribing'); micBtn.disabled = false; }
+        };
+        chatMediaRecorder.start(1000);
+        chatRecording = true; micBtn.classList.add('recording');
+      } catch (e) { console.warn('Mic access failed:', e); chatRecording = false; micBtn.classList.remove('recording'); }
+    }
+
+    // ── Senden (SSE-Stream, satzweises TTS) ──
+    async function sendChatMessage() {
+      if (chatWaiting) return;
+      var message = inputEl.value.trim();
+      if (!message) return;
+
+      if (message === '/clear') {
+        inputEl.value = '';
+        await fetch('/api/chat/clear', { method: 'POST' });
+        return;   // engine pollt History → Minilog leert sich von selbst
+      }
+
+      inputEl.value = '';
+      chatWaiting = true;
+      ZS.pushHistory('user', message);     // sofort im Minilog
+      ZS.setAi('thinking');
+
+      var fullText = '', ttsCursor = 0, streamingStarted = false;
+      try {
+        var sendingViaMic = chatViaMic; chatViaMic = false;
+        var resp = await fetch('/api/chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: message, via_mic: sendingViaMic })
+        });
+        var reader = resp.body.getReader(), decoder = new TextDecoder(), buffer = '';
+        stopSpeaking();   // evtl. noch laufende Stimme der vorigen Antwort abbrechen
+
+        while (true) {
+          var chunk = await reader.read();
+          if (chunk.done) break;
+          buffer += decoder.decode(chunk.value, { stream: true });
+          var lines = buffer.split('\n\n'); buffer = lines.pop();
+          for (var li = 0; li < lines.length; li++) {
+            var line = lines[li];
+            if (line.indexOf('data: ') !== 0) continue;
+            var data = JSON.parse(line.slice(6));
+            if (data.done) break;
+            if (data.token) {
+              if (!streamingStarted) { streamingStarted = true; ZS.pushHistory('ai', ''); ZS.setAi('streaming'); }
+              fullText += data.token;
+              ZS.updateLastHistory(fullText);
+              // satzweise sprechen
+              var tail = fullText.slice(ttsCursor);
+              var ext = extractSentences(tail);
+              if (ext[0].length) { ext[0].forEach(enqueueSpeak); ttsCursor += tail.length - ext[1].length; }
+            }
+          }
+        }
+        // Falls die Antwort leer war, trotzdem eine ai-Zeile zeigen
+        if (!streamingStarted) { ZS.pushHistory('ai', ''); }
+        ZS.updateLastHistory(fullText);
+        var leftover = fullText.slice(ttsCursor).trim();
+        if (leftover) { enqueueSpeak(leftover); ttsCursor = fullText.length; }
+      } catch (e) {
+        ZS.updateLastHistory('[Verbindungsfehler]');
+      } finally {
+        chatWaiting = false;
+        ZS.setAi('idle');     // gibt das History-Polling wieder frei (engine.js)
+        inputEl.focus();
+      }
+    }
+
+    // ── Tastatur ──
+    inputEl.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter')  { e.preventDefault(); sendChatMessage(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); inputEl.blur(); return; }
+      if (e.altKey && (e.key === 'm' || e.key === 'M')) { e.preventDefault(); toggleChatMic(); return; }
+      // Alt+S: auf keydown nur den Chord markieren (nicht sofort muten) →
+      // "Alt+S halten + Pfeil" bleibt als Lautstärke-Geste nutzbar.
+      if (e.altKey && (e.key === 's' || e.key === 'S')) { e.preventDefault(); altSChordActive = true; return; }
+      if (altSChordActive && e.altKey && e.key === 'ArrowUp')   { e.preventDefault(); altSChordUsed = true; changeVolume(+0.1); return; }
+      if (altSChordActive && e.altKey && e.key === 'ArrowDown') { e.preventDefault(); altSChordUsed = true; changeVolume(-0.1); return; }
+    });
+    inputEl.addEventListener('keyup', function (e) {
+      if (e.key === 's' || e.key === 'S' || e.key === 'Alt') {
+        if (altSChordActive && !altSChordUsed) toggleChatMute();
+        altSChordActive = false; altSChordUsed = false;
+      }
+    });
+    // Tippen → ab jetzt Tastatur-Eingabe (via_mic-Flag fällt)
+    inputEl.addEventListener('input', function () { chatViaMic = false; });
+    micBtn.addEventListener('click', toggleChatMic);
+
+    renderMuteHint();
+    inputEl.focus();   // sofort tippbereit (Kiosk ohne Maus)
+  })();
+  </script>
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       Data-Collection (Overlay, Taste Alt+K)
+       Portiert aus der alten UI: Kategorie-Auswahl → Formular → /api/log.
+       Geöffnet per Alt+K (nicht nacktes K, weil die Chat-Eingabe immer
+       fokussiert ist). Tastatur im Formular:
+         ↑↓ Feld wählen · Enter bearbeiten · K speichern · Esc abbrechen
+         (date: ↑↓ Tag · smiley_scale: ←→ wählen)
+       ════════════════════════════════════════════════════════════════════ -->
+  <script>
+  (function () {
+    var MOUTHS = [
+      'M 11,27 Q 20,19 29,27',   // tiefes Stirnrunzeln
+      'M 12,26 Q 20,22 28,26',   // leichtes Stirnrunzeln
+      'M 12,24 L 28,24',         // neutral
+      'M 12,24 Q 20,29 28,24',   // leichtes Lächeln
+      'M 11,23 Q 20,32 29,23'    // breites Lächeln
+    ];
+
+    var overlay = document.getElementById('dc-overlay');
+    var panel   = document.getElementById('dc-panel');
+
+    var mode = null;                 // null | 'category' | 'form'
+    var categories = [];
+    var activeCategory = null, fieldIndex = 0, editingField = false, fieldValues = {}, smileyHover = 2;
+
+    // ── Datum-Helfer ──
+    function toISODate(d) { return d.toISOString().split('T')[0]; }
+    function formatDate(iso) {
+      if (!iso) return '—';
+      var d = new Date(iso + 'T00:00:00');
+      return d.toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' });
+    }
+
+    // ── Smiley (theme-aware via currentColor) ──
+    function smileySVG(index, cls) {
+      var sz = cls.indexOf('hov') >= 0 ? 48 : 38, er = cls.indexOf('hov') >= 0 ? 2.2 : 1.8;
+      return '<div class="dc-smiley ' + cls + '"><svg viewBox="0 0 40 40" width="' + sz + '" height="' + sz + '">'
+        + '<circle cx="20" cy="20" r="17" fill="none" stroke="currentColor" stroke-width="1.8"/>'
+        + '<circle cx="13" cy="15" r="' + er + '" fill="currentColor"/>'
+        + '<circle cx="27" cy="15" r="' + er + '" fill="currentColor"/>'
+        + '<path d="' + MOUTHS[index] + '" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+        + '</svg></div>';
+    }
+
+    // ── Render ──
+    function renderList() {
+      panel.innerHTML = '<span class="bt">erfassen</span>'
+        + '<p class="dc-q">Welche Daten erfassen?</p><ul class="dc-list">'
+        + categories.map(function (cat, i) { return '<li class="dc-item"><span class="num">' + (i + 1) + '</span><span>' + cat.name + '</span></li>'; }).join('')
+        + '</ul><p class="dc-hint">[1–' + categories.length + '] wählen · Alt+K / Esc zurück</p>';
+    }
+    function renderForm() {
+      panel.innerHTML = '<span class="bt">erfassen</span>'
+        + '<div class="dc-title">' + activeCategory.name + '</div>'
+        + activeCategory.fields.map(renderField).join('')
+        + '<p class="dc-hint">↑↓ navigieren · Enter bearbeiten · K speichern · Esc abbrechen</p>';
+    }
+    function renderField(field, i) {
+      var focused = i === fieldIndex, editing = focused && editingField, val = fieldValues[field.id], valHTML = '';
+      if (field.type === 'date') {
+        valHTML = '<span class="dc-val ' + (editing ? 'editing' : '') + '">' + formatDate(val) + '</span>';
+      } else if (field.type === 'smiley_scale') {
+        var inner = '';
+        for (var si = 0; si < field.steps; si++) {
+          var cls = 'dim';
+          if (editing && si === smileyHover) cls = 'hov';
+          else if (!editing && si === val) cls = 'sel';
+          inner += smileySVG(si, cls);
+        }
+        valHTML = '<div class="dc-smileys">' + inner + '</div>';
+      } else {
+        valHTML = '<span class="dc-val ' + (editing ? 'editing' : '') + '">' + (val || '—') + '</span>';
+      }
+      return '<div class="dc-field ' + (focused ? 'focused' : '') + '"><span class="lbl">' + field.label + '</span>' + valHTML + '</div>';
+    }
+
+    function initFieldValues(category) {
+      var today = new Date(), values = {};
+      category.fields.forEach(function (f) {
+        values[f.id] = f.type === 'date' ? toISODate(today) : (f.type === 'smiley_scale' ? null : '');
+      });
+      return values;
+    }
+    function shiftDate(fieldId, days) {
+      var d = new Date(fieldValues[fieldId]); d.setDate(d.getDate() + days);
+      fieldValues[fieldId] = toISODate(d); renderForm();
+    }
+
+    // ── Navigation ──
+    async function open() {
+      if (!categories.length) {
+        try { categories = await (await fetch('/api/categories')).json(); } catch (e) { categories = []; }
+      }
+      mode = 'category';
+      var ci = document.getElementById('chat-input'); if (ci) ci.blur();
+      overlay.classList.add('on'); renderList();
+    }
+    function close() { mode = null; overlay.classList.remove('on'); var ci = document.getElementById('chat-input'); if (ci) ci.focus(); }
+    function openForm(category) {
+      activeCategory = category; fieldIndex = 0; editingField = false;
+      fieldValues = initFieldValues(category); smileyHover = 2; mode = 'form'; renderForm();
+    }
+    async function saveAndClose() {
+      var hasData = Object.keys(fieldValues).some(function (k) { return fieldValues[k] !== null && fieldValues[k] !== ''; });
+      if (hasData) {
+        try {
+          await fetch('/api/log', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category: activeCategory.id, data: fieldValues })
+          });
+          // Tracker-Panel sofort aktualisieren (statt auf den 60s-Poll zu warten)
+          window.dispatchEvent(new CustomEvent('zentrale:logged', { detail: { category: activeCategory.id } }));
+        } catch (e) { /* ignore */ }
+      }
+      close();
+    }
+
+    // ── Tastatur (nur wenn Overlay offen; Alt+K öffnet von überall) ──
+    function handleFormKey(e) {
+      var fields = activeCategory.fields, field = fields[fieldIndex];
+      if (!editingField) {
+        if (e.key === 'k' || e.key === 'K') { saveAndClose(); return; }
+        if (e.key === 'Escape')   { close(); return; }
+        if (e.key === 'ArrowDown'){ fieldIndex = Math.min(fieldIndex + 1, fields.length - 1); renderForm(); return; }
+        if (e.key === 'ArrowUp')  { fieldIndex = Math.max(fieldIndex - 1, 0); renderForm(); return; }
+        if (e.key === 'Enter')    {
+          editingField = true;
+          if (field.type === 'smiley_scale') smileyHover = (field.id in fieldValues && fieldValues[field.id] != null) ? fieldValues[field.id] : Math.floor(field.steps / 2);
+          renderForm(); return;
+        }
+      } else {
+        if (field.type === 'date') {
+          if (e.key === 'Enter' || e.key === 'Escape') { editingField = false; renderForm(); return; }
+          if (e.key === 'ArrowUp')   { shiftDate(field.id, +1); return; }
+          if (e.key === 'ArrowDown') { shiftDate(field.id, -1); return; }
+        } else if (field.type === 'smiley_scale') {
+          if (e.key === 'Enter')      { fieldValues[field.id] = smileyHover; editingField = false; renderForm(); return; }
+          if (e.key === 'Escape')     { editingField = false; renderForm(); return; }
+          if (e.key === 'ArrowLeft')  { smileyHover = Math.max(0, smileyHover - 1); renderForm(); return; }
+          if (e.key === 'ArrowRight') { smileyHover = Math.min(field.steps - 1, smileyHover + 1); renderForm(); return; }
+        }
+      }
+    }
+
+    document.addEventListener('keydown', function (e) {
+      // Alt+K öffnet/schließt — funktioniert auch wenn die Chat-Eingabe fokussiert
+      // ist (Alt verhindert, dass 'k' ins Feld getippt wird; preventDefault sichert das ab).
+      if (e.altKey && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        if (mode) close(); else open();
+        return;
+      }
+      if (!mode) return;
+      if (mode === 'category') {
+        var num = parseInt(e.key, 10);
+        if (!isNaN(num) && num >= 1 && num <= categories.length) { e.preventDefault(); openForm(categories[num - 1]); }
+        else if (e.key === 'Escape') { e.preventDefault(); close(); }
+        return;
+      }
+      if (mode === 'form') {
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.key) >= 0) e.preventDefault();
+        handleFormKey(e);
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

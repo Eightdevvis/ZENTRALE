@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<title>ZENTRALE · MONOLITH INVERT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #ece7dc;          /* warmes Papier */
+    --ink: #232019;
+    --bright: #000000;
+    --dim: #7c7768;
+    --faint: #bdb6a4;
+    --line: #cbc4b3;
+    --acc: #2f6b48;         /* einzige, gedeckte Akzent-Note (Tinten-Grün) */
+    --acc-dim: #6f8f7c;
+    --warn: #9a6a2c;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #d8d2c4; overflow: hidden; }
+
+  #stage {
+    position: absolute; left: 50%; top: 50%;
+    width: 1920px; height: 1080px;
+    transform: translate(-50%, -50%); transform-origin: center;
+    background: var(--bg); color: var(--ink);
+    font-family: var(--mono); font-size: 15px; line-height: 1.5;
+    display: grid; grid-template-rows: 92px 1fr;
+    padding: 26px 30px; gap: 16px; overflow: hidden;
+  }
+  /* zarte dunkle Scanlines auf hellem Grund (statisch, billig) */
+  #stage::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 60;
+    background: repeating-linear-gradient(to bottom, transparent 0 3px, rgba(0,0,0,0.045) 3px 4px); }
+  #stage > * { position: relative; z-index: 1; }
+
+  .top { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 14px; }
+  .brand { font-weight: 700; font-size: 50px; letter-spacing: 0.26em; color: var(--bright); line-height: 1; }
+  .brand .blk { background: var(--ink); color: var(--bg); padding: 0 8px; }
+  .brand-sub { font-size: 12px; letter-spacing: 0.34em; color: var(--dim); text-transform: uppercase; margin-top: 8px; }
+  .meta { display: flex; gap: 26px; align-items: center; }
+  .kv { font-size: 12px; letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; white-space: nowrap; }
+  .kv b { color: var(--ink); font-weight: 600; }
+  .kv .ok { color: var(--acc); }
+  .clock { font-weight: 700; font-size: 38px; letter-spacing: 0.06em; color: var(--bright); text-align: right; line-height: 1; }
+  .date { font-size: 12px; letter-spacing: 0.24em; color: var(--dim); text-align: right; text-transform: uppercase; margin-top: 4px; }
+
+  .body { display: grid; grid-template-columns: 336px 1fr 376px; gap: 16px; min-height: 0; }
+  .col { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+
+  .box { border: 1px solid var(--line); padding: 16px 16px 14px; position: relative; display: flex; flex-direction: column; min-height: 0; background: rgba(255,255,255,0.25); }
+  .box > .bt { position: absolute; top: -9px; left: 14px; background: var(--bg); padding: 0 10px; font-size: 12px; letter-spacing: 0.26em; color: var(--acc); text-transform: uppercase; }
+  .box > .bt::before { content: '┤ '; color: var(--faint); }
+  .box > .bt::after { content: ' ├'; color: var(--faint); }
+  .box > .bt2 { position: absolute; top: -9px; right: 14px; background: var(--bg); padding: 0 8px; font-size: 11px; letter-spacing: 0.16em; color: var(--dim); }
+
+  .srow { display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 10px; padding: 6px 0; font-size: 15px; letter-spacing: 0.06em; border-bottom: 1px dotted var(--line); }
+  .srow:last-child { border-bottom: 0; }
+  .srow .ind { color: var(--faint); }
+  .srow.on .ind { color: var(--acc); }
+  .srow .nm { color: var(--ink); } .srow.on .nm { color: var(--bright); }
+  .srow .val { color: var(--dim); font-size: 13px; } .srow.on .val { color: var(--acc); }
+
+  .meter { display: grid; grid-template-columns: 64px 1fr 54px; align-items: center; gap: 10px; padding: 6px 0; font-size: 14px; }
+  .meter .ml { color: var(--dim); letter-spacing: 0.12em; }
+  .meter .mb { color: var(--acc); letter-spacing: 0; white-space: pre; overflow: hidden; }
+  .meter .mv { color: var(--bright); text-align: right; font-weight: 500; }
+
+  .core-box { flex: 1; min-height: 0; align-items: stretch; }
+  .core-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  #core { font-size: 18px; line-height: 1.0; letter-spacing: 1px; color: var(--ink); text-align: center; contain: content; }
+  .core-readout { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
+  .ai-state { font-size: 16px; letter-spacing: 0.2em; color: var(--bright); text-transform: uppercase; font-weight: 600; }
+  .ai-state .sp { color: var(--acc); display: inline-block; width: 1.2em; }
+  .ai-model { font-size: 12px; color: var(--dim); letter-spacing: 0.1em; } .ai-model b { color: var(--ink); font-weight: 500; }
+
+  .minilog { flex-shrink: 0; max-height: 150px; overflow: hidden; display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .ml-row { display: grid; grid-template-columns: 44px 1fr; gap: 10px; font-size: 14px; line-height: 1.45; }
+  .ml-role { letter-spacing: 0.06em; font-weight: 500; } .ml-role.user { color: var(--warn); } .ml-role.ai { color: var(--acc); }
+  .ml-text { color: var(--ink); } .ml-text .cur { color: var(--bright); animation: blink 0.8s step-start infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .trk { display: grid; grid-template-columns: 92px 1fr 70px; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px dotted var(--line); }
+  .trk:last-child { border-bottom: 0; }
+  .trk .tl { font-size: 13px; color: var(--dim); letter-spacing: 0.1em; text-transform: uppercase; }
+  .trk .ts { font-size: 17px; color: var(--ink); white-space: pre; overflow: hidden; }
+  .trk .tv { font-size: 13px; color: var(--bright); text-align: right; font-weight: 500; }
+  .proj { padding: 7px 0; }
+  .proj-top { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 2px; }
+  .proj-top .pn { color: var(--ink); white-space: nowrap; } .proj-top .ps { color: var(--dim); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; }
+  .proj .pb { font-size: 14px; color: var(--acc); white-space: pre; letter-spacing: 0; }
+
+  .bottom { display: grid; grid-template-columns: 2.4fr 1fr; gap: 16px; min-height: 0; }
+  .term-body { flex: 1; overflow: hidden; display: flex; flex-direction: column-reverse; font-size: 14px; line-height: 1.5; }
+  .lg { display: flex; gap: 12px; white-space: pre; }
+  .lg .tt { color: var(--faint); } .lg .tx { color: var(--ink); }
+  .box.net { border-color: #cdbf9c; } .box.net > .bt { color: var(--warn); }
+  .box.net .tx { color: var(--warn); }
+  .term-idle { color: var(--acc-dim); font-size: 14px; letter-spacing: 0.04em; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <header class="top">
+      <div>
+        <div class="brand"><span class="blk">ZEN</span>TRALE</div>
+        <div class="brand-sub">monolith · invert · text-mode konsole</div>
+      </div>
+      <div class="meta">
+        <div class="kv">OLLAMA <b>qwen2.5:14b</b></div>
+        <div class="kv">NET <b class="ok">OFFLINE ✓</b></div>
+        <div class="kv">UP <b id="p-up">04:12:38</b></div>
+        <div>
+          <div class="clock" id="clock">--:--:--</div>
+          <div class="date" id="date">--</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="body">
+      <div class="col">
+        <div class="box" style="flex:0 0 auto">
+          <span class="bt">sensoren</span>
+          <div class="srow on" id="s-button"><span class="ind">[●]</span><span class="nm">BUTTON</span><span class="val">bereit</span></div>
+          <div class="srow on" id="s-light"><span class="ind">[●]</span><span class="nm">LICHT</span><span class="val" id="s-light-v">612 lux</span></div>
+          <div class="srow" id="s-motion"><span class="ind">[ ]</span><span class="nm">BEWEGUNG</span><span class="val">PIR</span></div>
+          <div class="srow" id="s-door"><span class="ind">[ ]</span><span class="nm">TÜR</span><span class="val">zu</span></div>
+        </div>
+        <div class="box" style="flex:0 0 auto">
+          <span class="bt">telemetrie</span><span class="bt2">pi-4 · vc4</span>
+          <div id="meters"></div>
+        </div>
+        <div class="box" style="flex:1 1 auto;min-height:0">
+          <span class="bt">stdout</span><span class="bt2">live</span>
+          <div class="term-body" id="term"></div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="box core-box">
+          <span class="bt">ki-kern · mesh</span><span class="bt2">qwen2.5:14b · lokal</span>
+          <div class="core-wrap"><pre id="core"></pre></div>
+          <div class="core-readout">
+            <div class="ai-state" id="ai-state"><span class="sp">·</span> BEREIT</div>
+            <div class="ai-model">CTX <b>8K</b> · 9.0 GB · 28 tok/s</div>
+          </div>
+          <div class="minilog" id="minilog"></div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="box" style="flex:0 0 auto">
+          <span class="bt">lifestyle &amp; gesundheit</span>
+          <div id="trackers"></div>
+        </div>
+        <div class="box" style="flex:0 0 auto">
+          <span class="bt">projekte</span>
+          <div id="projects"></div>
+        </div>
+        <div class="box net" style="flex:1 1 auto;min-height:0">
+          <span class="bt">outbound-tripwire</span><span class="bt2">letzte 3</span>
+          <div class="term-body" id="term-net"><div class="term-idle">// offline ✓</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="engine.js"></script>
+  <script src="viz.js"></script>
+  <script>
+  (function () {
+    var meters = document.getElementById('meters');
+    var METList = [['CPU','cpu','%'],['TEMP','temp','°C'],['RAM','ram','%'],['GPU','gpu','%'],['DISK','disk','%']];
+    meters.innerHTML = METList.map(function (m) { return '<div class="meter" data-m="' + m[1] + '"><span class="ml">' + m[0] + '</span><span class="mb"></span><span class="mv">–</span></div>'; }).join('');
+    function setMeter(key, pct, val, unit) {
+      var el = meters.querySelector('[data-m="' + key + '"]'); if (!el) return;
+      el.querySelector('.mb').textContent = '[' + VZ.asciiBar(pct, 20, '█', '─') + ']';
+      el.querySelector('.mv').textContent = Math.round(val) + unit;
+    }
+
+    var d = ZS.data;
+    var trk = document.getElementById('trackers');
+    function trackRow(label, vals, suffix) { return '<div class="trk"><span class="tl">' + label + '</span><span class="ts">' + VZ.blockSpark(vals) + '</span><span class="tv">' + suffix + '</span></div>'; }
+    trk.innerHTML =
+      trackRow('Schlaf', d.sleep, 'Ø' + (d.sleep.reduce((a,b)=>a+b,0)/d.sleep.length).toFixed(1)) +
+      trackRow('Stimmung', d.mood, 'Ø' + (d.mood.reduce((a,b)=>a+b,0)/d.mood.length).toFixed(1)) +
+      trackRow('Aktivität', d.steps, d.steps[d.steps.length-1].toFixed(1)+'k') +
+      trackRow('Fokus', d.focus, Math.round(d.focus.reduce((a,b)=>a+b,0)/d.focus.length)+'%');
+    document.getElementById('projects').innerHTML = d.projects.map(function (p) {
+      return '<div class="proj"><div class="proj-top"><span class="pn">' + p.name + '</span><span class="ps">' + p.status + '</span></div><div class="pb">[' + VZ.asciiBar(p.pct, 30, '█', '·') + '] ' + ('  '+p.pct).slice(-3) + '%</div></div>';
+    }).join('');
+
+    // ── ASCII-Mesh (vorberechnetes Flipbook) ──
+    var coreEl = document.getElementById('core');
+    var book = VZ.sphereFlipbook({ cols: 52, rows: 28, frames: 72, ramp: ' .·:-=+o*#@', tilt: 0.42, fill: 0.44 });
+    var fi = 0;
+    function tickCore() { coreEl.textContent = book.frames[fi % book.frames.length]; fi += (ZS.aiState !== 'idle' ? 2 : 1); }
+    setInterval(tickCore, 90); tickCore();
+
+    var spinFrames = ['|','/','-','\\'], spi = 0;
+    setInterval(function () {
+      var sp = document.querySelector('.ai-state .sp');
+      if (sp && ZS.aiState !== 'idle') { sp.textContent = spinFrames[spi % 4]; spi++; } else if (sp) sp.textContent = '·';
+    }, 120);
+
+    var upStart = Date.now() - 4*3600*1000 - 758*1000;
+    ZS.on('tick', function (e) {
+      document.getElementById('clock').textContent = e.time;
+      document.getElementById('date').textContent = e.date;
+      var up = Math.floor((Date.now()-upStart)/1000);
+      document.getElementById('p-up').textContent = [Math.floor(up/3600),Math.floor(up/60)%60,up%60].map(n=>('0'+n).slice(-2)).join(':');
+      var m = e.metrics;
+      setMeter('cpu', m.cpu.v, m.cpu.v, '%'); setMeter('temp', (m.temp.v-38)/40*100, m.temp.v, '°C');
+      setMeter('ram', m.ram.v, m.ram.v, '%'); setMeter('gpu', m.gpu.v, m.gpu.v, '%'); setMeter('disk', m.disk.v, m.disk.v, '%');
+      document.getElementById('s-light-v').textContent = e.sensors.light.value + ' lux';
+    });
+    ZS.on('sensor', function (e) {
+      if (e.name === 'light') return;
+      var el = document.getElementById('s-' + e.name); if (!el) return;
+      el.classList.toggle('on', e.active);
+      el.querySelector('.ind').textContent = e.active ? '[●]' : '[ ]';
+      el.querySelector('.val').textContent = e.active ? 'TRIGGER' : (e.name==='door'?'zu':(e.name==='motion'?'PIR':'bereit'));
+    });
+    function appendLog(id, e, cap) {
+      var c = document.getElementById(id); var idle = c.querySelector('.term-idle'); if (idle) idle.remove();
+      var row = document.createElement('div'); row.className='lg';
+      row.innerHTML = '<span class="tt">' + e.t + '</span><span class="tx">' + e.text + '</span>';
+      c.insertBefore(row, c.firstChild); while (c.children.length > (cap||40)) c.removeChild(c.lastChild);
+    }
+    ZS.on('log', function (e) { appendLog('term', e, 60); });
+    ZS.on('net', function (e) { appendLog('term-net', e, 3); });
+
+    var aiState = document.getElementById('ai-state');
+    function renderMini() {
+      document.getElementById('minilog').innerHTML = ZS.aiHistory.slice(-3).map(function (it) {
+        var cur = (it.role==='ai' && ZS.aiState==='streaming' && it===ZS.aiHistory[ZS.aiHistory.length-1]) ? '<span class="cur">█</span>' : '';
+        return '<div class="ml-row"><span class="ml-role ' + (it.role==='user'?'user':'ai') + '">' + (it.role==='user'?'DU ›':'KI ›') + '</span><span class="ml-text">' + it.text + cur + '</span></div>';
+      }).join('');
+    }
+    ZS.on('ai', function (e) {
+      if (e.state === 'thinking') aiState.innerHTML = '<span class="sp">|</span> DENKT';
+      else if (e.state === 'streaming') aiState.innerHTML = '<span class="sp">|</span> ANTWORTET';
+      else aiState.innerHTML = '<span class="sp">·</span> BEREIT';
+      renderMini();
+    });
+    renderMini();
+
+    ZS.start();
+    fitStage('#stage');
+  })();
+  </script>
+</body>
+</html>

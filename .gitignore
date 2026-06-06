@@ -20,3 +20,12 @@ data/*.bak*
 # mit Zeitstempel, kein Code. Das Skript selbst wird versioniert.
 scripts/bench_results_*.json
 scripts/reasoning_results_*.md
+scripts/bench_calendar_*.json
+
+# Test-/User-Fotos fuer den ASCII-Bild-Filter. Werden lokal vom PC-Backend
+# serviert (data/photos/), sind aber keine Repo-Inhalte — der Pi laedt das
+# Dashboard ohnehin vom PC. Eigene Bilder einfach in den Ordner legen.
+data/photos/
+
+# lokale Archive (z.B. Design-Downloads) — kein Repo-Inhalt
+*.zip

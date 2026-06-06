@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<title>ZENTRALE · KERN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --grn: #00ff88;
+    --grn-br: #b6ffd9;
+    --grn-dim: #1f8a5b;
+    --grn-deep: #0c3b29;
+    --ink: #cfeede;
+    --muted: #4f8a72;
+    --bg: #050807;
+    --panel: rgba(8, 18, 14, 0.62);
+    --line: rgba(0, 255, 136, 0.26);
+    --line-hot: rgba(0, 255, 136, 0.5);
+    --warn: #ffaa3c;
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+
+  #stage {
+    position: absolute; left: 50%; top: 50%;
+    width: 1920px; height: 1080px;
+    transform: translate(-50%, -50%); transform-origin: center;
+    background:
+      radial-gradient(ellipse 70% 55% at 50% 40%, rgba(0,90,60,0.12) 0%, transparent 60%),
+      var(--bg);
+    color: var(--ink); font-family: var(--mono);
+    display: grid; grid-template-rows: 102px 1fr 192px;
+    padding: 26px 30px; gap: 18px; overflow: hidden;
+  }
+  #stage::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 60;
+    background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0,255,136,0.045) 2px 3px); }
+  #stage > * { position: relative; z-index: 1; }
+
+  /* Header */
+  .top { display: flex; align-items: center; justify-content: space-between; }
+  .brand { font-weight: 700; font-size: 56px; letter-spacing: 0.2em; color: var(--grn); line-height: 1;
+    text-shadow: 0 0 26px rgba(0,255,136,0.6), 0 0 60px rgba(0,255,136,0.2); }
+  .brand-sub { font-size: 12px; letter-spacing: 0.4em; color: var(--grn-dim); text-transform: uppercase; margin-top: 8px; }
+  .pills { display: flex; gap: 10px; flex-shrink: 0; }
+  .pill { font-size: 11px; letter-spacing: 0.14em; padding: 8px 13px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); text-transform: uppercase; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .pill b { color: var(--grn); font-weight: 500; }
+  .pill .led { width: 8px; height: 8px; border-radius: 50%; background: var(--grn); box-shadow: 0 0 9px var(--grn); }
+  .clock { font-weight: 700; font-size: 40px; letter-spacing: 0.05em; color: var(--grn-br); text-align: right; line-height: 1; text-shadow: 0 0 18px rgba(0,255,136,0.4); }
+  .date { font-size: 12px; letter-spacing: 0.28em; color: var(--grn-dim); text-align: right; text-transform: uppercase; margin-top: 5px; }
+
+  /* Body */
+  .body { display: grid; grid-template-columns: 372px 1fr 432px; gap: 18px; min-height: 0; }
+  .col { display: flex; flex-direction: column; gap: 18px; min-height: 0; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); padding: 15px 17px; position: relative; display: flex; flex-direction: column; min-height: 0; box-shadow: 0 0 14px rgba(0,255,136,0.06); }
+  .panel > h2 { font-size: 12px; letter-spacing: 0.32em; text-transform: uppercase; color: var(--grn); margin-bottom: 13px; padding-bottom: 9px; border-bottom: 1px solid var(--line); text-shadow: 0 0 8px rgba(0,255,136,0.5); display: flex; align-items: center; gap: 10px; }
+  .panel > h2 .tag { margin-left: auto; font-size: 10px; color: var(--muted); letter-spacing: 0.16em; }
+
+  /* Sensoren */
+  .sensor { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 12px; padding: 8px 0; font-size: 13px; letter-spacing: 0.1em; border-bottom: 1px solid rgba(0,255,136,0.07); }
+  .sensor:last-child { border-bottom: 0; }
+  .sensor .dot { width: 11px; height: 11px; border-radius: 50%; background: #14271f; border: 1px solid #1f4536; transition: all .2s; }
+  .sensor.on .dot { background: var(--grn); border-color: var(--grn); box-shadow: 0 0 10px var(--grn); }
+  .sensor .nm { color: var(--ink); } .sensor.on .nm { color: var(--grn-br); }
+  .sensor .val { font-size: 11px; color: var(--muted); } .sensor.on .val { color: var(--grn); }
+
+  /* Gauges */
+  .gauges { display: grid; grid-template-columns: repeat(3,1fr); gap: 4px; }
+  .gauge { display: flex; flex-direction: column; align-items: center; }
+  .gauge svg { width: 90px; height: 90px; }
+  .gnum { font-weight: 700; font-size: 19px; fill: var(--grn-br); }
+  .gunit { font-size: 9px; fill: var(--muted); }
+  .glbl { font-size: 10px; letter-spacing: 0.18em; color: var(--grn-dim); text-transform: uppercase; margin-top: 2px; }
+  .mini-metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .mm { border: 1px solid var(--line); padding: 7px 9px; }
+  .mm .mlbl { font-size: 9px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }
+  .mm .mval { font-weight: 600; font-size: 15px; color: var(--grn-br); margin: 2px 0 3px; }
+  .mm svg { width: 100%; height: 18px; display: block; }
+
+  /* Radar */
+  .radar-wrap { display: flex; align-items: center; gap: 14px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .radar { width: 96px; height: 96px; flex-shrink: 0; position: relative; }
+  .radar svg { width: 100%; height: 100%; }
+  .radar .sweep { transform-box: fill-box; transform-origin: center; animation: spin 4s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .radar-info { font-size: 11px; line-height: 1.7; color: var(--muted); letter-spacing: 0.08em; }
+  .radar-info b { color: var(--grn-br); font-weight: 500; }
+
+  /* Orb */
+  .orb-panel { flex: 1; align-items: stretch; }
+  .orb-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; }
+  .orb { width: min(100%, 420px); aspect-ratio: 1; position: relative; }
+  .orb svg { width: 100%; height: 100%; shape-rendering: crispEdges; overflow: visible; }
+  .o-halo, .o-rays, .o-ring, .o-core { transform-box: fill-box; transform-origin: center; }
+  .o-halo { opacity: 0.28; animation: ohalo 8s ease-in-out infinite; }
+  .o-rays { opacity: 0; transition: opacity .5s; }
+  .o-disk { opacity: 0.5; transition: opacity .5s; }
+  .o-ring { opacity: 0.6; animation: spin 200s linear infinite reverse; }
+  .o-core { animation: ocore 5s ease-in-out infinite; }
+  .orb.active .o-halo { animation: ohaloA 0.9s ease-in-out infinite; }
+  .orb.active .o-rays { opacity: 1; animation: spin 9s linear infinite; }
+  .orb.active .o-disk { opacity: 0; }
+  .orb.active .o-ring { animation-duration: 18s; }
+  .orb.active .o-core { animation-duration: 0.6s; }
+  .orb.active .particles span { animation: opart 1.6s linear infinite; animation-delay: var(--d,0s); }
+  @keyframes ohalo { 0%,100% { opacity:.22; transform:scale(1);} 50% { opacity:.34; transform:scale(1.03);} }
+  @keyframes ohaloA { 0%,100% { opacity:.5; transform:scale(1);} 50% { opacity:.85; transform:scale(1.1);} }
+  @keyframes ocore { 0%,100% { opacity:.75;} 50% { opacity:1;} }
+  .particles { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+  .particles span { position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; background: var(--grn); box-shadow: 0 0 4px var(--grn); opacity: 0; }
+  @keyframes opart { 0% { transform: translate(-50%,-50%); opacity: 0;} 10% { opacity: 1;} 100% { transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))); opacity: 0;} }
+  .orb-readout { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; }
+  .ai-state { font-size: 16px; letter-spacing: 0.24em; color: var(--grn-br); text-transform: uppercase; }
+  .ai-state .blip { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--grn-dim); margin-right: 10px; vertical-align: middle; }
+  .ai-state.busy .blip { background: var(--grn); box-shadow: 0 0 10px var(--grn); animation: blink 0.9s infinite; }
+  .ai-model { font-size: 12px; color: var(--muted); letter-spacing: 0.1em; } .ai-model b { color: var(--grn); }
+  @keyframes blink { 50% { opacity: 0.3; } }
+
+  .minilog { flex-shrink: 0; max-height: 150px; overflow: hidden; display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .ml-row { display: grid; grid-template-columns: 48px 1fr; gap: 12px; font-size: 13px; line-height: 1.45; }
+  .ml-role { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; padding-top: 2px; }
+  .ml-role.user { color: #00aaff; } .ml-role.ai { color: var(--grn); text-shadow: 0 0 5px rgba(0,255,136,0.5); }
+  .ml-text { color: #aecfbe; } .ml-text .cur { color: var(--grn); animation: blink 0.8s step-start infinite; }
+
+  /* Tracker */
+  .track-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .track-lbl { font-size: 11px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; margin-bottom: 6px; }
+  .track-svg { width: 100%; display: block; }
+  .legend { font-size: 10px; color: var(--muted); letter-spacing: 0.1em; display: flex; justify-content: space-between; margin-top: 5px; }
+  .proj { margin: 10px 0; }
+  .proj-top { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }
+  .proj-top .pn { color: var(--ink); white-space: nowrap; } .proj-top .ps { color: var(--muted); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; white-space: nowrap; }
+  .bar { height: 7px; background: rgba(0,255,136,0.1); overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--grn-dim), var(--grn)); box-shadow: 0 0 8px rgba(0,255,136,0.5); }
+
+  /* Terminals */
+  .bottom { display: grid; grid-template-columns: 2.4fr 1fr; gap: 18px; min-height: 0; }
+  .term { background: rgba(4,9,7,0.8); }
+  .term-body { flex: 1; overflow: hidden; display: flex; flex-direction: column-reverse; font-size: 12.5px; line-height: 1.5; }
+  .lg { display: flex; gap: 12px; white-space: pre; }
+  .lg .tt { color: #2a5443; } .lg .tx { color: #58c79a; }
+  .term-net { border-color: rgba(255,170,60,0.45); }
+  .term-net h2 { color: var(--warn); }
+  .term-net .tx { color: #ffce8c; }
+  .term-idle { color: var(--grn); font-style: italic; opacity: 0.8; letter-spacing: 0.04em; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <header class="top">
+      <div>
+        <div class="brand">ZENTRALE</div>
+        <div class="brand-sub">kern · telemetrie-cockpit</div>
+      </div>
+      <div class="pills">
+        <div class="pill"><span class="led"></span>OLLAMA <b>qwen2.5:14b</b></div>
+        <div class="pill"><span class="led"></span>OFFLINE ✓</div>
+        <div class="pill">UPTIME <b id="p-up">04:12:38</b></div>
+      </div>
+      <div>
+        <div class="clock" id="clock">--:--:--</div>
+        <div class="date" id="date">--</div>
+      </div>
+    </header>
+
+    <div class="body">
+      <div class="col">
+        <div class="panel" style="flex:0 0 auto">
+          <h2>Sensoren</h2>
+          <div class="sensor on" id="s-button"><span class="dot"></span><span class="nm">BUTTON</span><span class="val">bereit</span></div>
+          <div class="sensor on" id="s-light"><span class="dot"></span><span class="nm">LICHT</span><span class="val" id="s-light-v">612 lux</span></div>
+          <div class="sensor" id="s-motion"><span class="dot"></span><span class="nm">BEWEGUNG</span><span class="val">PIR</span></div>
+          <div class="sensor" id="s-door"><span class="dot"></span><span class="nm">TÜR</span><span class="val">zu</span></div>
+        </div>
+        <div class="panel" style="flex:1 1 auto">
+          <h2>Telemetrie <span class="tag">PI-4 · VC4</span></h2>
+          <div class="gauges">
+            <div class="gauge" id="g-cpu"></div><div class="gauge" id="g-temp"></div><div class="gauge" id="g-ram"></div>
+          </div>
+          <div class="mini-metrics">
+            <div class="mm" id="m-gpu"><div class="mlbl">GPU</div><div class="mval">–</div><svg viewBox="0 0 100 18" preserveAspectRatio="none"><path fill="none" stroke="var(--grn)" stroke-width="1.5"/></svg></div>
+            <div class="mm" id="m-net"><div class="mlbl">LAN I/O</div><div class="mval">–</div><svg viewBox="0 0 100 18" preserveAspectRatio="none"><path fill="none" stroke="var(--grn)" stroke-width="1.5"/></svg></div>
+            <div class="mm" id="m-disk"><div class="mlbl">DISK</div><div class="mval">–</div><svg viewBox="0 0 100 18" preserveAspectRatio="none"><path fill="none" stroke="var(--grn)" stroke-width="1.5"/></svg></div>
+          </div>
+          <div class="radar-wrap">
+            <div class="radar">
+              <svg viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(0,255,136,0.2)"/>
+                <circle cx="50" cy="50" r="30" fill="none" stroke="rgba(0,255,136,0.15)"/>
+                <circle cx="50" cy="50" r="14" fill="none" stroke="rgba(0,255,136,0.15)"/>
+                <line x1="50" y1="4" x2="50" y2="96" stroke="rgba(0,255,136,0.12)"/>
+                <line x1="4" y1="50" x2="96" y2="50" stroke="rgba(0,255,136,0.12)"/>
+                <g class="sweep"><path d="M50 50 L50 4 A46 46 0 0 1 88 30 Z" fill="rgba(0,255,136,0.18)"/></g>
+                <circle cx="68" cy="34" r="2.2" fill="#00ff88"/>
+                <circle cx="38" cy="66" r="1.8" fill="#00ff88"/>
+              </svg>
+            </div>
+            <div class="radar-info">LAN-SCAN · <b>3 hosts</b><br/>pi-sensor <b>192.168.4.22</b><br/>tts/whisper <b>:5050/:5051</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="panel orb-panel">
+          <h2>KI-Kern <span class="tag">PIXEL-SONNE · qwen2.5</span></h2>
+          <div class="orb-wrap">
+            <div class="orb" id="orb">
+              <svg viewBox="-100 -100 200 200">
+                <defs><radialGradient id="halo" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#00ff88" stop-opacity="0.45"/><stop offset="55%" stop-color="#00ff88" stop-opacity="0.1"/><stop offset="100%" stop-color="#00ff88" stop-opacity="0"/></radialGradient></defs>
+                <circle class="o-halo" cx="0" cy="0" r="92" fill="url(#halo)"/>
+                <circle class="o-disk" cx="0" cy="0" r="64" fill="none" stroke="#00ff88" stroke-width="1.5"/>
+                <g class="o-rays" id="o-rays"></g>
+                <g class="o-ring" id="o-ring"></g>
+                <g class="o-core">
+                  <rect x="-6" y="-6" width="12" height="12" fill="#00ff88"/>
+                  <rect x="-10" y="-2" width="4" height="4" fill="#00ff88"/>
+                  <rect x="6" y="-2" width="4" height="4" fill="#00ff88"/>
+                  <rect x="-2" y="-10" width="4" height="4" fill="#00ff88"/>
+                  <rect x="-2" y="6" width="4" height="4" fill="#00ff88"/>
+                </g>
+              </svg>
+              <div class="particles" id="particles"></div>
+            </div>
+          </div>
+          <div class="orb-readout">
+            <div class="ai-state" id="ai-state"><span class="blip"></span>BEREIT</div>
+            <div class="ai-model">CTX <b>8K</b> · 9.0 GB · MEM 1.2k nodes</div>
+          </div>
+          <div class="minilog" id="minilog"></div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="panel" style="flex:0 0 auto">
+          <h2>Lifestyle &amp; Gesundheit</h2>
+          <div class="track-grid">
+            <div><div class="track-lbl">Schlafqualität</div><svg class="track-svg" id="t-sleep" viewBox="0 0 200 62" preserveAspectRatio="none"></svg><div class="legend"><span id="t-sleep-from"></span><span id="t-sleep-avg"></span></div></div>
+            <div><div class="track-lbl">Stimmung</div><svg class="track-svg" id="t-mood" viewBox="0 0 200 62" preserveAspectRatio="none"></svg><div class="legend"><span id="t-mood-from"></span><span id="t-mood-avg"></span></div></div>
+            <div><div class="track-lbl">Aktivität</div><svg class="track-svg" id="t-steps" viewBox="0 0 200 62" preserveAspectRatio="none"></svg><div class="legend"><span>14 T</span><span id="t-steps-now"></span></div></div>
+            <div><div class="track-lbl">Fokus-Index</div><svg class="track-svg" id="t-focus" viewBox="0 0 200 62" preserveAspectRatio="none"></svg><div class="legend"><span>Ø</span><span id="t-focus-avg"></span></div></div>
+          </div>
+        </div>
+        <div class="panel" style="flex:1 1 auto">
+          <h2>Projekte</h2>
+          <div id="projects"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottom">
+      <div class="panel term"><h2>stdout <span class="tag">live · /api/state</span></h2><div class="term-body" id="term"></div></div>
+      <div class="panel term term-net"><h2>Outbound-Tripwire</h2><div class="term-body" id="term-net"><div class="term-idle">// keine outbound-Pakete · offline ✓</div></div></div>
+    </div>
+  </div>
+
+  <script src="engine.js"></script>
+  <script src="viz.js"></script>
+  <script>
+  (function () {
+    // Orb-Strahlen/Ring/Partikel
+    var rays = ''; for (var a = 0; a < 360; a += 45) rays += '<rect x="-2" y="-72" width="4" height="14" fill="#00ff88" transform="rotate(' + a + ')"/>';
+    document.getElementById('o-rays').innerHTML = rays;
+    var ring = ''; for (var b = 0; b < 360; b += 30) ring += '<rect x="-2" y="-42" width="4" height="4" fill="#00ff88" transform="rotate(' + b + ')"/>';
+    document.getElementById('o-ring').innerHTML = ring;
+    var parts = '', dirs = [[130,0],[92,-92],[0,-115],[-85,-85],[-140,0],[-88,88],[0,110],[95,95]];
+    parts = dirs.map(function (d, i) { return '<span style="--tx:' + d[0] + 'px;--ty:' + d[1] + 'px;--d:' + (i*0.4).toFixed(2) + 's"></span>'; }).join('');
+    document.getElementById('particles').innerHTML = parts;
+
+    function gaugeSVG(pct, value, unit, label) {
+      var r = 36, ar = VZ.arc(pct, r);
+      return '<svg viewBox="0 0 90 90">' +
+        '<circle cx="45" cy="45" r="' + r + '" fill="none" stroke="rgba(0,255,136,0.12)" stroke-width="6" stroke-linecap="round" stroke-dasharray="' + ar.len + ' ' + ar.circ + '" transform="rotate(135 45 45)"/>' +
+        '<circle cx="45" cy="45" r="' + r + '" fill="none" stroke="#00ff88" stroke-width="6" stroke-linecap="round" stroke-dasharray="' + ar.fill + ' ' + ar.circ + '" transform="rotate(135 45 45)" style="filter:drop-shadow(0 0 5px rgba(0,255,136,0.7))"/>' +
+        '<text class="gnum" x="45" y="47" text-anchor="middle">' + Math.round(value) + '</text>' +
+        '<text class="gunit" x="45" y="60" text-anchor="middle">' + unit + '</text></svg><div class="glbl">' + label + '</div>';
+    }
+    function spark(el, vals) { el.querySelector('path').setAttribute('d', VZ.sparkPath(vals, 100, 18, 2)); }
+
+    var d = ZS.data;
+    function renderBars(id, vals, maxv) {
+      var bars = VZ.bars(vals, 200, 62, 4, maxv), s = '';
+      bars.forEach(function (bb, i) { var hot = i === bars.length-1;
+        s += '<rect x="' + bb.x.toFixed(1) + '" y="' + bb.y.toFixed(1) + '" width="' + bb.w.toFixed(1) + '" height="' + bb.h.toFixed(1) + '" fill="' + (hot?'#b6ffd9':'#00ff88') + '" opacity="' + (hot?1:0.6) + '"/>';
+      });
+      document.getElementById(id).innerHTML = s;
+    }
+    function renderArea(id, vals, color) {
+      var area = VZ.areaPath(vals, 200, 62, 3), line = VZ.sparkPath(vals, 200, 62, 3);
+      document.getElementById(id).innerHTML =
+        '<defs><linearGradient id="' + id + 'g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + color + '" stop-opacity="0.4"/><stop offset="100%" stop-color="' + color + '" stop-opacity="0"/></linearGradient></defs>' +
+        '<path d="' + area + '" fill="url(#' + id + 'g)"/><path d="' + line + '" fill="none" stroke="' + color + '" stroke-width="2" style="filter:drop-shadow(0 0 3px ' + color + ')"/>';
+    }
+    renderBars('t-sleep', d.sleep, 5);
+    renderArea('t-mood', d.mood, '#00ff88');
+    renderBars('t-steps', d.steps);
+    renderArea('t-focus', d.focus, '#ffaa3c');
+    document.getElementById('t-sleep-from').textContent = d.dayLabels[0];
+    document.getElementById('t-sleep-avg').textContent = 'Ø ' + (d.sleep.reduce((a,b)=>a+b,0)/d.sleep.length).toFixed(1) + '/5';
+    document.getElementById('t-mood-from').textContent = d.dayLabels[0];
+    document.getElementById('t-mood-avg').textContent = 'Ø ' + (d.mood.reduce((a,b)=>a+b,0)/d.mood.length).toFixed(1) + '/5';
+    document.getElementById('t-steps-now').textContent = d.steps[d.steps.length-1].toFixed(1) + 'k';
+    document.getElementById('t-focus-avg').textContent = Math.round(d.focus.reduce((a,b)=>a+b,0)/d.focus.length) + '%';
+
+    document.getElementById('projects').innerHTML = d.projects.map(function (p) {
+      return '<div class="proj"><div class="proj-top"><span class="pn">' + p.name + '</span><span class="ps">' + p.status + ' · ' + p.pct + '%</span></div><div class="bar"><i style="width:' + p.pct + '%"></i></div></div>';
+    }).join('');
+
+    var upStart = Date.now() - 4*3600*1000 - 758*1000;
+    ZS.on('tick', function (e) {
+      document.getElementById('clock').textContent = e.time;
+      document.getElementById('date').textContent = e.date;
+      var up = Math.floor((Date.now()-upStart)/1000);
+      document.getElementById('p-up').textContent = [Math.floor(up/3600),Math.floor(up/60)%60,up%60].map(n=>('0'+n).slice(-2)).join(':');
+      var m = e.metrics;
+      document.getElementById('g-cpu').innerHTML = gaugeSVG(m.cpu.v, m.cpu.v, '%', 'CPU');
+      document.getElementById('g-temp').innerHTML = gaugeSVG((m.temp.v-38)/40*100, m.temp.v, '°C', 'TEMP');
+      document.getElementById('g-ram').innerHTML = gaugeSVG(m.ram.v, m.ram.v, '%', 'RAM');
+      var mg=document.getElementById('m-gpu'); mg.querySelector('.mval').textContent=Math.round(m.gpu.v)+'%'; spark(mg,e.metHist.gpu);
+      var mn=document.getElementById('m-net'); mn.querySelector('.mval').textContent=m.net.v.toFixed(1)+'kB'; spark(mn,e.metHist.net);
+      var md=document.getElementById('m-disk'); md.querySelector('.mval').textContent=Math.round(m.disk.v)+'%'; spark(md,e.metHist.disk);
+      document.getElementById('s-light-v').textContent = e.sensors.light.value + ' lux';
+    });
+    ZS.on('sensor', function (e) {
+      if (e.name === 'light') return;
+      var el = document.getElementById('s-' + e.name); if (!el) return;
+      el.classList.toggle('on', e.active);
+      el.querySelector('.val').textContent = e.active ? 'TRIGGER' : (e.name==='door'?'zu':(e.name==='motion'?'PIR':'bereit'));
+    });
+    function appendLog(id, e) {
+      var c = document.getElementById(id); var idle = c.querySelector('.term-idle'); if (idle) idle.remove();
+      var row = document.createElement('div'); row.className='lg';
+      row.innerHTML = '<span class="tt">' + e.t + '</span><span class="tx">' + e.text + '</span>';
+      c.insertBefore(row, c.firstChild); while (c.children.length > 40) c.removeChild(c.lastChild);
+    }
+    ZS.on('log', function (e) { appendLog('term', e); });
+    ZS.on('net', function (e) { appendLog('term-net', e); });
+
+    var orb = document.getElementById('orb'), aiState = document.getElementById('ai-state');
+    function renderMini() {
+      document.getElementById('minilog').innerHTML = ZS.aiHistory.slice(-3).map(function (it) {
+        var cur = (it.role==='ai' && ZS.aiState==='streaming' && it===ZS.aiHistory[ZS.aiHistory.length-1]) ? '<span class="cur">▋</span>' : '';
+        return '<div class="ml-row"><span class="ml-role ' + (it.role==='user'?'user':'ai') + '">' + (it.role==='user'?'USER':'KI') + '</span><span class="ml-text">' + it.text + cur + '</span></div>';
+      }).join('');
+    }
+    ZS.on('ai', function (e) {
+      if (e.state === 'idle') { orb.classList.remove('active'); aiState.classList.remove('busy'); aiState.innerHTML='<span class="blip"></span>BEREIT'; }
+      else { orb.classList.add('active'); aiState.classList.add('busy'); aiState.innerHTML='<span class="blip"></span>' + (e.state==='thinking'?'DENKT':'ANTWORTET'); }
+      renderMini();
+    });
+    renderMini();
+
+    ZS.start();
+    fitStage('#stage');
+  })();
+  </script>
+</body>
+</html>

@@ -36,6 +36,12 @@
 #                         pi_sensor_bridge.service).
 #   ZENTRALE_BRIDGE_POLL  Sekunden zwischen Polls. Default 0.2.
 #   ZENTRALE_BRIDGE_KB    "1" = Tastatur-Reader an, "0" = aus. Default "1".
+#   ZENTRALE_TELEMETRY        "1" = Telemetrie-Push an, "0" = aus. Default "1".
+#   ZENTRALE_TELEMETRY_POLL   Sekunden zwischen Telemetrie-Pushes. Default 30.
+#
+# Telemetrie: der Pi POSTet zusaetzlich periodisch CPU/Temp/RAM/SD an
+#   POST /api/telemetry/pi  (das Backend kann der Pi nicht selbst anzeigen,
+#   FS read-only). Werte kommen aus core/host_metrics.py (dependency-frei).
 #
 # Manueller Aufruf (lokal testen, ggf. mit sudo wegen keyboard-Library):
 #   ZENTRALE_BACKEND_URL=http://10.117.205.127:5000 \
@@ -64,11 +70,23 @@ except Exception as e:
     print(f"FATAL: requests-Library fehlt: {e}", file=sys.stderr)
     sys.exit(1)
 
+# host_metrics liegt in core/ (dependency-frei). Wir legen core/ auf den
+# Suchpfad – genauso wie ui/app.py das macht. Optional: wenn der Import
+# scheitert (alter Checkout o.ae.), laeuft die Bridge ohne Telemetrie weiter.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core"))
+try:
+    import host_metrics
+except Exception as e:
+    host_metrics = None
+    print(f"HINWEIS: host_metrics nicht importierbar – Telemetrie aus: {e}", flush=True)
+
 
 # ── Konfig ───────────────────────────────────────────────────────────
 BACKEND_URL = os.environ.get("ZENTRALE_BACKEND_URL", "http://localhost:5000")
 POLL_SEC    = float(os.environ.get("ZENTRALE_BRIDGE_POLL", "0.2"))
 KB_ENABLED  = os.environ.get("ZENTRALE_BRIDGE_KB", "1") == "1"
+TELEMETRY_ENABLED = os.environ.get("ZENTRALE_TELEMETRY", "1") == "1" and host_metrics is not None
+TELEMETRY_POLL    = float(os.environ.get("ZENTRALE_TELEMETRY_POLL", "30"))
 
 # Sensor-Name -> Taste fuer die Tastatur-Simulation.
 # Muss synchron bleiben mit:
@@ -103,6 +121,33 @@ def _post_sensor(name: str):
         print(f"PUSH {name} -> {url} = {r.status_code}", flush=True)
     except Exception as e:
         print(f"PUSH {name} -> {url} FAIL: {e}", flush=True)
+
+
+# ── Telemetrie-Push ──────────────────────────────────────────────────
+def _build_telemetry():
+    """
+    Baut den Pi-Telemetrie-Block in der Shape, die das Dashboard erwartet
+    (je Metrik ein .v). Der Pi hat keine nvidia-GPU → nur CPU/Temp/RAM/SD.
+    Disk ist '/' = die SD-Karte. None-Werte bleiben None (Frontend zeigt '–').
+    """
+    ram  = host_metrics.mem_percent()       # (pct, used_gb, total_gb) | None
+    disk = host_metrics.disk_percent("/")   # (pct, used_gb, total_gb) | None
+    return {
+        "cpu":  {"v": host_metrics.cpu_percent()},
+        "temp": {"v": host_metrics.temp_c()},
+        "ram":  {"v": ram[0]  if ram  else None, "used": ram[1]  if ram  else None, "total": ram[2]  if ram  else None},
+        "disk": {"v": disk[0] if disk else None, "used": disk[1] if disk else None, "total": disk[2] if disk else None},
+    }
+
+
+def _post_telemetry():
+    """Telemetrie an das PC-Backend pushen. Fehler tolerant (wie _post_sensor)."""
+    url = f"{BACKEND_URL}/api/telemetry/pi"
+    try:
+        r = requests.post(url, timeout=2, json=_build_telemetry())
+        print(f"TELEMETRY -> {url} = {r.status_code}", flush=True)
+    except Exception as e:
+        print(f"TELEMETRY -> {url} FAIL: {e}", flush=True)
 
 
 # ── Quellen ──────────────────────────────────────────────────────────
@@ -155,6 +200,7 @@ def main():
     print(f"## ZENTRALE Sensor-Bridge", flush=True)
     print(f"## Backend: {BACKEND_URL}", flush=True)
     print(f"## Keyboard-Reader: {'an' if (KB_ENABLED and keyboard) else 'aus'}", flush=True)
+    print(f"## Telemetrie: {'an (' + str(TELEMETRY_POLL) + 's)' if TELEMETRY_ENABLED else 'aus'}", flush=True)
     print(f"## Poll-Intervall: {POLL_SEC}s", flush=True)
 
     if KB_ENABLED and not keyboard:
@@ -163,10 +209,21 @@ def main():
         print("HINWEIS: keyboard-Library nicht importierbar – Tastatur-Reader inaktiv.",
               flush=True)
 
+    # CPU-Auslastung ist ein Delta zwischen zwei Messungen → einmal "primen",
+    # damit der erste Push gleich einen sinnvollen Wert hat statt None.
+    # _last_tele so setzen, dass der erste Telemetrie-Push schon nach ~3s
+    # kommt (Pi erscheint zuegig im Dashboard), danach alle TELEMETRY_POLL s.
+    if TELEMETRY_ENABLED:
+        host_metrics.cpu_percent()
+    _last_tele = time.monotonic() - TELEMETRY_POLL + 3
+
     while True:
         if KB_ENABLED:
             _poll_keyboard()
         _poll_gpio()
+        if TELEMETRY_ENABLED and (time.monotonic() - _last_tele) >= TELEMETRY_POLL:
+            _post_telemetry()
+            _last_tele = time.monotonic()
         time.sleep(POLL_SEC)
 
 

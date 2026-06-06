@@ -64,6 +64,15 @@ mapped sie auf die internen Events (`_SENSOR_TO_EVENT` in `main.py`).
 Wenn ein neuer Sensor dazukommt: an drei Stellen ergänzen
 (`_ALLOWED_SENSORS`, `_SENSOR_TO_EVENT`, `KEYBOARD_MAP` in der Bridge).
 
+Zweiter **Pi → PC**-Push seit 2026-06-06: **Telemetrie**. Dieselbe
+Bridge (`pi_sensor_bridge.py`) pollt alle ~30s CPU/Temp/RAM/SD (aus
+`core/host_metrics.py`, dependency-frei) und POSTet sie an
+`POST /api/telemetry/pi`. Der PC hält nur den letzten Stand
+(`state.set_pi_telemetry()`), das Dashboard zeigt ihn im Telemetrie-Panel
+(PC-Block lokal, Pi-Block aus dem Push; stale ab >90s). PC-Telemetrie
+kommt dagegen lokal aus `core/telemetry.pc_snapshot()` (inkl. GPU/VRAM via
+`nvidia-smi`) — kein Push nötig, der PC ist ja das Backend.
+
 ## Netzwerk
 
 Seit 2026-05-19 hängen PC und Pi an einem **unmanaged Gigabit-Switch**
