@@ -77,6 +77,22 @@ OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
 # Auslagerung ins RAM = langsam). Per Env feinjustierbar.
 OLLAMA_NUM_CTX = int(os.environ.get("OLLAMA_NUM_CTX", "8192"))
 
+# Qwen-empfohlene Sampling-Parameter (Non-Thinking-Modus). Vorher setzte der
+# Chat-Pfad NUR num_ctx -> Ollama nahm seine Defaults (temp 0.8, top_p 0.9,
+# top_k 40, repeat_penalty 1.1), die fuer Qwen NICHT passen. Qwen empfiehlt
+# offiziell temp 0.7 / top_p 0.8 / top_k 20 / min_p 0 / repeat_penalty 1.05
+# (qwen.readthedocs.io function_call + Qwen3-Modelcards) und warnt explizit vor
+# greedy/temp=0 (-> Wiederholungen/Degradation). Im Kalender-Bench hob das die
+# Korrektheit von qwen3.5:9b messbar (70 -> 76 %, mit Antwort-Suffix -> 82 %,
+# auf 14B-Niveau bei 9B-Speed). Wird in den Chat-Calls in `options` gespreadt.
+QWEN_SAMPLING = {
+    "temperature":    float(os.environ.get("OLLAMA_TEMP",    "0.7")),
+    "top_p":          float(os.environ.get("OLLAMA_TOP_P",   "0.8")),
+    "top_k":          int(os.environ.get("OLLAMA_TOP_K",     "20")),
+    "min_p":          0.0,
+    "repeat_penalty": 1.05,
+}
+
 
 # ── Jetzt-Block ───────────────────────────────────────────────────────
 # Wird bei JEDEM Turn frisch gebaut und ganz vorne in den System-Prompt
@@ -386,7 +402,44 @@ TOOLS = [
             },
         },
     },
+    # antwort-Tool: die finale Antwort an den User laeuft (auch) ueber diesen
+    # Tool-Kanal statt nur als Freitext. Im Kalender-Bench hob das die
+    # Korrektheit von qwen3.5:9b (+~6 pp, gestapelt mit Sampling auf 82 %).
+    # Mechanismus ist primaer die FRAMING-Wirkung: "liefere immer eine Antwort"
+    # killt die "ich pruefe..."-und-Stopp-Aussetzer. chat_stream behandelt einen
+    # antwort-Call terminal (Text = finale Antwort). Das Modell darf weiterhin
+    # frei antworten - dann greift der Suffix-Effekt, nicht der Tool-Pfad.
+    {
+        "type": "function",
+        "function": {
+            "name": "antwort",
+            "description": (
+                "Gib deine finale Antwort an den User über dieses Tool aus - "
+                "der vollständige Antworttext ins Feld 'text'. Reihenfolge: "
+                "erst Daten-Tools (z.B. read_calendar) nutzen, dann mit 'antwort' "
+                "die fertige, formulierte Antwort liefern. Nie nur ankündigen "
+                "('ich schaue nach…'), immer die echte Antwort."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string",
+                             "description": "Die fertige Antwort für den User."},
+                },
+                "required": ["text"],
+            },
+        },
+    },
 ]
+
+# Wird im regulaeren Chat ans Ende des System-Prompts gehaengt (siehe
+# chat_stream). Der Prompt-Satz traegt den Loewenanteil des Antwort-Tool-
+# Effekts (isoliert gemessen: Suffix allein +6 pp). Tutor-Modus kriegt ihn
+# NICHT (eigenes Tool-Set, kein antwort-Tool).
+ANTWORT_SUFFIX = ("\n\nDeine finale Antwort lieferst du immer vollständig - "
+                  "entweder über das 'antwort'-Tool (Feld 'text') oder direkt. "
+                  "Nie nur ankündigen und abbrechen, nie aus Höflichkeit "
+                  "zurückfragen.")
 
 
 def _execute_tool(name: str, args: dict) -> str:
@@ -766,7 +819,7 @@ def chat(messages: list, model: str = None, system: str = None) -> str:
         "keep_alive": OLLAMA_KEEP_ALIVE,
         # Gleiches num_ctx wie im Streaming-Pfad - sonst haette der
         # Fallback-Call ein anderes Kontextverhalten als der echte Chat.
-        "options":    {"num_ctx": OLLAMA_NUM_CTX},
+        "options":    {"num_ctx": OLLAMA_NUM_CTX, **QWEN_SAMPLING},
     }
     try:
         result   = net.post(f"{OLLAMA_URL}/api/chat", payload)
@@ -830,6 +883,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         mem_ctx    = graph.context_for_query(user_query)
         # Jetzt-Block ganz vorne (siehe _now_prompt-Doku).
         sys_prompt = _now_prompt() + "\n\n" + (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
+        # Antwort-Suffix nur im regulaeren Chat (Tutor hat eigenes Tool-Set).
+        sys_prompt += ANTWORT_SUFFIX
         if mem_ctx:
             sys_prompt += "\n\n" + mem_ctx
         # Mic-Hinweis ans Ende - sieht die KI direkt vor der aktuellen
@@ -860,7 +915,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
             # num_ctx explizit setzen, sonst clampt Ollama auf seinen
             # Mini-Default und schneidet die Sprach-Regel aus dem Fenster
             # (siehe OLLAMA_NUM_CTX-Doku oben - Ursache fuers Chinesisch).
-            "options":    {"num_ctx": OLLAMA_NUM_CTX},
+            "options":    {"num_ctx": OLLAMA_NUM_CTX, **QWEN_SAMPLING},
         }
 
         round_content = []  # Tokens dieser Runde sammeln
@@ -922,7 +977,19 @@ def chat_stream(messages: list, model: str = None, system: str = None,
             fn_args = tc["function"]["arguments"]
             # Ollama liefert arguments manchmal als String, manchmal als Dict
             if isinstance(fn_args, str):
-                fn_args = _json.loads(fn_args)
+                try:
+                    fn_args = _json.loads(fn_args)
+                except Exception:
+                    fn_args = {}
+            # antwort-Tool ist TERMINAL: der text ist die finale Antwort an den
+            # User. Kein _dispatch (es ist kein Daten-Tool), kein weiterer Turn.
+            # Nur im regulaeren Chat (tools is None) - der Tutor kennt es nicht.
+            if tools is None and fn_name == "antwort":
+                answer = str(fn_args.get("text", "")).strip()
+                if answer:
+                    yield answer
+                _async_save_turn(user_query, answer)
+                return
             tool_result = active_exec(fn_name, fn_args)
             working_messages.append({
                 "role":    "tool",
