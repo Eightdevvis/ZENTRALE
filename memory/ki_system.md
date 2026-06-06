@@ -172,14 +172,22 @@ Reihenfolge im System-Prompt (siehe `core/ai.py`):
    geraten. Symptom war "die letzte Konversation war am 19.5., die am
    21.5. war bereits danach"-Logik-Quatsch.
 2. **`_SYSTEM_PROMPT`** – Persona (entspannt, direkt, deutsch).
-3. **`_CAPABILITIES_PROMPT`** – Meta-Regeln (nicht lügen; nicht erfinden
-   über Sasha; nicht erfinden über sich selbst → Anti-Identity-Bleed;
-   lateinische Schrift; reale Wörter). Schlank gehalten (~120 tokens),
-   weil bei jedem Turn injiziert.
+3. **`_CAPABILITIES_PROMPT`** – Meta-Regeln: nicht lügen über Memory;
+   nicht erfinden über Sasha; **Subjekt-Grenze** (Sashas Gefühle/Zustände
+   NIE als eigene ausgeben → Anti-Identity-Bleed, mit konkretem Beispiel);
+   nicht erfinden über eigene Fähigkeiten (was unter „Das kannst DU NICHT"
+   steht, nie behaupten zu können); lateinische Schrift; reale Wörter.
+   Bei jedem Turn injiziert.
 4. **`graph.context_for_query(user_query)`** – aktiviertes Wissen aus
    dem Graphen (Spread-Aktivierung von Entry-Points aus). Kann leer
    sein → KI sagt dann "noch nichts gespeichert" statt zu raten
-   (Anti-Konfabulation).
+   (Anti-Konfabulation). **Seit 2026-06-06 nach SUBJEKT getrennt
+   gerendert** – drei Abschnitte „Über SASHA" / „Das kannst DU" / „Das
+   kannst DU NICHT" statt flacher Liste. Verhindert dass das Modell
+   Sashas Zustände („einsam") als eigenes Gefühl oder Limit-Knoten
+   („Bilder generieren") als eigene Fähigkeit liest. Nötig mit qwen3.5
+   (weniger guarded als qwen2.5). Trennung nur per `type`-Feld
+   (self/capability/limit), siehe Render-Block in `core/graph.py`.
 5. **`_MIC_INPUT_HINT`** – *konditional*, nur wenn die letzte
    User-Message per Whisper-Spracheingabe kam (`via_mic=True`). Sagt
    der KI: Transkription kann Wörter verfälschen, bei semantischen
@@ -191,8 +199,8 @@ Konkrete Capabilities/Limits leben als Graph-Knoten (`graph.ensure_seed()`)
 und kommen via Aktivierungs-Spread in den Wissens-Block, statt fest
 ins System-Prompt zu wandern. Das gilt **auch für die Identität der KI
 selbst** (Tools, Grenzen, "wer bin ich"): der Graph ist *ihre* Memory,
-nicht nur ein Faktenspeicher über Sasha. Deshalb verweist Meta-Regel 3
-(Anti-Identity-Bleed) auf den Wissens-Block statt feste Tool-Namen
+nicht nur ein Faktenspeicher über Sasha. Deshalb verweist Meta-Regel 4
+(Fähigkeiten/Grenzen) auf den Wissens-Block statt feste Tool-Namen
 hardzucoden – fügt man der KI einen neuen Knoten "Tool X" hinzu, weiß
 sie es ohne Prompt-Änderung. Verhindert auch, dass das Pretraining
 (qwen kennt Claude-Code-Skill-Namen wie `update-config` aus öffentlichen

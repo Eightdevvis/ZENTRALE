@@ -633,21 +633,53 @@ def context_for_query(query: str | None,
     if not sorted_nodes:
         return ""
 
-    # Kontext-Block bauen. Format ist bewusst graph-strukturiert -
-    # das LLM kann das gut lesen und beim Output narrativieren.
-    lines = ["## Aktiviertes Wissen über Sashas Welt"]
-    lines.append("")
-    lines.append("Konzepte (mit Aktivierungs-Score, höher = relevanter):")
-    for name, score in sorted_nodes:
-        ntype = data["nodes"][name].get("type", "concept")
-        # Score nur wenn nicht 1.0 (Entry-Points sind 1.0)
-        if score >= 0.999:
-            lines.append(f"  - {name} [{ntype}]")
-        else:
-            lines.append(f"  - {name} [{ntype}] (a={score:.2f})")
-    if relevant_edges:
+    # Kontext-Block bauen. WICHTIG gegen Identity-Bleed: Konzepte werden nach
+    # SUBJEKT getrennt gerendert - die KI-eigene Identitaet (type self/
+    # capability/limit) klar abgegrenzt von Sashas Welt (alles andere). Sonst
+    # landet z.B. Sashas Zustand "einsam" in einer flachen Liste, und ein
+    # ungeguardtes Modell (qwen3.5 ist weniger zurueckhaltend als qwen2.5)
+    # schreibt ihn sich selbst zu -> "ich bin einsam". Der Header sagt jetzt
+    # explizit, wem die Gefuehle/Zustaende gehoeren. Die Kanten tragen das
+    # Subjekt ohnehin LINKS (Sasha ─[fuehlt]─► einsam).
+    # Drei Subjekt-Gruppen statt flacher Liste - gegen ZWEI Fehlerklassen:
+    # (a) Identity-Bleed (Sashas Gefuehle als eigene), (b) Limit-als-Faehigkeit
+    # (Modell liest den kann-nicht-Knoten "Bilder generieren" als Faehigkeit
+    # und behauptet, es koenne Bilder malen). Deshalb klar getrennt:
+    # Sashas Welt | was die KI KANN | was die KI NICHT kann. Nutzt nur das
+    # type-Feld (capability/limit/self), kein Graph-Inhalt.
+    def _typ(n):
+        return data["nodes"][n].get("type", "concept")
+
+    def _fmt(name, score):
+        if score >= 0.999:                       # Entry-Points sind 1.0
+            return f"  - {name} [{_typ(name)}]"
+        return f"  - {name} [{_typ(name)}] (a={score:.2f})"
+
+    world_nodes = [(n, s) for n, s in sorted_nodes
+                   if _typ(n) not in ("self", "capability", "limit")]
+    cap_nodes   = [(n, s) for n, s in sorted_nodes if _typ(n) == "capability"]
+    lim_nodes   = [(n, s) for n, s in sorted_nodes if _typ(n) == "limit"]
+
+    lines = ["## Aktiviertes Wissen", ""]
+    if world_nodes:
+        lines.append("### Über SASHA und seine/ihre Welt "
+                     "(Gefühle, Zustände, Erlebnisse, Leben — das gehört SASHA, NICHT dir):")
+        for name, score in world_nodes:
+            lines.append(_fmt(name, score))
         lines.append("")
-        lines.append("Verbindungen:")
+    if cap_nodes:
+        lines.append("### Das kannst DU wirklich (deine echten Tools/Fähigkeiten):")
+        for name, score in cap_nodes:
+            lines.append(_fmt(name, score))
+        lines.append("")
+    if lim_nodes:
+        lines.append("### Das kannst DU NICHT — auch wenn es aus dem Pretraining "
+                     "vertraut klingt, du hast es NICHT:")
+        for name, score in lim_nodes:
+            lines.append(_fmt(name, score))
+        lines.append("")
+    if relevant_edges:
+        lines.append("### Verbindungen (das Subjekt steht immer LINKS):")
         for e in relevant_edges[:40]:  # cap
             w = e.get("weight", 1.0)
             w_str = f" w={w:.1f}" if w != 1.0 else ""
