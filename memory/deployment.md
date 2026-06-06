@@ -47,6 +47,19 @@ Alle drei laufen als `User=sasha`, **kein** sudo → Tastatur-Sensor-Sim
 geht hier nicht (das war eh nur Dev-Modus, im echten Betrieb liefert
 der Pi die Sensor-Events ueber `/api/sensor/<name>`).
 
+**Kopplung (seit 2026-06-07):** `zentrale-pc.service` hat zusaetzlich
+`Wants=whisper-pc.service tts-pc.service`. Damit zieht `systemctl restart
+zentrale-pc.service` die Audio-Sidecars mit hoch (vorher startete der
+Restart NUR das Backend → standen Whisper/TTS, blieben sie unten, und im
+Dashboard-Terminal stand dauerhaft `[TTS nicht erreichbar]`). **Bewusst
+nur `Wants=`, KEIN `After=`** auf die Sidecars: die deklarieren selbst
+schon `After=zentrale-pc` → ein `After=` zurueck erzeugt einen Ordering-
+Cycle, den systemd durch Verwerfen des Sidecar-Starts bricht (sie kommen
+dann nie hoch). `Wants=` ist ordering-frei. Faustregel bei stummer KI /
+totem Mikro: **zuerst `systemctl is-active zentrale-pc whisper-pc tts-pc`**
+— stehen die Sidecars, `restart zentrale-pc` oder gezielt
+`sudo systemctl start whisper-pc tts-pc`.
+
 Einmalig installieren:
 
 ```bash
