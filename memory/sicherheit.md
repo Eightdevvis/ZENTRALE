@@ -112,7 +112,19 @@ am PC sitzen muss, läuft im Initramfs ein minimaler SSH-Server
 - User-Login auf X-Session bleibt manuell (gewollt: Brain läuft als
   systemd, kein Autologin).
 
-Setup-Anleitung: `memory/auto_unlock.md` (entsteht beim Aufsetzen).
+**Netzwerk-im-Initramfs — Design-Entscheidung (2026-06-01):** Das
+Initramfs braucht eine IP, *bevor* NetworkManager läuft. Wir setzen
+**kein** funktionales `ip=<adresse>`-Kernel-Param (das hat bei der
+LAN-Migration die kaputte Default-Route produziert, siehe `topologie.md`
++ Memory `feedback_no_kernel_ip_param`). Stattdessen: `ip=off` (der
+„mach-nichts"-Sentinel, neutralisiert nur das DHCP) **plus** ein eigenes
+init-premount-Skript, das enp4s0 mit `192.168.50.1/24` **ohne**
+Default-Route hochbringt. `init-bottom/dropbear` flusht eh alles vor dem
+Pivot → NetworkManager startet sauber. Begründung + exakte Befehle:
+`memory/auto_unlock.md`.
+
+Setup-Anleitung + Test-Plan: **`memory/auto_unlock.md`**
+(angelegt 2026-06-01, vorbereitet aber noch nicht angewendet).
 
 ## Recovery-Stand (LUKS)
 
@@ -157,7 +169,10 @@ sudo cryptsetup luksKillSlot /dev/nvme0n1p3 <slot-nr>
 - [ ] **Live-USB beschaffen** (Pop!_OS ISO auf USB-Stick). Pop hat zwar
   Recovery auf `nvme0n1p2` (4 GB FAT), Live-USB ist robuster für
   Initramfs-Reparatur falls's mal nicht bootet. Verschoben auf später.
-- [ ] **Dropbear im Initramfs** aufsetzen (in Arbeit, siehe Plan oben).
+- [~] **Dropbear im Initramfs**: installiert + gekeyt + Port 2222 steht,
+  Netz-Bringup (init-premount-Skript + `ip=off`) **angewendet 2026-06-01**
+  (Initramfs neu gebacken, ohne Fehler). Offen nur noch: Reboot +
+  ssh-Unlock-Test vom Pi. Details in `auto_unlock.md`.
 - [ ] **Firewall** (`nftables`/`ufw`) durchgehen – welche Ports sind
   offen, welche müssen offen sein, was loggt was.
 - [ ] **SSH-Hardening**: Key-only-Auth bestätigen
