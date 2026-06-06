@@ -24,6 +24,7 @@
 #   OLLAMA_MODEL – default: qwen2.5:14b
 
 import os
+import time
 import json as _json
 import threading  # Phase D: Auto-Save läuft in Daemon-Threads
 from datetime import datetime  # für den Jetzt-Block (Fix Zeit-Blindheit)
@@ -486,7 +487,10 @@ def warmup():
                 # num_predict=1: das Modell muss laden, aber nicht
                 # nennenswert generieren. Spart ein paar Sekunden ggü.
                 # einer vollen Antwort.
-                "options":    {"num_predict": 1},
+                # num_ctx identisch zum Chat-Pfad: sonst laedt der Warmup
+                # qwen@default und die erste echte Frage (num_ctx=8192)
+                # muss trotzdem neu laden – Warmup waere wirkungslos.
+                "options":    {"num_predict": 1, "num_ctx": OLLAMA_NUM_CTX},
             },
             timeout=120,
         )
@@ -563,24 +567,53 @@ def _last_user_query(messages: list) -> str | None:
 # - der User sieht die Antwort sofort, das Memory-Update tropft
 # Sekunden später hinterher.
 
-def _async_save_turn(user_msg: str, ai_msg: str):
-    """
-    Fire-and-forget: User+AI-Turn extrahieren und in den Konzept-
-    Graphen einarbeiten (Phase G).
+# ── Konsolidierung: gebündelt in der Gesprächspause ───────────────────
+# Die Graph-Extraktion ist ein voller qwen-Lauf (teuer – gemessen ~70 s
+# mit CPU-Anteil). Lief sie – wie früher – sofort als eigener Thread nach
+# JEDEM Turn, teilte sie sich die EINE qwen-Instanz mit der nächsten
+# User-Frage. Ollama bedient ein Modell seriell → die Frage hing, bis die
+# Konsolidierung durch war (Engpass nach dem num_ctx-Fix sichtbar
+# geworden). Lösung: EIN Worker-Thread sammelt die Turns und konsolidiert
+# erst, wenn CONSOLIDATION_IDLE_S lang KEIN neuer Turn mehr kam (=
+# Gesprächspause). Jeder Turn schiebt die Frist nach hinten → während
+# aktivem Hin-und-Her läuft nie eine Konsolidierung, die den Chat
+# blockieren könnte.
+#
+# Wichtig: Der laufende Gesprächsverlauf (state._chat_history, ~50
+# Nachrichten) geht bei JEDER Frage sofort mit. Das Verschieben betrifft
+# nur den Langzeit-Graphen (übergreifendes Erinnern), nicht das Folgen
+# des aktuellen Gesprächs.
+CONSOLIDATION_IDLE_S = float(os.environ.get("CONSOLIDATION_IDLE_S", "45"))
 
-    Der LLM-Extraktor produziert strukturierte Konzepte+Edges, die
-    via graph.add_turn_extraction in den Graphen gemerged werden
-    (mit Alias-Resolution und Sanity-Filter). Recent-Context kommt
-    automatisch durch Aktivierung des heutigen Time-Knotens, daher
-    keine separate STM-Schicht mehr.
+_consol_pending = []                      # [(user_msg, ai_msg), ...] noch offen
+_consol_cv      = threading.Condition()   # schützt _consol_pending + _consol_last_ts
+_consol_last_ts = 0.0                      # monotone Zeit des letzten Turns
+_consol_started = False                    # Worker schon gestartet?
 
-    Läuft als Daemon-Thread: blockiert nichts, der User hat die
-    Antwort schon lange. Fehler werden geloggt, nicht weitergereicht.
-    """
-    if not user_msg or not user_msg.strip():
-        return
 
-    def _do_save():
+def _consolidation_worker():
+    """Einzel-Worker: wartet auf Turns, konsolidiert sie aber erst nach
+    CONSOLIDATION_IDLE_S Ruhe und immer nur EINEN zur Zeit – nie parallel,
+    nie während der User aktiv tippt (jeder neue Turn verschiebt die
+    Frist). Daemon-Thread, läuft die ganze App-Laufzeit."""
+    global _consol_last_ts
+    while True:
+        with _consol_cv:
+            # 1. Schlafen, bis überhaupt etwas in der Queue liegt.
+            while not _consol_pending:
+                _consol_cv.wait()
+            # 2. Warten bis seit dem letzten Turn IDLE_S vergangen sind.
+            #    Ein neuer Turn aktualisiert _consol_last_ts + weckt uns →
+            #    Frist verschiebt sich nach hinten (Debounce/Preemption).
+            while True:
+                rest = CONSOLIDATION_IDLE_S - (time.monotonic() - _consol_last_ts)
+                if rest <= 0:
+                    break
+                _consol_cv.wait(timeout=rest)
+            # 3. Genau einen Turn entnehmen.
+            user_msg, ai_msg = _consol_pending.pop(0)
+        # LLM-Extraktion AUSSERHALB des Locks (langer Call – darf das
+        # Einreihen weiterer Turns nicht blockieren).
         try:
             consolidation.extract_turn_into_graph(user_msg, ai_msg)
         except Exception as e:
@@ -590,8 +623,34 @@ def _async_save_turn(user_msg: str, ai_msg: str):
             except Exception:
                 pass
 
-    thread = threading.Thread(target=_do_save, daemon=True, name='ai-auto-save')
-    thread.start()
+
+def _async_save_turn(user_msg: str, ai_msg: str):
+    """
+    Turn für die spätere Graph-Konsolidierung vormerken (Phase G).
+
+    Reiht den Turn in die Queue und stupst den Worker an; die eigentliche
+    LLM-Extraktion läuft gebündelt erst in der nächsten Gesprächspause
+    (siehe _consolidation_worker + Block oben). Kehrt sofort zurück –
+    blockiert weder den Chat noch belegt es qwen.
+
+    Der Extraktor produziert strukturierte Konzepte+Edges, die via
+    graph.add_turn_extraction in den Graphen gemerged werden (Alias-
+    Resolution + Sanity-Filter). Recent-Context kommt über die Aktivierung
+    des heutigen Time-Knotens, daher keine separate STM-Schicht.
+    """
+    global _consol_last_ts, _consol_started
+    if not user_msg or not user_msg.strip():
+        return
+
+    with _consol_cv:
+        # Worker lazy starten (kein Import-Seiteneffekt beim Modul-Laden).
+        if not _consol_started:
+            _consol_started = True
+            threading.Thread(target=_consolidation_worker, daemon=True,
+                             name='ai-consolidation').start()
+        _consol_pending.append((user_msg, ai_msg))
+        _consol_last_ts = time.monotonic()   # Debounce-Frist neu setzen
+        _consol_cv.notify()
 
 
 _seed_done = False

@@ -30,6 +30,13 @@ OLLAMA_MODEL      = os.environ.get("OLLAMA_MODEL",      "qwen2.5:14b")
 # wenn das Modell zwischendurch unloadet wird kostet jeder Lauf den
 # Reload. Default 30m, per Env überschreibbar.
 OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
+# KRITISCH: identisch zu ai.py.OLLAMA_NUM_CTX. Ollama haelt pro
+# (Modell, Kontextgroesse) eine eigene Instanz. Riefe dieser Extraktor
+# qwen ohne num_ctx (= Ollama-Default ~4096), waehrend der Chat
+# num_ctx=8192 nutzt, wuerde Ollama qwen bei JEDEM Turn neu laden
+# (Chat@8192 → Konsolidierung@default → naechster Chat@8192 = 2 Reloads
+# pro Frage, ~17 s je Reload). Gleicher Wert = eine Instanz, kein Reload.
+OLLAMA_NUM_CTX    = int(os.environ.get("OLLAMA_NUM_CTX", "8192"))
 
 
 # ── Sanitization für extrahierte Edges ────────────────────────────────
@@ -187,6 +194,9 @@ def _call_graph_extractor(user_msg: str, ai_msg: str, today: str) -> tuple[list[
                 "stream":     False,
                 "format":     "json",
                 "keep_alive": OLLAMA_KEEP_ALIVE,
+                # Gleiche Kontextgroesse wie der Chat-Pfad – sonst laedt
+                # Ollama qwen pro Turn neu (siehe OLLAMA_NUM_CTX oben).
+                "options":    {"num_ctx": OLLAMA_NUM_CTX},
             },
             timeout=90,
         )

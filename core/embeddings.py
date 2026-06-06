@@ -114,6 +114,17 @@ def _embed_raw(text: str) -> list[float] | None:
                 "model":      EMBED_MODEL,
                 "input":      text,
                 "keep_alive": EMBED_KEEP_ALIVE,
+                # num_gpu=0 zwingt bge-m3 auf die CPU. Grund: das Embed-
+                # Modell (~560M) + das 14B-Chat-Modell passen NICHT beide in
+                # die 12 GB der 4070 (qwen @ num_ctx=8192 fuellt die Karte
+                # allein bis zum Rand). Lag bge-m3 auf der GPU, warf Ollama
+                # bei jedem Embed-Call qwen raus und lud es danach 9 GB neu
+                # von der Platte -> 30-50 s bis zum ersten Wort. Auf der CPU
+                # frisst bge-m3 0 VRAM, qwen bleibt dauerhaft geladen. Der
+                # eine Embed-Durchlauf pro Frage kostet auf der CPU nur
+                # Bruchteile einer Sekunde (laeuft eh VOR der Generierung,
+                # klaut qwen also keine Zyklen).
+                "options":    {"num_gpu": 0},
             },
             timeout=30,
         )

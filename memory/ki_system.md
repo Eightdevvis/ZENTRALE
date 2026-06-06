@@ -87,6 +87,18 @@ fielen ~15% der Edges weg (22 Verb-Halluzinationen, 6 Datum-Subjekte,
 - API: `embed(text)`, `embed_query(text)`, `cosine_similarity(a, b)`,
   `top_k(query_vec, entries, k)`.
 - Kleiner LRU-Cache für wiederkehrende Texte.
+- **bge-m3 läuft auf der CPU** (`options={"num_gpu": 0}` im `/api/embed`-Call).
+  **Warum (2026-06-01):** qwen @ `num_ctx=8192` (~10,5 GB) füllt die 12-GB-
+  RTX-4070 schon allein bis zum Rand (lief `6%/94% CPU/GPU`). Lag bge-m3
+  zusätzlich auf der GPU, warf Ollama bei *jedem* Embed-Call qwen komplett
+  raus (Ollama entlädt ganze Modelle, statt zu quetschen) und lud es danach
+  9 GB neu von der Platte → **30–50 s bis zum ersten Wort**. Diagnose-Kette:
+  blankes Modell flott (340 ms) → TTS unschuldig → Retrieval billig (~100 ms)
+  → `ollama ps` zeigte qwen rausgeflogen, nur bge-m3 geladen. Embed ist ein
+  kleiner (560M) Job, **1× pro Frage, vor der Generierung** → CPU kostet nur
+  ~100–300 ms (warm) bzw. ~2 s (Kaltstart), tut nicht weh und lässt qwen
+  dauerhaft auf der GPU. iGPU als Plan B verworfen (Ollama-Multi-Backend-
+  Gefrickel, kaum schneller).
 
 ### Entfernt: Legacy LTM/STM (Phase D/E)
 
