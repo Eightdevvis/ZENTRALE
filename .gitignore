@@ -15,3 +15,7 @@ data/*.bak*
 # lokale Debug-Artefakte (Screenshots, Scratchpad) — gehoeren nicht ins Repo
 /*.png
 /notes.md
+
+# Benchmark-Ergebnisse (Output von scripts/bench_models.py) — Mess-Artefakt
+# mit Zeitstempel, kein Code. Das Skript selbst wird versioniert.
+scripts/bench_results_*.json
