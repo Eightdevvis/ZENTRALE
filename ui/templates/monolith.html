@@ -906,6 +906,36 @@
       // damit die Drain-Schleife sauber endet und speakDraining zurückgesetzt wird.
       if (currentSpeakResolve) { var r = currentSpeakResolve; currentSpeakResolve = null; r(); }
     }
+    // Deutsche Abkürzungen, an denen die TTS-Engine an den Punkten hängenbleibt,
+    // VOR dem Sprechen ausschreiben ("z.B." → "zum Beispiel"). `\.\s*` toleriert
+    // beide Schreibweisen ("z.B." wie "z. B."). Mehrteilige (i.d.R., u.v.m.)
+    // zuerst, damit sie nicht von kürzeren teilweise gefressen werden. Betrifft
+    // NUR den gesprochenen Text – im Minilog bleibt die Abkürzung stehen.
+    var TTS_ABBREV = [
+      [/\bi\.\s*d\.\s*R\./gi, 'in der Regel'],
+      [/\bu\.\s*v\.\s*m\./gi, 'und vieles mehr'],
+      [/\bz\.\s*B\./gi, 'zum Beispiel'],
+      [/\bd\.\s*h\./gi, 'das heißt'],
+      [/\bu\.\s*a\./gi, 'unter anderem'],
+      [/\bu\.\s*U\./gi, 'unter Umständen'],
+      [/\bv\.\s*a\./gi, 'vor allem'],
+      [/\bz\.\s*T\./gi, 'zum Teil'],
+      [/\bo\.\s*ä\./gi, 'oder ähnliches'],
+      [/\busw\./gi, 'und so weiter'],
+      [/\bbzw\./gi, 'beziehungsweise'],
+      [/\bggf\./gi, 'gegebenenfalls'],
+      [/\bevtl\./gi, 'eventuell'],
+      [/\bbspw\./gi, 'beispielsweise'],
+      [/\binkl\./gi, 'inklusive'],
+      [/\bca\./gi, 'circa'],
+      [/\bvgl\./gi, 'vergleiche'],
+      [/\betc\./gi, 'et cetera'],
+      [/\bNr\./g,  'Nummer']
+    ];
+    function expandAbbrev(s) {
+      for (var i = 0; i < TTS_ABBREV.length; i++) s = s.replace(TTS_ABBREV[i][0], TTS_ABBREV[i][1]);
+      return s;
+    }
     function enqueueSpeak(text) {
       // Effekt-Marker [[shimmer: wort]] → nur das Wort vorlesen (nicht die Syntax).
       var clean = (text || '').replace(/\[\[\w+:\s*([^\]]+)\]\]/g, '$1');
@@ -913,6 +943,7 @@
       // vorlesen – Bereiche: Pfeile (2190–21FF), Misc-Technical…Dingbats
       // (2300–27BF), Misc-Symbols-and-Arrows (2B00–2BFF).
       clean = clean.replace(/[←-⇿⌀-➿⬀-⯿]/g, '');
+      clean = expandAbbrev(clean);                  // Abkürzungen ausschreiben
       clean = clean.replace(/\s{2,}/g, ' ').trim();
       if (!clean || chatMuted) return;
       speakQueue.push(clean); drainSpeakQueue();
@@ -951,9 +982,18 @@
     // Satz-Ende = . ! ? … oder \n, GEFOLGT von Whitespace (verhindert dass
     // "3." in "3.14" als Satzende zählt). Rest bleibt im Puffer.
     function extractSentences(text) {
-      var re = /[^.!?…\n]*[.!?…\n]+\s+/g, sentences = [], lastIndex = 0, m;
-      while ((m = re.exec(text)) !== null) { sentences.push(m[0]); lastIndex = re.lastIndex; }
-      return [sentences, text.slice(lastIndex)];
+      var re = /[^.!?…\n]*[.!?…\n]+\s+/g, sentences = [], lastIndex = 0, m, buf = '';
+      while ((m = re.exec(text)) !== null) {
+        buf += m[0];
+        // Abkürzungs-Schutz: endet das Häppchen auf Einzelbuchstabe + Punkt
+        // (… z. / … B. / … d. …), ist das KEIN Satzende sondern eine Abkürzung
+        // (z. B., d. h., i. d. R.). Dann weitersammeln statt hier zu trennen –
+        // sonst kriegt die TTS "z." allein und kann es nicht ausschreiben.
+        if (/(^|[\s.])[A-Za-zÄÖÜäöü]\.\s+$/.test(buf)) { lastIndex = re.lastIndex; continue; }
+        sentences.push(buf); buf = ''; lastIndex = re.lastIndex;
+      }
+      // buf = angefangene, noch nicht beendete Abkürzungs-Kette → zurück in den Rest.
+      return [sentences, buf + text.slice(lastIndex)];
     }
 
     // ── Mic-Toggle (identisch zur alten UI; Text landet im Input, kein Auto-Send) ──

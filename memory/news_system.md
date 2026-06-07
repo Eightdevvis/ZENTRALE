@@ -128,6 +128,22 @@ Read-only + lokal → **nicht** in `PERMISSION_REQUIRED_TOOLS`. Dispatch →
   **nichts** als gesehen. Ist der Store für das Fenster leer (ZENTRALE war
   offline) → ehrlicher Hinweis statt Erfindung (Offline-Aufholmodus = nächster Baustein).
 
+## KI muss WISSEN, dass sie das Tool hat (sonst Konfabulation)
+
+Live-Test 2026-06-07: auf „hast du news für mich" rief das 9b `lies_news`
+**nicht** — es fabulierte ein plausibles News-Update aus dem (veralteten)
+Trainingswissen. Ursache: das Modell greift kein Tool, von dem es nicht weiß
+dass es das braucht. Fix an zwei Hebeln:
+1. **Graph-Capability** „dir die aktuellen Nachrichten und die Weltlage holen"
+   (`graph._SEED_CAPABILITIES` + `migrate_internet_access`-`new_caps`) → die KI
+   weiß jetzt, dass sie die Fähigkeit hat.
+2. **Anti-Konfabulations-Regel** (`_CAPABILITIES_PROMPT` Regel 8): aktuelles
+   Weltgeschehen kennt sie NICHT aus sich selbst → für News/Weltlage/Politik
+   IMMER `lies_news` (tage=7 für Wochenrückblick), nie aus dem Gedächtnis erfinden.
+Greift erst nach **Restart** (Migration läuft beim Boot, Prompt lädt beim Boot).
+Zuverlässigkeit ungemessen — bei weiterem Tool-Ignorieren eskalieren (stärkere
+Regel / Few-Shot), nicht in Python templaten ([[feedback_python_model_labor]]).
+
 ## Env-Variablen
 
 | Var                  | Default | Wirkung                        |

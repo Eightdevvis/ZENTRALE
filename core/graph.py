@@ -721,6 +721,11 @@ _SEED_CAPABILITIES = [
     # migriert, nutzt graph.migrate_internet_access().
     "im Internet suchen",
     "Webseiten abrufen",
+    # Persönliche Tagesschau (seit 2026-06-07): die KI liest das im Hintergrund
+    # gebaute Weltpolitik-Briefing via Tool lies_news (siehe core/news.py).
+    # Ohne diese Capability greift das 9b bei News-Fragen nicht zum Tool,
+    # sondern fabuliert News aus dem (veralteten) Trainingswissen.
+    "dir die aktuellen Nachrichten und die Weltlage holen",
 ]
 
 _SEED_LIMITS = [
@@ -817,7 +822,10 @@ def migrate_internet_access():
     persönlichen Konzepten. Idempotent: mehrfaches Aufrufen ist harmlos.
     Gibt ein kleines Report-Dict zurück (entfernt/hinzugefügt) für Logging.
     """
-    new_caps = ["im Internet suchen", "Webseiten abrufen"]
+    # Nachzuziehende Fähigkeiten: Internet-Pipe (2026-06-07) + News-Tagesschau
+    # (2026-06-07, Tool lies_news). Fehlende werden idempotent ergänzt.
+    new_caps = ["im Internet suchen", "Webseiten abrufen",
+                "dir die aktuellen Nachrichten und die Weltlage holen"]
     removed, added = [], []
     with _lock:
         data = _load_raw(for_write=True)
