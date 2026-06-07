@@ -11,11 +11,11 @@ venv/bin/pip install -r requirements.txt
 
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
-ollama pull qwen2.5:14b
+ollama pull qwen3.5:9b
 ```
 
 Standardmäßig erwartet ZENTRALE Ollama unter `http://localhost:11434`
-und greift auf das Modell `qwen2.5:14b` zu (siehe `starten.md` für
+und greift auf das Modell `qwen3.5:9b` zu (siehe `starten.md` für
 Env-Override `OLLAMA_MODEL`). Andere Tool-Use-fähige Ollama-Modelle
 funktionieren ohne Code-Änderung, einfach pullen und Env-Var setzen.
 

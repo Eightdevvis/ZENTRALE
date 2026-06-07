@@ -61,15 +61,19 @@ def _is_internet(url: str) -> bool:
         return True
 
 
-def get(url: str, timeout: int = 10) -> bytes:
+def get(url: str, timeout: int = 10, headers: dict = None) -> bytes:
     """
     Macht einen HTTP GET-Request und gibt den Response-Body als bytes zurück.
     Logt Anfrage + Antwort ins Terminal.
     Wirft bei Fehler eine Exception (mit Log-Eintrag).
+
+    headers: optionale Request-Header. Gebraucht z.B. für die Web-Suche -
+    DuckDuckGo (und viele Seiten) weisen den urllib-Default-User-Agent ab
+    oder liefern leere Ergebnisse; web.py schickt deshalb einen Browser-UA.
     """
     _log_out("GET", url)
 
-    req = urllib.request.Request(url, method="GET")
+    req = urllib.request.Request(url, method="GET", headers=headers or {})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = resp.read()

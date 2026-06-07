@@ -319,6 +319,15 @@ def api_chat():
             if isinstance(token, dict) and 'ascii' in token:
                 yield f"data: {json.dumps({'ascii': token['ascii'], 'name': token.get('name')})}\n\n"
                 continue
+            # permission-Event: ein bestätigungspflichtiges Tool wurde abgefangen
+            # und chat_stream blockiert jetzt (state.wait_permission). Frage als
+            # SSE 'permission'-Event raus - das Frontend tauscht daraufhin die
+            # Konsolen-Eingabe gegen JA/NEIN-Knöpfe und POSTet die Wahl an
+            # /api/permission_answer, was den Stream hier wieder entsperrt. Kein
+            # Antworttext → nicht in collected (nicht in die History-Schlussantwort).
+            if isinstance(token, dict) and 'permission' in token:
+                yield f"data: {json.dumps({'permission': token['permission']})}\n\n"
+                continue
             collected.append(token)
             # SSE-Format: "data: " + JSON + zwei Newlines
             # JSON.dumps schützt vor Sonderzeichen (Newlines im Token, etc.)
@@ -352,6 +361,31 @@ def api_chat_history():
 def api_chat_clear():
     """Löscht die gesamte Chat-History (per /clear Befehl im Chat-Input)."""
     state.clear_chat_history()
+    return jsonify({"ok": True})
+
+
+@app.route('/api/permission_answer', methods=['POST'])
+def api_permission_answer():
+    """
+    Nimmt die Ja/Nein-Antwort auf eine Erlaubnis-Rückfrage (Tool-Gate) entgegen.
+
+    Die KI blockiert gerade in einem offenen /api/chat-Stream (in einem
+    anderen Thread) auf state.wait_permission(). Dieser Request kommt vom
+    Klick auf die JA/NEIN-Knöpfe, liefert die Wahl und entsperrt damit den
+    wartenden Generator - der streamt dann den Rest der Antwort auf der
+    bereits offenen SSE-Verbindung weiter. Funktioniert nur weil Flask
+    multi-threaded läuft (siehe app.run(threaded=True) ganz unten).
+    """
+    body    = request.get_json(silent=True) or {}
+    answer  = (body.get('answer') or '').strip()
+    # Gegen die aktuell angebotenen Knopf-Labels validieren (case-insensitiv,
+    # aber das kanonische Label aus state durchreichen - so kommt z.B. "ja"
+    # immer als "ja" beim Gate-Check an, egal wie das Frontend es schickt).
+    options = state.get_permission_options()
+    match   = next((o for o in options if o.lower() == answer.lower()), None)
+    if match is None:
+        return jsonify({"error": f"answer must be one of {options}"}), 400
+    state.answer_permission(match)
     return jsonify({"ok": True})
 
 
@@ -457,5 +491,11 @@ def start_ui(host='0.0.0.0', port=5000):
     host='0.0.0.0' = auf allen Netzwerk-Interfaces lauschen (auch Pi → Browser im LAN)
     debug=False     = kein Debug-Modus (würde Threading-Probleme machen)
     use_reloader=False = kein Auto-Reload (läuft ja als Thread, kein eigener Prozess)
+    threaded=True   = jeder Request einen eigenen Worker-Thread. Ist zwar Flasks
+                      Default, aber wir setzen es EXPLIZIT, weil die Erlaubnis-
+                      Rückfrage zwingend darauf baut: ein /api/chat-Stream
+                      blockiert in state.wait_permission(), während parallel der
+                      POST /api/permission_answer durchkommen muss, um ihn zu
+                      wecken. Ohne Threading → Deadlock.
     """
-    app.run(host=host, port=port, debug=False, use_reloader=False)
+    app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)

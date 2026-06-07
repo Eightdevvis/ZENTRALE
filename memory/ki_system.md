@@ -142,6 +142,11 @@ fähigen Ollama-Modell; Default `qwen3.5:9b` (Env `OLLAMA_MODEL`).
 |---------------|-----------------------------------------------------|
 | `read_file`   | Datei aus der Whitelist lesen                       |
 | `list_files`  | Verfügbare lesbare Dateien auflisten                |
+| `read_calendar` / `add_calendar_*` / `delete_calendar_entry` | Kalender lesen/schreiben/löschen (s. kalender_system.md) |
+| `web_suche`   | Im Internet suchen (gegatet, s. „Internet-Pipe")    |
+| `hole_url`    | Webseite laden + Text holen (gegatet)               |
+| `antwort`     | Finale Antwort über Tool-Kanal (Framing-Effekt)     |
+| `frage_knopf` | Sasha eine Frage mit Knöpfen stellen (s. unten)     |
 
 Tool-Calls werden streng ans Dashboard-Terminal geloggt
 (`AI → TOOL read_file(...)` / `AI ← TOOL read_file → ok`). Sichtbar
@@ -190,10 +195,114 @@ Marker wird getippt, nicht angekündigt).
   happy, flip, …) sind als englische Alias-Tags in der Bibliothek
   hinterlegt, lösen also weiter auf.
 
+### Internet-Pipe – `web_suche` + `hole_url` (seit 2026-06-07)
+
+ZENTRALE war bis hierhin vollständig offline (außer lokalem Ollama). Diese
+zwei Tools sind das einzige, was bewusst nach draußen telefoniert:
+
+- **`web_suche(query)`** – sucht im Internet, liefert die Top-Treffer als
+  Liste (Titel, URL, Snippet). Für aktuelles Wissen, News, Wetter, Fakten,
+  die nicht im Graphen/in Dateien stehen.
+- **`hole_url(url)`** – lädt eine konkrete Seite und gibt den Textinhalt
+  zurück (HTML→Text, gekürzt auf ~4000 Zeichen, damit `num_ctx=8192` nicht
+  überläuft). Typischer Ablauf: erst `web_suche`, dann `hole_url` auf einen
+  Treffer.
+
+**Implementation:** [`core/web.py`](../core/web.py). Die eigentliche Such-
+Quelle steckt bewusst in **einer** Funktion (`_ddg_search`): heute
+**DuckDuckGo keyless** (HTML-Endpoint gescraped, kein API-Key/Account –
+passt zur Offline/Kontroll-Linie). Umstieg auf SearXNG (self-hosted) oder
+Brave-API später = nur `_ddg_search` tauschen, `suche()`/`hole()` und `ai.py`
+bleiben unangetastet. Scraping ist fragil: ändert DDG sein HTML, müssen die
+Regexe nachgezogen werden. **Ad-Filter:** DDG mischt bezahlte Anzeigen unter
+die Treffer (gleiche CSS-Klasse, href auf `duckduckgo.com/y.js?ad_provider=…`)
+– die werden rausgefiltert, sonst kriegt die KI Werbung als „Fakt".
+
+**Gating:** beide Tools stehen in `PERMISSION_REQUIRED_TOOLS` → **jeder**
+Call löst den JA/NEIN-Knopf-Dialog aus (Sasha sieht die Suchanfrage / die
+URL, bevor das Paket rausgeht). Konsequent zur Transparenz-Philosophie.
+Frage-Vorlagen in `_permission_question` (z.B. »Soll ich im Internet nach
+"…" suchen?«).
+
+**Transparenz:** Aller HTTP-Verkehr läuft durch `core/net.py`. Da DDG und
+beliebige URLs echte Internet-Ziele sind (kein localhost/LAN), leuchtet jeder
+Call **automatisch** im orangen Internet-Panel auf – kein Sonder-Logging.
+(Wäre die Quelle ein localhost-SearXNG, würde die Tripwire den Upstream-
+Verkehr NICHT sehen – dann müsste die Suchanfrage explizit ins Panel geloggt
+werden. Bei DDG keyless ist das nicht nötig.)
+
+**KI-Selbstbild:** Die Internet-Limits im Identity-Graphen (»auf das Internet
+zugreifen«, »Web-Suche durchführen«, »Echtzeit-News/Wetter abrufen«) wurden
+zu Fähigkeiten (»im Internet suchen«, »Webseiten abrufen«). Code:
+`graph._SEED_CAPABILITIES`/`_SEED_LIMITS` (frische Installs) +
+`graph.migrate_internet_access()` (zieht bereits geseedete Graphen nach,
+idempotent, hängt in `ai._ensure_seed_once` → self-healing bei jedem Boot).
+
+### Knopf-Dialog: Auto-Gate + `frage_knopf`
+
+Das Dashboard kann die Konsolen-Eingabe gegen **2–4 Knöpfe** tauschen
+(navigierbar per Pfeiltasten + Enter, Kiosk ohne Maus). Zwei Auslöser, ein
+geteilter Mechanismus (blockierender `state.wait_permission`):
+
+**(A) Auto-Gate für sensible Tools** — bestätigungspflichtige Tools
+(`PERMISSION_REQUIRED_TOOLS` in `core/ai.py`: die Kalender-Schreiber
+`add_calendar_entry`, `add_calendar_routine`, `add_calendar_pause`,
+`delete_calendar_entry` **plus** die Internet-Pipe `web_suche`, `hole_url`) fängt das Backend **vor der
+Ausführung** ab und zeigt **JA / NEIN**. Nur bei „ja" läuft das Tool, bei
+„nein"/Timeout wird es übersprungen. Lokales Lesen/Auskunft (`read_calendar`,
+`read_file`, …) bleibt ungated; alles was Daten schreibt oder das LAN verlässt
+ist gegatet.
+
+> **Nicht modellgetrieben – Absicht.** Die KI ruft ihr Schreib-Tool ganz
+> normal; das Gate kommt automatisch davor. Frühere Idee war ein Tool
+> `frage_erlaubnis`, das die KI von sich aus ruft – verworfen, weil ein 9b
+> das **nicht zuverlässig** vor jedem Eingriff täte ([[feedback_permission_gate_backend]],
+> [[project_history_vergiftung]]). Ein hart verdrahtetes Gate auf der Tool-
+> Liste ist robust statt vom Modellverhalten abhängig.
+
+**(B) `frage_knopf` – KI-initiiert** — braucht die KI mitten in einer Aufgabe
+eine knappe diskrete Entscheidung (statt auf freien Text zu warten), ruft sie
+**selbst** `frage_knopf(frage, optionen=[…])`. Ohne `optionen` = Ja/Nein, sonst
+2–4 eigene Labels (z.B. `["Deutsch","Englisch"]`). Das gewählte Label kommt als
+`tool`-Result zurück, die KI macht im selben Zug weiter. Anders als das Gate ist
+das bewusst modellgetrieben – es ist kein Sicherheits-Riegel, sondern ein
+Rückfrage-Werkzeug, das die KI gezielt einsetzt.
+
+**Mechanik – blockierend, nahtlos (ein Zug):**
+
+1. **Gate (A):** Im Tool-Loop (`chat_stream`) greift VOR `active_exec` der
+   Check `fn_name in PERMISSION_REQUIRED_TOOLS`; `_permission_question(name,
+   args)` baut die Frage („Soll ich »Zahnarzt« am … eintragen?"), Optionen =
+   Default Ja/Nein. **`frage_knopf` (B):** eigener Branch baut Frage + Optionen
+   aus den Call-Args (sanitisiert: ≥2, max 4). Beide rufen
+   `state.request_permission(options, timeout_default)`, yielden ein
+   **permission-Event** (`{"permission": {"frage", "optionen"}}`) und
+   **blockieren** in `state.wait_permission()`.
+2. `app.py` macht ein SSE `permission` daraus; das Frontend zeigt die Frage als
+   KI-Zeile (+ TTS) und baut die Knopf-Leiste dynamisch aus `optionen` (fehlt →
+   JA/NEIN). Der SSE-Reader läuft **nicht** zu Ende – die Verbindung bleibt offen.
+3. Klick → `POST /api/permission_answer {answer}` (eigener Thread), gegen die
+   angebotenen Labels validiert (case-insensitiv, kanonisches Label zurück) →
+   `state.answer_permission()` setzt das `threading.Event` → der blockierte
+   `chat_stream` wacht auf. Gate: bei „ja" durchfallen zur Ausführung, sonst
+   abschlägiger `tool`-Result. `frage_knopf`: gewähltes Label als `tool`-Result.
+   Beides im **selben Zug**.
+
+Das funktioniert nur, weil Flask **multi-threaded** läuft
+(`app.run(threaded=True)`, explizit) – sonst käme der Antwort-Request am
+blockierten Stream nicht vorbei → Deadlock. `wait_permission` (180 s Timeout)
+gibt den bei `request_permission` gesetzten `timeout_default` zurück: beim Gate
+**„nein"** (sicher – keine Antwort erlaubt nie eine Schreib-Aktion), bei
+`frage_knopf` ein neutrales `(keine Antwort)`. Log: `AI → ERLAUBNIS?`/`FRAGE …`
+bzw. `AI ← ERLAUBNIS:`/`WAHL: …`. Frontend-Details (perm-bar, N-Knopf-Nav):
+[dashboard.md](dashboard.md). Tutor-Modus: beides aus (fremdes Tool-Set). Neues
+Tool gaten = Name in `PERMISSION_REQUIRED_TOOLS` + ggf. Vorlage in
+`_permission_question`.
+
 `save_memory` ist mit dem Legacy-Pfad rausgeflogen – der Graph-Extraktor
 läuft eh nach jedem Turn automatisch. Kalender-Tools (`read_calendar`,
 `add_entry`, `add_routine`) kommen mit dem Kalender-System (siehe
-[calendar_system.md](calendar_system.md)).
+[kalender_system.md](kalender_system.md)).
 
 **Sicherheitsnetz:** `chat_stream` hat ein hartes `max_rounds = 5` für
 die Tool-Loop – verhindert Endlosschleifen bei kaputten Tool-Calls.
@@ -296,7 +405,7 @@ TTS ←  62 KB WAV
 
 Plus die Tool-Use-Zeilen (`AI → TOOL ...` / `AI ← TOOL ...`).
 
-### Zwei stdout-Channels: Voll-Stream vs. Internet-Tripwire
+### Zwei stdout-Channels: Voll-Stream vs. Internet-Monitor
 
 Der Footer im Dashboard ist in zwei Terminals gesplittet:
 
@@ -313,9 +422,13 @@ Der Footer im Dashboard ist in zwei Terminals gesplittet:
 - IPv6-Loopback / -Link-local / -Private → False
 - Alles andere (Public-IPs, normale Hostnames) → True
 
-Da ZENTRALE als vollständig offline gedacht ist, soll das rechte Panel
-**leer** bleiben. Sobald da was reinläuft, hat tatsächlich ein Paket
-das LAN verlassen – sichtbarer Alarm statt versteckt im großen Stream.
+**Philosophie-Update 2026-06-07:** Das rechte Panel sollte ursprünglich
+**leer** bleiben (Alarm-der-nie-feuern-darf), weil ZENTRALE vollständig
+offline war. Seit der Internet-Pipe (`web_suche`/`hole_url`) ist es bewusst
+ein **Transparenz-Monitor**: es zeigt **genau, was rein- und rausgeht**.
+Jeder gegatete Such-/Lade-Call leuchtet hier auf – das ist jetzt der
+erwartete, gewollte Beleg „Paket hat das LAN verlassen", nicht mehr ein
+Alarm. (Nicht-gegateter Internet-Traffic hier wäre weiterhin verdächtig.)
 Implementation: `core/net.py` (`_is_internet`, plus Spiegel-Calls in
 `_log_out/_log_in/_log_err`), `core/state.py` (`_internet_logs`,
 `push_internet_log`), `ui/templates/index.html` (`.terminal-row` +
@@ -328,9 +441,8 @@ Tests: `scripts/test_net_internet.py` (48 Cases, untracked).
 - KI-Chat mit qwen3.5:9b (oder via `OLLAMA_MODEL`), tokenweise gestreamt.
 - KI hat Zugriff auf Whitelist-Dateien + Graph-Memory.
 - Slash-Commands im Chat:
-  - `/memory` – Memory-Stats anzeigen (Graph + LTM)
-  - `/forget N` – Legacy: LTM-Eintrag Nr. N löschen
   - `/clear` – Chat-History leeren
+  - (`/memory` und `/forget N` sind mit dem Legacy-LTM-Pfad entfallen.)
 - ESC – zurück zum Haupt-Dashboard.
 
 ## Voice-Pipeline (Core, sprachneutral)

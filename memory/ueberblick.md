@@ -5,20 +5,28 @@
 Event-getriebene Zentrale für einen Wand-Monitor auf Raspberry Pi
 (Entwicklung läuft parallel auf einem Linux-PC). Sensoren und Zeitgeber
 erzeugen Events, der Core verarbeitet sie, das Web-Dashboard zeigt alles
-an – **vollständig offline**.
+an – **offline by default**.
 
-Die KI ist lokal (Ollama + qwen2.5:14b). Kein Cloud-Zugriff, keine Daten
-verlassen das Heimnetz. Die KI hat Lese-Zugriff auf eine fest definierte
-Whitelist von Projektdateien (siehe `datei_zugriffe.md`) und eine
-persistente Memory über Sessions hinweg.
+Die KI ist lokal (Ollama + qwen3.5:9b). Kein Cloud-Modell, keine Telemetrie.
+**Eine Ausnahme seit 2026-06-07:** die KI hat eine **gegatete Internet-Pipe**
+(Tools `web_suche`/`hole_url`, DuckDuckGo keyless) – jeder Call nach draußen
+muss von Sasha per Knopf bestätigt werden und leuchtet im Internet-Monitor
+des Dashboards auf. Ohne diese bewusste Freigabe verlässt nichts das Heimnetz.
+Details: `ki_system.md` → „Internet-Pipe". Die KI hat zusätzlich Lese-Zugriff
+auf eine fest definierte Whitelist von Projektdateien (siehe
+`datei_zugriffe.md`) und eine persistente Memory über Sessions hinweg.
 
-## Aktueller Stand (2026-05)
+## Aktueller Stand (2026-06)
 
 | Komponente                                    | Stand                              |
 |-----------------------------------------------|------------------------------------|
 | Dashboard, Data Collection, Chat              | fertig + getestet                  |
-| KI-Memory, Tool-Use                           | fertig + getestet                  |
-| Mandarin-Tutor                                | implementiert, Audio noch nicht voll getestet |
+| KI-Memory (Konzept-Graph), Tool-Use           | fertig + getestet                  |
+| Monolith-Dashboard (`/monolith`)              | in Integration, parallel zu `/`    |
+| Visuelle Stimme (Bild-Marker `[[bild:]]`)     | live (siehe `ki_system.md`)        |
+| Gegatete Internet-Pipe (`web_suche`/`hole_url`)| live, JA/NEIN-Knopf-Gate          |
+| Kalender + Konflikt-Alarm                     | live                               |
+| Mandarin-Tutor                                | pausiert (siehe `tutor_system.md`) |
 | Echter PIR-Sensor + GPIO                      | nicht angebunden – `sensors.py` simuliert via Tastatur |
 
 ## Geplante Features (Roadmap)

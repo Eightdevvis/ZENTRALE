@@ -38,7 +38,7 @@ gedacht – das war für die AI-Last zu schwer.
 
 | Komponente              | Host | Begründung                                |
 |-------------------------|------|-------------------------------------------|
-| Ollama (qwen2.5:14b)    | PC   | ~9 GB Modell, läuft auf RTX 4070-GPU.     |
+| Ollama (qwen3.5:9b)     | PC   | ~8,8 GB Modell, läuft auf RTX 4070-GPU.   |
 | Whisper STT             | PC   | ~500 MB Modell + CPU-intensiv.            |
 | TTS (sherpa-onnx)       | PC   | ~120 MB Modell + CPU-intensiv.            |
 | Flask + Event-Loop      | PC   | Damit AI-Calls direkt lokal sind (kein   |

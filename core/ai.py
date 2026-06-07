@@ -21,7 +21,7 @@
 #
 # ── Konfiguration ────────────────────────────────────────────────────
 #   OLLAMA_URL   – default: http://localhost:11434
-#   OLLAMA_MODEL – default: qwen2.5:14b
+#   OLLAMA_MODEL – default: qwen3.5:9b
 
 import os
 import re
@@ -36,6 +36,7 @@ import graph         # Phase G: Konzept-Graph Memory (assoziativ, primary)
 import consolidation # Phase G: Graph-Extraktor
 import kalender              # Kalender-Layer (Termine, Routinen, erlebt)
 import ascii_lib             # ASCII-Bibliothek (KI "spricht" visuell, siehe zeige_ascii)
+import web                   # Internet-Pipe: Web-Suche + Webseite holen (gegatet)
 
 OLLAMA_URL   = os.environ.get("OLLAMA_URL",   "http://localhost:11434")
 # Default-Modell seit 2026-06-06: qwen3.5:9b. Reasoning-Bench (scripts/
@@ -59,7 +60,7 @@ def _think_opts() -> dict:
     return {"think": False} if SUPPORTS_THINK else {}
 
 # Ollama unloadet ein Modell nach Default 5 Min Idle - dann zahlt der
-# nächste Turn den Cold-Load (qwen2.5:14b sind ~9 GB, das sind ein paar
+# nächste Turn den Cold-Load (qwen3.5:9b sind ~8,8 GB, das sind ein paar
 # Sekunden Reload je nach SSD/RAM). Wir halten das Hauptmodell länger
 # warm, damit Chat-Antworten auch nach einer Kaffeepause direkt losgehen.
 # Per Env `OLLAMA_KEEP_ALIVE` überschreibbar (z.B. "-1" = ewig, "10m",
@@ -295,8 +296,19 @@ TOOLS = [
                 "Reise? stimmt der Termin?), und wenn beides bestätigt ist, schlag "
                 "deutlich Alarm (klare Warnung im Text PLUS Bild-Marker "
                 "[[bild: alarm]]) - das sind Dinge, die der User leicht "
-                "vergisst. Rechne diese Hinweise nie selbst aus, lies nur ab was "
-                "dasteht."
+                "vergisst. '⚠ ABSAGEN' = eine regelmäßige Pflicht-Absage (z.B. "
+                "Geige bei der Lehrerin) fällt in eine Reise - die muss aktiv "
+                "abgesagt werden; ebenfalls erst rückversichern, dann Alarm mit "
+                "[[bild: alarm]]. Nach JEDEM Absage-Alarm (ABSAGEN, oder ein "
+                "Einzeltermin den Sasha absagen müsste) hakst du per frage_knopf "
+                "nach - eskalierend, ein Knopf nach dem anderen: zuerst Frage "
+                "'Hast du <die Sache, z.B. die Geigenstunde> schon abgesagt?' "
+                "(ohne optionen = ja/nein). Klickt sie 'nein', sofort der nächste: "
+                "'Wirst du es jetzt absagen?' (ja/nein). Klickt sie wieder 'nein', "
+                "ein letzter mit Frage 'Katastrophe.' und optionen ['ja','ja'] "
+                "(beide gleich, kleiner Schabernack). Sobald irgendwo 'ja' kommt: "
+                "kurz quittieren und Ruhe geben. Rechne diese Hinweise nie selbst "
+                "aus, lies nur ab was dasteht."
             ),
             "parameters": {
                 "type": "object",
@@ -409,6 +421,74 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "add_calendar_pause",
+            "description": (
+                "Trägt eine Pause/einen Ausfall für eine regelmäßige Aktivität "
+                "ein - in dem Zeitraum findet sie NICHT statt (Ferien, Feiertag, "
+                "Lehrerin im Urlaub). Nutze dies, wenn der User sowas sagt: "
+                "'Geige fällt in den Sommerferien aus, 1.-15. August', 'nächste "
+                "Woche keine Fahrschule'. 'label' muss zum Routinen-Titel im "
+                "Kalender passen (z.B. 'Geigenstunde'). Datum: YYYY-MM-DD."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "label": {
+                        "type":        "string",
+                        "description": "Titel der Routine, die ausfällt (wie im Kalender, z.B. 'Geigenstunde')",
+                    },
+                    "von": {
+                        "type":        "string",
+                        "description": "Start der Pause, YYYY-MM-DD (inkl.)",
+                    },
+                    "bis": {
+                        "type":        "string",
+                        "description": "Ende der Pause, YYYY-MM-DD (inkl.)",
+                    },
+                    "grund": {
+                        "type":        "string",
+                        "description": "Optional kurzer Grund, z.B. 'Sommerferien', 'Feiertag'",
+                    },
+                },
+                "required": ["label", "von", "bis"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_calendar_entry",
+            "description": (
+                "Löscht einen Einmal-Termin aus dem Kalender. Nutze dies wenn "
+                "der User einen Eintrag entfernt haben will ('lösch den Zahnarzt "
+                "am Montag', 'der Fake-Termin morgen kann weg'). Wenn du Tag oder "
+                "genaues Label nicht kennst, vorher read_calendar nutzen. Datum: "
+                "YYYY-MM-DD. Wirkt nur auf Einmal-Termine, nicht auf Routinen "
+                "oder Pausen."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "day": {
+                        "type":        "string",
+                        "description": "YYYY-MM-DD des zu löschenden Termins",
+                    },
+                    "label": {
+                        "type":        "string",
+                        "description": "Titel des Termins (wie im Kalender; Teiltreffer reicht)",
+                    },
+                    "layer": {
+                        "type":        "string",
+                        "description": "Optional Layer-Name; weglassen = in allen Layern suchen",
+                    },
+                },
+                "required": ["day", "label"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "read_file",
             "description": (
                 "Liest den Inhalt einer Datei aus dem ZENTRALE-Projekt. "
@@ -438,6 +518,61 @@ TOOLS = [
             },
         },
     },
+    # ── Internet-Pipe (gegatet) ───────────────────────────────────────
+    # Zwei Tools, die bewusst nach draußen telefonieren (siehe core/web.py).
+    # Beide stehen in PERMISSION_REQUIRED_TOOLS -> vor JEDEM Call kommt ein
+    # JA/NEIN-Dialog im Dashboard (Sasha sieht, wonach gesucht/was geladen
+    # wird, bevor es rausgeht). Der Traffic leuchtet zusätzlich automatisch
+    # im orangen Internet-Panel auf (net.py). Such-Quelle heute: DuckDuckGo
+    # keyless, in web._ddg_search gekapselt und später tauschbar.
+    {
+        "type": "function",
+        "function": {
+            "name": "web_suche",
+            "description": (
+                "Sucht im Internet und gibt die Top-Treffer als Liste zurück "
+                "(Titel, URL, kurzer Snippet). Nutze dies für aktuelles Wissen, "
+                "Fakten, Nachrichten, Wetter oder alles, was NICHT in deinem "
+                "Konzept-Graph (Gedächtnis) oder den Projekt-Dateien steht. Du "
+                "bekommst nur Vorschau-Snippets - brauchst du den vollen Text "
+                "einer Seite, ruf danach hole_url mit der passenden URL auf. "
+                "Jede Suche muss Sasha bestätigen (Knopf-Dialog), also sparsam "
+                "und gezielt einsetzen."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type":        "string",
+                        "description": "Die Suchanfrage in Worten, z.B. 'Wetter Berlin morgen'.",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "hole_url",
+            "description": (
+                "Lädt eine konkrete Webseite und gibt ihren Textinhalt zurück "
+                "(gekürzt). Nutze dies, wenn du eine URL hast - aus einer "
+                "web_suche oder vom User genannt - und den echten Inhalt brauchst, "
+                "nicht nur den Suchschnipsel. Jeder Abruf muss Sasha bestätigen."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type":        "string",
+                        "description": "Die vollständige URL, z.B. https://de.wikipedia.org/wiki/...",
+                    },
+                },
+                "required": ["url"],
+            },
+        },
+    },
     # antwort-Tool: die finale Antwort an den User laeuft (auch) ueber diesen
     # Tool-Kanal statt nur als Freitext. Im Kalender-Bench hob das die
     # Korrektheit von qwen3.5:9b (+~6 pp, gestapelt mit Sampling auf 82 %).
@@ -463,6 +598,45 @@ TOOLS = [
                              "description": "Die fertige Antwort für den User."},
                 },
                 "required": ["text"],
+            },
+        },
+    },
+    # frage_knopf-Tool: die KI löst SELBST einen Knopf-Dialog aus, wenn sie
+    # mitten in einer Aufgabe eine knappe, diskrete Entscheidung von Sasha
+    # braucht (statt auf eine freie Texteingabe zu warten). Teilt sich die
+    # Button-Leiste + den blockierenden state.wait_permission-Mechanismus mit
+    # dem automatischen Schreib-Tool-Gate - nur der Auslöser ist hier das
+    # Modell selbst, nicht ein abgefangener Schreib-Call. Ohne 'optionen' =
+    # Ja/Nein. chat_stream behandelt den Call gesondert (siehe dort).
+    {
+        "type": "function",
+        "function": {
+            "name": "frage_knopf",
+            "description": (
+                "Stellt Sasha eine Frage mit festen Antwort-Knöpfen, wenn du "
+                "mitten in einer Aufgabe eine knappe, diskrete Entscheidung von "
+                "ihr brauchst - statt eine freie Texteingabe abzuwarten. Im "
+                "Dashboard erscheinen statt der Tastatur die Knöpfe, die Sasha "
+                "mit Pfeiltasten und Enter wählt; du bekommst das gewählte Label "
+                "zurück und machst dann im selben Zug weiter. Ohne 'optionen' "
+                "sind es Ja/Nein. Sparsam einsetzen und nur für echte "
+                "Verzweigungen - nicht aus Höflichkeit rückfragen."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "frage": {
+                        "type":        "string",
+                        "description": "Die Frage an Sasha, vollständig ausformuliert.",
+                    },
+                    "optionen": {
+                        "type":        "array",
+                        "items":       {"type": "string"},
+                        "description": ("Optional 2-4 kurze Knopf-Labels, z.B. "
+                                        "['Deutsch','Englisch']. Weglassen = Ja/Nein."),
+                    },
+                },
+                "required": ["frage"],
             },
         },
     },
@@ -554,6 +728,65 @@ def _answer_with_images(answer: str, user_query: str):
     if clean:
         yield clean
     _async_save_turn(user_query, clean)
+
+
+# ── Bestätigungspflichtige Tools (Erlaubnis-Gate) ──────────────────────
+# Tools deren Call das Backend VOR der Ausführung abfängt: es zeigt Sasha
+# einen JA/NEIN-Dialog (Knöpfe im Dashboard) und führt das Tool nur bei
+# „ja" aus. Die KI ruft ihr Tool ganz normal - das Gate kommt automatisch
+# davor, ohne dass das Modell etwas davon wissen oder selbst nachfragen
+# muss (bewusst NICHT modellgetrieben: ein 9b ruft sowas nicht zuverlässig
+# von selbst). Aktuell die Kalender-Schreiber - sie verändern persistente
+# Daten. Lesen/Auskunft (read_calendar, read_file, …) bleibt ungated.
+# Die eigentliche Abfang-Logik sitzt in chat_stream (siehe dort).
+PERMISSION_REQUIRED_TOOLS = {
+    "add_calendar_entry",
+    "add_calendar_routine",
+    "add_calendar_pause",
+    "delete_calendar_entry",   # Löschen ist destruktiv → immer bestätigen
+    # Internet-Pipe: jeder Call nach draußen wird bestätigt. ZENTRALE ist
+    # sonst offline - was das LAN verlässt, gibt Sasha bewusst frei.
+    "web_suche",
+    "hole_url",
+}
+
+
+def _permission_question(name: str, args: dict) -> str:
+    """
+    Baut die menschenlesbare Ja/Nein-Frage für ein gegatetes Tool aus den
+    Call-Argumenten (wird Sasha im Dialog gezeigt + vorgelesen). Pro Tool
+    eine eigene Vorlage; generischer Fallback falls mal ein Tool ohne
+    Vorlage in PERMISSION_REQUIRED_TOOLS landet.
+    """
+    label = (args.get("label") or "").strip() or "diesen Eintrag"
+    if name == "add_calendar_entry":
+        wann = " ".join(p for p in (
+            (args.get("day") or "").strip(),
+            (args.get("time") or "").strip(),
+        ) if p)
+        wann_txt = f' am {wann}' if wann else ''
+        return f'Soll ich "{label}"{wann_txt} eintragen?'
+    if name == "add_calendar_routine":
+        rrule = (args.get("rrule") or "").strip()
+        rrule_txt = f' ({rrule})' if rrule else ''
+        return f'Soll ich die Routine "{label}"{rrule_txt} eintragen?'
+    if name == "add_calendar_pause":
+        von = (args.get("von") or "").strip()
+        bis = (args.get("bis") or "").strip()
+        spanne = f' von {von} bis {bis}' if von and bis else ''
+        return f'Soll ich "{label}"{spanne} pausieren?'
+    if name == "delete_calendar_entry":
+        day = (args.get("day") or "").strip()
+        wann_txt = f' am {day}' if day else ''
+        return f'Soll ich "{label}"{wann_txt} wirklich löschen?'
+    if name == "web_suche":
+        q = (args.get("query") or "").strip()
+        return f'Soll ich im Internet nach "{q}" suchen?' if q else "Soll ich im Internet suchen?"
+    if name == "hole_url":
+        u = (args.get("url") or "").strip()
+        return f'Soll ich die Seite {u} aus dem Internet laden?' if u else "Soll ich eine Webseite laden?"
+    # Fallback für künftige Gate-Tools ohne eigene Vorlage
+    return f'Soll ich die Aktion "{name}" wirklich ausführen?'
 
 
 def _execute_tool(name: str, args: dict) -> str:
@@ -648,13 +881,35 @@ def _dispatch_tool(name: str, args: dict) -> str:
             time      = args.get("time"),
         )
         return "OK, Routine eingetragen." if ok else "[Fehler: Layer existiert nicht oder rrule ungültig]"
+    elif name == "add_calendar_pause":
+        ok = kalender.add_pause(
+            label = args.get("label", ""),
+            von   = args.get("von", ""),
+            bis   = args.get("bis", ""),
+            grund = args.get("grund"),
+        )
+        return "OK, Pause eingetragen." if ok else "[Fehler: ungültige Datumsangabe]"
+    elif name == "delete_calendar_entry":
+        day   = (args.get("day") or "").strip()
+        label = (args.get("label") or "").strip()
+        layer = (args.get("layer") or "").strip() or None
+        if not day or not label:
+            return "[Fehler: day und label sind nötig zum Löschen.]"
+        n = kalender.delete_entry(day, label, layer)
+        if n == 0:
+            return f"Kein Termin '{label}' am {day} gefunden - nichts gelöscht."
+        return f"{n} Termin(e) '{label}' am {day} gelöscht."
+    elif name == "web_suche":
+        return web.suche(args.get("query", ""))
+    elif name == "hole_url":
+        return web.hole(args.get("url", ""))
     else:
         return f"[Unbekanntes Tool: {name}]"
 
 
 def warmup():
     """
-    Zieht qwen2.5:14b (Chat-Modell) und bge-m3 (Embedding-Modell) in
+    Zieht das Chat-Modell (OLLAMA_MODEL, Default qwen3.5:9b) und bge-m3 (Embedding-Modell) in
     Ollamas RAM-Cache. Wird als Daemon-Thread beim App-Start gefeuert,
     damit der allererste User-Turn nicht den Cold-Load der ~9 GB qwen-
     Weights bezahlen muss.
@@ -893,6 +1148,10 @@ def _ensure_seed_once():
         return
     try:
         graph.ensure_seed()
+        # Internet-Pipe (2026-06-07): bereits geseedete Graphen nachziehen -
+        # Internet-Limits zu Fähigkeiten machen. Idempotent + no-op wenn schon
+        # migriert (siehe graph.migrate_internet_access).
+        graph.migrate_internet_access()
     except Exception as e:
         try:
             import state
@@ -1106,6 +1365,56 @@ def chat_stream(messages: list, model: str = None, system: str = None,
                 answer = str(fn_args.get("text", "")).strip()
                 yield from _answer_with_images(answer, user_query)
                 return
+            # frage_knopf-Tool: die KI löst SELBST einen Knopf-Dialog aus (knappe
+            # diskrete Entscheidung mitten im Zug). Gleiche Mechanik wie das
+            # Auto-Gate unten - nur baut hier die KI Frage + Optionen, statt dass
+            # wir einen Schreib-Call abfangen. Default Ja/Nein, max 4 Labels. Das
+            # gewählte Label kommt als tool-Result zurück, die KI macht weiter.
+            if tools is None and fn_name == "frage_knopf":
+                import state as _state
+                frage = str(fn_args.get("frage", "")).strip() or "Wie soll ich weitermachen?"
+                opts  = [str(o).strip() for o in (fn_args.get("optionen") or []) if str(o).strip()]
+                if len(opts) < 2:        # zu wenige/keine → sinnvoller Default
+                    opts = ["ja", "nein"]
+                opts = opts[:4]          # Leiste fasst max 4 Knöpfe sauber
+                _state.push_log(f"AI →  FRAGE {opts}: {frage[:140]}")
+                _state.request_permission(options=opts, timeout_default="(keine Antwort)")
+                yield {"permission": {"frage": frage, "optionen": opts}}
+                wahl = _state.wait_permission()   # BLOCKIERT bis Klick/Timeout
+                _state.push_log(f"AI ←  WAHL: {wahl}")
+                working_messages.append({
+                    "role":    "tool",
+                    "content": f"Sasha hat gewählt: {wahl}.",
+                })
+                continue
+            # Erlaubnis-Gate: bestätigungspflichtige Tools (PERMISSION_REQUIRED_
+            # TOOLS) werden VOR der Ausführung abgefangen. Die KI hat ihr Tool
+            # ganz normal gerufen - wir schieben den Dialog automatisch davor:
+            # permission-Event yielden (app.py macht ein SSE 'permission' daraus
+            # → Frontend tauscht die Konsole gegen JA/NEIN-Knöpfe), dann in
+            # state.wait_permission() blockieren bis der Klick per POST
+            # /api/permission_answer (anderer Thread) reinkommt. Nur bei „ja"
+            # fällt der Code durch zur Ausführung; bei „nein"/Timeout hängen wir
+            # einen abschlägigen tool-Result an, damit die KI weiß dass sie es
+            # lassen soll, und überspringen die Ausführung. Nur im regulären
+            # Chat (tools is None) - fremde Tool-Sets (Tutor) gaten wir nicht.
+            if tools is None and fn_name in PERMISSION_REQUIRED_TOOLS:
+                import state as _state
+                frage = _permission_question(fn_name, fn_args)
+                _state.push_log(f"AI →  ERLAUBNIS? {frage[:160]}")
+                _state.request_permission()          # Event scharf machen
+                yield {"permission": {"frage": frage}}
+                answer = _state.wait_permission()     # BLOCKIERT bis Klick/Timeout
+                _state.push_log(f"AI ←  ERLAUBNIS: {answer}")
+                if answer != "ja":
+                    working_messages.append({
+                        "role":    "tool",
+                        "content": (f"Sasha hat die Aktion '{fn_name}' abgelehnt "
+                                    f"- NICHT ausführen, nichts eintragen. Kurz "
+                                    f"bestätigen dass du es lässt."),
+                    })
+                    continue
+                # „ja" → unten ganz normal ausführen (kein continue)
             tool_result = active_exec(fn_name, fn_args)
             working_messages.append({
                 "role":    "tool",

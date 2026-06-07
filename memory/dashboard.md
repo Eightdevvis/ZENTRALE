@@ -133,6 +133,33 @@ Pipeline + Begründung der Marker-statt-Tool-Entscheidung siehe
   automatisch zum normalen Auto-Programm zurück (`syncTabs`).
 - Kein Text → nicht im Minilog, kein TTS. Reine Mimik zur Antwort.
 
+### Knopf-Leiste (2–4 Knöpfe statt Eingabe)
+
+Zwei Auslöser, dieselbe Leiste: das Backend fängt ein bestätigungspflichtiges
+Schreib-Tool ab (Auto-Gate, Default JA/NEIN) **oder** die KI ruft selbst
+`frage_knopf` mit eigenen Labels (Backend-Mechanik + Begründung siehe
+`ki_system.md`). Der Chat-IIFE tauscht die Konsolen-Eingabe gegen die Knöpfe:
+
+- **Transport:** SSE-Event `data.permission {frage, optionen}` (parallel zu
+  `token` und `ascii` im selben `/api/chat`-Stream; `optionen` fehlt beim
+  Auto-Gate → Default `['ja','nein']`). Der Reader zeigt die Frage als KI-Zeile
+  im Minilog + TTS, ruft `showPermissionDialog(optionen)` und liest **weiter** –
+  der Stream bleibt offen, das Backend blockiert.
+- **Anzeige:** `#perm-bar` (im `.console`-Row, default `display:none`) blendet
+  sich ein, `#chat-input`/`#chat-mic-btn` aus (der `›`-Prompt bleibt als Anker).
+  Die Knöpfe baut das JS dynamisch in `#perm-btns` (ein `.perm-btn` pro Label,
+  Großschreibung per CSS), der angewählte trägt `.sel` (Akzentfarbe).
+- **Navigation:** Pfeil ← → zykliert `permSel` modulo durch die N Knöpfe, Enter
+  wählt den aktiven (`permOptions[permSel]`). Listener auf `document` mit
+  `capture=true`, weil das versteckte Input keinen Fokus mehr hat. Maus-Klick
+  geht auch (jeder Knopf hat seinen eigenen Click-Handler).
+- **Antwort:** `submitPermission(label)` blendet die Leiste zurück, stoppt eine
+  noch laufende TTS-Frage, setzt AI-State `thinking` und feuert `POST
+  /api/permission_answer {answer: label}` (fire-and-forget) → entsperrt den
+  wartenden Stream, der Rest der Antwort streamt auf demselben Reader weiter.
+  Bricht der Stream beim Warten ab, stellt der `finally`-Zweig die normale
+  Eingabe wieder her (kein Hängenbleiben).
+
 ## Data Collection
 
 Taste `K` öffnet den Data-Collection-Modus.

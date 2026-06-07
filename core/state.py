@@ -195,6 +195,92 @@ def clear_chat_history():
         _chat_history.clear()
 
 
+# ── Erlaubnis-Rückfrage (KI ↔ Mensch, blockierend) ────────────────────
+# Wenn die KI ein bestätigungspflichtiges Tool ruft (PERMISSION_REQUIRED_
+# TOOLS in ai.py), fängt das Backend den Call ab und hält den Tool-Loop
+# MITTEN im Zug an, bis Sasha Ja/Nein klickt. Technisch sind das zwei
+# verschiedene HTTP-Requests in zwei verschiedenen Threads:
+#
+#   Thread A – der offene /api/chat-Stream. Sein Generator blockiert in
+#              wait_permission() und hält die SSE-Verbindung offen.
+#   Thread B – ein frischer POST /api/permission_answer mit dem Klick.
+#              Er ruft answer_permission() und WECKT Thread A auf.
+#
+# Das Bindeglied ist ein threading.Event – ein Ein/Aus-Signal zwischen
+# Threads. .wait() blockiert bis ein anderer Thread .set() ruft (oder bis
+# der Timeout greift). Das funktioniert nur, weil Flask multi-threaded
+# läuft (app.run(threaded=True)) – sonst würde der blockierte Stream den
+# Antwort-Request gar nicht erst durchlassen und wir hätten ein Deadlock.
+#
+# Nur EINE offene Frage gleichzeitig (Kiosk = ein Mensch, ein Chat), also
+# reicht ein einzelnes geteiltes Event + ein Antwort-Slot.
+_perm_event   = threading.Event()
+_perm_answer  = None           # gewähltes Knopf-Label / None (noch keine Antwort)
+_perm_options = ["ja", "nein"] # aktuell angebotene Knopf-Labels
+_perm_default = "nein"         # Rückgabe bei Timeout (kein Klick)
+
+
+def request_permission(options=None, timeout_default="nein"):
+    """
+    Macht das Erlaubnis-Event scharf für eine neue Frage.
+
+    Aufrufer: ai.chat_stream, direkt bevor es das permission-Event yieldet
+    und in wait_permission() blockiert. Setzt einen evtl. alten Antwort-
+    Rest zurück (clear), damit eine verspätete Antwort der letzten Frage
+    nicht fälschlich diese hier beantwortet.
+
+    options: Liste der angebotenen Knopf-Labels. None → ["ja","nein"]
+             (das Auto-Gate der Schreib-Tools). Das KI-Tool `frage_knopf`
+             gibt hier eigene Labels rein (z.B. ["Deutsch","Englisch"]).
+    timeout_default: was wait_permission bei Timeout zurückgibt. Für das
+             Gate "nein" (sicher: keine Antwort erlaubt nie eine Aktion),
+             für freie Fragen ein neutrales Sentinel.
+    """
+    global _perm_answer, _perm_options, _perm_default
+    with _lock:
+        _perm_answer  = None
+        _perm_options = list(options) if options else ["ja", "nein"]
+        _perm_default = timeout_default
+    _perm_event.clear()
+
+
+def get_permission_options() -> list:
+    """Aktuell angebotene Knopf-Labels (für die Antwort-Validierung in app.py)."""
+    with _lock:
+        return list(_perm_options)
+
+
+def answer_permission(answer: str):
+    """
+    Liefert das gewählte Knopf-Label und weckt den wartenden chat_stream.
+
+    Aufrufer: ui/app.py POST /api/permission_answer (anderer Thread).
+    answer: eines der Labels aus get_permission_options() (im Flask-Handler
+    schon gegen die angebotenen Optionen validiert).
+    """
+    global _perm_answer
+    with _lock:
+        _perm_answer = answer
+    _perm_event.set()   # weckt den .wait() in wait_permission()
+
+
+def wait_permission(timeout: float = 180.0) -> str:
+    """
+    Blockiert bis answer_permission() kommt – oder bis der Timeout greift.
+
+    Gibt das gewählte Knopf-Label zurück. Timeout (kein Klick) liefert den
+    bei request_permission gesetzten timeout_default (beim Gate "nein" -
+    keine Antwort darf NIE versehentlich eine Aktion erlauben). 180 s =
+    großzügig, der Mensch soll in Ruhe lesen können, aber der Thread hängt
+    nicht ewig wenn der Tab zugeht.
+    """
+    got = _perm_event.wait(timeout)
+    with _lock:
+        if not got:
+            return _perm_default
+        return _perm_answer if _perm_answer is not None else _perm_default
+
+
 def queue_sensor(name: str):
     """
     Reiht einen extern eingegangenen Sensor-Trigger in die Queue.

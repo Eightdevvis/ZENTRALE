@@ -126,9 +126,9 @@ Halten + Pfeil = Lautstärke.
 
 ```
 Browser MediaRecorder
-   │  WAV (Browser sendet als multipart 'audio' + 'lang')
+   │  WebM/Opus (Browser sendet als multipart 'audio' + 'lang')
    ▼
-POST /api/transcribe   (lang='zh' für Mandarin)
+POST /api/transcribe   (lang='de' default)
    │
    ▼
 audio.py  ──HTTP──▶  whisper_service.py  (Port 5050)
@@ -139,7 +139,7 @@ audio.py  ──HTTP──▶  whisper_service.py  (Port 5050)
    │
    ▼ KI-Antwort generieren (Ollama)
    │
-POST /api/speak   (lang='zh' für Mandarin)
+POST /api/speak   (lang='de' default)
    │  Body: {text, lang, speed, speaker}
    ▼
 audio.py  ──HTTP──▶  tts_service.py  (Port 5051)
@@ -160,7 +160,7 @@ audio.py  ──HTTP──▶  tts_service.py  (Port 5051)
 - Reiner HTTP-Client. Kein Mikro-Handling, kein Sprecher-Handling.
 - Funktionen:
   - `transcribe(audio_bytes, filename, lang=None)` → Text via Whisper.
-  - `synthesize(text, lang=None, speed=0.9, speaker=0)` → WAV via TTS.
+  - `synthesize(text, lang=None, speed=1.2, speaker=0)` → WAV via TTS.
   - `whisper_available()` / `tts_available()` – Health-Checks gegen
     `/health`.
 - `lang=None` → fällt auf `DEFAULT_LANG` (env-Variable, default `de`).

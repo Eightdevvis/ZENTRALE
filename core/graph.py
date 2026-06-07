@@ -715,23 +715,35 @@ _SEED_CAPABILITIES = [
     "auf Englisch antworten",
     "Token-weise streamen",
     "im Chat Werkzeuge nutzen",
+    # Internet-Pipe (seit 2026-06-07): die KI darf - jeweils nach Sashas
+    # Bestätigung - im Internet suchen und Webseiten laden. Siehe core/web.py
+    # und die Tools web_suche/hole_url in ai.py. Wer den laufenden Graphen
+    # migriert, nutzt graph.migrate_internet_access().
+    "im Internet suchen",
+    "Webseiten abrufen",
 ]
 
 _SEED_LIMITS = [
     "Mails senden",
-    "auf das Internet zugreifen",
     "Code ausführen",
     "Dateien schreiben",
     "Dateien löschen",
     "etwas aus dem Gedächtnis löschen",
     "bestehende Memory-Einträge ändern",
-    "Web-Suche durchführen",
-    "Echtzeit-News oder Wetter abrufen",
     "Hardware-Sensoren aktiv abfragen",
     "Aktoren oder Geräte schalten",
     "Bilder generieren",
     "Audio direkt produzieren ohne TTS-Pipeline",
     "Anrufe machen oder Telefon nutzen",
+]
+# Entfernt 2026-06-07 (von Limit -> Fähigkeit, Internet-Pipe): "auf das
+# Internet zugreifen", "Web-Suche durchführen", "Echtzeit-News oder Wetter
+# abrufen". Web-Suche deckt News/Wetter jetzt ab. Für bereits geseedete
+# Graphen wird das per migrate_internet_access() nachgezogen.
+_OBSOLETE_INTERNET_LIMITS = [
+    "auf das Internet zugreifen",
+    "Web-Suche durchführen",
+    "Echtzeit-News oder Wetter abrufen",
 ]
 
 
@@ -786,6 +798,73 @@ def ensure_seed():
         _write_atomic(data)
 
     _log(f"GRAPH ⊕ Seed: KI-Identität mit {len(_SEED_CAPABILITIES)} kann + {len(_SEED_LIMITS)} kann-nicht")
+
+
+def migrate_internet_access():
+    """
+    Einmal-Migration für BEREITS geseedete Graphen (2026-06-07, Internet-Pipe).
+
+    ensure_seed() ist idempotent und läuft nur einmal - es zieht spätere
+    Änderungen an _SEED_CAPABILITIES/_SEED_LIMITS NICHT nach. Diese Funktion
+    holt das gezielt für die Internet-Fähigkeit nach:
+
+      1. Entfernt die obsoleten "kann-nicht"-Knoten + zugehörige Kanten
+         (_OBSOLETE_INTERNET_LIMITS) - die KI kann jetzt ins Internet.
+      2. Fügt die neuen "kann"-Knoten ("im Internet suchen", "Webseiten
+         abrufen") + KI-[kann]-Kanten hinzu, falls noch nicht vorhanden.
+
+    Fasst NUR die KI-Identity-Knoten an - kein Anfassen/Lesen von Sashas
+    persönlichen Konzepten. Idempotent: mehrfaches Aufrufen ist harmlos.
+    Gibt ein kleines Report-Dict zurück (entfernt/hinzugefügt) für Logging.
+    """
+    new_caps = ["im Internet suchen", "Webseiten abrufen"]
+    removed, added = [], []
+    with _lock:
+        data = _load_raw(for_write=True)
+        obsolete = set(_OBSOLETE_INTERNET_LIMITS)
+
+        # No-op-Guard: nur schreiben, wenn wirklich etwas zu tun ist. Sonst
+        # liefe die Funktion bei JEDEM Boot (sie hängt in _ensure_seed_once)
+        # und würde unnötig schreiben bzw. Edge-Gewichte hochzählen.
+        def _edge_exists(cap):
+            return any(e["from"] == "KI" and e["to"] == cap and e["rel"] == "kann"
+                       for e in data["edges"])
+
+        has_obsolete = any(l in data["nodes"] for l in _OBSOLETE_INTERNET_LIMITS)
+        caps_missing = any(c not in data["nodes"] or not _edge_exists(c)
+                           for c in new_caps)
+        if not has_obsolete and not caps_missing:
+            return {"removed": [], "added": []}   # schon migriert, nichts tun
+
+        # 1. Obsolete Limit-Knoten + alle Kanten zu/von ihnen wegwerfen.
+        for label in _OBSOLETE_INTERNET_LIMITS:
+            if label in data["nodes"]:
+                del data["nodes"][label]
+                removed.append(label)
+        data["edges"] = [
+            e for e in data["edges"]
+            if e["from"] not in obsolete and e["to"] not in obsolete
+        ]
+
+        # 2. Neue Fähigkeits-Knoten + Kanten (nur falls fehlend, kein
+        #    Gewicht-Bump bei schon vorhandenen).
+        for cap in new_caps:
+            if cap not in data["nodes"]:
+                data["nodes"][cap] = {
+                    "type":       "capability",
+                    "embedding":  embeddings.embed_document(cap),
+                    "first_seen": _now_iso(),
+                    "last_seen":  _now_iso(),
+                    "mentions":   1,
+                }
+                added.append(cap)
+            if "KI" in data["nodes"] and not _edge_exists(cap):
+                _add_edge("KI", cap, "kann", data, weight_delta=1.0)
+
+        _write_atomic(data)
+
+    _log(f"GRAPH ⊕ Internet-Migration: -{len(removed)} Limit, +{len(added)} Fähigkeit")
+    return {"removed": removed, "added": added}
 
 
 # ── Debug/Inspection API ──────────────────────────────────────────────

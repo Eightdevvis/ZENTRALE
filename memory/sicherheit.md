@@ -27,6 +27,26 @@ Setups gehören in eigene Themen-Files (z.B. `auto_unlock.md`, später
 Schlussfolgerung: **Diebstahlschutz und Remote-Hardening** sind die
 relevanten Achsen. Hochsicherheits-Setup wäre Overkill.
 
+## Ausgehender Kanal: Internet-Pipe der KI (seit 2026-06-07)
+
+Bis hierher hatte ZENTRALE **keinen** gewollten Ausgangskanal (offline by
+default). Die KI-Tools `web_suche`/`hole_url` (`core/web.py`) öffnen einen –
+und damit theoretisch einen **Exfiltrations-Pfad**: ein lokales 9b-Modell
+könnte (durch böswillige User-Eingabe oder **Prompt-Injection** aus dem Text
+einer geholten Seite) dazu gebracht werden, privates Graph-Wissen in eine
+Suchanfrage/URL zu verpacken und rauszuschicken.
+
+Mitigationen (bewusst, kein Modell-Vertrauen):
+- **Hartes Gate im Backend** (`PERMISSION_REQUIRED_TOOLS`): jeder Such-/Lade-
+  Call zeigt Sasha vorher die exakte Query/URL als JA/NEIN-Dialog. Nichts geht
+  ohne Klick raus. Nicht modellgetrieben → injection-resistent
+  ([[feedback_permission_gate_backend]]).
+- **Internet-Monitor** (rechtes Panel): jeder rausgehende Call leuchtet auf.
+  Nicht-gegateter Internet-Traffic dort = Alarm.
+- **Restrisiko:** wer „ja" reflexhaft klickt, hebelt das Gate aus – die
+  Query/URL ist sichtbar, aber lange Querystrings könnten Daten verstecken.
+  Akzeptiert; Gegenmaßnahme wäre Längen-/Inhalts-Check der Query vor Anzeige.
+
 ## LUKS – Wovor es schützt, wovor nicht
 
 LUKS schützt **nur Daten-at-rest** (PC aus, Disk verschlüsselt).

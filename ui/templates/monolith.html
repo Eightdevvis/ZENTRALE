@@ -151,6 +151,13 @@
 
   /* Terminals (token-coloriert) */
   .term-body { flex: 1; overflow: hidden; display: flex; flex-direction: column-reverse; font-size: 13px; line-height: 1.5; }
+  /* Beim Hovern scrollbar: column-reverse haelt von selbst am neuesten Eintrag
+     (unten) - scrollt man hoch, yankt neuer Log die Ansicht nicht weg. So kann
+     man zum Nachgucken in der Historie blaettern (z.B. AI -> BILD-Zeilen). */
+  .term-body:hover { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--acc) transparent; }
+  .term-body:hover::-webkit-scrollbar { width: 7px; }
+  .term-body:hover::-webkit-scrollbar-thumb { background: var(--acc); border-radius: 4px; }
+  .term-body:hover::-webkit-scrollbar-track { background: transparent; }
   .lg { display: flex; gap: 10px; white-space: pre; }
   .lg .tt { color: var(--faint); } .lg .tx { color: var(--ink); }
   .t-net { color: var(--t-net); } .t-graph { color: var(--t-graph); } .t-event { color: var(--t-event); }
@@ -173,6 +180,18 @@
   .mic-btn.recording { color: #fff; background: #c0392b; border-color: #c0392b; animation: micblink .8s step-start infinite; }
   .mic-btn.transcribing { color: var(--warn); border-color: var(--warn); }
   @keyframes micblink { 50% { opacity: 0.35; } }
+  /* Knopf-Leiste: ersetzt Input+Mic beim Auto-Gate ODER bei frage_knopf.
+     Sitzt im selben .console-Flexrow, der Prompt-Pfeil bleibt als Anker. */
+  .perm-bar { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; }
+  .perm-btns { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+  .perm-btn { font-family: 'VT323', monospace; font-size: 20px; letter-spacing: 0.12em;
+    text-transform: uppercase; padding: 3px 24px; border: 1px solid var(--line);
+    background: transparent; color: var(--dim); cursor: pointer;
+    transition: color .1s, background .1s, border-color .1s; }
+  /* .sel = aktuell angewählter Knopf (Pfeiltasten bewegen die Auswahl) */
+  .perm-btn.sel { color: var(--bg); background: var(--acc); border-color: var(--acc); }
+  .perm-bar .perm-hint { margin-left: auto; flex-shrink: 0; font-size: 11px;
+    letter-spacing: 0.1em; color: var(--faint); }
 
   /* ── Data-Collection-Overlay (Taste Alt+K) ── */
   #dc-overlay { position: absolute; inset: 0; z-index: 80; display: none; align-items: center; justify-content: center;
@@ -303,10 +322,19 @@
         <div class="box console" style="flex:0 0 auto">
           <span class="bt">konsole</span>
           <span class="bt2" id="chat-mute-hint">Alt+S Ton aus</span>
-          <span class="prompt">›</span>
+          <span class="prompt" id="chat-prompt">›</span>
           <input id="chat-input" type="text" autocomplete="off" spellcheck="false"
                  placeholder="sprich mit der KI …  (Enter senden · Alt+M Mic · /clear)" />
           <button id="chat-mic-btn" class="mic-btn" title="Mic (Alt+M)">●</button>
+          <!-- Knopf-Leiste: versteckt, bis ein gegatetes Schreib-Tool abgefangen
+               wird (Auto-Gate) ODER die KI selbst frage_knopf ruft. Dann blendet
+               das Chat-Script Input+Mic aus und diese Leiste ein; die Knöpfe baut
+               das JS dynamisch aus den gelieferten Optionen (2-4, Default JA/NEIN).
+               Auswahl per ← → + Enter (Kiosk ohne Maus). -->
+          <div id="perm-bar" class="perm-bar" style="display:none">
+            <span class="perm-btns" id="perm-btns"></span>
+            <span class="perm-hint">← →  ENTER</span>
+          </div>
         </div>
       </div>
 
@@ -941,6 +969,20 @@
                 { detail: { art: data.ascii, name: data.name } }));
               continue;
             }
+            // Knopf-Rückfrage: entweder ein gegatetes Schreib-Tool wurde
+            // abgefangen (Auto-Gate, optionen fehlt → Default JA/NEIN) oder die
+            // KI rief selbst frage_knopf (eigene optionen). Frage als KI-Zeile
+            // zeigen + vorlesen, dann die Konsole gegen die Knöpfe tauschen. Der
+            // Stream läuft hier NICHT zu Ende - das Backend blockiert, bis unser
+            // POST /api/permission_answer (aus submitPermission) ihn entsperrt;
+            // danach streamt der Rest der Antwort auf demselben Reader weiter.
+            if (data.permission) {
+              var pf = data.permission.frage || 'Darf ich fortfahren?';
+              ZS.pushHistory('ai', pf);
+              enqueueSpeak(pf);
+              showPermissionDialog(data.permission.optionen);
+              continue;
+            }
             if (data.token) {
               if (!streamingStarted) { streamingStarted = true; ZS.pushHistory('ai', ''); ZS.setAi('streaming'); }
               fullText += data.token;
@@ -961,6 +1003,10 @@
         ZS.updateLastHistory('[Verbindungsfehler]');
       } finally {
         chatWaiting = false;
+        // Falls der Stream abbrach während die KI noch auf Erlaubnis wartete:
+        // Knöpfe wieder gegen die normale Eingabe tauschen, sonst hängt die
+        // Konsole im JA/NEIN-Modus fest.
+        if (permActive) hidePermissionDialog();
         ZS.setAi('idle');     // gibt das History-Polling wieder frei (engine.js)
         inputEl.focus();
       }
@@ -986,6 +1032,72 @@
     // Tippen → ab jetzt Tastatur-Eingabe (via_mic-Flag fällt)
     inputEl.addEventListener('input', function () { chatViaMic = false; });
     micBtn.addEventListener('click', toggleChatMic);
+
+    // ── Knopf-Dialog (2–4 Knöpfe statt Eingabe) ──
+    // Wird vom SSE-Handler (data.permission) angestoßen: entweder vom Auto-Gate
+    // (gegatetes Schreib-Tool, Default JA/NEIN) oder von der KI selbst via
+    // frage_knopf (eigene Labels). Tauscht Input+Mic gegen die perm-bar, baut
+    // die Knöpfe dynamisch aus der Optionen-Liste.
+    var permBar    = document.getElementById('perm-bar');
+    var permBtns   = document.getElementById('perm-btns');
+    var muteHint   = document.getElementById('chat-mute-hint');
+    var permActive = false, permSel = 0, permOptions = [];
+
+    function renderPermSel() {
+      var btns = permBtns.children;
+      for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('sel', i === permSel);
+    }
+    function showPermissionDialog(options) {
+      // options fehlt/leer (Auto-Gate schickt nur die Frage) → Default JA/NEIN
+      permOptions = (options && options.length) ? options.slice(0, 4) : ['ja', 'nein'];
+      permActive = true; permSel = 0;
+      permBtns.innerHTML = '';
+      permOptions.forEach(function (label) {
+        var b = document.createElement('button');
+        b.className = 'perm-btn';
+        b.textContent = label;
+        b.addEventListener('click', function () { submitPermission(label); });
+        permBtns.appendChild(b);
+      });
+      renderPermSel();
+      inputEl.style.display = 'none';
+      micBtn.style.display  = 'none';
+      if (muteHint) muteHint.style.display = 'none';
+      permBar.style.display = 'flex';
+    }
+    function hidePermissionDialog() {
+      permActive = false;
+      permBar.style.display = 'none';
+      inputEl.style.display = '';
+      micBtn.style.display  = '';
+      if (muteHint) muteHint.style.display = '';
+    }
+    function submitPermission(label) {
+      if (!permActive) return;
+      hidePermissionDialog();
+      stopSpeaking();         // falls die Frage noch vorgelesen wird: abbrechen
+      ZS.setAi('thinking');   // KI arbeitet jetzt mit der Antwort weiter
+      // Fire-and-forget: das entsperrt den noch offenen /api/chat-Stream,
+      // der dann den Rest der Antwort auf seinem Reader weiterschickt.
+      fetch('/api/permission_answer', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer: label })
+      }).catch(function (e) { console.warn('permission_answer failed:', e); });
+    }
+    // Konsole hat keinen Fokus mehr (Input ist versteckt) → Listener auf
+    // document, capture=true damit Pfeil/Enter vor allem anderen greifen.
+    // Pfeile zyklieren durch die N Knöpfe (modulo), Enter wählt den aktiven.
+    document.addEventListener('keydown', function (e) {
+      if (!permActive) return;
+      var n = permOptions.length;
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault(); permSel = (permSel - 1 + n) % n; renderPermSel();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault(); permSel = (permSel + 1) % n; renderPermSel();
+      } else if (e.key === 'Enter') {
+        e.preventDefault(); submitPermission(permOptions[permSel]);
+      }
+    }, true);
 
     renderMuteHint();
     inputEl.focus();   // sofort tippbereit (Kiosk ohne Maus)

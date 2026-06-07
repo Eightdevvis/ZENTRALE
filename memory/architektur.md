@@ -44,10 +44,9 @@ index.html  (Browser pollt /api/state jede Sekunde)
    │
    ▼
  ai.py ── graph.py / consolidation.py / embeddings.py
-   │       └─ memory.py (Legacy LTM/STM für save_memory-Tool)
-   │       └─ context.py (Datei-Whitelist)
+   │       └─ context.py (Datei-Whitelist) / kalender.py / ascii_lib.py / web.py
    │
-   ├──▶ Ollama (qwen2.5:14b Chat, bge-m3 Embeddings)
+   ├──▶ Ollama (qwen3.5:9b Chat, bge-m3 Embeddings)
    └──▶ audio.py ──▶ Whisper (Port 5050) / TTS (Port 5051)
 ```
 
@@ -78,15 +77,21 @@ ZENTRALE/
 │   ├── graph.py             # Konzept-Graph Memory (PRIMARY, data/ai_graph.json)
 │   ├── consolidation.py     # async Fakt-Extraktor in den Graphen
 │   ├── embeddings.py        # bge-m3 via Ollama (Alias-Resolution, Entry-Points)
-│   ├── memory.py            # Legacy LTM/STM (data/ai_ltm.json, data/ai_stm.json)
 │   ├── context.py           # Whitelist-Dateizugriff (Cap 8000 Zeichen)
+│   ├── kalender.py          # Kalender-Layer (Termine, Routinen, Konflikt-Alarm)
+│   ├── ascii_lib.py         # ASCII-Bibliothek für Bild-Marker [[bild: name]]
+│   ├── web.py               # gegatete Internet-Pipe (web_suche / hole_url)
+│   ├── host_metrics.py      # PC-Host-Metriken (CPU/GPU/VRAM/Temp/RAM)
+│   ├── telemetry.py         # Telemetrie-Aggregat (PC + Pi) fürs Dashboard
 │   ├── audio.py             # HTTP-Client für Whisper + TTS
 │   ├── tutor.py             # Tutor-Tools (PAUSIERT, siehe tutor_system.md)
 │   └── tutor_session.py     # Tutor Session-State (PAUSIERT, ungenutzt)
 ├── ui/
 │   ├── app.py               # Flask Backend + REST API
+│   ├── static/              # engine.js, viz.js, ascii.js, fonts/ (für /monolith)
 │   └── templates/
-│       └── index.html       # Dashboard (Vanilla JS, SVG, kein CDN)
+│       ├── index.html       # Dashboard (Vanilla JS, SVG, kein CDN)
+│       └── monolith.html    # Monolith-Dashboard (Route /monolith)
 ├── services/
 │   ├── whisper_service.py   # STT (Port 5050)
 │   ├── tts_service.py       # TTS (Port 5051)

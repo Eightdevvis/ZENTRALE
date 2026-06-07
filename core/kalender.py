@@ -139,6 +139,56 @@ def add_entry(layer: str, day: str, label: str,
         return True
 
 
+def delete_entry(day: str, label: str, layer: str | None = None) -> int:
+    """
+    Löscht Einmal-Einträge an einem Tag, deren Label passt.
+
+      day    – YYYY-MM-DD des Termins
+      label  – Titel; Match case-insensitiv, exakt ODER als Teilstring
+               (damit „Fake-Termin" auch „Fake-Termin: Test" trifft)
+      layer  – optional auf einen Layer beschränken; None = alle Layer
+
+    Wirkt nur auf `entries` (Einmal-Termine), NICHT auf Routinen/Pausen –
+    die liegen in anderen Speicher-Slots und haben eigene Semantik.
+
+    Gibt die Anzahl entfernter Einträge zurück (0 = nichts gefunden, damit
+    der Aufrufer dem User ehrlich „nichts gelöscht" melden kann statt einen
+    Erfolg zu behaupten).
+    """
+    needle = (label or "").strip().lower()
+    if not needle:
+        return 0
+    removed = 0
+    with _lock:
+        data   = _load_raw()
+        layers = data.get("layers", {})
+        # Entweder nur der genannte Layer oder alle durchsuchen.
+        names  = [layer] if layer else list(layers.keys())
+        for lname in names:
+            lobj = layers.get(lname)
+            if not lobj:
+                continue
+            entries  = lobj.get("entries", {})
+            day_list = entries.get(day)
+            if not day_list:
+                continue
+            keep = []
+            for e in day_list:
+                lab = (e.get("label", "")).strip().lower()
+                if needle == lab or needle in lab:
+                    removed += 1          # Treffer → fällt raus
+                else:
+                    keep.append(e)        # behalten
+            # Tages-Liste aktualisieren bzw. leeren Tag-Key ganz entfernen.
+            if keep:
+                entries[day] = keep
+            else:
+                entries.pop(day, None)
+        if removed:
+            _save_raw(data)
+    return removed
+
+
 def add_routine(layer: str, label: str, rrule_str: str,
                 time: str | None = None, **extras) -> bool:
     """
@@ -200,6 +250,34 @@ def add_layer(name: str, label: str, color: str = "#999999",
         return True
 
 
+def add_pause(label: str, von: str, bis: str, grund: str | None = None) -> bool:
+    """
+    Trägt eine Pause/einen Ausfall für eine Routine ein: in [von, bis] findet
+    die Routine mit diesem `label` NICHT statt (Ferien, Feiertag, Lehrerin im
+    Urlaub). Beim Lesen wird das betroffene Routinen-Vorkommen als „fällt aus"
+    markiert statt normal angezeigt - so wird der User erinnert, dass z.B. keine
+    Geige ist, statt umsonst hinzufahren (Richtung 2 zum Reise-Konflikt: hier
+    sagt die ANDERE Seite ab).
+
+    Pausen liegen top-level unter `pausen` (nicht in einem Layer), weil sie ein
+    Routinen-Label Layer-übergreifend betreffen. von/bis als YYYY-MM-DD inkl.
+    """
+    try:
+        date.fromisoformat(von)
+        date.fromisoformat(bis)
+    except ValueError:
+        state.push_log(f"[calendar] ungültige Pause-Daten {von!r}/{bis!r}")
+        return False
+    with _lock:
+        data = _load_raw()
+        pause: dict = {"label": label, "von": von, "bis": bis}
+        if grund:
+            pause["grund"] = grund
+        data.setdefault("pausen", []).append(pause)
+        _save_raw(data)
+        return True
+
+
 # ── Auto-Capture aus dem Graph ─────────────────────────────────────────
 def auto_capture(concept: str, day_iso: str) -> None:
     """
@@ -254,6 +332,7 @@ def entries_in_range(start: date, end: date,
     """
     data = _load_raw()
     target = layers if layers else list(data.get("layers", {}).keys())
+    pausen = data.get("pausen", [])  # Ausfälle (Ferien etc.) für Routinen
     out: dict[str, list[dict]] = {}
 
     for layer_name in target:
@@ -286,7 +365,12 @@ def entries_in_range(start: date, end: date,
                     if occ > until:
                         break
                     day_iso = occ.date().isoformat()
-                    entry: dict = {"layer": layer_name, "label": r["label"]}
+                    # recurring=True markiert diesen Eintrag als Routine (aus einer
+                    # rrule expandiert), im Gegensatz zu Einmal-Einträgen. Der
+                    # Reise-Konflikt-Check (_conflict_lines) nutzt das: regelmäßige
+                    # Termine fallen auf Reisen sowieso aus → kein Alarm.
+                    entry: dict = {"layer": layer_name, "label": r["label"],
+                                   "recurring": True}
                     if r.get("time"):
                         entry["time"] = r["time"]
                     # Ende + Ort mitschleppen, sonst sieht weder die Kollisions-
@@ -296,6 +380,15 @@ def entries_in_range(start: date, end: date,
                         entry["ende"] = r["ende"]
                     if r.get("ort"):
                         entry["ort"] = r["ort"]
+                    # absage_noetig: diese Routine muss bei Abwesenheit aktiv
+                    # abgesagt werden (z.B. Geige bei der Lehrerin), fällt NICHT
+                    # einfach weg wie Parkour. Steuert den Absage-Alarm.
+                    if r.get("absage_noetig"):
+                        entry["absage_noetig"] = True
+                    # Fällt diese Routine an dem Tag aus (Ferien/Feiertag)?
+                    grund = _pause_grund(r["label"], occ.date(), pausen)
+                    if grund:
+                        entry["ausfall"] = grund
                     out.setdefault(day_iso, []).append(entry)
             except Exception as e:
                 state.push_log(
@@ -595,8 +688,8 @@ def day_warnings(entries: list[dict],
             rest = _interval(b)[1] - _interval(a)[1]
             warns.append(
                 f"⚠ Teil-Überlappung: {_fmt_entry(a)} und {_fmt_entry(b)} "
-                f"überschneiden sich. {a.get('label', '?')} früher verlassen "
-                f"und die restlichen {rest} min zu {b.get('label', '?')}?"
+                f"überschneiden sich teilweise ({b.get('label', '?')} läuft "
+                f"{rest} min länger)."
             )
 
     # 2) Knappe Übergänge zwischen direkt aufeinanderfolgenden Terminen.
@@ -625,6 +718,28 @@ def day_warnings(entries: list[dict],
                 f"du brauchst ~{need} min (Fahrt {tt} + {puffer_min} Puffer)."
             )
     return warns
+
+
+def _pause_grund(label: str, day: date, pausen: list[dict]) -> str | None:
+    """
+    Grund, falls die Routine `label` an `day` pausiert (Ferien etc.), sonst None.
+
+    Die EINE Nahtstelle für Ausfälle - heute aus der manuell gepflegten
+    `pausen`-Liste. Wenn die KI später Internet hat, kann hier zusätzlich eine
+    automatische Ferien-/Feiertags-Abfrage andocken, ohne dass der Rest sich
+    ändert (bewusst nie über Google).
+    """
+    for p in pausen:
+        if p.get("label") != label:
+            continue
+        try:
+            von = date.fromisoformat(p["von"])
+            bis = date.fromisoformat(p["bis"])
+        except (ValueError, KeyError):
+            continue
+        if von <= day <= bis:
+            return p.get("grund", "Pause")
+    return None
 
 
 def _away_blocks(start: date, end: date, data: dict | None = None) -> list[dict]:
@@ -672,10 +787,16 @@ def _conflict_lines(day: date, entries: list[dict],
     fällt, in der du an einem ANDEREN Ort bist - der „du bist in Ungarn, hast
     aber Dienstag Geige"-Fall. Liefert fertige ⚠-KONFLIKT-Zeilen.
 
+    NUR Einmal-Termine (unregelmäßig) lösen Alarm aus. Regelmäßige Routinen
+    (recurring=True: Geige, Fahrschule, Parkour) fallen auf einer Reise sowieso
+    aus - das ist normal, kein Alarm. Der Unterschied (Sasha 2026-06-07): bei
+    Routinen verpasst man Erwartbares, bei Einzelterminen etwas Besonderes, das
+    man evtl. aktiv absagen/verschieben muss.
+
     Modell-Verhalten (Persona): bei so einem KONFLIKT vergewissert sich die KI
     einmal beim User (stimmt die Reise? stimmt der Termin?) und schlägt dann
-    laut Alarm (Text + zeige_ascii 'alarm') - statt blind oder stumm. Python
-    liefert nur das Signal, die KI führt die Verifikation.
+    laut Alarm (Text + Bild-Marker [[bild: alarm]]) - statt blind oder stumm.
+    Python liefert nur das Signal, die KI führt die Verifikation.
 
     Kein Konflikt, wenn der Termin am selben Ort wie das Reiseziel liegt
     (du hast vor Ort was geplant). Ort unbekannt → trotzdem flaggen: du bist
@@ -690,18 +811,60 @@ def _conflict_lines(day: date, entries: list[dict],
                 continue  # nur konkrete (zeitlich verortete) Termine
             if e.get("label") == blk["label"]:
                 continue  # der Reise-Eintrag nicht gegen sich selbst
+            if e.get("recurring"):
+                continue  # Routine → fällt auf der Reise sowieso aus, kein Alarm
             appt_ort = e.get("ort")
             if blk["ort"] and appt_ort and appt_ort == blk["ort"]:
                 continue  # gleicher Ort wie Reiseziel → kein Konflikt
             wd = _WEEKDAYS_FULL_DE[day.weekday()]
             ort_str = f" @ {appt_ort}" if appt_ort else ""
+            # NUR Fakten - was die KI damit tun soll (rückversichern, Alarm),
+            # steht in der read_calendar-Tool-Beschreibung, NICHT hier. Sonst
+            # liest das Modell die Regie-Anweisung wörtlich vor.
             lines.append(
-                f"⚠ KONFLIKT: {blk['von'].strftime('%d.%m.')}-"
-                f"{blk['bis'].strftime('%d.%m.')} bist du in "
-                f"{blk['ort'] or 'einer Reise'} ({blk['label']}), aber {wd} "
-                f"{day.strftime('%d.%m.')} {e['label']}{ort_str} - du kannst "
-                f"nicht an beiden Orten sein. Beim User rückversichern, dann Alarm."
+                f"⚠ KONFLIKT: Reise {blk['label']} "
+                f"({blk['von'].strftime('%d.%m.')}-{blk['bis'].strftime('%d.%m.')}, "
+                f"{blk['ort'] or 'unterwegs'}) überschneidet sich mit Einzeltermin "
+                f"'{e['label']}'{ort_str} am {wd} {day.strftime('%d.%m.')}."
             )
+    return lines
+
+
+def _absage_alarms(away_blocks: list[dict]) -> list[str]:
+    """
+    Findet Routinen, die in eine Reise-Spanne fallen UND aktiv abgesagt werden
+    müssen (`absage_noetig`, z.B. Geige bei der Lehrerin). Liefert pro Reise und
+    Routine GENAU EINE Alarm-Zeile - egal über wie viele Wochen die Reise geht
+    (Sasha sagt einmal „bin von-bis weg", nicht jede Woche neu).
+
+    Abgegrenzt von _conflict_lines (Einmal-Termine, die man verpasst): hier geht
+    es um regelmäßige Termine mit Absage-PFLICHT - ein To-do, kein Verpassen.
+    Normale Routinen ohne `absage_noetig` (Parkour, Fahrschule) erscheinen hier
+    nicht; die fallen auf Reisen einfach weg.
+    """
+    lines: list[str] = []
+    for blk in away_blocks:
+        seen: set[str] = set()
+        # entries_in_range liest selbst aus der Kalender-Datei und expandiert
+        # die Routinen über die Reise-Spanne - so finden wir jedes Vorkommen.
+        for _day_iso, ents in entries_in_range(blk["von"], blk["bis"]).items():
+            for e in ents:
+                if not (e.get("recurring") and e.get("absage_noetig")):
+                    continue
+                if e.get("ausfall"):
+                    continue  # fällt eh aus (Ferien) → nichts abzusagen
+                if e["label"] in seen:
+                    continue
+                appt_ort = e.get("ort")
+                if blk["ort"] and appt_ort and appt_ort == blk["ort"]:
+                    continue  # findet am Reiseziel statt → kein Absagen nötig
+                seen.add(e["label"])
+                # Nur Fakten (Verhalten steht in der Tool-Beschreibung).
+                lines.append(
+                    f"⚠ ABSAGEN: Routine '{e['label']}' liegt in Reise "
+                    f"{blk['label']} ({blk['von'].strftime('%d.%m.')}-"
+                    f"{blk['bis'].strftime('%d.%m.')}) - Pflicht-Absage."
+                )
     return lines
 
 
@@ -752,11 +915,23 @@ def render_range_for_tool(start: date, end: date,
     matrix, puffer = _load_config()
     away_blocks = _away_blocks(start, end)
     lines = [head]
+    # Trip-level Absage-To-dos ganz nach oben (einmal pro Reise): aktive
+    # Aufgaben (Routine absagen), die nicht zu EINEM Tag gehören und die der
+    # User leicht vergisst - die sollen zuerst ins Auge springen.
+    for w in _absage_alarms(away_blocks):
+        lines.append("  " + w)
     for day_iso, entries in days.items():
         d = date.fromisoformat(day_iso)
         wd = _WEEKDAYS_FULL_DE[d.weekday()]
         lines.append(f"{wd}, {d.strftime('%d.%m.%Y')}:")
         for e in entries:
+            # Fällt die Routine aus (Ferien/Feiertag)? Dann als Erinnerung
+            # zeigen statt als normalen Termin - der User soll wissen, dass
+            # NICHTS ist, nicht umsonst hinfahren.
+            if e.get("ausfall"):
+                lines.append(f"  ℹ {e['label']} fällt aus ({e['ausfall']}) "
+                             f"- kein Termin an diesem Tag")
+                continue
             # Zeit MIT Ende anzeigen, wenn vorhanden ('17:45-18:30'),
             # sonst nur Startzeit - das Modell sieht so die Dauer direkt.
             if e.get("time") and e.get("ende"):

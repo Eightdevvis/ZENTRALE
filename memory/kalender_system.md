@@ -117,7 +117,46 @@ Antwort; der Tool-Hinweis in `ai.py` weist das Modell an, sie aktiv weiterzugebe
 **Abwesenheits-Konflikt (`⚠ KONFLIKT`, 2026-06-06):** Ein Mehrtages-Block mit
 `bis`+`ort` (Reise) macht dem Kalender bekannt, wo du über die Spanne bist. Fällt
 ein lokaler Termin an anderem Ort hinein („du bist in Ungarn, hast aber Di
-Geige"), wird er als `⚠ KONFLIKT` geflaggt. Modell-Verhalten (Persona + Tool-
+Geige"), wird er als `⚠ KONFLIKT` geflaggt.
+
+**Drei Alarm-Typen bei Reisen (Verfeinerung 2026-06-07).** Auf einer Reise wird
+NICHT alles gleich behandelt:
+
+- **Einmal-Termine** (`termine`-Einträge mit Uhrzeit) → `⚠ KONFLIKT`
+  (`_conflict_lines`): etwas Besonderes, das man verpasst/verschieben muss.
+- **Routinen ohne Absagepflicht** (Parkour, Fahrschule) → **still**, kein Alarm:
+  fallen auf einer Reise erwartbar weg. Bleiben gelistet.
+- **Routinen mit `absage_noetig: true`** (z.B. Geige bei der Lehrerin) →
+  `⚠ ABSAGEN` (`_absage_alarms`): aktive To-do-Absage. **Einmal pro Reise**
+  (dedupliziert über `seen`), nicht pro Vorkommen - Sasha sagt einmal „bin
+  von-bis weg", nicht jede Woche neu.
+
+Routinen tragen `recurring=True` (aus `entries_in_range`); `absage_noetig` ist
+ein optionales Feld pro Routine in der Kalender-Datei. Alarm-Verhalten in beiden
+Fällen: erst beim User rückversichern, dann lauter Text + `[[bild: alarm]]`.
+
+**Absage-Eskalation per Knopf-Dialog (2026-06-07):** nach jedem Absage-Alarm
+(ABSAGEN, oder Einzeltermin den Sasha absagen müsste) hakt die KI per
+`frage_knopf`-Tool nach - eskalierend: „Hast du es abgesagt?" (ja/nein) → bei
+nein „Wirst du es jetzt absagen?" (ja/nein) → bei nochmal nein „Katastrophe."
+mit optionen `['ja','ja']` (Schabernack). `frage_knopf` kann das nativ: Klick
+kommt als Tool-Result zurück, die KI legt im selben Zug den nächsten Knopf nach
+(Mechanik in `ai.py` chat_stream, kein Sonder-Code nötig). Anweisung steht in
+der `read_calendar`-Tool-Beschreibung. Reliabilität des 3-Stufen-Chains beim 9B
+ist noch zu messen - bei Flakiness ggf. deterministisch in Python treiben.
+
+**Richtung 2 - die andere Seite sagt ab (Pausen/Ausfälle, 2026-06-07):** der
+umgekehrte Fall - Ferien/Feiertag → Lehrerin/Anbieter zu, Sasha muss sich
+erinnern „keine Geige". Modelliert als top-level `pausen`-Liste
+(`[{label, von, bis, grund?}]`). Eine Routine, deren Vorkommen in eine Pause für
+ihr Label fällt, bekommt in `entries_in_range` ein `ausfall`-Feld und wird im
+Render als `ℹ <label> fällt aus (<grund>)` gezeigt statt als Termin - plus der
+`⚠ ABSAGEN`-Alarm verstummt (Anbieter hat ja schon abgesagt). Eingetragen wird
+manuell, am einfachsten über das KI-Tool `add_calendar_pause` (Sasha sagt's,
+die KI trägt's ein). `_pause_grund(label, day, pausen)` ist die **Nahtstelle**:
+heute manuelle Liste, später (KI mit Internet) erweiterbar um automatische
+Ferien-/Feiertags-Abfrage - nie Google. Neue Funktionen: `add_pause(...)`,
+`_pause_grund(...)`. Modell-Verhalten (Persona + Tool-
 Hinweis): die KI **vergewissert sich erst einmal beim User** (stimmt Reise?
 stimmt Termin?) und schlägt dann **laut Alarm** — deutlicher Text + `zeige_ascii`
 mit Stichwort `alarm` (Motiv in `data/ascii/alarm.txt`). Verify-dann-Alarm ist

@@ -83,7 +83,7 @@ willst:
 ```bash
 # ZENTRALE (core/main.py) verwendet:
 OLLAMA_URL=http://localhost:11434   # default
-OLLAMA_MODEL=qwen2.5:14b            # default
+OLLAMA_MODEL=qwen3.5:9b             # default
 WHISPER_URL=http://localhost:5050   # default (gegen den Whisper-Service)
 TTS_URL=http://localhost:5051       # default (gegen den TTS-Service)
 

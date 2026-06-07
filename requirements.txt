@@ -12,7 +12,7 @@ faster-whisper
 
 # Text-to-Speech (TTS) – offline
 # sherpa-onnx liefert die chinesische Stimme (vits-zh-aishell3, Tutor-Modus).
-# piper-tts liefert die deutsche Stimme (thorsten-medium, Haupt-Chat).
+# piper-tts liefert die deutsche Stimme (de_DE-kerstin-low, Haupt-Chat).
 # Beide werden parallel im services/tts_service.py geladen – pro Sprache
 # eine Engine. Modell-Download via services/download_tts_model.py.
 sherpa-onnx
