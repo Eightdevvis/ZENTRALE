@@ -68,6 +68,8 @@ Public API:
 - `ensure_init()` – Datei + Default-Layer beim Boot sicherstellen.
 - `add_entry(layer, day, label, time=None, **extras)` – Einmal-Eintrag.
 - `add_routine(layer, label, rrule_str, time=None, **extras)` – Wiederholungs-Regel.
+- `add_pause(label, von, bis, grund=None)` – Routine über eine Spanne aussetzen (Tool `add_calendar_pause`, gegatet).
+- `delete_entry(day, label, layer=None)` → `int` – Einträge an einem Tag löschen, gibt Anzahl zurück (Tool `delete_calendar_entry`, gegatet).
 - `add_layer(name, label, color, default_visible)` – neuer Layer.
 - `auto_capture(concept, day_iso)` – Spiegelung vom Graph-Extraktor.
 - `entries_in_range(start, end, layers=None)` – Range-Query, Routinen werden expandiert.
@@ -185,6 +187,8 @@ damit dasselbe Konzept bei mehrfachem Erwähnen nicht mehrfach im
 | `read_calendar`         | JEDE Frage nach Terminen/Plänen/Daten (Pflicht)     |
 | `add_calendar_entry`    | User nennt einmaligen Termin/Frist                  |
 | `add_calendar_routine`  | User nennt regelmäßige Aktivität                    |
+| `add_calendar_pause`    | Routine über eine Spanne aussetzen (gegatet)        |
+| `delete_calendar_entry` | Eintrag löschen (gegatet)                           |
 
 `read_calendar(zeitraum?, start_date?, end_date?, layers?)`. **Kein
 Calendar-Glue mehr im Prompt** — die KI hat keine Termine im Gedächtnis und

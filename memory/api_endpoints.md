@@ -79,17 +79,9 @@ per Parameter mitgegeben.
 
 Details zu Modellen + Sprachen: `audio_system.md`.
 
-## Tutor
+## Tutor (entfernt)
 
-Tutor ist ein Aufrufer der Voice-Pipeline mit `lang='zh'`. Die
-Tutor-Endpoints unterhalb sind dünne Aliase mit Hardcode `lang='zh'`
-für Rückwärtskompatibilität des Tutor-Frontend.
-
-| Endpoint                     | Methode | Beschreibung                          |
-|------------------------------|---------|---------------------------------------|
-| `/api/tutor/status`          | GET     | Session-Status + Audio-Service-Status |
-| `/api/tutor/start`           | POST    | Session starten, KI-Begrüßung streamen (SSE) |
-| `/api/tutor/respond`         | POST    | User-Text → KI-Antwort (SSE)          |
-| `/api/tutor/transcribe`      | POST    | Alias für `/api/transcribe` mit `lang='zh'` |
-| `/api/tutor/speak`           | POST    | Alias für `/api/speak` mit `lang='zh'` |
-| `/api/tutor/stop`            | POST    | Session beenden                       |
+Alle `/api/tutor/*`-Endpoints (status/start/respond/transcribe/speak/stop)
+sind entfallen – der Mandarin-Tutor ist pausiert (siehe `tutor_system.md`).
+Voice läuft über die sprachneutralen Core-Endpoints `/api/speak` +
+`/api/transcribe` mit `lang`-Parameter.

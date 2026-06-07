@@ -30,3 +30,7 @@ data/photos/
 
 # lokale Archive (z.B. Design-Downloads) — kein Repo-Inhalt
 *.zip
+
+# Editor-/Atomic-Write-Temp-Dateien (z.B. <name>.tmp.<ts>.<hash>) — sollen
+# nie versioniert werden (eine ist 2026-06-07 versehentlich reingerutscht).
+*.tmp.*
