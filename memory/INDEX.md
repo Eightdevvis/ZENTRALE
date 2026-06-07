@@ -19,6 +19,7 @@ hier sofort mitziehen, sonst tote Links.
 | Event-System (Sensoren → Actions)  | memory/event_system.md              |
 | KI-System (Ollama, Graph-Memory)   | memory/ki_system.md                 |
 | Kalender-System (Layer, Termine)   | memory/kalender_system.md           |
+| News-System (Tagesschau, Briefing) | memory/news_system.md               |
 | Memory-Plan v2 (Historie, A–G)     | memory/ki_memory_plan.md            |
 | Personality-Plan (Fine-Tuning)     | memory/ki_personality_plan.md       |
 | Mandarin-Tutor (pausiert)          | memory/tutor_system.md              |

@@ -44,7 +44,7 @@ index.html  (Browser pollt /api/state jede Sekunde)
    │
    ▼
  ai.py ── graph.py / consolidation.py / embeddings.py
-   │       └─ context.py (Datei-Whitelist) / kalender.py / ascii_lib.py / web.py
+   │       └─ context.py (Datei-Whitelist) / kalender.py / ascii_lib.py / web.py / news.py
    │
    ├──▶ Ollama (qwen3.5:9b Chat, bge-m3 Embeddings)
    └──▶ audio.py ──▶ Whisper (Port 5050) / TTS (Port 5051)
@@ -81,6 +81,7 @@ ZENTRALE/
 │   ├── kalender.py          # Kalender-Layer (Termine, Routinen, Konflikt-Alarm)
 │   ├── ascii_lib.py         # ASCII-Bibliothek für Bild-Marker [[bild: name]]
 │   ├── web.py               # gegatete Internet-Pipe (web_suche / hole_url)
+│   ├── news.py              # Persönliche Tagesschau: RSS-Fetch + KI-Briefing (lies_news)
 │   ├── host_metrics.py      # PC-Host-Metriken (CPU/GPU/VRAM/Temp/RAM)
 │   ├── telemetry.py         # Telemetrie-Aggregat (PC + Pi) fürs Dashboard
 │   ├── audio.py             # HTTP-Client für Whisper + TTS

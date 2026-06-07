@@ -82,8 +82,10 @@
       var date = s.time || (d.getDate() + '. ' + ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'][d.getMonth()] + ' ' + d.getFullYear());
       var sensors = shapeSensors(s.sensors);
 
-      // tick: treibt Uhr, Datum, Telemetrie-Meter, Sensoren und Uptime
-      emit('tick', { time: hms(), date: date, metrics: metrics, sensors: sensors, uptime_s: s.uptime_s });
+      // tick: treibt Uhr, Datum, Telemetrie-Meter, Sensoren, Uptime + Alarme.
+      // alarms = offene Kalender-Warnungen (Reise-Konflikt/Absage), die das
+      // Frontend als Warndreieck-Ecke im KI-Canvas rendert.
+      emit('tick', { time: hms(), date: date, metrics: metrics, sensors: sensors, uptime_s: s.uptime_s, alarms: s.alarms || [] });
 
       // Sensor-Flanken: nur bei Wechsel ein 'sensor'-Event
       ['button', 'light', 'motion', 'door'].forEach(function (name) {

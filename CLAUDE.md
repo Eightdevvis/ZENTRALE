@@ -25,6 +25,7 @@ hält die Antworten fokussiert.
 | Sensoren, Events, Brain, Actions          | `memory/event_system.md`             |
 | Ollama, Memory, Tools, Net-Logging        | `memory/ki_system.md`                |
 | Kalender-System (Layer, Termine)          | `memory/kalender_system.md`          |
+| News-System (Tagesschau, KI-Briefing)     | `memory/news_system.md`              |
 | KI-Persönlichkeit & Fine-Tuning-Plan      | `memory/ki_personality_plan.md`      |
 | Mandarin-Tutor (pausiert)                 | `memory/tutor_system.md`             |
 | Whisper STT + TTS, Audio-Architektur      | `memory/audio_system.md`             |

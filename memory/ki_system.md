@@ -145,6 +145,7 @@ fähigen Ollama-Modell; Default `qwen3.5:9b` (Env `OLLAMA_MODEL`).
 | `read_calendar` / `add_calendar_*` / `delete_calendar_entry` | Kalender lesen/schreiben/löschen (s. kalender_system.md) |
 | `web_suche`   | Im Internet suchen (gegatet, s. „Internet-Pipe")    |
 | `hole_url`    | Webseite laden + Text holen (gegatet)               |
+| `lies_news`   | Weltpolitik-Briefing lesen (persönliche Tagesschau, s. `news_system.md`) |
 | `antwort`     | Finale Antwort über Tool-Kanal (Framing-Effekt)     |
 | `frage_knopf` | Sasha eine Frage mit Knöpfen stellen (s. unten)     |
 

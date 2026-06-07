@@ -120,8 +120,22 @@
   .tab { font-family: 'VT323', monospace; font-size: 16px; letter-spacing: 0.06em; color: var(--dim); border: 1px solid var(--line); padding: 1px 8px; cursor: pointer; text-transform: uppercase; }
   .tab.on { color: var(--bg); background: var(--acc); border-color: var(--acc); }
   .tab:hover:not(.on) { color: var(--ink); }
-  .core-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .core-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
   #core { font-size: 15px; line-height: 1.0; letter-spacing: 0; color: var(--acc); text-align: center; contain: content; white-space: pre; overflow: hidden; }
+  /* Alarm-Ecke: offene Kalender-Warnungen (Reise-Konflikt/Absage) als
+     gestapelte Pixel-Dreiecke unten links im KI-Canvas. Randständig (absolut,
+     über dem ASCII), pointer-events:none → stört den zentralen Inhalt nie.
+     column-reverse = stapelt vom Boden nach oben. Gefüttert vom tick-Handler. */
+  #alarm-corner { position: absolute; left: 12px; bottom: 12px; display: flex; flex-direction: column-reverse; gap: 8px; z-index: 3; pointer-events: none; }
+  /* Echtes Pixel-Warnschild: gestufte SVG-Blöcke (shape-rendering crispEdges →
+     scharfe Treppen-Kanten, kein Anti-Aliasing) mit "!" in der Mitte. Bernstein
+     #ffb020, Glow via drop-shadow im Puls. Amber poppt auf hell + dunkel. */
+  .alarm-tri { width: 54px; height: auto; display: block; animation: alarmpulse 1.2s ease-in-out infinite; }
+  .alarm-more { font-family: 'VT323', monospace; font-size: 22px; line-height: 1; color: #ffb020; text-shadow: 0 0 9px rgba(255,176,32,0.9); }
+  @keyframes alarmpulse {
+    0%, 100% { opacity: 1;    filter: drop-shadow(0 0 5px rgba(255,176,32,0.8)); }
+    50%      { opacity: 0.92; filter: drop-shadow(0 0 13px rgba(255,176,32,1)); }
+  }
   #core.filtimg { font-size: 10px; line-height: 1.0; }   /* Bild-Filter: kleine Schrift, hohe Zeichen-Auflösung */
   .core-readout { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 9px; flex-shrink: 0; position: relative; z-index: 2; background: var(--bg); }
   .ai-state { font-family: 'VT323', monospace; font-size: 24px; letter-spacing: 0.12em; color: var(--bright); text-transform: uppercase; }
@@ -308,7 +322,7 @@
               <span class="tab on" data-ex="auto">Auto</span>
             </div>
           </div>
-          <div class="core-wrap"><pre id="core"></pre></div>
+          <div class="core-wrap"><pre id="core"></pre><div id="alarm-corner"></div></div>
           <div class="core-readout">
             <div class="ai-state" id="ai-state"><span class="sp">·</span> BEREIT</div>
             <div class="ai-model" id="ai-meta">zeigt: gesicht</div>
@@ -701,7 +715,49 @@
         document.getElementById('tele-src').textContent = 'pc live · pi ' + (piDead ? 'offline' : 'live');
         renderRot();   // aktuellen Wert frisch zeichnen (Wert tickt, Rotation alle 2.6s)
       }
+      // Alarm-Ecke: ein Pixel-Dreieck pro offenem Kalender-Alarm. e.alarms kommt
+      // aus /api/state (kalender.open_alarms). Leer → Ecke geleert.
+      renderAlarms(e.alarms || []);
     });
+
+    // Rendert die Warndreieck-Ecke unten links im KI-Canvas. Ein .alarm-tri pro
+    // offenem Alarm, title=Volltext (Hover zeigt die Warnung). Bei mehr als MAX
+    // wird gedeckelt + "+N" angehängt, damit die Ecke nicht den Kern zumüllt.
+    var alarmCorner = document.getElementById('alarm-corner');
+    var ALARM_MAX = 5;
+    // Pixel-Warnschild als gestufte SVG-Blöcke (viewBox 13x12): amber Dreieck in
+    // 2-Reihen-Stufen (Treppen-Kante = Pixel-Look) + dunkles "!" (Balken + Punkt)
+    // in der Mitte. Wird pro Alarm wiederholt; <title> trägt den Volltext (Hover).
+    var ALARM_TRI_BODY =
+      '<rect x="6" y="0"  width="1"  height="1" fill="#ffb020"/>' +
+      '<rect x="5" y="1"  width="3"  height="2" fill="#ffb020"/>' +
+      '<rect x="4" y="3"  width="5"  height="2" fill="#ffb020"/>' +
+      '<rect x="3" y="5"  width="7"  height="2" fill="#ffb020"/>' +
+      '<rect x="2" y="7"  width="9"  height="2" fill="#ffb020"/>' +
+      '<rect x="1" y="9"  width="11" height="2" fill="#ffb020"/>' +
+      '<rect x="0" y="11" width="13" height="1" fill="#ffb020"/>' +
+      '<rect x="6" y="3"  width="1"  height="4" fill="#241803"/>' +   // ! Balken
+      '<rect x="6" y="8"  width="1"  height="1" fill="#241803"/>';    // ! Punkt
+    function escXml(s) {
+      return String(s == null ? '' : s)
+               .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function alarmTri(text) {
+      return '<svg class="alarm-tri" viewBox="0 0 13 12" shape-rendering="crispEdges">' +
+             '<title>' + escXml(text) + '</title>' + ALARM_TRI_BODY + '</svg>';
+    }
+    function renderAlarms(alarms) {
+      if (!alarmCorner) return;
+      var html = '';
+      var shown = Math.min(alarms.length, ALARM_MAX);
+      for (var i = 0; i < shown; i++) {
+        html += alarmTri(alarms[i] && alarms[i].text ? alarms[i].text : '');
+      }
+      if (alarms.length > ALARM_MAX) {
+        html += '<div class="alarm-more">+' + (alarms.length - ALARM_MAX) + '</div>';
+      }
+      alarmCorner.innerHTML = html;
+    }
 
     // Sensoren: real button/light (bool). motion/door zeigt das Backend (noch)
     // nicht aktiv – sie bleiben ruhend bis eine echte Quelle sie triggert.
@@ -806,6 +862,10 @@
     // ── Stimme (TTS) — localStorage übersteht Reload/Kiosk-Neustart ──
     var chatMuted = localStorage.getItem('zentraleChatMuted') === '1';
     var speakQueue = [], speakDraining = false, currentSpeakAudio = null;
+    // currentSpeakResolve: resolve-Fn der laufenden Audio-Promise (zum aktiven
+    // Auflösen beim Abbruch). speakGen: Generation, hochgezählt bei jedem Stop -
+    // ein laufender/gefetchter Satz mit alter Generation wird verworfen.
+    var currentSpeakResolve = null, speakGen = 0;
     var chatVolume = parseFloat(localStorage.getItem('zentraleChatVolume'));
     if (!(chatVolume >= 0 && chatVolume <= 1)) chatVolume = 1.0;
     // Alt+S-Chord: aktiv solange S gehalten; "used" merkt, ob dazwischen ein
@@ -838,7 +898,13 @@
     }
     function stopSpeaking() {
       speakQueue = [];
+      speakGen++;   // invalidiert laufenden + grad-gefetchten Satz (alte Generation)
       if (currentSpeakAudio) { try { currentSpeakAudio.pause(); } catch (e) {} currentSpeakAudio = null; }
+      // KRITISCH: pause() feuert KEIN 'ended' → der await in drainSpeakQueue hinge
+      // sonst ewig, speakDraining bliebe true und die Stimme ginge NIE wieder an
+      // (genau der Bug). Darum die hängende Audio-Promise hier aktiv auflösen,
+      // damit die Drain-Schleife sauber endet und speakDraining zurückgesetzt wird.
+      if (currentSpeakResolve) { var r = currentSpeakResolve; currentSpeakResolve = null; r(); }
     }
     function enqueueSpeak(text) {
       // Effekt-Marker [[shimmer: wort]] → nur das Wort vorlesen (nicht die Syntax).
@@ -856,21 +922,28 @@
       try {
         while (speakQueue.length && !chatMuted) {
           var text = speakQueue.shift(); var url = null;
+          var myGen = speakGen;          // Generation dieses Satzes (stopSpeaking bumpt)
           try {
             var resp = await fetch('/api/speak', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ text: text, speed: 1.2 })
             });
-            if (!resp.ok) continue;       // TTS nicht verfügbar → Satz still überspringen
-            if (chatMuted) return;        // während des Fetch gemutet → abbrechen
+            if (!resp.ok) continue;                    // TTS nicht verfügbar → Satz still überspringen
+            if (chatMuted || myGen !== speakGen) return; // gemutet/abgebrochen während Fetch → raus
             var blob = await resp.blob();
+            if (chatMuted || myGen !== speakGen) return; // nach blob nochmal prüfen
             url = URL.createObjectURL(blob);
             var audio = new Audio(url);
             audio.volume = chatVolume;
             currentSpeakAudio = audio;
-            await new Promise(function (resolve) { audio.onended = resolve; audio.onerror = resolve; audio.play().catch(resolve); });
+            // resolve merken, damit stopSpeaking die Promise bei Abbruch auflösen
+            // kann (pause() allein feuert kein 'ended' → würde sonst ewig hängen).
+            await new Promise(function (resolve) {
+              currentSpeakResolve = resolve;
+              audio.onended = resolve; audio.onerror = resolve; audio.play().catch(resolve);
+            });
           } catch (e) { console.warn('TTS Fehler:', e); }
-          finally { if (url) URL.revokeObjectURL(url); currentSpeakAudio = null; }
+          finally { if (url) URL.revokeObjectURL(url); currentSpeakAudio = null; currentSpeakResolve = null; }
         }
       } finally { speakDraining = false; }
     }
@@ -931,6 +1004,7 @@
 
       if (message === '/clear') {
         inputEl.value = '';
+        stopSpeaking();   // laufende Stimme der vorigen Antwort sofort kappen
         await fetch('/api/chat/clear', { method: 'POST' });
         return;   // engine pollt History → Minilog leert sich von selbst
       }

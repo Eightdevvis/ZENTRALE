@@ -69,7 +69,7 @@ Public API:
 - `add_entry(layer, day, label, time=None, **extras)` – Einmal-Eintrag.
 - `add_routine(layer, label, rrule_str, time=None, **extras)` – Wiederholungs-Regel.
 - `add_pause(label, von, bis, grund=None)` – Routine über eine Spanne aussetzen (Tool `add_calendar_pause`, gegatet).
-- `delete_entry(day, label, layer=None)` → `int` – Einträge an einem Tag löschen, gibt Anzahl zurück (Tool `delete_calendar_entry`, gegatet).
+- `delete_entry(day, label, layer=None)` → `int` – Einträge an einem Tag löschen, gibt Anzahl zurück (Tool `delete_calendar_entry`, gegatet). Tool-Hinweis: DIREKT rufen, KEIN read_calendar davor – gemessen (2026-06-07): mit vorherigem read lenken die ⚠-Alarm-Zeilen das 9B 5/8-mal von der Löschung ab; direkt = 8/8. Deterministisch die Ablenkung wegnehmen schlägt Prompt-Nudging.
 - `add_layer(name, label, color, default_visible)` – neuer Layer.
 - `auto_capture(concept, day_iso)` – Spiegelung vom Graph-Extraktor.
 - `entries_in_range(start, end, layers=None)` – Range-Query, Routinen werden expandiert.
@@ -93,6 +93,19 @@ Public API:
 - `day_warnings(entries, matrix=None, puffer_min=None)` → `[str]` – fertige
   ⚠-Zeilen für einen Tag (Voll-/Teil-Überlappung + Knapp-Übergang). Wird in
   `render_range_for_tool` pro Tag angehängt.
+- `conflicts_for_proposed(layer, day, label, time=None)` → `[str]` – prüft einen
+  NOCH NICHT geschriebenen Einmal-Termin HYPOTHETISCH gegen den Tag: holt die
+  echten Einträge (alle Layer), hängt den Plan-Termin als Phantom dran und lässt
+  `day_warnings` + `_conflict_lines` laufen (DRY, gleiche Logik wie der Render-
+  Pfad). `_absage_alarms` bewusst NICHT (Reise-To-do, kein Konflikt dieses
+  Termins). Genutzt von `_permission_question` (ai.py): die ⚠-Zeile steht damit
+  schon im JA/NEIN-Gate-Dialog – Sasha entscheidet **informiert VOR dem
+  Schreiben**, statt erst danach gewarnt zu werden. `[]` bei ungültigem Datum
+  oder konfliktfrei. Hintergrund: Live-Tests 2026-06-07 zeigten erst, dass ein
+  blindes `add` einen Termin stumm in eine Reise legte; ein erster Fix warnte
+  NACH dem Schreiben (Tool-Ergebnis) – Sasha: „backwards"; daher die Warnung in
+  die Gate-Frage vorgezogen. Henne-Ei-Trick nötig, weil der KONFLIKT erst durch
+  das Schreiben entstünde – das Phantom umgeht das.
 - `_away_blocks(start, end, data=None)` → `[{von, bis, ort, label}]` –
   Mehrtages-Abwesenheits-Blöcke (Einträge mit `bis`), die den Bereich
   überschneiden.
@@ -113,8 +126,11 @@ Prinzip wie `resolve_range`/`suche`):
 
 Reisezeit ist `von`-`nach` (hängt vom Vor-Ort ab), nicht pauschal pro Ort. Fehlt
 die Fahrzeit (kein `ort`, Paar nicht in Matrix), gibt es bewusst KEINE
-Knapp-Warnung. Die ⚠-Zeilen erscheinen automatisch in jeder `read_calendar`-
-Antwort; der Tool-Hinweis in `ai.py` weist das Modell an, sie aktiv weiterzugeben.
+Knapp-Warnung. **Seit 2026-06-07 erscheinen diese ⚠-Zeilen NICHT mehr inline in
+`read_calendar`** (siehe „Alarm-Kanal" unten) — der Read ist reine Terminliste.
+Die Rechenfunktionen (`day_warnings`, `_conflict_lines`, `_absage_alarms`)
+bleiben, werden aber nur noch von `open_alarms` (Kanal) und `conflicts_for_proposed`
+(Add-Gate) aufgerufen, nicht mehr von `render_range_for_tool`.
 
 **Abwesenheits-Konflikt (`⚠ KONFLIKT`, 2026-06-06):** Ein Mehrtages-Block mit
 `bis`+`ort` (Reise) macht dem Kalender bekannt, wo du über die Spanne bist. Fällt
@@ -136,6 +152,54 @@ NICHT alles gleich behandelt:
 Routinen tragen `recurring=True` (aus `entries_in_range`); `absage_noetig` ist
 ein optionales Feld pro Routine in der Kalender-Datei. Alarm-Verhalten in beiden
 Fällen: erst beim User rückversichern, dann lauter Text + `[[bild: alarm]]`.
+
+### Alarm-Kanal (2026-06-07) — Warnungen raus aus den Arbeitsdaten
+
+**Problem:** Inline-⚠ in `read_calendar` kaperten die Aufmerksamkeit des 9B
+(Löschen scheiterte 1/4, Add wurde blind). Gegenmaßnahme „nicht lesen lassen"
+erzeugte Folgebugs. **Sashas Umkehrung:** KI nie vom Environment abschneiden —
+die Ablenkung in einen eigenen Rand-Kanal ziehen, Read sauber halten, frei lesen
+lassen.
+
+- **Quelle:** `kalender.open_alarms(horizon_days=30)` → `[{id, kind, text}]`.
+  Sammelt aus `_absage_alarms`/`_conflict_lines`/`day_warnings` (DRY). `id` =
+  stabiler md5(kind|text)[:8] (kein Frontend-Flackern), `text` ohne führendes „⚠".
+- **Recompute-Trigger:** zentral in `kalender._save_raw` (nach JEDER Mutation,
+  try/except-gekapselt) + Boot + alle ~300 Loop-Ticks in `core/main.py` (Zeit-
+  Drift: Reise rückt in den Horizont). Kein Deadlock — die `open_alarms`-Kette
+  nimmt `_lock` nicht.
+- **Speicher:** `state.set_alarms`/`get_alarms` — flache Liste mit **Replace-
+  Semantik** (nicht Append-Deque), gelöste Alarme verschwinden von selbst. Geht
+  in `get_snapshot()["alarms"]`.
+- **Zwei Senken:** (a) Dashboard — `/api/state` → `engine.js` tick → Warndreieck-
+  Ecke unten links im KI-Canvas (`#alarm-corner`, ein `.alarm-tri` pro Alarm,
+  gedeckelt auf 5 + „+N"); (b) KI — `ai._alarm_prompt()` hängt einen „## Offene
+  Erinnerungen"-Block an den System-Prompt (nur regulärer Chat, nach `mem_ctx`).
+- **Lese-Sperren entfernt:** delete-Tool-Beschreibung erlaubt wieder
+  `read_calendar` davor; Meta-Regel 8 („Aufgabe vor Hinweis") raus.
+
+**Gemessen (2026-06-07, `scripts/bench_calendar_delete.py`, N=10, qwen3.5:9b).**
+Eigener 3-Turn-Episoden-Bench (löschen → „was ist die Warnung" → „haben wir doch
+gelöscht"), isolierte Fixture, Alarm-Kanal voll nachgebaut (state-Stub mit echter
+Alarm-Box → recompute nach jeder Mutation wie in Prod). Lokalisiert den Bug:
+- delete feuert **90 %**, ehrlich (kein Fake-„gelöscht") **100 %** → die
+  Lese-Sperren-Hypothese hält, Löschen ist NICHT das Problem.
+- **Alarm-ZUORDNUNG nur 30 %**: das 9B liest `⚠ ABSAGEN: Routine 'Geigenstunde'
+  … Pflicht-Absage` und verkauft sie 7/10-mal als „Reise-vs-10-Uhr-KONFLIKT"
+  (den schon gelöschten Einzeltermin), spiralt von da in Konfabulation
+  (erfundenes Dashboard-Menü, „Neustart hilft"). Episode komplett sauber: 20 %.
+- Konsequenz: Hebel ist die **Präsentation** der Alarm-Zeile, nicht ein
+  weiterer Prompt-Knebel — `feedback_data_vs_model`.
+
+**Fix (2026-06-07, `_absage_alarms`).** ABSAGEN-Zeile umgebaut: AKTION + Subjekt
+nach vorn, eigener Wochentag des Vorkommens (Di — trennt die Routine vom
+Mo-Einzeltermin), Reise als Grund nach hinten. Alt: „Routine 'Geigenstunde' liegt
+in Reise Ungarn-Reise (…) - Pflicht-Absage." Neu: „⚠ Geigenstunde absagen: dein
+wöchentlicher Termin am Dienstag (09.06.) fällt in die Reise Ungarn-Reise (…) -
+du musst aktiv absagen (bei Geigenschule), er entfällt nicht von selbst."
+**Re-Bench (N=20): Alarm-Zuordnung 30 % → ~60 %, Episode-sauber 20 % → ~45 %, delete
+unverändert 100 %.** Reine Datenzeilen-Änderung. ~37 % Fehlattribution-Schwanz
+bleibt (9B-Decke / History-Vergiftung) — weiter offen.
 
 **Absage-Eskalation per Knopf-Dialog (2026-06-07):** nach jedem Absage-Alarm
 (ABSAGEN, oder Einzeltermin den Sasha absagen müsste) hakt die KI per

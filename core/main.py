@@ -15,6 +15,7 @@ from events import (
     DOOR_TOGGLE,
 )
 import state
+import kalender
 
 
 # Mapping: Sensor-Name aus dem Webhook -> intern verwendeter Event-Name.
@@ -64,14 +65,32 @@ def main():
     import ai
     ai.warmup_async()
 
+    # Persönliche Tagesschau: periodischer Hintergrund-Fetcher zieht
+    # Weltpolitik aus vielen RSS-Quellen und lässt die KI daraus ein
+    # Briefing bauen (core/news.py). Eigener Daemon-Thread, vom Chat
+    # entkoppelt; jeder Lauf kündigt sich laut im Log + Internet-Panel an.
+    import news
+    news.start_fetcher()
+
     event_queue = [SYSTEM_BOOT]
 
     # Initiale Vokabel laden
     state.set_vocab(_load_vocab())
 
+    # Alarm-Kanal initial befüllen: beim Boot einmal alle offenen Kalender-
+    # Alarme rechnen, damit die Dashboard-Ecke + der KI-Prompt sofort Bescheid
+    # wissen (sonst erst nach der ersten Kalender-Mutation). Danach hält
+    # kalender._save_raw das Set nach jeder Änderung frisch; der periodische
+    # Recompute unten fängt zeitrelative Alarme ab (Reise rückt näher).
+    try:
+        state.set_alarms(kalender.open_alarms())
+    except Exception as e:
+        log(f"Alarm-Init fehlgeschlagen: {e}")
+
     log("ZENTRALE SYSTEM STARTED")
     log("UI erreichbar unter http://localhost:5000")
 
+    _alarm_tick = 0
     while True:
         # 1️⃣ Sensoren abfragen + State updaten
         button = read_button()
@@ -115,6 +134,18 @@ def main():
             for new_event in new_events:
                 log(f"EVENT OUT: {new_event}")
                 event_queue.append(new_event)
+
+        # 3b️⃣ Alarm-Kanal periodisch neu rechnen (alle ~300 Ticks ≈ 5 min).
+        # Fängt zeitrelative Alarme ab, die OHNE Kalender-Edit relevant werden
+        # (eine Reise rückt in den Horizont). Kalender-Edits selbst aktualisieren
+        # das Set schon sofort über kalender._save_raw - das hier ist nur der
+        # langsame Heartbeat gegen Zeit-Drift.
+        _alarm_tick += 1
+        if _alarm_tick % 300 == 0:
+            try:
+                state.set_alarms(kalender.open_alarms())
+            except Exception as e:
+                log(f"Alarm-Recompute fehlgeschlagen: {e}")
 
         # 4️⃣ Kleine Pause um CPU zu schonen
         time.sleep(1)

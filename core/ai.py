@@ -37,6 +37,7 @@ import consolidation # Phase G: Graph-Extraktor
 import kalender              # Kalender-Layer (Termine, Routinen, erlebt)
 import ascii_lib             # ASCII-Bibliothek (KI "spricht" visuell, siehe zeige_ascii)
 import web                   # Internet-Pipe: Web-Suche + Webseite holen (gegatet)
+import news                  # Persönliche Tagesschau: News-Briefing (lies_news)
 
 OLLAMA_URL   = os.environ.get("OLLAMA_URL",   "http://localhost:11434")
 # Default-Modell seit 2026-06-06: qwen3.5:9b. Reasoning-Bench (scripts/
@@ -144,6 +145,37 @@ def _now_prompt() -> str:
         "nie raten, nie ohne Tool zurückfragen."
     )
     return head
+
+
+def _alarm_prompt() -> str:
+    """
+    Baut den "offene Erinnerungen"-Block aus dem Alarm-Kanal (state.get_alarms,
+    gefüllt von kalender.open_alarms). Ersetzt das frühere Inline-Mischen der
+    ⚠-Zeilen in die read_calendar-Ausgabe: dort verschluckte das kleine Modell
+    die eigentliche Aufgabe. Hier stehen die Alarme randständig im System-Prompt
+    - präsent, aber nicht zwischen die Termine gequetscht. Leeres Set → "" (gar
+    kein Block, damit der Prompt schlank bleibt).
+
+    Bewusst zurückhaltend formuliert: die KI soll die Erinnerung EINMAL aktiv
+    bringen wenn sie zum Gespräch passt, nicht in jede Antwort quetschen - sonst
+    wird der eindringliche Hinweis zum Dauer-Genörgel.
+    """
+    import state
+    alarms = state.get_alarms()
+    if not alarms:
+        return ""
+    lines = ["## Offene Erinnerungen (Hintergrund - nur ablesen, nicht ausrechnen)"]
+    for a in alarms:
+        lines.append("- " + str(a.get("text", "")).strip())
+    lines.append(
+        "Das sind stehende Erinnerungen für Sasha (vom Kalender automatisch "
+        "berechnet). Bring sie EINMAL aktiv zur Sprache, wenn sie gerade zum "
+        "Gespräch passen - z.B. bei einer Frage nach dem Tag/Kalender oder wenn "
+        "ein neuer Termin in eine Reisezeit fällt. Nicht in jede Antwort "
+        "quetschen. Bei KONFLIKT/ABSAGEN einmal kurz rückversichern, dann klar "
+        "warnen (Text + [[bild: alarm]])."
+    )
+    return "\n".join(lines)
 
 
 _SYSTEM_PROMPT = (
@@ -461,10 +493,16 @@ TOOLS = [
             "description": (
                 "Löscht einen Einmal-Termin aus dem Kalender. Nutze dies wenn "
                 "der User einen Eintrag entfernt haben will ('lösch den Zahnarzt "
-                "am Montag', 'der Fake-Termin morgen kann weg'). Wenn du Tag oder "
-                "genaues Label nicht kennst, vorher read_calendar nutzen. Datum: "
-                "YYYY-MM-DD. Wirkt nur auf Einmal-Termine, nicht auf Routinen "
-                "oder Pausen."
+                "am Montag', 'der Fake-Termin morgen kann weg'). Ist unklar "
+                "welcher Eintrag gemeint ist (z.B. 'lösch den raus'), lies ruhig "
+                "vorher mit read_calendar nach Tag + Label nach - der Kalender-"
+                "Read ist saubere Terminliste und lenkt nicht mehr ab. Wenn Tag "
+                "und Label schon klar sind, ruf direkt. WICHTIG: setz IMMER einen "
+                "echten Tool-Call ab und behaupte nie, gelöscht zu haben, ohne "
+                "das Tool gerufen zu haben. Label-Match ist Teilstring, also "
+                "reicht 'Fake-Termin'. Datum: YYYY-MM-DD, relative Angaben "
+                "(morgen) rechnest du aus dem Jetzt-Block aus. Wirkt nur auf "
+                "Einmal-Termine, nicht auf Routinen oder Pausen."
             ),
             "parameters": {
                 "type": "object",
@@ -515,6 +553,35 @@ TOOLS = [
             "parameters": {
                 "type":       "object",
                 "properties": {},
+            },
+        },
+    },
+    # ── Persönliche Tagesschau ────────────────────────────────────────
+    # Liest das im Hintergrund (core/news.py) gebaute Weltpolitik-Briefing.
+    # Read-only + lokal -> NICHT in PERMISSION_REQUIRED_TOOLS (kein Gate).
+    # Der Fetch selbst telefoniert nach draußen, ist aber vom Chat
+    # entkoppelt (eigener periodischer Thread, leuchtet im Internet-Panel).
+    {
+        "type": "function",
+        "function": {
+            "name": "lies_news",
+            "description": (
+                "Liefert ein Weltpolitik-Briefing - aus vielen Nachrichtenquellen "
+                "weltweit zusammengetragen, nach Themen gebündelt und mit "
+                "gegenübergestellten Perspektiven. Zwei Modi über 'tage': "
+                "ohne tage (oder 0) = die aktuelle Tagessendung ('was ist heute/grad "
+                "los'). Mit tage=7 = ein Wochenrückblick ('was ist die Woche/seit ich "
+                "weg war passiert'). Lies das Ergebnis locker und moderierend vor; "
+                "du darfst kürzen oder auf einen Aspekt eingehen."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tage": {
+                        "type":        "integer",
+                        "description": "Rückblick-Fenster in Tagen. 0/weglassen = aktuelle Sendung, 7 = Wochenrückblick.",
+                    },
+                },
             },
         },
     },
@@ -765,7 +832,22 @@ def _permission_question(name: str, args: dict) -> str:
             (args.get("time") or "").strip(),
         ) if p)
         wann_txt = f' am {wann}' if wann else ''
-        return f'Soll ich "{label}"{wann_txt} eintragen?'
+        frage = f'Soll ich "{label}"{wann_txt} eintragen?'
+        # Vorab-Konflikt-Check am GEPLANTEN (noch nicht geschriebenen) Termin:
+        # fällt er in eine Reise oder kollidiert er mit einem bestehenden Termin,
+        # ziehen wir die fertige ⚠-Zeile schon JETZT in die JA/NEIN-Frage - so
+        # entscheidet Sasha informiert, statt erst nach dem Eintragen gewarnt zu
+        # werden. Python rechnet (conflicts_for_proposed), das Modell ist außen
+        # vor: die Zeile wird dem Menschen direkt im Dialog gezeigt.
+        warns = kalender.conflicts_for_proposed(
+            args.get("layer", "termine"),
+            args.get("day", ""),
+            label,
+            args.get("time"),
+        )
+        if warns:
+            frage += " " + " ".join(warns)
+        return frage
     if name == "add_calendar_routine":
         rrule = (args.get("rrule") or "").strip()
         rrule_txt = f' ({rrule})' if rrule else ''
@@ -866,6 +948,10 @@ def _dispatch_tool(name: str, args: dict) -> str:
             start, end = end, start
         return kalender.render_range_for_tool(start, end, layers=layers, suche=suche)
     elif name == "add_calendar_entry":
+        # Konflikt-Warnung passiert VOR dem Schreiben im Erlaubnis-Dialog
+        # (_permission_question → conflicts_for_proposed), damit Sasha informiert
+        # JA/NEIN klickt. Hier nach dem Schreiben nur noch schlicht quittieren -
+        # kein erneuter Hinweis (sonst Doppel-Warnung).
         ok = kalender.add_entry(
             layer = args.get("layer", "termine"),
             day   = args.get("day", ""),
@@ -903,6 +989,8 @@ def _dispatch_tool(name: str, args: dict) -> str:
         return web.suche(args.get("query", ""))
     elif name == "hole_url":
         return web.hole(args.get("url", ""))
+    elif name == "lies_news":
+        return news.lies(args.get("tage", 0))
     else:
         return f"[Unbekanntes Tool: {name}]"
 
@@ -1262,6 +1350,11 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         sys_prompt += _ASCII_MARKER_PROMPT
         if mem_ctx:
             sys_prompt += "\n\n" + mem_ctx
+        # Alarm-Kanal: offene Kalender-Erinnerungen randständig anhängen (nicht
+        # mehr inline in der read_calendar-Ausgabe). Leer → kein Block.
+        alarm_block = _alarm_prompt()
+        if alarm_block:
+            sys_prompt += "\n\n" + alarm_block
         # Mic-Hinweis ans Ende - sieht die KI direkt vor der aktuellen
         # Message, hoechste Recency-Praesenz.
         if via_mic:

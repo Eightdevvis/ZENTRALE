@@ -32,6 +32,7 @@
 #   bleiben unabhängig wartbar.
 
 import json
+import hashlib
 import threading
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -88,6 +89,16 @@ def _save_raw(data: dict) -> None:
     CAL_PATH.parent.mkdir(parents=True, exist_ok=True)
     with CAL_PATH.open("w") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    # Alarm-Kanal frisch halten: nach JEDER Mutation das komplette Alarm-Set
+    # neu rechnen und in den State legen (Dashboard-Ecke + KI-Prompt ziehen es
+    # von dort). Zentral hier, weil ALLE Schreibpfade durch _save_raw laufen.
+    # In try/except gekapselt: ein Alarm-Rechenfehler darf NIE einen Kalender-
+    # Schreibvorgang kippen. Kein Deadlock-Risiko - die open_alarms-Kette nimmt
+    # _lock nicht (nur die Setter tun das, in denen _save_raw gerade schon läuft).
+    try:
+        state.set_alarms(open_alarms())
+    except Exception as e:
+        state.push_log(f"[calendar] Alarm-Recompute fehlgeschlagen: {e}")
 
 
 def ensure_init() -> None:
@@ -821,6 +832,14 @@ def _conflict_lines(day: date, entries: list[dict],
             # NUR Fakten - was die KI damit tun soll (rückversichern, Alarm),
             # steht in der read_calendar-Tool-Beschreibung, NICHT hier. Sonst
             # liest das Modell die Regie-Anweisung wörtlich vor.
+            #
+            # ANMERKUNG (2026-06-07): Versuch, diese Zeile parallel zur ABSAGEN-
+            # Zeile auf „Termin X musst du verschieben oder absagen" umzubauen,
+            # wurde GEMESSEN ZURÜCKGEROLLT - das „verschieben oder absagen" steht
+            # in T1 mit im Kontext und ließ das 9B beim expliziten „lösch den"
+            # zögern (T1-Löschquote 100 %→80 %), ohne die T2-Zuordnung zu heben
+            # (bench_calendar_delete.py, N=20). Daher bewusst die nüchterne
+            # „überschneidet sich"-Form behalten.
             lines.append(
                 f"⚠ KONFLIKT: Reise {blk['label']} "
                 f"({blk['von'].strftime('%d.%m.')}-{blk['bis'].strftime('%d.%m.')}, "
@@ -847,7 +866,7 @@ def _absage_alarms(away_blocks: list[dict]) -> list[str]:
         seen: set[str] = set()
         # entries_in_range liest selbst aus der Kalender-Datei und expandiert
         # die Routinen über die Reise-Spanne - so finden wir jedes Vorkommen.
-        for _day_iso, ents in entries_in_range(blk["von"], blk["bis"]).items():
+        for day_iso, ents in entries_in_range(blk["von"], blk["bis"]).items():
             for e in ents:
                 if not (e.get("recurring") and e.get("absage_noetig")):
                     continue
@@ -859,11 +878,24 @@ def _absage_alarms(away_blocks: list[dict]) -> list[str]:
                 if blk["ort"] and appt_ort and appt_ort == blk["ort"]:
                     continue  # findet am Reiseziel statt → kein Absagen nötig
                 seen.add(e["label"])
-                # Nur Fakten (Verhalten steht in der Tool-Beschreibung).
+                # Formulierung (Umbau 2026-06-07, gemessen): die alte Zeile
+                # „Routine 'X' liegt in Reise Y - Pflicht-Absage" las das 9B als
+                # Kollisions-Narrativ und klebte sie an einen anderen (oft schon
+                # gelöschten) Termin → Alarm-Zuordnung nur 30 % (bench_calendar_
+                # delete.py). Jetzt: AKTION + Subjekt nach vorn, der eigene
+                # Wochentag des Vorkommens (unterscheidet die Routine vom
+                # Einmal-Termin an einem anderen Tag), die Reise als GRUND nach
+                # hinten. Immer noch reine Fakten an Sasha, keine Regie-Anweisung
+                # ans Modell (die steht in der Tool-/Persona-Beschreibung).
+                d  = date.fromisoformat(day_iso)
+                wd = _WEEKDAYS_FULL_DE[d.weekday()]
+                wo = f" (bei {appt_ort})" if appt_ort else ""
                 lines.append(
-                    f"⚠ ABSAGEN: Routine '{e['label']}' liegt in Reise "
-                    f"{blk['label']} ({blk['von'].strftime('%d.%m.')}-"
-                    f"{blk['bis'].strftime('%d.%m.')}) - Pflicht-Absage."
+                    f"⚠ {e['label']} absagen: dein wöchentlicher Termin am {wd} "
+                    f"({d.strftime('%d.%m.')}) fällt in die Reise {blk['label']} "
+                    f"({blk['von'].strftime('%d.%m.')}-"
+                    f"{blk['bis'].strftime('%d.%m.')}) - du musst aktiv "
+                    f"absagen{wo}, er entfällt nicht von selbst."
                 )
     return lines
 
@@ -909,17 +941,13 @@ def render_range_for_tool(start: date, end: date,
         leer = (f"Keine Einträge mit {suche!r} in diesem Zeitraum."
                 if suche else "Keine Einträge in diesem Zeitraum.")
         return head + "\n" + leer
-    # Reisezeit-Matrix + Puffer EINMAL laden (nicht pro Tag/Paar die Datei
-    # neu lesen) und in day_warnings durchreichen. Abwesenheits-Blöcke
-    # (Reisen) ebenfalls einmal für den ganzen Bereich bestimmen.
-    matrix, puffer = _load_config()
-    away_blocks = _away_blocks(start, end)
+    # Reine Arbeitsdaten: NUR die Terminliste. Die ⚠-Warnungen (Reise-KONFLIKT,
+    # ABSAGEN, Tages-Kollision) sind hier BEWUSST RAUS - sie kaperten beim
+    # kleinen Modell die Aufmerksamkeit (Löschen scheiterte, Add wurde blind).
+    # Sie laufen jetzt über den Alarm-Kanal (open_alarms → state → Dashboard-Ecke
+    # + ai._alarm_prompt), randständig statt zwischen die Termine gemischt. Die
+    # KI darf den Kalender dadurch wieder frei lesen, ohne abgelenkt zu werden.
     lines = [head]
-    # Trip-level Absage-To-dos ganz nach oben (einmal pro Reise): aktive
-    # Aufgaben (Routine absagen), die nicht zu EINEM Tag gehören und die der
-    # User leicht vergisst - die sollen zuerst ins Auge springen.
-    for w in _absage_alarms(away_blocks):
-        lines.append("  " + w)
     for day_iso, entries in days.items():
         d = date.fromisoformat(day_iso)
         wd = _WEEKDAYS_FULL_DE[d.weekday()]
@@ -949,12 +977,91 @@ def render_range_for_tool(start: date, end: date,
                 except ValueError:
                     pass
             lines.append(f"  [{e['layer']}] {t}{e['label']}{bis}{ort}")
-        # Warnungen dieses Tages anhängen. Python rechnet, das Modell liest die
-        # fertige ⚠-Zeile nur ab:
-        #  - Voll-/Teil-Überlappung + zu-knapp (day_warnings)
-        #  - Abwesenheits-Konflikt: lokaler Termin während einer Reise
-        for w in day_warnings(entries, matrix=matrix, puffer_min=puffer):
-            lines.append("  " + w)
-        for w in _conflict_lines(d, entries, away_blocks):
-            lines.append("  " + w)
+        # (Keine ⚠-Warnzeilen mehr hier - die laufen über den Alarm-Kanal,
+        #  siehe open_alarms. Der Read bleibt saubere Terminliste.)
     return "\n".join(lines)
+
+
+def conflicts_for_proposed(layer: str, day: str, label: str,
+                           time: str | None = None) -> list[str]:
+    """
+    Prüft einen NOCH NICHT geschriebenen Einmal-Termin HYPOTHETISCH auf Konflikte
+    mit dem schon belegten Tag - ohne ihn zu speichern. Gedacht für die Erlaubnis-
+    Frage (ai._permission_question): Sasha soll im JA/NEIN-Dialog schon sehen, ob
+    der geplante Termin in eine Reise fällt (⚠ KONFLIKT) oder mit einem
+    bestehenden Termin kollidiert (⚠ Kollision/Teil-Überlappung/Knapp) - BEVOR
+    sie bestätigt, nicht erst hinterher als Tool-Ergebnis.
+
+    Trick gegen die „Konflikt entsteht erst durchs Schreiben"-Henne-Ei-Falle: wir
+    holen die echten Einträge des Tages (alle Layer), hängen den geplanten Termin
+    als Phantom-Eintrag dran und lassen die GLEICHEN Konflikt-Funktionen laufen
+    wie der Render-Pfad (day_warnings + _conflict_lines) - eine Logik, kein
+    Doppel-Code. _absage_alarms (Geige-Pflichtabsage) bleibt bewusst außen vor:
+    das ist ein Reise-To-do, kein Konflikt DIESES Termins, und wäre im Add-Dialog
+    nur Rauschen.
+
+    Hinweis: _conflict_lines flaggt nur Termine MIT Uhrzeit; ein ganztägiger
+    Eintrag (kein `time`) löst also keine Reise-KONFLIKT-Zeile aus - dasselbe
+    Verhalten wie im normalen read_calendar-Pfad, bewusst konsistent gehalten.
+
+    Gibt [] bei ungültigem Datum ODER wenn der geplante Termin konfliktfrei ist.
+    """
+    try:
+        d = date.fromisoformat((day or "").strip())
+    except ValueError:
+        return []
+    existing = entries_in_range(d, d).get(d.isoformat(), [])
+    phantom: dict = {"layer": (layer or "termine"),
+                     "label": (label or "(neuer Termin)")}
+    t = (time or "").strip()
+    if t:
+        phantom["time"] = t
+    entries = sorted(existing + [phantom], key=lambda e: e.get("time", "00:00"))
+    away = _away_blocks(d, d)
+    return day_warnings(entries) + _conflict_lines(d, entries, away)
+
+
+def open_alarms(horizon_days: int = 30) -> list[dict]:
+    """
+    Berechnet das KOMPLETTE Set offener Kalender-Alarme von heute über den
+    Horizont (Default 30 Tage) und liefert strukturierte Dicts. Das ist die
+    EINE Quelle des Alarm-Kanals: kalender → state.set_alarms → (Dashboard-Ecke
+    im KI-Canvas + ai._alarm_prompt "offene Erinnerungen"). Bewusst NICHT mehr
+    inline in render_range_for_tool - dort kaperten die ⚠-Zeilen die
+    Aufmerksamkeit des kleinen Modells (Löschen scheiterte, Add wurde blind).
+
+    Sammelt aus den GLEICHEN Rechenfunktionen wie früher der Render-Pfad, damit
+    die Konflikt-Logik an EINER Stelle bleibt (DRY):
+      - _absage_alarms(away_blocks) → Pflicht-Absagen (Routine in Reise)
+      - _conflict_lines(d, entries, away) → Einzeltermin in Reise
+      - day_warnings(entries) → Tages-Kollision / Teil-Überlappung / Knapp
+
+    Form je Alarm: {"id": <stabiler 8-Hex-Hash>, "kind": str, "text": str}.
+    'text' ist die fertige Zeile OHNE führendes "⚠ " - jede Senke setzt ihr
+    eigenes Symbol (Dreieck im Canvas, "- " im Prompt). 'id' ist stabil über
+    Recomputes (md5 über kind+text), damit das Frontend nicht bei jedem Poll
+    neu aufflackert. Reihenfolge: Reise-Absagen zuerst (vergisst man am
+    leichtesten), dann tagesweise Konflikte + Kollisionen.
+    """
+    today = date.today()
+    end   = today + timedelta(days=max(0, horizon_days))
+    away_blocks = _away_blocks(today, end)
+
+    raw: list[tuple[str, str]] = []   # (kind, roh-Zeile) in Anzeige-Reihenfolge
+    for line in _absage_alarms(away_blocks):
+        raw.append(("ABSAGEN", line))
+    for day_iso, entries in entries_in_range(today, end).items():
+        d = date.fromisoformat(day_iso)
+        for line in _conflict_lines(d, entries, away_blocks):
+            raw.append(("KONFLIKT", line))
+        for line in day_warnings(entries):
+            # kind aus dem Zeilenkopf ableiten (Kollision/Teil-Überlappung/Knapp)
+            kind = line.split(":", 1)[0].replace("⚠", "").strip() or "Warnung"
+            raw.append((kind, line))
+
+    alarms: list[dict] = []
+    for kind, line in raw:
+        text = line.lstrip("⚠").strip()
+        aid  = hashlib.md5(f"{kind}|{text}".encode("utf-8")).hexdigest()[:8]
+        alarms.append({"id": aid, "kind": kind, "text": text})
+    return alarms

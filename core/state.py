@@ -62,6 +62,43 @@ _internet_logs = deque(maxlen=100)
 # WICHTIG: Wird NICHT auf Disk gespeichert – beim Neustart weg.
 _chat_history = deque(maxlen=50)
 
+# ── Offene Kalender-Alarme (Alarm-Kanal) ──────────────────────────────
+# Strukturierte Alarme/Warnungen aus dem Kalender (Reise-KONFLIKT, Pflicht-
+# ABSAGEN, Tages-Kollisionen). Bewusst eine FLACHE LISTE mit Replace-Semantik,
+# KEIN Append-Deque: Python rechnet nach jeder Kalenderänderung (+ periodisch)
+# das KOMPLETTE Alarm-Set neu und ersetzt es hier ganz - so sammeln sich keine
+# Dubletten und gelöste Alarme verschwinden von selbst.
+#
+# Dieser Kanal ersetzt das alte Inline-Mischen der ⚠-Zeilen in die
+# read_calendar-Ausgabe: dort kaperten sie die Aufmerksamkeit des kleinen
+# Modells. Jetzt fließen sie randständig in zwei Senken: (a) das Dashboard
+# (Warndreieck-Ecke im KI-Canvas, via get_snapshot) und (b) den KI-System-
+# Prompt (ai._alarm_prompt, "offene Erinnerungen"). Quelle: kalender.open_alarms.
+# Form je Alarm: {"id": <stabil>, "kind": str, "text": str}.
+_alarms: list = []
+
+
+def set_alarms(alarms: list):
+    """
+    Ersetzt das komplette Alarm-Set (Replace, nicht Append).
+
+    Aufrufer: kalender.open_alarms-Recompute (nach jeder Mutation via _save_raw,
+    beim Boot und periodisch aus dem main.py-Loop). Ein voll neu gerechnetes Set
+    kommt rein und überschreibt das alte - gelöste Konflikte sind damit sofort
+    weg, neue da. Thread-safe, weil der Recompute aus verschiedenen Threads
+    kommt (Chat-Thread beim Schreiben, Event-Loop-Thread periodisch).
+    """
+    global _alarms
+    with _lock:
+        _alarms = list(alarms)
+
+
+def get_alarms() -> list:
+    """Aktuelles Alarm-Set (Kopie). Für get_snapshot + ai._alarm_prompt."""
+    with _lock:
+        return list(_alarms)
+
+
 # ── Externe Sensor-Trigger (über Webhook) ─────────────────────────────
 # Seit der PC↔Pi-Topologie-Migration kommen Sensor-Signale nicht mehr
 # nur lokal aus der Tastatur-Simulation (sensors.py), sondern auch via
@@ -326,4 +363,5 @@ def get_snapshot() -> dict:
             "logs":          list(_logs),
             "internet_logs": list(_internet_logs),
             "uptime_s":      round(time.monotonic() - _started),
+            "alarms":        list(_alarms),
         }
