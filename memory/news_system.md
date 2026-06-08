@@ -119,10 +119,16 @@ markiert (Auslieferung = gesehen).
 
 Read-only + lokal → **nicht** in `PERMISSION_REQUIRED_TOOLS`. Dispatch →
 `news.lies(args.get("tage", 0))`. Optionaler Param **`tage`**:
-- `0`/weglassen → **Tagessendung** (aktuelle Top-Themen). Liefert die Sendung
-  **und markiert die Steine als gesehen** (→ nächster Poll lässt sie weg, außer
-  sie bewegen sich). Nicht-blockierend: noch keine Sendung gebaut → async Lauf +
-  "frag gleich nochmal". Zweiter Aufruf ohne Bewegung → "schon gehört".
+- `0`/weglassen → **Tagessendung** (aktuelle Top-Themen). Liefert **IMMER** die
+  volle Sendung (auch beim Wiederholen/Replay) und markiert die Steine als
+  gesehen (das steuert nur die proaktive Frische-Logik, NICHT was geliefert
+  wird). Ist der gecachte Digest leer/alt → baut on-demand frisch. Nicht-
+  blockierend bei fehlendem Digest: async Lauf + "frag gleich nochmal".
+  **WICHTIG (Fix 2026-06-07):** früher klebte ein „(nichts Wichtiges Neues…)"-
+  Vorspann davor wenn alles gesehen war → das 9b plapperte genau das nach
+  statt die Sendung zu lesen, und es gab keinen Replay. Beides raus: kein
+  Freshness-Framing mehr im Tool-Output, `_waehle_sendung` fällt auf einen
+  Recap der wichtigsten aktiven Themen zurück wenn nichts „frisch" ist.
 - `7` (o.ä.) → **Wochenrückblick** ("was war diese Woche / seit ich weg war"):
   Steine der letzten N Tage nach BASIS-Wichtigkeit (ohne Decay-Strafe), markiert
   **nichts** als gesehen. Ist der Store für das Fenster leer (ZENTRALE war
@@ -143,6 +149,37 @@ dass es das braucht. Fix an zwei Hebeln:
 Greift erst nach **Restart** (Migration läuft beim Boot, Prompt lädt beim Boot).
 Zuverlässigkeit ungemessen — bei weiterem Tool-Ignorieren eskalieren (stärkere
 Regel / Few-Shot), nicht in Python templaten ([[feedback_python_model_labor]]).
+
+## Sendungs-/Cinema-Modus (Frontend, monolith.html)
+
+Liest die KI eine Sendung vor, schaltet das Dashboard in einen
+**Sendungs-Modus**: dunkler Vorhang über alles, großer zentraler Untertitel,
+der den **gerade gesprochenen Satz** zeigt (statt der ganzen Textwand).
+
+- **Trigger:** `ai.chat_stream` yieldet `{"cinema": True}`, sobald `lies_news`
+  läuft (vor der Ausführung). `app.py` reicht es als SSE-Event `cinema` durch.
+  Das Frontend ruft `enterCinema()`.
+- **Untertitel-Sync (geschenkt durch die Satz-TTS):** Die Sprachausgabe läuft
+  eh Satz für Satz (`enqueueSpeak`/`drainSpeakQueue`, wartet auf `audio.onended`).
+  Pro abgespieltem Satz setzt `drainSpeakQueue` den Untertitel auf genau
+  diesen Satz. `speakQueue` trägt jetzt `{speak, display}` (TTS-Fassung +
+  lesbarer Originalsatz).
+- **Layout (korrigiert 2026-06-07 — KEIN schwarzer Vollvorhang!):** der erste
+  Bau legte einen opaken Overlay über ALLES (auch den Kern) → kein Platz für
+  Animationen/Bilder. Jetzt: `#stage[data-cinema="on"]` dimmt nur die SEITEN
+  (`.body > .col:not(#col-mid)`) + Header sanft (opacity .3), die **Mittelspalte
+  (`#col-mid`) bleibt hell** und der **Kern (#core) voll sichtbar** (Animationen/
+  Phase-4-Bilder laufen weiter). Der Untertitel ist ein **Lower-Third** (`#cinema-sub`
+  absolut unten in `.core-wrap`, dunkler Verlauf für Lesbarkeit, große Schrift)
+  über dem Kern. `#minilog` (letzte User-Zeile) faded raus = macht Platz. Konsole
+  schrumpft + dimmt, klart beim Tippen auf. `enterCinema`/`exitCinema` toggeln
+  nur `data-cinema` aufs Stage; `setSubtitle` schreibt pro Satz ins Lower-Third.
+- **Ende:** `done` setzt `cinemaExitPending`; sobald der letzte Satz
+  durchgesprochen ist, schließt `drainSpeakQueue` den Vorhang sanft.
+  `stopSpeaking` (Abbruch / neue Nachricht / `/clear`) schließt sofort.
+- **Gemutet:** `enterCinema` no-op bei `chatMuted` (ohne Stimme kein
+  Satz-Takt) → normaler Minilog. Code: `monolith.html` (`#cinema`-CSS +
+  `enterCinema`/`exitCinema`/`setSubtitle` + Hooks in SSE-Reader/Drain).
 
 ## Env-Variablen
 

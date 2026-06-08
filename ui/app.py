@@ -48,32 +48,22 @@ _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data
 # ── Dashboard ─────────────────────────────────────────────────────────
 
 @app.route('/')
+@app.route('/monolith')   # Alias: alte Kiosk-/Bookmark-/Deeplink-URL bleibt gueltig
 def index():
-    """Liefert die Dashboard-HTML-Seite."""
-    resp = render_template('index.html')
-    from flask import make_response
-    r = make_response(resp)
-    # Cache deaktivieren: der Browser soll immer die aktuelle Version laden,
-    # nicht eine gecachte – wichtig bei Entwicklung und Pi-Restart.
-    r.headers['Cache-Control'] = 'no-store'
-    return r
-
-
-@app.route('/monolith')
-def monolith():
     """
-    Neues Monolith-Dashboard (zentrale-new-design). Liegt waehrend der
-    Integration parallel zur alten UI unter /monolith, damit / (das taegliche
-    Arbeits-Frontend inkl. Chat) unberuehrt weiterlaeuft. Sobald das Design
-    voll integriert + abgenommen ist, wird es nach / gezogen.
+    Liefert das Monolith-Dashboard - seit 2026-06-08 die EINZIGE UI (source of
+    truth, von /monolith nach / gezogen). Das alte index.html-Dashboard (AI-Orb,
+    #view-main-Grid) ist entfernt. /monolith bleibt als Alias bestehen, damit der
+    Pi-Kiosk und alte Bookmarks nicht brechen.
 
-    Statische Assets (engine.js = echter Daten-Adapter, viz.js, ascii.js,
-    fonts/) liegen in ui/static/ und werden von Flask automatisch unter
-    /static/<file> ausgeliefert.
+    Statische Assets (engine.js = Daten-Adapter, viz.js, ascii.js, fonts/) liegen
+    in ui/static/ und werden von Flask automatisch unter /static/<file> bedient.
     """
     resp = render_template('monolith.html')
     from flask import make_response
     r = make_response(resp)
+    # Cache deaktivieren: der Browser soll immer die aktuelle Version laden,
+    # nicht eine gecachte – wichtig bei Entwicklung und Pi-Restart.
     r.headers['Cache-Control'] = 'no-store'
     return r
 
@@ -327,6 +317,12 @@ def api_chat():
             # Antworttext → nicht in collected (nicht in die History-Schlussantwort).
             if isinstance(token, dict) and 'permission' in token:
                 yield f"data: {json.dumps({'permission': token['permission']})}\n\n"
+                continue
+            # cinema-Event: eine News-Sendung beginnt (lies_news lief). Reines
+            # UI-Signal (Sendungs-/Untertitel-Modus), kein Antworttext → nicht
+            # in collected.
+            if isinstance(token, dict) and 'cinema' in token:
+                yield f"data: {json.dumps({'cinema': True})}\n\n"
                 continue
             collected.append(token)
             # SSE-Format: "data: " + JSON + zwei Newlines

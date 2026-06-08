@@ -81,6 +81,13 @@ OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
 # Auslagerung ins RAM = langsam). Per Env feinjustierbar.
 OLLAMA_NUM_CTX = int(os.environ.get("OLLAMA_NUM_CTX", "8192"))
 
+# Dashboard-Sicht-Experiment (2026-06-07): gibt der KI eine knappe Sicht auf das,
+# was Sasha im Dashboard sieht (Layout + dass die offenen Erinnerungen = die
+# ⚠-Warnsymbole sind), damit „was ist diese Warnung im Dashboard?" andockt statt
+# ins „ich kenne dein Dashboard nicht" zu laufen. Default AN; per Env auf 0 für
+# den A/B-Vergleich (ZENTRALE_DASHVIEW=0 = alte Baseline ohne Sicht).
+_DASHVIEW = os.environ.get("ZENTRALE_DASHVIEW", "1") != "0"
+
 # Qwen-empfohlene Sampling-Parameter (Non-Thinking-Modus). Vorher setzte der
 # Chat-Pfad NUR num_ctx -> Ollama nahm seine Defaults (temp 0.8, top_p 0.9,
 # top_k 40, repeat_penalty 1.1), die fuer Qwen NICHT passen. Qwen empfiehlt
@@ -164,18 +171,63 @@ def _alarm_prompt() -> str:
     alarms = state.get_alarms()
     if not alarms:
         return ""
-    lines = ["## Offene Erinnerungen (Hintergrund - nur ablesen, nicht ausrechnen)"]
+    # Gemeinsamer Verhaltens-Schwanz (gilt in beiden Varianten).
+    tail = (
+        "Bring sie EINMAL aktiv zur Sprache, wenn sie zum Gespräch passt - z.B. "
+        "bei einer Frage nach dem Tag/Kalender/Dashboard oder wenn ein neuer "
+        "Termin in eine Reisezeit fällt. Nicht in jede Antwort quetschen. Bei "
+        "KONFLIKT/ABSAGEN einmal kurz rückversichern, dann klar warnen "
+        "(Text + [[bild: alarm]])."
+    )
+    if _DASHVIEW:
+        # Dashboard-bewusst: verbindet „Warnung im Dashboard" mit dieser Liste.
+        header  = ("## Offene Erinnerungen "
+                   "(= die ⚠ Warnsymbole unten links in deinem Dashboard)")
+        framing = (
+            "Das sind stehende Erinnerungen für Sasha (vom Kalender automatisch "
+            "berechnet) - UND gleichzeitig das, was Sasha im Dashboard sieht: unten "
+            "links an deinem Ausdrucks-Canvas (ki-kern) ist eine Symbol-Ecke, dort "
+            "steht ein ⚠-Warnsymbol PRO offener Erinnerung (gestapelt). Fragt Sasha "
+            "nach „der Warnung\", „den Symbolen\" oder „dem Alarm\" im Dashboard, "
+            "meint sie GENAU diese Liste hier - verbinde die Frage damit, nicht mit "
+            "etwas Unbekanntem (du siehst den Bildschirm nicht, aber DAS ist es, was "
+            "dort warnt). " + tail)
+    else:
+        # Baseline (vor dem Dashboard-Sicht-Experiment) - für A/B via ZENTRALE_DASHVIEW=0.
+        header  = "## Offene Erinnerungen (Hintergrund - nur ablesen, nicht ausrechnen)"
+        framing = ("Das sind stehende Erinnerungen für Sasha (vom Kalender "
+                   "automatisch berechnet). " + tail)
+    lines = [header]
     for a in alarms:
         lines.append("- " + str(a.get("text", "")).strip())
-    lines.append(
-        "Das sind stehende Erinnerungen für Sasha (vom Kalender automatisch "
-        "berechnet). Bring sie EINMAL aktiv zur Sprache, wenn sie gerade zum "
-        "Gespräch passen - z.B. bei einer Frage nach dem Tag/Kalender oder wenn "
-        "ein neuer Termin in eine Reisezeit fällt. Nicht in jede Antwort "
-        "quetschen. Bei KONFLIKT/ABSAGEN einmal kurz rückversichern, dann klar "
-        "warnen (Text + [[bild: alarm]])."
-    )
+    lines.append(framing)
     return "\n".join(lines)
+
+
+# Kompakte Dashboard-Sicht für die KI (regulärer Chat). Hintergrund: das 9b
+# kannte das Dashboard-Layout NULL - fragte Sasha „was ist diese Warnung im
+# Dashboard?", reflektierte es sich (think=ON) in „ich weiß nicht was du siehst,
+# das wäre Lügen" und verband die Frage nie mit dem Alarm-Block. Stimmt ja: es
+# hatte keine Sicht auf das, was Sasha sieht. Also geben wir ihm eine - knapp,
+# damit der Prompt schlank bleibt. Quelle: memory/dashboard.md.
+_DASHBOARD_VIEW = (
+    "\n\n## Dein Dashboard (was Sasha gerade vor sich sieht)\n"
+    "Du lebst in einem dunklen Cyberpunk-HUD namens „monolith\". MITTE = dein "
+    "Ausdrucks-Canvas (ki-kern) - deine VISUELLE STIMME: hier zeigst du regelmäßig "
+    "eigene ASCII-Bilder und Ausdrücke, die du SELBST per [[bild: ...]]-Marker in "
+    "deinen Antworttext legst (dein Gesicht, Stimmungen, Motive). Im Leerlauf laufen "
+    "umschaltbare Formen (Gesicht, Torus, Würfel, Globus, Welt; Default „Auto\"). "
+    "Direkt darunter die Konsole, in die Sasha "
+    "tippt, plus ein Mini-Log eurer letzten Zeilen. LINKS: Sensoren (Knopf, Licht, "
+    "Bewegung, Tür), Telemetrie, ein stdout-Log. RECHTS: Lifestyle-Tracker und ein "
+    "„outbound\"-Tripwire (zeigt Internet-Traffic, sonst „offline ✓\"). Oben eine "
+    "schmale Statusleiste (Ollama/Netz/Uptime). "
+    "WICHTIG: Unten links AM Ausdrucks-Canvas ist eine Symbol-Ecke - dort steht ein "
+    "⚠-Warnsymbol PRO offener Erinnerung/Alarm (gestapelt, bei vielen „+N\"). Zeigt "
+    "Sasha auf „diese Warnung\", „die Symbole\" oder „den Alarm im Dashboard\", "
+    "meint sie GENAU die offenen Erinnerungen - verbinde die Frage damit. Den "
+    "Bildschirm selbst siehst du NICHT, aber du weißt jetzt, was dort ist und wo."
+)
 
 
 _SYSTEM_PROMPT = (
@@ -1349,6 +1401,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         # (Tutor hat eigenes Tool-Set und kennt keine Bild-Marker).
         sys_prompt += ANTWORT_SUFFIX
         sys_prompt += _ASCII_MARKER_PROMPT
+        if _DASHVIEW:
+            sys_prompt += _DASHBOARD_VIEW   # damit „diese Warnung im Dashboard" andockt
         if mem_ctx:
             sys_prompt += "\n\n" + mem_ctx
         # Alarm-Kanal: offene Kalender-Erinnerungen randständig anhängen (nicht
@@ -1509,6 +1563,24 @@ def chat_stream(messages: list, model: str = None, system: str = None,
                     })
                     continue
                 # „ja" → unten ganz normal ausführen (kein continue)
+            # News-Sendung: lies_news ist TERMINAL (wie antwort). Das Briefing aus
+            # news.lies() IST die fertige, schon moderierte Sendung - wir streamen
+            # sie DIREKT als Antwort, statt das Modell sie in einem zweiten
+            # (langsamen) Durchlauf nacherzählen zu lassen. Spart die zweite
+            # Denk-Runde, verhindert Umschreiben/Konfabulation, und der gesprochene
+            # Text ist exakt das, was baue_sendung geschrieben hat. Davor das
+            # cinema-Signal fürs Frontend (Sendungs-/Untertitel-Modus).
+            # KEIN _async_save_turn: Welt-News gehören NICHT in den Konzept-Graphen
+            # (der speichert nur Sashas Realität).
+            if tools is None and fn_name == "lies_news":
+                yield {"cinema": True}
+                show = active_exec(fn_name, fn_args)
+                # Meta-Kopf ("Sendung (Stand …):") wegschneiden - der gesprochene
+                # Broadcast soll mit dem Moderationstext beginnen, nicht mit Meta.
+                if show.startswith("Sendung (Stand") and "\n\n" in show:
+                    show = show.split("\n\n", 1)[1]
+                yield show
+                return
             tool_result = active_exec(fn_name, fn_args)
             working_messages.append({
                 "role":    "tool",

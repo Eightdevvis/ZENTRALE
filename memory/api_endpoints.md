@@ -7,8 +7,8 @@ nutzen Server-Sent Events (SSE).
 
 | Endpoint              | Methode | Beschreibung                          |
 |-----------------------|---------|---------------------------------------|
-| `/`                   | GET     | Dashboard HTML (index.html)           |
-| `/monolith`           | GET     | Monolith-Dashboard (monolith.html, neues Design, parallel zu `/`) |
+| `/`                   | GET     | Monolith-Dashboard (monolith.html) – die einzige UI |
+| `/monolith`           | GET     | Alias auf `/` (Kiosk/Bookmark-Kompat), liefert dieselbe monolith.html |
 | `/api/state`          | GET     | Aktueller State (Events, Sensoren, Vokabel, Logs) – wird vom Frontend jede Sekunde gepollt |
 
 ## Sensor-Webhook

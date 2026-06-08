@@ -1,5 +1,13 @@
 # Dashboard & Frontend
 
+> **AKTUELLER STAND (2026-06): Live ist NUR noch das Monolith-Dashboard**
+> (`ui/templates/monolith.html`). Das alte `index.html` (AI-Orb, `#view-main`-
+> Grid, `#panel-ai`/`#panel-chat`-Modi, Chat/Data-Collection per Taste) ist
+> **weg** - die entsprechenden Sektionen wurden hier gelöscht, weil veraltete
+> Layout-Doku schon einmal zu falschen KI-Prompt-Texten geführt hat (Dashboard-
+> Sicht, siehe `grounding_recherche.md`). Was Sasha real sieht steht unter
+> „## Monolith-Dashboard".
+
 ## Stack
 
 - **Backend**: Flask (`ui/app.py`).
@@ -27,85 +35,11 @@ Streaming wird **nur** dort benutzt, wo es wirklich nötig ist:
 - `POST /api/chat` – Server-Sent Events (SSE), damit Tokens live
   erscheinen.
 
-## Layout (CSS-Grid mit named areas)
+## Monolith-Dashboard (Route `/`, source of truth)
 
-`#view-main` ist ein 3-Spalten-Grid:
-
-```
-+---------+---------------------+----------+
-| sensors |        ai           |  graph   |
-+---------+---------------------+----------+
-|              term (Footer)              |
-+-----------------------------------------+
-```
-
-Spaltenbreiten: `auto  minmax(0,1fr)  clamp(220px, 22vw, 340px)`.
-Grid-areas: `sensors ai graph` / `term term term`. Areas sind bewusst
-benannt, damit später AI- und Graph-Panel per JS-Class swappable sind
-ohne jede Card einzeln umzubauen.
-
-## Modi
-
-Das Frontend hat eine zentrale „AI-Card" in der Mitte (`#main-display`).
-Je nach Modus wird der Inhalt dieser Card ausgetauscht
-(`#panel-ai` / `#panel-chat`). Sensoren-Spalte links und Mini-Graph
-rechts bleiben dabei sichtbar.
-
-> `#panel-tutor` und die zugehörigen JS-Funktionen existieren noch im
-> HTML, sind aber dormant (Tutor pausiert, siehe `tutor_system.md`).
-
-### Haupt-Ansicht (default, `#panel-ai`)
-- **AI-Orb** (`#ai-orb`): pixelierte Neon-Sonne als SVG. Idle = ruhiger
-  Glow + solider Kreis-Outline + ultra-langsame Pixel-Ring-Rotation.
-  Active (`.ai-orb.active`) = Strahlen erscheinen, schneller Halo-Pulse,
-  Partikel fliegen radial.
-- **Mini-Chat-Log** (`#mini-log`): unter dem Orb, zeigt die letzten 5
-  Konversations-Zeilen (User+AI), Polling alle 2.5s gegen
-  `/api/chat/history`.
-- **Sensoren-Spalte** (links): Button + Light Sensor.
-- **Side-Graph** (rechts): Sleep-Quality-Chart (kompakt).
-- **Terminal** (unten, in zwei Panels gesplittet):
-  - **Links (`#terminal`, neon-grün):** voller Log-Stream. Speist sich
-    aus `state.push_log(...)`, das von `net.py` (`NET →` / `NET ←`),
-    `audio.py` (`STT →` / `TTS →`), `main.py` (`EVENT IN:` / `EVENT OUT:`),
-    `graph.py` (`GRAPH ⊕` / `GRAPH →` / `GRAPH ←`) etc. befüllt wird.
-  - **Rechts (`#terminal-net`, orange):** **nur** Internet-Traffic.
-    Spiegel-Channel `state._internet_logs`, befüllt aus `net.py` wenn
-    `net._is_internet(url)` True liefert (localhost/RFC1918/link-local
-    /`*.local` → False, alles andere → True). Idle-Hinweis
-    `// keine outbound-Pakete · offline ✓` wenn leer. Das Panel ist als
-    **Tripwire** gedacht: ZENTRALE läuft per Design offline – sobald da
-    eine Zeile auftaucht, ging tatsächlich was raus, und du siehst es
-    sofort statt es im großen stdout zu übersehen.
-    > Erfasst werden nur Calls, die durch `core/net.py` laufen. Browser-
-    > Polling, externe Prozesse (`ollama pull`, `git pull`, APT) und
-    > `audio.py` (loggt selbst, lokal-only) sind nicht im Panel.
-
-Stil: cyberpunk dark-HUD — eckige Cards, Neon-Grün auf dunkel-
-durchscheinendem Background, CRT-Scanlines als statisches Overlay
-(ohne `mix-blend-mode`, das war auf der Pi-VC4-GPU zu teuer).
-
-### Chat-Modus (Taste `C`)
-- KI-Chat (lokales Ollama-Modell), Tokens streamen live.
-- Slash-Commands: `/memory`, `/forget N`, `/clear`.
-- **Mic-Button** (`#chat-mic-btn`) im Input-Row neben dem Text-Feld.
-  Toggle-Verhalten: erster Click startet Aufnahme (rot, blinkt), zweiter
-  Click stoppt und schickt das WAV an `/api/transcribe`. Transkribierter
-  Text landet im Input-Feld (kein Auto-Send) – User kann editieren oder
-  mit Enter senden. Beim Senden geht ein `via_mic`-Flag an `/api/chat`
-  mit, der die KI über den Spracheingabe-Kontext informiert
-  (Whisper-Fehler-Awareness, siehe `ki_system.md`). Sobald der User
-  tippt nachdem der Text aus dem Mic kam, kippt das Flag auf `false`.
-- Details zur KI: `ki_system.md`.
-
-### Data-Collection-Modus (Taste `K`)
-- Tastaturgesteuerte Datenerfassung.
-- Details siehe unten.
-
-## Monolith-Dashboard (`/monolith`)
-
-Separate, neuere Dashboard-Variante (`ui/templates/monolith.html`, ein
-einziges großes HTML mit mehreren IIFE-Script-Blöcken). Herzstück ist ein
+Das gelebte Dashboard (`ui/templates/monolith.html`, ein einziges großes HTML mit
+mehreren IIFE-Script-Blöcken). Seit 2026-06-08 unter `/` (Alias `/monolith` bleibt
+für Kiosk/Bookmarks). Herzstück ist ein
 animierter **ASCII-Kern** (`#core`), gesteuert vom *Exhibit-Direktor*
 (`frameTick`, 90 ms/Frame). Umschaltbare Exhibits über Tabs: `gesicht`
 (Avatar), `torus`, `würfel`, `globus`, `welt` (Weltkarte), `filter`
@@ -114,6 +48,46 @@ animierter **ASCII-Kern** (`#core`), gesteuert vom *Exhibit-Direktor*
 > Die IIFEs sind getrennte Scopes. Cross-Scope-Signale laufen über den
 > CustomEvent-Bus auf `window` (`zentrale:logged`, `zentrale:ascii`),
 > nicht über geteilte Funktionen.
+
+### Layout (was Sasha real sieht)
+
+`#stage` ist 1920×1080 (Kiosk, scale-to-fit). Oben eine schmale Statusleiste
+(`.top`: „ZEN · monolith · adaptive konsole", Ollama/Netz/Uptime, Theme
+AUTO/HELL/DUNKEL). Darunter `.body` als 3 Spalten:
+
+```
++------------+----------------------+------------+
+| LINKS      |  MITTE (#col-mid)    | RECHTS     |
+| sensoren   |  ki-kern:            | lifestyle  |
+| telemetrie |   tabs + #core       |  (tracker) |
+| stdout     |   + ⚠ alarm-corner   | outbound   |
+| (#term)    |  konsole (chat-in)   |  (#term-net|
+|            |  minilog + cinema-sub|   tripwire)|
++------------+----------------------+------------+
+```
+
+- **LINKS:** `sensoren` (BUTTON/LICHT/BEWEGUNG-PIR/TÜR), `telemetrie` (PC·CPU-
+  Meter), `stdout` (`#term`, voller Log-Stream aus `state.push_log`).
+- **MITTE (`#col-mid`):** die `ki-kern`-Box mit Exhibit-Tabs (Gesicht/Torus/
+  Würfel/Globus/Welt/Filter/Auto) + dem ASCII-Kern `#core` (s.u.) + der Alarm-
+  Ecke; darunter `core-readout` (AI-State „BEREIT", „zeigt: gesicht"), das
+  `minilog` (letzte Konversationszeilen) und `#cinema-sub`. Darunter die
+  `konsole` (`#chat-input`, wo Sasha tippt).
+- **RECHTS:** `lifestyle` (Tracker) + `outbound` (`#term-net`, Internet-Tripwire,
+  Idle „// offline ✓").
+
+### Alarm-Ecke (`#alarm-corner`) — die ⚠-Warnsymbole
+
+Unten links **in `.core-wrap`** (also am ASCII-Kern), `position:absolute`
+left/bottom 12px, `flex column-reverse`. Pro offenem Kalender-Alarm ein
+Pixel-**Warndreieck** (`.alarm-tri`, `<title>`=Volltext für Hover), gedeckelt auf
+`ALARM_MAX=5` + „+N"-Indikator. Quelle: `e.alarms` aus `/api/state`
+(= `kalender.open_alarms`), gerendert von `renderAlarms()`. Leer → Ecke leer.
+Im Cinema-Modus verblasst sie (`opacity .12`, Puls aus). **Das ist „die Warnung im
+Dashboard", auf die Sasha zeigt** — die KI weiß davon seit 2026-06 über den
+`_DASHBOARD_VIEW`-Prompt-Block (`core/ai.py`), damit sie die Frage „was ist diese
+Warnung?" mit dem Alarm-Block verbindet statt „kenne dein Dashboard nicht" zu
+sagen (Hintergrund: `grounding_recherche.md`).
 
 ### ASCII-Kern / Bild-Marker (KI redet visuell)
 
@@ -132,6 +106,20 @@ Pipeline + Begründung der Marker-statt-Tool-Entscheidung siehe
   Frames), hält es `AI_ART_HOLD` ≈ 110 Frames (~10 s) und kehrt dann
   automatisch zum normalen Auto-Programm zurück (`syncTabs`).
 - Kein Text → nicht im Minilog, kein TTS. Reine Mimik zur Antwort.
+
+### Sendungs-/Cinema-Modus (News-Sendung)
+
+Liest die KI eine News-Sendung vor (Tool `lies_news`), schaltet das Dashboard
+in einen Kino-Modus: **Seiten-Spalten + Header dimmen sanft** (`opacity .3`),
+die **Mittelspalte (`#col-mid`) bleibt hell** und der **Kern (`#core`) voll
+sichtbar** (Animationen/Bilder laufen weiter — kein schwarzer Vollvorhang!).
+Der **gerade gesprochene Satz** erscheint groß als **Lower-Third** (`#cinema-sub`
+unten in `.core-wrap`), synchron zur Satz-TTS (`drainSpeakQueue`/`audio.onended`).
+`#minilog` (letzte User-Zeile) faded raus; Konsole schrumpft + dimmt (klart beim
+Tippen). Trigger: SSE-Event `data.cinema` (Backend yieldet `{cinema:true}` wenn
+`lies_news` läuft) → `enterCinema()` setzt `data-cinema="on"` aufs Stage.
+Schließt am Sendungsende (`done` + letzter Satz) oder bei `stopSpeaking`; bei
+`chatMuted` aus. Voller Mechanismus: [news_system.md](news_system.md).
 
 ### Knopf-Leiste (2–4 Knöpfe statt Eingabe)
 

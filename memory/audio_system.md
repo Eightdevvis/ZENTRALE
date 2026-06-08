@@ -91,8 +91,21 @@ während des SSE-Streamings**:
    gesprochenen Teil. Satz-Ende = `. ! ? … \n` **gefolgt von Whitespace**
    – das trailing-Whitespace garantiert, dass nach dem Satzzeichen schon
    das nächste Token da ist (sonst würde `3.` in `3.14` mitten im Stream
-   fälschlich als Satzende gewertet).
+   fälschlich als Satzende gewertet). **Seit 2026-06-07 ein Zeichen-Scan
+   statt Regex** (verlustfrei – die alte Regex ließ Text VOR eingebetteten
+   Daten wie „09.06.2026" fallen) und kein Satzende mehr bei Abkürzungen /
+   Ordinalzahlen (Einzelbuchstabe oder 1–2-stellige Zahl + Punkt: „z. B.",
+   „9. Juni").
 3. Jeder fertige Satz geht via `enqueueSpeak` in die `speakQueue`.
+   **Sprech-Normalisierung dort (2026-06-07), nur für den TTS-Text – die
+   Anzeige im Minilog bleibt unverändert:** Abkürzungen (`z.B.`→„zum
+   Beispiel"), Uhrzeiten (`19:00`→„19 Uhr"), Datumstage (`9.`→„neunter")
+   und voll-numerische Daten (`9.6.2026`→„neunter sechster 2026") werden
+   ausgeschrieben. Grund: Piper verschluckt/pausiert sonst an den Punkten/
+   Doppelpunkten. Funktionen `expandAbbrev/expandTimes/expandOrdinals/
+   expandNumericDates` (Reihenfolge: Ordinals VOR Times, sonst wird die
+   Uhrzeit-Minute „…30." fälschlich zur Ordinalzahl). Liste `TTS_ABBREV`
+   in `monolith.html` erweiterbar.
 4. `drainSpeakQueue` arbeitet die Queue **seriell** ab: `/api/speak`
    (Piper, `lang=de`) → `<audio>` abspielen → `onended` → nächster Satz.
    Seriell, weil sich sonst mehrere Sätze überlappen würden.

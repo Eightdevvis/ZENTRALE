@@ -143,6 +143,40 @@
   .ai-model { font-size: 11px; color: var(--dim); letter-spacing: 0.08em; } .ai-model b { color: var(--ink); font-weight: 500; }
 
   .minilog { flex-shrink: 0; height: 100px; overflow: hidden; display: flex; flex-direction: column; gap: 5px; margin-top: 8px; position: relative; z-index: 2; background: var(--bg); }
+
+  /* ── Sendungs-/Cinema-Modus (News-Sendung) ──────────────────────────
+     KEIN schwarzer Vollvorhang. Seiten + Chrome dimmen SANFT, die Mittelspalte
+     (Kern mit Animationen/Bildern) bleibt hell + sichtbar. Der gesprochene Text
+     kommt groß als Lower-Third UNTEN im Kern - die Animation läuft drüber weiter.
+     Die letzte User-Zeile (Minilog) verschwindet und macht Platz. */
+  #stage[data-cinema="on"] .top,
+  #stage[data-cinema="on"] .body > .col:not(#col-mid) {
+    opacity: .3; filter: saturate(.7); pointer-events: none;
+    transition: opacity .8s ease, filter .8s ease; }
+  /* Kopf + Readout der Mittelspalte treten zurück, der Kern selbst bleibt voll da */
+  #stage[data-cinema="on"] #col-mid .core-head,
+  #stage[data-cinema="on"] #col-mid .core-readout { opacity: .3; transition: opacity .8s ease; }
+  /* Warnungen (Alarm-Ecke) verblassen mit + der harte Puls beruhigt sich */
+  #stage[data-cinema="on"] #alarm-corner { opacity: .12; transition: opacity .8s ease; }
+  #stage[data-cinema="on"] .alarm-tri { animation: none; }
+  /* Normale Minilog-Box (mit User-Zeile) raus → der Untertitel übernimmt DIESELBE Box */
+  #stage[data-cinema="on"] #minilog { display: none; }
+  /* Konsole: flach + gedimmt nach unten, beim Tippen (focus) klart sie auf */
+  #stage[data-cinema="on"] .console { opacity: .12; transform: scale(.92);
+    transform-origin: bottom center; transition: opacity .8s ease, transform .8s ease; }
+  #stage[data-cinema="on"] .console:focus-within { opacity: .92; transform: none; }
+  /* Untertitel sitzt IN der Textbox (unter dem Kern), wo sonst die Konversation
+     steht - NICHT über dem Canvas. Im Sendungs-Modus ist die normale Box weg,
+     hier steht nur der grad gesprochene KI-Satz, ETWAS größer + mittig in der
+     Box. Kern/Foto darüber bleibt voll frei. Pro Satz neu ge-faded (.show). */
+  #cinema-sub { display: none; }
+  #stage[data-cinema="on"] #cinema-sub {
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; min-height: 100px; margin-top: 8px; padding: 0 16px;
+    text-align: center; font-family: 'VT323', monospace; color: var(--acc);
+    font-size: clamp(22px, 2vw, 32px); line-height: 1.3;
+    opacity: 0; transition: opacity .3s ease; }
+  #stage[data-cinema="on"] #cinema-sub.show { opacity: 1; }
   .ml-row { display: grid; grid-template-columns: 64px 1fr; gap: 9px; font-size: 13px; line-height: 1.42; }
   .ml-role { font-size: 12px; letter-spacing: 0.05em; } .ml-role.user { color: var(--warn); } .ml-role.ai { color: var(--acc); }
   /* Symbol-Fonts NUR an der KI-Prosa (Fallback für ★ ❀ ✦ ♥ …) – NICHT am
@@ -308,7 +342,7 @@
       </div>
 
       <!-- MITTE: Exhibit -->
-      <div class="col">
+      <div class="col" id="col-mid">
         <div class="box core-box">
           <div class="core-head">
             <span class="bt" style="position:static;background:none;padding:0">ki-kern</span>
@@ -328,6 +362,7 @@
             <div class="ai-model" id="ai-meta">zeigt: gesicht</div>
           </div>
           <div class="minilog" id="minilog"></div>
+          <div id="cinema-sub"></div>
         </div>
 
         <!-- Chat-Konsole: immer sichtbar, Enter sendet. Die Konversation
@@ -875,6 +910,43 @@
     var inputEl = document.getElementById('chat-input');
     var micBtn  = document.getElementById('chat-mic-btn');
 
+    // ── Sendungs-/Cinema-Modus ───────────────────────────────────────
+    // Wird vom Backend-Event {cinema:true} angeschaltet (News-Sendung) und
+    // zeigt den gesprochenen Text Satz für Satz als großen Untertitel,
+    // synchron zur Satz-TTS (drainSpeakQueue). Drumrum dunkel.
+    var cinemaStage = document.getElementById('stage');
+    var cinemaSub   = document.getElementById('cinema-sub');
+    var cinema = false, cinemaExitPending = false;
+    function enterCinema() {
+      if (chatMuted) return;   // Sendung lebt von der Stimme; gemutet → normaler Minilog
+      cinema = true; cinemaExitPending = false;
+      if (cinemaSub) { cinemaSub.textContent = ''; cinemaSub.classList.remove('show'); }
+      if (cinemaStage) cinemaStage.setAttribute('data-cinema', 'on');
+    }
+    function exitCinema() {
+      cinema = false; cinemaExitPending = false;
+      if (cinemaStage) cinemaStage.removeAttribute('data-cinema');
+      if (cinemaSub) cinemaSub.classList.remove('show');
+    }
+    // Vorhang NUR schließen wenn die Sendung WIRKLICH durch ist: Stream fertig
+    // (cinemaExitPending) UND nichts spricht/wartet mehr. Kurzer Halt + Re-Check,
+    // damit ein nachgereichter Leftover-Satz den Modus nicht verfrüht abschneidet
+    // (genau der "springt zu früh raus"-Bug). Mitten in der Wiedergabe ist
+    // speakDraining=true → schließt nicht.
+    function maybeEndCinema() {
+      if (!cinema || !cinemaExitPending || speakDraining || speakQueue.length) return;
+      setTimeout(function () {
+        if (cinema && cinemaExitPending && !speakDraining && !speakQueue.length) exitCinema();
+      }, 1400);
+    }
+    function setSubtitle(txt) {
+      if (!cinemaSub) return;
+      cinemaSub.classList.remove('show');
+      cinemaSub.textContent = txt;
+      void cinemaSub.offsetWidth;   // Reflow erzwingen → der Fade läuft pro Satz neu
+      cinemaSub.classList.add('show');
+    }
+
     function escHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
     // ── Mute / Lautstärke ──
@@ -898,6 +970,7 @@
     }
     function stopSpeaking() {
       speakQueue = [];
+      exitCinema();   // Sendungs-Vorhang sofort schließen (Abbruch / neue Nachricht / /clear)
       speakGen++;   // invalidiert laufenden + grad-gefetchten Satz (alte Generation)
       if (currentSpeakAudio) { try { currentSpeakAudio.pause(); } catch (e) {} currentSpeakAudio = null; }
       // KRITISCH: pause() feuert KEIN 'ended' → der await in drainSpeakQueue hinge
@@ -930,10 +1003,70 @@
       [/\bca\./gi, 'circa'],
       [/\bvgl\./gi, 'vergleiche'],
       [/\betc\./gi, 'et cetera'],
-      [/\bNr\./g,  'Nummer']
+      [/\bNr\./g,  'Nummer'],
+      [/\bDr\./g,  'Doktor']
     ];
     function expandAbbrev(s) {
       for (var i = 0; i < TTS_ABBREV.length; i++) s = s.replace(TTS_ABBREV[i][0], TTS_ABBREV[i][1]);
+      return s;
+    }
+    // Uhrzeiten "HH:MM" → gesprochene Form. Die Engine liest "19:00" sonst
+    // chaotisch ("neunzehn null null" / "…uhr null null uhr"). Deterministisch:
+    // Stunde ohne führende Null + "Uhr", Minuten nur wenn ≠ 00 (auch ohne
+    // führende Null). Zahlwörter macht die TTS selbst ("19" → "neunzehn").
+    // Behandelt: Bereiche "17:45-18:30" → "17 Uhr 45 bis 18 Uhr 30" (Kalender-
+    // Format!), und ein optionales "h"/"Uhr"-Suffix ("22:03h", "9:00 Uhr") wird
+    // geschluckt (sonst blieb es roh stehen / doppeltes "Uhr"). Std 0–23, Min 00–59.
+    function _tt(h, m) {
+      h = String(parseInt(h, 10));
+      return m === '00' ? h + ' Uhr' : h + ' Uhr ' + String(parseInt(m, 10));
+    }
+    function expandTimes(s) {
+      // Bereiche zuerst (Bindestrich ODER Gedankenstrich, optionales Uhr/h-Suffix).
+      s = s.replace(/\b([01]?\d|2[0-3]):([0-5]\d)\s*[-–]\s*([01]?\d|2[0-3]):([0-5]\d)(?:\s*(?:Uhr|h)\b)?/gi,
+        function (_, h1, m1, h2, m2) { return _tt(h1, m1) + ' bis ' + _tt(h2, m2); });
+      // Einzel-Uhrzeit, optionales "h"/"Uhr"-Suffix schlucken.
+      s = s.replace(/\b([01]?\d|2[0-3]):([0-5]\d)(?:\s*(?:Uhr|h)\b)?/gi,
+        function (_, h, m) { return _tt(h, m); });
+      return s;
+    }
+    // Ordinalzahlen/Datumstage "9." → "neunter". Löst zwei Dinge: die TTS sagt
+    // nicht mehr "neun" mit Satzende-Pause, und der Splitter (unten) hält "9."
+    // zusammen. Nur 1–31 (Monatstage) und nur wenn ein Leerzeichen/Ende folgt
+    // (so bleibt "9.5"/"9.6." als Dezimal-/Numerik-Datum unangetastet).
+    var TTS_ORD = ['', 'erster', 'zweiter', 'dritter', 'vierter', 'fünfter',
+      'sechster', 'siebter', 'achter', 'neunter', 'zehnter', 'elfter', 'zwölfter',
+      'dreizehnter', 'vierzehnter', 'fünfzehnter', 'sechzehnter', 'siebzehnter',
+      'achtzehnter', 'neunzehnter', 'zwanzigster', 'einundzwanzigster',
+      'zweiundzwanzigster', 'dreiundzwanzigster', 'vierundzwanzigster',
+      'fünfundzwanzigster', 'sechsundzwanzigster', 'siebenundzwanzigster',
+      'achtundzwanzigster', 'neunundzwanzigster', 'dreißigster', 'einunddreißigster'];
+    function expandOrdinals(s) {
+      // pre = Zeichen direkt davor, das NICHT ":" oder eine Ziffer sein darf -
+      // sonst würde eine Uhrzeit-Minute am Satzende ("19:30." / "19 Uhr 30.")
+      // fälschlich zu "dreißigster". pre wird unverändert mitkopiert. Läuft
+      // bewusst VOR expandTimes, solange die Minute noch hinter dem ":" klebt.
+      return s.replace(/(^|[^:\d])([12]?\d|3[01])\.(?=\s|$)/g, function (full, pre, n) {
+        var i = parseInt(n, 10);
+        return (i >= 1 && i <= 31) ? pre + TTS_ORD[i] : full;
+      });
+    }
+    // Voll-numerische Daten "D.M.JJJJ" / "D.M." (auch zero-padded "09.06.2026",
+    // auch mit Leerzeichen) ausschreiben. Die Engine macht sonst aus JEDEM Punkt
+    // ein Satzende mit ~2 s Pause ("neun … sechs … zweitausend…"). Tag + Monat
+    // als Ordinalzahl, das Jahr liest die TTS als Zahl selbst ("2026" →
+    // "zweitausendsechsundzwanzig"). Gültigkeits-Check Tag 1–31 / Monat 1–12 –
+    // passt es nicht (z.B. "25.45."), bleibt es unberührt (ist dann kein Datum).
+    function _ordIf(n, max) { n = parseInt(n, 10); return (n >= 1 && n <= max) ? TTS_ORD[n] : null; }
+    function expandNumericDates(s) {
+      s = s.replace(/\b(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\b/g, function (full, d, m, y) {
+        var od = _ordIf(d, 31), om = _ordIf(m, 12);
+        return (od && om) ? od + ' ' + om + ' ' + y : full;
+      });
+      s = s.replace(/\b(\d{1,2})\.\s*(\d{1,2})\.(?!\d)/g, function (full, d, m) {
+        var od = _ordIf(d, 31), om = _ordIf(m, 12);
+        return (od && om) ? od + ' ' + om : full;
+      });
       return s;
     }
     function enqueueSpeak(text) {
@@ -942,17 +1075,25 @@
       // Zier-Symbole (Sterne/Blumen/Herzen/Pfeile/Box-/Block-Zeichen) nicht
       // vorlesen – Bereiche: Pfeile (2190–21FF), Misc-Technical…Dingbats
       // (2300–27BF), Misc-Symbols-and-Arrows (2B00–2BFF).
-      clean = clean.replace(/[←-⇿⌀-➿⬀-⯿]/g, '');
+      clean = clean.replace(/[←-⇿⌀-➿⬀-⯿️]/g, '');   // ️ = Emoji-Variation-Selector-Rest
       clean = expandAbbrev(clean);                  // Abkürzungen ausschreiben
+      clean = expandNumericDates(clean);            // 9.6.2026 → "neunter sechster 2026"
+      clean = expandOrdinals(clean);                // einzelnes 9. → "neunter" (VOR Times: schützt Uhrzeit-Minuten)
+      clean = expandTimes(clean);                   // 19:00 → "19 Uhr"
       clean = clean.replace(/\s{2,}/g, ' ').trim();
       if (!clean || chatMuted) return;
-      speakQueue.push(clean); drainSpeakQueue();
+      // Im Cinema-Modus zeigen wir den LESBAREN Originalsatz als Untertitel,
+      // nicht die TTS-bereinigte Fassung (Abkürzungen ausgeschrieben, Symbole
+      // raus). Darum beides mitführen: speak (für /api/speak) + display (Untertitel).
+      var display = (text || '').replace(/\[\[\w+:\s*([^\]]+)\]\]/g, '$1')
+                                .replace(/\s{2,}/g, ' ').trim();
+      speakQueue.push({ speak: clean, display: display }); drainSpeakQueue();
     }
     async function drainSpeakQueue() {
       if (speakDraining) return; speakDraining = true;
       try {
         while (speakQueue.length && !chatMuted) {
-          var text = speakQueue.shift(); var url = null;
+          var item = speakQueue.shift(); var text = item.speak; var url = null;
           var myGen = speakGen;          // Generation dieses Satzes (stopSpeaking bumpt)
           try {
             var resp = await fetch('/api/speak', {
@@ -967,6 +1108,7 @@
             var audio = new Audio(url);
             audio.volume = chatVolume;
             currentSpeakAudio = audio;
+            if (cinema && item.display) setSubtitle(item.display);   // Untertitel = der Satz, der JETZT spricht
             // resolve merken, damit stopSpeaking die Promise bei Abbruch auflösen
             // kann (pause() allein feuert kein 'ended' → würde sonst ewig hängen).
             await new Promise(function (resolve) {
@@ -977,23 +1119,35 @@
           finally { if (url) URL.revokeObjectURL(url); currentSpeakAudio = null; currentSpeakResolve = null; }
         }
       } finally { speakDraining = false; }
+      // Sendung durch (done kam) UND alle Sätze gesprochen → Vorhang schließen.
+      maybeEndCinema();
     }
     // Fortlaufenden Text in fertige Sätze zerlegen → [sätze[], rest].
     // Satz-Ende = . ! ? … oder \n, GEFOLGT von Whitespace (verhindert dass
     // "3." in "3.14" als Satzende zählt). Rest bleibt im Puffer.
+    // Zeichen-Scan statt Regex: die frühere Regex /[^.!?…\n]*[.!?…\n]+\s+/ konnte
+    // nicht über interne Punkte hinweg matchen und ließ den Text VOR einem
+    // eingebetteten Datum ("Du hast am 09.06.2026 …") komplett fallen. Dieser
+    // Scan ist verlustfrei: er sucht Terminator+Whitespace als Satzende, lässt
+    // aber Punkte aus, die (a) keine Whitespace nach sich haben ("3.14", "9.6")
+    // oder (b) auf eine Abkürzung/Ordinalzahl folgen (Einzelbuchstabe oder
+    // 1–2-stellige Zahl direkt davor: "z. B.", "9. Juni"). Rest bleibt im Puffer.
     function extractSentences(text) {
-      var re = /[^.!?…\n]*[.!?…\n]+\s+/g, sentences = [], lastIndex = 0, m, buf = '';
-      while ((m = re.exec(text)) !== null) {
-        buf += m[0];
-        // Abkürzungs-Schutz: endet das Häppchen auf Einzelbuchstabe + Punkt
-        // (… z. / … B. / … d. …), ist das KEIN Satzende sondern eine Abkürzung
-        // (z. B., d. h., i. d. R.). Dann weitersammeln statt hier zu trennen –
-        // sonst kriegt die TTS "z." allein und kann es nicht ausschreiben.
-        if (/(^|[\s.])[A-Za-zÄÖÜäöü]\.\s+$/.test(buf)) { lastIndex = re.lastIndex; continue; }
-        sentences.push(buf); buf = ''; lastIndex = re.lastIndex;
+      var sentences = [], start = 0, i = 0, n = text.length, TERM = '.!?…\n';
+      while (i < n) {
+        if (TERM.indexOf(text[i]) !== -1) {
+          var j = i + 1;                                   // zusammenhängende Terminatoren (?!, …) schlucken
+          while (j < n && TERM.indexOf(text[j]) !== -1) j++;
+          if (j < n && /\s/.test(text[j])) {               // muss Whitespace folgen, sonst kein Satzende
+            var before = text.slice(start, i);
+            if (text[i] === '.' && /(^|[\s.])([A-Za-zÄÖÜäöü]|\d{1,2})$/.test(before)) { i = j; continue; }
+            var k = j; while (k < n && /\s/.test(text[k])) k++;  // folgende Whitespaces mitnehmen
+            sentences.push(text.slice(start, k)); start = k; i = k; continue;
+          }
+        }
+        i++;
       }
-      // buf = angefangene, noch nicht beendete Abkürzungs-Kette → zurück in den Rest.
-      return [sentences, buf + text.slice(lastIndex)];
+      return [sentences, text.slice(start)];
     }
 
     // ── Mic-Toggle (identisch zur alten UI; Text landet im Input, kein Auto-Send) ──
@@ -1073,7 +1227,16 @@
             var line = lines[li];
             if (line.indexOf('data: ') !== 0) continue;
             var data = JSON.parse(line.slice(6));
-            if (data.done) break;
+            if (data.done) {
+              // Sendung-Ende vormerken: der Vorhang schließt erst, wenn die
+              // letzte Satz-TTS durch ist (drainSpeakQueue). Ist die Queue eh
+              // schon leer (schnelle TTS), sofort schließen.
+              if (cinema) { cinemaExitPending = true; maybeEndCinema(); }
+              break;
+            }
+            // Sendungs-Signal: Backend meldet eine News-Sendung (lies_news lief)
+            // → Cinema-/Untertitel-Modus an, bevor der Antworttext streamt.
+            if (data.cinema) { enterCinema(); continue; }
             // Inline-Bild-Event (zeige_ascii): KI zeigt ein ASCII-Bild im
             // Kern, parallel zum Text. Kein Antworttext → nicht ins Minilog,
             // nicht sprechen. Der Exhibit-Direktor lebt in einer anderen
@@ -1131,13 +1294,19 @@
       if (e.key === 'Enter')  { e.preventDefault(); sendChatMessage(); return; }
       if (e.key === 'Escape') { e.preventDefault(); inputEl.blur(); return; }
       if (e.altKey && (e.key === 'm' || e.key === 'M')) { e.preventDefault(); toggleChatMic(); return; }
-      // Alt+S: auf keydown nur den Chord markieren (nicht sofort muten) →
-      // "Alt+S halten + Pfeil" bleibt als Lautstärke-Geste nutzbar.
+    });
+    // Lautstärke/Mute (Alt+S, Alt+S+Pfeil) GLOBAL am document - NICHT nur wenn
+    // das Chat-Input fokussiert ist. Vorher hingen die Handler an inputEl, also
+    // ging Lautstärke/Mute nur beim Tippen; im Sendungs-Modus (Konsole nicht
+    // fokussiert) tat sich gar nichts (der "nicht verkabelt"-Effekt). Jetzt
+    // überall. Arrows sind durch altSChordActive gegated → stören keine andere
+    // Pfeil-Navigation (perm-bar/Formular).
+    document.addEventListener('keydown', function (e) {
       if (e.altKey && (e.key === 's' || e.key === 'S')) { e.preventDefault(); altSChordActive = true; return; }
       if (altSChordActive && e.altKey && e.key === 'ArrowUp')   { e.preventDefault(); altSChordUsed = true; changeVolume(+0.1); return; }
       if (altSChordActive && e.altKey && e.key === 'ArrowDown') { e.preventDefault(); altSChordUsed = true; changeVolume(-0.1); return; }
     });
-    inputEl.addEventListener('keyup', function (e) {
+    document.addEventListener('keyup', function (e) {
       if (e.key === 's' || e.key === 'S' || e.key === 'Alt') {
         if (altSChordActive && !altSChordUsed) toggleChatMute();
         altSChordActive = false; altSChordUsed = false;

@@ -440,17 +440,17 @@ def _waehle_sendung(store: dict) -> list:
     ('aktualisiert'), nach aktueller (decay-bereinigter) Wichtigkeit sortiert,
     über der Schwelle, auf SENDUNG_MAX gedeckelt.
     """
-    kandidaten = []
-    for s in store["stories"]:
-        if s.get("status") == "archiviert":
-            continue
-        faellig = (not s.get("gesehen_von_sasha")) or s.get("status") == "aktualisiert"
-        if not faellig:
-            continue
-        w = _aktuelle_wichtigkeit(s)
-        if w < SENDUNG_MIN_WICHTIGKEIT:
-            continue
-        kandidaten.append((w, s))
+    aktiv = [s for s in store["stories"] if s.get("status") != "archiviert"]
+    # Bevorzugt: FRISCHE Themen (ungesehen oder seit-Sicht bewegt) - das ist
+    # die "was ist neu"-Sendung.
+    frisch = [s for s in aktiv
+              if (not s.get("gesehen_von_sasha")) or s.get("status") == "aktualisiert"]
+    # FALLBACK (alles schon gesehen): die wichtigsten AKTIVEN Themen als Recap.
+    # Eine ausdrückliche Sendung darf nie leer sein - "nochmal die Lage" statt
+    # "nichts Neues". Damit kann Sasha eine Sendung auch erneut/wiederholt sehen.
+    pool = frisch if frisch else aktiv
+    kandidaten = [(_aktuelle_wichtigkeit(s), s) for s in pool
+                  if _aktuelle_wichtigkeit(s) >= SENDUNG_MIN_WICHTIGKEIT]
     kandidaten.sort(key=lambda t: t[0], reverse=True)
     return [s for _, s in kandidaten[:SENDUNG_MAX]]
 
@@ -683,27 +683,35 @@ def lies(tage: int = 0) -> str:
     except Exception as e:
         return f"[Konnte die Sendung nicht lesen: {e}]"
 
+    text = (digest.get("text") or "").strip()
     ids = digest.get("story_ids", [])
-    store = _load_store()
-    schon_alle_gesehen = ids and all(
-        s.get("gesehen_von_sasha") for s in store["stories"] if s["id"] in ids
-    )
-    if schon_alle_gesehen:
-        return ("Die aktuelle Sendung hast du schon gehört - seitdem ist nichts "
-                "Wichtiges Neues reingekommen.")
+    # Leere/alte Sendung (nichts war "frisch" als sie gebaut wurde) -> JETZT
+    # frisch bauen. baue_sendung fällt auf einen Recap der wichtigsten Themen
+    # zurück, liefert also auch dann eine echte Sendung, wenn schon alles
+    # gesehen ist. So gibt's nie ein "nichts Neues"-Loch.
+    if not ids or not text:
+        digest = baue_sendung(_load_store())
+        text = (digest.get("text") or "").strip()
+        ids = digest.get("story_ids", [])
 
-    # Auslieferung: enthaltene Steine als gesehen markieren + zur Ruhe legen
-    now = _now()
-    for s in store["stories"]:
-        if s["id"] in ids:
-            s["gesehen_von_sasha"] = True
-            s["gesehen_am"] = now
-            if s.get("status") != "archiviert":
-                s["status"] = "ruht"
-    _save_store(store)
+    # Steine als gesehen markieren - das steuert NUR die proaktive Frische-Logik
+    # (was als "neu" gilt), NICHT was wir hier liefern. Eine ausdrückliche Frage
+    # ("hast du News?") liefert IMMER die volle Sendung, auch beim Wiederholen.
+    if ids:
+        store = _load_store()
+        id_set = set(ids)
+        now = _now()
+        for s in store["stories"]:
+            if s["id"] in id_set:
+                s["gesehen_von_sasha"] = True
+                s["gesehen_am"] = now
+                if s.get("status") != "archiviert":
+                    s["status"] = "ruht"
+        _save_store(store)
 
-    return (f"Sendung (Stand {digest.get('erstellt', '?')}, "
-            f"{len(ids)} Themen):\n\n{digest.get('text', '')}")
+    if not text:
+        return "Konnte gerade keine Sendung bauen - frag in einem Moment nochmal."
+    return f"Sendung (Stand {digest.get('erstellt', '?')}):\n\n{text}"
 
 
 # ── Periodischer Hintergrund-Fetcher ───────────────────────────────────

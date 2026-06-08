@@ -40,7 +40,7 @@ state.py     brain.py      actions.py     event-queue
  app.py  (Flask, liest state.py auf /api/state)
    │
    ▼
-index.html  (Browser pollt /api/state jede Sekunde)
+monolith.html  (Browser pollt /api/state jede Sekunde)
    │
    ▼
  ai.py ── graph.py / consolidation.py / embeddings.py
@@ -89,10 +89,9 @@ ZENTRALE/
 │   └── tutor_session.py     # Tutor Session-State (PAUSIERT, ungenutzt)
 ├── ui/
 │   ├── app.py               # Flask Backend + REST API
-│   ├── static/              # engine.js, viz.js, ascii.js, fonts/ (für /monolith)
+│   ├── static/              # engine.js, viz.js, ascii.js, fonts/ (Monolith-Assets)
 │   └── templates/
-│       ├── index.html       # Dashboard (Vanilla JS, SVG, kein CDN)
-│       └── monolith.html    # Monolith-Dashboard (Route /monolith)
+│       └── monolith.html    # DAS Dashboard (Route / + Alias /monolith)
 ├── services/
 │   ├── whisper_service.py   # STT (Port 5050)
 │   ├── tts_service.py       # TTS (Port 5051)

@@ -240,6 +240,10 @@ def build_system(today: date) -> str:
     sys_prompt = (ai._now_prompt() + "\n\n" + ai._SYSTEM_PROMPT
                   + "\n\n" + ai._CAPABILITIES_PROMPT
                   + ai.ANTWORT_SUFFIX + ai._ASCII_MARKER_PROMPT)
+    # Dashboard-Sicht (gegated wie im Prod-Pfad) - damit „was ist diese Warnung"
+    # andocken kann. A/B via ZENTRALE_DASHVIEW=0.
+    if ai._DASHVIEW:
+        sys_prompt += ai._DASHBOARD_VIEW
     alarm_block = ai._alarm_prompt()      # liest state.get_alarms() (unser Stub)
     if alarm_block:
         sys_prompt += "\n\n" + alarm_block
@@ -254,7 +258,7 @@ def http_post(url, payload, timeout=300):
         return json.loads(resp.read().decode("utf-8"))
 
 
-def run_turn(model, today, history, user_msg, max_rounds=5):
+def run_turn(model, today, history, user_msg, max_rounds=5, think=False):
     """
     Faehrt EINEN Dialog-Turn (volle Tool-Schleife) auf dem aktuellen Welt-/Alarm-
     Zustand. `history` ist die bisherige Gespraechs-Historie (Liste aus
@@ -280,7 +284,7 @@ def run_turn(model, today, history, user_msg, max_rounds=5):
             "options": {"num_ctx": ai.OLLAMA_NUM_CTX},   # KEINE temp -> echte Varianz
         }
         if model.startswith("qwen3"):
-            payload["think"] = False                     # Prod-Default (think aus)
+            payload["think"] = think                      # Default aus; --think = an
         try:
             msg = http_post(ai.OLLAMA_URL + "/api/chat", payload)["message"]
         except Exception as exc:
@@ -348,6 +352,10 @@ def main():
     ap.add_argument("--repeats", type=int, default=5)
     ap.add_argument("--models", nargs="+", default=["qwen3.5:9b"],
                     help="Modelle (Default: nur der Prod-Default qwen3.5:9b).")
+    ap.add_argument("--think", action="store_true",
+                    help="qwen3-Modelle mit think=ON fahren (Reflexion vor Antwort). "
+                         "Sinnvoll NUR mit Dashboard-Sicht an (sonst zerdenkt sich "
+                         "das 9b in 'kenne dein Dashboard nicht'). Langsamer.")
     ap.add_argument("--dump", action="store_true",
                     help="Gescheiterte T2/T3-Antworten am Ende im Wortlaut "
                          "ausgeben - zum ANSCHAUEN des Fehlermodus (klebt das 9B "
@@ -392,7 +400,8 @@ def main():
 
             # ── Turn 1: loeschen ────────────────────────────────────────────
             r1 = run_turn(model, today,
-                          history, "lösch bitte den termin um 10 uhr morgen.")
+                          history, "lösch bitte den termin um 10 uhr morgen.",
+                          think=args.think)
             lat.append(r1["latency"])
             t1_fired  = "delete_calendar_entry" in r1["fired"]
             target_gone = not _entry_present("10 uhr", tomorrow)
@@ -415,7 +424,7 @@ def main():
 
             # ── Turn 2: "was ist diese Warnung?" ───────────────────────────
             q2 = "und was ist diese warnung da im dashboard?"
-            r2 = run_turn(model, today, history, q2)
+            r2 = run_turn(model, today, history, q2, think=args.think)
             lat.append(r2["latency"])
             t2_attrib = (_has_all(r2["content"], [GEIGE, ABSAGE])
                          and not _has_any(r2["content"], MISATTRIB))
@@ -427,7 +436,7 @@ def main():
             # ── Turn 3: "haben wir doch gelöscht, wieso noch Warnung?" ──────
             q3 = ("den 10-uhr-termin haben wir doch grad gelöscht. "
                   "wieso steht da noch ne warnung?")
-            r3 = run_turn(model, today, history, q3)
+            r3 = run_turn(model, today, history, q3, think=args.think)
             lat.append(r3["latency"])
             t3_surfaces = _has_all(r3["content"], [GEIGE, ABSAGE])
             t3_no_allclear = not _has_any(r3["content"], ALLCLEAR)
