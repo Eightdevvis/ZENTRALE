@@ -23,6 +23,7 @@ hier sofort mitziehen, sonst tote Links.
 | Memory-Plan v2 (Historie, A–G)     | memory/ki_memory_plan.md            |
 | Personality-Plan (Fine-Tuning)     | memory/ki_personality_plan.md       |
 | Grounding-Recherche (nicht raten)  | memory/grounding_recherche.md       |
+| Bench-History (Testdaten + Protokolle) | memory/bench_history.md         |
 | Mandarin-Tutor (pausiert)          | memory/tutor_system.md              |
 | Audio (Whisper STT + TTS)          | memory/audio_system.md              |
 | Dashboard & Frontend               | memory/dashboard.md                 |
