@@ -5,6 +5,17 @@ nachvollziehbar machen, Doppel-Messungen vermeiden, Hypothesen gegen echte Zahle
 prüfen statt aus Vibes ([[messen-nicht-vibes]]). **Neue Läufe hier unten anhängen**,
 nicht überschreiben — auch (gerade!) die Negativ-Ergebnisse.
 
+> ## ⚠ SAMPLING-KORREKTUR (2026-06-08) — wichtig für ALLE Zahlen unten
+> Bis 2026-06-08 sendete `bench_calendar_delete.py`/`probe_*` nur `num_ctx` und lief
+> damit auf den **Modell-Defaults von qwen3.5:9b: temperature 1, presence_penalty
+> 1.5, top_p 0.95** — NICHT auf dem Prod-Sampling. Prod (`chat_stream`) sendet
+> `QWEN_SAMPLING` (**temp 0.7**/top_p 0.8/top_k 20/min_p 0/rp 1.05). **Folge:** alle
+> Läufe VOR diesem Datum sind temp-1 → viel rauschiger und NICHT prod-treu. Die
+> *relativen* Vergleiche innerhalb gleicher Bedingung halten meist; die *absoluten*
+> Zahlen sind zu pessimistisch. Beispiel: dieselbe Baseline (think aus, 0.30.6)
+> ergab **temp 1 → 42 % Episode, temp 0.7 → 87 % Episode**. Ab 2026-06-08 nutzen
+> Bench+Probe `QWEN_SAMPLING` (prod-treu). Zeilen mit „temp1" markiert.
+
 ## Test-Umgebung
 
 - PC, RTX 4070 (~12 GB VRAM), Ollama, Default-Modell **qwen3.5:9b** (`num_ctx=8192`,
@@ -28,23 +39,38 @@ nicht überschreiben — auch (gerade!) die Negativ-Ergebnisse.
 
 ## 1. Lösch-/Alarm-Episode (`bench_calendar_delete.py`) — die Hauptstory
 
-qwen3.5:9b, Ollama 0.17.7, sofern nicht anders vermerkt. Quoten in % (N variiert).
+qwen3.5:9b. **Sampling** + Ollama-Version je Zeile vermerkt — `temp1` = alte
+unfaithfule Modell-Defaults (s. Korrektur oben), `prod` = QWEN_SAMPLING temp 0.7.
 
-| Datum | Konfig | N | T1 ok | T2 Zuordn. | T3 keine-Entw. | **Episode** | s/Turn | Notiz |
-|-------|--------|---|-------|-----------|----------------|-------------|--------|-------|
-| 06-07 | Baseline (think aus, keine Dashboard-Sicht) | 10 | 90 % | **30 %** | 90 % | **20 %** | 3,0 | Bug lokalisiert: nicht Löschen/Ehrlichkeit, sondern Alarm-Zuordnung |
-| 06-07 | **+ABSAGEN-Zeile umformuliert** | 20 | ~90 % | **60 %** | 95 % | **45 %** | 3,0 | Daten-Präsentation: Zuordnung verdoppelt. ✅ live |
-| 06-07 | +ABSAGEN +KONFLIKT-Zeile umgebaut | 20 | 80 % | 50 % | 95 % | 25 % | 3,5 | KONFLIKT-Umbau ❌ schadet T1 → **revertet** |
-| 06-07 | +Re-Grounding-Gate AN | 20 | 85 % | 45 % | 95 % | 25 % | 3,4 | A/B-Gate |
-| 06-07 | +Re-Grounding-Gate AUS | 20 | 85 % | 55 % | 100 % | 35 % | 3,6 | Gate bringt nichts → ❌ revertet |
-| 06-07 | **qwen2.5:14b** (Modellwechsel-Test) | 15 | 100 % | 67 % | 100 % | 47 % | 14,5 | 14B ≈ 9B, 5× langsamer → Modell NICHT der Hebel |
-| 06-08 | think GLOBAL + Dashboard-Sicht | 12 | **25 %** | **8 %** | 100 % | **0 %** | 16,3 | Thinking global ❌ zerdenkt Aktions-Turns |
-| 06-08 | **ADAPTIV-think + Dashboard-Sicht** | 12 | **92 %** | **92 %** | 100 % | **67 %** | 5,8 | ✅ **bester Stand, live (RELEASE 30)** |
+| Datum | Konfig | Sampling/Ollama | N | T1 ok | T2 | Episode | Notiz |
+|-------|--------|-----------------|---|-------|----|---------|-------|
+| 06-07 | Baseline (keine Dashboard-Sicht) | temp1 / 0.17.7 | 10 | 90 % | 30 % | 20 % | Bug lokalisiert (Alarm-Zuordnung) |
+| 06-07 | **+ABSAGEN-Zeile** | temp1 / 0.17.7 | 20 | ~90 % | 60 % | 45 % | Daten-Präsentation. ✅ live |
+| 06-07 | +KONFLIKT-Zeile umgebaut | temp1 / 0.17.7 | 20 | 80 % | 50 % | 25 % | ❌ schadet T1 → revertet |
+| 06-07 | Re-Grounding AN / AUS | temp1 / 0.17.7 | 20 | 85 % | 45/55 % | 25/35 % | Gate ❌ kein Nutzen → revertet |
+| 06-07 | qwen2.5:14b | temp1 / 0.17.7 | 15 | 100 % | 67 % | 47 % | 14B≈9B, 5× langsamer |
+| 06-08 | think GLOBAL +Sicht | temp1 / 0.30.6 | 12 | 25 % | 8 % | 0 % | global ❌ zerdenkt Aktion |
+| 06-08 | ADAPTIV +Sicht | temp1 / 0.30.6 | 12 | 92 % | 92 % | 67 % | sah top aus — aber temp1! |
+| 06-08 | ADAPTIV +Sicht (Wdh.) | temp1 / 0.30.6 | 12 | 58 % | 67 % | 25 % | dieselbe Config, halb so gut → **temp-1-Rauschen entlarvt** |
+| 06-08 | Baseline +Sicht | temp1 / 0.30.6 | 12 | 67 % | 75 % | 42 % | temp1-Baseline |
+| **06-08** | **Baseline +Sicht (think aus)** | **prod / 0.30.6** | 15 | **93 %** | **93 %** | **87 %** | ✅ **prod-treu — Modell viel besser als temp1 zeigte** |
+| 06-08 | ADAPTIV +Sicht | prod / 0.30.6 | 15 | 80 % | **93 %** | 73 % | T2 = Baseline (93 %) → **think bringt NICHTS**, Episode-Diff ist T1-Rauschen → **revertet** |
 
-**Trajektorie T2-Zuordnung: 30 → 60 → 92 %. Episode: 20 → 45 → 67 %.** Drei Hebel,
-alle „bessere Eingaben / gezielte Reflexion", keine globalen Tricks:
-1. ABSAGEN-Zeile (Daten-Präsentation), 2. Dashboard-Sicht (KI kennt ihr UI),
-3. adaptive Reflexion (think nur auf Verständnisfragen).
+**LEHRE (Kern der Untersuchung 06-08):**
+1. Die scheinbare 67→25-„Regression" war **temp-1-Rauschen** (dieselbe Config schwankte
+   67↔25), KEIN Ollama-Regress, KEIN kaputtes Thinking. Ursache: Bench maß auf
+   Modell-Default temp 1 statt Prod temp 0.7 (s. Korrektur oben).
+2. Mit prod-treuem temp 0.7 ist die **Baseline (think aus) schon bei 87 % Episode /
+   93 % T2.** Die echten Hebel sind **bessere Daten/Info** (ABSAGEN-Zeile +
+   Dashboard-Sicht), nicht Thinking.
+3. **Adaptive-think war ein Phantom-Gewinn** aus temp-1-Rauschen — bei korrektem
+   Sampling kein Mehrwert (T2 93 % = Baseline) → aus Prod **revertet** (RELEASE folgt).
+   `ai._should_think` bleibt als Bench-Helfer, in chat_stream NICHT verdrahtet.
+4. Was das Ollama-Update WIRKLICH änderte: native `RENDERER/PARSER qwen3.5` (0.30.6)
+   statt Template-Fallback (0.17.7); der think+Tool-Template-Bug (Antwort im
+   thinking-Feld) blieb. Aber nichts davon war die „Regression" — das war Sampling.
+
+Die alten temp1-Absolutzahlen (30/60/67…) NICHT für bare Münze nehmen.
 
 ## 2. Alarm-Verständnis isoliert (`probe_structured_alarm.py`)
 
@@ -93,18 +119,26 @@ qwen3.5:9b ([[project_modell_benchmark]]).
 
 Was die laufende Ollama-Version kann/nicht kann — versionsabhängig, drum dokumentiert.
 
-| Test | Ollama 0.17.7 | Notiz |
-|------|---------------|-------|
-| `tool_choice: "required"` erzwingt Tool | ❌ ignoriert | Tool-Forcing über API geht nicht |
-| DRY-Sampler (`dry_multiplier` …) | ❌ ignoriert | greift eh nur within-turn |
-| `format` = JSON-**Schema-Objekt** erzwingt Felder | ❌ erfindet eigene | nur `format:"json"` greift |
-| think=ON, **kein** Tool → content | ✅ 0/3 leer | genereller content-loss-Bug WEG |
-| think=ON, Synthese **nach** Tool → content | ❌ **3/3 leer** | Bug #10976 (Template schließt `</think>` nicht) |
-| think→OFF nach Tool (Workaround) | ✅ 0/3 leer | rettet die Antwort |
+| Test | 0.17.7 | 0.30.6 | Notiz |
+|------|--------|--------|-------|
+| `tool_choice: "required"` erzwingt Tool | ❌ ignoriert | – | Tool-Forcing über API geht nicht |
+| DRY-Sampler (`dry_multiplier` …) | ❌ ignoriert | – | greift eh nur within-turn |
+| `format` = JSON-**Schema-Objekt** erzwingt Felder | ❌ erfindet eigene | – | nur `format:"json"` greift |
+| think=ON, **kein** Tool → content | ✅ 0/3 leer | ✅ 0/3 leer | genereller content-loss WEG |
+| think=ON, Synthese **nach** Tool → content | ❌ 3/3 leer | ❌ **3/3 leer** | bleibt kaputt — **Modell-Template**, NICHT Ollama |
+| think→OFF nach Tool (Workaround) | ✅ 0/3 leer | ✅ 0/3 leer | rettet die Antwort, in Prod |
 
-> **OFFEN:** Ollama-Update 0.17.7 → **0.30.6** läuft (2026-06-08). Danach Tabelle 5
-> Zeile „think+Tool" neu messen — wenn ✅, kann adaptive Reflexion think auf ALLEN
-> Runden lassen (kein Workaround). Latest-Version: 0.30.6 (release 2026-06-05).
+> **GEKLÄRT 2026-06-08:** Ollama 0.17.7 → **0.30.6** geupdatet (war 13 Versionen
+> zurück). Der think+Tool-Bug bleibt: bei der Synthese-Runde nach einem Tool-Call
+> landet die GANZE Antwort im `thinking`-Feld (gemessen: content len 0, thinking
+> len 418, `done_reason:stop`), content leer — Streaming wie non-streaming. Das ist
+> ein **qwen3.5:9b-Template-Problem** (schließt `</think>` nach Tool nicht), das ein
+> Ollama-Update nicht tauscht. **Fix in Prod (commit folgt):** `chat_stream` +
+> `run_turn` denken nur BIS zum ersten Tool-Call, danach `think=OFF` für die
+> Synthese (`tool_used`-Flag). Reine Verständnis-Turns (kein Tool, z.B. Alarm-Frage)
+> denken voll → Boost bleibt; Tool-Verständnisfragen („was steht diese Woche an?")
+> bekommen eine nicht-leere Antwort (verifiziert). Echter Template-Fix per Modelfile
+> = später, falls Tool-Synthese-Reflexion gebraucht wird.
 
 ---
 

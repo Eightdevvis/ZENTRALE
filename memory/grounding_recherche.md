@@ -240,7 +240,18 @@ globaler Schalter), nicht trivial zu bauen. (think=ON-content-loss-Bug ist auf
 KORREKTE Info ist und die reale „ich kenne dein Dashboard nicht"-Abstain-Falle
 schließt. Quelle ist das ECHTE UI, nicht die (jetzt bereinigte) dashboard.md.
 
-## ADAPTIVE THINK (2026-06-08) — DER GEWINN, in Prod
+## ADAPTIVE THINK — ZURÜCKGEROLLT (Phantom-Gewinn aus temp-1-Rauschen)
+
+> **KORREKTUR 2026-06-08 (später am Tag):** Der unten gefeierte „Gewinn" war ein
+> MESS-ARTEFAKT. Der Bench maß auf temp 1 (Modell-Default) statt Prod-Sampling
+> temp 0.7. Mit prod-treuem Sampling (`QWEN_SAMPLING`) ist die **Baseline (think
+> aus) schon bei 93 % T2 / 87 % Episode** — adaptive-think bringt da NICHTS (T2 =
+> Baseline). **Aus Prod revertet.** Echte Hebel = Daten/Info (ABSAGEN +
+> Dashboard-Sicht). `ai._should_think` bleibt nur als Bench-Helfer. Details:
+> [[bench_history.md im Repo]] (Sampling-Korrektur). Der Text unten = historischer
+> Stand vor der Korrektur.
+
+## ADAPTIVE THINK (2026-06-08, FRÜH) — schien DER GEWINN [temp-1, überholt]
 
 Auflösung der „Thinking global = Desaster, aber isoliert top"-Spannung:
 **think PRO TURN entscheiden.** `ai._should_think(messages)` (Heuristik auf die
@@ -272,8 +283,11 @@ Dashboard nicht").
 **FAZIT der ganzen Runde (alle Hebel durch):**
 - ✅ **Daten-Präsentation** (ABSAGEN-Zeile 30→60 %; Dashboard-Sicht) — bessere
   Eingaben schlagen jeden nachgelagerten Trick.
-- ✅ **Adaptive Reflexion** (think pro Turn) — der GROSSE Gewinn: T2 60→92 %,
-  Episode 45→67 %. In Prod.
+- ❌ **Adaptive Reflexion** (think pro Turn) — schien ein Gewinn, war temp-1-
+  Artefakt; bei prod-treuem Sampling kein Mehrwert (T2 = Baseline 93 %) → revertet.
+- 🔑 **Mess-Hygiene:** Bench muss Prod-Sampling (QWEN_SAMPLING) nutzen, sonst misst
+  er temp-1-Rauschen — das hat uns einen Phantom-Gewinn UND eine Phantom-Regression
+  vorgegaukelt. Seit 2026-06-08 prod-treu.
 - ❌ Modellwechsel (14B ≈ 9B), ❌ tool_choice (Ollama tot), ❌ DRY (Ollama tot +
   falsch), ❌ Re-Grounding (wirkungslos), ❌ Structured Outputs (schlechter),
   ❌ think GLOBAL (Episode 0 %).

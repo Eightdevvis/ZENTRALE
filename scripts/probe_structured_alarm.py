@@ -62,7 +62,7 @@ def base_payload(model, today, history, extra_user=""):
     msgs = [{"role": "system", "content": system}, *history,
             {"role": "user", "content": Q_T2 + extra_user}]
     p = {"model": model, "messages": msgs, "stream": False,
-         "options": {"num_ctx": ai.OLLAMA_NUM_CTX}}
+         "options": {"num_ctx": ai.OLLAMA_NUM_CTX, **ai.QWEN_SAMPLING}}  # prod-treu
     if model.startswith("qwen3"):
         p["think"] = False
     return p

@@ -26,14 +26,27 @@
 # was rein- und rausgeht. Kein versteckter Traffic, kein Sonder-Logging nötig.
 
 import re
+import json as _json
 import html as _html
 from urllib.parse import urlencode, urlparse, parse_qs, unquote
 
-import net  # transparenter HTTP-Wrapper (loggt jeden Call ins Dashboard)
+import net    # transparenter HTTP-Wrapper (loggt jeden Call ins Dashboard)
+import state  # für den expliziten Transparenz-Log (s.u. _searxng_search)
 
 
-# DuckDuckGo HTML-Endpoint. Liefert eine simple Trefferseite ohne JavaScript,
-# gut parsebar. (Der "lite"-Endpoint ginge auch, html/ ist stabiler bestückt.)
+# ── Such-Backend: SearXNG (self-hosted, localhost) ────────────────────
+# Seit 2026-06-08 ist die primäre Such-Quelle eine lokal laufende SearXNG-
+# Instanz (Docker-Container, Port 8888). SearXNG ist ein Meta-Suchmaschinen-
+# Aggregator: ER fragt im Hintergrund Google/Bing/DDG/… ab und liefert uns
+# eine saubere JSON-Trefferliste. Vorteile gegenüber dem alten DDG-Scraping:
+#   - stabiles JSON-Format statt fragilem HTML-Regex-Parsing
+#   - keine Anti-Bot-Landingpage (DDG hatte uns geblockt)
+#   - die Upstream-Suchen laufen unter SearXNGs Identität, nicht unter unserer
+# Umschalten der Quelle = weiterhin nur EINE Funktion tauschen (_searxng_search).
+_SEARX_URL = "http://localhost:8888/search"
+
+# DuckDuckGo HTML-Endpoint – bleibt als dokumentierter Fallback im Code, falls
+# der SearXNG-Container mal nicht läuft (suche() fällt darauf zurück).
 _DDG_URL = "https://html.duckduckgo.com/html/"
 
 # Browser-User-Agent: ohne diesen Header gibt DDG dem urllib-Default oft eine
@@ -134,6 +147,38 @@ def _ddg_search(query: str, max_results: int):
     return results
 
 
+def _searxng_search(query: str, max_results: int):
+    """
+    Primäre Such-Implementierung: fragt die lokale SearXNG-Instanz im JSON-
+    Modus und gibt eine Liste {title, url, snippet} zurück (gleicher Rückgabe-
+    Typ wie _ddg_search). Wirft bei Netz-/Parse-Fehlern (suche() fängt ab).
+
+    Transparenz-Hinweis: Der HTTP-Call geht an localhost:8888 → net.py stuft
+    ihn als "lokal" ein und das orange Internet-Panel würde leer bleiben,
+    OBWOHL SearXNG dahinter echtes Internet anfasst (Google/Bing/…). Damit die
+    Tripwire-Transparenz erhalten bleibt, spiegeln wir die Suchanfrage hier
+    EXPLIZIT in den Internet-Channel – man sieht im Panel also weiterhin, dass
+    (und wonach) nach draußen gesucht wurde.
+    """
+    state.push_internet_log(f"NET →  SUCHE „{query}“ (via SearXNG)")
+
+    url  = _SEARX_URL + "?" + urlencode({"q": query, "format": "json"})
+    body = net.get(url, timeout=_TIMEOUT_S, headers={"User-Agent": _UA})
+    data = _json.loads(body.decode("utf-8", errors="replace"))
+
+    results = []
+    for r in data.get("results", []):
+        results.append({
+            "url":     r.get("url", ""),
+            "title":   _strip_html(r.get("title", "")),
+            # SearXNG nennt das Snippet-Feld "content".
+            "snippet": _strip_html(r.get("content", "")),
+        })
+        if len(results) >= max_results:
+            break
+    return results
+
+
 def suche(query: str, max_results: int = _DEFAULT_RESULTS) -> str:
     """
     Web-Suche für das KI-Tool `web_suche`. Gibt ein menschen-/modell-lesbares
@@ -141,14 +186,23 @@ def suche(query: str, max_results: int = _DEFAULT_RESULTS) -> str:
     Fehler werden NICHT geworfen, sondern als [Fehler: ...]-String geliefert,
     damit die KI im selben Zug sinnvoll reagieren kann statt die Tool-Loop
     abzubrechen.
+
+    Quelle: primär SearXNG (lokal). Läuft der Container nicht, fällt die Suche
+    auf das alte DuckDuckGo-Scraping zurück – dann ist wenigstens nichts
+    komplett tot, solange DDG uns nicht blockt.
     """
     query = (query or "").strip()
     if not query:
         return "[Fehler: leere Suchanfrage]"
     try:
-        results = _ddg_search(query, max_results)
-    except Exception as e:
-        return f"[Fehler bei der Web-Suche: {e}]"
+        results = _searxng_search(query, max_results)
+    except Exception as e_searx:
+        # SearXNG nicht erreichbar / kaputt → Fallback auf DuckDuckGo.
+        try:
+            results = _ddg_search(query, max_results)
+        except Exception as e_ddg:
+            return (f"[Fehler bei der Web-Suche: SearXNG: {e_searx}; "
+                    f"DDG-Fallback: {e_ddg}]")
     if not results:
         return f"Keine Treffer für '{query}'."
 

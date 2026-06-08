@@ -1469,19 +1469,16 @@ def chat_stream(messages: list, model: str = None, system: str = None,
 
     max_rounds = 5  # Sicherheitsnetz gegen Endlosschleifen
 
-    # Adaptive Denk-Tiefe (regulärer Chat): think NUR bei Verständnis-/Verifikations-
-    # fragen, NICHT bei Aktions-Turns. Gemessen (bench_calendar_delete.py, N=12):
-    # adaptiv schlägt sowohl think-aus (Episode 45→67 %, T2-Zuordnung 60→92 %) als
-    # auch think-global (das die Aktions-Turns zerdenkt: Episode 0 %). Einmal vor
-    # der Tool-Schleife bestimmt - der Turn-Intent ändert sich über die Runden nicht.
-    # Tutor-Modus (tools != None) denkt nicht (eigenes Tool-Set, ungetestet).
-    do_think = SUPPORTS_THINK and tools is None and _should_think(messages)
-    think_opts = {"think": do_think} if SUPPORTS_THINK else {}
-
+    # Thinking AUS (prod-treu gemessen 2026-06-08): adaptive Denk-Tiefe (think nur
+    # auf Verständnisfragen) brachte bei korrektem Sampling (QWEN_SAMPLING, temp 0.7)
+    # KEINEN Mehrwert - die Baseline ist schon bei T2-Zuordnung 93 % / Episode 87 %
+    # (bench_history.md). Der frühere „adaptive Gewinn" war ein temp-1-Mess-Artefakt.
+    # Der Heuristik-Helfer ai._should_think bleibt für Bench-Experimente bestehen,
+    # ist hier aber bewusst NICHT verdrahtet (kein Mehrwert + think+Tool-Template-Bug).
     for _ in range(max_rounds):
         payload = {
             "model":      model,
-            **think_opts,
+            **_think_opts(),
             "messages":   working_messages,
             "tools":      active_tools,
             "stream":     True,

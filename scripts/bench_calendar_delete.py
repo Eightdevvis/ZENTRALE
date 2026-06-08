@@ -28,10 +28,12 @@ Warum DIESES Skript zusaetzlich zu bench_calendar.py:
 Bias-Schutz (Sashas Prinzip, messen statt Vibes - feedback_messen_nicht_vibes):
   - Die richtigen/falschen Antworten stehen als include/forbid-Listen IM SKRIPT,
     vor dem Lauf festgenagelt. Gescort wird per Substring-Abgleich, kein Urteil.
-  - KEINE temperature-Fixierung: wie im Produktiv-Pfad laeuft das Modell auf
-    seinem Default-Temp. Genau das erzeugt die Varianz, die Sasha spuert
-    ("dieses Mal hat sie ihn brav geloescht") - mit temp=0 wuerde man sie
-    wegmessen. Deshalb messen wir mit --repeats die ECHTE Quote.
+  - SAMPLING = ai.QWEN_SAMPLING, GENAU wie der Produktiv-Pfad (chat_stream):
+    temp 0.7 / top_p 0.8 / top_k 20 / min_p 0 / rp 1.05. KORREKTUR 2026-06-08:
+    frueher sendete der Bench nur num_ctx und lief damit auf den MODELL-Defaults
+    (temp 1, presence_penalty 1.5) - rauschiger UND nicht Prod; das verzerrte
+    fruehere Laeufe (wilde 67<->25-Schwankung kam zum Teil daher). Restvarianz
+    bei temp 0.7 ist die echte, die auch Sasha live spuert - mit --repeats messen.
 
 Faithfulness zum Produktiv-Pfad (core/ai.py:chat_stream, regulaerer Chat):
   - GLEICHER System-Prompt-Aufbau: _now_prompt + _SYSTEM_PROMPT +
@@ -274,6 +276,7 @@ def run_turn(model, today, history, user_msg, max_rounds=5, think=False):
             {"role": "user", "content": user_msg}]
     fired: list[str] = []
     t0 = time.time()
+    tool_used = False   # nach erstem Tool kein think mehr (Template-Bug, s. ai.py)
     for rnd in range(max_rounds):
         payload = {
             "model": model,
@@ -281,10 +284,14 @@ def run_turn(model, today, history, user_msg, max_rounds=5, think=False):
             "tools": ai.TOOLS,
             "stream": False,
             "keep_alive": "5m",
-            "options": {"num_ctx": ai.OLLAMA_NUM_CTX},   # KEINE temp -> echte Varianz
+            # PROD-TREU: chat_stream sendet QWEN_SAMPLING (temp 0.7/top_p 0.8/top_k
+            # 20/min_p 0/rp 1.05). Ohne das lief der Bench auf den Modell-Defaults
+            # (temp 1, presence_penalty 1.5) = viel rauschiger UND nicht Prod →
+            # die wilde 67↔25-Schwankung kam zum Teil daher. Jetzt identisch zu Prod.
+            "options": {"num_ctx": ai.OLLAMA_NUM_CTX, **ai.QWEN_SAMPLING},
         }
         if model.startswith("qwen3"):
-            payload["think"] = think                      # Default aus; --think = an
+            payload["think"] = think and not tool_used    # think bis erstes Tool, dann aus
         try:
             msg = http_post(ai.OLLAMA_URL + "/api/chat", payload)["message"]
         except Exception as exc:
@@ -297,6 +304,7 @@ def run_turn(model, today, history, user_msg, max_rounds=5, think=False):
                         rounds=rnd + 1, latency=time.time() - t0, error=None)
         msgs.append({"role": "assistant", "content": msg.get("content", ""),
                      "tool_calls": tcs})
+        tool_used = True   # Folge-Runden ohne think (Synthese-Template-Bug)
         for tc in tcs:
             name = tc["function"]["name"]
             a = tc["function"].get("arguments", {})
