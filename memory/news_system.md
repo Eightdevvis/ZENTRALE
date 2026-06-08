@@ -292,6 +292,23 @@ Tuning-Konstanten: `NEWS_CLUSTER_SIM=0.64` (Average-Linkage, gemessen),
     (kleine Modelle „misquoten") — aber das ist trivial fangbar; und Zitate über
     Sprachen (BBC=EN, Tagesschau=DE) am besten im Original zitieren (bleibt
     verbatim-prüfbar) oder übersetzte Zitate als Paraphrase markieren.
+  - **Korrektur-Schleife (Ping-Pong) — gemessen 2026-06-08 (4 Stories, 3 Runden):**
+    Idee (Sasha): KI schreibt → deterministischer Zitat-Substring-Check → Fehler
+    zurück → KI korrigiert, bis sauber (mit hartem Iterations-Cap). Ergebnis
+    **gemischt aber aufschlussreich:** 2/4 Stories konvergierten auf 0 unbelegte
+    Zitate (eine davon durch **ehrliche ABSTINENZ** — das Modell schrieb von selbst
+    „es liegen keine wörtlichen Zitate vor, kann ich nicht wiedergeben" → exakt das
+    Zielverhalten, verzahnt mit `scripts/bench_abstention.py`). 2/4 konvergierten
+    NICHT — das 9B baute beim Korrigieren NEUE falsche Zitate ein (1→2 statt →0).
+    Lehren: (a) „iterier bis sauber" terminiert mit dem 9B NICHT von selbst →
+    harter Cap Pflicht; (b) der **Guard (unbelegte Zitate nach N Runden streichen)
+    ist die Sicherheits-Untergrenze und greift HEUTE schon** — Ausgabe ist sicher,
+    egal ob die Schleife konvergiert; die Schleife macht's nur reicher wenn sie
+    klappt; (c) **bestätigte Lücke:** der Substring-Guard prüft nur ZITATE — die
+    Prosa DAZWISCHEN bleibt ungeprüft (im Test rutschte „Tschernobyl" als
+    Verbindungs-Prosa durch) → Fakten gehören in Zitate, Prosa muss faktenfrei sein
+    (oder eigener Check). Fazit: Untergrenze funktioniert mit dem 9B, Konvergenz/
+    Reichhaltigkeit braucht das stärkere Modell (das genau die Nicht-Konvergenz heilt).
 - **Qualität sonst ungebencht:** qwen3.5:9b hat Deutsch-Patzer
   („Isreal"/„Zverew"). Tuning-Konstanten gegen Ground-Truth zu benchen
   ([[feedback_messen_nicht_vibes]]).
