@@ -266,6 +266,10 @@ Audit vor dem Lauf: effektives `options`-Dict ausgedruckt + verifiziert
 Pflicht für jeden Vergleich (sonst misst man Artefakte — siehe Sampling-Korrektur
 oben, [[feedback_messen_nicht_vibes im Memory]]):
 
+0. **Design-Tabelle ZUERST (Pre-Registration).** Vor jedem Lauf eine Tabelle: alle
+   FIXEN Parameter (verifiziert) + der EINE Knopf, der sich ändert. Bestätigen,
+   DANN messen — nie blind losbenchen. (Sasha 2026-06-08: „zuerst nochmal so nen
+   table … dass wirklich nur EIN Rädchen gedreht wird und wir wissen welche".)
 1. **Nur EIN Rädchen pro Vergleich.** A vs B unterscheiden sich in GENAU einer
    Variable, alles andere bit-identisch. Nie zwei Knöpfe gleichzeitig.
 2. **ALLE Parameter vorher verifizieren** (Audit): das effektive `options`-Dict
