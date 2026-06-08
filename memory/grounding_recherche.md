@@ -299,5 +299,29 @@ Dashboard nicht").
   ([[ki_personality_plan.md]]) für den Rest-Schwanz; `_should_think`-Heuristik bei
   Bedarf verfeinern (mehr Fragetypen / Mehrdeutigkeiten).
 
+## ABSTINENZ: Thinking trägt — und die Richtung „sichtbare Reflexion" (2026-06-08)
+
+Gegenstück zur Lese-Aufgabe: bei ABSTINENZ („weiß ich, was ich nicht weiß?" =
+Metakognition) HILFT Thinking. Gemessen (`bench_abstention.py`, N=20, prod-treu,
+ein Rädchen = think-Modus): ehrliche Abstinenz **ohne 91 % → mit/adaptiv ~99–100 %**
+(+9pp), fast komplett getragen davon, dass das 9B ohne Think „was der Graph zeigt"
+in ~30 % frei erfindet (Batteriestatus, Körpertemperatur in Kelvin…), mit Reflexion
+nie. Voll: [[bench_history.md im Repo]] 2b. Bestätigt das Reasoning-Gap-vs-Daten-Gap-
+Modell auf BEIDEN Seiten: Lese-/Daten-Aufgabe → Think nutzlos; Metakognition/
+Abstinenz → Think ist der Hebel.
+
+**Trade-off Ehrlichkeit vs. Latenz — und Sashas Auflösung (die richtige Route):**
+Thinking kostet ~3× Zeit (~3s → ~10–15s). Das ist NUR teuer, weil das Denken
+HEUTE VERSTECKT ist (User starrt stumm, dann kommt die Antwort). Sashas Idee:
+**Reflexion SICHTBAR/gestreamt machen** — die KI sagt live „warte, ich glaub ich
+irre mich, schau kurz nach", tool-callt sichtbar, dann antwortet (genau wie Claude
+seinen Prozess zeigt). Dann ist die Latenz ein UX-GEWINN (User ist live dabei),
+nicht -Verlust. „UX ist nichts wert, wenn die KI nur Müll labert" — Ehrlichkeit
+schlägt Roh-Speed, aber der Weg ist die Reflexion zu ZEIGEN, nicht abzuschaffen.
+OFFEN/NÄCHSTER SCHRITT: streamendes Reflexions-/Tool-Narrativ ins Frontend (der
+`thinking`-Stream existiert ja schon, Ollama liefert ihn getrennt) + billiger
+Persona-Fix gegen Bildschirm-Inhalt-Konfabulieren gegenmessen. Siehe
+[[project_adaptiver_aufwand]].
+
 **Quellen Lauf 1 (alle Primär):** arXiv 2509.04664, 2512.19920, 2605.14038,
 2406.15927, 2309.11495 + llama.cpp grammars-Repo.
