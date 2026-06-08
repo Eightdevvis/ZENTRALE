@@ -9,7 +9,7 @@ an – **offline by default**.
 
 Die KI ist lokal (Ollama + qwen3.5:9b). Kein Cloud-Modell, keine Telemetrie.
 **Eine Ausnahme seit 2026-06-07:** die KI hat eine **gegatete Internet-Pipe**
-(Tools `web_suche`/`hole_url`, DuckDuckGo keyless) – jeder Call nach draußen
+(Tools `web_suche`/`hole_url`, Suche via SearXNG self-hosted) – jeder Call nach draußen
 muss von Sasha per Knopf bestätigt werden und leuchtet im Internet-Monitor
 des Dashboards auf. Ohne diese bewusste Freigabe verlässt nichts das Heimnetz.
 Details: `ki_system.md` → „Internet-Pipe". Die KI hat zusätzlich Lese-Zugriff

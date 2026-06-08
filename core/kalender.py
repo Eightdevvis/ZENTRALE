@@ -887,6 +887,10 @@ def _absage_alarms(away_blocks: list[dict]) -> list[str]:
                 # Einmal-Termin an einem anderen Tag), die Reise als GRUND nach
                 # hinten. Immer noch reine Fakten an Sasha, keine Regie-Anweisung
                 # ans Modell (die steht in der Tool-/Persona-Beschreibung).
+                # Formulierung gemessen prod-treu (N=20, temp 0.7): diese Zeile vs.
+                # die alte „Routine 'X' liegt in Reise Y - Pflicht-Absage" → T2-Alarm-
+                # Zuordnung 100 % vs 80 %, Episode 85 % vs 60 % (bench_history.md P5).
+                # Der Umbau trägt also echt, nicht nur ein temp-1-Artefakt.
                 d  = date.fromisoformat(day_iso)
                 wd = _WEEKDAYS_FULL_DE[d.weekday()]
                 wo = f" (bei {appt_ort})" if appt_ort else ""

@@ -281,8 +281,10 @@ Denk-Tokens im `thinking`-Feld (vom Reader ignoriert), die Antwort im `content`-
 Dashboard nicht").
 
 **FAZIT der ganzen Runde (alle Hebel durch):**
-- ✅ **Daten-Präsentation** (ABSAGEN-Zeile 30→60 %; Dashboard-Sicht) — bessere
-  Eingaben schlagen jeden nachgelagerten Trick.
+- ✅ **Daten-Präsentation** — sauber isoliert belegt (N=20, prod-treu temp 0.7,
+  ein Rädchen, [[bench_history.md im Repo]] 1b): **ABSAGEN-Zeile +25pp Episode,
+  Dashboard-Sicht +25pp Episode**; mit beiden T2-Zuordnung 100 %. Bessere Eingaben
+  schlagen jeden nachgelagerten Trick.
 - ❌ **Adaptive Reflexion** (think pro Turn) — schien ein Gewinn, war temp-1-
   Artefakt; bei prod-treuem Sampling kein Mehrwert (T2 = Baseline 93 %) → revertet.
 - 🔑 **Mess-Hygiene:** Bench muss Prod-Sampling (QWEN_SAMPLING) nutzen, sonst misst

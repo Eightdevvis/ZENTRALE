@@ -210,14 +210,24 @@ zwei Tools sind das einzige, was bewusst nach draußen telefoniert:
   Treffer.
 
 **Implementation:** [`core/web.py`](../core/web.py). Die eigentliche Such-
-Quelle steckt bewusst in **einer** Funktion (`_ddg_search`): heute
-**DuckDuckGo keyless** (HTML-Endpoint gescraped, kein API-Key/Account –
-passt zur Offline/Kontroll-Linie). Umstieg auf SearXNG (self-hosted) oder
-Brave-API später = nur `_ddg_search` tauschen, `suche()`/`hole()` und `ai.py`
-bleiben unangetastet. Scraping ist fragil: ändert DDG sein HTML, müssen die
-Regexe nachgezogen werden. **Ad-Filter:** DDG mischt bezahlte Anzeigen unter
-die Treffer (gleiche CSS-Klasse, href auf `duckduckgo.com/y.js?ad_provider=…`)
-– die werden rausgefiltert, sonst kriegt die KI Werbung als „Fakt".
+Quelle steckt bewusst in **einer** Funktion: seit 2026-06-08 ist das primär
+**SearXNG self-hosted** (`_searxng_search`, lokaler Docker-Container auf
+`localhost:8888`, JSON-Modus). SearXNG ist ein Meta-Such-Aggregator – ER
+fragt im Hintergrund Google/Bing/DDG/… ab und liefert uns sauberes JSON.
+Vorteil gegenüber dem alten Scraping: stabiles Format statt fragiler HTML-
+Regexe, keine Anti-Bot-Landingpage (DDG hatte uns geblockt), Upstream-Suchen
+laufen unter SearXNGs Identität. **Fallback:** läuft der Container nicht,
+fällt `suche()` automatisch auf das alte `_ddg_search` zurück (DuckDuckGo
+keyless, HTML-Endpoint gescraped, mit Ad-Filter gegen `y.js`-Werbung) –
+dann ist wenigstens nichts komplett tot. Quelle wechseln = weiterhin nur
+diese eine Funktion tauschen, `suche()`/`hole()`/`ai.py` bleiben unangetastet.
+
+> **SearXNG-Container:** `sudo docker run -d --name searxng --restart
+> unless-stopped -p 8888:8080 -v ~/searxng:/etc/searxng searxng/searxng`.
+> Konfig in `~/searxng/settings.yml` (`use_default_settings: true`,
+> `secret_key`, `limiter: false`, `formats: [html, json]`). `docker` braucht
+> `sudo` (Sasha nicht in der docker-Gruppe). Test:
+> `curl 'localhost:8888/search?q=test&format=json'`.
 
 **Gating:** beide Tools stehen in `PERMISSION_REQUIRED_TOOLS` → **jeder**
 Call löst den JA/NEIN-Knopf-Dialog aus (Sasha sieht die Suchanfrage / die
@@ -225,12 +235,14 @@ URL, bevor das Paket rausgeht). Konsequent zur Transparenz-Philosophie.
 Frage-Vorlagen in `_permission_question` (z.B. »Soll ich im Internet nach
 "…" suchen?«).
 
-**Transparenz:** Aller HTTP-Verkehr läuft durch `core/net.py`. Da DDG und
-beliebige URLs echte Internet-Ziele sind (kein localhost/LAN), leuchtet jeder
-Call **automatisch** im orangen Internet-Panel auf – kein Sonder-Logging.
-(Wäre die Quelle ein localhost-SearXNG, würde die Tripwire den Upstream-
-Verkehr NICHT sehen – dann müsste die Suchanfrage explizit ins Panel geloggt
-werden. Bei DDG keyless ist das nicht nötig.)
+**Transparenz:** Aller HTTP-Verkehr läuft durch `core/net.py`. `hole_url` und
+der DDG-Fallback treffen echte Internet-Ziele → leuchten **automatisch** im
+orangen Internet-Panel auf. **SearXNG ist der Sonderfall:** der Call geht an
+`localhost:8888`, also stuft `net._is_internet` ihn als lokal ein und das
+Panel bliebe leer – OBWOHL SearXNG dahinter echtes Internet anfasst. Damit
+die Tripwire-Linie hält, loggt `_searxng_search` die Suchanfrage **explizit**
+in den Internet-Channel (`state.push_internet_log("NET → SUCHE „…" (via
+SearXNG)")`). Man sieht im Panel also weiterhin, dass + wonach gesucht wurde.
 
 **KI-Selbstbild:** Die Internet-Limits im Identity-Graphen (»auf das Internet
 zugreifen«, »Web-Suche durchführen«, »Echtzeit-News/Wetter abrufen«) wurden

@@ -72,6 +72,25 @@ unfaithfule Modell-Defaults (s. Korrektur oben), `prod` = QWEN_SAMPLING temp 0.7
 
 Die alten temp1-Absolutzahlen (30/60/67…) NICHT für bare Münze nehmen.
 
+### 1b. Hebel-Isolation — sauberes A/B, EIN Rädchen (2026-06-08, prod-treu)
+
+Endgültiger wissenschaftlicher Test: tragen die Hebel bei prod-treuem Sampling
+wirklich, oder ist „temp 0.7 eh gut"? Alle Bedingungen **bit-identisch** (qwen3.5:9b,
+Ollama 0.30.6, temp 0.7/QWEN_SAMPLING, think aus, num_ctx 8192, Szenario 06-08,
+N=20) — pro Variante GENAU ein Rädchen anders. Protokoll P5.
+
+| Lauf | dashview | ABSAGEN | T2 Zuordnung | **Episode** |
+|------|----------|---------|--------------|-------------|
+| **A** Referenz | AN | neu | **100 %** | **85 %** |
+| **B** −Dashboard-Sicht | **AUS** | neu | 75 % | 60 % |
+| **C** −ABSAGEN-Umbau | AN | **alt** | 80 % | 60 % |
+
+→ **Beide Hebel tragen echt:** Dashboard-Sicht raus = −25pp Episode, alte ABSAGEN-
+Zeile = −25pp Episode. Mit beiden zusammen: **T2-Zuordnung 100 % (20/20).** Die
+Sorge „temp 0.7 ist eh nur gut" ist widerlegt — Wegnehmen eines Hebels fällt von
+85 % auf 60 %. **Saubere Endbilanz: ABSAGEN-Zeile ✅, Dashboard-Sicht ✅ (beide
+isoliert belegt, je ~+25pp); adaptive-think ❌ (Phantom).**
+
 ## 2. Alarm-Verständnis isoliert (`probe_structured_alarm.py`)
 
 Nur die T2-Frage „was ist diese Warnung?" mit realistischer (think-aus) Vorantwort,
@@ -226,12 +245,42 @@ Frage `„was steht diese woche an?"`) → read_calendar-Call; Tool-Ergebnis anh
 Runde 2 (`think:true` = Bug-Fall / `think:false` = Workaround) → content prüfen.
 Vergleichs-Fall ohne Tool: `„hauptstadt von frankreich?"`, `think:true`.
 
+### P5 — Hebel-Isolation (ein Rädchen, Tabelle 1b)
+
+Drei Läufe `bench_calendar_delete.py --repeats 20`, alles bit-identisch außer EINEM
+Rädchen. Fix für alle: qwen3.5:9b, Ollama 0.30.6, `QWEN_SAMPLING` (temp 0.7),
+think aus, num_ctx 8192, Szenario heute (06-08), Scoring wie P1.
+- **A (Referenz):** `ZENTRALE_DASHVIEW=1`, ABSAGEN-Zeile neu (Default-Code).
+- **B (Knopf Dashboard-Sicht):** `ZENTRALE_DASHVIEW=0` — sonst = A.
+- **C (Knopf ABSAGEN-Zeile):** `ZENTRALE_DASHVIEW=1 ZENTRALE_OLD_ABSAGEN=1` — der
+  temporäre Mess-Toggle in `_absage_alarms` erzeugte die alte „Routine 'X' liegt in
+  Reise Y - Pflicht-Absage"-Zeile; **nach dem Experiment wieder entfernt** (kein
+  Prod-Feature). Sonst = A.
+Audit vor dem Lauf: effektives `options`-Dict ausgedruckt + verifiziert
+(temp 0.7 etc. geht wirklich raus), think False, Szenario-Alarme gecheckt.
+
 ---
+
+## Methodik-Standard (WISSENSCHAFTLICH, seit 2026-06-08)
+
+Pflicht für jeden Vergleich (sonst misst man Artefakte — siehe Sampling-Korrektur
+oben, [[feedback_messen_nicht_vibes im Memory]]):
+
+1. **Nur EIN Rädchen pro Vergleich.** A vs B unterscheiden sich in GENAU einer
+   Variable, alles andere bit-identisch. Nie zwei Knöpfe gleichzeitig.
+2. **ALLE Parameter vorher verifizieren** (Audit): das effektive `options`-Dict
+   ausdrucken, das WIRKLICH rausgeht — Sampling, num_ctx, think, Modell, Ollama-
+   Version, Szenario/Datum, N, Scoring. Nachsehen, nicht annehmen.
+3. **Prod-treu sampeln:** EXAKT `ai.QWEN_SAMPLING` (temp 0.7). NICHT temp 0
+   (versteckt Varianz), NICHT Modell-Default temp 1 (= nicht Prod).
+4. **Datum/Szenario:** die Fixture ist datums-relativ → nur INNERHALB desselben
+   Tages vergleichen (an anderem Tag ist das Szenario anders = Confound).
+5. **Gleiches N** für alle Bedingungen, hoch genug; Roh-JSON als Audit.
 
 ## Wie ergänzen
 
 Nach jedem Bench: passende Tabelle oben um eine Zeile erweitern (Datum, Konfig, N,
-Quoten, Ollama-Version). Bench-Skripte schreiben Voll-JSONs nach `scripts/
-bench_*_<stamp>.json` — Kernzahlen hierher übertragen, das JSON kann weg (oder als
-Audit-Spur bleiben). Negativ-Ergebnisse SIND Daten — mit rein. Tiefen-Analysen +
-das „Warum" stehen in [[grounding_recherche.md]].
+Quoten, **Sampling**, Ollama-Version). Bench-Skripte schreiben Voll-JSONs nach
+`scripts/bench_*_<stamp>.json` (gitignored) — Kernzahlen hierher übertragen.
+Negativ-Ergebnisse SIND Daten — mit rein. Tiefen-Analysen + das „Warum" stehen in
+[[grounding_recherche.md]].

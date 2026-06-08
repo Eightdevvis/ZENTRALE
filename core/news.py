@@ -87,7 +87,21 @@ DESC_CAP      = 300      # gespeicherter Anrisstext
 CORPUS_DESC   = 160      # was das Cluster-LLM pro Meldung sieht
 TIMEOUT_S     = 15
 
-MATCH_THRESHOLD          = 0.60   # cosine ab hier = "gleiche Story" (merge)
+# ── Clustering (bge-m3 Average-Linkage, gemessen 2026-06-08) ──────────
+# Das Gruppieren der Meldungen zu Bausteinen macht NICHT mehr das LLM (das
+# lumpte ganze Regionen zu Mülleimern oder ließ Geschwister als Singletons
+# stehen — gemessen). Stattdessen: bge-m3 bettet jede Meldung ein, Python
+# clustert per Greedy-Average-Linkage. "Average" heißt: eine Meldung darf
+# nur in einen Cluster, wenn ihre MITTLERE Ähnlichkeit zu ALLEN Mitgliedern
+# über der Schwelle liegt — das verhindert Single-Link-Ketten (A~B~C, obwohl
+# A≁C), an denen der Nahost-Blob hing. So trennen sich Ort-verschiedene
+# Ereignisse (Beirut vs. Gaza vs. Iran-Raketen) von selbst, obwohl ihr
+# Framing-Vokabular sich überlappt. T=0.64 empirisch ermittelt (137 echte
+# Meldungen: bei 0.64 saubere quellen-/sprachübergreifende Cluster, Blob weg).
+NEWS_CLUSTER_SIM         = 0.64
+LABEL_BATCH              = 20     # Cluster pro Labeling-LLM-Call (mehr = JSON-Output reißt ab)
+
+MATCH_THRESHOLD          = 0.66   # Cross-Poll: Centroid-cosine ab hier = "gleiche Story"
 HALBWERTSZEIT_H          = 48.0   # Wichtigkeit halbiert sich alle 48 h ohne Bewegung
 ARCHIV_FLOOR             = 8.0    # aktuelle Wichtigkeit darunter -> Stein archiviert
 SENDUNG_MAX              = 7      # max Bausteine pro Sendung (Aufmerksamkeitsspanne)
@@ -208,81 +222,177 @@ def collect(pro_feed: int = MAX_PRO_FEED) -> list:
 # Cross-Poll-Matching (gehört der Baustein zu einem bestehenden Stein?) macht
 # danach Python per Embedding — nicht das LLM, das die alten Steine gar nicht
 # im Kontext hat.
-_CLUSTER_PROMPT = (
-    "Du bist ein Redakteur, der rohe Nachrichten-Schlagzeilen zu Themen-Bausteinen "
-    "für eine Weltpolitik-Sendung bündelt. Du bekommst nummerierte Meldungen aus "
-    "vielen Quellen weltweit (jede mit [Quelle · Herkunft]).\n\n"
-    "Aufgabe: Gruppiere Meldungen, die DENSELBEN Vorfall behandeln, zu je einem "
-    "Baustein. Für jeden Baustein gib an:\n"
-    "  thema       kurze, sachliche Überschrift (suchbar, stabil, z.B. 'Parlamentswahl Armenien')\n"
+# Das Gruppieren macht Python (Average-Linkage über bge-m3-Embeddings, s.u.).
+# Das LLM benennt nur die FERTIGEN Cluster — eine viel leichtere Aufgabe als
+# 60 Schlagzeilen auf einen Schlag zu gruppieren (woran das 9B scheiterte).
+_LABEL_PROMPT = (
+    "Du bist ein Nachrichten-Redakteur. Du bekommst bereits FERTIG gruppierte "
+    "Cluster — jeder Cluster ist EIN Vorfall, belegt durch Schlagzeilen mehrerer "
+    "Quellen. Du gruppierst NICHTS um. Vergib pro Cluster (angesprochen über seine "
+    "Nummer i):\n"
+    "  thema       kurze, sachliche, stabile Überschrift (z.B. 'Parlamentswahl Armenien')\n"
     "  kategorie   eins von: konflikt, wahl, diplomatie, wirtschaft, gesellschaft, katastrophe, kultur, sport, sonstiges\n"
     "  wichtigkeit 0-100, weltpolitische Tragweite. Kriege/Wahlen/Diplomatie/große Krisen HOCH (70-100). "
-    "Sport, Promis, Kultur, Lokales, Service NIEDRIG (0-25).\n"
-    "  quellen     Liste der Meldungs-Nummern, die zu diesem Thema gehören\n\n"
-    "REGELN: Nur die gegebenen Nummern verwenden. Jede Nummer höchstens einem Baustein. "
-    "Unwichtigen Kram trotzdem als eigenen Baustein mit niedriger wichtigkeit ausgeben "
-    "(nicht weglassen — das Filtern macht das System).\n\n"
+    "Sport, Promis, Kultur, Lokales NIEDRIG (0-25).\n\n"
     "OUTPUT: nur gültiges JSON, keine Erklärung:\n"
-    '{"bausteine": [{"thema": "...", "kategorie": "...", "wichtigkeit": 0, "quellen": [0,1]}]}'
+    '{"labels": [{"i": 0, "thema": "...", "kategorie": "...", "wichtigkeit": 0}]}'
 )
+
+
+def _centroid(vecs: list) -> list:
+    """
+    Mittelvektor einer Liste von Embeddings (leere/None-Einträge ignoriert).
+    Dient als inhaltlicher 'Fingerabdruck' eines Clusters: damit matcht
+    _integriere denselben Vorfall über mehrere Polls hinweg, statt nur den
+    LLM-`thema`-String zu vergleichen (der war zu grob -> Cross-Poll-Blobs).
+    """
+    gueltig = [v for v in vecs if v]
+    if not gueltig:
+        return []
+    dim = len(gueltig[0])
+    summe = [0.0] * dim
+    for v in gueltig:
+        for k in range(dim):
+            summe[k] += v[k]
+    return [x / len(gueltig) for x in summe]
+
+
+def _cluster_items(vecs: list) -> list:
+    """
+    Greedy-Average-Linkage über die Item-Embeddings. Gibt eine Liste von
+    Clustern zurück (jeder Cluster = Liste von Item-Indizes).
+
+    Eine Meldung kommt in den Cluster, zu dessen Mitgliedern ihre MITTLERE
+    cosine-Ähnlichkeit am höchsten ist — sofern die >= NEWS_CLUSTER_SIM liegt;
+    sonst eröffnet sie einen neuen Cluster. Das 'mittlere zu ALLEN Mitgliedern'
+    ist der Trick gegen Single-Link-Ketten: ein Gaza-Artikel kommt NICHT in den
+    Beirut-Cluster, nur weil er zu EINEM Mitglied zufällig nah ist — er müsste
+    im Schnitt zu allen passen. Items ohne Embedding werden Einzel-Cluster.
+    (Reihenfolge-abhängig, aber pro Poll deterministisch — kein temp im Spiel.)
+    """
+    clusters = []          # list[list[int]]   — Item-Indizes pro Cluster
+    cl_vecs  = []          # parallel dazu: die Embeddings der Mitglieder
+    for i, vi in enumerate(vecs):
+        if not vi:
+            clusters.append([i]); cl_vecs.append([]); continue
+        best, best_sim = None, NEWS_CLUSTER_SIM
+        for c_idx, members in enumerate(cl_vecs):
+            if not members:
+                continue
+            sims = [embeddings.cosine_similarity(vi, mv) for mv in members]
+            avg = sum(sims) / len(sims)
+            if avg >= best_sim:
+                best, best_sim = c_idx, avg
+        if best is None:
+            clusters.append([i]); cl_vecs.append([vi])
+        else:
+            clusters[best].append(i); cl_vecs[best].append(vi)
+    return clusters
+
+
+def _label_clusters(clusters: list, items: list) -> list:
+    """
+    Pro fertigem Cluster thema/kategorie/wichtigkeit holen. Das LLM benennt nur,
+    es gruppiert nicht. Fällt ein Call oder das Index-Alignment aus, greift pro
+    Cluster ein Heuristik-Fallback (erste Schlagzeile als thema, 'sonstiges',
+    Wichtigkeit grob aus der Quellenzahl). Gibt eine Liste paralleler Label-Dicts
+    zurück (gleiche Reihenfolge wie `clusters`).
+
+    WICHTIG — gebatcht: alle Cluster in EINEM Call zu labeln sprengt bei vielen
+    Themen den JSON-Output (er wird mittendrin abgeschnitten -> Parse-Fehler ->
+    ALLE Labels fallen auf die Heuristik zurück; genau das ist im Test passiert).
+    Darum in Häppchen von LABEL_BATCH Clustern — jeder Call bleibt klein genug,
+    und ein kaputtes Häppchen reißt nur seine ~20 Cluster in den Fallback, nicht alle.
+    """
+    # Fallback-Labels vorbereiten — gelten, bis das LLM sie überschreibt.
+    labels = []
+    for c in clusters:
+        n_quellen = len({items[i].get("quelle") for i in c})
+        labels.append({
+            "thema":       (items[c[0]].get("titel") or "Thema").strip()[:80],
+            "kategorie":   "sonstiges",
+            # Mehr Quellen über dasselbe Ereignis = mehr Tragweite (grobe Heuristik).
+            "wichtigkeit": min(60.0, 20.0 + 12.0 * n_quellen),
+        })
+
+    for start in range(0, len(clusters), LABEL_BATCH):
+        chunk = list(range(start, min(start + LABEL_BATCH, len(clusters))))
+        # LLM-Input: Cluster mit LOKALER Nummer (0..len(chunk)-1) + ein paar Schlagzeilen.
+        blocks = []
+        for local, gi in enumerate(chunk):
+            kopf = "\n".join(
+                f"   - [{items[i].get('quelle')} · {items[i].get('herkunft')}] {items[i].get('titel')}"
+                for i in clusters[gi][:5]
+            )
+            blocks.append(f"[{local}]\n{kopf}")
+        try:
+            resp = net.post(
+                f"{OLLAMA_URL}/api/chat",
+                {
+                    "model": OLLAMA_MODEL,
+                    **({"think": False} if SUPPORTS_THINK else {}),
+                    "messages": [
+                        {"role": "system", "content": _LABEL_PROMPT},
+                        {"role": "user",   "content": "Cluster:\n" + "\n\n".join(blocks)},
+                    ],
+                    "stream": False, "format": "json",
+                    "keep_alive": OLLAMA_KEEP_ALIVE,
+                    "options": {"num_ctx": OLLAMA_NUM_CTX},
+                },
+                timeout=180,
+            )
+            parsed = _json.loads(resp.get("message", {}).get("content", "").strip())
+            for lab in (parsed.get("labels", []) if isinstance(parsed, dict) else []):
+                if not isinstance(lab, dict):
+                    continue
+                local = lab.get("i")
+                if not isinstance(local, int) or not (0 <= local < len(chunk)):
+                    continue
+                gi = chunk[local]                     # lokale -> globale Cluster-Nummer
+                thema = (lab.get("thema") or "").strip()
+                if thema:
+                    labels[gi]["thema"] = thema[:80]
+                kat = (lab.get("kategorie") or "").strip().lower()
+                if kat:
+                    labels[gi]["kategorie"] = kat
+                try:
+                    labels[gi]["wichtigkeit"] = max(0.0, min(100.0, float(lab.get("wichtigkeit"))))
+                except (TypeError, ValueError):
+                    pass
+        except Exception as e:
+            state.push_log(f"NEWS  ✗ Cluster-Labeling Häppchen {start}-{start+len(chunk)} "
+                           f"fehlgeschlagen (Heuristik-Fallback): {e}")
+    return labels
+
 
 def _cluster_poll(items: list) -> list:
     """
     Frische Meldungen -> Liste von Bausteinen [{thema, kategorie, wichtigkeit,
-    stimmen:[item-dicts]}]. Ein LLM-Call (JSON). Fehler -> leere Liste (der
-    Poll-Lauf soll nicht daran sterben).
+    stimmen, centroid}]. Pipeline (Python gruppiert, LLM benennt nur):
+      1. bge-m3 bettet jede Meldung ein (Titel trägt die Eigennamen, Anriss den Kontext).
+      2. Average-Linkage clustert deterministisch + mehrsprachig (_cluster_items).
+      3. EIN LLM-Call labelt die fertigen Cluster (_label_clusters).
+    Der `centroid` (Mittelvektor) wandert mit in den Store und ankert das
+    Cross-Poll-Matching in _integriere. Fehlt das Embed-Modell, wird jede
+    Meldung ihr eigener Cluster (kein Crash, nur kein Merge).
     """
     if not items:
         return []
-    nummeriert = "\n".join(
-        f"[{i}] [{n['quelle']} · {n['herkunft']}] {n['titel']} — {(n['text'] or '')[:CORPUS_DESC]}"
-        for i, n in enumerate(items)
-    )
-    try:
-        resp = net.post(
-            f"{OLLAMA_URL}/api/chat",
-            {
-                "model": OLLAMA_MODEL,
-                **({"think": False} if SUPPORTS_THINK else {}),
-                "messages": [
-                    {"role": "system", "content": _CLUSTER_PROMPT},
-                    {"role": "user",   "content": "Meldungen:\n" + nummeriert},
-                ],
-                "stream": False, "format": "json",
-                "keep_alive": OLLAMA_KEEP_ALIVE,
-                "options": {"num_ctx": OLLAMA_NUM_CTX},
-            },
-            timeout=180,
-        )
-        parsed = _json.loads(resp.get("message", {}).get("content", "").strip())
-    except Exception as e:
-        state.push_log(f"NEWS  ✗ Clustering fehlgeschlagen: {e}")
-        return []
+    vecs = [
+        embeddings.embed_document(((n.get("titel") or "") + " " + (n.get("text") or "")[:CORPUS_DESC]))
+        for n in items
+    ]
+    clusters = _cluster_items(vecs)
+    labels   = _label_clusters(clusters, items)
 
-    roh = parsed.get("bausteine", []) if isinstance(parsed, dict) else []
     bausteine = []
-    for b in roh:
-        if not isinstance(b, dict):
-            continue
-        thema = (b.get("thema") or "").strip()
-        if not thema:
-            continue
-        # Item-Nummern -> echte Stimmen (out-of-range/Müll-Indizes wegwerfen)
-        stimmen = []
-        for idx in b.get("quellen", []):
-            if isinstance(idx, int) and 0 <= idx < len(items):
-                stimmen.append(items[idx])
-        if not stimmen:
-            continue
-        try:
-            w = max(0.0, min(100.0, float(b.get("wichtigkeit", 0))))
-        except (TypeError, ValueError):
-            w = 0.0
+    for c, lab in zip(clusters, labels):
         bausteine.append({
-            "thema":       thema,
-            "kategorie":   (b.get("kategorie") or "sonstiges").strip().lower(),
-            "wichtigkeit": w,
-            "stimmen":     stimmen,
+            "thema":       lab["thema"],
+            "kategorie":   lab["kategorie"],
+            "wichtigkeit": lab["wichtigkeit"],
+            "stimmen":     [items[i] for i in c],
+            "centroid":    _centroid([vecs[i] for i in c]),
         })
     return bausteine
 
@@ -337,11 +447,14 @@ def _merge_voices(story: dict, neue: list) -> bool:
 
 def _integriere(store: dict, baustein: dict):
     """
-    Einen frisch geclusterten Baustein in den Store einfügen: per Embedding-
-    Ähnlichkeit des Themas an einen bestehenden, nicht-archivierten Stein
-    andocken (= laufende Story), sonst neuen Stein anlegen.
+    Einen frisch geclusterten Baustein in den Store einfügen: per inhaltlicher
+    Ähnlichkeit (Cluster-CENTROID vs. gespeicherter Story-Centroid) an einen
+    bestehenden, nicht-archivierten Stein andocken (= laufende Story), sonst
+    neuen Stein anlegen. Der Centroid (Mittel der Stimmen-Embeddings) ist ein
+    robusterer Anker als der frühere `thema`-String-Vergleich — er bündelt die
+    geteilten Fakten der Quellen, statt an einer einzelnen Überschrift zu hängen.
     """
-    emb = embeddings.embed_document(baustein["thema"])
+    emb = baustein.get("centroid") or []
     bester, beste_sim = None, 0.0
     if emb:
         for s in store["stories"]:

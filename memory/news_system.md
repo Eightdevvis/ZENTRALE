@@ -24,7 +24,7 @@ Status-Aufkleber, aus denen sich die Feinheiten ergeben:
 | `zuletzt_bewegt`    | wann zuletzt eine neue Stimme dazukam → Anker fürs Decay|
 | `gesehen_von_sasha` | Haken, sobald in einer Sendung ausgeliefert            |
 | `status`            | neu / aktualisiert / ruht / archiviert                 |
-| `embedding`         | bge-m3-Vektor des Themas (fürs Cross-Poll-Matching)    |
+| `embedding`         | bge-m3-**Centroid** des Clusters (Mittel der Stimmen-Vektoren, fürs Cross-Poll-Matching) |
 | `stimmen[]`         | die Quellen-Meldungen (quelle, herkunft, titel, text, link, datum) |
 
 Daraus folgt automatisch, was Sasha wollte:
@@ -45,8 +45,8 @@ Daraus folgt automatisch, was Sasha wollte:
 
 ```
 collect()        Feeds holen (net.get) → parsen → putzen → dedup → Liste[dict]   (unverändert)
-_cluster_poll()  Poll-Meldungen → LLM → Bausteine {thema, kategorie, wichtigkeit, stimmen}
-_integriere()    je Baustein: per Embedding an bestehenden Stein andocken (merge) ODER neu
+_cluster_poll()  Poll-Meldungen → bge-m3 Embed → Python Average-Linkage clustert → LLM labelt → Bausteine {thema, kategorie, wichtigkeit, stimmen, centroid}
+_integriere()    je Baustein: per Centroid-Embedding an bestehenden Stein andocken (merge) ODER neu
 _decay_…()       Steine unter dem Boden archivieren
 baue_sendung()   ungesehene/bewegte Steine wählen → LLM-Moderation → data/news_digest.json
 wochenrueckblick(tage)  Steine der letzten N Tage (nach BASIS-Wichtigkeit, ohne Decay) → Rückblick
@@ -55,18 +55,44 @@ lies(tage)       KI-Tool: tage=0 Tagessendung (markiert gesehen), tage>0 Wochenr
 start_fetcher()  Daemon-Thread: periodisch + laut angekündigt (aus main.py)
 ```
 
-## Cross-Poll-Identität (hier verdient bge-m3 sein Geld)
+## Clustering: bge-m3 gruppiert, LLM labelt nur (Umbau 2026-06-08)
 
-Pro Poll clustert das **LLM** die frischen Meldungen (`_cluster_poll`,
-JSON-Output, Item-Indizes → echte Stimmen, Müll-Indizes verworfen). Ob
-ein neuer Baustein zu einer **bestehenden laufenden Story** gehört,
-entscheidet **Python per Embedding** (`_integriere`): Thema einbetten
-(`embeddings.embed_document`), Cosinus gegen alle aktiven Steine, über
-`MATCH_THRESHOLD` (0.60) → mergen (Stimmen rein, Wichtigkeit = max, bei
+**Vorher** gruppierte das **LLM** alle ~60 Meldungen auf einen Schlag
+(`_cluster_poll`, JSON). Das war der Grund für „Informationshaufen statt
+Quellen-Kontrast": gemessen lumpte das 9B ganze Regionen zu **Mülleimer-
+Bausteinen** (Nigeria landete unter „Terroranschlag Israel") und ließ
+zugleich Geschwister als **Singletons** stehen (52/78 Einzelquelle). Kein
+Prompt-Tweak fixt das zuverlässig ([[feedback_data_vs_model]]).
+
+**Jetzt** macht das Gruppieren **Python deterministisch** (Sashas Insight:
+nicht aufs variable Framing matchen, sondern auf die geteilten Fakten):
+
+1. **bge-m3** bettet jede Meldung ein (`embeddings.embed_document`, Titel +
+   Anriss). Mehrsprachig — de/en/ar derselben Story landen nah.
+2. **Greedy-Average-Linkage** (`_cluster_items`, Schwelle `NEWS_CLUSTER_SIM`
+   = 0.64): eine Meldung kommt nur in einen Cluster, wenn ihre MITTLERE
+   cosine-Ähnlichkeit zu ALLEN Mitgliedern über der Schwelle liegt. Das
+   „zu allen" bricht Single-Link-Ketten → ein Gaza-Artikel rutscht NICHT
+   in den Beirut-Cluster, nur weil beide „Israel/strikes" sagen. So trennen
+   sich ort-verschiedene Ereignisse von selbst (gemessen: der alte 23er-
+   Nahost-Blob zerfällt in Beirut / Iran-Raketen / Terror / Gaza, je sauber).
+3. **LLM labelt nur** die fertigen Cluster (`_label_clusters`,
+   `_LABEL_PROMPT`): thema/kategorie/wichtigkeit — leichte Aufgabe vs.
+   Gruppieren. **Gebatcht** (`LABEL_BATCH`=20), weil alle Cluster in EINEM
+   Call den JSON-Output abreißen lassen (im Test passiert → ALLE Labels
+   fielen auf die Heuristik zurück). Fallback pro Cluster: erste Schlagzeile
+   als thema, `sonstiges`, Wichtigkeit grob aus der Quellenzahl.
+
+`T=0.64` und der Batch-Bug wurden empirisch an 137 echten Meldungen
+ermittelt ([[feedback_messen_nicht_vibes]]).
+
+**Cross-Poll-Identität** (`_integriere`): ob ein neuer Baustein zu einer
+bestehenden laufenden Story gehört, entscheidet Python per **Centroid**
+(Mittel der Stimmen-Embeddings, robuster Fakten-Anker statt des früheren
+losen `thema`-String-Matches): Cosinus gegen alle aktiven Steine, über
+`MATCH_THRESHOLD` (0.66) → mergen (Stimmen rein, Wichtigkeit = max, bei
 echter neuer Stimme `zuletzt_bewegt` auffrischen). Sonst neuer Stein. So
-wächst die Ukraine-Story über Polls zu EINEM Stein, statt jeden Poll neu
-aufzutauchen. (Das LLM kann das nicht selbst, es kennt die alten Steine
-nicht.)
+wächst die Ukraine-Story über Polls zu EINEM Stein.
 
 ## Graph-Kopplung: bewusst KEINE (separater Store + spätere Lese-Brücke)
 
@@ -189,7 +215,8 @@ der den **gerade gesprochenen Satz** zeigt (statt der ganzen Textwand).
 | `NEWS_START_DELAY_S` | 90      | Verzögerung des ersten Laufs   |
 | `OLLAMA_*`           | s. ai   | Modell/URL/num_ctx (geteilt)   |
 
-Tuning-Konstanten (grob, gehören gebencht): `MATCH_THRESHOLD=0.60`,
+Tuning-Konstanten: `NEWS_CLUSTER_SIM=0.64` (Average-Linkage, gemessen),
+`LABEL_BATCH=20`, `MATCH_THRESHOLD=0.66` (Centroid-Cross-Poll),
 `HALBWERTSZEIT_H=48`, `ARCHIV_FLOOR=8`, `SENDUNG_MAX=7`,
 `SENDUNG_MIN_WICHTIGKEIT=15`.
 
@@ -204,29 +231,39 @@ Tuning-Konstanten (grob, gehören gebencht): `MATCH_THRESHOLD=0.60`,
   zurück"-Framing, schwerste zuerst, Trivia raus. Gilt für den Fall **du
   warst zuhause** (Store hat die Woche). Für **du warst weg** (ZENTRALE
   offline) fehlt der Store-Inhalt → siehe Offline-Aufholmodus unten.
-- **Qualität ungebencht:** qwen3.5:9b clustert + kontrastiert sinnvoll,
-  hat aber Deutsch-Patzer + gelegentliche Übersetzungs-/Faktenwackler.
-  Mechanik steht, Qualität braucht objektive Messung
-  ([[feedback_messen_nicht_vibes]]). Auch die Tuning-Konstanten
-  (Decay-Halbwertszeit, Match-Schwelle, Wichtigkeits-Floor) sind geraten.
+- **Clustering-Umbau LIVE + gemessen (2026-06-08):** Sashas Befund „Sendung
+  = Informationshaufen, Quellen nicht geltend gemacht" → Ursache war NICHT
+  der Moderations-Prompt (der fordert den Kontrast schon), sondern das
+  LLM-Clustering (Mülleimer-Bausteine + Singletons). Fix = bge-m3 Average-
+  Linkage gruppiert, LLM labelt nur (s.o. „Clustering"-Sektion). An 137
+  echten Meldungen verifiziert: Nahost-Blob zerfällt sauber, Multi-Quellen-
+  Cluster erhalten (Armenien trägt TASS), Sendung kontrastiert jetzt
+  namentlich („Tagesschau betont X, TASS stellt es als Y dar").
+- **OFFEN — 9B fabuliert in der Moderation:** in der Test-Sendung erfand das
+  Modell Details, die NICHT in den Snippets stehen („Flughafen Chornobyl",
+  „Operation Epic Fury", „7.000 Tote") — trotz „NICHTS erfinden"-Regel.
+  Separates Problem (Modell-Ehrlichkeit), nicht das Clustering. Wahrscheinl.
+  Ursache: der Moderator sieht pro Stimme nur `CORPUS_DESC`=160 Zeichen →
+  zu dünn → stopft Lücken mit Erfindung. **Daten-Hebel** ([[feedback_data_vs_model]]):
+  mehr echten Snippet-Text geben (volle 300 gespeicherte Zeichen, oder
+  Artikel-Body per `hole_url` nachladen) statt Prompt-Regeln stapeln. Nächster Schritt.
+- **Qualität sonst ungebencht:** qwen3.5:9b hat Deutsch-Patzer
+  („Isreal"/„Zverew"). Tuning-Konstanten gegen Ground-Truth zu benchen
+  ([[feedback_messen_nicht_vibes]]).
 - **Offen / nächste Bausteine:**
-  - **Offline-Aufholmodus GEBAUT (2026-06-07), aber auf Such-Backend
-    blockiert.** `wochenrueckblick(tage)` erkennt per `poll_historie` eine
-    Poll-Lücke im Fenster (`_groesste_pollluecke_tage` ≥ `GAP_SCHWELLE_TAGE`
-    1.5) → schaltet auf `aufholmodus(tage)`: rückblickende **Web-Suche**
-    (`web.suche`, themen-geseedet aus den dicksten Store-Steinen + generisch)
-    → LLM-Aufhol-Rückblick. Mechanik getestet + korrekt: Lücken-Erkennung
-    greift beidseitig, der Ehrlichkeits-Guard im `_AUFHOL_PROMPT` verhindert
-    Halluzination. **ABER:** `web.suche` liefert aktuell NICHTS — DuckDuckGo
-    serviert dem Scraper (`web._ddg_search`) eine Anti-Bot-Landingpage statt
-    Ergebnissen (html- UND lite-Endpoint, GET+POST, ~14 KB ohne `result__a`/
-    `uddg`). Das betrifft die **ganze Internet-Pipe** (auch das `web_suche`-
-    Tool). Könnte temporäres Rate-Limit (durch Test-Hämmern) ODER harter
-    Block sein — jedenfalls ist DDG-keyless zu fragil für ein automatisches,
-    periodisches Feature. **Echter Fix = `web._ddg_search` tauschen** (laut
-    Doku der vorgesehene Swap-Punkt): SearXNG self-hosted (passt zur
-    Offline/Kontroll-Linie) oder eine News-/Such-API mit Key. Eigener
-    Baustein, Backend-Entscheidung offen.
+  - **Offline-Aufholmodus LIVE seit 2026-06-08.** `wochenrueckblick(tage)`
+    erkennt per `poll_historie` eine Poll-Lücke im Fenster
+    (`_groesste_pollluecke_tage` ≥ `GAP_SCHWELLE_TAGE` 1.5) → schaltet auf
+    `aufholmodus(tage)`: rückblickende **Web-Suche** (`web.suche`, themen-
+    geseedet aus den dicksten Store-Steinen + generisch) → LLM-Aufhol-
+    Rückblick. Mechanik getestet + korrekt: Lücken-Erkennung greift beidseitig,
+    der Ehrlichkeits-Guard im `_AUFHOL_PROMPT` verhindert Halluzination.
+    **War blockiert** weil DuckDuckGo den Scraper geblockt hat — **gelöst durch
+    Such-Backend-Swap auf SearXNG** (self-hosted, `localhost:8888`, JSON;
+    Implementierung + Container-Befehl siehe [ki_system.md](ki_system.md)).
+    End-to-End-Lauf 2026-06-08 verifiziert: 7 SearXNG-Suchen → LLM →
+    4187-Zeichen-Rückblick, alle Calls im Internet-Panel sichtbar (expliziter
+    `push_internet_log`, da localhost-Hop sonst unsichtbar wäre).
   - **Eilmeldung/Live-Push**: neuer Stein über hoher Schwelle → sofort
     raushauen (reuse Alarm-Kanal-Muster vom Kalender), statt auf die
     Sendung zu warten.
