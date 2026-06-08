@@ -100,6 +100,19 @@ TIMEOUT_S     = 15
 # Meldungen: bei 0.64 saubere quellen-/sprachübergreifende Cluster, Blob weg).
 NEWS_CLUSTER_SIM         = 0.64
 LABEL_BATCH              = 20     # Cluster pro Labeling-LLM-Call (mehr = JSON-Output reißt ab)
+# Temperature für die News-LLM-Calls. Tradeoff, bewusst gewählt:
+#   - sehr niedrig (0.2) drückt Fabulation, macht aber jede Sendung im selben
+#     braven Ton -> monoton (Sasha will Lebendigkeit, 2026-06-08).
+#   - Default (~1.0) lebendig, aber das 9B schmuggelt Weltwissen rein.
+# 0.7 = lebendige Mitte (gleich wie der prod-Chat). WICHTIG: das löst die
+# Fabulation NICHT — gemessen 2026-06-08 erfindet das 9B trotz scharfem Prompt
+# + vollem Text noch Zahlen/Orte („7.000 Tote", „Tschernobyl", „Hormus-Sund").
+# Das ist ein MODELL-Problem (Reasoning/Halluzination), kein Pipeline-Problem.
+# Entscheidung mit Sasha: NICHT gegen das schwache Modell anbauen (extraktiv =
+# flach, Python-Wache = komplex, low temp = monoton — jeder Workaround kostet),
+# sondern PARKEN bis das stärkere/anti-halluzinations-getunte Modell steht. Bis
+# dahin ist die generierte Sendung NICHT faktentreu-vertrauenswürdig.
+NEWS_TEMPERATURE         = 0.7
 
 MATCH_THRESHOLD          = 0.66   # Cross-Poll: Centroid-cosine ab hier = "gleiche Story"
 HALBWERTSZEIT_H          = 48.0   # Wichtigkeit halbiert sich alle 48 h ohne Bewegung
@@ -337,7 +350,7 @@ def _label_clusters(clusters: list, items: list) -> list:
                     ],
                     "stream": False, "format": "json",
                     "keep_alive": OLLAMA_KEEP_ALIVE,
-                    "options": {"num_ctx": OLLAMA_NUM_CTX},
+                    "options": {"num_ctx": OLLAMA_NUM_CTX, "temperature": NEWS_TEMPERATURE},
                 },
                 timeout=180,
             )
@@ -506,15 +519,21 @@ _NARRATION_PROMPT = (
     "Du bist die Moderatorin von Sashas persönlicher Tagesschau. Du bekommst "
     "ausgewählte Themen-Bausteine (schon nach Wichtigkeit sortiert, schwerstes "
     "zuerst), jeder mit den Stimmen verschiedener Quellen.\n\n"
+    "OBERSTE REGEL — Treue zur Quelle: Du referierst NUR, was in den Stimmen "
+    "wörtlich dasteht. Keine Zahl, kein Eigenname, kein Ereignis, das nicht in "
+    "den gegebenen Texten steht — KEIN Weltwissen, KEINE Vermutung, KEINE "
+    "Ausschmückung. Geben die Stimmen wenig her, sag wenig. Eine kurze belegte "
+    "Zeile ist IMMER besser als ein voller erfundener Absatz. Im Zweifel weglassen. "
+    "Erfundene Nachrichten sind das Schlimmste, was passieren kann — lieber dünn "
+    "und wahr als reich und falsch.\n\n"
     "Bau daraus eine gesprochene Sendung:\n"
     "1. Kurze Hinführung ('Hier deine Weltlage, Sasha …'), dann die Blöcke in "
     "GEGEBENER Reihenfolge (Wichtigstes zuerst — Sashas Aufmerksamkeit soll vorne sitzen).\n"
-    "2. Pro Block: was ist passiert, und wo erzählen die Quellen es UNTERSCHIEDLICH "
-    "('Tagesschau betont X, TASS stellt es als Y dar'). Quellen namentlich nennen. "
-    "Dieser Kontrast ist der Sinn.\n"
-    "3. NICHTS erfinden — nur was in den Stimmen steht. Kommt was nur von einer "
-    "Quelle, sag das.\n"
-    "4. Gesprochen, locker, flüssige Sätze (wird vorgelesen). Pro Block ein paar "
+    "2. Pro Block: was ist laut den Stimmen passiert, und wo erzählen die Quellen "
+    "es UNTERSCHIEDLICH ('Tagesschau betont X, TASS stellt es als Y dar'). Quellen "
+    "namentlich nennen. Dieser Kontrast ist der Sinn. Steht etwas nur bei EINER "
+    "Quelle, sag genau das ('nur die BBC meldet …').\n"
+    "3. Gesprochen, locker, flüssige Sätze (wird vorgelesen). Pro Block ein paar "
     "Sätze, nicht ausufern.\n"
     "Bei '[UPDATE]' am Block: kurz einordnen, dass es eine Fortsetzung ist."
 )
@@ -536,12 +555,19 @@ _REVIEW_PROMPT = (
 )
 
 def _sendung_korpus(stories: list) -> str:
-    """Ausgewählte Steine -> Textblock fürs Moderations-LLM."""
+    """Ausgewählte Steine -> Textblock fürs Moderations-LLM.
+
+    Der Moderator bekommt pro Stimme den VOLLEN gespeicherten Anrisstext
+    (`DESC_CAP`=300), nicht nur die 160 Zeichen des Cluster-Schritts. Grund:
+    bei zu dünnem Input fabuliert das 9B die Lücken (gemessen 2026-06-08 —
+    erfand „Operation Epic Fury" etc.). Mehr echtes Material = weniger
+    Erfindungs-Spielraum (Daten-Hebel statt Prompt-Knebel, feedback_data_vs_model).
+    """
     bloecke = []
     for s in stories:
         marker = "[UPDATE] " if s.get("status") == "aktualisiert" else ""
         stimmen = "\n".join(
-            f"  - [{v['quelle']} · {v['herkunft']}] {v['titel']}: {(v['text'] or '')[:CORPUS_DESC]}"
+            f"  - [{v['quelle']} · {v['herkunft']}] {v['titel']}: {(v['text'] or '')[:DESC_CAP]}"
             for v in s["stimmen"]
         )
         bloecke.append(f"### {marker}{s['thema']} (Kategorie {s['kategorie']})\n{stimmen}")
@@ -582,7 +608,7 @@ def _llm_text(system_prompt: str, user_content: str) -> str:
                 ],
                 "stream": False,
                 "keep_alive": OLLAMA_KEEP_ALIVE,
-                "options": {"num_ctx": OLLAMA_NUM_CTX},
+                "options": {"num_ctx": OLLAMA_NUM_CTX, "temperature": NEWS_TEMPERATURE},
             },
             timeout=180,
         )

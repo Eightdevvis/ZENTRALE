@@ -239,14 +239,59 @@ Tuning-Konstanten: `NEWS_CLUSTER_SIM=0.64` (Average-Linkage, gemessen),
   echten Meldungen verifiziert: Nahost-Blob zerfällt sauber, Multi-Quellen-
   Cluster erhalten (Armenien trägt TASS), Sendung kontrastiert jetzt
   namentlich („Tagesschau betont X, TASS stellt es als Y dar").
-- **OFFEN — 9B fabuliert in der Moderation:** in der Test-Sendung erfand das
-  Modell Details, die NICHT in den Snippets stehen („Flughafen Chornobyl",
-  „Operation Epic Fury", „7.000 Tote") — trotz „NICHTS erfinden"-Regel.
-  Separates Problem (Modell-Ehrlichkeit), nicht das Clustering. Wahrscheinl.
-  Ursache: der Moderator sieht pro Stimme nur `CORPUS_DESC`=160 Zeichen →
-  zu dünn → stopft Lücken mit Erfindung. **Daten-Hebel** ([[feedback_data_vs_model]]):
-  mehr echten Snippet-Text geben (volle 300 gespeicherte Zeichen, oder
-  Artikel-Body per `hole_url` nachladen) statt Prompt-Regeln stapeln. Nächster Schritt.
+- **PARKED — 9B fabuliert in der Moderation (Modell-Problem, 2026-06-08):**
+  das 9B erfindet Zahlen/Orte, die NICHT in den Snippets stehen („7.000 Tote",
+  „Tschernobyl", „Hormus-Sund", ganze Somalia-Blöcke). Drei billige Hebel
+  PROBIERT + GEMESSEN (Token-Check der Sendung gegen den Quell-Korpus):
+  (1) Moderator-Text 160→300 Zeichen (`_sendung_korpus` nutzt jetzt `DESC_CAP`),
+  (2) `_NARRATION_PROMPT` Treue-zur-Quelle als oberste Regel (positiv, kein
+  Knebel), (3) `NEWS_TEMPERATURE`. **Ergebnis: Fabulation stark gedrückt, aber
+  NICHT auf Null** — und Sashas Vorgabe ist Null („lieber gar keine Sendung als
+  Fake-News"). Strukturelle Auswege (extraktiv = flach / Python-Wache gegen
+  unbelegte Zahlen+Entities = komplex / temp 0 = monoton) kosten alle was.
+  **Entscheidung mit Sasha: NICHT gegen das schwache Modell anbauen, sondern
+  parken** bis das stärkere/anti-halluzinations-getunte Modell steht (separate
+  Reasoning-Arbeitslinie). temp daher zurück auf **0.7** (Lebendigkeit, nicht
+  Schein-Sicherheit). Die billigen Hebel (1)+(2) bleiben drin (modell-agnostisch
+  gut). **Wieder-Aufnahme:** sobald besseres Modell → Sendung neu gegen Korpus
+  benchen ([[feedback_messen_nicht_vibes]]); wenn dann immer noch unbelegte
+  Tokens → Python-Wache als letzter Sicherungsschritt. Bis dahin gilt die
+  generierte Sendung als NICHT faktentreu-vertrauenswürdig.
+  - **VALIDIERTER RESUME-BAUPLAN (Sashas Idee, gemessen 2026-06-08):**
+    „generate-then-verify **pro Sektion**". Jede Story IST eine Sektion und
+    bringt ihre eigenen `stimmen` mit → man generiert den Absatz lebendig
+    (temp 0.7) und prüft ihn DANACH gegen NUR die eigenen Snippets (kleiner,
+    konzentrierter Kontext, optional Wort-Limit pro Sektion gegen Schwafeln).
+    **Messung:** der geerdete Prüfer („liste jede Angabe im Absatz, die NICHT
+    in DIESEN Quellen steht — nur gegen die Quellen, nicht gegen Weltwissen")
+    fing echte Fabrikate (erfundene „15 Ziele"/„US-Militärbasen", falsches
+    Datum). ABER das 9B als Prüfer ist noch unzuverlässig: pedantisches
+    Rauschen, invertiert manchmal die Aufgabe, `format=json` reißt (Prosa-
+    Output nötig). Großer Blob auf einmal → Prüfer gibt nur Leeres → pro-
+    Sektion ist Pflicht. **Dieser Bauplan wird mit dem stärkeren Modell zum
+    sauberen Fix (lebendig UND faktentreu) — DAS ist der Wieder-Aufnahme-Punkt.**
+  - **Prüfer = STATELESS, persona-freier Einzel-Call (Sashas Verfeinerung):**
+    der Verify-Pass läuft NICHT als die Moderatorin-Persona die „die Brille
+    wechselt", sondern als eigener, leergeräumter Call: nur Prüfer-System-Prompt
+    + die Snippets + der zu prüfende Absatz — KEINE Persona, KEINE Chat-History,
+    KEIN Dashboard-/Tool-/Memory-Context, niedrige temp. Zwei Gründe: (a) die
+    lockere Persona primt Erzeugen/Gefallen, das Gegenteil von kaltem Abgleichen;
+    (b) ohne den eigenen gerade geschriebenen Text im Kontext kann das Modell ihn
+    nicht VERTEIDIGEN ([[project_history_vergiftung]]) — es auditiert einen
+    „fremden" Text neutral gegen Quellen statt „habe ich gelogen?" defensiv zu
+    beantworten. (Im Prototyp 2026-06-08 lief der Prüfer schon so — eigener
+    `net.post`, keine Persona/History — und fing nur deshalb überhaupt Fabrikate.)
+  - **Mehr DIREKTE ZITATE statt Paraphrase (Sashas Verfeinerung):** lässt man
+    die Moderation die harten Fakten als wörtliche, attribuierte Zitate bringen
+    („BBC wörtlich: '…'") statt sie umzuschreiben, ist das faktentreu PER
+    KONSTRUKTION — in einem Zitat ist kein Platz zum Erfinden. Doppelter Gewinn:
+    (a) trifft exakt das URSPRÜNGLICHE Ziel „wer sagt was" (Zitate SIND die
+    divergenten Framings), (b) macht den Prüfschritt fast deterministisch — ein
+    Zitat ist ein Substring der Snippets oder nicht (Python-Substring-Check, kein
+    LLM nötig). Nuancen: das 9B kann INNERHALB der Anführungszeichen verfälschen
+    (kleine Modelle „misquoten") — aber das ist trivial fangbar; und Zitate über
+    Sprachen (BBC=EN, Tagesschau=DE) am besten im Original zitieren (bleibt
+    verbatim-prüfbar) oder übersetzte Zitate als Paraphrase markieren.
 - **Qualität sonst ungebencht:** qwen3.5:9b hat Deutsch-Patzer
   („Isreal"/„Zverew"). Tuning-Konstanten gegen Ground-Truth zu benchen
   ([[feedback_messen_nicht_vibes]]).
