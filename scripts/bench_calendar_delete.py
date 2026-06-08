@@ -356,6 +356,10 @@ def main():
                     help="qwen3-Modelle mit think=ON fahren (Reflexion vor Antwort). "
                          "Sinnvoll NUR mit Dashboard-Sicht an (sonst zerdenkt sich "
                          "das 9b in 'kenne dein Dashboard nicht'). Langsamer.")
+    ap.add_argument("--adaptive-think", action="store_true",
+                    help="think PRO TURN via ai._should_think: AN bei Verständnis-/"
+                         "Verifikationsfragen (T2/T3), AUS bei Aktions-Turns (T1 "
+                         "löschen). Testet die adaptive Denk-Tiefe.")
     ap.add_argument("--dump", action="store_true",
                     help="Gescheiterte T2/T3-Antworten am Ende im Wortlaut "
                          "ausgeben - zum ANSCHAUEN des Fehlermodus (klebt das 9B "
@@ -363,6 +367,12 @@ def main():
                          "blind neue Varianten zu raten.")
     args = ap.parse_args()
     fails: list[tuple] = []   # (modell, turn, durchlauf, antworttext) bei --dump
+
+    def think_for(msg):
+        """think-Wert für einen Turn: adaptiv via ai._should_think, sonst --think."""
+        if args.adaptive_think:
+            return ai._should_think([{"role": "user", "content": msg}])
+        return args.think
 
     today = date.today()
     tomorrow = today + timedelta(days=1)
@@ -399,9 +409,8 @@ def main():
             history: list[dict] = []
 
             # ── Turn 1: loeschen ────────────────────────────────────────────
-            r1 = run_turn(model, today,
-                          history, "lösch bitte den termin um 10 uhr morgen.",
-                          think=args.think)
+            q1 = "lösch bitte den termin um 10 uhr morgen."
+            r1 = run_turn(model, today, history, q1, think=think_for(q1))
             lat.append(r1["latency"])
             t1_fired  = "delete_calendar_entry" in r1["fired"]
             target_gone = not _entry_present("10 uhr", tomorrow)
@@ -424,7 +433,7 @@ def main():
 
             # ── Turn 2: "was ist diese Warnung?" ───────────────────────────
             q2 = "und was ist diese warnung da im dashboard?"
-            r2 = run_turn(model, today, history, q2, think=args.think)
+            r2 = run_turn(model, today, history, q2, think=think_for(q2))
             lat.append(r2["latency"])
             t2_attrib = (_has_all(r2["content"], [GEIGE, ABSAGE])
                          and not _has_any(r2["content"], MISATTRIB))
@@ -436,7 +445,7 @@ def main():
             # ── Turn 3: "haben wir doch gelöscht, wieso noch Warnung?" ──────
             q3 = ("den 10-uhr-termin haben wir doch grad gelöscht. "
                   "wieso steht da noch ne warnung?")
-            r3 = run_turn(model, today, history, q3, think=args.think)
+            r3 = run_turn(model, today, history, q3, think=think_for(q3))
             lat.append(r3["latency"])
             t3_surfaces = _has_all(r3["content"], [GEIGE, ABSAGE])
             t3_no_allclear = not _has_any(r3["content"], ALLCLEAR)

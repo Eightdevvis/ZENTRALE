@@ -204,6 +204,48 @@ def _alarm_prompt() -> str:
     return "\n".join(lines)
 
 
+# ── Adaptive Denk-Tiefe: think nur auf Verständnis-/Verifikationsfragen ────
+# Gemessen (bench_calendar_delete.py): think=ON GLOBAL auf der Episode = Desaster
+# (Episode 0 %, das 9b zerdenkt die Aktions-Turns wie Löschen). think=ON ISOLIERT
+# auf der Verständnisfrage = stark (+40pp mit Dashboard-Sicht). Konsequenz: NICHT
+# global schalten, sondern pro Turn entscheiden - reflektieren bei „was/warum/
+# stimmt das/ergibt das Sinn", NICHT bei Schreib-/Aktions-Befehlen. Genau die
+# adaptive-aufwand-Idee (memory/project_adaptiver_aufwand). Heuristik bewusst
+# konservativ: im Zweifel AUS (schnell, kein Zerdenken).
+_THINK_QUESTION = re.compile(
+    r"(\?|\b(was|warum|wieso|weshalb|wie|welche[rsn]?|wer|wann|wo|stimmt|"
+    r"ergibt|sinn|sicher|wirklich|versteh\w*|erklär\w*|erklaer\w*|meinst|"
+    r"hei[ßs]t|bedeutet|doch|nein|falsch|quatsch|check|prüf\w*|pruef\w*)\b)",
+    re.IGNORECASE,
+)
+_THINK_ACTION = re.compile(
+    r"\b(lösch\w*|loesch\w*|trag\b|eintrag\w*|füg\w*|fueg\w*|hinzu|erstell\w*|"
+    r"verschieb\w*|absag\w*|speicher\w*|notier\w*|entfern\w*|kann\s+weg|"
+    r"mach\b|setz\b|leg\s+an)\b",
+    re.IGNORECASE,
+)
+
+
+def _should_think(messages: list) -> bool:
+    """
+    Entscheidet pro Turn, ob das Modell mit think=ON reflektieren soll. Schaut auf
+    die LETZTE User-Message. Reihenfolge wichtig: Frage/Verifikation ZUERST - so
+    zählt „… haben wir doch gelöscht, WIESO …?" als Verständnisfrage (think AN),
+    nicht als Lösch-Befehl. Reiner Aktions-/Schreib-Befehl → think AUS (sonst
+    zerdenkt das 9b die Aktion). Default AUS.
+    """
+    last = ""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            last = m.get("content") or ""
+            break
+    if _THINK_QUESTION.search(last):
+        return True
+    if _THINK_ACTION.search(last):
+        return False
+    return False
+
+
 # Kompakte Dashboard-Sicht für die KI (regulärer Chat). Hintergrund: das 9b
 # kannte das Dashboard-Layout NULL - fragte Sasha „was ist diese Warnung im
 # Dashboard?", reflektierte es sich (think=ON) in „ich weiß nicht was du siehst,
@@ -1427,10 +1469,19 @@ def chat_stream(messages: list, model: str = None, system: str = None,
 
     max_rounds = 5  # Sicherheitsnetz gegen Endlosschleifen
 
+    # Adaptive Denk-Tiefe (regulärer Chat): think NUR bei Verständnis-/Verifikations-
+    # fragen, NICHT bei Aktions-Turns. Gemessen (bench_calendar_delete.py, N=12):
+    # adaptiv schlägt sowohl think-aus (Episode 45→67 %, T2-Zuordnung 60→92 %) als
+    # auch think-global (das die Aktions-Turns zerdenkt: Episode 0 %). Einmal vor
+    # der Tool-Schleife bestimmt - der Turn-Intent ändert sich über die Runden nicht.
+    # Tutor-Modus (tools != None) denkt nicht (eigenes Tool-Set, ungetestet).
+    do_think = SUPPORTS_THINK and tools is None and _should_think(messages)
+    think_opts = {"think": do_think} if SUPPORTS_THINK else {}
+
     for _ in range(max_rounds):
         payload = {
             "model":      model,
-            **_think_opts(),
+            **think_opts,
             "messages":   working_messages,
             "tools":      active_tools,
             "stream":     True,

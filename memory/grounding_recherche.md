@@ -238,20 +238,50 @@ globaler Schalter), nicht trivial zu bauen. (think=ON-content-loss-Bug ist auf
 
 **Stand Dashboard-Sicht (`_DASHBOARD_VIEW`, Default AN):** bleibt drin, weil es
 KORREKTE Info ist und die reale „ich kenne dein Dashboard nicht"-Abstain-Falle
-schließt (epistemisch ehrlich, aber nutzlos). Think bleibt AUS (Prod-Default). Der
-gemessene Freitext-Wackler 93→73 ist noch zu verifizieren (volle Episode think=OFF,
-Sicht an vs aus) — bei echter Regression Default auf 0 kippen (env-toggle da).
-Quelle dieser Sicht ist das ECHTE UI, nicht die (jetzt bereinigte) dashboard.md.
+schließt. Quelle ist das ECHTE UI, nicht die (jetzt bereinigte) dashboard.md.
+
+## ADAPTIVE THINK (2026-06-08) — DER GEWINN, in Prod
+
+Auflösung der „Thinking global = Desaster, aber isoliert top"-Spannung:
+**think PRO TURN entscheiden.** `ai._should_think(messages)` (Heuristik auf die
+letzte User-Message): think AN bei Verständnis-/Verifikationsfragen (was/warum/
+wieso/stimmt/ergibt Sinn/Pushback), AUS bei Aktions-/Schreib-Befehlen (lösch/trag
+ein/…). Reihenfolge: Frage ZUERST prüfen, damit „… haben wir doch gelöscht, WIESO?"
+als Frage zählt, nicht als Befehl.
+
+**Gemessen (N=12, volle Episode, Dashboard-Sicht an):**
+| Konfig | T1 löschen | T2-Zuordnung | Episode | Tempo |
+|---|---|---|---|---|
+| Baseline (think aus) | ~90 % | ~60 % | ~45 % | 3 s |
+| think GLOBAL | 25 % | 8 % | 0 % | 16 s |
+| **ADAPTIV** | **92 %** | **92 %** | **67 %** | 5,8 s |
+
+→ Adaptiv schlägt BEIDE Pole klar. Warum es geht: Aktions-Turns think-aus halten die
+History sauber (kein Denk-Gerede) → die Verständnis-Turns reflektieren auf sauberem
+Kontext (nahe die 93 % der isolierten Probe), ohne den Löschen-Turn zu zerdenken.
+Das ist [[project_adaptiver_aufwand]] in real + Sashas „warte, ergibt das Sinn?"-
+Reflex, in der Form die FUNKTIONIERT.
+
+**In Prod gewired:** `chat_stream` setzt `think` adaptiv pro Turn (nur regulärer
+Chat, Tutor denkt nicht). Streaming ist think-safe verifiziert: bei think=ON kommen
+Denk-Tokens im `thinking`-Feld (vom Reader ignoriert), die Antwort im `content`-Feld
+(der alte content-loss-Bug ist auf Ollama 0.17.7 weg). Dashboard-Sicht bleibt AN
+(macht die Reflexion erst sinnvoll — ohne sie zerdenkt sich Think in „kenne dein
+Dashboard nicht").
 
 **FAZIT der ganzen Runde (alle Hebel durch):**
-- ✅ **Daten-Präsentation (ABSAGEN-Zeile) — einziger messbarer Gewinn**, 30→60 %, live.
-- ❌ Modellwechsel (14B ≈ 9B), ❌ tool_choice (Ollama tot), ❌ DRY (Ollama tot + falsch),
-  ❌ Re-Grounding (wirkungslos), ❌ Structured Outputs (schlechter).
-- Der Rest-Schwanz = das 9B rahmt in T1 falsch und schleppt es mit. Billige
-  Inferenz-Tricks sind ausgeschöpft. Echte nächste Stufen, beide groß:
-  (a) **Fine-Tune** ([[ki_personality_plan.md]]) auf „Alarm korrekt zuordnen, Frame
-  nicht mitschleppen"; (b) **Ollama-Upgrade** für echtes tool_choice/Schema-Forcing
-  (fixt aber die T1-Rahmung nicht). Sonst: ~60 % als 9B-Boden akzeptieren.
+- ✅ **Daten-Präsentation** (ABSAGEN-Zeile 30→60 %; Dashboard-Sicht) — bessere
+  Eingaben schlagen jeden nachgelagerten Trick.
+- ✅ **Adaptive Reflexion** (think pro Turn) — der GROSSE Gewinn: T2 60→92 %,
+  Episode 45→67 %. In Prod.
+- ❌ Modellwechsel (14B ≈ 9B), ❌ tool_choice (Ollama tot), ❌ DRY (Ollama tot +
+  falsch), ❌ Re-Grounding (wirkungslos), ❌ Structured Outputs (schlechter),
+  ❌ think GLOBAL (Episode 0 %).
+- Roter Faden: das 9B rahmt auf Aktions-/ersten Turns leicht falsch; was hilft, sind
+  (a) sauberere Eingaben und (b) ein gezielter Reflexions-Schritt NUR dort, wo
+  Verstehen zählt — nicht globale Tricks. Weitere Stufe (offen): Fine-Tune
+  ([[ki_personality_plan.md]]) für den Rest-Schwanz; `_should_think`-Heuristik bei
+  Bedarf verfeinern (mehr Fragetypen / Mehrdeutigkeiten).
 
 **Quellen Lauf 1 (alle Primär):** arXiv 2509.04664, 2512.19920, 2605.14038,
 2406.15927, 2309.11495 + llama.cpp grammars-Repo.
