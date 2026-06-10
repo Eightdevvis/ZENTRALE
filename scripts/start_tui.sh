@@ -15,10 +15,12 @@
 # Die untere bash ist ein vollwertiges Terminal: Dateien öffnen z.B. mit
 # `xdg-open bericht.pdf` (PDF-Default ist zathura, via xdg-mime gesetzt).
 # Pane wechseln: Maus-Klick (Maus-Modus an) oder `Ctrl-b` + ↑/↓.
+# Höhe der bash live ändern: Rand mit der MAUS ziehen, oder `Ctrl-b` dann
+#   K = höher / J = niedriger (wiederholbar: Prefix einmal, dann K K K …).
 # Beenden: 'q' in der TUI → schließt das ganze tmux-Fenster und stoppt alles.
 # Ohne tmux: Fallback = TUI im Vollbild (wie früher), mit Install-Hinweis.
 #
-# Knöpfe (Env): ZENTRALE_TERM_LINES = Höhe der unteren bash (Default 12).
+# Knöpfe (Env): ZENTRALE_TERM_LINES = Höhe der unteren bash (Default 6).
 #
 # Das Backend-stdout geht in eine LOGDATEI, NICHT ins Terminal — sonst würde
 # es die curses-Oberfläche zerschießen. Die Logs erscheinen ohnehin im
@@ -40,7 +42,7 @@ fi
 export ZENTRALE_KASSETTE=tui
 BACKEND_LOG="/tmp/zentrale-tui-backend.log"
 SESSION="zentrale-tui"
-TERM_LINES="${ZENTRALE_TERM_LINES:-12}"   # Höhe der unteren echten bash
+TERM_LINES="${ZENTRALE_TERM_LINES:-6}"    # Höhe der unteren echten bash
 
 # ── Backend im Hintergrund, stdout in die Logdatei ──────────────────────
 "$PY" core/main.py > "$BACKEND_LOG" 2>&1 &
@@ -77,8 +79,12 @@ if command -v tmux >/dev/null; then
   tmux kill-session -t "$SESSION" 2>/dev/null || true
   tmux new-session -d -s "$SESSION" -c "$PWD" \
        "'$PY' tui/zentrale_tui.py; tmux kill-session -t '$SESSION'"
-  tmux set-option -t "$SESSION" -g mouse on        # Pane per Klick fokussieren
+  tmux set-option -t "$SESSION" -g mouse on        # Pane per Klick fokussieren + Rand ziehen
   tmux set-option -t "$SESSION" -g status off      # keine tmux-Statuszeile → mehr Platz
+  # Untere bash live höher/niedriger: Prefix (Ctrl-b) dann K/J, wiederholbar.
+  # Greift Pane 0 (die TUI) an → wirkt egal welches Pane gerade fokussiert ist.
+  tmux bind-key -r K resize-pane -t 0 -U 3         # bash höher (TUI schrumpft)
+  tmux bind-key -r J resize-pane -t 0 -D 3         # bash niedriger (TUI wächst)
   # Split ERST nach dem Attach, damit die Höhe relativ zur ECHTEN Terminal-
   # größe sitzt. '-d' lässt den Fokus oben auf der TUI; untere bash startet
   # im HOME (fühlt sich an wie ein frisch geöffnetes Terminal).

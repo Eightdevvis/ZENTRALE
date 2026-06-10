@@ -138,12 +138,10 @@ nachgebautes „Fake-Terminal": die TUI bleibt reine Anzeige, fürs Navigieren/
   auswählen statt Default: `mimeopen -a <datei>`.
 - **Pane wechseln:** Maus-Klick (Maus-Modus an) oder `Ctrl-b` dann `↑`/`↓`.
   Fokus startet oben auf der TUI; die untere bash startet im `$HOME`.
-- **Höhe der bash:** `ZENTRALE_TERM_LINES=16 zentrale-tui` (Default 12 Zeilen).
+- **Höhe der bash — Start:** `ZENTRALE_TERM_LINES=10 zentrale-tui` (Default 6 Zeilen).
+- **Höhe der bash — live:** Rand mit der **Maus** ziehen, oder `Ctrl-b` dann
+  `K` (höher) / `J` (niedriger). Wiederholbar: Prefix einmal, dann `K K K …`.
 - **Kein tmux:** Fallback = TUI im Vollbild + Hinweis `sudo apt install tmux`.
-
-> Hinweis: Der frühere TUI-Befehl `/slide` (festes zathura auf `data/slides/`)
-> ist damit überflüssig — er bleibt als Kurzbefehl bestehen, aber der normale
-> Weg ist jetzt `xdg-open` in der echten Shell unten.
 
 ## Variante B — 3 Terminals manuell
 
