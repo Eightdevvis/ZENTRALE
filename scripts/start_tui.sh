@@ -59,6 +59,23 @@ SESSION="zentrale-tui"
 # geschrieben (--run-tui unten), beim nächsten Start wieder geladen.
 STATE_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/zentrale/tui_term_lines"
 
+# Aktuelle Höhe der unteren bash (pane 1) wegschreiben — validiert, schreibt nur
+# bei gültiger Zahl (sonst alten Wert behalten, z.B. wenn pane 1 grad fehlt).
+save_term_height() {
+  local h
+  h="$(tmux display-message -p -t "${SESSION}.1" -F '#{pane_height}' 2>/dev/null || true)"
+  [[ "$h" =~ ^[0-9]+$ ]] || return 0
+  mkdir -p "$(dirname "$STATE_FILE")" 2>/dev/null && printf '%s\n' "$h" > "$STATE_FILE"
+}
+
+# ── Sub-Modus für den after-resize-pane-Hook: nur die bash-Höhe LIVE sichern. ─
+# So ist die Höhe nach JEDEM Resize (Taste oder Maus) sofort gemerkt — egal wie
+# die Session endet (q, Crash, Fenster zu). Kein Abhängen vom sauberen Quit.
+if [[ "${1:-}" == "--save-height" ]]; then
+  save_term_height
+  exit 0
+fi
+
 # ── Sub-Modus (läuft IM tmux-Pane 0): nur die TUI; danach die AKTUELLE Höhe der
 #    unteren bash (pane 1) für die nächste Session merken, dann die Session zu. ─
 if [[ "${1:-}" == "--run-tui" ]]; then
@@ -80,10 +97,7 @@ if [[ "${1:-}" == "--run-tui" ]]; then
     echo "Taste drücken zum Schließen…" >&2
     read -rsn1 || true
   fi
-  h="$(tmux display-message -p -t "${SESSION}.1" -F '#{pane_height}' 2>/dev/null || true)"
-  if [[ "$h" =~ ^[0-9]+$ ]]; then
-    mkdir -p "$(dirname "$STATE_FILE")" && printf '%s\n' "$h" > "$STATE_FILE"
-  fi
+  save_term_height          # Backup-Sicherung beim Beenden (der Hook macht's live)
   tmux kill-session -t "$SESSION" 2>/dev/null || true
   exit "$rc"
 fi
@@ -202,6 +216,10 @@ if command -v tmux >/dev/null; then
   # Backend+Session. Genau dieser Fummel-Footgun. Raus geht's NUR via 'q'.
   tmux unbind-key -T prefix d
   tmux unbind-key -T prefix D
+  # Höhe LIVE merken: nach JEDEM Resize (Taste ODER Maus-Rand) die bash-Höhe
+  # wegschreiben → nächste Session startet mit genau dieser Höhe, egal wie diese
+  # hier endet. -b = im Hintergrund, blockiert das Resizen nicht.
+  tmux set-hook -t "$SESSION" after-resize-pane "run-shell -b '\"$SELF\" --save-height'"
   # Split ERST nach dem Attach, damit die Höhe relativ zur ECHTEN Terminal-
   # größe sitzt. '-d' lässt den Fokus oben auf der TUI; untere bash startet
   # im HOME (fühlt sich an wie ein frisch geöffnetes Terminal).

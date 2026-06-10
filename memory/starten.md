@@ -175,11 +175,14 @@ nachgebautes „Fake-Terminal": die TUI bleibt reine Anzeige, fürs Navigieren/
   **Maus** ziehen. Untergrenze ist **1 Zeile** bash. Fokus wechseln dagegen:
   `Ctrl-b` dann **nacktes** ↑/↓ (Ctrl los). (`Alt+Pfeil` geht nicht — XFCE
   fängt das fürs Fenster-Tiling ab.)
-- **Höhe wird gemerkt:** die zuletzt eingestellte bash-Höhe landet beim Beenden in
-  `~/.config/zentrale/tui_term_lines` und wird beim nächsten `zentrale-tui` wieder
-  hergestellt — **beim Booten aber nie unter 3 Zeilen** (live runter bis 1 bleibt
-  ok), damit nichts unbrauchbar winzig startet. Erzwingen/überschreiben:
-  `ZENTRALE_TERM_LINES=10 zentrale-tui` (Env gewinnt; ohne alles Default 6).
+- **Höhe wird gemerkt:** die bash-Höhe wird **live bei JEDEM Resize** (Taste oder
+  Maus) nach `~/.config/zentrale/tui_term_lines` geschrieben — via tmux-Hook
+  `after-resize-pane` → `start_tui.sh --save-height`. Sie ist also immer aktuell,
+  egal wie die Session endet (q, Crash, Fenster zu). Beim nächsten `zentrale-tui`
+  wird sie wiederhergestellt — **beim Booten aber nie unter 3 Zeilen** (live
+  runter bis 1 bleibt ok), damit nichts unbrauchbar winzig startet.
+  Erzwingen/überschreiben: `ZENTRALE_TERM_LINES=10 zentrale-tui` (Env gewinnt;
+  ohne alles Default 6).
 - **Kein tmux:** Fallback = TUI im Vollbild + Hinweis `sudo apt install tmux`.
 
 ## Variante B — 3 Terminals manuell
