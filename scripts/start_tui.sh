@@ -88,17 +88,34 @@ if [[ "${1:-}" == "--run-tui" ]]; then
   exit "$rc"
 fi
 
-# ── Schon eine laufende ZENTRALE-TUI? Dann NICHT neu bauen. Sonst würde der
-#    "alte Reste weg"-Reset unten die laufende Session killen (gleicher Name)
-#    und ein zweites Backend auf den belegten Port :5000 prallen. ──
-if command -v tmux >/dev/null && tmux has-session -t "$SESSION" 2>/dev/null; then
-  if [[ -n "${TMUX:-}" ]]; then
-    echo "ZENTRALE-TUI läuft bereits — du bist schon drin (Session '$SESSION')." >&2
-    echo "Beenden mit 'q' in der TUI oben; ein zweiter Start ist nicht nötig." >&2
-    exit 0
+# ── Läuft schon eine ECHTE ZENTRALE-TUI? Nur DANN nicht neu bauen. ──
+# Wichtig: eine tmux-Session "zentrale-tui" kann VERWAIST sein — wenn das TUI-
+# Pane stirbt, wird das untere bash-Pane zum alleinigen Pane und die Session
+# lebt server-seitig weiter. `has-session` allein hält so eine Leiche für
+# "läuft". Darum die echte Lebend-Prüfung: läuft wirklich ein TUI-Prozess?
+TUI_ALIVE=0
+pgrep -f 'tui/zentrale_tui\.py' >/dev/null 2>&1 && TUI_ALIVE=1
+
+# (a) Wir sitzen SELBST in der zentrale-tui-Session? Dann NICHT von hier aus neu
+#     starten (kill-session träfe die eigene Session) — nur einen Hinweis geben.
+if [[ -n "${TMUX:-}" && "$(tmux display-message -p '#{session_name}' 2>/dev/null)" == "$SESSION" ]]; then
+  if [[ "$TUI_ALIVE" == 1 ]]; then
+    echo "Du bist schon in der ZENTRALE-TUI — beenden mit 'q', nicht neu starten." >&2
+  else
+    echo "Diese Session ist eine verwaiste ZENTRALE (TUI schon beendet)." >&2
+    echo "Tipp 'exit' (oder Fenster zu) und starte in einem FRISCHEN Terminal: zentrale-tui" >&2
   fi
-  echo "ZENTRALE-TUI läuft schon — hänge an die bestehende Session '$SESSION' an." >&2
-  exec tmux attach-session -t "$SESSION"
+  exit 0
+fi
+
+# (b) Von außerhalb: existiert eine Session?
+if command -v tmux >/dev/null && tmux has-session -t "$SESSION" 2>/dev/null; then
+  if [[ "$TUI_ALIVE" == 1 ]]; then
+    echo "ZENTRALE-TUI läuft schon — hänge an die bestehende Session an." >&2
+    exec tmux attach-session -t "$SESSION"
+  fi
+  echo "Verwaiste zentrale-tui-Session (TUI schon beendet) — räume auf und starte neu." >&2
+  tmux kill-session -t "$SESSION" 2>/dev/null || true
 fi
 
 # Höhe für den Split: Env-Override > gemerkte Höhe > Default 6.
@@ -118,12 +135,24 @@ TERM_LINES="${ZENTRALE_TERM_LINES:-${SAVED:-6}}"   # Höhe der unteren echten ba
 # FALSCHE Backend, und die TUI liefe gegen veralteten Code — genau die Art
 # "läuft nicht, keine Ahnung warum". Lieber hart abbrechen mit Aufräum-Tipp.
 if curl -sf -o /dev/null http://localhost:5000/api/state 2>/dev/null; then
-  echo "FEHLER (3): Auf http://localhost:5000 antwortet bereits eine ZENTRALE." >&2
-  echo "  Vermutlich ein verwaistes Backend (tmux-Session weg, Prozess noch da)." >&2
-  PIDS="$(pgrep -f 'core/main.py' 2>/dev/null | tr '\n' ' ')"
-  echo "  Backend-PID(s): ${PIDS:-unbekannt}" >&2
-  echo "  Aufräumen:  pkill -f 'core/main.py'   — dann erneut: zentrale-tui" >&2
-  exit 3
+  # Ist es UNSER verwaistes ki-frei-Backend (von einer toten TUI-Session)? Dann
+  # zurückholen statt abbrechen. Erkennung: ZENTRALE_KASSETTE=tui im Prozess-
+  # Environ — so treffen wir NIE ein fremdes/monolith-Backend.
+  reclaimed=0
+  for pid in $(pgrep -f 'core/main\.py' 2>/dev/null); do
+    if tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -qx 'ZENTRALE_KASSETTE=tui'; then
+      kill "$pid" 2>/dev/null && reclaimed=1
+    fi
+  done
+  if [[ "$reclaimed" == 1 ]]; then
+    echo "Verwaistes ki-frei-Backend auf :5000 zurückgeholt — starte frisch." >&2
+    for _ in $(seq 1 20); do curl -sf -o /dev/null http://localhost:5000/api/state 2>/dev/null || break; sleep 0.2; done
+  else
+    echo "FEHLER (3): Auf http://localhost:5000 antwortet bereits eine ZENTRALE (fremd/monolith)." >&2
+    echo "  Backend-PID(s): $(pgrep -f 'core/main.py' 2>/dev/null | tr '\n' ' ')" >&2
+    echo "  Aufräumen:  pkill -f 'core/main.py'   — dann erneut: zentrale-tui" >&2
+    exit 3
+  fi
 fi
 
 # ── Backend im Hintergrund, stdout in die Logdatei ──────────────────────
