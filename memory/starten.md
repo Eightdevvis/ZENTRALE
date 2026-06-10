@@ -136,12 +136,14 @@ nachgebautes „Fake-Terminal": die TUI bleibt reine Anzeige, fürs Navigieren/
   ```
   Default pro Typ ändern: `xdg-mime default <app>.desktop <mime/typ>`. App
   auswählen statt Default: `mimeopen -a <datei>`.
-- **Pane wechseln:** Maus-Klick (Maus-Modus an) oder `Ctrl-b` dann `↑`/`↓`.
-  Fokus startet oben auf der TUI; die untere bash startet im `$HOME`.
+- **Pane fokussieren (oben/unten):** Maus-Klick, oder `Ctrl-b` dann **nacktes**
+  `↑`/`↓` (Ctrl loslassen) = `select-pane`. Fokus startet oben auf der TUI; die
+  untere bash startet im `$HOME`.
 - **Höhe der bash — Start:** `ZENTRALE_TERM_LINES=10 zentrale-tui` (Default 6 Zeilen).
-- **Höhe der bash — live (ohne Prefix):** `Alt+↑` (höher) / `Alt+↓` (niedriger),
-  oder den Rand mit der **Maus** ziehen. (Alternativ unter dem Prefix: `Ctrl-b`
-  loslassen, dann `k`/`j` — wiederholbar.) Kein `Ctrl-b`-Tanz nötig.
+- **Höhe der bash — live:** `Ctrl-b` dann **`Ctrl+↑`/`Ctrl+↓`** (Ctrl durchgehend
+  halten; wiederholbar), oder den Rand mit der **Maus** ziehen. Merksatz:
+  **Ctrl gehalten = größer/kleiner, Ctrl los = Fokus wechseln.** (`Alt+Pfeil`
+  geht nicht — XFCE fängt das fürs Fenster-Tiling ab.)
 - **Kein tmux:** Fallback = TUI im Vollbild + Hinweis `sudo apt install tmux`.
 
 ## Variante B — 3 Terminals manuell
