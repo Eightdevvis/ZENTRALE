@@ -27,10 +27,12 @@ from flask import Flask, jsonify, render_template, request, Response, stream_wit
 from datetime import datetime
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
 import categories   # type: ignore
+import graphs       # type: ignore  – dynamische Lifestyle-Graph-Registry
 import ai           # type: ignore
 import audio        # type: ignore
 import consolidation # type: ignore  – Phase E: STM → LTM Konsolidierung
 import telemetry    # type: ignore  – PC-Host-Telemetrie (CPU/GPU/VRAM/Temp/RAM)
+import kassette     # type: ignore  – welche Kassette läuft (monolith | laptop)
 
 app = Flask(__name__)
 
@@ -45,21 +47,34 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
 
 
+# ── Kassetten-Gate für KI-Endpoints ───────────────────────────────────
+#
+# In den KI-freien Kassetten (laptop, tui) ist die KI komplett raus (siehe
+# core/kassette.py): kein Chat, kein TTS/STT, keine Permission-Antworten.
+# Diese Endpoints werden hart mit 503 abgeriegelt, falls doch jemand sie
+# aufruft. Die KI-freien Fronten kennen sie ohnehin nicht – das hier ist
+# Defense-in-Depth, damit eine versehentliche Anfrage NIE die PC-KI anspricht.
+def _ki_aus():
+    return jsonify({"error": "KI in dieser Kassette deaktiviert"}), 503
+
+
 # ── Dashboard ─────────────────────────────────────────────────────────
 
 @app.route('/')
 @app.route('/monolith')   # Alias: alte Kiosk-/Bookmark-/Deeplink-URL bleibt gueltig
 def index():
     """
-    Liefert das Monolith-Dashboard - seit 2026-06-08 die EINZIGE UI (source of
-    truth, von /monolith nach / gezogen). Das alte index.html-Dashboard (AI-Orb,
-    #view-main-Grid) ist entfernt. /monolith bleibt als Alias bestehen, damit der
-    Pi-Kiosk und alte Bookmarks nicht brechen.
+    Liefert das Dashboard der aktuell gefahrenen Kassette (core/kassette.py):
+      - monolith (Default): das große Pi-Kiosk-Dashboard (KI-Kern, Chat, Audio).
+      - laptop: die kleine, KI-freie Laptop-Kassette (ui/templates/laptop.html).
+    Die Wahl kommt aus ZENTRALE_KASSETTE, gesetzt vom Start-Befehl. /monolith
+    bleibt als Alias bestehen, damit der Pi-Kiosk und alte Bookmarks nicht brechen
+    (zeigt ebenfalls die kassetten-aktive UI).
 
     Statische Assets (engine.js = Daten-Adapter, viz.js, ascii.js, fonts/) liegen
     in ui/static/ und werden von Flask automatisch unter /static/<file> bedient.
     """
-    resp = render_template('monolith.html')
+    resp = render_template(kassette.template())
     from flask import make_response
     r = make_response(resp)
     # Cache deaktivieren: der Browser soll immer die aktuelle Version laden,
@@ -181,6 +196,42 @@ def api_data(category_id):
         return jsonify(json.load(f))
 
 
+# ── Lifestyle-Graphen (dynamisch, vom Dashboard angelegt) ──────────────
+#
+# Definitionen liegen in data/graphs.json (core/graphs.py). Die Messwerte
+# selbst teilen sich die Data-Collection-Infrastruktur: /api/log schreibt
+# nach data/<graph_id>.json, /api/data/<graph_id> liest sie zurück. Hier
+# gibt es nur die Verwaltung der Definitionen (Liste / anlegen / löschen).
+
+@app.route('/api/graphs')
+def api_graphs():
+    """Alle Graph-Definitionen (für das Graph-Werkzeug und die lifestyle-Box)."""
+    return jsonify(graphs.list_graphs())
+
+
+@app.route('/api/graphs', methods=['POST'])
+def api_graphs_create():
+    """
+    Neuen Graphen anlegen.
+    Body (JSON): {"name": "Gewicht", "type": "number"|"scale", "unit": "kg"}
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        g = graphs.create_graph(body.get('name'), body.get('type', 'number'), body.get('unit', ''))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    state.push_log(f"GRAPH+: {g['id']} ({g['type']})")
+    return jsonify(g)
+
+
+@app.route('/api/graphs/<gid>', methods=['DELETE'])
+def api_graphs_delete(gid):
+    """Graph-Definition und seine Messwerte-Datei löschen."""
+    graphs.delete_graph(gid)
+    state.push_log(f"GRAPH-: {gid}")
+    return jsonify({"ok": True})
+
+
 @app.route('/api/debug', methods=['POST'])
 def api_debug():
     """
@@ -282,6 +333,8 @@ def api_chat():
     stream_with_context() ist Flask-spezifisch: es stellt sicher dass der
     Flask-Request-Context (für g, session etc.) im Generator noch verfügbar ist.
     """
+    if kassette.ki_aus():
+        return _ki_aus()
     body    = request.get_json()
     message = (body.get('message') or '').strip()
     # via_mic-Flag aus dem Body. True bedeutet: diese Message kam aus
@@ -350,6 +403,8 @@ def api_chat():
 @app.route('/api/chat/history')
 def api_chat_history():
     """Gibt die aktuelle Chat-History zurück (für initiales Laden der Chat-View)."""
+    if kassette.ki_aus():
+        return jsonify([])   # Laptop-Kassette: kein Chat
     return jsonify(state.get_chat_history())
 
 
@@ -372,6 +427,8 @@ def api_permission_answer():
     bereits offenen SSE-Verbindung weiter. Funktioniert nur weil Flask
     multi-threaded läuft (siehe app.run(threaded=True) ganz unten).
     """
+    if kassette.ki_aus():
+        return _ki_aus()
     body    = request.get_json(silent=True) or {}
     answer  = (body.get('answer') or '').strip()
     # Gegen die aktuell angebotenen Knopf-Labels validieren (case-insensitiv,
@@ -396,6 +453,11 @@ def api_ai_status():
     Prüft ob Ollama erreichbar ist und gibt Status + Konfiguration zurück.
     Wird vom Dashboard alle 30s gecheckt und als Statusanzeige genutzt.
     """
+    if kassette.ki_aus():
+        # KI-freie Kassette (laptop/tui): KI ist nicht "unerreichbar", sondern
+        # bewusst aus. Ollama wird hier NICHT angepingt (ai.is_available() würde
+        # einen HTTP-Call absetzen) – wir antworten direkt deaktiviert.
+        return jsonify({"available": False, "url": None, "model": "—", "kassette": kassette.name()})
     return jsonify({
         "available": ai.is_available(),
         "url":       ai.OLLAMA_URL,
@@ -430,6 +492,8 @@ def api_speak():
 
     Response: audio/wav, oder 503 wenn das Modell fuer die Sprache fehlt.
     """
+    if kassette.ki_aus():
+        return _ki_aus()
     body    = request.get_json() or {}
     text    = (body.get('text') or '').strip()
     lang    = (body.get('lang') or '').strip() or None
@@ -459,6 +523,8 @@ def api_transcribe():
 
     Response: JSON {"text": "..."}.
     """
+    if kassette.ki_aus():
+        return _ki_aus()
     if 'audio' not in request.files:
         return jsonify({"error": "kein 'audio'-Feld"}), 400
 

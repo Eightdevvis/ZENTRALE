@@ -16,6 +16,7 @@ from events import (
 )
 import state
 import kalender
+import kassette
 
 
 # Mapping: Sensor-Name aus dem Webhook -> intern verwendeter Event-Name.
@@ -58,19 +59,29 @@ def main():
     ui_thread = threading.Thread(target=start_ui, daemon=True)
     ui_thread.start()
 
-    # KI-Modelle im Hintergrund ins Ollama-RAM ziehen, damit der erste
-    # echte User-Chat nicht den Cold-Load von qwen2.5:14b (~9 GB) zahlen
-    # muss. Daemon-Thread, blockiert nichts - während der Warmup läuft
-    # kann der User schon das Dashboard bedienen.
-    import ai
-    ai.warmup_async()
+    # ── KI nur in der Monolith-Kassette hochfahren ─────────────────────
+    # Die KI-freien Kassetten (laptop, tui) booten KEINE KI: kein Warmup,
+    # kein News-Fetcher -> Ollama wird NIE angesprochen (auch nicht die PC-
+    # Instanz). Welche Kassette läuft, kommt aus ZENTRALE_KASSETTE
+    # (core/kassette.py), gesetzt vom Start-Befehl.
+    if kassette.ki_aus():
+        log(f"KASSETTE: {kassette.name()} — KI deaktiviert (kein Warmup, kein News-Fetcher)")
+    else:
+        log(f"KASSETTE: {kassette.name()} — KI aktiv")
 
-    # Persönliche Tagesschau: periodischer Hintergrund-Fetcher zieht
-    # Weltpolitik aus vielen RSS-Quellen und lässt die KI daraus ein
-    # Briefing bauen (core/news.py). Eigener Daemon-Thread, vom Chat
-    # entkoppelt; jeder Lauf kündigt sich laut im Log + Internet-Panel an.
-    import news
-    news.start_fetcher()
+        # KI-Modelle im Hintergrund ins Ollama-RAM ziehen, damit der erste
+        # echte User-Chat nicht den Cold-Load von qwen2.5:14b (~9 GB) zahlen
+        # muss. Daemon-Thread, blockiert nichts - während der Warmup läuft
+        # kann der User schon das Dashboard bedienen.
+        import ai
+        ai.warmup_async()
+
+        # Persönliche Tagesschau: periodischer Hintergrund-Fetcher zieht
+        # Weltpolitik aus vielen RSS-Quellen und lässt die KI daraus ein
+        # Briefing bauen (core/news.py). Eigener Daemon-Thread, vom Chat
+        # entkoppelt; jeder Lauf kündigt sich laut im Log + Internet-Panel an.
+        import news
+        news.start_fetcher()
 
     event_queue = [SYSTEM_BOOT]
 

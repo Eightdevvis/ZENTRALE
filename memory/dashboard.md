@@ -1,12 +1,148 @@
 # Dashboard & Frontend
 
-> **AKTUELLER STAND (2026-06): Live ist NUR noch das Monolith-Dashboard**
-> (`ui/templates/monolith.html`). Das alte `index.html` (AI-Orb, `#view-main`-
-> Grid, `#panel-ai`/`#panel-chat`-Modi, Chat/Data-Collection per Taste) ist
-> **weg** - die entsprechenden Sektionen wurden hier gelöscht, weil veraltete
-> Layout-Doku schon einmal zu falschen KI-Prompt-Texten geführt hat (Dashboard-
-> Sicht, siehe `grounding_recherche.md`). Was Sasha real sieht steht unter
-> „## Monolith-Dashboard".
+> **AKTUELLER STAND (2026-06): zwei „Kassetten" auf EINEM Backend.**
+> Die gelebte Haupt-UI ist das Monolith-Dashboard (`ui/templates/monolith.html`).
+> Seit 2026-06-08 gibt es zusätzlich die **Laptop-Kassette**
+> (`ui/templates/laptop.html`) — „ZENTRALE in klein", KI-frei, für eine
+> RAM-schwache Laptop-Maschine. Beide teilen sich Backend/State/Routen; welche
+> ausgeliefert wird, entscheidet die Kassetten-Wahl (s.u.). Das alte `index.html`
+> (AI-Orb, `#view-main`-Grid, `#panel-ai`/`#panel-chat`-Modi) ist **weg** - die
+> entsprechenden Sektionen wurden hier gelöscht, weil veraltete Layout-Doku schon
+> einmal zu falschen KI-Prompt-Texten geführt hat (Dashboard-Sicht, siehe
+> `grounding_recherche.md`). Was Sasha real sieht steht unter „## Monolith-Dashboard"
+> bzw. „## Laptop-Kassette".
+
+## Kassetten (monolith | laptop | tui)
+
+Eine Codebase, ein Backend, **mehrere Fronten** — bewusst getrennte Fronten
+statt eines Modus-Schalters im Monolith (damit sie sich unabhängig entwickeln,
+ohne „Zusammendatschen"):
+
+- **`core/kassette.py`** ist die einzige Wahrheit: liest die Env-Var
+  `ZENTRALE_KASSETTE` (Default `monolith`; unbekannte Werte → `monolith`).
+  `name()`, `is_laptop()`, `is_tui()`, `ki_aus()`, `template()`.
+  `ki_aus()` ist `True` für **laptop und tui** (alles außer monolith).
+- **`core/main.py`** fährt den KI-Auto-Bootup (Ollama-Warmup + News-Fetcher)
+  **nur wenn `ki_aus()` False** ist (also nur monolith) hoch. Sonst: nichts
+  davon → Ollama wird nie angesprochen.
+- **`ui/app.py`** rendert `kassette.template()` auf `/` (+ `/monolith`-Alias).
+  Wenn `ki_aus()`: KI-Endpoints abgeriegelt — `/api/chat`,
+  `/api/permission_answer`, `/api/speak`, `/api/transcribe` → **503**;
+  `/api/ai/status` → `{available:false, kassette:<name>}`; `/api/chat/history` → `[]`.
+- Gestartet wird die Wahl über den Start-Befehl: `zentrale` zeigt ein
+  **Kassetten-Menü** (`tui/select_kassette.py`, ↑/↓ + Enter, animierter Stern,
+  Regenbogen-Ladebalken) und exec't in die gewählte Kassette; `zentrale-laptop`
+  → laptop, `zentrale-tui` → tui überspringen das Menü direkt (setzen die
+  Env-Var). Siehe `starten.md`.
+
+Die drei Fronten:
+
+| Kassette | Front | KI | Datei |
+|----------|-------|----|-------|
+| monolith | Browser, voll | an | `ui/templates/monolith.html` |
+| laptop   | Browser, lean | aus | `ui/templates/laptop.html` |
+| tui      | **Terminal (curses)** | aus | `tui/zentrale_tui.py` |
+
+### Laptop-Kassette (`ui/templates/laptop.html`)
+
+Eigenständige, schlanke Datei — **nicht** vom Monolith abgeleitet: kein
+`engine.js`/`viz.js`/`ascii.js`, kein Frametick, kein Flicker. Eigener
+Mini-Adapter (inline `<script>`), der **nur** `/api/state` (1 s) und
+`/api/telemetry` (2 s) pollt — kein `/api/ai/status`, kein
+`/api/chat/history`, damit auf der RAM-schwachen Maschine nichts ins Leere
+läuft. Optik: ZENTRALE-Look, AUTO-Theme (hell 05–21 / sonst dunkel),
+**statische** Scanlines (kein Keyframe), sonst still.
+
+Layout (3 Spalten, lean):
+
+```
++------------+--------------------------+------------------+
+| telemetrie |                          | lifestyle        |
+| (LAP·CPU/  |   MITTE (leeres Skelett, | (tracker, noch   |
+|  RAM/TEMP) |    Inhalt folgt          |  nicht an        |
+| stdout     |    gemeinsam)            |  /api/data)      |
+| (#term)    |                          +------------------+
+|            |                          | outbound         |
+|            |                          | (#term-net)      |
++------------+--------------------------+------------------+
+```
+
+> **Sensoren-Panel entfernt (2026-06):** in ALLEN drei Kassetten (monolith,
+> laptop, tui) ist die Sensoren-Anzeige raus — kein echter Sensor angeschlossen,
+> der Platzhalter soll weg. Das **Backend bleibt verkabelt** (Event-Loop,
+> `/api/sensor/<name>`-Webhook, `sensors` in `/api/state`); zum Wiederanzeigen
+> Box + Handler aus der git-History zurückholen (in den Templates steht das tote
+> `.srow`-CSS noch bereit).
+
+- **Header:** kein Ollama-Status (KI aus); NET/UP/Theme/Uhr.
+- **Mitte:** in `laptop.html` weiter Platzhalter; in der **TUI** ist hier das
+  **Graph-Werkzeug** verbaut (Taste `g`, s.u.).
+- **Minimale Boot-Dependencies:** nur `flask` + `python-dateutil` (kein
+  Whisper/TTS/sherpa/piper nötig — die Kassette ist KI-frei). Siehe `starten.md`.
+
+### Terminal-Kassette (`tui/zentrale_tui.py`)
+
+KEIN Browser — rendert direkt im Terminal (curses). Motivation: ein Browser-Tab
+frisst auf einer RAM-schwachen Maschine 300–600 MB+, das Backend selbst nur
+~32 MB. Die TUI ist ein **eigenständiger Client** (kein Flask-Template): sie
+pollt dasselbe `/api/state` (1 s) + `/api/telemetry` (2 s) über HTTP und zeichnet
+ein 3-Spalten-Layout analog zur Laptop-Kassette (telemetrie/stdout |
+mitte-skelett | lifestyle/outbound; Sensoren-Panel entfernt, s.o.). Header mit
+NET/UP/Uhr. Tasten: `q` beendet,
+`t` zykliert das Theme (auto/hell/dunkel — auto nach Uhrzeit, wie im Web).
+Themes: Light-Mode mit weißem Hintergrund (kein Gelb auf Weiß), Dark-Mode
+**ultra-high-contrast** (reinweißer Text 231 auf hartem Schwarz 16, Rahmen Grau
+245). Akzent-Grün ist gedämpft (Salbei 108, nie bold → kein Neon). Box-Inhalte
+werden auf die jeweilige Box-Innenbreite gekürzt (kein Überlauf in Nachbarspalten).
+
+**Befehlszeile (unten):** `/` öffnet eine Eingabezeile am unteren Rand (die
+Shell ist im Alternate-Screen nicht erreichbar — das ist der Ersatz). Beim
+Tippen klappt eine **Live-Liste** der passenden Befehle nach oben auf und filtert
+mit; Enter führt aus, `Esc` (oder den Slash wegbackspacen) schließt wieder.
+Befehle: `/help` (latcht die volle Hilfe inkl. Tastenkürzel, klappt bei der
+nächsten Taste weg), `/theme [auto|hell|dunkel]`, `/quit`. Die Logik liegt
+curses-frei auf Modulebene (`parse_command`, `overlay_rows`) und ist ohne TTY
+unit-testbar. Im Normal-Modus (Zeile zu) wirken `q`/`t` weiter als Shortcuts.
+
+**Graph-Werkzeug (Mitte, Taste `g`):** dieselbe geteilte Logik wie im Monolith
+(`core/graphs.py` + `/api/graphs`), hier in curses verbaut. `g` gibt der
+MITTE-Box den Fokus; ein kleines Zustandsmodell `G` (`view`: `list`/`new`/`view`)
+steuert die Bedienung: in **list** mit ↑/↓ wählen, `n` neu, `d` löschen,
+Enter öffnet; in **new** Name tippen, `Tab` zykliert den **Typ** (s.u.),
+Enter legt an (`POST /api/graphs`); in **view** trägt man Werte für *heute* ein,
+gespeichert über `/api/log` — dieselbe Route wie die Data-Collection.
+
+Vier **Graph-Typen** (`GRAPH_TYPES`, Validierung in `core/graphs.py`):
+- `number` — freie Messwerte (Ziffern + Enter), `blockspark`-Kurve.
+- `scale` — 1–5 Bewertung (Taste 1–5 trägt sofort ein).
+- `time` — **Uhrzeit pro Datum** (z.B. Einschlafzeit). Eingabe `HH:MM`
+  (`parse_clock`), gespeichert als `value` = Minuten seit Mitternacht.
+- `period` — **Zeitspanne pro Datum** (z.B. Schlaf `23:00–07:00`). Zwei-Stufen-
+  Eingabe von→bis (`pstage`/`input2`), gespeichert als `value`=Start-Minute +
+  `end`=End-Minute. `end < value` = über Mitternacht.
+
+`time`/`period` werden als **24h-Gitter** gezeichnet (`draw_time_plot`):
+X = letzte Einträge (Datum), Y = Uhrzeit (00:00 oben … 24:00 unten, Stunden-
+Marken), `time` → Punkt `●`, `period` → Balken `█` (über Mitternacht in zwei
+Segmente gesplittet, da die Achse an Mitternacht verankert ist). Formatierung
+über `fmt_clock` / `graph_last`; die Sparkline-Reihe liefert `graph_series`
+(`period` → Dauer via `period_duration`).
+
+Werte/Definitionen holt das Werkzeug synchron per `api_call()` (POST/DELETE),
+die `lifestyle`-Box rechts zeigt jeden Graphen als `blockspark`-Sparkline +
+letzten Wert (type-gerecht via `graph_last`/`graph_series`) aus dem langsamen
+Hintergrund-Polling (`Store._poll_graphs`, alle 5 s). `Esc`/`g` schließt das
+Werkzeug wieder. `--selftest` listet die Graphen inkl. Typ/Sparkline (ohne TTY).
+
+- **Nur stdlib:** `curses` + `urllib` + `json` + `threading` — null Extra-Deps.
+  Setzt UTF-8-Locale vor curses-Init (für Box-/Block-Zeichen).
+- Ein Hintergrund-Thread pollt, der curses-Loop liest den Snapshot (thread-safe
+  über Lock). Bei Backend-Ausfall: Header zeigt `[backend ?]`, kein Crash.
+- `--selftest` gibt einen Text-Snapshot ohne curses aus (Verifikation ohne TTY).
+- Backend läuft im `tui`-Mode (KI aus, wie laptop). Start: `zentrale-tui`
+  fährt Backend (stdout → Logdatei, nicht ins Terminal) + TUI hoch. Siehe
+  `starten.md`. Env `ZENTRALE_URL` überschreibt das Backend-Ziel (Default
+  `http://localhost:5000`).
 
 ## Stack
 
@@ -43,7 +179,31 @@ für Kiosk/Bookmarks). Herzstück ist ein
 animierter **ASCII-Kern** (`#core`), gesteuert vom *Exhibit-Direktor*
 (`frameTick`, 90 ms/Frame). Umschaltbare Exhibits über Tabs: `gesicht`
 (Avatar), `torus`, `würfel`, `globus`, `welt` (Weltkarte), `filter`
-(Bild→ASCII-Filter aus `data/photos/`, mono/farbe per Re-Klick).
+(Bild→ASCII-Filter aus `data/photos/`, mono/farbe per Re-Klick) und
+`graph` (s.u., interaktives Panel statt ASCII).
+
+> **Graph-Werkzeug (Exhibit `graph`)** — der Mittelbereich wird zum
+> interaktiven Lifestyle-Tracker: eigene Graphen **anlegen** (Typ `number`
+> = freie Messwerte/Kurve, oder `scale` = 1–5), **Werte eintragen** (Datum
+> + Wert), **Kurve sehen** (SVG-Plot via `viz.js`). Bei `graph` blendet
+> `frameTick` `#core` aus und `#graph-panel` (`.gpanel`) ein und steigt
+> früh aus (kein ASCII-Tick). Definitionen serverseitig in
+> `data/graphs.json` (`core/graphs.py`, Endpoints `GET/POST /api/graphs`,
+> `DELETE /api/graphs/<id>`); die Messwerte teilen sich die
+> Data-Collection (`/api/log` schreibt nach `data/<graph_id>.json`,
+> `/api/data/<id>` liest). Jeder gespeicherte Wert feuert `zentrale:logged`
+> → die `lifestyle`-Box rechts zeigt jeden angelegten Graphen automatisch
+> als Sparkline (Quelle: `/api/graphs`, Feld `value`).
+>
+> **Geteilte Logik, pro Kassette verbaut:** `core/graphs.py` + die
+> `/api/graphs`-Endpoints existieren für ALLE Kassetten; nur die UI ist
+> kassetten-spezifisch verkabelt — Monolith hier (Browser-Panel), TUI in
+> der curses-Mitte (Taste `g`, siehe „Terminal-Kassette"). `laptop.html`
+> ist (noch) nicht verkabelt. Das **Anlege-Formular im Monolith** bietet nur
+> `number`/`scale`; die Uhrzeit-Typen `time`/`period` (Y-Achse = Uhrzeit)
+> legt man in der TUI an (Backend kennt alle vier). Ein so angelegter
+> `time`/`period`-Graph erscheint in der Monolith-`lifestyle`-Box als
+> Sparkline über `value` (Minuten) — funktioniert, nur ohne HH:MM-Format.
 
 > Die IIFEs sind getrennte Scopes. Cross-Scope-Signale laufen über den
 > CustomEvent-Bus auf `window` (`zentrale:logged`, `zentrale:ascii`),
@@ -58,23 +218,29 @@ AUTO/HELL/DUNKEL). Darunter `.body` als 3 Spalten:
 ```
 +------------+----------------------+------------+
 | LINKS      |  MITTE (#col-mid)    | RECHTS     |
-| sensoren   |  ki-kern:            | lifestyle  |
-| telemetrie |   tabs + #core       |  (tracker) |
-| stdout     |   + ⚠ alarm-corner   | outbound   |
-| (#term)    |  konsole (chat-in)   |  (#term-net|
+| telemetrie |  ki-kern:            | lifestyle  |
+| stdout     |   tabs + #core       |  (tracker) |
+| (#term)    |   + ⚠ alarm-corner   | outbound   |
+|            |  konsole (chat-in)   |  (#term-net|
 |            |  minilog + cinema-sub|   tripwire)|
 +------------+----------------------+------------+
 ```
 
-- **LINKS:** `sensoren` (BUTTON/LICHT/BEWEGUNG-PIR/TÜR), `telemetrie` (PC·CPU-
-  Meter), `stdout` (`#term`, voller Log-Stream aus `state.push_log`).
+> **Sensoren-Panel entfernt (2026-06)** — in allen Kassetten, inkl. Monolith
+> (Details + Backend-bleibt-verkabelt: siehe „## Kassetten"). Auch der
+> `_DASHBOARD_VIEW`-Prompt in `core/ai.py` nennt die Sensoren nicht mehr.
+
+- **LINKS:** `telemetrie` (PC·CPU-Meter), `stdout` (`#term`, voller Log-Stream
+  aus `state.push_log`).
 - **MITTE (`#col-mid`):** die `ki-kern`-Box mit Exhibit-Tabs (Gesicht/Torus/
-  Würfel/Globus/Welt/Filter/Auto) + dem ASCII-Kern `#core` (s.u.) + der Alarm-
-  Ecke; darunter `core-readout` (AI-State „BEREIT", „zeigt: gesicht"), das
+  Würfel/Globus/Welt/Filter/Graph/Auto) + dem ASCII-Kern `#core` (s.u.) + der
+  Alarm-Ecke; darunter `core-readout` (AI-State „BEREIT", „zeigt: gesicht"), das
   `minilog` (letzte Konversationszeilen) und `#cinema-sub`. Darunter die
-  `konsole` (`#chat-input`, wo Sasha tippt).
-- **RECHTS:** `lifestyle` (Tracker) + `outbound` (`#term-net`, Internet-Tripwire,
-  Idle „// offline ✓").
+  `konsole` (`#chat-input`, wo Sasha tippt). Der `Graph`-Tab macht den
+  Mittelbereich zum Graph-Werkzeug (s.o.).
+- **RECHTS:** `lifestyle` (Tracker: hartkodierte Kategorien + jeder im
+  Graph-Werkzeug angelegte Graph als Sparkline) + `outbound` (`#term-net`,
+  Internet-Tripwire, Idle „// offline ✓").
 
 ### Alarm-Ecke (`#alarm-corner`) — die ⚠-Warnsymbole
 

@@ -192,6 +192,30 @@
   .trk .tl { font-size: 12px; color: var(--dim); letter-spacing: 0.08em; text-transform: uppercase; }
   .trk .ts { font-family: 'VT323', monospace; font-size: 20px; color: var(--acc); white-space: pre; overflow: hidden; line-height: 1; }
   .trk .tv { font-family: 'VT323', monospace; font-size: 18px; color: var(--bright); text-align: right; }
+
+  /* Graph-Werkzeug (Mittel-Exhibit „Graph") – interaktives Panel statt ASCII */
+  .gpanel { position: absolute; inset: 0; padding: 10px 12px; overflow: auto; display: flex; flex-direction: column; gap: 8px; text-align: left; font-family: 'VT323', monospace; color: var(--ink); }
+  .gchips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .gchip { font-size: 15px; padding: 1px 8px; border: 1px solid var(--line); color: var(--dim); cursor: pointer; text-transform: uppercase; letter-spacing: 0.05em; }
+  .gchip.on { color: var(--bg); background: var(--acc); border-color: var(--acc); }
+  .gchip.add { color: var(--acc); }
+  .gchip:hover:not(.on) { color: var(--ink); }
+  .grow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .gpanel input, .gpanel button { font-family: 'VT323', monospace; font-size: 16px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: 2px 6px; }
+  .gpanel input:focus { outline: none; border-color: var(--acc); }
+  .gpanel input:disabled { opacity: 0.4; }
+  .gpanel button { cursor: pointer; }
+  .gpanel button:hover { color: var(--acc); border-color: var(--acc); }
+  .gpanel button.sel { background: var(--acc); color: var(--bg); border-color: var(--acc); }
+  .gplot { flex: 1; min-height: 70px; border: 1px solid var(--line); position: relative; }
+  .gplot svg { width: 100%; height: 100%; display: block; }
+  .gplot svg .garea { fill: var(--acc); opacity: 0.12; }
+  .gplot svg .gline { fill: none; stroke: var(--acc); stroke-width: 1.4; }
+  .gplot svg circle { fill: var(--acc); }
+  .gmeta { font-size: 14px; color: var(--dim); }
+  .gscale { display: flex; gap: 4px; }
+  .ghint { color: var(--dim); font-size: 14px; }
+
   .proj { padding: 5px 0; }
   .proj-top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 1px; }
   .proj-top .pn { color: var(--ink); white-space: nowrap; } .proj-top .ps { color: var(--dim); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
@@ -319,14 +343,12 @@
 
     <div class="body">
       <!-- LINKS -->
+      <!-- Sensoren-Panel entfernt (2026-06): kein echter Sensor angeschlossen,
+           der Platzhalter soll nicht mehr sichtbar sein. Backend/Verkabelung
+           (Event-Loop, /api/sensor-Webhook, Sensor-State in /api/state) bleibt
+           erhalten – zum Wiederanzeigen reicht es, die Box + den ZS.on('sensor')-
+           Handler aus der git-History zurückzuholen. -->
       <div class="col">
-        <div class="box" style="flex:0 0 auto">
-          <span class="bt">sensoren</span>
-          <div class="srow" id="s-button"><span class="ind">[ ]</span><span class="nm">BUTTON</span><span class="val">bereit</span></div>
-          <div class="srow" id="s-light"><span class="ind">[ ]</span><span class="nm">LICHT</span><span class="val">—</span></div>
-          <div class="srow" id="s-motion"><span class="ind">[ ]</span><span class="nm">BEWEGUNG</span><span class="val">PIR</span></div>
-          <div class="srow" id="s-door"><span class="ind">[ ]</span><span class="nm">TÜR</span><span class="val">zu</span></div>
-        </div>
         <div class="box" style="flex:0 0 auto">
           <span class="bt">telemetrie</span><span class="bt2" id="tele-src">…</span>
           <div class="meter tele-rot">
@@ -353,10 +375,11 @@
               <span class="tab" data-ex="globus">Globus</span>
               <span class="tab" data-ex="welt">Welt</span>
               <span class="tab" data-ex="filter">Filter</span>
+              <span class="tab" data-ex="graph">Graph</span>
               <span class="tab on" data-ex="auto">Auto</span>
             </div>
           </div>
-          <div class="core-wrap"><pre id="core"></pre><div id="alarm-corner"></div></div>
+          <div class="core-wrap"><pre id="core"></pre><div id="graph-panel" class="gpanel" style="display:none"></div><div id="alarm-corner"></div></div>
           <div class="core-readout">
             <div class="ai-state" id="ai-state"><span class="sp">·</span> BEREIT</div>
             <div class="ai-model" id="ai-meta">zeigt: gesicht</div>
@@ -452,9 +475,21 @@
       var m = src && src[def[3]];
       if (!m || m.v == null) return null;
       var key = def[3];
-      var pct = key === 'temp' ? (m.v - 38) / 40 * 100 : m.v;   // Temp grob auf 38–78°C
+      var pct = key === 'temp' ? (m.v - 30) / 60 * 100 : m.v;   // Temp ehrlich auf 30–90°C
       var text = (key === 'vram' && m.used != null) ? m.used.toFixed(1) + 'G' : Math.round(m.v) + def[4];
       return { pct: pct, text: text };
+    }
+    // Balken mit Sub-Zellen-Auflösung: volle █ + ein Teilblock (Achtel) +
+    // matter Rest ░. Aus 16 Zellen werden ~128 Stufen → 35 % und 40 % sind
+    // sichtbar verschieden statt derselbe Balken.
+    var SUB = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉'];
+    function meterBar(pct, cells) {
+      var f = Math.max(0, Math.min(100, pct)) / 100 * cells;
+      var full = Math.floor(f), pi = Math.round((f - full) * 8);
+      if (pi === 8) { full += 1; pi = 0; }
+      var head = '█'.repeat(full) + (pi ? SUB[pi] : '');
+      var tail = '░'.repeat(Math.max(0, cells - full - (pi ? 1 : 0)));
+      return '<span class="mbf">' + head + '</span><span class="mbe">' + tail + '</span>';
     }
     // Aktuelles Meter zeichnen — überspringt nicht-verfügbare Werte vorwärts.
     function renderRot() {
@@ -467,9 +502,8 @@
       if (!val) { tsgLbl.textContent = '—'; tsgLbl.classList.remove('stale'); tsgBar.innerHTML = ''; tsgVal.textContent = '–'; return; }
       tsgLbl.textContent = def[0] + '·' + def[1];
       tsgLbl.classList.toggle('stale', def[2] === 'pi');   // Pi-Werte leicht abgesetzt
-      // Zweifarbiger Balken: n gefüllte █ (Akzent) + Rest ░ (matt) → Füllstand klar.
-      var n = Math.round(Math.max(0, Math.min(100, val.pct)) / 100 * 16);
-      tsgBar.innerHTML = '<span class="mbf">' + '█'.repeat(n) + '</span><span class="mbe">' + '░'.repeat(16 - n) + '</span>';
+      // Zweifarbiger Balken mit Sub-Zellen-Auflösung (siehe meterBar).
+      tsgBar.innerHTML = meterBar(val.pct, 16);
       tsgVal.textContent = val.text;
     }
     // Weiterrotieren (alle 2.6s); der angezeigte Wert selbst frischt im tick.
@@ -492,8 +526,19 @@
 
     async function fetchTrackers() {
       var rows = [];
-      for (var i = 0; i < TRACKERS.length; i++) {
-        var t = TRACKERS[i];
+      // Quellen = hartkodierte Python-Kategorien (TRACKERS) + dynamisch im
+      // Graph-Werkzeug angelegte Graphen (/api/graphs). Letztere tragen ihren
+      // Wert im Feld 'value'; fmt zeigt den jüngsten Wert (+ Einheit).
+      var defs = TRACKERS.slice();
+      try {
+        var gs = await (await fetch('/api/graphs')).json();
+        (gs || []).forEach(function (g) {
+          defs.push({ label: g.name, category: g.id, field: 'value',
+            fmt: function (v) { return v[v.length - 1] + (g.unit ? ' ' + g.unit : ''); } });
+        });
+      } catch (e) { /* keine Graphen angelegt → nur TRACKERS */ }
+      for (var i = 0; i < defs.length; i++) {
+        var t = defs[i];
         try {
           var entries = await (await fetch('/api/data/' + t.category)).json();
           var vals = (entries || [])
@@ -513,6 +558,154 @@
     setInterval(fetchTrackers, 60000);                 // langsam (manuell geloggte Daten)
     // Nach dem Erfassen (Alt+K → speichern) sofort neu laden:
     window.addEventListener('zentrale:logged', fetchTrackers);
+
+    // ── Graph-Werkzeug (Mittel-Exhibit „Graph") ─────────────────────────
+    // Eigene Graphen anlegen (Typ Zahl ODER Skala 1–5), Werte eintragen,
+    // Kurve sehen. Definitionen serverseitig (/api/graphs → data/graphs.json),
+    // Messwerte teilen sich die Data-Collection (/api/log schreibt,
+    // /api/data/<id> liest). Jeder gespeicherte Wert feuert 'zentrale:logged'
+    // → die lifestyle-Box rechts frischt sich von selbst.
+    (function () {
+      var panel = document.getElementById('graph-panel');
+      if (!panel) return;
+      var GT = { graphs: [], selId: null, def: null, vals: [], newMode: false, type: 'number', date: todayStr() };
+
+      function todayStr() {
+        var d = new Date();
+        return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+      }
+      function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+      function q(sel) { return panel.querySelector(sel); }
+
+      async function loadGraphs() {
+        try { GT.graphs = await (await fetch('/api/graphs')).json() || []; } catch (e) { GT.graphs = []; }
+        // gewählten Graphen weiter anzeigen, sonst ersten nehmen
+        if (GT.selId && !GT.graphs.some(function (g) { return g.id === GT.selId; })) GT.selId = null;
+        if (!GT.newMode && (GT.selId || GT.graphs.length)) { return selectGraph(GT.selId || GT.graphs[0].id); }
+        render();
+      }
+
+      async function loadVals() {
+        GT.vals = [];
+        if (!GT.selId) return;
+        try {
+          var rows = await (await fetch('/api/data/' + GT.selId)).json();
+          GT.vals = (rows || [])
+            .filter(function (e) { return e.value !== null && e.value !== undefined; })
+            .sort(function (a, b) { return String(a.date || '').localeCompare(String(b.date || '')); });
+        } catch (e) { /* noch keine Werte */ }
+      }
+
+      function selectGraph(id) {
+        GT.selId = id; GT.newMode = false;
+        GT.def = GT.graphs.filter(function (g) { return g.id === id; })[0] || null;
+        loadVals().then(render);
+      }
+
+      function plotSvg() {
+        var vals = GT.vals.map(function (e) { return Number(e.value); });
+        if (!vals.length) return '<div class="ghint" style="padding:8px">— noch keine werte —</div>';
+        var W = 300, H = 90;
+        if (vals.length === 1) return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none"><circle cx="' + (W / 2) + '" cy="' + (H / 2) + '" r="3"/></svg>';
+        return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">'
+          + '<path class="garea" d="' + VZ.areaPath(vals, W, H, 4) + '"/>'
+          + '<path class="gline" vector-effect="non-scaling-stroke" d="' + VZ.sparkPath(vals, W, H, 4) + '"/></svg>';
+      }
+
+      function render() {
+        var h = ['<div class="gchips">'];
+        GT.graphs.forEach(function (g) {
+          h.push('<span class="gchip' + (g.id === GT.selId && !GT.newMode ? ' on' : '') + '" data-sel="' + g.id + '">' + esc(g.name) + '</span>');
+        });
+        h.push('<span class="gchip add' + (GT.newMode ? ' on' : '') + '" data-new="1">＋ neu</span></div>');
+
+        if (GT.newMode) {
+          h.push('<div class="grow"><input id="gt-name" placeholder="Name (z.B. Gewicht)" style="flex:1;min-width:120px" />'
+            + '<button data-type="number" class="' + (GT.type === 'number' ? 'sel' : '') + '">Zahl</button>'
+            + '<button data-type="scale" class="' + (GT.type === 'scale' ? 'sel' : '') + '">Skala 1–5</button></div>');
+          h.push('<div class="grow"><input id="gt-unit" placeholder="Einheit (optional, z.B. kg)" style="flex:1;min-width:120px"' + (GT.type === 'scale' ? ' disabled' : '') + ' />'
+            + '<button data-create="1">anlegen</button><button data-cancel="1">abbrechen</button></div>');
+          h.push('<div class="ghint">Zahl = freie Messwerte (echte Kurve). Skala = 1–5 Bewertung.</div>');
+        } else if (GT.def) {
+          h.push('<div class="gplot">' + plotSvg() + '</div>');
+          var last = GT.vals.length ? GT.vals[GT.vals.length - 1].value : null;
+          h.push('<div class="gmeta">' + GT.vals.length + ' werte'
+            + (last != null ? ' · zuletzt ' + last + (GT.def.unit ? ' ' + esc(GT.def.unit) : '') : '')
+            + ' · ' + (GT.def.type === 'scale' ? 'skala 1–5' : 'zahl')
+            + '<span class="ghint" data-del="' + GT.def.id + '" style="cursor:pointer;float:right">[löschen]</span></div>');
+          h.push('<div class="grow"><button data-day="-1">◀</button><input id="gt-date" type="date" value="' + GT.date + '" /><button data-day="1">▶</button>');
+          if (GT.def.type === 'scale') {
+            h.push('<span class="gscale">');
+            for (var i = 1; i <= 5; i++) h.push('<button data-val="' + i + '">' + i + '</button>');
+            h.push('</span>');
+          } else {
+            h.push('<input id="gt-val" type="number" step="any" placeholder="wert" style="width:90px" /><button data-save="1">eintragen</button>');
+          }
+          h.push('</div>');
+        } else {
+          h.push('<div class="ghint">noch keine graphen — leg mit „＋ neu" einen an.</div>');
+        }
+        panel.innerHTML = h.join('');
+        wire();
+      }
+
+      function stepDate(delta) {
+        var p = ((q('#gt-date') && q('#gt-date').value) || GT.date).split('-');
+        var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+        d.setDate(d.getDate() + delta);
+        GT.date = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+        if (q('#gt-date')) q('#gt-date').value = GT.date;
+      }
+
+      async function createGraph() {
+        var name = (q('#gt-name').value || '').trim();
+        if (!name) { q('#gt-name').focus(); return; }
+        var unit = GT.type === 'number' ? (q('#gt-unit').value || '').trim() : '';
+        var res = await fetch('/api/graphs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name, type: GT.type, unit: unit }) });
+        if (!res.ok) return;
+        var g = await res.json();
+        GT.newMode = false; GT.selId = g.id;
+        await loadGraphs();
+        window.dispatchEvent(new Event('zentrale:logged'));   // lifestyle-Box mitnehmen
+      }
+
+      async function saveValue(v) {
+        if (v === '' || v == null || isNaN(Number(v))) return;
+        var date = (q('#gt-date') && q('#gt-date').value) || GT.date;
+        await fetch('/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category: GT.selId, data: { date: date, value: Number(v) } }) });
+        await loadVals(); render();
+        window.dispatchEvent(new Event('zentrale:logged'));
+      }
+
+      async function deleteGraph(id) {
+        await fetch('/api/graphs/' + id, { method: 'DELETE' });
+        GT.selId = null; GT.def = null;
+        await loadGraphs();
+        window.dispatchEvent(new Event('zentrale:logged'));
+      }
+
+      function wire() {
+        [].forEach.call(panel.querySelectorAll('[data-sel]'), function (el) { el.onclick = function () { selectGraph(el.getAttribute('data-sel')); }; });
+        var nb = q('[data-new]'); if (nb) nb.onclick = function () { GT.newMode = true; GT.type = 'number'; render(); var n = q('#gt-name'); if (n) n.focus(); };
+        [].forEach.call(panel.querySelectorAll('[data-type]'), function (el) { el.onclick = function () { GT.type = el.getAttribute('data-type'); render(); var n = q('#gt-name'); if (n) n.focus(); }; });
+        var cr = q('[data-create]'); if (cr) cr.onclick = createGraph;
+        var ca = q('[data-cancel]'); if (ca) ca.onclick = function () { GT.newMode = false; render(); };
+        var nameEl = q('#gt-name'); if (nameEl) nameEl.onkeydown = function (e) { if (e.key === 'Enter') createGraph(); };
+        [].forEach.call(panel.querySelectorAll('[data-day]'), function (el) { el.onclick = function () { stepDate(Number(el.getAttribute('data-day'))); }; });
+        var de = q('#gt-date'); if (de) de.onchange = function () { GT.date = de.value; };
+        [].forEach.call(panel.querySelectorAll('[data-val]'), function (el) { el.onclick = function () { saveValue(el.getAttribute('data-val')); }; });
+        var sv = q('[data-save]'); if (sv) sv.onclick = function () { saveValue(q('#gt-val').value); };
+        var vEl = q('#gt-val'); if (vEl) vEl.onkeydown = function (e) { if (e.key === 'Enter') saveValue(vEl.value); };
+        var dl = q('[data-del]'); if (dl) dl.onclick = function () { if (confirm('Graph „' + (GT.def ? GT.def.name : '') + '" inkl. Werte löschen?')) deleteGraph(dl.getAttribute('data-del')); };
+      }
+
+      // Beim Öffnen des Graph-Tabs frisch laden (externe Änderungen mitnehmen).
+      document.getElementById('tabs').addEventListener('click', function (e) {
+        var t = e.target.closest('.tab');
+        if (t && t.getAttribute('data-ex') === 'graph') loadGraphs();
+      });
+      loadGraphs();   // initial (Panel ist noch versteckt, aber Daten stehen bereit)
+    })();
 
     // ── ASCII-Bibliothek aufbauen (rein Frontend, einmalig) ──
     var books = {
@@ -652,8 +845,9 @@
 
     // ── Exhibit-Direktor ──
     var coreEl = document.getElementById('core'), aiMeta = document.getElementById('ai-meta');
+    var graphPanel = document.getElementById('graph-panel');
     var EX = { mode: 'auto', current: 'gesicht' };
-    var EXNAMES = { gesicht: 'gesicht', torus: 'torus', wuerfel: 'würfel', globus: 'globus', welt: 'weltkarte', filter: 'ascii-filter' };
+    var EXNAMES = { gesicht: 'gesicht', torus: 'torus', wuerfel: 'würfel', globus: 'globus', welt: 'weltkarte', filter: 'ascii-filter', graph: 'graph-werkzeug' };
     var fi = 0, gestureLeft = 0, autoT = 0;
     var tabs = document.getElementById('tabs');
     function syncTabs() {
@@ -698,6 +892,12 @@
 
     function frameTick() {
       fi++;
+      // Graph-Werkzeug: eigenes interaktives Panel statt ASCII-Tick. Panel
+      // ein-, Kern ausblenden und hier raus – nichts in #core schreiben.
+      var graphActive = (EX.current === 'graph');
+      graphPanel.style.display = graphActive ? '' : 'none';
+      coreEl.style.display = graphActive ? 'none' : '';
+      if (graphActive) return;
       // KI-Bild hat Vorrang und übernimmt den Kern auf Zeit.
       if (aiArt) {
         var age = fi - aiArt.born;
@@ -794,16 +994,10 @@
       alarmCorner.innerHTML = html;
     }
 
-    // Sensoren: real button/light (bool). motion/door zeigt das Backend (noch)
-    // nicht aktiv – sie bleiben ruhend bis eine echte Quelle sie triggert.
-    var wardSt = { button: 'bereit', light: 'dunkel', motion: 'PIR', door: 'zu' };
-    var wardOn = { button: 'TRIGGER', light: 'hell', motion: 'TRIGGER', door: 'offen' };
-    ZS.on('sensor', function (e) {
-      var el = document.getElementById('s-' + e.name); if (!el) return;
-      el.classList.toggle('on', e.active);
-      el.querySelector('.ind').textContent = e.active ? '[●]' : '[ ]';
-      el.querySelector('.val').textContent = e.active ? (wardOn[e.name] || 'TRIGGER') : (wardSt[e.name] || '·');
-    });
+    // Sensoren-Panel entfernt (2026-06): kein echter Sensor angeschlossen.
+    // engine.js feuert weiter 'sensor'-Events (Backend bleibt verkabelt) –
+    // hier hört nur niemand mehr drauf. Zum Wiederanzeigen: Box + diesen
+    // Handler aus der git-History zurückholen.
 
     // ── stdout + Tripwire ──
     function colorize(text) {

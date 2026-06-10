@@ -14,20 +14,35 @@ Login beim Boot starten. Setup + Befehle: siehe `deployment.md`,
 Abschnitt „PC-systemd-Services". Vorteil: PC anschalten reicht – nichts
 zu tippen. Nachteil: keine Tastatur-Sensor-Sim (sudo waere noetig).
 
-## Variante A — Ein-Befehl-Start (interaktiv, Dev)
+## Variante A — Ein-Befehl-Start: Kassetten-Menü (interaktiv, Dev)
 
 ```bash
 zentrale
 ```
 
-(Symlink in `~/.local/bin/zentrale` → `scripts/start_local.sh`. Funktioniert
+(Symlink in `~/.local/bin/zentrale` → `scripts/select_kassette.sh`. Funktioniert
 von jedem Verzeichnis aus. Falls der Symlink mal fehlt:
-`ln -s "$PWD/scripts/start_local.sh" ~/.local/bin/zentrale` aus dem
+`ln -s "$PWD/scripts/select_kassette.sh" ~/.local/bin/zentrale` aus dem
 Projekt-Root.)
 
-Startet alle drei Services parallel in einem Terminal, jede Zeile mit
-farbigem `[main]`/`[whisper]`/`[tts]`-Prefix. Kein `sudo`, dafür auch
-keine Tastatur-Sensor-Simulation – Sensoren manuell triggern via:
+`zentrale` zeigt seit 2026-06 ein **Kassetten-Menü** („Welche Kassette wählen?",
+`tui/select_kassette.py`): mit ↑/↓ wählen (ein animierter Stern ✶ funkelt auf der
+aktuellen Zeile), Enter startet — danach läuft ein Regenbogen-Ladebalken und das
+Menü exec't in das passende Start-Skript:
+
+| Auswahl    | startet            | KI   |
+|------------|--------------------|------|
+| monolith   | `start_local.sh`   | an   |
+| laptop     | `start_laptop.sh`  | aus  |
+| tui        | `start_tui.sh`     | aus  |
+
+Das Menü selbst ist reine stdlib (termios + ANSI, kein curses); Render-/Logik
+sind ohne TTY testbar (`venv/bin/python tui/select_kassette.py --selftest`).
+Direkt ohne Menü: `zentrale-laptop` / `zentrale-tui` (s.u.).
+
+**monolith** (die Vollvariante) startet alle drei Services parallel in einem
+Terminal, jede Zeile mit farbigem `[main]`/`[whisper]`/`[tts]`-Prefix. Kein
+`sudo`, dafür keine Tastatur-Sensor-Simulation – Sensoren manuell triggern via:
 
 ```bash
 curl -X POST http://localhost:5000/api/sensor/button
@@ -40,6 +55,85 @@ Mit `./scripts/start_local.sh --with-keyboard` läuft `core/main.py`
 unter `sudo`, dann geht auch die `b`/`l`/`m`-Tasten-Sim.
 
 `Ctrl+C` beendet alle drei sauber.
+
+## Variante A-Laptop — Laptop-Kassette (KI-frei, „ZENTRALE in klein")
+
+Für eine RAM-schwache Laptop-Maschine. Eigener Start-Befehl, eigene
+Kassette (`ui/templates/laptop.html`, siehe `dashboard.md` → „Kassetten"):
+
+```bash
+zentrale-laptop
+```
+
+(Symlink `~/.local/bin/zentrale-laptop` → `scripts/start_laptop.sh`. Falls er
+fehlt: `ln -s "$PWD/scripts/start_laptop.sh" ~/.local/bin/zentrale-laptop` aus
+dem Projekt-Root.)
+
+Unterschiede zum normalen `zentrale`:
+
+- Setzt `ZENTRALE_KASSETTE=laptop` → `main.py` lässt Ollama-Warmup + News-
+  Fetcher weg (kein Auto-Bootup), `app.py` riegelt die KI-Endpoints ab.
+  **Ollama wird nie angesprochen.**
+- Startet **nur** `core/main.py` (Event-Loop + Flask) — **kein** Whisper,
+  **kein** TTS. Spart RAM.
+- Flask liefert `laptop.html` statt `monolith.html`.
+
+**Minimal-Dependencies** (das KI-freie Backend braucht nicht den vollen
+Stack): es reichen `flask` + `python-dateutil`:
+
+```bash
+venv/bin/pip install flask python-dateutil
+```
+
+(`keyboard` nur für `--with-keyboard`/Tasten-Sim; Whisper/TTS/sherpa/piper
+werden hier nicht gebraucht.)
+
+`--with-keyboard` geht auch hier (main.py via `sudo -E`, damit die Kassetten-
+Env-Var root erreicht). Dashboard auf `http://localhost:5000`.
+
+## Variante A-TUI — Terminal-Kassette (kein Browser)
+
+Die leanste Front: ZENTRALE direkt im Terminal (curses), gegen dasselbe
+Backend. Motivation: ein Browser-Tab kostet auf einer RAM-schwachen Maschine
+300–600 MB+, das Backend nur ~32 MB — die TUI spart genau den Browser.
+
+```bash
+zentrale-tui
+```
+
+(Symlink `~/.local/bin/zentrale-tui` → `scripts/start_tui.sh`. Falls er fehlt:
+`ln -s "$PWD/scripts/start_tui.sh" ~/.local/bin/zentrale-tui`.)
+
+Was passiert: `ZENTRALE_KASSETTE=tui` → Backend ki-frei (wie laptop). Das Skript
+startet `core/main.py` im Hintergrund mit **stdout → Logdatei**
+(`/tmp/zentrale-tui-backend.log`, sonst würde es die curses-Oberfläche
+zerschießen — die Logs erscheinen ohnehin im stdout-Panel der TUI) und dann die
+TUI im Vordergrund. `q` (oder Ctrl+C) beendet TUI **und** Backend.
+
+- **Dependencies:** nur `flask` + `python-dateutil` fürs Backend; die TUI selbst
+  ist reine stdlib (`curses`). Kein Browser, kein Whisper/TTS.
+- **Standalone** (TUI gegen ein schon laufendes Backend, z.B. auf einer anderen
+  Maschine): `ZENTRALE_URL=http://<host>:5000 venv/bin/python tui/zentrale_tui.py`
+- **Selbsttest** (ein Text-Snapshot, ohne curses):
+  `venv/bin/python tui/zentrale_tui.py --selftest`
+
+### Folien öffnen (`/slide`)
+
+Curses kann keine Pixel (und xfce4-terminal/VTE 0.76 hat kein Sixel/Kitty-
+Bildprotokoll) — eine PDF in voller Schärfe geht also nur über ein **eigenes
+Viewer-Fenster**, nicht im Terminal-Raster. Befehl in der TUI-Befehlszeile (`/`):
+
+```
+/slide              # listet die PDFs in data/slides/
+/slide vortrag      # öffnet (Präfix reicht) — zathura-Fenster über dem Terminal
+```
+
+- PDFs liegen in `data/slides/` (per `ZENTRALE_SLIDE_DIR` umstellbar, in
+  `.gitignore` — persönlich, kein Repo-Inhalt). Pfad-Traversal ist abgeriegelt.
+- Viewer ist **zathura** (leicht, ~30–50 MB, nur offen solange man hinschaut):
+  `sudo apt install zathura zathura-pdf-poppler` (einmalig, braucht Netz; danach
+  offline). Anderer Viewer via `ZENTRALE_PDF_VIEWER=<binary>`. Das Fenster wird
+  nicht-blockierend gestartet, die TUI läuft weiter; `q` im Viewer → zurück.
 
 ## Variante B — 3 Terminals manuell
 
