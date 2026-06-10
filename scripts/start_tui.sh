@@ -30,6 +30,17 @@
 
 set -u
 
+# ── Exit-Codes (damit ein Fehlstart diagnostizierbar ist statt "exited") ──
+#   0  sauberer Quit (oder schon laufende Session attached)
+#   2  venv/Python fehlt
+#   3  Port :5000 schon belegt (verwaiste/fremde ZENTRALE) — NICHT zweimal starten
+#   4  Backend beim Hochfahren gestorben (Import-/Code-Fehler → Backend-Log)
+#   5  Backend-API nach 15 s nicht erreichbar (hängt → Backend-Log)
+#   1  TUI selbst abgestürzt (kein sauberer Quit → /tmp/zentrale-tui-crash.log)
+# Bei 1/4/5 zeigt das Skript das passende Log; die TUI schreibt ihren Traceback
+# zusätzlich nach /tmp/zentrale-tui-crash.log (sonst killt tmux die Pane samt
+# Fehlermeldung).
+
 # ── Ins Projekt-Root (Skript liegt in scripts/, Symlink wird aufgelöst) ──
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "$SELF")" && pwd)"
@@ -37,8 +48,8 @@ cd "$SCRIPT_DIR/.."
 
 PY="venv/bin/python"
 if [[ ! -x "$PY" ]]; then
-  echo "ERROR: $PY nicht gefunden. Bitte erst venv aufsetzen (siehe memory/setup.md)." >&2
-  exit 1
+  echo "FEHLER (2): $PY nicht gefunden. Bitte erst venv aufsetzen (siehe memory/setup.md)." >&2
+  exit 2
 fi
 
 export ZENTRALE_KASSETTE=tui
@@ -52,19 +63,68 @@ STATE_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/zentrale/tui_term_lines"
 #    unteren bash (pane 1) für die nächste Session merken, dann die Session zu. ─
 if [[ "${1:-}" == "--run-tui" ]]; then
   "$PY" tui/zentrale_tui.py
+  rc=$?
+  # Kein sauberer Quit (rc≠0)? Dann den Fehler ZEIGEN und auf eine Taste warten,
+  # BEVOR tmux die Pane (und damit jede Meldung) killt. Genau das hat bisher
+  # gefehlt: die TUI "verschwand" ohne Spur.
+  if [[ "$rc" -ne 0 ]]; then
+    echo >&2
+    echo "════ ZENTRALE-TUI mit Code $rc beendet — kein sauberer Quit ════" >&2
+    if [[ -f /tmp/zentrale-tui-crash.log ]]; then
+      echo "── TUI-Crash-Log ─────────────────────────────────" >&2
+      cat /tmp/zentrale-tui-crash.log >&2
+    fi
+    echo "── Backend-Log ($BACKEND_LOG), letzte Zeilen ─────" >&2
+    tail -n 15 "$BACKEND_LOG" 2>/dev/null >&2
+    echo >&2
+    echo "Taste drücken zum Schließen…" >&2
+    read -rsn1 || true
+  fi
   h="$(tmux display-message -p -t "${SESSION}.1" -F '#{pane_height}' 2>/dev/null || true)"
   if [[ "$h" =~ ^[0-9]+$ ]]; then
     mkdir -p "$(dirname "$STATE_FILE")" && printf '%s\n' "$h" > "$STATE_FILE"
   fi
   tmux kill-session -t "$SESSION" 2>/dev/null || true
-  exit 0
+  exit "$rc"
+fi
+
+# ── Schon eine laufende ZENTRALE-TUI? Dann NICHT neu bauen. Sonst würde der
+#    "alte Reste weg"-Reset unten die laufende Session killen (gleicher Name)
+#    und ein zweites Backend auf den belegten Port :5000 prallen. ──
+if command -v tmux >/dev/null && tmux has-session -t "$SESSION" 2>/dev/null; then
+  if [[ -n "${TMUX:-}" ]]; then
+    echo "ZENTRALE-TUI läuft bereits — du bist schon drin (Session '$SESSION')." >&2
+    echo "Beenden mit 'q' in der TUI oben; ein zweiter Start ist nicht nötig." >&2
+    exit 0
+  fi
+  echo "ZENTRALE-TUI läuft schon — hänge an die bestehende Session '$SESSION' an." >&2
+  exec tmux attach-session -t "$SESSION"
 fi
 
 # Höhe für den Split: Env-Override > gemerkte Höhe > Default 6.
 SAVED=""
 [[ -f "$STATE_FILE" ]] && read -r SAVED < "$STATE_FILE" 2>/dev/null || true
 [[ "$SAVED" =~ ^[0-9]+$ ]] || SAVED=""
+# Beim BOOTEN nie unbrauchbar winzig (gemerkter Mini-Wert): Untergrenze 3 Zeilen.
+# Live runterziehen bis 1 bleibt erlaubt — das hier betrifft nur den Start.
+[[ -n "$SAVED" && "$SAVED" -lt 3 ]] && SAVED=3
 TERM_LINES="${ZENTRALE_TERM_LINES:-${SAVED:-6}}"   # Höhe der unteren echten bash
+
+# ── Ist :5000 schon belegt? KLARE Ansage statt stillem Zweit-Backend ─────
+# Hierher kommen wir nur, wenn KEINE 'zentrale-tui'-Session läuft (sonst oben
+# attached). Antwortet trotzdem etwas auf :5000, ist es ein verwaistes oder
+# fremdes Backend. Würden wir jetzt ein zweites starten, könnte es den Port
+# nicht binden (Flask-Thread stirbt still), die Readiness-Prüfung träfe das
+# FALSCHE Backend, und die TUI liefe gegen veralteten Code — genau die Art
+# "läuft nicht, keine Ahnung warum". Lieber hart abbrechen mit Aufräum-Tipp.
+if curl -sf -o /dev/null http://localhost:5000/api/state 2>/dev/null; then
+  echo "FEHLER (3): Auf http://localhost:5000 antwortet bereits eine ZENTRALE." >&2
+  echo "  Vermutlich ein verwaistes Backend (tmux-Session weg, Prozess noch da)." >&2
+  PIDS="$(pgrep -f 'core/main.py' 2>/dev/null | tr '\n' ' ')"
+  echo "  Backend-PID(s): ${PIDS:-unbekannt}" >&2
+  echo "  Aufräumen:  pkill -f 'core/main.py'   — dann erneut: zentrale-tui" >&2
+  exit 3
+fi
 
 # ── Backend im Hintergrund, stdout in die Logdatei ──────────────────────
 "$PY" core/main.py > "$BACKEND_LOG" 2>&1 &
@@ -82,14 +142,14 @@ echo "ZENTRALE (tui) — Backend startet, warte auf API …"
 ready=0
 for _ in $(seq 1 30); do
   if curl -sf -o /dev/null http://localhost:5000/api/state 2>/dev/null; then ready=1; break; fi
-  # Backend schon gestorben? Dann raus mit Log-Hinweis.
-  kill -0 "$BACKEND_PID" 2>/dev/null || { echo "Backend abgebrochen — siehe $BACKEND_LOG:"; tail -n 20 "$BACKEND_LOG"; exit 1; }
+  # Backend schon gestorben? Dann raus mit Log-Hinweis (Code 4 = Code-/Import-Fehler).
+  kill -0 "$BACKEND_PID" 2>/dev/null || { echo "FEHLER (4): Backend abgebrochen — siehe $BACKEND_LOG:" >&2; tail -n 20 "$BACKEND_LOG" >&2; exit 4; }
   sleep 0.5
 done
 if [[ "$ready" != "1" ]]; then
-  echo "API nicht erreichbar nach 15s — siehe $BACKEND_LOG:" >&2
+  echo "FEHLER (5): Backend-API nach 15s nicht erreichbar — siehe $BACKEND_LOG:" >&2
   tail -n 20 "$BACKEND_LOG" >&2
-  exit 1
+  exit 5
 fi
 
 # ── TUI starten ─────────────────────────────────────────────────────────
@@ -109,6 +169,11 @@ if command -v tmux >/dev/null; then
   # Schrittweite 1 Zeile; Untergrenze ist von tmux aus 1 Zeile bash.
   tmux bind-key -r C-Up   resize-pane -t 0 -U 1    # bash höher (TUI schrumpft)
   tmux bind-key -r C-Down resize-pane -t 0 -D 1    # bash niedriger (TUI wächst)
+  # Detach abschalten: 'Ctrl-b d' (tmux-Default) koppelt sofort & ohne Rückfrage
+  # ab — und weil das Eltern-Skript dann aus 'attach' zurückkehrt, killt cleanup
+  # Backend+Session. Genau dieser Fummel-Footgun. Raus geht's NUR via 'q'.
+  tmux unbind-key -T prefix d
+  tmux unbind-key -T prefix D
   # Split ERST nach dem Attach, damit die Höhe relativ zur ECHTEN Terminal-
   # größe sitzt. '-d' lässt den Fokus oben auf der TUI; untere bash startet
   # im HOME (fühlt sich an wie ein frisch geöffnetes Terminal).

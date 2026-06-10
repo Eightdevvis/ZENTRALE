@@ -118,6 +118,32 @@ TUI. `q` in der TUI beendet alles (TUI, tmux-Fenster, Backend).
 - **Selbsttest** (ein Text-Snapshot, ohne curses):
   `venv/bin/python tui/zentrale_tui.py --selftest`
 
+### Diagnose: wenn `zentrale-tui` sofort wieder „weg" ist
+
+Früher killte die TUI beim Beenden sofort die tmux-Session — **inklusive jeder
+Fehlermeldung**, weshalb ein Absturz spurlos „verschwand". Das ist behoben:
+
+- **TUI-Crash** → Traceback landet in **`/tmp/zentrale-tui-crash.log`** und das
+  Start-Skript hält die Pane offen („Taste drücken zum Schließen…"), statt sie
+  wegzureißen. Backend-Crash → **`/tmp/zentrale-tui-backend.log`**.
+- **Kein echtes Terminal** (z.B. aus einem Skript/Pipe gestartet) → klare Ansage
+  statt curses-Absturz (Exit 2). Headless prüfen: `--selftest`.
+- **`start_tui.sh`-Exit-Codes** (für Skripte/Diagnose):
+
+  | Code | Bedeutung                                                        |
+  |------|------------------------------------------------------------------|
+  | 0    | sauberer Quit (oder schon laufende Session attached)             |
+  | 1    | TUI selbst abgestürzt → `/tmp/zentrale-tui-crash.log`            |
+  | 2    | venv/Python fehlt **oder** kein TTY                              |
+  | 3    | Port :5000 schon belegt (verwaiste/fremde ZENTRALE)             |
+  | 4    | Backend beim Hochfahren gestorben → Backend-Log                  |
+  | 5    | Backend-API nach 15 s nicht erreichbar → Backend-Log            |
+
+- **Häufigste Ursache (Code 3):** ein **verwaistes Backend** hält noch `:5000`
+  (tmux-Session weg, Prozess lebt). Das Skript bricht jetzt mit Hinweis ab statt
+  ein zweites Backend dagegenzufahren. Aufräumen: `pkill -f 'core/main.py'`,
+  dann erneut `zentrale-tui`.
+
 ### Unten angeklebtes ECHTES Terminal (tmux-Split)
 
 Ist `tmux` installiert, bootet `zentrale-tui` ein **tmux-Fenster mit zwei Panes**:
@@ -137,8 +163,12 @@ nachgebautes „Fake-Terminal": die TUI bleibt reine Anzeige, fürs Navigieren/
   Default pro Typ ändern: `xdg-mime default <app>.desktop <mime/typ>`. App
   auswählen statt Default: `mimeopen -a <datei>`.
 - **Pane fokussieren (oben/unten):** Maus-Klick, oder `Ctrl-b` dann **nacktes**
-  `↑`/`↓` (Ctrl loslassen) = `select-pane`. Fokus startet oben auf der TUI; die
-  untere bash startet im `$HOME`.
+  `↑`/`↓` (Ctrl loslassen) = `select-pane`, oder `Ctrl-b o` (toggelt). **Nicht
+  `n`** — das ist „next-**window**" und meldet bei nur einem Window „no next
+  window". Fokus startet oben auf der TUI; die untere bash startet im `$HOME`.
+- **Kein versehentliches Detach:** `Ctrl-b d` (tmux-Default) ist **abgeschaltet**
+  — es koppelte sofort ab und riss dabei Backend+Session weg. Raus geht's nur
+  über `q` in der TUI.
 - **Höhe der bash — live:** `Ctrl-b` dann **`Ctrl+↑`/`Ctrl+↓`** (Ctrl durchgehend
   halten; wiederholbar, **1 Zeile pro Schritt**), oder den Rand mit der **Maus**
   ziehen. Untergrenze ist **1 Zeile** bash. Merksatz: **Ctrl gehalten =
@@ -146,8 +176,9 @@ nachgebautes „Fake-Terminal": die TUI bleibt reine Anzeige, fürs Navigieren/
   fängt das fürs Fenster-Tiling ab.)
 - **Höhe wird gemerkt:** die zuletzt eingestellte bash-Höhe landet beim Beenden in
   `~/.config/zentrale/tui_term_lines` und wird beim nächsten `zentrale-tui` wieder
-  hergestellt. Erzwingen/überschreiben: `ZENTRALE_TERM_LINES=10 zentrale-tui`
-  (Env gewinnt; ohne alles Default 6).
+  hergestellt — **beim Booten aber nie unter 3 Zeilen** (live runter bis 1 bleibt
+  ok), damit nichts unbrauchbar winzig startet. Erzwingen/überschreiben:
+  `ZENTRALE_TERM_LINES=10 zentrale-tui` (Env gewinnt; ohne alles Default 6).
 - **Kein tmux:** Fallback = TUI im Vollbild + Hinweis `sudo apt install tmux`.
 
 ## Variante B — 3 Terminals manuell
