@@ -88,35 +88,29 @@ if [[ "${1:-}" == "--run-tui" ]]; then
   exit "$rc"
 fi
 
-# ── Läuft schon eine ECHTE ZENTRALE-TUI? Nur DANN nicht neu bauen. ──
-# Wichtig: eine tmux-Session "zentrale-tui" kann VERWAIST sein — wenn das TUI-
-# Pane stirbt, wird das untere bash-Pane zum alleinigen Pane und die Session
-# lebt server-seitig weiter. `has-session` allein hält so eine Leiche für
-# "läuft". Darum die echte Lebend-Prüfung: läuft wirklich ein TUI-Prozess?
-TUI_ALIVE=0
-pgrep -f 'tui/zentrale_tui\.py' >/dev/null 2>&1 && TUI_ALIVE=1
-
-# (a) Wir sitzen SELBST in der zentrale-tui-Session? Dann NICHT von hier aus neu
-#     starten (kill-session träfe die eigene Session) — nur einen Hinweis geben.
-if [[ -n "${TMUX:-}" && "$(tmux display-message -p '#{session_name}' 2>/dev/null)" == "$SESSION" ]]; then
-  if [[ "$TUI_ALIVE" == 1 ]]; then
-    echo "Du bist schon in der ZENTRALE-TUI — beenden mit 'q', nicht neu starten." >&2
+# ── Immer ein FRISCHER, sauberer Start ──────────────────────────────────
+# Keine "Session-Wiederverwendung" mehr: die war fehleranfällig (globales
+# pgrep, verwaiste Sessions, Fehltreffer → mal "läuft schon" gelogen, mal die
+# laufende Session gekillt). `zentrale-tui` heißt jetzt schlicht: gib mir hier
+# ein frisches Dashboard. Alte zentrale-tui-Reste werden weggeräumt (Session
+# unten; ein verwaistes ki-frei-Backend holt der Port-Check weiter unten zurück).
+#
+# EINZIGER Schutz: nicht aus der EIGENEN tmux-Session heraus neu starten — sonst
+# träfe das Aufräumen die Session, in der man gerade sitzt (Self-Kill-Footgun).
+if [[ -n "${TMUX:-}" ]]; then
+  cur="$(tmux display-message -p '#{session_name}' 2>/dev/null)"
+  if [[ "$cur" == "$SESSION" ]]; then
+    echo "Du bist schon in der ZENTRALE-tmux-Session — 'q' beendet die TUI." >&2
+    echo "Neustart: dieses Fenster schließen, dann aus einem FRISCHEN Terminal 'zentrale-tui'." >&2
   else
-    echo "Diese Session ist eine verwaiste ZENTRALE (TUI schon beendet)." >&2
-    echo "Tipp 'exit' (oder Fenster zu) und starte in einem FRISCHEN Terminal: zentrale-tui" >&2
+    echo "Du bist in einer anderen tmux-Session ('$cur'). zentrale-tui braucht ein" >&2
+    echo "normales Terminal (tmux-in-tmux geht nicht) — starte es außerhalb von tmux." >&2
   fi
   exit 0
 fi
 
-# (b) Von außerhalb: existiert eine Session?
-if command -v tmux >/dev/null && tmux has-session -t "$SESSION" 2>/dev/null; then
-  if [[ "$TUI_ALIVE" == 1 ]]; then
-    echo "ZENTRALE-TUI läuft schon — hänge an die bestehende Session an." >&2
-    exec tmux attach-session -t "$SESSION"
-  fi
-  echo "Verwaiste zentrale-tui-Session (TUI schon beendet) — räume auf und starte neu." >&2
-  tmux kill-session -t "$SESSION" 2>/dev/null || true
-fi
+# Außerhalb von tmux: evtl. vorhandene zentrale-tui-Session wegräumen (frisch).
+command -v tmux >/dev/null && tmux kill-session -t "$SESSION" 2>/dev/null || true
 
 # Höhe für den Split: Env-Override > gemerkte Höhe > Default 6.
 SAVED=""

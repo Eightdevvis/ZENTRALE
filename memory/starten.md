@@ -132,7 +132,7 @@ Fehlermeldung**, weshalb ein Absturz spurlos „verschwand". Das ist behoben:
 
   | Code | Bedeutung                                                        |
   |------|------------------------------------------------------------------|
-  | 0    | sauberer Quit (oder schon laufende Session attached)             |
+  | 0    | sauberer Quit (q) bzw. frischer Start             |
   | 1    | TUI selbst abgestürzt → `/tmp/zentrale-tui-crash.log`            |
   | 2    | venv/Python fehlt **oder** kein TTY                              |
   | 3    | Port :5000 schon belegt (verwaiste/fremde ZENTRALE)             |
