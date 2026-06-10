@@ -15,8 +15,8 @@
 # Die untere bash ist ein vollwertiges Terminal: Dateien öffnen z.B. mit
 # `xdg-open bericht.pdf` (PDF-Default ist zathura, via xdg-mime gesetzt).
 # Pane wechseln: Maus-Klick (Maus-Modus an) oder `Ctrl-b` + ↑/↓.
-# Höhe der bash live ändern: Rand mit der MAUS ziehen, oder `Ctrl-b` dann
-#   K = höher / J = niedriger (wiederholbar: Prefix einmal, dann K K K …).
+# Höhe der bash live ändern (OHNE Prefix): Alt+↑ = höher / Alt+↓ = niedriger,
+#   oder den Rand mit der MAUS ziehen. (Auch `Ctrl-b` dann k/j, wiederholbar.)
 # Beenden: 'q' in der TUI → schließt das ganze tmux-Fenster und stoppt alles.
 # Ohne tmux: Fallback = TUI im Vollbild (wie früher), mit Install-Hinweis.
 #
@@ -81,10 +81,14 @@ if command -v tmux >/dev/null; then
        "'$PY' tui/zentrale_tui.py; tmux kill-session -t '$SESSION'"
   tmux set-option -t "$SESSION" -g mouse on        # Pane per Klick fokussieren + Rand ziehen
   tmux set-option -t "$SESSION" -g status off      # keine tmux-Statuszeile → mehr Platz
-  # Untere bash live höher/niedriger: Prefix (Ctrl-b) dann K/J, wiederholbar.
-  # Greift Pane 0 (die TUI) an → wirkt egal welches Pane gerade fokussiert ist.
-  tmux bind-key -r K resize-pane -t 0 -U 3         # bash höher (TUI schrumpft)
-  tmux bind-key -r J resize-pane -t 0 -D 3         # bash niedriger (TUI wächst)
+  # Untere bash live höher/niedriger. Alle Bindings greifen Pane 0 (die TUI)
+  # an → wirken egal welches Pane fokussiert ist.
+  # OHNE Prefix (am robustesten, kein Ctrl-b-Tanz): Alt+↑ / Alt+↓.
+  tmux bind-key -n M-Up   resize-pane -t 0 -U 3    # bash höher (TUI schrumpft)
+  tmux bind-key -n M-Down resize-pane -t 0 -D 3    # bash niedriger (TUI wächst)
+  # Alternativ unter dem Prefix (Ctrl-b loslassen, dann k/j; wiederholbar):
+  tmux bind-key -r k resize-pane -t 0 -U 3
+  tmux bind-key -r j resize-pane -t 0 -D 3
   # Split ERST nach dem Attach, damit die Höhe relativ zur ECHTEN Terminal-
   # größe sitzt. '-d' lässt den Fokus oben auf der TUI; untere bash startet
   # im HOME (fühlt sich an wie ein frisch geöffnetes Terminal).

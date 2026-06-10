@@ -139,8 +139,9 @@ nachgebautes „Fake-Terminal": die TUI bleibt reine Anzeige, fürs Navigieren/
 - **Pane wechseln:** Maus-Klick (Maus-Modus an) oder `Ctrl-b` dann `↑`/`↓`.
   Fokus startet oben auf der TUI; die untere bash startet im `$HOME`.
 - **Höhe der bash — Start:** `ZENTRALE_TERM_LINES=10 zentrale-tui` (Default 6 Zeilen).
-- **Höhe der bash — live:** Rand mit der **Maus** ziehen, oder `Ctrl-b` dann
-  `K` (höher) / `J` (niedriger). Wiederholbar: Prefix einmal, dann `K K K …`.
+- **Höhe der bash — live (ohne Prefix):** `Alt+↑` (höher) / `Alt+↓` (niedriger),
+  oder den Rand mit der **Maus** ziehen. (Alternativ unter dem Prefix: `Ctrl-b`
+  loslassen, dann `k`/`j` — wiederholbar.) Kein `Ctrl-b`-Tanz nötig.
 - **Kein tmux:** Fallback = TUI im Vollbild + Hinweis `sudo apt install tmux`.
 
 ## Variante B — 3 Terminals manuell
