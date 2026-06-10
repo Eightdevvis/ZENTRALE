@@ -108,32 +108,42 @@ Was passiert: `ZENTRALE_KASSETTE=tui` → Backend ki-frei (wie laptop). Das Skri
 startet `core/main.py` im Hintergrund mit **stdout → Logdatei**
 (`/tmp/zentrale-tui-backend.log`, sonst würde es die curses-Oberfläche
 zerschießen — die Logs erscheinen ohnehin im stdout-Panel der TUI) und dann die
-TUI im Vordergrund. `q` (oder Ctrl+C) beendet TUI **und** Backend.
+TUI. `q` in der TUI beendet alles (TUI, tmux-Fenster, Backend).
 
 - **Dependencies:** nur `flask` + `python-dateutil` fürs Backend; die TUI selbst
-  ist reine stdlib (`curses`). Kein Browser, kein Whisper/TTS.
+  ist reine stdlib (`curses`). Kein Browser, kein Whisper/TTS. Für das untere
+  echte Terminal (s.u.): `tmux` (sonst Fallback = TUI im Vollbild).
 - **Standalone** (TUI gegen ein schon laufendes Backend, z.B. auf einer anderen
   Maschine): `ZENTRALE_URL=http://<host>:5000 venv/bin/python tui/zentrale_tui.py`
 - **Selbsttest** (ein Text-Snapshot, ohne curses):
   `venv/bin/python tui/zentrale_tui.py --selftest`
 
-### Folien öffnen (`/slide`)
+### Unten angeklebtes ECHTES Terminal (tmux-Split)
 
-Curses kann keine Pixel (und xfce4-terminal/VTE 0.76 hat kein Sixel/Kitty-
-Bildprotokoll) — eine PDF in voller Schärfe geht also nur über ein **eigenes
-Viewer-Fenster**, nicht im Terminal-Raster. Befehl in der TUI-Befehlszeile (`/`):
+Ist `tmux` installiert, bootet `zentrale-tui` ein **tmux-Fenster mit zwei Panes**:
+oben die TUI (Dashboard), unten eine **echte bash**. Die untere Shell ist ein
+vollwertiges Terminal — `cd`, `ls`, Tab-Completion, History, Pipes, alles. Kein
+nachgebautes „Fake-Terminal": die TUI bleibt reine Anzeige, fürs Navigieren/
+Öffnen nutzt man die echte Shell drunter.
 
-```
-/slide              # listet die PDFs in data/slides/
-/slide vortrag      # öffnet (Präfix reicht) — zathura-Fenster über dem Terminal
-```
+- **Dateien öffnen:** terminal-nativ mit `xdg-open` — erkennt den Typ und nimmt
+  die Standard-App. PDF-Default ist **zathura** (gesetzt via
+  `xdg-mime default org.pwmt.zathura.desktop application/pdf`). Also einfach:
+  ```
+  xdg-open ~/Downloads/bericht.pdf    # → zathura
+  xdg-open /pfad/bild.png             # → Standard-Bildviewer
+  zathura x.pdf                       # spezifische App direkt
+  ```
+  Default pro Typ ändern: `xdg-mime default <app>.desktop <mime/typ>`. App
+  auswählen statt Default: `mimeopen -a <datei>`.
+- **Pane wechseln:** Maus-Klick (Maus-Modus an) oder `Ctrl-b` dann `↑`/`↓`.
+  Fokus startet oben auf der TUI; die untere bash startet im `$HOME`.
+- **Höhe der bash:** `ZENTRALE_TERM_LINES=16 zentrale-tui` (Default 12 Zeilen).
+- **Kein tmux:** Fallback = TUI im Vollbild + Hinweis `sudo apt install tmux`.
 
-- PDFs liegen in `data/slides/` (per `ZENTRALE_SLIDE_DIR` umstellbar, in
-  `.gitignore` — persönlich, kein Repo-Inhalt). Pfad-Traversal ist abgeriegelt.
-- Viewer ist **zathura** (leicht, ~30–50 MB, nur offen solange man hinschaut):
-  `sudo apt install zathura zathura-pdf-poppler` (einmalig, braucht Netz; danach
-  offline). Anderer Viewer via `ZENTRALE_PDF_VIEWER=<binary>`. Das Fenster wird
-  nicht-blockierend gestartet, die TUI läuft weiter; `q` im Viewer → zurück.
+> Hinweis: Der frühere TUI-Befehl `/slide` (festes zathura auf `data/slides/`)
+> ist damit überflüssig — er bleibt als Kurzbefehl bestehen, aber der normale
+> Weg ist jetzt `xdg-open` in der echten Shell unten.
 
 ## Variante B — 3 Terminals manuell
 

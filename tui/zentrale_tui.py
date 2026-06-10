@@ -31,21 +31,13 @@ import sys
 import json
 import time
 import threading
-import subprocess
 import urllib.request
 import urllib.error
 
 BASE_URL = (os.environ.get("ZENTRALE_URL") or "http://localhost:5000").rstrip("/")
 
-# ── Folien (PDF) ────────────────────────────────────────────────────────────
-# Slides liegen in data/slides/ (per ZENTRALE_SLIDE_DIR überschreibbar) und
-# werden bei /slide mit einem externen Viewer in voller Schärfe geöffnet —
-# curses/Terminal kann keine Pixel, darum ein eigenes Fenster. zathura ist
-# leichtgewichtig (~30-50 MB, nur offen solange man hinschaut) und das Fenster
-# legt sich über das Terminal; 'q' im Viewer → zurück zur TUI.
-SLIDE_DIR = os.environ.get("ZENTRALE_SLIDE_DIR") or os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "data", "slides")
-SLIDE_VIEWER = os.environ.get("ZENTRALE_PDF_VIEWER", "zathura")
+# Dateien öffnet man in der echten bash unten (tmux-Split, siehe
+# scripts/start_tui.sh) via `xdg-open <datei>` — die TUI selbst macht das nicht.
 
 # Sensor-Beschriftung: (ruhe-text, aktiv-text) — gleiche Sprache wie laptop.html
 WARD = {
@@ -339,67 +331,9 @@ def selftest():
     return 0
 
 
-# ── Folien-Helfer (IO; vom curses-Loop aufgerufen, nicht von parse_command) ──
-def list_slides():
-    """Sortierte Liste der PDF-Dateinamen in SLIDE_DIR (leer wenn kein Ordner)."""
-    try:
-        return sorted(f for f in os.listdir(SLIDE_DIR) if f.lower().endswith(".pdf"))
-    except OSError:
-        return []
-
-
-def resolve_slide(name):
-    """
-    Findet die gemeinte PDF zu `name`: exakter Treffer, sonst Präfix (ohne .pdf).
-    Pfad muss INNERHALB von SLIDE_DIR bleiben (kein ../ raus). Gibt den absoluten
-    Pfad zurück oder None.
-    """
-    slides = list_slides()
-    if not name:
-        return None
-    low = name.lower()
-    hit = next((s for s in slides if s.lower() == low or s.lower() == low + ".pdf"), None)
-    if not hit:
-        cand = [s for s in slides if s.lower().startswith(low)]
-        if len(cand) == 1:
-            hit = cand[0]
-    if not hit:
-        return None
-    base = os.path.realpath(SLIDE_DIR)
-    path = os.path.realpath(os.path.join(base, hit))
-    if path != base and not path.startswith(base + os.sep):
-        return None                                   # Traversal-Schutz
-    return path if os.path.isfile(path) else None
-
-
-def open_slide(name):
-    """
-    Öffnet eine Folie im externen Viewer (eigenes Fenster, NICHT blockierend).
-    Gibt eine kurze Rückmeldung für die Befehlszeile zurück. name leer → Liste.
-    """
-    slides = list_slides()
-    if not name:
-        if not slides:
-            return "keine folien in " + SLIDE_DIR
-        return "folien: " + ", ".join(slides) + "  ·  /slide <name>"
-    path = resolve_slide(name)
-    if not path:
-        return "keine folie: " + name + (("  (da: " + ", ".join(slides) + ")") if slides else "")
-    try:
-        subprocess.Popen([SLIDE_VIEWER, path],
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, start_new_session=True)
-    except FileNotFoundError:
-        return SLIDE_VIEWER + " fehlt → sudo apt install zathura zathura-pdf-poppler"
-    except Exception as e:
-        return "viewer-fehler: " + str(e)
-    return "öffne " + os.path.basename(path)
-
-
 # ── Befehlszeile: pure Logik (curses-frei, daher unit-testbar) ───────────────
 TUI_COMMANDS = [
     ("/help",  "alle Befehle und Tasten zeigen"),
-    ("/slide", "PDF-Folie öffnen: /slide <name>  (leer = Liste)"),
     ("/theme", "Theme: auto | hell | dunkel  (auch 't')"),
     ("/quit",  "ZENTRALE-TUI beenden  (auch 'q')"),
 ]
@@ -416,8 +350,7 @@ def parse_command(buf, theme_mode):
     """
     Wertet einen getippten Befehl aus. PURE Funktion (kein curses, kein State):
       (buf inkl. '/', aktuelles theme_mode) -> (action, neues theme_mode, msg)
-    action: None | "QUIT" | "HELP" | "SLIDE".  msg: kurze Rückmeldung (z.B.
-    Fehler); bei "SLIDE" trägt msg den angeforderten Folien-Namen (leer = Liste).
+    action: None | "QUIT" | "HELP".  msg: kurze Rückmeldung (z.B. Fehler).
     """
     parts = buf[1:].strip().split()
     if not parts:
@@ -428,10 +361,6 @@ def parse_command(buf, theme_mode):
         return "QUIT", theme_mode, ""
     if name in ("help", "h", "?"):
         return "HELP", theme_mode, ""
-    if name in ("slide", "s", "pdf"):
-        rest = buf[1:].strip()
-        rest = rest.split(" ", 1)[1].strip() if " " in rest else ""
-        return "SLIDE", theme_mode, rest
     if name in ("theme", "t"):
         mapping = {"hell": "day", "dunkel": "night", "day": "day",
                    "night": "night", "auto": "auto"}
@@ -789,8 +718,6 @@ def run_ui(stdscr, store):
                     break
                 if res == "HELP":
                     help_latched = True
-                elif res == "SLIDE":
-                    cmd_msg = open_slide(cmd_msg)   # cmd_msg trägt den Namen → wird zur Rückmeldung
             elif ch in (curses.KEY_BACKSPACE, 127, 8):
                 cmd_buf = cmd_buf[:-1]
                 if not cmd_buf:                # Slash weggelöscht → zu

@@ -28,10 +28,6 @@ scripts/bench_ascii_*.json
 # Dashboard ohnehin vom PC. Eigene Bilder einfach in den Ordner legen.
 data/photos/
 
-# PDF-Folien fuer den TUI-Befehl /slide (data/slides/). Persoenliche
-# Praesentationen, lokal mit zathura geoeffnet — kein Repo-Inhalt.
-data/slides/
-
 # lokale Archive (z.B. Design-Downloads) — kein Repo-Inhalt
 *.zip
 
