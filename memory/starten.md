@@ -169,10 +169,11 @@ nachgebautes „Fake-Terminal": die TUI bleibt reine Anzeige, fürs Navigieren/
 - **Kein versehentliches Detach:** `Ctrl-b d` (tmux-Default) ist **abgeschaltet**
   — es koppelte sofort ab und riss dabei Backend+Session weg. Raus geht's nur
   über `q` in der TUI.
-- **Höhe der bash — live:** `Ctrl-b` dann **`Ctrl+↑`/`Ctrl+↓`** (Ctrl durchgehend
-  halten; wiederholbar, **1 Zeile pro Schritt**), oder den Rand mit der **Maus**
-  ziehen. Untergrenze ist **1 Zeile** bash. Merksatz: **Ctrl gehalten =
-  größer/kleiner, Ctrl los = Fokus wechseln.** (`Alt+Pfeil` geht nicht — XFCE
+- **Höhe der bash — live:** **`Ctrl+↑`/`Ctrl+↓` ohne Prefix** — Ctrl gedrückt
+  halten und ↑/↓ dauerfeuern, geht endlos (1 Zeile pro Schritt, kein 500-ms-
+  Repeat-Timeout). Alternativ `Ctrl-b` dann `Ctrl+↑/↓`, oder Rand mit der
+  **Maus** ziehen. Untergrenze ist **1 Zeile** bash. Fokus wechseln dagegen:
+  `Ctrl-b` dann **nacktes** ↑/↓ (Ctrl los). (`Alt+Pfeil` geht nicht — XFCE
   fängt das fürs Fenster-Tiling ab.)
 - **Höhe wird gemerkt:** die zuletzt eingestellte bash-Höhe landet beim Beenden in
   `~/.config/zentrale/tui_term_lines` und wird beim nächsten `zentrale-tui` wieder

@@ -185,13 +185,18 @@ if command -v tmux >/dev/null; then
   tmux new-session -d -s "$SESSION" -c "$PWD" "'$SELF' --run-tui"
   tmux set-option -t "$SESSION" -g mouse on        # Pane per Klick fokussieren + Rand ziehen
   tmux set-option -t "$SESSION" -g status off      # keine tmux-Statuszeile → mehr Platz
-  # Untere bash live höher/niedriger: Ctrl GEDRÜCKT HALTEN → b → (Ctrl weiter
-  # halten) ↑/↓. Das ist tmux-Standard (C-Up/C-Down in der Prefix-Tabelle).
-  # Greift Pane 0 (die TUI) an → fokus-unabhängig. Wiederholbar (-r).
+  # Untere bash live höher/niedriger, 1 Zeile pro Schritt, greift Pane 0 (TUI)
+  # → fokus-unabhängig. Untergrenze ist von tmux aus 1 Zeile bash.
+  # PRIMÄR ohne Prefix (root-Tabelle): Ctrl gedrückt HALTEN und ↑/↓ dauerfeuern —
+  # geht endlos, kein 500-ms-Repeat-Timeout, kein erneutes 'b' nötig.
   # (Alt+Pfeil NICHT genommen — XFCE fängt das fürs Fenster-Tiling ab.)
-  # Schrittweite 1 Zeile; Untergrenze ist von tmux aus 1 Zeile bash.
-  tmux bind-key -r C-Up   resize-pane -t 0 -U 1    # bash höher (TUI schrumpft)
-  tmux bind-key -r C-Down resize-pane -t 0 -D 1    # bash niedriger (TUI wächst)
+  tmux bind-key -n C-Up   resize-pane -t 0 -U 1    # bash höher (TUI schrumpft)
+  tmux bind-key -n C-Down resize-pane -t 0 -D 1    # bash niedriger (TUI wächst)
+  # Zusätzlich unter dem Prefix (Ctrl-b dann Ctrl+↑/↓), wiederholbar; das
+  # Repeat-Fenster großzügig, falls man doch über das Prefix geht.
+  tmux set-option -t "$SESSION" -g repeat-time 1000
+  tmux bind-key -r C-Up   resize-pane -t 0 -U 1
+  tmux bind-key -r C-Down resize-pane -t 0 -D 1
   # Detach abschalten: 'Ctrl-b d' (tmux-Default) koppelt sofort & ohne Rückfrage
   # ab — und weil das Eltern-Skript dann aus 'attach' zurückkehrt, killt cleanup
   # Backend+Session. Genau dieser Fummel-Footgun. Raus geht's NUR via 'q'.
