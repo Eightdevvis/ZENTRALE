@@ -46,6 +46,34 @@ SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "$SELF")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
+# ── Boot-Höhe der unteren bash berechnen — PURE Funktion (keine Seiteneffekte,
+#    damit testbar; siehe tests/test_start_tui_height.py). ───────────────────
+# $1 = gemerkter Wert (oder leer/Müll), $2 = Terminalhöhe gesamt (oder leer wenn
+# unbekannt). Override ZENTRALE_TERM_LINES sticht den gemerkten Wert. Garantiert:
+# Untergrenze 3 (sonst unbrauchbar winzig) und Obergrenze so, dass dem TUI seine
+# Mindesthöhe (14) + Split-Trenner (1) bleibt — sonst rendert es "Terminal zu
+# klein". Echot die finale bash-Höhe.
+TUI_MIN_LINES=14
+compute_boot_lines() {
+  local saved="$1" total="$2" lines
+  [[ "$saved" =~ ^[0-9]+$ ]] || saved=""
+  [[ -n "$saved" && "$saved" -lt 3 ]] && saved=3       # Untergrenze beim Boot
+  lines="${ZENTRALE_TERM_LINES:-${saved:-6}}"          # Override > gemerkt > Default 6
+  if [[ "$total" =~ ^[0-9]+$ ]]; then                  # Obergrenze: TUI behält ≥14
+    local max_bash=$(( total - TUI_MIN_LINES - 1 ))
+    (( max_bash < 1 )) && max_bash=1                   # Mini-Term: bash 1, TUI kriegt Rest
+    (( lines > max_bash )) && lines="$max_bash"
+  fi
+  printf '%s\n' "$lines"
+}
+
+# ── Test-Subcommand (nur für die pytest-Suite): Cap-Logik isoliert ausrechnen.
+#    Args: $2=gemerkter Wert, $3=Terminalhöhe. Keine venv/tmux-Abhängigkeit. ──
+if [[ "${1:-}" == "--compute-boot-lines" ]]; then
+  compute_boot_lines "${2:-}" "${3:-}"
+  exit 0
+fi
+
 PY="venv/bin/python"
 if [[ ! -x "$PY" ]]; then
   echo "FEHLER (2): $PY nicht gefunden. Bitte erst venv aufsetzen (siehe memory/setup.md)." >&2
@@ -126,27 +154,11 @@ fi
 # Außerhalb von tmux: evtl. vorhandene zentrale-tui-Session wegräumen (frisch).
 command -v tmux >/dev/null && tmux kill-session -t "$SESSION" 2>/dev/null || true
 
-# Höhe für den Split: Env-Override > gemerkte Höhe > Default 6.
+# Höhe für den Split berechnen (gemerkter Wert + echte Terminalhöhe → gedeckelt,
+# damit dem TUI ≥14 Zeilen bleiben). Logik in compute_boot_lines() oben.
 SAVED=""
 [[ -f "$STATE_FILE" ]] && read -r SAVED < "$STATE_FILE" 2>/dev/null || true
-[[ "$SAVED" =~ ^[0-9]+$ ]] || SAVED=""
-# Beim BOOTEN nie unbrauchbar winzig (gemerkter Mini-Wert): Untergrenze 3 Zeilen.
-# Live runterziehen bis 1 bleibt erlaubt — das hier betrifft nur den Start.
-[[ -n "$SAVED" && "$SAVED" -lt 3 ]] && SAVED=3
-TERM_LINES="${ZENTRALE_TERM_LINES:-${SAVED:-6}}"   # Höhe der unteren echten bash
-
-# Beim BOOTEN nie so hoch, dass dem TUI (Pane 0) zu wenig bleibt. Hat man die
-# bash mal fast über den ganzen Schirm gezogen (TUI auf 1 Zeile), würde sonst
-# genau dieser Riesenwert wiederhergestellt → TUI rendert "Terminal zu klein".
-# Obergrenze: echte Terminalhöhe minus TUI-Mindesthöhe (14) minus Split-Trenner.
-# (Live hochziehen bleibt erlaubt — das hier betrifft nur den Start.)
-TUI_MIN_LINES=14
-TERM_TOTAL="$(tput lines 2>/dev/null || true)"
-if [[ "$TERM_TOTAL" =~ ^[0-9]+$ ]]; then
-  MAX_BASH=$(( TERM_TOTAL - TUI_MIN_LINES - 1 ))
-  (( MAX_BASH < 1 )) && MAX_BASH=1          # Mini-Terminal: bash 1 Zeile, TUI kriegt den Rest
-  (( TERM_LINES > MAX_BASH )) && TERM_LINES="$MAX_BASH"
-fi
+TERM_LINES="$(compute_boot_lines "$SAVED" "$(tput lines 2>/dev/null || true)")"
 
 # ── Ist :5000 schon belegt? KLARE Ansage statt stillem Zweit-Backend ─────
 # Hierher kommen wir nur, wenn KEINE 'zentrale-tui'-Session läuft (sonst oben

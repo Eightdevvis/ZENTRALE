@@ -1,0 +1,4 @@
+# Dev-/Test-Abhängigkeiten (nicht fürs Laufen der ZENTRALE nötig).
+# Installieren:  venv/bin/pip install -r requirements-dev.txt
+# Tests laufen:  venv/bin/python -m pytest
+pytest

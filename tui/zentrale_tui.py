@@ -157,6 +157,20 @@ class Store:
 
 
 # ── Hilfsfunktionen (UI-unabhängig, testbar) ───────────────────────────────
+
+# Mindestgröße fürs Rendern: darunter passt das Dashboard-Layout nicht und wir
+# zeigen nur den "zu klein"-Hinweis. Das Start-Skript (scripts/start_tui.sh)
+# deckelt die untere bash beim Boot anhand DERSELBEN 14, damit dem TUI hier
+# immer genug bleibt — die beiden Zahlen müssen zusammenpassen.
+MIN_LINES = 14
+MIN_COLS = 60
+
+
+def terminal_too_small(h, w):
+    """True, wenn das Terminal kleiner als die Mindest-Renderfläche ist."""
+    return h < MIN_LINES or w < MIN_COLS
+
+
 def fmt_uptime(u):
     if u is None:
         return "—"
@@ -849,7 +863,7 @@ def run_ui(stdscr, store):
         H, W = stdscr.getmaxyx()
         stdscr.erase()
 
-        if H < 14 or W < 60:
+        if terminal_too_small(H, W):
             safe_addstr(0, 0, "Terminal zu klein (min 60x14).", C["warn"])
             safe_addstr(1, 0, "q = quit", C["dim"])
             stdscr.refresh()
