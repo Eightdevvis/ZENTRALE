@@ -31,6 +31,8 @@ import sys
 import json
 import time
 import threading
+from datetime import date, timedelta
+import subprocess
 import urllib.request
 import urllib.error
 
@@ -172,9 +174,15 @@ def terminal_too_small(h, w):
 
 
 def fmt_uptime(u):
-    if u is None:
+    # Defensiv: alles, was sich nicht in eine ganze Zahl pressen lässt (None,
+    # Liste, Text, NaN), wird zu "—" statt zu einem Crash — der State kommt
+    # über HTTP/JSON, da kann theoretisch Müll ankommen.
+    try:
+        if u is None:
+            return "—"
+        u = int(u)
+    except (TypeError, ValueError, OverflowError):   # OverflowError: int(inf)
         return "—"
-    u = int(u)
     return ":".join("%02d" % n for n in (u // 3600, (u // 60) % 60, u % 60))
 
 
@@ -185,13 +193,16 @@ def bar(pct, length=10):
 
 
 def blockspark(vals):
-    """ASCII-Sparkline ▁▂▃▄▅▆▇█ aus Zahlenwerten (wie viz.js blockSpark)."""
+    """ASCII-Sparkline ▁▂▃▄▅▆▇█ aus Zahlenwerten (wie viz.js blockSpark).
+    Robust: filtert alles raus, was keine endliche Zahl ist."""
     blocks = "▁▂▃▄▅▆▇█"
-    if not vals:
+    nums = [n for n in (_num(v) for v in vals) if n is not None] \
+        if isinstance(vals, (list, tuple)) else []
+    if not nums:
         return ""
-    lo, hi = min(vals), max(vals)
+    lo, hi = min(nums), max(nums)
     rng = (hi - lo) or 1
-    return "".join(blocks[round((v - lo) / rng * (len(blocks) - 1))] for v in vals)
+    return "".join(blocks[round((v - lo) / rng * (len(blocks) - 1))] for v in nums)
 
 
 # Graph-Typen fürs Werkzeug: (id, kurz-label, ein-zeilen-hinweis)
@@ -205,7 +216,9 @@ GRAPH_TYPES = [
 
 def parse_clock(s):
     """'23:15' | '2315' | '7' | '24:00' → Minuten seit Mitternacht (0–1440) oder None."""
-    s = (s or "").strip().replace(".", ":")
+    if not isinstance(s, str):   # nur Strings parsen, alles andere → None (kein Crash)
+        return None
+    s = s.strip().replace(".", ":")
     if not s:
         return None
     if ":" in s:
@@ -228,8 +241,20 @@ def parse_clock(s):
     return h * 60 + m
 
 
+def _num(x):
+    """x als ENDLICHE Zahl zurück, sonst None. Bool/Text/Liste/None/NaN/Inf →
+    None. Alle Werte kommen über JSON rein, da kann Müll dabei sein — diese
+    Schleuse hält ihn von den Rechenpfaden (int()/round()/float()) fern."""
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        return None
+    if x != x or x in (float("inf"), float("-inf")):   # NaN (x!=x) oder Inf
+        return None
+    return x
+
+
 def fmt_clock(m):
-    """Minuten → 'HH:MM' (24:00 für 1440)."""
+    """Minuten → 'HH:MM' (24:00 für 1440). Müll → '—' statt Crash."""
+    m = _num(m)
     if m is None:
         return "—"
     m = int(round(m))
@@ -244,16 +269,20 @@ def period_duration(start, end):
 
 
 def graph_series(gtype, rows):
-    """Zahlenreihe für die Sparkline, je nach Typ (period → Dauer)."""
+    """Zahlenreihe für die Sparkline, je nach Typ (period → Dauer). Robust:
+    überspringt Einträge, die keine sauberen Zahlen sind (statt zu crashen)."""
     out = []
-    for e in rows:
-        v = e.get("value")
+    for e in rows if isinstance(rows, list) else []:
+        if not isinstance(e, dict):
+            continue
+        v = _num(e.get("value"))
         if v is None:
             continue
         if gtype == "period":
-            if e.get("end") is None:
+            end = _num(e.get("end"))
+            if end is None:
                 continue
-            out.append(period_duration(v, e["end"]))
+            out.append(period_duration(v, end))
         else:
             out.append(float(v))
     return out
@@ -261,18 +290,24 @@ def graph_series(gtype, rows):
 
 def graph_last(g, rows):
     """Letzter Wert als Text für die lifestyle-Box (type-abhängig formatiert)."""
-    vals = [e for e in rows if e.get("value") is not None]
+    if not isinstance(g, dict):
+        g = {}
+    vals = [e for e in (rows if isinstance(rows, list) else [])
+            if isinstance(e, dict) and e.get("value") is not None]
     if not vals:
         return "—"
     e, t = vals[-1], g.get("type")
     if t == "time":
-        return fmt_clock(e["value"])
+        return fmt_clock(e.get("value"))
     if t == "period":
         if e.get("end") is None:
-            return fmt_clock(e["value"])
-        return fmt_clock(e["value"]) + "–" + fmt_clock(e["end"])
-    unit = (" " + g["unit"]) if g.get("unit") else ""
-    return "%g%s" % (float(e["value"]), unit)
+            return fmt_clock(e.get("value"))
+        return fmt_clock(e.get("value")) + "–" + fmt_clock(e.get("end"))
+    v = _num(e.get("value"))
+    if v is None:
+        return "—"
+    unit = (" " + str(g.get("unit"))) if g.get("unit") else ""
+    return "%g%s" % (v, unit)
 
 
 def api_call(path, method="GET", body=None, timeout=3.0):
@@ -292,11 +327,15 @@ def api_call(path, method="GET", body=None, timeout=3.0):
 
 def tele_value(metrics, key):
     """(pct, text) für eine Telemetrie-Reihe, oder None wenn nicht verfügbar."""
-    src = (metrics or {}).get("pc") or {}
-    m = src.get(key)
-    if not m or m.get("v") is None:
+    src = (metrics or {}).get("pc") if isinstance(metrics, dict) else None
+    if not isinstance(src, dict):
         return None
-    v = m["v"]
+    m = src.get(key)
+    if not isinstance(m, dict):
+        return None
+    v = _num(m.get("v"))   # nur endliche Zahlen verrechnen, sonst "nicht verfügbar"
+    if v is None:
+        return None
     pct = (v - 30) / 60 * 100 if key == "temp" else v   # Temp ehrlich 30–90°C
     unit = next((u for (lbl, k, u) in TELE_ROWS if k == key), "")
     return pct, "%d%s" % (round(v), unit)
@@ -355,6 +394,7 @@ TUI_KEYS = [
     ("q",   "beenden"),
     ("t",   "Theme wechseln (auto/hell/dunkel)"),
     ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen"),
+    ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · w=Fenster"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
@@ -521,7 +561,91 @@ def run_ui(stdscr, store):
     #   input  : Texteingabe (Name im new, Wert im view)
     G = {"active": False, "view": "list", "graphs": [], "sel": 0,
          "def": None, "vals": [], "input": "", "newtype": "number", "msg": "",
-         "input2": "", "pstage": 0}    # input2/pstage: Perioden-Eingabe (von→bis)
+         "input2": "", "pstage": 0,    # input2/pstage: Perioden-Eingabe (von→bis)
+         "confirm": False}             # Lösch-Nachfrage aktiv (Mini-Dialog)
+
+    # ── Karte (füllt die MITTE-Box, Taste 'm') ──────────────────────────
+    # Maps-System Schritt 1: grobe Basiskarte (Küsten 1:110m). Die TUI ist
+    # ein reiner Zeichner — alle Geo-Logik liegt im Backend (core/map/ →
+    # /api/map/base, siehe memory/maps_system.md). Wir halten nur den
+    # Viewport (Mittelpunkt lon/lat + Zoom) und die letzte Server-Antwort.
+    #   active : Karte hat den Fokus (Pan/Zoom-Tasten gehen an die Karte)
+    #   cx,cy  : Mittelpunkt in lon/lat (Start: 0°/20°, ganze Welt zentriert)
+    #   zoom   : 0 = ganze Welt; +1 je Zoomstufe (slippy-Semantik)
+    #   data   : letzte /api/map/base-Antwort (None ⇒ beim nächsten Zeichnen neu holen)
+    #   grid   : (cols,rows), für die data geholt wurde — bei Resize neu holen
+    M = {"active": False, "cx": 0.0, "cy": 20.0, "zoom": 0.0,
+         "data": None, "grid": None, "msg": "", "proc": None}
+    MAP_COAST = "▓"          # Küsten-/Land-Kantenglyph (gedämpft, kein Vollblock)
+
+    def m_fetch(cols, rows):
+        """Basiskarte fürs aktuelle Viewport+Raster synchron holen (localhost,
+        wenige ms — wie das Graph-Werkzeug bei Benutzeraktionen). aspect=0.5,
+        weil ein Terminalzeichen ~doppelt so hoch wie breit ist."""
+        try:
+            q = ("/api/map/base?cx=%.5f&cy=%.5f&zoom=%.2f&cols=%d&rows=%d&aspect=0.5"
+                 % (M["cx"], M["cy"], M["zoom"], cols, rows))
+            M["data"] = api_call(q, timeout=2.0)
+            M["grid"] = (cols, rows)
+            M["msg"] = ""
+        except Exception:
+            # Fehler-Marker (truthy!) statt None: verhindert, dass draw_map
+            # bei totem Backend JEDEN Frame neu (mit Timeout) anfragt und die UI
+            # einfriert. Erst ein Pan/Zoom/Resize (setzt data=None bzw. ändert
+            # grid) löst einen neuen Versuch aus.
+            M["data"] = {"failed": True}
+            M["grid"] = (cols, rows)
+            M["msg"] = "karte: backend?"
+
+    def m_pan(fx, fy):
+        """Mittelpunkt um einen Bruchteil der sichtbaren Spanne verschieben.
+        Spanne kommt aus den zuletzt gelieferten bounds [w,s,e,n] — so braucht
+        die TUI selbst KEINE Projektion. data=None erzwingt Neuladen."""
+        d = M["data"]
+        if not d or "bounds" not in d:   # noch nichts geladen ODER Fehler-Marker
+            return                        # ({"failed": True}) → nichts zu schwenken
+        w, s, e, n = d["bounds"]
+        M["cx"] = max(-180.0, min(180.0, M["cx"] + fx * (e - w)))
+        M["cy"] = max(-85.0, min(85.0, M["cy"] + fy * (n - s)))
+        M["data"] = None
+
+    def m_zoom(dz):
+        M["zoom"] = max(0.0, min(8.0, M["zoom"] + dz))
+        M["data"] = None
+
+    def m_window():
+        """Die Karte im NATIVEN Fenster aufklappen (pygame, scripts/map_window.py)
+        — wie /slide PDFs extern in zathura öffnet. Kein curses-Limit: echte
+        antialiased Vektorgrafik. Wir reichen den aktuellen Viewport (cx/cy/zoom)
+        mit, damit das Fenster genau dort aufgeht, wo die TUI gerade steht.
+        Detached gestartet (eigener Prozess), die TUI läuft normal weiter."""
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        py = os.path.join(root, "venv", "bin", "python")
+        script = os.path.join(root, "scripts", "map_window.py")
+        if not os.environ.get("DISPLAY"):
+            M["msg"] = "kein DISPLAY (X11?)"
+            return
+        if not os.path.exists(script):
+            M["msg"] = "map_window.py fehlt"
+            return
+        # NUR EIN Fenster pro TUI: curses' getch() feuert bei gehaltener Taste
+        # (Auto-Repeat) mehrfach — ohne diese Sperre würde jeder Tick einen neuen
+        # Prozess starten (→ zig Fenster auf einmal). Läuft das vorige noch
+        # (poll() is None), öffnen wir keins. Erst wenn es zu ist, geht ein neues.
+        proc = M.get("proc")
+        if proc is not None and proc.poll() is None:
+            M["msg"] = "fenster läuft schon"
+            return
+        try:
+            M["proc"] = subprocess.Popen(
+                [py if os.path.exists(py) else sys.executable, script,
+                 "--cx", "%.5f" % M["cx"], "--cy", "%.5f" % M["cy"],
+                 "--zoom", "%.2f" % M["zoom"]],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True)
+            M["msg"] = "natives fenster geöffnet"
+        except Exception as exc:
+            M["msg"] = "fenster-start: %s" % exc
 
     def g_load():
         """Definitionen frisch ziehen (nach Aktionen / beim Öffnen)."""
@@ -567,20 +691,29 @@ def run_ui(stdscr, store):
         h, w = stdscr.getmaxyx()
         if y < 0 or y >= h or x >= w:
             return
+        # Zentrale Zeichen-Primitive → hier hart machen, dann ist der GANZE
+        # Render-Pfad immun: alles zu str zwingen und Null-Bytes ersetzen
+        # (curses.addstr wirft an \x00 ein ValueError, nicht curses.error).
+        if not isinstance(text, str):
+            text = str(text)
+        if "\x00" in text:
+            text = text.replace("\x00", " ")
         if x < 0:
             text = text[-x:]
             x = 0
         text = text[: max(0, w - x)]
         try:
             stdscr.addstr(y, x, text, attr)
-        except curses.error:
-            pass  # untere rechte Zelle wirft immer — egal
+        except (curses.error, ValueError):
+            pass  # untere rechte Zelle wirft immer; ValueError = exotischer String
 
     def addclip(y, x, text, maxw, attr=0):
         """Wie safe_addstr, aber kürzt vorher auf maxw — verhindert, dass
         z.B. lange stdout-Zeilen aus ihrer Box in die Nachbarspalte laufen."""
         if maxw <= 0:
             return
+        if not isinstance(text, str):
+            text = str(text)
         safe_addstr(y, x, text[:maxw], attr)
 
     def draw_box(y, x, h, w, title, title_attr=0):
@@ -601,8 +734,8 @@ def run_ui(stdscr, store):
         return tid
 
     def draw_time_plot(py, bx, bw, ph, rows, is_period):
-        """24h-Gitter: X = letzte Einträge (Datum), Y = Uhrzeit (00:00 oben,
-        24:00 unten). time → Punkt ●; period → Balken █ (über Mitternacht
+        """24h-Gitter: X = letzte Einträge (Datum), Y = Uhrzeit (00:00 unten,
+        24:00 oben). time → Punkt ●; period → Balken █ (über Mitternacht
         gesplittet, da die Achse an Mitternacht verankert ist)."""
         if ph < 3:
             return
@@ -612,14 +745,19 @@ def run_ui(stdscr, store):
         if plot_w < 2:
             return
 
-        def row_of(m):
+        def row_of(m):                        # 0 → unterste Zeile, 1440 → oberste
             m = max(0, min(1440, m))
-            return py + int(round(m / 1440.0 * (ph - 1)))
+            return py + (ph - 1) - int(round(m / 1440.0 * (ph - 1)))
 
         for r in range(ph):                   # Y-Achse
             safe_addstr(py + r, plot_x - 1, "│", C["faint"])
         for hh in (0, 6, 12, 18, 24):         # Stunden-Marken
             safe_addstr(row_of(hh * 60), ix, "%02d" % (hh % 24), C["faint"])
+
+        def fill(cx, m1, m2):                 # Balken zwischen zwei Minuten (kein Wrap)
+            a, b = sorted((row_of(m1), row_of(m2)))
+            for r in range(a, b + 1):
+                safe_addstr(r, cx, "█", C["graph"])
 
         for ci, e in enumerate(rows[-plot_w:]):
             cx = plot_x + ci
@@ -630,12 +768,11 @@ def run_ui(stdscr, store):
                 en = e.get("end")
                 if en is None:
                     continue
-                sr, er = row_of(s), row_of(en)
-                segs = ([(sr, er)] if er >= sr
-                        else [(sr, py + ph - 1), (py, er)])   # Wrap über Mitternacht
-                for a, b in segs:
-                    for r in range(a, b + 1):
-                        safe_addstr(r, cx, "█", C["graph"])
+                if en >= s:
+                    fill(cx, s, en)
+                else:                         # Wrap über Mitternacht
+                    fill(cx, s, 1440)
+                    fill(cx, 0, en)
             else:
                 safe_addstr(row_of(s), cx, "●", C["graph"])
 
@@ -707,14 +844,77 @@ def run_ui(stdscr, store):
                 for i, g in enumerate(G["graphs"]):
                     if yy >= bottom:
                         break
+                    if not isinstance(g, dict):
+                        continue
                     sel = (i == G["sel"])
-                    rows = gv_cache.get(g["id"]) or []
+                    rows = gv_cache.get(g.get("id")) or []
                     spark = blockspark(graph_series(g.get("type"), rows)[-8:])
                     line = "%s %-12s %-7s %s" % (
-                        "›" if sel else " ", g["name"][:12], _tlabel(g.get("type")), spark)
+                        "›" if sel else " ", str(g.get("name") or "")[:12], _tlabel(g.get("type")), spark)
                     addclip(yy, ix, line, iw, C["bright"] if sel else C["dim"])
                     yy += 1
             addclip(bottom, ix, "↑↓ wählen · enter öffnen · n neu · d löschen · esc zu", iw, C["faint"])
+
+            if G["confirm"] and G["graphs"]:        # Mini-Dialog über die Liste legen
+                nm = G["graphs"][G["sel"]]["name"]
+                q = "»%s« löschen?" % nm[:18]
+                dw = min(iw, max(len(q), 16) + 4)
+                dx = bx + (bw - dw) // 2
+                dy = by + bh // 2 - 2
+                draw_box(dy, dx, 4, dw, "LÖSCHEN", C["warn"])
+                addclip(dy + 1, dx + 2, q, dw - 4, C["bright"])
+                addclip(dy + 2, dx + 2, "j/enter = ja · sonst abbrechen", dw - 4, C["faint"])
+
+    def draw_map(by, bx, bh, bw):
+        """Inhalt der MITTE-Box, wenn die Karte Fokus hat. Holt bei Bedarf
+        frische Linien (Resize/Pan/Zoom) und zeichnet sie per Bresenham. Die
+        Zellkoordinaten kommen schon fertig projiziert vom Backend — hier wird
+        nur noch gerastert und geclippt."""
+        iw, ih = bw - 2, bh - 2
+        if iw < 4 or ih < 3:
+            return
+        # Die unterste Box-Innenzeile bleibt für die Status-/Hilfe-Zeile frei.
+        map_ih = ih - 1
+        if (not M["data"]) or M["grid"] != (iw, map_ih):
+            m_fetch(iw, map_ih)
+        d = M["data"]
+        ox, oy = bx + 1, by + 1
+        if not d or d.get("failed") or "lines" not in d:
+            addclip(by + 1, ox, M["msg"] or "lade karte…", iw, C["faint"])
+            return
+
+        def plot(c, r):
+            if 0 <= c < iw and 0 <= r < map_ih:
+                safe_addstr(oy + r, ox + c, MAP_COAST, C["acc"])
+
+        for line in d["lines"]:
+            for i in range(len(line) - 1):
+                x0, y0 = int(round(line[i][0])), int(round(line[i][1]))
+                x1, y1 = int(round(line[i + 1][0])), int(round(line[i + 1][1]))
+                dx, dy = abs(x1 - x0), abs(y1 - y0)
+                stepx = 1 if x0 < x1 else -1
+                stepy = 1 if y0 < y1 else -1
+                err = dx - dy
+                while True:
+                    plot(x0, y0)
+                    if x0 == x1 and y0 == y1:
+                        break
+                    e2 = 2 * err
+                    if e2 > -dy:
+                        err -= dy; x0 += stepx
+                    if e2 < dx:
+                        err += dx; y0 += stepy
+
+        # Fadenkreuz in der Mitte (Orientierung, wo cx/cy liegt).
+        safe_addstr(oy + map_ih // 2, ox + iw // 2, "+", C["warn"])
+
+        # Status-/Hilfezeile unten in der Box: Position, Zoom, Steuerung.
+        info = "lon %+.1f lat %+.1f · z%g" % (M["cx"], M["cy"], M["zoom"])
+        addclip(by + bh - 2, ox, info, iw, C["bright"])
+        hint = "↑↓←→ pan · +/− zoom · 0 reset · w=fenster · esc zu"
+        if M["msg"]:
+            hint = M["msg"]
+        addclip(by + bh - 2, ox + iw - len(hint), hint, len(hint), C["faint"])
 
     while True:
         ch = stdscr.getch()
@@ -740,8 +940,22 @@ def run_ui(stdscr, store):
                 cmd_buf += chr(ch)
         elif G["active"]:                      # Graph-Werkzeug hat den Fokus
             if G["view"] == "list":
-                if ch in (27, ord("g"), ord("G")):           # Esc/g → Werkzeug zu
+                if G["confirm"]:                              # Lösch-Nachfrage offen
+                    if ch in (ord("y"), ord("Y"), ord("j"), ord("J"),
+                              10, 13, curses.KEY_ENTER):
+                        try:
+                            api_call("/api/graphs/" + G["graphs"][G["sel"]]["id"], method="DELETE")
+                            G["msg"] = "gelöscht"
+                        except Exception:
+                            G["msg"] = "löschen fehlgeschlagen"
+                        G["confirm"] = False
+                        g_load()
+                    elif ch != -1:                            # alles andere → abbrechen
+                        G["confirm"] = False; G["msg"] = ""
+                elif ch in (27, ord("g"), ord("G")):           # Esc/g → Werkzeug zu
                     G["active"] = False
+                elif ch in (ord("q"), ord("Q")):               # q → ganze TUI beenden
+                    break
                 elif ch in (curses.KEY_UP, ord("k")):
                     G["sel"] = max(0, G["sel"] - 1)
                 elif ch in (curses.KEY_DOWN, ord("j")):
@@ -755,12 +969,7 @@ def run_ui(stdscr, store):
                     G["view"] = "new"; G["input"] = ""; G["newtype"] = "number"; G["msg"] = ""
                 elif ch in (ord("d"), ord("D")):
                     if G["graphs"]:
-                        try:
-                            api_call("/api/graphs/" + G["graphs"][G["sel"]]["id"], method="DELETE")
-                            G["msg"] = "gelöscht"
-                        except Exception:
-                            G["msg"] = "löschen fehlgeschlagen"
-                        g_load()
+                        G["confirm"] = True; G["msg"] = ""
             elif G["view"] == "new":
                 if ch == 27:
                     G["view"] = "list"; G["msg"] = ""
@@ -841,6 +1050,29 @@ def run_ui(stdscr, store):
                         G[cur] = G[cur][:-1]
                     elif (48 <= ch <= 57 or ch == ord(":")) and len(G[cur]) < 5:
                         G[cur] += chr(ch)
+        elif M["active"]:                      # Karte hat den Fokus
+            if ch in (27, ord("m"), ord("M")):                 # Esc/m → Karte zu
+                M["active"] = False
+            elif ch in (ord("q"), ord("Q")):                   # q → ganze TUI beenden
+                break
+            elif ch in (curses.KEY_LEFT, ord("h")):
+                m_pan(-0.30, 0.0)
+            elif ch in (curses.KEY_RIGHT, ord("l")):
+                m_pan(0.30, 0.0)
+            elif ch in (curses.KEY_UP, ord("k")):
+                m_pan(0.0, 0.30)               # nach Norden
+            elif ch in (curses.KEY_DOWN, ord("j")):
+                m_pan(0.0, -0.30)              # nach Süden
+            elif ch in (ord("+"), ord("=")):   # '=' = '+' ohne Shift
+                m_zoom(1.0)
+            elif ch in (ord("-"), ord("_")):
+                m_zoom(-1.0)
+            elif ch == ord("0"):               # zurück zur ganzen Welt
+                M["cx"], M["cy"], M["zoom"], M["data"] = 0.0, 20.0, 0.0, None
+            elif ch in (ord("w"), ord("W"), 10, 13, curses.KEY_ENTER):
+                m_window()                     # natives Fenster aufklappen
+            elif ch in (ord("t"), ord("T")):   # Theme darf auch hier zyklieren
+                theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
         else:                                  # Normal-Modus: Shortcuts aktiv
             if ch in (ord("q"), ord("Q")):
                 break
@@ -848,6 +1080,8 @@ def run_ui(stdscr, store):
                 theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
             elif ch in (ord("g"), ord("G")):   # Graph-Werkzeug öffnen
                 G["active"] = True; G["view"] = "list"; G["msg"] = ""; g_load()
+            elif ch in (ord("m"), ord("M")):   # Karte öffnen
+                M["active"] = True; M["data"] = None
             elif ch == ord("/"):               # Befehlszeile öffnen
                 cmd_mode = True; cmd_buf = "/"; cmd_msg = ""
         # KEY_RESIZE oder Timeout → einfach neu zeichnen
@@ -875,6 +1109,8 @@ def run_ui(stdscr, store):
         safe_addstr(0, 11, "tui · kassette", C["dim"])
 
         nets = state.get("internet_logs", []) or []
+        if not isinstance(nets, list):
+            nets = []
         if nets:
             net_txt, net_attr = "TRAFFIC !", C["warn"]
         else:
@@ -925,9 +1161,13 @@ def run_ui(stdscr, store):
         if std_h >= 3:
             draw_box(sy, lx, std_h, leftw, "stdout")
             logs = state.get("logs", []) or []
+            if not isinstance(logs, list):
+                logs = []
             inner = std_h - 2
             shown = logs[-inner:]
             for i, e in enumerate(shown):
+                if not isinstance(e, dict):
+                    continue
                 yy = sy + 1 + i
                 t = (e.get("time") or "")[:8]
                 safe_addstr(yy, lx + 2, t, C["faint"])
@@ -943,35 +1183,140 @@ def run_ui(stdscr, store):
                 else:
                     safe_addstr(yy, px, txt, C["dim"])
 
-        # ── MITTE: Graph-Werkzeug (oder Einladung, es zu öffnen) ──────────
+        # ── MITTE: Graph-Werkzeug / Karte (oder Einladung, sie zu öffnen) ──
         if G["active"]:
             draw_box(top, mx, body_h, midw, "graph-werkzeug")
             draw_graph_tool(top, mx, body_h, midw, gv_cache)
+        elif M["active"]:
+            draw_box(top, mx, body_h, midw, "karte · welt")
+            draw_map(top, mx, body_h, midw)
         else:
             draw_box(top, mx, body_h, midw, "mitte")
-            cy = top + body_h // 2
+            cyc = top + body_h // 2
             big = "KASSETTE · TUI"
-            small = "g · graph-werkzeug öffnen"
-            addclip(cy - 1, mx + max(1, (midw - len(big)) // 2), big, midw - 2, C["bright"])
-            addclip(cy + 1, mx + max(1, (midw - len(small)) // 2), small, midw - 2, C["acc"])
+            l1 = "g · graph-werkzeug"
+            l2 = "m · karte"
+            addclip(cyc - 1, mx + max(1, (midw - len(big)) // 2), big, midw - 2, C["bright"])
+            addclip(cyc + 1, mx + max(1, (midw - len(l1)) // 2), l1, midw - 2, C["acc"])
+            addclip(cyc + 2, mx + max(1, (midw - len(l2)) // 2), l2, midw - 2, C["acc"])
 
         # ── RECHTS: lifestyle / outbound ──────────────────────────────────
-        # lifestyle = jeder im Graph-Werkzeug angelegte Graph als Sparkline +
-        # letzter Wert (Quelle: store.graphs_snapshot, langsames Polling).
-        life_h = max(4, min(2 + len(gs_cache), body_h - 5)) if gs_cache else 4
+        # lifestyle = ÜBERLAGERUNG aller Graphen in EINEM Gitter. X = Datum
+        # (Zeitstrahl), Y bewusst MEHRDEUTIG — jeder Graph nutzt seine eigene
+        # Achse + Darstellung, alles übereinandergelegt zum Vergleich:
+        #   period → Balken █ über die Zeitspanne (24h-Skala, 00:00 unten)
+        #   time   → Punkt auf der 24h-Skala
+        #   scale  → Punkt auf der eigenen 1–5-Skala
+        #   number → Punkt auf der eigenen min/max-Spanne (sichtbare Werte)
+        # Eigener Marker + Farbe je Graph (+ Legende). Quelle:
+        # store.graphs_snapshot (langsames Hintergrund-Polling).
+        if gs_cache:
+            life_h = min(body_h - 4, max(7, body_h - 8))
+        else:
+            life_h = 4
         out_h = body_h - life_h
         draw_box(top, rx, life_h, rightw, "lifestyle")
+        # Marker + Farb-Palette, je Graph einer (durchgezykelt).
+        LIFE_MARK = "●◆▲■✚◐✦○"
+        LIFE_COL = ["graph", "acc", "warn", "net", "event", "audio", "hook", "num"]
         if gs_cache:
-            inner = life_h - 2
-            for i, g in enumerate(gs_cache[:inner]):
-                yy = top + 1 + i
-                rows = gv_cache.get(g["id"]) or []
-                ser = graph_series(g.get("type"), rows)
-                last = graph_last(g, rows)
-                addclip(yy, rx + 2, g["name"][:10], 10, C["acc"])
-                sw = max(0, rightw - 2 - 11 - len(last) - 2)
-                addclip(yy, rx + 2 + 11, blockspark(ser[-sw:]) if ser else "", sw, C["graph"])
-                safe_addstr(yy, rx + rightw - len(last) - 2, last, C["bright"])
+            plot_x = rx + 2
+            plot_w = max(2, rightw - 4)
+            inner_h = life_h - 2
+            # pro Graph: {datum: roh-eintrag}, Typ, Marker/Farbe. Roh halten,
+            # weil period zwei Werte (start+end) braucht und Zahlen ihre eigene
+            # Spanne über alle sichtbaren Werte ziehen.
+            series = []
+            for i, g in enumerate(gs_cache):
+                if not isinstance(g, dict):
+                    continue
+                rows = gv_cache.get(g.get("id")) or []
+                dv = {}
+                for e in rows if isinstance(rows, list) else []:
+                    if not isinstance(e, dict):
+                        continue
+                    if _num(e.get("value")) is None or not e.get("date"):
+                        continue
+                    dv[e["date"]] = e
+                if dv:
+                    series.append({"name": g.get("name", "?"), "type": g.get("type"),
+                                   "dv": dv, "mk": LIFE_MARK[i % len(LIFE_MARK)],
+                                   "col": LIFE_COL[i % len(LIFE_COL)]})
+            # Legende packen (mehrere pro Zeile), damit klar ist welcher Marker
+            # welcher Graph ist — verbraucht Zeilen, die dem Plot fehlen.
+            leg_lines, cur_w = [[]], 0
+            for s in series:
+                nm = s["name"][:8]
+                tok = s["mk"] + " " + nm
+                if cur_w + len(tok) + 1 > plot_w and leg_lines[-1]:
+                    leg_lines.append([]); cur_w = 0
+                leg_lines[-1].append((s["mk"], nm, s["col"]))
+                cur_w += len(tok) + 1
+            max_leg = min(len(leg_lines), max(1, inner_h - 3))
+            plot_h = max(2, inner_h - max_leg)
+            base = top + 1                         # oberste Plot-Zeile
+
+            def row_clock(m):                      # 24h-Skala: 0 unten, 1440 oben
+                m = max(0, min(1440, m))
+                return base + (plot_h - 1) - int(round(m / 1440.0 * (plot_h - 1)))
+
+            def row_norm(v, lo, hi):               # eigene Spanne: lo unten, hi oben
+                n = 0.5 if hi is None or hi == lo else (float(v) - lo) / (hi - lo)
+                n = max(0.0, min(1.0, n))
+                return base + (plot_h - 1) - int(round(n * (plot_h - 1)))
+
+            if series:
+                # X = FESTES Fenster der letzten 7 Tage (heute rechts, 6 Tage
+                # zurück nach links), über die volle Plotbreite verteilt — egal
+                # wie viel schon gefüllt ist. Tage ohne Eintrag bleiben leer.
+                NDAYS = 7
+                today = date.today()
+                window = [(today - timedelta(days=k)).isoformat()
+                          for k in range(NDAYS - 1, -1, -1)]   # alt → neu
+                col_idx = {d: (plot_w - 1 if NDAYS == 1
+                               else int(round(i / (NDAYS - 1) * (plot_w - 1))))
+                           for i, d in enumerate(window)}
+                cols = window
+                for s in series:
+                    typ, mk, col, dv = s["type"], s["mk"], s["col"], s["dv"]
+                    # eigene min/max-Spanne nur für number (über sichtbare Werte)
+                    lo = hi = None
+                    if typ == "number":
+                        vis = [_num(dv[d].get("value")) for d in cols if d in dv]
+                        vis = [x for x in vis if x is not None]
+                        if vis:
+                            lo, hi = min(vis), max(vis)
+                    for d, e in dv.items():
+                        ci = col_idx.get(d)
+                        if ci is None:
+                            continue
+                        cx = plot_x + ci
+                        v = _num(e.get("value"))
+                        end = _num(e.get("end"))
+                        if typ == "period" and end is not None:
+                            st, en = int(v), int(end)        # Balken über die Spanne
+                            segs = ([(st, en)] if en >= st
+                                    else [(st, 1440), (0, en)])   # Wrap Mitternacht
+                            for a, b in segs:
+                                r0, r1 = sorted((row_clock(a), row_clock(b)))
+                                for r in range(r0, r1 + 1):
+                                    safe_addstr(r, cx, "█", C[col])
+                        elif typ in ("time", "period"):
+                            safe_addstr(row_clock(int(v)), cx, mk, C[col])
+                        elif typ == "scale":
+                            safe_addstr(row_norm(v, 1, 5), cx, mk, C[col])
+                        else:                                     # number
+                            safe_addstr(row_norm(v, lo, hi), cx, mk, C[col])
+                # Legende unter den Plot
+                for li, line in enumerate(leg_lines[:max_leg]):
+                    yy = base + plot_h + li
+                    cx = plot_x
+                    for mk, nm, col in line:
+                        safe_addstr(yy, cx, mk, C[col])
+                        addclip(yy, cx + 2, nm, plot_w - (cx - plot_x) - 2, C["dim"])
+                        cx += 2 + len(nm) + 1
+            else:
+                safe_addstr(top + 1, rx + 2, "// noch keine werte", C["faint"])
         else:
             safe_addstr(top + 1, rx + 2, "// noch keine graphen (g)", C["faint"])
         oy = top + life_h
@@ -979,6 +1324,8 @@ def run_ui(stdscr, store):
         if nets:
             inner = out_h - 2
             for i, e in enumerate(nets[-inner:]):
+                if not isinstance(e, dict):
+                    continue
                 yy = oy + 1 + i
                 t = (e.get("time") or "")[:8]
                 safe_addstr(yy, rx + 2, t, C["faint"])
@@ -1026,15 +1373,36 @@ def run_ui(stdscr, store):
         # ── Footer (Tasten + Theme + Backend) ─────────────────────────────
         tm_txt = "auto(%s)" % cur_theme if theme_mode == "auto" else cur_theme
         addclip(footer_row, 0,
-                " q quit · t theme: %s · g graph · / befehle · %s" % (tm_txt, BASE_URL),
+                " q quit · t theme: %s · g graph · m karte · / befehle · %s" % (tm_txt, BASE_URL),
                 W - 1, C["faint"])
 
         stdscr.refresh()
 
 
+# Default-Pfad bleibt fix (start_tui.sh liest genau diesen); per Env überstimmbar,
+# damit z.B. die Fuzz-Tests pro Session ein eigenes, isoliertes Log bekommen.
+CRASH_LOG = os.environ.get("ZENTRALE_TUI_CRASH_LOG") or "/tmp/zentrale-tui-crash.log"
+
+
 def main():
     if "--selftest" in sys.argv:
         sys.exit(selftest())
+
+    # Ohne echtes Terminal kann curses nicht initialisieren (und segfaultet im
+    # schlimmsten Fall beim Aufräumen). Lieber früh mit klarer Ansage + Code 2
+    # raus, statt kryptisch zu sterben. Headless prüfen geht über --selftest.
+    if not sys.stdout.isatty():
+        sys.stderr.write("ZENTRALE-TUI braucht ein echtes Terminal (TTY).\n"
+                         "Headless-Check stattdessen:  zentrale_tui.py --selftest\n")
+        sys.exit(2)
+
+    # Altes Crash-Log wegräumen, damit ein später angezeigtes Log GARANTIERT
+    # aus DIESEM Lauf stammt (sonst zeigt das Start-Skript evtl. einen alten
+    # Absturz an und schickt die Diagnose in die Irre).
+    try:
+        os.remove(CRASH_LOG)
+    except OSError:
+        pass
 
     # UTF-8-Locale, damit curses die Box-/Block-Zeichen (┌ █ ░ ✓ ·) korrekt
     # rendert statt als Müll. Muss VOR dem curses-Init stehen.
@@ -1042,11 +1410,60 @@ def main():
     locale.setlocale(locale.LC_ALL, "")
 
     import curses
+    import traceback
     store = Store()
     poller = threading.Thread(target=store.run, daemon=True)
     poller.start()
+
+    # ── Sicherheitsnetz: die TUI darf NIEMALS an einer einzelnen Exception
+    # sterben. ──────────────────────────────────────────────────────────────
+    # curses.wrapper läuft in einer Retry-Schleife: wirft run_ui (z.B. weil das
+    # Backend mal kurz kaputte/unerwartete Daten liefert), setzt sich die TUI
+    # einfach neu auf und läuft weiter — der Nutzer sieht höchstens ein kurzes
+    # Flackern statt eines Absturzes. Nur DAUERFEUER (viele Crashes in kurzer
+    # Zeit → dauerhaft defekter Zustand) bricht hart ab, statt ewig zu zappeln.
+    # ZENTRALE_TUI_FRAME_ERR_LOG (optional) sammelt jeden abgefangenen Traceback
+    # zum Nachsehen, ohne dass er die Sitzung killt (von den Fuzz-Tests genutzt).
+    frame_err_log = os.environ.get("ZENTRALE_TUI_FRAME_ERR_LOG")
+    recent = []                       # monotone Zeitstempel der letzten Recoveries
     try:
-        curses.wrapper(run_ui, store)
+        while True:
+            try:
+                curses.wrapper(run_ui, store)
+                break                 # sauberer Quit (q / Befehl /quit)
+            except KeyboardInterrupt:
+                # Ctrl-C = gewollter Quit (wie 'q'). Sauberer Exit (rc 0), damit
+                # das Start-Skript die tmux-Session SOFORT abräumt statt mit
+                # "kein sauberer Quit" auf einen Tastendruck zu warten.
+                break
+            except Exception:
+                tb = traceback.format_exc()
+                if frame_err_log:
+                    try:
+                        with open(frame_err_log, "a", encoding="utf-8") as f:
+                            f.write(tb + "\n--- recover ---\n")
+                    except OSError:
+                        pass
+                now = time.monotonic()
+                recent.append(now)
+                recent[:] = [t for t in recent if now - t < 10.0]
+                if len(recent) > 25:          # >25 Crashes in 10 s → echtes Dauerproblem
+                    raise
+                # sonst: transienter Fehler → run_ui neu starten, TUI lebt weiter
+    except Exception:
+        # Endgültig (über dem Raten-Limit): curses.wrapper hat das Terminal schon
+        # zurückgesetzt; Traceback in eine Datei UND nach stderr. Exit-Code 1
+        # signalisiert dem Start-Skript "kein sauberer Quit" (siehe start_tui.sh).
+        tb = traceback.format_exc()
+        try:
+            with open(CRASH_LOG, "w", encoding="utf-8") as f:
+                f.write("ZENTRALE-TUI Crash (Backend: %s)\n\n%s" % (BASE_URL, tb))
+        except OSError:
+            pass
+        sys.stderr.write("\nZENTRALE-TUI abgestürzt:\n%s\n(gespeichert in %s)\n"
+                         % (tb, CRASH_LOG))
+        store.stop()
+        sys.exit(1)
     finally:
         store.stop()
 
