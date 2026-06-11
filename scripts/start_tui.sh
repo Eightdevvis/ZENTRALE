@@ -135,6 +135,19 @@ SAVED=""
 [[ -n "$SAVED" && "$SAVED" -lt 3 ]] && SAVED=3
 TERM_LINES="${ZENTRALE_TERM_LINES:-${SAVED:-6}}"   # Höhe der unteren echten bash
 
+# Beim BOOTEN nie so hoch, dass dem TUI (Pane 0) zu wenig bleibt. Hat man die
+# bash mal fast über den ganzen Schirm gezogen (TUI auf 1 Zeile), würde sonst
+# genau dieser Riesenwert wiederhergestellt → TUI rendert "Terminal zu klein".
+# Obergrenze: echte Terminalhöhe minus TUI-Mindesthöhe (14) minus Split-Trenner.
+# (Live hochziehen bleibt erlaubt — das hier betrifft nur den Start.)
+TUI_MIN_LINES=14
+TERM_TOTAL="$(tput lines 2>/dev/null || true)"
+if [[ "$TERM_TOTAL" =~ ^[0-9]+$ ]]; then
+  MAX_BASH=$(( TERM_TOTAL - TUI_MIN_LINES - 1 ))
+  (( MAX_BASH < 1 )) && MAX_BASH=1          # Mini-Terminal: bash 1 Zeile, TUI kriegt den Rest
+  (( TERM_LINES > MAX_BASH )) && TERM_LINES="$MAX_BASH"
+fi
+
 # ── Ist :5000 schon belegt? KLARE Ansage statt stillem Zweit-Backend ─────
 # Hierher kommen wir nur, wenn KEINE 'zentrale-tui'-Session läuft (sonst oben
 # attached). Antwortet trotzdem etwas auf :5000, ist es ein verwaistes oder
