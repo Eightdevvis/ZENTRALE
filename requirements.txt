@@ -27,3 +27,15 @@ requests
 
 # Recurrence-Rules (iCal RRULE) für Routinen im Kalender-System
 python-dateutil
+
+# Natives Karten-Fenster (Maps-System): scripts/map_window.py rendert die Karte
+# als zweites X11-Fenster mit echter antialiased Vektorgrafik (aus der TUI per
+# 'w' aufklappbar). Nur dafür nötig — TUI/Backend laufen ohne. ~15 MB Wheel.
+# numpy: vektorisierte Projektion der LOD-Geometrie (10m = >500k Punkte) — ohne
+# das wären feine Zoomstufen sekundenlang pro Frame. Auch nur fürs Fenster.
+pygame
+numpy
+
+# Verschlüsselter Zugangsdaten-Speicher fürs Mail-System (core/mail_secrets.py).
+# Fernet/AES für data/mail_secrets.enc, entsperrt per Passphrase ZENTRALE_MAIL_KEY.
+cryptography

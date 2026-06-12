@@ -82,6 +82,29 @@ Workflow-Regeln, die nicht aus dem Code allein hervorgehen.
   pushen. Code-only-Commits ohne RELEASE-Bump bleiben auf dem Pi
   unsichtbar bis zum nächsten Bump. Details: `deployment.md`.
 
+### Kassetten-Prinzip: geteilte Logik, pro Front gerendert
+
+Generelles Bau-Prinzip für **jedes** neue Feature, das in mehreren Fronten
+(monolith / laptop / tui) erscheinen soll — nicht nur für die Map:
+
+- **Logik einmal, front-agnostisch** in `core/` (kein curses, kein HTML, kein
+  SVG dort). Die Front-spezifischen Renderer bleiben **bewusst dumm**: sie
+  holen fertige Daten über einen `/api/...`-Kontrakt und *zeichnen nur*.
+- **Ein HTTP-Kontrakt für alle Fronten.** Eine neue Front = nur ein neuer
+  Zeichner gegen denselben Endpoint, keine Logik-Duplikation.
+- **Zuerst in der TUI bauen & testen, später nachziehen.** Die TUI ist der
+  schnellste, schlankeste Front (stdlib-only, kein Browser, `--selftest` ohne
+  TTY). Was dort gegen `core/` + `/api/` läuft, ist die Logik bewiesen; Laptop
+  und Monolith bekommen danach nur ihren eigenen Renderer.
+- **Backend bleibt zustandslos** (Polling-Modell): View-/UI-State lebt pro
+  Front im Client, das Backend beantwortet nur Anfragen.
+
+Gelebte Vorbilder: das **Graph-Werkzeug** (`core/graphs.py` + `/api/graphs`,
+dreifach gerendert) und das geplante **Maps-System** (`memory/maps_system.md`,
+`core/map/` + `/api/map`). Wer ein Feature „nur schnell ins Monolith-HTML"
+baut, das später überall hin soll, verletzt dieses Prinzip — Logik gehört nach
+`core/`, nicht ins Template.
+
 ## Workflow-Regeln (gelten für Claude beim Mitarbeiten)
 
 ### Code-Änderungen

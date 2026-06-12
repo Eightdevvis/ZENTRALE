@@ -38,6 +38,7 @@ import kalender              # Kalender-Layer (Termine, Routinen, erlebt)
 import ascii_lib             # ASCII-Bibliothek (KI "spricht" visuell, siehe zeige_ascii)
 import web                   # Internet-Pipe: Web-Suche + Webseite holen (gegatet)
 import news                  # Persönliche Tagesschau: News-Briefing (lies_news)
+import mail                  # Mail-Triage: Überblick + Review-Stapel (lies_mail)
 
 OLLAMA_URL   = os.environ.get("OLLAMA_URL",   "http://localhost:11434")
 # Default-Modell seit 2026-06-06: qwen3.5:9b. Reasoning-Bench (scripts/
@@ -364,7 +365,8 @@ _CAPABILITIES_PROMPT = """## Meta-Regeln
 5. Antworte auf Deutsch (Englisch wenn der User Englisch tippt).
 6. Nur reale Wörter, keine Neuschöpfungen.
 7. Eigene Vorantwort ist kein Beweis: vertrau bei Termin- und Faktenfragen nie blind deiner früheren Antwort im Verlauf. Hakt der User nach oder bist du unsicher, ruf das Tool ERNEUT statt die alte Aussage zu verteidigen. Ein zugegebener, korrigierter Fehler ist besser als ein hartnäckig verteidigter. Manche Menschen reflektieren und erkennen ihre Fehler, manche nicht, dies ist mit der entscheidenste Unterschied zwischen einem intelligenten Menschen und einem dummen Menschen.
-8. Aktuelles Weltgeschehen kennst du NICHT aus dir selbst – dein Trainingswissen ist veraltet und fürs Tagesgeschehen unzuverlässig. Fragt Sasha nach Nachrichten, Weltlage, Politik oder „was ist los": ruf IMMER das Tool lies_news (die Tagessendung; für „was war diese Woche" / „seit ich weg war" mit tage=7) und gib wieder, was es liefert. Erfinde NIEMALS Nachrichten oder aktuelle Ereignisse aus dem Gedächtnis – im Zweifel das Tool rufen, nicht raten."""
+8. Aktuelles Weltgeschehen kennst du NICHT aus dir selbst – dein Trainingswissen ist veraltet und fürs Tagesgeschehen unzuverlässig. Fragt Sasha nach Nachrichten, Weltlage, Politik oder „was ist los": ruf IMMER das Tool lies_news (die Tagessendung; für „was war diese Woche" / „seit ich weg war" mit tage=7) und gib wieder, was es liefert. Erfinde NIEMALS Nachrichten oder aktuelle Ereignisse aus dem Gedächtnis – im Zweifel das Tool rufen, nicht raten.
+9. Mail kennst du NICHT aus dir selbst. Fragt Sasha nach seinen Mails, dem Posteingang, „was liegt an", „muss ich was angucken" oder dem Sortier-/Review-Stand: ruf das Tool lies_mail (modus='review' wenn er gezielt den Stapel unbekannter Absender will) und gib wieder, was es liefert. Erfinde NIEMALS Absender, Betreffzeilen oder Zähler – nur was das Tool liefert."""
 # EXPERIMENT 2026-06-06: Die harte CJK-Sperre in Regel 5 ("Nur lateinische
 # Schrift ... Keine CJK-Zeichen") ist RAUS - Test, ob qwen3.5:9b von allein
 # nicht mehr ins Chinesische blutet (war ein qwen2.5-Problem bei num_ctx-
@@ -675,6 +677,31 @@ TOOLS = [
                     "tage": {
                         "type":        "integer",
                         "description": "Rückblick-Fenster in Tagen. 0/weglassen = aktuelle Sendung, 7 = Wochenrückblick.",
+                    },
+                },
+            },
+        },
+    },
+    # Liest NUR den lokalen Triage-Stand (core/mail.py) — kein IMAP, kein Netz,
+    # nichts wird verschoben. Read-only + lokal -> kein Permission-Gate.
+    {
+        "type": "function",
+        "function": {
+            "name": "lies_mail",
+            "description": (
+                "Liefert den Stand der Mail-Triage: wie viele Mails je Kategorie "
+                "einsortiert wurden und welche unbekannten Absender noch auf eine "
+                "Zuordnung warten (der 'sasha muss gucken'-Stapel). Zwei Modi über "
+                "'modus': ohne modus (oder '') = Überblick mit Zählern + Review-"
+                "Stapel; modus='review' = nur der Review-Stapel, ausführlicher. "
+                "Nur lesen — sortiert oder löscht nichts."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "modus": {
+                        "type":        "string",
+                        "description": "'' = Überblick (Default), 'review' = nur der Stapel unbekannter Absender.",
                     },
                 },
             },
@@ -1086,6 +1113,8 @@ def _dispatch_tool(name: str, args: dict) -> str:
         return web.hole(args.get("url", ""))
     elif name == "lies_news":
         return news.lies(args.get("tage", 0))
+    elif name == "lies_mail":
+        return mail.lies(args.get("modus", ""))
     else:
         return f"[Unbekanntes Tool: {name}]"
 

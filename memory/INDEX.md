@@ -20,6 +20,10 @@ hier sofort mitziehen, sonst tote Links.
 | KI-System (Ollama, Graph-Memory)   | memory/ki_system.md                 |
 | Kalender-System (Layer, Termine)   | memory/kalender_system.md           |
 | News-System (Tagesschau, Briefing) | memory/news_system.md               |
+| Mail-System (IMAP-Triage, Keymap)  | memory/mail_system.md               |
+| Maps-System (Layer-Karte, 3 Achsen)| memory/maps_system.md               |
+| Maps Design-Brief (Look-Handoff)   | memory/maps_design_brief.md         |
+| Maps Quellen-Charta (Layer→Quelle) | memory/maps_quellen.md              |
 | Memory-Plan v2 (Historie, A–G)     | memory/ki_memory_plan.md            |
 | Personality-Plan (Fine-Tuning)     | memory/ki_personality_plan.md       |
 | Grounding-Recherche (nicht raten)  | memory/grounding_recherche.md       |

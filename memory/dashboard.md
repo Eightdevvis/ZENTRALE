@@ -107,8 +107,10 @@ unit-testbar. Im Normal-Modus (Zeile zu) wirken `q`/`t` weiter als Shortcuts.
 **Graph-Werkzeug (Mitte, Taste `g`):** dieselbe geteilte Logik wie im Monolith
 (`core/graphs.py` + `/api/graphs`), hier in curses verbaut. `g` gibt der
 MITTE-Box den Fokus; ein kleines Zustandsmodell `G` (`view`: `list`/`new`/`view`)
-steuert die Bedienung: in **list** mit ↑/↓ wählen, `n` neu, `d` löschen,
-Enter öffnet; in **new** Name tippen, `Tab` zykliert den **Typ** (s.u.),
+steuert die Bedienung: in **list** mit ↑/↓ wählen, `n` neu, `d` löschen
+(öffnet einen **Mini-Bestätigungsdialog** über der Liste: `j`/Enter löscht,
+jede andere Taste bricht ab — `G["confirm"]`), Enter öffnet; in **new** Name
+tippen, `Tab` zykliert den **Typ** (s.u.),
 Enter legt an (`POST /api/graphs`); in **view** trägt man Werte für *heute* ein,
 gespeichert über `/api/log` — dieselbe Route wie die Data-Collection.
 
@@ -122,17 +124,54 @@ Vier **Graph-Typen** (`GRAPH_TYPES`, Validierung in `core/graphs.py`):
   `end`=End-Minute. `end < value` = über Mitternacht.
 
 `time`/`period` werden als **24h-Gitter** gezeichnet (`draw_time_plot`):
-X = letzte Einträge (Datum), Y = Uhrzeit (00:00 oben … 24:00 unten, Stunden-
-Marken), `time` → Punkt `●`, `period` → Balken `█` (über Mitternacht in zwei
-Segmente gesplittet, da die Achse an Mitternacht verankert ist). Formatierung
-über `fmt_clock` / `graph_last`; die Sparkline-Reihe liefert `graph_series`
-(`period` → Dauer via `period_duration`).
+X = letzte Einträge (Datum), Y = Uhrzeit (00:00 **unten** … 24:00 **oben**,
+Stunden-Marken), `time` → Punkt `●`, `period` → Balken `█` (über Mitternacht in
+zwei Segmente gesplittet via `fill()`, da die Achse an Mitternacht verankert
+ist — orientierungs-unabhängig). Formatierung über `fmt_clock` / `graph_last`;
+die Sparkline-Reihe liefert `graph_series` (`period` → Dauer via
+`period_duration`).
 
-Werte/Definitionen holt das Werkzeug synchron per `api_call()` (POST/DELETE),
-die `lifestyle`-Box rechts zeigt jeden Graphen als `blockspark`-Sparkline +
-letzten Wert (type-gerecht via `graph_last`/`graph_series`) aus dem langsamen
-Hintergrund-Polling (`Store._poll_graphs`, alle 5 s). `Esc`/`g` schließt das
-Werkzeug wieder. `--selftest` listet die Graphen inkl. Typ/Sparkline (ohne TTY).
+Werte/Definitionen holt das Werkzeug synchron per `api_call()` (POST/DELETE).
+Die `lifestyle`-Box rechts zeigt **alle Graphen überlagert** in EINEM Gitter:
+X = **festes Fenster der letzten 7 Tage** (heute rechts, 6 Tage zurück nach
+links, über die volle Breite verteilt — egal wie viel gefüllt ist; leere Tage
+bleiben leer), Y **bewusst mehrdeutig** — jeder Graph nutzt seine *eigene*
+Achse + Darstellung, alles übereinandergelegt zum Vergleich. Gezeichnet als
+**dünne Linien**, je Graph in einer eigenen **Farbe** (Unterscheidung über die
+Farbe, nicht über fette Symbole):
+- `period` → dünne **vertikale** Linie `│` über die Zeitspanne (24h-Skala,
+  00:00 unten; Wrap über Mitternacht in zwei Segmente),
+- `time` → Punkt auf der 24h-Skala,
+- `scale` → Punkt auf der eigenen 1–5-Skala,
+- `number` → Punkt auf der eigenen min/max-Spanne (über die sichtbaren Werte).
+
+Die Punkt-Typen (`time`/`scale`/`number`) werden über die Tage zu einer
+**Liniengrafik verbunden** (Steigung → `╱` steigt, `╲` fällt, `─` flach,
+`│` senkrecht; einzelner Punkt → `·`). Farb-Palette `LIFE_COL` (durchgezykelt),
+darunter eine gepackte Legende (farbiges `─`-Sample → Name). Es geht um Verlauf
+& Gleichzeitigkeit, nicht um absolute Werte (`row_clock`/`row_norm`). Quelle ist
+das langsame Hintergrund-Polling (`Store._poll_graphs`, alle 5 s). `Esc`/`g`
+schließt das Werkzeug wieder. `--selftest` listet die Graphen inkl.
+Typ/Sparkline (ohne TTY).
+
+**Karte (Mitte, Taste `m`):** Maps-System Schritt 1 — grobe Weltkarte (Küsten
+1:110m) in der MITTE-Box, analog zum Graph-Werkzeug. Die TUI ist reiner
+Zeichner: holt fertig projizierte Linien über `/api/map/base` (Engine in
+`core/map/`) und rastert sie per Bresenham. Steuerung `↑↓←→`/`hjkl` pan,
+`+`/`−` zoom, `0` reset, `esc`/`m` zu. **`f`** schaltet den Stil um: `outline`
+(Küsten-Bresenham `▓`) ↔ `braille` (gefülltes Land in Braille-Punkten, 2×4
+Subpixel/Zelle — Endpoint `/api/map/braille`, gerendert in
+`core/map/render.py:base_braille`; die TUI druckt nur die fertigen Zeilen). **`o`**
+schaltet das **Handelsrouten-Overlay** (Achse 2) ein/aus: leuchtende
+`◆`-Marker an den maritimen Engstellen + Detail (Name/heutiger Verkehr) der dem
+Fadenkreuz nächsten Stelle, samt Datenstand. Quelle: IMF PortWatch über
+`/api/map/layer/trade` (Provenienz/Lizenz: [maps_quellen.md](maps_quellen.md)).
+Mit **`w`** klappt die Karte im
+**nativen pygame-Fenster** auf (`scripts/map_window.py`, echte antialiased
+Vektorgrafik, gleicher Viewport — wie `/slide` PDFs extern öffnet; dort Taste
+**`t`** fürs selbe Overlay als Bernstein-Marker); der
+ASCII-Grid in der TUI ist nur die reduzierte Variante. Architektur + die drei
+Achsen (Detail/Layer/Zeit): [maps_system.md](maps_system.md).
 
 - **Nur stdlib:** `curses` + `urllib` + `json` + `threading` — null Extra-Deps.
   Setzt UTF-8-Locale vor curses-Init (für Box-/Block-Zeichen).

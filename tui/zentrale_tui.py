@@ -394,7 +394,7 @@ TUI_KEYS = [
     ("q",   "beenden"),
     ("t",   "Theme wechseln (auto/hell/dunkel)"),
     ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen"),
-    ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · w=Fenster"),
+    ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · f=Stil · o=Handelsrouten · w=Fenster"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
@@ -575,16 +575,27 @@ def run_ui(stdscr, store):
     #   data   : letzte /api/map/base-Antwort (None ⇒ beim nächsten Zeichnen neu holen)
     #   grid   : (cols,rows), für die data geholt wurde — bei Resize neu holen
     M = {"active": False, "cx": 0.0, "cy": 20.0, "zoom": 0.0,
-         "data": None, "grid": None, "msg": "", "proc": None}
+         "data": None, "grid": None, "msg": "", "proc": None,
+         "style": "braille",    # STANDARD: gefülltes Land in Braille-Punkten
+                                # ('f' schaltet auf 'outline' = Küsten-Bresenham)
+         "overlay": False,      # Handelsrouten-Overlay (Achse 2) ein/aus
+         "odata": None,         # letzte /api/map/layer/trade-Antwort (None ⇒ neu holen)
+         "ogrid": None}         # (cols,rows), für die odata geholt wurde
     MAP_COAST = "▓"          # Küsten-/Land-Kantenglyph (gedämpft, kein Vollblock)
+    MAP_CHOKE = "◆"          # Chokepoint-Marker (Handelsrouten-Overlay)
 
     def m_fetch(cols, rows):
-        """Basiskarte fürs aktuelle Viewport+Raster synchron holen (localhost,
-        wenige ms — wie das Graph-Werkzeug bei Benutzeraktionen). aspect=0.5,
-        weil ein Terminalzeichen ~doppelt so hoch wie breit ist."""
+        """Karte fürs aktuelle Viewport+Raster synchron holen (localhost, wenige
+        ms — wie das Graph-Werkzeug bei Benutzeraktionen). Je nach Stil entweder
+        Küsten-Linien (/api/map/base, aspect=0.5 weil ein Zeichen ~2:1 ist) oder
+        die gefüllte Braille-Karte (/api/map/braille). Beides liefert core/map/."""
         try:
-            q = ("/api/map/base?cx=%.5f&cy=%.5f&zoom=%.2f&cols=%d&rows=%d&aspect=0.5"
-                 % (M["cx"], M["cy"], M["zoom"], cols, rows))
+            if M["style"] == "braille":
+                q = ("/api/map/braille?cx=%.5f&cy=%.5f&zoom=%.2f&cols=%d&rows=%d"
+                     % (M["cx"], M["cy"], M["zoom"], cols, rows))
+            else:
+                q = ("/api/map/base?cx=%.5f&cy=%.5f&zoom=%.2f&cols=%d&rows=%d&aspect=0.5"
+                     % (M["cx"], M["cy"], M["zoom"], cols, rows))
             M["data"] = api_call(q, timeout=2.0)
             M["grid"] = (cols, rows)
             M["msg"] = ""
@@ -597,6 +608,18 @@ def run_ui(stdscr, store):
             M["grid"] = (cols, rows)
             M["msg"] = "karte: backend?"
 
+    def m_fetch_overlay(cols, rows):
+        """Handelsrouten-Overlay (Sub-Layer Chokepoints) fürs aktuelle Viewport
+        holen — projizierte Marker + Provenienz von /api/map/layer/trade. Wie
+        m_fetch synchron; Fehler-Marker statt Dauer-Refetch bei totem Backend."""
+        try:
+            q = ("/api/map/layer/trade?sub=chokepoints"
+                 "&cx=%.5f&cy=%.5f&zoom=%.2f&cols=%d&rows=%d&aspect=0.5"
+                 % (M["cx"], M["cy"], M["zoom"], cols, rows))
+            M["odata"] = api_call(q, timeout=2.0) or {"failed": True}
+        except Exception:
+            M["odata"] = {"failed": True}
+
     def m_pan(fx, fy):
         """Mittelpunkt um einen Bruchteil der sichtbaren Spanne verschieben.
         Spanne kommt aus den zuletzt gelieferten bounds [w,s,e,n] — so braucht
@@ -608,10 +631,12 @@ def run_ui(stdscr, store):
         M["cx"] = max(-180.0, min(180.0, M["cx"] + fx * (e - w)))
         M["cy"] = max(-85.0, min(85.0, M["cy"] + fy * (n - s)))
         M["data"] = None
+        M["odata"] = None        # Overlay-Marker mit-neu projizieren
 
     def m_zoom(dz):
         M["zoom"] = max(0.0, min(8.0, M["zoom"] + dz))
         M["data"] = None
+        M["odata"] = None
 
     def m_window():
         """Die Karte im NATIVEN Fenster aufklappen (pygame, scripts/map_window.py)
@@ -867,9 +892,9 @@ def run_ui(stdscr, store):
 
     def draw_map(by, bx, bh, bw):
         """Inhalt der MITTE-Box, wenn die Karte Fokus hat. Holt bei Bedarf
-        frische Linien (Resize/Pan/Zoom) und zeichnet sie per Bresenham. Die
-        Zellkoordinaten kommen schon fertig projiziert vom Backend — hier wird
-        nur noch gerastert und geclippt."""
+        frische Daten (Resize/Pan/Zoom). Zwei Stile (Taste 'f'): 'outline' rastert
+        die Küsten-Linien per Bresenham, 'braille' druckt die fertig gefüllte
+        Braille-Karte zeilenweise. Beides kommt fertig projiziert vom Backend."""
         iw, ih = bw - 2, bh - 2
         if iw < 4 or ih < 3:
             return
@@ -879,39 +904,76 @@ def run_ui(stdscr, store):
             m_fetch(iw, map_ih)
         d = M["data"]
         ox, oy = bx + 1, by + 1
-        if not d or d.get("failed") or "lines" not in d:
+        if not d or d.get("failed") or not (d.get("lines") or d.get("braille")):
             addclip(by + 1, ox, M["msg"] or "lade karte…", iw, C["faint"])
             return
 
-        def plot(c, r):
-            if 0 <= c < iw and 0 <= r < map_ih:
-                safe_addstr(oy + r, ox + c, MAP_COAST, C["acc"])
+        if M["style"] == "braille" and d.get("braille"):
+            # Gefülltes Land als fertige Braille-Zeilen — die TUI druckt nur.
+            for r, row in enumerate(d["braille"][:map_ih]):
+                addclip(oy + r, ox, row, iw, C["acc"])
+        else:
+            def plot(c, r):
+                if 0 <= c < iw and 0 <= r < map_ih:
+                    safe_addstr(oy + r, ox + c, MAP_COAST, C["acc"])
 
-        for line in d["lines"]:
-            for i in range(len(line) - 1):
-                x0, y0 = int(round(line[i][0])), int(round(line[i][1]))
-                x1, y1 = int(round(line[i + 1][0])), int(round(line[i + 1][1]))
-                dx, dy = abs(x1 - x0), abs(y1 - y0)
-                stepx = 1 if x0 < x1 else -1
-                stepy = 1 if y0 < y1 else -1
-                err = dx - dy
-                while True:
-                    plot(x0, y0)
-                    if x0 == x1 and y0 == y1:
-                        break
-                    e2 = 2 * err
-                    if e2 > -dy:
-                        err -= dy; x0 += stepx
-                    if e2 < dx:
-                        err += dx; y0 += stepy
+            for line in d.get("lines", []):
+                for i in range(len(line) - 1):
+                    x0, y0 = int(round(line[i][0])), int(round(line[i][1]))
+                    x1, y1 = int(round(line[i + 1][0])), int(round(line[i + 1][1]))
+                    dx, dy = abs(x1 - x0), abs(y1 - y0)
+                    stepx = 1 if x0 < x1 else -1
+                    stepy = 1 if y0 < y1 else -1
+                    err = dx - dy
+                    while True:
+                        plot(x0, y0)
+                        if x0 == x1 and y0 == y1:
+                            break
+                        e2 = 2 * err
+                        if e2 > -dy:
+                            err -= dy; x0 += stepx
+                        if e2 < dx:
+                            err += dx; y0 += stepy
 
-        # Fadenkreuz in der Mitte (Orientierung, wo cx/cy liegt).
+        # Handelsrouten-Overlay (Achse 2, Sub-Layer Chokepoints): leuchtende
+        # Marker an den Engstellen + Detail der dem Fadenkreuz nächsten Stelle.
+        focus = None        # (name, today-total, top-industrie) nahe der Mitte
+        ovintage = None
+        if M["overlay"]:
+            if (not M["odata"]) or M["ogrid"] != (iw, map_ih):
+                m_fetch_overlay(iw, map_ih); M["ogrid"] = (iw, map_ih)
+            od = M["odata"]
+            if od and not od.get("failed"):
+                ovintage = od.get("vintage")
+                ccol, crow = iw / 2.0, map_ih / 2.0
+                best = None
+                for p in od.get("points", []):
+                    c, r = int(round(p["col"])), int(round(p["row"]))
+                    if 0 <= c < iw and 0 <= r < map_ih:
+                        safe_addstr(oy + r, ox + c, MAP_CHOKE, C["warn"])
+                    dist = (p["col"] - ccol) ** 2 + (p["row"] - crow) ** 2
+                    if best is None or dist < best[0]:
+                        best = (dist, p)
+                if best is not None:
+                    p = best[1]
+                    ind = (p.get("industries") or [None])[0]
+                    focus = (p["name"], p.get("value"), ind)
+
+        # Fadenkreuz in der Mitte (Orientierung, wo cx/cy liegt). NACH den Markern,
+        # damit es obenauf bleibt.
         safe_addstr(oy + map_ih // 2, ox + iw // 2, "+", C["warn"])
 
         # Status-/Hilfezeile unten in der Box: Position, Zoom, Steuerung.
-        info = "lon %+.1f lat %+.1f · z%g" % (M["cx"], M["cy"], M["zoom"])
+        info = "lon %+.1f lat %+.1f · z%g · %s" % (
+            M["cx"], M["cy"], M["zoom"], M["style"])
+        if M["overlay"]:
+            if focus:
+                nm, val, _ind = focus
+                info += " · ◆%s %s" % (nm, "—" if val is None else val)
+            else:
+                info += " · ◆Handel %s" % (ovintage or "?")
         addclip(by + bh - 2, ox, info, iw, C["bright"])
-        hint = "↑↓←→ pan · +/− zoom · 0 reset · w=fenster · esc zu"
+        hint = "↑↓←→ +/− 0·f·o·w·esc"
         if M["msg"]:
             hint = M["msg"]
         addclip(by + bh - 2, ox + iw - len(hint), hint, len(hint), C["faint"])
@@ -1069,6 +1131,12 @@ def run_ui(stdscr, store):
                 m_zoom(-1.0)
             elif ch == ord("0"):               # zurück zur ganzen Welt
                 M["cx"], M["cy"], M["zoom"], M["data"] = 0.0, 20.0, 0.0, None
+            elif ch in (ord("f"), ord("F")):   # Stil: Umriss ↔ Braille-Füllung
+                M["style"] = "braille" if M["style"] == "outline" else "outline"
+                M["data"] = None               # Neuladen mit neuem Endpoint
+            elif ch in (ord("o"), ord("O")):   # Handelsrouten-Overlay ein/aus
+                M["overlay"] = not M["overlay"]
+                M["odata"] = None              # beim Einschalten frisch holen
             elif ch in (ord("w"), ord("W"), 10, 13, curses.KEY_ENTER):
                 m_window()                     # natives Fenster aufklappen
             elif ch in (ord("t"), ord("T")):   # Theme darf auch hier zyklieren
@@ -1216,16 +1284,16 @@ def run_ui(stdscr, store):
             life_h = 4
         out_h = body_h - life_h
         draw_box(top, rx, life_h, rightw, "lifestyle")
-        # Marker + Farb-Palette, je Graph einer (durchgezykelt).
-        LIFE_MARK = "●◆▲■✚◐✦○"
+        # Farb-Palette, je Graph eine (durchgezykelt). Unterschieden wird über
+        # die FARBE, nicht über fette Symbole — gezeichnet als dünne Linien.
         LIFE_COL = ["graph", "acc", "warn", "net", "event", "audio", "hook", "num"]
         if gs_cache:
             plot_x = rx + 2
             plot_w = max(2, rightw - 4)
             inner_h = life_h - 2
-            # pro Graph: {datum: roh-eintrag}, Typ, Marker/Farbe. Roh halten,
-            # weil period zwei Werte (start+end) braucht und Zahlen ihre eigene
-            # Spanne über alle sichtbaren Werte ziehen.
+            # pro Graph: {datum: roh-eintrag}, Typ, Farbe. Roh halten, weil period
+            # zwei Werte (start+end) braucht und Zahlen ihre eigene Spanne über
+            # alle sichtbaren Werte ziehen.
             series = []
             for i, g in enumerate(gs_cache):
                 if not isinstance(g, dict):
@@ -1240,17 +1308,16 @@ def run_ui(stdscr, store):
                     dv[e["date"]] = e
                 if dv:
                     series.append({"name": g.get("name", "?"), "type": g.get("type"),
-                                   "dv": dv, "mk": LIFE_MARK[i % len(LIFE_MARK)],
-                                   "col": LIFE_COL[i % len(LIFE_COL)]})
-            # Legende packen (mehrere pro Zeile), damit klar ist welcher Marker
-            # welcher Graph ist — verbraucht Zeilen, die dem Plot fehlen.
+                                   "dv": dv, "col": LIFE_COL[i % len(LIFE_COL)]})
+            # Legende packen (mehrere pro Zeile): farbiges Linien-Sample + Name —
+            # verbraucht Zeilen, die dem Plot fehlen.
             leg_lines, cur_w = [[]], 0
             for s in series:
                 nm = s["name"][:8]
-                tok = s["mk"] + " " + nm
+                tok = "─ " + nm
                 if cur_w + len(tok) + 1 > plot_w and leg_lines[-1]:
                     leg_lines.append([]); cur_w = 0
-                leg_lines[-1].append((s["mk"], nm, s["col"]))
+                leg_lines[-1].append((nm, s["col"]))
                 cur_w += len(tok) + 1
             max_leg = min(len(leg_lines), max(1, inner_h - 3))
             plot_h = max(2, inner_h - max_leg)
@@ -1278,7 +1345,7 @@ def run_ui(stdscr, store):
                            for i, d in enumerate(window)}
                 cols = window
                 for s in series:
-                    typ, mk, col, dv = s["type"], s["mk"], s["col"], s["dv"]
+                    typ, col, dv = s["type"], s["col"], s["dv"]
                     # eigene min/max-Spanne nur für number (über sichtbare Werte)
                     lo = hi = None
                     if typ == "number":
@@ -1286,6 +1353,7 @@ def run_ui(stdscr, store):
                         vis = [x for x in vis if x is not None]
                         if vis:
                             lo, hi = min(vis), max(vis)
+                    pts = []                          # (cx, row) für die Linie
                     for d, e in dv.items():
                         ci = col_idx.get(d)
                         if ci is None:
@@ -1294,25 +1362,44 @@ def run_ui(stdscr, store):
                         v = _num(e.get("value"))
                         end = _num(e.get("end"))
                         if typ == "period" and end is not None:
-                            st, en = int(v), int(end)        # Balken über die Spanne
+                            # Zeitspanne → dünne VERTIKALE Linie über den Bereich
+                            st, en = int(v), int(end)
                             segs = ([(st, en)] if en >= st
                                     else [(st, 1440), (0, en)])   # Wrap Mitternacht
                             for a, b in segs:
                                 r0, r1 = sorted((row_clock(a), row_clock(b)))
                                 for r in range(r0, r1 + 1):
-                                    safe_addstr(r, cx, "█", C[col])
-                        elif typ in ("time", "period"):
-                            safe_addstr(row_clock(int(v)), cx, mk, C[col])
+                                    safe_addstr(r, cx, "│", C[col])
+                            continue
+                        if typ in ("time", "period"):
+                            r = row_clock(int(v))
                         elif typ == "scale":
-                            safe_addstr(row_norm(v, 1, 5), cx, mk, C[col])
+                            r = row_norm(v, 1, 5)
                         else:                                     # number
-                            safe_addstr(row_norm(v, lo, hi), cx, mk, C[col])
-                # Legende unter den Plot
+                            r = row_norm(v, lo, hi)
+                        pts.append((cx, r))
+                    # Einzelpunkte zu einer dünnen Linie verbinden (Steigung →
+                    # ╱ steigt, ╲ fällt, ─ flach; senkrecht → │). Einzelner Punkt → ·
+                    pts.sort()
+                    if len(pts) == 1:
+                        safe_addstr(pts[0][1], pts[0][0], "·", C[col])
+                    else:
+                        for (c1, r1), (c2, r2) in zip(pts, pts[1:]):
+                            if c2 == c1:
+                                for r in range(min(r1, r2), max(r1, r2) + 1):
+                                    safe_addstr(r, c1, "│", C[col])
+                                continue
+                            ch = "─" if r2 == r1 else ("╲" if r2 > r1 else "╱")
+                            for c in range(c1, c2 + 1):
+                                t = (c - c1) / (c2 - c1)
+                                r = int(round(r1 + t * (r2 - r1)))
+                                safe_addstr(r, c, ch, C[col])
+                # Legende unter den Plot: farbiges Linien-Sample + Name
                 for li, line in enumerate(leg_lines[:max_leg]):
                     yy = base + plot_h + li
                     cx = plot_x
-                    for mk, nm, col in line:
-                        safe_addstr(yy, cx, mk, C[col])
+                    for nm, col in line:
+                        safe_addstr(yy, cx, "─", C[col])
                         addclip(yy, cx + 2, nm, plot_w - (cx - plot_x) - 2, C["dim"])
                         cx += 2 + len(nm) + 1
             else:

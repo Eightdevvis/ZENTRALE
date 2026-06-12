@@ -14,9 +14,9 @@
 #   └─────────────────────────────┘
 # Die untere bash ist ein vollwertiges Terminal: Dateien öffnen z.B. mit
 # `xdg-open bericht.pdf` (PDF-Default ist zathura, via xdg-mime gesetzt).
-# Pane FOKUSSIEREN (oben/unten): Maus-Klick, oder `Ctrl-b` dann nacktes ↑/↓
-#   (Ctrl loslassen). Höhe der bash ÄNDERN: `Ctrl-b` dann Ctrl+↑/↓ (Ctrl
-#   durchhalten), oder den Rand mit der MAUS ziehen.
+# Pane FOKUSSIEREN (oben/unten): Maus-Klick, oder `Ctrl-b` dann ↑/↓ — egal ob
+#   Ctrl noch gehalten wird (beides switcht). Höhe der bash ÄNDERN: Ctrl+↑/↓
+#   OHNE Prefix (Ctrl halten und ↑/↓ tippen), oder den Rand mit der MAUS ziehen.
 # Beenden: 'q' in der TUI → schließt das ganze tmux-Fenster und stoppt alles.
 # Ohne tmux: Fallback = TUI im Vollbild (wie früher), mit Install-Hinweis.
 #
@@ -104,6 +104,46 @@ if [[ "${1:-}" == "--save-height" ]]; then
   exit 0
 fi
 
+# ── tmux-Tastatur/Optionen/Hook für die Doppel-Pane-Kassette setzen. In EINER
+#    Funktion, damit die pytest-Suite (tests/test_tmux_panes.py) EXAKT dieselbe
+#    Belegung gegen einen Wegwerf-Socket prüfen kann — statt einer driftenden
+#    Kopie. $1 = Session. Socket via ZENTRALE_TMUX_L überstimmbar (nur Tests;
+#    live leer → Default-Socket). Erläuterungen siehe Aufruf weiter unten.
+apply_tui_tmux_keys() {
+  local sess="$1"
+  local tm=(tmux); [[ -n "${ZENTRALE_TMUX_L:-}" ]] && tm=(tmux -L "$ZENTRALE_TMUX_L")
+  "${tm[@]}" set-option -t "$sess" -g mouse on        # Pane per Klick fokussieren + Rand ziehen
+  "${tm[@]}" set-option -t "$sess" -g status off      # keine tmux-Statuszeile → mehr Platz
+  # APPLIANCE-HÄRTUNG: die GANZE Prefix-Tabelle leeren. Danach kann 'Ctrl-b
+  # <irgendwas>' NICHTS Zerstörerisches mehr — kein kill-pane ('x'), kein
+  # split ('"'/'%' → Drei-Pane-Chaos), kein new-window ('c'), kein detach ('d',
+  # koppelt sonst ab → Eltern-Skript kehrt aus 'attach' zurück → cleanup killt
+  # Backend). Genau diese Fat-Finger-Footguns hat der Pane-Fuzzer gefunden.
+  # Raus geht's NUR über 'q' in der TUI. Danach NUR das Switchen wieder rein.
+  "${tm[@]}" unbind-key -a -T prefix
+  # SWITCHEN: Ctrl-b dann ↑/↓ — EGAL ob Ctrl noch gehalten wird (beide Varianten
+  # auf select-pane). Vorher hing das Switchen daran, ob man Ctrl rechtzeitig
+  # loslässt — sonst traf man Ctrl-b Ctrl-↑ = resize. Single-shot, kein -r.
+  "${tm[@]}" bind-key -T prefix Up     select-pane -U
+  "${tm[@]}" bind-key -T prefix Down   select-pane -D
+  "${tm[@]}" bind-key -T prefix C-Up   select-pane -U
+  "${tm[@]}" bind-key -T prefix C-Down select-pane -D
+  # RESIZEN: Ctrl+↑/↓ OHNE Prefix (root-Tabelle), 1 Zeile/Schritt, greift fix
+  # Pane 0 (TUI) → fokus-unabhängig. (Alt+Pfeil nicht — XFCE klaut das fürs Tiling.)
+  "${tm[@]}" bind-key -n C-Up   resize-pane -t 0 -U 1 # bash höher (TUI schrumpft)
+  "${tm[@]}" bind-key -n C-Down resize-pane -t 0 -D 1 # bash niedriger (TUI wächst)
+  # Höhe LIVE merken: nach JEDEM Resize (Taste ODER Maus-Rand) die bash-Höhe
+  # wegschreiben → nächste Session startet mit genau dieser Höhe. -b = Hintergrund.
+  "${tm[@]}" set-hook -t "$sess" after-resize-pane "run-shell -b '\"$SELF\" --save-height'"
+}
+
+# ── Sub-Modus (nur pytest): exakt die Live-Belegung auf eine schon bestehende
+#    Session anwenden, isoliert auf einem Wegwerf-Socket (ZENTRALE_TMUX_L). ──
+if [[ "${1:-}" == "--apply-keys" ]]; then
+  apply_tui_tmux_keys "${2:?Session-Name fehlt}"
+  exit 0
+fi
+
 # ── Sub-Modus (läuft IM tmux-Pane 0): nur die TUI; danach die AKTUELLE Höhe der
 #    unteren bash (pane 1) für die nächste Session merken, dann die Session zu. ─
 if [[ "${1:-}" == "--run-tui" ]]; then
@@ -122,8 +162,9 @@ if [[ "${1:-}" == "--run-tui" ]]; then
     echo "── Backend-Log ($BACKEND_LOG), letzte Zeilen ─────" >&2
     tail -n 15 "$BACKEND_LOG" 2>/dev/null >&2
     echo >&2
-    echo "Taste drücken zum Schließen…" >&2
-    read -rsn1 || true
+    echo "Taste drücken zum Schließen… (schließt sich sonst nach 30 s selbst)" >&2
+    read -rsn1 -t 30 || true   # Timeout: NIE ewig offen bleiben (sonst hängen
+                               # Session + Backend fest und :5000 bleibt belegt)
   fi
   save_term_height          # Backup-Sicherung beim Beenden (der Hook macht's live)
   tmux kill-session -t "$SESSION" 2>/dev/null || true
@@ -197,7 +238,11 @@ cleanup() {
   kill "$BACKEND_PID" 2>/dev/null || true
   wait "$BACKEND_PID" 2>/dev/null || true
 }
-trap cleanup INT TERM EXIT
+# HUP MUSS dabei sein: schließt man das Terminalfenster, kriegt dieses Skript
+# (es hängt in `tmux attach-session`) ein SIGHUP. Ohne HUP im Trap stirbt es
+# OHNE cleanup → Backend bleibt als Waise auf :5000 zurück ("läuft noch" beim
+# nächsten Start). Mit HUP räumt es Session + Backend auch dann ab.
+trap cleanup INT TERM HUP EXIT
 
 # ── Auf die Flask-API warten (max ~15 s) ────────────────────────────────
 echo "ZENTRALE (tui) — Backend startet, warte auf API …"
@@ -222,29 +267,9 @@ if command -v tmux >/dev/null; then
   # killt sie die ganze Session → attach kehrt zurück → cleanup stoppt Backend.
   tmux kill-session -t "$SESSION" 2>/dev/null || true
   tmux new-session -d -s "$SESSION" -c "$PWD" "'$SELF' --run-tui"
-  tmux set-option -t "$SESSION" -g mouse on        # Pane per Klick fokussieren + Rand ziehen
-  tmux set-option -t "$SESSION" -g status off      # keine tmux-Statuszeile → mehr Platz
-  # Untere bash live höher/niedriger, 1 Zeile pro Schritt, greift Pane 0 (TUI)
-  # → fokus-unabhängig. Untergrenze ist von tmux aus 1 Zeile bash.
-  # PRIMÄR ohne Prefix (root-Tabelle): Ctrl gedrückt HALTEN und ↑/↓ dauerfeuern —
-  # geht endlos, kein 500-ms-Repeat-Timeout, kein erneutes 'b' nötig.
-  # (Alt+Pfeil NICHT genommen — XFCE fängt das fürs Fenster-Tiling ab.)
-  tmux bind-key -n C-Up   resize-pane -t 0 -U 1    # bash höher (TUI schrumpft)
-  tmux bind-key -n C-Down resize-pane -t 0 -D 1    # bash niedriger (TUI wächst)
-  # Zusätzlich unter dem Prefix (Ctrl-b dann Ctrl+↑/↓), wiederholbar; das
-  # Repeat-Fenster großzügig, falls man doch über das Prefix geht.
-  tmux set-option -t "$SESSION" -g repeat-time 1000
-  tmux bind-key -r C-Up   resize-pane -t 0 -U 1
-  tmux bind-key -r C-Down resize-pane -t 0 -D 1
-  # Detach abschalten: 'Ctrl-b d' (tmux-Default) koppelt sofort & ohne Rückfrage
-  # ab — und weil das Eltern-Skript dann aus 'attach' zurückkehrt, killt cleanup
-  # Backend+Session. Genau dieser Fummel-Footgun. Raus geht's NUR via 'q'.
-  tmux unbind-key -T prefix d
-  tmux unbind-key -T prefix D
-  # Höhe LIVE merken: nach JEDEM Resize (Taste ODER Maus-Rand) die bash-Höhe
-  # wegschreiben → nächste Session startet mit genau dieser Höhe, egal wie diese
-  # hier endet. -b = im Hintergrund, blockiert das Resizen nicht.
-  tmux set-hook -t "$SESSION" after-resize-pane "run-shell -b '\"$SELF\" --save-height'"
+  # Tastatur/Optionen/Hook setzen (switchen vs. resizen sauber getrennt, Detach
+  # aus, Höhen-Hook). Eine Funktion → die pytest-Suite prüft EXAKT dasselbe.
+  apply_tui_tmux_keys "$SESSION"
   # Split ERST nach dem Attach, damit die Höhe relativ zur ECHTEN Terminal-
   # größe sitzt. '-d' lässt den Fokus oben auf der TUI; untere bash startet
   # im HOME (fühlt sich an wie ein frisch geöffnetes Terminal).

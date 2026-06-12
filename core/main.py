@@ -83,6 +83,14 @@ def main():
         import news
         news.start_fetcher()
 
+    # Mail-Triage: KASSETTEN-UNABHÄNGIG (kein KI-Bedarf), aber hart gegated
+    # über ZENTRALE_MAIL=on — default AUS, damit nichts ungewollt IMAP-Konten
+    # kontaktiert. Default-Modus ist zudem DRY-RUN (MAIL_DRY_RUN). Pollt die
+    # INBOXen, klassifiziert per Sender-Keymap und sortiert (core/mail.py).
+    import mail
+    if mail.start_fetcher():
+        log("MAIL: Triage-Fetcher gestartet (ZENTRALE_MAIL=on)")
+
     event_queue = [SYSTEM_BOOT]
 
     # Initiale Vokabel laden

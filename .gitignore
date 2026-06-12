@@ -11,6 +11,9 @@ data/*.json
 # Graph-/Memory-Backups (z.B. ai_graph.json.bak.<timestamp>) - ebenfalls
 # privater KI-Inhalt, niemals committen.
 data/*.bak*
+# Verschlüsselter Mail-Zugangsdaten-Blob (Ciphertext, aber default-safe nie
+# ins Repo). Entschlüsselt nur mit ZENTRALE_MAIL_KEY. Siehe core/mail_secrets.py.
+data/*.enc
 
 # lokale Debug-Artefakte (Screenshots, Scratchpad) — gehoeren nicht ins Repo
 /*.png
@@ -30,6 +33,17 @@ data/photos/
 
 # lokale Archive (z.B. Design-Downloads) — kein Repo-Inhalt
 *.zip
+
+# tools/ — externe/geklonte Hilfsprojekte (eigene .git-Repos, z.B. Crucix,
+# imf-portwatch-analytics). Gehören NICHT ins ZENTRALE-Repo (Fremdcode, Bloat,
+# verschachtelte .git). Lokal nützlich, aber kein Repo-Inhalt.
+tools/
+
+# Maps-Overlay-Cache: lizenzierte Quellen (z.B. IMF PortWatch) werden LIVE
+# geholt und nur lokal zwischengespeichert — NICHT weiterverteilen, also nie
+# committen (anders als das gemeinfreie Natural Earth in core/map/data/*.geojson).
+# Siehe memory/maps_quellen.md.
+core/map/data/cache/
 
 # Editor-/Atomic-Write-Temp-Dateien (z.B. <name>.tmp.<ts>.<hash>) — sollen
 # nie versioniert werden (eine ist 2026-06-07 versehentlich reingerutscht).

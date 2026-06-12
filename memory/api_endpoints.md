@@ -67,6 +67,24 @@ dependency-frei (kein psutil), voll offline.
 | `/api/photos`         | GET     | Liste der Bild-Dateinamen aus `data/photos/` (Quelle für den Canvas-Bild→ASCII-Filter im Monolith). |
 | `/api/photos/<name>`  | GET     | Einzelnes Bild (same-origin, damit der Canvas `getImageData` darf). Path-Traversal-geschützt. |
 
+## Maps (Karten-System)
+
+Front-agnostisch: jede Front schickt ihren Viewport (`cx,cy,zoom`) + ihr
+Zielraster (`cols,rows,aspect`); die Engine in `core/map/` projiziert fertig.
+**Nicht** KI-gegatet (Karte gibt es in allen Kassetten). Architektur +
+drei Achsen: `maps_system.md`; Quellen/Lizenzen: `maps_quellen.md`.
+
+| Endpoint                 | Methode | Beschreibung                          |
+|--------------------------|---------|---------------------------------------|
+| `/api/map/base`          | GET     | Basiskarte (Küsten, Achse-1-LOD nach Zoom) als projizierte Linien fürs Zellraster. Query: `cx,cy,zoom,cols,rows,aspect`. |
+| `/api/map/braille`       | GET     | Basiskarte als gefülltes Land in Braille (2×4 Subpixel/Zelle), fertige Zeilen. Query: `cx,cy,zoom,cols,rows`. |
+| `/api/map/layers`        | GET     | Registry der thematischen Overlays (Achse 2): Layer + Sub-Layer + Quelle (Provenienz) + ob zeitfähig (Achse 3). |
+| `/api/map/layer/<id>`    | GET     | Features eines Overlays, projiziert. Query wie `/base` + `sub` (Sub-Layer, z.B. `chokepoints`) + `at` (Zeitpunkt, Achse 3). Antwort trägt `source/vintage/retrieved_at`. 404 bei unbekanntem Layer. |
+
+Live: `trade/chokepoints` (IMF PortWatch, täglicher Schiffsverkehr an den
+maritimen Engstellen). Lizenziert → lokal gecacht, nicht committet; Refresh
+per `python -m map.layers.portwatch`.
+
 ## Voice (sprachneutral, Core)
 
 Die Voice-Pipeline gehört zur Core-AI, nicht zum Tutor. Sprache wird

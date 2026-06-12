@@ -33,6 +33,9 @@ import audio        # type: ignore
 import consolidation # type: ignore  – Phase E: STM → LTM Konsolidierung
 import telemetry    # type: ignore  – PC-Host-Telemetrie (CPU/GPU/VRAM/Temp/RAM)
 import kassette     # type: ignore  – welche Kassette läuft (monolith | laptop)
+from map import base_features as map_base_features  # type: ignore  – Maps-System (core/map/)
+from map import base_braille as map_base_braille  # type: ignore  – Maps-System (Braille-Füllung)
+from map import layers as map_layers  # type: ignore  – Overlay-Layer (Achse 2, Handelsrouten)
 
 app = Flask(__name__)
 
@@ -230,6 +233,96 @@ def api_graphs_delete(gid):
     graphs.delete_graph(gid)
     state.push_log(f"GRAPH-: {gid}")
     return jsonify({"ok": True})
+
+
+@app.route('/api/map/base')
+def api_map_base():
+    """
+    Basiskarte (Küstenlinien 1:110m) für den Viewport der anfragenden Front,
+    fertig auf deren Zellraster projiziert. Front-agnostisch: TUI und Browser
+    rufen denselben Endpoint, schicken nur ihr eigenes cols/rows/aspect mit.
+    Alle Geo-Mathematik steckt in core/map/ (siehe memory/maps_system.md).
+
+    Query: cx,cy (lon/lat Mittelpunkt), zoom (≥0), cols,rows (Zielraster),
+           aspect (Zellbreite/Höhe; TUI ≈ 0.5, SVG = 1.0).
+    NICHT KI-gegatet — die Karte gibt es in ALLEN Kassetten (auch tui/laptop).
+    """
+    a = request.args
+    try:
+        cx = float(a.get('cx', 0.0))
+        cy = float(a.get('cy', 20.0))
+        zoom = float(a.get('zoom', 0.0))
+        cols = int(a.get('cols', 120))
+        rows = int(a.get('rows', 40))
+        aspect = float(a.get('aspect', 0.5))
+    except (TypeError, ValueError):
+        return jsonify({"error": "ungültige map-parameter"}), 400
+    return jsonify(map_base_features(cx, cy, zoom, cols, rows, aspect))
+
+
+@app.route('/api/map/braille')
+def api_map_braille():
+    """
+    Basiskarte als GEFÜLLTES Land in Braille („kleine Punkte als Füllung") —
+    fertige Braille-Zeilen für eine Terminal-Front, die sie nur druckt. 2×4
+    Subpixel pro Zelle. Geo-/Rasterlogik komplett in core/map/render.py.
+
+    Query: cx,cy (lon/lat), zoom (≥0), cols,rows (Zeichenraster der TUI-Box).
+    NICHT KI-gegatet (Karte gibt es in allen Kassetten).
+    """
+    a = request.args
+    try:
+        cx = float(a.get('cx', 0.0))
+        cy = float(a.get('cy', 20.0))
+        zoom = float(a.get('zoom', 0.0))
+        cols = int(a.get('cols', 80))
+        rows = int(a.get('rows', 30))
+    except (TypeError, ValueError):
+        return jsonify({"error": "ungültige map-parameter"}), 400
+    return jsonify(map_base_braille(cx, cy, zoom, cols, rows))
+
+
+@app.route('/api/map/layers')
+def api_map_layers():
+    """
+    Registry der thematischen Overlay-Layer (Achse 2): welche Layer es gibt,
+    je mit ihren Sub-Layern, Quelle (Provenienz) und ob sie eine Zeitachse
+    haben (Achse 3). Die Front baut daraus ihr Layer-Menü.
+    NICHT KI-gegatet (Karte gibt es in allen Kassetten).
+    """
+    return jsonify({"layers": map_layers.registry()})
+
+
+@app.route('/api/map/layer/<layer_id>')
+def api_map_layer(layer_id):
+    """
+    Features EINES Overlay-Layers für den Viewport der Front, fertig aufs
+    Zellraster projiziert (gleiche viewport()-Mathematik wie /api/map/base, damit
+    Overlay und Grundkarte passgenau sitzen). Trägt die Provenienz mit
+    (source/vintage/retrieved_at) — für ein seriöses „wer sagt das, wann".
+
+    Query: cx,cy,zoom,cols,rows,aspect wie /api/map/base; zusätzlich
+           sub  = Sub-Layer (z.B. 'chokepoints'),
+           at   = Zeitpunkt (Achse 3; Layer ohne Zeitachse ignorieren ihn).
+    404 bei unbekanntem Layer. NICHT KI-gegatet.
+    """
+    a = request.args
+    try:
+        cx = float(a.get('cx', 0.0))
+        cy = float(a.get('cy', 20.0))
+        zoom = float(a.get('zoom', 0.0))
+        cols = int(a.get('cols', 120))
+        rows = int(a.get('rows', 40))
+        aspect = float(a.get('aspect', 0.5))
+    except (TypeError, ValueError):
+        return jsonify({"error": "ungültige map-parameter"}), 400
+    sub = a.get('sub') or None
+    at = a.get('at') or None
+    out = map_layers.layer_features(layer_id, cx, cy, zoom, cols, rows,
+                                    aspect=aspect, sub=sub, at=at)
+    if out is None:
+        return jsonify({"error": "unbekannter layer/sub-layer"}), 404
+    return jsonify(out)
 
 
 @app.route('/api/debug', methods=['POST'])
