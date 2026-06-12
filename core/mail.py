@@ -74,6 +74,22 @@ def _dry_run():
     return os.environ.get("MAIL_DRY_RUN", "1") not in ("0", "false", "no", "off")
 
 
+def _action_delay():
+    """Pause (Sek.) nach jeder Server-Aktion. Outlook drosselt Bulk-MOVE hart;
+    eine kleine Pause hält uns unter der Drossel. 0 schaltet sie ab."""
+    try:
+        return max(0.0, float(os.environ.get("MAIL_ACTION_DELAY_S", "0.4")))
+    except ValueError:
+        return 0.4
+
+
+def _max_reconnect():
+    try:
+        return max(0, int(os.environ.get("MAIL_MAX_RECONNECT", "5")))
+    except ValueError:
+        return 5
+
+
 def _enabled():
     return os.environ.get("ZENTRALE_MAIL", "").lower() in ("1", "on", "true", "yes")
 
@@ -300,6 +316,28 @@ def _target_folder(imap, action_spec):
     return _ensure_folder(imap, folder)
 
 
+class _FolderCache:
+    """Löst Zielordner EINMAL auf statt pro Mail. Jede Ordner-Auflösung kostet
+    sonst ein volles LIST am Server — bei hunderten Mails ein Befehls-Sturm,
+    den Outlook mit Throttling/Verbindungsabbruch quittiert. Der Cache überlebt
+    auch Reconnects (Ordnernamen sind stabil, einmal angelegt bleibt angelegt).
+    """
+    def __init__(self):
+        self._trash = None
+        self._ensured = set()
+
+    def target(self, imap, spec):
+        if spec.get("action") == "trash":
+            if self._trash is None:
+                self._trash = _find_trash(imap)
+            return self._trash
+        folder = spec.get("folder") or f"{FOLDER_PREFIX}/Review"
+        if folder not in self._ensured:
+            _ensure_folder(imap, folder)
+            self._ensured.add(folder)
+        return folder
+
+
 def _move_uid(imap, uid, target):
     """UID nach `target` verschieben. UID MOVE (RFC 6851) bevorzugt, sonst
     COPY + \\Deleted + EXPUNGE als Fallback. Beides ist umkehrbar (die Mail
@@ -325,10 +363,66 @@ def _q(name):
 
 # ── Ein Konto pollen ──────────────────────────────────────────────────
 
+# Verbindungs-Abbrüche, bei denen ein Reconnect sinnvoll ist. Outlook wirft
+# bei Bulk-MOVE-Drosselung ein hartes EOF -> imaplib.IMAP4.abort.
+_DROP_ERRORS = (imaplib.IMAP4.abort, ssl.SSLError, OSError, EOFError)
+
+
+def _handle_uid(imap, name, uid, dry_run, folders, results):
+    """Eine Mail: FETCHen, klassifizieren, (live) verschieben. Liefert
+    (abgehakt?, verschoben?): abgehakt=True heißt 'nicht erneut versuchen'
+    (verschoben ODER Dry-Run ODER nicht abrufbar); verschoben=True nur bei
+    erfolgreichem Live-Move. Verbindungs-Abbrüche (`_DROP_ERRORS`) propagieren
+    nach oben und lösen einen Reconnect aus."""
+    typ, fetched = imap.uid("FETCH", str(uid),
+                            "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])")
+    if typ != "OK" or not fetched or not isinstance(fetched[0], tuple):
+        return True, False  # nicht lesbar -> abhaken, nicht ewig wiederholen
+    hdr = _parse_headers(fetched[0][1])
+    category, known = mail_rules.classify(hdr["from"])
+    spec = mail_rules.category_action(category)
+
+    item = {
+        "account": name,
+        "uid": uid,
+        "from": hdr["from"],
+        "subject": hdr["subject"],
+        "date": hdr["date"],
+        "category": category,
+        "known": known,
+        "action": spec.get("action", "move"),
+        "applied": False,
+        "dry_run": dry_run,
+        "seen_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+    done, moved = True, False
+    if not dry_run:
+        target = folders.target(imap, spec)   # Drop-Fehler hier -> Reconnect
+        if _move_uid(imap, uid, target):
+            item["applied"] = True
+            item["target"] = target
+            moved = True
+        else:
+            done = False                       # Move abgelehnt -> nächster Poll
+            state.push_log(f"MAIL [{name}]: Move abgelehnt (uid {uid}) → {target}")
+
+    flag = "✓" if item["applied"] else ("·" if dry_run else "✗")
+    tag = category if known else f"{category} (neu)"
+    state.push_log(f"MAIL [{name}] {flag} «{hdr['subject'][:48]}» "
+                   f"<{mail_rules.normalize(hdr['from'])}> → {tag}")
+    _record(item)
+    results.append(item)
+    return done, moved
+
+
 def poll_account(account, dry_run=None):
     """Holt neue Mails eines Kontos, klassifiziert + (optional) sortiert.
 
-    Liefert eine Liste der klassifizierten Items (auch im Dry-Run).
+    Robust gegen Verbindungs-Abbrüche: Outlook drosselt Bulk-MOVE und kappt
+    dann die TLS-Verbindung (EOF). Wir fangen das ab, verbinden neu und machen
+    weiter — gefahrlos, weil verschobene Mails die INBOX verlassen, ein erneutes
+    SEARCH sie also nicht wieder einsammelt. Liefert die klassifizierten Items.
     """
     if dry_run is None:
         dry_run = _dry_run()
@@ -338,76 +432,78 @@ def poll_account(account, dry_run=None):
     state.push_log(f"MAIL [{name}]: poll {cfg['host']}:{cfg['port']} ({mode})")
     state.push_internet_log(f"IMAP {name} → {cfg['host']}:{cfg['port']} ({mode})")
 
-    imap = _connect(account)
+    delay = _action_delay()
+    folders = _FolderCache()        # Ordner einmal auflösen (überlebt Reconnects)
     results = []
-    try:
-        imap.select("INBOX")
-        last = _watermark(name)
-        # Alle UIDs echt größer als der Watermark holen.
-        typ, data = imap.uid("SEARCH", None, f"UID {last + 1}:*")
-        uids = []
-        if typ == "OK" and data and data[0]:
-            for u in data[0].split():
-                u = int(u)
-                if u > last:            # IMAP gibt bei x:* min. eine UID zurück
-                    uids.append(u)
-        if not uids:
-            state.push_log(f"MAIL [{name}]: nichts Neues (UID > {last})")
-            return results
+    processed = set()               # in DIESEM Lauf schon abgehakte UIDs
+    applied = set()                 # davon erfolgreich verschoben (für Watermark)
+    attempt = 0
+    last = _watermark(name)
 
-        highest = last
-        for uid in sorted(uids):
-            typ, fetched = imap.uid("FETCH", str(uid),
-                                    "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])")
-            if typ != "OK" or not fetched or not isinstance(fetched[0], tuple):
-                highest = max(highest, uid)
-                continue
-            hdr = _parse_headers(fetched[0][1])
-            category, known = mail_rules.classify(hdr["from"])
-            spec = mail_rules.category_action(category)
-
-            item = {
-                "account": name,
-                "uid": uid,
-                "from": hdr["from"],
-                "subject": hdr["subject"],
-                "date": hdr["date"],
-                "category": category,
-                "known": known,
-                "action": spec.get("action", "move"),
-                "applied": False,
-                "dry_run": dry_run,
-                "seen_at": datetime.now().isoformat(timespec="seconds"),
-            }
-
-            if not dry_run:
-                try:
-                    target = _target_folder(imap, spec)
-                    if _move_uid(imap, uid, target):
-                        item["applied"] = True
-                        item["target"] = target
-                except Exception as e:
-                    state.push_log(f"MAIL [{name}]: Aktion fehlgeschlagen "
-                                   f"(uid {uid}): {type(e).__name__}: {e}")
-
-            flag = "✓" if item["applied"] else ("·" if dry_run else "✗")
-            tag = category if known else f"{category} (neu)"
-            state.push_log(f"MAIL [{name}] {flag} «{hdr['subject'][:48]}» "
-                           f"<{mail_rules.normalize(hdr['from'])}> → {tag}")
-            _record(item)
-            results.append(item)
-            highest = max(highest, uid)
-
-        # Watermark NUR im Live-Modus vorrücken — sonst würde ein Dry-Run die
-        # Mails "verbrauchen", ohne sie je wirklich sortiert zu haben.
-        if not dry_run:
-            _set_watermark(name, highest)
-        return results
-    finally:
+    while True:
+        imap = None
         try:
-            imap.logout()
-        except Exception:
-            pass
+            imap = _connect(account)
+            imap.select("INBOX")
+            # Alle UIDs echt größer als der Watermark, die wir noch nicht hatten.
+            typ, data = imap.uid("SEARCH", None, f"UID {last + 1}:*")
+            uids = []
+            if typ == "OK" and data and data[0]:
+                for u in data[0].split():
+                    u = int(u)
+                    if u > last and u not in processed:
+                        uids.append(u)
+            uids.sort()
+            if not uids:
+                if not processed:
+                    state.push_log(f"MAIL [{name}]: nichts Neues (UID > {last})")
+                break
+
+            for uid in uids:
+                done, moved = _handle_uid(imap, name, uid, dry_run, folders, results)
+                processed.add(uid)
+                if moved:
+                    applied.add(uid)
+                if delay and not dry_run:
+                    time.sleep(delay)          # Drossel-Schutz zwischen Aktionen
+            break                              # alle erledigt
+
+        except _DROP_ERRORS as e:
+            attempt += 1
+            if attempt > _max_reconnect():
+                state.push_log(f"MAIL [{name}]: zu viele Abbrüche ({type(e).__name__}) "
+                               f"— Rest beim nächsten Poll.")
+                break
+            wait = min(2 ** attempt, 30)
+            state.push_log(f"MAIL [{name}]: Verbindung abgebrochen "
+                           f"({type(e).__name__}) — neu verbinden in {wait}s "
+                           f"(Versuch {attempt}/{_max_reconnect()})")
+            time.sleep(wait)
+            continue                           # weiter mit dem INBOX-Rest
+        except Exception as e:
+            state.push_log(f"MAIL [{name}]: Poll-Fehler — {type(e).__name__}: {e}")
+            break
+        finally:
+            if imap is not None:
+                try:
+                    imap.logout()
+                except Exception:
+                    pass
+
+    # Watermark NUR live und NUR bis zur lückenlosen Front erfolgreich
+    # verschobener Mails vorrücken — so werden abgelehnte/offene Mails beim
+    # nächsten Poll erneut versucht statt übersprungen. (Dry-Run rückt nie vor,
+    # sonst "verbraucht" die Probe die Mails ungesehen.)
+    if not dry_run and processed:
+        frontier = last
+        for u in sorted(processed):
+            if u in applied:
+                frontier = u
+            else:
+                break
+        if frontier > last:
+            _set_watermark(name, frontier)
+    return results
 
 
 def poll_all(dry_run=None):

@@ -113,6 +113,19 @@ das M365-Dev-Programm kostet. Kartenlos bleibt nur ein 30-Tage-Trial-Tenant
   Kategorie-Ordner werden bei Bedarf unter `MAIL_FOLDER_PREFIX` (Default
   `ZENTRALE`) angelegt.
 
+### Verbindungs-Härtung (Outlook-Drossel)
+Outlook drosselt Bulk-MOVE hart und **kappt dann die TLS-Verbindung** (EOF →
+`imaplib.IMAP4.abort`). Drei Gegenmaßnahmen in `poll_account`:
+1. **Ordner-Cache** (`_FolderCache`): Zielordner werden **einmal** aufgelöst
+   statt pro Mail — vorher kostete jede Mail ein volles `LIST`, was den
+   Befehls-Sturm erst auslöste.
+2. **Drossel-Pause** `MAIL_ACTION_DELAY_S` (Default 0.4s) nach jeder Aktion.
+3. **Reconnect + Resume**: bricht die Verbindung ab, wird mit Backoff neu
+   verbunden und weitergemacht. Gefahrlos, weil verschobene Mails die INBOX
+   verlassen — ein erneutes `SEARCH` sammelt sie nicht wieder ein. Watermark
+   rückt nur bis zur **lückenlosen Front** erfolgreich verschobener Mails vor,
+   abgelehnte/offene werden beim nächsten Poll erneut versucht.
+
 ## Trigger + Transparenz
 
 `start_fetcher` (aus `main.py`, **kassetten-unabhängig**) ist hart gegated über
@@ -132,6 +145,8 @@ im News-System).
 | `MAIL_INTERVAL_MIN` | `10`  | Poll-Intervall |
 | `MAIL_START_DELAY_S`| `30`  | Verzögerung des ersten Laufs |
 | `MAIL_FOLDER_PREFIX`| `ZENTRALE` | Prefix der angelegten Kategorie-Ordner |
+| `MAIL_ACTION_DELAY_S`| `0.4` | Pause nach jeder Server-Aktion (Outlook-Drossel-Schutz; `0` = aus) |
+| `MAIL_MAX_RECONNECT`| `5`   | Reconnect-Versuche, wenn der Server die Verbindung kappt |
 
 ## Selftest
 

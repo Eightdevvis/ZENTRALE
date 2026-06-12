@@ -394,7 +394,7 @@ TUI_KEYS = [
     ("q",   "beenden"),
     ("t",   "Theme wechseln (auto/hell/dunkel)"),
     ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen"),
-    ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · f=Stil · o=Handelsrouten · w=Fenster"),
+    ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · o=Chokepoints · w=Fenster"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
@@ -576,26 +576,19 @@ def run_ui(stdscr, store):
     #   grid   : (cols,rows), für die data geholt wurde — bei Resize neu holen
     M = {"active": False, "cx": 0.0, "cy": 20.0, "zoom": 0.0,
          "data": None, "grid": None, "msg": "", "proc": None,
-         "style": "braille",    # STANDARD: gefülltes Land in Braille-Punkten
-                                # ('f' schaltet auf 'outline' = Küsten-Bresenham)
          "overlay": False,      # Handelsrouten-Overlay (Achse 2) ein/aus
          "odata": None,         # letzte /api/map/layer/trade-Antwort (None ⇒ neu holen)
          "ogrid": None}         # (cols,rows), für die odata geholt wurde
-    MAP_COAST = "▓"          # Küsten-/Land-Kantenglyph (gedämpft, kein Vollblock)
     MAP_CHOKE = "◆"          # Chokepoint-Marker (Handelsrouten-Overlay)
 
     def m_fetch(cols, rows):
         """Karte fürs aktuelle Viewport+Raster synchron holen (localhost, wenige
-        ms — wie das Graph-Werkzeug bei Benutzeraktionen). Je nach Stil entweder
-        Küsten-Linien (/api/map/base, aspect=0.5 weil ein Zeichen ~2:1 ist) oder
-        die gefüllte Braille-Karte (/api/map/braille). Beides liefert core/map/."""
+        ms — wie das Graph-Werkzeug bei Benutzeraktionen). Die TUI rendert das
+        gefüllte Land in Braille (/api/map/braille) — der frühere Umriss-Stil ist
+        raus (sah zu grob aus). Alle Geo-Mathematik bleibt in core/map/."""
         try:
-            if M["style"] == "braille":
-                q = ("/api/map/braille?cx=%.5f&cy=%.5f&zoom=%.2f&cols=%d&rows=%d"
-                     % (M["cx"], M["cy"], M["zoom"], cols, rows))
-            else:
-                q = ("/api/map/base?cx=%.5f&cy=%.5f&zoom=%.2f&cols=%d&rows=%d&aspect=0.5"
-                     % (M["cx"], M["cy"], M["zoom"], cols, rows))
+            q = ("/api/map/braille?cx=%.5f&cy=%.5f&zoom=%.2f&cols=%d&rows=%d"
+                 % (M["cx"], M["cy"], M["zoom"], cols, rows))
             M["data"] = api_call(q, timeout=2.0)
             M["grid"] = (cols, rows)
             M["msg"] = ""
@@ -892,9 +885,8 @@ def run_ui(stdscr, store):
 
     def draw_map(by, bx, bh, bw):
         """Inhalt der MITTE-Box, wenn die Karte Fokus hat. Holt bei Bedarf
-        frische Daten (Resize/Pan/Zoom). Zwei Stile (Taste 'f'): 'outline' rastert
-        die Küsten-Linien per Bresenham, 'braille' druckt die fertig gefüllte
-        Braille-Karte zeilenweise. Beides kommt fertig projiziert vom Backend."""
+        frische Daten (Resize/Pan/Zoom) und druckt die fertig gefüllte
+        Braille-Karte zeilenweise (vom Backend bereits projiziert)."""
         iw, ih = bw - 2, bh - 2
         if iw < 4 or ih < 3:
             return
@@ -904,36 +896,13 @@ def run_ui(stdscr, store):
             m_fetch(iw, map_ih)
         d = M["data"]
         ox, oy = bx + 1, by + 1
-        if not d or d.get("failed") or not (d.get("lines") or d.get("braille")):
+        if not d or d.get("failed") or not d.get("braille"):
             addclip(by + 1, ox, M["msg"] or "lade karte…", iw, C["faint"])
             return
 
-        if M["style"] == "braille" and d.get("braille"):
-            # Gefülltes Land als fertige Braille-Zeilen — die TUI druckt nur.
-            for r, row in enumerate(d["braille"][:map_ih]):
-                addclip(oy + r, ox, row, iw, C["acc"])
-        else:
-            def plot(c, r):
-                if 0 <= c < iw and 0 <= r < map_ih:
-                    safe_addstr(oy + r, ox + c, MAP_COAST, C["acc"])
-
-            for line in d.get("lines", []):
-                for i in range(len(line) - 1):
-                    x0, y0 = int(round(line[i][0])), int(round(line[i][1]))
-                    x1, y1 = int(round(line[i + 1][0])), int(round(line[i + 1][1]))
-                    dx, dy = abs(x1 - x0), abs(y1 - y0)
-                    stepx = 1 if x0 < x1 else -1
-                    stepy = 1 if y0 < y1 else -1
-                    err = dx - dy
-                    while True:
-                        plot(x0, y0)
-                        if x0 == x1 and y0 == y1:
-                            break
-                        e2 = 2 * err
-                        if e2 > -dy:
-                            err -= dy; x0 += stepx
-                        if e2 < dx:
-                            err += dx; y0 += stepy
+        # Gefülltes Land als fertige Braille-Zeilen — die TUI druckt nur.
+        for r, row in enumerate(d["braille"][:map_ih]):
+            addclip(oy + r, ox, row, iw, C["acc"])
 
         # Handelsrouten-Overlay (Achse 2, Sub-Layer Chokepoints): leuchtende
         # Marker an den Engstellen + Detail der dem Fadenkreuz nächsten Stelle.
@@ -964,16 +933,15 @@ def run_ui(stdscr, store):
         safe_addstr(oy + map_ih // 2, ox + iw // 2, "+", C["warn"])
 
         # Status-/Hilfezeile unten in der Box: Position, Zoom, Steuerung.
-        info = "lon %+.1f lat %+.1f · z%g · %s" % (
-            M["cx"], M["cy"], M["zoom"], M["style"])
+        info = "lon %+.1f lat %+.1f · z%g" % (M["cx"], M["cy"], M["zoom"])
         if M["overlay"]:
             if focus:
                 nm, val, _ind = focus
                 info += " · ◆%s %s" % (nm, "—" if val is None else val)
             else:
-                info += " · ◆Handel %s" % (ovintage or "?")
+                info += " · ◆Chokepoints %s" % (ovintage or "?")
         addclip(by + bh - 2, ox, info, iw, C["bright"])
-        hint = "↑↓←→ +/− 0·f·o·w·esc"
+        hint = "↑↓←→ +/− 0·o·w·esc"
         if M["msg"]:
             hint = M["msg"]
         addclip(by + bh - 2, ox + iw - len(hint), hint, len(hint), C["faint"])
@@ -1131,10 +1099,7 @@ def run_ui(stdscr, store):
                 m_zoom(-1.0)
             elif ch == ord("0"):               # zurück zur ganzen Welt
                 M["cx"], M["cy"], M["zoom"], M["data"] = 0.0, 20.0, 0.0, None
-            elif ch in (ord("f"), ord("F")):   # Stil: Umriss ↔ Braille-Füllung
-                M["style"] = "braille" if M["style"] == "outline" else "outline"
-                M["data"] = None               # Neuladen mit neuem Endpoint
-            elif ch in (ord("o"), ord("O")):   # Handelsrouten-Overlay ein/aus
+            elif ch in (ord("o"), ord("O")):   # Chokepoints-Overlay ein/aus
                 M["overlay"] = not M["overlay"]
                 M["odata"] = None              # beim Einschalten frisch holen
             elif ch in (ord("w"), ord("W"), 10, 13, curses.KEY_ENTER):

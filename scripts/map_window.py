@@ -18,8 +18,8 @@
 #   0                           Reset auf Weltansicht
 #   g                           Gradnetz an/aus
 #   l                           Länder-Labels an/aus
-#   t                           Handelsrouten-Overlay an/aus (Chokepoints)
-#   ?                           Shortcut-Legende ein/aus
+#   t                           Chokepoints-Overlay an/aus (Schiffsverkehr/Engstellen)
+#   ?                           Glossar-Such-Modal (Begriffe nachschlagen)
 #   Esc / q                     schließen
 #
 # Start:
@@ -41,6 +41,7 @@ from pygame import gfxdraw  # noqa: E402
 
 from map.projection import lonlat_to_world, world_to_lonlat  # noqa: E402
 from map import basemap  # noqa: E402
+import glossary  # noqa: E402  (core/glossary.py — Begriffs-Erklärungen fürs ?-Modal)
 
 # ── Palette ("Control-Room": tiefes Meer, Salbei-Land, leuchtende Küste) ─────
 SEA_TOP    = (8, 18, 34)       # Tiefsee oben
@@ -61,6 +62,12 @@ TRADE_FG   = (255, 232, 196)    # Chokepoint-Label
 LEG_FG     = (196, 214, 210)    # Legenden-Text
 LEG_KEY    = (130, 222, 212)    # Legenden-Taste (Mint, wie Küste)
 LEG_BG     = (10, 20, 34)       # Legenden-Hintergrund
+GLO_BG     = (12, 22, 38)       # Glossar-Modal-Hintergrund
+GLO_BORDER = (60, 86, 112)      # Modal-Rahmen
+GLO_TERM   = (130, 222, 212)    # Begriff (Mint)
+GLO_TERM_A = (255, 232, 196)    # aktiver Begriff (Bernstein)
+GLO_TEXT   = (214, 226, 222)    # Erklärungstext
+GLO_DIM    = (120, 140, 150)    # Hinweise/Sekundär
 
 # Shortcut-Legende (oben rechts, Taste '?' blendet sie um). EINE Quelle der
 # Wahrheit fürs Fenster — neue Shortcuts ab jetzt HIER als Zeile ergänzen, dann
@@ -71,8 +78,8 @@ LEGEND = [
     ("0",             "Weltansicht"),
     ("g",             "Gradnetz"),
     ("l",             "Länder-Labels"),
-    ("t",             "Handelsrouten"),
-    ("?",             "Legende ein/aus"),
+    ("t",             "Chokepoints (Schiffe/Tag)"),
+    ("?",             "Glossar (Begriffe suchen)"),
     ("Esc / q",       "schließen"),
 ]
 
@@ -451,7 +458,7 @@ def _draw_trade_caption(screen, font, view):
     """Kleine Quellen-/Stand-Zeile oben links — Provenienz sichtbar (seriös)."""
     td = _get_trade()
     if not td['items']:
-        txt = "◆ Handelsrouten — keine Daten (PortWatch-Cache leer)"
+        txt = "◆ Chokepoints — keine Daten (PortWatch-Cache leer)"
     else:
         txt = "◆ Chokepoints · %s · Stand %s" % (
             td['source'] or 'IMF PortWatch', td['vintage'] or '?')
@@ -483,6 +490,89 @@ def _draw_legend(screen, font, win_w):
         screen.blit(font.render(v, True, LEG_FG), (x0 + pad + key_w + gap, y))
 
 
+def _wrap(font, text, max_w):
+    """Text auf max_w Pixel umbrechen (wortweise). Liste von Zeilen-Strings."""
+    words = text.split()
+    lines, cur = [], ""
+    for w in words:
+        trial = w if not cur else cur + " " + w
+        if font.size(trial)[0] <= max_w or not cur:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _draw_glossary(screen, fonts, win_w, win_h, query, results, sel):
+    """Such-Modal (Taste '?'): Eingabezeile + Trefferliste links, Erklärung des
+    gewählten Begriffs rechts. Inhalte aus core/glossary.py. Reiner Renderer."""
+    title_f, term_f, text_f = fonts          # (bold 17, bold 15, normal 14)
+    # Karte abdunkeln (Fokus aufs Modal).
+    dim = pygame.Surface((win_w, win_h), pygame.SRCALPHA)
+    dim.fill((4, 8, 16, 170))
+    screen.blit(dim, (0, 0))
+
+    pw = min(820, win_w - 60)
+    ph = min(520, win_h - 60)
+    x0 = (win_w - pw) // 2
+    y0 = (win_h - ph) // 2
+    panel = pygame.Surface((pw, ph))
+    panel.fill(GLO_BG)
+    screen.blit(panel, (x0, y0))
+    pygame.draw.rect(screen, GLO_BORDER, (x0, y0, pw, ph), 1)
+
+    pad = 18
+    cx = x0 + pad
+    cy = y0 + pad
+    # Kopf + Eingabezeile (mit blinkfreiem Cursor-Balken).
+    screen.blit(title_f.render("Glossar", True, GLO_TERM), (cx, cy))
+    hint = "tippen zum Suchen · ↑↓ wählen · Esc schließt"
+    hs = text_f.render(hint, True, GLO_DIM)
+    screen.blit(hs, (x0 + pw - pad - hs.get_width(), cy + 3))
+    cy += title_f.get_height() + 8
+    qs = term_f.render("Suche: " + query + "▌", True, GLO_TERM_A)
+    screen.blit(qs, (cx, cy))
+    cy += term_f.get_height() + 8
+    pygame.draw.line(screen, GLO_BORDER, (cx, cy), (x0 + pw - pad, cy))
+    cy += 10
+
+    if not results:
+        screen.blit(text_f.render("keine Treffer für „%s“" % query, True,
+                                  GLO_DIM), (cx, cy))
+        return
+
+    # Linke Spalte: Treffer-Begriffe (gewählter hervorgehoben).
+    list_w = 250
+    lh = term_f.get_height() + 6
+    max_rows = (y0 + ph - pad - cy) // lh
+    sel = max(0, min(sel, len(results) - 1))
+    start = max(0, min(sel - max_rows + 1, len(results) - max_rows)) \
+        if len(results) > max_rows else 0
+    for i in range(start, min(len(results), start + max_rows)):
+        e = results[i]
+        active = (i == sel)
+        col = GLO_TERM_A if active else GLO_TERM
+        prefix = "▸ " if active else "  "
+        screen.blit(term_f.render(prefix + e["term"], True, col),
+                    (cx, cy + (i - start) * lh))
+
+    # Rechte Spalte: Erklärung des gewählten Begriffs (umbrochen).
+    rx = cx + list_w + 16
+    rw = x0 + pw - pad - rx
+    pygame.draw.line(screen, GLO_BORDER, (rx - 8, cy),
+                     (rx - 8, y0 + ph - pad))
+    e = results[sel]
+    ty = cy
+    screen.blit(term_f.render(e["term"], True, GLO_TERM_A), (rx, ty))
+    ty += term_f.get_height() + 6
+    for line in _wrap(text_f, e["text"], rw):
+        screen.blit(text_f.render(line, True, GLO_TEXT), (rx, ty))
+        ty += text_f.get_height() + 3
+
+
 def _draw_hud(screen, font, view, level=''):
     lon, lat = world_to_lonlat(view.cx, view.cy)
     txt = "lon %.2f  lat %.2f   zoom %.1f   lod %s" % (lon, lat, view.zoom, level)
@@ -512,6 +602,9 @@ def main():
     legend_font = pygame.font.SysFont("monospace", 13)
     label_fonts = (pygame.font.SysFont("sans", 17, bold=True),
                    pygame.font.SysFont("sans", 13))
+    glossary_fonts = (pygame.font.SysFont("sans", 17, bold=True),
+                      pygame.font.SysFont("sans", 15, bold=True),
+                      pygame.font.SysFont("sans", 14))
     label_cache = {}
 
     view = MapView(a.w, a.h, a.cx, a.cy, a.zoom)
@@ -519,8 +612,10 @@ def main():
     vig = _vignette(a.w, a.h)
     show_grat = True
     show_labels = True
-    show_trade = False               # Handelsrouten-Overlay (Taste 't')
-    show_legend = True               # Shortcut-Legende oben rechts (Taste '?')
+    show_trade = False               # Chokepoints-Overlay (Taste 't')
+    show_legend = True               # Shortcut-Legende oben rechts (immer an)
+    glossary_open = False            # '?'-Such-Modal (Begriffs-Erklärungen)
+    g_query, g_sel = "", 0
 
     dragging = False
     running = True
@@ -535,8 +630,23 @@ def main():
                 sea = _sea_gradient(ev.w, ev.h)
                 vig = _vignette(ev.w, ev.h)
             elif ev.type == pygame.KEYDOWN:
+                if glossary_open:
+                    # Modal frisst alle Tasten — keine Karten-Steuerung dahinter.
+                    if ev.key == pygame.K_ESCAPE:
+                        glossary_open = False
+                    elif ev.key == pygame.K_BACKSPACE:
+                        g_query, g_sel = g_query[:-1], 0
+                    elif ev.key == pygame.K_UP:
+                        g_sel = max(0, g_sel - 1)
+                    elif ev.key == pygame.K_DOWN:
+                        g_sel += 1            # beim Zeichnen geclamped
+                    elif ev.unicode and ev.unicode.isprintable():
+                        g_query, g_sel = g_query + ev.unicode, 0
+                    continue
                 if ev.key in (pygame.K_ESCAPE, pygame.K_q):
                     running = False
+                elif ev.unicode == '?':
+                    glossary_open, g_query, g_sel = True, "", 0
                 elif ev.key == pygame.K_0:
                     view.tzoom = 0.0       # weich zurück zur Weltansicht
                     wx, wy = lonlat_to_world(10.0, 30.0)
@@ -551,8 +661,6 @@ def main():
                     show_labels = not show_labels
                 elif ev.key == pygame.K_t:
                     show_trade = not show_trade
-                elif ev.unicode == '?':
-                    show_legend = not show_legend
                 elif ev.key == pygame.K_LEFT:
                     view.pan_target(-0.2, 0)
                 elif ev.key == pygame.K_RIGHT:
@@ -561,7 +669,7 @@ def main():
                     view.pan_target(0, -0.2)
                 elif ev.key == pygame.K_DOWN:
                     view.pan_target(0, +0.2)
-            elif ev.type == pygame.MOUSEBUTTONDOWN:
+            elif ev.type == pygame.MOUSEBUTTONDOWN and not glossary_open:
                 if ev.button == 1:
                     dragging = True
                 elif ev.button == 4:
@@ -571,7 +679,7 @@ def main():
             elif ev.type == pygame.MOUSEBUTTONUP:
                 if ev.button == 1:
                     dragging = False
-            elif ev.type == pygame.MOUSEMOTION and dragging:
+            elif ev.type == pygame.MOUSEMOTION and dragging and not glossary_open:
                 view.pan_pixels(ev.rel[0], ev.rel[1])
 
         view.update(dt)                      # sanftes Zoom-Easing pro Frame
@@ -598,6 +706,9 @@ def main():
         _draw_hud(screen, hud_font, view, level)
         if show_legend:
             _draw_legend(screen, legend_font, view.w)
+        if glossary_open:
+            _draw_glossary(screen, glossary_fonts, view.w, view.h,
+                           g_query, glossary.search(g_query), g_sel)
         pygame.display.flip()
 
     pygame.quit()
