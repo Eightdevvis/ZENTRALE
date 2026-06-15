@@ -75,11 +75,19 @@ ZENTRALE/
 │   ├── categories.py        # Data-Collection-Kategorien (Sleep, Food)
 │   ├── ai.py                # Ollama-Client (Chat, Streaming, Tools)
 │   ├── net.py               # HTTP-Wrapper mit Terminal-Logging
-│   ├── graph.py             # Konzept-Graph Memory (PRIMARY, data/ai_graph.json)
+│   ├── graph.py             # KONZEPT-Graph Memory der KI (PRIMARY, data/ai_graph.json)
+│   ├── graphs.py            # Lifestyle-GRAPHEN-Registry (Messreihen-Werkzeug, ≠ graph.py!)
 │   ├── consolidation.py     # async Fakt-Extraktor in den Graphen
 │   ├── embeddings.py        # bge-m3 via Ollama (Alias-Resolution, Entry-Points)
 │   ├── context.py           # Whitelist-Dateizugriff (Cap 8000 Zeichen)
 │   ├── kalender.py          # Kalender-Layer (Termine, Routinen, Konflikt-Alarm)
+│   ├── lists.py             # Dynamische Listen-Registry (To-Do/Checklisten, Listen-Werkzeug)
+│   ├── glossary.py          # Kuratiertes Mini-Glossar (front-agnostisch, `?`-Suche)
+│   ├── kassette.py          # Welche "Kassette" läuft (monolith|laptop|tui) + KI-Gate
+│   ├── mail.py              # Mail-Triage: IMAP rein, sortieren, zurückschreiben
+│   ├── mail_rules.py        # Triage-Keymap (Sender → Ordner/Aktion)
+│   ├── mail_secrets.py      # Verschlüsselter Zugangsdaten-Speicher (Mail-Konten)
+│   ├── mail_oauth.py        # OAuth2/XOAUTH2 für Outlook.com-IMAP
 │   ├── ascii_lib.py         # ASCII-Bibliothek für Bild-Marker [[bild: name]]
 │   ├── web.py               # gegatete Internet-Pipe (web_suche / hole_url)
 │   ├── news.py              # Persönliche Tagesschau: RSS-Fetch + KI-Briefing (lies_news)
@@ -91,12 +99,21 @@ ZENTRALE/
 │   ├── tutor_langs.py       # Sprach-Profile (zh live; ru/ar/es Skizzen)
 │   ├── tutor_providers.py   # Provider-Registry (kind/base_url/key/trains_on_data-Flag)
 │   ├── tutor_openai_compat.py # OpenAI-/v1-Backend (Qwen/DeepSeek/Mistral/OpenAI/Groq/…)
-│   └── tutor_cloud.py       # Anthropic-Backend (Claude, Sashas persönlicher Pfad)
+│   ├── tutor_cloud.py       # Anthropic-Backend (Claude, Sashas persönlicher Pfad)
+│   └── map/                 # Geo-Layer-System (front-agnostisch, pure stdlib)
+│       ├── basemap.py       # Basiskarte (Natural Earth, data/*.geojson)
+│       ├── projection.py    # Geo→Pixel-Projektion
+│       ├── render.py        # ASCII/Braille-Rasterung
+│       └── layers/          # Overlay-Registry: trade.py, portwatch.py, density.py
 ├── ui/
-│   ├── app.py               # Flask Backend + REST API
+│   ├── app.py               # Flask Backend + REST API (reiner Adapter auf core/)
 │   ├── static/              # engine.js, viz.js, ascii.js, fonts/ (Monolith-Assets)
 │   └── templates/
-│       └── monolith.html    # DAS Dashboard (Route / + Alias /monolith)
+│       ├── monolith.html    # DAS Dashboard, KI sichtbar (Route / bei Kassette monolith)
+│       └── laptop.html      # KI-freie Front (Kassette laptop/Fallback, gleiches Layout)
+├── tui/                     # Terminal-Kassette (curses), redet NUR via HTTP mit ui/app.py
+│   ├── zentrale_tui.py      # Die TUI (Sensoren, Karte, Kalender, Listen, Graphen, Mail)
+│   └── select_kassette.py   # Kassetten-Auswahl beim Start
 ├── services/
 │   ├── whisper_service.py   # STT (Port 5050)
 │   ├── tts_service.py       # TTS (Port 5051)
@@ -133,3 +150,32 @@ ZENTRALE/
 - **State-Mutation passiert in `main.py`**, nicht in `actions.py`. `main.py`
   ruft `state.set_sensor()` / `state.push_event()` direkt auf; `actions.py`
   ist absichtlich klein gehalten (nur `print()`-Side-Effects pro Event).
+
+## Wie Bausteine andocken (Baustein-Konvention)
+
+Die Feature-Module in `core/` (kalender, mail, news, web, lists, glossary,
+graphs, map …) sind **autonom gekapselt**: keine zirkulären Importe, alle
+Abhängigkeiten hierarchisch (Stern-Muster: `ai.py` → Features; `mail.py` →
+`mail_*`; `map/layers` → Sub-Layer). Geteilter Zustand läuft ausschließlich
+über `state.py`. Jeder Baustein dockt über genau **zwei Konventions-Stellen**
+an – es gibt (bewusst) keine zentrale Plugin-Registry:
+
+1. **KI-Tool:** Tool-Definition in `ai.py` → `TOOLS` eintragen **und** den
+   Aufruf in `_dispatch_tool()` ergänzen (Schreib-Tools zusätzlich in
+   `PERMISSION_REQUIRED_TOOLS`). Damit kann die KI den Baustein nutzen.
+2. **Front:** eine REST-Route in `ui/app.py`, die 1:1 an die Baustein-Funktion
+   delegiert. `ui/app.py` ist reiner Adapter (keine Business-Logik), die TUI
+   spricht nur über HTTP, beide Browser-Fronts teilen dieselbe API.
+
+Optionaler Bootstrap (Hintergrund-Fetcher wie `news`/`mail`) wird in `main.py`
+kassetten-abhängig gestartet. Folge: ein neuer Baustein berührt 2–3 zentrale
+Stellen – sauber genug für „plug-and-play per Konvention", aber keine
+Selbst-Registrierung. Wer echtes Hot-Plug will, müsste `TOOLS`/`_dispatch_tool`
+und das Event-Routing (`brain.py`/`actions.py`, heute `if-elif`) auf eine
+Registry/Dispatch-Tabelle heben.
+
+> **`graph.py` vs. `graphs.py`** – leicht zu verwechseln: `graph.py` ist der
+> **Konzept-Graph** des KI-Memorys (eine globale Wissensstruktur, primary
+> memory). `graphs.py` ist die **Lifestyle-Graphen-Registry** des Mess-/
+> Tracking-Werkzeugs (viele benannte Messreihen, zur Laufzeit anlegbar).
+> Verschiedene Systeme, nur namensähnlich.
