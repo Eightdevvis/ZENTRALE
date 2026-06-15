@@ -78,7 +78,7 @@ NICHT direkt abhakbar; sein effektiver Status ist **abgeleitet** (`is_done` in
 
 | Endpoint              | Methode | Beschreibung                          |
 |-----------------------|---------|---------------------------------------|
-| `/api/chat`           | POST    | Chat-Nachricht senden (SSE-Stream). JSON-Body: `{message: str, via_mic?: bool}`. `via_mic=true` triggert `_MIC_INPUT_HINT` im System-Prompt (Whisper-Fehler-Awareness, siehe `ki_system.md`). |
+| `/api/chat`           | POST    | Chat-Nachricht senden (SSE-Stream). JSON-Body: `{message: str, via_mic?: bool}`. `via_mic=true` triggert `_MIC_INPUT_HINT` im System-Prompt (Whisper-Fehler-Awareness, siehe `ki_system.md`). SSE-Events: `token` (Antworttext), `reflect` (Denk-/Reflexions-Strom bei adaptivem Thinking → HUD-Kern, NICHT gespeichert/gesprochen), `ascii` (Inline-Bild), `permission` (Knopf-Rückfrage), `cinema` (News-Sendung), `done`. |
 | `/api/chat/history`   | GET     | Chat-History                          |
 | `/api/chat/clear`     | POST    | Chat-History leeren                   |
 

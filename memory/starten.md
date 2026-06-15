@@ -228,6 +228,9 @@ willst:
 # ZENTRALE (core/main.py) verwendet:
 OLLAMA_URL=http://localhost:11434   # default
 OLLAMA_MODEL=qwen3.5:9b             # default
+ZENTRALE_THINK=1                    # default an: adaptives Thinking im Chat
+                                    # (Frage→denkt+sichtbare Reflexion im Kern,
+                                    # Aktion→aus). =0 schaltet komplett aus.
 WHISPER_URL=http://localhost:5050   # default (gegen den Whisper-Service)
 TTS_URL=http://localhost:5051       # default (gegen den TTS-Service)
 

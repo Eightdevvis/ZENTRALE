@@ -137,6 +137,16 @@
     50%      { opacity: 0.92; filter: drop-shadow(0 0 13px rgba(255,176,32,1)); }
   }
   #core.filtimg { font-size: 10px; line-height: 1.0; }   /* Bild-Filter: kleine Schrift, hohe Zeichen-Auflösung */
+  /* KI-Reflexion (adaptives Thinking): innerer Monolog. Gedämpft, linksbündig,
+     leicht kursiv + weicher Umbruch → liest sich als „die KI denkt grad", klar
+     abgesetzt von der eigentlichen (im Minilog erscheinenden) Antwort. */
+  #core.reflecting {
+    font-size: 12px; line-height: 1.35; text-align: left; white-space: pre-wrap;
+    font-style: italic; color: var(--acc); opacity: 0.5;
+    padding: 4px 16px; box-sizing: border-box;
+    animation: reflectpulse 1.8s ease-in-out infinite;
+  }
+  @keyframes reflectpulse { 0%,100% { opacity: 0.42; } 50% { opacity: 0.6; } }
   .core-readout { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 9px; flex-shrink: 0; position: relative; z-index: 2; background: var(--bg); }
   .ai-state { font-family: 'VT323', monospace; font-size: 24px; letter-spacing: 0.12em; color: var(--bright); text-transform: uppercase; }
   .ai-state .sp { color: var(--acc); display: inline-block; width: 1.1em; }
@@ -1247,11 +1257,54 @@
       showAiArt(e.detail.art, e.detail.name);
     });
 
+    // ── KI-Reflexion (adaptives Thinking) ────────────────────────────────
+    // Denkt die KI vor einer Antwort (think=ON, nur Verständnis-/Verifikations-
+    // Turns), tickert ihr innerer Monolog live in den Kern - sichtbares „ich
+    // schau kurz nach…" statt totem Warten. Höchster Vorrang im frameTick.
+    // reflectText sammelt den ganzen Strom; gerendert wird wortumgebrochen das
+    // Ende (wie ein scrollendes Denk-Fenster). Beim ersten echten Antwort-Token
+    // (reflect-end) löst es sich auf und der Direktor übernimmt wieder.
+    var reflectText = '', reflectActive = false;
+    var REFLECT_W = 46, REFLECT_ROWS = 16;   // Umbruch-Breite / sichtbare Zeilen
+    window.addEventListener('zentrale:reflect', function (e) {
+      reflectActive = true;
+      reflectText += (e.detail && e.detail.text) || '';
+      coreEl.classList.add('reflecting');
+      aiMeta.textContent = 'ki denkt nach…';
+    });
+    window.addEventListener('zentrale:reflect-end', function () {
+      reflectActive = false; reflectText = '';
+      coreEl.classList.remove('reflecting');
+      syncTabs();   // Meta-Zeile zurück auf das aktuelle Exhibit
+    });
+    // Wort-Umbruch auf feste Breite + nur die letzten ROWS Zeilen (Tail-Scroll).
+    function wrapReflect(s) {
+      var words = s.replace(/\s+/g, ' ').trim().split(' '), lines = [], cur = '';
+      for (var i = 0; i < words.length; i++) {
+        var w = words[i];
+        if ((cur + ' ' + w).trim().length > REFLECT_W) { if (cur) lines.push(cur); cur = w; }
+        else cur = (cur ? cur + ' ' : '') + w;
+      }
+      if (cur) lines.push(cur);
+      return lines.slice(-REFLECT_ROWS).join('\n');
+    }
+
     function frameTick() {
       fi++;
       // Graph-Werkzeug + Kalender: eigene interaktive Panels statt ASCII-Tick.
       // Passendes Panel ein-, Kern ausblenden und hier raus – nichts in #core
       // schreiben, solange ein Panel den Kern übernimmt.
+      // KI-Reflexion hat ALLERHÖCHSTEN Vorrang: während die KI denkt, zeigt der
+      // Kern ihren Denk-Strom (Tail-scrollend), nichts anderes. Auch Graph/
+      // Kalender treten zurück (sonst denkt die KI „hinter" dem Panel).
+      if (reflectActive) {
+        graphPanel.style.display = 'none';
+        calendarPanel.style.display = 'none';
+        coreEl.style.display = '';
+        coreEl.textContent = reflectText ? wrapReflect(reflectText) : '…';
+        return;
+      }
+      coreEl.classList.remove('reflecting');
       var graphActive = (EX.current === 'graph');
       var calActive = (EX.current === 'kalender');
       graphPanel.style.display = graphActive ? '' : 'none';
@@ -1938,7 +1991,19 @@
               showPermissionDialog(data.permission.optionen);
               continue;
             }
+            // Reflexions-Strom (adaptives Thinking): das Denk-Feld der KI tickert
+            // live in den ki-kern (sichtbares „ich schau kurz nach…"). Kein
+            // Antworttext → nicht ins Minilog, nicht sprechen. Läuft in der
+            // Exhibit-IIFE → über den CustomEvent-Bus signalisieren.
+            if (data.reflect) {
+              window.dispatchEvent(new CustomEvent('zentrale:reflect',
+                { detail: { text: data.reflect } }));
+              continue;
+            }
             if (data.token) {
+              // Erster echter Antwort-Token → Reflexion im Kern auflösen, der
+              // Direktor übernimmt wieder (Gesicht/Exhibit).
+              if (!streamingStarted) { window.dispatchEvent(new CustomEvent('zentrale:reflect-end')); }
               if (!streamingStarted) { streamingStarted = true; ZS.pushHistory('ai', ''); ZS.setAi('streaming'); }
               fullText += data.token;
               ZS.updateLastHistory(fullText);
@@ -1958,6 +2023,9 @@
         ZS.updateLastHistory('[Verbindungsfehler]');
       } finally {
         chatWaiting = false;
+        // Reflexion in jedem Fall auflösen (auch bei Fehler/Abbruch/leerer
+        // Antwort), sonst bliebe der Denk-Text im Kern stehen.
+        window.dispatchEvent(new CustomEvent('zentrale:reflect-end'));
         // Falls der Stream abbrach während die KI noch auf Erlaubnis wartete:
         // Knöpfe wieder gegen die normale Eingabe tauschen, sonst hängt die
         // Konsole im JA/NEIN-Modus fest.
