@@ -170,6 +170,10 @@
   .cal-msg.warn { color: var(--warn); }
   .cw-del { margin-left: 6px; color: var(--dim); cursor: pointer; opacity: 0.55; }
   .cw-del:hover { color: var(--warn); opacity: 1; }
+  .cw-act { margin-left: 6px; color: var(--dim); cursor: pointer; opacity: 0.6; }
+  .cw-act:hover { color: var(--acc); opacity: 1; }
+  .cw-ent.deakt { opacity: 0.55; text-decoration: line-through; }
+  .cw-ent.deakt .cw-act, .cw-ent.deakt .cw-del { text-decoration: none; }
 </style>
 </head>
 <body>
@@ -396,7 +400,7 @@
       var head = body.parentNode.querySelector('.cal-head');
       var WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
       var view = 'week', ref = isoToday();
-      var adding = false, formDay = null, msg = '', msgWarn = false, lastData = {};
+      var adding = false, editing = null, form = {}, msg = '', msgWarn = false, lastData = {};
 
       function isoToday() { return iso(new Date()); }
       function iso(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
@@ -432,13 +436,13 @@
         subEl.textContent = view;
         var top = '';
         if (adding) {
-          var fday = formDay || (d.today || isoToday());
           top += '<div class="cal-form">'
-            + '<input type="date" id="cf-day" value="' + esc(fday) + '" />'
-            + '<input id="cf-time" placeholder="HH:MM" size="5" maxlength="5" />'
-            + '<input id="cf-label" placeholder="Titel" style="flex:1;min-width:90px" />'
-            + '<input id="cf-ort" placeholder="Ort (optional)" size="12" />'
-            + '<button data-save="1">anlegen</button></div>';
+            + '<input type="date" id="cf-day" value="' + esc(form.day || d.today || isoToday()) + '" />'
+            + '<input id="cf-time" placeholder="HH:MM" size="5" maxlength="5" value="' + esc(form.time || '') + '" />'
+            + '<input id="cf-label" placeholder="Titel" style="flex:1;min-width:90px" value="' + esc(form.label || '') + '" />'
+            + '<input id="cf-ort" placeholder="Ort (optional)" size="12" value="' + esc(form.ort || '') + '" />'
+            + '<button data-save="1">' + (editing ? 'ändern' : 'anlegen') + '</button>'
+            + (editing ? '<button data-canceledit="1" title="abbrechen">×</button>' : '') + '</div>';
         }
         if (msg) top += '<div class="cal-msg' + (msgWarn ? ' warn' : '') + '">' + esc(msg) + '</div>';
         body.innerHTML = top + ((view === 'month') ? renderMonth(d, days) : renderWeek(d, days));
@@ -451,17 +455,32 @@
         var time = ((body.querySelector('#cf-time') || {}).value || '').trim();
         var ort = ((body.querySelector('#cf-ort') || {}).value || '').trim();
         if (!label) { msg = 'Titel fehlt.'; msgWarn = true; render(); return; }
+        var method, payload;
+        if (editing) {
+          method = 'PUT';
+          payload = { day: editing.iso, label: editing.label, layer: editing.layer,
+                      new: { day: day, label: label, time: time, ort: ort } };
+        } else {
+          method = 'POST';
+          payload = { day: day, label: label, time: time, ort: ort };
+        }
         fetch('/api/calendar/entry', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ day: day, label: label, time: time, ort: ort })
+          method: method, headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
           .then(function (res) {
             if (!res.ok) { msg = res.j.error || 'fehlgeschlagen.'; msgWarn = true; render(); return; }
-            adding = false;
+            var verb = editing ? 'geändert: ' : 'angelegt: ';
+            adding = false; editing = null; form = {};
             var warn = (res.j.conflicts && res.j.conflicts.length) ? ' · ⚠ ' + res.j.conflicts.join(' · ') : '';
-            msg = 'angelegt: ' + label + warn; msgWarn = !!warn;
+            msg = verb + label + warn; msgWarn = !!warn;
             ref = day || ref; load();
           }).catch(function () { msg = 'netzwerkfehler.'; msgWarn = true; render(); });
+      }
+      function beginEdit(isoDay, label, layer, time, ort) {
+        editing = { iso: isoDay, label: label, layer: layer };
+        form = { day: isoDay, time: time || '', label: label, ort: ort || '' };
+        adding = true; msg = ''; render();
       }
       function delEntry(day, label, layer) {
         fetch('/api/calendar/entry', {
@@ -469,6 +488,14 @@
           body: JSON.stringify({ day: day, label: label, layer: layer || undefined })
         }).then(function (r) { return r.json(); }).then(function (j) {
           msg = (j.deleted ? 'gelöscht: ' + label : 'nichts gelöscht.'); msgWarn = !j.deleted; load();
+        }).catch(function () { msg = 'netzwerkfehler.'; msgWarn = true; render(); });
+      }
+      function routineToggle(day, label, layer, off) {
+        fetch('/api/calendar/routine/skip', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ layer: layer, label: label, day: day, off: off })
+        }).then(function (r) { return r.json(); }).then(function () {
+          msg = (off ? 'deaktiviert: ' : 'aktiviert: ') + label; msgWarn = false; load();
         }).catch(function () { msg = 'netzwerkfehler.'; msgWarn = true; render(); });
       }
       function renderWeek(d, days) {
@@ -481,13 +508,25 @@
             + WD[(cur.getDay() + 6) % 7] + ' ' + ('0' + cur.getDate()).slice(-2) + '.' + ('0' + (cur.getMonth() + 1)).slice(-2) + '.</span><span class="cw-ents">');
           if (!es.length) out.push('<span class="cw-empty">—</span>');
           else es.forEach(function (e) {
-            // Einmal-Termine bekommen ein ✕ zum Löschen; Routinen-Vorkommen nicht.
-            var del = (e && !e.ausfall && !e.recurring)
-              ? '<span class="cw-del" title="löschen" data-del-day="' + k + '" data-del-label="' + esc((e && e.label) || '') + '" data-del-layer="' + esc((e && e.layer) || '') + '">✕</span>'
-              : '';
-            out.push('<span class="cw-ent' + (e && e.ausfall ? ' ausfall' : '') + '" title="'
-              + esc(entLabel(e) + (e && e.ort ? ' @' + e.ort : '')) + '">'
-              + esc(entLabel(e) + (e && e.ort ? ' @' + e.ort : '')) + del + '</span>');
+            if (!e || typeof e !== 'object') return;
+            // Einmal: ✎ bearbeiten + ✕ löschen. Routine: ⊘ deaktivieren / ↺ aktivieren.
+            var lbl = (e.label || ''), deakt = !!e.deaktiviert, acts = '';
+            if (e.ausfall) {
+              acts = '';
+            } else if (e.recurring) {
+              acts = '<span class="cw-act" title="' + (deakt ? 'wieder aktivieren' : 'diesen Termin deaktivieren')
+                + '" data-rt-day="' + k + '" data-rt-label="' + esc(lbl) + '" data-rt-layer="' + esc(e.layer || '')
+                + '" data-rt-off="' + (deakt ? '0' : '1') + '">' + (deakt ? '↺' : '⊘') + '</span>';
+            } else {
+              acts = '<span class="cw-act" title="bearbeiten" data-edit-day="' + k + '" data-edit-label="' + esc(lbl)
+                + '" data-edit-layer="' + esc(e.layer || '') + '" data-edit-time="' + esc(e.time || '')
+                + '" data-edit-ort="' + esc(e.ort || '') + '">✎</span>'
+                + '<span class="cw-del" title="löschen" data-del-day="' + k + '" data-del-label="' + esc(lbl)
+                + '" data-del-layer="' + esc(e.layer || '') + '">✕</span>';
+            }
+            var txt = entLabel(e) + (e.ort ? ' @' + e.ort : '') + (deakt ? ' (aus)' : '');
+            out.push('<span class="cw-ent' + (e.ausfall ? ' ausfall' : '') + (deakt ? ' deakt' : '') + '" title="'
+              + esc(entLabel(e) + (e.ort ? ' @' + e.ort : '')) + '">' + esc(txt) + acts + '</span>');
           });
           out.push('</span></div>');
           cur = addDays(cur, 1);
@@ -519,15 +558,20 @@
         var b = e.target.closest('button'); if (!b) return;
         if (b.hasAttribute('data-nav')) { msg = ''; step(Number(b.getAttribute('data-nav'))); }
         else if (b.hasAttribute('data-today')) { msg = ''; ref = isoToday(); load(); }
-        else if (b.hasAttribute('data-add')) { adding = !adding; msg = ''; if (adding && !formDay) formDay = (lastData && lastData.today) || isoToday(); b.classList.toggle('on', adding); render(); }
+        else if (b.hasAttribute('data-add')) { adding = !adding; editing = null; msg = ''; form = adding ? { day: (lastData && lastData.today) || isoToday() } : {}; b.classList.toggle('on', adding); render(); }
         else if (b.hasAttribute('data-view')) {
           var v = b.getAttribute('data-view');
           if (v !== view) { msg = ''; view = v; [].forEach.call(head.querySelectorAll('[data-view]'), function (x) { x.classList.toggle('on', x === b); }); load(); }
         }
       });
-      // Save + Delete liegen im (JS-gerenderten) Body → Event-Delegation.
+      // Save/Cancel/Edit/Delete/Routine liegen im (JS-gerenderten) Body → Delegation.
       body.addEventListener('click', function (e) {
-        var s = e.target.closest('[data-save]'); if (s) { addEntry(); return; }
+        if (e.target.closest('[data-save]')) { addEntry(); return; }
+        if (e.target.closest('[data-canceledit]')) { adding = false; editing = null; form = {}; render(); return; }
+        var ed = e.target.closest('[data-edit-label]');
+        if (ed) { e.stopPropagation(); beginEdit(ed.getAttribute('data-edit-day'), ed.getAttribute('data-edit-label'), ed.getAttribute('data-edit-layer'), ed.getAttribute('data-edit-time'), ed.getAttribute('data-edit-ort')); return; }
+        var rt = e.target.closest('[data-rt-label]');
+        if (rt) { e.stopPropagation(); routineToggle(rt.getAttribute('data-rt-day'), rt.getAttribute('data-rt-label'), rt.getAttribute('data-rt-layer'), rt.getAttribute('data-rt-off') === '1'); return; }
         var d = e.target.closest('[data-del-label]');
         if (d) { e.stopPropagation(); delEntry(d.getAttribute('data-del-day'), d.getAttribute('data-del-label'), d.getAttribute('data-del-layer')); }
       });

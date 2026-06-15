@@ -26,7 +26,7 @@ KEYS = [b'g', b'm', b'/', b'n', b'd', b't', b'j', b'k', b'h', b'l', b'q',
         b'\t', b'\x7f', b'\x08', b'\x1b', b'\x1b[A', b'\x1b[B', b'\x1b[C', b'\x1b[D',
         b'a', b'Z', b' ', b'\x00', b'\xff', b'\x1b[3~', b'x', b'w', b'2', b'9',
         b'G', b'M', b'N', b'D', b'T', b'p', b'r', b'3', b'4', b'8', b'_', b'=',
-        b'c', b'C', b'v', b'V']
+        b'c', b'C', b'v', b'V', b'e', b'E']
 SIZES = [(1, 1), (2, 5), (3, 40), (5, 59), (13, 80), (14, 60), (10, 200),
          (40, 300), (24, 80), (50, 250), (60, 400), (8, 8), (200, 600), (15, 61)]
 
@@ -170,7 +170,10 @@ class _AdvHandler(BaseHTTPRequestHandler):
                     "alarms": [],
                     "days": {"2026-06-09": [{"layer": "routinen", "label": "Geige",
                                              "time": "17:45", "ende": "18:30",
-                                             "ort": "Musikschule", "recurring": True}],
+                                             "ort": "Musikschule", "recurring": True},
+                                            {"layer": "routinen", "label": "Parkour",
+                                             "time": "19:00", "recurring": True,
+                                             "deaktiviert": True}],
                              "2026-06-11": [{"layer": "termine", "label": "Arzt",
                                              "time": "10:00"},
                                             {"layer": "routinen", "label": "Geige",
@@ -252,6 +255,8 @@ class _AdvHandler(BaseHTTPRequestHandler):
                                          "time": self._pick(["10:00", None, 5]),
                                          "ende": self._pick(["18:30", None]),
                                          "ort": self._pick(ws + [None]),
+                                         "recurring": self._pick([True, False, None]),
+                                         "deaktiviert": self._pick([True, False, None]),
                                          "ausfall": self._pick([None, "Ferien", 5])}]},
                         {self._pick(ws): self._pick(wn)}, {}, "x", None])}
         return self._pick([{}, None, "x"])
@@ -261,15 +266,25 @@ class _AdvHandler(BaseHTTPRequestHandler):
         obj = self._good(p) if self._r() < self.good_prob else self._adv(p)
         self._send(obj)
 
-    def do_POST(self):
+    def _drain_body(self):
         try:
             ln = int(self.headers.get("Content-Length", 0)); self.rfile.read(ln)
         except (ValueError, OSError):
             pass
-        self._send(self._pick([{"id": "g1"}, {}, None, {"id": None}]))
+
+    def do_POST(self):
+        self._drain_body()
+        # Kalender-Schreibpfade liefern plausible Antworten, der Rest Graph-ish.
+        self._send(self._pick([{"id": "g1"}, {}, None, {"id": None},
+                               {"ok": True, "conflicts": []}, {"changed": True}]))
+
+    def do_PUT(self):
+        self._drain_body()
+        self._send(self._pick([{"ok": True, "conflicts": []}, {}, None, "x"]))
 
     def do_DELETE(self):
-        self._send(self._pick([{}, None]))
+        self._drain_body()
+        self._send(self._pick([{}, None, {"deleted": 1}]))
 
     def _send(self, obj):
         try:

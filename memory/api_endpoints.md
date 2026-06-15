@@ -61,9 +61,12 @@ Alt-Dateien ohne `items`-Feld an Einträgen bleiben gültig (= Blatt).
 | `/api/lists`                          | GET     | Alle Listen inkl. Einträge (`[{id,name,created,next_item,items:[{id,text,done,items?:[…]}]}]`). |
 | `/api/lists`                          | POST    | Neue Liste. Body `{name}`. 400 bei leerem Namen. id = `l_<slug>` (kollisionsfrei). |
 | `/api/lists/<lid>`                    | DELETE  | Liste samt Einträgen löschen.         |
+| `/api/lists/<lid>/rename`             | POST    | Listen-Namen ändern. Body `{name}`. id bleibt stabil. 400 leer, 404 unbek. |
 | `/api/lists/<lid>/items`              | POST    | Eintrag anhängen. Body `{text}`, optional `{parent:<iid>}` → Unterpunkt von `<iid>`. 400 leer, 404 unbek. Liste/Eltern. Liefert `{id,text,done}`. |
 | `/api/lists/<lid>/nest`               | POST    | Ganze Liste in eine andere einordnen (Quelle → Eintrag, verschwindet aus Top-Level). Body `{into:<ziel-lid>}`, optional `{parent:<iid>}`. ids des Teilbaums werden im Ziel neu vergeben. 400 in-sich-selbst, 404 unbek. Liefert den neuen Eintrag. |
 | `/api/lists/<lid>/items/<int:iid>/toggle` | POST | Erledigt-Status umschalten (egal wie tief). 404 unbekannt. |
+| `/api/lists/<lid>/items/<int:iid>/rename` | POST | Eintrags-Text ändern (egal wie tief). Body `{text}`. 400 leer, 404 unbek. |
+| `/api/lists/<lid>/items/<int:iid>/move`   | POST | Eintrag (samt Teilbaum) RAUS in eine andere/dieselbe Liste. Body `{into:<ziel-lid>}`, optional `{parent:<iid>}`. ids im Ziel neu. 400 Zyklus (eigener Teilbaum), 404 unbek. Liefert den Eintrag. |
 | `/api/lists/<lid>/items/<int:iid>`    | DELETE  | Eintrag (samt Teilbaum) löschen, egal wie tief. 404 unbek. Liste/Eintrag. |
 
 ## Chat
@@ -124,17 +127,22 @@ auch in der ki-freien Kassette. Datums-Arithmetik macht Python
 | `/api/calendar`         | GET     | Woche (Mo-So) oder Monatsgitter, nach Tag gruppiert. Query: `view=week`(Default)`|month`, `ref=YYYY-MM-DD` (Default heute). |
 | `/api/calendar/entry`   | POST    | Einmal-Termin direkt anlegen. Body `{day=YYYY-MM-DD, label, time?, ende?, ort?, layer?}` (Default-Layer `termine`). Antwort `{ok, conflicts:[…]}` — Konflikt-Zeilen (Reise/Kollision/Knapp) nur als HINWEIS, kein Block. 400 bei fehlendem label/ungültigem day. |
 | `/api/calendar/entry`   | DELETE  | Einmal-Termin(e) löschen. Body `{day, label, layer?}`, Label-Match wie das KI-Tool (case-insensitiv, exakt/Teilstring). Antwort `{deleted:n}`. Wirkt NICHT auf Routinen. 400 ohne day/label. |
+| `/api/calendar/entry`   | PUT     | Bestehenden Einmal-Termin ÄNDERN (= delete alt + add neu). Body `{day, label, layer?, new:{day, label, time?, ende?, ort?}}`. Antwort `{ok, conflicts:[…]}`. 400 bei fehlendem alt-day/label oder ungültigem new.day. |
+| `/api/calendar/routine/skip` | POST | EINZELNES Routine-Vorkommen deaktivieren/aktivieren (reversibel, pro Tag). Body `{layer, label, day, off}` (`off=true` deaktiviert). Speichert die Datumsliste `aus` an der Routine; das Vorkommen bleibt sichtbar, aber als `deaktiviert` markiert. Antwort `{changed:bool}`. 400 ohne label/day. |
 
 GET-Antwort: `{view, ref, today, label, start, end, days:{iso:[entries]}, alarms}`;
 bei `view=month` zusätzlich `month, first, last` (echte Monatsgrenzen, damit die
 Front Rand-Tage aus Vor-/Folgemonat ausgraut). `days` nutzt `entries_in_range`
-(Routinen expandiert, `ausfall`-Feld bei Ferien). Müll-`ref` → 400, nie 500.
+(Routinen expandiert, `ausfall`-Feld bei Ferien, `deaktiviert`-Feld bei einzeln
+abgeschalteten Routine-Vorkommen). Müll-`ref` → 400, nie 500.
 
 **Schreiben ist DIREKTE Nutzeraktion, NICHT KI-gegatet** (wie `/api/log` beim
-Graph-Werkzeug) — das KI-Permission-Gate bleibt davon unberührt. Routinen
-(Wiederholungen) laufen weiter über die KI; die UI legt bewusst nur Einmal-
-Termine an. Front-Bedienung: TUI `a`=neu / `d`=löschen, Browser „＋ Termin"-Form
-+ ✕ pro Einmal-Termin.
+Graph-Werkzeug) — das KI-Permission-Gate bleibt davon unberührt. Einmal-Termine
+werden direkt angelegt/geändert/gelöscht; Routine-*Regeln* (rrule) entstehen
+weiter über die KI, aber **einzelne Routine-Vorkommen** lassen sich pro Tag
+ab-/anschalten. Front-Bedienung: TUI `a`=neu · `e`=bearbeiten (Einmal→Formular,
+Routine→De-/Aktivieren) · `d`=löschen/aus; Browser „＋ Termin"-Form + pro Termin
+✎ (bearbeiten) / ✕ (löschen) bzw. ⊘/↺ (Routine de-/aktivieren).
 
 ## Voice (sprachneutral, Core)
 

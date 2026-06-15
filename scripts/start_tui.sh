@@ -197,9 +197,13 @@ command -v tmux >/dev/null && tmux kill-session -t "$SESSION" 2>/dev/null || tru
 
 # Höhe für den Split berechnen (gemerkter Wert + echte Terminalhöhe → gedeckelt,
 # damit dem TUI ≥14 Zeilen bleiben). Logik in compute_boot_lines() oben.
+# Die echte Terminalgröße JETZT festhalten (das Skript läuft noch im echten
+# Terminal, vor tmux) — sie wird unten auch der Session aufgezwungen, siehe dort.
+TPUT_LINES="$(tput lines 2>/dev/null || true)"
+TPUT_COLS="$(tput cols  2>/dev/null || true)"
 SAVED=""
 [[ -f "$STATE_FILE" ]] && read -r SAVED < "$STATE_FILE" 2>/dev/null || true
-TERM_LINES="$(compute_boot_lines "$SAVED" "$(tput lines 2>/dev/null || true)")"
+TERM_LINES="$(compute_boot_lines "$SAVED" "$TPUT_LINES")"
 
 # ── Ist :5000 schon belegt? KLARE Ansage statt stillem Zweit-Backend ─────
 # Hierher kommen wir nur, wenn KEINE 'zentrale-tui'-Session läuft (sonst oben
@@ -266,7 +270,18 @@ if command -v tmux >/dev/null; then
   # Frische Session (alte Reste weg), pane 0 = TUI. Wenn die TUI endet ('q'),
   # killt sie die ganze Session → attach kehrt zurück → cleanup stoppt Backend.
   tmux kill-session -t "$SESSION" 2>/dev/null || true
-  tmux new-session -d -s "$SESSION" -c "$PWD" "'$SELF' --run-tui"
+  # Session SOFORT in der echten Terminalgröße erzeugen (-x/-y). SONST: eine
+  # detached Session startet in der tmux-Default-Größe (80x24); das gleich danach
+  # laufende `split-window -l N` (im attach unten) rechnet das N gegen diese 24
+  # statt gegen die echten z.B. 40 Zeilen — und wenn der Client attached und das
+  # Fenster auf 40 wächst, verteilt tmux den Zuwachs PROPORTIONAL auf beide Panes,
+  # die untere bash wird also größer als N. Der after-resize-pane-Hook merkt sich
+  # diesen aufgeblähten Wert → nächster Start noch höher → die bash kroch bei
+  # jedem Neustart nach oben. Mit -x/-y gibt es kein Nachwachsen, N bleibt N.
+  size_args=()
+  [[ "$TPUT_COLS"  =~ ^[0-9]+$ ]] && size_args+=(-x "$TPUT_COLS")
+  [[ "$TPUT_LINES" =~ ^[0-9]+$ ]] && size_args+=(-y "$TPUT_LINES")
+  tmux new-session -d -s "$SESSION" "${size_args[@]}" -c "$PWD" "'$SELF' --run-tui"
   # Tastatur/Optionen/Hook setzen (switchen vs. resizen sauber getrennt, Detach
   # aus, Höhen-Hook). Eine Funktion → die pytest-Suite prüft EXAKT dasselbe.
   apply_tui_tmux_keys "$SESSION"

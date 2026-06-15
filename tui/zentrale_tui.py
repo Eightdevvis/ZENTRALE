@@ -411,7 +411,7 @@ TUI_KEYS = [
     ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen"),
     ("l",   "Listen (Mitte): anlegen · einträge abhaken (space) / löschen"),
     ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · o=Handelsrouten · w=Fenster"),
-    ("c",   "Kalender (Mitte): ←→ blättern · ↑↓ wählen · a neu · d löschen · v Woche/Monat · 0 heute"),
+    ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · ←→ blättern · v Woche/Monat"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
@@ -595,10 +595,14 @@ def run_ui(stdscr, store):
     #   lrename: in "new" benennen wir eine bestehende Liste um (id) statt neu
     #   move_iid/nsel: zu verschiebender Eintrag + Zielauswahl ("move"/"move_new")
     #   nest_src/nsel: Quell-Liste + Auswahl-Index beim Einordnen ("nest")
-    # Einträge sind Mischtypen: jeder kann eigene Unterpunkte ('items') tragen,
-    # die TUI rendert/navigiert den Baum flachgeklopft (l_flatten).
+    # Einträge sind Mischtypen: jeder kann eigene Unterpunkte ('items') tragen.
+    # In "view" navigiert man wie Ordner: ein Eintrag MIT Kindern ist eine
+    # anklickbare Zeile (Enter = reingehen), kein aufgeklappter Baum. path ist
+    # der Drill-Pfad (Eintrags-ids) innerhalb der offenen Liste def; isel zählt
+    # die DIREKTEN Kinder der gerade offenen Ebene.
     L = {"active": False, "view": "list", "lists": [], "sel": 0,
-         "def": None, "isel": 0, "adding": False, "input": "", "msg": "",
+         "def": None, "isel": 0, "path": [], "adding": False, "input": "",
+         "msg": "",
          "confirm": False,             # Lösch-Nachfrage für ganze Liste
          "addparent": None,            # Eltern-id beim Anhängen (None = top)
          "imode": "add",               # Eingabezeile: add|sub|rename
@@ -634,11 +638,15 @@ def run_ui(stdscr, store):
     #   ref    : ISO-Datum irgendwo im gezeigten Zeitraum (Blätter-Anker)
     #   data   : letzte /api/calendar-Antwort (None ⇒ beim Zeichnen neu holen)
     #   mode   : "view" (blättern/auswählen) | "add" (Termin-Eingabe, gestaffelt)
-    #   sel    : Auswahl-Index unter den löschbaren Einmal-Terminen (Wochenansicht)
+    #            | "routine" (De-/Aktivieren-Screen eines Routine-Vorkommens)
+    #   sel    : Auswahl-Index über ALLE Einträge der Woche (Einmal + Routine)
     #   astage : Add-Stufe 0=Datum 1=Zeit 2=Titel; aday/atime/alabel = Eingaben
+    #   editing: None | (iso,label,layer) — Add-Formular im Ändern-Modus
+    #   ract   : der im "routine"-Screen gewählte Eintrag (für De-/Aktivieren)
     K = {"active": False, "view": "week", "ref": date.today().isoformat(),
          "data": None, "msg": "", "mode": "view", "sel": 0, "confirmdel": False,
-         "astage": 0, "aday": "", "atime": "", "alabel": "", "amsg": ""}
+         "astage": 0, "aday": "", "atime": "", "alabel": "", "amsg": "",
+         "editing": None, "ract": None}
     KAL_WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
     def m_fetch(cols, rows):
@@ -806,11 +814,36 @@ def run_ui(stdscr, store):
                 t += ct
         return d, t
 
-    def l_flat_index(iid):
-        """Flach-Index des Eintrags mit iid in der offenen Liste (0 wenn weg)."""
-        flat = l_flatten(L["def"].get("items")) if L["def"] else []
-        for i, (it, _d) in enumerate(flat):
-            if it.get("id") == iid:
+    def l_container():
+        """Die gerade offene Ebene auflösen: (direkte Kinder, container-id,
+        Breadcrumb-Liste) anhand L["def"] + L["path"]. container-id ist None auf
+        oberster Ebene (Listen-Wurzel) bzw. die id des reingegangenen Eintrags.
+        Ein gebrochener Pfad (Eintrag inzwischen weg) wird hier gekürzt."""
+        if not L["def"]:
+            return [], None, []
+        node = L["def"]
+        pid = None
+        crumbs = [str(L["def"].get("name") or "")]
+        valid = []
+        for iid in L["path"]:
+            nxt = next((it for it in (node.get("items") or [])
+                        if isinstance(it, dict) and it.get("id") == iid), None)
+            if nxt is None:
+                break
+            node = nxt
+            pid = iid
+            valid.append(iid)
+            crumbs.append(str(nxt.get("text") or ""))
+        if valid != L["path"]:
+            L["path"] = valid
+        return (node.get("items") or []), pid, crumbs
+
+    def l_index_in_container(iid):
+        """Index des Eintrags mit iid unter den DIREKTEN Kindern der offenen
+        Ebene (0, wenn nicht da)."""
+        items, _pid, _cr = l_container()
+        for i, it in enumerate(items):
+            if isinstance(it, dict) and it.get("id") == iid:
                 return i
         return 0
 
@@ -835,11 +868,11 @@ def run_ui(stdscr, store):
         cur = next((x for x in L["lists"] if x.get("id") == L["def"]["id"]), None)
         L["def"] = cur
         if cur is None:                       # Liste verschwunden → zurück zur Übersicht
-            L["view"] = "list"
+            L["view"] = "list"; L["path"] = []
             return
-        n = len(l_flatten(cur.get("items")))
-        if L["isel"] >= n:
-            L["isel"] = max(0, n - 1)
+        items, _pid, _cr = l_container()      # validiert/kürzt den Drill-Pfad
+        if L["isel"] >= len(items):
+            L["isel"] = max(0, len(items) - 1)
 
     def safe_addstr(y, x, text, attr=0):
         h, w = stdscr.getmaxyx()
@@ -1034,30 +1067,34 @@ def run_ui(stdscr, store):
             addclip(bottom, ix, (tip + L["msg"]).strip(), iw, C["faint"])
 
         elif L["view"] == "view" and L["def"]:
-            d = L["def"]
-            flat = l_flatten(d.get("items"))
-            done, total = l_count(d.get("items"))
-            addclip(by + 1, ix, "%s  (%d/%d)" % (str(d.get("name") or ""), done, total), iw, C["bright"])
+            items, _pid, crumbs = l_container()   # NUR die offene Ebene (Ordner-Sicht)
+            done, total = l_count(items)
+            head = " / ".join(crumbs)             # Breadcrumb: liste / ordner / …
+            addclip(by + 1, ix, "%s  (%d/%d)" % (head, done, total), iw, C["bright"])
             safe_addstr(by + 1, bx + bw - 9, "[a neu]", C["acc"])
             safe_addstr(by + 2, ix, "─" * iw, C["faint"])
             input_row = by + bh - 3
             list_bottom = (input_row - 1) if L["adding"] else bottom
             yy = by + 3
-            if not flat:
+            if not items:
                 addclip(yy, ix, "noch leer — 'a' hängt was an", iw, C["faint"])
             else:
                 # Fenster um den Cursor, damit lange Listen scrollen statt abzuschneiden
                 avail = max(1, list_bottom - yy)
-                start = max(0, min(L["isel"] - avail + 1, len(flat) - avail)) if len(flat) > avail else 0
-                for off, (it, depth) in enumerate(flat[start:start + avail]):
+                start = max(0, min(L["isel"] - avail + 1, len(items) - avail)) if len(items) > avail else 0
+                for off, it in enumerate(items[start:start + avail]):
+                    if not isinstance(it, dict):
+                        continue
                     sel = (start + off == L["isel"])
                     box = "[x]" if it.get("done") else "[ ]"
                     kids = it.get("items")
+                    folder = isinstance(kids, list) and bool(kids)
                     suffix = ""
-                    if isinstance(kids, list) and kids:
-                        cd, ct = l_count(kids)        # Unterpunkte-Fortschritt
+                    if folder:
+                        cd, ct = l_count(kids)        # Ordner-Fortschritt
                         suffix = "  (%d/%d)" % (cd, ct)
-                    line = "%s %s%s %s%s" % ("›" if sel else " ", "  " * depth,
+                    mark = "▸ " if folder else "  "   # Ordner = anklickbar (enter rein)
+                    line = "%s %s%s %s%s" % ("›" if sel else " ", mark,
                                              box, str(it.get("text") or ""), suffix)
                     attr = C["faint"] if it.get("done") else (C["bright"] if sel else C["dim"])
                     addclip(yy, ix, line, iw, attr)
@@ -1068,7 +1105,8 @@ def run_ui(stdscr, store):
                 addclip(input_row, ix, lbl + ": " + L["input"] + "_", iw, C["bright"])
                 addclip(bottom, ix, (tip + " · esc abbrechen  " + L["msg"]).strip(), iw, C["faint"])
             else:
-                addclip(bottom, ix, "space hak · a neu · s sub · r name · m raus · d weg · esc zu", iw, C["faint"])
+                back = "zurück" if L["path"] else "zu"
+                addclip(bottom, ix, "enter rein/hak · space hak · a/s neu · r name · m raus · d weg · esc " + back, iw, C["faint"])
 
         elif L["view"] == "nest":          # Liste in eine andere einordnen
             src = next((x for x in L["lists"] if x.get("id") == L["nest_src"]), None)
@@ -1265,11 +1303,13 @@ def run_ui(stdscr, store):
         K["ref"] = date.today().isoformat()
         K["data"] = None
 
-    def k_deletable():
-        """Flache Liste der LÖSCHBAREN Termine der aktuellen Antwort in Render-
-        Reihenfolge: (iso, label, layer) je Einmal-Eintrag (keine Routinen, keine
-        Ausfälle). Quelle für Auswahl (K['sel']) + Löschen. Defensiv gegen
-        kaputte Backend-Daten (alles über JSON)."""
+    def k_selectable():
+        """Flache Liste ALLER auswählbaren Einträge der Antwort in Render-
+        Reihenfolge (Einmal-Termine UND Routine-Vorkommen; nur reine Ausfälle/
+        Ferien sind nicht handelbar). Jeder Eintrag als Dict mit Typ-Infos —
+        Quelle für Auswahl (K['sel']) + alle Aktionen. Reihenfolge MUSS zum
+        Wochen-Render passen (sortierte Tage, Eintragsreihenfolge), sonst zeigt
+        der ›-Cursor auf den falschen Termin. Defensiv gegen kaputte JSON-Daten."""
         d = K["data"]
         if not isinstance(d, dict):
             return []
@@ -1282,8 +1322,14 @@ def run_ui(stdscr, store):
             if not isinstance(ents, list):
                 continue
             for e in ents:
-                if isinstance(e, dict) and not e.get("recurring") and not e.get("ausfall"):
-                    out.append((iso, e.get("label", ""), e.get("layer", "termine")))
+                if not isinstance(e, dict) or e.get("ausfall"):
+                    continue   # Ausfall (Ferien) ist nur Info, nicht handelbar
+                out.append({"iso": iso, "label": e.get("label", ""),
+                            "layer": e.get("layer", "termine"),
+                            "recurring": bool(e.get("recurring")),
+                            "deaktiviert": bool(e.get("deaktiviert")),
+                            "time": e.get("time"), "ende": e.get("ende"),
+                            "ort": e.get("ort")})
         return out
 
     def k_parse_day(s):
@@ -1311,8 +1357,9 @@ def run_ui(stdscr, store):
             return None
 
     def k_add_save():
-        """Add-Formular absenden: validieren, POST /api/calendar/entry, dann
-        zurück in die View (Konflikt-Hinweis aus der Antwort mitnehmen)."""
+        """Add-/Edit-Formular absenden: validieren, dann je nach K['editing']
+        einen NEUEN Termin anlegen (POST) oder einen bestehenden ÄNDERN (PUT).
+        Konflikt-Hinweis aus der Antwort mitnehmen, zurück in die View."""
         day = k_parse_day(K["aday"])
         if day is None:
             K["amsg"] = "datum? TT.MM"; return
@@ -1322,18 +1369,42 @@ def run_ui(stdscr, store):
         time = K["atime"].strip() or None
         if time and parse_clock(time) is None:
             K["amsg"] = "zeit? HH:MM (leer=ganztags)"; return
-        body = {"day": day, "label": label}
+        new = {"day": day, "label": label}
         if time:
-            body["time"] = time
+            new["time"] = time
         try:
-            res = api_call("/api/calendar/entry", method="POST", body=body)
+            if K["editing"]:
+                old_iso, old_label, old_layer = K["editing"]
+                res = api_call("/api/calendar/entry", method="PUT",
+                               body={"day": old_iso, "label": old_label,
+                                     "layer": old_layer, "new": new})
+                verb = "geändert: "
+            else:
+                res = api_call("/api/calendar/entry", method="POST", body=new)
+                verb = "angelegt: "
             conf = (res or {}).get("conflicts") or []
-            K["msg"] = "angelegt: " + label + (" ⚠" if conf else "")
-            K["ref"] = day; K["data"] = None       # zur Woche des neuen Termins
-            K["mode"] = "view"; K["astage"] = 0
+            K["msg"] = verb + label + (" ⚠" if conf else "")
+            K["ref"] = day; K["data"] = None       # zur Woche des Termins springen
+            K["mode"] = "view"; K["astage"] = 0; K["editing"] = None
             K["aday"] = K["atime"] = K["alabel"] = K["amsg"] = ""
         except Exception:
             K["amsg"] = "speichern fehlgeschlagen"
+
+    def k_begin_edit():
+        """Den ausgewählten Eintrag bearbeiten: Einmal-Termin → Ändern-Formular
+        (vorbefüllt); Routine-Vorkommen → De-/Aktivieren-Screen."""
+        sels = k_selectable()
+        if not sels or not (0 <= K["sel"] < len(sels)):
+            return
+        it = sels[K["sel"]]
+        if it["recurring"]:
+            K["mode"] = "routine"; K["ract"] = it; K["msg"] = ""
+        else:
+            K["mode"] = "add"; K["astage"] = 0; K["amsg"] = ""; K["msg"] = ""
+            K["editing"] = (it["iso"], it["label"], it["layer"])
+            K["aday"] = date.fromisoformat(it["iso"]).strftime("%d.%m")
+            K["atime"] = it.get("time") or ""
+            K["alabel"] = it["label"]
 
     def k_delete_sel(item):
         day, label, layer = item
@@ -1345,6 +1416,21 @@ def run_ui(stdscr, store):
         except Exception:
             K["msg"] = "löschen fehlgeschlagen"
         K["data"] = None
+
+    def k_routine_toggle(off):
+        """Das im Routine-Screen gewählte EINZELNE Vorkommen de-/aktivieren
+        (POST /api/calendar/routine/skip). off=True deaktiviert, False aktiviert."""
+        it = K["ract"]
+        if not it:
+            K["mode"] = "view"; return
+        try:
+            api_call("/api/calendar/routine/skip", method="POST",
+                     body={"layer": it["layer"], "label": it["label"],
+                           "day": it["iso"], "off": off})
+            K["msg"] = ("deaktiviert: " if off else "aktiviert: ") + it["label"]
+        except Exception:
+            K["msg"] = "fehlgeschlagen"
+        K["mode"] = "view"; K["ract"] = None; K["data"] = None
 
     def _k_entry_line(e):
         """Eine Termin-Zeile kompakt: Zeit(spanne) + Label (+ Ort). Ausfall
@@ -1393,19 +1479,40 @@ def run_ui(stdscr, store):
             head += "  ⚠%d" % nalarm
         addclip(by + 1, ix, head, iw, C["bright"])
 
-        # Add-Formular hat Vorrang: füllt den Body, wenn mode == "add".
+        # Add-/Edit-Formular hat Vorrang: füllt den Body, wenn mode == "add".
         if K["mode"] == "add":
             fy = by + 3
             cz = "_"                        # Cursor-Marker an der aktiven Stufe
-            addclip(fy, ix, "NEUER TERMIN", iw, C["bright"])
+            addclip(fy, ix, "TERMIN ÄNDERN" if K["editing"] else "NEUER TERMIN", iw, C["bright"])
             addclip(fy + 2, ix, "Datum: " + K["aday"] + (cz if K["astage"] == 0 else "")
                     + "   (TT.MM, leer=heute)", iw, C["bright"] if K["astage"] == 0 else C["dim"])
             addclip(fy + 3, ix, "Zeit:  " + K["atime"] + (cz if K["astage"] == 1 else "")
                     + "   (HH:MM, leer=ganztags)", iw, C["bright"] if K["astage"] == 1 else C["dim"])
             addclip(fy + 4, ix, "Titel: " + K["alabel"] + (cz if K["astage"] == 2 else ""),
                     iw, C["bright"] if K["astage"] == 2 else C["dim"])
-            addclip(bottom, ix, ("enter weiter/anlegen · esc zurück  " + K["amsg"]).strip(),
+            addclip(bottom, ix, ("enter weiter/speichern · esc zurück  " + K["amsg"]).strip(),
                     iw, C["faint"])
+            return
+
+        # Routine-Screen: ein einzelnes Vorkommen de-/aktivieren.
+        if K["mode"] == "routine":
+            it = K["ract"] or {}
+            fy = by + 3
+            try:
+                wd = KAL_WD[date.fromisoformat(it.get("iso", "")).weekday()]
+                dd = date.fromisoformat(it["iso"]).strftime("%d.%m.%Y")
+            except (KeyError, ValueError):
+                wd, dd = "", it.get("iso", "")
+            t = (it.get("time") or "")
+            addclip(fy, ix, "ROUTINE-TERMIN", iw, C["bright"])
+            addclip(fy + 2, ix, "%s  ·  %s %s %s" % (it.get("label", "?"), wd, dd, t), iw, C["dim"])
+            if it.get("deaktiviert"):
+                addclip(fy + 4, ix, "Dieser Termin ist DEAKTIVIERT.", iw, C["faint"])
+                addclip(bottom, ix, "a = wieder aktivieren · esc zurück", iw, C["faint"])
+            else:
+                addclip(fy + 4, ix, "Nur DIESEN einen Termin deaktivieren?", iw, C["dim"])
+                addclip(fy + 5, ix, "(Routine läuft an anderen Tagen weiter.)", iw, C["faint"])
+                addclip(bottom, ix, "d = deaktivieren · esc zurück", iw, C["faint"])
             return
 
         if K["view"] == "month":
@@ -1440,15 +1547,16 @@ def run_ui(stdscr, store):
                 cur += timedelta(days=1)
         else:
             # Wochenliste: pro Tag eine Kopfzeile, Termine eingerückt darunter.
-            # Löschbare Einmal-Termine sind auswählbar (›-Cursor, K["sel"]).
+            # ALLE Termine (Einmal + Routine) sind auswählbar (›-Cursor, K["sel"]);
+            # nur Ausfälle (Ferien) sind reine Info. Reihenfolge = k_selectable().
             try:
                 start = date.fromisoformat(d["start"]); end = date.fromisoformat(d["end"])
             except (KeyError, ValueError):
                 return
-            deletable = k_deletable()
-            if K["sel"] >= len(deletable):
-                K["sel"] = max(0, len(deletable) - 1)
-            di = 0                          # läuft über die löschbaren Termine
+            nsel = len(k_selectable())
+            if K["sel"] >= nsel:
+                K["sel"] = max(0, nsel - 1)
+            di = 0                          # läuft über die auswählbaren Termine
             yy, cur = by + 2, start
             while cur <= end and yy < bottom:
                 iso = cur.isoformat()
@@ -1460,26 +1568,30 @@ def run_ui(stdscr, store):
                 addclip(yy, ix, hdr + ("  ‹heute›" if is_today else ""), iw,
                         C["bright"] if is_today else C["acc"])
                 yy += 1
-                if not ents:
-                    addclip(yy, ix + 2, "—", iw - 2, C["faint"]); yy += 1
+                shown = False
                 for e in ents:
                     if yy >= bottom:
                         break
                     if not isinstance(e, dict):
                         continue
-                    is_del = not e.get("recurring") and not e.get("ausfall")
-                    selected = is_del and di == K["sel"]
+                    shown = True
+                    if e.get("ausfall"):        # Info-Zeile, nicht auswählbar
+                        addclip(yy, ix, "  " + _k_entry_line(e), iw, C["faint"]); yy += 1
+                        continue
+                    selected = (di == K["sel"])
+                    deakt = bool(e.get("deaktiviert"))
                     mark = "› " if selected else "  "
                     if selected:
                         attr = C["bright"] | curses.A_REVERSE
-                    elif e.get("ausfall"):
+                    elif deakt:
                         attr = C["faint"]
                     else:
                         attr = C["dim"]
-                    addclip(yy, ix, mark + _k_entry_line(e), iw, attr)
-                    if is_del:
-                        di += 1
-                    yy += 1
+                    txt = _k_entry_line(e) + (" (aus)" if deakt else "")
+                    addclip(yy, ix, mark + txt, iw, attr)
+                    di += 1; yy += 1
+                if not shown and yy < bottom:
+                    addclip(yy, ix + 2, "—", iw - 2, C["faint"]); yy += 1
                 cur += timedelta(days=1)
 
         info = "%s · %s" % ("woche" if K["view"] == "week" else "monat", label)
@@ -1489,7 +1601,7 @@ def run_ui(stdscr, store):
         elif K["msg"]:
             hint = K["msg"]
         elif K["view"] == "week":
-            hint = "↑↓ wählen · a neu · d löschen · ←→ blättern · v monat · esc"
+            hint = "↑↓ wählen · e bearbeiten · a neu · d löschen/aus · ←→ woche · v monat"
         else:
             hint = "←→ blättern · v woche · a neu · 0 heute · esc"
         addclip(bottom, ix + iw - len(hint), hint, len(hint), C["faint"])
@@ -1653,6 +1765,7 @@ def run_ui(stdscr, store):
                 elif ch in (10, 13, curses.KEY_ENTER):
                     if L["lists"]:
                         L["def"] = L["lists"][L["sel"]]; L["isel"] = 0
+                        L["path"] = []            # frisch auf oberster Ebene
                         L["adding"] = False; L["input"] = ""; L["msg"] = ""
                         L["view"] = "view"
                 elif ch in (ord("n"), ord("N")):
@@ -1724,12 +1837,16 @@ def run_ui(stdscr, store):
                                 # Umbenennen ist einmalig; neu/sub bleibt offen
                                 # für Schnell-Eingabe mehrerer Einträge in Folge.
                                 L["input"] = ""; L["edit_iid"] = None
-                                if L["imode"] == "rename":
+                                close = (L["imode"] == "rename")
+                                mode_add = (L["imode"] == "add")
+                                if close:
                                     L["adding"] = False; L["imode"] = "add"
                                 L["addparent"] = None
                                 l_load(); l_sync_def()
-                                if new_id is not None:        # Cursor auf den betroffenen Eintrag
-                                    L["isel"] = l_flat_index(new_id)
+                                # Cursor nur beim Anhängen auf der OFFENEN Ebene
+                                # nachziehen; sub/rename lassen die Auswahl stehen.
+                                if mode_add and new_id is not None:
+                                    L["isel"] = l_index_in_container(new_id)
                             except Exception:
                                 L["msg"] = "speichern fehlgeschlagen"
                     elif ch in (curses.KEY_BACKSPACE, 127, 8):
@@ -1737,17 +1854,34 @@ def run_ui(stdscr, store):
                     elif 32 <= ch <= 126 and len(L["input"]) < 80:
                         L["input"] += chr(ch)
                 else:
-                    flat = l_flatten(L["def"].get("items")) if L["def"] else []
-                    cur = flat[L["isel"]][0] if 0 <= L["isel"] < len(flat) else None
-                    if ch in (27, ord("l"), ord("L")):         # Esc/l → zurück zur Übersicht
-                        L["view"] = "list"; L["msg"] = ""; l_load()
+                    items, pid, _cr = l_container()      # nur die offene Ebene
+                    cur = items[L["isel"]] if 0 <= L["isel"] < len(items) else None
+                    if ch in (27, ord("l"), ord("L")):         # Esc/l → Ebene zurück, sonst Übersicht
+                        if L["path"]:
+                            back = L["path"][-1]
+                            L["path"] = L["path"][:-1]
+                            L["isel"] = l_index_in_container(back)
+                            L["msg"] = ""
+                        else:
+                            L["view"] = "list"; L["msg"] = ""; l_load()
                     elif ch in (ord("q"), ord("Q")):           # q → ganze TUI beenden
                         break
                     elif ch in (curses.KEY_UP, ord("k")):
                         L["isel"] = max(0, L["isel"] - 1)
                     elif ch in (curses.KEY_DOWN, ord("j")):
-                        L["isel"] = min(max(0, len(flat) - 1), L["isel"] + 1)
-                    elif ch in (ord(" "), 10, 13, curses.KEY_ENTER):
+                        L["isel"] = min(max(0, len(items) - 1), L["isel"] + 1)
+                    elif ch in (10, 13, curses.KEY_ENTER):     # Enter: Ordner rein, sonst abhaken
+                        kids = cur.get("items") if cur else None
+                        if cur and isinstance(kids, list) and kids:
+                            L["path"] = L["path"] + [cur["id"]]; L["isel"] = 0; L["msg"] = ""
+                        elif cur and lid:
+                            try:
+                                api_call("/api/lists/%s/items/%d/toggle" % (lid, cur["id"]),
+                                         method="POST")
+                                l_load(); l_sync_def()
+                            except Exception:
+                                L["msg"] = "umschalten fehlgeschlagen"
+                    elif ch == ord(" "):                       # space: immer abhaken (auch Ordner)
                         if cur and lid:
                             try:
                                 api_call("/api/lists/%s/items/%d/toggle" % (lid, cur["id"]),
@@ -1755,9 +1889,9 @@ def run_ui(stdscr, store):
                                 l_load(); l_sync_def()
                             except Exception:
                                 L["msg"] = "umschalten fehlgeschlagen"
-                    elif ch in (ord("a"), ord("A")):           # neuer Eintrag (oberste Ebene)
+                    elif ch in (ord("a"), ord("A")):           # neuer Eintrag in DIESER Ebene
                         L["adding"] = True; L["imode"] = "add"
-                        L["addparent"] = None; L["edit_iid"] = None
+                        L["addparent"] = pid; L["edit_iid"] = None
                         L["input"] = ""; L["msg"] = ""
                     elif ch in (ord("s"), ord("S")):           # Unterpunkt zum gewählten Eintrag
                         if cur:
@@ -1911,11 +2045,22 @@ def run_ui(stdscr, store):
                         K["atime"] += cc
                     elif K["astage"] == 2 and len(K["alabel"]) < 60:
                         K["alabel"] += cc
-            elif K["confirmdel"]:              # Lösch-Nachfrage offen
+            elif K["mode"] == "routine":       # Routine-Vorkommen de-/aktivieren
+                it = K["ract"] or {}
+                if ch == 27:                   # Esc → zurück ohne Änderung
+                    K["mode"] = "view"; K["ract"] = None
+                elif it.get("deaktiviert") and ch in (ord("a"), ord("A"),
+                                                      10, 13, curses.KEY_ENTER):
+                    k_routine_toggle(False)    # wieder aktivieren
+                elif (not it.get("deaktiviert")) and ch in (ord("d"), ord("D"),
+                                                            10, 13, curses.KEY_ENTER):
+                    k_routine_toggle(True)     # diesen Termin deaktivieren
+            elif K["confirmdel"]:              # Lösch-Nachfrage (Einmal-Termin) offen
                 if ch in (ord("j"), ord("J"), ord("y"), ord("Y"), 10, 13, curses.KEY_ENTER):
-                    dl = k_deletable()
-                    if dl and 0 <= K["sel"] < len(dl):
-                        k_delete_sel(dl[K["sel"]])
+                    sels = k_selectable()
+                    if sels and 0 <= K["sel"] < len(sels) and not sels[K["sel"]]["recurring"]:
+                        it = sels[K["sel"]]
+                        k_delete_sel((it["iso"], it["label"], it["layer"]))
                     K["confirmdel"] = False
                 elif ch != -1:                 # alles andere bricht ab
                     K["confirmdel"] = False; K["msg"] = ""
@@ -1938,11 +2083,20 @@ def run_ui(stdscr, store):
                     k_today(); K["sel"] = 0; K["msg"] = ""
                 elif ch in (ord("a"), ord("A")):               # a → neuen Termin anlegen
                     K["mode"] = "add"; K["astage"] = 0; K["amsg"] = ""; K["msg"] = ""
+                    K["editing"] = None
                     K["aday"] = date.fromisoformat(K["ref"]).strftime("%d.%m")
                     K["atime"] = ""; K["alabel"] = ""
-                elif ch in (ord("d"), ord("D")):               # d → ausgewählten Termin löschen
-                    if K["view"] == "week" and k_deletable():
-                        K["confirmdel"] = True; K["msg"] = ""
+                elif ch in (ord("e"), ord("E"), 10, 13, curses.KEY_ENTER):   # bearbeiten
+                    if K["view"] == "week":
+                        k_begin_edit()
+                elif ch in (ord("d"), ord("D")):               # d → löschen / Routine-Screen
+                    if K["view"] == "week":
+                        sels = k_selectable()
+                        if sels and 0 <= K["sel"] < len(sels):
+                            if sels[K["sel"]]["recurring"]:
+                                K["mode"] = "routine"; K["ract"] = sels[K["sel"]]; K["msg"] = ""
+                            else:
+                                K["confirmdel"] = True; K["msg"] = ""
                 elif ch in (ord("t"), ord("T")):               # Theme darf auch hier zyklieren
                     theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
         else:                                  # Normal-Modus: Shortcuts aktiv
@@ -1959,6 +2113,7 @@ def run_ui(stdscr, store):
             elif ch in (ord("c"), ord("C")):   # Kalender öffnen
                 K["active"] = True; K["data"] = None
                 K["mode"] = "view"; K["sel"] = 0; K["confirmdel"] = False; K["msg"] = ""
+                K["editing"] = None; K["ract"] = None
             elif ch == ord("/"):               # Befehlszeile öffnen
                 cmd_mode = True; cmd_buf = "/"; cmd_msg = ""
         # KEY_RESIZE oder Timeout → einfach neu zeichnen

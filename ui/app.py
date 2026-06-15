@@ -39,6 +39,9 @@ import tutor_langs     # type: ignore  – Sprach-Profile (Liste)
 import consolidation # type: ignore  – Phase E: STM → LTM Konsolidierung
 import telemetry    # type: ignore  – PC-Host-Telemetrie (CPU/GPU/VRAM/Temp/RAM)
 import kassette     # type: ignore  – welche Kassette läuft (monolith | laptop)
+import mail         # type: ignore  – Mail-Triage (read-only Panel + Live-Poll)
+import mail_secrets # type: ignore  – verschlüsselter Zugangsdaten-Speicher
+import threading    # für den Hintergrund-Poll (blockiert den Request nicht)
 from map import base_features as map_base_features  # type: ignore  – Maps-System (core/map/)
 from map import base_braille as map_base_braille  # type: ignore  – Maps-System (Braille-Füllung)
 from map import layers as map_layers  # type: ignore  – Overlay-Layer (Achse 2, Handelsrouten)
@@ -1055,6 +1058,60 @@ def api_tutor_stop():
     """Beendet die aktive Tutor-Session."""
     tutor_session.deactivate()
     return jsonify({"ok": True})
+
+
+# ── Mail-Triage (read-only Panel + expliziter Live-Poll) ────────────────
+# Das Panel selbst ist KEY-FREI: counts/review/recent lesen nur den lokalen
+# Triage-Stand (data/mail_state.json, unverschlüsselt). Die Passphrase (Env
+# ODER OS-Keyring) braucht NUR der Live-Poll, der echte IMAP-Aktionen ausführt.
+
+_mail_poll_lock = threading.Lock()
+_mail_poll_running = {"on": False}
+
+
+@app.route('/api/mail')
+def api_mail():
+    """Alles fürs Mail-Panel in einem Rutsch: Zähler je Kategorie, der
+    Review-Stapel (unbekannte Absender) und die zuletzt sortierten Mails.
+    `can_poll` sagt der UI, ob ein Live-Poll möglich ist (Passphrase vorhanden)."""
+    try:
+        limit = request.args.get('limit', default=50, type=int)
+        limit = min(max(limit, 1), 200)
+        return jsonify({
+            "counts": mail.counts(),
+            "review": mail.review_stack(limit=20),
+            "recent": mail.recent(limit=limit),
+            "can_poll": mail_secrets.available(),
+            "polling": _mail_poll_running["on"],
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/mail/poll', methods=['POST'])
+def api_mail_poll():
+    """Stößt einen LIVE-Poll im Hintergrund an (explizite Nutzer-Aktion =
+    Einwilligung; Move/Trash sind umkehrbar). Kehrt sofort zurück — der
+    Fortschritt läuft über die normalen Log-Streams. Verhindert Parallel-Polls."""
+    if not mail_secrets.available():
+        return jsonify({"error": "keine Passphrase (Env oder OS-Keyring) — "
+                                 "kein Live-Poll möglich"}), 409
+    with _mail_poll_lock:
+        if _mail_poll_running["on"]:
+            return jsonify({"ok": True, "already": True})
+        _mail_poll_running["on"] = True
+
+    def _run():
+        try:
+            mail.poll_all(dry_run=False)
+        except Exception as e:
+            state.push_log(f"MAIL: Hintergrund-Poll abgebrochen — "
+                           f"{type(e).__name__}: {e}")
+        finally:
+            _mail_poll_running["on"] = False
+
+    threading.Thread(target=_run, daemon=True, name="mail-poll").start()
+    return jsonify({"ok": True, "started": True})
 
 
 # ── Start ──────────────────────────────────────────────────────────────

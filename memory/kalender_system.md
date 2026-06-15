@@ -350,35 +350,42 @@ Bewusst getrennt vom Alarm-Kanal: die Anzeige zeigt die Termin-Arbeitsdaten,
 die ⚠-Warnungen bleiben randständig (Header-Zähler `⚠N` aus `alarms`), genau wie
 `read_calendar` sauber von den Inline-Warnungen getrennt wurde.
 
-### Direktes Eintragen/Löschen aus der Mitte (2026-06)
+### Direktes Eintragen/Ändern/Löschen + Routine-Deaktivieren (2026-06)
 
-Die Anzeige ist nicht nur read-only — Einmal-Termine lassen sich **direkt aus der
-Mitte anlegen und löschen**, in allen drei Fronten. Schreib-Endpoints
-(`ui/app.py`): `POST /api/calendar/entry` (`{day,label,time?,ende?,ort?,layer?}`,
-Default-Layer `termine`) und `DELETE /api/calendar/entry` (`{day,label,layer?}`).
-Beide rufen `core/kalender.py:add_entry`/`delete_entry`.
+Die Anzeige ist nicht read-only — aus der Mitte lassen sich Einmal-Termine
+**anlegen, ändern, löschen** und **einzelne Routine-Vorkommen ab-/anschalten**,
+in allen drei Fronten. Schreib-Endpoints (`ui/app.py`, alle direkt auf
+`core/kalender.py`): `POST /api/calendar/entry` (anlegen → `add_entry`),
+`PUT …/entry` (ändern = delete+add), `DELETE …/entry` (löschen → `delete_entry`),
+`POST /api/calendar/routine/skip` (Vorkommen de-/aktivieren → `set_routine_skip`).
 
-- **NICHT KI-gegatet** — das ist eine **direkte Nutzeraktion** aus der UI (wie
-  `/api/log` beim Graph-Werkzeug), kein KI-Schreibpfad. Das KI-Permission-Gate
-  (JA/NEIN mit `conflicts_for_proposed`) bleibt davon unberührt; es greift nur,
-  wenn die *KI* schreibt. Der POST gibt die Konflikt-Zeilen trotzdem als
-  **Hinweis** zurück (`conflicts`), nur ohne zu blocken.
-- **Bewusst nur Einmal-Termine.** Routinen (Wiederholungen, rrule) bleiben beim
-  KI-Tool `add_calendar_routine` — die UI mutet dem User keine RRULE-Syntax zu.
-  In der Anzeige tragen Routinen-Vorkommen `recurring=True` und bekommen daher
-  **kein** Lösch-✕ (sie würden über `delete_entry` ohnehin nicht fallen, das nur
-  auf `entries` wirkt).
-- **TUI:** `a` öffnet ein gestaffeltes Formular (Datum→Zeit→Titel, `parse_clock`/
-  eigener `TT.MM`-Parser, Jahr aus dem Blätter-Anker); in der Wochenliste sind
-  Einmal-Termine mit `↑↓` auswählbar (›-Cursor), `d` + Bestätigung `j` löscht den
-  markierten. `k_deletable()` ist die gemeinsame Quelle für Auswahl + Löschen.
-- **Browser** (Monolith-Panel + Laptop-Mittelbox): „＋ Termin"-Form (Datum/Zeit/
-  Titel/Ort) + ✕ pro Einmal-Termin in der Wochenliste; Konflikt-Hinweis und
-  Feedback als `cmsg`-Zeile. Laptop-Auto-Refresh pausiert während der Eingabe.
+- **NICHT KI-gegatet** — direkte Nutzeraktion (wie `/api/log` beim Graph-Werkzeug),
+  kein KI-Schreibpfad. Das KI-Permission-Gate (JA/NEIN mit `conflicts_for_proposed`)
+  bleibt unberührt; es greift nur, wenn die *KI* schreibt. POST/PUT geben die
+  Konflikt-Zeilen trotzdem als **Hinweis** (`conflicts`) zurück, ohne zu blocken.
+- **Einmal-Termine** (`termine`) werden voll editiert. **Routine-Regeln** (rrule)
+  entstehen weiter über das KI-Tool `add_calendar_routine` (keine RRULE-Syntax in
+  der UI), aber ein **einzelnes Vorkommen** kann pro Tag deaktiviert werden:
+  - `set_routine_skip(layer,label,day,off)` führt eine Liste `aus=[iso,…]` AN der
+    Routine. `entries_in_range` gibt das Vorkommen weiter aus, markiert es aber
+    `deaktiviert=True` (sichtbar + wieder-aktivierbar, ausgegraut „(aus)").
+  - Deaktivierte Vorkommen lösen **keine** Alarme aus — Guards in `open_alarms`,
+    `_absage_alarms` und `conflicts_for_proposed` (analog zum `ausfall`-Guard).
+    Abgrenzung: `ausfall` = Anbieter/Ferien-Pause (`pausen`), `deaktiviert` = der
+    User hat diesen einen Termin selbst abgeschaltet.
+- **TUI:** der ›-Cursor (`↑↓`) läuft jetzt über **ALLE** Einträge (`k_selectable()`,
+  nicht mehr nur Einmal-Termine — das war der Skip-Bug). `e`/Enter bearbeiten:
+  Einmal → gestaffeltes Formular (Datum→Zeit→Titel, vorbefüllt, speichert per PUT),
+  Routine → De-/Aktivieren-Screen (`d` aus / `a` an). `d` direkt: Einmal → Lösch-
+  Bestätigung, Routine → gleicher Screen. `a` = neuer Termin.
+- **Browser** (Monolith-Panel + Laptop-Mittelbox): pro Termin ✎ (bearbeiten,
+  füllt die Form, speichert per PUT) + ✕ (löschen); Routine-Vorkommen ⊘ (diesen
+  Tag deaktivieren) / ↺ (wieder aktivieren), deaktivierte durchgestrichen-grau.
 
-Defensiv getestet: `tests/test_backend_api.py` (Add→erscheint→Delete, isolierte
-TEMP-`CAL_PATH`), TUI-PTY-E2E (Datei als Wahrheit) und die Fuzz-Suite
-(`a/d/c/v`-Keys + Adversarial-`/api/calendar`).
+Defensiv getestet: `tests/test_backend_api.py` (add/edit/skip, isolierte TEMP-
+`CAL_PATH`), TUI-PTY-E2E (Edit + Routine-Deaktivieren/-Reaktivieren, Datei als
+Wahrheit) und die Fuzz-Suite (`a/d/e/c/v`-Keys + Adversarial-`/api/calendar`
+inkl. recurring/deaktiviert/PUT).
 
 ## Cross-Reference Graph ↔ Kalender (typisches Beispiel)
 

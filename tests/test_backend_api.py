@@ -113,3 +113,51 @@ def test_api_calendar_add_validation(client):
     assert client.post("/api/calendar/entry", json={"day": "2026-06-20", "label": ""}).status_code == 400
     assert client.post("/api/calendar/entry", json={"day": "kaputt", "label": "X"}).status_code == 400
     assert client.delete("/api/calendar/entry", json={"day": "2026-06-20"}).status_code == 400
+    assert client.put("/api/calendar/entry",
+                      json={"day": "2026-06-20", "label": "X", "new": {"day": "zz", "label": "Y"}}).status_code == 400
+    assert client.post("/api/calendar/routine/skip", json={"label": "", "day": "2026-06-20"}).status_code == 400
+
+
+def test_api_calendar_edit_entry(client, tmp_path, monkeypatch):
+    # Bestehenden Einmal-Termin ändern (PUT = delete alt + add neu).
+    import kalender
+    monkeypatch.setattr(kalender, "CAL_PATH", tmp_path / "cal.json")
+    kalender.ensure_init()
+    client.post("/api/calendar/entry", json={"day": "2026-06-20", "label": "Arzt", "time": "10:00"})
+    r = client.put("/api/calendar/entry", json={
+        "day": "2026-06-20", "label": "Arzt",
+        "new": {"day": "2026-06-21", "label": "Hausarzt", "time": "11:30", "ort": "Praxis"}})
+    assert r.status_code == 200 and r.get_json()["ok"] is True
+    days = client.get("/api/calendar?view=week&ref=2026-06-20").get_json()["days"]
+    assert not days.get("2026-06-20")                       # alter weg
+    new = days.get("2026-06-21", [])
+    assert any(e.get("label") == "Hausarzt" and e.get("ort") == "Praxis" for e in new)
+
+
+def test_api_calendar_routine_skip(client, tmp_path, monkeypatch):
+    # Einzelnes Routine-Vorkommen deaktivieren/aktivieren — reversibel, ohne die
+    # Routine zu zerstören. Andere Vorkommen bleiben aktiv.
+    import kalender
+    monkeypatch.setattr(kalender, "CAL_PATH", tmp_path / "cal.json")
+    kalender.ensure_init()
+    kalender.add_routine("routinen", "Geige", "FREQ=WEEKLY;BYDAY=TU", time="17:45", ende="18:30")
+    # zwei Dienstage im Bereich finden
+    days = client.get("/api/calendar?view=week&ref=2026-06-16").get_json()["days"]
+    tue = "2026-06-16"
+    assert any(e.get("label") == "Geige" for e in days.get(tue, []))
+
+    r = client.post("/api/calendar/routine/skip", json={"layer": "routinen", "label": "Geige", "day": tue, "off": True})
+    assert r.get_json()["changed"] is True
+    days = client.get("/api/calendar?view=week&ref=2026-06-16").get_json()["days"]
+    geige = [e for e in days.get(tue, []) if e.get("label") == "Geige"][0]
+    assert geige.get("deaktiviert") is True
+    # nächster Dienstag bleibt aktiv
+    nxt = client.get("/api/calendar?view=week&ref=2026-06-23").get_json()["days"]
+    g2 = [e for e in nxt.get("2026-06-23", []) if e.get("label") == "Geige"][0]
+    assert not g2.get("deaktiviert")
+    # wieder aktivieren
+    r = client.post("/api/calendar/routine/skip", json={"layer": "routinen", "label": "Geige", "day": tue, "off": False})
+    assert r.get_json()["changed"] is True
+    days = client.get("/api/calendar?view=week&ref=2026-06-16").get_json()["days"]
+    geige = [e for e in days.get(tue, []) if e.get("label") == "Geige"][0]
+    assert not geige.get("deaktiviert")

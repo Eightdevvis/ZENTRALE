@@ -158,18 +158,26 @@ Typ/Sparkline (ohne TTY).
 **Listen-Werkzeug (Mitte, Taste `l`):** abhakbare Todo-/Sammel-Listen — Pendant
 zum Graph-Werkzeug, aber für „random stuff" statt Zeitreihen. Geteilte Logik
 (`core/lists.py` + `/api/lists`), hier in curses verbaut. `l` gibt der MITTE-Box
-den Fokus; ein Zustandsmodell `L` (`view`: `list`/`new`/`view`/`nest`) steuert: in
-**list** mit ↑/↓ Liste wählen, `n` neu, `d` löschen (Mini-Bestätigungsdialog wie
-beim Graph: `j`/Enter löscht, sonst Abbruch — `L["confirm"]`), `>` ordnet die Liste
-in eine andere ein (→ **nest**: Ziel-Liste wählen, Enter; `POST …/<lid>/nest`),
-Enter öffnet; in **new** Name tippen + Enter (`POST /api/lists`); in **view** die
-Einträge der Liste — **verschachtelt**: jeder Eintrag kann eigene Unterpunkte
-tragen, die TUI klopft den Baum mit `l_flatten()` flach (Einrückung = Tiefe) und
-zeigt bei Eltern `(erledigt/gesamt)` der Kinder. ↑/↓ wählen, **`space`/Enter**
-hakt ab/auf (`…/items/<iid>/toggle`, trifft jede Tiefe), `a` hängt einen neuen
-Eintrag oben an, **`s` hängt einen Unterpunkt** unter den markierten
-(`L["addparent"]` → `POST …/items {parent}`), `d` löscht den markierten samt
-Teilbaum. Erledigte stehen gedämpft mit `[x]` da. Lange Listen scrollen um den
+den Fokus; ein Zustandsmodell `L` (`view`: `list`/`new`/`view`/`nest`/`move`/
+`move_new`) steuert: in **list** mit ↑/↓ Liste wählen, `n` neu, `r` umbenennen
+(→ **new** mit vorbefülltem Namen, `L["lrename"]` → `POST …/<lid>/rename`), `d`
+löschen (Mini-Bestätigungsdialog wie beim Graph: `j`/Enter löscht, sonst Abbruch
+— `L["confirm"]`), `>` ordnet die Liste in eine andere ein (→ **nest**: Ziel-Liste
+wählen, Enter; `POST …/<lid>/nest`), Enter öffnet; in **new** Name tippen + Enter
+(`POST /api/lists` bzw. rename je `L["lrename"]`); in **view** die Einträge der
+Liste — **verschachtelt**: jeder Eintrag kann eigene Unterpunkte tragen, die TUI
+klopft den Baum mit `l_flatten()` flach (Einrückung = Tiefe) und zeigt bei Eltern
+`(erledigt/gesamt)` der Kinder. ↑/↓ wählen, **`space`/Enter** hakt ab/auf
+(`…/items/<iid>/toggle`, trifft jede Tiefe), `a` hängt einen neuen Eintrag oben an,
+**`s` hängt einen Unterpunkt** unter den markierten (`L["addparent"]` →
+`POST …/items {parent}`), **`r` benennt** den markierten um (vorbefüllt,
+`POST …/items/<iid>/rename`), **`m` verschiebt** ihn RAUS in eine andere Liste
+(→ **move**: Ziel wählen — erste Option `[+ neue Liste]` führt über **move_new**
+zu Name-Tippen + `POST /api/lists` und dann `POST …/items/<iid>/move {into}`;
+sonst direkt `move` in die gewählte Liste). Eingabezeile-Modus steckt in
+`L["imode"]` (`add`/`sub`/`rename`); `a`/`s` bleiben für Schnell-Eingabe offen,
+`r` ist einmalig. `d` löscht den markierten samt Teilbaum. Erledigte stehen
+gedämpft mit `[x]` da. Lange Listen scrollen um den
 Cursor. Alles synchron per `api_call()`; nach jeder Aktion `l_load()`+`l_sync_def()`
 (offene Liste aus der frischen Registry neu greifen). `Esc`/`l` schließt.
 `--selftest` listet die Listen inkl. erledigt-Zähler (ohne TTY). Anders als die
@@ -201,11 +209,13 @@ Achsen (Detail/Layer/Zeit): [maps_system.md](maps_system.md).
 fertig gruppierte Tage über `/api/calendar` (Logik in `core/kalender.py`,
 `week_view`/`month_view`). Steuerung `←→`/`hl` blättern, `v`/`Tab` Woche↔Monat,
 `0` heute, `esc`/`c` zu. Heute hervorgehoben, Monats-Randtage ausgegraut,
-`ausfall`-Routinen als `ℹ`. **Einmal-Termine direkt eintragen/löschen:** `a`
-öffnet ein gestaffeltes Formular (Datum→Zeit→Titel → `POST /api/calendar/entry`);
-in der Wochenliste mit `↑↓` einen Termin wählen, `d`+`j` löscht ihn
-(`DELETE /api/calendar/entry`). Routinen bleiben beim KI-Tool (kein ✕). Defensiv
-wie der Karten-Pfad (Fehler-Marker statt Dauer-Refetch). Details + die zwei
+`ausfall`-Routinen als `ℹ`. **Anlegen/Ändern/Löschen + Routine-Deaktivieren:**
+der ›-Cursor (`↑↓`) läuft über ALLE Einträge (`k_selectable()`); `a` legt neu an,
+`e`/Enter bearbeitet (Einmal → gestaffeltes Formular, speichert per PUT; Routine →
+De-/Aktivieren-Screen), `d` löscht Einmal-Termine bzw. öffnet bei Routinen denselben
+Screen. Einzelne Routine-Vorkommen werden so pro Tag ab-/angeschaltet
+(`deaktiviert`, ausgegraut „(aus)"), ohne die Routine zu zerstören. Defensiv wie
+der Karten-Pfad (Fehler-Marker statt Dauer-Refetch). Details + die zwei
 Browser-Fronten: [kalender_system.md](kalender_system.md).
 
 - **Nur stdlib:** `curses` + `urllib` + `json` + `threading` — null Extra-Deps.
@@ -286,10 +296,11 @@ animierter **ASCII-Kern** (`#core`), gesteuert vom *Exhibit-Direktor*
 > offenen Alarmen. Eigenes `#calendar-panel` (`.cpanel`, `frameTick` blendet wie
 > bei `graph` `#core` aus). Reiner Zeichner: Daten von `/api/calendar`
 > (`view`+`ref`), Datums-Logik in `core/kalender.py`. **Derselbe Endpoint** für
-> alle drei Fronten (Monolith-Tab, Laptop-Mittelbox, TUI-Taste `c`). Einmal-
-> Termine direkt anlegen („＋ Termin"-Form → `POST /api/calendar/entry`) und je
-> Termin per ✕ löschen (`DELETE …`); Routinen bleiben beim KI-Tool. Schreiben ist
-> direkte Nutzeraktion, **nicht** KI-gegatet. Details:
+> alle drei Fronten (Monolith-Tab, Laptop-Mittelbox, TUI-Taste `c`). „＋ Termin"-
+> Form legt Einmal-Termine an; pro Termin ✎ (bearbeiten → PUT) / ✕ (löschen);
+> Routine-Vorkommen ⊘/↺ (diesen Tag de-/aktivieren → `…/routine/skip`),
+> deaktivierte durchgestrichen-grau. Schreiben ist direkte Nutzeraktion,
+> **nicht** KI-gegatet. Details:
 > [kalender_system.md](kalender_system.md).
 
 > Die IIFEs sind getrennte Scopes. Cross-Scope-Signale laufen über den

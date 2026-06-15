@@ -247,6 +247,10 @@
   .cmsg.warn { color: var(--warn, #c33); }
   .cdel { margin-left: 5px; color: var(--dim); cursor: pointer; opacity: 0.55; }
   .cdel:hover { color: var(--warn, #c33); opacity: 1; }
+  .cact { margin-left: 5px; color: var(--dim); cursor: pointer; opacity: 0.6; }
+  .cact:hover { color: var(--acc); opacity: 1; }
+  .cent.deakt { opacity: 0.55; text-decoration: line-through; }
+  .cent.deakt .cact { text-decoration: none; display: inline-block; }
 
   .proj { padding: 5px 0; }
   .proj-top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 1px; }
@@ -749,7 +753,8 @@
       var panel = document.getElementById('calendar-panel');
       if (!panel) return;
       var WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-      var CS = { view: 'week', ref: todayStr(), data: null, adding: false, formDay: null, msg: '', msgWarn: false };
+      var CS = { view: 'week', ref: todayStr(), data: null, adding: false, editing: null,
+                 form: {}, msg: '', msgWarn: false };
 
       function todayStr() { var d = new Date(); return iso(d); }
       function iso(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
@@ -770,17 +775,29 @@
       }
 
       // Eine Termin-Kachel (Zeit + Label + Ort). Ausfall (Ferien) als ℹ-Hinweis.
-      // Einmal-Termine (nicht recurring) bekommen ein ✕ zum Löschen; Routinen-
-      // Vorkommen nicht (die werden über die KI/Datei verwaltet, nicht hier).
+      // Einmal-Termine: ✎ bearbeiten + ✕ löschen. Routine-Vorkommen: ⊘ diesen
+      // Termin deaktivieren bzw. ↺ wieder aktivieren (deaktivierte ausgegraut).
       function entChip(e, dayIso) {
         if (!e || typeof e !== 'object') return '';
         if (e.ausfall) return '<span class="cent ausfall" title="' + esc((e.label || '') + ' fällt aus (' + e.ausfall + ')') + '">ℹ ' + esc(e.label || '?') + '</span>';
+        var label = e.label || '?';
         var t = (e.time && e.ende) ? (e.time + '–' + e.ende + ' ') : (e.time ? e.time + ' ' : '');
         var ort = e.ort ? ' @' + e.ort : '';
-        var del = (dayIso && !e.recurring)
-          ? '<span class="cdel" title="löschen" data-del-day="' + dayIso + '" data-del-label="' + esc(e.label || '') + '" data-del-layer="' + esc(e.layer || '') + '">✕</span>'
-          : '';
-        return '<span class="cent" title="' + esc(t + (e.label || '') + ort) + '">' + esc(t + (e.label || '?')) + del + '</span>';
+        var deakt = !!e.deaktiviert;
+        var acts = '';
+        if (e.recurring) {
+          acts = '<span class="cact" title="' + (deakt ? 'wieder aktivieren' : 'diesen Termin deaktivieren')
+            + '" data-rt-day="' + dayIso + '" data-rt-label="' + esc(label) + '" data-rt-layer="' + esc(e.layer || '')
+            + '" data-rt-off="' + (deakt ? '0' : '1') + '">' + (deakt ? '↺' : '⊘') + '</span>';
+        } else if (dayIso) {
+          acts = '<span class="cact" title="bearbeiten" data-edit-day="' + dayIso + '" data-edit-label="' + esc(label)
+            + '" data-edit-layer="' + esc(e.layer || '') + '" data-edit-time="' + esc(e.time || '')
+            + '" data-edit-ort="' + esc(e.ort || '') + '">✎</span>'
+            + '<span class="cdel" title="löschen" data-del-day="' + dayIso + '" data-del-label="' + esc(label)
+            + '" data-del-layer="' + esc(e.layer || '') + '">✕</span>';
+        }
+        return '<span class="cent' + (deakt ? ' deakt' : '') + '" title="' + esc(t + label + ort) + '">'
+          + esc(t + label) + (deakt ? ' (aus)' : '') + acts + '</span>';
       }
       function dayList(days, isoDay) { var v = days[isoDay]; return Array.isArray(v) ? v : []; }
 
@@ -844,13 +861,14 @@
         h.push('<button data-view="month" class="' + (CS.view === 'month' ? 'sel' : '') + '">Monat</button>');
         h.push('</div>');
         if (CS.adding) {
-          var fday = CS.formDay || (d.today || todayStr());
+          var f = CS.form || {};
           h.push('<div class="cform">'
-            + '<input type="date" id="cf-day" value="' + esc(fday) + '" />'
-            + '<input id="cf-time" placeholder="HH:MM" size="5" maxlength="5" />'
-            + '<input id="cf-label" placeholder="Titel" style="flex:1;min-width:90px" />'
-            + '<input id="cf-ort" placeholder="Ort (optional)" size="12" />'
-            + '<button data-save="1">anlegen</button></div>');
+            + '<input type="date" id="cf-day" value="' + esc(f.day || d.today || todayStr()) + '" />'
+            + '<input id="cf-time" placeholder="HH:MM" size="5" maxlength="5" value="' + esc(f.time || '') + '" />'
+            + '<input id="cf-label" placeholder="Titel" style="flex:1;min-width:90px" value="' + esc(f.label || '') + '" />'
+            + '<input id="cf-ort" placeholder="Ort (optional)" size="12" value="' + esc(f.ort || '') + '" />'
+            + '<button data-save="1">' + (CS.editing ? 'ändern' : 'anlegen') + '</button>'
+            + (CS.editing ? '<button data-canceledit="1" title="abbrechen">×</button>' : '') + '</div>');
         }
         if (CS.msg) h.push('<div class="cmsg' + (CS.msgWarn ? ' warn' : '') + '">' + esc(CS.msg) + '</div>');
         if (d.failed) h.push('<div class="ghint">kalender nicht erreichbar.</div>');
@@ -865,19 +883,33 @@
         var time = ((panel.querySelector('#cf-time') || {}).value || '').trim();
         var ort = ((panel.querySelector('#cf-ort') || {}).value || '').trim();
         if (!label) { CS.msg = 'Titel fehlt.'; CS.msgWarn = true; render(); return; }
+        var url = '/api/calendar/entry', method, payload;
+        if (CS.editing) {
+          method = 'PUT';
+          payload = { day: CS.editing.iso, label: CS.editing.label, layer: CS.editing.layer,
+                      new: { day: day, label: label, time: time, ort: ort } };
+        } else {
+          method = 'POST';
+          payload = { day: day, label: label, time: time, ort: ort };
+        }
         try {
-          var res = await fetch('/api/calendar/entry', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ day: day, label: label, time: time, ort: ort })
-          });
+          var res = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' },
+                                       body: JSON.stringify(payload) });
           var j = await res.json();
           if (!res.ok) { CS.msg = j.error || 'fehlgeschlagen.'; CS.msgWarn = true; render(); return; }
-          CS.adding = false;
+          var verb = CS.editing ? 'geändert: ' : 'angelegt: ';
+          CS.adding = false; CS.editing = null; CS.form = {};
           var warn = (j.conflicts && j.conflicts.length) ? ' · ⚠ ' + j.conflicts.join(' · ') : '';
-          CS.msg = 'angelegt: ' + label + warn; CS.msgWarn = !!warn;
-          CS.ref = day || CS.ref;   // zur Woche des neuen Termins springen
+          CS.msg = verb + label + warn; CS.msgWarn = !!warn;
+          CS.ref = day || CS.ref;   // zur Woche des Termins springen
           load();
         } catch (e) { CS.msg = 'netzwerkfehler.'; CS.msgWarn = true; render(); }
+      }
+
+      function beginEdit(iso, label, layer, time, ort) {
+        CS.editing = { iso: iso, label: label, layer: layer };
+        CS.form = { day: iso, time: time || '', label: label, ort: ort || '' };
+        CS.adding = true; CS.msg = ''; render();
       }
 
       async function delEntry(day, label, layer) {
@@ -892,17 +924,47 @@
         } catch (e) { CS.msg = 'netzwerkfehler.'; CS.msgWarn = true; render(); }
       }
 
+      async function routineToggle(day, label, layer, off) {
+        try {
+          await fetch('/api/calendar/routine/skip', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ layer: layer, label: label, day: day, off: off })
+          });
+          CS.msg = (off ? 'deaktiviert: ' : 'aktiviert: ') + label; CS.msgWarn = false;
+          load();
+        } catch (e) { CS.msg = 'netzwerkfehler.'; CS.msgWarn = true; render(); }
+      }
+
       function wire() {
         [].forEach.call(panel.querySelectorAll('[data-nav]'), function (el) { el.onclick = function () { CS.msg = ''; stepRef(Number(el.getAttribute('data-nav'))); }; });
         var tb = panel.querySelector('[data-today]'); if (tb) tb.onclick = function () { CS.msg = ''; CS.ref = todayStr(); load(); };
         [].forEach.call(panel.querySelectorAll('[data-view]'), function (el) { el.onclick = function () { var v = el.getAttribute('data-view'); if (v !== CS.view) { CS.msg = ''; CS.view = v; load(); } }; });
-        var ab = panel.querySelector('[data-add]'); if (ab) ab.onclick = function () { CS.adding = !CS.adding; CS.msg = ''; if (CS.adding && !CS.formDay) CS.formDay = (CS.data && CS.data.today) || todayStr(); render(); };
+        var ab = panel.querySelector('[data-add]'); if (ab) ab.onclick = function () {
+          CS.adding = !CS.adding; CS.editing = null; CS.form = {}; CS.msg = '';
+          if (CS.adding) CS.form = { day: (CS.data && CS.data.today) || todayStr() };
+          render();
+        };
         var sv = panel.querySelector('[data-save]'); if (sv) sv.onclick = addEntry;
+        var ce = panel.querySelector('[data-canceledit]'); if (ce) ce.onclick = function () { CS.adding = false; CS.editing = null; CS.form = {}; render(); };
         ['#cf-label', '#cf-time', '#cf-ort'].forEach(function (sel) { var el = panel.querySelector(sel); if (el) el.onkeydown = function (e) { if (e.key === 'Enter') addEntry(); }; });
         [].forEach.call(panel.querySelectorAll('[data-del-label]'), function (el) {
           el.onclick = function (ev) {
             ev.stopPropagation();
             delEntry(el.getAttribute('data-del-day'), el.getAttribute('data-del-label'), el.getAttribute('data-del-layer'));
+          };
+        });
+        [].forEach.call(panel.querySelectorAll('[data-edit-label]'), function (el) {
+          el.onclick = function (ev) {
+            ev.stopPropagation();
+            beginEdit(el.getAttribute('data-edit-day'), el.getAttribute('data-edit-label'),
+                      el.getAttribute('data-edit-layer'), el.getAttribute('data-edit-time'), el.getAttribute('data-edit-ort'));
+          };
+        });
+        [].forEach.call(panel.querySelectorAll('[data-rt-label]'), function (el) {
+          el.onclick = function (ev) {
+            ev.stopPropagation();
+            routineToggle(el.getAttribute('data-rt-day'), el.getAttribute('data-rt-label'),
+                          el.getAttribute('data-rt-layer'), el.getAttribute('data-rt-off') === '1');
           };
         });
       }
