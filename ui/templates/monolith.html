@@ -249,8 +249,8 @@
   .cdel:hover { color: var(--warn, #c33); opacity: 1; }
   .cact { margin-left: 5px; color: var(--dim); cursor: pointer; opacity: 0.6; }
   .cact:hover { color: var(--acc); opacity: 1; }
-  .cent.deakt { opacity: 0.55; text-decoration: line-through; }
-  .cent.deakt .cact { text-decoration: none; display: inline-block; }
+  .cent.deakt { opacity: 0.4; text-decoration: line-through; border-style: dashed; color: var(--dim); }
+  .cent.deakt .cact, .cent.deakt .cdel { text-decoration: none; opacity: 1; display: inline-block; }
   .cwdays { display: inline-flex; gap: 2px; }
   .cwd-chip { font-size: 13px; padding: 1px 5px; border: 1px solid var(--line); background: var(--bg); color: var(--dim); cursor: pointer; }
   .cwd-chip.on { background: var(--acc); color: var(--bg); border-color: var(--acc); }
@@ -804,7 +804,7 @@
             + '" data-del-layer="' + esc(e.layer || '') + '">✕</span>';
         }
         return '<span class="cent' + (deakt ? ' deakt' : '') + '" title="' + esc(t + label + ort) + '">'
-          + esc(t + label) + (deakt ? ' (aus)' : '') + acts + '</span>';
+          + (deakt ? '✗ ' : '') + esc(t + label) + (deakt ? ' (aus)' : '') + acts + '</span>';
       }
       function dayList(days, isoDay) { var v = days[isoDay]; return Array.isArray(v) ? v : []; }
 

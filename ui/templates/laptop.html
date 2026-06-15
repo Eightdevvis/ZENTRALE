@@ -172,8 +172,8 @@
   .cw-del:hover { color: var(--warn); opacity: 1; }
   .cw-act { margin-left: 6px; color: var(--dim); cursor: pointer; opacity: 0.6; }
   .cw-act:hover { color: var(--acc); opacity: 1; }
-  .cw-ent.deakt { opacity: 0.55; text-decoration: line-through; }
-  .cw-ent.deakt .cw-act, .cw-ent.deakt .cw-del { text-decoration: none; }
+  .cw-ent.deakt { opacity: 0.4; text-decoration: line-through; border-style: dashed; color: var(--dim); }
+  .cw-ent.deakt .cw-act, .cw-ent.deakt .cw-del { text-decoration: none; opacity: 1; }
   .cal-form button.on { background: var(--acc); color: var(--bg); border-color: var(--acc); }
   .cal-wdays { display: inline-flex; gap: 2px; }
   .cal-wd { font-family: 'VT323', monospace; font-size: 16px; padding: 2px 7px; background: transparent; color: var(--dim); border: 1px solid var(--line); cursor: pointer; }
@@ -581,7 +581,7 @@
                 + '<span class="cw-del" title="löschen" data-del-day="' + k + '" data-del-label="' + esc(lbl)
                 + '" data-del-layer="' + esc(e.layer || '') + '">✕</span>';
             }
-            var txt = entLabel(e) + (e.ort ? ' @' + e.ort : '') + (deakt ? ' (aus)' : '');
+            var txt = (deakt ? '✗ ' : '') + entLabel(e) + (e.ort ? ' @' + e.ort : '') + (deakt ? ' (aus)' : '');
             out.push('<span class="cw-ent' + (e.ausfall ? ' ausfall' : '') + (deakt ? ' deakt' : '') + '" title="'
               + esc(entLabel(e) + (e.ort ? ' @' + e.ort : '')) + '">' + esc(txt) + acts + '</span>');
           });

@@ -1759,13 +1759,20 @@ def run_ui(stdscr, store):
                     selected = (di == K["sel"])
                     deakt = bool(e.get("deaktiviert"))
                     mark = "› " if selected else "  "
-                    if selected:
-                        attr = C["bright"] | curses.A_REVERSE
-                    elif deakt:
+                    if deakt:
+                        # Deaktiviert IMMER klar gedimmt zeigen — auch wenn
+                        # selektiert (sonst überdeckt das helle Invers die
+                        # Markierung und es sieht aus wie „nichts passiert").
+                        # Selektion bleibt über den ›-Cursor erkennbar; das
+                        # ✗-Präfix + „(deaktiviert)" macht den Aus-Zustand eindeutig.
                         attr = C["faint"]
+                        txt = "✗ " + _k_entry_line(e) + "  (deaktiviert)"
+                    elif selected:
+                        attr = C["bright"] | curses.A_REVERSE
+                        txt = _k_entry_line(e)
                     else:
                         attr = C["dim"]
-                    txt = _k_entry_line(e) + (" (aus)" if deakt else "")
+                        txt = _k_entry_line(e)
                     addclip(yy, ix, mark + txt, iw, attr)
                     di += 1; yy += 1
                 if not shown and yy < bottom:
@@ -1847,10 +1854,17 @@ def run_ui(stdscr, store):
             q = ("/api/mail/body?cat=" + urllib.parse.quote(MAIL["cat"] or "")
                  + "&uid=" + str(uid)
                  + "&account=" + urllib.parse.quote(it.get("account") or ""))
-            r = api_call(q, timeout=12.0)
+            r = api_call(q, timeout=20.0)
             MAIL["body"] = r if isinstance(r, dict) else {"error": "?"}
-        except Exception:
-            MAIL["body"] = {"error": "backend?"}
+        except urllib.error.HTTPError as e:
+            # Den ECHTEN Grund zeigen (z.B. 409 „kein key") statt „backend?".
+            try:
+                j = json.loads(e.read().decode("utf-8"))
+                MAIL["body"] = {"error": j.get("error", "HTTP %d" % e.code)}
+            except Exception:
+                MAIL["body"] = {"error": "HTTP %d" % e.code}
+        except Exception as ex:
+            MAIL["body"] = {"error": "%s (Backend erreichbar?)" % type(ex).__name__}
         MAIL["bodyfor"] = uid
         MAIL["bodyoff"] = 0
 
@@ -2863,7 +2877,7 @@ def run_ui(stdscr, store):
             rightw = max(16, int(W * 0.16))
         else:
             leftw = max(24, int(W * 0.28))
-            rightw = max(22, int(W * 0.27))
+            rightw = max(20, int(W * 0.22))
         midw = W - leftw - rightw
         lx, mx, rx = 0, leftw, leftw + midw
 
@@ -2952,13 +2966,14 @@ def run_ui(stdscr, store):
         # (Zeitstrahl), Y bewusst MEHRDEUTIG — jeder Graph nutzt seine eigene
         # Achse + Darstellung, alles übereinandergelegt zum Vergleich:
         #   period → zusammenhängende Bande (Zellen-Hintergrund) über die Spanne
-        #   time   → Punkt auf der 24h-Skala
+        #   time   → Stern ★ auf der 24h-Skala (Zeitpunkt, keine Linie)
         #   scale  → wachsende Kreise ◦○◉●⬤ auf eigener Zeile (Größe = 1–5)
         #   number → Punkt auf der eigenen min/max-Spanne (sichtbare Werte)
         # Eigener Marker + Farbe je Graph (+ Legende). Quelle:
         # store.graphs_snapshot (langsames Hintergrund-Polling).
         if gs_cache:
-            life_h = min(body_h - 4, max(7, body_h - 8))
+            # bewusst kompakt: höchstens ~11 Zeilen, Rest geht an outbound.
+            life_h = max(7, min(11, body_h - 4))
         else:
             life_h = 4
         out_h = body_h - life_h
@@ -3012,11 +3027,12 @@ def run_ui(stdscr, store):
                 return base + (plot_h - 1) - int(round(n * (plot_h - 1)))
 
             if series:
-                # X = FESTES Fenster der letzten 7 Tage (heute rechts, 6 Tage
-                # zurück nach links). Tage liegen LÜCKENLOS aneinander: jeder Tag
-                # bekommt einen zusammenhängenden Spalten-Block (volle Breite
-                # aufgeteilt), damit Schlaf-Blöcke benachbarter Tage sich berühren.
-                NDAYS = 7
+                # X = Fenster der letzten NDAYS Tage (heute rechts). Tage liegen
+                # LÜCKENLOS aneinander; jeder Tag bekommt einen Spalten-Block.
+                # Block-Breite ~1/3 der früheren (war plot_w/7) → mehr Tage als 7
+                # passen rein, skaliert mit der Boxbreite.
+                # bewusst wenige Tage: ~10 ins Fenster, je Tag ≥2 Spalten breit.
+                NDAYS = max(5, min(10, plot_w // 2))
                 today = date.today()
                 window = [(today - timedelta(days=k)).isoformat()
                           for k in range(NDAYS - 1, -1, -1)]   # alt → neu
@@ -3069,9 +3085,9 @@ def run_ui(stdscr, store):
                 for s in series:
                     if s["type"] != "scale":
                         continue
-                    ry = base + srow
+                    ry = base + plot_h - 1 - srow      # Zeilen von UNTEN auffüllen
                     srow += 1
-                    if ry > base + plot_h - 1:
+                    if ry < base:
                         continue                      # kein Platz mehr → weglassen
                     col = s["col"]
                     for d, e in s["dv"].items():
@@ -3082,30 +3098,35 @@ def run_ui(stdscr, store):
                         idx = max(0, min(4, int(round(v)) - 1))
                         safe_addstr(ry, cx, CIRC[idx], latt(ry, cx, col))
 
-                # 3. DURCHGANG: time/number als dünne Linien DAVOR,
-                # je Tag an der Block-Mitte aufgehängt.
+                # 3. DURCHGANG: time als einzelne Sterne ★ (Zeitpunkt, keine
+                # Linie), je Tag an der Block-Mitte auf der 24h-Skala.
                 for s in series:
-                    typ, col, dv = s["type"], s["col"], s["dv"]
-                    if typ in ("period", "scale"):
+                    if s["type"] != "time":
                         continue
-                    # eigene min/max-Spanne nur für number (über sichtbare Werte)
-                    lo = hi = None
-                    if typ == "number":
-                        vis = [_num(dv[d].get("value")) for d in cols if d in dv]
-                        vis = [x for x in vis if x is not None]
-                        if vis:
-                            lo, hi = min(vis), max(vis)
+                    col = s["col"]
+                    for d, e in s["dv"].items():
+                        cx = day_center.get(d)
+                        v = _num(e.get("value"))
+                        if cx is None or v is None:
+                            continue
+                        r = row_clock(int(v))
+                        safe_addstr(r, cx, "★", latt(r, cx, col))
+
+                # 4. DURCHGANG: number als dünne Linie (eigene min/max-Spanne).
+                for s in series:
+                    if s["type"] != "number":
+                        continue
+                    col, dv = s["col"], s["dv"]
+                    vis = [_num(dv[d].get("value")) for d in cols if d in dv]
+                    vis = [x for x in vis if x is not None]
+                    lo, hi = (min(vis), max(vis)) if vis else (None, None)
                     pts = []                          # (cx, row) für die Linie
                     for d, e in dv.items():
                         cx = day_center.get(d)
                         v = _num(e.get("value"))
                         if cx is None or v is None:
                             continue
-                        if typ == "time":
-                            r = row_clock(int(v))
-                        else:                                     # number
-                            r = row_norm(v, lo, hi)
-                        pts.append((cx, r))
+                        pts.append((cx, row_norm(v, lo, hi)))
                     # Einzelpunkte zu einer dünnen Linie verbinden (Steigung →
                     # ╱ steigt, ╲ fällt, ─ flach; senkrecht → │). Einzelner Punkt → ·
                     pts.sort()
@@ -3131,6 +3152,8 @@ def run_ui(stdscr, store):
                             safe_addstr(yy, cx, band_glyph, C["band"])
                         elif typ == "scale":         # Kreis-Sample statt Linie
                             safe_addstr(yy, cx, "●", C[col])
+                        elif typ == "time":          # Stern-Sample statt Linie
+                            safe_addstr(yy, cx, "★", C[col])
                         else:
                             safe_addstr(yy, cx, "─", C[col])
                         addclip(yy, cx + 2, nm, plot_w - (cx - plot_x) - 2, C["dim"])
