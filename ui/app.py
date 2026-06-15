@@ -42,6 +42,7 @@ import kassette     # type: ignore  – welche Kassette läuft (monolith | lapto
 import mail         # type: ignore  – Mail-Triage (read-only Panel + Live-Poll)
 import mail_secrets # type: ignore  – verschlüsselter Zugangsdaten-Speicher
 import threading    # für den Hintergrund-Poll (blockiert den Request nicht)
+import time         # für das Alter des Live-Ordnerzähl-Caches
 from map import base_features as map_base_features  # type: ignore  – Maps-System (core/map/)
 from map import base_braille as map_base_braille  # type: ignore  – Maps-System (Braille-Füllung)
 from map import layers as map_layers  # type: ignore  – Overlay-Layer (Achse 2, Handelsrouten)
@@ -333,9 +334,12 @@ def api_lists_nest(lid):
 
 @app.route('/api/lists/<lid>/items/<int:iid>/toggle', methods=['POST'])
 def api_lists_toggle_item(lid, iid):
-    """Erledigt-Status eines Eintrags umschalten."""
+    """Erledigt-Status eines Blatt-Eintrags umschalten. Ordner sind nicht
+    direkt abhakbar (Status abgeleitet) → 400."""
     try:
         item = lists.toggle_item(lid, iid)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except KeyError:
         return jsonify({"error": "unbekannt"}), 404
     return jsonify(item)
@@ -631,6 +635,61 @@ def api_calendar_routine_skip():
     off = body.get('off', True)
     changed = kalender.set_routine_skip(layer, label, day, off=bool(off))
     return jsonify({"changed": changed})
+
+
+_WEEKDAY_CODES = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
+
+
+@app.route('/api/calendar/routine', methods=['POST'])
+def api_calendar_add_routine():
+    """
+    Eine neue WÖCHENTLICHE Routine anlegen (ohne dass der User RRULE tippen muss).
+    Body: {label, byday, time?, ende?, ort?, layer?}. `byday` = ein oder mehrere
+    Wochentage als MO..SU (Liste ODER kommagetrennt). Daraus bauen wir
+    `FREQ=WEEKLY;BYDAY=…`; krummere Wiederholungen (monatlich/jährlich) bleiben
+    dem KI-Tool vorbehalten. NICHT KI-gegatet (direkte Nutzeraktion).
+    Antwort {ok:true} bzw. 400. Default-Layer `routinen`.
+    """
+    body = request.get_json(silent=True) or {}
+    label = (body.get('label') or '').strip()
+    if not label:
+        return jsonify({"error": "label fehlt"}), 400
+    raw = body.get('byday')
+    if isinstance(raw, list):
+        cand = [str(x).strip().upper() for x in raw]
+    else:
+        cand = [d.strip().upper() for d in str(raw or '').split(',')]
+    days = [d for d in cand if d in _WEEKDAY_CODES]
+    if not days:
+        return jsonify({"error": "byday (MO..SU) nötig"}), 400
+    rrule = "FREQ=WEEKLY;BYDAY=" + ",".join(days)
+    time = (body.get('time') or '').strip() or None
+    layer = (body.get('layer') or 'routinen').strip() or 'routinen'
+    extras = {}
+    for k in ('ende', 'ort'):
+        v = (body.get(k) or '').strip()
+        if v:
+            extras[k] = v
+    ok = kalender.add_routine(layer, label, rrule, time=time, **extras)
+    if not ok:
+        return jsonify({"error": "routine abgelehnt (layer/rrule?)"}), 400
+    return jsonify({"ok": True})
+
+
+@app.route('/api/calendar/routine', methods=['DELETE'])
+def api_calendar_delete_routine():
+    """
+    Eine GANZE Routine (Wiederholungs-Regel) löschen — alle Vorkommen weg.
+    Gegenstück zum einzelnen Deaktivieren (.../routine/skip). NICHT KI-gegatet
+    (direkte Nutzeraktion). Body: {layer, label}. Antwort {deleted:n}.
+    """
+    body = request.get_json(silent=True) or {}
+    layer = (body.get('layer') or 'routinen').strip() or 'routinen'
+    label = (body.get('label') or '').strip()
+    if not label:
+        return jsonify({"error": "label nötig"}), 400
+    n = kalender.delete_routine(layer, label)
+    return jsonify({"deleted": n})
 
 
 @app.route('/api/debug', methods=['POST'])
@@ -1061,31 +1120,158 @@ def api_tutor_stop():
 
 
 # ── Mail-Triage (read-only Panel + expliziter Live-Poll) ────────────────
-# Das Panel selbst ist KEY-FREI: counts/review/recent lesen nur den lokalen
-# Triage-Stand (data/mail_state.json, unverschlüsselt). Die Passphrase (Env
-# ODER OS-Keyring) braucht NUR der Live-Poll, der echte IMAP-Aktionen ausführt.
+# Das Panel selbst ist KEY-FREI: Kategorie-Übersicht + Mails lesen nur den
+# lokalen Triage-Stand (data/mail_state.json, unverschlüsselt). Die Passphrase
+# (Env ODER OS-Keyring) braucht NUR der Live-Poll, der echte IMAP-Aktionen tut.
 
 _mail_poll_lock = threading.Lock()
 _mail_poll_running = {"on": False}
 
+# Cache der LIVE-Ordnerzählung (IMAP STATUS). Wird nicht-blockierend im
+# Hintergrund aufgefrischt (POST /api/mail/refresh-counts) und von /api/mail
+# nur GELESEN — so bleibt das Panel schnell, während die echten Zahlen
+# nachtröpfeln. {kat: anzahl}; leer, solange noch nie/ohne Key aufgefrischt.
+_mail_live = {"counts": {}, "ts": 0.0, "refreshing": False}
+_mail_live_lock = threading.Lock()
+
 
 @app.route('/api/mail')
 def api_mail():
-    """Alles fürs Mail-Panel in einem Rutsch: Zähler je Kategorie, der
-    Review-Stapel (unbekannte Absender) und die zuletzt sortierten Mails.
-    `can_poll` sagt der UI, ob ein Live-Poll möglich ist (Passphrase vorhanden)."""
+    """Alles fürs Mail-Panel in einem Rutsch, Drill-down-freundlich:
+    `categories` = Ebene 1 (alle Kategorien zum Auswählen). `count` ist der
+    lokale Schnappschuss; `live_counts` (separat) trägt die ECHTE Ordnergröße
+    aus dem Cache, sobald aufgefrischt. `can_poll` = Passphrase vorhanden,
+    `polling`/`counts_refreshing` = Hintergrund-Aktivität läuft."""
     try:
-        limit = request.args.get('limit', default=50, type=int)
-        limit = min(max(limit, 1), 200)
         return jsonify({
-            "counts": mail.counts(),
-            "review": mail.review_stack(limit=20),
-            "recent": mail.recent(limit=limit),
+            "categories": mail.category_overview(),
+            "recent": mail.recent(limit=200),
+            "live_counts": _mail_live["counts"],
+            "counts_age_s": (time.time() - _mail_live["ts"]) if _mail_live["ts"] else None,
+            "counts_refreshing": _mail_live["refreshing"],
             "can_poll": mail_secrets.available(),
             "polling": _mail_poll_running["on"],
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/mail/refresh-counts', methods=['POST'])
+def api_mail_refresh_counts():
+    """Frischt den LIVE-Ordnerzähl-Cache im Hintergrund auf (IMAP STATUS-Sweep).
+    Kehrt sofort zurück; das Ergebnis erscheint beim nächsten /api/mail. Key-
+    gegatet, Parallel-Refresh verhindert."""
+    if not mail_secrets.available():
+        return jsonify({"ok": False, "error": "kein key"}), 409
+    with _mail_live_lock:
+        if _mail_live["refreshing"]:
+            return jsonify({"ok": True, "already": True})
+        _mail_live["refreshing"] = True
+
+    def _run():
+        try:
+            _mail_live["counts"] = mail.folder_counts()
+            _mail_live["ts"] = time.time()
+        except Exception as e:
+            state.push_log(f"MAIL: Ordnerzählung — {type(e).__name__}: {e}")
+        finally:
+            _mail_live["refreshing"] = False
+
+    threading.Thread(target=_run, daemon=True, name="mail-counts").start()
+    return jsonify({"ok": True, "started": True})
+
+
+@app.route('/api/mail/folder')
+def api_mail_folder():
+    """Die Mails EINER Kategorie. Mit Key + eigenem Ordner: LIVE aus dem echten
+    IMAP-Ordner (voller Inhalt). Sonst (trash-Kategorie oder kein Key): lokaler
+    Schnappschuss. Query: `cat` (Kategoriename). `live` sagt, welche Quelle."""
+    cat = request.args.get('cat', '')
+    if not cat:
+        return jsonify({"error": "cat fehlt"}), 400
+    try:
+        if mail_secrets.available():
+            mails = mail.folder_mails(cat, limit=200)
+            src = "live"
+        else:
+            mails = mail.in_category(cat, limit=200)
+            src = "snapshot"
+        return jsonify({"cat": cat, "mails": mails, "live": src == "live", "source": src})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/mail/body')
+def api_mail_body():
+    """Voller Text + Header EINER Mail (Lesemodus). LIVE aus dem Ordner; braucht
+    Key. Query: `cat`, `uid`, optional `account`."""
+    cat = request.args.get('cat', '')
+    uid = request.args.get('uid', type=int)
+    account = request.args.get('account') or None
+    if not cat or uid is None:
+        return jsonify({"error": "cat/uid fehlt"}), 400
+    if not mail_secrets.available():
+        return jsonify({"error": "kein key — Body nur live lesbar"}), 409
+    try:
+        return jsonify(mail.mail_body(cat, uid, account_name=account))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/mail/assign', methods=['POST'])
+def api_mail_assign():
+    """Den ABSENDER einer Kategorie zuordnen (Keymap). Verschiebt NICHT die
+    Mail — künftige Mails dieses Absenders landen ab jetzt in der Kategorie.
+    Key-frei (nur lokale Keymap). Body: `{sender, category}`."""
+    body = request.get_json(silent=True) or {}
+    sender = (body.get('sender') or '').strip()
+    category = (body.get('category') or '').strip()
+    if not sender or not category:
+        return jsonify({"error": "sender/category fehlt"}), 400
+    try:
+        addr, cat = mail.reassign_sender(sender, category)
+        return jsonify({"ok": True, "sender": addr, "category": cat})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/mail/delete', methods=['POST'])
+def api_mail_delete():
+    """Eine Mail in den Papierkorb verschieben (umkehrbar). LIVE; braucht Key.
+    Body: `{cat, uid, account?}`."""
+    if not mail_secrets.available():
+        return jsonify({"error": "kein key — löschen nur live"}), 409
+    body = request.get_json(silent=True) or {}
+    cat = (body.get('cat') or '').strip()
+    uid = body.get('uid')
+    account = body.get('account') or None
+    if not cat or uid is None:
+        return jsonify({"error": "cat/uid fehlt"}), 400
+    try:
+        ok = mail.delete_mail(cat, int(uid), account_name=account)
+        return jsonify({"ok": bool(ok)}), (200 if ok else 502)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/mail/reply', methods=['POST'])
+def api_mail_reply():
+    """Sendet eine Antwort auf eine Mail (SMTP XOAUTH2). LIVE; braucht Key.
+    Body: `{cat, uid, text, account?}`. To/Betreff/Threading leitet das Backend
+    aus der Original-Mail ab."""
+    if not mail_secrets.available():
+        return jsonify({"error": "kein key — senden nicht möglich"}), 409
+    body = request.get_json(silent=True) or {}
+    cat = (body.get('cat') or '').strip()
+    uid = body.get('uid')
+    text = body.get('text') or ''
+    account = body.get('account') or None
+    if not cat or uid is None or not text.strip():
+        return jsonify({"error": "cat/uid/text fehlt"}), 400
+    res = mail.reply_to_mail(cat, int(uid), text, account_name=account)
+    if res.get("error"):
+        return jsonify(res), 502
+    return jsonify(res)
 
 
 @app.route('/api/mail/poll', methods=['POST'])

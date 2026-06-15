@@ -204,6 +204,78 @@ im News-System).
 - **Proton (danach):** Bridge installieren (bezahlter Plan) → `mail_secrets
   add` (provider=proton, Bridge-User + Bridge-Passwort) → Dry-Run.
 - **Gmail (danach):** App-Passwort → läuft sofort mit dem bestehenden Code.
-- **UI (offen):** Dashboard-Panel (Kategorie-Zähler aus `counts()` +
-  Review-Stapel aus `review_stack()`) noch nicht gebaut — die Daten-Helfer
-  stehen aber bereit.
+- **UI (gebaut 2026-06-15):** TUI-Panel **Post/Mail** (Taste `p`), **Drill-down
+  in zwei Ebenen**:
+  - **Ebene 1 (cats):** beim Öffnen NUR die Kategorien zum Auswählen — der
+    Review-Stapel ist einfach die Kategorie `sasha muss gucken` wie jede andere
+    (nichts wird einem ins Gesicht geklatscht). `↑↓` wählen, `enter` rein.
+  - **Ebene 2 (mails):** zwei umschaltbare Anzeige-Modi (`v`/Tab):
+    - **Lesen** (Default): EINE Mail — Von / Betreff / Text-Vorschau (erste
+      Zeilen), `e` klappt zum vollen Text auf (scrollbar), `n`/`N` blättert.
+    - **Liste:** Blöckchen (Absender + Titel), `↑↓` wählen, `enter` öffnet im
+      Lesen-Modus.
+    - Aktions-Tasten in beiden Modi: `s` = **einsortieren** (öffnet Kategorie-
+      Picker; ordnet den **ABSENDER** neu zu, NICHT die einzelne Mail —
+      künftige Mails von ihm landen dann dort), `d` = **löschen** (in den
+      Papierkorb, umkehrbar, mit `j/n`-Nachfrage), `a` = **antworten** (Split-
+      Editor), `esc`/`←` zurück.
+  - **Antwort-Editor (`a`):** die MITTE wird breit (Seitenpanels schrumpfen, bis
+    der Editor zu ist), gesplittet in zwei Kästen — **links** die Original-Mail
+    (scrollbar mit ↑↓), **rechts** dein Text-Editor (tippen, `enter`=Zeile).
+    `esc` öffnet die Senden-Leiste: `j` senden · `n` verwerfen · `w` weiter.
+    Senden geht **echt** raus via Outlook-SMTP (XOAUTH2), To/Betreff/Threading
+    leitet das Backend aus dem Original ab (`Re:`, In-Reply-To/References).
+  - `r` = Live-Poll anstoßen, `p` = Panel zu. Auto-Refresh ~3s.
+  - **Hybrid-Datenquelle:** Zähler in Ebene 1 kommen LIVE aus den echten IMAP-
+    Ordnern (`STATUS`-Sweep, im Backend gecacht), Fallback = lokaler 200er-
+    Schnappschuss (`mail_state.json`). Klick auf eine Kategorie holt deren Mails
+    LIVE aus dem echten Ordner (gebündelter Header-FETCH) — bei trash-Kategorien
+    oder ohne Key der Schnappschuss. Header zeigt `[live]`/`[lokal]`. Begründung:
+    folgt „Ordner ist Status" (das volle Postfach, nicht nur die letzten 200).
+  - Core-Helfer: `category_overview()` (Ebene 1, lokal), `folder_counts()`
+    (LIVE STATUS je move-Ordner), `folder_mails(cat)` (LIVE Header eines
+    Ordners; trash→`in_category()`-Schnappschuss).
+
+### Dashboard-Routen (`ui/app.py`)
+- `GET /api/mail` → `{categories, recent, live_counts, counts_age_s,
+  counts_refreshing, can_poll, polling}` — read-only, key-frei. `categories` =
+  lokale Schnappschuss-Zähler, `live_counts` = echte Ordnergröße aus dem Cache.
+- `POST /api/mail/refresh-counts` → frischt den Live-Ordnerzähl-Cache im
+  Hintergrund-Thread auf (STATUS-Sweep). `409` ohne Key, Parallel-Lock. Die TUI
+  feuert das beim Panel-Öffnen (fire-and-forget) — friert nicht ein.
+- `GET /api/mail/folder?cat=NAME` → die Mails einer Kategorie. Mit Key + eigenem
+  Ordner LIVE (`source:"live"`), sonst Schnappschuss (`source:"snapshot"`).
+- `GET /api/mail/body?cat=&uid=&account=` → voller Text + Header EINER Mail
+  (Lesen-Modus), LIVE; `409` ohne Key. Core: `mail_body()` (MIME→Klartext,
+  text/plain bevorzugt, sonst html grob entschärft).
+- `POST /api/mail/assign {sender, category}` → ordnet den **Absender** einer
+  Kategorie zu (Keymap, key-frei). Verschiebt NICHT die Mail. Core:
+  `reassign_sender()` → `mail_rules.assign()`.
+- `POST /api/mail/delete {cat, uid, account?}` → eine Mail in den Papierkorb
+  (umkehrbar), LIVE; `409` ohne Key. Core: `delete_mail()`.
+- `POST /api/mail/reply {cat, uid, text, account?}` → sendet eine Antwort via
+  **SMTP XOAUTH2** (Outlook `smtp.office365.com:587` STARTTLS). To/Betreff/
+  Threading aus dem Original. `409` ohne Key. Core: `reply_to_mail()` →
+  `send_reply()`.
+
+### Senden (SMTP) + erneuter Login
+Versand braucht den Scope `SMTP.Send` (in `mail_oauth.SCOPE`, zusammen mit IMAP —
+**ein** Token deckt beides, da beide unter `outlook.office.com`). Wer den alten
+**nur-IMAP**-refresh_token hat, muss **EINMAL neu einloggen** (Re-Consent):
+`ZENTRALE_MAIL_KEY=… venv/bin/python -m core.mail_oauth login`. Erst danach
+funktioniert `a` → senden. **Noch nicht live verifiziert** (braucht den
+Re-Login + echtes Netz) — der XOAUTH2-SMTP-Pfad folgt dem Standard-Schema.
+- `POST /api/mail/poll` → stößt einen **Live**-Poll im Backend-Thread an
+  (explizite Nutzer-Aktion = Einwilligung; Move/Trash umkehrbar). `409`, wenn
+  keine Passphrase. Parallel-Polls werden via Lock verhindert.
+
+### Passphrase-Quellen (Env + OS-Keyring)
+`mail_secrets._passphrase()`: **erst** `ZENTRALE_MAIL_KEY` (headless/systemd),
+**dann** OS-Keyring (Secret Service via `secretstorage`, nur interaktive
+Desktop-Session). So bleibt der headless-Pfad heil und der Desktop muss nicht
+tippen. Verwaltung (Passphrase tippt der Nutzer per `getpass`, nie geloggt):
+- `… -m core.mail_secrets keyring-set` — Passphrase in den Login-Keyring legen
+  (mit Gegenprobe gegen den vorhandenen Store).
+- `… keyring-test` / `keyring-clear` — prüfen / entfernen.
+Deps: `secretstorage` + `jeepney` (pure-Python, im venv). Fehlen sie (headless),
+greift einfach weiter nur die Env-Var.

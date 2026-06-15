@@ -36,11 +36,15 @@ import sys
 import ssl
 import json
 import time
+import email
+import base64
 import imaplib
+import smtplib
 import threading
 from datetime import datetime
+from email.message import EmailMessage
 from email.header import decode_header, make_header
-from email.utils import parsedate_to_datetime
+from email.utils import parsedate_to_datetime, make_msgid, formatdate, parseaddr
 
 # core/ auf den Pfad, damit `import state` auch bei `python -m core.mail`
 # greift (Modul-Start legt nur das Projekt-Root auf sys.path, nicht core/).
@@ -153,6 +157,378 @@ def review_stack(limit=20):
     Das ist Sashas Arbeitsstapel: hier wartet, was eine Zuordnung braucht."""
     return [it for it in recent(200)
             if not it.get("known")][:limit]
+
+
+def category_overview():
+    """Alle DEFINIERTEN Kategorien mit Anzahl (aus dem letzten 200er-Fenster)
+    + Server-Aktion/Ordner. Ebene 1 des Mail-Panels: hier wählt man aus, der
+    Review-Stapel ist einfach die Kategorie 'sasha muss gucken' wie jede andere.
+    Sortiert: meiste Mails zuerst, dann alphabetisch."""
+    cnt = counts()
+    out = []
+    for name, spec in mail_rules.categories().items():
+        out.append({
+            "name": name,
+            "count": cnt.get(name, 0),
+            "action": spec.get("action", "move"),
+            "folder": spec.get("folder"),
+            "system": bool(spec.get("system")),
+        })
+    out.sort(key=lambda c: (-c["count"], c["name"].lower()))
+    return out
+
+
+def in_category(name, limit=200):
+    """Die Mails einer Kategorie (aus dem letzten 200er-Fenster). Ebene 2 des
+    Mail-Panels: Klick auf eine Kategorie zeigt, was drinliegt."""
+    return [it for it in recent(200) if it.get("category") == name][:limit]
+
+
+# ── LIVE aus den echten IMAP-Ordnern (Hybrid-Panel) ──────────────────
+# Der lokale Schnappschuss (mail_state.json) hält nur die letzten 200 Mails.
+# Für die WAHRE Ordnergröße + den vollen Ordner-Inhalt fragen wir den Server.
+# Lesend (STATUS / SELECT readonly / FETCH headers) — throttle-arm, kein MOVE.
+# Braucht Passphrase + Konten; ohne → leeres Ergebnis (Aufrufer fällt zurück).
+
+def folder_counts():
+    """LIVE: echte Nachrichtenzahl je Kategorie-Ordner (IMAP STATUS), aggregiert
+    über alle aktiven Konten. Nur move-Kategorien mit eigenem Ordner — trash-
+    Kategorien teilen den Papierkorb und tauchen hier nicht auf. {kat: anzahl}."""
+    accts = [a for a in mail_secrets.load_accounts() if a.get("enabled", True)]
+    if not accts:
+        return {}
+    cats = mail_rules.categories()
+    out = {}
+    for account in accts:
+        imap = None
+        try:
+            imap = _connect(account)
+            for name, spec in cats.items():
+                folder = spec.get("folder")
+                if spec.get("action") != "move" or not folder:
+                    continue
+                try:
+                    typ, data = imap.status(_q(folder), "(MESSAGES)")
+                    if typ == "OK" and data and data[0]:
+                        raw = data[0] if isinstance(data[0], bytes) else str(data[0]).encode()
+                        m = re.search(rb"MESSAGES\s+(\d+)", raw)
+                        if m:
+                            out[name] = out.get(name, 0) + int(m.group(1))
+                except _DROP_ERRORS:
+                    raise
+                except Exception:
+                    pass   # Ordner existiert evtl. noch nicht -> als 0 werten
+        except Exception as e:
+            state.push_log(f"MAIL: Ordnerzählung fehlgeschlagen — "
+                           f"{type(e).__name__}: {e}")
+        finally:
+            if imap is not None:
+                try:
+                    imap.logout()
+                except Exception:
+                    pass
+    return out
+
+
+def folder_mails(cat, limit=200):
+    """LIVE: die Mails einer Kategorie aus ihrem echten IMAP-Ordner (nur Header).
+    trash-Kategorien (kein eigener Ordner) → lokaler Schnappschuss. Liefert
+    Liste {account, uid, from, subject, date}, neueste zuerst. [] ohne Key."""
+    spec = mail_rules.category_action(cat)
+    if spec.get("action") != "move" or not spec.get("folder"):
+        return in_category(cat, limit)
+    folder = spec["folder"]
+    accts = [a for a in mail_secrets.load_accounts() if a.get("enabled", True)]
+    out = []
+    for account in accts:
+        imap = None
+        try:
+            imap = _connect(account)
+            typ, _ = imap.select(_q(folder), readonly=True)   # nichts verändern
+            if typ != "OK":
+                continue
+            typ, data = imap.uid("SEARCH", None, "UID 1:*")
+            uids = []
+            if typ == "OK" and data and data[0]:
+                uids = sorted((int(u) for u in data[0].split()), reverse=True)[:limit]
+            if not uids:
+                continue
+            # EIN gebündelter FETCH statt pro Mail (throttle-arm).
+            typ, fetched = imap.uid(
+                "FETCH", ",".join(str(u) for u in uids),
+                "(UID BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])")
+            if typ != "OK" or not fetched:
+                continue
+            for item in fetched:
+                if not isinstance(item, tuple) or len(item) < 2:
+                    continue
+                meta = item[0].decode("ascii", "replace") if isinstance(item[0], bytes) \
+                    else str(item[0])
+                mm = re.search(r"UID\s+(\d+)", meta)
+                hdr = _parse_headers(item[1])
+                out.append({"account": account["name"],
+                            "uid": int(mm.group(1)) if mm else None,
+                            "from": hdr["from"], "subject": hdr["subject"],
+                            "date": hdr["date"]})
+        except Exception as e:
+            state.push_log(f"MAIL: Ordner '{folder}' lesen — "
+                           f"{type(e).__name__}: {e}")
+        finally:
+            if imap is not None:
+                try:
+                    imap.logout()
+                except Exception:
+                    pass
+    out.sort(key=lambda x: (x["uid"] or 0), reverse=True)
+    return out[:limit]
+
+
+# ── Body lesen + einzelne Mail löschen (Mail-Panel Ebene 2) ──────────
+
+def _part_text(part):
+    """Den dekodierten Text eines MIME-Teils als str (best effort)."""
+    payload = part.get_payload(decode=True)
+    if payload is None:
+        return ""
+    charset = part.get_content_charset() or "utf-8"
+    try:
+        return payload.decode(charset, "replace")
+    except (LookupError, TypeError):
+        return payload.decode("utf-8", "replace")
+
+
+def _strip_html(html):
+    """HTML grob zu lesbarem Text (kein echtes Rendering, nur Tags raus)."""
+    text = re.sub(r"(?is)<(script|style).*?</\1>", " ", html)
+    text = re.sub(r"(?s)<br\s*/?>", "\n", text)
+    text = re.sub(r"(?s)</p>", "\n\n", text)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    for a, b in (("&nbsp;", " "), ("&amp;", "&"), ("&lt;", "<"),
+                 ("&gt;", ">"), ("&quot;", '"'), ("&#39;", "'")):
+        text = text.replace(a, b)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n[ \t]+", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _extract_text(msg):
+    """Lesbaren Klartext aus einer email.message.Message ziehen: text/plain
+    bevorzugt, sonst text/html grob entschärft. Anhänge übersprungen."""
+    if msg.is_multipart():
+        plain, html = None, None
+        for part in msg.walk():
+            if part.is_multipart():
+                continue
+            disp = str(part.get("Content-Disposition") or "").lower()
+            if "attachment" in disp:
+                continue
+            ctype = part.get_content_type()
+            if ctype == "text/plain" and plain is None:
+                plain = _part_text(part)
+            elif ctype == "text/html" and html is None:
+                html = _part_text(part)
+        if plain and plain.strip():
+            return plain
+        if html:
+            return _strip_html(html)
+        return ""
+    text = _part_text(msg)
+    if msg.get_content_type() == "text/html":
+        return _strip_html(text)
+    return text
+
+
+def _accounts_for(account_name=None):
+    accts = [a for a in mail_secrets.load_accounts() if a.get("enabled", True)]
+    if account_name:
+        match = [a for a in accts if a.get("name") == account_name]
+        if match:
+            return match
+    return accts
+
+
+def mail_body(cat, uid, account_name=None):
+    """LIVE: vollen Text + Header einer Mail aus ihrem Ordner holen. Liefert
+    {account, uid, from, subject, date, body} oder {error}. Read-only."""
+    spec = mail_rules.category_action(cat)
+    folder = spec.get("folder")
+    if spec.get("action") != "move" or not folder:
+        return {"error": "kein Live-Ordner für diese Kategorie"}
+    for account in _accounts_for(account_name):
+        imap = None
+        try:
+            imap = _connect(account)
+            typ, _ = imap.select(_q(folder), readonly=True)
+            if typ != "OK":
+                continue
+            typ, fetched = imap.uid("FETCH", str(uid), "(BODY.PEEK[])")
+            if typ != "OK" or not fetched or not isinstance(fetched[0], tuple):
+                continue
+            msg = email.message_from_bytes(fetched[0][1])
+            try:
+                dt = parsedate_to_datetime(msg.get("Date"))
+                date_s = dt.isoformat() if dt else ""
+            except (TypeError, ValueError):
+                date_s = ""
+            return {"account": account["name"], "uid": uid,
+                    "from": _decode(msg.get("From", "")),
+                    "subject": _decode(msg.get("Subject", "")),
+                    "date": date_s,
+                    "message_id": (msg.get("Message-ID") or "").strip(),
+                    "references": (msg.get("References") or "").strip(),
+                    "body": _extract_text(msg).strip()}
+        except Exception as e:
+            state.push_log(f"MAIL: Body '{folder}' uid {uid} — "
+                           f"{type(e).__name__}: {e}")
+        finally:
+            if imap is not None:
+                try:
+                    imap.logout()
+                except Exception:
+                    pass
+    return {"error": "Mail nicht gefunden"}
+
+
+def delete_mail(cat, uid, account_name=None):
+    """LIVE: eine Mail aus dem Kategorie-Ordner in den Papierkorb verschieben
+    (umkehrbar, kein Hard-Expunge). Liefert True bei Erfolg."""
+    spec = mail_rules.category_action(cat)
+    folder = spec.get("folder")
+    if not folder:
+        return False
+    for account in _accounts_for(account_name):
+        imap = None
+        try:
+            imap = _connect(account)
+            typ, _ = imap.select(_q(folder))      # read-write (wir verschieben)
+            if typ != "OK":
+                continue
+            trash = _find_trash(imap)
+            if _move_uid(imap, str(uid), trash):
+                state.push_log(f"MAIL: gelöscht (uid {uid}) {folder} → {trash}")
+                return True
+        except Exception as e:
+            state.push_log(f"MAIL: löschen '{folder}' uid {uid} — "
+                           f"{type(e).__name__}: {e}")
+        finally:
+            if imap is not None:
+                try:
+                    imap.logout()
+                except Exception:
+                    pass
+    return False
+
+
+def reassign_sender(sender, category):
+    """Den ABSENDER einer Kategorie zuordnen (Keymap-Eintrag). Verschiebt NICHT
+    die einzelne Mail — ab jetzt landen KÜNFTIGE Mails dieses Absenders
+    automatisch in der neuen Kategorie (Sashas Modell: Absender → Hand → Kat.).
+    Liefert (normalisierte_adresse, kategorie)."""
+    return mail_rules.assign(sender, category)
+
+
+# ── Antworten senden (SMTP XOAUTH2) ──────────────────────────────────
+# Outlook-SMTP mit demselben OAuth-Token wie IMAP (Scope deckt SMTP.Send mit
+# ab). Andere Provider können host/port/security/auth übers Konto setzen.
+_SMTP_DEFAULTS = {
+    "outlook": {"host": "smtp.office365.com", "port": 587,
+                "security": "starttls", "auth": "oauth2"},
+}
+
+
+def _smtp_cfg(account):
+    base = dict(_SMTP_DEFAULTS.get(account.get("provider", ""), {}))
+    for k in ("host", "port", "security", "auth", "verify"):
+        v = account.get("smtp_" + k)
+        if v is not None:
+            base[k] = v
+    return base
+
+
+def send_reply(account, to_addr, subject, body, in_reply_to=None, references=None):
+    """Eine (Antwort-)Mail über SMTP senden. Bei oauth2 via XOAUTH2 mit dem
+    frischen Access-Token (kein Passwort). Setzt In-Reply-To/References fürs
+    Threading. Liefert True; wirft bei Fehler (Aufrufer fängt)."""
+    cfg = _smtp_cfg(account)
+    if not cfg.get("host"):
+        raise RuntimeError(f"kein SMTP-Host für Provider '{account.get('provider')}'")
+    user = account["user"]
+
+    msg = EmailMessage()
+    msg["From"] = user
+    msg["To"] = to_addr
+    msg["Subject"] = subject
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid()
+    if in_reply_to:
+        msg["In-Reply-To"] = in_reply_to
+        msg["References"] = (references or in_reply_to)
+    msg.set_content(body or "")
+
+    host, port = cfg["host"], int(cfg.get("port", 587))
+    security = cfg.get("security", "starttls")
+    ctx = ssl.create_default_context()
+    if cfg.get("verify") is False:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+    state.push_log(f"MAIL [{account['name']}]: SMTP {host}:{port} → senden")
+    state.push_internet_log(f"SMTP {account['name']} → {host}:{port}")
+
+    if security == "ssl":
+        smtp = smtplib.SMTP_SSL(host, port, context=ctx, timeout=30)
+    else:
+        smtp = smtplib.SMTP(host, port, timeout=30)
+    try:
+        smtp.ehlo()
+        if security == "starttls":
+            smtp.starttls(context=ctx)
+            smtp.ehlo()
+        if cfg.get("auth") == "oauth2":
+            import mail_oauth
+            token = mail_oauth.access_token_for(account)
+            xo = f"user={user}\x01auth=Bearer {token}\x01\x01"
+            code, resp = smtp.docmd(
+                "AUTH", "XOAUTH2 " + base64.b64encode(xo.encode("utf-8")).decode("ascii"))
+            if code == 334:                      # Server will Detail -> leere Zeile, dann Fehler
+                code, resp = smtp.docmd("")
+            if code != 235:
+                raise RuntimeError(f"SMTP XOAUTH2 abgelehnt: {code} {resp!r}")
+        else:
+            smtp.login(user, account["secret"])
+        smtp.send_message(msg)
+    finally:
+        try:
+            smtp.quit()
+        except Exception:
+            pass
+    state.push_log(f"MAIL [{account['name']}]: ✓ Antwort an {to_addr} gesendet")
+    return True
+
+
+def reply_to_mail(cat, uid, body, account_name=None):
+    """Komfort-Wrapper fürs Panel: holt die Original-Mail (Absender, Betreff,
+    Message-ID) und sendet die getippte Antwort dorthin. Liefert {ok}/{error}."""
+    info = mail_body(cat, uid, account_name=account_name)
+    if not isinstance(info, dict) or info.get("error"):
+        return {"error": (info or {}).get("error", "Original nicht ladbar")}
+    accts = _accounts_for(account_name or info.get("account"))
+    if not accts:
+        return {"error": "kein Konto / kein Key"}
+    account = accts[0]
+    to_addr = parseaddr(info.get("from", ""))[1] or info.get("from", "")
+    subj = info.get("subject", "") or ""
+    if not subj.lower().startswith("re:"):
+        subj = "Re: " + subj
+    refs = (info.get("references", "") + " " + info.get("message_id", "")).strip()
+    try:
+        send_reply(account, to_addr, subj, body,
+                   in_reply_to=info.get("message_id") or None,
+                   references=refs or None)
+        return {"ok": True, "to": to_addr, "subject": subj}
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
 
 
 # ── KI-Tool: lies_mail (read-only, lokal, kein Permission-Gate) ────────

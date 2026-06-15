@@ -122,6 +122,52 @@ def test_nest_reids_against_legacy_dest_without_next_item(reg):
     assert len(all_ids) == len(set(all_ids)), all_ids
 
 
+def test_folder_not_directly_toggleable(reg):
+    lst = L.create_list("x")
+    a = L.add_item(lst["id"], "a")
+    L.add_item(lst["id"], "kind", parent_iid=a["id"])   # a wird Ordner
+    with pytest.raises(ValueError):
+        L.toggle_item(lst["id"], a["id"])               # Ordner nicht abhakbar
+    # Blatt geht weiterhin
+    leaf = _get(lst["id"])["items"][0]["items"][0]
+    L.toggle_item(lst["id"], leaf["id"])
+    assert _get(lst["id"])["items"][0]["items"][0]["done"] is True
+
+
+def test_is_done_derived_for_folder(reg):
+    lst = L.create_list("x")
+    a = L.add_item(lst["id"], "a")
+    k1 = L.add_item(lst["id"], "k1", parent_iid=a["id"])
+    k2 = L.add_item(lst["id"], "k2", parent_iid=a["id"])
+    folder = _get(lst["id"])["items"][0]
+    assert L.is_container(folder) is True
+    assert L.is_done(folder) is False                   # noch nichts gehakt
+    L.toggle_item(lst["id"], k1["id"])
+    assert L.is_done(_get(lst["id"])["items"][0]) is False   # nur 1 von 2
+    L.toggle_item(lst["id"], k2["id"])
+    assert L.is_done(_get(lst["id"])["items"][0]) is True    # alle Kinder gehakt → Ordner gehakt
+
+
+def test_is_done_nested_folders(reg):
+    lst = L.create_list("x")
+    a = L.add_item(lst["id"], "a")
+    b = L.add_item(lst["id"], "b", parent_iid=a["id"])      # a→b Ordnerkette
+    leaf = L.add_item(lst["id"], "leaf", parent_iid=b["id"])
+    top = _get(lst["id"])["items"][0]
+    assert L.is_done(top) is False
+    L.toggle_item(lst["id"], leaf["id"])
+    assert L.is_done(_get(lst["id"])["items"][0]) is True    # tiefstes Blatt erledigt → alles
+
+
+def test_leaf_is_done_is_own_flag(reg):
+    lst = L.create_list("x")
+    a = L.add_item(lst["id"], "a")
+    assert L.is_container(a) is False
+    assert L.is_done(_get(lst["id"])["items"][0]) is False
+    L.toggle_item(lst["id"], a["id"])
+    assert L.is_done(_get(lst["id"])["items"][0]) is True
+
+
 def test_rename_list_keeps_id(reg):
     lst = L.create_list("alt")
     out = L.rename_list(lst["id"], "neu")

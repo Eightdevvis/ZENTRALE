@@ -161,3 +161,37 @@ def test_api_calendar_routine_skip(client, tmp_path, monkeypatch):
     days = client.get("/api/calendar?view=week&ref=2026-06-16").get_json()["days"]
     geige = [e for e in days.get(tue, []) if e.get("label") == "Geige"][0]
     assert not geige.get("deaktiviert")
+
+
+def test_api_calendar_add_routine(client, tmp_path, monkeypatch):
+    # Neue wöchentliche Routine aus der UI (byday → FREQ=WEEKLY;BYDAY=…).
+    import kalender
+    monkeypatch.setattr(kalender, "CAL_PATH", tmp_path / "cal.json")
+    kalender.ensure_init()
+    r = client.post("/api/calendar/routine",
+                    json={"label": "Geige", "byday": ["TU", "FR"], "time": "17:45"})
+    assert r.status_code == 200 and r.get_json()["ok"] is True
+    # erscheint an einem Dienstag
+    days = client.get("/api/calendar?view=week&ref=2026-06-16").get_json()["days"]
+    geige = [e for e in days.get("2026-06-16", []) if e.get("label") == "Geige"]
+    assert geige and geige[0].get("recurring") is True and geige[0].get("time") == "17:45"
+    # Validierung
+    assert client.post("/api/calendar/routine", json={"label": "", "byday": "TU"}).status_code == 400
+    assert client.post("/api/calendar/routine", json={"label": "X", "byday": "XX"}).status_code == 400
+
+
+def test_api_calendar_delete_routine(client, tmp_path, monkeypatch):
+    # Ganze Routine löschen — alle Vorkommen weg, andere Routinen bleiben.
+    import kalender
+    monkeypatch.setattr(kalender, "CAL_PATH", tmp_path / "cal.json")
+    kalender.ensure_init()
+    kalender.add_routine("routinen", "Geige", "FREQ=WEEKLY;BYDAY=TU", time="17:45")
+    kalender.add_routine("routinen", "Parkour", "FREQ=WEEKLY;BYDAY=TH", time="19:00")
+    r = client.delete("/api/calendar/routine", json={"layer": "routinen", "label": "Geige"})
+    assert r.get_json()["deleted"] == 1
+    days = client.get("/api/calendar?view=week&ref=2026-06-16").get_json()["days"]
+    assert not any(e.get("label") == "Geige" for ents in days.values() for e in ents)
+    # Parkour unberührt
+    assert any(e.get("label") == "Parkour" for ents in days.values() for e in ents)
+    # ohne label → 400
+    assert client.delete("/api/calendar/routine", json={"layer": "routinen"}).status_code == 400

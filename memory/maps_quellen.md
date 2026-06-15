@@ -101,19 +101,30 @@ keine ehrliche „von-wann/woher"-Antwort mehr → das wäre „devious".
   `?sub=routes` / `?sub=chokepoints` adressieren die Sub-Layer einzeln.
 - **Code:** `portwatch.routes()` + `trade.py` (Komposit), `render.project_polyline`.
 
-### `trade/density` — GEPLANT (gemessen, global, committbar) ⭐
+### `trade/density` — Render GEBAUT (Fenster), Ingest ausstehend ⭐
 - **Institution:** World Bank Data Catalog, „Global Shipping Traffic Density"
   (Dataset 0037580) — entstanden aus **IMFs eigener AIS-Analyse** (Cerdeiro,
   Komaromi, Liu, Saeed 2020). Also dieselbe institutionelle Linie wie unsere
   Chokepoints, nur das *gemessene* Produkt → die Layer sind kohärent.
 - **Was:** stündliche AIS-Positionen **Jan 2015 – Feb 2021**, aggregiert zu einem
-  Dichte-**Raster** (GeoTIFF), 0,005° (~500 m) Zellen, **6 Layer** (global,
-  kommerziell, Fischerei, Öl/Gas, Passagier, Freizeit).
-- **Lizenz: CC BY 4.0 → `commit_ok = True`.** Löst nebenbei das „nie ins Repo"-
-  Problem für diesen Layer. (Größe beachten → ggf. herunterskalieren/quantisieren.)
-- **Render:** Heatmap statt Linien → neue Render-Logik in Fenster + TUI nötig.
-- **Stand:** statischer Einmal-Aggregat (kein Update) — passt zur A/B-Logik
-  (Routen = quasi-statische Struktur).
+  Dichte-**Raster**, 0,005° (~500 m), 6 Layer. Original: Zenodo-Zip
+  `shipdensity_global.zip` (**534 MB**, ~10 GB entpackt), CC BY 4.0.
+  (Auch als Esri-ImageServer gespiegelt, aber `TilesOnly` = nur vorgefärbte
+  Kacheln, keine Rohwerte → unbrauchbar für eigene Farben + Konsens.)
+- **Lizenz: CC BY 4.0 → `commit_ok = True`.** Anders als PortWatch: das
+  ABGELEITETE Mini-Raster darf (mit Namensnennung) ins Repo.
+- **Pipeline (A/B):** `scripts/ingest_shipdensity.py` (läuft EINMAL auf dem PC,
+  braucht Netz + `pip install tifffile`) lädt/liest den GeoTIFF, rechnet auf
+  **0,05°** runter, log-skaliert auf `uint8`, schreibt
+  `core/map/data/shipdensity_density_0p05.npz` (wenige MB, **committen**).
+  `core/map/layers/density.py` lädt das offline (nur numpy), trägt Provenienz.
+- **Render:** **nur natives Fenster** (Taste `d`) — weiche Heatmap übers Meer
+  (Welt→lon/lat samplen, Farb-LUT, smoothscale → nie harte Pixel; Welt-Wrap
+  gratis). TUI bewusst NICHT (Sashas Vorgabe: Density vorerst nur Fenster).
+- **Stand:** statischer Einmal-Aggregat (kein Update) — A/B-Logik: Tages­aktualität
+  sitzt in den Chokepoints, nicht hier. Caption trägt „Stand 2015–2021".
+- **OFFEN:** der einmalige Ingest muss auf Sashas PC laufen (Sandbox kommt nicht
+  an Zenodo/World Bank — 403). Danach ist der Layer live.
 - **URL:** https://datacatalog.worldbank.org/search/dataset/0037580
 
 ### `trade/eu` — GEPLANT (gemessen, EU, monatlich)

@@ -174,6 +174,10 @@
   .cw-act:hover { color: var(--acc); opacity: 1; }
   .cw-ent.deakt { opacity: 0.55; text-decoration: line-through; }
   .cw-ent.deakt .cw-act, .cw-ent.deakt .cw-del { text-decoration: none; }
+  .cal-form button.on { background: var(--acc); color: var(--bg); border-color: var(--acc); }
+  .cal-wdays { display: inline-flex; gap: 2px; }
+  .cal-wd { font-family: 'VT323', monospace; font-size: 16px; padding: 2px 7px; background: transparent; color: var(--dim); border: 1px solid var(--line); cursor: pointer; }
+  .cal-wd.on { background: var(--acc); color: var(--bg); border-color: var(--acc); }
 </style>
 </head>
 <body>
@@ -399,6 +403,7 @@
       var labelEl = document.getElementById('cal-label'), subEl = document.getElementById('cal-sub');
       var head = body.parentNode.querySelector('.cal-head');
       var WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+      var WDCODE = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
       var view = 'week', ref = isoToday();
       var adding = false, editing = null, form = {}, msg = '', msgWarn = false, lastData = {};
 
@@ -436,25 +441,64 @@
         subEl.textContent = view;
         var top = '';
         if (adding) {
-          top += '<div class="cal-form">'
-            + '<input type="date" id="cf-day" value="' + esc(form.day || d.today || isoToday()) + '" />'
-            + '<input id="cf-time" placeholder="HH:MM" size="5" maxlength="5" value="' + esc(form.time || '') + '" />'
-            + '<input id="cf-label" placeholder="Titel" style="flex:1;min-width:90px" value="' + esc(form.label || '') + '" />'
-            + '<input id="cf-ort" placeholder="Ort (optional)" size="12" value="' + esc(form.ort || '') + '" />'
-            + '<button data-save="1">' + (editing ? 'ändern' : 'anlegen') + '</button>'
-            + (editing ? '<button data-canceledit="1" title="abbrechen">×</button>' : '') + '</div>';
+          var isRt = (form.type === 'routine');
+          var fh = ['<div class="cal-form">'];
+          if (!editing) {
+            fh.push('<button data-ftype="entry" class="' + (!isRt ? 'on' : '') + '">Termin</button>');
+            fh.push('<button data-ftype="routine" class="' + (isRt ? 'on' : '') + '">Routine</button>');
+          }
+          if (isRt) {
+            fh.push('<span class="cal-wdays">');
+            WD.forEach(function (w, i) {
+              fh.push('<button class="cal-wd' + ((form.byday || []).indexOf(WDCODE[i]) >= 0 ? ' on' : '')
+                + '" data-wd="' + WDCODE[i] + '">' + w + '</button>');
+            });
+            fh.push('</span>');
+          } else {
+            fh.push('<input type="date" id="cf-day" value="' + esc(form.day || d.today || isoToday()) + '" />');
+          }
+          fh.push('<input id="cf-time" placeholder="HH:MM" size="5" maxlength="5" value="' + esc(form.time || '') + '" />');
+          fh.push('<input id="cf-label" placeholder="Titel" style="flex:1;min-width:90px" value="' + esc(form.label || '') + '" />');
+          fh.push('<input id="cf-ort" placeholder="Ort (optional)" size="12" value="' + esc(form.ort || '') + '" />');
+          fh.push('<button data-save="1">' + (editing ? 'ändern' : (isRt ? 'Routine anlegen' : 'anlegen')) + '</button>');
+          fh.push(editing ? '<button data-canceledit="1" title="abbrechen">×</button>' : '');
+          fh.push('</div>');
+          top += fh.join('');
         }
         if (msg) top += '<div class="cal-msg' + (msgWarn ? ' warn' : '') + '">' + esc(msg) + '</div>';
         body.innerHTML = top + ((view === 'month') ? renderMonth(d, days) : renderWeek(d, days));
         if (adding) { var lf = body.querySelector('#cf-label'); if (lf) lf.focus(); }
       }
 
+      function captureForm() {
+        var q = function (s) { var el = body.querySelector(s); return el ? el.value : undefined; };
+        if (q('#cf-day') !== undefined) form.day = q('#cf-day');
+        if (q('#cf-time') !== undefined) form.time = q('#cf-time');
+        if (q('#cf-label') !== undefined) form.label = q('#cf-label');
+        if (q('#cf-ort') !== undefined) form.ort = q('#cf-ort');
+      }
+
       function addEntry() {
-        var day = (body.querySelector('#cf-day') || {}).value || '';
-        var label = ((body.querySelector('#cf-label') || {}).value || '').trim();
-        var time = ((body.querySelector('#cf-time') || {}).value || '').trim();
-        var ort = ((body.querySelector('#cf-ort') || {}).value || '').trim();
+        captureForm();
+        var label = (form.label || '').trim();
+        var time = (form.time || '').trim();
+        var ort = (form.ort || '').trim();
         if (!label) { msg = 'Titel fehlt.'; msgWarn = true; render(); return; }
+
+        if (form.type === 'routine' && !editing) {       // NEUE wöchentliche Routine
+          if (!(form.byday || []).length) { msg = 'Wochentag wählen.'; msgWarn = true; render(); return; }
+          fetch('/api/calendar/routine', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ label: label, byday: form.byday, time: time, ort: ort })
+          }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+            .then(function (res) {
+              if (!res.ok) { msg = res.j.error || 'fehlgeschlagen.'; msgWarn = true; render(); return; }
+              adding = false; form = {}; msg = 'Routine angelegt: ' + label; msgWarn = false; load();
+            }).catch(function () { msg = 'netzwerkfehler.'; msgWarn = true; render(); });
+          return;
+        }
+
+        var day = (form.day || '').trim();
         var method, payload;
         if (editing) {
           method = 'PUT';
@@ -479,7 +523,7 @@
       }
       function beginEdit(isoDay, label, layer, time, ort) {
         editing = { iso: isoDay, label: label, layer: layer };
-        form = { day: isoDay, time: time || '', label: label, ort: ort || '' };
+        form = { type: 'entry', day: isoDay, time: time || '', label: label, ort: ort || '' };
         adding = true; msg = ''; render();
       }
       function delEntry(day, label, layer) {
@@ -494,8 +538,19 @@
         fetch('/api/calendar/routine/skip', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ layer: layer, label: label, day: day, off: off })
-        }).then(function (r) { return r.json(); }).then(function () {
+        }).then(function (r) {
+          if (!r.ok) { msg = 'fehlgeschlagen (Backend neu starten?).'; msgWarn = true; render(); return; }
           msg = (off ? 'deaktiviert: ' : 'aktiviert: ') + label; msgWarn = false; load();
+        }).catch(function () { msg = 'netzwerkfehler.'; msgWarn = true; render(); });
+      }
+      function routineDelete(label, layer) {
+        if (!confirm('Ganze Routine „' + label + '" löschen? Alle Vorkommen verschwinden.')) return;
+        fetch('/api/calendar/routine', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ layer: layer, label: label })
+        }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
+          if (!res.ok) { msg = 'fehlgeschlagen (Backend neu starten?).'; msgWarn = true; render(); return; }
+          msg = (res.j.deleted ? 'Routine gelöscht: ' + label : 'nichts gelöscht.'); msgWarn = !res.j.deleted; load();
         }).catch(function () { msg = 'netzwerkfehler.'; msgWarn = true; render(); });
       }
       function renderWeek(d, days) {
@@ -516,7 +571,9 @@
             } else if (e.recurring) {
               acts = '<span class="cw-act" title="' + (deakt ? 'wieder aktivieren' : 'diesen Termin deaktivieren')
                 + '" data-rt-day="' + k + '" data-rt-label="' + esc(lbl) + '" data-rt-layer="' + esc(e.layer || '')
-                + '" data-rt-off="' + (deakt ? '0' : '1') + '">' + (deakt ? '↺' : '⊘') + '</span>';
+                + '" data-rt-off="' + (deakt ? '0' : '1') + '">' + (deakt ? '↺' : '⊘') + '</span>'
+                + '<span class="cw-del" title="ganze Routine löschen" data-rd-label="' + esc(lbl)
+                + '" data-rd-layer="' + esc(e.layer || '') + '">🗑</span>';
             } else {
               acts = '<span class="cw-act" title="bearbeiten" data-edit-day="' + k + '" data-edit-label="' + esc(lbl)
                 + '" data-edit-layer="' + esc(e.layer || '') + '" data-edit-time="' + esc(e.time || '')
@@ -558,7 +615,7 @@
         var b = e.target.closest('button'); if (!b) return;
         if (b.hasAttribute('data-nav')) { msg = ''; step(Number(b.getAttribute('data-nav'))); }
         else if (b.hasAttribute('data-today')) { msg = ''; ref = isoToday(); load(); }
-        else if (b.hasAttribute('data-add')) { adding = !adding; editing = null; msg = ''; form = adding ? { day: (lastData && lastData.today) || isoToday() } : {}; b.classList.toggle('on', adding); render(); }
+        else if (b.hasAttribute('data-add')) { adding = !adding; editing = null; msg = ''; form = adding ? { type: 'entry', day: (lastData && lastData.today) || isoToday(), byday: [] } : {}; b.classList.toggle('on', adding); render(); }
         else if (b.hasAttribute('data-view')) {
           var v = b.getAttribute('data-view');
           if (v !== view) { msg = ''; view = v; [].forEach.call(head.querySelectorAll('[data-view]'), function (x) { x.classList.toggle('on', x === b); }); load(); }
@@ -568,15 +625,21 @@
       body.addEventListener('click', function (e) {
         if (e.target.closest('[data-save]')) { addEntry(); return; }
         if (e.target.closest('[data-canceledit]')) { adding = false; editing = null; form = {}; render(); return; }
+        var ft = e.target.closest('[data-ftype]');
+        if (ft) { captureForm(); form.type = ft.getAttribute('data-ftype'); if (!form.byday) form.byday = []; render(); return; }
+        var wd = e.target.closest('[data-wd]');
+        if (wd) { captureForm(); var c = wd.getAttribute('data-wd'); form.byday = form.byday || []; var i = form.byday.indexOf(c); if (i >= 0) form.byday.splice(i, 1); else form.byday.push(c); render(); return; }
         var ed = e.target.closest('[data-edit-label]');
         if (ed) { e.stopPropagation(); beginEdit(ed.getAttribute('data-edit-day'), ed.getAttribute('data-edit-label'), ed.getAttribute('data-edit-layer'), ed.getAttribute('data-edit-time'), ed.getAttribute('data-edit-ort')); return; }
         var rt = e.target.closest('[data-rt-label]');
         if (rt) { e.stopPropagation(); routineToggle(rt.getAttribute('data-rt-day'), rt.getAttribute('data-rt-label'), rt.getAttribute('data-rt-layer'), rt.getAttribute('data-rt-off') === '1'); return; }
+        var rd = e.target.closest('[data-rd-label]');
+        if (rd) { e.stopPropagation(); routineDelete(rd.getAttribute('data-rd-label'), rd.getAttribute('data-rd-layer')); return; }
         var d = e.target.closest('[data-del-label]');
         if (d) { e.stopPropagation(); delEntry(d.getAttribute('data-del-day'), d.getAttribute('data-del-label'), d.getAttribute('data-del-layer')); }
       });
       body.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' && e.target && /^cf-(label|time|ort)$/.test(e.target.id)) addEntry();
+        if (e.key === 'Enter' && e.target && /^cf-(label|time|ort|day)$/.test(e.target.id)) addEntry();
       });
       load();
       setInterval(function () { if (!adding) load(); }, 60000);   // minütlich auffrischen, aber nicht während der Eingabe

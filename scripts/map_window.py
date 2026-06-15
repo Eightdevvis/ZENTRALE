@@ -19,6 +19,7 @@
 #   g                           Gradnetz an/aus
 #   l                           Länder-Labels an/aus
 #   t                           Handelsrouten-Overlay an/aus (Routen + Chokepoints)
+#   d                           Verkehrsdichte-Heatmap an/aus (gemessen, World Bank/IMF)
 #   ?                           Glossar-Such-Modal (Begriffe nachschlagen)
 #   Esc / q                     schließen
 #
@@ -60,6 +61,7 @@ TRADE_DOT  = (255, 178, 72)     # Chokepoint-Marker (Bernstein, kontrastiert Min
 TRADE_RING = (255, 226, 180)    # heller Rand des Markers
 TRADE_FG   = (255, 232, 196)    # Chokepoint-Label
 ROUTE_COL  = (92, 138, 156)     # Schifffahrtsrouten-Linien (gedämpftes Stahlblau)
+DENS_FG    = (214, 184, 236)    # Verkehrsdichte-Caption (weiches Violett, wie Ramp)
 LEG_FG     = (196, 214, 210)    # Legenden-Text
 LEG_KEY    = (130, 222, 212)    # Legenden-Taste (Mint, wie Küste)
 LEG_BG     = (10, 20, 34)       # Legenden-Hintergrund
@@ -80,6 +82,7 @@ LEGEND = [
     ("g",             "Gradnetz"),
     ("l",             "Länder-Labels"),
     ("t",             "Handelsrouten (Routen+Engstellen)"),
+    ("d",             "Verkehrsdichte (Heatmap, gemessen)"),
     ("?",             "Glossar (Begriffe suchen)"),
     ("Esc / q",       "schließen"),
 ]
@@ -510,21 +513,138 @@ def _draw_trade(screen, view, font, mouse):
         screen.blit(surf, (px + r + 4, py - surf.get_height() // 2))
 
 
-def _draw_trade_caption(screen, font, view):
-    """Kleine Quellen-/Stand-Zeile oben links — Provenienz sichtbar (seriös)."""
-    td = _get_trade()
-    if not td['items']:
-        txt = "◆ Handelsrouten — keine Daten (PortWatch-Cache leer)"
-    else:
-        txt = "◆ Handelsrouten · Routen + Chokepoints · %s · Stand %s" % (
-            td['source'] or 'IMF PortWatch', td['vintage'] or '?')
-    label = font.render(txt, True, TRADE_FG)
+def _draw_caption(screen, font, text, y, fg=TRADE_FG):
+    """Eine Provenienz-/Stand-Zeile oben links bei Höhe y. Gibt das y für die
+    NÄCHSTE Zeile zurück → mehrere Overlays stapeln ihre Captions sauber."""
+    label = font.render(text, True, fg)
     pad = 6
     bg = pygame.Surface((label.get_width() + 2 * pad, label.get_height() + 2 * pad))
     bg.set_alpha(150)
     bg.fill(HUD_BG)
-    screen.blit(bg, (10, 10))
-    screen.blit(label, (10 + pad, 10 + pad))
+    screen.blit(bg, (10, y))
+    screen.blit(label, (10 + pad, y + pad))
+    return y + bg.get_height() + 4
+
+
+def _trade_caption_text():
+    td = _get_trade()
+    if not td['items']:
+        return "◆ Handelsrouten — keine Daten (PortWatch-Cache leer)"
+    return "◆ Handelsrouten · Routen + Chokepoints · %s · Stand %s" % (
+        td['source'] or 'IMF PortWatch', td['vintage'] or '?')
+
+
+# ── Verkehrsdichte-Overlay (Achse 2, Sub-Layer density / World Bank·IMF) ──────
+# Gemessenes AIS-Dichteraster (committet, CC BY 4.0). Wird als weiche Heatmap
+# übers Meer gemalt: pro Reduktions-Pixel Welt→lon/lat, Gitter samplen, über eine
+# Farb-LUT zu RGBA, dann smoothscale aufs Fenster → nie harte Pixel, nur eine
+# Dichtewolke, die tief drin sanft weicher wird. Welt-Wrap kommt gratis, weil x
+# pro Pixel mod 1 genommen wird (Endlos-Band, wie der Rest).
+_DENS = None
+_DENS_LUT = None
+
+
+def _get_density():
+    global _DENS
+    if _DENS is not None:
+        return _DENS or None
+    try:
+        from map.layers import density  # noqa: E402
+        _DENS = density.load() or False
+    except Exception:
+        _DENS = False
+    return _DENS or None
+
+
+def _density_lut():
+    """256×4-RGBA-Farbverlauf (transparent → Indigo → Magenta → warm). Alpha
+    wächst mit der Dichte, leeres Meer bleibt klar."""
+    global _DENS_LUT
+    if _DENS_LUT is not None:
+        return _DENS_LUT
+    stops = [(0.00,  10,  16,  40,   0),
+             (0.12,  34,  54, 120,  60),
+             (0.40, 120,  46, 156, 130),
+             (0.72, 242,  96,  74, 184),
+             (1.00, 255, 224, 158, 214)]
+    ts = np.array([s[0] for s in stops])
+    xs = np.linspace(0, 1, 256)
+    lut = np.zeros((256, 4), np.uint8)
+    for ci in range(4):
+        ys = np.array([s[ci + 1] for s in stops], float)
+        lut[:, ci] = np.clip(np.interp(xs, ts, ys), 0, 255).astype(np.uint8)
+    _DENS_LUT = lut
+    return lut
+
+
+def _draw_density(screen, view):
+    """Dichte als weiche Heatmap übers Meer (unter Land/Routen). Reduktions-Raster
+    vektorisiert sampeln, dann glatt aufs Fenster skalieren."""
+    d = _get_density()
+    if d is None:
+        return
+    grid = d['grid']
+    H, W = grid.shape
+    lon_min, lon_max = d['lon_min'], d['lon_max']
+    lat_min, lat_max = d['lat_min'], d['lat_max']
+    w, h = view.w, view.h
+    rw = min(600, max(120, w // 2))
+    rh = max(1, int(rw * h / w))
+    x0, y0, sx, sy = view._view()
+    wx = x0 + (np.arange(rw) + 0.5) / rw * sx
+    wy = y0 + (np.arange(rh) + 0.5) / rh * sy
+    WX = wx[None, :] - np.floor(wx[None, :])          # Welt-Wrap → [0,1)
+    WY = wy[:, None]
+    lon = WX * 360.0 - 180.0
+    lat = np.degrees(np.arctan(np.sinh(np.pi - 2.0 * np.pi * WY)))  # inverse Mercator
+    col = (lon - lon_min) / (lon_max - lon_min) * W
+    row = (lat_max - lat) / (lat_max - lat_min) * H
+    valid = ((row >= 0) & (row < H) & (col >= 0) & (col < W)
+             & (WY >= 0) & (WY <= 1))
+    ri = np.clip(row, 0, H - 1).astype(np.int32)
+    ci = np.clip(col, 0, W - 1).astype(np.int32)
+    rgba = _density_lut()[grid[ri, ci]]               # (rh, rw, 4)
+    rgba[~valid] = 0
+    surf = pygame.image.frombuffer(np.ascontiguousarray(rgba, np.uint8).tobytes(),
+                                   (rw, rh), 'RGBA')
+    screen.blit(pygame.transform.smoothscale(surf, (w, h)), (0, 0))
+
+
+def _density_caption_text():
+    d = _get_density()
+    if d is None:
+        return "▦ Verkehrsdichte — keine Daten (Ingest fehlt: ingest_shipdensity.py)"
+    return "▦ Verkehrsdichte (gemessen) · World Bank/IMF · Stand %s · CC BY 4.0" \
+        % d['vintage']
+
+
+def _draw_density_legend(screen, font, view, bottom):
+    """Farbskala-Legende (Heatmap = wenig→viel Verkehr) unten rechts, mit der
+    Unterkante bei `bottom`. Gibt die Oberkante zurück (zum Stapeln)."""
+    pad = 8
+    barw, barh = 130, 10
+    title = "Verkehrsdichte (2015–2021)"
+    tw = font.size(title)[0]
+    lo, hi = font.size("wenig")[0], font.size("viel")[0]
+    bw = pad * 2 + max(barw, tw)
+    bh = pad * 2 + font.get_height() + 4 + barh + 2 + font.get_height()
+    x0 = view.w - bw - 10
+    y0 = bottom - bh
+    bg = pygame.Surface((bw, bh))
+    bg.set_alpha(175)
+    bg.fill(LEG_BG)
+    screen.blit(bg, (x0, y0))
+    screen.blit(font.render(title, True, LEG_FG), (x0 + pad, y0 + pad))
+    by = y0 + pad + font.get_height() + 4
+    lut = _density_lut()
+    for i in range(barw):                              # Farbverlauf-Balken
+        c = lut[int(i / barw * 255)]
+        pygame.draw.line(screen, (int(c[0]), int(c[1]), int(c[2])),
+                         (x0 + pad + i, by), (x0 + pad + i, by + barh))
+    ty = by + barh + 2
+    screen.blit(font.render("wenig", True, LEG_FG), (x0 + pad, ty))
+    screen.blit(font.render("viel", True, LEG_FG), (x0 + pad + barw - hi, ty))
+    return y0
 
 
 # Symbol-Erklärung für das Trade-Overlay (nur sichtbar, wenn 't' an ist). Sagt,
@@ -537,16 +657,17 @@ _TRADE_LEGEND = [
 ]
 
 
-def _draw_trade_legend(screen, font, view):
+def _draw_trade_legend(screen, font, view, bottom):
     """Mini-Legende unten rechts, die die Trade-Symbole beschriftet: was ist die
-    Linie, was der Marker, was die Zahl. Farbproben links, Text rechts."""
+    Linie, was der Marker, was die Zahl. Unterkante bei `bottom`, gibt die
+    Oberkante zurück (zum Stapeln mit anderen Overlay-Legenden)."""
     pad, sw, gap = 8, 24, 8                       # swatch-Breite, Abstand
     lh = font.get_height() + 6
     lab_w = max(font.size(t)[0] for _, _, t in _TRADE_LEGEND)
     bw = pad * 2 + sw + gap + lab_w
     bh = pad * 2 + lh * len(_TRADE_LEGEND)
     x0 = view.w - bw - 10
-    y0 = view.h - bh - 10
+    y0 = bottom - bh
     bg = pygame.Surface((bw, bh))
     bg.set_alpha(175)
     bg.fill(LEG_BG)
@@ -565,6 +686,7 @@ def _draw_trade_legend(screen, font, view):
             screen.blit(ns, (sxc + sw // 2 - ns.get_width() // 2,
                              cyc - ns.get_height() // 2))
         screen.blit(font.render(text, True, LEG_FG), (x0 + pad + sw + gap, ty))
+    return y0
 
 
 def _draw_legend(screen, font, win_w):
@@ -708,7 +830,8 @@ def main():
     vig = _vignette(a.w, a.h)
     show_grat = True
     show_labels = True
-    show_trade = False               # Chokepoints-Overlay (Taste 't')
+    show_trade = False               # Routen + Chokepoints (Taste 't')
+    show_density = False             # Verkehrsdichte-Heatmap (Taste 'd')
     show_legend = True               # Shortcut-Legende oben rechts (immer an)
     glossary_open = False            # '?'-Such-Modal (Begriffs-Erklärungen)
     g_query, g_sel = "", 0
@@ -758,6 +881,8 @@ def main():
                     show_labels = not show_labels
                 elif ev.key == pygame.K_t:
                     show_trade = not show_trade
+                elif ev.key == pygame.K_d:
+                    show_density = not show_density
                 elif ev.key == pygame.K_LEFT:
                     view.pan_target(-0.2, 0)
                 elif ev.key == pygame.K_RIGHT:
@@ -789,6 +914,8 @@ def main():
         geom = _get_geom(level)
 
         screen.blit(sea, (0, 0))
+        if show_density:
+            _draw_density(screen, view)      # Meer-Heatmap unter Gradnetz/Land
         if show_grat:
             _draw_graticule(screen, view)
         _draw_land(screen, view, geom['countries'])
@@ -800,8 +927,20 @@ def main():
         if show_trade:
             _draw_routes(screen, view)       # Routen zuerst (unter den Markern)
             _draw_trade(screen, view, label_fonts[1], pygame.mouse.get_pos())
-            _draw_trade_caption(screen, hud_font, view)
-            _draw_trade_legend(screen, legend_font, view)   # Symbol-Erklärung
+        # Provenienz-Captions oben links stapeln (jedes aktive Overlay eine Zeile).
+        cap_y = 10
+        if show_density:
+            cap_y = _draw_caption(screen, hud_font, _density_caption_text(),
+                                  cap_y, DENS_FG)
+        if show_trade:
+            cap_y = _draw_caption(screen, hud_font, _trade_caption_text(), cap_y)
+        # Overlay-Legenden unten rechts stapeln (Dichte-Skala unten, Trade darüber).
+        leg_bottom = view.h - 10
+        if show_density:
+            leg_bottom = _draw_density_legend(screen, legend_font, view,
+                                              leg_bottom) - 8
+        if show_trade:
+            _draw_trade_legend(screen, legend_font, view, leg_bottom)
         _draw_hud(screen, hud_font, view, level)
         if show_legend:
             _draw_legend(screen, legend_font, view.w)

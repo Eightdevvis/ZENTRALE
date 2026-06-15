@@ -165,21 +165,31 @@ löschen (Mini-Bestätigungsdialog wie beim Graph: `j`/Enter löscht, sonst Abbr
 — `L["confirm"]`), `>` ordnet die Liste in eine andere ein (→ **nest**: Ziel-Liste
 wählen, Enter; `POST …/<lid>/nest`), Enter öffnet; in **new** Name tippen + Enter
 (`POST /api/lists` bzw. rename je `L["lrename"]`); in **view** die Einträge der
-Liste — **verschachtelt**: jeder Eintrag kann eigene Unterpunkte tragen, die TUI
-klopft den Baum mit `l_flatten()` flach (Einrückung = Tiefe) und zeigt bei Eltern
-`(erledigt/gesamt)` der Kinder. ↑/↓ wählen, **`space`/Enter** hakt ab/auf
-(`…/items/<iid>/toggle`, trifft jede Tiefe), `a` hängt einen neuen Eintrag oben an,
-**`s` hängt einen Unterpunkt** unter den markierten (`L["addparent"]` →
-`POST …/items {parent}`), **`r` benennt** den markierten um (vorbefüllt,
-`POST …/items/<iid>/rename`), **`m` verschiebt** ihn RAUS in eine andere Liste
-(→ **move**: Ziel wählen — erste Option `[+ neue Liste]` führt über **move_new**
-zu Name-Tippen + `POST /api/lists` und dann `POST …/items/<iid>/move {into}`;
-sonst direkt `move` in die gewählte Liste). Eingabezeile-Modus steckt in
-`L["imode"]` (`add`/`sub`/`rename`); `a`/`s` bleiben für Schnell-Eingabe offen,
-`r` ist einmalig. `d` löscht den markierten samt Teilbaum. Erledigte stehen
-gedämpft mit `[x]` da. Lange Listen scrollen um den
+Liste — **Ordner-Navigation statt aufgeklapptem Baum**: jeder Eintrag kann eigene
+Unterpunkte tragen; ein Eintrag MIT Kindern ist eine anklickbare Ordner-Zeile
+(Marker `▸`, Anzeige `(erledigt/gesamt)`), KEIN eingerückter Teilbaum. `L["path"]`
+ist der Drill-Pfad (Eintrags-ids) in der offenen Liste, `l_container()` löst die
+gerade offene Ebene + Breadcrumb auf, `isel` zählt nur die DIREKTEN Kinder. ↑/↓
+wählen, **Enter** geht in einen Ordner REIN (bzw. hakt ein Blatt ab), **`space`**
+hakt ein **Blatt** ab/auf (`…/items/<iid>/toggle`), `a` hängt einen Eintrag in die
+GERADE OFFENE Ebene an (`L["addparent"]` = Container-id), **`s` hängt einen
+Unterpunkt** unter den markierten (macht ein Blatt zum Ordner), **`r` benennt** den
+markierten um (vorbefüllt, `POST …/items/<iid>/rename`), **`m` verschiebt** ihn RAUS
+in eine andere Liste (→ **move**: Ziel wählen — erste Option `[+ neue Liste]` führt
+über **move_new** zu Name-Tippen + `POST /api/lists` und dann
+`POST …/items/<iid>/move {into}`; sonst direkt `move` in die gewählte Liste).
+Eingabezeile-Modus steckt in `L["imode"]` (`add`/`sub`/`rename`); `a`/`s` bleiben
+für Schnell-Eingabe offen, `r` ist einmalig. `d` löscht den markierten samt
+Teilbaum. **Abhaken:** nur Blätter sind direkt abhakbar; ein **Ordner** ist NICHT
+direkt abhakbar (`space` darauf = Hinweis), sein Häkchen ist **abgeleitet**
+(`l_done()` = alle Kinder erledigt → Ordner gilt erledigt; `core.lists.is_done`/
+`toggle`→400 spiegeln das). Fortschritt `(erledigt/gesamt)` zählt die **Blätter**
+(`l_count`). **Erledigte** Einträge werden **transparent (faint) + durchgestrichen**
+gerendert (`addclip(..., strike=True)`, Combining-Overlay U+0336; der Cursor-Pfeil
+`›` bleibt normal sichtbar). Lange Ebenen scrollen um den
 Cursor. Alles synchron per `api_call()`; nach jeder Aktion `l_load()`+`l_sync_def()`
-(offene Liste aus der frischen Registry neu greifen). `Esc`/`l` schließt.
+(offene Liste aus der frischen Registry neu greifen, Drill-Pfad wird validiert/
+gekürzt). `Esc`/`l` geht eine Ebene zurück, auf oberster Ebene schließt es.
 `--selftest` listet die Listen inkl. erledigt-Zähler (ohne TTY). Anders als die
 Graphen gibt es **keine** `lifestyle`-Box-Überlagerung — eine Liste ist kein
 Zeitreihen-Plot. (Monolith/Laptop sind für Listen noch **nicht** verkabelt; das

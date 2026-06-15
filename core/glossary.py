@@ -59,6 +59,17 @@ GLOSSARY = [
                 "t im Fenster, o in der TUI).",
     },
     {
+        "term": "Verkehrsdichte (Heatmap)",
+        "keys": ["dichte", "density", "heatmap", "verkehr", "wärmebild", "d",
+                 "world bank", "weltbank", "ais", "gemessen", "korridore"],
+        "text": "Die gemessene Schiffsdichte als weiche Wärmewolke übers Meer "
+                "(Taste d) — hell/warm = viel Verkehr. Quelle: World Bank/IMF aus "
+                "AIS-Positionen 2015–2021 (CC BY 4.0), also ein GEMESSENES "
+                "Mittel, kein gezeichneter Idealweg wie die Routen-Linien. "
+                "Statischer Stand (kein Tagesbezug); Tagesaktualität sitzt in den "
+                "Chokepoints. Wird tief reingezoomt nur weicher, nie pixelig.",
+    },
+    {
         "term": "Achse 2 — Overlays",
         "keys": ["achse 2", "overlay", "layer", "thematisch", "handelsrouten",
                  "trade"],

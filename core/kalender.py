@@ -249,6 +249,40 @@ def set_routine_skip(layer: str, label: str, day: str, off: bool = True) -> bool
     return changed
 
 
+def delete_routine(layer: str, label: str) -> int:
+    """
+    Eine GANZE Wiederholungs-Regel aus einem Layer entfernen (Gegenstück zu
+    add_routine). Anders als set_routine_skip (das nur ein einzelnes Vorkommen
+    stilllegt) verschwindet damit die Routine komplett - alle Vorkommen weg.
+
+      layer  – Layer der Routine (z.B. 'routinen')
+      label  – Titel; Match case-insensitiv, exakt ODER Teilstring (wie
+               delete_entry), ALLE Treffer im Layer fallen raus.
+
+    Gibt die Anzahl entfernter Routinen zurück (0 = nichts gefunden).
+    """
+    needle = (label or "").strip().lower()
+    if not needle:
+        return 0
+    removed = 0
+    with _lock:
+        data = _load_raw()
+        lobj = data.get("layers", {}).get(layer)
+        if not lobj:
+            return 0
+        keep = []
+        for r in lobj.get("routines", []):
+            lab = (r.get("label", "")).strip().lower()
+            if needle == lab or needle in lab:
+                removed += 1          # Treffer → fällt raus
+            else:
+                keep.append(r)
+        if removed:
+            lobj["routines"] = keep
+            _save_raw(data)
+    return removed
+
+
 def add_routine(layer: str, label: str, rrule_str: str,
                 time: str | None = None, **extras) -> bool:
     """

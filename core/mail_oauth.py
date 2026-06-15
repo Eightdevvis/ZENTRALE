@@ -28,8 +28,10 @@
 # ── Privat-Konto-Spezifika (verifiziert 2026-06, Microsoft Learn) ─────
 #   Authority: https://login.microsoftonline.com/consumers  (Privatkonten)
 #              bzw. /common (Thunderbird-Weg, akzeptiert Privat + Org).
-#   Scope:     offline_access https://outlook.office.com/IMAP.AccessAsUser.All
+#   Scope:     offline_access IMAP.AccessAsUser.All + SMTP.Send (beide unter
+#              outlook.office.com → EIN Token deckt IMAP-Lesen UND SMTP-Senden).
 #   IMAP-Host: outlook.office365.com:993 (SSL), SASL XOAUTH2.
+#   SMTP-Host: smtp.office365.com:587 (STARTTLS), SASL XOAUTH2.
 #
 # ── Transparenz ───────────────────────────────────────────────────────
 # Diese Calls gehen an login.microsoftonline.com (echtes Internet). Da sie
@@ -54,7 +56,13 @@ import state
 import mail_secrets
 
 DEFAULT_AUTHORITY = "https://login.microsoftonline.com/consumers"
-SCOPE = "offline_access https://outlook.office.com/IMAP.AccessAsUser.All"
+# IMAP-Lesen UND SMTP-Senden in EINEM Scope — beide Ressourcen liegen unter
+# outlook.office.com, ein Access-Token deckt damit beides ab. Wer den alten
+# (nur-IMAP) refresh_token hat, muss EINMAL neu einloggen (Re-Consent für
+# SMTP.Send): venv/bin/python -m core.mail_oauth login
+SCOPE = ("offline_access "
+         "https://outlook.office.com/IMAP.AccessAsUser.All "
+         "https://outlook.office.com/SMTP.Send")
 
 # Mozilla Thunderbirds öffentliche Client-ID — von Microsoft für Privatkonten
 # freigegeben. Damit braucht ZENTRALE KEINE eigene Azure-App (Weg A oben).

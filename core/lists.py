@@ -211,10 +211,27 @@ def add_item(lid, text, parent_iid=None):
     return item
 
 
+def is_container(item):
+    """Eintrag mit (nicht-leeren) Kindern? Solche „Ordner" sind NICHT direkt
+    abhakbar — ihr Erledigt-Status leitet sich aus den Kindern ab (is_done)."""
+    kids = item.get('items') if isinstance(item, dict) else None
+    return isinstance(kids, list) and len(kids) > 0
+
+
+def is_done(item):
+    """Effektiver Erledigt-Status. Blatt: das eigene 'done'. Ordner: abgeleitet
+    — erledigt genau dann, wenn ALLE direkten Kinder (rekursiv) erledigt sind.
+    Ein Ordner hat also keinen eigenen abhakbaren Zustand."""
+    if is_container(item):
+        return all(is_done(c) for c in item['items'] if isinstance(c, dict))
+    return bool(item.get('done'))
+
+
 def toggle_item(lid, iid):
     """
-    Erledigt-Status eines Eintrags umschalten (egal wie tief verschachtelt).
-    Eltern werden unabhängig abgehakt — Kinder bleiben unberührt.
+    Erledigt-Status eines BLATT-Eintrags umschalten (egal wie tief verschachtelt).
+    Ordner (Einträge mit Kindern) sind nicht direkt abhakbar — ihr Status leitet
+    sich aus den Kindern ab; ein Toggle darauf wirft ValueError.
     Liefert den Eintrag zurück. Wirft KeyError bei unbekannter Liste /
     unbekanntem Eintrag.
     """
@@ -225,6 +242,8 @@ def toggle_item(lid, iid):
     item = _find_item(lst.get('items'), iid)
     if item is None:
         raise KeyError(iid)
+    if is_container(item):
+        raise ValueError('Ordner nicht direkt abhakbar')
     item['done'] = not item.get('done', False)
     _save(lists)
     return item

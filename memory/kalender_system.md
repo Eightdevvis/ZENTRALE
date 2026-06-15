@@ -357,30 +357,39 @@ Die Anzeige ist nicht read-only — aus der Mitte lassen sich Einmal-Termine
 in allen drei Fronten. Schreib-Endpoints (`ui/app.py`, alle direkt auf
 `core/kalender.py`): `POST /api/calendar/entry` (anlegen → `add_entry`),
 `PUT …/entry` (ändern = delete+add), `DELETE …/entry` (löschen → `delete_entry`),
-`POST /api/calendar/routine/skip` (Vorkommen de-/aktivieren → `set_routine_skip`).
+`POST /api/calendar/routine/skip` (Vorkommen de-/aktivieren → `set_routine_skip`),
+`DELETE /api/calendar/routine` (ganze Routine löschen → `delete_routine`).
 
 - **NICHT KI-gegatet** — direkte Nutzeraktion (wie `/api/log` beim Graph-Werkzeug),
   kein KI-Schreibpfad. Das KI-Permission-Gate (JA/NEIN mit `conflicts_for_proposed`)
   bleibt unberührt; es greift nur, wenn die *KI* schreibt. POST/PUT geben die
   Konflikt-Zeilen trotzdem als **Hinweis** (`conflicts`) zurück, ohne zu blocken.
-- **Einmal-Termine** (`termine`) werden voll editiert. **Routine-Regeln** (rrule)
-  entstehen weiter über das KI-Tool `add_calendar_routine` (keine RRULE-Syntax in
-  der UI), aber ein **einzelnes Vorkommen** kann pro Tag deaktiviert werden:
+- **Einmal-Termine** (`termine`) werden voll editiert. **Routinen** lassen sich
+  aus der Mitte **anlegen** (wöchentlich: ein/mehrere Wochentage + Zeit + Titel →
+  `POST /api/calendar/routine`, baut `FREQ=WEEKLY;BYDAY=…`; krummere Wiederholungen
+  wie monatlich/jährlich bleiben dem KI-Tool `add_calendar_routine` vorbehalten),
+  **ganz löschen** ODER pro Tag ein **einzelnes Vorkommen** deaktivieren:
   - `set_routine_skip(layer,label,day,off)` führt eine Liste `aus=[iso,…]` AN der
     Routine. `entries_in_range` gibt das Vorkommen weiter aus, markiert es aber
     `deaktiviert=True` (sichtbar + wieder-aktivierbar, ausgegraut „(aus)").
+  - `delete_routine(layer,label)` entfernt die ganze Regel (Gegenstück zu
+    `add_routine`) — alle Vorkommen weg.
   - Deaktivierte Vorkommen lösen **keine** Alarme aus — Guards in `open_alarms`,
     `_absage_alarms` und `conflicts_for_proposed` (analog zum `ausfall`-Guard).
     Abgrenzung: `ausfall` = Anbieter/Ferien-Pause (`pausen`), `deaktiviert` = der
     User hat diesen einen Termin selbst abgeschaltet.
 - **TUI:** der ›-Cursor (`↑↓`) läuft jetzt über **ALLE** Einträge (`k_selectable()`,
-  nicht mehr nur Einmal-Termine — das war der Skip-Bug). `e`/Enter bearbeiten:
-  Einmal → gestaffeltes Formular (Datum→Zeit→Titel, vorbefüllt, speichert per PUT),
-  Routine → De-/Aktivieren-Screen (`d` aus / `a` an). `d` direkt: Einmal → Lösch-
-  Bestätigung, Routine → gleicher Screen. `a` = neuer Termin.
-- **Browser** (Monolith-Panel + Laptop-Mittelbox): pro Termin ✎ (bearbeiten,
-  füllt die Form, speichert per PUT) + ✕ (löschen); Routine-Vorkommen ⊘ (diesen
-  Tag deaktivieren) / ↺ (wieder aktivieren), deaktivierte durchgestrichen-grau.
+  nicht mehr nur Einmal-Termine — das war der Skip-Bug). `a` = neu anlegen
+  (Formular, **Tab** schaltet Termin↔Routine: bei Routine Wochentag-Eingabe „Mo,Fr"
+  statt Datum). `e`/Enter bearbeiten: Einmal → vorbefülltes Formular (PUT), Routine
+  → Screen mit `d` (nur dieser Tag aus) / `a` (wieder an) / `x` (ganze Routine
+  löschen, `j`-Nachfrage). `d` direkt: Einmal → Lösch-Bestätigung, Routine → Screen.
+- **Browser** (Monolith-Panel + Laptop-Mittelbox): „＋ Termin"-Form mit
+  Termin/Routine-Umschalter (Routine = Wochentag-Chips Mo–So statt Datum); pro
+  Termin ✎ (bearbeiten, PUT) + ✕ (löschen); Routine-Vorkommen ⊘ (diesen Tag
+  deaktivieren) / ↺ (wieder aktivieren), deaktivierte durchgestrichen-grau, + 🗑
+  (ganze Routine löschen, `confirm()`). Schreib-Fehler (z.B. altes Backend ohne
+  neue Route) werden jetzt sichtbar gemeldet statt still geschluckt.
 
 Defensiv getestet: `tests/test_backend_api.py` (add/edit/skip, isolierte TEMP-
 `CAL_PATH`), TUI-PTY-E2E (Edit + Routine-Deaktivieren/-Reaktivieren, Datei als

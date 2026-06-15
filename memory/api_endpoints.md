@@ -52,9 +52,14 @@ Sharing. Front: TUI-Mitte Taste `l` (`dashboard.md` → Terminal-Kassette).
 **Einträge sind Mischtypen (verschachtelt):** jeder Eintrag kann selbst ein
 optionales `items`-Array tragen — also Unterpunkt ODER eingeordnete Unterliste
 ODER beides, beliebig tief. `next_item` ist die id-Quelle und über den GANZEN
-Baum eindeutig. `done` am Eltern-Eintrag wird unabhängig gesetzt (Kinder
-unberührt); die Fronts zeigen zusätzlich einen Kind-Fortschritt `(erledigt/gesamt)`.
-Alt-Dateien ohne `items`-Feld an Einträgen bleiben gültig (= Blatt).
+Baum eindeutig. Alt-Dateien ohne `items`-Feld an Einträgen bleiben gültig (= Blatt).
+
+**Abhaken:** Nur **Blätter** (Einträge ohne Kinder) sind direkt abhakbar — ihr
+`done`-Feld wird per `toggle` gesetzt. Ein **Ordner** (Eintrag MIT Kindern) ist
+NICHT direkt abhakbar; sein effektiver Status ist **abgeleitet** (`is_done` in
+`core/lists.py`): erledigt genau dann, wenn alle Kinder (rekursiv) erledigt sind.
+`toggle` auf einen Ordner → **400**. Fortschritt `(erledigt/gesamt)` zählt die
+**Blätter** (Ordner selbst zählen nicht mit).
 
 | Endpoint                              | Methode | Beschreibung                          |
 |---------------------------------------|---------|---------------------------------------|
@@ -129,6 +134,8 @@ auch in der ki-freien Kassette. Datums-Arithmetik macht Python
 | `/api/calendar/entry`   | DELETE  | Einmal-Termin(e) löschen. Body `{day, label, layer?}`, Label-Match wie das KI-Tool (case-insensitiv, exakt/Teilstring). Antwort `{deleted:n}`. Wirkt NICHT auf Routinen. 400 ohne day/label. |
 | `/api/calendar/entry`   | PUT     | Bestehenden Einmal-Termin ÄNDERN (= delete alt + add neu). Body `{day, label, layer?, new:{day, label, time?, ende?, ort?}}`. Antwort `{ok, conflicts:[…]}`. 400 bei fehlendem alt-day/label oder ungültigem new.day. |
 | `/api/calendar/routine/skip` | POST | EINZELNES Routine-Vorkommen deaktivieren/aktivieren (reversibel, pro Tag). Body `{layer, label, day, off}` (`off=true` deaktiviert). Speichert die Datumsliste `aus` an der Routine; das Vorkommen bleibt sichtbar, aber als `deaktiviert` markiert. Antwort `{changed:bool}`. 400 ohne label/day. |
+| `/api/calendar/routine` | POST   | Neue WÖCHENTLICHE Routine anlegen (ohne RRULE-Tipperei). Body `{label, byday, time?, ende?, ort?, layer?}`; `byday` = ein/mehrere Wochentage `MO..SU` (Liste ODER kommagetrennt) → `FREQ=WEEKLY;BYDAY=…`. Antwort `{ok:true}`. 400 ohne label/byday. Krummere Wiederholungen bleiben dem KI-Tool vorbehalten. |
+| `/api/calendar/routine` | DELETE | GANZE Routine löschen (alle Vorkommen weg) — Gegenstück zum einzelnen Deaktivieren. Body `{layer, label}`, Label-Match wie sonst. Antwort `{deleted:n}`. 400 ohne label. |
 
 GET-Antwort: `{view, ref, today, label, start, end, days:{iso:[entries]}, alarms}`;
 bei `view=month` zusätzlich `month, first, last` (echte Monatsgrenzen, damit die
@@ -155,6 +162,21 @@ per Parameter mitgegeben.
 | `/api/transcribe`     | POST    | Audio → Text. Multipart: `audio` + `lang?`. `lang` Default `de`.  |
 
 Details zu Modellen + Sprachen: `audio_system.md`.
+
+## Mail-Triage
+
+| Endpoint                    | Methode | Beschreibung                          |
+|-----------------------------|---------|---------------------------------------|
+| `/api/mail`                 | GET     | Mail-Panel Ebene 1: `{categories, recent, live_counts, counts_age_s, counts_refreshing, can_poll, polling}`. Read-only, **key-frei** (`mail_state.json`). `categories[].count` = lokaler Schnappschuss, `live_counts` = echte Ordnergröße aus dem Cache. |
+| `/api/mail/refresh-counts`  | POST    | Frischt den Live-Ordnerzähl-Cache im Hintergrund auf (IMAP `STATUS`-Sweep). `409` ohne Passphrase, Parallel-Lock. |
+| `/api/mail/folder?cat=NAME` | GET     | Mail-Panel Ebene 2: die Mails einer Kategorie. Mit Key + eigenem Ordner LIVE (`source:"live"`), sonst lokaler Schnappschuss (`source:"snapshot"`). |
+| `/api/mail/body?cat=&uid=&account=` | GET | Voller Text + Header EINER Mail (Lesen-Modus). LIVE; `409` ohne Key. MIME→Klartext. |
+| `/api/mail/assign`          | POST    | Ordnet den **Absender** einer Kategorie zu (Keymap, key-frei). Body `{sender, category}`. Verschiebt NICHT die Mail. |
+| `/api/mail/delete`          | POST    | Eine Mail in den Papierkorb (umkehrbar). LIVE; `409` ohne Key. Body `{cat, uid, account?}`. |
+| `/api/mail/reply`           | POST    | Antwort senden via SMTP XOAUTH2 (Outlook). LIVE; `409` ohne Key. Body `{cat, uid, text, account?}`. Braucht `SMTP.Send`-Scope (Neu-Login). |
+| `/api/mail/poll`            | POST    | Stößt einen **Live**-Poll im Hintergrund-Thread an. `409`, wenn keine Passphrase (Env/Keyring). Parallel-Polls per Lock verhindert. |
+
+Details: `mail_system.md` (Panel/Drill-down/Hybrid, Passphrase-Quellen, Keyring-CLI).
 
 ## Tutor (entfernt)
 

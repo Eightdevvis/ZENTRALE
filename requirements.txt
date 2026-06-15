@@ -39,3 +39,9 @@ numpy
 # Verschlüsselter Zugangsdaten-Speicher fürs Mail-System (core/mail_secrets.py).
 # Fernet/AES für data/mail_secrets.enc, entsperrt per Passphrase ZENTRALE_MAIL_KEY.
 cryptography
+
+# Optionaler OS-Keyring-Fallback für die Mail-Passphrase (interaktive Desktop-
+# Session, Secret Service). Pure-Python, klein. Fehlt es (headless), greift
+# einfach weiter nur ZENTRALE_MAIL_KEY. Siehe mail_secrets._passphrase().
+secretstorage
+jeepney
