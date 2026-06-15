@@ -49,6 +49,16 @@ GLOSSARY = [
                 "1:10m). Von weit weg grob, beim Reinzoomen detaillierter.",
     },
     {
+        "term": "Schifffahrtsrouten",
+        "keys": ["route", "routen", "schifffahrtsrouten", "linien", "wege",
+                 "shipping", "handelsrouten", "seewege"],
+        "text": "Die Linien des Welt-Seehandels (woauf Schiffe fahren) — als "
+                "dezente Pfade unter den Chokepoint-Markern. Reine Geometrie aus "
+                "IMF PortWatch (statisch), ohne Namen/Verkehr. Zusammen mit den "
+                "Engstellen-Punkten ergeben sie das Handelsrouten-Overlay (Taste "
+                "t im Fenster, o in der TUI).",
+    },
+    {
         "term": "Achse 2 — Overlays",
         "keys": ["achse 2", "overlay", "layer", "thematisch", "handelsrouten",
                  "trade"],
@@ -113,10 +123,13 @@ GLOSSARY = [
     {
         "term": "Pan / Zoom",
         "keys": ["pan", "zoom", "navigation", "ziehen", "rad", "pfeiltasten",
-                 "schwenken"],
+                 "schwenken", "band", "wrap", "datumsgrenze", "endlos"],
         "text": "Pan: Maus ziehen oder Pfeiltasten. Zoom: Mausrad (auf den "
                 "Cursor) oder + / −. Taste 0 springt weich zurück zur Weltansicht. "
-                "Die Bewegung easet (weich statt sprunghaft).",
+                "Die Bewegung easet (weich statt sprunghaft). Horizontal läuft die "
+                "Karte als ENDLOS-BAND: über die Datumsgrenze hinaus pannen geht "
+                "nahtlos weiter (links Verschwundenes kommt rechts wieder), damit "
+                "Routen z.B. Asien→Amerika am Stück sichtbar bleiben.",
     },
 ]
 

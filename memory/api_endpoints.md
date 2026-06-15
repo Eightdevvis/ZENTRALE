@@ -42,6 +42,30 @@ dependency-frei (kein psutil), voll offline.
 | `/api/log`            | POST    | Neuen Eintrag speichern               |
 | `/api/debug`          | POST    | Debug-Log-Zeile ins Terminal (temporäre Dev-Hilfe) |
 
+## Listen (Todo-/Sammel-Listen)
+
+Zur Laufzeit angelegte, abhakbare Listen — Pendant zum Lifestyle-Graph-Werkzeug
+(`/api/graphs`), aber für „random stuff" statt Zeitreihen. Definition UND
+Einträge liegen inline in `data/lists.json` (`core/lists.py`); kein `/api/log`-
+Sharing. Front: TUI-Mitte Taste `l` (`dashboard.md` → Terminal-Kassette).
+
+**Einträge sind Mischtypen (verschachtelt):** jeder Eintrag kann selbst ein
+optionales `items`-Array tragen — also Unterpunkt ODER eingeordnete Unterliste
+ODER beides, beliebig tief. `next_item` ist die id-Quelle und über den GANZEN
+Baum eindeutig. `done` am Eltern-Eintrag wird unabhängig gesetzt (Kinder
+unberührt); die Fronts zeigen zusätzlich einen Kind-Fortschritt `(erledigt/gesamt)`.
+Alt-Dateien ohne `items`-Feld an Einträgen bleiben gültig (= Blatt).
+
+| Endpoint                              | Methode | Beschreibung                          |
+|---------------------------------------|---------|---------------------------------------|
+| `/api/lists`                          | GET     | Alle Listen inkl. Einträge (`[{id,name,created,next_item,items:[{id,text,done,items?:[…]}]}]`). |
+| `/api/lists`                          | POST    | Neue Liste. Body `{name}`. 400 bei leerem Namen. id = `l_<slug>` (kollisionsfrei). |
+| `/api/lists/<lid>`                    | DELETE  | Liste samt Einträgen löschen.         |
+| `/api/lists/<lid>/items`              | POST    | Eintrag anhängen. Body `{text}`, optional `{parent:<iid>}` → Unterpunkt von `<iid>`. 400 leer, 404 unbek. Liste/Eltern. Liefert `{id,text,done}`. |
+| `/api/lists/<lid>/nest`               | POST    | Ganze Liste in eine andere einordnen (Quelle → Eintrag, verschwindet aus Top-Level). Body `{into:<ziel-lid>}`, optional `{parent:<iid>}`. ids des Teilbaums werden im Ziel neu vergeben. 400 in-sich-selbst, 404 unbek. Liefert den neuen Eintrag. |
+| `/api/lists/<lid>/items/<int:iid>/toggle` | POST | Erledigt-Status umschalten (egal wie tief). 404 unbekannt. |
+| `/api/lists/<lid>/items/<int:iid>`    | DELETE  | Eintrag (samt Teilbaum) löschen, egal wie tief. 404 unbek. Liste/Eintrag. |
+
 ## Chat
 
 | Endpoint              | Methode | Beschreibung                          |
@@ -81,9 +105,36 @@ drei Achsen: `maps_system.md`; Quellen/Lizenzen: `maps_quellen.md`.
 | `/api/map/layers`        | GET     | Registry der thematischen Overlays (Achse 2): Layer + Sub-Layer + Quelle (Provenienz) + ob zeitfähig (Achse 3). |
 | `/api/map/layer/<id>`    | GET     | Features eines Overlays, projiziert. Query wie `/base` + `sub` (Sub-Layer, z.B. `chokepoints`) + `at` (Zeitpunkt, Achse 3). Antwort trägt `source/vintage/retrieved_at`. 404 bei unbekanntem Layer. |
 
-Live: `trade/chokepoints` (IMF PortWatch, täglicher Schiffsverkehr an den
-maritimen Engstellen). Lizenziert → lokal gecacht, nicht committet; Refresh
-per `python -m map.layers.portwatch`.
+Live: `trade` (IMF PortWatch) — ohne `sub` das **Komposit** (Routenlinien +
+Chokepoint-Punkte); `?sub=routes` (Schifffahrtslinien, statisch) bzw.
+`?sub=chokepoints` (Engstellen + täglicher Verkehr) einzeln. Lizenziert →
+lokal gecacht, nicht committet; Refresh per `python -m map.layers.portwatch`.
+
+## Kalender (Anzeige)
+
+Front-agnostisch wie die Maps: die geteilte Quelle für die Kalender-Mitte
+**aller** Kassetten (TUI-Modus `c`, Monolith-Tab „Kalender", Laptop-Mittelbox).
+**Nicht** KI-gegatet — reine Anzeige, kein KI-Tool-Pfad (die KI greift den
+Kalender weiter über `read_calendar`, nicht über diesen Endpoint), läuft also
+auch in der ki-freien Kassette. Datums-Arithmetik macht Python
+(`core/kalender.py`), die Front klassifiziert nur `view` + blättert über `ref`.
+
+| Endpoint                | Methode | Beschreibung                          |
+|-------------------------|---------|---------------------------------------|
+| `/api/calendar`         | GET     | Woche (Mo-So) oder Monatsgitter, nach Tag gruppiert. Query: `view=week`(Default)`|month`, `ref=YYYY-MM-DD` (Default heute). |
+| `/api/calendar/entry`   | POST    | Einmal-Termin direkt anlegen. Body `{day=YYYY-MM-DD, label, time?, ende?, ort?, layer?}` (Default-Layer `termine`). Antwort `{ok, conflicts:[…]}` — Konflikt-Zeilen (Reise/Kollision/Knapp) nur als HINWEIS, kein Block. 400 bei fehlendem label/ungültigem day. |
+| `/api/calendar/entry`   | DELETE  | Einmal-Termin(e) löschen. Body `{day, label, layer?}`, Label-Match wie das KI-Tool (case-insensitiv, exakt/Teilstring). Antwort `{deleted:n}`. Wirkt NICHT auf Routinen. 400 ohne day/label. |
+
+GET-Antwort: `{view, ref, today, label, start, end, days:{iso:[entries]}, alarms}`;
+bei `view=month` zusätzlich `month, first, last` (echte Monatsgrenzen, damit die
+Front Rand-Tage aus Vor-/Folgemonat ausgraut). `days` nutzt `entries_in_range`
+(Routinen expandiert, `ausfall`-Feld bei Ferien). Müll-`ref` → 400, nie 500.
+
+**Schreiben ist DIREKTE Nutzeraktion, NICHT KI-gegatet** (wie `/api/log` beim
+Graph-Werkzeug) — das KI-Permission-Gate bleibt davon unberührt. Routinen
+(Wiederholungen) laufen weiter über die KI; die UI legt bewusst nur Einmal-
+Termine an. Front-Bedienung: TUI `a`=neu / `d`=löschen, Browser „＋ Termin"-Form
++ ✕ pro Einmal-Termin.
 
 ## Voice (sprachneutral, Core)
 

@@ -318,6 +318,68 @@ Frage): 4/4 Tool gerufen, 0/4 Rückfrage, Wochentag korrekt.
 `feedback_data_vs_model` gilt weiter — nur war die richtige Daten-Auswahl
 hier „gar nichts kleben, sauber greppen", nicht „mehr kleben".
 
+## Sichtbare Anzeige (Mitte/Canvas jeder Kassette, 2026-06)
+
+Neben dem KI-Tool `read_calendar` ist der Kalender jetzt **sichtbar** in der
+Mitte jeder Front — blätterbar und zwischen **Woche** und **Monat**
+umschaltbar. Geteilte, front-agnostische Quelle (wie die Maps):
+
+- **Endpoint** `GET /api/calendar?view=week|month&ref=YYYY-MM-DD` (in `ui/app.py`).
+  **Nicht** KI-gegatet — reine Anzeige, kein KI-Pfad, läuft auch in der ki-freien
+  Kassette. Liefert `{view, ref, today, label, start, end, days, alarms}` (+
+  `month/first/last` bei Monat). Details: `api_endpoints.md`.
+- **Backend** (`core/kalender.py`): `week_view()` (bestand) liefert die Mo-So-
+  Woche; neu `month_view(reference)` liefert das **Monatsgitter** — alle Tage vom
+  Montag VOR dem Ersten bis zum Sonntag NACH dem Letzten (volle Wochenzeilen),
+  plus `first`/`last` zum Ausgrauen der Rand-Tage. Beide nutzen
+  `entries_in_range` (Routinen expandiert, `ausfall` bei Ferien). Monatsnamen:
+  `_MONTHS_FULL_DE`. Datums-Arithmetik in Python, nie in der Front.
+- **Drei Fronten, ein Endpoint:**
+  - *TUI* (`tui/zentrale_tui.py`): Mittelbox-Modus `c` neben `g`/`m`. `←→`/`hl`
+    blättern, `v`/Tab schaltet Woche↔Monat, `0` springt zu heute, `esc`/`c` zu.
+    Woche = Tagesliste, Monat = Braille-freies Zeichen-Gitter. Defensiv wie der
+    Karten-Pfad (Fehler-Marker statt Dauer-Refetch; `_for`-Tag gegen Refetch je
+    Frame). Im Fuzz (`tests/_tui_fuzz.py`) mit eigenen `c/v`-Keys + Adversarial-
+    `/api/calendar` abgedeckt.
+  - *Monolith* (`ui/templates/monolith.html`): neuer Exhibit-Tab „Kalender"
+    (eigenes `#calendar-panel` wie das Graph-Werkzeug, NICHT im Auto-Direktor).
+  - *Laptop* (`ui/templates/laptop.html`): füllt die bis dahin leere „mitte"-Box
+    (`tbd`) mit demselben Woche/Monat-Widget, KI-frei, minütlicher Refresh.
+
+Bewusst getrennt vom Alarm-Kanal: die Anzeige zeigt die Termin-Arbeitsdaten,
+die ⚠-Warnungen bleiben randständig (Header-Zähler `⚠N` aus `alarms`), genau wie
+`read_calendar` sauber von den Inline-Warnungen getrennt wurde.
+
+### Direktes Eintragen/Löschen aus der Mitte (2026-06)
+
+Die Anzeige ist nicht nur read-only — Einmal-Termine lassen sich **direkt aus der
+Mitte anlegen und löschen**, in allen drei Fronten. Schreib-Endpoints
+(`ui/app.py`): `POST /api/calendar/entry` (`{day,label,time?,ende?,ort?,layer?}`,
+Default-Layer `termine`) und `DELETE /api/calendar/entry` (`{day,label,layer?}`).
+Beide rufen `core/kalender.py:add_entry`/`delete_entry`.
+
+- **NICHT KI-gegatet** — das ist eine **direkte Nutzeraktion** aus der UI (wie
+  `/api/log` beim Graph-Werkzeug), kein KI-Schreibpfad. Das KI-Permission-Gate
+  (JA/NEIN mit `conflicts_for_proposed`) bleibt davon unberührt; es greift nur,
+  wenn die *KI* schreibt. Der POST gibt die Konflikt-Zeilen trotzdem als
+  **Hinweis** zurück (`conflicts`), nur ohne zu blocken.
+- **Bewusst nur Einmal-Termine.** Routinen (Wiederholungen, rrule) bleiben beim
+  KI-Tool `add_calendar_routine` — die UI mutet dem User keine RRULE-Syntax zu.
+  In der Anzeige tragen Routinen-Vorkommen `recurring=True` und bekommen daher
+  **kein** Lösch-✕ (sie würden über `delete_entry` ohnehin nicht fallen, das nur
+  auf `entries` wirkt).
+- **TUI:** `a` öffnet ein gestaffeltes Formular (Datum→Zeit→Titel, `parse_clock`/
+  eigener `TT.MM`-Parser, Jahr aus dem Blätter-Anker); in der Wochenliste sind
+  Einmal-Termine mit `↑↓` auswählbar (›-Cursor), `d` + Bestätigung `j` löscht den
+  markierten. `k_deletable()` ist die gemeinsame Quelle für Auswahl + Löschen.
+- **Browser** (Monolith-Panel + Laptop-Mittelbox): „＋ Termin"-Form (Datum/Zeit/
+  Titel/Ort) + ✕ pro Einmal-Termin in der Wochenliste; Konflikt-Hinweis und
+  Feedback als `cmsg`-Zeile. Laptop-Auto-Refresh pausiert während der Eingabe.
+
+Defensiv getestet: `tests/test_backend_api.py` (Add→erscheint→Delete, isolierte
+TEMP-`CAL_PATH`), TUI-PTY-E2E (Datei als Wahrheit) und die Fuzz-Suite
+(`a/d/c/v`-Keys + Adversarial-`/api/calendar`).
+
 ## Cross-Reference Graph ↔ Kalender (typisches Beispiel)
 
 User: „wie war Geige letzte Woche?"

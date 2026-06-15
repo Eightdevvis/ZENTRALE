@@ -46,11 +46,15 @@ _ARCGIS = ("https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/"
            "services")
 _CHOKE_GEO = _ARCGIS + "/PortWatch_chokepoints_database/FeatureServer/0/query"
 _CHOKE_DAILY = _ARCGIS + "/Daily_Chokepoints_Data/FeatureServer/0/query"
+# Routengeometrie: ein einziges Riesen-Feature (CAD/DXF-Import der Welt-
+# Schifffahrtslinien) auf Layer 15 — rein geometrisch, ~400 Segmente, statisch.
+_ROUTES = _ARCGIS + "/Global_Shipping_Routes/FeatureServer/15/query"
 
 _CACHE_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "data", "cache")
 _CACHE_FILE = os.path.join(_CACHE_DIR, "portwatch_chokepoints.json")
+_CACHE_ROUTES = os.path.join(_CACHE_DIR, "portwatch_routes.json")
 
 
 def _get(url, params, timeout=20):
@@ -136,49 +140,98 @@ def _fetch():
     }
 
 
-def _read_cache():
+def _fetch_routes():
+    """Welt-Schifffahrtsrouten (Global_Shipping_Routes L15) holen: ein Feature
+    mit vielen Liniensegmenten, jedes nach Welt-Koord. + Bounding-Box. Rein
+    geometrisch (keine Namen/Verkehr), statisch — daher kein Datums-Join."""
+    gj = _get(_ROUTES, {"where": "1=1", "outFields": "DocUpdate",
+                        "outSR": "4326", "f": "geojson"}, timeout=60)
+    segments = []
+    vintage = None
+    for f in gj.get("features", []):
+        g = f.get("geometry") or {}
+        t = g.get("type")
+        c = g.get("coordinates") or []
+        parts = c if t == "MultiLineString" else ([c] if t == "LineString" else [])
+        for line in parts:
+            if len(line) < 2:
+                continue
+            pts = [list(lonlat_to_world(lon, lat)) for lon, lat in line]
+            xs = [p[0] for p in pts]
+            ys = [p[1] for p in pts]
+            segments.append([min(xs), min(ys), max(xs), max(ys), pts])
+        du = (f.get("properties") or {}).get("DocUpdate")
+        if du and vintage is None:
+            try:
+                vintage = datetime.fromtimestamp(
+                    du / 1000.0, tz=timezone.utc).strftime("%Y-%m-%d")
+            except (TypeError, ValueError, OSError):
+                vintage = None
+    return {
+        "schema": 1,
+        "source": SOURCE,
+        "vintage": vintage,            # Dokument-Stand (statische Geometrie)
+        "retrieved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "segments": segments,
+    }
+
+
+def _read(path):
     try:
-        with open(_CACHE_FILE, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except (OSError, ValueError):
         return None
 
 
-def _write_cache(payload):
+def _write(path, payload):
     os.makedirs(_CACHE_DIR, exist_ok=True)
-    tmp = _CACHE_FILE + ".tmp"
+    tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(payload, f)
-    os.replace(tmp, _CACHE_FILE)      # atomar, kein halb-geschriebener Cache
+    os.replace(tmp, path)             # atomar, kein halb-geschriebener Cache
 
 
 def refresh():
-    """Frische Daten holen UND cachen. Für Bootstrap / periodischen Job
-    (`python -m map.layers.portwatch`). Wirft bei Netzfehler weiter."""
-    payload = _fetch()
-    _write_cache(payload)
-    return payload
+    """Beide Sub-Layer frisch holen UND cachen (Bootstrap / periodischer Job
+    `python -m map.layers.portwatch`). Wirft bei Netzfehler weiter."""
+    chk = _fetch()
+    _write(_CACHE_FILE, chk)
+    rts = _fetch_routes()
+    _write(_CACHE_ROUTES, rts)
+    return chk, rts
 
 
-def chokepoints():
-    """Chokepoint-Daten fürs Overlay (Offline-zuerst): liefert IMMER aus dem
-    lokalen Cache, ohne pro Anfrage ins Netz zu gehen (sonst friert ein
-    pollendes Frontend ein). Fehlt der Cache komplett, wird EINMAL gebootstrappt.
-    Aktualisiert wird über refresh() (Cron/manuell) — der Stand steht in
-    `vintage`/`retrieved_at`, die Front zeigt ihn an.
-
-    Rückgabe: das Cache-Payload (siehe _fetch) oder None, wenn weder Cache noch
-    Netz verfügbar (Front zeigt dann „Quelle nicht erreichbar")."""
-    cached = _read_cache()
+def _cache_first(path, fetch_one):
+    """Offline-zuerst: aus dem lokalen Cache liefern, ohne pro Anfrage ins Netz
+    zu gehen (sonst friert ein pollendes Frontend ein). Fehlt der Cache, EINMAL
+    bootstrappen. Aktualisiert wird über refresh() (Cron/manuell)."""
+    cached = _read(path)
     if cached is not None:
         return cached
     try:
-        return refresh()
+        payload = fetch_one()
+        _write(path, payload)
+        return payload
     except Exception:
         return None
 
 
+def chokepoints():
+    """Chokepoint-Punkte + heutiger Verkehr (Sub-Layer chokepoints). Cache-first;
+    Stand in `vintage`/`retrieved_at`. None, wenn weder Cache noch Netz da."""
+    return _cache_first(_CACHE_FILE, _fetch)
+
+
+def routes():
+    """Welt-Schifffahrtsrouten als Liniensegmente (Sub-Layer routes). Cache-first;
+    statische Geometrie. None, wenn weder Cache noch Netz da."""
+    return _cache_first(_CACHE_ROUTES, _fetch_routes)
+
+
 if __name__ == "__main__":      # `python -m map.layers.portwatch` → Cache füllen
-    p = refresh()
-    print("PortWatch-Chokepoints gecacht: %d Punkte, Stand %s (geholt %s)"
-          % (len(p["items"]), p["vintage"], p["retrieved_at"]))
+    chk, rts = refresh()
+    print("PortWatch gecacht: %d Chokepoints (Stand %s), %d Routensegmente "
+          "(Stand %s) — geholt %s"
+          % (len(chk["items"]), chk["vintage"], len(rts["segments"]),
+             rts["vintage"], chk["retrieved_at"]))

@@ -50,8 +50,9 @@ monolith.html  (Browser pollt /api/state jede Sekunde)
    └──▶ audio.py ──▶ Whisper (Port 5050) / TTS (Port 5051)
 ```
 
-> `tutor_session.py` und `tutor.py` existieren noch im Repo, sind im
-> Laufzeit-Pfad aber pausiert – siehe `tutor_system.md`.
+> Mandarin-Tutor: Reaktivierung läuft. `tutor.py` / `tutor_session.py` /
+> `tutor_cloud.py` sind aktiv; Backend per `TUTOR_BACKEND` (local|cloud).
+> Siehe `tutor_system.md`.
 
 `brain.process_event(e)` und `actions.handle_action(e)` werden vom
 Event-Loop **parallel pro Event** aufgerufen, nicht hintereinander.
@@ -85,8 +86,12 @@ ZENTRALE/
 │   ├── host_metrics.py      # PC-Host-Metriken (CPU/GPU/VRAM/Temp/RAM)
 │   ├── telemetry.py         # Telemetrie-Aggregat (PC + Pi) fürs Dashboard
 │   ├── audio.py             # HTTP-Client für Whisper + TTS
-│   ├── tutor.py             # Tutor-Tools (PAUSIERT, siehe tutor_system.md)
-│   └── tutor_session.py     # Tutor Session-State (PAUSIERT, ungenutzt)
+│   ├── tutor.py             # Tutor-Vokabel-Tools (Reaktivierung läuft, siehe tutor_system.md)
+│   ├── tutor_session.py     # Tutor Session-State + Auflösung Sprache→Provider→Modell
+│   ├── tutor_langs.py       # Sprach-Profile (zh live; ru/ar/es Skizzen)
+│   ├── tutor_providers.py   # Provider-Registry (kind/base_url/key/trains_on_data-Flag)
+│   ├── tutor_openai_compat.py # OpenAI-/v1-Backend (Qwen/DeepSeek/Mistral/OpenAI/Groq/…)
+│   └── tutor_cloud.py       # Anthropic-Backend (Claude, Sashas persönlicher Pfad)
 ├── ui/
 │   ├── app.py               # Flask Backend + REST API
 │   ├── static/              # engine.js, viz.js, ascii.js, fonts/ (Monolith-Assets)

@@ -216,6 +216,38 @@
   .gscale { display: flex; gap: 4px; }
   .ghint { color: var(--dim); font-size: 14px; }
 
+  /* ── Kalender-Panel (Mittel-Exhibit „Kalender") ──────────────────── */
+  .cpanel .crow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .cpanel .clabel { font-size: 17px; color: var(--ink); letter-spacing: 0.04em; }
+  .cpanel .calarm { color: var(--warn, #c33); font-size: 14px; margin-left: 4px; }
+  .cpanel .cspace { flex: 1; }
+  .cpanel button.sel { background: var(--acc); color: var(--bg); border-color: var(--acc); }
+  .cweek { display: flex; flex-direction: column; gap: 2px; overflow: auto; flex: 1; min-height: 0; }
+  .cday { display: flex; gap: 8px; padding: 2px 4px; border-left: 2px solid transparent; align-items: baseline; }
+  .cday.today { border-left-color: var(--acc); background: rgba(127, 127, 127, 0.10); }
+  .cdate { min-width: 78px; color: var(--dim); white-space: nowrap; }
+  .cday.today .cdate { color: var(--acc); }
+  .cents { display: flex; flex-wrap: wrap; gap: 4px; }
+  .cent { font-size: 14px; padding: 0 6px; border: 1px solid var(--line); color: var(--ink); white-space: nowrap; }
+  .cent.ausfall { color: var(--dim); border-style: dashed; }
+  .cempty { color: var(--dim); opacity: 0.5; }
+  .cmonth { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; flex: 1; min-height: 0; align-content: start; }
+  .cwd { text-align: center; color: var(--dim); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .ccell { border: 1px solid var(--line); min-height: 32px; padding: 1px 4px; display: flex; flex-direction: column; gap: 1px; overflow: hidden; }
+  .ccell.out { opacity: 0.30; }
+  .ccell.today { border-color: var(--acc); }
+  .cnum { font-size: 14px; color: var(--ink); }
+  .ccell.today .cnum { color: var(--acc); font-weight: bold; }
+  .cmark { font-size: 12px; color: var(--acc); line-height: 1.08; overflow: hidden; }
+  .cpanel .cadd { color: var(--acc); }
+  .cform { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .cform input { font-family: 'VT323', monospace; font-size: 15px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: 2px 6px; }
+  .cform input:focus { outline: none; border-color: var(--acc); }
+  .cmsg { font-size: 13px; color: var(--dim); }
+  .cmsg.warn { color: var(--warn, #c33); }
+  .cdel { margin-left: 5px; color: var(--dim); cursor: pointer; opacity: 0.55; }
+  .cdel:hover { color: var(--warn, #c33); opacity: 1; }
+
   .proj { padding: 5px 0; }
   .proj-top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 1px; }
   .proj-top .pn { color: var(--ink); white-space: nowrap; } .proj-top .ps { color: var(--dim); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
@@ -376,10 +408,11 @@
               <span class="tab" data-ex="welt">Welt</span>
               <span class="tab" data-ex="filter">Filter</span>
               <span class="tab" data-ex="graph">Graph</span>
+              <span class="tab" data-ex="kalender">Kalender</span>
               <span class="tab on" data-ex="auto">Auto</span>
             </div>
           </div>
-          <div class="core-wrap"><pre id="core"></pre><div id="graph-panel" class="gpanel" style="display:none"></div><div id="alarm-corner"></div></div>
+          <div class="core-wrap"><pre id="core"></pre><div id="graph-panel" class="gpanel" style="display:none"></div><div id="calendar-panel" class="gpanel cpanel" style="display:none"></div><div id="alarm-corner"></div></div>
           <div class="core-readout">
             <div class="ai-state" id="ai-state"><span class="sp">·</span> BEREIT</div>
             <div class="ai-model" id="ai-meta">zeigt: gesicht</div>
@@ -707,6 +740,181 @@
       loadGraphs();   // initial (Panel ist noch versteckt, aber Daten stehen bereit)
     })();
 
+    // ── Kalender (Mittel-Exhibit „Kalender") ────────────────────────────
+    // Blätterbare Woche (Mo-So-Liste) ODER Monat (Gitter), umschaltbar. Wie
+    // die Karte ein reiner Zeichner: alle Datums-/Layer-Logik liegt im Backend
+    // (core/kalender.py → /api/calendar), die Front klassifiziert nur view +
+    // blättert über ref. Teilt sich den Endpoint mit TUI und Laptop-Kassette.
+    (function () {
+      var panel = document.getElementById('calendar-panel');
+      if (!panel) return;
+      var WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+      var CS = { view: 'week', ref: todayStr(), data: null, adding: false, formDay: null, msg: '', msgWarn: false };
+
+      function todayStr() { var d = new Date(); return iso(d); }
+      function iso(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+      function parseISO(s) { var p = String(s).split('-'); var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])); return isNaN(d.getTime()) ? null : d; }
+      function addDays(d, n) { var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
+      function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+      async function load() {
+        try { CS.data = await (await fetch('/api/calendar?view=' + CS.view + '&ref=' + CS.ref)).json(); }
+        catch (e) { CS.data = { failed: true }; }
+        render();
+      }
+      function stepRef(delta) {
+        var d = parseISO(CS.ref) || new Date();
+        if (CS.view === 'month') d = new Date(d.getFullYear(), d.getMonth() + delta, 1);
+        else d = addDays(d, 7 * delta);
+        CS.ref = iso(d); load();
+      }
+
+      // Eine Termin-Kachel (Zeit + Label + Ort). Ausfall (Ferien) als ℹ-Hinweis.
+      // Einmal-Termine (nicht recurring) bekommen ein ✕ zum Löschen; Routinen-
+      // Vorkommen nicht (die werden über die KI/Datei verwaltet, nicht hier).
+      function entChip(e, dayIso) {
+        if (!e || typeof e !== 'object') return '';
+        if (e.ausfall) return '<span class="cent ausfall" title="' + esc((e.label || '') + ' fällt aus (' + e.ausfall + ')') + '">ℹ ' + esc(e.label || '?') + '</span>';
+        var t = (e.time && e.ende) ? (e.time + '–' + e.ende + ' ') : (e.time ? e.time + ' ' : '');
+        var ort = e.ort ? ' @' + e.ort : '';
+        var del = (dayIso && !e.recurring)
+          ? '<span class="cdel" title="löschen" data-del-day="' + dayIso + '" data-del-label="' + esc(e.label || '') + '" data-del-layer="' + esc(e.layer || '') + '">✕</span>'
+          : '';
+        return '<span class="cent" title="' + esc(t + (e.label || '') + ort) + '">' + esc(t + (e.label || '?')) + del + '</span>';
+      }
+      function dayList(days, isoDay) { var v = days[isoDay]; return Array.isArray(v) ? v : []; }
+
+      function renderWeek(d, days, today) {
+        var start = parseISO(d.start), end = parseISO(d.end);
+        if (!start || !end) return '<div class="ghint">keine daten.</div>';
+        var out = ['<div class="cweek">'], cur = start, guard = 0;
+        while (cur <= end && guard++ < 40) {
+          var k = iso(cur), ents = dayList(days, k), isT = (k === today);
+          out.push('<div class="cday' + (isT ? ' today' : '') + '">');
+          out.push('<span class="cdate">' + WD[(cur.getDay() + 6) % 7] + ' ' + ('0' + cur.getDate()).slice(-2) + '.' + ('0' + (cur.getMonth() + 1)).slice(-2) + '.</span>');
+          out.push('<span class="cents">');
+          if (!ents.length) out.push('<span class="cempty">—</span>');
+          else ents.forEach(function (e) { out.push(entChip(e, k)); });
+          out.push('</span></div>');
+          cur = addDays(cur, 1);
+        }
+        out.push('</div>'); return out.join('');
+      }
+
+      function renderMonth(d, days, today) {
+        var start = parseISO(d.start), end = parseISO(d.end),
+            first = parseISO(d.first), last = parseISO(d.last);
+        if (!start || !end) return '<div class="ghint">keine daten.</div>';
+        var out = ['<div class="cmonth">'];
+        WD.forEach(function (w) { out.push('<div class="cwd">' + w + '</div>'); });
+        var cur = start, guard = 0;
+        while (cur <= end && guard++ < 50) {
+          var k = iso(cur), ents = dayList(days, k), isT = (k === today);
+          var isOut = (first && cur < first) || (last && cur > last);
+          out.push('<div class="ccell' + (isT ? ' today' : '') + (isOut ? ' out' : '') + '">');
+          out.push('<span class="cnum">' + cur.getDate() + '</span>');
+          if (ents.length) {
+            var marks = ents.slice(0, 3).map(function (e) {
+              return (e && e.ausfall ? 'ℹ ' : (e && e.time ? e.time + ' ' : '')) + ((e && e.label) || '');
+            });
+            var title = ents.map(function (e) { return (e && e.time ? e.time + ' ' : '') + ((e && e.label) || ''); }).join('\n');
+            out.push('<span class="cmark" title="' + esc(title) + '">' + marks.map(esc).join('<br>')
+              + (ents.length > 3 ? '<br>+' + (ents.length - 3) : '') + '</span>');
+          }
+          out.push('</div>');
+          cur = addDays(cur, 1);
+        }
+        out.push('</div>'); return out.join('');
+      }
+
+      function render() {
+        var d = CS.data || {};
+        var days = (d.days && typeof d.days === 'object') ? d.days : {};
+        var label = (typeof d.label === 'string') ? d.label : '';
+        var nalarm = Array.isArray(d.alarms) ? d.alarms.length : 0;
+        var h = ['<div class="crow">'];
+        h.push('<button data-nav="-1" title="zurück">◀</button>');
+        h.push('<button data-today="1">heute</button>');
+        h.push('<button data-nav="1" title="vor">▶</button>');
+        h.push('<span class="clabel">' + esc(label)
+          + (nalarm ? '<span class="calarm" title="' + nalarm + ' offene erinnerung(en)">⚠' + nalarm + '</span>' : '') + '</span>');
+        h.push('<button class="cadd' + (CS.adding ? ' sel' : '') + '" data-add="1">＋ Termin</button>');
+        h.push('<span class="cspace"></span>');
+        h.push('<button data-view="week" class="' + (CS.view === 'week' ? 'sel' : '') + '">Woche</button>');
+        h.push('<button data-view="month" class="' + (CS.view === 'month' ? 'sel' : '') + '">Monat</button>');
+        h.push('</div>');
+        if (CS.adding) {
+          var fday = CS.formDay || (d.today || todayStr());
+          h.push('<div class="cform">'
+            + '<input type="date" id="cf-day" value="' + esc(fday) + '" />'
+            + '<input id="cf-time" placeholder="HH:MM" size="5" maxlength="5" />'
+            + '<input id="cf-label" placeholder="Titel" style="flex:1;min-width:90px" />'
+            + '<input id="cf-ort" placeholder="Ort (optional)" size="12" />'
+            + '<button data-save="1">anlegen</button></div>');
+        }
+        if (CS.msg) h.push('<div class="cmsg' + (CS.msgWarn ? ' warn' : '') + '">' + esc(CS.msg) + '</div>');
+        if (d.failed) h.push('<div class="ghint">kalender nicht erreichbar.</div>');
+        else h.push(CS.view === 'month' ? renderMonth(d, days, d.today) : renderWeek(d, days, d.today));
+        panel.innerHTML = h.join(''); wire();
+        if (CS.adding) { var lf = panel.querySelector('#cf-label'); if (lf) lf.focus(); }
+      }
+
+      async function addEntry() {
+        var day = (panel.querySelector('#cf-day') || {}).value || '';
+        var label = ((panel.querySelector('#cf-label') || {}).value || '').trim();
+        var time = ((panel.querySelector('#cf-time') || {}).value || '').trim();
+        var ort = ((panel.querySelector('#cf-ort') || {}).value || '').trim();
+        if (!label) { CS.msg = 'Titel fehlt.'; CS.msgWarn = true; render(); return; }
+        try {
+          var res = await fetch('/api/calendar/entry', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ day: day, label: label, time: time, ort: ort })
+          });
+          var j = await res.json();
+          if (!res.ok) { CS.msg = j.error || 'fehlgeschlagen.'; CS.msgWarn = true; render(); return; }
+          CS.adding = false;
+          var warn = (j.conflicts && j.conflicts.length) ? ' · ⚠ ' + j.conflicts.join(' · ') : '';
+          CS.msg = 'angelegt: ' + label + warn; CS.msgWarn = !!warn;
+          CS.ref = day || CS.ref;   // zur Woche des neuen Termins springen
+          load();
+        } catch (e) { CS.msg = 'netzwerkfehler.'; CS.msgWarn = true; render(); }
+      }
+
+      async function delEntry(day, label, layer) {
+        try {
+          var res = await fetch('/api/calendar/entry', {
+            method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ day: day, label: label, layer: layer || undefined })
+          });
+          var j = await res.json();
+          CS.msg = (j.deleted ? 'gelöscht: ' + label : 'nichts gelöscht.'); CS.msgWarn = !j.deleted;
+          load();
+        } catch (e) { CS.msg = 'netzwerkfehler.'; CS.msgWarn = true; render(); }
+      }
+
+      function wire() {
+        [].forEach.call(panel.querySelectorAll('[data-nav]'), function (el) { el.onclick = function () { CS.msg = ''; stepRef(Number(el.getAttribute('data-nav'))); }; });
+        var tb = panel.querySelector('[data-today]'); if (tb) tb.onclick = function () { CS.msg = ''; CS.ref = todayStr(); load(); };
+        [].forEach.call(panel.querySelectorAll('[data-view]'), function (el) { el.onclick = function () { var v = el.getAttribute('data-view'); if (v !== CS.view) { CS.msg = ''; CS.view = v; load(); } }; });
+        var ab = panel.querySelector('[data-add]'); if (ab) ab.onclick = function () { CS.adding = !CS.adding; CS.msg = ''; if (CS.adding && !CS.formDay) CS.formDay = (CS.data && CS.data.today) || todayStr(); render(); };
+        var sv = panel.querySelector('[data-save]'); if (sv) sv.onclick = addEntry;
+        ['#cf-label', '#cf-time', '#cf-ort'].forEach(function (sel) { var el = panel.querySelector(sel); if (el) el.onkeydown = function (e) { if (e.key === 'Enter') addEntry(); }; });
+        [].forEach.call(panel.querySelectorAll('[data-del-label]'), function (el) {
+          el.onclick = function (ev) {
+            ev.stopPropagation();
+            delEntry(el.getAttribute('data-del-day'), el.getAttribute('data-del-label'), el.getAttribute('data-del-layer'));
+          };
+        });
+      }
+
+      // Beim Öffnen des Kalender-Tabs frisch laden (externe Änderungen mitnehmen).
+      document.getElementById('tabs').addEventListener('click', function (e) {
+        var t = e.target.closest('.tab');
+        if (t && t.getAttribute('data-ex') === 'kalender') load();
+      });
+      load();   // initial (Panel versteckt, aber Daten stehen bereit)
+    })();
+
     // ── ASCII-Bibliothek aufbauen (rein Frontend, einmalig) ──
     var books = {
       torus:  ASCII.torusFlipbook({ cols: 60, rows: 28, frames: 60 }),
@@ -846,8 +1054,9 @@
     // ── Exhibit-Direktor ──
     var coreEl = document.getElementById('core'), aiMeta = document.getElementById('ai-meta');
     var graphPanel = document.getElementById('graph-panel');
+    var calendarPanel = document.getElementById('calendar-panel');
     var EX = { mode: 'auto', current: 'gesicht' };
-    var EXNAMES = { gesicht: 'gesicht', torus: 'torus', wuerfel: 'würfel', globus: 'globus', welt: 'weltkarte', filter: 'ascii-filter', graph: 'graph-werkzeug' };
+    var EXNAMES = { gesicht: 'gesicht', torus: 'torus', wuerfel: 'würfel', globus: 'globus', welt: 'weltkarte', filter: 'ascii-filter', graph: 'graph-werkzeug', kalender: 'kalender' };
     var fi = 0, gestureLeft = 0, autoT = 0;
     var tabs = document.getElementById('tabs');
     function syncTabs() {
@@ -892,12 +1101,15 @@
 
     function frameTick() {
       fi++;
-      // Graph-Werkzeug: eigenes interaktives Panel statt ASCII-Tick. Panel
-      // ein-, Kern ausblenden und hier raus – nichts in #core schreiben.
+      // Graph-Werkzeug + Kalender: eigene interaktive Panels statt ASCII-Tick.
+      // Passendes Panel ein-, Kern ausblenden und hier raus – nichts in #core
+      // schreiben, solange ein Panel den Kern übernimmt.
       var graphActive = (EX.current === 'graph');
+      var calActive = (EX.current === 'kalender');
       graphPanel.style.display = graphActive ? '' : 'none';
-      coreEl.style.display = graphActive ? 'none' : '';
-      if (graphActive) return;
+      calendarPanel.style.display = calActive ? '' : 'none';
+      coreEl.style.display = (graphActive || calActive) ? 'none' : '';
+      if (graphActive || calActive) return;
       // KI-Bild hat Vorrang und übernimmt den Kern auf Zeit.
       if (aiArt) {
         var age = fi - aiArt.born;
@@ -1087,6 +1299,7 @@
     // ── State ──
     var chatWaiting = false;
     var chatRecording = false, chatViaMic = false, chatMediaRecorder = null, chatAudioChunks = [];
+    var tutorActive = false;   // Tutor-Modus: Eingaben gehen an /api/tutor/respond (Konsolen-Commands)
 
     // ── Stimme (TTS) — localStorage übersteht Reload/Kiosk-Neustart ──
     var chatMuted = localStorage.getItem('zentraleChatMuted') === '1';
@@ -1384,6 +1597,116 @@
       } catch (e) { console.warn('Mic access failed:', e); chatRecording = false; micBtn.classList.remove('recording'); }
     }
 
+    // ── Tutor-Konsolen-Commands ──────────────────────────────────────
+    //  /tutor             Tutor starten (Begrüßung streamt in den Minilog)
+    //  /tutorstop         Tutor beenden
+    //  /provider <name>   Anbieter live umschalten (qwen|deepseek|mistral|…)
+    //  /model <id>        Modell live umschalten (z.B. qwen-turbo)
+    //  /lang <code>       Sprache umschalten (zh|ru|ar|es)
+    //  /models            aktuelle Wahl + wählbare Provider (mit Privacy-Flag)
+    // Steuert /api/tutor/config (Backend-Live-Umschaltung). Anzeige im Minilog.
+    function _mini(text) { ZS.pushHistory('ai', text); }
+
+    async function _tutorCfgPost(body) {
+      try {
+        var r = await fetch('/api/tutor/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        return await r.json();
+      } catch (e) { return null; }
+    }
+    function _cfgLine(c) {
+      return 'Tutor: ' + c.lang + ' · ' + c.provider + ' · ' + c.model
+           + (c.trains_on_data ? '   ⚠ Anbieter trainiert auf deinen Daten' : '');
+    }
+
+    // Gibt true zurück, wenn der Befehl ein Tutor-Command war (dann nicht weiter
+    // an den Chat reichen). /clear wird vorher in sendChatMessage behandelt.
+    async function handleConsoleCommand(msg) {
+      var parts = msg.trim().split(/\s+/);
+      var cmd = parts[0].toLowerCase(), arg = parts.slice(1).join(' ');
+
+      if (cmd === '/provider' || cmd === '/model' || cmd === '/lang') {
+        if (!arg) { _mini(cmd + ' <wert> — Wert fehlt'); return true; }
+        var key = cmd.slice(1); var body = {}; body[key] = arg;
+        var c = await _tutorCfgPost(body);
+        _mini(c ? _cfgLine(c) : 'Tutor-Config fehlgeschlagen.');
+        return true;
+      }
+      if (cmd === '/models' || cmd === '/tutorconfig') {
+        try {
+          var c = await (await fetch('/api/tutor/config')).json();
+          _mini(_cfgLine(c));
+          c.providers.forEach(function (p) {
+            _mini((p.name === c.provider ? '▶ ' : '  ') + p.name
+                + ' (' + p.jurisdiction + ') '
+                + (p.trains_on_data ? '⚠ trainiert' : 'ok')
+                + (p.enabled ? '' : ' [skizze]'));
+          });
+        } catch (e) { _mini('Konnte Tutor-Config nicht laden.'); }
+        return true;
+      }
+      if (cmd === '/tutor')     { await startTutor(); return true; }
+      if (cmd === '/tutorstop') { await stopTutor();  return true; }
+      return false;
+    }
+
+    async function startTutor() {
+      if (tutorActive) { _mini('Tutor läuft schon.'); return; }
+      tutorActive = true;
+      _mini('— Tutor gestartet (Eingaben gehen jetzt an den Tutor; /tutorstop beendet) —');
+      try {
+        var s = await (await fetch('/api/tutor/status')).json();
+        if (s.privacy_warning) _mini('⚠ ' + s.privacy_warning);
+      } catch (e) {}
+      await streamTutor('/api/tutor/start', null);
+    }
+    async function stopTutor() {
+      if (!tutorActive) { _mini('Kein Tutor aktiv.'); return; }
+      tutorActive = false;
+      try { await fetch('/api/tutor/stop', { method: 'POST' }); } catch (e) {}
+      _mini('— Tutor beendet —');
+    }
+
+    // Tutor-Antwort streamen (gleiche SSE-Mechanik wie der Chat). Text-first:
+    // TTS bewusst noch nicht (Zielsprachen-Stimme via lang muss erst durch).
+    async function streamTutor(endpoint, text) {
+      if (chatWaiting) return;
+      chatWaiting = true; ZS.setAi('thinking');
+      var fullText = '', started = false;
+      try {
+        var resp = await fetch(endpoint, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: (text == null) ? '{}' : JSON.stringify({ text: text })
+        });
+        var reader = resp.body.getReader(), decoder = new TextDecoder(), buffer = '';
+        while (true) {
+          var chunk = await reader.read();
+          if (chunk.done) break;
+          buffer += decoder.decode(chunk.value, { stream: true });
+          var lines = buffer.split('\n\n'); buffer = lines.pop();
+          for (var li = 0; li < lines.length; li++) {
+            var line = lines[li];
+            if (line.indexOf('data: ') !== 0) continue;
+            var data = JSON.parse(line.slice(6));
+            if (data.done) break;
+            if (data.token) {
+              if (!started) { started = true; ZS.pushHistory('ai', ''); ZS.setAi('streaming'); }
+              fullText += data.token;
+              ZS.updateLastHistory(fullText);
+            }
+          }
+        }
+        if (!started) ZS.pushHistory('ai', '');
+        ZS.updateLastHistory(fullText);
+      } catch (e) {
+        ZS.updateLastHistory('[Tutor-Verbindungsfehler]');
+      } finally {
+        chatWaiting = false; ZS.setAi('idle'); inputEl.focus();
+      }
+    }
+
     // ── Senden (SSE-Stream, satzweises TTS) ──
     async function sendChatMessage() {
       if (chatWaiting) return;
@@ -1395,6 +1718,19 @@
         stopSpeaking();   // laufende Stimme der vorigen Antwort sofort kappen
         await fetch('/api/chat/clear', { method: 'POST' });
         return;   // engine pollt History → Minilog leert sich von selbst
+      }
+
+      // Tutor-Konsolen-Commands (/tutor, /provider, /model, /lang, /models …).
+      if (message.charAt(0) === '/') {
+        var consumed = await handleConsoleCommand(message);
+        if (consumed) { inputEl.value = ''; return; }
+      }
+      // Tutor-Modus aktiv → Eingabe geht an den Tutor statt an den Chat.
+      if (tutorActive) {
+        inputEl.value = '';
+        ZS.pushHistory('user', message);
+        await streamTutor('/api/tutor/respond', message);
+        return;
       }
 
       inputEl.value = '';

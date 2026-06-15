@@ -50,7 +50,8 @@ Die Keymap + Kategorien in `data/mail_rules.json`. Unit-testbar ohne Postfach.
 Provider-agnostischer Poller. `PROVIDERS`-Vorlagen, `_connect` (SSL/STARTTLS,
 `verify=False` für Bridge-localhost, XOAUTH2 für Outlook), `poll_account`,
 `poll_all`, `start_fetcher` (Daemon-Thread). Store `data/mail_state.json`
-(UID-Watermark pro Konto + letzte klassifizierte Mails, Cap 200).
+(`last_poll` pro Konto + letzte klassifizierte Mails, Cap 200; **kein**
+UID-Watermark mehr — die INBOX selbst ist die Arbeitsschlange).
 Lese-/Auswert-Helfer: `recent()`, `counts()` (Kategorie→Anzahl),
 `review_stack()` (unbekannte Absender) und `lies(modus)` — die Textfassung
 fürs KI-Tool `lies_mail` (read-only, kein Netz). Review-CLI:
@@ -104,14 +105,27 @@ das M365-Dev-Programm kostet. Kartenlos bleibt nur ein 30-Tage-Trial-Tenant
 ## Safe-by-default (Write-back fasst echte Mails an!)
 
 - **DRY-RUN ist default AN** (`MAIL_DRY_RUN`, Default `"1"`): klassifiziert +
-  loggt, was es *täte*, fasst aber nichts an. Watermark rückt im Dry-Run
-  **nicht** vor (sonst „verbraucht" der Probelauf Mails ungesehen).
+  loggt, was es *täte*, fasst aber nichts an. Im Dry-Run wird nichts verschoben,
+  die INBOX bleibt also unangetastet (nächster Lauf sieht dieselben Mails).
 - Aktionen sind **umkehrbar**: `move` (in Ordner) / `trash` (Papierkorb via
   special-use `\Trash`). **Kein** Hard-Expunge über das Move hinaus.
 - **Unbekannte Absender** → Review, nie destruktiv.
 - Move via `UID MOVE` (RFC 6851), Fallback `COPY + \Deleted + EXPUNGE`.
-  Kategorie-Ordner werden bei Bedarf unter `MAIL_FOLDER_PREFIX` (Default
-  `ZENTRALE`) angelegt.
+  **Outlook/Exchange kann KEIN MOVE** (nicht in CAPABILITY) → immer der
+  COPY-Pfad. Kategorie-Ordner werden bei Bedarf unter `MAIL_FOLDER_PREFIX`
+  (Default `ZENTRALE`) angelegt.
+- **LIST-Parsing** (`_list_name`, Regex): Format `(flags) "sep" name` — der Name
+  ist gequotet *oder* ein Atom ohne Leerzeichen. Naives `split('"')[-2]` erwischte
+  bei ungequoteten Namen den **Separator** `"/"` → `_find_trash` lieferte `"/"` →
+  `COPY <uid> "/"` → `BAD Command Argument Error`. Jetzt sauber per Regex; kein
+  \Trash gefunden → Fallback `Deleted Items` (Exchange-Default).
+
+### Diagnose-Werkzeuge
+- `python core/mail.py --probe` — verbindet, SELECT INBOX, probiert mehrere
+  SEARCH-Formen durch und zeigt die rohe Server-Antwort (read-only).
+- `MAIL_IMAP_DEBUG=1 …` — schaltet `imap.debug=4` ein (IMAP-Protokoll-Mitschnitt
+  auf stderr). Wird **erst nach** der Authentifizierung gesetzt, damit das
+  XOAUTH2-Token nie mitgeloggt wird.
 
 ### Verbindungs-Härtung (Outlook-Drossel)
 Outlook drosselt Bulk-MOVE hart und **kappt dann die TLS-Verbindung** (EOF →
@@ -122,9 +136,17 @@ Outlook drosselt Bulk-MOVE hart und **kappt dann die TLS-Verbindung** (EOF →
 2. **Drossel-Pause** `MAIL_ACTION_DELAY_S` (Default 0.4s) nach jeder Aktion.
 3. **Reconnect + Resume**: bricht die Verbindung ab, wird mit Backoff neu
    verbunden und weitergemacht. Gefahrlos, weil verschobene Mails die INBOX
-   verlassen — ein erneutes `SEARCH` sammelt sie nicht wieder ein. Watermark
-   rückt nur bis zur **lückenlosen Front** erfolgreich verschobener Mails vor,
-   abgelehnte/offene werden beim nächsten Poll erneut versucht.
+   verlassen — ein erneutes `SEARCH` sammelt sie nicht wieder ein.
+
+**INBOX-als-Arbeitsschlange (kein Watermark):** `poll_account` sucht jeden Lauf
+mit `SEARCH UID 1:*` *alles*, was aktuell in der INBOX liegt. Sortierte Mails
+(move/trash) verlassen die INBOX und verschwinden damit aus der Schlange;
+abgelehnte/offene Mails bleiben liegen und werden beim nächsten Poll automatisch
+erneut versucht. Selbstheilend — kein UID-Hochwasserstand, der tieferliegende
+(z.B. abgelehnte) UIDs überspringt. Grund für den Wechsel: ein Watermark `UID
+N:*` ließ Outlook bei `N` > höchster UID `BAD Command Argument Error` werfen und
+verwaiste abgelehnte Mails unterhalb der Marke. (`1:*` ist immer gültig, weil 1
+nie über der höchsten UID liegt.)
 
 ## Trigger + Transparenz
 

@@ -25,7 +25,8 @@ KEYS = [b'g', b'm', b'/', b'n', b'd', b't', b'j', b'k', b'h', b'l', b'q',
         b'+', b'-', b'0', b':', b'.', b'y', b'Y', b'1', b'5', b'\r', b'\n',
         b'\t', b'\x7f', b'\x08', b'\x1b', b'\x1b[A', b'\x1b[B', b'\x1b[C', b'\x1b[D',
         b'a', b'Z', b' ', b'\x00', b'\xff', b'\x1b[3~', b'x', b'w', b'2', b'9',
-        b'G', b'M', b'N', b'D', b'T', b'p', b'r', b'3', b'4', b'8', b'_', b'=']
+        b'G', b'M', b'N', b'D', b'T', b'p', b'r', b'3', b'4', b'8', b'_', b'=',
+        b'c', b'C', b'v', b'V']
 SIZES = [(1, 1), (2, 5), (3, 40), (5, 59), (13, 80), (14, 60), (10, 200),
          (40, 300), (24, 80), (50, 250), (60, 400), (8, 8), (200, 600), (15, 61)]
 
@@ -162,6 +163,18 @@ class _AdvHandler(BaseHTTPRequestHandler):
         if p == "/api/map/base":
             return {"bounds": [-180, -85, 180, 85],
                     "lines": [[[10, 5], [20, 8]], [[40, 12], [55, 15]]]}
+        if p == "/api/calendar":
+            return {"view": "week", "ref": "2026-06-11", "today": "2026-06-11",
+                    "label": "08.06.–14.06.2026", "start": "2026-06-08",
+                    "end": "2026-06-14", "first": "2026-06-01", "last": "2026-06-30",
+                    "alarms": [],
+                    "days": {"2026-06-09": [{"layer": "routinen", "label": "Geige",
+                                             "time": "17:45", "ende": "18:30",
+                                             "ort": "Musikschule", "recurring": True}],
+                             "2026-06-11": [{"layer": "termine", "label": "Arzt",
+                                             "time": "10:00"},
+                                            {"layer": "routinen", "label": "Geige",
+                                             "ausfall": "Ferien"}]}}
         return {}
 
     # gemeine Formen
@@ -221,6 +234,26 @@ class _AdvHandler(BaseHTTPRequestHandler):
                 return self._pick([{"failed": True}, {}, None, {"bounds": "x"}, {"lines": "x"}])
             return {"bounds": self._pick([[-180, -85, 180, 85], [0, 0, 0, 0], [1, 2], "x"]),
                     "lines": self._pick([[], [[[0, 0], [1, 1]]], [[["a", "b"]]], "x"])}
+        if p == "/api/calendar":
+            r = self._r()
+            if r < 0.35:
+                return self._pick([{"failed": True}, {}, None, "x",
+                                   {"view": "month"}, {"days": "x"}, {"days": None}])
+            return {"view": self._pick(["week", "month", "bogus", None]),
+                    "label": self._pick(ws),
+                    "today": self._pick(["2026-06-11", None, 5]),
+                    "start": self._pick(["2026-06-08", "x", None]),
+                    "end": self._pick(["2026-06-14", "2026-07-05", "x", None]),
+                    "first": self._pick(["2026-06-01", None, "x"]),
+                    "last": self._pick(["2026-06-30", None, "x"]),
+                    "alarms": self._pick([[], [{"text": "x"}], "x", None]),
+                    "days": self._pick([
+                        {"2026-06-09": [{"label": self._pick(ws),
+                                         "time": self._pick(["10:00", None, 5]),
+                                         "ende": self._pick(["18:30", None]),
+                                         "ort": self._pick(ws + [None]),
+                                         "ausfall": self._pick([None, "Ferien", 5])}]},
+                        {self._pick(ws): self._pick(wn)}, {}, "x", None])}
         return self._pick([{}, None, "x"])
 
     def do_GET(self):

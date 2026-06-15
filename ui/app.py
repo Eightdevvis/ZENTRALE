@@ -24,12 +24,18 @@ import json
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'core'))
 
 from flask import Flask, jsonify, render_template, request, Response, stream_with_context, send_from_directory
-from datetime import datetime
+from datetime import datetime, date
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
 import categories   # type: ignore
 import graphs       # type: ignore  – dynamische Lifestyle-Graph-Registry
+import lists        # type: ignore  – dynamische Listen-Registry (Todo/Sammel-Listen)
+import kalender     # type: ignore  – Kalender-Layer (Woche/Monat, data/ai_calendar.json)
 import ai           # type: ignore
 import audio        # type: ignore
+import tutor_session # type: ignore  – Sprach-Tutor (Addon auf der Core-KI, eigener Prompt/Tools)
+import tutor_config   # type: ignore  – lokale Tutor-Config + Live-Umschalten (Provider/Modell)
+import tutor_providers # type: ignore  – Provider-Registry (Flags, Liste)
+import tutor_langs     # type: ignore  – Sprach-Profile (Liste)
 import consolidation # type: ignore  – Phase E: STM → LTM Konsolidierung
 import telemetry    # type: ignore  – PC-Host-Telemetrie (CPU/GPU/VRAM/Temp/RAM)
 import kassette     # type: ignore  – welche Kassette läuft (monolith | laptop)
@@ -235,6 +241,148 @@ def api_graphs_delete(gid):
     return jsonify({"ok": True})
 
 
+# ── Listen (dynamisch, vom Dashboard angelegt) ─────────────────────────
+#
+# Pendant zu den Lifestyle-Graphen, aber für abhakbare Todo-/Sammel-Listen.
+# Anders als die Graphen liegen Definition UND Einträge inline in
+# data/lists.json (core/lists.py) – keine Zeitreihe, kein /api/log-Sharing.
+
+@app.route('/api/lists')
+def api_lists():
+    """Alle Listen-Definitionen inkl. ihrer Einträge."""
+    return jsonify(lists.list_lists())
+
+
+@app.route('/api/lists', methods=['POST'])
+def api_lists_create():
+    """
+    Neue Liste anlegen.
+    Body (JSON): {"name": "Einkaufen"}
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        l = lists.create_list(body.get('name'))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    state.push_log(f"LISTE+: {l['id']}")
+    return jsonify(l)
+
+
+@app.route('/api/lists/<lid>', methods=['DELETE'])
+def api_lists_delete(lid):
+    """Listen-Definition mit allen Einträgen löschen."""
+    lists.delete_list(lid)
+    state.push_log(f"LISTE-: {lid}")
+    return jsonify({"ok": True})
+
+
+@app.route('/api/lists/<lid>/rename', methods=['POST'])
+def api_lists_rename(lid):
+    """
+    Anzeigenamen einer Liste ändern (id bleibt stabil).
+    Body (JSON): {"name": "Neuer Name"}
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        lst = lists.rename_list(lid, body.get('name'))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except KeyError:
+        return jsonify({"error": "unbekannte liste"}), 404
+    return jsonify(lst)
+
+
+@app.route('/api/lists/<lid>/items', methods=['POST'])
+def api_lists_add_item(lid):
+    """
+    Eintrag an eine Liste hängen.
+    Body (JSON): {"text": "Milch"} — optional {"parent": <iid>} macht ihn zum
+    Unterpunkt des Eintrags <iid> (Liste wird so zum verschachtelten Mischtyp).
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        item = lists.add_item(lid, body.get('text'), body.get('parent'))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except KeyError:
+        return jsonify({"error": "unbekannte liste/eintrag"}), 404
+    return jsonify(item)
+
+
+@app.route('/api/lists/<lid>/nest', methods=['POST'])
+def api_lists_nest(lid):
+    """
+    Eine ganze Liste IN eine andere einordnen — sie wird dort zum Eintrag und
+    verschwindet aus der obersten Ebene.
+    Body (JSON): {"into": <ziel-lid>} — optional {"parent": <iid>} hängt sie
+    unter einen bestimmten Ziel-Eintrag statt ganz oben.
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        node = lists.nest_list(lid, body.get('into'), body.get('parent'))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except KeyError:
+        return jsonify({"error": "unbekannte liste/eintrag"}), 404
+    state.push_log(f"LISTE~: {lid} → {body.get('into')}")
+    return jsonify(node)
+
+
+@app.route('/api/lists/<lid>/items/<int:iid>/toggle', methods=['POST'])
+def api_lists_toggle_item(lid, iid):
+    """Erledigt-Status eines Eintrags umschalten."""
+    try:
+        item = lists.toggle_item(lid, iid)
+    except KeyError:
+        return jsonify({"error": "unbekannt"}), 404
+    return jsonify(item)
+
+
+@app.route('/api/lists/<lid>/items/<int:iid>/rename', methods=['POST'])
+def api_lists_rename_item(lid, iid):
+    """
+    Text eines Eintrags ändern (egal wie tief).
+    Body (JSON): {"text": "Neuer Text"}
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        item = lists.rename_item(lid, iid, body.get('text'))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except KeyError:
+        return jsonify({"error": "unbekannt"}), 404
+    return jsonify(item)
+
+
+@app.route('/api/lists/<lid>/items/<int:iid>/move', methods=['POST'])
+def api_lists_move_item(lid, iid):
+    """
+    Einen Eintrag (samt Teilbaum) RAUS in eine andere (oder dieselbe) Liste
+    verschieben.
+    Body (JSON): {"into": <ziel-lid>} — optional {"parent": <iid>} hängt ihn
+    unter einen bestimmten Ziel-Eintrag statt ganz oben.
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        node = lists.move_item(lid, iid, body.get('into'), body.get('parent'))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except KeyError:
+        return jsonify({"error": "unbekannte liste/eintrag"}), 404
+    state.push_log(f"LISTE↦: {lid}/{iid} → {body.get('into')}")
+    return jsonify(node)
+
+
+@app.route('/api/lists/<lid>/items/<int:iid>', methods=['DELETE'])
+def api_lists_delete_item(lid, iid):
+    """Einen Eintrag aus einer Liste löschen."""
+    try:
+        lists.delete_item(lid, iid)
+    except KeyError:
+        return jsonify({"error": "unbekannte liste"}), 404
+    return jsonify({"ok": True})
+
+
 @app.route('/api/map/base')
 def api_map_base():
     """
@@ -323,6 +471,163 @@ def api_map_layer(layer_id):
     if out is None:
         return jsonify({"error": "unbekannter layer/sub-layer"}), 404
     return jsonify(out)
+
+
+@app.route('/api/calendar')
+def api_calendar():
+    """
+    Kalender-Daten für die Mitte/Canvas JEDER Kassette: laufende Woche ODER
+    Monat um `ref`, fertig nach Tag gruppiert. Front-agnostisch — TUI, monolith
+    und laptop rufen denselben Endpoint und zeichnen nur (wie /api/map/*). NICHT
+    KI-gegatet: der Kalender ist hier reine Anzeige, kein KI-Tool-Pfad, läuft
+    also auch in der ki-freien Kassette. Die Datums-Arithmetik (Woche Mo-So /
+    Monatsgitter) macht Python in core/kalender.py, die Front klassifiziert nur
+    `view` und blättert über `ref` — dieselbe Linie wie resolve_range.
+
+    Query: view = 'week' (Default) | 'month';  ref = YYYY-MM-DD (Default heute).
+    Antwort: {view, ref, today, label, start, end, days:{iso:[entries]}, alarms,
+             (month: first/last/month nur bei view=month)}.
+    """
+    a = request.args
+    view = (a.get('view') or 'week').lower()
+    ref_s = a.get('ref')
+    try:
+        ref = datetime.strptime(ref_s, '%Y-%m-%d').date() if ref_s else date.today()
+    except (TypeError, ValueError):
+        return jsonify({"error": "ungültiges ref-datum (YYYY-MM-DD)"}), 400
+
+    if view == 'month':
+        out = kalender.month_view(ref)
+    else:
+        view = 'week'                       # alles != month → Woche (robust)
+        out = kalender.week_view(ref)
+        start = date.fromisoformat(out['start'])
+        end = date.fromisoformat(out['end'])
+        out['label'] = f"{start.strftime('%d.%m.')}–{end.strftime('%d.%m.%Y')}"
+
+    out['view'] = view
+    out['ref'] = ref.isoformat()
+    out['today'] = date.today().isoformat()
+    # Offene Kalender-Alarme mitschicken (gleiche Quelle wie die Canvas-Ecke),
+    # damit die Front pro Tag/Header dezent warnen kann. Defensiv: nie crashen.
+    try:
+        out['alarms'] = state.get_alarms() or []
+    except Exception:
+        out['alarms'] = []
+    return jsonify(out)
+
+
+@app.route('/api/calendar/entry', methods=['POST'])
+def api_calendar_add_entry():
+    """
+    Einen Einmal-Termin direkt aus der Kalender-Mitte anlegen (TUI/Browser).
+    NICHT KI-gegatet: das ist eine DIREKTE Nutzeraktion aus der UI (wie
+    `/api/log` beim Graph-Werkzeug), kein KI-Schreibpfad — das Permission-Gate
+    der KI bleibt davon unberührt. Schreibt über `core/kalender.py:add_entry`.
+
+    Body (JSON): day=YYYY-MM-DD (Pflicht), label (Pflicht), time=HH:MM (opt),
+    ende=HH:MM (opt), ort (opt), layer (Default 'termine'). Routinen
+    (Wiederholungen) laufen weiter über die KI — hier bewusst nur Einmal-Termine.
+
+    Antwort: {ok, conflicts:[…]} — die Konflikt-Zeilen (Reise/Kollision/Knapp)
+    werden VOR dem Schreiben gesammelt und nur als HINWEIS zurückgegeben (kein
+    Block; gleiche Rechnung wie das KI-Gate via conflicts_for_proposed).
+    """
+    body = request.get_json(silent=True) or {}
+    label = (body.get('label') or '').strip()
+    day = (body.get('day') or '').strip()
+    if not label:
+        return jsonify({"error": "label fehlt"}), 400
+    try:
+        date.fromisoformat(day)
+    except (TypeError, ValueError):
+        return jsonify({"error": "day muss YYYY-MM-DD sein"}), 400
+    time = (body.get('time') or '').strip() or None
+    layer = (body.get('layer') or 'termine').strip() or 'termine'
+    extras = {}
+    for k in ('ende', 'ort'):
+        v = (body.get(k) or '').strip()
+        if v:
+            extras[k] = v
+    conflicts = kalender.conflicts_for_proposed(layer, day, label, time=time)
+    ok = kalender.add_entry(layer, day, label, time=time, **extras)
+    if not ok:
+        return jsonify({"error": "eintrag abgelehnt (unbekannter layer?)"}), 400
+    return jsonify({"ok": True, "conflicts": conflicts})
+
+
+@app.route('/api/calendar/entry', methods=['DELETE'])
+def api_calendar_delete_entry():
+    """
+    Einmal-Termin(e) an einem Tag löschen — Label-Match wie das KI-Tool
+    (case-insensitiv, exakt oder Teilstring). Wirkt NUR auf Einmal-Einträge,
+    nicht auf Routinen. Body: {day, label, layer?}. Antwort: {deleted:n}.
+    """
+    body = request.get_json(silent=True) or {}
+    day = (body.get('day') or '').strip()
+    label = (body.get('label') or '').strip()
+    if not day or not label:
+        return jsonify({"error": "day und label nötig"}), 400
+    n = kalender.delete_entry(day, label, layer=(body.get('layer') or None))
+    return jsonify({"deleted": n})
+
+
+@app.route('/api/calendar/entry', methods=['PUT'])
+def api_calendar_edit_entry():
+    """
+    Einen bestehenden Einmal-Termin ÄNDERN: löscht den alten (`day`,`label`,
+    `layer?`) und legt den neuen an. Body:
+      {day, label, layer?, new:{day, label, time?, ende?, ort?}}
+    `new.day`/`new.label` Pflicht. Antwort {ok, conflicts:[…]} wie beim Anlegen.
+    Bewusst delete+add (kein In-Place-Patch): Einmal-Termine sind klein und der
+    Match läuft über Label - so bleibt es dieselbe Logik wie POST/DELETE.
+    """
+    body = request.get_json(silent=True) or {}
+    old_day = (body.get('day') or '').strip()
+    old_label = (body.get('label') or '').strip()
+    layer = (body.get('layer') or 'termine').strip() or 'termine'
+    new = body.get('new') or {}
+    new_day = (new.get('day') or '').strip()
+    new_label = (new.get('label') or '').strip()
+    if not old_day or not old_label:
+        return jsonify({"error": "alter day/label nötig"}), 400
+    if not new_label:
+        return jsonify({"error": "neuer label fehlt"}), 400
+    try:
+        date.fromisoformat(new_day)
+    except (TypeError, ValueError):
+        return jsonify({"error": "new.day muss YYYY-MM-DD sein"}), 400
+    new_time = (new.get('time') or '').strip() or None
+    extras = {}
+    for k in ('ende', 'ort'):
+        v = (new.get(k) or '').strip()
+        if v:
+            extras[k] = v
+    kalender.delete_entry(old_day, old_label, layer=layer)
+    conflicts = kalender.conflicts_for_proposed(layer, new_day, new_label, time=new_time)
+    ok = kalender.add_entry(layer, new_day, new_label, time=new_time, **extras)
+    if not ok:
+        return jsonify({"error": "neuer eintrag abgelehnt"}), 400
+    return jsonify({"ok": True, "conflicts": conflicts})
+
+
+@app.route('/api/calendar/routine/skip', methods=['POST'])
+def api_calendar_routine_skip():
+    """
+    Einen EINZELNEN Routine-Termin deaktivieren bzw. wieder aktivieren
+    (reversibel, pro Vorkommen) — über core/kalender.py:set_routine_skip. NICHT
+    KI-gegatet (direkte Nutzeraktion). Body: {layer, label, day, off=true}.
+    `off=true` deaktiviert, `off=false` aktiviert wieder. Antwort {changed:bool}.
+    """
+    body = request.get_json(silent=True) or {}
+    layer = (body.get('layer') or 'routinen').strip() or 'routinen'
+    label = (body.get('label') or '').strip()
+    day = (body.get('day') or '').strip()
+    if not label or not day:
+        return jsonify({"error": "label und day nötig"}), 400
+    off = body.get('off', True)
+    changed = kalender.set_routine_skip(layer, label, day, off=bool(off))
+    return jsonify({"changed": changed})
 
 
 @app.route('/api/debug', methods=['POST'])
@@ -629,12 +934,127 @@ def api_transcribe():
 
 # ── Tutor ─────────────────────────────────────────────────────────────
 #
-# Der Mandarin-Tutor ist pausiert (siehe memory/tutor_system.md). Die
-# frueheren Endpoints /api/tutor/{status,start,respond,transcribe,speak,
-# stop} sind raus. core/tutor.py, core/tutor_session.py und
-# data/vocab_mandarin.json bleiben unangetastet – fuers spaetere Wieder-
-# Anschalten reicht es, die Routes plus den brain-Trigger zurueckzu-
-# holen (git-History) und tutor_session wieder zu importieren.
+# Mandarin-Sprachtutor: Addon auf der Core-KI mit EIGENEM System-Prompt
+# (_TUTOR_PROMPT) und EIGENEM Tool-Set (TUTOR_TOOLS), sauber getrennt vom
+# regulaeren Chat (siehe core/tutor_session.py + core/tutor.py).
+#
+# Start ist rein MANUELL ueber die Dashboard-Taste 'T' → POST /api/tutor/start.
+# Es gibt KEINEN Presence-Auto-Trigger in brain.py (bewusst: erst Core-KI
+# sauber, dann Addon – siehe memory/tutor_system.md).
+#
+# Audio laeuft ueber die generische Voice-API (/api/transcribe, /api/speak)
+# mit lang='zh' – der Tutor besitzt die Pipeline nicht, er ruft sie nur auf.
+
+
+@app.route('/api/tutor/status')
+def api_tutor_status():
+    """Gibt zurueck ob gerade eine Tutor-Session aktiv ist + Audio-Service-Status.
+    privacy_warning != null → Provider trainiert auf Daten: im UI laut anzeigen."""
+    return jsonify({
+        "active":         tutor_session.is_active(),
+        "whisper":        audio.whisper_available(),
+        "tts":            audio.tts_available(),
+        "privacy_warning": tutor_session.privacy_notice(),
+    })
+
+
+@app.route('/api/tutor/config', methods=['GET', 'POST'])
+def api_tutor_config():
+    """Liest/aendert die Live-Tutor-Konfiguration (Sprache/Provider/Modell) –
+    so kann man das Modell IN ZENTRALE direkt umschalten, ohne Datei-Editieren.
+
+    POST-Body (JSON, alle optional): {lang, provider, model, history_window, persist}.
+    persist=true schreibt zusaetzlich in data/tutor_config.json (ueberlebt Neustart),
+    sonst gilt der Wechsel nur fuer die laufende Instanz.
+    GET liefert die aktuelle Aufloesung + waehlbare Provider/Sprachen.
+    """
+    if request.method == 'POST':
+        body    = request.get_json() or {}
+        persist = bool(body.get('persist'))
+        for k in ('lang', 'provider', 'model', 'history_window'):
+            if k in body:
+                tutor_config.set_override(k, body[k], persist=persist)
+
+    prof, pname, prov, model = tutor_session._resolve()
+    return jsonify({
+        "lang":           tutor_config.setting("lang", "zh"),
+        "lang_name":      prof["name"],
+        "provider":       pname,
+        "model":          model,
+        "trains_on_data": tutor_providers.trains_on_data(pname),
+        "providers": [
+            {"name": n, "default_model": p.get("default_model"),
+             "trains_on_data": tutor_providers.trains_on_data(n),
+             "jurisdiction": p.get("jurisdiction"), "enabled": p.get("enabled")}
+            for n, p in tutor_providers.PROVIDERS.items()
+        ],
+        "langs": [
+            {"code": c, "name": p["name"], "enabled": p.get("enabled")}
+            for c, p in tutor_langs.PROFILES.items()
+        ],
+    })
+
+
+@app.route('/api/tutor/start', methods=['POST'])
+def api_tutor_start():
+    """
+    Startet eine Tutor-Session manuell (Dashboard-Taste 'T') und streamt die
+    erste KI-Begruessung. Die KI laedt zu Beginn selbst die Vokabeln via
+    get_confirmed_vocab()/get_testing_vocab() (Tool-Calls) und begruesst auf
+    Mandarin.
+    """
+    if kassette.ki_aus():
+        return _ki_aus()
+
+    if not tutor_session.is_active():
+        tutor_session.activate()
+
+    def generate():
+        # user_text=None → KI beginnt das Gespraech
+        for token in tutor_session.respond_stream(user_text=None):
+            yield f"data: {json.dumps({'token': token})}\n\n"
+        yield f"data: {json.dumps({'done': True})}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        content_type='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
+
+
+@app.route('/api/tutor/respond', methods=['POST'])
+def api_tutor_respond():
+    """
+    Nimmt transkribierten Text entgegen, schickt ihn an die KI (Tutor-Modus)
+    und streamt die Antwort zurueck. Body: JSON {"text": "我很好"}.
+    """
+    if kassette.ki_aus():
+        return _ki_aus()
+    if not tutor_session.is_active():
+        return jsonify({"error": "Keine aktive Tutor-Session"}), 400
+
+    body      = request.get_json() or {}
+    user_text = (body.get('text') or '').strip()
+    if not user_text:
+        return jsonify({"error": "kein Text"}), 400
+
+    def generate():
+        for token in tutor_session.respond_stream(user_text=user_text):
+            yield f"data: {json.dumps({'token': token})}\n\n"
+        yield f"data: {json.dumps({'done': True})}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        content_type='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
+
+
+@app.route('/api/tutor/stop', methods=['POST'])
+def api_tutor_stop():
+    """Beendet die aktive Tutor-Session."""
+    tutor_session.deactivate()
+    return jsonify({"ok": True})
 
 
 # ── Start ──────────────────────────────────────────────────────────────

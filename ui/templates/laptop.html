@@ -133,6 +133,43 @@
   .mid-skel { text-align: center; color: var(--faint); }
   .mid-skel .big { font-family: 'VT323', monospace; font-size: 40px; letter-spacing: 0.18em; color: var(--dim); text-transform: uppercase; }
   .mid-skel .small { font-size: 12px; letter-spacing: 0.14em; margin-top: 10px; text-transform: uppercase; }
+
+  /* ── MITTE: Kalender (blätterbare Woche/Monat, teilt /api/calendar mit TUI
+     und Monolith — die Datums-/Layer-Logik liegt im Backend, core/kalender.py) */
+  .cal-box { align-items: stretch; justify-content: flex-start; gap: 12px; }
+  .cal-head { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+  .cal-head button { font-family: 'VT323', monospace; font-size: 18px; background: transparent; color: var(--dim); border: 1px solid var(--line); padding: 2px 11px; cursor: pointer; }
+  .cal-head button:hover { color: var(--acc); border-color: var(--acc); }
+  .cal-head button.on { background: var(--acc); color: var(--bg); border-color: var(--acc); }
+  .cal-label { font-family: 'VT323', monospace; font-size: 23px; color: var(--bright); letter-spacing: 0.04em; }
+  .cal-alarm { color: var(--warn); font-size: 16px; margin-left: 7px; }
+  .cal-space { flex: 1; }
+  .cal-body { flex: 1; min-height: 0; overflow: auto; }
+  .cw { display: flex; flex-direction: column; gap: 3px; }
+  .cw-day { display: flex; gap: 10px; padding: 5px 4px; border-left: 3px solid transparent; align-items: baseline; }
+  .cw-day.today { border-left-color: var(--acc); background: color-mix(in srgb, var(--acc) 9%, transparent); }
+  .cw-date { min-width: 96px; color: var(--dim); font-size: 14px; white-space: nowrap; }
+  .cw-day.today .cw-date { color: var(--acc); }
+  .cw-ents { display: flex; flex-wrap: wrap; gap: 6px; }
+  .cw-ent { font-size: 13px; padding: 1px 8px; border: 1px solid var(--line); color: var(--ink); white-space: nowrap; }
+  .cw-ent.ausfall { color: var(--dim); border-style: dashed; }
+  .cw-empty { color: var(--faint); font-style: italic; font-size: 12px; }
+  .cm { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cm-wd { text-align: center; color: var(--dim); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; padding-bottom: 2px; }
+  .cm-cell { border: 1px solid var(--line); min-height: 78px; padding: 3px 6px; display: flex; flex-direction: column; gap: 2px; overflow: hidden; background: var(--paper); }
+  .cm-cell.out { opacity: 0.32; }
+  .cm-cell.today { border-color: var(--acc); }
+  .cm-num { font-size: 14px; color: var(--ink); }
+  .cm-cell.today .cm-num { color: var(--acc); font-weight: 700; }
+  .cm-mark { font-size: 12px; color: var(--acc); line-height: 1.12; }
+  .cal-head button.cal-add { color: var(--acc); }
+  .cal-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 0; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .cal-form input { font-family: 'VT323', monospace; font-size: 16px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: 2px 7px; }
+  .cal-form input:focus { outline: none; border-color: var(--acc); }
+  .cal-msg { font-size: 13px; color: var(--dim); padding: 2px 0 6px; }
+  .cal-msg.warn { color: var(--warn); }
+  .cw-del { margin-left: 6px; color: var(--dim); cursor: pointer; opacity: 0.55; }
+  .cw-del:hover { color: var(--warn); opacity: 1; }
 </style>
 </head>
 <body>
@@ -180,12 +217,19 @@
 
       <!-- MITTE: leeres Skelett (kommt später, gemeinsam) -->
       <div class="col" id="col-mid">
-        <div class="box mid-box">
-          <span class="bt">mitte</span><span class="bt2">tbd</span>
-          <div class="mid-skel">
-            <div class="big">Kassette · laptop</div>
-            <div class="small">Mitte noch leer — Inhalt folgt</div>
+        <div class="box mid-box cal-box">
+          <span class="bt">kalender</span><span class="bt2" id="cal-sub">woche</span>
+          <div class="cal-head">
+            <button data-nav="-1" title="zurück">◀</button>
+            <button data-today="1">heute</button>
+            <button data-nav="1" title="vor">▶</button>
+            <button data-add="1" class="cal-add">＋ Termin</button>
+            <span class="cal-label" id="cal-label">…</span>
+            <span class="cal-space"></span>
+            <button data-view="week" class="on">Woche</button>
+            <button data-view="month">Monat</button>
           </div>
+          <div class="cal-body" id="cal-body"></div>
         </div>
       </div>
 
@@ -340,6 +384,159 @@
       stage.style.transform = 'translate(-50%,-50%) scale(' + s + ')';
     }
     fitStage(); window.addEventListener('resize', fitStage);
+
+    // ── Kalender (Mitte): blätterbare Woche/Monat ───────────────────────
+    // Reiner Zeichner wie TUI/Monolith: die Datums-/Layer-Logik liegt im
+    // Backend (core/kalender.py → /api/calendar), wir klassifizieren nur view
+    // und blättern über ref. KI-frei, derselbe Endpoint für alle Kassetten.
+    (function () {
+      var body = document.getElementById('cal-body');
+      if (!body) return;
+      var labelEl = document.getElementById('cal-label'), subEl = document.getElementById('cal-sub');
+      var head = body.parentNode.querySelector('.cal-head');
+      var WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+      var view = 'week', ref = isoToday();
+      var adding = false, formDay = null, msg = '', msgWarn = false, lastData = {};
+
+      function isoToday() { return iso(new Date()); }
+      function iso(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+      function parseISO(s) { var p = String(s).split('-'); var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])); return isNaN(d.getTime()) ? null : d; }
+      function addDays(d, n) { var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
+      function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+      function dayEnts(days, k) { var v = days[k]; return Array.isArray(v) ? v : []; }
+      function entLabel(e) {
+        if (e && e.ausfall) return 'ℹ ' + ((e.label) || '?');
+        var t = (e && e.time && e.ende) ? (e.time + '–' + e.ende + ' ') : (e && e.time ? e.time + ' ' : '');
+        return t + ((e && e.label) || '?');
+      }
+
+      function load() {
+        fetch('/api/calendar?view=' + view + '&ref=' + ref)
+          .then(function (r) { return r.json(); }).then(render)
+          .catch(function () { body.innerHTML = '<div class="cw-empty">kalender nicht erreichbar.</div>'; });
+      }
+      function step(delta) {
+        var d = parseISO(ref) || new Date();
+        if (view === 'month') d = new Date(d.getFullYear(), d.getMonth() + delta, 1);
+        else d = addDays(d, 7 * delta);
+        ref = iso(d); load();
+      }
+
+      function render(d) {
+        d = d || lastData || {};
+        lastData = d;
+        var days = (d.days && typeof d.days === 'object') ? d.days : {};
+        var label = (typeof d.label === 'string') ? d.label : '';
+        var nalarm = Array.isArray(d.alarms) ? d.alarms.length : 0;
+        labelEl.innerHTML = esc(label) + (nalarm ? '<span class="cal-alarm" title="' + nalarm + ' offene erinnerung(en)">⚠' + nalarm + '</span>' : '');
+        subEl.textContent = view;
+        var top = '';
+        if (adding) {
+          var fday = formDay || (d.today || isoToday());
+          top += '<div class="cal-form">'
+            + '<input type="date" id="cf-day" value="' + esc(fday) + '" />'
+            + '<input id="cf-time" placeholder="HH:MM" size="5" maxlength="5" />'
+            + '<input id="cf-label" placeholder="Titel" style="flex:1;min-width:90px" />'
+            + '<input id="cf-ort" placeholder="Ort (optional)" size="12" />'
+            + '<button data-save="1">anlegen</button></div>';
+        }
+        if (msg) top += '<div class="cal-msg' + (msgWarn ? ' warn' : '') + '">' + esc(msg) + '</div>';
+        body.innerHTML = top + ((view === 'month') ? renderMonth(d, days) : renderWeek(d, days));
+        if (adding) { var lf = body.querySelector('#cf-label'); if (lf) lf.focus(); }
+      }
+
+      function addEntry() {
+        var day = (body.querySelector('#cf-day') || {}).value || '';
+        var label = ((body.querySelector('#cf-label') || {}).value || '').trim();
+        var time = ((body.querySelector('#cf-time') || {}).value || '').trim();
+        var ort = ((body.querySelector('#cf-ort') || {}).value || '').trim();
+        if (!label) { msg = 'Titel fehlt.'; msgWarn = true; render(); return; }
+        fetch('/api/calendar/entry', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ day: day, label: label, time: time, ort: ort })
+        }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (res) {
+            if (!res.ok) { msg = res.j.error || 'fehlgeschlagen.'; msgWarn = true; render(); return; }
+            adding = false;
+            var warn = (res.j.conflicts && res.j.conflicts.length) ? ' · ⚠ ' + res.j.conflicts.join(' · ') : '';
+            msg = 'angelegt: ' + label + warn; msgWarn = !!warn;
+            ref = day || ref; load();
+          }).catch(function () { msg = 'netzwerkfehler.'; msgWarn = true; render(); });
+      }
+      function delEntry(day, label, layer) {
+        fetch('/api/calendar/entry', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ day: day, label: label, layer: layer || undefined })
+        }).then(function (r) { return r.json(); }).then(function (j) {
+          msg = (j.deleted ? 'gelöscht: ' + label : 'nichts gelöscht.'); msgWarn = !j.deleted; load();
+        }).catch(function () { msg = 'netzwerkfehler.'; msgWarn = true; render(); });
+      }
+      function renderWeek(d, days) {
+        var start = parseISO(d.start), end = parseISO(d.end);
+        if (!start || !end) return '<div class="cw-empty">keine daten.</div>';
+        var out = ['<div class="cw">'], cur = start, g = 0;
+        while (cur <= end && g++ < 40) {
+          var k = iso(cur), es = dayEnts(days, k), isT = (k === d.today);
+          out.push('<div class="cw-day' + (isT ? ' today' : '') + '"><span class="cw-date">'
+            + WD[(cur.getDay() + 6) % 7] + ' ' + ('0' + cur.getDate()).slice(-2) + '.' + ('0' + (cur.getMonth() + 1)).slice(-2) + '.</span><span class="cw-ents">');
+          if (!es.length) out.push('<span class="cw-empty">—</span>');
+          else es.forEach(function (e) {
+            // Einmal-Termine bekommen ein ✕ zum Löschen; Routinen-Vorkommen nicht.
+            var del = (e && !e.ausfall && !e.recurring)
+              ? '<span class="cw-del" title="löschen" data-del-day="' + k + '" data-del-label="' + esc((e && e.label) || '') + '" data-del-layer="' + esc((e && e.layer) || '') + '">✕</span>'
+              : '';
+            out.push('<span class="cw-ent' + (e && e.ausfall ? ' ausfall' : '') + '" title="'
+              + esc(entLabel(e) + (e && e.ort ? ' @' + e.ort : '')) + '">'
+              + esc(entLabel(e) + (e && e.ort ? ' @' + e.ort : '')) + del + '</span>');
+          });
+          out.push('</span></div>');
+          cur = addDays(cur, 1);
+        }
+        out.push('</div>'); return out.join('');
+      }
+      function renderMonth(d, days) {
+        var start = parseISO(d.start), end = parseISO(d.end), first = parseISO(d.first), last = parseISO(d.last);
+        if (!start || !end) return '<div class="cw-empty">keine daten.</div>';
+        var out = ['<div class="cm">'];
+        WD.forEach(function (w) { out.push('<div class="cm-wd">' + w + '</div>'); });
+        var cur = start, g = 0;
+        while (cur <= end && g++ < 50) {
+          var k = iso(cur), es = dayEnts(days, k), isT = (k === d.today);
+          var isOut = (first && cur < first) || (last && cur > last);
+          out.push('<div class="cm-cell' + (isT ? ' today' : '') + (isOut ? ' out' : '') + '"><span class="cm-num">' + cur.getDate() + '</span>');
+          if (es.length) {
+            var marks = es.slice(0, 3).map(function (e) { return esc(entLabel(e)); });
+            out.push('<span class="cm-mark" title="' + esc(es.map(entLabel).join('\n')) + '">'
+              + marks.join('<br>') + (es.length > 3 ? '<br>+' + (es.length - 3) : '') + '</span>');
+          }
+          out.push('</div>');
+          cur = addDays(cur, 1);
+        }
+        out.push('</div>'); return out.join('');
+      }
+
+      head.addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        if (b.hasAttribute('data-nav')) { msg = ''; step(Number(b.getAttribute('data-nav'))); }
+        else if (b.hasAttribute('data-today')) { msg = ''; ref = isoToday(); load(); }
+        else if (b.hasAttribute('data-add')) { adding = !adding; msg = ''; if (adding && !formDay) formDay = (lastData && lastData.today) || isoToday(); b.classList.toggle('on', adding); render(); }
+        else if (b.hasAttribute('data-view')) {
+          var v = b.getAttribute('data-view');
+          if (v !== view) { msg = ''; view = v; [].forEach.call(head.querySelectorAll('[data-view]'), function (x) { x.classList.toggle('on', x === b); }); load(); }
+        }
+      });
+      // Save + Delete liegen im (JS-gerenderten) Body → Event-Delegation.
+      body.addEventListener('click', function (e) {
+        var s = e.target.closest('[data-save]'); if (s) { addEntry(); return; }
+        var d = e.target.closest('[data-del-label]');
+        if (d) { e.stopPropagation(); delEntry(d.getAttribute('data-del-day'), d.getAttribute('data-del-label'), d.getAttribute('data-del-layer')); }
+      });
+      body.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && e.target && /^cf-(label|time|ort)$/.test(e.target.id)) addEntry();
+      });
+      load();
+      setInterval(function () { if (!adding) load(); }, 60000);   // minütlich auffrischen, aber nicht während der Eingabe
+    })();
 
     // ── Loops starten ───────────────────────────────────────────────────
     pollState(); setInterval(pollState, 1000);

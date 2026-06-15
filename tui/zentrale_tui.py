@@ -378,6 +378,21 @@ def selftest():
         ser = graph_series(g.get("type"), rows)
         print("    %-16s :" % g.get("name"), "[%s]" % g.get("type"),
               blockspark(ser), "zuletzt", graph_last(g, rows))
+    def _lcount(items):           # erledigt/gesamt rekursiv über alle Ebenen
+        d = t = 0
+        for i in items or []:
+            if not isinstance(i, dict):
+                continue
+            t += 1
+            d += 1 if i.get("done") else 0
+            cd, ct = _lcount(i.get("items"))
+            d += cd; t += ct
+        return d, t
+    ll = store._get("/api/lists") or []
+    print("  listen             :", [l.get("id") for l in ll] or "—")
+    for l in ll:
+        done, total = _lcount(l.get("items"))
+        print("    %-16s :" % l.get("name"), "%d/%d erledigt" % (done, total))
     last = state.get("logs", [])[-1] if state.get("logs") else None
     if last:
         print("  letzte log-zeile    :", last.get("time"), last.get("text"))
@@ -394,7 +409,9 @@ TUI_KEYS = [
     ("q",   "beenden"),
     ("t",   "Theme wechseln (auto/hell/dunkel)"),
     ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen"),
-    ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · o=Chokepoints · w=Fenster"),
+    ("l",   "Listen (Mitte): anlegen · einträge abhaken (space) / löschen"),
+    ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · o=Handelsrouten · w=Fenster"),
+    ("c",   "Kalender (Mitte): ←→ blättern · ↑↓ wählen · a neu · d löschen · v Woche/Monat · 0 heute"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
@@ -564,6 +581,32 @@ def run_ui(stdscr, store):
          "input2": "", "pstage": 0,    # input2/pstage: Perioden-Eingabe (von→bis)
          "confirm": False}             # Lösch-Nachfrage aktiv (Mini-Dialog)
 
+    # ── Listen-Werkzeug (füllt die MITTE-Box, Taste 'l') ────────────────
+    # Pendant zum Graph-Werkzeug, aber für abhakbare Todo-/Sammel-Listen.
+    # Geteilte Logik (core/lists.py + /api/lists), hier in der TUI verbaut.
+    #   active : Werkzeug hat den Fokus
+    #   view   : "list" (Listen wählen) | "new" (anlegen) | "view" (Einträge)
+    #            | "nest" (Liste in eine andere einordnen)
+    #   sel    : ausgewählte Liste (in "list"); isel: ausgewählter Eintrag (in "view")
+    #   adding : in "view" tippen wir gerade einen neuen Eintrag (input)
+    #   addparent: id des Eltern-Eintrags beim Tippen (None = oberste Ebene)
+    #   imode  : was die Eingabezeile tut — "add"|"sub"|"rename"
+    #   edit_iid: beim Umbenennen die id des Eintrags (imode "rename")
+    #   lrename: in "new" benennen wir eine bestehende Liste um (id) statt neu
+    #   move_iid/nsel: zu verschiebender Eintrag + Zielauswahl ("move"/"move_new")
+    #   nest_src/nsel: Quell-Liste + Auswahl-Index beim Einordnen ("nest")
+    # Einträge sind Mischtypen: jeder kann eigene Unterpunkte ('items') tragen,
+    # die TUI rendert/navigiert den Baum flachgeklopft (l_flatten).
+    L = {"active": False, "view": "list", "lists": [], "sel": 0,
+         "def": None, "isel": 0, "adding": False, "input": "", "msg": "",
+         "confirm": False,             # Lösch-Nachfrage für ganze Liste
+         "addparent": None,            # Eltern-id beim Anhängen (None = top)
+         "imode": "add",               # Eingabezeile: add|sub|rename
+         "edit_iid": None,             # umzubenennender Eintrag (imode rename)
+         "lrename": None,              # umzubenennende Liste (in "new")
+         "move_iid": None,             # zu verschiebender Eintrag ("move")
+         "nest_src": None, "nsel": 0}  # Einordnen/Verschieben: Quelle + Zielwahl
+
     # ── Karte (füllt die MITTE-Box, Taste 'm') ──────────────────────────
     # Maps-System Schritt 1: grobe Basiskarte (Küsten 1:110m). Die TUI ist
     # ein reiner Zeichner — alle Geo-Logik liegt im Backend (core/map/ →
@@ -580,6 +623,23 @@ def run_ui(stdscr, store):
          "odata": None,         # letzte /api/map/layer/trade-Antwort (None ⇒ neu holen)
          "ogrid": None}         # (cols,rows), für die odata geholt wurde
     MAP_CHOKE = "◆"          # Chokepoint-Marker (Handelsrouten-Overlay)
+    MAP_ROUTE = "·"          # Schifffahrtsrouten-Pfad (dezent, unter den Markern)
+
+    # ── Kalender (füllt die MITTE-Box, Taste 'c') ──────────────────────
+    # Wie die Karte ein reiner Zeichner: alle Datums-/Layer-Logik liegt im
+    # Backend (core/kalender.py → /api/calendar). Die TUI hält nur die Ansicht
+    # (Woche|Monat) + das Referenzdatum zum Blättern und die letzte Antwort.
+    #   active : Kalender hat den Fokus (Blätter-/Umschalt-Tasten gehen hierher)
+    #   view   : "week" (Mo-So-Liste) | "month" (Monatsgitter)
+    #   ref    : ISO-Datum irgendwo im gezeigten Zeitraum (Blätter-Anker)
+    #   data   : letzte /api/calendar-Antwort (None ⇒ beim Zeichnen neu holen)
+    #   mode   : "view" (blättern/auswählen) | "add" (Termin-Eingabe, gestaffelt)
+    #   sel    : Auswahl-Index unter den löschbaren Einmal-Terminen (Wochenansicht)
+    #   astage : Add-Stufe 0=Datum 1=Zeit 2=Titel; aday/atime/alabel = Eingaben
+    K = {"active": False, "view": "week", "ref": date.today().isoformat(),
+         "data": None, "msg": "", "mode": "view", "sel": 0, "confirmdel": False,
+         "astage": 0, "aday": "", "atime": "", "alabel": "", "amsg": ""}
+    KAL_WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
     def m_fetch(cols, rows):
         """Karte fürs aktuelle Viewport+Raster synchron holen (localhost, wenige
@@ -602,12 +662,13 @@ def run_ui(stdscr, store):
             M["msg"] = "karte: backend?"
 
     def m_fetch_overlay(cols, rows):
-        """Handelsrouten-Overlay (Sub-Layer Chokepoints) fürs aktuelle Viewport
-        holen — projizierte Marker + Provenienz von /api/map/layer/trade. Wie
-        m_fetch synchron; Fehler-Marker statt Dauer-Refetch bei totem Backend."""
+        """Handelsrouten-Overlay (Komposit) fürs aktuelle Viewport holen:
+        Routenlinien + Chokepoint-Marker + Provenienz von /api/map/layer/trade
+        (ohne sub = beide). Wie m_fetch synchron; Fehler-Marker statt
+        Dauer-Refetch bei totem Backend."""
         try:
-            q = ("/api/map/layer/trade?sub=chokepoints"
-                 "&cx=%.5f&cy=%.5f&zoom=%.2f&cols=%d&rows=%d&aspect=0.5"
+            q = ("/api/map/layer/trade?"
+                 "cx=%.5f&cy=%.5f&zoom=%.2f&cols=%d&rows=%d&aspect=0.5"
                  % (M["cx"], M["cy"], M["zoom"], cols, rows))
             M["odata"] = api_call(q, timeout=2.0) or {"failed": True}
         except Exception:
@@ -704,6 +765,81 @@ def run_ui(stdscr, store):
                 G["msg"] = "eingetragen: %g" % v
         except Exception:
             G["msg"] = "speichern fehlgeschlagen"
+
+    def l_load():
+        """Listen-Definitionen (inkl. Einträge) frisch ziehen."""
+        try:
+            L["lists"] = api_call("/api/lists") or []
+        except Exception:
+            L["lists"] = []
+        if L["sel"] >= len(L["lists"]):
+            L["sel"] = max(0, len(L["lists"]) - 1)
+
+    def l_flatten(items, depth=0, out=None):
+        """Den Eintrags-Baum in eine flache [(item, tiefe), …]-Liste klopfen,
+        Eltern vor Kindern. Cursor (isel) und Rendering laufen über diese
+        flache Sicht; die Tiefe steuert nur die Einrückung."""
+        if out is None:
+            out = []
+        for it in items or []:
+            if not isinstance(it, dict):
+                continue
+            out.append((it, depth))
+            kids = it.get("items")
+            if isinstance(kids, list) and kids:
+                l_flatten(kids, depth + 1, out)
+        return out
+
+    def l_count(items):
+        """Rekursiv (erledigt, gesamt) über alle Ebenen zählen."""
+        d = t = 0
+        for it in items or []:
+            if not isinstance(it, dict):
+                continue
+            t += 1
+            if it.get("done"):
+                d += 1
+            kids = it.get("items")
+            if isinstance(kids, list):
+                cd, ct = l_count(kids)
+                d += cd
+                t += ct
+        return d, t
+
+    def l_flat_index(iid):
+        """Flach-Index des Eintrags mit iid in der offenen Liste (0 wenn weg)."""
+        flat = l_flatten(L["def"].get("items")) if L["def"] else []
+        for i, (it, _d) in enumerate(flat):
+            if it.get("id") == iid:
+                return i
+        return 0
+
+    def l_find_item(items, iid):
+        """Den Eintrag mit iid irgendwo im Baum (oder None)."""
+        for it, _d in l_flatten(items):
+            if it.get("id") == iid:
+                return it
+        return None
+
+    def l_move_targets():
+        """Listen, in die der gewählte Eintrag wandern darf — alle außer der
+        gerade offenen (raus = in eine ANDERE Liste)."""
+        cur = L["def"]["id"] if L["def"] else None
+        return [l for l in L["lists"] if isinstance(l, dict) and l.get("id") != cur]
+
+    def l_sync_def():
+        """Nach Änderungen die offene Liste aus der frisch geladenen Registry
+        neu greifen (Einträge können dazugekommen / weg sein)."""
+        if not L["def"]:
+            return
+        cur = next((x for x in L["lists"] if x.get("id") == L["def"]["id"]), None)
+        L["def"] = cur
+        if cur is None:                       # Liste verschwunden → zurück zur Übersicht
+            L["view"] = "list"
+            return
+        n = len(l_flatten(cur.get("items")))
+        if L["isel"] >= n:
+            L["isel"] = max(0, n - 1)
 
     def safe_addstr(y, x, text, attr=0):
         h, w = stdscr.getmaxyx()
@@ -883,6 +1019,131 @@ def run_ui(stdscr, store):
                 addclip(dy + 1, dx + 2, q, dw - 4, C["bright"])
                 addclip(dy + 2, dx + 2, "j/enter = ja · sonst abbrechen", dw - 4, C["faint"])
 
+    def draw_list_tool(by, bx, bh, bw):
+        """Inhalt der MITTE-Box, wenn das Listen-Werkzeug Fokus hat."""
+        ix, iw = bx + 2, bw - 4
+        bottom = by + bh - 2          # Hinweiszeile unten in der Box
+        if iw < 8:
+            return
+
+        if L["view"] == "new":
+            ren = L["lrename"] is not None
+            addclip(by + 1, ix, "LISTE UMBENENNEN" if ren else "NEUE LISTE", iw, C["bright"])
+            addclip(by + 3, ix, "name: " + L["input"] + "_", iw, C["bright"])
+            tip = "enter umbenennen · esc zurück  " if ren else "enter anlegen · esc zurück  "
+            addclip(bottom, ix, (tip + L["msg"]).strip(), iw, C["faint"])
+
+        elif L["view"] == "view" and L["def"]:
+            d = L["def"]
+            flat = l_flatten(d.get("items"))
+            done, total = l_count(d.get("items"))
+            addclip(by + 1, ix, "%s  (%d/%d)" % (str(d.get("name") or ""), done, total), iw, C["bright"])
+            safe_addstr(by + 1, bx + bw - 9, "[a neu]", C["acc"])
+            safe_addstr(by + 2, ix, "─" * iw, C["faint"])
+            input_row = by + bh - 3
+            list_bottom = (input_row - 1) if L["adding"] else bottom
+            yy = by + 3
+            if not flat:
+                addclip(yy, ix, "noch leer — 'a' hängt was an", iw, C["faint"])
+            else:
+                # Fenster um den Cursor, damit lange Listen scrollen statt abzuschneiden
+                avail = max(1, list_bottom - yy)
+                start = max(0, min(L["isel"] - avail + 1, len(flat) - avail)) if len(flat) > avail else 0
+                for off, (it, depth) in enumerate(flat[start:start + avail]):
+                    sel = (start + off == L["isel"])
+                    box = "[x]" if it.get("done") else "[ ]"
+                    kids = it.get("items")
+                    suffix = ""
+                    if isinstance(kids, list) and kids:
+                        cd, ct = l_count(kids)        # Unterpunkte-Fortschritt
+                        suffix = "  (%d/%d)" % (cd, ct)
+                    line = "%s %s%s %s%s" % ("›" if sel else " ", "  " * depth,
+                                             box, str(it.get("text") or ""), suffix)
+                    attr = C["faint"] if it.get("done") else (C["bright"] if sel else C["dim"])
+                    addclip(yy, ix, line, iw, attr)
+                    yy += 1
+            if L["adding"]:
+                lbl = {"sub": "unterpunkt", "rename": "umbenennen"}.get(L["imode"], "neu")
+                tip = "enter umbenennen" if L["imode"] == "rename" else "enter anhängen"
+                addclip(input_row, ix, lbl + ": " + L["input"] + "_", iw, C["bright"])
+                addclip(bottom, ix, (tip + " · esc abbrechen  " + L["msg"]).strip(), iw, C["faint"])
+            else:
+                addclip(bottom, ix, "space hak · a neu · s sub · r name · m raus · d weg · esc zu", iw, C["faint"])
+
+        elif L["view"] == "nest":          # Liste in eine andere einordnen
+            src = next((x for x in L["lists"] if x.get("id") == L["nest_src"]), None)
+            nm = str(src.get("name") if isinstance(src, dict) else "?")
+            addclip(by + 1, ix, "»%s« einordnen unter:" % nm[:18], iw, C["bright"])
+            safe_addstr(by + 2, ix, "─" * iw, C["faint"])
+            cands = [l for l in L["lists"]
+                     if isinstance(l, dict) and l.get("id") != L["nest_src"]]
+            yy = by + 3
+            if not cands:
+                addclip(yy, ix, "keine andere Liste da", iw, C["faint"])
+            else:
+                avail = max(1, bottom - yy)
+                start = max(0, min(L["nsel"] - avail + 1, len(cands) - avail)) if len(cands) > avail else 0
+                for off, l in enumerate(cands[start:start + avail]):
+                    sel = (start + off == L["nsel"])
+                    addclip(yy, ix, "%s %s" % ("›" if sel else " ", str(l.get("name") or "")),
+                            iw, C["bright"] if sel else C["dim"])
+                    yy += 1
+            addclip(bottom, ix, ("↑↓ wählen · enter einordnen · esc abbrechen  " + L["msg"]).strip(), iw, C["faint"])
+
+        elif L["view"] == "move" and L["def"]:   # Eintrag raus in eine andere Liste
+            it = l_find_item(L["def"].get("items"), L["move_iid"])
+            nm = str(it.get("text") if isinstance(it, dict) else "?")
+            addclip(by + 1, ix, "»%s« verschieben nach:" % nm[:18], iw, C["bright"])
+            safe_addstr(by + 2, ix, "─" * iw, C["faint"])
+            # Zielauswahl: erst „neue Liste", dann alle anderen Listen.
+            opts = ["[+ neue Liste]"] + [str(l.get("name") or "")
+                                         for l in l_move_targets()]
+            yy = by + 3
+            avail = max(1, bottom - yy)
+            start = max(0, min(L["nsel"] - avail + 1, len(opts) - avail)) if len(opts) > avail else 0
+            for off, label in enumerate(opts[start:start + avail]):
+                sel = (start + off == L["nsel"])
+                addclip(yy, ix, "%s %s" % ("›" if sel else " ", label),
+                        iw, C["bright"] if sel else C["dim"])
+                yy += 1
+            addclip(bottom, ix, ("↑↓ wählen · enter verschieben · esc abbrechen  " + L["msg"]).strip(), iw, C["faint"])
+
+        elif L["view"] == "move_new":            # Name für die neue Ziel-Liste
+            addclip(by + 1, ix, "NEUE LISTE (ziel)", iw, C["bright"])
+            addclip(by + 3, ix, "name: " + L["input"] + "_", iw, C["bright"])
+            addclip(bottom, ix, ("enter anlegen+verschieben · esc zurück  " + L["msg"]).strip(), iw, C["faint"])
+
+        else:  # "list"
+            addclip(by + 1, ix, "LISTEN", iw, C["bright"])
+            safe_addstr(by + 1, bx + bw - 9, "[n neu]", C["acc"])
+            safe_addstr(by + 2, ix, "─" * iw, C["faint"])
+            yy = by + 3
+            if not L["lists"]:
+                addclip(yy, ix, "noch keine — 'n' legt eine an", iw, C["faint"])
+            else:
+                for i, l in enumerate(L["lists"]):
+                    if yy >= bottom:
+                        break
+                    if not isinstance(l, dict):
+                        continue
+                    sel = (i == L["sel"])
+                    done, total = l_count(l.get("items"))
+                    line = "%s %-16s %d/%d" % (
+                        "›" if sel else " ", str(l.get("name") or "")[:16], done, total)
+                    addclip(yy, ix, line, iw, C["bright"] if sel else C["dim"])
+                    yy += 1
+            addclip(bottom, ix, "enter öffnen · n neu · r name · > einordnen · d weg · esc zu", iw, C["faint"])
+
+            if L["confirm"] and L["lists"]:        # Mini-Dialog über die Liste legen
+                nm = str(L["lists"][L["sel"]].get("name") or "")
+                q = "»%s« löschen?" % nm[:18]
+                dw = min(iw, max(len(q), 16) + 4)
+                dx = bx + (bw - dw) // 2
+                dy = by + bh // 2 - 2
+                draw_box(dy, dx, 4, dw, "LÖSCHEN", C["warn"])
+                addclip(dy + 1, dx + 2, q, dw - 4, C["bright"])
+                addclip(dy + 2, dx + 2, "j/enter = ja · sonst abbrechen", dw - 4, C["faint"])
+
     def draw_map(by, bx, bh, bw):
         """Inhalt der MITTE-Box, wenn die Karte Fokus hat. Holt bei Bedarf
         frische Daten (Resize/Pan/Zoom) und druckt die fertig gefüllte
@@ -904,8 +1165,9 @@ def run_ui(stdscr, store):
         for r, row in enumerate(d["braille"][:map_ih]):
             addclip(oy + r, ox, row, iw, C["acc"])
 
-        # Handelsrouten-Overlay (Achse 2, Sub-Layer Chokepoints): leuchtende
-        # Marker an den Engstellen + Detail der dem Fadenkreuz nächsten Stelle.
+        # Handelsrouten-Overlay (Achse 2, Komposit): erst die Routenlinien (dezent),
+        # dann die leuchtenden Chokepoint-Marker + Detail der dem Fadenkreuz
+        # nächsten Engstelle.
         focus = None        # (name, today-total, top-industrie) nahe der Mitte
         ovintage = None
         if M["overlay"]:
@@ -914,6 +1176,25 @@ def run_ui(stdscr, store):
             od = M["odata"]
             if od and not od.get("failed"):
                 ovintage = od.get("vintage")
+                # Routenlinien per Bresenham (dezenter Pfad-Glyph).
+                for line in od.get("lines", []):
+                    for i in range(len(line) - 1):
+                        x0, y0 = int(round(line[i][0])), int(round(line[i][1]))
+                        x1, y1 = int(round(line[i + 1][0])), int(round(line[i + 1][1]))
+                        dx, dy = abs(x1 - x0), abs(y1 - y0)
+                        sxx = 1 if x0 < x1 else -1
+                        syy = 1 if y0 < y1 else -1
+                        err = dx - dy
+                        while True:
+                            if 0 <= x0 < iw and 0 <= y0 < map_ih:
+                                safe_addstr(oy + y0, ox + x0, MAP_ROUTE, C["faint"])
+                            if x0 == x1 and y0 == y1:
+                                break
+                            e2 = 2 * err
+                            if e2 > -dy:
+                                err -= dy; x0 += sxx
+                            if e2 < dx:
+                                err += dx; y0 += syy
                 ccol, crow = iw / 2.0, map_ih / 2.0
                 best = None
                 for p in od.get("points", []):
@@ -939,12 +1220,279 @@ def run_ui(stdscr, store):
                 nm, val, _ind = focus
                 info += " · ◆%s %s" % (nm, "—" if val is None else val)
             else:
-                info += " · ◆Chokepoints %s" % (ovintage or "?")
+                info += " · Handelsrouten %s" % (ovintage or "?")
         addclip(by + bh - 2, ox, info, iw, C["bright"])
         hint = "↑↓←→ +/− 0·o·w·esc"
         if M["msg"]:
             hint = M["msg"]
         addclip(by + bh - 2, ox + iw - len(hint), hint, len(hint), C["faint"])
+
+    def k_fetch():
+        """Kalender fürs aktuelle view+ref synchron holen (localhost, wenige ms).
+        Fehler-Marker statt None, damit draw_calendar nicht bei totem Backend
+        jeden Frame neu anfragt — erst Blättern/Umschalten löst einen neuen
+        Versuch aus (setzt data=None)."""
+        try:
+            resp = api_call("/api/calendar?view=%s&ref=%s"
+                            % (K["view"], K["ref"]), timeout=2.0)
+            # Nur ein dict ist zeichenbar; null/Liste/String (auch von einem
+            # kaputten Backend) → Fehler-Marker, sonst crasht draw_calendar an
+            # .get(). Wie der Karten-Pfad: truthy Marker statt None verhindert
+            # Dauer-Refetch jeden Frame.
+            K["data"] = resp if isinstance(resp, dict) else {"failed": True}
+            K["msg"] = "" if isinstance(resp, dict) else "kalender: backend?"
+        except Exception:
+            K["data"] = {"failed": True}
+            K["msg"] = "kalender: backend?"
+
+    def k_step(delta):
+        """Eine Periode vor/zurück: Woche = ±7 Tage, Monat = ±1 Monat (auf den
+        1. normalisiert, sonst springt z.B. der 31. krumm)."""
+        r = date.fromisoformat(K["ref"])
+        if K["view"] == "month":
+            m = r.month - 1 + delta
+            r = date(r.year + m // 12, m % 12 + 1, 1)
+        else:
+            r = r + timedelta(days=7 * delta)
+        K["ref"] = r.isoformat()
+        K["data"] = None
+
+    def k_toggle():
+        K["view"] = "month" if K["view"] == "week" else "week"
+        K["data"] = None
+
+    def k_today():
+        K["ref"] = date.today().isoformat()
+        K["data"] = None
+
+    def k_deletable():
+        """Flache Liste der LÖSCHBAREN Termine der aktuellen Antwort in Render-
+        Reihenfolge: (iso, label, layer) je Einmal-Eintrag (keine Routinen, keine
+        Ausfälle). Quelle für Auswahl (K['sel']) + Löschen. Defensiv gegen
+        kaputte Backend-Daten (alles über JSON)."""
+        d = K["data"]
+        if not isinstance(d, dict):
+            return []
+        days = d.get("days")
+        if not isinstance(days, dict):
+            return []
+        out = []
+        for iso in sorted(days.keys()):
+            ents = days.get(iso)
+            if not isinstance(ents, list):
+                continue
+            for e in ents:
+                if isinstance(e, dict) and not e.get("recurring") and not e.get("ausfall"):
+                    out.append((iso, e.get("label", ""), e.get("layer", "termine")))
+        return out
+
+    def k_parse_day(s):
+        """Tippeingabe → ISO-Datum. Akzeptiert 'TT.MM', 'TT.MM.JJJJ',
+        'JJJJ-MM-TT'; leer = heute; Jahr aus dem Blätter-Anker, wenn nur TT.MM.
+        None bei Unsinn (Aufrufer meldet 'datum?')."""
+        s = (s or "").strip()
+        if not s:
+            return date.today().isoformat()
+        parts = [p for p in s.replace("-", ".").replace("/", ".").split(".") if p]
+        try:
+            if len(parts) == 3 and len(parts[0]) == 4:        # JJJJ.MM.TT
+                y, m, dd = int(parts[0]), int(parts[1]), int(parts[2])
+            elif len(parts) == 3:                              # TT.MM.JJJJ
+                dd, m, y = int(parts[0]), int(parts[1]), int(parts[2])
+                if y < 100:
+                    y += 2000
+            elif len(parts) == 2:                              # TT.MM (Jahr aus ref)
+                dd, m = int(parts[0]), int(parts[1])
+                y = date.fromisoformat(K["ref"]).year
+            else:
+                return None
+            return date(y, m, dd).isoformat()
+        except (ValueError, IndexError):
+            return None
+
+    def k_add_save():
+        """Add-Formular absenden: validieren, POST /api/calendar/entry, dann
+        zurück in die View (Konflikt-Hinweis aus der Antwort mitnehmen)."""
+        day = k_parse_day(K["aday"])
+        if day is None:
+            K["amsg"] = "datum? TT.MM"; return
+        label = K["alabel"].strip()
+        if not label:
+            K["amsg"] = "titel fehlt"; return
+        time = K["atime"].strip() or None
+        if time and parse_clock(time) is None:
+            K["amsg"] = "zeit? HH:MM (leer=ganztags)"; return
+        body = {"day": day, "label": label}
+        if time:
+            body["time"] = time
+        try:
+            res = api_call("/api/calendar/entry", method="POST", body=body)
+            conf = (res or {}).get("conflicts") or []
+            K["msg"] = "angelegt: " + label + (" ⚠" if conf else "")
+            K["ref"] = day; K["data"] = None       # zur Woche des neuen Termins
+            K["mode"] = "view"; K["astage"] = 0
+            K["aday"] = K["atime"] = K["alabel"] = K["amsg"] = ""
+        except Exception:
+            K["amsg"] = "speichern fehlgeschlagen"
+
+    def k_delete_sel(item):
+        day, label, layer = item
+        try:
+            res = api_call("/api/calendar/entry", method="DELETE",
+                           body={"day": day, "label": label, "layer": layer})
+            n = (res or {}).get("deleted", 0)
+            K["msg"] = ("gelöscht: " + label) if n else "nichts gelöscht"
+        except Exception:
+            K["msg"] = "löschen fehlgeschlagen"
+        K["data"] = None
+
+    def _k_entry_line(e):
+        """Eine Termin-Zeile kompakt: Zeit(spanne) + Label (+ Ort). Ausfall
+        (Ferien) als ℹ-Hinweis statt Termin — wie render_range_for_tool."""
+        if e.get("ausfall"):
+            return "ℹ %s fällt aus" % e.get("label", "?")
+        if e.get("time") and e.get("ende"):
+            t = "%s-%s " % (e["time"], e["ende"])
+        elif e.get("time"):
+            t = "%s " % e["time"]
+        else:
+            t = ""
+        ort = " @%s" % e["ort"] if e.get("ort") else ""
+        return "%s%s%s" % (t, e.get("label", "?"), ort)
+
+    def draw_calendar(by, bx, bh, bw):
+        """Inhalt der MITTE-Box, wenn der Kalender Fokus hat. Holt bei Bedarf
+        frische Daten (Blättern/Umschalten) und zeichnet Woche (Liste) oder
+        Monat (Gitter) — die Datums-Logik kam fertig vom Backend."""
+        ix, iw = bx + 2, bw - 4
+        bottom = by + bh - 2          # Status-/Hilfezeile unten in der Box
+        if iw < 8:
+            return
+        if (not K["data"]) or K["data"].get("_for") != (K["view"], K["ref"]):
+            k_fetch()
+            if isinstance(K["data"], dict):
+                K["data"]["_for"] = (K["view"], K["ref"])
+        d = K["data"]
+        if not d or d.get("failed"):
+            addclip(by + 1, ix, K["msg"] or "lade kalender…", iw, C["faint"])
+            return
+
+        # Defensiv wie der ganze Render-Pfad: alles kommt über HTTP/JSON, ein
+        # kaputtes Backend kann statt dict/list auch String/Zahl/None liefern.
+        days = d.get("days")
+        if not isinstance(days, dict):
+            days = {}
+        today = d.get("today")
+        label = d.get("label", "")
+        if not isinstance(label, str):
+            label = ""
+        alarms = d.get("alarms")
+        nalarm = len(alarms) if isinstance(alarms, list) else 0
+        head = ("Woche " if K["view"] == "week" else "Monat ") + label
+        if nalarm:
+            head += "  ⚠%d" % nalarm
+        addclip(by + 1, ix, head, iw, C["bright"])
+
+        # Add-Formular hat Vorrang: füllt den Body, wenn mode == "add".
+        if K["mode"] == "add":
+            fy = by + 3
+            cz = "_"                        # Cursor-Marker an der aktiven Stufe
+            addclip(fy, ix, "NEUER TERMIN", iw, C["bright"])
+            addclip(fy + 2, ix, "Datum: " + K["aday"] + (cz if K["astage"] == 0 else "")
+                    + "   (TT.MM, leer=heute)", iw, C["bright"] if K["astage"] == 0 else C["dim"])
+            addclip(fy + 3, ix, "Zeit:  " + K["atime"] + (cz if K["astage"] == 1 else "")
+                    + "   (HH:MM, leer=ganztags)", iw, C["bright"] if K["astage"] == 1 else C["dim"])
+            addclip(fy + 4, ix, "Titel: " + K["alabel"] + (cz if K["astage"] == 2 else ""),
+                    iw, C["bright"] if K["astage"] == 2 else C["dim"])
+            addclip(bottom, ix, ("enter weiter/anlegen · esc zurück  " + K["amsg"]).strip(),
+                    iw, C["faint"])
+            return
+
+        if K["view"] == "month":
+            # Monatsgitter: 7 Spalten Mo-So, bis zu 6 Wochenzeilen.
+            colw = max(3, iw // 7)
+            for c, wd in enumerate(KAL_WD):
+                addclip(by + 2, ix + c * colw, wd, colw, C["faint"])
+            try:
+                start = date.fromisoformat(d["start"]); end = date.fromisoformat(d["end"])
+                first = date.fromisoformat(d["first"]); last = date.fromisoformat(d["last"])
+            except (KeyError, ValueError):
+                return
+            row, cur = by + 3, start
+            while cur <= end and row < bottom:
+                c = cur.weekday()
+                iso = cur.isoformat()
+                in_month = first <= cur <= last
+                ents = days.get(iso)
+                has = bool(ents) and isinstance(ents, list)
+                cell = "%2d" % cur.day + ("•" if has else "")
+                if iso == today:
+                    attr = C["bright"] | curses.A_REVERSE
+                elif not in_month:
+                    attr = C["faint"]
+                elif has:
+                    attr = C["acc"]
+                else:
+                    attr = C["dim"]
+                addclip(row, ix + c * colw, cell, colw, attr)
+                if c == 6:                 # Sonntag → nächste Zeile
+                    row += 1
+                cur += timedelta(days=1)
+        else:
+            # Wochenliste: pro Tag eine Kopfzeile, Termine eingerückt darunter.
+            # Löschbare Einmal-Termine sind auswählbar (›-Cursor, K["sel"]).
+            try:
+                start = date.fromisoformat(d["start"]); end = date.fromisoformat(d["end"])
+            except (KeyError, ValueError):
+                return
+            deletable = k_deletable()
+            if K["sel"] >= len(deletable):
+                K["sel"] = max(0, len(deletable) - 1)
+            di = 0                          # läuft über die löschbaren Termine
+            yy, cur = by + 2, start
+            while cur <= end and yy < bottom:
+                iso = cur.isoformat()
+                ents = days.get(iso)
+                if not isinstance(ents, list):
+                    ents = []
+                is_today = (iso == today)
+                hdr = "%s %s" % (KAL_WD[cur.weekday()], cur.strftime("%d.%m."))
+                addclip(yy, ix, hdr + ("  ‹heute›" if is_today else ""), iw,
+                        C["bright"] if is_today else C["acc"])
+                yy += 1
+                if not ents:
+                    addclip(yy, ix + 2, "—", iw - 2, C["faint"]); yy += 1
+                for e in ents:
+                    if yy >= bottom:
+                        break
+                    if not isinstance(e, dict):
+                        continue
+                    is_del = not e.get("recurring") and not e.get("ausfall")
+                    selected = is_del and di == K["sel"]
+                    mark = "› " if selected else "  "
+                    if selected:
+                        attr = C["bright"] | curses.A_REVERSE
+                    elif e.get("ausfall"):
+                        attr = C["faint"]
+                    else:
+                        attr = C["dim"]
+                    addclip(yy, ix, mark + _k_entry_line(e), iw, attr)
+                    if is_del:
+                        di += 1
+                    yy += 1
+                cur += timedelta(days=1)
+
+        info = "%s · %s" % ("woche" if K["view"] == "week" else "monat", label)
+        addclip(bottom, ix, info, iw, C["bright"])
+        if K["confirmdel"]:
+            hint = "löschen? j/n"
+        elif K["msg"]:
+            hint = K["msg"]
+        elif K["view"] == "week":
+            hint = "↑↓ wählen · a neu · d löschen · ←→ blättern · v monat · esc"
+        else:
+            hint = "←→ blättern · v woche · a neu · 0 heute · esc"
+        addclip(bottom, ix + iw - len(hint), hint, len(hint), C["faint"])
 
     while True:
         ch = stdscr.getch()
@@ -1080,6 +1628,232 @@ def run_ui(stdscr, store):
                         G[cur] = G[cur][:-1]
                     elif (48 <= ch <= 57 or ch == ord(":")) and len(G[cur]) < 5:
                         G[cur] += chr(ch)
+        elif L["active"]:                      # Listen-Werkzeug hat den Fokus
+            if L["view"] == "list":
+                if L["confirm"]:                              # Lösch-Nachfrage offen
+                    if ch in (ord("y"), ord("Y"), ord("j"), ord("J"),
+                              10, 13, curses.KEY_ENTER):
+                        try:
+                            api_call("/api/lists/" + L["lists"][L["sel"]]["id"], method="DELETE")
+                            L["msg"] = "gelöscht"
+                        except Exception:
+                            L["msg"] = "löschen fehlgeschlagen"
+                        L["confirm"] = False
+                        l_load()
+                    elif ch != -1:                            # alles andere → abbrechen
+                        L["confirm"] = False; L["msg"] = ""
+                elif ch in (27, ord("l"), ord("L")):           # Esc/l → Werkzeug zu
+                    L["active"] = False
+                elif ch in (ord("q"), ord("Q")):               # q → ganze TUI beenden
+                    break
+                elif ch in (curses.KEY_UP, ord("k")):
+                    L["sel"] = max(0, L["sel"] - 1)
+                elif ch in (curses.KEY_DOWN, ord("j")):
+                    L["sel"] = min(max(0, len(L["lists"]) - 1), L["sel"] + 1)
+                elif ch in (10, 13, curses.KEY_ENTER):
+                    if L["lists"]:
+                        L["def"] = L["lists"][L["sel"]]; L["isel"] = 0
+                        L["adding"] = False; L["input"] = ""; L["msg"] = ""
+                        L["view"] = "view"
+                elif ch in (ord("n"), ord("N")):
+                    L["view"] = "new"; L["lrename"] = None; L["input"] = ""; L["msg"] = ""
+                elif ch in (ord("r"), ord("R")):              # gewählte Liste umbenennen
+                    if L["lists"]:
+                        cur = L["lists"][L["sel"]]
+                        L["view"] = "new"; L["lrename"] = cur["id"]
+                        L["input"] = str(cur.get("name") or ""); L["msg"] = ""
+                elif ch in (ord("d"), ord("D")):
+                    if L["lists"]:
+                        L["confirm"] = True; L["msg"] = ""
+                elif ch == ord(">"):                          # diese Liste in eine andere einordnen
+                    if len(L["lists"]) > 1:
+                        L["nest_src"] = L["lists"][L["sel"]]["id"]
+                        L["nsel"] = 0; L["msg"] = ""; L["view"] = "nest"
+            elif L["view"] == "new":
+                if ch == 27:
+                    L["view"] = "list"; L["lrename"] = None; L["msg"] = ""
+                elif ch in (10, 13, curses.KEY_ENTER):
+                    name = L["input"].strip()
+                    if not name:
+                        L["msg"] = "name fehlt"
+                    elif L["lrename"] is not None:             # bestehende Liste umbenennen
+                        try:
+                            api_call("/api/lists/%s/rename" % L["lrename"], method="POST",
+                                     body={"name": name})
+                            L["view"] = "list"; L["lrename"] = None
+                            L["msg"] = "umbenannt"; l_load()
+                        except Exception:
+                            L["msg"] = "umbenennen fehlgeschlagen"
+                    else:
+                        try:
+                            l = api_call("/api/lists", method="POST", body={"name": name})
+                            l_load()
+                            for i, x in enumerate(L["lists"]):
+                                if l and x["id"] == l.get("id"):
+                                    L["sel"] = i
+                            L["view"] = "list"; L["msg"] = "angelegt: " + name
+                        except Exception:
+                            L["msg"] = "anlegen fehlgeschlagen"
+                elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                    L["input"] = L["input"][:-1]
+                elif 32 <= ch <= 126 and len(L["input"]) < 40:
+                    L["input"] += chr(ch)
+            elif L["view"] == "view":
+                lid = L["def"]["id"] if L["def"] else None
+                if L["adding"]:                               # Eintrag tippen (neu/sub/umbenennen)
+                    if ch == 27:
+                        L["adding"] = False; L["addparent"] = None
+                        L["edit_iid"] = None; L["imode"] = "add"
+                        L["input"] = ""; L["msg"] = ""
+                    elif ch in (10, 13, curses.KEY_ENTER):
+                        txt = L["input"].strip()
+                        if txt and lid:
+                            try:
+                                if L["imode"] == "rename":    # bestehenden Eintrag umbenennen
+                                    api_call("/api/lists/%s/items/%d/rename"
+                                             % (lid, L["edit_iid"]), method="POST",
+                                             body={"text": txt})
+                                    new_id = L["edit_iid"]
+                                else:                         # neuen Eintrag/Unterpunkt anhängen
+                                    body = {"text": txt}
+                                    if L["addparent"] is not None:
+                                        body["parent"] = L["addparent"]
+                                    new = api_call("/api/lists/%s/items" % lid, method="POST",
+                                                   body=body)
+                                    new_id = new.get("id") if new else None
+                                # Umbenennen ist einmalig; neu/sub bleibt offen
+                                # für Schnell-Eingabe mehrerer Einträge in Folge.
+                                L["input"] = ""; L["edit_iid"] = None
+                                if L["imode"] == "rename":
+                                    L["adding"] = False; L["imode"] = "add"
+                                L["addparent"] = None
+                                l_load(); l_sync_def()
+                                if new_id is not None:        # Cursor auf den betroffenen Eintrag
+                                    L["isel"] = l_flat_index(new_id)
+                            except Exception:
+                                L["msg"] = "speichern fehlgeschlagen"
+                    elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                        L["input"] = L["input"][:-1]
+                    elif 32 <= ch <= 126 and len(L["input"]) < 80:
+                        L["input"] += chr(ch)
+                else:
+                    flat = l_flatten(L["def"].get("items")) if L["def"] else []
+                    cur = flat[L["isel"]][0] if 0 <= L["isel"] < len(flat) else None
+                    if ch in (27, ord("l"), ord("L")):         # Esc/l → zurück zur Übersicht
+                        L["view"] = "list"; L["msg"] = ""; l_load()
+                    elif ch in (ord("q"), ord("Q")):           # q → ganze TUI beenden
+                        break
+                    elif ch in (curses.KEY_UP, ord("k")):
+                        L["isel"] = max(0, L["isel"] - 1)
+                    elif ch in (curses.KEY_DOWN, ord("j")):
+                        L["isel"] = min(max(0, len(flat) - 1), L["isel"] + 1)
+                    elif ch in (ord(" "), 10, 13, curses.KEY_ENTER):
+                        if cur and lid:
+                            try:
+                                api_call("/api/lists/%s/items/%d/toggle" % (lid, cur["id"]),
+                                         method="POST")
+                                l_load(); l_sync_def()
+                            except Exception:
+                                L["msg"] = "umschalten fehlgeschlagen"
+                    elif ch in (ord("a"), ord("A")):           # neuer Eintrag (oberste Ebene)
+                        L["adding"] = True; L["imode"] = "add"
+                        L["addparent"] = None; L["edit_iid"] = None
+                        L["input"] = ""; L["msg"] = ""
+                    elif ch in (ord("s"), ord("S")):           # Unterpunkt zum gewählten Eintrag
+                        if cur:
+                            L["adding"] = True; L["imode"] = "sub"
+                            L["addparent"] = cur["id"]; L["edit_iid"] = None
+                            L["input"] = ""; L["msg"] = ""
+                    elif ch in (ord("r"), ord("R")):           # gewählten Eintrag umbenennen
+                        if cur:
+                            L["adding"] = True; L["imode"] = "rename"
+                            L["edit_iid"] = cur["id"]; L["addparent"] = None
+                            L["input"] = str(cur.get("text") or ""); L["msg"] = ""
+                    elif ch in (ord("m"), ord("M")):           # Eintrag raus in eine andere Liste
+                        if cur and l_move_targets():
+                            L["move_iid"] = cur["id"]; L["nsel"] = 0
+                            L["msg"] = ""; L["view"] = "move"
+                        elif cur:
+                            L["msg"] = "keine andere liste"
+                    elif ch in (ord("d"), ord("D")):
+                        if cur and lid:
+                            try:
+                                api_call("/api/lists/%s/items/%d" % (lid, cur["id"]),
+                                         method="DELETE")
+                                l_load(); l_sync_def()
+                            except Exception:
+                                L["msg"] = "löschen fehlgeschlagen"
+            elif L["view"] == "nest":          # Liste in eine andere einordnen
+                cands = [l for l in L["lists"]
+                         if isinstance(l, dict) and l.get("id") != L["nest_src"]]
+                if ch in (27, ord("l"), ord("L")):             # Esc/l → abbrechen
+                    L["view"] = "list"; L["nest_src"] = None; L["msg"] = ""
+                elif ch in (ord("q"), ord("Q")):               # q → ganze TUI beenden
+                    break
+                elif ch in (curses.KEY_UP, ord("k")):
+                    L["nsel"] = max(0, L["nsel"] - 1)
+                elif ch in (curses.KEY_DOWN, ord("j")):
+                    L["nsel"] = min(max(0, len(cands) - 1), L["nsel"] + 1)
+                elif ch in (10, 13, curses.KEY_ENTER):
+                    if cands and 0 <= L["nsel"] < len(cands):
+                        dest = cands[L["nsel"]]
+                        try:
+                            api_call("/api/lists/%s/nest" % L["nest_src"], method="POST",
+                                     body={"into": dest["id"]})
+                            L["msg"] = "eingeordnet"
+                        except Exception:
+                            L["msg"] = "einordnen fehlgeschlagen"
+                        L["view"] = "list"; L["nest_src"] = None
+                        l_load()
+            elif L["view"] == "move":          # Eintrag raus in eine andere Liste
+                lid = L["def"]["id"] if L["def"] else None
+                targets = l_move_targets()
+                nopts = 1 + len(targets)       # 0 = neue Liste, dann die Ziele
+                if ch in (27, ord("l"), ord("L")):             # Esc/l → zurück zu den Einträgen
+                    L["view"] = "view"; L["move_iid"] = None; L["msg"] = ""
+                elif ch in (ord("q"), ord("Q")):
+                    break
+                elif ch in (curses.KEY_UP, ord("k")):
+                    L["nsel"] = max(0, L["nsel"] - 1)
+                elif ch in (curses.KEY_DOWN, ord("j")):
+                    L["nsel"] = min(max(0, nopts - 1), L["nsel"] + 1)
+                elif ch in (10, 13, curses.KEY_ENTER):
+                    if L["nsel"] == 0:                         # → in eine NEUE Liste (Name tippen)
+                        it = l_find_item(L["def"].get("items"), L["move_iid"]) if L["def"] else None
+                        L["input"] = str(it.get("text") or "") if it else ""
+                        L["view"] = "move_new"; L["msg"] = ""
+                    elif 1 <= L["nsel"] < nopts and lid:
+                        dest = targets[L["nsel"] - 1]
+                        try:
+                            api_call("/api/lists/%s/items/%d/move" % (lid, L["move_iid"]),
+                                     method="POST", body={"into": dest["id"]})
+                            L["msg"] = "verschoben"
+                        except Exception:
+                            L["msg"] = "verschieben fehlgeschlagen"
+                        L["view"] = "view"; L["move_iid"] = None
+                        l_load(); l_sync_def()
+            elif L["view"] == "move_new":       # Name für die neue Ziel-Liste tippen
+                lid = L["def"]["id"] if L["def"] else None
+                if ch == 27:
+                    L["view"] = "move"; L["input"] = ""; L["msg"] = ""
+                elif ch in (10, 13, curses.KEY_ENTER):
+                    name = L["input"].strip()
+                    if not name:
+                        L["msg"] = "name fehlt"
+                    elif lid:
+                        try:
+                            new = api_call("/api/lists", method="POST", body={"name": name})
+                            api_call("/api/lists/%s/items/%d/move" % (lid, L["move_iid"]),
+                                     method="POST", body={"into": new["id"]})
+                            L["msg"] = "verschoben → " + name
+                            L["view"] = "view"; L["move_iid"] = None; L["input"] = ""
+                            l_load(); l_sync_def()
+                        except Exception:
+                            L["msg"] = "verschieben fehlgeschlagen"
+                elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                    L["input"] = L["input"][:-1]
+                elif 32 <= ch <= 126 and len(L["input"]) < 40:
+                    L["input"] += chr(ch)
         elif M["active"]:                      # Karte hat den Fokus
             if ch in (27, ord("m"), ord("M")):                 # Esc/m → Karte zu
                 M["active"] = False
@@ -1106,6 +1880,71 @@ def run_ui(stdscr, store):
                 m_window()                     # natives Fenster aufklappen
             elif ch in (ord("t"), ord("T")):   # Theme darf auch hier zyklieren
                 theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
+        elif K["active"]:                      # Kalender hat den Fokus
+            if K["mode"] == "add":             # gestaffeltes Eingabe-Formular
+                cur_key = ("aday", "atime", "alabel")[K["astage"]]
+                if ch == 27:                   # Esc: Stufe zurück bzw. Formular verlassen
+                    if K["astage"] > 0:
+                        K["astage"] -= 1; K["amsg"] = ""
+                    else:
+                        K["mode"] = "view"; K["amsg"] = ""
+                elif ch in (10, 13, curses.KEY_ENTER):
+                    if K["astage"] == 0:
+                        if k_parse_day(K["aday"]) is None:
+                            K["amsg"] = "datum? TT.MM"
+                        else:
+                            K["astage"] = 1; K["amsg"] = ""
+                    elif K["astage"] == 1:
+                        if K["atime"].strip() and parse_clock(K["atime"]) is None:
+                            K["amsg"] = "zeit? HH:MM (leer=ganztags)"
+                        else:
+                            K["astage"] = 2; K["amsg"] = ""
+                    else:
+                        k_add_save()
+                elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                    K[cur_key] = K[cur_key][:-1]
+                elif 32 <= ch <= 126:
+                    cc = chr(ch)
+                    if K["astage"] == 0 and (cc.isdigit() or cc in "./-") and len(K["aday"]) < 10:
+                        K["aday"] += cc
+                    elif K["astage"] == 1 and (cc.isdigit() or cc == ":") and len(K["atime"]) < 5:
+                        K["atime"] += cc
+                    elif K["astage"] == 2 and len(K["alabel"]) < 60:
+                        K["alabel"] += cc
+            elif K["confirmdel"]:              # Lösch-Nachfrage offen
+                if ch in (ord("j"), ord("J"), ord("y"), ord("Y"), 10, 13, curses.KEY_ENTER):
+                    dl = k_deletable()
+                    if dl and 0 <= K["sel"] < len(dl):
+                        k_delete_sel(dl[K["sel"]])
+                    K["confirmdel"] = False
+                elif ch != -1:                 # alles andere bricht ab
+                    K["confirmdel"] = False; K["msg"] = ""
+            else:                              # View-Modus: blättern/auswählen
+                if ch in (27, ord("c"), ord("C")):             # Esc/c → Kalender zu
+                    K["active"] = False
+                elif ch in (ord("q"), ord("Q")):               # q → ganze TUI beenden
+                    break
+                elif ch in (curses.KEY_LEFT, ord("h")):
+                    k_step(-1); K["sel"] = 0; K["msg"] = ""
+                elif ch in (curses.KEY_RIGHT, ord("l")):
+                    k_step(1); K["sel"] = 0; K["msg"] = ""
+                elif ch in (curses.KEY_UP, ord("k")):
+                    K["sel"] = max(0, K["sel"] - 1)
+                elif ch in (curses.KEY_DOWN, ord("j")):
+                    K["sel"] = K["sel"] + 1    # Klemmung passiert beim Zeichnen
+                elif ch in (ord("v"), ord("V"), 9):            # v/Tab → Woche↔Monat
+                    k_toggle(); K["sel"] = 0; K["msg"] = ""
+                elif ch == ord("0"):                           # 0 → zurück zu heute
+                    k_today(); K["sel"] = 0; K["msg"] = ""
+                elif ch in (ord("a"), ord("A")):               # a → neuen Termin anlegen
+                    K["mode"] = "add"; K["astage"] = 0; K["amsg"] = ""; K["msg"] = ""
+                    K["aday"] = date.fromisoformat(K["ref"]).strftime("%d.%m")
+                    K["atime"] = ""; K["alabel"] = ""
+                elif ch in (ord("d"), ord("D")):               # d → ausgewählten Termin löschen
+                    if K["view"] == "week" and k_deletable():
+                        K["confirmdel"] = True; K["msg"] = ""
+                elif ch in (ord("t"), ord("T")):               # Theme darf auch hier zyklieren
+                    theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
         else:                                  # Normal-Modus: Shortcuts aktiv
             if ch in (ord("q"), ord("Q")):
                 break
@@ -1113,8 +1952,13 @@ def run_ui(stdscr, store):
                 theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
             elif ch in (ord("g"), ord("G")):   # Graph-Werkzeug öffnen
                 G["active"] = True; G["view"] = "list"; G["msg"] = ""; g_load()
+            elif ch in (ord("l"), ord("L")):   # Listen-Werkzeug öffnen
+                L["active"] = True; L["view"] = "list"; L["msg"] = ""; l_load()
             elif ch in (ord("m"), ord("M")):   # Karte öffnen
                 M["active"] = True; M["data"] = None
+            elif ch in (ord("c"), ord("C")):   # Kalender öffnen
+                K["active"] = True; K["data"] = None
+                K["mode"] = "view"; K["sel"] = 0; K["confirmdel"] = False; K["msg"] = ""
             elif ch == ord("/"):               # Befehlszeile öffnen
                 cmd_mode = True; cmd_buf = "/"; cmd_msg = ""
         # KEY_RESIZE oder Timeout → einfach neu zeichnen
@@ -1220,18 +2064,28 @@ def run_ui(stdscr, store):
         if G["active"]:
             draw_box(top, mx, body_h, midw, "graph-werkzeug")
             draw_graph_tool(top, mx, body_h, midw, gv_cache)
+        elif L["active"]:
+            draw_box(top, mx, body_h, midw, "listen")
+            draw_list_tool(top, mx, body_h, midw)
         elif M["active"]:
             draw_box(top, mx, body_h, midw, "karte · welt")
             draw_map(top, mx, body_h, midw)
+        elif K["active"]:
+            draw_box(top, mx, body_h, midw, "kalender")
+            draw_calendar(top, mx, body_h, midw)
         else:
             draw_box(top, mx, body_h, midw, "mitte")
             cyc = top + body_h // 2
             big = "KASSETTE · TUI"
             l1 = "g · graph-werkzeug"
-            l2 = "m · karte"
-            addclip(cyc - 1, mx + max(1, (midw - len(big)) // 2), big, midw - 2, C["bright"])
-            addclip(cyc + 1, mx + max(1, (midw - len(l1)) // 2), l1, midw - 2, C["acc"])
-            addclip(cyc + 2, mx + max(1, (midw - len(l2)) // 2), l2, midw - 2, C["acc"])
+            l2 = "l · listen"
+            l3 = "m · karte"
+            l4 = "c · kalender"
+            addclip(cyc - 3, mx + max(1, (midw - len(big)) // 2), big, midw - 2, C["bright"])
+            addclip(cyc - 1, mx + max(1, (midw - len(l1)) // 2), l1, midw - 2, C["acc"])
+            addclip(cyc, mx + max(1, (midw - len(l2)) // 2), l2, midw - 2, C["acc"])
+            addclip(cyc + 1, mx + max(1, (midw - len(l3)) // 2), l3, midw - 2, C["acc"])
+            addclip(cyc + 2, mx + max(1, (midw - len(l4)) // 2), l4, midw - 2, C["acc"])
 
         # ── RECHTS: lifestyle / outbound ──────────────────────────────────
         # lifestyle = ÜBERLAGERUNG aller Graphen in EINEM Gitter. X = Datum
@@ -1425,7 +2279,7 @@ def run_ui(stdscr, store):
         # ── Footer (Tasten + Theme + Backend) ─────────────────────────────
         tm_txt = "auto(%s)" % cur_theme if theme_mode == "auto" else cur_theme
         addclip(footer_row, 0,
-                " q quit · t theme: %s · g graph · m karte · / befehle · %s" % (tm_txt, BASE_URL),
+                " q quit · t theme: %s · g graph · m karte · c kalender · / befehle · %s" % (tm_txt, BASE_URL),
                 W - 1, C["faint"])
 
         stdscr.refresh()

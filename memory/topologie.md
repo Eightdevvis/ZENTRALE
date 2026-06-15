@@ -115,6 +115,62 @@ der Pi-WLAN-MAC `b8:27:eb:34:8b:1c` und schreibt eine passende IP in
 `~/.ssh/config`. Nur als Notfall-Tool gedacht – im Normalbetrieb laeuft
 `ssh zentrale` ueber die feste LAN-IP `192.168.50.10`.
 
+## Laptop als 3. Knoten (seit 2026-06-15)
+
+Ein Laptop (`0RAMMachine`, User `sasha`) greift von unterwegs/daheim auf
+den PC zu. Beide hängen am **Handy-Hotspot** (`Bigme`), wo der PC eine
+**dynamische IP** hat – die feste LAN-IP `192.168.50.1` ist nur am
+Gigabit-Switch (Pi↔PC), für den Laptop nicht erreichbar.
+
+Damit das trotzdem stabil ist, gibt es laptop-lokale Tools (in
+`~/.local/bin/`, **bewusst außerhalb des Repos**, damit sie nicht zum Pi
+syncen):
+
+| Befehl          | Zweck |
+|-----------------|-------|
+| `find-pc`       | Spiegelbild zu `find-zentrale`: ARP-Scan nach der PC-WLAN-MAC `8c:86:dd:72:37:e7` (Fallback: `:5000`/api/state-Signatur), schreibt einen `# >>> find-pc >>>`-Block mit `Host pc` in `~/.ssh/config`. Überlebt IP-/Subnetzwechsel des Hotspots. |
+| `zentrale-remote` | „Daheim"-Befehl: `find-pc` → SSH-Tunnel `localhost:15000 → pc:5000` → Laptop-TUI gegen das volle Ollama-Backend des PCs. `q` beendet + Tunnel-Teardown. |
+| `zentrale-pull` / `zentrale-push` | Manueller Dateisync der **nicht-git-getrackten** Dateien (Daten/Caches/Configs/untracked) per rsync über den `pc`-Alias. Symlinks auf `zentrale-sync`. Listet `git ls-files --others` (untracked + ignoriert), filtert `venv/`, `__pycache__`, `.pyc`, `.pytest_cache` sowie `.history/` und `.claude/settings.local.json` (maschinenlokal; `ZENTRALE_SYNC_ALL=1` nimmt auch die mit). **Kein `--delete`** (nur additiv); Richtung bewusst pro Maschine. `--dry-run` + extra rsync-Args werden durchgereicht. |
+| `zentrale-autosync` | **Dauer-Sync als Dienst** (siehe unten). Hält dieselben nicht-git-Dateien automatisch in Sync. |
+| `zentrale-autopush` | Variante von autosync: nur Push-on-change, ohne Pull/Reconcile. Wird **nicht** genutzt (autosync ist der Dienst), liegt nur als einfachere Alternative herum. |
+
+### Auto-Sync-Dienst (`zentrale-autosync.service`)
+
+Läuft als systemd-**User**-Service (`~/.config/systemd/user/zentrale-autosync.service`,
+`enabled` → Autostart beim Login, `Restart=always`, `StartLimitIntervalSec=0`
+damit er bei langer PC-Abwesenheit nicht dauerhaft stirbt). Braucht
+`inotify-tools`. Zwei Mechanismen:
+
+1. **Sofort** – `inotifywait` beobachtet das Laptop-Repo; ändert sich eine
+   nicht-git-Datei, wird sie umgehend gepusht (mit kurzem Pull davor).
+2. **Reconcile** – alle `ZENTRALE_RECONCILE`s (Default 60s) ein **voller
+   PULL+PUSH**, sobald der PC erreichbar ist. Das ist der Reconnect-Pfad:
+   War der PC weg (unterwegs/aus), holt der nächste Reconcile nach Rückkehr
+   ins selbe WLAN automatisch alles nach – **beide Richtungen, auch im
+   Leerlauf**.
+
+Beide Richtungen mit `rsync --update` (neuere mtime gewinnt → schützt die
+frische Änderung; Konflikt nur, wenn dieselbe Datei gleichzeitig auf beiden
+geändert wird). Getrackter Code läuft über git (wird übersprungen), **kein
+Löschen**. Robust gegen weg/da: kein `set -e`, fehlgeschlagener rsync killt
+nicht, es retryt. **Voraussetzung:** beide im selben Subnetz/WLAN (find-pc
+scannt das aktuelle Netz nach der PC-MAC).
+
+Steuern: `systemctl --user status|restart|stop|disable zentrale-autosync`,
+mitlesen `journalctl --user -u zentrale-autosync -f` (`↑`/`↓`/`⇅`-Zeilen).
+Soll er auch ohne Login laufen: `loginctl enable-linger sasha`.
+Live-Daten ausklammern: `ZENTRALE_AUTOPUSH_EXCLUDE='/data/'`.
+
+Voraussetzung am PC (einmalig): `openssh-server` installiert + `ssh.service`
+aktiv (der PC hatte nur den SSH-**Client** → konnte zum Pi, aber niemand
+zu ihm); MAC-Randomisierung für `Bigme` aus
+(`nmcli connection modify Bigme wifi.cloned-mac-address permanent`), damit
+`find-pc` die MAC trifft; Laptop-Key (`id_ed25519`) via `ssh-copy-id pc`.
+
+Der „Frontend↔AI"-Weg läuft bewusst über den **SSH-Tunnel** statt direkt
+auf `:5000` (verschlüsselt; `:5000` am PC kann später auf `localhost`
+eingeschränkt werden, dann geht es nur noch via SSH).
+
 ## Was der Pi NICHT mehr macht
 
 - Kein `zentrale.service` mehr (stopped + disabled).

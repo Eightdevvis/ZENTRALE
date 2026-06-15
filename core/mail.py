@@ -31,6 +31,7 @@
 # Fall im News-System).
 
 import os
+import re
 import sys
 import ssl
 import json
@@ -114,15 +115,14 @@ def _save_state(data):
     os.replace(tmp, _STATE)
 
 
-def _watermark(name):
-    return int(_load_state()["accounts"].get(name, {}).get("uid_watermark", 0))
-
-
-def _set_watermark(name, uid):
+def _touch_poll(name):
+    """Merkt sich nur den Zeitpunkt des letzten Polls (kein Watermark mehr —
+    die INBOX selbst ist die Arbeitsschlange, siehe poll_account)."""
     with _state_lock:
         data = _load_state()
-        data["accounts"].setdefault(name, {})["uid_watermark"] = int(uid)
-        data["accounts"][name]["last_poll"] = datetime.now().isoformat(timespec="seconds")
+        acct = data["accounts"].setdefault(name, {})
+        acct["last_poll"] = datetime.now().isoformat(timespec="seconds")
+        acct.pop("uid_watermark", None)   # alten Stand wegräumen
         _save_state(data)
 
 
@@ -238,6 +238,10 @@ def _connect(account):
         imap.authenticate("XOAUTH2", lambda _=None: auth_str.encode("utf-8"))
     else:
         imap.login(account["user"], account["secret"])
+    # Opt-in IMAP-Protokoll-Mitschnitt für die Fehlersuche. ERST NACH der
+    # Authentifizierung setzen, damit das XOAUTH2-Token NICHT mitgeloggt wird.
+    if os.environ.get("MAIL_IMAP_DEBUG") == "1":
+        imap.debug = 4
     return imap
 
 
@@ -282,28 +286,48 @@ def _list_folders(imap):
     return folders
 
 
+# LIST-Antwort:  (flags) "sep" name   — der Name ist ENTWEDER ein gequoteter
+# String "..." ODER ein Atom ohne Leerzeichen. Der Separator ist selbst gequotet
+# ("/" oder NIL) — naives split('"')[-2] erwischt deshalb bei UNgequoteten Namen
+# den Separator statt den Ordnernamen. Darum sauber per Regex.
+_LIST_RE = re.compile(r'^\([^)]*\)\s+(?:"(?:[^"\\]|\\.)*"|NIL)\s+(.+?)\s*$')
+
+
+def _list_name(line):
+    """Liefert den Mailbox-Namen aus einer LIST-Zeile (oder None)."""
+    m = _LIST_RE.match(line)
+    if not m:
+        return None
+    name = m.group(1)
+    if len(name) >= 2 and name[0] == '"' and name[-1] == '"':
+        name = name[1:-1].replace('\\"', '"').replace('\\\\', '\\')
+    return name
+
+
 def _find_trash(imap):
     """Papierkorb über das SPECIAL-USE-Attribut \\Trash finden, sonst raten."""
     for line in _list_folders(imap):
-        low = line.lower()
-        if "\\trash" in low:
-            # Ordnername steht am Zeilenende in Anführungszeichen.
-            name = line.split('"')[-2] if '"' in line else line.split()[-1]
-            return name
-    for guess in ("Trash", "[Gmail]/Trash", "Deleted", "Deleted Items", "Papierkorb"):
-        return guess  # erster Treffer als pragmatischer Fallback
-    return "Trash"
+        if "\\trash" in line.lower():
+            name = _list_name(line)
+            if name:
+                return name
+    # Kein \Trash gefunden -> Exchange/Outlook nennt ihn üblicherweise so:
+    return "Deleted Items"
 
 
 def _ensure_folder(imap, name):
     """Legt einen Ordner an, falls er fehlt (idempotent)."""
-    existing = []
+    existing = set()
     for line in _list_folders(imap):
-        if '"' in line:
-            existing.append(line.split('"')[-2])
+        n = _list_name(line)
+        if n:
+            existing.add(n)
     if name not in existing:
         try:
-            imap.create(name)
+            # MUSS gequotet werden: ohne Anführungszeichen zerlegt IMAP einen
+            # Ordnernamen mit Leerzeichen ("Job Opportunities") in zwei Argumente
+            # -> CREATE scheitert, der spätere MOVE wird "abgelehnt".
+            imap.create(_q(name))
         except Exception:
             pass
     return name
@@ -436,27 +460,35 @@ def poll_account(account, dry_run=None):
     folders = _FolderCache()        # Ordner einmal auflösen (überlebt Reconnects)
     results = []
     processed = set()               # in DIESEM Lauf schon abgehakte UIDs
-    applied = set()                 # davon erfolgreich verschoben (für Watermark)
+    applied = set()                 # davon erfolgreich verschoben
     attempt = 0
-    last = _watermark(name)
 
+    # Kein Watermark mehr: die INBOX IST die Arbeitsschlange. Sortierte Mails
+    # verlassen die INBOX (move/trash), ein erneutes SEARCH sammelt sie also
+    # nicht wieder ein. Abgelehnte/offene Mails bleiben liegen und werden beim
+    # nächsten Poll erneut versucht — selbstheilend, ohne dass ein Watermark
+    # tieferliegende UIDs verwaisen lässt.
     while True:
         imap = None
         try:
             imap = _connect(account)
             imap.select("INBOX")
-            # Alle UIDs echt größer als der Watermark, die wir noch nicht hatten.
-            typ, data = imap.uid("SEARCH", None, f"UID {last + 1}:*")
+            # Alles, was aktuell in der INBOX liegt (und in diesem Lauf noch
+            # nicht behandelt wurde). Outlook lehnt `UID SEARCH ALL` mit
+            # "Command Argument Error" ab, akzeptiert aber den UID-Bereich
+            # `1:*` — und 1 liegt nie über der höchsten UID, anders als ein
+            # Watermark-Startpunkt. `*` ist die höchste vorhandene UID.
+            typ, data = imap.uid("SEARCH", None, "UID 1:*")
             uids = []
             if typ == "OK" and data and data[0]:
                 for u in data[0].split():
                     u = int(u)
-                    if u > last and u not in processed:
+                    if u not in processed:
                         uids.append(u)
             uids.sort()
             if not uids:
                 if not processed:
-                    state.push_log(f"MAIL [{name}]: nichts Neues (UID > {last})")
+                    state.push_log(f"MAIL [{name}]: INBOX leer — nichts zu tun")
                 break
 
             for uid in uids:
@@ -490,19 +522,11 @@ def poll_account(account, dry_run=None):
                 except Exception:
                     pass
 
-    # Watermark NUR live und NUR bis zur lückenlosen Front erfolgreich
-    # verschobener Mails vorrücken — so werden abgelehnte/offene Mails beim
-    # nächsten Poll erneut versucht statt übersprungen. (Dry-Run rückt nie vor,
-    # sonst "verbraucht" die Probe die Mails ungesehen.)
-    if not dry_run and processed:
-        frontier = last
-        for u in sorted(processed):
-            if u in applied:
-                frontier = u
-            else:
-                break
-        if frontier > last:
-            _set_watermark(name, frontier)
+    if not dry_run:
+        _touch_poll(name)
+        if processed:
+            state.push_log(f"MAIL [{name}]: {len(applied)}/{len(processed)} Mail(s) "
+                           f"verschoben, {len(processed) - len(applied)} bleiben in INBOX")
     return results
 
 
@@ -688,8 +712,55 @@ def _cats_cli(argv):
 #   venv/bin/python -m core.mail --poll     -> echter Dry-Run-Poll aller Konten
 #   MAIL_DRY_RUN=0 ... --poll               -> LIVE (sortiert wirklich!)
 
+def _probe_cli():
+    """Diagnose: verbindet, selektiert INBOX und probiert mehrere SEARCH-Formen
+    durch — zeigt für jede die ROHE Server-Antwort. So sehen wir genau, was
+    Outlook akzeptiert, statt zu raten. Kein Schreibzugriff, nur Lesen.
+    """
+    accounts = [a for a in mail_secrets.load_accounts() if a.get("enabled", True)]
+    if not accounts:
+        print("keine Konten konfiguriert")
+        return 1
+    for account in accounts:
+        name = account["name"]
+        print(f"\n=== {name} ===")
+        imap = _connect(account)
+        try:
+            typ, data = imap.select("INBOX")
+            print(f"SELECT INBOX           -> {typ} {data}")
+            try:
+                print(f"STATUS                 -> "
+                      f"{imap.status('INBOX', '(MESSAGES UIDNEXT UIDVALIDITY)')}")
+            except Exception as e:
+                print(f"STATUS                 -> FEHLER {type(e).__name__}: {e}")
+
+            variants = [
+                ("search(None,'ALL')      [seq]", lambda: imap.search(None, "ALL")),
+                ("uid('SEARCH','ALL')          ", lambda: imap.uid("SEARCH", "ALL")),
+                ("uid('SEARCH',None,'ALL')     ", lambda: imap.uid("SEARCH", None, "ALL")),
+                ("uid('SEARCH','UID','1:*')    ", lambda: imap.uid("SEARCH", "UID", "1:*")),
+                ("uid('SEARCH',None,'UID 1:*') ", lambda: imap.uid("SEARCH", None, "UID 1:*")),
+                ("uid('SEARCH','1:*')          ", lambda: imap.uid("SEARCH", "1:*")),
+            ]
+            for label, fn in variants:
+                try:
+                    typ, data = fn()
+                    n = len(data[0].split()) if (data and data[0]) else 0
+                    print(f"{label} -> {typ}  ({n} Treffer)")
+                except Exception as e:
+                    print(f"{label} -> FEHLER {type(e).__name__}: {e}")
+        finally:
+            try:
+                imap.logout()
+            except Exception:
+                pass
+    return 0
+
+
 def _selftest():
     import sys
+    if "--probe" in sys.argv:
+        return _probe_cli()
     if "--poll" in sys.argv:
         items = poll_all(dry_run=_dry_run())
         print(f"\n{len(items)} Mail(s) klassifiziert "

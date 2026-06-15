@@ -1,20 +1,86 @@
 # Mandarin-Tutor
 
-> **Status (2026-05-14): PAUSIERT.** Der Tutor ist „weich deaktiviert":
-> - `core/brain.py`: kein `PRESENCE_DETECTED → TUTOR_START` mehr,
->   kein `TUTOR_START`-Handler.
-> - `ui/app.py`: `/api/tutor/{status,start,respond,transcribe,speak,stop}`
->   sind entfernt, `tutor_session`-Import ist raus.
-> - `ui/templates/index.html`: `T`-Hotkey weg, `setInterval`-Polling
->   gegen `/api/tutor/status` weg. Panel-Markup + JS-Funktionen sind
->   dormant (werden nicht mehr aufgerufen).
-> - `core/tutor.py`, `core/tutor_session.py`, `data/vocab_mandarin.json`,
->   das Event `TUTOR_START` in `core/events.py` und die Audio-Modelle
->   (`zh` TTS, Whisper) sind **unangetastet** – reaktivierbar per
->   git-Revert dieser Cleanup-Commits.
+> **Status (2026-06-13): REAKTIVIERUNG LÄUFT – Cloud-Verifikations-Phase.**
 >
-> Der Rest dieses Files beschreibt das *frühere* Design und gilt nicht
-> für den aktuellen Laufzeit-Zustand.
+> Der Tutor wurde am 2026-05-14 weich deaktiviert. Grund war **nicht** der
+> schlechte Auto-Trigger (das war nur der Anlass), sondern Sequencing:
+> erst die Core-KI sauber aufstellen, ohne den KI-Layer mit dem Tutor-Addon
+> zu vermischen. Jetzt wird er wieder angeschaltet.
+>
+> **Reaktivierungs-Stand:**
+> - `ui/app.py`: `/api/tutor/{status,start,respond,stop}` **wieder aktiv**,
+>   `tutor_session` wird importiert. Audio läuft über die generische
+>   Voice-API (`/api/transcribe`, `/api/speak`) mit `lang='zh'` – keine
+>   eigenen Tutor-Audio-Aliase mehr nötig.
+> - Start ist **rein manuell** (Dashboard-Hotkey, geplant `Alt+T` – nacktes
+>   `T` kollidiert mit dem immer fokussierten Chat-Input). KEIN Presence-
+>   Auto-Start in `brain.py` (bewusst, siehe Sequencing oben).
+> - **Frontend (`monolith.html`) noch offen:** das alte Tutor-Panel lebte in
+>   `index.html`, das beim Monolith-Umbau (`d2904be`) gelöscht wurde. Es muss
+>   als neues **Exhibit** ins zentrale AI-Canvas (neben `gesicht`/`graph`,
+>   wie das `graph-panel`) neu gebaut werden – Drumherum nicht anfassen.
+> - **Backend-Wahl per `TUTOR_BACKEND`:** `cloud` → Claude (Anthropic),
+>   `local` (Default) → Ollama. Siehe „Cloud-Backend" unten.
+> - `core/tutor.py`, `core/tutor_session.py`, `core/tutor_cloud.py`,
+>   `vocab_mandarin.json` (Repo-Root) und die Audio-Modelle sind aktiv/intakt.
+>
+> Der Rest dieses Files beschreibt das Design; Abweichungen sind oben vermerkt.
+
+## Framework: Sprachen + Provider (austauschbar)
+
+Der Tutor ist ein **Sprach-Framework**: Sprachen werden als **Profile**
+draufgelegt, der **Anbieter/das Modell ist davon entkoppelt**. Beides wird zur
+Laufzeit aufgelöst (`tutor_session._resolve`): Sprache → Profil → Provider →
+Modell.
+
+**Module:**
+- `core/tutor_langs.py` – **LanguageProfile** pro Sprache: System-Prompt,
+  Vokabel-Datei, `reading` (zh=Pinyin, ru=Betonung, ar=Translit, es=—),
+  `script` (ar=RTL), STT/TTS-Lang, Default-Provider+Modell.
+  **LIVE: `zh` (Chinesisch).** Skizzen (enabled=False, stückweise reinziehen):
+  `ru`, `ar`, `es`.
+- `core/tutor_providers.py` – **Provider-Registry**. Pro Eintrag: `kind`
+  (`ollama` | `anthropic` | `openai_compat`), `base_url`, `key_env`,
+  `default_model`, **`trains_on_data`**, `jurisdiction`, `enabled`.
+  **LIVE:** `local` (Ollama), `claude` (Sashas Pfad), `qwen` (Verteil-Default).
+  Skizzen: `openai`, `mistral`, `groq`, `deepseek`, `gemini`.
+- `core/tutor_openai_compat.py` – **Drop-in für `ai.chat_stream()`**, bedient
+  JEDEN OpenAI-`/v1`-kompatiblen Provider (Qwen/DeepSeek/Mistral/OpenAI/Groq/
+  Gemini) durch Tausch von base_url+Key+Modell. `TUTOR_TOOLS` sind schon
+  OpenAI-Schema → ohne Übersetzung. Streaming-Tool-Loop.
+- `core/tutor_cloud.py` – **Anthropic-SDK-Pfad** (Claude), Sashas persönliche
+  Verifikation. Übersetzt `TUTOR_TOOLS` ins Anthropic-Format.
+
+**Steuerung – lokale Config-Datei (kein `export` nötig):**
+- `data/tutor_config.json` (`core/tutor_config.py`) hält `lang` / `provider` /
+  `model` / `history_window` **und die API-Keys**. Modell durchprobieren =
+  `provider`/`model` dort ändern, neu starten. Vorlage:
+  `data/tutor_config.json.example`.
+- **Sicherheit:** `data/*.json` ist in `.gitignore` → die echte Config (mit
+  Keys) wandert NIE ins Repo (verifiziert via `git check-ignore`). Keys aus der
+  Config werden beim Import in `os.environ` injiziert, damit die SDKs sie finden.
+- **Precedence:** Env-Var > Config-Datei > Profil-Default. D.h. `TUTOR_LANG` /
+  `TUTOR_PROVIDER` / `TUTOR_MODEL` / `TUTOR_HISTORY_WINDOW` im Terminal
+  übersteuern die Config für ein schnelles Einzel-Experiment.
+- `history_window` (Default 30) = wieviele letzte Turns gesendet werden
+  (Kosten-Hebel: zustandslose API sendet History sonst komplett neu).
+- **Caching:** noch NICHT explizit gesetzt. OpenAI-kompatible Provider mit
+  Auto-Cache (OpenAI/DeepSeek) profitieren schon vom cache-freundlichen Aufbau
+  (stabiler System-Prompt zuerst, History nur angehängt); Qwen-Context-Cache
+  noch zu verifizieren. → offener Punkt.
+
+**Default pro Sprache (verifiziert, billig × gut × Privacy):**
+zh → Qwen (Singapur, no-train) · es → Mistral (EU) · ru → Qwen · ar →
+gpt-4o-mini (ALLaM/Groq als Option, Policy noch prüfen).
+
+**Privacy-Flag (HART):** Provider mit `trains_on_data=True` (deepseek, gemini-
+free) **oder unverifiziert** (`None`, z.B. groq) werden NICHT verboten, aber bei
+Session-Start **laut geflaggt**: `tutor_session.activate()` setzt eine Warnung
+(Log + `privacy_notice()`), die `/api/tutor/status` als `privacy_warning`
+liefert → UI muss sie deutlich anzeigen.
+
+**Offline-Prinzip:** Default bleibt `local` (Ollama, offline). Cloud-Provider
+sind bewusster Opt-in. **Dependencies:** `anthropic`, `openai` (im venv).
 
 ## Position in der Architektur
 
@@ -95,17 +161,32 @@ Zusätzlich existiert in `tutor.py` die Hilfsfunktion `get_vocab_stats()`
 („total / confirmed / testing"). Sie ist **kein** AI-Tool, sondern für
 Dashboard-Anzeige gedacht.
 
-## Bedienung
+## Bedienung – Konsolen-Commands
 
-- Start: Taste `T` (im Frontend) oder automatisch über Motion-Sensor
-  (`PRESENCE_DETECTED` → `TUTOR_START`, siehe `event_system.md`).
-  Es gibt **keine** Tageszeit-Bedingung – einzige Sperre ist eine
-  bereits aktive Session.
-- Aufnehmen: `Space` startet die Aufnahme, `Space` nochmal stoppt und
-  schickt die Aufnahme an den Whisper-Service.
-- KI antwortet – Antwort wird sofort durch den TTS-Service gesprochen
-  (Default-Speed `0.9`, langsamer als normal für besseres Hörverstehen).
-- Stop: `ESC` oder Stop-Button → `tutor_session.deactivate()`.
+Gesteuert wird über die **Dashboard-Konsole** (das immer fokussierte Chat-
+Eingabefeld in `monolith.html`). Kein Hotkey-Konflikt, passt zum „Terminal"-
+Charakter. Befehle (Handler in der Chat-IIFE, `handleConsoleCommand`):
+
+| Command | Wirkung |
+|---|---|
+| `/tutor` | Tutor starten; Begrüßung streamt in den Minilog. Danach gehen Eingaben an `/api/tutor/respond` statt an den Chat. |
+| `/tutorstop` | Tutor beenden (`/api/tutor/stop`). |
+| `/provider <name>` | Anbieter **live** umschalten (qwen, deepseek, mistral, …). |
+| `/model <id>` | Modell live umschalten (z.B. qwen-turbo). |
+| `/lang <code>` | Sprache umschalten (zh, ru, ar, es). |
+| `/models` | Aktuelle Wahl + wählbare Provider mit Jurisdiktion + Privacy-Flag. |
+
+Backend dahinter: `POST/GET /api/tutor/config` (Live-Override in
+`tutor_config`, optional `persist`). Schaltet die Provider/Modelle ohne
+Neustart. Privacy-Warnung (`trains_on_data`) erscheint beim Start im Minilog
+und über `/api/tutor/status` (`privacy_warning`).
+
+**Noch offen / Skizze:** das **zentrale Tutor-Exhibit** (eigene Ansicht im
+AI-Canvas statt nur Minilog) und **Voice** für den Tutor (Mic→`/api/transcribe`
++ TTS→`/api/speak`, beides mit der Profil-`lang`, nicht dem `de`-Default) sind
+noch nicht gebaut – aktuell läuft der Tutor **text-first** im Minilog. Der
+generische Voice-Stack (siehe „Audio-Pipeline") existiert, muss aber pro
+Sprache verkabelt werden.
 
 ## Vokabel-Datei
 

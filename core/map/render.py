@@ -56,6 +56,24 @@ def viewport(cx, cy, zoom, cols, rows, aspect=0.5):
     }
 
 
+def project_polyline(vp, pts):
+    """Eine Polylinie (Welt-Koords [(wx,wy),…]) aufs Zellraster eines viewport()
+    projizieren + vereinfachen (aufeinanderfolgende Punkte derselben Zelle
+    zusammenfassen). Für Overlay-Linien (z.B. Schifffahrtsrouten). Gibt
+    [[col,row],…] zurück; Clipping macht der Renderer beim Zeichnen."""
+    out = []
+    last = None
+    for wx, wy in pts:
+        col = (wx - vp["x0"]) * vp["sx"]
+        row = (wy - vp["y0"]) * vp["sy"]
+        cell = (int(col), int(row))
+        if cell == last:
+            continue
+        last = cell
+        out.append([round(col, 2), round(row, 2)])
+    return out
+
+
 def base_features(cx, cy, zoom, cols, rows, aspect=0.5):
     """
     Basiskarten-Linien für einen Viewport, projiziert aufs Zellraster.

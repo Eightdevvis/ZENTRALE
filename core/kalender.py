@@ -75,6 +75,9 @@ _DEFAULT_LAYERS = {
 _WEEKDAYS_SHORT_DE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 _WEEKDAYS_FULL_DE  = ["Montag", "Dienstag", "Mittwoch", "Donnerstag",
                       "Freitag", "Samstag", "Sonntag"]
+_MONTHS_FULL_DE    = ["Januar", "Februar", "März", "April", "Mai", "Juni",
+                      "Juli", "August", "September", "Oktober", "November",
+                      "Dezember"]
 
 
 # ── Persistenz ─────────────────────────────────────────────────────────
@@ -198,6 +201,52 @@ def delete_entry(day: str, label: str, layer: str | None = None) -> int:
         if removed:
             _save_raw(data)
     return removed
+
+
+def set_routine_skip(layer: str, label: str, day: str, off: bool = True) -> bool:
+    """
+    Einen EINZELNEN Routine-Termin an `day` deaktivieren (off=True) bzw. wieder
+    aktivieren (off=False) - reversibel, pro Vorkommen. Speichert die Liste der
+    deaktivierten ISO-Daten im Feld `aus` an der Routine selbst.
+
+      layer  – Layer der Routine (z.B. 'routinen')
+      label  – Routinen-Titel; Match case-insensitiv, exakt ODER Teilstring
+               (wie delete_entry), erste passende Routine im Layer.
+      day    – YYYY-MM-DD des konkreten Vorkommens
+      off    – True = deaktivieren, False = wieder aktivieren
+
+    Anders als delete (Einmal-Termine) bleibt die Routine voll erhalten; nur das
+    eine Datum wird stillgelegt. `entries_in_range` gibt es weiter aus, aber als
+    `deaktiviert` markiert (sichtbar + toggle-bar, ohne Alarm). Gibt True bei
+    tatsächlicher Änderung zurück (False = nichts gefunden / schon im Zielzustand).
+    """
+    needle = (label or "").strip().lower()
+    if not needle:
+        return False
+    try:
+        date.fromisoformat(day)
+    except (TypeError, ValueError):
+        return False
+    changed = False
+    with _lock:
+        data = _load_raw()
+        lobj = data.get("layers", {}).get(layer)
+        if not lobj:
+            return False
+        for r in lobj.get("routines", []):
+            lab = (r.get("label", "")).strip().lower()
+            if needle == lab or needle in lab:
+                aus = r.setdefault("aus", [])
+                if off and day not in aus:
+                    aus.append(day); changed = True
+                elif not off and day in aus:
+                    aus.remove(day); changed = True
+                if not aus:                 # leere Liste wieder entfernen (sauber)
+                    r.pop("aus", None)
+                break
+        if changed:
+            _save_raw(data)
+    return changed
 
 
 def add_routine(layer: str, label: str, rrule_str: str,
@@ -400,6 +449,13 @@ def entries_in_range(start: date, end: date,
                     grund = _pause_grund(r["label"], occ.date(), pausen)
                     if grund:
                         entry["ausfall"] = grund
+                    # Vom User EINZELN deaktiviert? `aus` = Liste von ISO-Daten an
+                    # der Routine. Das Vorkommen wird trotzdem ausgegeben (sichtbar +
+                    # wieder-aktivierbar), aber als `deaktiviert` markiert: es löst
+                    # keine Kollisions-/Absage-Alarme aus (siehe Guards in
+                    # open_alarms/_absage_alarms/conflicts_for_proposed).
+                    if day_iso in (r.get("aus") or []):
+                        entry["deaktiviert"] = True
                     out.setdefault(day_iso, []).append(entry)
             except Exception as e:
                 state.push_log(
@@ -438,6 +494,44 @@ def week_view(reference: date | None = None,
         "start": monday.isoformat(),
         "end":   sunday.isoformat(),
         "days":  entries_in_range(monday, sunday, layers=layers),
+    }
+
+
+def month_view(reference: date | None = None,
+               only_default_visible: bool = True) -> dict:
+    """
+    Liefert den Monat um `reference` als GITTER-Daten für eine Monatsansicht:
+    alle Tage vom Montag VOR dem Monatsersten bis zum Sonntag NACH dem
+    Monatsletzten - also volle Mo-So-Wochenzeilen, damit eine Front ein
+    lückenloses Raster zeichnen kann. Welche Tage zum Monat selbst gehören
+    (und welche nur Rand-Füllung aus Vor-/Folgemonat sind), erkennt die Front
+    über `first`/`last`.
+
+    only_default_visible wie week_view: nur sichtbare Layer, sonst flutet der
+    erlebt-Auto-Layer das Gitter. Datums-Arithmetik macht Python, nicht die
+    Front - dieselbe Linie wie resolve_range/week_view.
+    """
+    if reference is None:
+        reference = date.today()
+    first = reference.replace(day=1)
+    last = _month_last_day(first)
+    grid_start = first - timedelta(days=first.weekday())      # Mo vor dem 1.
+    grid_end = last + timedelta(days=6 - last.weekday())      # So nach dem Letzten
+    layers = None
+    if only_default_visible:
+        data = _load_raw()
+        layers = [
+            name for name, lyr in data.get("layers", {}).items()
+            if lyr.get("default_visible", True)
+        ]
+    return {
+        "month": first.strftime("%Y-%m"),
+        "label": f"{_MONTHS_FULL_DE[first.month - 1]} {first.year}",
+        "first": first.isoformat(),
+        "last":  last.isoformat(),
+        "start": grid_start.isoformat(),
+        "end":   grid_end.isoformat(),
+        "days":  entries_in_range(grid_start, grid_end, layers=layers),
     }
 
 
@@ -872,6 +966,8 @@ def _absage_alarms(away_blocks: list[dict]) -> list[str]:
                     continue
                 if e.get("ausfall"):
                     continue  # fällt eh aus (Ferien) → nichts abzusagen
+                if e.get("deaktiviert"):
+                    continue  # vom User einzeln deaktiviert → kein Alarm
                 if e["label"] in seen:
                     continue
                 appt_ort = e.get("ort")
@@ -964,6 +1060,10 @@ def render_range_for_tool(start: date, end: date,
                 lines.append(f"  ℹ {e['label']} fällt aus ({e['ausfall']}) "
                              f"- kein Termin an diesem Tag")
                 continue
+            if e.get("deaktiviert"):
+                lines.append(f"  ℹ {e['label']} ist an diesem Tag deaktiviert "
+                             f"- findet nicht statt")
+                continue
             # Zeit MIT Ende anzeigen, wenn vorhanden ('17:45-18:30'),
             # sonst nur Startzeit - das Modell sieht so die Dauer direkt.
             if e.get("time") and e.get("ende"):
@@ -1014,7 +1114,8 @@ def conflicts_for_proposed(layer: str, day: str, label: str,
         d = date.fromisoformat((day or "").strip())
     except ValueError:
         return []
-    existing = entries_in_range(d, d).get(d.isoformat(), [])
+    existing = [e for e in entries_in_range(d, d).get(d.isoformat(), [])
+                if not e.get("deaktiviert")]   # deaktivierte zählen nicht mit
     phantom: dict = {"layer": (layer or "termine"),
                      "label": (label or "(neuer Termin)")}
     t = (time or "").strip()
@@ -1056,6 +1157,7 @@ def open_alarms(horizon_days: int = 30) -> list[dict]:
         raw.append(("ABSAGEN", line))
     for day_iso, entries in entries_in_range(today, end).items():
         d = date.fromisoformat(day_iso)
+        entries = [e for e in entries if not e.get("deaktiviert")]  # deaktivierte: kein Alarm
         for line in _conflict_lines(d, entries, away_blocks):
             raw.append(("KONFLIKT", line))
         for line in day_warnings(entries):

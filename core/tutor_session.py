@@ -3,54 +3,69 @@
 # Verwaltet den State einer aktiven Sprachtutor-Session.
 #
 # ── Was ist eine Session? ─────────────────────────────────────────────
-# Eine Session beginnt wenn Presence erkannt wird (oder manuell per 'T').
-# Die KI begrüßt zuerst auf Mandarin. Der User antwortet (per Mikrofon +
-# Space-Taste). Das geht hin und her bis die Session manuell beendet wird.
+# Eine Session beginnt manuell (Dashboard-Hotkey). Die KI begrüßt zuerst in
+# der Zielsprache. Der User antwortet (Mikrofon + Space). Das geht hin und
+# her bis die Session manuell beendet wird.
+#
+# ── Framework, nicht Chinesisch-Tutor ─────────────────────────────────
+# Welche Sprache (System-Prompt, Vokabeln, Lesehilfe) kommt aus dem
+# LanguageProfile (tutor_langs.py); welcher Anbieter/welches Modell aus der
+# Provider-Registry (tutor_providers.py). Backend-Dispatch nach provider.kind:
+#   ollama        → core/ai.py (lokal, Default, offline)
+#   anthropic     → core/tutor_cloud.py (Claude, Sashas Pfad)
+#   openai_compat → core/tutor_openai_compat.py (Qwen/DeepSeek/Mistral/…)
+#
+# ── Privacy ───────────────────────────────────────────────────────────
+# Provider mit trains_on_data werden NICHT verboten, aber bei Session-Beginn
+# LAUT geflaggt (Log + privacy_notice() fürs UI). Siehe memory/tutor_system.md.
 #
 # ── Thread-Safety ─────────────────────────────────────────────────────
-# _active und _history werden von Flask (Browser-Requests) und dem
-# Event-Loop (brain.py) gleichzeitig gelesen/geschrieben → Lock nötig.
-#
-# ── Tutor-System-Prompt ───────────────────────────────────────────────
-# Komplett anderer Prompt als der reguläre Chat – die KI weiß hier dass
-# sie Sprachlehrerin ist und nutzt die Tutor-Tools (get_confirmed_vocab etc.)
+# _active/_history werden von Flask und Event-Loop gelesen/geschrieben → Lock.
 
+import os
 from threading import Lock
 from collections import deque
 import ai
 import tutor
+import tutor_langs
+import tutor_providers
+import tutor_config   # lädt data/tutor_config.json, injiziert Keys, liefert Settings
 
-_lock    = Lock()
-_active  = False
-_history = deque(maxlen=100)  # Tutor-Gesprächsverlauf (separat vom Chat-History)
+_lock     = Lock()
+_active   = False
+_history  = deque(maxlen=100)   # Tutor-Gesprächsverlauf (separat vom Chat-History)
+_privacy  = None               # gesetzte Privacy-Warnung der laufenden Session (oder None)
 
-# ── Tutor-System-Prompt ───────────────────────────────────────────────
-# Wird statt _SYSTEM_PROMPT aus ai.py verwendet wenn Tutor aktiv ist.
-_TUTOR_PROMPT = (
-    "Du bist Mandarin-Sprachtutor für Sasha, eine Deutsche die Mandarin lernt. "
-    "Deine Aufgabe: lockeres, natürliches Smalltalk auf Mandarin – wie ein echter "
-    "Gesprächspartner im Alltag, nicht wie ein Lehrer vor einer Klasse. "
-    "\n\n"
-    "ABLAUF ZU SESSION-BEGINN: "
-    "Ruf get_confirmed_vocab() und get_testing_vocab() auf um zu wissen welche Wörter "
-    "Sasha kennt. Falls testing_vocab weniger als 10 Einträge hat: introduce_new() aufrufen. "
-    "\n\n"
-    "VOKABEL-REGELN: "
-    "80% der Zeit nur bestätigte Vokabeln (confirmed=True) verwenden. "
-    "20% der Zeit Wörter aus dem Testing-Pool einstreuen. "
-    "Wenn Sasha ein Wort korrekt und sinnvoll in einem Satz nutzt: increment_correct_use() aufrufen. "
-    "\n\n"
-    "SPRACH-REGELN: "
-    "Hauptsächlich auf Mandarin schreiben. "
-    "Neue Wörter immer mit Pinyin in Klammern: 谢谢 (xiè xie). "
-    "Sätze kurz halten – Sasha ist Anfängerin. "
-    "Wenn Sasha auf Deutsch fragt oder etwas nicht versteht: kurz auf Deutsch erklären, "
-    "dann weiter auf Mandarin. "
-    "\n\n"
-    "CHARAKTER: Entspannt, geduldig, kein übertriebenes Lob. Reagiere natürlich. "
-    "Keine Bewertungen wie 'Super gemacht!' – einfach normal weiterreden. "
-    "Die erste Nachricht: kurze, einfache Begrüßung auf Mandarin."
-)
+def _history_window() -> int:
+    """Wieviele der letzten Turns ans Modell gesendet werden (Kosten-Hebel: die
+    API ist zustandslos, sendet sonst die ganze History pro Turn neu). Storage
+    bleibt bei maxlen=100; gesendet wird nur das Fenster."""
+    try:
+        return int(tutor_config.setting("history_window", 30))
+    except (TypeError, ValueError):
+        return 30
+
+
+def _resolve():
+    """Löst Sprache → Profil → Provider → Modell auf. Werte kommen aus der lokalen
+    Config (data/tutor_config.json), per Env übersteuerbar (siehe tutor_config:
+    Precedence Env > Config > Profil-Default). Wird der Provider gewechselt, ohne
+    ein Modell zu setzen, greift das default_model des Providers."""
+    lang          = tutor_config.setting("lang", "zh")
+    prof          = tutor_langs.get(lang)
+    provider_name = tutor_config.setting("provider", prof["provider"])
+    provider      = tutor_providers.get(provider_name)
+    model         = tutor_config.setting("model", None)
+    if not model:
+        model = prof["model"] if provider_name == prof["provider"] else provider.get("default_model")
+    return prof, provider_name, provider, model
+
+
+def privacy_notice():
+    """Gibt die Privacy-Warnung der laufenden Session zurück (oder None).
+    Für /api/tutor/status → UI-Banner."""
+    with _lock:
+        return _privacy
 
 
 def is_active() -> bool:
@@ -61,21 +76,38 @@ def is_active() -> bool:
 
 def activate():
     """
-    Aktiviert den Session-State (wird von brain.py aufgerufen wenn TUTOR_START Event kommt).
-    Setzt _active = True und leert die History für eine frische Session.
-    Die KI-Begrüßung kommt separat über /api/tutor/start.
+    Aktiviert den Session-State (manueller Start via /api/tutor/start).
+    Setzt _active=True, leert die History, und FLAGGT laut, falls der gewählte
+    Provider auf Nutzdaten trainiert.
     """
-    global _active, _history
+    global _active, _history, _privacy
+    prof, pname, provider, model = _resolve()
+
+    notice = None
+    if tutor_providers.trains_on_data(pname):
+        notice = (f"⚠ DATENSCHUTZ: Provider '{pname}' ({provider.get('jurisdiction')}) "
+                  f"trainiert/nutzt offiziell deine Eingaben. Modell {model}, "
+                  f"Sprache {prof['name']}.")
+        try:
+            import state
+            state.push_log("⚠⚠⚠ TUTOR PRIVACY-WARNUNG ⚠⚠⚠")
+            state.push_log(notice)
+        except Exception:
+            pass
+        print(notice)
+
     with _lock:
         _active  = True
         _history = deque(maxlen=100)
+        _privacy = notice
 
 
 def deactivate():
     """Beendet die Session. History bleibt für eventuelle Nachbetrachtung."""
-    global _active
+    global _active, _privacy
     with _lock:
-        _active = False
+        _active  = False
+        _privacy = None
 
 
 def get_history() -> list:
@@ -92,30 +124,43 @@ def push_message(role: str, content: str):
 
 def respond_stream(user_text: str = None):
     """
-    Generator: schickt die aktuelle History (+ optionale neue User-Nachricht)
-    an Mistral mit dem Tutor-System-Prompt und Tutor-Tools.
-    Yieldet Token für Token für das Browser-Streaming.
+    Generator: schickt die History (+ optionale neue User-Nachricht) an das
+    aufgelöste Backend mit dem Sprach-System-Prompt und den Tutor-Tools.
+    Yieldet Token für Token fürs Browser-Streaming.
 
-    user_text=None bedeutet: KI startet das Gespräch (Session-Beginn).
+    user_text=None → KI startet das Gespräch (Session-Beginn).
     """
     if user_text is not None:
         push_message("user", user_text)
 
-    history = get_history()
+    prof, pname, provider, model = _resolve()
 
-    # ai.chat_stream mit Tutor-Prompt + Tutor-Tools aufrufen.
-    # Wir nutzen die gleiche Infrastruktur wie der reguläre Chat,
-    # aber mit anderem System-Prompt und anderen Tools.
+    # Kosten-Hebel: nur die letzten N Turns senden (zustandslose API).
+    history = get_history()[-_history_window():]
+    system  = prof["system_prompt"]
+
+    # Backend-Dispatch nach provider.kind. Alle haben dieselbe chat_stream()-
+    # Signatur (yieldet Plain-Text-Tokens); der Tutor bleibt sauberes Addon.
+    kind = provider.get("kind")
+    if kind == "anthropic":
+        import tutor_cloud
+        stream = tutor_cloud.chat_stream(
+            messages=history, model=model, system=system,
+            tools=tutor.TUTOR_TOOLS, tool_executor=tutor.execute_tool)
+    elif kind == "openai_compat":
+        import tutor_openai_compat
+        stream = tutor_openai_compat.chat_stream(
+            messages=history, model=model, system=system,
+            tools=tutor.TUTOR_TOOLS, tool_executor=tutor.execute_tool,
+            _provider=provider)
+    else:  # 'ollama' → lokaler Default über core/ai.py
+        stream = ai.chat_stream(
+            messages=history, system=system,
+            tools=tutor.TUTOR_TOOLS, tool_executor=tutor.execute_tool)
+
     full_response = []
-
-    for token in ai.chat_stream(
-        messages=history,
-        system=_TUTOR_PROMPT,
-        tools=tutor.TUTOR_TOOLS,
-        tool_executor=tutor.execute_tool,
-    ):
+    for token in stream:
         full_response.append(token)
         yield token
 
-    # Komplette Antwort in History speichern
     push_message("assistant", "".join(full_response))

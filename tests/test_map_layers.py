@@ -85,3 +85,44 @@ def test_trade_features_unavailable_when_source_down(monkeypatch):
 
 def test_trade_unknown_sub_returns_none():
     assert trade.features(0, 0, 0, 80, 30, sub="pipelines") is None
+
+
+def _fake_routes():
+    # ein Segment quer durch die Weltsicht (Atlantik-nah)
+    a = lonlat_to_world(-40.0, 20.0)
+    b = lonlat_to_world(10.0, 10.0)
+    c = lonlat_to_world(40.0, 30.0)
+    return {"source": portwatch.SOURCE, "vintage": "2023-02-28",
+            "retrieved_at": "2023-02-28T00:00:00+00:00",
+            "segments": [[min(a[0], c[0]), min(a[1], b[1]),
+                          max(a[0], c[0]), max(c[1], a[1]),
+                          [list(a), list(b), list(c)]]]}
+
+
+def test_trade_routes_projects_lines(monkeypatch):
+    monkeypatch.setattr(portwatch, "routes", _fake_routes)
+    out = trade.features(0.0, 20.0, 0.0, 120, 40, sub="routes")
+    assert out["sub"] == "routes"
+    assert len(out["lines"]) == 1
+    assert len(out["lines"][0]) >= 2          # projizierte Polylinie
+    assert "points" not in out                # nur Linien bei sub=routes
+    assert out["vintage"] == "2023-02-28"
+
+
+def test_trade_composite_has_both(monkeypatch):
+    monkeypatch.setattr(portwatch, "routes", _fake_routes)
+    monkeypatch.setattr(portwatch, "chokepoints", _fake_payload)
+    out = trade.features(0.0, 20.0, 0.0, 120, 40)   # kein sub → Komposit
+    assert out["sub"] == "all"
+    assert len(out["lines"]) == 1
+    assert any(p["name"] == "Suez Canal" for p in out["points"])
+    # tagesaktueller Chokepoint-Stand gewinnt über statischen Routen-Stand
+    assert out["vintage"] == "2026-06-07"
+    assert out["unavailable"] is False
+
+
+def test_project_polyline_simplifies():
+    vp = render.viewport(0.0, 20.0, 0.0, 100, 40, aspect=0.5)
+    a = lonlat_to_world(0.0, 0.0)
+    line = render.project_polyline(vp, [a, a, a])   # selbe Zelle → kollabiert
+    assert len(line) == 1

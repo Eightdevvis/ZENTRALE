@@ -78,12 +78,14 @@ Liegen *über* der Grundkarte, sprechen dasselbe Koordinatensystem, sind
 beliebig **stapelbar** (das „übereinanderlegen"). Unabhängig von Achse 1.
 
 - `trade` — **erster gebauter Overlay (2026-06)**, Komposit aus Sub-Layern, je
-  EINE offizielle Quelle (siehe `memory/maps_quellen.md`). Live: `chokepoints`
-  (IMF PortWatch, maritime Engstellen + täglicher Schiffsverkehr). Geometrie
-  (Engstellen-Punkte, quasi-statisch) + Tagesdaten (Verkehr) joint die Engine
-  per `portid` — exakt die A/B-Trennung. Geplant: `routes` (PortWatch
-  `Global_Shipping_Routes` L15), `ports`, Seekabel (TeleGeography), Pipelines.
-  Wichtig: PortWatch ist lizenziert → Daten nur lokal gecacht, NICHT committet.
+  EINE offizielle Quelle (siehe `memory/maps_quellen.md`). Live: `routes`
+  (PortWatch `Global_Shipping_Routes` L15 — Schifffahrtslinien, statisch) +
+  `chokepoints` (IMF PortWatch, maritime Engstellen + **täglicher** Verkehr,
+  Punkte+Tagesdaten per `portid` gejoint — A/B-Trennung). Der Overlay-Toggle
+  zeigt das **Komposit** (Linien + Punkte) → „Handelsrouten" wird seinem Namen
+  gerecht; `?sub=routes|chokepoints` adressiert die Sub-Layer einzeln. Geplant:
+  `ports`, Seekabel (TeleGeography), Pipelines. Wichtig: PortWatch ist
+  lizenziert → Daten nur lokal gecacht, NICHT committet.
 - `political` — Konflikte, Grenzen, Truppenbewegungen.
 - `economic` — danach.
 - `climate` — danach.

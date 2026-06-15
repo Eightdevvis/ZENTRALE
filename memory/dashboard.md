@@ -75,8 +75,9 @@ Layout (3 Spalten, lean):
 > `.srow`-CSS noch bereit).
 
 - **Header:** kein Ollama-Status (KI aus); NET/UP/Theme/Uhr.
-- **Mitte:** in `laptop.html` weiter Platzhalter; in der **TUI** ist hier das
-  **Graph-Werkzeug** verbaut (Taste `g`, s.u.).
+- **Mitte:** in `laptop.html` jetzt der **Kalender** (blätterbare Woche/Monat,
+  `/api/calendar`, s.u. „Kalender-Mitte"); in der **TUI** wahlweise
+  **Graph-Werkzeug** (`g`), **Listen** (`l`), **Karte** (`m`) oder **Kalender** (`c`).
 - **Minimale Boot-Dependencies:** nur `flask` + `python-dateutil` (kein
   Whisper/TTS/sherpa/piper nötig — die Kassette ist KI-frei). Siehe `starten.md`.
 
@@ -154,6 +155,28 @@ das langsame Hintergrund-Polling (`Store._poll_graphs`, alle 5 s). `Esc`/`g`
 schließt das Werkzeug wieder. `--selftest` listet die Graphen inkl.
 Typ/Sparkline (ohne TTY).
 
+**Listen-Werkzeug (Mitte, Taste `l`):** abhakbare Todo-/Sammel-Listen — Pendant
+zum Graph-Werkzeug, aber für „random stuff" statt Zeitreihen. Geteilte Logik
+(`core/lists.py` + `/api/lists`), hier in curses verbaut. `l` gibt der MITTE-Box
+den Fokus; ein Zustandsmodell `L` (`view`: `list`/`new`/`view`/`nest`) steuert: in
+**list** mit ↑/↓ Liste wählen, `n` neu, `d` löschen (Mini-Bestätigungsdialog wie
+beim Graph: `j`/Enter löscht, sonst Abbruch — `L["confirm"]`), `>` ordnet die Liste
+in eine andere ein (→ **nest**: Ziel-Liste wählen, Enter; `POST …/<lid>/nest`),
+Enter öffnet; in **new** Name tippen + Enter (`POST /api/lists`); in **view** die
+Einträge der Liste — **verschachtelt**: jeder Eintrag kann eigene Unterpunkte
+tragen, die TUI klopft den Baum mit `l_flatten()` flach (Einrückung = Tiefe) und
+zeigt bei Eltern `(erledigt/gesamt)` der Kinder. ↑/↓ wählen, **`space`/Enter**
+hakt ab/auf (`…/items/<iid>/toggle`, trifft jede Tiefe), `a` hängt einen neuen
+Eintrag oben an, **`s` hängt einen Unterpunkt** unter den markierten
+(`L["addparent"]` → `POST …/items {parent}`), `d` löscht den markierten samt
+Teilbaum. Erledigte stehen gedämpft mit `[x]` da. Lange Listen scrollen um den
+Cursor. Alles synchron per `api_call()`; nach jeder Aktion `l_load()`+`l_sync_def()`
+(offene Liste aus der frischen Registry neu greifen). `Esc`/`l` schließt.
+`--selftest` listet die Listen inkl. erledigt-Zähler (ohne TTY). Anders als die
+Graphen gibt es **keine** `lifestyle`-Box-Überlagerung — eine Liste ist kein
+Zeitreihen-Plot. (Monolith/Laptop sind für Listen noch **nicht** verkabelt; das
+Backend `/api/lists` steht aber für alle Kassetten bereit.)
+
 **Karte (Mitte, Taste `m`):** Maps-System Schritt 1 — grobe Weltkarte (Küsten
 1:110m) in der MITTE-Box, analog zum Graph-Werkzeug. Die TUI ist reiner
 Zeichner: holt fertig projizierte Linien über `/api/map/base` (Engine in
@@ -172,6 +195,18 @@ Vektorgrafik, gleicher Viewport — wie `/slide` PDFs extern öffnet; dort Taste
 **`t`** fürs selbe Overlay als Bernstein-Marker); der
 ASCII-Grid in der TUI ist nur die reduzierte Variante. Architektur + die drei
 Achsen (Detail/Layer/Zeit): [maps_system.md](maps_system.md).
+
+**Kalender (Mitte, Taste `c`):** blätterbare **Woche** (Mo-So-Tagesliste) bzw.
+**Monat** (Zeichen-Gitter), umschaltbar. Wie die Karte reiner Zeichner: holt
+fertig gruppierte Tage über `/api/calendar` (Logik in `core/kalender.py`,
+`week_view`/`month_view`). Steuerung `←→`/`hl` blättern, `v`/`Tab` Woche↔Monat,
+`0` heute, `esc`/`c` zu. Heute hervorgehoben, Monats-Randtage ausgegraut,
+`ausfall`-Routinen als `ℹ`. **Einmal-Termine direkt eintragen/löschen:** `a`
+öffnet ein gestaffeltes Formular (Datum→Zeit→Titel → `POST /api/calendar/entry`);
+in der Wochenliste mit `↑↓` einen Termin wählen, `d`+`j` löscht ihn
+(`DELETE /api/calendar/entry`). Routinen bleiben beim KI-Tool (kein ✕). Defensiv
+wie der Karten-Pfad (Fehler-Marker statt Dauer-Refetch). Details + die zwei
+Browser-Fronten: [kalender_system.md](kalender_system.md).
 
 - **Nur stdlib:** `curses` + `urllib` + `json` + `threading` — null Extra-Deps.
   Setzt UTF-8-Locale vor curses-Init (für Box-/Block-Zeichen).
@@ -218,8 +253,9 @@ für Kiosk/Bookmarks). Herzstück ist ein
 animierter **ASCII-Kern** (`#core`), gesteuert vom *Exhibit-Direktor*
 (`frameTick`, 90 ms/Frame). Umschaltbare Exhibits über Tabs: `gesicht`
 (Avatar), `torus`, `würfel`, `globus`, `welt` (Weltkarte), `filter`
-(Bild→ASCII-Filter aus `data/photos/`, mono/farbe per Re-Klick) und
-`graph` (s.u., interaktives Panel statt ASCII).
+(Bild→ASCII-Filter aus `data/photos/`, mono/farbe per Re-Klick), `graph`
+(s.u., interaktives Panel statt ASCII) und `kalender` (s.u.). `graph` und
+`kalender` sind **nicht** im Auto-Direktor (interaktiv, nicht zum Durchzappen).
 
 > **Graph-Werkzeug (Exhibit `graph`)** — der Mittelbereich wird zum
 > interaktiven Lifestyle-Tracker: eigene Graphen **anlegen** (Typ `number`
@@ -243,6 +279,18 @@ animierter **ASCII-Kern** (`#core`), gesteuert vom *Exhibit-Direktor*
 > legt man in der TUI an (Backend kennt alle vier). Ein so angelegter
 > `time`/`period`-Graph erscheint in der Monolith-`lifestyle`-Box als
 > Sparkline über `value` (Minuten) — funktioniert, nur ohne HH:MM-Format.
+
+> **Kalender (Exhibit `kalender`)** — der Mittelbereich zeigt den Kalender:
+> blätterbare **Woche** (Mo-So-Liste) bzw. **Monat** (Gitter), umschaltbar,
+> heute hervorgehoben, `ausfall`-Routinen als `ℹ`, Header-Zähler `⚠N` aus den
+> offenen Alarmen. Eigenes `#calendar-panel` (`.cpanel`, `frameTick` blendet wie
+> bei `graph` `#core` aus). Reiner Zeichner: Daten von `/api/calendar`
+> (`view`+`ref`), Datums-Logik in `core/kalender.py`. **Derselbe Endpoint** für
+> alle drei Fronten (Monolith-Tab, Laptop-Mittelbox, TUI-Taste `c`). Einmal-
+> Termine direkt anlegen („＋ Termin"-Form → `POST /api/calendar/entry`) und je
+> Termin per ✕ löschen (`DELETE …`); Routinen bleiben beim KI-Tool. Schreiben ist
+> direkte Nutzeraktion, **nicht** KI-gegatet. Details:
+> [kalender_system.md](kalender_system.md).
 
 > Die IIFEs sind getrennte Scopes. Cross-Scope-Signale laufen über den
 > CustomEvent-Bus auf `window` (`zentrale:logged`, `zentrale:ascii`),

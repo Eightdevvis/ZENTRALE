@@ -13,12 +13,12 @@
 # nur, es rechnet keine Geographie.
 #
 # Steuerung:
-#   Maus ziehen / Pfeiltasten   Pan
+#   Maus ziehen / Pfeiltasten   Pan (horizontal endlos — Welt als Band)
 #   Mausrad / + -               Zoom (Rad zoomt auf den Cursor)
 #   0                           Reset auf Weltansicht
 #   g                           Gradnetz an/aus
 #   l                           Länder-Labels an/aus
-#   t                           Chokepoints-Overlay an/aus (Schiffsverkehr/Engstellen)
+#   t                           Handelsrouten-Overlay an/aus (Routen + Chokepoints)
 #   ?                           Glossar-Such-Modal (Begriffe nachschlagen)
 #   Esc / q                     schließen
 #
@@ -59,6 +59,7 @@ HUD_BG     = (10, 20, 34)
 TRADE_DOT  = (255, 178, 72)     # Chokepoint-Marker (Bernstein, kontrastiert Mint)
 TRADE_RING = (255, 226, 180)    # heller Rand des Markers
 TRADE_FG   = (255, 232, 196)    # Chokepoint-Label
+ROUTE_COL  = (92, 138, 156)     # Schifffahrtsrouten-Linien (gedämpftes Stahlblau)
 LEG_FG     = (196, 214, 210)    # Legenden-Text
 LEG_KEY    = (130, 222, 212)    # Legenden-Taste (Mint, wie Küste)
 LEG_BG     = (10, 20, 34)       # Legenden-Hintergrund
@@ -78,7 +79,7 @@ LEGEND = [
     ("0",             "Weltansicht"),
     ("g",             "Gradnetz"),
     ("l",             "Länder-Labels"),
-    ("t",             "Chokepoints (Schiffe/Tag)"),
+    ("t",             "Handelsrouten (Routen+Engstellen)"),
     ("?",             "Glossar (Begriffe suchen)"),
     ("Esc / q",       "schließen"),
 ]
@@ -131,9 +132,9 @@ class MapView:
         sx, sy = self._span(self.zoom)
         return self.cx - sx / 2.0, self.cy - sy / 2.0, sx, sy
 
-    def to_screen(self, wx, wy):
+    def to_screen(self, wx, wy, ox=0.0):
         x0, y0, sx, sy = self._view()
-        px = (wx - x0) / sx * self.w
+        px = (wx + ox - x0) / sx * self.w
         py = (wy - y0) / sy * self.h
         return _clampf(px, -_CLAMP, _CLAMP), _clampf(py, -_CLAMP, _CLAMP)
 
@@ -141,14 +142,26 @@ class MapView:
         x0, y0, sx, sy = self._view()
         return x0 + px / self.w * sx, y0 + py / self.h * sy
 
-    def visible(self, minx, miny, maxx, maxy):
+    def visible(self, minx, miny, maxx, maxy, ox=0.0):
         x0, y0, sx, sy = self._view()
-        return not (maxx < x0 or minx > x0 + sx or maxy < y0 or miny > y0 + sy)
+        return not (maxx + ox < x0 or minx + ox > x0 + sx
+                    or maxy < y0 or miny > y0 + sy)
+
+    def x_offsets(self):
+        """Welt-Wrap: ganzzahlige x-Verschiebungen (in Welt-Breiten = 360°), die
+        die [0,1]-Welt ins Sichtfenster bringen. Die Karte ist ein ENDLOS-BAND —
+        jede Geometrie wird pro Offset projiziert, damit Routen über den 180°-
+        Schnitt nahtlos weiterlaufen (statt am Rand abzuschneiden). Meist 1 Wert,
+        am Datums­grenz-Schnitt 2."""
+        x0 = self.cx - self.span_x / 2.0
+        x1 = x0 + self.span_x
+        return list(range(math.floor(x0), math.floor(x1 - 1e-9) + 1))
 
     def _clamp_pt(self, cx, cy, zoom):
-        """Mittelpunkt so halten, dass die Weltkarte nicht ganz rausläuft."""
+        """Nur VERTIKAL klemmen (oben/unten gibt es keinen Wrap — Mercator endet
+        bei ±85°). Horizontal läuft der Mittelpunkt FREI; die Welt wiederholt sich
+        als Band (siehe x_offsets), darum kein x-Clamp mehr."""
         sx, sy = self._span(zoom)
-        cx = _clampf(cx, -sx / 2.0, 1.0 + sx / 2.0)
         cy = _clampf(cy, sy / 2.0, 1.0 - sy / 2.0) if sy < 1.0 else 0.5
         return cx, cy
 
@@ -217,12 +230,13 @@ def _vignette(w, h):
 def _draw_graticule(screen, view):
     """Längen-/Breitenlinien alle 30°; Äquator + Nullmeridian etwas heller."""
     x0, y0, sx, sy = view._view()
-    for lon in range(-150, 181, 30):
-        wx, _ = lonlat_to_world(lon, 0)
-        px = (wx - x0) / sx * view.w
-        if 0 <= px <= view.w:
-            pygame.draw.line(screen, GRAT_AXIS if lon == 0 else GRAT,
-                             (px, 0), (px, view.h))
+    for ox in view.x_offsets():
+        for lon in range(-150, 181, 30):
+            wx, _ = lonlat_to_world(lon, 0)
+            px = (wx + ox - x0) / sx * view.w
+            if 0 <= px <= view.w:
+                pygame.draw.line(screen, GRAT_AXIS if lon == 0 else GRAT,
+                                 (px, 0), (px, view.h))
     for lat in range(-60, 61, 30):
         _, wy = lonlat_to_world(0, lat)
         py = (wy - y0) / sy * view.h
@@ -254,12 +268,13 @@ def _get_geom(level):
     return g
 
 
-def _project(view, ring):
+def _project(view, ring, ox=0.0):
     """Nx2-Welt-Array → Bildschirm-Pixel (int), vektorisiert + vereinfacht:
     aufeinanderfolgende Punkte auf derselben Pixel-Zelle fallen weg. Kappt die
-    Zeichenlast auf ~Bildschirmauflösung, unabhängig von der Quell-Detailtiefe."""
+    Zeichenlast auf ~Bildschirmauflösung, unabhängig von der Quell-Detailtiefe.
+    `ox` verschiebt um eine ganze Welt-Breite (Welt-Wrap-Band, siehe x_offsets)."""
     x0, y0, sx, sy = view._view()
-    px = np.clip((ring[:, 0] - x0) / sx * view.w, -_CLAMP, _CLAMP)
+    px = np.clip((ring[:, 0] + ox - x0) / sx * view.w, -_CLAMP, _CLAMP)
     py = np.clip((ring[:, 1] - y0) / sy * view.h, -_CLAMP, _CLAMP)
     pts = np.empty((len(ring), 2), dtype=np.int32)
     pts[:, 0] = px
@@ -318,21 +333,22 @@ def _draw_land(screen, view, countries):
     ox, oy = SHADOW_OFF
     w, h = view.w, view.h
     polys = []
-    for c in countries:
-        if not view.visible(*c['bbox']):
-            continue
-        for ring in c['rings']:
-            pts = _project(view, ring)
-            if len(pts) < 3:
+    for wox in view.x_offsets():
+        for c in countries:
+            if not view.visible(*c['bbox'], ox=wox):
                 continue
-            mn = pts.min(axis=0)
-            mx = pts.max(axis=0)
-            if mn[0] >= -8 and mn[1] >= -8 and mx[0] <= w + 8 and mx[1] <= h + 8:
-                polys.append(pts.tolist())            # ganz sichtbar → kein Clip nötig
-            else:
-                clipped = _clip_poly(pts.tolist(), -8, -8, w + 8, h + 8)
-                if len(clipped) >= 3:
-                    polys.append(clipped)
+            for ring in c['rings']:
+                pts = _project(view, ring, wox)
+                if len(pts) < 3:
+                    continue
+                mn = pts.min(axis=0)
+                mx = pts.max(axis=0)
+                if mn[0] >= -8 and mn[1] >= -8 and mx[0] <= w + 8 and mx[1] <= h + 8:
+                    polys.append(pts.tolist())        # ganz sichtbar → kein Clip nötig
+                else:
+                    clipped = _clip_poly(pts.tolist(), -8, -8, w + 8, h + 8)
+                    if len(clipped) >= 3:
+                        polys.append(clipped)
     # 1) Schlagschatten ZUERST (versetzt), damit die Füllung darüber liegt.
     for p in polys:
         gfxdraw.filled_polygon(screen, [(x + ox, y + oy) for (x, y) in p], SHADOW)
@@ -345,15 +361,16 @@ def _draw_land(screen, view, countries):
 def _draw_coast(screen, view, lines):
     """Küste mit Glow: erst breiter, weicher Schimmer, dann scharfe helle Linie.
     Punkte vektorisiert projiziert+vereinfacht (siehe _project)."""
-    for (bbox, ring) in lines:
-        if not view.visible(*bbox):
-            continue
-        pts = _project(view, ring)
-        if len(pts) < 2:
-            continue
-        lst = pts.tolist()
-        pygame.draw.lines(screen, COAST_GLOW, False, lst, 4)   # weicher Untergrund
-        pygame.draw.aalines(screen, COAST, False, lst)         # scharfe Linie
+    for ox in view.x_offsets():
+        for (bbox, ring) in lines:
+            if not view.visible(*bbox, ox=ox):
+                continue
+            pts = _project(view, ring, ox)
+            if len(pts) < 2:
+                continue
+            lst = pts.tolist()
+            pygame.draw.lines(screen, COAST_GLOW, False, lst, 4)   # weicher Untergrund
+            pygame.draw.aalines(screen, COAST, False, lst)         # scharfe Linie
 
 
 def _point_in_ring(px, py, ring):
@@ -375,12 +392,14 @@ def _draw_hover_label(screen, view, countries, fonts, cache, mouse):
     liegt)."""
     mx, my = mouse
     wx, wy = view.screen_to_world(mx, my)
+    ox = math.floor(wx)            # welche Welt-Kopie liegt unterm Cursor (Band)
+    wxw = wx - ox                  # zugehöriges x in [0,1) für den Polygon-Test
     hit = None
     for c in countries:
         minx, miny, maxx, maxy = c['bbox']
-        if not (minx <= wx <= maxx and miny <= wy <= maxy):
+        if not (minx <= wxw <= maxx and miny <= wy <= maxy):
             continue
-        if any(_point_in_ring(wx, wy, ring) for ring in c['rings']):
+        if any(_point_in_ring(wxw, wy, ring) for ring in c['rings']):
             hit = c
             break
     if hit is None:
@@ -391,7 +410,7 @@ def _draw_hover_label(screen, view, countries, fonts, cache, mouse):
     if surf is None:
         surf = font.render(hit['name'], True, LABEL_FG)
         cache[hit['name']] = surf
-    px, py = view.to_screen(hit['lx'], hit['ly'])
+    px, py = view.to_screen(hit['lx'], hit['ly'], ox=ox)
     if not (0 <= px <= view.w and 0 <= py <= view.h):
         px, py = mx, my - 18                              # Anker raus → am Cursor
     w, h = surf.get_size()
@@ -428,25 +447,62 @@ def _get_trade():
     return _TRADE
 
 
+_ROUTES = None
+
+
+def _get_routes():
+    """Schifffahrtsrouten-Segmente einmal laden (Welt-Koords als Nx2-Arrays für
+    die vektorisierte Projektion, wie die Küsten). Liste von (bbox, np-array)."""
+    global _ROUTES
+    if _ROUTES is not None:
+        return _ROUTES
+    segs = []
+    try:
+        from map.layers import portwatch  # noqa: E402
+        data = portwatch.routes()
+        if data:
+            for (mnx, mny, mxx, mxy, pts) in data["segments"]:
+                segs.append(((mnx, mny, mxx, mxy),
+                             np.asarray(pts, dtype=np.float64)))
+    except Exception:
+        pass
+    _ROUTES = segs
+    return _ROUTES
+
+
+def _draw_routes(screen, view):
+    """Welt-Schifffahrtsrouten als dezente Linien (unter den Chokepoint-Markern).
+    Projektion vektorisiert + vereinfacht (wie die Küste, _project)."""
+    for ox in view.x_offsets():
+        for (bbox, ring) in _get_routes():
+            if not view.visible(*bbox, ox=ox):
+                continue
+            pts = _project(view, ring, ox)
+            if len(pts) < 2:
+                continue
+            pygame.draw.aalines(screen, ROUTE_COL, False, pts.tolist())
+
+
 def _draw_trade(screen, view, font, mouse):
     """Chokepoints als leuchtende Bernstein-Marker, Radius ~√(Schiffe heute).
     Halo + Kern + heller Ring; der dem Cursor nächste bekommt Name + Wert."""
     td = _get_trade()
     mx, my = mouse
     near, nd = None, 1e18
-    for it in td['items']:
-        if not view.visible(it['wx'], it['wy'], it['wx'], it['wy']):
-            continue
-        px, py = int(view.to_screen(it['wx'], it['wy'])[0]), \
-            int(view.to_screen(it['wx'], it['wy'])[1])
-        val = it['val'] or 0
-        r = max(4, min(26, int(4 + math.sqrt(val) * 0.7)))
-        gfxdraw.filled_circle(screen, px, py, r + 4, (255, 160, 50, 55))  # Halo
-        gfxdraw.filled_circle(screen, px, py, r, TRADE_DOT)
-        gfxdraw.aacircle(screen, px, py, r, TRADE_RING)
-        d = (px - mx) ** 2 + (py - my) ** 2
-        if d < nd:
-            nd, near = d, (it, px, py, r)
+    for ox in view.x_offsets():
+        for it in td['items']:
+            if not view.visible(it['wx'], it['wy'], it['wx'], it['wy'], ox=ox):
+                continue
+            sxp, syp = view.to_screen(it['wx'], it['wy'], ox=ox)
+            px, py = int(sxp), int(syp)
+            val = it['val'] or 0
+            r = max(4, min(26, int(4 + math.sqrt(val) * 0.7)))
+            gfxdraw.filled_circle(screen, px, py, r + 4, (255, 160, 50, 55))  # Halo
+            gfxdraw.filled_circle(screen, px, py, r, TRADE_DOT)
+            gfxdraw.aacircle(screen, px, py, r, TRADE_RING)
+            d = (px - mx) ** 2 + (py - my) ** 2
+            if d < nd:
+                nd, near = d, (it, px, py, r)
     if near is not None and nd < 70 ** 2:
         it, px, py, r = near
         label = "%s  %s" % (it['name'], '—' if it['val'] is None else it['val'])
@@ -458,9 +514,9 @@ def _draw_trade_caption(screen, font, view):
     """Kleine Quellen-/Stand-Zeile oben links — Provenienz sichtbar (seriös)."""
     td = _get_trade()
     if not td['items']:
-        txt = "◆ Chokepoints — keine Daten (PortWatch-Cache leer)"
+        txt = "◆ Handelsrouten — keine Daten (PortWatch-Cache leer)"
     else:
-        txt = "◆ Chokepoints · %s · Stand %s" % (
+        txt = "◆ Handelsrouten · Routen + Chokepoints · %s · Stand %s" % (
             td['source'] or 'IMF PortWatch', td['vintage'] or '?')
     label = font.render(txt, True, TRADE_FG)
     pad = 6
@@ -469,6 +525,46 @@ def _draw_trade_caption(screen, font, view):
     bg.fill(HUD_BG)
     screen.blit(bg, (10, 10))
     screen.blit(label, (10 + pad, 10 + pad))
+
+
+# Symbol-Erklärung für das Trade-Overlay (nur sichtbar, wenn 't' an ist). Sagt,
+# was Linie / Marker / Zahl bedeuten — eine EIGENE Legende, getrennt von der
+# Shortcut-Legende oben rechts. Unten rechts (über nichts anderem).
+_TRADE_LEGEND = [
+    ("line", ROUTE_COL, "Schifffahrtsroute"),
+    ("dot",  TRADE_DOT, "Chokepoint (Engstelle)"),
+    ("num",  TRADE_FG,  "Zahl = Schiffe / Tag"),
+]
+
+
+def _draw_trade_legend(screen, font, view):
+    """Mini-Legende unten rechts, die die Trade-Symbole beschriftet: was ist die
+    Linie, was der Marker, was die Zahl. Farbproben links, Text rechts."""
+    pad, sw, gap = 8, 24, 8                       # swatch-Breite, Abstand
+    lh = font.get_height() + 6
+    lab_w = max(font.size(t)[0] for _, _, t in _TRADE_LEGEND)
+    bw = pad * 2 + sw + gap + lab_w
+    bh = pad * 2 + lh * len(_TRADE_LEGEND)
+    x0 = view.w - bw - 10
+    y0 = view.h - bh - 10
+    bg = pygame.Surface((bw, bh))
+    bg.set_alpha(175)
+    bg.fill(LEG_BG)
+    screen.blit(bg, (x0, y0))
+    for i, (kind, col, text) in enumerate(_TRADE_LEGEND):
+        ty = y0 + pad + i * lh
+        cyc = ty + font.get_height() // 2
+        sxc = x0 + pad
+        if kind == "line":
+            pygame.draw.line(screen, col, (sxc, cyc), (sxc + sw, cyc), 2)
+        elif kind == "dot":
+            gfxdraw.filled_circle(screen, sxc + sw // 2, cyc, 5, col)
+            gfxdraw.aacircle(screen, sxc + sw // 2, cyc, 5, TRADE_RING)
+        else:  # num — Beispielzahl als Probe
+            ns = font.render("17", True, col)
+            screen.blit(ns, (sxc + sw // 2 - ns.get_width() // 2,
+                             cyc - ns.get_height() // 2))
+        screen.blit(font.render(text, True, LEG_FG), (x0 + pad + sw + gap, ty))
 
 
 def _draw_legend(screen, font, win_w):
@@ -574,7 +670,7 @@ def _draw_glossary(screen, fonts, win_w, win_h, query, results, sel):
 
 
 def _draw_hud(screen, font, view, level=''):
-    lon, lat = world_to_lonlat(view.cx, view.cy)
+    lon, lat = world_to_lonlat(view.cx - math.floor(view.cx), view.cy)
     txt = "lon %.2f  lat %.2f   zoom %.1f   lod %s" % (lon, lat, view.zoom, level)
     label = font.render(txt, True, HUD_FG)
     pad = 6
@@ -650,6 +746,7 @@ def main():
                 elif ev.key == pygame.K_0:
                     view.tzoom = 0.0       # weich zurück zur Weltansicht
                     wx, wy = lonlat_to_world(10.0, 30.0)
+                    wx += round(view.cx - wx)   # nächste Welt-Kopie → kurzer Pan
                     view.tcx, view.tcy = view._clamp_pt(wx, wy, 0.0)
                 elif ev.key in (pygame.K_PLUS, pygame.K_EQUALS, pygame.K_KP_PLUS):
                     view.zoom_to(view.w / 2, view.h / 2, +0.6)
@@ -701,8 +798,10 @@ def main():
             _draw_hover_label(screen, view, geom['countries'], label_fonts,
                               label_cache, pygame.mouse.get_pos())
         if show_trade:
+            _draw_routes(screen, view)       # Routen zuerst (unter den Markern)
             _draw_trade(screen, view, label_fonts[1], pygame.mouse.get_pos())
             _draw_trade_caption(screen, hud_font, view)
+            _draw_trade_legend(screen, legend_font, view)   # Symbol-Erklärung
         _draw_hud(screen, hud_font, view, level)
         if show_legend:
             _draw_legend(screen, legend_font, view.w)
