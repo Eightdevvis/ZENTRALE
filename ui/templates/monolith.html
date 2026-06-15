@@ -793,9 +793,9 @@
         if (e.recurring) {
           acts = '<span class="cact" title="' + (deakt ? 'wieder aktivieren' : 'diesen Termin deaktivieren')
             + '" data-rt-day="' + dayIso + '" data-rt-label="' + esc(label) + '" data-rt-layer="' + esc(e.layer || '')
-            + '" data-rt-off="' + (deakt ? '0' : '1') + '">' + (deakt ? '↺' : '⊘') + '</span>'
+            + '" data-rt-time="' + esc(e.time || '') + '" data-rt-off="' + (deakt ? '0' : '1') + '">' + (deakt ? '↺' : '⊘') + '</span>'
             + '<span class="cdel" title="ganze Routine löschen" data-rd-label="' + esc(label)
-            + '" data-rd-layer="' + esc(e.layer || '') + '">🗑</span>';
+            + '" data-rd-layer="' + esc(e.layer || '') + '" data-rd-day="' + dayIso + '" data-rd-time="' + esc(e.time || '') + '">🗑</span>';
         } else if (dayIso) {
           acts = '<span class="cact" title="bearbeiten" data-edit-day="' + dayIso + '" data-edit-label="' + esc(label)
             + '" data-edit-layer="' + esc(e.layer || '') + '" data-edit-time="' + esc(e.time || '')
@@ -975,24 +975,26 @@
         } catch (e) { CS.msg = 'netzwerkfehler.'; CS.msgWarn = true; render(); }
       }
 
-      async function routineToggle(day, label, layer, off) {
+      async function routineToggle(day, label, layer, off, time) {
         try {
           var res = await fetch('/api/calendar/routine/skip', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ layer: layer, label: label, day: day, off: off })
+            body: JSON.stringify({ layer: layer, label: label, day: day, off: off, time: time || '' })
           });
           if (!res.ok) { CS.msg = 'fehlgeschlagen (Backend neu starten?).'; CS.msgWarn = true; render(); return; }
+          var j = await res.json();
+          if (!j.changed) { CS.msg = 'keine passende Routine an dem Tag.'; CS.msgWarn = true; render(); return; }
           CS.msg = (off ? 'deaktiviert: ' : 'aktiviert: ') + label; CS.msgWarn = false;
           load();
         } catch (e) { CS.msg = 'netzwerkfehler.'; CS.msgWarn = true; render(); }
       }
 
-      async function routineDelete(label, layer) {
+      async function routineDelete(label, layer, day, time) {
         if (!confirm('Ganze Routine „' + label + '" löschen? Alle Vorkommen verschwinden.')) return;
         try {
           var res = await fetch('/api/calendar/routine', {
             method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ layer: layer, label: label })
+            body: JSON.stringify({ layer: layer, label: label, day: day || '', time: time || '' })
           });
           if (!res.ok) { CS.msg = 'fehlgeschlagen (Backend neu starten?).'; CS.msgWarn = true; render(); return; }
           var j = await res.json();
@@ -1040,13 +1042,15 @@
           el.onclick = function (ev) {
             ev.stopPropagation();
             routineToggle(el.getAttribute('data-rt-day'), el.getAttribute('data-rt-label'),
-                          el.getAttribute('data-rt-layer'), el.getAttribute('data-rt-off') === '1');
+                          el.getAttribute('data-rt-layer'), el.getAttribute('data-rt-off') === '1',
+                          el.getAttribute('data-rt-time'));
           };
         });
         [].forEach.call(panel.querySelectorAll('[data-rd-label]'), function (el) {
           el.onclick = function (ev) {
             ev.stopPropagation();
-            routineDelete(el.getAttribute('data-rd-label'), el.getAttribute('data-rd-layer'));
+            routineDelete(el.getAttribute('data-rd-label'), el.getAttribute('data-rd-layer'),
+                          el.getAttribute('data-rd-day'), el.getAttribute('data-rd-time'));
           };
         });
       }

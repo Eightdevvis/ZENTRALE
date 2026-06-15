@@ -203,80 +203,132 @@ def delete_entry(day: str, label: str, layer: str | None = None) -> int:
     return removed
 
 
-def set_routine_skip(layer: str, label: str, day: str, off: bool = True) -> bool:
+def _routine_hits_day(r: dict, d: date) -> bool:
+    """True, wenn die Routine `r` an genau dem Tag `d` ein Vorkommen hat.
+
+    Nötig, um bei MEHREREN gleichnamigen Routinen (z.B. zwei 'Parkour' an
+    verschiedenen Wochentagen) die RICHTIGE zu treffen — Label allein reicht
+    nicht (sonst landet ein Aus-/Lösch-Befehl auf der erstbesten Namensgleichen,
+    die an dem Tag gar nicht stattfindet → es passiert sichtbar nichts).
+    Expandiert die rrule für den einen Tag (gleiche Logik wie entries_in_range).
+    Defensiv: ungültige/fehlende rrule → False."""
+    rule_str = r.get("rrule")
+    if not rule_str:
+        return False
+    try:
+        rule = rrulestr(
+            f"DTSTART:{datetime.combine(d, datetime.min.time()).strftime('%Y%m%dT%H%M%S')}\n"
+            f"RRULE:{rule_str}"
+        )
+        until = datetime.combine(d, datetime.max.time())
+        for occ in rule:
+            if occ > until:
+                break
+            if occ.date() == d:
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def set_routine_skip(layer: str, label: str, day: str, off: bool = True,
+                     time: str | None = None) -> bool:
     """
     Einen EINZELNEN Routine-Termin an `day` deaktivieren (off=True) bzw. wieder
     aktivieren (off=False) - reversibel, pro Vorkommen. Speichert die Liste der
     deaktivierten ISO-Daten im Feld `aus` an der Routine selbst.
 
       layer  – Layer der Routine (z.B. 'routinen')
-      label  – Routinen-Titel; Match case-insensitiv, exakt ODER Teilstring
-               (wie delete_entry), erste passende Routine im Layer.
+      label  – Routinen-Titel; Match case-insensitiv, exakt ODER Teilstring.
       day    – YYYY-MM-DD des konkreten Vorkommens
       off    – True = deaktivieren, False = wieder aktivieren
+      time   – optional HH:MM des Vorkommens, grenzt bei gleichem Label+Tag
+               die richtige Routine zusätzlich ein.
 
-    Anders als delete (Einmal-Termine) bleibt die Routine voll erhalten; nur das
-    eine Datum wird stillgelegt. `entries_in_range` gibt es weiter aus, aber als
-    `deaktiviert` markiert (sichtbar + toggle-bar, ohne Alarm). Gibt True bei
-    tatsächlicher Änderung zurück (False = nichts gefunden / schon im Zielzustand).
+    Trifft NUR Routinen, die an `day` tatsächlich vorkommen (`_routine_hits_day`)
+    — sonst landet das Aus-Datum auf einer gleichnamigen Routine an einem anderen
+    Wochentag und bewirkt sichtbar nichts. Anders als delete bleibt die Routine
+    voll erhalten; nur das eine Datum wird stillgelegt. Gibt True bei tatsächlicher
+    Änderung zurück (False = nichts passendes gefunden / schon im Zielzustand).
     """
     needle = (label or "").strip().lower()
     if not needle:
         return False
     try:
-        date.fromisoformat(day)
+        d = date.fromisoformat(day)
     except (TypeError, ValueError):
         return False
+    want_time = (time or "").strip() or None
     changed = False
     with _lock:
         data = _load_raw()
         lobj = data.get("layers", {}).get(layer)
         if not lobj:
             return False
-        for r in lobj.get("routines", []):
-            lab = (r.get("label", "")).strip().lower()
-            if needle == lab or needle in lab:
-                aus = r.setdefault("aus", [])
-                if off and day not in aus:
-                    aus.append(day); changed = True
-                elif not off and day in aus:
-                    aus.remove(day); changed = True
-                if not aus:                 # leere Liste wieder entfernen (sauber)
-                    r.pop("aus", None)
-                break
+        cands = [r for r in lobj.get("routines", [])
+                 if (needle == (r.get("label", "").strip().lower())
+                     or needle in (r.get("label", "").strip().lower()))
+                 and _routine_hits_day(r, d)]
+        # Bei gleichem Tag + gleichem Label per Uhrzeit weiter eingrenzen.
+        if want_time and any((c.get("time") or "") == want_time for c in cands):
+            cands = [c for c in cands if (c.get("time") or "") == want_time]
+        for r in cands:
+            aus = r.setdefault("aus", [])
+            if off and day not in aus:
+                aus.append(day); changed = True
+            elif not off and day in aus:
+                aus.remove(day); changed = True
+            if not aus:                 # leere Liste wieder entfernen (sauber)
+                r.pop("aus", None)
         if changed:
             _save_raw(data)
     return changed
 
 
-def delete_routine(layer: str, label: str) -> int:
+def delete_routine(layer: str, label: str, day: str | None = None,
+                   time: str | None = None) -> int:
     """
     Eine GANZE Wiederholungs-Regel aus einem Layer entfernen (Gegenstück zu
-    add_routine). Anders als set_routine_skip (das nur ein einzelnes Vorkommen
-    stilllegt) verschwindet damit die Routine komplett - alle Vorkommen weg.
+    add_routine) - alle Vorkommen weg.
 
-      layer  – Layer der Routine (z.B. 'routinen')
-      label  – Titel; Match case-insensitiv, exakt ODER Teilstring (wie
-               delete_entry), ALLE Treffer im Layer fallen raus.
+      layer  – Layer der Routine.
+      label  – Titel; Match case-insensitiv, exakt ODER Teilstring.
+      day    – optional YYYY-MM-DD: trifft dann NUR die Routine, die an diesem
+               Tag vorkommt (damit gleichnamige Serien an anderen Wochentagen
+               NICHT mitgelöscht werden). Ohne `day`: alle Label-Treffer.
+      time   – optional, grenzt bei gleichem Label+Tag weiter ein.
 
     Gibt die Anzahl entfernter Routinen zurück (0 = nichts gefunden).
     """
     needle = (label or "").strip().lower()
     if not needle:
         return 0
+    d = None
+    if day:
+        try:
+            d = date.fromisoformat(day)
+        except (TypeError, ValueError):
+            d = None
+    want_time = (time or "").strip() or None
     removed = 0
     with _lock:
         data = _load_raw()
         lobj = data.get("layers", {}).get(layer)
         if not lobj:
             return 0
-        keep = []
-        for r in lobj.get("routines", []):
+        routines = lobj.get("routines", [])
+
+        def label_match(r):
             lab = (r.get("label", "")).strip().lower()
-            if needle == lab or needle in lab:
-                removed += 1          # Treffer → fällt raus
-            else:
-                keep.append(r)
+            return needle == lab or needle in lab
+
+        cands = [r for r in routines
+                 if label_match(r) and (d is None or _routine_hits_day(r, d))]
+        if d is not None and want_time and any((c.get("time") or "") == want_time for c in cands):
+            cands = [c for c in cands if (c.get("time") or "") == want_time]
+        cand_ids = {id(c) for c in cands}
+        keep = [r for r in routines if id(r) not in cand_ids]
+        removed = len(routines) - len(keep)
         if removed:
             lobj["routines"] = keep
             _save_raw(data)

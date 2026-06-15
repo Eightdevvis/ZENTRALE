@@ -623,8 +623,9 @@ def api_calendar_routine_skip():
     """
     Einen EINZELNEN Routine-Termin deaktivieren bzw. wieder aktivieren
     (reversibel, pro Vorkommen) — über core/kalender.py:set_routine_skip. NICHT
-    KI-gegatet (direkte Nutzeraktion). Body: {layer, label, day, off=true}.
-    `off=true` deaktiviert, `off=false` aktiviert wieder. Antwort {changed:bool}.
+    KI-gegatet (direkte Nutzeraktion). Body: {layer, label, day, off=true, time?}.
+    `off=true` deaktiviert, `off=false` aktiviert wieder. `time` grenzt bei
+    gleichnamigen Routinen die richtige ein. Antwort {changed:bool}.
     """
     body = request.get_json(silent=True) or {}
     layer = (body.get('layer') or 'routinen').strip() or 'routinen'
@@ -633,7 +634,8 @@ def api_calendar_routine_skip():
     if not label or not day:
         return jsonify({"error": "label und day nötig"}), 400
     off = body.get('off', True)
-    changed = kalender.set_routine_skip(layer, label, day, off=bool(off))
+    time = (body.get('time') or '').strip() or None
+    changed = kalender.set_routine_skip(layer, label, day, off=bool(off), time=time)
     return jsonify({"changed": changed})
 
 
@@ -681,14 +683,19 @@ def api_calendar_delete_routine():
     """
     Eine GANZE Routine (Wiederholungs-Regel) löschen — alle Vorkommen weg.
     Gegenstück zum einzelnen Deaktivieren (.../routine/skip). NICHT KI-gegatet
-    (direkte Nutzeraktion). Body: {layer, label}. Antwort {deleted:n}.
+    (direkte Nutzeraktion). Body: {layer, label, day?, time?}. `day`/`time`
+    treffen bei gleichnamigen Routinen nur die, die an dem Tag vorkommt (sonst
+    werden Serien gleichen Namens an anderen Wochentagen mitgelöscht).
+    Antwort {deleted:n}.
     """
     body = request.get_json(silent=True) or {}
     layer = (body.get('layer') or 'routinen').strip() or 'routinen'
     label = (body.get('label') or '').strip()
     if not label:
         return jsonify({"error": "label nötig"}), 400
-    n = kalender.delete_routine(layer, label)
+    day = (body.get('day') or '').strip() or None
+    time = (body.get('time') or '').strip() or None
+    n = kalender.delete_routine(layer, label, day=day, time=time)
     return jsonify({"deleted": n})
 
 

@@ -163,6 +163,27 @@ def test_api_calendar_routine_skip(client, tmp_path, monkeypatch):
     assert not geige.get("deaktiviert")
 
 
+def test_api_calendar_routine_skip_same_label_diff_weekday(client, tmp_path, monkeypatch):
+    # Regression: ZWEI gleichnamige Routinen an verschiedenen Wochentagen
+    # (z.B. zwei 'Parkour' Mi+Fr). Deaktivieren des Fr-Vorkommens darf NUR die
+    # Fr-Routine treffen — Label-Match allein landete früher auf der ersten
+    # (Mi-)Routine und bewirkte sichtbar nichts.
+    import kalender
+    monkeypatch.setattr(kalender, "CAL_PATH", tmp_path / "cal.json")
+    kalender.ensure_init()
+    kalender.add_routine("routinen", "Parkour", "FREQ=WEEKLY;BYDAY=WE", time="18:00")
+    kalender.add_routine("routinen", "Parkour", "FREQ=WEEKLY;BYDAY=FR", time="20:00")
+    fri = "2026-06-19"   # Freitag
+    r = client.post("/api/calendar/routine/skip",
+                    json={"layer": "routinen", "label": "Parkour", "day": fri, "off": True, "time": "20:00"})
+    assert r.get_json()["changed"] is True
+    week = client.get("/api/calendar?view=week&ref=2026-06-15").get_json()["days"]
+    fr = [e for e in week.get(fri, []) if e.get("label") == "Parkour"][0]
+    assert fr.get("deaktiviert") is True                      # Fr deaktiviert
+    wed = [e for e in week.get("2026-06-17", []) if e.get("label") == "Parkour"][0]
+    assert not wed.get("deaktiviert")                         # Mi unberührt
+
+
 def test_api_calendar_add_routine(client, tmp_path, monkeypatch):
     # Neue wöchentliche Routine aus der UI (byday → FREQ=WEEKLY;BYDAY=…).
     import kalender

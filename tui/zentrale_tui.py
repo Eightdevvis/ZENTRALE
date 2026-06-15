@@ -1565,12 +1565,18 @@ def run_ui(stdscr, store):
         if not it:
             K["mode"] = "view"; return
         try:
-            api_call("/api/calendar/routine/skip", method="POST",
-                     body={"layer": it["layer"], "label": it["label"],
-                           "day": it["iso"], "off": off})
-            K["msg"] = ("deaktiviert: " if off else "aktiviert: ") + it["label"]
+            res = api_call("/api/calendar/routine/skip", method="POST",
+                           body={"layer": it["layer"], "label": it["label"],
+                                 "day": it["iso"], "off": off, "time": it.get("time")})
+            # `changed` ehrlich auswerten: traf der Skip keine an dem Tag
+            # vorkommende Routine (z.B. Namens-Verwechslung), passiert nichts —
+            # das soll der User sehen, nicht ein falsches „deaktiviert".
+            if (res or {}).get("changed"):
+                K["msg"] = ("deaktiviert: " if off else "aktiviert: ") + it["label"]
+            else:
+                K["msg"] = "keine passende Routine an dem Tag"
         except Exception:
-            K["msg"] = "fehlgeschlagen"
+            K["msg"] = "fehlgeschlagen (backend neu starten?)"
         K["mode"] = "view"; K["ract"] = None; K["data"] = None
 
     def k_routine_delete():
@@ -1581,7 +1587,8 @@ def run_ui(stdscr, store):
             K["mode"] = "view"; K["rconfirm"] = False; return
         try:
             res = api_call("/api/calendar/routine", method="DELETE",
-                           body={"layer": it["layer"], "label": it["label"]})
+                           body={"layer": it["layer"], "label": it["label"],
+                                 "day": it["iso"], "time": it.get("time")})
             n = (res or {}).get("deleted", 0)
             K["msg"] = ("Routine gelöscht: " + it["label"]) if n else "nichts gelöscht"
         except Exception:

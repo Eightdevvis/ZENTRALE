@@ -534,20 +534,21 @@
           msg = (j.deleted ? 'gelöscht: ' + label : 'nichts gelöscht.'); msgWarn = !j.deleted; load();
         }).catch(function () { msg = 'netzwerkfehler.'; msgWarn = true; render(); });
       }
-      function routineToggle(day, label, layer, off) {
+      function routineToggle(day, label, layer, off, time) {
         fetch('/api/calendar/routine/skip', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ layer: layer, label: label, day: day, off: off })
-        }).then(function (r) {
-          if (!r.ok) { msg = 'fehlgeschlagen (Backend neu starten?).'; msgWarn = true; render(); return; }
+          body: JSON.stringify({ layer: layer, label: label, day: day, off: off, time: time || '' })
+        }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
+          if (!res.ok) { msg = 'fehlgeschlagen (Backend neu starten?).'; msgWarn = true; render(); return; }
+          if (!res.j.changed) { msg = 'keine passende Routine an dem Tag.'; msgWarn = true; render(); return; }
           msg = (off ? 'deaktiviert: ' : 'aktiviert: ') + label; msgWarn = false; load();
         }).catch(function () { msg = 'netzwerkfehler.'; msgWarn = true; render(); });
       }
-      function routineDelete(label, layer) {
+      function routineDelete(label, layer, day, time) {
         if (!confirm('Ganze Routine „' + label + '" löschen? Alle Vorkommen verschwinden.')) return;
         fetch('/api/calendar/routine', {
           method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ layer: layer, label: label })
+          body: JSON.stringify({ layer: layer, label: label, day: day || '', time: time || '' })
         }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
           if (!res.ok) { msg = 'fehlgeschlagen (Backend neu starten?).'; msgWarn = true; render(); return; }
           msg = (res.j.deleted ? 'Routine gelöscht: ' + label : 'nichts gelöscht.'); msgWarn = !res.j.deleted; load();
@@ -571,9 +572,9 @@
             } else if (e.recurring) {
               acts = '<span class="cw-act" title="' + (deakt ? 'wieder aktivieren' : 'diesen Termin deaktivieren')
                 + '" data-rt-day="' + k + '" data-rt-label="' + esc(lbl) + '" data-rt-layer="' + esc(e.layer || '')
-                + '" data-rt-off="' + (deakt ? '0' : '1') + '">' + (deakt ? '↺' : '⊘') + '</span>'
+                + '" data-rt-time="' + esc(e.time || '') + '" data-rt-off="' + (deakt ? '0' : '1') + '">' + (deakt ? '↺' : '⊘') + '</span>'
                 + '<span class="cw-del" title="ganze Routine löschen" data-rd-label="' + esc(lbl)
-                + '" data-rd-layer="' + esc(e.layer || '') + '">🗑</span>';
+                + '" data-rd-layer="' + esc(e.layer || '') + '" data-rd-day="' + k + '" data-rd-time="' + esc(e.time || '') + '">🗑</span>';
             } else {
               acts = '<span class="cw-act" title="bearbeiten" data-edit-day="' + k + '" data-edit-label="' + esc(lbl)
                 + '" data-edit-layer="' + esc(e.layer || '') + '" data-edit-time="' + esc(e.time || '')
@@ -632,9 +633,9 @@
         var ed = e.target.closest('[data-edit-label]');
         if (ed) { e.stopPropagation(); beginEdit(ed.getAttribute('data-edit-day'), ed.getAttribute('data-edit-label'), ed.getAttribute('data-edit-layer'), ed.getAttribute('data-edit-time'), ed.getAttribute('data-edit-ort')); return; }
         var rt = e.target.closest('[data-rt-label]');
-        if (rt) { e.stopPropagation(); routineToggle(rt.getAttribute('data-rt-day'), rt.getAttribute('data-rt-label'), rt.getAttribute('data-rt-layer'), rt.getAttribute('data-rt-off') === '1'); return; }
+        if (rt) { e.stopPropagation(); routineToggle(rt.getAttribute('data-rt-day'), rt.getAttribute('data-rt-label'), rt.getAttribute('data-rt-layer'), rt.getAttribute('data-rt-off') === '1', rt.getAttribute('data-rt-time')); return; }
         var rd = e.target.closest('[data-rd-label]');
-        if (rd) { e.stopPropagation(); routineDelete(rd.getAttribute('data-rd-label'), rd.getAttribute('data-rd-layer')); return; }
+        if (rd) { e.stopPropagation(); routineDelete(rd.getAttribute('data-rd-label'), rd.getAttribute('data-rd-layer'), rd.getAttribute('data-rd-day'), rd.getAttribute('data-rd-time')); return; }
         var d = e.target.closest('[data-del-label]');
         if (d) { e.stopPropagation(); delEntry(d.getAttribute('data-del-day'), d.getAttribute('data-del-label'), d.getAttribute('data-del-layer')); }
       });
