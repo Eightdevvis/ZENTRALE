@@ -131,35 +131,36 @@ syncen):
 | `find-pc`       | Spiegelbild zu `find-zentrale`: ARP-Scan nach der PC-WLAN-MAC `8c:86:dd:72:37:e7` (Fallback: `:5000`/api/state-Signatur), schreibt einen `# >>> find-pc >>>`-Block mit `Host pc` in `~/.ssh/config`. Überlebt IP-/Subnetzwechsel des Hotspots. |
 | `zentrale-remote` | „Daheim"-Befehl: `find-pc` → SSH-Tunnel `localhost:15000 → pc:5000` → Laptop-TUI gegen das volle Ollama-Backend des PCs. `q` beendet + Tunnel-Teardown. |
 | `zentrale-pull` / `zentrale-push` | Manueller Dateisync der **nicht-git-getrackten** Dateien (Daten/Caches/Configs/untracked) per rsync über den `pc`-Alias. Symlinks auf `zentrale-sync`. Listet `git ls-files --others` (untracked + ignoriert), filtert `venv/`, `__pycache__`, `.pyc`, `.pytest_cache` sowie `.history/` und `.claude/settings.local.json` (maschinenlokal; `ZENTRALE_SYNC_ALL=1` nimmt auch die mit). **Kein `--delete`** (nur additiv); Richtung bewusst pro Maschine. `--dry-run` + extra rsync-Args werden durchgereicht. |
-| `zentrale-autosync` | **Dauer-Sync als Dienst** (siehe unten). Hält dieselben nicht-git-Dateien automatisch in Sync. |
-| `zentrale-autopush` | Variante von autosync: nur Push-on-change, ohne Pull/Reconcile. Wird **nicht** genutzt (autosync ist der Dienst), liegt nur als einfachere Alternative herum. |
+| `zentrale-sync-boot` | **Einmaliger Abgleich beim Start** (siehe unten). Kein Daemon. |
+| `zentrale-launch` | Wrapper hinter den Startern `zentrale`/`zentrale-tui`/`zentrale-laptop`; hängt den Boot-Sync ein. |
 
-### Auto-Sync-Dienst (`zentrale-autosync.service`)
+### Boot-Sync (einmalig beim Start, KEIN Daemon)
 
-Läuft als systemd-**User**-Service (`~/.config/systemd/user/zentrale-autosync.service`,
-`enabled` → Autostart beim Login, `Restart=always`, `StartLimitIntervalSec=0`
-damit er bei langer PC-Abwesenheit nicht dauerhaft stirbt). Braucht
-`inotify-tools`. Zwei Mechanismen:
+Modell nach mehreren Fehlschlägen mit Dauer-Sync (ein inotify/Reconcile-Daemon
+racte mit aktiven Edits/Commits im selben Repo und überschrieb getrackte
+Dateien, weil `git ls-files` mid-commit leer kam): **ein laufender Daemon ist
+raus.** Stattdessen läuft **genau einmal beim ZENTRALE-Start**, *bevor* das
+Backend hochfährt → kein Race.
 
-1. **Sofort** – `inotifywait` beobachtet das Laptop-Repo; ändert sich eine
-   nicht-git-Datei, wird sie umgehend gepusht (mit kurzem Pull davor).
-2. **Reconcile** – alle `ZENTRALE_RECONCILE`s (Default 60s) ein **voller
-   PULL+PUSH**, sobald der PC erreichbar ist. Das ist der Reconnect-Pfad:
-   War der PC weg (unterwegs/aus), holt der nächste Reconcile nach Rückkehr
-   ins selbe WLAN automatisch alles nach – **beide Richtungen, auch im
-   Leerlauf**.
+`zentrale-sync-boot` macht: `find-pc`, dann `zentrale-sync pull --update` +
+`push --update` (newest-wins per mtime; da immer nur eine Maschine zur Zeit
+schreibt, clasht nichts). Best-effort: PC weg/aus → still überspringen, Start
+läuft normal. **Nur nicht-git-getrackte Dateien**; `zentrale-sync` pull hat
+einen **Fail-safe**: ist `git ls-files` leer (Index gesperrt), bricht der Pull
+ab, statt Code zu überschreiben. Abschalten: `ZENTRALE_NO_BOOT_SYNC=1`.
 
-Beide Richtungen mit `rsync --update` (neuere mtime gewinnt → schützt die
-frische Änderung; Konflikt nur, wenn dieselbe Datei gleichzeitig auf beiden
-geändert wird). Getrackter Code läuft über git (wird übersprungen), **kein
-Löschen**. Robust gegen weg/da: kein `set -e`, fehlgeschlagener rsync killt
-nicht, es retryt. **Voraussetzung:** beide im selben Subnetz/WLAN (find-pc
-scannt das aktuelle Netz nach der PC-MAC).
+Eingehängt über `zentrale-launch` je nach Pfad:
+- **`zentrale` (Menü):** der Sync läuft **versteckt hinter dem Regenbogen-
+  Ladebalken**. `tui/select_kassette.py` startet ihn beim Auswählen im
+  Hintergrund, der 100%-Balken shimmert weiter bis der Sync fertig ist —
+  keine separate Ladesequenz. (Auf PC/Pi ohne `zentrale-sync-boot` in PATH:
+  No-Op, Start wie bisher.)
+- **`zentrale-tui`/`zentrale-laptop` (Direktstart):** stiller Sync im Wrapper
+  (Ausgabe ins Log `/tmp/zentrale-sync-boot.log`, kurze `⟳`-Zeile).
 
-Steuern: `systemctl --user status|restart|stop|disable zentrale-autosync`,
-mitlesen `journalctl --user -u zentrale-autosync -f` (`↑`/`↓`/`⇅`-Zeilen).
-Soll er auch ohne Login laufen: `loginctl enable-linger sasha`.
-Live-Daten ausklammern: `ZENTRALE_AUTOPUSH_EXCLUDE='/data/'`.
+PC-Seite (PC holt beim eigenen Start auch den neuesten Stand) ist noch offen:
+dort startet ZENTRALE per systemd-Service → Boot-Sync müsste als
+`ExecStartPre` dazu.
 
 Voraussetzung am PC (einmalig): `openssh-server` installiert + `ssh.service`
 aktiv (der PC hatte nur den SSH-**Client** → konnte zum Pi, aber niemand
