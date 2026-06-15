@@ -154,8 +154,13 @@ def menu_loop(fd):
         sys.stdout.flush()
 
 
-def play_loader(label):
-    """Game-mäßiger Regenbogen-Ladebalken auf dem Normal-Screen."""
+def play_loader(label, wait_proc=None):
+    """Game-mäßiger Regenbogen-Ladebalken auf dem Normal-Screen.
+
+    Läuft ein optionaler Hintergrund-Prozess (wait_proc, z.B. der Boot-Abgleich),
+    shimmert der 100%-Balken weiter, bis er fertig ist — so versteckt sich der
+    Sync hinter dem Balken und das Backend startet erst danach (kein Race).
+    """
     width = 28
     sys.stdout.write("\n  %sstarte %s …%s\n\n" % (c256(108), label, RESET))
     sys.stdout.flush()
@@ -167,21 +172,49 @@ def play_loader(label):
         sys.stdout.flush()
         phase += 1
         time.sleep(0.035)
-    # kurzer Shimmer bei 100 %
-    for _ in range(10):
+    # Shimmer bei 100 % — mind. 10 Frames, und falls ein Prozess läuft: bis er fertig ist.
+    shimmer = 0
+    while True:
         bar = rainbow_segment(width, width, phase)
         sys.stdout.write("\r  [%s] %s100%%%s" % (bar, c256(231), RESET))
         sys.stdout.flush()
         phase += 1
+        shimmer += 1
         time.sleep(0.045)
+        proc_done = (wait_proc is None) or (wait_proc.poll() is not None)
+        if shimmer >= 10 and proc_done:
+            break
     sys.stdout.write("\n\n")
     sys.stdout.flush()
 
 
+def _start_boot_sync():
+    """Einmaligen Laptop↔PC-Abgleich im Hintergrund anstoßen (Ausgabe ins Log).
+
+    Gibt das Popen-Objekt zurück, oder None, wenn abgeschaltet (ZENTRALE_NO_BOOT_SYNC=1)
+    bzw. das Tool fehlt (z.B. auf PC/Pi, die haben kein zentrale-sync-boot in PATH →
+    dann ist der Start einfach wie bisher). Best-effort, wirft nie.
+    """
+    if os.environ.get("ZENTRALE_NO_BOOT_SYNC") == "1":
+        return None
+    import shutil
+    import subprocess
+    exe = shutil.which("zentrale-sync-boot")
+    if not exe:
+        return None
+    try:
+        logf = open("/tmp/zentrale-sync-boot.log", "wb")
+        return subprocess.Popen([exe], stdout=logf, stderr=logf,
+                                stdin=subprocess.DEVNULL)
+    except Exception:
+        return None
+
+
 def launch(idx):
-    """Terminal ist hier schon restauriert. Loader + exec in die Kassette."""
+    """Terminal ist hier schon restauriert. Boot-Sync (hinterm Loader) + exec."""
     key, label, desc, script = CASSETTES[idx]
-    play_loader(label)
+    sync_proc = _start_boot_sync()           # läuft versteckt hinter dem Balken
+    play_loader(label, wait_proc=sync_proc)  # shimmert, bis der Sync fertig ist
     script_abs = os.path.join(PROJECT_ROOT, script)
     os.execv("/bin/bash", ["/bin/bash", script_abs])
 
