@@ -55,6 +55,18 @@ OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3.5:9b")
 # aelteren (qwen2.5) wuerfe Ollama 400, deshalb nur dann setzen.
 SUPPORTS_THINK = OLLAMA_MODEL.startswith("qwen3")
 
+# Adaptives Thinking im Live-Chat (chat_stream): pro Turn entscheidet
+# _should_think() anhand der letzten User-Message, ob das Modell reflektieren
+# soll (Frage/Verifikation -> AN, Schreib-/Aktions-Befehl -> AUS). Gemessen
+# (bench_abstention.py 2026-06-08): Reflexion hebt ehrliches "weiss ich nicht"
+# um ~9pp (v.a. Bildschirm-Inhalt-Konfabulation 30%->0%), schadet den Aktions-
+# Turns nicht (die bleiben think=AUS). Der think-Stream wird sichtbar ins HUD
+# gespiegelt (ki-kern), damit die ~3x Latenz UX-Gewinn statt -Verlust wird
+# ("warte, ich schau kurz nach"). Kill-Switch fuer A/B + Rollback:
+# ZENTRALE_THINK=0 -> komplett aus (Verhalten wie vor dem Feature, think immer
+# False). Default an. Greift nur bei Thinking-faehigen Modellen (qwen3*).
+ADAPTIVE_THINK = SUPPORTS_THINK and os.environ.get("ZENTRALE_THINK", "1") != "0"
+
 
 def _think_opts() -> dict:
     """{'think': False} fuer Thinking-Modelle, sonst {} - zum Spreaden in die
@@ -1498,16 +1510,25 @@ def chat_stream(messages: list, model: str = None, system: str = None,
 
     max_rounds = 5  # Sicherheitsnetz gegen Endlosschleifen
 
-    # Thinking AUS (prod-treu gemessen 2026-06-08): adaptive Denk-Tiefe (think nur
-    # auf Verständnisfragen) brachte bei korrektem Sampling (QWEN_SAMPLING, temp 0.7)
-    # KEINEN Mehrwert - die Baseline ist schon bei T2-Zuordnung 93 % / Episode 87 %
-    # (bench_history.md). Der frühere „adaptive Gewinn" war ein temp-1-Mess-Artefakt.
-    # Der Heuristik-Helfer ai._should_think bleibt für Bench-Experimente bestehen,
-    # ist hier aber bewusst NICHT verdrahtet (kein Mehrwert + think+Tool-Template-Bug).
+    # Adaptive Denk-Tiefe (ADAPTIVE_THINK, oben dokumentiert): _should_think()
+    # schaut auf die letzte User-Message und entscheidet, ob dieser Turn mit
+    # Reflexion läuft. Frage/Verifikation → AN (hebt ehrliche Abstinenz, der
+    # think-Stream wird sichtbar ins HUD gespiegelt), reiner Schreib-/Aktions-
+    # Befehl → AUS (sonst zerdenkt das 9b die Aktion, gemessen Episode 0 %).
+    # WICHTIG gegen den qwen3.5-Template-Bug (#10976): nach dem ERSTEN Tool-Call
+    # think=AUS, weil die Synthese-Runde mit think die ganze Antwort ins
+    # `thinking`-Feld kippt (content leer). Reine Verständnis-Turns (kein Tool,
+    # z.B. „was zeigt der Graph?") reflektieren voll → Boost bleibt, keine leere
+    # Antwort. Kill-Switch ZENTRALE_THINK=0 → want_think False → wie früher.
+    want_think = ADAPTIVE_THINK and _should_think(messages)
+    tool_used  = False  # nach dem ersten Tool-Call think aus (Template-Bug)
     for _ in range(max_rounds):
+        # Nur denken, solange kein Tool gelaufen ist; danach Synthese ohne think.
+        think_now = want_think and not tool_used
+        think_opts = {"think": think_now} if SUPPORTS_THINK else {}
         payload = {
             "model":      model,
-            **_think_opts(),
+            **think_opts,
             "messages":   working_messages,
             "tools":      active_tools,
             "stream":     True,
@@ -1523,6 +1544,14 @@ def chat_stream(messages: list, model: str = None, system: str = None,
 
         for chunk in net.stream_post(f"{OLLAMA_URL}/api/chat", payload):
             msg   = chunk.get("message", {})
+            # Reflexions-Stream: Ollama liefert die Denk-Tokens getrennt im
+            # `thinking`-Feld. Live als {"reflect": ...}-Event rausgeben, damit
+            # das HUD sie im ki-kern mitlaufen lässt ("ich schau kurz nach…").
+            # NICHT in round_content → landet weder in der History noch im TTS;
+            # es ist innerer Monolog, keine Antwort.
+            reflect_tok = msg.get("thinking")
+            if reflect_tok:
+                yield {"reflect": reflect_tok}
             token = msg.get("content", "")
             if token:
                 # NICHT sofort yielden. Content aus einer Runde, die mit einem
@@ -1564,6 +1593,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
             return
         # sonst: round_content war das Tool-Runden-Geschwätz → an Ollama als
         # Assistant-Turn zurück (Kontext), aber NICHT an den User geyieldet.
+        tool_used = True  # ab jetzt Synthese ohne think (Template-Bug, s.o.)
 
         # Reihenfolge wichtig: erst assistant-Nachricht (mit tool_calls),
         # dann für jeden Call eine "tool"-Antwortnachricht.

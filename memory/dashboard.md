@@ -391,6 +391,29 @@ Pipeline + Begründung der Marker-statt-Tool-Entscheidung siehe
   automatisch zum normalen Auto-Programm zurück (`syncTabs`).
 - Kein Text → nicht im Minilog, kein TTS. Reine Mimik zur Antwort.
 
+### KI-Reflexion im Kern (sichtbares Thinking)
+
+Denkt die KI vor einer Antwort (adaptives Thinking, `core/ai.py`
+`_should_think` → nur Verständnis-/Verifikations-Turns, siehe `ki_system.md`),
+**tickert ihr innerer Monolog live in den Kern** — sichtbares „ich schau kurz
+nach…" statt totem Warten (so wird die ~3× Latenz UX-Gewinn statt -Verlust).
+
+- **Transport:** Ollama liefert die Denk-Tokens getrennt im `thinking`-Feld.
+  `chat_stream` yieldet sie als `{"reflect": …}`; `app.py` reicht sie als SSE-
+  Event `data.reflect` durch (NICHT in `collected` → nicht gespeichert, nicht
+  gesprochen). Der Chat-IIFE-Leser feuert daraus `zentrale:reflect` `{text}`;
+  der Exhibit-Direktor hört darauf (wie bei `zentrale:ascii`).
+- **Anzeige:** `reflectActive` hat **allerhöchsten Vorrang** im `frameTick`
+  (über KI-Bild, Graph und Kalender). `wrapReflect` bricht den Strom auf feste
+  Breite um und zeigt tail-scrollend die letzten Zeilen; CSS-Klasse
+  `#core.reflecting` (gedämpft, linksbündig, kursiv, sanfter Puls) setzt ihn vom
+  restlichen Kern ab. Meta-Zeile = „ki denkt nach…".
+- **Ende:** Beim ersten echten Antwort-Token (oder Stream-Ende/Fehler) feuert
+  der Chat-IIFE `zentrale:reflect-end` → Kern frei, Direktor übernimmt wieder
+  (`syncTabs`). Die eigentliche Antwort erscheint wie gewohnt im Minilog.
+- Kill-Switch `ZENTRALE_THINK=0` (siehe `starten.md`) → kein Thinking, kein
+  Reflexions-Strom (Verhalten wie davor).
+
 ### Sendungs-/Cinema-Modus (News-Sendung)
 
 Liest die KI eine News-Sendung vor (Tool `lies_news`), schaltet das Dashboard

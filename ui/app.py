@@ -878,6 +878,14 @@ def api_chat():
             if isinstance(token, dict) and 'permission' in token:
                 yield f"data: {json.dumps({'permission': token['permission']})}\n\n"
                 continue
+            # reflect-Event: ein Stück des Denk-/Reflexions-Stroms (Ollama
+            # `thinking`-Feld). Geht als eigenes SSE 'reflect'-Event raus, das
+            # das Frontend im ki-kern live mitlaufen lässt ("ich schau kurz
+            # nach…"). KEIN Antworttext → nicht in collected (nicht gespeichert,
+            # nicht gesprochen). Siehe ai.chat_stream / adaptives Thinking.
+            if isinstance(token, dict) and 'reflect' in token:
+                yield f"data: {json.dumps({'reflect': token['reflect']})}\n\n"
+                continue
             # cinema-Event: eine News-Sendung beginnt (lies_news lief). Reines
             # UI-Signal (Sendungs-/Untertitel-Modus), kein Antworttext → nicht
             # in collected.
