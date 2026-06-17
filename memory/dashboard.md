@@ -190,10 +190,19 @@ gerendert (`addclip(..., strike=True)`, Combining-Overlay U+0336; der Cursor-Pfe
 Cursor. Alles synchron per `api_call()`; nach jeder Aktion `l_load()`+`l_sync_def()`
 (offene Liste aus der frischen Registry neu greifen, Drill-Pfad wird validiert/
 gekürzt). `Esc`/`l` geht eine Ebene zurück, auf oberster Ebene schließt es.
-`--selftest` listet die Listen inkl. erledigt-Zähler (ohne TTY). Anders als die
-Graphen gibt es **keine** `lifestyle`-Box-Überlagerung — eine Liste ist kein
-Zeitreihen-Plot. (Monolith/Laptop sind für Listen noch **nicht** verkabelt; das
-Backend `/api/lists` steht aber für alle Kassetten bereit.)
+`--selftest` listet die Listen inkl. erledigt-Zähler (und `◆projekt`-Flag, ohne TTY).
+Eine Liste ist kein Zeitreihen-Plot, taucht also nicht in der `lifestyle`-Überlagerung
+auf. **Projekt-Flag:** in der Listenübersicht schaltet `p` das Projekt-Flag der
+gewählten Liste (`POST /api/lists/<lid>/project`); geflaggte Listen tragen ein `◆`.
+
+**PROJECTS-Box (rechts, alle Fronten):** zwischen `lifestyle` und `outbound` steht
+eine `projects`-Box — pro geflaggter Liste **Titel + Erfüllungsleiste** (erledigte/
+alle Blätter rekursiv, Quelle `/api/projects` → `core.lists.leaf_progress`). Reine
+Anzeige; angelegt/abgehakt/geflaggt wird im Listen-Werkzeug. In der TUI nimmt die
+Box `outbound` Höhe ab (nur wenn outbound ≥5 Zeilen behält, sonst weggelassen; je
+Projekt 2 Zeilen, `+N` wenn nicht alle reinpassen); pollt über `Store._poll_projects`
+(alle 5 s). Monolith (`#projects`) und Laptop (`#projects`) pollen `/api/projects`
+(30 s) und rendern Titel + ASCII-Leiste + `d/t`.
 
 **Karte (Mitte, Taste `m`):** Maps-System Schritt 1 — grobe Weltkarte (Küsten
 1:110m) in der MITTE-Box, analog zum Graph-Werkzeug. Die TUI ist reiner
@@ -347,8 +356,9 @@ AUTO/HELL/DUNKEL). Darunter `.body` als 3 Spalten:
   `konsole` (`#chat-input`, wo Sasha tippt). Der `Graph`-Tab macht den
   Mittelbereich zum Graph-Werkzeug (s.o.).
 - **RECHTS:** `lifestyle` (Tracker: hartkodierte Kategorien + jeder im
-  Graph-Werkzeug angelegte Graph als Sparkline) + `outbound` (`#term-net`,
-  Internet-Tripwire, Idle „// offline ✓").
+  Graph-Werkzeug angelegte Graph als Sparkline) + `projects` (`#projects`,
+  als Projekt geflaggte Listen mit Erfüllungsleiste, Quelle `/api/projects`) +
+  `outbound` (`#term-net`, Internet-Tripwire, Idle „// offline ✓").
 
 ### Alarm-Ecke (`#alarm-corner`) — die ⚠-Warnsymbole
 

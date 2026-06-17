@@ -193,6 +193,17 @@
   .trk .ts { font-family: 'VT323', monospace; font-size: 20px; color: var(--acc); white-space: pre; overflow: hidden; line-height: 1; }
   .trk .tv { font-family: 'VT323', monospace; font-size: 18px; color: var(--bright); text-align: right; }
 
+  /* Projekte (Liste mit Projekt-Flag) — Titel + Erfüllungsleiste + d/t */
+  .prj { padding: 6px 0; border-bottom: 1px dotted var(--line); }
+  .prj:last-child { border-bottom: 0; }
+  .prj .ph { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .prj .pt { font-size: 12px; color: var(--dim); letter-spacing: 0.08em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prj .pc { font-family: 'VT323', monospace; font-size: 16px; color: var(--bright); flex: 0 0 auto; }
+  .prj .pb { font-family: 'VT323', monospace; font-size: 18px; white-space: pre; overflow: hidden; line-height: 1; margin-top: 2px; }
+  .prj .pb .pbf { color: var(--acc); }
+  .prj .pb .pbe { color: var(--faint); }
+  .prj.full .pc { color: var(--acc); }
+
   /* Graph-Werkzeug (Mittel-Exhibit „Graph") – interaktives Panel statt ASCII */
   .gpanel { position: absolute; inset: 0; padding: 10px 12px; overflow: auto; display: flex; flex-direction: column; gap: 8px; text-align: left; font-family: 'VT323', monospace; color: var(--ink); }
   .gchips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -457,6 +468,10 @@
           <span class="bt">lifestyle</span>
           <div id="trackers"></div>
         </div>
+        <div class="box" style="flex:0 0 auto">
+          <span class="bt">projects</span>
+          <div id="projects"></div>
+        </div>
         <div class="box net" style="flex:1 1 auto;min-height:0">
           <span class="bt">outbound</span><span class="bt2">tripwire</span>
           <div class="term-body" id="term-net"><div class="term-idle">// offline ✓</div></div>
@@ -599,6 +614,42 @@
     setInterval(fetchTrackers, 60000);                 // langsam (manuell geloggte Daten)
     // Nach dem Erfassen (Alt+K → speichern) sofort neu laden:
     window.addEventListener('zentrale:logged', fetchTrackers);
+
+    // ── Projekte (PROJECTS-Box) ─────────────────────────────────────────
+    // Reine Anzeige: jede Liste mit gesetztem Projekt-Flag (im Listen-
+    // Werkzeug der TUI) erscheint hier als Titel + Erfüllungsleiste. Quelle
+    // /api/projects liefert {id,name,done,total} (done/total = erledigte/alle
+    // Blätter rekursiv) — die Fortschrittslogik bleibt serverseitig.
+    var prjEl = document.getElementById('projects');
+    function projBar(done, total, cells) {
+      var f = total ? Math.max(0, Math.min(1, done / total)) : 0;
+      var full = Math.round(f * cells);
+      return '<span class="pbf">' + '█'.repeat(full) + '</span>'
+           + '<span class="pbe">' + '░'.repeat(Math.max(0, cells - full)) + '</span>';
+    }
+    function pEsc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    async function fetchProjects() {
+      if (!prjEl) return;
+      var pr;
+      try { pr = await (await fetch('/api/projects')).json(); }
+      catch (e) { return; }                            // Backend kurz weg → alte Anzeige stehen lassen
+      if (!Array.isArray(pr) || !pr.length) {
+        prjEl.innerHTML = '<div class="nodata">— keine projekte (im listen-werkzeug \'p\') —</div>';
+        return;
+      }
+      prjEl.innerHTML = pr.map(function (p) {
+        var done = p.done | 0, total = p.total | 0, full = total && done >= total;
+        return '<div class="prj' + (full ? ' full' : '') + '">'
+          + '<div class="ph"><span class="pt">' + pEsc(p.name || '') + '</span>'
+          + '<span class="pc">' + done + '/' + total + '</span></div>'
+          + '<div class="pb">' + projBar(done, total, 24) + '</div></div>';
+      }).join('');
+    }
+    fetchProjects();
+    setInterval(fetchProjects, 30000);
+    // Abhaken/Anlegen passiert in der TUI, aber falls im selben Browser etwas
+    // geloggt wird, frischen wir mit:
+    window.addEventListener('zentrale:logged', fetchProjects);
 
     // ── Graph-Werkzeug (Mittel-Exhibit „Graph") ─────────────────────────
     // Eigene Graphen anlegen (Typ Zahl ODER Skala 1–5), Werte eintragen,

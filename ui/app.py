@@ -257,6 +257,24 @@ def api_lists():
     return jsonify(lists.list_lists())
 
 
+@app.route('/api/projects')
+def api_projects():
+    """
+    Listen mit gesetztem Projekt-Flag, je mit Erfüllungsgrad (erledigte/alle
+    Blätter rekursiv). Quelle für die PROJECTS-Box in ALLEN Fronten — die
+    Fortschrittslogik bleibt damit an einer Stelle (core/lists), die Fronten
+    rendern nur Titel + Leiste. NICHT KI-gegatet (gibt es in allen Kassetten).
+    """
+    out = []
+    for l in lists.list_lists():
+        if not l.get('project'):
+            continue
+        done, total = lists.leaf_progress(l)
+        out.append({"id": l.get("id"), "name": l.get("name"),
+                    "done": done, "total": total})
+    return jsonify(out)
+
+
 @app.route('/api/lists', methods=['POST'])
 def api_lists_create():
     """
@@ -293,6 +311,22 @@ def api_lists_rename(lid):
         return jsonify({"error": str(e)}), 400
     except KeyError:
         return jsonify({"error": "unbekannte liste"}), 404
+    return jsonify(lst)
+
+
+@app.route('/api/lists/<lid>/project', methods=['POST'])
+def api_lists_set_project(lid):
+    """
+    Projekt-Flag einer Liste setzen/löschen — bestimmt, ob sie in der
+    PROJECTS-Box der Fronten erscheint.
+    Body (JSON): {"project": true|false}
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        lst = lists.set_project(lid, bool(body.get('project')))
+    except KeyError:
+        return jsonify({"error": "unbekannte liste"}), 404
+    state.push_log(f"PROJEKT{'+' if lst.get('project') else '-'}: {lid}")
     return jsonify(lst)
 
 
@@ -723,6 +757,7 @@ def api_log():
     entry       = request.get_json()
     category_id = entry.get('category')
     data        = entry.get('data', {})
+    upsert      = bool(entry.get('upsert'))   # True → Eintrag mit gleichem Datum ersetzen
 
     os.makedirs(_DATA_DIR, exist_ok=True)  # data/ erstellen falls noch nicht vorhanden
     log_file = os.path.join(_DATA_DIR, f'{category_id}.json')
@@ -732,6 +767,11 @@ def api_log():
     if os.path.exists(log_file):
         with open(log_file, 'r', encoding='utf-8') as f:
             logs = json.load(f)
+
+    # upsert: vorhandene Einträge desselben Datums entfernen (Nachtragen/Ändern
+    # im Graph-Werkzeug soll genau EINEN Eintrag pro Tag halten, kein Duplikat).
+    if upsert and data.get('date') is not None:
+        logs = [e for e in logs if not (isinstance(e, dict) and e.get('date') == data['date'])]
 
     # Neuen Eintrag mit Zeitstempel anhängen und zurückschreiben
     logs.append({**data, 'logged_at': datetime.now().isoformat()})
@@ -1227,17 +1267,18 @@ def api_mail_body():
 
 @app.route('/api/mail/assign', methods=['POST'])
 def api_mail_assign():
-    """Den ABSENDER einer Kategorie zuordnen (Keymap). Verschiebt NICHT die
-    Mail — künftige Mails dieses Absenders landen ab jetzt in der Kategorie.
-    Key-frei (nur lokale Keymap). Body: `{sender, category}`."""
+    """Den ABSENDER einer Kategorie zuordnen (Keymap) UND **alle** seine
+    vorhandenen Mails (alt + neu) in den Kategorie-Ordner verschieben — Sashas
+    Modell: pro Absender EINE Kategorie. Mit Key: live umsortiert (`moved` zählt);
+    ohne Key: nur Keymap (künftige Mails). Body: `{sender, category}`."""
     body = request.get_json(silent=True) or {}
     sender = (body.get('sender') or '').strip()
     category = (body.get('category') or '').strip()
     if not sender or not category:
         return jsonify({"error": "sender/category fehlt"}), 400
     try:
-        addr, cat = mail.reassign_sender(sender, category)
-        return jsonify({"ok": True, "sender": addr, "category": cat})
+        res = mail.refile_sender(sender, category)
+        return jsonify({"ok": True, **res})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

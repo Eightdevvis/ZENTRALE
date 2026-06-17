@@ -168,6 +168,7 @@ def create_list(name):
         'created': datetime.now().isoformat(),
         'next_item': 1,   # monoton steigende id-Quelle, eindeutig über den Baum
         'items': [],      # [{id, text, done, items?:[…]}] — items? = Unterpunkte
+        'project': False, # als Projekt in der PROJECTS-Box der Fronten zeigen?
     }
     lists.append(lst)
     _save(lists)
@@ -324,6 +325,38 @@ def rename_list(lid, name):
     lst['name'] = name
     _save(lists)
     return lst
+
+
+def set_project(lid, on):
+    """
+    Projekt-Flag einer Liste setzen/löschen. Nur Listen mit gesetztem Flag
+    erscheinen als Projekt in der PROJECTS-Box der Fronten (Titel + Erfüllungs-
+    leiste). Reine Anzeige-Markierung, ändert die Einträge nicht. Liefert die
+    Liste. Wirft KeyError bei unbekannter Liste.
+    """
+    lists = _load()
+    lst = _find(lists, lid)
+    if lst is None:
+        raise KeyError(lid)
+    lst['project'] = bool(on)
+    _save(lists)
+    return lst
+
+
+def leaf_progress(lst):
+    """
+    (erledigte Blätter, alle Blätter) rekursiv über den Baum — Basis für die
+    Projekt-Erfüllungsleiste. Ordner (Einträge mit Kindern) zählen NICHT selbst
+    mit, nur ihre Blätter; ihr Status ist ohnehin abgeleitet (vgl. is_done).
+    """
+    done = total = 0
+    for it in _walk(lst.get('items')):
+        if is_container(it):
+            continue
+        total += 1
+        if it.get('done'):
+            done += 1
+    return done, total
 
 
 def rename_item(lid, iid, text):

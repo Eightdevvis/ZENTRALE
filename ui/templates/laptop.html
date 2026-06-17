@@ -111,6 +111,15 @@
   .meter .mv { font-family: 'VT323', monospace; font-size: 18px; color: var(--bright); text-align: right; }
   .meter .mbf { color: var(--acc); }
   .meter .mbe { color: var(--faint); }
+  /* Projekte: Titel + Erfüllungsleiste + d/t (reine Anzeige) */
+  .prj { padding: 6px 0; border-bottom: 1px dotted var(--line); }
+  .prj:last-child { border-bottom: 0; }
+  .prj .ph { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .prj .pt { font-size: 12px; color: var(--dim); letter-spacing: 0.08em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prj .pc { font-family: 'VT323', monospace; font-size: 15px; color: var(--bright); flex: 0 0 auto; }
+  .prj .pb { font-family: 'VT323', monospace; font-size: 16px; white-space: pre; overflow: hidden; line-height: 1; margin-top: 2px; }
+  .prj .pb .mbf { color: var(--acc); } .prj .pb .mbe { color: var(--faint); }
+  .prj.full .pc { color: var(--acc); }
 
   /* Terminals (token-coloriert) — stdout + outbound */
   .term-body { flex: 1; overflow: hidden; display: flex; flex-direction: column-reverse; font-size: 13px; line-height: 1.5; }
@@ -248,6 +257,10 @@
           <!-- Tracker (sleep/food) noch nicht an /api/data verkabelt — ehrlich leer -->
           <div class="nodata">// tracker-quelle noch nicht verkabelt</div>
         </div>
+        <div class="box" style="flex:0 0 auto">
+          <span class="bt">projects</span>
+          <div id="projects"></div>
+        </div>
         <div class="box net" style="flex:1 1 auto;min-height:0">
           <span class="bt">outbound</span><span class="bt2">tripwire</span>
           <div class="term-body" id="term-net"><div class="term-idle">// offline ✓</div></div>
@@ -375,6 +388,35 @@
         if (nets.length < lastNetLen) lastNetLen = 0;
         for (var j = lastNetLen; j < nets.length; j++) appendLog('term-net', nets[j], 100);
         lastNetLen = nets.length;
+      }).catch(function () { /* Backend kurz weg — nächster Tick versucht's erneut */ });
+    }
+
+    // ── Poll: /api/projects (30 s) ──────────────────────────────────────
+    // Reine Anzeige: Listen mit gesetztem Projekt-Flag (im Listen-Werkzeug der
+    // TUI) als Titel + Erfüllungsleiste. done/total = erledigte/alle Blätter
+    // rekursiv, serverseitig berechnet — wir rendern nur.
+    var prjEl = document.getElementById('projects');
+    function pEsc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    function projBar(done, total, cells) {
+      var f = total ? Math.max(0, Math.min(1, done / total)) : 0;
+      var full = Math.round(f * cells);
+      return '<span class="mbf">' + '█'.repeat(full) + '</span>'
+           + '<span class="mbe">' + '░'.repeat(Math.max(0, cells - full)) + '</span>';
+    }
+    function pollProjects() {
+      if (!prjEl) return;
+      fetch('/api/projects').then(function (r) { return r.json(); }).then(function (pr) {
+        if (!Array.isArray(pr) || !pr.length) {
+          prjEl.innerHTML = '<div class="nodata">// keine projekte (listen-werkzeug \'p\')</div>';
+          return;
+        }
+        prjEl.innerHTML = pr.map(function (p) {
+          var done = p.done | 0, total = p.total | 0, full = total && done >= total;
+          return '<div class="prj' + (full ? ' full' : '') + '">'
+            + '<div class="ph"><span class="pt">' + pEsc(p.name || '') + '</span>'
+            + '<span class="pc">' + done + '/' + total + '</span></div>'
+            + '<div class="pb">' + projBar(done, total, 22) + '</div></div>';
+        }).join('');
       }).catch(function () { /* Backend kurz weg — nächster Tick versucht's erneut */ });
     }
 
@@ -649,6 +691,7 @@
     // ── Loops starten ───────────────────────────────────────────────────
     pollState(); setInterval(pollState, 1000);
     pollTelemetry(); setInterval(pollTelemetry, 2000);
+    pollProjects(); setInterval(pollProjects, 30000);
   })();
   </script>
 </body>

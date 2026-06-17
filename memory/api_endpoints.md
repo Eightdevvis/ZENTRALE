@@ -61,11 +61,23 @@ NICHT direkt abhakbar; sein effektiver Status ist **abgeleitet** (`is_done` in
 `toggle` auf einen Ordner → **400**. Fortschritt `(erledigt/gesamt)` zählt die
 **Blätter** (Ordner selbst zählen nicht mit).
 
+**Projekt-Flag (PROJECTS-Box):** Eine Liste kann als *Projekt* markiert werden
+(`project: bool`, Default `false`). Geflaggte Listen erscheinen in **allen**
+Fronten in einer eigenen `projects`-Box (rechts, zwischen `lifestyle` und
+`outbound`) als **Titel + Erfüllungsleiste**: die Leiste = erledigte/alle Blätter
+rekursiv (`leaf_progress` in `core/lists.py`, gleiche Zählung wie der Listen-
+Fortschritt). Reine Anzeige; verwaltet/umgeschaltet wird im **Listen-Werkzeug**
+(TUI Taste `l` → in der Listenübersicht `p`; geflaggte Listen tragen ein `◆`).
+Die Fortschrittslogik liegt zentral in Python (`/api/projects`), die Fronten
+rendern nur.
+
 | Endpoint                              | Methode | Beschreibung                          |
 |---------------------------------------|---------|---------------------------------------|
-| `/api/lists`                          | GET     | Alle Listen inkl. Einträge (`[{id,name,created,next_item,items:[{id,text,done,items?:[…]}]}]`). |
+| `/api/lists`                          | GET     | Alle Listen inkl. Einträge (`[{id,name,created,next_item,project,items:[{id,text,done,items?:[…]}]}]`). |
 | `/api/lists`                          | POST    | Neue Liste. Body `{name}`. 400 bei leerem Namen. id = `l_<slug>` (kollisionsfrei). |
+| `/api/projects`                       | GET     | Nur als Projekt geflaggte Listen, je `{id,name,done,total}` (done/total = erledigte/alle Blätter rekursiv). Quelle der PROJECTS-Box in allen Fronten. |
 | `/api/lists/<lid>`                    | DELETE  | Liste samt Einträgen löschen.         |
+| `/api/lists/<lid>/project`            | POST    | Projekt-Flag setzen/löschen. Body `{project:bool}`. 404 unbek. Liefert die Liste. |
 | `/api/lists/<lid>/rename`             | POST    | Listen-Namen ändern. Body `{name}`. id bleibt stabil. 400 leer, 404 unbek. |
 | `/api/lists/<lid>/items`              | POST    | Eintrag anhängen. Body `{text}`, optional `{parent:<iid>}` → Unterpunkt von `<iid>`. 400 leer, 404 unbek. Liste/Eltern. Liefert `{id,text,done}`. |
 | `/api/lists/<lid>/nest`               | POST    | Ganze Liste in eine andere einordnen (Quelle → Eintrag, verschwindet aus Top-Level). Body `{into:<ziel-lid>}`, optional `{parent:<iid>}`. ids des Teilbaums werden im Ziel neu vergeben. 400 in-sich-selbst, 404 unbek. Liefert den neuen Eintrag. |
@@ -171,7 +183,7 @@ Details zu Modellen + Sprachen: `audio_system.md`.
 | `/api/mail/refresh-counts`  | POST    | Frischt den Live-Ordnerzähl-Cache im Hintergrund auf (IMAP `STATUS`-Sweep). `409` ohne Passphrase, Parallel-Lock. |
 | `/api/mail/folder?cat=NAME` | GET     | Mail-Panel Ebene 2: die Mails einer Kategorie. Mit Key + eigenem Ordner LIVE (`source:"live"`), sonst lokaler Schnappschuss (`source:"snapshot"`). |
 | `/api/mail/body?cat=&uid=&account=` | GET | Voller Text + Header EINER Mail (Lesen-Modus). LIVE; `409` ohne Key. MIME→Klartext. |
-| `/api/mail/assign`          | POST    | Ordnet den **Absender** einer Kategorie zu (Keymap, key-frei). Body `{sender, category}`. Verschiebt NICHT die Mail. |
+| `/api/mail/assign`          | POST    | Ordnet den **Absender** der Kategorie zu (Keymap) UND verschiebt mit Key **alle** seine vorhandenen Mails dorthin (`SEARCH FROM` über INBOX + move-Ordner). Body `{sender, category}` → `{assigned, category, moved, live}`. |
 | `/api/mail/delete`          | POST    | Eine Mail in den Papierkorb (umkehrbar). LIVE; `409` ohne Key. Body `{cat, uid, account?}`. |
 | `/api/mail/reply`           | POST    | Antwort senden via SMTP XOAUTH2 (Outlook). LIVE; `409` ohne Key. Body `{cat, uid, text, account?}`. Braucht `SMTP.Send`-Scope (Neu-Login). |
 | `/api/mail/poll`            | POST    | Stößt einen **Live**-Poll im Hintergrund-Thread an. `409`, wenn keine Passphrase (Env/Keyring). Parallel-Polls per Lock verhindert. |

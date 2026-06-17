@@ -74,6 +74,7 @@ class Store:
         self.metrics = None    # /api/telemetry
         self.graphs = []       # /api/graphs (Definitionen, für lifestyle-Box)
         self.graph_vals = {}   # graph_id -> /api/data/<id> (Messwerte)
+        self.projects = []     # /api/projects (geflaggte Listen, für PROJECTS-Box)
         self.connected = False
         self._stop = threading.Event()
 
@@ -98,6 +99,15 @@ class Store:
         except (urllib.error.URLError, OSError, ValueError):
             pass
 
+    def _poll_projects(self):
+        """Als Projekt geflaggte Listen samt Erfüllungsgrad ziehen (PROJECTS-Box)."""
+        try:
+            pr = self._get("/api/projects") or []
+            with self._lock:
+                self.projects = pr if isinstance(pr, list) else []
+        except (urllib.error.URLError, OSError, ValueError):
+            pass
+
     def poll_once(self):
         """Einmal alle Endpoints ziehen (für --selftest und den Loop)."""
         ok = False
@@ -116,6 +126,7 @@ class Store:
         except (urllib.error.URLError, OSError, ValueError):
             pass
         self._poll_graphs()
+        self._poll_projects()
         with self._lock:
             self.connected = ok
         return ok
@@ -142,6 +153,7 @@ class Store:
                     pass
             if tick % 5 == 0:                  # langsam: manuell geloggte Graph-Werte
                 self._poll_graphs()
+                self._poll_projects()
             tick += 1
             self._stop.wait(1.0)
 
@@ -157,6 +169,11 @@ class Store:
         langsamer frischt als state/telemetry."""
         with self._lock:
             return list(self.graphs), dict(self.graph_vals)
+
+    def projects_snapshot(self):
+        """Liste der geflaggten Projekte ({id,name,done,total}) für die PROJECTS-Box."""
+        with self._lock:
+            return [dict(p) for p in self.projects if isinstance(p, dict)]
 
 
 # ── Hilfsfunktionen (UI-unabhängig, testbar) ───────────────────────────────
@@ -394,7 +411,11 @@ def selftest():
     print("  listen             :", [l.get("id") for l in ll] or "—")
     for l in ll:
         done, total = _lcount(l.get("items"))
-        print("    %-16s :" % l.get("name"), "%d/%d erledigt" % (done, total))
+        flag = " ◆projekt" if l.get("project") else ""
+        print("    %-16s :" % l.get("name"), "%d/%d erledigt%s" % (done, total, flag))
+    pr = store._get("/api/projects") or []
+    print("  projekte (rechts)  :",
+          ["%s %d/%d" % (p.get("name"), p.get("done"), p.get("total")) for p in pr] or "—")
     last = state.get("logs", [])[-1] if state.get("logs") else None
     if last:
         print("  letzte log-zeile    :", last.get("time"), last.get("text"))
@@ -411,10 +432,10 @@ TUI_KEYS = [
     ("q",   "beenden"),
     ("t",   "Theme wechseln (auto/hell/dunkel)"),
     ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen"),
-    ("l",   "Listen (Mitte): anlegen · einträge abhaken (space) / löschen"),
+    ("l",   "Listen (Mitte): anlegen · einträge abhaken (space) / löschen · p als projekt rechts"),
     ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · o=Handelsrouten · w=Fenster"),
     ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · ←→ blättern · v Woche/Monat"),
-    ("p",   "Post/Mail (Mitte): ↑↓ wählen · enter rein · v lesen/liste · e ausklappen · a antw · s einsort · d lösch · esc zurück"),
+    ("p",   "Post/Mail (Mitte): ↑↓ blättern · enter rein · v lesen/liste · e ausklappen · Bild↑↓ scrollen · a antw · s einsort · d lösch · esc zurück"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
@@ -611,6 +632,7 @@ def run_ui(stdscr, store):
     G = {"active": False, "view": "list", "graphs": [], "sel": 0,
          "def": None, "vals": [], "input": "", "newtype": "number", "msg": "",
          "input2": "", "pstage": 0,    # input2/pstage: Perioden-Eingabe (von→bis)
+         "dayoff": 0,                  # Ziel-Tag: 0=heute, N=N Tage zurück (←/→)
          "confirm": False}             # Lösch-Nachfrage aktiv (Mini-Dialog)
 
     # ── Listen-Werkzeug (füllt die MITTE-Box, Taste 'l') ────────────────
@@ -641,6 +663,7 @@ def run_ui(stdscr, store):
          "edit_iid": None,             # umzubenennender Eintrag (imode rename)
          "lrename": None,              # umzubenennende Liste (in "new")
          "move_iid": None,             # zu verschiebender Eintrag ("move")
+         "inest_iid": None,            # einzuordnender Eintrag ("inest", > auf Punkt)
          "nest_src": None, "nsel": 0}  # Einordnen/Verschieben: Quelle + Zielwahl
 
     # ── Karte (füllt die MITTE-Box, Taste 'm') ──────────────────────────
@@ -827,23 +850,46 @@ def run_ui(stdscr, store):
             except Exception:
                 pass
 
+    def g_target():
+        """Ziel-Datum für Eintrag/Anzeige (heute minus dayoff)."""
+        return date.today() - timedelta(days=max(0, G.get("dayoff", 0)))
+
+    def g_daylabel():
+        off = max(0, G.get("dayoff", 0))
+        if off == 0:
+            return "heute"
+        if off == 1:
+            return "gestern"
+        return g_target().strftime("%d.%m.")
+
+    def g_existing():
+        """Vorhandener Eintrag für den Ziel-Tag (oder None) — für 'aktuell:'-Hint."""
+        ds = g_target().isoformat()
+        for e in reversed(G["vals"] or []):     # jüngster zuerst
+            if isinstance(e, dict) and e.get("date") == ds:
+                return e
+        return None
+
     def g_save(v, end=None):
-        """Wert für HEUTE eintragen (teilt sich /api/log mit der Data-Collection).
+        """Wert für den Ziel-Tag eintragen (Default heute; ←/→ verschiebt ihn).
+        upsert=True ersetzt einen vorhandenen Eintrag desselben Datums, damit
+        Nachtragen/Ändern keine Duplikate erzeugt.
         end gesetzt → Zeitperiode (value=Start-Minute, end=End-Minute)."""
-        data = {"date": time.strftime("%Y-%m-%d"), "value": v}
+        data = {"date": g_target().isoformat(), "value": v}
         if end is not None:
             data["end"] = end
         try:
             api_call("/api/log", method="POST",
-                     body={"category": G["def"]["id"], "data": data})
+                     body={"category": G["def"]["id"], "data": data, "upsert": True})
             g_load_vals()
+            tag = "" if G.get("dayoff", 0) == 0 else " (%s)" % g_daylabel()
             t = G["def"].get("type")
             if t == "period":
-                G["msg"] = "eingetragen: %s–%s" % (fmt_clock(v), fmt_clock(end))
+                G["msg"] = "eingetragen%s: %s–%s" % (tag, fmt_clock(v), fmt_clock(end))
             elif t == "time":
-                G["msg"] = "eingetragen: %s" % fmt_clock(v)
+                G["msg"] = "eingetragen%s: %s" % (tag, fmt_clock(v))
             else:
-                G["msg"] = "eingetragen: %g" % v
+                G["msg"] = "eingetragen%s: %g" % (tag, v)
         except Exception:
             G["msg"] = "speichern fehlgeschlagen"
 
@@ -1090,6 +1136,16 @@ def run_ui(stdscr, store):
             addclip(by + 1, ix, "%s  (%s%s)" % (d["name"], _tlabel(typ), unit), iw, C["bright"])
             rows = G["vals"]
             input_row = by + bh - 3
+            dl = g_daylabel()
+            exv = g_existing()                     # vorhandener Eintrag am Ziel-Tag
+            if not exv:
+                eh = ""
+            elif typ == "period":
+                eh = " (aktuell %s–%s)" % (fmt_clock(exv.get("value")), fmt_clock(exv.get("end")))
+            elif typ == "time":
+                eh = " (aktuell %s)" % fmt_clock(exv.get("value"))
+            else:
+                eh = " (aktuell %g)" % (_num(exv.get("value")) or 0)
 
             if typ in ("time", "period"):
                 addclip(by + 2, ix, "%d einträge · zuletzt %s" % (len(rows), graph_last(d, rows)), iw, C["dim"])
@@ -1098,13 +1154,13 @@ def run_ui(stdscr, store):
                 else:
                     addclip(by + 3, ix, "— noch keine einträge —", iw, C["faint"])
                 if typ == "time":
-                    addclip(input_row, ix, "zeit: " + G["input"] + "_", iw, C["bright"])
-                    addclip(bottom, ix, ("HH:MM · enter speichern · esc zu  " + G["msg"]).strip(), iw, C["faint"])
+                    addclip(input_row, ix, "%s · zeit: %s_%s" % (dl, G["input"], eh), iw, C["bright"])
+                    addclip(bottom, ix, ("HH:MM · enter speichern · ←/→ tag · esc zu  " + G["msg"]).strip(), iw, C["faint"])
                 else:
                     c1 = G["input"] + ("_" if G["pstage"] == 0 else "")
                     c2 = G["input2"] + ("_" if G["pstage"] == 1 else "")
-                    addclip(input_row, ix, "von: " + c1 + "   bis: " + c2, iw, C["bright"])
-                    addclip(bottom, ix, ("HH:MM · enter von→bis · esc zu  " + G["msg"]).strip(), iw, C["faint"])
+                    addclip(input_row, ix, "%s · von: %s  bis: %s%s" % (dl, c1, c2, eh), iw, C["bright"])
+                    addclip(bottom, ix, ("HH:MM · enter von→bis · ←/→ tag · esc zu  " + G["msg"]).strip(), iw, C["faint"])
             else:
                 ser = graph_series(typ, rows)
                 if ser:
@@ -1113,11 +1169,11 @@ def run_ui(stdscr, store):
                 else:
                     addclip(by + 2, ix, "— noch keine werte —", iw, C["faint"])
                 if typ == "scale":
-                    addclip(input_row, ix, "taste 1–5 trägt für heute ein", iw, C["acc"])
-                    addclip(bottom, ix, ("1–5 eintragen · esc zu  " + G["msg"]).strip(), iw, C["faint"])
+                    addclip(input_row, ix, "1–5 trägt für %s ein%s" % (dl, eh), iw, C["acc"])
+                    addclip(bottom, ix, ("1–5 eintragen · ←/→ tag · esc zu  " + G["msg"]).strip(), iw, C["faint"])
                 else:
-                    addclip(input_row, ix, "wert: " + G["input"] + "_", iw, C["bright"])
-                    addclip(bottom, ix, ("ziffern · enter speichern · esc zu  " + G["msg"]).strip(), iw, C["faint"])
+                    addclip(input_row, ix, "%s · wert: %s_%s" % (dl, G["input"], eh), iw, C["bright"])
+                    addclip(bottom, ix, ("ziffern · enter speichern · ←/→ tag · esc zu  " + G["msg"]).strip(), iw, C["faint"])
 
         else:  # "list"
             addclip(by + 1, ix, "GRAPHEN", iw, C["bright"])
@@ -1208,7 +1264,7 @@ def run_ui(stdscr, store):
                 addclip(bottom, ix, (tip + " · esc abbrechen  " + L["msg"]).strip(), iw, C["faint"])
             else:
                 back = "zurück" if L["path"] else "zu"
-                addclip(bottom, ix, "enter rein/hak · space hak · a/s neu · r name · m raus · d weg · esc " + back, iw, C["faint"])
+                addclip(bottom, ix, "enter rein/hak · space hak · a/s neu · r name · > einordnen · m raus · d weg · esc " + back, iw, C["faint"])
 
         elif L["view"] == "nest":          # Liste in eine andere einordnen
             src = next((x for x in L["lists"] if x.get("id") == L["nest_src"]), None)
@@ -1226,6 +1282,26 @@ def run_ui(stdscr, store):
                 for off, l in enumerate(cands[start:start + avail]):
                     sel = (start + off == L["nsel"])
                     addclip(yy, ix, "%s %s" % ("›" if sel else " ", str(l.get("name") or "")),
+                            iw, C["bright"] if sel else C["dim"])
+                    yy += 1
+            addclip(bottom, ix, ("↑↓ wählen · enter einordnen · esc abbrechen  " + L["msg"]).strip(), iw, C["faint"])
+
+        elif L["view"] == "inest" and L["def"]:   # Punkt in einen Geschwister-Punkt einordnen
+            sib_items, _pid, _cr = l_container()  # die gerade offene Ebene
+            it = l_find_item(L["def"].get("items"), L["inest_iid"])
+            nm = str(it.get("text") if isinstance(it, dict) else "?")
+            addclip(by + 1, ix, "»%s« einordnen unter:" % nm[:18], iw, C["bright"])
+            safe_addstr(by + 2, ix, "─" * iw, C["faint"])
+            sibs = [x for x in sib_items if isinstance(x, dict) and x.get("id") != L["inest_iid"]]
+            yy = by + 3
+            if not sibs:
+                addclip(yy, ix, "kein anderer punkt auf dieser ebene", iw, C["faint"])
+            else:
+                avail = max(1, bottom - yy)
+                start = max(0, min(L["nsel"] - avail + 1, len(sibs) - avail)) if len(sibs) > avail else 0
+                for off, s in enumerate(sibs[start:start + avail]):
+                    sel = (start + off == L["nsel"])
+                    addclip(yy, ix, "%s %s" % ("›" if sel else " ", str(s.get("text") or "")),
                             iw, C["bright"] if sel else C["dim"])
                     yy += 1
             addclip(bottom, ix, ("↑↓ wählen · enter einordnen · esc abbrechen  " + L["msg"]).strip(), iw, C["faint"])
@@ -1268,11 +1344,12 @@ def run_ui(stdscr, store):
                         continue
                     sel = (i == L["sel"])
                     done, total = l_count(l.get("items"))
-                    line = "%s %-16s %d/%d" % (
-                        "›" if sel else " ", str(l.get("name") or "")[:16], done, total)
+                    proj = "◆" if l.get("project") else " "   # Projekt → rechts in PROJECTS-Box
+                    line = "%s%s %-15s %d/%d" % (
+                        "›" if sel else " ", proj, str(l.get("name") or "")[:15], done, total)
                     addclip(yy, ix, line, iw, C["bright"] if sel else C["dim"])
                     yy += 1
-            addclip(bottom, ix, "enter öffnen · n neu · r name · > einordnen · d weg · esc zu", iw, C["faint"])
+            addclip(bottom, ix, "enter öffnen · n neu · r name · p projekt · > einordnen · d weg · esc zu", iw, C["faint"])
 
             if L["confirm"] and L["lists"]:        # Mini-Dialog über die Liste legen
                 nm = str(L["lists"][L["sel"]].get("name") or "")
@@ -1875,19 +1952,41 @@ def run_ui(stdscr, store):
         MAIL["bodyfor"] = uid
         MAIL["bodyoff"] = 0
 
-    def mail_assign(category):
-        """Den ABSENDER der aktuellen Mail einer Kategorie zuordnen (Keymap).
-        Verschiebt NICHT die Mail — künftige Mails dieses Absenders landen dort."""
-        it = mail_cur()
-        if not it:
+    def mail_refetch():
+        """Die Mails der aktuellen Kategorie frisch holen (nach Umsortieren/
+        Löschen verschwinden verschobene Mails hier). Behält den Modus."""
+        if not MAIL["cat"]:
             return
         try:
-            api_call("/api/mail/assign", method="POST",
-                     body={"sender": it.get("from") or "", "category": category})
-            MAIL["msg"] = "absender → %s" % category
+            q = "/api/mail/folder?cat=" + urllib.parse.quote(MAIL["cat"])
+            r = api_call(q, timeout=12.0)
+            if isinstance(r, dict):
+                MAIL["mails"] = r.get("mails") if isinstance(r.get("mails"), list) else []
+                MAIL["mails_live"] = bool(r.get("live"))
+        except Exception:
+            pass
+        ms = MAIL["mails"] or []
+        MAIL["msel"] = max(0, min(MAIL["msel"], max(0, len(ms) - 1)))
+        MAIL["body"] = None; MAIL["bodyfor"] = None
+
+    def mail_assign(category):
+        """Den ABSENDER der aktuellen Mail einer Kategorie zuordnen UND alle
+        seine vorhandenen Mails dorthin verschieben (Backend macht das live)."""
+        it = mail_cur()
+        if not it:
+            MAIL["picking"] = False
+            return
+        MAIL["picking"] = False
+        try:
+            r = api_call("/api/mail/assign", method="POST",
+                         body={"sender": it.get("from") or "", "category": category},
+                         timeout=30.0)
+            moved = (r or {}).get("moved", 0) if isinstance(r, dict) else 0
+            MAIL["msg"] = "absender → %s (%d verschoben)" % (category, moved)
         except Exception:
             MAIL["msg"] = "einsortieren: backend?"
-        MAIL["picking"] = False
+        mail_refetch()                 # umsortierte Mails fallen aus dieser Liste
+        mail_refresh_counts()          # echte Ordnergrößen neu zählen
 
     def mail_delete():
         """Die aktuelle Mail in den Papierkorb (umkehrbar) und aus der Liste raus."""
@@ -2069,8 +2168,9 @@ def run_ui(stdscr, store):
                 hint = "wirklich löschen? j/n"
             else:
                 pos = "%d/%d" % (MAIL["msel"] + 1, n)
-                hint = MAIL["msg"] or ("%s · n/N blättern · e ausklappen · a antw · "
-                                       "s einsort · d lösch · v liste · esc zu" % pos)
+                scroll = " · Bild↑↓ scrollen" if MAIL["expanded"] else ""
+                hint = MAIL["msg"] or ("%s · ↑↓ blättern · e ausklappen%s · a antw · "
+                                       "s einsort · d lösch · v liste · esc" % (pos, scroll))
             addclip(bottom, ix, hint, iw, C["faint"])
             return
 
@@ -2235,7 +2335,7 @@ def run_ui(stdscr, store):
                 elif ch in (10, 13, curses.KEY_ENTER):
                     if G["graphs"]:
                         G["def"] = G["graphs"][G["sel"]]; G["input"] = ""; G["msg"] = ""
-                        G["input2"] = ""; G["pstage"] = 0
+                        G["input2"] = ""; G["pstage"] = 0; G["dayoff"] = 0
                         G["view"] = "view"; g_load_vals()
                 elif ch in (ord("n"), ord("N")):
                     G["view"] = "new"; G["input"] = ""; G["newtype"] = "number"; G["msg"] = ""
@@ -2276,7 +2376,11 @@ def run_ui(stdscr, store):
                         G["pstage"] = 0; G["input2"] = ""; G["msg"] = ""
                     else:
                         G["view"] = "list"; G["input"] = ""; G["input2"] = ""
-                        G["pstage"] = 0; G["msg"] = ""
+                        G["pstage"] = 0; G["msg"] = ""; G["dayoff"] = 0
+                elif ch == curses.KEY_LEFT:                     # Ziel-Tag einen zurück
+                    G["dayoff"] = min(365, G.get("dayoff", 0) + 1); G["msg"] = ""
+                elif ch == curses.KEY_RIGHT:                    # … wieder vor (max heute)
+                    G["dayoff"] = max(0, G.get("dayoff", 0) - 1); G["msg"] = ""
                 elif typ == "scale":
                     if ord("1") <= ch <= ord("5"):             # 1–5 trägt sofort ein
                         g_save(int(chr(ch)))
@@ -2364,6 +2468,12 @@ def run_ui(stdscr, store):
                     if len(L["lists"]) > 1:
                         L["nest_src"] = L["lists"][L["sel"]]["id"]
                         L["nsel"] = 0; L["msg"] = ""; L["view"] = "nest"
+                elif ch in (ord("p"), ord("P")):              # als Projekt (rechts) an/aus
+                    if L["lists"]:
+                        cur = L["lists"][L["sel"]]
+                        api_call("/api/lists/%s/project" % cur["id"], method="POST",
+                                 body={"project": not cur.get("project")})
+                        l_load()
             elif L["view"] == "new":
                 if ch == 27:
                     L["view"] = "list"; L["lrename"] = None; L["msg"] = ""
@@ -2494,6 +2604,14 @@ def run_ui(stdscr, store):
                             L["msg"] = ""; L["view"] = "move"
                         elif cur:
                             L["msg"] = "keine andere liste"
+                    elif ch == ord(">"):                       # diesen Punkt in einen Geschwister-Punkt einordnen (wie > für Listen)
+                        sibs = [x for x in items if isinstance(x, dict)
+                                and x.get("id") != (cur or {}).get("id")]
+                        if cur and sibs:
+                            L["inest_iid"] = cur["id"]; L["nsel"] = 0
+                            L["msg"] = ""; L["view"] = "inest"
+                        elif cur:
+                            L["msg"] = "kein geschwister-punkt"
                     elif ch in (ord("d"), ord("D")):
                         if cur and lid:
                             try:
@@ -2524,6 +2642,29 @@ def run_ui(stdscr, store):
                             L["msg"] = "einordnen fehlgeschlagen"
                         L["view"] = "list"; L["nest_src"] = None
                         l_load()
+            elif L["view"] == "inest":         # Punkt in einen Geschwister-Punkt einordnen
+                lid = L["def"]["id"] if L["def"] else None
+                sib_items, _pid, _cr = l_container()
+                sibs = [x for x in sib_items if isinstance(x, dict) and x.get("id") != L["inest_iid"]]
+                if ch in (27, ord("l"), ord("L")):             # Esc/l → zurück zu den Einträgen
+                    L["view"] = "view"; L["inest_iid"] = None; L["msg"] = ""
+                elif ch in (ord("q"), ord("Q")):
+                    break
+                elif ch in (curses.KEY_UP, ord("k")):
+                    L["nsel"] = max(0, L["nsel"] - 1)
+                elif ch in (curses.KEY_DOWN, ord("j")):
+                    L["nsel"] = min(max(0, len(sibs) - 1), L["nsel"] + 1)
+                elif ch in (10, 13, curses.KEY_ENTER):
+                    if sibs and 0 <= L["nsel"] < len(sibs) and lid:
+                        dest = sibs[L["nsel"]]
+                        try:
+                            api_call("/api/lists/%s/items/%d/move" % (lid, L["inest_iid"]),
+                                     method="POST", body={"into": lid, "parent": dest["id"]})
+                            L["msg"] = "eingeordnet"
+                        except Exception:
+                            L["msg"] = "einordnen fehlgeschlagen"
+                        L["view"] = "view"; L["inest_iid"] = None
+                        l_load(); l_sync_def()
             elif L["view"] == "move":          # Eintrag raus in eine andere Liste
                 lid = L["def"]["id"] if L["def"] else None
                 targets = l_move_targets()
@@ -2756,26 +2897,34 @@ def run_ui(stdscr, store):
                 elif ch in (ord("v"), ord("V"), 9):            # v/Tab → lesen↔liste
                     MAIL["mode2"] = "list" if MAIL["mode2"] == "read" else "read"
                     MAIL["expanded"] = False; MAIL["bodyoff"] = 0; MAIL["msg"] = ""
-                elif ch in (curses.KEY_UP, ord("k")):
-                    if MAIL["mode2"] == "read" and MAIL["expanded"]:
-                        MAIL["bodyoff"] = max(0, MAIL["bodyoff"] - 1)   # Body scrollen
-                    else:
-                        MAIL["msel"] = max(0, MAIL["msel"] - 1)
-                        MAIL["expanded"] = False; MAIL["bodyoff"] = 0; MAIL["msg"] = ""
-                elif ch in (curses.KEY_DOWN, ord("j")):
-                    if MAIL["mode2"] == "read" and MAIL["expanded"]:
-                        MAIL["bodyoff"] = MAIL["bodyoff"] + 1
-                    else:
-                        MAIL["msel"] = MAIL["msel"] + 1     # Klemmung beim Zeichnen
-                        MAIL["expanded"] = False; MAIL["bodyoff"] = 0; MAIL["msg"] = ""
-                elif ch in (ord("n"), ord(" ")):               # nächste Mail blättern
-                    MAIL["msel"] = MAIL["msel"] + 1
-                    MAIL["expanded"] = False; MAIL["bodyoff"] = 0; MAIL["msg"] = ""
-                elif ch == ord("N"):                           # vorige Mail
-                    MAIL["msel"] = max(0, MAIL["msel"] - 1)
-                    MAIL["expanded"] = False; MAIL["bodyoff"] = 0; MAIL["msg"] = ""
+                elif ch in (curses.KEY_UP, curses.KEY_DOWN, ord("k"), ord("j"),
+                            ord("n"), ord("N"), ord(" ")):
+                    # Pfeil/j/k/n/N = BLÄTTERN (immer, egal ob ausgeklappt). Eine
+                    # gepufferte Tastenfolge zusammenfassen, damit schnelles
+                    # Blättern nicht pro Taste den Body blockierend nachlädt.
+                    _DN = (curses.KEY_DOWN, ord("j"), ord("n"), ord(" "))
+                    _UP = (curses.KEY_UP, ord("k"), ord("N"))
+                    delta = 1 if ch in _DN else -1
+                    stdscr.nodelay(True)
+                    while True:
+                        nx = stdscr.getch()
+                        if nx in _DN:
+                            delta += 1
+                        elif nx in _UP:
+                            delta -= 1
+                        else:
+                            if nx != -1:
+                                curses.ungetch(nx)
+                            break
+                    stdscr.timeout(250)
+                    MAIL["msel"] = max(0, MAIL["msel"] + delta)  # Obergrenze beim Zeichnen
+                    MAIL["bodyoff"] = 0; MAIL["msg"] = ""
+                elif ch == curses.KEY_NPAGE:                   # Bild↓ → Body runter
+                    MAIL["bodyoff"] = MAIL["bodyoff"] + 5
+                elif ch == curses.KEY_PPAGE:                   # Bild↑ → Body hoch
+                    MAIL["bodyoff"] = max(0, MAIL["bodyoff"] - 5)
                 elif ch in (10, 13, curses.KEY_ENTER, curses.KEY_RIGHT, ord("l")):
-                    MAIL["mode2"] = "read"; MAIL["expanded"] = False   # aus Liste: lesen
+                    MAIL["mode2"] = "read"               # aus Liste: lesen
                 elif ch in (ord("e"), ord("E")):               # ausklappen ↔ Vorschau
                     MAIL["expanded"] = not MAIL["expanded"]; MAIL["bodyoff"] = 0
                 elif ch in (ord("s"), ord("S")):               # einsortieren (Absender)
@@ -2838,6 +2987,7 @@ def run_ui(stdscr, store):
 
         state, metrics, connected = store.snapshot()
         gs_cache, gv_cache = store.graphs_snapshot()
+        proj_cache = store.projects_snapshot()
         H, W = stdscr.getmaxyx()
         stdscr.erase()
 
@@ -2984,6 +3134,14 @@ def run_ui(stdscr, store):
         else:
             life_h = 4
         out_h = body_h - life_h
+        # PROJECTS schiebt sich zwischen lifestyle und outbound — aber nur wenn
+        # es überhaupt geflaggte Projekte gibt UND outbound danach mind. 5 Zeilen
+        # behält (sonst lieber ganz weglassen, Tripwire hat Vorrang). Je Projekt
+        # 2 Zeilen (Titel + Leiste) + 2 für den Rahmen.
+        proj_h = 0
+        if proj_cache and out_h >= 9:
+            proj_h = min(2 + 2 * len(proj_cache), out_h - 5)
+        out_h -= proj_h
         draw_box(top, rx, life_h, rightw, "lifestyle")
         # Farb-Palette, je Graph eine (durchgezykelt). Unterschieden wird über
         # die FARBE, nicht über fette Symbole — gezeichnet als dünne Linien.
@@ -3034,47 +3192,82 @@ def run_ui(stdscr, store):
                 return base + (plot_h - 1) - int(round(n * (plot_h - 1)))
 
             if series:
-                # X = Fenster der letzten NDAYS Tage (heute rechts). Tage liegen
-                # LÜCKENLOS aneinander; jeder Tag bekommt einen Spalten-Block.
-                # Block-Breite ~1/3 der früheren (war plot_w/7) → mehr Tage als 7
-                # passen rein, skaliert mit der Boxbreite.
-                # bewusst wenige Tage: ~10 ins Fenster, je Tag ≥2 Spalten breit.
-                NDAYS = max(5, min(10, plot_w // 2))
+                # Wie in der Schlaf-Ansicht: links 3 Spalten für die Stunden-
+                # Labels, dann GENAU 1 Spalte pro Tag (dünn + gleichmäßig — kein
+                # dicker Block, kein schmaler erster Balken durch Rundung).
+                # Heute rechts, ältester Tag links.
+                ix = plot_x                           # Stunden-Labels
+                day_x0 = ix + 3                       # erste Tages-Spalte
+                day_w = max(1, (rx + rightw - 2) - day_x0)
+                NDAYS = day_w
                 today = date.today()
                 window = [(today - timedelta(days=k)).isoformat()
                           for k in range(NDAYS - 1, -1, -1)]   # alt → neu
-                day_span = {}                         # datum → (c0, c1) Spaltenblock
-                for i, d in enumerate(window):
-                    c0 = plot_x + int(round(i / NDAYS * plot_w))
-                    c1 = plot_x + int(round((i + 1) / NDAYS * plot_w)) - 1
-                    day_span[d] = (c0, max(c0, c1))
-                day_center = {d: (a + b) // 2 for d, (a, b) in day_span.items()}
+                day_col = {d: day_x0 + i for i, d in enumerate(window)}
+                day_center = day_col                  # 1 Spalte → Mitte = die Spalte
                 cols = window
 
+                # 24h-Achse links: senkrechte Linie + Stunden-Marken.
+                for r in range(plot_h):
+                    safe_addstr(base + r, day_x0 - 1, "│", C["faint"])
+                for hh in (0, 6, 12, 18, 24):
+                    safe_addstr(row_clock(hh * 60), ix, "%02d" % (hh % 24), C["faint"])
+
+                # PREDICTION: Lücken-Tage (kein echter Eintrag) werden aus dem
+                # Schnitt der letzten NPRED echten Werte geschätzt — aber NUR ab
+                # dem ersten echten Eintrag (nichts vor Tracking-Beginn erfinden).
+                # Geschätzte Tage werden später blass/schraffiert markiert.
+                NPRED = 7
+
+                def predicted_days(dv):
+                    """{datum: schätz-entry mit _pred=True} für Fenster-Lücken."""
+                    actual = sorted((e for e in dv.values() if isinstance(e, dict)),
+                                    key=lambda e: str(e.get("date", "")))
+                    if not actual:
+                        return {}
+                    earliest = str(actual[0].get("date", ""))
+                    last = actual[-NPRED:]
+
+                    def mean(key):
+                        xs = [_num(e.get(key)) for e in last]
+                        xs = [x for x in xs if x is not None]
+                        return sum(xs) / len(xs) if xs else None
+
+                    mv, me = mean("value"), mean("end")
+                    out = {}
+                    for d in window:
+                        if d in dv or d < earliest or mv is None:
+                            continue
+                        e = {"date": d, "value": mv, "_pred": True}
+                        if me is not None:
+                            e["end"] = me
+                        out[d] = e
+                    return out
+
                 # 1. DURCHGANG: period/Schlaf als zusammenhängende Bande HINTER
-                # allem. Gefärbter Zellen-HINTERGRUND (band); jeder Tag füllt
-                # seinen ganzen Block, Nachbartage stoßen aneinander → ein Band.
-                # band_cells merkt sich die belegten Zellen, damit Kurven dort
-                # mit band-bg gezeichnet werden (= vor dem Band, kein Loch).
+                # allem. Gefärbter Zellen-HINTERGRUND (band), 1 Spalte pro Tag;
+                # Nachbartage stoßen aneinander → ein Band. band_cells merkt sich
+                # die Zellen, damit Kurven dort mit band-bg gezeichnet werden
+                # (= vor dem Band, kein Loch).
                 band_glyph = " " if C.get("band_is_bg") else "▒"
                 band_cells = set()
                 for s in series:
                     if s["type"] != "period":
                         continue
-                    for d, e in s["dv"].items():
-                        span = day_span.get(d)
+                    for d, e in list(s["dv"].items()) + list(predicted_days(s["dv"]).items()):
+                        cx = day_col.get(d)
                         v, end = _num(e.get("value")), _num(e.get("end"))
-                        if span is None or v is None or end is None:
+                        if cx is None or v is None or end is None:
                             continue
-                        st, en = int(v), int(end)
+                        st, en = int(round(v)), int(round(end))
                         segs = ([(st, en)] if en >= st
                                 else [(st, 1440), (0, en)])   # Wrap Mitternacht
+                        g = "░" if e.get("_pred") else band_glyph   # geschätzt = schraffiert
                         for a, b in segs:
                             r0, r1 = sorted((row_clock(a), row_clock(b)))
                             for r in range(r0, r1 + 1):
-                                for cx in range(span[0], span[1] + 1):
-                                    safe_addstr(r, cx, band_glyph, C["band"])
-                                    band_cells.add((r, cx))
+                                safe_addstr(r, cx, g, C["band"])
+                                band_cells.add((r, cx))
 
                 # Attribut für einen Linien-Glyph: in Banden-Zellen die "@band"-
                 # Variante (band-bg) → Glyph liegt VOR der Bande; sonst normal.
@@ -3097,13 +3290,14 @@ def run_ui(stdscr, store):
                     if ry < base:
                         continue                      # kein Platz mehr → weglassen
                     col = s["col"]
-                    for d, e in s["dv"].items():
+                    for d, e in list(s["dv"].items()) + list(predicted_days(s["dv"]).items()):
                         cx = day_center.get(d)
                         v = _num(e.get("value"))
                         if cx is None or v is None:
                             continue
                         idx = max(0, min(4, int(round(v)) - 1))
-                        safe_addstr(ry, cx, CIRC[idx], latt(ry, cx, col))
+                        attr = latt(ry, cx, "faint") if e.get("_pred") else latt(ry, cx, col)
+                        safe_addstr(ry, cx, CIRC[idx], attr)
 
                 # 3. DURCHGANG: time als einzelne Sterne ★ (Zeitpunkt, keine
                 # Linie), je Tag an der Block-Mitte auf der 24h-Skala.
@@ -3111,13 +3305,14 @@ def run_ui(stdscr, store):
                     if s["type"] != "time":
                         continue
                     col = s["col"]
-                    for d, e in s["dv"].items():
+                    for d, e in list(s["dv"].items()) + list(predicted_days(s["dv"]).items()):
                         cx = day_center.get(d)
                         v = _num(e.get("value"))
                         if cx is None or v is None:
                             continue
-                        r = row_clock(int(v))
-                        safe_addstr(r, cx, "★", latt(r, cx, col))
+                        r = row_clock(int(round(v)))
+                        attr = latt(r, cx, "faint") if e.get("_pred") else latt(r, cx, col)
+                        safe_addstr(r, cx, "★", attr)
 
                 # 4. DURCHGANG: number als dünne Linie (eigene min/max-Spanne).
                 for s in series:
@@ -3150,6 +3345,14 @@ def run_ui(stdscr, store):
                                 t = (c - c1) / (c2 - c1)
                                 r = int(round(r1 + t * (r2 - r1)))
                                 safe_addstr(r, c, ch, latt(r, c, col))
+                    # geschätzte Tage als blasse Einzelpunkte (nicht in die Linie)
+                    for d, e in predicted_days(dv).items():
+                        cx = day_center.get(d)
+                        v = _num(e.get("value"))
+                        if cx is None or v is None:
+                            continue
+                        r = row_norm(v, lo, hi)
+                        safe_addstr(r, cx, "·", latt(r, cx, "faint"))
                 # Legende unter den Plot: farbiges Linien-Sample + Name
                 for li, line in enumerate(leg_lines[:max_leg]):
                     yy = base + plot_h + li
@@ -3169,7 +3372,37 @@ def run_ui(stdscr, store):
                 safe_addstr(top + 1, rx + 2, "// noch keine werte", C["faint"])
         else:
             safe_addstr(top + 1, rx + 2, "// noch keine graphen (g)", C["faint"])
-        oy = top + life_h
+
+        # ── PROJECTS (zwischen lifestyle und outbound) ────────────────────
+        # Projekt = Liste mit gesetztem Flag (im Listen-Werkzeug 'p'). Pro
+        # Projekt der Titel + eine Erfüllungsleiste = erledigte/alle Blätter
+        # rekursiv (Quelle: store.projects_snapshot ← /api/projects). Reine
+        # Anzeige; verwaltet wird weiter im Listen-Werkzeug.
+        if proj_h:
+            draw_box(top + life_h, rx, proj_h, rightw, "projects")
+            pix = rx + 2
+            piw = max(4, rightw - 4)
+            shown = (proj_h - 2) // 2          # so viele Projekte passen rein
+            for i, p in enumerate(proj_cache[:shown]):
+                if not isinstance(p, dict):
+                    continue
+                done = int(p.get("done") or 0)
+                total = int(p.get("total") or 0)
+                ry = top + life_h + 1 + 2 * i
+                cnt = "%d/%d" % (done, total)
+                nmw = max(1, piw - len(cnt) - 1)
+                addclip(ry, pix, str(p.get("name") or "")[:nmw], nmw, C["bright"])
+                safe_addstr(ry, rx + rightw - 1 - len(cnt), cnt, C["dim"])
+                frac = (done / total) if total else 0.0
+                full = int(round(max(0.0, min(1.0, frac)) * piw))
+                bar = "█" * full + "░" * (piw - full)
+                bcol = C["acc"] if (total and done >= total) else C["graph"]
+                safe_addstr(ry + 1, pix, bar, bcol)
+            if len(proj_cache) > shown:         # Rest passt nicht → ehrlich anzeigen
+                safe_addstr(top + life_h + proj_h - 1, rx + rightw - 6,
+                            "+%d" % (len(proj_cache) - shown), C["faint"])
+
+        oy = top + life_h + proj_h
         draw_box(oy, rx, out_h, rightw, "outbound", C["warn"])
         if nets:
             inner = out_h - 2

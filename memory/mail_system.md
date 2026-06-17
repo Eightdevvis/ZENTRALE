@@ -215,10 +215,12 @@ im News-System).
     - **Liste:** Blöckchen (Absender + Titel), `↑↓` wählen, `enter` öffnet im
       Lesen-Modus.
     - Aktions-Tasten in beiden Modi: `s` = **einsortieren** (öffnet Kategorie-
-      Picker; ordnet den **ABSENDER** neu zu, NICHT die einzelne Mail —
-      künftige Mails von ihm landen dann dort), `d` = **löschen** (in den
+      Picker; ordnet den **ABSENDER** der Kategorie zu UND verschiebt **alle**
+      seine vorhandenen Mails — alt + neu — in den Ziel-Ordner; künftige sortiert
+      der Poll automatisch dorthin), `d` = **löschen** (eine Mail in den
       Papierkorb, umkehrbar, mit `j/n`-Nachfrage), `a` = **antworten** (Split-
-      Editor), `esc`/`←` zurück.
+      Editor), `esc`/`←` zurück. Navigation: `↑↓` blättern (immer), `Bild↑↓`
+      scrollt den ausgeklappten Text.
   - **Antwort-Editor (`a`):** die MITTE wird breit (Seitenpanels schrumpfen, bis
     der Editor zu ist), gesplittet in zwei Kästen — **links** die Original-Mail
     (scrollbar mit ↑↓), **rechts** dein Text-Editor (tippen, `enter`=Zeile).
@@ -248,9 +250,11 @@ im News-System).
 - `GET /api/mail/body?cat=&uid=&account=` → voller Text + Header EINER Mail
   (Lesen-Modus), LIVE; `409` ohne Key. Core: `mail_body()` (MIME→Klartext,
   text/plain bevorzugt, sonst html grob entschärft).
-- `POST /api/mail/assign {sender, category}` → ordnet den **Absender** einer
-  Kategorie zu (Keymap, key-frei). Verschiebt NICHT die Mail. Core:
-  `reassign_sender()` → `mail_rules.assign()`.
+- `POST /api/mail/assign {sender, category}` → ordnet den **Absender** der
+  Kategorie zu (Keymap) UND verschiebt mit Key **alle** seine vorhandenen Mails
+  (INBOX + jeder move-Ordner, via `SEARCH FROM`) in den Ziel-Ordner. Antwort
+  `{assigned, category, moved, live}`. Ohne Key: nur Keymap (`moved=0`). Core:
+  `refile_sender()`.
 - `POST /api/mail/delete {cat, uid, account?}` → eine Mail in den Papierkorb
   (umkehrbar), LIVE; `409` ohne Key. Core: `delete_mail()`.
 - `POST /api/mail/reply {cat, uid, text, account?}` → sendet eine Antwort via

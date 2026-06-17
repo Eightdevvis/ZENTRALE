@@ -428,6 +428,62 @@ def reassign_sender(sender, category):
     return mail_rules.assign(sender, category)
 
 
+def refile_sender(sender, category, account_name=None):
+    """Sashas Modell ganz: den ABSENDER einer Kategorie zuordnen (Keymap) UND
+    **alle** seine vorhandenen Mails — alte wie neue — in den Kategorie-Ordner
+    verschieben. Durchsucht INBOX + jeden move-Kategorie-Ordner per `SEARCH FROM`
+    und verschiebt Treffer ins Ziel (außer was schon dort liegt). Künftige Mails
+    sortiert der Poll automatisch dorthin. Liefert {assigned, category, moved,
+    live}. Ohne Key/Konto: nur Keymap (moved=0, live=False)."""
+    addr, cat = mail_rules.assign(sender, category)
+    spec = mail_rules.category_action(cat)
+    accts = _accounts_for(account_name)
+    if not accts:
+        return {"assigned": True, "category": cat, "moved": 0, "live": False}
+
+    moved = 0
+    for account in accts:
+        imap = None
+        try:
+            imap = _connect(account)
+            folders = _FolderCache()
+            target = folders.target(imap, spec)
+            # Quell-Ordner: INBOX + jeder move-Kategorie-Ordner (Ziel ausgenommen).
+            sources = ["INBOX"]
+            for _nm, sp in mail_rules.categories().items():
+                f = sp.get("folder")
+                if sp.get("action") == "move" and f and f not in sources:
+                    sources.append(f)
+            for folder in sources:
+                if folder == target:
+                    continue
+                try:
+                    typ, _ = imap.select(_q(folder))      # read-write (wir verschieben)
+                    if typ != "OK":
+                        continue
+                    typ, data = imap.uid("SEARCH", None, "FROM", '"%s"' % addr)
+                    if typ != "OK" or not data or not data[0]:
+                        continue
+                    for uid in data[0].split():
+                        if _move_uid(imap, uid.decode() if isinstance(uid, bytes)
+                                     else str(uid), target):
+                            moved += 1
+                except _DROP_ERRORS:
+                    raise
+                except Exception:
+                    pass     # Ordner fehlt / nicht durchsuchbar -> überspringen
+        except Exception as e:
+            state.push_log(f"MAIL: Umsortieren '{addr}' — {type(e).__name__}: {e}")
+        finally:
+            if imap is not None:
+                try:
+                    imap.logout()
+                except Exception:
+                    pass
+    state.push_log(f"MAIL: Absender {addr} → {cat} ({moved} Mail(s) umsortiert)")
+    return {"assigned": True, "category": cat, "moved": moved, "live": True}
+
+
 # ── Antworten senden (SMTP XOAUTH2) ──────────────────────────────────
 # Outlook-SMTP mit demselben OAuth-Token wie IMAP (Scope deckt SMTP.Send mit
 # ab). Andere Provider können host/port/security/auth übers Konto setzen.
