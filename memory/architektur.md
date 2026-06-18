@@ -109,8 +109,8 @@ ZENTRALE/
 │   ├── app.py               # Flask Backend + REST API (reiner Adapter auf core/)
 │   ├── static/              # engine.js, viz.js, ascii.js, fonts/ (Monolith-Assets)
 │   └── templates/
-│       ├── monolith.html    # DAS Dashboard, KI sichtbar (Route / bei Kassette monolith)
-│       └── laptop.html      # KI-freie Front (Kassette laptop/Fallback, gleiches Layout)
+│       └── monolith.html    # DIE EINE Browser-Front (alle Kassetten); KI-Blöcke
+│                            # werden per ki_aus-Flag weggelassen (laptop/tui)
 ├── tui/                     # Terminal-Kassette (curses), redet NUR via HTTP mit ui/app.py
 │   ├── zentrale_tui.py      # Die TUI (Sensoren, Karte, Kalender, Listen, Graphen, Mail)
 │   └── select_kassette.py   # Kassetten-Auswahl beim Start

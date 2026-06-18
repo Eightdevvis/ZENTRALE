@@ -77,17 +77,21 @@ def _ki_aus():
 @app.route('/monolith')   # Alias: alte Kiosk-/Bookmark-/Deeplink-URL bleibt gueltig
 def index():
     """
-    Liefert das Dashboard der aktuell gefahrenen Kassette (core/kassette.py):
-      - monolith (Default): das große Pi-Kiosk-Dashboard (KI-Kern, Chat, Audio).
-      - laptop: die kleine, KI-freie Laptop-Kassette (ui/templates/laptop.html).
+    Liefert das EINE Dashboard-Template (monolith.html) für alle Browser-Fronten.
+    Der Unterschied zwischen den Kassetten (core/kassette.py) ist allein der
+    ki_aus-Flag, den wir hier ans Template durchreichen:
+      - monolith (Default): voll, mit KI-Kern (Chat, Audio, News).
+      - laptop / tui:       ki_aus=True → die KI-Blöcke werden nicht gerendert,
+                            stattdessen erscheint unten die Shortcut-Übersicht.
     Die Wahl kommt aus ZENTRALE_KASSETTE, gesetzt vom Start-Befehl. /monolith
-    bleibt als Alias bestehen, damit der Pi-Kiosk und alte Bookmarks nicht brechen
-    (zeigt ebenfalls die kassetten-aktive UI).
+    bleibt als Alias bestehen, damit der Pi-Kiosk und alte Bookmarks nicht brechen.
 
     Statische Assets (engine.js = Daten-Adapter, viz.js, ascii.js, fonts/) liegen
     in ui/static/ und werden von Flask automatisch unter /static/<file> bedient.
     """
-    resp = render_template(kassette.template())
+    resp = render_template(kassette.template(),
+                           ki_aus=kassette.ki_aus(),
+                           kassette=kassette.name())
     from flask import make_response
     r = make_response(resp)
     # Cache deaktivieren: der Browser soll immer die aktuelle Version laden,

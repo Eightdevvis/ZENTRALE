@@ -7,8 +7,12 @@
    aus den realen Flask-Endpoints statt aus Zufallszahlen:
 
      GET /api/state        (1 s)  → sensors, logs, internet_logs   (Haupt-State)
-     GET /api/ai/status    (30 s) → Ollama erreichbar? + Modell-Name
-     GET /api/chat/history (2.5 s)→ Konversation (für Minilog)
+     GET /api/ai/status    (30 s) → Ollama erreichbar? + Modell-Name   [nur KI-Front]
+     GET /api/chat/history (2.5 s)→ Konversation (für Minilog)          [nur KI-Front]
+
+   KI-frei (window.KI_AUS === true, gesetzt vom Template aus kassette.ki_aus()):
+   die beiden KI-Polls werden in start() übersprungen — laptop/tui fragen weder
+   Ollama-Status noch Chat-History ab. state/telemetry laufen immer.
 
    Die KI-Zustände (denkt/antwortet) werden NICHT gepollt, sondern vom
    Interaktions-Layer (Chat-Senden in index.html) über ZS.setAi() gesetzt,
@@ -149,8 +153,13 @@
     if (started) return; started = true;
     pollState();  setInterval(pollState, 1000);
     pollTelemetry(); setInterval(pollTelemetry, 2000);
-    pollStatus(); setInterval(pollStatus, 30000);
-    pollHistory(); setInterval(pollHistory, 2500);
+    // KI-Polls nur in der KI-Front. In laptop/tui (window.KI_AUS) gibt es weder
+    // Ollama-Status-Header noch Minilog → die Endpoints (503-gegatet) gar nicht
+    // erst anfragen.
+    if (!global.KI_AUS) {
+      pollStatus(); setInterval(pollStatus, 30000);
+      pollHistory(); setInterval(pollHistory, 2500);
+    }
   }
 
   // ── Öffentliche API ────────────────────────────────────────────────────────

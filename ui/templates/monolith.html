@@ -213,6 +213,12 @@
   .prj .pb .pbf { color: var(--acc); }
   .prj .pb .pbe { color: var(--faint); }
   .prj.full .pc { color: var(--acc); }
+  /* Projekt MIT Unterprojekten: dünner Rahmen, Titel im Rahmen, Kinder drin */
+  .prj-box { position: relative; border: 1px solid var(--line); margin: 11px 0 5px; padding: 9px 7px 3px; }
+  .prj-box > .prj-bt { position: absolute; top: -9px; left: 9px; background: var(--bg); padding: 0 6px; font-family: 'VT323', monospace; font-size: 15px; letter-spacing: 0.1em; color: var(--bright); text-transform: uppercase; white-space: nowrap; max-width: 88%; overflow: hidden; text-overflow: ellipsis; }
+  .prj-box > .prj-bt::before { content: '┤ '; color: var(--faint); } .prj-box > .prj-bt::after { content: ' ├'; color: var(--faint); }
+  .prj-kids > .prj:first-child { padding-top: 2px; }
+  #projects { overflow: hidden; }   /* Platzmangel → ab dem Punkt einfach abgeschnitten */
 
   /* Graph-Werkzeug (Mittel-Exhibit „Graph") – interaktives Panel statt ASCII */
   .gpanel { position: absolute; inset: 0; padding: 10px 12px; overflow: auto; display: flex; flex-direction: column; gap: 8px; text-align: left; font-family: 'VT323', monospace; color: var(--ink); }
@@ -236,6 +242,32 @@
   .gmeta { font-size: 14px; color: var(--dim); }
   .gscale { display: flex; gap: 4px; }
   .ghint { color: var(--dim); font-size: 14px; }
+  .grow .ghint { margin-right: 12px; }
+
+  /* ── Listen-Panel (Mittel-Exhibit „Listen") ──────────────────────── */
+  .lpanel .li-tree { flex: 1; min-height: 0; overflow: auto; }
+  .lpanel .li-row { display: flex; align-items: baseline; gap: 8px; padding: 1px 0; }
+  .lpanel .li-box { cursor: pointer; color: var(--acc); width: 1.2em; flex-shrink: 0; }
+  .lpanel .li-box.folder { cursor: default; color: var(--dim); }
+  .lpanel .li-tx { flex: 1; min-width: 0; }
+  .lpanel .li-tx.done { color: var(--faint); text-decoration: line-through; }
+  .lpanel .li-meta { color: var(--faint); font-size: 12px; }
+  .lpanel .li-act { cursor: pointer; color: var(--dim); flex-shrink: 0; opacity: 0; transition: opacity .1s; }
+  .lpanel .li-row:hover .li-act { opacity: 1; }
+  .lpanel .li-act:hover { color: var(--acc); }
+
+  /* ── Post-Panel (Mittel-Exhibit „Post") ──────────────────────────── */
+  .mpanel .mp-cats, .mpanel .mp-list { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+  .mpanel .mp-cat { display: flex; justify-content: space-between; cursor: pointer; padding: 2px 4px; border-bottom: 1px solid var(--line); }
+  .mpanel .mp-cat:hover { color: var(--acc); }
+  .mpanel .mp-cc { color: var(--faint); }
+  .mpanel .mp-row { cursor: pointer; padding: 2px 4px; border-bottom: 1px solid var(--line); overflow: hidden; }
+  .mpanel .mp-row:hover { color: var(--acc); }
+  .mpanel .mp-from { color: var(--ink); margin-right: 8px; }
+  .mpanel .mp-subj { color: var(--dim); }
+  .mpanel .mp-head { font-size: 14px; color: var(--dim); padding: 4px 0; border-bottom: 1px solid var(--line); }
+  .mpanel .mp-body { flex: 1; min-height: 0; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: var(--ink); margin: 6px 0; }
+  .mpanel .mp-reply textarea { width: 100%; height: 80px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; }
 
   /* ── Kalender-Panel (Mittel-Exhibit „Kalender") ──────────────────── */
   .cpanel .crow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -326,6 +358,15 @@
   .perm-bar .perm-hint { margin-left: auto; flex-shrink: 0; font-size: 11px;
     letter-spacing: 0.1em; color: var(--faint); }
 
+  /* ── Tastenkürzel-Box (ersetzt die Konsole in der KI-freien Front) ── */
+  .shortcuts { padding: 14px; }
+  .shortcuts .sc-grid { display: grid; grid-template-columns: auto 1fr; gap: 5px 14px;
+    align-items: baseline; margin-top: 6px; }
+  .shortcuts .sc-k { font-family: 'VT323', monospace; font-size: 18px; letter-spacing: 0.08em;
+    color: var(--acc); text-transform: uppercase; white-space: nowrap; }
+  .shortcuts .sc-d { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px;
+    letter-spacing: 0.01em; color: var(--dim); }
+
   /* ── Data-Collection-Overlay (Taste Alt+K) ── */
   #dc-overlay { position: absolute; inset: 0; z-index: 80; display: none; align-items: center; justify-content: center;
     background: color-mix(in srgb, var(--bg) 84%, transparent); }
@@ -387,7 +428,7 @@
         <div class="brand-sub">monolith · adaptive konsole</div>
       </div>
       <div class="meta">
-        <div class="kv">OLLAMA <b id="h-model">…</b></div>
+        {% if not ki_aus %}<div class="kv">OLLAMA <b id="h-model">…</b></div>{% endif %}
         <div class="kv">NET <b id="h-net" class="ok">OFFLINE ✓</b></div>
         <div class="kv">UP <b id="p-up">—</b></div>
         <div class="theme-ctl" id="theme-ctl">
@@ -438,21 +479,26 @@
               <span class="tab" data-ex="filter">Filter</span>
               <span class="tab" data-ex="graph">Graph</span>
               <span class="tab" data-ex="kalender">Kalender</span>
+              <span class="tab" data-ex="listen">Listen</span>
+              <span class="tab" data-ex="mail">Post</span>
               <span class="tab on" data-ex="auto">Auto</span>
             </div>
           </div>
-          <div class="core-wrap"><pre id="core"></pre><div id="graph-panel" class="gpanel" style="display:none"></div><div id="calendar-panel" class="gpanel cpanel" style="display:none"></div><div id="alarm-corner"></div></div>
+          <div class="core-wrap"><pre id="core"></pre><div id="graph-panel" class="gpanel" style="display:none"></div><div id="calendar-panel" class="gpanel cpanel" style="display:none"></div><div id="lists-panel" class="gpanel lpanel" style="display:none"></div><div id="mail-panel" class="gpanel mpanel" style="display:none"></div><div id="alarm-corner"></div></div>
           <div class="core-readout">
-            <div class="ai-state" id="ai-state"><span class="sp">·</span> BEREIT</div>
+            {% if not ki_aus %}<div class="ai-state" id="ai-state"><span class="sp">·</span> BEREIT</div>{% endif %}
             <div class="ai-model" id="ai-meta">zeigt: gesicht</div>
           </div>
+          {% if not ki_aus %}
           <div class="minilog" id="minilog"></div>
           <div id="cinema-sub"></div>
+          {% endif %}
         </div>
 
+        {% if not ki_aus %}
         <!-- Chat-Konsole: immer sichtbar, Enter sendet. Die Konversation
              erscheint live im Minilog oben (letzte 2 Zeilen, KI-Antwort
-             streamt mit Cursor). -->
+             streamt mit Cursor). Nur in der KI-Front (ki_aus=false). -->
         <div class="box console" style="flex:0 0 auto">
           <span class="bt">konsole</span>
           <span class="bt2" id="chat-mute-hint">Alt+S Ton aus</span>
@@ -470,6 +516,21 @@
             <span class="perm-hint">← →  ENTER</span>
           </div>
         </div>
+        {% else %}
+        <!-- KI-freie Front (laptop/tui): statt der Chat-Zeile die Tastenkürzel.
+             Nur die im Browser wirksamen Tasten (Tabs/Theme/Data-Collection);
+             Chat/Mic entfallen, b/l/m sind OS-Ebene. Quelle: memory/tastatur.md
+             — bei Änderung dort mitziehen. -->
+        <div class="box shortcuts" style="flex:0 0 auto">
+          <span class="bt">tastenkürzel</span>
+          <div class="sc-grid">
+            <span class="sc-k">Tab-Klick</span><span class="sc-d">Werkzeug wählen (Karte · Graph · Kalender · Listen · Post)</span>
+            <span class="sc-k">AUTO·HELL·DUNKEL</span><span class="sc-d">Theme umschalten (oben rechts)</span>
+            <span class="sc-k">k</span><span class="sc-d">Data-Collection öffnen</span>
+            <span class="sc-k">↑ ↓</span><span class="sc-d">Feld wählen · ← → Smiley · k speichern · ESC zurück</span>
+          </div>
+        </div>
+        {% endif %}
       </div>
 
       <!-- RECHTS -->
@@ -478,7 +539,7 @@
           <span class="bt">lifestyle</span>
           <div id="trackers"></div>
         </div>
-        <div class="box" style="flex:0 0 auto">
+        <div class="box" style="flex:0 1 auto;min-height:0">
           <span class="bt">projects</span>
           <div id="projects"></div>
         </div>
@@ -492,6 +553,11 @@
     <!-- Data-Collection-Overlay: per Alt+K geöffnet, Tastatur-gesteuert -->
     <div id="dc-overlay"><div class="dc-panel" id="dc-panel"></div></div>
   </div>
+
+  <!-- Kassetten-Flag: in laptop/tui ist die KI aus. Muss VOR engine.js stehen,
+       weil engine.js es in start() liest, um die KI-Polls zu überspringen. Die
+       Inline-Scripts unten gaten ihre KI-Teile ebenfalls über window.KI_AUS. -->
+  <script>window.KI_AUS = {{ ki_aus|tojson }};</script>
 
   <!-- viz.js + ascii.js: unveränderte Helfer (ascii.js trägt auch den Bild→ASCII-Filter).
        engine.js: ECHTER Daten-Adapter (ersetzt die frühere Simulation). -->
@@ -638,6 +704,24 @@
            + '<span class="pbe">' + '░'.repeat(Math.max(0, cells - full)) + '</span>';
     }
     function pEsc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    // Rekursiv: Knoten ohne children = Titel + Leiste; mit children = gerahmter
+    // Kasten (Titel im Rahmen) um die Kinder, KEINE eigene Leiste. Leisten-Breite
+    // schrumpft mit der Tiefe, damit tiefe Verschachtelung nicht überläuft.
+    function renderNode(node, depth) {
+      var name = pEsc(node.name || ''), kids = node.children || [];
+      if (kids.length) {
+        return '<div class="prj-box"><span class="prj-bt">' + name + '</span>'
+          + '<div class="prj-kids">'
+          + kids.map(function (c) { return renderNode(c, depth + 1); }).join('')
+          + '</div></div>';
+      }
+      var done = node.done | 0, total = node.total | 0, full = total && done >= total;
+      var cells = Math.max(8, 24 - depth * 4);
+      return '<div class="prj' + (full ? ' full' : '') + '">'
+        + '<div class="ph"><span class="pt">' + name + '</span>'
+        + '<span class="pc">' + done + '/' + total + '</span></div>'
+        + '<div class="pb">' + projBar(done, total, cells) + '</div></div>';
+    }
     async function fetchProjects() {
       if (!prjEl) return;
       var pr;
@@ -647,13 +731,7 @@
         prjEl.innerHTML = '<div class="nodata">— keine projekte (im listen-werkzeug \'p\') —</div>';
         return;
       }
-      prjEl.innerHTML = pr.map(function (p) {
-        var done = p.done | 0, total = p.total | 0, full = total && done >= total;
-        return '<div class="prj' + (full ? ' full' : '') + '">'
-          + '<div class="ph"><span class="pt">' + pEsc(p.name || '') + '</span>'
-          + '<span class="pc">' + done + '/' + total + '</span></div>'
-          + '<div class="pb">' + projBar(done, total, 24) + '</div></div>';
-      }).join('');
+      prjEl.innerHTML = pr.map(function (p) { return renderNode(p, 0); }).join('');
     }
     fetchProjects();
     setInterval(fetchProjects, 30000);
@@ -734,7 +812,8 @@
           h.push('<div class="gmeta">' + GT.vals.length + ' werte'
             + (last != null ? ' · zuletzt ' + last + (GT.def.unit ? ' ' + esc(GT.def.unit) : '') : '')
             + ' · ' + (GT.def.type === 'scale' ? 'skala 1–5' : 'zahl')
-            + '<span class="ghint" data-del="' + GT.def.id + '" style="cursor:pointer;float:right">[löschen]</span></div>');
+            + '<span class="ghint" data-del="' + GT.def.id + '" style="cursor:pointer;float:right">[löschen]</span>'
+            + '<span class="ghint" data-pred="' + GT.def.id + '" style="cursor:pointer;float:right;margin-right:12px">[~vorhersage: ' + (GT.def.predict ? 'an' : 'aus') + ']</span></div>');
           h.push('<div class="grow"><button data-day="-1">◀</button><input id="gt-date" type="date" value="' + GT.date + '" /><button data-day="1">▶</button>');
           if (GT.def.type === 'scale') {
             h.push('<span class="gscale">');
@@ -786,6 +865,15 @@
         window.dispatchEvent(new Event('zentrale:logged'));
       }
 
+      // Vorhersage-Ergänzung (Lücken aus dem Schnitt) pro Graph an/aus. Wirkt auf
+      // die lifestyle-Box; default aus, bewusst nur dort sinnvoll, wo ein Muster
+      // existiert (z.B. Schlaf).
+      async function setPredict(id, on) {
+        await fetch('/api/graphs/' + id + '/predict', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ predict: on }) });
+        await loadGraphs();
+        window.dispatchEvent(new Event('zentrale:logged'));
+      }
+
       function wire() {
         [].forEach.call(panel.querySelectorAll('[data-sel]'), function (el) { el.onclick = function () { selectGraph(el.getAttribute('data-sel')); }; });
         var nb = q('[data-new]'); if (nb) nb.onclick = function () { GT.newMode = true; GT.type = 'number'; render(); var n = q('#gt-name'); if (n) n.focus(); };
@@ -799,6 +887,7 @@
         var sv = q('[data-save]'); if (sv) sv.onclick = function () { saveValue(q('#gt-val').value); };
         var vEl = q('#gt-val'); if (vEl) vEl.onkeydown = function (e) { if (e.key === 'Enter') saveValue(vEl.value); };
         var dl = q('[data-del]'); if (dl) dl.onclick = function () { if (confirm('Graph „' + (GT.def ? GT.def.name : '') + '" inkl. Werte löschen?')) deleteGraph(dl.getAttribute('data-del')); };
+        var pr = q('[data-pred]'); if (pr) pr.onclick = function () { setPredict(pr.getAttribute('data-pred'), !(GT.def && GT.def.predict)); };
       }
 
       // Beim Öffnen des Graph-Tabs frisch laden (externe Änderungen mitnehmen).
@@ -1124,6 +1213,178 @@
       load();   // initial (Panel versteckt, aber Daten stehen bereit)
     })();
 
+    // ── Listen (Mittel-Exhibit „Listen") ────────────────────────────────
+    // Verschachtelte Listen/To-Dos gegen core/lists.py (/api/lists), dieselbe
+    // API wie die TUI. NICHT KI-gegatet — in jeder Kassette nutzbar.
+    (function () {
+      var panel = document.getElementById('lists-panel');
+      if (!panel) return;
+      var LS = { lists: [], selId: null };
+      function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+      function q(sel){ return panel.querySelector(sel); }
+      function sel(){ return LS.lists.filter(function(l){return l.id===LS.selId;})[0] || null; }
+
+      async function load(){
+        try { LS.lists = await (await fetch('/api/lists')).json() || []; } catch(e){ LS.lists = []; }
+        if (!LS.lists.some(function(l){return l.id===LS.selId;})) LS.selId = LS.lists.length ? LS.lists[0].id : null;
+        render();
+      }
+      // Fortschritt: erledigte Blätter / alle Blätter eines Knotens.
+      function prog(item){
+        var kids = item.items || [];
+        if (!kids.length) return { d: item.done?1:0, t: 1 };
+        var d=0,t=0; kids.forEach(function(k){ var p=prog(k); d+=p.d; t+=p.t; });
+        return { d:d, t:t };
+      }
+      function renderItems(lid, items, depth){
+        var h=[];
+        (items||[]).forEach(function(it){
+          var kids = it.items || [], isC = kids.length>0, p = isC ? prog(it) : null;
+          h.push('<div class="li-row" style="padding-left:'+(depth*16)+'px">');
+          h.push(isC ? '<span class="li-box folder">'+(p.d>=p.t?'▣':'▢')+'</span>'
+                     : '<span class="li-box" data-tog="'+lid+'|'+it.id+'">'+(it.done?'☑':'☐')+'</span>');
+          h.push('<span class="li-tx'+(!isC&&it.done?' done':'')+'">'+esc(it.text)
+                 +(p?' <span class="li-meta">'+p.d+'/'+p.t+'</span>':'')+'</span>');
+          h.push('<span class="li-act" data-add="'+lid+'|'+it.id+'" title="Unterpunkt">＋</span>');
+          h.push('<span class="li-act" data-dit="'+lid+'|'+it.id+'" title="löschen">✕</span></div>');
+          if (isC) h.push(renderItems(lid, kids, depth+1));
+        });
+        return h.join('');
+      }
+      function render(){
+        var h = ['<div class="gchips">'];
+        LS.lists.forEach(function(l){
+          h.push('<span class="gchip'+(l.id===LS.selId?' on':'')+'" data-sel="'+l.id+'">'+(l.project?'★ ':'')+esc(l.name)+'</span>');
+        });
+        h.push('<span class="gchip add" data-newlist="1">＋ liste</span></div>');
+        var l = sel();
+        if (l){
+          h.push('<div class="grow"><span class="ghint" data-proj="'+l.id+'" style="cursor:pointer">'+(l.project?'★ projekt':'☆ projekt')+'</span>'
+            +'<span class="ghint" data-renl="'+l.id+'" style="cursor:pointer">umbenennen</span>'
+            +'<span class="ghint" data-dell="'+l.id+'" style="cursor:pointer;color:var(--warn)">liste löschen</span></div>');
+          h.push('<div class="li-tree">'+(l.items&&l.items.length?renderItems(l.id,l.items,0):'<div class="ghint">— leer —</div>')+'</div>');
+          h.push('<div class="grow"><input id="li-new" placeholder="neuer punkt …" style="flex:1;min-width:120px" /><button data-additem="1">＋</button></div>');
+        } else {
+          h.push('<div class="ghint">noch keine listen — leg mit „＋ liste" eine an.</div>');
+        }
+        panel.innerHTML = h.join('');
+        wire();
+      }
+      function post(url, body){ return fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})}); }
+      async function addItem(){
+        var el=q('#li-new'); var t=(el&&el.value||'').trim(); if(!t||!LS.selId) return;
+        await post('/api/lists/'+LS.selId+'/items',{text:t}); await load();
+      }
+      function wire(){
+        [].forEach.call(panel.querySelectorAll('[data-sel]'), function(el){ el.onclick=function(){ LS.selId=el.getAttribute('data-sel'); render(); }; });
+        var nl=q('[data-newlist]'); if(nl) nl.onclick=async function(){ var n=prompt('Listenname?'); if(!n) return; var r=await post('/api/lists',{name:n}); if(r.ok){ var l=await r.json(); LS.selId=l.id; } await load(); };
+        var ai=q('[data-additem]'); if(ai) ai.onclick=addItem;
+        var ne=q('#li-new'); if(ne) ne.onkeydown=function(e){ if(e.key==='Enter') addItem(); };
+        [].forEach.call(panel.querySelectorAll('[data-tog]'), function(el){ el.onclick=async function(){ var p=el.getAttribute('data-tog').split('|'); await post('/api/lists/'+p[0]+'/items/'+p[1]+'/toggle'); await load(); }; });
+        [].forEach.call(panel.querySelectorAll('[data-add]'), function(el){ el.onclick=async function(){ var p=el.getAttribute('data-add').split('|'); var t=prompt('Unterpunkt?'); if(!t) return; await post('/api/lists/'+p[0]+'/items',{text:t,parent:Number(p[1])}); await load(); }; });
+        [].forEach.call(panel.querySelectorAll('[data-dit]'), function(el){ el.onclick=async function(){ var p=el.getAttribute('data-dit').split('|'); await fetch('/api/lists/'+p[0]+'/items/'+p[1],{method:'DELETE'}); await load(); }; });
+        var pr=q('[data-proj]'); if(pr) pr.onclick=async function(){ var l=sel(); await post('/api/lists/'+pr.getAttribute('data-proj')+'/project',{project:!(l&&l.project)}); await load(); };
+        var rn=q('[data-renl]'); if(rn) rn.onclick=async function(){ var l=sel(); var n=prompt('Neuer Name?', l?l.name:''); if(!n) return; await post('/api/lists/'+rn.getAttribute('data-renl')+'/rename',{name:n}); await load(); };
+        var dl=q('[data-dell]'); if(dl) dl.onclick=async function(){ var l=sel(); if(!confirm('Liste „'+(l?l.name:'')+'" löschen?')) return; await fetch('/api/lists/'+dl.getAttribute('data-dell'),{method:'DELETE'}); LS.selId=null; await load(); };
+      }
+      document.getElementById('tabs').addEventListener('click', function(e){ var t=e.target.closest('.tab'); if(t&&t.getAttribute('data-ex')==='listen') load(); });
+      load();
+    })();
+
+    // ── Post (Mittel-Exhibit „Post") ────────────────────────────────────
+    // Mail-Triage gegen core/mail.py (/api/mail*), Drill-down Kategorie →
+    // Ordner → Body, wie die TUI. Schreib-Aktionen (Body/Antwort/Löschen)
+    // brauchen den Key; ohne → 409, das Panel zeigt dann nur den Schnappschuss.
+    (function () {
+      var panel = document.getElementById('mail-panel');
+      if (!panel) return;
+      var MS = { cats: [], canPoll: false, cat: null, mails: [], body: null, msg: '' };
+      function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+      function q(sel){ return panel.querySelector(sel); }
+
+      async function load(){
+        try {
+          var d = await (await fetch('/api/mail')).json();
+          MS.cats = d.categories || []; MS.canPoll = !!d.can_poll;
+        } catch(e){ MS.cats = []; MS.canPoll = false; }
+        render();
+      }
+      async function openCat(cat){
+        MS.cat = cat; MS.body = null; MS.mails = []; MS.msg = 'lädt …'; render();
+        try {
+          var d = await (await fetch('/api/mail/folder?cat='+encodeURIComponent(cat))).json();
+          MS.mails = d.mails || []; MS.msg = d.error || '';
+        } catch(e){ MS.msg = 'Ordner nicht ladbar'; }
+        render();
+      }
+      async function openBody(m){
+        if (!MS.canPoll){ MS.msg = 'Body nur live lesbar — kein Key gesetzt'; render(); return; }
+        MS.body = { loading:true }; MS.msg=''; render();
+        try {
+          var u = '/api/mail/body?cat='+encodeURIComponent(MS.cat)+'&uid='+m.uid+(m.account?'&account='+encodeURIComponent(m.account):'');
+          var d = await (await fetch(u)).json();
+          MS.body = d.error ? null : d; MS.msg = d.error || '';
+        } catch(e){ MS.body=null; MS.msg='Body nicht ladbar'; }
+        render();
+      }
+      function row(m){
+        return '<div class="mp-row" data-uid="'+m.uid+'" data-acc="'+esc(m.account||'')+'">'
+          +'<span class="mp-from">'+esc((m.from||'').replace(/<.*>/,'').trim()||m.from||'—')+'</span>'
+          +'<span class="mp-subj">'+esc(m.subject||'(kein Betreff)')+'</span></div>';
+      }
+      function render(){
+        var h=[];
+        if (MS.body){
+          var b = MS.body;
+          h.push('<div class="grow"><span class="ghint" data-back="1" style="cursor:pointer">‹ zurück</span>');
+          h.push('<span class="ghint" data-del="1" style="cursor:pointer;color:var(--warn)">löschen</span>'
+            +'<span class="ghint" data-rep="1" style="cursor:pointer">antworten</span></div>');
+          if (b.loading){ h.push('<div class="ghint">lädt …</div>'); }
+          else {
+            h.push('<div class="mp-head"><b>'+esc(b.subject||'')+'</b><br>'+esc(b.from||'')+' · '+esc((b.date||'').slice(0,16))+'</div>');
+            h.push('<pre class="mp-body">'+esc(b.body||'')+'</pre>');
+            h.push('<div class="mp-reply" style="display:none"><textarea id="mp-rtext" placeholder="Antwort …"></textarea>'
+              +'<div class="grow"><button data-send="1">senden</button><span class="ghint" data-repcancel="1" style="cursor:pointer">abbrechen</span></div></div>');
+          }
+        } else if (MS.cat){
+          h.push('<div class="grow"><span class="ghint" data-back="1" style="cursor:pointer">‹ kategorien</span><span class="ghint">'+esc(MS.cat)+'</span></div>');
+          if (MS.msg) h.push('<div class="ghint">'+esc(MS.msg)+'</div>');
+          h.push('<div class="mp-list">'+(MS.mails.length?MS.mails.map(row).join(''):'<div class="ghint">— leer —</div>')+'</div>');
+        } else {
+          if (!MS.canPoll) h.push('<div class="ghint">kein Key — nur lokaler Schnappschuss, keine Schreib-Aktionen.</div>');
+          h.push('<div class="mp-cats">');
+          MS.cats.forEach(function(c){
+            h.push('<div class="mp-cat" data-cat="'+esc(c.name)+'"><span class="mp-cn">'+esc(c.name)+'</span><span class="mp-cc">'+(c.count||0)+'</span></div>');
+          });
+          h.push('</div>');
+        }
+        panel.innerHTML = h.join('');
+        wire();
+      }
+      function wire(){
+        [].forEach.call(panel.querySelectorAll('[data-cat]'), function(el){ el.onclick=function(){ openCat(el.getAttribute('data-cat')); }; });
+        [].forEach.call(panel.querySelectorAll('.mp-row'), function(el){ el.onclick=function(){ openBody({uid:Number(el.getAttribute('data-uid')), account:el.getAttribute('data-acc')}); }; });
+        var bk=q('[data-back]'); if(bk) bk.onclick=function(){ if(MS.body){ MS.body=null; render(); } else { MS.cat=null; MS.mails=[]; render(); } };
+        var rp=q('[data-rep]'); if(rp) rp.onclick=function(){ var r=q('.mp-reply'); if(r){ r.style.display=''; var t=q('#mp-rtext'); if(t) t.focus(); } };
+        var rc=q('[data-repcancel]'); if(rc) rc.onclick=function(){ var r=q('.mp-reply'); if(r) r.style.display='none'; };
+        var sd=q('[data-send]'); if(sd) sd.onclick=sendReply;
+        var dl=q('[data-del]'); if(dl) dl.onclick=delMail;
+      }
+      function post(url, body){ return fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})}); }
+      async function sendReply(){
+        var t=q('#mp-rtext'); var text=(t&&t.value||'').trim(); if(!text||!MS.body) return;
+        var r=await post('/api/mail/reply',{cat:MS.cat, uid:MS.body.uid, text:text, account:MS.body.account});
+        MS.msg = r.ok ? 'gesendet ✓' : 'senden fehlgeschlagen'; MS.body=null; await openCat(MS.cat);
+      }
+      async function delMail(){
+        if(!MS.body || !confirm('Mail in den Papierkorb?')) return;
+        await post('/api/mail/delete',{cat:MS.cat, uid:MS.body.uid, account:MS.body.account});
+        MS.body=null; await openCat(MS.cat);
+      }
+      document.getElementById('tabs').addEventListener('click', function(e){ var t=e.target.closest('.tab'); if(t&&t.getAttribute('data-ex')==='mail') load(); });
+      load();
+    })();
+
     // ── ASCII-Bibliothek aufbauen (rein Frontend, einmalig) ──
     var books = {
       torus:  ASCII.torusFlipbook({ cols: 60, rows: 28, frames: 60 }),
@@ -1264,8 +1525,10 @@
     var coreEl = document.getElementById('core'), aiMeta = document.getElementById('ai-meta');
     var graphPanel = document.getElementById('graph-panel');
     var calendarPanel = document.getElementById('calendar-panel');
+    var listsPanel = document.getElementById('lists-panel');
+    var mailPanel = document.getElementById('mail-panel');
     var EX = { mode: 'auto', current: 'gesicht' };
-    var EXNAMES = { gesicht: 'gesicht', torus: 'torus', wuerfel: 'würfel', globus: 'globus', welt: 'weltkarte', filter: 'ascii-filter', graph: 'graph-werkzeug', kalender: 'kalender' };
+    var EXNAMES = { gesicht: 'gesicht', torus: 'torus', wuerfel: 'würfel', globus: 'globus', welt: 'weltkarte', filter: 'ascii-filter', graph: 'graph-werkzeug', kalender: 'kalender', listen: 'listen', mail: 'post' };
     var fi = 0, gestureLeft = 0, autoT = 0;
     var tabs = document.getElementById('tabs');
     function syncTabs() {
@@ -1351,17 +1614,23 @@
       if (reflectActive) {
         graphPanel.style.display = 'none';
         calendarPanel.style.display = 'none';
+        listsPanel.style.display = 'none';
+        mailPanel.style.display = 'none';
         coreEl.style.display = '';
         coreEl.textContent = reflectText ? wrapReflect(reflectText) : '…';
         return;
       }
       coreEl.classList.remove('reflecting');
-      var graphActive = (EX.current === 'graph');
-      var calActive = (EX.current === 'kalender');
-      graphPanel.style.display = graphActive ? '' : 'none';
-      calendarPanel.style.display = calActive ? '' : 'none';
-      coreEl.style.display = (graphActive || calActive) ? 'none' : '';
-      if (graphActive || calActive) return;
+      // Werkzeug-Panels (Graph/Kalender/Listen/Post) übernehmen den Kern, wenn
+      // ihr Tab aktiv ist — passendes Panel ein, Rest + #core aus.
+      var panelMap = { graph: graphPanel, kalender: calendarPanel, listen: listsPanel, mail: mailPanel };
+      var activePanel = panelMap[EX.current] || null;
+      graphPanel.style.display = (activePanel === graphPanel) ? '' : 'none';
+      calendarPanel.style.display = (activePanel === calendarPanel) ? '' : 'none';
+      listsPanel.style.display = (activePanel === listsPanel) ? '' : 'none';
+      mailPanel.style.display = (activePanel === mailPanel) ? '' : 'none';
+      coreEl.style.display = activePanel ? 'none' : '';
+      if (activePanel) return;
       // KI-Bild hat Vorrang und übernimmt den Kern auf Zeit.
       if (aiArt) {
         var age = fi - aiArt.born;
@@ -1482,14 +1751,18 @@
     ZS.on('net', function (e) { appendLog('term-net', e, 100); });
 
     // ── Header-Status (Modell / Tripwire) ──
+    // h-model gibt es nur in der KI-Front; in laptop/tui pollt engine.js den
+    // Status ohnehin nicht — defensiv bleibt's trotzdem sauber.
     ZS.on('status', function (e) {
-      document.getElementById('h-model').textContent = e.model;
+      var hm = document.getElementById('h-model'); if (hm) hm.textContent = e.model;
       var net = document.getElementById('h-net');
       if (e.online) { net.textContent = 'TRAFFIC !'; net.className = 'warn'; }
       else { net.textContent = 'OFFLINE ✓'; net.className = 'ok'; }
     });
 
-    // ── KI-Zustand + Minilog ──
+    // ── KI-Zustand + Minilog ── (nur KI-Front; #ai-state/#minilog sind sonst
+    // nicht im DOM und der Direktor/die Animationen laufen unabhängig weiter)
+    if (!window.KI_AUS) {
     var aiState = document.getElementById('ai-state');
 
     // Text-Effekte: HTML escapen, dann [[effekt: wort]] → animierter Span.
@@ -1531,20 +1804,23 @@
     });
     ZS.on('history', function () { renderMini(); });
     renderMini();
+    }  // ende if(!window.KI_AUS) — KI-Zustand/Minilog
 
     ZS.start();
     fitStage('#stage');
   })();
   </script>
 
+  {% if not ki_aus %}
   <!-- ════════════════════════════════════════════════════════════════════
-       Chat-Konsole (Interaktions-Layer)
+       Chat-Konsole (Interaktions-Layer) — NUR KI-Front (ki_aus=false).
        Portiert aus der alten UI (ui/templates/index.html), aber an den
        ZS-Adapter verdrahtet statt an die alten View-Panels:
          - ZS.setAi('thinking'|'streaming'|'idle')  treibt KI-Zustand + Kern
          - ZS.pushHistory / updateLastHistory        treibt das Minilog live
        SSE-Streaming, satzweises Piper-TTS, Lautstärke/Mute (localStorage)
-       und der via_mic-Flag bleiben identisch zur alten UI.
+       und der via_mic-Flag bleiben identisch zur alten UI. Kommuniziert mit
+       Block 1 nur über window-CustomEvents (zentrale:ascii/reflect) + ZS.setAi.
        ════════════════════════════════════════════════════════════════════ -->
   <script>
   (function () {
@@ -2183,6 +2459,7 @@
     inputEl.focus();   // sofort tippbereit (Kiosk ohne Maus)
   })();
   </script>
+  {% endif %}
 
   <!-- ════════════════════════════════════════════════════════════════════
        Data-Collection (Overlay, Taste Alt+K)

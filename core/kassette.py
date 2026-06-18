@@ -8,7 +8,8 @@
 #   "monolith"  – das große Pi-Kiosk-Dashboard im Browser (KI-Kern, Chat,
 #                 Audio, News). Default, wenn nichts gesetzt ist.
 #   "laptop"    – die kleine Browser-Kassette für eine RAM-schwache Maschine:
-#                 KI komplett raus, eigenes Template, eigenes Mittelpanel.
+#                 dasselbe Dashboard-Template wie monolith, nur die KI-Teile
+#                 sind per ki_aus()-Flag herausgegated (kein Chat/Audio/News).
 #   "tui"       – die Terminal-Kassette: rendert im Terminal (curses) statt im
 #                 Browser, gegen dasselbe /api/state. KEIN Browser -> der mit
 #                 Abstand größte RAM-Posten entfällt. KI ebenfalls aus.
@@ -68,8 +69,10 @@ def template() -> str:
     """
     Das Jinja-Template für die Browser-Route.
 
-    Für tui irrelevant (es gibt keinen Browser), wir liefern dort dasselbe
-    schlanke laptop.html – falls die Route doch mal aufgerufen wird, ist es
-    die KI-freie Variante.
+    Es gibt nur EINE Front (monolith.html); der Unterschied zwischen den
+    Kassetten läuft allein über den ki_aus()-Flag, den index() ans Template
+    durchreicht (KI-Blöcke werden dann nicht gerendert). Kein Datei-Split mehr.
+    Für tui irrelevant (kein Browser) – falls die Route doch aufgerufen wird,
+    bekommt sie dieselbe, KI-frei gegatete Seite.
     """
-    return "monolith.html" if name() == MONOLITH else "laptop.html"
+    return "monolith.html"

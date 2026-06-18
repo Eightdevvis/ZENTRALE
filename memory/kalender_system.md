@@ -341,10 +341,10 @@ umschaltbar. Geteilte, front-agnostische Quelle (wie die Maps):
     Karten-Pfad (Fehler-Marker statt Dauer-Refetch; `_for`-Tag gegen Refetch je
     Frame). Im Fuzz (`tests/_tui_fuzz.py`) mit eigenen `c/v`-Keys + Adversarial-
     `/api/calendar` abgedeckt.
-  - *Monolith* (`ui/templates/monolith.html`): neuer Exhibit-Tab „Kalender"
-    (eigenes `#calendar-panel` wie das Graph-Werkzeug, NICHT im Auto-Direktor).
-  - *Laptop* (`ui/templates/laptop.html`): füllt die bis dahin leere „mitte"-Box
-    (`tbd`) mit demselben Woche/Monat-Widget, KI-frei, minütlicher Refresh.
+  - *Browser* (`ui/templates/monolith.html`, alle Kassetten): Exhibit-Tab
+    „Kalender" (eigenes `#calendar-panel` wie das Graph-Werkzeug, NICHT im
+    Auto-Direktor). In der KI-freien Kassette (laptop) identisch — dasselbe
+    Template, nur ohne KI-Blöcke.
 
 Bewusst getrennt vom Alarm-Kanal: die Anzeige zeigt die Termin-Arbeitsdaten,
 die ⚠-Warnungen bleiben randständig (Header-Zähler `⚠N` aus `alarms`), genau wie

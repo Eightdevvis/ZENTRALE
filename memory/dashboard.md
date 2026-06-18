@@ -1,16 +1,18 @@
 # Dashboard & Frontend
 
-> **AKTUELLER STAND (2026-06): zwei „Kassetten" auf EINEM Backend.**
-> Die gelebte Haupt-UI ist das Monolith-Dashboard (`ui/templates/monolith.html`).
-> Seit 2026-06-08 gibt es zusätzlich die **Laptop-Kassette**
-> (`ui/templates/laptop.html`) — „ZENTRALE in klein", KI-frei, für eine
-> RAM-schwache Laptop-Maschine. Beide teilen sich Backend/State/Routen; welche
-> ausgeliefert wird, entscheidet die Kassetten-Wahl (s.u.). Das alte `index.html`
-> (AI-Orb, `#view-main`-Grid, `#panel-ai`/`#panel-chat`-Modi) ist **weg** - die
-> entsprechenden Sektionen wurden hier gelöscht, weil veraltete Layout-Doku schon
-> einmal zu falschen KI-Prompt-Texten geführt hat (Dashboard-Sicht, siehe
-> `grounding_recherche.md`). Was Sasha real sieht steht unter „## Monolith-Dashboard"
-> bzw. „## Laptop-Kassette".
+> **AKTUELLER STAND (2026-06): EIN Browser-Template, mehrere Kassetten.**
+> Die gelebte Haupt-UI ist `ui/templates/monolith.html` — und das ist seit
+> 2026-06 die **einzige** Browser-Front. Die frühere separate `laptop.html`
+> ist **weg**: monolith und laptop liefen auseinander (laptop verlor Karte/
+> Graphen, Mail/Listen kamen nie an). Jetzt rendert `/` für **alle** Browser-
+> Kassetten dasselbe Template; der Unterschied ist allein der Flag
+> `ki_aus` (aus `core/kassette.py`), den `app.py` ans Template durchreicht —
+> bei laptop/tui werden die KI-Blöcke per `{% if not ki_aus %}` weggelassen
+> (Chat/Audio/Tutor/News/OLLAMA-Status), und unten erscheint statt der Chat-
+> Zeile eine **Shortcut-Übersicht**. Alles Nicht-KI (Karte, Graphen, Kalender,
+> Listen, Post/Mail, Telemetrie, Logs) ist damit in allen Fronten gleich.
+> Das alte `index.html` (AI-Orb, `#view-main`-Grid) ist ebenfalls **weg**.
+> Was Sasha real sieht steht unter „## Monolith-Dashboard".
 
 ## Kassetten (monolith | laptop | tui)
 
@@ -40,44 +42,31 @@ Die drei Fronten:
 | Kassette | Front | KI | Datei |
 |----------|-------|----|-------|
 | monolith | Browser, voll | an | `ui/templates/monolith.html` |
-| laptop   | Browser, lean | aus | `ui/templates/laptop.html` |
+| laptop   | Browser, lean | aus | `ui/templates/monolith.html` (`ki_aus`-gegated) |
 | tui      | **Terminal (curses)** | aus | `tui/zentrale_tui.py` |
 
-### Laptop-Kassette (`ui/templates/laptop.html`)
+### Laptop-Kassette (KI-frei, gleiches Template)
 
-Eigenständige, schlanke Datei — **nicht** vom Monolith abgeleitet: kein
-`engine.js`/`viz.js`/`ascii.js`, kein Frametick, kein Flicker. Eigener
-Mini-Adapter (inline `<script>`), der **nur** `/api/state` (1 s) und
-`/api/telemetry` (2 s) pollt — kein `/api/ai/status`, kein
-`/api/chat/history`, damit auf der RAM-schwachen Maschine nichts ins Leere
-läuft. Optik: ZENTRALE-Look, AUTO-Theme (hell 05–21 / sonst dunkel),
-**statische** Scanlines (kein Keyframe), sonst still.
+**Keine eigene Datei mehr** — laptop rendert `monolith.html`, nur mit
+`ki_aus=True`. Was dadurch wegfällt (per `{% if not ki_aus %}` im Template +
+`if (!window.KI_AUS)` im JS): OLLAMA-Header-Status, AI-State/Minilog, die
+Chat-Konsole (Input/Mic/Permission), Cinema-Mode, Tutor — und `engine.js`
+überspringt die KI-Polls (`/api/ai/status`, `/api/chat/history`), pollt also
+nur `/api/state` (1 s) + `/api/telemetry` (2 s). **Bleibt** für alle Fronten:
+das Mittel-Exhibit mit ASCII-Animationen + Tabs (das ist Visualizer, keine KI),
+Karte/Graphen/Kalender/Listen/Post, Telemetrie, Logs, Data-Collection (Alt+K).
+Statt der Chat-Zeile steht unten die **Tastenkürzel-Box** (Quelle:
+`tastatur.md`).
 
-Layout (3 Spalten, lean):
+> **Sensoren-Panel entfernt (2026-06):** in ALLEN Kassetten ist die Sensoren-
+> Anzeige raus — kein echter Sensor angeschlossen. Das **Backend bleibt
+> verkabelt** (Event-Loop, `/api/sensor/<name>`-Webhook, `sensors` in
+> `/api/state`); zum Wiederanzeigen Box + Handler aus der git-History
+> zurückholen (das tote `.srow`-CSS steht im Template noch bereit).
 
-```
-+------------+--------------------------+------------------+
-| telemetrie |                          | lifestyle        |
-| (LAP·CPU/  |   MITTE (leeres Skelett, | (tracker, noch   |
-|  RAM/TEMP) |    Inhalt folgt          |  nicht an        |
-| stdout     |    gemeinsam)            |  /api/data)      |
-| (#term)    |                          +------------------+
-|            |                          | outbound         |
-|            |                          | (#term-net)      |
-+------------+--------------------------+------------------+
-```
-
-> **Sensoren-Panel entfernt (2026-06):** in ALLEN drei Kassetten (monolith,
-> laptop, tui) ist die Sensoren-Anzeige raus — kein echter Sensor angeschlossen,
-> der Platzhalter soll weg. Das **Backend bleibt verkabelt** (Event-Loop,
-> `/api/sensor/<name>`-Webhook, `sensors` in `/api/state`); zum Wiederanzeigen
-> Box + Handler aus der git-History zurückholen (in den Templates steht das tote
-> `.srow`-CSS noch bereit).
-
-- **Header:** kein Ollama-Status (KI aus); NET/UP/Theme/Uhr.
-- **Mitte:** in `laptop.html` jetzt der **Kalender** (blätterbare Woche/Monat,
-  `/api/calendar`, s.u. „Kalender-Mitte"); in der **TUI** wahlweise
-  **Graph-Werkzeug** (`g`), **Listen** (`l`), **Karte** (`m`) oder **Kalender** (`c`).
+- **Mitte:** dieselben Werkzeug-Tabs wie im Monolith — **Graph**, **Kalender**,
+  **Listen**, **Post** (Mail), **Karte** (Globus/Welt) — plus die Animationen.
+  In der **TUI** dieselben Werkzeuge über Tasten (`g`/`c`/`l`/`p`/`m`).
 - **Minimale Boot-Dependencies:** nur `flask` + `python-dateutil` (kein
   Whisper/TTS/sherpa/piper nötig — die Kassette ist KI-frei). Siehe `starten.md`.
 
@@ -155,6 +144,18 @@ das langsame Hintergrund-Polling (`Store._poll_graphs`, alle 5 s). `Esc`/`g`
 schließt das Werkzeug wieder. `--selftest` listet die Graphen inkl.
 Typ/Sparkline (ohne TTY).
 
+**Vorhersage-Ergänzung (`predict`-Flag, default aus):** Trägt ein Graph
+`predict: true`, schätzt die `lifestyle`-Box **fehlende Tage** im Fenster aus dem
+Schnitt der letzten ~7 echten Werte (ab dem ersten echten Eintrag, nichts vor
+Tracking-Beginn) und zeichnet sie **blass/schraffiert** (`predicted_days`,
+TUI-Rendering). Bewusst nur dort sinnvoll, wo ein stabiles Muster existiert —
+default ist es überall **aus**, nur `g_sleep` ist migriert auf an. Geschaltet wird
+es im Graph-Werkzeug: TUI-Listenansicht Taste `p` (geflaggte tragen ein `~`),
+Browser-Panel `[~vorhersage: an/aus]` neben `[löschen]`; beides ruft
+`POST /api/graphs/<gid>/predict {predict}` (→ `core.graphs.set_predict`). Die
+Schätzung rendert aktuell in der TUI-`lifestyle`-Box; das Flag liegt aber pro
+Graph zentral, Fronten honorieren es, wo sie schätzen.
+
 **Listen-Werkzeug (Mitte, Taste `l`):** abhakbare Todo-/Sammel-Listen — Pendant
 zum Graph-Werkzeug, aber für „random stuff" statt Zeitreihen. Geteilte Logik
 (`core/lists.py` + `/api/lists`), hier in curses verbaut. `l` gibt der MITTE-Box
@@ -192,17 +193,23 @@ Cursor. Alles synchron per `api_call()`; nach jeder Aktion `l_load()`+`l_sync_de
 gekürzt). `Esc`/`l` geht eine Ebene zurück, auf oberster Ebene schließt es.
 `--selftest` listet die Listen inkl. erledigt-Zähler (und `◆projekt`-Flag, ohne TTY).
 Eine Liste ist kein Zeitreihen-Plot, taucht also nicht in der `lifestyle`-Überlagerung
-auf. **Projekt-Flag:** in der Listenübersicht schaltet `p` das Projekt-Flag der
-gewählten Liste (`POST /api/lists/<lid>/project`); geflaggte Listen tragen ein `◆`.
+auf. **Projekt-Flag:** `p` schaltet das Projekt-Flag — in der Listenübersicht für
+die **Liste** (`POST /api/lists/<lid>/project`), in der view-Ebene für den
+markierten **Eintrag/Unterordner** (`…/items/<iid>/project`); geflaggte tragen ein `◆`.
 
 **PROJECTS-Box (rechts, alle Fronten):** zwischen `lifestyle` und `outbound` steht
-eine `projects`-Box — pro geflaggter Liste **Titel + Erfüllungsleiste** (erledigte/
-alle Blätter rekursiv, Quelle `/api/projects` → `core.lists.leaf_progress`). Reine
-Anzeige; angelegt/abgehakt/geflaggt wird im Listen-Werkzeug. In der TUI nimmt die
-Box `outbound` Höhe ab (nur wenn outbound ≥5 Zeilen behält, sonst weggelassen; je
-Projekt 2 Zeilen, `+N` wenn nicht alle reinpassen); pollt über `Store._poll_projects`
-(alle 5 s). Monolith (`#projects`) und Laptop (`#projects`) pollen `/api/projects`
-(30 s) und rendern Titel + ASCII-Leiste + `d/t`.
+eine `projects`-Box. Quelle ist der **verschachtelte** Baum `/api/projects`
+(`core.lists.projects_tree`): geflaggte Top-Level-Liste = Wurzel, rekursiv geflaggte
+Unter-Einträge als `children`. **Darstellung rekursiv:** Knoten **ohne**
+Unterprojekte → **Titel + Erfüllungsleiste** (erledigte/alle Blätter rekursiv,
+`node_progress`); Knoten **mit** Unterprojekten → **gerahmter Kasten** (Titel im
+Rahmen, Unterprojekte drin, KEINE eigene Leiste). Bei Platzmangel wird ab dem Punkt
+einfach aufgehört (kein Überlauf). Reine Anzeige; markiert wird im Listen-Werkzeug.
+In der TUI misst `proj_measure` die nötige Höhe und `proj_draw` zeichnet rekursiv
+(Rahmen aus `┌─┐│└┘`); die Box nimmt `outbound` Höhe ab, nur wenn dort ≥5 Zeilen
+bleiben, `+N` wenn nicht alle Wurzeln reinpassen; pollt über `Store._poll_projects`
+(alle 5 s). Monolith/Laptop (`#projects`) pollen `/api/projects` (30 s) und rendern
+rekursiv `renderNode` (verschachtelte `.prj-box`/`.prj`, `overflow:hidden` clippt).
 
 **Karte (Mitte, Taste `m`):** Maps-System Schritt 1 — grobe Weltkarte (Küsten
 1:110m) in der MITTE-Box, analog zum Graph-Werkzeug. Die TUI ist reiner
@@ -315,7 +322,7 @@ animierter **ASCII-Kern** (`#core`), gesteuert vom *Exhibit-Direktor*
 > offenen Alarmen. Eigenes `#calendar-panel` (`.cpanel`, `frameTick` blendet wie
 > bei `graph` `#core` aus). Reiner Zeichner: Daten von `/api/calendar`
 > (`view`+`ref`), Datums-Logik in `core/kalender.py`. **Derselbe Endpoint** für
-> alle drei Fronten (Monolith-Tab, Laptop-Mittelbox, TUI-Taste `c`). „＋ Termin"-
+> alle Fronten (Browser-Tab „Kalender", TUI-Taste `c`). „＋ Termin"-
 > Form legt Einmal-Termine an; pro Termin ✎ (bearbeiten → PUT) / ✕ (löschen);
 > Routine-Vorkommen ⊘/↺ (diesen Tag de-/aktivieren → `…/routine/skip`),
 > deaktivierte durchgestrichen-grau. Schreiben ist direkte Nutzeraktion,
@@ -357,7 +364,8 @@ AUTO/HELL/DUNKEL). Darunter `.body` als 3 Spalten:
   Mittelbereich zum Graph-Werkzeug (s.o.).
 - **RECHTS:** `lifestyle` (Tracker: hartkodierte Kategorien + jeder im
   Graph-Werkzeug angelegte Graph als Sparkline) + `projects` (`#projects`,
-  als Projekt geflaggte Listen mit Erfüllungsleiste, Quelle `/api/projects`) +
+  als Projekt geflaggte Listen/Einträge, verschachtelt mit Leisten & gerahmten
+  Unterprojekten, Quelle `/api/projects`) +
   `outbound` (`#term-net`, Internet-Tripwire, Idle „// offline ✓").
 
 ### Alarm-Ecke (`#alarm-corner`) — die ⚠-Warnsymbole

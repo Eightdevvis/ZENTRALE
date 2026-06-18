@@ -216,3 +216,50 @@ def test_api_calendar_delete_routine(client, tmp_path, monkeypatch):
     assert any(e.get("label") == "Parkour" for ents in days.values() for e in ents)
     # ohne label → 400
     assert client.delete("/api/calendar/routine", json={"layer": "routinen"}).status_code == 400
+
+
+# ── Eine Front, KI per Flag ─────────────────────────────────────────────────
+# Seit der Template-Vereinigung gibt es nur EIN Browser-Template (monolith.html);
+# laptop/tui rendern es mit ki_aus=True (KI-Blöcke weg). Die folgenden Tests
+# sichern genau diese Gate-Grenze ab — sie war vorher gar nicht getestet
+# (die Route '/' lief in keinem Test).
+
+def test_index_ki_frei_in_tui_kassette(client):
+    # conftest fährt ZENTRALE_KASSETTE=tui → ki_aus=True.
+    r = client.get("/")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "window.KI_AUS = true" in html        # Flag korrekt durchgereicht
+    assert 'id="chat-input"' not in html          # Chat-Konsole gegated
+    assert 'id="ai-state"' not in html            # AI-State gegated
+    assert "OLLAMA" not in html                   # KI-Header-Status gegated
+    # Visualizer + Werkzeuge bleiben für ALLE Fronten:
+    assert 'id="core"' in html                    # ASCII-Exhibit
+    assert 'id="ai-meta"' in html                 # Direktor-Meta (kein KI)
+    assert 'class="box shortcuts"' in html        # Shortcut-Footer statt Chat
+    for tab in ('data-ex="listen"', 'data-ex="mail"', 'id="lists-panel"', 'id="mail-panel"'):
+        assert tab in html, f"Werkzeug fehlt in der KI-freien Front: {tab}"
+
+
+def test_index_ki_front_in_monolith_kassette(client, monkeypatch):
+    # Monolith-Kassette → ki_aus=False; kassette.name() liest die Env zur
+    # Laufzeit (kein Cache), also reicht setenv vor dem Request.
+    monkeypatch.setenv("ZENTRALE_KASSETTE", "monolith")
+    r = client.get("/")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "window.KI_AUS = false" in html
+    assert 'id="chat-input"' in html              # Chat-Konsole da
+    assert 'id="ai-state"' in html
+    assert "OLLAMA" in html
+    assert 'class="box shortcuts"' not in html    # kein Shortcut-Footer
+    # Werkzeug-Tabs sind frontübergreifend auch hier vorhanden
+    assert 'data-ex="listen"' in html and 'data-ex="mail"' in html
+
+
+def test_mail_endpoint_no_500_without_key(client):
+    # Mail-Panel pollt /api/mail; ohne Key/Config darf das nie 500 werfen
+    # (conftest: ZENTRALE_MAIL=off). 200 mit Snapshot ist ok.
+    r = client.get("/api/mail")
+    assert r.status_code == 200
+    assert isinstance(r.get_json(), dict)

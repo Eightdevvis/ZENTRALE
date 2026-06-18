@@ -58,8 +58,9 @@ unter `sudo`, dann geht auch die `b`/`l`/`m`-Tasten-Sim.
 
 ## Variante A-Laptop — Laptop-Kassette (KI-frei, „ZENTRALE in klein")
 
-Für eine RAM-schwache Laptop-Maschine. Eigener Start-Befehl, eigene
-Kassette (`ui/templates/laptop.html`, siehe `dashboard.md` → „Kassetten"):
+Für eine RAM-schwache Laptop-Maschine. Eigener Start-Befehl; dieselbe
+Browser-Front wie monolith, nur KI-frei gegated (siehe `dashboard.md` →
+„Kassetten"):
 
 ```bash
 zentrale-laptop
