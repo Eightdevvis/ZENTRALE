@@ -39,6 +39,10 @@ fi
 # ── DIE Kassetten-Wahl: hieran erkennt main.py + app.py den Laptop-Modus ──
 export ZENTRALE_KASSETTE=laptop
 
+# ── Push-on-write: jede echte Daten-Änderung sofort zum Peer schieben ──
+# (core/datasync.py stößt im Hintergrund zentrale-push-data an; no-op ohne dies)
+export ZENTRALE_AUTOPUSH=1
+
 # ── Optional: --with-keyboard schaltet sudo fuer main.py an ────────────
 # sudo -E, damit ZENTRALE_KASSETTE die Umgebung von root erreicht (sonst
 # liefe das Backend versehentlich als Monolith mit KI).

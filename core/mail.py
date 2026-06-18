@@ -69,6 +69,10 @@ PROVIDERS = {
                 "verify": True,  "auth": "password"},
     "outlook": {"host": "outlook.office365.com",    "port": 993,  "security": "ssl",
                 "verify": True,  "auth": "oauth2"},
+    # Posteo: Standard-IMAP/SMTP mit normalem Konto-Passwort (kein OAuth, keine
+    # App-Passwörter). User = volle Posteo-Adresse, secret = Konto-Passwort.
+    "posteo":  {"host": "posteo.de",                "port": 993,  "security": "ssl",
+                "verify": True,  "auth": "password"},
 }
 
 # Ordner-Prefix für die Kategorie-Ordner, die wir bei Bedarf anlegen.
@@ -490,6 +494,12 @@ def refile_sender(sender, category, account_name=None):
 _SMTP_DEFAULTS = {
     "outlook": {"host": "smtp.office365.com", "port": 587,
                 "security": "starttls", "auth": "oauth2"},
+    "posteo":  {"host": "posteo.de", "port": 465,
+                "security": "ssl", "auth": "password"},
+    "gmail":   {"host": "smtp.gmail.com", "port": 587,
+                "security": "starttls", "auth": "password"},
+    "proton":  {"host": "127.0.0.1", "port": 1025,
+                "security": "starttls", "auth": "password", "verify": False},
 }
 
 

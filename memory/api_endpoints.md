@@ -46,8 +46,16 @@ dependency-frei (kein psutil), voll offline.
 
 Zur Laufzeit angelegte, abhakbare Listen — Pendant zum Lifestyle-Graph-Werkzeug
 (`/api/graphs`), aber für „random stuff" statt Zeitreihen. Definition UND
-Einträge liegen inline in `data/lists.json` (`core/lists.py`); kein `/api/log`-
-Sharing. Front: TUI-Mitte Taste `l` (`dashboard.md` → Terminal-Kassette).
+Einträge liegen inline (`core/lists.py`); kein `/api/log`-Sharing. Front:
+TUI-Mitte Taste `l` (`dashboard.md` → Terminal-Kassette).
+
+**Zwei-Dateien-Speicher (isoliert):** Sashas private Listen liegen in
+`data/lists.json`, der **`zentrale`-Feature-Tracker** (Liste `l_zentrale`, von
+Claude gepflegt) in `data/features.json`. `core/lists._load()` liest **beide
+gemerged** (API/TUI/Box sehen alles), `_save()` schreibt jede Liste zurück in
+ihre Datei und fasst nur die wirklich geänderte an — Feature-Pflege berührt
+`lists.json` nicht und umgekehrt. Beide sind gitignored (`data/*.json`). Details
+zur Konvention: `CLAUDE.md` → „Feature-Tracking".
 
 **Einträge sind Mischtypen (verschachtelt):** jeder Eintrag kann selbst ein
 optionales `items`-Array tragen — also Unterpunkt ODER eingeordnete Unterliste
@@ -61,23 +69,31 @@ NICHT direkt abhakbar; sein effektiver Status ist **abgeleitet** (`is_done` in
 `toggle` auf einen Ordner → **400**. Fortschritt `(erledigt/gesamt)` zählt die
 **Blätter** (Ordner selbst zählen nicht mit).
 
-**Projekt-Flag (PROJECTS-Box):** Eine Liste kann als *Projekt* markiert werden
-(`project: bool`, Default `false`). Geflaggte Listen erscheinen in **allen**
-Fronten in einer eigenen `projects`-Box (rechts, zwischen `lifestyle` und
-`outbound`) als **Titel + Erfüllungsleiste**: die Leiste = erledigte/alle Blätter
-rekursiv (`leaf_progress` in `core/lists.py`, gleiche Zählung wie der Listen-
-Fortschritt). Reine Anzeige; verwaltet/umgeschaltet wird im **Listen-Werkzeug**
-(TUI Taste `l` → in der Listenübersicht `p`; geflaggte Listen tragen ein `◆`).
-Die Fortschrittslogik liegt zentral in Python (`/api/projects`), die Fronten
-rendern nur.
+**Projekt-Flag (PROJECTS-Box):** Sowohl eine **Liste** als auch ein **Eintrag**
+(Unterordner) kann als *Projekt* markiert werden (`project: bool`). Geflaggte
+Knoten erscheinen in **allen** Fronten in einer eigenen `projects`-Box (rechts,
+zwischen `lifestyle` und `outbound`). `/api/projects` liefert dafür einen
+**verschachtelten Baum** (`projects_tree` in `core/lists.py`): geflaggte
+Top-Level-Liste = Wurzel, ihre rekursiv geflaggten Unter-Einträge hängen als
+`children` darunter. Nicht geflaggte Knoten werden nur durchschritten — ihre
+geflaggten Nachfahren klettern hoch. Das gilt auch für eine **ganze nicht
+geflaggte Liste**: deren geflaggte Einträge werden selbst zu Wurzeln (sonst
+verstecken sich Projekte in einer ungeflaggten Liste und tauchen nie auf). Anzeige-Konvention: Knoten **ohne**
+children → Titel + Erfüllungsleiste (erledigte/alle Blätter rekursiv,
+`node_progress`); Knoten **mit** children → **gerahmter Kasten** (Titel im
+Rahmen, children drin, KEINE eigene Leiste); rekursiv, bei Platzmangel bricht
+die Front einfach ab. Reine Anzeige; markiert wird im **Listen-Werkzeug** (TUI
+Taste `l` → `p` auf einer Liste in der Übersicht bzw. auf einem Eintrag in der
+view-Ebene; geflaggte tragen ein `◆`).
 
 | Endpoint                              | Methode | Beschreibung                          |
 |---------------------------------------|---------|---------------------------------------|
 | `/api/lists`                          | GET     | Alle Listen inkl. Einträge (`[{id,name,created,next_item,project,items:[{id,text,done,items?:[…]}]}]`). |
 | `/api/lists`                          | POST    | Neue Liste. Body `{name}`. 400 bei leerem Namen. id = `l_<slug>` (kollisionsfrei). |
-| `/api/projects`                       | GET     | Nur als Projekt geflaggte Listen, je `{id,name,done,total}` (done/total = erledigte/alle Blätter rekursiv). Quelle der PROJECTS-Box in allen Fronten. |
+| `/api/projects`                       | GET     | Verschachtelter Projekt-Baum für die PROJECTS-Box: `[{id,name,done,total,children:[…]}]` (geflaggte Top-Level-Listen + rekursiv geflaggte Unter-Einträge). done/total = erledigte/alle Blätter rekursiv unter dem Knoten. |
 | `/api/lists/<lid>`                    | DELETE  | Liste samt Einträgen löschen.         |
-| `/api/lists/<lid>/project`            | POST    | Projekt-Flag setzen/löschen. Body `{project:bool}`. 404 unbek. Liefert die Liste. |
+| `/api/lists/<lid>/project`            | POST    | Projekt-Flag einer LISTE setzen/löschen. Body `{project:bool}`. 404 unbek. Liefert die Liste. |
+| `/api/lists/<lid>/items/<int:iid>/project` | POST | Projekt-Flag eines EINTRAGS (Unterordner, egal wie tief) setzen/löschen. Body `{project:bool}`. 404 unbek. Liefert den Eintrag. |
 | `/api/lists/<lid>/rename`             | POST    | Listen-Namen ändern. Body `{name}`. id bleibt stabil. 400 leer, 404 unbek. |
 | `/api/lists/<lid>/items`              | POST    | Eintrag anhängen. Body `{text}`, optional `{parent:<iid>}` → Unterpunkt von `<iid>`. 400 leer, 404 unbek. Liste/Eltern. Liefert `{id,text,done}`. |
 | `/api/lists/<lid>/nest`               | POST    | Ganze Liste in eine andere einordnen (Quelle → Eintrag, verschwindet aus Top-Level). Body `{into:<ziel-lid>}`, optional `{parent:<iid>}`. ids des Teilbaums werden im Ziel neu vergeben. 400 in-sich-selbst, 404 unbek. Liefert den neuen Eintrag. |
@@ -133,7 +149,8 @@ lokal gecacht, nicht committet; Refresh per `python -m map.layers.portwatch`.
 ## Kalender (Anzeige)
 
 Front-agnostisch wie die Maps: die geteilte Quelle für die Kalender-Mitte
-**aller** Kassetten (TUI-Modus `c`, Monolith-Tab „Kalender", Laptop-Mittelbox).
+**aller** Kassetten (TUI-Modus `c`, Browser-Tab „Kalender" — auch in der
+KI-freien laptop-Kassette, gleiches Template).
 **Nicht** KI-gegatet — reine Anzeige, kein KI-Tool-Pfad (die KI greift den
 Kalender weiter über `read_calendar`, nicht über diesen Endpoint), läuft also
 auch in der ki-freien Kassette. Datums-Arithmetik macht Python

@@ -302,13 +302,39 @@ def _login_device(name, user):
     return 0
 
 
+def _scopes_cli():
+    """Zeigt je OAuth-Konto den tatsächlich gewährten Scope (per Token-Refresh).
+    So sieht man eindeutig, welcher Eintrag SMTP.Send kann — ohne zu raten."""
+    accts = [a for a in mail_secrets.load_accounts() if a.get("auth") == "oauth2"]
+    if not accts:
+        print("keine OAuth-Konten.")
+        return 1
+    for a in accts:
+        rt = (a.get("oauth") or {}).get("refresh_token")
+        if not rt:
+            print(f"- {a['name']:<24} (kein refresh_token — nicht eingeloggt)")
+            continue
+        try:
+            tok = refresh(a["client_id"], rt, _authority(a))
+            scope = tok.get("scope", "(keine Angabe)")
+            smtp = "SMTP ✓" if "SMTP.Send" in scope else "SMTP ✗"
+            imap = "IMAP ✓" if "IMAP.AccessAsUser" in scope else "IMAP ✗"
+            print(f"- {a['name']:<24} {imap}  {smtp}")
+        except Exception as e:
+            print(f"- {a['name']:<24} FEHLER {type(e).__name__}: {e}")
+    return 0
+
+
 def _cli():
     import sys
     args = sys.argv[1:]
-    if not args or args[0] != "login":
-        print("Nutzung: python -m core.mail_oauth login", file=sys.stderr)
+    cmd = args[0] if args else ""
+    if cmd == "scopes":
+        return _scopes_cli()
+    if cmd != "login":
+        print("Nutzung: python -m core.mail_oauth login | scopes", file=sys.stderr)
         return 2
-    if not os.environ.get("ZENTRALE_MAIL_KEY"):
+    if not os.environ.get("ZENTRALE_MAIL_KEY") and not mail_secrets._keyring_get():
         print("FEHLER: ZENTRALE_MAIL_KEY nicht gesetzt.", file=sys.stderr)
         return 2
 

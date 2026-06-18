@@ -13,5 +13,5 @@
 # Overlays (politisch/wirtschaftlich/klima) und tiefere LOD-Stufen (OSM)
 # kommen schrittweise dazu, ohne diese Engine umzubauen.
 
-from .render import base_features, base_braille  # noqa: F401  (Einstieg für app.py)
+from .render import base_features, base_braille, country_outlines  # noqa: F401  (Einstieg für app.py)
 from . import layers  # noqa: F401  (Overlay-Registry, Achse 2 — Handelsrouten etc.)

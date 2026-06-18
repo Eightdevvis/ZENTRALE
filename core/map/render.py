@@ -150,6 +150,50 @@ def base_features(cx, cy, zoom, cols, rows, aspect=0.5):
     }
 
 
+def country_outlines(cx, cy, zoom, cols, rows, aspect=0.5, focus=None):
+    """Länder-Daten für die Auswahl in einer Front (front-agnostisch):
+
+      • `countries`: ALLE Länder mit Mittelpunkt in Welt-Koords [0,1]²
+        (`wx,wy`) + Name — die Front navigiert damit richtungsbasiert (Strg+
+        Pfeile → räumlich nächstes Land), unabhängig vom Viewport.
+      • `focus`: das fokussierte Land, dessen Umriss-Ringe auf DAS aktuelle
+        Zellraster projiziert sind (`rings` = Liste von [[col,row],…]) plus
+        Label-Zelle — die Front zeichnet nur die Border (z.B. gestrichelt) + den
+        Namen. Clipping macht die Front beim Zeichnen.
+
+    LOD wie die Braille-Basis (lod_for_zoom), damit der Umriss zum gefüllten
+    Land passt. Die Geo-Mathematik bleibt hier; die Front zeichnet/navigiert nur.
+    """
+    vp = viewport(cx, cy, zoom, cols, rows, aspect)
+    cs = basemap.countries(basemap.lod_for_zoom(vp["zoom"]))
+    centers = []
+    for c in cs:
+        lon, lat = world_to_lonlat(c["lx"], c["ly"])
+        # wx/wy: visuelle Richtungswahl (Bildschirm-oben = kleineres wy);
+        # lon/lat: Kamera-Ziel der Front (die macht KEINE Projektion selbst).
+        centers.append({"name": c["name"], "wx": round(c["lx"], 6),
+                        "wy": round(c["ly"], 6), "lon": round(lon, 4),
+                        "lat": round(lat, 4)})
+    foc = None
+    if focus:
+        m = next((c for c in cs if c["name"] == focus), None)
+        if m is not None:
+            rings = []
+            for (_, _, _, _, pts) in m["rings"]:
+                r = project_polyline(vp, pts)
+                if len(r) >= 2:
+                    rings.append(r)
+            lc = [round((m["lx"] - vp["x0"]) * vp["sx"], 2),
+                  round((m["ly"] - vp["y0"]) * vp["sy"], 2)]
+            foc = {"name": m["name"], "rings": rings, "label": lc,
+                   "onscreen": 0 <= lc[0] <= cols and 0 <= lc[1] <= rows}
+    return {
+        "center": [vp["cx"], vp["cy"]], "zoom": vp["zoom"],
+        "cols": cols, "rows": rows,
+        "countries": centers, "focus": foc,
+    }
+
+
 # Braille-Punktmuster: 2×4 Punkte pro Zelle, Bit-Maske nach Unicode-Standard.
 _BRAILLE = [[0x01, 0x08], [0x02, 0x10], [0x04, 0x20], [0x40, 0x80]]
 

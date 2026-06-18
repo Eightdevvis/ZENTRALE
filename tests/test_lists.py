@@ -21,9 +21,11 @@ import lists as L  # core/ liegt via conftest auf sys.path
 
 @pytest.fixture()
 def reg(tmp_path, monkeypatch):
-    """Frische, leere Registry in einer tmp-Datei."""
+    """Frische, leere Registries in tmp-Dateien — BEIDE (privat + features),
+    sonst greift _load/_save auf die echte data/features.json zu."""
     f = tmp_path / "lists.json"
     monkeypatch.setattr(L, "_REGISTRY", str(f))
+    monkeypatch.setattr(L, "_FEATURES", str(tmp_path / "features.json"))
     monkeypatch.setattr(L, "_DATA_DIR", str(tmp_path))
     return f
 

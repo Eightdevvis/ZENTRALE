@@ -130,7 +130,8 @@ syncen):
 |-----------------|-------|
 | `find-pc`       | Spiegelbild zu `find-zentrale`: ARP-Scan nach der PC-WLAN-MAC `8c:86:dd:72:37:e7` (Fallback: `:5000`/api/state-Signatur), schreibt einen `# >>> find-pc >>>`-Block mit `Host pc` in `~/.ssh/config`. Überlebt IP-/Subnetzwechsel des Hotspots. |
 | `zentrale-remote` | „Daheim"-Befehl: `find-pc` → SSH-Tunnel `localhost:15000 → pc:5000` → Laptop-TUI gegen das volle Ollama-Backend des PCs. `q` beendet + Tunnel-Teardown. |
-| `zentrale-pull` / `zentrale-push` | Manueller Dateisync der **nicht-git-getrackten** Dateien (Daten/Caches/Configs/untracked) per rsync über den `pc`-Alias. Symlinks auf `zentrale-sync`. Listet `git ls-files --others` (untracked + ignoriert), filtert `venv/`, `__pycache__`, `.pyc`, `.pytest_cache` sowie `.history/` und `.claude/settings.local.json` (maschinenlokal; `ZENTRALE_SYNC_ALL=1` nimmt auch die mit). **Kein `--delete`** (nur additiv); Richtung bewusst pro Maschine. `--dry-run` + extra rsync-Args werden durchgereicht. |
+| `zentrale-pull` / `zentrale-push` | Dateisync der **nicht-git-getrackten** Dateien (Daten/Caches/Configs/untracked) per rsync. Symlinks auf `zentrale-sync`. Listet `git ls-files --others` (untracked + ignoriert), filtert `venv/`, `__pycache__`, `.pyc`, `.pytest_cache` sowie `.history/` und `.claude/settings.local.json` (`ZENTRALE_SYNC_ALL=1` nimmt auch die mit). **Kein `--delete`** (nur additiv). **Newest-wins per Default (`--update`)** — eine ältere Datei überschreibt eine neuere NIE mehr blind (`ZENTRALE_SYNC_FORCE=1` für bedingungsloses Spiegeln). Peer per `ZENTRALE_FINDER`+`SSH_HOST_ALIAS`: Laptop→`pc` (`find-pc`), PC→`0RAMMachine` (`find-0RAMMachine`). `--dry-run` + extra rsync-Args werden durchgereicht. |
+| `zentrale-push-data` | **Push-on-write-Helfer** (siehe unten). Vom Backend nach jeder echten Daten-Änderung fire-and-forget angestoßen; coalesct Bursts (flock+dirty), schiebt newest-wins zum Peer, komplett stumm + kurzer Timeout. |
 | `zentrale-sync-boot` | **Einmaliger Abgleich beim Start** (siehe unten). Kein Daemon. |
 | `zentrale-launch` | Wrapper hinter den Startern `zentrale`/`zentrale-tui`/`zentrale-laptop`; hängt den Boot-Sync ein. |
 
@@ -158,9 +159,36 @@ Eingehängt über `zentrale-launch` je nach Pfad:
 - **`zentrale-tui`/`zentrale-laptop` (Direktstart):** stiller Sync im Wrapper
   (Ausgabe ins Log `/tmp/zentrale-sync-boot.log`, kurze `⟳`-Zeile).
 
-PC-Seite (PC holt beim eigenen Start auch den neuesten Stand) ist noch offen:
-dort startet ZENTRALE per systemd-Service → Boot-Sync müsste als
-`ExecStartPre` dazu.
+### Push-on-write (live, event-getrieben — ergänzt den Boot-Sync)
+
+Der Boot-Sync allein ließ zwischen zwei Starts Stände auseinanderlaufen, und
+die **manuellen** `push`/`pull` hatten lange **kein `--update`** → ein
+versehentlicher Push einer älteren Datei hat eine neuere am Peer
+**bedingungslos überschrieben** (so gingen wiederholt Sashas Projekt-Flags in
+`features.json` verloren — die Datei wird von BEIDEN Seiten geschrieben). Fix
+zweistufig: (1) `--update` ist jetzt Default (s.o.); (2) **Push-on-write** —
+das Backend schiebt jede echte Daten-Änderung sofort zum Peer.
+
+`core/datasync.py:notify_change()` hängt im **Schreib-Pfad** der user-getriebenen
+Registries (`lists._save_file`, `graphs._save`, `kalender._save_raw`) und stößt
+— nur wenn `ZENTRALE_AUTOPUSH=1` (setzen `start_laptop.sh`/`start_local.sh`) —
+fire-and-forget `zentrale-push-data` an. **Bewusst im Schreib-Pfad, NICHT per
+Datei-Watcher:** ein vom Sync eingehendes rsync schreibt die Datei direkt auf
+Platte, NICHT durch `_save_*` → löst nie einen Gegen-Push aus ⇒ **kein
+Ping-Pong** (ein Watcher hätte genau die Schleife). Bewusst **nicht** gehängt:
+`graph.py` (KI-Konzeptgraph, würde während Chats stürmen) und die
+Hochfrequenz-Sensorlogs (`/api/log`) — die bleiben beim Boot-Sync.
+
+Das ist die event-getriebene Rückkehr zur Live-Propagierung, aber **leichter
+als der frühere Daemon** (kein Polling/inotify-Reconcile, kein Race mit
+Commits — nur ein Stups pro echtem App-Write).
+
+PC-Seite: die Skripte sind jetzt **bidirektional** (Peer per `ZENTRALE_FINDER`;
+der PC kennt den Laptop als `0RAMMachine`/`find-0RAMMachine`). Was am PC noch
+einmalig nötig ist: die `~/.local/bin`-Skripte (`zentrale-sync` + `push`/`pull`-
+Symlinks, `zentrale-push-data`, `zentrale-sync-boot`) dort installieren und den
+neuen Code (`git pull`) ziehen; ZENTRALE startet am PC per systemd-Service →
+Boot-Sync müsste als `ExecStartPre` dazu.
 
 Voraussetzung am PC (einmalig): `openssh-server` installiert + `ssh.service`
 aktiv (der PC hatte nur den SSH-**Client** → konnte zum Pi, aber niemand

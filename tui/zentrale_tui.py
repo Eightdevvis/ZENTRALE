@@ -414,8 +414,15 @@ def selftest():
         flag = " ◆projekt" if l.get("project") else ""
         print("    %-16s :" % l.get("name"), "%d/%d erledigt%s" % (done, total, flag))
     pr = store._get("/api/projects") or []
-    print("  projekte (rechts)  :",
-          ["%s %d/%d" % (p.get("name"), p.get("done"), p.get("total")) for p in pr] or "—")
+    print("  projekte (rechts)  :", [p.get("name") for p in pr] or "—")
+    def _pp(node, depth=0):                       # Projekt-Baum eingerückt drucken
+        kids = node.get("children") or []
+        head = "    " + "  " * depth + ("▸ " if kids else "• ")
+        print(head + "%s  %d/%d" % (node.get("name"), node.get("done"), node.get("total")))
+        for c in kids:
+            _pp(c, depth + 1)
+    for p in pr:
+        _pp(p)
     last = state.get("logs", [])[-1] if state.get("logs") else None
     if last:
         print("  letzte log-zeile    :", last.get("time"), last.get("text"))
@@ -431,14 +438,74 @@ TUI_COMMANDS = [
 TUI_KEYS = [
     ("q",   "beenden"),
     ("t",   "Theme wechseln (auto/hell/dunkel)"),
-    ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen"),
+    ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung an/aus"),
     ("l",   "Listen (Mitte): anlegen · einträge abhaken (space) / löschen · p als projekt rechts"),
-    ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · o=Handelsrouten · w=Fenster"),
+    ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Handelsrouten · w=Fenster"),
     ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · ←→ blättern · v Woche/Monat"),
     ("p",   "Post/Mail (Mitte): ↑↓ blättern · enter rein · v lesen/liste · e ausklappen · Bild↑↓ scrollen · a antw · s einsort · d lösch · esc zurück"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
+
+# Kontext-Shortcuts: welche Tasten zeigt '/' im jeweils fokussierten Fenster.
+# Single Source of Truth — die Box-Fußzeilen tragen diese langen Listen NICHT
+# mehr fest ein (sie schnitten ab); '/' blendet sie bei Bedarf auf. Die Tasten
+# selbst greifen weiterhin direkt, ganz ohne Slash. Schlüssel = Kontext aus
+# current_ctx(); Reihenfolge spiegelt die alten Fußzeilen.
+CTX_KEYS = {
+    "home": [
+        ("l", "listen"), ("g", "graph"), ("m", "karte"),
+        ("c", "kalender"), ("p", "post / mail"),
+        ("t", "theme"), ("q", "beenden"),
+    ],
+    "graph": [
+        ("↑↓", "wählen"), ("enter", "öffnen"),
+        ("n", "neu"), ("d", "löschen"), ("esc", "zu"),
+    ],
+    "list:list": [
+        ("enter", "öffnen"), ("n", "neu"), ("s", "kind"),
+        ("r", "name"), ("p", "projekt"), (">", "einordnen"),
+        ("d", "weg"), ("esc", "zu"),
+    ],
+    "list:view": [
+        ("enter", "rein / hak"), ("space", "hak"), ("a/s", "neu"),
+        ("r", "name"), ("p", "projekt"), (">", "einordnen"),
+        ("m", "raus"), ("d", "weg"), ("esc", "zurück"),
+    ],
+    "list:pick": [
+        ("↑↓", "wählen"), ("enter", "übernehmen"), ("esc", "abbrechen"),
+    ],
+    "map": [
+        ("↑↓←→", "pan (auch hjkl)"), ("+/−", "zoom"), ("0", "reset"),
+        ("Alt+↑↓←→", "land fokussieren"),
+        ("o", "handelsrouten"), ("w", "fenster"), ("esc", "zu"),
+    ],
+    "cal:week": [
+        ("↑↓", "wählen"), ("e", "bearbeiten"), ("a", "neu"),
+        ("d", "löschen / aus"), ("←→", "woche"), ("v", "monat"),
+    ],
+    "cal:month": [
+        ("←→", "blättern"), ("v", "woche"), ("a", "neu"),
+        ("0", "heute"), ("esc", "zu"),
+    ],
+    "mail:cats": [
+        ("↑↓", "wählen"), ("enter", "öffnen"), ("r", "poll"), ("esc", "zu"),
+    ],
+    "mail:list": [
+        ("↑↓", "wählen"), ("enter", "lesen"), ("a", "antworten"),
+        ("s", "einsortieren"), ("d", "löschen"), ("esc", "zurück"),
+    ],
+    "mail:read": [
+        ("↑↓", "blättern"), ("e", "ausklappen"), ("a", "antworten"),
+        ("s", "einsortieren"), ("d", "löschen"), ("v", "liste"), ("esc", "zurück"),
+    ],
+}
+CTX_TITLES = {
+    "home": "start", "graph": "graph", "list:list": "listen",
+    "list:view": "liste", "list:pick": "einordnen", "map": "karte",
+    "cal:week": "kalender · woche", "cal:month": "kalender · monat",
+    "mail:cats": "post", "mail:list": "post · liste", "mail:read": "post · lesen",
+}
 
 
 def parse_command(buf, theme_mode):
@@ -467,12 +534,17 @@ def parse_command(buf, theme_mode):
     return None, theme_mode, "unbekannter befehl: /" + name
 
 
-def overlay_rows(cmd_buf, help_latched):
+def overlay_rows(cmd_buf, help_latched, ctx=None):
     """
     Welche Zeilen zeigt das Befehls-Overlay? PURE Funktion → (titel, rows).
     rows-Einträge: ("cmd", name, desc) | ("key", taste, desc) | ("sep",) |
-    ("info", "", text). '/help' (oder help_latched) → volle Hilfe inkl. Tasten,
-    sonst live-gefilterte Befehlsliste nach dem getippten Präfix.
+    ("info", "", text).
+
+    - '/help' (oder help_latched) → volle Hilfe inkl. globaler Tasten.
+    - nacktes '/' → die Shortcuts des FOKUSSIERTEN Fensters (ctx) plus die
+      globalen Slash-Befehle darunter. ctx = (titel, [(taste, desc), …]) oder
+      None (dann nur die globalen Befehle).
+    - '/<präfix>' → live-gefilterte Slash-Befehlsliste.
     """
     full = help_latched or cmd_buf.startswith("/help")
     if full:
@@ -481,6 +553,13 @@ def overlay_rows(cmd_buf, help_latched):
         rows += [("key", k, d) for k, d in TUI_KEYS]
         return "hilfe", rows
     pref = cmd_buf[1:].split(" ")[0].lower()
+    if not pref:                       # nacktes '/': Kontext-Tasten + globale Befehle
+        title, keys = ctx if ctx else ("befehle", [])
+        rows = [("key", k, d) for k, d in keys]
+        if keys:
+            rows += [("sep",)]
+        rows += [("cmd", n, d) for n, d in TUI_COMMANDS]
+        return title, rows
     hits = [(n, d) for n, d in TUI_COMMANDS if n[1:].startswith(pref)]
     rows = [("cmd", n, d) for n, d in hits] or [("info", "", "kein treffer")]
     return "befehle", rows
@@ -640,7 +719,7 @@ def run_ui(stdscr, store):
     # Geteilte Logik (core/lists.py + /api/lists), hier in der TUI verbaut.
     #   active : Werkzeug hat den Fokus
     #   view   : "list" (Listen wählen) | "new" (anlegen) | "view" (Einträge)
-    #            | "nest" (Liste in eine andere einordnen)
+    #            | "place" (Knoten Forest-weit einordnen, ">" auf Liste/Eintrag)
     #   sel    : ausgewählte Liste (in "list"); isel: ausgewählter Eintrag (in "view")
     #   adding : in "view" tippen wir gerade einen neuen Eintrag (input)
     #   addparent: id des Eltern-Eintrags beim Tippen (None = oberste Ebene)
@@ -648,7 +727,7 @@ def run_ui(stdscr, store):
     #   edit_iid: beim Umbenennen die id des Eintrags (imode "rename")
     #   lrename: in "new" benennen wir eine bestehende Liste um (id) statt neu
     #   move_iid/nsel: zu verschiebender Eintrag + Zielauswahl ("move"/"move_new")
-    #   nest_src/nsel: Quell-Liste + Auswahl-Index beim Einordnen ("nest")
+    #   place_kind/lid/iid: Quell-Knoten beim Einordnen ("place"); nsel = Zielindex
     # Einträge sind Mischtypen: jeder kann eigene Unterpunkte ('items') tragen.
     # In "view" navigiert man wie Ordner: ein Eintrag MIT Kindern ist eine
     # anklickbare Zeile (Enter = reingehen), kein aufgeklappter Baum. path ist
@@ -663,8 +742,9 @@ def run_ui(stdscr, store):
          "edit_iid": None,             # umzubenennender Eintrag (imode rename)
          "lrename": None,              # umzubenennende Liste (in "new")
          "move_iid": None,             # zu verschiebender Eintrag ("move")
-         "inest_iid": None,            # einzuordnender Eintrag ("inest", > auf Punkt)
-         "nest_src": None, "nsel": 0}  # Einordnen/Verschieben: Quelle + Zielwahl
+         # Einordnen (">", Forest-weit): Quelle = Liste ODER Eintrag
+         "place_kind": None, "place_lid": None, "place_iid": None,
+         "nsel": 0}                    # Zielwahl-Index (place/move/move_new)
 
     # ── Karte (füllt die MITTE-Box, Taste 'm') ──────────────────────────
     # Maps-System Schritt 1: grobe Basiskarte (Küsten 1:110m). Die TUI ist
@@ -680,7 +760,12 @@ def run_ui(stdscr, store):
          "data": None, "grid": None, "msg": "", "proc": None,
          "overlay": False,      # Handelsrouten-Overlay (Achse 2) ein/aus
          "odata": None,         # letzte /api/map/layer/trade-Antwort (None ⇒ neu holen)
-         "ogrid": None}         # (cols,rows), für die odata geholt wurde
+         "ogrid": None,         # (cols,rows), für die odata geholt wurde
+         "focus": None,         # Name des fokussierten Landes (Alt+Pfeile), None=keins
+         "fdata": None,         # letzte /api/map/countries-Antwort (None ⇒ neu holen)
+         "fgrid": None,         # (cols,rows), für die fdata geholt wurde
+         "tcx": 0.0, "tcy": 20.0,  # Kamera-ZIEL (lon/lat) beim Fokuswechsel
+         "anim": False}         # läuft gerade eine weiche Kamerafahrt?
     MAP_CHOKE = "◆"          # Chokepoint-Marker (Handelsrouten-Overlay)
     MAP_ROUTE = "·"          # Schifffahrtsrouten-Pfad (dezent, unter den Markern)
 
@@ -829,6 +914,121 @@ def run_ui(stdscr, store):
 
         except Exception as exc:
             M["msg"] = "fenster-start: %s" % exc
+
+    # ── Länder-Fokus (Alt+Pfeile): immer genau ein Land fokussiert, weiße
+    # gestrichelte Border + Name; Alt+↑↓←→ springt zum räumlich nächsten Land in
+    # der Richtung, die Kamera zieht weich mit. Geo-Logik im Backend
+    # (/api/map/countries) — die TUI navigiert nur über Mittelpunkte + zeichnet.
+    def m_fetch_countries(cols, rows):
+        """Länder-Daten holen: alle Mittelpunkte (Navigation) + Umriss des
+        fokussierten Landes (Border). Aufs selbe Raster wie die Braille-Basis."""
+        try:
+            q = ("/api/map/countries?cx=%.5f&cy=%.5f&zoom=%.2f&cols=%d&rows=%d"
+                 "&aspect=0.5" % (M["cx"], M["cy"], M["zoom"], cols, rows))
+            if M.get("focus"):
+                q += "&focus=" + urllib.parse.quote(M["focus"])
+            M["fdata"] = api_call(q)
+            M["fgrid"] = (cols, rows)
+        except Exception:
+            M["fdata"] = None
+
+    def m_countries():
+        """fdata sicherstellen (für das letzte bekannte Karten-Raster)."""
+        if M.get("fdata") is None and M.get("grid"):
+            m_fetch_countries(*M["grid"])
+        return M.get("fdata")
+
+    def m_focus_init():
+        """Ersten Fokus setzen: das Land, dessen Mittelpunkt der Bildmitte am
+        nächsten liegt — und Kamera weich dorthin."""
+        fd = m_countries()
+        if not fd or not fd.get("countries"):
+            return
+        best = min(fd["countries"],
+                   key=lambda c: (c["lon"] - M["cx"]) ** 2 + (c["lat"] - M["cy"]) ** 2)
+        M["focus"] = best["name"]
+        M["tcx"], M["tcy"], M["anim"], M["fdata"] = best["lon"], best["lat"], True, None
+
+    def m_focus_step(dirx, diry):
+        """Zum räumlich nächsten Land in der Richtung (dirx/diry) fokussieren.
+        Richtung im VISUELLEN Welt-Raum (wx/wy: oben = kleineres wy). Kosten =
+        Distanz entlang der Richtung + 2× seitlicher Versatz (bevorzugt geradeaus)."""
+        fd = m_countries()
+        if not fd or not fd.get("countries"):
+            return
+        if not M.get("focus"):
+            m_focus_init()                       # erster Strg+Pfeil: Fokus an
+            return
+        cur = next((c for c in fd["countries"] if c["name"] == M["focus"]), None)
+        if cur is None:
+            m_focus_init()
+            return
+        best = None
+        for c in fd["countries"]:
+            if c["name"] == cur["name"]:
+                continue
+            dx, dy = c["wx"] - cur["wx"], c["wy"] - cur["wy"]
+            if dirx:
+                along, lateral = dx * dirx, abs(dy)
+            else:
+                along, lateral = dy * diry, abs(dx)
+            if along <= 1e-6:                    # nicht in der gewünschten Richtung
+                continue
+            cost = along + 2.0 * lateral
+            if best is None or cost < best[0]:
+                best = (cost, c)
+        if best is None:
+            return
+        tgt = best[1]
+        M["focus"] = tgt["name"]
+        M["tcx"], M["tcy"], M["anim"], M["fdata"] = tgt["lon"], tgt["lat"], True, None
+
+    def m_anim_step():
+        """Eine Ease-Stufe der Kamerafahrt zum Fokus-Ziel (pro Frame aufgerufen,
+        solange M['anim']). Refetch erzwingen, damit Karte+Border mitziehen."""
+        dx, dy = M["tcx"] - M["cx"], M["tcy"] - M["cy"]
+        if abs(dx) < 0.08 and abs(dy) < 0.08:
+            M["cx"], M["cy"], M["anim"] = M["tcx"], M["tcy"], False
+        else:
+            M["cx"] += dx * 0.35
+            M["cy"] += dy * 0.35
+        M["data"] = M["odata"] = M["fdata"] = None
+
+    def m_alt_arrow(ch):
+        """Alt+Pfeil → 'up'/'down'/'left'/'right'; einzelnes Esc → 'esc'; sonst
+        None. (Strg+Pfeil ist schon belegt: Höhe Zentrale↔Befehlszeile.) Robust
+        über terminfo-Keyname (kUP3…, Modifier 3 = Alt) ODER durch Nachlesen der
+        Roh-Escape-Sequenz — zwei verbreitete Alt-Formen:
+          • CSI-Modifier:   \\033[1;3{A..D}
+          • Meta=Esc-Präfix: \\033 \\033[{A..D}  (bzw. \\033O{A..D} im App-Modus)
+        Damit terminal-/tmux-unabhängig."""
+        try:
+            nm = curses.keyname(ch)
+        except (ValueError, OverflowError):
+            nm = b""
+        by_name = {b"kUP3": "up", b"kDN3": "down", b"kLFT3": "left", b"kRIT3": "right"}
+        if nm in by_name:
+            return by_name[nm]
+        if ch != 27:
+            return None
+        seq = []
+        stdscr.nodelay(True)
+        for _ in range(8):
+            nx = stdscr.getch()
+            if nx == -1:
+                break
+            seq.append(nx)
+        stdscr.timeout(250)
+        s = bytes(b & 0xFF for b in seq).decode("latin-1", "ignore")
+        by_seq = {
+            "[1;3A": "up", "[1;3B": "down", "[1;3C": "right", "[1;3D": "left",
+            "\x1b[A": "up", "\x1b[B": "down", "\x1b[C": "right", "\x1b[D": "left",
+            "\x1bOA": "up", "\x1bOB": "down", "\x1bOC": "right", "\x1bOD": "left",
+        }
+        for k, v in by_seq.items():
+            if s.startswith(k):
+                return v
+        return "esc" if not s else None
 
     def g_load():
         """Definitionen frisch ziehen (nach Aktionen / beim Öffnen)."""
@@ -989,6 +1189,33 @@ def run_ui(stdscr, store):
         gerade offenen (raus = in eine ANDERE Liste)."""
         cur = L["def"]["id"] if L["def"] else None
         return [l for l in L["lists"] if isinstance(l, dict) and l.get("id") != cur]
+
+    def l_forest_targets(skind, slid, siid):
+        """Alle Ziel-Knoten zum Einordnen über ALLE Listen hinweg — flach, mit
+        Tiefe & Label, OHNE den eigenen Teilbaum (kein Zyklus). Jeder Eintrag:
+        {lid, iid (None = Listen-Top als Ziel), label}. So kann `>` auf jeder
+        Ebene jeden Knoten erreichen (oben wie unten gleich)."""
+        excl = set()                                  # eigener Teilbaum (nur item-Quelle)
+        if skind == "item":
+            src_lst = next((l for l in L["lists"] if isinstance(l, dict) and l.get("id") == slid), None)
+            src = l_find_item((src_lst or {}).get("items"), siid)
+            if src is not None:
+                for it, _d in l_flatten([src]):
+                    excl.add(it.get("id"))
+        out = []
+        for l in L["lists"]:
+            if not isinstance(l, dict):
+                continue
+            lid = l.get("id")
+            if skind == "list" and lid == slid:       # ganze Quell-Liste raus
+                continue
+            out.append({"lid": lid, "iid": None, "label": str(l.get("name") or "")})
+            for it, d in l_flatten(l.get("items")):
+                if skind == "item" and lid == slid and it.get("id") in excl:
+                    continue                          # eigener Teilbaum
+                out.append({"lid": lid, "iid": it.get("id"),
+                            "label": "  " * (d + 1) + str(it.get("text") or "")})
+        return out
 
     def l_sync_def():
         """Nach Änderungen die offene Liste aus der frisch geladenen Registry
@@ -1191,11 +1418,15 @@ def run_ui(stdscr, store):
                     sel = (i == G["sel"])
                     rows = gv_cache.get(g.get("id")) or []
                     spark = blockspark(graph_series(g.get("type"), rows)[-8:])
-                    line = "%s %-12s %-7s %s" % (
-                        "›" if sel else " ", str(g.get("name") or "")[:12], _tlabel(g.get("type")), spark)
+                    pred = "~" if g.get("predict") else " "   # ~ = Lücken werden geschätzt
+                    line = "%s%s%-11s %-6s %s" % (
+                        "›" if sel else " ", pred, str(g.get("name") or "")[:11], _tlabel(g.get("type")), spark)
                     addclip(yy, ix, line, iw, C["bright"] if sel else C["dim"])
                     yy += 1
-            addclip(bottom, ix, "↑↓ wählen · enter öffnen · n neu · d löschen · esc zu", iw, C["faint"])
+            if G["msg"]:                       # Shortcuts liegen unter '/'; nur Feedback
+                addclip(bottom, ix, G["msg"], iw, C["faint"])
+            else:
+                addclip(bottom, ix, "enter öffnen · n neu · p ~vorhersage · d weg · esc zu", iw, C["faint"])
 
             if G["confirm"] and G["graphs"]:        # Mini-Dialog über die Liste legen
                 nm = G["graphs"][G["sel"]]["name"]
@@ -1249,6 +1480,8 @@ def run_ui(stdscr, store):
                     if folder:
                         cd, ct = l_count(kids)        # Ordner-Fortschritt (Blätter)
                         suffix = "  (%d/%d)" % (cd, ct)
+                    if it.get("project"):             # als Projekt markiert → ◆ (wie Listen)
+                        suffix += " ◆"
                     mark = "▸ " if folder else "  "   # Ordner = anklickbar (enter rein)
                     body = "%s%s %s%s" % (mark, box, str(it.get("text") or ""), suffix)
                     attr = C["faint"] if done else (C["bright"] if sel else C["dim"])
@@ -1262,49 +1495,35 @@ def run_ui(stdscr, store):
                 tip = "enter umbenennen" if L["imode"] == "rename" else "enter anhängen"
                 addclip(input_row, ix, lbl + ": " + L["input"] + "_", iw, C["bright"])
                 addclip(bottom, ix, (tip + " · esc abbrechen  " + L["msg"]).strip(), iw, C["faint"])
-            else:
-                back = "zurück" if L["path"] else "zu"
-                addclip(bottom, ix, "enter rein/hak · space hak · a/s neu · r name · > einordnen · m raus · d weg · esc " + back, iw, C["faint"])
+            elif L["msg"]:                     # Shortcuts liegen unter '/'; nur Feedback
+                addclip(bottom, ix, L["msg"], iw, C["faint"])
 
-        elif L["view"] == "nest":          # Liste in eine andere einordnen
-            src = next((x for x in L["lists"] if x.get("id") == L["nest_src"]), None)
-            nm = str(src.get("name") if isinstance(src, dict) else "?")
-            addclip(by + 1, ix, "»%s« einordnen unter:" % nm[:18], iw, C["bright"])
+        elif L["view"] == "place":         # Knoten (Liste/Eintrag) Forest-weit einordnen
+            if L["place_kind"] == "list":
+                src = next((x for x in L["lists"] if isinstance(x, dict) and x.get("id") == L["place_lid"]), None)
+                nm = str(src.get("name") if isinstance(src, dict) else "?")
+            else:
+                src_lst = next((x for x in L["lists"] if isinstance(x, dict) and x.get("id") == L["place_lid"]), None)
+                it = l_find_item((src_lst or {}).get("items"), L["place_iid"])
+                nm = str(it.get("text") if isinstance(it, dict) else "?")
+            addclip(by + 1, ix, "»%s« einordnen in:" % nm[:18], iw, C["bright"])
             safe_addstr(by + 2, ix, "─" * iw, C["faint"])
-            cands = [l for l in L["lists"]
-                     if isinstance(l, dict) and l.get("id") != L["nest_src"]]
+            tg = l_forest_targets(L["place_kind"], L["place_lid"], L["place_iid"])
             yy = by + 3
-            if not cands:
-                addclip(yy, ix, "keine andere Liste da", iw, C["faint"])
+            if not tg:
+                addclip(yy, ix, "kein ziel da", iw, C["faint"])
             else:
                 avail = max(1, bottom - yy)
-                start = max(0, min(L["nsel"] - avail + 1, len(cands) - avail)) if len(cands) > avail else 0
-                for off, l in enumerate(cands[start:start + avail]):
+                start = max(0, min(L["nsel"] - avail + 1, len(tg) - avail)) if len(tg) > avail else 0
+                for off, t in enumerate(tg[start:start + avail]):
                     sel = (start + off == L["nsel"])
-                    addclip(yy, ix, "%s %s" % ("›" if sel else " ", str(l.get("name") or "")),
+                    # Listen-Top (iid None) als ≡ markiert, Einträge eingerückt
+                    mark = "≡ " if t["iid"] is None else "  "
+                    addclip(yy, ix, "%s %s%s" % ("›" if sel else " ", mark, t["label"]),
                             iw, C["bright"] if sel else C["dim"])
                     yy += 1
-            addclip(bottom, ix, ("↑↓ wählen · enter einordnen · esc abbrechen  " + L["msg"]).strip(), iw, C["faint"])
-
-        elif L["view"] == "inest" and L["def"]:   # Punkt in einen Geschwister-Punkt einordnen
-            sib_items, _pid, _cr = l_container()  # die gerade offene Ebene
-            it = l_find_item(L["def"].get("items"), L["inest_iid"])
-            nm = str(it.get("text") if isinstance(it, dict) else "?")
-            addclip(by + 1, ix, "»%s« einordnen unter:" % nm[:18], iw, C["bright"])
-            safe_addstr(by + 2, ix, "─" * iw, C["faint"])
-            sibs = [x for x in sib_items if isinstance(x, dict) and x.get("id") != L["inest_iid"]]
-            yy = by + 3
-            if not sibs:
-                addclip(yy, ix, "kein anderer punkt auf dieser ebene", iw, C["faint"])
-            else:
-                avail = max(1, bottom - yy)
-                start = max(0, min(L["nsel"] - avail + 1, len(sibs) - avail)) if len(sibs) > avail else 0
-                for off, s in enumerate(sibs[start:start + avail]):
-                    sel = (start + off == L["nsel"])
-                    addclip(yy, ix, "%s %s" % ("›" if sel else " ", str(s.get("text") or "")),
-                            iw, C["bright"] if sel else C["dim"])
-                    yy += 1
-            addclip(bottom, ix, ("↑↓ wählen · enter einordnen · esc abbrechen  " + L["msg"]).strip(), iw, C["faint"])
+            if L["msg"]:                       # Shortcuts liegen unter '/'; nur Feedback
+                addclip(bottom, ix, L["msg"], iw, C["faint"])
 
         elif L["view"] == "move" and L["def"]:   # Eintrag raus in eine andere Liste
             it = l_find_item(L["def"].get("items"), L["move_iid"])
@@ -1322,7 +1541,8 @@ def run_ui(stdscr, store):
                 addclip(yy, ix, "%s %s" % ("›" if sel else " ", label),
                         iw, C["bright"] if sel else C["dim"])
                 yy += 1
-            addclip(bottom, ix, ("↑↓ wählen · enter verschieben · esc abbrechen  " + L["msg"]).strip(), iw, C["faint"])
+            if L["msg"]:                       # Shortcuts liegen unter '/'; nur Feedback
+                addclip(bottom, ix, L["msg"], iw, C["faint"])
 
         elif L["view"] == "move_new":            # Name für die neue Ziel-Liste
             addclip(by + 1, ix, "NEUE LISTE (ziel)", iw, C["bright"])
@@ -1349,7 +1569,8 @@ def run_ui(stdscr, store):
                         "›" if sel else " ", proj, str(l.get("name") or "")[:15], done, total)
                     addclip(yy, ix, line, iw, C["bright"] if sel else C["dim"])
                     yy += 1
-            addclip(bottom, ix, "enter öffnen · n neu · r name · p projekt · > einordnen · d weg · esc zu", iw, C["faint"])
+            if L["msg"]:                       # Shortcuts liegen unter '/'; nur Feedback
+                addclip(bottom, ix, L["msg"], iw, C["faint"])
 
             if L["confirm"] and L["lists"]:        # Mini-Dialog über die Liste legen
                 nm = str(L["lists"][L["sel"]].get("name") or "")
@@ -1426,12 +1647,51 @@ def run_ui(stdscr, store):
                     ind = (p.get("industries") or [None])[0]
                     focus = (p["name"], p.get("value"), ind)
 
+        # Länder-Fokus: weiße GESTRICHELTE Border des fokussierten Landes + Name.
+        # Border-Geometrie kommt projiziert vom Backend (/api/map/countries) — wir
+        # laufen sie per Bresenham ab und setzen nur jede 2. Zelle (= gestrichelt).
+        if M["focus"]:
+            if (not M["fdata"]) or M["fgrid"] != (iw, map_ih):
+                m_fetch_countries(iw, map_ih); M["fgrid"] = (iw, map_ih)
+            fdoc = (M["fdata"] or {}).get("focus")
+            if fdoc:
+                dash = 0
+                for ring in fdoc.get("rings", []):
+                    for i in range(len(ring) - 1):
+                        x0, y0 = int(round(ring[i][0])), int(round(ring[i][1]))
+                        x1, y1 = int(round(ring[i + 1][0])), int(round(ring[i + 1][1]))
+                        ddx, ddy = abs(x1 - x0), abs(y1 - y0)
+                        sxx = 1 if x0 < x1 else -1
+                        syy = 1 if y0 < y1 else -1
+                        err = ddx - ddy
+                        while True:
+                            if dash % 2 == 0 and 0 <= x0 < iw and 0 <= y0 < map_ih:
+                                safe_addstr(oy + y0, ox + x0, "•", C["bright"])
+                            dash += 1
+                            if x0 == x1 and y0 == y1:
+                                break
+                            e2 = 2 * err
+                            if e2 > -ddy:
+                                err -= ddy; x0 += sxx
+                            if e2 < ddx:
+                                err += ddx; y0 += syy
+                # Name am Label-Anker (oder oben-mittig, falls Anker außerhalb).
+                nm = fdoc.get("name", "")
+                lc = fdoc.get("label") or [iw / 2, map_ih / 2]
+                lx, ly = int(lc[0]), int(lc[1])
+                if not (0 <= lx < iw and 0 <= ly < map_ih):
+                    lx, ly = iw // 2, max(0, map_ih // 2 - 1)
+                nx = max(0, min(lx - len(nm) // 2, iw - len(nm)))
+                safe_addstr(oy + ly, ox + nx, nm[:iw], C["bright"])
+
         # Fadenkreuz in der Mitte (Orientierung, wo cx/cy liegt). NACH den Markern,
         # damit es obenauf bleibt.
         safe_addstr(oy + map_ih // 2, ox + iw // 2, "+", C["warn"])
 
         # Status-/Hilfezeile unten in der Box: Position, Zoom, Steuerung.
         info = "lon %+.1f lat %+.1f · z%g" % (M["cx"], M["cy"], M["zoom"])
+        if M["focus"]:
+            info += " · ⬚%s" % M["focus"]      # fokussiertes Land (Alt+Pfeile)
         if M["overlay"]:
             if focus:
                 nm, val, _ind = focus
@@ -1445,10 +1705,10 @@ def run_ui(stdscr, store):
         win_open = proc is not None and proc.poll() is None
         if not win_open and M["msg"] == "fenster läuft schon":
             M["msg"] = ""        # veraltete „läuft schon"-Meldung aufräumen
-        hint = "● fenster · ↑↓←→ +/− 0·o·esc" if win_open else "↑↓←→ +/− 0·o·w·esc"
-        if M["msg"]:
-            hint = M["msg"]
-        addclip(by + bh - 2, ox + iw - len(hint), hint, len(hint), C["faint"])
+        # Shortcuts liegen unter '/'; unten nur Status (● fenster) bzw. Feedback.
+        hint = M["msg"] or ("● fenster" if win_open else "")
+        if hint:
+            addclip(by + bh - 2, ox + iw - len(hint), hint, len(hint), C["faint"])
 
     def k_fetch():
         """Kalender fürs aktuelle view+ref synchron holen (localhost, wenige ms).
@@ -1865,15 +2125,12 @@ def run_ui(stdscr, store):
 
         info = "%s · %s" % ("woche" if K["view"] == "week" else "monat", label)
         addclip(bottom, ix, info, iw, C["bright"])
-        if K["confirmdel"]:
+        if K["confirmdel"]:                    # Shortcuts liegen unter '/'
             hint = "löschen? j/n"
-        elif K["msg"]:
-            hint = K["msg"]
-        elif K["view"] == "week":
-            hint = "↑↓ wählen · e bearbeiten · a neu · d löschen/aus · ←→ woche · v monat"
         else:
-            hint = "←→ blättern · v woche · a neu · 0 heute · esc"
-        addclip(bottom, ix + iw - len(hint), hint, len(hint), C["faint"])
+            hint = K["msg"]
+        if hint:
+            addclip(bottom, ix + iw - len(hint), hint, len(hint), C["faint"])
 
     # ── Post/Mail-Panel: laden / pollen / zeichnen ─────────────────────
     def mail_load():
@@ -2128,11 +2385,9 @@ def run_ui(stdscr, store):
                     a2 = (C["dim"] | curses.A_REVERSE) if seld else C["dim"]
                     addclip(y, ix, ("» " if seld else "  ") + who, iw, a1)
                     addclip(y + 1, ix, "  " + subj, iw, a2)
-                hint = MAIL["msg"] or ("↑↓ wählen · enter lesen · a antw · "
-                                       "s einsort · d lösch · esc zu")
-                if MAIL["confirmdel"]:
-                    hint = "wirklich löschen? j/n"
-                addclip(bottom, ix, hint, iw, C["faint"])
+                hint = "wirklich löschen? j/n" if MAIL["confirmdel"] else MAIL["msg"]
+                if hint:                       # Shortcuts liegen unter '/'
+                    addclip(bottom, ix, hint, iw, C["faint"])
                 return
 
             # ── Modus LESEN: eine Mail, Vorschau / ausgeklappt ──
@@ -2166,11 +2421,8 @@ def run_ui(stdscr, store):
                                 iw, C["faint"])
             if MAIL["confirmdel"]:
                 hint = "wirklich löschen? j/n"
-            else:
-                pos = "%d/%d" % (MAIL["msel"] + 1, n)
-                scroll = " · Bild↑↓ scrollen" if MAIL["expanded"] else ""
-                hint = MAIL["msg"] or ("%s · ↑↓ blättern · e ausklappen%s · a antw · "
-                                       "s einsort · d lösch · v liste · esc" % (pos, scroll))
+            else:                              # Shortcuts liegen unter '/'; nur Position/Feedback
+                hint = MAIL["msg"] or ("%d/%d" % (MAIL["msel"] + 1, n))
             addclip(bottom, ix, hint, iw, C["faint"])
             return
 
@@ -2200,7 +2452,8 @@ def run_ui(stdscr, store):
             attr = (C["bright"] | curses.A_REVERSE) if idx == sel else C["bright"]
             addclip(body_top + r, ix, line, iw, attr)
         src = "live" if live_counts else "lokal"
-        hint = MAIL["msg"] or ("↑↓ wählen · enter öffnen · r poll · esc zu  [%s]" % src)
+        # Shortcuts liegen unter '/'; unten nur Feedback bzw. die Datenquelle.
+        hint = MAIL["msg"] or ("[%s]" % src)
         addclip(bottom, ix, hint, iw, C["faint"])
 
     def mail_reply_open():
@@ -2288,7 +2541,51 @@ def run_ui(stdscr, store):
             hint = "tippen · enter=zeile · esc=fertig/senden"
         addclip(by + bh - 2, rix, hint[:riw], riw, C["faint"])
 
+    def in_text_entry():
+        """Tippt der Nutzer gerade einen Freitext (Name, Eintrag, Antwort)?
+        Dann bleibt '/' ein normales Zeichen und öffnet NICHT die Befehlszeile."""
+        if G["active"]:
+            return G["view"] in ("new", "view")      # Name bzw. Werteingabe
+        if L["active"]:
+            return L["adding"] or L["view"] in ("new", "move_new")
+        if K["active"]:
+            return K["mode"] == "add"                 # Termin/Routine anlegen+bearbeiten
+        if MAIL["active"]:
+            return MAIL["replying"]
+        return False
+
+    def current_ctx():
+        """Kontext-Schlüssel des fokussierten Fensters für die '/'-Anzeige.
+        None = Tipp-Screen ohne eigene Shortcut-Liste."""
+        if G["active"]:
+            return "graph" if G["view"] == "list" else None
+        if L["active"]:
+            v = L["view"]
+            if v == "list":
+                return "list:list"
+            if v == "view" and not L["adding"]:
+                return "list:view"
+            if v in ("place", "move"):
+                return "list:pick"
+            return None
+        if M["active"]:
+            return "map"
+        if K["active"]:
+            if K["mode"] != "view":
+                return None
+            return "cal:week" if K["view"] == "week" else "cal:month"
+        if MAIL["active"]:
+            if MAIL["replying"] or MAIL.get("picking"):
+                return None
+            if MAIL["level"] == "cats":
+                return "mail:cats"
+            return "mail:read" if MAIL["mode2"] == "read" else "mail:list"
+        return "home"
+
     while True:
+        # Während einer Länder-Kamerafahrt schneller ticken (~30 fps) für weiche
+        # Bewegung; sonst die ruhige 250-ms-Kadenz (spart CPU/Backend-Last).
+        stdscr.timeout(33 if (M["active"] and M.get("anim")) else 250)
         ch = stdscr.getch()
 
         if help_latched:
@@ -2310,6 +2607,11 @@ def run_ui(stdscr, store):
                     cmd_mode = False
             elif 32 <= ch <= 126 and len(cmd_buf) < 120:
                 cmd_buf += chr(ch)
+        elif ch == ord("/") and not in_text_entry():
+            # '/' greift JETZT in jedem Fenster (nicht nur Home): blendet die
+            # Shortcuts des fokussierten Fensters ein. In Freitext-Feldern bleibt
+            # '/' ein Zeichen (siehe in_text_entry), darum hier das Guard.
+            cmd_mode = True; cmd_buf = "/"; cmd_msg = ""
         elif G["active"]:                      # Graph-Werkzeug hat den Fokus
             if G["view"] == "list":
                 if G["confirm"]:                              # Lösch-Nachfrage offen
@@ -2342,6 +2644,15 @@ def run_ui(stdscr, store):
                 elif ch in (ord("d"), ord("D")):
                     if G["graphs"]:
                         G["confirm"] = True; G["msg"] = ""
+                elif ch in (ord("p"), ord("P")):              # vorhersage-ergänzung an/aus
+                    if G["graphs"]:
+                        cur = G["graphs"][G["sel"]]
+                        try:
+                            api_call("/api/graphs/%s/predict" % cur["id"], method="POST",
+                                     body={"predict": not cur.get("predict")})
+                            g_load()
+                        except Exception:
+                            G["msg"] = "predict fehlgeschlagen"
             elif G["view"] == "new":
                 if ch == 27:
                     G["view"] = "list"; G["msg"] = ""
@@ -2464,10 +2775,18 @@ def run_ui(stdscr, store):
                 elif ch in (ord("d"), ord("D")):
                     if L["lists"]:
                         L["confirm"] = True; L["msg"] = ""
-                elif ch == ord(">"):                          # diese Liste in eine andere einordnen
-                    if len(L["lists"]) > 1:
-                        L["nest_src"] = L["lists"][L["sel"]]["id"]
-                        L["nsel"] = 0; L["msg"] = ""; L["view"] = "nest"
+                elif ch == ord(">"):                          # diese Liste in einen Knoten einordnen (Forest-weit)
+                    if L["lists"] and len(L["lists"]) > 1:
+                        L["place_kind"] = "list"
+                        L["place_lid"] = L["lists"][L["sel"]]["id"]
+                        L["place_iid"] = None
+                        L["nsel"] = 0; L["msg"] = ""; L["view"] = "place"
+                elif ch in (ord("s"), ord("S")):              # Kind direkt anhängen (Liste öffnen + Eingabe)
+                    if L["lists"]:
+                        L["def"] = L["lists"][L["sel"]]; L["isel"] = 0; L["path"] = []
+                        L["view"] = "view"; L["adding"] = True; L["imode"] = "add"
+                        L["addparent"] = None; L["edit_iid"] = None
+                        L["input"] = ""; L["msg"] = ""
                 elif ch in (ord("p"), ord("P")):              # als Projekt (rechts) an/aus
                     if L["lists"]:
                         cur = L["lists"][L["sel"]]
@@ -2604,14 +2923,19 @@ def run_ui(stdscr, store):
                             L["msg"] = ""; L["view"] = "move"
                         elif cur:
                             L["msg"] = "keine andere liste"
-                    elif ch == ord(">"):                       # diesen Punkt in einen Geschwister-Punkt einordnen (wie > für Listen)
-                        sibs = [x for x in items if isinstance(x, dict)
-                                and x.get("id") != (cur or {}).get("id")]
-                        if cur and sibs:
-                            L["inest_iid"] = cur["id"]; L["nsel"] = 0
-                            L["msg"] = ""; L["view"] = "inest"
-                        elif cur:
-                            L["msg"] = "kein geschwister-punkt"
+                    elif ch == ord(">"):                       # diesen Punkt in einen Knoten einordnen (Forest-weit)
+                        if cur and lid:
+                            L["place_kind"] = "item"
+                            L["place_lid"] = lid; L["place_iid"] = cur["id"]
+                            L["nsel"] = 0; L["msg"] = ""; L["view"] = "place"
+                    elif ch in (ord("p"), ord("P")):           # diesen Eintrag als Projekt an/aus
+                        if cur and lid:
+                            try:
+                                api_call("/api/lists/%s/items/%d/project" % (lid, cur["id"]),
+                                         method="POST", body={"project": not cur.get("project")})
+                                l_load(); l_sync_def()
+                            except Exception:
+                                L["msg"] = "projekt fehlgeschlagen"
                     elif ch in (ord("d"), ord("D")):
                         if cur and lid:
                             try:
@@ -2620,51 +2944,34 @@ def run_ui(stdscr, store):
                                 l_load(); l_sync_def()
                             except Exception:
                                 L["msg"] = "löschen fehlgeschlagen"
-            elif L["view"] == "nest":          # Liste in eine andere einordnen
-                cands = [l for l in L["lists"]
-                         if isinstance(l, dict) and l.get("id") != L["nest_src"]]
+            elif L["view"] == "place":         # Knoten (Liste/Eintrag) Forest-weit einordnen
+                tg = l_forest_targets(L["place_kind"], L["place_lid"], L["place_iid"])
+                back = "view" if L["place_kind"] == "item" else "list"
                 if ch in (27, ord("l"), ord("L")):             # Esc/l → abbrechen
-                    L["view"] = "list"; L["nest_src"] = None; L["msg"] = ""
+                    L["view"] = back; L["place_iid"] = None; L["msg"] = ""
                 elif ch in (ord("q"), ord("Q")):               # q → ganze TUI beenden
                     break
                 elif ch in (curses.KEY_UP, ord("k")):
                     L["nsel"] = max(0, L["nsel"] - 1)
                 elif ch in (curses.KEY_DOWN, ord("j")):
-                    L["nsel"] = min(max(0, len(cands) - 1), L["nsel"] + 1)
+                    L["nsel"] = min(max(0, len(tg) - 1), L["nsel"] + 1)
                 elif ch in (10, 13, curses.KEY_ENTER):
-                    if cands and 0 <= L["nsel"] < len(cands):
-                        dest = cands[L["nsel"]]
+                    if tg and 0 <= L["nsel"] < len(tg):
+                        t = tg[L["nsel"]]
                         try:
-                            api_call("/api/lists/%s/nest" % L["nest_src"], method="POST",
-                                     body={"into": dest["id"]})
+                            if L["place_kind"] == "list":
+                                api_call("/api/lists/%s/nest" % L["place_lid"], method="POST",
+                                         body={"into": t["lid"], "parent": t["iid"]})
+                            else:
+                                api_call("/api/lists/%s/items/%d/move" % (L["place_lid"], L["place_iid"]),
+                                         method="POST", body={"into": t["lid"], "parent": t["iid"]})
                             L["msg"] = "eingeordnet"
                         except Exception:
                             L["msg"] = "einordnen fehlgeschlagen"
-                        L["view"] = "list"; L["nest_src"] = None
+                        L["view"] = back; L["place_iid"] = None
                         l_load()
-            elif L["view"] == "inest":         # Punkt in einen Geschwister-Punkt einordnen
-                lid = L["def"]["id"] if L["def"] else None
-                sib_items, _pid, _cr = l_container()
-                sibs = [x for x in sib_items if isinstance(x, dict) and x.get("id") != L["inest_iid"]]
-                if ch in (27, ord("l"), ord("L")):             # Esc/l → zurück zu den Einträgen
-                    L["view"] = "view"; L["inest_iid"] = None; L["msg"] = ""
-                elif ch in (ord("q"), ord("Q")):
-                    break
-                elif ch in (curses.KEY_UP, ord("k")):
-                    L["nsel"] = max(0, L["nsel"] - 1)
-                elif ch in (curses.KEY_DOWN, ord("j")):
-                    L["nsel"] = min(max(0, len(sibs) - 1), L["nsel"] + 1)
-                elif ch in (10, 13, curses.KEY_ENTER):
-                    if sibs and 0 <= L["nsel"] < len(sibs) and lid:
-                        dest = sibs[L["nsel"]]
-                        try:
-                            api_call("/api/lists/%s/items/%d/move" % (lid, L["inest_iid"]),
-                                     method="POST", body={"into": lid, "parent": dest["id"]})
-                            L["msg"] = "eingeordnet"
-                        except Exception:
-                            L["msg"] = "einordnen fehlgeschlagen"
-                        L["view"] = "view"; L["inest_iid"] = None
-                        l_load(); l_sync_def()
+                        if back == "view":
+                            l_sync_def()
             elif L["view"] == "move":          # Eintrag raus in eine andere Liste
                 lid = L["def"]["id"] if L["def"] else None
                 targets = l_move_targets()
@@ -2715,7 +3022,11 @@ def run_ui(stdscr, store):
                 elif 32 <= ch <= 126 and len(L["input"]) < 40:
                     L["input"] += chr(ch)
         elif M["active"]:                      # Karte hat den Fokus
-            if ch in (27, ord("m"), ord("M")):                 # Esc/m → Karte zu
+            ca = m_alt_arrow(ch)              # Alt+Pfeil? (frisst evtl. Folgebytes)
+            if ca in ("up", "down", "left", "right"):
+                m_focus_step(*{"up": (0, -1), "down": (0, 1),
+                               "left": (-1, 0), "right": (1, 0)}[ca])
+            elif ca == "esc" or ch in (ord("m"), ord("M")):    # Esc/m → Karte zu
                 M["active"] = False
             elif ch in (ord("q"), ord("Q")):                   # q → ganze TUI beenden
                 break
@@ -2975,8 +3286,8 @@ def run_ui(stdscr, store):
                 MAIL["sel"] = 0; MAIL["cat"] = None; MAIL["off"] = 0
                 MAIL["mails"] = None; MAIL["data"] = None; MAIL["msg"] = ""
                 mail_refresh_counts()          # echte Ordnergrößen im Hintergrund holen
-            elif ch == ord("/"):               # Befehlszeile öffnen
-                cmd_mode = True; cmd_buf = "/"; cmd_msg = ""
+            # '/' wird global oben abgefangen (greift in JEDEM Fenster), darum
+            # hier kein eigener Zweig mehr.
         # KEY_RESIZE oder Timeout → einfach neu zeichnen
 
         # Theme nachziehen (auto wechselt nach Uhrzeit, oder nach 't'/Befehl)
@@ -2984,6 +3295,10 @@ def run_ui(stdscr, store):
         if want != cur_theme:
             cur_theme = want
             apply_theme(cur_theme)
+
+        # Weiche Kamerafahrt zum fokussierten Land (eine Ease-Stufe pro Frame).
+        if M["active"] and M.get("anim"):
+            m_anim_step()
 
         state, metrics, connected = store.snapshot()
         gs_cache, gv_cache = store.graphs_snapshot()
@@ -3136,11 +3451,20 @@ def run_ui(stdscr, store):
         out_h = body_h - life_h
         # PROJECTS schiebt sich zwischen lifestyle und outbound — aber nur wenn
         # es überhaupt geflaggte Projekte gibt UND outbound danach mind. 5 Zeilen
-        # behält (sonst lieber ganz weglassen, Tripwire hat Vorrang). Je Projekt
-        # 2 Zeilen (Titel + Leiste) + 2 für den Rahmen.
+        # behält (sonst lieber ganz weglassen, Tripwire hat Vorrang). Höhe ist
+        # VARIABEL (verschachtelt): ein Knoten ohne Unterprojekte braucht 2 Zeilen
+        # (Titel+Leiste), einer MIT Unterprojekten einen Rahmen (oben+unten) um
+        # seine rekursiv gemessenen Kinder.
+        def proj_measure(node, w):
+            kids = node.get("children") or []
+            if not kids:
+                return 2
+            return 2 + sum(proj_measure(c, w - 2) for c in kids)
         proj_h = 0
         if proj_cache and out_h >= 9:
-            proj_h = min(2 + 2 * len(proj_cache), out_h - 5)
+            need = 2 + sum(proj_measure(p, rightw - 4) for p in proj_cache
+                           if isinstance(p, dict))
+            proj_h = min(need, out_h - 5)
         out_h -= proj_h
         draw_box(top, rx, life_h, rightw, "lifestyle")
         # Farb-Palette, je Graph eine (durchgezykelt). Unterschieden wird über
@@ -3167,7 +3491,8 @@ def run_ui(stdscr, store):
                     dv[e["date"]] = e
                 if dv:
                     series.append({"name": g.get("name", "?"), "type": g.get("type"),
-                                   "dv": dv, "col": LIFE_COL[i % len(LIFE_COL)]})
+                                   "dv": dv, "col": LIFE_COL[i % len(LIFE_COL)],
+                                   "predict": bool(g.get("predict"))})
             # Legende packen (mehrere pro Zeile): farbiges Linien-Sample + Name —
             # verbraucht Zeilen, die dem Plot fehlen.
             leg_lines, cur_w = [[]], 0
@@ -3219,8 +3544,13 @@ def run_ui(stdscr, store):
                 # Geschätzte Tage werden später blass/schraffiert markiert.
                 NPRED = 7
 
-                def predicted_days(dv):
-                    """{datum: schätz-entry mit _pred=True} für Fenster-Lücken."""
+                def predicted_days(s):
+                    """{datum: schätz-entry mit _pred=True} für Fenster-Lücken —
+                    aber NUR wenn der Graph das predict-Flag trägt (sonst {}).
+                    So wird z.B. nur Schlaf ergänzt, nicht jeder Graph."""
+                    if not s.get("predict"):
+                        return {}
+                    dv = s.get("dv") or {}
                     actual = sorted((e for e in dv.values() if isinstance(e, dict)),
                                     key=lambda e: str(e.get("date", "")))
                     if not actual:
@@ -3254,7 +3584,7 @@ def run_ui(stdscr, store):
                 for s in series:
                     if s["type"] != "period":
                         continue
-                    for d, e in list(s["dv"].items()) + list(predicted_days(s["dv"]).items()):
+                    for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
                         cx = day_col.get(d)
                         v, end = _num(e.get("value")), _num(e.get("end"))
                         if cx is None or v is None or end is None:
@@ -3290,7 +3620,7 @@ def run_ui(stdscr, store):
                     if ry < base:
                         continue                      # kein Platz mehr → weglassen
                     col = s["col"]
-                    for d, e in list(s["dv"].items()) + list(predicted_days(s["dv"]).items()):
+                    for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
                         cx = day_center.get(d)
                         v = _num(e.get("value"))
                         if cx is None or v is None:
@@ -3305,7 +3635,7 @@ def run_ui(stdscr, store):
                     if s["type"] != "time":
                         continue
                     col = s["col"]
-                    for d, e in list(s["dv"].items()) + list(predicted_days(s["dv"]).items()):
+                    for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
                         cx = day_center.get(d)
                         v = _num(e.get("value"))
                         if cx is None or v is None:
@@ -3346,7 +3676,7 @@ def run_ui(stdscr, store):
                                 r = int(round(r1 + t * (r2 - r1)))
                                 safe_addstr(r, c, ch, latt(r, c, col))
                     # geschätzte Tage als blasse Einzelpunkte (nicht in die Linie)
-                    for d, e in predicted_days(dv).items():
+                    for d, e in predicted_days(s).items():
                         cx = day_center.get(d)
                         v = _num(e.get("value"))
                         if cx is None or v is None:
@@ -3374,33 +3704,63 @@ def run_ui(stdscr, store):
             safe_addstr(top + 1, rx + 2, "// noch keine graphen (g)", C["faint"])
 
         # ── PROJECTS (zwischen lifestyle und outbound) ────────────────────
-        # Projekt = Liste mit gesetztem Flag (im Listen-Werkzeug 'p'). Pro
-        # Projekt der Titel + eine Erfüllungsleiste = erledigte/alle Blätter
-        # rekursiv (Quelle: store.projects_snapshot ← /api/projects). Reine
-        # Anzeige; verwaltet wird weiter im Listen-Werkzeug.
+        # VERSCHACHTELT (Quelle: store.projects_snapshot ← /api/projects, Baum).
+        # Knoten OHNE Unterprojekte: Titel + Erfüllungsleiste (2 Zeilen). Knoten
+        # MIT Unterprojekten: dünner Rahmen (Titel im oberen Rand) um die rekursiv
+        # gezeichneten Kinder, KEINE eigene Leiste. Reine Anzeige; markiert wird im
+        # Listen-Werkzeug ('p' auf Liste bzw. Eintrag). Bei Platzmangel wird
+        # einfach ab dem Punkt aufgehört (kein Überlauf, kein Crash).
         if proj_h:
             draw_box(top + life_h, rx, proj_h, rightw, "projects")
-            pix = rx + 2
-            piw = max(4, rightw - 4)
-            shown = (proj_h - 2) // 2          # so viele Projekte passen rein
-            for i, p in enumerate(proj_cache[:shown]):
-                if not isinstance(p, dict):
-                    continue
-                done = int(p.get("done") or 0)
-                total = int(p.get("total") or 0)
-                ry = top + life_h + 1 + 2 * i
-                cnt = "%d/%d" % (done, total)
-                nmw = max(1, piw - len(cnt) - 1)
-                addclip(ry, pix, str(p.get("name") or "")[:nmw], nmw, C["bright"])
-                safe_addstr(ry, rx + rightw - 1 - len(cnt), cnt, C["dim"])
-                frac = (done / total) if total else 0.0
-                full = int(round(max(0.0, min(1.0, frac)) * piw))
-                bar = "█" * full + "░" * (piw - full)
-                bcol = C["acc"] if (total and done >= total) else C["graph"]
-                safe_addstr(ry + 1, pix, bar, bcol)
-            if len(proj_cache) > shown:         # Rest passt nicht → ehrlich anzeigen
+            y_max = top + life_h + proj_h - 2          # letzte innere Zeile
+            x0, w0 = rx + 2, max(4, rightw - 4)
+
+            def proj_draw(node, x, y, w, y_max):
+                if y > y_max or w < 4:
+                    return y_max + 1
+                name = str(node.get("name") or "")
+                kids = node.get("children") or []
+                if not kids:                            # Blatt-Projekt: Titel + Leiste
+                    done = int(node.get("done") or 0)
+                    total = int(node.get("total") or 0)
+                    cnt = "%d/%d" % (done, total)
+                    nmw = max(1, w - len(cnt) - 1)
+                    addclip(y, x, name[:nmw], nmw, C["bright"])
+                    safe_addstr(y, x + w - len(cnt), cnt, C["dim"])
+                    if y + 1 <= y_max:
+                        frac = (done / total) if total else 0.0
+                        full = int(round(max(0.0, min(1.0, frac)) * w))
+                        bar = "█" * full + "░" * (w - full)
+                        bcol = C["acc"] if (total and done >= total) else C["graph"]
+                        safe_addstr(y + 1, x, bar, bcol)
+                    return y + 2
+                # gerahmter Kasten: Titel im oberen Rand, Kinder rekursiv drin
+                inner = w - 2
+                label = (" " + name + " ")[:inner]
+                safe_addstr(y, x, "┌" + label + "─" * (inner - len(label)) + "┐", C["faint"])
+                safe_addstr(y, x + 1, label, C["bright"])    # Titel hervorheben
+                cy = y + 1
+                for c in kids:
+                    if cy > y_max:
+                        break
+                    cy = proj_draw(c, x + 1, cy, w - 2, y_max)
+                for ry in range(y + 1, min(cy, y_max + 1)):  # senkrechte Ränder
+                    safe_addstr(ry, x, "│", C["faint"])
+                    safe_addstr(ry, x + w - 1, "│", C["faint"])
+                if cy <= y_max:                              # unterer Rand (wenn Platz)
+                    safe_addstr(cy, x, "└" + "─" * (w - 2) + "┘", C["faint"])
+                    return cy + 1
+                return y_max + 1                             # abgeschnitten → Schluss
+
+            y, rendered = top + life_h + 1, 0
+            for p in proj_cache:
+                if y > y_max or not isinstance(p, dict):
+                    break
+                y = proj_draw(p, x0, y, w0, y_max)
+                rendered += 1
+            if rendered < len(proj_cache):         # Rest passt nicht → ehrlich anzeigen
                 safe_addstr(top + life_h + proj_h - 1, rx + rightw - 6,
-                            "+%d" % (len(proj_cache) - shown), C["faint"])
+                            "+%d" % (len(proj_cache) - rendered), C["faint"])
 
         oy = top + life_h + proj_h
         draw_box(oy, rx, out_h, rightw, "outbound", C["warn"])
@@ -3420,7 +3780,9 @@ def run_ui(stdscr, store):
 
         # ── Befehls-Overlay (klappt über den Body nach oben auf) ──────────
         if cmd_mode or help_latched:
-            ov_title, rows = overlay_rows(cmd_buf, help_latched)
+            ck = current_ctx()
+            ctx = (CTX_TITLES.get(ck, ck), CTX_KEYS.get(ck, [])) if ck else None
+            ov_title, rows = overlay_rows(cmd_buf, help_latched, ctx)
             ov_w = min(W - 4, 56)
             ov_h = len(rows) + 2
             ov_x = 2

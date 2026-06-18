@@ -37,6 +37,12 @@ if [[ ! -x "$PY" ]]; then
   exit 1
 fi
 
+# ── Push-on-write: jede echte Daten-Änderung sofort zum Peer schieben ──
+# (core/datasync.py stößt im Hintergrund zentrale-push-data an; no-op ohne dies).
+# Hinweis: greift nur ohne sudo — mit --with-keyboard läuft main.py via plain
+# sudo (Env wird verworfen), dann übernimmt der Boot-Sync den Abgleich.
+export ZENTRALE_AUTOPUSH=1
+
 # ── Optional: --with-keyboard schaltet sudo fuer main.py an ────────────
 USE_SUDO=""
 if [[ "${1:-}" == "--with-keyboard" ]]; then

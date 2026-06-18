@@ -156,6 +156,38 @@ def test_parse_command_theme_sets_mode():
     assert parse_command("/theme", "auto")[1] == "day"          # zyklisch ab auto
 
 
+# ── overlay_rows: '/' zeigt die Shortcuts des fokussierten Fensters ──────────
+def test_overlay_bare_slash_shows_context_keys_then_commands():
+    ctx = ("liste", [("enter", "rein / hak"), ("space", "hak")])
+    title, rows = overlay_rows("/", False, ctx)
+    assert title == "liste"
+    keys = [r for r in rows if r[0] == "key"]
+    cmds = [r for r in rows if r[0] == "cmd"]
+    # Kontext-Tasten zuerst, dann eine Trennlinie, dann die globalen Befehle.
+    assert ("key", "enter", "rein / hak") in keys
+    assert ("sep",) in rows
+    assert any(c[1] == "/help" for c in cmds)        # /help bleibt immer erreichbar
+
+
+def test_overlay_bare_slash_without_ctx_is_just_commands():
+    title, rows = overlay_rows("/", False, None)
+    assert title == "befehle"
+    assert ("sep",) not in rows                       # keine Kontext-Tasten → keine Trennlinie
+    assert all(r[0] == "cmd" for r in rows)
+
+
+def test_overlay_help_still_lists_global_keys():
+    _title, rows = overlay_rows("/help", False, ("liste", [("x", "y")]))
+    assert ("key", "q", "beenden") in rows            # volle Hilfe inkl. globaler Tasten
+    assert _title == "hilfe"
+
+
+def test_overlay_prefix_filters_commands():
+    _title, rows = overlay_rows("/q", False, ("liste", [("x", "y")]))
+    names = [r[1] for r in rows if r[0] == "cmd"]
+    assert names == ["/quit"]                         # Präfix filtert, Kontext tritt zurück
+
+
 # ── log_prefix / blockspark / bar ───────────────────────────────────────────
 def test_log_prefix():
     assert log_prefix("EVENT IN BOOT")[0] == "EVENT IN"

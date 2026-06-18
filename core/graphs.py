@@ -41,6 +41,12 @@ def _save(graphs):
     os.makedirs(_DATA_DIR, exist_ok=True)
     with open(_REGISTRY, 'w', encoding='utf-8') as f:
         json.dump(graphs, f, indent=2, ensure_ascii=False)
+    # Echte Änderung geschrieben → Peer-Push anstoßen (no-op ohne AUTOPUSH).
+    try:
+        from datasync import notify_change
+        notify_change(_REGISTRY)
+    except Exception:
+        pass
 
 
 def _slug(name):
@@ -85,10 +91,28 @@ def create_graph(name, gtype='number', unit=''):
         'type': gtype,
         'unit': (unit or '').strip() if gtype == 'number' else '',
         'created': datetime.now().isoformat(),
+        'predict': False,   # Lücken-Tage in der lifestyle-Box aus dem Schnitt schätzen?
     }
     graphs.append(graph)
     _save(graphs)
     return graph
+
+
+def set_predict(gid, on):
+    """
+    Vorhersage-Flag eines Graphen setzen/löschen. Ist es gesetzt, schätzt die
+    lifestyle-Box fehlende (nicht eingetragene) Tage aus dem Schnitt der letzten
+    echten Werte und zeigt sie blass/schraffiert. Default aus — bewusst nur dort
+    sinnvoll, wo ein stabiles Muster existiert (z.B. Schlaf). Liefert den Graphen.
+    Wirft KeyError bei unbekanntem Graphen.
+    """
+    graphs = _load()
+    g = next((x for x in graphs if x.get('id') == gid), None)
+    if g is None:
+        raise KeyError(gid)
+    g['predict'] = bool(on)
+    _save(graphs)
+    return g
 
 
 def delete_graph(gid):

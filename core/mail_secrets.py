@@ -152,15 +152,27 @@ def upsert(acct):
     """Fügt ein Konto ein oder ersetzt das gleichnamige (by `name`) und
     schreibt verschlüsselt. Praktisch für den OAuth-Login, der ein Konto
     inkl. frischem Refresh-Token zurückspeichern muss.
+
+    SICHERHEIT: Liefert `load_accounts()` LEER, obwohl ein nicht-leerer Store
+    existiert (transienter Entschlüssel-Fehler, falsche Passphrase, Race), wird
+    ABGEBROCHEN — sonst würde der Store mit nur DIESEM einen Konto überschrieben
+    und alle anderen (z.B. Posteo) gingen verloren. Genau dieser Fall ist beim
+    Token-Rotieren im Hintergrund-Poll schon einmal passiert.
     """
-    accts = [a for a in load_accounts() if a.get("name") != acct["name"]]
+    existing = load_accounts()
+    if not existing and os.path.exists(_STORE) and os.path.getsize(_STORE) > 0:
+        raise RuntimeError("Konten-Store vorhanden, aber nicht lesbar (Passphrase?) "
+                           "— upsert abgebrochen, um Datenverlust zu vermeiden")
+    accts = [a for a in existing if a.get("name") != acct["name"]]
     accts.append(acct)
     save_accounts(accts)
     return acct
 
 
 def save_accounts(accounts):
-    """Verschlüsselt die Konto-Liste und schreibt sie atomar."""
+    """Verschlüsselt die Konto-Liste und schreibt sie atomar. Vor dem Über-
+    schreiben wird der bisherige Store nach `.enc.bak` gesichert — ein Backup-
+    Stand zum Zurückholen, falls doch mal zu wenig geschrieben wird."""
     passphrase = _passphrase()
     if not passphrase:
         raise RuntimeError(f"{_ENV_KEY} nicht gesetzt und kein OS-Keyring-Eintrag "
@@ -175,6 +187,12 @@ def save_accounts(accounts):
         "ct": token.decode("utf-8"),
     }
     os.makedirs(os.path.dirname(_STORE), exist_ok=True)
+    if os.path.exists(_STORE):                 # ein Stand Backup behalten
+        try:
+            import shutil
+            shutil.copy2(_STORE, _STORE + ".bak")
+        except Exception:
+            pass
     tmp = _STORE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         f.write(json.dumps(envelope))
@@ -225,12 +243,34 @@ def _cli():
         print(f"'{args[1]}' entfernt. Verbleibend: {len(accts)}")
         return 0
 
+    if cmd == "rename":
+        if len(args) < 3:
+            print("Nutzung: rename <alt> <neu>", file=sys.stderr)
+            return 2
+        old, new = args[1], args[2]
+        accts = load_accounts()
+        if any(a["name"] == new for a in accts):
+            print(f"'{new}' existiert schon.", file=sys.stderr)
+            return 2
+        hit = [a for a in accts if a["name"] == old]
+        if not hit:
+            print(f"'{old}' nicht gefunden.", file=sys.stderr)
+            return 2
+        hit[0]["name"] = new
+        save_accounts(accts)
+        print(f"'{old}' → '{new}'. (Token/Einstellungen bleiben erhalten)")
+        return 0
+
     if cmd == "add":
         print("Neues Mail-Konto anlegen.")
-        name = input("Kurzname (z.B. proton): ").strip()
-        provider = input("Provider [proton/gmail/outlook]: ").strip() or "proton"
+        name = input("Kurzname (z.B. posteo): ").strip()
+        provider = input("Provider [posteo/proton/gmail/outlook]: ").strip() or "posteo"
         user = input("IMAP-User (volle Mailadresse): ").strip()
         secret = getpass.getpass("Passwort / Bridge-Passwort / App-Passwort: ")
+        # Bracketed-Paste-Marker entfernen (Terminals schmuggeln sie beim Einfügen
+        # in die versteckte Eingabe — sonst stimmt das Passwort nicht).
+        for mark in ("\x1b[200~", "\x1b[201~", "[200~", "[201~"):
+            secret = secret.replace(mark, "")
         acct = {
             "name": name,
             "provider": provider,
@@ -245,7 +285,7 @@ def _cli():
         print(f"'{name}' gespeichert ({len(accts)} Konten gesamt).")
         return 0
 
-    print(f"Unbekannter Befehl: {cmd}. Bekannt: list | add | remove | "
+    print(f"Unbekannter Befehl: {cmd}. Bekannt: list | add | remove | rename | "
           f"keyring-set | keyring-test | keyring-clear", file=sys.stderr)
     return 2
 
@@ -276,7 +316,22 @@ def _keyring_cli(cmd):
         print("secretstorage fehlt — installieren mit:\n"
               "  venv/bin/pip install secretstorage jeepney", file=sys.stderr)
         return 2
-    pw = getpass.getpass("Master-Passphrase (wird im OS-Keyring abgelegt): ")
+
+    # Wenn ZENTRALE_MAIL_KEY schon in der Umgebung steht, NIMM DIE — sie hat
+    # bewiesen, dass sie funktioniert, und wir umgehen die getpass-Einfüge-Falle
+    # (Terminals hängen beim Paste „bracketed paste"-Steuerzeichen an, die in der
+    # versteckten Eingabe unsichtbar mit reinrutschen und die Passphrase kaputt
+    # machen). Sonst doch abfragen — und solche Marker sicherheitshalber strippen.
+    pw = os.environ.get(_ENV_KEY)
+    if pw:
+        print(f"Übernehme {_ENV_KEY} aus der Umgebung (kein Tippen/Einfügen nötig).")
+    else:
+        print("Tipp: Wenn das Einfügen scheitert, vorher 'export "
+              f"{_ENV_KEY}=…' setzen und diesen Befehl erneut aufrufen.")
+        pw = getpass.getpass("Master-Passphrase (wird im OS-Keyring abgelegt): ")
+        # Bracketed-Paste-Marker entfernen, falls das Terminal sie reingeschmuggelt hat.
+        pw = pw.replace("\x1b[200~", "").replace("\x1b[201~", "")
+        pw = pw.replace("[200~", "").replace("[201~", "")
     if not pw:
         print("abgebrochen (leer).", file=sys.stderr)
         return 2

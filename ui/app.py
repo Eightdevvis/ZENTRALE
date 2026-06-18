@@ -46,6 +46,7 @@ import time         # für das Alter des Live-Ordnerzähl-Caches
 from map import base_features as map_base_features  # type: ignore  – Maps-System (core/map/)
 from map import base_braille as map_base_braille  # type: ignore  – Maps-System (Braille-Füllung)
 from map import layers as map_layers  # type: ignore  – Overlay-Layer (Achse 2, Handelsrouten)
+from map import country_outlines as map_country_outlines  # type: ignore  – Länder-Auswahl (TUI)
 
 app = Flask(__name__)
 
@@ -249,6 +250,22 @@ def api_graphs_delete(gid):
     return jsonify({"ok": True})
 
 
+@app.route('/api/graphs/<gid>/predict', methods=['POST'])
+def api_graphs_set_predict(gid):
+    """
+    Vorhersage-Flag eines Graphen setzen/löschen — steuert, ob die lifestyle-Box
+    fehlende Tage aus dem Schnitt schätzt (blass/schraffiert). Default aus.
+    Body (JSON): {"predict": true|false}
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        g = graphs.set_predict(gid, bool(body.get('predict')))
+    except KeyError:
+        return jsonify({"error": "unbekannter graph"}), 404
+    state.push_log(f"GRAPH~predict {'an' if g.get('predict') else 'aus'}: {gid}")
+    return jsonify(g)
+
+
 # ── Listen (dynamisch, vom Dashboard angelegt) ─────────────────────────
 #
 # Pendant zu den Lifestyle-Graphen, aber für abhakbare Todo-/Sammel-Listen.
@@ -264,19 +281,15 @@ def api_lists():
 @app.route('/api/projects')
 def api_projects():
     """
-    Listen mit gesetztem Projekt-Flag, je mit Erfüllungsgrad (erledigte/alle
-    Blätter rekursiv). Quelle für die PROJECTS-Box in ALLEN Fronten — die
-    Fortschrittslogik bleibt damit an einer Stelle (core/lists), die Fronten
-    rendern nur Titel + Leiste. NICHT KI-gegatet (gibt es in allen Kassetten).
+    Als Projekt markierte KNOTEN (Listen UND Einträge) als VERSCHACHTELTER Baum:
+    geflaggte Top-Level-Liste = Wurzel, ihre geflaggten Unter-Einträge hängen
+    rekursiv als `children` darunter (`{id,name,done,total,children:[…]}`).
+    Quelle für die PROJECTS-Box in ALLEN Fronten — die Fortschrittslogik bleibt
+    an einer Stelle (core/lists), die Fronten rendern nur. Ein Knoten ohne
+    children → normal (Titel+Leiste), mit children → gerahmter Kasten.
+    NICHT KI-gegatet (gibt es in allen Kassetten).
     """
-    out = []
-    for l in lists.list_lists():
-        if not l.get('project'):
-            continue
-        done, total = lists.leaf_progress(l)
-        out.append({"id": l.get("id"), "name": l.get("name"),
-                    "done": done, "total": total})
-    return jsonify(out)
+    return jsonify(lists.projects_tree())
 
 
 @app.route('/api/lists', methods=['POST'])
@@ -332,6 +345,22 @@ def api_lists_set_project(lid):
         return jsonify({"error": "unbekannte liste"}), 404
     state.push_log(f"PROJEKT{'+' if lst.get('project') else '-'}: {lid}")
     return jsonify(lst)
+
+
+@app.route('/api/lists/<lid>/items/<int:iid>/project', methods=['POST'])
+def api_lists_set_item_project(lid, iid):
+    """
+    Projekt-Flag auf einem Eintrag setzen/löschen (Pendant zu /project für
+    Listen — jeder Knoten ist als Projekt markierbar).
+    Body (JSON): {"project": true|false}
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        it = lists.set_item_project(lid, iid, bool(body.get('project')))
+    except KeyError:
+        return jsonify({"error": "unbekannte liste/eintrag"}), 404
+    state.push_log(f"PROJEKT{'+' if it.get('project') else '-'}: {lid}/{iid}")
+    return jsonify(it)
 
 
 @app.route('/api/lists/<lid>/items', methods=['POST'])
@@ -473,6 +502,31 @@ def api_map_braille():
     except (TypeError, ValueError):
         return jsonify({"error": "ungültige map-parameter"}), 400
     return jsonify(map_base_braille(cx, cy, zoom, cols, rows))
+
+
+@app.route('/api/map/countries')
+def api_map_countries():
+    """
+    Länder für die Auswahl/Fokussierung in einer Front: alle Länder-Mittelpunkte
+    (für die Richtungs-Navigation) + der projizierte Umriss des fokussierten
+    Landes (Border zum Zeichnen). Geo-Logik in core/map/render.country_outlines.
+
+    Query: cx,cy,zoom,cols,rows,aspect wie /api/map/base; zusätzlich
+           focus = Name des fokussierten Landes (für dessen Umriss).
+    NICHT KI-gegatet (Karte gibt es in allen Kassetten).
+    """
+    a = request.args
+    try:
+        cx = float(a.get('cx', 0.0))
+        cy = float(a.get('cy', 20.0))
+        zoom = float(a.get('zoom', 0.0))
+        cols = int(a.get('cols', 80))
+        rows = int(a.get('rows', 30))
+        aspect = float(a.get('aspect', 0.5))
+    except (TypeError, ValueError):
+        return jsonify({"error": "ungültige map-parameter"}), 400
+    return jsonify(map_country_outlines(cx, cy, zoom, cols, rows, aspect,
+                                        a.get('focus') or None))
 
 
 @app.route('/api/map/layers')

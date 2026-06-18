@@ -17,21 +17,60 @@ import unicodedata
 from datetime import datetime
 
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
+# ZWEI Registries, bewusst getrennt (gemerged gelesen):
+#   _REGISTRY  = Sashas private Listen — pflegt NUR Sasha (TUI).
+#   _FEATURES  = der ZENTRALE-Feature-Tracker (Liste »zentrale«) — pflegt Claude.
+# Beim Lesen werden beide zusammengeführt (TUI + PROJECTS-Box sehen alles),
+# beim Schreiben landet jede Liste wieder in IHRER Datei — und es wird nur die
+# Datei angefasst, die sich wirklich geändert hat. ACHTUNG: das ist KEIN sauberer
+# Besitz-Schnitt — features.json schreiben beide (Claude den Inhalt, Sasha das
+# Projekt-Flag/Abhaken in der TUI). Beide Dateien sind NICHT in git (siehe
+# .gitignore / datei_zugriffe.md); der Abgleich Laptop↔PC läuft über den
+# rsync-Sync (zentrale-push/-pull, newest-wins) + Push-on-write (datasync.py →
+# _save_file unten stößt zentrale-push-data an). Details: CLAUDE.md / topologie.md.
 _REGISTRY = os.path.join(_DATA_DIR, 'lists.json')
+_FEATURES = os.path.join(_DATA_DIR, 'features.json')
 
 
-def _load():
-    """Registry von Disk lesen (leere Liste wenn noch nichts angelegt)."""
-    if not os.path.exists(_REGISTRY):
+def _load_file(path):
+    """Eine Registry-Datei von Disk lesen (leere Liste, wenn nicht vorhanden)."""
+    if not os.path.exists(path):
         return []
-    with open(_REGISTRY, 'r', encoding='utf-8') as f:
+    with open(path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 
-def _save(lists):
+def _save_file(path, lists):
     os.makedirs(_DATA_DIR, exist_ok=True)
-    with open(_REGISTRY, 'w', encoding='utf-8') as f:
+    with open(path, 'w', encoding='utf-8') as f:
         json.dump(lists, f, indent=2, ensure_ascii=False)
+    # Echte Änderung geschrieben → Peer-Push anstoßen (no-op ohne AUTOPUSH).
+    try:
+        from datasync import notify_change
+        notify_change(path)
+    except Exception:
+        pass
+
+
+def _load():
+    """Beide Registries gemerged (privat zuerst, dann Feature-Tracker)."""
+    return _load_file(_REGISTRY) + _load_file(_FEATURES)
+
+
+def _save(lists):
+    """
+    Die gemergte Liste zurück auf die zwei Dateien aufteilen: was im
+    Feature-Tracker steckt (id ist dort schon bekannt) → features.json, alles
+    andere → lists.json. Geschrieben wird nur, was sich gegenüber Disk wirklich
+    geändert hat — damit eine reine Feature-Pflege lists.json NICHT berührt.
+    """
+    feat_ids = {l.get('id') for l in _load_file(_FEATURES)}
+    features = [l for l in lists if l.get('id') in feat_ids]
+    personal = [l for l in lists if l.get('id') not in feat_ids]
+    if features != _load_file(_FEATURES):
+        _save_file(_FEATURES, features)
+    if personal != _load_file(_REGISTRY):
+        _save_file(_REGISTRY, personal)
 
 
 def _slug(name):
@@ -357,6 +396,85 @@ def leaf_progress(lst):
         if it.get('done'):
             done += 1
     return done, total
+
+
+def node_progress(node):
+    """Erfüllungsgrad EINES Knotens (Liste oder Eintrag): über seine Blätter.
+    Ein Blatt selbst zählt als 1 Punkt (erledigt/offen) — so kann auch ein
+    einzelner Eintrag als Projekt einen Fortschritt zeigen."""
+    if is_container(node):
+        return leaf_progress(node)
+    return (1 if node.get('done') else 0, 1)
+
+
+def set_item_project(lid, iid, on):
+    """
+    Projekt-Flag auf einem EINTRAG (egal wie tief) setzen/löschen — Pendant zu
+    set_project für Listen, damit jeder Knoten als Projekt markierbar ist.
+    Liefert den Eintrag. Wirft KeyError bei unbekannter Liste / unbekanntem
+    Eintrag.
+    """
+    lists = _load()
+    lst = _find(lists, lid)
+    if lst is None:
+        raise KeyError(lid)
+    it = _find_item(lst.get('items'), iid)
+    if it is None:
+        raise KeyError(iid)
+    it['project'] = bool(on)
+    _save(lists)
+    return it
+
+
+def _project_subnodes(items):
+    """
+    Rekursiv die als Projekt geflaggten Einträge unter `items` als verschachtelte
+    Knoten sammeln. Ein geflaggter Eintrag wird zum Knoten (sein Fortschritt +
+    seine eigenen geflaggten Unter-Projekte als `children`); ein NICHT geflaggter
+    Container wird nur durchschritten — seine geflaggten Nachfahren klettern eine
+    Ebene höher. So erscheinen genau die markierten Knoten in ihrer Verschachtelung.
+    """
+    out = []
+    for it in items or []:
+        if not isinstance(it, dict):
+            continue
+        if it.get('project'):
+            d, t = node_progress(it)
+            out.append({"id": it.get("id"), "name": it.get("text"),
+                        "done": d, "total": t,
+                        "children": _project_subnodes(it.get('items'))})
+        else:
+            kids = it.get('items')
+            if isinstance(kids, list) and kids:
+                out.extend(_project_subnodes(kids))
+    return out
+
+
+def projects_tree():
+    """
+    Verschachtelte Projekt-Struktur für die PROJECTS-Box. Jede als Projekt
+    geflaggte Top-Level-Liste ist ein Wurzel-Knoten; ihre (rekursiv) geflaggten
+    Unter-Einträge hängen als `children` darunter. Knoten-Form:
+    `{id, name, done, total, children:[…]}`.
+
+    Anzeige-Konvention der Fronten: ein Knoten OHNE children wird normal
+    (Titel + Leiste) gezeigt, einer MIT children als gerahmter Kasten (Titel im
+    Rahmen, children drin — der gerahmte Knoten selbst trägt KEINE eigene Leiste).
+    `done/total` = erledigte/alle Blätter rekursiv unter dem Knoten.
+    """
+    out = []
+    for l in _load():
+        if l.get('project'):
+            d, t = node_progress(l)
+            out.append({"id": l.get("id"), "name": l.get("name"),
+                        "done": d, "total": t,
+                        "children": _project_subnodes(l.get('items'))})
+        else:
+            # Liste selbst kein Projekt → ihre geflaggten Einträge klettern hoch
+            # und werden eigene Wurzeln (sonst „verstecken" sich Projekte in einer
+            # ungeflaggten Liste und tauchen nie in der Box auf).
+            out.extend(_project_subnodes(l.get('items')))
+    return out
 
 
 def rename_item(lid, iid, text):

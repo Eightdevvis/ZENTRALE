@@ -92,6 +92,12 @@ def _save_raw(data: dict) -> None:
     CAL_PATH.parent.mkdir(parents=True, exist_ok=True)
     with CAL_PATH.open("w") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    # Echte Änderung geschrieben → Peer-Push anstoßen (no-op ohne AUTOPUSH).
+    try:
+        from datasync import notify_change
+        notify_change(str(CAL_PATH))
+    except Exception:
+        pass
     # Alarm-Kanal frisch halten: nach JEDER Mutation das komplette Alarm-Set
     # neu rechnen und in den State legen (Dashboard-Ecke + KI-Prompt ziehen es
     # von dort). Zentral hier, weil ALLE Schreibpfade durch _save_raw laufen.
