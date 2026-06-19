@@ -36,6 +36,7 @@ import tutor_session # type: ignore  – Sprach-Tutor (Addon auf der Core-KI, ei
 import tutor_config   # type: ignore  – lokale Tutor-Config + Live-Umschalten (Provider/Modell)
 import tutor_providers # type: ignore  – Provider-Registry (Flags, Liste)
 import tutor_langs     # type: ignore  – Sprach-Profile (Liste)
+import ai_backends     # type: ignore  – AI-Backend-Verfügbarkeit (local/cloud, EXTERNAL-Box)
 import consolidation # type: ignore  – Phase E: STM → LTM Konsolidierung
 import telemetry    # type: ignore  – PC-Host-Telemetrie (CPU/GPU/VRAM/Temp/RAM)
 import kassette     # type: ignore  – welche Kassette läuft (monolith | laptop)
@@ -1131,6 +1132,13 @@ def api_tutor_status():
         "tts":            audio.tts_available(),
         "privacy_warning": tutor_session.privacy_notice(),
     })
+
+
+@app.route('/api/ai/backends')
+def api_ai_backends():
+    """Welche AI-Backends sind auf diesem Geraet erreichbar (local/cloud)?
+    Speist die EXTERNAL-Box + das kapazitaetsbasierte Modul-Gating."""
+    return jsonify(ai_backends.status())
 
 
 @app.route('/api/tutor/config', methods=['GET', 'POST'])

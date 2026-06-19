@@ -873,11 +873,13 @@ def run_ui(stdscr, store):
         M["cy"] = max(-85.0, min(85.0, M["cy"] + fy * (n - s)))
         M["data"] = None
         M["odata"] = None        # Overlay-Marker mit-neu projizieren
+        M["fdata"] = None        # Länder-Border mit-neu projizieren (sonst klebt sie)
 
     def m_zoom(dz):
         M["zoom"] = max(0.0, min(8.0, M["zoom"] + dz))
         M["data"] = None
         M["odata"] = None
+        M["fdata"] = None
 
     def m_window():
         """Die Karte im NATIVEN Fenster aufklappen (pygame, scripts/map_window.py)
@@ -996,12 +998,12 @@ def run_ui(stdscr, store):
 
     def m_alt_arrow(ch):
         """Alt+Pfeil → 'up'/'down'/'left'/'right'; einzelnes Esc → 'esc'; sonst
-        None. (Strg+Pfeil ist schon belegt: Höhe Zentrale↔Befehlszeile.) Robust
-        über terminfo-Keyname (kUP3…, Modifier 3 = Alt) ODER durch Nachlesen der
-        Roh-Escape-Sequenz — zwei verbreitete Alt-Formen:
-          • CSI-Modifier:   \\033[1;3{A..D}
-          • Meta=Esc-Präfix: \\033 \\033[{A..D}  (bzw. \\033O{A..D} im App-Modus)
-        Damit terminal-/tmux-unabhängig."""
+        None. (Strg+Pfeil ist schon belegt: Höhe Zentrale↔Befehlszeile.) Deckt die
+        verbreiteten Alt-Formen ab, da das Terminal eine davon schickt:
+          1) terminfo-Keyname kUP3… (Modifier 3 = Alt) — EIN Keycode
+          2) Esc + (keypad-übersetzter) Pfeil-Keycode  (Meta=Esc-Präfix)
+          3) Esc + Roh-CSI  \\033[1;3{A..D}  bzw.  \\033\\033[{A..D} / \\033O{A..D}
+        Unbekannte Esc-Sequenzen landen zur Diagnose in M['msg']."""
         try:
             nm = curses.keyname(ch)
         except (ValueError, OverflowError):
@@ -1011,24 +1013,39 @@ def run_ui(stdscr, store):
             return by_name[nm]
         if ch != 27:
             return None
+        # Kurz (50 ms) auf das ERSTE Folgebyte warten — fängt den Fall ab, dass
+        # ESC einen Tick vor dem Rest der Sequenz ankommt; danach den Rest ohne
+        # Warten leeren. Einzelnes Esc → nach 50 ms -1 → 'esc'.
         seq = []
-        stdscr.nodelay(True)
-        for _ in range(8):
-            nx = stdscr.getch()
-            if nx == -1:
-                break
-            seq.append(nx)
+        stdscr.timeout(50)
+        first = stdscr.getch()
+        if first != -1:
+            seq.append(first)
+            stdscr.nodelay(True)
+            for _ in range(7):
+                nx = stdscr.getch()
+                if nx == -1:
+                    break
+                seq.append(nx)
         stdscr.timeout(250)
-        s = bytes(b & 0xFF for b in seq).decode("latin-1", "ignore")
-        by_seq = {
-            "[1;3A": "up", "[1;3B": "down", "[1;3C": "right", "[1;3D": "left",
-            "\x1b[A": "up", "\x1b[B": "down", "\x1b[C": "right", "\x1b[D": "left",
-            "\x1bOA": "up", "\x1bOB": "down", "\x1bOC": "right", "\x1bOD": "left",
-        }
-        for k, v in by_seq.items():
+        if not seq:
+            return "esc"                       # einzelnes Esc → Karte zu
+        # (2) Meta=Esc + Pfeil-Keycode (keypad(True) übersetzt das \\033[A schon)
+        arrow = {curses.KEY_UP: "up", curses.KEY_DOWN: "down",
+                 curses.KEY_LEFT: "left", curses.KEY_RIGHT: "right"}
+        for n in seq:
+            if n in arrow:
+                return arrow[n]
+        # (3) Roh-Escape-Sequenz (führende ESC strippen → Meta- u. CSI-Form gleich)
+        s = "".join(chr(n) for n in seq if 0 <= n < 256).lstrip("\x1b")
+        for k, v in (("[1;3A", "up"), ("[1;3B", "down"), ("[1;3C", "right"),
+                     ("[1;3D", "left"), ("[A", "up"), ("[B", "down"),
+                     ("[C", "right"), ("[D", "left"), ("OA", "up"), ("OB", "down"),
+                     ("OC", "right"), ("OD", "left")):
             if s.startswith(k):
                 return v
-        return "esc" if not s else None
+        M["msg"] = "alt? codes " + " ".join(str(n) for n in seq)   # Diagnose
+        return None
 
     def g_load():
         """Definitionen frisch ziehen (nach Aktionen / beim Öffnen)."""
@@ -1647,34 +1664,17 @@ def run_ui(stdscr, store):
                     ind = (p.get("industries") or [None])[0]
                     focus = (p["name"], p.get("value"), ind)
 
-        # Länder-Fokus: weiße GESTRICHELTE Border des fokussierten Landes + Name.
-        # Border-Geometrie kommt projiziert vom Backend (/api/map/countries) — wir
-        # laufen sie per Bresenham ab und setzen nur jede 2. Zelle (= gestrichelt).
+        # Länder-Fokus: weiße Border des fokussierten Landes (DÜNNE Braille-Punkte,
+        # umgefärbt — nicht fette Vollzeichen) + Name. Das Backend rasterisiert den
+        # Umriss in Braille-Subpixel; wir malen die Rand-Zeichen nur weiß drüber.
         if M["focus"]:
             if (not M["fdata"]) or M["fgrid"] != (iw, map_ih):
                 m_fetch_countries(iw, map_ih); M["fgrid"] = (iw, map_ih)
             fdoc = (M["fdata"] or {}).get("focus")
             if fdoc:
-                dash = 0
-                for ring in fdoc.get("rings", []):
-                    for i in range(len(ring) - 1):
-                        x0, y0 = int(round(ring[i][0])), int(round(ring[i][1]))
-                        x1, y1 = int(round(ring[i + 1][0])), int(round(ring[i + 1][1]))
-                        ddx, ddy = abs(x1 - x0), abs(y1 - y0)
-                        sxx = 1 if x0 < x1 else -1
-                        syy = 1 if y0 < y1 else -1
-                        err = ddx - ddy
-                        while True:
-                            if dash % 2 == 0 and 0 <= x0 < iw and 0 <= y0 < map_ih:
-                                safe_addstr(oy + y0, ox + x0, "•", C["bright"])
-                            dash += 1
-                            if x0 == x1 and y0 == y1:
-                                break
-                            e2 = 2 * err
-                            if e2 > -ddy:
-                                err -= ddy; x0 += sxx
-                            if e2 < ddx:
-                                err += ddx; y0 += syy
+                for cc, rr, glyph in fdoc.get("braille", []):
+                    if 0 <= cc < iw and 0 <= rr < map_ih:
+                        safe_addstr(oy + rr, ox + cc, glyph, C["bright"])
                 # Name am Label-Anker (oder oben-mittig, falls Anker außerhalb).
                 nm = fdoc.get("name", "")
                 lc = fdoc.get("label") or [iw / 2, map_ih / 2]
@@ -3044,6 +3044,7 @@ def run_ui(stdscr, store):
                 m_zoom(-1.0)
             elif ch == ord("0"):               # zurück zur ganzen Welt
                 M["cx"], M["cy"], M["zoom"], M["data"] = 0.0, 20.0, 0.0, None
+                M["odata"] = M["fdata"] = None
             elif ch in (ord("o"), ord("O")):   # Chokepoints-Overlay ein/aus
                 M["overlay"] = not M["overlay"]
                 M["odata"] = None              # beim Einschalten frisch holen

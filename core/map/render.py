@@ -154,12 +154,12 @@ def country_outlines(cx, cy, zoom, cols, rows, aspect=0.5, focus=None):
     """Länder-Daten für die Auswahl in einer Front (front-agnostisch):
 
       • `countries`: ALLE Länder mit Mittelpunkt in Welt-Koords [0,1]²
-        (`wx,wy`) + Name — die Front navigiert damit richtungsbasiert (Strg+
-        Pfeile → räumlich nächstes Land), unabhängig vom Viewport.
-      • `focus`: das fokussierte Land, dessen Umriss-Ringe auf DAS aktuelle
-        Zellraster projiziert sind (`rings` = Liste von [[col,row],…]) plus
-        Label-Zelle — die Front zeichnet nur die Border (z.B. gestrichelt) + den
-        Namen. Clipping macht die Front beim Zeichnen.
+        (`wx,wy`) + lon/lat + Name — die Front navigiert damit richtungsbasiert
+        (Alt+Pfeile → räumlich nächstes Land), unabhängig vom Viewport.
+      • `focus`: das fokussierte Land, dessen Umriss als DÜNNE Braille-Linie ins
+        aktuelle Zellraster rasterisiert ist (`braille` = [[col,row,char],…], nur
+        Rand-Zellen — deckungsgleich mit der Braille-Füllung) plus Label-Zelle —
+        die Front malt die Rand-Zeichen nur eingefärbt (z.B. weiß) + den Namen.
 
     LOD wie die Braille-Basis (lod_for_zoom), damit der Umriss zum gefüllten
     Land passt. Die Geo-Mathematik bleibt hier; die Front zeichnet/navigiert nur.
@@ -178,14 +178,15 @@ def country_outlines(cx, cy, zoom, cols, rows, aspect=0.5, focus=None):
     if focus:
         m = next((c for c in cs if c["name"] == focus), None)
         if m is not None:
-            rings = []
-            for (_, _, _, _, pts) in m["rings"]:
-                r = project_polyline(vp, pts)
-                if len(r) >= 2:
-                    rings.append(r)
+            # Umriss als BRAILLE-Subpixel rasterisieren (2×4 Punkte/Zelle, gleiche
+            # Viewport-Mathematik wie die Braille-Füllung → deckungsgleich), damit
+            # die Front eine dünne Linie aus Braille-Punkten zeichnen kann statt
+            # fetter Vollzeichen. Rückgabe: [[col,row,char], …] (nur Rand-Zellen).
+            braille = _braille_outline(vp, [pts for (_, _, _, _, pts) in m["rings"]],
+                                       cols, rows)
             lc = [round((m["lx"] - vp["x0"]) * vp["sx"], 2),
                   round((m["ly"] - vp["y0"]) * vp["sy"], 2)]
-            foc = {"name": m["name"], "rings": rings, "label": lc,
+            foc = {"name": m["name"], "braille": braille, "label": lc,
                    "onscreen": 0 <= lc[0] <= cols and 0 <= lc[1] <= rows}
     return {
         "center": [vp["cx"], vp["cy"]], "zoom": vp["zoom"],
@@ -196,6 +197,54 @@ def country_outlines(cx, cy, zoom, cols, rows, aspect=0.5, focus=None):
 
 # Braille-Punktmuster: 2×4 Punkte pro Zelle, Bit-Maske nach Unicode-Standard.
 _BRAILLE = [[0x01, 0x08], [0x02, 0x10], [0x04, 0x20], [0x40, 0x80]]
+
+
+def _braille_outline(vp, rings_world, cols, rows):
+    """Polylinien (Welt-Koords) als DÜNNE Braille-Linie in ein cols*2 × rows*4
+    Subpixel-Raster zeichnen (Bresenham), pro Zelle zum Braille-Zeichen packen.
+    Subpixel-x = Zell-x·2, Subpixel-y = Zell-y·4 (gleiche viewport()-Skalen wie
+    die Füllung → deckungsgleich). Rückgabe: [[col,row,char], …], nur Rand-Zellen.
+    """
+    W, H = cols * 2, rows * 4
+    sx2, sy4 = vp["sx"] * 2.0, vp["sy"] * 4.0
+    cells = {}
+
+    def setpix(px, py):
+        if 0 <= px < W and 0 <= py < H:
+            cells[(px // 2, py // 4)] = (cells.get((px // 2, py // 4), 0)
+                                         | _BRAILLE[py % 4][px % 2])
+
+    def _clampi(v, lo, hi):
+        return lo if v < lo else hi if v > hi else v
+
+    for pts in rings_world:
+        prev = None
+        for (wx, wy) in pts:
+            # Auf einen großzügigen Rand clampen: hält Bresenham-Läufe bounded,
+            # ohne den sichtbaren Linienverlauf (0..W/0..H) zu verändern.
+            px = _clampi(int((wx - vp["x0"]) * sx2), -W, 2 * W)
+            py = _clampi(int((wy - vp["y0"]) * sy4), -H, 2 * H)
+            if prev is not None:
+                ax, ay = prev
+                ddx, ddy = abs(px - ax), abs(py - ay)
+                stepx = 1 if ax < px else -1
+                stepy = 1 if ay < py else -1
+                err = ddx - ddy
+                # Frühes Cullen, wenn die ganze Strecke weit außerhalb liegt
+                # (sonst läuft Bresenham bei starkem Zoom über riesige Distanzen).
+                if not (max(ax, px) < 0 or min(ax, px) > W
+                        or max(ay, py) < 0 or min(ay, py) > H):
+                    while True:
+                        setpix(ax, ay)
+                        if ax == px and ay == py:
+                            break
+                        e2 = 2 * err
+                        if e2 > -ddy:
+                            err -= ddy; ax += stepx
+                        if e2 < ddx:
+                            err += ddx; ay += stepy
+            prev = (px, py)
+    return [[c, r, chr(0x2800 + mask)] for (c, r), mask in cells.items()]
 
 
 def base_braille(cx, cy, zoom, cols, rows):
