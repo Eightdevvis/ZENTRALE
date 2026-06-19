@@ -94,6 +94,36 @@ def _block_mean(a, fy, fx):
     return a.mean(axis=(1, 3))
 
 
+def _stream_block_mean(src, full_h, full_w, fy, fx, strip_src_rows=400):
+    """Wie _block_mean, aber OHNE das Vollraster je komplett in den RAM zu ziehen.
+
+    `src` ist ein lazy indexierbares 2D-Array (zarr-View über den GeoTIFF oder
+    numpy-memmap): `src[y0:y1, :]` liest NUR diese Zeilen von der Platte. Wir
+    gehen in horizontalen Streifen durch, rechnen jeden Streifen sofort auf
+    fy×fx herunter und sammeln nur das kleine Ergebnis. Peak-RAM = ein Streifen
+    (~strip_src_rows·full_w·4 B) + das Ergebnisgitter — statt der vollen ~20 GB.
+    """
+    out_h, out_w = full_h // fy, full_w // fx
+    acc = np.zeros((out_h, out_w), dtype=np.float32)
+    strip = max(fy, (strip_src_rows // fy) * fy)   # Streifenhöhe = Vielfaches von fy
+    oy = 0
+    last = -1
+    for y0 in range(0, out_h * fy, strip):
+        y1 = min(y0 + strip, out_h * fy)
+        blk = np.asarray(src[y0:y1, :out_w * fx], dtype=np.float32)
+        blk = np.where(blk < 0, 0.0, blk)          # Nodata/Negative → 0
+        bh = (y1 - y0) // fy
+        blk = blk.reshape(bh, fy, out_w, fx).mean(axis=(1, 3))
+        acc[oy:oy + bh] = blk
+        oy += bh
+        pct = 100 * y1 // (out_h * fy)
+        if pct != last:                            # schlichter Fortschritt
+            print("\r  streame … %3d %%" % pct, end="", flush=True)
+            last = pct
+    print()
+    return acc
+
+
 def main():
     ap = argparse.ArgumentParser(description="World-Bank-Dichteraster → kleines .npz")
     ap.add_argument("--tif", help="Pfad zum entpackten shipdensity_global.tif")
@@ -113,6 +143,11 @@ def main():
     tif = a.tif or (_download(tmp) if a.download else None)
     if not tif:
         sys.exit("Entweder --tif PFAD oder --download angeben.")
+
+    # RAM-Deckel: oberhalb davon NICHT das Vollraster laden, sondern streamen.
+    # Das Vollbild (72000×36000) wäre als float64 ~21 GB — das sprengt selbst
+    # einen 16-GB-PC. Unterhalb des Deckels ist Direktladen schneller/einfacher.
+    DIRECT_LOAD_MAX_BYTES = 1_200_000_000   # ~1,2 GB float64-Vollladung
 
     print("Lese %s …" % tif)
     with tifffile.TiffFile(tif) as t:
@@ -134,14 +169,31 @@ def main():
         if chosen is not series:
             print("  nutze Overview-Ebene %d×%d (statt Vollbild)"
                   % (chosen.shape[1], chosen.shape[0]))
-        arr = np.asarray(chosen.asarray(), dtype=np.float64)
+
+        ch_h, ch_w = chosen.shape[:2]
+        fx = max(1, int(round((target_w and ch_w / target_w) or 1)))
+        fy = fx
         lon_min, lon_max, lat_min, lat_max = _geo_extent(page, (full_h, full_w))
 
-    arr = np.where(arr < 0, 0.0, arr)        # Nodata/Negative → 0
-    lh, lw = arr.shape
-    fx = max(1, int(round((target_w and lw / target_w) or 1)))
-    fy = fx
-    grid = _block_mean(arr, fy, fx) if fx > 1 else arr
+        est = ch_h * ch_w * 8
+        if est <= DIRECT_LOAD_MAX_BYTES:
+            # Klein genug (z.B. Overview-Ebene) → in einem Rutsch laden.
+            arr = np.asarray(chosen.asarray(), dtype=np.float64)
+            arr = np.where(arr < 0, 0.0, arr)
+            grid = _block_mean(arr, fy, fx) if fx > 1 else arr
+            del arr
+        else:
+            # Zu groß fürs RAM → streifenweise von der Platte lesen.
+            print("  Vollladung wäre ~%.1f GB → streame stattdessen "
+                  "(Peak ein paar 100 MB)." % (est / 1e9))
+            try:
+                import zarr  # noqa: F401
+                store = chosen.aszarr()
+                src = zarr.open(store, mode="r")
+            except ImportError:
+                sys.exit("Für das Streaming des Vollrasters einmalig:  "
+                         "%s -m pip install zarr" % os.path.basename(sys.executable))
+            grid = _stream_block_mean(src, ch_h, ch_w, fy, fx)
     print("  heruntergerechnet auf %d×%d" % (grid.shape[1], grid.shape[0]))
 
     # Log-Skala (Dichte ist extrem schief: 1 … zig Millionen), dann auf uint8.
