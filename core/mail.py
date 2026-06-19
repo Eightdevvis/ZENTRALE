@@ -1199,8 +1199,47 @@ def _probe_cli():
     return 0
 
 
+def _test_cli(argv):
+    """Login-Test eines (oder aller) Konten: zeigt User/Host und ob der IMAP-
+    Login klappt. Read-only. Aufruf: `python core/mail.py test [name]`."""
+    name = argv[2] if len(argv) > 2 else None
+    accts = mail_secrets.load_accounts()
+    if name:
+        accts = [a for a in accts if a.get("name") == name]
+    if not accts:
+        print("kein passendes Konto." if name else
+              "keine Konten (Passphrase/Keyring da?).")
+        return 1
+    rc = 0
+    for a in accts:
+        cfg = _provider_cfg(a)
+        print(f"\n=== {a.get('name')} ({a.get('provider')}) ===")
+        print(f"  user   : {a.get('user')!r}")     # repr zeigt versteckte Zeichen
+        print(f"  host   : {cfg.get('host')}:{cfg.get('port')} "
+              f"{cfg.get('security')} auth={cfg.get('auth')}")
+        if a.get("auth") != "oauth2":
+            print(f"  secret : {len(a.get('secret',''))} Zeichen")
+        imap = None
+        try:
+            imap = _connect(a)
+            typ, _ = imap.select("INBOX")
+            print(f"  LOGIN  : OK  (INBOX select {typ})")
+        except Exception as e:
+            print(f"  LOGIN  : FEHLER — {e!r}")
+            rc = 1
+        finally:
+            if imap is not None:
+                try:
+                    imap.logout()
+                except Exception:
+                    pass
+    return rc
+
+
 def _selftest():
     import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "test":
+        return _test_cli(sys.argv)
     if "--probe" in sys.argv:
         return _probe_cli()
     if "--poll" in sys.argv:

@@ -451,6 +451,13 @@
            erhalten – zum Wiederanzeigen reicht es, die Box + den ZS.on('sensor')-
            Handler aus der git-History zurückzuholen. -->
       <div class="col">
+        <!-- EXTERNAL: welche AI-Backends sind hier erreichbar (local/cloud).
+             Immer sichtbar (front-agnostisch), Status via /api/ai/backends. -->
+        <div class="box" style="flex:0 0 auto">
+          <span class="bt">external</span><span class="bt2" id="ext-any">…</span>
+          <div class="kv">LOKAL <b id="ext-local">…</b></div>
+          <div class="kv">CLOUD <b id="ext-cloud">…</b></div>
+        </div>
         <div class="box" style="flex:0 0 auto">
           <span class="bt">telemetrie</span><span class="bt2" id="tele-src">…</span>
           <div class="meter tele-rot">
@@ -1731,6 +1738,26 @@
     // engine.js feuert weiter 'sensor'-Events (Backend bleibt verkabelt) –
     // hier hört nur niemand mehr drauf. Zum Wiederanzeigen: Box + diesen
     // Handler aus der git-History zurückholen.
+
+    // ── EXTERNAL: AI-Backend-Status (local/cloud) pollen ──
+    // Eigener, ruhiger Intervall (Backend pingt Ollama/Cloud-Host); nicht an
+    // den 1s-tick gehängt. Front-agnostisch: läuft auch in der KI-freien Front.
+    function renderExternal(s) {
+      var L = document.getElementById('ext-local');
+      var C = document.getElementById('ext-cloud');
+      var A = document.getElementById('ext-any');
+      if (!L || !C || !A) return;
+      L.textContent = s.local ? '✓ ollama' : '✗';
+      C.textContent = s.cloud ? ('✓ ' + (s.cloud_provider || '')) : '✗';
+      A.textContent = s.any ? 'online' : 'kein backend';
+    }
+    function pollExternal() {
+      fetch('/api/ai/backends').then(function (r) { return r.json(); })
+        .then(renderExternal)
+        .catch(function () { var A = document.getElementById('ext-any'); if (A) A.textContent = '–'; });
+    }
+    pollExternal();
+    setInterval(pollExternal, 8000);
 
     // ── stdout + Tripwire ──
     function colorize(text) {
