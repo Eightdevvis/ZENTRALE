@@ -98,6 +98,13 @@ Generelles Bau-Prinzip für **jedes** neue Feature, das in mehreren Fronten
   und Monolith bekommen danach nur ihren eigenen Renderer.
 - **Backend bleibt zustandslos** (Polling-Modell): View-/UI-State lebt pro
   Front im Client, das Backend beantwortet nur Anfragen.
+- **„Fertig" heißt: in ALLEN Fronten.** Ein Feature/eine Änderung ist erst
+  abgeschlossen, wenn **monolith, laptop UND tui** es tragen — nicht nur das
+  Browser-Template. `laptop` rendert dasselbe `monolith.html` (mit `ki_aus`), eine
+  Browser-Änderung deckt also beide Browser-Fronten; die **tui**
+  (`tui/zentrale_tui.py`) ist eine eigene curses-App und braucht ihren Renderer
+  **separat**. Browser-only = unfertig. (Diese Regel kam, weil genau das einmal
+  passiert ist.)
 
 Gelebte Vorbilder: das **Graph-Werkzeug** (`core/graphs.py` + `/api/graphs`,
 dreifach gerendert) und das geplante **Maps-System** (`memory/maps_system.md`,

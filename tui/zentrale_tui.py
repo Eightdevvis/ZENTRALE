@@ -75,6 +75,7 @@ class Store:
         self.graphs = []       # /api/graphs (Definitionen, für lifestyle-Box)
         self.graph_vals = {}   # graph_id -> /api/data/<id> (Messwerte)
         self.projects = []     # /api/projects (geflaggte Listen, für PROJECTS-Box)
+        self.backends = {}     # /api/ai/backends (EXTERNAL-Box: local/cloud erreichbar)
         self.connected = False
         self._stop = threading.Event()
 
@@ -108,6 +109,16 @@ class Store:
         except (urllib.error.URLError, OSError, ValueError):
             pass
 
+    def _poll_backends(self):
+        """Welche AI-Backends sind erreichbar (local/cloud) – für die EXTERNAL-Box.
+        Front-agnostisch dieselbe Quelle wie der Browser (/api/ai/backends)."""
+        try:
+            bk = self._get("/api/ai/backends") or {}
+            with self._lock:
+                self.backends = bk if isinstance(bk, dict) else {}
+        except (urllib.error.URLError, OSError, ValueError):
+            pass
+
     def poll_once(self):
         """Einmal alle Endpoints ziehen (für --selftest und den Loop)."""
         ok = False
@@ -127,6 +138,7 @@ class Store:
             pass
         self._poll_graphs()
         self._poll_projects()
+        self._poll_backends()
         with self._lock:
             self.connected = ok
         return ok
@@ -154,6 +166,7 @@ class Store:
             if tick % 5 == 0:                  # langsam: manuell geloggte Graph-Werte
                 self._poll_graphs()
                 self._poll_projects()
+                self._poll_backends()          # AI-Backend-Status (EXTERNAL-Box)
             tick += 1
             self._stop.wait(1.0)
 
@@ -174,6 +187,11 @@ class Store:
         """Liste der geflaggten Projekte ({id,name,done,total}) für die PROJECTS-Box."""
         with self._lock:
             return [dict(p) for p in self.projects if isinstance(p, dict)]
+
+    def backends_snapshot(self):
+        """AI-Backend-Status ({local,cloud,cloud_provider,any}) für die EXTERNAL-Box."""
+        with self._lock:
+            return dict(self.backends)
 
 
 # ── Hilfsfunktionen (UI-unabhängig, testbar) ───────────────────────────────
@@ -386,6 +404,10 @@ def selftest():
     print("  datum              :", state.get("time"))
     print("  stdout-zeilen       :", len(state.get("logs", [])))
     print("  outbound-zeilen     :", len(state.get("internet_logs", [])))
+    bk = store.backends_snapshot()
+    print("  ai-backends         :", "local=%s cloud=%s%s" % (
+        bool(bk.get("local")), bool(bk.get("cloud")),
+        (" (" + bk["cloud_provider"] + ")") if bk.get("cloud_provider") else ""))
     for lbl, key, _u in TELE_ROWS:
         tv = tele_value(metrics, key)
         print("  tele %-5s         :" % lbl, "%s %s" % (bar(tv[0]), tv[1]) if tv else "n/a")
@@ -3358,9 +3380,25 @@ def run_ui(stdscr, store):
         # (Sensoren-Panel entfernt 2026-06: kein echter Sensor angeschlossen.
         #  /api/state.sensors wird weiter gepollt, nur nicht mehr gezeichnet —
         #  Box zum Wiederanzeigen aus der git-History zurückholen.)
+        # EXTERNAL: erreichbare AI-Backends (local/cloud) – wie im Browser oben
+        # links. Front-agnostisch dieselbe Quelle (/api/ai/backends). Titel grün
+        # wenn irgendein Backend da ist, sonst Warn-Farbe.
+        bk = store.backends_snapshot()
+        ext_h = 4
+        draw_box(top, lx, ext_h, leftw, "external",
+                 C["acc"] if bk.get("any") else C["warn"])
+        safe_addstr(top + 1, lx + 2, "LOKAL", C["acc"])
+        safe_addstr(top + 1, lx + 9,
+                    "✓ ollama" if bk.get("local") else "✗",
+                    C["bright"] if bk.get("local") else C["faint"])
+        safe_addstr(top + 2, lx + 2, "CLOUD", C["acc"])
+        safe_addstr(top + 2, lx + 9,
+                    ("✓ " + (bk.get("cloud_provider") or "")) if bk.get("cloud") else "✗",
+                    C["bright"] if bk.get("cloud") else C["faint"])
+
         tele_h = len(TELE_ROWS) + 2
-        std_h = body_h - tele_h
-        ty = top
+        ty = top + ext_h
+        std_h = body_h - ext_h - tele_h
         draw_box(ty, lx, tele_h, leftw, "telemetrie")
         for i, (lbl, key, _u) in enumerate(TELE_ROWS):
             tv = tele_value(metrics, key)
