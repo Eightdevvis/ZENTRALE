@@ -26,6 +26,7 @@ hier sofort mitziehen, sonst tote Links.
 | Maps Quellen-Charta (Layer→Quelle) | memory/maps_quellen.md              |
 | Memory-Plan v2 (Historie, A–G)     | memory/ki_memory_plan.md            |
 | Personality-Plan (Fine-Tuning)     | memory/ki_personality_plan.md       |
+| Logic-Loop (Action-Scaffold, WIP)  | memory/logic_loop_plan.md           |
 | Grounding-Recherche (nicht raten)  | memory/grounding_recherche.md       |
 | Bench-History (Testdaten + Protokolle) | memory/bench_history.md         |
 | Mandarin-Tutor (pausiert)          | memory/tutor_system.md              |
