@@ -171,8 +171,16 @@ das Backend schiebt jede echte Daten-Änderung sofort zum Peer.
 
 `core/datasync.py:notify_change()` hängt im **Schreib-Pfad** der user-getriebenen
 Registries (`lists._save_file`, `graphs._save`, `kalender._save_raw`) und stößt
-— nur wenn `ZENTRALE_AUTOPUSH=1` (setzen `start_laptop.sh`/`start_local.sh`) —
-fire-and-forget `zentrale-push-data` an. **Bewusst im Schreib-Pfad, NICHT per
+— nur wenn `ZENTRALE_AUTOPUSH=1` — fire-and-forget `zentrale-push-data` an.
+Quelle der Variable je Knoten: **Laptop** `start_laptop.sh` (Shell-`export`),
+**PC** die systemd-Unit `zentrale-pc.service` (`Environment=`). **Achtung
+Stolperstein (gefixt 2026-06-25):** am PC lag das `Environment=` lange in einem
+Drop-in `…/zentrale-pc.service.d/autopush.conf` **ohne `[Service]`-Header** →
+systemd verwarf beide Zeilen still („Assignment outside of section") → der PC
+hat **nie** autogepusht (PC→Laptop-Richtung tot, fiel nur als Asymmetrie auf:
+News am PC frisch, am Laptop tagealt). Jetzt fest in der versionierten Unit
+(`deploy/zentrale-pc.service`), inkl. `PATH` mit `~/.local/bin` (sonst findet
+das vom Backend gespawnte `zentrale-push-data` seine Helfer nicht). **Bewusst im Schreib-Pfad, NICHT per
 Datei-Watcher:** ein vom Sync eingehendes rsync schreibt die Datei direkt auf
 Platte, NICHT durch `_save_*` → löst nie einen Gegen-Push aus ⇒ **kein
 Ping-Pong** (ein Watcher hätte genau die Schleife). Bewusst **nicht** gehängt:
@@ -184,11 +192,25 @@ als der frühere Daemon** (kein Polling/inotify-Reconcile, kein Race mit
 Commits — nur ein Stups pro echtem App-Write).
 
 PC-Seite: die Skripte sind jetzt **bidirektional** (Peer per `ZENTRALE_FINDER`;
-der PC kennt den Laptop als `0RAMMachine`/`find-0RAMMachine`). Was am PC noch
-einmalig nötig ist: die `~/.local/bin`-Skripte (`zentrale-sync` + `push`/`pull`-
-Symlinks, `zentrale-push-data`, `zentrale-sync-boot`) dort installieren und den
-neuen Code (`git pull`) ziehen; ZENTRALE startet am PC per systemd-Service →
-Boot-Sync müsste als `ExecStartPre` dazu.
+der PC kennt den Laptop als `0RAMMachine`/`find-0RAMMachine`). Die
+`~/.local/bin`-Skripte (`zentrale-sync` + `push`/`pull`-Symlinks,
+`zentrale-push-data`, `zentrale-sync-boot`) müssen dort installiert sein.
+
+**Boot-Sync am PC = eigene oneshot-Unit (seit 2026-06-25), NICHT `ExecStartPre`.**
+Der frühere Plan „`ExecStartPre=zentrale-sync-boot` an `zentrale-pc`" ist eine
+Falle: `zentrale-pc` hat `Restart=always`/`RestartSec=3`, ein `ExecStartPre`
+feuert bei **jedem** Crash-Neustart erneut → im Crashloop ein Sync-Sturm. Statt
+dessen: `deploy/zentrale-sync-boot.service` (`Type=oneshot`), die `zentrale-pc`
+nur per `Wants=`+`After=` zieht. systemd löst Dependencies **nicht** bei jedem
+`Restart=` neu auf → der Sync läuft genau **einmal pro echtem Start** (Boot /
+`systemctl start`), crashloop-sicher. (Auf dem Laptop bleibt der Boot-Sync wie
+gehabt im `zentrale-launch`-Wrapper, da Direktstart statt systemd.)
+
+**Finder retry-gehärtet (2026-06-25):** `find-pc`/`find-0RAMMachine` machen den
+ARP-Scan jetzt bis zu 3× (`FIND_RETRIES`), weil ein Einzelschuss flackert
+(Peer im WLAN-Stromsparmodus / Ping-Verlust → MAC fehlt für eine Runde in
+`ip neigh`, nächste Runde da). Eine Runde ~1s, hilft Boot-Sync **und** Autopush
+(beide rufen denselben Finder; ein verpasster Scan = ein verlorener Push).
 
 Voraussetzung am PC (einmalig): `openssh-server` installiert + `ssh.service`
 aktiv (der PC hatte nur den SSH-**Client** → konnte zum Pi, aber niemand

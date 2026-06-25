@@ -13,6 +13,15 @@ Wants=network-online.target
 # Verwerfen des Sidecar-Starts bricht -> sie kamen nie hoch. Wants ist
 # ordering-frei = sauber. Stop von zentrale-pc laesst die Sidecars laufen.
 Wants=whisper-pc.service tts-pc.service
+# Daten-Abgleich VOR dem Core: die oneshot-Unit zentrale-sync-boot macht einmal
+# pull+push, BEVOR das Backend hochfaehrt und anfaengt zu schreiben. Bewusst als
+# eigene Unit (nicht ExecStartPre!): Wants+After ziehen sie genau EINMAL pro
+# echtem Start (Boot / `systemctl start zentrale-pc`). Ein automatischer
+# Restart=always-Neustart loest Dependencies NICHT neu auf -> im 3-Sekunden-
+# Crashloop (z.B. kaputte venv) feuert der Sync NICHT mit. Genau das wollten
+# wir: "wie der Laptop einmal beim Start syncen", aber crashloop-sicher.
+Wants=zentrale-sync-boot.service
+After=zentrale-sync-boot.service
 
 [Service]
 Type=simple
@@ -23,6 +32,18 @@ ExecStart=/home/sasha/codicus/ZENTRALE/venv/bin/python /home/sasha/codicus/ZENTR
 Restart=always
 RestartSec=3
 Environment=PYTHONUNBUFFERED=1
+# Autopush-on-write scharf schalten: core/datasync.py stoesst nach JEDER echten
+# Datenaenderung im Hintergrund `zentrale-push-data` an -> der Laptop hat sofort
+# den frischen Stand. OHNE diese Variable ist der Push ein No-op, der PC wuerde
+# seine Aenderungen (News, am PC editierte Termine) NIE von selbst rausschieben.
+# WAR LANGE KAPUTT: lag in /etc/.../zentrale-pc.service.d/autopush.conf OHNE
+# [Service]-Header -> systemd ignorierte beide Zeilen ("Assignment outside of
+# section"). Deshalb jetzt fest in der versionierten Unit statt im Drop-in.
+Environment=ZENTRALE_AUTOPUSH=1
+# PATH explizit setzen, damit der vom Backend gespawnte `zentrale-push-data`
+# (und seine Helfer find-pc/find-0RAMMachine/rsync in ~/.local/bin) ueberhaupt
+# gefunden wird. Der systemd-Default-PATH enthaelt ~/.local/bin NICHT.
+Environment=PATH=/home/sasha/.local/bin:/usr/local/bin:/usr/bin:/bin
 
 [Install]
 WantedBy=multi-user.target

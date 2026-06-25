@@ -1,0 +1,41 @@
+[Unit]
+# Einmaliger Daten-Abgleich (pull+push, newest-wins), der VOR dem PC-Core laeuft.
+# Faengt genau den Fall ab, den der Autopush NICHT abdeckt: eine Maschine war
+# laenger aus (oder das Backend war tot, z.B. kaputte venv) und hat dabei die
+# Pushes des Peers verpasst. Beim naechsten Start gleicht diese Unit den Stand
+# einmal ab, bevor der Core anfaengt zu schreiben.
+#
+# WARUM eine eigene oneshot-Unit statt ExecStartPre= im Core: der Core hat
+# Restart=always (RestartSec=3). Ein ExecStartPre wuerde bei JEDEM Crash-Neustart
+# erneut feuern -> im Crashloop ein Sync-Sturm, evtl. mitten in fremde Writes.
+# Eine separate Unit, die der Core nur per Wants=/After= zieht, laeuft dagegen
+# nur bei einem echten Start-Job (Boot / `systemctl start`), NICHT bei den
+# automatischen Restart-Zyklen des Core. (systemd loest Dependencies nicht bei
+# jedem Restart= neu auf.)
+Description=ZENTRALE Sync (boot) - einmaliger Daten-Abgleich vor dem Core
+After=network-online.target
+Wants=network-online.target
+# Strikt vor dem Core: erst abgleichen, dann schreibt das Backend.
+Before=zentrale-pc.service
+
+[Service]
+Type=oneshot
+# Nach dem Lauf wieder inaktiv -> wird bei jedem echten Core-Start frisch
+# gezogen und laeuft erneut. (Mit RemainAfterExit=yes bliebe sie "active" haengen
+# und der naechste Start wuerde sie evtl. ueberspringen.)
+RemainAfterExit=no
+User=sasha
+Group=sasha
+WorkingDirectory=/home/sasha/codicus/ZENTRALE
+# ~/.local/bin muss in PATH: zentrale-sync-boot ruft find-*/zentrale-sync/rsync.
+Environment=PATH=/home/sasha/.local/bin:/usr/local/bin:/usr/bin:/bin
+# zentrale-sync-boot ist best-effort: Peer nicht da -> still exit 0, blockiert
+# den Boot nie. Es nutzt selbst kurze timeouts (Finder 8s, pull/push je 90s);
+# TimeoutStartSec deckt den Worst Case grosszuegig ab, ohne den Core ewig zu
+# verzoegern, falls der Peer da ist aber rsync zaeh laeuft.
+ExecStart=/home/sasha/.local/bin/zentrale-sync-boot
+TimeoutStartSec=210
+
+# KEIN [Install]: diese Unit wird ausschliesslich vom Core ueber Wants=/After=
+# gezogen, nicht eigenstaendig von einem Target gestartet. So haengt ihr
+# Lebenszyklus sauber am zentrale-pc-Start.
