@@ -14,6 +14,9 @@
     --acc: #2f6b48; --acc-soft: #6f8f7c;
     --t-net: #1d6a8c; --t-graph: #8a3fb0; --t-event: #3a7d3a; --t-audio: #2f6b48;
     --t-hook: #9a6a2c; --t-num: #9a6a2c; --t-dim: #9a9482; --warn: #9a6a2c;
+    /* Tutor-Kanal: prägnantes Rot, deutlich vom grünen --acc/bernstein --warn
+       abgesetzt → unmissverständlich "die Mitte gehört jetzt dem Sprachtutor". */
+    --tutor: #c0392b;
     --scan: rgba(0,0,0,0.045);
   }
   /* ── Theme: NACHT (code-dark / tech-dark) ── */
@@ -23,6 +26,8 @@
     --acc: #7ec699; --acc-soft: #4f6353;
     --t-net: #56b6c2; --t-graph: #c678dd; --t-event: #98c379; --t-audio: #7ec699;
     --t-hook: #e0a458; --t-num: #d19a66; --t-dim: #5c6773; --warn: #e0a458;
+    /* Tutor-Rot, im Dark-Theme etwas heller fürs dunkle BG (siehe Tag-Theme). */
+    --tutor: #e5534b;
     --scan: rgba(0,0,0,0.16);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -195,6 +200,31 @@
   .ml-text { color: var(--ink); font-family: 'JetBrains Mono', 'Noto Sans Symbols', 'Noto Sans Symbols 2', ui-monospace, monospace; }
   .ml-text .cur { color: var(--bright); animation: blink .8s step-start infinite; }
   @keyframes blink { 50% { opacity: 0; } }
+
+  /* ── Tutor-Modus (Sprachtutor übernimmt die Mitte) ──────────────────
+     Der Tutor ist ein EIGENER Kanal, architektonisch getrennt von der Haupt-KI
+     (eigene Session/Prompt/Tools/Backend, siehe core/tutor_session.py). Diese
+     Trennung wird sichtbar gemacht: ein prägnanter roter Rahmen um die ganze
+     Mittelspalte (#col-mid = Kern-Canvas + Konsole drunter). outline statt
+     border → kein Layout-Sprung. Toggle per Alt+T (setzt body.tutor-mode).
+     "erstmal nur umschalten": noch kein eigenes Tutor-Exhibit, nur der Rahmen
+     + das Routing der Eingaben an den Tutor (JS: tutorActive). */
+  body.tutor-mode #col-mid {
+    position: relative;
+    outline: 3px solid var(--tutor);
+    outline-offset: 6px;
+    box-shadow: 0 0 0 1px var(--tutor), 0 0 24px -5px var(--tutor);
+    transition: outline-color .3s ease, box-shadow .3s ease;
+  }
+  /* Kanal-Marke als kleiner roter Reiter oben am Rahmen. */
+  body.tutor-mode #col-mid::before {
+    content: "● TUTOR"; position: absolute; top: -11px; left: 14px; z-index: 5;
+    padding: 1px 9px; background: var(--bg); color: var(--tutor);
+    font-family: 'VT323', monospace; font-size: 16px; letter-spacing: 0.12em;
+  }
+  /* Prompt-Pfeil der Konsole wird rot: man sieht im Eingabefokus, wohin man
+     tippt (Tutor statt Haupt-KI). */
+  body.tutor-mode #chat-prompt { color: var(--tutor); }
 
   /* Tracker */
   .trk { display: grid; grid-template-columns: 82px 1fr 60px; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px dotted var(--line); }
@@ -2210,7 +2240,12 @@
     async function startTutor() {
       if (tutorActive) { _mini('Tutor läuft schon.'); return; }
       tutorActive = true;
-      _mini('— Tutor gestartet (Eingaben gehen jetzt an den Tutor; /tutorstop beendet) —');
+      // Sichtbarer Kanal-Wechsel: roter Rahmen um die Mitte (CSS body.tutor-mode)
+      // + Konsolen-Placeholder umschalten. Beides wird in stopTutor zurückgesetzt,
+      // egal ob Start/Stop per Alt+T oder per /tutor-Command kam.
+      document.body.classList.add('tutor-mode');
+      if (inputEl) inputEl.placeholder = 'Tutor-Modus … (Alt+T beendet · Enter senden · Alt+M Mic)';
+      _mini('— Tutor gestartet (Eingaben gehen jetzt an den Tutor; Alt+T oder /tutorstop beendet) —');
       try {
         var s = await (await fetch('/api/tutor/status')).json();
         if (s.privacy_warning) _mini('⚠ ' + s.privacy_warning);
@@ -2220,8 +2255,17 @@
     async function stopTutor() {
       if (!tutorActive) { _mini('Kein Tutor aktiv.'); return; }
       tutorActive = false;
+      document.body.classList.remove('tutor-mode');
+      if (inputEl) inputEl.placeholder = 'sprich mit der KI …  (Enter senden · Alt+M Mic · /clear)';
       try { await fetch('/api/tutor/stop', { method: 'POST' }); } catch (e) {}
       _mini('— Tutor beendet —');
+    }
+
+    // Alt+T-Toggle: ein Hotkey, beide Richtungen. "erstmal nur umschalten" —
+    // schaltet den Tutorkanal an/aus (roter Rahmen + Eingabe-Routing). Start
+    // zieht die Begrüßung des Tutors in den Minilog (startTutor → streamTutor).
+    function toggleTutor() {
+      if (tutorActive) { stopTutor(); } else { startTutor(); }
     }
 
     // Tutor-Antwort streamen (gleiche SSE-Mechanik wie der Chat). Text-first:
@@ -2405,6 +2449,10 @@
       if (e.altKey && (e.key === 's' || e.key === 'S')) { e.preventDefault(); altSChordActive = true; return; }
       if (altSChordActive && e.altKey && e.key === 'ArrowUp')   { e.preventDefault(); altSChordUsed = true; changeVolume(+0.1); return; }
       if (altSChordActive && e.altKey && e.key === 'ArrowDown') { e.preventDefault(); altSChordUsed = true; changeVolume(-0.1); return; }
+      // Alt+T: Tutorkanal an/aus. Nur in der KI-Front sinnvoll (ki_aus hat keine
+      // Konsole) → an inputEl gekoppelt. nacktes 'T' wäre wertlos, es landet eh
+      // im fokussierten Chat-Input; Alt+T ist frei (siehe memory/tastatur.md).
+      if (e.altKey && (e.key === 't' || e.key === 'T') && inputEl) { e.preventDefault(); toggleTutor(); return; }
     });
     document.addEventListener('keyup', function (e) {
       if (e.key === 's' || e.key === 'S' || e.key === 'Alt') {

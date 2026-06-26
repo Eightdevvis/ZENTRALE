@@ -12,13 +12,19 @@
 >   `tutor_session` wird importiert. Audio läuft über die generische
 >   Voice-API (`/api/transcribe`, `/api/speak`) mit `lang='zh'` – keine
 >   eigenen Tutor-Audio-Aliase mehr nötig.
-> - Start ist **rein manuell** (Dashboard-Hotkey, geplant `Alt+T` – nacktes
->   `T` kollidiert mit dem immer fokussierten Chat-Input). KEIN Presence-
+> - Start ist **rein manuell**. **`Alt+T` ist LIVE** (Toggle, beide Richtungen):
+>   schaltet im Dashboard den Tutorkanal an/aus (`toggleTutor` → `startTutor`/
+>   `stopTutor`). Nacktes `T` ginge nicht – es landet im immer fokussierten
+>   Chat-Input. Zusätzlich weiter per `/tutor` / `/tutorstop`. KEIN Presence-
 >   Auto-Start in `brain.py` (bewusst, siehe Sequencing oben).
-> - **Frontend (`monolith.html`) noch offen:** das alte Tutor-Panel lebte in
->   `index.html`, das beim Monolith-Umbau (`d2904be`) gelöscht wurde. Es muss
->   als neues **Exhibit** ins zentrale AI-Canvas (neben `gesicht`/`graph`,
->   wie das `graph-panel`) neu gebaut werden – Drumherum nicht anfassen.
+> - **Frontend (`monolith.html`) – Kanalwechsel gebaut, Exhibit noch offen:**
+>   der sichtbare **Kanalwechsel** ist da: bei aktivem Tutor legt `body.tutor-mode`
+>   einen **prägnanten roten Rahmen** um die ganze Mittelspalte (`#col-mid` =
+>   Kern-Canvas + Konsole drunter, CSS-Var `--tutor`), Reiter „● TUTOR", roter
+>   Prompt-Pfeil, Eingaben gehen an `/api/tutor/respond`. Das ist der „erstmal
+>   nur umschalten"-Schritt. **Noch offen:** ein eigenes Tutor-**Exhibit** im
+>   AI-Canvas (neben `gesicht`/`graph`, wie `graph-panel`); aktuell läuft der
+>   Tutor text-first im Minilog. Drumherum nicht anfassen.
 > - **Backend-Wahl per `TUTOR_BACKEND`:** `cloud` → Claude (Anthropic),
 >   `local` (Default) → Ollama. Siehe „Cloud-Backend" unten.
 > - `core/tutor.py`, `core/tutor_session.py`, `core/tutor_cloud.py`,
@@ -80,7 +86,13 @@ Session-Start **laut geflaggt**: `tutor_session.activate()` setzt eine Warnung
 liefert → UI muss sie deutlich anzeigen.
 
 **Offline-Prinzip:** Default bleibt `local` (Ollama, offline). Cloud-Provider
-sind bewusster Opt-in. **Dependencies:** `anthropic`, `openai` (im venv).
+sind bewusster Opt-in. **Dependencies:** `openai` ist seit 2026-06-26 im venv +
+in `requirements.txt` – der **qwen-Cloud-Pfad** (openai_compat) lief vorher gar
+nicht, `import openai` knallte. `anthropic` ist bewusst NICHT installiert (nur
+der teure Claude-Verifikations-Pfad braucht es: `venv/bin/pip install anthropic`).
+**Letzte Lücke für Cloud-Live:** `DASHSCOPE_API_KEY` in `data/tutor_config.json`
+(`keys`-Block) – Secret, gitignored, von Sasha einzutragen. Provider/Modell/
+Prompt stehen; ohne Key gibt's nur einen Auth-Fehler beim ersten API-Call.
 
 ## Position in der Architektur
 

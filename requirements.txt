@@ -45,3 +45,14 @@ cryptography
 # einfach weiter nur ZENTRALE_MAIL_KEY. Siehe mail_secrets._passphrase().
 secretstorage
 jeepney
+
+# Sprach-Tutor – Cloud-Leitung. Default-Provider 'qwen' (DashScope, Singapur,
+# no-train) läuft über den OpenAI-/v1-kompatiblen Pfad (core/tutor_openai_compat.py)
+# und braucht das openai-SDK. Deckt zugleich Mistral/DeepSeek/Groq/Gemini ab.
+# Key kommt aus data/tutor_config.json (keys.DASHSCOPE_API_KEY), NICHT ins Repo.
+# Der Offline-Default (Ollama) braucht das NICHT — nur der Cloud-Tutor.
+openai
+# anthropic-SDK (core/tutor_cloud.py) ist NUR für den teuren Claude-Verifikations-
+# pfad (provider='claude') nötig. Erst installieren, wenn du den wirklich nutzt:
+#   venv/bin/pip install anthropic
+# anthropic

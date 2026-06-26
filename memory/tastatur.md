@@ -20,7 +20,9 @@ ohne Inputs).
 | `c`    | Chat-Panel öffnen                     |
 | `ESC`  | Zurück zum Haupt-Dashboard            |
 
-> `t` (Mandarin-Tutor) ist pausiert – siehe `tutor_system.md`.
+> Der Sprachtutor ist **reaktiviert** und wird im Chat-Modus per `Alt + T`
+> umgeschaltet (nicht mehr über diesen Sensor-Trigger). Der Presence-Auto-Start
+> bleibt bewusst aus – siehe `tutor_system.md`.
 
 ## Im Chat-Modus (zusätzlich)
 
@@ -30,6 +32,7 @@ ohne Inputs).
 | `Alt + M` | Mikrofon-Toggle (Aufnahme an/aus → Whisper-Transkription)   |
 | `Alt + S` | Stimme stumm/an (Auto-Speak der KI-Antwort, Zustand gemerkt) |
 | `Alt + S` + `↑`/`↓` | Lautstärke lauter/leiser (Schritt 10%, in `localStorage` gemerkt) |
+| `Alt + T` | Tutorkanal an/aus (Sprachtutor). Roter Rahmen um die Mitte, Eingaben gehen an den Tutor statt die Haupt-KI. Toggle. Siehe `tutor_system.md`. |
 | `ESC`     | zurück zum Haupt-Dashboard                                  |
 
 Alt-Modifier verhindert dass das `m`/`s` als Buchstabe ins Input-Feld
