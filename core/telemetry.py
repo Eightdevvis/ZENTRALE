@@ -17,15 +17,23 @@
 #     "ram":  {"v": %, "used": GB, "total": GB} }
 # Fehlt eine Quelle, ist .v = None → das Frontend zeigt ehrlich '–'.
 
+import socket
 import host_metrics  # liegt in core/, wird ueber sys.path gefunden (siehe ui/app.py)
 
 
 def pc_snapshot() -> dict:
-    """Aktuelle PC-Telemetrie. CPU/GPU/VRAM/Temp/RAM, jeweils None-sicher."""
+    """Aktuelle PC-Telemetrie. CPU/GPU/VRAM/Temp/RAM, jeweils None-sicher.
+
+    `host` = Hostname DIESER Maschine (= Host des Backends). Wichtig, weil die
+    Fronten nur HTTP-Clients sind: die TUI auf dem Pi zeigt diese Werte, sie
+    stammen aber vom Backend-Host (i.d.R. der PC). Ohne das Feld beschriftete
+    die TUI sie frueher hart als "LAP" — falsch, sobald das Backend woanders
+    laeuft. Die Front leitet aus `host` ihr Kuerzel ab (PC/LAP/PI)."""
     ram = host_metrics.mem_percent()       # (pct, used_gb, total_gb) | None
     gpu = host_metrics.gpu_nvidia()         # dict | None
 
     return {
+        "host": socket.gethostname(),
         "cpu":  {"v": host_metrics.cpu_percent()},
         "gpu":  {"v": gpu["util"] if gpu else None},
         "vram": {

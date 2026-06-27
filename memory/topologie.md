@@ -73,6 +73,13 @@ Bridge (`pi_sensor_bridge.py`) pollt alle ~30s CPU/Temp/RAM/SD (aus
 kommt dagegen lokal aus `core/telemetry.pc_snapshot()` (inkl. GPU/VRAM via
 `nvidia-smi`) — kein Push nötig, der PC ist ja das Backend.
 
+`pc_snapshot()` legt seit 2026-06-27 auch `host` (`socket.gethostname()`)
+ab: die Fronten sind nur HTTP-Clients, die gezeigten „pc"-Werte stammen vom
+**Backend-Host**, nicht von der anzeigenden Maschine. Die TUI leitet daraus
+ihr Telemetrie-Kürzel ab (`host_label`: pop-os→`PC`, 0RAMMachine→`LAP`,
+zentrale→`PI`) — vorher stand dort hart `LAP`, was auf dem Pi-Kiosk (zeigt
+die PC-Werte) falsch war.
+
 ## Netzwerk
 
 Seit 2026-05-19 hängen PC und Pi an einem **unmanaged Gigabit-Switch**

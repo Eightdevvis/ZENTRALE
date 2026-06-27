@@ -377,6 +377,26 @@ def tele_value(metrics, key):
     return pct, "%d%s" % (round(v), unit)
 
 
+def host_label(metrics):
+    """Kurz-Kürzel für die Telemetrie-Box: WELCHE Maschine liefert die Werte?
+
+    Zwischenprüfung statt hartem Label: die /api/telemetry.pc-Werte stammen vom
+    HOST DES BACKENDS, nicht von der Maschine, auf der diese TUI läuft (die TUI
+    ist nur HTTP-Client). Das Backend legt seinen Hostnamen in pc.host ab
+    (core/telemetry.pc_snapshot). Bekannte Hosts → griffiges Kürzel, sonst der
+    echte Hostname auf 4 Zeichen gekappt (nie wieder ein falsches "LAP")."""
+    src = (metrics or {}).get("pc") if isinstance(metrics, dict) else None
+    host = (src.get("host") if isinstance(src, dict) else "") or ""
+    h = host.lower()
+    if "0ram" in h or "lap" in h:
+        return "LAP"
+    if "pop" in h or h == "pc":
+        return "PC"
+    if "zentrale" in h or h.startswith("pi"):
+        return "PI"
+    return host[:4].upper() or "HOST"
+
+
 def log_prefix(text):
     """Erstes Wort -> Farbgruppe (oder None). Erkennt auch 'EVENT IN/OUT'."""
     for key in ("EVENT IN", "EVENT OUT"):
@@ -980,12 +1000,19 @@ def run_ui(stdscr, store):
             M["msg"] = "fenster läuft schon"
             return
         try:
+            # stderr NICHT nach /dev/null: fehlt pygame/numpy (z.B. Pi ohne venv),
+            # stirbt map_window.py beim Import STILL — man drueckt 'w' und nichts
+            # passiert, kein Hinweis. In ein Log umgeleitet ist der Grund lesbar
+            # (cat $ZENTRALE_MAP_WINDOW_LOG bzw. /tmp/zentrale-map-window.log).
+            map_log = os.environ.get("ZENTRALE_MAP_WINDOW_LOG") or "/tmp/zentrale-map-window.log"
+            errf = open(map_log, "a", encoding="utf-8")
             M["proc"] = subprocess.Popen(
                 [py if os.path.exists(py) else sys.executable, script,
                  "--cx", "%.5f" % M["cx"], "--cy", "%.5f" % M["cy"],
                  "--zoom", "%.2f" % M["zoom"]],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL, stderr=errf,
                 start_new_session=True)
+            errf.close()   # das Kind hat seinen eigenen Dup-FD; Eltern-Kopie zu
             M["msg"] = ""        # kein klebender Text — das Live-Badge (poll())
                                  # in draw_map zeigt „● fenster", solange es offen ist
 
@@ -3453,9 +3480,10 @@ def run_ui(stdscr, store):
         ty = top + ext_h
         std_h = body_h - ext_h - tele_h
         draw_box(ty, lx, tele_h, leftw, "telemetrie")
+        hlbl = host_label(metrics)   # Host des Backends (PC/LAP/PI), nicht hart
         for i, (lbl, key, _u) in enumerate(TELE_ROWS):
             tv = tele_value(metrics, key)
-            safe_addstr(ty + 1 + i, lx + 2, "LAP·" + lbl, C["acc"])
+            safe_addstr(ty + 1 + i, lx + 2, hlbl + "·" + lbl, C["acc"])
             if tv:
                 pct, text = tv
                 n = round(max(0.0, min(100.0, pct)) / 100.0 * 10)
