@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# zentrale-unlock — Remote-LUKS-Unlock des PC vom Pi aus, mit Warte-Schleife.
+#
+# WARUM eine Schleife (das Timing-Rennen):
+# Der Initramfs-Dropbear (Port 2222 auf dem PC) lauscht NUR im schmalen
+# Fenster, in dem der PC am LUKS-Prompt steht. Vorher (PC noch aus) und
+# nachher (PC durchgebootet) ist Port 2222 tot — Dropbear lebt nur im
+# Initramfs, nicht im laufenden System. Ein EINMALIGER ssh-Versuch (so wie
+# der xfce-Autostart früher) trifft dieses Fenster fast nie:
+#   - PC noch aus      → "host unreachable", Versuch gibt auf
+#   - PC schon fertig  → "connection refused", Versuch gibt auf
+# Nur wenn Pi und PC zufällig im selben Sekundenfenster booten, klappt's.
+# Deshalb hier: ERST pollen bis der Port offen ist, DANN genau einmal
+# interaktiv entsperren. Egal wer zuerst bootet — die Schleife wartet das
+# richtige Fenster einfach ab.
+set -u
+
+HOST=192.168.50.1
+PORT=2222
+SSH_USER=root
+
+# --- Phase 1: warten bis der Initramfs-Dropbear erreichbar ist -------------
+# Reiner Port-Check über bash /dev/tcp — kein nc/netcat als Abhängigkeit.
+# `timeout 3` begrenzt jeden einzelnen Connect-Versuch (gefilterte/tote
+# Leitung würde sonst hängen). Schleife läuft, bis der PC ins Initramfs
+# kommt und Port 2222 öffnet. Läuft der PC nie an, wartet sie eben weiter —
+# harmlos, Strg-C oder Fenster zu bricht ab.
+echo "warte auf PC-Initramfs ($HOST:$PORT) … (Strg-C bricht ab)"
+until timeout 3 bash -c "exec 3<>/dev/tcp/$HOST/$PORT" 2>/dev/null; do
+    sleep 3
+done
+
+# --- Phase 2: Fenster ist offen → genau EINMAL interaktiv entsperren --------
+# cryptroot-unlock fragt die LUKS-Passphrase auf der PC-Seite ab → kein
+# Passwort im Skript. `accept-new` nimmt den Initramfs-Hostkey beim ersten
+# Mal automatisch an (eigener Key, Port 2222 — siehe auto_unlock.md
+# "Erste-Verbindung-Gotcha"). Nach erfolgreichem Unlock killt init-bottom
+# die SSH-Session (gewollt) und der PC bootet durch.
+echo "PC im Initramfs erreichbar — LUKS-Passphrase eingeben:"
+ssh -p "$PORT" -o StrictHostKeyChecking=accept-new "$SSH_USER@$HOST" cryptroot-unlock
+
+echo "fertig — PC entsperrt und bootet durch."

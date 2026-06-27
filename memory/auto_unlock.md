@@ -17,11 +17,11 @@ Zugehöriges Bedrohungsmodell + Design-Entscheidungen: `sicherheit.md`.
 Auf dem **Pi** liegt ein Bequemlichkeits-Wrapper, damit Sasha vom Sofa
 nicht die volle `ssh`-Zeile tippen muss:
 
-- **`/usr/local/bin/zentrale-unlock`** — ist „literally nur" der ssh an
-  den Dropbear: `ssh -p 2222 root@192.168.50.1 cryptroot-unlock`. Die
-  LUKS-Passphrase fragt das `cryptroot-unlock` auf der PC-Seite
-  interaktiv ab → **kein Passwort im Skript**, sicherheitstechnisch
-  sauber.
+- **`/usr/local/bin/zentrale-unlock`** — Quelle ist versioniert unter
+  **`deploy/zentrale-unlock`** (siehe Timing-Fix unten). Entsperrt den PC
+  per `cryptroot-unlock` über den Initramfs-Dropbear (`root@192.168.50.1`
+  Port 2222). Die LUKS-Passphrase fragt `cryptroot-unlock` auf der PC-Seite
+  interaktiv ab → **kein Passwort im Skript**, sicherheitstechnisch sauber.
 - **`~/.config/autostart/zentrale-unlock.desktop`** — xfce-Autostart-
   Launcher, öffnet bei **jedem Pi-Start** automatisch ein xterm mit dem
   Skript: `Exec=xterm -hold -e zentrale-unlock`. So poppt die
@@ -29,16 +29,50 @@ nicht die volle `ssh`-Zeile tippen muss:
   - `-e` = Kommando *im* xterm ausführen; `-hold` = Fenster offen lassen
     (zeigt Erfolg/Fehler). Wenn's zuverlässig läuft, `-hold` raus →
     Fenster schließt sich nach erfolgreichem Unlock von selbst.
-  - Poppt auch auf, wenn der PC schon läuft → dann `connection refused`
-    (Dropbear lauscht nur im Initramfs, nicht im gebooteten System).
+
+### Timing-Rennen + Warte-Schleife-Fix (2026-06-26)
+
+**Beobachtet (Sasha):** Pi gebootet während PC **aus** → xterm sagt
+*host unreachable*, gibt auf, nichts passiert; manuell per Terminal
+`zentrale-unlock` getippt → klappt (PC war inzwischen im Initramfs).
+Pi gebootet während PC **schon fertig** → xterm sagt *connection
+refused*; ZENTRALE ging trotzdem hoch, aber nur weil das Backend eh
+schon lief (kein Unlock nötig).
+
+**Diagnose:** Kein Bug, ein **Timing-Rennen**. Der Initramfs-Dropbear
+lauscht NUR im schmalen Fenster, in dem der PC am LUKS-Prompt steht —
+davor (PC aus) und danach (PC durchgebootet) ist Port 2222 tot
+(Dropbear lebt nur im Initramfs). Der **einmalige** ssh-Versuch des
+Autostarts feuert beim Pi-Boot und trifft dieses PC-Fenster fast nie →
+scheitert in beide Richtungen. Funktioniert nur, wenn Pi und PC zufällig
+im selben Sekundenfenster booten.
+
+**Fix:** `zentrale-unlock` ist jetzt **zweiphasig** (Quelle:
+`deploy/zentrale-unlock`):
+1. **Pollt** per `bash /dev/tcp` (kein nc nötig, je Versuch `timeout 3`),
+   bis Port 2222 offen ist — wartet das PC-Initramfs-Fenster also ab,
+   egal wer zuerst bootet.
+2. **Dann genau einmal** `ssh … cryptroot-unlock` interaktiv. `accept-new`
+   nimmt den Initramfs-Hostkey beim ersten Mal automatisch (löst die
+   „Erste-Verbindung-Gotcha" unten en passant).
+
+Damit poppt der Passphrase-Prompt von allein auf, sobald der PC ins
+Initramfs kommt — kein manuelles Nachtippen mehr.
+
+**Auf den Pi spielen** (Pi-lokal, read-only-vom-Repo-aus → Sasha tippt):
+```bash
+scp deploy/zentrale-unlock pi@192.168.50.10:/tmp/zentrale-unlock
+ssh pi@192.168.50.10 'sudo install -m755 /tmp/zentrale-unlock /usr/local/bin/zentrale-unlock'
+```
 
 **Stolperstein 2026-06-03:** `zentrale-unlock` gab `permission denied` —
-dem Skript fehlte das Execute-Bit. Fix: `sudo chmod +x
-/usr/local/bin/zentrale-unlock`.
+dem Skript fehlte das Execute-Bit. `install -m755` oben setzt es gleich
+mit; bei Handarbeit: `sudo chmod +x /usr/local/bin/zentrale-unlock`.
 
-**⚠️ Nicht im Repo:** Beide Dateien liegen Pi-lokal (`/usr/local/bin/`
-+ `~/.config/autostart/`), nicht im versionierten Repo → kein Backup.
-Bei Pi-Neuaufsetzung von Hand neu anlegen (Inhalte stehen oben).
+**⚠️ Launcher noch nicht im Repo:** Das **Skript** ist jetzt versioniert
+(`deploy/zentrale-unlock`), der `.desktop`-Launcher liegt weiter Pi-lokal
+(`~/.config/autostart/`). Bei Pi-Neuaufsetzung den Launcher von Hand neu
+anlegen (`Exec=xterm -hold -e zentrale-unlock`).
 
 ---
 
