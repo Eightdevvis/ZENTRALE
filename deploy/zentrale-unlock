@@ -13,20 +13,39 @@
 # Deshalb hier: ERST pollen bis der Port offen ist, DANN genau einmal
 # interaktiv entsperren. Egal wer zuerst bootet — die Schleife wartet das
 # richtige Fenster einfach ab.
+#
+# Zwei Ports unterscheiden die zwei PC-Zustände:
+#   Port 2222 offen → PC im Initramfs (Dropbear)      → entsperren.
+#   Port 22   offen → PC schon durchgebootet (sshd)   → nichts zu tun, raus.
+#   keiner offen    → PC aus / noch früh im Boot       → weiter warten.
 set -u
 
 HOST=192.168.50.1
-PORT=2222
+DROPBEAR_PORT=2222   # SSH im Initramfs — nur am LUKS-Prompt offen
+SSH_PORT=22          # normaler sshd — nur im gebooteten System offen
 SSH_USER=root
 
+# Port-Check über bash /dev/tcp (kein nc/netcat als Abhängigkeit).
+# `timeout 3` begrenzt jeden einzelnen Connect-Versuch, sonst würde eine
+# gefilterte/tote Leitung hängen. Rückgabe 0 = Port offen.
+port_open() {
+    timeout 3 bash -c "exec 3<>/dev/tcp/$HOST/$1" 2>/dev/null
+}
+
 # --- Phase 1: warten bis der Initramfs-Dropbear erreichbar ist -------------
-# Reiner Port-Check über bash /dev/tcp — kein nc/netcat als Abhängigkeit.
-# `timeout 3` begrenzt jeden einzelnen Connect-Versuch (gefilterte/tote
-# Leitung würde sonst hängen). Schleife läuft, bis der PC ins Initramfs
-# kommt und Port 2222 öffnet. Läuft der PC nie an, wartet sie eben weiter —
-# harmlos, Strg-C oder Fenster zu bricht ab.
-echo "warte auf PC-Initramfs ($HOST:$PORT) … (Strg-C bricht ab)"
-until timeout 3 bash -c "exec 3<>/dev/tcp/$HOST/$PORT" 2>/dev/null; do
+# Pro Runde beide Ports prüfen. 2222 zuerst (der handlungsrelevante Zustand):
+# ist er offen, raus aus der Schleife und entsperren. Sonst 22 prüfen — ist
+# DER offen, läuft der PC längst, es gibt nichts zu entsperren → sauber raus
+# statt ewig gegen einen toten 2222 zu pollen. Sonst (PC aus) weiter warten.
+echo "warte auf PC-Initramfs ($HOST:$DROPBEAR_PORT) … (Strg-C bricht ab)"
+while true; do
+    if port_open "$DROPBEAR_PORT"; then
+        break
+    fi
+    if port_open "$SSH_PORT"; then
+        echo "PC läuft bereits (Port $SSH_PORT offen) — kein Unlock nötig."
+        exit 0
+    fi
     sleep 3
 done
 
@@ -37,6 +56,6 @@ done
 # "Erste-Verbindung-Gotcha"). Nach erfolgreichem Unlock killt init-bottom
 # die SSH-Session (gewollt) und der PC bootet durch.
 echo "PC im Initramfs erreichbar — LUKS-Passphrase eingeben:"
-ssh -p "$PORT" -o StrictHostKeyChecking=accept-new "$SSH_USER@$HOST" cryptroot-unlock
+ssh -p "$DROPBEAR_PORT" -o StrictHostKeyChecking=accept-new "$SSH_USER@$HOST" cryptroot-unlock
 
 echo "fertig — PC entsperrt und bootet durch."

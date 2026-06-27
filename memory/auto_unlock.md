@@ -59,6 +59,14 @@ im selben Sekundenfenster booten.
 Damit poppt der Passphrase-Prompt von allein auf, sobald der PC ins
 Initramfs kommt — kein manuelles Nachtippen mehr.
 
+**„PC läuft schon"-Kurzschluss (2026-06-27):** Die zwei PC-Zustände
+hängen an zwei Ports — **2222** offen = Initramfs/Dropbear (entsperren),
+**22** offen = schon durchgebootet (normaler sshd). Die Poll-Schleife
+prüft pro Runde beide: 2222 → entsperren; 22 → der PC läuft längst, es
+gibt nichts zu entsperren → **sauber raus** (`exit 0`) statt ewig gegen
+einen toten 2222 zu pollen; keiner offen (PC aus) → weiter warten. So
+gammelt das xterm im „PC schon fertig"-Fall nicht endlos.
+
 **Auf den Pi spielen** (Pi-lokal, read-only-vom-Repo-aus → Sasha tippt):
 ```bash
 scp deploy/zentrale-unlock pi@192.168.50.10:/tmp/zentrale-unlock
