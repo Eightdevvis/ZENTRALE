@@ -4,8 +4,18 @@
 # -----------------------------------------------------------------------------
 # Konfiguriert XFCE auf dem Pi als reinen Kiosk: KEIN Wallpaper, KEIN Panel,
 # KEINE Desktop-Icons. Nur xfwm4 (Window Manager) + xfsettingsd (xrandr/
-# theme-Daemon) laufen — Firefox-Kiosk legt sich sofort als einziges Fenster
+# theme-Daemon) laufen — der Kiosk legt sich sofort als einziges Fenster
 # vollflaechig drueber.
+#
+# ZWEI MODI (ZENTRALE_KIOSK_MODE, Default 'tui' seit 2026-06-27):
+#   tui     — maximiertes xterm mit der curses-TUI (tui/zentrale_tui.py)
+#             gegen das PC-Backend. KEIN Browser. Grund: der Pi 3 (1 GB RAM,
+#             schwache VideoCore-IV-GPU) rendert das animierte 1080p-Dashboard
+#             nur in Software -> ein CPU-Kern dauerhaft am Anschlag (gemessen
+#             firefox-esr ~120 %CPU), sichtbar ruckelige Framerate. Die TUI
+#             malt nur geaenderte Terminal-Zellen -> Last quasi null. ACHTUNG:
+#             tui-Kassette ist KI-frei (kein Chat/Kino/Reflexion auf der Wand).
+#   browser — der alte selbstheilende Firefox-Kiosk (volle KI-Optik / PC-Test).
 #
 # Hintergrund: vorher sah man zwischen lightdm-Login und Firefox-Start
 # noch kurz das default XFCE-Setup (Wallpaper + Panel). Jetzt bleibt das
@@ -105,6 +115,14 @@ mkdir -p "$AUTOSTART_DIR" "$XFCONF_DIR"
 # ---------------------------------------------------------------------
 BACKEND_URL="${ZENTRALE_BACKEND_URL:-http://192.168.50.1:5000}"
 echo "Kiosk-Backend-URL: $BACKEND_URL"
+
+# Kiosk-Modus: 'tui' (Default) = maximiertes xterm mit der curses-TUI,
+# 'browser' = Firefox-Kiosk. Siehe Kopf-Kommentar. Umschalten z.B.:
+#   ZENTRALE_KIOSK_MODE=browser bash install_xfce_autostart.sh
+KIOSK_MODE="${ZENTRALE_KIOSK_MODE:-tui}"
+# Schriftgroesse der TUI im xterm (Wand-Monitor aus Distanz -> eher gross).
+TUI_FONTSIZE="${ZENTRALE_TUI_FONTSIZE:-16}"
+echo "Kiosk-Modus: $KIOSK_MODE"
 
 # Dediziertes Firefox-Profil fuer den Kiosk. Liegt unter $HOME, gehoert
 # dem User, ist git-unabhaengig (wird hier programmatisch befuellt).
@@ -222,16 +240,54 @@ EOF
 # genau der Bug vom 2026-06-02. Die Endlos-Schleife kennt kein
 # Timeout und erholt sich auch nach spaetem PC-Start oder Suspend.
 rm -f "$AUTOSTART_DIR/zentrale.desktop.disabled"
-# Heredoc OHNE Quotes -> $BACKEND_URL und $KIOSK_PROFILE_DIR werden JETZT
-# (zur Install-Zeit) in die Exec-Zeile eingebacken. Die Runtime-Variablen
-# der Schleife ($U, $P, $F, $n) und die Subshells muessen dagegen LITERAL
-# im File landen (werden erst beim Kiosk-Start ausgewertet), deshalb sind
-# deren Dollar-Zeichen mit \$ escaped.
-#
-# --profile <dir>: dediziertes Kiosk-Profil mit der user.js von weiter
-# unten (Mic-Insecure-Prefs). --no-remote: keine parallele Default-
-# Instanz reusieren, garantiert Start mit dem Kiosk-Profil.
-cat > "$AUTOSTART_DIR/zentrale.desktop" << EOF
+
+if [ "$KIOSK_MODE" = "tui" ]; then
+    # --- TUI-Variante: maximiertes xterm mit der curses-TUI -----------------
+    # Kein Browser. xterm (das einzige am Pi vorhandene Terminal), maximiert
+    # auf den ganzen Schirm, darin python3 tui/zentrale_tui.py gegen das
+    # PC-Backend ($BACKEND_URL).
+    #
+    # Warum -maximized und NICHT -fullscreen: ein echtes Fullscreen-Fenster
+    # liegt bei xfwm4 in einem eigenen Layer GANZ oben — dann oeffnen die
+    # Zusatzfenster der TUI (Karte 'w' -> scripts/map_window.py via pygame,
+    # /slide-PDFs) DAHINTER und sind unerreichbar. -maximized ist ein ganz
+    # normales Fenster auf voller Groesse -> neue Fenster stapeln sich normal
+    # drueber und kommen nach vorn. Randlos macht es das xfconf-Setting
+    # borderless_maximize weiter unten (sonst klebt eine Titelleiste dran).
+    #
+    # xterm-Flags:
+    #   -u8                erzwingt UTF-8 unabhaengig von der Locale — die TUI
+    #                      lebt von Box-/Block-/Braille-Zeichen
+    #   -fa Monospace -fs N  TrueType (DejaVu) mit voller Unicode-Abdeckung,
+    #                      Groesse aus $TUI_FONTSIZE
+    #   -bg black -fg white  ruhiger Wand-Look
+    # Im Kind: TERM=xterm-256color (curses braucht's fuer 256 Farben),
+    # ZENTRALE_URL zeigt auf den PC. Die TUI ist stdlib-only -> system-python3
+    # genuegt, KEIN venv noetig.
+    #
+    # Selbstheilung: aeussere Endlos-Schleife startet xterm neu, wenn es endet
+    # (TUI-Crash oder jemand drueckt 'q'). Backend-weg faengt die TUI selbst ab
+    # (Header '[backend ?]', kein Crash) -> keine curl-Warteschleife noetig.
+    #
+    # Heredoc OHNE Quotes -> $BACKEND_URL/$TUI_FONTSIZE jetzt eingebacken; die
+    # Exec-Zeile enthaelt KEINE Runtime-$-Variablen, daher kein Escaping noetig.
+    cat > "$AUTOSTART_DIR/zentrale.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Name=ZENTRALE Kiosk (TUI)
+Comment=Maximiertes xterm mit der curses-TUI gegen das PC-Backend (KI-frei, browserlos)
+Exec=bash -c 'while true; do xterm -maximized -u8 -fa Monospace -fs ${TUI_FONTSIZE} -bg black -fg white -e bash -c "export TERM=xterm-256color; export ZENTRALE_URL=${BACKEND_URL}; cd /opt/zentrale && exec python3 tui/zentrale_tui.py"; sleep 2; done'
+X-GNOME-Autostart-enabled=true
+EOF
+    echo "Kiosk-Autostart (TUI, maximiertes xterm) geschrieben."
+else
+    # --- Browser-Variante: Firefox-Kiosk (selbstheilende Schleife) ----------
+    # Heredoc OHNE Quotes -> $BACKEND_URL und $KIOSK_PROFILE_DIR werden JETZT
+    # (zur Install-Zeit) eingebacken. Die Runtime-Variablen der Schleife
+    # ($U, $P, $F, $n) muessen LITERAL ins File -> mit \$ escaped.
+    # --profile <dir>: dediziertes Kiosk-Profil mit der user.js (Mic-Insecure-
+    # Prefs). --no-remote: garantiert Start mit dem Kiosk-Profil.
+    cat > "$AUTOSTART_DIR/zentrale.desktop" << EOF
 [Desktop Entry]
 Type=Application
 Name=ZENTRALE Kiosk
@@ -239,6 +295,12 @@ Comment=Firefox auf das ZENTRALE-Dashboard, selbstheilend (wartet aufs Backend, 
 Exec=bash -c 'U=${BACKEND_URL}; P=${KIOSK_PROFILE_DIR}; while true; do until curl -fs "\$U/" >/dev/null 2>&1; do sleep 2; done; firefox-esr --no-remote --profile "\$P" --kiosk "\$U" & F=\$!; n=0; while kill -0 \$F 2>/dev/null; do if curl -fs "\$U/" >/dev/null 2>&1; then n=0; else n=\$((n+1)); [ \$n -ge 3 ] && { kill \$F 2>/dev/null; break; }; fi; sleep 10; done; sleep 2; done'
 X-GNOME-Autostart-enabled=true
 EOF
+    echo "Kiosk-Autostart (Browser/Firefox) geschrieben."
+fi
+
+# --- Browser-Only: Mikrofon ueber HTTP (Profil-user.js + Policy) -------------
+# Beides ergibt nur im Browser-Modus Sinn (im tui-Modus laeuft kein Firefox).
+if [ "$KIOSK_MODE" = "browser" ]; then
 
 # --- Kiosk-Profil: user.js fuer Mikrofon ueber HTTP -------------------------
 # Firefox blockt navigator.mediaDevices.getUserMedia() per default komplett,
@@ -292,6 +354,8 @@ else
     echo "WARNUNG: $MIC_POLICY_SCRIPT nicht ausfuehrbar — Mic-Policy uebersprungen."
 fi
 
+fi  # Ende Browser-Only (Mic-Profil + Policy)
+
 # --- Hotkeys: Notaus + xterm-Toggle ------------------------------------------
 # Setzt Custom-Command-Shortcuts im XFCE-Keyboard-Channel:
 #
@@ -312,6 +376,15 @@ if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
 fi
 
 if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] && command -v xfconf-query >/dev/null 2>&1; then
+    # Randlos beim Maximieren — nur im tui-Modus relevant (das Kiosk-xterm
+    # laeuft maximiert; ohne das klebt eine Titelleiste am Wand-Bild). -n -t
+    # legt die Property an, falls noch nicht vorhanden; sonst nur -s.
+    if [ "$KIOSK_MODE" = "tui" ]; then
+        xfconf-query -c xfwm4 -p /general/borderless_maximize -n -t bool -s true 2>/dev/null \
+            || xfconf-query -c xfwm4 -p /general/borderless_maximize -s true || true
+        echo "xfwm4: borderless_maximize = true (randloses Maximieren)"
+    fi
+
     # Notaus
     EMERG_HOTKEY='/commands/custom/<Primary><Alt>Escape'
     EMERG_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/emergency_exit.sh"
@@ -337,14 +410,17 @@ fi
 # --- Ausgabe ------------------------------------------------------------------
 echo
 echo "Installiert:"
-ls -la "$XFCONF_DIR/xfce4-session.xml" \
-       "$AUTOSTART_DIR/xfwm4.desktop" \
-       "$AUTOSTART_DIR/zentrale.desktop" \
-       "$KIOSK_PROFILE_DIR/user.js"
+INSTALLED_FILES=("$XFCONF_DIR/xfce4-session.xml" "$AUTOSTART_DIR/xfwm4.desktop" "$AUTOSTART_DIR/zentrale.desktop")
+if [ "$KIOSK_MODE" = "browser" ]; then INSTALLED_FILES+=("$KIOSK_PROFILE_DIR/user.js"); fi
+ls -la "${INSTALLED_FILES[@]}"
 echo
 echo "Test mit:"
 echo "  sudo systemctl restart lightdm"
-echo "  # nach ~5s sollte Firefox-Kiosk drauf sein, KEIN Panel, KEIN Wallpaper"
+if [ "$KIOSK_MODE" = "tui" ]; then
+    echo "  # nach ~5s sollte das maximierte TUI-xterm drauf sein, KEIN Panel/Titelleiste"
+else
+    echo "  # nach ~5s sollte Firefox-Kiosk drauf sein, KEIN Panel, KEIN Wallpaper"
+fi
 echo
 echo "Notaus testen (in der laufenden XFCE-Session):"
 echo "  Ctrl+Alt+Esc  -> lightdm stoppt, Pi landet auf TTY1"

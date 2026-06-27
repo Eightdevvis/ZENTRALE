@@ -202,8 +202,35 @@ wird — sobald der Core idle ist, kriegen sie CPU.
 
 ## 4) Kiosk-Modus (Auto-Start im Vollbild, ohne XFCE-UI)
 
-Ziel: Pi bootet → kurze Konsole → schwarzer Bildschirm → Firefox-Kiosk.
-**Kein XFCE-Panel, kein Wallpaper, kein Mauszeiger** dazwischen.
+> **MODI seit 2026-06-27 (`ZENTRALE_KIOSK_MODE`, Default `tui`):** Der Pi
+> zeigt standardmäßig **kein Firefox mehr**, sondern ein **maximiertes xterm
+> mit der curses-TUI** (`tui/zentrale_tui.py`, gegen das PC-Backend). Grund:
+> Der Pi 3 (1 GB RAM, schwache VideoCore-IV-GPU) rendert das animierte
+> 1080p-Monolith-Dashboard nur in **Software** → ein CPU-Kern dauerhaft am
+> Anschlag (gemessen `firefox-esr` ~120 % CPU), sichtbar ruckelige Framerate.
+> Die TUI malt nur geänderte Terminal-Zellen → Last quasi null; sie ist
+> stdlib-only → **kein venv nötig** (system-`python3` reicht). **ACHTUNG:** die
+> `tui`-Kassette ist **KI-frei** (kein Chat/Kino/Reflexion auf der Wand). Der
+> alte Firefox-Kiosk bleibt unter `ZENTRALE_KIOSK_MODE=browser` erhalten (volle
+> KI-Optik / PC-Solo-Test). Beide schreibt dasselbe
+> `install_xfce_autostart.sh`.
+>
+> **`-maximized`, NICHT `-fullscreen`:** Ein echtes Fullscreen-Fenster liegt
+> bei xfwm4 in einem eigenen Layer ganz oben → die Zusatzfenster der TUI
+> (Karte `w` → `scripts/map_window.py` pygame, `/slide`-PDFs) öffnen
+> **dahinter** und sind unerreichbar. `-maximized` ist ein normales Fenster
+> auf voller Größe → neue Fenster stapeln sich normal drüber. Randlos macht es
+> das xfconf-Setting `xfwm4 /general/borderless_maximize = true` (setzt das
+> Skript im tui-Modus selbst).
+>
+> **Anwenden nach Deploy:** Der Autopull (Abschnitt 6) zieht nur Code +
+> restartet Services — er ruft `install_xfce_autostart.sh` **nicht**. Nach dem
+> Pull also einmalig auf dem Pi:
+> `bash /opt/zentrale/scripts/install_xfce_autostart.sh && sudo systemctl restart lightdm`.
+
+Ziel: Pi bootet → kurze Konsole → schwarzer Bildschirm → Kiosk (TUI-xterm
+bzw. Firefox je nach Modus). **Kein XFCE-Panel, kein Wallpaper, kein
+Mauszeiger** dazwischen.
 
 `scripts/install_xfce_autostart.sh` macht das komplett (User-Ebene):
 
