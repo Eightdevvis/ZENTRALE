@@ -587,6 +587,59 @@ def overlay_rows(cmd_buf, help_latched, ctx=None):
     return "befehle", rows
 
 
+class _OverlayScreen:
+    """Adapter, der render_overlay_body die zwei Zeichen-Primitive reicht, ohne
+    dass die Funktion curses kennt. In run_ui mit safe_addstr/addclip befuellt,
+    im Test (tests/test_tui_overlay.py) mit einem Zell-Fake derselben Signatur
+    → render_overlay_body ist als reine Bildfunktion pruefbar."""
+    __slots__ = ("_fill", "_put")
+
+    def __init__(self, fill, put):
+        self._fill, self._put = fill, put
+
+    def fill(self, y, x, n, ch, attr=0):
+        self._fill(y, x, n, ch, attr)
+
+    def put(self, y, x, text, maxw, attr=0):
+        self._put(y, x, text, maxw, attr)
+
+
+def render_overlay_body(scr, rows, ov_x, ov_y, ov_w, attrs):
+    """Zeichnet die Innenzeilen des Befehls-Overlays — DECKEND.
+
+    Curses kennt keine Z-Order/Opazitaet: der Body-stdout ist schon gezeichnet,
+    wenn das Overlay drueberklappt. Wo eine Overlay-Zeile kuerzer war als die
+    Kasten-Innenbreite, blieb frueher der stdout darunter stehen und „blutete"
+    in den Kasten. Fix: JEDE Zeile zuerst ueber die volle Innenbreite blanken,
+    erst dann den Inhalt drauf bestempeln.
+
+    Curses-frei: zeichnet ausschliesslich ueber das scr-Adapterobjekt mit genau
+    zwei Primitiven — fill(y,x,n,ch,attr) blankt n Zellen, put(y,x,text,maxw,attr)
+    schreibt auf maxw gekuerzt. So 1:1 gegen einen Fake-Screen testbar.
+
+    rows-Format wie overlay_rows(): ("cmd",name,desc) | ("key",taste,desc) |
+    ("sep",) | ("info","",text). attrs mappt die Rollen acc/num/dim/faint.
+    """
+    inner_x = ov_x + 1            # erste Innenspalte (rechts vom linken Rahmen)
+    inner_w = ov_w - 2            # Innenbreite zwischen den senkrechten Raendern
+    for i, r in enumerate(rows):
+        yy = ov_y + 1 + i
+        if r[0] == "sep":
+            # Trennlinie deckt die volle Innenbreite schon selbst ab
+            scr.fill(yy, inner_x, inner_w, "─", attrs["faint"])
+            continue
+        # 1) deckend blanken  2) Inhalt drauf
+        scr.fill(yy, inner_x, inner_w, " ", attrs["faint"])
+        if r[0] == "cmd":
+            scr.put(yy, ov_x + 2, r[1], 9, attrs["acc"])
+            scr.put(yy, ov_x + 12, r[2], ov_w - 14, attrs["dim"])
+        elif r[0] == "key":
+            scr.put(yy, ov_x + 2, r[1], 7, attrs["num"])
+            scr.put(yy, ov_x + 10, r[2], ov_w - 12, attrs["dim"])
+        else:                     # "info" / Fallback
+            scr.put(yy, ov_x + 2, r[2], ov_w - 4, attrs["faint"])
+
+
 # ── curses-UI ───────────────────────────────────────────────────────────────
 def run_ui(stdscr, store):
     import curses
@@ -3827,18 +3880,17 @@ def run_ui(stdscr, store):
             ov_x = 2
             ov_y = max(top, bot - ov_h + 1)
             draw_box(ov_y, ov_x, ov_h, ov_w, ov_title)
-            for i, r in enumerate(rows):
-                yy = ov_y + 1 + i
-                if r[0] == "cmd":
-                    addclip(yy, ov_x + 2, r[1], 9, C["acc"])
-                    addclip(yy, ov_x + 12, r[2], ov_w - 14, C["dim"])
-                elif r[0] == "key":
-                    addclip(yy, ov_x + 2, r[1], 7, C["num"])
-                    addclip(yy, ov_x + 10, r[2], ov_w - 12, C["dim"])
-                elif r[0] == "sep":
-                    safe_addstr(yy, ov_x + 1, "─" * (ov_w - 2), C["faint"])
-                else:
-                    addclip(yy, ov_x + 2, r[2], ov_w - 4, C["faint"])
+            # Innenzeilen ueber die testbare, DECKENDE Render-Funktion zeichnen.
+            # Adapter reicht ihr curses-frei zwei Primitive: fill (= blanken via
+            # safe_addstr) und put (= gekuerzt schreiben via addclip).
+            ov_scr = _OverlayScreen(
+                lambda y, x, n, ch, attr=0: safe_addstr(y, x, ch * max(0, n), attr),
+                lambda y, x, text, maxw, attr=0: addclip(y, x, text, maxw, attr),
+            )
+            render_overlay_body(
+                ov_scr, rows, ov_x, ov_y, ov_w,
+                {"acc": C["acc"], "num": C["num"], "dim": C["dim"], "faint": C["faint"]},
+            )
 
         # ── Trennlinie + Befehlszeile (›) ─────────────────────────────────
         safe_addstr(sep_row, 0, "─" * W, C["faint"])
