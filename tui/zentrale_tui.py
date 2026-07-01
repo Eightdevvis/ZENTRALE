@@ -1470,6 +1470,353 @@ def run_ui(stdscr, store):
             else:
                 safe_addstr(row_of(s), cx, "●", C["graph"])
 
+    # Farb-Palette der Überlagerung, je Graph eine (durchgezykelt).
+    LIFE_COL = ["graph", "acc", "warn", "net", "event", "audio", "hook", "num"]
+
+    def draw_overlay(otop, oleft, oh, ow, gs_cache, gv_cache, labeled=False):
+        """ÜBERLAGERUNG aller Graphen in EINEM Gitter (X=Datum/Zeitstrahl, Y je
+        Typ eigene Achse). Zeichnet NUR Inhalt in das Rechteck (otop,oleft,oh,ow)
+        — den Rahmen setzt der Aufrufer. Zwei Modi, geteilt von rechter
+        lifestyle-Box und großer Mitte-Ansicht im Graph-Werkzeug:
+          labeled=False (kompakt): 1 gemeinsame 24h-Achse links, scale als
+              Kreis-Zeilen im Plot, mehrzeilige Legende unten. (unverändert)
+          labeled=True (groß): links GESTAPELTE beschriftete y-achsen — je
+              zahl-graph eine eigene farbige achse (min/max) + die 24h-uhr;
+              scale-graphen als beschriftete zeile unten; Kopf-Legende oben.
+        Darstellung je Typ: period→Bande, time→eigenes Symbol auf 24h,
+        scale→Kreise ◦○◉●⬤, number→dünne Linie auf eigener min/max-Spanne."""
+        if oh < 4 or ow < 12:
+            return
+        if not gs_cache:
+            safe_addstr(otop + 1, oleft + 2, "// noch keine graphen (g)", C["faint"])
+            return
+        plot_x = oleft + 2
+        # pro Graph: {datum: roh-eintrag}, Typ, Farbe (+ Symbol bei time).
+        series = []
+        time_n = 0                             # laufender Index NUR über time-Graphen
+        for i, g in enumerate(gs_cache):
+            if not isinstance(g, dict):
+                continue
+            rows = gv_cache.get(g.get("id")) or []
+            dv = {}
+            for e in rows if isinstance(rows, list) else []:
+                if not isinstance(e, dict):
+                    continue
+                if _num(e.get("value")) is None or not e.get("date"):
+                    continue
+                dv[e["date"]] = e
+            if dv:
+                srec = {"name": g.get("name", "?"), "type": g.get("type"),
+                        "dv": dv, "col": LIFE_COL[i % len(LIFE_COL)],
+                        "predict": bool(g.get("predict"))}
+                if srec["type"] == "time":
+                    srec["sym"] = TIME_SYMBOLS[time_n % len(TIME_SYMBOLS)]
+                    time_n += 1
+                series.append(srec)
+        if not series:
+            safe_addstr(otop + 1, oleft + 2, "// noch keine werte", C["faint"])
+            return
+
+        num_series = [s for s in series if s["type"] == "number"]
+        scale_series = [s for s in series if s["type"] == "scale"]
+
+        # ── Layout je Modus: base/plot_h, linker Gutter (Achsen), Legende ──
+        if labeled:
+            AX_W = 5                           # breite EINER zahl-achsen-spalte
+            n_ax = len(num_series)
+            ix_clock = plot_x + AX_W * n_ax    # 24h-labels rechts vom zahl-gutter
+            day_x0 = ix_clock + 3              # 2 uhr-spalten + │
+            header_h = 1                       # kopf-legende
+            scale_h = 1 if scale_series else 0
+            base = otop + header_h
+            plot_bottom = otop + oh - 1 - scale_h
+            plot_h = max(2, plot_bottom - base + 1)
+            leg_lines = None
+        else:
+            inner_h = oh - 2
+            plot_w0 = max(2, ow - 4)
+            leg_lines, cur_w = [[]], 0
+            for s in series:
+                nm = s["name"][:8]
+                tok = "─ " + nm
+                if cur_w + len(tok) + 1 > plot_w0 and leg_lines[-1]:
+                    leg_lines.append([]); cur_w = 0
+                leg_lines[-1].append((nm, s["col"], s["type"], s.get("sym")))
+                cur_w += len(tok) + 1
+            max_leg = min(len(leg_lines), max(1, inner_h - 3))
+            plot_h = max(2, inner_h - max_leg)
+            base = otop + 1
+            ix_clock = plot_x
+            day_x0 = plot_x + 3
+
+        def row_clock(m):                      # 24h-Skala: 0 unten, 1440 oben
+            m = max(0, min(1440, m))
+            return base + (plot_h - 1) - int(round(m / 1440.0 * (plot_h - 1)))
+
+        def row_norm(v, lo, hi):               # eigene Spanne: lo unten, hi oben
+            n = 0.5 if hi is None or hi == lo else (float(v) - lo) / (hi - lo)
+            n = max(0.0, min(1.0, n))
+            return base + (plot_h - 1) - int(round(n * (plot_h - 1)))
+
+        # Tages-Spalten (X = Zeitstrahl, heute rechts, ältester Tag links).
+        # kompakt: GENAU 1 Spalte/Tag, füllt die Breite (viele Tage).
+        # groß: Fenster = tatsächliche Datenspanne (frühester wert … heute),
+        #   über die volle Breite GESTRECKT, damit die Daten den Platz füllen
+        #   statt rechts an der Achse zu kleben (mehrere Spalten/Tag möglich).
+        today = date.today()
+        day_x_end = oleft + ow - 2
+        avail = max(1, day_x_end - day_x0 + 1)
+        if labeled:
+            all_dates = [dd for s in series for dd in s["dv"].keys()]
+            span = avail
+            if all_dates:
+                try:
+                    ey, em, ed = (int(x) for x in min(all_dates).split("-"))
+                    span = (today - date(ey, em, ed)).days + 1
+                except Exception:
+                    span = avail
+            ndays = max(1, min(span, 366))
+            window = [(today - timedelta(days=k)).isoformat() for k in range(ndays - 1, -1, -1)]
+            if ndays == 1:
+                day_col = {window[0]: day_x_end}
+            else:
+                day_col = {d: day_x0 + int(round(i / (ndays - 1) * (avail - 1)))
+                           for i, d in enumerate(window)}
+        else:
+            window = [(today - timedelta(days=k)).isoformat() for k in range(avail - 1, -1, -1)]
+            day_col = {d: day_x0 + i for i, d in enumerate(window)}
+        day_center = day_col
+        cols = window
+        # Spalten-Spanne je Tag → zusammenhängende Banden auch bei Streckung
+        # (kompakt: 1 Spalte, also unverändert).
+        day_span = {}
+        for idx, d in enumerate(window):
+            x0 = day_col[d]
+            x1 = (day_col[window[idx + 1]] - 1) if idx + 1 < len(window) else day_x_end
+            day_span[d] = (x0, max(x0, x1))
+
+        # 24h-Achse links: senkrechte Linie + Stunden-Marken (groß: feiner).
+        for r in range(plot_h):
+            safe_addstr(base + r, day_x0 - 1, "│", C["faint"])
+        marks = (0, 3, 6, 9, 12, 15, 18, 21, 24) if (labeled and plot_h >= 8) else (0, 6, 12, 18, 24)
+        for hh in marks:
+            safe_addstr(row_clock(hh * 60), ix_clock, "%02d" % (hh % 24), C["faint"])
+
+        NPRED = 7
+
+        def predicted_days(s):
+            """{datum: schätz-entry _pred=True} für Fenster-Lücken — nur wenn der
+            Graph predict trägt (sonst {}); nichts vor dem ersten echten Wert."""
+            if not s.get("predict"):
+                return {}
+            dv = s.get("dv") or {}
+            actual = sorted((e for e in dv.values() if isinstance(e, dict)),
+                            key=lambda e: str(e.get("date", "")))
+            if not actual:
+                return {}
+            earliest = str(actual[0].get("date", ""))
+            last = actual[-NPRED:]
+
+            def mean(key):
+                xs = [_num(e.get(key)) for e in last]
+                xs = [x for x in xs if x is not None]
+                return sum(xs) / len(xs) if xs else None
+
+            mv, me = mean("value"), mean("end")
+            out = {}
+            for d in window:
+                if d in dv or d < earliest or mv is None:
+                    continue
+                e = {"date": d, "value": mv, "_pred": True}
+                if me is not None:
+                    e["end"] = me
+                out[d] = e
+            return out
+
+        # 1. period/Schlaf als zusammenhängende Bande HINTER allem.
+        band_glyph = " " if C.get("band_is_bg") else "▒"
+        band_cells = set()
+        band_fine = bool(C.get("band_is_bg")) and ("band_edge" in C)
+
+        def frow(m):                           # 24h-Skala als FRAKTIONALE Zeile
+            m = max(0, min(1440, m))
+            return base + (plot_h - 1) - (m / 1440.0 * (plot_h - 1))
+
+        def draw_band_seg(cx, a, b, pred):
+            ftop, fbot = frow(b), frow(a)      # ftop <= fbot (screen)
+            rt, rb = int(round(ftop)), int(round(fbot))
+            g = "░" if pred else band_glyph    # geschätzt = schraffiert
+            fine = band_fine and not pred and rb > rt
+            for r in range(rt, rb + 1):
+                if fine and r == rt:           # Oberkante: unterer Zellteil → ▄
+                    cover = (r + 0.5) - ftop
+                    if cover >= 0.75:
+                        safe_addstr(r, cx, g, C["band"]); band_cells.add((r, cx))
+                    elif cover >= 0.25:
+                        safe_addstr(r, cx, "▄", C["band_edge"])
+                elif fine and r == rb:         # Unterkante: oberer Zellteil → ▀
+                    cover = fbot - (r - 0.5)
+                    if cover >= 0.75:
+                        safe_addstr(r, cx, g, C["band"]); band_cells.add((r, cx))
+                    elif cover >= 0.25:
+                        safe_addstr(r, cx, "▀", C["band_edge"])
+                else:
+                    safe_addstr(r, cx, g, C["band"]); band_cells.add((r, cx))
+
+        for s in series:
+            if s["type"] != "period":
+                continue
+            for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
+                span = day_span.get(d)
+                v, end = _num(e.get("value")), _num(e.get("end"))
+                if span is None or v is None or end is None:
+                    continue
+                st, en = int(round(v)), int(round(end))
+                segs = ([(st, en)] if en >= st else [(st, 1440), (0, en)])
+                for a, b in segs:
+                    for cx in range(span[0], span[1] + 1):   # ganze Tages-Breite
+                        draw_band_seg(cx, a, b, bool(e.get("_pred")))
+
+        def latt(r, c, col):                   # in Banden-Zellen: @band-Variante
+            if (r, c) in band_cells and (col + "@band") in C:
+                return C[col + "@band"]
+            return C[col]
+
+        # 2. scale: kompakt = Kreis-Zeilen im Plot; groß = eigene Zeile unten.
+        CIRC = "◦○◉●⬤"
+        if not labeled:
+            srow = 0
+            for s in scale_series:
+                ry = base + plot_h - 1 - srow
+                srow += 1
+                if ry < base:
+                    continue
+                col = s["col"]
+                for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
+                    cx = day_center.get(d)
+                    v = _num(e.get("value"))
+                    if cx is None or v is None:
+                        continue
+                    idx = max(0, min(4, int(round(v)) - 1))
+                    attr = latt(ry, cx, "faint") if e.get("_pred") else latt(ry, cx, col)
+                    safe_addstr(ry, cx, CIRC[idx], attr)
+
+        # 3. time: eigenes Symbol je Graph auf der 24h-Skala.
+        for s in series:
+            if s["type"] != "time":
+                continue
+            col = s["col"]
+            sym = s.get("sym") or TIME_SYMBOLS[0]
+            for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
+                cx = day_center.get(d)
+                v = _num(e.get("value"))
+                if cx is None or v is None:
+                    continue
+                r = row_clock(int(round(v)))
+                attr = latt(r, cx, "faint") if e.get("_pred") else latt(r, cx, col)
+                safe_addstr(r, cx, sym, attr)
+
+        # 4. number: dünne Linie auf eigener min/max-Spanne (+ groß: y-achse).
+        for j, s in enumerate(num_series):
+            col, dv = s["col"], s["dv"]
+            vis = [_num(dv[d].get("value")) for d in cols if d in dv]
+            vis = [x for x in vis if x is not None]
+            lo, hi = (min(vis), max(vis)) if vis else (None, None)
+            pts = []
+            for d, e in dv.items():
+                cx = day_center.get(d)
+                v = _num(e.get("value"))
+                if cx is None or v is None:
+                    continue
+                pts.append((cx, row_norm(v, lo, hi)))
+            pts.sort()
+            if len(pts) == 1:
+                safe_addstr(pts[0][1], pts[0][0], "·", latt(pts[0][1], pts[0][0], col))
+            else:
+                for (c1, r1), (c2, r2) in zip(pts, pts[1:]):
+                    if c2 == c1:
+                        for r in range(min(r1, r2), max(r1, r2) + 1):
+                            safe_addstr(r, c1, "│", latt(r, c1, col))
+                        continue
+                    ch = "─" if r2 == r1 else ("╲" if r2 > r1 else "╱")
+                    for c in range(c1, c2 + 1):
+                        t = (c - c1) / (c2 - c1)
+                        r = int(round(r1 + t * (r2 - r1)))
+                        safe_addstr(r, c, ch, latt(r, c, col))
+            for d, e in predicted_days(s).items():
+                cx = day_center.get(d)
+                v = _num(e.get("value"))
+                if cx is None or v is None:
+                    continue
+                safe_addstr(row_norm(v, lo, hi), cx, "·", latt(row_norm(v, lo, hi), cx, "faint"))
+            # groß: beschriftete y-achse dieses zahl-graphen im linken Gutter
+            if labeled and lo is not None:
+                axx = plot_x + j * AX_W
+                def _axlbl(x):                 # kurz + ohne hässliches Trailing-'.'
+                    if abs(x) >= 10 or x == round(x):
+                        return "%d" % int(round(x))
+                    return "%.1f" % x
+                safe_addstr(base, axx, _axlbl(hi)[:AX_W - 1].rjust(AX_W - 1), C[col])
+                safe_addstr(base + plot_h - 1, axx, _axlbl(lo)[:AX_W - 1].rjust(AX_W - 1), C[col])
+
+        if labeled:
+            # Kopf-Legende (name+symbol/marker je Graph, farbig) in EINER Zeile.
+            hx = plot_x
+            for s in series:
+                if s["type"] == "period":
+                    mk = "▓"
+                elif s["type"] == "scale":
+                    mk = "●"
+                elif s["type"] == "time":
+                    mk = s.get("sym") or TIME_SYMBOLS[0]
+                else:
+                    mk = "─"
+                nm = s["name"][:9]
+                if hx + len(nm) + 3 > oleft + ow - 1:
+                    break
+                safe_addstr(otop, hx, mk, C[s["col"]])
+                addclip(otop, hx + 2, nm, oleft + ow - 1 - (hx + 2), C["dim"])
+                hx += 2 + len(nm) + 1
+            # scale-Zeile unten: je graph name + Kreis-Verlauf der letzten werte.
+            if scale_series:
+                sy = otop + oh - 1
+                sx = plot_x
+                safe_addstr(sy, sx, "skala:", C["faint"]); sx += 7
+                for s in scale_series:
+                    nm = s["name"][:8]
+                    if sx + len(nm) + 2 > oleft + ow - 8:
+                        break
+                    addclip(sy, sx, nm, oleft + ow - 1 - sx, C["dim"]); sx += len(nm) + 1
+                    dvs = sorted((e for e in s["dv"].values() if isinstance(e, dict)),
+                                 key=lambda e: str(e.get("date", "")))
+                    for e in dvs[-8:]:
+                        if sx >= oleft + ow - 6:
+                            break
+                        vv = _num(e.get("value"))
+                        if vv is None:
+                            continue
+                        safe_addstr(sy, sx, CIRC[max(0, min(4, int(round(vv)) - 1))], C[s["col"]])
+                        sx += 1
+                    sx += 2
+                if sx < oleft + ow - 5:
+                    safe_addstr(sy, oleft + ow - 5, "1–5", C["faint"])
+        else:
+            # kompakte Legende unter dem Plot: farbiges Marker-Sample + Name.
+            for li, line in enumerate(leg_lines[:max_leg]):
+                yy = base + plot_h + li
+                cx = plot_x
+                for nm, col, typ, sym in line:
+                    if typ == "period":
+                        safe_addstr(yy, cx, band_glyph, C["band"])
+                    elif typ == "scale":
+                        safe_addstr(yy, cx, "●", C[col])
+                    elif typ == "time":
+                        safe_addstr(yy, cx, sym or TIME_SYMBOLS[0], C[col])
+                    else:
+                        safe_addstr(yy, cx, "─", C[col])
+                    addclip(yy, cx + 2, nm, (ow - 4) - (cx - plot_x) - 2, C["dim"])
+                    cx += 2 + len(nm) + 1
+
     def draw_graph_tool(by, bx, bh, bw, gv_cache):
         """Inhalt der MITTE-Box, wenn das Graph-Werkzeug Fokus hat."""
         ix, iw = bx + 2, bw - 4
@@ -1538,10 +1885,23 @@ def run_ui(stdscr, store):
                     addclip(bottom, ix, ("ziffern · enter speichern · ←/→ tag · esc zu  " + G["msg"]).strip(), iw, C["faint"])
 
         else:  # "list"
-            addclip(by + 1, ix, "GRAPHEN", iw, C["bright"])
-            safe_addstr(by + 1, bx + bw - 9, "[n neu]", C["acc"])
-            safe_addstr(by + 2, ix, "─" * iw, C["faint"])
-            yy = by + 3
+            # Große Überlagerungs-Ansicht (alle Graphen, beschriftete y-achsen)
+            # ÜBER der editierbaren Graphliste — nur wenn Graphen da sind und
+            # genug Platz. Fokus/Mechanik bleiben auf der Liste; das hier ist
+            # reine erweiterte Anschauung (geteilte Routine mit der lifestyle-Box).
+            ly = by + 1
+            if G["graphs"] and bh >= 18 and iw >= 26:
+                avail = bh - 3                     # ohne top-border, hint, bottom-border
+                ng = len([g for g in G["graphs"] if isinstance(g, dict)])
+                list_h = min(2 + ng, max(4, avail // 2))
+                ov_h = avail - list_h
+                if ov_h >= 8:
+                    draw_overlay(by + 1, bx, ov_h, bw, G["graphs"], gv_cache, labeled=True)
+                    ly = by + 1 + ov_h             # Liste beginnt unter der Ansicht
+            addclip(ly, ix, "GRAPHEN", iw, C["bright"])
+            safe_addstr(ly, bx + bw - 9, "[n neu]", C["acc"])
+            safe_addstr(ly + 1, ix, "─" * iw, C["faint"])
+            yy = ly + 2
             if not G["graphs"]:
                 addclip(yy, ix, "noch keine — 'n' legt einen an", iw, C["faint"])
             else:
@@ -3604,278 +3964,9 @@ def run_ui(stdscr, store):
             proj_h = min(need, out_h - 5)
         out_h -= proj_h
         draw_box(top, rx, life_h, rightw, "lifestyle")
-        # Farb-Palette, je Graph eine (durchgezykelt). Unterschieden wird über
-        # die FARBE, nicht über fette Symbole — gezeichnet als dünne Linien.
-        LIFE_COL = ["graph", "acc", "warn", "net", "event", "audio", "hook", "num"]
-        if gs_cache:
-            plot_x = rx + 2
-            plot_w = max(2, rightw - 4)
-            inner_h = life_h - 2
-            # pro Graph: {datum: roh-eintrag}, Typ, Farbe. Roh halten, weil period
-            # zwei Werte (start+end) braucht und Zahlen ihre eigene Spanne über
-            # alle sichtbaren Werte ziehen.
-            series = []
-            time_n = 0                         # laufender Index NUR über time-Graphen
-            for i, g in enumerate(gs_cache):
-                if not isinstance(g, dict):
-                    continue
-                rows = gv_cache.get(g.get("id")) or []
-                dv = {}
-                for e in rows if isinstance(rows, list) else []:
-                    if not isinstance(e, dict):
-                        continue
-                    if _num(e.get("value")) is None or not e.get("date"):
-                        continue
-                    dv[e["date"]] = e
-                if dv:
-                    srec = {"name": g.get("name", "?"), "type": g.get("type"),
-                            "dv": dv, "col": LIFE_COL[i % len(LIFE_COL)],
-                            "predict": bool(g.get("predict"))}
-                    # time-Graph: eigenes Symbol aus der Palette (★ = erstes).
-                    if srec["type"] == "time":
-                        srec["sym"] = TIME_SYMBOLS[time_n % len(TIME_SYMBOLS)]
-                        time_n += 1
-                    series.append(srec)
-            # Legende packen (mehrere pro Zeile): farbiges Linien-Sample + Name —
-            # verbraucht Zeilen, die dem Plot fehlen.
-            leg_lines, cur_w = [[]], 0
-            for s in series:
-                nm = s["name"][:8]
-                tok = "─ " + nm
-                if cur_w + len(tok) + 1 > plot_w and leg_lines[-1]:
-                    leg_lines.append([]); cur_w = 0
-                leg_lines[-1].append((nm, s["col"], s["type"], s.get("sym")))
-                cur_w += len(tok) + 1
-            max_leg = min(len(leg_lines), max(1, inner_h - 3))
-            plot_h = max(2, inner_h - max_leg)
-            base = top + 1                         # oberste Plot-Zeile
-
-            def row_clock(m):                      # 24h-Skala: 0 unten, 1440 oben
-                m = max(0, min(1440, m))
-                return base + (plot_h - 1) - int(round(m / 1440.0 * (plot_h - 1)))
-
-            def row_norm(v, lo, hi):               # eigene Spanne: lo unten, hi oben
-                n = 0.5 if hi is None or hi == lo else (float(v) - lo) / (hi - lo)
-                n = max(0.0, min(1.0, n))
-                return base + (plot_h - 1) - int(round(n * (plot_h - 1)))
-
-            if series:
-                # Wie in der Schlaf-Ansicht: links 3 Spalten für die Stunden-
-                # Labels, dann GENAU 1 Spalte pro Tag (dünn + gleichmäßig — kein
-                # dicker Block, kein schmaler erster Balken durch Rundung).
-                # Heute rechts, ältester Tag links.
-                ix = plot_x                           # Stunden-Labels
-                day_x0 = ix + 3                       # erste Tages-Spalte
-                day_w = max(1, (rx + rightw - 2) - day_x0)
-                NDAYS = day_w
-                today = date.today()
-                window = [(today - timedelta(days=k)).isoformat()
-                          for k in range(NDAYS - 1, -1, -1)]   # alt → neu
-                day_col = {d: day_x0 + i for i, d in enumerate(window)}
-                day_center = day_col                  # 1 Spalte → Mitte = die Spalte
-                cols = window
-
-                # 24h-Achse links: senkrechte Linie + Stunden-Marken.
-                for r in range(plot_h):
-                    safe_addstr(base + r, day_x0 - 1, "│", C["faint"])
-                for hh in (0, 6, 12, 18, 24):
-                    safe_addstr(row_clock(hh * 60), ix, "%02d" % (hh % 24), C["faint"])
-
-                # PREDICTION: Lücken-Tage (kein echter Eintrag) werden aus dem
-                # Schnitt der letzten NPRED echten Werte geschätzt — aber NUR ab
-                # dem ersten echten Eintrag (nichts vor Tracking-Beginn erfinden).
-                # Geschätzte Tage werden später blass/schraffiert markiert.
-                NPRED = 7
-
-                def predicted_days(s):
-                    """{datum: schätz-entry mit _pred=True} für Fenster-Lücken —
-                    aber NUR wenn der Graph das predict-Flag trägt (sonst {}).
-                    So wird z.B. nur Schlaf ergänzt, nicht jeder Graph."""
-                    if not s.get("predict"):
-                        return {}
-                    dv = s.get("dv") or {}
-                    actual = sorted((e for e in dv.values() if isinstance(e, dict)),
-                                    key=lambda e: str(e.get("date", "")))
-                    if not actual:
-                        return {}
-                    earliest = str(actual[0].get("date", ""))
-                    last = actual[-NPRED:]
-
-                    def mean(key):
-                        xs = [_num(e.get(key)) for e in last]
-                        xs = [x for x in xs if x is not None]
-                        return sum(xs) / len(xs) if xs else None
-
-                    mv, me = mean("value"), mean("end")
-                    out = {}
-                    for d in window:
-                        if d in dv or d < earliest or mv is None:
-                            continue
-                        e = {"date": d, "value": mv, "_pred": True}
-                        if me is not None:
-                            e["end"] = me
-                        out[d] = e
-                    return out
-
-                # 1. DURCHGANG: period/Schlaf als zusammenhängende Bande HINTER
-                # allem. Gefärbter Zellen-HINTERGRUND (band), 1 Spalte pro Tag;
-                # Nachbartage stoßen aneinander → ein Band. band_cells merkt sich
-                # die Zellen, damit Kurven dort mit band-bg gezeichnet werden
-                # (= vor dem Band, kein Loch).
-                band_glyph = " " if C.get("band_is_bg") else "▒"
-                band_cells = set()
-                # Fein-Modus: sub-zellen-genaue Ränder mit Halbblöcken ▀/▄ in
-                # Bandfarbe (nur 256-Farben, wo band als bg + band_edge als fg
-                # existiert). Sonst der alte ganz-zellen-Balken.
-                band_fine = bool(C.get("band_is_bg")) and ("band_edge" in C)
-
-                def frow(m):                       # 24h-Skala als FRAKTIONALE Zeile
-                    m = max(0, min(1440, m))
-                    return base + (plot_h - 1) - (m / 1440.0 * (plot_h - 1))
-
-                def draw_band_seg(cx, a, b, pred):
-                    # a<b in Minuten; höhere Minute = weiter oben (kleinere Zeile).
-                    ftop, fbot = frow(b), frow(a)          # ftop <= fbot (screen)
-                    rt, rb = int(round(ftop)), int(round(fbot))
-                    g = "░" if pred else band_glyph        # geschätzt = schraffiert
-                    fine = band_fine and not pred and rb > rt
-                    for r in range(rt, rb + 1):
-                        # Oberkante: Band füllt den UNTEREN Teil dieser Zelle → ▄
-                        if fine and r == rt:
-                            cover = (r + 0.5) - ftop
-                            if cover >= 0.75:
-                                safe_addstr(r, cx, g, C["band"]); band_cells.add((r, cx))
-                            elif cover >= 0.25:
-                                safe_addstr(r, cx, "▄", C["band_edge"])
-                        # Unterkante: Band füllt den OBEREN Teil dieser Zelle → ▀
-                        elif fine and r == rb:
-                            cover = fbot - (r - 0.5)
-                            if cover >= 0.75:
-                                safe_addstr(r, cx, g, C["band"]); band_cells.add((r, cx))
-                            elif cover >= 0.25:
-                                safe_addstr(r, cx, "▀", C["band_edge"])
-                        else:
-                            safe_addstr(r, cx, g, C["band"]); band_cells.add((r, cx))
-
-                for s in series:
-                    if s["type"] != "period":
-                        continue
-                    for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
-                        cx = day_col.get(d)
-                        v, end = _num(e.get("value")), _num(e.get("end"))
-                        if cx is None or v is None or end is None:
-                            continue
-                        st, en = int(round(v)), int(round(end))
-                        segs = ([(st, en)] if en >= st
-                                else [(st, 1440), (0, en)])   # Wrap Mitternacht
-                        for a, b in segs:
-                            draw_band_seg(cx, a, b, bool(e.get("_pred")))
-
-                # Attribut für einen Linien-Glyph: in Banden-Zellen die "@band"-
-                # Variante (band-bg) → Glyph liegt VOR der Bande; sonst normal.
-                def latt(r, c, col):
-                    if (r, c) in band_cells and (col + "@band") in C:
-                        return C[col + "@band"]
-                    return C[col]
-
-                # 2. DURCHGANG: scale (1–5) als wachsende Kreise ◦○◉●⬤ auf je
-                # EIGENER Zeile (von oben gestapelt). Größe kodiert den Wert,
-                # Farbe trennt die Graphen — keine Verbindungslinie. Mehrere
-                # Wertungsgraphen belegen so praktischerweise eigene Zeilen.
-                CIRC = "◦○◉●⬤"
-                srow = 0
-                for s in series:
-                    if s["type"] != "scale":
-                        continue
-                    ry = base + plot_h - 1 - srow      # Zeilen von UNTEN auffüllen
-                    srow += 1
-                    if ry < base:
-                        continue                      # kein Platz mehr → weglassen
-                    col = s["col"]
-                    for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
-                        cx = day_center.get(d)
-                        v = _num(e.get("value"))
-                        if cx is None or v is None:
-                            continue
-                        idx = max(0, min(4, int(round(v)) - 1))
-                        attr = latt(ry, cx, "faint") if e.get("_pred") else latt(ry, cx, col)
-                        safe_addstr(ry, cx, CIRC[idx], attr)
-
-                # 3. DURCHGANG: time als einzelnes Symbol (Zeitpunkt, keine
-                # Linie), je Tag an der Block-Mitte auf der 24h-Skala. Jeder
-                # time-Graph hat SEIN eigenes Symbol (siehe TIME_SYMBOLS).
-                for s in series:
-                    if s["type"] != "time":
-                        continue
-                    col = s["col"]
-                    sym = s.get("sym") or TIME_SYMBOLS[0]
-                    for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
-                        cx = day_center.get(d)
-                        v = _num(e.get("value"))
-                        if cx is None or v is None:
-                            continue
-                        r = row_clock(int(round(v)))
-                        attr = latt(r, cx, "faint") if e.get("_pred") else latt(r, cx, col)
-                        safe_addstr(r, cx, sym, attr)
-
-                # 4. DURCHGANG: number als dünne Linie (eigene min/max-Spanne).
-                for s in series:
-                    if s["type"] != "number":
-                        continue
-                    col, dv = s["col"], s["dv"]
-                    vis = [_num(dv[d].get("value")) for d in cols if d in dv]
-                    vis = [x for x in vis if x is not None]
-                    lo, hi = (min(vis), max(vis)) if vis else (None, None)
-                    pts = []                          # (cx, row) für die Linie
-                    for d, e in dv.items():
-                        cx = day_center.get(d)
-                        v = _num(e.get("value"))
-                        if cx is None or v is None:
-                            continue
-                        pts.append((cx, row_norm(v, lo, hi)))
-                    # Einzelpunkte zu einer dünnen Linie verbinden (Steigung →
-                    # ╱ steigt, ╲ fällt, ─ flach; senkrecht → │). Einzelner Punkt → ·
-                    pts.sort()
-                    if len(pts) == 1:
-                        safe_addstr(pts[0][1], pts[0][0], "·", latt(pts[0][1], pts[0][0], col))
-                    else:
-                        for (c1, r1), (c2, r2) in zip(pts, pts[1:]):
-                            if c2 == c1:
-                                for r in range(min(r1, r2), max(r1, r2) + 1):
-                                    safe_addstr(r, c1, "│", latt(r, c1, col))
-                                continue
-                            ch = "─" if r2 == r1 else ("╲" if r2 > r1 else "╱")
-                            for c in range(c1, c2 + 1):
-                                t = (c - c1) / (c2 - c1)
-                                r = int(round(r1 + t * (r2 - r1)))
-                                safe_addstr(r, c, ch, latt(r, c, col))
-                    # geschätzte Tage als blasse Einzelpunkte (nicht in die Linie)
-                    for d, e in predicted_days(s).items():
-                        cx = day_center.get(d)
-                        v = _num(e.get("value"))
-                        if cx is None or v is None:
-                            continue
-                        r = row_norm(v, lo, hi)
-                        safe_addstr(r, cx, "·", latt(r, cx, "faint"))
-                # Legende unter den Plot: farbiges Linien-Sample + Name
-                for li, line in enumerate(leg_lines[:max_leg]):
-                    yy = base + plot_h + li
-                    cx = plot_x
-                    for nm, col, typ, sym in line:
-                        if typ == "period":          # Bande statt Linie zeigen
-                            safe_addstr(yy, cx, band_glyph, C["band"])
-                        elif typ == "scale":         # Kreis-Sample statt Linie
-                            safe_addstr(yy, cx, "●", C[col])
-                        elif typ == "time":          # Symbol-Sample statt Linie
-                            safe_addstr(yy, cx, sym or TIME_SYMBOLS[0], C[col])
-                        else:
-                            safe_addstr(yy, cx, "─", C[col])
-                        addclip(yy, cx + 2, nm, plot_w - (cx - plot_x) - 2, C["dim"])
-                        cx += 2 + len(nm) + 1
-            else:
-                safe_addstr(top + 1, rx + 2, "// noch keine werte", C["faint"])
-        else:
-            safe_addstr(top + 1, rx + 2, "// noch keine graphen (g)", C["faint"])
+        # Inhalt der lifestyle-Box: kompakte Überlagerung aller Graphen
+        # (geteilte Routine, auch groß im Graph-Werkzeug — siehe draw_overlay).
+        draw_overlay(top, rx, life_h, rightw, gs_cache, gv_cache, labeled=False)
 
         # ── PROJECTS (zwischen lifestyle und outbound) ────────────────────
         # VERSCHACHTELT (Quelle: store.projects_snapshot ← /api/projects, Baum).
