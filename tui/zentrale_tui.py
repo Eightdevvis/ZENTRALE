@@ -249,6 +249,15 @@ GRAPH_TYPES = [
     ("period", "periode", "zeitspanne pro datum (z.b. schlaf 23:00–07:00)"),
 ]
 
+# Marker-Symbole für time-Graphen in der lifestyle-Überlagerung. Früher war der
+# Marker fest der Stern ★; jetzt gibt es eine Palette, aus der jeder time-Graph
+# (in Anlege-Reihenfolge) SEIN eigenes Symbol bekommt — der Stern bleibt der
+# erste/Default, danach variiert es (andere Sterne, Blumen, Schneeflocken …),
+# damit sich mehrere Zeitpunkt-Graphen im selben 24h-Gitter nicht nur über die
+# Farbe unterscheiden. Bewusst nur einfach-breite Dingbats (keine Emoji-Breite),
+# lange Liste → genug zum Durchzykeln.
+TIME_SYMBOLS = "★✦✿❀❁✽✻✷✶✴✳❈❉❋✼✾✩✫✭✮✯❆"
+
 
 def parse_clock(s):
     """'23:15' | '2315' | '7' | '24:00' → Minuten seit Mitternacht (0–1440) oder None."""
@@ -762,6 +771,13 @@ def run_ui(stdscr, store):
                 curses.init_pair(pp, c2, th["band_bg"])
                 C[r + "@band"] = curses.color_pair(pp) | extra
                 pp += 1
+            # Banden-KANTE als Vordergrund: band-bg-Farbe als fg auf Theme-bg.
+            # Damit lassen sich Halbblöcke ▀/▄ am oberen/unteren Rand der Schlaf-
+            # Bande in Bandfarbe zeichnen → sub-zellen-feine Ränder (sonst schnappt
+            # der Balken auf ganze Zeilen ≈ 2–3 h und wirkt grob/hackig).
+            curses.init_pair(pp, th["band_bg"], bg)
+            C["band_edge"] = curses.color_pair(pp)
+            pp += 1
         else:
             C["band"] = C["faint"]
             C["band_is_bg"] = False
@@ -3558,7 +3574,8 @@ def run_ui(stdscr, store):
         # (Zeitstrahl), Y bewusst MEHRDEUTIG — jeder Graph nutzt seine eigene
         # Achse + Darstellung, alles übereinandergelegt zum Vergleich:
         #   period → zusammenhängende Bande (Zellen-Hintergrund) über die Spanne
-        #   time   → Stern ★ auf der 24h-Skala (Zeitpunkt, keine Linie)
+        #   time   → Symbol auf der 24h-Skala (Zeitpunkt, keine Linie); je
+        #            Graph EIN eigenes aus TIME_SYMBOLS (★ als Default/erstes)
         #   scale  → wachsende Kreise ◦○◉●⬤ auf eigener Zeile (Größe = 1–5)
         #   number → Punkt auf der eigenen min/max-Spanne (sichtbare Werte)
         # Eigener Marker + Farbe je Graph (+ Legende). Quelle:
@@ -3598,6 +3615,7 @@ def run_ui(stdscr, store):
             # zwei Werte (start+end) braucht und Zahlen ihre eigene Spanne über
             # alle sichtbaren Werte ziehen.
             series = []
+            time_n = 0                         # laufender Index NUR über time-Graphen
             for i, g in enumerate(gs_cache):
                 if not isinstance(g, dict):
                     continue
@@ -3610,9 +3628,14 @@ def run_ui(stdscr, store):
                         continue
                     dv[e["date"]] = e
                 if dv:
-                    series.append({"name": g.get("name", "?"), "type": g.get("type"),
-                                   "dv": dv, "col": LIFE_COL[i % len(LIFE_COL)],
-                                   "predict": bool(g.get("predict"))})
+                    srec = {"name": g.get("name", "?"), "type": g.get("type"),
+                            "dv": dv, "col": LIFE_COL[i % len(LIFE_COL)],
+                            "predict": bool(g.get("predict"))}
+                    # time-Graph: eigenes Symbol aus der Palette (★ = erstes).
+                    if srec["type"] == "time":
+                        srec["sym"] = TIME_SYMBOLS[time_n % len(TIME_SYMBOLS)]
+                        time_n += 1
+                    series.append(srec)
             # Legende packen (mehrere pro Zeile): farbiges Linien-Sample + Name —
             # verbraucht Zeilen, die dem Plot fehlen.
             leg_lines, cur_w = [[]], 0
@@ -3621,7 +3644,7 @@ def run_ui(stdscr, store):
                 tok = "─ " + nm
                 if cur_w + len(tok) + 1 > plot_w and leg_lines[-1]:
                     leg_lines.append([]); cur_w = 0
-                leg_lines[-1].append((nm, s["col"], s["type"]))
+                leg_lines[-1].append((nm, s["col"], s["type"], s.get("sym")))
                 cur_w += len(tok) + 1
             max_leg = min(len(leg_lines), max(1, inner_h - 3))
             plot_h = max(2, inner_h - max_leg)
@@ -3701,6 +3724,39 @@ def run_ui(stdscr, store):
                 # (= vor dem Band, kein Loch).
                 band_glyph = " " if C.get("band_is_bg") else "▒"
                 band_cells = set()
+                # Fein-Modus: sub-zellen-genaue Ränder mit Halbblöcken ▀/▄ in
+                # Bandfarbe (nur 256-Farben, wo band als bg + band_edge als fg
+                # existiert). Sonst der alte ganz-zellen-Balken.
+                band_fine = bool(C.get("band_is_bg")) and ("band_edge" in C)
+
+                def frow(m):                       # 24h-Skala als FRAKTIONALE Zeile
+                    m = max(0, min(1440, m))
+                    return base + (plot_h - 1) - (m / 1440.0 * (plot_h - 1))
+
+                def draw_band_seg(cx, a, b, pred):
+                    # a<b in Minuten; höhere Minute = weiter oben (kleinere Zeile).
+                    ftop, fbot = frow(b), frow(a)          # ftop <= fbot (screen)
+                    rt, rb = int(round(ftop)), int(round(fbot))
+                    g = "░" if pred else band_glyph        # geschätzt = schraffiert
+                    fine = band_fine and not pred and rb > rt
+                    for r in range(rt, rb + 1):
+                        # Oberkante: Band füllt den UNTEREN Teil dieser Zelle → ▄
+                        if fine and r == rt:
+                            cover = (r + 0.5) - ftop
+                            if cover >= 0.75:
+                                safe_addstr(r, cx, g, C["band"]); band_cells.add((r, cx))
+                            elif cover >= 0.25:
+                                safe_addstr(r, cx, "▄", C["band_edge"])
+                        # Unterkante: Band füllt den OBEREN Teil dieser Zelle → ▀
+                        elif fine and r == rb:
+                            cover = fbot - (r - 0.5)
+                            if cover >= 0.75:
+                                safe_addstr(r, cx, g, C["band"]); band_cells.add((r, cx))
+                            elif cover >= 0.25:
+                                safe_addstr(r, cx, "▀", C["band_edge"])
+                        else:
+                            safe_addstr(r, cx, g, C["band"]); band_cells.add((r, cx))
+
                 for s in series:
                     if s["type"] != "period":
                         continue
@@ -3712,12 +3768,8 @@ def run_ui(stdscr, store):
                         st, en = int(round(v)), int(round(end))
                         segs = ([(st, en)] if en >= st
                                 else [(st, 1440), (0, en)])   # Wrap Mitternacht
-                        g = "░" if e.get("_pred") else band_glyph   # geschätzt = schraffiert
                         for a, b in segs:
-                            r0, r1 = sorted((row_clock(a), row_clock(b)))
-                            for r in range(r0, r1 + 1):
-                                safe_addstr(r, cx, g, C["band"])
-                                band_cells.add((r, cx))
+                            draw_band_seg(cx, a, b, bool(e.get("_pred")))
 
                 # Attribut für einen Linien-Glyph: in Banden-Zellen die "@band"-
                 # Variante (band-bg) → Glyph liegt VOR der Bande; sonst normal.
@@ -3749,12 +3801,14 @@ def run_ui(stdscr, store):
                         attr = latt(ry, cx, "faint") if e.get("_pred") else latt(ry, cx, col)
                         safe_addstr(ry, cx, CIRC[idx], attr)
 
-                # 3. DURCHGANG: time als einzelne Sterne ★ (Zeitpunkt, keine
-                # Linie), je Tag an der Block-Mitte auf der 24h-Skala.
+                # 3. DURCHGANG: time als einzelnes Symbol (Zeitpunkt, keine
+                # Linie), je Tag an der Block-Mitte auf der 24h-Skala. Jeder
+                # time-Graph hat SEIN eigenes Symbol (siehe TIME_SYMBOLS).
                 for s in series:
                     if s["type"] != "time":
                         continue
                     col = s["col"]
+                    sym = s.get("sym") or TIME_SYMBOLS[0]
                     for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
                         cx = day_center.get(d)
                         v = _num(e.get("value"))
@@ -3762,7 +3816,7 @@ def run_ui(stdscr, store):
                             continue
                         r = row_clock(int(round(v)))
                         attr = latt(r, cx, "faint") if e.get("_pred") else latt(r, cx, col)
-                        safe_addstr(r, cx, "★", attr)
+                        safe_addstr(r, cx, sym, attr)
 
                 # 4. DURCHGANG: number als dünne Linie (eigene min/max-Spanne).
                 for s in series:
@@ -3807,13 +3861,13 @@ def run_ui(stdscr, store):
                 for li, line in enumerate(leg_lines[:max_leg]):
                     yy = base + plot_h + li
                     cx = plot_x
-                    for nm, col, typ in line:
+                    for nm, col, typ, sym in line:
                         if typ == "period":          # Bande statt Linie zeigen
                             safe_addstr(yy, cx, band_glyph, C["band"])
                         elif typ == "scale":         # Kreis-Sample statt Linie
                             safe_addstr(yy, cx, "●", C[col])
-                        elif typ == "time":          # Stern-Sample statt Linie
-                            safe_addstr(yy, cx, "★", C[col])
+                        elif typ == "time":          # Symbol-Sample statt Linie
+                            safe_addstr(yy, cx, sym or TIME_SYMBOLS[0], C[col])
                         else:
                             safe_addstr(yy, cx, "─", C[col])
                         addclip(yy, cx + 2, nm, plot_w - (cx - plot_x) - 2, C["dim"])
