@@ -1599,6 +1599,15 @@ def run_ui(stdscr, store):
         for r in range(plot_h):
             safe_addstr(base + r, day_x0 - 1, "│", C["faint"])
         marks = (0, 3, 6, 9, 12, 15, 18, 21, 24) if (labeled and plot_h >= 8) else (0, 6, 12, 18, 24)
+        # groß: feines waagerechtes Hilfsraster an den Stunden-Marken — nur ganz
+        # leicht angedeutet (gepunktet, jede 2. Spalte, faint) und ZUERST gemalt,
+        # damit Banden/Marker/Linien es überzeichnen. Erleichtert das Ablesen der
+        # Werte-Höhe quer über den Zeitstrahl.
+        if labeled:
+            for hh in marks:
+                gr = row_clock(hh * 60)
+                for cx in range(day_x0, day_x_end + 1, 2):
+                    safe_addstr(gr, cx, "·", C["faint"])
         for hh in marks:
             safe_addstr(row_clock(hh * 60), ix_clock, "%02d" % (hh % 24), C["faint"])
 
