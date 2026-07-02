@@ -1,6 +1,6 @@
 # Mandarin-Tutor
 
-> **Status (2026-06-13): REAKTIVIERUNG LÄUFT – Cloud-Verifikations-Phase.**
+> **Status (2026-06-30): REAKTIVIERUNG LÄUFT – Cloud (qwen) startklar, E2E-Call offen.**
 >
 > Der Tutor wurde am 2026-05-14 weich deaktiviert. Grund war **nicht** der
 > schlechte Auto-Trigger (das war nur der Anlass), sondern Sequencing:
@@ -29,6 +29,10 @@
 >   `local` (Default) → Ollama. Siehe „Cloud-Backend" unten.
 > - `core/tutor.py`, `core/tutor_session.py`, `core/tutor_cloud.py`,
 >   `vocab_mandarin.json` (Repo-Root) und die Audio-Modelle sind aktiv/intakt.
+> - **Fronten (»alle Kassetten«-Regel):** der Tutorkanal ist bisher **nur im
+>   Browser** (`monolith.html`) gebaut. In die **TUI** ist davon erst der
+>   `/cloud`-Kill-Switch + die EXTERNAL-Backend-Box gewandert – ein Tutor-Start/
+>   -Kanal in der TUI fehlt noch komplett (offener Punkt).
 >
 > Der Rest dieses Files beschreibt das Design; Abweichungen sind oben vermerkt.
 
@@ -88,11 +92,15 @@ liefert → UI muss sie deutlich anzeigen.
 **Offline-Prinzip:** Default bleibt `local` (Ollama, offline). Cloud-Provider
 sind bewusster Opt-in. **Dependencies:** `openai` ist seit 2026-06-26 im venv +
 in `requirements.txt` – der **qwen-Cloud-Pfad** (openai_compat) lief vorher gar
-nicht, `import openai` knallte. `anthropic` ist bewusst NICHT installiert (nur
-der teure Claude-Verifikations-Pfad braucht es: `venv/bin/pip install anthropic`).
-**Letzte Lücke für Cloud-Live:** `DASHSCOPE_API_KEY` in `data/tutor_config.json`
-(`keys`-Block) – Secret, gitignored, von Sasha einzutragen. Provider/Modell/
-Prompt stehen; ohne Key gibt's nur einen Auth-Fehler beim ersten API-Call.
+nicht, `import openai` knallte. `anthropic` ist **inzwischen ebenfalls im venv
+installiert** (für den Claude-Verifikations-Pfad `core/tutor_cloud.py`), bleibt
+aber **policy-mäßig Opt-in**: in `requirements.txt` bewusst auskommentiert, also
+kein Pflicht-Dep für die Verteilung (`venv/bin/pip install anthropic` bei Bedarf).
+**Cloud-Live steht:** `DASHSCOPE_API_KEY` ist in `data/tutor_config.json`
+(`keys`-Block) **gesetzt** (Secret, gitignored) → der qwen-Pfad ist startklar
+(`provider=qwen`, `model=qwen-plus`, `lang=zh`). Provider/Modell/Prompt stehen;
+**offen bleibt nur ein echter End-to-End-Call** zur Auth-Verifikation – der ist
+noch nicht protokolliert.
 
 ## Position in der Architektur
 
@@ -187,11 +195,21 @@ Charakter. Befehle (Handler in der Chat-IIFE, `handleConsoleCommand`):
 | `/model <id>` | Modell live umschalten (z.B. qwen-turbo). |
 | `/lang <code>` | Sprache umschalten (zh, ru, ar, es). |
 | `/models` | Aktuelle Wahl + wählbare Provider mit Jurisdiktion + Privacy-Flag. |
+| `/cloud on\|off` | **Cloud-Kill-Switch** (Datenschutz/Kosten). Aus → kein Cloud-Backend, EXTERNAL zeigt „gedrosselt". Auch in der TUI. |
 
 Backend dahinter: `POST/GET /api/tutor/config` (Live-Override in
-`tutor_config`, optional `persist`). Schaltet die Provider/Modelle ohne
+`tutor_config`, optional `persist`) für Sprache/Provider/Modell;
+`POST /api/ai/backends {cloud_enabled}` für die Cloud-Drossel. Schaltet ohne
 Neustart. Privacy-Warnung (`trains_on_data`) erscheint beim Start im Minilog
 und über `/api/tutor/status` (`privacy_warning`).
+
+**Verfügbarkeit (kapazitätsbasiert, nicht kassetten-hart):** Der Tutor wird
+nicht mehr per `kassette.ki_aus()` gegated, sondern per
+`tutor_session.available()` — er läuft, sobald das Backend seines aufgelösten
+Providers da ist (lokal ODER cloud, siehe `core/ai_backends.py` +
+`memory/`-Doku zur AI-Backend-Verfügbarkeit). Damit nutzbar auf laptop/tui,
+sobald cloud (oder via SSH lokal) erreichbar ist. Fehlt das Backend (oder Cloud
+gedrosselt): `/api/tutor/{start,respond}` → 503 „backend not here".
 
 **Noch offen / Skizze:** das **zentrale Tutor-Exhibit** (eigene Ansicht im
 AI-Canvas statt nur Minilog) und **Voice** für den Tutor (Mic→`/api/transcribe`

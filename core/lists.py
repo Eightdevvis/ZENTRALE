@@ -12,9 +12,10 @@
 
 import os
 import re
+import copy
 import json
 import unicodedata
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
 # ZWEI Registries, bewusst getrennt (gemerged gelesen):
@@ -52,9 +53,21 @@ def _save_file(path, lists):
         pass
 
 
+_week_migrated = False
+
+
 def _load():
-    """Beide Registries gemerged (privat zuerst, dann Feature-Tracker)."""
-    return _load_file(_REGISTRY) + _load_file(_FEATURES)
+    """Beide Registries gemerged (privat zuerst, dann Feature-Tracker).
+    Beim ersten Laden pro Prozess wird die »week«-Liste einmalig flach
+    gezogen (Wochentag-Ordner → flache Items) und, falls das etwas ändert,
+    zurückgespeichert. Idempotent: danach No-op."""
+    global _week_migrated
+    lists = _load_file(_REGISTRY) + _load_file(_FEATURES)
+    if not _week_migrated:
+        _week_migrated = True
+        if _migrate_week_flat(lists):
+            _save(lists)                  # _save nutzt _load_file, keine Rekursion
+    return lists
 
 
 def _save(lists):
@@ -178,6 +191,132 @@ def _reid(items, lst):
             _reid(kids, lst)
 
 
+# ── Wochen-Liste (Brücke Listen ↔ Kalender) ─────────────────────────────────
+# Eine als »week« benannte Liste ist SPEZIELL: sie ist die FLACHE
+# Kalender-Sidebar-Liste. Ihre Items werden in der Kalender-Wochenansicht rechts
+# neben dem Gitter angezeigt — als EINE flache Liste, NICHT mehr nach Wochentag
+# sortiert (die frühere Wochentag-Ordner-Struktur mon…sun ist raus; _migrate_
+# week_flat() zieht Altdaten einmalig flach). Drei Sonderregeln:
+#   1. week_items() liefert die flache Item-Liste für die Sidebar (kein Datums-
+#      Mapping mehr) — {lid, items:[{id,text,done,linked}]}.
+#   2. Wer einen Eintrag IN die week-Liste schiebt (move_item mit der week-Liste
+#      als Ziel), VERSCHIEBT ihn nicht — er wird KOPIERT: die Quelle behält ihr
+#      Original, eine verlinkte Kopie landet in der Sidebar. Die Kopie trägt
+#      link={lid,iid} zurück auf die Quelle.
+#   3. Abhaken ist über den Link BIDIREKTIONAL: toggle_item auf der Kopie setzt
+#      die Quelle mit, toggle_item auf der Quelle setzt alle Kopien mit
+#      (_sync_linked_done). LÖSCHEN der Kopie bricht nur den Link, die Quelle
+#      bleibt (dangling link wird beim Toggle still ignoriert).
+# _WEEKDAY_NAMES/_weekday_index bleiben — nur noch die Migration nutzt sie.
+
+# Wochentags-Name (robust: deutsch/englisch, lang/kurz) → Index 0=Mo … 6=So.
+_WEEKDAY_NAMES = {
+    "montag": 0, "monday": 0, "mo": 0, "mon": 0,
+    "dienstag": 1, "tuesday": 1, "di": 1, "tue": 1, "tues": 1,
+    "mittwoch": 2, "wednesday": 2, "mi": 2, "wed": 2,
+    "donnerstag": 3, "thursday": 3, "do": 3, "thu": 3, "thur": 3, "thurs": 3,
+    "freitag": 4, "friday": 4, "fr": 4, "fri": 4,
+    "samstag": 5, "sonnabend": 5, "saturday": 5, "sa": 5, "sat": 5,
+    "sonntag": 6, "sunday": 6, "so": 6, "sun": 6,
+}
+
+
+def _weekday_index(text):
+    """Eintrags-Text → Wochentag-Index (0=Mo … 6=So) oder None, wenn der Text
+    kein Wochentag ist."""
+    return _WEEKDAY_NAMES.get((text or "").strip().lower())
+
+
+def _is_week_list(lst):
+    """Ist das die spezielle »week«-Liste? (Name, case-insensitive.)"""
+    return isinstance(lst, dict) and (lst.get("name") or "").strip().lower() == "week"
+
+
+def find_week_list(lists=None):
+    """Die »week«-Liste (oder None). lists optional, sonst frisch geladen."""
+    for l in (lists if lists is not None else _load()):
+        if _is_week_list(l):
+            return l
+    return None
+
+
+def _migrate_week_flat(lists):
+    """
+    Einmalige, idempotente Migration: die alte Wochentag-Ordner-Struktur der
+    »week«-Liste (Kinder mon…sun, darunter die Items) flach ziehen — die Items
+    wandern eine Ebene hoch in die Top-Level-Liste (Reihenfolge Mo…So bleibt,
+    done bleibt), die Wochentag-Ordner verschwinden. Läuft nur, solange es
+    überhaupt noch Wochentag-benannte Ordner gibt → danach No-op.
+    Liefert True, wenn etwas geändert wurde (dann muss der Aufrufer speichern).
+    """
+    wl = find_week_list(lists)
+    if wl is None:
+        return False
+    items = wl.get("items") or []
+    if not any(isinstance(it, dict) and _weekday_index(it.get("text")) is not None
+               for it in items):
+        return False                      # keine Wochentag-Ordner mehr → fertig
+    flat = []
+    for it in items:
+        if isinstance(it, dict) and _weekday_index(it.get("text")) is not None:
+            for kid in (it.get("items") or []):   # Kinder hochziehen
+                if isinstance(kid, dict):
+                    flat.append(kid)
+        else:
+            flat.append(it)               # bereits flaches Item bleibt
+    wl["items"] = flat
+    return True
+
+
+def week_items(reference=None):
+    """
+    Flache Item-Liste der »week«-Liste für die Kalender-Sidebar. Kein Datums-
+    Mapping mehr (die Liste ist ein konstanter, wochenunabhängiger Vorrat).
+    `reference` wird ignoriert (Signatur bleibt kompatibel).
+
+    Return: {"lid": <id|None>, "items": [{id, text, done, linked}, …]} —
+    `linked` = True, wenn das Item eine verlinkte Kopie aus einer anderen Liste
+    ist. Leere Item-Liste, wenn es keine »week«-Liste gibt.
+    """
+    wl = find_week_list()
+    if wl is None:
+        return {"lid": None, "items": []}
+    out = []
+    for it in wl.get("items") or []:
+        if not isinstance(it, dict):
+            continue
+        out.append({"id": it.get("id"), "text": it.get("text"),
+                    "done": is_done(it), "linked": bool(it.get("link"))})
+    return {"lid": wl.get("id"), "items": out}
+
+
+def _sync_linked_done(lists, lid, iid, val):
+    """
+    Bidirektionaler Abhak-Sync über den `link` einer week-Kopie:
+      1. Hat das getoggelte Item (lid/iid) selbst einen link → Quelle mit-setzen.
+      2. Ist das getoggelte Item eine QUELLE → alle week-Kopien, deren link auf
+         (lid, iid) zeigt, mit-setzen.
+    Best effort: fehlende Quelle/Kopie (gelöscht → dangling link) wird still
+    übergangen; Container (Ordner) werden nie direkt gesetzt.
+    `lists` wird in-place mutiert; der Aufrufer speichert.
+    """
+    lst = _find(lists, lid)
+    item = _find_item(lst.get("items"), iid) if lst else None
+    link = item.get("link") if isinstance(item, dict) else None
+    if link:                                              # (1) Kopie → Quelle
+        src = _find(lists, link.get("lid"))
+        si = _find_item(src.get("items"), link.get("iid")) if src else None
+        if isinstance(si, dict) and not is_container(si):
+            si["done"] = val
+    wl = find_week_list(lists)                            # (2) Quelle → Kopien
+    if wl:
+        for wi in _walk(wl.get("items") or []):
+            wlink = wi.get("link") if isinstance(wi, dict) else None
+            if (wlink and wlink.get("lid") == lid and wlink.get("iid") == iid
+                    and not is_container(wi)):
+                wi["done"] = val
+
+
 def list_lists():
     """Alle Listen-Definitionen inkl. ihrer Einträge."""
     return _load()
@@ -285,6 +424,8 @@ def toggle_item(lid, iid):
     if is_container(item):
         raise ValueError('Ordner nicht direkt abhakbar')
     item['done'] = not item.get('done', False)
+    # Bidirektionaler Sync über week-Kopie-Links (Quelle↔Sidebar-Kopie).
+    _sync_linked_done(lists, lid, iid, item['done'])
     _save(lists)
     return item
 
@@ -328,9 +469,13 @@ def nest_list(lid, dest_lid, parent_iid=None):
     # Teilbaum drinhängt — sonst kollidieren die gleich neu vergebenen ids.
     _bump_next_item(dest)
 
+    # »week«-Liste als Ziel → DUPLIZIEREN statt verschieben (Quelle bleibt
+    # bestehen, Items tief kopiert, damit _reid die Quell-ids nicht mit-mutiert).
+    to_week = _is_week_list(dest)
+    items = copy.deepcopy(src.get('items') or []) if to_week else (src.get('items') or [])
     # Quell-Liste → Eintrag. id wird gleich von _reid sauber überschrieben.
     node = {'id': None, 'text': src.get('name') or '', 'done': False,
-            'items': src.get('items') or []}
+            'items': items}
     if parent_iid is None:
         dest.setdefault('items', []).append(node)
     else:
@@ -342,8 +487,10 @@ def nest_list(lid, dest_lid, parent_iid=None):
     # Frische, im Ziel eindeutige ids für den ganzen eingehängten Teilbaum.
     _reid([node], dest)
 
-    # Quell-Liste aus dem Top-Level entfernen (dest-Objekt bleibt referenziert).
-    lists = [l for l in lists if l.get('id') != lid]
+    # Beim normalen Einordnen verschwindet die Quell-Liste aus dem Top-Level;
+    # beim Duplizieren in die week-Liste bleibt sie erhalten.
+    if not to_week:
+        lists = [l for l in lists if l.get('id') != lid]
     _save(lists)
     return node
 
@@ -532,10 +679,21 @@ def move_item(src_lid, iid, dest_lid, parent_iid=None):
         if _find_item(dest.get('items'), parent_iid) is None:
             raise KeyError(parent_iid)
 
-    # next_item der Ziel-Liste hochziehen, SOLANGE der bewegte Teilbaum noch
-    # nicht drinhängt (bei gleicher Liste zählt _walk seine alten ids mit — die
-    # werden gleich eh neu vergeben, das schadet nur als oberer Startwert nicht).
-    node = _detach_item(src.setdefault('items', []), iid)
+    # Sonderfall »week«-Liste als Ziel: NICHT verschieben, sondern KOPIEREN —
+    # die Quelle behält ihr Original, eine verlinkte Kopie wandert in die
+    # Sidebar-Liste. Sonst normal ausklinken. (week_items/CLAUDE: die
+    # Kalender-Sidebar räumt den Ursprungsort nicht aus.)
+    if _is_week_list(dest):
+        node = copy.deepcopy(moving)
+        # Kopie zeigt per link auf die Quelle zurück → bidirektionaler Abhak-
+        # Sync (_sync_linked_done). _reid gibt node gleich eine neue id, der
+        # link (Quell-lid/iid) bleibt davon unberührt.
+        node['link'] = {'lid': src_lid, 'iid': iid}
+    else:
+        # next_item der Ziel-Liste hochziehen, SOLANGE der bewegte Teilbaum noch
+        # nicht drinhängt (bei gleicher Liste zählt _walk seine alten ids mit — die
+        # werden gleich eh neu vergeben, das schadet nur als oberer Startwert nicht).
+        node = _detach_item(src.setdefault('items', []), iid)
     _bump_next_item(dest)
     if parent_iid is None:
         dest.setdefault('items', []).append(node)
@@ -545,3 +703,45 @@ def move_item(src_lid, iid, dest_lid, parent_iid=None):
     _reid([node], dest)
     _save(lists)
     return node
+
+
+def _find_siblings(items, iid):
+    """Die Geschwister-Liste (das list-Objekt) UND den Index, unter denen iid
+    direkt hängt — rekursiv. (sib_list, index) oder None."""
+    for idx, it in enumerate(items or []):
+        if not isinstance(it, dict):
+            continue
+        if it.get('id') == iid:
+            return items, idx
+        r = _find_siblings(it.get('items'), iid)
+        if r is not None:
+            return r
+    return None
+
+
+def reorder_item(lid, iid, delta):
+    """
+    Einen Eintrag INNERHALB seiner Geschwister-Ebene um `delta` Positionen
+    verschieben (−1 = rauf, +1 = runter), geklemmt an den Rand. Reine
+    Reihenfolge-Änderung, kein Ebenen-/Listenwechsel. Liefert True, wenn sich
+    etwas bewegt hat (am Rand: False). Wirft KeyError bei unbekannter Liste/
+    unbekanntem Eintrag.
+    """
+    try:
+        delta = int(delta)
+    except (TypeError, ValueError):
+        return False
+    lists = _load()
+    lst = _find(lists, lid)
+    if lst is None:
+        raise KeyError(lid)
+    found = _find_siblings(lst.get('items'), iid)
+    if found is None:
+        raise KeyError(iid)
+    sib, idx = found
+    j = idx + delta
+    if j < 0 or j >= len(sib):
+        return False                      # schon am Rand → nichts tun
+    sib[idx], sib[j] = sib[j], sib[idx]
+    _save(lists)
+    return True

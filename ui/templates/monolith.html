@@ -11,7 +11,7 @@
   [data-theme="day"] {
     --bg: #ece7dc; --paper: rgba(255,255,255,0.25);
     --ink: #232019; --bright: #000; --dim: #7c7768; --faint: #bdb6a4; --line: #cbc4b3;
-    --acc: #2f6b48; --acc-soft: #6f8f7c;
+    --acc: #2f6b48; --acc-soft: #6f8f7c; --span: #b5651d;
     --t-net: #1d6a8c; --t-graph: #8a3fb0; --t-event: #3a7d3a; --t-audio: #2f6b48;
     --t-hook: #9a6a2c; --t-num: #9a6a2c; --t-dim: #9a9482; --warn: #9a6a2c;
     /* Tutor-Kanal: prägnantes Rot, deutlich vom grünen --acc/bernstein --warn
@@ -23,7 +23,7 @@
   [data-theme="night"] {
     --bg: #0d1017; --paper: rgba(255,255,255,0.018);
     --ink: #c5cdd6; --bright: #eaf0f6; --dim: #909eae; --faint: #44505f; --line: #222a33;
-    --acc: #7ec699; --acc-soft: #4f6353;
+    --acc: #7ec699; --acc-soft: #4f6353; --span: #e0a860;
     --t-net: #56b6c2; --t-graph: #c678dd; --t-event: #98c379; --t-audio: #7ec699;
     --t-hook: #e0a458; --t-num: #d19a66; --t-dim: #5c6773; --warn: #e0a458;
     /* Tutor-Rot, im Dark-Theme etwas heller fürs dunkle BG (siehe Tag-Theme). */
@@ -310,10 +310,33 @@
   .cday.today { border-left-color: var(--acc); background: rgba(127, 127, 127, 0.10); }
   .cdate { min-width: 78px; color: var(--dim); white-space: nowrap; }
   .cday.today .cdate { color: var(--acc); }
-  .cents { display: flex; flex-wrap: wrap; gap: 4px; }
+  .cents { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; min-width: 0; }
   .cent { font-size: 14px; padding: 0 6px; border: 1px solid var(--line); color: var(--ink); white-space: nowrap; }
   .cent.ausfall { color: var(--dim); border-style: dashed; }
+  .cent.span { border-style: dotted; border-color: var(--span); color: var(--span); }
+  /* Mehrtägig: der Titel wird nicht mehr auf jeden Tag geschrieben, sondern
+     läuft links neben der Klammer senkrecht mit (ein Zeichen pro Tag) — in
+     sanfterem, hellerem Ton, damit die Klammer selbst führt. */
+  .cent.span .spantime { color: var(--dim); }
+  .cfl { color: var(--dim); font-size: 12px; align-self: center; }
   .cempty { color: var(--dim); opacity: 0.5; }
+  /* Kalender-Sidebar (rechts neben der Woche): die FLACHE »week«-Liste — EINE
+     Spalte, wochenunabhängig, nicht mehr pro Tag. Bearbeitbar (abhaken/umbenennen/
+     löschen/neu); Move in andere Listen gibt es hier bewusst NICHT. */
+  .cweekwrap { display: flex; gap: 10px; flex: 1; min-height: 0; }
+  .cweekwrap .cweek { flex: 1; }
+  .csidebar { width: 32%; max-width: 320px; min-width: 150px; border-left: 1px solid var(--line);
+              padding-left: 8px; display: flex; flex-direction: column; gap: 9px; overflow: auto; }
+  .cshead { color: var(--dim); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+  .csitem { display: flex; align-items: baseline; gap: 3px; font-size: 14px; color: var(--ink); }
+  .csitem .cstext { flex: 1; cursor: pointer; }
+  .csitem.done .cstext { text-decoration: line-through; }
+  .csmove { cursor: pointer; color: var(--dim); opacity: 0.55; font-size: 11px; }
+  .csmove:hover { color: var(--acc); opacity: 1; }
+  .cslink { color: var(--acc); opacity: 0.75; font-size: 12px; }
+  .csadd { display: flex; gap: 4px; margin-top: 5px; }
+  .csadd input { flex: 1; font-family: 'VT323', monospace; font-size: 14px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: 1px 5px; }
+  .csadd input:focus { outline: none; border-color: var(--acc); }
   .cmonth { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; flex: 1; min-height: 0; align-content: start; }
   .cwd { text-align: center; color: var(--dim); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; }
   .ccell { border: 1px solid var(--line); min-height: 32px; padding: 1px 4px; display: flex; flex-direction: column; gap: 1px; overflow: hidden; }
@@ -419,6 +442,18 @@
   .dc-smiley.sel { color: var(--acc); }
   .dc-smiley.hov { color: var(--acc); filter: drop-shadow(0 0 7px color-mix(in srgb, var(--acc) 70%, transparent)); }
   .dc-hint { margin-top: 14px; font-size: 11px; letter-spacing: 0.08em; color: var(--dim); text-transform: uppercase; }
+
+  /* ── Graph-Reminder-Modal („bitte eintragen") ──
+     Eigenes Overlay (nicht das Erfassen-Overlay), teilt sich aber den .dc-panel-
+     Look. Poppt auf, wenn ein Graph mit Tages-Reminder heute noch nicht geloggt
+     ist (siehe /api/graphs/reminders). */
+  #rem-overlay { position: absolute; inset: 0; z-index: 85; display: none; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--bg) 84%, transparent); }
+  #rem-overlay.on { display: flex; }
+  .rem-names { list-style: none; display: flex; flex-direction: column; gap: 8px; margin: 6px 0 18px; }
+  .rem-names li { padding: 10px 12px; border: 1px solid var(--line); font-size: 16px; color: var(--bright); }
+  .rem-names li .at { float: right; color: var(--dim); font-size: 13px; }
+  .rem-btns { display: flex; gap: 10px; justify-content: flex-end; }
 
   /* ── Text-Effekte ([[effekt: wort]] in KI-Antworten) ──
      Eigene Inline-Spezialeffekte, die die KI gezielt setzen kann. Neuen
@@ -589,6 +624,7 @@
 
     <!-- Data-Collection-Overlay: per Alt+K geöffnet, Tastatur-gesteuert -->
     <div id="dc-overlay"><div class="dc-panel" id="dc-panel"></div></div>
+    <div id="rem-overlay"><div class="dc-panel" id="rem-panel"></div></div>
   </div>
 
   <!-- Kassetten-Flag: in laptop/tui ist die KI aus. Muss VOR engine.js stehen,
@@ -785,7 +821,8 @@
     (function () {
       var panel = document.getElementById('graph-panel');
       if (!panel) return;
-      var GT = { graphs: [], selId: null, def: null, vals: [], newMode: false, type: 'number', date: todayStr() };
+      var GT = { graphs: [], selId: null, def: null, vals: [], newMode: false, type: 'number', date: todayStr(),
+                 remind: false, remindAt: '20:00' };   // remind/remindAt: Tages-Reminder im Anlege-Formular
 
       function todayStr() {
         var d = new Date();
@@ -842,7 +879,10 @@
             + '<button data-type="scale" class="' + (GT.type === 'scale' ? 'sel' : '') + '">Skala 1–5</button></div>');
           h.push('<div class="grow"><input id="gt-unit" placeholder="Einheit (optional, z.B. kg)" style="flex:1;min-width:120px"' + (GT.type === 'scale' ? ' disabled' : '') + ' />'
             + '<button data-create="1">anlegen</button><button data-cancel="1">abbrechen</button></div>');
-          h.push('<div class="ghint">Zahl = freie Messwerte (echte Kurve). Skala = 1–5 Bewertung.</div>');
+          h.push('<div class="grow"><button data-remtgl="1" class="' + (GT.remind ? 'sel' : '') + '">⏰ remind ' + (GT.remind ? 'an' : 'aus') + '</button>'
+            + '<input id="gt-remat" type="time" value="' + GT.remindAt + '"' + (GT.remind ? '' : ' disabled') + ' style="width:110px" /></div>');
+          h.push('<div class="ghint">Zahl = freie Messwerte (echte Kurve). Skala = 1–5 Bewertung.'
+            + (GT.remind ? ' · remind: täglich ab ' + GT.remindAt + ' erinnern, bis eingetragen.' : '') + '</div>');
         } else if (GT.def) {
           h.push('<div class="gplot">' + plotSvg() + '</div>');
           var last = GT.vals.length ? GT.vals[GT.vals.length - 1].value : null;
@@ -850,7 +890,8 @@
             + (last != null ? ' · zuletzt ' + last + (GT.def.unit ? ' ' + esc(GT.def.unit) : '') : '')
             + ' · ' + (GT.def.type === 'scale' ? 'skala 1–5' : 'zahl')
             + '<span class="ghint" data-del="' + GT.def.id + '" style="cursor:pointer;float:right">[löschen]</span>'
-            + '<span class="ghint" data-pred="' + GT.def.id + '" style="cursor:pointer;float:right;margin-right:12px">[~vorhersage: ' + (GT.def.predict ? 'an' : 'aus') + ']</span></div>');
+            + '<span class="ghint" data-pred="' + GT.def.id + '" style="cursor:pointer;float:right;margin-right:12px">[~vorhersage: ' + (GT.def.predict ? 'an' : 'aus') + ']</span>'
+            + '<span class="ghint" data-rem="' + GT.def.id + '" style="cursor:pointer;float:right;margin-right:12px">[⏰ remind: ' + (GT.def.remind ? esc(GT.def.remind_at || '20:00') : 'aus') + ']</span></div>');
           h.push('<div class="grow"><button data-day="-1">◀</button><input id="gt-date" type="date" value="' + GT.date + '" /><button data-day="1">▶</button>');
           if (GT.def.type === 'scale') {
             h.push('<span class="gscale">');
@@ -879,7 +920,8 @@
         var name = (q('#gt-name').value || '').trim();
         if (!name) { q('#gt-name').focus(); return; }
         var unit = GT.type === 'number' ? (q('#gt-unit').value || '').trim() : '';
-        var res = await fetch('/api/graphs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name, type: GT.type, unit: unit }) });
+        var remAt = (q('#gt-remat') && q('#gt-remat').value) || GT.remindAt;
+        var res = await fetch('/api/graphs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name, type: GT.type, unit: unit, remind: GT.remind, remind_at: remAt }) });
         if (!res.ok) return;
         var g = await res.json();
         GT.newMode = false; GT.selId = g.id;
@@ -911,9 +953,21 @@
         window.dispatchEvent(new Event('zentrale:logged'));
       }
 
+      // Tages-Reminder eines bestehenden Graphen an/aus (nachträglich, wie predict).
+      // Anschalten fragt die Uhrzeit ab; ausschalten direkt. Body.at nur beim An.
+      async function setRemind(id, on, at) {
+        var body = { remind: on };
+        if (on) body.at = at;
+        await fetch('/api/graphs/' + id + '/remind', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        await loadGraphs();
+        window.dispatchEvent(new Event('zentrale:logged'));
+      }
+
       function wire() {
         [].forEach.call(panel.querySelectorAll('[data-sel]'), function (el) { el.onclick = function () { selectGraph(el.getAttribute('data-sel')); }; });
-        var nb = q('[data-new]'); if (nb) nb.onclick = function () { GT.newMode = true; GT.type = 'number'; render(); var n = q('#gt-name'); if (n) n.focus(); };
+        var nb = q('[data-new]'); if (nb) nb.onclick = function () { GT.newMode = true; GT.type = 'number'; GT.remind = false; GT.remindAt = '20:00'; render(); var n = q('#gt-name'); if (n) n.focus(); };
+        var rt = q('[data-remtgl]'); if (rt) rt.onclick = function () { var at = q('#gt-remat'); if (at) GT.remindAt = at.value || GT.remindAt; GT.remind = !GT.remind; render(); };
+        var ra = q('#gt-remat'); if (ra) ra.onchange = function () { GT.remindAt = ra.value || GT.remindAt; };
         [].forEach.call(panel.querySelectorAll('[data-type]'), function (el) { el.onclick = function () { GT.type = el.getAttribute('data-type'); render(); var n = q('#gt-name'); if (n) n.focus(); }; });
         var cr = q('[data-create]'); if (cr) cr.onclick = createGraph;
         var ca = q('[data-cancel]'); if (ca) ca.onclick = function () { GT.newMode = false; render(); };
@@ -925,6 +979,12 @@
         var vEl = q('#gt-val'); if (vEl) vEl.onkeydown = function (e) { if (e.key === 'Enter') saveValue(vEl.value); };
         var dl = q('[data-del]'); if (dl) dl.onclick = function () { if (confirm('Graph „' + (GT.def ? GT.def.name : '') + '" inkl. Werte löschen?')) deleteGraph(dl.getAttribute('data-del')); };
         var pr = q('[data-pred]'); if (pr) pr.onclick = function () { setPredict(pr.getAttribute('data-pred'), !(GT.def && GT.def.predict)); };
+        var rm = q('[data-rem]'); if (rm) rm.onclick = function () {
+          if (GT.def && GT.def.remind) { setRemind(rm.getAttribute('data-rem'), false); return; }
+          var at = prompt('täglich erinnern ab welcher uhrzeit? (HH:MM)', (GT.def && GT.def.remind_at) || '20:00');
+          if (at === null) return;
+          setRemind(rm.getAttribute('data-rem'), true, at.trim());
+        };
       }
 
       // Beim Öffnen des Graph-Tabs frisch laden (externe Änderungen mitnehmen).
@@ -945,15 +1005,20 @@
       if (!panel) return;
       var WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
       var WDCODE = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+      // showHidden: EIN gemeinsamer Schalter für „passiert nicht" — einzeln
+      // deaktivierte Routine-Vorkommen (deaktiviert), per Zeitraum-Pause
+      // ausgefallene (ausfall, z.B. Ferien) UND abgehakte Wochenplan-Items
+      // (done) zusammen. Default aus → der Kalender startet aufgeräumt; der
+      // Knopf blendet alles gemeinsam ein/aus. Reiner Anzeige-Filter (kein
+      // Reload), greift in Woche UND Monat.
       var CS = { view: 'week', ref: todayStr(), data: null, adding: false, editing: null,
-                 form: {}, msg: '', msgWarn: false };
+                 form: {}, msg: '', msgWarn: false, showHidden: false };
 
       function todayStr() { var d = new Date(); return iso(d); }
       function iso(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
       function parseISO(s) { var p = String(s).split('-'); var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])); return isNaN(d.getTime()) ? null : d; }
       function addDays(d, n) { var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
       function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-
       async function load() {
         try { CS.data = await (await fetch('/api/calendar?view=' + CS.view + '&ref=' + CS.ref)).json(); }
         catch (e) { CS.data = { failed: true }; }
@@ -972,6 +1037,26 @@
       function entChip(e, dayIso) {
         if (!e || typeof e !== 'object') return '';
         if (e.ausfall) return '<span class="cent ausfall" title="' + esc((e.label || '') + ' fällt aus (' + e.ausfall + ')') + '">ℹ ' + esc(e.label || '?') + '</span>';
+        if (e.spanning) {
+          // Mehrtägig: durchgehende Klammer über die Tage (┌ erster · │ mitte ·
+          // └ letzter). Der Titel steht NUR am ersten Tag (nicht pro Tag wieder-
+          // holt); Folgetage tragen nur die Klammer (+ optionale Pro-Tag-Uhrzeit).
+          // ✎ setzt die Uhrzeit NUR für diesen Tag, ✕ löscht die GANZE Spanne.
+          var sl = e.label || '?';
+          var seg = e.span_first ? '┌' : (e.span_last ? '└' : '│');
+          var st = e.time ? ('<span class="spantime">' + esc(e.time) + '</span> ') : '';
+          var body = e.span_first ? (seg + ' ' + st + esc(sl)) : (seg + ' ' + st);
+          var sacts = '';
+          if (dayIso) {
+            sacts = '<span class="cact" title="uhrzeit für diesen tag (leer=ganztags)" data-spanedit="1"'
+              + ' data-se-von="' + esc(e.von || '') + '" data-se-label="' + esc(sl) + '" data-se-layer="' + esc(e.layer || '')
+              + '" data-se-day="' + dayIso + '" data-se-time="' + esc(e.time || '') + '">✎</span>'
+              + '<span class="cdel" title="ganze mehrtägige Spanne löschen" data-del-day="' + esc(e.von || '')
+              + '" data-del-label="' + esc(sl) + '" data-del-layer="' + esc(e.layer || '') + '">✕</span>';
+          }
+          return '<span class="cent span" title="' + esc(sl + ' (' + (e.von || '') + '–' + (e.bis || '') + ')') + '">'
+            + body + sacts + '</span>';
+        }
         var label = e.label || '?';
         var t = (e.time && e.ende) ? (e.time + '–' + e.ende + ' ') : (e.time ? e.time + ' ' : '');
         var ort = e.ort ? ' @' + e.ort : '';
@@ -993,12 +1078,54 @@
         return '<span class="cent' + (deakt ? ' deakt' : '') + '" title="' + esc(t + label + ort) + '">'
           + (deakt ? '✗ ' : '') + esc(t + label) + (deakt ? ' (aus)' : '') + acts + '</span>';
       }
-      function dayList(days, isoDay) { var v = days[isoDay]; return Array.isArray(v) ? v : []; }
+      // Termine eines Tages — einzeln deaktivierte (deaktiviert) UND per
+      // Zeitraum-Pause ausgefallene (ausfall, z.B. Ferien) werden ausgefiltert,
+      // solange der Schalter (CS.showHidden) aus ist. Beide sind „passiert nicht"
+      // und teilen denselben Toggle (gilt für Woche UND Monat).
+      function dayList(days, isoDay) {
+        var v = days[isoDay]; v = Array.isArray(v) ? v : [];
+        return CS.showHidden ? v : v.filter(function (e) { return !(e && (e.deaktiviert || e.ausfall)); });
+      }
+      // Sichtbare Items der flachen »week«-Liste (Sidebar). Neue Form:
+      // weekplan = {lid, items:[{id,text,done,linked}]}. Abgehakte (done) fallen
+      // mit demselben 'erledigte'-Schalter weg.
+      function planItems(wp) {
+        var v = (wp && Array.isArray(wp.items)) ? wp.items : [];
+        return CS.showHidden ? v : v.filter(function (it) { return !(it && it.done); });
+      }
+      function sidebarLid() {
+        return (CS.data && CS.data.weekplan && CS.data.weekplan.lid) || null;
+      }
+      // Rechte Sidebar: die flache Liste, bearbeitbar (inkl. ▲▼ sortieren).
+      // KEIN Move in andere Listen. Ombre: je weiter unten, desto transparenter
+      // (sichtbar ab ~4 Items, verblasst nach unten).
+      function renderSidebar(wp) {
+        var items = planItems(wp);
+        var o = ['<div class="csidebar"><div class="cshead">liste</div>'];
+        if (!items.length) o.push('<span class="cempty">— leer</span>');
+        items.forEach(function (it, idx) {
+          if (!it || typeof it !== 'object') return;
+          var done = !!it.done;
+          var op = Math.max(0.38, 1 - idx * 0.14);   // ombre von oben nach unten
+          o.push('<div class="csitem' + (done ? ' done' : '') + '" style="opacity:' + op.toFixed(2) + '">'
+            + '<span class="csmove" data-siup="' + it.id + '" title="hoch">▲</span>'
+            + '<span class="csmove" data-sidown="' + it.id + '" title="runter">▼</span>'
+            + '<span class="cstext" data-sitog="' + it.id + '" title="abhaken">' + (done ? '✓ ' : '• ') + esc(it.text || '') + '</span>'
+            + (it.linked ? '<span class="cslink" title="verlinkte kopie – abhaken spiegelt in die quelle">↔</span>' : '')
+            + '<span class="cact" data-siren="' + it.id + '" title="umbenennen">✎</span>'
+            + '<span class="cdel" data-sidel="' + it.id + '" title="aus der liste löschen (quelle bleibt)">✕</span>'
+            + '</div>');
+        });
+        o.push('<div class="csadd"><input id="cs-new" placeholder="+ neu" maxlength="80"><button data-siadd="1">+</button></div>');
+        o.push('</div>');
+        return o.join('');
+      }
 
       function renderWeek(d, days, today) {
         var start = parseISO(d.start), end = parseISO(d.end);
         if (!start || !end) return '<div class="ghint">keine daten.</div>';
-        var out = ['<div class="cweek">'], cur = start, guard = 0;
+        var wp = (d.weekplan && typeof d.weekplan === 'object') ? d.weekplan : {};
+        var out = ['<div class="cweekwrap"><div class="cweek">'], cur = start, guard = 0;
         while (cur <= end && guard++ < 40) {
           var k = iso(cur), ents = dayList(days, k), isT = (k === today);
           out.push('<div class="cday' + (isT ? ' today' : '') + '">');
@@ -1006,10 +1133,14 @@
           out.push('<span class="cents">');
           if (!ents.length) out.push('<span class="cempty">—</span>');
           else ents.forEach(function (e) { out.push(entChip(e, k)); });
-          out.push('</span></div>');
+          out.push('</span>');
+          out.push('</div>');
           cur = addDays(cur, 1);
         }
-        out.push('</div>'); return out.join('');
+        out.push('</div>');            // .cweek
+        out.push(renderSidebar(wp));   // rechte flache Sidebar-Liste
+        out.push('</div>');            // .cweekwrap
+        return out.join('');
       }
 
       function renderMonth(d, days, today) {
@@ -1050,6 +1181,8 @@
         h.push('<span class="clabel">' + esc(label)
           + (nalarm ? '<span class="calarm" title="' + nalarm + ' offene erinnerung(en)">⚠' + nalarm + '</span>' : '') + '</span>');
         h.push('<button class="cadd' + (CS.adding ? ' sel' : '') + '" data-add="1">＋ Termin</button>');
+        h.push('<button class="chidden' + (CS.showHidden ? ' sel' : '') + '" data-hidden="1" title="deaktivierte + ausgefallene (Ferien/Pause) Termine + abgehakte Plan-Punkte zeigen/verbergen">'
+          + (CS.showHidden ? '👁' : '🚫') + ' erledigte</button>');
         h.push('<span class="cspace"></span>');
         h.push('<button data-view="week" class="' + (CS.view === 'week' ? 'sel' : '') + '">Woche</button>');
         h.push('<button data-view="month" class="' + (CS.view === 'month' ? 'sel' : '') + '">Monat</button>');
@@ -1057,10 +1190,12 @@
         if (CS.adding) {
           var f = CS.form || {};
           var isRt = (f.type === 'routine');
+          var isSpan = (f.type === 'span');
           var fh = ['<div class="cform">'];
           if (!CS.editing) {
-            fh.push('<button data-ftype="entry" class="' + (!isRt ? 'sel' : '') + '">Termin</button>');
+            fh.push('<button data-ftype="entry" class="' + (!isRt && !isSpan ? 'sel' : '') + '">Termin</button>');
             fh.push('<button data-ftype="routine" class="' + (isRt ? 'sel' : '') + '">Routine</button>');
+            fh.push('<button data-ftype="span" class="' + (isSpan ? 'sel' : '') + '">Mehrtägig</button>');
           }
           if (isRt) {
             fh.push('<span class="cwdays">');
@@ -1070,12 +1205,17 @@
             });
             fh.push('</span>');
           } else {
-            fh.push('<input type="date" id="cf-day" value="' + esc(f.day || d.today || todayStr()) + '" />');
+            fh.push((isSpan ? '<label class="cfl">von</label>' : '')
+              + '<input type="date" id="cf-day" value="' + esc(f.day || d.today || todayStr()) + '" />');
           }
-          fh.push('<input id="cf-time" placeholder="HH:MM" size="5" maxlength="5" value="' + esc(f.time || '') + '" />');
+          if (isSpan) {
+            fh.push('<label class="cfl">bis</label><input type="date" id="cf-bis" value="' + esc(f.bis || '') + '" />');
+          } else {
+            fh.push('<input id="cf-time" placeholder="HH:MM" size="5" maxlength="5" value="' + esc(f.time || '') + '" />');
+          }
           fh.push('<input id="cf-label" placeholder="Titel" style="flex:1;min-width:90px" value="' + esc(f.label || '') + '" />');
           fh.push('<input id="cf-ort" placeholder="Ort (optional)" size="12" value="' + esc(f.ort || '') + '" />');
-          fh.push('<button data-save="1">' + (CS.editing ? 'ändern' : (isRt ? 'Routine anlegen' : 'anlegen')) + '</button>');
+          fh.push('<button data-save="1">' + (CS.editing ? 'ändern' : (isRt ? 'Routine anlegen' : (isSpan ? 'Mehrtägig anlegen' : 'anlegen'))) + '</button>');
           fh.push(CS.editing ? '<button data-canceledit="1" title="abbrechen">×</button>' : '');
           fh.push('</div>');
           h.push(fh.join(''));
@@ -1093,6 +1233,7 @@
         var q = function (s) { var el = panel.querySelector(s); return el ? el.value : undefined; };
         CS.form = CS.form || {};
         if (q('#cf-day') !== undefined) CS.form.day = q('#cf-day');
+        if (q('#cf-bis') !== undefined) CS.form.bis = q('#cf-bis');
         if (q('#cf-time') !== undefined) CS.form.time = q('#cf-time');
         if (q('#cf-label') !== undefined) CS.form.label = q('#cf-label');
         if (q('#cf-ort') !== undefined) CS.form.ort = q('#cf-ort');
@@ -1120,6 +1261,22 @@
           return;
         }
 
+        if (f.type === 'span' && !CS.editing) {          // MEHRTÄGIGER (ganztägiger) Termin
+          var von = (f.day || '').trim(), bis = (f.bis || '').trim();
+          if (!von || !bis) { CS.msg = 'Von- und Bis-Datum nötig.'; CS.msgWarn = true; render(); return; }
+          if (bis < von) { CS.msg = 'Bis liegt vor Von.'; CS.msgWarn = true; render(); return; }
+          try {
+            var sr = await fetch('/api/calendar/entry', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ day: von, bis: bis, label: label, ort: ort }) });
+            var sj = await sr.json();
+            if (!sr.ok) { CS.msg = sj.error || 'fehlgeschlagen.'; CS.msgWarn = true; render(); return; }
+            CS.adding = false; CS.form = {}; CS.msg = 'Mehrtägig angelegt: ' + label; CS.msgWarn = false;
+            CS.ref = von; load();
+          } catch (e) { CS.msg = 'netzwerkfehler.'; CS.msgWarn = true; render(); }
+          return;
+        }
+
         var day = (f.day || '').trim();
         var url = '/api/calendar/entry', method, payload;
         if (CS.editing) {
@@ -1140,6 +1297,21 @@
           var warn = (j.conflicts && j.conflicts.length) ? ' · ⚠ ' + j.conflicts.join(' · ') : '';
           CS.msg = verb + label + warn; CS.msgWarn = !!warn;
           CS.ref = day || CS.ref;   // zur Woche des Termins springen
+          load();
+        } catch (e) { CS.msg = 'netzwerkfehler.'; CS.msgWarn = true; render(); }
+      }
+
+      // Pro-Tag-Uhrzeit einer mehrtägigen Spanne setzen/löschen (leer = ganztags).
+      async function spanTime(von, label, layer, day, cur) {
+        var t = prompt('Uhrzeit für ' + day + ' (HH:MM, leer = ganztags):', cur || '');
+        if (t === null) return;                 // abgebrochen
+        t = t.trim();
+        try {
+          var res = await fetch('/api/calendar/entry/spantime', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ von: von, label: label, layer: layer, day: day, time: t }) });
+          if (!res.ok) { CS.msg = 'fehlgeschlagen.'; CS.msgWarn = true; render(); return; }
+          CS.msg = t ? ('zeit ' + day + ': ' + t) : ('wieder ganztags: ' + day); CS.msgWarn = false;
           load();
         } catch (e) { CS.msg = 'netzwerkfehler.'; CS.msgWarn = true; render(); }
       }
@@ -1190,10 +1362,30 @@
         } catch (e) { CS.msg = 'netzwerkfehler.'; CS.msgWarn = true; render(); }
       }
 
+      // Sidebar-Aktionen (flache »week«-Liste). Nur abhaken/umbenennen/löschen/
+      // neu — KEIN Move in andere Listen (isolierte Einheit). Abhaken läuft
+      // serverseitig durch den bidirektionalen Link-Sync.
+      async function sidebarAction(kind, id, arg) {
+        var lid = sidebarLid();
+        if (!lid) { CS.msg = 'keine listen-id.'; CS.msgWarn = true; render(); return; }
+        var url, opt = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+        if (kind === 'toggle') { url = '/api/lists/' + lid + '/items/' + id + '/toggle'; }
+        else if (kind === 'rename') { url = '/api/lists/' + lid + '/items/' + id + '/rename'; opt.body = JSON.stringify({ text: arg }); }
+        else if (kind === 'del') { url = '/api/lists/' + lid + '/items/' + id; opt = { method: 'DELETE' }; }
+        else if (kind === 'add') { url = '/api/lists/' + lid + '/items'; opt.body = JSON.stringify({ text: arg }); }
+        else if (kind === 'reorder') { url = '/api/lists/' + lid + '/items/' + id + '/reorder'; opt.body = JSON.stringify({ delta: arg }); }
+        try {
+          var res = await fetch(url, opt);
+          if (!res.ok) { CS.msg = 'liste: fehlgeschlagen.'; CS.msgWarn = true; render(); return; }
+          CS.msg = ''; CS.msgWarn = false; load();
+        } catch (e) { CS.msg = 'netzwerkfehler.'; CS.msgWarn = true; render(); }
+      }
+
       function wire() {
         [].forEach.call(panel.querySelectorAll('[data-nav]'), function (el) { el.onclick = function () { CS.msg = ''; stepRef(Number(el.getAttribute('data-nav'))); }; });
         var tb = panel.querySelector('[data-today]'); if (tb) tb.onclick = function () { CS.msg = ''; CS.ref = todayStr(); load(); };
         [].forEach.call(panel.querySelectorAll('[data-view]'), function (el) { el.onclick = function () { var v = el.getAttribute('data-view'); if (v !== CS.view) { CS.msg = ''; CS.view = v; load(); } }; });
+        var hd = panel.querySelector('[data-hidden]'); if (hd) hd.onclick = function () { CS.showHidden = !CS.showHidden; CS.msg = ''; render(); };
         var ab = panel.querySelector('[data-add]'); if (ab) ab.onclick = function () {
           CS.adding = !CS.adding; CS.editing = null; CS.msg = '';
           CS.form = CS.adding ? { type: 'entry', day: (CS.data && CS.data.today) || todayStr(), byday: [] } : {};
@@ -1225,6 +1417,14 @@
                       el.getAttribute('data-edit-layer'), el.getAttribute('data-edit-time'), el.getAttribute('data-edit-ort'));
           };
         });
+        [].forEach.call(panel.querySelectorAll('[data-spanedit]'), function (el) {
+          el.onclick = function (ev) {
+            ev.stopPropagation();
+            spanTime(el.getAttribute('data-se-von'), el.getAttribute('data-se-label'),
+                     el.getAttribute('data-se-layer'), el.getAttribute('data-se-day'),
+                     el.getAttribute('data-se-time'));
+          };
+        });
         [].forEach.call(panel.querySelectorAll('[data-rt-label]'), function (el) {
           el.onclick = function (ev) {
             ev.stopPropagation();
@@ -1240,6 +1440,31 @@
                           el.getAttribute('data-rd-day'), el.getAttribute('data-rd-time'));
           };
         });
+        // Sidebar-Liste: abhaken / umbenennen / löschen / neu
+        [].forEach.call(panel.querySelectorAll('[data-sitog]'), function (el) {
+          el.onclick = function () { sidebarAction('toggle', el.getAttribute('data-sitog')); };
+        });
+        [].forEach.call(panel.querySelectorAll('[data-siren]'), function (el) {
+          el.onclick = function () {
+            var tx = el.parentNode.querySelector('.cstext');
+            var old = tx ? tx.textContent.replace(/^[✓•]\s*/, '') : '';
+            var t = prompt('umbenennen:', old);
+            if (t && t.trim()) sidebarAction('rename', el.getAttribute('data-siren'), t.trim());
+          };
+        });
+        [].forEach.call(panel.querySelectorAll('[data-sidel]'), function (el) {
+          el.onclick = function () { sidebarAction('del', el.getAttribute('data-sidel')); };
+        });
+        [].forEach.call(panel.querySelectorAll('[data-siup]'), function (el) {
+          el.onclick = function () { sidebarAction('reorder', el.getAttribute('data-siup'), -1); };
+        });
+        [].forEach.call(panel.querySelectorAll('[data-sidown]'), function (el) {
+          el.onclick = function () { sidebarAction('reorder', el.getAttribute('data-sidown'), 1); };
+        });
+        var sadd = panel.querySelector('[data-siadd]'), sinp = panel.querySelector('#cs-new');
+        function doSidebarAdd() { if (sinp && sinp.value.trim()) sidebarAction('add', null, sinp.value.trim()); }
+        if (sadd) sadd.onclick = doSidebarAdd;
+        if (sinp) sinp.onkeydown = function (e) { if (e.key === 'Enter') doSidebarAdd(); };
       }
 
       // Beim Öffnen des Kalender-Tabs frisch laden (externe Änderungen mitnehmen).
@@ -1381,7 +1606,7 @@
             h.push('<div class="mp-head"><b>'+esc(b.subject||'')+'</b><br>'+esc(b.from||'')+' · '+esc((b.date||'').slice(0,16))+'</div>');
             h.push('<pre class="mp-body">'+esc(b.body||'')+'</pre>');
             h.push('<div class="mp-reply" style="display:none"><textarea id="mp-rtext" placeholder="Antwort …"></textarea>'
-              +'<div class="grow"><button data-send="1">senden</button><span class="ghint" data-repcancel="1" style="cursor:pointer">abbrechen</span></div></div>');
+              +'<div class="grow"><button data-send="1">senden</button><button data-draft="1">als Entwurf</button><span class="ghint" data-repcancel="1" style="cursor:pointer">abbrechen</span></div></div>');
           }
         } else if (MS.cat){
           h.push('<div class="grow"><span class="ghint" data-back="1" style="cursor:pointer">‹ kategorien</span><span class="ghint">'+esc(MS.cat)+'</span></div>');
@@ -1405,6 +1630,7 @@
         var rp=q('[data-rep]'); if(rp) rp.onclick=function(){ var r=q('.mp-reply'); if(r){ r.style.display=''; var t=q('#mp-rtext'); if(t) t.focus(); } };
         var rc=q('[data-repcancel]'); if(rc) rc.onclick=function(){ var r=q('.mp-reply'); if(r) r.style.display='none'; };
         var sd=q('[data-send]'); if(sd) sd.onclick=sendReply;
+        var dr=q('[data-draft]'); if(dr) dr.onclick=saveDraft;
         var dl=q('[data-del]'); if(dl) dl.onclick=delMail;
       }
       function post(url, body){ return fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})}); }
@@ -1412,6 +1638,11 @@
         var t=q('#mp-rtext'); var text=(t&&t.value||'').trim(); if(!text||!MS.body) return;
         var r=await post('/api/mail/reply',{cat:MS.cat, uid:MS.body.uid, text:text, account:MS.body.account});
         MS.msg = r.ok ? 'gesendet ✓' : 'senden fehlgeschlagen'; MS.body=null; await openCat(MS.cat);
+      }
+      async function saveDraft(){
+        var t=q('#mp-rtext'); var text=(t&&t.value||'').trim(); if(!text||!MS.body) return;
+        var r=await post('/api/mail/reply',{cat:MS.cat, uid:MS.body.uid, text:text, account:MS.body.account, draft:true});
+        MS.msg = r.ok ? 'als Entwurf gespeichert ✎' : 'entwurf fehlgeschlagen'; MS.body=null; await openCat(MS.cat);
       }
       async function delMail(){
         if(!MS.body || !confirm('Mail in den Papierkorb?')) return;
@@ -1778,7 +2009,8 @@
       var A = document.getElementById('ext-any');
       if (!L || !C || !A) return;
       L.textContent = s.local ? '✓ ollama' : '✗';
-      C.textContent = s.cloud ? ('✓ ' + (s.cloud_provider || '')) : '✗';
+      C.textContent = s.cloud ? ('✓ ' + (s.cloud_provider || ''))
+                    : (s.cloud_enabled === false ? '✗ gedrosselt' : '✗');
       A.textContent = s.any ? 'online' : 'kein backend';
     }
     function pollExternal() {
@@ -1788,6 +2020,9 @@
     }
     pollExternal();
     setInterval(pollExternal, 8000);
+    // Für die Konsolen-Commands (/cloud) erreichbar machen – die Command-Logik
+    // lebt in der Chat-IIFE (anderer Scope).
+    window.__zenExternal = { render: renderExternal };
 
     // ── stdout + Tripwire ──
     function colorize(text) {
@@ -2234,6 +2469,27 @@
       }
       if (cmd === '/tutor')     { await startTutor(); return true; }
       if (cmd === '/tutorstop') { await stopTutor();  return true; }
+
+      // /cloud on|off|toggle — Cloud-Kill-Switch (Datenschutz-/Kosten-Drossel).
+      if (cmd === '/cloud') {
+        var a = arg.toLowerCase(), on;
+        if (a === 'on' || a === 'an')        on = true;
+        else if (a === 'off' || a === 'aus') on = false;
+        else {  // toggle: aktuellen Stand holen und umkehren
+          try { on = !(await (await fetch('/api/ai/backends')).json()).cloud_enabled; }
+          catch (e) { _mini('Cloud-Status nicht lesbar.'); return true; }
+        }
+        try {
+          var s = await (await fetch('/api/ai/backends', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cloud_enabled: on })
+          })).json();
+          if (window.__zenExternal) window.__zenExternal.render(s);  // Box sofort aktualisieren
+          _mini('Cloud ' + (s.cloud_enabled ? 'AN' : 'GEDROSSELT')
+              + ' · CLOUD ' + (s.cloud ? ('✓ ' + (s.cloud_provider || '')) : '✗'));
+        } catch (e) { _mini('Cloud-Schalter fehlgeschlagen.'); }
+        return true;
+      }
       return false;
     }
 
@@ -2700,6 +2956,53 @@
         handleFormKey(e);
       }
     });
+  })();
+  </script>
+
+  <script>
+  // ── Graph-Reminder-Modal („bitte eintragen") ─────────────────────────
+  // Pollt /api/graphs/reminders: ist ein Graph mit Tages-Reminder heute noch
+  // nicht geloggt und die Uhrzeit erreicht, poppt EINMAL pro Sitzung dieses
+  // Modal. Wegklicken = für diese Sitzung Ruhe (dismissed); sobald für den Tag
+  // geloggt ist, fällt der Graph serverseitig ohnehin aus der Liste.
+  (function () {
+    var overlay = document.getElementById('rem-overlay');
+    var panel = document.getElementById('rem-panel');
+    if (!overlay || !panel) return;
+    var dismissed = {};   // id → true: in dieser Sitzung weggeklickt, nicht erneut nagen
+    var showing = [];     // ids, die das offene Modal gerade listet
+    function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    function close() { overlay.classList.remove('on'); showing = []; }
+    function render(due) {
+      showing = due.map(function (d) { return d.id; });
+      panel.innerHTML = '<span class="bt">reminder</span>'
+        + '<div class="dc-title">bitte eintragen</div>'
+        + '<p class="dc-q">heute noch nicht geloggt:</p>'
+        + '<ul class="rem-names">' + due.map(function (d) {
+            return '<li>' + esc(d.name || d.id) + (d.remind_at ? '<span class="at">ab ' + esc(d.remind_at) + '</span>' : '') + '</li>';
+          }).join('') + '</ul>'
+        + '<div class="rem-btns"><button data-rem-later="1">später</button><button data-rem-go="1">eintragen</button></div>';
+      var later = panel.querySelector('[data-rem-later]');
+      if (later) later.onclick = function () { showing.forEach(function (id) { dismissed[id] = true; }); close(); };
+      var go = panel.querySelector('[data-rem-go]');
+      if (go) go.onclick = function () {
+        showing.forEach(function (id) { dismissed[id] = true; });
+        close();
+        var tab = document.querySelector('.tab[data-ex="graph"]');   // Graph-Werkzeug aufmachen
+        if (tab) tab.click();
+      };
+    }
+    async function poll() {
+      var due;
+      try { due = await (await fetch('/api/graphs/reminders')).json(); } catch (e) { return; }
+      due = (due || []).filter(function (d) { return !dismissed[d.id]; });
+      if (!due.length) { close(); return; }
+      render(due);
+      overlay.classList.add('on');
+    }
+    poll();
+    setInterval(poll, 5 * 60 * 1000);   // alle 5 min nachsehen (fällig-werden mitnehmen)
+    window.addEventListener('zentrale:logged', poll);   // nach dem Eintragen sofort schließen
   })();
   </script>
 </body>

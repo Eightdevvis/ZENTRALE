@@ -31,6 +31,7 @@ import sys
 import json
 import time
 import threading
+import queue
 from datetime import date, timedelta
 import subprocess
 import urllib.request
@@ -74,6 +75,7 @@ class Store:
         self.metrics = None    # /api/telemetry
         self.graphs = []       # /api/graphs (Definitionen, für lifestyle-Box)
         self.graph_vals = {}   # graph_id -> /api/data/<id> (Messwerte)
+        self.reminders = []    # /api/graphs/reminders (heute fällig, noch nicht geloggt)
         self.projects = []     # /api/projects (geflaggte Listen, für PROJECTS-Box)
         self.backends = {}     # /api/ai/backends (EXTERNAL-Box: local/cloud erreichbar)
         self.connected = False
@@ -94,9 +96,14 @@ class Store:
                     gv[g["id"]] = self._get("/api/data/" + g["id"]) or []
                 except (urllib.error.URLError, OSError, ValueError):
                     gv[g["id"]] = []
+            try:
+                rm = self._get("/api/graphs/reminders") or []
+            except (urllib.error.URLError, OSError, ValueError):
+                rm = []
             with self._lock:
                 self.graphs = gs
                 self.graph_vals = gv
+                self.reminders = rm if isinstance(rm, list) else []
         except (urllib.error.URLError, OSError, ValueError):
             pass
 
@@ -183,6 +190,11 @@ class Store:
         with self._lock:
             return list(self.graphs), dict(self.graph_vals)
 
+    def reminders_snapshot(self):
+        """Heute fällige Graph-Reminder (id/name/remind_at) für den TUI-Nag."""
+        with self._lock:
+            return list(self.reminders)
+
     def projects_snapshot(self):
         """Liste der geflaggten Projekte ({id,name,done,total}) für die PROJECTS-Box."""
         with self._lock:
@@ -248,6 +260,15 @@ GRAPH_TYPES = [
     ("time",   "zeit",    "uhrzeit pro datum (z.b. einschlafzeit)"),
     ("period", "periode", "zeitspanne pro datum (z.b. schlaf 23:00–07:00)"),
 ]
+
+# Marker-Symbole für time-Graphen in der lifestyle-Überlagerung. Früher war der
+# Marker fest der Stern ★; jetzt gibt es eine Palette, aus der jeder time-Graph
+# (in Anlege-Reihenfolge) SEIN eigenes Symbol bekommt — der Stern bleibt der
+# erste/Default, danach variiert es (andere Sterne, Blumen, Schneeflocken …),
+# damit sich mehrere Zeitpunkt-Graphen im selben 24h-Gitter nicht nur über die
+# Farbe unterscheiden. Bewusst nur einfach-breite Dingbats (keine Emoji-Breite),
+# lange Liste → genug zum Durchzykeln.
+TIME_SYMBOLS = "★✦✿❀❁✽✻✷✶✴✳❈❉❋✼✾✩✫✭✮✯❆"
 
 
 def parse_clock(s):
@@ -425,8 +446,8 @@ def selftest():
     print("  stdout-zeilen       :", len(state.get("logs", [])))
     print("  outbound-zeilen     :", len(state.get("internet_logs", [])))
     bk = store.backends_snapshot()
-    print("  ai-backends         :", "local=%s cloud=%s%s" % (
-        bool(bk.get("local")), bool(bk.get("cloud")),
+    print("  ai-backends         :", "local=%s cloud=%s cloud_enabled=%s%s" % (
+        bool(bk.get("local")), bool(bk.get("cloud")), bk.get("cloud_enabled", True),
         (" (" + bk["cloud_provider"] + ")") if bk.get("cloud_provider") else ""))
     for lbl, key, _u in TELE_ROWS:
         tv = tele_value(metrics, key)
@@ -475,16 +496,17 @@ def selftest():
 TUI_COMMANDS = [
     ("/help",  "alle Befehle und Tasten zeigen"),
     ("/theme", "Theme: auto | hell | dunkel  (auch 't')"),
+    ("/cloud", "Cloud-Drossel: on | off  (Datenschutz/Kosten)"),
     ("/quit",  "ZENTRALE-TUI beenden  (auch 'q')"),
 ]
 TUI_KEYS = [
     ("q",   "beenden"),
     ("t",   "Theme wechseln (auto/hell/dunkel)"),
-    ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung an/aus"),
+    ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
     ("l",   "Listen (Mitte): anlegen · einträge abhaken (space) / löschen · p als projekt rechts"),
     ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Handelsrouten · w=Fenster"),
-    ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · ←→ blättern · v Woche/Monat"),
-    ("p",   "Post/Mail (Mitte): ↑↓ blättern · enter rein · v lesen/liste · e ausklappen · Bild↑↓ scrollen · a antw · s einsort · d lösch · esc zurück"),
+    ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · v Woche/Monat"),
+    ("p",   "Post/Mail (Mitte): enter rein · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · esc zurück"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
@@ -502,7 +524,8 @@ CTX_KEYS = {
     ],
     "graph": [
         ("↑↓", "wählen"), ("enter", "öffnen"),
-        ("n", "neu"), ("d", "löschen"), ("esc", "zu"),
+        ("n", "neu"), ("p", "~vorhersage"), ("r", "reminder"),
+        ("d", "löschen"), ("esc", "zu"),
     ],
     "list:list": [
         ("enter", "öffnen"), ("n", "neu"), ("s", "kind"),
@@ -524,28 +547,39 @@ CTX_KEYS = {
     ],
     "cal:week": [
         ("↑↓", "wählen"), ("e", "bearbeiten"), ("a", "neu"),
-        ("d", "löschen / aus"), ("←→", "woche"), ("v", "monat"),
+        ("d", "löschen / aus"), ("x", "erledigte zeigen"),
+        ("l", "liste-fokus"), ("←→", "woche"), ("v", "monat"),
     ],
     "cal:month": [
         ("←→", "blättern"), ("v", "woche"), ("a", "neu"),
-        ("0", "heute"), ("esc", "zu"),
+        ("x", "erledigte zeigen"), ("0", "heute"), ("esc", "zu"),
+    ],
+    "cal:list": [
+        ("↑↓", "wählen"), ("space", "abhaken"), ("s", "sortieren"),
+        ("a", "neu"), ("r", "umbenennen"), ("d", "löschen"), ("l/esc", "zurück"),
+    ],
+    "cal:sort": [
+        ("↑↓", "verschieben"), ("s/esc", "fertig"),
     ],
     "mail:cats": [
-        ("↑↓", "wählen"), ("enter", "öffnen"), ("r", "poll"), ("esc", "zu"),
+        ("↑↓", "wählen"), ("enter", "öffnen"), ("r", "poll"),
+        ("z", "neu zählen"), ("esc", "zu"),
     ],
     "mail:list": [
         ("↑↓", "wählen"), ("enter", "lesen"), ("a", "antworten"),
-        ("s", "einsortieren"), ("d", "löschen"), ("esc", "zurück"),
+        ("s", "einsortieren"), ("d", "löschen"), ("z", "neu zählen"), ("esc", "zurück"),
     ],
     "mail:read": [
-        ("↑↓", "blättern"), ("e", "ausklappen"), ("a", "antworten"),
-        ("s", "einsortieren"), ("d", "löschen"), ("v", "liste"), ("esc", "zurück"),
+        ("←→", "vor/zurück"), ("↓", "ausklappen/scrollen"), ("↑", "scrollen/zu"),
+        ("a", "antworten"), ("s", "einsortieren"), ("d", "löschen"), ("v", "liste"),
+        ("z", "neu zählen"), ("esc", "zurück"),
     ],
 }
 CTX_TITLES = {
     "home": "start", "graph": "graph", "list:list": "listen",
     "list:view": "liste", "list:pick": "einordnen", "map": "karte",
     "cal:week": "kalender · woche", "cal:month": "kalender · monat",
+    "cal:list": "kalender · liste", "cal:sort": "kalender · sortieren",
     "mail:cats": "post", "mail:list": "post · liste", "mail:read": "post · lesen",
 }
 
@@ -573,6 +607,10 @@ def parse_command(buf, theme_mode):
         else:                                   # ohne Arg: zyklieren wie 't'
             theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
         return None, theme_mode, ""
+    if name == "cloud":                          # Cloud-Kill-Switch (POST macht der Aufrufer)
+        if arg in ("on", "an"):   return "CLOUD_ON", theme_mode, ""
+        if arg in ("off", "aus"): return "CLOUD_OFF", theme_mode, ""
+        return "CLOUD_TOGGLE", theme_mode, ""
     return None, theme_mode, "unbekannter befehl: /" + name
 
 
@@ -679,8 +717,8 @@ def run_ui(stdscr, store):
     # Dark-Mode: ULTRA HIGH CONTRAST — hartes Schwarz, reinweißer Text (231),
     # Rahmen ein klar sichtbares Grau (245). Grün NIE bold (= sonst Neon),
     # gedämpftes Salbeigrün (108) statt grellem Standard-Grün.
-    ROLES = ["acc", "warn", "net", "graph", "event", "audio", "hook", "num",
-             "dim", "faint", "bright", "ink", "band"]
+    ROLES = ["acc", "warn", "net", "graph", "event", "audio", "hook", "span",
+             "num", "dim", "faint", "bright", "ink", "band"]
     THEMES = {
         "night": {
             "bg8": curses.COLOR_BLACK, "bg256": 16,
@@ -692,6 +730,7 @@ def run_ui(stdscr, store):
             "event": (curses.COLOR_GREEN,   108, 0),
             "audio": (curses.COLOR_GREEN,   108, 0),
             "hook":  (curses.COLOR_YELLOW,  215, 0),
+            "span":  (curses.COLOR_YELLOW,  216, 0),    # Mehrtages-Klammer: weiches Orange
             "num":   (curses.COLOR_YELLOW,  222, 0),
             "dim":   (curses.COLOR_WHITE,   231, 0),    # normaler Text: reinweiß = max Kontrast
             "faint": (curses.COLOR_WHITE,   245, 0),    # Rahmen: sichtbares Grau (nicht gedimmt)
@@ -699,6 +738,9 @@ def run_ui(stdscr, store):
             "ink":   (curses.COLOR_WHITE,   231, 0),
             # Schlaf-Bande: gedämpftes Dunkelmagenta als ZELLEN-HINTERGRUND
             "band_fg": 245, "band_bg": 53,
+            # Ombre der Sidebar-Liste: 256-Grau-Rampe, die nach unten in den
+            # (schwarzen) Hintergrund verblasst → „weiter unten = transparenter".
+            "ombre": [252, 246, 241, 237, 235],
         },
         "day": {
             "bg8": curses.COLOR_WHITE, "bg256": 231,
@@ -709,6 +751,7 @@ def run_ui(stdscr, store):
             "event": (curses.COLOR_GREEN,   65,  0),
             "audio": (curses.COLOR_GREEN,   65,  0),
             "hook":  (curses.COLOR_RED,     130, 0),
+            "span":  (curses.COLOR_RED,     166, 0),    # Mehrtages-Klammer: kräftiges Orange (auf Weiss lesbar)
             "num":   (curses.COLOR_BLUE,    26,  0),
             "dim":   (curses.COLOR_BLACK,   16,  0),    # schwarzer Text auf weiß
             "faint": (curses.COLOR_BLUE,    67,  0),    # Rahmen blau-grau (auf weiß sichtbar)
@@ -716,6 +759,9 @@ def run_ui(stdscr, store):
             "ink":   (curses.COLOR_BLACK,   16,  0),
             # Schlaf-Bande: hell-magenta angehauchtes Grau als ZELLEN-HINTERGRUND
             "band_fg": 240, "band_bg": 225,
+            # Ombre der Sidebar-Liste: nach unten in den (weißen) Hintergrund
+            # verblassend → Grau wird heller.
+            "ombre": [238, 244, 248, 251, 253],
         },
     }
     C = {}
@@ -728,6 +774,8 @@ def run_ui(stdscr, store):
             C["dim"] = curses.A_BOLD       # heller Text im Mono-Fallback
             C["faint"] = curses.A_DIM
             C["acc"] = curses.A_BOLD
+            # Ombre ohne Farbe: nur zwei Stufen (normal → gedimmt)
+            C["ombre"] = [0, 0, curses.A_DIM, curses.A_DIM, curses.A_DIM]
             return
         c256 = curses.COLORS >= 256
         th = THEMES[tname]
@@ -762,9 +810,27 @@ def run_ui(stdscr, store):
                 curses.init_pair(pp, c2, th["band_bg"])
                 C[r + "@band"] = curses.color_pair(pp) | extra
                 pp += 1
+            # Banden-KANTE als Vordergrund: band-bg-Farbe als fg auf Theme-bg.
+            # Damit lassen sich Halbblöcke ▀/▄ am oberen/unteren Rand der Schlaf-
+            # Bande in Bandfarbe zeichnen → sub-zellen-feine Ränder (sonst schnappt
+            # der Balken auf ganze Zeilen ≈ 2–3 h und wirkt grob/hackig).
+            curses.init_pair(pp, th["band_bg"], bg)
+            C["band_edge"] = curses.color_pair(pp)
+            pp += 1
         else:
             C["band"] = C["faint"]
             C["band_is_bg"] = False
+        # Ombre-Rampe der Sidebar-Liste: eigene Grau-Paare (nur 256-Farben),
+        # sonst zweistufiger A_DIM-Fallback.
+        if c256:
+            C["ombre"] = []
+            for g in th.get("ombre", [245]):
+                curses.init_pair(pp, g, bg)
+                C["ombre"].append(curses.color_pair(pp))
+                pp += 1
+        else:
+            C["ombre"] = [C["dim"], C["dim"], C["faint"],
+                          C["faint"], C["faint"] | curses.A_DIM]
         # leere Zellen (erase) bekommen den Theme-Hintergrund
         stdscr.bkgd(" ", C["ink"])
 
@@ -797,6 +863,15 @@ def run_ui(stdscr, store):
     help_latched = False    # volle Hilfe stehen lassen (nach '/help')
     cmd_msg = ""            # kurze Rückmeldung (z.B. unbekannter Befehl)
 
+    # ── Graph-Reminder-Nag ──────────────────────────────────────────────
+    # Poppt EINMAL pro Sitzung ein „bitte eintragen"-Kästchen, wenn ein Graph
+    # mit Tages-Reminder heute noch nicht geloggt ist (store.reminders ←
+    # /api/graphs/reminders). Eine Taste klickt es weg → bis Sitzungsende Ruhe
+    # für die gezeigten Graphen (nag_dismissed); neu fällige nagen weiter.
+    nag_active = False       # Kästchen steht gerade offen?
+    nag_items = []           # was es listet (ids für die Dismiss-Markierung)
+    nag_dismissed = set()    # in dieser Sitzung weggeklickte graph-ids
+
     # ── Graph-Werkzeug (füllt die MITTE-Box, Taste 'g') ─────────────────
     # Geteilte Logik (core/graphs.py + /api/graphs), hier in der TUI verbaut.
     # Eigenes Mini-Zustandsmodell statt vieler nonlocal-Variablen:
@@ -807,6 +882,9 @@ def run_ui(stdscr, store):
          "def": None, "vals": [], "input": "", "newtype": "number", "msg": "",
          "input2": "", "pstage": 0,    # input2/pstage: Perioden-Eingabe (von→bis)
          "dayoff": 0,                  # Ziel-Tag: 0=heute, N=N Tage zurück (←/→)
+         "shown": set(),               # in der Überlagerung gezeigte graph-ids:
+                                       # leer=alle (Übersicht), 1=solo+editieren,
+                                       # mehrere=Kombi (nur Anzeige, später)
          "confirm": False}             # Lösch-Nachfrage aktiv (Mini-Dialog)
 
     # ── Listen-Werkzeug (füllt die MITTE-Box, Taste 'l') ────────────────
@@ -879,10 +957,29 @@ def run_ui(stdscr, store):
     #   atype  : "entry" (Einmal-Termin) | "routine" (wöchentlich) — Tab im Add-Formular
     #   editing: None | (iso,label,layer) — Add-Formular im Ändern-Modus
     #   ract   : der im "routine"-Screen gewählte Eintrag (für De-/Aktivieren)
+    #   showhidden: erledigte/abgeschaltete Einträge mit-anzeigen? Ein GEMEINSAMER
+    #            Schalter (Taste 'x') über dreierlei „passiert nicht": einzeln
+    #            deaktivierte Routine-Vorkommen (deaktiviert), per Zeitraum-Pause
+    #            ausgefallene (ausfall, z.B. Ferien) UND abgehakte Wochenplan-
+    #            Items (done). Default aus → der Kalender startet aufgeräumt;
+    #            'x' blendet alles gemeinsam ein bzw. wieder aus.
+    #   listfocus: Fokus in der rechten Sidebar-Liste (flache »week«-Liste)?
+    #            Taste 'l' schiebt rein (nur Wochenansicht), Esc/'l' wieder raus.
+    #            lsel = Auswahl-Index in der Sidebar; im Fokus bearbeitbar
+    #            (a neu / r umbenennen / d löschen / Space abhaken) — KEIN Move
+    #            in andere Listen (isolierte Einheit).
+    #   linput/lmode/ledit_iid: Text-Eingabe der Sidebar. linput=None ⇒ inaktiv,
+    #            sonst getippter Text; lmode "add"|"rename"; ledit_iid = iid beim
+    #            Umbenennen.
+    #   lsort: Sortier-Modus in der Sidebar (Taste 's')? Dann verschieben ↑↓ das
+    #            fokussierte Item statt die Auswahl (POST …/reorder).
     K = {"active": False, "view": "week", "ref": date.today().isoformat(),
          "data": None, "msg": "", "mode": "view", "sel": 0, "confirmdel": False,
          "astage": 0, "aday": "", "atime": "", "alabel": "", "amsg": "",
-         "atype": "entry", "editing": None, "ract": None, "rconfirm": False}
+         "atype": "entry", "editing": None, "ract": None, "rconfirm": False,
+         "showhidden": False, "listfocus": False, "lsel": 0,
+         "linput": None, "lmode": "add", "ledit_iid": None, "lsort": False,
+         "spantgt": None}
     KAL_WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
     # Deutsche Wochentags-Kürzel → iCal-BYDAY-Codes (für Routine-Anlage)
     KAL_BYDAY = {"mo": "MO", "di": "TU", "mi": "WE", "do": "TH",
@@ -905,8 +1002,9 @@ def run_ui(stdscr, store):
     #   cat    : Name der geöffneten Kategorie (in "mails")
     #   off    : Scroll-Offset in der Mail-Liste; _ts: letzter Abruf (Auto-Refresh)
     MAIL = {"active": False, "level": "cats", "sel": 0, "cat": None,
-            "off": 0, "data": None, "msg": "", "_ts": 0.0,
+            "off": 0, "data": None, "msg": "", "_ts": 0.0, "busy": "",
             "mails": None, "mails_live": False,   # mails: None=lädt, []=leer
+            "fcache": {},         # Kategorie → zuletzt geholte Mail-Liste (Reopen instant)
             # Ebene 2: zwei Anzeige-Modi + Aktions-Submodi.
             "mode2": "read",      # "read" (eine Mail, Vorschau+ausklappen) | "list" (Blöcke)
             "msel": 0,            # ausgewählte Mail (in beiden Modi)
@@ -922,6 +1020,46 @@ def run_ui(stdscr, store):
             "reply_text": "",     # dein getippter Antworttext
             "reply_origoff": 0,   # Scroll im Original (links)
             "reply_confirm": False}  # Verlassen-Leiste (senden/verwerfen/weiter)
+
+    # ── Mail-I/O läuft im Hintergrund, NIE im Render/Input-Thread ─────────
+    # Jede IMAP-Op (zählen, Ordner holen, Body, einsortieren, löschen) kann bei
+    # Outlook Sekunden dauern. Früher lief das synchron im Zeichnen/Tasten-Loop
+    # → die ganze TUI fror ein, esc klemmte, und man sah nicht, WAS gerade lud.
+    # Jetzt arbeitet EIN Worker-Thread die Jobs ab; das Panel liest nur den
+    # Zustand und zeigt `busy` an. `key` dedupt (kein Job-Stau beim schnellen
+    # Blättern), `busy` verschwindet erst, wenn nichts mehr wartet.
+    MAIL_Q = queue.Queue()
+    MAIL_PENDING = set()
+    MAIL_PLOCK = threading.Lock()
+
+    def _mail_submit(key, label, fn):
+        """Einen Mail-Job in den Hintergrund geben. Läuft/wartet schon einer mit
+        gleichem `key`, wird NICHT doppelt eingereiht (Dedup). Leeres `label` =
+        stiller Job (z.B. der billige 3s-Auto-Refresh, kein IMAP → kein Flackern)."""
+        with MAIL_PLOCK:
+            if key in MAIL_PENDING:
+                return
+            MAIL_PENDING.add(key)
+        if label:
+            MAIL["busy"] = label
+        MAIL_Q.put((key, label, fn))
+
+    def _mail_worker():
+        while True:
+            key, label, fn = MAIL_Q.get()
+            if label:
+                MAIL["busy"] = label
+            try:
+                fn()
+            except Exception:
+                pass
+            finally:
+                with MAIL_PLOCK:
+                    MAIL_PENDING.discard(key)
+                if MAIL_Q.empty():
+                    MAIL["busy"] = ""
+
+    threading.Thread(target=_mail_worker, daemon=True, name="mail-io").start()
 
     def m_fetch(cols, rows):
         """Karte fürs aktuelle Viewport+Raster synchron holen (localhost, wenige
@@ -1454,6 +1592,390 @@ def run_ui(stdscr, store):
             else:
                 safe_addstr(row_of(s), cx, "●", C["graph"])
 
+    # Farb-Palette der Überlagerung, je Graph eine (durchgezykelt).
+    LIFE_COL = ["graph", "acc", "warn", "net", "event", "audio", "hook", "num"]
+
+    def draw_overlay(otop, oleft, oh, ow, gs_cache, gv_cache, labeled=False):
+        """ÜBERLAGERUNG aller Graphen in EINEM Gitter (X=Datum/Zeitstrahl, Y je
+        Typ eigene Achse). Zeichnet NUR Inhalt in das Rechteck (otop,oleft,oh,ow)
+        — den Rahmen setzt der Aufrufer. Zwei Modi, geteilt von rechter
+        lifestyle-Box und großer Mitte-Ansicht im Graph-Werkzeug:
+          labeled=False (kompakt): 1 gemeinsame 24h-Achse links, scale als
+              Kreis-Zeilen im Plot, mehrzeilige Legende unten. (unverändert)
+          labeled=True (groß): links GESTAPELTE beschriftete y-achsen — je
+              zahl-graph eine eigene farbige achse (min/max) + die 24h-uhr;
+              scale-graphen als beschriftete zeile unten; Kopf-Legende oben.
+        Darstellung je Typ: period→Bande, time→eigenes Symbol auf 24h,
+        scale→Kreise ◦○◉●⬤, number→dünne Linie auf eigener min/max-Spanne."""
+        if oh < 4 or ow < 12:
+            return
+        if not gs_cache:
+            safe_addstr(otop + 1, oleft + 2, "// noch keine graphen (g)", C["faint"])
+            return
+        plot_x = oleft + 2
+        # pro Graph: {datum: roh-eintrag}, Typ, Farbe (+ Symbol bei time).
+        series = []
+        time_n = 0                             # laufender Index NUR über time-Graphen
+        for i, g in enumerate(gs_cache):
+            if not isinstance(g, dict):
+                continue
+            rows = gv_cache.get(g.get("id")) or []
+            dv = {}
+            for e in rows if isinstance(rows, list) else []:
+                if not isinstance(e, dict):
+                    continue
+                if _num(e.get("value")) is None or not e.get("date"):
+                    continue
+                dv[e["date"]] = e
+            if dv:
+                srec = {"name": g.get("name", "?"), "type": g.get("type"),
+                        "dv": dv, "col": LIFE_COL[i % len(LIFE_COL)],
+                        "predict": bool(g.get("predict"))}
+                if srec["type"] == "time":
+                    srec["sym"] = TIME_SYMBOLS[time_n % len(TIME_SYMBOLS)]
+                    time_n += 1
+                series.append(srec)
+        if not series:
+            safe_addstr(otop + 1, oleft + 2, "// noch keine werte", C["faint"])
+            return
+
+        num_series = [s for s in series if s["type"] == "number"]
+        scale_series = [s for s in series if s["type"] == "scale"]
+        # Auswahl NUR aus scale-graphen (z.B. solo scale) → die Skala bekommt
+        # eine eigene 1–5-y-achse mit Kreisen IM Gitter (die 24h-uhr wäre hier
+        # sinnlos, die Boden-Zeile bliebe der Plot leer). Misch-Übersicht bleibt
+        # unverändert: da rendert scale weiter als Zeile unten.
+        only_scale = bool(scale_series) and len(scale_series) == len(series)
+
+        # ── Layout je Modus: base/plot_h, linker Gutter (Achsen), Legende ──
+        if labeled:
+            AX_W = 5                           # breite EINER zahl-achsen-spalte
+            n_ax = len(num_series)
+            ix_clock = plot_x + AX_W * n_ax    # y-labels rechts vom zahl-gutter
+            day_x0 = ix_clock + 3              # 2 achsen-spalten + │
+            header_h = 1                       # kopf-legende
+            scale_h = 1 if (scale_series and not only_scale) else 0
+            base = otop + header_h
+            plot_bottom = otop + oh - 1 - scale_h
+            plot_h = max(2, plot_bottom - base + 1)
+            leg_lines = None
+        else:
+            inner_h = oh - 2
+            plot_w0 = max(2, ow - 4)
+            leg_lines, cur_w = [[]], 0
+            for s in series:
+                nm = s["name"][:8]
+                tok = "─ " + nm
+                if cur_w + len(tok) + 1 > plot_w0 and leg_lines[-1]:
+                    leg_lines.append([]); cur_w = 0
+                leg_lines[-1].append((nm, s["col"], s["type"], s.get("sym")))
+                cur_w += len(tok) + 1
+            max_leg = min(len(leg_lines), max(1, inner_h - 3))
+            plot_h = max(2, inner_h - max_leg)
+            base = otop + 1
+            ix_clock = plot_x
+            day_x0 = plot_x + 3
+
+        def row_clock(m):                      # 24h-Skala: 0 unten, 1440 oben
+            m = max(0, min(1440, m))
+            return base + (plot_h - 1) - int(round(m / 1440.0 * (plot_h - 1)))
+
+        def row_norm(v, lo, hi):               # eigene Spanne: lo unten, hi oben
+            n = 0.5 if hi is None or hi == lo else (float(v) - lo) / (hi - lo)
+            n = max(0.0, min(1.0, n))
+            return base + (plot_h - 1) - int(round(n * (plot_h - 1)))
+
+        def row_scale(v):                      # 1–5-Skala: 1 unten, 5 oben
+            n = (max(1.0, min(5.0, float(v))) - 1) / 4.0
+            return base + (plot_h - 1) - int(round(n * (plot_h - 1)))
+
+        # Tages-Spalten (X = Zeitstrahl, heute rechts, ältester Tag links).
+        # kompakt: GENAU 1 Spalte/Tag, füllt die Breite (viele Tage).
+        # groß: Fenster = tatsächliche Datenspanne (frühester wert … heute),
+        #   über die volle Breite GESTRECKT, damit die Daten den Platz füllen
+        #   statt rechts an der Achse zu kleben (mehrere Spalten/Tag möglich).
+        today = date.today()
+        day_x_end = oleft + ow - 2
+        avail = max(1, day_x_end - day_x0 + 1)
+        if labeled:
+            all_dates = [dd for s in series for dd in s["dv"].keys()]
+            span = avail
+            if all_dates:
+                try:
+                    ey, em, ed = (int(x) for x in min(all_dates).split("-"))
+                    span = (today - date(ey, em, ed)).days + 1
+                except Exception:
+                    span = avail
+            ndays = max(1, min(span, 366))
+            window = [(today - timedelta(days=k)).isoformat() for k in range(ndays - 1, -1, -1)]
+            if ndays == 1:
+                day_col = {window[0]: day_x_end}
+            else:
+                day_col = {d: day_x0 + int(round(i / (ndays - 1) * (avail - 1)))
+                           for i, d in enumerate(window)}
+        else:
+            window = [(today - timedelta(days=k)).isoformat() for k in range(avail - 1, -1, -1)]
+            day_col = {d: day_x0 + i for i, d in enumerate(window)}
+        day_center = day_col
+        cols = window
+        # Spalten-Spanne je Tag → zusammenhängende Banden auch bei Streckung
+        # (kompakt: 1 Spalte, also unverändert).
+        day_span = {}
+        for idx, d in enumerate(window):
+            x0 = day_col[d]
+            x1 = (day_col[window[idx + 1]] - 1) if idx + 1 < len(window) else day_x_end
+            day_span[d] = (x0, max(x0, x1))
+
+        # Linke y-achse: 24h-uhr — ODER 1–5-skala, wenn NUR scale-graphen gewählt
+        # sind (dann sind stunden sinnlos). Senkrechte Linie + Marken-Labels +
+        # (groß) feines waagerechtes Hilfsraster: gepunktet, jede 2. Spalte, faint
+        # und ZUERST gemalt → Banden/Marker/Linien überzeichnen es. Erleichtert
+        # das Ablesen der Werte-Höhe quer über den Zeitstrahl.
+        for r in range(plot_h):
+            safe_addstr(base + r, day_x0 - 1, "│", C["faint"])
+        if only_scale:
+            axrows = [(row_scale(v), str(v)) for v in (1, 2, 3, 4, 5)]
+        else:
+            marks = (0, 3, 6, 9, 12, 15, 18, 21, 24) if (labeled and plot_h >= 8) else (0, 6, 12, 18, 24)
+            axrows = [(row_clock(hh * 60), "%02d" % (hh % 24)) for hh in marks]
+        if labeled:
+            for gr in {r for r, _l in axrows}:
+                for cx in range(day_x0, day_x_end + 1, 2):
+                    safe_addstr(gr, cx, "·", C["faint"])
+        for gr, lbl in axrows:
+            safe_addstr(gr, ix_clock, lbl.rjust(2), C["faint"])
+
+        NPRED = 7
+
+        def predicted_days(s):
+            """{datum: schätz-entry _pred=True} für Fenster-Lücken — nur wenn der
+            Graph predict trägt (sonst {}); nichts vor dem ersten echten Wert."""
+            if not s.get("predict"):
+                return {}
+            dv = s.get("dv") or {}
+            actual = sorted((e for e in dv.values() if isinstance(e, dict)),
+                            key=lambda e: str(e.get("date", "")))
+            if not actual:
+                return {}
+            earliest = str(actual[0].get("date", ""))
+            last = actual[-NPRED:]
+
+            def mean(key):
+                xs = [_num(e.get(key)) for e in last]
+                xs = [x for x in xs if x is not None]
+                return sum(xs) / len(xs) if xs else None
+
+            mv, me = mean("value"), mean("end")
+            out = {}
+            for d in window:
+                if d in dv or d < earliest or mv is None:
+                    continue
+                e = {"date": d, "value": mv, "_pred": True}
+                if me is not None:
+                    e["end"] = me
+                out[d] = e
+            return out
+
+        # 1. period/Schlaf als zusammenhängende Bande HINTER allem.
+        band_glyph = " " if C.get("band_is_bg") else "▒"
+        band_cells = set()
+        band_fine = bool(C.get("band_is_bg")) and ("band_edge" in C)
+
+        def frow(m):                           # 24h-Skala als FRAKTIONALE Zeile
+            m = max(0, min(1440, m))
+            return base + (plot_h - 1) - (m / 1440.0 * (plot_h - 1))
+
+        def draw_band_seg(cx, a, b, pred):
+            ftop, fbot = frow(b), frow(a)      # ftop <= fbot (screen)
+            rt, rb = int(round(ftop)), int(round(fbot))
+            g = "░" if pred else band_glyph    # geschätzt = schraffiert
+            fine = band_fine and not pred and rb > rt
+            for r in range(rt, rb + 1):
+                if fine and r == rt:           # Oberkante: unterer Zellteil → ▄
+                    cover = (r + 0.5) - ftop
+                    if cover >= 0.75:
+                        safe_addstr(r, cx, g, C["band"]); band_cells.add((r, cx))
+                    elif cover >= 0.25:
+                        safe_addstr(r, cx, "▄", C["band_edge"])
+                elif fine and r == rb:         # Unterkante: oberer Zellteil → ▀
+                    cover = fbot - (r - 0.5)
+                    if cover >= 0.75:
+                        safe_addstr(r, cx, g, C["band"]); band_cells.add((r, cx))
+                    elif cover >= 0.25:
+                        safe_addstr(r, cx, "▀", C["band_edge"])
+                else:
+                    safe_addstr(r, cx, g, C["band"]); band_cells.add((r, cx))
+
+        for s in series:
+            if s["type"] != "period":
+                continue
+            for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
+                span = day_span.get(d)
+                v, end = _num(e.get("value")), _num(e.get("end"))
+                if span is None or v is None or end is None:
+                    continue
+                st, en = int(round(v)), int(round(end))
+                segs = ([(st, en)] if en >= st else [(st, 1440), (0, en)])
+                for a, b in segs:
+                    for cx in range(span[0], span[1] + 1):   # ganze Tages-Breite
+                        draw_band_seg(cx, a, b, bool(e.get("_pred")))
+
+        def latt(r, c, col):                   # in Banden-Zellen: @band-Variante
+            if (r, c) in band_cells and (col + "@band") in C:
+                return C[col + "@band"]
+            return C[col]
+
+        # 2. scale: Kreise ◦○◉●⬤. Drei Fälle:
+        #   kompakt        → je graph EINE Kreis-Zeile (gestapelt unten im Plot)
+        #   groß+only_scale → Kreise auf 1–5-HÖHE im Gitter (eigene y-achse)
+        #   groß+gemischt   → als beschriftete Zeile ganz unten (siehe unten)
+        CIRC = "◦○◉●⬤"
+        if not labeled:
+            srow = 0
+            for s in scale_series:
+                ry = base + plot_h - 1 - srow
+                srow += 1
+                if ry < base:
+                    continue
+                col = s["col"]
+                for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
+                    cx = day_center.get(d)
+                    v = _num(e.get("value"))
+                    if cx is None or v is None:
+                        continue
+                    idx = max(0, min(4, int(round(v)) - 1))
+                    attr = latt(ry, cx, "faint") if e.get("_pred") else latt(ry, cx, col)
+                    safe_addstr(ry, cx, CIRC[idx], attr)
+        elif only_scale:
+            for s in scale_series:
+                col = s["col"]
+                for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
+                    cx = day_center.get(d)
+                    v = _num(e.get("value"))
+                    if cx is None or v is None:
+                        continue
+                    idx = max(0, min(4, int(round(v)) - 1))
+                    ry = row_scale(v)
+                    attr = latt(ry, cx, "faint") if e.get("_pred") else latt(ry, cx, col)
+                    safe_addstr(ry, cx, CIRC[idx], attr)
+
+        # 3. time: eigenes Symbol je Graph auf der 24h-Skala.
+        for s in series:
+            if s["type"] != "time":
+                continue
+            col = s["col"]
+            sym = s.get("sym") or TIME_SYMBOLS[0]
+            for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
+                cx = day_center.get(d)
+                v = _num(e.get("value"))
+                if cx is None or v is None:
+                    continue
+                r = row_clock(int(round(v)))
+                attr = latt(r, cx, "faint") if e.get("_pred") else latt(r, cx, col)
+                safe_addstr(r, cx, sym, attr)
+
+        # 4. number: dünne Linie auf eigener min/max-Spanne (+ groß: y-achse).
+        for j, s in enumerate(num_series):
+            col, dv = s["col"], s["dv"]
+            vis = [_num(dv[d].get("value")) for d in cols if d in dv]
+            vis = [x for x in vis if x is not None]
+            lo, hi = (min(vis), max(vis)) if vis else (None, None)
+            pts = []
+            for d, e in dv.items():
+                cx = day_center.get(d)
+                v = _num(e.get("value"))
+                if cx is None or v is None:
+                    continue
+                pts.append((cx, row_norm(v, lo, hi)))
+            pts.sort()
+            if len(pts) == 1:
+                safe_addstr(pts[0][1], pts[0][0], "·", latt(pts[0][1], pts[0][0], col))
+            else:
+                for (c1, r1), (c2, r2) in zip(pts, pts[1:]):
+                    if c2 == c1:
+                        for r in range(min(r1, r2), max(r1, r2) + 1):
+                            safe_addstr(r, c1, "│", latt(r, c1, col))
+                        continue
+                    ch = "─" if r2 == r1 else ("╲" if r2 > r1 else "╱")
+                    for c in range(c1, c2 + 1):
+                        t = (c - c1) / (c2 - c1)
+                        r = int(round(r1 + t * (r2 - r1)))
+                        safe_addstr(r, c, ch, latt(r, c, col))
+            for d, e in predicted_days(s).items():
+                cx = day_center.get(d)
+                v = _num(e.get("value"))
+                if cx is None or v is None:
+                    continue
+                safe_addstr(row_norm(v, lo, hi), cx, "·", latt(row_norm(v, lo, hi), cx, "faint"))
+            # groß: beschriftete y-achse dieses zahl-graphen im linken Gutter
+            if labeled and lo is not None:
+                axx = plot_x + j * AX_W
+                def _axlbl(x):                 # kurz + ohne hässliches Trailing-'.'
+                    if abs(x) >= 10 or x == round(x):
+                        return "%d" % int(round(x))
+                    return "%.1f" % x
+                safe_addstr(base, axx, _axlbl(hi)[:AX_W - 1].rjust(AX_W - 1), C[col])
+                safe_addstr(base + plot_h - 1, axx, _axlbl(lo)[:AX_W - 1].rjust(AX_W - 1), C[col])
+
+        if labeled:
+            # Kopf-Legende (name+symbol/marker je Graph, farbig) in EINER Zeile.
+            hx = plot_x
+            for s in series:
+                if s["type"] == "period":
+                    mk = "▓"
+                elif s["type"] == "scale":
+                    mk = "●"
+                elif s["type"] == "time":
+                    mk = s.get("sym") or TIME_SYMBOLS[0]
+                else:
+                    mk = "─"
+                nm = s["name"][:9]
+                if hx + len(nm) + 3 > oleft + ow - 1:
+                    break
+                safe_addstr(otop, hx, mk, C[s["col"]])
+                addclip(otop, hx + 2, nm, oleft + ow - 1 - (hx + 2), C["dim"])
+                hx += 2 + len(nm) + 1
+            # scale-Zeile unten: je graph name + Kreis-Verlauf der letzten werte.
+            # Nur bei gemischter Auswahl — only_scale rendert im Gitter (oben).
+            if scale_series and not only_scale:
+                sy = otop + oh - 1
+                sx = plot_x
+                safe_addstr(sy, sx, "skala:", C["faint"]); sx += 7
+                for s in scale_series:
+                    nm = s["name"][:8]
+                    if sx + len(nm) + 2 > oleft + ow - 8:
+                        break
+                    addclip(sy, sx, nm, oleft + ow - 1 - sx, C["dim"]); sx += len(nm) + 1
+                    dvs = sorted((e for e in s["dv"].values() if isinstance(e, dict)),
+                                 key=lambda e: str(e.get("date", "")))
+                    for e in dvs[-8:]:
+                        if sx >= oleft + ow - 6:
+                            break
+                        vv = _num(e.get("value"))
+                        if vv is None:
+                            continue
+                        safe_addstr(sy, sx, CIRC[max(0, min(4, int(round(vv)) - 1))], C[s["col"]])
+                        sx += 1
+                    sx += 2
+                if sx < oleft + ow - 5:
+                    safe_addstr(sy, oleft + ow - 5, "1–5", C["faint"])
+        else:
+            # kompakte Legende unter dem Plot: farbiges Marker-Sample + Name.
+            for li, line in enumerate(leg_lines[:max_leg]):
+                yy = base + plot_h + li
+                cx = plot_x
+                for nm, col, typ, sym in line:
+                    if typ == "period":
+                        safe_addstr(yy, cx, band_glyph, C["band"])
+                    elif typ == "scale":
+                        safe_addstr(yy, cx, "●", C[col])
+                    elif typ == "time":
+                        safe_addstr(yy, cx, sym or TIME_SYMBOLS[0], C[col])
+                    else:
+                        safe_addstr(yy, cx, "─", C[col])
+                    addclip(yy, cx + 2, nm, (ow - 4) - (cx - plot_x) - 2, C["dim"])
+                    cx += 2 + len(nm) + 1
+
     def draw_graph_tool(by, bx, bh, bw, gv_cache):
         """Inhalt der MITTE-Box, wenn das Graph-Werkzeug Fokus hat."""
         ix, iw = bx + 2, bw - 4
@@ -1475,77 +1997,102 @@ def run_ui(stdscr, store):
             addclip(by + 7, ix, next((h for t, l, h in GRAPH_TYPES if t == G["newtype"]), ""), iw, C["faint"])
             addclip(bottom, ix, ("tab typ · enter anlegen · esc zurück  " + G["msg"]).strip(), iw, C["faint"])
 
-        elif G["view"] == "view" and G["def"]:
-            d = G["def"]
-            typ = d.get("type")
-            unit = (" · " + d["unit"]) if d.get("unit") else ""
-            addclip(by + 1, ix, "%s  (%s%s)" % (d["name"], _tlabel(typ), unit), iw, C["bright"])
-            rows = G["vals"]
+        elif G["view"] == "remind" and G["graphs"]:
+            nm = str(G["graphs"][G["sel"]].get("name") or "")
+            addclip(by + 1, ix, "REMINDER: " + nm, iw, C["bright"])
+            addclip(by + 3, ix, "täglich erinnern ab welcher uhrzeit?", iw, C["dim"])
+            addclip(by + 5, ix, "uhrzeit (HH:MM): " + G["input"] + "_", iw, C["bright"])
+            addclip(by + 7, ix, "erinnert dich, bis du für den tag eingetragen hast.", iw, C["faint"])
+            addclip(bottom, ix, ("HH:MM · enter an · esc zurück  " + G["msg"]).strip(), iw, C["faint"])
+
+        elif G["view"] in ("list", "view"):
+            # EINE vereinte Ansicht: dieselbe große Überlagerung (draw_overlay,
+            # beschriftete y-achsen) OBEN, darunter die Graphliste. G["shown"]
+            # (Menge von ids) filtert die Überlagerung — leer = ALLE (Übersicht),
+            # genau EINE = solo: nur dieser Graph + seine Eingabezeile unten.
+            # (Kombis später: shown mit mehreren → nur Anzeige, kein Eintrag.)
+            shown = G.get("shown") or set()
+            subset = [g for g in G["graphs"] if isinstance(g, dict)
+                      and (not shown or g.get("id") in shown)]
+            solo = G["def"] if (len(shown) == 1 and G["def"]) else None
+            typ = solo.get("type") if solo else None
             input_row = by + bh - 3
-            dl = g_daylabel()
-            exv = g_existing()                     # vorhandener Eintrag am Ziel-Tag
-            if not exv:
-                eh = ""
-            elif typ == "period":
-                eh = " (aktuell %s–%s)" % (fmt_clock(exv.get("value")), fmt_clock(exv.get("end")))
-            elif typ == "time":
-                eh = " (aktuell %s)" % fmt_clock(exv.get("value"))
-            else:
-                eh = " (aktuell %g)" % (_num(exv.get("value")) or 0)
-
-            if typ in ("time", "period"):
-                addclip(by + 2, ix, "%d einträge · zuletzt %s" % (len(rows), graph_last(d, rows)), iw, C["dim"])
-                if rows:
-                    draw_time_plot(by + 3, bx, bw, input_row - 1 - (by + 3), rows, typ == "period")
-                else:
-                    addclip(by + 3, ix, "— noch keine einträge —", iw, C["faint"])
-                if typ == "time":
-                    addclip(input_row, ix, "%s · zeit: %s_%s" % (dl, G["input"], eh), iw, C["bright"])
-                    addclip(bottom, ix, ("HH:MM · enter speichern · ←/→ tag · esc zu  " + G["msg"]).strip(), iw, C["faint"])
-                else:
-                    c1 = G["input"] + ("_" if G["pstage"] == 0 else "")
-                    c2 = G["input2"] + ("_" if G["pstage"] == 1 else "")
-                    addclip(input_row, ix, "%s · von: %s  bis: %s%s" % (dl, c1, c2, eh), iw, C["bright"])
-                    addclip(bottom, ix, ("HH:MM · enter von→bis · ←/→ tag · esc zu  " + G["msg"]).strip(), iw, C["faint"])
-            else:
-                ser = graph_series(typ, rows)
-                if ser:
-                    addclip(by + 2, ix, blockspark(ser[-iw:]), iw, C["graph"])
-                    addclip(by + 3, ix, "%d werte · zuletzt %s" % (len(ser), graph_last(d, rows)), iw, C["dim"])
-                else:
-                    addclip(by + 2, ix, "— noch keine werte —", iw, C["faint"])
-                if typ == "scale":
-                    addclip(input_row, ix, "1–5 trägt für %s ein%s" % (dl, eh), iw, C["acc"])
-                    addclip(bottom, ix, ("1–5 eintragen · ←/→ tag · esc zu  " + G["msg"]).strip(), iw, C["faint"])
-                else:
-                    addclip(input_row, ix, "%s · wert: %s_%s" % (dl, G["input"], eh), iw, C["bright"])
-                    addclip(bottom, ix, ("ziffern · enter speichern · ←/→ tag · esc zu  " + G["msg"]).strip(), iw, C["faint"])
-
-        else:  # "list"
-            addclip(by + 1, ix, "GRAPHEN", iw, C["bright"])
-            safe_addstr(by + 1, bx + bw - 9, "[n neu]", C["acc"])
-            safe_addstr(by + 2, ix, "─" * iw, C["faint"])
-            yy = by + 3
+            # ── Überlagerung oben (auf subset gefiltert), so groß wie es geht ──
+            ly = by + 1
+            if subset and bh >= 18 and iw >= 26:
+                avail = ((input_row - 1) - (by + 1)) if solo else (bh - 3)
+                ng = len([g for g in G["graphs"] if isinstance(g, dict)])
+                list_h = min(2 + ng, max(4, avail // 2))
+                ov_h = avail - list_h
+                if ov_h >= 8:
+                    draw_overlay(by + 1, bx, ov_h, bw, subset, gv_cache, labeled=True)
+                    ly = by + 1 + ov_h             # Liste beginnt unter der Ansicht
+            hdr = ("nur %s" % (solo.get("name") or "?")) if solo else "GRAPHEN"
+            addclip(ly, ix, hdr, iw, C["bright"])
+            if not solo:
+                safe_addstr(ly, bx + bw - 9, "[n neu]", C["acc"])
+            safe_addstr(ly + 1, ix, "─" * iw, C["faint"])
+            list_bottom = (input_row - 1) if solo else bottom
+            yy = ly + 2
             if not G["graphs"]:
                 addclip(yy, ix, "noch keine — 'n' legt einen an", iw, C["faint"])
             else:
-                for i, g in enumerate(G["graphs"]):
-                    if yy >= bottom:
+                # Fenster um den Cursor, damit ↑↓ (auch im Solo) nicht aus dem
+                # sichtbaren Ausschnitt läuft, wenn mehr Graphen als Platz da sind.
+                navail = max(1, list_bottom - (ly + 2))
+                ntot = len(G["graphs"])
+                gstart = max(0, min(G["sel"] - navail + 1, ntot - navail)) if ntot > navail else 0
+                for i in range(gstart, ntot):
+                    if yy >= list_bottom:
                         break
+                    g = G["graphs"][i]
                     if not isinstance(g, dict):
                         continue
-                    sel = (i == G["sel"])
+                    cur = (i == G["sel"])
+                    on = (not shown) or (g.get("id") in shown)    # in Überlagerung sichtbar?
                     rows = gv_cache.get(g.get("id")) or []
                     spark = blockspark(graph_series(g.get("type"), rows)[-8:])
                     pred = "~" if g.get("predict") else " "   # ~ = Lücken werden geschätzt
-                    line = "%s%s%-11s %-6s %s" % (
-                        "›" if sel else " ", pred, str(g.get("name") or "")[:11], _tlabel(g.get("type")), spark)
-                    addclip(yy, ix, line, iw, C["bright"] if sel else C["dim"])
+                    mk = "●" if on else "○"                   # ●=gezeigt · ○=abgewählt
+                    line = "%s%s%s%-11s %-6s %s" % (
+                        "›" if cur else " ", mk, pred, str(g.get("name") or "")[:11],
+                        _tlabel(g.get("type")), spark)
+                    if g.get("remind"):                       # @HH:MM = täglicher Reminder
+                        line += "  @" + (g.get("remind_at") or "")
+                    attr = C["bright"] if cur else (C["dim"] if on else C["faint"])
+                    addclip(yy, ix, line, iw, attr)
                     yy += 1
-            if G["msg"]:                       # Shortcuts liegen unter '/'; nur Feedback
+            if solo:
+                # Eingabezeile des solo-Graphen (Tag-Nav, HH:MM, 1–5 — wie gehabt).
+                dl = g_daylabel()
+                exv = g_existing()                     # vorhandener Eintrag am Ziel-Tag
+                if not exv:
+                    eh = ""
+                elif typ == "period":
+                    eh = " (aktuell %s–%s)" % (fmt_clock(exv.get("value")), fmt_clock(exv.get("end")))
+                elif typ == "time":
+                    eh = " (aktuell %s)" % fmt_clock(exv.get("value"))
+                else:
+                    eh = " (aktuell %g)" % (_num(exv.get("value")) or 0)
+                if typ == "time":
+                    addclip(input_row, ix, "%s · zeit: %s_%s" % (dl, G["input"], eh), iw, C["bright"])
+                    hint = "HH:MM · enter speichern · ↑↓ graph · ←→ tag · esc alle"
+                elif typ == "period":
+                    c1 = G["input"] + ("_" if G["pstage"] == 0 else "")
+                    c2 = G["input2"] + ("_" if G["pstage"] == 1 else "")
+                    addclip(input_row, ix, "%s · von: %s  bis: %s%s" % (dl, c1, c2, eh), iw, C["bright"])
+                    hint = "HH:MM · enter von→bis · ↑↓ graph · ←→ tag · esc alle"
+                elif typ == "scale":
+                    addclip(input_row, ix, "1–5 trägt für %s ein%s" % (dl, eh), iw, C["acc"])
+                    hint = "1–5 eintragen · ↑↓ graph · ←→ tag · esc alle"
+                else:  # number
+                    addclip(input_row, ix, "%s · wert: %s_%s" % (dl, G["input"], eh), iw, C["bright"])
+                    hint = "ziffern · enter speichern · ↑↓ graph · ←→ tag · esc alle"
+                addclip(bottom, ix, (hint + "  " + G["msg"]).strip(), iw, C["faint"])
+            elif G["msg"]:                     # Shortcuts liegen unter '/'; nur Feedback
                 addclip(bottom, ix, G["msg"], iw, C["faint"])
             else:
-                addclip(bottom, ix, "enter öffnen · n neu · p ~vorhersage · d weg · esc zu", iw, C["faint"])
+                addclip(bottom, ix, "enter solo · n neu · p ~vorhersage · r reminder · d weg · esc zu", iw, C["faint"])
 
             if G["confirm"] and G["graphs"]:        # Mini-Dialog über die Liste legen
                 nm = G["graphs"][G["sel"]]["name"]
@@ -1818,6 +2365,9 @@ def run_ui(stdscr, store):
         jeden Frame neu anfragt — erst Blättern/Umschalten löst einen neuen
         Versuch aus (setzt data=None)."""
         try:
+            # Woche bleibt die normale Mo-So-Kalenderwoche; nur die Wochenplan-
+            # Items (week_plan) rollen — auf ihr nächstes Vorkommen in den 7
+            # Tagen ab heute verankert, erscheinen am passenden Datum.
             resp = api_call("/api/calendar?view=%s&ref=%s"
                             % (K["view"], K["ref"]), timeout=2.0)
             # Nur ein dict ist zeichenbar; null/Liste/String (auch von einem
@@ -1871,13 +2421,39 @@ def run_ui(stdscr, store):
             for e in ents:
                 if not isinstance(e, dict) or e.get("ausfall"):
                     continue   # Ausfall (Ferien) ist nur Info, nicht handelbar
+                if e.get("deaktiviert") and not K["showhidden"]:
+                    continue   # ausgeblendet (nur mit 'x'); MUSS exakt zur Skip-
+                    # Bedingung im Wochen-Render passen, sonst zeigt der ›-Cursor
+                    # auf den falschen Termin (di-Index läuft synchron mit).
                 out.append({"iso": iso, "label": e.get("label", ""),
                             "layer": e.get("layer", "termine"),
                             "recurring": bool(e.get("recurring")),
                             "deaktiviert": bool(e.get("deaktiviert")),
+                            "spanning": bool(e.get("spanning")),
+                            "von": e.get("von"), "bis": e.get("bis"),
+                            "span_first": bool(e.get("span_first")),
+                            "span_last": bool(e.get("span_last")),
                             "time": e.get("time"), "ende": e.get("ende"),
                             "ort": e.get("ort")})
         return out
+
+    def k_sidebar_items():
+        """Die SICHTBAREN Items der flachen »week«-Sidebar (abgehakte fallen mit
+        dem 'x'-Schalter raus). Gleiche Filterung wie im Render → Handler und
+        Zeichnung sehen exakt dieselbe Reihenfolge/Länge (lsel bleibt gültig)."""
+        d = K["data"]
+        wp = d.get("weekplan") if isinstance(d, dict) else None
+        items = wp.get("items") if isinstance(wp, dict) else None
+        if not isinstance(items, list):
+            return []
+        return [it for it in items if isinstance(it, dict)
+                and (K["showhidden"] or not it.get("done"))]
+
+    def k_sidebar_lid():
+        """id der »week«-Liste aus der letzten Antwort (oder None)."""
+        d = K["data"]
+        wp = d.get("weekplan") if isinstance(d, dict) else None
+        return wp.get("lid") if isinstance(wp, dict) else None
 
     def k_parse_day(s):
         """Tippeingabe → ISO-Datum. Akzeptiert 'TT.MM', 'TT.MM.JJJJ',
@@ -1926,6 +2502,25 @@ def run_ui(stdscr, store):
         label = K["alabel"].strip()
         if not label:
             K["amsg"] = "titel fehlt"; return
+
+        if K["atype"] == "span":               # MEHRTÄGIGER (ganztägiger) Termin
+            von = k_parse_day(K["aday"])
+            bis = k_parse_day(K["atime"])      # Stufe 1 hält das Bis-Datum
+            if von is None or bis is None:
+                K["amsg"] = "datum? TT.MM"; return
+            if bis < von:
+                K["amsg"] = "bis < von"; return
+            try:
+                api_call("/api/calendar/entry", method="POST",
+                         body={"day": von, "bis": bis, "label": label})
+                K["msg"] = "mehrtägig angelegt: " + label
+                K["ref"] = von; K["data"] = None
+                K["mode"] = "view"; K["astage"] = 0; K["atype"] = "entry"
+                K["aday"] = K["atime"] = K["alabel"] = K["amsg"] = ""
+            except Exception:
+                K["amsg"] = "speichern fehlgeschlagen"
+            return
+
         time = K["atime"].strip() or None
         if time and parse_clock(time) is None:
             K["amsg"] = "zeit? HH:MM (leer=ganztags)"; return
@@ -1978,6 +2573,12 @@ def run_ui(stdscr, store):
         it = sels[K["sel"]]
         if it["recurring"]:
             K["mode"] = "routine"; K["ract"] = it; K["msg"] = ""
+        elif it.get("spanning"):
+            # Mehrtägig: „bearbeiten" heißt Uhrzeit NUR für diesen Tag setzen
+            # (leer = wieder ganztags). Eingabe unten in der ›-Leiste.
+            K["linput"] = it.get("time") or ""; K["lmode"] = "spantime"
+            K["spantgt"] = (it["layer"], it.get("von"), it["label"], it["iso"])
+            K["msg"] = ""
         else:
             K["mode"] = "add"; K["astage"] = 0; K["amsg"] = ""; K["msg"] = ""
             K["atype"] = "entry"           # Ändern gibt es nur für Einmal-Termine
@@ -2034,9 +2635,12 @@ def run_ui(stdscr, store):
             K["msg"] = "löschen fehlgeschlagen"
         K["mode"] = "view"; K["ract"] = None; K["rconfirm"] = False; K["data"] = None
 
-    def _k_entry_line(e):
+    def _k_entry_line(e, day_iso=None):
         """Eine Termin-Zeile kompakt: Zeit(spanne) + Label (+ Ort). Ausfall
-        (Ferien) als ℹ-Hinweis statt Termin — wie render_range_for_tool."""
+        (Ferien) als ℹ-Hinweis statt Termin. Mehrtägige Termine (spanning)
+        laufen NICHT hier durch — die zeichnet der Wochen-Render als durchgehende
+        Klammer in der linken Spann-Gosse (day_iso bleibt nur der Kompatibilität
+        halber im Signatur)."""
         if e.get("ausfall"):
             return "ℹ %s fällt aus" % e.get("label", "?")
         if e.get("time") and e.get("ende"):
@@ -2086,27 +2690,40 @@ def run_ui(stdscr, store):
             fy = by + 3
             cz = "_"                        # Cursor-Marker an der aktiven Stufe
             is_rt = (K["atype"] == "routine")
+            is_span = (K["atype"] == "span")
             if K["editing"]:
                 title = "TERMIN ÄNDERN"
+            elif is_rt:
+                title = "NEUE ROUTINE"
+            elif is_span:
+                title = "MEHRTÄGIG"
             else:
-                title = "NEUE ROUTINE" if is_rt else "NEUER TERMIN"
+                title = "NEUER TERMIN"
             addclip(fy, ix, title, iw, C["bright"])
             # Typ-Umschalter (nur bei Neuanlage, nicht beim Ändern).
             if not K["editing"]:
-                te = "[Termin]" if not is_rt else " Termin "
-                tr = "[Routine]" if is_rt else " Routine "
-                safe_addstr(fy, ix + len(title) + 3, te, C["acc"] if not is_rt else C["faint"])
-                safe_addstr(fy, ix + len(title) + 3 + len(te) + 1, tr, C["acc"] if is_rt else C["faint"])
-                safe_addstr(fy, ix + len(title) + 3 + len(te) + 1 + len(tr) + 2, "(Tab)", C["faint"])
+                tabs = [("Termin", not is_rt and not is_span),
+                        ("Routine", is_rt), ("Mehrtägig", is_span)]
+                xx = ix + len(title) + 3
+                for name, on in tabs:
+                    seg = ("[%s]" % name) if on else (" %s " % name)
+                    safe_addstr(fy, xx, seg, C["acc"] if on else C["faint"])
+                    xx += len(seg) + 1
+                safe_addstr(fy, xx + 1, "(Tab)", C["faint"])
             if is_rt:
                 addclip(fy + 2, ix, "Tag:   " + K["aday"] + (cz if K["astage"] == 0 else "")
                         + "   (Mo/Di/.., mehrere mit Komma)", iw,
                         C["bright"] if K["astage"] == 0 else C["dim"])
             else:
-                addclip(fy + 2, ix, "Datum: " + K["aday"] + (cz if K["astage"] == 0 else "")
+                lbl0 = "Von:   " if is_span else "Datum: "
+                addclip(fy + 2, ix, lbl0 + K["aday"] + (cz if K["astage"] == 0 else "")
                         + "   (TT.MM, leer=heute)", iw, C["bright"] if K["astage"] == 0 else C["dim"])
-            addclip(fy + 3, ix, "Zeit:  " + K["atime"] + (cz if K["astage"] == 1 else "")
-                    + "   (HH:MM, leer=ganztags)", iw, C["bright"] if K["astage"] == 1 else C["dim"])
+            if is_span:
+                addclip(fy + 3, ix, "Bis:   " + K["atime"] + (cz if K["astage"] == 1 else "")
+                        + "   (TT.MM, letzter tag)", iw, C["bright"] if K["astage"] == 1 else C["dim"])
+            else:
+                addclip(fy + 3, ix, "Zeit:  " + K["atime"] + (cz if K["astage"] == 1 else "")
+                        + "   (HH:MM, leer=ganztags)", iw, C["bright"] if K["astage"] == 1 else C["dim"])
             addclip(fy + 4, ix, "Titel: " + K["alabel"] + (cz if K["astage"] == 2 else ""),
                     iw, C["bright"] if K["astage"] == 2 else C["dim"])
             addclip(bottom, ix, ("enter weiter/speichern · esc zurück  " + K["amsg"]).strip(),
@@ -2139,6 +2756,7 @@ def run_ui(stdscr, store):
                 addclip(bottom, ix, "d = nur dieser aus · x = ganze Routine löschen · esc", iw, C["faint"])
             return
 
+        span_hint = ""                 # ▶-Hinweis, wenn ein Spann-Tag gewählt ist
         if K["view"] == "month":
             # Monatsgitter: 7 Spalten Mo-So, bis zu 6 Wochenzeilen.
             colw = max(3, iw // 7)
@@ -2155,6 +2773,10 @@ def run_ui(stdscr, store):
                 iso = cur.isoformat()
                 in_month = first <= cur <= last
                 ents = days.get(iso)
+                if isinstance(ents, list) and not K["showhidden"]:
+                    ents = [e for e in ents
+                            if not (isinstance(e, dict)
+                                    and (e.get("deaktiviert") or e.get("ausfall")))]
                 has = bool(ents) and isinstance(ents, list)
                 cell = "%2d" % cur.day + ("•" if has else "")
                 if iso == today:
@@ -2170,62 +2792,270 @@ def run_ui(stdscr, store):
                     row += 1
                 cur += timedelta(days=1)
         else:
-            # Wochenliste: pro Tag eine Kopfzeile, Termine eingerückt darunter.
-            # ALLE Termine (Einmal + Routine) sind auswählbar (›-Cursor, K["sel"]);
-            # nur Ausfälle (Ferien) sind reine Info. Reihenfolge = k_selectable().
+            # Wochenansicht: normale Mo-So-Kalenderwoche. Pro Tag ein
+            # zeilen-ausgerichtetes BAND — links die Termine (auswählbar,
+            # ›-Cursor/K["sel"]), rechts die zugeordneten Items der »week«-Liste
+            # (week_plan rollt: dieser Wochentag = sein nächstes Vorkommen ab
+            # heute, erscheint also am passenden Datum dieser Woche). Die Bänder
+            # stapeln sich, jeder Tag hat seine eigene Höhe → Montag-Items können
+            # NICHT in die Dienstag-Zeile bluten. Passt alles in die Box →
+            # natürliche Höhe (gestreckt); reicht der Platz nicht → pro Tag
+            # einklappen ("…+N"). Reihenfolge der Termine = k_selectable().
             try:
                 start = date.fromisoformat(d["start"]); end = date.fromisoformat(d["end"])
             except (KeyError, ValueError):
                 return
+            # Sidebar = flache »week«-Liste (wochenunabhängig), EINE Spalte über
+            # die volle Höhe — NICHT mehr pro Tag. sitems = sichtbare Items
+            # (abgehakte via 'x' aus). lsel defensiv klemmen.
+            sitems = k_sidebar_items()
+            if K["lsel"] >= len(sitems):
+                K["lsel"] = max(0, len(sitems) - 1)
             nsel = len(k_selectable())
             if K["sel"] >= nsel:
                 K["sel"] = max(0, nsel - 1)
-            di = 0                          # läuft über die auswählbaren Termine
-            yy, cur = by + 2, start
-            while cur <= end and yy < bottom:
+
+            # Spalten: links Termine, rechts Wochenplan (nur wenn breit genug).
+            rcw = max(0, (iw - 3) * 2 // 5)        # ~40 % für die Plan-Spalte
+            if rcw < 8:
+                rcw = 0                             # zu schmal → keine Plan-Spalte
+            lcw = iw - rcw - (1 if rcw else 0)     # Rest links (− Trenner)
+            divx = ix + lcw                         # Spalte des "│"-Trenners
+
+            # Pro Tag die Zeilen einsammeln. di läuft über ALLE Termine in
+            # k_selectable-Reihenfolge (sortierte Tage, Eintragsreihenfolge);
+            # Ausfälle (Ferien) sind reine Info (di=None, nicht auswählbar).
+            days_rows = []
+            di = 0
+            span_map = {}          # (von,label,layer) → {"label", "cells":[(day_idx,di)]}
+            day_idx = 0
+            cur = start
+            while cur <= end:
                 iso = cur.isoformat()
                 ents = days.get(iso)
                 if not isinstance(ents, list):
                     ents = []
-                is_today = (iso == today)
-                hdr = "%s %s" % (KAL_WD[cur.weekday()], cur.strftime("%d.%m."))
-                addclip(yy, ix, hdr + ("  ‹heute›" if is_today else ""), iw,
-                        C["bright"] if is_today else C["acc"])
-                yy += 1
-                shown = False
+                left = []                           # [(txt, attr, di|None)]
                 for e in ents:
-                    if yy >= bottom:
-                        break
                     if not isinstance(e, dict):
                         continue
-                    shown = True
-                    if e.get("ausfall"):        # Info-Zeile, nicht auswählbar
-                        addclip(yy, ix, "  " + _k_entry_line(e), iw, C["faint"]); yy += 1
+                    if e.get("ausfall"):
+                        # Ferien/Pausen-Ausfall (add_pause über Zeitraum) ist
+                        # dieselbe Sorte „passiert nicht" wie einzeln deaktiviert
+                        # → GLEICHER Toggle. Reine Info (di=None), berührt den
+                        # Auswahl-Index nie → kein Sync-Problem mit k_selectable.
+                        if not K["showhidden"]:
+                            continue
+                        left.append(("  " + _k_entry_line(e, iso), C["faint"], None))
                         continue
-                    selected = (di == K["sel"])
-                    deakt = bool(e.get("deaktiviert"))
-                    mark = "› " if selected else "  "
-                    if deakt:
-                        # Deaktiviert IMMER klar gedimmt zeigen — auch wenn
-                        # selektiert (sonst überdeckt das helle Invers die
-                        # Markierung und es sieht aus wie „nichts passiert").
-                        # Selektion bleibt über den ›-Cursor erkennbar; das
-                        # ✗-Präfix + „(deaktiviert)" macht den Aus-Zustand eindeutig.
-                        attr = C["faint"]
-                        txt = "✗ " + _k_entry_line(e) + "  (deaktiviert)"
-                    elif selected:
-                        attr = C["bright"] | curses.A_REVERSE
-                        txt = _k_entry_line(e)
+                    if e.get("deaktiviert") and not K["showhidden"]:
+                        continue   # ausgeblendet: NICHT zeichnen und di NICHT
+                        # erhöhen → Index bleibt synchron mit k_selectable().
+                    cur_di = di; di += 1
+                    if e.get("spanning"):
+                        # Mehrtägig: NICHT inline (sonst reißt die Klammer, sobald
+                        # der Tag andere Termine hat) → sammeln für die linke
+                        # Spann-Gosse. di trotzdem zählen → Sync mit k_selectable;
+                        # auswählbar bleibt es (Cursor hebt die Gosse des Tages).
+                        key = (e.get("von"), e.get("label"), e.get("layer"))
+                        sm = span_map.setdefault(
+                            key, {"label": e.get("label") or "?", "cells": []})
+                        sm["cells"].append((day_idx, cur_di))
+                        continue
+                    if e.get("deaktiviert"):
+                        left.append(("✗ " + _k_entry_line(e, iso) + "  (aus)", C["faint"], cur_di))
+                    elif cur_di == K["sel"]:
+                        left.append((_k_entry_line(e, iso), C["bright"] | curses.A_REVERSE, cur_di))
                     else:
-                        attr = C["dim"]
-                        txt = _k_entry_line(e)
-                    addclip(yy, ix, mark + txt, iw, attr)
-                    di += 1; yy += 1
-                if not shown and yy < bottom:
-                    addclip(yy, ix + 2, "—", iw - 2, C["faint"]); yy += 1
+                        left.append((_k_entry_line(e, iso), C["dim"], cur_di))
+                # Rechte Spalte pro Tag gibt es nicht mehr — die Sidebar ist EINE
+                # flache Liste (unten separat). right bleibt leer, damit die
+                # Höhenverteilung nur die Termine (links) berücksichtigt.
+                days_rows.append((cur, iso, left, []))
+                day_idx += 1
                 cur += timedelta(days=1)
 
+            # Spann-Gosse links: je Mehrtages-Termin EINE durchgehende Klammer über
+            # alle betroffenen Tages-Zeilen; überlappende Spannen bekommen eigene
+            # Spalten (Lanes, Greedy). gw = Gossenbreite → die Tages-Spalte rückt
+            # um gw(+1) nach rechts, damit die Klammer außerhalb der Daten steht.
+            spans = []
+            for _key, sm in span_map.items():
+                idxs = [c[0] for c in sm["cells"]]
+                spans.append({"label": sm["label"], "cells": sm["cells"],
+                              "d0": min(idxs), "d1": max(idxs)})
+            spans.sort(key=lambda s: (s["d0"], s["d1"]))
+            lane_end = []                           # letzter belegter day_idx je Lane
+            for s in spans:
+                s["lane"] = None
+                for li in range(len(lane_end)):
+                    if s["d0"] > lane_end[li]:
+                        lane_end[li] = s["d1"]; s["lane"] = li; break
+                if s["lane"] is None:
+                    s["lane"] = len(lane_end); lane_end.append(s["d1"])
+            gw = min(len(lane_end), max(0, (iw - rcw) // 4))
+            cx = ix + (gw + 1 if gw else 0)         # Start-Spalte der Tages-Inhalte
+            lw = (divx - cx) if rcw else (ix + iw - cx)
+            if lw < 6:                              # Notbremse: zu schmal → keine Gosse
+                gw = 0; cx = ix; lw = lcw if rcw else iw
+
+            # Höhen verteilen: Bedarf je Tag = max(links, rechts, 1) Inhaltszeilen
+            # (+1 Kopfzeile). Passt die Summe → jeder bekommt seinen Bedarf;
+            # sonst fair aufteilen und den Rest reihum an die Hungrigen geben.
+            y0 = by + 2
+            avail = bottom - y0
+            nd = len(days_rows)
+            needs = [max(len(l), len(r), 1) for (_c, _i, l, r) in days_rows]
+            caps = [0] * nd
+            budget = avail - nd                     # je Tag eine Kopfzeile abziehen
+            if budget > 0 and nd:
+                base = budget // nd
+                for i in range(nd):
+                    caps[i] = min(needs[i], base)
+                leftover = budget - sum(caps)
+                i = 0
+                while leftover > 0 and any(caps[j] < needs[j] for j in range(nd)):
+                    if caps[i] < needs[i]:
+                        caps[i] += 1; leftover -= 1
+                    i = (i + 1) % nd
+
+            # Bleibt nach dem Füllen Höhe übrig (großes Display), als etwas Luft
+            # ZWISCHEN die Tage geben, statt sie unten zu sammeln — dezent
+            # (max 2 Leerzeilen je Lücke), Trenner läuft durch.
+            gap = min(2, max(0, (avail - (nd + sum(caps))) // max(1, nd - 1)))
+
+            day_top = [None] * nd                   # y der Kopfzeile je Tag
+            day_bot = [None] * nd                   # y der letzten Zeile je Tag
+            yy = y0
+            for idx, (cd, iso, left, right) in enumerate(days_rows):
+                if yy >= bottom:
+                    break
+                day_top[idx] = yy
+                is_today = (iso == today)
+                hdr = "%s %s" % (KAL_WD[cd.weekday()], cd.strftime("%d.%m."))
+                addclip(yy, cx, hdr + ("  ‹heute›" if is_today else ""),
+                        lw, C["bright"] if is_today else C["acc"])
+                if rcw:
+                    safe_addstr(yy, divx, "│", C["faint"])
+                day_bot[idx] = yy
+                yy += 1
+                cap = caps[idx]
+                for r in range(cap):
+                    if yy >= bottom:
+                        break
+                    if rcw:
+                        safe_addstr(yy, divx, "│", C["faint"])
+                    # Linke Spalte: Termine (letzte sichtbare Zeile klappt den Rest ein).
+                    if r < len(left):
+                        if r == cap - 1 and len(left) > cap:
+                            addclip(yy, cx, "  …+%d" % (len(left) - cap + 1), lw, C["faint"])
+                        else:
+                            txt, attr, dd = left[r]
+                            if dd is None:
+                                addclip(yy, cx, txt, lw, attr)
+                            else:
+                                mark = "› " if dd == K["sel"] else "  "
+                                addclip(yy, cx, mark + txt, lw, attr)
+                    elif not left and r == 0:
+                        addclip(yy, cx + 2, "—", lw - 2, C["faint"])
+                    # (rechte Spalte: siehe Sidebar-Block nach der Tages-Schleife)
+                    day_bot[idx] = yy
+                    yy += 1
+                # Luft zwischen den Tagen (nicht nach dem letzten); Trenner durch.
+                if gap and idx < nd - 1:
+                    for _g in range(gap):
+                        if yy >= bottom:
+                            break
+                        if rcw:
+                            safe_addstr(yy, divx, "│", C["faint"])
+                        yy += 1
+
+            # ── Spann-Gosse zeichnen: durchgehende Klammer + senkrechter Titel ──
+            # ┌ am ersten sichtbaren Tag, └ am letzten; dazwischen laufen die
+            # Titel-Buchstaben AM STÜCK nach unten (ein Zeichen pro Zeile), Rest
+            # als │. Der ausgewählte Tag (Cursor) hebt seinen Klammer-Abschnitt
+            # invers hervor — so bleibt die Spanne per ↑↓ ansteuerbar (e/d).
+            for s in spans:
+                lane = s["lane"]
+                if lane >= gw or s["d0"] >= nd or s["d1"] >= nd:
+                    continue
+                ytop, ybot = day_top[s["d0"]], day_bot[s["d1"]]
+                if ytop is None or ybot is None:
+                    continue
+                gx = ix + lane
+                title = s["label"] or "?"
+                sel_day = next((dd for (dd, ddi) in s["cells"] if ddi == K["sel"]), None)
+                for y in range(ytop, ybot + 1):
+                    if y == ytop:
+                        chc = "┌"
+                    elif y == ybot:
+                        chc = "└"
+                    else:
+                        pos = y - (ytop + 1)
+                        chc = title[pos] if pos < len(title) else "│"
+                    hot = (sel_day is not None and day_top[sel_day] is not None
+                           and day_top[sel_day] <= y <= day_bot[sel_day])
+                    safe_addstr(y, gx, chc,
+                                (C["bright"] | curses.A_REVERSE) if hot else C["span"])
+                if sel_day is not None:
+                    span_hint = "▶ %s · %s" % (title, days_rows[sel_day][1])
+
+            # ── Sidebar: flache »week«-Liste (rechte Spalte, volle Höhe) ──
+            # Unabhängig von den Tages-Bändern. 'l' schiebt den Fokus hierher
+            # (‹fokus›), dann bearbeitbar (a/r/d/Space). Abgehakte via 'x' aus.
+            if rcw:
+                for yv in range(y0, bottom):        # Trenner über die volle Höhe
+                    safe_addstr(yv, divx, "│", C["faint"])
+                foc = K["listfocus"]
+                sx = divx + 1                        # Cursor-Gosse ab hier
+                sw = ix + iw - sx                    # Restbreite rechts
+                if K["linput"] is not None and K["lmode"] in ("add", "rename"):
+                    head = "liste  ‹" + ("neu" if K["lmode"] == "add"
+                                         else "umbenennen") + " unten›"
+                elif K["lsort"]:
+                    head = "liste  ‹sortieren ↑↓›"
+                elif foc:
+                    head = "liste  ‹fokus›"
+                else:
+                    head = "liste"
+                addclip(y0, sx + 1, head, sw - 1, C["bright"] if foc else C["acc"])
+                sy = y0 + 1
+                avail = max(0, bottom - sy)          # verfügbare Zeilen
+                step = 2                             # 1 Leerzeile Abstand je Item
+                cap = max(1, (avail + 1) // step)    # so viele Items passen
+                n = len(sitems)
+                off = (min(max(0, K["lsel"] - cap // 2), max(0, n - cap))
+                       if (foc and n > cap) else 0)
+                if n == 0:
+                    addclip(sy, sx + 1, "— leer (a: neu)", sw - 1, C["faint"])
+                else:
+                    # Ombre: nach unten (visible-Position) progressiv transparenter.
+                    ombre = C.get("ombre") or [C["dim"]]
+                    shown = 0
+                    i = off
+                    while i < n and shown < cap:
+                        yy2 = sy + shown * step
+                        if shown == cap - 1 and (n - off) > cap:
+                            addclip(yy2, sx + 1, "…+%d" % (n - off - cap + 1),
+                                    sw - 1, C["faint"])
+                            break
+                        it = sitems[i]
+                        done = bool(it.get("done"))
+                        cur_s = foc and i == K["lsel"]
+                        head_mark = ("⇅ " if (cur_s and K["lsort"])
+                                     else ("› " if cur_s else "  "))
+                        txt = (head_mark + ("✓ " if done else "• ")
+                               + str(it.get("text", ""))
+                               + (" ↔" if it.get("linked") else ""))
+                        attr = ((C["bright"] | curses.A_REVERSE) if cur_s
+                                else ombre[min(shown, len(ombre) - 1)])
+                        addclip(yy2, sx, txt, sw, attr)
+                        i += 1
+                        shown += 1
+
         info = "%s · %s" % ("woche" if K["view"] == "week" else "monat", label)
+        if span_hint:
+            info += "   " + span_hint
         addclip(bottom, ix, info, iw, C["bright"])
         if K["confirmdel"]:                    # Shortcuts liegen unter '/'
             hint = "löschen? j/n"
@@ -2238,24 +3068,77 @@ def run_ui(stdscr, store):
     def mail_load():
         """Kategorie-Übersicht read-only holen (inkl. Live-Zähl-Cache)."""
         try:
-            MAIL["data"] = api_call("/api/mail", timeout=2.0)
+            MAIL["data"] = api_call("/api/mail", timeout=8.0)
             MAIL["msg"] = ""
         except Exception:
             MAIL["data"] = {"failed": True}
             MAIL["msg"] = "mail: backend?"
         MAIL["_ts"] = time.time()
 
-    def mail_refresh_counts():
-        """Live-Ordnerzählung im Backend anstoßen (fire-and-forget). Die echten
-        Zahlen tröpfeln per Auto-Refresh nach — friert die TUI nicht ein."""
+    def _do_refresh_counts(force=False):
+        """Live-Ordnerzählung im Backend anstoßen (Backend zählt im eigenen
+        Thread, der POST kehrt schnell zurück). `force` umgeht die Backend-TTL —
+        nötig, wenn sich die Zahlen gerade geändert haben (nach Umsortieren)."""
         try:
-            api_call("/api/mail/refresh-counts", method="POST", timeout=2.0)
+            q = "/api/mail/refresh-counts" + ("?force=1" if force else "")
+            api_call(q, method="POST", timeout=8.0)
         except Exception:
             pass
 
+    def mail_refresh_counts():
+        """Zählung im Hintergrund anstoßen — friert die TUI nicht ein."""
+        _mail_submit(("counts",), "zähle ordner…", _do_refresh_counts)
+
+    def _mail_fetch_folder(name, force=False):
+        """Die Mails einer Kategorie holen (läuft im Worker). Schreibt das
+        Ergebnis nur, wenn der Nutzer nicht inzwischen weitergeschaltet hat, und
+        zeigt einen ECHTEN Fehler statt ihn als „(Ordner leer)" zu verschleiern.
+        `force=1` umgeht den Backend-Cache (nach Umsortieren/Löschen). Meldet das
+        Backend, dass es im Hintergrund frisch nachzieht (`refreshing`), holen wir
+        das Ergebnis nach kurzer Wartezeit noch einmal, damit die frische Liste
+        einschwenkt."""
+        mails, live, err, refreshing = None, False, None, False
+        try:
+            q = "/api/mail/folder?cat=" + urllib.parse.quote(name or "")
+            if force:
+                q += "&force=1"
+            r = api_call(q, timeout=30.0)
+            if isinstance(r, dict) and r.get("error"):
+                mails, err = [], str(r.get("error"))
+            elif isinstance(r, dict):
+                mails = r.get("mails") if isinstance(r.get("mails"), list) else []
+                live = bool(r.get("live"))
+                refreshing = bool(r.get("refreshing"))
+            else:
+                mails = []
+        except urllib.error.HTTPError as e:
+            mails = []
+            try:
+                j = json.loads(e.read().decode("utf-8"))
+                err = str(j.get("error", "HTTP %d" % e.code))
+            except Exception:
+                err = "HTTP %d" % e.code
+        except Exception as ex:
+            mails, err = [], "%s (backend?)" % type(ex).__name__
+        if MAIL["cat"] != name:            # Nutzer ist weiter → Ergebnis verwerfen
+            return
+        MAIL["mails"] = mails
+        MAIL["mails_live"] = live
+        MAIL["msg"] = ("ordner: " + err) if err else ""
+        if not err and isinstance(mails, list):
+            MAIL["fcache"][name] = mails   # Reopen zeigt das sofort
+        if refreshing and not err:
+            # Backend zieht gerade frisch nach → gleich nochmal (still) abholen.
+            t = threading.Timer(2.0, lambda n=name: _mail_submit(
+                ("folder-refresh", n), "", lambda: _mail_fetch_folder(n)))
+            t.daemon = True
+            t.start()
+
     def mail_open_category(name):
-        """Eine Kategorie öffnen: Mails LIVE aus dem echten Ordner holen (mit
-        Key) bzw. lokalen Schnappschuss (ohne). Blockiert kurz — bewusste Aktion."""
+        """Eine Kategorie öffnen: Ansicht sofort umschalten. Liegt der Ordner noch
+        im TUI-Cache, zeigen wir ihn SOFORT und frischen still im Hintergrund auf
+        (kein „lädt ordner…"-Warten mehr beim Wieder-Aufmachen); sonst holt der
+        Worker ihn (Backend serviert i.d.R. instant aus SEINEM Cache)."""
         MAIL["cat"] = name
         MAIL["level"] = "mails"
         MAIL["off"] = 0
@@ -2263,111 +3146,125 @@ def run_ui(stdscr, store):
         MAIL["expanded"] = False; MAIL["bodyoff"] = 0
         MAIL["body"] = None; MAIL["bodyfor"] = None
         MAIL["picking"] = False; MAIL["confirmdel"] = False
-        MAIL["mails"] = None          # None ⇒ „lädt…"
-        MAIL["mails_live"] = False
+        cached = MAIL["fcache"].get(name)
+        MAIL["mails"] = cached                 # sofort zeigen (None ⇒ „lädt…")
+        MAIL["mails_live"] = cached is not None
         MAIL["msg"] = ""
-        try:
-            q = "/api/mail/folder?cat=" + urllib.parse.quote(name or "")
-            r = api_call(q, timeout=12.0)
-            if isinstance(r, dict):
-                MAIL["mails"] = r.get("mails") if isinstance(r.get("mails"), list) else []
-                MAIL["mails_live"] = bool(r.get("live"))
-            else:
-                MAIL["mails"] = []
-        except Exception:
-            MAIL["mails"] = []
-            MAIL["msg"] = "ordner: backend?"
+        _mail_submit(("folder", name),
+                     "" if cached is not None else "lädt ordner…",
+                     lambda n=name: _mail_fetch_folder(n))
 
     def mail_cur():
         """Die aktuell ausgewählte Mail (oder None)."""
         ms = MAIL["mails"] or []
         return ms[MAIL["msel"]] if 0 <= MAIL["msel"] < len(ms) else None
 
-    def mail_load_body():
-        """Body der aktuellen Mail live nachladen (gecacht je uid). Blockiert kurz."""
+    def _do_body(uid, it):
+        """Body EINER Mail holen (läuft im Worker). Nachbarn zum Vorwärmen
+        mitschicken; ECHTEN Fehlergrund zeigen statt „backend?"."""
+        ms = MAIL["mails"] or []
+        acct = it.get("account") or ""
+        try:
+            sel = ms.index(it)
+        except ValueError:
+            sel = MAIL["msel"]
+        neigh = []
+        for j in (sel + 1, sel - 1):
+            if 0 <= j < len(ms):
+                nb = ms[j]
+                nu = nb.get("uid")
+                # Cache ist konto-skaliert → nur gleichkontige Nachbarn vorwärmen.
+                if nu is not None and (nb.get("account") or "") == acct:
+                    neigh.append(str(nu))
+        try:
+            q = ("/api/mail/body?cat=" + urllib.parse.quote(MAIL["cat"] or "")
+                 + "&uid=" + str(uid)
+                 + "&account=" + urllib.parse.quote(it.get("account") or ""))
+            if neigh:
+                q += "&prefetch=" + urllib.parse.quote(",".join(neigh))
+            r = api_call(q, timeout=30.0)
+            body = r if isinstance(r, dict) else {"error": "?"}
+        except urllib.error.HTTPError as e:
+            try:
+                j = json.loads(e.read().decode("utf-8"))
+                body = {"error": j.get("error", "HTTP %d" % e.code)}
+            except Exception:
+                body = {"error": "HTTP %d" % e.code}
+        except Exception as ex:
+            body = {"error": "%s (Backend erreichbar?)" % type(ex).__name__}
+        MAIL["body"] = body
+        MAIL["bodyfor"] = uid
+
+    def mail_request_body():
+        """Body der aktuellen Mail im Hintergrund anfordern (dedupt je uid).
+        Blockiert NICHT — der Worker füllt MAIL['body'], das Panel zeigt solange
+        „lädt Text…". Schon geladen/gecacht → sofort da."""
         it = mail_cur()
         if not it:
             MAIL["body"] = None; MAIL["bodyfor"] = None
             return
         uid = it.get("uid")
-        if MAIL["bodyfor"] == uid and MAIL["body"] is not None:
+        if MAIL["bodyfor"] == uid and isinstance(MAIL["body"], dict):
             return
-        MAIL["body"] = None          # None ⇒ „lädt…"
-        try:
-            q = ("/api/mail/body?cat=" + urllib.parse.quote(MAIL["cat"] or "")
-                 + "&uid=" + str(uid)
-                 + "&account=" + urllib.parse.quote(it.get("account") or ""))
-            r = api_call(q, timeout=20.0)
-            MAIL["body"] = r if isinstance(r, dict) else {"error": "?"}
-        except urllib.error.HTTPError as e:
-            # Den ECHTEN Grund zeigen (z.B. 409 „kein key") statt „backend?".
-            try:
-                j = json.loads(e.read().decode("utf-8"))
-                MAIL["body"] = {"error": j.get("error", "HTTP %d" % e.code)}
-            except Exception:
-                MAIL["body"] = {"error": "HTTP %d" % e.code}
-        except Exception as ex:
-            MAIL["body"] = {"error": "%s (Backend erreichbar?)" % type(ex).__name__}
-        MAIL["bodyfor"] = uid
-        MAIL["bodyoff"] = 0
+        _mail_submit(("body", it.get("account"), uid), "lädt text…",
+                     lambda u=uid, item=it: _do_body(u, item))
 
-    def mail_refetch():
-        """Die Mails der aktuellen Kategorie frisch holen (nach Umsortieren/
-        Löschen verschwinden verschobene Mails hier). Behält den Modus."""
-        if not MAIL["cat"]:
-            return
-        try:
-            q = "/api/mail/folder?cat=" + urllib.parse.quote(MAIL["cat"])
-            r = api_call(q, timeout=12.0)
-            if isinstance(r, dict):
-                MAIL["mails"] = r.get("mails") if isinstance(r.get("mails"), list) else []
-                MAIL["mails_live"] = bool(r.get("live"))
-        except Exception:
-            pass
-        ms = MAIL["mails"] or []
-        MAIL["msel"] = max(0, min(MAIL["msel"], max(0, len(ms) - 1)))
-        MAIL["body"] = None; MAIL["bodyfor"] = None
-
-    def mail_assign(category):
-        """Den ABSENDER der aktuellen Mail einer Kategorie zuordnen UND alle
-        seine vorhandenen Mails dorthin verschieben (Backend macht das live)."""
-        it = mail_cur()
-        if not it:
-            MAIL["picking"] = False
-            return
-        MAIL["picking"] = False
+    def _do_assign(sender, category):
         try:
             r = api_call("/api/mail/assign", method="POST",
-                         body={"sender": it.get("from") or "", "category": category},
-                         timeout=30.0)
+                         body={"sender": sender, "category": category},
+                         timeout=60.0)
             moved = (r or {}).get("moved", 0) if isinstance(r, dict) else 0
             MAIL["msg"] = "absender → %s (%d verschoben)" % (category, moved)
         except Exception:
             MAIL["msg"] = "einsortieren: backend?"
-        mail_refetch()                 # umsortierte Mails fallen aus dieser Liste
-        mail_refresh_counts()          # echte Ordnergrößen neu zählen
+        # force=1: Backend-Cache umgehen, damit die umsortierten Mails hier
+        # wirklich rausfallen (sonst zeigte der Cache sie noch).
+        _mail_fetch_folder(MAIL["cat"], force=True)
+        MAIL["body"] = None; MAIL["bodyfor"] = None
+        _do_refresh_counts(force=True)    # Zahlen haben sich geändert
 
-    def mail_delete():
-        """Die aktuelle Mail in den Papierkorb (umkehrbar) und aus der Liste raus."""
+    def mail_assign(category):
+        """Den ABSENDER der aktuellen Mail einer Kategorie zuordnen UND alle
+        seine vorhandenen Mails dorthin verschieben (im Hintergrund — das kann
+        bei Outlook lange dauern, die TUI bleibt derweil bedienbar)."""
         it = mail_cur()
-        ms = MAIL["mails"] or []
+        MAIL["picking"] = False
         if not it:
-            MAIL["confirmdel"] = False
             return
+        sender = it.get("from") or ""
+        MAIL["msg"] = "sortiere absender ein…"
+        _mail_submit(("assign", sender, category), "sortiere absender ein…",
+                     lambda s=sender, c=category: _do_assign(s, c))
+
+    def _do_delete(cat, uid, acct):
         try:
             r = api_call("/api/mail/delete", method="POST",
-                         body={"cat": MAIL["cat"], "uid": it.get("uid"),
-                               "account": it.get("account")}, timeout=12.0)
+                         body={"cat": cat, "uid": uid, "account": acct},
+                         timeout=30.0)
             if isinstance(r, dict) and r.get("ok"):
-                del ms[MAIL["msel"]]
-                MAIL["msel"] = max(0, min(MAIL["msel"], len(ms) - 1))
+                MAIL["mails"] = [m for m in (MAIL["mails"] or [])
+                                 if not (m.get("uid") == uid
+                                         and m.get("account") == acct)]
+                MAIL["fcache"][cat] = MAIL["mails"]   # Cache mitziehen (Reopen)
                 MAIL["body"] = None; MAIL["bodyfor"] = None
                 MAIL["msg"] = "gelöscht (Papierkorb)"
             else:
                 MAIL["msg"] = "löschen abgelehnt"
         except Exception:
             MAIL["msg"] = "löschen: backend?"
+        _do_refresh_counts(force=True)
+
+    def mail_delete():
+        """Die aktuelle Mail in den Papierkorb (umkehrbar) — im Hintergrund."""
+        it = mail_cur()
         MAIL["confirmdel"] = False
+        if not it:
+            return
+        MAIL["msg"] = "löscht…"
+        _mail_submit(("delete", it.get("account"), it.get("uid")), "löscht…",
+                     lambda c=MAIL["cat"], u=it.get("uid"),
+                            a=it.get("account"): _do_delete(c, u, a))
 
     def _wrap(text, width):
         """Text auf `width` umbrechen (wortweise), Zeilenumbrüche erhalten."""
@@ -2385,11 +3282,9 @@ def run_ui(stdscr, store):
             out.append(para)
         return out
 
-    def mail_poll():
-        """Live-Poll im Backend anstoßen (POST). Kehrt sofort zurück — der
-        Fortschritt läuft über das Log links. Braucht Passphrase (Env/Keyring)."""
+    def _do_poll():
         try:
-            r = api_call("/api/mail/poll", method="POST", timeout=4.0)
+            r = api_call("/api/mail/poll", method="POST", timeout=8.0)
             if isinstance(r, dict) and r.get("error"):
                 MAIL["msg"] = "kein key — keyring-set nötig"
             elif isinstance(r, dict) and r.get("already"):
@@ -2398,6 +3293,11 @@ def run_ui(stdscr, store):
                 MAIL["msg"] = "poll gestartet — siehe log links"
         except Exception:
             MAIL["msg"] = "poll: backend?"
+
+    def mail_poll():
+        """Live-Poll im Backend anstoßen (im Hintergrund). Der Fortschritt läuft
+        über das Log links. Braucht Passphrase (Env/Keyring)."""
+        _mail_submit(("poll",), "poll…", _do_poll)
 
     def _mail_line(it):
         """Absender + Betreff kompakt für eine Mail-Zeile."""
@@ -2414,7 +3314,7 @@ def run_ui(stdscr, store):
         if iw < 8:
             return
         if (not MAIL["data"]) or (time.time() - MAIL["_ts"] > 3):
-            mail_load()
+            _mail_submit("load", "", mail_load)   # billig, still (kein IMAP)
         d = MAIL["data"]
         if not isinstance(d, dict) or d.get("failed"):
             addclip(by + 1, ix, MAIL["msg"] or "lade mail…", iw, C["faint"])
@@ -2438,6 +3338,8 @@ def run_ui(stdscr, store):
             head = "Post · %s (%s)" % (cat[:max(4, iw - 22)], cnt)
             if mails is not None:
                 head += "  [%s/%s]" % (modetag, src)
+            if MAIL["busy"]:
+                head += "  ⟳ " + MAIL["busy"]
             addclip(by + 1, ix, head, iw, C["bright"])
             if mails is None:
                 addclip(body_top, ix, "lädt Ordner…", iw, C["faint"])
@@ -2465,7 +3367,8 @@ def run_ui(stdscr, store):
                 return
 
             if n == 0:
-                addclip(body_top, ix, "(Ordner leer)", iw, C["faint"])
+                # Bei einem Ordner-Fehler den ECHTEN Grund zeigen, nicht „leer".
+                addclip(body_top, ix, MAIL["msg"] or "(Ordner leer)", iw, C["faint"])
                 addclip(bottom, ix, "esc zurück", iw, C["faint"])
                 return
 
@@ -2494,7 +3397,7 @@ def run_ui(stdscr, store):
 
             # ── Modus LESEN: eine Mail, Vorschau / ausgeklappt ──
             it = mails[MAIL["msel"]]
-            mail_load_body()
+            mail_request_body()
             who = (it.get("from") or "?").strip()
             subj = (it.get("subject") or "").strip() or "(kein Betreff)"
             addclip(body_top, ix, "Von:     " + who, iw, C["bright"])
@@ -2502,7 +3405,8 @@ def run_ui(stdscr, store):
             addclip(body_top + 2, ix, "─" * iw, iw, C["faint"])
             txt_top = body_top + 3
             txt_h = bottom - txt_top
-            b = MAIL["body"]
+            # Body nur zeigen, wenn er zur AKTUELLEN Mail gehört — sonst „lädt…".
+            b = MAIL["body"] if MAIL["bodyfor"] == it.get("uid") else None
             if b is None:
                 addclip(txt_top, ix, "lädt Text…", iw, C["faint"])
             elif isinstance(b, dict) and b.get("error"):
@@ -2519,7 +3423,7 @@ def run_ui(stdscr, store):
                     for r, ln in enumerate(lines[:prev_h]):
                         addclip(txt_top + r, ix, ln, iw, C["dim"])
                     if len(lines) > prev_h:
-                        addclip(txt_top + prev_h, ix, "  … (e zum Ausklappen)",
+                        addclip(txt_top + prev_h, ix, "  … (↓ zum Ausklappen)",
                                 iw, C["faint"])
             if MAIL["confirmdel"]:
                 hint = "wirklich löschen? j/n"
@@ -2530,7 +3434,9 @@ def run_ui(stdscr, store):
 
         # ── Ebene 1: nur die Kategorien (Auswahl) ─────────────────────
         head = "Postfach · %d Kategorien" % len(cats)
-        if polling:
+        if MAIL["busy"]:
+            head += "  ⟳ " + MAIL["busy"]
+        elif polling:
             head += "  ⟳ poll läuft"
         elif refreshing:
             head += "  ⟳ zähle…"
@@ -2564,27 +3470,17 @@ def run_ui(stdscr, store):
         it = mail_cur()
         if not it:
             return
-        mail_load_body()
+        mail_request_body()
         MAIL["replying"] = True
         MAIL["reply_text"] = ""
         MAIL["reply_origoff"] = 0
         MAIL["reply_confirm"] = False
         MAIL["msg"] = ""
 
-    def mail_reply_send():
-        """Den getippten Text als Antwort senden (SMTP via Backend). Blockiert
-        kurz; bei Erfolg schließt der Editor."""
-        it = mail_cur()
-        if not it or not MAIL["reply_text"].strip():
-            MAIL["reply_confirm"] = False
-            MAIL["msg"] = "leer — nichts gesendet"
-            MAIL["replying"] = False
-            return
+    def _do_reply(payload):
         try:
-            r = api_call("/api/mail/reply", method="POST",
-                         body={"cat": MAIL["cat"], "uid": it.get("uid"),
-                               "account": it.get("account"),
-                               "text": MAIL["reply_text"]}, timeout=30.0)
+            r = api_call("/api/mail/reply", method="POST", body=payload,
+                         timeout=60.0)
             if isinstance(r, dict) and r.get("ok"):
                 MAIL["msg"] = "✓ Antwort gesendet"
             else:
@@ -2592,8 +3488,54 @@ def run_ui(stdscr, store):
                     (r or {}).get("error", "?") if isinstance(r, dict) else "?")
         except Exception:
             MAIL["msg"] = "senden: backend?"
+
+    def mail_reply_send():
+        """Den getippten Text als Antwort senden (SMTP via Backend, im
+        Hintergrund). Der Editor schließt sofort, das Senden läuft im Worker."""
+        it = mail_cur()
+        if not it or not MAIL["reply_text"].strip():
+            MAIL["reply_confirm"] = False
+            MAIL["msg"] = "leer — nichts gesendet"
+            MAIL["replying"] = False
+            return
+        payload = {"cat": MAIL["cat"], "uid": it.get("uid"),
+                   "account": it.get("account"), "text": MAIL["reply_text"]}
         MAIL["replying"] = False
         MAIL["reply_confirm"] = False
+        MAIL["msg"] = "sende antwort…"
+        _mail_submit(("reply", it.get("uid")), "sendet antwort…",
+                     lambda p=payload: _do_reply(p))
+
+    def _do_reply_draft(payload):
+        try:
+            r = api_call("/api/mail/reply", method="POST", body=payload,
+                         timeout=60.0)
+            if isinstance(r, dict) and r.get("ok"):
+                MAIL["msg"] = "✎ als Entwurf gespeichert"
+            else:
+                MAIL["msg"] = "entwurf fehlgeschlagen: %s" % (
+                    (r or {}).get("error", "?") if isinstance(r, dict) else "?")
+        except Exception:
+            MAIL["msg"] = "entwurf: backend?"
+
+    def mail_reply_draft():
+        """Den getippten Text als ECHTEN Entwurf in den Drafts-Ordner legen (IMAP
+        APPEND via Backend) — nichts geht raus, in Outlook/Handy weiterschreibbar.
+        Editor schließt sofort, das Speichern läuft im Worker."""
+        it = mail_cur()
+        if not it or not MAIL["reply_text"].strip():
+            MAIL["reply_confirm"] = False
+            MAIL["msg"] = "leer — kein entwurf"
+            MAIL["replying"] = False
+            return
+        payload = {"cat": MAIL["cat"], "uid": it.get("uid"),
+                   "account": it.get("account"), "text": MAIL["reply_text"],
+                   "draft": True}
+        MAIL["replying"] = False
+        MAIL["reply_confirm"] = False
+        MAIL["msg"] = "speichere entwurf…"
+        _mail_submit(("draft", it.get("uid")), "speichere entwurf…",
+                     lambda p=payload: _do_reply_draft(p))
 
     def draw_reply(by, bx, bh, bw):
         """Antwort-Editor: zwei Kästen nebeneinander — links die Original-Mail,
@@ -2618,7 +3560,7 @@ def run_ui(stdscr, store):
 
         # Rechter Kasten: dein Editor
         rbx = bx + lw + gap
-        title = "antwort" + ("  · SENDEN? j/n" if MAIL["reply_confirm"] else "")
+        title = "antwort" + ("  · j/e/n?" if MAIL["reply_confirm"] else "")
         draw_box(by, rbx, bh, rw, title)
         rix, riw = rbx + 2, rw - 4
         to = ""
@@ -2638,7 +3580,7 @@ def run_ui(stdscr, store):
             cur = "_" if (estart + r == len(elines) - 1) else ""
             addclip(ed_top + r, rix, ln + cur, riw, C["bright"])
         if MAIL["reply_confirm"]:
-            hint = "j senden · n verwerfen · w weiter schreiben"
+            hint = "j senden · e entwurf · n verwerfen · w weiter"
         else:
             hint = "tippen · enter=zeile · esc=fertig/senden"
         addclip(by + bh - 2, rix, hint[:riw], riw, C["faint"])
@@ -2647,11 +3589,12 @@ def run_ui(stdscr, store):
         """Tippt der Nutzer gerade einen Freitext (Name, Eintrag, Antwort)?
         Dann bleibt '/' ein normales Zeichen und öffnet NICHT die Befehlszeile."""
         if G["active"]:
-            return G["view"] in ("new", "view")      # Name bzw. Werteingabe
+            return G["view"] in ("new", "view", "remind")   # Name/Wert/Reminder-Uhrzeit
         if L["active"]:
             return L["adding"] or L["view"] in ("new", "move_new")
         if K["active"]:
-            return K["mode"] == "add"                 # Termin/Routine anlegen+bearbeiten
+            # Termin/Routine anlegen+bearbeiten ODER Sidebar-Item neu/umbenennen
+            return K["mode"] == "add" or K["linput"] is not None
         if MAIL["active"]:
             return MAIL["replying"]
         return False
@@ -2675,6 +3618,8 @@ def run_ui(stdscr, store):
         if K["active"]:
             if K["mode"] != "view":
                 return None
+            if K["listfocus"]:
+                return "cal:sort" if K["lsort"] else "cal:list"
             return "cal:week" if K["view"] == "week" else "cal:month"
         if MAIL["active"]:
             if MAIL["replying"] or MAIL.get("picking"):
@@ -2690,7 +3635,14 @@ def run_ui(stdscr, store):
         stdscr.timeout(33 if (M["active"] and M.get("anim")) else 250)
         ch = stdscr.getch()
 
-        if help_latched:
+        if nag_active:
+            if ch != -1:                       # jede Taste klickt den Reminder weg (Sitzung)
+                for r in nag_items:
+                    nag_dismissed.add(r.get("id"))
+                nag_active = False
+                if ch in (ord("g"), ord("G")):  # g = gleich ins Graph-Werkzeug
+                    G["active"] = True; G["view"] = "list"; G["msg"] = ""; g_load()
+        elif help_latched:
             if ch != -1:                       # jede Taste schließt die Hilfe wieder
                 help_latched = False
         elif cmd_mode:
@@ -2703,6 +3655,19 @@ def run_ui(stdscr, store):
                     break
                 if res == "HELP":
                     help_latched = True
+                if res in ("CLOUD_ON", "CLOUD_OFF", "CLOUD_TOGGLE"):
+                    # Cloud-Kill-Switch umlegen (POST ans Backend, front-agnostisch
+                    # dieselbe Quelle wie der Browser). Danach EXTERNAL sofort frisch.
+                    try:
+                        if res == "CLOUD_TOGGLE":
+                            on = not store.backends_snapshot().get("cloud_enabled", True)
+                        else:
+                            on = (res == "CLOUD_ON")
+                        st = api_call("/api/ai/backends", "POST", {"cloud_enabled": on})
+                        store._poll_backends()
+                        cmd_msg = "cloud " + ("AN" if (st or {}).get("cloud_enabled") else "GEDROSSELT")
+                    except (urllib.error.URLError, OSError, ValueError):
+                        cmd_msg = "cloud-schalter fehlgeschlagen"
             elif ch in (curses.KEY_BACKSPACE, 127, 8):
                 cmd_buf = cmd_buf[:-1]
                 if not cmd_buf:                # Slash weggelöscht → zu
@@ -2740,6 +3705,7 @@ def run_ui(stdscr, store):
                     if G["graphs"]:
                         G["def"] = G["graphs"][G["sel"]]; G["input"] = ""; G["msg"] = ""
                         G["input2"] = ""; G["pstage"] = 0; G["dayoff"] = 0
+                        G["shown"] = {G["def"]["id"]}   # solo: nur dieser gezeigt
                         G["view"] = "view"; g_load_vals()
                 elif ch in (ord("n"), ord("N")):
                     G["view"] = "new"; G["input"] = ""; G["newtype"] = "number"; G["msg"] = ""
@@ -2755,6 +3721,37 @@ def run_ui(stdscr, store):
                             g_load()
                         except Exception:
                             G["msg"] = "predict fehlgeschlagen"
+                elif ch in (ord("r"), ord("R")):              # tages-reminder an/aus
+                    if G["graphs"]:
+                        cur = G["graphs"][G["sel"]]
+                        if cur.get("remind"):                 # an → direkt aus
+                            try:
+                                api_call("/api/graphs/%s/remind" % cur["id"], method="POST",
+                                         body={"remind": False})
+                                g_load(); G["msg"] = "reminder aus"
+                            except Exception:
+                                G["msg"] = "reminder fehlgeschlagen"
+                        else:                                 # aus → uhrzeit eintippen
+                            G["input"] = cur.get("remind_at") or "20:00"
+                            G["msg"] = ""; G["view"] = "remind"
+            elif G["view"] == "remind":
+                # Uhrzeit für den Tages-Reminder eintippen (HH:MM), enter setzt an.
+                if ch == 27:
+                    G["view"] = "list"; G["msg"] = ""
+                elif ch in (10, 13, curses.KEY_ENTER):
+                    if G["graphs"]:
+                        cur = G["graphs"][G["sel"]]
+                        try:
+                            api_call("/api/graphs/%s/remind" % cur["id"], method="POST",
+                                     body={"remind": True, "at": G["input"].strip()})
+                            g_load(); G["msg"] = "reminder an " + G["input"].strip()
+                            G["view"] = "list"
+                        except Exception:
+                            G["msg"] = "uhrzeit ungültig (HH:MM)"
+                elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                    G["input"] = G["input"][:-1]
+                elif (48 <= ch <= 57 or ch == ord(":")) and len(G["input"]) < 5:
+                    G["input"] += chr(ch)
             elif G["view"] == "new":
                 if ch == 27:
                     G["view"] = "list"; G["msg"] = ""
@@ -2787,9 +3784,19 @@ def run_ui(stdscr, store):
                 if ch == 27:                                   # Esc: bei period erst bis→von zurück
                     if typ == "period" and G["pstage"] == 1:
                         G["pstage"] = 0; G["input2"] = ""; G["msg"] = ""
-                    else:
-                        G["view"] = "list"; G["input"] = ""; G["input2"] = ""
+                    else:                                      # zurück zur Übersicht (alle zeigen)
+                        G["view"] = "list"; G["shown"] = set()
+                        G["input"] = ""; G["input2"] = ""
                         G["pstage"] = 0; G["msg"] = ""; G["dayoff"] = 0
+                elif ch in (curses.KEY_UP, curses.KEY_DOWN):    # solo-Graph wechseln (↑↓)
+                    if G["graphs"]:
+                        step = -1 if ch == curses.KEY_UP else 1
+                        G["sel"] = max(0, min(len(G["graphs"]) - 1, G["sel"] + step))
+                        G["def"] = G["graphs"][G["sel"]]
+                        G["shown"] = {G["def"]["id"]}
+                        G["input"] = ""; G["input2"] = ""; G["pstage"] = 0
+                        G["dayoff"] = 0; G["msg"] = ""
+                        g_load_vals()
                 elif ch == curses.KEY_LEFT:                     # Ziel-Tag einen zurück
                     G["dayoff"] = min(365, G.get("dayoff", 0) + 1); G["msg"] = ""
                 elif ch == curses.KEY_RIGHT:                    # … wieder vor (max heute)
@@ -3158,9 +4165,11 @@ def run_ui(stdscr, store):
             if K["mode"] == "add":             # gestaffeltes Eingabe-Formular
                 cur_key = ("aday", "atime", "alabel")[K["astage"]]
                 is_rt = (K["atype"] == "routine")
-                if ch == 9 and not K["editing"]:   # Tab → Termin/Routine umschalten
-                    K["atype"] = "entry" if is_rt else "routine"
-                    K["aday"] = ""; K["astage"] = 0; K["amsg"] = ""
+                is_span = (K["atype"] == "span")   # mehrtägig: Stufe 1 = Bis-Datum
+                if ch == 9 and not K["editing"]:   # Tab → Termin→Routine→Mehrtägig
+                    K["atype"] = {"entry": "routine", "routine": "span",
+                                  "span": "entry"}[K["atype"]]
+                    K["aday"] = ""; K["atime"] = ""; K["astage"] = 0; K["amsg"] = ""
                 elif ch == 27:                 # Esc: Stufe zurück bzw. Formular verlassen
                     if K["astage"] > 0:
                         K["astage"] -= 1; K["amsg"] = ""
@@ -3174,7 +4183,12 @@ def run_ui(stdscr, store):
                         else:
                             K["astage"] = 1; K["amsg"] = ""
                     elif K["astage"] == 1:
-                        if K["atime"].strip() and parse_clock(K["atime"]) is None:
+                        if is_span:                # Stufe 1 = Bis-Datum (Pflicht)
+                            if k_parse_day(K["atime"]) is None:
+                                K["amsg"] = "bis-datum? TT.MM"
+                            else:
+                                K["astage"] = 2; K["amsg"] = ""
+                        elif K["atime"].strip() and parse_clock(K["atime"]) is None:
                             K["amsg"] = "zeit? HH:MM (leer=ganztags)"
                         else:
                             K["astage"] = 2; K["amsg"] = ""
@@ -3188,9 +4202,12 @@ def run_ui(stdscr, store):
                         if is_rt and (cc.isalpha() or cc in ", ") and len(K["aday"]) < 24:
                             K["aday"] += cc            # Wochentag(e): Mo,Mi,Fr
                         elif (not is_rt) and (cc.isdigit() or cc in "./-") and len(K["aday"]) < 10:
-                            K["aday"] += cc            # Datum: TT.MM
-                    elif K["astage"] == 1 and (cc.isdigit() or cc == ":") and len(K["atime"]) < 5:
-                        K["atime"] += cc
+                            K["aday"] += cc            # (Von-)Datum: TT.MM
+                    elif K["astage"] == 1:
+                        if is_span and (cc.isdigit() or cc in "./-") and len(K["atime"]) < 10:
+                            K["atime"] += cc           # Bis-Datum: TT.MM
+                        elif (not is_span) and (cc.isdigit() or cc == ":") and len(K["atime"]) < 5:
+                            K["atime"] += cc           # Zeit: HH:MM
                     elif K["astage"] == 2 and len(K["alabel"]) < 60:
                         K["alabel"] += cc
             elif K["mode"] == "routine":       # Routine-Vorkommen de-/aktivieren / Routine löschen
@@ -3210,15 +4227,106 @@ def run_ui(stdscr, store):
                 elif (not it.get("deaktiviert")) and ch in (ord("d"), ord("D"),
                                                             10, 13, curses.KEY_ENTER):
                     k_routine_toggle(True)     # diesen Termin deaktivieren
+            elif K["linput"] is not None:      # ›-Leisten-Eingabe: Sidebar (a/r) ODER Spannen-Zeit
+                if ch == 27:                   # Esc → Eingabe abbrechen
+                    K["linput"] = None; K["ledit_iid"] = None; K["spantgt"] = None
+                elif ch in (10, 13, curses.KEY_ENTER):
+                    txt = K["linput"].strip()
+                    if K["lmode"] == "spantime":    # per-Tag-Uhrzeit einer Spanne
+                        if txt and parse_clock(txt) is None:
+                            K["msg"] = "zeit? HH:MM (leer=ganztags)"
+                        else:
+                            tgt = K["spantgt"]
+                            if tgt:
+                                layer, von, label, day = tgt
+                                api_call("/api/calendar/entry/spantime", method="POST",
+                                         body={"layer": layer, "von": von, "label": label,
+                                               "day": day, "time": txt})
+                                K["msg"] = ("zeit gesetzt: " + txt) if txt else "wieder ganztags"
+                                k_fetch()
+                            K["linput"] = None; K["spantgt"] = None
+                    else:                           # Sidebar-Liste: neu / umbenennen
+                        lid = k_sidebar_lid()
+                        if txt and lid:
+                            if K["lmode"] == "add":
+                                api_call("/api/lists/%s/items" % lid, method="POST",
+                                         body={"text": txt})
+                            elif K["ledit_iid"] is not None:
+                                api_call("/api/lists/%s/items/%s/rename" % (lid, K["ledit_iid"]),
+                                         method="POST", body={"text": txt})
+                            k_fetch()
+                        K["linput"] = None; K["ledit_iid"] = None
+                elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                    K["linput"] = K["linput"][:-1]
+                elif 32 <= ch <= 126 and len(K["linput"]) < 60:
+                    K["linput"] += chr(ch)
             elif K["confirmdel"]:              # Lösch-Nachfrage (Einmal-Termin) offen
                 if ch in (ord("j"), ord("J"), ord("y"), ord("Y"), 10, 13, curses.KEY_ENTER):
                     sels = k_selectable()
                     if sels and 0 <= K["sel"] < len(sels) and not sels[K["sel"]]["recurring"]:
                         it = sels[K["sel"]]
-                        k_delete_sel((it["iso"], it["label"], it["layer"]))
+                        # Mehrtägig: über den Start-Tag (von) löschen → ganze Spanne weg.
+                        day = it.get("von") or it["iso"]
+                        k_delete_sel((day, it["label"], it["layer"]))
                     K["confirmdel"] = False
                 elif ch != -1:                 # alles andere bricht ab
                     K["confirmdel"] = False; K["msg"] = ""
+            elif K["listfocus"]:               # Fokus in der Sidebar-Liste
+                # Isolierte Einheit: bearbeiten ja (a/r/d/Space) + sortieren (s),
+                # aber KEIN Move in andere Listen. lid/Items aus der letzten Antwort.
+                lid = k_sidebar_lid()
+                sit = k_sidebar_items()
+                if ch in (ord("c"), ord("C")):                 # c → Kalender ganz zu
+                    K["active"] = False; K["listfocus"] = False; K["lsort"] = False
+                elif ch in (ord("q"), ord("Q")):
+                    break
+                elif ch in (ord("t"), ord("T")):
+                    theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
+                elif K["lsort"]:                               # ── Sortier-Modus ──
+                    if ch in (27, ord("s"), ord("S"), ord("l"), ord("L"),
+                              10, 13, curses.KEY_ENTER):
+                        K["lsort"] = False; K["msg"] = ""      # sortieren fertig
+                    elif ch in (curses.KEY_UP, ord("k"), curses.KEY_DOWN, ord("j")):
+                        delta = -1 if ch in (curses.KEY_UP, ord("k")) else 1
+                        if lid and 0 <= K["lsel"] < len(sit):
+                            iid = sit[K["lsel"]]["id"]
+                            api_call("/api/lists/%s/items/%s/reorder" % (lid, iid),
+                                     method="POST", body={"delta": delta})
+                            k_fetch()
+                            for idx2, itx in enumerate(k_sidebar_items()):
+                                if itx.get("id") == iid:       # Cursor dem Item nachziehen
+                                    K["lsel"] = idx2; break
+                else:                                          # ── normaler Fokus ──
+                    if ch in (27, curses.KEY_LEFT, ord("h"), ord("l")):  # zurück zum Kalender
+                        K["listfocus"] = False; K["msg"] = ""
+                    elif ch in (curses.KEY_UP, ord("k")):
+                        K["lsel"] = max(0, K["lsel"] - 1)
+                    elif ch in (curses.KEY_DOWN, ord("j")):
+                        K["lsel"] = min(max(0, len(sit) - 1), K["lsel"] + 1)
+                    elif ch in (ord(" "), 10, 13, curses.KEY_ENTER):   # abhaken (mit Link-Sync)
+                        if lid and 0 <= K["lsel"] < len(sit):
+                            api_call("/api/lists/%s/items/%s/toggle" % (lid, sit[K["lsel"]]["id"]),
+                                     method="POST")
+                            k_fetch()
+                    elif ch in (ord("s"), ord("S")):           # s → Sortier-Modus
+                        if sit:
+                            K["lsort"] = True; K["msg"] = ""
+                    elif ch in (ord("a"), ord("A")):           # a → neues Item
+                        K["linput"] = ""; K["lmode"] = "add"; K["ledit_iid"] = None; K["msg"] = ""
+                    elif ch in (ord("r"), ord("R")):           # r → umbenennen
+                        if 0 <= K["lsel"] < len(sit):
+                            K["linput"] = str(sit[K["lsel"]].get("text", ""))
+                            K["lmode"] = "rename"; K["ledit_iid"] = sit[K["lsel"]]["id"]; K["msg"] = ""
+                    elif ch in (ord("d"), ord("D")):           # d → löschen (nur Kopie, nicht Quelle)
+                        if lid and 0 <= K["lsel"] < len(sit):
+                            api_call("/api/lists/%s/items/%s" % (lid, sit[K["lsel"]]["id"]),
+                                     method="DELETE")
+                            k_fetch()
+                    elif ch in (ord("x"), ord("X")):           # erledigte ein/aus gilt auch hier
+                        K["showhidden"] = not K["showhidden"]; K["lsel"] = 0
+                        K["msg"] = "erledigte: " + ("an" if K["showhidden"] else "aus")
+                    elif ch in (ord("v"), ord("V"), 9):        # Monat hat keine Sidebar → Fokus raus
+                        K["listfocus"] = False; k_toggle(); K["sel"] = 0; K["msg"] = ""
             else:                              # View-Modus: blättern/auswählen
                 if ch in (27, ord("c"), ord("C")):             # Esc/c → Kalender zu
                     K["active"] = False
@@ -3226,8 +4334,13 @@ def run_ui(stdscr, store):
                     break
                 elif ch in (curses.KEY_LEFT, ord("h")):
                     k_step(-1); K["sel"] = 0; K["msg"] = ""
-                elif ch in (curses.KEY_RIGHT, ord("l")):
+                elif ch == curses.KEY_RIGHT:                   # → nächste Periode (l ist jetzt Sidebar)
                     k_step(1); K["sel"] = 0; K["msg"] = ""
+                elif ch in (ord("l"), ord("L")):               # l → Fokus in die Sidebar-Liste
+                    if K["view"] == "week":
+                        K["listfocus"] = True; K["lsel"] = 0; K["msg"] = ""
+                    else:
+                        K["msg"] = "liste nur in der wochenansicht"
                 elif ch in (curses.KEY_UP, ord("k")):
                     K["sel"] = max(0, K["sel"] - 1)
                 elif ch in (curses.KEY_DOWN, ord("j")):
@@ -3236,6 +4349,12 @@ def run_ui(stdscr, store):
                     k_toggle(); K["sel"] = 0; K["msg"] = ""
                 elif ch == ord("0"):                           # 0 → zurück zu heute
                     k_today(); K["sel"] = 0; K["msg"] = ""
+                elif ch in (ord("x"), ord("X")):               # x → erledigtes ein-/ausblenden
+                    # Ein Schalter für alles „passiert nicht": deaktivierte +
+                    # ausgefallene (Ferien/Pause) Termine + abgehakte Plan-Punkte.
+                    # Nur Anzeige-Filter → kein Neu-Laden nötig.
+                    K["showhidden"] = not K["showhidden"]; K["sel"] = 0
+                    K["msg"] = "erledigte: " + ("an" if K["showhidden"] else "aus")
                 elif ch in (ord("a"), ord("A")):               # a → neuer Termin (Tab: Routine)
                     K["mode"] = "add"; K["astage"] = 0; K["amsg"] = ""; K["msg"] = ""
                     K["editing"] = None; K["atype"] = "entry"
@@ -3258,6 +4377,8 @@ def run_ui(stdscr, store):
             if MAIL["reply_confirm"]:                          # Verlassen-Leiste
                 if ch in (ord("j"), ord("J"), ord("y"), ord("Y")):
                     mail_reply_send()
+                elif ch in (ord("e"), ord("E")):               # e → als Entwurf sichern
+                    mail_reply_draft()
                 elif ch in (ord("n"), ord("N")):
                     MAIL["replying"] = False; MAIL["reply_confirm"] = False
                     MAIL["msg"] = "verworfen"
@@ -3302,7 +4423,7 @@ def run_ui(stdscr, store):
                         mail_delete()
                     elif ch != -1:
                         MAIL["confirmdel"] = False; MAIL["msg"] = ""
-                elif ch in (27, curses.KEY_LEFT, ord("h")):    # Esc/← → zurück zu Kategorien
+                elif ch == 27:                                 # Esc → zurück zu Kategorien
                     MAIL["level"] = "cats"; MAIL["msg"] = ""
                 elif ch in (ord("p"), ord("P")):               # p → Panel ganz zu
                     MAIL["active"] = False
@@ -3311,11 +4432,73 @@ def run_ui(stdscr, store):
                 elif ch in (ord("v"), ord("V"), 9):            # v/Tab → lesen↔liste
                     MAIL["mode2"] = "list" if MAIL["mode2"] == "read" else "read"
                     MAIL["expanded"] = False; MAIL["bodyoff"] = 0; MAIL["msg"] = ""
-                elif ch in (curses.KEY_UP, curses.KEY_DOWN, ord("k"), ord("j"),
-                            ord("n"), ord("N"), ord(" ")):
-                    # Pfeil/j/k/n/N = BLÄTTERN (immer, egal ob ausgeklappt). Eine
-                    # gepufferte Tastenfolge zusammenfassen, damit schnelles
-                    # Blättern nicht pro Taste den Body blockierend nachlädt.
+                elif MAIL["mode2"] == "read" and ch in (curses.KEY_LEFT,
+                                                        curses.KEY_RIGHT):
+                    # ←/→ = vorige/nächste Mail im Stapel (gepuffert zusammenfassen,
+                    # damit schnelles Durchklicken nicht pro Taste den Body lädt).
+                    delta = 1 if ch == curses.KEY_RIGHT else -1
+                    stdscr.nodelay(True)
+                    while True:
+                        nx = stdscr.getch()
+                        if nx == curses.KEY_RIGHT:
+                            delta += 1
+                        elif nx == curses.KEY_LEFT:
+                            delta -= 1
+                        else:
+                            if nx != -1:
+                                curses.ungetch(nx)
+                            break
+                    stdscr.timeout(250)
+                    MAIL["msel"] = max(0, MAIL["msel"] + delta)  # Obergrenze beim Zeichnen
+                    MAIL["expanded"] = False; MAIL["bodyoff"] = 0; MAIL["msg"] = ""
+                elif MAIL["mode2"] == "read" and ch in (curses.KEY_DOWN, ord("j"),
+                                                        ord(" ")):
+                    # ↓ aus der Vorschau = ausklappen; im Text = runterscrollen.
+                    if not MAIL["expanded"]:
+                        MAIL["expanded"] = True; MAIL["bodyoff"] = 0
+                    else:
+                        step = 5 if ch == ord(" ") else 1
+                        stdscr.nodelay(True)
+                        while True:
+                            nx = stdscr.getch()
+                            if nx in (curses.KEY_DOWN, ord("j")):
+                                step += 1
+                            elif nx in (curses.KEY_UP, ord("k")):
+                                step -= 1
+                            else:
+                                if nx != -1:
+                                    curses.ungetch(nx)
+                                break
+                        stdscr.timeout(250)
+                        MAIL["bodyoff"] = max(0, MAIL["bodyoff"] + step)
+                    MAIL["msg"] = ""
+                elif MAIL["mode2"] == "read" and ch in (curses.KEY_UP, ord("k")):
+                    # ↑ = hochscrollen; ganz oben nochmal ↑ → wieder einklappen.
+                    if MAIL["expanded"]:
+                        if MAIL["bodyoff"] > 0:
+                            step = 1
+                            stdscr.nodelay(True)
+                            while True:
+                                nx = stdscr.getch()
+                                if nx in (curses.KEY_UP, ord("k")):
+                                    step += 1
+                                elif nx in (curses.KEY_DOWN, ord("j")):
+                                    step -= 1
+                                else:
+                                    if nx != -1:
+                                        curses.ungetch(nx)
+                                    break
+                            stdscr.timeout(250)
+                            MAIL["bodyoff"] = max(0, MAIL["bodyoff"] - step)
+                        else:
+                            MAIL["expanded"] = False
+                    MAIL["msg"] = ""
+                elif MAIL["mode2"] == "list" and ch in (curses.KEY_LEFT, ord("h")):
+                    MAIL["level"] = "cats"; MAIL["msg"] = ""   # Liste: ← zurück
+                elif MAIL["mode2"] == "list" and ch in (
+                        curses.KEY_UP, curses.KEY_DOWN, ord("k"), ord("j"),
+                        ord("n"), ord("N"), ord(" ")):
+                    # LISTE: rauf/runter wählt eine Mail (gepuffert zusammenfassen).
                     _DN = (curses.KEY_DOWN, ord("j"), ord("n"), ord(" "))
                     _UP = (curses.KEY_UP, ord("k"), ord("N"))
                     delta = 1 if ch in _DN else -1
@@ -3331,16 +4514,16 @@ def run_ui(stdscr, store):
                                 curses.ungetch(nx)
                             break
                     stdscr.timeout(250)
-                    MAIL["msel"] = max(0, MAIL["msel"] + delta)  # Obergrenze beim Zeichnen
+                    MAIL["msel"] = max(0, MAIL["msel"] + delta)
                     MAIL["bodyoff"] = 0; MAIL["msg"] = ""
+                elif MAIL["mode2"] == "list" and ch in (10, 13, curses.KEY_ENTER,
+                                                        curses.KEY_RIGHT, ord("l")):
+                    MAIL["mode2"] = "read"               # aus Liste: gewählte lesen
+                    MAIL["expanded"] = False; MAIL["bodyoff"] = 0
                 elif ch == curses.KEY_NPAGE:                   # Bild↓ → Body runter
                     MAIL["bodyoff"] = MAIL["bodyoff"] + 5
                 elif ch == curses.KEY_PPAGE:                   # Bild↑ → Body hoch
                     MAIL["bodyoff"] = max(0, MAIL["bodyoff"] - 5)
-                elif ch in (10, 13, curses.KEY_ENTER, curses.KEY_RIGHT, ord("l")):
-                    MAIL["mode2"] = "read"               # aus Liste: lesen
-                elif ch in (ord("e"), ord("E")):               # ausklappen ↔ Vorschau
-                    MAIL["expanded"] = not MAIL["expanded"]; MAIL["bodyoff"] = 0
                 elif ch in (ord("s"), ord("S")):               # einsortieren (Absender)
                     MAIL["picking"] = True; MAIL["picksel"] = 0; MAIL["msg"] = ""
                 elif ch in (ord("d"), ord("D")):               # löschen (Papierkorb)
@@ -3349,6 +4532,10 @@ def run_ui(stdscr, store):
                     mail_reply_open()
                 elif ch in (ord("r"), ord("R")):
                     mail_poll(); MAIL["data"] = None
+                elif ch in (ord("z"), ord("Z")):               # z → Zahlen JETZT neu zählen
+                    _mail_submit(("counts",), "zähle ordner…",
+                                 lambda: _do_refresh_counts(force=True))
+                    MAIL["msg"] = "zähle neu…"
                 elif ch in (ord("t"), ord("T")):
                     theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
             else:                                              # Ebene 1: Kategorien wählen
@@ -3367,6 +4554,10 @@ def run_ui(stdscr, store):
                         mail_open_category(cl[MAIL["sel"]].get("name"))
                 elif ch in (ord("r"), ord("R")):               # r → Live-Poll anstoßen
                     mail_poll(); MAIL["data"] = None
+                elif ch in (ord("z"), ord("Z")):               # z → Zahlen JETZT neu zählen
+                    _mail_submit(("counts",), "zähle ordner…",
+                                 lambda: _do_refresh_counts(force=True))
+                    MAIL["msg"] = "zähle neu…"
                 elif ch in (ord("t"), ord("T")):
                     theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
         else:                                  # Normal-Modus: Shortcuts aktiv
@@ -3375,7 +4566,8 @@ def run_ui(stdscr, store):
             elif ch in (ord("t"), ord("T")):   # Theme zyklieren
                 theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
             elif ch in (ord("g"), ord("G")):   # Graph-Werkzeug öffnen
-                G["active"] = True; G["view"] = "list"; G["msg"] = ""; g_load()
+                G["active"] = True; G["view"] = "list"; G["msg"] = ""
+                G["shown"] = set(); g_load()   # immer in der Übersicht (alle) starten
             elif ch in (ord("l"), ord("L")):   # Listen-Werkzeug öffnen
                 L["active"] = True; L["view"] = "list"; L["msg"] = ""; l_load()
             elif ch in (ord("m"), ord("M")):   # Karte öffnen
@@ -3406,6 +4598,16 @@ def run_ui(stdscr, store):
         state, metrics, connected = store.snapshot()
         gs_cache, gv_cache = store.graphs_snapshot()
         proj_cache = store.projects_snapshot()
+
+        # Graph-Reminder: ist heute was fällig (und noch nicht weggeklickt), das
+        # Nag-Kästchen aufmachen — aber nicht mitten in Tipperei/Overlay/Dialog.
+        if not nag_active and not in_text_entry() and not cmd_mode and not help_latched:
+            due = [r for r in store.reminders_snapshot()
+                   if isinstance(r, dict) and r.get("id") not in nag_dismissed]
+            if due:
+                nag_active = True
+                nag_items = due
+
         H, W = stdscr.getmaxyx()
         stdscr.erase()
 
@@ -3471,10 +4673,14 @@ def run_ui(stdscr, store):
         safe_addstr(top + 1, lx + 9,
                     "✓ ollama" if bk.get("local") else "✗",
                     C["bright"] if bk.get("local") else C["faint"])
+        if bk.get("cloud"):
+            ctxt, cattr = "✓ " + (bk.get("cloud_provider") or ""), C["bright"]
+        elif bk.get("cloud_enabled") is False:      # manuell gedrosselt
+            ctxt, cattr = "✗ gedrosselt", C["warn"]
+        else:
+            ctxt, cattr = "✗", C["faint"]
         safe_addstr(top + 2, lx + 2, "CLOUD", C["acc"])
-        safe_addstr(top + 2, lx + 9,
-                    ("✓ " + (bk.get("cloud_provider") or "")) if bk.get("cloud") else "✗",
-                    C["bright"] if bk.get("cloud") else C["faint"])
+        safe_addstr(top + 2, lx + 9, ctxt, cattr)
 
         tele_h = len(TELE_ROWS) + 2
         ty = top + ext_h
@@ -3558,7 +4764,8 @@ def run_ui(stdscr, store):
         # (Zeitstrahl), Y bewusst MEHRDEUTIG — jeder Graph nutzt seine eigene
         # Achse + Darstellung, alles übereinandergelegt zum Vergleich:
         #   period → zusammenhängende Bande (Zellen-Hintergrund) über die Spanne
-        #   time   → Stern ★ auf der 24h-Skala (Zeitpunkt, keine Linie)
+        #   time   → Symbol auf der 24h-Skala (Zeitpunkt, keine Linie); je
+        #            Graph EIN eigenes aus TIME_SYMBOLS (★ als Default/erstes)
         #   scale  → wachsende Kreise ◦○◉●⬤ auf eigener Zeile (Größe = 1–5)
         #   number → Punkt auf der eigenen min/max-Spanne (sichtbare Werte)
         # Eigener Marker + Farbe je Graph (+ Legende). Quelle:
@@ -3587,241 +4794,9 @@ def run_ui(stdscr, store):
             proj_h = min(need, out_h - 5)
         out_h -= proj_h
         draw_box(top, rx, life_h, rightw, "lifestyle")
-        # Farb-Palette, je Graph eine (durchgezykelt). Unterschieden wird über
-        # die FARBE, nicht über fette Symbole — gezeichnet als dünne Linien.
-        LIFE_COL = ["graph", "acc", "warn", "net", "event", "audio", "hook", "num"]
-        if gs_cache:
-            plot_x = rx + 2
-            plot_w = max(2, rightw - 4)
-            inner_h = life_h - 2
-            # pro Graph: {datum: roh-eintrag}, Typ, Farbe. Roh halten, weil period
-            # zwei Werte (start+end) braucht und Zahlen ihre eigene Spanne über
-            # alle sichtbaren Werte ziehen.
-            series = []
-            for i, g in enumerate(gs_cache):
-                if not isinstance(g, dict):
-                    continue
-                rows = gv_cache.get(g.get("id")) or []
-                dv = {}
-                for e in rows if isinstance(rows, list) else []:
-                    if not isinstance(e, dict):
-                        continue
-                    if _num(e.get("value")) is None or not e.get("date"):
-                        continue
-                    dv[e["date"]] = e
-                if dv:
-                    series.append({"name": g.get("name", "?"), "type": g.get("type"),
-                                   "dv": dv, "col": LIFE_COL[i % len(LIFE_COL)],
-                                   "predict": bool(g.get("predict"))})
-            # Legende packen (mehrere pro Zeile): farbiges Linien-Sample + Name —
-            # verbraucht Zeilen, die dem Plot fehlen.
-            leg_lines, cur_w = [[]], 0
-            for s in series:
-                nm = s["name"][:8]
-                tok = "─ " + nm
-                if cur_w + len(tok) + 1 > plot_w and leg_lines[-1]:
-                    leg_lines.append([]); cur_w = 0
-                leg_lines[-1].append((nm, s["col"], s["type"]))
-                cur_w += len(tok) + 1
-            max_leg = min(len(leg_lines), max(1, inner_h - 3))
-            plot_h = max(2, inner_h - max_leg)
-            base = top + 1                         # oberste Plot-Zeile
-
-            def row_clock(m):                      # 24h-Skala: 0 unten, 1440 oben
-                m = max(0, min(1440, m))
-                return base + (plot_h - 1) - int(round(m / 1440.0 * (plot_h - 1)))
-
-            def row_norm(v, lo, hi):               # eigene Spanne: lo unten, hi oben
-                n = 0.5 if hi is None or hi == lo else (float(v) - lo) / (hi - lo)
-                n = max(0.0, min(1.0, n))
-                return base + (plot_h - 1) - int(round(n * (plot_h - 1)))
-
-            if series:
-                # Wie in der Schlaf-Ansicht: links 3 Spalten für die Stunden-
-                # Labels, dann GENAU 1 Spalte pro Tag (dünn + gleichmäßig — kein
-                # dicker Block, kein schmaler erster Balken durch Rundung).
-                # Heute rechts, ältester Tag links.
-                ix = plot_x                           # Stunden-Labels
-                day_x0 = ix + 3                       # erste Tages-Spalte
-                day_w = max(1, (rx + rightw - 2) - day_x0)
-                NDAYS = day_w
-                today = date.today()
-                window = [(today - timedelta(days=k)).isoformat()
-                          for k in range(NDAYS - 1, -1, -1)]   # alt → neu
-                day_col = {d: day_x0 + i for i, d in enumerate(window)}
-                day_center = day_col                  # 1 Spalte → Mitte = die Spalte
-                cols = window
-
-                # 24h-Achse links: senkrechte Linie + Stunden-Marken.
-                for r in range(plot_h):
-                    safe_addstr(base + r, day_x0 - 1, "│", C["faint"])
-                for hh in (0, 6, 12, 18, 24):
-                    safe_addstr(row_clock(hh * 60), ix, "%02d" % (hh % 24), C["faint"])
-
-                # PREDICTION: Lücken-Tage (kein echter Eintrag) werden aus dem
-                # Schnitt der letzten NPRED echten Werte geschätzt — aber NUR ab
-                # dem ersten echten Eintrag (nichts vor Tracking-Beginn erfinden).
-                # Geschätzte Tage werden später blass/schraffiert markiert.
-                NPRED = 7
-
-                def predicted_days(s):
-                    """{datum: schätz-entry mit _pred=True} für Fenster-Lücken —
-                    aber NUR wenn der Graph das predict-Flag trägt (sonst {}).
-                    So wird z.B. nur Schlaf ergänzt, nicht jeder Graph."""
-                    if not s.get("predict"):
-                        return {}
-                    dv = s.get("dv") or {}
-                    actual = sorted((e for e in dv.values() if isinstance(e, dict)),
-                                    key=lambda e: str(e.get("date", "")))
-                    if not actual:
-                        return {}
-                    earliest = str(actual[0].get("date", ""))
-                    last = actual[-NPRED:]
-
-                    def mean(key):
-                        xs = [_num(e.get(key)) for e in last]
-                        xs = [x for x in xs if x is not None]
-                        return sum(xs) / len(xs) if xs else None
-
-                    mv, me = mean("value"), mean("end")
-                    out = {}
-                    for d in window:
-                        if d in dv or d < earliest or mv is None:
-                            continue
-                        e = {"date": d, "value": mv, "_pred": True}
-                        if me is not None:
-                            e["end"] = me
-                        out[d] = e
-                    return out
-
-                # 1. DURCHGANG: period/Schlaf als zusammenhängende Bande HINTER
-                # allem. Gefärbter Zellen-HINTERGRUND (band), 1 Spalte pro Tag;
-                # Nachbartage stoßen aneinander → ein Band. band_cells merkt sich
-                # die Zellen, damit Kurven dort mit band-bg gezeichnet werden
-                # (= vor dem Band, kein Loch).
-                band_glyph = " " if C.get("band_is_bg") else "▒"
-                band_cells = set()
-                for s in series:
-                    if s["type"] != "period":
-                        continue
-                    for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
-                        cx = day_col.get(d)
-                        v, end = _num(e.get("value")), _num(e.get("end"))
-                        if cx is None or v is None or end is None:
-                            continue
-                        st, en = int(round(v)), int(round(end))
-                        segs = ([(st, en)] if en >= st
-                                else [(st, 1440), (0, en)])   # Wrap Mitternacht
-                        g = "░" if e.get("_pred") else band_glyph   # geschätzt = schraffiert
-                        for a, b in segs:
-                            r0, r1 = sorted((row_clock(a), row_clock(b)))
-                            for r in range(r0, r1 + 1):
-                                safe_addstr(r, cx, g, C["band"])
-                                band_cells.add((r, cx))
-
-                # Attribut für einen Linien-Glyph: in Banden-Zellen die "@band"-
-                # Variante (band-bg) → Glyph liegt VOR der Bande; sonst normal.
-                def latt(r, c, col):
-                    if (r, c) in band_cells and (col + "@band") in C:
-                        return C[col + "@band"]
-                    return C[col]
-
-                # 2. DURCHGANG: scale (1–5) als wachsende Kreise ◦○◉●⬤ auf je
-                # EIGENER Zeile (von oben gestapelt). Größe kodiert den Wert,
-                # Farbe trennt die Graphen — keine Verbindungslinie. Mehrere
-                # Wertungsgraphen belegen so praktischerweise eigene Zeilen.
-                CIRC = "◦○◉●⬤"
-                srow = 0
-                for s in series:
-                    if s["type"] != "scale":
-                        continue
-                    ry = base + plot_h - 1 - srow      # Zeilen von UNTEN auffüllen
-                    srow += 1
-                    if ry < base:
-                        continue                      # kein Platz mehr → weglassen
-                    col = s["col"]
-                    for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
-                        cx = day_center.get(d)
-                        v = _num(e.get("value"))
-                        if cx is None or v is None:
-                            continue
-                        idx = max(0, min(4, int(round(v)) - 1))
-                        attr = latt(ry, cx, "faint") if e.get("_pred") else latt(ry, cx, col)
-                        safe_addstr(ry, cx, CIRC[idx], attr)
-
-                # 3. DURCHGANG: time als einzelne Sterne ★ (Zeitpunkt, keine
-                # Linie), je Tag an der Block-Mitte auf der 24h-Skala.
-                for s in series:
-                    if s["type"] != "time":
-                        continue
-                    col = s["col"]
-                    for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
-                        cx = day_center.get(d)
-                        v = _num(e.get("value"))
-                        if cx is None or v is None:
-                            continue
-                        r = row_clock(int(round(v)))
-                        attr = latt(r, cx, "faint") if e.get("_pred") else latt(r, cx, col)
-                        safe_addstr(r, cx, "★", attr)
-
-                # 4. DURCHGANG: number als dünne Linie (eigene min/max-Spanne).
-                for s in series:
-                    if s["type"] != "number":
-                        continue
-                    col, dv = s["col"], s["dv"]
-                    vis = [_num(dv[d].get("value")) for d in cols if d in dv]
-                    vis = [x for x in vis if x is not None]
-                    lo, hi = (min(vis), max(vis)) if vis else (None, None)
-                    pts = []                          # (cx, row) für die Linie
-                    for d, e in dv.items():
-                        cx = day_center.get(d)
-                        v = _num(e.get("value"))
-                        if cx is None or v is None:
-                            continue
-                        pts.append((cx, row_norm(v, lo, hi)))
-                    # Einzelpunkte zu einer dünnen Linie verbinden (Steigung →
-                    # ╱ steigt, ╲ fällt, ─ flach; senkrecht → │). Einzelner Punkt → ·
-                    pts.sort()
-                    if len(pts) == 1:
-                        safe_addstr(pts[0][1], pts[0][0], "·", latt(pts[0][1], pts[0][0], col))
-                    else:
-                        for (c1, r1), (c2, r2) in zip(pts, pts[1:]):
-                            if c2 == c1:
-                                for r in range(min(r1, r2), max(r1, r2) + 1):
-                                    safe_addstr(r, c1, "│", latt(r, c1, col))
-                                continue
-                            ch = "─" if r2 == r1 else ("╲" if r2 > r1 else "╱")
-                            for c in range(c1, c2 + 1):
-                                t = (c - c1) / (c2 - c1)
-                                r = int(round(r1 + t * (r2 - r1)))
-                                safe_addstr(r, c, ch, latt(r, c, col))
-                    # geschätzte Tage als blasse Einzelpunkte (nicht in die Linie)
-                    for d, e in predicted_days(s).items():
-                        cx = day_center.get(d)
-                        v = _num(e.get("value"))
-                        if cx is None or v is None:
-                            continue
-                        r = row_norm(v, lo, hi)
-                        safe_addstr(r, cx, "·", latt(r, cx, "faint"))
-                # Legende unter den Plot: farbiges Linien-Sample + Name
-                for li, line in enumerate(leg_lines[:max_leg]):
-                    yy = base + plot_h + li
-                    cx = plot_x
-                    for nm, col, typ in line:
-                        if typ == "period":          # Bande statt Linie zeigen
-                            safe_addstr(yy, cx, band_glyph, C["band"])
-                        elif typ == "scale":         # Kreis-Sample statt Linie
-                            safe_addstr(yy, cx, "●", C[col])
-                        elif typ == "time":          # Stern-Sample statt Linie
-                            safe_addstr(yy, cx, "★", C[col])
-                        else:
-                            safe_addstr(yy, cx, "─", C[col])
-                        addclip(yy, cx + 2, nm, plot_w - (cx - plot_x) - 2, C["dim"])
-                        cx += 2 + len(nm) + 1
-            else:
-                safe_addstr(top + 1, rx + 2, "// noch keine werte", C["faint"])
-        else:
-            safe_addstr(top + 1, rx + 2, "// noch keine graphen (g)", C["faint"])
+        # Inhalt der lifestyle-Box: kompakte Überlagerung aller Graphen
+        # (geteilte Routine, auch groß im Graph-Werkzeug — siehe draw_overlay).
+        draw_overlay(top, rx, life_h, rightw, gs_cache, gv_cache, labeled=False)
 
         # ── PROJECTS (zwischen lifestyle und outbound) ────────────────────
         # VERSCHACHTELT (Quelle: store.projects_snapshot ← /api/projects, Baum).
@@ -3922,7 +4897,17 @@ def run_ui(stdscr, store):
 
         # ── Trennlinie + Befehlszeile (›) ─────────────────────────────────
         safe_addstr(sep_row, 0, "─" * W, C["faint"])
-        if cmd_mode:
+        if K["active"] and K.get("linput") is not None:
+            # Eingabe lebt HIER unten (mehr Platz als die schmale Sidebar-Kopf-
+            # zeile): Sidebar neu/umbenennen ODER die Pro-Tag-Uhrzeit einer Spanne.
+            prompt = ({"add": "neuer eintrag: ", "rename": "umbenennen: ",
+                       "spantime": "zeit (leer=ganztags): "}
+                      .get(K["lmode"], "umbenennen: "))
+            safe_addstr(input_row, 1, "›", C["acc"])
+            shown = (prompt + K["linput"])[-(W - 6):]
+            addclip(input_row, 3, shown, W - 6, C["bright"])
+            safe_addstr(input_row, 3 + len(shown), "_", C["bright"])
+        elif cmd_mode:
             safe_addstr(input_row, 1, "›", C["acc"])
             shown = cmd_buf[-(W - 6):]
             addclip(input_row, 3, shown, W - 6, C["bright"])
@@ -3939,6 +4924,24 @@ def run_ui(stdscr, store):
         addclip(footer_row, 0,
                 " q quit · t theme: %s · g graph · m karte · c kalender · / befehle · %s" % (tm_txt, BASE_URL),
                 W - 1, C["faint"])
+
+        # ── Graph-Reminder-Nag (zuletzt → liegt über allem) ───────────────
+        if nag_active and nag_items:
+            lines = ["heute noch nicht geloggt:"]
+            for r in nag_items:
+                at = r.get("remind_at") or ""
+                lines.append("  • " + str(r.get("name") or r.get("id") or "")
+                             + (("  @" + at) if at else ""))
+            lines.append("")
+            lines.append("g = eintragen · sonst wegklicken")
+            nw = min(W - 4, max(26, max(len(s) for s in lines) + 4))
+            nh = len(lines) + 2
+            nx = max(0, (W - nw) // 2)
+            ny = max(0, (H - nh) // 2)
+            draw_box(ny, nx, nh, nw, "bitte eintragen", C["warn"])
+            for i, s in enumerate(lines):
+                addclip(ny + 1 + i, nx + 2, s, nw - 4,
+                        C["bright"] if i == 0 else C["faint"])
 
         stdscr.refresh()
 

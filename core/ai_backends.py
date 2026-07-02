@@ -62,6 +62,24 @@ def cloud_provider() -> str:
     return None
 
 
+def cloud_enabled() -> bool:
+    """Cloud-Kill-Switch: ist Cloud manuell freigegeben? (Default True.)
+    Aus → cloud_ok()=False, egal ob Key/Internet da. Datenschutz-/Kosten-Drossel,
+    in der Config (data/tutor_config.json, key 'cloud_enabled') persistiert."""
+    v = tutor_config.setting("cloud_enabled", True)
+    if isinstance(v, str):
+        return v.strip().lower() not in ("0", "false", "off", "no", "aus", "nein")
+    return bool(v)
+
+
+def set_cloud_enabled(on: bool, persist: bool = True) -> bool:
+    """Cloud-Drossel umlegen (live, optional persistiert). Invalidiert den Cache,
+    damit EXTERNAL/Gating sofort reagieren. Gibt den neuen Zustand zurück."""
+    tutor_config.set_override("cloud_enabled", bool(on), persist=persist)
+    _cache["val"] = None
+    return bool(on)
+
+
 def _reachable(host: str, port: int = 443, timeout: float = 2.0) -> bool:
     """Leichter Erreichbarkeits-Check (TCP-Connect, kein HTTP)."""
     if not host:
@@ -85,14 +103,16 @@ def status(fresh: bool = False) -> dict:
     if not fresh and _cache["val"] is not None and (now - _cache["t"]) < _CACHE_TTL:
         return _cache["val"]
 
-    local = local_ok()
-    prov  = cloud_provider()
-    cloud = False
-    if prov:
+    local   = local_ok()
+    prov    = cloud_provider()
+    enabled = cloud_enabled()
+    cloud   = False
+    if prov and enabled:   # Kill-Switch aus → Cloud gilt als nicht da
         base = tutor_providers.get(prov).get("base_url") or "https://api.openai.com"
         cloud = _reachable(urlparse(base).hostname)
 
-    st = {LOCAL: local, CLOUD: cloud, "cloud_provider": prov, "any": (local or cloud)}
+    st = {LOCAL: local, CLOUD: cloud, "cloud_provider": prov,
+          "cloud_enabled": enabled, "any": (local or cloud)}
     st["modules"] = {m: any(st.get(b) for b in bk) for m, bk in MODULE_BACKENDS.items()}
 
     _cache["t"], _cache["val"] = now, st

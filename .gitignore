@@ -48,3 +48,7 @@ core/map/data/cache/
 # Editor-/Atomic-Write-Temp-Dateien (z.B. <name>.tmp.<ts>.<hash>) — sollen
 # nie versioniert werden (eine ist 2026-06-07 versehentlich reingerutscht).
 *.tmp.*
+
+# Claude Code: lokale Einstellungen + Worktrees/Jobs — Werkzeug-interne
+# Artefakte, gehoeren nie ins Repo.
+.claude/

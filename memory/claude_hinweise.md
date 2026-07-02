@@ -56,6 +56,27 @@ Workflow-Regeln, die nicht aus dem Code allein hervorgehen.
 - `introduce_new(word, pinyin)` legt ein **neues** Wort an – die KI
   wählt das Wort selbst, es gibt keinen Pool aus dem geschöpft wird.
 
+### Cloud→Lokal-Trennung (HARTE Invariante)
+
+Die **Cloud-/Tutor-AI darf NICHT in die lokale AI greifen.** Lokale AI =
+`ai.py`-Chat + Konzept-Graph (`graph.py`/`ai_graph.json`) + Consolidation. Die
+Cloud-AI (Tutor auf einem Cloud-Provider) lebt in ihrem eigenen Environment.
+Was die Cloud-AI sieht/anfassen kann, ist GENAU: ihr Tutor-Prompt, ihre eigene
+Tutor-History, und die **4 Vokabel-Tools** (`TUTOR_TOOLS`, fassen nur
+`vocab_*.json` an). Durchgesetzt durch:
+
+- **Choke-Point `tutor.execute_tool`** – geschlossene Allowlist (`_ALLOWED`);
+  jeder andere Tool-Name wird abgelehnt **und** ins stdout-Log geflaggt.
+- **`ai.py`-Gates** (`if tools is None`): bei gesetzten Tools KEINE Graph-
+  Injektion (`graph.context_for_query`) und KEINE Consolidation
+  (`_async_save_turn` läuft nur über `_answer_with_images`, ai.py:1589) →
+  Tutor-Gespräche landen NIE im lokalen Memory-Graphen.
+- **Cloud-Backends** (`tutor_openai_compat.py`, `tutor_cloud.py`) importieren
+  `ai`/`graph`/`consolidation`/`context` NICHT und führen selbst keine Tools aus.
+
+Wer hier etwas ändert (neuen Tutor-Tool, anderes Tool-Set an einen Cloud-Pfad
+hängen), weicht diese Trennung bewusst auf – im Zweifel sein lassen.
+
 ### Audio-Architektur
 
 - **Kein Python-Audio auf dem Pi**: Aufnahme über Browser-MediaRecorder,

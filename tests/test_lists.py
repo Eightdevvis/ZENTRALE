@@ -27,6 +27,9 @@ def reg(tmp_path, monkeypatch):
     monkeypatch.setattr(L, "_REGISTRY", str(f))
     monkeypatch.setattr(L, "_FEATURES", str(tmp_path / "features.json"))
     monkeypatch.setattr(L, "_DATA_DIR", str(tmp_path))
+    # Einmal-pro-Prozess-Migrationsflag je Test zurücksetzen, sonst läuft die
+    # week-Flatten-Migration in späteren Tests nicht mehr (globaler Prozess-State).
+    monkeypatch.setattr(L, "_week_migrated", False)
     return f
 
 
@@ -251,3 +254,145 @@ def test_nest_unknown_dest_raises(reg):
     lst = L.create_list("x")
     with pytest.raises(KeyError):
         L.nest_list(lst["id"], "l_gibtsnicht")
+
+
+# ── Kalender-Sidebar-Liste (»week«, flach) ──────────────────────────────────
+# Eine als »week« benannte Liste ist speziell: sie ist die FLACHE Kalender-
+# Sidebar (week_items). Wer einen Eintrag hineinschiebt, KOPIERT ihn (Quelle
+# bleibt) und die Kopie trägt einen link zurück → Abhaken ist bidirektional.
+# Alte Wochentag-Ordner werden beim Laden einmalig flach gezogen.
+
+def _copy_into_week(wk, src_lid, iid):
+    """Item in die week-Liste kopieren (top-level) und die frische Kopie zurück."""
+    return L.move_item(src_lid, iid, wk["id"])
+
+
+def test_migrate_week_flat_pulls_items_up(reg):
+    # Alt-Struktur direkt auf Disk: week mit Wochentag-Ordnern + Items darunter.
+    import json
+    data = [{"id": "l_week", "name": "week", "next_item": 40, "items": [
+        {"id": 1, "text": "montag", "done": False, "items": [
+            {"id": 2, "text": "A", "done": False},
+            {"id": 3, "text": "B", "done": True}]},
+        {"id": 10, "text": "freitag", "done": False, "items": []},
+        {"id": 20, "text": "sonntag", "done": False, "items": [
+            {"id": 21, "text": "C", "done": False}]}]}]
+    reg.write_text(json.dumps(data), encoding="utf-8")
+    wk = _get("l_week")                              # _load() migriert einmalig
+    texts = [i["text"] for i in wk["items"]]
+    assert texts == ["A", "B", "C"]                 # flach, Reihenfolge Mo…So
+    assert all(L._weekday_index(i["text"]) is None for i in wk["items"])
+    assert next(i for i in wk["items"] if i["text"] == "B")["done"] is True
+
+
+def test_move_into_week_copies_links_keeps_source(reg):
+    wk = L.create_list("week")
+    proj = L.create_list("Projekt")
+    it = L.add_item(proj["id"], "Steuer")
+    node = _copy_into_week(wk, proj["id"], it["id"])
+    # Quelle behält das Original …
+    assert any(i["text"] == "Steuer" for i in _get(proj["id"])["items"])
+    # … die Kopie trägt einen link zurück auf die Quelle (ids sind nur
+    # listen-intern eindeutig, taugen also nicht als Cross-List-Unterschied).
+    assert node["link"] == {"lid": proj["id"], "iid": it["id"]}
+    assert L.week_items()["items"][0]["linked"] is True
+
+
+def test_move_into_normal_list_still_moves(reg):
+    a = L.create_list("A"); b = L.create_list("B")
+    it = L.add_item(a["id"], "ding")
+    L.move_item(a["id"], it["id"], b["id"])
+    assert not any(i["text"] == "ding" for i in _get(a["id"])["items"])  # weg
+    assert any(i["text"] == "ding" for i in _get(b["id"])["items"])
+
+
+def test_toggle_copy_syncs_source(reg):
+    wk = L.create_list("week")
+    proj = L.create_list("P")
+    it = L.add_item(proj["id"], "Aufgabe")
+    node = _copy_into_week(wk, proj["id"], it["id"])
+    L.toggle_item(wk["id"], node["id"])             # Kopie abhaken
+    src = next(i for i in _get(proj["id"])["items"] if i["id"] == it["id"])
+    assert src["done"] is True                      # Quelle folgt
+
+
+def test_toggle_source_syncs_copy(reg):
+    wk = L.create_list("week")
+    proj = L.create_list("P")
+    it = L.add_item(proj["id"], "Aufgabe")
+    node = _copy_into_week(wk, proj["id"], it["id"])
+    L.toggle_item(proj["id"], it["id"])             # Quelle abhaken
+    cp = next(i for i in _get(wk["id"])["items"] if i["id"] == node["id"])
+    assert cp["done"] is True                       # Kopie folgt
+
+
+def test_delete_copy_keeps_source(reg):
+    wk = L.create_list("week")
+    proj = L.create_list("P")
+    it = L.add_item(proj["id"], "Aufgabe")
+    node = _copy_into_week(wk, proj["id"], it["id"])
+    L.delete_item(wk["id"], node["id"])             # Kopie löschen
+    # Quelle bleibt, und ihr Toggle crasht nicht (dangling link wird ignoriert).
+    assert any(i["id"] == it["id"] for i in _get(proj["id"])["items"])
+    L.toggle_item(proj["id"], it["id"])             # kein Fehler
+
+
+def test_week_items_flat_shape(reg):
+    wk = L.create_list("week")
+    L.add_item(wk["id"], "eigenes")
+    proj = L.create_list("P")
+    it = L.add_item(proj["id"], "kopiert")
+    _copy_into_week(wk, proj["id"], it["id"])
+    wi = L.week_items()
+    assert wi["lid"] == wk["id"]
+    texts = {i["text"]: i for i in wi["items"]}
+    assert set(texts) == {"eigenes", "kopiert"}
+    assert texts["eigenes"]["linked"] is False
+    assert texts["kopiert"]["linked"] is True
+
+
+def test_week_items_empty_without_week_list(reg):
+    L.create_list("irgendwas")
+    assert L.week_items() == {"lid": None, "items": []}
+
+
+# ── Reihenfolge (Sidebar-Sortierung) ────────────────────────────────────────
+
+def _texts(lid):
+    return [i["text"] for i in _get(lid)["items"]]
+
+
+def test_reorder_moves_up_and_down(reg):
+    lst = L.create_list("L")
+    a = L.add_item(lst["id"], "eins")
+    L.add_item(lst["id"], "zwei")
+    L.add_item(lst["id"], "drei")
+    assert L.reorder_item(lst["id"], a["id"], +1) is True   # eins runter
+    assert _texts(lst["id"]) == ["zwei", "eins", "drei"]
+    assert L.reorder_item(lst["id"], a["id"], -1) is True    # wieder rauf
+    assert _texts(lst["id"]) == ["eins", "zwei", "drei"]
+
+
+def test_reorder_at_edge_is_noop(reg):
+    lst = L.create_list("L")
+    a = L.add_item(lst["id"], "eins")
+    L.add_item(lst["id"], "zwei")
+    assert L.reorder_item(lst["id"], a["id"], -1) is False   # schon ganz oben
+    assert _texts(lst["id"]) == ["eins", "zwei"]
+
+
+def test_reorder_within_sibling_level(reg):
+    # Reorder wirkt nur innerhalb der Geschwister-Ebene, nicht global.
+    lst = L.create_list("L")
+    p = L.add_item(lst["id"], "ordner")
+    c1 = L.add_item(lst["id"], "kind-a", parent_iid=p["id"])
+    L.add_item(lst["id"], "kind-b", parent_iid=p["id"])
+    L.reorder_item(lst["id"], c1["id"], +1)
+    kids = [k["text"] for k in _get(lst["id"])["items"][0]["items"]]
+    assert kids == ["kind-b", "kind-a"]
+
+
+def test_reorder_unknown_raises(reg):
+    lst = L.create_list("L")
+    with pytest.raises(KeyError):
+        L.reorder_item(lst["id"], 999, +1)

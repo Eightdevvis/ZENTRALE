@@ -41,6 +41,8 @@ import base64
 import imaplib
 import smtplib
 import threading
+from collections import OrderedDict
+from contextlib import contextmanager
 from datetime import datetime
 from email.message import EmailMessage
 from email.header import decode_header, make_header
@@ -204,33 +206,26 @@ def folder_counts():
     cats = mail_rules.categories()
     out = {}
     for account in accts:
-        imap = None
         try:
-            imap = _connect(account)
-            for name, spec in cats.items():
-                folder = spec.get("folder")
-                if spec.get("action") != "move" or not folder:
-                    continue
-                try:
-                    typ, data = imap.status(_q(folder), "(MESSAGES)")
-                    if typ == "OK" and data and data[0]:
-                        raw = data[0] if isinstance(data[0], bytes) else str(data[0]).encode()
-                        m = re.search(rb"MESSAGES\s+(\d+)", raw)
-                        if m:
-                            out[name] = out.get(name, 0) + int(m.group(1))
-                except _DROP_ERRORS:
-                    raise
-                except Exception:
-                    pass   # Ordner existiert evtl. noch nicht -> als 0 werten
+            with _session(account) as imap:
+                for name, spec in cats.items():
+                    folder = spec.get("folder")
+                    if spec.get("action") != "move" or not folder:
+                        continue
+                    try:
+                        typ, data = imap.status(_q(folder), "(MESSAGES)")
+                        if typ == "OK" and data and data[0]:
+                            raw = data[0] if isinstance(data[0], bytes) else str(data[0]).encode()
+                            m = re.search(rb"MESSAGES\s+(\d+)", raw)
+                            if m:
+                                out[name] = out.get(name, 0) + int(m.group(1))
+                    except _DROP_ERRORS:
+                        raise
+                    except Exception:
+                        pass   # Ordner existiert evtl. noch nicht -> als 0 werten
         except Exception as e:
             state.push_log(f"MAIL: Ordnerzählung fehlgeschlagen — "
                            f"{type(e).__name__}: {e}")
-        finally:
-            if imap is not None:
-                try:
-                    imap.logout()
-                except Exception:
-                    pass
     return out
 
 
@@ -245,44 +240,36 @@ def folder_mails(cat, limit=200):
     accts = [a for a in mail_secrets.load_accounts() if a.get("enabled", True)]
     out = []
     for account in accts:
-        imap = None
         try:
-            imap = _connect(account)
-            typ, _ = imap.select(_q(folder), readonly=True)   # nichts verändern
-            if typ != "OK":
-                continue
-            typ, data = imap.uid("SEARCH", None, "UID 1:*")
-            uids = []
-            if typ == "OK" and data and data[0]:
-                uids = sorted((int(u) for u in data[0].split()), reverse=True)[:limit]
-            if not uids:
-                continue
-            # EIN gebündelter FETCH statt pro Mail (throttle-arm).
-            typ, fetched = imap.uid(
-                "FETCH", ",".join(str(u) for u in uids),
-                "(UID BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])")
-            if typ != "OK" or not fetched:
-                continue
-            for item in fetched:
-                if not isinstance(item, tuple) or len(item) < 2:
+            with _session(account) as imap:
+                if _pselect(imap, account["name"], folder, readonly=True) != "OK":
                     continue
-                meta = item[0].decode("ascii", "replace") if isinstance(item[0], bytes) \
-                    else str(item[0])
-                mm = re.search(r"UID\s+(\d+)", meta)
-                hdr = _parse_headers(item[1])
-                out.append({"account": account["name"],
-                            "uid": int(mm.group(1)) if mm else None,
-                            "from": hdr["from"], "subject": hdr["subject"],
-                            "date": hdr["date"]})
+                typ, data = imap.uid("SEARCH", None, "UID 1:*")
+                uids = []
+                if typ == "OK" and data and data[0]:
+                    uids = sorted((int(u) for u in data[0].split()), reverse=True)[:limit]
+                if not uids:
+                    continue
+                # EIN gebündelter FETCH statt pro Mail (throttle-arm).
+                typ, fetched = imap.uid(
+                    "FETCH", ",".join(str(u) for u in uids),
+                    "(UID BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])")
+                if typ != "OK" or not fetched:
+                    continue
+                for item in fetched:
+                    if not isinstance(item, tuple) or len(item) < 2:
+                        continue
+                    meta = item[0].decode("ascii", "replace") if isinstance(item[0], bytes) \
+                        else str(item[0])
+                    mm = re.search(r"UID\s+(\d+)", meta)
+                    hdr = _parse_headers(item[1])
+                    out.append({"account": account["name"],
+                                "uid": int(mm.group(1)) if mm else None,
+                                "from": hdr["from"], "subject": hdr["subject"],
+                                "date": hdr["date"]})
         except Exception as e:
             state.push_log(f"MAIL: Ordner '{folder}' lesen — "
                            f"{type(e).__name__}: {e}")
-        finally:
-            if imap is not None:
-                try:
-                    imap.logout()
-                except Exception:
-                    pass
     out.sort(key=lambda x: (x["uid"] or 0), reverse=True)
     return out[:limit]
 
@@ -352,45 +339,92 @@ def _accounts_for(account_name=None):
     return accts
 
 
+# ── Body-Cache: einmal geholte Mail-Texte sind unveränderlich ─────────
+# Der volle Text einer Mail ändert sich nie — also einmal holen, dann aus dem
+# RAM bedienen. Erneutes Öffnen derselben Mail kommt damit ganz ohne Netz aus,
+# und ein Prefetch (mail_body der Nachbarn im Hintergrund) macht n/N im Panel
+# instant. Größen-begrenzt als simples LRU (älteste fliegen raus).
+_body_cache = OrderedDict()      # (account_name, cat, uid) -> body-dict
+_body_cache_lock = threading.Lock()
+_BODY_CACHE_MAX = int(os.environ.get("MAIL_BODY_CACHE", "128"))
+
+
 def mail_body(cat, uid, account_name=None):
-    """LIVE: vollen Text + Header einer Mail aus ihrem Ordner holen. Liefert
-    {account, uid, from, subject, date, body} oder {error}. Read-only."""
+    """LIVE: vollen Text + Header einer Mail (Cache-aware). Liefert
+    {account, uid, from, subject, date, body} oder {error}. Read-only.
+    Erfolgreiche Ergebnisse landen im Body-Cache (Mail-Text ist unveränderlich);
+    Fehler werden NICHT gecacht (nächster Versuch darf es frisch probieren)."""
+    try:
+        uid = int(uid)
+    except (TypeError, ValueError):
+        return {"error": "uid ungültig"}
+    key = (account_name, cat, uid)
+    with _body_cache_lock:
+        hit = _body_cache.get(key)
+        if hit is not None:
+            _body_cache.move_to_end(key)
+            return hit
+    result = _fetch_body(cat, uid, account_name)
+    if isinstance(result, dict) and not result.get("error"):
+        with _body_cache_lock:
+            _body_cache[key] = result
+            _body_cache.move_to_end(key)
+            while len(_body_cache) > _BODY_CACHE_MAX:
+                _body_cache.popitem(last=False)
+    return result
+
+
+def prefetch_bodies(cat, uids, account_name=None):
+    """Mail-Texte der angegebenen uids in den Cache holen (für fire-and-forget
+    im Hintergrund-Thread). Überspringt, was schon im Cache liegt — so kostet
+    ein Prefetch nichts, wenn der Nutzer eh nicht weiterblättert."""
+    spec = mail_rules.category_action(cat)
+    if spec.get("action") != "move" or not spec.get("folder"):
+        return                       # trash-Kategorie: kein Live-Body, nichts zu tun
+    for u in uids:
+        try:
+            u = int(u)
+        except (TypeError, ValueError):
+            continue
+        with _body_cache_lock:
+            if (account_name, cat, u) in _body_cache:
+                continue
+        try:
+            mail_body(cat, u, account_name=account_name)
+        except Exception:
+            pass                     # Prefetch ist best-effort, nie laut scheitern
+
+
+def _fetch_body(cat, uid, account_name=None):
+    """Den vollen Body EINER Mail wirklich vom Server holen (ohne Cache)."""
     spec = mail_rules.category_action(cat)
     folder = spec.get("folder")
     if spec.get("action") != "move" or not folder:
         return {"error": "kein Live-Ordner für diese Kategorie"}
     for account in _accounts_for(account_name):
-        imap = None
         try:
-            imap = _connect(account)
-            typ, _ = imap.select(_q(folder), readonly=True)
-            if typ != "OK":
-                continue
-            typ, fetched = imap.uid("FETCH", str(uid), "(BODY.PEEK[])")
-            if typ != "OK" or not fetched or not isinstance(fetched[0], tuple):
-                continue
-            msg = email.message_from_bytes(fetched[0][1])
-            try:
-                dt = parsedate_to_datetime(msg.get("Date"))
-                date_s = dt.isoformat() if dt else ""
-            except (TypeError, ValueError):
-                date_s = ""
-            return {"account": account["name"], "uid": uid,
-                    "from": _decode(msg.get("From", "")),
-                    "subject": _decode(msg.get("Subject", "")),
-                    "date": date_s,
-                    "message_id": (msg.get("Message-ID") or "").strip(),
-                    "references": (msg.get("References") or "").strip(),
-                    "body": _extract_text(msg).strip()}
+            with _session(account) as imap:
+                if _pselect(imap, account["name"], folder, readonly=True) != "OK":
+                    continue
+                typ, fetched = imap.uid("FETCH", str(uid), "(BODY.PEEK[])")
+                if typ != "OK" or not fetched or not isinstance(fetched[0], tuple):
+                    continue
+                msg = email.message_from_bytes(fetched[0][1])
+                try:
+                    dt = parsedate_to_datetime(msg.get("Date"))
+                    date_s = dt.isoformat() if dt else ""
+                except (TypeError, ValueError):
+                    date_s = ""
+                return {"account": account["name"], "uid": uid,
+                        "from": _decode(msg.get("From", "")),
+                        "subject": _decode(msg.get("Subject", "")),
+                        "date": date_s,
+                        "message_id": (msg.get("Message-ID") or "").strip(),
+                        "references": (msg.get("References") or "").strip(),
+                        "body": _extract_text(msg).strip()}
         except Exception as e:
             state.push_log(f"MAIL: Body '{folder}' uid {uid} — "
                            f"{type(e).__name__}: {e}")
-        finally:
-            if imap is not None:
-                try:
-                    imap.logout()
-                except Exception:
-                    pass
     return {"error": "Mail nicht gefunden"}
 
 
@@ -402,25 +436,17 @@ def delete_mail(cat, uid, account_name=None):
     if not folder:
         return False
     for account in _accounts_for(account_name):
-        imap = None
         try:
-            imap = _connect(account)
-            typ, _ = imap.select(_q(folder))      # read-write (wir verschieben)
-            if typ != "OK":
-                continue
-            trash = _find_trash(imap)
-            if _move_uid(imap, str(uid), trash):
-                state.push_log(f"MAIL: gelöscht (uid {uid}) {folder} → {trash}")
-                return True
+            with _session(account) as imap:
+                if _pselect(imap, account["name"], folder, readonly=False) != "OK":
+                    continue
+                trash = _find_trash(imap)
+                if _move_uid(imap, str(uid), trash):
+                    state.push_log(f"MAIL: gelöscht (uid {uid}) {folder} → {trash}")
+                    return True
         except Exception as e:
             state.push_log(f"MAIL: löschen '{folder}' uid {uid} — "
                            f"{type(e).__name__}: {e}")
-        finally:
-            if imap is not None:
-                try:
-                    imap.logout()
-                except Exception:
-                    pass
     return False
 
 
@@ -434,58 +460,63 @@ def reassign_sender(sender, category):
 
 def refile_sender(sender, category, account_name=None):
     """Sashas Modell ganz: den ABSENDER einer Kategorie zuordnen (Keymap) UND
-    **alle** seine vorhandenen Mails — alte wie neue — in den Kategorie-Ordner
-    verschieben. Durchsucht INBOX + jeden move-Kategorie-Ordner per `SEARCH FROM`
-    und verschiebt Treffer ins Ziel (außer was schon dort liegt). Künftige Mails
-    sortiert der Poll automatisch dorthin. Liefert {assigned, category, moved,
-    live}. Ohne Key/Konto: nur Keymap (moved=0, live=False)."""
+    **alle** seine vorhandenen Mails in den Kategorie-Ordner verschieben. Weil
+    ein Absender IMMER genau einer Kategorie zugeordnet ist und der Poll seine
+    Mails längst aus der INBOX in genau diesen Ordner geräumt hat, liegen sie an
+    **einer einzigen** Stelle: seinem **bisherigen** Kategorie-Ordner (bei noch
+    unbekanntem Absender: der Review-Ordner). Nur den durchsuchen wir per
+    `SEARCH FROM` — nicht INBOX, nicht andere Ordner. Etwaige brandneue, noch
+    ungepollte Mails sortiert der nächste Poll ohnehin gleich in die neue
+    Kategorie. Liefert {assigned, category, moved, live}. Ohne Key/Konto: nur
+    Keymap."""
+    # Die bisherige Kategorie VOR dem Umschreiben lesen — dort liegen seine Mails.
+    # classify() gibt für unbekannte Absender REVIEW zurück (= Review-Ordner).
+    prev_cat, _known = mail_rules.classify(sender)
     addr, cat = mail_rules.assign(sender, category)
     spec = mail_rules.category_action(cat)
     accts = _accounts_for(account_name)
     if not accts:
-        return {"assigned": True, "category": cat, "moved": 0, "live": False}
+        return {"assigned": True, "category": cat, "moved": 0, "live": False,
+                "moved_from": prev_cat}
+
+    # Quelle: GENAU der bisherige Kategorie-Ordner des Absenders (das Ziel selbst
+    # wird unten übersprungen — Umsortieren in dieselbe Kategorie = nichts zu tun).
+    sources = []
+    prev_spec = mail_rules.category_action(prev_cat)
+    prev_folder = prev_spec.get("folder")
+    if prev_spec.get("action") == "move" and prev_folder:
+        sources.append(prev_folder)
+    if not sources:                    # kein durchsuchbarer Vor-Ordner → fertig
+        return {"assigned": True, "category": cat, "moved": 0, "live": True,
+                "moved_from": prev_cat}
 
     moved = 0
     for account in accts:
-        imap = None
         try:
-            imap = _connect(account)
-            folders = _FolderCache()
-            target = folders.target(imap, spec)
-            # Quell-Ordner: INBOX + jeder move-Kategorie-Ordner (Ziel ausgenommen).
-            sources = ["INBOX"]
-            for _nm, sp in mail_rules.categories().items():
-                f = sp.get("folder")
-                if sp.get("action") == "move" and f and f not in sources:
-                    sources.append(f)
-            for folder in sources:
-                if folder == target:
-                    continue
-                try:
-                    typ, _ = imap.select(_q(folder))      # read-write (wir verschieben)
-                    if typ != "OK":
+            with _session(account) as imap:
+                folders = _FolderCache()
+                target = folders.target(imap, spec)
+                for folder in sources:
+                    if folder == target:
                         continue
-                    typ, data = imap.uid("SEARCH", None, "FROM", '"%s"' % addr)
-                    if typ != "OK" or not data or not data[0]:
-                        continue
-                    for uid in data[0].split():
-                        if _move_uid(imap, uid.decode() if isinstance(uid, bytes)
-                                     else str(uid), target):
-                            moved += 1
-                except _DROP_ERRORS:
-                    raise
-                except Exception:
-                    pass     # Ordner fehlt / nicht durchsuchbar -> überspringen
+                    try:
+                        if _pselect(imap, account["name"], folder, readonly=False) != "OK":
+                            continue
+                        typ, data = imap.uid("SEARCH", None, "FROM", '"%s"' % addr)
+                        if typ != "OK" or not data or not data[0]:
+                            continue
+                        # Alle Treffer dieses Ordners in EINEM MOVE (statt pro Mail
+                        # ein Roundtrip) → drastisch weniger Outlook-Drossel.
+                        moved += _move_uid_set(imap, data[0].split(), target)
+                    except _DROP_ERRORS:
+                        raise
+                    except Exception:
+                        pass     # Ordner fehlt / nicht durchsuchbar -> überspringen
         except Exception as e:
             state.push_log(f"MAIL: Umsortieren '{addr}' — {type(e).__name__}: {e}")
-        finally:
-            if imap is not None:
-                try:
-                    imap.logout()
-                except Exception:
-                    pass
     state.push_log(f"MAIL: Absender {addr} → {cat} ({moved} Mail(s) umsortiert)")
-    return {"assigned": True, "category": cat, "moved": moved, "live": True}
+    return {"assigned": True, "category": cat, "moved": moved, "live": True,
+            "moved_from": prev_cat}
 
 
 # ── Antworten senden (SMTP XOAUTH2) ──────────────────────────────────
@@ -512,6 +543,24 @@ def _smtp_cfg(account):
     return base
 
 
+def _compose_message(from_addr, to_addr, subject, body, in_reply_to=None,
+                     references=None):
+    """Eine (Antwort-)Mail als email.message bauen — gemeinsam von Senden (SMTP)
+    und Entwurf-Speichern (IMAP Drafts) genutzt, damit Threading/Header identisch
+    sind."""
+    msg = EmailMessage()
+    msg["From"] = from_addr
+    msg["To"] = to_addr
+    msg["Subject"] = subject
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid()
+    if in_reply_to:
+        msg["In-Reply-To"] = in_reply_to
+        msg["References"] = (references or in_reply_to)
+    msg.set_content(body or "")
+    return msg
+
+
 def send_reply(account, to_addr, subject, body, in_reply_to=None, references=None):
     """Eine (Antwort-)Mail über SMTP senden. Bei oauth2 via XOAUTH2 mit dem
     frischen Access-Token (kein Passwort). Setzt In-Reply-To/References fürs
@@ -521,16 +570,7 @@ def send_reply(account, to_addr, subject, body, in_reply_to=None, references=Non
         raise RuntimeError(f"kein SMTP-Host für Provider '{account.get('provider')}'")
     user = account["user"]
 
-    msg = EmailMessage()
-    msg["From"] = user
-    msg["To"] = to_addr
-    msg["Subject"] = subject
-    msg["Date"] = formatdate(localtime=True)
-    msg["Message-ID"] = make_msgid()
-    if in_reply_to:
-        msg["In-Reply-To"] = in_reply_to
-        msg["References"] = (references or in_reply_to)
-    msg.set_content(body or "")
+    msg = _compose_message(user, to_addr, subject, body, in_reply_to, references)
 
     host, port = cfg["host"], int(cfg.get("port", 587))
     security = cfg.get("security", "starttls")
@@ -571,6 +611,60 @@ def send_reply(account, to_addr, subject, body, in_reply_to=None, references=Non
             pass
     state.push_log(f"MAIL [{account['name']}]: ✓ Antwort an {to_addr} gesendet")
     return True
+
+
+def _find_drafts(imap):
+    """Entwürfe-Ordner über das SPECIAL-USE-Attribut \\Drafts finden, sonst
+    raten (Outlook/Exchange nennt ihn üblicherweise 'Drafts')."""
+    for line in _list_folders(imap):
+        if "\\drafts" in line.lower():
+            name = _list_name(line)
+            if name:
+                return name
+    return "Drafts"
+
+
+def save_draft(account, to_addr, subject, body, in_reply_to=None, references=None):
+    """Eine (Antwort-)Mail als ENTWURF in den Drafts-Ordner des Kontos legen
+    (IMAP APPEND mit \\Draft-Flag) — KEIN SMTP, nichts geht raus. Threading/Header
+    identisch zum Senden, damit der Entwurf in Outlook/Handy sauber im Thread
+    hängt. Liefert den Ordnernamen. Wirft bei Fehler (Aufrufer fängt)."""
+    msg = _compose_message(account["user"], to_addr, subject, body,
+                           in_reply_to, references)
+    with _session(account) as imap:
+        drafts = _ensure_folder(imap, _find_drafts(imap))
+        typ, _ = imap.append(_q(drafts), r"(\Draft)",
+                             imaplib.Time2Internaldate(time.time()),
+                             msg.as_bytes())
+        if typ != "OK":
+            raise RuntimeError(f"APPEND in '{drafts}' abgelehnt: {typ}")
+    state.push_log(f"MAIL [{account['name']}]: ✎ Entwurf in '{drafts}' gespeichert")
+    return drafts
+
+
+def draft_reply(cat, uid, body, account_name=None):
+    """Wie reply_to_mail, aber die getippte Antwort wird als ENTWURF in den
+    Drafts-Ordner gelegt statt gesendet. Liefert {ok, to, subject, folder}/{error}."""
+    info = mail_body(cat, uid, account_name=account_name)
+    if not isinstance(info, dict) or info.get("error"):
+        return {"error": (info or {}).get("error", "Original nicht ladbar")}
+    accts = _accounts_for(account_name or info.get("account"))
+    if not accts:
+        return {"error": "kein Konto / kein Key"}
+    account = accts[0]
+    to_addr = parseaddr(info.get("from", ""))[1] or info.get("from", "")
+    subj = info.get("subject", "") or ""
+    if not subj.lower().startswith("re:"):
+        subj = "Re: " + subj
+    refs = (info.get("references", "") + " " + info.get("message_id", "")).strip()
+    try:
+        folder = save_draft(account, to_addr, subj, body,
+                            in_reply_to=info.get("message_id") or None,
+                            references=refs or None)
+        return {"ok": True, "to": to_addr, "subject": subj, "folder": folder,
+                "draft": True}
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
 
 
 def reply_to_mail(cat, uid, body, account_name=None):
@@ -652,17 +746,20 @@ def _provider_cfg(account):
     return base
 
 
-def _connect(account):
+def _connect(account, force_token=False):
     cfg = _provider_cfg(account)
     host, port = cfg["host"], int(cfg["port"])
+    # Socket-Timeout, damit eine tote (poolte) Verbindung nicht ewig hängt —
+    # ein NOOP/FETCH auf einem halb-toten Socket gibt dann auf statt zu blocken.
+    timeout = int(os.environ.get("MAIL_NET_TIMEOUT_S", "30"))
     if cfg.get("security") == "ssl":
         ctx = ssl.create_default_context()
         if not cfg.get("verify", True):
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
-        imap = imaplib.IMAP4_SSL(host, port, ssl_context=ctx)
+        imap = imaplib.IMAP4_SSL(host, port, ssl_context=ctx, timeout=timeout)
     else:
-        imap = imaplib.IMAP4(host, port)
+        imap = imaplib.IMAP4(host, port, timeout=timeout)
         if cfg.get("security") == "starttls":
             ctx = ssl.create_default_context()
             if not cfg.get("verify", True):
@@ -673,11 +770,21 @@ def _connect(account):
     if cfg.get("auth") == "oauth2":
         # XOAUTH2: frisches Access-Token holen (Refresh über den gespeicherten
         # refresh_token, core/mail_oauth.py). Token NIE persistiert, nur im RAM.
+        # `force_token` erzwingt ein neues Token (Retry, wenn das gecachte
+        # abgelehnt wurde). Scheitert die Auth, den Socket sauber schließen,
+        # damit der Aufrufer mit frischer Verbindung neu ansetzen kann.
         import mail_oauth
         user = account["user"]
-        token = mail_oauth.access_token_for(account)
+        token = mail_oauth.access_token_for(account, force_refresh=force_token)
         auth_str = f"user={user}\x01auth=Bearer {token}\x01\x01"
-        imap.authenticate("XOAUTH2", lambda _=None: auth_str.encode("utf-8"))
+        try:
+            imap.authenticate("XOAUTH2", lambda _=None: auth_str.encode("utf-8"))
+        except Exception:
+            try:
+                imap.logout()
+            except Exception:
+                pass
+            raise
     else:
         imap.login(account["user"], account["secret"])
     # Opt-in IMAP-Protokoll-Mitschnitt für die Fehlersuche. ERST NACH der
@@ -685,6 +792,93 @@ def _connect(account):
     if os.environ.get("MAIL_IMAP_DEBUG") == "1":
         imap.debug = 4
     return imap
+
+
+# ── Verbindungs-Pool: warme IMAP-Verbindungen wiederverwenden ─────────
+# Früher baute JEDE Lese-/Schreib-Operation (counts/folder/body/delete/assign)
+# eine FRISCHE TLS-Verbindung auf, meldete sich per XOAUTH2 an und loggte sich
+# danach wieder aus. Bei Outlook kostet allein dieses Handshake ~1-3 s — und
+# zwar pro Kategorie-Klick, pro geöffneter Mail, pro n/N. Genau das machte das
+# Panel zäh. Der Pool hält pro Konto EINE Verbindung warm und reicht sie wieder
+# her; ein Lock pro Konto serialisiert den Zugriff (imaplib ist nicht
+# thread-safe). Stirbt die Verbindung (Idle-Timeout des Servers, Outlook-
+# Drossel-EOF), fliegt sie raus und der nächste Borrow baut transparent neu auf.
+# Der Bulk-Poll (poll_account) und SMTP bleiben bewusst außen vor — die haben
+# eigene, langlebige Verbindungs-/Reconnect-Logik.
+_pool = {}            # name -> warmes imaplib-Objekt
+_pool_selected = {}   # name -> (folder, readonly) zuletzt selektiert (skip SELECT)
+_pool_locks = {}      # name -> threading.Lock (serialisiert Zugriff pro Konto)
+_pool_guard = threading.Lock()
+
+
+def _pool_lock_for(name):
+    with _pool_guard:
+        lk = _pool_locks.get(name)
+        if lk is None:
+            lk = _pool_locks[name] = threading.Lock()
+        return lk
+
+
+def _alive(imap):
+    """Billiger Lebens-Check: ein NOOP-Roundtrip statt voller TLS+Auth."""
+    try:
+        return imap.noop()[0] == "OK"
+    except Exception:
+        return False
+
+
+def _drop_conn(name, imap=None):
+    """Verbindung aus dem Pool werfen (nach Bruch / am Lebensende)."""
+    _pool.pop(name, None)
+    _pool_selected.pop(name, None)
+    if imap is not None:
+        try:
+            imap.logout()
+        except Exception:
+            pass
+
+
+@contextmanager
+def _session(account):
+    """Borgt eine warme IMAP-Verbindung fürs Konto (verbindet bei Bedarf neu).
+    Pro Konto serialisiert; bricht die Verbindung weg, fliegt sie aus dem Pool
+    und der nächste Borrow baut frisch auf."""
+    name = account["name"]
+    with _pool_lock_for(name):
+        imap = _pool.get(name)
+        if imap is None or not _alive(imap):
+            _drop_conn(name, imap)
+            try:
+                imap = _connect(account)
+            except imaplib.IMAP4.error as e:
+                # Der Server hat das (gecachte) Access-Token abgelehnt
+                # (AUTHENTICATIONFAILED — früh invalidiert / Uhr-Skew). Standard-
+                # OAuth-Retry: EINMAL mit erzwungenem Token-Refresh frisch
+                # verbinden, statt die ganze Operation fallen zu lassen.
+                state.push_log(f"MAIL: Login abgelehnt ({e}) — Token erneuern, "
+                               f"1× neu verbinden")
+                imap = _connect(account, force_token=True)
+            _pool[name] = imap
+        try:
+            yield imap
+        except _DROP_ERRORS:
+            _drop_conn(name, imap)
+            raise
+
+
+def _pselect(imap, name, folder, readonly=True):
+    """SELECT mit Gedächtnis: ist der Ordner schon im gewünschten Modus aktiv,
+    sparen wir den Roundtrip (n/N im selben Ordner → nur noch FETCH). Liefert
+    den IMAP-Status-String ('OK' / sonst)."""
+    key = (folder, readonly)
+    if _pool_selected.get(name) == key:
+        return "OK"
+    typ, _ = imap.select(_q(folder), readonly=readonly)
+    if typ == "OK":
+        _pool_selected[name] = key
+    else:
+        _pool_selected.pop(name, None)
+    return typ
 
 
 # ── Header-Parsing ────────────────────────────────────────────────────
@@ -820,6 +1014,35 @@ def _move_uid(imap, uid, target):
     imap.uid("STORE", uid, "+FLAGS", "(\\Deleted)")
     imap.expunge()
     return True
+
+
+def _move_uid_set(imap, uids, target, chunk=200):
+    """Mehrere UIDs in EINEM Rutsch nach `target` verschieben statt pro Mail ein
+    eigener Roundtrip (das war der Grund, warum Einsortieren so lange dauerte —
+    ein Absender mit 40 alten Mails = 40 sequentielle MOVEs an Outlook, das dabei
+    drosselt). `UID MOVE` mit Sequenz-Set; Fallback COPY+\\Deleted+EXPUNGE. In
+    Blöcken (`chunk`), damit die Kommandozeile nicht zu lang wird. Liefert die
+    Zahl erfolgreich verschobener Mails."""
+    uset_all = [u.decode() if isinstance(u, bytes) else str(u) for u in uids]
+    if not uset_all:
+        return 0
+    has_move = b"MOVE" in (imap.capabilities or ())
+    moved = 0
+    for i in range(0, len(uset_all), chunk):
+        part = uset_all[i:i + chunk]
+        uset = ",".join(part)
+        if has_move:
+            typ, _ = imap.uid("MOVE", uset, _q(target))
+            if typ == "OK":
+                moved += len(part)
+                continue
+        typ, _ = imap.uid("COPY", uset, _q(target))
+        if typ != "OK":
+            continue
+        imap.uid("STORE", uset, "+FLAGS", "(\\Deleted)")
+        imap.expunge()
+        moved += len(part)
+    return moved
 
 
 def _q(name):

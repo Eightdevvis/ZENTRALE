@@ -199,15 +199,32 @@ TUTOR_TOOLS = [
 # ── Tool-Dispatcher für ai.py ─────────────────────────────────────────
 # ai.py ruft dies auf wenn Mistral ein Tutor-Tool aufruft.
 
+# ── Cloud→Lokal-Sandbox (Choke-Point) ────────────────────────────────
+# Dies ist die EINZIGE Stelle, an der eine Tutor-/Cloud-AI etwas "ausführt".
+# Sie ist eine GESCHLOSSENE Allowlist: nur die 4 Vokabel-Tools, die
+# ausschließlich vocab_*.json anfassen. Damit kann die Cloud-AI NICHT in die
+# lokale AI greifen – kein graph/consolidation, keine lokalen Tools
+# (save_memory/read_file/web/mail/…), kein Datei-Whitelist-Zugriff. Wer hier
+# einen Tool-Namen ergänzt, erweitert bewusst die Reichweite der Cloud-AI.
+_ALLOWED = {
+    "get_confirmed_vocab":   lambda a: get_confirmed_vocab(),
+    "get_testing_vocab":     lambda a: get_testing_vocab(),
+    "increment_correct_use": lambda a: increment_correct_use(a.get("word", "")),
+    "introduce_new":         lambda a: introduce_new(a.get("word", ""), a.get("pinyin", "")),
+}
+
+
 def execute_tool(name: str, args: dict) -> str:
-    """Führt ein Tutor-Tool aus und gibt das Ergebnis zurück."""
-    if name == "get_confirmed_vocab":
-        return get_confirmed_vocab()
-    elif name == "get_testing_vocab":
-        return get_testing_vocab()
-    elif name == "increment_correct_use":
-        return increment_correct_use(args.get("word", ""))
-    elif name == "introduce_new":
-        return introduce_new(args.get("word", ""), args.get("pinyin", ""))
-    else:
-        return f"[Unbekanntes Tutor-Tool: {name}]"
+    """Führt ein Tutor-Tool aus. Allowlist-Sandbox: alles außerhalb der 4
+    Vokabel-Tools wird abgelehnt UND geflaggt (eine Cloud-AI, die ein lokales
+    Tool ruft, soll sichtbar sein, nicht still durchrutschen)."""
+    fn = _ALLOWED.get(name)
+    if fn is None:
+        try:
+            import state
+            state.push_log(f"⚠ TUTOR-SANDBOX: Tool '{name}' abgelehnt (nicht in der Allowlist)")
+        except Exception:
+            pass
+        return f"[Abgelehnt: '{name}' ist kein Tutor-Tool – die Tutor-/Cloud-AI " \
+               f"darf nur Vokabel-Tools nutzen.]"
+    return fn(args or {})

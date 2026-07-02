@@ -156,6 +156,20 @@ Browser-Panel `[~vorhersage: an/aus]` neben `[löschen]`; beides ruft
 Schätzung rendert aktuell in der TUI-`lifestyle`-Box; das Flag liegt aber pro
 Graph zentral, Fronten honorieren es, wo sie schätzen.
 
+**Tages-Reminder (`remind`/`remind_at`, default aus):** ein Graph kann täglich
+ans Eintragen erinnern. `remind: true` + `remind_at: "HH:MM"` → ab dieser Uhrzeit
+gilt der Graph als **fällig**, SOLANGE für *heute* noch kein Wert da ist; sobald
+geloggt, fällt er raus (erfüllt). Quelle ist `GET /api/graphs/reminders`
+(`core.graphs.due_reminders`: remind an, Uhrzeit erreicht, heute ungeloggt).
+Gesetzt wird's im Graph-Werkzeug: **Browser** Toggle + Uhrzeit-Feld im
+Anlege-Formular und `[⏰ remind: …]` nachträglich am Graphen; **TUI** Taste `r`
+(Uhrzeit eintippen; in der Liste steht `@HH:MM`). Beides ruft
+`POST /api/graphs/<gid>/remind {remind, at?}` (→ `core.graphs.set_remind`). Der
+Nag selbst poppt **einmal pro Sitzung**: Browser als »bitte eintragen«-Modal
+(`#rem-overlay`, `eintragen` öffnet das Graph-Werkzeug), TUI als zentriertes
+Kästchen (`g` = ins Werkzeug, sonst wegklicken). Wegklicken = Ruhe bis
+Sitzungsende für die gezeigten Graphen; neu fällige nagen weiter.
+
 **Listen-Werkzeug (Mitte, Taste `l`):** abhakbare Todo-/Sammel-Listen — Pendant
 zum Graph-Werkzeug, aber für „random stuff" statt Zeitreihen. Geteilte Logik
 (`core/lists.py` + `/api/lists`), hier in curses verbaut. `l` gibt der MITTE-Box
@@ -233,14 +247,29 @@ Achsen (Detail/Layer/Zeit): [maps_system.md](maps_system.md).
 **Kalender (Mitte, Taste `c`):** blätterbare **Woche** (Mo-So-Tagesliste) bzw.
 **Monat** (Zeichen-Gitter), umschaltbar. Wie die Karte reiner Zeichner: holt
 fertig gruppierte Tage über `/api/calendar` (Logik in `core/kalender.py`,
-`week_view`/`month_view`). Steuerung `←→`/`hl` blättern, `v`/`Tab` Woche↔Monat,
+`week_view`/`month_view`). Steuerung `←`/`h` bzw. `→` blättern (`l` ist jetzt
+Sidebar-Fokus, s.u.), `v`/`Tab` Woche↔Monat,
 `0` heute, `esc`/`c` zu. Heute hervorgehoben, Monats-Randtage ausgegraut,
 `ausfall`-Routinen als `ℹ`. **Anlegen/Ändern/Löschen + Routine-Deaktivieren:**
 der ›-Cursor (`↑↓`) läuft über ALLE Einträge (`k_selectable()`); `a` legt neu an,
 `e`/Enter bearbeitet (Einmal → gestaffeltes Formular, speichert per PUT; Routine →
-De-/Aktivieren-Screen), `d` löscht Einmal-Termine bzw. öffnet bei Routinen denselben
-Screen. Einzelne Routine-Vorkommen werden so pro Tag ab-/angeschaltet
-(`deaktiviert`, ausgegraut „(aus)"), ohne die Routine zu zerstören. Defensiv wie
+De-/Aktivieren-Screen; Spanne → Uhrzeit für diesen Tag), `d` löscht Einmal-Termine
+bzw. öffnet bei Routinen denselben Screen. Das Anlege-Formular (`a`) hat drei Typen
+(Tab: Termin → Routine → **Mehrtägig**); mehrtägige (ganztägige) Termine spannen
+über Von–Bis und erscheinen als **durchgehende Klammer in einer eigenen linken
+Spalte** (außerhalb der Tagesdaten), mit dem **Titel senkrecht am Stück** — der
+gewählte Tag wird invers markiert (unten `▶ titel · datum`). Einzelne Routine-Vorkommen werden so pro Tag ab-/angeschaltet
+(`deaktiviert`, ausgegraut „(aus)"), ohne die Routine zu zerstören. **`x`** blendet
+**erledigtes** ein/aus — EIN Schalter über deaktivierte Termine, per Zeitraum
+ausgefallene (`ausfall`, Ferien) UND abgehakte Sidebar-Items zusammen (Default
+aus, startet aufgeräumt). **Sidebar-Liste (rechts):** die flache »week«-Liste
+(`week_items`), wochenunabhängig, Items mit Abstand + Ombre (nach unten
+transparenter). **`l`** schiebt den Fokus in die Liste (nur Wochenansicht); dort
+`↑↓` wählen, `space`/enter abhaken, `a` neu, `r` umbenennen, `d` löschen, **`s`
+Sortier-Modus** (dann verschieben `↑↓` das fokussierte Item), `l`/esc zurück —
+**kein** Verschieben in andere Listen. Items, die per Listentool in die
+»week«-Liste kopiert wurden, sind verlinkt (`↔`): abhaken spiegelt bidirektional
+in die Quelle, Löschen bricht nur den Link. Defensiv wie
 der Karten-Pfad (Fehler-Marker statt Dauer-Refetch). Details + die zwei
 Browser-Fronten: [kalender_system.md](kalender_system.md).
 
@@ -323,10 +352,17 @@ animierter **ASCII-Kern** (`#core`), gesteuert vom *Exhibit-Direktor*
 > bei `graph` `#core` aus). Reiner Zeichner: Daten von `/api/calendar`
 > (`view`+`ref`), Datums-Logik in `core/kalender.py`. **Derselbe Endpoint** für
 > alle Fronten (Browser-Tab „Kalender", TUI-Taste `c`). „＋ Termin"-
-> Form legt Einmal-Termine an; pro Termin ✎ (bearbeiten → PUT) / ✕ (löschen);
+> Form hat drei Typen (Termin / Routine / **Mehrtägig** mit Von–Bis); pro Termin
+> ✎ (bearbeiten → PUT) / ✕ (löschen); mehrtägige Spannen als gepunkteter Chip mit
+> `┌│└`-Marker (Titel nur am ersten Tag), ✎ = Uhrzeit für diesen Tag, ✕ = ganze Spanne;
 > Routine-Vorkommen ⊘/↺ (diesen Tag de-/aktivieren → `…/routine/skip`),
-> deaktivierte durchgestrichen-grau. Schreiben ist direkte Nutzeraktion,
-> **nicht** KI-gegatet. Details:
+> deaktivierte durchgestrichen-grau. Der Knopf „🚫/👁 erledigte" blendet
+> deaktivierte + ausgefallene (Ferien) Termine + abgehakte Sidebar-Items **gemeinsam** ein/aus
+> (Default aus). **Rechte Sidebar** (`renderSidebar`): die flache »week«-Liste
+> (Abstand + Ombre nach unten) — klick abhaken, `▲▼` sortieren, `✎` umbenennen,
+> `✕` löschen, Add-Feld; verlinkte Kopien (`↔`) spiegeln beim Abhaken
+> bidirektional in die Quelle. Kein Move in andere Listen.
+> Schreiben ist direkte Nutzeraktion, **nicht** KI-gegatet. Details:
 > [kalender_system.md](kalender_system.md).
 
 > Die IIFEs sind getrennte Scopes. Cross-Scope-Signale laufen über den

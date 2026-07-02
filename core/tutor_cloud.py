@@ -10,8 +10,13 @@
 #
 # ── Sauberes Addon ──────────────────────────────────────────────────────
 # Dieses Modul ist ein DROP-IN für ai.chat_stream() mit identischer Signatur.
-# Es webt NICHTS in den Core-KI-Layer (core/ai.py) ein. tutor_session.py
-# wählt das Backend per TUTOR_BACKEND-Env-Var (local | cloud).
+# Es webt NICHTS in den Core-KI-Layer (core/ai.py) ein.
+#
+# ── Cloud→Lokal-Sandbox (Invariante) ────────────────────────────────────
+# Importiert WEDER ai/graph/consolidation NOCH führt es selbst Tools aus –
+# Tool-Calls gehen nur an den übergebenen tool_executor (= tutor.execute_tool,
+# geschlossene Vokabel-Allowlist). Die Cloud-AI kann darüber NICHT in die
+# lokale AI greifen (kein Graph, keine lokalen Tools, kein Datei-Zugriff).
 #
 # ── Offline-Prinzip ─────────────────────────────────────────────────────
 # ZENTRALE ist normalerweise vollständig offline. Dieses Backend bricht das

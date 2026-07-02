@@ -65,16 +65,36 @@ def list_graphs():
     return _load()
 
 
-def create_graph(name, gtype='number', unit=''):
+def _norm_hhmm(s):
+    """'HH:MM' validieren/normalisieren. '' bleibt '' (kein Reminder). Wirft
+    ValueError bei Unsinn. Genutzt für die Reminder-Uhrzeit (remind_at)."""
+    s = (s or '').strip()
+    if not s:
+        return ''
+    m = re.match(r'^(\d{1,2}):(\d{2})$', s)
+    if not m:
+        raise ValueError('uhrzeit muss HH:MM sein')
+    h, mi = int(m.group(1)), int(m.group(2))
+    if not (0 <= h <= 23 and 0 <= mi <= 59):
+        raise ValueError('uhrzeit ausserhalb 00:00–23:59')
+    return '%02d:%02d' % (h, mi)
+
+
+def create_graph(name, gtype='number', unit='', remind=False, remind_at=''):
     """
     Neuen Graphen anlegen. Liefert die Definition zurück.
-    Wirft ValueError bei leerem Namen oder unbekanntem Typ.
+    Wirft ValueError bei leerem Namen, unbekanntem Typ oder kaputter Uhrzeit.
+    remind/remind_at: optionaler Tages-Reminder (siehe set_remind).
     """
     name = (name or '').strip()
     if not name:
         raise ValueError('Name fehlt')
     if gtype not in VALID_TYPES:
         raise ValueError('Typ muss number oder scale sein')
+    remind_at = _norm_hhmm(remind_at)
+    remind = bool(remind)
+    if remind and not remind_at:
+        remind_at = '20:00'   # an, aber keine Uhrzeit → sinnvoller Default
 
     graphs = _load()
     # id aus dem Namen ableiten, kollisionsfrei machen (g_<slug>, _2, _3 …)
@@ -92,6 +112,8 @@ def create_graph(name, gtype='number', unit=''):
         'unit': (unit or '').strip() if gtype == 'number' else '',
         'created': datetime.now().isoformat(),
         'predict': False,   # Lücken-Tage in der lifestyle-Box aus dem Schnitt schätzen?
+        'remind': remind,   # täglich ans Eintragen erinnern, bis für den Tag geloggt?
+        'remind_at': remind_at,   # ab welcher Uhrzeit erinnert wird ('' = aus)
     }
     graphs.append(graph)
     _save(graphs)
@@ -113,6 +135,66 @@ def set_predict(gid, on):
     g['predict'] = bool(on)
     _save(graphs)
     return g
+
+
+def set_remind(gid, on, at=None):
+    """
+    Tages-Reminder eines Graphen setzen/löschen. Ist er an, melden die Fronten
+    (Dashboard + TUI) ab der Uhrzeit »bitte eintragen«, SOLANGE für den heutigen
+    Tag noch kein Wert da ist — sobald geloggt, ist der Reminder erfüllt und
+    verschwindet (siehe due_reminders). Default aus. Liefert den Graphen.
+    `at` (HH:MM): None = Uhrzeit unverändert lassen, sonst neu setzen ('' = leer).
+    Wirft KeyError bei unbekanntem Graphen, ValueError bei kaputter Uhrzeit.
+    """
+    graphs = _load()
+    g = next((x for x in graphs if x.get('id') == gid), None)
+    if g is None:
+        raise KeyError(gid)
+    g['remind'] = bool(on)
+    if at is not None:
+        g['remind_at'] = _norm_hhmm(at)
+    if g['remind'] and not g.get('remind_at'):
+        g['remind_at'] = '20:00'   # an, aber keine Uhrzeit → sinnvoller Default
+    _save(graphs)
+    return g
+
+
+def _logged_today(gid, today):
+    """True, wenn data/<gid>.json schon einen Eintrag mit date==today trägt.
+    Quelle ist dieselbe Messwert-Datei, die /api/log schreibt."""
+    path = os.path.join(_DATA_DIR, gid + '.json')
+    if not os.path.exists(path):
+        return False
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            rows = json.load(f)
+    except Exception:
+        return False
+    return any(isinstance(e, dict) and e.get('date') == today for e in (rows or []))
+
+
+def due_reminders(now=None):
+    """
+    Graphen mit JETZT fälligem Tages-Reminder: remind=an, die Tages-Uhrzeit ist
+    erreicht/überschritten UND für HEUTE wurde noch kein Wert eingetragen. Sobald
+    für den Tag geloggt ist, fällt der Graph hier raus (Reminder erfüllt).
+    Liefert [{id, name, remind_at}, …]. `now` = datetime (Default: jetzt).
+    Geteilte Quelle für monolith/laptop (Modal) und TUI (Nag).
+    """
+    now = now or datetime.now()
+    today = now.date().isoformat()
+    cur = now.strftime('%H:%M')   # HH:MM, nullgepolstert → String-Vergleich ok
+    due = []
+    for g in _load():
+        if not g.get('remind'):
+            continue
+        at = g.get('remind_at') or ''
+        if at and cur < at:
+            continue
+        if _logged_today(g.get('id'), today):
+            continue
+        due.append({'id': g.get('id'), 'name': g.get('name'), 'remind_at': at})
+    return due
 
 
 def delete_graph(gid):

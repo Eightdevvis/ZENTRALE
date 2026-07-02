@@ -159,6 +159,72 @@ def add_entry(layer: str, day: str, label: str,
         return True
 
 
+def add_span(layer: str, von: str, bis: str, label: str, **extras) -> bool:
+    """
+    Trägt einen MEHRTÄGIGEN (ganztägigen) Termin ein: einen Einmal-Eintrag mit
+    `bis`-Datum, gespeichert unter dem Start-Tag `von`. `entries_in_range`
+    expandiert ihn dann über die ganze Spanne [von, bis] (inklusive).
+
+      von/bis – YYYY-MM-DD; bis muss >= von sein.
+      label   – Titel.
+      extras  – Zusatzfelder (ort, …). Uhrzeiten werden NICHT pauschal gesetzt
+                (ganztägig); pro Tag optional über `set_span_time`.
+    Defensiv: ungültige/verdrehte Daten oder unbekannter Layer → False.
+    """
+    try:
+        d0 = date.fromisoformat(von)
+        d1 = date.fromisoformat(bis)
+    except (TypeError, ValueError):
+        state.push_log(f"[calendar] ungültige Spannen-Daten {von!r}/{bis!r}")
+        return False
+    if d1 < d0:
+        state.push_log(f"[calendar] Spanne verdreht: bis {bis} < von {von}")
+        return False
+    with _lock:
+        data = _load_raw()
+        if layer not in data.get("layers", {}):
+            state.push_log(f"[calendar] unbekannter Layer: {layer}")
+            return False
+        entries = data["layers"][layer].setdefault("entries", {})
+        entry: dict = {"label": label, "bis": bis}
+        entry.update(extras)
+        entries.setdefault(von, []).append(entry)
+        _save_raw(data)
+        return True
+
+
+def set_span_time(layer: str, von: str, label: str, day: str,
+                  time: str | None) -> bool:
+    """
+    Für EINEN Tag einer mehrtägigen Spanne eine Uhrzeit setzen bzw. löschen
+    (leeres `time` = wieder ganztägig an dem Tag). Die Spanne wird über ihren
+    Start-Tag `von` + `label` (case-insensitiv, exakt) gefunden; die Uhrzeit
+    landet in `times[day]` an der Spanne. Liefert True bei Treffer.
+    """
+    needle = (label or "").strip().lower()
+    time = (time or "").strip() or None
+    with _lock:
+        data = _load_raw()
+        lobj = data.get("layers", {}).get(layer)
+        if not lobj:
+            return False
+        for e in (lobj.get("entries", {}).get(von) or []):
+            if not isinstance(e, dict) or not e.get("bis"):
+                continue
+            if (e.get("label", "").strip().lower()) != needle:
+                continue
+            times = e.setdefault("times", {})
+            if time:
+                times[day] = time
+            else:
+                times.pop(day, None)
+            if not times:
+                e.pop("times", None)      # leere Map wieder entfernen (sauber)
+            _save_raw(data)
+            return True
+    return False
+
+
 def delete_entry(day: str, label: str, layer: str | None = None) -> int:
     """
     Löscht Einmal-Einträge an einem Tag, deren Label passt.
@@ -492,14 +558,45 @@ def entries_in_range(start: date, end: date,
         if not layer:
             continue
 
-        # 1. Einmal-Einträge
+        # 1. Einmal-Einträge (inkl. mehrtägiger Spannen mit `bis`)
         for day_iso, day_entries in layer.get("entries", {}).items():
             try:
-                d = date.fromisoformat(day_iso)
+                d0 = date.fromisoformat(day_iso)
             except ValueError:
                 continue
-            if start <= d <= end:
-                for e in day_entries:
+            for e in day_entries:
+                bis_s = e.get("bis") if isinstance(e, dict) else None
+                if bis_s:
+                    # Mehrtägiger Termin: über [von, bis] ∩ [start, end] verteilen.
+                    # Jeder Tag bekommt eine eigene Kopie mit Spann-Markern; die
+                    # optionale Pro-Tag-Uhrzeit kommt aus `times`. `bis`/`times`
+                    # selbst wandern NICHT als Rohfelder in die Kopie.
+                    try:
+                        d1 = date.fromisoformat(bis_s)
+                    except (TypeError, ValueError):
+                        d1 = d0
+                    if d1 < d0:
+                        d1 = d0
+                    times = e.get("times") if isinstance(e.get("times"), dict) else {}
+                    cur = max(d0, start)
+                    last = min(d1, end)
+                    while cur <= last:
+                        ci = cur.isoformat()
+                        copy = {k: v for k, v in e.items()
+                                if k not in ("bis", "times")}
+                        copy.update({
+                            "layer": layer_name, "spanning": True,
+                            "von": day_iso, "bis": bis_s,
+                            "span_first": (cur == d0), "span_last": (cur == d1),
+                        })
+                        t = times.get(ci)
+                        if t:
+                            copy["time"] = t          # Uhrzeit nur für diesen Tag
+                        else:
+                            copy.pop("time", None)     # sonst ganztägig
+                        out.setdefault(ci, []).append(copy)
+                        cur += timedelta(days=1)
+                elif start <= d0 <= end:
                     out.setdefault(day_iso, []).append({
                         "layer": layer_name,
                         **e,
@@ -564,7 +661,10 @@ def entries_in_range(start: date, end: date,
 def week_view(reference: date | None = None,
               only_default_visible: bool = True) -> dict:
     """
-    Liefert die laufende Woche (Mo-So) um `reference` herum.
+    Liefert die laufende Kalenderwoche (Mo-So) um `reference`. Die Anzeige
+    beginnt IMMER am Montag. Die Sidebar-Liste (lists.week_items) ist davon
+    unabhängig — sie ist ein flacher, wochenunabhängiger Vorrat und wird von der
+    Front separat rechts neben dem Gitter gezeigt.
 
     only_default_visible=True (Default) zeigt nur Layer mit
     default_visible=True - sonst würde der `erlebt`-Auto-Layer den

@@ -10,6 +10,13 @@
 # ein (sauberes Addon). Tools = TUTOR_TOOLS sind bereits OpenAI-Schema, also
 # OHNE Übersetzung direkt nutzbar (anders als der Anthropic-Pfad).
 #
+# ── Cloud→Lokal-Sandbox (Invariante) ────────────────────────────────────
+# Dieses Modul importiert WEDER ai/graph/consolidation/context NOCH führt es
+# selbst Tools aus – es reicht Tool-Calls nur an den übergebenen tool_executor
+# (= tutor.execute_tool, geschlossene Vokabel-Allowlist) durch. Die Cloud-AI
+# kann darüber NICHT in die lokale AI greifen (kein Memory-Graph, keine lokalen
+# Tools, kein Datei-Zugriff). Diese Trennung NIE aufweichen.
+#
 # ── Streaming-Tool-Loop ─────────────────────────────────────────────────
 # Streamt Text-Deltas; akkumuliert fragmentierte tool_calls-Deltas; bei
 # finish_reason='tool_calls' werden die Tutor-Tools ausgeführt und die

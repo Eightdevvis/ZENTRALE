@@ -73,6 +73,15 @@ def _ki_aus():
     return jsonify({"error": "KI in dieser Kassette deaktiviert"}), 503
 
 
+# Tutor-spezifisch: NICHT kassetten-hart, sondern kapazitaetsbasiert. Der Tutor
+# laeuft, sobald das Backend seines Providers da ist (lokal ODER cloud) – auch
+# auf laptop/tui. Fehlt es, sagen wir das ehrlich ("backend not here").
+def _tutor_unavail():
+    return jsonify({"error": "backend not here",
+                    "detail": "Tutor-Backend nicht erreichbar (Provider-Backend fehlt "
+                              "oder Cloud gedrosselt)."}), 503
+
+
 # ── Dashboard ─────────────────────────────────────────────────────────
 
 @app.route('/')
@@ -232,11 +241,14 @@ def api_graphs():
 def api_graphs_create():
     """
     Neuen Graphen anlegen.
-    Body (JSON): {"name": "Gewicht", "type": "number"|"scale", "unit": "kg"}
+    Body (JSON): {"name": "Gewicht", "type": "number"|"scale", "unit": "kg",
+                  "remind": true|false, "remind_at": "HH:MM"}
+    remind/remind_at optional → Tages-Reminder gleich beim Anlegen mitgeben.
     """
     body = request.get_json(silent=True) or {}
     try:
-        g = graphs.create_graph(body.get('name'), body.get('type', 'number'), body.get('unit', ''))
+        g = graphs.create_graph(body.get('name'), body.get('type', 'number'), body.get('unit', ''),
+                                remind=bool(body.get('remind')), remind_at=body.get('remind_at', ''))
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     state.push_log(f"GRAPH+: {g['id']} ({g['type']})")
@@ -265,6 +277,34 @@ def api_graphs_set_predict(gid):
         return jsonify({"error": "unbekannter graph"}), 404
     state.push_log(f"GRAPH~predict {'an' if g.get('predict') else 'aus'}: {gid}")
     return jsonify(g)
+
+
+@app.route('/api/graphs/<gid>/remind', methods=['POST'])
+def api_graphs_set_remind(gid):
+    """
+    Tages-Reminder eines Graphen setzen/löschen. Ab `at` erinnern die Fronten
+    täglich ans Eintragen, bis für den Tag ein Wert da ist. Default aus.
+    Body (JSON): {"remind": true|false, "at": "HH:MM"} (at optional → unverändert)
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        g = graphs.set_remind(gid, bool(body.get('remind')), body.get('at'))
+    except KeyError:
+        return jsonify({"error": "unbekannter graph"}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    state.push_log(f"GRAPH~remind {('an ' + g.get('remind_at', '')) if g.get('remind') else 'aus'}: {gid}")
+    return jsonify(g)
+
+
+@app.route('/api/graphs/reminders')
+def api_graphs_reminders():
+    """
+    Graphen mit JETZT fälligem Tages-Reminder (remind an, Uhrzeit erreicht, heute
+    noch nicht geloggt). Geteilte Quelle: monolith/laptop ziehen daraus das
+    »bitte eintragen«-Modal, die TUI ihren Nag. Liefert [{id, name, remind_at}].
+    """
+    return jsonify(graphs.due_reminders())
 
 
 # ── Listen (dynamisch, vom Dashboard angelegt) ─────────────────────────
@@ -448,6 +488,20 @@ def api_lists_move_item(lid, iid):
     return jsonify(node)
 
 
+@app.route('/api/lists/<lid>/items/<int:iid>/reorder', methods=['POST'])
+def api_lists_reorder_item(lid, iid):
+    """
+    Einen Eintrag INNERHALB seiner Geschwister-Ebene verschieben (Reihenfolge).
+    Body (JSON): {"delta": -1|+1} — rauf/runter, geklemmt am Rand.
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        moved = lists.reorder_item(lid, iid, body.get('delta', 0))
+    except KeyError:
+        return jsonify({"error": "unbekannte liste/eintrag"}), 404
+    return jsonify({"moved": bool(moved)})
+
+
 @app.route('/api/lists/<lid>/items/<int:iid>', methods=['DELETE'])
 def api_lists_delete_item(lid, iid):
     """Einen Eintrag aus einer Liste löschen."""
@@ -600,10 +654,19 @@ def api_calendar():
         out = kalender.month_view(ref)
     else:
         view = 'week'                       # alles != month → Woche (robust)
-        out = kalender.week_view(ref)
+        out = kalender.week_view(ref)       # immer Mo-So
         start = date.fromisoformat(out['start'])
         end = date.fromisoformat(out['end'])
         out['label'] = f"{start.strftime('%d.%m.')}–{end.strftime('%d.%m.%Y')}"
+
+    # Kalender-Sidebar-Liste (die flache »week«-Liste). Wochenunabhängiger
+    # Vorrat → in BEIDER Ansicht gleich; Form {lid, items:[{id,text,done,
+    # linked}]}. Nur Anzeige/Bearbeitung über die vorhandenen /api/lists-
+    # Endpoints; defensiv, nie crashen.
+    try:
+        out['weekplan'] = lists.week_items()
+    except Exception:
+        out['weekplan'] = {"lid": None, "items": []}
 
     out['view'] = view
     out['ref'] = ref.isoformat()
@@ -649,6 +712,18 @@ def api_calendar_add_entry():
         v = (body.get(k) or '').strip()
         if v:
             extras[k] = v
+    # Mehrtägiger (ganztägiger) Termin: `bis`-Datum gesetzt → Spanne statt
+    # Einmal-Termin. Kein Konflikt-Check (ganztägig, kein Zeit-Slot).
+    bis = (body.get('bis') or '').strip()
+    if bis:
+        try:
+            date.fromisoformat(bis)
+        except (TypeError, ValueError):
+            return jsonify({"error": "bis muss YYYY-MM-DD sein"}), 400
+        ok = kalender.add_span(layer, day, bis, label, **extras)
+        if not ok:
+            return jsonify({"error": "spanne abgelehnt (bis<von? layer?)"}), 400
+        return jsonify({"ok": True, "conflicts": [], "spanning": True})
     conflicts = kalender.conflicts_for_proposed(layer, day, label, time=time)
     ok = kalender.add_entry(layer, day, label, time=time, **extras)
     if not ok:
@@ -709,6 +784,25 @@ def api_calendar_edit_entry():
     if not ok:
         return jsonify({"error": "neuer eintrag abgelehnt"}), 400
     return jsonify({"ok": True, "conflicts": conflicts})
+
+
+@app.route('/api/calendar/entry/spantime', methods=['POST'])
+def api_calendar_span_time():
+    """
+    Für EINEN Tag einer mehrtägigen Spanne eine Uhrzeit setzen/löschen (leeres
+    `time` = wieder ganztägig). Die Spanne wird über `von` (Start-Tag) + `label`
+    + `layer` gefunden. Body: {layer?, von, label, day, time?}. Antwort {ok}.
+    """
+    body = request.get_json(silent=True) or {}
+    von = (body.get('von') or '').strip()
+    label = (body.get('label') or '').strip()
+    day = (body.get('day') or '').strip()
+    layer = (body.get('layer') or 'termine').strip() or 'termine'
+    time = (body.get('time') or '').strip() or None
+    if not von or not label or not day:
+        return jsonify({"error": "von, label, day nötig"}), 400
+    ok = kalender.set_span_time(layer, von, label, day, time)
+    return jsonify({"ok": bool(ok)})
 
 
 @app.route('/api/calendar/routine/skip', methods=['POST'])
@@ -1134,10 +1228,19 @@ def api_tutor_status():
     })
 
 
-@app.route('/api/ai/backends')
+@app.route('/api/ai/backends', methods=['GET', 'POST'])
 def api_ai_backends():
     """Welche AI-Backends sind auf diesem Geraet erreichbar (local/cloud)?
-    Speist die EXTERNAL-Box + das kapazitaetsbasierte Modul-Gating."""
+    Speist die EXTERNAL-Box + das kapazitaetsbasierte Modul-Gating.
+
+    POST {cloud_enabled: bool} legt den Cloud-Kill-Switch um (Datenschutz-/
+    Kosten-Drossel, persistiert in data/tutor_config.json). GET liefert Status
+    inkl. cloud_enabled. Frisch nach Toggle (kein Cache-Delay)."""
+    if request.method == 'POST':
+        body = request.get_json() or {}
+        if 'cloud_enabled' in body:
+            ai_backends.set_cloud_enabled(bool(body['cloud_enabled']))
+        return jsonify(ai_backends.status(fresh=True))
     return jsonify(ai_backends.status())
 
 
@@ -1186,8 +1289,8 @@ def api_tutor_start():
     get_confirmed_vocab()/get_testing_vocab() (Tool-Calls) und begruesst auf
     Mandarin.
     """
-    if kassette.ki_aus():
-        return _ki_aus()
+    if not tutor_session.available():
+        return _tutor_unavail()
 
     if not tutor_session.is_active():
         tutor_session.activate()
@@ -1211,8 +1314,8 @@ def api_tutor_respond():
     Nimmt transkribierten Text entgegen, schickt ihn an die KI (Tutor-Modus)
     und streamt die Antwort zurueck. Body: JSON {"text": "我很好"}.
     """
-    if kassette.ki_aus():
-        return _ki_aus()
+    if not tutor_session.available():
+        return _tutor_unavail()
     if not tutor_session.is_active():
         return jsonify({"error": "Keine aktive Tutor-Session"}), 400
 
@@ -1252,8 +1355,141 @@ _mail_poll_running = {"on": False}
 # Hintergrund aufgefrischt (POST /api/mail/refresh-counts) und von /api/mail
 # nur GELESEN — so bleibt das Panel schnell, während die echten Zahlen
 # nachtröpfeln. {kat: anzahl}; leer, solange noch nie/ohne Key aufgefrischt.
+# PERSISTIERT auf Disk (data/mail_counts.json): sonst zeigt das Panel nach jedem
+# Backend-Neustart erst den mageren lokalen Schnappschuss (nur letzte ~200 Mails
+# → z.B. „171") und muss die echten Zahlen (z.B. 1000+) neu ersweepen. Mit
+# Persistenz stehen die letzten ECHTEN Zahlen sofort da; die TTL frischt sie
+# danach im Hintergrund einmal auf.
 _mail_live = {"counts": {}, "ts": 0.0, "refreshing": False}
 _mail_live_lock = threading.Lock()
+_MAIL_COUNTS_FILE = os.path.join(_DATA_DIR, "mail_counts.json")
+
+
+def _mail_counts_load():
+    """Zuletzt persistierte Live-Zahlen beim Start in den Cache holen (best
+    effort — fehlt/kaputt die Datei, bleibt der Cache einfach leer)."""
+    try:
+        with open(_MAIL_COUNTS_FILE, "r", encoding="utf-8") as f:
+            d = json.load(f)
+        if isinstance(d.get("counts"), dict):
+            _mail_live["counts"] = d["counts"]
+            _mail_live["ts"] = float(d.get("ts") or 0.0)
+    except Exception:
+        pass
+
+
+def _mail_counts_save():
+    """Den frischen Zähl-Stand atomar auf Disk schreiben (überlebt Neustart)."""
+    try:
+        os.makedirs(_DATA_DIR, exist_ok=True)
+        tmp = _MAIL_COUNTS_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"counts": _mail_live["counts"], "ts": _mail_live["ts"]},
+                      f, ensure_ascii=False)
+        os.replace(tmp, _MAIL_COUNTS_FILE)
+    except Exception as e:
+        state.push_log(f"MAIL: Zähl-Cache speichern — {type(e).__name__}: {e}")
+
+
+_mail_counts_load()
+
+
+# ── Ordner-Inhalts-Cache (Header-Listen je Kategorie) ────────────────────
+# Jeder Ordner-Aufruf machte bisher einen vollen IMAP SELECT+SEARCH+FETCH → das
+# spürbare „lädt ordner…" bei JEDEM Öffnen. Jetzt: den Inhalt je Kategorie cachen,
+# beim Öffnen SOFORT aus dem Cache liefern und (erst wenn abgelaufen) im Hinter-
+# grund auffrischen. Persistiert auf Disk (data/mail_folders.json) → auch das
+# erste Öffnen nach Neustart ist instant. {cat: {"mails":[...], "ts":float}}.
+_mail_folders = {}
+_mail_folders_lock = threading.Lock()
+_mail_folders_refreshing = set()
+_MAIL_FOLDERS_FILE = os.path.join(_DATA_DIR, "mail_folders.json")
+
+
+def _mail_folders_load():
+    try:
+        with open(_MAIL_FOLDERS_FILE, "r", encoding="utf-8") as f:
+            d = json.load(f)
+        if isinstance(d, dict):
+            for cat, ent in d.items():
+                if isinstance(ent, dict) and isinstance(ent.get("mails"), list):
+                    _mail_folders[cat] = {"mails": ent["mails"],
+                                          "ts": float(ent.get("ts") or 0.0)}
+    except Exception:
+        pass
+
+
+def _mail_folders_save():
+    try:
+        os.makedirs(_DATA_DIR, exist_ok=True)
+        with _mail_folders_lock:
+            snap = {c: {"mails": e["mails"], "ts": e["ts"]}
+                    for c, e in _mail_folders.items()}
+        tmp = _MAIL_FOLDERS_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(snap, f, ensure_ascii=False)
+        os.replace(tmp, _MAIL_FOLDERS_FILE)
+    except Exception as e:
+        state.push_log(f"MAIL: Ordner-Cache speichern — {type(e).__name__}: {e}")
+
+
+_mail_folders_load()
+
+
+def _folder_fetch_store(cat):
+    """Ordner-Inhalt LIVE holen und in Cache + auf Disk ablegen; gibt die
+    Mail-Liste zurück."""
+    mails = mail.folder_mails(cat, limit=200)
+    with _mail_folders_lock:
+        _mail_folders[cat] = {"mails": mails, "ts": time.time()}
+    _mail_folders_save()
+    return mails
+
+
+def _folder_refresh_async(cat):
+    """Ordner im Hintergrund auffrischen (dedup je Kategorie). True, wenn ein
+    Refresh läuft bzw. gestartet wurde."""
+    with _mail_folders_lock:
+        if cat in _mail_folders_refreshing:
+            return True
+        _mail_folders_refreshing.add(cat)
+
+    def _run():
+        try:
+            _folder_fetch_store(cat)
+        except Exception as e:
+            state.push_log(f"MAIL: Ordner-Auffrischung ({cat}) — "
+                           f"{type(e).__name__}: {e}")
+        finally:
+            with _mail_folders_lock:
+                _mail_folders_refreshing.discard(cat)
+
+    threading.Thread(target=_run, daemon=True, name="mail-folder").start()
+    return True
+
+
+def _folder_cache_drop(*cats):
+    """Cache einzelner Kategorien verwerfen (nach Umsortieren/Poll) → das nächste
+    Öffnen holt garantiert frisch."""
+    changed = False
+    with _mail_folders_lock:
+        for c in cats:
+            if c and _mail_folders.pop(c, None) is not None:
+                changed = True
+    if changed:
+        _mail_folders_save()
+
+
+def _folder_cache_remove_uid(cat, uid):
+    """Eine gelöschte Mail SOFORT aus dem Cache nehmen, damit sie beim nächsten
+    (gecachten) Öffnen nicht wieder auftaucht."""
+    with _mail_folders_lock:
+        ent = _mail_folders.get(cat)
+        if ent:
+            ent["mails"] = [m for m in ent["mails"] if m.get("uid") != uid]
+        else:
+            return
+    _mail_folders_save()
 
 
 @app.route('/api/mail')
@@ -1284,6 +1520,15 @@ def api_mail_refresh_counts():
     gegatet, Parallel-Refresh verhindert."""
     if not mail_secrets.available():
         return jsonify({"ok": False, "error": "kein key"}), 409
+    # Frische Zahlen nicht unnötig neu sweepen: ein STATUS-Sweep über alle
+    # Kategorie-Ordner belegt die (eine) gepoolte Verbindung und lässt einen
+    # gleichzeitigen Ordner-Aufruf warten. Innerhalb der TTL → Cache behalten,
+    # außer `?force=1` (bewusstes Auffrischen, z.B. nach Poll/Umsortieren).
+    ttl = float(os.environ.get("MAIL_COUNTS_TTL_S", "90"))
+    if not request.args.get("force"):
+        age = (time.time() - _mail_live["ts"]) if _mail_live["ts"] else None
+        if age is not None and age < ttl and _mail_live["counts"]:
+            return jsonify({"ok": True, "cached": True, "age_s": age})
     with _mail_live_lock:
         if _mail_live["refreshing"]:
             return jsonify({"ok": True, "already": True})
@@ -1291,8 +1536,27 @@ def api_mail_refresh_counts():
 
     def _run():
         try:
-            _mail_live["counts"] = mail.folder_counts()
-            _mail_live["ts"] = time.time()
+            fresh = mail.folder_counts()
+            # Ein gedrosselter/abgebrochener STATUS-Sweep liefert eine LEERE
+            # oder LÜCKENHAFTE Zählung (ein Ordner, der Outlook-throttlet, fehlt
+            # einfach). Die dürfen die guten persistierten Zahlen NICHT platt-
+            # machen — sonst zeigt das Panel nach Neustart wieder den mageren
+            # 171er-Schnappschuss und muss neu zählen. Regeln:
+            #   • leeres Ergebnis (Totalausfall) → gar nichts überschreiben.
+            #   • sonst frisch ÜBER alt mergen: ein Ordner, der diesmal nicht
+            #     geantwortet hat, behält seinen letzten echten Wert.
+            # Auf gültige Kategorien beschränken, damit gelöschte nicht spuken.
+            if fresh:
+                valid = {c["name"] for c in mail.category_overview()}
+                merged = dict(_mail_live["counts"])
+                merged.update(fresh)
+                merged = {k: v for k, v in merged.items() if k in valid}
+                _mail_live["counts"] = merged
+                _mail_live["ts"] = time.time()
+                _mail_counts_save()      # echte Zahlen überleben den Neustart
+            else:
+                state.push_log("MAIL: Ordnerzählung leer (throttle?) — "
+                               "behalte alten Zähl-Stand")
         except Exception as e:
             state.push_log(f"MAIL: Ordnerzählung — {type(e).__name__}: {e}")
         finally:
@@ -1304,20 +1568,38 @@ def api_mail_refresh_counts():
 
 @app.route('/api/mail/folder')
 def api_mail_folder():
-    """Die Mails EINER Kategorie. Mit Key + eigenem Ordner: LIVE aus dem echten
-    IMAP-Ordner (voller Inhalt). Sonst (trash-Kategorie oder kein Key): lokaler
-    Schnappschuss. Query: `cat` (Kategoriename). `live` sagt, welche Quelle."""
+    """Die Mails EINER Kategorie. Serviert SOFORT aus dem Ordner-Cache (kein
+    Warten aufs IMAP) und frischt bei abgelaufenem Cache im Hintergrund auf; nur
+    der allererste Aufruf je Kategorie (kalter Cache) holt synchron. `?force=1`
+    umgeht den Cache und holt synchron frisch (nach Umsortieren/Löschen). Ohne
+    Key oder ohne eigenen Ordner: lokaler Schnappschuss. `cached`/`refreshing`
+    sagen, ob die Liste aus dem Cache kam und ob im Hintergrund nachgezogen wird."""
     cat = request.args.get('cat', '')
     if not cat:
         return jsonify({"error": "cat fehlt"}), 400
+    force = bool(request.args.get('force'))
+    ttl = float(os.environ.get("MAIL_FOLDER_TTL_S", "120"))
     try:
-        if mail_secrets.available():
-            mails = mail.folder_mails(cat, limit=200)
-            src = "live"
-        else:
+        if not mail_secrets.available():
             mails = mail.in_category(cat, limit=200)
-            src = "snapshot"
-        return jsonify({"cat": cat, "mails": mails, "live": src == "live", "source": src})
+            return jsonify({"cat": cat, "mails": mails, "live": False,
+                            "source": "snapshot"})
+        if force:                       # bewusst frisch (nach Mutation)
+            mails = _folder_fetch_store(cat)
+            return jsonify({"cat": cat, "mails": mails, "live": True,
+                            "source": "live", "cached": False, "refreshing": False})
+        with _mail_folders_lock:
+            ent = _mail_folders.get(cat)
+            ent = {"mails": ent["mails"], "ts": ent["ts"]} if ent else None
+        if ent is not None:             # instant aus Cache, ggf. Hintergrund-Refresh
+            age = time.time() - ent["ts"]
+            refreshing = _folder_refresh_async(cat) if age >= ttl else False
+            return jsonify({"cat": cat, "mails": ent["mails"], "live": True,
+                            "source": "cache", "cached": True,
+                            "age_s": age, "refreshing": refreshing})
+        mails = _folder_fetch_store(cat)   # kalt: einmal synchron, dann gecacht
+        return jsonify({"cat": cat, "mails": mails, "live": True,
+                        "source": "live", "cached": False, "refreshing": False})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1325,7 +1607,9 @@ def api_mail_folder():
 @app.route('/api/mail/body')
 def api_mail_body():
     """Voller Text + Header EINER Mail (Lesemodus). LIVE aus dem Ordner; braucht
-    Key. Query: `cat`, `uid`, optional `account`."""
+    Key. Query: `cat`, `uid`, optional `account`, optional `prefetch` (Komma-
+    Liste von Nachbar-uids → werden im Hintergrund in den Body-Cache geholt,
+    damit n/N im Panel instant ist)."""
     cat = request.args.get('cat', '')
     uid = request.args.get('uid', type=int)
     account = request.args.get('account') or None
@@ -1334,9 +1618,18 @@ def api_mail_body():
     if not mail_secrets.available():
         return jsonify({"error": "kein key — Body nur live lesbar"}), 409
     try:
-        return jsonify(mail.mail_body(cat, uid, account_name=account))
+        body = mail.mail_body(cat, uid, account_name=account)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    # Nachbarn vorwärmen (best-effort, nie blockierend) — die nächste/vorige
+    # Mail liegt dann schon im Cache, wenn der Nutzer weiterblättert.
+    pf = request.args.get('prefetch', '')
+    neigh = [int(x) for x in pf.split(',') if x.strip().lstrip('-').isdigit()]
+    if neigh:
+        threading.Thread(
+            target=lambda: mail.prefetch_bodies(cat, neigh, account_name=account),
+            daemon=True, name="mail-prefetch").start()
+    return jsonify(body)
 
 
 @app.route('/api/mail/assign', methods=['POST'])
@@ -1352,6 +1645,9 @@ def api_mail_assign():
         return jsonify({"error": "sender/category fehlt"}), 400
     try:
         res = mail.refile_sender(sender, category)
+        # Beide betroffenen Ordner-Caches verwerfen (Herkunft + Ziel), damit das
+        # nächste Öffnen die verschobenen Mails korrekt zeigt.
+        _folder_cache_drop(category, res.get("moved_from"))
         return jsonify({"ok": True, **res})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1371,6 +1667,8 @@ def api_mail_delete():
         return jsonify({"error": "cat/uid fehlt"}), 400
     try:
         ok = mail.delete_mail(cat, int(uid), account_name=account)
+        if ok:                          # gelöschte Mail sofort aus dem Cache nehmen
+            _folder_cache_remove_uid(cat, int(uid))
         return jsonify({"ok": bool(ok)}), (200 if ok else 502)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1378,9 +1676,10 @@ def api_mail_delete():
 
 @app.route('/api/mail/reply', methods=['POST'])
 def api_mail_reply():
-    """Sendet eine Antwort auf eine Mail (SMTP XOAUTH2). LIVE; braucht Key.
-    Body: `{cat, uid, text, account?}`. To/Betreff/Threading leitet das Backend
-    aus der Original-Mail ab."""
+    """Antwort auf eine Mail. LIVE; braucht Key. Body: `{cat, uid, text,
+    account?, draft?}`. To/Betreff/Threading leitet das Backend aus der
+    Original-Mail ab. `draft:true` → speichert die Antwort als ENTWURF im
+    Drafts-Ordner (IMAP APPEND) statt sie per SMTP zu senden."""
     if not mail_secrets.available():
         return jsonify({"error": "kein key — senden nicht möglich"}), 409
     body = request.get_json(silent=True) or {}
@@ -1388,9 +1687,13 @@ def api_mail_reply():
     uid = body.get('uid')
     text = body.get('text') or ''
     account = body.get('account') or None
+    draft = bool(body.get('draft'))
     if not cat or uid is None or not text.strip():
         return jsonify({"error": "cat/uid/text fehlt"}), 400
-    res = mail.reply_to_mail(cat, int(uid), text, account_name=account)
+    if draft:
+        res = mail.draft_reply(cat, int(uid), text, account_name=account)
+    else:
+        res = mail.reply_to_mail(cat, int(uid), text, account_name=account)
     if res.get("error"):
         return jsonify(res), 502
     return jsonify(res)
@@ -1412,6 +1715,11 @@ def api_mail_poll():
     def _run():
         try:
             mail.poll_all(dry_run=False)
+            # Der Poll hat Mails in ihre Ordner geräumt → alle Ordner-Caches sind
+            # veraltet. Komplett verwerfen; das nächste Öffnen holt frisch.
+            with _mail_folders_lock:
+                _mail_folders.clear()
+            _mail_folders_save()
         except Exception as e:
             state.push_log(f"MAIL: Hintergrund-Poll abgebrochen — "
                            f"{type(e).__name__}: {e}")

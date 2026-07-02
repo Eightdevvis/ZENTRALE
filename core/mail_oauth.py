@@ -216,13 +216,17 @@ def extract_code(pasted):
 
 # ── Im Betrieb: gültiges Access-Token für ein Konto ───────────────────
 
-def access_token_for(account):
+def access_token_for(account, force_refresh=False):
     """Liefert ein frisches Access-Token. Nutzt den In-Memory-Cache, sonst
     Refresh über den gespeicherten refresh_token. Rotiert Microsoft den
-    refresh_token, wird der neue verschlüsselt zurückgespeichert."""
+    refresh_token, wird der neue verschlüsselt zurückgespeichert.
+
+    `force_refresh=True` überspringt den Cache und holt garantiert ein neues
+    Token — für den Fall, dass der Server ein (scheinbar noch gültiges) Cache-
+    Token ablehnt (AUTHENTICATIONFAILED durch frühe Invalidierung / Uhr-Skew)."""
     name = account["name"]
     cached = _token_cache.get(name)
-    if cached and cached[1] - 60 > time.time():
+    if not force_refresh and cached and cached[1] - 60 > time.time():
         return cached[0]
 
     oauth = account.get("oauth") or {}

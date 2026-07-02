@@ -61,6 +61,20 @@ def _resolve():
     return prof, provider_name, provider, model
 
 
+def available() -> bool:
+    """Ist der Tutor mit dem aktuell aufgelösten Provider nutzbar? Kapazitäts-
+    basiert (Backend des Providers erreichbar) statt kassetten-hart (ki_aus):
+    lokaler Provider → Ollama da; Cloud-Provider → cloud da (Internet + Key +
+    Kill-Switch an). So läuft der Tutor auch auf laptop/tui, sobald ein Backend
+    erreichbar ist."""
+    import ai_backends
+    _prof, _pname, provider, _model = _resolve()
+    st = ai_backends.status()
+    if provider.get("kind") == "ollama":
+        return bool(st.get("local"))
+    return bool(st.get("cloud"))   # anthropic / openai_compat → cloud
+
+
 def privacy_notice():
     """Gibt die Privacy-Warnung der laufenden Session zurück (oder None).
     Für /api/tutor/status → UI-Banner."""

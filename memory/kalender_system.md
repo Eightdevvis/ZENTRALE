@@ -67,6 +67,8 @@ das entsprechende Tracking-Feature gebaut wird.
 Public API:
 - `ensure_init()` – Datei + Default-Layer beim Boot sicherstellen.
 - `add_entry(layer, day, label, time=None, **extras)` – Einmal-Eintrag.
+- `add_span(layer, von, bis, label, **extras)` – MEHRTÄGIGER (ganztägiger) Termin: Einmal-Eintrag mit `bis`-Datum unter `von`; `entries_in_range` expandiert über [von,bis]. bis<von → False.
+- `set_span_time(layer, von, label, day, time)` – optionale Uhrzeit NUR für einen Tag der Spanne (`times[day]` an der Spanne; leer = löschen/ganztägig).
 - `add_routine(layer, label, rrule_str, time=None, **extras)` – Wiederholungs-Regel.
 - `add_pause(label, von, bis, grund=None)` – Routine über eine Spanne aussetzen (Tool `add_calendar_pause`, gegatet).
 - `delete_entry(day, label, layer=None)` → `int` – Einträge an einem Tag löschen, gibt Anzahl zurück (Tool `delete_calendar_entry`, gegatet). Tool-Hinweis: DIREKT rufen, KEIN read_calendar davor – gemessen (2026-06-07): mit vorherigem read lenken die ⚠-Alarm-Zeilen das 9B 5/8-mal von der Löschung ab; direkt = 8/8. Deterministisch die Ablenkung wegnehmen schlägt Prompt-Nudging.
@@ -350,6 +352,109 @@ Bewusst getrennt vom Alarm-Kanal: die Anzeige zeigt die Termin-Arbeitsdaten,
 die ⚠-Warnungen bleiben randständig (Header-Zähler `⚠N` aus `alarms`), genau wie
 `read_calendar` sauber von den Inline-Warnungen getrennt wurde.
 
+### Kalender-Sidebar: die flache »week«-Liste (2026-07, ersetzt die Wochentag-Spalte)
+
+Brücke Listen ↔ Kalender. Eine als **`week`** benannte Liste (`core/lists.py`)
+ist speziell: sie ist die **flache Kalender-Sidebar** — EINE Liste, deren Items
+in der Wochenansicht **rechts neben dem Gitter** stehen, **nicht** mehr nach
+Wochentag sortiert, **wochenunabhängig** (blättern ändert die Liste nicht). Löst
+das frühere Modell ab (7 Wochentag-Ordner + Datums-Rolling — von Sasha verworfen).
+
+- **Einmalige Migration (`_migrate_week_flat`, in `_load`):** Altdaten mit
+  Wochentag-Ordnern (mon…sun) werden beim ersten Laden pro Prozess flach gezogen
+  (Items eine Ebene hoch, done bleibt, Ordner weg). Idempotent → danach No-op.
+  `_WEEKDAY_NAMES`/`_weekday_index` bleiben nur noch dafür.
+- **`lists.week_items(reference=None)`** (ersetzt `week_plan`): liefert
+  `{lid, items:[{id,text,done,linked}]}` — flach, kein Datums-Mapping. `reference`
+  wird ignoriert (Signatur kompatibel). Leeres `{lid:None, items:[]}` ohne
+  week-Liste.
+- **Reinschieben = kopieren + verlinken:** `move_item` mit der `week`-Liste als
+  Ziel KOPIERT den Eintrag (Quelle/Projekt behält das Original) und stampft
+  `link={lid,iid}` auf die Kopie. Man kann die `week`-Liste **weiterhin normal im
+  Listentool** öffnen und dort Items reinkopieren.
+- **Abhaken ist BIDIREKTIONAL (`_sync_linked_done` in `toggle_item`):** Kopie
+  abhaken setzt die Quelle mit; Quelle abhaken setzt alle Kopien mit (Reverse-
+  Lookup über `link`). **LÖSCHEN** der Kopie bricht nur den Link — die Quelle
+  bleibt (dangling link wird beim Toggle still ignoriert).
+
+Anzeige-/Interaktions-Pfad:
+- **Backend:** `/api/calendar` hängt `weekplan = lists.week_items()` an die
+  Antwort (in Woche UND Monat, defensiv `{lid:None,items:[]}`). Bearbeiten nutzt
+  die vorhandenen `/api/lists/<l_week>/items…` (toggle/add/rename/delete); **neu**
+  fürs Sortieren: `POST …/items/<iid>/reorder` `{delta:-1|+1}` (`lists.reorder_item`
+  tauscht mit dem Nachbarn in der Geschwister-Ebene, am Rand No-op).
+- **Sidebar-Optik:** Items stehen **etwas auseinander** (TUI: 1 Leerzeile Abstand;
+  Browser: `gap:9px`) und haben eine **Ombre** — je weiter unten, desto
+  transparenter (sichtbar ab ~4 Items, verblasst in den Hintergrund). TUI: eigene
+  256-Grau-Rampe pro Theme (`C["ombre"]`, verblasst Richtung bg; Mono/8-Farb-
+  Fallback = A_DIM-Stufen). Browser: `opacity` pro Item (`1 − idx·0.14`, Boden 0.38).
+- **TUI** (`tui/zentrale_tui.py`): rechte Spalte ist EINE flache Liste über die
+  volle Höhe (`k_sidebar_items()`/`k_sidebar_lid()`), Trenner `│`. **Taste `l`**
+  (aus „nächste Periode" gelöst; nächste Periode nur noch `→`) schiebt den Fokus
+  in die Sidebar (`K["listfocus"]`, ‹fokus›, erstes Item). Dort: `↑↓` wählen,
+  `Space/Enter` abhaken (Link-Sync), `a` neu / `r` umbenennen (`K["linput"]`-
+  Eingabe läuft unten in der breiten ›-Befehlszeile, nicht in der schmalen
+  Kopfzeile; die Kopfzeile zeigt nur ‹umbenennen unten›) / `d` löschen,
+  **`s` Sortier-Modus**
+  (`K["lsort"]`: dann verschieben `↑↓` das fokussierte Item per `reorder`, Cursor
+  zieht per id nach; `s`/Esc = fertig; Kopfzeile ‹sortieren ↑↓›, Item-Marker `⇅`),
+  `l`/Esc/← zurück, `c` Kalender zu. **KEIN** `m`/`>` (kein Move in andere Listen
+  — isolierte Einheit). Nur in der Wochenansicht. Verlinkte Items tragen `↔`.
+  Kontexte `cal:list`/`cal:sort` in der Shortcut-Leiste.
+- **Browser/Laptop** (`monolith.html`, `renderWeek`→`renderSidebar`): Flex-Row
+  `[.cweek Tage] [.csidebar flache Liste]`. Items klickbar (abhaken), `▲▼`
+  sortieren (`reorder`), `✎` umbenennen (prompt), `✕` löschen, Add-Feld unten
+  (`sidebarAction` → dieselben `/api/lists`-Endpoints, danach `load()`). `↔` an
+  verlinkten. Maus-getrieben → kein `l`-Tastensprung. Move in andere Listen ist im
+  Browser ohnehin nie verdrahtet.
+- Tests: `tests/test_lists.py` (Migration flach, copy+link, bidirektionaler
+  Sync, delete-bricht-nur-Link, `week_items`-Form, `reorder` rauf/runter/Rand/
+  Geschwister-Ebene), `tests/test_backend_api.py`, Fuzz mit adversarialem
+  `weekplan` (neue `{lid,items}`-Form + Müll) + `s`-Taste im Sortier-Pfad.
+
+### Mehrtägige Termine (2026-07)
+
+Ganztägige Termine über eine Datumsspanne (Urlaub, Messe, Konferenz). Modell:
+**ein** Einmal-Eintrag mit `bis`-Datum, gespeichert unter dem Start-Tag `von` in
+`entries[von]` — `{label, bis, times?:{iso:HH:MM}, ort?}`. `entries_in_range`
+**expandiert** ihn über [von,bis] ∩ Fenster: jeder Tag eine Kopie mit
+`spanning:True`, `von`, `bis`, `span_first`/`span_last`; `bis`/`times` selbst
+wandern NICHT roh in die Kopien.
+
+- **Linke Spann-Gosse (2026-07, TUI):** mehrtägige Termine werden NICHT inline in
+  den Tages-Zeilen gezeichnet (dort riss die Klammer, sobald ein Tag andere
+  Termine hatte, + Leerzeilen), sondern in einer **eigenen linken Spalte außerhalb
+  der Tagesdaten**: eine **durchgehende Klammer** `┌` (erster Tag) · `│`/Buchstaben
+  · `└` (letzter Tag). Der **Titel läuft senkrecht AM STÜCK** nach unten (ein
+  Buchstabe pro Zeile, ab Zeile unter `┌`; Rest der Höhe als `│`) — nicht mehr pro
+  Tag wiederholt. Überlappende Spannen bekommen eigene **Lanes** (Greedy);
+  `gw`=Gossenbreite, die Tages-Inhalte rücken um `gw+1` nach rechts (`cx`). Der
+  Render erfasst pro Tag `day_top`/`day_bot` und zieht die Klammer vom ersten bis
+  letzten sichtbaren Tag durch. Spannen bleiben **auswählbar** (di zählt in
+  `k_selectable` mit, ohne Inline-Zeile): der gewählte Tag hebt seinen Klammer-
+  Abschnitt **invers** hervor, unten steht `▶ <titel> · <datum>`.
+- **Ganztägig by default; Uhrzeit optional PRO TAG:** bearbeitet man einen
+  einzelnen Tag der Spanne, setzt `set_span_time` eine Uhrzeit nur für diesen Tag
+  (`times[day]`, leer = wieder ganztägig). Kein pauschales `time` an der Spanne.
+- **Endpoints:** `POST /api/calendar/entry` mit `{day:von, bis, label, ort?}` →
+  `add_span` (kein Konflikt-Check, ganztägig). `POST /api/calendar/entry/spantime`
+  `{layer?, von, label, day, time?}` → `set_span_time`. Löschen über den Start-Tag
+  (`DELETE …/entry {day:von, label}`) entfernt die GANZE Spanne.
+- **TUI:** Anlege-Formular hat einen **dritten Typ** (Tab: Termin→Routine→**Mehrtägig**);
+  Mehrtägig fragt Von-Datum, Bis-Datum, Titel. Darstellung = linke Spann-Gosse
+  (s.o.). `e` auf einer Spanne = Uhrzeit für DIESEN Tag (Eingabe unten in der
+  ›-Leiste, `spantgt`/`lmode="spantime"`); `d` löscht über `von` die ganze Spanne.
+  `k_selectable` trägt die Spann-Felder; `_k_entry_line` rendert Spannen NICHT
+  (die macht der Gossen-Block).
+- **Browser:** dritter Form-Typ „Mehrtägig" (Von/Bis-Datumsfelder); Spann-Chip
+  `.cent.span` (gepunktet) mit `┌│└`-Marker je Tag; der **Titel steht nur am
+  ersten Tag** (nicht pro Tag wiederholt), Folgetage nur Klammer (+ optionale
+  Uhrzeit `.spantime`). `✎` = Uhrzeit für diesen Tag (`spanTime`, prompt),
+  `✕` = ganze Spanne löschen (über `von`).
+- Tests: `tests/test_backend_api.py` (Expansion + Marker, Delete über von,
+  per-Tag-Zeit setzen/löschen, bis<von→400), Fuzz mit adversarialen `spanning`-
+  Einträgen.
+
 ### Direktes Eintragen/Ändern/Löschen + Routine-Deaktivieren (2026-06)
 
 Die Anzeige ist nicht read-only — aus der Mitte lassen sich Einmal-Termine
@@ -380,8 +485,9 @@ in allen drei Fronten. Schreib-Endpoints (`ui/app.py`, alle direkt auf
     User hat diesen einen Termin selbst abgeschaltet.
 - **TUI:** der ›-Cursor (`↑↓`) läuft jetzt über **ALLE** Einträge (`k_selectable()`,
   nicht mehr nur Einmal-Termine — das war der Skip-Bug). `a` = neu anlegen
-  (Formular, **Tab** schaltet Termin↔Routine: bei Routine Wochentag-Eingabe „Mo,Fr"
-  statt Datum). `e`/Enter bearbeiten: Einmal → vorbefülltes Formular (PUT), Routine
+  (Formular, **Tab** schaltet Termin→Routine→**Mehrtägig**: Routine = Wochentag-
+  Eingabe „Mo,Fr", Mehrtägig = Von/Bis-Datum). `e`/Enter bearbeiten: Einmal →
+  vorbefülltes Formular (PUT), Spanne → Uhrzeit-für-diesen-Tag, Routine
   → Screen mit `d` (nur dieser Tag aus) / `a` (wieder an) / `x` (ganze Routine
   löschen, `j`-Nachfrage). `d` direkt: Einmal → Lösch-Bestätigung, Routine → Screen.
 - **Browser** (Monolith-Panel + Laptop-Mittelbox): „＋ Termin"-Form mit
@@ -393,8 +499,37 @@ in allen drei Fronten. Schreib-Endpoints (`ui/app.py`, alle direkt auf
 
 Defensiv getestet: `tests/test_backend_api.py` (add/edit/skip, isolierte TEMP-
 `CAL_PATH`), TUI-PTY-E2E (Edit + Routine-Deaktivieren/-Reaktivieren, Datei als
-Wahrheit) und die Fuzz-Suite (`a/d/e/c/v`-Keys + Adversarial-`/api/calendar`
+Wahrheit) und die Fuzz-Suite (`a/d/e/c/v/x`-Keys + Adversarial-`/api/calendar`
 inkl. recurring/deaktiviert/PUT).
+
+### Erledigtes ein-/ausblenden — EIN gemeinsamer Toggle (2026-06)
+
+Ein **Anzeige-Schalter** über dreierlei „passiert nicht" zusammen: einzeln
+**deaktivierte Routine-Vorkommen** (`deaktiviert`, „(aus)"), per Zeitraum-Pause
+**ausgefallene** (`ausfall`, z.B. Ferien; kommt aus `add_pause`/`pausen`) UND
+**abgehakte Wochenplan-Items** (`done`, durchgestrichen). Alle stehen gemeinsam da
+oder sind gemeinsam weg. **Default: ausgeblendet** — der Kalender startet
+aufgeräumt, der Toggle blendet alles **ein**.
+
+- **Reiner Front-Filter, kein Backend-Pfad:** alle Flags liegen schon in der
+  `/api/calendar`-Antwort (`entries_in_range` → `deaktiviert`/`ausfall`,
+  `week_items` → `done`). Gefiltert wird pro Front, `core/kalender.py`/`lists.py`/
+  `app.py` unverändert. Greift in Woche UND Monat (im Monat fällt der `•`-Marker
+  eines Tags weg, der nur noch deaktivierte/ausgefallene Einträge hätte).
+- **Zwei Deaktivierungs-Routen, EIN Toggle:** `deaktiviert` = einzelnes Vorkommen
+  vom User abgeschaltet (`set_routine_skip` → `aus`-Liste an der Routine);
+  `ausfall` = ganze Routine über einen Zeitraum pausiert (`add_pause` → `pausen`).
+  Beide zählen als „findet nicht statt" und teilen sich denselben Schalter — sonst
+  bleibt z.B. eine über Ferien pausierte Geigenstunde trotz „aus" sichtbar.
+- **Browser** (`monolith.html`, Kalender-IIFE): Header-Knopf `🚫/👁 erledigte`
+  (neben „＋ Termin"), Zustand `CS.showHidden`. `dayList()` filtert `deaktiviert`
+  **und** `ausfall`, `planItems()` filtert `done` in der Sidebar (alle nur solange
+  `!showHidden`). Toggle ruft nur `render()` (kein Reload).
+- **TUI** (`tui/zentrale_tui.py`): Taste **`x`** im Kalender (`K["showhidden"]`).
+  **Wichtig:** `k_selectable()` UND der Wochen-Render überspringen versteckte
+  deaktivierte Einträge an der **exakt gleichen** Stelle (vor `di += 1`), sonst
+  zeigt der ›-Cursor auf den falschen Termin. `ausfall`-Einträge sind ohnehin nie
+  auswählbar (`di=None`), lassen sich also gefahrlos gleich mit verstecken.
 
 ## Cross-Reference Graph ↔ Kalender (typisches Beispiel)
 

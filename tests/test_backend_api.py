@@ -11,6 +11,8 @@ Geprüft wird das, was beim Start real kaputt war / kaputt gehen könnte:
   - die KI-Endpoints sind in der tui-Kassette hart abgeriegelt (503),
   - ein unbekannter Sensor-Webhook wird abgewiesen (kein Querschuss aus dem LAN).
 """
+import threading
+
 import pytest
 
 from ui.app import app
@@ -46,6 +48,187 @@ def test_unknown_sensor_rejected(client):
     assert r.status_code != 200
 
 
+def test_refresh_counts_serves_fresh_cache(client, monkeypatch):
+    # Frische Zähl-Zahlen NICHT neu sweepen: ein STATUS-Sweep belegt die (eine)
+    # gepoolte IMAP-Verbindung und ließe einen gleichzeitigen Ordner-Aufruf
+    # warten. Innerhalb der TTL → Cache behalten, folder_counts NICHT anfassen.
+    import time as _t
+
+    from ui import app as A
+    monkeypatch.setattr(A.mail_secrets, "available", lambda: True)
+    called = []
+    monkeypatch.setattr(A.mail, "folder_counts",
+                        lambda: called.append(1) or {"x": 1})
+    monkeypatch.setitem(A._mail_live, "counts", {"x": 1})
+    monkeypatch.setitem(A._mail_live, "ts", _t.time())        # brandfrisch
+    monkeypatch.setitem(A._mail_live, "refreshing", False)
+
+    r = client.post("/api/mail/refresh-counts")               # ohne force
+    assert r.status_code == 200 and r.get_json().get("cached") is True
+    assert called == []                                       # kein Sweep
+
+
+def test_refresh_counts_force_bypasses_ttl(client, monkeypatch):
+    # Nach Umsortieren/Löschen haben sich die Zahlen geändert → ?force=1 muss
+    # die TTL umgehen und wirklich neu zählen.
+    import time as _t
+
+    from ui import app as A
+    monkeypatch.setattr(A.mail_secrets, "available", lambda: True)
+    done = threading.Event()
+    monkeypatch.setattr(A.mail, "folder_counts",
+                        lambda: (done.set(), {"x": 2})[1])
+    monkeypatch.setitem(A._mail_live, "counts", {"x": 1})
+    monkeypatch.setitem(A._mail_live, "ts", _t.time())        # frisch, aber egal
+    monkeypatch.setitem(A._mail_live, "refreshing", False)
+
+    r = client.post("/api/mail/refresh-counts?force=1")
+    assert r.status_code == 200 and r.get_json().get("started") is True
+    assert done.wait(timeout=5.0)                             # Sweep lief wirklich
+
+
+def test_mail_counts_persist_survives_restart(tmp_path, monkeypatch):
+    # Die echten Live-Zahlen müssen einen Backend-Neustart überleben — sonst
+    # zeigt das Panel wieder den mageren Schnappschuss (»171«) und muss neu
+    # zählen. Save→Cache leeren→Load-Roundtrip auf einer TEMP-Datei.
+    from ui import app as A
+    monkeypatch.setattr(A, "_MAIL_COUNTS_FILE", str(tmp_path / "mc.json"))
+    monkeypatch.setitem(A._mail_live, "counts", {"zahlen": 1234})
+    monkeypatch.setitem(A._mail_live, "ts", 111.0)
+    A._mail_counts_save()
+
+    monkeypatch.setitem(A._mail_live, "counts", {})       # »Neustart«: RAM leer
+    monkeypatch.setitem(A._mail_live, "ts", 0.0)
+    A._mail_counts_load()
+    assert A._mail_live["counts"] == {"zahlen": 1234}      # echte Zahl sofort da
+    assert A._mail_live["ts"] == 111.0
+
+
+def _wait_refresh_done(A, timeout=3.0):
+    import time as _t
+    end = _t.time() + timeout
+    while _t.time() < end:
+        if not A._mail_live["refreshing"]:
+            return True
+        _t.sleep(0.01)
+    return False
+
+
+def test_refresh_counts_empty_sweep_keeps_old(client, monkeypatch):
+    # Ein gedrosselter Sweep (Outlook throttlet → leeres Ergebnis) darf die
+    # guten persistierten Zahlen NICHT plattmachen; sonst kommt nach Neustart
+    # wieder die »171«. Leeres folder_counts() ⇒ Cache bleibt, kein Save.
+    from ui import app as A
+    monkeypatch.setattr(A.mail_secrets, "available", lambda: True)
+    saved = []
+    monkeypatch.setattr(A, "_mail_counts_save", lambda: saved.append(1))
+    monkeypatch.setattr(A.mail, "category_overview", lambda: [{"name": "zahlen"}])
+    monkeypatch.setattr(A.mail, "folder_counts", lambda: {})   # Totalausfall
+    monkeypatch.setitem(A._mail_live, "counts", {"zahlen": 1234})
+    monkeypatch.setitem(A._mail_live, "ts", 111.0)
+    monkeypatch.setitem(A._mail_live, "refreshing", False)
+
+    r = client.post("/api/mail/refresh-counts?force=1")
+    assert r.status_code == 200
+    assert _wait_refresh_done(A)
+    assert A._mail_live["counts"] == {"zahlen": 1234}          # unangetastet
+    assert A._mail_live["ts"] == 111.0                         # kein Neu-Stempel
+    assert saved == []                                        # nichts überschrieben
+
+
+def test_refresh_counts_partial_merge_and_prune(client, monkeypatch):
+    # Ein lückenhafter Sweep (ein Ordner antwortet nicht) merged frisch ÜBER alt:
+    # der fehlende Ordner behält seinen letzten echten Wert. Gelöschte Kategorien
+    # (nicht mehr in der Übersicht) werden dabei ausgekehrt.
+    from ui import app as A
+    saved = []
+    monkeypatch.setattr(A.mail_secrets, "available", lambda: True)
+    monkeypatch.setattr(A, "_mail_counts_save",
+                        lambda: saved.append(dict(A._mail_live["counts"])))
+    monkeypatch.setattr(A.mail, "category_overview",
+                        lambda: [{"name": "a"}, {"name": "b"}])
+    monkeypatch.setattr(A.mail, "folder_counts", lambda: {"a": 5})  # b fehlt
+    monkeypatch.setitem(A._mail_live, "counts", {"a": 1, "b": 99, "ghost": 7})
+    monkeypatch.setitem(A._mail_live, "ts", 0.0)
+    monkeypatch.setitem(A._mail_live, "refreshing", False)
+
+    r = client.post("/api/mail/refresh-counts?force=1")
+    assert r.status_code == 200
+    assert _wait_refresh_done(A)
+    assert A._mail_live["counts"] == {"a": 5, "b": 99}   # a frisch, b behält alt, ghost weg
+    assert saved and saved[-1] == {"a": 5, "b": 99}
+
+
+def test_folder_cold_fetch_then_serves_cache(client, monkeypatch, tmp_path):
+    # Erstes Öffnen holt LIVE (kalter Cache), zweites Öffnen liefert SOFORT aus
+    # dem Cache — ohne erneuten IMAP-Fetch. Genau das killt das „lädt ordner…"
+    # bei jedem Wieder-Aufmachen.
+    from ui import app as A
+    monkeypatch.setattr(A, "_MAIL_FOLDERS_FILE", str(tmp_path / "f.json"))
+    A._mail_folders.clear()
+    monkeypatch.setattr(A.mail_secrets, "available", lambda: True)
+    calls = []
+    monkeypatch.setattr(A.mail, "folder_mails",
+                        lambda cat, limit=200: (calls.append(cat),
+                                                [{"uid": 1, "from": "a"}])[1])
+    j1 = client.get("/api/mail/folder?cat=Uni").get_json()
+    assert j1["mails"] == [{"uid": 1, "from": "a"}] and j1["cached"] is False
+    assert calls == ["Uni"]                       # kalt → live geholt
+    j2 = client.get("/api/mail/folder?cat=Uni").get_json()
+    assert j2["cached"] is True and j2["mails"] == [{"uid": 1, "from": "a"}]
+    assert calls == ["Uni"]                       # warm → KEIN weiterer IMAP-Fetch
+
+
+def test_folder_force_bypasses_cache(client, monkeypatch, tmp_path):
+    # ?force=1 (nach Umsortieren/Löschen) ignoriert den Cache und holt frisch.
+    from ui import app as A
+    monkeypatch.setattr(A, "_MAIL_FOLDERS_FILE", str(tmp_path / "f.json"))
+    A._mail_folders.clear()
+    monkeypatch.setattr(A.mail_secrets, "available", lambda: True)
+    calls = []
+    monkeypatch.setattr(A.mail, "folder_mails",
+                        lambda cat, limit=200: (calls.append(cat), [])[1])
+    client.get("/api/mail/folder?cat=Uni")        # seed (call 1)
+    j = client.get("/api/mail/folder?cat=Uni&force=1").get_json()
+    assert j["cached"] is False and len(calls) == 2   # force → erneut live
+
+
+def test_assign_drops_both_folder_caches(client, monkeypatch, tmp_path):
+    # Umsortieren muss Herkunfts- UND Ziel-Ordner-Cache verwerfen, sonst zeigt
+    # das nächste Öffnen die verschobenen Mails noch.
+    from ui import app as A
+    monkeypatch.setattr(A, "_MAIL_FOLDERS_FILE", str(tmp_path / "f.json"))
+    A._mail_folders.clear()
+    A._mail_folders["Uni"] = {"mails": [{"uid": 1}], "ts": 1e9}
+    A._mail_folders["zahlen"] = {"mails": [{"uid": 2}], "ts": 1e9}
+    A._mail_folders["fun options"] = {"mails": [{"uid": 3}], "ts": 1e9}
+    monkeypatch.setattr(A.mail, "refile_sender",
+                        lambda s, c: {"assigned": True, "category": "zahlen",
+                                      "moved": 3, "live": True, "moved_from": "Uni"})
+    r = client.post("/api/mail/assign",
+                    json={"sender": "a@b", "category": "zahlen"})
+    assert r.status_code == 200
+    assert "Uni" not in A._mail_folders and "zahlen" not in A._mail_folders
+    assert "fun options" in A._mail_folders        # unbeteiligter Ordner bleibt
+
+
+def test_delete_removes_uid_from_folder_cache(client, monkeypatch, tmp_path):
+    # Löschen nimmt die Mail SOFORT aus dem Cache — kein Wiederauftauchen beim
+    # nächsten (gecachten) Öffnen.
+    from ui import app as A
+    monkeypatch.setattr(A, "_MAIL_FOLDERS_FILE", str(tmp_path / "f.json"))
+    A._mail_folders.clear()
+    A._mail_folders["Uni"] = {"mails": [{"uid": 5, "account": "o"},
+                                        {"uid": 6, "account": "o"}], "ts": 1e9}
+    monkeypatch.setattr(A.mail_secrets, "available", lambda: True)
+    monkeypatch.setattr(A.mail, "delete_mail",
+                        lambda cat, uid, account_name=None: True)
+    r = client.post("/api/mail/delete",
+                    json={"cat": "Uni", "uid": 5, "account": "o"})
+    assert r.status_code == 200
+    assert [m["uid"] for m in A._mail_folders["Uni"]["mails"]] == [6]
+
+
 def test_api_calendar_week_shape(client):
     # /api/calendar ist die geteilte Quelle für die Kalender-Mitte ALLER
     # Kassetten (TUI, Monolith, Laptop) — nicht KI-gegatet, läuft also auch in
@@ -61,6 +244,20 @@ def test_api_calendar_week_shape(client):
     # Woche ist Mo-So → genau 7 Tage Spanne.
     from datetime import date
     assert (date.fromisoformat(d["end"]) - date.fromisoformat(d["start"])).days == 6
+
+
+def test_api_calendar_week_weekplan(client):
+    # Die Woche ist IMMER die feste Mo-So-Kalenderwoche (Anzeige startet montags,
+    # egal welcher Wochentag `ref` ist). Nur die »week«-Listen-Items rollen
+    # (week_plan → nächstes Vorkommen ab heute); die Woche trägt sie als
+    # `weekplan` mit ({} wenn es keine »week«-Liste gibt).
+    from datetime import date
+    r = client.get("/api/calendar?view=week&ref=2026-06-24")  # ein Mittwoch
+    assert r.status_code == 200
+    d = r.get_json()
+    assert date.fromisoformat(d["start"]).weekday() == 0      # startet Montag …
+    assert d["start"] == "2026-06-22" and d["end"] == "2026-06-28"  # Mo-So um den 24.
+    assert "weekplan" in d and isinstance(d["weekplan"], dict)
 
 
 def test_api_calendar_month_grid(client):
@@ -132,6 +329,75 @@ def test_api_calendar_edit_entry(client, tmp_path, monkeypatch):
     assert not days.get("2026-06-20")                       # alter weg
     new = days.get("2026-06-21", [])
     assert any(e.get("label") == "Hausarzt" and e.get("ort") == "Praxis" for e in new)
+
+
+def test_api_calendar_span_add_expands(client, tmp_path, monkeypatch):
+    # Mehrtägiger (ganztägiger) Termin: `bis` gesetzt → erscheint an JEDEM Tag
+    # der Spanne mit Spann-Markern (span_first/last), ohne pauschale Uhrzeit.
+    import kalender
+    monkeypatch.setattr(kalender, "CAL_PATH", tmp_path / "cal.json")
+    kalender.ensure_init()
+    r = client.post("/api/calendar/entry",
+                    json={"day": "2026-06-22", "bis": "2026-06-25", "label": "Urlaub", "ort": "See"})
+    assert r.status_code == 200 and r.get_json().get("spanning") is True
+    days = client.get("/api/calendar?view=week&ref=2026-06-22").get_json()["days"]
+    got = {}
+    for iso in ("2026-06-22", "2026-06-23", "2026-06-24", "2026-06-25"):
+        e = next((x for x in days.get(iso, []) if x.get("label") == "Urlaub"), None)
+        assert e is not None and e.get("spanning") is True and e.get("ort") == "See"
+        got[iso] = (e["span_first"], e["span_last"])
+    assert got["2026-06-22"] == (True, False)      # erster Tag
+    assert got["2026-06-25"] == (False, True)       # letzter Tag
+    assert got["2026-06-23"] == (False, False)      # Mitte
+    # nicht darüber hinaus
+    assert not any(x.get("label") == "Urlaub" for x in days.get("2026-06-26", []))
+
+
+def test_api_calendar_span_delete(client, tmp_path, monkeypatch):
+    # Löschen über den Start-Tag (von) entfernt die GANZE Spanne.
+    import kalender
+    monkeypatch.setattr(kalender, "CAL_PATH", tmp_path / "cal.json")
+    kalender.ensure_init()
+    client.post("/api/calendar/entry",
+                json={"day": "2026-06-22", "bis": "2026-06-24", "label": "Messe"})
+    r = client.delete("/api/calendar/entry", json={"day": "2026-06-22", "label": "Messe"})
+    assert r.get_json()["deleted"] == 1
+    days = client.get("/api/calendar?view=week&ref=2026-06-22").get_json()["days"]
+    assert not any(x.get("label") == "Messe" for es in days.values() for x in es)
+
+
+def test_api_calendar_span_per_day_time(client, tmp_path, monkeypatch):
+    # Optionale Uhrzeit NUR für einen Tag der Spanne (der Rest bleibt ganztägig).
+    import kalender
+    monkeypatch.setattr(kalender, "CAL_PATH", tmp_path / "cal.json")
+    kalender.ensure_init()
+    client.post("/api/calendar/entry",
+                json={"day": "2026-06-22", "bis": "2026-06-25", "label": "Urlaub"})
+    r = client.post("/api/calendar/entry/spantime",
+                    json={"von": "2026-06-22", "label": "Urlaub", "day": "2026-06-24", "time": "14:00"})
+    assert r.status_code == 200 and r.get_json()["ok"] is True
+    days = client.get("/api/calendar?view=week&ref=2026-06-22").get_json()["days"]
+    d24 = next(x for x in days["2026-06-24"] if x.get("label") == "Urlaub")
+    d23 = next(x for x in days["2026-06-23"] if x.get("label") == "Urlaub")
+    assert d24.get("time") == "14:00"          # gesetzter Tag
+    assert d23.get("time") is None             # andere Tage bleiben ganztägig
+    # wieder löschen (leere Zeit)
+    client.post("/api/calendar/entry/spantime",
+                json={"von": "2026-06-22", "label": "Urlaub", "day": "2026-06-24", "time": ""})
+    days = client.get("/api/calendar?view=week&ref=2026-06-22").get_json()["days"]
+    d24 = next(x for x in days["2026-06-24"] if x.get("label") == "Urlaub")
+    assert d24.get("time") is None
+
+
+def test_api_calendar_span_bad(client, tmp_path, monkeypatch):
+    # bis < von → 400; kaputtes bis-Datum → 400.
+    import kalender
+    monkeypatch.setattr(kalender, "CAL_PATH", tmp_path / "cal.json")
+    kalender.ensure_init()
+    assert client.post("/api/calendar/entry",
+                       json={"day": "2026-06-25", "bis": "2026-06-22", "label": "X"}).status_code == 400
+    assert client.post("/api/calendar/entry",
+                       json={"day": "2026-06-22", "bis": "kaputt", "label": "X"}).status_code == 400
 
 
 def test_api_calendar_routine_skip(client, tmp_path, monkeypatch):

@@ -26,7 +26,7 @@ KEYS = [b'g', b'm', b'/', b'n', b'd', b't', b'j', b'k', b'h', b'l', b'q',
         b'\t', b'\x7f', b'\x08', b'\x1b', b'\x1b[A', b'\x1b[B', b'\x1b[C', b'\x1b[D',
         b'a', b'Z', b' ', b'\x00', b'\xff', b'\x1b[3~', b'x', b'w', b'2', b'9',
         b'G', b'M', b'N', b'D', b'T', b'p', b'r', b'3', b'4', b'8', b'_', b'=',
-        b'c', b'C', b'v', b'V', b'e', b'E']
+        b'c', b'C', b'v', b'V', b'e', b'E', b's', b'S']
 SIZES = [(1, 1), (2, 5), (3, 40), (5, 59), (13, 80), (14, 60), (10, 200),
          (40, 300), (24, 80), (50, 250), (60, 400), (8, 8), (200, 600), (15, 61)]
 
@@ -250,6 +250,19 @@ class _AdvHandler(BaseHTTPRequestHandler):
                     "first": self._pick(["2026-06-01", None, "x"]),
                     "last": self._pick(["2026-06-30", None, "x"]),
                     "alarms": self._pick([[], [{"text": "x"}], "x", None]),
+                    "weekplan": self._pick([
+                        {}, None, "x",
+                        # neue Form: flache {lid, items:[{id,text,done,linked}]}
+                        {"lid": "l_week", "items": [
+                            {"id": self._pick([1, 2, None]),
+                             "text": self._pick(ws),
+                             "done": self._pick([True, False, None]),
+                             "linked": self._pick([True, False, None])}]},
+                        {"lid": None, "items": []},
+                        {"lid": "l_week", "items": "x"},   # items kaputt
+                        {"lid": "l_week", "items": [None, "x", 5]},
+                        {"items": [{"text": self._pick(ws)}]},  # lid fehlt
+                        {self._pick(ws): self._pick(wn)}]),     # alt/wirr
                     "days": self._pick([
                         {"2026-06-09": [{"label": self._pick(ws),
                                          "time": self._pick(["10:00", None, 5]),
@@ -257,7 +270,14 @@ class _AdvHandler(BaseHTTPRequestHandler):
                                          "ort": self._pick(ws + [None]),
                                          "recurring": self._pick([True, False, None]),
                                          "deaktiviert": self._pick([True, False, None]),
-                                         "ausfall": self._pick([None, "Ferien", 5])}]},
+                                         "ausfall": self._pick([None, "Ferien", 5])},
+                                        # mehrtägige Spanne (spanning) + Müll-Varianten
+                                        {"label": self._pick(ws), "spanning": True,
+                                         "von": self._pick(["2026-06-08", None, 5]),
+                                         "bis": self._pick(["2026-06-11", None, "x"]),
+                                         "span_first": self._pick([True, False, None]),
+                                         "span_last": self._pick([True, False, None]),
+                                         "time": self._pick(["14:00", None])}]},
                         {self._pick(ws): self._pick(wn)}, {}, "x", None])}
         return self._pick([{}, None, "x"])
 
