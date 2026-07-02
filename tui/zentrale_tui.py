@@ -823,6 +823,9 @@ def run_ui(stdscr, store):
          "def": None, "vals": [], "input": "", "newtype": "number", "msg": "",
          "input2": "", "pstage": 0,    # input2/pstage: Perioden-Eingabe (von→bis)
          "dayoff": 0,                  # Ziel-Tag: 0=heute, N=N Tage zurück (←/→)
+         "shown": set(),               # in der Überlagerung gezeigte graph-ids:
+                                       # leer=alle (Übersicht), 1=solo+editieren,
+                                       # mehrere=Kombi (nur Anzeige, später)
          "confirm": False}             # Lösch-Nachfrage aktiv (Mini-Dialog)
 
     # ── Listen-Werkzeug (füllt die MITTE-Box, Taste 'l') ────────────────
@@ -1519,15 +1522,20 @@ def run_ui(stdscr, store):
 
         num_series = [s for s in series if s["type"] == "number"]
         scale_series = [s for s in series if s["type"] == "scale"]
+        # Auswahl NUR aus scale-graphen (z.B. solo scale) → die Skala bekommt
+        # eine eigene 1–5-y-achse mit Kreisen IM Gitter (die 24h-uhr wäre hier
+        # sinnlos, die Boden-Zeile bliebe der Plot leer). Misch-Übersicht bleibt
+        # unverändert: da rendert scale weiter als Zeile unten.
+        only_scale = bool(scale_series) and len(scale_series) == len(series)
 
         # ── Layout je Modus: base/plot_h, linker Gutter (Achsen), Legende ──
         if labeled:
             AX_W = 5                           # breite EINER zahl-achsen-spalte
             n_ax = len(num_series)
-            ix_clock = plot_x + AX_W * n_ax    # 24h-labels rechts vom zahl-gutter
-            day_x0 = ix_clock + 3              # 2 uhr-spalten + │
+            ix_clock = plot_x + AX_W * n_ax    # y-labels rechts vom zahl-gutter
+            day_x0 = ix_clock + 3              # 2 achsen-spalten + │
             header_h = 1                       # kopf-legende
-            scale_h = 1 if scale_series else 0
+            scale_h = 1 if (scale_series and not only_scale) else 0
             base = otop + header_h
             plot_bottom = otop + oh - 1 - scale_h
             plot_h = max(2, plot_bottom - base + 1)
@@ -1556,6 +1564,10 @@ def run_ui(stdscr, store):
         def row_norm(v, lo, hi):               # eigene Spanne: lo unten, hi oben
             n = 0.5 if hi is None or hi == lo else (float(v) - lo) / (hi - lo)
             n = max(0.0, min(1.0, n))
+            return base + (plot_h - 1) - int(round(n * (plot_h - 1)))
+
+        def row_scale(v):                      # 1–5-Skala: 1 unten, 5 oben
+            n = (max(1.0, min(5.0, float(v))) - 1) / 4.0
             return base + (plot_h - 1) - int(round(n * (plot_h - 1)))
 
         # Tages-Spalten (X = Zeitstrahl, heute rechts, ältester Tag links).
@@ -1595,21 +1607,24 @@ def run_ui(stdscr, store):
             x1 = (day_col[window[idx + 1]] - 1) if idx + 1 < len(window) else day_x_end
             day_span[d] = (x0, max(x0, x1))
 
-        # 24h-Achse links: senkrechte Linie + Stunden-Marken (groß: feiner).
+        # Linke y-achse: 24h-uhr — ODER 1–5-skala, wenn NUR scale-graphen gewählt
+        # sind (dann sind stunden sinnlos). Senkrechte Linie + Marken-Labels +
+        # (groß) feines waagerechtes Hilfsraster: gepunktet, jede 2. Spalte, faint
+        # und ZUERST gemalt → Banden/Marker/Linien überzeichnen es. Erleichtert
+        # das Ablesen der Werte-Höhe quer über den Zeitstrahl.
         for r in range(plot_h):
             safe_addstr(base + r, day_x0 - 1, "│", C["faint"])
-        marks = (0, 3, 6, 9, 12, 15, 18, 21, 24) if (labeled and plot_h >= 8) else (0, 6, 12, 18, 24)
-        # groß: feines waagerechtes Hilfsraster an den Stunden-Marken — nur ganz
-        # leicht angedeutet (gepunktet, jede 2. Spalte, faint) und ZUERST gemalt,
-        # damit Banden/Marker/Linien es überzeichnen. Erleichtert das Ablesen der
-        # Werte-Höhe quer über den Zeitstrahl.
+        if only_scale:
+            axrows = [(row_scale(v), str(v)) for v in (1, 2, 3, 4, 5)]
+        else:
+            marks = (0, 3, 6, 9, 12, 15, 18, 21, 24) if (labeled and plot_h >= 8) else (0, 6, 12, 18, 24)
+            axrows = [(row_clock(hh * 60), "%02d" % (hh % 24)) for hh in marks]
         if labeled:
-            for hh in marks:
-                gr = row_clock(hh * 60)
+            for gr in {r for r, _l in axrows}:
                 for cx in range(day_x0, day_x_end + 1, 2):
                     safe_addstr(gr, cx, "·", C["faint"])
-        for hh in marks:
-            safe_addstr(row_clock(hh * 60), ix_clock, "%02d" % (hh % 24), C["faint"])
+        for gr, lbl in axrows:
+            safe_addstr(gr, ix_clock, lbl.rjust(2), C["faint"])
 
         NPRED = 7
 
@@ -1691,7 +1706,10 @@ def run_ui(stdscr, store):
                 return C[col + "@band"]
             return C[col]
 
-        # 2. scale: kompakt = Kreis-Zeilen im Plot; groß = eigene Zeile unten.
+        # 2. scale: Kreise ◦○◉●⬤. Drei Fälle:
+        #   kompakt        → je graph EINE Kreis-Zeile (gestapelt unten im Plot)
+        #   groß+only_scale → Kreise auf 1–5-HÖHE im Gitter (eigene y-achse)
+        #   groß+gemischt   → als beschriftete Zeile ganz unten (siehe unten)
         CIRC = "◦○◉●⬤"
         if not labeled:
             srow = 0
@@ -1707,6 +1725,18 @@ def run_ui(stdscr, store):
                     if cx is None or v is None:
                         continue
                     idx = max(0, min(4, int(round(v)) - 1))
+                    attr = latt(ry, cx, "faint") if e.get("_pred") else latt(ry, cx, col)
+                    safe_addstr(ry, cx, CIRC[idx], attr)
+        elif only_scale:
+            for s in scale_series:
+                col = s["col"]
+                for d, e in list(s["dv"].items()) + list(predicted_days(s).items()):
+                    cx = day_center.get(d)
+                    v = _num(e.get("value"))
+                    if cx is None or v is None:
+                        continue
+                    idx = max(0, min(4, int(round(v)) - 1))
+                    ry = row_scale(v)
                     attr = latt(ry, cx, "faint") if e.get("_pred") else latt(ry, cx, col)
                     safe_addstr(ry, cx, CIRC[idx], attr)
 
@@ -1787,7 +1817,8 @@ def run_ui(stdscr, store):
                 addclip(otop, hx + 2, nm, oleft + ow - 1 - (hx + 2), C["dim"])
                 hx += 2 + len(nm) + 1
             # scale-Zeile unten: je graph name + Kreis-Verlauf der letzten werte.
-            if scale_series:
+            # Nur bei gemischter Auswahl — only_scale rendert im Gitter (oben).
+            if scale_series and not only_scale:
                 sy = otop + oh - 1
                 sx = plot_x
                 safe_addstr(sy, sx, "skala:", C["faint"]); sx += 7
@@ -1847,90 +1878,92 @@ def run_ui(stdscr, store):
             addclip(by + 7, ix, next((h for t, l, h in GRAPH_TYPES if t == G["newtype"]), ""), iw, C["faint"])
             addclip(bottom, ix, ("tab typ · enter anlegen · esc zurück  " + G["msg"]).strip(), iw, C["faint"])
 
-        elif G["view"] == "view" and G["def"]:
-            d = G["def"]
-            typ = d.get("type")
-            unit = (" · " + d["unit"]) if d.get("unit") else ""
-            addclip(by + 1, ix, "%s  (%s%s)" % (d["name"], _tlabel(typ), unit), iw, C["bright"])
-            rows = G["vals"]
+        elif G["view"] in ("list", "view"):
+            # EINE vereinte Ansicht: dieselbe große Überlagerung (draw_overlay,
+            # beschriftete y-achsen) OBEN, darunter die Graphliste. G["shown"]
+            # (Menge von ids) filtert die Überlagerung — leer = ALLE (Übersicht),
+            # genau EINE = solo: nur dieser Graph + seine Eingabezeile unten.
+            # (Kombis später: shown mit mehreren → nur Anzeige, kein Eintrag.)
+            shown = G.get("shown") or set()
+            subset = [g for g in G["graphs"] if isinstance(g, dict)
+                      and (not shown or g.get("id") in shown)]
+            solo = G["def"] if (len(shown) == 1 and G["def"]) else None
+            typ = solo.get("type") if solo else None
             input_row = by + bh - 3
-            dl = g_daylabel()
-            exv = g_existing()                     # vorhandener Eintrag am Ziel-Tag
-            if not exv:
-                eh = ""
-            elif typ == "period":
-                eh = " (aktuell %s–%s)" % (fmt_clock(exv.get("value")), fmt_clock(exv.get("end")))
-            elif typ == "time":
-                eh = " (aktuell %s)" % fmt_clock(exv.get("value"))
-            else:
-                eh = " (aktuell %g)" % (_num(exv.get("value")) or 0)
-
-            if typ in ("time", "period"):
-                addclip(by + 2, ix, "%d einträge · zuletzt %s" % (len(rows), graph_last(d, rows)), iw, C["dim"])
-                if rows:
-                    draw_time_plot(by + 3, bx, bw, input_row - 1 - (by + 3), rows, typ == "period")
-                else:
-                    addclip(by + 3, ix, "— noch keine einträge —", iw, C["faint"])
-                if typ == "time":
-                    addclip(input_row, ix, "%s · zeit: %s_%s" % (dl, G["input"], eh), iw, C["bright"])
-                    addclip(bottom, ix, ("HH:MM · enter speichern · ←/→ tag · esc zu  " + G["msg"]).strip(), iw, C["faint"])
-                else:
-                    c1 = G["input"] + ("_" if G["pstage"] == 0 else "")
-                    c2 = G["input2"] + ("_" if G["pstage"] == 1 else "")
-                    addclip(input_row, ix, "%s · von: %s  bis: %s%s" % (dl, c1, c2, eh), iw, C["bright"])
-                    addclip(bottom, ix, ("HH:MM · enter von→bis · ←/→ tag · esc zu  " + G["msg"]).strip(), iw, C["faint"])
-            else:
-                ser = graph_series(typ, rows)
-                if ser:
-                    addclip(by + 2, ix, blockspark(ser[-iw:]), iw, C["graph"])
-                    addclip(by + 3, ix, "%d werte · zuletzt %s" % (len(ser), graph_last(d, rows)), iw, C["dim"])
-                else:
-                    addclip(by + 2, ix, "— noch keine werte —", iw, C["faint"])
-                if typ == "scale":
-                    addclip(input_row, ix, "1–5 trägt für %s ein%s" % (dl, eh), iw, C["acc"])
-                    addclip(bottom, ix, ("1–5 eintragen · ←/→ tag · esc zu  " + G["msg"]).strip(), iw, C["faint"])
-                else:
-                    addclip(input_row, ix, "%s · wert: %s_%s" % (dl, G["input"], eh), iw, C["bright"])
-                    addclip(bottom, ix, ("ziffern · enter speichern · ←/→ tag · esc zu  " + G["msg"]).strip(), iw, C["faint"])
-
-        else:  # "list"
-            # Große Überlagerungs-Ansicht (alle Graphen, beschriftete y-achsen)
-            # ÜBER der editierbaren Graphliste — nur wenn Graphen da sind und
-            # genug Platz. Fokus/Mechanik bleiben auf der Liste; das hier ist
-            # reine erweiterte Anschauung (geteilte Routine mit der lifestyle-Box).
+            # ── Überlagerung oben (auf subset gefiltert), so groß wie es geht ──
             ly = by + 1
-            if G["graphs"] and bh >= 18 and iw >= 26:
-                avail = bh - 3                     # ohne top-border, hint, bottom-border
+            if subset and bh >= 18 and iw >= 26:
+                avail = ((input_row - 1) - (by + 1)) if solo else (bh - 3)
                 ng = len([g for g in G["graphs"] if isinstance(g, dict)])
                 list_h = min(2 + ng, max(4, avail // 2))
                 ov_h = avail - list_h
                 if ov_h >= 8:
-                    draw_overlay(by + 1, bx, ov_h, bw, G["graphs"], gv_cache, labeled=True)
+                    draw_overlay(by + 1, bx, ov_h, bw, subset, gv_cache, labeled=True)
                     ly = by + 1 + ov_h             # Liste beginnt unter der Ansicht
-            addclip(ly, ix, "GRAPHEN", iw, C["bright"])
-            safe_addstr(ly, bx + bw - 9, "[n neu]", C["acc"])
+            hdr = ("nur %s" % (solo.get("name") or "?")) if solo else "GRAPHEN"
+            addclip(ly, ix, hdr, iw, C["bright"])
+            if not solo:
+                safe_addstr(ly, bx + bw - 9, "[n neu]", C["acc"])
             safe_addstr(ly + 1, ix, "─" * iw, C["faint"])
+            list_bottom = (input_row - 1) if solo else bottom
             yy = ly + 2
             if not G["graphs"]:
                 addclip(yy, ix, "noch keine — 'n' legt einen an", iw, C["faint"])
             else:
-                for i, g in enumerate(G["graphs"]):
-                    if yy >= bottom:
+                # Fenster um den Cursor, damit ↑↓ (auch im Solo) nicht aus dem
+                # sichtbaren Ausschnitt läuft, wenn mehr Graphen als Platz da sind.
+                navail = max(1, list_bottom - (ly + 2))
+                ntot = len(G["graphs"])
+                gstart = max(0, min(G["sel"] - navail + 1, ntot - navail)) if ntot > navail else 0
+                for i in range(gstart, ntot):
+                    if yy >= list_bottom:
                         break
+                    g = G["graphs"][i]
                     if not isinstance(g, dict):
                         continue
-                    sel = (i == G["sel"])
+                    cur = (i == G["sel"])
+                    on = (not shown) or (g.get("id") in shown)    # in Überlagerung sichtbar?
                     rows = gv_cache.get(g.get("id")) or []
                     spark = blockspark(graph_series(g.get("type"), rows)[-8:])
                     pred = "~" if g.get("predict") else " "   # ~ = Lücken werden geschätzt
-                    line = "%s%s%-11s %-6s %s" % (
-                        "›" if sel else " ", pred, str(g.get("name") or "")[:11], _tlabel(g.get("type")), spark)
-                    addclip(yy, ix, line, iw, C["bright"] if sel else C["dim"])
+                    mk = "●" if on else "○"                   # ●=gezeigt · ○=abgewählt
+                    line = "%s%s%s%-11s %-6s %s" % (
+                        "›" if cur else " ", mk, pred, str(g.get("name") or "")[:11],
+                        _tlabel(g.get("type")), spark)
+                    attr = C["bright"] if cur else (C["dim"] if on else C["faint"])
+                    addclip(yy, ix, line, iw, attr)
                     yy += 1
-            if G["msg"]:                       # Shortcuts liegen unter '/'; nur Feedback
+            if solo:
+                # Eingabezeile des solo-Graphen (Tag-Nav, HH:MM, 1–5 — wie gehabt).
+                dl = g_daylabel()
+                exv = g_existing()                     # vorhandener Eintrag am Ziel-Tag
+                if not exv:
+                    eh = ""
+                elif typ == "period":
+                    eh = " (aktuell %s–%s)" % (fmt_clock(exv.get("value")), fmt_clock(exv.get("end")))
+                elif typ == "time":
+                    eh = " (aktuell %s)" % fmt_clock(exv.get("value"))
+                else:
+                    eh = " (aktuell %g)" % (_num(exv.get("value")) or 0)
+                if typ == "time":
+                    addclip(input_row, ix, "%s · zeit: %s_%s" % (dl, G["input"], eh), iw, C["bright"])
+                    hint = "HH:MM · enter speichern · ↑↓ graph · ←→ tag · esc alle"
+                elif typ == "period":
+                    c1 = G["input"] + ("_" if G["pstage"] == 0 else "")
+                    c2 = G["input2"] + ("_" if G["pstage"] == 1 else "")
+                    addclip(input_row, ix, "%s · von: %s  bis: %s%s" % (dl, c1, c2, eh), iw, C["bright"])
+                    hint = "HH:MM · enter von→bis · ↑↓ graph · ←→ tag · esc alle"
+                elif typ == "scale":
+                    addclip(input_row, ix, "1–5 trägt für %s ein%s" % (dl, eh), iw, C["acc"])
+                    hint = "1–5 eintragen · ↑↓ graph · ←→ tag · esc alle"
+                else:  # number
+                    addclip(input_row, ix, "%s · wert: %s_%s" % (dl, G["input"], eh), iw, C["bright"])
+                    hint = "ziffern · enter speichern · ↑↓ graph · ←→ tag · esc alle"
+                addclip(bottom, ix, (hint + "  " + G["msg"]).strip(), iw, C["faint"])
+            elif G["msg"]:                     # Shortcuts liegen unter '/'; nur Feedback
                 addclip(bottom, ix, G["msg"], iw, C["faint"])
             else:
-                addclip(bottom, ix, "enter öffnen · n neu · p ~vorhersage · d weg · esc zu", iw, C["faint"])
+                addclip(bottom, ix, "enter solo · n neu · p ~vorhersage · d weg · esc zu", iw, C["faint"])
 
             if G["confirm"] and G["graphs"]:        # Mini-Dialog über die Liste legen
                 nm = G["graphs"][G["sel"]]["name"]
@@ -3125,6 +3158,7 @@ def run_ui(stdscr, store):
                     if G["graphs"]:
                         G["def"] = G["graphs"][G["sel"]]; G["input"] = ""; G["msg"] = ""
                         G["input2"] = ""; G["pstage"] = 0; G["dayoff"] = 0
+                        G["shown"] = {G["def"]["id"]}   # solo: nur dieser gezeigt
                         G["view"] = "view"; g_load_vals()
                 elif ch in (ord("n"), ord("N")):
                     G["view"] = "new"; G["input"] = ""; G["newtype"] = "number"; G["msg"] = ""
@@ -3172,9 +3206,19 @@ def run_ui(stdscr, store):
                 if ch == 27:                                   # Esc: bei period erst bis→von zurück
                     if typ == "period" and G["pstage"] == 1:
                         G["pstage"] = 0; G["input2"] = ""; G["msg"] = ""
-                    else:
-                        G["view"] = "list"; G["input"] = ""; G["input2"] = ""
+                    else:                                      # zurück zur Übersicht (alle zeigen)
+                        G["view"] = "list"; G["shown"] = set()
+                        G["input"] = ""; G["input2"] = ""
                         G["pstage"] = 0; G["msg"] = ""; G["dayoff"] = 0
+                elif ch in (curses.KEY_UP, curses.KEY_DOWN):    # solo-Graph wechseln (↑↓)
+                    if G["graphs"]:
+                        step = -1 if ch == curses.KEY_UP else 1
+                        G["sel"] = max(0, min(len(G["graphs"]) - 1, G["sel"] + step))
+                        G["def"] = G["graphs"][G["sel"]]
+                        G["shown"] = {G["def"]["id"]}
+                        G["input"] = ""; G["input2"] = ""; G["pstage"] = 0
+                        G["dayoff"] = 0; G["msg"] = ""
+                        g_load_vals()
                 elif ch == curses.KEY_LEFT:                     # Ziel-Tag einen zurück
                     G["dayoff"] = min(365, G.get("dayoff", 0) + 1); G["msg"] = ""
                 elif ch == curses.KEY_RIGHT:                    # … wieder vor (max heute)
@@ -3760,7 +3804,8 @@ def run_ui(stdscr, store):
             elif ch in (ord("t"), ord("T")):   # Theme zyklieren
                 theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
             elif ch in (ord("g"), ord("G")):   # Graph-Werkzeug öffnen
-                G["active"] = True; G["view"] = "list"; G["msg"] = ""; g_load()
+                G["active"] = True; G["view"] = "list"; G["msg"] = ""
+                G["shown"] = set(); g_load()   # immer in der Übersicht (alle) starten
             elif ch in (ord("l"), ord("L")):   # Listen-Werkzeug öffnen
                 L["active"] = True; L["view"] = "list"; L["msg"] = ""; l_load()
             elif ch in (ord("m"), ord("M")):   # Karte öffnen
