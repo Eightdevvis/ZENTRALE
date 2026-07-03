@@ -1223,9 +1223,13 @@ def api_transcribe():
 @app.route('/api/tutor/status')
 def api_tutor_status():
     """Gibt zurueck ob gerade eine Tutor-Session aktiv ist + Audio-Service-Status.
-    privacy_warning != null → Provider trainiert auf Daten: im UI laut anzeigen."""
+    privacy_warning != null → Provider trainiert auf Daten: im UI laut anzeigen.
+    available = ist das aufgeloeste Backend (ollama vs cloud) gerade erreichbar?
+    → Fronten (TUI/Browser) koennen ohne Start-Versuch zeigen, ob der Tutor geht
+    (sonst z.B. toter Smiley statt Fehler beim /start)."""
     return jsonify({
         "active":         tutor_session.is_active(),
+        "available":      tutor_session.available(),
         "whisper":        audio.whisper_available(),
         "tts":            audio.tts_available(),
         "privacy_warning": tutor_session.privacy_notice(),

@@ -498,6 +498,7 @@ TUI_COMMANDS = [
     ("/theme", "Theme: auto | hell | dunkel  (auch 't')"),
     ("/cloud", "Cloud-Drossel: on | off  (Datenschutz/Kosten)"),
     ("/local", "Lokale KI drosseln: on | off  (Ollama-Leitung)"),
+    ("/tutor", "Sprach-Tutor öffnen (Mitte, Cloud/Qwen)  (auch 'u')"),
     ("/quit",  "ZENTRALE-TUI beenden  (auch 'q')"),
 ]
 TUI_KEYS = [
@@ -509,6 +510,7 @@ TUI_KEYS = [
     ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · v Woche/Monat"),
     ("p",   "Post/Mail (Mitte): enter rein · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich (ordner an keymap) · esc zurück"),
     ("a",   "KI-Chat (Mitte): tippen + enter fragt die lokale KI (PC-Hirn via tunnel) · ↑↓ scrollen · esc zu"),
+    ("u",   "Sprach-Tutor (Mitte): enter startet die stunde · tippen + enter redet · /lang /provider /model /models /tutorstop · esc zu (session bleibt)"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
@@ -522,10 +524,16 @@ CTX_KEYS = {
     "home": [
         ("l", "listen"), ("g", "graph"), ("m", "karte"),
         ("c", "kalender"), ("p", "post / mail"), ("a", "ki-chat"),
-        ("t", "theme"), ("q", "beenden"),
+        ("u", "tutor"), ("t", "theme"), ("q", "beenden"),
     ],
     "ai": [
         ("tippen", "frage"), ("enter", "senden"),
+        ("↑↓", "scrollen"), ("esc", "zu"),
+    ],
+    "tutor": [
+        ("enter", "start / reden"), ("/lang", "sprache"),
+        ("/provider", "anbieter"), ("/model", "modell"),
+        ("/models", "wahl zeigen"), ("/tutorstop", "beenden"),
         ("↑↓", "scrollen"), ("esc", "zu"),
     ],
     "graph": [
@@ -588,7 +596,7 @@ CTX_TITLES = {
     "cal:week": "kalender · woche", "cal:month": "kalender · monat",
     "cal:list": "kalender · liste", "cal:sort": "kalender · sortieren",
     "mail:cats": "post", "mail:list": "post · liste", "mail:read": "post · lesen",
-    "ai": "ki-chat",
+    "ai": "ki-chat", "tutor": "tutor",
 }
 
 
@@ -623,6 +631,8 @@ def parse_command(buf, theme_mode):
         if arg in ("on", "an"):   return "LOCAL_ON", theme_mode, ""
         if arg in ("off", "aus"): return "LOCAL_OFF", theme_mode, ""
         return "LOCAL_TOGGLE", theme_mode, ""
+    if name in ("tutor", "sprache"):             # Sprach-Tutor-Panel öffnen (Mitte)
+        return "TUTOR_OPEN", theme_mode, ""
     return None, theme_mode, "unbekannter befehl: /" + name
 
 
@@ -1178,6 +1188,201 @@ def run_ui(stdscr, store):
                     cur = cand
             out.append((role, cur))
         return out
+
+    # ── Sprach-Tutor (füllt die MITTE-Box, Taste 'u') ──────────────────
+    # Angekabelt an das Backend über <BASE_URL>/api/tutor/*. Anders als der Chat
+    # läuft der Tutor meist über die CLOUD (Default zh→qwen): die Session ist
+    # ZUSTANDSBEHAFTET (start/stop), der Stream liefert nur token/done (keine
+    # Erlaubnis-Fragen). Das Backend entscheidet per tutor_session.available()
+    # anhand des AUFGELÖSTEN Providers, ob es überhaupt geht (ollama vs cloud);
+    # ist es weg (cloud gedrosselt / offline), zeigt das Panel einen toten Smiley
+    # statt einen /start ins Leere zu schicken. Slash-Befehle (/lang /provider
+    # /model /models /tutorstop /cloud) tippt man in DIESELBE Zeile (Browser-
+    # Konsolen-Prinzip) — beginnt die Eingabe mit '/', ist es ein Befehl, sonst
+    # eine Antwort an den Tutor. Alle IO im Hintergrund-Thread, nie im Render/Input.
+    #   session : läuft serverseitig eine Tutor-Session? (start setzt sie)
+    #   avail   : Backend erreichbar? None=noch nicht geprüft, False=toter Smiley
+    #   provider/model/lang/lang_name : aufgelöste Wahl (Kopfzeile)
+    #   privacy : Datenschutz-Warnung (Provider trainiert auf Daten) oder None
+    TUTOR = {"active": False, "input": "", "log": [], "answer": None,
+             "streaming": False, "scroll": 0, "session": False, "avail": None,
+             "provider": "", "model": "", "lang": "", "lang_name": "",
+             "privacy": None, "msg": "", "loaded": False}
+    TUTOR_LOCK = threading.Lock()
+
+    def tutor_refresh():
+        """Status + Config vom Backend holen (Hintergrund): avail/session/privacy
+        aus /api/tutor/status, provider/model/lang aus /api/tutor/config. Scheitert
+        still → avail=False (toter Smiley)."""
+        try:
+            st = api_call("/api/tutor/status")
+        except (urllib.error.URLError, OSError, ValueError):
+            st = None
+        try:
+            cf = api_call("/api/tutor/config")
+        except (urllib.error.URLError, OSError, ValueError):
+            cf = None
+        with TUTOR_LOCK:
+            if isinstance(st, dict):
+                TUTOR["avail"]   = bool(st.get("available"))
+                TUTOR["session"] = bool(st.get("active"))
+                TUTOR["privacy"] = st.get("privacy_warning")
+            else:
+                TUTOR["avail"] = False
+            if isinstance(cf, dict):
+                TUTOR["provider"]  = cf.get("provider") or ""
+                TUTOR["model"]     = cf.get("model") or ""
+                TUTOR["lang"]      = cf.get("lang") or ""
+                TUTOR["lang_name"] = cf.get("lang_name") or ""
+                # Config warnt schon VOR Session-Start, falls der Provider trainiert
+                if cf.get("trains_on_data") and not TUTOR["privacy"]:
+                    TUTOR["privacy"] = "provider '%s' trainiert auf deine eingaben" % (
+                        TUTOR["provider"],)
+            TUTOR["loaded"] = True
+
+    def tutor_sse(url, payload):
+        """Gemeinsamer SSE-Leser für /api/tutor/start + /respond. Füllt
+        TUTOR['answer'] Token für Token, hängt die fertige Antwort ans log.
+        503 → aufgelöstes Backend weg → avail=False (toter Smiley)."""
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url, data=data, method="POST",
+            headers={"Content-Type": "application/json",
+                     "Accept": "text/event-stream"})
+        resp = None
+        try:
+            resp = urllib.request.urlopen(req, timeout=120)
+            for raw in resp:
+                line = raw.decode("utf-8", "replace").rstrip("\r\n")
+                if not line.startswith("data:"):
+                    continue
+                try:
+                    evt = json.loads(line[5:].strip())
+                except ValueError:
+                    continue
+                with TUTOR_LOCK:
+                    if "token" in evt:
+                        TUTOR["answer"] = (TUTOR["answer"] or "") + str(evt["token"])
+                    elif "done" in evt:
+                        break
+        except urllib.error.HTTPError as e:
+            with TUTOR_LOCK:
+                if e.code == 503:
+                    TUTOR["avail"] = False
+                    TUTOR["session"] = False
+                    TUTOR["msg"] = "tutor nicht erreichbar (cloud gedrosselt? /cloud on)"
+                else:
+                    TUTOR["msg"] = "fehler: HTTP %s" % e.code
+        except (urllib.error.URLError, OSError):
+            with TUTOR_LOCK:
+                TUTOR["msg"] = "keine verbindung (zentrale-remote?)"
+        finally:
+            if resp is not None:
+                try: resp.close()
+                except OSError: pass
+            with TUTOR_LOCK:
+                ans = (TUTOR["answer"] or "").strip()
+                if ans:
+                    TUTOR["log"].append(("ai", ans))
+                TUTOR["answer"] = None
+                TUTOR["streaming"] = False
+
+    def tutor_begin():
+        """Session starten (KI begrüßt, user_text=None). Nur wenn erreichbar."""
+        with TUTOR_LOCK:
+            if TUTOR["streaming"]:
+                return
+            if TUTOR["avail"] is False:
+                TUTOR["msg"] = "tutor nicht erreichbar (cloud gedrosselt? /cloud on)"
+                return
+            TUTOR["answer"]    = ""
+            TUTOR["msg"]       = ""
+            TUTOR["scroll"]    = 0
+            TUTOR["session"]   = True
+            TUTOR["streaming"] = True
+        threading.Thread(target=tutor_sse,
+                         args=(BASE_URL + "/api/tutor/start", {}), daemon=True).start()
+
+    def tutor_say(text):
+        """Antwort an den Tutor schicken (respond-Stream). Session muss laufen."""
+        with TUTOR_LOCK:
+            if TUTOR["streaming"] or not text:
+                return
+            TUTOR["log"].append(("user", text))
+            TUTOR["input"]     = ""
+            TUTOR["answer"]    = ""
+            TUTOR["msg"]       = ""
+            TUTOR["scroll"]    = 0
+            TUTOR["streaming"] = True
+        threading.Thread(target=tutor_sse,
+                         args=(BASE_URL + "/api/tutor/respond", {"text": text}),
+                         daemon=True).start()
+
+    def tutor_cmd(buf):
+        """Slash-Befehl aus der Tutor-Zeile (Browser-Konsolen-Prinzip). Kennt
+        /tutor(start) /tutorstop /lang /provider /model /models /cloud. Live-
+        Umschalten geht über /api/tutor/config (persist=False = nur laufende
+        Instanz, wie im Browser). Alles kurz synchron (ein paar ms) + Refresh."""
+        parts = buf[1:].strip().split()
+        with TUTOR_LOCK:
+            TUTOR["input"] = ""
+        if not parts:
+            return
+        name = parts[0].lower()
+        arg  = " ".join(parts[1:]).strip()
+        if name in ("tutor", "start"):
+            tutor_begin(); return
+        if name in ("tutorstop", "stop"):
+            try: api_call("/api/tutor/stop", "POST", {})
+            except (urllib.error.URLError, OSError, ValueError): pass
+            with TUTOR_LOCK:
+                TUTOR["session"] = False
+                TUTOR["msg"]     = "tutor-stunde beendet"
+            return
+        if name == "cloud":                          # Tutor braucht meist Cloud
+            want = None
+            if arg.lower() in ("on", "an"):  want = True
+            if arg.lower() in ("off", "aus"): want = False
+            try:
+                if want is None:
+                    cur  = api_call("/api/ai/backends")
+                    want = not (cur or {}).get("cloud_enabled", True)
+                st = api_call("/api/ai/backends", "POST", {"cloud_enabled": bool(want)})
+                store._poll_backends()
+                with TUTOR_LOCK:
+                    TUTOR["msg"] = "cloud " + ("AN" if (st or {}).get("cloud_enabled") else "GEDROSSELT")
+            except (urllib.error.URLError, OSError, ValueError):
+                with TUTOR_LOCK: TUTOR["msg"] = "cloud-schalter fehlgeschlagen"
+            threading.Thread(target=tutor_refresh, daemon=True).start()
+            return
+        if name in ("lang", "provider", "model"):
+            if not arg:
+                with TUTOR_LOCK: TUTOR["msg"] = "nutze /%s <wert>" % name
+                return
+            try:
+                api_call("/api/tutor/config", "POST", {name: arg})
+                with TUTOR_LOCK: TUTOR["msg"] = "%s → %s" % (name, arg)
+            except (urllib.error.URLError, OSError, ValueError):
+                with TUTOR_LOCK: TUTOR["msg"] = "%s-wechsel fehlgeschlagen" % name
+            threading.Thread(target=tutor_refresh, daemon=True).start()
+            return
+        if name in ("models", "model?"):
+            try:
+                cf = api_call("/api/tutor/config")
+            except (urllib.error.URLError, OSError, ValueError):
+                cf = None
+            with TUTOR_LOCK:
+                if isinstance(cf, dict):
+                    provs = ", ".join(p.get("name") for p in cf.get("providers", [])
+                                      if p.get("enabled"))
+                    TUTOR["msg"] = "jetzt: %s · %s · %s — wählbar: %s" % (
+                        cf.get("provider"), cf.get("model"), cf.get("lang"),
+                        provs or "—")
+                else:
+                    TUTOR["msg"] = "modelle nicht lesbar"
+            return
+        with TUTOR_LOCK:
+            TUTOR["msg"] = "unbekannt: /%s" % name
 
     # ── Mail-I/O läuft im Hintergrund, NIE im Render/Input-Thread ─────────
     # Jede IMAP-Op (zählen, Ordner holen, Body, einsortieren, löschen) kann bei
@@ -3832,6 +4037,92 @@ def run_ui(stdscr, store):
                 shown = "› …" + inp[-(inw - 5):]
             addclip(input_y, inx, shown + "_", inw, C["bright"])
 
+    def draw_tutor(by, bx, bh, bw):
+        """Inhalt der MITTE-Box, wenn der Sprach-Tutor Fokus hat. Reiner Zeichner:
+        Kopfzeile (aufgelöste Wahl + Privacy-Ampel), Verlauf/laufende Antwort,
+        Info- + Eingabezeile. Ist das Backend weg (avail=False) → toter Smiley."""
+        inx = bx + 2
+        inw = max(6, bw - 4)
+        input_y  = by + bh - 2
+        info_y   = by + bh - 3
+        head_y   = by + 1
+        body_top = by + 2
+        body_bot = by + bh - 4
+        rows = max(1, body_bot - body_top + 1)
+
+        with TUTOR_LOCK:
+            log       = list(TUTOR["log"])
+            answer    = TUTOR["answer"]
+            streaming = TUTOR["streaming"]
+            inp       = TUTOR["input"]
+            msg       = TUTOR["msg"]
+            scroll    = TUTOR["scroll"]
+            session   = TUTOR["session"]
+            av        = TUTOR["avail"]
+            prov      = TUTOR["provider"]
+            model     = TUTOR["model"]
+            lang      = TUTOR["lang"]
+            privacy   = TUTOR["privacy"]
+
+        # Kopfzeile: aufgelöste Wahl (modell · sprache) links, Privacy-Ampel rechts
+        head = "tutor"
+        sel = " · ".join(x for x in (model or prov, lang) if x)
+        if sel:
+            head += " · " + sel
+        pflag = "⚠ trainiert" if privacy else ("· ok" if (prov or lang) else "")
+        addclip(head_y, inx, head, max(1, inw - len(pflag) - 1), C["dim"])
+        if pflag:
+            addclip(head_y, inx + max(0, inw - len(pflag)), pflag, len(pflag),
+                    C["warn"] if privacy else C["faint"])
+
+        if av is False:                          # Backend weg → toter Smiley
+            face = ["x_x", "tutor nicht erreichbar", "cloud gedrosselt? · /cloud on"]
+            cy = body_top + max(0, rows // 2 - 1)
+            for i, ln in enumerate(face[:rows]):
+                addclip(cy + i, inx + max(0, (inw - len(ln)) // 2), ln, inw,
+                        C["warn"] if i == 0 else C["faint"])
+        else:
+            lines = []
+            for role, text in log:
+                lines += ai_wrap(role, text, inw)
+                lines.append(("gap", ""))
+            if answer is not None:
+                lines += ai_wrap("ai", answer + ("▌" if streaming else ""), inw)
+            if not lines:
+                hint = ("enter startet die stunde" if not session else
+                        "tippen + enter · /lang /provider /model /models /tutorstop")
+                addclip(body_top + rows // 2, inx, hint[:inw], inw, C["faint"])
+            else:
+                total = len(lines)
+                maxscroll = max(0, total - rows)
+                sc = min(scroll, maxscroll)
+                start = max(0, total - rows - sc)
+                y = body_top
+                for kind, seg in lines[start:start + rows]:
+                    attr = C["acc"] if kind == "user" else (
+                        C["bright"] if kind == "ai" else C["faint"])
+                    addclip(y, inx, seg, inw, attr)
+                    y += 1
+
+        # Info-Zeile: Status/Fehler > Privacy-Warnung > Scroll-Hinweis
+        if msg:
+            addclip(info_y, inx, msg[:inw], inw, C["warn"])
+        elif privacy:
+            addclip(info_y, inx, ("⚠ " + str(privacy))[:inw], inw, C["warn"])
+        elif scroll > 0:
+            addclip(info_y, inx, "↑ verlauf (↓ nach unten)", inw, C["faint"])
+
+        # Eingabezeile: Stream läuft > Backend weg > normale Eingabe
+        if streaming:
+            addclip(input_y, inx, "› …", inw, C["dim"])
+        elif av is False:
+            addclip(input_y, inx, "› /cloud on  gibt die cloud frei", inw, C["faint"])
+        else:
+            shown = "› " + inp
+            if len(shown) > inw - 1:
+                shown = "› …" + inp[-(inw - 5):]
+            addclip(input_y, inx, shown + "_", inw, C["bright"])
+
     def in_text_entry():
         """Tippt der Nutzer gerade einen Freitext (Name, Eintrag, Antwort)?
         Dann bleibt '/' ein normales Zeichen und öffnet NICHT die Befehlszeile."""
@@ -3848,6 +4139,10 @@ def run_ui(stdscr, store):
             # Ganzes Panel ist Prompt-Eingabe → '/' bleibt ein Zeichen, öffnet
             # nicht die Befehlszeile. (Bei offener Erlaubnis-Frage ignoriert der
             # AI-Zweig alles außer j/n/Zahl/esc.)
+            return True
+        if TUTOR["active"]:
+            # Ganze Zeile ist Eingabe (reden ODER '/befehl') → '/' bleibt ein
+            # Zeichen, die Tutor-Zeile parst Slash-Befehle selbst (Browser-Konsole).
             return True
         return False
 
@@ -3881,13 +4176,16 @@ def run_ui(stdscr, store):
             return "mail:read" if MAIL["mode2"] == "read" else "mail:list"
         if AI["active"]:
             return "ai"
+        if TUTOR["active"]:
+            return "tutor"
         return "home"
 
     while True:
         # Während einer Länder-Kamerafahrt ODER eines laufenden KI-Streams
         # schneller ticken (~30 fps) für weiche Bewegung / live nachlaufende
         # Token; sonst die ruhige 250-ms-Kadenz (spart CPU/Backend-Last).
-        fast = (M["active"] and M.get("anim")) or (AI["active"] and AI["streaming"])
+        fast = ((M["active"] and M.get("anim")) or (AI["active"] and AI["streaming"])
+                or (TUTOR["active"] and TUTOR["streaming"]))
         stdscr.timeout(33 if fast else 250)
         ch = stdscr.getch()
 
@@ -3937,6 +4235,11 @@ def run_ui(stdscr, store):
                         cmd_msg = "lokale ki " + ("AN" if (st or {}).get("local_enabled") else "GEDROSSELT")
                     except (urllib.error.URLError, OSError, ValueError):
                         cmd_msg = "lokal-schalter fehlgeschlagen"
+                if res == "TUTOR_OPEN":
+                    # Panel öffnen wie Taste 'u' (Status/Config im Hintergrund holen)
+                    TUTOR["active"] = True; TUTOR["scroll"] = 0; TUTOR["msg"] = ""
+                    threading.Thread(target=tutor_refresh, daemon=True).start()
+                    cmd_msg = "tutor"
             elif ch in (curses.KEY_BACKSPACE, 127, 8):
                 cmd_buf = cmd_buf[:-1]
                 if not cmd_buf:                # Slash weggelöscht → zu
@@ -4833,6 +5136,31 @@ def run_ui(stdscr, store):
                     MAIL["msg"] = "zähle neu…"
                 elif ch in (ord("t"), ord("T")):
                     theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
+        elif TUTOR["active"]:                  # Sprach-Tutor hat den Fokus
+            if ch == 27:                       # esc schließt Panel (Session bleibt aktiv)
+                TUTOR["active"] = False
+            elif ch in (10, 13, curses.KEY_ENTER):
+                buf = TUTOR["input"].strip()
+                if buf.startswith("/"):        # /befehl (reden vs. steuern in EINER zeile)
+                    tutor_cmd(buf)
+                elif not TUTOR["session"]:     # noch keine stunde → enter startet sie
+                    with TUTOR_LOCK: TUTOR["input"] = ""
+                    tutor_begin()
+                elif buf:                      # session läuft + text → antworten
+                    tutor_say(buf)
+            elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                if not TUTOR["streaming"]:
+                    TUTOR["input"] = TUTOR["input"][:-1]
+            elif ch == curses.KEY_UP:
+                TUTOR["scroll"] += 1
+            elif ch == curses.KEY_DOWN:
+                TUTOR["scroll"] = max(0, TUTOR["scroll"] - 1)
+            elif ch == curses.KEY_PPAGE:
+                TUTOR["scroll"] += 5
+            elif ch == curses.KEY_NPAGE:
+                TUTOR["scroll"] = max(0, TUTOR["scroll"] - 5)
+            elif 32 <= ch <= 126 and not TUTOR["streaming"] and len(TUTOR["input"]) < 1000:
+                TUTOR["input"] += chr(ch)
         elif AI["active"]:                     # KI-Chat hat den Fokus
             if AI["perm"]:                     # offene Erlaubnis-Frage → j/n/Zahl
                 opts = AI["perm"].get("optionen") or ["ja", "nein"]
@@ -4886,6 +5214,9 @@ def run_ui(stdscr, store):
                 AI["active"] = True; AI["scroll"] = 0; AI["msg"] = ""
                 if not AI["loaded"]:           # Verlauf einmal im Hintergrund nachladen
                     threading.Thread(target=ai_load_history, daemon=True).start()
+            elif ch in (ord("u"), ord("U")):   # Sprach-Tutor öffnen (Cloud/Qwen-Backend)
+                TUTOR["active"] = True; TUTOR["scroll"] = 0; TUTOR["msg"] = ""
+                threading.Thread(target=tutor_refresh, daemon=True).start()
             # '/' wird global oben abgefangen (greift in JEDEM Fenster), darum
             # hier kein eigener Zweig mehr.
         # KEY_RESIZE oder Timeout → einfach neu zeichnen
@@ -5055,12 +5386,16 @@ def run_ui(stdscr, store):
         elif AI["active"]:
             draw_box(top, mx, body_h, midw, "ki-chat")
             draw_ai(top, mx, body_h, midw)
+        elif TUTOR["active"]:
+            draw_box(top, mx, body_h, midw, "tutor")
+            draw_tutor(top, mx, body_h, midw)
         else:
             draw_box(top, mx, body_h, midw, "mitte")
             cyc = top + body_h // 2
             big = "KASSETTE · TUI"
             invite = ["g · graph-werkzeug", "l · listen", "m · karte",
-                      "c · kalender", "p · post/mail", "a · ki-chat"]
+                      "c · kalender", "p · post/mail", "a · ki-chat",
+                      "u · tutor"]
             addclip(cyc - 4, mx + max(1, (midw - len(big)) // 2), big, midw - 2, C["bright"])
             for i, ln in enumerate(invite):
                 addclip(cyc - 2 + i, mx + max(1, (midw - len(ln)) // 2),
@@ -5229,7 +5564,7 @@ def run_ui(stdscr, store):
         # ── Footer (Tasten + Theme + Backend) ─────────────────────────────
         tm_txt = "auto(%s)" % cur_theme if theme_mode == "auto" else cur_theme
         addclip(footer_row, 0,
-                " q quit · t theme: %s · g graph · m karte · c kalender · a ki · / befehle · %s" % (tm_txt, BASE_URL),
+                " q quit · t theme: %s · g graph · m karte · c kalender · a ki · u tutor · / befehle · %s" % (tm_txt, BASE_URL),
                 W - 1, C["faint"])
 
         # ── Graph-Reminder-Nag (zuletzt → liegt über allem) ───────────────
