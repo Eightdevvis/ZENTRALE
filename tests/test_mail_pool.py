@@ -412,10 +412,12 @@ def test_reconcile_moves_misfiled_to_keymap_target(monkeypatch):
     _wire_reconcile(monkeypatch, imap, cats, classify)
     res = M.reconcile_account({"name": "acc"}, dry_run=False)
 
-    assert imap.folders["ZENTRALE/Werbung"] == {1: "a@pearl.de", 10: "a@pearl.de"}
+    # Reconcile lässt die INBOX (Eingang-Tray) in Ruhe → uid 10 bleibt liegen.
+    assert imap.folders["ZENTRALE/Werbung"] == {1: "a@pearl.de"}
     assert imap.folders["ZENTRALE/Reise"] == {2: "b@flixbus.com"}
     assert imap.folders["ZENTRALE/Review"] == {3: "c@unknown.io"}   # unbekannt bleibt
-    assert res["moved"] == 3
+    assert imap.folders["INBOX"] == {10: "a@pearl.de"}             # Eingang unangetastet
+    assert res["moved"] == 2
 
     # idempotent: alles liegt richtig → zweiter Lauf bewegt nichts
     res2 = M.reconcile_account({"name": "acc"}, dry_run=False)
@@ -468,6 +470,123 @@ def test_trie_unknown_and_stale_category_go_to_review():
     assert m.classify("wer@ganz.anders") == (M.mail_rules.REVIEW, False)  # unbekannt
     # Regel zeigt auf eine Kategorie, die es nicht mehr gibt → Review (safe)
     assert m.classify("a@b.de") == (M.mail_rules.REVIEW, False)
+
+
+# ── Eingang-Tray: INBOX + \Seen, einsortieren erst beim Lesen ─────────
+# Neue Mail bleibt im Eingang (INBOX), bis sie GELESEN ist und der Absender
+# bekannt: dann wandert sie in ihre Kategorie. Ungelesenes/Unbekanntes bleibt.
+
+class _HdrIMAP:
+    """Liefert für FETCH einen FROM-Header (fester Absender); STORE/uid gezählt."""
+    capabilities = (b"MOVE",)
+    def __init__(self, frm="a@known.de"):
+        self.frm = frm
+        self.stored = []
+    def uid(self, cmd, *a):
+        if cmd == "STORE":
+            self.stored.append(a)
+            return ("OK", [b""])
+        if cmd == "FETCH":
+            return ("OK", [(b"1 (UID 1)", ("From: %s\r\n\r\n" % self.frm).encode())])
+        return ("OK", [b""])
+
+
+class _FC:
+    def target(self, imap, spec):
+        return spec.get("folder")
+
+
+def _wire_classify(monkeypatch, known_cat="zahlen"):
+    monkeypatch.setattr(M, "_record", lambda item: None)   # nicht in echte state.json
+    monkeypatch.setattr(M.mail_rules, "category_action",
+                        lambda c: {"action": "move", "folder": "ZENTRALE/Zahlen"})
+
+
+def test_handle_uid_files_only_seen_and_known(monkeypatch):
+    _wire_classify(monkeypatch)
+    monkeypatch.setattr(M.mail_rules, "classify", lambda f: ("zahlen", True))
+    moves = []
+    monkeypatch.setattr(M, "_move_uid",
+                        lambda imap, uid, target: (moves.append((uid, target)), True)[1])
+    imap = _HdrIMAP("a@known.de")
+    # gelesen + bekannt → einsortiert
+    done, moved = M._handle_uid(imap, "acc", 1, False, _FC(), [], seen=True)
+    assert moved is True and moves == [(1, "ZENTRALE/Zahlen")]
+    # bekannt, aber UNGELESEN → bleibt im Eingang
+    moves.clear()
+    done, moved = M._handle_uid(imap, "acc", 1, False, _FC(), [], seen=False)
+    assert moved is False and moves == []
+
+
+def test_handle_uid_unknown_stays_even_if_seen(monkeypatch):
+    _wire_classify(monkeypatch)
+    monkeypatch.setattr(M.mail_rules, "classify",
+                        lambda f: (M.mail_rules.REVIEW, False))
+    moves = []
+    monkeypatch.setattr(M, "_move_uid",
+                        lambda imap, uid, target: (moves.append((uid, target)), True)[1])
+    done, moved = M._handle_uid(_HdrIMAP("x@neu.io"), "acc", 1, False, _FC(), [], seen=True)
+    assert moved is False and moves == []           # unbekannt bleibt im Eingang
+
+
+def test_mark_seen_and_file_known(monkeypatch):
+    imap = _HdrIMAP("a@known.de")
+    monkeypatch.setattr(M, "_session", contextmanager(lambda account: iter([imap])))
+    monkeypatch.setattr(M, "_accounts_for", lambda name=None: [{"name": "acc"}])
+    monkeypatch.setattr(M, "_pselect",
+                        lambda imap, name, folder, readonly=True: "OK")
+    monkeypatch.setattr(M.mail_rules, "classify", lambda f: ("zahlen", True))
+    monkeypatch.setattr(M.mail_rules, "category_action",
+                        lambda c: {"action": "move", "folder": "ZENTRALE/Zahlen"})
+    monkeypatch.setattr(M._FolderCache, "target", lambda self, imap, spec: spec["folder"])
+    moved = []
+    monkeypatch.setattr(M, "_move_uid",
+                        lambda imap, uid, target: (moved.append(target), True)[1])
+    res = M.mark_seen_and_file(1)
+    assert res["seen"] and res["filed"] and res["category"] == "zahlen"
+    assert imap.stored and imap.stored[0][1] == "+FLAGS"     # \Seen gesetzt
+    assert moved == ["ZENTRALE/Zahlen"]
+
+
+def test_mark_seen_and_file_unknown_only_marks_seen(monkeypatch):
+    imap = _HdrIMAP("x@neu.io")
+    monkeypatch.setattr(M, "_session", contextmanager(lambda account: iter([imap])))
+    monkeypatch.setattr(M, "_accounts_for", lambda name=None: [{"name": "acc"}])
+    monkeypatch.setattr(M, "_pselect",
+                        lambda imap, name, folder, readonly=True: "OK")
+    monkeypatch.setattr(M.mail_rules, "classify",
+                        lambda f: (M.mail_rules.REVIEW, False))
+    moved = []
+    monkeypatch.setattr(M, "_move_uid",
+                        lambda imap, uid, target: (moved.append(target), True)[1])
+    res = M.mark_seen_and_file(1)
+    assert res["seen"] is True and res["filed"] is False     # nur gelesen, bleibt
+    assert imap.stored and moved == []                       # \Seen ja, Move nein
+
+
+def test_inbox_tray_parses_seen_flag_and_category(monkeypatch):
+    from types import SimpleNamespace
+    class TrayIMAP:
+        def uid(self, cmd, *a):
+            if cmd == "SEARCH":
+                return ("OK", [b"1 2"])
+            if cmd == "FETCH":
+                return ("OK", [
+                    (b"1 (UID 1 FLAGS (\\Seen) BODY[HEADER])",
+                     b"From: a@known.de\r\nSubject: s1\r\n\r\n"),
+                    (b"2 (UID 2 FLAGS () BODY[HEADER])",
+                     b"From: b@neu.io\r\nSubject: s2\r\n\r\n"),
+                ])
+            return ("OK", [b""])
+    monkeypatch.setattr(M, "_session", contextmanager(lambda account: iter([TrayIMAP()])))
+    monkeypatch.setattr(M, "_accounts_for", lambda name=None: [{"name": "acc"}])
+    monkeypatch.setattr(M, "_pselect",
+                        lambda imap, name, folder, readonly=True: "OK")
+    monkeypatch.setattr(M.mail_rules, "matcher", lambda: SimpleNamespace(
+        classify=lambda f: ("zahlen", True) if "known.de" in f else (M.mail_rules.REVIEW, False)))
+    tray = {t["uid"]: t for t in M.inbox_tray()}
+    assert tray[1]["seen"] is True and tray[1]["known"] and tray[1]["category"] == "zahlen"
+    assert tray[2]["seen"] is False and not tray[2]["known"] and tray[2]["category"] is None
 
 
 # ── Entwurf: Antwort als echter IMAP-Draft (Drafts-Ordner) ────────────

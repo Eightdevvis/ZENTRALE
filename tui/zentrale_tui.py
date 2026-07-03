@@ -508,7 +508,7 @@ TUI_KEYS = [
     ("l",   "Listen (Mitte): anlegen · einträge abhaken (space) / löschen · p als projekt rechts"),
     ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Handelsrouten · w=Fenster"),
     ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · v Woche/Monat"),
-    ("p",   "Post/Mail (Mitte): enter rein · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich (ordner an keymap) · esc zurück"),
+    ("p",   "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
     ("a",   "KI-Chat (Mitte): tippen + enter fragt die lokale KI (PC-Hirn via tunnel) · ↑↓ scrollen · esc zu"),
     ("u",   "Sprach-Tutor (Mitte): enter startet die stunde · tippen + enter redet · /lang /provider /model /models /tutorstop · esc zu (session bleibt)"),
     ("/",   "Befehlszeile öffnen"),
@@ -576,18 +576,18 @@ CTX_KEYS = {
         ("↑↓", "verschieben"), ("s/esc", "fertig"),
     ],
     "mail:cats": [
-        ("↑↓", "wählen"), ("enter", "öffnen"), ("r", "poll"),
+        ("↑↓", "wählen"), ("enter", "öffnen"), ("e", "eingang"), ("r", "poll"),
         ("x", "abgleich"), ("z", "neu zählen"), ("esc", "zu"),
     ],
     "mail:list": [
-        ("↑↓", "wählen"), ("enter", "lesen"), ("a", "antworten"),
+        ("↑↓", "wählen"), ("enter", "lesen"), ("f", "abhaken"), ("a", "antworten"),
         ("s", "einsortieren"), ("d", "löschen"), ("x", "abgleich"),
         ("z", "neu zählen"), ("esc", "zurück"),
     ],
     "mail:read": [
         ("←→", "vor/zurück"), ("↓", "ausklappen/scrollen"), ("↑", "scrollen/zu"),
-        ("a", "antworten"), ("s", "einsortieren"), ("d", "löschen"), ("v", "liste"),
-        ("x", "abgleich"), ("z", "neu zählen"), ("esc", "zurück"),
+        ("f", "abhaken"), ("a", "antworten"), ("s", "einsortieren"), ("d", "löschen"),
+        ("v", "liste"), ("x", "abgleich"), ("z", "neu zählen"), ("esc", "zurück"),
     ],
 }
 CTX_TITLES = {
@@ -1021,8 +1021,10 @@ def run_ui(stdscr, store):
     #   active : Panel hat den Fokus
     #   level  : "cats" (Kategorien wählen) | "mails" (Mails der gewählten Kat.)
     #   sel    : Auswahl-Index in der Kategorie-Liste
-    #   cat    : Name der geöffneten Kategorie (in "mails")
+    #   cat    : Name der geöffneten Kategorie (in "mails"); Sentinel MAIL_EINGANG
+    #            = der Eingang-Tray (INBOX + \Seen) statt einer Kategorie
     #   off    : Scroll-Offset in der Mail-Liste; _ts: letzter Abruf (Auto-Refresh)
+    MAIL_EINGANG = "__eingang__"
     MAIL = {"active": False, "level": "cats", "sel": 0, "cat": None,
             "off": 0, "data": None, "msg": "", "_ts": 0.0, "busy": "",
             "mails": None, "mails_live": False,   # mails: None=lädt, []=leer
@@ -3462,9 +3464,12 @@ def run_ui(stdscr, store):
         einschwenkt."""
         mails, live, err, refreshing = None, False, None, False
         try:
-            q = "/api/mail/folder?cat=" + urllib.parse.quote(name or "")
-            if force:
-                q += "&force=1"
+            if name == MAIL_EINGANG:            # Eingang-Tray = INBOX + \Seen
+                q = "/api/mail/inbox"
+            else:
+                q = "/api/mail/folder?cat=" + urllib.parse.quote(name or "")
+                if force:
+                    q += "&force=1"
             r = api_call(q, timeout=30.0)
             if isinstance(r, dict) and r.get("error"):
                 mails, err = [], str(r.get("error"))
@@ -3540,11 +3545,15 @@ def run_ui(stdscr, store):
                 if nu is not None and (nb.get("account") or "") == acct:
                     neigh.append(str(nu))
         try:
-            q = ("/api/mail/body?cat=" + urllib.parse.quote(MAIL["cat"] or "")
-                 + "&uid=" + str(uid)
-                 + "&account=" + urllib.parse.quote(it.get("account") or ""))
-            if neigh:
-                q += "&prefetch=" + urllib.parse.quote(",".join(neigh))
+            if MAIL["cat"] == MAIL_EINGANG:     # Eingang-Mail liegt in der INBOX
+                q = ("/api/mail/inbox-body?uid=" + str(uid)
+                     + "&account=" + urllib.parse.quote(it.get("account") or ""))
+            else:
+                q = ("/api/mail/body?cat=" + urllib.parse.quote(MAIL["cat"] or "")
+                     + "&uid=" + str(uid)
+                     + "&account=" + urllib.parse.quote(it.get("account") or ""))
+                if neigh:
+                    q += "&prefetch=" + urllib.parse.quote(",".join(neigh))
             r = api_call(q, timeout=30.0)
             body = r if isinstance(r, dict) else {"error": "?"}
         except urllib.error.HTTPError as e:
@@ -3681,10 +3690,54 @@ def run_ui(stdscr, store):
         _mail_submit(("reconcile",), "gleiche ab…", _do_reconcile)
         MAIL["msg"] = "starte abgleich…"
 
+    def mail_open_eingang():
+        """Den Eingang-Tray öffnen (INBOX + \\Seen). Neue/ungelesene Mail liegt
+        hier, bis sie gelesen ist; `f` hakt sie ab (gelesen + einsortieren)."""
+        mail_open_category(MAIL_EINGANG)
+
+    def _do_mark_read():
+        it = mail_cur()
+        if not it:
+            return
+        uid = it.get("uid")
+        try:
+            r = api_call("/api/mail/read", method="POST",
+                         body={"uid": uid, "account": it.get("account")}, timeout=30.0)
+            if isinstance(r, dict) and r.get("filed"):
+                MAIL["msg"] = "abgehakt → %s" % (r.get("category") or "?")
+            elif isinstance(r, dict) and r.get("seen"):
+                MAIL["msg"] = "gelesen — Absender noch unbekannt (s = einsortieren)"
+            else:
+                MAIL["msg"] = "abhaken: backend?"
+        except Exception:
+            MAIL["msg"] = "abhaken: backend?"
+        # Die Mail hat den Eingang verlassen (oder ist zumindest jetzt gelesen) →
+        # Liste ohne sie neu aufbauen, damit sie sofort verschwindet.
+        MAIL["mails"] = [m for m in (MAIL["mails"] or [])
+                         if m.get("uid") != uid]
+        MAIL["fcache"].pop(MAIL_EINGANG, None)
+        MAIL["body"] = None; MAIL["bodyfor"] = None
+        _do_refresh_counts(force=True)
+
+    def mail_mark_read():
+        """Aktuelle Eingang-Mail abhaken: als gelesen markieren + (bekannter
+        Absender) einsortieren. Läuft im Worker → TUI blockiert nicht."""
+        it = mail_cur()
+        if not it:
+            return
+        MAIL["msg"] = "hake ab…"
+        _mail_submit(("read", it.get("account"), it.get("uid")), "hake ab…",
+                     _do_mark_read)
+
     def _mail_line(it):
-        """Absender + Betreff kompakt für eine Mail-Zeile."""
+        """Absender + Betreff kompakt für eine Mail-Zeile. Eingang-Items tragen
+        ein Gelesen-Flag (●=ungelesen/○=gelesen) + die vermutete Zielkategorie."""
         who = (it.get("from") or "?").strip()
         subj = (it.get("subject") or "").strip() or "(kein Betreff)"
+        if "seen" in it:                        # Eingang-Item
+            mark = "○" if it.get("seen") else "●"
+            tail = ("  → " + it["category"]) if it.get("category") else "  → ?"
+            return "%s %s — %s%s" % (mark, who, subj, tail)
         return "%s — %s" % (who, subj)
 
     def draw_mail(by, bx, bh, bw):
@@ -3713,11 +3766,13 @@ def run_ui(stdscr, store):
         # ── Ebene 2: Mails der geöffneten Kategorie (LIVE aus dem Ordner) ─
         if MAIL["level"] == "mails" and MAIL["cat"] is not None:
             cat = MAIL["cat"]
+            is_eingang = (cat == MAIL_EINGANG)
+            catlabel = "Eingang" if is_eingang else cat
             mails = MAIL["mails"]
             src = "live" if MAIL["mails_live"] else "lokal"
             cnt = "…" if mails is None else str(len(mails))
             modetag = "lesen" if MAIL["mode2"] == "read" else "liste"
-            head = "Post · %s (%s)" % (cat[:max(4, iw - 22)], cnt)
+            head = "Post · %s (%s)" % (catlabel[:max(4, iw - 22)], cnt)
             if mails is not None:
                 head += "  [%s/%s]" % (modetag, src)
             if MAIL["busy"]:
@@ -3768,6 +3823,9 @@ def run_ui(stdscr, store):
                     seld = (idx == MAIL["msel"])
                     who = (it.get("from") or "?").strip()
                     subj = (it.get("subject") or "").strip() or "(kein Betreff)"
+                    if is_eingang:                # Gelesen-Marker + Ziel-Vorschau
+                        who = ("○ " if it.get("seen") else "● ") + who
+                        subj += ("   → " + it["category"]) if it.get("category") else "   → ?"
                     a1 = (C["bright"] | curses.A_REVERSE) if seld else C["bright"]
                     a2 = (C["dim"] | curses.A_REVERSE) if seld else C["dim"]
                     addclip(y, ix, ("» " if seld else "  ") + who, iw, a1)
@@ -3782,6 +3840,10 @@ def run_ui(stdscr, store):
             mail_request_body()
             who = (it.get("from") or "?").strip()
             subj = (it.get("subject") or "").strip() or "(kein Betreff)"
+            if is_eingang:                        # Eingang: Status + Ziel im Kopf
+                who = ("○ gelesen · " if it.get("seen") else "● neu · ") + who
+                if it.get("category"):
+                    subj += "   → " + it["category"]
             addclip(body_top, ix, "Von:     " + who, iw, C["bright"])
             addclip(body_top + 1, ix, "Betreff: " + subj, iw, C["acc"])
             addclip(body_top + 2, ix, "─" * iw, iw, C["faint"])
@@ -5098,10 +5160,21 @@ def run_ui(stdscr, store):
                     MAIL["bodyoff"] = max(0, MAIL["bodyoff"] - 5)
                 elif ch in (ord("s"), ord("S")):               # einsortieren (Absender)
                     MAIL["picking"] = True; MAIL["picksel"] = 0; MAIL["msg"] = ""
+                elif ch in (ord("f"), ord("F")):               # abhaken (Eingang): gelesen + einsortieren
+                    if MAIL["cat"] == MAIL_EINGANG:
+                        mail_mark_read()
                 elif ch in (ord("d"), ord("D")):               # löschen (Papierkorb)
-                    MAIL["confirmdel"] = True; MAIL["msg"] = ""
+                    if MAIL["cat"] == MAIL_EINGANG:
+                        MAIL["msg"] = "im eingang: f = abhaken (löschen erst nach einsortieren)"
+                    else:
+                        MAIL["confirmdel"] = True; MAIL["msg"] = ""
                 elif ch in (ord("a"), ord("A")):               # antworten (Split-Editor)
-                    mail_reply_open()
+                    if MAIL["cat"] == MAIL_EINGANG:
+                        MAIL["msg"] = "im eingang erst abhaken/einsortieren, dann antworten"
+                    else:
+                        mail_reply_open()
+                elif ch in (ord("e"), ord("E")):               # e → Eingang öffnen (INBOX + \Seen)
+                    mail_open_eingang()
                 elif ch in (ord("r"), ord("R")):
                     mail_poll(); MAIL["data"] = None
                 elif ch in (ord("x"), ord("X")):               # x → Ordner an Keymap angleichen
@@ -5126,6 +5199,8 @@ def run_ui(stdscr, store):
                     cl = d.get("categories") if isinstance(d.get("categories"), list) else []
                     if 0 <= MAIL["sel"] < len(cl):
                         mail_open_category(cl[MAIL["sel"]].get("name"))
+                elif ch in (ord("e"), ord("E")):               # e → Eingang öffnen (INBOX + \Seen)
+                    mail_open_eingang()
                 elif ch in (ord("r"), ord("R")):               # r → Live-Poll anstoßen
                     mail_poll(); MAIL["data"] = None
                 elif ch in (ord("x"), ord("X")):               # x → Ordner an Keymap angleichen

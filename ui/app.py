@@ -1779,6 +1779,58 @@ def api_mail_reconcile():
     return jsonify({"ok": True, "started": True})
 
 
+@app.route('/api/mail/inbox')
+def api_mail_inbox():
+    """Der Eingang-Tray: die INBOX mit Gelesen-Flag (`\\Seen`) + vermuteter
+    Kategorie je Mail. LIVE; braucht Key (ohne → leer). Neue/ungelesene Mail liegt
+    hier, bis Sasha sie liest — dann sortiert sie sich (bekannter Absender) ein."""
+    if not mail_secrets.available():
+        return jsonify({"mails": [], "live": False, "source": "kein key"})
+    try:
+        return jsonify({"mails": mail.inbox_tray(limit=200), "live": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/mail/inbox-body')
+def api_mail_inbox_body():
+    """Voller Text EINER Eingang-Mail (INBOX). LIVE; braucht Key. Query: `uid`,
+    optional `account`. Read-only (PEEK) → hakt die Mail NICHT ab."""
+    uid = request.args.get('uid', type=int)
+    account = request.args.get('account') or None
+    if uid is None:
+        return jsonify({"error": "uid fehlt"}), 400
+    if not mail_secrets.available():
+        return jsonify({"error": "kein key — Body nur live lesbar"}), 409
+    try:
+        return jsonify(mail.inbox_body(uid, account_name=account))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/mail/read', methods=['POST'])
+def api_mail_read():
+    """Eine Eingang-Mail abhaken: als gelesen markieren (`\\Seen`) und, wenn der
+    Absender bekannt ist, sofort einsortieren. LIVE; braucht Key. Body:
+    `{uid, account?}`. Sortiert sie ein → alle Ordner-Caches verwerfen."""
+    if not mail_secrets.available():
+        return jsonify({"error": "kein key — abhaken nur live"}), 409
+    body = request.get_json(silent=True) or {}
+    uid = body.get('uid')
+    account = body.get('account') or None
+    if uid is None:
+        return jsonify({"error": "uid fehlt"}), 400
+    try:
+        res = mail.mark_seen_and_file(int(uid), account_name=account)
+        if res.get("filed"):        # Mail wanderte in einen Ordner → Caches stale
+            with _mail_folders_lock:
+                _mail_folders.clear()
+            _mail_folders_save()
+        return jsonify({"ok": True, **res})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ── Start ──────────────────────────────────────────────────────────────
 
 def start_ui(host='0.0.0.0', port=5000):

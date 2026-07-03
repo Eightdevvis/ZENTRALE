@@ -531,6 +531,139 @@ def refile_sender(sender, category, account_name=None):
             "moved_from": sorted(touched)}
 
 
+# ── Eingang: die INBOX als Tray (neu/ungelesen), einsortieren beim Lesen ──
+# Sashas Modell: neue Mail bleibt sichtbar in der INBOX, bis er sie liest. Das
+# Gelesen-Flag ist der native IMAP-`\Seen` (jeder Client setzt es) — wir bauen
+# kein eigenes read/unread. `inbox_tray()` liefert die INBOX mit Gelesen-Flag +
+# vermuteter Kategorie; `mark_seen_and_file()` hakt eine Mail ab (setzt `\Seen`
+# und sortiert bekannte Absender sofort ein).
+
+_SEEN_RE = re.compile(rb"FLAGS\s*\(([^)]*)\)", re.I)
+
+
+def inbox_tray(limit=200):
+    """Die INBOX als Eingang-Tray: {account, uid, from, subject, date, seen,
+    known, category}. `seen` aus dem nativen `\\Seen`-Flag, `category` = die per
+    Keymap vermutete Zielkategorie (None bei unbekanntem Absender). Neueste
+    zuerst. [] ohne Key. Read-only."""
+    m = mail_rules.matcher()
+    out = []
+    for account in _accounts_for():
+        try:
+            with _session(account) as imap:
+                if _pselect(imap, account["name"], "INBOX", readonly=True) != "OK":
+                    continue
+                typ, data = imap.uid("SEARCH", None, "UID 1:*")
+                uids = []
+                if typ == "OK" and data and data[0]:
+                    uids = sorted((int(u) for u in data[0].split()), reverse=True)[:limit]
+                if not uids:
+                    continue
+                # EIN gebündelter FETCH: FLAGS (für \Seen) + Header zusammen.
+                typ, fetched = imap.uid(
+                    "FETCH", ",".join(str(u) for u in uids),
+                    "(UID FLAGS BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])")
+                if typ != "OK" or not fetched:
+                    continue
+                for item in fetched:
+                    if not isinstance(item, tuple) or len(item) < 2:
+                        continue
+                    meta = item[0] if isinstance(item[0], bytes) else str(item[0]).encode()
+                    mm = re.search(rb"UID\s+(\d+)", meta)
+                    fm = _SEEN_RE.search(meta)
+                    seen = bool(fm and b"\\seen" in fm.group(1).lower())
+                    hdr = _parse_headers(item[1])
+                    cat, known = m.classify(hdr["from"])
+                    out.append({"account": account["name"],
+                                "uid": int(mm.group(1)) if mm else None,
+                                "from": hdr["from"], "subject": hdr["subject"],
+                                "date": hdr["date"], "seen": seen,
+                                "known": known,
+                                "category": cat if known else None})
+        except Exception as e:
+            state.push_log(f"MAIL: Eingang lesen — {type(e).__name__}: {e}")
+    out.sort(key=lambda x: (x["uid"] or 0), reverse=True)
+    return out[:limit]
+
+
+def mark_seen_and_file(uid, account_name=None):
+    """Eine INBOX-Mail abhaken: als gelesen markieren (`\\Seen`) UND, wenn der
+    Absender bekannt ist, sofort in seinen Kategorie-Ordner einsortieren (bei
+    trash-Kategorien in den Papierkorb). Unbekannter Absender → nur gelesen, die
+    Mail bleibt im Eingang, bis er zugeordnet wird. Liefert {seen, filed,
+    category, target}."""
+    try:
+        uid = int(uid)
+    except (TypeError, ValueError):
+        return {"seen": False, "filed": False, "error": "uid ungültig"}
+    for account in _accounts_for(account_name):
+        try:
+            with _session(account) as imap:
+                if _pselect(imap, account["name"], "INBOX", readonly=False) != "OK":
+                    continue
+                imap.uid("STORE", str(uid), "+FLAGS", "(\\Seen)")
+                typ, fetched = imap.uid(
+                    "FETCH", str(uid), "(BODY.PEEK[HEADER.FIELDS (FROM)])")
+                frm = ""
+                if typ == "OK" and fetched and isinstance(fetched[0], tuple):
+                    frm = _parse_headers(fetched[0][1])["from"]
+                cat, known = mail_rules.classify(frm)
+                if known:
+                    spec = mail_rules.category_action(cat)
+                    folders = _FolderCache()
+                    target = folders.target(imap, spec)
+                    if target and _move_uid(imap, str(uid), target):
+                        state.push_log(f"MAIL [{account['name']}] ✓ abgehakt "
+                                       f"<{mail_rules.normalize(frm)}> → {cat}")
+                        return {"seen": True, "filed": True,
+                                "category": cat, "target": target}
+                # unbekannt (oder Move abgelehnt): gelesen, bleibt im Eingang
+                state.push_log(f"MAIL [{account['name']}] · gelesen, bleibt im "
+                               f"Eingang <{mail_rules.normalize(frm)}> "
+                               f"({'unbekannt' if not known else 'Move abgelehnt'})")
+                return {"seen": True, "filed": False,
+                        "category": cat if known else None}
+        except Exception as e:
+            state.push_log(f"MAIL: abhaken uid {uid} — {type(e).__name__}: {e}")
+    return {"seen": False, "filed": False, "error": "nicht gefunden / kein Key"}
+
+
+def inbox_body(uid, account_name=None):
+    """Vollen Text + Header EINER Eingang-Mail (INBOX) lesen. Read-only via
+    BODY.PEEK → setzt KEIN `\\Seen` (Lesen im Panel hakt nicht versehentlich ab;
+    das macht erst mark_seen_and_file). Liefert {account, uid, from, subject,
+    date, body, known, category} oder {error}."""
+    try:
+        uid = int(uid)
+    except (TypeError, ValueError):
+        return {"error": "uid ungültig"}
+    for account in _accounts_for(account_name):
+        try:
+            with _session(account) as imap:
+                if _pselect(imap, account["name"], "INBOX", readonly=True) != "OK":
+                    continue
+                typ, fetched = imap.uid("FETCH", str(uid), "(BODY.PEEK[])")
+                if typ != "OK" or not fetched or not isinstance(fetched[0], tuple):
+                    continue
+                msg = email.message_from_bytes(fetched[0][1])
+                try:
+                    dt = parsedate_to_datetime(msg.get("Date"))
+                    date_s = dt.isoformat() if dt else ""
+                except (TypeError, ValueError):
+                    date_s = ""
+                frm = _decode(msg.get("From", ""))
+                cat, known = mail_rules.classify(frm)
+                return {"account": account["name"], "uid": uid, "from": frm,
+                        "subject": _decode(msg.get("Subject", "")), "date": date_s,
+                        "message_id": (msg.get("Message-ID") or "").strip(),
+                        "references": (msg.get("References") or "").strip(),
+                        "body": _extract_text(msg).strip(),
+                        "known": known, "category": cat if known else None}
+        except Exception as e:
+            state.push_log(f"MAIL: Eingang-Body uid {uid} — {type(e).__name__}: {e}")
+    return {"error": "Mail nicht gefunden"}
+
+
 # ── Reconcile: die Ordner an die Keymap angleichen ───────────────────
 # Die Keymap ist die EINZIGE Wahrheit. Ein Reconcile bringt die Server-Ordner
 # damit zur Deckung: jede Mail wird über ihren Absender (Trie-Matcher) neu
@@ -594,6 +727,12 @@ def reconcile_account(account, dry_run=None):
             review_target = targets.get(mail_rules.REVIEW)
 
             for folder in _sortable_folders():
+                # Die INBOX ist der Eingang-Tray — sie gehört dem Poll (\Seen-
+                # gegatet) und dem Abhaken, NICHT dem Reconcile. Sonst würde ein
+                # Abgleich die ungelesene neue Mail vorzeitig aus dem Eingang
+                # räumen. Reconcile richtet nur die schon einsortierten Ordner aus.
+                if folder == "INBOX":
+                    continue
                 try:
                     if _pselect(imap, name, folder, readonly=False) != "OK":
                         continue
@@ -1189,12 +1328,14 @@ def _q(name):
 _DROP_ERRORS = (imaplib.IMAP4.abort, ssl.SSLError, OSError, EOFError)
 
 
-def _handle_uid(imap, name, uid, dry_run, folders, results):
-    """Eine Mail: FETCHen, klassifizieren, (live) verschieben. Liefert
-    (abgehakt?, verschoben?): abgehakt=True heißt 'nicht erneut versuchen'
-    (verschoben ODER Dry-Run ODER nicht abrufbar); verschoben=True nur bei
-    erfolgreichem Live-Move. Verbindungs-Abbrüche (`_DROP_ERRORS`) propagieren
-    nach oben und lösen einen Reconnect aus."""
+def _handle_uid(imap, name, uid, dry_run, folders, results, seen=False):
+    """Eine INBOX-Mail: FETCHen, klassifizieren, (live) einsortieren — ABER nur,
+    wenn sie GELESEN (`\\Seen`) UND der Absender BEKANNT ist. Sonst bleibt sie im
+    Eingang (INBOX) liegen: ungelesenes zeigt sich Sasha erst, unbekanntes wartet
+    auf eine Zuordnung. Liefert (abgehakt?, verschoben?): abgehakt=True heißt 'in
+    diesem Lauf nicht nochmal anfassen' (einsortiert ODER bewusst liegengelassen
+    ODER nicht abrufbar); verschoben=True nur bei erfolgreichem Live-Move.
+    `_DROP_ERRORS` propagieren nach oben und lösen einen Reconnect aus."""
     typ, fetched = imap.uid("FETCH", str(uid),
                             "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])")
     if typ != "OK" or not fetched or not isinstance(fetched[0], tuple):
@@ -1202,6 +1343,10 @@ def _handle_uid(imap, name, uid, dry_run, folders, results):
     hdr = _parse_headers(fetched[0][1])
     category, known = mail_rules.classify(hdr["from"])
     spec = mail_rules.category_action(category)
+
+    # Einsortieren erst, wenn GELESEN und BEKANNT (Sashas Eingang-Modell). Alles
+    # andere bleibt im Eingang; der nächste Poll prüft es erneut (selbstheilend).
+    should_file = known and seen
 
     item = {
         "account": name,
@@ -1211,6 +1356,7 @@ def _handle_uid(imap, name, uid, dry_run, folders, results):
         "date": hdr["date"],
         "category": category,
         "known": known,
+        "seen": seen,
         "action": spec.get("action", "move"),
         "applied": False,
         "dry_run": dry_run,
@@ -1218,20 +1364,22 @@ def _handle_uid(imap, name, uid, dry_run, folders, results):
     }
 
     done, moved = True, False
-    if not dry_run:
+    if should_file and not dry_run:
         target = folders.target(imap, spec)   # Drop-Fehler hier -> Reconnect
         if _move_uid(imap, uid, target):
             item["applied"] = True
             item["target"] = target
             moved = True
+            state.push_log(f"MAIL [{name}] ✓ «{hdr['subject'][:48]}» "
+                           f"<{mail_rules.normalize(hdr['from'])}> → {category}")
         else:
             done = False                       # Move abgelehnt -> nächster Poll
             state.push_log(f"MAIL [{name}]: Move abgelehnt (uid {uid}) → {target}")
+    elif should_file and dry_run:
+        state.push_log(f"MAIL [{name}] · «{hdr['subject'][:48]}» "
+                       f"<{mail_rules.normalize(hdr['from'])}> → {category} (würde)")
+    # ungelesen/unbekannt → still im Eingang lassen (kein Log-Spam pro Poll)
 
-    flag = "✓" if item["applied"] else ("·" if dry_run else "✗")
-    tag = category if known else f"{category} (neu)"
-    state.push_log(f"MAIL [{name}] {flag} «{hdr['subject'][:48]}» "
-                   f"<{mail_rules.normalize(hdr['from'])}> → {tag}")
     _record(item)
     results.append(item)
     return done, moved
@@ -1288,8 +1436,16 @@ def poll_account(account, dry_run=None):
                     state.push_log(f"MAIL [{name}]: INBOX leer — nichts zu tun")
                 break
 
+            # Gelesen-Status (Eingang-Modell): nur GELESENE bekannte Mail verlässt
+            # die INBOX. `SEARCH SEEN` liefert die gelesenen UIDs in einem Rutsch.
+            typ_s, sdata = imap.uid("SEARCH", None, "SEEN")
+            seen_uids = set()
+            if typ_s == "OK" and sdata and sdata[0]:
+                seen_uids = {int(u) for u in sdata[0].split()}
+
             for uid in uids:
-                done, moved = _handle_uid(imap, name, uid, dry_run, folders, results)
+                done, moved = _handle_uid(imap, name, uid, dry_run, folders,
+                                          results, seen=(uid in seen_uids))
                 processed.add(uid)
                 if moved:
                     applied.add(uid)
@@ -1322,8 +1478,9 @@ def poll_account(account, dry_run=None):
     if not dry_run:
         _touch_poll(name)
         if processed:
-            state.push_log(f"MAIL [{name}]: {len(applied)}/{len(processed)} Mail(s) "
-                           f"verschoben, {len(processed) - len(applied)} bleiben in INBOX")
+            state.push_log(f"MAIL [{name}]: {len(applied)}/{len(processed)} gelesene "
+                           f"Mail(s) einsortiert, {len(processed) - len(applied)} "
+                           f"bleiben im Eingang (ungelesen/unbekannt)")
     return results
 
 
