@@ -995,6 +995,10 @@ def api_chat():
     """
     if kassette.ki_aus():
         return _ki_aus()
+    # Lokal-Drossel (Pendant zum Cloud-Kill-Switch): bewusst aus → hier hart
+    # abriegeln, damit die Drossel wirklich drosselt (nicht nur die Anzeige).
+    if not ai_backends.local_enabled():
+        return jsonify({"error": "lokale KI gedrosselt"}), 503
     body    = request.get_json()
     message = (body.get('message') or '').strip()
     # via_mic-Flag aus dem Body. True bedeutet: diese Message kam aus
@@ -1234,12 +1238,15 @@ def api_ai_backends():
     Speist die EXTERNAL-Box + das kapazitaetsbasierte Modul-Gating.
 
     POST {cloud_enabled: bool} legt den Cloud-Kill-Switch um (Datenschutz-/
-    Kosten-Drossel, persistiert in data/tutor_config.json). GET liefert Status
-    inkl. cloud_enabled. Frisch nach Toggle (kein Cache-Delay)."""
+    Kosten-Drossel), {local_enabled: bool} den Lokal-Kill-Switch (drosselt die
+    lokale Ollama-Leitung) – beide persistiert in data/tutor_config.json. GET
+    liefert Status inkl. cloud_enabled/local_enabled. Frisch nach Toggle."""
     if request.method == 'POST':
         body = request.get_json() or {}
         if 'cloud_enabled' in body:
             ai_backends.set_cloud_enabled(bool(body['cloud_enabled']))
+        if 'local_enabled' in body:
+            ai_backends.set_local_enabled(bool(body['local_enabled']))
         return jsonify(ai_backends.status(fresh=True))
     return jsonify(ai_backends.status())
 

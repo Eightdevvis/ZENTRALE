@@ -497,6 +497,7 @@ TUI_COMMANDS = [
     ("/help",  "alle Befehle und Tasten zeigen"),
     ("/theme", "Theme: auto | hell | dunkel  (auch 't')"),
     ("/cloud", "Cloud-Drossel: on | off  (Datenschutz/Kosten)"),
+    ("/local", "Lokale KI drosseln: on | off  (Ollama-Leitung)"),
     ("/quit",  "ZENTRALE-TUI beenden  (auch 'q')"),
 ]
 TUI_KEYS = [
@@ -507,6 +508,7 @@ TUI_KEYS = [
     ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Handelsrouten · w=Fenster"),
     ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · v Woche/Monat"),
     ("p",   "Post/Mail (Mitte): enter rein · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · esc zurück"),
+    ("a",   "KI-Chat (Mitte): tippen + enter fragt die lokale KI (PC-Hirn via tunnel) · ↑↓ scrollen · esc zu"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
@@ -519,8 +521,12 @@ TUI_KEYS = [
 CTX_KEYS = {
     "home": [
         ("l", "listen"), ("g", "graph"), ("m", "karte"),
-        ("c", "kalender"), ("p", "post / mail"),
+        ("c", "kalender"), ("p", "post / mail"), ("a", "ki-chat"),
         ("t", "theme"), ("q", "beenden"),
+    ],
+    "ai": [
+        ("tippen", "frage"), ("enter", "senden"),
+        ("↑↓", "scrollen"), ("esc", "zu"),
     ],
     "graph": [
         ("↑↓", "wählen"), ("enter", "öffnen"),
@@ -581,6 +587,7 @@ CTX_TITLES = {
     "cal:week": "kalender · woche", "cal:month": "kalender · monat",
     "cal:list": "kalender · liste", "cal:sort": "kalender · sortieren",
     "mail:cats": "post", "mail:list": "post · liste", "mail:read": "post · lesen",
+    "ai": "ki-chat",
 }
 
 
@@ -611,6 +618,10 @@ def parse_command(buf, theme_mode):
         if arg in ("on", "an"):   return "CLOUD_ON", theme_mode, ""
         if arg in ("off", "aus"): return "CLOUD_OFF", theme_mode, ""
         return "CLOUD_TOGGLE", theme_mode, ""
+    if name in ("local", "lokal", "ki"):         # Lokal-Kill-Switch (POST macht der Aufrufer)
+        if arg in ("on", "an"):   return "LOCAL_ON", theme_mode, ""
+        if arg in ("off", "aus"): return "LOCAL_OFF", theme_mode, ""
+        return "LOCAL_TOGGLE", theme_mode, ""
     return None, theme_mode, "unbekannter befehl: /" + name
 
 
@@ -1020,6 +1031,152 @@ def run_ui(stdscr, store):
             "reply_text": "",     # dein getippter Antworttext
             "reply_origoff": 0,   # Scroll im Original (links)
             "reply_confirm": False}  # Verlassen-Leiste (senden/verwerfen/weiter)
+
+    # ── KI-Chat (füllt die MITTE-Box, Taste 'a') ───────────────────────
+    # THIN-CLIENT: die TUI-Kassette ist selbst ki-frei (kassette.ki_aus()), die
+    # KI lebt am PC. Wir sprechen NUR über HTTP mit <BASE_URL>/api/chat — daheim
+    # via `zentrale-remote` zeigt BASE_URL auf den SSH-Tunnel → PC-Monolith →
+    # Ollama/Qwen. Ohne Tunnel (lokales tui-Backend) antwortet /api/chat mit 503
+    # (ki_aus bzw. „gedrosselt"); das fangen wir ab und sagen es in der Statuszeile.
+    # Der Stream (SSE) läuft in EINEM Hintergrund-Thread und füllt AI["answer"]
+    # live; die Zeichenschleife rendert nur — nie IO im Render/Input-Thread.
+    #   active   : Panel hat den Fokus
+    #   input    : aktuelle Eingabezeile (Prompt)
+    #   log      : Verlauf [(rolle, text)] rolle = "user"|"ai"|"sys"
+    #   answer   : live wachsende KI-Antwort während des Streams (None=keiner)
+    #   reflect  : letzter Denk-Schnipsel (dim, nur während Stream), ""=keiner
+    #   streaming: läuft gerade ein Stream? (dann Eingabe gesperrt, schnellerer Tick)
+    #   scroll   : Scroll-Offset vom Boden (0 = neueste unten sichtbar)
+    #   perm     : offene Erlaubnis-Frage {frage, optionen} oder None (Tool-Gate)
+    #   msg      : kurze Statuszeile (Fehler/Hinweis)
+    #   loaded   : History schon einmal vom Backend geholt?
+    AI = {"active": False, "input": "", "log": [], "answer": None,
+          "reflect": "", "streaming": False, "scroll": 0,
+          "perm": None, "msg": "", "loaded": False}
+    AI_LOCK = threading.Lock()
+
+    def ai_stream(message):
+        """Öffnet den SSE-Stream /api/chat und füllt AI['answer'] Token für Token.
+        Läuft im Hintergrund-Thread. Blockiert bei einer Erlaubnis-Frage still,
+        bis der Input-Thread /api/permission_answer POSTet und der Server den
+        Stream weiterlaufen lässt."""
+        url = BASE_URL + "/api/chat"
+        data = json.dumps({"message": message}).encode("utf-8")
+        req = urllib.request.Request(
+            url, data=data, method="POST",
+            headers={"Content-Type": "application/json",
+                     "Accept": "text/event-stream"})
+        resp = None
+        try:
+            resp = urllib.request.urlopen(req, timeout=120)
+            for raw in resp:
+                line = raw.decode("utf-8", "replace").rstrip("\r\n")
+                if not line.startswith("data:"):
+                    continue
+                try:
+                    evt = json.loads(line[5:].strip())
+                except ValueError:
+                    continue
+                with AI_LOCK:
+                    if "token" in evt:
+                        AI["answer"] = (AI["answer"] or "") + str(evt["token"])
+                        AI["perm"] = None          # es fließt wieder Text
+                    elif "reflect" in evt:
+                        AI["reflect"] = (AI["reflect"] + str(evt["reflect"]))[-400:]
+                    elif "permission" in evt:
+                        AI["perm"] = evt["permission"]
+                    elif "done" in evt:
+                        break
+                    # ascii/cinema: im Terminal ohne Bild/Sound → ignorieren
+        except urllib.error.HTTPError as e:
+            with AI_LOCK:
+                AI["msg"] = ("lokale ki gedrosselt / aus — tunnel? (/local on)"
+                             if e.code == 503 else "fehler: HTTP %s" % e.code)
+        except (urllib.error.URLError, OSError):
+            with AI_LOCK:
+                AI["msg"] = "keine verbindung zur ki (zentrale-remote?)"
+        finally:
+            if resp is not None:
+                try: resp.close()
+                except OSError: pass
+            with AI_LOCK:
+                ans = (AI["answer"] or "").strip()
+                if ans:
+                    AI["log"].append(("ai", ans))
+                AI["answer"] = None
+                AI["reflect"] = ""
+                AI["perm"] = None
+                AI["streaming"] = False
+
+    def ai_submit():
+        """Aktuellen Prompt abschicken (Stream im Hintergrund starten)."""
+        msg = AI["input"].strip()
+        if not msg or AI["streaming"]:
+            return
+        with AI_LOCK:
+            AI["log"].append(("user", msg))
+            AI["input"] = ""
+            AI["answer"] = ""
+            AI["reflect"] = ""
+            AI["perm"] = None
+            AI["msg"] = ""
+            AI["scroll"] = 0
+            AI["streaming"] = True
+        threading.Thread(target=ai_stream, args=(msg,), daemon=True).start()
+
+    def ai_answer_perm(option):
+        """Erlaubnis-Frage beantworten → entsperrt den wartenden Stream."""
+        try:
+            api_call("/api/permission_answer", "POST", {"answer": option})
+        except (urllib.error.URLError, OSError, ValueError):
+            pass
+        with AI_LOCK:
+            AI["perm"] = None
+
+    def ai_load_history():
+        """Chat-Verlauf vom Backend holen (gemeinsam mit dem Browser). Läuft im
+        Hintergrund beim ersten Öffnen; scheitert still (dann leerer Verlauf)."""
+        try:
+            h = api_call("/api/chat/history")
+        except (urllib.error.URLError, OSError, ValueError):
+            h = None
+        log = []
+        for m in (h if isinstance(h, list) else []):
+            if not isinstance(m, dict):
+                continue
+            txt = (m.get("content") or "").strip()
+            if not txt:
+                continue
+            log.append(("user" if m.get("role") == "user" else "ai", txt))
+        with AI_LOCK:
+            # nur übernehmen, wenn zwischenzeitlich nichts Eigenes dazukam
+            if not AI["log"]:
+                AI["log"] = log
+            AI["loaded"] = True
+
+    def ai_wrap(role, text, w):
+        """Text auf Breite w umbrechen; jede Zeile trägt ihre Rolle (für Farbe).
+        Rollen-Präfix nur auf der ersten Zeile. Sehr lange Wörter hart brechen."""
+        if w < 6:
+            w = 6
+        pre = {"user": "du:", "ai": "ki:"}.get(role, "")
+        out = []
+        first = True
+        for para in text.split("\n"):
+            cur = pre if (first and pre) else ""
+            first = False
+            for wd in para.split():
+                while len(wd) > w:
+                    if cur:
+                        out.append((role, cur)); cur = ""
+                    out.append((role, wd[:w])); wd = wd[w:]
+                cand = (cur + " " + wd) if cur else wd
+                if len(cand) > w:
+                    out.append((role, cur)); cur = wd
+                else:
+                    cur = cand
+            out.append((role, cur))
+        return out
 
     # ── Mail-I/O läuft im Hintergrund, NIE im Render/Input-Thread ─────────
     # Jede IMAP-Op (zählen, Ordner holen, Body, einsortieren, löschen) kann bei
@@ -3585,6 +3742,76 @@ def run_ui(stdscr, store):
             hint = "tippen · enter=zeile · esc=fertig/senden"
         addclip(by + bh - 2, rix, hint[:riw], riw, C["faint"])
 
+    def draw_ai(by, bx, bh, bw):
+        """Inhalt der MITTE-Box, wenn der KI-Chat Fokus hat. Reiner Zeichner:
+        liest AI[...] (unter Lock) und rendert Verlauf + laufende Antwort +
+        Eingabezeile. Der Stream selbst läuft in ai_stream() im Hintergrund."""
+        inx = bx + 2
+        inw = max(6, bw - 4)
+        input_y = by + bh - 2
+        info_y = by + bh - 3
+        body_top = by + 1
+        body_bot = by + bh - 4
+        avail = max(1, body_bot - body_top + 1)
+
+        with AI_LOCK:
+            log = list(AI["log"])
+            answer = AI["answer"]
+            reflect = AI["reflect"]
+            streaming = AI["streaming"]
+            perm = dict(AI["perm"]) if AI["perm"] else None
+            inp = AI["input"]
+            msg = AI["msg"]
+            scroll = AI["scroll"]
+
+        # Zeilen bauen: Verlauf + laufende Antwort (jede Zeile trägt ihre Rolle)
+        lines = []
+        for role, text in log:
+            lines += ai_wrap(role, text, inw)
+            lines.append(("gap", ""))
+        if answer is not None:
+            lines += ai_wrap("ai", answer + ("▌" if streaming else ""), inw)
+
+        if not lines:
+            addclip(body_top + avail // 2, inx,
+                    "frag die lokale ki — tippen + enter", inw, C["faint"])
+        else:
+            total = len(lines)
+            maxscroll = max(0, total - avail)     # scroll=0 → Boden (neueste)
+            sc = min(scroll, maxscroll)
+            start = max(0, total - avail - sc)
+            y = body_top
+            for kind, seg in lines[start:start + avail]:
+                attr = C["acc"] if kind == "user" else (
+                    C["bright"] if kind == "ai" else C["faint"])
+                addclip(y, inx, seg, inw, attr)
+                y += 1
+
+        # Info-Zeile: Erlaubnis-Frage > Denk-Strom > Fehler/Status > Scroll-Hinweis
+        if perm:
+            addclip(info_y, inx, ("? " + (perm.get("frage") or "darf ich?"))[:inw],
+                    inw, C["warn"])
+        elif streaming and reflect:
+            addclip(info_y, inx, ("denkt: " + reflect.replace("\n", " "))[-inw:],
+                    inw, C["faint"])
+        elif msg:
+            addclip(info_y, inx, msg[:inw], inw, C["warn"])
+        elif scroll > 0:
+            addclip(info_y, inx, "↑ verlauf (↓ nach unten)", inw, C["faint"])
+
+        # Unterste Zeile: Erlaubnis-Knöpfe > Stream-läuft > Eingabe
+        if perm:
+            opts = perm.get("optionen") or ["ja", "nein"]
+            label = "  ".join("%d) %s" % (i + 1, o) for i, o in enumerate(opts))
+            addclip(input_y, inx, ("› " + label)[:inw], inw, C["warn"])
+        elif streaming:
+            addclip(input_y, inx, "› …", inw, C["dim"])
+        else:
+            shown = "› " + inp
+            if len(shown) > inw - 1:
+                shown = "› …" + inp[-(inw - 5):]
+            addclip(input_y, inx, shown + "_", inw, C["bright"])
+
     def in_text_entry():
         """Tippt der Nutzer gerade einen Freitext (Name, Eintrag, Antwort)?
         Dann bleibt '/' ein normales Zeichen und öffnet NICHT die Befehlszeile."""
@@ -3597,6 +3824,11 @@ def run_ui(stdscr, store):
             return K["mode"] == "add" or K["linput"] is not None
         if MAIL["active"]:
             return MAIL["replying"]
+        if AI["active"]:
+            # Ganzes Panel ist Prompt-Eingabe → '/' bleibt ein Zeichen, öffnet
+            # nicht die Befehlszeile. (Bei offener Erlaubnis-Frage ignoriert der
+            # AI-Zweig alles außer j/n/Zahl/esc.)
+            return True
         return False
 
     def current_ctx():
@@ -3627,12 +3859,16 @@ def run_ui(stdscr, store):
             if MAIL["level"] == "cats":
                 return "mail:cats"
             return "mail:read" if MAIL["mode2"] == "read" else "mail:list"
+        if AI["active"]:
+            return "ai"
         return "home"
 
     while True:
-        # Während einer Länder-Kamerafahrt schneller ticken (~30 fps) für weiche
-        # Bewegung; sonst die ruhige 250-ms-Kadenz (spart CPU/Backend-Last).
-        stdscr.timeout(33 if (M["active"] and M.get("anim")) else 250)
+        # Während einer Länder-Kamerafahrt ODER eines laufenden KI-Streams
+        # schneller ticken (~30 fps) für weiche Bewegung / live nachlaufende
+        # Token; sonst die ruhige 250-ms-Kadenz (spart CPU/Backend-Last).
+        fast = (M["active"] and M.get("anim")) or (AI["active"] and AI["streaming"])
+        stdscr.timeout(33 if fast else 250)
         ch = stdscr.getch()
 
         if nag_active:
@@ -3668,6 +3904,19 @@ def run_ui(stdscr, store):
                         cmd_msg = "cloud " + ("AN" if (st or {}).get("cloud_enabled") else "GEDROSSELT")
                     except (urllib.error.URLError, OSError, ValueError):
                         cmd_msg = "cloud-schalter fehlgeschlagen"
+                if res in ("LOCAL_ON", "LOCAL_OFF", "LOCAL_TOGGLE"):
+                    # Lokal-Kill-Switch umlegen (dieselbe Quelle wie /cloud, nur
+                    # local_enabled). Danach EXTERNAL sofort frisch.
+                    try:
+                        if res == "LOCAL_TOGGLE":
+                            on = not store.backends_snapshot().get("local_enabled", True)
+                        else:
+                            on = (res == "LOCAL_ON")
+                        st = api_call("/api/ai/backends", "POST", {"local_enabled": on})
+                        store._poll_backends()
+                        cmd_msg = "lokale ki " + ("AN" if (st or {}).get("local_enabled") else "GEDROSSELT")
+                    except (urllib.error.URLError, OSError, ValueError):
+                        cmd_msg = "lokal-schalter fehlgeschlagen"
             elif ch in (curses.KEY_BACKSPACE, 127, 8):
                 cmd_buf = cmd_buf[:-1]
                 if not cmd_buf:                # Slash weggelöscht → zu
@@ -4560,6 +4809,34 @@ def run_ui(stdscr, store):
                     MAIL["msg"] = "zähle neu…"
                 elif ch in (ord("t"), ord("T")):
                     theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
+        elif AI["active"]:                     # KI-Chat hat den Fokus
+            if AI["perm"]:                     # offene Erlaubnis-Frage → j/n/Zahl
+                opts = AI["perm"].get("optionen") or ["ja", "nein"]
+                if ch in (ord("j"), ord("J")):
+                    ai_answer_perm(next((o for o in opts if o.lower().startswith("j")), opts[0]))
+                elif ch in (ord("n"), ord("N")):
+                    ai_answer_perm(next((o for o in opts if o.lower().startswith("n")), opts[-1]))
+                elif ord("1") <= ch <= ord("9") and (ch - ord("1")) < len(opts):
+                    ai_answer_perm(opts[ch - ord("1")])
+                elif ch == 27:                 # esc = ablehnen (letzte Option, meist nein)
+                    ai_answer_perm(opts[-1])
+            elif ch == 27:                     # esc schließt das Panel (Stream läuft im BG weiter)
+                AI["active"] = False
+            elif ch in (10, 13, curses.KEY_ENTER):
+                ai_submit()
+            elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                if not AI["streaming"]:
+                    AI["input"] = AI["input"][:-1]
+            elif ch == curses.KEY_UP:
+                AI["scroll"] += 1
+            elif ch == curses.KEY_DOWN:
+                AI["scroll"] = max(0, AI["scroll"] - 1)
+            elif ch == curses.KEY_PPAGE:
+                AI["scroll"] += 5
+            elif ch == curses.KEY_NPAGE:
+                AI["scroll"] = max(0, AI["scroll"] - 5)
+            elif 32 <= ch <= 126 and not AI["streaming"] and len(AI["input"]) < 1000:
+                AI["input"] += chr(ch)
         else:                                  # Normal-Modus: Shortcuts aktiv
             if ch in (ord("q"), ord("Q")):
                 break
@@ -4581,6 +4858,10 @@ def run_ui(stdscr, store):
                 MAIL["sel"] = 0; MAIL["cat"] = None; MAIL["off"] = 0
                 MAIL["mails"] = None; MAIL["data"] = None; MAIL["msg"] = ""
                 mail_refresh_counts()          # echte Ordnergrößen im Hintergrund holen
+            elif ch in (ord("a"), ord("A")):   # KI-Chat öffnen (Thin-Client übers PC-Hirn)
+                AI["active"] = True; AI["scroll"] = 0; AI["msg"] = ""
+                if not AI["loaded"]:           # Verlauf einmal im Hintergrund nachladen
+                    threading.Thread(target=ai_load_history, daemon=True).start()
             # '/' wird global oben abgefangen (greift in JEDEM Fenster), darum
             # hier kein eigener Zweig mehr.
         # KEY_RESIZE oder Timeout → einfach neu zeichnen
@@ -4669,10 +4950,14 @@ def run_ui(stdscr, store):
         ext_h = 4
         draw_box(top, lx, ext_h, leftw, "external",
                  C["acc"] if bk.get("any") else C["warn"])
+        if bk.get("local"):
+            ltxt, lattr = "✓ ollama", C["bright"]
+        elif bk.get("local_enabled") is False:      # manuell gedrosselt
+            ltxt, lattr = "✗ gedrosselt", C["warn"]
+        else:
+            ltxt, lattr = "✗", C["faint"]
         safe_addstr(top + 1, lx + 2, "LOKAL", C["acc"])
-        safe_addstr(top + 1, lx + 9,
-                    "✓ ollama" if bk.get("local") else "✗",
-                    C["bright"] if bk.get("local") else C["faint"])
+        safe_addstr(top + 1, lx + 9, ltxt, lattr)
         if bk.get("cloud"):
             ctxt, cattr = "✓ " + (bk.get("cloud_provider") or ""), C["bright"]
         elif bk.get("cloud_enabled") is False:      # manuell gedrosselt
@@ -4743,21 +5028,19 @@ def run_ui(stdscr, store):
         elif MAIL["active"]:
             draw_box(top, mx, body_h, midw, "post · mail")
             draw_mail(top, mx, body_h, midw)
+        elif AI["active"]:
+            draw_box(top, mx, body_h, midw, "ki-chat")
+            draw_ai(top, mx, body_h, midw)
         else:
             draw_box(top, mx, body_h, midw, "mitte")
             cyc = top + body_h // 2
             big = "KASSETTE · TUI"
-            l1 = "g · graph-werkzeug"
-            l2 = "l · listen"
-            l3 = "m · karte"
-            l4 = "c · kalender"
-            l5 = "p · post/mail"
-            addclip(cyc - 3, mx + max(1, (midw - len(big)) // 2), big, midw - 2, C["bright"])
-            addclip(cyc - 1, mx + max(1, (midw - len(l1)) // 2), l1, midw - 2, C["acc"])
-            addclip(cyc, mx + max(1, (midw - len(l2)) // 2), l2, midw - 2, C["acc"])
-            addclip(cyc + 1, mx + max(1, (midw - len(l3)) // 2), l3, midw - 2, C["acc"])
-            addclip(cyc + 2, mx + max(1, (midw - len(l4)) // 2), l4, midw - 2, C["acc"])
-            addclip(cyc + 3, mx + max(1, (midw - len(l5)) // 2), l5, midw - 2, C["acc"])
+            invite = ["g · graph-werkzeug", "l · listen", "m · karte",
+                      "c · kalender", "p · post/mail", "a · ki-chat"]
+            addclip(cyc - 4, mx + max(1, (midw - len(big)) // 2), big, midw - 2, C["bright"])
+            for i, ln in enumerate(invite):
+                addclip(cyc - 2 + i, mx + max(1, (midw - len(ln)) // 2),
+                        ln, midw - 2, C["acc"])
 
         # ── RECHTS: lifestyle / outbound ──────────────────────────────────
         # lifestyle = ÜBERLAGERUNG aller Graphen in EINEM Gitter. X = Datum
@@ -4922,7 +5205,7 @@ def run_ui(stdscr, store):
         # ── Footer (Tasten + Theme + Backend) ─────────────────────────────
         tm_txt = "auto(%s)" % cur_theme if theme_mode == "auto" else cur_theme
         addclip(footer_row, 0,
-                " q quit · t theme: %s · g graph · m karte · c kalender · / befehle · %s" % (tm_txt, BASE_URL),
+                " q quit · t theme: %s · g graph · m karte · c kalender · a ki · / befehle · %s" % (tm_txt, BASE_URL),
                 W - 1, C["faint"])
 
         # ── Graph-Reminder-Nag (zuletzt → liegt über allem) ───────────────

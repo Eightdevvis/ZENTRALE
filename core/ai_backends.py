@@ -80,6 +80,26 @@ def set_cloud_enabled(on: bool, persist: bool = True) -> bool:
     return bool(on)
 
 
+def local_enabled() -> bool:
+    """Lokal-Kill-Switch: ist die lokale KI (Ollama) manuell freigegeben?
+    (Default True.) Aus → local gilt als nicht da (Drossel), egal ob Ollama
+    läuft. Pendant zu cloud_enabled – so lässt sich auch die lokale Leitung
+    drosseln (z.B. TUI-Chat übers PC-Hirn aus). Persistiert in
+    data/tutor_config.json (key 'local_enabled')."""
+    v = tutor_config.setting("local_enabled", True)
+    if isinstance(v, str):
+        return v.strip().lower() not in ("0", "false", "off", "no", "aus", "nein")
+    return bool(v)
+
+
+def set_local_enabled(on: bool, persist: bool = True) -> bool:
+    """Lokal-Drossel umlegen (live, optional persistiert). Invalidiert den Cache,
+    damit EXTERNAL/Gating sofort reagieren. Gibt den neuen Zustand zurück."""
+    tutor_config.set_override("local_enabled", bool(on), persist=persist)
+    _cache["val"] = None
+    return bool(on)
+
+
 def _reachable(host: str, port: int = 443, timeout: float = 2.0) -> bool:
     """Leichter Erreichbarkeits-Check (TCP-Connect, kein HTTP)."""
     if not host:
@@ -103,7 +123,8 @@ def status(fresh: bool = False) -> dict:
     if not fresh and _cache["val"] is not None and (now - _cache["t"]) < _CACHE_TTL:
         return _cache["val"]
 
-    local   = local_ok()
+    local_en = local_enabled()
+    local    = local_en and local_ok()   # Drossel aus → local gilt als nicht da
     prov    = cloud_provider()
     enabled = cloud_enabled()
     cloud   = False
@@ -112,7 +133,7 @@ def status(fresh: bool = False) -> dict:
         cloud = _reachable(urlparse(base).hostname)
 
     st = {LOCAL: local, CLOUD: cloud, "cloud_provider": prov,
-          "cloud_enabled": enabled, "any": (local or cloud)}
+          "cloud_enabled": enabled, "local_enabled": local_en, "any": (local or cloud)}
     st["modules"] = {m: any(st.get(b) for b in bk) for m, bk in MODULE_BACKENDS.items()}
 
     _cache["t"], _cache["val"] = now, st
