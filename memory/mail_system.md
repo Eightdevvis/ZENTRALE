@@ -202,27 +202,54 @@ sortiere absender ein… / löscht…`). Leeres Label = stiller Job (der billige
   zeigt jetzt `msg or "(Ordner leer)"`. Stale-Guard: Ergebnis nur übernehmen,
   wenn `MAIL["cat"]` noch dieselbe Kategorie ist.
 
-### Einsortieren schnell: ein Ordner, ein Batch-MOVE (2026-07-01)
-`refile_sender` verschiebt **alle** Mails eines Absenders ins Ziel. Zwei
-Ursachen für die frühere Zähigkeit, beide behoben:
-1. **Es durchsuchte JEDEN move-Ordner.** Falsch: ein Absender ist immer genau
-   einer Kategorie zugeordnet, und der Poll hat seine Mails längst aus der INBOX
-   in **genau diesen** Ordner geräumt. Sie liegen also an **einer einzigen**
-   Stelle — dem **bisherigen** Kategorie-Ordner (Review, solange der Absender
-   unbekannt ist). Neu: `classify(sender)` VOR dem Umschreiben lesen → nur diesen
-   einen Ordner per `SEARCH FROM` durchsuchen (INBOX/andere gar nicht). Etwaige
-   brandneue, noch ungepollte Mails sortiert der nächste Poll ohnehin gleich in
-   die neue Kategorie. Umsortieren in dieselbe Kategorie = 0 Suchen (Quelle ==
-   Ziel, übersprungen).
-2. **Es verschob Mail für Mail** (ein `UID MOVE` pro Treffer, Outlook drosselt
-   das). Neu: `_move_uid_set(imap, uids, target)` schiebt alle Treffer in
-   **einem** `UID MOVE <set>` (Fallback COPY+`\Deleted`+EXPUNGE), in 200er-
-   Blöcken gegen zu lange Kommandozeilen.
+### Einsortieren: Batch-MOVE (2026-07-01)
+`refile_sender` verschiebt **alle** Mails eines Absenders ins Ziel. Früher
+verschob es Mail für Mail (ein `UID MOVE` pro Treffer, Outlook drosselt das).
+`_move_uid_set(imap, uids, target)` schiebt alle Treffer in **einem** `UID MOVE
+<set>` (Fallback COPY+`\Deleted`+EXPUNGE), in 200er-Blöcken gegen zu lange
+Kommandozeilen. Läuft in der TUI im Hintergrund-Worker → das Panel bleibt
+bedienbar. (Die frühere „nur den bisherigen Ordner durchsuchen"-Optimierung ist
+2026-07-02 durch den keymap-getriebenen Abgleich ersetzt — siehe unten.)
 
-Aus *O(ordner)* Suchen + *O(mails)* Moves wird **1 Suche + 1 Move** (pro Konto).
-Tests in `tests/test_mail_pool.py` (nur-ein-Ordner, Review bei unbekannt,
-gleiche-Kategorie=nichts; Batch-MOVE ein-MOVE/Chunking/Fallback). Läuft in der
-TUI zudem im Hintergrund-Worker → das Panel bleibt bedienbar.
+### Keymap = Wahrheit: Reconcile + Trie-Matcher (2026-07-02)
+**Der Fehler:** Die Keymap war nur eine **Vorwärts-Regel** — sie griff bloß für
+Mail, die noch in der INBOX lag (der Poll scannt ausschließlich `INBOX`). Schon
+einsortierte Mail (inkl. `ZENTRALE/Review`) wurde **nie wieder** gegen die Keymap
+geprüft. Einen Absender zuzuordnen zog seine **vorhandene** Mail also NICHT nach.
+Schlimmer: `refile_sender` las die Herkunft aus `classify()` VOR dem Umschreiben
+— zeigte die Keymap (z.B. per Bulk/CLI) schon auf die neue Kategorie, war Quelle
+== Ziel → **0 Moves**, die Mail blieb in Review liegen.
+
+**Der Fix — keymap-getrieben, nicht mehr prev-folder-getrieben:**
+- **`refile_sender`** durchsucht jetzt **JEDEN** sortierbaren Ordner
+  (`_sortable_folders()` = INBOX + alle move-Ordner inkl. Review, **ohne**
+  Papierkorb) per `SEARCH FROM <absender>` und schiebt alle Treffer ins Ziel.
+  Zuweisen ⇒ alle vorhandenen Mails ziehen mit — egal, wo sie liegen. `moved_from`
+  ist jetzt die **Liste** der tatsächlich angefassten Ordner.
+- **`reconcile_account` / `reconcile_all`** gleichen den **ganzen** Kontostand an
+  die Keymap an: pro Ordner EIN `SEARCH` + EIN gebündelter FROM-Header-FETCH,
+  jede Mail über den Absender neu klassifiziert, per Zielordner **ein** Batch-MOVE.
+  Unbekannte bleiben in Review, der Papierkorb ist keine Quelle (nichts zurück-
+  holen), **idempotent** (zweiter Lauf = 0 Moves). DRY-RUN meldet nur, WAS es täte.
+- **Trie-Matcher (`mail_rules.Matcher`):** Regeln hängen in einem Knoten-
+  Wörterbuch-Baum, Schlüssel = **umgedrehte Domain-Labels** + optional Local-Part
+  (`maria.kern@pearl.de` → `["de","pearl","@","maria.kern"]`). `classify` läuft den
+  Pfad hinab und nimmt die **tiefste** Regel → **Longest-Match**. Damit sind
+  **Domain-Regeln** möglich: `pearl.de` deckt ALLE `@pearl.de` (+ Subdomains) ab
+  (eine Zuweisung, viele Adressen), eine Adress-Regel `boss@pearl.de` schlägt sie
+  für genau die Adresse. Das Umdrehen macht Domains zu Präfixen mit sauberer
+  Label-Grenze → `pearl.de` matcht **nicht** `pearl.de.evil.com`. Gecacht
+  (`matcher()`, baut nur bei Keymap-Änderung neu) → `classify` kostet im Reconcile
+  über tausende Mails keinen Datei-Zugriff.
+- **Trigger, non-blocking:** `POST /api/mail/reconcile` startet den Abgleich im
+  **Backend-Hintergrund-Thread** (kehrt sofort zurück, key-gegatet, Parallel-Lock);
+  in der TUI Taste **`x`** = »abgleich«, über den Mail-Worker → die GUI friert nie.
+  CLI: `venv/bin/python -m core.mail reconcile` (DRY-RUN; `MAIL_DRY_RUN=0 …` LIVE).
+- Assign verwirft jetzt den **ganzen** Ordner-Cache (der Move kann aus mehreren
+  Ordnern gezogen haben). Tests: `tests/test_mail_pool.py` (Trie: Domain/Subdomain,
+  Adresse schlägt Domain, kein Label-Leak, stale→Review; refile: alle Ordner außer
+  Ziel, Domain-Absender; reconcile: Fehl-Ablage→Ziel, idempotent, Dry-Run),
+  `tests/test_backend_api.py` (assign leert Cache).
 
 ### Zähl-Cache: TTL + Persistenz (2026-07-01)
 `POST /api/mail/refresh-counts` sweept STATUS über **alle** Kategorie-Ordner —

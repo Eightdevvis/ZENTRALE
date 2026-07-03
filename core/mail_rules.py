@@ -37,6 +37,13 @@ _DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _STORE = os.path.join(_DIR, "data", "mail_rules.json")
 _lock = threading.Lock()
 
+# Revision der Keymap: bei JEDEM Write hochgezählt. Der Trie-Matcher (unten)
+# cacht sich und baut nur neu, wenn sich `_rev` geändert hat — so kostet ein
+# classify() im Normalfall keinen Datei-Zugriff und keinen Trie-Neuaufbau.
+_rev = 0
+_matcher = None
+_matcher_rev = -1
+
 # Die System-Kategorie für unbekannte/unsortierte Absender. Existiert immer,
 # ist nicht löschbar — sie ist das Sicherheitsnetz.
 REVIEW = "sasha muss gucken"
@@ -86,6 +93,8 @@ def _save_raw(data):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     os.replace(tmp, _STORE)
+    global _rev
+    _rev += 1        # Keymap geändert → Matcher-Cache ist beim nächsten Zugriff stale
 
 
 def normalize(addr):
@@ -98,6 +107,100 @@ def normalize(addr):
         return ""
     _, email_addr = parseaddr(addr)
     return (email_addr or addr).strip().lower()
+
+
+# ── Trie-Matcher: schnelles Longest-Match (Adresse ODER Domain) ───────
+# Sashas Idee: damit ein Einsortieren SCHNELL matchen kann, hängen die Regeln
+# in einem Knoten-Wörterbuch-Baum (Trie). Der Schlüssel ist NICHT die rohe
+# Zeichenkette, sondern der **umgedrehte Domain-Pfad** plus (optional) der
+# Local-Part:
+#
+#     maria.kern@pearl.de   ->  ["de", "pearl", "@", "maria.kern"]
+#     pearl.de              ->  ["de", "pearl"]                (Domain-Regel!)
+#     noreply@trips.flixbus.com -> ["com","flixbus","trips","@","noreply"]
+#
+# Beim Klassifizieren laufen wir den Pfad der Absender-Adresse hinab und merken
+# uns die TIEFSTE angetroffene Regel → das **spezifischste** Match gewinnt:
+#   • eine Domain-Regel `pearl.de` deckt automatisch ALLE Absender @pearl.de
+#     (und Subdomains) ab — eine Zuweisung, viele Adressen.
+#   • eine Adress-Regel `boss@pearl.de` schlägt die Domain-Regel für genau
+#     diese Adresse (sie sitzt tiefer im Baum).
+# Das Umdrehen der Labels macht Domains zu Präfixen mit sauberer Grenze
+# (Label-für-Label), also matcht `pearl.de` NICHT `pearl.de.evil.com`.
+
+_LABEL_LOCAL = "@"    # Sentinel-Label zwischen Domain-Pfad und Local-Part
+
+
+def _key_path(key):
+    """Adresse ('local@domain') ODER blanke Domain ('pearl.de') → Trie-Pfad
+    (umgedrehte Domain-Labels, dann '@' + Local-Part, falls vorhanden)."""
+    key = (key or "").strip().lower()
+    if not key:
+        return []
+    if "@" in key:
+        local, _, domain = key.rpartition("@")
+    else:
+        local, domain = None, key
+    path = [lbl for lbl in reversed(domain.split(".")) if lbl]
+    if local is not None:
+        path.append(_LABEL_LOCAL)
+        path.append(local)
+    return path
+
+
+class _Node:
+    __slots__ = ("children", "category")
+
+    def __init__(self):
+        self.children = {}
+        self.category = None
+
+
+class Matcher:
+    """Ein aus einem Keymap-Schnappschuss gebauter Trie. Einmal bauen, dann
+    beliebig oft `classify()` aufrufen (z.B. über tausende Mails im Reconcile-
+    Sweep) — ohne Lock, ohne Datei-Zugriff, ohne Neuaufbau."""
+
+    def __init__(self, senders, valid_categories):
+        self._valid = set(valid_categories or ())
+        self.root = _Node()
+        for key, cat in (senders or {}).items():
+            node = self.root
+            for label in _key_path(key):
+                nxt = node.children.get(label)
+                if nxt is None:
+                    nxt = node.children[label] = _Node()
+                node = nxt
+            node.category = cat
+
+    def classify(self, from_addr):
+        """Absender → (kategorie, bekannt?). Longest-Match; unbekannt → REVIEW."""
+        addr = normalize(from_addr)
+        if not addr:
+            return REVIEW, False
+        node = self.root
+        best = None
+        for label in _key_path(addr):
+            node = node.children.get(label)
+            if node is None:
+                break
+            if node.category is not None:
+                best = node.category
+        if best is not None and best in self._valid:
+            return best, True
+        return REVIEW, False
+
+
+def matcher():
+    """Der aktuelle (gecachte) Trie-Matcher. Baut nur neu, wenn sich die Keymap
+    seit dem letzten Aufruf geändert hat (`_rev`)."""
+    global _matcher, _matcher_rev
+    with _lock:
+        if _matcher is None or _matcher_rev != _rev:
+            data = _load_raw()
+            _matcher = Matcher(data["senders"], data["categories"].keys())
+            _matcher_rev = _rev
+        return _matcher
 
 
 # ── öffentliche API ───────────────────────────────────────────────────
@@ -114,16 +217,14 @@ def categories():
 def classify(from_addr):
     """Kernfunktion: Absender -> (kategorie, bekannt?).
 
-    Bekannt  -> die zugewiesene Kategorie, known=True.
+    Bekannt  -> die (spezifischste) zugewiesene Kategorie, known=True.
     Unbekannt-> REVIEW, known=False (landet im "sasha muss gucken"-Stapel).
+
+    Läuft über den Trie-Matcher (Longest-Match Adresse ODER Domain). Für den
+    Bulk-Fall (Reconcile über tausende Mails) EINMAL `matcher()` holen und dessen
+    `.classify()` wiederverwenden, statt hier pro Mail den Cache zu prüfen.
     """
-    addr = normalize(from_addr)
-    with _lock:
-        data = _load_raw()
-        cat = data["senders"].get(addr)
-        if cat and cat in data["categories"]:
-            return cat, True
-    return REVIEW, False
+    return matcher().classify(from_addr)
 
 
 def category_action(name):

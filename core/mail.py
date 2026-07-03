@@ -458,47 +458,55 @@ def reassign_sender(sender, category):
     return mail_rules.assign(sender, category)
 
 
+def _sortable_folders():
+    """Alle Ordner, die als QUELLE eines Umsortierens in Frage kommen: die INBOX
+    plus jeder move-Kategorie-Ordner (inkl. Review). Der Papierkorb ist bewusst
+    NICHT dabei — ein Keymap-Abgleich soll nie Mail aus dem Papierkorb zurück-
+    holen. Dedupliziert (mehrere Kategorien könnten denselben Ordner teilen)."""
+    out = ["INBOX"]
+    seen = {"INBOX"}
+    for spec in mail_rules.categories().values():
+        f = spec.get("folder")
+        if spec.get("action") == "move" and f and f not in seen:
+            out.append(f)
+            seen.add(f)
+    return out
+
+
 def refile_sender(sender, category, account_name=None):
     """Sashas Modell ganz: den ABSENDER einer Kategorie zuordnen (Keymap) UND
-    **alle** seine vorhandenen Mails in den Kategorie-Ordner verschieben. Weil
-    ein Absender IMMER genau einer Kategorie zugeordnet ist und der Poll seine
-    Mails längst aus der INBOX in genau diesen Ordner geräumt hat, liegen sie an
-    **einer einzigen** Stelle: seinem **bisherigen** Kategorie-Ordner (bei noch
-    unbekanntem Absender: der Review-Ordner). Nur den durchsuchen wir per
-    `SEARCH FROM` — nicht INBOX, nicht andere Ordner. Etwaige brandneue, noch
-    ungepollte Mails sortiert der nächste Poll ohnehin gleich in die neue
-    Kategorie. Liefert {assigned, category, moved, live}. Ohne Key/Konto: nur
-    Keymap."""
-    # Die bisherige Kategorie VOR dem Umschreiben lesen — dort liegen seine Mails.
-    # classify() gibt für unbekannte Absender REVIEW zurück (= Review-Ordner).
-    prev_cat, _known = mail_rules.classify(sender)
+    **alle** seine vorhandenen Mails dorthin verschieben — egal, wo sie gerade
+    liegen.
+
+    KEYMAP-GETRIEBEN (nicht mehr an einer »vorheriger Ordner«-Buchhaltung
+    hängend): wir durchsuchen JEDEN sortierbaren Ordner (INBOX + alle move-Ordner,
+    inkl. Review) per `SEARCH FROM <absender>` und schieben alle Treffer ins Ziel.
+    Der alte Weg las die Herkunft aus classify() VOR dem Umschreiben — sobald die
+    Keymap aber schon (z.B. per Bulk/CLI) auf die neue Kategorie zeigte, war
+    Quelle == Ziel und es wurde NICHTS bewegt (genau der Bug, durch den bereits
+    zugewiesene Absender in Review liegenblieben). Jetzt zählt allein die Keymap:
+    Zuweisen ⇒ alle vorhandenen Mails ziehen mit. `sender` darf eine konkrete
+    Adresse ODER eine Domain sein (SEARCH FROM matcht als Teilstring).
+
+    Liefert {assigned, category, moved, live, moved_from}. `moved_from` = die
+    Ordner, aus denen tatsächlich verschoben wurde. Ohne Key/Konto: nur Keymap."""
     addr, cat = mail_rules.assign(sender, category)
     spec = mail_rules.category_action(cat)
     accts = _accounts_for(account_name)
     if not accts:
         return {"assigned": True, "category": cat, "moved": 0, "live": False,
-                "moved_from": prev_cat}
-
-    # Quelle: GENAU der bisherige Kategorie-Ordner des Absenders (das Ziel selbst
-    # wird unten übersprungen — Umsortieren in dieselbe Kategorie = nichts zu tun).
-    sources = []
-    prev_spec = mail_rules.category_action(prev_cat)
-    prev_folder = prev_spec.get("folder")
-    if prev_spec.get("action") == "move" and prev_folder:
-        sources.append(prev_folder)
-    if not sources:                    # kein durchsuchbarer Vor-Ordner → fertig
-        return {"assigned": True, "category": cat, "moved": 0, "live": True,
-                "moved_from": prev_cat}
+                "moved_from": []}
 
     moved = 0
+    touched = set()
     for account in accts:
         try:
             with _session(account) as imap:
                 folders = _FolderCache()
                 target = folders.target(imap, spec)
-                for folder in sources:
+                for folder in _sortable_folders():
                     if folder == target:
-                        continue
+                        continue        # schon am Ziel → nichts zu tun
                     try:
                         if _pselect(imap, account["name"], folder, readonly=False) != "OK":
                             continue
@@ -507,16 +515,140 @@ def refile_sender(sender, category, account_name=None):
                             continue
                         # Alle Treffer dieses Ordners in EINEM MOVE (statt pro Mail
                         # ein Roundtrip) → drastisch weniger Outlook-Drossel.
-                        moved += _move_uid_set(imap, data[0].split(), target)
+                        n = _move_uid_set(imap, data[0].split(), target)
+                        if n:
+                            moved += n
+                            touched.add(folder)
                     except _DROP_ERRORS:
                         raise
                     except Exception:
                         pass     # Ordner fehlt / nicht durchsuchbar -> überspringen
         except Exception as e:
             state.push_log(f"MAIL: Umsortieren '{addr}' — {type(e).__name__}: {e}")
-    state.push_log(f"MAIL: Absender {addr} → {cat} ({moved} Mail(s) umsortiert)")
+    state.push_log(f"MAIL: Absender {addr} → {cat} "
+                   f"({moved} Mail(s) aus {len(touched)} Ordner(n) umsortiert)")
     return {"assigned": True, "category": cat, "moved": moved, "live": True,
-            "moved_from": prev_cat}
+            "moved_from": sorted(touched)}
+
+
+# ── Reconcile: die Ordner an die Keymap angleichen ───────────────────
+# Die Keymap ist die EINZIGE Wahrheit. Ein Reconcile bringt die Server-Ordner
+# damit zur Deckung: jede Mail wird über ihren Absender (Trie-Matcher) neu
+# klassifiziert und, falls sie im falschen Ordner liegt, in den richtigen
+# geschoben. Damit greift »Absender zuweisen ⇒ ALLE vorhandenen Mails ziehen
+# nach« lückenlos — auch für Mail, die schon einsortiert war (der Poll schaut
+# nur in die INBOX und würde die nie wieder anfassen). Ordner-GETRIEBEN: pro
+# Ordner EIN SEARCH + EIN gebündelter Header-FETCH, dann pro Zielordner EIN
+# Batch-MOVE — throttle-arm. Der Papierkorb ist keine Quelle (nichts zurück-
+# holen). Idempotent: ein zweiter Lauf bewegt nichts mehr.
+
+def _fetch_from_headers(imap, uids, chunk=200):
+    """{uid: from-header} für viele uids in wenigen gebündelten FETCHes."""
+    out = {}
+    for i in range(0, len(uids), chunk):
+        part = uids[i:i + chunk]
+        typ, fetched = imap.uid("FETCH", ",".join(str(u) for u in part),
+                                "(UID BODY.PEEK[HEADER.FIELDS (FROM)])")
+        if typ != "OK" or not fetched:
+            continue
+        for item in fetched:
+            if not isinstance(item, tuple) or len(item) < 2:
+                continue
+            meta = item[0].decode("ascii", "replace") if isinstance(item[0], bytes) \
+                else str(item[0])
+            mm = re.search(r"UID\s+(\d+)", meta)
+            if not mm:
+                continue
+            out[int(mm.group(1))] = _parse_headers(item[1])["from"]
+    return out
+
+
+def reconcile_account(account, dry_run=None):
+    """Einen Kontostand an die Keymap angleichen. Liefert
+    {account, moved, per_target, dry_run, errors}. Move ist umkehrbar; Dry-Run
+    (Default über MAIL_DRY_RUN) fasst nichts an und meldet nur, WAS es täte."""
+    if dry_run is None:
+        dry_run = _dry_run()
+    name = account["name"]
+    m = mail_rules.matcher()          # EINMAL bauen, dann pro Mail wiederverwenden
+    delay = _action_delay()
+    moved = 0
+    per_target = {}
+    errors = []
+    mode = "DRY-RUN" if dry_run else "LIVE"
+    state.push_log(f"MAIL [{name}]: Reconcile {mode} — gleiche Ordner an die Keymap an")
+    state.push_internet_log(f"IMAP {name} → Reconcile ({mode})")
+    try:
+        with _session(account) as imap:
+            fc = _FolderCache()
+            # Zielordner je Kategorie EINMAL auflösen (ensure/Trash-LIST), damit
+            # der Inner-Loop pro Mail nur noch ein Dict nachschlägt.
+            targets = {}
+            for cname, spec in mail_rules.categories().items():
+                try:
+                    targets[cname] = fc.target(imap, spec)
+                except _DROP_ERRORS:
+                    raise
+                except Exception:
+                    pass
+            review_target = targets.get(mail_rules.REVIEW)
+
+            for folder in _sortable_folders():
+                try:
+                    if _pselect(imap, name, folder, readonly=False) != "OK":
+                        continue
+                    typ, data = imap.uid("SEARCH", None, "UID 1:*")
+                    if typ != "OK" or not data or not data[0]:
+                        continue
+                    uids = [int(u) for u in data[0].split()]
+                    from_by_uid = _fetch_from_headers(imap, uids)
+                    # uids nach Zielordner gruppieren (nur die, die woanders hin
+                    # gehören als in ihren aktuellen Ordner).
+                    groups = {}
+                    for uid in uids:
+                        cat, _known = m.classify(from_by_uid.get(uid, ""))
+                        target = targets.get(cat) or review_target
+                        if not target or target == folder:
+                            continue     # gehört genau hierher → liegen lassen
+                        groups.setdefault(target, []).append(uid)
+                    for target, guids in groups.items():
+                        if dry_run:
+                            n = len(guids)
+                        else:
+                            n = _move_uid_set(imap, guids, target)
+                            if delay:
+                                time.sleep(delay)   # Drossel-Schutz
+                        if n:
+                            moved += n
+                            per_target[target] = per_target.get(target, 0) + n
+                except _DROP_ERRORS:
+                    raise
+                except Exception as e:
+                    errors.append(f"{folder}: {type(e).__name__}: {e}")
+    except Exception as e:
+        errors.append(f"{type(e).__name__}: {e}")
+        state.push_log(f"MAIL [{name}]: Reconcile-Fehler — {type(e).__name__}: {e}")
+    state.push_log(f"MAIL [{name}]: Reconcile {mode} fertig — "
+                   f"{moved} Mail(s) {'würden umsortiert' if dry_run else 'umsortiert'}")
+    return {"account": name, "moved": moved, "per_target": per_target,
+            "dry_run": dry_run, "errors": errors}
+
+
+def reconcile_all(dry_run=None):
+    """Reconcile über alle aktiven Konten. Liefert Summen + je-Konto-Details."""
+    accts = [a for a in mail_secrets.load_accounts() if a.get("enabled", True)]
+    if not accts:
+        state.push_log("MAIL: Reconcile — keine Konten konfiguriert")
+        return {"moved": 0, "accounts": [], "dry_run": _dry_run() if dry_run is None else dry_run}
+    results = []
+    total = 0
+    for acct in accts:
+        r = reconcile_account(acct, dry_run=dry_run)
+        results.append(r)
+        total += r.get("moved", 0)
+    return {"moved": total, "accounts": results,
+            "dry_run": results[0]["dry_run"] if results else
+                       (_dry_run() if dry_run is None else dry_run)}
 
 
 # ── Antworten senden (SMTP XOAUTH2) ──────────────────────────────────
@@ -1469,6 +1601,21 @@ def _selftest():
         items = poll_all(dry_run=_dry_run())
         print(f"\n{len(items)} Mail(s) klassifiziert "
               f"({'DRY-RUN' if _dry_run() else 'LIVE'}).")
+        return 0
+    if "reconcile" in sys.argv[1:]:
+        # Ordner an die Keymap angleichen (bereits einsortierte Mail nachziehen).
+        # Default DRY-RUN — zeigt nur die Umsortier-Absicht; MAIL_DRY_RUN=0 = LIVE.
+        res = reconcile_all(dry_run=_dry_run())
+        mode = "DRY-RUN" if res["dry_run"] else "LIVE"
+        print(f"\nReconcile {mode}: {res['moved']} Mail(s) "
+              f"{'würden umsortiert' if res['dry_run'] else 'umsortiert'}.")
+        for acc in res["accounts"]:
+            print(f"  [{acc['account']}] {acc['moved']} → " +
+                  (", ".join(f"{t}:{n}" for t, n in acc["per_target"].items()) or "—"))
+            for err in acc["errors"]:
+                print(f"     ! {err}")
+        if res["dry_run"]:
+            print("\n(nichts angefasst — MAIL_DRY_RUN=0 … reconcile macht es LIVE)")
         return 0
     if len(sys.argv) > 1 and sys.argv[1] in ("cats", "addcat", "delcat"):
         return _cats_cli(sys.argv)
