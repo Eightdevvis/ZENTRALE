@@ -894,6 +894,9 @@ def run_ui(stdscr, store):
          "def": None, "vals": [], "input": "", "newtype": "number", "msg": "",
          "input2": "", "pstage": 0,    # input2/pstage: Perioden-Eingabe (von→bis)
          "dayoff": 0,                  # Ziel-Tag: 0=heute, N=N Tage zurück (←/→)
+         "gscroll": 0,                 # Kombigraph-Zeitfenster (nur Übersicht):
+                                       # 0=heute rechts, N=N Tage in die
+                                       # Vergangenheit gepant (←/→ scrollt)
          "shown": set(),               # in der Überlagerung gezeigte graph-ids:
                                        # leer=alle (Übersicht), 1=solo+editieren,
                                        # mehrere=Kombi (nur Anzeige, später)
@@ -1753,7 +1756,7 @@ def run_ui(stdscr, store):
     # Farb-Palette der Überlagerung, je Graph eine (durchgezykelt).
     LIFE_COL = ["graph", "acc", "warn", "net", "event", "audio", "hook", "num"]
 
-    def draw_overlay(otop, oleft, oh, ow, gs_cache, gv_cache, labeled=False):
+    def draw_overlay(otop, oleft, oh, ow, gs_cache, gv_cache, labeled=False, scroll=0):
         """ÜBERLAGERUNG aller Graphen in EINEM Gitter (X=Datum/Zeitstrahl, Y je
         Typ eigene Achse). Zeichnet NUR Inhalt in das Rechteck (otop,oleft,oh,ow)
         — den Rahmen setzt der Aufrufer. Zwei Modi, geteilt von rechter
@@ -1766,10 +1769,10 @@ def run_ui(stdscr, store):
         Darstellung je Typ: period→Bande, time→eigenes Symbol auf 24h,
         scale→Kreise ◦○◉●⬤, number→dünne Linie auf eigener min/max-Spanne."""
         if oh < 4 or ow < 12:
-            return
+            return 0
         if not gs_cache:
             safe_addstr(otop + 1, oleft + 2, "// noch keine graphen (g)", C["faint"])
-            return
+            return 0
         plot_x = oleft + 2
         # pro Graph: {datum: roh-eintrag}, Typ, Farbe (+ Symbol bei time).
         series = []
@@ -1795,7 +1798,7 @@ def run_ui(stdscr, store):
                 series.append(srec)
         if not series:
             safe_addstr(otop + 1, oleft + 2, "// noch keine werte", C["faint"])
-            return
+            return 0
 
         num_series = [s for s in series if s["type"] == "number"]
         scale_series = [s for s in series if s["type"] == "scale"]
@@ -1812,9 +1815,10 @@ def run_ui(stdscr, store):
             ix_clock = plot_x + AX_W * n_ax    # y-labels rechts vom zahl-gutter
             day_x0 = ix_clock + 3              # 2 achsen-spalten + │
             header_h = 1                       # kopf-legende
+            date_h = 1                          # sparse datums-zeile GANZ unten
             scale_h = 1 if (scale_series and not only_scale) else 0
             base = otop + header_h
-            plot_bottom = otop + oh - 1 - scale_h
+            plot_bottom = otop + oh - 1 - scale_h - date_h
             plot_h = max(2, plot_bottom - base + 1)
             leg_lines = None
         else:
@@ -1855,6 +1859,7 @@ def run_ui(stdscr, store):
         today = date.today()
         day_x_end = oleft + ow - 2
         avail = max(1, day_x_end - day_x0 + 1)
+        maxscroll = 0                          # wie weit man in die Vergangenheit kann
         if labeled:
             all_dates = [dd for s in series for dd in s["dv"].keys()]
             span = avail
@@ -1864,13 +1869,23 @@ def run_ui(stdscr, store):
                     span = (today - date(ey, em, ed)).days + 1
                 except Exception:
                     span = avail
-            ndays = max(1, min(span, 366))
-            window = [(today - timedelta(days=k)).isoformat() for k in range(ndays - 1, -1, -1)]
-            if ndays == 1:
-                day_col = {window[0]: day_x_end}
+            if span <= avail:
+                # passt komplett in die breite → wie bisher gestreckt, kein scrollen
+                ndays = max(1, min(span, 366))
+                window = [(today - timedelta(days=k)).isoformat() for k in range(ndays - 1, -1, -1)]
+                if ndays == 1:
+                    day_col = {window[0]: day_x_end}
+                else:
+                    day_col = {d: day_x0 + int(round(i / (ndays - 1) * (avail - 1)))
+                               for i, d in enumerate(window)}
             else:
-                day_col = {d: day_x0 + int(round(i / (ndays - 1) * (avail - 1)))
-                           for i, d in enumerate(window)}
+                # historie breiter als der platz → festes fenster (1 tag/spalte),
+                # rechte kante = heute minus scroll; ←/→ pant durch die vergangenheit
+                maxscroll = span - avail
+                scroll = max(0, min(int(scroll), maxscroll))
+                right = today - timedelta(days=scroll)
+                window = [(right - timedelta(days=k)).isoformat() for k in range(avail - 1, -1, -1)]
+                day_col = {d: day_x0 + i for i, d in enumerate(window)}
         else:
             window = [(today - timedelta(days=k)).isoformat() for k in range(avail - 1, -1, -1)]
             day_col = {d: day_x0 + i for i, d in enumerate(window)}
@@ -2096,7 +2111,7 @@ def run_ui(stdscr, store):
             # scale-Zeile unten: je graph name + Kreis-Verlauf der letzten werte.
             # Nur bei gemischter Auswahl — only_scale rendert im Gitter (oben).
             if scale_series and not only_scale:
-                sy = otop + oh - 1
+                sy = otop + oh - 1 - date_h    # datums-zeile bleibt ganz unten
                 sx = plot_x
                 safe_addstr(sy, sx, "skala:", C["faint"]); sx += 7
                 for s in scale_series:
@@ -2117,6 +2132,29 @@ def run_ui(stdscr, store):
                     sx += 2
                 if sx < oleft + ow - 5:
                     safe_addstr(sy, oleft + ow - 5, "1–5", C["faint"])
+            # ── sparse datums-zeile GANZ unten: ein paar tage übers fenster
+            # verteilt (dd.mm.), damit man grob sieht wann was war. ‹/› zeigen,
+            # dass links älteres bzw. rechts neueres außerhalb des fensters liegt.
+            drow = otop + oh - 1
+            prev_end = day_x0 - 2
+            for d in window:
+                cx = day_col.get(d)
+                if cx is None:
+                    continue
+                parts = d.split("-")
+                if len(parts) != 3:
+                    continue
+                lbl = "%s.%s." % (parts[2], parts[1])
+                if cx + len(lbl) > day_x_end + 1:
+                    cx = day_x_end + 1 - len(lbl)
+                if cx - prev_end < len(lbl) + 2:      # zu dicht am letzten label
+                    continue
+                safe_addstr(drow, cx, lbl, C["faint"])
+                prev_end = cx + len(lbl)
+            if scroll < maxscroll:                    # älteres links außerhalb
+                safe_addstr(drow, day_x0 - 1, "‹", C["dim"])
+            if scroll > 0 and maxscroll > 0:          # neueres rechts außerhalb
+                safe_addstr(drow, day_x_end, "›", C["dim"])
         else:
             # kompakte Legende unter dem Plot: farbiges Marker-Sample + Name.
             for li, line in enumerate(leg_lines[:max_leg]):
@@ -2133,6 +2171,7 @@ def run_ui(stdscr, store):
                         safe_addstr(yy, cx, "─", C[col])
                     addclip(yy, cx + 2, nm, (ow - 4) - (cx - plot_x) - 2, C["dim"])
                     cx += 2 + len(nm) + 1
+        return maxscroll        # wie weit ←/→ noch in die Vergangenheit kann
 
     def draw_graph_tool(by, bx, bh, bw, gv_cache):
         """Inhalt der MITTE-Box, wenn das Graph-Werkzeug Fokus hat."""
@@ -2183,7 +2222,12 @@ def run_ui(stdscr, store):
                 list_h = min(2 + ng, max(4, avail // 2))
                 ov_h = avail - list_h
                 if ov_h >= 8:
-                    draw_overlay(by + 1, bx, ov_h, bw, subset, gv_cache, labeled=True)
+                    # Solo editiert einen einzelnen Tag (←/→ = dayoff) → kein
+                    # Fenster-Pan; Übersicht dagegen pant per G["gscroll"].
+                    ms = draw_overlay(by + 1, bx, ov_h, bw, subset, gv_cache,
+                                      labeled=True, scroll=(0 if solo else G.get("gscroll", 0)))
+                    if not solo:                  # Scroll auf echte Historie clampen
+                        G["gscroll"] = max(0, min(G.get("gscroll", 0), ms or 0))
                     ly = by + 1 + ov_h             # Liste beginnt unter der Ansicht
             hdr = ("nur %s" % (solo.get("name") or "?")) if solo else "GRAPHEN"
             addclip(ly, ix, hdr, iw, C["bright"])
@@ -2250,7 +2294,9 @@ def run_ui(stdscr, store):
             elif G["msg"]:                     # Shortcuts liegen unter '/'; nur Feedback
                 addclip(bottom, ix, G["msg"], iw, C["faint"])
             else:
-                addclip(bottom, ix, "enter solo · n neu · p ~vorhersage · r reminder · d weg · esc zu", iw, C["faint"])
+                gs = G.get("gscroll", 0)
+                zt = ("←→ zeit (%d t zurück)" % gs) if gs else "←→ zeit"
+                addclip(bottom, ix, "enter solo · n neu · %s · p ~vorhersage · r reminder · d weg · esc zu" % zt, iw, C["faint"])
 
             if G["confirm"] and G["graphs"]:        # Mini-Dialog über die Liste legen
                 nm = G["graphs"][G["sel"]]["name"]
@@ -3897,7 +3943,8 @@ def run_ui(stdscr, store):
                     nag_dismissed.add(r.get("id"))
                 nag_active = False
                 if ch in (ord("g"), ord("G")):  # g = gleich ins Graph-Werkzeug
-                    G["active"] = True; G["view"] = "list"; G["msg"] = ""; g_load()
+                    G["active"] = True; G["view"] = "list"; G["msg"] = ""
+                    G["gscroll"] = 0; g_load()
         elif help_latched:
             if ch != -1:                       # jede Taste schließt die Hilfe wieder
                 help_latched = False
@@ -3970,6 +4017,10 @@ def run_ui(stdscr, store):
                     G["sel"] = max(0, G["sel"] - 1)
                 elif ch in (curses.KEY_DOWN, ord("j")):
                     G["sel"] = min(max(0, len(G["graphs"]) - 1), G["sel"] + 1)
+                elif ch == curses.KEY_LEFT:                    # kombigraph in vergangenheit pannen
+                    G["gscroll"] = G.get("gscroll", 0) + 7; G["msg"] = ""
+                elif ch == curses.KEY_RIGHT:                   # … zurück richtung heute
+                    G["gscroll"] = max(0, G.get("gscroll", 0) - 7); G["msg"] = ""
                 elif ch in (10, 13, curses.KEY_ENTER):
                     if G["graphs"]:
                         G["def"] = G["graphs"][G["sel"]]; G["input"] = ""; G["msg"] = ""
@@ -4057,6 +4108,7 @@ def run_ui(stdscr, store):
                         G["view"] = "list"; G["shown"] = set()
                         G["input"] = ""; G["input2"] = ""
                         G["pstage"] = 0; G["msg"] = ""; G["dayoff"] = 0
+                        G["gscroll"] = 0                       # übersicht startet bei heute
                 elif ch in (curses.KEY_UP, curses.KEY_DOWN):    # solo-Graph wechseln (↑↓)
                     if G["graphs"]:
                         step = -1 if ch == curses.KEY_UP else 1
@@ -4868,7 +4920,7 @@ def run_ui(stdscr, store):
                 theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
             elif ch in (ord("g"), ord("G")):   # Graph-Werkzeug öffnen
                 G["active"] = True; G["view"] = "list"; G["msg"] = ""
-                G["shown"] = set(); g_load()   # immer in der Übersicht (alle) starten
+                G["shown"] = set(); G["gscroll"] = 0; g_load()  # übersicht, heute rechts
             elif ch in (ord("l"), ord("L")):   # Listen-Werkzeug öffnen
                 L["active"] = True; L["view"] = "list"; L["msg"] = ""; l_load()
             elif ch in (ord("m"), ord("M")):   # Karte öffnen

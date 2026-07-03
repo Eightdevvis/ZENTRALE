@@ -104,6 +104,19 @@ tippen, `Tab` zykliert den **Typ** (s.u.),
 Enter legt an (`POST /api/graphs`); in **view** trägt man Werte für *heute* ein,
 gespeichert über `/api/log` — dieselbe Route wie die Data-Collection.
 
+**Übersicht = großer Kombigraph mit Zeit-Achse (`draw_overlay(labeled=True)`):**
+oben über der Liste liegt die beschriftete Überlagerung aller Graphen. Unten
+läuft eine **sparse Datums-Zeile** (ein paar `dd.mm.`-Marken übers Fenster
+verteilt) — grobe Orientierung, wann was war. Passt die ganze Historie in die
+Breite, wird sie wie gehabt **gestreckt** (heute rechts, ältester Wert links);
+ist sie **breiter als der Platz**, zeigt die Übersicht ein **festes Fenster
+(1 Tag/Spalte)** mit *heute* rechts, das man mit **←/→** in die Vergangenheit
+bzw. zurück Richtung heute **pant** (`G["gscroll"]` = Tage zurück, in `list`
+per ←/→; beim Öffnen/Zurück auf 0, auf die echte Historie geclampt). `‹`/`›`
+in der Datums-Zeile zeigen, dass links Älteres bzw. rechts Neueres außerhalb
+liegt; der Hint nennt den Offset (`←→ zeit (N t zurück)`). Solo (Enter) nutzt
+←/→ weiter für den **Ziel-Tag** (`dayoff`), nicht fürs Fenster.
+
 Vier **Graph-Typen** (`GRAPH_TYPES`, Validierung in `core/graphs.py`):
 - `number` — freie Messwerte (Ziffern + Enter), `blockspark`-Kurve.
 - `scale` — 1–5 Bewertung (Taste 1–5 trägt sofort ein).
