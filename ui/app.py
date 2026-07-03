@@ -1351,6 +1351,9 @@ def api_tutor_stop():
 _mail_poll_lock = threading.Lock()
 _mail_poll_running = {"on": False}
 
+_mail_reconcile_lock = threading.Lock()
+_mail_reconcile_running = {"on": False}
+
 # Cache der LIVE-Ordnerzählung (IMAP STATUS). Wird nicht-blockierend im
 # Hintergrund aufgefrischt (POST /api/mail/refresh-counts) und von /api/mail
 # nur GELESEN — so bleibt das Panel schnell, während die echten Zahlen
@@ -1645,9 +1648,12 @@ def api_mail_assign():
         return jsonify({"error": "sender/category fehlt"}), 400
     try:
         res = mail.refile_sender(sender, category)
-        # Beide betroffenen Ordner-Caches verwerfen (Herkunft + Ziel), damit das
-        # nächste Öffnen die verschobenen Mails korrekt zeigt.
-        _folder_cache_drop(category, res.get("moved_from"))
+        # Der Umzug ist jetzt keymap-getrieben und kann aus MEHREREN Ordnern
+        # gezogen haben (INBOX + jeder move-Ordner). Statt einzelne Herkünfte zu
+        # raten den ganzen Ordner-Cache verwerfen — das nächste Öffnen holt frisch.
+        with _mail_folders_lock:
+            _mail_folders.clear()
+        _mail_folders_save()
         return jsonify({"ok": True, **res})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1727,6 +1733,38 @@ def api_mail_poll():
             _mail_poll_running["on"] = False
 
     threading.Thread(target=_run, daemon=True, name="mail-poll").start()
+    return jsonify({"ok": True, "started": True})
+
+
+@app.route('/api/mail/reconcile', methods=['POST'])
+def api_mail_reconcile():
+    """Gleicht die Server-Ordner an die Keymap an (bereits einsortierte Mail
+    nachziehen) — im Hintergrund-Thread, kehrt SOFORT zurück, blockiert die GUI
+    also nie. Explizite Nutzer-Aktion = Einwilligung (Move/Trash umkehrbar). Key-
+    gegatet, Parallel-Reconcile via Lock verhindert. Fortschritt läuft über die
+    Log-Streams; das Panel bleibt bedienbar."""
+    if not mail_secrets.available():
+        return jsonify({"error": "keine Passphrase (Env oder OS-Keyring) — "
+                                 "kein Abgleich möglich"}), 409
+    with _mail_reconcile_lock:
+        if _mail_reconcile_running["on"]:
+            return jsonify({"ok": True, "already": True})
+        _mail_reconcile_running["on"] = True
+
+    def _run():
+        try:
+            mail.reconcile_all(dry_run=False)
+            # Mails wurden umgeräumt → alle Ordner-Caches sind veraltet.
+            with _mail_folders_lock:
+                _mail_folders.clear()
+            _mail_folders_save()
+        except Exception as e:
+            state.push_log(f"MAIL: Hintergrund-Reconcile abgebrochen — "
+                           f"{type(e).__name__}: {e}")
+        finally:
+            _mail_reconcile_running["on"] = False
+
+    threading.Thread(target=_run, daemon=True, name="mail-reconcile").start()
     return jsonify({"ok": True, "started": True})
 
 

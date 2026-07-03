@@ -13,6 +13,7 @@ Verbindung warm. Geprüft (ohne Netz, Fake-IMAP):
     aus dem Pool und der nächste Borrow baut frisch auf.
 """
 import imaplib
+from contextlib import contextmanager
 
 import pytest
 
@@ -267,16 +268,17 @@ def test_move_uid_set_falls_back_without_move_cap():
     assert imap.expunges == 1                             # ein EXPUNGE fürs Set
 
 
-# ── Einsortieren durchsucht GENAU EINEN Ordner ────────────────────────
-# Ein Absender ist immer genau einer Kategorie zugeordnet und der Poll hat seine
-# Mails längst aus der INBOX in diesen Ordner geräumt → seine Mails liegen an
-# genau einer Stelle: dem bisherigen Kategorie-Ordner (Review, solange unbekannt).
+# ── Einsortieren ist KEYMAP-getrieben: ALLE Ordner, nicht nur der Vor-Ordner ──
+# Der alte Weg las die Herkunft aus classify() VOR dem Umschreiben und durch-
+# suchte nur diesen einen Ordner. Sobald die Keymap (z.B. per Bulk/CLI) schon
+# auf die neue Kategorie zeigte, war Quelle == Ziel → 0 Moves, die Mail blieb
+# liegen (der Bug). Jetzt zählt allein die Keymap: JEDER sortierbare Ordner
+# (INBOX + move-Ordner, außer dem Ziel) wird nach dem Absender durchsucht.
 
 @pytest.fixture()
 def refile(monkeypatch):
     """refile_sender so verdrahten, dass wir ohne Netz sehen, WELCHE Ordner
     durchsucht werden. `searched` sammelt die selektierten Quell-Ordner."""
-    from contextlib import contextmanager
     searched = []
 
     class Imap:
@@ -294,6 +296,7 @@ def refile(monkeypatch):
     monkeypatch.setattr(M, "_session", fake_session)
     monkeypatch.setattr(M, "_accounts_for", lambda name=None: [{"name": "acc"}])
     monkeypatch.setattr(M.mail_rules, "assign", lambda s, c, **k: (s, c))
+    monkeypatch.setattr(M.mail_rules, "categories", lambda: cats)
     monkeypatch.setattr(M.mail_rules, "category_action", lambda name: cats[name])
     monkeypatch.setattr(M._FolderCache, "target",
                         lambda self, imap, spec: spec["folder"])
@@ -305,28 +308,166 @@ def refile(monkeypatch):
     return searched
 
 
-def test_refile_searches_only_prev_folder(refile, monkeypatch):
-    monkeypatch.setattr(M.mail_rules, "classify", lambda s: ("zahlen", True))
-    res = M.refile_sender("x@y.z", "arbeit")             # zahlen → arbeit
-    assert refile == ["ZENTRALE/Zahlen"]                 # GENAU ein Ordner, kein INBOX
-    assert res["moved"] == 2                             # 1 Ordner × 2 Treffer
+def test_refile_searches_all_folders_except_target(refile):
+    res = M.refile_sender("x@y.z", "arbeit")             # Ziel = ZENTRALE/Arbeit
+    # INBOX + alle move-Ordner AUSSER dem Ziel (Arbeit wird übersprungen)
+    assert refile == ["INBOX", "ZENTRALE/Zahlen", "ZENTRALE/Review"]
+    assert res["moved"] == 6                             # 3 Ordner × 2 Treffer
+    assert set(res["moved_from"]) == {"INBOX", "ZENTRALE/Zahlen", "ZENTRALE/Review"}
 
 
-def test_refile_unknown_sender_searches_review(refile, monkeypatch):
-    # Unbekannter Absender: classify() liefert REVIEW → nur dessen Ordner.
-    monkeypatch.setattr(M.mail_rules, "classify",
-                        lambda s: (M.mail_rules.REVIEW, False))
-    M.refile_sender("neu@y.z", "arbeit")
-    assert refile == ["ZENTRALE/Review"]
+def test_refile_skips_target_folder(refile):
+    M.refile_sender("x@y.z", "zahlen")                   # Ziel = ZENTRALE/Zahlen
+    assert "ZENTRALE/Zahlen" not in refile               # Ziel nie durchsucht
+    assert refile == ["INBOX", "ZENTRALE/Arbeit", "ZENTRALE/Review"]
 
 
-def test_refile_same_category_searches_nothing(refile, monkeypatch):
-    # In dieselbe Kategorie umsortieren: der bisherige Ordner IST das Ziel →
-    # wird übersprungen, es gibt nichts zu durchsuchen/verschieben.
-    monkeypatch.setattr(M.mail_rules, "classify", lambda s: ("arbeit", True))
-    res = M.refile_sender("x@y.z", "arbeit")
-    assert refile == []
-    assert res["moved"] == 0
+def test_refile_works_for_domain_sender(refile):
+    # Domain statt Adresse: SEARCH FROM matcht als Teilstring, Move läuft normal.
+    res = M.refile_sender("pearl.de", "arbeit")
+    assert res["moved"] == 6
+
+
+# ── Reconcile: Ordner an die Keymap angleichen (bereits einsortierte Mail) ──
+# Der Poll schaut nur in die INBOX — einmal einsortierte Mail wird nie wieder
+# gegen die Keymap geprüft. reconcile_account holt das nach: jede Mail wird über
+# ihren Absender neu klassifiziert und, falls falsch abgelegt, in den richtigen
+# Ordner geschoben. Unbekannte bleiben in Review, der Papierkorb ist keine Quelle,
+# und ein zweiter Lauf ist ein No-Op (idempotent).
+
+class FolderIMAP:
+    """IMAP-Stub mit echten Ordnern {ordner: {uid: from}} — SELECT/SEARCH/FETCH
+    (FROM-Header) und UID MOVE bewegen Mail wirklich zwischen den Ordnern."""
+    capabilities = (b"MOVE",)
+
+    def __init__(self, folders):
+        self.folders = {f: dict(m) for f, m in folders.items()}
+        self.cur = None
+
+    def select(self, mailbox, readonly=False):
+        self.cur = mailbox.strip('"')
+        self.folders.setdefault(self.cur, {})
+        return ("OK", [b"1"])
+
+    def uid(self, cmd, *args):
+        if cmd == "SEARCH":
+            uids = sorted(self.folders.get(self.cur, {}))
+            return ("OK", [" ".join(str(u) for u in uids).encode()])
+        if cmd == "FETCH":
+            want = [int(x) for x in args[0].split(",")]
+            data = []
+            for u in want:
+                frm = self.folders.get(self.cur, {}).get(u)
+                if frm is None:
+                    continue
+                meta = ("%d (UID %d BODY[HEADER.FIELDS (FROM)] {}" % (u, u)).encode()
+                data.append((meta, ("From: %s\r\n\r\n" % frm).encode()))
+            return ("OK", data)
+        if cmd == "MOVE":
+            target = args[1].strip('"')
+            self.folders.setdefault(target, {})
+            for u in [int(x) for x in args[0].split(",")]:
+                if u in self.folders.get(self.cur, {}):
+                    self.folders[target][u] = self.folders[self.cur].pop(u)
+            return ("OK", [b""])
+        return ("OK", [b""])
+
+    def expunge(self):
+        return ("OK", [b""])
+
+
+def _wire_reconcile(monkeypatch, imap, cats, classify):
+    from types import SimpleNamespace
+    monkeypatch.setattr(M, "_action_delay", lambda: 0.0)  # keine Drossel-Sleeps
+    monkeypatch.setattr(M, "_session", contextmanager(lambda account: iter([imap])))
+    monkeypatch.setattr(M.mail_rules, "matcher",
+                        lambda: SimpleNamespace(classify=classify))
+    monkeypatch.setattr(M.mail_rules, "categories", lambda: cats)
+    monkeypatch.setattr(M._FolderCache, "target",
+                        lambda self, imap, spec: spec.get("folder"))
+    monkeypatch.setattr(M, "_pselect",
+                        lambda imap, name, folder, readonly=True:
+                        (imap.select('"%s"' % folder, readonly=readonly), "OK")[1])
+
+
+def test_reconcile_moves_misfiled_to_keymap_target(monkeypatch):
+    R = M.mail_rules.REVIEW
+    imap = FolderIMAP({
+        "INBOX": {10: "a@pearl.de"},
+        "ZENTRALE/Review": {1: "a@pearl.de", 2: "b@flixbus.com", 3: "c@unknown.io"},
+        "ZENTRALE/Werbung": {},
+        "ZENTRALE/Reise": {},
+    })
+    cats = {R: {"action": "move", "folder": "ZENTRALE/Review"},
+            "Werbung": {"action": "move", "folder": "ZENTRALE/Werbung"},
+            "Reise": {"action": "move", "folder": "ZENTRALE/Reise"}}
+
+    def classify(frm):
+        if "pearl.de" in frm:
+            return "Werbung", True
+        if "flixbus.com" in frm:
+            return "Reise", True
+        return R, False
+
+    _wire_reconcile(monkeypatch, imap, cats, classify)
+    res = M.reconcile_account({"name": "acc"}, dry_run=False)
+
+    assert imap.folders["ZENTRALE/Werbung"] == {1: "a@pearl.de", 10: "a@pearl.de"}
+    assert imap.folders["ZENTRALE/Reise"] == {2: "b@flixbus.com"}
+    assert imap.folders["ZENTRALE/Review"] == {3: "c@unknown.io"}   # unbekannt bleibt
+    assert res["moved"] == 3
+
+    # idempotent: alles liegt richtig → zweiter Lauf bewegt nichts
+    res2 = M.reconcile_account({"name": "acc"}, dry_run=False)
+    assert res2["moved"] == 0
+
+
+def test_reconcile_dry_run_moves_nothing(monkeypatch):
+    R = M.mail_rules.REVIEW
+    imap = FolderIMAP({
+        "INBOX": {},
+        "ZENTRALE/Review": {1: "a@pearl.de"},
+        "ZENTRALE/Werbung": {},
+    })
+    cats = {R: {"action": "move", "folder": "ZENTRALE/Review"},
+            "Werbung": {"action": "move", "folder": "ZENTRALE/Werbung"}}
+    _wire_reconcile(monkeypatch, imap, cats, lambda frm: ("Werbung", True))
+    res = M.reconcile_account({"name": "acc"}, dry_run=True)
+    assert res["moved"] == 1                          # meldet, WAS es täte
+    assert res["dry_run"] is True
+    assert imap.folders["ZENTRALE/Review"] == {1: "a@pearl.de"}  # aber nichts bewegt
+    assert imap.folders["ZENTRALE/Werbung"] == {}
+
+
+# ── Trie-Matcher: schnelles Longest-Match (Adresse ODER Domain) ───────
+
+def test_trie_domain_rule_matches_subdomains_and_addresses():
+    m = M.mail_rules.Matcher(
+        {"pearl.de": "Werbung", "flixbus.com": "Reise"},
+        {"Werbung", "Reise"})
+    assert m.classify("maria.kern@pearl.de") == ("Werbung", True)
+    assert m.classify("noreply@trips.mail.flixbus.com") == ("Reise", True)
+
+
+def test_trie_address_rule_beats_domain_rule():
+    m = M.mail_rules.Matcher(
+        {"pearl.de": "Werbung", "boss@pearl.de": "arbeit antworten"},
+        {"Werbung", "arbeit antworten"})
+    assert m.classify("boss@pearl.de") == ("arbeit antworten", True)   # spezifischer
+    assert m.classify("x@pearl.de") == ("Werbung", True)               # Domain-Fallback
+
+
+def test_trie_no_domain_leak_across_boundary():
+    m = M.mail_rules.Matcher({"pearl.de": "Werbung"}, {"Werbung"})
+    # 'pearl.de' darf NICHT 'pearl.de.evil.com' fangen (Label-Grenze, kein Präfix)
+    assert m.classify("x@pearl.de.evil.com") == (M.mail_rules.REVIEW, False)
+
+
+def test_trie_unknown_and_stale_category_go_to_review():
+    m = M.mail_rules.Matcher({"a@b.de": "geloescht-inzwischen"}, {"zahlen"})
+    assert m.classify("wer@ganz.anders") == (M.mail_rules.REVIEW, False)  # unbekannt
+    # Regel zeigt auf eine Kategorie, die es nicht mehr gibt → Review (safe)
+    assert m.classify("a@b.de") == (M.mail_rules.REVIEW, False)
 
 
 # ── Entwurf: Antwort als echter IMAP-Draft (Drafts-Ordner) ────────────

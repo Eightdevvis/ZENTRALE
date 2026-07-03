@@ -506,7 +506,7 @@ TUI_KEYS = [
     ("l",   "Listen (Mitte): anlegen · einträge abhaken (space) / löschen · p als projekt rechts"),
     ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Handelsrouten · w=Fenster"),
     ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · v Woche/Monat"),
-    ("p",   "Post/Mail (Mitte): enter rein · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · esc zurück"),
+    ("p",   "Post/Mail (Mitte): enter rein · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich (ordner an keymap) · esc zurück"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
@@ -563,16 +563,17 @@ CTX_KEYS = {
     ],
     "mail:cats": [
         ("↑↓", "wählen"), ("enter", "öffnen"), ("r", "poll"),
-        ("z", "neu zählen"), ("esc", "zu"),
+        ("x", "abgleich"), ("z", "neu zählen"), ("esc", "zu"),
     ],
     "mail:list": [
         ("↑↓", "wählen"), ("enter", "lesen"), ("a", "antworten"),
-        ("s", "einsortieren"), ("d", "löschen"), ("z", "neu zählen"), ("esc", "zurück"),
+        ("s", "einsortieren"), ("d", "löschen"), ("x", "abgleich"),
+        ("z", "neu zählen"), ("esc", "zurück"),
     ],
     "mail:read": [
         ("←→", "vor/zurück"), ("↓", "ausklappen/scrollen"), ("↑", "scrollen/zu"),
         ("a", "antworten"), ("s", "einsortieren"), ("d", "löschen"), ("v", "liste"),
-        ("z", "neu zählen"), ("esc", "zurück"),
+        ("x", "abgleich"), ("z", "neu zählen"), ("esc", "zurück"),
     ],
 }
 CTX_TITLES = {
@@ -3299,6 +3300,25 @@ def run_ui(stdscr, store):
         über das Log links. Braucht Passphrase (Env/Keyring)."""
         _mail_submit(("poll",), "poll…", _do_poll)
 
+    def _do_reconcile():
+        try:
+            r = api_call("/api/mail/reconcile", method="POST", timeout=8.0)
+            if isinstance(r, dict) and r.get("error"):
+                MAIL["msg"] = "kein key — keyring-set nötig"
+            elif isinstance(r, dict) and r.get("already"):
+                MAIL["msg"] = "abgleich läuft schon…"
+            else:
+                MAIL["msg"] = "abgleich gestartet — siehe log links"
+        except Exception:
+            MAIL["msg"] = "abgleich: backend?"
+        MAIL["data"] = None       # Zähler nach dem Umräumen frisch ziehen
+
+    def mail_reconcile():
+        """Ordner an die Keymap angleichen (bereits einsortierte Mail nachziehen)
+        — läuft im Backend-Hintergrund, blockiert die TUI nie. Braucht Key."""
+        _mail_submit(("reconcile",), "gleiche ab…", _do_reconcile)
+        MAIL["msg"] = "starte abgleich…"
+
     def _mail_line(it):
         """Absender + Betreff kompakt für eine Mail-Zeile."""
         who = (it.get("from") or "?").strip()
@@ -4532,6 +4552,8 @@ def run_ui(stdscr, store):
                     mail_reply_open()
                 elif ch in (ord("r"), ord("R")):
                     mail_poll(); MAIL["data"] = None
+                elif ch in (ord("x"), ord("X")):               # x → Ordner an Keymap angleichen
+                    mail_reconcile()
                 elif ch in (ord("z"), ord("Z")):               # z → Zahlen JETZT neu zählen
                     _mail_submit(("counts",), "zähle ordner…",
                                  lambda: _do_refresh_counts(force=True))
@@ -4554,6 +4576,8 @@ def run_ui(stdscr, store):
                         mail_open_category(cl[MAIL["sel"]].get("name"))
                 elif ch in (ord("r"), ord("R")):               # r → Live-Poll anstoßen
                     mail_poll(); MAIL["data"] = None
+                elif ch in (ord("x"), ord("X")):               # x → Ordner an Keymap angleichen
+                    mail_reconcile()
                 elif ch in (ord("z"), ord("Z")):               # z → Zahlen JETZT neu zählen
                     _mail_submit(("counts",), "zähle ordner…",
                                  lambda: _do_refresh_counts(force=True))

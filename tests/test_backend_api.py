@@ -193,9 +193,10 @@ def test_folder_force_bypasses_cache(client, monkeypatch, tmp_path):
     assert j["cached"] is False and len(calls) == 2   # force → erneut live
 
 
-def test_assign_drops_both_folder_caches(client, monkeypatch, tmp_path):
-    # Umsortieren muss Herkunfts- UND Ziel-Ordner-Cache verwerfen, sonst zeigt
-    # das nächste Öffnen die verschobenen Mails noch.
+def test_assign_clears_folder_cache(client, monkeypatch, tmp_path):
+    # Umsortieren ist jetzt KEYMAP-getrieben und kann aus MEHREREN Ordnern gezogen
+    # haben (INBOX + jeder move-Ordner). Statt einzelne Herkünfte zu raten wird der
+    # ganze Ordner-Cache verworfen — das nächste Öffnen holt garantiert frisch.
     from ui import app as A
     monkeypatch.setattr(A, "_MAIL_FOLDERS_FILE", str(tmp_path / "f.json"))
     A._mail_folders.clear()
@@ -204,12 +205,12 @@ def test_assign_drops_both_folder_caches(client, monkeypatch, tmp_path):
     A._mail_folders["fun options"] = {"mails": [{"uid": 3}], "ts": 1e9}
     monkeypatch.setattr(A.mail, "refile_sender",
                         lambda s, c: {"assigned": True, "category": "zahlen",
-                                      "moved": 3, "live": True, "moved_from": "Uni"})
+                                      "moved": 3, "live": True,
+                                      "moved_from": ["ZENTRALE/Uni", "INBOX"]})
     r = client.post("/api/mail/assign",
                     json={"sender": "a@b", "category": "zahlen"})
     assert r.status_code == 200
-    assert "Uni" not in A._mail_folders and "zahlen" not in A._mail_folders
-    assert "fun options" in A._mail_folders        # unbeteiligter Ordner bleibt
+    assert A._mail_folders == {}                   # komplett geleert
 
 
 def test_delete_removes_uid_from_folder_cache(client, monkeypatch, tmp_path):
