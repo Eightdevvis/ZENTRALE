@@ -2104,6 +2104,26 @@ def run_ui(stdscr, store):
             x1 = (day_col[window[idx + 1]] - 1) if idx + 1 < len(window) else day_x_end
             day_span[d] = (x0, max(x0, x1))
 
+        # Datums-Marken (sparse) EINMAL bestimmen: dieselbe Spalte trägt UNTEN
+        # das Label UND (groß) eine feine senkrechte Führungslinie durch den
+        # Plot nach oben → man liest Datum↔Spalte exakt ab.
+        date_ticks = []                        # (tick-spalte, label-start, "dd.mm.")
+        if labeled:
+            prev_end = day_x0 - 2
+            for d in window:
+                cx = day_col.get(d)
+                if cx is None:
+                    continue
+                parts = d.split("-")
+                if len(parts) != 3:
+                    continue
+                lbl = "%s.%s." % (parts[2], parts[1])
+                lx = min(cx, day_x_end + 1 - len(lbl))   # rechts nicht überlaufen
+                if lx - prev_end < len(lbl) + 2:         # zu dicht am letzten label
+                    continue
+                date_ticks.append((cx, lx, lbl))
+                prev_end = lx + len(lbl)
+
         # Linke y-achse: 24h-uhr — ODER 1–5-skala, wenn NUR scale-graphen gewählt
         # sind (dann sind stunden sinnlos). Senkrechte Linie + Marken-Labels +
         # (groß) feines waagerechtes Hilfsraster: gepunktet, jede 2. Spalte, faint
@@ -2120,6 +2140,11 @@ def run_ui(stdscr, store):
             for gr in {r for r, _l in axrows}:
                 for cx in range(day_x0, day_x_end + 1, 2):
                     safe_addstr(gr, cx, "·", C["faint"])
+            # senkrechte Führungslinien an den Datums-Marken (gestrichelt, faint,
+            # ZUERST → Banden/Linien/Marker überzeichnen sie).
+            for cx, _lx, _lbl in date_ticks:
+                for r in range(plot_h):
+                    safe_addstr(base + r, cx, "┊", C["faint"])
         for gr, lbl in axrows:
             safe_addstr(gr, ix_clock, lbl.rjust(2), C["faint"])
 
@@ -2341,21 +2366,8 @@ def run_ui(stdscr, store):
             # verteilt (dd.mm.), damit man grob sieht wann was war. ‹/› zeigen,
             # dass links älteres bzw. rechts neueres außerhalb des fensters liegt.
             drow = otop + oh - 1
-            prev_end = day_x0 - 2
-            for d in window:
-                cx = day_col.get(d)
-                if cx is None:
-                    continue
-                parts = d.split("-")
-                if len(parts) != 3:
-                    continue
-                lbl = "%s.%s." % (parts[2], parts[1])
-                if cx + len(lbl) > day_x_end + 1:
-                    cx = day_x_end + 1 - len(lbl)
-                if cx - prev_end < len(lbl) + 2:      # zu dicht am letzten label
-                    continue
-                safe_addstr(drow, cx, lbl, C["faint"])
-                prev_end = cx + len(lbl)
+            for _cx, lx, lbl in date_ticks:       # exakt unter der Führungslinie
+                safe_addstr(drow, lx, lbl, C["faint"])
             if scroll < maxscroll:                    # älteres links außerhalb
                 safe_addstr(drow, day_x0 - 1, "‹", C["dim"])
             if scroll > 0 and maxscroll > 0:          # neueres rechts außerhalb
