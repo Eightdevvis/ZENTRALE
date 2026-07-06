@@ -21,6 +21,7 @@ hier sofort mitziehen, sonst tote Links.
 | Kalender-System (Layer, Termine)   | memory/kalender_system.md           |
 | News-System (Tagesschau, Briefing) | memory/news_system.md               |
 | Mail-System (IMAP-Triage, Keymap)  | memory/mail_system.md               |
+| Notizen-System (Blöcke: text/list/float) | memory/notizen_system.md      |
 | Maps-System (Layer-Karte, 3 Achsen)| memory/maps_system.md               |
 | Maps Design-Brief (Look-Handoff)   | memory/maps_design_brief.md         |
 | Maps Quellen-Charta (Layer→Quelle) | memory/maps_quellen.md              |

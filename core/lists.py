@@ -573,13 +573,16 @@ def set_item_project(lid, iid, on):
     return it
 
 
-def _project_subnodes(items):
+def _project_subnodes(items, lid):
     """
     Rekursiv die als Projekt geflaggten Einträge unter `items` als verschachtelte
     Knoten sammeln. Ein geflaggter Eintrag wird zum Knoten (sein Fortschritt +
     seine eigenen geflaggten Unter-Projekte als `children`); ein NICHT geflaggter
     Container wird nur durchschritten — seine geflaggten Nachfahren klettern eine
     Ebene höher. So erscheinen genau die markierten Knoten in ihrer Verschachtelung.
+    `focus` = dieser Knoten ist das aktuell allein fokussierte Projekt (vgl. set_focus).
+    `lid` = id der besitzenden Liste, damit die Front den Fokus per (lid, iid)
+    setzen kann (Eintrags-ids sind nur INNERHALB ihrer Liste eindeutig).
     """
     out = []
     for it in items or []:
@@ -588,12 +591,14 @@ def _project_subnodes(items):
         if it.get('project'):
             d, t = node_progress(it)
             out.append({"id": it.get("id"), "name": it.get("text"),
+                        "lid": lid,
                         "done": d, "total": t,
-                        "children": _project_subnodes(it.get('items'))})
+                        "focus": bool(it.get('focus')),
+                        "children": _project_subnodes(it.get('items'), lid)})
         else:
             kids = it.get('items')
             if isinstance(kids, list) and kids:
-                out.extend(_project_subnodes(kids))
+                out.extend(_project_subnodes(kids, lid))
     return out
 
 
@@ -611,17 +616,119 @@ def projects_tree():
     """
     out = []
     for l in _load():
+        lid = l.get("id")
         if l.get('project'):
             d, t = node_progress(l)
-            out.append({"id": l.get("id"), "name": l.get("name"),
+            out.append({"id": lid, "name": l.get("name"),
+                        "lid": lid,
                         "done": d, "total": t,
-                        "children": _project_subnodes(l.get('items'))})
+                        "focus": bool(l.get('focus')),
+                        "children": _project_subnodes(l.get('items'), lid)})
         else:
             # Liste selbst kein Projekt → ihre geflaggten Einträge klettern hoch
             # und werden eigene Wurzeln (sonst „verstecken" sich Projekte in einer
             # ungeflaggten Liste und tauchen nie in der Box auf).
-            out.extend(_project_subnodes(l.get('items')))
+            out.extend(_project_subnodes(l.get('items'), lid))
     return out
+
+
+# ── Projekt-Fokus: genau EIN Projekt allein am Rand ──────────────────────────
+# Ein Projekt-Knoten (Liste ODER Eintrag) kann als »Fokus« markiert sein
+# (`focus: True`, parallel zum `project`-Flag). Ist ein Fokus gesetzt, zeigen die
+# Fronten in der PROJECTS-Box NUR dieses Projekt allein (statt aller). Das Flag
+# lebt am Knoten selbst → eindeutig, ohne id-Matching, und reitet auf demselben
+# Sync mit (data/*.json). Es ist immer HÖCHSTENS EINER gesetzt.
+
+def _clear_all_focus(lists):
+    """Alle focus-Flags über Listen UND Einträge löschen. Liefert True, wenn
+    irgendwo eins entfernt wurde (→ es hat sich wirklich was geändert)."""
+    changed = False
+    for l in lists:
+        if l.pop('focus', None):
+            changed = True
+        for it in _walk(l.get('items')):
+            if it.pop('focus', None):
+                changed = True
+    return changed
+
+
+def get_focus():
+    """Das aktuell fokussierte Projekt als `{lid, iid, name}` — oder None.
+    `iid` ist None, wenn eine ganze Liste fokussiert ist."""
+    for l in _load():
+        if l.get('focus'):
+            return {"lid": l.get("id"), "iid": None, "name": l.get("name")}
+        for it in _walk(l.get('items')):
+            if it.get('focus'):
+                return {"lid": l.get("id"), "iid": it.get("id"),
+                        "name": it.get("text")}
+    return None
+
+
+def focused_subtree():
+    """Der aktuell fokussierte Knoten (Liste ODER Eintrag, egal ob project-
+    geflaggt) als Anzeige-Teilbaum für die FOCUS-Box — oder None. Gezeigt wird
+    NUR EINE Ebene tief: der Knoten selbst + seine DIREKTEN Unterpunkte; deren
+    eigene Unterpunkte sind EINGEKLAPPT (nur als `branch: true` markiert, damit
+    die Front ein ▸ setzen kann, plus aggregierter Fortschritt). Form:
+    `{name, done, total, focus, children:[{name,done,total,branch}, …]}`.
+    Die volle begehbare Übersicht gibt es ausschließlich in der Projektansicht."""
+    def _view(node, is_list):
+        name = node.get('name') if is_list else node.get('text')
+        d, t = node_progress(node)
+        children = []
+        for c in node.get('items') or []:
+            if not isinstance(c, dict):
+                continue
+            cd, ct = node_progress(c)
+            children.append({"name": c.get('text'), "done": cd, "total": ct,
+                             "branch": is_container(c)})
+        return {"name": name, "done": d, "total": t, "focus": True,
+                "children": children}
+    for l in _load():
+        if l.get('focus'):
+            return _view(l, True)
+        for it in _walk(l.get('items')):
+            if it.get('focus'):
+                return _view(it, False)
+    return None
+
+
+def set_focus(lid, iid=None):
+    """
+    Ein Projekt als alleinigen Fokus setzen (Toggle). Räumt IMMER alle anderen
+    focus-Flags ab (höchstens einer gleichzeitig). War der Zielknoten schon
+    fokussiert → Fokus AUS (liefert None). Sonst wird er gesetzt (liefert
+    `{lid, iid, name}`). `iid=None` fokussiert die ganze Liste.
+    Wirft KeyError bei unbekannter Liste / unbekanntem Eintrag.
+    """
+    lists = _load()
+    lst = _find(lists, lid)
+    if lst is None:
+        raise KeyError(lid)
+    if iid is None:
+        target = lst
+        name = lst.get("name")
+    else:
+        target = _find_item(lst.get('items'), iid)
+        if target is None:
+            raise KeyError(iid)
+        name = target.get("text")
+    was_focused = bool(target.get('focus'))
+    _clear_all_focus(lists)                       # nur einer darf leuchten
+    if was_focused:                               # schon fokussiert → Toggle aus
+        _save(lists)
+        return None
+    target['focus'] = True
+    _save(lists)
+    return {"lid": lid, "iid": iid, "name": name}
+
+
+def clear_focus():
+    """Fokus überall löschen (Fronten zeigen wieder ALLE Projekte)."""
+    lists = _load()
+    if _clear_all_focus(lists):
+        _save(lists)
 
 
 def rename_item(lid, iid, text):

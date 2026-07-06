@@ -79,6 +79,7 @@ hält die Antworten fokussiert.
 | Kalender-System (Layer, Termine)          | `memory/kalender_system.md`          |
 | News-System (Tagesschau, KI-Briefing)     | `memory/news_system.md`              |
 | Mail-System (IMAP-Triage, Sender-Keymap)  | `memory/mail_system.md`              |
+| Notizen (Blöcke: text/liste/float, Taste n)| `memory/notizen_system.md`          |
 | Maps-System (Layer-Karte, 3 Achsen)       | `memory/maps_system.md`              |
 | KI-Persönlichkeit & Fine-Tuning-Plan      | `memory/ki_personality_plan.md`      |
 | Mandarin-Tutor (pausiert)                 | `memory/tutor_system.md`             |

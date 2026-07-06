@@ -243,6 +243,7 @@
   .prj .pb .pbf { color: var(--acc); }
   .prj .pb .pbe { color: var(--faint); }
   .prj.full .pc { color: var(--acc); }
+  .prj.focus .pb .pbf { color: var(--span); }   /* fokussiertes Projekt → Bernstein-Balken */
   /* Projekt MIT Unterprojekten: dünner Rahmen, Titel im Rahmen, Kinder drin */
   .prj-box { position: relative; border: 1px solid var(--line); margin: 11px 0 5px; padding: 9px 7px 3px; }
   .prj-box > .prj-bt { position: absolute; top: -9px; left: 9px; background: var(--bg); padding: 0 6px; font-family: 'VT323', monospace; font-size: 15px; letter-spacing: 0.1em; color: var(--bright); text-transform: uppercase; white-space: nowrap; max-width: 88%; overflow: hidden; text-overflow: ellipsis; }
@@ -612,7 +613,7 @@
           <div id="trackers"></div>
         </div>
         <div class="box" style="flex:0 1 auto;min-height:0">
-          <span class="bt">projects</span>
+          <span class="bt">focus</span>
           <div id="projects"></div>
         </div>
         <div class="box net" style="flex:1 1 auto;min-height:0">
@@ -781,7 +782,8 @@
     // Kasten (Titel im Rahmen) um die Kinder, KEINE eigene Leiste. Leisten-Breite
     // schrumpft mit der Tiefe, damit tiefe Verschachtelung nicht überläuft.
     function renderNode(node, depth) {
-      var name = pEsc(node.name || ''), kids = node.children || [];
+      // ▸ = eingeklappter Zweig (hat Unterpunkte); focus → Leiste bernsteinfarben.
+      var name = (node.branch ? '▸ ' : '') + pEsc(node.name || ''), kids = node.children || [];
       if (kids.length) {
         return '<div class="prj-box"><span class="prj-bt">' + name + '</span>'
           + '<div class="prj-kids">'
@@ -790,21 +792,22 @@
       }
       var done = node.done | 0, total = node.total | 0, full = total && done >= total;
       var cells = Math.max(8, 24 - depth * 4);
-      return '<div class="prj' + (full ? ' full' : '') + '">'
+      var cls = 'prj' + (full ? ' full' : '') + (node.focus ? ' focus' : '');
+      return '<div class="' + cls + '">'
         + '<div class="ph"><span class="pt">' + name + '</span>'
         + '<span class="pc">' + done + '/' + total + '</span></div>'
         + '<div class="pb">' + projBar(done, total, cells) + '</div></div>';
     }
+    // Die FOCUS-Box zeigt AUSSCHLIESSLICH das in der TUI-Projektansicht (Taste
+    // 'f') fokussierte Projekt — oder nichts. Kein Fallback auf „alle Projekte";
+    // die Gesamtübersicht lebt nur noch in der Projektansicht. Quelle daher der
+    // schlanke Fokus-Endpoint (nicht der volle Baum).
     async function fetchProjects() {
       if (!prjEl) return;
-      var pr;
-      try { pr = await (await fetch('/api/projects')).json(); }
+      var foc;
+      try { foc = await (await fetch('/api/projects/focused')).json(); }
       catch (e) { return; }                            // Backend kurz weg → alte Anzeige stehen lassen
-      if (!Array.isArray(pr) || !pr.length) {
-        prjEl.innerHTML = '<div class="nodata">— keine projekte (im listen-werkzeug \'p\') —</div>';
-        return;
-      }
-      prjEl.innerHTML = pr.map(function (p) { return renderNode(p, 0); }).join('');
+      prjEl.innerHTML = foc ? renderNode(foc, 0) : '';  // nichts fokussiert → leer
     }
     fetchProjects();
     setInterval(fetchProjects, 30000);

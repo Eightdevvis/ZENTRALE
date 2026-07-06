@@ -108,11 +108,15 @@ class Store:
             pass
 
     def _poll_projects(self):
-        """Als Projekt geflaggte Listen samt Erfüllungsgrad ziehen (PROJECTS-Box)."""
+        """NUR den fokussierten Projekt-Teilbaum ziehen (FOCUS-Box). Kein
+        Fallback auf alle Projekte — die Gesamtübersicht lebt allein in der
+        Projektansicht (Taste 'f', holt /api/projects selbst). Als Liste
+        gehalten ([node] oder []), damit die Box-Render-Schleife unverändert
+        läuft."""
         try:
-            pr = self._get("/api/projects") or []
+            foc = self._get("/api/projects/focused")
             with self._lock:
-                self.projects = pr if isinstance(pr, list) else []
+                self.projects = [foc] if isinstance(foc, dict) else []
         except (urllib.error.URLError, OSError, ValueError):
             pass
 
@@ -196,7 +200,8 @@ class Store:
             return list(self.reminders)
 
     def projects_snapshot(self):
-        """Liste der geflaggten Projekte ({id,name,done,total}) für die PROJECTS-Box."""
+        """Der fokussierte Projekt-Teilbaum als Liste ([node] oder []) für die
+        FOCUS-Box — NICHT alle Projekte (die Übersicht lebt in der Projektansicht)."""
         with self._lock:
             return [dict(p) for p in self.projects if isinstance(p, dict)]
 
@@ -477,7 +482,9 @@ def selftest():
         flag = " ◆projekt" if l.get("project") else ""
         print("    %-16s :" % l.get("name"), "%d/%d erledigt%s" % (done, total, flag))
     pr = store._get("/api/projects") or []
-    print("  projekte (rechts)  :", [p.get("name") for p in pr] or "—")
+    foc = store._get("/api/projects/focused")
+    print("  projekte (übersicht):", [p.get("name") for p in pr] or "—",
+          "· fokus:", (foc.get("name") if isinstance(foc, dict) else "—"))
     def _pp(node, depth=0):                       # Projekt-Baum eingerückt drucken
         kids = node.get("children") or []
         head = "    " + "  " * depth + ("▸ " if kids else "• ")
@@ -511,6 +518,7 @@ TUI_KEYS = [
     ("p",   "Post/Mail (Mitte): enter rein · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich (ordner an keymap) · esc zurück"),
     ("a",   "KI-Chat (Mitte): tippen + enter fragt die lokale KI (PC-Hirn via tunnel) · ↑↓ scrollen · esc zu"),
     ("u",   "Sprach-Tutor (Mitte): enter startet die stunde · tippen + enter redet · /lang /provider /model /models /tutorstop · esc zu (session bleibt)"),
+    ("f",   "Projektansicht (Mitte): top-level projekte, aufklappbar · ↑↓ wählen · enter aufklappen (bis ins kleinste blatt) · space/f als fokus (rendert dann allein in der FOCUS-box) · esc/← zuklappen"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
@@ -524,7 +532,11 @@ CTX_KEYS = {
     "home": [
         ("l", "listen"), ("g", "graph"), ("m", "karte"),
         ("c", "kalender"), ("p", "post / mail"), ("a", "ki-chat"),
-        ("u", "tutor"), ("t", "theme"), ("q", "beenden"),
+        ("u", "tutor"), ("f", "projekte"), ("t", "theme"), ("q", "beenden"),
+    ],
+    "projects": [
+        ("↑↓", "wählen"), ("enter", "aufklappen"), ("space/f", "fokus"),
+        ("esc/←", "zuklappen / zu"),
     ],
     "ai": [
         ("tippen", "frage"), ("enter", "senden"),
@@ -596,7 +608,7 @@ CTX_TITLES = {
     "cal:week": "kalender · woche", "cal:month": "kalender · monat",
     "cal:list": "kalender · liste", "cal:sort": "kalender · sortieren",
     "mail:cats": "post", "mail:list": "post · liste", "mail:read": "post · lesen",
-    "ai": "ki-chat", "tutor": "tutor",
+    "ai": "ki-chat", "tutor": "tutor", "projects": "projekte",
 }
 
 
@@ -740,7 +752,7 @@ def run_ui(stdscr, store):
     # Rahmen ein klar sichtbares Grau (245). Grün NIE bold (= sonst Neon),
     # gedämpftes Salbeigrün (108) statt grellem Standard-Grün.
     ROLES = ["acc", "warn", "net", "graph", "event", "audio", "hook", "span",
-             "num", "dim", "faint", "bright", "ink", "band"]
+             "num", "amber", "dim", "faint", "bright", "ink", "band"]
     THEMES = {
         "night": {
             "bg8": curses.COLOR_BLACK, "bg256": 16,
@@ -754,6 +766,7 @@ def run_ui(stdscr, store):
             "hook":  (curses.COLOR_YELLOW,  215, 0),
             "span":  (curses.COLOR_YELLOW,  216, 0),    # Mehrtages-Klammer: weiches Orange
             "num":   (curses.COLOR_YELLOW,  222, 0),
+            "amber": (curses.COLOR_YELLOW,  214, curses.A_BOLD),  # Fokus-Leiste: Bernstein
             "dim":   (curses.COLOR_WHITE,   231, 0),    # normaler Text: reinweiß = max Kontrast
             "faint": (curses.COLOR_WHITE,   245, 0),    # Rahmen: sichtbares Grau (nicht gedimmt)
             "bright":(curses.COLOR_WHITE,   231, curses.A_BOLD),
@@ -775,6 +788,7 @@ def run_ui(stdscr, store):
             "hook":  (curses.COLOR_RED,     130, 0),
             "span":  (curses.COLOR_RED,     166, 0),    # Mehrtages-Klammer: kräftiges Orange (auf Weiss lesbar)
             "num":   (curses.COLOR_BLUE,    26,  0),
+            "amber": (curses.COLOR_YELLOW,  172, curses.A_BOLD),  # Fokus-Leiste: Bernstein (auf weiß lesbar)
             "dim":   (curses.COLOR_BLACK,   16,  0),    # schwarzer Text auf weiß
             "faint": (curses.COLOR_BLUE,    67,  0),    # Rahmen blau-grau (auf weiß sichtbar)
             "bright":(curses.COLOR_BLACK,   16,  curses.A_BOLD),
@@ -943,6 +957,40 @@ def run_ui(stdscr, store):
          # Einordnen (">", Forest-weit): Quelle = Liste ODER Eintrag
          "place_kind": None, "place_lid": None, "place_iid": None,
          "nsel": 0}                    # Zielwahl-Index (place/move/move_new)
+
+    # ── Notiz-Werkzeug (füllt die MITTE-Box, Taste 'n') ─────────────────
+    # Freie Notiz aus untereinander gestapelten Blöcken (text/list/float).
+    # Wie die anderen Werkzeuge ein reiner HTTP-Client (kann auf dem Laptop
+    # gegen das PC-Backend laufen) → Daten über /api/notes, das Layout wird
+    # HIER lokal gerechnet (kleine Spiegel von core/notes: n_wrap/n_block_h/
+    # n_stack/n_scatter — analog l_done↔core.lists.is_done).
+    # Zwei Ebenen (layer): 1 = zwischen Blöcken navigieren + neue anlegen
+    # (t/l/f), 2 = den fokussierten Block form-spezifisch bearbeiten.
+    #   view   : "edit" (eine Notiz) | "list" (Übersicht aller Notizen)
+    #   note   : die aktuell offene Notiz (voll, inkl. blocks) oder None
+    #   bsel   : fokussierter Block-Index; esel/buf: Ebene-2-Cursor + Tipppuffer
+    NOTE = {"active": False, "view": "edit",
+            "notes": [], "sel": 0,
+            "note": None,
+            "layer": 1, "bsel": 0,
+            "esel": 0, "buf": "",
+            "titling": False,
+            "scroll": 0, "confirm": False, "msg": ""}
+
+    # ── Projektansicht (füllt die MITTE-Box, Taste 'f') ─────────────────
+    # AUFKLAPP-Navigator: Top-Level-Projekte, alles darunter eingeklappt. enter
+    # klappt einen Knoten auf (Ebene runter, durch die ECHTEN Unterpunkte bis ins
+    # kleinste Blatt — die Klapplogik liegt ÜBER dem Projekt-Flag), esc/← klappt
+    # zu. space/f (oder enter auf einem Blatt) setzt JEDEN Knoten als alleinigen
+    # FOKUS (core/lists set_focus, /api/projects/focus) → die FOCUS-Box zeigt dann
+    # nur ihn. Zwei Quellen: /api/projects = Roots (Einstiegspunkte), /api/lists =
+    # volle Items (Aufklappen + focus-Flags).
+    #   active : Werkzeug hat den Fokus
+    #   roots  : Top-Level-Projekte als Deskriptoren [{lid,iid}]
+    #   lists  : volle Listen-Definitionen (/api/lists) zum Aufklappen
+    #   stack  : aufgeklappter Pfad [{lid,iid}] (leer = Root-Ebene)
+    #   sel    : Cursor-Index in der aktuell offenen Ebene
+    P = {"active": False, "roots": [], "lists": [], "stack": [], "sel": 0, "msg": ""}
 
     # ── Karte (füllt die MITTE-Box, Taste 'm') ──────────────────────────
     # Maps-System Schritt 1: grobe Basiskarte (Küsten 1:110m). Die TUI ist
@@ -1724,6 +1772,112 @@ def run_ui(stdscr, store):
             L["lists"] = []
         if L["sel"] >= len(L["lists"]):
             L["sel"] = max(0, len(L["lists"]) - 1)
+
+    # ── Projektansicht: Daten + Drill-Navigation ────────────────────────
+    # Zwei Quellen: /api/projects liefert die TOP-LEVEL-Projekte (welche Knoten
+    # überhaupt Einstiegspunkte sind, geflaggt), /api/lists die VOLLEN Items
+    # (zum Aufklappen bis ins kleinste Blatt + focus-Flags). Ein Knoten wird als
+    # Deskriptor {lid, iid} adressiert (iid None = ganze Liste). P["stack"] ist
+    # der aktuell aufgeklappte Pfad; die angezeigte Ebene sind die Kinder des
+    # obersten Stack-Knotens (bzw. die Roots, wenn der Stack leer ist).
+    def p_load():
+        """Top-Level-Projekte (/api/projects) + volle Listen (/api/lists) ziehen."""
+        try:
+            pr = api_call("/api/projects") or []
+        except Exception:
+            pr = []
+        roots = []
+        for r in pr:
+            if not isinstance(r, dict):
+                continue
+            lid = r.get("lid") or r.get("id")
+            roots.append({"lid": lid,
+                          "iid": None if r.get("id") == lid else r.get("id")})
+        P["roots"] = roots
+        try:
+            P["lists"] = api_call("/api/lists") or []
+        except Exception:
+            P["lists"] = []
+        p_clamp()
+
+    def p_realnode(desc):
+        """Den echten Listen-/Eintrags-Dict zu einem Deskriptor {lid,iid} finden
+        (aus P['lists']) — oder None. iid None → die ganze Liste."""
+        if not isinstance(desc, dict):
+            return None
+        lst = next((l for l in P["lists"]
+                    if isinstance(l, dict) and l.get("id") == desc.get("lid")), None)
+        if lst is None:
+            return None
+        if desc.get("iid") is None:
+            return lst
+        return l_find_item(lst.get("items"), desc.get("iid"))
+
+    def p_progress(node):
+        """(erledigt, gesamt) eines Knotens über seine Blätter — ein Ordner zählt
+        seine Blätter, ein Blatt zählt als 1 Punkt (wie node_progress im Backend)."""
+        kids = node.get("items")
+        if isinstance(kids, list) and kids:
+            return l_count(kids)
+        return (1 if node.get("done") else 0, 1)
+
+    def p_level():
+        """Deskriptoren [{lid,iid}] der aktuell offenen Ebene: Roots bei leerem
+        Stack, sonst die DIREKTEN Kinder (alle echten Items) des obersten
+        Stack-Knotens. Ins Leere laufender Stack fällt automatisch zurück."""
+        if not P["stack"]:
+            return list(P["roots"])
+        node = p_realnode(P["stack"][-1])
+        if node is None:
+            P["stack"].pop()
+            return p_level()
+        lid = P["stack"][-1]["lid"]
+        return [{"lid": lid, "iid": c.get("id")}
+                for c in (node.get("items") or []) if isinstance(c, dict)]
+
+    def p_view(desc):
+        """Anzeige-Knoten {name,done,total,branch,focus,lid,iid} zu einem
+        Deskriptor — flach (KEINE children), damit proj_render ihn als
+        eingeklappte Zeile zeichnet (▸ wenn er Unterpunkte hat)."""
+        node = p_realnode(desc)
+        if node is None:
+            return None
+        d, t = p_progress(node)
+        kids = node.get("items")
+        name = node.get("name") if desc.get("iid") is None else node.get("text")
+        return {"lid": desc["lid"], "iid": desc.get("iid"), "name": name,
+                "done": d, "total": t,
+                "branch": bool(isinstance(kids, list) and kids),
+                "focus": bool(node.get("focus"))}
+
+    def p_crumb():
+        """Namen der aufgeklappten Knoten (Breadcrumb) für die Kopfzeile."""
+        out = []
+        for f in P["stack"]:
+            node = p_realnode(f)
+            if node is None:
+                break
+            out.append(node.get("name") if f.get("iid") is None else node.get("text"))
+        return out
+
+    def p_clamp():
+        n = len(p_level())
+        if P["sel"] >= n:
+            P["sel"] = max(0, n - 1)
+
+    def p_focus_toggle(desc):
+        """Den Knoten {lid,iid} als alleinigen Fokus setzen (Toggle,
+        /api/projects/focus) — funktioniert für JEDEN Knoten, auch einen tiefen
+        Unterpunkt ohne eigenes Projekt-Flag."""
+        body = {"lid": desc["lid"]}
+        if desc.get("iid") is not None:
+            body["iid"] = desc["iid"]
+        try:
+            foc = api_call("/api/projects/focus", "POST", body)
+            P["msg"] = ("fokus: " + foc["name"]) if foc else "fokus aus"
+        except Exception:
+            P["msg"] = "fokus fehlgeschlagen"
+        p_load()
 
     def l_flatten(items, depth=0, out=None):
         """Den Eintrags-Baum in eine flache [(item, tiefe), …]-Liste klopfen,
@@ -2668,6 +2822,412 @@ def run_ui(stdscr, store):
                 draw_box(dy, dx, 4, dw, "LÖSCHEN", C["warn"])
                 addclip(dy + 1, dx + 2, q, dw - 4, C["bright"])
                 addclip(dy + 2, dx + 2, "j/enter = ja · sonst abbrechen", dw - 4, C["faint"])
+
+    def proj_render(node, x, y, w, y_max, sel_node=None, mark_focus=False):
+        """EINE Render-Routine für die verschachtelte Projekt-Anzeige — geteilt
+        von der FOCUS-Box (rechts) und der Projektansicht (Mitte), damit beide
+        BYTE-GLEICH aussehen. Blatt-Projekt = Titel + Erfüllungsleiste (2 Zeilen);
+        Knoten mit Unterprojekten = dünner Rahmen (Titel im oberen Rand) um die
+        rekursiv gezeichneten Kinder. `sel_node` (Objekt-Identität) wird invers
+        hervorgehoben (Cursor der Projektansicht); `mark_focus` hängt an den
+        fokussierten Knoten ein ◆. Liefert die nächste freie y-Zeile."""
+        if y > y_max or w < 4:
+            return y_max + 1
+        name = str(node.get("name") or "")
+        if node.get("branch"):                  # eingeklappter Zweig (hat Unterpunkte)
+            name = "▸ " + name
+        if mark_focus and node.get("focus"):
+            name += " ◆"
+        sel = (node is sel_node)
+        tattr = (C["bright"] | curses.A_REVERSE) if sel else C["bright"]
+        kids = node.get("children") or []
+        if not kids:                            # Blatt / eingeklappt: Titel + Leiste
+            done = int(node.get("done") or 0)
+            total = int(node.get("total") or 0)
+            cnt = "%d/%d" % (done, total)
+            nmw = max(1, w - len(cnt) - 1)
+            addclip(y, x, name[:nmw], nmw, tattr)
+            safe_addstr(y, x + w - len(cnt), cnt, C["dim"])
+            if y + 1 <= y_max:
+                frac = (done / total) if total else 0.0
+                full = int(round(max(0.0, min(1.0, frac)) * w))
+                bar = "█" * full + "░" * (w - full)
+                if node.get("focus"):                    # fokussiertes Projekt → Bernstein
+                    bcol = C["amber"]
+                elif total and done >= total:
+                    bcol = C["acc"]
+                else:
+                    bcol = C["graph"]
+                safe_addstr(y + 1, x, bar, bcol)
+            return y + 2
+        # gerahmter Kasten: Titel im oberen Rand, Kinder rekursiv drin
+        inner = w - 2
+        label = (" " + name + " ")[:inner]
+        safe_addstr(y, x, "┌" + label + "─" * (inner - len(label)) + "┐", C["faint"])
+        safe_addstr(y, x + 1, label, tattr)         # Titel hervorheben (ggf. invers)
+        cy = y + 1
+        for c in kids:
+            if cy > y_max:
+                break
+            cy = proj_render(c, x + 1, cy, w - 2, y_max, sel_node, mark_focus)
+        for ry in range(y + 1, min(cy, y_max + 1)):  # senkrechte Ränder
+            safe_addstr(ry, x, "│", C["faint"])
+            safe_addstr(ry, x + w - 1, "│", C["faint"])
+        if cy <= y_max:                              # unterer Rand (wenn Platz)
+            safe_addstr(cy, x, "└" + "─" * (w - 2) + "┘", C["faint"])
+            return cy + 1
+        return y_max + 1                             # abgeschnitten → Schluss
+
+    def draw_projects(by, bx, bh, bw):
+        """Inhalt der MITTE-Box, wenn die Projektansicht Fokus hat. AUFKLAPP-
+        Modell: es wird immer NUR die aktuelle Ebene gezeigt (Roots = Top-Level-
+        Projekte, alles darunter eingeklappt). ↑↓ wählt in der Ebene, enter klappt
+        einen Knoten mit Unterpunkten auf (Ebene runter, bis ins kleinste Blatt),
+        esc/← klappt wieder zu. space/f (oder enter auf einem Blatt) = diesen
+        Knoten als alleinigen Fokus setzen (◆). Jede Zeile im FOCUS-Stil (Titel +
+        Leiste, ▸ = aufklappbar) via proj_render — nur eben eine Ebene."""
+        ix, iw = bx + 2, bw - 4
+        bottom = by + bh - 2
+        if iw < 8:
+            return
+        crumb = p_crumb()
+        addclip(by + 1, ix, " / ".join(["projekte"] + crumb)[:iw], iw, C["faint"])
+        level = p_level()
+        views = [v for v in (p_view(d) for d in level) if v]
+        y0 = by + 3
+        y_max = bottom - (1 if P["msg"] else 0)
+        if not views:
+            msg = ("leer — esc zurück" if P["stack"]
+                   else "keine projekte — im listen-werkzeug 'p' flaggen")
+            addclip(y0, ix, msg, iw, C["faint"])
+        else:
+            sel_node = views[P["sel"]] if 0 <= P["sel"] < len(views) else None
+            # Fenster um den Cursor (jede Zeile ist 2 hoch), damit lange Ebenen scrollen
+            per = 2
+            avail = max(1, (y_max - y0 + 1) // per)
+            start = (max(0, min(P["sel"] - avail + 1, len(views) - avail))
+                     if len(views) > avail else 0)
+            y = y0
+            for v in views[start:start + avail]:
+                if y > y_max:
+                    break
+                y = proj_render(v, ix, y, iw, y_max, sel_node=sel_node, mark_focus=True)
+            if start + avail < len(views):     # Rest passt nicht → ehrlich anzeigen
+                safe_addstr(bottom, ix + iw - 5, "+%d" % (len(views) - start - avail),
+                            C["faint"])
+        if P["msg"]:                       # Shortcuts liegen unter '/'; nur Feedback
+            addclip(bottom, ix, P["msg"], iw, C["faint"])
+
+    # ── Notiz-Werkzeug: Daten (über /api/notes) ─────────────────────────
+    def n_load_list():
+        """Notiz-Übersicht frisch ziehen (kommt neueste-zuerst sortiert)."""
+        try:
+            NOTE["notes"] = api_call("/api/notes") or []
+        except Exception:
+            NOTE["notes"] = []
+        if NOTE["sel"] >= len(NOTE["notes"]):
+            NOTE["sel"] = max(0, len(NOTE["notes"]) - 1)
+
+    def n_enter_edit(full):
+        """In den Bearbeiten-Modus einer (frisch geladenen) Notiz springen."""
+        NOTE["note"] = full
+        NOTE["view"] = "edit"; NOTE["layer"] = 1
+        NOTE["bsel"] = 0; NOTE["esel"] = 0; NOTE["buf"] = ""
+        NOTE["scroll"] = 0; NOTE["titling"] = False; NOTE["msg"] = ""
+
+    def n_new():
+        """Neue leere Notiz anlegen und öffnen. Liefert sie oder None."""
+        try:
+            full = api_call("/api/notes", method="POST", body={"title": ""})
+        except Exception:
+            full = None
+        if full is not None:
+            n_enter_edit(full)
+        return full
+
+    def n_open():
+        """Öffner von der Startseite: zuletzt bearbeitete Notiz laden, sonst neue."""
+        n_load_list()
+        full = None
+        if NOTE["notes"]:
+            try:
+                full = api_call("/api/notes/" + NOTE["notes"][0]["id"])
+            except Exception:
+                full = None
+        if full is not None:
+            n_enter_edit(full)
+        else:
+            n_new()
+
+    def n_save():
+        """Aktuelle Notiz (Titel + Blöcke) sichern (PUT). Fehler → nur Meldung."""
+        n = NOTE["note"]
+        if not n or not n.get("id"):
+            return
+        try:
+            api_call("/api/notes/" + n["id"], method="PUT",
+                     body={"title": n.get("title", ""), "blocks": n.get("blocks") or []})
+        except Exception:
+            NOTE["msg"] = "speichern fehlgeschlagen"
+
+    def n_add_block(btype):
+        """Neuen Block anhängen, fokussieren und DIREKT in Ebene 2 (bearbeiten)
+        springen — man tippt sofort los, ohne erst 'e'/Enter (next_block = id-Quelle)."""
+        n = NOTE["note"]
+        if not n:
+            return
+        bid = n.get("next_block") or 1
+        blk = {"id": bid, "type": btype}
+        if btype == "text":
+            blk["text"] = ""
+        elif btype == "list":
+            blk["items"] = []; blk["next_item"] = 1
+        else:  # float
+            blk["terms"] = []; blk["next_term"] = 1
+        n.setdefault("blocks", []).append(blk)
+        n["next_block"] = bid + 1
+        NOTE["bsel"] = len(n["blocks"]) - 1
+        # frischer Block ist leer → esel auf den 'neu'-Slot (0), Puffer leer.
+        NOTE["layer"] = 2; NOTE["esel"] = 0; NOTE["buf"] = ""
+        n_save()
+
+    def n_loadbuf(blk):
+        """Ebene-2-Puffer aus dem gewählten Item/Term füllen (leer = 'neu'-Slot)."""
+        seq = (blk.get("items") if blk.get("type") == "list" else blk.get("terms")) or []
+        NOTE["buf"] = seq[NOTE["esel"]]["text"] if NOTE["esel"] < len(seq) else ""
+
+    def n_commit_list(blk):
+        """Puffer in das gewählte Listen-Item schreiben / neues anhängen. Leerer
+        Text auf einem bestehenden Item → Item entfällt."""
+        items = blk.setdefault("items", [])
+        txt = NOTE["buf"].strip()
+        if NOTE["esel"] < len(items):
+            if txt:
+                items[NOTE["esel"]]["text"] = txt
+            else:
+                del items[NOTE["esel"]]
+        elif txt:
+            iid = blk.get("next_item") or 1
+            items.append({"id": iid, "text": txt, "done": False})
+            blk["next_item"] = iid + 1
+
+    def n_commit_float(blk):
+        """Wie n_commit_list, aber für Float-Terme ({id,text})."""
+        terms = blk.setdefault("terms", [])
+        txt = NOTE["buf"].strip()
+        if NOTE["esel"] < len(terms):
+            if txt:
+                terms[NOTE["esel"]]["text"] = txt
+            else:
+                del terms[NOTE["esel"]]
+        elif txt:
+            tid = blk.get("next_term") or 1
+            terms.append({"id": tid, "text": txt})
+            blk["next_term"] = tid + 1
+
+    # ── Notiz-Werkzeug: Layout (Spiegel von core/notes, curses rechnet selbst) ──
+    def n_wrap(text, width):
+        width = max(1, int(width)); out = []
+        for raw in str(text).split("\n"):
+            if not raw:
+                out.append(""); continue
+            line = ""
+            for word in raw.split(" "):
+                while len(word) > width:
+                    if line:
+                        out.append(line); line = ""
+                    out.append(word[:width]); word = word[width:]
+                cand = word if not line else line + " " + word
+                if len(cand) <= width:
+                    line = cand
+                else:
+                    out.append(line); line = word
+            out.append(line)
+        return out or [""]
+
+    def n_float_grid(nterms, width):
+        cellw = 16
+        cols = max(1, int(width) // cellw)
+        if nterms <= 0:
+            return cols, cellw, 3
+        rows_grid = (nterms + cols - 1) // cols
+        return cols, cellw, max(3, rows_grid * 2 + 1)
+
+    def n_scatter(nn, width, height):
+        cols, cellw, _ = n_float_grid(nn, width)
+        w = max(1, int(width)); h = max(1, int(height)); pos = []
+        for i in range(int(nn)):
+            col, row = i % cols, i // cols
+            x = min(col * cellw + (i * 7) % 5, w - 1)
+            y = min(row * 2 + (i * 3) % 2, h - 1)
+            pos.append((max(0, x), max(0, y)))
+        return pos
+
+    def n_content_rows(blk, inner, editing):
+        t = blk.get("type")
+        if t == "text":
+            return max(1, len(n_wrap(blk.get("text", ""), inner)))
+        if t == "list":
+            return max(1, len(blk.get("items") or []) + (1 if editing else 0))
+        nterms = len(blk.get("terms") or []) + (1 if editing else 0)   # float
+        return n_float_grid(nterms, inner)[2]
+
+    def n_block_h(blk, width, editing=False):
+        return n_content_rows(blk, max(1, int(width) - 2), editing) + 2
+
+    def n_stack(blocks, width, gap=1):
+        """[(block, y, h, editing), …]. Der fokussierte Block wächst in Ebene 2
+        um die 'neu'-Zeile (Liste/Float), damit die Eingabe Platz hat."""
+        out, y = [], 0
+        for i, b in enumerate(blocks):
+            editing = (NOTE["layer"] == 2 and i == NOTE["bsel"])
+            h = n_block_h(b, width, editing)
+            out.append((b, y, h, editing))
+            y += h + gap
+        return out
+
+    def n_drawblock(blk, sy, rh, focus, editing, ix, iw, atop, abot):
+        """Einen Block-Kasten zeichnen, vertikal an [atop,abot] geklippt."""
+        battr = C["acc"] if focus else C["faint"]
+        label = {"text": "text", "list": "liste", "float": "float"}.get(blk.get("type"), "?")
+        for r in range(rh):                       # Rahmen
+            yrow = sy + r
+            if not (atop <= yrow <= abot):
+                continue
+            if r == 0:
+                safe_addstr(yrow, ix, "┌" + "─" * (iw - 2) + "┐", battr)
+                head = ("▸ " if focus else "") + label
+                safe_addstr(yrow, ix + 2, " " + head.upper() + " ",
+                            C["bright"] if focus else C["acc"])
+            elif r == rh - 1:
+                safe_addstr(yrow, ix, "└" + "─" * (iw - 2) + "┘", battr)
+            else:
+                safe_addstr(yrow, ix, "│", battr)
+                safe_addstr(yrow, ix + iw - 1, "│", battr)
+        cy0, cx, cw = sy + 1, ix + 1, iw - 2      # Inhalts-Region
+        cbot = sy + rh - 2
+        t = blk.get("type")
+        rowok = lambda yr: (atop <= yr <= abot) and yr <= cbot
+
+        if t == "text":
+            lines = n_wrap(blk.get("text", ""), cw)
+            for i, ln in enumerate(lines):
+                yr = cy0 + i
+                if yr > cbot:
+                    break
+                if rowok(yr):
+                    cur = "_" if (editing and i == len(lines) - 1) else ""
+                    addclip(yr, cx, ln + cur, cw, C["dim"])
+        elif t == "list":
+            items = blk.get("items") or []
+            for i in range(len(items) + (1 if editing else 0)):
+                yr = cy0 + i
+                if yr > cbot:
+                    break
+                if not rowok(yr):
+                    continue
+                if i < len(items):
+                    it = items[i]; done = bool(it.get("done"))
+                    sel = editing and i == NOTE["esel"]
+                    box = "[x]" if done else "[ ]"
+                    txt = NOTE["buf"] if sel else str(it.get("text") or "")
+                    attr = C["bright"] if sel else (C["faint"] if done else C["dim"])
+                    addclip(yr, cx, box + " " + txt + ("_" if sel else ""), cw, attr,
+                            strike=done and not sel)
+                else:
+                    sel = editing and NOTE["esel"] == len(items)
+                    addclip(yr, cx, "+ " + (NOTE["buf"] if sel else "") + ("_" if sel else ""),
+                            cw, C["bright"] if sel else C["faint"])
+        elif t == "float":
+            terms = blk.get("terms") or []
+            show = len(terms) + (1 if editing else 0)
+            pos = n_scatter(show, cw, max(1, rh - 2))
+            for i in range(show):
+                px, py = pos[i]; yr = cy0 + py; col = cx + px; room = cw - px
+                if room < 1 or not rowok(yr):
+                    continue
+                if i < len(terms):
+                    sel = editing and i == NOTE["esel"]
+                    txt = NOTE["buf"] if sel else str(terms[i].get("text") or "")
+                    addclip(yr, col, ("»%s«" % txt) if sel else txt, room,
+                            C["bright"] if sel else C["dim"])
+                else:
+                    sel = editing and NOTE["esel"] == len(terms)
+                    addclip(yr, col, "+" + (NOTE["buf"] if sel else "") + ("_" if sel else ""),
+                            room, C["bright"] if sel else C["faint"])
+
+    def draw_note_tool(by, bx, bh, bw):
+        """Inhalt der MITTE-Box fürs Notiz-Werkzeug (Übersicht ODER eine Notiz)."""
+        ix, iw = bx + 2, bw - 4
+        bottom = by + bh - 2
+        if iw < 8:
+            return
+
+        if NOTE["view"] == "list":                    # ── Übersicht ──
+            addclip(by + 1, ix, "NOTIZEN  (%d)" % len(NOTE["notes"]), iw, C["bright"])
+            safe_addstr(by + 2, ix, "─" * iw, C["faint"])
+            notes = NOTE["notes"]; yy = by + 3
+            if not notes:
+                addclip(yy, ix, "noch keine — 'n' legt eine an", iw, C["faint"])
+            else:
+                avail = max(1, (bottom - 1) - yy)
+                start = max(0, min(NOTE["sel"] - avail + 1, len(notes) - avail)) if len(notes) > avail else 0
+                for off, nt in enumerate(notes[start:start + avail]):
+                    sel = (start + off == NOTE["sel"])
+                    title = str(nt.get("title") or "ohne titel")
+                    md = str(nt.get("modified") or "")[:16].replace("T", " ")
+                    meta = "  %s · %d" % (md, nt.get("nblocks", 0))
+                    addclip(yy, ix, ("› " if sel else "  ") + title, iw - len(meta),
+                            C["bright"] if sel else C["dim"])
+                    safe_addstr(yy, bx + bw - 2 - len(meta), meta, C["faint"])
+                    yy += 1
+            if NOTE["confirm"]:
+                addclip(bottom, ix, "wirklich löschen? j/n", iw, C["bright"])
+            else:
+                addclip(bottom, ix, ("enter öffnen · n neu · d löschen · esc zu  " + NOTE["msg"]).strip(),
+                        iw, C["faint"])
+            return
+
+        n = NOTE["note"]                              # ── eine Notiz ──
+        if not n:
+            addclip(by + 1, ix, "keine notiz (backend erreichbar?)", iw, C["faint"])
+            return
+        if NOTE["titling"]:
+            addclip(by + 1, ix, "titel: " + NOTE["buf"] + "_", iw, C["bright"])
+        else:
+            addclip(by + 1, ix, str(n.get("title") or "ohne titel"), iw - 10, C["bright"])
+            safe_addstr(by + 1, bx + bw - 11, "[r titel]", C["faint"])
+        safe_addstr(by + 2, ix, "─" * iw, C["faint"])
+
+        area_top, area_bottom = by + 3, by + bh - 3
+        blocks = n.get("blocks") or []
+        layout = n_stack(blocks, iw)
+        area_h = max(1, area_bottom - area_top + 1)
+        if blocks and 0 <= NOTE["bsel"] < len(layout):   # Fokus im Blick halten
+            _, fy, fh, _e = layout[NOTE["bsel"]]
+            if fy < NOTE["scroll"]:
+                NOTE["scroll"] = fy
+            elif fy + fh > NOTE["scroll"] + area_h:
+                NOTE["scroll"] = fy + fh - area_h
+        NOTE["scroll"] = max(0, NOTE["scroll"])
+
+        if not blocks:
+            addclip(area_top, ix, "leer — t text · l liste · f float", iw, C["faint"])
+        for bi, (blk, ry, rh, editing) in enumerate(layout):
+            sy = area_top + ry - NOTE["scroll"]
+            if sy + rh - 1 < area_top or sy > area_bottom:
+                continue
+            n_drawblock(blk, sy, rh, bi == NOTE["bsel"], editing, ix, iw, area_top, area_bottom)
+
+        if NOTE["layer"] == 2 and blocks:
+            tip = {"text": "tippen · enter zeile · esc fertig",
+                   "list": "tippen · enter neu · tab haken · entf weg · esc fertig",
+                   "float": "tippen · enter setzen · ←→ wählen · entf weg · esc fertig"
+                   }.get(blocks[NOTE["bsel"]]["type"], "esc fertig")
+        else:
+            tip = "↑↓ block · t/l/f neu · e bearb · d weg · n übersicht · esc zu"
+        addclip(by + bh - 2, ix, (tip + ("  " + NOTE["msg"] if NOTE["msg"] else "")).strip(),
+                iw, C["faint"])
 
     def draw_map(by, bx, bh, bw):
         """Inhalt der MITTE-Box, wenn die Karte Fokus hat. Holt bei Bedarf
@@ -4193,6 +4753,9 @@ def run_ui(stdscr, store):
             return K["mode"] == "add" or K["linput"] is not None
         if MAIL["active"]:
             return MAIL["replying"]
+        if NOTE["active"]:
+            # Ebene 2 (Block bearbeiten) oder Titel tippen → Freitext, '/' literal.
+            return NOTE["layer"] == 2 or NOTE["titling"]
         if AI["active"]:
             # Ganzes Panel ist Prompt-Eingabe → '/' bleibt ein Zeichen, öffnet
             # nicht die Befehlszeile. (Bei offener Erlaubnis-Frage ignoriert der
@@ -4218,6 +4781,8 @@ def run_ui(stdscr, store):
             if v in ("place", "move"):
                 return "list:pick"
             return None
+        if P["active"]:
+            return "projects"
         if M["active"]:
             return "map"
         if K["active"]:
@@ -4766,6 +5331,34 @@ def run_ui(stdscr, store):
                     L["input"] = L["input"][:-1]
                 elif 32 <= ch <= 126 and len(L["input"]) < 40:
                     L["input"] += chr(ch)
+        elif P["active"]:                      # Projektansicht hat den Fokus
+            level = p_level()
+            if ch == 27:                                # Esc: aufklappung zu, Root → zu
+                if P["stack"]:
+                    P["stack"].pop(); P["sel"] = 0; P["msg"] = ""; p_clamp()
+                else:
+                    P["active"] = False; P["msg"] = ""
+            elif ch in (curses.KEY_UP, ord("k")):
+                if level:
+                    P["sel"] = (P["sel"] - 1) % len(level)
+            elif ch in (curses.KEY_DOWN, ord("j")):
+                if level:
+                    P["sel"] = (P["sel"] + 1) % len(level)
+            elif ch in (10, 13, curses.KEY_ENTER, curses.KEY_RIGHT):
+                # Enter/→: Knoten mit Unterpunkten AUFKLAPPEN; Blatt → Fokus setzen
+                if level and 0 <= P["sel"] < len(level):
+                    desc = level[P["sel"]]
+                    node = p_realnode(desc)
+                    if node is not None and node.get("items"):
+                        P["stack"].append(desc); P["sel"] = 0; P["msg"] = ""
+                    else:
+                        p_focus_toggle(desc)
+            elif ch in (curses.KEY_LEFT, ord("h")):     # ←: eine Ebene zuklappen
+                if P["stack"]:
+                    P["stack"].pop(); P["sel"] = 0; P["msg"] = ""; p_clamp()
+            elif ch in (ord(" "), ord("f"), ord("F")):  # space/f: diesen Knoten fokussieren
+                if level and 0 <= P["sel"] < len(level):
+                    p_focus_toggle(level[P["sel"]])
         elif M["active"]:                      # Karte hat den Fokus
             ca = m_alt_arrow(ch)              # Alt+Pfeil? (frisst evtl. Folgebytes)
             if ca in ("up", "down", "left", "right"):
@@ -5200,6 +5793,164 @@ def run_ui(stdscr, store):
                     MAIL["msg"] = "zähle neu…"
                 elif ch in (ord("t"), ord("T")):
                     theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
+        elif NOTE["active"]:                   # Notiz-Werkzeug hat den Fokus
+            n = NOTE["note"]
+            blocks = (n.get("blocks") if n else None) or []
+            if NOTE["view"] == "list":                          # ── Übersicht ──
+                if NOTE["confirm"]:
+                    if ch in (ord("y"), ord("Y"), ord("j"), ord("J"),
+                              10, 13, curses.KEY_ENTER):
+                        if NOTE["notes"]:
+                            gone = NOTE["notes"][NOTE["sel"]]["id"]
+                            try:
+                                api_call("/api/notes/" + gone, method="DELETE")
+                                NOTE["msg"] = "gelöscht"
+                            except Exception:
+                                NOTE["msg"] = "löschen fehlgeschlagen"
+                            if NOTE["note"] and NOTE["note"].get("id") == gone:
+                                NOTE["note"] = None             # aktuelle Notiz war es
+                        NOTE["confirm"] = False; n_load_list()
+                    elif ch != -1:
+                        NOTE["confirm"] = False; NOTE["msg"] = ""
+                elif ch == 27:                                  # Esc → zurück/zu
+                    if NOTE["note"]:
+                        NOTE["view"] = "edit"; NOTE["msg"] = ""
+                    else:
+                        NOTE["active"] = False
+                elif ch in (ord("q"), ord("Q")):
+                    break
+                elif ch in (curses.KEY_UP, ord("k")):
+                    NOTE["sel"] = max(0, NOTE["sel"] - 1)
+                elif ch in (curses.KEY_DOWN, ord("j")):
+                    NOTE["sel"] = min(max(0, len(NOTE["notes"]) - 1), NOTE["sel"] + 1)
+                elif ch in (10, 13, curses.KEY_ENTER):
+                    if NOTE["notes"]:
+                        try:
+                            full = api_call("/api/notes/" + NOTE["notes"][NOTE["sel"]]["id"])
+                        except Exception:
+                            full = None
+                        if full is not None:
+                            n_enter_edit(full)
+                elif ch in (ord("n"), ord("N")):
+                    n_new()
+                elif ch in (ord("d"), ord("D")):
+                    if NOTE["notes"]:
+                        NOTE["confirm"] = True; NOTE["msg"] = ""
+            elif NOTE["titling"]:                               # ── Titel tippen ──
+                if ch == 27:
+                    NOTE["titling"] = False; NOTE["msg"] = ""
+                elif ch in (10, 13, curses.KEY_ENTER):
+                    if n is not None:
+                        n["title"] = NOTE["buf"].strip(); n_save(); n_load_list()
+                    NOTE["titling"] = False; NOTE["msg"] = "titel gesetzt"
+                elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                    NOTE["buf"] = NOTE["buf"][:-1]
+                elif 32 <= ch <= 126 and len(NOTE["buf"]) < 60:
+                    NOTE["buf"] += chr(ch)
+            elif NOTE["layer"] == 1:                            # ── Ebene 1: navigieren/anlegen ──
+                if ch == 27:
+                    n_save(); NOTE["active"] = False
+                elif ch in (ord("q"), ord("Q")):
+                    n_save(); break
+                elif ch in (ord("n"), ord("N")):
+                    n_save(); n_load_list()
+                    NOTE["view"] = "list"; NOTE["sel"] = 0
+                    NOTE["confirm"] = False; NOTE["msg"] = ""
+                elif ch in (curses.KEY_UP, ord("k")):
+                    NOTE["bsel"] = max(0, NOTE["bsel"] - 1)
+                elif ch in (curses.KEY_DOWN, ord("j")):
+                    NOTE["bsel"] = min(max(0, len(blocks) - 1), NOTE["bsel"] + 1)
+                elif ch in (ord("t"), ord("T")):
+                    n_add_block("text")
+                elif ch in (ord("l"), ord("L")):
+                    n_add_block("list")
+                elif ch in (ord("f"), ord("F")):
+                    n_add_block("float")
+                elif ch in (ord("r"), ord("R")):
+                    if n is not None:
+                        NOTE["titling"] = True; NOTE["buf"] = str(n.get("title") or "")
+                elif ch in (ord("d"), ord("D")):
+                    if blocks and 0 <= NOTE["bsel"] < len(blocks):
+                        del blocks[NOTE["bsel"]]
+                        NOTE["bsel"] = min(NOTE["bsel"], max(0, len(blocks) - 1))
+                        n_save()
+                elif ch in (ord("e"), 10, 13, curses.KEY_ENTER):
+                    if blocks and 0 <= NOTE["bsel"] < len(blocks):
+                        NOTE["layer"] = 2
+                        blk = blocks[NOTE["bsel"]]
+                        if blk["type"] in ("list", "float"):
+                            seq = blk.get("items") if blk["type"] == "list" else blk.get("terms")
+                            NOTE["esel"] = len(seq or [])       # auf den 'neu'-Slot
+                        else:
+                            NOTE["esel"] = 0
+                        NOTE["buf"] = ""
+            else:                                               # ── Ebene 2: Block bearbeiten ──
+                blk = blocks[NOTE["bsel"]] if (blocks and 0 <= NOTE["bsel"] < len(blocks)) else None
+                if blk is None:
+                    NOTE["layer"] = 1
+                elif blk["type"] == "text":
+                    if ch == 27:
+                        n_save(); NOTE["layer"] = 1
+                    elif ch in (10, 13, curses.KEY_ENTER):
+                        blk["text"] = blk.get("text", "") + "\n"
+                    elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                        blk["text"] = blk.get("text", "")[:-1]
+                    elif 32 <= ch <= 126:
+                        blk["text"] = blk.get("text", "") + chr(ch)
+                elif blk["type"] == "list":
+                    items = blk.setdefault("items", [])
+                    if ch == 27:
+                        n_commit_list(blk); n_save(); NOTE["layer"] = 1
+                    elif ch in (10, 13, curses.KEY_ENTER):
+                        n_commit_list(blk)
+                        NOTE["esel"] = len(blk["items"]); NOTE["buf"] = ""
+                    elif ch == curses.KEY_UP:
+                        n_commit_list(blk)
+                        NOTE["esel"] = max(0, NOTE["esel"] - 1); n_loadbuf(blk)
+                    elif ch == curses.KEY_DOWN:
+                        n_commit_list(blk)
+                        NOTE["esel"] = min(len(blk["items"]), NOTE["esel"] + 1); n_loadbuf(blk)
+                    elif ch == 9:                               # Tab → haken
+                        if NOTE["esel"] < len(items):
+                            items[NOTE["esel"]]["done"] = not items[NOTE["esel"]].get("done")
+                            n_save()
+                    elif ch == curses.KEY_DC:                   # Entf → weg
+                        if NOTE["esel"] < len(items):
+                            del items[NOTE["esel"]]
+                            NOTE["esel"] = min(NOTE["esel"], len(items)); n_loadbuf(blk); n_save()
+                    elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                        if NOTE["buf"]:
+                            NOTE["buf"] = NOTE["buf"][:-1]
+                        elif NOTE["esel"] < len(items):
+                            del items[NOTE["esel"]]
+                            NOTE["esel"] = min(NOTE["esel"], len(items)); n_loadbuf(blk); n_save()
+                    elif 32 <= ch <= 126:
+                        NOTE["buf"] += chr(ch)
+                elif blk["type"] == "float":
+                    terms = blk.setdefault("terms", [])
+                    if ch == 27:
+                        n_commit_float(blk); n_save(); NOTE["layer"] = 1
+                    elif ch in (10, 13, curses.KEY_ENTER):
+                        n_commit_float(blk)
+                        NOTE["esel"] = len(blk["terms"]); NOTE["buf"] = ""
+                    elif ch in (curses.KEY_LEFT, curses.KEY_UP):
+                        n_commit_float(blk)
+                        NOTE["esel"] = max(0, NOTE["esel"] - 1); n_loadbuf(blk)
+                    elif ch in (curses.KEY_RIGHT, curses.KEY_DOWN):
+                        n_commit_float(blk)
+                        NOTE["esel"] = min(len(blk["terms"]), NOTE["esel"] + 1); n_loadbuf(blk)
+                    elif ch == curses.KEY_DC:
+                        if NOTE["esel"] < len(terms):
+                            del terms[NOTE["esel"]]
+                            NOTE["esel"] = min(NOTE["esel"], len(terms)); n_loadbuf(blk); n_save()
+                    elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                        if NOTE["buf"]:
+                            NOTE["buf"] = NOTE["buf"][:-1]
+                        elif NOTE["esel"] < len(terms):
+                            del terms[NOTE["esel"]]
+                            NOTE["esel"] = min(NOTE["esel"], len(terms)); n_loadbuf(blk); n_save()
+                    elif 32 <= ch <= 126:
+                        NOTE["buf"] += chr(ch)
         elif TUTOR["active"]:                  # Sprach-Tutor hat den Fokus
             if ch == 27:                       # esc schließt Panel (Session bleibt aktiv)
                 TUTOR["active"] = False
@@ -5281,6 +6032,11 @@ def run_ui(stdscr, store):
             elif ch in (ord("u"), ord("U")):   # Sprach-Tutor öffnen (Cloud/Qwen-Backend)
                 TUTOR["active"] = True; TUTOR["scroll"] = 0; TUTOR["msg"] = ""
                 threading.Thread(target=tutor_refresh, daemon=True).start()
+            elif ch in (ord("n"), ord("N")):   # Notiz-Werkzeug öffnen (direkt in eine Notiz)
+                NOTE["active"] = True; n_open()
+            elif ch in (ord("f"), ord("F")):   # Projektansicht öffnen (Fokus wählen)
+                P["active"] = True; P["stack"] = []; P["sel"] = 0; P["msg"] = ""
+                p_load()
             # '/' wird global oben abgefangen (greift in JEDEM Fenster), darum
             # hier kein eigener Zweig mehr.
         # KEY_RESIZE oder Timeout → einfach neu zeichnen
@@ -5297,6 +6053,9 @@ def run_ui(stdscr, store):
 
         state, metrics, connected = store.snapshot()
         gs_cache, gv_cache = store.graphs_snapshot()
+        # Nur der fokussierte Teilbaum ([node] oder []); der Store zieht bereits
+        # /api/projects/focused. Kein Fallback auf alle Projekte — die volle
+        # Übersicht gibt es allein in der Projektansicht (Taste 'f').
         proj_cache = store.projects_snapshot()
 
         # Graph-Reminder: ist heute was fällig (und noch nicht weggeklickt), das
@@ -5436,6 +6195,9 @@ def run_ui(stdscr, store):
         elif L["active"]:
             draw_box(top, mx, body_h, midw, "listen")
             draw_list_tool(top, mx, body_h, midw)
+        elif P["active"]:
+            draw_box(top, mx, body_h, midw, "projekte")
+            draw_projects(top, mx, body_h, midw)
         elif M["active"]:
             draw_box(top, mx, body_h, midw, "karte · welt")
             draw_map(top, mx, body_h, midw)
@@ -5453,13 +6215,16 @@ def run_ui(stdscr, store):
         elif TUTOR["active"]:
             draw_box(top, mx, body_h, midw, "tutor")
             draw_tutor(top, mx, body_h, midw)
+        elif NOTE["active"]:
+            draw_box(top, mx, body_h, midw, "notiz" if NOTE["view"] == "edit" else "notizen")
+            draw_note_tool(top, mx, body_h, midw)
         else:
             draw_box(top, mx, body_h, midw, "mitte")
             cyc = top + body_h // 2
             big = "KASSETTE · TUI"
-            invite = ["g · graph-werkzeug", "l · listen", "m · karte",
-                      "c · kalender", "p · post/mail", "a · ki-chat",
-                      "u · tutor"]
+            invite = ["g · graph-werkzeug", "l · listen", "n · notizen",
+                      "m · karte", "c · kalender", "p · post/mail",
+                      "a · ki-chat", "u · tutor", "f · projekte"]
             addclip(cyc - 4, mx + max(1, (midw - len(big)) // 2), big, midw - 2, C["bright"])
             for i, ln in enumerate(invite):
                 addclip(cyc - 2 + i, mx + max(1, (midw - len(ln)) // 2),
@@ -5512,52 +6277,19 @@ def run_ui(stdscr, store):
         # Listen-Werkzeug ('p' auf Liste bzw. Eintrag). Bei Platzmangel wird
         # einfach ab dem Punkt aufgehört (kein Überlauf, kein Crash).
         if proj_h:
-            draw_box(top + life_h, rx, proj_h, rightw, "projects")
+            draw_box(top + life_h, rx, proj_h, rightw, "focus")
             y_max = top + life_h + proj_h - 2          # letzte innere Zeile
             x0, w0 = rx + 2, max(4, rightw - 4)
 
-            def proj_draw(node, x, y, w, y_max):
-                if y > y_max or w < 4:
-                    return y_max + 1
-                name = str(node.get("name") or "")
-                kids = node.get("children") or []
-                if not kids:                            # Blatt-Projekt: Titel + Leiste
-                    done = int(node.get("done") or 0)
-                    total = int(node.get("total") or 0)
-                    cnt = "%d/%d" % (done, total)
-                    nmw = max(1, w - len(cnt) - 1)
-                    addclip(y, x, name[:nmw], nmw, C["bright"])
-                    safe_addstr(y, x + w - len(cnt), cnt, C["dim"])
-                    if y + 1 <= y_max:
-                        frac = (done / total) if total else 0.0
-                        full = int(round(max(0.0, min(1.0, frac)) * w))
-                        bar = "█" * full + "░" * (w - full)
-                        bcol = C["acc"] if (total and done >= total) else C["graph"]
-                        safe_addstr(y + 1, x, bar, bcol)
-                    return y + 2
-                # gerahmter Kasten: Titel im oberen Rand, Kinder rekursiv drin
-                inner = w - 2
-                label = (" " + name + " ")[:inner]
-                safe_addstr(y, x, "┌" + label + "─" * (inner - len(label)) + "┐", C["faint"])
-                safe_addstr(y, x + 1, label, C["bright"])    # Titel hervorheben
-                cy = y + 1
-                for c in kids:
-                    if cy > y_max:
-                        break
-                    cy = proj_draw(c, x + 1, cy, w - 2, y_max)
-                for ry in range(y + 1, min(cy, y_max + 1)):  # senkrechte Ränder
-                    safe_addstr(ry, x, "│", C["faint"])
-                    safe_addstr(ry, x + w - 1, "│", C["faint"])
-                if cy <= y_max:                              # unterer Rand (wenn Platz)
-                    safe_addstr(cy, x, "└" + "─" * (w - 2) + "┘", C["faint"])
-                    return cy + 1
-                return y_max + 1                             # abgeschnitten → Schluss
-
+            # Dieselbe Routine wie die Projektansicht (Mitte) → BYTE-GLEICHE
+            # Darstellung. Ohne Cursor/Fokus-Marke; proj_cache ist ohnehin nur
+            # der eine fokussierte Knoten (oder leer → Box wird gar nicht erst
+            # gezeichnet, da proj_h dann 0 ist).
             y, rendered = top + life_h + 1, 0
             for p in proj_cache:
                 if y > y_max or not isinstance(p, dict):
                     break
-                y = proj_draw(p, x0, y, w0, y_max)
+                y = proj_render(p, x0, y, w0, y_max)
                 rendered += 1
             if rendered < len(proj_cache):         # Rest passt nicht → ehrlich anzeigen
                 safe_addstr(top + life_h + proj_h - 1, rx + rightw - 6,

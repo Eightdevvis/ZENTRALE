@@ -29,6 +29,7 @@ import state         # type: ignore  – in core/, aber durch sys.path.insert au
 import categories   # type: ignore
 import graphs       # type: ignore  – dynamische Lifestyle-Graph-Registry
 import lists        # type: ignore  – dynamische Listen-Registry (Todo/Sammel-Listen)
+import notes        # type: ignore  – Notiz-Registry (Text-/Listen-/Float-Blöcke, TUI-Werkzeug)
 import kalender     # type: ignore  – Kalender-Layer (Woche/Monat, data/ai_calendar.json)
 import ai           # type: ignore
 import audio        # type: ignore
@@ -333,6 +334,48 @@ def api_projects():
     return jsonify(lists.projects_tree())
 
 
+@app.route('/api/projects/focused')
+def api_projects_focused():
+    """
+    Der aktuell fokussierte Projekt-Teilbaum (voller Knoten inkl. children /
+    Fortschritt) — oder null. QUELLE DER FOCUS-BOX in allen Fronten: die zeigt
+    NUR noch dieses eine Projekt (oder nichts). Die volle Projekt-Übersicht gibt
+    es ausschließlich über /api/projects (die neue Projektansicht der TUI).
+    NICHT KI-gegatet (gibt es in allen Kassetten).
+    """
+    return jsonify(lists.focused_subtree())
+
+
+@app.route('/api/projects/focus', methods=['GET', 'POST'])
+def api_projects_focus():
+    """
+    Projekt-FOKUS: genau EIN Projekt allein am Rand rendern.
+    GET  → das aktuell fokussierte Projekt `{lid,iid,name}` oder null.
+    POST → Fokus setzen (Toggle) bzw. löschen. Quelle für die »Projektansicht«
+    der TUI (Taste 'f'); ist ein Fokus gesetzt, zeigen die Fronten in der
+    PROJECTS-Box NUR dieses Projekt. Höchstens einer gleichzeitig.
+    Body (JSON): {"lid": "...", "iid": 3|null}  → diesen Knoten togglen
+                 {"clear": true}                 → Fokus ganz aus
+    """
+    if request.method == 'GET':
+        return jsonify(lists.get_focus())
+    body = request.get_json(silent=True) or {}
+    if body.get('clear'):
+        lists.clear_focus()
+        state.push_log("FOKUS-: (aus)")
+        return jsonify(None)
+    lid = body.get('lid')
+    if not lid:
+        return jsonify({"error": "lid fehlt"}), 400
+    iid = body.get('iid')
+    try:
+        foc = lists.set_focus(lid, iid if iid is not None else None)
+    except KeyError:
+        return jsonify({"error": "unbekannte liste/eintrag"}), 404
+    state.push_log(f"FOKUS{'+' if foc else '-'}: {lid}" + (f"/{iid}" if iid is not None else ""))
+    return jsonify(foc)
+
+
 @app.route('/api/lists', methods=['POST'])
 def api_lists_create():
     """
@@ -509,6 +552,59 @@ def api_lists_delete_item(lid, iid):
         lists.delete_item(lid, iid)
     except KeyError:
         return jsonify({"error": "unbekannte liste"}), 404
+    return jsonify({"ok": True})
+
+
+# ── Notizen (dynamisch, vom Dashboard angelegt) ────────────────────────
+#
+# Freie Notizen aus gestapelten Blöcken (text/list/float), Inhalt inline in
+# data/notes.json (core/notes.py). Aktuell nur vom TUI-Werkzeug bespielt; die
+# Browser-Front kommt später. Dünner Adapter — alle Logik in core/notes.
+
+@app.route('/api/notes')
+def api_notes():
+    """Übersicht aller Notizen (ohne Block-Inhalte), neueste zuerst."""
+    return jsonify(notes.list_notes())
+
+
+@app.route('/api/notes', methods=['POST'])
+def api_notes_create():
+    """Neue (leere) Notiz anlegen. Body (JSON): {"title": "..."} (optional)."""
+    body = request.get_json(silent=True) or {}
+    n = notes.create_note(body.get('title', ''))
+    state.push_log(f"NOTIZ+: {n['id']}")
+    return jsonify(n)
+
+
+@app.route('/api/notes/<nid>')
+def api_notes_get(nid):
+    """Vollständige Notiz mit allen Blöcken."""
+    n = notes.get_note(nid)
+    if n is None:
+        return jsonify({"error": "unbekannte notiz"}), 404
+    return jsonify(n)
+
+
+@app.route('/api/notes/<nid>', methods=['PUT'])
+def api_notes_save(nid):
+    """
+    Notiz-Inhalt ersetzen. Body (JSON): {"title": "...", "blocks": [...]}.
+    Beide Felder optional; nur übergebene werden angefasst. Blöcke werden
+    serverseitig normalisiert (siehe core/notes._clean_blocks).
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        n = notes.save_note(nid, title=body.get('title'), blocks=body.get('blocks'))
+    except KeyError:
+        return jsonify({"error": "unbekannte notiz"}), 404
+    return jsonify(n)
+
+
+@app.route('/api/notes/<nid>', methods=['DELETE'])
+def api_notes_delete(nid):
+    """Notiz löschen."""
+    notes.delete_note(nid)
+    state.push_log(f"NOTIZ-: {nid}")
     return jsonify({"ok": True})
 
 
