@@ -975,7 +975,7 @@ def run_ui(stdscr, store):
             "layer": 1, "bsel": 0,
             "esel": 0, "buf": "",
             "titling": False,
-            "scroll": 0, "confirm": False, "msg": ""}
+            "scroll": 0, "confirm": False, "bconfirm": False, "msg": ""}
 
     # ── Projektansicht (füllt die MITTE-Box, Taste 'f') ─────────────────
     # AUFKLAPP-Navigator: Top-Level-Projekte, alles darunter eingeklappt. enter
@@ -2993,6 +2993,18 @@ def run_ui(stdscr, store):
         NOTE["layer"] = 2; NOTE["esel"] = 0; NOTE["buf"] = ""
         n_save()
 
+    def n_block_empty(blk):
+        """Hat der Block KEINEN Inhalt? Leere Blöcke dürfen ohne Nachfrage weg,
+        befüllte fragen vor dem Löschen nach (siehe 'd' in Ebene 1)."""
+        t = blk.get("type")
+        if t == "text":
+            return not (blk.get("text") or "").strip()
+        if t == "list":
+            return not any((it.get("text") or "").strip() for it in (blk.get("items") or []))
+        if t == "float":
+            return not any((tm.get("text") or "").strip() for tm in (blk.get("terms") or []))
+        return True
+
     def n_loadbuf(blk):
         """Ebene-2-Puffer aus dem gewählten Item/Term füllen (leer = 'neu'-Slot)."""
         seq = (blk.get("items") if blk.get("type") == "list" else blk.get("terms")) or []
@@ -3221,7 +3233,9 @@ def run_ui(stdscr, store):
                 continue
             n_drawblock(blk, sy, rh, bi == NOTE["bsel"], editing, ix, iw, area_top, area_bottom)
 
-        if NOTE["layer"] == 2 and blocks:
+        if NOTE["bconfirm"]:
+            tip = "block löschen? j/n"
+        elif NOTE["layer"] == 2 and blocks:
             tip = {"text": "tippen · enter zeile · esc fertig",
                    "list": "tippen · enter neu · tab haken · entf weg · esc fertig",
                    "float": "tippen · enter setzen · ←→ wählen · entf weg · esc fertig"
@@ -5936,7 +5950,17 @@ def run_ui(stdscr, store):
                 elif 32 <= ch <= 126 and len(NOTE["buf"]) < 60:
                     NOTE["buf"] += chr(ch)
             elif NOTE["layer"] == 1:                            # ── Ebene 1: navigieren/anlegen ──
-                if ch == 27:
+                if NOTE["bconfirm"]:                            # Block-Lösch-Nachfrage offen
+                    if ch in (ord("y"), ord("Y"), ord("j"), ord("J"),
+                              10, 13, curses.KEY_ENTER):
+                        if blocks and 0 <= NOTE["bsel"] < len(blocks):
+                            del blocks[NOTE["bsel"]]
+                            NOTE["bsel"] = min(NOTE["bsel"], max(0, len(blocks) - 1))
+                            n_save()
+                        NOTE["bconfirm"] = False; NOTE["msg"] = "gelöscht"
+                    elif ch != -1:                             # alles andere → abbrechen
+                        NOTE["bconfirm"] = False; NOTE["msg"] = ""
+                elif ch == 27:
                     n_save(); NOTE["active"] = False
                 elif ch in (ord("q"), ord("Q")):
                     n_save(); break
@@ -5959,9 +5983,12 @@ def run_ui(stdscr, store):
                         NOTE["titling"] = True; NOTE["buf"] = str(n.get("title") or "")
                 elif ch in (ord("d"), ord("D")):
                     if blocks and 0 <= NOTE["bsel"] < len(blocks):
-                        del blocks[NOTE["bsel"]]
-                        NOTE["bsel"] = min(NOTE["bsel"], max(0, len(blocks) - 1))
-                        n_save()
+                        if n_block_empty(blocks[NOTE["bsel"]]):
+                            del blocks[NOTE["bsel"]]           # leer → sofort weg
+                            NOTE["bsel"] = min(NOTE["bsel"], max(0, len(blocks) - 1))
+                            n_save()
+                        else:
+                            NOTE["bconfirm"] = True; NOTE["msg"] = ""  # befüllt → nachfragen
                 elif ch in (ord("e"), 10, 13, curses.KEY_ENTER):
                     if blocks and 0 <= NOTE["bsel"] < len(blocks):
                         NOTE["layer"] = 2

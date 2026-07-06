@@ -49,8 +49,9 @@ frische). **`n` in der Notiz → Übersicht** aller Notizen (also „zweimal n")
 
 - **Ebene 1 (navigieren/anlegen):** `↑/↓` Block wählen · `t`/`l`/`f` neuer Block
   (text/liste/float) → springt **direkt** in Ebene 2, man tippt sofort los ·
-  `e`/Enter → vorhandenen Block bearbeiten · `d` Block löschen · `r` Titel · `n`
-  Übersicht · `Esc` speichern & schließen.
+  `e`/Enter → vorhandenen Block bearbeiten · `d` Block löschen (leerer Block
+  sofort, befüllter fragt erst nach `j/n`) · `r` Titel · `n` Übersicht · `Esc`
+  speichern & schließen.
 - **Ebene 2 (bearbeiten), je Blocktyp:**
   - **text:** tippen; Enter = neue Zeile; Esc fertig. Höhe = Zeilen.
   - **liste:** tippen editiert das gewählte Item; Enter neues Item; `Tab` hakt
