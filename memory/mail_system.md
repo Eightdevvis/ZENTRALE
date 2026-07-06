@@ -251,6 +251,39 @@ Schlimmer: `refile_sender` las die Herkunft aus `classify()` VOR dem Umschreiben
   Ziel, Domain-Absender; reconcile: Fehl-Ablage→Ziel, idempotent, Dry-Run),
   `tests/test_backend_api.py` (assign leert Cache).
 
+### Eingang-Tray: INBOX + `\Seen`, einsortieren erst beim Lesen (2026-07-03)
+Sashas Modell: neue Mail soll **sichtbar liegen bleiben**, bis er sie liest —
+erst dann einsortieren. Kein neues read/unread-System und **kein neuer Ordner**:
+- **Der Tray IST die INBOX** (das „INBOX-als-Arbeitsschlange"-Modell), das
+  Gelesen-Flag ist der **native IMAP-`\Seen`** (jeder Client setzt es beim Öffnen).
+- **Poll gated auf `\Seen`:** `_handle_uid(..., seen)` sortiert eine INBOX-Mail
+  nur noch dann in ihre Kategorie, wenn sie **gelesen UND der Absender bekannt**
+  ist. Ungelesenes/Unbekanntes bleibt im Eingang; der nächste Poll prüft erneut
+  (selbstheilend). `poll_account` holt die Gelesen-Menge per `SEARCH SEEN`.
+  (Vorher: bekannte Mail wurde sofort bei Ankunft weggeräumt.)
+- **`mark_seen_and_file(uid)` = abhaken:** setzt `\Seen` und sortiert bekannte
+  Absender sofort ein (trash-Kategorien → Papierkorb); unbekannt → nur gelesen,
+  bleibt im Eingang bis zur Zuordnung. `inbox_tray()` liefert die INBOX mit
+  Gelesen-Flag + vermuteter Kategorie; `inbox_body()` liest den Volltext read-only
+  (BODY.PEEK → hakt NICHT versehentlich ab).
+- **Reconcile lässt die INBOX in Ruhe** (`folder == "INBOX": continue`): der
+  Eingang gehört dem Poll + Abhaken, nicht dem „alles-ausrichten"-Hammer `x` —
+  sonst würde ein Abgleich die ungelesene neue Mail vorzeitig rausräumen.
+- **Routen:** `GET /api/mail/inbox` (Tray), `GET /api/mail/inbox-body`,
+  `POST /api/mail/read {uid}` (abhaken, key-gegatet, leert danach den Ordner-Cache).
+- **TUI:** Taste **`e`** öffnet den Eingang (ungelesene INBOX; `●`=ungelesen,
+  `○`=gelesen, je Zeile die vermutete Zielkategorie `→ …`), **`f`** = abhaken
+  (gelesen + einsortieren), **`s`** ordnet unbekannte Absender zu. `d`/`a` sind im
+  Eingang absichtlich gesperrt (erst einsortieren, dann löschen/antworten). Alles
+  über den Mail-Worker → non-blocking.
+- **Nebenwirkung, gewollt:** unbekannte neue Mail wandert NICHT mehr automatisch
+  in `ZENTRALE/Review` — sie bleibt im Eingang (INBOX). Der Review-Ordner ist
+  damit weitgehend Legacy; die Triage passiert im Eingang. Siehe
+  [[mail-keymap-source-of-truth]] (Reconcile/Trie) und „Ordner ist Status".
+- Tests: `tests/test_mail_pool.py` (Poll filet nur seen+known; unbekannt bleibt
+  auch gelesen; abhaken bekannt/unbekannt; Tray parst `\Seen`+Kategorie; Reconcile
+  lässt INBOX in Ruhe).
+
 ### Zähl-Cache: TTL + Persistenz (2026-07-01)
 `POST /api/mail/refresh-counts` sweept STATUS über **alle** Kategorie-Ordner —
 das belegt die (eine) gepoolte Verbindung und lässt einen gleichzeitigen
