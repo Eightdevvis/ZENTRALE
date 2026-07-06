@@ -5150,19 +5150,32 @@ def run_ui(stdscr, store):
                                     new_id = L["edit_iid"]
                                 else:                         # neuen Eintrag/Unterpunkt anhängen
                                     body = {"text": txt}
-                                    if L["addparent"] is not None:
-                                        body["parent"] = L["addparent"]
+                                    # Ziel-Ebene IMMER frisch aus dem Drill-Pfad
+                                    # ableiten (Single Source of Truth = L["path"]),
+                                    # NICHT aus einem gemerkten Feld — sonst
+                                    # „überblutet" ein Folge-Eintrag in die falsche
+                                    # Ebene. "add" = aktuell offene Ebene; "sub" =
+                                    # fester Eltern-Eintrag (steht für Serien-Eingabe).
+                                    if L["imode"] == "sub":
+                                        parent = L["addparent"]
+                                    else:                     # "add"
+                                        _items, parent, _cr = l_container()
+                                    if parent is not None:
+                                        body["parent"] = parent
                                     new = api_call("/api/lists/%s/items" % lid, method="POST",
                                                    body=body)
                                     new_id = new.get("id") if new else None
-                                # Umbenennen ist einmalig; neu/sub bleibt offen
-                                # für Schnell-Eingabe mehrerer Einträge in Folge.
+                                # Umbenennen ist einmalig; neu/sub bleibt offen für
+                                # Schnell-Eingabe mehrerer Einträge in Folge — der
+                                # Eltern-Kontext (Drill-Pfad bzw. sub-addparent)
+                                # bleibt dabei erhalten, wird NICHT zurückgesetzt
+                                # (sonst landet der nächste Eintrag in der Wurzel).
                                 L["input"] = ""; L["edit_iid"] = None
                                 close = (L["imode"] == "rename")
                                 mode_add = (L["imode"] == "add")
                                 if close:
                                     L["adding"] = False; L["imode"] = "add"
-                                L["addparent"] = None
+                                    L["addparent"] = None
                                 l_load(); l_sync_def()
                                 # Cursor nur beim Anhängen auf der OFFENEN Ebene
                                 # nachziehen; sub/rename lassen die Auswahl stehen.
