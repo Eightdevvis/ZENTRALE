@@ -513,6 +513,7 @@ TUI_KEYS = [
     ("t",   "Theme wechseln (auto/hell/dunkel)"),
     ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
     ("l",   "Listen (Mitte): anlegen · einträge abhaken (space) / löschen · p als projekt rechts"),
+    ("n",   "Notizen (Mitte): freie notiz aus blöcken · ↑↓ block · t/l/f text/liste/float · e bearbeiten · d weg (fragt bei inhalt) · r titel · n übersicht · esc speichern & zu"),
     ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Handelsrouten · w=Fenster"),
     ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · v Woche/Monat"),
     ("p",   "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
@@ -530,13 +531,22 @@ TUI_KEYS = [
 # current_ctx(); Reihenfolge spiegelt die alten Fußzeilen.
 CTX_KEYS = {
     "home": [
-        ("l", "listen"), ("g", "graph"), ("m", "karte"),
+        ("l", "listen"), ("n", "notizen"), ("g", "graph"), ("m", "karte"),
         ("c", "kalender"), ("p", "post / mail"), ("a", "ki-chat"),
         ("u", "tutor"), ("f", "projekte"), ("t", "theme"), ("q", "beenden"),
     ],
     "projects": [
         ("↑↓", "wählen"), ("enter", "aufklappen"), ("space/f", "fokus"),
         ("esc/←", "zuklappen / zu"),
+    ],
+    "note:edit": [
+        ("↑↓", "block wählen"), ("t/l/f", "neu: text/liste/float"),
+        ("e/enter", "bearbeiten"), ("d", "block weg"), ("r", "titel"),
+        ("n", "übersicht"), ("esc", "speichern & zu"),
+    ],
+    "note:list": [
+        ("↑↓", "wählen"), ("enter", "öffnen"), ("n", "neu"),
+        ("d", "löschen"), ("esc", "zurück"),
     ],
     "ai": [
         ("tippen", "frage"), ("enter", "senden"),
@@ -609,6 +619,7 @@ CTX_TITLES = {
     "cal:list": "kalender · liste", "cal:sort": "kalender · sortieren",
     "mail:cats": "post", "mail:list": "post · liste", "mail:read": "post · lesen",
     "ai": "ki-chat", "tutor": "tutor", "projects": "projekte",
+    "note:edit": "notiz", "note:list": "notizen",
 }
 
 
@@ -4877,6 +4888,13 @@ def run_ui(stdscr, store):
             return "ai"
         if TUTOR["active"]:
             return "tutor"
+        if NOTE["active"]:
+            # Ebene 2 / Titel-Eingabe sind Freitext → '/' ist dort ein Zeichen,
+            # das Overlay geht gar nicht erst auf (siehe in_text_entry). Bleibt
+            # Ebene 1 (block-navigation) bzw. die Übersicht.
+            if NOTE["titling"] or NOTE["layer"] == 2:
+                return None
+            return "note:list" if NOTE["view"] == "list" else "note:edit"
         return "home"
 
     while True:
