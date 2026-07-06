@@ -43,7 +43,7 @@ import smtplib
 import threading
 from collections import OrderedDict
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from email.message import EmailMessage
 from email.header import decode_header, make_header
 from email.utils import parsedate_to_datetime, make_msgid, formatdate, parseaddr
@@ -229,6 +229,41 @@ def folder_counts():
     return out
 
 
+def _date_key(iso):
+    """Sortier-Schlüssel aus einem ISO-Datum (`date` aus _parse_headers). Ordnet
+    nach dem ECHTEN Mail-Datum (Date-Header), NICHT nach UID — die UID sagt nach
+    einem Verschieben nur »wann einsortiert«, nicht »wann angekommen«. Fehlt oder
+    kaputt → ganz alt (sinkt ans Ende der neueste-zuerst-Liste)."""
+    if not iso:
+        return float("-inf")
+    try:
+        dt = datetime.fromisoformat(iso)
+        if dt.tzinfo is None:                 # naive → als UTC werten, sonst wirft .timestamp()
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except Exception:
+        return float("-inf")
+
+
+def _folder_uids_by_date(imap, limit):
+    """UIDs eines (bereits selektierten) Ordners, neueste zuerst. Nutzt server-
+    seitiges `UID SORT (REVERSE DATE)` → auch bei >limit Mails kommen die nach
+    DATUM neuesten, nicht die zuletzt einsortierten (die hätten die höchsten UIDs,
+    nach einem Reconcile aber verwürfelte Daten). Fällt auf UID-Reihenfolge zurück,
+    falls der Server SORT nicht kann."""
+    for charset in ("UTF-8", "US-ASCII"):
+        try:
+            typ, data = imap.uid("SORT", "(REVERSE DATE)", charset, "ALL")
+            if typ == "OK" and data and data[0]:
+                return [int(u) for u in data[0].split()][:limit]
+        except Exception:
+            pass                              # SORT nicht unterstützt → Fallback
+    typ, data = imap.uid("SEARCH", None, "UID 1:*")
+    if typ == "OK" and data and data[0]:
+        return sorted((int(u) for u in data[0].split()), reverse=True)[:limit]
+    return []
+
+
 def folder_mails(cat, limit=200):
     """LIVE: die Mails einer Kategorie aus ihrem echten IMAP-Ordner (nur Header).
     trash-Kategorien (kein eigener Ordner) → lokaler Schnappschuss. Liefert
@@ -244,10 +279,7 @@ def folder_mails(cat, limit=200):
             with _session(account) as imap:
                 if _pselect(imap, account["name"], folder, readonly=True) != "OK":
                     continue
-                typ, data = imap.uid("SEARCH", None, "UID 1:*")
-                uids = []
-                if typ == "OK" and data and data[0]:
-                    uids = sorted((int(u) for u in data[0].split()), reverse=True)[:limit]
+                uids = _folder_uids_by_date(imap, limit)   # neueste nach DATUM zuerst
                 if not uids:
                     continue
                 # EIN gebündelter FETCH statt pro Mail (throttle-arm).
@@ -270,7 +302,7 @@ def folder_mails(cat, limit=200):
         except Exception as e:
             state.push_log(f"MAIL: Ordner '{folder}' lesen — "
                            f"{type(e).__name__}: {e}")
-    out.sort(key=lambda x: (x["uid"] or 0), reverse=True)
+    out.sort(key=lambda x: (_date_key(x["date"]), x["uid"] or 0), reverse=True)
     return out[:limit]
 
 
@@ -553,10 +585,7 @@ def inbox_tray(limit=200):
             with _session(account) as imap:
                 if _pselect(imap, account["name"], "INBOX", readonly=True) != "OK":
                     continue
-                typ, data = imap.uid("SEARCH", None, "UID 1:*")
-                uids = []
-                if typ == "OK" and data and data[0]:
-                    uids = sorted((int(u) for u in data[0].split()), reverse=True)[:limit]
+                uids = _folder_uids_by_date(imap, limit)   # neueste nach DATUM zuerst
                 if not uids:
                     continue
                 # EIN gebündelter FETCH: FLAGS (für \Seen) + Header zusammen.
@@ -582,7 +611,7 @@ def inbox_tray(limit=200):
                                 "category": cat if known else None})
         except Exception as e:
             state.push_log(f"MAIL: Eingang lesen — {type(e).__name__}: {e}")
-    out.sort(key=lambda x: (x["uid"] or 0), reverse=True)
+    out.sort(key=lambda x: (_date_key(x["date"]), x["uid"] or 0), reverse=True)
     return out[:limit]
 
 

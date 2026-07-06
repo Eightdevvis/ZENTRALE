@@ -589,6 +589,65 @@ def test_inbox_tray_parses_seen_flag_and_category(monkeypatch):
     assert tray[2]["seen"] is False and not tray[2]["known"] and tray[2]["category"] is None
 
 
+def test_folder_mails_sorted_by_date_not_uid(monkeypatch):
+    """Nach einem Reconcile hat die zuletzt per MOVE einsortierte Mail die
+    HÖCHSTE UID, aber evtl. das ÄLTESTE Datum — UID-Ordnung ≠ Chronologie.
+    folder_mails muss nach echtem Date-Header ordnen (neueste zuerst)."""
+    dates = {                                   # UID-Reihenfolge gegenläufig zum Datum
+        1: "Thu, 01 Jan 2026 09:00:00 +0100",   # ältestes Datum, niedrigste UID
+        2: "Mon, 01 Jun 2026 09:00:00 +0100",   # NEUESTES Datum, mittlere UID
+        3: "Sun, 01 Mar 2026 09:00:00 +0100",   # höchste UID, mittleres Datum
+    }
+
+    class DateIMAP:
+        def select(self, mailbox, readonly=False):
+            return ("OK", [b"3"])
+
+        def uid(self, cmd, *a):
+            if cmd == "SEARCH":                 # SORT nicht unterstützt → Fallback greift
+                return ("OK", [b"1 2 3"])
+            if cmd == "FETCH":
+                out = []
+                for u in [int(x) for x in a[0].split(",")]:
+                    meta = ("%d (UID %d BODY[HEADER])" % (u, u)).encode()
+                    hdr = ("From: x@known.de\r\nSubject: s%d\r\nDate: %s\r\n\r\n"
+                           % (u, dates[u])).encode()
+                    out.append((meta, hdr))
+                return ("OK", out)
+            return ("OK", [b""])
+
+    monkeypatch.setattr(M.mail_rules, "category_action",
+                        lambda c: {"action": "move", "folder": "ZENTRALE/Zahlen"})
+    monkeypatch.setattr(M.mail_secrets, "load_accounts",
+                        lambda: [{"name": "acc", "enabled": True}])
+    monkeypatch.setattr(M, "_session", contextmanager(lambda account: iter([DateIMAP()])))
+    monkeypatch.setattr(M, "_pselect",
+                        lambda imap, name, folder, readonly=True: "OK")
+
+    mails = M.folder_mails("Zahlen")
+    assert [m["uid"] for m in mails] == [2, 3, 1]     # nach DATUM, nicht [3,2,1] nach UID
+
+
+def test_folder_uids_by_date_prefers_server_sort(monkeypatch):
+    """Kann der Server SORT, kommt dessen Datums-Reihenfolge (REVERSE DATE) —
+    kein blindes UID-SEARCH mehr."""
+    class SortIMAP:
+        def __init__(self):
+            self.calls = []
+
+        def uid(self, cmd, *a):
+            self.calls.append(cmd)
+            if cmd == "SORT":
+                return ("OK", [b"2 3 1"])       # Server liefert Datums-Ordnung
+            if cmd == "SEARCH":
+                return ("OK", [b"1 2 3"])
+            return ("OK", [b""])
+
+    imap = SortIMAP()
+    assert M._folder_uids_by_date(imap, 200) == [2, 3, 1]
+    assert "SORT" in imap.calls and "SEARCH" not in imap.calls   # SORT gewann, kein Fallback
+
+
 # ── Entwurf: Antwort als echter IMAP-Draft (Drafts-Ordner) ────────────
 
 class DraftIMAP:
