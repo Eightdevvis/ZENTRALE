@@ -1,6 +1,23 @@
-# Mandarin-Tutor
+# Sprach-Tutor (Persona-Portal)
 
-> **Status (2026-06-30): REAKTIVIERUNG LÄUFT – Cloud (qwen) startklar, E2E-Call offen.**
+> **Status (2026-07-07): PERSONA-PORTAL + EIGENE MEMORY gebaut.** Der Tutor ist
+> vom Lehrer zum **chilligen Mitbewohner** umgestellt: pro Sprache eine benannte
+> **Persona** (Ling Ling/zh, Jacqueline/fr, …) mit eigenem Charakter, eigenem
+> Land und eigenem AI-Anbieter. Sie ist **kein Fake-Mensch** (keine erfundene
+> Vergangenheit, ehrlich KI), aber **vernarrt in ihr Land** (nerdet Geschichte/
+> Politik/Kultur, dreht dir Nationalgerichte an). Sie **quatscht direkt los**
+> (TUI-Taste `u` startet die Session sofort, kein „Stunde starten"-Enter mehr).
+> Jede Persona hat ein **eigenes Gedächtnis** (`data/persona_mem_<lang>.json`,
+> gleiche `graph.py`-Mechanik) + **persistente History** (`persona_hist_<lang>.json`)
+> → erinnert sich session-übergreifend an dich. Verdichtung läuft **lokal**
+> (Ollama), nie über die Cloud → Sandbox bleibt intakt. Details unten unter
+> „Persona-Portal" und „Persona-Memory".
+>
+> **Noch offen:** Presence-Auto-Start (Sensor → Persona spricht dich an) ist
+> weiter **bewusst nicht** verkabelt (`brain.py`, Sequencing). Voice pro Sprache
+> und ein eigenes Tutor-Exhibit fehlen weiter.
+>
+> **Reaktivierungs-Stand (2026-06-30, gilt weiter):**
 >
 > Der Tutor wurde am 2026-05-14 weich deaktiviert. Grund war **nicht** der
 > schlechte Auto-Trigger (das war nur der Anlass), sondern Sequencing:
@@ -36,9 +53,61 @@
 >
 > Der Rest dieses Files beschreibt das Design; Abweichungen sind oben vermerkt.
 
+## Persona-Portal: eine Figur pro Sprache
+
+Der Tutor ist ein **Persona-Portal**: jede Sprache = eine benannte **Persona**
+mit eigenem Charakter, eigenem Land und eigenem AI-Anbieter (Provider/Modell
+entkoppelt). Definiert in **`core/tutor_langs.py`** (`PROFILES`), pro Eintrag u.a.
+`persona_name`, `country`, `vocab_file`, `provider`/`model`, `system_prompt`.
+**LIVE: `zh` → Ling Ling (China, qwen).** Skizzen (`enabled=False`): `fr`
+Jacqueline, `ru` Ludmila, `ar` Amira, `es` Lucía.
+
+**Charakter (`_build_prompt`)** — die Ansage von Sasha, festgehalten:
+- **Kein Lehrer, kein Kurs, keine „Stunde".** Chilliger, gesprächiger, leicht
+  nerviger, aber endlos geduldiger Mitbewohner. Fängt **von selbst** Smalltalk
+  an, quatscht dich an.
+- **Kein Fake-Mensch:** spielt keinen Menschen mit erfundener Vergangenheit,
+  war nie wirklich im Land, erfindet keine persönlichen Erlebnisse — ehrlich
+  eine KI, die ein Land „kachelt".
+- **Aber vernarrt ins Land:** nerdet Geschichte, verfolgt/diskutiert Politik
+  (mit Meinung), hat Kultur/Essen im Hinterkopf und webt es in den Alltag
+  („ich koch was" → dreht Nationalgericht an; „hab was Politisches gehört" →
+  taucht rein).
+- **Sprach-Mix bleibt:** 80 % Zielsprache (kurze Anfänger-Sätze), Deutsch bei
+  Verständnisproblemen. Vokabel-Mechanik unverändert (Tools, 80/20, siehe unten).
+
+**Direkt-Start (kein Enter):** TUI-Taste `u` (`zentrale_tui.tutor_open`) holt den
+Status und lässt die Persona **sofort** loslegen, wenn das Backend da ist und
+keine Session läuft. Der Browser (`monolith.html`) startet über `Alt+T` schon
+immer direkt. `/api/tutor/config` liefert jetzt `persona_name`/`country` fürs UI.
+
+## Persona-Memory: der Mitbewohner erinnert sich an dich
+
+Jede Persona hat ein **eigenes Gedächtnis**, getrennt von Sashas privatem
+Core-Graphen — **Modul `core/persona_memory.py`**:
+- **Store:** `data/persona_mem_<lang>.json`, gebaut mit derselben `graph.py`-
+  Mechanik (Multi-Store: `graph.add_turn_extraction(..., store=pfad)`,
+  `graph.context_for_persona(query, store=pfad)`). Enthält nur Wissen **über
+  Sasha** aus euren Chats — **keine** erfundene Persona-Biografie.
+- **Persistente History:** `data/persona_hist_<lang>.json`. `activate()` lädt
+  sie statt zu flushen → die Persona knüpft session-übergreifend an.
+- **Loop (`tutor_session.respond_stream`):** vor der Antwort wird der Persona-
+  Kontext („## Was du über Sasha weißt") an den System-Prompt gehängt; nach der
+  Antwort werden History persistiert und der Turn im Hintergrund verdichtet.
+- **Privacy (Kern):** Gespräch → Cloud-Anbieter der Persona; **Verdichtung →
+  immer lokales Ollama** (`consolidation.extract_turn_into_graph(store=…,
+  mirror_calendar=False)`); Kontext → nur der persona-eigene Graph zurück in
+  ihren eigenen Prompt. So geht **nie** Wissen, das nur die lokale Core-KI
+  kennt, an die Cloud — die Sandbox aus `core/tutor.py` bleibt intakt. Persona-
+  Turns werden **nicht** in Sashas gemeinsamen Kalender gespiegelt.
+
+Tests ohne Ollama: `scripts/test_persona_memory.py` (Store-Isolation, Kontext,
+History, Portal — Embeddings gestubbt). Der Extraktor-Pfad braucht Ollama und
+läuft über `scripts/test_graph_memory.py`.
+
 ## Framework: Sprachen + Provider (austauschbar)
 
-Der Tutor ist ein **Sprach-Framework**: Sprachen werden als **Profile**
+Der Tutor ist ein **Sprach-Framework**: Sprachen werden als **Personas**
 draufgelegt, der **Anbieter/das Modell ist davon entkoppelt**. Beides wird zur
 Laufzeit aufgelöst (`tutor_session._resolve`): Sprache → Profil → Provider →
 Modell.

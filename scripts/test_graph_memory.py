@@ -32,21 +32,19 @@ sys.path.insert(0, os.path.join(ROOT, 'core'))
 
 @contextmanager
 def temp_graph():
-    """Frischer Graph in tmp-dir, automatisch aufgeraeumt."""
+    """Frischer Graph in tmp-dir, automatisch aufgeraeumt.
+
+    Die alte STM/LTM-Schicht (core/memory.py) ist raus — nur noch der Konzept-
+    Graph wird umgebogen. graph._GRAPH_FILE auf tmp zeigen lassen reicht; der
+    Multi-Store legt lazy einen frischen Store für diesen Pfad an."""
     tmpdir = tempfile.mkdtemp(prefix='graph_test_')
-    import graph as _g, memory as _m
+    import graph as _g
     orig_graph = _g._GRAPH_FILE
-    orig_ltm   = _m._LTM_FILE
-    orig_stm   = _m._STM_FILE
     _g._GRAPH_FILE = os.path.join(tmpdir, 'ai_graph.json')
-    _m._LTM_FILE   = os.path.join(tmpdir, 'ai_ltm.json')
-    _m._STM_FILE   = os.path.join(tmpdir, 'ai_stm.json')
     try:
         yield tmpdir
     finally:
         _g._GRAPH_FILE = orig_graph
-        _m._LTM_FILE   = orig_ltm
-        _m._STM_FILE   = orig_stm
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 

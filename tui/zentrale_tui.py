@@ -518,7 +518,7 @@ TUI_KEYS = [
     ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · v Woche/Monat"),
     ("p",   "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
     ("a",   "KI-Chat (Mitte): tippen + enter fragt die lokale KI (PC-Hirn via tunnel) · ↑↓ scrollen · esc zu"),
-    ("u",   "Sprach-Tutor (Mitte): enter startet die stunde · tippen + enter redet · /lang /provider /model /models /tutorstop · esc zu (session bleibt)"),
+    ("u",   "Sprach-Tutor (Mitte): Persona quatscht direkt los · tippen + enter redet · /lang /provider /model /models /tutorstop · esc zu (session bleibt)"),
     ("f",   "Projektansicht (Mitte): top-level projekte, aufklappbar · ↑↓ wählen · enter aufklappen (bis ins kleinste blatt) · space/f als fokus (rendert dann allein in der FOCUS-box) · esc/← zuklappen"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
@@ -1271,6 +1271,7 @@ def run_ui(stdscr, store):
     TUTOR = {"active": False, "input": "", "log": [], "answer": None,
              "streaming": False, "scroll": 0, "session": False, "avail": None,
              "provider": "", "model": "", "lang": "", "lang_name": "",
+             "persona_name": "", "country": "",
              "privacy": None, "msg": "", "loaded": False}
     TUTOR_LOCK = threading.Lock()
 
@@ -1294,15 +1295,30 @@ def run_ui(stdscr, store):
             else:
                 TUTOR["avail"] = False
             if isinstance(cf, dict):
-                TUTOR["provider"]  = cf.get("provider") or ""
-                TUTOR["model"]     = cf.get("model") or ""
-                TUTOR["lang"]      = cf.get("lang") or ""
-                TUTOR["lang_name"] = cf.get("lang_name") or ""
+                TUTOR["provider"]     = cf.get("provider") or ""
+                TUTOR["model"]        = cf.get("model") or ""
+                TUTOR["lang"]         = cf.get("lang") or ""
+                TUTOR["lang_name"]    = cf.get("lang_name") or ""
+                TUTOR["persona_name"] = cf.get("persona_name") or ""
+                TUTOR["country"]      = cf.get("country") or ""
                 # Config warnt schon VOR Session-Start, falls der Provider trainiert
                 if cf.get("trains_on_data") and not TUTOR["privacy"]:
                     TUTOR["privacy"] = "provider '%s' trainiert auf deine eingaben" % (
                         TUTOR["provider"],)
             TUTOR["loaded"] = True
+
+    def tutor_open():
+        """Panel-Öffnen-Ablauf im Hintergrund: Status holen, und wenn das Backend
+        da ist und noch keine Session läuft, den Tutor SOFORT loslegen lassen
+        (kein Enter, keine 'Stunde starten' — die Persona quatscht von selbst an).
+        Läuft eine Session schon (esc/wieder auf), knüpft sie einfach weiter an."""
+        tutor_refresh()
+        with TUTOR_LOCK:
+            avail     = TUTOR["avail"]
+            session   = TUTOR["session"]
+            streaming = TUTOR["streaming"]
+        if avail and not session and not streaming:
+            tutor_begin()
 
     def tutor_sse(url, payload):
         """Gemeinsamer SSE-Leser für /api/tutor/start + /respond. Füllt
@@ -1401,7 +1417,7 @@ def run_ui(stdscr, store):
             except (urllib.error.URLError, OSError, ValueError): pass
             with TUTOR_LOCK:
                 TUTOR["session"] = False
-                TUTOR["msg"]     = "tutor-stunde beendet"
+                TUTOR["msg"]     = "tutor beendet"
             return
         if name == "cloud":                          # Tutor braucht meist Cloud
             want = None
@@ -4767,10 +4783,11 @@ def run_ui(stdscr, store):
             prov      = TUTOR["provider"]
             model     = TUTOR["model"]
             lang      = TUTOR["lang"]
+            persona   = TUTOR["persona_name"]
             privacy   = TUTOR["privacy"]
 
-        # Kopfzeile: aufgelöste Wahl (modell · sprache) links, Privacy-Ampel rechts
-        head = "tutor"
+        # Kopfzeile: Persona-Name (Ling Ling) links + aufgelöste Wahl, Ampel rechts
+        head = persona or "tutor"
         sel = " · ".join(x for x in (model or prov, lang) if x)
         if sel:
             head += " · " + sel
@@ -4794,7 +4811,7 @@ def run_ui(stdscr, store):
             if answer is not None:
                 lines += ai_wrap("ai", answer + ("▌" if streaming else ""), inw)
             if not lines:
-                hint = ("enter startet die stunde" if not session else
+                hint = ((persona or "die persona") + " meldet sich gleich…" if not session else
                         "tippen + enter · /lang /provider /model /models /tutorstop")
                 addclip(body_top + rows // 2, inx, hint[:inw], inw, C["faint"])
             else:
@@ -4954,9 +4971,10 @@ def run_ui(stdscr, store):
                     except (urllib.error.URLError, OSError, ValueError):
                         cmd_msg = "lokal-schalter fehlgeschlagen"
                 if res == "TUTOR_OPEN":
-                    # Panel öffnen wie Taste 'u' (Status/Config im Hintergrund holen)
+                    # Panel öffnen wie Taste 'u': Status holen + falls Backend da
+                    # und keine Session, die Persona SOFORT loslegen lassen.
                     TUTOR["active"] = True; TUTOR["scroll"] = 0; TUTOR["msg"] = ""
-                    threading.Thread(target=tutor_refresh, daemon=True).start()
+                    threading.Thread(target=tutor_open, daemon=True).start()
                     cmd_msg = "tutor"
             elif ch in (curses.KEY_BACKSPACE, 127, 8):
                 cmd_buf = cmd_buf[:-1]
@@ -6091,8 +6109,8 @@ def run_ui(stdscr, store):
                 buf = TUTOR["input"].strip()
                 if buf.startswith("/"):        # /befehl (reden vs. steuern in EINER zeile)
                     tutor_cmd(buf)
-                elif not TUTOR["session"]:     # noch keine stunde → enter startet sie
-                    with TUTOR_LOCK: TUTOR["input"] = ""
+                elif not TUTOR["session"]:     # Fallback: falls Auto-Start (tutor_open)
+                    with TUTOR_LOCK: TUTOR["input"] = ""   # noch nicht lief (Backend kam später)
                     tutor_begin()
                 elif buf:                      # session läuft + text → antworten
                     tutor_say(buf)
@@ -6162,9 +6180,9 @@ def run_ui(stdscr, store):
                 AI["active"] = True; AI["scroll"] = 0; AI["msg"] = ""
                 if not AI["loaded"]:           # Verlauf einmal im Hintergrund nachladen
                     threading.Thread(target=ai_load_history, daemon=True).start()
-            elif ch in (ord("u"), ord("U")):   # Sprach-Tutor öffnen (Cloud/Qwen-Backend)
+            elif ch in (ord("u"), ord("U")):   # Sprach-Tutor öffnen — Persona quatscht direkt los
                 TUTOR["active"] = True; TUTOR["scroll"] = 0; TUTOR["msg"] = ""
-                threading.Thread(target=tutor_refresh, daemon=True).start()
+                threading.Thread(target=tutor_open, daemon=True).start()
             elif ch in (ord("n"), ord("N")):   # Notiz-Werkzeug öffnen (direkt in eine Notiz)
                 NOTE["active"] = True; n_open()
             elif ch in (ord("f"), ord("F")):   # Projektansicht öffnen (Fokus wählen)

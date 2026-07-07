@@ -23,6 +23,7 @@
 # _active/_history werden von Flask und Event-Loop gelesen/geschrieben → Lock.
 
 import os
+import threading
 from threading import Lock
 from collections import deque
 import ai
@@ -30,11 +31,13 @@ import tutor
 import tutor_langs
 import tutor_providers
 import tutor_config   # lädt data/tutor_config.json, injiziert Keys, liefert Settings
+import persona_memory # eigenes Gedächtnis + persistente History pro Persona
 
 _lock     = Lock()
 _active   = False
 _history  = deque(maxlen=100)   # Tutor-Gesprächsverlauf (separat vom Chat-History)
 _privacy  = None               # gesetzte Privacy-Warnung der laufenden Session (oder None)
+_session_lang = None           # Sprache/Persona der laufenden Session (für History+Memory)
 
 def _history_window() -> int:
     """Wieviele der letzten Turns ans Modell gesendet werden (Kosten-Hebel: die
@@ -91,11 +94,13 @@ def is_active() -> bool:
 def activate():
     """
     Aktiviert den Session-State (manueller Start via /api/tutor/start).
-    Setzt _active=True, leert die History, und FLAGGT laut, falls der gewählte
+    Setzt _active=True, LÄDT die persistente History der Persona (sie vergisst
+    dich zwischen Sessions nicht mehr), und FLAGGT laut, falls der gewählte
     Provider auf Nutzdaten trainiert.
     """
-    global _active, _history, _privacy
+    global _active, _history, _privacy, _session_lang
     prof, pname, provider, model = _resolve()
+    lang = tutor_config.setting("lang", "zh")
 
     notice = None
     if tutor_providers.trains_on_data(pname):
@@ -110,10 +115,14 @@ def activate():
             pass
         print(notice)
 
+    # Persistente History der Persona laden statt zu flushen — der Mitbewohner
+    # knüpft beim Öffnen an eure letzten Gespräche an.
+    prior = persona_memory.load_history(lang)
     with _lock:
-        _active  = True
-        _history = deque(maxlen=100)
-        _privacy = notice
+        _active       = True
+        _session_lang = lang
+        _history      = deque(prior, maxlen=100)
+        _privacy      = notice
 
 
 def deactivate():
@@ -148,10 +157,19 @@ def respond_stream(user_text: str = None):
         push_message("user", user_text)
 
     prof, pname, provider, model = _resolve()
+    lang = _session_lang or tutor_config.setting("lang", "zh")
 
     # Kosten-Hebel: nur die letzten N Turns senden (zustandslose API).
     history = get_history()[-_history_window():]
     system  = prof["system_prompt"]
+
+    # Persona-Gedächtnis: was die Persona aus früheren Gesprächen über Sasha
+    # weiß, an den System-Prompt hängen. Nur ihr EIGENER Store (nie Sashas
+    # Core-Graph) → keine private Info an die Cloud. Query = die neue User-
+    # Nachricht (bei Begrüßung None → Sasha/Heute-Anker).
+    mem_ctx = persona_memory.context(user_text, lang)
+    if mem_ctx:
+        system = system + "\n\n" + mem_ctx
 
     # Backend-Dispatch nach provider.kind. Alle haben dieselbe chat_stream()-
     # Signatur (yieldet Plain-Text-Tokens); der Tutor bleibt sauberes Addon.
@@ -177,4 +195,14 @@ def respond_stream(user_text: str = None):
         full_response.append(token)
         yield token
 
-    push_message("assistant", "".join(full_response))
+    full = "".join(full_response)
+    push_message("assistant", full)
+
+    # Nach dem Turn: History persistieren (Persona vergisst dich nicht) und den
+    # Turn in IHR Gedächtnis verdichten. Beides im Hintergrund — der Extraktor
+    # läuft lokal (Ollama), darf das Streaming nicht blockieren.
+    persona_memory.save_history(get_history(), lang)
+    if user_text:   # Begrüßungs-Turn (user_text=None) nicht verdichten
+        threading.Thread(
+            target=persona_memory.remember,
+            args=(user_text, full, lang), daemon=True).start()

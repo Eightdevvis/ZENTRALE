@@ -1372,6 +1372,8 @@ def api_tutor_config():
     return jsonify({
         "lang":           tutor_config.setting("lang", "zh"),
         "lang_name":      prof["name"],
+        "persona_name":   prof.get("persona_name", prof["name"]),
+        "country":        prof.get("country", ""),
         "provider":       pname,
         "model":          model,
         "trains_on_data": tutor_providers.trains_on_data(pname),
@@ -1382,7 +1384,9 @@ def api_tutor_config():
             for n, p in tutor_providers.PROVIDERS.items()
         ],
         "langs": [
-            {"code": c, "name": p["name"], "enabled": p.get("enabled")}
+            {"code": c, "name": p["name"], "enabled": p.get("enabled"),
+             "persona_name": p.get("persona_name", p["name"]),
+             "country": p.get("country", "")}
             for c, p in tutor_langs.PROFILES.items()
         ],
     })

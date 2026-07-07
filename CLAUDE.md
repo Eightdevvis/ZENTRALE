@@ -82,7 +82,7 @@ hält die Antworten fokussiert.
 | Notizen (Blöcke: text/liste/float, Taste n)| `memory/notizen_system.md`          |
 | Maps-System (Layer-Karte, 3 Achsen)       | `memory/maps_system.md`              |
 | KI-Persönlichkeit & Fine-Tuning-Plan      | `memory/ki_personality_plan.md`      |
-| Mandarin-Tutor (pausiert)                 | `memory/tutor_system.md`             |
+| Sprach-Tutor (Persona-Portal, eigene Memory) | `memory/tutor_system.md`          |
 | Whisper STT + TTS, Audio-Architektur      | `memory/audio_system.md`             |
 | Dashboard-UI, Modi, Polling               | `memory/dashboard.md`                |
 | Tastatur in jedem Modus                   | `memory/tastatur.md`                 |

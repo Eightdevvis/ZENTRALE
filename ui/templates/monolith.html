@@ -2503,8 +2503,15 @@
       // + Konsolen-Placeholder umschalten. Beides wird in stopTutor zurückgesetzt,
       // egal ob Start/Stop per Alt+T oder per /tutor-Command kam.
       document.body.classList.add('tutor-mode');
-      if (inputEl) inputEl.placeholder = 'Tutor-Modus … (Alt+T beendet · Enter senden · Alt+M Mic)';
-      _mini('— Tutor gestartet (Eingaben gehen jetzt an den Tutor; Alt+T oder /tutorstop beendet) —');
+      // Persona-Name holen (Ling Ling/zh, Jacqueline/fr …) für Placeholder + Minilog.
+      var persona = '';
+      try {
+        var cf = await (await fetch('/api/tutor/config')).json();
+        persona = cf.persona_name || '';
+      } catch (e) {}
+      if (inputEl) inputEl.placeholder = (persona ? persona + ' hört zu' : 'Tutor-Modus') +
+        ' … (Alt+T beendet · Enter senden · Alt+M Mic)';
+      _mini('— ' + (persona || 'Tutor') + ' ist da (quatscht gleich los; Alt+T oder /tutorstop beendet) —');
       try {
         var s = await (await fetch('/api/tutor/status')).json();
         if (s.privacy_warning) _mini('⚠ ' + s.privacy_warning);

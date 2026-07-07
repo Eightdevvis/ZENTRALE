@@ -61,7 +61,45 @@ DEFAULT_HOPS  = 2     # wie weit propagieren
 DEFAULT_DECAY = 0.5   # pro Hop mit diesem Faktor multiplizieren
 NOISE_FLOOR   = 0.05  # Aktivierung unter diesem Wert nicht weiterspreaden
 
-_lock = Lock()
+
+# ── Multi-Store ────────────────────────────────────────────────────────
+#
+# graph.py war lange ein Singleton auf data/ai_graph.json. Der Sprach-Tutor
+# braucht aber pro Persona (Ling Ling/zh, Jacqueline/fr, …) EINEN EIGENEN
+# Graphen mit derselben Mechanik (data/persona_mem_<lang>.json) — damit der
+# Mitbewohner sich über Sessions an dich erinnert, ohne Sashas privaten
+# Core-Graphen zu berühren (der ginge sonst an den Cloud-Anbieter → Bruch der
+# Sandbox, siehe core/tutor.py).
+#
+# Lösung: jeder Store kapselt (Pfad, Write-Lock, Cache-Lock, Cache-Key/-Data).
+# Die reinen Graph-Algorithmen (_add_or_get_node/_add_edge/_activate/…) nehmen
+# ohnehin `data` als Parameter und bleiben unangetastet — nur die I/O-Schicht
+# und die Public-API werden store-parametrisiert. store=None ⇒ Core-Graph, also
+# 100% rückwärtskompatibel für ai.py/consolidation.py.
+
+class _Store:
+    __slots__ = ("path", "lock", "cache_lock", "cache_key", "cache_data")
+
+    def __init__(self, path: str):
+        self.path       = path
+        self.lock       = Lock()   # Write-Serialisierung (Load-Mutate-Write)
+        self.cache_lock = Lock()   # schützt cache_key/cache_data gegen Races
+        self.cache_key  = None     # (mtime_ns, size) der zuletzt geladenen Datei
+        self.cache_data = None     # das geparste dict
+
+
+_stores       = {}       # Pfad → _Store
+_stores_guard = Lock()
+
+
+def _get_store(store: str | None = None) -> _Store:
+    """Store-Objekt für einen Pfad (Default: Core-Graph). Lazy angelegt."""
+    path = store or _GRAPH_FILE
+    with _stores_guard:
+        st = _stores.get(path)
+        if st is None:
+            st = _stores[path] = _Store(path)
+        return st
 
 
 # ── Helpers ────────────────────────────────────────────────────────────
@@ -164,16 +202,11 @@ def _tokens(s: str) -> set[str]:
 #     passiert - und der Speed-Gewinn liegt im gesparten JSON-Parse,
 #     nicht in der Kopie selbst.
 
-_cache_lock = Lock()
-_cache_key  = None   # (mtime_ns, size) der zuletzt geladenen Datei
-_cache_data = None   # das geparste dict
-
-
-def _file_key() -> tuple | None:
+def _file_key(st: _Store) -> tuple | None:
     """Schnüre einen Cache-Key aus dem Dateizustand. None wenn Datei fehlt."""
     try:
-        st = os.stat(_GRAPH_FILE)
-        return (st.st_mtime_ns, st.st_size)
+        s = os.stat(st.path)
+        return (s.st_mtime_ns, s.st_size)
     except FileNotFoundError:
         return None
 
@@ -186,31 +219,29 @@ def _empty_graph() -> dict:
     }
 
 
-def _load_raw(for_write: bool = False) -> dict:
+def _load_raw(st: _Store, for_write: bool = False) -> dict:
     """
-    Lädt den Graphen. Im Read-Pfad (for_write=False) kommt's aus dem
-    in-memory Cache wenn die Datei seit dem letzten Load unverändert ist;
-    sonst frisch von Disk.
+    Lädt den Graphen des Stores `st`. Im Read-Pfad (for_write=False) kommt's
+    aus dem in-memory Cache wenn die Datei seit dem letzten Load unverändert
+    ist; sonst frisch von Disk.
 
     Im Write-Pfad (for_write=True) immer von Disk lesen - der Caller wird
     das dict mutieren und _write_atomic rufen. Wir geben hier nicht das
     Cache-dict zurück, damit der Cache durch Caller-Mutation nicht
     schleichend mit halbfertigem Stand befallen wird.
 
-    Caller muss den _lock halten (Write-Pfade tun das schon). Cache-Lock
-    schützt zusätzlich die _cache_*-Globals gegen Race zwischen
+    Caller muss st.lock halten (Write-Pfade tun das schon). st.cache_lock
+    schützt zusätzlich die Cache-Felder gegen Race zwischen
     Async-Save-Thread und Request-Thread.
     """
-    global _cache_key, _cache_data
-
-    key = _file_key()
+    key = _file_key(st)
     if key is None:
         # Datei existiert nicht → frisches leeres Schema, nichts cachen
         return _empty_graph()
 
     if for_write:
         # Direkt von Disk, keine Cache-Bedienung
-        with open(_GRAPH_FILE, 'r', encoding='utf-8') as f:
+        with open(st.path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         data.setdefault("schema_version", SCHEMA_VERSION)
         data.setdefault("nodes", {})
@@ -218,26 +249,26 @@ def _load_raw(for_write: bool = False) -> dict:
         return data
 
     # Read-Pfad mit Cache
-    with _cache_lock:
-        if _cache_key == key and _cache_data is not None:
+    with st.cache_lock:
+        if st.cache_key == key and st.cache_data is not None:
             # Defensiv-Kopie der Top-Level-Container; die Werte (Knoten-Dicts,
             # Edge-Dicts) bleiben geteilt - der Read-Pfad mutiert sie eh nicht
             # und das spart ggü. deepcopy einiges. Falls ein Read-Pfad doch
             # mal anfängt zu mutieren: zu copy.deepcopy wechseln.
             return {
-                "schema_version": _cache_data["schema_version"],
-                "nodes":          dict(_cache_data["nodes"]),
-                "edges":          list(_cache_data["edges"]),
+                "schema_version": st.cache_data["schema_version"],
+                "nodes":          dict(st.cache_data["nodes"]),
+                "edges":          list(st.cache_data["edges"]),
             }
 
-        with open(_GRAPH_FILE, 'r', encoding='utf-8') as f:
+        with open(st.path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         data.setdefault("schema_version", SCHEMA_VERSION)
         data.setdefault("nodes", {})
         data.setdefault("edges", [])
 
-        _cache_key  = key
-        _cache_data = data
+        st.cache_key  = key
+        st.cache_data = data
         # Selbe shallow-Kopier-Strategie wie oben
         return {
             "schema_version": data["schema_version"],
@@ -246,20 +277,19 @@ def _load_raw(for_write: bool = False) -> dict:
         }
 
 
-def _write_atomic(data: dict):
+def _write_atomic(st: _Store, data: dict):
     """Atomic write: tmp + rename, gegen halbgeschriebene Files."""
-    global _cache_key, _cache_data
-    os.makedirs(_DATA_DIR, exist_ok=True)
-    tmp = _GRAPH_FILE + '.tmp'
+    os.makedirs(os.path.dirname(st.path), exist_ok=True)
+    tmp = st.path + '.tmp'
     with open(tmp, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
-    os.replace(tmp, _GRAPH_FILE)
+    os.replace(tmp, st.path)
     # Cache nach Write aktualisieren: wir haben gerade frische Daten in
     # der Hand, also einlagern statt nächsten Read auf Disk zu schicken.
     # Neuer Cache-Key kommt aus der frisch geschriebenen Datei.
-    with _cache_lock:
-        _cache_data = data
-        _cache_key  = _file_key()
+    with st.cache_lock:
+        st.cache_data = data
+        st.cache_key  = _file_key(st)
 
 
 # ── Node Operations ───────────────────────────────────────────────────
@@ -427,7 +457,8 @@ def _ensure_time_node(date_str: str, data: dict):
 
 # ── Public Write API ──────────────────────────────────────────────────
 
-def add_turn_extraction(nodes_in: list[dict], edges_in: list[dict]):
+def add_turn_extraction(nodes_in: list[dict], edges_in: list[dict],
+                        store: str | None = None):
     """
     Hauptweg um den Graphen zu erweitern. Wird vom Extraktor in
     consolidation.py nach jedem Turn (async) aufgerufen.
@@ -435,6 +466,7 @@ def add_turn_extraction(nodes_in: list[dict], edges_in: list[dict]):
     Args:
         nodes_in: Liste von {"name": str, "type": str}
         edges_in: Liste von {"from": str, "to": str, "rel": str}
+        store:    Pfad eines Persona-Graphen, oder None (Core-Graph).
 
     Macht:
       1. Alle Knoten via Alias-Resolution adden (Mapping orig→canonical).
@@ -449,8 +481,9 @@ def add_turn_extraction(nodes_in: list[dict], edges_in: list[dict]):
     if not nodes_in and not edges_in:
         return
 
-    with _lock:
-        data = _load_raw(for_write=True)
+    st = _get_store(store)
+    with st.lock:
+        data = _load_raw(st, for_write=True)
         name_map = {}
 
         # 1. Nodes adden mit Alias-Resolution
@@ -499,7 +532,7 @@ def add_turn_extraction(nodes_in: list[dict], edges_in: list[dict]):
             if canon and canon != today:
                 _add_edge(canon, today, "erwähnt-am", data, weight_delta=0.3)
 
-        _write_atomic(data)
+        _write_atomic(st, data)
 
     # Logging außerhalb des Locks
     nlist = list(set(name_map.values()))
@@ -574,11 +607,53 @@ def _find_entry_points(query: str, data: dict,
     return [n for n, _ in scored[:top_k]]
 
 
+def _activated_view(query: str | None, st: _Store,
+                    hops: int, max_nodes: int):
+    """
+    Gemeinsamer Kern für alle Kontext-Renderer: lädt den Store, sammelt
+    Entry-Points (Query-Embedding + Sasha + Heute), spreadet Aktivierung und
+    gibt (data, sorted_nodes, relevant_edges) zurück. Leerer Graph / keine
+    Entry-Points → (data, [], []).
+    """
+    with st.lock:
+        data = _load_raw(st)
+
+    if not data["nodes"]:
+        _log("GRAPH →  leer, kein Kontext")
+        return data, [], []
+
+    entries: list[str] = []
+    if query:
+        entries.extend(_find_entry_points(query, data))
+    if "Sasha" in data["nodes"] and "Sasha" not in entries:
+        entries.append("Sasha")
+    today = _today_str()
+    if today in data["nodes"] and today not in entries:
+        entries.append(today)
+
+    if not entries:
+        _log(f"GRAPH →  Query '{(query or '')[:40]}': keine Entry-Points")
+        return data, [], []
+
+    _log(f"GRAPH →  Entry-Points: {', '.join(entries)}")
+
+    activation   = _activate(entries, data, hops=hops)
+    sorted_nodes = sorted(activation.items(), key=lambda x: -x[1])[:max_nodes]
+    node_set     = {n for n, _ in sorted_nodes}
+    relevant_edges = [
+        e for e in data["edges"]
+        if e["from"] in node_set and e["to"] in node_set
+    ]
+    _log(f"GRAPH ←  {len(sorted_nodes)} Knoten, {len(relevant_edges)} Kanten aktiv")
+    return data, sorted_nodes, relevant_edges
+
+
 def context_for_query(query: str | None,
                       hops: int = DEFAULT_HOPS,
-                      max_nodes: int = 25) -> str:
+                      max_nodes: int = 25,
+                      store: str | None = None) -> str:
     """
-    Hauptweg um Memory-Kontext für einen Chat-Turn zu holen.
+    Hauptweg um Memory-Kontext für einen Chat-Turn zu holen (Core-KI).
 
     Strategie:
       1. Entry-Points = Query-Embedding-Match (top_k) + "Sasha"-Knoten
@@ -591,45 +666,8 @@ def context_for_query(query: str | None,
 
     Wenn der Graph leer ist oder kein Entry-Point findbar: leerer String.
     """
-    with _lock:
-        data = _load_raw()
-
-    if not data["nodes"]:
-        _log("GRAPH →  leer, kein Kontext")
-        return ""
-
-    # Entry-Points sammeln
-    entries: list[str] = []
-    if query:
-        entries.extend(_find_entry_points(query, data))
-
-    # Sasha + Heute IMMER als Anker (wenn Graph sie kennt)
-    if "Sasha" in data["nodes"] and "Sasha" not in entries:
-        entries.append("Sasha")
-    today = _today_str()
-    if today in data["nodes"] and today not in entries:
-        entries.append(today)
-
-    if not entries:
-        _log(f"GRAPH →  Query '{(query or '')[:40]}': keine Entry-Points")
-        return ""
-
-    _log(f"GRAPH →  Entry-Points: {', '.join(entries)}")
-
-    activation = _activate(entries, data, hops=hops)
-
-    # Top-N
-    sorted_nodes = sorted(activation.items(), key=lambda x: -x[1])[:max_nodes]
-    node_set     = {n for n, _ in sorted_nodes}
-
-    # Relevante Edges - nur zwischen aktivierten Knoten
-    relevant_edges = [
-        e for e in data["edges"]
-        if e["from"] in node_set and e["to"] in node_set
-    ]
-
-    _log(f"GRAPH ←  {len(sorted_nodes)} Knoten, {len(relevant_edges)} Kanten aktiv")
-
+    st = _get_store(store)
+    data, sorted_nodes, relevant_edges = _activated_view(query, st, hops, max_nodes)
     if not sorted_nodes:
         return ""
 
@@ -685,6 +723,43 @@ def context_for_query(query: str | None,
             w_str = f" w={w:.1f}" if w != 1.0 else ""
             lines.append(f"  {e['from']} ─[{e['rel']}{w_str}]─► {e['to']}")
 
+    return "\n".join(lines)
+
+
+def context_for_persona(query: str | None, store: str,
+                        persona_name: str = "du",
+                        hops: int = DEFAULT_HOPS,
+                        max_nodes: int = 20) -> str:
+    """
+    Kontext-Block für eine Sprach-Persona (Ling Ling, Jacqueline, …) aus IHREM
+    eigenen Graphen (`store` = data/persona_mem_<lang>.json).
+
+    Anders gerahmt als context_for_query: eine Persona hat keine KI-Identity-
+    Knoten (kein capability/limit-Seed), ihr Graph ist reines Wissen ÜBER
+    SASHA aus euren Gesprächen. Deshalb eine schlichte "das weißt du über
+    Sasha"-Liste statt der Subjekt-Dreiteilung. Wichtig: das ist echtes
+    Erinnern (nur was Sasha DIR erzählt hat), KEINE erfundene Vorgeschichte —
+    die Persona spielt keinen Menschen mit Biografie.
+    """
+    st = store if isinstance(store, _Store) else _get_store(store)
+    data, sorted_nodes, relevant_edges = _activated_view(query, st, hops, max_nodes)
+    # Zeit-/Anker-Knoten selbst tragen keine Info fürs Gespräch → rausfiltern
+    world = [(n, s) for n, s in sorted_nodes
+             if data["nodes"][n].get("type", "concept")
+             not in ("time-day", "time-month", "time-year", "self")]
+    if not world:
+        return ""
+
+    lines = ["## Was du über Sasha weißt (aus euren bisherigen Gesprächen — "
+             "nur das, kein erfundenes Wissen):", ""]
+    for name, score in world:
+        typ = data["nodes"][name].get("type", "concept")
+        lines.append(f"  - {name} [{typ}]")
+    if relevant_edges:
+        lines.append("")
+        lines.append("### Verbindungen (Subjekt steht LINKS):")
+        for e in relevant_edges[:30]:
+            lines.append(f"  {e['from']} ─[{e['rel']}]─► {e['to']}")
     return "\n".join(lines)
 
 
@@ -764,9 +839,13 @@ def ensure_seed():
       1. KI-Knoten anlegen (type: "self")
       2. Pro Capability: Knoten + Edge KI ─[kann]─► capability
       3. Pro Limit: Knoten + Edge KI ─[kann-nicht]─► limit
+
+    Nur der Core-Graph kriegt diesen Identity-Seed — Persona-Graphen haben
+    keine KI-Selbst-Knoten (siehe context_for_persona).
     """
-    with _lock:
-        data = _load_raw(for_write=True)
+    st = _get_store()
+    with st.lock:
+        data = _load_raw(st, for_write=True)
         if "KI" in data["nodes"]:
             return  # bereits geseedet
 
@@ -800,7 +879,7 @@ def ensure_seed():
             }
             _add_edge("KI", lim, "kann-nicht", data, weight_delta=1.0)
 
-        _write_atomic(data)
+        _write_atomic(st, data)
 
     _log(f"GRAPH ⊕ Seed: KI-Identität mit {len(_SEED_CAPABILITIES)} kann + {len(_SEED_LIMITS)} kann-nicht")
 
@@ -827,8 +906,9 @@ def migrate_internet_access():
     new_caps = ["im Internet suchen", "Webseiten abrufen",
                 "dir die aktuellen Nachrichten und die Weltlage holen"]
     removed, added = [], []
-    with _lock:
-        data = _load_raw(for_write=True)
+    st = _get_store()
+    with st.lock:
+        data = _load_raw(st, for_write=True)
         obsolete = set(_OBSOLETE_INTERNET_LIMITS)
 
         # No-op-Guard: nur schreiben, wenn wirklich etwas zu tun ist. Sonst
@@ -869,7 +949,7 @@ def migrate_internet_access():
             if "KI" in data["nodes"] and not _edge_exists(cap):
                 _add_edge("KI", cap, "kann", data, weight_delta=1.0)
 
-        _write_atomic(data)
+        _write_atomic(st, data)
 
     _log(f"GRAPH ⊕ Internet-Migration: -{len(removed)} Limit, +{len(added)} Fähigkeit")
     return {"removed": removed, "added": added}
@@ -877,10 +957,11 @@ def migrate_internet_access():
 
 # ── Debug/Inspection API ──────────────────────────────────────────────
 
-def stats() -> dict:
-    """Schnelle Übersicht für Debug/UI."""
-    with _lock:
-        data = _load_raw()
+def stats(store: str | None = None) -> dict:
+    """Schnelle Übersicht für Debug/UI (Core-Graph oder ein Persona-Store)."""
+    st = _get_store(store)
+    with st.lock:
+        data = _load_raw(st)
     return {
         "nodes": len(data["nodes"]),
         "edges": len(data["edges"]),
@@ -888,7 +969,8 @@ def stats() -> dict:
     }
 
 
-def dump() -> dict:
+def dump(store: str | None = None) -> dict:
     """Roher Zugriff auf den Graph (Read-Only-Snapshot)."""
-    with _lock:
-        return _load_raw()
+    st = _get_store(store)
+    with st.lock:
+        return _load_raw(st)

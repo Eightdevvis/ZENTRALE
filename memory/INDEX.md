@@ -30,7 +30,7 @@ hier sofort mitziehen, sonst tote Links.
 | Logic-Loop (Action-Scaffold, WIP)  | memory/logic_loop_plan.md           |
 | Grounding-Recherche (nicht raten)  | memory/grounding_recherche.md       |
 | Bench-History (Testdaten + Protokolle) | memory/bench_history.md         |
-| Mandarin-Tutor (pausiert)          | memory/tutor_system.md              |
+| Sprach-Tutor (Persona-Portal, eigene Memory) | memory/tutor_system.md    |
 | Audio (Whisper STT + TTS)          | memory/audio_system.md              |
 | Dashboard & Frontend               | memory/dashboard.md                 |
 | UI-Schnittstellen (DOM/JS-Hooks)   | memory/ui_hooks.md                  |

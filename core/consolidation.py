@@ -270,7 +270,9 @@ def _is_substantive(user_msg: str) -> bool:
     return True
 
 
-def extract_turn_into_graph(user_msg: str, ai_msg: str):
+def extract_turn_into_graph(user_msg: str, ai_msg: str,
+                            store: str | None = None,
+                            mirror_calendar: bool = True):
     """
     Hauptweg um einen Turn in den Graphen zu kippen. Wird async von
     ai._async_save_turn aufgerufen. Macht den LLM-Extraktor-Call und
@@ -281,6 +283,16 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str):
     Konfabulations-Müll.
 
     Blockiert nichts: Caller sollte das in einem Thread laufen lassen.
+
+    Args:
+        store:           None → Core-Graph (data/ai_graph.json). Ein Pfad →
+                         der Graph einer Sprach-Persona (persona_memory).
+                         Der Extraktor selbst läuft IMMER lokal (Ollama) —
+                         auch für Cloud-Personas bleibt die Verdichtung
+                         privacy-safe, nur die Zielablage wechselt.
+        mirror_calendar: geschah-am-Konzepte in Sashas erlebt-Layer spiegeln.
+                         Für Persona-Turns AUS: Tutor-Geschwätz gehört nicht
+                         in den gemeinsamen Kalender.
     """
     user_msg = (user_msg or '').strip()
     ai_msg   = (ai_msg   or '').strip()
@@ -291,7 +303,10 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str):
     nodes, edges = _call_graph_extractor(user_msg, ai_msg, today)
     if not nodes and not edges:
         return
-    graph.add_turn_extraction(nodes, edges)
+    graph.add_turn_extraction(nodes, edges, store=store)
+
+    if not mirror_calendar:
+        return
 
     # Auto-Capture in den Kalender: jedes Konzept das im Graph einen
     # geschah-am-Edge zu einem ISO-Datum kriegt, spiegeln wir in den
