@@ -94,6 +94,38 @@ def main():
         check("prompt: kein Lehrer", "KEIN Lehrer" in sp)
         check("prompt: kein Fake-Mensch", "KEIN FAKE-MENSCH" in sp)
         check("prompt: Vokabel-Mechanik erhalten", "get_confirmed_vocab" in sp)
+
+        # ── Kapazitätsbasierte Backend-Wahl (Ollama daheim ODER Cloud) ──
+        import ai_backends
+        captured = {}
+        def fake_extract(u, a, store=None, mirror_calendar=True,
+                         backend=None, provider=None, model=None):
+            captured.clear()
+            captured.update(backend=backend, provider=provider, store=store,
+                            mirror_calendar=mirror_calendar)
+        orig_extract = persona_memory.consolidation.extract_turn_into_graph
+        orig_status  = ai_backends.status
+        persona_memory.consolidation.extract_turn_into_graph = fake_extract
+        try:
+            ai_backends.status = lambda *a, **k: {"local": True, "cloud": True, "cloud_provider": "qwen"}
+            persona_memory.remember("ich hab morgen klausur", "加油", lang="zh",
+                                    provider="qwen", model="qwen-plus")
+            check("local da → backend local", captured.get("backend") == "local")
+            check("persona-turn spiegelt NICHT in kalender", captured.get("mirror_calendar") is False)
+
+            ai_backends.status = lambda *a, **k: {"local": False, "cloud": True, "cloud_provider": "qwen"}
+            persona_memory.remember("ich hab morgen klausur", "加油", lang="zh",
+                                    provider="qwen", model="qwen-plus")
+            check("kein Ollama, cloud da → backend cloud", captured.get("backend") == "cloud")
+            check("cloud → provider gesetzt", captured.get("provider") == "qwen")
+
+            captured.clear()
+            ai_backends.status = lambda *a, **k: {"local": False, "cloud": False, "cloud_provider": None}
+            persona_memory.remember("ich hab morgen klausur", "加油", lang="zh")
+            check("kein backend → verdichtung uebersprungen", captured == {})
+        finally:
+            persona_memory.consolidation.extract_turn_into_graph = orig_extract
+            ai_backends.status = orig_status
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

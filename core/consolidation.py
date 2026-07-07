@@ -173,50 +173,27 @@ OUTPUT: gültiges JSON mit zwei Arrays. Auch bei nur einem Knoten/Edge ein Array
 }"""
 
 
-def _call_graph_extractor(user_msg: str, ai_msg: str, today: str) -> tuple[list[dict], list[dict]]:
-    """
-    LLM-Call der einen Chat-Turn in (nodes, edges) übersetzt.
-
-    Returns Tupel von (nodes, edges) Listen. Bei Fehlern: leere Listen.
-    """
-    body = (
+def _extractor_body(user_msg: str, ai_msg: str, today: str) -> str:
+    """Der User-Prompt-Body für den Extraktor (identisch für lokal + cloud)."""
+    return (
         f"Heutiges Datum: {today}\n\n"
         f"Chat-Turn:\n"
         f"User (Sasha): {user_msg}\n"
         f"AI:           {ai_msg}\n\n"
         f"Extrahiere als JSON mit 'nodes' und 'edges' Arrays:"
     )
-    try:
-        resp = net.post(
-            f"{OLLAMA_URL}/api/chat",
-            {
-                "model":    OLLAMA_MODEL,
-                **({"think": False} if SUPPORTS_THINK else {}),
-                "messages": [
-                    {"role": "system", "content": _GRAPH_EXTRACTOR_PROMPT},
-                    {"role": "user",   "content": body},
-                ],
-                "stream":     False,
-                "format":     "json",
-                "keep_alive": OLLAMA_KEEP_ALIVE,
-                # Gleiche Kontextgroesse wie der Chat-Pfad – sonst laedt
-                # Ollama qwen pro Turn neu (siehe OLLAMA_NUM_CTX oben).
-                "options":    {"num_ctx": OLLAMA_NUM_CTX},
-            },
-            timeout=90,
-        )
-        content = resp.get("message", {}).get("content", "").strip()
-    except Exception:
-        return ([], [])
 
+
+def _finalize_extraction(content: str) -> tuple[list[dict], list[dict]]:
+    """Parst die JSON-Antwort eines Extraktors (lokal ODER cloud) und
+    sanitized sie gegen die bekannten Pathologien. Bei Müll: leere Listen."""
+    content = (content or "").strip()
     if not content:
         return ([], [])
-
     try:
         parsed = _json.loads(content)
     except Exception:
         return ([], [])
-
     if not isinstance(parsed, dict):
         return ([], [])
 
@@ -248,6 +225,88 @@ def _call_graph_extractor(user_msg: str, ai_msg: str, today: str) -> tuple[list[
     return (nodes, edges)
 
 
+def _call_graph_extractor(user_msg: str, ai_msg: str, today: str) -> tuple[list[dict], list[dict]]:
+    """
+    LOKALER Extraktor (Ollama): übersetzt einen Chat-Turn in (nodes, edges).
+    Returns Tupel von (nodes, edges) Listen. Bei Fehlern: leere Listen.
+    """
+    body = _extractor_body(user_msg, ai_msg, today)
+    try:
+        resp = net.post(
+            f"{OLLAMA_URL}/api/chat",
+            {
+                "model":    OLLAMA_MODEL,
+                **({"think": False} if SUPPORTS_THINK else {}),
+                "messages": [
+                    {"role": "system", "content": _GRAPH_EXTRACTOR_PROMPT},
+                    {"role": "user",   "content": body},
+                ],
+                "stream":     False,
+                "format":     "json",
+                "keep_alive": OLLAMA_KEEP_ALIVE,
+                # Gleiche Kontextgroesse wie der Chat-Pfad – sonst laedt
+                # Ollama qwen pro Turn neu (siehe OLLAMA_NUM_CTX oben).
+                "options":    {"num_ctx": OLLAMA_NUM_CTX},
+            },
+            timeout=90,
+        )
+        content = resp.get("message", {}).get("content", "").strip()
+    except Exception:
+        return ([], [])
+
+    return _finalize_extraction(content)
+
+
+def _cloud_graph_extractor(user_msg: str, ai_msg: str, today: str,
+                           provider: str, model: str) -> tuple[list[dict], list[dict]]:
+    """
+    CLOUD-Extraktor: verdichtet einen Turn über den Anbieter, der eh gerade
+    redet (Fallback, wenn kein lokales Ollama erreichbar ist — Laptop unterwegs).
+
+    Wichtig zur Sandbox: das ist die LOKALE Seite, die zum Cloud-*Client*
+    ausgreift — die Cloud-Module importieren weiterhin NICHTS aus graph/
+    consolidation. Das Ergebnis schreibt lokaler Code in den PERSONA-Store,
+    nie in den Core-Graphen. Kein Privacy-Gewinn fürs Tutor-Material (das lag
+    beim Reden eh schon beim Anbieter) — nur damit die Memory ohne Ollama baut.
+    """
+    import tutor_providers
+    p = tutor_providers.get(provider)
+    kind = p.get("kind")
+    body = _extractor_body(user_msg, ai_msg, today)
+    content = ""
+    try:
+        if kind == "openai_compat":
+            import tutor_openai_compat   # nur Client-Factory, kein graph-Import
+            client = tutor_openai_compat._client(p)
+            resp = client.chat.completions.create(
+                model=model or p.get("default_model"),
+                messages=[
+                    {"role": "system", "content": _GRAPH_EXTRACTOR_PROMPT},
+                    {"role": "user",   "content": body},
+                ],
+                stream=False,
+                response_format={"type": "json_object"},
+            )
+            content = (resp.choices[0].message.content or "").strip()
+        elif kind == "anthropic":
+            import anthropic   # type: ignore
+            client = anthropic.Anthropic()
+            msg = client.messages.create(
+                model=model or p.get("default_model"),
+                max_tokens=1024,
+                system=_GRAPH_EXTRACTOR_PROMPT + "\n\nAntworte NUR mit dem JSON-Objekt, ohne Fließtext.",
+                messages=[{"role": "user", "content": body}],
+            )
+            content = "".join(getattr(b, "text", "") for b in msg.content
+                              if getattr(b, "type", None) == "text").strip()
+        else:
+            return ([], [])
+    except Exception:
+        return ([], [])
+
+    return _finalize_extraction(content)
+
+
 def _is_substantive(user_msg: str) -> bool:
     """
     Pre-Filter: hat der Turn überhaupt genug Substanz für eine
@@ -272,7 +331,10 @@ def _is_substantive(user_msg: str) -> bool:
 
 def extract_turn_into_graph(user_msg: str, ai_msg: str,
                             store: str | None = None,
-                            mirror_calendar: bool = True):
+                            mirror_calendar: bool = True,
+                            backend: str | None = None,
+                            provider: str | None = None,
+                            model: str | None = None):
     """
     Hauptweg um einen Turn in den Graphen zu kippen. Wird async von
     ai._async_save_turn aufgerufen. Macht den LLM-Extraktor-Call und
@@ -286,13 +348,17 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
 
     Args:
         store:           None → Core-Graph (data/ai_graph.json). Ein Pfad →
-                         der Graph einer Sprach-Persona (persona_memory).
-                         Der Extraktor selbst läuft IMMER lokal (Ollama) —
-                         auch für Cloud-Personas bleibt die Verdichtung
-                         privacy-safe, nur die Zielablage wechselt.
+                         der Graph einer Sprach-Persona (persona_memory). Die
+                         Stores fassen sich nie an — das ist die eigentliche
+                         Grenze (Tutor ↔ lokale Core-KI), NICHT der Extraktor.
         mirror_calendar: geschah-am-Konzepte in Sashas erlebt-Layer spiegeln.
                          Für Persona-Turns AUS: Tutor-Geschwätz gehört nicht
                          in den gemeinsamen Kalender.
+        backend:         None/'local' → lokaler Ollama-Extraktor (Core-AI-Pfad,
+                         unverändert). 'cloud' → Verdichtung über den Cloud-
+                         Anbieter (provider/model), wenn kein Ollama da ist.
+                         Kapazitäts-Wahl trifft der Caller (persona_memory via
+                         ai_backends). Der Core-AI-Pfad ruft NIE cloud.
     """
     user_msg = (user_msg or '').strip()
     ai_msg   = (ai_msg   or '').strip()
@@ -300,7 +366,10 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
         return
 
     today = date.today().isoformat()
-    nodes, edges = _call_graph_extractor(user_msg, ai_msg, today)
+    if backend == "cloud":
+        nodes, edges = _cloud_graph_extractor(user_msg, ai_msg, today, provider, model)
+    else:
+        nodes, edges = _call_graph_extractor(user_msg, ai_msg, today)
     if not nodes and not edges:
         return
     graph.add_turn_extraction(nodes, edges, store=store)

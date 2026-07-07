@@ -9,9 +9,11 @@
 > (TUI-Taste `u` startet die Session sofort, kein „Stunde starten"-Enter mehr).
 > Jede Persona hat ein **eigenes Gedächtnis** (`data/persona_mem_<lang>.json`,
 > gleiche `graph.py`-Mechanik) + **persistente History** (`persona_hist_<lang>.json`)
-> → erinnert sich session-übergreifend an dich. Verdichtung läuft **lokal**
-> (Ollama), nie über die Cloud → Sandbox bleibt intakt. Details unten unter
-> „Persona-Portal" und „Persona-Memory".
+> → erinnert sich session-übergreifend an dich. **Einzige echte Grenze:** dieses
+> Persona-Gedächtnis und die lokale **Core-KI-Memory** (`ai_graph.json`) fassen
+> sich **nie** an. Die Verdichtung läuft **kapazitätsbasiert** (Ollama daheim
+> erreichbar → lokal, sonst Cloud). Details unten unter „Persona-Portal" und
+> „Persona-Memory".
 >
 > **Noch offen:** Presence-Auto-Start (Sensor → Persona spricht dich an) ist
 > weiter **bewusst nicht** verkabelt (`brain.py`, Sequencing). Voice pro Sprache
@@ -94,12 +96,23 @@ Core-Graphen — **Modul `core/persona_memory.py`**:
 - **Loop (`tutor_session.respond_stream`):** vor der Antwort wird der Persona-
   Kontext („## Was du über Sasha weißt") an den System-Prompt gehängt; nach der
   Antwort werden History persistiert und der Turn im Hintergrund verdichtet.
-- **Privacy (Kern):** Gespräch → Cloud-Anbieter der Persona; **Verdichtung →
-  immer lokales Ollama** (`consolidation.extract_turn_into_graph(store=…,
-  mirror_calendar=False)`); Kontext → nur der persona-eigene Graph zurück in
-  ihren eigenen Prompt. So geht **nie** Wissen, das nur die lokale Core-KI
-  kennt, an die Cloud — die Sandbox aus `core/tutor.py` bleibt intakt. Persona-
-  Turns werden **nicht** in Sashas gemeinsamen Kalender gespiegelt.
+- **Verdichtungs-Backend kapazitätsbasiert** (`persona_memory.remember` via
+  `ai_backends.status()`): ist **Ollama erreichbar** (daheim, oder Laptop→PC per
+  `zentrale-remote`) → **lokaler** Extraktor; sonst → **Cloud** (der Anbieter,
+  der eh gerade redet, z.B. qwen); **kein Backend** → Turn übersprungen. So baut
+  die Memory auch, wenn der Laptop unterwegs kein Ollama hat.
+
+- **Was hier NICHT stimmt (ehrliche Grenze — kein Marketing):** Läuft die
+  Persona über die Cloud, liegt ihr **Gesprächs- und Memory-Inhalt beim Cloud-
+  Anbieter** — unvermeidbar, das Reden läuft ja dort, und der Kontext-Block wird
+  jede Session wieder mitgeschickt (wächst sogar an). Die lokale Verdichtung ist
+  **kein** Privacy-Schutz fürs Tutor-Material (das war beim Reden längst beim
+  Anbieter); sie ist nur billiger + hält alles offline, **wenn** Ollama da ist.
+  Die **einzige** harte Garantie: die **Core-KI-Memory** (`ai_graph.json`, das
+  was du dem lokalen Chat offline erzählst) wird der Tutor-Persona **nie**
+  gefüttert — die Stores fassen sich nicht an, die Sandbox aus `core/tutor.py`
+  bleibt intakt. Persona-Turns werden zudem **nicht** in Sashas gemeinsamen
+  Kalender gespiegelt.
 
 Tests ohne Ollama: `scripts/test_persona_memory.py` (Store-Isolation, Kontext,
 History, Portal — Embeddings gestubbt). Der Extraktor-Pfad braucht Ollama und

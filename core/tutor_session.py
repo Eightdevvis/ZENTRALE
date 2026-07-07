@@ -203,6 +203,8 @@ def respond_stream(user_text: str = None):
     # läuft lokal (Ollama), darf das Streaming nicht blockieren.
     persona_memory.save_history(get_history(), lang)
     if user_text:   # Begrüßungs-Turn (user_text=None) nicht verdichten
+        # provider/model mitgeben: fällt die Verdichtung mangels Ollama auf die
+        # Cloud zurück, nutzt sie denselben Anbieter, der eh gerade redet.
         threading.Thread(
             target=persona_memory.remember,
-            args=(user_text, full, lang), daemon=True).start()
+            args=(user_text, full, lang, pname, model), daemon=True).start()

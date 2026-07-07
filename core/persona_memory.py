@@ -2,20 +2,22 @@
 #
 # Eigenes Gedächtnis pro Sprach-Persona (Ling Ling/zh, Jacqueline/fr, …).
 #
-# ── Warum getrennt vom Core-Graphen? ─────────────────────────────────────
+# ── Die EINE Grenze: Tutor ↔ Core-KI fassen sich nie an ──────────────────
 # Die meisten Personas reden über einen CLOUD-Anbieter (zh→qwen). Würde die
-# Persona Sashas privaten Core-Graphen (data/ai_graph.json) lesen und an die
-# Cloud schicken, wäre das ein Bruch der Sandbox (core/tutor.py). Deshalb hat
-# jede Persona ihren EIGENEN Graphen:  data/persona_mem_<lang>.json  — gleiche
-# graph.py-Mechanik, aber ein anderer Store. Er enthält nur, was Sasha DIESER
-# Persona erzählt hat.
+# Persona Sashas privaten Core-Graphen (data/ai_graph.json — das was Sasha dem
+# lokalen Offline-Chat erzählt) lesen und an die Cloud schicken, wäre das ein
+# Bruch der Sandbox (core/tutor.py). Deshalb hat jede Persona ihren EIGENEN
+# Graphen: data/persona_mem_<lang>.json — gleiche graph.py-Mechanik, anderer
+# Store. Er enthält nur, was Sasha DIESER Persona erzählt hat. Das ist die
+# einzige harte Garantie hier.
 #
-# ── Privacy des Loops ────────────────────────────────────────────────────
-#   Gespräch  → Cloud-Anbieter der Persona (tutor_session).
-#   Verdichtung→ LOKALES Ollama (consolidation), egal welcher Anbieter redet.
-#   Kontext   → nur der persona-eigene Graph zurück in ihren eigenen Prompt
-#               (die Daten hat Sasha diesem Anbieter ohnehin schon geschickt).
-# So bleibt Wissen, das nur die lokale Core-KI kennt, aus der Cloud.
+# ── Was NICHT privat ist (ehrlich) ───────────────────────────────────────
+# Läuft die Persona über die Cloud, liegt ihr Gesprächs- UND Memory-Inhalt beim
+# Anbieter — das Reden läuft dort, und der Kontext-Block geht jede Session wieder
+# mit. Kein Versteck. Die Verdichtung KAPAZITÄTSBASIERT (ai_backends): Ollama da
+# → lokal; sonst → Cloud (derselbe Anbieter, der redet); nichts da → auslassen.
+# Lokal ist KEIN Privacy-Schutz fürs Tutor-Material (das war eh beim Anbieter),
+# nur billiger + offline-fähig, wenn Ollama da ist.
 #
 # ── Kein Fake-Mensch ─────────────────────────────────────────────────────
 # Der Store ist Wissen ÜBER SASHA (aus euren Chats), KEINE erfundene Persona-
@@ -57,18 +59,35 @@ def hist_path(lang: str | None = None) -> str:
 
 # ── Gedächtnis (Graph) ───────────────────────────────────────────────────
 
-def remember(user_text: str, ai_text: str, lang: str | None = None):
+def remember(user_text: str, ai_text: str, lang: str | None = None,
+             provider: str | None = None, model: str | None = None):
     """
-    Verdichtet einen Persona-Turn in IHREN Graphen. Läuft über den lokalen
-    Ollama-Extraktor (privacy-safe) und spiegelt NICHT in Sashas Kalender.
+    Verdichtet einen Persona-Turn in IHREN Graphen (nie den Core-Graphen).
+
+    Backend KAPAZITÄTSBASIERT (ai_backends): ist ein lokales Ollama erreichbar
+    (daheim / PC via zentrale-remote), läuft die Verdichtung dort — sonst über
+    den Cloud-Anbieter der Persona, damit die Memory auch unterwegs baut (Laptop
+    ohne Zuhause). Ist gar kein Backend da: diesen Turn überspringen. Der lokale
+    Extraktor ist KEIN Privacy-Schutz fürs Tutor-Material (das lag beim Reden eh
+    beim Anbieter) — er ist billiger und hält alles offline, wenn Ollama da ist.
 
     Blockiert (LLM-Call ~1-2s): der Caller lässt das in einem Thread laufen.
     """
     try:
+        import ai_backends
+        st = ai_backends.status()
+        if st.get("local"):
+            backend = "local"
+        elif st.get("cloud"):
+            backend  = "cloud"
+            provider = provider or st.get("cloud_provider")
+        else:
+            return   # kein Backend erreichbar → Gedächtnis diesen Turn auslassen
         consolidation.extract_turn_into_graph(
             user_text, ai_text,
             store=mem_path(lang),
             mirror_calendar=False,
+            backend=backend, provider=provider, model=model,
         )
     except Exception:
         # Gedächtnis ist Beiwerk — ein Extraktor-Fehler darf das Gespräch nie
