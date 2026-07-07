@@ -32,8 +32,11 @@ import os
 # ohne Schwachmodell-Faktor zu verifizieren. Per Env überschreibbar.
 _MODEL = os.getenv("TUTOR_CLOUD_MODEL", "claude-opus-4-8")
 
-# Tutor-Antworten sind kurze Mandarin-Sätze – 1024 Output-Tokens reichen satt.
-_MAX_TOKENS = 1024
+# Tutor-Antworten sollen KURZ sein (1-2 Sätze). Cap + niedrige Temperatur halten
+# das Verhalten reproduzierbar knapp (wie beim openai_compat-Pfad, siehe dort +
+# memory/tutor_persona_tuning.md). Beide per Env übersteuerbar.
+_MAX_TOKENS   = int(os.getenv("TUTOR_MAX_TOKENS", "200"))
+_TEMPERATURE  = float(os.getenv("TUTOR_TEMPERATURE", "0.4"))
 
 _client = None  # lazy: anthropic erst importieren/instanziieren wenn wirklich genutzt
 
@@ -104,6 +107,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         with client.messages.stream(
             model=model or _MODEL,
             max_tokens=_MAX_TOKENS,
+            temperature=_TEMPERATURE,
             system=system or "",
             tools=anthro_tools,
             messages=anthro_msgs,

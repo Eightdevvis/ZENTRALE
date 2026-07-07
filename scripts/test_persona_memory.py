@@ -87,13 +87,23 @@ def main():
         check("mem_stats liest persona-store",
               persona_memory.mem_stats("zh")["nodes"] >= 2)
 
-        # ── Persona-Portal: Charakter statt Lehrer ──
+        # ── Persona-Portal: getunter zh-Prompt (chinesisch, schlank) ──
         p = tutor_langs.get("zh")
         check("persona Ling Ling", p.get("persona_name") == "Ling Ling")
         sp = p["system_prompt"]
-        check("prompt: kein Lehrer", "KEIN Lehrer" in sp)
-        check("prompt: kein Fake-Mensch", "KEIN FAKE-MENSCH" in sp)
-        check("prompt: Vokabel-Mechanik erhalten", "get_confirmed_vocab" in sp)
+        check("zh-prompt: nur-Mandarin-Regel", "只用中文" in sp)
+        check("zh-prompt: kein Fake-Lob", "别夸她" in sp)
+        check("zh-prompt: ehrlich KI, kein Fake-Mensch", "你是 AI" in sp and "别编身世" in sp)
+        check("zh-prompt: KEIN altes Länder-Spam", "Nationalgericht" not in sp and "vernarrt" not in sp)
+        check("zh-prompt: schlank (< 800 zeichen)", len(sp) < 800)
+        # Vokabel-Mechanik lebt weiter (Tools + Kontext-Injektion in tutor_session)
+        import tutor as _tut
+        check("vokabel-tools erhalten", hasattr(_tut, "get_confirmed_vocab")
+              and any(t["function"]["name"] == "introduce_new" for t in _tut.TUTOR_TOOLS))
+        # Sketch-Sprache: schlanker generischer Fallback
+        fr = tutor_langs.get("fr")["system_prompt"]
+        check("fr-fallback: nur-Zielsprache-Regel", "NUR auf Französisch" in fr)
+        check("fr-fallback: kein Fake-Mensch", "erfinde\n        keine Vergangenheit" in fr or "keine Vergangenheit" in fr)
 
         # ── Kapazitätsbasierte Backend-Wahl (Ollama daheim ODER Cloud) ──
         import ai_backends

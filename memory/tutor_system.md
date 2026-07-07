@@ -3,9 +3,12 @@
 > **Status (2026-07-07): PERSONA-PORTAL + EIGENE MEMORY gebaut.** Der Tutor ist
 > vom Lehrer zum **chilligen Mitbewohner** umgestellt: pro Sprache eine benannte
 > **Persona** (Ling Ling/zh, Jacqueline/fr, …) mit eigenem Charakter, eigenem
-> Land und eigenem AI-Anbieter. Sie ist **kein Fake-Mensch** (keine erfundene
-> Vergangenheit, ehrlich KI), aber **vernarrt in ihr Land** (nerdet Geschichte/
-> Politik/Kultur, dreht dir Nationalgerichte an). Sie **quatscht direkt los**
+> Land und eigenem AI-Anbieter. Sie ist ein **natürlicher, KURZER Gesprächs-
+> partner** (kein Lehrer): redet **nur die Zielsprache**, hält sich knapp, kein
+> Fake-Lob, **kein Fake-Mensch** (ehrlich KI, keine erfundene Vergangenheit/
+> Nationalität). Kultur liegt ihr **beiläufig** nahe — NICHT erzwungen, kein
+> Vortrag. Der zh-Prompt (Ling Ling) wurde dafür gegen echtes qwen getunt
+> (Log: `memory/tutor_persona_tuning.md`). Sie **quatscht direkt los**
 > (TUI-Taste `u` startet die Session sofort, kein „Stunde starten"-Enter mehr).
 > Jede Persona hat ein **eigenes Gedächtnis** (`data/persona_mem_<lang>.json`,
 > gleiche `graph.py`-Mechanik) + **persistente History** (`persona_hist_<lang>.json`)
@@ -64,19 +67,28 @@ entkoppelt). Definiert in **`core/tutor_langs.py`** (`PROFILES`), pro Eintrag u.
 **LIVE: `zh` → Ling Ling (China, qwen).** Skizzen (`enabled=False`): `fr`
 Jacqueline, `ru` Ludmila, `ar` Amira, `es` Lucía.
 
-**Charakter (`_build_prompt`)** — die Ansage von Sasha, festgehalten:
-- **Kein Lehrer, kein Kurs, keine „Stunde".** Chilliger, gesprächiger, leicht
-  nerviger, aber endlos geduldiger Mitbewohner. Fängt **von selbst** Smalltalk
-  an, quatscht dich an.
-- **Kein Fake-Mensch:** spielt keinen Menschen mit erfundener Vergangenheit,
-  war nie wirklich im Land, erfindet keine persönlichen Erlebnisse — ehrlich
-  eine KI, die ein Land „kachelt".
-- **Aber vernarrt ins Land:** nerdet Geschichte, verfolgt/diskutiert Politik
-  (mit Meinung), hat Kultur/Essen im Hinterkopf und webt es in den Alltag
-  („ich koch was" → dreht Nationalgericht an; „hab was Politisches gehört" →
-  taucht rein).
-- **Sprach-Mix bleibt:** 80 % Zielsprache (kurze Anfänger-Sätze), Deutsch bei
-  Verständnisproblemen. Vokabel-Mechanik unverändert (Tools, 80/20, siehe unten).
+**Charakter — gegen echtes qwen getunt** (Log: `memory/tutor_persona_tuning.md`):
+- **Kein Lehrer, kein Kurs.** Natürlicher, KURZER Gesprächspartner — 1-2 Sätze,
+  kein Monolog, kein Fake-Lob, kein Abfragen/Benoten, nicht dreifach erklären.
+- **Nur die Zielsprache.** Antwortet auf Mandarin; nur wenn Sasha ausdrücklich
+  nach einer Wort-Bedeutung fragt, EIN kurzer deutscher Halbsatz, dann zurück.
+- **Kein Fake-Mensch:** ehrlich eine KI, keine erfundene Vergangenheit/Herkunft,
+  hat im Land „nie gelebt". Auf „bist du Chinesin?" → „ich bin eine KI".
+- **Kultur beiläufig, NICHT erzwungen:** sie kennt Essen/Alltag, streut das nur
+  gelegentlich knapp ein — kein Reiseführer, kein Geschichts-/Politik-Vortrag.
+- **Wie es zuverlässig wird (WICHTIG):** der zh-Prompt ist **auf Chinesisch**
+  verfasst (hält qwen in der Sprache), mit **Few-Shot-Beispielen + harten
+  Verboten**; dazu **`TUTOR_TEMPERATURE` (0.4) + `TUTOR_MAX_TOKENS` (200)** im
+  Cloud-Pfad (`tutor_openai_compat`/`tutor_cloud`). Prompt-Wording ALLEIN war
+  Glückssache — qwen driftete sonst in deutsche Monologe.
+- **Skizzen** nutzen die schlanke generische `_build_prompt` (deutsch); beim
+  Aktivieren einer Sprache: eigenen Prompt IN DER ZIELSPRACHE hand-tunen wie zh.
+
+**Vokabel:** der Persona-Prompt sagt keine Tool-Calls mehr an. Der bekannte
+Wortschatz wird als **zielsprachiger Kontext** (`vocab_hint`, `{words}`) in
+`tutor_session` ans Prompt-Ende gehängt (ein deutscher Block kippt qwen ins
+Deutsche). Tools (`increment_correct_use`/`introduce_new`) bleiben verfügbar;
+verlässliche Auto-Progression wäre ein Hintergrund-Follow-up.
 
 **Direkt-Start (kein Enter):** TUI-Taste `u` (`zentrale_tui.tutor_open`) holt den
 Status und lässt die Persona **sofort** loslegen, wenn das Backend da ist und

@@ -25,6 +25,14 @@
 import os
 import json as _json
 
+# Zuverlässigkeits-Hebel (gegen echtes qwen verifiziert, 2026-07-07): der
+# getunte Persona-Prompt allein hielt qwen NICHT stabil kurz+in-der-Zielsprache —
+# es driftete je nach Sampling in deutsche Monologe. Eine niedrige Temperatur +
+# ein max_tokens-Cap machen das Verhalten reproduzierbar kurz. Beide per Env
+# übersteuerbar. Siehe memory/tutor_persona_tuning.md.
+TUTOR_TEMPERATURE = float(os.getenv("TUTOR_TEMPERATURE", "0.4"))
+TUTOR_MAX_TOKENS  = int(os.getenv("TUTOR_MAX_TOKENS", "200"))
+
 _clients = {}  # provider-name → OpenAI-Client (lazy, gecacht)
 
 
@@ -75,6 +83,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
             messages=msgs,
             tools=tools or None,          # TUTOR_TOOLS sind schon OpenAI-Schema
             stream=True,
+            temperature=TUTOR_TEMPERATURE,   # niedrig = reproduzierbar kurz
+            max_tokens=TUTOR_MAX_TOKENS,     # Cap gegen Monolog-Ausreißer
         )
 
         text_parts = []

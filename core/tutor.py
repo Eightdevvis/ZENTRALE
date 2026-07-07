@@ -121,6 +121,14 @@ def introduce_new(word: str, pinyin: str) -> str:
     return f"✓ Neues Wort hinzugefügt: '{word}' ({pinyin})"
 
 
+def term_list() -> list:
+    """Alle Vokabel-Wörter (confirmed + testing) als flache Liste — für den
+    Vokabel-Kontext, den tutor_session dem Persona-Prompt anhängt."""
+    with _lock:
+        entries = _load_raw()
+    return [e['word'] for e in entries if e.get('word')]
+
+
 def get_vocab_stats() -> str:
     """
     Gibt eine kurze Statistik über den Lernfortschritt zurück.

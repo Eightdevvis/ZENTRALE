@@ -163,6 +163,21 @@ def respond_stream(user_text: str = None):
     history = get_history()[-_history_window():]
     system  = prof["system_prompt"]
 
+    # Vokabel-Kontext ans Prompt-Ende hängen: welche Wörter Sasha lernt, damit
+    # die Persona sich ans begrenzte Set hält. Ersetzt das frühere "ruf zu Beginn
+    # get_confirmed_vocab() auf". WICHTIG: der Hinweis kommt aus dem Profil in der
+    # ZIELSPRACHE (prof['vocab_hint']) — ein deutscher Block hier kippt qwen zurück
+    # ins Deutsche/Monolog (gegen echtes qwen verifiziert). Kein Hinweis im Profil
+    # (Skizzen) → keine Injektion. Tools increment/introduce bleiben verfügbar.
+    hint = prof.get("vocab_hint")
+    if hint:
+        try:
+            words = "、".join(tutor.term_list())
+            if words:
+                system = system + "\n\n" + hint.format(words=words)
+        except Exception:
+            pass
+
     # Persona-Gedächtnis: was die Persona aus früheren Gesprächen über Sasha
     # weiß, an den System-Prompt hängen. Nur ihr EIGENER Store (nie Sashas
     # Core-Graph) → keine private Info an die Cloud. Query = die neue User-
