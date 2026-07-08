@@ -76,6 +76,11 @@ BAR_DIM    = (128, 118, 128)
 # Gesagtes „verhallt": Blase steht kurz voll, dann blendet sie aus.
 BUBBLE_LINGER = 4.0   # s voll sichtbar nach dem Sprechen
 BUBBLE_FADE   = 1.3   # s Ausblenden danach
+# Feedback-Loop (gedeckelt, damit die Cloud-Kosten winzig bleiben): nach kurzer
+# Stille EIN Anstoß (die KI schaut/winkt/fragt), danach chillt sie — client-
+# seitig, kostenlos. Bleibt das Fenster offen, alle ~15 min ein neuer Versuch.
+NUDGE_AFTER_S   = 25.0    # s Stille bis zum ersten Anstoß
+CHILL_RECHECK_S = 900.0   # s (15 min) bis zum nächsten Versuch
 
 
 def _font(size, bold=False):
@@ -102,6 +107,9 @@ class Backend:
 
     def config(self):
         return self._get('/api/tutor/config')
+
+    def room_state(self):
+        return self._get('/api/tutor/room_state', timeout=2.0)
 
     def speak(self, text, lang, speaker, speed):
         """Text → WAV-Bytes (Backend-TTS, /api/speak). None bei Fehler/503
@@ -197,6 +205,10 @@ class Persona:
         self.target = None           # ziel-x zum hinlaufen
         self.want_sit = False
         self.sitting = False
+        self.stance = 'idle'         # von der KI gesetzt (express-Tool)
+        self.gesture = None          # laufende einmalige Geste
+        self.gesture_t = 0.0
+        self.pause_t = 0.0           # Schlender-Pause bei 'wander'
         # layout (in layout() gesetzt)
         self.floor_y = 0.0
         self.couch_x = 0.0
@@ -215,32 +227,48 @@ class Persona:
         if self.x == 0.0:
             self.x = w * 0.35
 
-    def _pick_next(self):
-        if self.sitting:
-            # aufstehen und schlendern
-            self.sitting = False
-            self.want_sit = False
+    def set_stance(self, stance):
+        """Vom Backend (KI per express-Tool) gesetzte Haltung — ersetzt das
+        frühere hardcoded-Random. Bewegt sich nur, wenn die KI es will."""
+        if not stance or stance == self.stance:
+            return
+        self.stance = stance
+        mid = (self.xmin + self.xmax) * 0.5
+        if stance == 'sit':
+            self.want_sit = True;  self.target = self.couch_x
+        elif stance == 'come_closer':
+            self.sitting = False; self.want_sit = False; self.target = mid
+        elif stance == 'wander':
+            self.sitting = False; self.want_sit = False
             self.target = random.uniform(self.xmin, self.xmax)
-        elif random.random() < 0.45:
-            # zur couch und hinsetzen
-            self.want_sit = True
-            self.target = self.couch_x
-        else:
-            self.target = random.uniform(self.xmin, self.xmax)
+        elif stance == 'pace':
+            self.sitting = False; self.want_sit = False
+            self.target = self.xmax if self.x < mid else self.xmin
+        else:  # 'stand' / 'idle'
+            self.sitting = False; self.want_sit = False; self.target = None
+
+    def play_gesture(self, kind):
+        """Einmalige Geste (winken/nicken/hinschauen/strecken), ~1.3 s."""
+        self.gesture = kind
+        self.gesture_t = 1.3
 
     def update(self, dt, talking):
         self.t += dt
         self.blink -= dt
         if self.blink < 0:
             self.blink = random.uniform(2.2, 5.0)  # nächster Lidschlag
+        if self.gesture_t > 0:
+            self.gesture_t -= dt
+            if self.gesture_t <= 0:
+                self.gesture = None
 
         if talking:
             # redet zugewandt; steht dabei nicht extra auf (auch von der Couch ok)
             self.state = 'talk'
-            self.idle_timer = 0.0
             self.facing = 1
             return
 
+        # zum Ziel laufen (von set_stance gesetzt)
         if self.target is not None:
             dx = self.target - self.x
             if abs(dx) > 3:
@@ -249,19 +277,23 @@ class Persona:
                 self.facing = 1 if dx > 0 else -1
                 self.state = 'walk'
                 return
-            # ziel erreicht
             self.x = self.target
             self.target = None
-            if self.want_sit and abs(self.x - self.couch_x) < 6:
+            if self.want_sit and abs(self.x - self.couch_x) < 8:
                 self.sitting = True
-            self.idle_timer = 0.0
+            # anhaltende Bewegungen: neues Ziel nach dem Erreichen
+            if self.stance == 'pace':
+                self.target = self.xmin if abs(self.x - self.xmax) < 12 else self.xmax
+            elif self.stance == 'wander':
+                self.pause_t = random.uniform(1.5, 3.5)   # kurz stehen, dann weiter
 
-        # ruht (steht oder sitzt)
+        # Schlender-Pause bei 'wander'
+        if self.stance == 'wander' and self.target is None:
+            self.pause_t -= dt
+            if self.pause_t <= 0:
+                self.target = random.uniform(self.xmin, self.xmax)
+
         self.state = 'sit' if self.sitting else 'idle'
-        self.idle_timer += dt
-        if self.idle_timer > random.uniform(4.5, 8.0):
-            self.idle_timer = 0.0
-            self._pick_next()
 
     # -- Zeichnen ------------------------------------------------------------
     def head_top(self):
@@ -311,13 +343,21 @@ class Persona:
         pygame.draw.polygon(surf, DRESS, pts)
         pygame.draw.polygon(surf, DRESS_DK, [(x - 15*s, y - 22*s), (x - 8*s, y - 22*s),
                                              (x - 7*s, body_top), (x - 12*s, body_top)])
-        # Arme
+        # Arme — mit Gesten (winken hebt den rechten Arm + wackelt, strecken beide)
+        g = self.gesture
+        gp = (1.3 - self.gesture_t) * 7.0    # Gesten-Phase
+        la_off = ra_off = 0.0
+        if g == 'wave':
+            ra_off = -26*s + math.sin(gp) * 5*s
+        elif g == 'stretch':
+            la_off = ra_off = -24*s
         arm_sw = math.sin(self.t * 8.0) * 6 * s if self.state == 'walk' else 0
-        pygame.draw.rect(surf, LIMB, (x - 17*s, body_top + 3*s + arm_sw, 6*s, 30*s), border_radius=int(3*s))
-        pygame.draw.rect(surf, LIMB, (x + 11*s, body_top + 3*s - arm_sw, 6*s, 30*s), border_radius=int(3*s))
+        pygame.draw.rect(surf, LIMB, (x - 17*s, body_top + 3*s + arm_sw + la_off, 6*s, 30*s), border_radius=int(3*s))
+        pygame.draw.rect(surf, LIMB, (x + 11*s, body_top + 3*s - arm_sw + ra_off, 6*s, 30*s), border_radius=int(3*s))
 
-        # Kopf
-        hy = body_top - 16*s
+        # Kopf (nicken = kurzer Ab-Bob)
+        nod = abs(math.sin(gp)) * 6*s if g == 'nod' else 0.0
+        hy = body_top - 16*s + nod
         pygame.draw.circle(surf, SKIN, (int(x), int(hy)), int(15*s))
         # Haare (Bob): Kappe oben + zwei seitliche Strähnen
         pygame.draw.circle(surf, HAIR, (int(x), int(hy - 3*s)), int(15*s))
@@ -524,6 +564,11 @@ def main():
         'mute': bool(a.mute),  # Stimme aus (Alt+M togglet)
         'log': [],             # Verlauf: Liste von (role, text) — 'user' | 'tutor'
         'scroll': 0,           # Verlaufs-Scroll (0 = neuestes unten)
+        'stance': 'idle',      # von der KI gesetzte Haltung (room_state-Poll)
+        'pending_gesture': None,  # einmalige Geste, die die Persona abspielen soll
+        'last_user_ms': 0,     # letzte Sasha-Eingabe (Feedback-Loop)
+        'nudged': False,       # Anstoß in dieser Stille schon gemacht?
+        'nudge_ms': 0,
     }
 
     def log_add(role, text):
@@ -615,8 +660,51 @@ def main():
                     S['available'] = bool(st.get('available'))
                     S['tts'] = bool(st.get('tts'))
 
+    def watch_room():
+        """Ausdrucks-Zustand pollen (Haltung/Geste, von der KI per express-Tool
+        gesetzt) und ans Fenster reichen. Persona wird NUR im Render-Thread
+        mutiert → hier nur S['stance']/S['pending_gesture'] setzen."""
+        last_gid = 0
+        while True:
+            pygame.time.wait(250)
+            rs = be.room_state()
+            if not isinstance(rs, dict):
+                continue
+            gid = int(rs.get('gesture_id') or 0)
+            with S['lock']:
+                S['stance'] = rs.get('stance') or 'idle'
+                if gid != last_gid:
+                    S['pending_gesture'] = rs.get('gesture')
+            last_gid = gid
+
+    def feedback_loop():
+        """Merkt, wenn Sasha eine Weile nichts sagt → EIN Anstoß (die KI schaut/
+        winkt/fragt kurz). Danach chillt sie; erst nach ~15 min ein neuer
+        Versuch. Gedeckelt = winzige Cloud-Kosten."""
+        while True:
+            pygame.time.wait(1000)
+            now = pygame.time.get_ticks()
+            with S['lock']:
+                ok = S['available'] and not S['busy'] and not S['streaming']
+                lu = S['last_user_ms']; nudged = S['nudged']; nm = S['nudge_ms']
+            if not ok:
+                continue
+            silence = (now - lu) / 1000.0
+            if not nudged and silence > NUDGE_AFTER_S:
+                with S['lock']:
+                    S['nudged'] = True; S['nudge_ms'] = now
+                run_stream('/api/tutor/nudge', {})
+            elif nudged and (now - nm) / 1000.0 > CHILL_RECHECK_S:
+                with S['lock']:
+                    S['nudge_ms'] = now
+                run_stream('/api/tutor/nudge', {})
+
+    with S['lock']:
+        S['last_user_ms'] = pygame.time.get_ticks()   # Stille-Uhr ab Fenster-Öffnen
     threading.Thread(target=kickoff, daemon=True).start()
     threading.Thread(target=watch_status, daemon=True).start()
+    threading.Thread(target=watch_room, daemon=True).start()
+    threading.Thread(target=feedback_loop, daemon=True).start()
 
     def send(text):
         text = text.strip()
@@ -625,6 +713,8 @@ def main():
         with S['lock']:
             if S['busy'] or not S['available']:
                 return
+            S['last_user_ms'] = pygame.time.get_ticks()   # Stille-Uhr zurücksetzen
+            S['nudged'] = False
         log_add('user', text)      # in den Verlauf
         threading.Thread(target=run_stream,
                          args=('/api/tutor/respond', {'text': text}), daemon=True).start()
@@ -686,11 +776,16 @@ def main():
             inp = S['input']; avail = S['available']; pname = S['persona']
             compose = S['compose']; tts_ok = S['tts']
             log = list(S['log']); scroll = S['scroll']
+            stance = S['stance']; pend = S['pending_gesture']; S['pending_gesture'] = None
 
         # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft.
         has_text = bool(buf.strip())
         talking  = (streaming and has_text) or speaking
         thinking = streaming and not has_text
+        # Haltung/Geste kommen von der KI (express-Tool → room_state-Poll).
+        persona.set_stance(stance)
+        if pend:
+            persona.play_gesture(pend)
         persona.update(dt, talking)
 
         # Gesagtes „verhallt": solange sie redet/denkt bleibt die Blase frisch,

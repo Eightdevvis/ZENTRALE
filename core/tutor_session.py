@@ -39,6 +39,32 @@ _history  = deque(maxlen=100)   # Tutor-Gesprächsverlauf (separat vom Chat-Hist
 _privacy  = None               # gesetzte Privacy-Warnung der laufenden Session (oder None)
 _session_lang = None           # Sprache/Persona der laufenden Session (für History+Memory)
 
+# ── Ausdruck im Zimmer (vom Modell per express-Tool gesetzt) ─────────────────
+# Die KI drückt sich selbst aus (statt hardcoded-Random): stance = anhaltende
+# Haltung/Bewegung, gesture = einmalige Geste (gid zählt hoch, damit das Fenster
+# sie GENAU EINMAL abspielt). Das Zimmer pollt /api/tutor/room_state.
+_STANCES  = {"idle", "sit", "stand", "pace", "wander", "come_closer"}
+_GESTURES = {"wave", "nod", "look", "stretch"}
+_expr     = {"stance": "idle", "gesture": None, "gid": 0}
+
+
+def set_expression(action: str):
+    """Vom express-Tool aufgerufen: setzt Haltung ODER löst eine Geste aus."""
+    a = (action or "").strip().lower()
+    with _lock:
+        if a in _STANCES:
+            _expr["stance"] = a
+        elif a in _GESTURES:
+            _expr["gesture"] = a
+            _expr["gid"] += 1
+
+
+def room_state() -> dict:
+    """Aktueller Ausdrucks-Zustand fürs Zimmer-Fenster (pollt das leichtgewichtig)."""
+    with _lock:
+        return {"stance": _expr["stance"], "gesture": _expr["gesture"],
+                "gesture_id": _expr["gid"], "active": _active}
+
 def _history_window() -> int:
     """Wieviele der letzten Turns ans Modell gesendet werden (Kosten-Hebel: die
     API ist zustandslos, sendet sonst die ganze History pro Turn neu). Storage
@@ -123,6 +149,7 @@ def activate():
         _session_lang = lang
         _history      = deque(prior, maxlen=100)
         _privacy      = notice
+        _expr["stance"] = "idle"; _expr["gesture"] = None   # frisch, keine Alt-Geste
 
 
 def deactivate():
@@ -145,13 +172,22 @@ def push_message(role: str, content: str):
         _history.append({"role": role, "content": content})
 
 
-def respond_stream(user_text: str = None):
+# Nudge-Text (Zielsprache-neutral gehalten, mit chinesischer Anweisung): wird
+# NUR gesendet, nie in der History gespeichert — Sasha hat das ja nicht gesagt.
+_NUDGE_PROMPT = ("（旁白：Sasha 有一会儿没出声了。你可以看看她、招手，或者轻声问一句"
+                 "她在不在——很简短，一句就够。用 express 工具做动作。）")
+
+
+def respond_stream(user_text: str = None, nudge: bool = False):
     """
     Generator: schickt die History (+ optionale neue User-Nachricht) an das
     aufgelöste Backend mit dem Sprach-System-Prompt und den Tutor-Tools.
     Yieldet Token für Token fürs Browser-Streaming.
 
     user_text=None → KI startet das Gespräch (Session-Beginn).
+    nudge=True     → Stille-Anstoß: die KI reagiert von selbst (schauen/winken/
+                     kurz nachfragen). Der Anstoß-Text wird NUR gesendet, nicht
+                     in der History gespeichert.
     """
     if user_text is not None:
         push_message("user", user_text)
@@ -161,6 +197,8 @@ def respond_stream(user_text: str = None):
 
     # Kosten-Hebel: nur die letzten N Turns senden (zustandslose API).
     history = get_history()[-_history_window():]
+    if nudge:
+        history = history + [{"role": "user", "content": _NUDGE_PROMPT}]
     system  = prof["system_prompt"]
 
     # Vokabel-Kontext ans Prompt-Ende hängen: welche Wörter Sasha lernt, damit

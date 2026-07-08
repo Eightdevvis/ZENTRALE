@@ -148,7 +148,29 @@ scripts/tutor_room.py [--url … --speaker N --speed X --mute]`.
   Browser bekommt KEIN Zimmer (kann keinen nativen Prozess starten; text-first
   bleibt).
 - **Offen/Skizze:** Presence-Auto-Öffnen (Sensor → Zimmer auf + Persona spricht
-  an; Andockpunkt `brain.py` `PRESENCE_DETECTED`), Voice, reichere Sprites/Möbel.
+  an; Andockpunkt `brain.py` `PRESENCE_DETECTED`), reichere Sprites/Möbel,
+  eigene Fallback-Aktivitäten (schlafen, malen), auf die sie beim Chillen
+  zurückfällt.
+
+### Eigenleben: Ausdruck + Feedback-Loop (nicht nur ein Chatfenster)
+
+- **Gesagtes verhallt:** die Sprechblase bleibt nicht ewig hängen — sie steht
+  kurz voll (`BUBBLE_LINGER`) und blendet aus (`BUBBLE_FADE`). Unten eine
+  translucente **Verlaufs-Leiste** (Sasha kühl, Persona warm), die lange
+  Antworten umbricht und mit **↑/↓** scrollbar ist — so geht nichts verloren.
+- **Bewegung ist ein KI-Tool, kein Random:** die Persona läuft/pact/sitzt nur,
+  wenn die KI sich selbst ausdrückt. Neues **`express`-Tool** (`core/tutor.py`,
+  Enum: sit/stand/pace/wander/come_closer + wave/nod/look/stretch) → schreibt in
+  `tutor_session._expr` (Haltung + Gesten-Zähler). Das Fenster pollt
+  **`GET /api/tutor/room_state`** (~4 Hz) und animiert; `Persona.set_stance`/
+  `play_gesture`. Der zh-Prompt hat eine kurze chinesische Zeile dazu (gegen
+  echtes qwen verifiziert: Rede bleibt kurz, sie ruft `express` z.B. beim Nudge).
+- **Feedback-Loop (gedeckelt, winzige Kosten):** das Fenster merkt Stille. Nach
+  `NUDGE_AFTER_S` (25 s) EIN Cloud-Anstoß **`POST /api/tutor/nudge`** → die KI
+  reagiert von selbst (schaut/winkt/„在吗？"); der Nudge-Text wird NICHT in der
+  History gespeichert. Danach **chillt** sie (client-seitig, kein weiterer Call);
+  erst nach `CHILL_RECHECK_S` (15 min) ein neuer Versuch. Eingabe von Sasha setzt
+  die Stille-Uhr zurück.
 
 ## Persona-Memory: der Mitbewohner erinnert sich an dich
 

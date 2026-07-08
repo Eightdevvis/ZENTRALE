@@ -129,6 +129,18 @@ def term_list() -> list:
     return [e['word'] for e in entries if e.get('word')]
 
 
+def express(action: str) -> str:
+    """Ausdruck im Zimmer (Haltung/Geste). Reicht die Aktion an tutor_session
+    weiter, das den Zustand fürs Fenster hält. Lazy-Import bricht den Zyklus
+    tutor↔tutor_session. Reine UI-Bewegung — kein Zugriff auf lokale AI."""
+    try:
+        import tutor_session
+        tutor_session.set_expression(action)
+    except Exception:
+        pass
+    return "ok"
+
+
 def get_vocab_stats() -> str:
     """
     Gibt eine kurze Statistik über den Lernfortschritt zurück.
@@ -201,6 +213,26 @@ TUTOR_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name":        "express",
+            "description": "在房间里表达自己（用这个来动，别写成文字）：坐下 sit / 站起 stand / "
+                           "踱步 pace / 走动 wander / 靠近 come_closer；或一个动作：招手 wave / "
+                           "点头 nod / 看着她 look / 伸懒腰 stretch。自然地用，想动就动。",
+            "parameters":  {
+                "type":       "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["sit", "stand", "pace", "wander", "come_closer",
+                                 "wave", "nod", "look", "stretch"],
+                    },
+                },
+                "required": ["action"],
+            },
+        },
+    },
 ]
 
 
@@ -219,6 +251,7 @@ _ALLOWED = {
     "get_testing_vocab":     lambda a: get_testing_vocab(),
     "increment_correct_use": lambda a: increment_correct_use(a.get("word", "")),
     "introduce_new":         lambda a: introduce_new(a.get("word", ""), a.get("pinyin", "")),
+    "express":               lambda a: express(a.get("action", "")),
 }
 
 

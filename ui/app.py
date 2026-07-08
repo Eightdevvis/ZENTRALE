@@ -1459,6 +1459,37 @@ def api_tutor_stop():
     return jsonify({"ok": True})
 
 
+@app.route('/api/tutor/room_state')
+def api_tutor_room_state():
+    """Aktueller Ausdrucks-Zustand der Persona (Haltung/Geste) fuers Zimmer-
+    Fenster. Leichtgewichtig — das Fenster pollt das ein paar Mal pro Sekunde.
+    Die Werte setzt die KI selbst ueber das express-Tool."""
+    return jsonify(tutor_session.room_state())
+
+
+@app.route('/api/tutor/nudge', methods=['POST'])
+def api_tutor_nudge():
+    """Stille-Anstoss: Sasha hat eine Weile nichts gesagt → die Persona reagiert
+    von selbst (schauen/winken/kurz nachfragen). Das Zimmer-Fenster loest das
+    gedeckelt aus (einmal, dann Ruhe; alle ~15 min erneut). Streamt wie /respond;
+    der Anstoss-Text wird NICHT in der History gespeichert."""
+    if not tutor_session.available():
+        return _tutor_unavail()
+    if not tutor_session.is_active():
+        return jsonify({"error": "Keine aktive Tutor-Session"}), 400
+
+    def generate():
+        for token in tutor_session.respond_stream(nudge=True):
+            yield f"data: {json.dumps({'token': token})}\n\n"
+        yield f"data: {json.dumps({'done': True})}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        content_type='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
+
+
 # ── Mail-Triage (read-only Panel + expliziter Live-Poll) ────────────────
 # Das Panel selbst ist KEY-FREI: Kategorie-Übersicht + Mails lesen nur den
 # lokalen Triage-Stand (data/mail_state.json, unverschlüsselt). Die Passphrase
