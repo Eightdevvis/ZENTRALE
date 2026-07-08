@@ -95,6 +95,37 @@ Status und lässt die Persona **sofort** loslegen, wenn das Backend da ist und
 keine Session läuft. Der Browser (`monolith.html`) startet über `Alt+T` schon
 immer direkt. `/api/tutor/config` liefert jetzt `persona_name`/`country` fürs UI.
 
+## Persona-Zimmer (natives pygame-Fenster)
+
+Der Tutor ist keine Chat-Box, sondern eine Person — sie **wohnt** in einem
+gezeichneten Wohnzimmer: **`scripts/tutor_room.py`** (pygame, wie
+`scripts/map_window.py`). Aus dem Tutor-Panel per **`/room`** (`/fenster`/
+`/zimmer`) geöffnet → `zentrale_tui.tutor_window()` startet es **detached**
+(DISPLAY-Check, Single-Instance über `TUTOR['proc']`, Fehler nach
+`/tmp/zentrale-tutor-room.log`) und reicht `BASE_URL` mit (findet auch vom Laptop
+via `zentrale-remote` ans PC-Backend). Standalone: `venv/bin/python
+scripts/tutor_room.py [--url …]`.
+
+- **Szene:** Wand + Dielenboden, Nachtfenster mit Mond, Stehlampe mit Glühen,
+  Couch, Teppich, Pflanze — warme Palette (bewusst anders als die Karte).
+- **Persona-Sprite** (`Persona`-Klasse, aus pygame-Primitiven, kein Sprite-Sheet):
+  läuft rum, **sitzt sich auf die Couch**, blinzelt; kleine Verhaltens-Maschine
+  (idle → schlendern → sitzen → aufstehen). Redet sie (SSE läuft), nickt sie
+  zugewandt mit Mund-Animation.
+- **Warum das Rezept stabil bleibt gilt auch hier:** kurze Mandarin-Antworten
+  passen in die Sprechblase; nichts am Prompt/Temperatur geändert.
+- **Wovon es lebt:** rein Renderer + Client. Session/Sprache/Persona/Memory liegen
+  im Backend; das Fenster spricht `/api/tutor/{status,config,start,respond}` und
+  streamt die Antwort als SSE in eine **Sprechblase** (CJK-Font `notosanscjksc`).
+  Beim Öffnen begrüßt die Persona von selbst (wenn Backend da + keine Session).
+  Eingabe: tippen + Enter (auch IME/Unicode), Esc schließt. Backend weg → `zzz…`.
+- **Wand-tauglich:** natives Fenster, stapelt sich übers Wand-TUI (Deployment
+  startet die Kiosk-TUI `-maximized`, damit solche Fenster oben liegen). Der
+  Browser bekommt KEIN Zimmer (kann keinen nativen Prozess starten; text-first
+  bleibt).
+- **Offen/Skizze:** Presence-Auto-Öffnen (Sensor → Zimmer auf + Persona spricht
+  an; Andockpunkt `brain.py` `PRESENCE_DETECTED`), Voice, reichere Sprites/Möbel.
+
 ## Persona-Memory: der Mitbewohner erinnert sich an dich
 
 Jede Persona hat ein **eigenes Gedächtnis**, getrennt von Sashas privatem

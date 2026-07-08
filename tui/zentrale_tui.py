@@ -518,7 +518,7 @@ TUI_KEYS = [
     ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · v Woche/Monat"),
     ("p",   "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
     ("a",   "KI-Chat (Mitte): tippen + enter fragt die lokale KI (PC-Hirn via tunnel) · ↑↓ scrollen · esc zu"),
-    ("u",   "Sprach-Tutor (Mitte): Persona quatscht direkt los · tippen + enter redet · /lang /provider /model /models /tutorstop · esc zu (session bleibt)"),
+    ("u",   "Sprach-Tutor (Mitte): Persona quatscht direkt los · tippen + enter redet · /room = zimmer im eigenen fenster · /lang /provider /model /models /tutorstop · esc zu"),
     ("f",   "Projektansicht (Mitte): top-level projekte, aufklappbar · ↑↓ wählen · enter aufklappen (bis ins kleinste blatt) · space/f als fokus (rendert dann allein in der FOCUS-box) · esc/← zuklappen"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
@@ -1272,7 +1272,7 @@ def run_ui(stdscr, store):
              "streaming": False, "scroll": 0, "session": False, "avail": None,
              "provider": "", "model": "", "lang": "", "lang_name": "",
              "persona_name": "", "country": "",
-             "privacy": None, "msg": "", "loaded": False}
+             "privacy": None, "msg": "", "loaded": False, "proc": None}
     TUTOR_LOCK = threading.Lock()
 
     def tutor_refresh():
@@ -1398,10 +1398,42 @@ def run_ui(stdscr, store):
                          args=(BASE_URL + "/api/tutor/respond", {"text": text}),
                          daemon=True).start()
 
+    def tutor_window():
+        """Das Persona-ZIMMER im NATIVEN Fenster aufklappen (pygame,
+        scripts/tutor_room.py) — wie die Karte per 'w'. Der Tutor ist keine
+        Chat-Box, sondern eine Person: hier wohnt sie, läuft rum, sitzt auf der
+        Couch. Detached gestartet (eigener Prozess), die TUI läuft weiter; das
+        Fenster spricht dieselbe /api/tutor/*-Session. BASE_URL wird mitgereicht,
+        damit es auch vom Laptop (zentrale-remote) ans PC-Backend findet."""
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        py = os.path.join(root, "venv", "bin", "python")
+        script = os.path.join(root, "scripts", "tutor_room.py")
+        if not os.environ.get("DISPLAY"):
+            with TUTOR_LOCK: TUTOR["msg"] = "kein DISPLAY (X11?)"
+            return
+        if not os.path.exists(script):
+            with TUTOR_LOCK: TUTOR["msg"] = "tutor_room.py fehlt"
+            return
+        # Nur EIN Fenster: läuft das vorige noch (poll() is None), kein neues.
+        proc = TUTOR.get("proc")
+        if proc is not None and proc.poll() is None:
+            with TUTOR_LOCK: TUTOR["msg"] = "zimmer läuft schon"
+            return
+        try:
+            room_log = os.environ.get("ZENTRALE_ROOM_WINDOW_LOG") or "/tmp/zentrale-tutor-room.log"
+            errf = open(room_log, "a", encoding="utf-8")
+            TUTOR["proc"] = subprocess.Popen(
+                [py if os.path.exists(py) else sys.executable, script, "--url", BASE_URL],
+                stdout=subprocess.DEVNULL, stderr=errf, start_new_session=True)
+            errf.close()
+            with TUTOR_LOCK: TUTOR["msg"] = "zimmer offen (eigenes fenster)"
+        except Exception as exc:
+            with TUTOR_LOCK: TUTOR["msg"] = "zimmer-start: %s" % exc
+
     def tutor_cmd(buf):
         """Slash-Befehl aus der Tutor-Zeile (Browser-Konsolen-Prinzip). Kennt
-        /tutor(start) /tutorstop /lang /provider /model /models /cloud. Live-
-        Umschalten geht über /api/tutor/config (persist=False = nur laufende
+        /tutor(start) /tutorstop /room /lang /provider /model /models /cloud.
+        Live-Umschalten geht über /api/tutor/config (persist=False = nur laufende
         Instanz, wie im Browser). Alles kurz synchron (ein paar ms) + Refresh."""
         parts = buf[1:].strip().split()
         with TUTOR_LOCK:
@@ -1412,6 +1444,8 @@ def run_ui(stdscr, store):
         arg  = " ".join(parts[1:]).strip()
         if name in ("tutor", "start"):
             tutor_begin(); return
+        if name in ("room", "fenster", "zimmer"):    # Persona-Zimmer nativ öffnen
+            threading.Thread(target=tutor_window, daemon=True).start(); return
         if name in ("tutorstop", "stop"):
             try: api_call("/api/tutor/stop", "POST", {})
             except (urllib.error.URLError, OSError, ValueError): pass
@@ -4812,7 +4846,7 @@ def run_ui(stdscr, store):
                 lines += ai_wrap("ai", answer + ("▌" if streaming else ""), inw)
             if not lines:
                 hint = ((persona or "die persona") + " meldet sich gleich…" if not session else
-                        "tippen + enter · /lang /provider /model /models /tutorstop")
+                        "tippen + enter · /room = eigenes fenster · /lang /provider /model /tutorstop")
                 addclip(body_top + rows // 2, inx, hint[:inw], inw, C["faint"])
             else:
                 total = len(lines)
