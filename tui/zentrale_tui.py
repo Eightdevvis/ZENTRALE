@@ -512,14 +512,14 @@ TUI_KEYS = [
     ("q",   "beenden"),
     ("t",   "Theme wechseln (auto/hell/dunkel)"),
     ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
-    ("l",   "Listen (Mitte): anlegen · einträge abhaken (space) / löschen · p als projekt rechts"),
+    ("l",   "Listen/Fokus (Mitte): oben projekte, drunter alle listen · enter reindiven · a/s neu · space abhaken · r name · d weg · p projekt · f fokus · m/> verschieben (auch 'f')"),
     ("n",   "Notizen (Mitte): freie notiz aus blöcken · ↑↓ block · t/l/f text/liste/float · e bearbeiten · d weg (fragt bei inhalt) · r titel · n übersicht · esc speichern & zu"),
     ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Handelsrouten · w=Fenster"),
     ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · v Woche/Monat"),
     ("p",   "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
     ("a",   "KI-Chat (Mitte): tippen + enter fragt die lokale KI (PC-Hirn via tunnel) · ↑↓ scrollen · esc zu"),
     ("u",   "Persona-Zimmer (eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · ohne DISPLAY → text-panel · /tutor = text-panel"),
-    ("f",   "Projektansicht (Mitte): top-level projekte, aufklappbar · ↑↓ wählen · enter aufklappen (bis ins kleinste blatt) · space/f als fokus (rendert dann allein in der FOCUS-box) · esc/← zuklappen"),
+    ("f",   "Listen/Fokus (Mitte): gleiches werkzeug wie 'l' · f setzt den gewählten knoten als alleinigen fokus (rendert dann allein in der FOCUS-box)"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
@@ -531,13 +531,9 @@ TUI_KEYS = [
 # current_ctx(); Reihenfolge spiegelt die alten Fußzeilen.
 CTX_KEYS = {
     "home": [
-        ("l", "listen"), ("n", "notizen"), ("g", "graph"), ("m", "karte"),
+        ("l/f", "listen · fokus"), ("n", "notizen"), ("g", "graph"), ("m", "karte"),
         ("c", "kalender"), ("p", "post / mail"), ("a", "ki-chat"),
-        ("u", "tutor"), ("f", "projekte"), ("t", "theme"), ("q", "beenden"),
-    ],
-    "projects": [
-        ("↑↓", "wählen"), ("enter", "aufklappen"), ("space/f", "fokus"),
-        ("esc/←", "zuklappen / zu"),
+        ("u", "tutor"), ("t", "theme"), ("q", "beenden"),
     ],
     "note:edit": [
         ("↑↓", "block wählen"), ("t/l/f", "neu: text/liste/float"),
@@ -563,14 +559,14 @@ CTX_KEYS = {
         ("n", "neu"), ("p", "~vorhersage"), ("r", "reminder"),
         ("d", "löschen"), ("esc", "zu"),
     ],
-    "list:list": [
-        ("enter", "öffnen"), ("n", "neu"), ("s", "kind"),
-        ("r", "name"), ("p", "projekt"), (">", "einordnen"),
-        ("d", "weg"), ("esc", "zu"),
+    "list:forest": [
+        ("↑↓", "wählen"), ("enter", "rein / hak"), ("s", "rein+neu"),
+        ("n", "neue liste"), ("f", "fokus"), ("r", "name"), ("p", "projekt"),
+        ("m/>", "verschieben"), ("d", "weg"), ("esc/l", "zu"),
     ],
     "list:view": [
         ("enter", "rein / hak"), ("space", "hak"), ("a/s", "neu"),
-        ("r", "name"), ("p", "projekt"), (">", "einordnen"),
+        ("r", "name"), ("p", "projekt"), ("f", "fokus"), (">", "einordnen"),
         ("m", "raus"), ("d", "weg"), ("esc", "zurück"),
     ],
     "list:pick": [
@@ -613,12 +609,12 @@ CTX_KEYS = {
     ],
 }
 CTX_TITLES = {
-    "home": "start", "graph": "graph", "list:list": "listen",
+    "home": "start", "graph": "graph", "list:forest": "listen · fokus",
     "list:view": "liste", "list:pick": "einordnen", "map": "karte",
     "cal:week": "kalender · woche", "cal:month": "kalender · monat",
     "cal:list": "kalender · liste", "cal:sort": "kalender · sortieren",
     "mail:cats": "post", "mail:list": "post · liste", "mail:read": "post · lesen",
-    "ai": "ki-chat", "tutor": "tutor", "projects": "projekte",
+    "ai": "ki-chat", "tutor": "tutor",
     "note:edit": "notiz", "note:list": "notizen",
 }
 
@@ -956,7 +952,22 @@ def run_ui(stdscr, store):
     # anklickbare Zeile (Enter = reingehen), kein aufgeklappter Baum. path ist
     # der Drill-Pfad (Eintrags-ids) innerhalb der offenen Liste def; isel zählt
     # die DIREKTEN Kinder der gerade offenen Ebene.
-    L = {"active": False, "view": "list", "lists": [], "sel": 0,
+    # ── Listen-/Fokus-Werkzeug (füllt die MITTE-Box, Taste 'f'/'l') ─────
+    # EIN gemergtes Werkzeug: Look + Reindive-Navigation der früheren
+    # Projektansicht (verschachtelte Kästen + Erfüllungsleisten, proj_render)
+    # PLUS die volle Editier-Macht des alten Listen-Werkzeugs. Die Wurzel
+    # ("forest") ist ZWEIGETEILT: oben die geflaggten Projekte (/api/projects),
+    # eine Trennlinie, drunter alle anderen (Nicht-Projekt-)Listen — beide
+    # top-level, per enter reindivebar. Ab da ist es die normale Ordner-Sicht
+    # einer Liste ("view", def+path). 'f'/space setzt JEDEN Knoten als
+    # alleinigen Fokus (rendert dann allein in der rechten FOCUS-Box).
+    #   view : "forest" (zwei-Zonen-Wurzel) | "view" (in einer Liste) |
+    #          "new" (Liste anlegen/umbenennen) | "place"/"move"/"move_new"
+    #   proots : Projekt-Roots als Deskriptoren [{lid,iid}] (iid None = Liste)
+    #   fsel   : Cursor-Index in der Forest-Wurzel (proots + Nicht-Projekt-Listen)
+    L = {"active": False, "view": "forest", "lists": [], "sel": 0,
+         "proots": [], "fsel": 0,      # Forest-Wurzel: Projekt-Roots + Cursor
+         "fedit": None,                # Deskriptor beim Inline-Umbenennen (forest)
          "def": None, "isel": 0, "path": [], "adding": False, "input": "",
          "msg": "",
          "confirm": False,             # Lösch-Nachfrage für ganze Liste
@@ -987,21 +998,6 @@ def run_ui(stdscr, store):
             "esel": 0, "buf": "",
             "titling": False,
             "scroll": 0, "confirm": False, "bconfirm": False, "msg": ""}
-
-    # ── Projektansicht (füllt die MITTE-Box, Taste 'f') ─────────────────
-    # AUFKLAPP-Navigator: Top-Level-Projekte, alles darunter eingeklappt. enter
-    # klappt einen Knoten auf (Ebene runter, durch die ECHTEN Unterpunkte bis ins
-    # kleinste Blatt — die Klapplogik liegt ÜBER dem Projekt-Flag), esc/← klappt
-    # zu. space/f (oder enter auf einem Blatt) setzt JEDEN Knoten als alleinigen
-    # FOKUS (core/lists set_focus, /api/projects/focus) → die FOCUS-Box zeigt dann
-    # nur ihn. Zwei Quellen: /api/projects = Roots (Einstiegspunkte), /api/lists =
-    # volle Items (Aufklappen + focus-Flags).
-    #   active : Werkzeug hat den Fokus
-    #   roots  : Top-Level-Projekte als Deskriptoren [{lid,iid}]
-    #   lists  : volle Listen-Definitionen (/api/lists) zum Aufklappen
-    #   stack  : aufgeklappter Pfad [{lid,iid}] (leer = Root-Ebene)
-    #   sel    : Cursor-Index in der aktuell offenen Ebene
-    P = {"active": False, "roots": [], "lists": [], "stack": [], "sel": 0, "msg": ""}
 
     # ── Karte (füllt die MITTE-Box, Taste 'm') ──────────────────────────
     # Maps-System Schritt 1: grobe Basiskarte (Küsten 1:110m). Die TUI ist
@@ -1828,23 +1824,12 @@ def run_ui(stdscr, store):
             G["msg"] = "speichern fehlgeschlagen"
 
     def l_load():
-        """Listen-Definitionen (inkl. Einträge) frisch ziehen."""
+        """Listen-Definitionen (inkl. Einträge) UND die Projekt-Roots
+        (/api/projects → obere Forest-Zone) frisch ziehen."""
         try:
             L["lists"] = api_call("/api/lists") or []
         except Exception:
             L["lists"] = []
-        if L["sel"] >= len(L["lists"]):
-            L["sel"] = max(0, len(L["lists"]) - 1)
-
-    # ── Projektansicht: Daten + Drill-Navigation ────────────────────────
-    # Zwei Quellen: /api/projects liefert die TOP-LEVEL-Projekte (welche Knoten
-    # überhaupt Einstiegspunkte sind, geflaggt), /api/lists die VOLLEN Items
-    # (zum Aufklappen bis ins kleinste Blatt + focus-Flags). Ein Knoten wird als
-    # Deskriptor {lid, iid} adressiert (iid None = ganze Liste). P["stack"] ist
-    # der aktuell aufgeklappte Pfad; die angezeigte Ebene sind die Kinder des
-    # obersten Stack-Knotens (bzw. die Roots, wenn der Stack leer ist).
-    def p_load():
-        """Top-Level-Projekte (/api/projects) + volle Listen (/api/lists) ziehen."""
         try:
             pr = api_call("/api/projects") or []
         except Exception:
@@ -1853,22 +1838,23 @@ def run_ui(stdscr, store):
         for r in pr:
             if not isinstance(r, dict):
                 continue
-            lid = r.get("lid") or r.get("id")
-            roots.append({"lid": lid,
-                          "iid": None if r.get("id") == lid else r.get("id")})
-        P["roots"] = roots
-        try:
-            P["lists"] = api_call("/api/lists") or []
-        except Exception:
-            P["lists"] = []
-        p_clamp()
+            plid = r.get("lid") or r.get("id")
+            roots.append({"lid": plid,
+                          "iid": None if r.get("id") == plid else r.get("id")})
+        L["proots"] = roots
+        if L["sel"] >= len(L["lists"]):
+            L["sel"] = max(0, len(L["lists"]) - 1)
+        l_fclamp()
 
-    def p_realnode(desc):
-        """Den echten Listen-/Eintrags-Dict zu einem Deskriptor {lid,iid} finden
-        (aus P['lists']) — oder None. iid None → die ganze Liste."""
+    # ── Forest-Wurzel (zwei Zonen) + Fokus: Deskriptor-Helfer ───────────
+    # Ein Knoten wird als {lid, iid} adressiert (iid None = ganze Liste). Die
+    # Wurzel zeigt oben die Projekt-Roots, unten alle Nicht-Projekt-Listen;
+    # per enter geht es in die normale Ordner-Sicht (def+path) einer Liste.
+    def l_realnode(desc):
+        """Echten Listen-/Eintrags-Dict zu {lid,iid} aus L['lists'] — oder None."""
         if not isinstance(desc, dict):
             return None
-        lst = next((l for l in P["lists"]
+        lst = next((l for l in L["lists"]
                     if isinstance(l, dict) and l.get("id") == desc.get("lid")), None)
         if lst is None:
             return None
@@ -1876,71 +1862,92 @@ def run_ui(stdscr, store):
             return lst
         return l_find_item(lst.get("items"), desc.get("iid"))
 
-    def p_progress(node):
-        """(erledigt, gesamt) eines Knotens über seine Blätter — ein Ordner zählt
-        seine Blätter, ein Blatt zählt als 1 Punkt (wie node_progress im Backend)."""
-        kids = node.get("items")
-        if isinstance(kids, list) and kids:
-            return l_count(kids)
-        return (1 if node.get("done") else 0, 1)
-
-    def p_level():
-        """Deskriptoren [{lid,iid}] der aktuell offenen Ebene: Roots bei leerem
-        Stack, sonst die DIREKTEN Kinder (alle echten Items) des obersten
-        Stack-Knotens. Ins Leere laufender Stack fällt automatisch zurück."""
-        if not P["stack"]:
-            return list(P["roots"])
-        node = p_realnode(P["stack"][-1])
-        if node is None:
-            P["stack"].pop()
-            return p_level()
-        lid = P["stack"][-1]["lid"]
-        return [{"lid": lid, "iid": c.get("id")}
-                for c in (node.get("items") or []) if isinstance(c, dict)]
-
-    def p_view(desc):
-        """Anzeige-Knoten {name,done,total,branch,focus,lid,iid} zu einem
-        Deskriptor — flach (KEINE children), damit proj_render ihn als
-        eingeklappte Zeile zeichnet (▸ wenn er Unterpunkte hat)."""
-        node = p_realnode(desc)
+    def l_desc_view(desc):
+        """Flacher Anzeige-Knoten {name,done,total,branch,focus,project,whole,
+        lid,iid} für proj_render (KEINE children → als eingeklappte Zeile mit
+        Leiste gezeichnet, ▸ wenn er Unterpunkte hätte)."""
+        node = l_realnode(desc)
         if node is None:
             return None
-        d, t = p_progress(node)
         kids = node.get("items")
-        name = node.get("name") if desc.get("iid") is None else node.get("text")
-        return {"lid": desc["lid"], "iid": desc.get("iid"), "name": name,
-                "done": d, "total": t,
+        if isinstance(kids, list) and kids:
+            d, t = l_count(kids)
+        else:
+            d, t = (1 if node.get("done") else 0, 1)
+        whole = desc.get("iid") is None
+        name = node.get("name") if whole else node.get("text")
+        return {"lid": desc["lid"], "iid": desc.get("iid"),
+                "name": str(name or ""), "done": d, "total": t,
                 "branch": bool(isinstance(kids, list) and kids),
-                "focus": bool(node.get("focus"))}
+                "focus": bool(node.get("focus")),
+                "project": bool(node.get("project")), "whole": whole}
 
-    def p_crumb():
-        """Namen der aufgeklappten Knoten (Breadcrumb) für die Kopfzeile."""
-        out = []
-        for f in P["stack"]:
-            node = p_realnode(f)
-            if node is None:
-                break
-            out.append(node.get("name") if f.get("iid") is None else node.get("text"))
-        return out
+    def l_forest_rows():
+        """Zwei-Zonen-Wurzel als (rows, ndiv): oben die Projekt-Roots
+        (/api/projects), dann alle NICHT-projekt-Listen. ndiv = Zahl der
+        Projekt-Zeilen (danach kommt die Trennlinie)."""
+        rows = []
+        for d in L.get("proots") or []:
+            v = l_desc_view(d)
+            if v:
+                rows.append(v)
+        ndiv = len(rows)
+        for l in L["lists"]:
+            if isinstance(l, dict) and not l.get("project"):
+                v = l_desc_view({"lid": l.get("id"), "iid": None})
+                if v:
+                    rows.append(v)
+        return rows, ndiv
 
-    def p_clamp():
-        n = len(p_level())
-        if P["sel"] >= n:
-            P["sel"] = max(0, n - 1)
+    def l_fclamp():
+        rows, _ = l_forest_rows()
+        if L["fsel"] >= len(rows):
+            L["fsel"] = max(0, len(rows) - 1)
 
-    def p_focus_toggle(desc):
+    def l_path_to(items, iid, acc=None):
+        """id-Kette von der Listen-Wurzel bis zu iid (inklusive) — oder None."""
+        if acc is None:
+            acc = []
+        for it in items or []:
+            if not isinstance(it, dict):
+                continue
+            if it.get("id") == iid:
+                return acc + [iid]
+            kids = it.get("items")
+            if isinstance(kids, list) and kids:
+                sub = l_path_to(kids, iid, acc + [it.get("id")])
+                if sub is not None:
+                    return sub
+        return None
+
+    def l_open_desc(desc):
+        """Aus der Forest-Wurzel in einen Knoten reindiven → view='view'.
+        Ganze Liste (iid None) → oberste Ebene; Eintrag → Drill-Pfad zu ihm."""
+        lst = next((l for l in L["lists"]
+                    if isinstance(l, dict) and l.get("id") == desc.get("lid")), None)
+        if lst is None:
+            return
+        L["def"] = lst
+        if desc.get("iid") is None:
+            L["path"] = []
+        else:
+            L["path"] = l_path_to(lst.get("items"), desc["iid"]) or []
+        L["isel"] = 0
+        L["adding"] = False; L["input"] = ""; L["msg"] = ""
+        L["view"] = "view"
+
+    def l_focus_toggle(desc):
         """Den Knoten {lid,iid} als alleinigen Fokus setzen (Toggle,
-        /api/projects/focus) — funktioniert für JEDEN Knoten, auch einen tiefen
-        Unterpunkt ohne eigenes Projekt-Flag."""
+        /api/projects/focus) — für JEDEN Knoten, auch einen tiefen Unterpunkt."""
         body = {"lid": desc["lid"]}
         if desc.get("iid") is not None:
             body["iid"] = desc["iid"]
         try:
             foc = api_call("/api/projects/focus", "POST", body)
-            P["msg"] = ("fokus: " + foc["name"]) if foc else "fokus aus"
+            L["msg"] = ("fokus: " + foc["name"]) if foc else "fokus aus"
         except Exception:
-            P["msg"] = "fokus fehlgeschlagen"
-        p_load()
+            L["msg"] = "fokus fehlgeschlagen"
+        l_load()
 
     def l_flatten(items, depth=0, out=None):
         """Den Eintrags-Baum in eine flache [(item, tiefe), …]-Liste klopfen,
@@ -2064,8 +2071,8 @@ def run_ui(stdscr, store):
             return
         cur = next((x for x in L["lists"] if x.get("id") == L["def"]["id"]), None)
         L["def"] = cur
-        if cur is None:                       # Liste verschwunden → zurück zur Übersicht
-            L["view"] = "list"; L["path"] = []
+        if cur is None:                       # Liste verschwunden → zurück zur Wurzel
+            L["view"] = "forest"; L["path"] = []
             return
         items, _pid, _cr = l_container()      # validiert/kürzt den Drill-Pfad
         if L["isel"] >= len(items):
@@ -2743,20 +2750,34 @@ def run_ui(stdscr, store):
                 addclip(dy + 2, dx + 2, "j/enter = ja · sonst abbrechen", dw - 4, C["faint"])
 
     def draw_list_tool(by, bx, bh, bw):
-        """Inhalt der MITTE-Box, wenn das Listen-Werkzeug Fokus hat."""
+        """Inhalt der MITTE-Box, wenn das Listen-/Fokus-Werkzeug Fokus hat.
+        Gezeichnet wird durchweg im FOCUS-Look (proj_render): jede Zeile =
+        Titel + Erfüllungsleiste (2 Zeilen), ▸ = reindivebar, ◆ = Fokus."""
         ix, iw = bx + 2, bw - 4
         bottom = by + bh - 2          # Hinweiszeile unten in der Box
         if iw < 8:
             return
 
-        if L["view"] == "new":
-            ren = L["lrename"] is not None
-            addclip(by + 1, ix, "LISTE UMBENENNEN" if ren else "NEUE LISTE", iw, C["bright"])
-            addclip(by + 3, ix, "name: " + L["input"] + "_", iw, C["bright"])
-            tip = "enter umbenennen · esc zurück  " if ren else "enter anlegen · esc zurück  "
-            addclip(bottom, ix, (tip + L["msg"]).strip(), iw, C["faint"])
+        def rows_render(nodes, sel_idx, y0, y_max, mark_focus=True):
+            """Flache proj_render-Knoten (2 Zeilen je Eintrag) mit Cursor-Fenster
+            zeichnen. Liefert (nächste_y, wieviele_unten_abgeschnitten)."""
+            if not nodes:
+                return y0, 0
+            per = 2
+            avail = max(1, (y_max - y0 + 1) // per)
+            start = (max(0, min(sel_idx - avail + 1, len(nodes) - avail))
+                     if len(nodes) > avail else 0)
+            sel_node = nodes[sel_idx] if 0 <= sel_idx < len(nodes) else None
+            y = y0
+            for n in nodes[start:start + avail]:
+                if y > y_max:
+                    break
+                y = proj_render(n, ix, y, iw, y_max, sel_node=sel_node,
+                                mark_focus=mark_focus)
+            rest = len(nodes) - (start + avail)
+            return y, max(0, rest)
 
-        elif L["view"] == "view" and L["def"]:
+        if L["view"] == "view" and L["def"]:
             items, _pid, crumbs = l_container()   # NUR die offene Ebene (Ordner-Sicht)
             done, total = l_count(items)
             head = " / ".join(crumbs)             # Breadcrumb: liste / ordner / …
@@ -2765,35 +2786,28 @@ def run_ui(stdscr, store):
             safe_addstr(by + 2, ix, "─" * iw, C["faint"])
             input_row = by + bh - 3
             list_bottom = (input_row - 1) if L["adding"] else bottom
-            yy = by + 3
+            y0 = by + 3
             if not items:
-                addclip(yy, ix, "noch leer — 'a' hängt was an", iw, C["faint"])
+                addclip(y0, ix, "noch leer — 'a' hängt was an", iw, C["faint"])
             else:
-                # Fenster um den Cursor, damit lange Listen scrollen statt abzuschneiden
-                avail = max(1, list_bottom - yy)
-                start = max(0, min(L["isel"] - avail + 1, len(items) - avail)) if len(items) > avail else 0
-                for off, it in enumerate(items[start:start + avail]):
+                # Jeden Eintrag im FOCUS-Look: Titel + Leiste (proj_render).
+                # Blatt = eigene done/1-Leiste, Ordner = Blätter-Fortschritt.
+                nodes = []
+                for it in items:
                     if not isinstance(it, dict):
                         continue
-                    sel = (start + off == L["isel"])
                     kids = it.get("items")
                     folder = isinstance(kids, list) and bool(kids)
-                    done = l_done(it)                 # Ordner: abgeleitet, Blatt: 'done'
-                    box = "[x]" if done else "[ ]"
-                    suffix = ""
-                    if folder:
-                        cd, ct = l_count(kids)        # Ordner-Fortschritt (Blätter)
-                        suffix = "  (%d/%d)" % (cd, ct)
-                    if it.get("project"):             # als Projekt markiert → ◆ (wie Listen)
-                        suffix += " ◆"
-                    mark = "▸ " if folder else "  "   # Ordner = anklickbar (enter rein)
-                    body = "%s%s %s%s" % (mark, box, str(it.get("text") or ""), suffix)
-                    attr = C["faint"] if done else (C["bright"] if sel else C["dim"])
-                    # Cursor-Pfeil immer normal (sichtbar), Inhalt ggf. transparent
-                    # + durchgestrichen wenn erledigt.
-                    addclip(yy, ix, "› " if sel else "  ", 2, C["bright"] if sel else attr)
-                    addclip(yy, ix + 2, body, iw - 2, attr, strike=done)
-                    yy += 1
+                    d, t = l_count(kids) if folder else (1 if it.get("done") else 0, 1)
+                    nm = str(it.get("text") or "")
+                    if it.get("project"):             # als Projekt markiert → ★
+                        nm += " ★"
+                    nodes.append({"name": nm, "branch": folder,
+                                  "focus": bool(it.get("focus")),
+                                  "done": d, "total": t})
+                _, rest = rows_render(nodes, L["isel"], y0, list_bottom)
+                if rest:
+                    safe_addstr(list_bottom, ix + iw - 5, "+%d" % rest, C["faint"])
             if L["adding"]:
                 lbl = {"sub": "unterpunkt", "rename": "umbenennen"}.get(L["imode"], "neu")
                 tip = "enter umbenennen" if L["imode"] == "rename" else "enter anhängen"
@@ -2853,27 +2867,77 @@ def run_ui(stdscr, store):
             addclip(by + 3, ix, "name: " + L["input"] + "_", iw, C["bright"])
             addclip(bottom, ix, ("enter anlegen+verschieben · esc zurück  " + L["msg"]).strip(), iw, C["faint"])
 
-        else:  # "list"
-            addclip(by + 1, ix, "LISTEN", iw, C["bright"])
+        else:  # "forest" — Wurzel: oben Projekte, Trennlinie, unten andere Listen
+            rows, ndiv = l_forest_rows()
+            if L["confirm"]:                       # Lösch-Nachfrage für ganze Liste
+                cur = rows[L["fsel"]] if 0 <= L["fsel"] < len(rows) else None
+                nm = str((cur or {}).get("name") or "?")
+                addclip(by + 1, ix, "LISTE LÖSCHEN", iw, C["bright"])
+                addclip(by + 3, ix, "»%s« wirklich löschen?" % nm[:max(4, iw - 22)],
+                        iw, C["bright"])
+                addclip(by + 5, ix, "j/enter = ja · sonst abbrechen", iw, C["faint"])
+                return
+            addclip(by + 1, ix, "LISTEN · FOKUS", iw, C["bright"])
             safe_addstr(by + 1, bx + bw - 9, "[n neu]", C["acc"])
-            safe_addstr(by + 2, ix, "─" * iw, C["faint"])
-            yy = by + 3
-            if not L["lists"]:
-                addclip(yy, ix, "noch keine — 'n' legt eine an", iw, C["faint"])
+            input_row = by + bh - 3
+            grid_bottom = (input_row - 1) if L["adding"] else bottom
+            if not rows:
+                addclip(by + 3, ix, "noch nichts — 'n' legt eine liste an",
+                        iw, C["faint"])
             else:
-                for i, l in enumerate(L["lists"]):
-                    if yy >= bottom:
-                        break
-                    if not isinstance(l, dict):
+                # Token-Stream: Zonen-Label (1 Zeile) + Knoten (2 Zeilen). Ein
+                # zeilenbasiertes Fenster (auf Token-Grenze eingerastet) hält den
+                # Cursor sichtbar, auch wenn beide Zonen zusammen überlaufen.
+                y0 = by + 2
+                Hh = grid_bottom - y0 + 1
+                seq = []
+                if ndiv:
+                    seq.append(("lbl", "projekte"))
+                for i in range(ndiv):
+                    seq.append(("node", rows[i], i))
+                seq.append(("lbl", "── listen ──" if ndiv else "listen"))
+                for j in range(ndiv, len(rows)):
+                    seq.append(("node", rows[j], j))
+                heights = [2 if t[0] == "node" else 1 for t in seq]
+                starts, acc = [], 0
+                for h in heights:
+                    starts.append(acc); acc += h
+                total_lines = acc
+                sel_line = next((starts[k] for k, t in enumerate(seq)
+                                 if t[0] == "node" and t[2] == L["fsel"]), 0)
+                top_line = 0
+                if total_lines > Hh:
+                    target = max(0, min(sel_line - (Hh - 2), total_lines - Hh))
+                    for s in starts:                    # auf Token-Grenze einrasten
+                        if s <= target:
+                            top_line = s
+                        else:
+                            break
+                sel_node = rows[L["fsel"]] if 0 <= L["fsel"] < len(rows) else None
+                for k, t in enumerate(seq):
+                    ln = starts[k]
+                    if ln + heights[k] - 1 < top_line:  # ganz oberhalb → weg
                         continue
-                    sel = (i == L["sel"])
-                    done, total = l_count(l.get("items"))
-                    proj = "◆" if l.get("project") else " "   # Projekt → rechts in PROJECTS-Box
-                    line = "%s%s %-15s %d/%d" % (
-                        "›" if sel else " ", proj, str(l.get("name") or "")[:15], done, total)
-                    addclip(yy, ix, line, iw, C["bright"] if sel else C["dim"])
-                    yy += 1
-            if L["msg"]:                       # Shortcuts liegen unter '/'; nur Feedback
+                    yy = y0 + (ln - top_line)
+                    if yy > grid_bottom:
+                        break
+                    if t[0] == "lbl":
+                        if t[1]:
+                            addclip(yy, ix, t[1], iw, C["faint"])
+                    else:
+                        proj_render(t[1], ix, yy, iw, grid_bottom,
+                                    sel_node=sel_node, mark_focus=True)
+                if total_lines > top_line + Hh:
+                    safe_addstr(grid_bottom, ix + iw - 5, "+", C["faint"])
+            if L["adding"]:                        # neue Liste / umbenennen tippen
+                lbl = "umbenennen" if L["imode"] == "frename" else "neue liste"
+                tip = ("enter umbenennen" if L["imode"] == "frename"
+                       else "enter anlegen")
+                addclip(input_row, ix, lbl + ": " + L["input"] + "_",
+                        iw, C["bright"])
+                addclip(bottom, ix, (tip + " · esc abbrechen  "
+                                     + L["msg"]).strip(), iw, C["faint"])
+            elif L["msg"]:                     # Shortcuts liegen unter '/'; nur Feedback
                 addclip(bottom, ix, L["msg"], iw, C["faint"])
 
             if L["confirm"] and L["lists"]:        # Mini-Dialog über die Liste legen
@@ -2940,46 +3004,6 @@ def run_ui(stdscr, store):
             safe_addstr(cy, x, "└" + "─" * (w - 2) + "┘", C["faint"])
             return cy + 1
         return y_max + 1                             # abgeschnitten → Schluss
-
-    def draw_projects(by, bx, bh, bw):
-        """Inhalt der MITTE-Box, wenn die Projektansicht Fokus hat. AUFKLAPP-
-        Modell: es wird immer NUR die aktuelle Ebene gezeigt (Roots = Top-Level-
-        Projekte, alles darunter eingeklappt). ↑↓ wählt in der Ebene, enter klappt
-        einen Knoten mit Unterpunkten auf (Ebene runter, bis ins kleinste Blatt),
-        esc/← klappt wieder zu. space/f (oder enter auf einem Blatt) = diesen
-        Knoten als alleinigen Fokus setzen (◆). Jede Zeile im FOCUS-Stil (Titel +
-        Leiste, ▸ = aufklappbar) via proj_render — nur eben eine Ebene."""
-        ix, iw = bx + 2, bw - 4
-        bottom = by + bh - 2
-        if iw < 8:
-            return
-        crumb = p_crumb()
-        addclip(by + 1, ix, " / ".join(["projekte"] + crumb)[:iw], iw, C["faint"])
-        level = p_level()
-        views = [v for v in (p_view(d) for d in level) if v]
-        y0 = by + 3
-        y_max = bottom - (1 if P["msg"] else 0)
-        if not views:
-            msg = ("leer — esc zurück" if P["stack"]
-                   else "keine projekte — im listen-werkzeug 'p' flaggen")
-            addclip(y0, ix, msg, iw, C["faint"])
-        else:
-            sel_node = views[P["sel"]] if 0 <= P["sel"] < len(views) else None
-            # Fenster um den Cursor (jede Zeile ist 2 hoch), damit lange Ebenen scrollen
-            per = 2
-            avail = max(1, (y_max - y0 + 1) // per)
-            start = (max(0, min(P["sel"] - avail + 1, len(views) - avail))
-                     if len(views) > avail else 0)
-            y = y0
-            for v in views[start:start + avail]:
-                if y > y_max:
-                    break
-                y = proj_render(v, ix, y, iw, y_max, sel_node=sel_node, mark_focus=True)
-            if start + avail < len(views):     # Rest passt nicht → ehrlich anzeigen
-                safe_addstr(bottom, ix + iw - 5, "+%d" % (len(views) - start - avail),
-                            C["faint"])
-        if P["msg"]:                       # Shortcuts liegen unter '/'; nur Feedback
-            addclip(bottom, ix, P["msg"], iw, C["faint"])
 
     # ── Notiz-Werkzeug: Daten (über /api/notes) ─────────────────────────
     def n_load_list():
@@ -4885,7 +4909,7 @@ def run_ui(stdscr, store):
         if G["active"]:
             return G["view"] in ("new", "view", "remind")   # Name/Wert/Reminder-Uhrzeit
         if L["active"]:
-            return L["adding"] or L["view"] in ("new", "move_new")
+            return L["adding"] or L["view"] == "move_new"
         if K["active"]:
             # Termin/Routine anlegen+bearbeiten ODER Sidebar-Item neu/umbenennen
             return K["mode"] == "add" or K["linput"] is not None
@@ -4912,15 +4936,13 @@ def run_ui(stdscr, store):
             return "graph" if G["view"] == "list" else None
         if L["active"]:
             v = L["view"]
-            if v == "list":
-                return "list:list"
+            if v == "forest" and not L["adding"] and not L["confirm"]:
+                return "list:forest"
             if v == "view" and not L["adding"]:
                 return "list:view"
             if v in ("place", "move"):
                 return "list:pick"
             return None
-        if P["active"]:
-            return "projects"
         if M["active"]:
             return "map"
         if K["active"]:
@@ -5194,17 +5216,55 @@ def run_ui(stdscr, store):
                     elif (48 <= ch <= 57 or ch == ord(":")) and len(G[cur]) < 5:
                         G[cur] += chr(ch)
         elif L["active"]:                      # Listen-Werkzeug hat den Fokus
-            if L["view"] == "list":
-                if L["confirm"]:                              # Lösch-Nachfrage offen
+            if L["view"] == "forest":
+                # Zwei-Zonen-Wurzel: oben Projekte, unten andere Listen. cur =
+                # gewählter Deskriptor {lid,iid,branch,whole,…}.
+                rows, _ndiv = l_forest_rows()
+                cur = rows[L["fsel"]] if 0 <= L["fsel"] < len(rows) else None
+                enter = ch in (10, 13, curses.KEY_ENTER)
+                if L["adding"]:                               # neue Liste / umbenennen tippen
+                    if ch == 27:
+                        L["adding"] = False; L["imode"] = "add"
+                        L["fedit"] = None; L["input"] = ""; L["msg"] = ""
+                    elif enter:
+                        txt = L["input"].strip()
+                        if not txt:
+                            L["msg"] = "name fehlt"
+                        elif L["imode"] == "frename" and L["fedit"] is not None:
+                            d = L["fedit"]
+                            try:
+                                if d.get("iid") is None:
+                                    api_call("/api/lists/%s/rename" % d["lid"], method="POST",
+                                             body={"name": txt})
+                                else:
+                                    api_call("/api/lists/%s/items/%d/rename" % (d["lid"], d["iid"]),
+                                             method="POST", body={"text": txt})
+                                L["msg"] = "umbenannt"
+                            except Exception:
+                                L["msg"] = "umbenennen fehlgeschlagen"
+                            L["adding"] = False; L["imode"] = "add"
+                            L["fedit"] = None; L["input"] = ""; l_load()
+                        else:                                 # neue Liste anlegen
+                            try:
+                                api_call("/api/lists", method="POST", body={"name": txt})
+                                L["msg"] = "angelegt: " + txt
+                            except Exception:
+                                L["msg"] = "anlegen fehlgeschlagen"
+                            L["adding"] = False; L["input"] = ""; l_load()
+                    elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                        L["input"] = L["input"][:-1]
+                    elif 32 <= ch <= 126 and len(L["input"]) < 80:
+                        L["input"] += chr(ch)
+                elif L["confirm"]:                            # Liste löschen? (Nachfrage)
                     if ch in (ord("y"), ord("Y"), ord("j"), ord("J"),
                               10, 13, curses.KEY_ENTER):
-                        try:
-                            api_call("/api/lists/" + L["lists"][L["sel"]]["id"], method="DELETE")
-                            L["msg"] = "gelöscht"
-                        except Exception:
-                            L["msg"] = "löschen fehlgeschlagen"
-                        L["confirm"] = False
-                        l_load()
+                        if cur and cur.get("iid") is None:
+                            try:
+                                api_call("/api/lists/" + str(cur["lid"]), method="DELETE")
+                                L["msg"] = "gelöscht"
+                            except Exception:
+                                L["msg"] = "löschen fehlgeschlagen"
+                        L["confirm"] = False; l_load()
                     elif ch != -1:                            # alles andere → abbrechen
                         L["confirm"] = False; L["msg"] = ""
                 elif ch in (27, ord("l"), ord("L")):           # Esc/l → Werkzeug zu
@@ -5212,72 +5272,85 @@ def run_ui(stdscr, store):
                 elif ch in (ord("q"), ord("Q")):               # q → ganze TUI beenden
                     break
                 elif ch in (curses.KEY_UP, ord("k")):
-                    L["sel"] = max(0, L["sel"] - 1)
+                    if rows:
+                        L["fsel"] = (L["fsel"] - 1) % len(rows)
                 elif ch in (curses.KEY_DOWN, ord("j")):
-                    L["sel"] = min(max(0, len(L["lists"]) - 1), L["sel"] + 1)
-                elif ch in (10, 13, curses.KEY_ENTER):
-                    if L["lists"]:
-                        L["def"] = L["lists"][L["sel"]]; L["isel"] = 0
-                        L["path"] = []            # frisch auf oberster Ebene
-                        L["adding"] = False; L["input"] = ""; L["msg"] = ""
-                        L["view"] = "view"
-                elif ch in (ord("n"), ord("N")):
-                    L["view"] = "new"; L["lrename"] = None; L["input"] = ""; L["msg"] = ""
-                elif ch in (ord("r"), ord("R")):              # gewählte Liste umbenennen
-                    if L["lists"]:
-                        cur = L["lists"][L["sel"]]
-                        L["view"] = "new"; L["lrename"] = cur["id"]
+                    if rows:
+                        L["fsel"] = (L["fsel"] + 1) % len(rows)
+                elif enter or ch == curses.KEY_RIGHT:          # rein / (Blatt) abhaken
+                    if cur:
+                        if cur.get("iid") is None or cur.get("branch"):
+                            l_open_desc(cur)                   # ganze Liste / Ordner → reindiven
+                        else:                                  # Blatt-Eintrag → abhaken
+                            try:
+                                api_call("/api/lists/%s/items/%d/toggle" % (cur["lid"], cur["iid"]),
+                                         method="POST")
+                                l_load()
+                            except Exception:
+                                L["msg"] = "umschalten fehlgeschlagen"
+                elif ch == ord(" "):                           # space: Blatt-Eintrag abhaken
+                    if cur and cur.get("iid") is not None and not cur.get("branch"):
+                        try:
+                            api_call("/api/lists/%s/items/%d/toggle" % (cur["lid"], cur["iid"]),
+                                     method="POST")
+                            l_load()
+                        except Exception:
+                            L["msg"] = "umschalten fehlgeschlagen"
+                elif ch in (ord("f"), ord("F")):               # f: diesen Knoten fokussieren
+                    if cur:
+                        l_focus_toggle(cur)
+                elif ch in (ord("n"), ord("N")):               # neue Liste (inline)
+                    L["adding"] = True; L["imode"] = "newlist"
+                    L["fedit"] = None; L["input"] = ""; L["msg"] = ""
+                elif ch in (ord("r"), ord("R")):               # umbenennen (Liste/Eintrag, inline)
+                    if cur:
+                        L["adding"] = True; L["imode"] = "frename"
+                        L["fedit"] = {"lid": cur["lid"], "iid": cur["iid"]}
                         L["input"] = str(cur.get("name") or ""); L["msg"] = ""
-                elif ch in (ord("d"), ord("D")):
-                    if L["lists"]:
-                        L["confirm"] = True; L["msg"] = ""
-                elif ch == ord(">"):                          # diese Liste in einen Knoten einordnen (Forest-weit)
-                    if L["lists"] and len(L["lists"]) > 1:
-                        L["place_kind"] = "list"
-                        L["place_lid"] = L["lists"][L["sel"]]["id"]
-                        L["place_iid"] = None
-                        L["nsel"] = 0; L["msg"] = ""; L["view"] = "place"
-                elif ch in (ord("s"), ord("S")):              # Kind direkt anhängen (Liste öffnen + Eingabe)
-                    if L["lists"]:
-                        L["def"] = L["lists"][L["sel"]]; L["isel"] = 0; L["path"] = []
-                        L["view"] = "view"; L["adding"] = True; L["imode"] = "add"
+                elif ch in (ord("s"), ord("S")):               # reindiven + gleich anhängen
+                    if cur:
+                        l_open_desc(cur)
+                        L["adding"] = True; L["imode"] = "add"
                         L["addparent"] = None; L["edit_iid"] = None
                         L["input"] = ""; L["msg"] = ""
-                elif ch in (ord("p"), ord("P")):              # als Projekt (rechts) an/aus
-                    if L["lists"]:
-                        cur = L["lists"][L["sel"]]
-                        api_call("/api/lists/%s/project" % cur["id"], method="POST",
-                                 body={"project": not cur.get("project")})
-                        l_load()
-            elif L["view"] == "new":
-                if ch == 27:
-                    L["view"] = "list"; L["lrename"] = None; L["msg"] = ""
-                elif ch in (10, 13, curses.KEY_ENTER):
-                    name = L["input"].strip()
-                    if not name:
-                        L["msg"] = "name fehlt"
-                    elif L["lrename"] is not None:             # bestehende Liste umbenennen
+                elif ch in (ord("d"), ord("D")):               # löschen (Liste → Nachfrage, Eintrag direkt)
+                    if cur and cur.get("iid") is None:
+                        L["confirm"] = True; L["msg"] = ""
+                    elif cur:
                         try:
-                            api_call("/api/lists/%s/rename" % L["lrename"], method="POST",
-                                     body={"name": name})
-                            L["view"] = "list"; L["lrename"] = None
-                            L["msg"] = "umbenannt"; l_load()
-                        except Exception:
-                            L["msg"] = "umbenennen fehlgeschlagen"
-                    else:
-                        try:
-                            l = api_call("/api/lists", method="POST", body={"name": name})
+                            api_call("/api/lists/%s/items/%d" % (cur["lid"], cur["iid"]),
+                                     method="DELETE")
                             l_load()
-                            for i, x in enumerate(L["lists"]):
-                                if l and x["id"] == l.get("id"):
-                                    L["sel"] = i
-                            L["view"] = "list"; L["msg"] = "angelegt: " + name
                         except Exception:
-                            L["msg"] = "anlegen fehlgeschlagen"
-                elif ch in (curses.KEY_BACKSPACE, 127, 8):
-                    L["input"] = L["input"][:-1]
-                elif 32 <= ch <= 126 and len(L["input"]) < 40:
-                    L["input"] += chr(ch)
+                            L["msg"] = "löschen fehlgeschlagen"
+                elif ch in (ord("p"), ord("P")):               # Projekt-Flag an/aus (schiebt in obere Zone)
+                    if cur:
+                        node = l_realnode(cur)
+                        on = not (node.get("project") if node else False)
+                        try:
+                            if cur.get("iid") is None:
+                                api_call("/api/lists/%s/project" % cur["lid"], method="POST",
+                                         body={"project": on})
+                            else:
+                                api_call("/api/lists/%s/items/%d/project" % (cur["lid"], cur["iid"]),
+                                         method="POST", body={"project": on})
+                            l_load()
+                        except Exception:
+                            L["msg"] = "projekt fehlgeschlagen"
+                elif ch in (ord("m"), ord("M")):               # Eintrag in andere Liste verschieben
+                    if cur and cur.get("iid") is not None:
+                        L["def"] = next((l for l in L["lists"]
+                                         if isinstance(l, dict) and l.get("id") == cur["lid"]), None)
+                        if L["def"] and l_move_targets():
+                            L["move_iid"] = cur["iid"]; L["nsel"] = 0
+                            L["msg"] = ""; L["view"] = "move"
+                        else:
+                            L["msg"] = "keine andere liste"
+                elif ch == ord(">"):                           # Forest-weit einordnen (Liste/Eintrag)
+                    if cur:
+                        L["place_kind"] = "item" if cur.get("iid") is not None else "list"
+                        L["place_lid"] = cur["lid"]; L["place_iid"] = cur.get("iid")
+                        L["nsel"] = 0; L["msg"] = ""; L["view"] = "place"
             elif L["view"] == "view":
                 lid = L["def"]["id"] if L["def"] else None
                 if L["adding"]:                               # Eintrag tippen (neu/sub/umbenennen)
@@ -5336,14 +5409,14 @@ def run_ui(stdscr, store):
                 else:
                     items, pid, _cr = l_container()      # nur die offene Ebene
                     cur = items[L["isel"]] if 0 <= L["isel"] < len(items) else None
-                    if ch in (27, ord("l"), ord("L")):         # Esc/l → Ebene zurück, sonst Übersicht
+                    if ch in (27, ord("l"), ord("L")):         # Esc/l → Ebene zurück, sonst Wurzel
                         if L["path"]:
                             back = L["path"][-1]
                             L["path"] = L["path"][:-1]
                             L["isel"] = l_index_in_container(back)
                             L["msg"] = ""
                         else:
-                            L["view"] = "list"; L["msg"] = ""; l_load()
+                            L["view"] = "forest"; L["msg"] = ""; l_load()
                     elif ch in (ord("q"), ord("Q")):           # q → ganze TUI beenden
                         break
                     elif ch in (curses.KEY_UP, ord("k")):
@@ -5413,9 +5486,13 @@ def run_ui(stdscr, store):
                                 l_load(); l_sync_def()
                             except Exception:
                                 L["msg"] = "löschen fehlgeschlagen"
+                    elif ch in (ord("f"), ord("F")):           # diesen Eintrag fokussieren
+                        if cur and lid:
+                            l_focus_toggle({"lid": lid, "iid": cur["id"]})
+                            l_sync_def()
             elif L["view"] == "place":         # Knoten (Liste/Eintrag) Forest-weit einordnen
                 tg = l_forest_targets(L["place_kind"], L["place_lid"], L["place_iid"])
-                back = "view" if L["place_kind"] == "item" else "list"
+                back = "view" if L["place_kind"] == "item" else "forest"
                 if ch in (27, ord("l"), ord("L")):             # Esc/l → abbrechen
                     L["view"] = back; L["place_iid"] = None; L["msg"] = ""
                 elif ch in (ord("q"), ord("Q")):               # q → ganze TUI beenden
@@ -5490,34 +5567,6 @@ def run_ui(stdscr, store):
                     L["input"] = L["input"][:-1]
                 elif 32 <= ch <= 126 and len(L["input"]) < 40:
                     L["input"] += chr(ch)
-        elif P["active"]:                      # Projektansicht hat den Fokus
-            level = p_level()
-            if ch == 27:                                # Esc: aufklappung zu, Root → zu
-                if P["stack"]:
-                    P["stack"].pop(); P["sel"] = 0; P["msg"] = ""; p_clamp()
-                else:
-                    P["active"] = False; P["msg"] = ""
-            elif ch in (curses.KEY_UP, ord("k")):
-                if level:
-                    P["sel"] = (P["sel"] - 1) % len(level)
-            elif ch in (curses.KEY_DOWN, ord("j")):
-                if level:
-                    P["sel"] = (P["sel"] + 1) % len(level)
-            elif ch in (10, 13, curses.KEY_ENTER, curses.KEY_RIGHT):
-                # Enter/→: Knoten mit Unterpunkten AUFKLAPPEN; Blatt → Fokus setzen
-                if level and 0 <= P["sel"] < len(level):
-                    desc = level[P["sel"]]
-                    node = p_realnode(desc)
-                    if node is not None and node.get("items"):
-                        P["stack"].append(desc); P["sel"] = 0; P["msg"] = ""
-                    else:
-                        p_focus_toggle(desc)
-            elif ch in (curses.KEY_LEFT, ord("h")):     # ←: eine Ebene zuklappen
-                if P["stack"]:
-                    P["stack"].pop(); P["sel"] = 0; P["msg"] = ""; p_clamp()
-            elif ch in (ord(" "), ord("f"), ord("F")):  # space/f: diesen Knoten fokussieren
-                if level and 0 <= P["sel"] < len(level):
-                    p_focus_toggle(level[P["sel"]])
         elif M["active"]:                      # Karte hat den Fokus
             ca = m_alt_arrow(ch)              # Alt+Pfeil? (frisst evtl. Folgebytes)
             if ca in ("up", "down", "left", "right"):
@@ -6197,8 +6246,9 @@ def run_ui(stdscr, store):
             elif ch in (ord("g"), ord("G")):   # Graph-Werkzeug öffnen
                 G["active"] = True; G["view"] = "list"; G["msg"] = ""
                 G["shown"] = set(); G["gscroll"] = 0; g_load()  # übersicht, heute rechts
-            elif ch in (ord("l"), ord("L")):   # Listen-Werkzeug öffnen
-                L["active"] = True; L["view"] = "list"; L["msg"] = ""; l_load()
+            elif ch in (ord("l"), ord("L")):   # Listen-/Fokus-Werkzeug öffnen (Wurzel)
+                L["active"] = True; L["view"] = "forest"; L["fsel"] = 0
+                L["adding"] = False; L["confirm"] = False; L["msg"] = ""; l_load()
             elif ch in (ord("m"), ord("M")):   # Karte öffnen
                 M["active"] = True; M["data"] = None
             elif ch in (ord("c"), ord("C")):   # Kalender öffnen
@@ -6225,9 +6275,9 @@ def run_ui(stdscr, store):
                     threading.Thread(target=tutor_open, daemon=True).start()
             elif ch in (ord("n"), ord("N")):   # Notiz-Werkzeug öffnen (direkt in eine Notiz)
                 NOTE["active"] = True; n_open()
-            elif ch in (ord("f"), ord("F")):   # Projektansicht öffnen (Fokus wählen)
-                P["active"] = True; P["stack"] = []; P["sel"] = 0; P["msg"] = ""
-                p_load()
+            elif ch in (ord("f"), ord("F")):   # Listen-/Fokus-Werkzeug öffnen (gleiches Tool wie 'l')
+                L["active"] = True; L["view"] = "forest"; L["fsel"] = 0
+                L["adding"] = False; L["confirm"] = False; L["msg"] = ""; l_load()
             # '/' wird global oben abgefangen (greift in JEDEM Fenster), darum
             # hier kein eigener Zweig mehr.
         # KEY_RESIZE oder Timeout → einfach neu zeichnen
@@ -6384,11 +6434,8 @@ def run_ui(stdscr, store):
             draw_box(top, mx, body_h, midw, "graph-werkzeug")
             draw_graph_tool(top, mx, body_h, midw, gv_cache)
         elif L["active"]:
-            draw_box(top, mx, body_h, midw, "listen")
+            draw_box(top, mx, body_h, midw, "listen · fokus")
             draw_list_tool(top, mx, body_h, midw)
-        elif P["active"]:
-            draw_box(top, mx, body_h, midw, "projekte")
-            draw_projects(top, mx, body_h, midw)
         elif M["active"]:
             draw_box(top, mx, body_h, midw, "karte · welt")
             draw_map(top, mx, body_h, midw)
@@ -6413,9 +6460,9 @@ def run_ui(stdscr, store):
             draw_box(top, mx, body_h, midw, "mitte")
             cyc = top + body_h // 2
             big = "KASSETTE · TUI"
-            invite = ["g · graph-werkzeug", "l · listen", "n · notizen",
+            invite = ["g · graph-werkzeug", "l / f · listen · fokus", "n · notizen",
                       "m · karte", "c · kalender", "p · post/mail",
-                      "a · ki-chat", "u · tutor", "f · projekte"]
+                      "a · ki-chat", "u · tutor"]
             addclip(cyc - 4, mx + max(1, (midw - len(big)) // 2), big, midw - 2, C["bright"])
             for i, ln in enumerate(invite):
                 addclip(cyc - 2 + i, mx + max(1, (midw - len(ln)) // 2),
