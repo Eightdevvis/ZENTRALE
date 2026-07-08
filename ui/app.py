@@ -1260,7 +1260,12 @@ def api_speak():
 
     Response: audio/wav, oder 503 wenn das Modell fuer die Sprache fehlt.
     """
-    if kassette.ki_aus():
+    # TTS ist LOKALE Synthese (sherpa/Piper) und der Sprach-Tutor laeuft
+    # kapazitaetsbasiert ueber die Cloud – unabhaengig von der lokalen KI-Kassette.
+    # Nur blocken, wenn AUCH der Tutor kein Backend hat; sonst kriegt die Persona-
+    # Stimme keinen Ton, obwohl der Tutor laeuft (verifiziert: /api/speak gab 503
+    # 'KI in dieser Kassette deaktiviert', obwohl der Cloud-Tutor verfuegbar war).
+    if kassette.ki_aus() and not tutor_session.available():
         return _ki_aus()
     body    = request.get_json() or {}
     text    = (body.get('text') or '').strip()

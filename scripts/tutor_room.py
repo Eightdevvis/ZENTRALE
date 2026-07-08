@@ -458,10 +458,21 @@ def main():
     pygame.display.set_caption('ZENTRALE — Persona')
     screen = pygame.display.set_mode((a.w, a.h), pygame.RESIZABLE)
     clock = pygame.time.Clock()
+
+    def set_ime_rect():
+        """SDL/IME sagen, WO die Eingabe ist — sonst dockt das Pinyin-Kandidaten-
+        fenster (ibus/fcitx) nicht an und Mandarin-Eingabe kommt gar nicht an."""
+        try:
+            w, h = screen.get_size()
+            pygame.key.set_text_input_rect(pygame.Rect(14, h - 62, max(60, w - 28), 30))
+        except Exception:
+            pass
+
     try:
-        pygame.key.start_text_input()  # IME/Unicode-Eingabe (auch CJK)
+        pygame.key.start_text_input()  # IME/Unicode-Eingabe (auch CJK) einschalten
     except Exception:
         pass
+    set_ime_rect()
 
     fonts = {'bubble': _font(22), 'hud': _font(16), 'input': _font(20), 'big': _font(26, True)}
     be = Backend(a.url)
@@ -479,6 +490,8 @@ def main():
         'persona': 'Ling Ling',
         'lang': 'zh',          # aus /api/tutor/config (TTS-Sprache)
         'input': '',
+        'compose': '',         # laufende IME-Komposition (Pinyin vor dem Commit)
+        'tts': None,           # Backend-TTS verfügbar? (status['tts'])
         'mute': bool(a.mute),  # Stimme aus (Alt+M togglet)
     }
 
@@ -544,13 +557,26 @@ def main():
         st = be.status()
         with S['lock']:
             S['available'] = bool(st and st.get('available'))
+            S['tts'] = bool(st and st.get('tts'))
             active = bool(st and st.get('active'))
             if st and st.get('privacy_warning'):
                 S['msg'] = st['privacy_warning']
         if S['available'] and not active:
             run_stream('/api/tutor/start', {})
 
+    def watch_status():
+        """Status leichtgewichtig nachpollen — damit avail/tts aktuell bleiben,
+        wenn das Backend oder der TTS-Service später hoch-/runterkommt."""
+        while True:
+            pygame.time.wait(4000)
+            st = be.status()
+            if st is not None:
+                with S['lock']:
+                    S['available'] = bool(st.get('available'))
+                    S['tts'] = bool(st.get('tts'))
+
     threading.Thread(target=kickoff, daemon=True).start()
+    threading.Thread(target=watch_status, daemon=True).start()
 
     def send(text):
         text = text.strip()
@@ -573,10 +599,17 @@ def main():
             elif ev.type == pygame.VIDEORESIZE:
                 screen = pygame.display.set_mode((ev.w, ev.h), pygame.RESIZABLE)
                 persona.layout(ev.w, ev.h)
+                set_ime_rect()
             elif ev.type == pygame.TEXTINPUT:
+                # fertig committeter Text (bei CJK: das gewählte Zeichen)
                 with S['lock']:
+                    S['compose'] = ''
                     if len(S['input']) < 200:
                         S['input'] += ev.text
+            elif ev.type == pygame.TEXTEDITING:
+                # laufende IME-Komposition (Pinyin, noch nicht bestätigt)
+                with S['lock']:
+                    S['compose'] = ev.text
             elif ev.type == pygame.KEYDOWN:
                 if ev.key == pygame.K_ESCAPE:
                     running = False
@@ -599,20 +632,33 @@ def main():
         w, h = screen.get_size()
         persona.layout(w, h)
         with S['lock']:
-            talking = S['streaming'] or S['speaking']
+            streaming = S['streaming']; speaking = S['speaking']
             buf = S['buf']; last = S['last']; msg = S['msg']
             inp = S['input']; avail = S['available']; pname = S['persona']
+            compose = S['compose']; tts_ok = S['tts']
 
+        # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft —
+        # NICHT während der Cloud-Latenz vor dem ersten Token (sonst wackelt der
+        # Mund ins Leere und die Blase poppt erst am Stream-Ende auf).
+        has_text = bool(buf.strip())
+        talking  = (streaming and has_text) or speaking
+        thinking = streaming and not has_text
         persona.update(dt, talking)
 
         # zeichnen
         draw_room(screen, w, h, caret_t)
         persona.draw(screen)
 
-        # Sprechblase: live-Stream, sonst letzte Zeile
-        bubble = buf if (talking or buf) else last
+        # Sprechblase: „…" während des Nachdenkens, dann Live-Stream, dann die
+        # letzte Zeile stehen lassen.
         if avail is False:
-            bubble = ''  # schläft
+            bubble = ''            # schläft
+        elif thinking:
+            bubble = '…'
+        elif has_text:
+            bubble = buf
+        else:
+            bubble = last
         draw_bubble(screen, fonts['bubble'], bubble, persona.x, persona.head_top(), w)
 
         # schläft/nicht erreichbar
@@ -622,15 +668,31 @@ def main():
 
         # HUD: Persona-Name oben, Hinweis/Fehler unten
         screen.blit(fonts['big'].render(pname, True, HUD_FG), (16, 12))
-        hint = msg or ('tippen + Enter zum Reden · Alt+M stumm · Esc schließt' if avail else 'verbinde…')
+        if msg:
+            hint = msg
+        elif avail is False:
+            hint = 'verbinde…'
+        elif avail and not tts_ok:
+            hint = 'tippen + Enter · 🔇 keine Stimme (tts-service aus?) · Esc'
+        else:
+            hint = 'tippen + Enter zum Reden · Alt+M stumm · Esc schließt'
         screen.blit(fonts['hud'].render(hint, True, HUD_DIM), (16, h - 30))
 
-        # Eingabezeile unten
+        # Eingabezeile unten: bestätigter Text + laufende IME-Komposition (Pinyin)
         ih = 34
         pygame.draw.rect(screen, INPUT_BG, (0, h - ih*2, w, ih))
-        caret = '▏' if (caret_t % 1.0) < 0.5 else ' '
-        surf_in = fonts['input'].render(inp + caret, True, INPUT_FG)
-        screen.blit(surf_in, (14, h - ih*2 + 6))
+        iy = h - ih*2 + 6
+        base = fonts['input'].render(inp, True, INPUT_FG)
+        screen.blit(base, (14, iy))
+        xo = 14 + base.get_width()
+        if compose:
+            comp = fonts['input'].render(compose, True, CARET)   # Pinyin-Vorschau
+            pygame.draw.line(screen, CARET, (xo, iy + comp.get_height() - 1),
+                             (xo + comp.get_width(), iy + comp.get_height() - 1), 1)
+            screen.blit(comp, (xo, iy))
+            xo += comp.get_width()
+        if (caret_t % 1.0) < 0.5:
+            screen.blit(fonts['input'].render('▏', True, INPUT_FG), (xo, iy))
 
         pygame.display.flip()
 

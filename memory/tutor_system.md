@@ -116,13 +116,22 @@ scripts/tutor_room.py [--url … --speaker N --speed X --mute]`.
   zugewandt mit Mund-Animation.
 - **Stimme:** nach jeder (kurzen) Antwort holt das Fenster die WAV vom Backend-
   TTS (`POST /api/speak`, `lang` aus der Config → zh = sherpa-onnx
-  `vits-zh-aishell3`) und spielt sie über `pygame.mixer` — **der Mund bewegt sich,
-  solange Audio läuft**. `play_wav` initialisiert den Mixer auf die Sample-Rate der
-  Datei (pygame resampelt nicht). Sprecher/Tempo: `--speaker` (0–173,
-  `TUTOR_TTS_SPEAKER`, Default 66) / `--speed` (`TUTOR_TTS_SPEED`). **Alt+M**
-  schaltet stumm. Kein Audiogerät / TTS-503 → bleibt einfach still (kein Crash).
-  Hinweis: `/api/speak` ist noch über `kassette.ki_aus()` gegated — läuft die
-  lokale KI-Kassette „aus", kommt trotz Cloud-Tutor keine Stimme (offener Punkt).
+  `vits-zh-aishell3`, 8 kHz mono) und spielt sie über `pygame.mixer` — **der Mund
+  bewegt sich, solange Audio läuft**. `play_wav` initialisiert den Mixer auf die
+  Sample-Rate der Datei (pygame resampelt nicht → sonst falsche Tonhöhe). Sprecher/
+  Tempo: `--speaker` (0–173, `TUTOR_TTS_SPEAKER`, Default 66) / `--speed`
+  (`TUTOR_TTS_SPEED`). **Alt+M** schaltet stumm. Kein TTS → das Fenster zeigt
+  ehrlich „🔇 keine Stimme (tts-service aus?)" (aus `status['tts']`, alle 4 s
+  nachgepollt) statt still zu scheitern.
+  - **Damit die Stimme wirklich kommt, muss laufen:** (1) der **`tts_service`**
+    (Port 5051, `venv/bin/python services/tts_service.py`) — er hard-importiert
+    `soundfile`, die zh-Engine braucht `sherpa-onnx` (beide in requirements.txt,
+    auf frischen Maschinen ggf. `pip install -r requirements.txt`); Modell via
+    `services/download_tts_model.py zh`. (2) `/api/speak` war über
+    `kassette.ki_aus()` gegated → **gelockert**: blockt nur noch, wenn AUCH der
+    Tutor kein Backend hat (`kassette.ki_aus() and not tutor_session.available()`),
+    sonst spricht die Cloud-Persona trotz „lokale KI aus". Backend nach dem
+    Update **neu starten**.
 - **Warum das Rezept stabil bleibt gilt auch hier:** kurze Mandarin-Antworten
   passen in Blase UND in einen TTS-Call; nichts am Prompt/Temperatur geändert.
 - **Wovon es lebt:** rein Renderer + Client. Session/Sprache/Persona/Memory liegen
