@@ -37,28 +37,36 @@ def _progress_reporter(label, total_mb_hint=None):
 
 
 def download_zh():
-    """Laedt das KLARE Mandarin-Modell MeloTTS (vits-melo-tts-zh_en, 44.1 kHz)
-    fuer die Tutor-Persona. Das aeltere vits-zh-aishell3 (8 kHz, schwammig) wird
-    nicht mehr geladen — tts_service bevorzugt automatisch MeloTTS, faellt aber
-    auf aishell3 zurueck, falls es noch auf der Platte liegt."""
-    target = os.path.join(MODEL_DIR, "vits-melo-tts-zh_en")
-    if os.path.exists(os.path.join(target, "model.onnx")):
-        print(f"zh: Modell schon vorhanden: {target}")
-        return
-
-    os.makedirs(MODEL_DIR, exist_ok=True)
-    archive = os.path.join(MODEL_DIR, "model_zh.tar.bz2")
-    url     = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-melo-tts-zh_en.tar.bz2"
-
-    print(f"zh: Lade vits-melo-tts-zh_en (44.1kHz, ~200MB) von {url} ...")
-    urllib.request.urlretrieve(url, archive, reporthook=_progress_reporter("zh", 200))
-    print("\nzh: Extrahiere...")
-
+    """Laedt das beste Mandarin-Modell fuer die Tutor-Persona: matcha-icefall-
+    zh-baker (22 kHz, flow-matching, Profi-Frauenstimme, beste Artikulation) +
+    den noetigen Vocoder (vocos-22khz-univ.onnx). tts_service bevorzugt matcha
+    automatisch; MeloTTS/aishell3 bleiben Fallback, falls noch auf der Platte."""
     import tarfile
-    with tarfile.open(archive, 'r:bz2') as tar:
-        tar.extractall(MODEL_DIR)
-    os.remove(archive)
-    print(f"zh: Fertig. {target}")
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    base = "https://github.com/k2-fsa/sherpa-onnx/releases/download"
+
+    target = os.path.join(MODEL_DIR, "matcha-icefall-zh-baker")
+    if os.path.exists(os.path.join(target, "model-steps-3.onnx")):
+        print(f"zh: Modell schon vorhanden: {target}")
+    else:
+        archive = os.path.join(MODEL_DIR, "model_zh.tar.bz2")
+        url = f"{base}/tts-models/matcha-icefall-zh-baker.tar.bz2"
+        print(f"zh: Lade matcha-icefall-zh-baker (22kHz, ~75MB) von {url} ...")
+        urllib.request.urlretrieve(url, archive, reporthook=_progress_reporter("zh", 75))
+        print("\nzh: Extrahiere...")
+        with tarfile.open(archive, 'r:bz2') as tar:
+            tar.extractall(MODEL_DIR)
+        os.remove(archive)
+        print(f"zh: Fertig. {target}")
+
+    voc = os.path.join(MODEL_DIR, "vocos-22khz-univ.onnx")
+    if os.path.exists(voc):
+        print(f"zh: Vocoder schon vorhanden: {voc}")
+    else:
+        url = f"{base}/vocoder-models/vocos-22khz-univ.onnx"
+        print(f"zh: Lade Vocoder vocos-22khz-univ (~54MB) von {url} ...")
+        urllib.request.urlretrieve(url, voc, reporthook=_progress_reporter("zh-vocoder", 54))
+        print(f"\nzh: Vocoder fertig. {voc}")
 
 
 # Welche deutsche Stimme geladen wird – exakt dieselbe Env-Var wie

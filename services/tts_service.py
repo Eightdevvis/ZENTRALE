@@ -70,26 +70,57 @@ DE_VOICE = os.environ.get("PIPER_DE_VOICE", "de_DE-kerstin-low")
 _engines = {}
 
 
+# ── Satzzeichen fuers Sprachenlernen: bessere Prosodie/Pausen ───────────
+# Die zh-Modelle machen Betonung/Pausen an chinesischen Vollbreite-Zeichen
+# (！？。，) — lateinische ! ? , und vor allem …/... verschlucken sie (OOV).
+# Fuer die Artikulation (Sasha lernt) normalisieren wir vor der Synthese.
+_ZH_PUNCT = {'!': '！', '?': '？', ',': '，', ';': '；', ':': '：',
+             '(': '（', ')': '）'}
+
+
+def _normalize_zh_punct(text: str) -> str:
+    text = (text or '').replace('...', '。').replace('…', '。')
+    for a, b in _ZH_PUNCT.items():
+        text = text.replace(a, b)
+    return text
+
+
 # ── Engine: Mandarin via sherpa-onnx ──────────────────────────────────
-# Bevorzugt das KLARERE MeloTTS-Modell (44.1 kHz); aishell3 (nur 8 kHz, klingt
-# schwammig/telefonig) bleibt Fallback. Beide sind vits, aber verschieden
-# konfiguriert: MeloTTS nutzt ein jieba-dict_dir (kein espeak), aishell3 nutzt
-# espeak-ng-data. Modelle via services/download_tts_model.py.
+# Beste Artikulation zuerst: matcha-icefall-zh-baker (22 kHz, flow-matching,
+# Profi-Frauenstimme Baker) → braucht einen Vocoder (vocos-22khz-univ.onnx).
+# Dann MeloTTS (44.1 kHz, vits), zuletzt aishell3 (8 kHz, telefonig). Modelle
+# via services/download_tts_model.py.
 def _try_load_sherpa_zh():
-    """Laedt das beste vorhandene Mandarin-Modell (MeloTTS 44.1kHz bevorzugt,
-    sonst aishell3 8kHz) und registriert die Engine fuer lang='zh'. Stille
-    No-Op, wenn kein Modell oder die Library fehlt."""
+    """Laedt das beste vorhandene Mandarin-Modell (matcha-Baker > MeloTTS >
+    aishell3) und registriert die Engine fuer lang='zh'. Stille No-Op, wenn
+    kein Modell/Vocoder oder die Library fehlt."""
     try:
         import sherpa_onnx
     except ImportError:
         log.error("sherpa-onnx nicht installiert (pip install sherpa-onnx).")
         return
 
-    melo = os.path.join(_DATA_ROOT, 'vits-melo-tts-zh_en')
-    ai3  = os.path.join(_DATA_ROOT, 'vits-zh-aishell3')
+    matcha  = os.path.join(_DATA_ROOT, 'matcha-icefall-zh-baker')
+    vocoder = os.path.join(_DATA_ROOT, 'vocos-22khz-univ.onnx')
+    melo    = os.path.join(_DATA_ROOT, 'vits-melo-tts-zh_en')
+    ai3     = os.path.join(_DATA_ROOT, 'vits-zh-aishell3')
     rule_fsts = ''
+    model_cfg = None
 
-    if os.path.exists(os.path.join(melo, 'model.onnx')):
+    if os.path.exists(os.path.join(matcha, 'model-steps-3.onnx')) and os.path.exists(vocoder):
+        model_dir = matcha
+        mc = sherpa_onnx.OfflineTtsMatchaModelConfig(
+            acoustic_model=os.path.join(matcha, 'model-steps-3.onnx'),
+            vocoder=vocoder,
+            lexicon=os.path.join(matcha, 'lexicon.txt'),
+            tokens=os.path.join(matcha, 'tokens.txt'),
+            dict_dir=os.path.join(matcha, 'dict'),
+        )
+        model_cfg = sherpa_onnx.OfflineTtsModelConfig(matcha=mc, num_threads=2, debug=False)
+        fsts = [os.path.join(matcha, f) for f in ('date.fst', 'phone.fst', 'number.fst')]
+        rule_fsts = ','.join(p for p in fsts if os.path.exists(p))
+        engine_name = "sherpa-onnx / matcha-icefall-zh-baker (22kHz, flow-matching)"
+    elif os.path.exists(os.path.join(melo, 'model.onnx')):
         model_dir = melo
         vits = sherpa_onnx.OfflineTtsVitsModelConfig(
             model=os.path.join(melo, 'model.onnx'),
@@ -97,7 +128,7 @@ def _try_load_sherpa_zh():
             tokens=os.path.join(melo, 'tokens.txt'),
             dict_dir=os.path.join(melo, 'dict'),
         )
-        # optionale Zahl/Datum-Normalisierung, falls die Rule-FSTs dabei sind
+        model_cfg = sherpa_onnx.OfflineTtsModelConfig(vits=vits, num_threads=2, debug=False)
         fsts = [os.path.join(melo, f) for f in ('date.fst', 'phone.fst', 'number.fst')]
         rule_fsts = ','.join(p for p in fsts if os.path.exists(p))
         engine_name = "sherpa-onnx / vits-melo-tts-zh_en (44.1kHz)"
@@ -109,14 +140,14 @@ def _try_load_sherpa_zh():
             tokens=os.path.join(ai3, 'tokens.txt'),
             data_dir=os.path.join(ai3, 'espeak-ng-data'),
         )
+        model_cfg = sherpa_onnx.OfflineTtsModelConfig(vits=vits, num_threads=2, debug=False)
         engine_name = "sherpa-onnx / vits-zh-aishell3 (8kHz)"
     else:
-        log.warning("kein zh-TTS-Modell gefunden (MeloTTS/aishell3). "
+        log.warning("kein zh-TTS-Modell gefunden (matcha/MeloTTS/aishell3). "
                     "'python services/download_tts_model.py zh' ausfuehren.")
         return
 
     try:
-        model_cfg = sherpa_onnx.OfflineTtsModelConfig(vits=vits, num_threads=2, debug=False)
         cfg = sherpa_onnx.OfflineTtsConfig(model=model_cfg, rule_fsts=rule_fsts)
         engine = sherpa_onnx.OfflineTts(cfg)
     except Exception as e:
@@ -126,7 +157,7 @@ def _try_load_sherpa_zh():
     nspk = engine.num_speakers
 
     def speak_zh(text, speed, speaker):
-        # MeloTTS hat 1 Sprecher, aishell3 174. Ungueltige sid → 0 (kein Crash).
+        text = _normalize_zh_punct(text)              # bessere Pausen/Betonung
         sid = speaker if (isinstance(speaker, int) and 0 <= speaker < nspk) else 0
         audio = engine.generate(text, sid=sid, speed=speed)
         return audio.samples, audio.sample_rate

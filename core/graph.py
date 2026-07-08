@@ -618,8 +618,9 @@ def _activated_view(query: str | None, st: _Store,
     with st.lock:
         data = _load_raw(st)
 
+    # Leerer/sparser Graph ist NORMAL (frische Persona, Ollama aus) — kein
+    # Log-Spam dafür. Nur wenn wirklich Kontext AKTIV wird, loggen wir (unten).
     if not data["nodes"]:
-        _log("GRAPH →  leer, kein Kontext")
         return data, [], []
 
     entries: list[str] = []
@@ -632,10 +633,7 @@ def _activated_view(query: str | None, st: _Store,
         entries.append(today)
 
     if not entries:
-        _log(f"GRAPH →  Query '{(query or '')[:40]}': keine Entry-Points")
         return data, [], []
-
-    _log(f"GRAPH →  Entry-Points: {', '.join(entries)}")
 
     activation   = _activate(entries, data, hops=hops)
     sorted_nodes = sorted(activation.items(), key=lambda x: -x[1])[:max_nodes]
