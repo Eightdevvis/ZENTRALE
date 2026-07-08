@@ -65,7 +65,8 @@ Statt der Chat-Zeile steht unten die **Tastenkürzel-Box** (Quelle:
 > zurückholen (das tote `.srow`-CSS steht im Template noch bereit).
 
 - **Mitte:** dieselben Werkzeug-Tabs wie im Monolith — **Graph**, **Kalender**,
-  **Listen**, **Post** (Mail), **Karte** (Globus/Welt) — plus die Animationen.
+  **Fokus** (Listen·Fokus, auch per Taste `f`), **Post** (Mail), **Karte**
+  (Globus/Welt) — plus die Animationen.
   In der **TUI** dieselben Werkzeuge über Tasten (`g`/`c`/`l`/`p`/`m`).
 - **Minimale Boot-Dependencies:** nur `flask` + `python-dateutil` (kein
   Whisper/TTS/sherpa/piper nötig — die Kassette ist KI-frei). Siehe `starten.md`.
@@ -235,6 +236,15 @@ auf. **Projekt-Flag:** `p` schaltet das Projekt-Flag — in der Wurzel für die
 gewählte **Liste** (`POST /api/lists/<lid>/project`) ODER den gewählten
 Projekt-Eintrag, in der view-Ebene für den markierten **Eintrag/Unterordner**
 (`…/items/<iid>/project`); geflaggte wandern in die obere Zone bzw. tragen ein `◆`/`★`.
+
+**Im Canvas (Browser):** dasselbe Werkzeug, aber der Tab heißt **„Fokus"** und ist
+zusätzlich per **Taste `f`** erreichbar (nacktes `f`, wenn kein Eingabefeld
+fokussiert ist → synthetischer Klick auf den Fokus-Tab; `data-ex` bleibt intern
+`listen`). Die Wurzel ist gleich zweigeteilt (Projekte oben, `── listen ──`
+drunter), nur ist die **listen-Zone unten angedockt** (Flex-Feder `.lf-spring` in
+`.lf-root`): die Nicht-Projekt-Listen **füllen sich von unten nach oben** auf,
+Projekte bleiben oben. Reindive per Klick auf eine Zeile, Aktionen (Fokus ◆ /
+Projekt ☆★ / ＋ / ✎ / ✕) als Hover-Icons.
 
 **FOCUS-Box (rechts, alle Fronten):** zwischen `lifestyle` und `outbound` steht
 eine `focus`-Box. Quelle ist der schlanke Endpoint **`/api/projects/focused`**

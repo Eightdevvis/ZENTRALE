@@ -303,6 +303,11 @@
   .lpanel .lf-acts span.on { color: var(--span); }
   .lpanel .lf-newrow { display: flex; gap: 4px; margin-top: 8px; }
   .lpanel .lf-empty { color: var(--faint); padding: 6px 0; }
+  /* Wurzel: Projekte oben, Feder, dann die „listen"-Zone unten angedockt —
+     die Listen füllen sich von unten nach oben auf. */
+  .lpanel .lf-root { display: flex; flex-direction: column; }
+  .lpanel .lf-root .lf-spring { flex: 1 1 auto; min-height: 10px; }
+  .lpanel .lf-root .lf-znlist { flex-shrink: 0; }
 
   /* ── Post-Panel (Mittel-Exhibit „Post") ──────────────────────────── */
   .mpanel .mp-cats, .mpanel .mp-list { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
@@ -569,7 +574,7 @@
               <span class="tab" data-ex="filter">Filter</span>
               <span class="tab" data-ex="graph">Graph</span>
               <span class="tab" data-ex="kalender">Kalender</span>
-              <span class="tab" data-ex="listen">Listen</span>
+              <span class="tab" data-ex="listen">Fokus</span>
               <span class="tab" data-ex="mail">Post</span>
               <span class="tab on" data-ex="auto">Auto</span>
             </div>
@@ -1602,17 +1607,19 @@
           if(!lv.rows.length) h.push('<div class="lf-empty">— leer — unten anhängen</div>');
           else lv.rows.forEach(function(v){ h.push(rowHTML(v)); });
           h.push('</div><div class="lf-newrow"><input id="lf-new" placeholder="neuer punkt …" style="flex:1;min-width:120px"/><button data-additem="1">＋</button></div>');
-        } else {                                               // Wurzel: zwei Zonen
+        } else {                                               // Wurzel: zwei Zonen (listen unten angedockt)
           var f = forestRows();
-          h.push('<div class="lf-tree">');
-          if(!f.rows.length){ h.push('<div class="lf-empty">noch nichts — „＋ liste" legt eine an.</div>'); }
-          else {
-            var proj = f.rows.slice(0,f.ndiv), other = f.rows.slice(f.ndiv);
-            if(proj.length){ h.push('<div class="lf-zone">projekte</div>'); proj.forEach(function(v){ h.push(rowHTML(v)); }); }
-            h.push('<div class="lf-zone">listen</div>');
-            if(other.length) other.forEach(function(v){ h.push(rowHTML(v)); });
-            else h.push('<div class="lf-empty">— keine —</div>');
-          }
+          var proj = f.rows.slice(0,f.ndiv), other = f.rows.slice(f.ndiv);
+          h.push('<div class="lf-tree lf-root">');
+          h.push('<div class="lf-znproj">');                    // Projekte: oben
+          if(proj.length){ h.push('<div class="lf-zone">projekte</div>'); proj.forEach(function(v){ h.push(rowHTML(v)); }); }
+          h.push('</div>');
+          h.push('<div class="lf-spring"></div>');              // Feder drückt die listen nach unten
+          h.push('<div class="lf-znlist">');                    // Nicht-Projekt-Listen: unten, von unten nach oben
+          h.push('<div class="lf-zone">listen</div>');
+          if(other.length) other.forEach(function(v){ h.push(rowHTML(v)); });
+          else h.push('<div class="lf-empty">— keine — „＋ liste" legt eine an.</div>');
+          h.push('</div>');
           h.push('</div><div class="lf-newrow"><button data-newlist="1">＋ liste</button></div>');
         }
         panel.innerHTML = h.join('');
@@ -1908,7 +1915,7 @@
     var listsPanel = document.getElementById('lists-panel');
     var mailPanel = document.getElementById('mail-panel');
     var EX = { mode: 'auto', current: 'gesicht' };
-    var EXNAMES = { gesicht: 'gesicht', torus: 'torus', wuerfel: 'würfel', globus: 'globus', welt: 'weltkarte', filter: 'ascii-filter', graph: 'graph-werkzeug', kalender: 'kalender', listen: 'listen', mail: 'post' };
+    var EXNAMES = { gesicht: 'gesicht', torus: 'torus', wuerfel: 'würfel', globus: 'globus', welt: 'weltkarte', filter: 'ascii-filter', graph: 'graph-werkzeug', kalender: 'kalender', listen: 'fokus', mail: 'post' };
     var fi = 0, gestureLeft = 0, autoT = 0;
     var tabs = document.getElementById('tabs');
     function syncTabs() {
@@ -1930,6 +1937,18 @@
       else if (ex === 'gesicht' && EX.mode === 'manual' && EX.current === 'gesicht') { avatar = (avatar + 1) % people.length; syncTabs(); }
       else if (ex === 'filter' && EX.mode === 'manual' && EX.current === 'filter') { filterColor = !filterColor; _lastFilterKey = ''; }   // Re-Klick: mono↔farbe
       else { EX.mode = 'manual'; gestureLeft = 0; setCurrent(ex); }
+    });
+    // Taste 'f' → Fokus-Werkzeug öffnen. Reuse des Tab-Klicks (feuert beide
+    // Listener: Exhibit-Wechsel + Panel-Load). Nacktes 'f' greift nur, wenn kein
+    // Eingabefeld fokussiert ist (sonst landet es im Chat/Formular) und keine
+    // Modifier gedrückt sind (Alt+… gehört anderen Chords).
+    document.addEventListener('keydown', function (e) {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key !== 'f' && e.key !== 'F') return;
+      var ae = document.activeElement;
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return;
+      var lt = tabs.querySelector('[data-ex="listen"]'); if (!lt) return;
+      e.preventDefault(); lt.click();
     });
 
     // ── KI-Bild-Übernahme (zeige_ascii) ──────────────────────────────────
