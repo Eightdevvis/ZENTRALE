@@ -505,7 +505,7 @@ TUI_COMMANDS = [
     ("/theme", "Theme: auto | hell | dunkel  (auch 't')"),
     ("/cloud", "Cloud-Drossel: on | off  (Datenschutz/Kosten)"),
     ("/local", "Lokale KI drosseln: on | off  (Ollama-Leitung)"),
-    ("/tutor", "Sprach-Tutor öffnen (Mitte, Cloud/Qwen)  (auch 'u')"),
+    ("/tutor", "Sprach-Tutor TEXT-panel (Mitte, Cloud/Qwen); 'u' öffnet das Zimmer-Fenster"),
     ("/quit",  "ZENTRALE-TUI beenden  (auch 'q')"),
 ]
 TUI_KEYS = [
@@ -518,7 +518,7 @@ TUI_KEYS = [
     ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · v Woche/Monat"),
     ("p",   "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
     ("a",   "KI-Chat (Mitte): tippen + enter fragt die lokale KI (PC-Hirn via tunnel) · ↑↓ scrollen · esc zu"),
-    ("u",   "Sprach-Tutor (Mitte): Persona quatscht direkt los · tippen + enter redet · /room = zimmer im eigenen fenster · /lang /provider /model /models /tutorstop · esc zu"),
+    ("u",   "Persona-Zimmer (eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · ohne DISPLAY → text-panel · /tutor = text-panel"),
     ("f",   "Projektansicht (Mitte): top-level projekte, aufklappbar · ↑↓ wählen · enter aufklappen (bis ins kleinste blatt) · space/f als fokus (rendert dann allein in der FOCUS-box) · esc/← zuklappen"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
@@ -6214,9 +6214,15 @@ def run_ui(stdscr, store):
                 AI["active"] = True; AI["scroll"] = 0; AI["msg"] = ""
                 if not AI["loaded"]:           # Verlauf einmal im Hintergrund nachladen
                     threading.Thread(target=ai_load_history, daemon=True).start()
-            elif ch in (ord("u"), ord("U")):   # Sprach-Tutor öffnen — Persona quatscht direkt los
-                TUTOR["active"] = True; TUTOR["scroll"] = 0; TUTOR["msg"] = ""
-                threading.Thread(target=tutor_open, daemon=True).start()
+            elif ch in (ord("u"), ord("U")):   # 'u' öffnet DIREKT das Persona-Zimmer (natives Fenster)
+                if os.environ.get("DISPLAY"):
+                    # kein Umweg mehr über Panel + /room: das Zimmer geht auf, die
+                    # Persona quatscht dort von selbst los (Session startet im Fenster).
+                    threading.Thread(target=tutor_window, daemon=True).start()
+                else:
+                    # kein grafisches Display (headless/ssh) → Text-Panel als Fallback
+                    TUTOR["active"] = True; TUTOR["scroll"] = 0; TUTOR["msg"] = ""
+                    threading.Thread(target=tutor_open, daemon=True).start()
             elif ch in (ord("n"), ord("N")):   # Notiz-Werkzeug öffnen (direkt in eine Notiz)
                 NOTE["active"] = True; n_open()
             elif ch in (ord("f"), ord("F")):   # Projektansicht öffnen (Fokus wählen)

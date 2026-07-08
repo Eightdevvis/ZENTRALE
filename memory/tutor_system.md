@@ -99,12 +99,14 @@ immer direkt. `/api/tutor/config` liefert jetzt `persona_name`/`country` fürs U
 
 Der Tutor ist keine Chat-Box, sondern eine Person — sie **wohnt** in einem
 gezeichneten Wohnzimmer: **`scripts/tutor_room.py`** (pygame, wie
-`scripts/map_window.py`). Aus dem Tutor-Panel per **`/room`** (`/fenster`/
-`/zimmer`) geöffnet → `zentrale_tui.tutor_window()` startet es **detached**
-(DISPLAY-Check, Single-Instance über `TUTOR['proc']`, Fehler nach
-`/tmp/zentrale-tutor-room.log`) und reicht `BASE_URL` mit (findet auch vom Laptop
-via `zentrale-remote` ans PC-Backend). Standalone: `venv/bin/python
-scripts/tutor_room.py [--url …]`.
+`scripts/map_window.py`). **TUI-Taste `u` öffnet DIREKT das Zimmer** (kein Umweg
+über Panel/`/room`); `zentrale_tui.tutor_window()` startet es **detached**
+(Single-Instance über `TUTOR['proc']`, Fehler nach `/tmp/zentrale-tutor-room.log`)
+und reicht `BASE_URL` mit (findet auch vom Laptop via `zentrale-remote` ans PC-
+Backend). **Ohne `DISPLAY`** (headless/ssh) fällt `u` auf das Text-Panel zurück.
+Das **Text-Panel** (Slash-Commands `/lang /provider /cloud …`) gibt's weiter per
+**`/tutor`**; `/room` aus dem Panel geht auch noch. Standalone: `venv/bin/python
+scripts/tutor_room.py [--url … --speaker N --speed X --mute]`.
 
 - **Szene:** Wand + Dielenboden, Nachtfenster mit Mond, Stehlampe mit Glühen,
   Couch, Teppich, Pflanze — warme Palette (bewusst anders als die Karte).
@@ -112,13 +114,23 @@ scripts/tutor_room.py [--url …]`.
   läuft rum, **sitzt sich auf die Couch**, blinzelt; kleine Verhaltens-Maschine
   (idle → schlendern → sitzen → aufstehen). Redet sie (SSE läuft), nickt sie
   zugewandt mit Mund-Animation.
+- **Stimme:** nach jeder (kurzen) Antwort holt das Fenster die WAV vom Backend-
+  TTS (`POST /api/speak`, `lang` aus der Config → zh = sherpa-onnx
+  `vits-zh-aishell3`) und spielt sie über `pygame.mixer` — **der Mund bewegt sich,
+  solange Audio läuft**. `play_wav` initialisiert den Mixer auf die Sample-Rate der
+  Datei (pygame resampelt nicht). Sprecher/Tempo: `--speaker` (0–173,
+  `TUTOR_TTS_SPEAKER`, Default 66) / `--speed` (`TUTOR_TTS_SPEED`). **Alt+M**
+  schaltet stumm. Kein Audiogerät / TTS-503 → bleibt einfach still (kein Crash).
+  Hinweis: `/api/speak` ist noch über `kassette.ki_aus()` gegated — läuft die
+  lokale KI-Kassette „aus", kommt trotz Cloud-Tutor keine Stimme (offener Punkt).
 - **Warum das Rezept stabil bleibt gilt auch hier:** kurze Mandarin-Antworten
-  passen in die Sprechblase; nichts am Prompt/Temperatur geändert.
+  passen in Blase UND in einen TTS-Call; nichts am Prompt/Temperatur geändert.
 - **Wovon es lebt:** rein Renderer + Client. Session/Sprache/Persona/Memory liegen
-  im Backend; das Fenster spricht `/api/tutor/{status,config,start,respond}` und
-  streamt die Antwort als SSE in eine **Sprechblase** (CJK-Font `notosanscjksc`).
-  Beim Öffnen begrüßt die Persona von selbst (wenn Backend da + keine Session).
-  Eingabe: tippen + Enter (auch IME/Unicode), Esc schließt. Backend weg → `zzz…`.
+  im Backend; das Fenster spricht `/api/tutor/{status,config,start,respond}` +
+  `/api/speak` und streamt die Antwort als SSE in eine **Sprechblase** (CJK-Font
+  `notosanscjksc`). Beim Öffnen begrüßt die Persona von selbst (wenn Backend da +
+  keine Session). Eingabe: tippen + Enter (auch IME/Unicode), Esc schließt.
+  Backend weg → `zzz…`.
 - **Wand-tauglich:** natives Fenster, stapelt sich übers Wand-TUI (Deployment
   startet die Kiosk-TUI `-maximized`, damit solche Fenster oben liegen). Der
   Browser bekommt KEIN Zimmer (kann keinen nativen Prozess starten; text-first

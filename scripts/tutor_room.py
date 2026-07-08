@@ -25,6 +25,8 @@
 
 import os
 import sys
+import io
+import wave
 import json
 import math
 import random
@@ -93,6 +95,24 @@ class Backend:
     def config(self):
         return self._get('/api/tutor/config')
 
+    def speak(self, text, lang, speaker, speed):
+        """Text → WAV-Bytes (Backend-TTS, /api/speak). None bei Fehler/503
+        (z.B. Modell fehlt oder KI gedrosselt) — dann bleibt die Persona stumm."""
+        if not text:
+            return None
+        body = json.dumps({'text': text, 'lang': lang,
+                           'speaker': speaker, 'speed': speed}).encode('utf-8')
+        req = urllib.request.Request(
+            self.url + '/api/speak', data=body, method='POST',
+            headers={'Content-Type': 'application/json', 'Accept': 'audio/wav'})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                if r.headers.get('Content-Type', '').startswith('audio'):
+                    return r.read()
+                return None
+        except Exception:
+            return None
+
     def stream(self, path, payload, on_token):
         """POST + SSE lesen (wie die TUI): 'data: {token|done}'. Gibt einen
         Fehlerstring zurück (oder None bei Erfolg)."""
@@ -126,6 +146,30 @@ class Backend:
             if resp is not None:
                 try: resp.close()
                 except OSError: pass
+
+
+# ── Stimme: WAV vom Backend abspielen ────────────────────────────────────────
+_mixer_lock = threading.Lock()
+
+
+def play_wav(wav_bytes):
+    """Spielt WAV-Bytes über pygame.mixer. Initialisiert den Mixer bei Bedarf auf
+    die Sample-Rate der Datei — pygame resampelt NICHT, sonst käme die Stimme
+    zu hoch/tief. Gibt den Channel zurück (zum Busy-Pollen) oder None. Schlägt
+    Audio fehl (kein Gerät, Pi-ALSA), bleibt es still statt zu crashen."""
+    try:
+        with wave.open(io.BytesIO(wav_bytes), 'rb') as wf:
+            fr = wf.getframerate()
+        with _mixer_lock:
+            init = pygame.mixer.get_init()
+            if not init or init[0] != fr:
+                try: pygame.mixer.quit()
+                except Exception: pass
+                pygame.mixer.init(frequency=fr)
+            snd = pygame.mixer.Sound(io.BytesIO(wav_bytes))
+            return snd.play()
+    except Exception:
+        return None
 
 
 # ── Persona-Sprite: läuft, sitzt, blinzelt, redet ────────────────────────────
@@ -404,6 +448,10 @@ def main():
     ap.add_argument('--url', default=os.environ.get('ZENTRALE_URL', 'http://localhost:5000'))
     ap.add_argument('--w', type=int, default=920)
     ap.add_argument('--h', type=int, default=600)
+    # Stimme: Sprecher-ID (vits-zh-aishell3 hat 174 — Wert durchprobieren) + Tempo.
+    ap.add_argument('--speaker', type=int, default=int(os.environ.get('TUTOR_TTS_SPEAKER', '66')))
+    ap.add_argument('--speed', type=float, default=float(os.environ.get('TUTOR_TTS_SPEED', '1.0')))
+    ap.add_argument('--mute', action='store_true', help='ohne Stimme starten')
     a = ap.parse_args()
 
     pygame.init()
@@ -423,17 +471,45 @@ def main():
         'lock': threading.Lock(),
         'busy': False,
         'streaming': False,
+        'speaking': False,     # Audio läuft gerade → Mund bewegt sich
         'buf': '',
         'last': '',            # letzte fertige Zeile (bleibt in der Blase stehen)
         'msg': '',
         'available': None,
         'persona': 'Ling Ling',
+        'lang': 'zh',          # aus /api/tutor/config (TTS-Sprache)
         'input': '',
+        'mute': bool(a.mute),  # Stimme aus (Alt+M togglet)
     }
 
     def on_token(tok):
         with S['lock']:
             S['buf'] += tok
+
+    def speak(text):
+        """Zeile vom Backend synthetisieren (WAV) und abspielen; währenddessen
+        S['speaking'] setzen, damit sich der Mund bewegt. Stumm/kein Audio → egal,
+        die Blase steht ja trotzdem da."""
+        if not text:
+            return
+        with S['lock']:
+            if S['mute']:
+                return
+            lang = S['lang']
+        wav = be.speak(text, lang, a.speaker, a.speed)
+        if not wav:
+            return
+        ch = play_wav(wav)
+        if ch is None:
+            return
+        with S['lock']:
+            S['speaking'] = True
+        try:
+            while ch.get_busy():
+                pygame.time.wait(60)
+        finally:
+            with S['lock']:
+                S['speaking'] = False
 
     def run_stream(path, payload):
         with S['lock']:
@@ -449,16 +525,22 @@ def main():
             S['busy'] = False
             if err:
                 S['msg'] = err
-            if S['buf'].strip():
-                S['last'] = S['buf'].strip()
+            line = S['buf'].strip()
+            if line:
+                S['last'] = line
+        if not err and line:
+            speak(line)   # ihre Stimme (nach dem Stream, Antworten sind kurz)
 
     def kickoff():
         """Status/Config holen; wenn erreichbar und keine Session läuft, die
         Persona von selbst begrüßen lassen (kein Enter — sie quatscht los)."""
         cf = be.config()
-        if cf and cf.get('persona_name'):
+        if cf:
             with S['lock']:
-                S['persona'] = cf['persona_name']
+                if cf.get('persona_name'):
+                    S['persona'] = cf['persona_name']
+                if cf.get('lang'):
+                    S['lang'] = cf['lang']
         st = be.status()
         with S['lock']:
             S['available'] = bool(st and st.get('available'))
@@ -498,6 +580,14 @@ def main():
             elif ev.type == pygame.KEYDOWN:
                 if ev.key == pygame.K_ESCAPE:
                     running = False
+                elif ev.key == pygame.K_m and (ev.mod & pygame.KMOD_ALT):
+                    with S['lock']:
+                        S['mute'] = not S['mute']
+                        muted = S['mute']
+                        S['msg'] = 'stumm' if muted else 'stimme an'
+                    if muted:
+                        try: pygame.mixer.stop()
+                        except Exception: pass
                 elif ev.key == pygame.K_RETURN:
                     with S['lock']:
                         txt = S['input']; S['input'] = ''
@@ -509,7 +599,7 @@ def main():
         w, h = screen.get_size()
         persona.layout(w, h)
         with S['lock']:
-            talking = S['streaming']
+            talking = S['streaming'] or S['speaking']
             buf = S['buf']; last = S['last']; msg = S['msg']
             inp = S['input']; avail = S['available']; pname = S['persona']
 
@@ -532,7 +622,7 @@ def main():
 
         # HUD: Persona-Name oben, Hinweis/Fehler unten
         screen.blit(fonts['big'].render(pname, True, HUD_FG), (16, 12))
-        hint = msg or ('tippen + Enter zum Reden · Esc schließt' if avail else 'verbinde…')
+        hint = msg or ('tippen + Enter zum Reden · Alt+M stumm · Esc schließt' if avail else 'verbinde…')
         screen.blit(fonts['hud'].render(hint, True, HUD_DIM), (16, h - 30))
 
         # Eingabezeile unten
