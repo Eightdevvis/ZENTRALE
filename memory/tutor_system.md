@@ -115,12 +115,15 @@ scripts/tutor_room.py [--url … --speaker N --speed X --mute]`.
   (idle → schlendern → sitzen → aufstehen). Redet sie (SSE läuft), nickt sie
   zugewandt mit Mund-Animation.
 - **Stimme:** nach jeder (kurzen) Antwort holt das Fenster die WAV vom Backend-
-  TTS (`POST /api/speak`, `lang` aus der Config → zh = sherpa-onnx
-  `vits-zh-aishell3`, 8 kHz mono) und spielt sie über `pygame.mixer` — **der Mund
-  bewegt sich, solange Audio läuft**. `play_wav` initialisiert den Mixer auf die
-  Sample-Rate der Datei (pygame resampelt nicht → sonst falsche Tonhöhe). Sprecher/
-  Tempo: `--speaker` (0–173, `TUTOR_TTS_SPEAKER`, Default 66) / `--speed`
-  (`TUTOR_TTS_SPEED`). **Alt+M** schaltet stumm. Kein TTS → das Fenster zeigt
+  TTS (`POST /api/speak`, `lang` aus der Config → zh = sherpa-onnx **MeloTTS
+  `vits-melo-tts-zh_en`, 44.1 kHz** — klar; das alte `vits-zh-aishell3` war nur
+  8 kHz/telefonig und bleibt nur Fallback, `tts_service._try_load_sherpa_zh`
+  bevorzugt MeloTTS) und spielt sie über `pygame.mixer` — **der Mund bewegt sich,
+  solange Audio läuft**. `play_wav` initialisiert den Mixer auf die Sample-Rate der
+  Datei (pygame resampelt nicht → sonst falsche Tonhöhe). Tempo: `--speed`
+  (`TUTOR_TTS_SPEED`). `--speaker` (`TUTOR_TTS_SPEAKER`) greift nur bei Multi-
+  Sprecher-Modellen; MeloTTS hat 1 Sprecher (sid wird sonst auf 0 geklemmt).
+  **Alt+M** schaltet stumm. Kein TTS → das Fenster zeigt
   ehrlich „🔇 keine Stimme (tts-service aus?)" (aus `status['tts']`, alle 4 s
   nachgepollt) statt still zu scheitern.
   - **Damit die Stimme wirklich kommt, muss laufen:** (1) der **`tts_service`**

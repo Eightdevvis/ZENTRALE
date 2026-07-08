@@ -37,18 +37,21 @@ def _progress_reporter(label, total_mb_hint=None):
 
 
 def download_zh():
-    """Laedt vits-zh-aishell3 fuer den Tutor-Modus."""
-    target = os.path.join(MODEL_DIR, "vits-zh-aishell3")
-    if os.path.exists(target):
+    """Laedt das KLARE Mandarin-Modell MeloTTS (vits-melo-tts-zh_en, 44.1 kHz)
+    fuer die Tutor-Persona. Das aeltere vits-zh-aishell3 (8 kHz, schwammig) wird
+    nicht mehr geladen — tts_service bevorzugt automatisch MeloTTS, faellt aber
+    auf aishell3 zurueck, falls es noch auf der Platte liegt."""
+    target = os.path.join(MODEL_DIR, "vits-melo-tts-zh_en")
+    if os.path.exists(os.path.join(target, "model.onnx")):
         print(f"zh: Modell schon vorhanden: {target}")
         return
 
     os.makedirs(MODEL_DIR, exist_ok=True)
     archive = os.path.join(MODEL_DIR, "model_zh.tar.bz2")
-    url     = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-zh-aishell3.tar.bz2"
+    url     = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-melo-tts-zh_en.tar.bz2"
 
-    print(f"zh: Lade vits-zh-aishell3 herunter (~120MB) von {url} ...")
-    urllib.request.urlretrieve(url, archive, reporthook=_progress_reporter("zh", 120))
+    print(f"zh: Lade vits-melo-tts-zh_en (44.1kHz, ~200MB) von {url} ...")
+    urllib.request.urlretrieve(url, archive, reporthook=_progress_reporter("zh", 200))
     print("\nzh: Extrahiere...")
 
     import tarfile

@@ -70,53 +70,72 @@ DE_VOICE = os.environ.get("PIPER_DE_VOICE", "de_DE-kerstin-low")
 _engines = {}
 
 
-# ── Engine: Mandarin via sherpa-onnx (vits-zh-aishell3) ───────────────
+# ── Engine: Mandarin via sherpa-onnx ──────────────────────────────────
+# Bevorzugt das KLARERE MeloTTS-Modell (44.1 kHz); aishell3 (nur 8 kHz, klingt
+# schwammig/telefonig) bleibt Fallback. Beide sind vits, aber verschieden
+# konfiguriert: MeloTTS nutzt ein jieba-dict_dir (kein espeak), aishell3 nutzt
+# espeak-ng-data. Modelle via services/download_tts_model.py.
 def _try_load_sherpa_zh():
-    """Versucht das Mandarin-Modell zu laden und registriert die Engine
-    fuer lang='zh'. Stille No-Op wenn Modell-Datei oder Library fehlen."""
-    model_dir  = os.path.join(_DATA_ROOT, 'vits-zh-aishell3')
-    model_file = os.path.join(model_dir, 'vits-aishell3.onnx')
-    if not os.path.exists(model_file):
-        log.warning(f"sherpa-onnx Modell nicht gefunden: {model_file}")
-        log.warning("Fuer Mandarin: 'python services/download_tts_model.py' ausfuehren.")
-        return
-
+    """Laedt das beste vorhandene Mandarin-Modell (MeloTTS 44.1kHz bevorzugt,
+    sonst aishell3 8kHz) und registriert die Engine fuer lang='zh'. Stille
+    No-Op, wenn kein Modell oder die Library fehlt."""
     try:
         import sherpa_onnx
     except ImportError:
         log.error("sherpa-onnx nicht installiert (pip install sherpa-onnx).")
         return
 
-    try:
-        tts_config = sherpa_onnx.OfflineTtsConfig(
-            model=sherpa_onnx.OfflineTtsModelConfig(
-                vits=sherpa_onnx.OfflineTtsVitsModelConfig(
-                    model=model_file,
-                    lexicon=os.path.join(model_dir, 'lexicon.txt'),
-                    tokens=os.path.join(model_dir, 'tokens.txt'),
-                    data_dir=os.path.join(model_dir, 'espeak-ng-data'),
-                ),
-                num_threads=2,
-                debug=False,
-            ),
+    melo = os.path.join(_DATA_ROOT, 'vits-melo-tts-zh_en')
+    ai3  = os.path.join(_DATA_ROOT, 'vits-zh-aishell3')
+    rule_fsts = ''
+
+    if os.path.exists(os.path.join(melo, 'model.onnx')):
+        model_dir = melo
+        vits = sherpa_onnx.OfflineTtsVitsModelConfig(
+            model=os.path.join(melo, 'model.onnx'),
+            lexicon=os.path.join(melo, 'lexicon.txt'),
+            tokens=os.path.join(melo, 'tokens.txt'),
+            dict_dir=os.path.join(melo, 'dict'),
         )
-        engine = sherpa_onnx.OfflineTts(tts_config)
-    except Exception as e:
-        log.error(f"sherpa-onnx Ladefehler: {e}")
+        # optionale Zahl/Datum-Normalisierung, falls die Rule-FSTs dabei sind
+        fsts = [os.path.join(melo, f) for f in ('date.fst', 'phone.fst', 'number.fst')]
+        rule_fsts = ','.join(p for p in fsts if os.path.exists(p))
+        engine_name = "sherpa-onnx / vits-melo-tts-zh_en (44.1kHz)"
+    elif os.path.exists(os.path.join(ai3, 'vits-aishell3.onnx')):
+        model_dir = ai3
+        vits = sherpa_onnx.OfflineTtsVitsModelConfig(
+            model=os.path.join(ai3, 'vits-aishell3.onnx'),
+            lexicon=os.path.join(ai3, 'lexicon.txt'),
+            tokens=os.path.join(ai3, 'tokens.txt'),
+            data_dir=os.path.join(ai3, 'espeak-ng-data'),
+        )
+        engine_name = "sherpa-onnx / vits-zh-aishell3 (8kHz)"
+    else:
+        log.warning("kein zh-TTS-Modell gefunden (MeloTTS/aishell3). "
+                    "'python services/download_tts_model.py zh' ausfuehren.")
         return
 
+    try:
+        model_cfg = sherpa_onnx.OfflineTtsModelConfig(vits=vits, num_threads=2, debug=False)
+        cfg = sherpa_onnx.OfflineTtsConfig(model=model_cfg, rule_fsts=rule_fsts)
+        engine = sherpa_onnx.OfflineTts(cfg)
+    except Exception as e:
+        log.error(f"sherpa-onnx Ladefehler ({model_dir}): {e}")
+        return
+
+    nspk = engine.num_speakers
+
     def speak_zh(text, speed, speaker):
-        audio = engine.generate(text, sid=speaker, speed=speed)
+        # MeloTTS hat 1 Sprecher, aishell3 174. Ungueltige sid → 0 (kein Crash).
+        sid = speaker if (isinstance(speaker, int) and 0 <= speaker < nspk) else 0
+        audio = engine.generate(text, sid=sid, speed=speed)
         return audio.samples, audio.sample_rate
 
     _engines["zh"] = {
         "speak": speak_zh,
-        "info": {
-            "engine":   "sherpa-onnx / vits-zh-aishell3",
-            "speakers": engine.num_speakers,
-        },
+        "info": {"engine": engine_name, "speakers": nspk},
     }
-    log.info(f"TTS-Engine zh geladen (sherpa-onnx, {engine.num_speakers} Sprecher).")
+    log.info(f"TTS-Engine zh geladen ({engine_name}, {nspk} Sprecher).")
 
 
 # ── Engine: Deutsch via Piper (Voice via PIPER_DE_VOICE env) ──────────
