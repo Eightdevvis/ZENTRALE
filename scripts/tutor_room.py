@@ -68,6 +68,14 @@ HUD_DIM    = (150, 138, 146)
 INPUT_BG   = (40, 33, 42)
 INPUT_FG   = (238, 232, 236)
 CARET      = (226, 150, 150)
+# Verlaufs-Leiste + Rollen
+BAR_BG     = (16, 12, 20, 214)   # translucentes Panel unten
+ROLE_USER  = (150, 200, 230)     # Sasha (kühl)
+ROLE_TUTOR = (240, 202, 172)     # Persona (warm)
+BAR_DIM    = (128, 118, 128)
+# Gesagtes „verhallt": Blase steht kurz voll, dann blendet sie aus.
+BUBBLE_LINGER = 4.0   # s voll sichtbar nach dem Sprechen
+BUBBLE_FADE   = 1.3   # s Ausblenden danach
 
 
 def _font(size, bold=False):
@@ -406,8 +414,9 @@ def draw_room(surf, w, h, t):
         pygame.draw.rect(surf, COUCH_LT, (kx, cy-int(ch*0.1), int(cw*0.16), int(ch*0.4)), border_radius=8)
 
 
-def _wrap(font, text, max_w):
-    """Zeilenumbruch — zeichenweise (CJK hat keine Wort-Grenzen)."""
+def _wrap(font, text, max_w, max_lines=6):
+    """Zeilenumbruch — zeichenweise (CJK hat keine Wort-Grenzen). max_lines=None
+    → kein Limit (für die Verlaufs-Leiste, wo lange Antworten ganz stehen)."""
     lines, cur = [], ''
     for ch in text:
         if ch == '\n':
@@ -418,11 +427,26 @@ def _wrap(font, text, max_w):
             cur += ch
     if cur:
         lines.append(cur)
-    return lines[:6]
+    return lines if max_lines is None else lines[:max_lines]
 
 
-def draw_bubble(surf, font, text, cx, top_y, w):
-    if not text:
+def _transcript_lines(log, persona_name, font, max_w):
+    """Log (Liste von (role, text)) → flache Liste (farbe, zeile) für die
+    Verlaufs-Leiste, umgebrochen; Fortsetzungszeilen leicht eingerückt."""
+    out = []
+    for role, txt in log:
+        who = "Sasha" if role == 'user' else (persona_name or "Ling Ling")
+        col = ROLE_USER if role == 'user' else ROLE_TUTOR
+        wrapped = _wrap(font, f"{who}: {txt}", max_w, max_lines=None)
+        for i, ln in enumerate(wrapped):
+            out.append((col, ln if i == 0 else "  " + ln))
+    return out
+
+
+def draw_bubble(surf, font, text, cx, top_y, w, alpha=255):
+    """Sprechblase über dem Kopf; alpha<255 blendet sie aus (Gesagtes verhallt).
+    Auf eine Temp-Surface gemalt, damit der Alpha gleichmäßig wirkt."""
+    if not text or alpha <= 0:
         return
     max_w = min(int(w*0.5), 420)
     lines = _wrap(font, text, max_w - 28)
@@ -433,13 +457,17 @@ def draw_bubble(surf, font, text, cx, top_y, w):
     by = int(top_y - bh - 16)
     bx = max(8, min(bx, surf.get_width() - bw - 8))
     by = max(8, by)
-    pygame.draw.rect(surf, BUBBLE_BG, (bx, by, bw, bh), border_radius=14)
-    pygame.draw.rect(surf, BUBBLE_BD, (bx, by, bw, bh), 2, border_radius=14)
-    # Schnabel Richtung Kopf
     tipx = int(max(bx+18, min(cx, bx+bw-18)))
-    pygame.draw.polygon(surf, BUBBLE_BG, [(tipx-9, by+bh-2), (tipx+9, by+bh-2), (tipx, by+bh+12)])
+    tmp = pygame.Surface((bw, bh + 14), pygame.SRCALPHA)
+    pygame.draw.rect(tmp, BUBBLE_BG, (0, 0, bw, bh), border_radius=14)
+    pygame.draw.rect(tmp, BUBBLE_BD, (0, 0, bw, bh), 2, border_radius=14)
+    lx = tipx - bx
+    pygame.draw.polygon(tmp, BUBBLE_BG, [(lx-9, bh-2), (lx+9, bh-2), (lx, bh+12)])  # Schnabel
     for i, ln in enumerate(lines):
-        surf.blit(font.render(ln, True, BUBBLE_FG), (bx+14, by+10 + i*lh))
+        tmp.blit(font.render(ln, True, BUBBLE_FG), (14, 10 + i*lh))
+    if alpha < 255:
+        tmp.set_alpha(alpha)
+    surf.blit(tmp, (bx, by))
 
 
 # ── App ──────────────────────────────────────────────────────────────────────
@@ -464,7 +492,7 @@ def main():
         fenster (ibus/fcitx) nicht an und Mandarin-Eingabe kommt gar nicht an."""
         try:
             w, h = screen.get_size()
-            pygame.key.set_text_input_rect(pygame.Rect(14, h - 62, max(60, w - 28), 30))
+            pygame.key.set_text_input_rect(pygame.Rect(14, h - 34, max(60, w - 28), 28))
         except Exception:
             pass
 
@@ -474,7 +502,8 @@ def main():
         pass
     set_ime_rect()
 
-    fonts = {'bubble': _font(22), 'hud': _font(16), 'input': _font(20), 'big': _font(26, True)}
+    fonts = {'bubble': _font(22), 'hud': _font(15), 'input': _font(20),
+             'big': _font(26, True), 'log': _font(18)}
     be = Backend(a.url)
     persona = Persona()
 
@@ -493,7 +522,17 @@ def main():
         'compose': '',         # laufende IME-Komposition (Pinyin vor dem Commit)
         'tts': None,           # Backend-TTS verfügbar? (status['tts'])
         'mute': bool(a.mute),  # Stimme aus (Alt+M togglet)
+        'log': [],             # Verlauf: Liste von (role, text) — 'user' | 'tutor'
+        'scroll': 0,           # Verlaufs-Scroll (0 = neuestes unten)
     }
+
+    def log_add(role, text):
+        text = (text or '').strip()
+        if not text:
+            return
+        with S['lock']:
+            S['log'].append((role, text))
+            S['scroll'] = 0        # bei neuem Eintrag ans neueste springen
 
     def on_token(tok):
         with S['lock']:
@@ -542,7 +581,8 @@ def main():
             if line:
                 S['last'] = line
         if not err and line:
-            speak(line)   # ihre Stimme (nach dem Stream, Antworten sind kurz)
+            log_add('tutor', line)   # in den Verlauf
+            speak(line)              # ihre Stimme (nach dem Stream, Antworten sind kurz)
 
     def kickoff():
         """Status/Config holen; wenn erreichbar und keine Session läuft, die
@@ -585,11 +625,14 @@ def main():
         with S['lock']:
             if S['busy'] or not S['available']:
                 return
+        log_add('user', text)      # in den Verlauf
         threading.Thread(target=run_stream,
                          args=('/api/tutor/respond', {'text': text}), daemon=True).start()
 
     running = True
     caret_t = 0.0
+    bub_text = ''      # aktuell in der Blase stehender Text
+    bub_age  = 999.0   # s seit letztem Sprechen — steuert das Ausblenden
     while running:
         dt = clock.tick(30) / 1000.0
         caret_t += dt
@@ -628,6 +671,12 @@ def main():
                 elif ev.key == pygame.K_BACKSPACE:
                     with S['lock']:
                         S['input'] = S['input'][:-1]
+                elif ev.key in (pygame.K_UP, pygame.K_PAGEUP):
+                    with S['lock']:
+                        S['scroll'] += (3 if ev.key == pygame.K_PAGEUP else 1)
+                elif ev.key in (pygame.K_DOWN, pygame.K_PAGEDOWN):
+                    with S['lock']:
+                        S['scroll'] = max(0, S['scroll'] - (3 if ev.key == pygame.K_PAGEDOWN else 1))
 
         w, h = screen.get_size()
         persona.layout(w, h)
@@ -636,52 +685,85 @@ def main():
             buf = S['buf']; last = S['last']; msg = S['msg']
             inp = S['input']; avail = S['available']; pname = S['persona']
             compose = S['compose']; tts_ok = S['tts']
+            log = list(S['log']); scroll = S['scroll']
 
-        # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft —
-        # NICHT während der Cloud-Latenz vor dem ersten Token (sonst wackelt der
-        # Mund ins Leere und die Blase poppt erst am Stream-Ende auf).
+        # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft.
         has_text = bool(buf.strip())
         talking  = (streaming and has_text) or speaking
         thinking = streaming and not has_text
         persona.update(dt, talking)
 
+        # Gesagtes „verhallt": solange sie redet/denkt bleibt die Blase frisch,
+        # danach altert sie und blendet aus (bub_age). Kein ewiges Herumhängen.
+        if avail is False:
+            cur = ''
+        elif thinking:
+            cur = '…'
+        elif has_text:
+            cur = buf
+        elif streaming or speaking:
+            cur = last
+        else:
+            cur = None            # nichts Aktives mehr
+        if cur:
+            bub_text = cur; bub_age = 0.0
+        elif streaming or speaking:
+            bub_age = 0.0
+        else:
+            bub_age += dt
+
         # zeichnen
         draw_room(screen, w, h, caret_t)
         persona.draw(screen)
 
-        # Sprechblase: „…" während des Nachdenkens, dann Live-Stream, dann die
-        # letzte Zeile stehen lassen.
-        if avail is False:
-            bubble = ''            # schläft
-        elif thinking:
-            bubble = '…'
-        elif has_text:
-            bubble = buf
-        else:
-            bubble = last
-        draw_bubble(screen, fonts['bubble'], bubble, persona.x, persona.head_top(), w)
+        # Blase mit Ausblenden
+        if bub_text and avail is not False and bub_age < BUBBLE_LINGER + BUBBLE_FADE:
+            if bub_age <= BUBBLE_LINGER:
+                alpha = 255
+            else:
+                alpha = int(255 * max(0.0, 1 - (bub_age - BUBBLE_LINGER) / BUBBLE_FADE))
+            draw_bubble(screen, fonts['bubble'], bub_text, persona.x, persona.head_top(), w, alpha)
 
         # schläft/nicht erreichbar
         if avail is False:
             zz = fonts['big'].render('zzz…', True, HUD_DIM)
             screen.blit(zz, (int(persona.x)+18, int(persona.head_top())-10))
 
-        # HUD: Persona-Name oben, Hinweis/Fehler unten
+        # HUD oben: Name + kompakte Steuerung/Meldung (unten ist jetzt die Leiste)
         screen.blit(fonts['big'].render(pname, True, HUD_FG), (16, 12))
         if msg:
             hint = msg
         elif avail is False:
             hint = 'verbinde…'
         elif avail and not tts_ok:
-            hint = 'tippen + Enter · 🔇 keine Stimme (tts-service aus?) · Esc'
+            hint = '🔇 keine Stimme (tts-service aus?)'
         else:
-            hint = 'tippen + Enter zum Reden · Alt+M stumm · Esc schließt'
-        screen.blit(fonts['hud'].render(hint, True, HUD_DIM), (16, h - 30))
+            hint = '↑/↓ Verlauf · Enter reden · Alt+M stumm · Esc'
+        screen.blit(fonts['hud'].render(hint, True, HUD_DIM), (16, 44))
 
-        # Eingabezeile unten: bestätigter Text + laufende IME-Komposition (Pinyin)
-        ih = 34
-        pygame.draw.rect(screen, INPUT_BG, (0, h - ih*2, w, ih))
-        iy = h - ih*2 + 6
+        # ── Verlaufs-Leiste unten (translucent, umbrechend, ↑/↓ scrollt) ────
+        lf = fonts['log']; lh = lf.get_linesize()
+        VIS = 3
+        input_h = 36
+        bar_h = lh * VIS + 10
+        bar_y = h - input_h - bar_h
+        panel = pygame.Surface((w, bar_h), pygame.SRCALPHA); panel.fill(BAR_BG)
+        screen.blit(panel, (0, bar_y))
+        tl = _transcript_lines(log, pname, lf, w - 24)
+        total = len(tl)
+        maxscroll = max(0, total - VIS)
+        sc = min(scroll, maxscroll)
+        start = max(0, total - VIS - sc)
+        for i, (col, ln) in enumerate(tl[start:start + VIS]):
+            screen.blit(lf.render(ln, True, col), (12, bar_y + 5 + i*lh))
+        if start > 0:                                  # es gibt Älteres oberhalb
+            screen.blit(lf.render('↑', True, BAR_DIM), (w - 22, bar_y + 4))
+        if sc > 0:                                     # nicht ganz unten
+            screen.blit(lf.render('↓', True, BAR_DIM), (w - 22, h - input_h - lh - 2))
+
+        # Eingabezeile ganz unten: Text + laufende IME-Komposition (Pinyin)
+        iy = h - input_h + 7
+        pygame.draw.rect(screen, INPUT_BG, (0, h - input_h, w, input_h))
         base = fonts['input'].render(inp, True, INPUT_FG)
         screen.blit(base, (14, iy))
         xo = 14 + base.get_width()
