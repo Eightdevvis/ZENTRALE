@@ -96,15 +96,23 @@ verstecken sich Projekte in einer ungeflaggten Liste und tauchen nie auf). Anzei
 children → Titel + Erfüllungsleiste (erledigte/alle Blätter rekursiv,
 `node_progress`); Knoten **mit** children → **gerahmter Kasten** (Titel im
 Rahmen, children drin, KEINE eigene Leiste); rekursiv, bei Platzmangel bricht
-die Front einfach ab. Reine Anzeige; markiert wird im **Listen-Werkzeug** (TUI
-Taste `l` → `p` auf einer Liste in der Übersicht bzw. auf einem Eintrag in der
+die Front einfach ab. Reine Anzeige; markiert wird im **Listen·Fokus-Werkzeug**
+(TUI Taste `l`/`f` → `p` auf einer Liste/einem Eintrag in der Wurzel bzw. in der
 view-Ebene; geflaggte tragen ein `◆`).
+
+**Fokus (FOCUS-Box):** genau EIN Knoten (Liste ODER Eintrag) kann als alleiniger
+*Fokus* markiert sein (`focus: bool`, `set_focus`, höchstens einer). Ist ein Fokus
+gesetzt, zeigt die rechte **`focus`-Box** in allen Fronten NUR ihn (Quelle
+`/api/projects/focused`); sonst ist die Box leer. Gesetzt wird per `f` im
+Listen·Fokus-Werkzeug (Toggle).
 
 | Endpoint                              | Methode | Beschreibung                          |
 |---------------------------------------|---------|---------------------------------------|
 | `/api/lists`                          | GET     | Alle Listen inkl. Einträge (`[{id,name,created,next_item,project,items:[{id,text,done,items?:[…]}]}]`). |
 | `/api/lists`                          | POST    | Neue Liste. Body `{name}`. 400 bei leerem Namen. id = `l_<slug>` (kollisionsfrei). |
-| `/api/projects`                       | GET     | Verschachtelter Projekt-Baum für die PROJECTS-Box: `[{id,name,done,total,children:[…]}]` (geflaggte Top-Level-Listen + rekursiv geflaggte Unter-Einträge). done/total = erledigte/alle Blätter rekursiv unter dem Knoten. |
+| `/api/projects`                       | GET     | Verschachtelter Projekt-Baum: `[{id,name,lid,done,total,children:[…]}]` (geflaggte Top-Level-Listen + rekursiv geflaggte Unter-Einträge). done/total = erledigte/alle Blätter rekursiv. Quelle der oberen Zone im Listen·Fokus-Werkzeug. |
+| `/api/projects/focused`               | GET     | Der EINE fokussierte Knoten als Teilbaum `{name,done,total,focus,children:[…]}` — oder `null`. Quelle der rechten `focus`-Box in allen Fronten. |
+| `/api/projects/focus`                 | GET/POST| GET → der Fokus `{lid,iid,name}` oder `null`. POST setzt (Toggle) mit `{lid,iid?}` bzw. löscht mit `{clear:true}`. |
 | `/api/lists/<lid>`                    | DELETE  | Liste samt Einträgen löschen.         |
 | `/api/lists/<lid>/project`            | POST    | Projekt-Flag einer LISTE setzen/löschen. Body `{project:bool}`. 404 unbek. Liefert die Liste. |
 | `/api/lists/<lid>/items/<int:iid>/project` | POST | Projekt-Flag eines EINTRAGS (Unterordner, egal wie tief) setzen/löschen. Body `{project:bool}`. 404 unbek. Liefert den Eintrag. |

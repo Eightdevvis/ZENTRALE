@@ -286,6 +286,23 @@
   .lpanel .li-act { cursor: pointer; color: var(--dim); flex-shrink: 0; opacity: 0; transition: opacity .1s; }
   .lpanel .li-row:hover .li-act { opacity: 1; }
   .lpanel .li-act:hover { color: var(--acc); }
+  /* Listen·Fokus (gemergtes Werkzeug): FOCUS-Look (proj_render-Klassen .prj/.ph/
+     .pb) + zwei Zonen + Reindive. Jede Zeile ein anklickbarer Knoten. */
+  .lpanel .lf-tree { flex: 1; min-height: 0; overflow: auto; }
+  .lpanel .lf-crumb { color: var(--dim); font-size: 13px; margin-bottom: 4px; display: flex; gap: 6px; flex-wrap: wrap; align-items: baseline; }
+  .lpanel .lf-crumb .cx { cursor: pointer; }
+  .lpanel .lf-crumb .cx:hover { color: var(--acc); }
+  .lpanel .lf-zone { color: var(--faint); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; margin: 9px 0 2px; }
+  .lpanel .lf-zone:first-child { margin-top: 0; }
+  .lpanel .lf-row { position: relative; cursor: pointer; }
+  .lpanel .lf-row:hover .pt { color: var(--acc); }
+  .lpanel .lf-acts { position: absolute; top: 3px; right: 0; display: flex; gap: 9px; background: var(--bg); padding-left: 8px; opacity: 0; transition: opacity .1s; }
+  .lpanel .lf-row:hover .lf-acts { opacity: 1; }
+  .lpanel .lf-acts span { cursor: pointer; color: var(--dim); font-size: 13px; }
+  .lpanel .lf-acts span:hover { color: var(--acc); }
+  .lpanel .lf-acts span.on { color: var(--span); }
+  .lpanel .lf-newrow { display: flex; gap: 4px; margin-top: 8px; }
+  .lpanel .lf-empty { color: var(--faint); padding: 6px 0; }
 
   /* ── Post-Panel (Mittel-Exhibit „Post") ──────────────────────────── */
   .mpanel .mp-cats, .mpanel .mp-list { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
@@ -1478,21 +1495,24 @@
       load();   // initial (Panel versteckt, aber Daten stehen bereit)
     })();
 
-    // ── Listen (Mittel-Exhibit „Listen") ────────────────────────────────
-    // Verschachtelte Listen/To-Dos gegen core/lists.py (/api/lists), dieselbe
-    // API wie die TUI. NICHT KI-gegatet — in jeder Kassette nutzbar.
+    // ── Listen · Fokus (Mittel-Exhibit „Listen") ───────────────────────
+    // EIN gemergtes Werkzeug (wie in der TUI): FOCUS-Look (proj_render-Optik,
+    // Titel + Erfüllungsleiste, ▸ = reindivebar, ◆/Bernstein = Fokus) + die
+    // volle Editier-Macht gegen core/lists.py (/api/lists). Wurzel ist ZWEI-
+    // GETEILT: oben die Projekte (/api/projects), drunter alle anderen Listen.
+    // Klick auf eine Zeile = reindiven (Liste/Ordner) bzw. abhaken (Blatt);
+    // die kleinen Icons rechts: ◆ Fokus · ★ Projekt · ＋ Unterpunkt · ✎ name ·
+    // ✕ löschen. NICHT KI-gegatet — in jeder Kassette nutzbar.
     (function () {
       var panel = document.getElementById('lists-panel');
       if (!panel) return;
-      var LS = { lists: [], selId: null };
+      // stack = Reindive-Pfad [{lid,iid}] (leer = Wurzel mit zwei Zonen).
+      var LS = { lists: [], proots: [], stack: [] };
       function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
       function q(sel){ return panel.querySelector(sel); }
-      function sel(){ return LS.lists.filter(function(l){return l.id===LS.selId;})[0] || null; }
-
-      async function load(){
-        try { LS.lists = await (await fetch('/api/lists')).json() || []; } catch(e){ LS.lists = []; }
-        if (!LS.lists.some(function(l){return l.id===LS.selId;})) LS.selId = LS.lists.length ? LS.lists[0].id : null;
-        render();
+      function bar(done,total,cells){
+        var f = total ? Math.max(0,Math.min(1,done/total)) : 0, full = Math.round(f*cells);
+        return '<span class="pbf">'+'█'.repeat(full)+'</span><span class="pbe">'+'░'.repeat(Math.max(0,cells-full))+'</span>';
       }
       // Fortschritt: erledigte Blätter / alle Blätter eines Knotens.
       function prog(item){
@@ -1501,56 +1521,145 @@
         var d=0,t=0; kids.forEach(function(k){ var p=prog(k); d+=p.d; t+=p.t; });
         return { d:d, t:t };
       }
-      function renderItems(lid, items, depth){
-        var h=[];
-        (items||[]).forEach(function(it){
-          var kids = it.items || [], isC = kids.length>0, p = isC ? prog(it) : null;
-          h.push('<div class="li-row" style="padding-left:'+(depth*16)+'px">');
-          h.push(isC ? '<span class="li-box folder">'+(p.d>=p.t?'▣':'▢')+'</span>'
-                     : '<span class="li-box" data-tog="'+lid+'|'+it.id+'">'+(it.done?'☑':'☐')+'</span>');
-          h.push('<span class="li-tx'+(!isC&&it.done?' done':'')+'">'+esc(it.text)
-                 +(p?' <span class="li-meta">'+p.d+'/'+p.t+'</span>':'')+'</span>');
-          h.push('<span class="li-act" data-add="'+lid+'|'+it.id+'" title="Unterpunkt">＋</span>');
-          h.push('<span class="li-act" data-dit="'+lid+'|'+it.id+'" title="löschen">✕</span></div>');
-          if (isC) h.push(renderItems(lid, kids, depth+1));
+      function findItem(items, iid){
+        var found=null;
+        (items||[]).some(function(it){
+          if (it.id===iid){ found=it; return true; }
+          var s=findItem(it.items, iid); if(s){ found=s; return true; }
+          return false;
         });
-        return h.join('');
+        return found;
       }
+      // Echten Listen-/Eintrags-Knoten zu einem Deskriptor {lid,iid} finden.
+      function realnode(d){
+        if(!d) return null;
+        var lst = LS.lists.filter(function(l){return l.id===d.lid;})[0];
+        if(!lst) return null;
+        return d.iid==null ? lst : findItem(lst.items, d.iid);
+      }
+      // Flacher Anzeige-Knoten (für eine eingeklappte Zeile).
+      function view(d){
+        var n = realnode(d); if(!n) return null;
+        var kids = n.items||[], p = kids.length?prog(n):{d:n.done?1:0,t:1}, whole = d.iid==null;
+        return { lid:d.lid, iid:d.iid, whole:whole, name: whole?n.name:n.text,
+                 done:p.d, total:p.t, branch:kids.length>0, focus:!!n.focus, project:!!n.project };
+      }
+      // Wurzel: {rows, ndiv} — oben Projekte, dann Nicht-Projekt-Listen.
+      function forestRows(){
+        var rows=[];
+        (LS.proots||[]).forEach(function(d){ var v=view(d); if(v) rows.push(v); });
+        var ndiv=rows.length;
+        LS.lists.forEach(function(l){ if(!l.project){ var v=view({lid:l.id,iid:null}); if(v) rows.push(v); } });
+        return { rows:rows, ndiv:ndiv };
+      }
+      // Aktuelle Ebene: Wurzel (leerer Stack) oder Kinder des obersten Knotens.
+      function levelRows(){
+        if(!LS.stack.length) return forestRows();
+        var top = LS.stack[LS.stack.length-1], n = realnode(top);
+        if(!n){ LS.stack.pop(); return levelRows(); }
+        var rows = (n.items||[]).map(function(c){ return view({lid:top.lid, iid:c.id}); }).filter(Boolean);
+        return { rows:rows, ndiv:-1 };
+      }
+      function crumbNames(){
+        var out=[]; LS.stack.forEach(function(d){ var n=realnode(d); if(n) out.push(d.iid==null?n.name:n.text); }); return out;
+      }
+
+      async function load(){
+        try { LS.lists = await (await fetch('/api/lists')).json() || []; } catch(e){ LS.lists = []; }
+        try { var pr = await (await fetch('/api/projects')).json() || [];
+              LS.proots = pr.map(function(r){ var lid=r.lid||r.id; return {lid:lid, iid:(r.id===lid?null:r.id)}; }); }
+        catch(e){ LS.proots = []; }
+        render();
+      }
+      function post(url, body){ return fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})}); }
+      function del(url){ return fetch(url, {method:'DELETE'}); }
+      function key(v){ return v.lid+'|'+(v.iid==null?'':v.iid); }
+      function parseKey(k){ var p=k.split('|'); return { lid:p[0], iid: p[1]===''?null:Number(p[1]) }; }
+
+      function rowHTML(v){
+        var full = v.total && v.done>=v.total;
+        var cls = 'prj lf-row'+(v.focus?' focus':'')+(full?' full':'');
+        var name = (v.branch?'▸ ':'')+esc(v.name)+(v.project&&!v.whole?' ★':'');
+        var k = key(v);
+        var acts = '<span class="lf-acts">'
+          + '<span data-focus="'+k+'"'+(v.focus?' class="on"':'')+' title="Fokus">◆</span>'
+          + '<span data-proj="'+k+'" title="Projekt">'+(v.project?'★':'☆')+'</span>'
+          + '<span data-add="'+k+'" title="Unterpunkt">＋</span>'
+          + '<span data-ren="'+k+'" title="Umbenennen">✎</span>'
+          + '<span data-del="'+k+'" title="Löschen">✕</span></span>';
+        return '<div class="'+cls+'" data-open="'+k+'">'
+          + '<div class="ph"><span class="pt">'+name+'</span><span class="pc">'+v.done+'/'+v.total+'</span>'+acts+'</div>'
+          + '<div class="pb">'+bar(v.done,v.total,24)+'</div></div>';
+      }
+
       function render(){
-        var h = ['<div class="gchips">'];
-        LS.lists.forEach(function(l){
-          h.push('<span class="gchip'+(l.id===LS.selId?' on':'')+'" data-sel="'+l.id+'">'+(l.project?'★ ':'')+esc(l.name)+'</span>');
-        });
-        h.push('<span class="gchip add" data-newlist="1">＋ liste</span></div>');
-        var l = sel();
-        if (l){
-          h.push('<div class="grow"><span class="ghint" data-proj="'+l.id+'" style="cursor:pointer">'+(l.project?'★ projekt':'☆ projekt')+'</span>'
-            +'<span class="ghint" data-renl="'+l.id+'" style="cursor:pointer">umbenennen</span>'
-            +'<span class="ghint" data-dell="'+l.id+'" style="cursor:pointer;color:var(--warn)">liste löschen</span></div>');
-          h.push('<div class="li-tree">'+(l.items&&l.items.length?renderItems(l.id,l.items,0):'<div class="ghint">— leer —</div>')+'</div>');
-          h.push('<div class="grow"><input id="li-new" placeholder="neuer punkt …" style="flex:1;min-width:120px" /><button data-additem="1">＋</button></div>');
-        } else {
-          h.push('<div class="ghint">noch keine listen — leg mit „＋ liste" eine an.</div>');
+        var h=[];
+        if(LS.stack.length){                                   // reingedrillt: Breadcrumb + eine Ebene
+          h.push('<div class="lf-crumb"><span class="cx" data-crumb="-1">⌂ wurzel</span>');
+          crumbNames().forEach(function(n,i){ h.push('<span>/</span><span class="cx" data-crumb="'+i+'">'+esc(n)+'</span>'); });
+          h.push('</div><div class="lf-tree">');
+          var lv = levelRows();
+          if(!lv.rows.length) h.push('<div class="lf-empty">— leer — unten anhängen</div>');
+          else lv.rows.forEach(function(v){ h.push(rowHTML(v)); });
+          h.push('</div><div class="lf-newrow"><input id="lf-new" placeholder="neuer punkt …" style="flex:1;min-width:120px"/><button data-additem="1">＋</button></div>');
+        } else {                                               // Wurzel: zwei Zonen
+          var f = forestRows();
+          h.push('<div class="lf-tree">');
+          if(!f.rows.length){ h.push('<div class="lf-empty">noch nichts — „＋ liste" legt eine an.</div>'); }
+          else {
+            var proj = f.rows.slice(0,f.ndiv), other = f.rows.slice(f.ndiv);
+            if(proj.length){ h.push('<div class="lf-zone">projekte</div>'); proj.forEach(function(v){ h.push(rowHTML(v)); }); }
+            h.push('<div class="lf-zone">listen</div>');
+            if(other.length) other.forEach(function(v){ h.push(rowHTML(v)); });
+            else h.push('<div class="lf-empty">— keine —</div>');
+          }
+          h.push('</div><div class="lf-newrow"><button data-newlist="1">＋ liste</button></div>');
         }
         panel.innerHTML = h.join('');
         wire();
       }
-      function post(url, body){ return fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})}); }
+
+      async function openRow(d){
+        var v = view(d); if(!v) return;
+        if(v.whole || v.branch){ LS.stack.push({lid:d.lid, iid:d.iid}); render(); }   // reindiven
+        else { await post('/api/lists/'+d.lid+'/items/'+d.iid+'/toggle'); await load(); }  // Blatt abhaken
+      }
       async function addItem(){
-        var el=q('#li-new'); var t=(el&&el.value||'').trim(); if(!t||!LS.selId) return;
-        await post('/api/lists/'+LS.selId+'/items',{text:t}); await load();
+        var el=q('#lf-new'); var t=(el&&el.value||'').trim();
+        var top = LS.stack[LS.stack.length-1]; if(!t||!top) return;
+        var body = {text:t}; if(top.iid!=null) body.parent = top.iid;
+        await post('/api/lists/'+top.lid+'/items', body); await load();
       }
       function wire(){
-        [].forEach.call(panel.querySelectorAll('[data-sel]'), function(el){ el.onclick=function(){ LS.selId=el.getAttribute('data-sel'); render(); }; });
-        var nl=q('[data-newlist]'); if(nl) nl.onclick=async function(){ var n=prompt('Listenname?'); if(!n) return; var r=await post('/api/lists',{name:n}); if(r.ok){ var l=await r.json(); LS.selId=l.id; } await load(); };
+        [].forEach.call(panel.querySelectorAll('[data-open]'), function(el){
+          el.onclick=function(e){ if(e.target.closest('.lf-acts')) return; openRow(parseKey(el.getAttribute('data-open'))); }; });
+        [].forEach.call(panel.querySelectorAll('[data-crumb]'), function(el){
+          el.onclick=function(){ var i=Number(el.getAttribute('data-crumb')); LS.stack = i<0?[]:LS.stack.slice(0,i+1); render(); }; });
+        [].forEach.call(panel.querySelectorAll('[data-focus]'), function(el){
+          el.onclick=async function(e){ e.stopPropagation(); var d=parseKey(el.getAttribute('data-focus'));
+            var b={lid:d.lid}; if(d.iid!=null) b.iid=d.iid; await post('/api/projects/focus', b);
+            await load(); window.dispatchEvent(new Event('zentrale:logged')); }; });
+        [].forEach.call(panel.querySelectorAll('[data-proj]'), function(el){
+          el.onclick=async function(e){ e.stopPropagation(); var d=parseKey(el.getAttribute('data-proj'));
+            var n=realnode(d), on=!(n&&n.project);
+            if(d.iid==null) await post('/api/lists/'+d.lid+'/project',{project:on});
+            else await post('/api/lists/'+d.lid+'/items/'+d.iid+'/project',{project:on}); await load(); }; });
+        [].forEach.call(panel.querySelectorAll('[data-add]'), function(el){
+          el.onclick=async function(e){ e.stopPropagation(); var d=parseKey(el.getAttribute('data-add'));
+            var t=prompt('Unterpunkt?'); if(!t) return; var b={text:t}; if(d.iid!=null) b.parent=d.iid;
+            await post('/api/lists/'+d.lid+'/items', b); await load(); }; });
+        [].forEach.call(panel.querySelectorAll('[data-ren]'), function(el){
+          el.onclick=async function(e){ e.stopPropagation(); var d=parseKey(el.getAttribute('data-ren'));
+            var n=realnode(d), cur=n?(d.iid==null?n.name:n.text):''; var v=prompt('Neuer Name?', cur); if(!v) return;
+            if(d.iid==null) await post('/api/lists/'+d.lid+'/rename',{name:v});
+            else await post('/api/lists/'+d.lid+'/items/'+d.iid+'/rename',{text:v}); await load(); }; });
+        [].forEach.call(panel.querySelectorAll('[data-del]'), function(el){
+          el.onclick=async function(e){ e.stopPropagation(); var d=parseKey(el.getAttribute('data-del'));
+            if(d.iid==null){ var n=realnode(d); if(!confirm('Liste „'+(n?n.name:'')+'" löschen?')) return; await del('/api/lists/'+d.lid); }
+            else await del('/api/lists/'+d.lid+'/items/'+d.iid); await load(); }; });
+        var nl=q('[data-newlist]'); if(nl) nl.onclick=async function(){ var n=prompt('Listenname?'); if(!n) return; await post('/api/lists',{name:n}); await load(); };
         var ai=q('[data-additem]'); if(ai) ai.onclick=addItem;
-        var ne=q('#li-new'); if(ne) ne.onkeydown=function(e){ if(e.key==='Enter') addItem(); };
-        [].forEach.call(panel.querySelectorAll('[data-tog]'), function(el){ el.onclick=async function(){ var p=el.getAttribute('data-tog').split('|'); await post('/api/lists/'+p[0]+'/items/'+p[1]+'/toggle'); await load(); }; });
-        [].forEach.call(panel.querySelectorAll('[data-add]'), function(el){ el.onclick=async function(){ var p=el.getAttribute('data-add').split('|'); var t=prompt('Unterpunkt?'); if(!t) return; await post('/api/lists/'+p[0]+'/items',{text:t,parent:Number(p[1])}); await load(); }; });
-        [].forEach.call(panel.querySelectorAll('[data-dit]'), function(el){ el.onclick=async function(){ var p=el.getAttribute('data-dit').split('|'); await fetch('/api/lists/'+p[0]+'/items/'+p[1],{method:'DELETE'}); await load(); }; });
-        var pr=q('[data-proj]'); if(pr) pr.onclick=async function(){ var l=sel(); await post('/api/lists/'+pr.getAttribute('data-proj')+'/project',{project:!(l&&l.project)}); await load(); };
-        var rn=q('[data-renl]'); if(rn) rn.onclick=async function(){ var l=sel(); var n=prompt('Neuer Name?', l?l.name:''); if(!n) return; await post('/api/lists/'+rn.getAttribute('data-renl')+'/rename',{name:n}); await load(); };
-        var dl=q('[data-dell]'); if(dl) dl.onclick=async function(){ var l=sel(); if(!confirm('Liste „'+(l?l.name:'')+'" löschen?')) return; await fetch('/api/lists/'+dl.getAttribute('data-dell'),{method:'DELETE'}); LS.selId=null; await load(); };
+        var ne=q('#lf-new'); if(ne) ne.onkeydown=function(e){ if(e.key==='Enter') addItem(); };
       }
       document.getElementById('tabs').addEventListener('click', function(e){ var t=e.target.closest('.tab'); if(t&&t.getAttribute('data-ex')==='listen') load(); });
       load();

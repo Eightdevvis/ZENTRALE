@@ -183,17 +183,27 @@ Nag selbst poppt **einmal pro Sitzung**: Browser als »bitte eintragen«-Modal
 Kästchen (`g` = ins Werkzeug, sonst wegklicken). Wegklicken = Ruhe bis
 Sitzungsende für die gezeigten Graphen; neu fällige nagen weiter.
 
-**Listen-Werkzeug (Mitte, Taste `l`):** abhakbare Todo-/Sammel-Listen — Pendant
-zum Graph-Werkzeug, aber für „random stuff" statt Zeitreihen. Geteilte Logik
-(`core/lists.py` + `/api/lists`), hier in curses verbaut. `l` gibt der MITTE-Box
-den Fokus; ein Zustandsmodell `L` (`view`: `list`/`new`/`view`/`nest`/`move`/
-`move_new`) steuert: in **list** mit ↑/↓ Liste wählen, `n` neu, `r` umbenennen
-(→ **new** mit vorbefülltem Namen, `L["lrename"]` → `POST …/<lid>/rename`), `d`
-löschen (Mini-Bestätigungsdialog wie beim Graph: `j`/Enter löscht, sonst Abbruch
-— `L["confirm"]`), `>` ordnet die Liste in eine andere ein (→ **nest**: Ziel-Liste
-wählen, Enter; `POST …/<lid>/nest`), Enter öffnet; in **new** Name tippen + Enter
-(`POST /api/lists` bzw. rename je `L["lrename"]`); in **view** die Einträge der
-Liste — **Ordner-Navigation statt aufgeklapptem Baum**: jeder Eintrag kann eigene
+**Listen · Fokus-Werkzeug (Mitte, Taste `l` ODER `f`):** EIN gemergtes Werkzeug —
+abhakbare Todo-/Sammel-Listen im **FOCUS-Look** (früher zwei getrennte Sachen:
+schlichtes Listen-Werkzeug `l` + Projektansicht/Fokus `f`; jetzt verschmolzen,
+beide Tasten öffnen dasselbe). Geteilte Logik (`core/lists.py` + `/api/lists`),
+hier in curses verbaut. Gezeichnet wird durchweg über `proj_render`: jede Zeile =
+**Titel + Erfüllungsleiste** (2 Zeilen), `▸` = reindivebar, `◆`/Bernstein-Balken =
+Fokus. Zustandsmodell `L` (`view`: `forest`/`view`/`place`/`move`/`move_new`).
+Die **Wurzel** (`forest`) ist **zweigeteilt**: oben die geflaggten Projekte
+(`/api/projects`), Trennlinie `── listen ──`, drunter **alle Nicht-Projekt-Listen**
+— beide top-level, per **Enter reindivebar** (wie die frühere Projektansicht;
+Deskriptor-Modell `{lid,iid}`, `l_forest_rows`/`l_desc_view`/`l_open_desc`). In der
+Wurzel: `↑↓` wählen, **Enter** rein (Liste/Ordner) bzw. Blatt abhaken, `n` neue
+Liste (inline), `s` reindiven + gleich anhängen, `r` umbenennen (Liste ODER Eintrag,
+inline), `d` löschen (Liste mit `j`/Enter-Nachfrage `L["confirm"]`, Eintrag direkt),
+`p` Projekt-Flag (schiebt in die obere Zone), `m` verschieben, `>` forest-weit
+einordnen, **`f` setzt den Knoten als alleinigen Fokus** (`/api/projects/focus`,
+Toggle → rendert dann allein in der rechten FOCUS-Box). `Esc`/`l` schließt.
+Reindivt man in eine Liste, ist es die normale Ordner-Sicht (`view`, s.u.); `Esc`
+geht eine Ebene zurück, auf der obersten zurück zur Wurzel.
+In **view** die Einträge der offenen Liste — **Ordner-Navigation statt
+aufgeklapptem Baum**: jeder Eintrag kann eigene
 Unterpunkte tragen; ein Eintrag MIT Kindern ist eine anklickbare Ordner-Zeile
 (Marker `▸`, Anzeige `(erledigt/gesamt)`), KEIN eingerückter Teilbaum. `L["path"]`
 ist der Drill-Pfad (Eintrags-ids) in der offenen Liste, `l_container()` löst die
@@ -217,25 +227,28 @@ gerendert (`addclip(..., strike=True)`, Combining-Overlay U+0336; der Cursor-Pfe
 `›` bleibt normal sichtbar). Lange Ebenen scrollen um den
 Cursor. Alles synchron per `api_call()`; nach jeder Aktion `l_load()`+`l_sync_def()`
 (offene Liste aus der frischen Registry neu greifen, Drill-Pfad wird validiert/
-gekürzt). `Esc`/`l` geht eine Ebene zurück, auf oberster Ebene schließt es.
+gekürzt). `Esc`/`l` geht eine Ebene zurück, auf der obersten zurück zur Wurzel
+(`forest`); in der Wurzel schließt `Esc`/`l` das Werkzeug.
 `--selftest` listet die Listen inkl. erledigt-Zähler (und `◆projekt`-Flag, ohne TTY).
 Eine Liste ist kein Zeitreihen-Plot, taucht also nicht in der `lifestyle`-Überlagerung
-auf. **Projekt-Flag:** `p` schaltet das Projekt-Flag — in der Listenübersicht für
-die **Liste** (`POST /api/lists/<lid>/project`), in der view-Ebene für den
-markierten **Eintrag/Unterordner** (`…/items/<iid>/project`); geflaggte tragen ein `◆`.
+auf. **Projekt-Flag:** `p` schaltet das Projekt-Flag — in der Wurzel für die
+gewählte **Liste** (`POST /api/lists/<lid>/project`) ODER den gewählten
+Projekt-Eintrag, in der view-Ebene für den markierten **Eintrag/Unterordner**
+(`…/items/<iid>/project`); geflaggte wandern in die obere Zone bzw. tragen ein `◆`/`★`.
 
-**PROJECTS-Box (rechts, alle Fronten):** zwischen `lifestyle` und `outbound` steht
-eine `projects`-Box. Quelle ist der **verschachtelte** Baum `/api/projects`
-(`core.lists.projects_tree`): geflaggte Top-Level-Liste = Wurzel, rekursiv geflaggte
-Unter-Einträge als `children`. **Darstellung rekursiv:** Knoten **ohne**
-Unterprojekte → **Titel + Erfüllungsleiste** (erledigte/alle Blätter rekursiv,
-`node_progress`); Knoten **mit** Unterprojekten → **gerahmter Kasten** (Titel im
-Rahmen, Unterprojekte drin, KEINE eigene Leiste). Bei Platzmangel wird ab dem Punkt
-einfach aufgehört (kein Überlauf). Reine Anzeige; markiert wird im Listen-Werkzeug.
-In der TUI misst `proj_measure` die nötige Höhe und `proj_draw` zeichnet rekursiv
-(Rahmen aus `┌─┐│└┘`); die Box nimmt `outbound` Höhe ab, nur wenn dort ≥5 Zeilen
-bleiben, `+N` wenn nicht alle Wurzeln reinpassen; pollt über `Store._poll_projects`
-(alle 5 s). Monolith/Laptop (`#projects`) pollen `/api/projects` (30 s) und rendern
+**FOCUS-Box (rechts, alle Fronten):** zwischen `lifestyle` und `outbound` steht
+eine `focus`-Box. Quelle ist der schlanke Endpoint **`/api/projects/focused`**
+(`core.lists.focused_subtree`): der EINE aktuell fokussierte Knoten (per `f` im
+Listen·Fokus-Werkzeug gesetzt, `set_focus`) als Teilbaum — oder **nichts** (Box
+entfällt dann ganz). **Darstellung rekursiv:** Knoten **ohne** Unterprojekte →
+**Titel + Erfüllungsleiste** (erledigte/alle Blätter rekursiv, `node_progress`);
+Knoten **mit** Unterprojekten → **gerahmter Kasten** (Titel im Rahmen, Unterprojekte
+drin, KEINE eigene Leiste). Bei Platzmangel wird ab dem Punkt einfach aufgehört
+(kein Überlauf). **Reine Anzeige** (Zusammenfassung) — gesetzt/geändert wird im
+Listen·Fokus-Werkzeug. In der TUI teilt sie sich `proj_render` mit dem Werkzeug
+(BYTE-gleiche Optik, Rahmen aus `┌─┐│└┘`); die Box nimmt `outbound` Höhe ab, nur
+wenn dort ≥5 Zeilen bleiben; pollt über `Store._poll_projects` (alle 5 s).
+Monolith/Laptop (`#projects`) pollen `/api/projects/focused` (30 s) und rendern
 rekursiv `renderNode` (verschachtelte `.prj-box`/`.prj`, `overflow:hidden` clippt).
 
 **Karte (Mitte, Taste `m`):** Maps-System Schritt 1 — grobe Weltkarte (Küsten
