@@ -628,6 +628,10 @@ def main():
         if not err and line:
             log_add('tutor', line)   # in den Verlauf
             speak(line)              # ihre Stimme (nach dem Stream, Antworten sind kurz)
+        # buf jetzt leeren, damit die Blase verhallen KANN — sonst hält der
+        # stehengebliebene Text has_text ewig true und bub_age wird nie größer.
+        with S['lock']:
+            S['buf'] = ''
 
     def kickoff():
         """Status/Config holen; wenn erreichbar und keine Session läuft, die
