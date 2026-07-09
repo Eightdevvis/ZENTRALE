@@ -114,3 +114,24 @@ dokumentieren, morgen gemeinsam reviewen.
 - **Review-Frage an Sasha:** reicht die nonverbale Reaktion, oder willst du den
   verbalen Gruß doch — dann unter welcher Bedingung (nur bei offenem Fenster, mit
   Rate-Limit)? Cooldown/Flag-Namen sind Vorschläge.
+
+### 6. Lokale Landes-News ✅ (Mechanik, Content-Lücke)
+- **get_local_news**-Tool (10. Tool): die Persona bringt beiläufig EIN Thema aus
+  ihrem Land auf (Wetter/Essen/Feste/„was man gerade so guckt"), rotierend per
+  Cursor, damit sie nicht dranklebt. Kein Nachrichten-Vorlesen — der Tool-Text
+  weist ausdrücklich auf „随口带一句, 别像播新闻".
+- **Sandbox strikt gewahrt:** eigener persona-isolierter Pool, fasst **NIE**
+  core/news.py an (das sind Sashas DE/World-Feeds der Core-KI). Der Allowlist-
+  Kommentar in tutor.py wurde entsprechend von „nur 4 Vokabel-Tools" auf die
+  reale Invariante nachgezogen (nur tutor-eigene Dateien + UI-State).
+- **Seed lebt im CODE** (`_NEWS_SEED` in tutor.py), NICHT in data/*.json — letzteres
+  ist gitignored (rsync-Runtime) und käme sonst nicht mit; die Datei
+  `data/persona_news_zh.json` hält nur den Rotations-Cursor und bootstrappt beim
+  ersten Aufruf aus dem Seed. Prompt-Zeile (zh) ergänzt.
+- **Entscheidung/Annahme:** kein echter Feed → **evergreen-nahe** Themen (keine
+  datierten Schlagzeilen, die veralten). Ehrlich-KI-Framing: sie erzählt „中国的情况",
+  kein Ich-war-dort. Content-Lücke = echter, tutor-isolierter China-Feed-Ingest
+  (könnte news.py `_parse_feed` gegen einen China-RSS in einen SEPARATEN Store
+  nutzen — bewusst nicht gebaut: online + eigener Sandbox-Store nötig).
+- **Offen/Review:** willst du echte tagesaktuelle China-News (dann Feed-Quelle +
+  isolierter Ingest festlegen), oder reicht der Evergreen-Gesprächsstoff?

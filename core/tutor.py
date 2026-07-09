@@ -208,6 +208,68 @@ def increment_structure(pattern: str) -> str:
     return f"['{pattern}' 未找到]"
 
 
+# ── Lokale Landes-News (persona-isoliert) ────────────────────────────────────
+# Feature 6: die Persona kann beiläufig ein Thema aus ihrem Land aufbringen.
+# WICHTIG: eigener, tutor-isolierter Pool — fasst NIEMALS core/news.py an (das ist
+# Sashas DE/World-News der Core-KI; Sandbox). Seed statt echtem Feed (Content-
+# Lücke, siehe Feature-Log §6). Der Seed lebt IM CODE (data/*.json ist gitignored,
+# rsync-Runtime — käme sonst nicht mit); die Datei hält nur den Rotations-Cursor
+# (Runtime-State), bootstrappt beim ersten Aufruf aus dem Seed.
+_NEWS_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'persona_news_zh.json')
+
+# Leichte, evergreen-nahe Gesprächsthemen aus/über China — casual, kurz. Ling Ling
+# bringt sie als „was in China gerade so Thema ist" ein, nicht als eigenes Erlebnis
+# (sie ist ehrlich eine KI). Echte tagesaktuelle Meldungen bräuchten einen tutor-
+# isolierten China-Feed-Ingest (offen, Content-Lücke).
+_NEWS_SEED = [
+    "中国很多城市现在几乎只用手机付款，出门都不带现金了",
+    "一到秋天，街上就开始卖糖炒栗子，特别香",
+    "快到节日的时候，超市里摆满了月饼，各种口味都有",
+    "最近好多人喜欢围炉煮茶，一边烤橘子一边聊天",
+    "冬天很多人爱去东北看雪、泡温泉",
+    "共享单车现在到处都是，骑车上下班的人特别多",
+    "外卖在中国太方便了，几分钟就能点到吃的",
+    "最近大家都在追一部古装剧，办公室里都在聊",
+]
+
+
+def _news_load() -> dict:
+    """Cursor + Items laden. Datei fehlt/kaputt → aus dem Code-Seed. Vorhandene
+    Datei ohne items → Seed einsetzen (nur der Cursor ist Runtime-State)."""
+    d = {}
+    if os.path.exists(_NEWS_FILE):
+        try:
+            with open(_NEWS_FILE, 'r', encoding='utf-8') as f:
+                d = json.load(f)
+        except Exception:
+            d = {}
+    if not isinstance(d, dict):
+        d = {}
+    items = [s for s in (d.get('items') or []) if isinstance(s, str) and s.strip()]
+    if not items:
+        items = list(_NEWS_SEED)
+    return {"cursor": int(d.get('cursor', 0) or 0), "items": items}
+
+
+def get_local_news() -> str:
+    """Ein leichtes Gesprächsthema aus dem Land der Persona (rotierend). Sie soll
+    es BEILÄUFIG einstreuen, nicht wie eine Nachrichtensendung vorlesen."""
+    with _lock:
+        d = _news_load()
+        items = [s for s in (d.get('items') or []) if isinstance(s, str) and s.strip()]
+        if not items:
+            return "（现在没有话题，随便聊聊就好）"
+        cur = int(d.get('cursor', 0)) % len(items)
+        topic = items[cur]
+        d['cursor'] = (cur + 1) % len(items)
+        try:
+            with open(_NEWS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(d, f, indent='\t', ensure_ascii=False)
+        except Exception:
+            pass
+    return f"（可以随口提一句，别像播新闻）中国最近常聊的：{topic}"
+
+
 def express(action: str) -> str:
     """Ausdruck im Zimmer (Haltung/Geste). Reicht die Aktion an tutor_session
     weiter, das den Zustand fürs Fenster hält. Lazy-Import bricht den Zyklus
@@ -365,6 +427,15 @@ TUTOR_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name":        "get_local_news",
+            "description": "想跟 Sasha 随口聊聊中国最近的话题时用（比如天气、吃的、节日、大家在聊什么）。"
+                           "返回一个话题，你自然地带一句就好，别像播新闻，别一直聊这个。你是 AI，说的是中国的情况，不是你亲身经历。",
+            "parameters":  {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name":        "show_thought",
             "description": "想帮 Sasha 懂一个词时，在你脑子里显示这个词和它的意思（图或翻译），"
                            "让她一看就懂——比用一堆话解释好。word 是这个词，meaning 是德语意思。",
@@ -386,11 +457,15 @@ TUTOR_TOOLS = [
 
 # ── Cloud→Lokal-Sandbox (Choke-Point) ────────────────────────────────
 # Dies ist die EINZIGE Stelle, an der eine Tutor-/Cloud-AI etwas "ausführt".
-# Sie ist eine GESCHLOSSENE Allowlist: nur die 4 Vokabel-Tools, die
-# ausschließlich vocab_*.json anfassen. Damit kann die Cloud-AI NICHT in die
-# lokale AI greifen – kein graph/consolidation, keine lokalen Tools
-# (save_memory/read_file/web/mail/…), kein Datei-Whitelist-Zugriff. Wer hier
-# einen Tool-Namen ergänzt, erweitert bewusst die Reichweite der Cloud-AI.
+# Sie ist eine GESCHLOSSENE Allowlist. JEDES Tool hier fasst NUR tutor-isolierte
+# Ressourcen an: die Vokabel-/Struktur-/News-Dateien (vocab_*.json,
+# structures_mandarin.json, persona_news_zh.json) und den UI-Zustand im Zimmer
+# (tutor_session: Ausdruck/Gedanke/Presence). Damit kann die Cloud-AI NICHT in
+# die lokale AI greifen – kein graph/consolidation, keine lokalen Tools
+# (save_memory/read_file/web/mail/…), kein Datei-Whitelist-Zugriff, KEIN Zugriff
+# auf core/news.py (Sashas DE/World-News). Wer hier einen Tool-Namen ergänzt,
+# erweitert bewusst die Reichweite der Cloud-AI — dann prüfen, dass er wirklich
+# nur tutor-eigene Daten berührt.
 _ALLOWED = {
     "get_confirmed_vocab":   lambda a: get_confirmed_vocab(),
     "get_testing_vocab":     lambda a: get_testing_vocab(),
@@ -400,6 +475,7 @@ _ALLOWED = {
     "get_structures":        lambda a: get_structures(),
     "introduce_structure":   lambda a: introduce_structure(a.get("pattern", ""), a.get("note", "")),
     "increment_structure":   lambda a: increment_structure(a.get("pattern", "")),
+    "get_local_news":        lambda a: get_local_news(),
     "show_thought":          lambda a: show_thought(a.get("word", ""), a.get("meaning", "")),
 }
 
