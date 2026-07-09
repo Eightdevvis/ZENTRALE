@@ -43,3 +43,20 @@ dokumentieren, morgen gemeinsam reviewen.
   one-shot), damit Feature 2 (Batterie) sie treiben kann. Gesten bleiben one-shot.
 - **Offen/Review:** die Sprite-Optik ist simpel (Primitive) — reicht funktional,
   könnte man später hübscher machen.
+
+### 2. Soziale Batterie / Stimmung ✅
+- `tutor_session._battery` (Level + Zeitstempel), **zeitbasiert** berechnet (kein
+  Ticker): sinkt ~3.5/min (≈30 min von voll auf leer), **+9 pro echtem Sasha-Turn**
+  (`battery_bump` in respond_stream). `room_state()` liefert `battery` (0-100) +
+  `mood` (happy≥68 / ok / low<32). activate() setzt auf 55.
+- Fenster: **Laune-Balken** oben rechts (grün/amber/rot). Die Stimmung **färbt die
+  Mimik** — aber NUR wenn die KI nicht selbst eine gesetzt hat: `eff_face = KI-Face
+  sonst mood→(low=tired/happy=happy)`. So gewinnt bewusster Ausdruck, sonst zeigt
+  sich die Grundstimmung.
+- **Entscheidungen/Annahmen:** Decay/Refill-Werte frei gewählt (tunebar oben in
+  tutor_session). „Verstanden werden lädt mehr" (Sashas Idee) ist vereinfacht:
+  jeder echte Sasha-Turn lädt (= sie hat geantwortet = verstanden genug). Feiner
+  (Confidence/Verständnis messen) wäre Follow-up. Nudge lädt NICHT (sie kriegt ja
+  keine Antwort).
+- **Offen/Review:** Werte fürs Gefühl nachjustieren; evtl. bei sehr niedriger
+  Batterie auch die Rede-Lust drosseln (sie wird wortkarger).

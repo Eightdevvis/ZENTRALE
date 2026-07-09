@@ -23,6 +23,7 @@
 # _active/_history werden von Flask und Event-Loop gelesen/geschrieben → Lock.
 
 import os
+import time
 import threading
 from threading import Lock
 from collections import deque
@@ -70,11 +71,36 @@ def set_face(face: str):
             _expr["face"] = f
 
 
-def room_state() -> dict:
-    """Aktueller Ausdrucks-Zustand fürs Zimmer-Fenster (pollt das leichtgewichtig)."""
+# ── Soziale Batterie / Stimmung ──────────────────────────────────────────────
+# Sashas Idee: die Persona hat eine „soziale Batterie". Sie sinkt langsam mit der
+# Zeit (niemand da) und wird beim Quatschen mit Sasha wieder aufgeladen. Niedrig =
+# lustloser/müder (färbt die Mimik im Fenster). ZEITBASIERT berechnet (kein
+# Ticker-Thread): Level + Zeitstempel, aktueller Wert = Level − Decay·Δt.
+_BAT_DECAY_PER_MIN = 3.5    # sinkt langsam (≈ 30 min von voll auf leer)
+_BAT_REFILL        = 9.0    # pro echtem Sasha-Turn (Quatschen lädt auf)
+_battery = {"level": 60.0, "ts": time.time()}
+
+
+def _battery_now() -> float:
+    lvl = _battery["level"] - _BAT_DECAY_PER_MIN * (time.time() - _battery["ts"]) / 60.0
+    return max(0.0, min(100.0, lvl))
+
+
+def battery_bump(amount: float):
+    """Batterie ändern (positiv = aufladen beim Quatschen)."""
     with _lock:
+        _battery["level"] = max(0.0, min(100.0, _battery_now() + amount))
+        _battery["ts"] = time.time()
+
+
+def room_state() -> dict:
+    """Aktueller Ausdrucks-Zustand + Stimmung fürs Zimmer-Fenster (leichtgewichtig)."""
+    with _lock:
+        bat = _battery_now()
+        mood = "happy" if bat >= 68 else ("low" if bat < 32 else "ok")
         return {"stance": _expr["stance"], "gesture": _expr["gesture"],
-                "gesture_id": _expr["gid"], "face": _expr["face"], "active": _active}
+                "gesture_id": _expr["gid"], "face": _expr["face"],
+                "battery": int(bat), "mood": mood, "active": _active}
 
 def _history_window() -> int:
     """Wieviele der letzten Turns ans Modell gesendet werden (Kosten-Hebel: die
@@ -161,6 +187,7 @@ def activate():
         _history      = deque(prior, maxlen=100)
         _privacy      = notice
         _expr["stance"] = "idle"; _expr["gesture"] = None; _expr["face"] = "neutral"
+        _battery["level"] = 55.0; _battery["ts"] = time.time()   # frische Batterie
 
 
 def deactivate():
@@ -202,6 +229,7 @@ def respond_stream(user_text: str = None, nudge: bool = False):
     """
     if user_text is not None:
         push_message("user", user_text)
+        battery_bump(_BAT_REFILL)     # echtes Quatschen lädt die soziale Batterie
 
     prof, pname, provider, model = _resolve()
     lang = _session_lang or tutor_config.setting("lang", "zh")

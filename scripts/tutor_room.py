@@ -648,6 +648,7 @@ def main():
         'scroll': 0,           # Verlaufs-Scroll (0 = neuestes unten)
         'stance': 'idle',      # von der KI gesetzte Haltung (room_state-Poll)
         'face': 'neutral',     # von der KI gesetzte Mimik
+        'battery': 60, 'mood': 'ok',   # soziale Batterie / Stimmung
         'pending_gesture': None,  # einmalige Geste, die die Persona abspielen soll
         'last_user_ms': 0,     # letzte Sasha-Eingabe (Feedback-Loop)
         'nudged': False,       # Anstoß in dieser Stille schon gemacht?
@@ -765,6 +766,7 @@ def main():
             with S['lock']:
                 S['stance'] = rs.get('stance') or 'idle'
                 S['face'] = rs.get('face') or 'neutral'
+                S['battery'] = int(rs.get('battery', 60)); S['mood'] = rs.get('mood') or 'ok'
                 if gid != last_gid:
                     S['pending_gesture'] = rs.get('gesture')
             last_gid = gid
@@ -946,7 +948,7 @@ def main():
             compose = S['compose']; tts_ok = S['tts']
             log = list(S['log']); scroll = S['scroll']
             stance = S['stance']; pend = S['pending_gesture']; S['pending_gesture'] = None
-            face = S['face']
+            face = S['face']; battery = S['battery']; mood = S['mood']
             mic = S['mic']; hearing = S['hearing']; transcribing = S['transcribing']; mic_err = S['mic_err']
 
         # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft.
@@ -954,8 +956,11 @@ def main():
         talking  = (streaming and has_text) or speaking
         thinking = streaming and not has_text
         # Haltung/Geste/Mimik kommen von der KI (express-Tool → room_state-Poll).
+        # Die Stimmung (soziale Batterie) färbt die Mimik NUR, wenn die KI nicht
+        # selbst eine gesetzt hat (dann gewinnt die KI-Mimik).
+        eff_face = face if face != 'neutral' else {'low': 'tired', 'happy': 'happy'}.get(mood, 'neutral')
         persona.set_stance(stance)
-        persona.set_face(face)
+        persona.set_face(eff_face)
         if pend:
             persona.play_gesture(pend)
         persona.update(dt, talking)
@@ -1023,6 +1028,15 @@ def main():
         else:
             mic_line, mic_col = 'Mic: hört zu · Alt+H', HUD_DIM
         screen.blit(fonts['hud'].render(mic_line, True, mic_col), (16, 66))
+
+        # Soziale Batterie oben rechts (grün hoch / amber mittel / rot niedrig)
+        bw2, bh2 = 92, 12
+        bx2, by2 = w - bw2 - 16, 18
+        bcol = (120, 200, 120) if mood == 'happy' else ((214, 176, 96) if mood == 'ok' else (214, 112, 112))
+        pygame.draw.rect(screen, (44, 38, 48), (bx2, by2, bw2, bh2), border_radius=5)
+        pygame.draw.rect(screen, bcol, (bx2 + 2, by2 + 2, int((bw2 - 4) * max(0, min(100, battery)) / 100), bh2 - 4), border_radius=4)
+        lab = fonts['hud'].render('Laune', True, HUD_DIM)
+        screen.blit(lab, (bx2 - lab.get_width() - 8, by2 - 2))
 
         # ── Verlaufs-Leiste unten (translucent, umbrechend, ↑/↓ scrollt) ────
         lf = fonts['log']; lh = lf.get_linesize()
