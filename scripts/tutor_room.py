@@ -120,7 +120,8 @@ class Backend:
         return self._get('/api/tutor/room_state', timeout=2.0)
 
     def transcribe(self, wav_bytes, lang):
-        """WAV → Text (Whisper via /api/transcribe). Leer bei Fehler."""
+        """WAV → (Text, Fehler). Fehler ist None bei Erfolg, sonst ein kurzer
+        Grund (damit das Fenster nicht mehr STILL scheitert)."""
         boundary, body = _multipart_audio({'lang': lang or 'zh'}, wav_bytes)
         req = urllib.request.Request(
             self.url + '/api/transcribe', data=body, method='POST',
@@ -128,9 +129,17 @@ class Backend:
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
                 d = json.loads(r.read().decode('utf-8', 'replace'))
-                return (d.get('text') or '').strip()
+                return (d.get('text') or '').strip(), None
+        except urllib.error.HTTPError as e:
+            try:
+                msg = json.loads(e.read().decode('utf-8', 'replace')).get('error') or ('HTTP %s' % e.code)
+            except Exception:
+                msg = 'HTTP %s' % e.code
+            return '', msg
+        except (urllib.error.URLError, OSError):
+            return '', 'backend nicht erreichbar'
         except Exception:
-            return ''
+            return '', 'STT-fehler'
 
     def speak(self, text, lang, speaker, speed):
         """Text → WAV-Bytes (Backend-TTS, /api/speak). None bei Fehler/503
@@ -778,9 +787,11 @@ def main():
     def _do_transcribe(wav):
         with S['lock']:
             lang = S['lang']; S['transcribing'] = True
-        txt = be.transcribe(wav, lang)
+        txt, err = be.transcribe(wav, lang)
         with S['lock']:
             S['transcribing'] = False
+            if err:
+                S['msg'] = 'STT: ' + err     # sichtbar machen statt still scheitern
         t = (txt or '').strip()
         if t and len(t) >= 2:      # winzige Blips/Halluzinationen verwerfen
             send(t)
