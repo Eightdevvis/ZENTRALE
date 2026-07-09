@@ -1296,7 +1296,10 @@ def api_transcribe():
 
     Response: JSON {"text": "..."}.
     """
-    if kassette.ki_aus():
+    # STT ist lokale Erkennung; der Sprach-Tutor laeuft kapazitaetsbasiert. Nur
+    # blocken, wenn AUCH der Tutor kein Backend hat — sonst kann das Persona-
+    # Zimmer nicht zuhoeren, obwohl der Tutor laeuft (wie bei /api/speak).
+    if kassette.ki_aus() and not tutor_session.available():
         return _ki_aus()
     if 'audio' not in request.files:
         return jsonify({"error": "kein 'audio'-Feld"}), 400

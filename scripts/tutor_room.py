@@ -81,6 +81,14 @@ BUBBLE_FADE   = 1.3   # s Ausblenden danach
 # seitig, kostenlos. Bleibt das Fenster offen, alle ~15 min ein neuer Versuch.
 NUDGE_AFTER_S   = 25.0    # s Stille bis zum ersten Anstoß
 CHILL_RECHECK_S = 900.0   # s (15 min) bis zum nächsten Versuch
+# Immer-Zuhören (STT): Mikro im Fenster, webrtcvad segmentiert Sprache, das Mikro
+# ist gegated während die Persona spricht (sonst hört sie sich selbst zu).
+MIC_RATE          = 16000  # Hz (webrtcvad kann 8/16/32k)
+MIC_FRAME_MS      = 20      # ms pro VAD-Frame
+MIC_VAD_AGGR      = 2       # 0..3 (höher = strenger, weniger Fehl-Trigger)
+MIC_SILENCE_MS    = 700     # Pause nach Sprache → Äußerung fertig
+MIC_MINSPEECH_MS  = 300     # kürzere „Äußerungen" verwerfen (Blips/Husten)
+MIC_MAX_MS        = 12000   # harte Obergrenze pro Äußerung
 
 
 def _font(size, bold=False):
@@ -110,6 +118,19 @@ class Backend:
 
     def room_state(self):
         return self._get('/api/tutor/room_state', timeout=2.0)
+
+    def transcribe(self, wav_bytes, lang):
+        """WAV → Text (Whisper via /api/transcribe). Leer bei Fehler."""
+        boundary, body = _multipart_audio({'lang': lang or 'zh'}, wav_bytes)
+        req = urllib.request.Request(
+            self.url + '/api/transcribe', data=body, method='POST',
+            headers={'Content-Type': 'multipart/form-data; boundary=' + boundary})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                d = json.loads(r.read().decode('utf-8', 'replace'))
+                return (d.get('text') or '').strip()
+        except Exception:
+            return ''
 
     def speak(self, text, lang, speaker, speed):
         """Text → WAV-Bytes (Backend-TTS, /api/speak). None bei Fehler/503
@@ -162,6 +183,32 @@ class Backend:
             if resp is not None:
                 try: resp.close()
                 except OSError: pass
+
+
+# ── Mikro/STT-Helfer ─────────────────────────────────────────────────────────
+def _pcm_to_wav(pcm_bytes, rate=MIC_RATE):
+    """Rohe int16-mono-Frames → WAV-Bytes (für /api/transcribe)."""
+    bio = io.BytesIO()
+    with wave.open(bio, 'wb') as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate)
+        w.writeframes(pcm_bytes)
+    return bio.getvalue()
+
+
+def _multipart_audio(fields, wav_bytes):
+    """Minimaler multipart/form-data-Body (audio-Datei + Felder) — ohne requests,
+    passend zu /api/transcribe."""
+    boundary = '----zroom' + format(len(wav_bytes), 'x')
+    parts = []
+    for k, v in fields.items():
+        parts.append(('--%s\r\nContent-Disposition: form-data; name="%s"\r\n\r\n%s\r\n'
+                      % (boundary, k, v)).encode('utf-8'))
+    parts.append(('--%s\r\nContent-Disposition: form-data; name="audio"; '
+                  'filename="speech.wav"\r\nContent-Type: audio/wav\r\n\r\n' % boundary).encode('utf-8'))
+    parts.append(wav_bytes)
+    parts.append(b'\r\n')
+    parts.append(('--%s--\r\n' % boundary).encode('utf-8'))
+    return boundary, b''.join(parts)
 
 
 # ── Stimme: WAV vom Backend abspielen ────────────────────────────────────────
@@ -520,6 +567,7 @@ def main():
     ap.add_argument('--speaker', type=int, default=int(os.environ.get('TUTOR_TTS_SPEAKER', '66')))
     ap.add_argument('--speed', type=float, default=float(os.environ.get('TUTOR_TTS_SPEED', '1.0')))
     ap.add_argument('--mute', action='store_true', help='ohne Stimme starten')
+    ap.add_argument('--no-mic', action='store_true', help='ohne Immer-Zuhören (STT) starten')
     a = ap.parse_args()
 
     pygame.init()
@@ -569,6 +617,10 @@ def main():
         'last_user_ms': 0,     # letzte Sasha-Eingabe (Feedback-Loop)
         'nudged': False,       # Anstoß in dieser Stille schon gemacht?
         'nudge_ms': 0,
+        'mic': not a.no_mic,   # Immer-Zuhören an? (Alt+H togglet)
+        'hearing': False,      # gerade Sprache am Mikro?
+        'transcribing': False, # Segment wird gerade erkannt
+        'mic_err': '',         # kein Mikro / Lib fehlt
     }
 
     def log_add(role, text):
@@ -723,6 +775,77 @@ def main():
         threading.Thread(target=run_stream,
                          args=('/api/tutor/respond', {'text': text}), daemon=True).start()
 
+    def _do_transcribe(wav):
+        with S['lock']:
+            lang = S['lang']; S['transcribing'] = True
+        txt = be.transcribe(wav, lang)
+        with S['lock']:
+            S['transcribing'] = False
+        t = (txt or '').strip()
+        if t and len(t) >= 2:      # winzige Blips/Halluzinationen verwerfen
+            send(t)
+
+    def listen_loop():
+        """Immer-Zuhören: Dauer-Mikro, webrtcvad segmentiert Sprache; das Mikro
+        ist GEGATED, solange die Persona spricht/antwortet (sonst hört sie sich
+        selbst). Endpointing: nach MIC_SILENCE_MS Pause → Segment an Whisper.
+        Kein Mikro / STT-Libs fehlen → still deaktivieren."""
+        try:
+            import sounddevice as sd
+            import webrtcvad
+        except Exception:
+            with S['lock']:
+                S['mic'] = False; S['mic_err'] = 'STT-Libs fehlen (pip install)'
+            return
+        n = int(MIC_RATE * MIC_FRAME_MS / 1000)   # samples/Frame
+        try:
+            vad = webrtcvad.Vad(MIC_VAD_AGGR)
+            stream = sd.RawInputStream(samplerate=MIC_RATE, channels=1, dtype='int16', blocksize=n)
+            stream.start()
+        except Exception:
+            with S['lock']:
+                S['mic'] = False; S['mic_err'] = 'kein Mikrofon'
+            return
+        buf = []; in_speech = False; silence = 0; speech = 0
+        while True:
+            with S['lock']:
+                on = S['mic']; gated = S['speaking'] or S['busy'] or S['streaming']
+            try:
+                data, _ = stream.read(n)
+            except Exception:
+                pygame.time.wait(20); continue
+            if (not on) or gated:
+                if in_speech or buf:
+                    buf, in_speech, silence, speech = [], False, 0, 0
+                    with S['lock']: S['hearing'] = False
+                continue
+            frame = bytes(data)
+            if len(frame) < n * 2:
+                continue
+            try:
+                is_sp = vad.is_speech(frame, MIC_RATE)
+            except Exception:
+                continue
+            if is_sp:
+                buf.append(frame); in_speech = True; speech += MIC_FRAME_MS; silence = 0
+                with S['lock']: S['hearing'] = True
+            elif in_speech:
+                buf.append(frame); silence += MIC_FRAME_MS
+                if silence >= MIC_SILENCE_MS:
+                    with S['lock']: S['hearing'] = False
+                    if speech >= MIC_MINSPEECH_MS:
+                        threading.Thread(target=_do_transcribe,
+                                         args=(_pcm_to_wav(b''.join(buf)),), daemon=True).start()
+                    buf, in_speech, silence, speech = [], False, 0, 0
+            if (speech + silence) >= MIC_MAX_MS:      # harte Obergrenze
+                if speech >= MIC_MINSPEECH_MS:
+                    threading.Thread(target=_do_transcribe,
+                                     args=(_pcm_to_wav(b''.join(buf)),), daemon=True).start()
+                buf, in_speech, silence, speech = [], False, 0, 0
+                with S['lock']: S['hearing'] = False
+
+    threading.Thread(target=listen_loop, daemon=True).start()
+
     running = True
     caret_t = 0.0
     bub_text = ''      # aktuell in der Blase stehender Text
@@ -758,6 +881,10 @@ def main():
                     if muted:
                         try: pygame.mixer.stop()
                         except Exception: pass
+                elif ev.key == pygame.K_h and (ev.mod & pygame.KMOD_ALT):
+                    with S['lock']:
+                        S['mic'] = not S['mic']
+                        S['msg'] = 'zuhören an' if S['mic'] else 'mikro aus'
                 elif ev.key == pygame.K_RETURN:
                     with S['lock']:
                         txt = S['input']; S['input'] = ''
@@ -781,6 +908,7 @@ def main():
             compose = S['compose']; tts_ok = S['tts']
             log = list(S['log']); scroll = S['scroll']
             stance = S['stance']; pend = S['pending_gesture']; S['pending_gesture'] = None
+            mic = S['mic']; hearing = S['hearing']; transcribing = S['transcribing']; mic_err = S['mic_err']
 
         # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft.
         has_text = bool(buf.strip())
@@ -839,6 +967,19 @@ def main():
         else:
             hint = '↑/↓ Verlauf · Enter reden · Alt+M stumm · Esc'
         screen.blit(fonts['hud'].render(hint, True, HUD_DIM), (16, 44))
+
+        # Mic-Indikator (Immer-Zuhören): Zustand + Alt+H
+        if mic_err:
+            mic_line, mic_col = 'Mic: ' + mic_err, HUD_DIM
+        elif not mic:
+            mic_line, mic_col = 'Mic aus · Alt+H', HUD_DIM
+        elif transcribing:
+            mic_line, mic_col = 'Mic: versteht…', ROLE_USER
+        elif hearing:
+            mic_line, mic_col = 'Mic: hört dich ●', ROLE_USER
+        else:
+            mic_line, mic_col = 'Mic: hört zu · Alt+H', HUD_DIM
+        screen.blit(fonts['hud'].render(mic_line, True, mic_col), (16, 66))
 
         # ── Verlaufs-Leiste unten (translucent, umbrechend, ↑/↓ scrollt) ────
         lf = fonts['log']; lh = lf.get_linesize()

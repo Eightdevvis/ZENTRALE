@@ -18,9 +18,13 @@ faster-whisper
 sherpa-onnx
 piper-tts
 
-# Audio-Aufnahme und -Wiedergabe (für spätere Pi-Nutzung)
+# Audio-Aufnahme und -Wiedergabe (Mikro fürs Persona-Zimmer / spätere Pi-Nutzung)
 sounddevice
 soundfile
+# Voice-Activity-Detection fürs Immer-Zuhören im Tutor-Fenster (scripts/tutor_room.py).
+# webrtcvad-wheels statt webrtcvad: liefert Wheels + kommt ohne pkg_resources aus
+# (setuptools>=81 hat pkg_resources entfernt, klassisches webrtcvad importiert es).
+webrtcvad-wheels
 
 # HTTP-Client (für Whisper/TTS Services, falls nicht über stdlib)
 requests
