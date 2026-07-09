@@ -118,6 +118,29 @@ _presence = {"ts": 0.0}
 _PRESENCE_COOLDOWN = 90.0    # s zwischen zwei Reaktionen
 
 
+# ── Musik (die Persona legt was auf) ─────────────────────────────────────────
+# Feature 7: die Persona kann im Zimmer Musik nach Stimmung auflegen. Der State
+# ist nur ein WUNSCH (action/mood, id-getriggert) — das ABSPIELEN macht das
+# Fenster (pygame.mixer.music, Bibliothek data/persona_music/<mood>/). Kein Audio
+# mitgeliefert (Lizenz) → Content-Lücke; Mechanik läuft, sobald Dateien da sind.
+_MUSIC_MOODS = {"chill", "happy", "focus", "sad", "energetic"}
+_music = {"action": "", "mood": "", "id": 0}   # action: "play" | "stop"
+
+
+def play_music(mood: str = "chill") -> str:
+    m = (mood or "chill").strip().lower()
+    if m not in _MUSIC_MOODS:
+        m = "chill"
+    with _lock:
+        _music["action"] = "play"; _music["mood"] = m; _music["id"] += 1
+    return m
+
+
+def stop_music():
+    with _lock:
+        _music["action"] = "stop"; _music["mood"] = ""; _music["id"] += 1
+
+
 def presence_ping() -> bool:
     """Presence-Sensor: Sasha ist im Raum. Reagiert nur bei AKTIVER Session,
     nonverbal + gedrosselt. True = hat sichtbar reagiert."""
@@ -143,7 +166,9 @@ def room_state() -> dict:
                 "gesture_id": _expr["gid"], "face": _expr["face"],
                 "battery": int(bat), "mood": mood, "active": _active,
                 "thought_word": _thought["word"], "thought_meaning": _thought["meaning"],
-                "thought_id": _thought["id"]}
+                "thought_id": _thought["id"],
+                "music_action": _music["action"], "music_mood": _music["mood"],
+                "music_id": _music["id"]}
 
 def _history_window() -> int:
     """Wieviele der letzten Turns ans Modell gesendet werden (Kosten-Hebel: die

@@ -278,20 +278,98 @@ def _multipart_audio(fields, wav_bytes):
 _mixer_lock = threading.Lock()
 
 
+# ── Hintergrund-Musik (Feature 7) ────────────────────────────────────────────
+# Die Persona legt Musik nach Stimmung auf (mixer.music-Stream, resampelt anders
+# als mixer.Sound automatisch auf die Mixer-Rate). Bibliothek nach Stimmung:
+# data/persona_music/<mood>/*.{ogg,mp3,wav}. KEIN Audio mitgeliefert (Lizenz) →
+# Content-Lücke; sobald Dateien drin sind, läuft es. Während sie SPRICHT wird die
+# Musik geduckt (leiser), nicht gestoppt.
+MUSIC_DIR    = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'persona_music')
+MUSIC_VOLUME = 0.35    # normale Lautstärke
+MUSIC_DUCK   = 0.10    # gedämpft, während die Persona spricht
+_music_state = {"path": None, "playing": False, "ducked": False}
+
+
+def _music_pick(mood):
+    """Zufällige Datei aus data/persona_music/<mood>/ (oder None, wenn leer)."""
+    folder = os.path.join(MUSIC_DIR, mood)
+    try:
+        files = [os.path.join(folder, f) for f in os.listdir(folder)
+                 if f.lower().endswith(('.ogg', '.mp3', '.wav', '.flac'))]
+    except Exception:
+        files = []
+    return random.choice(files) if files else None
+
+
+def music_play(mood):
+    """Lädt einen Track der Stimmung und spielt ihn geloopt (leise im Hintergrund).
+    Keine Datei da → still (Content-Lücke), kein Crash."""
+    path = _music_pick(mood)
+    if not path:
+        return False
+    try:
+        with _mixer_lock:
+            if not pygame.mixer.get_init():
+                pygame.mixer.init()
+            pygame.mixer.music.load(path)
+            vol = MUSIC_DUCK if _music_state["ducked"] else MUSIC_VOLUME
+            pygame.mixer.music.set_volume(vol)
+            pygame.mixer.music.play(-1)
+            _music_state.update(path=path, playing=True)
+        return True
+    except Exception:
+        return False
+
+
+def music_stop():
+    try:
+        with _mixer_lock:
+            pygame.mixer.music.stop()
+    except Exception:
+        pass
+    _music_state.update(path=None, playing=False)
+
+
+def music_duck(on):
+    """Musik während des Sprechens leiser (on) bzw. zurück (off)."""
+    _music_state["ducked"] = bool(on)
+    if not _music_state["playing"]:
+        return
+    try:
+        with _mixer_lock:
+            pygame.mixer.music.set_volume(MUSIC_DUCK if on else MUSIC_VOLUME)
+    except Exception:
+        pass
+
+
 def play_wav(wav_bytes):
     """Spielt WAV-Bytes über pygame.mixer. Initialisiert den Mixer bei Bedarf auf
     die Sample-Rate der Datei — pygame resampelt NICHT, sonst käme die Stimme
     zu hoch/tief. Gibt den Channel zurück (zum Busy-Pollen) oder None. Schlägt
-    Audio fehl (kein Gerät, Pi-ALSA), bleibt es still statt zu crashen."""
+    Audio fehl (kein Gerät, Pi-ALSA), bleibt es still statt zu crashen.
+
+    Muss der Mixer für eine abweichende Rate neu init werden, stoppt das die
+    laufende mixer.music — darum den Track danach wieder aufziehen (aus praktischen
+    Gründen von vorn; TTS ist konstant 22 kHz, ein Reinit passiert also fast nie
+    mitten in einer Session)."""
     try:
         with wave.open(io.BytesIO(wav_bytes), 'rb') as wf:
             fr = wf.getframerate()
         with _mixer_lock:
             init = pygame.mixer.get_init()
-            if not init or init[0] != fr:
+            need_reinit = (not init) or init[0] != fr
+            resume = _music_state["path"] if (need_reinit and _music_state["playing"]) else None
+            if need_reinit:
                 try: pygame.mixer.quit()
                 except Exception: pass
                 pygame.mixer.init(frequency=fr)
+                if resume:
+                    try:
+                        pygame.mixer.music.load(resume)
+                        pygame.mixer.music.set_volume(MUSIC_DUCK if _music_state["ducked"] else MUSIC_VOLUME)
+                        pygame.mixer.music.play(-1)
+                    except Exception:
+                        _music_state.update(path=None, playing=False)
             snd = pygame.mixer.Sound(io.BytesIO(wav_bytes))
             return snd.play()
     except Exception:
@@ -706,6 +784,7 @@ def main():
         'thought': None,       # (wort, bedeutung) Vokabel-Gedanke, oder None
         'thought_id': 0,       # letzte gesehene Gedanken-id (one-shot wie Geste)
         'thought_t': 0.0,      # Restlaufzeit der Gedanken-Blase (s)
+        'music': None,         # laufende Musik-Stimmung (♪-HUD), oder None
         'pending_gesture': None,  # einmalige Geste, die die Persona abspielen soll
         'last_user_ms': 0,     # letzte Sasha-Eingabe (Feedback-Loop)
         'nudged': False,       # Anstoß in dieser Stille schon gemacht?
@@ -741,8 +820,10 @@ def main():
         wav = be.speak(text, lang, a.speaker, a.speed)
         if not wav:
             return
+        music_duck(True)         # Musik leiser, solange sie redet
         ch = play_wav(wav)
         if ch is None:
+            music_duck(False)
             return
         with S['lock']:
             S['speaking'] = True
@@ -752,6 +833,7 @@ def main():
         finally:
             with S['lock']:
                 S['speaking'] = False
+            music_duck(False)    # Musik wieder auf normal
 
     def run_stream(path, payload):
         with S['lock']:
@@ -813,7 +895,7 @@ def main():
         """Ausdrucks-Zustand pollen (Haltung/Geste, von der KI per express-Tool
         gesetzt) und ans Fenster reichen. Persona wird NUR im Render-Thread
         mutiert → hier nur S['stance']/S['pending_gesture'] setzen."""
-        last_gid = 0; last_tid = 0
+        last_gid = 0; last_tid = 0; last_mid = 0
         while True:
             pygame.time.wait(250)
             rs = be.room_state()
@@ -821,6 +903,7 @@ def main():
                 continue
             gid = int(rs.get('gesture_id') or 0)
             tid = int(rs.get('thought_id') or 0)
+            mid = int(rs.get('music_id') or 0)
             with S['lock']:
                 S['stance'] = rs.get('stance') or 'idle'
                 S['face'] = rs.get('face') or 'neutral'
@@ -832,7 +915,17 @@ def main():
                     S['thought'] = (w, (rs.get('thought_meaning') or '').strip()) if w else None
                     S['thought_id'] = tid
                     S['thought_t'] = THOUGHT_TTL if w else 0.0
-            last_gid = gid; last_tid = tid
+                music_now = rs.get('music_mood') if rs.get('music_action') == 'play' else None
+            if mid != last_mid:   # neuer Musik-Wunsch (auflegen/stoppen)
+                if rs.get('music_action') == 'play':
+                    ok = music_play(music_now or 'chill')
+                    with S['lock']:
+                        S['music'] = music_now if ok else None
+                else:
+                    music_stop()
+                    with S['lock']:
+                        S['music'] = None
+            last_gid = gid; last_tid = tid; last_mid = mid
 
     def feedback_loop():
         """Merkt, wenn Sasha eine Weile nichts sagt → EIN Anstoß (die KI schaut/
@@ -1017,6 +1110,7 @@ def main():
                 S['thought_t'] = max(0.0, S['thought_t'] - dt)
             thought = S['thought'] if S['thought_t'] > 0 else None
             thought_t = S['thought_t']
+            music = S['music']
 
         # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft.
         has_text = bool(buf.strip())
@@ -1102,6 +1196,8 @@ def main():
         else:
             mic_line, mic_col = 'Mic: hört zu · Alt+H', HUD_DIM
         screen.blit(fonts['hud'].render(mic_line, True, mic_col), (16, 66))
+        if music:
+            screen.blit(fonts['hud'].render(f'♪ {music}', True, ROLE_USER), (16, 88))
 
         # Soziale Batterie oben rechts (grün hoch / amber mittel / rot niedrig)
         bw2, bh2 = 92, 12

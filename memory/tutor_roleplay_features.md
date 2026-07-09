@@ -135,3 +135,24 @@ dokumentieren, morgen gemeinsam reviewen.
   nutzen — bewusst nicht gebaut: online + eigener Sandbox-Store nötig).
 - **Offen/Review:** willst du echte tagesaktuelle China-News (dann Feed-Quelle +
   isolierter Ingest festlegen), oder reicht der Evergreen-Gesprächsstoff?
+
+### 7. Musik (Mechanik, Content-Lücke) ✅
+- **play_music(mood)** + **stop_music** (Tools 11+12): die Persona legt Musik nach
+  Stimmung auf — `chill/happy/focus/sad/energetic`. `tutor_session` hält nur den
+  WUNSCH (action/mood, id-getriggert); **abgespielt wird im Fenster** über
+  `pygame.mixer.music` aus `data/persona_music/<mood>/*.{ogg,mp3,wav,flac}` (zufällige
+  Datei, geloopt, leise ~0.35). `♪ <mood>`-HUD zeigt's an.
+- **Mixer-Konflikt gelöst:** TTS (`play_wav`) reinitialisiert den Mixer bei
+  abweichender Rate → das stoppt `mixer.music`. Zwei Schutzmaßnahmen: (a) während
+  sie SPRICHT wird die Musik **geduckt** (leiser), nicht gestoppt; (b) muss doch
+  reinit passieren, wird der Track danach wieder aufgezogen. In der Praxis ist TTS
+  konstant 22 kHz → nach dem ersten Ton bleibt der Mixer stabil, ein Reinit mitten
+  in der Session passiert fast nie.
+- **Entscheidung/Annahme:** Ordner-nach-Stimmung ist die simpelste Bibliothek
+  (keine Metadaten-DB nötig). Moods frei gewählt. **Content-Lücke:** kein Audio
+  mitgeliefert (Lizenz) — `data/persona_music/` ist leer/gitignored; sobald Sasha
+  dort Dateien reinlegt, läuft es sofort. Headless getestet (dummy audio, inkl.
+  Reinit-Resume), aber **nicht mit echtem Audiogerät + echten Musikdateien**.
+- **Offen/Review:** Musikquelle klären (eigene Files / gemeinfrei / lokal
+  gerippt?); Lautstärke/Duck-Werte nach Gefühl; evtl. sanftes Fade statt hartem
+  Volume-Sprung.

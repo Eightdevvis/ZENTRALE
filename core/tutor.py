@@ -270,6 +270,28 @@ def get_local_news() -> str:
     return f"（可以随口提一句，别像播新闻）中国最近常聊的：{topic}"
 
 
+def play_music(mood: str = "chill") -> str:
+    """Legt im Zimmer Musik nach Stimmung auf (chill/happy/focus/sad/energetic).
+    Reicht nur den Wunsch an tutor_session; das Fenster spielt aus seiner lokalen
+    Bibliothek (data/persona_music/<mood>/). Reine UI/Audio — kein Core-AI-Zugriff."""
+    try:
+        import tutor_session
+        m = tutor_session.play_music(mood)
+        return f"ok（{m}）"
+    except Exception:
+        return "ok"
+
+
+def stop_music() -> str:
+    """Stoppt die Musik im Zimmer."""
+    try:
+        import tutor_session
+        tutor_session.stop_music()
+    except Exception:
+        pass
+    return "ok"
+
+
 def express(action: str) -> str:
     """Ausdruck im Zimmer (Haltung/Geste). Reicht die Aktion an tutor_session
     weiter, das den Zustand fürs Fenster hält. Lazy-Import bricht den Zyklus
@@ -427,6 +449,30 @@ TUTOR_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name":        "play_music",
+            "description": "想在房间里放点音乐时用（按心情选）。chill 轻松 / happy 开心 / focus 专注 / "
+                           "sad 安静 / energetic 有劲儿。放就好，别一直提音乐。",
+            "parameters":  {
+                "type": "object",
+                "properties": {
+                    "mood": {"type": "string",
+                             "enum": ["chill", "happy", "focus", "sad", "energetic"]},
+                },
+                "required": ["mood"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name":        "stop_music",
+            "description": "把音乐停掉。",
+            "parameters":  {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name":        "get_local_news",
             "description": "想跟 Sasha 随口聊聊中国最近的话题时用（比如天气、吃的、节日、大家在聊什么）。"
                            "返回一个话题，你自然地带一句就好，别像播新闻，别一直聊这个。你是 AI，说的是中国的情况，不是你亲身经历。",
@@ -475,6 +521,8 @@ _ALLOWED = {
     "get_structures":        lambda a: get_structures(),
     "introduce_structure":   lambda a: introduce_structure(a.get("pattern", ""), a.get("note", "")),
     "increment_structure":   lambda a: increment_structure(a.get("pattern", "")),
+    "play_music":            lambda a: play_music(a.get("mood", "chill")),
+    "stop_music":            lambda a: stop_music(),
     "get_local_news":        lambda a: get_local_news(),
     "show_thought":          lambda a: show_thought(a.get("word", ""), a.get("meaning", "")),
 }
