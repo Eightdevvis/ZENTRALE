@@ -107,6 +107,33 @@ def set_thought(word: str, meaning: str = ""):
         _thought["id"] += 1
 
 
+# ── Presence-Reaktion (Sasha tauct im Raum auf) ──────────────────────────────
+# Sashas Roleplay-Idee: die Persona merkt, wenn du reinkommst. WICHTIG — der
+# Presence-AUTO-START bleibt bewusst pausiert (memory/tutor_system.md,
+# Sequencing): dieser Ping STARTET NIE eine Session. Läuft die Session schon,
+# reagiert sie nur NONVERBAL (schaut hoch, hellt auf, kleiner Batterie-Schub) —
+# KEIN erzwungener Cloud-Turn (genau der schlechte Auto-Trigger, der 05-14 zur
+# Deaktivierung führte). Gedrosselt, damit PIR-Zucken sie nicht nervös macht.
+_presence = {"ts": 0.0}
+_PRESENCE_COOLDOWN = 90.0    # s zwischen zwei Reaktionen
+
+
+def presence_ping() -> bool:
+    """Presence-Sensor: Sasha ist im Raum. Reagiert nur bei AKTIVER Session,
+    nonverbal + gedrosselt. True = hat sichtbar reagiert."""
+    with _lock:
+        if not _active:
+            return False
+        now = time.time()
+        if now - _presence["ts"] < _PRESENCE_COOLDOWN:
+            return False
+        _presence["ts"] = now
+        _expr["gesture"] = "look"; _expr["gid"] += 1   # schaut zu ihr rüber
+        _expr["face"] = "happy"                          # hellt auf
+    battery_bump(6.0)    # jemand ist da → hebt die Laune (nimmt _lock selbst)
+    return True
+
+
 def room_state() -> dict:
     """Aktueller Ausdrucks-Zustand + Stimmung fürs Zimmer-Fenster (leichtgewichtig)."""
     with _lock:

@@ -147,10 +147,16 @@ scripts/tutor_room.py [--url … --speaker N --speed X --mute]`.
   startet die Kiosk-TUI `-maximized`, damit solche Fenster oben liegen). Der
   Browser bekommt KEIN Zimmer (kann keinen nativen Prozess starten; text-first
   bleibt).
-- **Offen/Skizze:** Presence-Auto-Öffnen (Sensor → Zimmer auf + Persona spricht
-  an; Andockpunkt `brain.py` `PRESENCE_DETECTED`), reichere Sprites/Möbel,
-  eigene Fallback-Aktivitäten (schlafen, malen), auf die sie beim Chillen
-  zurückfällt.
+- **Teilweise gebaut (2026-07-09), REVIEW:** Presence gibt jetzt eine **nonverbale**
+  Reaktion — `brain.py PRESENCE_DETECTED` → `tutor_session.presence_ping()` (schaut
+  hoch, Mimik happy, +Batterie), aber **NUR** hinter Env-Flag
+  `TUTOR_PRESENCE_REACT=1` (default aus) UND nur bei bereits **laufender** Session.
+  Es STARTET keine Session und macht **keinen** verbalen Auto-Gruß (das bleibt
+  bewusst aus — genau der schlechte Auto-Trigger). Details:
+  `memory/tutor_roleplay_features.md` §5.
+- **Offen/Skizze:** verbaler Presence-Gruß (erst nach Core-KI-Sequencing /
+  Sashas Freigabe), Auto-Öffnen des Fensters, reichere Sprites/Möbel, eigene
+  Fallback-Aktivitäten (schlafen, malen), auf die sie beim Chillen zurückfällt.
 
 ### Eigenleben: Ausdruck + Feedback-Loop (nicht nur ein Chatfenster)
 

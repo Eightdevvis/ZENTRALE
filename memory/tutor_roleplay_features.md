@@ -94,3 +94,23 @@ dokumentieren, morgen gemeinsam reviewen.
   Mechanik. Später: Wort→Bild-Zuordnung (manuell kuratiert oder generiert).
 - **Offen/Review:** TTL/Position der Blase nach Gefühl justieren; evtl. Kollision
   mit der Sprechblase prüfen (steht bewusst nach links versetzt).
+
+### 5. Presence im Hintergrund ✅ (bewusst konservativ, REVIEW)
+- **Spannungsfeld:** die Roadmap sagt „PRESENCE_DETECTED → Zimmer/Anquatschen",
+  ABER `memory/tutor_system.md` verbietet **explizit** den Presence-Auto-Start in
+  brain.py (Sequencing — und der schlechte Auto-Trigger war 2026-05-14 der
+  *Anlass* der Deaktivierung). Ich habe zugunsten des dokumentierten Guardrails
+  entschieden und die Mechanik **konservativ** gebaut:
+- `tutor_session.presence_ping()`: **startet NIE** eine Session. Läuft die Session
+  schon, reagiert die Persona **nonverbal** — schaut hoch (`look`), Mimik `happy`,
+  +6 Batterie. Gedrosselt (`_PRESENCE_COOLDOWN=90s`) gegen PIR-Zucken. Der Laptop-
+  Raum sieht die Reaktion über den `room_state`-Poll.
+- `brain.py` PRESENCE_DETECTED: Hook hinter **Env-Flag `TUTOR_PRESENCE_REACT=1`,
+  default AUS** → Default-Laufzeit **unverändert** („kein Trigger aktiv"). Flag an
+  = nonverbale Reaktion (nur bei aktiver Session).
+- **Bewusst NICHT gebaut:** der verbale Auto-Gruß („Anquatschen" per Cloud-Turn)
+  aus einem Sensor-Event — das IST der schlechte Auto-Trigger. Erst wenn Core-KI-
+  Sequencing durch ist / Sasha es freigibt, als eigener Schritt (eigenes Flag).
+- **Review-Frage an Sasha:** reicht die nonverbale Reaktion, oder willst du den
+  verbalen Gruß doch — dann unter welcher Bedingung (nur bei offenem Fenster, mit
+  Rate-Limit)? Cooldown/Flag-Namen sind Vorschläge.
