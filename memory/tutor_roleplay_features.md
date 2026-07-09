@@ -60,3 +60,18 @@ dokumentieren, morgen gemeinsam reviewen.
   keine Antwort).
 - **Offen/Review:** Werte fürs Gefühl nachjustieren; evtl. bei sehr niedriger
   Batterie auch die Rede-Lust drosseln (sie wird wortkarger).
+
+### 3. Vokabel-Feinmodell + Satz-Strukturen ✅
+- **Pro-Wort-Vertrautheit** war schon da (correct_use + confirmed). Jetzt besser
+  exponiert: `tutor.vocab_split()` → (gefestigt, im-Lernen); der injizierte
+  Vokabel-Kontext (tutor_session) zeigt beides getrennt („放心多用" vs „多带带").
+- **Strukturen** (NEU, das genuin Fehlende): paralleler Pool für Satzmuster/neue
+  Sagweisen (`data/structures_mandarin.json`) + 3 Tools `get_structures /
+  introduce_structure / increment_structure` (auto-„掌握" ab 3× korrekt). In den
+  Kontext injiziert. So kann die Persona nicht nur neue WÖRTER, sondern auch neue
+  STRUKTUREN stückweise einführen (Sashas „新词或新说法").
+- **Entscheidung/Annahme:** Strukturen mandarin-fest (wie die Vokabeldatei —
+  vocab_*.json ist eh hardcoded zh; Multi-Sprache ist ein separater Umbau).
+- **Offen/Review:** qwen-Verhaltens-Recheck mit dem VOLLEN Tool-Set (jetzt 8
+  Tools) steht noch aus — mache ich gesammelt gegen Ende. Bisher: Prompt
+  unverändert, Tools nur Schemas (nicht erzwungen) → Regressions-Risiko gering.

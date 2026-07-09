@@ -249,9 +249,17 @@ def respond_stream(user_text: str = None, nudge: bool = False):
     hint = prof.get("vocab_hint")
     if hint:
         try:
-            words = "、".join(tutor.term_list())
-            if words:
-                system = system + "\n\n" + hint.format(words=words)
+            solid, learn = tutor.vocab_split()
+            structs = tutor.structure_list()
+            parts = []
+            if solid:   parts.append("已掌握（放心多用）：" + "、".join(solid))
+            if learn:   parts.append("在学（多带带，用对了帮她记）：" + "、".join(learn))
+            if structs: parts.append("在教的句型：" + "、".join(structs))
+            if not parts:                      # ganz frisch: einfach die Wörter
+                parts = ["她在学：" + "、".join(tutor.term_list())]
+            body = "；".join(parts)
+            if body.strip("：；"):
+                system = system + "\n\n" + hint.format(words=body)
         except Exception:
             pass
 

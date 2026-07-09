@@ -129,6 +129,85 @@ def term_list() -> list:
     return [e['word'] for e in entries if e.get('word')]
 
 
+def vocab_split() -> tuple:
+    """(gefestigte Wörter, im-Lernen-Wörter) — für den Vokabel-Kontext, damit die
+    KI weiß, worauf sie bauen kann und was sie noch festigen soll (Feinmodell)."""
+    with _lock:
+        entries = _load_raw()
+    solid = [e['word'] for e in entries if e.get('word') and e.get('confirmed')]
+    learn = [e['word'] for e in entries if e.get('word') and not e.get('confirmed')]
+    return solid, learn
+
+
+# ── Satz-Strukturen / neue „Sagweisen" (Feinmodell: nicht nur Wörter) ────────
+# Parallel zum Vokabel-Pool, aber für Grammatik/Muster („怎么说X", „把-Satz", …).
+# Damit die Persona nicht nur neue WÖRTER, sondern auch neue STRUKTUREN stückweise
+# einführen kann (Sashas Idee). Mandarin-fest wie die Vokabeldatei.
+_STRUCT_FILE      = os.path.join(os.path.dirname(__file__), '..', 'data', 'structures_mandarin.json')
+STRUCT_THRESHOLD  = 3
+
+
+def _struct_load() -> list:
+    if not os.path.exists(_STRUCT_FILE):
+        return []
+    try:
+        with open(_STRUCT_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def _struct_write(entries: list):
+    os.makedirs(os.path.dirname(_STRUCT_FILE), exist_ok=True)
+    with open(_STRUCT_FILE, 'w', encoding='utf-8') as f:
+        json.dump(entries, f, indent='\t', ensure_ascii=False)
+
+
+def get_structures() -> str:
+    with _lock:
+        e = _struct_load()
+    if not e:
+        return "还没有句型。她熟了可以用 introduce_structure 加一个新说法。"
+    lines = [f"{s['pattern']} — {s.get('note','')}（{s.get('uses',0)}次" +
+             ("，已掌握" if s.get('confirmed') else "") + "）" for s in e]
+    return "在学的句型/说法:\n" + "\n".join(lines)
+
+
+def structure_list() -> list:
+    with _lock:
+        e = _struct_load()
+    return [s['pattern'] for s in e if s.get('pattern')]
+
+
+def introduce_structure(pattern: str, note: str = "") -> str:
+    pattern = (pattern or '').strip()
+    if not pattern:
+        return "[kein Muster]"
+    with _lock:
+        e = _struct_load()
+        if any(s.get('pattern') == pattern for s in e):
+            return f"['{pattern}' 已有]"
+        e.append({"pattern": pattern, "note": (note or '').strip(), "uses": 0, "confirmed": False})
+        _struct_write(e)
+    return f"✓ 新句型: {pattern}"
+
+
+def increment_structure(pattern: str) -> str:
+    pattern = (pattern or '').strip()
+    with _lock:
+        e = _struct_load()
+        for s in e:
+            if s.get('pattern') == pattern:
+                s['uses'] = s.get('uses', 0) + 1
+                if s['uses'] >= STRUCT_THRESHOLD and not s.get('confirmed'):
+                    s['confirmed'] = True
+                    _struct_write(e)
+                    return f"✓ 句型 '{pattern}' 已掌握"
+                _struct_write(e)
+                return f"✓ '{pattern}' {s['uses']}/{STRUCT_THRESHOLD}"
+    return f"['{pattern}' 未找到]"
+
+
 def express(action: str) -> str:
     """Ausdruck im Zimmer (Haltung/Geste). Reicht die Aktion an tutor_session
     weiter, das den Zustand fürs Fenster hält. Lazy-Import bricht den Zyklus
@@ -236,6 +315,41 @@ TUTOR_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name":        "get_structures",
+            "description": "看看 Sasha 在学哪些句型/说法（新语法/表达，不只是单词）。",
+            "parameters":  {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name":        "introduce_structure",
+            "description": "等 Sasha 现有的词熟了，偶尔加一个新句型/新说法（比如 把-字句、怎么说…之类）。别一次加太多。",
+            "parameters":  {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "句型，如 '把 X 放在 Y'"},
+                    "note":    {"type": "string", "description": "简短说明（可选）"},
+                },
+                "required": ["pattern"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name":        "increment_structure",
+            "description": "Sasha 正确用了某个句型时调用，帮她把它变熟。",
+            "parameters":  {
+                "type": "object",
+                "properties": {"pattern": {"type": "string"}},
+                "required": ["pattern"],
+            },
+        },
+    },
 ]
 
 
@@ -255,6 +369,9 @@ _ALLOWED = {
     "increment_correct_use": lambda a: increment_correct_use(a.get("word", "")),
     "introduce_new":         lambda a: introduce_new(a.get("word", ""), a.get("pinyin", "")),
     "express":               lambda a: express(a.get("action", "")),
+    "get_structures":        lambda a: get_structures(),
+    "introduce_structure":   lambda a: introduce_structure(a.get("pattern", ""), a.get("note", "")),
+    "increment_structure":   lambda a: increment_structure(a.get("pattern", "")),
 }
 
 

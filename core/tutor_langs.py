@@ -95,7 +95,7 @@ Sasha: 我有点累
 # Vokabel-Hinweis (auf Chinesisch, sonst driftet qwen ins Deutsche) — wird in
 # tutor_session mit den aktuellen Wörtern gefüllt und ans Ende gehängt. Ersetzt
 # das frühere "ruf get_confirmed_vocab() auf". {words} = bekannte/gelernte Wörter.
-_ZH_VOCAB_HINT = "（背景，别在对话里提：她在学这几个词，多用这些，偶尔带一个新的：{words}）"
+_ZH_VOCAB_HINT = "（背景，别在对话里提，帮你把握分寸：{words}。她熟了偶尔加一个新词或新句型。）"
 
 
 PROFILES = {
