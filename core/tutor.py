@@ -220,6 +220,18 @@ def express(action: str) -> str:
     return "ok"
 
 
+def show_thought(word: str, meaning: str = "") -> str:
+    """Zeigt Sasha „in Gedanken" ein Wort + seine Bedeutung (Übersetzung, und im
+    Fenster ggf. ein Bild aus data/vocab_images/<wort>.png) — comprehensible input
+    statt Text-Erklärung. Reicht an tutor_session weiter (Fenster pollt)."""
+    try:
+        import tutor_session
+        tutor_session.set_thought(word, meaning)
+    except Exception:
+        pass
+    return "ok"
+
+
 def get_vocab_stats() -> str:
     """
     Gibt eine kurze Statistik über den Lernfortschritt zurück.
@@ -350,6 +362,22 @@ TUTOR_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name":        "show_thought",
+            "description": "想帮 Sasha 懂一个词时，在你脑子里显示这个词和它的意思（图或翻译），"
+                           "让她一看就懂——比用一堆话解释好。word 是这个词，meaning 是德语意思。",
+            "parameters":  {
+                "type": "object",
+                "properties": {
+                    "word":    {"type": "string", "description": "要解释的词（中文）"},
+                    "meaning": {"type": "string", "description": "德语意思/翻译"},
+                },
+                "required": ["word"],
+            },
+        },
+    },
 ]
 
 
@@ -372,6 +400,7 @@ _ALLOWED = {
     "get_structures":        lambda a: get_structures(),
     "introduce_structure":   lambda a: introduce_structure(a.get("pattern", ""), a.get("note", "")),
     "increment_structure":   lambda a: increment_structure(a.get("pattern", "")),
+    "show_thought":          lambda a: show_thought(a.get("word", ""), a.get("meaning", "")),
 }
 
 

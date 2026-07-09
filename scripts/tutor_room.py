@@ -76,6 +76,60 @@ BAR_DIM    = (128, 118, 128)
 # Gesagtes „verhallt": Blase steht kurz voll, dann blendet sie aus.
 BUBBLE_LINGER = 4.0   # s voll sichtbar nach dem Sprechen
 BUBBLE_FADE   = 1.3   # s Ausblenden danach
+# Gedanken-Blase (Vokabel-Hilfe: Wort + Übersetzung, optional Bild)
+THOUGHT_BG  = (240, 242, 250)
+THOUGHT_FG  = (40, 44, 60)
+THOUGHT_SUB = (96, 102, 128)
+THOUGHT_TTL = 6.0     # s sichtbar, dann aus
+_VOCAB_IMG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'vocab_images')
+_img_cache = {}
+
+
+def _vocab_image(word):
+    """Bild zu einem Wort aus data/vocab_images/<wort>.png (falls vorhanden),
+    gecacht. Kein Bild → None (dann nur Wort+Übersetzung)."""
+    if word in _img_cache:
+        return _img_cache[word]
+    img = None
+    try:
+        p = os.path.join(_VOCAB_IMG_DIR, word + '.png')
+        if os.path.exists(p):
+            img = pygame.image.load(p).convert_alpha()
+    except Exception:
+        img = None
+    _img_cache[word] = img
+    return img
+
+
+def draw_thought(surf, font, small, word, meaning, cx, top_y, alpha=255):
+    """Gedanken-Blase (heller als die Sprechblase, mit kleinen Trail-Kringeln)
+    über/neben dem Kopf: optional Bild, dann Wort (Zielsprache), dann Übersetzung."""
+    if not word or alpha <= 0:
+        return
+    img = _vocab_image(word)
+    iw = ih = 0
+    if img:
+        iw = min(80, img.get_width())
+        ih = int(img.get_height() * (iw / img.get_width())) if img.get_width() else 0
+    w_word = font.render(word, True, THOUGHT_FG)
+    w_mean = small.render(meaning, True, THOUGHT_SUB) if meaning else None
+    cw = max(iw, w_word.get_width(), (w_mean.get_width() if w_mean else 0)) + 26
+    ch = 12 + (ih + 6 if ih else 0) + w_word.get_height() + (w_mean.get_height() + 4 if w_mean else 0) + 10
+    bx = max(8, int(cx - cw - 70))
+    by = max(8, int(top_y - ch - 24))
+    tmp = pygame.Surface((cw, ch + 16), pygame.SRCALPHA)
+    pygame.draw.rect(tmp, THOUGHT_BG, (0, 0, cw, ch), border_radius=16)
+    y = 10
+    if img:
+        tmp.blit(pygame.transform.smoothscale(img, (iw, ih)), ((cw - iw) // 2, y)); y += ih + 6
+    tmp.blit(w_word, ((cw - w_word.get_width()) // 2, y)); y += w_word.get_height() + 3
+    if w_mean:
+        tmp.blit(w_mean, ((cw - w_mean.get_width()) // 2, y))
+    pygame.draw.circle(tmp, THOUGHT_BG, (cw - 14, ch + 3), 6)   # Trail Richtung Kopf
+    pygame.draw.circle(tmp, THOUGHT_BG, (cw - 4, ch + 11), 4)
+    if alpha < 255:
+        tmp.set_alpha(alpha)
+    surf.blit(tmp, (bx, by))
 # Feedback-Loop (gedeckelt, damit die Cloud-Kosten winzig bleiben): nach kurzer
 # Stille EIN Anstoß (die KI schaut/winkt/fragt), danach chillt sie — client-
 # seitig, kostenlos. Bleibt das Fenster offen, alle ~15 min ein neuer Versuch.
@@ -649,6 +703,9 @@ def main():
         'stance': 'idle',      # von der KI gesetzte Haltung (room_state-Poll)
         'face': 'neutral',     # von der KI gesetzte Mimik
         'battery': 60, 'mood': 'ok',   # soziale Batterie / Stimmung
+        'thought': None,       # (wort, bedeutung) Vokabel-Gedanke, oder None
+        'thought_id': 0,       # letzte gesehene Gedanken-id (one-shot wie Geste)
+        'thought_t': 0.0,      # Restlaufzeit der Gedanken-Blase (s)
         'pending_gesture': None,  # einmalige Geste, die die Persona abspielen soll
         'last_user_ms': 0,     # letzte Sasha-Eingabe (Feedback-Loop)
         'nudged': False,       # Anstoß in dieser Stille schon gemacht?
@@ -756,20 +813,26 @@ def main():
         """Ausdrucks-Zustand pollen (Haltung/Geste, von der KI per express-Tool
         gesetzt) und ans Fenster reichen. Persona wird NUR im Render-Thread
         mutiert → hier nur S['stance']/S['pending_gesture'] setzen."""
-        last_gid = 0
+        last_gid = 0; last_tid = 0
         while True:
             pygame.time.wait(250)
             rs = be.room_state()
             if not isinstance(rs, dict):
                 continue
             gid = int(rs.get('gesture_id') or 0)
+            tid = int(rs.get('thought_id') or 0)
             with S['lock']:
                 S['stance'] = rs.get('stance') or 'idle'
                 S['face'] = rs.get('face') or 'neutral'
                 S['battery'] = int(rs.get('battery', 60)); S['mood'] = rs.get('mood') or 'ok'
                 if gid != last_gid:
                     S['pending_gesture'] = rs.get('gesture')
-            last_gid = gid
+                if tid != last_tid:   # neuer Vokabel-Gedanke → Blase zeigen
+                    w = (rs.get('thought_word') or '').strip()
+                    S['thought'] = (w, (rs.get('thought_meaning') or '').strip()) if w else None
+                    S['thought_id'] = tid
+                    S['thought_t'] = THOUGHT_TTL if w else 0.0
+            last_gid = gid; last_tid = tid
 
     def feedback_loop():
         """Merkt, wenn Sasha eine Weile nichts sagt → EIN Anstoß (die KI schaut/
@@ -950,6 +1013,10 @@ def main():
             stance = S['stance']; pend = S['pending_gesture']; S['pending_gesture'] = None
             face = S['face']; battery = S['battery']; mood = S['mood']
             mic = S['mic']; hearing = S['hearing']; transcribing = S['transcribing']; mic_err = S['mic_err']
+            if S['thought_t'] > 0:
+                S['thought_t'] = max(0.0, S['thought_t'] - dt)
+            thought = S['thought'] if S['thought_t'] > 0 else None
+            thought_t = S['thought_t']
 
         # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft.
         has_text = bool(buf.strip())
@@ -995,6 +1062,13 @@ def main():
             else:
                 alpha = int(255 * max(0.0, 1 - (bub_age - BUBBLE_LINGER) / BUBBLE_FADE))
             draw_bubble(screen, fonts['bubble'], bub_text, persona.x, persona.head_top(), w, alpha)
+
+        # Gedanken-Blase (Vokabel-Hilfe): Wort + Übersetzung (+ Bild, falls da),
+        # neben dem Kopf, blendet in der letzten Sekunde aus.
+        if thought and avail is not False:
+            t_alpha = 255 if thought_t > 1.0 else int(255 * max(0.0, thought_t))
+            draw_thought(screen, fonts['bubble'], fonts['log'],
+                         thought[0], thought[1], persona.x, persona.head_top(), t_alpha)
 
         # schläft/nicht erreichbar
         if avail is False:

@@ -93,6 +93,20 @@ def battery_bump(amount: float):
         _battery["ts"] = time.time()
 
 
+# ── Gedanken-Bild/Übersetzung (comprehensible input statt Text-Wand) ─────────
+# Sashas Idee: die Persona kann „in Gedanken" ein Bild ODER die Übersetzung zu
+# einem Wort zeigen, statt es mit Text zu erklären. id zählt hoch → das Fenster
+# zeigt es GENAU EINMAL (und blendet es dann aus).
+_thought = {"word": "", "meaning": "", "id": 0}
+
+
+def set_thought(word: str, meaning: str = ""):
+    with _lock:
+        _thought["word"] = (word or "").strip()
+        _thought["meaning"] = (meaning or "").strip()
+        _thought["id"] += 1
+
+
 def room_state() -> dict:
     """Aktueller Ausdrucks-Zustand + Stimmung fürs Zimmer-Fenster (leichtgewichtig)."""
     with _lock:
@@ -100,7 +114,9 @@ def room_state() -> dict:
         mood = "happy" if bat >= 68 else ("low" if bat < 32 else "ok")
         return {"stance": _expr["stance"], "gesture": _expr["gesture"],
                 "gesture_id": _expr["gid"], "face": _expr["face"],
-                "battery": int(bat), "mood": mood, "active": _active}
+                "battery": int(bat), "mood": mood, "active": _active,
+                "thought_word": _thought["word"], "thought_meaning": _thought["meaning"],
+                "thought_id": _thought["id"]}
 
 def _history_window() -> int:
     """Wieviele der letzten Turns ans Modell gesendet werden (Kosten-Hebel: die

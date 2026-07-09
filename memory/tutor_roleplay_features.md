@@ -75,3 +75,22 @@ dokumentieren, morgen gemeinsam reviewen.
 - **Offen/Review:** qwen-Verhaltens-Recheck mit dem VOLLEN Tool-Set (jetzt 8
   Tools) steht noch aus — mache ich gesammelt gegen Ende. Bisher: Prompt
   unverändert, Tools nur Schemas (nicht erzwungen) → Regressions-Risiko gering.
+
+### 4. Visuelle Vokabel-Hilfe (Gedanken-Blase) ✅
+- **show_thought(word, meaning)**-Tool (9. Tool): die KI zeigt „in ihrem Kopf"
+  ein Wort + dessen deutsche Bedeutung. `tutor.show_thought` → `tutor_session.
+  set_thought` (State `_thought` mit hochzählender id). `room_state()` liefert
+  `thought_word/thought_meaning/thought_id`.
+- **Render** (`scripts/tutor_room.py`): `draw_thought()` zeichnet eine helle
+  Gedanken-Blase neben dem Kopf (kleine Trail-Kringel), Wort (Zielsprache, groß)
+  + Übersetzung (klein). `watch_room` pollt `thought_id` one-shot (wie Gesten) →
+  `S['thought']` + TTL 6 s, blendet in der letzten Sekunde aus.
+- **Bild-Variante:** liegt in `data/vocab_images/<wort>.png` ein Bild, wird es
+  über dem Wort gezeigt (gecacht, `_vocab_image`). Prompt-Zeile (zh) ergänzt:
+  „想帮她记住一个词时，可以用 show_thought …".
+- **Entscheidung/Annahme:** die Übersetzungs-Variante ist voll funktionsfähig
+  (KI liefert Wort+Bedeutung). Bilder sind ein **Drop-in-Ordner** ohne
+  mitgelieferte Assets — **Content-Lücke** (kein lizenziertes Bildmaterial), rein
+  Mechanik. Später: Wort→Bild-Zuordnung (manuell kuratiert oder generiert).
+- **Offen/Review:** TTL/Position der Blase nach Gefühl justieren; evtl. Kollision
+  mit der Sprechblase prüfen (steht bewusst nach links versetzt).
