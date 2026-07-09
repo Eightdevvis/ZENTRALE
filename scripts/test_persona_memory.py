@@ -93,7 +93,7 @@ def main():
         sp = p["system_prompt"]
         check("zh-prompt: nur-Mandarin-Regel", "只用中文" in sp)
         check("zh-prompt: kein Fake-Lob", "别夸她" in sp)
-        check("zh-prompt: ehrlich KI, kein Fake-Mensch", "你是 AI" in sp and "别编身世" in sp)
+        check("zh-prompt: ehrlich KI, kein Fake-Mensch", "你是 AI" in sp and "不是真人" in sp)
         check("zh-prompt: KEIN altes Länder-Spam", "Nationalgericht" not in sp and "vernarrt" not in sp)
         check("zh-prompt: schlank (< 800 zeichen)", len(sp) < 800)
         # Vokabel-Mechanik lebt weiter (Tools + Kontext-Injektion in tutor_session)
