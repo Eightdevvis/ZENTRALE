@@ -696,6 +696,48 @@ def _transcript_lines(log, persona_name, font, max_w):
     return out
 
 
+def draw_tv(surf, w, h, on, title, font, t):
+    """Fernseher an der Wand. Aus = dunkler Schirm; an = leuchtet (bläulich,
+    leichtes Flackern) und zeigt den Titel. Echtes Video ist DEFERRED — der
+    Schirm zeigt nur den Titel + ein Schimmern (Content-/Playback-Lücke)."""
+    tw, th = int(w * 0.17), int(h * 0.14)
+    tx, ty = int(w * 0.40) - tw // 2, int(h * 0.20)
+    # Standfuß/Rahmen
+    pygame.draw.rect(surf, (28, 26, 32), (tx - 6, ty - 6, tw + 12, th + 12), border_radius=8)
+    if on:
+        # Glühen um den TV
+        glow = pygame.Surface((tw + 80, th + 80), pygame.SRCALPHA)
+        pygame.draw.rect(glow, (120, 170, 220, 46), (24, 24, tw + 32, th + 32), border_radius=20)
+        surf.blit(glow, (tx - 40, ty - 40))
+        flick = 12 + int(6 * math.sin(t * 7.0))
+        screen_col = (52 + flick, 78 + flick, 120 + flick)
+        pygame.draw.rect(surf, screen_col, (tx, ty, tw, th))
+        # ein paar Scanlinien / Schimmer
+        for k in range(0, th, 6):
+            pygame.draw.line(surf, (screen_col[0] + 10, screen_col[1] + 10, screen_col[2] + 14),
+                             (tx, ty + k), (tx + tw, ty + k), 1)
+        # Titel (umgebrochen, zentriert)
+        if title:
+            words = title
+            maxw = tw - 12
+            lines, cur = [], ''
+            for chch in words:
+                if font.size(cur + chch)[0] > maxw and cur:
+                    lines.append(cur); cur = chch
+                else:
+                    cur += chch
+            if cur:
+                lines.append(cur)
+            lines = lines[:3]
+            yy = ty + th // 2 - (len(lines) * font.get_linesize()) // 2
+            for ln in lines:
+                r = font.render(ln, True, (235, 242, 252))
+                surf.blit(r, (tx + (tw - r.get_width()) // 2, yy)); yy += font.get_linesize()
+    else:
+        pygame.draw.rect(surf, (20, 22, 28), (tx, ty, tw, th))
+        pygame.draw.line(surf, (40, 44, 52), (tx + 6, ty + 6), (tx + tw - 10, ty + th - 8), 2)  # Reflex
+
+
 def draw_bubble(surf, font, text, cx, top_y, w, alpha=255):
     """Sprechblase über dem Kopf; alpha<255 blendet sie aus (Gesagtes verhallt).
     Auf eine Temp-Surface gemalt, damit der Alpha gleichmäßig wirkt."""
@@ -785,6 +827,7 @@ def main():
         'thought_id': 0,       # letzte gesehene Gedanken-id (one-shot wie Geste)
         'thought_t': 0.0,      # Restlaufzeit der Gedanken-Blase (s)
         'music': None,         # laufende Musik-Stimmung (♪-HUD), oder None
+        'tv': (False, ''),     # (an?, titel) Fernseher-Zustand
         'pending_gesture': None,  # einmalige Geste, die die Persona abspielen soll
         'last_user_ms': 0,     # letzte Sasha-Eingabe (Feedback-Loop)
         'nudged': False,       # Anstoß in dieser Stille schon gemacht?
@@ -915,6 +958,7 @@ def main():
                     S['thought'] = (w, (rs.get('thought_meaning') or '').strip()) if w else None
                     S['thought_id'] = tid
                     S['thought_t'] = THOUGHT_TTL if w else 0.0
+                S['tv'] = (bool(rs.get('tv_on')), (rs.get('tv_title') or ''))
                 music_now = rs.get('music_mood') if rs.get('music_action') == 'play' else None
             if mid != last_mid:   # neuer Musik-Wunsch (auflegen/stoppen)
                 if rs.get('music_action') == 'play':
@@ -1110,7 +1154,7 @@ def main():
                 S['thought_t'] = max(0.0, S['thought_t'] - dt)
             thought = S['thought'] if S['thought_t'] > 0 else None
             thought_t = S['thought_t']
-            music = S['music']
+            music = S['music']; tv_on, tv_title = S['tv']
 
         # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft.
         has_text = bool(buf.strip())
@@ -1147,6 +1191,7 @@ def main():
 
         # zeichnen
         draw_room(screen, w, h, caret_t)
+        draw_tv(screen, w, h, tv_on, tv_title, fonts['hud'], caret_t)
         persona.draw(screen)
 
         # Blase mit Ausblenden

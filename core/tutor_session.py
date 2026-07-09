@@ -141,6 +141,24 @@ def stop_music():
         _music["action"] = "stop"; _music["mood"] = ""; _music["id"] += 1
 
 
+# ── Fernseher (die Persona macht den TV an) ──────────────────────────────────
+# Feature 8: im Zimmer steht ein TV; die Persona kann etwas „anmachen" (nach
+# Stimmung/Level). State = an/aus + Titel (id-getriggert). Echtes Video-Playback
+# ist DEFERRED (keine Files, Lizenz, pygame-Video schwach) — das Fenster zeigt den
+# TV als AN mit dem Titel auf dem Schirm; sie referenziert es im Gespräch.
+_tv = {"on": False, "title": "", "id": 0}
+
+
+def tv_on(title: str = ""):
+    with _lock:
+        _tv["on"] = True; _tv["title"] = (title or "").strip(); _tv["id"] += 1
+
+
+def tv_off():
+    with _lock:
+        _tv["on"] = False; _tv["title"] = ""; _tv["id"] += 1
+
+
 def presence_ping() -> bool:
     """Presence-Sensor: Sasha ist im Raum. Reagiert nur bei AKTIVER Session,
     nonverbal + gedrosselt. True = hat sichtbar reagiert."""
@@ -168,7 +186,8 @@ def room_state() -> dict:
                 "thought_word": _thought["word"], "thought_meaning": _thought["meaning"],
                 "thought_id": _thought["id"],
                 "music_action": _music["action"], "music_mood": _music["mood"],
-                "music_id": _music["id"]}
+                "music_id": _music["id"],
+                "tv_on": _tv["on"], "tv_title": _tv["title"], "tv_id": _tv["id"]}
 
 def _history_window() -> int:
     """Wieviele der letzten Turns ans Modell gesendet werden (Kosten-Hebel: die

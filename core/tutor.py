@@ -270,6 +270,71 @@ def get_local_news() -> str:
     return f"（可以随口提一句，别像播新闻）中国最近常聊的：{topic}"
 
 
+# ── TV / Film-Mediathek (persona-isoliert) ───────────────────────────────────
+# Feature 8: die Persona macht den Fernseher an und schlägt etwas Level-gerechtes
+# vor. Katalog IM CODE (wie News; nur Titel/Meta, kein Video). Echtes Playback ist
+# DEFERRED (keine Files, Lizenz, pygame-Video schwach). Filtert nach Stimmung und
+# bevorzugt für Anfänger einfaches Material. mood: chill/happy/focus/sad. Titel
+# sind echte Werke — man darf sie NENNEN (keine Datei, kein Stream).
+_TV_SEED = [
+    {"title": "《小猪佩奇》",   "mood": "chill",  "level": "leicht", "note": "动画，慢，词简单，最适合入门"},
+    {"title": "李子柒的美食视频", "mood": "chill",  "level": "leicht", "note": "画面美，几乎不用听懂也能看"},
+    {"title": "熊猫纪录片",     "mood": "chill",  "level": "leicht", "note": "看熊猫，轻松，解说慢"},
+    {"title": "《你好，李焕英》", "mood": "happy",  "level": "中",     "note": "温暖的喜剧电影，有笑有哭"},
+    {"title": "中国美食纪录片《舌尖上的中国》", "mood": "happy", "level": "中", "note": "讲各地吃的，解说清楚"},
+    {"title": "《西游记》老动画", "mood": "happy",  "level": "中",     "note": "经典故事，你多半知道剧情，好跟"},
+    {"title": "自然风光慢直播",   "mood": "focus",  "level": "leicht", "note": "山水画面，几乎没台词，适合安静学习"},
+    {"title": "轻音乐 MV",       "mood": "sad",    "level": "leicht", "note": "安静的画面和音乐，不吵"},
+]
+_TV_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'persona_tv_zh.json')
+
+
+def _tv_cursor() -> int:
+    if not os.path.exists(_TV_FILE):
+        return 0
+    try:
+        with open(_TV_FILE, 'r', encoding='utf-8') as f:
+            return int(json.load(f).get('cursor', 0) or 0)
+    except Exception:
+        return 0
+
+
+def _tv_bump(nxt: int):
+    try:
+        with open(_TV_FILE, 'w', encoding='utf-8') as f:
+            json.dump({"cursor": nxt}, f)
+    except Exception:
+        pass
+
+
+def watch_tv(mood: str = "chill") -> str:
+    """Macht den TV an und wählt etwas Passendes (nach Stimmung, für Anfänger
+    eher Leichtes). Rotiert, damit nicht immer dasselbe kommt. Setzt den TV-Zustand
+    fürs Fenster. Reine UI/Katalog — kein Core-AI-Zugriff, kein echtes Video."""
+    m = (mood or "chill").strip().lower()
+    with _lock:
+        pool = [e for e in _TV_SEED if e["mood"] == m] or list(_TV_SEED)
+        cur = _tv_cursor() % len(pool)
+        pick = pool[cur]
+        _tv_bump((cur + 1) % len(pool))
+    try:
+        import tutor_session
+        tutor_session.tv_on(pick["title"])
+    except Exception:
+        pass
+    return f"（打开了电视，随口说一句就好）在看：{pick['title']}（{pick['level']}，{pick['note']}）"
+
+
+def turn_off_tv() -> str:
+    """Macht den Fernseher aus."""
+    try:
+        import tutor_session
+        tutor_session.tv_off()
+    except Exception:
+        pass
+    return "ok"
+
+
 def play_music(mood: str = "chill") -> str:
     """Legt im Zimmer Musik nach Stimmung auf (chill/happy/focus/sad/energetic).
     Reicht nur den Wunsch an tutor_session; das Fenster spielt aus seiner lokalen
@@ -449,6 +514,29 @@ TUTOR_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name":        "watch_tv",
+            "description": "想开电视看点东西时用（按心情，给 Sasha 挑简单好懂的）。chill 轻松 / "
+                           "happy 开心 / focus 安静专注 / sad 平静。开了随口说一句在看什么就好，别唠叨。",
+            "parameters":  {
+                "type": "object",
+                "properties": {
+                    "mood": {"type": "string", "enum": ["chill", "happy", "focus", "sad"]},
+                },
+                "required": ["mood"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name":        "turn_off_tv",
+            "description": "把电视关掉。",
+            "parameters":  {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name":        "play_music",
             "description": "想在房间里放点音乐时用（按心情选）。chill 轻松 / happy 开心 / focus 专注 / "
                            "sad 安静 / energetic 有劲儿。放就好，别一直提音乐。",
@@ -521,6 +609,8 @@ _ALLOWED = {
     "get_structures":        lambda a: get_structures(),
     "introduce_structure":   lambda a: introduce_structure(a.get("pattern", ""), a.get("note", "")),
     "increment_structure":   lambda a: increment_structure(a.get("pattern", "")),
+    "watch_tv":              lambda a: watch_tv(a.get("mood", "chill")),
+    "turn_off_tv":           lambda a: turn_off_tv(),
     "play_music":            lambda a: play_music(a.get("mood", "chill")),
     "stop_music":            lambda a: stop_music(),
     "get_local_news":        lambda a: get_local_news(),

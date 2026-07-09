@@ -156,3 +156,43 @@ dokumentieren, morgen gemeinsam reviewen.
 - **Offen/Review:** Musikquelle klären (eigene Files / gemeinfrei / lokal
   gerippt?); Lautstärke/Duck-Werte nach Gefühl; evtl. sanftes Fade statt hartem
   Volume-Sprung.
+
+### 8. TV + Film-Mediathek (Mechanik, Playback deferred) ✅
+- **watch_tv(mood)** + **turn_off_tv** (Tools 13+14): die Persona macht den
+  Fernseher an und schlägt etwas **Level-gerechtes** vor (für Anfänger eher
+  Leichtes). Katalog `_TV_SEED` **im Code** (Titel + mood + level + note), rotiert
+  per Cursor (`data/persona_tv_zh.json`, gitignored-Runtime wie News).
+- **Raum:** ein TV an der Wand (`draw_tv`) — aus = dunkler Schirm; an = leuchtet
+  bläulich mit leichtem Flackern + Scanlinien und zeigt den **Titel** (umgebrochen).
+  `tutor_session._tv` (an/Titel, id) → `room_state` → Fenster.
+- **Entscheidung/Annahme:** echtes **Video-Playback ist DEFERRED** — keine Files,
+  Lizenz, und pygame-Video ist schwach. Die Mechanik ist „TV an + Titel + beiläufig
+  referenzieren" (comprehensible-input-Idee: sie guckt was Einfaches, Sasha schaut
+  mit). Titel sind echte Werke — **nennen** ist ok, es wird nichts gestreamt.
+  Katalog ist ein Seed (kuratierbar). Headless gerendert getestet.
+- **Offen/Review:** willst du echtes Mitgucken (dann Quelle/Format klären — lokale
+  Files? Untertitel-Sync fürs Lernen?), oder reicht „sie guckt was, ihr redet
+  drüber"? Katalog erweitern/kuratieren.
+
+---
+
+## Abschluss Über-Nacht-Lauf (2026-07-09)
+
+**Alle 8 Features gebaut** (Commits „Roleplay-Feature 1..8"), jeweils lokal auf
+`main` ff-gemerged. Tool-Set gewachsen von 4 → **14** (alle in `_ALLOWED`-Sandbox,
+deckungsgleich mit `TUTOR_TOOLS`, statisch verifiziert). Jede neue Prompt-Zeile
+auf Chinesisch (hält qwen im Chinesischen — statisch geprüft, keine deutschen
+Streuwörter im `_ZH_PROMPT`).
+
+**Ein Punkt bewusst offen (kein Zugriff):** der **Live-qwen-Verhaltens-Recheck**
+mit dem vollen 14-Tool-Set konnte NICHT laufen — in dieser Umgebung ist kein
+`DASHSCOPE_API_KEY` gesetzt. Statt zu faken: statisch abgesichert (Tool-Integrität,
+Prompt-Sprache, kein Crash bei leerem arg). **Bitte morgen einmal live gegen qwen
+gegentesten** (kurz? Chinesisch? in-character? kein Fake-Lob? nutzt sie die neuen
+Tools sinnvoll und sparsam?) — das ist der letzte Verifikations-Schritt.
+
+**Content-/Playback-Lücken (Mechanik steht, Assets fehlen):** Vokabel-Bilder
+(`data/vocab_images/`), Musik (`data/persona_music/<mood>/`), echter China-News-Feed,
+Film-Video-Playback. Alles Drop-in bzw. dokumentierte Folge-Entscheidungen.
+
+**Weitere Review-Fragen** stehen pro Feature oben unter „Offen/Review".
