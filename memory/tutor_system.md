@@ -349,10 +349,22 @@ während des Tutor-Modus.
 | `get_testing_vocab`       | –                      | Liefert alle Vokabeln mit `confirmed: false` + `count`                          |
 | `increment_correct_use`   | `word`                 | +1 auf `correct_use`. Bei ≥ 5 → auto-confirmed                                  |
 | `introduce_new`           | `word`, `pinyin`       | **Neues** Wort in `vocab_mandarin.json` hinzufügen (nicht aus einem Pool wählen) |
+| `express`                 | `action` (Enum)        | Haltung/Geste/Mimik im Zimmer setzen (sit/stand/pace/…/wave/nod/happy/tired…)    |
+| `get_structures`          | –                      | Aktuelle Satzmuster/Strukturen im Lernen (Feinmodell, `structures_mandarin.json`)|
+| `introduce_structure`     | `pattern`, `note?`     | Neues Satzmuster/„neue Sagweise" einführen                                       |
+| `increment_structure`     | `pattern`              | +1 auf ein Muster; ab 3× → „掌握"                                                |
+| `show_thought`            | `word`, `meaning?`     | Vokabel-Gedanke: Wort + Übersetzung (+ Bild aus `data/vocab_images/`) im Zimmer  |
+| `get_local_news`          | –                      | Ein leichtes Landes-Thema (persona-isolierter Seed, rotierend; NIE `core/news.py`)|
+| `play_music` / `stop_music`| `mood?`               | Musik nach Stimmung aus `data/persona_music/<mood>/` (Fenster spielt); Content-Lücke|
+| `watch_tv` / `turn_off_tv`| `mood?`                | TV an + level-gerechter Titel (`_TV_SEED`); Video-Playback deferred              |
 
 Logik (laut System-Prompt): wenn `get_testing_vocab` `count < 10`
 zurückmeldet → KI soll `introduce_new(word, pinyin)` aufrufen mit einem
 selbstgewählten neuen Wort. Es gibt keinen vorgefertigten Pool.
+
+Die Tools ab `express` sind die **Roleplay-Erweiterung** (2026-07-09, Feature 1–8,
+Log: `memory/tutor_roleplay_features.md`). ALLE fassen nur tutor-isolierte Daten +
+UI-State an (Sandbox-Choke-Point `_ALLOWED` in `tutor.py`) — nie die Core-KI.
 
 Zusätzlich existiert in `tutor.py` die Hilfsfunktion `get_vocab_stats()`
 („total / confirmed / testing"). Sie ist **kein** AI-Tool, sondern für
