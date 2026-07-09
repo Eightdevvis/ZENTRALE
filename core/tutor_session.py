@@ -43,13 +43,14 @@ _session_lang = None           # Sprache/Persona der laufenden Session (für His
 # Die KI drückt sich selbst aus (statt hardcoded-Random): stance = anhaltende
 # Haltung/Bewegung, gesture = einmalige Geste (gid zählt hoch, damit das Fenster
 # sie GENAU EINMAL abspielt). Das Zimmer pollt /api/tutor/room_state.
-_STANCES  = {"idle", "sit", "stand", "pace", "wander", "come_closer"}
-_GESTURES = {"wave", "nod", "look", "stretch"}
-_expr     = {"stance": "idle", "gesture": None, "gid": 0}
+_STANCES  = {"idle", "sit", "stand", "pace", "wander", "come_closer", "sleep"}
+_GESTURES = {"wave", "nod", "look", "stretch", "arms_up", "cross_arms", "shrug"}
+_FACES    = {"neutral", "happy", "sad", "surprised", "tired"}  # anhaltende Mimik
+_expr     = {"stance": "idle", "gesture": None, "gid": 0, "face": "neutral"}
 
 
 def set_expression(action: str):
-    """Vom express-Tool aufgerufen: setzt Haltung ODER löst eine Geste aus."""
+    """Vom express-Tool aufgerufen: setzt Haltung, Mimik ODER löst eine Geste aus."""
     a = (action or "").strip().lower()
     with _lock:
         if a in _STANCES:
@@ -57,13 +58,23 @@ def set_expression(action: str):
         elif a in _GESTURES:
             _expr["gesture"] = a
             _expr["gid"] += 1
+        elif a in _FACES:
+            _expr["face"] = a
+
+
+def set_face(face: str):
+    """Mimik direkt setzen (z.B. von der Stimmung/sozialen Batterie getrieben)."""
+    f = (face or "").strip().lower()
+    if f in _FACES:
+        with _lock:
+            _expr["face"] = f
 
 
 def room_state() -> dict:
     """Aktueller Ausdrucks-Zustand fürs Zimmer-Fenster (pollt das leichtgewichtig)."""
     with _lock:
         return {"stance": _expr["stance"], "gesture": _expr["gesture"],
-                "gesture_id": _expr["gid"], "active": _active}
+                "gesture_id": _expr["gid"], "face": _expr["face"], "active": _active}
 
 def _history_window() -> int:
     """Wieviele der letzten Turns ans Modell gesendet werden (Kosten-Hebel: die
@@ -149,7 +160,7 @@ def activate():
         _session_lang = lang
         _history      = deque(prior, maxlen=100)
         _privacy      = notice
-        _expr["stance"] = "idle"; _expr["gesture"] = None   # frisch, keine Alt-Geste
+        _expr["stance"] = "idle"; _expr["gesture"] = None; _expr["face"] = "neutral"
 
 
 def deactivate():

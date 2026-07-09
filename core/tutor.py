@@ -217,16 +217,19 @@ TUTOR_TOOLS = [
         "type": "function",
         "function": {
             "name":        "express",
-            "description": "在房间里表达自己（用这个来动，别写成文字）：坐下 sit / 站起 stand / "
-                           "踱步 pace / 走动 wander / 靠近 come_closer；或一个动作：招手 wave / "
-                           "点头 nod / 看着她 look / 伸懒腰 stretch。自然地用，想动就动。",
+            "description": "在房间里表达自己（用这个来动/换表情，别写成文字）。姿态：坐下 sit / "
+                           "站起 stand / 踱步 pace / 走动 wander / 靠近 come_closer / 睡觉 sleep。"
+                           "动作：招手 wave / 点头 nod / 看着她 look / 伸懒腰 stretch / 举起手 "
+                           "arms_up / 抱臂 cross_arms / 耸肩 shrug。表情：开心 happy / 难过 sad / "
+                           "惊讶 surprised / 累 tired / 平常 neutral。想动、想换表情就自然地用。",
             "parameters":  {
                 "type":       "object",
                 "properties": {
                     "action": {
                         "type": "string",
-                        "enum": ["sit", "stand", "pace", "wander", "come_closer",
-                                 "wave", "nod", "look", "stretch"],
+                        "enum": ["sit", "stand", "pace", "wander", "come_closer", "sleep",
+                                 "wave", "nod", "look", "stretch", "arms_up", "cross_arms", "shrug",
+                                 "happy", "sad", "surprised", "tired", "neutral"],
                     },
                 },
                 "required": ["action"],

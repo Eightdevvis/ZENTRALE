@@ -265,6 +265,7 @@ class Persona:
         self.gesture = None          # laufende einmalige Geste
         self.gesture_t = 0.0
         self.pause_t = 0.0           # Schlender-Pause bei 'wander'
+        self.face = 'neutral'        # Mimik (happy/sad/surprised/tired/neutral)
         # layout (in layout() gesetzt)
         self.floor_y = 0.0
         self.couch_x = 0.0
@@ -290,7 +291,7 @@ class Persona:
             return
         self.stance = stance
         mid = (self.xmin + self.xmax) * 0.5
-        if stance == 'sit':
+        if stance in ('sit', 'sleep'):    # sleep = auf der Couch sitzen + Augen zu
             self.want_sit = True;  self.target = self.couch_x
         elif stance == 'come_closer':
             self.sitting = False; self.want_sit = False; self.target = mid
@@ -304,9 +305,14 @@ class Persona:
             self.sitting = False; self.want_sit = False; self.target = None
 
     def play_gesture(self, kind):
-        """Einmalige Geste (winken/nicken/hinschauen/strecken), ~1.3 s."""
+        """Einmalige Geste (winken/nicken/strecken/arme hoch/schulterzucken), ~1.3 s.
+        cross_arms hält etwas länger (Pose)."""
         self.gesture = kind
-        self.gesture_t = 1.3
+        self.gesture_t = 2.2 if kind == 'cross_arms' else 1.3
+
+    def set_face(self, face):
+        if face:
+            self.face = face
 
     def update(self, dt, talking):
         self.t += dt
@@ -399,17 +405,23 @@ class Persona:
         pygame.draw.polygon(surf, DRESS, pts)
         pygame.draw.polygon(surf, DRESS_DK, [(x - 15*s, y - 22*s), (x - 8*s, y - 22*s),
                                              (x - 7*s, body_top), (x - 12*s, body_top)])
-        # Arme — mit Gesten (winken hebt den rechten Arm + wackelt, strecken beide)
+        # Arme — mit Gesten (winken/strecken/arme hoch/schulterzucken/abtorsten)
         g = self.gesture
         gp = (1.3 - self.gesture_t) * 7.0    # Gesten-Phase
         la_off = ra_off = 0.0
         if g == 'wave':
             ra_off = -26*s + math.sin(gp) * 5*s
-        elif g == 'stretch':
-            la_off = ra_off = -24*s
+        elif g in ('stretch', 'arms_up'):
+            la_off = ra_off = -26*s
+        elif g == 'shrug':
+            la_off = ra_off = -8*s
         arm_sw = math.sin(self.t * 8.0) * 6 * s if self.state == 'walk' else 0
-        pygame.draw.rect(surf, LIMB, (x - 17*s, body_top + 3*s + arm_sw + la_off, 6*s, 30*s), border_radius=int(3*s))
-        pygame.draw.rect(surf, LIMB, (x + 11*s, body_top + 3*s - arm_sw + ra_off, 6*s, 30*s), border_radius=int(3*s))
+        if g == 'cross_arms':                 # Arme waagerecht vor der Brust
+            pygame.draw.rect(surf, LIMB, (x - 14*s, body_top + 12*s, 28*s, 6*s), border_radius=int(3*s))
+            pygame.draw.rect(surf, LIMB, (x - 12*s, body_top + 19*s, 24*s, 6*s), border_radius=int(3*s))
+        else:
+            pygame.draw.rect(surf, LIMB, (x - 17*s, body_top + 3*s + arm_sw + la_off, 6*s, 30*s), border_radius=int(3*s))
+            pygame.draw.rect(surf, LIMB, (x + 11*s, body_top + 3*s - arm_sw + ra_off, 6*s, 30*s), border_radius=int(3*s))
 
         # Kopf (nicken = kurzer Ab-Bob)
         nod = abs(math.sin(gp)) * 6*s if g == 'nod' else 0.0
@@ -420,22 +432,35 @@ class Persona:
         pygame.draw.rect(surf, SKIN, (x - 15*s, hy, 30*s, 15*s))  # Gesicht frei
         pygame.draw.rect(surf, HAIR, (x - 15*s, hy - 2*s, 5*s, 16*s), border_radius=int(2*s))
         pygame.draw.rect(surf, HAIR, (x + 10*s, hy - 2*s, 5*s, 16*s), border_radius=int(2*s))
-        # Augen (blinzelt kurz)
+        # Augen — Mimik: schlafen/müde = zu/halb, überrascht = weit, sonst Punkte
+        sleeping = (self.stance == 'sleep')
         blinking = self.blink < 0.14
-        ex = 5.2*s
-        ey = hy + 1*s
-        if blinking:
-            pygame.draw.line(surf, HAIR, (x - ex - 2*s, ey), (x - ex + 2*s, ey), max(1, int(1.6*s)))
-            pygame.draw.line(surf, HAIR, (x + ex - 2*s, ey), (x + ex + 2*s, ey), max(1, int(1.6*s)))
+        face = self.face
+        ex = 5.2*s; ey = hy + 1*s; ew = max(1, int(1.6*s))
+        if sleeping or face == 'tired' or blinking:
+            for sx in (-ex, ex):
+                pygame.draw.line(surf, HAIR, (x + sx - 2.5*s, ey), (x + sx + 2.5*s, ey), ew)
+        elif face == 'surprised':
+            for sx in (-ex, ex):
+                pygame.draw.circle(surf, HAIR, (int(x + sx), int(ey)), max(2, int(2.8*s)), width=max(1, int(1.4*s)))
         else:
-            pygame.draw.circle(surf, HAIR, (int(x - ex), int(ey)), max(1, int(2*s)))
-            pygame.draw.circle(surf, HAIR, (int(x + ex), int(ey)), max(1, int(2*s)))
-        # Mund (redet → offen/zu im Takt, sonst kleines Lächeln)
-        my = hy + 8*s
+            for sx in (-ex, ex):
+                pygame.draw.circle(surf, HAIR, (int(x + sx), int(ey)), max(1, int(2*s)))
+        # Mund — Mimik: reden > überrascht(O) > traurig(runter) > müde(Strich) >
+        # glücklich(breites Lächeln) > neutral(kleines Lächeln)
+        my = hy + 8*s; mw = max(1, int(1.6*s))
         if talking and int(self.t * 8) % 2 == 0:
             pygame.draw.circle(surf, DRESS_DK, (int(x), int(my)), max(2, int(2.6*s)))
+        elif face == 'surprised':
+            pygame.draw.circle(surf, DRESS_DK, (int(x), int(my)), max(2, int(2.4*s)), width=mw)
+        elif face == 'sad':
+            pygame.draw.arc(surf, DRESS_DK, (x - 5*s, my, 10*s, 8*s), 0, math.pi, mw)
+        elif face == 'tired' or sleeping:
+            pygame.draw.line(surf, DRESS_DK, (x - 3.5*s, my), (x + 3.5*s, my), mw)
+        elif face == 'happy':
+            pygame.draw.arc(surf, DRESS_DK, (x - 6*s, my - 5*s, 12*s, 10*s), math.pi, 2*math.pi, max(1, int(2*s)))
         else:
-            pygame.draw.arc(surf, DRESS_DK, (x - 5*s, my - 4*s, 10*s, 8*s), math.pi, 2*math.pi, max(1, int(1.6*s)))
+            pygame.draw.arc(surf, DRESS_DK, (x - 5*s, my - 4*s, 10*s, 8*s), math.pi, 2*math.pi, mw)
 
 
 # ── Zimmer zeichnen ──────────────────────────────────────────────────────────
@@ -622,6 +647,7 @@ def main():
         'log': [],             # Verlauf: Liste von (role, text) — 'user' | 'tutor'
         'scroll': 0,           # Verlaufs-Scroll (0 = neuestes unten)
         'stance': 'idle',      # von der KI gesetzte Haltung (room_state-Poll)
+        'face': 'neutral',     # von der KI gesetzte Mimik
         'pending_gesture': None,  # einmalige Geste, die die Persona abspielen soll
         'last_user_ms': 0,     # letzte Sasha-Eingabe (Feedback-Loop)
         'nudged': False,       # Anstoß in dieser Stille schon gemacht?
@@ -738,6 +764,7 @@ def main():
             gid = int(rs.get('gesture_id') or 0)
             with S['lock']:
                 S['stance'] = rs.get('stance') or 'idle'
+                S['face'] = rs.get('face') or 'neutral'
                 if gid != last_gid:
                     S['pending_gesture'] = rs.get('gesture')
             last_gid = gid
@@ -919,14 +946,16 @@ def main():
             compose = S['compose']; tts_ok = S['tts']
             log = list(S['log']); scroll = S['scroll']
             stance = S['stance']; pend = S['pending_gesture']; S['pending_gesture'] = None
+            face = S['face']
             mic = S['mic']; hearing = S['hearing']; transcribing = S['transcribing']; mic_err = S['mic_err']
 
         # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft.
         has_text = bool(buf.strip())
         talking  = (streaming and has_text) or speaking
         thinking = streaming and not has_text
-        # Haltung/Geste kommen von der KI (express-Tool → room_state-Poll).
+        # Haltung/Geste/Mimik kommen von der KI (express-Tool → room_state-Poll).
         persona.set_stance(stance)
+        persona.set_face(face)
         if pend:
             persona.play_gesture(pend)
         persona.update(dt, talking)
@@ -966,6 +995,9 @@ def main():
         if avail is False:
             zz = fonts['big'].render('zzz…', True, HUD_DIM)
             screen.blit(zz, (int(persona.x)+18, int(persona.head_top())-10))
+        elif stance == 'sleep':
+            screen.blit(fonts['big'].render('zzz', True, HUD_DIM),
+                        (int(persona.x)+18, int(persona.head_top())-6))
 
         # HUD oben: Name + kompakte Steuerung/Meldung (unten ist jetzt die Leiste)
         screen.blit(fonts['big'].render(pname, True, HUD_FG), (16, 12))
