@@ -184,10 +184,12 @@ Nag selbst poppt **einmal pro Sitzung**: Browser als »bitte eintragen«-Modal
 Kästchen (`g` = ins Werkzeug, sonst wegklicken). Wegklicken = Ruhe bis
 Sitzungsende für die gezeigten Graphen; neu fällige nagen weiter.
 
-**Listen · Fokus-Werkzeug (Mitte, Taste `l` ODER `f`):** EIN gemergtes Werkzeug —
+**Fokus-Werkzeug (Mitte, Taste `f`):** EIN gemergtes Werkzeug —
 abhakbare Todo-/Sammel-Listen im **FOCUS-Look** (früher zwei getrennte Sachen:
-schlichtes Listen-Werkzeug `l` + Projektansicht/Fokus `f`; jetzt verschmolzen,
-beide Tasten öffnen dasselbe). Geteilte Logik (`core/lists.py` + `/api/lists`),
+schlichtes Listen-Werkzeug `l` + Projektansicht/Fokus `f`; jetzt verschmolzen und
+einheitlich **„Fokus"** genannt, Taste `f`). `l` öffnet dasselbe noch als
+**stiller Alt-Alias** (Muskelgedächtnis), taucht aber in KEINER Legende/Einladung
+mehr auf — überall steht nur noch `f · fokus`. Geteilte Logik (`core/lists.py` + `/api/lists`),
 hier in curses verbaut. Gezeichnet wird durchweg über `proj_render`: jede Zeile =
 **Titel + Erfüllungsleiste** (2 Zeilen), `▸` = reindivebar, `◆`/Bernstein-Balken =
 Fokus. Zustandsmodell `L` (`view`: `forest`/`view`/`place`/`move`/`move_new`).

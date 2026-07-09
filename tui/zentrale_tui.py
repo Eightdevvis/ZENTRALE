@@ -512,14 +512,13 @@ TUI_KEYS = [
     ("q",   "beenden"),
     ("t",   "Theme wechseln (auto/hell/dunkel)"),
     ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
-    ("l",   "Listen/Fokus (Mitte): oben projekte, drunter alle listen · enter reindiven · a/s neu · space abhaken · r name · d weg · p projekt · f fokus · m/> verschieben (auch 'f')"),
     ("n",   "Notizen (Mitte): freie notiz aus blöcken · ↑↓ block · t/l/f text/liste/float · e bearbeiten · d weg (fragt bei inhalt) · r titel · n übersicht · esc speichern & zu"),
     ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Handelsrouten · w=Fenster"),
     ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · v Woche/Monat"),
     ("p",   "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
     ("a",   "KI-Chat (Mitte): tippen + enter fragt die lokale KI (PC-Hirn via tunnel) · ↑↓ scrollen · esc zu"),
     ("u",   "Persona-Zimmer (eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · ohne DISPLAY → text-panel · /tutor = text-panel"),
-    ("f",   "Listen/Fokus (Mitte): gleiches werkzeug wie 'l' · f setzt den gewählten knoten als alleinigen fokus (rendert dann allein in der FOCUS-box)"),
+    ("f",   "Fokus (Mitte): oben projekte, drunter alle listen · enter reindiven · a/s neu · space abhaken · r name · d weg · p projekt · f setzt den knoten als alleinigen fokus (rendert dann allein in der FOCUS-box) · m/> verschieben"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
@@ -531,7 +530,7 @@ TUI_KEYS = [
 # current_ctx(); Reihenfolge spiegelt die alten Fußzeilen.
 CTX_KEYS = {
     "home": [
-        ("l/f", "listen · fokus"), ("n", "notizen"), ("g", "graph"), ("m", "karte"),
+        ("f", "fokus"), ("n", "notizen"), ("g", "graph"), ("m", "karte"),
         ("c", "kalender"), ("p", "post / mail"), ("a", "ki-chat"),
         ("u", "tutor"), ("t", "theme"), ("q", "beenden"),
     ],
@@ -609,7 +608,7 @@ CTX_KEYS = {
     ],
 }
 CTX_TITLES = {
-    "home": "start", "graph": "graph", "list:forest": "listen · fokus",
+    "home": "start", "graph": "graph", "list:forest": "fokus",
     "list:view": "liste", "list:pick": "einordnen", "map": "karte",
     "cal:week": "kalender · woche", "cal:month": "kalender · monat",
     "cal:list": "kalender · liste", "cal:sort": "kalender · sortieren",
@@ -6246,7 +6245,7 @@ def run_ui(stdscr, store):
             elif ch in (ord("g"), ord("G")):   # Graph-Werkzeug öffnen
                 G["active"] = True; G["view"] = "list"; G["msg"] = ""
                 G["shown"] = set(); G["gscroll"] = 0; g_load()  # übersicht, heute rechts
-            elif ch in (ord("l"), ord("L")):   # Listen-/Fokus-Werkzeug öffnen (Wurzel)
+            elif ch in (ord("l"), ord("L")):   # Fokus-Werkzeug öffnen — stiller Alt-Alias zu 'f' (nicht mehr in der Legende)
                 L["active"] = True; L["view"] = "forest"; L["fsel"] = 0
                 L["adding"] = False; L["confirm"] = False; L["msg"] = ""; l_load()
             elif ch in (ord("m"), ord("M")):   # Karte öffnen
@@ -6275,7 +6274,7 @@ def run_ui(stdscr, store):
                     threading.Thread(target=tutor_open, daemon=True).start()
             elif ch in (ord("n"), ord("N")):   # Notiz-Werkzeug öffnen (direkt in eine Notiz)
                 NOTE["active"] = True; n_open()
-            elif ch in (ord("f"), ord("F")):   # Listen-/Fokus-Werkzeug öffnen (gleiches Tool wie 'l')
+            elif ch in (ord("f"), ord("F")):   # Fokus-Werkzeug öffnen (primäre Taste)
                 L["active"] = True; L["view"] = "forest"; L["fsel"] = 0
                 L["adding"] = False; L["confirm"] = False; L["msg"] = ""; l_load()
             # '/' wird global oben abgefangen (greift in JEDEM Fenster), darum
@@ -6434,7 +6433,7 @@ def run_ui(stdscr, store):
             draw_box(top, mx, body_h, midw, "graph-werkzeug")
             draw_graph_tool(top, mx, body_h, midw, gv_cache)
         elif L["active"]:
-            draw_box(top, mx, body_h, midw, "listen · fokus")
+            draw_box(top, mx, body_h, midw, "fokus")
             draw_list_tool(top, mx, body_h, midw)
         elif M["active"]:
             draw_box(top, mx, body_h, midw, "karte · welt")
@@ -6460,7 +6459,7 @@ def run_ui(stdscr, store):
             draw_box(top, mx, body_h, midw, "mitte")
             cyc = top + body_h // 2
             big = "KASSETTE · TUI"
-            invite = ["g · graph-werkzeug", "l / f · listen · fokus", "n · notizen",
+            invite = ["g · graph-werkzeug", "f · fokus", "n · notizen",
                       "m · karte", "c · kalender", "p · post/mail",
                       "a · ki-chat", "u · tutor"]
             addclip(cyc - 4, mx + max(1, (midw - len(big)) // 2), big, midw - 2, C["bright"])
