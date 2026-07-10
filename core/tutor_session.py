@@ -265,13 +265,13 @@ def activate():
             pass
         print(notice)
 
-    # Persistente History der Persona laden statt zu flushen — der Mitbewohner
-    # knüpft beim Öffnen an eure letzten Gespräche an.
-    prior = persona_memory.load_history(lang)
+    # KEIN rohes History-Replay mehr über Sessions (führte zu Filler-Loops und ist
+    # auch unnötig): Kontinuität kommt aus den GROB-Notizen (persona_memory.context,
+    # unten in den System-Prompt gehängt). _history ist reiner In-Session-Puffer.
     with _lock:
         _active       = True
         _session_lang = lang
-        _history      = deque(prior, maxlen=100)
+        _history      = deque(maxlen=100)
         _privacy      = notice
         _expr["stance"] = "idle"; _expr["gesture"] = None; _expr["face"] = "neutral"
         _battery["level"] = 55.0; _battery["ts"] = time.time()   # frische Batterie
@@ -437,10 +437,9 @@ def respond_stream(user_text: str = None, nudge: bool = False,
         return
     push_message("assistant", full)
 
-    # Nach dem Turn: History persistieren (Persona vergisst dich nicht) und den
-    # Turn in IHR Gedächtnis verdichten. Beides im Hintergrund — der Extraktor
-    # läuft lokal (Ollama), darf das Streaming nicht blockieren.
-    persona_memory.save_history(get_history(), lang)
+    # Nach dem Turn: KEIN roher Verlauf mehr auf Disk — nur die GROB-Notizen im
+    # Hintergrund verdichten (persona_memory.remember, läuft lokal/Cloud, darf das
+    # Streaming nicht blockieren).
     if user_text:   # Begrüßungs-Turn (user_text=None) nicht verdichten
         # provider/model mitgeben: fällt die Verdichtung mangels Ollama auf die
         # Cloud zurück, nutzt sie denselben Anbieter, der eh gerade redet.

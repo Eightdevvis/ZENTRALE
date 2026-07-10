@@ -28,11 +28,12 @@ def process_event(event, data=None):
 
     elif event == PRESENCE_DETECTED:
         # Tutor-Auto-START bleibt bewusst pausiert (memory/tutor_system.md,
-        # Sequencing). NUR wenn TUTOR_PRESENCE_REACT=1 gesetzt ist, reicht der
-        # Presence-Event einen NONVERBALEN Ping an die Persona weiter — und der
-        # wirkt auch dann nur, wenn die Tutor-Session bereits LÄUFT (er startet
-        # nie eine). Default (Flag aus) = unverändert kein Trigger.
-        if os.getenv("TUTOR_PRESENCE_REACT") == "1":
+        # Sequencing). Der Presence-Event reicht STANDARDMÄSSIG einen NONVERBALEN
+        # Ping an die Persona weiter — und der wirkt auch dann nur, wenn die
+        # Tutor-Session bereits LÄUFT (er startet nie eine); die Guards dafür
+        # (aktive Session, nonverbal, Cooldown) stecken in presence_ping() selbst
+        # und no-op-en sicher. Über TUTOR_PRESENCE_REACT=0 explizit abschaltbar.
+        if os.getenv("TUTOR_PRESENCE_REACT") != "0":
             try:
                 import tutor_session
                 reacted = tutor_session.presence_ping()
@@ -41,6 +42,6 @@ def process_event(event, data=None):
             except Exception as e:
                 print(f"Brain: Presence-Reaktion fehlgeschlagen: {e}")
         else:
-            print("Brain: Presence erkannt (kein Trigger aktiv)")
+            print("Brain: Presence erkannt (Reaktion per TUTOR_PRESENCE_REACT=0 aus)")
 
     return new_events

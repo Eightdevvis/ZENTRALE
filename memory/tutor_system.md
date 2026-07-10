@@ -10,11 +10,12 @@
 > Vortrag. Der zh-Prompt (Ling Ling) wurde dafür gegen echtes qwen getunt
 > (Log: `memory/tutor_persona_tuning.md`). Sie **quatscht direkt los**
 > (TUI-Taste `u` startet die Session sofort, kein „Stunde starten"-Enter mehr).
-> Jede Persona hat ein **eigenes Gedächtnis** (`data/persona_mem_<lang>.json`,
-> gleiche `graph.py`-Mechanik) + **persistente History** (`persona_hist_<lang>.json`)
-> → erinnert sich session-übergreifend an dich. **Einzige echte Grenze:** dieses
-> Persona-Gedächtnis und die lokale **Core-KI-Memory** (`ai_graph.json`) fassen
-> sich **nie** an. Die Verdichtung läuft **kapazitätsbasiert** (Ollama daheim
+> Jede Persona hat ein **eigenes, GROBES Gedächtnis** (`data/persona_mem_<lang>.json`
+> = kleine Notiz-Liste `facts`/`topics`, kein Graph, kein Wortprotokoll, Umbau
+> 2026-07-10) → erinnert sich session-übergreifend *ungefähr* an dich. Roher
+> Verlauf wird NICHT mehr persistiert (nur in-session). **Einzige echte Grenze:**
+> dieses Persona-Gedächtnis und die lokale **Core-KI-Memory** (`ai_graph.json`)
+> fassen sich **nie** an. Die Verdichtung läuft **kapazitätsbasiert** (Ollama daheim
 > erreichbar → lokal, sonst Cloud). Details unten unter „Persona-Portal" und
 > „Persona-Memory".
 >
@@ -182,20 +183,28 @@ scripts/tutor_room.py [--url … --speaker N --speed X --mute]`.
 
 Jede Persona hat ein **eigenes Gedächtnis**, getrennt von Sashas privatem
 Core-Graphen — **Modul `core/persona_memory.py`**:
-- **Store:** `data/persona_mem_<lang>.json`, gebaut mit derselben `graph.py`-
-  Mechanik (Multi-Store: `graph.add_turn_extraction(..., store=pfad)`,
-  `graph.context_for_persona(query, store=pfad)`). Enthält nur Wissen **über
-  Sasha** aus euren Chats — **keine** erfundene Persona-Biografie.
-- **Persistente History:** `data/persona_hist_<lang>.json`. `activate()` lädt
-  sie statt zu flushen → die Persona knüpft session-übergreifend an.
-- **Loop (`tutor_session.respond_stream`):** vor der Antwort wird der Persona-
-  Kontext („## Was du über Sasha weißt") an den System-Prompt gehängt; nach der
-  Antwort werden History persistiert und der Turn im Hintergrund verdichtet.
+- **GROB, nicht exakt (Umbau 2026-07-10):** ein Mitbewohner merkt sich *ungefähr*
+  ein paar wichtige Dinge, nicht wann genau was gesagt wurde. Darum ist der Store
+  **kein** Konzept-Graph mehr (der von der Core-KI kopierte war eh nie gebaut
+  worden) und **kein** Wortprotokoll, sondern eine kleine, gedeckelte **Notiz-
+  Liste**: `data/persona_mem_<lang>.json` = `{"facts": [kurze Sätze], "topics":
+  [Stichworte]}` (je max 12, auf Chinesisch, keine Zeitstempel). Enthält nur
+  Wissen **über Sasha** aus euren Chats — **keine** erfundene Persona-Biografie.
+- **Kein persistenter roher Verlauf mehr:** früher lud `activate()` `persona_hist_
+  <lang>.json` Turn-für-Turn — das füllte sich mit „你在吗？"-Nudge-Fillern und
+  zog die Persona beim Öffnen in Echo-Schleifen. Jetzt: `_history` ist **reiner
+  In-Session-Puffer** (Kohärenz), wird NICHT über Sessions gespeichert. Kontinuität
+  kommt allein aus den Grob-Notizen.
+- **Loop (`tutor_session.respond_stream`):** vor der Antwort wird der Notiz-Kontext
+  („关于 Sasha（只是大概印象…）") an den System-Prompt gehängt; nach einem echten
+  Turn destilliert `remember()` im Hintergrund neue Fakten/Themen in die Notizen
+  (leichter LLM-Pass, merged + deckelt). Der Öffnungs-/Nudge-Turn wird **nicht**
+  gemerkt (ambient, kein Gespräch).
 - **Verdichtungs-Backend kapazitätsbasiert** (`persona_memory.remember` via
-  `ai_backends.status()`): ist **Ollama erreichbar** (daheim, oder Laptop→PC per
-  `zentrale-remote`) → **lokaler** Extraktor; sonst → **Cloud** (der Anbieter,
-  der eh gerade redet, z.B. qwen); **kein Backend** → Turn übersprungen. So baut
-  die Memory auch, wenn der Laptop unterwegs kein Ollama hat.
+  `ai_backends.status()`): **Ollama erreichbar** → **lokaler** Pass; sonst →
+  **Cloud** (der Anbieter, der eh redet, z.B. qwen); **kein Backend** →
+  übersprungen. `_distill()` macht einen tool-losen Ein-Schuss-Call, `_parse_notes()`
+  zieht das JSON raus.
 
 - **Was hier NICHT stimmt (ehrliche Grenze — kein Marketing):** Läuft die
   Persona über die Cloud, liegt ihr **Gesprächs- und Memory-Inhalt beim Cloud-
@@ -209,9 +218,11 @@ Core-Graphen — **Modul `core/persona_memory.py`**:
   bleibt intakt. Persona-Turns werden zudem **nicht** in Sashas gemeinsamen
   Kalender gespiegelt.
 
-Tests ohne Ollama: `scripts/test_persona_memory.py` (Store-Isolation, Kontext,
-History, Portal — Embeddings gestubbt). Der Extraktor-Pfad braucht Ollama und
-läuft über `scripts/test_graph_memory.py`.
+Tests: die Notiz-Funktionen (`_load_notes`/`_save_notes`/`context`) sind ohne
+Backend prüfbar; der Destillations-Pfad (`remember`/`_distill`) braucht ein
+Backend (lokal Ollama oder Cloud-Key). `scripts/test_persona_memory.py` ist auf
+den alten Graph-Store gemünzt — beim nächsten Anfassen auf das Notiz-Modell
+nachziehen.
 
 ## Framework: Sprachen + Provider (austauschbar)
 

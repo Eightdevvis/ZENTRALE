@@ -116,9 +116,15 @@ def draw_thought(surf, font, small, word, meaning, cx, top_y, alpha=255):
     w_mean = small.render(meaning, True, THOUGHT_SUB) if meaning else None
     cw = max(iw, w_word.get_width(), (w_mean.get_width() if w_mean else 0)) + 26
     ch = 12 + (ih + 6 if ih else 0) + w_word.get_height() + (w_mean.get_height() + 4 if w_mean else 0) + 10
-    bx = max(8, int(cx - cw - 70))
-    by = max(8, int(top_y - ch - 24))
-    tmp = pygame.Surface((cw, ch + 16), pygame.SRCALPHA)
+    # Entzerrt neben dem Kopf (links, auf Kopf-Höhe abwärts): die Sprechblase
+    # sitzt MITTIG ÜBER dem Kopf. Verankert man die Gedanken-Blase mit ihrer
+    # OBERKANTE knapp unter der Kopf-Oberkante, liegen beide garantiert in
+    # getrennten vertikalen Bändern und können sich NIE überlappen — egal wie
+    # breit die Sprechblase gerade ist. Trail-Kringel zeigen nach rechts → Kopf.
+    trail = 16
+    bx = max(8, int(cx - cw - 28))    # rechte Kante ~28px links vom Kopf (Lücke)
+    by = max(8, int(top_y + 6))       # Oberkante unter der Sprechblasen-Unterkante
+    tmp = pygame.Surface((cw + trail, ch), pygame.SRCALPHA)
     pygame.draw.rect(tmp, THOUGHT_BG, (0, 0, cw, ch), border_radius=16)
     y = 10
     if img:
@@ -126,8 +132,8 @@ def draw_thought(surf, font, small, word, meaning, cx, top_y, alpha=255):
     tmp.blit(w_word, ((cw - w_word.get_width()) // 2, y)); y += w_word.get_height() + 3
     if w_mean:
         tmp.blit(w_mean, ((cw - w_mean.get_width()) // 2, y))
-    pygame.draw.circle(tmp, THOUGHT_BG, (cw - 14, ch + 3), 6)   # Trail Richtung Kopf
-    pygame.draw.circle(tmp, THOUGHT_BG, (cw - 4, ch + 11), 4)
+    pygame.draw.circle(tmp, THOUGHT_BG, (cw + 3, 15), 5)   # Trail nach rechts → Kopf
+    pygame.draw.circle(tmp, THOUGHT_BG, (cw + 11, 6), 3)
     if alpha < 255:
         tmp.set_alpha(alpha)
     surf.blit(tmp, (bx, by))
