@@ -353,13 +353,16 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     lang = _session_lang or tutor_config.setting("lang", "zh")
 
     # Kosten-Hebel: nur die letzten N Turns senden (zustandslose API).
-    history = get_history()[-_history_window():]
-    if nudge:
-        history = history + [{"role": "user", "content": _nudge_situation(focus, sound)}]
-    elif user_text is None:
-        # Öffnen/Session-Start: Lage-Meldung „Sasha kommt rein" statt leerem
-        # Fortsetzen der alten History (sonst degeneriert sie zu „我在"/Echo).
-        history = history + [{"role": "user", "content": _opening_situation(focus)}]
+    if user_text is None and not nudge:
+        # Öffnen/Session-Start: NUR die Lage-Meldung „Sasha kommt rein", KEIN roher
+        # Verlauf. Sonst kapert ein (mit „你在吗？"-Fillern) verseuchter Verlauf den
+        # Gruß und sie fällt in eine Frage-/Echo-Schleife. Kontinuität kommt aus
+        # persona_memory (Zusammenfassung im System-Prompt), nicht aus History-Replay.
+        history = [{"role": "user", "content": _opening_situation(focus)}]
+    else:
+        history = get_history()[-_history_window():]
+        if nudge:
+            history = history + [{"role": "user", "content": _nudge_situation(focus, sound)}]
     system  = prof["system_prompt"]
 
     # Vokabel-Kontext ans Prompt-Ende hängen: welche Wörter Sasha lernt, damit
