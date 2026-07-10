@@ -389,6 +389,29 @@ def show_thought(word: str, meaning: str = "", pinyin: str = "") -> str:
     return "ok"
 
 
+def mark_known(word: str, pinyin: str = "") -> str:
+    """Vokabel-Check (Anfangsphase): Sasha kann dieses Wort SCHON → als confirmed
+    ablegen. Gegenstück zu show_thought/introduce_new (die ein NEUES Wort als „im
+    Lernen" anlegen). Existiert das Wort, wird es bestätigt; sonst neu+confirmed.
+    So baut der Check die Basis auf, aus der die Persona dann Sätze bilden kann."""
+    word = (word or "").strip()
+    if not word:
+        return "[kein Wort]"
+    with _lock:
+        entries = _load_raw()
+        for e in entries:
+            if e['word'] == word:
+                e['confirmed'] = True
+                if e.get('correct_use', 0) < CONFIRM_THRESHOLD:
+                    e['correct_use'] = CONFIRM_THRESHOLD
+                _write_raw(entries)
+                return f"✓ '{word}' als bekannt markiert"
+        entries.append({'word': word, 'pinyin': pinyin,
+                        'correct_use': CONFIRM_THRESHOLD, 'confirmed': True})
+        _write_raw(entries)
+    return f"✓ '{word}' als bekannt hinzugefügt"
+
+
 def get_vocab_stats() -> str:
     """
     Gibt eine kurze Statistik über den Lernfortschritt zurück.
@@ -469,7 +492,8 @@ TUTOR_TOOLS = [
                            "站起 stand / 踱步 pace / 走动 wander / 靠近 come_closer / 睡觉 sleep。"
                            "动作：招手 wave / 点头 nod / 看着她 look / 伸懒腰 stretch / 举起手 "
                            "arms_up / 抱臂 cross_arms / 耸肩 shrug。表情：开心 happy / 难过 sad / "
-                           "惊讶 surprised / 累 tired / 平常 neutral。想动、想换表情就自然地用。",
+                           "惊讶 surprised / 累 tired / 疑惑（没听懂/她发「?」）puzzled / 平常 neutral。"
+                           "想动、想换表情就自然地用。",
             "parameters":  {
                 "type":       "object",
                 "properties": {
@@ -477,7 +501,7 @@ TUTOR_TOOLS = [
                         "type": "string",
                         "enum": ["sit", "stand", "pace", "wander", "come_closer", "sleep",
                                  "wave", "nod", "look", "stretch", "arms_up", "cross_arms", "shrug",
-                                 "happy", "sad", "surprised", "tired", "neutral"],
+                                 "happy", "sad", "surprised", "tired", "puzzled", "neutral"],
                     },
                 },
                 "required": ["action"],
@@ -578,6 +602,23 @@ TUTOR_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name":        "mark_known",
+            "description": "开始时先搞清楚 Sasha 已经会哪些词：她能听懂/说出的词，用这个记下（记成"
+                           "『已掌握』）。这跟 show_thought 相反——show_thought 是教她一个新词。word 是词，"
+                           "pinyin 是拼音。",
+            "parameters":  {
+                "type": "object",
+                "properties": {
+                    "word":   {"type": "string", "description": "她已经会的词（中文）"},
+                    "pinyin": {"type": "string", "description": "拼音（带声调）"},
+                },
+                "required": ["word"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name":        "show_thought",
             "description": "她还不熟的词，每次都用这个：在你脑子里显示这个词和它的意思（图或翻译），"
                            "让她一看就懂——比用一堆话解释好。word 是这个词，meaning 是德语意思，"
@@ -625,6 +666,7 @@ _ALLOWED = {
     "stop_music":            lambda a: stop_music(),
     "get_local_news":        lambda a: get_local_news(),
     "show_thought":          lambda a: show_thought(a.get("word", ""), a.get("meaning", ""), a.get("pinyin", "")),
+    "mark_known":            lambda a: mark_known(a.get("word", ""), a.get("pinyin", "")),
 }
 
 

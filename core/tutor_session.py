@@ -46,7 +46,7 @@ _session_lang = None           # Sprache/Persona der laufenden Session (für His
 # sie GENAU EINMAL abspielt). Das Zimmer pollt /api/tutor/room_state.
 _STANCES  = {"idle", "sit", "stand", "pace", "wander", "come_closer", "sleep"}
 _GESTURES = {"wave", "nod", "look", "stretch", "arms_up", "cross_arms", "shrug"}
-_FACES    = {"neutral", "happy", "sad", "surprised", "tired"}  # anhaltende Mimik
+_FACES    = {"neutral", "happy", "sad", "surprised", "tired", "puzzled"}  # anhaltende Mimik
 _expr     = {"stance": "idle", "gesture": None, "gid": 0, "face": "neutral"}
 
 

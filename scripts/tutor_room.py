@@ -26,6 +26,7 @@
 import os
 import sys
 import io
+import re
 import wave
 import json
 import math
@@ -576,6 +577,11 @@ class Persona:
         elif face == 'surprised':
             for sx in (-ex, ex):
                 pygame.draw.circle(surf, HAIR, (int(x + sx), int(ey)), max(2, int(2.8*s)), width=max(1, int(1.4*s)))
+        elif face == 'puzzled':
+            for sx in (-ex, ex):
+                pygame.draw.circle(surf, HAIR, (int(x + sx), int(ey)), max(1, int(2*s)))
+            # eine hochgezogene Augenbraue (rechts) → fragender Blick
+            pygame.draw.line(surf, HAIR, (x + ex - 2.5*s, ey - 3.4*s), (x + ex + 2.5*s, ey - 4.8*s), ew)
         else:
             for sx in (-ex, ex):
                 pygame.draw.circle(surf, HAIR, (int(x + sx), int(ey)), max(1, int(2*s)))
@@ -590,6 +596,8 @@ class Persona:
             pygame.draw.arc(surf, DRESS_DK, (x - 5*s, my, 10*s, 8*s), 0, math.pi, mw)
         elif face == 'tired' or sleeping:
             pygame.draw.line(surf, DRESS_DK, (x - 3.5*s, my), (x + 3.5*s, my), mw)
+        elif face == 'puzzled':
+            pygame.draw.line(surf, DRESS_DK, (x - 3*s, my + 1.2*s), (x + 3*s, my - 1.2*s), mw)  # schiefer, unsicherer Strich
         elif face == 'happy':
             pygame.draw.arc(surf, DRESS_DK, (x - 6*s, my - 5*s, 12*s, 10*s), math.pi, 2*math.pi, max(1, int(2*s)))
         else:
@@ -737,6 +745,33 @@ def draw_tv(surf, w, h, on, title, font, t):
     else:
         pygame.draw.rect(surf, (20, 22, 28), (tx, ty, tw, th))
         pygame.draw.line(surf, (40, 44, 52), (tx + 6, ty + 6), (tx + tw - 10, ty + th - 8), 2)  # Reflex
+
+
+# ── Rede säubern: Regie-Klammern + geleakte Tool-Zeilen raus ──────────────────
+# Sicherheitsnetz gegen qwens Roleplay-Prior (schreibt Aktionen als „（…）" und
+# leakt manchmal Tool-Namen wie „show_thought: …" in den Text). Was Sasha SIEHT
+# und HÖRT, wird hier bereinigt — unabhängig davon, wie brav das Modell ist.
+_TOOL_NAMES = ('express', 'show_thought', 'mark_known', 'play_music', 'stop_music',
+               'watch_tv', 'turn_off_tv', 'get_local_news', 'get_confirmed_vocab',
+               'get_testing_vocab', 'increment_correct_use', 'introduce_new',
+               'get_structures', 'introduce_structure', 'increment_structure')
+_PAREN_RE    = re.compile(r'（[^）]*）|\([^)]*\)')          # Regie in Klammern
+_TOOLLINE_RE = re.compile(r'^\s*(?:' + '|'.join(_TOOL_NAMES) + r')\b.*$', re.IGNORECASE)
+
+
+def _clean_speech(text):
+    """Streift （Regie） und geleakte Tool-Zeilen aus dem sichtbaren/gesprochenen
+    Text. Klammer-Gruppen müssen geschlossen sein (offene bleiben, bis der Stream
+    sie schließt) — bei fertigen Zeilen ist alles zu."""
+    if not text:
+        return text
+    text = _PAREN_RE.sub('', text)
+    lines = []
+    for ln in text.split('\n'):
+        ln = ln.strip()
+        if ln and not _TOOLLINE_RE.match(ln):   # leere + reine Tool-Zeilen raus
+            lines.append(ln)
+    return '\n'.join(lines).strip()
 
 
 def draw_bubble(surf, font, text, cx, top_y, w, alpha=255):
@@ -893,7 +928,7 @@ def main():
             S['busy'] = False
             if err:
                 S['msg'] = err
-            line = S['buf'].strip()
+            line = _clean_speech(S['buf'].strip())   # Regie/Tool-Leak raus
             if line:
                 S['last'] = line
         if not err and line:
@@ -1178,7 +1213,7 @@ def main():
         elif thinking:
             cur = '…'
         elif has_text:
-            cur = buf
+            cur = _clean_speech(buf)   # Regie/Tool-Leak auch in der Live-Blase raus
         elif streaming or speaking:
             cur = last
         else:
