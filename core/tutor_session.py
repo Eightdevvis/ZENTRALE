@@ -304,15 +304,33 @@ def push_message(role: str, content: str):
 # Wird NUR gesendet, nie in der History gespeichert (Sasha hat's nicht gesagt).
 # focus: Fenster fokussiert? (jemand schaut zu)  True/False/None(unbekannt)
 # sound: Mikro-Ambient — Rascheln? (Phase 2, vorerst None/unbenutzt)
+# Lage-Meldungen sind HINTERGRUND (keine echte Rede von Sasha). WICHTIG: bei
+# Fast-Null-Wortschatz greift sie sonst ein konkretes Wort daraus auf und echot es
+# (Bug: 旁白 „…窗户…" → sie sagt „窗户！"). Darum (a) klar als Hintergrund + „nicht
+# nachplappern" markiert, (b) keine aufgreifbaren Nomen (kein 窗户 o.ä.).
+_SIT_PREFIX = "（背景，不是 Sasha 说的话，别重复里面的字："
+_SIT_SUFFIX = "。）"
+
+
 def _nudge_situation(focus=None, sound=None) -> str:
     bits = ["一会儿没动静了"]                       # eine Weile keine Regung
     if focus is True:
-        bits.append("窗户那边有人在看着你，可就是不出声")  # jemand schaut, sagt aber nichts
+        bits.append("有人在看着你，可就是不出声")      # jemand schaut, sagt aber nichts
     elif focus is False:
-        bits.append("窗户那边也没人看你")                  # niemand schaut zu
+        bits.append("也没人看你")                      # niemand schaut zu
     if sound is True:
-        bits.append("你好像听到点窸窣声，说不好是有人还是没人")  # Rascheln, ungewiss
-    return "（旁白：" + "，".join(bits) + "。）"
+        bits.append("好像有点响动，说不好有没有人")     # ein Geräusch, ungewiss
+    return _SIT_PREFIX + "，".join(bits) + _SIT_SUFFIX
+
+
+def _opening_situation(focus=None) -> str:
+    """Öffnen = Wahrnehmungs-Ereignis (wie Fokus/Stille): Sasha kommt gerade rein.
+    Neutrale HINTERGRUND-Meldung → sie begrüßt/reagiert aus ihrer Person (variabel),
+    statt stale History degeneriert fortzusetzen ('我在'-Bug)."""
+    s = "Sasha 刚过来了"                             # Sasha ist gerade rübergekommen
+    if focus is True:
+        s += "，在看着你"                             # und schaut dich an
+    return _SIT_PREFIX + s + _SIT_SUFFIX
 
 
 def respond_stream(user_text: str = None, nudge: bool = False,
@@ -338,6 +356,10 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     history = get_history()[-_history_window():]
     if nudge:
         history = history + [{"role": "user", "content": _nudge_situation(focus, sound)}]
+    elif user_text is None:
+        # Öffnen/Session-Start: Lage-Meldung „Sasha kommt rein" statt leerem
+        # Fortsetzen der alten History (sonst degeneriert sie zu „我在"/Echo).
+        history = history + [{"role": "user", "content": _opening_situation(focus)}]
     system  = prof["system_prompt"]
 
     # Vokabel-Kontext ans Prompt-Ende hängen: welche Wörter Sasha lernt, damit
@@ -403,6 +425,13 @@ def respond_stream(user_text: str = None, nudge: bool = False,
         yield token
 
     full = "".join(full_response)
+
+    # Nudge-Antworten sind AMBIENTES Verhalten (sie reagiert auf Stille), kein
+    # Gespräch — NICHT ins Gedächtnis (sonst füllt sich die persistente History mit
+    # „我在"-Fillern und beim nächsten Öffnen plappert sie die nach). Nur echte
+    # Turns + der Eröffnungsgruß landen im Verlauf.
+    if nudge:
+        return
     push_message("assistant", full)
 
     # Nach dem Turn: History persistieren (Persona vergisst dich nicht) und den

@@ -1414,9 +1414,12 @@ def api_tutor_start():
     if not tutor_session.is_active():
         tutor_session.activate()
 
+    body  = request.get_json(silent=True) or {}
+    focus = body.get('focus')   # Fenster fokussiert beim Öffnen? (Sensor)
+
     def generate():
-        # user_text=None → KI beginnt das Gespraech
-        for token in tutor_session.respond_stream(user_text=None):
+        # user_text=None → KI beginnt das Gespraech (Öffnen = Lage-Meldung)
+        for token in tutor_session.respond_stream(user_text=None, focus=focus):
             yield f"data: {json.dumps({'token': token})}\n\n"
         yield f"data: {json.dumps({'done': True})}\n\n"
 
@@ -1481,8 +1484,11 @@ def api_tutor_nudge():
     if not tutor_session.is_active():
         return jsonify({"error": "Keine aktive Tutor-Session"}), 400
 
+    body  = request.get_json(silent=True) or {}
+    focus = body.get('focus')   # Fenster fokussiert? (Sensor aus dem Zimmer)
+
     def generate():
-        for token in tutor_session.respond_stream(nudge=True):
+        for token in tutor_session.respond_stream(nudge=True, focus=focus):
             yield f"data: {json.dumps({'token': token})}\n\n"
         yield f"data: {json.dumps({'done': True})}\n\n"
 

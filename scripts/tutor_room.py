@@ -872,6 +872,7 @@ def main():
         'hearing': False,      # gerade Sprache am Mikro?
         'transcribing': False, # Segment wird gerade erkannt
         'mic_err': '',         # kein Mikro / Lib fehlt
+        'focused': True,       # Fenster fokussiert? (Sensor: wird sie „angeschaut")
     }
 
     def log_add(role, text):
@@ -957,7 +958,9 @@ def main():
             if st and st.get('privacy_warning'):
                 S['msg'] = st['privacy_warning']
         if S['available'] and not active:
-            run_stream('/api/tutor/start', {})
+            with S['lock']:
+                foc = S['focused']
+            run_stream('/api/tutor/start', {'focus': foc})   # Öffnen = Lage-Meldung
 
     def watch_status():
         """Status leichtgewichtig nachpollen — damit avail/tts aktuell bleiben,
@@ -1020,14 +1023,16 @@ def main():
             if not ok:
                 continue
             silence = (now - lu) / 1000.0
+            with S['lock']:
+                foc = S['focused']
             if not nudged and silence > NUDGE_AFTER_S:
                 with S['lock']:
                     S['nudged'] = True; S['nudge_ms'] = now
-                run_stream('/api/tutor/nudge', {})
+                run_stream('/api/tutor/nudge', {'focus': foc})
             elif nudged and (now - nm) / 1000.0 > CHILL_RECHECK_S:
                 with S['lock']:
                     S['nudge_ms'] = now
-                run_stream('/api/tutor/nudge', {})
+                run_stream('/api/tutor/nudge', {'focus': foc})
 
     with S['lock']:
         S['last_user_ms'] = pygame.time.get_ticks()   # Stille-Uhr ab Fenster-Öffnen
@@ -1132,6 +1137,10 @@ def main():
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
                 running = False
+            elif ev.type == getattr(pygame, 'WINDOWFOCUSGAINED', -1):
+                with S['lock']: S['focused'] = True    # sie wird angeschaut
+            elif ev.type == getattr(pygame, 'WINDOWFOCUSLOST', -2):
+                with S['lock']: S['focused'] = False
             elif ev.type == pygame.VIDEORESIZE:
                 screen = pygame.display.set_mode((ev.w, ev.h), pygame.RESIZABLE)
                 persona.layout(ev.w, ev.h)
