@@ -133,7 +133,8 @@ def draw_thought(surf, font, small, word, meaning, cx, top_y, alpha=255):
 # Feedback-Loop (gedeckelt, damit die Cloud-Kosten winzig bleiben): nach kurzer
 # Stille EIN Anstoß (die KI schaut/winkt/fragt), danach chillt sie — client-
 # seitig, kostenlos. Bleibt das Fenster offen, alle ~15 min ein neuer Versuch.
-NUDGE_AFTER_S   = 25.0    # s Stille bis zum ersten Anstoß
+NUDGE_AFTER_S   = 90.0    # s Stille bis zum ersten Anstoß (war 25 = Spam; sie lebt
+                          # lieber in ihrem Zimmer weiter, als dich ständig anzuquatschen)
 CHILL_RECHECK_S = 900.0   # s (15 min) bis zum nächsten Versuch
 # Immer-Zuhören (STT): Mikro im Fenster, webrtcvad segmentiert Sprache, das Mikro
 # ist gegated während die Persona spricht (sonst hört sie sich selbst zu).

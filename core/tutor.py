@@ -369,15 +369,23 @@ def express(action: str) -> str:
     return "ok"
 
 
-def show_thought(word: str, meaning: str = "") -> str:
+def show_thought(word: str, meaning: str = "", pinyin: str = "") -> str:
     """Zeigt Sasha „in Gedanken" ein Wort + seine Bedeutung (Übersetzung, und im
     Fenster ggf. ein Bild aus data/vocab_images/<wort>.png) — comprehensible input
-    statt Text-Erklärung. Reicht an tutor_session weiter (Fenster pollt)."""
+    statt Text-Erklärung. Reicht an tutor_session weiter (Fenster pollt).
+
+    TRACKING-KOPPLUNG: ist das Wort neu, wandert es zugleich in die Vokabelliste
+    (introduce_new dedupt selbst → bekanntes Wort = no-op, kein Duplikat). So wächst
+    der Umfang automatisch genau mit dem, was die Persona real zeigt/einführt —
+    das ist der verlässliche Anker fürs Tracking (Sashas Vorgabe)."""
+    word = (word or "").strip()
     try:
         import tutor_session
         tutor_session.set_thought(word, meaning)
     except Exception:
         pass
+    if word:
+        introduce_new(word, pinyin)   # dedupt intern: neu → getrackt, bekannt → no-op
     return "ok"
 
 
@@ -571,13 +579,15 @@ TUTOR_TOOLS = [
         "type": "function",
         "function": {
             "name":        "show_thought",
-            "description": "想帮 Sasha 懂一个词时，在你脑子里显示这个词和它的意思（图或翻译），"
-                           "让她一看就懂——比用一堆话解释好。word 是这个词，meaning 是德语意思。",
+            "description": "她还不熟的词，每次都用这个：在你脑子里显示这个词和它的意思（图或翻译），"
+                           "让她一看就懂——比用一堆话解释好。word 是这个词，meaning 是德语意思，"
+                           "pinyin 是拼音（带声调）。（这也会自动把词记进她的词表，别另外再记。）",
             "parameters":  {
                 "type": "object",
                 "properties": {
-                    "word":    {"type": "string", "description": "要解释的词（中文）"},
+                    "word":    {"type": "string", "description": "要显示的词（中文）"},
                     "meaning": {"type": "string", "description": "德语意思/翻译"},
+                    "pinyin":  {"type": "string", "description": "拼音（带声调），如 nǐ hǎo"},
                 },
                 "required": ["word"],
             },
@@ -614,7 +624,7 @@ _ALLOWED = {
     "play_music":            lambda a: play_music(a.get("mood", "chill")),
     "stop_music":            lambda a: stop_music(),
     "get_local_news":        lambda a: get_local_news(),
-    "show_thought":          lambda a: show_thought(a.get("word", ""), a.get("meaning", "")),
+    "show_thought":          lambda a: show_thought(a.get("word", ""), a.get("meaning", ""), a.get("pinyin", "")),
 }
 
 

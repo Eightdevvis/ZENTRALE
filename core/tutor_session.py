@@ -297,22 +297,35 @@ def push_message(role: str, content: str):
         _history.append({"role": role, "content": content})
 
 
-# Nudge-Text (Zielsprache-neutral gehalten, mit chinesischer Anweisung): wird
-# NUR gesendet, nie in der History gespeichert — Sasha hat das ja nicht gesagt.
-_NUDGE_PROMPT = ("（旁白：Sasha 有一会儿没出声了。你可以看看她、招手，或者轻声问一句"
-                 "她在不在——很简短，一句就够。用 express 工具做动作。）")
+# Nudge = neutrale LAGE-MELDUNG (kein Verhaltensbefehl mehr). Früher stand hier
+# "frag ob sie da ist" → sie fragte ewig im selben Wortlaut. Jetzt beschreiben wir
+# nur die SITUATION (still + Sensorik), und ihre Persona (mag kein Ignoriert-
+# werden) reagiert selbst — mal genervt, mal macht sie ihr Ding, mal stupst sie.
+# Wird NUR gesendet, nie in der History gespeichert (Sasha hat's nicht gesagt).
+# focus: Fenster fokussiert? (jemand schaut zu)  True/False/None(unbekannt)
+# sound: Mikro-Ambient — Rascheln? (Phase 2, vorerst None/unbenutzt)
+def _nudge_situation(focus=None, sound=None) -> str:
+    bits = ["一会儿没动静了"]                       # eine Weile keine Regung
+    if focus is True:
+        bits.append("窗户那边有人在看着你，可就是不出声")  # jemand schaut, sagt aber nichts
+    elif focus is False:
+        bits.append("窗户那边也没人看你")                  # niemand schaut zu
+    if sound is True:
+        bits.append("你好像听到点窸窣声，说不好是有人还是没人")  # Rascheln, ungewiss
+    return "（旁白：" + "，".join(bits) + "。）"
 
 
-def respond_stream(user_text: str = None, nudge: bool = False):
+def respond_stream(user_text: str = None, nudge: bool = False,
+                   focus=None, sound=None):
     """
     Generator: schickt die History (+ optionale neue User-Nachricht) an das
     aufgelöste Backend mit dem Sprach-System-Prompt und den Tutor-Tools.
     Yieldet Token für Token fürs Browser-Streaming.
 
     user_text=None → KI startet das Gespräch (Session-Beginn).
-    nudge=True     → Stille-Anstoß: die KI reagiert von selbst (schauen/winken/
-                     kurz nachfragen). Der Anstoß-Text wird NUR gesendet, nicht
-                     in der History gespeichert.
+    nudge=True     → Stille: statt eines Befehls kriegt sie eine neutrale Lage-
+                     Meldung (mit Fokus-/Ambient-Sensorik), reagiert selbst aus
+                     ihrem Charakter. Nur gesendet, nicht in der History.
     """
     if user_text is not None:
         push_message("user", user_text)
@@ -324,7 +337,7 @@ def respond_stream(user_text: str = None, nudge: bool = False):
     # Kosten-Hebel: nur die letzten N Turns senden (zustandslose API).
     history = get_history()[-_history_window():]
     if nudge:
-        history = history + [{"role": "user", "content": _NUDGE_PROMPT}]
+        history = history + [{"role": "user", "content": _nudge_situation(focus, sound)}]
     system  = prof["system_prompt"]
 
     # Vokabel-Kontext ans Prompt-Ende hängen: welche Wörter Sasha lernt, damit
@@ -347,6 +360,13 @@ def respond_stream(user_text: str = None, nudge: bool = False):
             body = "；".join(parts)
             if body.strip("：；"):
                 system = system + "\n\n" + hint.format(words=body)
+            # Erwartung skalieren: kleine Liste/wenig Strukturen → Bremse davor
+            # setzen (winzige Gespräche ok, kein Lehrdruck). Zielsprache aus Profil.
+            expect_fn = prof.get("expect")
+            if expect_fn:
+                exp = expect_fn(len(solid) + len(learn) + len(structs))
+                if exp:
+                    system = system + "\n" + exp
         except Exception:
             pass
 
