@@ -250,14 +250,26 @@ def _folder_uids_by_date(imap, limit):
     seitiges `UID SORT (REVERSE DATE)` → auch bei >limit Mails kommen die nach
     DATUM neuesten, nicht die zuletzt einsortierten (die hätten die höchsten UIDs,
     nach einem Reconcile aber verwürfelte Daten). Fällt auf UID-Reihenfolge zurück,
-    falls der Server SORT nicht kann."""
-    for charset in ("UTF-8", "US-ASCII"):
-        try:
-            typ, data = imap.uid("SORT", "(REVERSE DATE)", charset, "ALL")
-            if typ == "OK" and data and data[0]:
-                return [int(u) for u in data[0].split()][:limit]
-        except Exception:
-            pass                              # SORT nicht unterstützt → Fallback
+    falls der Server SORT nicht kann.
+
+    WICHTIG — SORT nur senden, wenn der Server es in CAPABILITY anbietet:
+    **Outlook/Exchange kann KEIN SORT** und quittiert `UID SORT` mit `BAD`.
+    Ein paar solcher BADs auf einer gepoolten Verbindung, und Outlook **KAPPT
+    die Verbindung** — die unmittelbar folgende `SEARCH`/`FETCH` läuft dann in
+    einen `abort` (»Connection closed«), der Ordner kam **leer** zurück bzw. ein
+    Body-Read lief in einen `TimeoutError`. Weil hier vorher blind SORT (sogar
+    2×, UTF-8 + US-ASCII) pro Öffnen ging, drosselte Outlook nach ~jedem 2.–3.
+    Ordner in genau dieses Muster (»Ordner leer« bei jedem x-ten Öffnen). Ohne
+    beworbenes SORT also direkt `SEARCH` — kein BAD, keine gekappte Verbindung;
+    die Datums-Sortierung macht `folder_mails`/`inbox_tray` ohnehin clientseitig."""
+    if "SORT" in getattr(imap, "capabilities", ()):
+        for charset in ("UTF-8", "US-ASCII"):
+            try:
+                typ, data = imap.uid("SORT", "(REVERSE DATE)", charset, "ALL")
+                if typ == "OK" and data and data[0]:
+                    return [int(u) for u in data[0].split()][:limit]
+            except Exception:
+                break                         # doch nicht → 1× reicht, dann SEARCH
     typ, data = imap.uid("SEARCH", None, "UID 1:*")
     if typ == "OK" and data and data[0]:
         return sorted((int(u) for u in data[0].split()), reverse=True)[:limit]
@@ -362,8 +374,52 @@ def _extract_text(msg):
     return text
 
 
+# ── Konto-Quarantäne: dauerhaft abgelehnte Logins aussetzen ───────────
+# Ein Konto mit falschem Passwort / totem Token lehnt JEDEN Login ab. Ohne
+# Bremse liefe jeder Counts-Sweep, jeder Ordner-Abruf und jeder Poll erneut
+# dagegen und spammte das Internet-Panel mit »Login abgelehnt«. Darum: nach der
+# ersten ENDGÜLTIGEN Ablehnung (auch der eine Token-Refresh-Retry scheiterte)
+# das Konto aussetzen — EINMAL loggen, dann für eine Abkühlphase (Default 1 h)
+# überspringen. Danach ein stiller neuer Versuch (self-healing, falls Passwort/
+# Token inzwischen repariert). `_accounts_for` filtert ausgesetzte Konten, also
+# laufen weder die Panel-Ops (`_session`) noch der Poll (`poll_all`) dagegen.
+_suspended = {}          # name -> Zeitpunkt der Aussetzung (time.time())
+_suspended_lock = threading.Lock()
+_SUSPEND_COOLDOWN_S = int(os.environ.get("MAIL_SUSPEND_COOLDOWN_S", "3600"))
+
+
+def _is_suspended(name):
+    """True, solange das Konto in der Abkühlphase ausgesetzt ist. Nach Ablauf
+    wird die Aussetzung verworfen → der nächste Zugriff probiert es wieder."""
+    if not name:
+        return False
+    with _suspended_lock:
+        ts = _suspended.get(name)
+        if ts is None:
+            return False
+        if time.time() - ts > _SUSPEND_COOLDOWN_S:
+            _suspended.pop(name, None)
+            return False
+        return True
+
+
+def _suspend_account(name, err):
+    """Ein Konto nach endgültig abgelehntem Login aussetzen. Loggt nur beim
+    ERSTEN Mal (bzw. nach abgelaufener Abkühlphase) — kein Dauerspam."""
+    with _suspended_lock:
+        first = name not in _suspended
+        _suspended[name] = time.time()
+    if first:
+        state.push_log(
+            f"MAIL [{name}]: Login endgültig abgelehnt ({err}) — Konto "
+            f"ausgesetzt (kein weiterer Versuch für {_SUSPEND_COOLDOWN_S // 60} "
+            f"min). Fix: Passwort/Token in mail_secrets erneuern oder Konto "
+            f"deaktivieren.")
+
+
 def _accounts_for(account_name=None):
-    accts = [a for a in mail_secrets.load_accounts() if a.get("enabled", True)]
+    accts = [a for a in mail_secrets.load_accounts()
+             if a.get("enabled", True) and not _is_suspended(a.get("name"))]
     if account_name:
         match = [a for a in accts if a.get("name") == account_name]
         if match:
@@ -428,11 +484,16 @@ def prefetch_bodies(cat, uids, account_name=None):
 
 
 def _fetch_body(cat, uid, account_name=None):
-    """Den vollen Body EINER Mail wirklich vom Server holen (ohne Cache)."""
-    spec = mail_rules.category_action(cat)
-    folder = spec.get("folder")
-    if spec.get("action") != "move" or not folder:
-        return {"error": "kein Live-Ordner für diese Kategorie"}
+    """Den vollen Body EINER Mail wirklich vom Server holen (ohne Cache).
+    Der Eingang-Sentinel (`EINGANG`) wird wie der Ordner INBOX behandelt — so
+    lässt sich auch aus dem Eingang heraus antworten (das Original liegt dort)."""
+    if cat == EINGANG:
+        folder = "INBOX"
+    else:
+        spec = mail_rules.category_action(cat)
+        folder = spec.get("folder")
+        if spec.get("action") != "move" or not folder:
+            return {"error": "kein Live-Ordner für diese Kategorie"}
     for account in _accounts_for(account_name):
         try:
             with _session(account) as imap:
@@ -571,6 +632,12 @@ def refile_sender(sender, category, account_name=None):
 # und sortiert bekannte Absender sofort ein).
 
 _SEEN_RE = re.compile(rb"FLAGS\s*\(([^)]*)\)", re.I)
+
+# Sentinel-„Kategorie" für den Eingang: die TUI/Browser schicken diesen Wert als
+# `cat`, wenn eine Mail im Eingang (INBOX) liegt statt in einem Kategorie-Ordner.
+# `_fetch_body`/`reply`/`draft` behandeln ihn wie den Ordner INBOX. Muss mit dem
+# TUI-Konstanten `MAIL_EINGANG` übereinstimmen.
+EINGANG = "__eingang__"
 
 
 def inbox_tray(limit=200):
@@ -942,9 +1009,23 @@ def save_draft(account, to_addr, subject, body, in_reply_to=None, references=Non
     return drafts
 
 
+def _file_inbox_after_reply(uid, account_name):
+    """Nach einer Antwort/einem Entwurf AUS DEM EINGANG die Original-Mail abhaken
+    (gelesen + einsortieren) — der Nutzer hat sie ja bearbeitet, sie muss nicht
+    mehr im Eingang liegen. Best-effort: klappt das Einsortieren nicht (unbekannter
+    Absender bleibt liegen, Move abgelehnt …), ist die Antwort trotzdem raus."""
+    try:
+        return mark_seen_and_file(uid, account_name=account_name)
+    except Exception as e:
+        state.push_log(f"MAIL: auto-einsortieren nach Antwort uid {uid} — "
+                       f"{type(e).__name__}: {e}")
+        return {"seen": False, "filed": False, "error": str(e)}
+
+
 def draft_reply(cat, uid, body, account_name=None):
     """Wie reply_to_mail, aber die getippte Antwort wird als ENTWURF in den
-    Drafts-Ordner gelegt statt gesendet. Liefert {ok, to, subject, folder}/{error}."""
+    Drafts-Ordner gelegt statt gesendet. Liefert {ok, to, subject, folder}/{error}.
+    Aus dem Eingang heraus wird die Original-Mail danach auto-einsortiert."""
     info = mail_body(cat, uid, account_name=account_name)
     if not isinstance(info, dict) or info.get("error"):
         return {"error": (info or {}).get("error", "Original nicht ladbar")}
@@ -961,15 +1042,20 @@ def draft_reply(cat, uid, body, account_name=None):
         folder = save_draft(account, to_addr, subj, body,
                             in_reply_to=info.get("message_id") or None,
                             references=refs or None)
-        return {"ok": True, "to": to_addr, "subject": subj, "folder": folder,
-                "draft": True}
+        res = {"ok": True, "to": to_addr, "subject": subj, "folder": folder,
+               "draft": True}
+        if cat == EINGANG:
+            res["filed"] = _file_inbox_after_reply(uid, account["name"])
+        return res
     except Exception as e:
         return {"error": f"{type(e).__name__}: {e}"}
 
 
 def reply_to_mail(cat, uid, body, account_name=None):
     """Komfort-Wrapper fürs Panel: holt die Original-Mail (Absender, Betreff,
-    Message-ID) und sendet die getippte Antwort dorthin. Liefert {ok}/{error}."""
+    Message-ID) und sendet die getippte Antwort dorthin. Liefert {ok}/{error}.
+    Aus dem Eingang heraus wird die Original-Mail danach auto-einsortiert
+    (`filed` im Ergebnis)."""
     info = mail_body(cat, uid, account_name=account_name)
     if not isinstance(info, dict) or info.get("error"):
         return {"error": (info or {}).get("error", "Original nicht ladbar")}
@@ -986,7 +1072,10 @@ def reply_to_mail(cat, uid, body, account_name=None):
         send_reply(account, to_addr, subj, body,
                    in_reply_to=info.get("message_id") or None,
                    references=refs or None)
-        return {"ok": True, "to": to_addr, "subject": subj}
+        res = {"ok": True, "to": to_addr, "subject": subj}
+        if cat == EINGANG:
+            res["filed"] = _file_inbox_after_reply(uid, account["name"])
+        return res
     except Exception as e:
         return {"error": f"{type(e).__name__}: {e}"}
 
@@ -1155,9 +1244,16 @@ def _session(account):
                 # (AUTHENTICATIONFAILED — früh invalidiert / Uhr-Skew). Standard-
                 # OAuth-Retry: EINMAL mit erzwungenem Token-Refresh frisch
                 # verbinden, statt die ganze Operation fallen zu lassen.
-                state.push_log(f"MAIL: Login abgelehnt ({e}) — Token erneuern, "
-                               f"1× neu verbinden")
-                imap = _connect(account, force_token=True)
+                state.push_log(f"MAIL [{name}]: Login abgelehnt ({e}) — Token "
+                               f"erneuern, 1× neu verbinden")
+                try:
+                    imap = _connect(account, force_token=True)
+                except imaplib.IMAP4.error as e2:
+                    # Auch mit frischem Token abgelehnt → der Login ist endgültig
+                    # kaputt (falsches Passwort / toter refresh_token). Konto
+                    # aussetzen, statt es bei jedem Sweep/Poll neu zu versuchen.
+                    _suspend_account(name, e2)
+                    raise
             _pool[name] = imap
         try:
             yield imap
@@ -1494,6 +1590,12 @@ def poll_account(account, dry_run=None):
                            f"(Versuch {attempt}/{_max_reconnect()})")
             time.sleep(wait)
             continue                           # weiter mit dem INBOX-Rest
+        except imaplib.IMAP4.error as e:
+            # Login abgelehnt (kein .abort — das fängt _DROP_ERRORS oben ab):
+            # falsches Passwort / toter Token. Konto aussetzen, damit der Poll
+            # (und die Panel-Ops) nicht bei jedem Lauf erneut dagegenlaufen.
+            _suspend_account(name, e)
+            break
         except Exception as e:
             state.push_log(f"MAIL [{name}]: Poll-Fehler — {type(e).__name__}: {e}")
             break
@@ -1514,7 +1616,7 @@ def poll_account(account, dry_run=None):
 
 
 def poll_all(dry_run=None):
-    accounts = [a for a in mail_secrets.load_accounts() if a.get("enabled", True)]
+    accounts = _accounts_for()          # ausgesetzte (Login abgelehnt) fallen raus
     if not accounts:
         state.push_log("MAIL: keine Konten konfiguriert (siehe "
                        "core.mail_secrets add) — übersprungen")

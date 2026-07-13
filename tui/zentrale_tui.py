@@ -4429,6 +4429,13 @@ def run_ui(stdscr, store):
             MAIL["msg"] = "abhaken: backend?"
         # Die Mail hat den Eingang verlassen (oder ist zumindest jetzt gelesen) →
         # Liste ohne sie neu aufbauen, damit sie sofort verschwindet.
+        _eingang_drop(uid)
+
+    def _eingang_drop(uid):
+        """Eine abgehakte/beantwortete Mail sofort aus der Eingang-Ansicht nehmen
+        (Liste + Cache + Body), Zahlen frisch ziehen. Beim nächsten Öffnen kommt
+        der echte Serverstand (eine nur gelesene, unbekannte Mail taucht als ○
+        wieder auf — wie beim Abhaken)."""
         MAIL["mails"] = [m for m in (MAIL["mails"] or [])
                          if m.get("uid") != uid]
         MAIL["fcache"].pop(MAIL_EINGANG, None)
@@ -4540,8 +4547,10 @@ def run_ui(stdscr, store):
                     who = (it.get("from") or "?").strip()
                     subj = (it.get("subject") or "").strip() or "(kein Betreff)"
                     if is_eingang:                # Gelesen-Marker + Ziel-Vorschau
+                        # → Ziel an die ADRESSZEILE, nicht an den Betreff: ein
+                        # langer Betreff schnitt das Ziel sonst ab.
                         who = ("○ " if it.get("seen") else "● ") + who
-                        subj += ("   → " + it["category"]) if it.get("category") else "   → ?"
+                        who += ("   → " + it["category"]) if it.get("category") else "   → ?"
                     a1 = (C["bright"] | curses.A_REVERSE) if seld else C["bright"]
                     a2 = (C["dim"] | curses.A_REVERSE) if seld else C["dim"]
                     addclip(y, ix, ("» " if seld else "  ") + who, iw, a1)
@@ -4557,9 +4566,11 @@ def run_ui(stdscr, store):
             who = (it.get("from") or "?").strip()
             subj = (it.get("subject") or "").strip() or "(kein Betreff)"
             if is_eingang:                        # Eingang: Status + Ziel im Kopf
+                # → Ziel an die Von-/Adresszeile, nicht an den (evtl. langen,
+                # abgeschnittenen) Betreff.
                 who = ("○ gelesen · " if it.get("seen") else "● neu · ") + who
                 if it.get("category"):
-                    subj += "   → " + it["category"]
+                    who += "   → " + it["category"]
             addclip(body_top, ix, "Von:     " + who, iw, C["bright"])
             addclip(body_top + 1, ix, "Betreff: " + subj, iw, C["acc"])
             addclip(body_top + 2, ix, "─" * iw, iw, C["faint"])
@@ -4637,12 +4648,24 @@ def run_ui(stdscr, store):
         MAIL["reply_confirm"] = False
         MAIL["msg"] = ""
 
-    def _do_reply(payload):
+    def _reply_filed_msg(r, verb):
+        """Rückmeldung nach Antwort/Entwurf aus dem Eingang: wurde die Mail
+        auto-einsortiert oder blieb sie (unbekannter Absender) liegen?"""
+        filed = (r or {}).get("filed") or {}
+        if filed.get("filed"):
+            return "✓ %s + einsortiert → %s" % (verb, filed.get("category") or "?")
+        return "✓ %s — Absender unbekannt, bleibt im Eingang (s = einsortieren)" % verb
+
+    def _do_reply(payload, uid=None, is_eingang=False):
         try:
             r = api_call("/api/mail/reply", method="POST", body=payload,
                          timeout=60.0)
             if isinstance(r, dict) and r.get("ok"):
-                MAIL["msg"] = "✓ Antwort gesendet"
+                if is_eingang:
+                    MAIL["msg"] = _reply_filed_msg(r, "gesendet")
+                    _eingang_drop(uid)
+                else:
+                    MAIL["msg"] = "✓ Antwort gesendet"
             else:
                 MAIL["msg"] = "senden fehlgeschlagen: %s" % (
                     (r or {}).get("error", "?") if isinstance(r, dict) else "?")
@@ -4651,7 +4674,8 @@ def run_ui(stdscr, store):
 
     def mail_reply_send():
         """Den getippten Text als Antwort senden (SMTP via Backend, im
-        Hintergrund). Der Editor schließt sofort, das Senden läuft im Worker."""
+        Hintergrund). Der Editor schließt sofort, das Senden läuft im Worker.
+        Aus dem Eingang wird die Original-Mail danach auto-einsortiert."""
         it = mail_cur()
         if not it or not MAIL["reply_text"].strip():
             MAIL["reply_confirm"] = False
@@ -4660,18 +4684,24 @@ def run_ui(stdscr, store):
             return
         payload = {"cat": MAIL["cat"], "uid": it.get("uid"),
                    "account": it.get("account"), "text": MAIL["reply_text"]}
+        is_eingang = (MAIL["cat"] == MAIL_EINGANG)
+        uid = it.get("uid")
         MAIL["replying"] = False
         MAIL["reply_confirm"] = False
         MAIL["msg"] = "sende antwort…"
-        _mail_submit(("reply", it.get("uid")), "sendet antwort…",
-                     lambda p=payload: _do_reply(p))
+        _mail_submit(("reply", uid), "sendet antwort…",
+                     lambda p=payload: _do_reply(p, uid=uid, is_eingang=is_eingang))
 
-    def _do_reply_draft(payload):
+    def _do_reply_draft(payload, uid=None, is_eingang=False):
         try:
             r = api_call("/api/mail/reply", method="POST", body=payload,
                          timeout=60.0)
             if isinstance(r, dict) and r.get("ok"):
-                MAIL["msg"] = "✎ als Entwurf gespeichert"
+                if is_eingang:
+                    MAIL["msg"] = _reply_filed_msg(r, "entwurf")
+                    _eingang_drop(uid)
+                else:
+                    MAIL["msg"] = "✎ als Entwurf gespeichert"
             else:
                 MAIL["msg"] = "entwurf fehlgeschlagen: %s" % (
                     (r or {}).get("error", "?") if isinstance(r, dict) else "?")
@@ -4681,7 +4711,8 @@ def run_ui(stdscr, store):
     def mail_reply_draft():
         """Den getippten Text als ECHTEN Entwurf in den Drafts-Ordner legen (IMAP
         APPEND via Backend) — nichts geht raus, in Outlook/Handy weiterschreibbar.
-        Editor schließt sofort, das Speichern läuft im Worker."""
+        Editor schließt sofort, das Speichern läuft im Worker. Aus dem Eingang
+        wird die Original-Mail danach auto-einsortiert."""
         it = mail_cur()
         if not it or not MAIL["reply_text"].strip():
             MAIL["reply_confirm"] = False
@@ -4691,11 +4722,13 @@ def run_ui(stdscr, store):
         payload = {"cat": MAIL["cat"], "uid": it.get("uid"),
                    "account": it.get("account"), "text": MAIL["reply_text"],
                    "draft": True}
+        is_eingang = (MAIL["cat"] == MAIL_EINGANG)
+        uid = it.get("uid")
         MAIL["replying"] = False
         MAIL["reply_confirm"] = False
         MAIL["msg"] = "speichere entwurf…"
-        _mail_submit(("draft", it.get("uid")), "speichere entwurf…",
-                     lambda p=payload: _do_reply_draft(p))
+        _mail_submit(("draft", uid), "speichere entwurf…",
+                     lambda p=payload: _do_reply_draft(p, uid=uid, is_eingang=is_eingang))
 
     def draw_reply(by, bx, bh, bw):
         """Antwort-Editor: zwei Kästen nebeneinander — links die Original-Mail,
@@ -5971,10 +6004,7 @@ def run_ui(stdscr, store):
                     else:
                         MAIL["confirmdel"] = True; MAIL["msg"] = ""
                 elif ch in (ord("a"), ord("A")):               # antworten (Split-Editor)
-                    if MAIL["cat"] == MAIL_EINGANG:
-                        MAIL["msg"] = "im eingang erst abhaken/einsortieren, dann antworten"
-                    else:
-                        mail_reply_open()
+                    mail_reply_open()                          # auch aus dem Eingang direkt
                 elif ch in (ord("e"), ord("E")):               # e → Eingang öffnen (INBOX + \Seen)
                     mail_open_eingang()
                 elif ch in (ord("r"), ord("R")):

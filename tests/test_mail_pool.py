@@ -50,6 +50,7 @@ def pool(monkeypatch):
     monkeypatch.setattr(M, "_pool", {})
     monkeypatch.setattr(M, "_pool_selected", {})
     monkeypatch.setattr(M, "_pool_locks", {})
+    monkeypatch.setattr(M, "_suspended", {})
     made = []
 
     def fake_connect(account):
@@ -120,6 +121,7 @@ def _fresh_pool(monkeypatch):
     monkeypatch.setattr(M, "_pool", {})
     monkeypatch.setattr(M, "_pool_selected", {})
     monkeypatch.setattr(M, "_pool_locks", {})
+    monkeypatch.setattr(M, "_suspended", {})
 
 
 def test_session_retries_connect_on_rejected_token(monkeypatch):
@@ -153,6 +155,36 @@ def test_session_auth_error_propagates_when_retry_also_fails(monkeypatch):
         with M._session(ACCT):
             pass
     assert calls == [False, True]     # genau EIN Retry, dann aufgeben (keine Endlosschleife)
+
+
+def test_session_suspends_account_after_persistent_auth_failure(monkeypatch):
+    """Bleibt der Login endgültig abgelehnt (auch der Token-Retry scheitert),
+    wird das Konto AUSGESETZT: _accounts_for filtert es raus, damit nicht jeder
+    Sweep/Poll erneut dagegenläuft (Panel-Spam). Self-healing nach der Abkühlung."""
+    _fresh_pool(monkeypatch)
+    logs = []
+    monkeypatch.setattr(M.state, "push_log", lambda m: logs.append(m))
+    monkeypatch.setattr(M, "_connect",
+                        lambda account, force_token=False: (_ for _ in ()).throw(
+                            imaplib.IMAP4.error(b"[AUTHENTICATIONFAILED]")))
+    monkeypatch.setattr(M.mail_secrets, "load_accounts",
+                        lambda: [{"name": "outlook-main", "provider": "outlook"}])
+
+    with pytest.raises(imaplib.IMAP4.error):
+        with M._session(ACCT):
+            pass
+    assert M._is_suspended("outlook-main")                 # jetzt ausgesetzt
+    assert M._accounts_for() == []                         # aus dem Verkehr gezogen
+    assert sum("ausgesetzt" in m for m in logs) == 1       # genau EINMAL geloggt
+
+
+def test_suspension_expires_after_cooldown(monkeypatch):
+    """Nach Ablauf der Abkühlphase ist das Konto wieder freigegeben (der nächste
+    Zugriff darf es erneut versuchen — repariertes Passwort heilt von selbst)."""
+    monkeypatch.setattr(M, "_suspended", {})
+    monkeypatch.setattr(M, "_SUSPEND_COOLDOWN_S", 0)       # sofort abgelaufen
+    M._suspend_account("acc", imaplib.IMAP4.error(b"x"))
+    assert not M._is_suspended("acc")                      # Abkühlung vorbei
 
 
 def test_access_token_force_refresh_bypasses_cache(monkeypatch):
@@ -629,9 +661,11 @@ def test_folder_mails_sorted_by_date_not_uid(monkeypatch):
 
 
 def test_folder_uids_by_date_prefers_server_sort(monkeypatch):
-    """Kann der Server SORT, kommt dessen Datums-Reihenfolge (REVERSE DATE) —
-    kein blindes UID-SEARCH mehr."""
+    """Bewirbt der Server SORT (CAPABILITY), kommt dessen Datums-Reihenfolge
+    (REVERSE DATE) — kein blindes UID-SEARCH mehr."""
     class SortIMAP:
+        capabilities = ("IMAP4REV1", "SORT")     # Server KANN SORT
+
         def __init__(self):
             self.calls = []
 
@@ -646,6 +680,30 @@ def test_folder_uids_by_date_prefers_server_sort(monkeypatch):
     imap = SortIMAP()
     assert M._folder_uids_by_date(imap, 200) == [2, 3, 1]
     assert "SORT" in imap.calls and "SEARCH" not in imap.calls   # SORT gewann, kein Fallback
+
+
+def test_folder_uids_by_date_skips_sort_when_uncapable():
+    """Bewirbt der Server KEIN SORT (Outlook/Exchange), wird `UID SORT` gar nicht
+    erst gesendet — es würde mit BAD quittiert und Outlook kappt nach ein paar
+    BADs die Verbindung (→ leerer Ordner / Body-Timeout). Also direkt SEARCH,
+    absteigend nach UID."""
+    class NoSortIMAP:
+        capabilities = ("IMAP4REV1", "MOVE")     # KEIN SORT beworben
+
+        def __init__(self):
+            self.calls = []
+
+        def uid(self, cmd, *a):
+            self.calls.append(cmd)
+            if cmd == "SORT":
+                raise AssertionError("SORT darf ohne CAPABILITY nie gesendet werden")
+            if cmd == "SEARCH":
+                return ("OK", [b"1 2 3"])
+            return ("OK", [b""])
+
+    imap = NoSortIMAP()
+    assert M._folder_uids_by_date(imap, 200) == [3, 2, 1]   # SEARCH, neueste UID zuerst
+    assert imap.calls == ["SEARCH"]                          # kein SORT-BAD-Sturm
 
 
 # ── Entwurf: Antwort als echter IMAP-Draft (Drafts-Ordner) ────────────
@@ -720,3 +778,84 @@ def test_draft_reply_builds_re_subject_and_threads(monkeypatch):
     assert captured["subject"] == "Re: Angebot"       # Re: vorangestellt
     assert captured["irt"] == "<m1>"                  # In-Reply-To = Original-ID
     assert "<m1>" in captured["refs"] and "<m0>" in captured["refs"]
+
+
+# ── Antworten AUS DEM EINGANG (INBOX) + Auto-Einsortieren ─────────────
+
+def test_fetch_body_eingang_reads_inbox(monkeypatch):
+    """cat == EINGANG → _fetch_body holt das Original aus der INBOX (nicht aus
+    einem Kategorie-Ordner). So lässt sich direkt aus dem Eingang antworten."""
+    selects = []
+
+    class InboxIMAP:
+        def uid(self, cmd, *a):
+            if cmd == "FETCH":
+                return ("OK", [(b"1 (BODY[])",
+                                b"From: a@b.c\r\nSubject: s\r\n\r\nhallo")])
+            return ("OK", [b""])
+
+    monkeypatch.setattr(M, "_accounts_for", lambda name=None: [{"name": "acc"}])
+    monkeypatch.setattr(M, "_pselect",
+                        lambda imap, name, folder, readonly=True:
+                        selects.append(folder) or "OK")
+    monkeypatch.setattr(M, "_session",
+                        contextmanager(lambda account: iter([InboxIMAP()])))
+    res = M._fetch_body(M.EINGANG, 1)
+    assert res["from"] == "a@b.c" and res["body"] == "hallo"
+    assert selects == ["INBOX"]                        # INBOX, kein Kategorie-Ordner
+
+
+def test_reply_from_eingang_autofiles_original(monkeypatch):
+    """Antwort AUS DEM EINGANG: nach dem Senden wird die Original-Mail
+    auto-einsortiert (mark_seen_and_file), das Ergebnis trägt `filed`."""
+    monkeypatch.setattr(M, "mail_body", lambda cat, uid, account_name=None: {
+        "account": "acc", "from": "Bob <bob@x.z>", "subject": "Hi",
+        "message_id": "<m1>", "references": "", "body": "…"})
+    monkeypatch.setattr(M, "_accounts_for",
+                        lambda name=None: [{"name": "acc", "user": "me@x.z"}])
+    monkeypatch.setattr(M, "send_reply", lambda *a, **k: None)
+    filed = []
+    monkeypatch.setattr(M, "mark_seen_and_file",
+                        lambda uid, account_name=None:
+                        filed.append((uid, account_name))
+                        or {"seen": True, "filed": True, "category": "zahlen"})
+
+    res = M.reply_to_mail(M.EINGANG, 7, "text")
+    assert res["ok"] and res["filed"]["category"] == "zahlen"
+    assert filed == [(7, "acc")]                       # genau 1×, richtiges Konto
+
+
+def test_reply_from_category_does_not_autofile(monkeypatch):
+    """Antwort aus einem Kategorie-Ordner (nicht Eingang) rührt das Einsortieren
+    NICHT an — die Mail liegt schon richtig, `filed` fehlt."""
+    monkeypatch.setattr(M, "mail_body", lambda cat, uid, account_name=None: {
+        "account": "acc", "from": "bob@x.z", "subject": "Hi",
+        "message_id": "<m1>", "references": "", "body": "…"})
+    monkeypatch.setattr(M, "_accounts_for",
+                        lambda name=None: [{"name": "acc", "user": "me@x.z"}])
+    monkeypatch.setattr(M, "send_reply", lambda *a, **k: None)
+    called = []
+    monkeypatch.setattr(M, "mark_seen_and_file", lambda *a, **k: called.append(1))
+
+    res = M.reply_to_mail("zahlen", 7, "text")
+    assert res["ok"] and "filed" not in res
+    assert called == []
+
+
+def test_draft_from_eingang_autofiles_original(monkeypatch):
+    """Auch der ENTWURF aus dem Eingang sortiert die Original-Mail ein."""
+    monkeypatch.setattr(M, "mail_body", lambda cat, uid, account_name=None: {
+        "account": "acc", "from": "bob@x.z", "subject": "Hi",
+        "message_id": "<m1>", "references": "", "body": "…"})
+    monkeypatch.setattr(M, "_accounts_for",
+                        lambda name=None: [{"name": "acc", "user": "me@x.z"}])
+    monkeypatch.setattr(M, "save_draft", lambda *a, **k: "Drafts")
+    filed = []
+    monkeypatch.setattr(M, "mark_seen_and_file",
+                        lambda uid, account_name=None:
+                        filed.append(uid) or {"seen": True, "filed": True,
+                                              "category": "arbeit antworten"})
+
+    res = M.draft_reply(M.EINGANG, 9, "entwurf")
+    assert res["ok"] and res["draft"] and res["filed"]["filed"]
+    assert filed == [9]

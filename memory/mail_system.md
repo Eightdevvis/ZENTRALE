@@ -272,10 +272,12 @@ erst dann einsortieren. Kein neues read/unread-System und **kein neuer Ordner**:
 - **Routen:** `GET /api/mail/inbox` (Tray), `GET /api/mail/inbox-body`,
   `POST /api/mail/read {uid}` (abhaken, key-gegatet, leert danach den Ordner-Cache).
 - **TUI:** Taste **`e`** öffnet den Eingang (ungelesene INBOX; `●`=ungelesen,
-  `○`=gelesen, je Zeile die vermutete Zielkategorie `→ …`), **`f`** = abhaken
-  (gelesen + einsortieren), **`s`** ordnet unbekannte Absender zu. `d`/`a` sind im
-  Eingang absichtlich gesperrt (erst einsortieren, dann löschen/antworten). Alles
-  über den Mail-Worker → non-blocking.
+  `○`=gelesen, das vermutete Ziel `→ …` steht an der **Adresszeile**, nicht am
+  Betreff — sonst schnitt ein langer Betreff das Ziel ab), **`f`** = abhaken
+  (gelesen + einsortieren), **`s`** ordnet unbekannte Absender zu, **`a`** =
+  **direkt aus dem Eingang antworten** (s.u.). `d` (löschen) ist im Eingang
+  weiter gesperrt (erst einsortieren, dann löschen). Alles über den Mail-Worker
+  → non-blocking.
 - **Nebenwirkung, gewollt:** unbekannte neue Mail wandert NICHT mehr automatisch
   in `ZENTRALE/Review` — sie bleibt im Eingang (INBOX). Der Review-Ordner ist
   damit weitgehend Legacy; die Triage passiert im Eingang. Siehe
@@ -283,6 +285,48 @@ erst dann einsortieren. Kein neues read/unread-System und **kein neuer Ordner**:
 - Tests: `tests/test_mail_pool.py` (Poll filet nur seen+known; unbekannt bleibt
   auch gelesen; abhaken bekannt/unbekannt; Tray parst `\Seen`+Kategorie; Reconcile
   lässt INBOX in Ruhe).
+
+### Direkt aus dem Eingang antworten + Auto-Einsortieren (2026-07-12)
+Sashas Modell: die Mail zuerst abzuhaken/einzusortieren, **bevor** man antworten
+darf, war Quatsch — man will aus dem Eingang **direkt antworten**. Beim Antworten
+sortiert sie sich **von selbst** ein.
+- **`a` im Eingang entsperrt:** öffnet den normalen Split-Antwort-Editor (links
+  Original aus der INBOX via `inbox_body`, rechts der Text). Kein „erst abhaken".
+- **Auto-Einsortieren nach dem Senden:** `reply_to_mail`/`draft_reply` erkennen
+  den **Eingang-Sentinel** `EINGANG = "__eingang__"` (deckungsgleich mit dem
+  TUI-`MAIL_EINGANG`) und rufen nach erfolgreichem Senden/Entwurf
+  `mark_seen_and_file(uid)` → die Original-Mail wird gelesen markiert und in ihre
+  Kategorie einsortiert (bekannter Absender) bzw. bleibt gelesen im Eingang
+  (unbekannt). Ergebnis trägt dann `filed`. **Auch der Entwurf** (`e`) sortiert
+  ein — man hat die Mail ja bearbeitet.
+- **Warum es vorher scheiterte:** `_fetch_body` löste `cat` über
+  `category_action` zu einem Ordner auf; für `__eingang__` gab es keinen →
+  `reply_to_mail` fand das Original nicht. Jetzt: `cat == EINGANG` ⇒ Ordner
+  `INBOX`.
+- **TUI:** `_do_reply`/`_do_reply_draft` melden „gesendet + einsortiert → <kat>"
+  bzw. „Absender unbekannt, bleibt im Eingang" und nehmen die Mail per
+  `_eingang_drop(uid)` sofort aus der Ansicht (Liste + Cache + Body, Zahlen
+  frisch). Best-effort: schlägt das Einsortieren fehl, ist die Antwort trotzdem
+  raus.
+- Tests: `tests/test_mail_pool.py` (`_fetch_body` Eingang→INBOX; Reply/Draft aus
+  Eingang ruft `mark_seen_and_file` + trägt `filed`; Reply aus Kategorie rührt es
+  NICHT an).
+
+### Abgelehnter Login → Konto aussetzen (kein Panel-Spam) (2026-07-12)
+Ein Konto mit falschem Passwort / totem Token (z.B. posteo) lehnte **jeden**
+Login ab, und weil `_session` das pro Counts-Sweep / Ordner-Abruf erneut
+versuchte, spammte „Login abgelehnt" laufend das Internet-Panel.
+- **Quarantäne (`_suspended`, `_suspend_account`, `_is_suspended`):** nach der
+  **ersten endgültigen** Ablehnung (auch der eine Token-Refresh-Retry scheiterte)
+  wird das Konto ausgesetzt — **einmal** geloggt (mit Konto-Name + Fix-Hinweis),
+  dann für eine Abkühlphase (`MAIL_SUSPEND_COOLDOWN_S`, Default 3600s)
+  übersprungen. Danach ein stiller neuer Versuch (self-healing).
+- **`_accounts_for` filtert ausgesetzte Konten** → weder die Panel-Ops
+  (`_session`) noch der Poll (`poll_all` läuft jetzt über `_accounts_for()`)
+  rennen weiter dagegen. `poll_account` setzt bei `imaplib.IMAP4.error` (Login
+  abgelehnt, kein `.abort`) ebenfalls aus.
+- Tests: `tests/test_mail_pool.py` (Aussetzen nach dauerhafter Auth-Ablehnung →
+  `_accounts_for` leer, genau 1× geloggt; Abkühlphase abgelaufen → wieder frei).
 
 ### Zähl-Cache: TTL + Persistenz (2026-07-01)
 `POST /api/mail/refresh-counts` sweept STATUS über **alle** Kategorie-Ordner —
@@ -357,6 +401,30 @@ cacht das Backend die Header-Liste je Kategorie (`_mail_folders`, persistiert in
 Tests in `tests/test_backend_api.py` (kalt→dann-Cache, force-bypass, assign-dropt-
 beide, delete-entfernt-uid).
 
+### SORT nur mit CAPABILITY — sonst kappt Outlook die Verbindung (2026-07-07)
+**Bug:** Ordner (arbeit antworten & Co.) öffneten sich, luden, kamen dann **leer**
+(»Ordner leer«) bzw. der Body meldete **`TimeoutError`** — intermittierend, etwa
+bei jedem 2.–3. Öffnen, während der Zähler (298) stimmte. Ursache: das seit
+`f4c12a0` (»chronologisch sortieren«) eingeführte `_folder_uids_by_date` schickte
+**blind `UID SORT (REVERSE DATE)`** (sogar 2×, UTF-8 + US-ASCII) vor jedem
+Ordner-Öffnen. **Outlook/Exchange kann kein SORT** (nicht in CAPABILITY) und
+quittiert mit **`BAD`**. Ein `BAD` ist NICHT gratis: nach ~3 gesammelten BADs auf
+der **gepoolten** Verbindung **kappt Outlook die TLS-Verbindung** — die
+unmittelbar folgende `SEARCH`/`FETCH` läuft in einen `abort` (»Connection
+closed«), Ordner leer / Body-Timeout. Der Zähler stimmte, weil `STATUS` kein
+abgelehntes Kommando ist. Betraf **alle** move-Ordner (nicht nur einen), nur
+phasenverschoben je nach BAD-Zähler.
+**Fix (`_folder_uids_by_date`):** `UID SORT` nur senden, wenn der Server es in
+`imap.capabilities` bewirbt. Outlook → direkt `SEARCH UID 1:*` (kein BAD, keine
+gekappte Verbindung); die Datums-Sortierung macht `folder_mails`/`inbox_tray`
+ohnehin clientseitig nach dem Header-FETCH. Servern mit SORT (Dovecot/posteo)
+bleibt die serverseitige Datums-Ordnung erhalten (relevant bei >200 Mails).
+Gleiche Disziplin wie beim **MOVE** (»Outlook kann kein MOVE« → immer COPY-Pfad):
+**erst CAPABILITY prüfen, nicht auf try/except-Fallback verlassen** — ein
+abgelehntes Kommando kostet bei Outlook die Verbindung. Tests in
+`tests/test_mail_pool.py` (SORT nur mit Capability; ohne → nur SEARCH, kein
+BAD-Sturm).
+
 ### Verbindungs-Härtung (Outlook-Drossel)
 Outlook drosselt Bulk-MOVE hart und **kappt dann die TLS-Verbindung** (EOF →
 `imaplib.IMAP4.abort`). Drei Gegenmaßnahmen in `poll_account`:
@@ -403,6 +471,7 @@ im News-System).
 | `MAIL_BODY_CACHE`   | `128` | Max. Mail-Texte im RAM-Body-Cache (LRU; Text ist unveränderlich) |
 | `MAIL_COUNTS_TTL_S` | `90`  | Live-Zähl-Cache-Alter, bis `refresh-counts` neu sweept (`?force=1` umgeht es) |
 | `MAIL_FOLDER_TTL_S` | `120` | Ordner-Inhalts-Cache-Alter, ab dem `/api/mail/folder` im Hintergrund frisch nachzieht (`?force=1` umgeht es) |
+| `MAIL_SUSPEND_COOLDOWN_S` | `3600` | Abkühlphase, für die ein Konto nach endgültig abgelehntem Login ausgesetzt (übersprungen) wird, bevor es still neu versucht wird |
 
 ## Selftest
 
@@ -510,7 +579,10 @@ im News-System).
   Ordner per Special-Use `\Drafts` gefunden, sonst `Drafts`). To/Betreff/
   Threading aus dem Original (gemeinsamer Nachrichten-Bau `_compose_message`).
   `409` ohne Key. Core: `reply_to_mail()`→`send_reply()` bzw. `draft_reply()`→
-  `save_draft()`.
+  `save_draft()`. **`cat == "__eingang__"`** (Antwort aus dem Eingang): Original
+  wird aus der INBOX geholt und nach Erfolg **auto-einsortiert**
+  (`mark_seen_and_file`, Ergebnis-Feld `filed`) — siehe „Direkt aus dem Eingang
+  antworten".
 
 ### Senden (SMTP) + erneuter Login
 Versand braucht den Scope `SMTP.Send` (in `mail_oauth.SCOPE`, zusammen mit IMAP —
