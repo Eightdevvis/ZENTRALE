@@ -118,9 +118,28 @@ def test_stack_layout_is_cumulative(notes):
     assert lay[1][1] == lay[0][2] + 1                          # zweiter nach h0 + gap
 
 
-def test_scatter_deterministic_unique_in_field(notes):
-    a = notes.scatter_positions(6, 40, 8)
-    b = notes.scatter_positions(6, 40, 8)
-    assert a == b                                             # reproduzierbar (kein random)
-    assert len(set(a)) == len(a)                             # keine Dubletten
-    assert all(0 <= x < 40 and 0 <= y < 8 for x, y in a)     # im Feld
+def test_float_positions_deterministic_no_overlap(notes):
+    terms = ["milch", "brot", "eier", "wochenendeinkauf", "käse", "obst"]
+    a, ra = notes.float_positions(terms, 40)
+    b, rb = notes.float_positions(terms, 40)
+    assert (a, ra) == (b, rb)                                # reproduzierbar (kein random)
+    # kein Rechts-Überlauf und keine Überlappung: jeder Term belegt [x,x+len)
+    # in seiner Zeile, keine zwei Terme teilen sich eine Zelle
+    cells = {}
+    for (x, y), t in zip(a, terms):
+        w = min(len(t), 40)
+        assert 0 <= x and x + w <= 40                        # im Feld
+        for xx in range(x, x + w):
+            assert (xx, y) not in cells                      # keine Kollision
+            cells[(xx, y)] = t
+
+
+def test_float_box_grows_with_more_terms(notes):
+    few = {"type": "float", "terms": [{"text": "a"}, {"text": "b"}]}
+    many = {"type": "float", "terms": [{"text": "term%02d" % i} for i in range(12)]}
+    assert notes.block_height(many, 40) > notes.block_height(few, 40)
+
+    # ein überbreiter Term läuft nicht rechts raus, sondern belegt die Feldbreite
+    wide = {"type": "float", "terms": [{"text": "x" * 80}]}
+    pos, rows = notes.float_positions(wide["terms"], 40)
+    assert pos[0][0] == 0 and rows == 1

@@ -3143,23 +3143,38 @@ def run_ui(stdscr, store):
             out.append(line)
         return out or [""]
 
-    def n_float_grid(nterms, width):
-        cellw = 16
-        cols = max(1, int(width) // cellw)
-        if nterms <= 0:
-            return cols, cellw, 3
-        rows_grid = (nterms + cols - 1) // cols
-        return cols, cellw, max(3, rows_grid * 2 + 1)
+    def n_float_pos(widths, width):
+        """Spiegel von core.notes._float_positions: (positions, rows). Terme
+        greedy zeilenweise nach ECHTER Breite gepackt — passt einer nicht mehr,
+        bricht er um (Box wächst nach unten), nie Überlappung; kleiner fixer
+        Versatz gibt den verstreuten Eindruck."""
+        w = max(1, int(width)); gap = 3
+        pos, x, row = [], 0, 0
+        for i, tw in enumerate(widths):
+            tw = min(max(1, int(tw)), w)
+            jit = (i * 7) % 3
+            if x > 0 and x + jit + tw > w:
+                row += 1; x = 0
+            px = x + (jit if x + jit + tw <= w else 0)
+            px = min(px, max(0, w - tw))
+            pos.append((px, row * 2))
+            x = px + tw + gap
+        return pos, (row + 1 if widths else 0)
 
-    def n_scatter(nn, width, height):
-        cols, cellw, _ = n_float_grid(nn, width)
-        w = max(1, int(width)); h = max(1, int(height)); pos = []
-        for i in range(int(nn)):
-            col, row = i % cols, i // cols
-            x = min(col * cellw + (i * 7) % 5, w - 1)
-            y = min(row * 2 + (i * 3) % 2, h - 1)
-            pos.append((max(0, x), max(0, y)))
-        return pos
+    def n_float_widths(blk, editing):
+        """Display-Breiten der Float-Terme EXAKT wie n_drawblock sie zeichnet
+        (inkl. »…« ums gewählte und den '+'-Neu-Slot beim Bearbeiten), damit
+        Höhe und Positionen zusammenpassen."""
+        terms = blk.get("terms") or []
+        ws = []
+        for i, tm in enumerate(terms):
+            if editing and i == NOTE["esel"]:
+                ws.append(len(NOTE["buf"]) + 2)                # »buf«
+            else:
+                ws.append(len(str(tm.get("text") or "")))
+        if editing:                                            # '+'-Neu-Slot
+            ws.append(len(NOTE["buf"]) + 2 if NOTE["esel"] == len(terms) else 1)
+        return [max(1, w) for w in ws]
 
     def n_content_rows(blk, inner, editing):
         t = blk.get("type")
@@ -3167,8 +3182,8 @@ def run_ui(stdscr, store):
             return max(1, len(n_wrap(blk.get("text", ""), inner)))
         if t == "list":
             return max(1, len(blk.get("items") or []) + (1 if editing else 0))
-        nterms = len(blk.get("terms") or []) + (1 if editing else 0)   # float
-        return n_float_grid(nterms, inner)[2]
+        _, rows = n_float_pos(n_float_widths(blk, editing), inner)   # float
+        return max(3, rows * 2 - 1) if rows else 3
 
     def n_block_h(blk, width, editing=False):
         return n_content_rows(blk, max(1, int(width) - 2), editing) + 2
@@ -3239,7 +3254,7 @@ def run_ui(stdscr, store):
         elif t == "float":
             terms = blk.get("terms") or []
             show = len(terms) + (1 if editing else 0)
-            pos = n_scatter(show, cw, max(1, rh - 2))
+            pos, _ = n_float_pos(n_float_widths(blk, editing), cw)
             for i in range(show):
                 px, py = pos[i]; yr = cy0 + py; col = cx + px; room = cw - px
                 if room < 1 or not rowok(yr):
@@ -3247,12 +3262,17 @@ def run_ui(stdscr, store):
                 if i < len(terms):
                     sel = editing and i == NOTE["esel"]
                     txt = NOTE["buf"] if sel else str(terms[i].get("text") or "")
-                    addclip(yr, col, ("»%s«" % txt) if sel else txt, room,
-                            C["bright"] if sel else C["dim"])
+                    disp = ("»%s«" % txt) if sel else txt
                 else:
                     sel = editing and NOTE["esel"] == len(terms)
-                    addclip(yr, col, "+" + (NOTE["buf"] if sel else "") + ("_" if sel else ""),
-                            room, C["bright"] if sel else C["faint"])
+                    disp = "+" + (NOTE["buf"] if sel else "") + ("_" if sel else "")
+                # Beim Tippen den Rand-Überlauf abfangen: ist der Term breiter als
+                # der Platz, das ENDE zeigen — so bleibt der frisch getippte Text
+                # (am Cursor) immer sichtbar, statt rechts unsichtbar wegzulaufen.
+                if sel and len(disp) > room:
+                    disp = disp[-room:]
+                addclip(yr, col, disp, room,
+                        C["bright"] if sel else (C["dim"] if i < len(terms) else C["faint"]))
 
     def draw_note_tool(by, bx, bh, bw):
         """Inhalt der MITTE-Box fürs Notiz-Werkzeug (Übersicht ODER eine Notiz)."""

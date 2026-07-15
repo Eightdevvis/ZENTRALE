@@ -11,7 +11,7 @@
 #
 # Muster 1:1 wie core/graphs.py: eine Registry-Datei data/notes.json, _load/_save
 # mit datasync.notify_change (Peer-Push), dateisystem-sichere ids via _slug.
-# Die reinen Layout-Helfer (block_height/stack_layout/scatter_positions) sind
+# Die reinen Layout-Helfer (block_height/stack_layout/float_positions) sind
 # curses-frei und ohne Terminal testbar; die TUI zeichnet damit.
 
 import os
@@ -210,33 +210,50 @@ def wrap_text(text, width):
     return out or ['']
 
 
-def _float_grid(n, width):
-    """(cols, cellw, content_rows) für eine Floatbox mit n Termen bei `width`
-    Innenbreite. Terme sitzen in einem groben Raster (cellw breit); zwischen den
-    Rasterzeilen bleibt eine Leerzeile → 'floatender' Eindruck."""
-    cellw = 16
-    cols = max(1, int(width) // cellw)
-    if n <= 0:
-        return cols, cellw, 3
-    rows_grid = (n + cols - 1) // cols
-    return cols, cellw, max(3, rows_grid * 2 + 1)
+def _term_widths(terms):
+    """Display-Breiten der Float-Terme (String ODER {text}) — wie breit jeder
+    Term beim Zeichnen wirklich wird, damit das Packen nichts überlappt."""
+    out = []
+    for t in terms:
+        txt = t.get('text', '') if isinstance(t, dict) else t
+        out.append(len(str(txt)))
+    return out
 
 
-def scatter_positions(n, width, height):
-    """Deterministische (x,y)-Positionen für n Float-Terme im Feld width×height.
-    Rasterbasis + fester Jitter (kein random → stabil/reproduzierbar). Zwei
-    verschiedene Terme bekommen nie exakt dieselbe Position."""
-    cols, cellw, _ = _float_grid(n, width)
-    w = max(1, int(width)); h = max(1, int(height))
-    pos = []
-    for i in range(int(n)):
-        col, row = i % cols, i // cols
-        jx = (i * 7) % 5           # 0..4  deterministischer Versatz
-        jy = (i * 3) % 2           # 0..1
-        x = min(col * cellw + jx, w - 1)
-        y = min(row * 2 + jy, h - 1)
-        pos.append((max(0, x), max(0, y)))
-    return pos
+def _float_positions(widths, width):
+    """(positions, rows) für Float-Terme gegebener Breiten in einem `width`
+    breiten Feld. Greedy zeilenweise gepackt: jeder Term belegt SEINE echte
+    Breite; passt er nicht mehr in die laufende Zeile, bricht er in die nächste
+    um (die Box wächst also nach unten, statt Terme übereinander zu stapeln).
+    Ein kleiner deterministischer Versatz (kein random → stabil/diffbar) gibt
+    den 'verstreuten' Eindruck, eine Leerzeile zwischen den Zeilen die Luft."""
+    w = max(1, int(width))
+    gap = 3                                     # Luft zwischen zwei Termen
+    pos, x, row = [], 0, 0
+    for i, tw in enumerate(widths):
+        tw = min(max(1, int(tw)), w)            # überbreiter Term → auf Feldbreite
+        jit = (i * 7) % 3                       # 0..2 horizontaler Versatz
+        if x > 0 and x + jit + tw > w:          # passt nicht mehr → neue Zeile
+            row += 1
+            x = 0
+        px = x + (jit if x + jit + tw <= w else 0)
+        px = min(px, max(0, w - tw))            # nie über den rechten Rand
+        pos.append((px, row * 2))               # row*2 → Leerzeile dazwischen
+        x = px + tw + gap
+    return pos, (row + 1 if widths else 0)
+
+
+def _float_rows_height(rows):
+    """Inhaltszeilen einer Floatbox mit `rows` gepackten Term-Zeilen (eine
+    Leerzeile dazwischen; Mindesthöhe für die leere bzw. '+'-Box)."""
+    return max(3, rows * 2 - 1) if rows else 3
+
+
+def float_positions(terms, width):
+    """Verstreute (x,y)-Positionen für Float-Terme im `width` breiten Feld, plus
+    die Zeilenzahl. terms: Liste von Strings ODER {text}. Deterministisch, nie
+    überlappend, wächst nach unten. (Die TUI spiegelt diese Logik zum Zeichnen.)"""
+    return _float_positions(_term_widths(terms), width)
 
 
 def _content_rows(block, inner):
@@ -247,8 +264,8 @@ def _content_rows(block, inner):
     if t == 'list':
         return max(1, len(block.get('items') or []))
     if t == 'float':
-        _, _, rows = _float_grid(len(block.get('terms') or []), inner)
-        return rows
+        _, rows = _float_positions(_term_widths(block.get('terms') or []), inner)
+        return _float_rows_height(rows)
     return 1
 
 

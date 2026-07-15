@@ -32,8 +32,10 @@ normalisiert Blöcke via `_clean_blocks` → krude API-Bodies können nichts
 kaputtmachen) · `delete_note`.
 
 **Reine Layout-Helfer** (curses-frei, testbar): `wrap_text`, `block_height`,
-`stack_layout`, `scatter_positions` (deterministisch, **kein `random`** → stabil/
-diffbar). Die TUI **spiegelt** diese als lokale `n_*`-Funktionen (analog
+`stack_layout`, `float_positions` (Float-Terme werden nach ihrer **echten
+Breite** zeilenweise gepackt → wächst nach unten, nie Überlappung; deterministisch,
+**kein `random`** → stabil/diffbar). Die TUI **spiegelt** diese als lokale
+`n_*`-Funktionen (analog
 `l_done ↔ core.lists.is_done`), weil die TUI ein reiner HTTP-Client ist und auf
 dem Laptop gegen das PC-Backend laufen kann — sie importiert `core` nicht.
 
