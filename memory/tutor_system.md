@@ -9,11 +9,26 @@
 >   `tutor.*` direkt; der Port macht auch den `sys.path`-Bootstrap, damit kein
 >   Aufrufer den Tutor-Pfad kennen muss. **Verifiziert mit physisch entferntem
 >   Ordner:** ZENTRALE startet, `tutor_port.present()` → False, kein Crash.
-> - **Warum ein Paket und nicht flach:** `core/main.py` legt das Projekt-Root auf
->   `sys.path`. Ein Ordner `tutor/` wäre damit ein Namespace-Package `tutor` — und
->   hätte mit dem flachen Modul `tutor` (ex `core/tutor.py`) kollidiert, je nach
->   Pfad-Reihenfolge mal so mal so. Als echtes Paket ist der Ordner das Modul.
->   Ebenso wäre ein flaches `providers.py` mit `core/providers.py` kollidiert.
+> - **Warum ein Paket und nicht flach** (nachgemessen 2026-07-16, die erste
+>   Fassung dieser Notiz war in einem Punkt falsch — siehe unten):
+>   1. **Kurze Namen kollidieren STILL und reihenfolge-abhängig.** Flach lägen
+>      `core/providers.py` und `tutor/providers.py` beide als `providers` auf
+>      `sys.path` — zwei reguläre Module, gleicher Name. Es gewinnt schlicht der
+>      erste `sys.path`-Eintrag. Nachgestellt: der Tutor verdeckte cores Registry,
+>      und beim Umdrehen der Reihenfolge kippte es zurück. **Kein Fehler, nur die
+>      falsche Tabelle** — das ist der gefährliche Fall. Gälte für jeden kurzen
+>      Namen (`config`, `session`, `tools`, `memory`).
+>   2. **Der Ordner `tutor/` und ein Modul `tutor` schließen sich flach aus** —
+>      aber *deterministisch*, NICHT „mal so mal so": nach PEP 420 ist ein
+>      Namespace-Package (Ordner ohne `__init__.py`) der **Fallback letzter
+>      Instanz**. Python scannt den ganzen `sys.path` zu Ende; findet es irgendwo
+>      ein reguläres Modul, gewinnt IMMER das — egal an welcher Position. Flach
+>      hätte `import tutor` also stur `tutor/tutor.py` geliefert und
+>      `from tutor import session` **immer** mit `ImportError` gebrochen. Kein
+>      Race, aber ein harter Blocker: man müsste `tutor.py` umbenennen.
+>   Als echtes Paket (`__init__.py`) ist der Ordner das Modul, und alle Namen
+>   liegen im Paket-Namensraum (`tutor.providers` ≠ `providers`) → beide Probleme
+>   sind strukturell weg, nicht nur umschifft.
 > - **Namen** (alle Referenzen in dieser Datei sind nachgezogen):
 >   `tutor/session.py` `tools.py` `langs.py` `providers.py` `config.py`
 >   `memory.py` `cloud.py` `openai_compat.py` `room.py` — importiert als
