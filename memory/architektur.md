@@ -115,19 +115,26 @@ ZENTRALE/
 │   │                        # fehlt der Ordner, läuft ZENTRALE normal weiter.
 │   ├── __init__.py          # Kontrakt: was der Tutor vom "basic core" braucht
 │   ├── session.py           # Session-State + Auflösung Sprache→Provider→Modell
-│   ├── tools.py             # Vokabel-/Roleplay-Tools + Sandbox-Allowlist (_ALLOWED)
-│   ├── langs.py             # Sprach-/Persona-Profile (zh live; fr/ru/ar/es Skizzen)
+│   ├── tools.py             # Tool-MECHANIK + Sandbox-Allowlist — sprach-NEUTRAL
 │   ├── providers.py         # Provider-Registry des TUTORS (≠ core/providers.py)
 │   ├── config.py            # Sprache/Provider/Modell — KEINE Keys (die hat der Core)
 │   ├── memory.py            # Grob-Gedächtnis pro Persona (Notizen, kein Graph)
 │   ├── openai_compat.py     # OpenAI-/v1-Backend (Qwen/DeepSeek/Mistral/OpenAI/Groq/…)
 │   ├── cloud.py             # Anthropic-Backend (Claude, Sashas persönlicher Pfad)
 │   ├── room.py              # Persona-Zimmer (pygame, nativ; reiner HTTP-Client)
-│   ├── test_memory.py       # Regression: Notizen, Sandbox, Persona, Backend-Wahl
-│   ├── vocab_mandarin.json  # Mandarin-Vokabeln (Wort + Pinyin) — getrackt
-│   ├── prompts/             # Referenz-Fassungen der Persona-Prompts (Doku)
-│   └── data/                # Laufzeit, nicht committen: persona_mem_*, structures,
-│                            # tutor_config.json. Enthält NIE einen API-Key.
+│   ├── test_memory.py       # Regression: Notizen, Sandbox, Persona, Sprach-Isolation
+│   ├── langs/               # ★ EINE SPRACHE = EIN ORDNER (getrackt, kommt mit)
+│   │   ├── __init__.py      #   Registry: findet die Pakete selbst (get/expect/enabled)
+│   │   ├── base.py          #   Profil-Schema + generischer dt. Fallback-Prompt
+│   │   ├── zh/              #   LIVE — Ling Ling: prompt.md (chinesisch, hand-getunt),
+│   │   │                    #   prompt.de.md (Referenz), tool_texts.json, expect.json,
+│   │   │                    #   vocab_hint.md, seeds/news.json + seeds/tv.json
+│   │   └── fr/ ru/ ar/ es/  #   Skizzen (enabled=False, generischer Prompt)
+│   ├── prompts/             # dt. Referenz-Fassungen der übrigen Prompts (Doku)
+│   └── data/                # Laufzeit, nicht committen. Enthält NIE einen API-Key.
+│       ├── tutor_config.json  #   lokale Wahl (Sprache/Provider/Modell)
+│       └── <lang>/          #   LERNSTAND pro Sprache: vocab.json, structures.json,
+│                            #   persona_mem.json, persona_hist.json, Rotations-Cursor
 ├── tui/                     # Terminal-Kassette (curses), redet NUR via HTTP mit ui/app.py
 │   ├── zentrale_tui.py      # Die TUI (Sensoren, Karte, Kalender, Listen, Graphen, Mail)
 │   └── select_kassette.py   # Kassetten-Auswahl beim Start

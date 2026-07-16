@@ -204,10 +204,15 @@ def config(changes: dict | None = None, persist: bool = False) -> dict:
              "jurisdiction": p.get("jurisdiction"), "enabled": p.get("enabled")}
             for n, p in tutor_providers.PROVIDERS.items()
         ],
+        # Sortierung: fertige Sprachen zuerst, dann alphabetisch. Die Registry
+        # findet die Pakete alphabetisch (ar, es, fr, ru, zh) — ohne das stünde
+        # die einzige LIVE-Sprache im UI ganz unten.
         "langs": [
             {"code": c, "name": p["name"], "enabled": p.get("enabled"),
              "persona_name": p.get("persona_name", p["name"]),
-             "country": p.get("country", "")}
-            for c, p in tutor_langs.PROFILES.items()
+             "country": p.get("country", ""),
+             "reading": p.get("reading")}      # pinyin/stress/translit/none
+            for c, p in sorted(tutor_langs.PROFILES.items(),
+                               key=lambda kv: (not kv[1].get("enabled"), kv[0]))
         ],
     }

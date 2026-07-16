@@ -1,0 +1,50 @@
+[
+  {
+    "title": "《小猪佩奇》",
+    "mood": "chill",
+    "level": "leicht",
+    "note": "动画，慢，词简单，最适合入门"
+  },
+  {
+    "title": "李子柒的美食视频",
+    "mood": "chill",
+    "level": "leicht",
+    "note": "画面美，几乎不用听懂也能看"
+  },
+  {
+    "title": "熊猫纪录片",
+    "mood": "chill",
+    "level": "leicht",
+    "note": "看熊猫，轻松，解说慢"
+  },
+  {
+    "title": "《你好，李焕英》",
+    "mood": "happy",
+    "level": "中",
+    "note": "温暖的喜剧电影，有笑有哭"
+  },
+  {
+    "title": "中国美食纪录片《舌尖上的中国》",
+    "mood": "happy",
+    "level": "中",
+    "note": "讲各地吃的，解说清楚"
+  },
+  {
+    "title": "《西游记》老动画",
+    "mood": "happy",
+    "level": "中",
+    "note": "经典故事，你多半知道剧情，好跟"
+  },
+  {
+    "title": "自然风光慢直播",
+    "mood": "focus",
+    "level": "leicht",
+    "note": "山水画面，几乎没台词，适合安静学习"
+  },
+  {
+    "title": "轻音乐 MV",
+    "mood": "sad",
+    "level": "leicht",
+    "note": "安静的画面和音乐，不吵"
+  }
+]

@@ -47,18 +47,34 @@ _hist_lock = Lock()   # serialisiert History-Writes über Personas hinweg
 
 
 def _lang(lang: str | None) -> str:
-    """Sprachcode normalisieren: übergebener Code, sonst TUTOR_LANG, sonst zh."""
-    return (lang or os.getenv("TUTOR_LANG", "zh")).lower()
+    """Sprachcode normalisieren. Ohne Angabe: die Sprache der laufenden Session
+    (session.active_lang()) — nicht blind zh, sonst schreibt eine fr-Session ihre
+    Notizen in Ling Lings Store."""
+    if lang:
+        return lang.lower()
+    try:
+        from . import session
+        return session.active_lang().lower()
+    except Exception:
+        return os.getenv("TUTOR_LANG", "zh").lower()
+
+
+def _dir(lang: str | None = None) -> str:
+    """tutor/data/<lang>/ — pro Sprache ein eigener Ordner (Umbau 2026-07-16;
+    vorher lagen alle Sprachen flach als persona_mem_<lang>.json nebeneinander)."""
+    d = os.path.join(_DATA_DIR, _lang(lang))
+    os.makedirs(d, exist_ok=True)
+    return d
 
 
 def mem_path(lang: str | None = None) -> str:
-    """Pfad des Persona-Graphen (Wissen über Sasha) für eine Sprache."""
-    return os.path.join(_DATA_DIR, f"persona_mem_{_lang(lang)}.json")
+    """Pfad der Grob-Notizen (Wissen über Sasha) für eine Sprache."""
+    return os.path.join(_dir(lang), "persona_mem.json")
 
 
 def hist_path(lang: str | None = None) -> str:
     """Pfad der persistenten Gesprächs-History einer Persona."""
-    return os.path.join(_DATA_DIR, f"persona_hist_{_lang(lang)}.json")
+    return os.path.join(_dir(lang), "persona_hist.json")
 
 
 # ── Gedächtnis: destillierte GROB-Notizen (kein Graph, kein Wortprotokoll) ──

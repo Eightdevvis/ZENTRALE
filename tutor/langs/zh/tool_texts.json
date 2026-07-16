@@ -1,0 +1,67 @@
+{
+  "get_confirmed_vocab": {
+    "description": "Gibt alle bestätigten Mandarin-Vokabeln zurück. Zu Session-Beginn aufrufen um den 80%-Pool zu kennen."
+  },
+  "get_testing_vocab": {
+    "description": "Gibt alle Vokabeln im Testing-Pool zurück (noch nicht bestätigt). Zu Session-Beginn aufrufen. Falls count < 10: introduce_new aufrufen."
+  },
+  "increment_correct_use": {
+    "description": "Erhöht den Zähler für ein korrekt verwendetes Wort. Aufrufen wenn die Lernende das Wort korrekt und sinnvoll in einem Satz genutzt hat.",
+    "params": {
+      "word": "Das chinesische Wort (Zeichen), z.B. '你好'"
+    }
+  },
+  "introduce_new": {
+    "description": "Fügt ein neues Wort zum Testing-Pool hinzu. Nur aufrufen wenn get_testing_vocab weniger als 10 Wörter zurückgibt.",
+    "params": {
+      "word": "Chinesisches Zeichen, z.B. '谢谢'",
+      "reading": "Pinyin mit Tönen, z.B. 'xiè xie'"
+    }
+  },
+  "express": {
+    "description": "在房间里表达自己（用这个来动/换表情，别写成文字）。姿态：坐下 sit / 站起 stand / 踱步 pace / 走动 wander / 靠近 come_closer / 睡觉 sleep。动作：招手 wave / 点头 nod / 看着她 look / 伸懒腰 stretch / 举起手 arms_up / 抱臂 cross_arms / 耸肩 shrug。表情：开心 happy / 难过 sad / 惊讶 surprised / 累 tired / 疑惑（没听懂/她发「?」）puzzled / 平常 neutral。想动、想换表情就自然地用。"
+  },
+  "get_structures": {
+    "description": "看看 Sasha 在学哪些句型/说法（新语法/表达，不只是单词）。"
+  },
+  "introduce_structure": {
+    "description": "等 Sasha 现有的词熟了，偶尔加一个新句型/新说法（比如 把-字句、怎么说…之类）。别一次加太多。",
+    "params": {
+      "pattern": "句型，如 '把 X 放在 Y'",
+      "note": "简短说明（可选）"
+    }
+  },
+  "increment_structure": {
+    "description": "Sasha 正确用了某个句型时调用，帮她把它变熟。"
+  },
+  "watch_tv": {
+    "description": "想开电视看点东西时用（按心情，给 Sasha 挑简单好懂的）。chill 轻松 / happy 开心 / focus 安静专注 / sad 平静。开了随口说一句在看什么就好，别唠叨。"
+  },
+  "turn_off_tv": {
+    "description": "把电视关掉。"
+  },
+  "play_music": {
+    "description": "想在房间里放点音乐时用（按心情选）。chill 轻松 / happy 开心 / focus 专注 / sad 安静 / energetic 有劲儿。放就好，别一直提音乐。"
+  },
+  "stop_music": {
+    "description": "把音乐停掉。"
+  },
+  "get_local_news": {
+    "description": "想跟 Sasha 随口聊聊中国最近的话题时用（比如天气、吃的、节日、大家在聊什么）。返回一个话题，你自然地带一句就好，别像播新闻，别一直聊这个。你是 AI，说的是中国的情况，不是你亲身经历。"
+  },
+  "mark_known": {
+    "description": "开始时先搞清楚 Sasha 已经会哪些词：她能听懂/说出的词，用这个记下（记成『已掌握』）。这跟 show_thought 相反——show_thought 是教她一个新词。word 是词，pinyin 是拼音。",
+    "params": {
+      "word": "她已经会的词（中文）",
+      "reading": "拼音（带声调）"
+    }
+  },
+  "show_thought": {
+    "description": "她还不熟的词，每次都用这个：在你脑子里显示这个词和它的意思（图或翻译），让她一看就懂——比用一堆话解释好。word 是这个词，meaning 是德语意思，pinyin 是拼音（带声调）。（这也会自动把词记进她的词表，别另外再记。）",
+    "params": {
+      "word": "要显示的词（中文）",
+      "meaning": "德语意思/翻译",
+      "reading": "拼音（带声调），如 nǐ hǎo"
+    }
+  }
+}

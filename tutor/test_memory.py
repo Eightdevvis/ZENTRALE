@@ -16,6 +16,7 @@
 # Exit-Code = Anzahl Fehler.
 
 import os
+import io
 import sys
 import json
 import shutil
@@ -44,8 +45,9 @@ def main():
 
     try:
         # ── Notiz-Modell: grob, gedeckelt, pro Sprache ──────────────────
-        check("mem_path lang-spezifisch",
-              memory.mem_path("zh").endswith("persona_mem_zh.json"))
+        check("mem_path lang-spezifisch (data/<lang>/persona_mem.json)",
+              memory.mem_path("zh").endswith(os.path.join("zh", "persona_mem.json"))
+              and memory.mem_path("fr").endswith(os.path.join("fr", "persona_mem.json")))
         check("mem_path liegt in tutor/data (nicht ZENTRALE/data)",
               orig_dir.rstrip('/').endswith(os.path.join('tutor', 'data')))
 
@@ -68,7 +70,7 @@ def main():
 
         # ── Sandbox: der Persona-Store fasst ai_graph.json NIE an ───────
         check("persona-notizen liegen im tmp-store",
-              os.path.exists(os.path.join(tmp, "persona_mem_zh.json")))
+              os.path.exists(os.path.join(tmp, "zh", "persona_mem.json")))
         check("kein core-graph angelegt",
               not os.path.exists(os.path.join(tmp, "ai_graph.json")))
         check("memory importiert weder graph noch consolidation",
@@ -98,7 +100,7 @@ def main():
 
         check("vokabel-tools erhalten", hasattr(tools, "get_confirmed_vocab")
               and any(t["function"]["name"] == "introduce_new"
-                      for t in tools.TUTOR_TOOLS))
+                      for t in tools.tools_for("zh")))
 
         fr = langs.get("fr")["system_prompt"]
         check("fr-fallback: nur-Zielsprache-Regel", "NUR auf Französisch" in fr)
@@ -141,6 +143,55 @@ def main():
         finally:
             memory._distill = orig_distill
             ai_backends.status = orig_status
+
+        # ── Sprach-Isolation (das war der eigentliche Bug) ──────────────
+        # Vorher: tools.py hatte MODUL-Konstanten auf vocab_mandarin.json →
+        # /lang fr liess Jacqueline Franzoesisch reden, aber franzoesische
+        # Woerter mit einem 'pinyin'-Feld in Ling Lings Mandarin-Liste schreiben,
+        # mit chinesischen Tool-Beschreibungen und China-News.
+        vtmp = tempfile.mkdtemp(prefix='tutor_vocab_test_')
+        orig_root = tools._DATA_ROOT
+        tools._DATA_ROOT = vtmp
+        try:
+            zh_v, fr_v = tools._file('vocab.json', 'zh'), tools._file('vocab.json', 'fr')
+            check("vokabel-datei ist pro sprache getrennt", zh_v != fr_v
+                  and zh_v.endswith(os.path.join('zh', 'vocab.json'))
+                  and fr_v.endswith(os.path.join('fr', 'vocab.json')))
+
+            tools.introduce_new("你好", "nǐ hǎo", lang="zh")
+            tools.introduce_new("bonjour", "", lang="fr")
+            check("kein leak zh->fr", "你好" not in tools.term_list("fr"))
+            check("kein leak fr->zh", "bonjour" not in tools.term_list("zh"))
+
+            # Datenmodell: generisches 'reading', kein mandarin-festes 'pinyin'
+            raw = json.load(io.open(zh_v, encoding="utf-8"))
+            check("vokabel-schema nutzt 'reading', nicht 'pinyin'",
+                  "reading" in raw[0] and "pinyin" not in raw[0])
+            check("reading traegt den wert", raw[0]["reading"] == "nǐ hǎo")
+
+            # Tool-Schema: Parameter generisch, Text pro Sprache
+            def schema(lang):
+                return {t["function"]["name"]: t["function"]
+                        for t in tools.tools_for(lang)}
+            zs, fs = schema("zh"), schema("fr")
+            check("introduce_new hat 'reading', kein 'pinyin'",
+                  "reading" in zs["introduce_new"]["parameters"]["properties"]
+                  and "pinyin" not in zs["introduce_new"]["parameters"]["properties"])
+            check("zh-tooltext ist der getunte (chinesisch bei show_thought)",
+                  any('\u4e00' <= c <= '\u9fff'
+                      for c in zs["show_thought"]["description"]))
+            check("fr bekommt KEINEN chinesischen tooltext",
+                  not any('\u4e00' <= c <= '\u9fff'
+                          for c in fs["show_thought"]["description"]))
+
+            # Seeds: Landes-Themen kommen aus dem Sprach-Paket
+            check("zh hat landes-seeds", len(tools._news_items("zh")) > 0)
+            check("fr bekommt KEINE china-seeds", tools._news_items("fr") == [])
+            check("fr-news faellt sauber auf 'kein thema' zurueck",
+                  "quatsch" in tools.get_local_news("fr").lower())
+        finally:
+            tools._DATA_ROOT = orig_root
+            shutil.rmtree(vtmp, ignore_errors=True)
 
         # ── Secrets: tutor/ hält KEINE Keys mehr (der Core besitzt sie) ──
         cfg_file = os.path.join(ROOT, "tutor", "data", "tutor_config.json")

@@ -32,8 +32,8 @@ dokumentieren, morgen gemeinsam reviewen.
 ### 1. Reichere Gesten + Mimik + Schlafen ✅
 - **express-Tool** erweitert: Haltungen +`sleep`; Gesten +`arms_up`/`cross_arms`/
   `shrug`; NEU **Mimik** (anhaltend): `happy`/`sad`/`surprised`/`tired`/`neutral`.
-  Ein Enum, geroutet in `tutor_session.set_expression` (Stance|Geste|Face).
-- `tutor_session._expr` hat jetzt `face`; `room_state()` liefert es; das Fenster
+  Ein Enum, geroutet in `tutor.session.set_expression` (Stance|Geste|Face).
+- `tutor.session._expr` hat jetzt `face`; `room_state()` liefert es; das Fenster
   pollt + `Persona.set_face`. `set_face()` auch direkt aufrufbar (für Feature 2,
   Stimmung→Mimik).
 - Render: `sleep` = auf der Couch, Augen zu, „zzz"; `cross_arms` = Arme waagerecht
@@ -45,7 +45,7 @@ dokumentieren, morgen gemeinsam reviewen.
   könnte man später hübscher machen.
 
 ### 2. Soziale Batterie / Stimmung ✅
-- `tutor_session._battery` (Level + Zeitstempel), **zeitbasiert** berechnet (kein
+- `tutor.session._battery` (Level + Zeitstempel), **zeitbasiert** berechnet (kein
   Ticker): sinkt ~3.5/min (≈30 min von voll auf leer), **+9 pro echtem Sasha-Turn**
   (`battery_bump` in respond_stream). `room_state()` liefert `battery` (0-100) +
   `mood` (happy≥68 / ok / low<32). activate() setzt auf 55.
@@ -54,7 +54,7 @@ dokumentieren, morgen gemeinsam reviewen.
   sonst mood→(low=tired/happy=happy)`. So gewinnt bewusster Ausdruck, sonst zeigt
   sich die Grundstimmung.
 - **Entscheidungen/Annahmen:** Decay/Refill-Werte frei gewählt (tunebar oben in
-  tutor_session). „Verstanden werden lädt mehr" (Sashas Idee) ist vereinfacht:
+  tutor.session). „Verstanden werden lädt mehr" (Sashas Idee) ist vereinfacht:
   jeder echte Sasha-Turn lädt (= sie hat geantwortet = verstanden genug). Feiner
   (Confidence/Verständnis messen) wäre Follow-up. Nudge lädt NICHT (sie kriegt ja
   keine Antwort).
@@ -64,9 +64,9 @@ dokumentieren, morgen gemeinsam reviewen.
 ### 3. Vokabel-Feinmodell + Satz-Strukturen ✅
 - **Pro-Wort-Vertrautheit** war schon da (correct_use + confirmed). Jetzt besser
   exponiert: `tutor.vocab_split()` → (gefestigt, im-Lernen); der injizierte
-  Vokabel-Kontext (tutor_session) zeigt beides getrennt („放心多用" vs „多带带").
+  Vokabel-Kontext (tutor.session) zeigt beides getrennt („放心多用" vs „多带带").
 - **Strukturen** (NEU, das genuin Fehlende): paralleler Pool für Satzmuster/neue
-  Sagweisen (`tutor/data/structures_mandarin.json`) + 3 Tools `get_structures /
+  Sagweisen (`tutor/data/<lang>/structures.json`) + 3 Tools `get_structures /
   introduce_structure / increment_structure` (auto-„掌握" ab 3× korrekt). In den
   Kontext injiziert. So kann die Persona nicht nur neue WÖRTER, sondern auch neue
   STRUKTUREN stückweise einführen (Sashas „新词或新说法").
@@ -78,7 +78,7 @@ dokumentieren, morgen gemeinsam reviewen.
 
 ### 4. Visuelle Vokabel-Hilfe (Gedanken-Blase) ✅
 - **show_thought(word, meaning)**-Tool (9. Tool): die KI zeigt „in ihrem Kopf"
-  ein Wort + dessen deutsche Bedeutung. `tutor.show_thought` → `tutor_session.
+  ein Wort + dessen deutsche Bedeutung. `tutor.tools.show_thought` → `tutor.session.
   set_thought` (State `_thought` mit hochzählender id). `room_state()` liefert
   `thought_word/thought_meaning/thought_id`.
 - **Render** (`tutor/room.py`): `draw_thought()` zeichnet eine helle
@@ -101,7 +101,7 @@ dokumentieren, morgen gemeinsam reviewen.
   brain.py (Sequencing — und der schlechte Auto-Trigger war 2026-05-14 der
   *Anlass* der Deaktivierung). Ich habe zugunsten des dokumentierten Guardrails
   entschieden und die Mechanik **konservativ** gebaut:
-- `tutor_session.presence_ping()`: **startet NIE** eine Session. Läuft die Session
+- `tutor.session.presence_ping()`: **startet NIE** eine Session. Läuft die Session
   schon, reagiert die Persona **nonverbal** — schaut hoch (`look`), Mimik `happy`,
   +6 Batterie. Gedrosselt (`_PRESENCE_COOLDOWN=90s`) gegen PIR-Zucken. Der Laptop-
   Raum sieht die Reaktion über den `room_state`-Poll.
@@ -164,7 +164,7 @@ dokumentieren, morgen gemeinsam reviewen.
   per Cursor (`tutor/data/persona_tv_zh.json`, gitignored-Runtime wie News).
 - **Raum:** ein TV an der Wand (`draw_tv`) — aus = dunkler Schirm; an = leuchtet
   bläulich mit leichtem Flackern + Scanlinien und zeigt den **Titel** (umgebrochen).
-  `tutor_session._tv` (an/Titel, id) → `room_state` → Fenster.
+  `tutor.session._tv` (an/Titel, id) → `room_state` → Fenster.
 - **Entscheidung/Annahme:** echtes **Video-Playback ist DEFERRED** — keine Files,
   Lizenz, und pygame-Video ist schwach. Die Mechanik ist „TV an + Titel + beiläufig
   referenzieren" (comprehensible-input-Idee: sie guckt was Einfaches, Sasha schaut
@@ -180,7 +180,7 @@ dokumentieren, morgen gemeinsam reviewen.
 
 **Alle 8 Features gebaut** (Commits „Roleplay-Feature 1..8"), jeweils lokal auf
 `main` ff-gemerged. Tool-Set gewachsen von 4 → **14** (alle in `_ALLOWED`-Sandbox,
-deckungsgleich mit `TUTOR_TOOLS`, statisch verifiziert). Jede neue Prompt-Zeile
+deckungsgleich mit `tools_for(lang)`, statisch verifiziert). Jede neue Prompt-Zeile
 auf Chinesisch (hält qwen im Chinesischen — statisch geprüft, keine deutschen
 Streuwörter im `_ZH_PROMPT`).
 

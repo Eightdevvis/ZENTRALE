@@ -19,8 +19,15 @@
 # Der Cloud-Pfad (tutor/openai_compat.py, tutor/cloud.py) braucht NICHTS aus
 # ZENTRALE. Wächst diese Liste, wächst die Kopplung — also nicht wachsen lassen.
 #
+# ── Sprache = Ordner (tutor/langs/<code>/) ──────────────────────────────
+# Der Tutor ist ein FRAMEWORK, kein Chinesisch-Tutor. Alles, was eine Sprache
+# ausmacht, liegt in ihrem Paket: Prompt (in der ZIELSPRACHE), Tool-Beschriftung,
+# Register-Leiter, Landes-Seeds. tools.py/session.py sind sprach-NEUTRAL und
+# lösen pro Aufruf über die aktive Sprache auf (session.active_lang()).
+# Eine Sprache dazubauen = einen Ordner anlegen. Siehe tutor/langs/__init__.py.
+#
 # ── Sandbox (Invariante, nie aufweichen) ────────────────────────────────
-# Die Persona-Stores (tutor/data/persona_mem_<lang>.json) und Sashas Core-KI-
+# Die Persona-Stores (tutor/data/<lang>/persona_mem.json) und Sashas Core-KI-
 # Memory (data/ai_graph.json) fassen sich NIE an. Tool-Zugriffe laufen über die
 # Allowlist in tutor/tools.py (_ALLOWED).
 #

@@ -74,7 +74,7 @@ Baseline-Roman.
 
 ## 5. Was in den Code ging
 
-- `tutor/langs.py`: `_ZH_PROMPT` = getunter chinesischer Prompt (Few-Shot +
+- `tutor/langs/zh/prompt.md`: getunter chinesischer Prompt (Few-Shot +
   Verbote); `_ZH_VOCAB_HINT` (chinesischer Vokabel-Kontext, `{words}`). Skizzen-
   Sprachen nutzen weiter die schlanke generische `_build_prompt` (deutsch) — beim
   Aktivieren pro Sprache genauso hand-tunen.

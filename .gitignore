@@ -16,15 +16,19 @@ data/*.bak*
 data/*.enc
 
 # Laufzeit-Daten des Tutors (eigenes Projekt, siehe tutor/ + memory/tutor_system.md):
-# Persona-Gedächtnis, Vokabel-Feinmodell, lokale Wahl (Sprache/Provider/Modell).
-# Gleiche Regel wie data/*.json — Auto-generiert + persoenlich, nie ins Repo.
+# der LERNSTAND pro Sprache (tutor/data/<lang>/: vocab, structures, persona_mem,
+# persona_hist, Rotations-Cursor) + die lokale Wahl (Sprache/Provider/Modell).
+# Gleiche Regel wie data/*.json — auto-generiert + persoenlich, nie ins Repo.
+#   ** deckt BEIDE Ebenen ab: tutor/data/tutor_config.json UND tutor/data/zh/*.
 # API-KEYS liegen BEWUSST NICHT hier, sondern in data/ai_config.json (core besitzt
 # den Key-Store) — tutor/data/ enthaelt nie ein Secret. Nicht aufweichen.
 # tutor/data/tutor_config.json.example bleibt getrackt (endet auf .example).
-tutor/data/*.json
-tutor/data/*.bak*
-tutor/data/vocab_images/
-tutor/data/persona_music/
+# NICHT betroffen: tutor/langs/<lang>/ — das ist die SPRACHE (Prompt, Beschriftung,
+# Seeds), die kommt mit dem Repo und muss getrackt bleiben.
+tutor/data/**/*.json
+tutor/data/**/*.bak*
+tutor/data/**/vocab_images/
+tutor/data/**/persona_music/
 
 # lokale Debug-Artefakte (Screenshots, Scratchpad) — gehoeren nicht ins Repo
 /*.png

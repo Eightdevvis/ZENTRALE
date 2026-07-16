@@ -216,6 +216,16 @@ def _resolve():
     return prof, provider_name, provider, model
 
 
+def active_lang() -> str:
+    """Die Sprache, um die es JETZT geht — die EINE Quelle für alle.
+
+    Läuft eine Session, ist es DEREN Sprache (beim Start eingefroren), sonst die
+    aus der Config. Wichtig: tools.py fragt das hier und NICHT config direkt.
+    Sonst würde ein `/lang fr` mitten in einer zh-Session die nächsten Tool-Calls
+    in die fr-Dateien schreiben und beide Lernstände verderben."""
+    return _session_lang or config.setting("lang", "zh")
+
+
 def backend_kind() -> str:
     """'ollama' (lokal) | 'anthropic' | 'openai_compat' (beide = Cloud) — welche
     Art Backend der aktuell aufgelöste Provider braucht.
@@ -394,7 +404,7 @@ def respond_stream(user_text: str = None, nudge: bool = False,
         battery_bump(_BAT_REFILL)     # echtes Quatschen lädt die soziale Batterie
 
     prof, pname, provider, model = _resolve()
-    lang = _session_lang or config.setting("lang", "zh")
+    lang = active_lang()
 
     # Kosten-Hebel: nur die letzten N Turns senden (zustandslose API).
     if user_text is None and not nudge:
@@ -418,24 +428,30 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     hint = prof.get("vocab_hint")
     if hint:
         try:
-            solid, learn = tools.vocab_split()
-            structs = tools.structure_list()
+            solid, learn = tools.vocab_split(lang)
+            structs = tools.structure_list(lang)
+            # Beschriftung + Trennzeichen kommen aus dem Sprach-Paket
+            # (prof['vocab_labels']); waren vorher chinesische Literale hier —
+            # eine fr-Session hätte damit einen chinesischen Block bekommen.
+            lab  = prof.get("vocab_labels") or {}
+            join = lab.get("join", ", ")
+            sep  = lab.get("sep", "; ")
             parts = []
-            if solid:   parts.append("已掌握（放心多用）：" + "、".join(solid))
-            if learn:   parts.append("在学（多带带，用对了帮她记）：" + "、".join(learn))
-            if structs: parts.append("在教的句型：" + "、".join(structs))
+            if solid:   parts.append(lab.get("solid",  "kann sie schon: ") + join.join(solid))
+            if learn:   parts.append(lab.get("learn",  "lernt sie gerade: ") + join.join(learn))
+            if structs: parts.append(lab.get("structs", "Satzmuster im Lernen: ") + join.join(structs))
             if not parts:                      # ganz frisch: einfach die Wörter
-                parts = ["她在学：" + "、".join(tools.term_list())]
-            body = "；".join(parts)
-            if body.strip("：；"):
-                system = system + "\n\n" + hint.format(words=body)
+                terms = tools.term_list(lang)
+                if terms:
+                    parts = [lab.get("plain", "sie lernt: ") + join.join(terms)]
+            if parts:
+                system = system + "\n\n" + hint.format(words=sep.join(parts))
             # Erwartung skalieren: kleine Liste/wenig Strukturen → Bremse davor
-            # setzen (winzige Gespräche ok, kein Lehrdruck). Zielsprache aus Profil.
-            expect_fn = prof.get("expect")
-            if expect_fn:
-                exp = expect_fn(len(solid) + len(learn) + len(structs))
-                if exp:
-                    system = system + "\n" + exp
+            # setzen (winzige Gespräche ok, kein Lehrdruck). Die Leiter ist
+            # Paket-DATEN (langs/<lang>/expect.json), in der Zielsprache.
+            exp = langs.expect(lang, len(solid) + len(learn) + len(structs))
+            if exp:
+                system = system + "\n" + exp
         except Exception:
             pass
 
@@ -454,17 +470,17 @@ def respond_stream(user_text: str = None, nudge: bool = False,
         from . import cloud as tutor_cloud
         stream = tutor_cloud.chat_stream(
             messages=history, model=model, system=system,
-            tools=tools.TUTOR_TOOLS, tool_executor=tools.execute_tool)
+            tools=tools.tools_for(lang), tool_executor=tools.execute_tool)
     elif kind == "openai_compat":
         from . import openai_compat as tutor_openai_compat
         stream = tutor_openai_compat.chat_stream(
             messages=history, model=model, system=system,
-            tools=tools.TUTOR_TOOLS, tool_executor=tools.execute_tool,
+            tools=tools.tools_for(lang), tool_executor=tools.execute_tool,
             _provider=provider)
     else:  # 'ollama' → lokaler Default über core/ai.py
         stream = ai.chat_stream(
             messages=history, system=system,
-            tools=tools.TUTOR_TOOLS, tool_executor=tools.execute_tool)
+            tools=tools.tools_for(lang), tool_executor=tools.execute_tool)
 
     full_response = []
     for token in stream:

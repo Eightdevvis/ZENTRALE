@@ -48,7 +48,7 @@ Workflow-Regeln, die nicht aus dem Code allein hervorgehen.
 
 - Beide nutzen dieselbe `ai.chat_stream()`-Infrastruktur.
 - Unterschied: anderer System-Prompt + andere Tool-Liste
-  (`tutor.tools.TUTOR_TOOLS`) – die Standard-Tools sind im Tutor-Modus
+  (`tutor.tools.tools_for(lang)`) – die Standard-Tools sind im Tutor-Modus
   **deaktiviert**, nicht zusätzlich aktiv.
 - `tutor/session.py` hat eine eigene History (getrennt von der
   Chat-History), damit sich Lernkontext und allgemeine Konversation
