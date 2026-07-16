@@ -1,6 +1,9 @@
 import json
 
-with open('vocab_mandarin.json', 'r', encoding='utf-8') as f:
+import os
+_VOCAB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vocab_mandarin.json')
+
+with open(_VOCAB, 'r', encoding='utf-8') as f:
     Mandarin = json.load(f)
 
 

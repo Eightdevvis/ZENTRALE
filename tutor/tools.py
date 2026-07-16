@@ -1,4 +1,4 @@
-# core/tutor.py
+# tutor/tools.py
 #
 # Vokabel-Tools für den Mandarin-Sprachtutor.
 #
@@ -22,7 +22,7 @@ import json
 import os
 from threading import Lock
 
-_VOCAB_FILE = os.path.join(os.path.dirname(__file__), '..', 'vocab_mandarin.json')
+_VOCAB_FILE = os.path.join(os.path.dirname(__file__), 'vocab_mandarin.json')
 _lock       = Lock()  # Mehrere Threads (Flask + Event-Loop) könnten gleichzeitig lesen/schreiben
 
 # Ab dieser Anzahl korrekter Verwendungen gilt ein Wort als bestätigt.
@@ -143,7 +143,7 @@ def vocab_split() -> tuple:
 # Parallel zum Vokabel-Pool, aber für Grammatik/Muster („怎么说X", „把-Satz", …).
 # Damit die Persona nicht nur neue WÖRTER, sondern auch neue STRUKTUREN stückweise
 # einführen kann (Sashas Idee). Mandarin-fest wie die Vokabeldatei.
-_STRUCT_FILE      = os.path.join(os.path.dirname(__file__), '..', 'data', 'structures_mandarin.json')
+_STRUCT_FILE      = os.path.join(os.path.dirname(__file__), 'data', 'structures_mandarin.json')
 STRUCT_THRESHOLD  = 3
 
 
@@ -215,7 +215,7 @@ def increment_structure(pattern: str) -> str:
 # Lücke, siehe Feature-Log §6). Der Seed lebt IM CODE (data/*.json ist gitignored,
 # rsync-Runtime — käme sonst nicht mit); die Datei hält nur den Rotations-Cursor
 # (Runtime-State), bootstrappt beim ersten Aufruf aus dem Seed.
-_NEWS_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'persona_news_zh.json')
+_NEWS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'persona_news_zh.json')
 
 # Leichte, evergreen-nahe Gesprächsthemen aus/über China — casual, kurz. Ling Ling
 # bringt sie als „was in China gerade so Thema ist" ein, nicht als eigenes Erlebnis
@@ -286,7 +286,7 @@ _TV_SEED = [
     {"title": "自然风光慢直播",   "mood": "focus",  "level": "leicht", "note": "山水画面，几乎没台词，适合安静学习"},
     {"title": "轻音乐 MV",       "mood": "sad",    "level": "leicht", "note": "安静的画面和音乐，不吵"},
 ]
-_TV_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'persona_tv_zh.json')
+_TV_FILE = os.path.join(os.path.dirname(__file__), 'data', 'persona_tv_zh.json')
 
 
 def _tv_cursor() -> int:
@@ -318,7 +318,7 @@ def watch_tv(mood: str = "chill") -> str:
         pick = pool[cur]
         _tv_bump((cur + 1) % len(pool))
     try:
-        import tutor_session
+        from . import session as tutor_session
         tutor_session.tv_on(pick["title"])
     except Exception:
         pass
@@ -328,7 +328,7 @@ def watch_tv(mood: str = "chill") -> str:
 def turn_off_tv() -> str:
     """Macht den Fernseher aus."""
     try:
-        import tutor_session
+        from . import session as tutor_session
         tutor_session.tv_off()
     except Exception:
         pass
@@ -340,7 +340,7 @@ def play_music(mood: str = "chill") -> str:
     Reicht nur den Wunsch an tutor_session; das Fenster spielt aus seiner lokalen
     Bibliothek (data/persona_music/<mood>/). Reine UI/Audio — kein Core-AI-Zugriff."""
     try:
-        import tutor_session
+        from . import session as tutor_session
         m = tutor_session.play_music(mood)
         return f"ok（{m}）"
     except Exception:
@@ -350,7 +350,7 @@ def play_music(mood: str = "chill") -> str:
 def stop_music() -> str:
     """Stoppt die Musik im Zimmer."""
     try:
-        import tutor_session
+        from . import session as tutor_session
         tutor_session.stop_music()
     except Exception:
         pass
@@ -362,7 +362,7 @@ def express(action: str) -> str:
     weiter, das den Zustand fürs Fenster hält. Lazy-Import bricht den Zyklus
     tutor↔tutor_session. Reine UI-Bewegung — kein Zugriff auf lokale AI."""
     try:
-        import tutor_session
+        from . import session as tutor_session
         tutor_session.set_expression(action)
     except Exception:
         pass
@@ -380,7 +380,7 @@ def show_thought(word: str, meaning: str = "", pinyin: str = "") -> str:
     das ist der verlässliche Anker fürs Tracking (Sashas Vorgabe)."""
     word = (word or "").strip()
     try:
-        import tutor_session
+        from . import session as tutor_session
         tutor_session.set_thought(word, meaning)
     except Exception:
         pass

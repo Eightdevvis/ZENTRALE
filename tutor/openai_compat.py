@@ -1,4 +1,4 @@
-# core/tutor_openai_compat.py
+# tutor/openai_compat.py
 #
 # OpenAI-/v1-kompatibles Tutor-Backend — der Arbeitstier-Pfad für die
 # Verteilung. Bedient JEDEN Provider mit OpenAI-kompatiblem Endpoint

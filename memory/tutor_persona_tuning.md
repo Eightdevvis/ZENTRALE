@@ -53,7 +53,7 @@ wurde es erst **strukturell**:
 - **Few-Shot-Beispiele** im Prompt (zeigen statt sagen — 5 kurze Muster-Turns),
 - **harte Verbote** (keine deutschen Sätze, keine `*Regie*`-Anweisungen, keine Emojis),
 - **`temperature ≈ 0.4`** + **`max_tokens`-Cap (~200)** im Cloud-Pfad
-  (`tutor_openai_compat` / `tutor_cloud`).
+  (`tutor.openai_compat` / `tutor.cloud`).
 
 Über 3 Läufe wurde das Verhalten damit praktisch identisch.
 
@@ -74,13 +74,13 @@ Baseline-Roman.
 
 ## 5. Was in den Code ging
 
-- `core/tutor_langs.py`: `_ZH_PROMPT` = getunter chinesischer Prompt (Few-Shot +
+- `tutor/langs.py`: `_ZH_PROMPT` = getunter chinesischer Prompt (Few-Shot +
   Verbote); `_ZH_VOCAB_HINT` (chinesischer Vokabel-Kontext, `{words}`). Skizzen-
   Sprachen nutzen weiter die schlanke generische `_build_prompt` (deutsch) — beim
   Aktivieren pro Sprache genauso hand-tunen.
-- `core/tutor_session.py`: hängt den Vokabel-Kontext in der ZIELSPRACHE ans
+- `tutor/session.py`: hängt den Vokabel-Kontext in der ZIELSPRACHE ans
   Prompt-Ende (ein deutscher Block kippt qwen zurück ins Deutsche — verifiziert).
-- `core/tutor_openai_compat.py` + `core/tutor_cloud.py`: `TUTOR_TEMPERATURE`
+- `tutor/openai_compat.py` + `tutor/cloud.py`: `TUTOR_TEMPERATURE`
   (0.4) + `TUTOR_MAX_TOKENS` (200), per Env übersteuerbar.
 
 **Offen / Follow-up:** die Auto-Progression (correct_use hochzählen, introduce_new

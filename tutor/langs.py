@@ -1,4 +1,4 @@
-# core/tutor_langs.py
+# tutor/langs.py
 #
 # Persona/Language-Portal für den Sprach-Tutor-Framework.
 #
@@ -78,7 +78,7 @@ def _build_prompt(persona_name: str, language: str, country: str,
 # Prompt muss sie nur WOLLEN lassen). Bleibt auf CHINESISCH (hält qwen im
 # Chinesischen) + Few-Shot; temperature≈0.4 + max_tokens-Cap.
 #
-# Deutsche Gloss / Volltext-Übersetzung: prompts/tutor_ling-ling_zh.md.
+# Deutsche Gloss / Volltext-Übersetzung: tutor/prompts/persona-ling-ling.md.
 # KURZ-GLOSS:
 #   P1 Du bist Ling Ling, KI in diesem Zimmer. Das ist dein Revier — Couch,
 #      Fenster, TV, Musik gehören dir. Keiner da → du machst dein Ding (an die

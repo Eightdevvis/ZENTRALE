@@ -1,4 +1,4 @@
-# core/persona_memory.py
+# tutor/memory.py
 #
 # Eigenes Gedächtnis pro Sprach-Persona (Ling Ling/zh, Jacqueline/fr, …).
 #
@@ -34,9 +34,9 @@ import os
 import json
 from threading import Lock
 
-import tutor_langs
+from . import langs as tutor_langs
 
-_DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
+_DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 
 # History wird auf Disk gehalten, damit die Persona dich zwischen Sessions
 # nicht vergisst. Storage-Cap großzügig; gesendet wird eh nur ein Fenster
@@ -155,7 +155,7 @@ def _distill(backend: str, provider: str | None, model: str | None, user_msg: st
     parts = []
     try:
         if backend == "cloud":
-            import tutor_providers, tutor_openai_compat as oc
+            from . import providers as tutor_providers, openai_compat as oc
             prov = tutor_providers.get(provider) if provider else None
             if not prov:
                 return ""

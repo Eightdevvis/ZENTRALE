@@ -7,7 +7,7 @@ die KI über die Tools `read_file` und `list_files` öffnen.
 
 ```
 data/*.json
-vocab_mandarin.json
+tutor/vocab_mandarin.json
 core/*.py
 ui/app.py
 notes.md

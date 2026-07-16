@@ -257,56 +257,6 @@ def _call_graph_extractor(user_msg: str, ai_msg: str, today: str) -> tuple[list[
     return _finalize_extraction(content)
 
 
-def _cloud_graph_extractor(user_msg: str, ai_msg: str, today: str,
-                           provider: str, model: str) -> tuple[list[dict], list[dict]]:
-    """
-    CLOUD-Extraktor: verdichtet einen Turn über den Anbieter, der eh gerade
-    redet (Fallback, wenn kein lokales Ollama erreichbar ist — Laptop unterwegs).
-
-    Wichtig zur Sandbox: das ist die LOKALE Seite, die zum Cloud-*Client*
-    ausgreift — die Cloud-Module importieren weiterhin NICHTS aus graph/
-    consolidation. Das Ergebnis schreibt lokaler Code in den PERSONA-Store,
-    nie in den Core-Graphen. Kein Privacy-Gewinn fürs Tutor-Material (das lag
-    beim Reden eh schon beim Anbieter) — nur damit die Memory ohne Ollama baut.
-    """
-    import tutor_providers
-    p = tutor_providers.get(provider)
-    kind = p.get("kind")
-    body = _extractor_body(user_msg, ai_msg, today)
-    content = ""
-    try:
-        if kind == "openai_compat":
-            import tutor_openai_compat   # nur Client-Factory, kein graph-Import
-            client = tutor_openai_compat._client(p)
-            resp = client.chat.completions.create(
-                model=model or p.get("default_model"),
-                messages=[
-                    {"role": "system", "content": _GRAPH_EXTRACTOR_PROMPT},
-                    {"role": "user",   "content": body},
-                ],
-                stream=False,
-                response_format={"type": "json_object"},
-            )
-            content = (resp.choices[0].message.content or "").strip()
-        elif kind == "anthropic":
-            import anthropic   # type: ignore
-            client = anthropic.Anthropic()
-            msg = client.messages.create(
-                model=model or p.get("default_model"),
-                max_tokens=1024,
-                system=_GRAPH_EXTRACTOR_PROMPT + "\n\nAntworte NUR mit dem JSON-Objekt, ohne Fließtext.",
-                messages=[{"role": "user", "content": body}],
-            )
-            content = "".join(getattr(b, "text", "") for b in msg.content
-                              if getattr(b, "type", None) == "text").strip()
-        else:
-            return ([], [])
-    except Exception:
-        return ([], [])
-
-    return _finalize_extraction(content)
-
-
 def _is_substantive(user_msg: str) -> bool:
     """
     Pre-Filter: hat der Turn überhaupt genug Substanz für eine
@@ -331,10 +281,7 @@ def _is_substantive(user_msg: str) -> bool:
 
 def extract_turn_into_graph(user_msg: str, ai_msg: str,
                             store: str | None = None,
-                            mirror_calendar: bool = True,
-                            backend: str | None = None,
-                            provider: str | None = None,
-                            model: str | None = None):
+                            mirror_calendar: bool = True):
     """
     Hauptweg um einen Turn in den Graphen zu kippen. Wird async von
     ai._async_save_turn aufgerufen. Macht den LLM-Extraktor-Call und
@@ -354,11 +301,12 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
         mirror_calendar: geschah-am-Konzepte in Sashas erlebt-Layer spiegeln.
                          Für Persona-Turns AUS: Tutor-Geschwätz gehört nicht
                          in den gemeinsamen Kalender.
-        backend:         None/'local' → lokaler Ollama-Extraktor (Core-AI-Pfad,
-                         unverändert). 'cloud' → Verdichtung über den Cloud-
-                         Anbieter (provider/model), wenn kein Ollama da ist.
-                         Kapazitäts-Wahl trifft der Caller (persona_memory via
-                         ai_backends). Der Core-AI-Pfad ruft NIE cloud.
+
+    Verdichtet IMMER lokal über Ollama. Es gab hier mal einen Cloud-Extraktor
+    für die alte Graph-basierte Persona-Memory; die ist seit dem Notiz-Umbau
+    (2026-07-10) weg und rief ihn nicht mehr. Er hing als einziger Grund dafür,
+    dass core/ in tutor_providers greifen musste — entfernt. Der Tutor macht
+    seine Verdichtung selbst (persona_memory._distill).
     """
     user_msg = (user_msg or '').strip()
     ai_msg   = (ai_msg   or '').strip()
@@ -366,10 +314,7 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
         return
 
     today = date.today().isoformat()
-    if backend == "cloud":
-        nodes, edges = _cloud_graph_extractor(user_msg, ai_msg, today, provider, model)
-    else:
-        nodes, edges = _call_graph_extractor(user_msg, ai_msg, today)
+    nodes, edges = _call_graph_extractor(user_msg, ai_msg, today)
     if not nodes and not edges:
         return
     graph.add_turn_extraction(nodes, edges, store=store)

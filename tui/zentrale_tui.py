@@ -1395,19 +1395,19 @@ def run_ui(stdscr, store):
 
     def tutor_window():
         """Das Persona-ZIMMER im NATIVEN Fenster aufklappen (pygame,
-        scripts/tutor_room.py) — wie die Karte per 'w'. Der Tutor ist keine
+        tutor/room.py) — wie die Karte per 'w'. Der Tutor ist keine
         Chat-Box, sondern eine Person: hier wohnt sie, läuft rum, sitzt auf der
         Couch. Detached gestartet (eigener Prozess), die TUI läuft weiter; das
         Fenster spricht dieselbe /api/tutor/*-Session. BASE_URL wird mitgereicht,
         damit es auch vom Laptop (zentrale-remote) ans PC-Backend findet."""
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         py = os.path.join(root, "venv", "bin", "python")
-        script = os.path.join(root, "scripts", "tutor_room.py")
+        script = os.path.join(root, "tutor", "room.py")
         if not os.environ.get("DISPLAY"):
             with TUTOR_LOCK: TUTOR["msg"] = "kein DISPLAY (X11?)"
             return
         if not os.path.exists(script):
-            with TUTOR_LOCK: TUTOR["msg"] = "tutor_room.py fehlt"
+            with TUTOR_LOCK: TUTOR["msg"] = "tutor/room.py fehlt"
             return
         # Nur EIN Fenster: läuft das vorige noch (poll() is None), kein neues.
         proc = TUTOR.get("proc")

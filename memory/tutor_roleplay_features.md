@@ -66,7 +66,7 @@ dokumentieren, morgen gemeinsam reviewen.
   exponiert: `tutor.vocab_split()` → (gefestigt, im-Lernen); der injizierte
   Vokabel-Kontext (tutor_session) zeigt beides getrennt („放心多用" vs „多带带").
 - **Strukturen** (NEU, das genuin Fehlende): paralleler Pool für Satzmuster/neue
-  Sagweisen (`data/structures_mandarin.json`) + 3 Tools `get_structures /
+  Sagweisen (`tutor/data/structures_mandarin.json`) + 3 Tools `get_structures /
   introduce_structure / increment_structure` (auto-„掌握" ab 3× korrekt). In den
   Kontext injiziert. So kann die Persona nicht nur neue WÖRTER, sondern auch neue
   STRUKTUREN stückweise einführen (Sashas „新词或新说法").
@@ -81,11 +81,11 @@ dokumentieren, morgen gemeinsam reviewen.
   ein Wort + dessen deutsche Bedeutung. `tutor.show_thought` → `tutor_session.
   set_thought` (State `_thought` mit hochzählender id). `room_state()` liefert
   `thought_word/thought_meaning/thought_id`.
-- **Render** (`scripts/tutor_room.py`): `draw_thought()` zeichnet eine helle
+- **Render** (`tutor/room.py`): `draw_thought()` zeichnet eine helle
   Gedanken-Blase neben dem Kopf (kleine Trail-Kringel), Wort (Zielsprache, groß)
   + Übersetzung (klein). `watch_room` pollt `thought_id` one-shot (wie Gesten) →
   `S['thought']` + TTL 6 s, blendet in der letzten Sekunde aus.
-- **Bild-Variante:** liegt in `data/vocab_images/<wort>.png` ein Bild, wird es
+- **Bild-Variante:** liegt in `tutor/data/vocab_images/<wort>.png` ein Bild, wird es
   über dem Wort gezeigt (gecacht, `_vocab_image`). Prompt-Zeile (zh) ergänzt:
   „想帮她记住一个词时，可以用 show_thought …".
 - **Entscheidung/Annahme:** die Übersetzungs-Variante ist voll funktionsfähig
@@ -126,7 +126,7 @@ dokumentieren, morgen gemeinsam reviewen.
   reale Invariante nachgezogen (nur tutor-eigene Dateien + UI-State).
 - **Seed lebt im CODE** (`_NEWS_SEED` in tutor.py), NICHT in data/*.json — letzteres
   ist gitignored (rsync-Runtime) und käme sonst nicht mit; die Datei
-  `data/persona_news_zh.json` hält nur den Rotations-Cursor und bootstrappt beim
+  `tutor/data/persona_news_zh.json` hält nur den Rotations-Cursor und bootstrappt beim
   ersten Aufruf aus dem Seed. Prompt-Zeile (zh) ergänzt.
 - **Entscheidung/Annahme:** kein echter Feed → **evergreen-nahe** Themen (keine
   datierten Schlagzeilen, die veralten). Ehrlich-KI-Framing: sie erzählt „中国的情况",
@@ -138,9 +138,9 @@ dokumentieren, morgen gemeinsam reviewen.
 
 ### 7. Musik (Mechanik, Content-Lücke) ✅
 - **play_music(mood)** + **stop_music** (Tools 11+12): die Persona legt Musik nach
-  Stimmung auf — `chill/happy/focus/sad/energetic`. `tutor_session` hält nur den
+  Stimmung auf — `chill/happy/focus/sad/energetic`. `tutor.session` hält nur den
   WUNSCH (action/mood, id-getriggert); **abgespielt wird im Fenster** über
-  `pygame.mixer.music` aus `data/persona_music/<mood>/*.{ogg,mp3,wav,flac}` (zufällige
+  `pygame.mixer.music` aus `tutor/data/persona_music/<mood>/*.{ogg,mp3,wav,flac}` (zufällige
   Datei, geloopt, leise ~0.35). `♪ <mood>`-HUD zeigt's an.
 - **Mixer-Konflikt gelöst:** TTS (`play_wav`) reinitialisiert den Mixer bei
   abweichender Rate → das stoppt `mixer.music`. Zwei Schutzmaßnahmen: (a) während
@@ -150,7 +150,7 @@ dokumentieren, morgen gemeinsam reviewen.
   in der Session passiert fast nie.
 - **Entscheidung/Annahme:** Ordner-nach-Stimmung ist die simpelste Bibliothek
   (keine Metadaten-DB nötig). Moods frei gewählt. **Content-Lücke:** kein Audio
-  mitgeliefert (Lizenz) — `data/persona_music/` ist leer/gitignored; sobald Sasha
+  mitgeliefert (Lizenz) — `tutor/data/persona_music/` ist leer/gitignored; sobald Sasha
   dort Dateien reinlegt, läuft es sofort. Headless getestet (dummy audio, inkl.
   Reinit-Resume), aber **nicht mit echtem Audiogerät + echten Musikdateien**.
 - **Offen/Review:** Musikquelle klären (eigene Files / gemeinfrei / lokal
@@ -161,7 +161,7 @@ dokumentieren, morgen gemeinsam reviewen.
 - **watch_tv(mood)** + **turn_off_tv** (Tools 13+14): die Persona macht den
   Fernseher an und schlägt etwas **Level-gerechtes** vor (für Anfänger eher
   Leichtes). Katalog `_TV_SEED` **im Code** (Titel + mood + level + note), rotiert
-  per Cursor (`data/persona_tv_zh.json`, gitignored-Runtime wie News).
+  per Cursor (`tutor/data/persona_tv_zh.json`, gitignored-Runtime wie News).
 - **Raum:** ein TV an der Wand (`draw_tv`) — aus = dunkler Schirm; an = leuchtet
   bläulich mit leichtem Flackern + Scanlinien und zeigt den **Titel** (umgebrochen).
   `tutor_session._tv` (an/Titel, id) → `room_state` → Fenster.
@@ -192,7 +192,7 @@ gegentesten** (kurz? Chinesisch? in-character? kein Fake-Lob? nutzt sie die neue
 Tools sinnvoll und sparsam?) — das ist der letzte Verifikations-Schritt.
 
 **Content-/Playback-Lücken (Mechanik steht, Assets fehlen):** Vokabel-Bilder
-(`data/vocab_images/`), Musik (`data/persona_music/<mood>/`), echter China-News-Feed,
+(`tutor/data/vocab_images/`), Musik (`tutor/data/persona_music/<mood>/`), echter China-News-Feed,
 Film-Video-Playback. Alles Drop-in bzw. dokumentierte Folge-Entscheidungen.
 
 **Weitere Review-Fragen** stehen pro Feature oben unter „Offen/Review".

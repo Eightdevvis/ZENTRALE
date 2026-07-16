@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# scripts/tutor_room.py
+# tutor/room.py
 #
 # Natives Zimmer-Fenster (pygame) für die Sprach-Tutor-Persona (Ling Ling & Co).
 # Der Tutor ist keine Chat-Box, sondern eine Person — hier WOHNT sie: ein
@@ -14,7 +14,7 @@
 # Token-Stream (wie im Browser/TUI), landen in einer Sprechblase.
 #
 # Start:
-#   venv/bin/python scripts/tutor_room.py [--url http://host:5000]
+#   venv/bin/python tutor/room.py [--url http://host:5000]
 #
 # Steuerung:
 #   tippen + Enter   an die Persona reden
@@ -82,7 +82,7 @@ THOUGHT_BG  = (240, 242, 250)
 THOUGHT_FG  = (40, 44, 60)
 THOUGHT_SUB = (96, 102, 128)
 THOUGHT_TTL = 6.0     # s sichtbar, dann aus
-_VOCAB_IMG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'vocab_images')
+_VOCAB_IMG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'vocab_images')
 _img_cache = {}
 
 
@@ -292,7 +292,7 @@ _mixer_lock = threading.Lock()
 # data/persona_music/<mood>/*.{ogg,mp3,wav}. KEIN Audio mitgeliefert (Lizenz) →
 # Content-Lücke; sobald Dateien drin sind, läuft es. Während sie SPRICHT wird die
 # Musik geduckt (leiser), nicht gestoppt.
-MUSIC_DIR    = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'persona_music')
+MUSIC_DIR    = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'persona_music')
 MUSIC_VOLUME = 0.35    # normale Lautstärke
 MUSIC_DUCK   = 0.10    # gedämpft, während die Persona spricht
 _music_state = {"path": None, "playing": False, "ducked": False}

@@ -33,10 +33,9 @@ import notes        # type: ignore  – Notiz-Registry (Text-/Listen-/Float-Blö
 import kalender     # type: ignore  – Kalender-Layer (Woche/Monat, data/ai_calendar.json)
 import ai           # type: ignore
 import audio        # type: ignore
-import tutor_session # type: ignore  – Sprach-Tutor (Addon auf der Core-KI, eigener Prompt/Tools)
-import tutor_config   # type: ignore  – lokale Tutor-Config + Live-Umschalten (Provider/Modell)
-import tutor_providers # type: ignore  – Provider-Registry (Flags, Liste)
-import tutor_langs     # type: ignore  – Sprach-Profile (Liste)
+import tutor_port    # type: ignore  – EINZIGER Griff am Sprach-Tutor (Addon).
+                     # Nicht tutor_* direkt importieren: der Port haelt den Tutor
+                     # rausziehbar und wendet die ZENTRALE-Drossel an.
 import ai_backends     # type: ignore  – AI-Backend-Verfügbarkeit (local/cloud, EXTERNAL-Box)
 import consolidation # type: ignore  – Phase E: STM → LTM Konsolidierung
 import telemetry    # type: ignore  – PC-Host-Telemetrie (CPU/GPU/VRAM/Temp/RAM)
@@ -79,8 +78,8 @@ def _ki_aus():
 # auf laptop/tui. Fehlt es, sagen wir das ehrlich ("backend not here").
 def _tutor_unavail():
     return jsonify({"error": "backend not here",
-                    "detail": "Tutor-Backend nicht erreichbar (Provider-Backend fehlt "
-                              "oder Cloud gedrosselt)."}), 503
+                    "detail": tutor_port.unavailable_reason()
+                              or "Tutor-Backend nicht erreichbar."}), 503
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────
@@ -1265,7 +1264,7 @@ def api_speak():
     # Nur blocken, wenn AUCH der Tutor kein Backend hat; sonst kriegt die Persona-
     # Stimme keinen Ton, obwohl der Tutor laeuft (verifiziert: /api/speak gab 503
     # 'KI in dieser Kassette deaktiviert', obwohl der Cloud-Tutor verfuegbar war).
-    if kassette.ki_aus() and not tutor_session.available():
+    if kassette.ki_aus() and not tutor_port.available():
         return _ki_aus()
     body    = request.get_json() or {}
     text    = (body.get('text') or '').strip()
@@ -1299,7 +1298,7 @@ def api_transcribe():
     # STT ist lokale Erkennung; der Sprach-Tutor laeuft kapazitaetsbasiert. Nur
     # blocken, wenn AUCH der Tutor kein Backend hat — sonst kann das Persona-
     # Zimmer nicht zuhoeren, obwohl der Tutor laeuft (wie bei /api/speak).
-    if kassette.ki_aus() and not tutor_session.available():
+    if kassette.ki_aus() and not tutor_port.available():
         return _ki_aus()
     if 'audio' not in request.files:
         return jsonify({"error": "kein 'audio'-Feld"}), 400
@@ -1332,11 +1331,11 @@ def api_tutor_status():
     → Fronten (TUI/Browser) koennen ohne Start-Versuch zeigen, ob der Tutor geht
     (sonst z.B. toter Smiley statt Fehler beim /start)."""
     return jsonify({
-        "active":         tutor_session.is_active(),
-        "available":      tutor_session.available(),
+        "active":         tutor_port.is_active(),
+        "available":      tutor_port.available(),
         "whisper":        audio.whisper_available(),
         "tts":            audio.tts_available(),
-        "privacy_warning": tutor_session.privacy_notice(),
+        "privacy_warning": tutor_port.privacy_notice(),
     })
 
 
@@ -1347,7 +1346,7 @@ def api_ai_backends():
 
     POST {cloud_enabled: bool} legt den Cloud-Kill-Switch um (Datenschutz-/
     Kosten-Drossel), {local_enabled: bool} den Lokal-Kill-Switch (drosselt die
-    lokale Ollama-Leitung) – beide persistiert in data/tutor_config.json. GET
+    lokale Ollama-Leitung) – beide persistiert in data/ai_config.json. GET
     liefert Status inkl. cloud_enabled/local_enabled. Frisch nach Toggle."""
     if request.method == 'POST':
         body = request.get_json() or {}
@@ -1365,39 +1364,16 @@ def api_tutor_config():
     so kann man das Modell IN ZENTRALE direkt umschalten, ohne Datei-Editieren.
 
     POST-Body (JSON, alle optional): {lang, provider, model, history_window, persist}.
-    persist=true schreibt zusaetzlich in data/tutor_config.json (ueberlebt Neustart),
+    persist=true schreibt zusaetzlich in data/tutor_config.json (ueberlebt Neustart, gehoert dem Tutor),
     sonst gilt der Wechsel nur fuer die laufende Instanz.
     GET liefert die aktuelle Aufloesung + waehlbare Provider/Sprachen.
     """
-    if request.method == 'POST':
-        body    = request.get_json() or {}
-        persist = bool(body.get('persist'))
-        for k in ('lang', 'provider', 'model', 'history_window'):
-            if k in body:
-                tutor_config.set_override(k, body[k], persist=persist)
-
-    prof, pname, prov, model = tutor_session._resolve()
-    return jsonify({
-        "lang":           tutor_config.setting("lang", "zh"),
-        "lang_name":      prof["name"],
-        "persona_name":   prof.get("persona_name", prof["name"]),
-        "country":        prof.get("country", ""),
-        "provider":       pname,
-        "model":          model,
-        "trains_on_data": tutor_providers.trains_on_data(pname),
-        "providers": [
-            {"name": n, "default_model": p.get("default_model"),
-             "trains_on_data": tutor_providers.trains_on_data(n),
-             "jurisdiction": p.get("jurisdiction"), "enabled": p.get("enabled")}
-            for n, p in tutor_providers.PROVIDERS.items()
-        ],
-        "langs": [
-            {"code": c, "name": p["name"], "enabled": p.get("enabled"),
-             "persona_name": p.get("persona_name", p["name"]),
-             "country": p.get("country", "")}
-            for c, p in tutor_langs.PROFILES.items()
-        ],
-    })
+    body    = request.get_json(silent=True) or {} if request.method == 'POST' else {}
+    persist = bool(body.get('persist'))
+    cfg     = tutor_port.config(changes=body, persist=persist)
+    if not cfg.get("present"):
+        return _tutor_unavail()
+    return jsonify(cfg)
 
 
 @app.route('/api/tutor/start', methods=['POST'])
@@ -1408,18 +1384,18 @@ def api_tutor_start():
     get_confirmed_vocab()/get_testing_vocab() (Tool-Calls) und begruesst auf
     Mandarin.
     """
-    if not tutor_session.available():
+    if not tutor_port.available():
         return _tutor_unavail()
 
-    if not tutor_session.is_active():
-        tutor_session.activate()
+    if not tutor_port.is_active():
+        tutor_port.activate()
 
     body  = request.get_json(silent=True) or {}
     focus = body.get('focus')   # Fenster fokussiert beim Öffnen? (Sensor)
 
     def generate():
         # user_text=None → KI beginnt das Gespraech (Öffnen = Lage-Meldung)
-        for token in tutor_session.respond_stream(user_text=None, focus=focus):
+        for token in tutor_port.respond_stream(user_text=None, focus=focus):
             yield f"data: {json.dumps({'token': token})}\n\n"
         yield f"data: {json.dumps({'done': True})}\n\n"
 
@@ -1436,9 +1412,9 @@ def api_tutor_respond():
     Nimmt transkribierten Text entgegen, schickt ihn an die KI (Tutor-Modus)
     und streamt die Antwort zurueck. Body: JSON {"text": "我很好"}.
     """
-    if not tutor_session.available():
+    if not tutor_port.available():
         return _tutor_unavail()
-    if not tutor_session.is_active():
+    if not tutor_port.is_active():
         return jsonify({"error": "Keine aktive Tutor-Session"}), 400
 
     body      = request.get_json() or {}
@@ -1447,7 +1423,7 @@ def api_tutor_respond():
         return jsonify({"error": "kein Text"}), 400
 
     def generate():
-        for token in tutor_session.respond_stream(user_text=user_text):
+        for token in tutor_port.respond_stream(user_text=user_text):
             yield f"data: {json.dumps({'token': token})}\n\n"
         yield f"data: {json.dumps({'done': True})}\n\n"
 
@@ -1461,7 +1437,7 @@ def api_tutor_respond():
 @app.route('/api/tutor/stop', methods=['POST'])
 def api_tutor_stop():
     """Beendet die aktive Tutor-Session."""
-    tutor_session.deactivate()
+    tutor_port.deactivate()
     return jsonify({"ok": True})
 
 
@@ -1470,7 +1446,7 @@ def api_tutor_room_state():
     """Aktueller Ausdrucks-Zustand der Persona (Haltung/Geste) fuers Zimmer-
     Fenster. Leichtgewichtig — das Fenster pollt das ein paar Mal pro Sekunde.
     Die Werte setzt die KI selbst ueber das express-Tool."""
-    return jsonify(tutor_session.room_state())
+    return jsonify(tutor_port.room_state())
 
 
 @app.route('/api/tutor/nudge', methods=['POST'])
@@ -1479,16 +1455,16 @@ def api_tutor_nudge():
     von selbst (schauen/winken/kurz nachfragen). Das Zimmer-Fenster loest das
     gedeckelt aus (einmal, dann Ruhe; alle ~15 min erneut). Streamt wie /respond;
     der Anstoss-Text wird NICHT in der History gespeichert."""
-    if not tutor_session.available():
+    if not tutor_port.available():
         return _tutor_unavail()
-    if not tutor_session.is_active():
+    if not tutor_port.is_active():
         return jsonify({"error": "Keine aktive Tutor-Session"}), 400
 
     body  = request.get_json(silent=True) or {}
     focus = body.get('focus')   # Fenster fokussiert? (Sensor aus dem Zimmer)
 
     def generate():
-        for token in tutor_session.respond_stream(nudge=True, focus=focus):
+        for token in tutor_port.respond_stream(nudge=True, focus=focus):
             yield f"data: {json.dumps({'token': token})}\n\n"
         yield f"data: {json.dumps({'done': True})}\n\n"
 

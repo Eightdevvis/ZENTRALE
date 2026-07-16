@@ -16,7 +16,7 @@
 #
 # ── cloud = da, wenn Internet an ───────────────────────────────────────
 # Cloud gilt als verfügbar, wenn ein Cloud-Provider konfiguriert ist (Key in
-# der Env, via tutor_config aus data/tutor_config.json) UND sein Host erreichbar
+# der Env, via ai_config aus data/ai_config.json) UND sein Host erreichbar
 # ist (= Internet an). Offline → cloud=False, auch wenn ein Key gesetzt ist.
 #
 # Nebenwirkungsarm + kurz gecacht, weil die Erkennung Netz-Pings macht.
@@ -27,8 +27,8 @@ import socket
 from urllib.parse import urlparse
 
 import ai                # is_available() pingt Ollama /api/tags
-import tutor_config      # injiziert Provider-Keys in os.environ (Import-Effekt)
-import tutor_providers   # Provider-Registry: kind / key_env / base_url
+import ai_config         # Kill-Switches + Key-Injection in os.environ (Import-Effekt)
+import providers         # Cloud-Registry des Kerns: key_env / base_url
 
 LOCAL = "local"
 CLOUD = "cloud"
@@ -52,21 +52,17 @@ def local_ok() -> bool:
 
 def cloud_provider() -> str:
     """Name eines KONFIGURIERTEN Cloud-Providers (Key gesetzt) – oder None.
-    Konfiguriert = openai_compat/anthropic-Provider, dessen key_env in der Env
-    gesetzt ist (Keys kommen via tutor_config aus data/tutor_config.json)."""
-    for name, p in tutor_providers.PROVIDERS.items():
-        if p.get("kind") in ("openai_compat", "anthropic"):
-            env = p.get("key_env")
-            if env and os.environ.get(env):
-                return name
-    return None
+    Keys kommen via ai_config aus data/ai_config.json (Legacy-Fallback:
+    data/tutor_config.json)."""
+    return providers.configured()
 
 
 def cloud_enabled() -> bool:
     """Cloud-Kill-Switch: ist Cloud manuell freigegeben? (Default True.)
     Aus → cloud_ok()=False, egal ob Key/Internet da. Datenschutz-/Kosten-Drossel,
-    in der Config (data/tutor_config.json, key 'cloud_enabled') persistiert."""
-    v = tutor_config.setting("cloud_enabled", True)
+    in der Config (data/ai_config.json, key 'cloud_enabled') persistiert.
+    Gilt ZENTRALE-weit — auch für den Tutor, den core/tutor_port.py hiermit gated."""
+    v = ai_config.setting("cloud_enabled", True)
     if isinstance(v, str):
         return v.strip().lower() not in ("0", "false", "off", "no", "aus", "nein")
     return bool(v)
@@ -75,7 +71,7 @@ def cloud_enabled() -> bool:
 def set_cloud_enabled(on: bool, persist: bool = True) -> bool:
     """Cloud-Drossel umlegen (live, optional persistiert). Invalidiert den Cache,
     damit EXTERNAL/Gating sofort reagieren. Gibt den neuen Zustand zurück."""
-    tutor_config.set_override("cloud_enabled", bool(on), persist=persist)
+    ai_config.set_override("cloud_enabled", bool(on), persist=persist)
     _cache["val"] = None
     return bool(on)
 
@@ -85,8 +81,8 @@ def local_enabled() -> bool:
     (Default True.) Aus → local gilt als nicht da (Drossel), egal ob Ollama
     läuft. Pendant zu cloud_enabled – so lässt sich auch die lokale Leitung
     drosseln (z.B. TUI-Chat übers PC-Hirn aus). Persistiert in
-    data/tutor_config.json (key 'local_enabled')."""
-    v = tutor_config.setting("local_enabled", True)
+    data/ai_config.json (key 'local_enabled')."""
+    v = ai_config.setting("local_enabled", True)
     if isinstance(v, str):
         return v.strip().lower() not in ("0", "false", "off", "no", "aus", "nein")
     return bool(v)
@@ -95,7 +91,7 @@ def local_enabled() -> bool:
 def set_local_enabled(on: bool, persist: bool = True) -> bool:
     """Lokal-Drossel umlegen (live, optional persistiert). Invalidiert den Cache,
     damit EXTERNAL/Gating sofort reagieren. Gibt den neuen Zustand zurück."""
-    tutor_config.set_override("local_enabled", bool(on), persist=persist)
+    ai_config.set_override("local_enabled", bool(on), persist=persist)
     _cache["val"] = None
     return bool(on)
 
@@ -129,7 +125,7 @@ def status(fresh: bool = False) -> dict:
     enabled = cloud_enabled()
     cloud   = False
     if prov and enabled:   # Kill-Switch aus → Cloud gilt als nicht da
-        base = tutor_providers.get(prov).get("base_url") or "https://api.openai.com"
+        base = providers.get(prov).get("base_url") or "https://api.openai.com"
         cloud = _reachable(urlparse(base).hostname)
 
     st = {LOCAL: local, CLOUD: cloud, "cloud_provider": prov,

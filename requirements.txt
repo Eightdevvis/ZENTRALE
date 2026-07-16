@@ -21,7 +21,7 @@ piper-tts
 # Audio-Aufnahme und -Wiedergabe (Mikro fürs Persona-Zimmer / spätere Pi-Nutzung)
 sounddevice
 soundfile
-# Voice-Activity-Detection fürs Immer-Zuhören im Tutor-Fenster (scripts/tutor_room.py).
+# Voice-Activity-Detection fürs Immer-Zuhören im Tutor-Fenster (tutor/room.py).
 # webrtcvad-wheels statt webrtcvad: liefert Wheels + kommt ohne pkg_resources aus
 # (setuptools>=81 hat pkg_resources entfernt, klassisches webrtcvad importiert es).
 webrtcvad-wheels
@@ -53,7 +53,7 @@ jeepney
 # Sprach-Tutor – Cloud-Leitung. Default-Provider 'qwen' (DashScope, Singapur,
 # no-train) läuft über den OpenAI-/v1-kompatiblen Pfad (core/tutor_openai_compat.py)
 # und braucht das openai-SDK. Deckt zugleich Mistral/DeepSeek/Groq/Gemini ab.
-# Key kommt aus data/tutor_config.json (keys.DASHSCOPE_API_KEY), NICHT ins Repo.
+# Key kommt aus data/ai_config.json (keys.DASHSCOPE_API_KEY), NICHT ins Repo.
 # Der Offline-Default (Ollama) braucht das NICHT — nur der Cloud-Tutor.
 openai
 # anthropic-SDK (core/tutor_cloud.py) ist NUR für den teuren Claude-Verifikations-

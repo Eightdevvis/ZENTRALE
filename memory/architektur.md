@@ -50,9 +50,10 @@ monolith.html  (Browser pollt /api/state jede Sekunde)
    └──▶ audio.py ──▶ Whisper (Port 5050) / TTS (Port 5051)
 ```
 
-> Mandarin-Tutor: Reaktivierung läuft. `tutor.py` / `tutor_session.py` /
-> `tutor_cloud.py` sind aktiv; Backend per `TUTOR_BACKEND` (local|cloud).
-> Siehe `tutor_system.md`.
+> Sprach-Tutor: lebt seit 2026-07-16 als EIGENES PROJEKT im Ordner `tutor/`
+> (rausziehbar am Stück). ZENTRALE greift NUR über `core/tutor_port.py` rein —
+> kein Core-/UI-Modul importiert `tutor.*` direkt. Fehlt der Ordner, läuft
+> ZENTRALE normal weiter. Siehe `tutor_system.md`.
 
 `brain.process_event(e)` und `actions.handle_action(e)` werden vom
 Event-Loop **parallel pro Event** aufgerufen, nicht hintereinander.
@@ -75,6 +76,8 @@ ZENTRALE/
 │   ├── categories.py        # Data-Collection-Kategorien (Sleep, Food)
 │   ├── ai.py                # Ollama-Client (Chat, Streaming, Tools)
 │   ├── ai_backends.py       # AI-Backend-Verfügbarkeit (local/cloud, Modul-Gating, EXTERNAL-Box)
+│   ├── ai_config.py         # Kill-Switches (cloud/local) + API-Key-Store, data/ai_config.json
+│   ├── providers.py         # Cloud-Registry des KERNS (Erreichbarkeit; ≠ tutor_providers)
 │   ├── net.py               # HTTP-Wrapper mit Terminal-Logging
 │   ├── graph.py             # KONZEPT-Graph Memory der KI (PRIMARY, data/ai_graph.json)
 │   ├── graphs.py            # Lifestyle-GRAPHEN-Registry (Messreihen-Werkzeug, ≠ graph.py!)
@@ -95,12 +98,7 @@ ZENTRALE/
 │   ├── host_metrics.py      # PC-Host-Metriken (CPU/GPU/VRAM/Temp/RAM)
 │   ├── telemetry.py         # Telemetrie-Aggregat (PC + Pi) fürs Dashboard
 │   ├── audio.py             # HTTP-Client für Whisper + TTS
-│   ├── tutor.py             # Tutor-Vokabel-Tools (Reaktivierung läuft, siehe tutor_system.md)
-│   ├── tutor_session.py     # Tutor Session-State + Auflösung Sprache→Provider→Modell
-│   ├── tutor_langs.py       # Sprach-Profile (zh live; ru/ar/es Skizzen)
-│   ├── tutor_providers.py   # Provider-Registry (kind/base_url/key/trains_on_data-Flag)
-│   ├── tutor_openai_compat.py # OpenAI-/v1-Backend (Qwen/DeepSeek/Mistral/OpenAI/Groq/…)
-│   ├── tutor_cloud.py       # Anthropic-Backend (Claude, Sashas persönlicher Pfad)
+│   ├── tutor_port.py        # ★ EINZIGE Naht zum Tutor (Policy/Gate, lazy, sys.path)
 │   └── map/                 # Geo-Layer-System (front-agnostisch, pure stdlib)
 │       ├── basemap.py       # Basiskarte (Natural Earth, data/*.geojson)
 │       ├── projection.py    # Geo→Pixel-Projektion
@@ -112,6 +110,24 @@ ZENTRALE/
 │   └── templates/
 │       └── monolith.html    # DIE EINE Browser-Front (alle Kassetten); KI-Blöcke
 │                            # werden per ki_aus-Flag weggelassen (laptop/tui)
+├── tutor/                   # ★ EIGENES PROJEKT, wohnt hier mit. Rausziehbar am Stück.
+│   │                        # ZENTRALE greift NUR über core/tutor_port.py rein;
+│   │                        # fehlt der Ordner, läuft ZENTRALE normal weiter.
+│   ├── __init__.py          # Kontrakt: was der Tutor vom "basic core" braucht
+│   ├── session.py           # Session-State + Auflösung Sprache→Provider→Modell
+│   ├── tools.py             # Vokabel-/Roleplay-Tools + Sandbox-Allowlist (_ALLOWED)
+│   ├── langs.py             # Sprach-/Persona-Profile (zh live; fr/ru/ar/es Skizzen)
+│   ├── providers.py         # Provider-Registry des TUTORS (≠ core/providers.py)
+│   ├── config.py            # Sprache/Provider/Modell — KEINE Keys (die hat der Core)
+│   ├── memory.py            # Grob-Gedächtnis pro Persona (Notizen, kein Graph)
+│   ├── openai_compat.py     # OpenAI-/v1-Backend (Qwen/DeepSeek/Mistral/OpenAI/Groq/…)
+│   ├── cloud.py             # Anthropic-Backend (Claude, Sashas persönlicher Pfad)
+│   ├── room.py              # Persona-Zimmer (pygame, nativ; reiner HTTP-Client)
+│   ├── test_memory.py       # Regression: Notizen, Sandbox, Persona, Backend-Wahl
+│   ├── vocab_mandarin.json  # Mandarin-Vokabeln (Wort + Pinyin) — getrackt
+│   ├── prompts/             # Referenz-Fassungen der Persona-Prompts (Doku)
+│   └── data/                # Laufzeit, nicht committen: persona_mem_*, structures,
+│                            # tutor_config.json. Enthält NIE einen API-Key.
 ├── tui/                     # Terminal-Kassette (curses), redet NUR via HTTP mit ui/app.py
 │   ├── zentrale_tui.py      # Die TUI (Sensoren, Karte, Kalender, Listen, Graphen, Mail)
 │   └── select_kassette.py   # Kassetten-Auswahl beim Start
@@ -119,7 +135,8 @@ ZENTRALE/
 │   ├── whisper_service.py   # STT (Port 5050)
 │   ├── tts_service.py       # TTS (Port 5051)
 │   └── download_tts_model.py
-├── data/                    # Auto-generiert, nicht committen
+├── data/                    # Auto-generiert, nicht committen (Core-Daten)
+│   ├── ai_config.json       # Kill-Switches (cloud/local) + API-KEY-Store
 │   ├── sleep_quality.json   # Geloggte Einträge
 │   ├── ai_graph.json        # Konzept-Graph (primary memory)
 │   ├── ai_ltm.json          # Legacy LTM (save_memory-Tool)
@@ -133,8 +150,7 @@ ZENTRALE/
 │   ├── pi_autopull.sh            # Cron-Worker: fetch → diff → pull → restart
 │   └── test_audio.py             # manueller Audio-Smoke-Test
 ├── memory/                  # Dieser Doku-Ordner
-├── notes.md                 # Freie Notizen, KI kann sie lesen
-└── vocab_mandarin.json      # Mandarin-Vokabeln (Wort + Pinyin)
+└── notes.md                 # Freie Notizen, KI kann sie lesen
 ```
 
 ## Eckpfeiler-Entscheidungen

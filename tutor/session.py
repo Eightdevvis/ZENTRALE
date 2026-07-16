@@ -1,4 +1,4 @@
-# core/tutor_session.py
+# tutor/session.py
 #
 # Verwaltet den State einer aktiven Sprachtutor-Session.
 #
@@ -9,8 +9,8 @@
 #
 # ── Framework, nicht Chinesisch-Tutor ─────────────────────────────────
 # Welche Sprache (System-Prompt, Vokabeln, Lesehilfe) kommt aus dem
-# LanguageProfile (tutor_langs.py); welcher Anbieter/welches Modell aus der
-# Provider-Registry (tutor_providers.py). Backend-Dispatch nach provider.kind:
+# LanguageProfile (tutor/langs.py); welcher Anbieter/welches Modell aus der
+# Provider-Registry (tutor/providers.py). Backend-Dispatch nach provider.kind:
 #   ollama        → core/ai.py (lokal, Default, offline)
 #   anthropic     → core/tutor_cloud.py (Claude, Sashas Pfad)
 #   openai_compat → core/tutor_openai_compat.py (Qwen/DeepSeek/Mistral/…)
@@ -24,15 +24,17 @@
 
 import os
 import time
+import socket
 import threading
 from threading import Lock
 from collections import deque
-import ai
-import tutor
-import tutor_langs
-import tutor_providers
-import tutor_config   # lädt data/tutor_config.json, injiziert Keys, liefert Settings
-import persona_memory # eigenes Gedächtnis + persistente History pro Persona
+from urllib.parse import urlparse
+import ai                       # basic core: chat_stream + is_available
+from . import tools             # Vokabel-Tools + Sandbox-Allowlist
+from . import langs             # Sprach-/Persona-Profile
+from . import providers         # Provider-Registry des Tutors
+from . import config            # tutor/data/tutor_config.json (Sprache/Provider/Modell)
+from . import memory            # eigenes Grob-Gedächtnis pro Persona
 
 _lock     = Lock()
 _active   = False
@@ -194,7 +196,7 @@ def _history_window() -> int:
     API ist zustandslos, sendet sonst die ganze History pro Turn neu). Storage
     bleibt bei maxlen=100; gesendet wird nur das Fenster."""
     try:
-        return int(tutor_config.setting("history_window", 30))
+        return int(config.setting("history_window", 30))
     except (TypeError, ValueError):
         return 30
 
@@ -204,28 +206,70 @@ def _resolve():
     Config (data/tutor_config.json), per Env übersteuerbar (siehe tutor_config:
     Precedence Env > Config > Profil-Default). Wird der Provider gewechselt, ohne
     ein Modell zu setzen, greift das default_model des Providers."""
-    lang          = tutor_config.setting("lang", "zh")
-    prof          = tutor_langs.get(lang)
-    provider_name = tutor_config.setting("provider", prof["provider"])
-    provider      = tutor_providers.get(provider_name)
-    model         = tutor_config.setting("model", None)
+    lang          = config.setting("lang", "zh")
+    prof          = langs.get(lang)
+    provider_name = config.setting("provider", prof["provider"])
+    provider      = providers.get(provider_name)
+    model         = config.setting("model", None)
     if not model:
         model = prof["model"] if provider_name == prof["provider"] else provider.get("default_model")
     return prof, provider_name, provider, model
 
 
-def available() -> bool:
-    """Ist der Tutor mit dem aktuell aufgelösten Provider nutzbar? Kapazitäts-
-    basiert (Backend des Providers erreichbar) statt kassetten-hart (ki_aus):
-    lokaler Provider → Ollama da; Cloud-Provider → cloud da (Internet + Key +
-    Kill-Switch an). So läuft der Tutor auch auf laptop/tui, sobald ein Backend
-    erreichbar ist."""
-    import ai_backends
+def backend_kind() -> str:
+    """'ollama' (lokal) | 'anthropic' | 'openai_compat' (beide = Cloud) — welche
+    Art Backend der aktuell aufgelöste Provider braucht.
+
+    Teil des KONTRAKTS zum Kern: core/tutor_port.py fragt das, um die ZENTRALE-
+    Drossel (cloud_enabled/local_enabled) anzuwenden. Der Tutor selbst kennt die
+    Drossel nicht — siehe available()."""
     _prof, _pname, provider, _model = _resolve()
-    st = ai_backends.status()
+    return provider.get("kind") or "ollama"
+
+
+_REACH_TTL   = 5.0
+_reach_cache = {}   # host → (t, ok)
+
+
+def _reachable(host: str, port: int = 443, timeout: float = 2.0) -> bool:
+    """Leichter TCP-Erreichbarkeits-Check, kurz gecacht (status() wird gepollt)."""
+    if not host:
+        return False
+    hit = _reach_cache.get(host)
+    now = time.time()
+    if hit and (now - hit[0]) < _REACH_TTL:
+        return hit[1]
+    ok = False
+    try:
+        s = socket.create_connection((host, port), timeout=timeout)
+        s.close()
+        ok = True
+    except Exception:
+        ok = False
+    _reach_cache[host] = (now, ok)
+    return ok
+
+
+def available() -> bool:
+    """Ist der Tutor mit dem aktuell aufgelösten Provider nutzbar?
+
+    REIN KAPAZITÄT: ist das Backend meines Providers erreichbar — lokaler
+    Provider → Ollama da; Cloud-Provider → Key gesetzt + Host erreichbar.
+
+    Kennt die ZENTRALE-Drossel (cloud_enabled/local_enabled) BEWUSST NICHT.
+    Die ist Core-Policy und sitzt in core/tutor_port.py — der Port fragt erst
+    die Drossel, dann das hier. Vorher hing der Tutor über ai_backends direkt an
+    der Core-Config; damit war er nicht rausziehbar und die Drossel wohnte in
+    einer Tutor-Datei (Umbau 2026-07-16). Wer den Tutor GATEN will, fragt den
+    Port, nicht das hier."""
+    _prof, _pname, provider, _model = _resolve()
     if provider.get("kind") == "ollama":
-        return bool(st.get("local"))
-    return bool(st.get("cloud"))   # anthropic / openai_compat → cloud
+        return ai.is_available()
+    key = provider.get("key_env")
+    if key and not os.environ.get(key):
+        return False
+    base = provider.get("base_url") or "https://api.anthropic.com"
+    return _reachable(urlparse(base).hostname)
 
 
 def privacy_notice():
@@ -250,10 +294,10 @@ def activate():
     """
     global _active, _history, _privacy, _session_lang
     prof, pname, provider, model = _resolve()
-    lang = tutor_config.setting("lang", "zh")
+    lang = config.setting("lang", "zh")
 
     notice = None
-    if tutor_providers.trains_on_data(pname):
+    if providers.trains_on_data(pname):
         notice = (f"⚠ DATENSCHUTZ: Provider '{pname}' ({provider.get('jurisdiction')}) "
                   f"trainiert/nutzt offiziell deine Eingaben. Modell {model}, "
                   f"Sprache {prof['name']}.")
@@ -266,7 +310,7 @@ def activate():
         print(notice)
 
     # KEIN rohes History-Replay mehr über Sessions (führte zu Filler-Loops und ist
-    # auch unnötig): Kontinuität kommt aus den GROB-Notizen (persona_memory.context,
+    # auch unnötig): Kontinuität kommt aus den GROB-Notizen (memory.context,
     # unten in den System-Prompt gehängt). _history ist reiner In-Session-Puffer.
     with _lock:
         _active       = True
@@ -350,7 +394,7 @@ def respond_stream(user_text: str = None, nudge: bool = False,
         battery_bump(_BAT_REFILL)     # echtes Quatschen lädt die soziale Batterie
 
     prof, pname, provider, model = _resolve()
-    lang = _session_lang or tutor_config.setting("lang", "zh")
+    lang = _session_lang or config.setting("lang", "zh")
 
     # Kosten-Hebel: nur die letzten N Turns senden (zustandslose API).
     if user_text is None and not nudge:
@@ -374,14 +418,14 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     hint = prof.get("vocab_hint")
     if hint:
         try:
-            solid, learn = tutor.vocab_split()
-            structs = tutor.structure_list()
+            solid, learn = tools.vocab_split()
+            structs = tools.structure_list()
             parts = []
             if solid:   parts.append("已掌握（放心多用）：" + "、".join(solid))
             if learn:   parts.append("在学（多带带，用对了帮她记）：" + "、".join(learn))
             if structs: parts.append("在教的句型：" + "、".join(structs))
             if not parts:                      # ganz frisch: einfach die Wörter
-                parts = ["她在学：" + "、".join(tutor.term_list())]
+                parts = ["她在学：" + "、".join(tools.term_list())]
             body = "；".join(parts)
             if body.strip("：；"):
                 system = system + "\n\n" + hint.format(words=body)
@@ -399,7 +443,7 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     # weiß, an den System-Prompt hängen. Nur ihr EIGENER Store (nie Sashas
     # Core-Graph) → keine private Info an die Cloud. Query = die neue User-
     # Nachricht (bei Begrüßung None → Sasha/Heute-Anker).
-    mem_ctx = persona_memory.context(user_text, lang)
+    mem_ctx = memory.context(user_text, lang)
     if mem_ctx:
         system = system + "\n\n" + mem_ctx
 
@@ -407,20 +451,20 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     # Signatur (yieldet Plain-Text-Tokens); der Tutor bleibt sauberes Addon.
     kind = provider.get("kind")
     if kind == "anthropic":
-        import tutor_cloud
+        from . import cloud as tutor_cloud
         stream = tutor_cloud.chat_stream(
             messages=history, model=model, system=system,
-            tools=tutor.TUTOR_TOOLS, tool_executor=tutor.execute_tool)
+            tools=tools.TUTOR_TOOLS, tool_executor=tools.execute_tool)
     elif kind == "openai_compat":
-        import tutor_openai_compat
+        from . import openai_compat as tutor_openai_compat
         stream = tutor_openai_compat.chat_stream(
             messages=history, model=model, system=system,
-            tools=tutor.TUTOR_TOOLS, tool_executor=tutor.execute_tool,
+            tools=tools.TUTOR_TOOLS, tool_executor=tools.execute_tool,
             _provider=provider)
     else:  # 'ollama' → lokaler Default über core/ai.py
         stream = ai.chat_stream(
             messages=history, system=system,
-            tools=tutor.TUTOR_TOOLS, tool_executor=tutor.execute_tool)
+            tools=tools.TUTOR_TOOLS, tool_executor=tools.execute_tool)
 
     full_response = []
     for token in stream:
@@ -438,11 +482,11 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     push_message("assistant", full)
 
     # Nach dem Turn: KEIN roher Verlauf mehr auf Disk — nur die GROB-Notizen im
-    # Hintergrund verdichten (persona_memory.remember, läuft lokal/Cloud, darf das
+    # Hintergrund verdichten (memory.remember, läuft lokal/Cloud, darf das
     # Streaming nicht blockieren).
     if user_text:   # Begrüßungs-Turn (user_text=None) nicht verdichten
         # provider/model mitgeben: fällt die Verdichtung mangels Ollama auf die
         # Cloud zurück, nutzt sie denselben Anbieter, der eh gerade redet.
         threading.Thread(
-            target=persona_memory.remember,
+            target=memory.remember,
             args=(user_text, full, lang, pname, model), daemon=True).start()

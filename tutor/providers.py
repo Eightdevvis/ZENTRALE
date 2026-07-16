@@ -1,4 +1,4 @@
-# core/tutor_providers.py
+# tutor/providers.py
 #
 # Provider-Registry für den Sprach-Tutor.
 #

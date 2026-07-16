@@ -1,4 +1,4 @@
-# core/tutor_cloud.py
+# tutor/cloud.py
 #
 # Cloud-Backend für den Mandarin-Tutor (Anthropic Claude).
 #

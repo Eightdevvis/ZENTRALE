@@ -1,0 +1,20 @@
+[
+  {
+    "word": "你好",
+    "pinyin": "nǐ hǎo",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "谢谢",
+    "pinyin": "xiè xie",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "再见",
+    "pinyin": "zài jiàn",
+    "correct_use": 0,
+    "confirmed": false
+  }
+]

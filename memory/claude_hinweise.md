@@ -22,7 +22,7 @@ Workflow-Regeln, die nicht aus dem Code allein hervorgehen.
 - `clock.py` feuert `TIME_REACHED` (nicht `MORNING_WAKEUP` direkt).
   Das Mapping `TIME_REACHED → MORNING_WAKEUP` macht `brain.py`.
 - `PRESENCE_DETECTED → TUTOR_START` hat **keinen** Tageszeit-Check;
-  einzige Sperre ist `tutor_session.is_active()`.
+  einzige Sperre ist `tutor_port.is_active()` (der Kern fragt nie `tutor.*` direkt).
 
 ### Ollama-Anbindung
 
@@ -48,9 +48,9 @@ Workflow-Regeln, die nicht aus dem Code allein hervorgehen.
 
 - Beide nutzen dieselbe `ai.chat_stream()`-Infrastruktur.
 - Unterschied: anderer System-Prompt + andere Tool-Liste
-  (`tutor.TUTOR_TOOLS`) – die Standard-Tools sind im Tutor-Modus
+  (`tutor.tools.TUTOR_TOOLS`) – die Standard-Tools sind im Tutor-Modus
   **deaktiviert**, nicht zusätzlich aktiv.
-- `tutor_session.py` hat eine eigene History (getrennt von der
+- `tutor/session.py` hat eine eigene History (getrennt von der
   Chat-History), damit sich Lernkontext und allgemeine Konversation
   nicht vermischen.
 - `introduce_new(word, pinyin)` legt ein **neues** Wort an – die KI
@@ -65,13 +65,13 @@ Was die Cloud-AI sieht/anfassen kann, ist GENAU: ihr Tutor-Prompt, ihre eigene
 Tutor-History, und die **4 Vokabel-Tools** (`TUTOR_TOOLS`, fassen nur
 `vocab_*.json` an). Durchgesetzt durch:
 
-- **Choke-Point `tutor.execute_tool`** – geschlossene Allowlist (`_ALLOWED`);
+- **Choke-Point `tutor.tools.execute_tool`** – geschlossene Allowlist (`_ALLOWED`);
   jeder andere Tool-Name wird abgelehnt **und** ins stdout-Log geflaggt.
 - **`ai.py`-Gates** (`if tools is None`): bei gesetzten Tools KEINE Graph-
   Injektion (`graph.context_for_query`) und KEINE Consolidation
   (`_async_save_turn` läuft nur über `_answer_with_images`, ai.py:1589) →
   Tutor-Gespräche landen NIE im lokalen Memory-Graphen.
-- **Cloud-Backends** (`tutor_openai_compat.py`, `tutor_cloud.py`) importieren
+- **Cloud-Backends** (`tutor/openai_compat.py`, `tutor/cloud.py`) importieren
   `ai`/`graph`/`consolidation`/`context` NICHT und führen selbst keine Tools aus.
 
 Wer hier etwas ändert (neuen Tutor-Tool, anderes Tool-Set an einen Cloud-Pfad

@@ -1,0 +1,8 @@
+{
+  "_hinweis": "Kopiere diese Datei nach tutor/data/tutor_config.json. Sie haelt NUR die Wahl: Modell durchprobieren = 'provider'/'model' hier aendern, neu starten. Via .gitignore (tutor/data/*.json) NICHT im Repo.",
+  "_keine_keys_hier": "HIER GEHOEREN KEINE API-KEYS HIN. Der Key-Store gehoert dem Kern: data/ai_config.json (Vorlage: data/ai_config.json.example). tutor/data/ enthaelt bewusst nie ein Secret - so kann ein vergessener .gitignore-Eintrag unter tutor/ nichts leaken. tutor/test_memory.py prueft das als Regression.",
+  "lang": "zh",
+  "provider": "qwen",
+  "model": "qwen-plus",
+  "history_window": 30
+}

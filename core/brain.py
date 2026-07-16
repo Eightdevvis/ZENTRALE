@@ -35,8 +35,8 @@ def process_event(event, data=None):
         # und no-op-en sicher. Über TUTOR_PRESENCE_REACT=0 explizit abschaltbar.
         if os.getenv("TUTOR_PRESENCE_REACT") != "0":
             try:
-                import tutor_session
-                reacted = tutor_session.presence_ping()
+                import tutor_port
+                reacted = tutor_port.presence_ping()
                 print("Brain: Presence → Persona "
                       + ("reagiert" if reacted else "ruht (Session inaktiv/Cooldown)"))
             except Exception as e:
