@@ -1325,18 +1325,22 @@ def api_transcribe():
 
 @app.route('/api/tutor/status')
 def api_tutor_status():
-    """Gibt zurueck ob gerade eine Tutor-Session aktiv ist + Audio-Service-Status.
-    privacy_warning != null → Provider trainiert auf Daten: im UI laut anzeigen.
-    available = ist das aufgeloeste Backend (ollama vs cloud) gerade erreichbar?
-    → Fronten (TUI/Browser) koennen ohne Start-Versuch zeigen, ob der Tutor geht
-    (sonst z.B. toter Smiley statt Fehler beim /start)."""
-    return jsonify({
-        "active":         tutor_port.is_active(),
-        "available":      tutor_port.available(),
-        "whisper":        audio.whisper_available(),
-        "tts":            audio.tts_available(),
-        "privacy_warning": tutor_port.privacy_notice(),
-    })
+    """Kern-Sicht auf den Tutor + Audio-Service-Status. Fronten pollen das.
+
+    Felder aus tutor_port.status():
+      present   – ist der Tutor auf dieser Maschine ueberhaupt installiert?
+      active    – laeuft gerade eine Session?
+      available – installiert UND von der Drossel erlaubt UND Backend erreichbar
+      reason    – WARUM nicht, im Klartext ("Cloud ist per Kill-Switch gedrosselt",
+                  "Provider-Backend nicht erreichbar", "Tutor nicht installiert").
+                  Leer, wenn available. Die Fronten SCHREIBEN das hin, statt zu
+                  raten — bis 2026-07-17 warf dieser Endpunkt present+reason weg,
+                  also konnte niemand "gedrosselt" von "weg" unterscheiden.
+      privacy_warning – != null → Provider trainiert auf Daten: laut anzeigen.
+    """
+    st = tutor_port.status()
+    st.update(whisper=audio.whisper_available(), tts=audio.tts_available())
+    return jsonify(st)
 
 
 @app.route('/api/ai/backends', methods=['GET', 'POST'])

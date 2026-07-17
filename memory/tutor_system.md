@@ -105,6 +105,23 @@
 >   verwaiste `vocab.py` vom Repo-Root (las die alte Vokabel-Datei per CWD-Pfad,
 >   niemand importierte ihn) ist beim Framework-Umbau **gelöscht** worden.
 >
+> **Fronten sagen jetzt die Wahrheit (2026-07-17).** Der Port formulierte den
+> Grund („Cloud ist per Kill-Switch gedrosselt" …) schon seit dem Infra-Schnitt —
+> er kam nur nirgends an: `/api/tutor/status` baute sich **neben**
+> `tutor_port.status()` ein eigenes Dict und warf `present` + `reason` weg
+> (`status()` war damit tote Zeile, die niemand aufrief). Folge: `startTutor()`
+> setzte `tutorActive = true` **vor** jeder Prüfung und `streamTutor` sah nie auf
+> `resp.ok` → ohne Tutor/mit gedrosselter Cloud landete man im roten Rahmen fest,
+> jedes Enter lief in einen 503 und wurde als **leere KI-Blase** geschluckt. Die
+> TUI riet stattdessen („cloud gedrosselt? · /cloud on" — mit Fragezeichen, weil
+> sie den Grund nicht hatte), auch wenn in Wahrheit Ollama tot oder `tutor/` weg war.
+> Jetzt: Endpunkt reicht den Port-Status **1:1** durch; der Monolith fragt **erst**
+> und wechselt den Kanal nur bei `available`, sonst steht der Grund im Minilog; bei
+> 503 im Stream zeigt er den `detail` und verlässt den toten Kanal; die TUI schreibt
+> `reason` unter den `x_x`-Smiley (umgebrochen per `_wrap`). **Regel:** der Grund wird
+> an genau EINER Stelle formuliert (`tutor_port.unavailable_reason()`) — Fronten
+> geben ihn wörtlich weiter, formulieren nie selbst.
+>
 > **Noch offen (Fronten, nicht Struktur):** `monolith.html` kapert über
 > `tutorActive` den Chat-Sendepfad der Mitte statt ein eigenes Exhibit zu haben;
 > die TUI hält TUTOR-State im Input-Dispatch/Fokus-Router/Layout (nur HTTP, bricht

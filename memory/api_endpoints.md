@@ -231,9 +231,42 @@ Details zu Modellen + Sprachen: `audio_system.md`.
 
 Details: `mail_system.md` (Panel/Drill-down/Hybrid, Passphrase-Quellen, Keyring-CLI).
 
-## Tutor (entfernt)
+## Tutor (Addon, optional)
 
-Alle `/api/tutor/*`-Endpoints (status/start/respond/transcribe/speak/stop)
-sind entfallen – der Mandarin-Tutor ist pausiert (siehe `tutor_system.md`).
-Voice läuft über die sprachneutralen Core-Endpoints `/api/speak` +
-`/api/transcribe` mit `lang`-Parameter.
+Die `/api/tutor/*`-Endpoints gibt es — dieser Abschnitt behauptete bis
+2026-07-17 das Gegenteil („entfernt"), das war schlicht falsch. **Pausiert** ist
+die Weiterentwicklung der Persona (siehe `tutor_system.md`), nicht die API.
+
+Der Tutor ist ein **Addon**: `ui/app.py` fasst ihn nur über `core/tutor_port.py`
+an. Fehlt `tutor/` ganz, läuft ZENTRALE normal weiter und die Routen antworten
+`503 {error:"backend not here", detail:"<Grund>"}`. Voice läuft NICHT hier,
+sondern über die sprachneutralen Core-Endpoints `/api/speak` + `/api/transcribe`
+mit `lang`-Parameter.
+
+| Endpoint                | Methode  | Beschreibung                          |
+|-------------------------|----------|---------------------------------------|
+| `/api/tutor/status`     | GET      | Kern-Sicht (s.u.) + `whisper`/`tts`. Reicht `tutor_port.status()` 1:1 durch. |
+| `/api/tutor/config`     | GET/POST | Aufgelöste Wahl + wählbare Provider/Sprachen. POST `{lang?, provider?, model?, history_window?, persist?}`. |
+| `/api/tutor/start`      | POST     | Session starten, Persona begrüßt von selbst. SSE-Stream (`data: {token}` … `{done}`). |
+| `/api/tutor/respond`    | POST     | `{text}` → Antwort. SSE wie `/start`.  |
+| `/api/tutor/stop`       | POST     | Session beenden → `{ok:true}`.        |
+| `/api/tutor/room_state` | GET      | Zustand des Persona-Zimmers (pygame-Fenster, `tutor/room.py`). |
+| `/api/tutor/nudge`      | POST     | Nonverbaler Presence-Ping. Startet NIE eine Session. |
+
+**`/api/tutor/status` — die Felder, auf die die Fronten bauen:**
+
+| Feld              | Bedeutung                                              |
+|-------------------|--------------------------------------------------------|
+| `present`         | Ist `tutor/` auf dieser Maschine überhaupt installiert? |
+| `active`          | Läuft gerade eine Session?                              |
+| `available`       | installiert **und** von der Drossel erlaubt **und** Backend erreichbar |
+| `reason`          | **Warum nicht**, im Klartext: `"Cloud ist per Kill-Switch gedrosselt"` · `"lokale KI ist per Kill-Switch gedrosselt"` · `"Provider-Backend nicht erreichbar"` · `"Tutor nicht installiert (…)"`. Leer, wenn `available`. |
+| `privacy_warning` | != null → Provider trainiert auf die Eingaben: laut anzeigen. |
+
+`present` + `reason` fehlten bis 2026-07-17: der Endpunkt baute sich neben
+`tutor_port.status()` ein eigenes Dict und warf beide weg. Damit konnte keine
+Front „gedrosselt" von „gar nicht da" unterscheiden — der Monolith wechselte
+ungeprüft in den Tutor-Kanal und hing dann im 503 fest, die TUI riet
+(„cloud gedrosselt? /cloud on"). Fronten sollen `reason` **wörtlich hinschreiben**,
+nicht selbst formulieren: der Grund wird an genau EINER Stelle formuliert
+(`core/tutor_port.unavailable_reason()`).

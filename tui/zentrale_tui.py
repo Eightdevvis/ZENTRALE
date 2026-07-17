@@ -1261,12 +1261,17 @@ def run_ui(stdscr, store):
     # eine Antwort an den Tutor. Alle IO im Hintergrund-Thread, nie im Render/Input.
     #   session : läuft serverseitig eine Tutor-Session? (start setzt sie)
     #   avail   : Backend erreichbar? None=noch nicht geprüft, False=toter Smiley
+    #   reason  : WARUM nicht — Klartext aus core/tutor_port.py ("Cloud ist per
+    #             Kill-Switch gedrosselt", "Provider-Backend nicht erreichbar",
+    #             "Tutor nicht installiert (…)"). Vorher riet die TUI hier selbst
+    #             ("cloud gedrosselt? /cloud on") — mit Fragezeichen, weil sie den
+    #             Grund gar nicht hatte. Der Kern weiß ihn, also fragen wir ihn.
     #   provider/model/lang/lang_name : aufgelöste Wahl (Kopfzeile)
     #   privacy : Datenschutz-Warnung (Provider trainiert auf Daten) oder None
     TUTOR = {"active": False, "input": "", "log": [], "answer": None,
              "streaming": False, "scroll": 0, "session": False, "avail": None,
              "provider": "", "model": "", "lang": "", "lang_name": "",
-             "persona_name": "", "country": "",
+             "persona_name": "", "country": "", "reason": "",
              "privacy": None, "msg": "", "loaded": False, "proc": None}
     TUTOR_LOCK = threading.Lock()
 
@@ -1287,8 +1292,10 @@ def run_ui(stdscr, store):
                 TUTOR["avail"]   = bool(st.get("available"))
                 TUTOR["session"] = bool(st.get("active"))
                 TUTOR["privacy"] = st.get("privacy_warning")
+                TUTOR["reason"]  = st.get("reason") or ""
             else:
-                TUTOR["avail"] = False
+                TUTOR["avail"]  = False
+                TUTOR["reason"] = "keine verbindung zum backend (zentrale-remote?)"
             if isinstance(cf, dict):
                 TUTOR["provider"]     = cf.get("provider") or ""
                 TUTOR["model"]        = cf.get("model") or ""
@@ -1341,13 +1348,23 @@ def run_ui(stdscr, store):
                     elif "done" in evt:
                         break
         except urllib.error.HTTPError as e:
+            # Der 503-Body trägt den Klartext-Grund aus core/tutor_port.py
+            # (_tutor_unavail in ui/app.py) — lesen statt raten.
+            detail = ""
+            try:
+                detail = (json.loads(e.read().decode("utf-8", "replace"))
+                          .get("detail") or "")
+            except (ValueError, OSError, AttributeError):
+                pass
             with TUTOR_LOCK:
                 if e.code == 503:
                     TUTOR["avail"] = False
                     TUTOR["session"] = False
-                    TUTOR["msg"] = "tutor nicht erreichbar (cloud gedrosselt? /cloud on)"
+                    TUTOR["reason"] = detail
+                    TUTOR["msg"] = detail.lower() or "tutor-backend nicht erreichbar"
                 else:
-                    TUTOR["msg"] = "fehler: HTTP %s" % e.code
+                    TUTOR["msg"] = "fehler: HTTP %s%s" % (
+                        e.code, (" — " + detail.lower()) if detail else "")
         except (urllib.error.URLError, OSError):
             with TUTOR_LOCK:
                 TUTOR["msg"] = "keine verbindung (zentrale-remote?)"
@@ -1368,7 +1385,7 @@ def run_ui(stdscr, store):
             if TUTOR["streaming"]:
                 return
             if TUTOR["avail"] is False:
-                TUTOR["msg"] = "tutor nicht erreichbar (cloud gedrosselt? /cloud on)"
+                TUTOR["msg"] = (TUTOR["reason"] or "tutor-backend nicht erreichbar").lower()
                 return
             TUTOR["answer"]    = ""
             TUTOR["msg"]       = ""
@@ -4890,6 +4907,7 @@ def run_ui(stdscr, store):
             scroll    = TUTOR["scroll"]
             session   = TUTOR["session"]
             av        = TUTOR["avail"]
+            reason    = TUTOR["reason"]
             prov      = TUTOR["provider"]
             model     = TUTOR["model"]
             lang      = TUTOR["lang"]
@@ -4907,10 +4925,15 @@ def run_ui(stdscr, store):
             addclip(head_y, inx + max(0, inw - len(pflag)), pflag, len(pflag),
                     C["warn"] if privacy else C["faint"])
 
-        if av is False:                          # Backend weg → toter Smiley
-            face = ["x_x", "tutor nicht erreichbar", "cloud gedrosselt? · /cloud on"]
-            cy = body_top + max(0, rows // 2 - 1)
-            for i, ln in enumerate(face[:rows]):
+        if av is False:                          # Backend weg → toter Smiley + GRUND
+            # Der Grund kommt fertig aus core/tutor_port.py durch /api/tutor/status.
+            # Vorher stand hier fest "cloud gedrosselt? · /cloud on" — eine Vermutung,
+            # die bei fehlendem tutor/ oder totem Ollama schlicht falsch war.
+            why = (reason or "tutor-backend nicht erreichbar").lower()
+            face = ["x_x"] + _wrap(why, max(8, inw - 2))
+            face = face[:max(1, rows)]
+            cy = body_top + max(0, rows // 2 - len(face) // 2)
+            for i, ln in enumerate(face):
                 addclip(cy + i, inx + max(0, (inw - len(ln)) // 2), ln, inw,
                         C["warn"] if i == 0 else C["faint"])
         else:

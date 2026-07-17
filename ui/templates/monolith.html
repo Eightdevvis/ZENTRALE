@@ -2626,6 +2626,27 @@
 
     async function startTutor() {
       if (tutorActive) { _mini('Tutor läuft schon.'); return; }
+
+      // ERST fragen, DANN den Kanal wechseln. Vorher stand tutorActive=true hier
+      // oben, ungeprüft: fehlte der Tutor (oder war die Cloud gedrosselt), landete
+      // man im roten Rahmen fest, jede Eingabe lief in einen 503 und wurde als
+      // leere Blase geschluckt. Jetzt sagt der Kern erst, was Sache ist.
+      var s = null;
+      try {
+        s = await (await fetch('/api/tutor/status')).json();
+      } catch (e) {
+        _mini('Tutor: keine Verbindung zum Backend.');
+        return;
+      }
+      if (!s.available) {
+        // reason kommt fertig formuliert aus core/tutor_port.py — nicht raten,
+        // nicht umdichten: "Cloud ist per Kill-Switch gedrosselt" / "Provider-
+        // Backend nicht erreichbar" / "Tutor nicht installiert (…)".
+        _mini('Tutor: ' + (s.reason || 'Backend nicht erreichbar.'));
+        return;
+      }
+      if (s.privacy_warning) _mini('⚠ ' + s.privacy_warning);
+
       tutorActive = true;
       // Sichtbarer Kanal-Wechsel: roter Rahmen um die Mitte (CSS body.tutor-mode)
       // + Konsolen-Placeholder umschalten. Beides wird in stopTutor zurückgesetzt,
@@ -2640,10 +2661,6 @@
       if (inputEl) inputEl.placeholder = (persona ? persona + ' hört zu' : 'Tutor-Modus') +
         ' … (Alt+T beendet · Enter senden · Alt+M Mic)';
       _mini('— ' + (persona || 'Tutor') + ' ist da (quatscht gleich los; Alt+T oder /tutorstop beendet) —');
-      try {
-        var s = await (await fetch('/api/tutor/status')).json();
-        if (s.privacy_warning) _mini('⚠ ' + s.privacy_warning);
-      } catch (e) {}
       await streamTutor('/api/tutor/start', null);
     }
     async function stopTutor() {
@@ -2673,6 +2690,22 @@
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: (text == null) ? '{}' : JSON.stringify({ text: text })
         });
+        // Fehler-Antworten sind JSON, kein SSE. Ohne diese Prüfung lief der
+        // Body unten durch den 'data: '-Parser, fand nichts und endete als
+        // LEERE KI-Blase — der Grund (503-detail) verpuffte, und der Tutor-Modus
+        // blieb an: jedes weitere Enter wieder 503, wieder leere Blase.
+        if (!resp.ok) {
+          var why = 'Tutor-Backend nicht erreichbar.';
+          try {
+            var err = await resp.json();
+            why = err.detail || err.error || why;
+          } catch (e2) { why = 'Tutor-Fehler (HTTP ' + resp.status + ').'; }
+          _mini('Tutor: ' + why);
+          // Backend weg → nicht im toten Kanal sitzen bleiben (wie die TUI, die
+          // bei 503 die Session fallen lässt).
+          if (tutorActive) await stopTutor();
+          return;
+        }
         var reader = resp.body.getReader(), decoder = new TextDecoder(), buffer = '';
         while (true) {
           var chunk = await reader.read();
