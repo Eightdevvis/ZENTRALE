@@ -484,14 +484,19 @@ kein Pflicht-Dep für die Verteilung (`venv/bin/pip install anthropic` bei Bedar
 (`keys`-Block) gesetzt (Secret, gitignored) → der qwen-Pfad ist startklar
 (`provider=qwen`, `model=qwen-plus`, `lang=zh`).
 
-> **Migrations-Schuld (Stand 2026-07-17, ungelöst):** derselbe Key steht auf
-> diesem Knoten **zusätzlich** in der Legacy-Datei `data/tutor_config.json`
-> (identischer Wert, per Hash verglichen) — dort liegen auch noch alte
-> `cloud_enabled`/`local_enabled`. Gelesen wird `ai_config.json` zuerst, die
-> Legacy-Datei ist nur Fallback für Knoten, die die neue Datei noch nicht haben
-> (PC/Pi). Solange beide existieren, muss ein Key-Wechsel an ZWEI Stellen passieren,
-> sonst serviert der Fallback still den alten. **Aufräumen erst, wenn alle Knoten
-> `data/ai_config.json` haben** — das ist Sashas Entscheidung, nicht meine.
+> **Single Source of Truth (Fix 2026-07-17):** Keys werden NUR noch aus
+> `data/ai_config.json` injiziert (`ai_config._inject_keys`). Der doppelte
+> `keys`-Block in der Legacy-Datei `data/tutor_config.json` ist auf diesem Knoten
+> **entfernt**; liegt auf einem anderen Knoten noch einer, wird er **ignoriert
+> und beim Start laut angemahnt** (nicht mehr injiziert). Damit gibt es genau
+> eine Key-Quelle. Die Switches (`cloud_enabled`/`local_enabled`, kein Secret)
+> lesen weiter mit Legacy-Fallback, das hält alte Knoten am Laufen.
+>
+> **Cross-Node-Rest:** Die Bereinigung des `keys`-Blocks propagiert per rsync
+> (newest-wins) auf PC/Pi, sobald wieder gesynct wird — beide Config-Dateien
+> syncen. Bis dahin tragen die dortigen Legacy-Dateien evtl. noch einen Key; er
+> wird dort ebenfalls ignoriert (die Warnung feuert). Nichts bricht: `ai_config.json`
+> syncte seit 2026-07-16 mit und ist die aktive Quelle.
 
 ## Position in der Architektur
 

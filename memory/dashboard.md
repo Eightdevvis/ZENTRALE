@@ -334,7 +334,7 @@ Drei separate Polling-Loops im Frontend, jeder mit eigener Frequenz:
 
 | Endpoint              | Intervall | Was es liefert                                  |
 |-----------------------|-----------|-------------------------------------------------|
-| `GET /api/state`      | 1 s       | Events, Sensoren, Logs (Haupt-State). Das Feld `vocab` ist **tot**: `main.py:_load_vocab()` liest die längst entfernte `vocab_mandarin.json` → immer `null`, und keine Front rendert es (siehe `tutor_system.md`, Aufräum-Punkt) |
+| `GET /api/state`      | 1 s       | Events, Sensoren, Logs (Haupt-State). Das frühere Feld `vocab` ist **entfernt** (2026-07-17): es kam aus `main.py:_load_vocab()`, das die längst gelöschte `vocab_mandarin.json` las (immer `null`) und über den Port hinweg in Tutor-Daten griff — samt der toten `set_vocab`/`_vocab`-Kette in `state.py` raus |
 | `GET /api/ai/status`  | 30 s      | Ollama erreichbar? + Modell-Name                |
 
 > Das frühere 3 s-**Dauer**-Polling gegen `/api/tutor/status` ist raus — nicht

@@ -2,34 +2,35 @@
 
 ## Whitelist – was die KI lesen darf
 
-`core/context.py` (`_WHITELIST_PATTERNS`) definiert die Whitelist. Nur was hier
-steht, kann die **lokale** KI über die Tools `read_file` und `list_files` öffnen.
+`core/context.py` regelt den Dateizugriff der **lokalen** KI in zwei Stufen:
+eine **Secret-Sperre** (Denylist, gewinnt immer) und darunter die **Whitelist**.
 **Wortlaut aus dem Code** (2026-07-17 nachgemessen, nicht abgeschrieben):
 
 ```
+# SECRET-SPERRE (vor der Whitelist, matcht nach Basename):
+#   ai_config.json, tutor_config.json           ← Key-Store / Legacy-Keys
+#   *.enc, *.key, *.pem                          ← Blobs, Schlüssel, Zertifikate
+# WHITELIST (nur was NICHT gesperrt ist):
 data/*.json
-vocab_mandarin.json     ← TOTER EINTRAG: die Datei gibt es seit dem
-                          Sprach-Framework nicht mehr, matcht nichts
 core/*.py
 ui/app.py
 notes.md
 ```
 
-> **Achtung, zwei Dinge stehen hier falschherum** (Stand 2026-07-17, ungelöst):
+> **Sicherheit — der Key-Store ist gesperrt (Fix 2026-07-17).** Die Whitelist
+> `data/*.json` deckte `data/ai_config.json` (mit dem echten `DASHSCOPE_API_KEY`)
+> mit ab — die KI konnte ihn per `read_file` im Klartext lesen. Jetzt fängt die
+> **Secret-Sperre** das ab: sie greift VOR der Whitelist und matcht nach Basename,
+> also ortsunabhängig (ein Verschieben oder Unterordner hebelt sie nicht aus, und
+> auch der `..`-Umweg nicht). `list_files` verrät den Key-Store nicht mal.
+> Regressionstest: `tests/test_context_secrets.py`. **Deny-by-default für Secrets:**
+> neue Secret-Dateien in `_SECRET_BASENAMES`/`_SECRET_SUFFIXES` eintragen, nicht
+> darauf hoffen, dass die Whitelist sie zufällig verfehlt.
 >
-> 1. **`data/*.json` deckt den API-Key-Store mit ab.** `data/ai_config.json` und
->    `data/tutor_config.json` enthalten den `keys`-Block mit dem echten
->    `DASHSCOPE_API_KEY` — die lokale KI darf sie per `read_file` im Klartext
->    lesen (nachgestellt, sie liefert den Key aus). Das ist keine Folge des
->    Infra-Schnitts: die Keys lagen vorher in `data/tutor_config.json`, also
->    ebenfalls unter `data/*.json`. Das Muster stammt aus der Zeit, als in `data/`
->    nur Schlaf-Logs lagen. **Sasha entscheidet**, ob der Key-Store aus der
->    Whitelist ausgenommen wird — bis dahin: die Whitelist ist kein Secret-Schutz.
-> 2. **Die Vokabeldatei ist NICHT lesbar.** Diese Datei behauptete
->    `tutor/data/<lang>/vocab.json` stünde in der Whitelist — steht sie nie, und
->    der Zugriff wird verweigert. Der Lernstand des Tutors ist der lokalen KI
->    also unsichtbar (was zur Tutor-Sandbox passt, aber nicht das war, was hier
->    stand).
+> Der frühere Eintrag `vocab_mandarin.json` in der Whitelist ist **raus** (tote
+> Datei seit dem Sprach-Framework). Der Lernstand des Tutors
+> (`tutor/data/<lang>/vocab.json`) stand nie in der Whitelist und ist der lokalen
+> KI unsichtbar — das passt zur Tutor-Sandbox.
 
 Die Whitelist gilt für die **lokale Core-KI**. Der Tutor hat eine **eigene,
 strengere** Sandbox (`tutor.tools._ALLOWED`) und kann gar keine Dateien lesen —

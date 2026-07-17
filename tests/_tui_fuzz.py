@@ -149,7 +149,6 @@ class _AdvHandler(BaseHTTPRequestHandler):
         if p == "/api/state":
             return {"events": [{"event": "BOOT", "time": "07:00:01"}],
                     "sensors": {"button": False, "light": True, "motion": False, "door": False},
-                    "vocab": {"word": "你好", "pinyin": "nǐ hǎo"},
                     "logs": [{"text": "KASSETTE tui", "time": "07:00:01"}],
                     "internet_logs": [], "uptime_s": 12345, "alarms": [], "time": "11. Juni 2026"}
         if p == "/api/telemetry":
@@ -184,7 +183,7 @@ class _AdvHandler(BaseHTTPRequestHandler):
     def _adv(self, p):
         ws, wn = _WEIRD_STR, _WEIRD_NUM
         if p == "/api/state":
-            keys = ["events", "sensors", "vocab", "logs", "internet_logs", "uptime_s", "alarms", "time"]
+            keys = ["events", "sensors", "logs", "internet_logs", "uptime_s", "alarms", "time"]
             d = {}
             for k in keys:
                 if self._r() < 0.15:
@@ -198,8 +197,6 @@ class _AdvHandler(BaseHTTPRequestHandler):
                         if self._r() < 0.8 else self._pick(wn)
                 elif k == "uptime_s":
                     d[k] = self._pick(wn)
-                elif k == "vocab":
-                    d[k] = self._pick([None, {}, {"word": self._pick(ws)}, "x"])
                 else:
                     d[k] = self._pick(ws + wn)
             return d

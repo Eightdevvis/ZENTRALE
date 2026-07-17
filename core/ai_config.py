@@ -12,22 +12,29 @@
 # Core. Jetzt gehört die Drossel dem Core; der Tutor ist nur noch ein Konsument
 # (und wird über core/tutor_port.py gegated, ohne selbst davon zu wissen).
 #
-# ── Keys ────────────────────────────────────────────────────────────────
+# ── Keys: EINE Quelle (data/ai_config.json), Punkt ──────────────────────
 # Der Key-Store ist MASCHINEN-Ebene, nicht Modul-Ebene: nicht-leere Keys aus
-# config["keys"] wandern beim Import in os.environ (Env gewinnt, falls gesetzt),
-# damit die SDKs (openai/anthropic) sie wie gewohnt finden. Bewusst NICHT pro
-# Modul aufgeteilt — ein Secret in zwei Dateien, die zwischen drei Knoten
-# rsyncen, ist wie man Keys desynct oder leakt.
+# ai_config.json["keys"] wandern beim Import in os.environ (Env gewinnt, falls
+# gesetzt), damit die SDKs (openai/anthropic) sie wie gewohnt finden.
 #
-# ── Migration (wichtig, Stand 2026-07-16) ───────────────────────────────
-# Gelesen wird data/ai_config.json. Fehlt eine Angabe dort, fällt das Modul auf
-# data/tutor_config.json zurück (die alte Heimat von Switches + Keys). Damit
-# laufen PC/Pi/Laptop unverändert weiter, ohne dass irgendwer eine Datei anfassen
-# oder einen Key umziehen muss. Sasha kann in Ruhe migrieren: ai_config.json
-# anlegen → gewinnt. Vorlage: data/ai_config.json.example.
+# **Single Source of Truth (Stand 2026-07-17):** Keys werden NUR aus
+# data/ai_config.json injiziert — NICHT mehr aus der Legacy-Datei
+# data/tutor_config.json. Vorher las _inject_keys aus BEIDEN → derselbe
+# DASHSCOPE-Key lag doppelt (in zwei Dateien, die zwischen drei Knoten rsyncen)
+# und ein Key-Wechsel hätte still nur halb gegriffen. Liegt in der Legacy-Datei
+# noch ein keys-Block, wird er IGNORIERT und laut angemahnt (siehe _inject_keys)
+# — dort gehört kein Secret mehr hin.
+#
+# ── Migration der SWITCHES (kein Secret) ────────────────────────────────
+# cloud_enabled/local_enabled werden weiter aus ai_config.json gelesen, mit
+# data/tutor_config.json als Fallback (setting()). Das ist harmlos (kein Key)
+# und hält alte Knoten am Laufen, bis sie ihr eigenes ai_config.json haben.
+# Vorlage: data/ai_config.json.example.
 #
 # ── Sicherheit ──────────────────────────────────────────────────────────
 # data/*.json ist in .gitignore → die Datei (mit Keys) wandert NIE ins Repo.
+# Zusätzlich sperrt core/context.py ai_config.json gegen die lokale KI
+# (Secret-Denylist) — die Whitelist `data/*.json` würde sie sonst lesbar machen.
 
 import os
 import json
@@ -58,12 +65,18 @@ def _load():
 
 
 def _inject_keys():
-    """API-Keys in os.environ legen (Env gewinnt). Neue Config zuerst, dann die
-    alte Tutor-Config als Fallback — so bleibt ein bereits gesetzter Key gültig."""
-    for src in (_config, _legacy):
-        for name, val in (src.get("keys") or {}).items():
-            if val and not os.environ.get(name):
-                os.environ[name] = str(val)
+    """API-Keys in os.environ legen (Env gewinnt). NUR aus data/ai_config.json —
+    die EINE Quelle. Ein keys-Block in der Legacy-Datei wird bewusst NICHT
+    injiziert, sondern nur angemahnt (dort gehört kein Secret mehr hin)."""
+    for name, val in (_config.get("keys") or {}).items():
+        if val and not os.environ.get(name):
+            os.environ[name] = str(val)
+
+    stale = [k for k, v in (_legacy.get("keys") or {}).items() if v]
+    if stale:
+        print("[ai_config] WARNUNG: data/tutor_config.json enthält noch Keys "
+              f"({', '.join(sorted(stale))}) — sie werden IGNORIERT (Single Source "
+              "of Truth: data/ai_config.json). Bitte den keys-Block dort entfernen.")
 
 
 _overrides = {}   # Runtime-Overrides (Live-Umschalten, ohne Neustart)

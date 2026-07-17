@@ -39,10 +39,6 @@ _events = deque(maxlen=20)
 # Werte sind immer bool: True = aktiv, False = inaktiv.
 _sensors = {"button": False, "light": False}
 
-# Aktuelle Vokabel des Tages (None = noch nicht geladen).
-# Wird beim Start aus vocab_mandarin.json befüllt.
-_vocab = None
-
 # Letzte 100 Log-Zeilen (stdout-Ausgaben, sichtbar im Dashboard-Terminal)
 _logs = deque(maxlen=100)
 
@@ -154,16 +150,6 @@ def set_sensor(name: str, value: bool):
     """Setzt den aktuellen Status eines Sensors (True/False)."""
     with _lock:
         _sensors[name] = value
-
-
-def set_vocab(word):
-    """
-    Setzt die aktuelle Vokabel.
-    word: {"word": "你好", "pinyin": "nǐ hǎo"} oder None
-    """
-    global _vocab
-    with _lock:
-        _vocab = word
 
 
 def push_log(line: str):
@@ -359,7 +345,6 @@ def get_snapshot() -> dict:
         return {
             "events":        list(_events),
             "sensors":       dict(_sensors),
-            "vocab":         _vocab,
             "logs":          list(_logs),
             "internet_logs": list(_internet_logs),
             "uptime_s":      round(time.monotonic() - _started),

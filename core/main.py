@@ -4,7 +4,6 @@ import threading
 import sys
 import os
 import time
-import json
 
 from brain import process_event
 from actions import handle_action
@@ -38,19 +37,6 @@ def log(msg: str):
 # ZENTRALE-Root auf den Pfad legen damit wir ui importieren können
 _root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 sys.path.insert(0, _root)
-
-
-def _load_vocab():
-    """Lädt das erste Wort aus vocab_mandarin.json. Gibt None zurück bei Fehler."""
-    try:
-        vocab_path = os.path.join(_root, 'vocab_mandarin.json')
-        with open(vocab_path, 'r', encoding='utf-8') as f:
-            vocab = json.load(f)
-        if vocab:
-            return {"word": vocab[0]['word'], "pinyin": vocab[0].get('pinyin', '')}
-    except Exception:
-        pass
-    return None
 
 
 def main():
@@ -92,9 +78,6 @@ def main():
         log("MAIL: Triage-Fetcher gestartet (ZENTRALE_MAIL=on)")
 
     event_queue = [SYSTEM_BOOT]
-
-    # Initiale Vokabel laden
-    state.set_vocab(_load_vocab())
 
     # Alarm-Kanal initial befüllen: beim Boot einmal alle offenen Kalender-
     # Alarme rechnen, damit die Dashboard-Ecke + der KI-Prompt sofort Bescheid
