@@ -21,8 +21,13 @@ Workflow-Regeln, die nicht aus dem Code allein hervorgehen.
   `print()` für ein paar Events – nicht „der Side-Effect-Layer".
 - `clock.py` feuert `TIME_REACHED` (nicht `MORNING_WAKEUP` direkt).
   Das Mapping `TIME_REACHED → MORNING_WAKEUP` macht `brain.py`.
-- `PRESENCE_DETECTED → TUTOR_START` hat **keinen** Tageszeit-Check;
-  einzige Sperre ist `tutor_port.is_active()` (der Kern fragt nie `tutor.*` direkt).
+- `PRESENCE_DETECTED` löst **kein** `TUTOR_START` aus — diese Kante gibt es nicht
+  (die Konstante hat weder Sender noch Handler). `brain.py` ruft stattdessen
+  `tutor_port.presence_ping()`: eine **nonverbale** Reaktion in eine bereits
+  laufende Session, die nie eine startet. Gates, in dieser Reihenfolge: Env
+  `TUTOR_PRESENCE_REACT != "0"` (default AN) → `tutor_port.available()`
+  (Kill-Switch + Backend erreichbar) → Session-interne Guards (Cooldown).
+  Kein Tageszeit-Check. Der Kern fragt nie `tutor.*` direkt, immer den Port.
 
 ### Ollama-Anbindung
 
@@ -53,8 +58,11 @@ Workflow-Regeln, die nicht aus dem Code allein hervorgehen.
 - `tutor/session.py` hat eine eigene History (getrennt von der
   Chat-History), damit sich Lernkontext und allgemeine Konversation
   nicht vermischen.
-- `introduce_new(word, pinyin)` legt ein **neues** Wort an – die KI
-  wählt das Wort selbst, es gibt keinen Pool aus dem geschöpft wird.
+- `introduce_new(word, reading="", lang=None)` legt ein **neues** Wort an – die KI
+  wählt das Wort selbst, es gibt keinen Pool aus dem geschöpft wird. Der Parameter
+  heißt seit dem Sprach-Framework `reading`, nicht `pinyin` (was `reading` bedeutet,
+  sagt das Sprach-Profil: zh=Pinyin, ru=Betonung, ar=Translit). `pinyin` wird beim
+  Lesen alter Einträge noch als Alias toleriert (`tools._read()`).
 
 ### Cloud→Lokal-Trennung (HARTE Invariante)
 
@@ -62,8 +70,11 @@ Die **Cloud-/Tutor-AI darf NICHT in die lokale AI greifen.** Lokale AI =
 `ai.py`-Chat + Konzept-Graph (`graph.py`/`ai_graph.json`) + Consolidation. Die
 Cloud-AI (Tutor auf einem Cloud-Provider) lebt in ihrem eigenen Environment.
 Was die Cloud-AI sieht/anfassen kann, ist GENAU: ihr Tutor-Prompt, ihre eigene
-Tutor-History, und die **4 Vokabel-Tools** (`TUTOR_TOOLS`, fassen nur
-`vocab_*.json` an). Durchgesetzt durch:
+Tutor-History, und die **15 Tutor-Tools** (`tutor.tools.tools_for(lang)`; ein
+statisches `TUTOR_TOOLS` gibt es nicht mehr). Die fassen an: die Lernstands-Dateien
+der aktiven Sprache (`tutor/data/<lang>/{vocab,structures,news,tv}.json`) und
+**UI-State des Persona-Zimmers** (`express`, `show_thought`, `watch_tv`,
+`play_music`) — mehr nicht, nie die Core-KI. Durchgesetzt durch:
 
 - **Choke-Point `tutor.tools.execute_tool`** – geschlossene Allowlist (`_ALLOWED`);
   jeder andere Tool-Name wird abgelehnt **und** ins stdout-Log geflaggt.

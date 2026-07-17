@@ -36,9 +36,11 @@ Simulation gegen echten GPIO-Trigger tauschen ohne `brain.py` anzufassen).
 - Aktuelle Events: `TIME_REACHED`, `MORNING_WAKEUP`, `BUTTON_PRESS`,
   `LIGHT_SENSOR_TRIGGER`, `SYSTEM_BOOT`, `DATA_COLLECTION`,
   `PRESENCE_DETECTED`, `TUTOR_START`, `DOOR_TOGGLE`, `HOMECOMING`.
-- `TUTOR_START` existiert als Konstante weiter, hat aber aktuell
-  keinen Sender und keinen Handler (Tutor pausiert, siehe
-  `tutor_system.md`).
+- `TUTOR_START` existiert als Konstante weiter, hat aber keinen Sender und
+  keinen Handler. **Nicht** weil der Tutor pausiert (er läuft), sondern weil ein
+  Auto-**Start** per Event bewusst nicht existiert: `brain.py` schickt bei
+  `PRESENCE_DETECTED` nur einen nonverbalen `tutor_port.presence_ping()` in eine
+  **bereits laufende** Session. Siehe `tutor_system.md`.
 - `DOOR_TOGGLE` feuert jedes Mal wenn der Türsensor durchgeht
   (auf ODER zu). `HOMECOMING` ist die abgeleitete Bedeutung, sobald
   `brain.py` daraus „User war > X Std weg und ist jetzt zurück"

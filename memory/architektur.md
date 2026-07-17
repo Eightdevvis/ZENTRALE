@@ -77,7 +77,7 @@ ZENTRALE/
 │   ├── ai.py                # Ollama-Client (Chat, Streaming, Tools)
 │   ├── ai_backends.py       # AI-Backend-Verfügbarkeit (local/cloud, Modul-Gating, EXTERNAL-Box)
 │   ├── ai_config.py         # Kill-Switches (cloud/local) + API-Key-Store, data/ai_config.json
-│   ├── providers.py         # Cloud-Registry des KERNS (Erreichbarkeit; ≠ tutor_providers)
+│   ├── providers.py         # Cloud-Registry des KERNS (Erreichbarkeit; ≠ tutor/providers.py)
 │   ├── net.py               # HTTP-Wrapper mit Terminal-Logging
 │   ├── graph.py             # KONZEPT-Graph Memory der KI (PRIMARY, data/ai_graph.json)
 │   ├── graphs.py            # Lifestyle-GRAPHEN-Registry (Messreihen-Werkzeug, ≠ graph.py!)

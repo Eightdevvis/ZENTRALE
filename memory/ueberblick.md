@@ -26,7 +26,7 @@ auf eine fest definierte Whitelist von Projektdateien (siehe
 | Visuelle Stimme (Bild-Marker `[[bild:]]`)     | live (siehe `ki_system.md`)        |
 | Gegatete Internet-Pipe (`web_suche`/`hole_url`)| live, JA/NEIN-Knopf-Gate          |
 | Kalender + Konflikt-Alarm                     | live                               |
-| Mandarin-Tutor                                | pausiert (siehe `tutor_system.md`) |
+| Sprach-Tutor (Persona-Portal, `tutor/`)       | live: `zh`/Ling Ling über qwen; `fr`/`ru`/`ar`/`es` als Skizzen (siehe `tutor_system.md`) |
 | Echter PIR-Sensor + GPIO                      | nicht angebunden – `sensors.py` simuliert via Tastatur |
 
 ## Geplante Features (Roadmap)

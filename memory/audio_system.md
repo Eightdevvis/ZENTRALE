@@ -11,8 +11,10 @@ Parameter:
 | Haupt-Chat     | `POST /api/transcribe`| `de` (Whisper)                 |
 
 > Die früheren Tutor-Aliase `/api/tutor/speak` und `/api/tutor/transcribe`
-> (hardcoded `lang='zh'`) sind raus. Tutor pausiert, siehe
-> `tutor_system.md`. Wer Mandarin sprechen will, ruft die generischen
+> (hardcoded `lang='zh'`) sind raus — **nicht** weil der Tutor pausiert (er läuft,
+> siehe `tutor_system.md`), sondern weil die Pipeline dem Kern gehört und
+> sprachneutral ist: der Tutor ist ein Aufrufer wie jeder andere und schickt die
+> Sprache seines Profils mit. Wer Mandarin sprechen will, ruft die generischen
 > Endpoints mit `lang='zh'` auf – die Modelle (`vits-zh-aishell3`,
 > Whisper) liegen weiter auf der Platte.
 
@@ -191,8 +193,9 @@ audio.py  ──HTTP──▶  tts_service.py  (Port 5051)
   `medium` (~1.5 GB).
 - **Sprache parametrisch** über das Multipart-Feld `lang`. Default
   über `WHISPER_LANG`-env (default `de`). Haupt-Chat lässt Default
-  greifen; für Mandarin würde der Aufrufer `lang=zh` mitschicken
-  (Tutor pausiert, siehe `tutor_system.md`).
+  greifen; für Mandarin schickt der Aufrufer `lang=zh` mit — der Sprach-Tutor
+  tut genau das und ist ein **realer, laufender** Nutzer dieser Pipeline
+  (siehe `tutor_system.md`).
 - **VAD-Vorfilter** (Silero VAD über faster-whisper integriert):
   schneidet Stille raus, bevor Whisper transkribiert. Schutz gegen
   YouTube-Halluzinationen aus leeren Aufnahmen („Vielen Dank fürs

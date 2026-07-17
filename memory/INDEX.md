@@ -33,7 +33,7 @@ hier sofort mitziehen, sonst tote Links.
 | Sprach-Tutor (eigenes Projekt in tutor/, Sprach-Framework) | memory/tutor_system.md |
 | Audio (Whisper STT + TTS)          | memory/audio_system.md              |
 | Dashboard & Frontend               | memory/dashboard.md                 |
-| UI-Schnittstellen (DOM/JS-Hooks)   | memory/ui_hooks.md                  |
+| UI-Schnittstellen (DOM/JS-Hooks)   | memory/ui_hooks.md ⚠ **VERALTET** (beschreibt das gelöschte `index.html`, kein Hook stimmt noch) → nimm `dashboard.md` |
 | Tastatur-Belegung (alle Modi)      | memory/tastatur.md                  |
 | REST API Endpoints                 | memory/api_endpoints.md             |
 | Setup & Installation               | memory/setup.md                     |

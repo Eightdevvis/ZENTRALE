@@ -39,7 +39,9 @@ WHISPER_MODEL=medium venv/bin/python services/whisper_service.py  # ~1.5 GB
 Zwei Modelle pro Sprache, beide werden parallel von
 `tts_service.py` geladen (Engine-Registry):
 
-- `zh` – sherpa-onnx `vits-zh-aishell3` (~120 MB; früherer Tutor-Modus, aktuell pausiert)
+- `zh` – sherpa-onnx: **MeloTTS `vits-melo-tts-zh_en`** (44.1 kHz) ist die Stimme
+  der Persona Ling Ling und wird bevorzugt; `vits-zh-aishell3` (~120 MB, 8 kHz)
+  bleibt nur Fallback. Live, nicht pausiert (siehe `tutor_system.md`).
 - `de` – Piper, Voice via Env `PIPER_DE_VOICE` (Default `de_DE-kerstin-low`, ~20 MB, Haupt-Chat)
 
 Einmaliger Download nach `data/tts_model/<voice>/`:

@@ -197,8 +197,9 @@
 > zu vermischen. Jetzt wird er wieder angeschaltet.
 >
 > **Reaktivierungs-Stand:**
-> - `ui/app.py`: `/api/tutor/{status,start,respond,stop}` **wieder aktiv**
->   (seit 2026-07-16 über `tutor_port`, nicht mehr `tutor.session` direkt).
+> - `ui/app.py`: **sieben** Routen aktiv — `/api/tutor/{status,config,start,
+>   respond,stop,room_state,nudge}` (seit 2026-07-16 über `tutor_port`, nicht mehr
+>   `tutor.session` direkt). Vertrag der Felder: `memory/api_endpoints.md`.
 >   Audio läuft über die generische
 >   Voice-API (`/api/transcribe`, `/api/speak`) mit `lang='zh'` – keine
 >   eigenen Tutor-Audio-Aliase mehr nötig.
@@ -215,14 +216,20 @@
 >   nur umschalten"-Schritt. **Noch offen:** ein eigenes Tutor-**Exhibit** im
 >   AI-Canvas (neben `gesicht`/`graph`, wie `graph-panel`); aktuell läuft der
 >   Tutor text-first im Minilog. Drumherum nicht anfassen.
-> - **Backend-Wahl per `TUTOR_BACKEND`:** `cloud` → Claude (Anthropic),
->   `local` (Default) → Ollama. Siehe „Cloud-Backend" unten.
+> - **Backend-Wahl über den aufgelösten Provider**, nicht über `TUTOR_BACKEND`:
+>   `tutor.session._stream` verzweigt auf `provider.kind` (`ollama` /
+>   `openai_compat` / `anthropic`), und der Provider kommt aus der Config bzw.
+>   `TUTOR_PROVIDER`. **Ein `TUTOR_BACKEND` liest kein Code** — die Env-Var stand
+>   hier jahrelang falsch dokumentiert (Rest steht nur noch als toter Kommentar in
+>   `tutor/cloud.py`). Siehe „Cloud-Backend" unten.
 > - `tutor/tools.py`, `tutor/session.py`, `tutor/cloud.py`,
 >   die Vokabeln und die Audio-Modelle sind aktiv/intakt.
-> - **Fronten (»alle Kassetten«-Regel):** der Tutorkanal ist bisher **nur im
->   Browser** (`monolith.html`) gebaut. In die **TUI** ist davon erst der
->   `/cloud`-Kill-Switch + die EXTERNAL-Backend-Box gewandert – ein Tutor-Start/
->   -Kanal in der TUI fehlt noch komplett (offener Punkt).
+> - **Fronten (»alle Kassetten«-Regel):** der Tutorkanal ist in **beiden** Fronten
+>   gebaut — Browser (`monolith.html`, `Alt+T`) und **TUI** (Taste `u`, komplettes
+>   `TUTOR`-Panel: `tutor_refresh/open/begin/say/sse/cmd/window`, Slash-Commands,
+>   `zentrale_tui.py:1271-1460`). Die frühere Zeile „ein Tutor-Kanal in der TUI
+>   fehlt noch komplett" war **falsch** und widersprach dieser Datei selbst
+>   (siehe Direkt-Start unten).
 >
 > Der Rest dieses Files beschreibt das Design; Abweichungen sind oben vermerkt.
 
@@ -259,10 +266,13 @@ Wortschatz wird als **zielsprachiger Kontext** (`vocab_hint`, `{words}`) in
 Deutsche). Tools (`increment_correct_use`/`introduce_new`) bleiben verfügbar;
 verlässliche Auto-Progression wäre ein Hintergrund-Follow-up.
 
-**Direkt-Start (kein Enter):** TUI-Taste `u` (`zentrale_tui.tutor_open`) holt den
-Status und lässt die Persona **sofort** loslegen, wenn das Backend da ist und
-keine Session läuft. Der Browser (`monolith.html`) startet über `Alt+T` schon
-immer direkt. `/api/tutor/config` liefert jetzt `persona_name`/`country` fürs UI.
+**Direkt-Start (kein Enter):** TUI-Taste `u` öffnet **mit `DISPLAY` das
+Persona-Zimmer** (`zentrale_tui.tutor_window`, eigenes pygame-Fenster, siehe
+unten); **ohne `DISPLAY`** fällt sie auf das Text-Panel zurück
+(`zentrale_tui.tutor_open`), das den Status holt und die Persona **sofort**
+loslegen lässt, wenn das Backend da ist und keine Session läuft. Das Text-Panel
+gibt's immer per `/tutor`. Der Browser (`monolith.html`) startet über `Alt+T`.
+`/api/tutor/config` liefert `persona_name`/`country` fürs UI.
 
 ## Persona-Zimmer (natives pygame-Fenster)
 
@@ -317,9 +327,11 @@ tutor/room.py [--url … --speaker N --speed X --mute]`.
   Browser bekommt KEIN Zimmer (kann keinen nativen Prozess starten; text-first
   bleibt).
 - **Teilweise gebaut (2026-07-09), REVIEW:** Presence gibt jetzt eine **nonverbale**
-  Reaktion — `brain.py PRESENCE_DETECTED` → `tutor.session.presence_ping()` (schaut
-  hoch, Mimik happy, +Batterie), aber **NUR** hinter Env-Flag
-  `TUTOR_PRESENCE_REACT=1` (default aus) UND nur bei bereits **laufender** Session.
+  Reaktion — `brain.py PRESENCE_DETECTED` → `tutor_port.presence_ping()` (schaut
+  hoch, Mimik happy, +Batterie). **Default AN**, per `TUTOR_PRESENCE_REACT=0`
+  abschaltbar (`brain.py:36` prüft `!= "0"`) — hier stand bis 2026-07-17 das
+  Gegenteil („`=1`, default aus"). Wirkt nur bei bereits **laufender** Session.
+  Der Weg geht über den Port, nicht an `tutor.session` vorbei (Regel oben).
   Es STARTET keine Session und macht **keinen** verbalen Auto-Gruß (das bleibt
   bewusst aus — genau der schlechte Auto-Trigger). Details:
   `memory/tutor_roleplay_features.md` §5.
@@ -341,7 +353,8 @@ tutor/room.py [--url … --speaker N --speed X --mute]`.
   `play_gesture`. Der zh-Prompt hat eine kurze chinesische Zeile dazu (gegen
   echtes qwen verifiziert: Rede bleibt kurz, sie ruft `express` z.B. beim Nudge).
 - **Feedback-Loop (gedeckelt, winzige Kosten):** das Fenster merkt Stille. Nach
-  `NUDGE_AFTER_S` (25 s) EIN Cloud-Anstoß **`POST /api/tutor/nudge`** → die KI
+  `NUDGE_AFTER_S` (**90 s** — 25 s war Spam) EIN Cloud-Anstoß
+  **`POST /api/tutor/nudge`** → die KI
   reagiert von selbst (schaut/winkt/„在吗？"); der Nudge-Text wird NICHT in der
   History gespeichert. Danach **chillt** sie (client-seitig, kein weiterer Call);
   erst nach `CHILL_RECHECK_S` (15 min) ein neuer Versuch. Eingabe von Sasha setzt
@@ -355,11 +368,11 @@ Core-Graphen — **Modul `tutor/memory.py`**:
   ein paar wichtige Dinge, nicht wann genau was gesagt wurde. Darum ist der Store
   **kein** Konzept-Graph mehr (der von der Core-KI kopierte war eh nie gebaut
   worden) und **kein** Wortprotokoll, sondern eine kleine, gedeckelte **Notiz-
-  Liste**: `tutor/data/persona_mem_<lang>.json` = `{"facts": [kurze Sätze], "topics":
+  Liste**: `tutor/data/<lang>/persona_mem.json` = `{"facts": [kurze Sätze], "topics":
   [Stichworte]}` (je max 12, auf Chinesisch, keine Zeitstempel). Enthält nur
   Wissen **über Sasha** aus euren Chats — **keine** erfundene Persona-Biografie.
-- **Kein persistenter roher Verlauf mehr:** früher lud `activate()` `persona_hist_
-  <lang>.json` Turn-für-Turn — das füllte sich mit „你在吗？"-Nudge-Fillern und
+- **Kein persistenter roher Verlauf mehr:** früher lud `activate()`
+  `persona_hist.json` Turn-für-Turn — das füllte sich mit „你在吗？"-Nudge-Fillern und
   zog die Persona beim Öffnen in Echo-Schleifen. Jetzt: `_history` ist **reiner
   In-Session-Puffer** (Kohärenz), wird NICHT über Sessions gespeichert. Kontinuität
   kommt allein aus den Grob-Notizen.
@@ -368,7 +381,7 @@ Core-Graphen — **Modul `tutor/memory.py`**:
   Turn destilliert `remember()` im Hintergrund neue Fakten/Themen in die Notizen
   (leichter LLM-Pass, merged + deckelt). Der Öffnungs-/Nudge-Turn wird **nicht**
   gemerkt (ambient, kein Gespräch).
-- **Verdichtungs-Backend kapazitätsbasiert** (`persona_memory.remember` via
+- **Verdichtungs-Backend kapazitätsbasiert** (`tutor.memory.remember` via
   `ai_backends.status()`): **Ollama erreichbar** → **lokaler** Pass; sonst →
   **Cloud** (der Anbieter, der eh redet, z.B. qwen); **kein Backend** →
   übersprungen. `_distill()` macht einen tool-losen Ein-Schuss-Call, `_parse_notes()`
@@ -388,9 +401,12 @@ Core-Graphen — **Modul `tutor/memory.py`**:
 
 Tests: die Notiz-Funktionen (`_load_notes`/`_save_notes`/`context`) sind ohne
 Backend prüfbar; der Destillations-Pfad (`remember`/`_distill`) braucht ein
-Backend (lokal Ollama oder Cloud-Key). `tutor/test_memory.py` ist auf
-den alten Graph-Store gemünzt — beim nächsten Anfassen auf das Notiz-Modell
-nachziehen.
+Backend (lokal Ollama oder Cloud-Key). `tutor/test_memory.py` liegt **auf dem
+Notiz-Modell** und prüft zusätzlich Sandbox, Persona-Prompt, Backend-Wahl,
+Sprach-Isolation und Secret-Freiheit (die Zeile „ist auf den alten Graph-Store
+gemünzt" galt für den Vorgänger `scripts/test_persona_memory.py` und war hier
+seit dem Umbau falsch stehengeblieben). Läuft nicht unter pytest
+(`testpaths = tests`), sondern von Hand: `venv/bin/python tutor/test_memory.py`.
 
 ## Framework: Sprachen + Provider (austauschbar)
 
@@ -400,11 +416,16 @@ Laufzeit aufgelöst (`tutor.session._resolve`): Sprache → Profil → Provider 
 Modell.
 
 **Module:**
-- `tutor/langs/` – **ein Ordner pro Sprache**: System-Prompt,
-  Vokabel-Datei, `reading` (zh=Pinyin, ru=Betonung, ar=Translit, es=—),
+- `tutor/langs/` – **ein Ordner pro Sprache** (`tutor/langs/<code>/`): Profil +
+  `prompt.md` (in der Zielsprache) + `prompt.de.md` (Referenz, sieht das Modell
+  NIE) + `tool_texts.json` + `expect.json` (Register-Leiter) + `vocab_hint.md` +
+  `seeds/`. Im Profil: `reading` (zh=Pinyin, ru=Betonung, ar=Translit, fr/es=—),
   `script` (ar=RTL), STT/TTS-Lang, Default-Provider+Modell.
+  **Keine Vokabel-Datei** — die ist LERNSTAND und liegt unter
+  `tutor/data/<lang>/vocab.json` (gitignored); `langs/` ist die SPRACHE und wird
+  getrackt. Ein `vocab_file`-Feld gibt es im Schema nicht (mehr).
   **LIVE: `zh` (Chinesisch).** Skizzen (enabled=False, stückweise reinziehen):
-  `ru`, `ar`, `es`.
+  `fr`, `ru`, `ar`, `es`.
 - `tutor/providers.py` – **Provider-Registry**. Pro Eintrag: `kind`
   (`ollama` | `anthropic` | `openai_compat`), `base_url`, `key_env`,
   `default_model`, **`trains_on_data`**, `jurisdiction`, `enabled`.
@@ -412,22 +433,29 @@ Modell.
   Skizzen: `openai`, `mistral`, `groq`, `deepseek`, `gemini`.
 - `tutor/openai_compat.py` – **Drop-in für `ai.chat_stream()`**, bedient
   JEDEN OpenAI-`/v1`-kompatiblen Provider (Qwen/DeepSeek/Mistral/OpenAI/Groq/
-  Gemini) durch Tausch von base_url+Key+Modell. `TUTOR_TOOLS` sind schon
-  OpenAI-Schema → ohne Übersetzung. Streaming-Tool-Loop.
+  Gemini) durch Tausch von base_url+Key+Modell. Die Tools kommen als Parameter
+  rein (`tools.tools_for(lang)`) und sind schon OpenAI-Schema → ohne Übersetzung.
+  Streaming-Tool-Loop.
 - `tutor/cloud.py` – **Anthropic-SDK-Pfad** (Claude), Sashas persönliche
-  Verifikation. Übersetzt `TUTOR_TOOLS` ins Anthropic-Format.
+  Verifikation. Übersetzt die übergebenen Tools ins Anthropic-Format.
 
 **Steuerung – lokale Config-Datei (kein `export` nötig):**
-- `data/tutor_config.json` (`tutor/config.py`) hält `lang` / `provider` /
-  `model` / `history_window` **und die API-Keys**. Modell durchprobieren =
+- `tutor/data/tutor_config.json` (`tutor/config.py`) hält `lang` / `provider` /
+  `model` / `history_window` — **und KEINE API-Keys**. Modell durchprobieren =
   `provider`/`model` dort ändern, neu starten. Vorlage:
   `tutor/data/tutor_config.json.example`.
-- **Sicherheit:** `data/*.json` ist in `.gitignore` → die echte Config (mit
-  Keys) wandert NIE ins Repo (verifiziert via `git check-ignore`). Keys aus der
-  Config werden beim Import in `os.environ` injiziert, damit die SDKs sie finden.
-- **Precedence:** Env-Var > Config-Datei > Profil-Default. D.h. `TUTOR_LANG` /
-  `TUTOR_PROVIDER` / `TUTOR_MODEL` / `TUTOR_HISTORY_WINDOW` im Terminal
-  übersteuern die Config für ein schnelles Einzel-Experiment.
+- **Keys gehören dem Kern**, nicht dem Tutor: `core/ai_config.py` →
+  `data/ai_config.json` (`keys`-Block) besitzt sie und injiziert sie in
+  `os.environ`, damit die SDKs sie finden. `tutor/config.py` injiziert **nichts**
+  mehr (`tutor/test_memory.py` prüft das als Regression). Damit kann ein
+  vergessener gitignore-Eintrag unter `tutor/` kein Secret leaken.
+- **Sicherheit:** `data/*.json` UND `tutor/data/**/*.json` sind in `.gitignore` →
+  weder Keys noch Lernstand wandern ins Repo (verifiziert via `git check-ignore`).
+- **Precedence (`config.py:68-82`):** Runtime-Override > Env-Var >
+  `tutor/data/tutor_config.json` > `data/tutor_config.json` (Legacy-Fallback) >
+  Profil-Default. D.h. `TUTOR_LANG` / `TUTOR_PROVIDER` / `TUTOR_MODEL` /
+  `TUTOR_HISTORY_WINDOW` im Terminal übersteuern die Config für ein schnelles
+  Einzel-Experiment. Die Legacy-Datei wird nur GELESEN, nie geschrieben.
 - `history_window` (Default 30) = wieviele letzte Turns gesendet werden
   (Kosten-Hebel: zustandslose API sendet History sonst komplett neu).
 - **Caching:** noch NICHT explizit gesetzt. OpenAI-kompatible Provider mit
@@ -452,11 +480,18 @@ nicht, `import openai` knallte. `anthropic` ist **inzwischen ebenfalls im venv
 installiert** (für den Claude-Verifikations-Pfad `tutor/cloud.py`), bleibt
 aber **policy-mäßig Opt-in**: in `requirements.txt` bewusst auskommentiert, also
 kein Pflicht-Dep für die Verteilung (`venv/bin/pip install anthropic` bei Bedarf).
-**Cloud-Live steht:** `DASHSCOPE_API_KEY` ist in `data/tutor_config.json`
-(`keys`-Block) **gesetzt** (Secret, gitignored) → der qwen-Pfad ist startklar
-(`provider=qwen`, `model=qwen-plus`, `lang=zh`). Provider/Modell/Prompt stehen;
-**offen bleibt nur ein echter End-to-End-Call** zur Auth-Verifikation – der ist
-noch nicht protokolliert.
+**Cloud-Live steht:** `DASHSCOPE_API_KEY` ist in **`data/ai_config.json`**
+(`keys`-Block) gesetzt (Secret, gitignored) → der qwen-Pfad ist startklar
+(`provider=qwen`, `model=qwen-plus`, `lang=zh`).
+
+> **Migrations-Schuld (Stand 2026-07-17, ungelöst):** derselbe Key steht auf
+> diesem Knoten **zusätzlich** in der Legacy-Datei `data/tutor_config.json`
+> (identischer Wert, per Hash verglichen) — dort liegen auch noch alte
+> `cloud_enabled`/`local_enabled`. Gelesen wird `ai_config.json` zuerst, die
+> Legacy-Datei ist nur Fallback für Knoten, die die neue Datei noch nicht haben
+> (PC/Pi). Solange beide existieren, muss ein Key-Wechsel an ZWEI Stellen passieren,
+> sonst serviert der Fallback still den alten. **Aufräumen erst, wenn alle Knoten
+> `data/ai_config.json` haben** — das ist Sashas Entscheidung, nicht meine.
 
 ## Position in der Architektur
 
@@ -465,18 +500,26 @@ Voice-Pipeline. STT (Whisper) und TTS (sherpa-onnx / Piper) leben
 zentral in `services/whisper_service.py` und `services/tts_service.py`
 und sind sprachneutral nutzbar via `/api/transcribe` und `/api/speak`
 (siehe `audio_system.md`). Der Tutor ruft diese Endpoints **als
-Aufrufer** mit `lang='zh'` auf – er besitzt sie nicht.
+Aufrufer** auf – er besitzt sie nicht. Die Sprache kommt aus dem aktiven Profil
+(`stt_lang`/`tts_lang`), `zh` ist nur der heutige Default, kein Festwert.
 
-Die alten Pfade `/api/tutor/transcribe` und `/api/tutor/speak` existieren
-als dünne Aliase mit `lang='zh'`-Default, damit das Tutor-Frontend ohne
-Änderung weiterläuft.
+Die alten Pfade `/api/tutor/transcribe` und `/api/tutor/speak` sind **entfernt**
+(`ui/app.py:1243`) — es gibt nur noch die generischen `/api/transcribe` +
+`/api/speak` mit `lang`-Parameter. Diese Datei behauptete bis 2026-07-17, die
+Aliase existierten noch.
 
 ## Idee
 
-Smalltalk auf Mandarin mit der KI – mit Spracheingabe (Whisper-STT)
-und Sprachausgabe (sherpa-onnx-TTS, Modell `vits-zh-aishell3`).
-Vokabeln kommen aus `tutor/data/zh/vocab.json`. Die KI nutzt 80 % bekannte
-Vokabeln (zur Festigung) und 20 % neue (zum Erweitern).
+Smalltalk in der Zielsprache mit der KI – mit Spracheingabe (Whisper-STT)
+und Sprachausgabe (sherpa-onnx-TTS, zh = MeloTTS `vits-melo-tts-zh_en`;
+`vits-zh-aishell3` ist nur noch 8-kHz-Fallback, siehe Persona-Zimmer oben).
+Vokabeln kommen aus `tutor/data/<lang>/vocab.json`.
+
+**Zur „80 % bekannt / 20 % neu"-Regel:** die stand hier als Verhalten, ist aber
+**nicht** im Live-Prompt. `langs/zh/prompt.md` fordert das Strengere: nur bekannte
+Wörter, **höchstens EIN** unbekanntes pro Satz, und dann verpflichtend
+`show_thought`. Die 80/20-Formulierung lebt nur noch in Tool-/Pool-Beschriftungen
+(confirmed = Festigung, testing = Erweiterung).
 
 ## Vokabel-Daten-Modell
 
@@ -489,15 +532,20 @@ Jeder Eintrag in `tutor/data/<lang>/vocab.json` hat:
 - `confirmed: false` → **Testing-Pool** (20 % der Konversation)
 - `confirmed: true`  → **Confirmed-Pool** (80 % der Konversation)
 - `correct_use` zählt korrekte Verwendungen. Bei
-  `correct_use ≥ CONFIRM_THRESHOLD` (= 5, in `tutor.py`) flippt
+  `correct_use ≥ CONFIRM_THRESHOLD` (= 5, in `tutor/tools.py`) flippt
   `confirmed` automatisch auf `true`.
 
 ## Aufbau
 
 ### `tutor/tools.py`
-- Definiert den System-Prompt für den Tutor-Modus.
-- Definiert `TUTOR_TOOLS` – die Liste der Tools, die nur im Tutor-Modus
-  verfügbar sind.
+- **Sprach-neutrale Mechanik** der Tools + die Sandbox-Allowlist. Definiert
+  **nicht** den System-Prompt (der liegt in `langs/<code>/prompt.md`) und **kein**
+  statisches `TUTOR_TOOLS` mehr — die Liste baut `tools_for(lang)` pro Aufruf:
+  Struktur aus `_TOOL_SPECS`, Beschriftung aus dem Sprach-Paket
+  (`tool_texts.json`), deutsche Defaults als Fallback.
+- Sprache wird pro Aufruf über `session.active_lang()` aufgelöst, nicht über die
+  Config — sonst schriebe ein `/lang`-Wechsel mitten in einer Session in die
+  Dateien der falschen Sprache.
 
 ### `tutor/session.py`
 - Verwaltet eine laufende Session: Zustand, History, Audio-Aufrufe.
@@ -509,33 +557,38 @@ Jeder Eintrag in `tutor/data/<lang>/vocab.json` hat:
 Tutor und Chat nutzen dieselbe `ai.chat_stream()`-Infrastruktur.
 Der Unterschied liegt nur in:
 
-- **System-Prompt** (Tutor: „Du bist Mandarin-Sprachtutor für Sasha …")
+- **System-Prompt** — der Tutor nimmt `langs/<code>/prompt.md`. Für `zh` ist das
+  ein **chinesischer** Prompt der Persona 玲玲/Ling Ling, ausdrücklich *keine*
+  Lehrerin. Der hier früher zitierte deutsche Satz („Du bist Mandarin-Sprachtutor
+  für Sasha …") steht **nirgends** im Code — ein deutscher Prompt wäre genau der
+  Fehler, der qwen ins Deutsche kippt (`memory/tutor_persona_tuning.md`).
 - **Tool-Set** – im Tutor-Modus sind die Standard-Tools (`save_memory`,
   `read_file`, `list_files`) **deaktiviert** und durch die
-  Tutor-spezifischen Vokabel-Tools ersetzt (siehe unten).
+  Tutor-spezifischen Tools ersetzt (siehe unten).
 
 Das hält den Code DRY – kein doppelter Streaming-Mechanismus.
 
 ## Tutor-Tools
 
-Aktiv nur während einer Tutor-Session (`TUTOR_TOOLS` in `tutor/tools.py`).
+Aktiv nur während einer Tutor-Session (`tools_for(lang)` in `tutor/tools.py`).
 Diese **ersetzen** die Standard-Tools (save_memory, read_file, list_files)
-während des Tutor-Modus.
+während des Tutor-Modus. **15 Stück** (Stand 2026-07-17).
 
 | Tool                      | Argumente              | Funktion                                                                        |
 |---------------------------|------------------------|---------------------------------------------------------------------------------|
 | `get_confirmed_vocab`     | –                      | Liefert alle Vokabeln mit `confirmed: true` als Prompt-formatierten String      |
 | `get_testing_vocab`       | –                      | Liefert alle Vokabeln mit `confirmed: false` + `count`                          |
 | `increment_correct_use`   | `word`                 | +1 auf `correct_use`. Bei ≥ 5 → auto-confirmed                                  |
-| `introduce_new`           | `word`, `reading`      | **Neues** Wort in `tutor/data/<lang>/vocab.json` hinzufügen (nicht aus einem Pool wählen) |
+| `introduce_new`           | `word`, `reading?`     | **Neues** Wort in `tutor/data/<lang>/vocab.json` hinzufügen (nicht aus einem Pool wählen) |
+| `mark_known`              | `word`, `reading?`     | Wort, das Sasha schon kann, direkt als **confirmed** ablegen (überspringt den Testing-Pool) |
 | `express`                 | `action` (Enum)        | Haltung/Geste/Mimik im Zimmer setzen (sit/stand/pace/…/wave/nod/happy/tired…)    |
-| `get_structures`          | –                      | Aktuelle Satzmuster/Strukturen im Lernen (Feinmodell, `structures_mandarin.json`)|
+| `get_structures`          | –                      | Aktuelle Satzmuster/Strukturen im Lernen (Feinmodell, `tutor/data/<lang>/structures.json`)|
 | `introduce_structure`     | `pattern`, `note?`     | Neues Satzmuster/„neue Sagweise" einführen                                       |
 | `increment_structure`     | `pattern`              | +1 auf ein Muster; ab 3× → „掌握"                                                |
-| `show_thought`            | `word`, `meaning?`     | Vokabel-Gedanke: Wort + Übersetzung (+ Bild aus `tutor/data/vocab_images/`) im Zimmer  |
-| `get_local_news`          | –                      | Ein leichtes Landes-Thema (persona-isolierter Seed, rotierend; NIE `core/news.py`)|
-| `play_music` / `stop_music`| `mood?`               | Musik nach Stimmung aus `tutor/data/persona_music/<mood>/` (Fenster spielt); Content-Lücke|
-| `watch_tv` / `turn_off_tv`| `mood?`                | TV an + level-gerechter Titel (`_TV_SEED`); Video-Playback deferred              |
+| `show_thought`            | `word`, `meaning?`, `reading?` | Vokabel-Gedanke: Wort + Übersetzung (+ Bild aus `tutor/data/<lang>/vocab_images/`) im Zimmer |
+| `get_local_news`          | –                      | Ein leichtes Landes-Thema (Seed aus `langs/<lang>/seeds/news.json`, rotierend; NIE `core/news.py`)|
+| `play_music` / `stop_music`| `mood`                | Musik nach Stimmung aus `tutor/data/<lang>/persona_music/<mood>/` (Fenster spielt); Content-Lücke|
+| `watch_tv` / `turn_off_tv`| `mood`                 | TV an + level-gerechter Titel (Seed aus `langs/<lang>/seeds/tv.json`, Rotations-Cursor in `data/<lang>/tv.json`); Video-Playback deferred |
 
 Logik (laut System-Prompt): wenn `get_testing_vocab` `count < 10`
 zurückmeldet → KI soll `introduce_new(word, reading)` aufrufen mit einem
@@ -543,9 +596,9 @@ selbstgewählten neuen Wort. Es gibt keinen vorgefertigten Pool.
 
 Die Tools ab `express` sind die **Roleplay-Erweiterung** (2026-07-09, Feature 1–8,
 Log: `memory/tutor_roleplay_features.md`). ALLE fassen nur tutor-isolierte Daten +
-UI-State an (Sandbox-Choke-Point `_ALLOWED` in `tutor.py`) — nie die Core-KI.
+UI-State an (Sandbox-Choke-Point `_ALLOWED` in `tutor/tools.py`) — nie die Core-KI.
 
-Zusätzlich existiert in `tutor.py` die Hilfsfunktion `get_vocab_stats()`
+Zusätzlich existiert in `tutor/tools.py` die Hilfsfunktion `get_vocab_stats()`
 („total / confirmed / testing"). Sie ist **kein** AI-Tool, sondern für
 Dashboard-Anzeige gedacht.
 

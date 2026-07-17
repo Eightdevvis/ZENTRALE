@@ -465,5 +465,6 @@ STT und TTS hängen nicht mehr am Tutor, sondern an der Core-AI:
 - `POST /api/transcribe` – Audio → Text (Whisper, `lang`-Param)
 - `POST /api/speak` – Text → WAV (Piper für `de`, sherpa-onnx für `zh`)
 
-Der Tutor ist ein Konsument dieser Pipeline mit `lang='zh'`. Details:
-`audio_system.md` und `api_endpoints.md`.
+Der Tutor ist ein Konsument dieser Pipeline — die Sprache kommt aus dem aktiven
+Sprach-Profil (`stt_lang`/`tts_lang`), `zh` ist nur der heutige Default, kein
+Festwert. Details: `audio_system.md` und `api_endpoints.md`.

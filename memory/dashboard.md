@@ -334,11 +334,14 @@ Drei separate Polling-Loops im Frontend, jeder mit eigener Frequenz:
 
 | Endpoint              | Intervall | Was es liefert                                  |
 |-----------------------|-----------|-------------------------------------------------|
-| `GET /api/state`      | 1 s       | Events, Sensoren, Vokabel, Logs (Haupt-State)   |
+| `GET /api/state`      | 1 s       | Events, Sensoren, Logs (Haupt-State). Das Feld `vocab` ist **tot**: `main.py:_load_vocab()` liest die längst entfernte `vocab_mandarin.json` → immer `null`, und keine Front rendert es (siehe `tutor_system.md`, Aufräum-Punkt) |
 | `GET /api/ai/status`  | 30 s      | Ollama erreichbar? + Modell-Name                |
 
-> Das frühere 3 s-Polling gegen `/api/tutor/status` ist raus (Tutor
-> pausiert, siehe `tutor_system.md`).
+> Das frühere 3 s-**Dauer**-Polling gegen `/api/tutor/status` ist raus — nicht
+> weil der Tutor pausiert (er läuft), sondern weil es nichts kostet, den Status
+> **bei Bedarf** zu holen: `startTutor()` fragt ihn einmal vor dem Kanalwechsel
+> (`monolith.html`). Die TUI pollt ihn weiterhin für ihr Panel. Siehe
+> `tutor_system.md`.
 
 Kein WebSocket, kein SSE für Statusdaten – Polling reicht für
 ein Single-User-Dashboard und ist deutlich simpler.

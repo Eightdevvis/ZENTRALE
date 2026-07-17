@@ -1,7 +1,32 @@
 # UI-Schnittstellen (Anker für Erweiterungen)
 
-Alles was an `ui/templates/index.html` ein „Hook" ist und von späterem
-Code gegriffen wird. Wenn Namen geändert werden – diese Datei mitziehen,
+> # ⚠ DIESE DATEI IST VERALTET — NICHTS HIER STIMMT MEHR
+>
+> Sie beschreibt `ui/templates/index.html`. **Diese Datei existiert nicht mehr**
+> (Monolith-Umbau, siehe `dashboard.md`). Nachgemessen am 2026-07-17 gegen das
+> heutige `ui/templates/monolith.html`: **keiner** der unten genannten Hooks
+> existiert — `#main-display`, `#panel-ai`, `#panel-chat`, `#panel-tutor`,
+> `goToTutor()` → je **0 Treffer**.
+>
+> Konkret falsch, wenn du hier ansetzt:
+> - Es gibt **kein** Panel-Tauschen in einer Mitte-Card. Der Tutor ist ein
+>   **Kanalwechsel**: `Alt+T` → `toggleTutor()` → `body.tutor-mode` (roter Rahmen
+>   um `#col-mid`), Eingaben gehen an `/api/tutor/respond`.
+> - Es gibt **keinen** Motion-Sensor-Trigger, der ein Tutor-Panel aufmacht.
+> - Die Space-Taste ist **nicht** für den Tutor belegt.
+> - Nur `/api/tutor/speak` + `/api/tutor/transcribe` sind entfernt; **sieben**
+>   andere `/api/tutor/*`-Routen sind live (`api_endpoints.md`).
+>
+> **Wo die Wahrheit steht:** `dashboard.md` (UI/Modi/Polling), `tastatur.md`
+> (Tasten), `api_endpoints.md` (Routen), `tutor_system.md` (Tutorkanal).
+>
+> Der Rest unten bleibt nur als Historie stehen — **nicht** als Anleitung.
+> Ob die Datei gelöscht oder gegen `monolith.html` neu geschrieben wird, ist
+> offen (Sashas Entscheidung); bis dahin darf sie niemanden mehr in die Irre
+> führen.
+
+Alles was an `ui/templates/index.html` ein „Hook" war und von späterem
+Code gegriffen wurde. Wenn Namen geändert werden – diese Datei mitziehen,
 sonst raten Future-Claude/User wo sie ansetzen sollen.
 
 ## DOM-IDs (HTML-Anker)

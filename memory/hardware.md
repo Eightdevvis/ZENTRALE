@@ -4,8 +4,10 @@ Für den vollen Voice-Betrieb auf dem Pi brauchst du Mikrofon, Speaker
 und einen Bewegungs-/Geräuschsensor. Mikro, Lautsprecher und ein
 Geräuschsensor sind **bereits angeschlossen** (Stand 2026-06-02),
 aber noch nicht voll integriert – Details unter „GPIO – aktueller
-Stand". (Der Mandarin-Tutor, der diese Hardware ursprünglich am
-stärksten brauchte, ist aktuell pausiert – siehe `tutor_system.md`.)
+Stand". (Der Sprach-Tutor, der diese Hardware ursprünglich am stärksten
+brauchte, **läuft** – siehe `tutor_system.md`. Was fehlt, ist nicht der Tutor,
+sondern der Sensor: `PRESENCE_DETECTED` löst nur einen **nonverbalen** Ping in
+eine bereits laufende Session aus, kein Auto-Start.)
 
 ## Empfohlene Komponenten
 
