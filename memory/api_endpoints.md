@@ -9,7 +9,7 @@ nutzen Server-Sent Events (SSE).
 |-----------------------|---------|---------------------------------------|
 | `/`                   | GET     | Monolith-Dashboard (monolith.html) – die einzige UI |
 | `/monolith`           | GET     | Alias auf `/` (Kiosk/Bookmark-Kompat), liefert dieselbe monolith.html |
-| `/api/state`          | GET     | Aktueller State (Events, Sensoren, Vokabel, Logs) – wird vom Frontend jede Sekunde gepollt |
+| `/api/state`          | GET     | Aktueller State (Events, Sensoren, Logs, Alarme, Uptime) – wird vom Frontend jede Sekunde gepollt. Das frühere Feld `vocab` ist **entfernt** (2026-07-17, war ein toter Tutor-Tentakel) |
 
 ## Sensor-Webhook
 
@@ -233,9 +233,10 @@ Details: `mail_system.md` (Panel/Drill-down/Hybrid, Passphrase-Quellen, Keyring-
 
 ## Tutor (Addon, optional)
 
-Die `/api/tutor/*`-Endpoints gibt es — dieser Abschnitt behauptete bis
-2026-07-17 das Gegenteil („entfernt"), das war schlicht falsch. **Pausiert** ist
-die Weiterentwicklung der Persona (siehe `tutor_system.md`), nicht die API.
+Die `/api/tutor/*`-Endpoints gibt es und der Tutor **läuft** (zh/Ling Ling über
+qwen) — dieser Abschnitt behauptete bis 2026-07-17 das Gegenteil („entfernt"),
+das war schlicht falsch. Offen ist nur der **verbale** Presence-Auto-Gruß
+(siehe `tutor_system.md`); API und Persona sind aktiv.
 
 Der Tutor ist ein **Addon**: `ui/app.py` fasst ihn nur über `core/tutor_port.py`
 an. Fehlt `tutor/` ganz, läuft ZENTRALE normal weiter und die Routen antworten

@@ -1445,8 +1445,9 @@ def chat_stream(messages: list, model: str = None, system: str = None,
       5. Falls nein: fertig
 
     tools/tool_executor: Optional. Wenn nicht angegeben werden die Standard-Tools
-    (TOOLS + _execute_tool) verwendet. Tutor-Session übergibt hier tutor.TUTOR_TOOLS
-    und tutor.execute_tool um eigene Tools mitzubringen.
+    (TOOLS + _execute_tool) verwendet. Die Tutor-Session übergibt hier
+    tutor.tools.tools_for(lang) und tutor.tools.execute_tool, um ihre eigenen
+    (sprach-abhängigen) Tools mitzubringen.
 
     via_mic: True wenn die letzte User-Message aus Whisper kam (Spracheingabe).
     Dann wird `_MIC_INPUT_HINT` an den System-Prompt angehaengt, damit die KI

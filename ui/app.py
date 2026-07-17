@@ -1311,11 +1311,13 @@ def api_transcribe():
 
 # ── Tutor ─────────────────────────────────────────────────────────────
 #
-# Mandarin-Sprachtutor: Addon auf der Core-KI mit EIGENEM System-Prompt
-# (_TUTOR_PROMPT) und EIGENEM Tool-Set (TUTOR_TOOLS), sauber getrennt vom
-# regulaeren Chat (siehe core/tutor_session.py + core/tutor.py).
+# Sprach-Tutor: Addon auf der Core-KI mit EIGENEM System-Prompt (pro Sprache
+# tutor/langs/<code>/prompt.md) und EIGENEM Tool-Set (tutor.tools.tools_for(lang)),
+# sauber getrennt vom regulaeren Chat. Der Kern fasst den Tutor NUR ueber
+# core/tutor_port.py an; die Logik lebt in tutor/session.py + tutor/tools.py.
 #
-# Start ist rein MANUELL ueber die Dashboard-Taste 'T' → POST /api/tutor/start.
+# Start ist rein MANUELL ueber Alt+T (Browser) bzw. Taste 'u' (TUI) → POST
+# /api/tutor/start.
 # Es gibt KEINEN Presence-Auto-Trigger in brain.py (bewusst: erst Core-KI
 # sauber, dann Addon – siehe memory/tutor_system.md).
 #

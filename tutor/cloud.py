@@ -20,7 +20,10 @@
 #
 # ── Offline-Prinzip ─────────────────────────────────────────────────────
 # ZENTRALE ist normalerweise vollständig offline. Dieses Backend bricht das
-# BEWUSST und nur als Opt-in (TUTOR_BACKEND=cloud). Default bleibt 'local'.
+# BEWUSST und nur als Opt-in: es läuft NUR, wenn das aktive LanguageProfile auf
+# einen Provider mit kind='anthropic' zeigt (Provider-Registry, per Config/
+# TUTOR_PROVIDER gewählt). Ein Env-Schalter 'TUTOR_BACKEND' existiert NICHT —
+# der Default-Provider ist lokal (ollama).
 #
 # ── Konfiguration (Env-Vars) ────────────────────────────────────────────
 #   ANTHROPIC_API_KEY   – Pflicht. Secret, NIE committen.
@@ -52,7 +55,7 @@ def _get_client():
 
 def _to_anthropic_tools(openai_tools: list) -> list:
     """
-    Übersetzt das OpenAI/Ollama-Tool-Schema (TUTOR_TOOLS) ins Anthropic-Format.
+    Übersetzt das OpenAI/Ollama-Tool-Schema (tools_for(lang)) ins Anthropic-Format.
 
     OpenAI:    {"type": "function", "function": {"name", "description", "parameters"}}
     Anthropic: {"name", "description", "input_schema"}

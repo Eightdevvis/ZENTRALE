@@ -52,8 +52,9 @@ def local_ok() -> bool:
 
 def cloud_provider() -> str:
     """Name eines KONFIGURIERTEN Cloud-Providers (Key gesetzt) – oder None.
-    Keys kommen via ai_config aus data/ai_config.json (Legacy-Fallback:
-    data/tutor_config.json)."""
+    Keys kommen via ai_config NUR aus data/ai_config.json (Single Source of
+    Truth seit 2026-07-17; ein Legacy-keys-Block in data/tutor_config.json wird
+    ignoriert). Nur die Switches cloud/local haben noch den Legacy-Fallback."""
     return providers.configured()
 
 

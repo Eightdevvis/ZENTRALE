@@ -64,12 +64,15 @@ NOISE_FLOOR   = 0.05  # Aktivierung unter diesem Wert nicht weiterspreaden
 
 # ── Multi-Store ────────────────────────────────────────────────────────
 #
-# graph.py war lange ein Singleton auf data/ai_graph.json. Der Sprach-Tutor
-# braucht aber pro Persona (Ling Ling/zh, Jacqueline/fr, …) EINEN EIGENEN
-# Graphen mit derselben Mechanik (data/persona_mem_<lang>.json) — damit der
-# Mitbewohner sich über Sessions an dich erinnert, ohne Sashas privaten
+# graph.py war lange ein Singleton auf data/ai_graph.json. Der store-Parameter
+# wurde mal eingezogen, damit eine Sprach-Persona einen EIGENEN Graphen haben
+# könnte. ⚠ Dieser Persona-Graph-Weg ist TOT (seit dem Notiz-Umbau 2026-07-10):
+# der Tutor merkt sich Sasha über tutor/memory.py (Notiz-Modell,
+# tutor/data/<lang>/persona_mem.json — KEIN Graph). context_for_persona unten
+# hat keinen Aufrufer mehr. Der store-Parameter wird heute nur mit store=None
+# (Core-Graph) benutzt. Er bleibt vorerst, weil der
 # Core-Graphen zu berühren (der ginge sonst an den Cloud-Anbieter → Bruch der
-# Sandbox, siehe core/tutor.py).
+# Sandbox, siehe tutor/tools.py).
 #
 # Lösung: jeder Store kapselt (Pfad, Write-Lock, Cache-Lock, Cache-Key/-Data).
 # Die reinen Graph-Algorithmen (_add_or_get_node/_add_edge/_activate/…) nehmen
@@ -729,8 +732,15 @@ def context_for_persona(query: str | None, store: str,
                         hops: int = DEFAULT_HOPS,
                         max_nodes: int = 20) -> str:
     """
+    ⚠ TOTER CODE (Stand 2026-07-17): kein Aufrufer mehr. Stammt aus der alten
+    GRAPH-basierten Persona-Memory; die ist seit dem Notiz-Umbau (2026-07-10)
+    ersetzt durch tutor/memory.py (Notiz-Modell, data/<lang>/persona_mem.json —
+    KEIN Graph). Bleibt vorerst stehen (Löschen ist eine Graph-Subsystem-
+    Entscheidung, siehe zentrale-Tracker), aber NICHT als lebende Tutor-Naht
+    lesen: der Tutor fasst core/graph nicht an.
+
     Kontext-Block für eine Sprach-Persona (Ling Ling, Jacqueline, …) aus IHREM
-    eigenen Graphen (`store` = data/persona_mem_<lang>.json).
+    eigenen Graphen.
 
     Anders gerahmt als context_for_query: eine Persona hat keine KI-Identity-
     Knoten (kein capability/limit-Seed), ihr Graph ist reines Wissen ÜBER

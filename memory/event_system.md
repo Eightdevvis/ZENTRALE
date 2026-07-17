@@ -50,10 +50,12 @@ Simulation gegen echten GPIO-Trigger tauschen ohne `brain.py` anzufassen).
 - **Reine Logik-Schicht**: wandelt Input-Events in neue Events um.
 - Aktuelle Mappings:
   - `TIME_REACHED` → `MORNING_WAKEUP`
-  - `PRESENCE_DETECTED` → No-Op (loggt nur „Presence erkannt").
-    Vor dem Tutor-Pause-Cleanup hat das hier `TUTOR_START` ausgelöst;
-    siehe `tutor_system.md` für den Status.
-- Macht keine HTTP-Calls oder File-Writes.
+  - `PRESENCE_DETECTED` → `tutor_port.presence_ping()`: eine **nonverbale**
+    Reaktion (schaut hoch, Mimik) in eine **bereits laufende** Tutor-Session,
+    kein Auto-Start, kein verbaler Gruß. Default an, per `TUTOR_PRESENCE_REACT=0`
+    aus. Kein `TUTOR_START`-Event (die Kante gibt es nicht). Der Kern geht über
+    den Port, nie an `tutor.*` vorbei. Siehe `tutor_system.md`.
+- Macht selbst keine File-Writes; der `presence_ping` ist ein Port-Aufruf.
 
 ### `core/actions.py`
 - Bewusst sehr klein gehalten: macht nur `print()`-Side-Effects.

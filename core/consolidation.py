@@ -294,10 +294,12 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
     Blockiert nichts: Caller sollte das in einem Thread laufen lassen.
 
     Args:
-        store:           None → Core-Graph (data/ai_graph.json). Ein Pfad →
-                         der Graph einer Sprach-Persona (persona_memory). Die
-                         Stores fassen sich nie an — das ist die eigentliche
-                         Grenze (Tutor ↔ lokale Core-KI), NICHT der Extraktor.
+        store:           None → Core-Graph (data/ai_graph.json). Der Persona-
+                         Pfad ist TOT: der Tutor nutzt seit dem Notiz-Umbau
+                         (2026-07-10) tutor/memory.py (Notiz-Modell), NICHT den
+                         Graphen — heute wird diese Funktion nur mit store=None
+                         (Core-Graph) aufgerufen. Die Grenze Tutor ↔ Core-KI
+                         liegt darin, dass die Stores sich NIE anfassen.
         mirror_calendar: geschah-am-Konzepte in Sashas erlebt-Layer spiegeln.
                          Für Persona-Turns AUS: Tutor-Geschwätz gehört nicht
                          in den gemeinsamen Kalender.
@@ -306,7 +308,7 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
     für die alte Graph-basierte Persona-Memory; die ist seit dem Notiz-Umbau
     (2026-07-10) weg und rief ihn nicht mehr. Er hing als einziger Grund dafür,
     dass core/ in tutor_providers greifen musste — entfernt. Der Tutor macht
-    seine Verdichtung selbst (persona_memory._distill).
+    seine Verdichtung selbst (tutor/memory.py, `_distill`).
     """
     user_msg = (user_msg or '').strip()
     ai_msg   = (ai_msg   or '').strip()

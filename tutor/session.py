@@ -9,11 +9,11 @@
 #
 # ── Framework, nicht Chinesisch-Tutor ─────────────────────────────────
 # Welche Sprache (System-Prompt, Vokabeln, Lesehilfe) kommt aus dem
-# LanguageProfile (tutor/langs.py); welcher Anbieter/welches Modell aus der
+# LanguageProfile (tutor/langs/); welcher Anbieter/welches Modell aus der
 # Provider-Registry (tutor/providers.py). Backend-Dispatch nach provider.kind:
 #   ollama        → core/ai.py (lokal, Default, offline)
-#   anthropic     → core/tutor_cloud.py (Claude, Sashas Pfad)
-#   openai_compat → core/tutor_openai_compat.py (Qwen/DeepSeek/Mistral/…)
+#   anthropic     → tutor/cloud.py (Claude, Sashas Pfad)
+#   openai_compat → tutor/openai_compat.py (Qwen/DeepSeek/Mistral/…)
 #
 # ── Privacy ───────────────────────────────────────────────────────────
 # Provider mit trains_on_data werden NICHT verboten, aber bei Session-Beginn

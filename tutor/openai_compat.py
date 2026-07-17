@@ -7,8 +7,8 @@
 #
 # ── Drop-in für ai.chat_stream() ────────────────────────────────────────
 # Gleiche Signatur, yieldet Plain-Text-Tokens. Greift NICHT in core/ai.py
-# ein (sauberes Addon). Tools = TUTOR_TOOLS sind bereits OpenAI-Schema, also
-# OHNE Übersetzung direkt nutzbar (anders als der Anthropic-Pfad).
+# ein (sauberes Addon). Die übergebenen Tools (tools_for(lang)) sind bereits
+# OpenAI-Schema, also OHNE Übersetzung direkt nutzbar (anders als der Anthropic-Pfad).
 #
 # ── Cloud→Lokal-Sandbox (Invariante) ────────────────────────────────────
 # Dieses Modul importiert WEDER ai/graph/consolidation/context NOCH führt es
@@ -81,7 +81,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         stream = client.chat.completions.create(
             model=model,
             messages=msgs,
-            tools=tools or None,          # TUTOR_TOOLS sind schon OpenAI-Schema
+            tools=tools or None,          # tools_for(lang) ist schon OpenAI-Schema
             stream=True,
             temperature=TUTOR_TEMPERATURE,   # niedrig = reproduzierbar kurz
             max_tokens=TUTOR_MAX_TOKENS,     # Cap gegen Monolog-Ausreißer

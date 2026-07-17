@@ -3,12 +3,12 @@
 # Provider-Registry für den Sprach-Tutor.
 #
 # Entkoppelt "welcher Anbieter/welches Modell" von der Sprache (siehe
-# tutor_langs.py). Ein LanguageProfile zeigt auf einen Provider-Namen hier.
+# tutor/langs/). Ein LanguageProfile zeigt auf einen Provider-Namen hier.
 #
 # ── kind ────────────────────────────────────────────────────────────────
 #   ollama        → lokal, über core/ai.py (Default, offline)
-#   anthropic     → Claude via Anthropic-SDK (core/tutor_cloud.py)
-#   openai_compat → OpenAI-/v1-kompatibel (core/tutor_openai_compat.py):
+#   anthropic     → Claude via Anthropic-SDK (tutor/cloud.py)
+#   openai_compat → OpenAI-/v1-kompatibel (tutor/openai_compat.py):
 #                   Qwen, DeepSeek, Mistral, OpenAI, Groq, Gemini, …
 #
 # ── trains_on_data (HART, siehe memory/tutor_system.md) ──────────────────

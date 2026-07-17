@@ -121,13 +121,14 @@ dokumentieren, morgen gemeinsam reviewen.
   Cursor, damit sie nicht dranklebt. Kein Nachrichten-Vorlesen — der Tool-Text
   weist ausdrücklich auf „随口带一句, 别像播新闻".
 - **Sandbox strikt gewahrt:** eigener persona-isolierter Pool, fasst **NIE**
-  core/news.py an (das sind Sashas DE/World-Feeds der Core-KI). Der Allowlist-
-  Kommentar in tutor.py wurde entsprechend von „nur 4 Vokabel-Tools" auf die
-  reale Invariante nachgezogen (nur tutor-eigene Dateien + UI-State).
-- **Seed lebt im CODE** (`_NEWS_SEED` in tutor.py), NICHT in data/*.json — letzteres
-  ist gitignored (rsync-Runtime) und käme sonst nicht mit; die Datei
-  `tutor/data/persona_news_zh.json` hält nur den Rotations-Cursor und bootstrappt beim
-  ersten Aufruf aus dem Seed. Prompt-Zeile (zh) ergänzt.
+  core/news.py an (das sind Sashas DE/World-Feeds der Core-KI). Die Allowlist
+  (`_ALLOWED` in `tutor/tools.py`) deckt genau die tutor-eigenen Dateien + den
+  Zimmer-UI-State ab (heute 15 Tools, nicht mehr „4 Vokabel-Tools").
+- **Seed lebt im SPRACH-PAKET** (`tutor/langs/<lang>/seeds/news.json`, getrackt),
+  NICHT in `tutor/data/` — letzteres ist gitignored (rsync-Runtime, Lernstand) und
+  käme sonst nicht mit. Die Datei `tutor/data/<lang>/news.json` hält nur den
+  Rotations-Cursor. Seit dem Sprach-Framework (2026-07-17) kommt der Seed über
+  `PROFILE['seeds']['news']`, nicht mehr aus einer Modul-Konstante `_NEWS_SEED`.
 - **Entscheidung/Annahme:** kein echter Feed → **evergreen-nahe** Themen (keine
   datierten Schlagzeilen, die veralten). Ehrlich-KI-Framing: sie erzählt „中国的情况",
   kein Ich-war-dort. Content-Lücke = echter, tutor-isolierter China-Feed-Ingest
@@ -160,8 +161,10 @@ dokumentieren, morgen gemeinsam reviewen.
 ### 8. TV + Film-Mediathek (Mechanik, Playback deferred) ✅
 - **watch_tv(mood)** + **turn_off_tv** (Tools 13+14): die Persona macht den
   Fernseher an und schlägt etwas **Level-gerechtes** vor (für Anfänger eher
-  Leichtes). Katalog `_TV_SEED` **im Code** (Titel + mood + level + note), rotiert
-  per Cursor (`tutor/data/persona_tv_zh.json`, gitignored-Runtime wie News).
+  Leichtes). Katalog im **Sprach-Paket** (`tutor/langs/<lang>/seeds/tv.json`,
+  getrackt; via `PROFILE['seeds']['tv']`, seit 2026-07-17 keine Modul-Konstante
+  `_TV_SEED` mehr), rotiert per Cursor (`tutor/data/<lang>/tv.json`,
+  gitignored-Runtime wie News).
 - **Raum:** ein TV an der Wand (`draw_tv`) — aus = dunkler Schirm; an = leuchtet
   bläulich mit leichtem Flackern + Scanlinien und zeigt den **Titel** (umgebrochen).
   `tutor.session._tv` (an/Titel, id) → `room_state` → Fenster.

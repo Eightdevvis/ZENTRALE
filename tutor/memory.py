@@ -6,9 +6,9 @@
 # Die meisten Personas reden über einen CLOUD-Anbieter (zh→qwen). Würde die
 # Persona Sashas privaten Core-Graphen (data/ai_graph.json — das was Sasha dem
 # lokalen Offline-Chat erzählt) anfassen, wäre das ein Bruch der Sandbox
-# (core/tutor.py). Deshalb hat jede Persona ihren EIGENEN, getrennten Store:
-# data/persona_mem_<lang>.json. Er enthält nur, was Sasha DIESER Persona erzählt
-# hat. Das ist die einzige harte Garantie hier.
+# (tutor/tools.py, _ALLOWED). Deshalb hat jede Persona ihren EIGENEN, getrennten
+# Store: tutor/data/<lang>/persona_mem.json. Er enthält nur, was Sasha DIESER
+# Persona erzählt hat. Das ist die einzige harte Garantie hier.
 #
 # ── GROB, nicht exakt (2026-07-10) ───────────────────────────────────────
 # Der Store ist KEIN Konzept-Graph mehr (der von der Core-KI kopierte war eh nie
@@ -28,7 +28,7 @@
 # ── Kein Fake-Mensch ─────────────────────────────────────────────────────
 # Der Store ist Wissen ÜBER SASHA (aus euren Chats), KEINE erfundene Persona-
 # Biografie. Die Persona erinnert sich an dich, spielt aber keinen Menschen
-# mit Vergangenheit (siehe tutor_langs.py).
+# mit Vergangenheit (siehe tutor/langs/).
 
 import os
 import json
@@ -82,7 +82,7 @@ def hist_path(lang: str | None = None) -> str:
 # Zeitstempeln, sondern nur UNGEFÄHRE Eindrücke — die wichtigsten Fakten über
 # Sasha + worüber ihr grob schon geredet habt. Darum ersetzt hier ein kleiner,
 # gedeckelter Notiz-Store den früher kopierten Core-KI-Konzept-Graphen (der war
-# eh nie gebaut worden). Store: data/persona_mem_<lang>.json =
+# eh nie gebaut worden). Store: tutor/data/<lang>/persona_mem.json =
 # {"facts": [kurze Sätze], "topics": [Stichworte]}. Auf CHINESISCH (der Block
 # wandert in den zh-System-Prompt → hält qwen im Chinesischen).
 _MEM_MAX_FACTS  = 12

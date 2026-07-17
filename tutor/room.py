@@ -10,7 +10,7 @@
 #
 # Architektur = Kassetten-Prinzip: dieses File ZEICHNET nur + spricht die
 # Tutor-API. Keine KI-Logik hier — Session/Sprache/Persona/Memory leben im
-# Backend (core/tutor_session.py, /api/tutor/*). Die Antworten kommen als SSE-
+# Backend (tutor/session.py, /api/tutor/*). Die Antworten kommen als SSE-
 # Token-Stream (wie im Browser/TUI), landen in einer Sprechblase.
 #
 # Start:

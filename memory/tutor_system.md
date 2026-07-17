@@ -294,10 +294,11 @@ tutor/room.py [--url … --speaker N --speed X --mute]`.
   (idle → schlendern → sitzen → aufstehen). Redet sie (SSE läuft), nickt sie
   zugewandt mit Mund-Animation.
 - **Stimme:** nach jeder (kurzen) Antwort holt das Fenster die WAV vom Backend-
-  TTS (`POST /api/speak`, `lang` aus der Config → zh = sherpa-onnx **MeloTTS
-  `vits-melo-tts-zh_en`, 44.1 kHz** — klar; das alte `vits-zh-aishell3` war nur
-  8 kHz/telefonig und bleibt nur Fallback, `tts_service._try_load_sherpa_zh`
-  bevorzugt MeloTTS) und spielt sie über `pygame.mixer` — **der Mund bewegt sich,
+  TTS (`POST /api/speak`, `lang` aus der Config → zh = sherpa-onnx). Rangfolge in
+  `tts_service._try_load_sherpa_zh`: **`matcha-icefall-zh-baker` (22 kHz, beste
+  Artikulation) > MeloTTS `vits-melo-tts-zh_en` (44.1 kHz) > `vits-zh-aishell3`
+  (8 kHz, telefonig, letzter Fallback)** — geladen wird das beste vorhandene
+  Modell. Das Fenster spielt sie über `pygame.mixer` — **der Mund bewegt sich,
   solange Audio läuft**. `play_wav` initialisiert den Mixer auf die Sample-Rate der
   Datei (pygame resampelt nicht → sonst falsche Tonhöhe). Tempo: `--speed`
   (`TUTOR_TTS_SPEED`). `--speaker` (`TUTOR_TTS_SPEAKER`) greift nur bei Multi-
@@ -516,8 +517,8 @@ Aliase existierten noch.
 ## Idee
 
 Smalltalk in der Zielsprache mit der KI – mit Spracheingabe (Whisper-STT)
-und Sprachausgabe (sherpa-onnx-TTS, zh = MeloTTS `vits-melo-tts-zh_en`;
-`vits-zh-aishell3` ist nur noch 8-kHz-Fallback, siehe Persona-Zimmer oben).
+und Sprachausgabe (sherpa-onnx-TTS, zh = bestes vorhandenes Modell:
+`matcha-icefall-zh-baker` > MeloTTS > `vits-zh-aishell3`, siehe Persona-Zimmer oben).
 Vokabeln kommen aus `tutor/data/<lang>/vocab.json`.
 
 **Zur „80 % bekannt / 20 % neu"-Regel:** die stand hier als Verhalten, ist aber
@@ -590,9 +591,9 @@ während des Tutor-Modus. **15 Stück** (Stand 2026-07-17).
 | `get_structures`          | –                      | Aktuelle Satzmuster/Strukturen im Lernen (Feinmodell, `tutor/data/<lang>/structures.json`)|
 | `introduce_structure`     | `pattern`, `note?`     | Neues Satzmuster/„neue Sagweise" einführen                                       |
 | `increment_structure`     | `pattern`              | +1 auf ein Muster; ab 3× → „掌握"                                                |
-| `show_thought`            | `word`, `meaning?`, `reading?` | Vokabel-Gedanke: Wort + Übersetzung (+ Bild aus `tutor/data/<lang>/vocab_images/`) im Zimmer |
+| `show_thought`            | `word`, `meaning?`, `reading?` | Vokabel-Gedanke: Wort + Übersetzung (+ Bild aus `tutor/data/vocab_images/`) im Zimmer |
 | `get_local_news`          | –                      | Ein leichtes Landes-Thema (Seed aus `langs/<lang>/seeds/news.json`, rotierend; NIE `core/news.py`)|
-| `play_music` / `stop_music`| `mood`                | Musik nach Stimmung aus `tutor/data/<lang>/persona_music/<mood>/` (Fenster spielt); Content-Lücke|
+| `play_music` / `stop_music`| `mood`                | Musik nach Stimmung aus `tutor/data/persona_music/<mood>/` (Fenster spielt); Content-Lücke|
 | `watch_tv` / `turn_off_tv`| `mood`                 | TV an + level-gerechter Titel (Seed aus `langs/<lang>/seeds/tv.json`, Rotations-Cursor in `data/<lang>/tv.json`); Video-Playback deferred |
 
 Logik (laut System-Prompt): wenn `get_testing_vocab` `count < 10`
