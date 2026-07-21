@@ -83,6 +83,19 @@ fi
 export ZENTRALE_KASSETTE=tui
 BACKEND_LOG="/tmp/zentrale-tui-backend.log"
 SESSION="zentrale-tui"
+# ── Dedizierter tmux-Socket ─────────────────────────────────────────────────
+# Die ganze Appliance-Härtung (Prefix-Tabelle LEEREN, status/mouse) läuft auf
+# einem EIGENEN tmux-Server, NICHT auf dem Default-Socket des Nutzers. Grund:
+# Keybindings und `status` sind in tmux server-global, nicht pro Session — auf
+# dem Default-Socket leert `unbind-key -a -T prefix` also die Tastatur ALLER
+# Sessions des Nutzers (Ctrl-b tut nichts mehr) und `status off` nimmt überall
+# die Statusleiste. Ein eigener Socket ist die EINZIGE saubere Isolation. Live-
+# Default 'zentrale'; die pytest-Suite überstimmt mit einem Wegwerf-Socket
+# (ZENTRALE_TMUX_L, siehe tests/_tmux_fuzz.py). EXPORT → die Sub-Aufrufe
+# (--run-tui/--save-height laufen als eigene Prozesse im Pane) erben den Socket.
+: "${ZENTRALE_TMUX_L:=zentrale}"
+export ZENTRALE_TMUX_L
+TM=(tmux -L "$ZENTRALE_TMUX_L")
 # Gemerkte Höhe der unteren bash (über Sessions hinweg): beim Beenden der TUI
 # geschrieben (--run-tui unten), beim nächsten Start wieder geladen.
 STATE_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/zentrale/tui_term_lines"
@@ -91,7 +104,7 @@ STATE_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/zentrale/tui_term_lines"
 # bei gültiger Zahl (sonst alten Wert behalten, z.B. wenn pane 1 grad fehlt).
 save_term_height() {
   local h
-  h="$(tmux display-message -p -t "${SESSION}.1" -F '#{pane_height}' 2>/dev/null || true)"
+  h="$("${TM[@]}" display-message -p -t "${SESSION}.1" -F '#{pane_height}' 2>/dev/null || true)"
   [[ "$h" =~ ^[0-9]+$ ]] || return 0
   mkdir -p "$(dirname "$STATE_FILE")" 2>/dev/null && printf '%s\n' "$h" > "$STATE_FILE"
 }
@@ -134,7 +147,8 @@ apply_tui_tmux_keys() {
   "${tm[@]}" bind-key -n C-Down resize-pane -t 0 -D 1 # bash niedriger (TUI wächst)
   # Höhe LIVE merken: nach JEDEM Resize (Taste ODER Maus-Rand) die bash-Höhe
   # wegschreiben → nächste Session startet mit genau dieser Höhe. -b = Hintergrund.
-  "${tm[@]}" set-hook -t "$sess" after-resize-pane "run-shell -b '\"$SELF\" --save-height'"
+  "${tm[@]}" set-hook -t "$sess" after-resize-pane \
+    "run-shell -b 'ZENTRALE_TMUX_L=$ZENTRALE_TMUX_L \"$SELF\" --save-height'"
 }
 
 # ── Sub-Modus (nur pytest): exakt die Live-Belegung auf eine schon bestehende
@@ -167,7 +181,7 @@ if [[ "${1:-}" == "--run-tui" ]]; then
                                # Session + Backend fest und :5000 bleibt belegt)
   fi
   save_term_height          # Backup-Sicherung beim Beenden (der Hook macht's live)
-  tmux kill-session -t "$SESSION" 2>/dev/null || true
+  "${TM[@]}" kill-session -t "$SESSION" 2>/dev/null || true
   exit "$rc"
 fi
 
@@ -193,7 +207,7 @@ if [[ -n "${TMUX:-}" ]]; then
 fi
 
 # Außerhalb von tmux: evtl. vorhandene zentrale-tui-Session wegräumen (frisch).
-command -v tmux >/dev/null && tmux kill-session -t "$SESSION" 2>/dev/null || true
+command -v tmux >/dev/null && "${TM[@]}" kill-session -t "$SESSION" 2>/dev/null || true
 
 # Höhe für den Split berechnen (gemerkter Wert + echte Terminalhöhe → gedeckelt,
 # damit dem TUI ≥14 Zeilen bleiben). Logik in compute_boot_lines() oben.
@@ -238,7 +252,7 @@ fi
 BACKEND_PID=$!
 
 cleanup() {
-  command -v tmux >/dev/null && tmux kill-session -t "$SESSION" 2>/dev/null || true
+  command -v tmux >/dev/null && "${TM[@]}" kill-session -t "$SESSION" 2>/dev/null || true
   kill "$BACKEND_PID" 2>/dev/null || true
   wait "$BACKEND_PID" 2>/dev/null || true
 }
@@ -269,7 +283,7 @@ fi
 if command -v tmux >/dev/null; then
   # Frische Session (alte Reste weg), pane 0 = TUI. Wenn die TUI endet ('q'),
   # killt sie die ganze Session → attach kehrt zurück → cleanup stoppt Backend.
-  tmux kill-session -t "$SESSION" 2>/dev/null || true
+  "${TM[@]}" kill-session -t "$SESSION" 2>/dev/null || true
   # Session SOFORT in der echten Terminalgröße erzeugen (-x/-y). SONST: eine
   # detached Session startet in der tmux-Default-Größe (80x24); das gleich danach
   # laufende `split-window -l N` (im attach unten) rechnet das N gegen diese 24
@@ -281,14 +295,14 @@ if command -v tmux >/dev/null; then
   size_args=()
   [[ "$TPUT_COLS"  =~ ^[0-9]+$ ]] && size_args+=(-x "$TPUT_COLS")
   [[ "$TPUT_LINES" =~ ^[0-9]+$ ]] && size_args+=(-y "$TPUT_LINES")
-  tmux new-session -d -s "$SESSION" "${size_args[@]}" -c "$PWD" "'$SELF' --run-tui"
+  "${TM[@]}" new-session -d -s "$SESSION" "${size_args[@]}" -c "$PWD" "'$SELF' --run-tui"
   # Tastatur/Optionen/Hook setzen (switchen vs. resizen sauber getrennt, Detach
   # aus, Höhen-Hook). Eine Funktion → die pytest-Suite prüft EXAKT dasselbe.
   apply_tui_tmux_keys "$SESSION"
   # Split ERST nach dem Attach, damit die Höhe relativ zur ECHTEN Terminal-
   # größe sitzt. '-d' lässt den Fokus oben auf der TUI; untere bash startet
   # im HOME (fühlt sich an wie ein frisch geöffnetes Terminal).
-  tmux attach-session -t "$SESSION" \; \
+  "${TM[@]}" attach-session -t "$SESSION" \; \
        split-window -d -v -l "$TERM_LINES" -c "$HOME"
 else
   echo "ZENTRALE (tui): tmux nicht installiert — TUI im Vollbild (kein unteres Terminal)." >&2

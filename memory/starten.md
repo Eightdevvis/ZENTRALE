@@ -170,6 +170,14 @@ nachgebautes „Fake-Terminal": die TUI bleibt reine Anzeige, fürs Navigieren/
 - **Kein versehentliches Detach:** `Ctrl-b d` (tmux-Default) ist **abgeschaltet**
   — es koppelte sofort ab und riss dabei Backend+Session weg. Raus geht's nur
   über `q` in der TUI.
+- **Eigener tmux-Socket (`-L zentrale`):** Die Appliance-Härtung (Prefix-Tabelle
+  leeren, `status off`, `mouse on`) läuft auf einem **eigenen tmux-Server**, nicht
+  auf dem Default-Socket. Grund: Keybindings und `status` sind in tmux **server-
+  global**, nicht pro Session — auf dem Default-Socket würde `unbind-key -a` die
+  Tastatur ALLER anderen tmux-Sessions des Nutzers leerräumen (`Ctrl-b` tut nichts
+  mehr) und `status off` überall die Leiste nehmen. Der eigene Socket isoliert das
+  sauber; dein persönliches tmux bleibt unangetastet. Manuell inspizieren:
+  `tmux -L zentrale ls`. Socket-Name überstimmbar via `ZENTRALE_TMUX_L` (nur Tests).
 - **Höhe der bash — live:** **`Ctrl+↑`/`Ctrl+↓` ohne Prefix** — Ctrl gedrückt
   halten und ↑/↓ dauerfeuern, geht endlos (1 Zeile pro Schritt, kein 500-ms-
   Repeat-Timeout). Alternativ `Ctrl-b` dann `Ctrl+↑/↓`, oder Rand mit der

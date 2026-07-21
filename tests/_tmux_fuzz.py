@@ -87,8 +87,11 @@ class PaneSession:
         subprocess.run([START_TUI, "--apply-keys", "s"],
                        env={**env, "ZENTRALE_TMUX_L": self.sock},
                        capture_output=True, text=True, check=True, timeout=10)
-        # Den Höhen-Hook für den Test neutralisieren (er zielt sonst cross-socket
-        # auf den Default-tmux). Das Switchen/Resizen/Detach bleibt voll getestet.
+        # Den Höhen-Hook für den Test neutralisieren: er würde bei jedem Resize
+        # `start_tui.sh --save-height` spawnen (Prozess-Rauschen, schreibt tui_term_
+        # lines). Der Hook trägt den Wegwerf-Socket (ZENTRALE_TMUX_L=self.sock), zielt
+        # also NICHT mehr cross-socket auf den Default-tmux — raus trotzdem, damit der
+        # Test nur Tastatur prüft. Das Switchen/Resizen/Detach bleibt voll getestet.
         self._tmux("set-hook", "-u", "-t", "s", "after-resize-pane")
         # Pane 1 (bash-Platzhalter) unten dazu
         self._tmux("split-window", "-d", "-v", "-l", str(self.split), "-t", "s",
