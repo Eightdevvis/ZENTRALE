@@ -513,7 +513,7 @@ TUI_KEYS = [
     ("t",   "Theme wechseln (auto/hell/dunkel)"),
     ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
     ("n",   "Notizen (Mitte): freie notiz aus blöcken · ↑↓ block · t/l/f text/liste/float · e bearbeiten · d weg (fragt bei inhalt) · r titel · n übersicht · esc speichern & zu"),
-    ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Handelsrouten · w=Fenster"),
+    ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Overlay (Handel→Politik→aus) · w=Fenster"),
     ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · v Woche/Monat"),
     ("p",   "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
     ("a",   "KI-Chat (Mitte): tippen + enter fragt die lokale KI (PC-Hirn via tunnel) · ↑↓ scrollen · esc zu"),
@@ -1010,16 +1010,21 @@ def run_ui(stdscr, store):
     #   grid   : (cols,rows), für die data geholt wurde — bei Resize neu holen
     M = {"active": False, "cx": 0.0, "cy": 20.0, "zoom": 0.0,
          "data": None, "grid": None, "msg": "", "proc": None,
-         "overlay": False,      # Handelsrouten-Overlay (Achse 2) ein/aus
-         "odata": None,         # letzte /api/map/layer/trade-Antwort (None ⇒ neu holen)
+         "overlay": False,      # thematisches Overlay (Achse 2) ein/aus
+         "overlay_layer": "trade",  # welches Overlay: 'trade'|'political' (Taste o zykliert)
+         "odata": None,         # letzte /api/map/layer/<overlay_layer>-Antwort (None ⇒ neu holen)
          "ogrid": None,         # (cols,rows), für die odata geholt wurde
          "focus": None,         # Name des fokussierten Landes (Alt+Pfeile), None=keins
          "fdata": None,         # letzte /api/map/countries-Antwort (None ⇒ neu holen)
          "fgrid": None,         # (cols,rows), für die fdata geholt wurde
          "tcx": 0.0, "tcy": 20.0,  # Kamera-ZIEL (lon/lat) beim Fokuswechsel
          "anim": False}         # läuft gerade eine weiche Kamerafahrt?
-    MAP_CHOKE = "◆"          # Chokepoint-Marker (Handelsrouten-Overlay)
-    MAP_ROUTE = "·"          # Schifffahrtsrouten-Pfad (dezent, unter den Markern)
+    MAP_CHOKE = "◆"          # Ereignis-/Chokepoint-Marker (Diamant)
+    MAP_CTRL = "●"           # Gebietskontrolle-Marker (Punkt, nach Status gefärbt)
+    MAP_ROUTE = "·"          # Linien-Pfad (Route/umstrittene Grenze, dezent)
+    # Overlay-Zyklus für Taste 'o': aus → jeder Layer der Reihe nach → aus.
+    OVERLAY_CYCLE = ["trade", "political"]
+    OVERLAY_LABEL = {"trade": "Handelsrouten", "political": "Politik/Konflikt"}
 
     # ── Kalender (füllt die MITTE-Box, Taste 'c') ──────────────────────
     # Wie die Karte ein reiner Zeichner: alle Datums-/Layer-Logik liegt im
@@ -1571,14 +1576,14 @@ def run_ui(stdscr, store):
             M["msg"] = "karte: backend?"
 
     def m_fetch_overlay(cols, rows):
-        """Handelsrouten-Overlay (Komposit) fürs aktuelle Viewport holen:
-        Routenlinien + Chokepoint-Marker + Provenienz von /api/map/layer/trade
-        (ohne sub = beide). Wie m_fetch synchron; Fehler-Marker statt
-        Dauer-Refetch bei totem Backend."""
+        """Aktives Overlay-Komposit (M['overlay_layer']) fürs Viewport holen:
+        Linien + Punkte + Provenienz von /api/map/layer/<layer> (ohne sub =
+        Komposit). Wie m_fetch synchron; Fehler-Marker statt Dauer-Refetch bei
+        totem Backend. (Backend serviert cache-first/offline-first → schnell.)"""
         try:
-            q = ("/api/map/layer/trade?"
+            q = ("/api/map/layer/%s?"
                  "cx=%.5f&cy=%.5f&zoom=%.2f&cols=%d&rows=%d&aspect=0.5"
-                 % (M["cx"], M["cy"], M["zoom"], cols, rows))
+                 % (M["overlay_layer"], M["cx"], M["cy"], M["zoom"], cols, rows))
             M["odata"] = api_call(q, timeout=2.0) or {"failed": True}
         except Exception:
             M["odata"] = {"failed": True}
@@ -3422,14 +3427,27 @@ def run_ui(stdscr, store):
                 for p in od.get("points", []):
                     c, r = int(round(p["col"])), int(round(p["row"]))
                     if 0 <= c < iw and 0 <= r < map_ih:
-                        safe_addstr(oy + r, ox + c, MAP_CHOKE, C["warn"])
+                        # Glyph + Farbe nach cat: Kontrolle = Punkt nach Status,
+                        # Ereignis = Diamant (bernstein), sonst Chokepoint (warn).
+                        cat = p.get("cat") or ""
+                        if cat == "control-ua":
+                            st = (p.get("status") or "").upper()
+                            col_attr = (C["acc"] if st == "UA"        # grün
+                                        else C["graph"] if st == "RU"  # magenta (Kontrast)
+                                        else C["warn"])                # umstritten
+                            glyph = MAP_CTRL
+                        elif cat.startswith("event-"):
+                            col_attr = C["amber"]
+                            glyph = MAP_CHOKE
+                        else:
+                            col_attr = C["warn"]
+                            glyph = MAP_CHOKE
+                        safe_addstr(oy + r, ox + c, glyph, col_attr)
                     dist = (p["col"] - ccol) ** 2 + (p["row"] - crow) ** 2
                     if best is None or dist < best[0]:
                         best = (dist, p)
                 if best is not None:
-                    p = best[1]
-                    ind = (p.get("industries") or [None])[0]
-                    focus = (p["name"], p.get("value"), ind)
+                    focus = best[1]      # ganzer Punkt (Caption liest je nach cat)
 
         # Länder-Fokus: weiße Border des fokussierten Landes (DÜNNE Braille-Punkte,
         # umgefärbt — nicht fette Vollzeichen) + Name. Das Backend rasterisiert den
@@ -3460,11 +3478,18 @@ def run_ui(stdscr, store):
         if M["focus"]:
             info += " · ⬚%s" % M["focus"]      # fokussiertes Land (Alt+Pfeile)
         if M["overlay"]:
+            lbl = OVERLAY_LABEL.get(M["overlay_layer"], M["overlay_layer"])
             if focus:
-                nm, val, _ind = focus
-                info += " · ◆%s %s" % (nm, "—" if val is None else val)
+                # Fokus-Text je nach cat: Kontrolle → Status, sonst Wert (Opfer/Verkehr).
+                nm = focus.get("name", "?")
+                if (focus.get("cat") or "") == "control-ua":
+                    extra = focus.get("status") or "?"
+                else:
+                    val = focus.get("value")
+                    extra = "—" if val is None else val
+                info += " · [%s] %s %s" % (lbl, nm, extra)
             else:
-                info += " · Handelsrouten %s" % (ovintage or "?")
+                info += " · %s %s" % (lbl, ovintage or "?")
         addclip(by + bh - 2, ox, info, iw, C["bright"])
         # Fenster-Status LIVE aus dem Prozess lesen (poll()), nicht aus klebendem
         # Text — so verschwindet „● fenster", sobald das native Fenster zu ist.
@@ -5666,9 +5691,18 @@ def run_ui(stdscr, store):
             elif ch == ord("0"):               # zurück zur ganzen Welt
                 M["cx"], M["cy"], M["zoom"], M["data"] = 0.0, 20.0, 0.0, None
                 M["odata"] = M["fdata"] = None
-            elif ch in (ord("o"), ord("O")):   # Chokepoints-Overlay ein/aus
-                M["overlay"] = not M["overlay"]
-                M["odata"] = None              # beim Einschalten frisch holen
+            elif ch in (ord("o"), ord("O")):   # Overlay zyklieren
+                # aus → erster Layer → nächster … → letzter → aus.
+                if not M["overlay"]:
+                    M["overlay"] = True
+                    M["overlay_layer"] = OVERLAY_CYCLE[0]
+                else:
+                    i = OVERLAY_CYCLE.index(M["overlay_layer"]) + 1
+                    if i >= len(OVERLAY_CYCLE):
+                        M["overlay"] = False   # nach dem letzten: Overlay aus
+                    else:
+                        M["overlay_layer"] = OVERLAY_CYCLE[i]
+                M["odata"] = None              # bei Wechsel/Einschalten frisch holen
             elif ch in (ord("w"), ord("W"), 10, 13, curses.KEY_ENTER):
                 m_window()                     # natives Fenster aufklappen
             elif ch in (ord("t"), ord("T")):   # Theme darf auch hier zyklieren

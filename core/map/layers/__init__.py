@@ -9,10 +9,12 @@
 # mit EINER offiziellen Quelle + mitgeführter Provenienz.
 
 from . import trade
+from . import political
 
 # id -> Layer-Modul (jedes hat META + features()).
 _LAYERS = {
     "trade": trade,
+    "political": political,
 }
 
 
