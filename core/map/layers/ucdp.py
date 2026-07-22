@@ -157,18 +157,12 @@ def refresh():
 
 
 def events():
-    """GED-Ereignisse (Sub-Layer events-ucdp), cache-first. Stand in
-    `vintage`/`retrieved_at`. None, wenn weder Cache noch Netz da (dann liefert
-    der Layer sauber „keine Daten")."""
-    cached = _read(_CACHE_FILE)
-    if cached is not None:
-        return cached
-    try:
-        payload = _fetch()
-        _write(_CACHE_FILE, payload)
-        return payload
-    except Exception:
-        return None
+    """GED-Ereignisse (Sub-Layer events-ucdp) — CACHE-ONLY auf dem Anfrage-Pfad:
+    liefert den lokalen Cache oder None. Bewusst KEIN Netz im Request (der Abruf
+    paginiert potenziell zehntausende Ereignisse → würde den Request blockieren);
+    Befüllen ausschließlich über refresh() / `python -m map.layers.ucdp` (Cron/
+    manuell). Stand in `vintage`/`retrieved_at`; None → Layer zeigt „keine Daten"."""
+    return _read(_CACHE_FILE)
 
 
 if __name__ == "__main__":      # `python -m map.layers.ucdp` → Cache füllen

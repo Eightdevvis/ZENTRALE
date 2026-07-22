@@ -159,40 +159,39 @@ def features(cx, cy, zoom, cols, rows, aspect=0.5, sub=None, at=None):
     vintages = []
     truncated = False
 
+    # Provenienz wird aus den SOURCE-Konstanten der AKTIVEN Sub-Layer gesammelt
+    # — unabhängig davon, ob gerade Daten im Cache sind. So trägt die Antwort
+    # „wer sagt das" IMMER (Charter), auch wenn ein Sub-Layer leer ist.
     if sub in ("all", "events-ucdp"):
-        p, v, s, t = _event_points(vp, ucdp.events(), "ucdp")
+        sources.append(ucdp.SOURCE)
+        p, v, _s, t = _event_points(vp, ucdp.events(), "ucdp")
         points += p
-        if s:
-            sources.append(s)
+        truncated = truncated or t
         if v:
             vintages.append(v)
-        truncated = truncated or t
 
     # ACLED bewusst NUR bei explizitem sub (lizenz-gesperrt → nicht im Komposit).
     if sub == "events-acled":
-        p, v, s, t = _event_points(vp, acled.events(), "acled")
+        sources.append(acled.SOURCE)
+        p, v, _s, t = _event_points(vp, acled.events(), "acled")
         points += p
-        if s:
-            sources.append(s)
+        truncated = truncated or t
         if v:
             vintages.append(v)
-        truncated = truncated or t
 
     if sub in ("all", "control-ua"):
-        p, v, s, t = _control_points(vp, viina.control())
+        sources.append(viina.SOURCE)
+        p, v, _s, t = _control_points(vp, viina.control())
         points += p
-        if s:
-            sources.append(s)
+        truncated = truncated or t
         if v:
             vintages.append(v)
-        truncated = truncated or t
 
     if sub in ("all", "borders"):
-        lines, v, s = _border_lines(vp)
+        sources.append(borders.SOURCE)
+        lines, v, _s = _border_lines(vp)
         if lines:
             out["lines"] = lines
-        if s:
-            sources.append(s)
         if v:
             vintages.append(v)
 

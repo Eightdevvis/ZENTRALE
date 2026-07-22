@@ -148,17 +148,12 @@ def refresh():
 
 
 def control():
-    """Ukraine-Gebietskontrolle je Ort (Sub-Layer control-ua), cache-first.
-    None, wenn weder Cache noch Netz da (Layer liefert dann „keine Daten")."""
-    cached = _read(_CACHE_FILE)
-    if cached is not None:
-        return cached
-    try:
-        payload = _fetch()
-        _write(_CACHE_FILE, payload)
-        return payload
-    except Exception:
-        return None
+    """Ukraine-Gebietskontrolle je Ort (Sub-Layer control-ua) — CACHE-ONLY auf
+    dem Anfrage-Pfad: liefert den lokalen Cache oder None. WICHTIG: kein Netz im
+    Request — der Jahres-Download ist groß (git-LFS) und würde den Request
+    minutenlang blockieren. Befüllen ausschließlich über refresh() /
+    `python -m map.layers.viina` (einmal auf echtem Rechner). None → „keine Daten"."""
+    return _read(_CACHE_FILE)
 
 
 if __name__ == "__main__":      # `python -m map.layers.viina` → Cache füllen

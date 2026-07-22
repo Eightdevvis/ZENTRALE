@@ -152,17 +152,11 @@ def refresh():
 
 
 def events():
-    """ACLED-Ereignisse (Sub-Layer events-acled), cache-first. None, wenn weder
-    Cache noch Netz/Zugang da (Layer liefert dann „keine Daten")."""
-    cached = _read(_CACHE_FILE)
-    if cached is not None:
-        return cached
-    try:
-        payload = _fetch()
-        _write(_CACHE_FILE, payload)
-        return payload
-    except Exception:
-        return None
+    """ACLED-Ereignisse (Sub-Layer events-acled) — CACHE-ONLY auf dem Anfrage-
+    Pfad: liefert den lokalen Cache oder None. Kein Netz im Request; Befüllen nur
+    über refresh() / `python -m map.layers.acled` (braucht Key+Email). None →
+    Layer zeigt „keine Daten"."""
+    return _read(_CACHE_FILE)
 
 
 if __name__ == "__main__":      # `python -m map.layers.acled` → Cache füllen
