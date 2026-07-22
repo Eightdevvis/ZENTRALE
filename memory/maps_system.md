@@ -246,7 +246,10 @@ Sasha begleitet jeden Schritt und gibt die Details vor.
 1. **Grobe Base-Map in der TUI** — ✅ **erledigt** (Details unten). Nur
    Grundkarte (Küsten), noch keine Overlays.
 2. **Politischer Layer** (erster Overlay) — Konflikte, Grenzen,
-   Truppenbewegungen. Datenquelle/Details kommen von Sasha.
+   Truppenbewegungen. **Gegenwart ✅ gebaut** (Backend, siehe „Schritt 2" unten);
+   **Zeitachse (Achse 3) folgt danach** (Sashas Vorgabe: erst Gegenwart).
+   Truppenbewegungen bewusst NICHT gebaut — dafür existiert offen keine
+   autoritative Quelle (Recherche, s.u.).
 3. **Wirtschaftlicher Layer**.
 4. **Klima-Layer**.
 5. **Höhen-/Relief-Layer (`terrain`)** — DEM (SRTM/ETOPO) → Hillshade/Höhenfarbe.
@@ -296,11 +299,52 @@ das Graph-Werkzeug (`q` beendet erst nach `esc`).
 > Verifiziert end-to-end via tmux (Welt + Reinzoomen rendern korrekt, sauberer
 > Quit, keine Fehler) — nicht nur Unit-getestet.
 
+## Schritt 2 — Implementierung (politischer Layer, Gegenwart)
+
+**Recherche zuerst (Sashas Vorgabe „so wenig wie möglich neu bauen"):** tiefe
+Quellen-Recherche (liveuamap & Co.) → Kernbefunde in `maps_quellen.md`. Ergebnis:
+liveuamap ist selbst nur ein manuell kuratiertes OSINT-Aggregat mit proprietärer
+Paid-API (nicht nutzbar); **genaue Truppenbewegungen existieren offen nicht**
+(klassifiziert). Nutzbar & seriös: Ereignisse (UCDP/ACLED), Ukraine-Kontrolle
+(VIINA), umstrittene Gebiete (Natural Earth).
+
+**Layer `political` (Komposit, Achse 2)** — `core/map/layers/political.py`, im
+Registry (`layers/__init__.py`). Sub-Layer, jeder EINE Quelle + Provenienz,
+einzeln togglebar (STAPELN statt verschmelzen, Charter):
+- `events-ucdp` — UCDP GED, Ereignis-**Punkte**, CC BY (committbar). `ucdp.py`.
+- `control-ua` — VIINA, Ukraine-Kontrolle je Ort als **Punkte**, ODbL
+  (committbar, deklariert abgeleitet). `viina.py` (git-LFS via media-URL).
+- `borders` — Natural Earth „disputed areas" als **Linien**, gemeinfrei →
+  `ne_10m_admin_0_disputed_areas.geojson` COMMITTET. `borders.py`. **live.**
+- `events-acled` — ACLED, reicher, aber lizenz-gesperrt → `commit_ok = False`,
+  nur lokal cachen, NUR per `?sub=events-acled` (nicht im Standard-Komposit).
+  `acled.py`.
+- Standard-Komposit (ohne `sub`) = UCDP + VIINA + Grenzen (die committbaren).
+  `sources`-Liste + `truncated`-Flag mitgeführt (ehrliche Deckelung pro Viewport).
+
+**A/B (wie PortWatch):** UCDP/VIINA/ACLED werden live geholt + lokal gecacht
+(`data/cache/`, gitignore't; leere Fetches werfen → kein Dud-Cache). Der
+einmalige VIINA-Jahres-Download ist groß (LFS) → gehört auf einen echten Rechner
+(`python -m map.layers.viina`), wie der density-Ingest. UCDP braucht einen
+kostenlosen Token (`UCDP_ACCESS_TOKEN`), ACLED Key+Email — fehlen sie, liefert
+der Layer sauber „keine Daten" (graceful). Tests: `tests/test_map_political.py`
+(Quellen gemockt, `borders` echt gegen die committete GeoJSON).
+
+**OFFEN Schritt 2:** (a) **Front-Toggle** — es gibt in KEINER Front einen
+Layer-/Sub-Wähler (sogar `trade` hängt an einem hartcodierten Slot). TUI zeichnet
+Punkte/Linien generisch (neue `cat` rendern als `◆`); nötig für Sichtbarkeit ist
+nur die hartcodierte URL `tui/zentrale_tui.py:1579` (`/api/map/layer/trade`) →
+parametrisieren + Sub-Toggle-UI. Native `scripts/map_window.py` braucht eigenen
+Zeichen-Code. (b) **Achse 3 (Zeitstrahl)** — `at` wird schon durchgereicht, aber
+ignoriert; UCDP (1989–) + VIINA (2022–) + CShapes 2.0 (1886–2019, historische
+Grenzen) sind die Zeitreihen-Quellen.
+
 ## Geparkte / offene Entscheidungen
 
-- **Konflikt-/Overlay-Datenquelle offline:** woher kommen die politischen
-  Daten (Konflikte, Frontverläufe) im offline-Betrieb? Pro Layer mit Sasha
-  klären (Schritt 2+). Liveuamap selbst ist online — eigene Quelle/Format
+- ~~**Konflikt-/Overlay-Datenquelle offline**~~ **→ GELÖST (Schritt 2):** UCDP GED
+  (Ereignisse, committbar), VIINA (Ukraine-Kontrolle, committbar), Natural Earth
+  disputed areas (Grenzen, committet), ACLED (cache-only Anreicherung). Details
+  oben + in `maps_quellen.md`. Liveuamap selbst ist online — eigene Quelle/Format
   nötig.
 - **OSM-Integration:** Format (PBF/GeoJSON), wie viel Region vorhalten, wie
   bei tiefem Zoom einspeisen. Erst relevant ab dem OSM-/Navi-Schritt.

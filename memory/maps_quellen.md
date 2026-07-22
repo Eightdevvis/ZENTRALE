@@ -149,6 +149,87 @@ keine ehrliche „von-wann/woher"-Antwort mehr → das wäre „devious".
 - **Hängt an:** `density` (+ optional `eu`/`us`) + `routes` — baut erst, wenn
   mindestens zwei gemessene Quellen live sind.
 
+## Politischer Layer — Recherche-Kernbefunde (Stand 2026-07)
+
+Tiefe Quellen-Recherche zum „liveuamap-Gedanken" (Ereignisse + Frontverläufe +
+Truppenbewegungen), Leitfrage „so wenig wie möglich neu bauen":
+- **liveuamap ist keine nutzbare Quelle:** selbst nur ein manuell kuratiertes
+  OSINT-Aggregat (Social Media / News / offizielle Statements, von Redakteuren
+  geolokalisiert), Ausgabe NUR über proprietäre Paid-API (150–1000 $/Monat, keine
+  CC-Lizenz). Die Frontlinien sind gezeichnete Schätzungen, kein Messwert.
+- **Genaue Truppenbewegungen existieren offen NICHT** (klassifizierte Aufklärung).
+  Das Strukturierteste ist ACLEDs „Strategic Developments" — lizenz-gesperrt.
+  GeoConfirmed (OSINT-Freiwillige) ist das Näheste, aber kein sauberes Dataset.
+  → bewusst nicht gebaut.
+- **Es gibt keine EINE Wunderquelle** — der Layer zerfällt in Sub-Layer mit sehr
+  unterschiedlicher Lizenz-Lage (siehe Register unten).
+
+### `political/events-ucdp` — LIVE ✅ (Ereignisse, weltweit, committbar)
+- **Institution:** UCDP — Uppsala Conflict Data Program, Uppsala Universität
+  (https://ucdp.uu.se). Der Georeferenced Event Dataset (GED) ist DER
+  wissenschaftliche Primär-Datensatz für einzelne Gewaltereignisse, ortsgenau,
+  tagesgenau, peer-reviewed. Deckung 1989–heute (ideal für Achse 3).
+- **API:** `https://ucdpapi.pcr.uu.se/api/gedevents/<version>`, JSON, Paginierung
+  `page`/`pagesize`+`NextPageUrl`, Bbox `Geography=y0 x0,y1 x1`. Token-Header
+  `x-ucdp-access-token` (kostenlos, 5000 Anfragen/Tag). Felder u.a. `latitude`/
+  `longitude`/`date_start`/`type_of_violence`/`best`/`side_a`/`side_b`/`conflict_name`.
+- **Frische (A/B):** GED-Kern jährlich; **Candidate Events** monatlich (~1 Monat
+  Verzug) = der tagesaktuelle Kanal (`UCDP_GED_VERSION` setzen).
+- **Lizenz: CC BY 4.0 → `commit_ok = True`.** Wir holen live + cachen lokal
+  (`data/cache/ucdp_ged.json`, gitignore't); committeter Snapshot erlaubt, aber
+  nicht nötig. Für die Gegenwart nur die jüngsten Ereignisse gecacht (Deckel
+  `UCDP_MAX_EVENTS`), volle Historie kommt mit Achse 3.
+- **Code:** `core/map/layers/ucdp.py` (Fetch+Cache+Provenienz), Projektion in
+  `political.py`. Refresh: `python -m map.layers.ucdp`.
+
+### `political/control-ua` — gebaut ✅ (Ukraine-Kontrolle, committbar, abgeleitet)
+- **Projekt:** VIINA — Violent Incident Information from News Articles (Yuri
+  Zhukov, Yale/U-Michigan, https://github.com/zhukovyuri/VIINA). Je Ort täglich
+  ein Kontroll-Status (UA/RU/CONTESTED) auf GeoNames-Ebene, ab Feb 2022.
+- **EHRLICH:** die Kontroll-Ebene ist ein **Aggregat** (Mehrheitsvotum über
+  DeepStateMap `status_dsm` / ISW `status_isw` / Wikipedia `status_wiki`) — KEINE
+  reine Primärquelle. Darum als deklariert-abgeleiteter Sekundär-Overlay geführt
+  (`source.derived = True`), mit Einzel-Stati mitgeführt (Quellen vergleichbar).
+  Für die Ukraine gibt es offen KEINE permissive Primär-Flächenquelle (liveuamap
+  = paid, DeepStateMap = Zugang an Ukraine-Defense/Charity gebunden).
+- **Format:** `Data/control_latest_<jahr>.zip` (GeoNames, N≈33k) — **git-LFS**, der
+  echte Inhalt kommt über `media.githubusercontent.com/media/…/main/Data/…`
+  (der `raw`-Endpoint liefert nur den LFS-Pointer). Spalten `geonameid`/
+  `longitude`/`latitude`/`asciiname`/`status`(+Einzelquellen).
+- **Lizenz: ODbL (Namensnennung + Share-alike) → `commit_ok = True`** (Copyleft
+  beachten). Live geholt + lokal gecacht (`data/cache/viina_control.json`).
+- **Groß:** der Jahres-Download ist groß → einmaliger Abruf auf einem echten
+  Rechner (`python -m map.layers.viina`), wie der density-Ingest. `VIINA_YEAR`
+  wählt das Jahr (später für Achse 3).
+- **Code:** `core/map/layers/viina.py`.
+
+### `political/borders` — LIVE ✅ (umstrittene Gebiete, gemeinfrei, committet)
+- **Institution:** Natural Earth (https://www.naturalearthdata.com), Datei
+  `ne_10m_admin_0_disputed_areas` — 99 Flächen (Kaschmir, Aksai Chin, West-
+  jordanland, Krim, Westsahara …). Der politische Mehrwert über die Basiskarte:
+  die zeichnet anerkannte Grenzen, DIESER Layer das Umstrittene.
+- **Lizenz: Public Domain → `commit_ok = True`.** GeoJSON liegt COMMITTET in
+  `core/map/data/ne_10m_admin_0_disputed_areas.geojson` (statisch, kein Fetch/
+  Cache). Lädt wie basemap.py (vorprojiziert + Bounding-Box), stdlib-only.
+- **Code:** `core/map/layers/borders.py`.
+
+### `political/events-acled` — gebaut ✅, aber lizenz-gesperrt (nur lokal cachen)
+- **Institution:** ACLED — Armed Conflict Location & Event Data
+  (https://acleddata.com). Reicher als UCDP (mehr Ereignistypen, u.a. als
+  Einziges nicht-gewaltsame „Strategic Developments" ~ Truppenverlegungen).
+- **Lizenz: proprietäres EULA — nicht-kommerziell, KEINE Weiterverteilung →
+  `commit_ok = False`.** Exakt wie IMF PortWatch: live geholt, nur LOKAL gecacht
+  (`data/cache/acled_events.json`, gitignore't), NIE ins Repo. Darum NICHT im
+  Standard-Komposit, nur per `?sub=events-acled` als bewusste lokale Anreicherung.
+- **Zugang:** Registrierung, `ACLED_API_KEY`+`ACLED_EMAIL`; fehlen sie → graceful
+  leer. **Code:** `core/map/layers/acled.py`.
+
+### Für die Zeitachse (Achse 3) vorgemerkt
+- **CShapes 2.0** (ETH Zürich, https://icr.ethz.ch/data/cshapes/) — Grenzen +
+  Hauptstädte unabhängiger Staaten **1886–2019** mit exaktem Änderungsdatum. DIE
+  Quelle für historische Grenz-Scheiben. UCDP (Ereignisse 1989–) + VIINA (Ukraine
+  2022–) decken die dynamischen Ebenen; CShapes die Grenzen.
+
 ### Geprüfte, noch NICHT eingeplante Quellen
 - **`trade/ports` (Hafen-Aktivität):** PortWatch `PortWatch_ports_database` +
   `Daily_Ports_Data` (5,6 Mio Zeilen, Join per `portid`), täglich.
