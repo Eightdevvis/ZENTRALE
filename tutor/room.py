@@ -181,6 +181,30 @@ class Backend:
     def room_state(self):
         return self._get('/api/tutor/room_state', timeout=2.0)
 
+    def set_config(self, changes):
+        """POST /api/tutor/config (JSON, KEIN SSE) → aufgelöste Config oder None.
+        Für den Live-Sprachwechsel aus dem Zimmer (Sprache/Provider umstellen)."""
+        try:
+            req = urllib.request.Request(
+                self.url + '/api/tutor/config',
+                data=json.dumps(changes).encode('utf-8'), method='POST',
+                headers={'Content-Type': 'application/json'})
+            with urllib.request.urlopen(req, timeout=5) as r:
+                return json.loads(r.read().decode('utf-8', 'replace'))
+        except Exception:
+            return None
+
+    def stop(self):
+        """POST /api/tutor/stop — laufende Session beenden (vor dem Sprachwechsel,
+        damit die neue Persona in der neuen Sprache frisch begrüßt)."""
+        try:
+            req = urllib.request.Request(
+                self.url + '/api/tutor/stop', data=b'{}', method='POST',
+                headers={'Content-Type': 'application/json'})
+            urllib.request.urlopen(req, timeout=5).read()
+        except Exception:
+            pass
+
     def transcribe(self, wav_bytes, lang):
         """WAV → (Text, Fehler). Fehler ist None bei Erfolg, sonst ein kurzer
         Grund (damit das Fenster nicht mehr STILL scheitert)."""
@@ -856,6 +880,8 @@ def main():
         'available': None,
         'persona': 'Ling Ling',
         'lang': 'zh',          # aus /api/tutor/config (TTS-Sprache)
+        'langs': [],           # wählbare (enabled) Sprachen fürs Menü (Alt+L)
+        'menu': None,          # offenes Sprach-Menü: {'sel': int} oder None
         'input': '',
         'compose': '',         # laufende IME-Komposition (Pinyin vor dem Commit)
         'tts': None,           # Backend-TTS verfügbar? (status['tts'])
@@ -946,6 +972,72 @@ def main():
         with S['lock']:
             S['buf'] = ''
 
+    # ── Sprach-Menü (Alt+L): live zwischen Personas/Sprachen umschalten ──────
+    # Der Kern kann das schon (POST /api/tutor/config {lang}); hier ist nur die
+    # sichtbare Auswahl im Zimmer statt eines Konsolen-Befehls (/lang). Wechsel =
+    # Config setzen (persist) → Session beenden → neu starten, damit die neue
+    # Persona in IHRER Sprache frisch begrüßt (active_lang friert beim Start ein).
+    def open_lang_menu():
+        with S['lock']:
+            langs = list(S['langs'])
+        if not langs:                       # Cache leer (kickoff-Race) → nachholen
+            cf = be.config()
+            langs = [l for l in (cf.get('langs') if cf else []) if l.get('enabled')]
+        if not langs:
+            with S['lock']: S['msg'] = 'keine Sprachen verfügbar'
+            return
+        with S['lock']:
+            cur = S['lang']
+            S['langs'] = langs
+            S['menu'] = {'sel': next((i for i, l in enumerate(langs)
+                                      if l['code'] == cur), 0)}
+
+    def menu_key(ev):
+        """Taste im offenen Menü. Gibt einen zu wechselnden Sprachcode zurück
+        (Enter/Zifferwahl) oder None (Navigation/Schließen)."""
+        with S['lock']:
+            m = S['menu']
+            if not m:
+                return None
+            langs = S['langs']; n = len(langs)
+            close = (ev.key == pygame.K_ESCAPE) or \
+                    (ev.key == pygame.K_l and (ev.mod & pygame.KMOD_ALT))
+            if close or n == 0:
+                S['menu'] = None; return None
+            if ev.key in (pygame.K_UP, pygame.K_k):
+                m['sel'] = (m['sel'] - 1) % n; return None
+            if ev.key in (pygame.K_DOWN, pygame.K_j):
+                m['sel'] = (m['sel'] + 1) % n; return None
+            if pygame.K_1 <= ev.key <= pygame.K_9:
+                i = ev.key - pygame.K_1
+                if i < n:
+                    S['menu'] = None; return langs[i]['code']
+                return None
+            if ev.key == pygame.K_RETURN:
+                S['menu'] = None; return langs[m['sel']]['code']
+        return None
+
+    def switch_lang(code):
+        """Sprache/Persona live umschalten (läuft in einem Thread — Netz + Stream)."""
+        with S['lock']:
+            same = (code == S['lang'])
+            S['menu'] = None
+        if same:
+            return
+        cf = be.set_config({'lang': code, 'persist': True})
+        if not cf:
+            with S['lock']: S['msg'] = 'Sprachwechsel fehlgeschlagen'
+            return
+        be.stop()                            # alte Session beenden
+        with S['lock']:
+            S['lang']    = cf.get('lang', code)
+            S['persona'] = cf.get('persona_name', S['persona'])
+            S['log']     = []                # neue Persona → eigener Verlauf
+            S['last']    = ''; S['buf'] = ''
+            S['msg']     = f"→ {S['persona']} ({cf.get('lang_name', '')})"
+            foc = S['focused']
+        run_stream('/api/tutor/start', {'focus': foc})   # neue Begrüßung
+
     def kickoff():
         """Status/Config holen; wenn erreichbar und keine Session läuft, die
         Persona von selbst begrüßen lassen (kein Enter — sie quatscht los)."""
@@ -956,6 +1048,9 @@ def main():
                     S['persona'] = cf['persona_name']
                 if cf.get('lang'):
                     S['lang'] = cf['lang']
+                if cf.get('langs'):
+                    # nur fertige Sprachen sind wählbar (Skizzen raus)
+                    S['langs'] = [l for l in cf['langs'] if l.get('enabled')]
         st = be.status()
         with S['lock']:
             S['available'] = bool(st and st.get('available'))
@@ -1152,18 +1247,33 @@ def main():
                 persona.layout(ev.w, ev.h)
                 set_ime_rect()
             elif ev.type == pygame.TEXTINPUT:
-                # fertig committeter Text (bei CJK: das gewählte Zeichen)
+                # fertig committeter Text (bei CJK: das gewählte Zeichen).
+                # Bei offenem Menü ignorieren (keine Eingabe hinter dem Overlay).
                 with S['lock']:
-                    S['compose'] = ''
-                    if len(S['input']) < 200:
-                        S['input'] += ev.text
+                    if S['menu'] is None:
+                        S['compose'] = ''
+                        if len(S['input']) < 200:
+                            S['input'] += ev.text
             elif ev.type == pygame.TEXTEDITING:
                 # laufende IME-Komposition (Pinyin, noch nicht bestätigt)
                 with S['lock']:
-                    S['compose'] = ev.text
+                    if S['menu'] is None:
+                        S['compose'] = ev.text
             elif ev.type == pygame.KEYDOWN:
+                # Offenes Sprach-Menü fängt die Tasten ab (Navigation/Auswahl/
+                # Schließen) — kein Reden, kein Quit, keine Texteingabe dahinter.
+                with S['lock']:
+                    menu_open = S['menu'] is not None
+                if menu_open:
+                    code = menu_key(ev)
+                    if code:
+                        threading.Thread(target=switch_lang, args=(code,),
+                                         daemon=True).start()
+                    continue
                 if ev.key == pygame.K_ESCAPE:
                     running = False
+                elif ev.key == pygame.K_l and (ev.mod & pygame.KMOD_ALT):
+                    open_lang_menu()                 # Sprache/Persona umschalten
                 elif ev.key == pygame.K_m and (ev.mod & pygame.KMOD_ALT):
                     with S['lock']:
                         S['mute'] = not S['mute']
@@ -1206,6 +1316,7 @@ def main():
             thought = S['thought'] if S['thought_t'] > 0 else None
             thought_t = S['thought_t']
             music = S['music']; tv_on, tv_title = S['tv']
+            menu = S['menu']; menu_langs = list(S['langs']); cur_lang = S['lang']
 
         # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft.
         has_text = bool(buf.strip())
@@ -1277,7 +1388,7 @@ def main():
         elif avail and not tts_ok:
             hint = '🔇 keine Stimme (tts-service aus?)'
         else:
-            hint = '↑/↓ Verlauf · Enter reden · Alt+M stumm · Esc'
+            hint = '↑/↓ Verlauf · Enter reden · Alt+L Sprache · Alt+M stumm · Esc'
         screen.blit(fonts['hud'].render(hint, True, HUD_DIM), (16, 44))
 
         # Mic-Indikator (Immer-Zuhören): Zustand + Alt+H
@@ -1338,6 +1449,32 @@ def main():
             xo += comp.get_width()
         if (caret_t % 1.0) < 0.5:
             screen.blit(fonts['input'].render('▏', True, INPUT_FG), (xo, iy))
+
+        # ── Sprach-Menü-Overlay (Alt+L) ─────────────────────────────────────
+        if menu is not None and menu_langs:
+            ov = pygame.Surface((w, h), pygame.SRCALPHA); ov.fill((0, 0, 0, 150))
+            screen.blit(ov, (0, 0))
+            rh = fonts['input'].get_linesize() + 8
+            mw = min(380, w - 40)
+            mh = 52 + rh * len(menu_langs) + 30
+            mx = (w - mw) // 2; my = max(20, (h - mh) // 2)
+            pygame.draw.rect(screen, (34, 30, 40), (mx, my, mw, mh), border_radius=12)
+            pygame.draw.rect(screen, (96, 86, 104), (mx, my, mw, mh), width=1, border_radius=12)
+            screen.blit(fonts['big'].render('Sprache', True, HUD_FG), (mx + 18, my + 14))
+            yy = my + 52
+            sel = menu.get('sel', 0)
+            for i, l in enumerate(menu_langs):
+                if i == sel:
+                    pygame.draw.rect(screen, (62, 55, 74),
+                                     (mx + 8, yy - 2, mw - 16, rh), border_radius=8)
+                label = f"{i + 1}. {l.get('persona_name', l['code'])} — {l.get('name', l['code'])}"
+                if l['code'] == cur_lang:
+                    label += '   ●'
+                screen.blit(fonts['input'].render(label, True,
+                            HUD_FG if i == sel else HUD_DIM), (mx + 20, yy))
+                yy += rh
+            screen.blit(fonts['hud'].render('↑/↓ · Enter · 1–9 · Esc', True, HUD_DIM),
+                        (mx + 18, yy + 6))
 
         pygame.display.flip()
 
