@@ -240,8 +240,12 @@ mit eigenem Charakter, eigenem Land und eigenem AI-Anbieter (Provider/Modell
 entkoppelt). **Eine Sprache = ein Ordner** `tutor/langs/<code>/` mit allem, was
 sie ausmacht (Profil, Prompt, Tool-Beschriftung, Register-Leiter, Seeds); die
 Registry `tutor/langs/__init__.py` findet die Pakete selbst.
-**LIVE: `zh` → Ling Ling (China, qwen).** Skizzen (`enabled=False`): `fr`
-Jacqueline, `ru` Ludmila, `ar` Amira, `es` Lucía.
+**LIVE: `zh` → Ling Ling (China, qwen), `es` → Lucía (Spanien, qwen).** Skizzen
+(`enabled=False`): `fr` Jacqueline, `ru` Ludmila, `ar` Amira. (Der `es`-Prompt ist
+1:1 nach dem zh-Bauplan verfasst, aber noch nicht gegen echtes qwen gegengetestet —
+siehe `tutor/langs/es/prompt.de.md`. Provider zeigt bewusst auf `qwen` statt der
+Skizzen-Wahl `mistral`: qwen läuft heute [Key da, no-train, solide bei es],
+umstellbar über `tutor/data/tutor_config.json`.)
 
 **Charakter — gegen echtes qwen getunt** (Log: `memory/tutor_persona_tuning.md`):
 - **Kein Lehrer, kein Kurs.** Natürlicher, KURZER Gesprächspartner — 1-2 Sätze,
@@ -265,6 +269,28 @@ Wortschatz wird als **zielsprachiger Kontext** (`vocab_hint`, `{words}`) in
 `tutor.session` ans Prompt-Ende gehängt (ein deutscher Block kippt qwen ins
 Deutsche). Tools (`increment_correct_use`/`introduce_new`) bleiben verfügbar;
 verlässliche Auto-Progression wäre ein Hintergrund-Follow-up.
+
+**Kern-Syllabus (optional, pro Sprache).** Zusätzlich zum EMERGENTEN Vokabular
+(das nur wächst, wenn die Persona zufällig ein Wort per `show_thought` zeigt)
+kann eine Sprache ein festes **Curriculum** tragen: `langs/<lang>/core_vocab.json`
+= die ersten ~75 Kern-Wörter (`{word, reading, priority, category}`, Paket-DATEN,
+kommt mit dem Repo). `tutor.session` hängt daraus in der ZIELSPRACHE einen
+`core_hint` ans Prompt-Ende — Fortschritt (`{got}/{total}`) + die nächsten
+noch-nicht-gefestigten Kern-Wörter nach Priorität (`tools.core_todo`) — damit die
+Persona das Grund-Vokabular **aktiv abarbeitet** statt beliebig. Die **Deckung**
+misst sich, indem die Curriculum-Wörter gegen die `confirmed`-Vokabeln geschnitten
+werden (`tools.core_coverage`) — kein zweiter Zähler. Bei **≥75 %** feuert
+`tools.check_graduation` **genau einmal** einen Meilenstein (`state.push_log`
+„🎓 Kern-Wortschatz gemeistert"), danach fällt der `core_hint` weg (ab da trägt
+die Konversation sich selbst, Register über die `expect`-Leiter). Der einmalige
+Zustand liegt in `data/<lang>/progress.json` — **bewusst NICHT** in den
+Persona-Notizen (`persona_mem`), denn die wandern in den Cloud-Prompt; ein
+Steuer-Flag hat da nichts zu suchen. Sprache ohne `core_vocab.json` → Feature
+still inaktiv (`core_hint` leer, nichts bricht). **LIVE für `es`** (76 Wörter);
+`zh` trägt (noch) keinen Syllabus. Herkunft: adaptiert aus einer
+Bootcamp-Skizze (`tutor/assessment_extension/`), die gegen die alte
+Monolith-Architektur geschrieben war — die Phase/Register-Idee daraus deckt schon
+die `expect`-Leiter ab; neu übernommen wurde nur der Syllabus-Teil.
 
 **Direkt-Start (kein Enter):** TUI-Taste `u` öffnet **mit `DISPLAY` das
 Persona-Zimmer** (`zentrale_tui.tutor_window`, eigenes pygame-Fenster, siehe
@@ -425,8 +451,10 @@ Modell.
   **Keine Vokabel-Datei** — die ist LERNSTAND und liegt unter
   `tutor/data/<lang>/vocab.json` (gitignored); `langs/` ist die SPRACHE und wird
   getrackt. Ein `vocab_file`-Feld gibt es im Schema nicht (mehr).
-  **LIVE: `zh` (Chinesisch).** Skizzen (enabled=False, stückweise reinziehen):
-  `fr`, `ru`, `ar`, `es`.
+  **LIVE: `zh` (Chinesisch), `es` (Spanisch).** Skizzen (enabled=False,
+  stückweise reinziehen): `fr`, `ru`, `ar`. Optional trägt ein Paket einen
+  **Kern-Syllabus** `core_vocab.json` (festes Grund-Vokabular, ~75 Wörter) +
+  `core_hint`-Template — siehe Kern-Syllabus unten.
 - `tutor/providers.py` – **Provider-Registry**. Pro Eintrag: `kind`
   (`ollama` | `anthropic` | `openai_compat`), `base_url`, `key_env`,
   `default_model`, **`trains_on_data`**, `jurisdiction`, `enabled`.

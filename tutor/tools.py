@@ -257,6 +257,120 @@ def get_vocab_stats(lang: str = None) -> str:
                    testing=total - confirmed)
 
 
+# ── Kern-Syllabus: festes Grund-Vokabular + Fortschritt ─────────────────
+# Zusätzlich zum EMERGENTEN Vokabular (das nur wächst, wenn die Persona zufällig
+# ein Wort per show_thought zeigt) trägt eine Sprache optional ein festes
+# CURRICULUM: die ersten ~75 Kern-Wörter, die verlässlich drankommen sollen.
+#
+# Trennung wie überall im Tutor:
+#   • Curriculum = SPRACHE, kommt mit dem Repo → tutor/langs/<lang>/core_vocab.json
+#     (in PROFILE['core_vocab'], base.load_json). Wird NIE geschrieben.
+#   • Lernstand  = LAUFZEIT, gitignored → data/<lang>/vocab.json (confirmed-Flags)
+#     + data/<lang>/progress.json (der einmalige Graduierungs-Meilenstein).
+# Die Deckung misst sich, indem man die Curriculum-Wörter gegen die als
+# confirmed markierten Vokabeln schneidet — kein zweiter Zähler, keine Divergenz.
+
+_PRIO_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+GRADUATE_AT = 0.75    # Anteil gefestigter Kern-Wörter → Kern-Wortschatz „gemeistert"
+
+
+def _core_list(lang: str = None) -> list:
+    """Das Kern-Curriculum der Sprache (Paket-DATEN). Leer → kein Syllabus."""
+    return [e for e in (_prof(lang).get("core_vocab") or [])
+            if isinstance(e, dict) and e.get("word")]
+
+
+def _confirmed_words(lang: str = None) -> set:
+    with _lock:
+        entries = _load_raw(lang)
+    return {e["word"] for e in entries if e.get("confirmed") and e.get("word")}
+
+
+def core_coverage(lang: str = None) -> tuple:
+    """(gefestigte Kern-Wörter, Kern-Gesamt). (0,0) wenn die Sprache kein
+    Curriculum trägt — der Aufrufer behandelt das als „Feature inaktiv"."""
+    core = _core_list(lang)
+    if not core:
+        return (0, 0)
+    confirmed = _confirmed_words(lang)
+    got = sum(1 for e in core if e["word"] in confirmed)
+    return (got, len(core))
+
+
+def core_ratio(lang: str = None) -> float:
+    got, total = core_coverage(lang)
+    return (got / total) if total else 0.0
+
+
+def core_todo(lang: str = None, n: int = 6) -> list:
+    """Die nächsten n noch nicht gefestigten Kern-Wörter, nach Priorität
+    (critical→low). Für den Syllabus-Hinweis an die Persona: WAS als Nächstes
+    dran ist, damit sie das Curriculum aktiv abarbeitet statt beliebig."""
+    core = _core_list(lang)
+    if not core:
+        return []
+    confirmed = _confirmed_words(lang)
+    todo = [e for e in core if e["word"] not in confirmed]
+    todo.sort(key=lambda e: _PRIO_ORDER.get(e.get("priority"), 9))
+    return todo[:max(0, n)]
+
+
+def core_graduated(lang: str = None) -> bool:
+    """Ist die Kern-Schwelle erreicht (≥GRADUATE_AT gefestigt)? Reiner Blick auf
+    die Deckung — der EINMALIGE Meilenstein läuft über check_graduation()."""
+    total = core_coverage(lang)[1]
+    return total > 0 and core_ratio(lang) >= GRADUATE_AT
+
+
+def core_status(lang: str = None) -> str:
+    """Kurze Fortschritts-Zeile für UI/Log (KEIN AI-Tool, deutsch)."""
+    got, total = core_coverage(lang)
+    if not total:
+        return "kein Kern-Syllabus für diese Sprache"
+    pct = int(round(100 * got / total))
+    tail = " — gemeistert" if core_graduated(lang) else ""
+    return f"Kern-Wortschatz: {got}/{total} ({pct}%){tail}"
+
+
+def _progress_load(lang: str = None) -> dict:
+    path = _file('progress.json', lang)
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _progress_save(d: dict, lang: str = None):
+    try:
+        with open(_file('progress.json', lang), 'w', encoding='utf-8') as f:
+            json.dump(d, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def check_graduation(lang: str = None) -> bool:
+    """Nach einem Turn aufrufen: hat die Lernende gerade ERSTMALS die Kern-
+    Schwelle überschritten? Genau EINMAL True (der Meilenstein), danach nie
+    wieder — der Zustand liegt in data/<lang>/progress.json.
+
+    BEWUSST NICHT in persona_mem (den Grob-Notizen): dort ist es (a) ein
+    Fake-Gedächtnis-Fakt, den die Persona nie „erlebt" hat, und (b) der
+    Notiz-Block wandert in den Cloud-Prompt — ein Steuer-Flag hat da nichts zu
+    suchen (Sashas Vorgabe: raus aus den facts)."""
+    if not core_graduated(lang):
+        return False
+    prog = _progress_load(lang)
+    if prog.get("graduated"):
+        return False
+    prog["graduated"] = True
+    _progress_save(prog, lang)
+    return True
+
+
 # ── Satz-Strukturen (Feinmodell: nicht nur Wörter) ──────────────────────
 # Parallel zum Vokabel-Pool, aber für Muster/Grammatik — damit die Persona auch
 # neue SAGWEISEN stückweise einführen kann (Sashas Idee), nicht nur Vokabeln.

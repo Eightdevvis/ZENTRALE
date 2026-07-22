@@ -455,6 +455,24 @@ def respond_stream(user_text: str = None, nudge: bool = False,
         except Exception:
             pass
 
+    # Kern-Syllabus ans Prompt-Ende: WELCHE Kern-Wörter noch dran sind + der
+    # Deckungs-Stand. So arbeitet die Persona das feste Grund-Vokabular aktiv ab
+    # (statt sich rein aufs Emergente zu verlassen). Template aus dem Paket in
+    # der ZIELSPRACHE (prof['core_hint']); fehlt es → keine Injektion. Nach der
+    # Graduierung (Kern gemeistert) fällt der Hinweis weg — kein Nachkarten, ab
+    # da trägt die Konversation sich selbst (Register kommt aus der expect-Leiter).
+    core_hint = prof.get("core_hint")
+    if core_hint and not tools.core_graduated(lang):
+        try:
+            got, total = tools.core_coverage(lang)
+            if total:
+                join = (prof.get("vocab_labels") or {}).get("join", ", ")
+                todo = join.join(e["word"] for e in tools.core_todo(lang, 6))
+                system = system + "\n\n" + core_hint.format(
+                    got=got, total=total, words=todo or "—")
+        except Exception:
+            pass
+
     # Persona-Gedächtnis: was die Persona aus früheren Gesprächen über Sasha
     # weiß, an den System-Prompt hängen. Nur ihr EIGENER Store (nie Sashas
     # Core-Graph) → keine private Info an die Cloud. Query = die neue User-
@@ -506,3 +524,16 @@ def respond_stream(user_text: str = None, nudge: bool = False,
         threading.Thread(
             target=memory.remember,
             args=(user_text, full, lang, pname, model), daemon=True).start()
+
+        # Kern-Syllabus: einmaliger Graduierungs-Meilenstein (≥75% der Kern-
+        # Wörter gefestigt). check_graduation() feuert genau EINMAL — der Zustand
+        # liegt in data/<lang>/progress.json, NICHT in den Persona-Notizen.
+        try:
+            if tools.check_graduation(lang):
+                got, total = tools.core_coverage(lang)
+                import state
+                state.push_log(
+                    f"🎓 Kern-Wortschatz gemeistert ({prof.get('name', lang)}): "
+                    f"{got}/{total} Kern-Wörter — ab jetzt freie Konversation.")
+        except Exception:
+            pass

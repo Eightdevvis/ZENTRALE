@@ -119,6 +119,14 @@ DEFAULTS = {
     "tool_texts":  {},         # Tool-Beschriftung in der Zielsprache (tools.py)
     "phrases":     {},         # Rückgaben/Regie-Sätze der Tools, Zielsprache
     "seeds":       {},         # news/tv-Inhalte der Sprache
+
+    # ── Kern-Syllabus (optional) ────────────────────────────────────────
+    # Ein festes Grund-Vokabular, das die Persona bevorzugt durchnimmt (die
+    # ersten ~75 Wörter), statt sich rein aufs Emergente zu verlassen. Leer =
+    # kein Syllabus (das Feature ist dann einfach inaktiv, nichts bricht).
+    "core_vocab":  [],         # [{word, reading, priority, category}, …] — Paket-DATEN
+    "core_hint":   "",         # {got}/{total}/{words}-Template, in session gefüllt,
+                               # ZIELSPRACHE (ein deutscher Block kippt das Modell)
 }
 
 

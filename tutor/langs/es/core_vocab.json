@@ -1,0 +1,95 @@
+[
+	{ "word": "yo", "reading": "", "priority": "critical", "category": "pronoun" },
+	{ "word": "tú", "reading": "", "priority": "critical", "category": "pronoun" },
+	{ "word": "él", "reading": "", "priority": "critical", "category": "pronoun" },
+	{ "word": "ella", "reading": "", "priority": "critical", "category": "pronoun" },
+	{ "word": "eso", "reading": "", "priority": "medium", "category": "pronoun" },
+	{ "word": "nosotros", "reading": "", "priority": "medium", "category": "pronoun" },
+
+	{ "word": "ser", "reading": "", "priority": "critical", "category": "verb_core" },
+	{ "word": "estar", "reading": "", "priority": "critical", "category": "verb_core" },
+	{ "word": "tener", "reading": "", "priority": "critical", "category": "verb_core" },
+	{ "word": "ir", "reading": "", "priority": "critical", "category": "verb_core" },
+	{ "word": "hacer", "reading": "", "priority": "critical", "category": "verb_core" },
+	{ "word": "decir", "reading": "", "priority": "high", "category": "verb_core" },
+	{ "word": "entender", "reading": "", "priority": "critical", "category": "verb_core" },
+	{ "word": "saber", "reading": "", "priority": "high", "category": "verb_core" },
+	{ "word": "querer", "reading": "", "priority": "high", "category": "verb_core" },
+
+	{ "word": "comer", "reading": "", "priority": "high", "category": "verb_action" },
+	{ "word": "beber", "reading": "", "priority": "high", "category": "verb_action" },
+	{ "word": "ver", "reading": "", "priority": "high", "category": "verb_action" },
+	{ "word": "oír", "reading": "", "priority": "high", "category": "verb_action" },
+
+	{ "word": "qué", "reading": "", "priority": "critical", "category": "question" },
+	{ "word": "quién", "reading": "", "priority": "critical", "category": "question" },
+	{ "word": "cómo", "reading": "", "priority": "critical", "category": "question" },
+	{ "word": "dónde", "reading": "", "priority": "critical", "category": "question" },
+	{ "word": "cuándo", "reading": "", "priority": "high", "category": "question" },
+	{ "word": "por qué", "reading": "", "priority": "high", "category": "question" },
+
+	{ "word": "aquí", "reading": "", "priority": "high", "category": "spatial" },
+	{ "word": "allí", "reading": "", "priority": "high", "category": "spatial" },
+	{ "word": "arriba", "reading": "", "priority": "medium", "category": "spatial" },
+	{ "word": "abajo", "reading": "", "priority": "medium", "category": "spatial" },
+
+	{ "word": "ahora", "reading": "", "priority": "critical", "category": "time" },
+	{ "word": "hoy", "reading": "", "priority": "high", "category": "time" },
+	{ "word": "mañana", "reading": "", "priority": "high", "category": "time" },
+	{ "word": "ayer", "reading": "", "priority": "medium", "category": "time" },
+
+	{ "word": "sí", "reading": "", "priority": "critical", "category": "response" },
+	{ "word": "no", "reading": "", "priority": "critical", "category": "response" },
+	{ "word": "quizás", "reading": "", "priority": "medium", "category": "response" },
+
+	{ "word": "bien", "reading": "", "priority": "critical", "category": "emotion" },
+	{ "word": "mal", "reading": "", "priority": "high", "category": "emotion" },
+	{ "word": "feliz", "reading": "", "priority": "high", "category": "emotion" },
+	{ "word": "triste", "reading": "", "priority": "high", "category": "emotion" },
+	{ "word": "cansado", "reading": "", "priority": "medium", "category": "emotion" },
+
+	{ "word": "grande", "reading": "", "priority": "high", "category": "adjective" },
+	{ "word": "pequeño", "reading": "", "priority": "high", "category": "adjective" },
+	{ "word": "nuevo", "reading": "", "priority": "medium", "category": "adjective" },
+	{ "word": "viejo", "reading": "", "priority": "medium", "category": "adjective" },
+	{ "word": "rápido", "reading": "", "priority": "medium", "category": "adjective" },
+	{ "word": "lento", "reading": "", "priority": "high", "category": "adjective" },
+	{ "word": "caliente", "reading": "", "priority": "medium", "category": "adjective" },
+	{ "word": "frío", "reading": "", "priority": "medium", "category": "adjective" },
+
+	{ "word": "mesa", "reading": "", "priority": "high", "category": "noun_household" },
+	{ "word": "silla", "reading": "", "priority": "high", "category": "noun_household" },
+	{ "word": "puerta", "reading": "", "priority": "medium", "category": "noun_household" },
+	{ "word": "ventana", "reading": "", "priority": "medium", "category": "noun_household" },
+
+	{ "word": "agua", "reading": "", "priority": "high", "category": "noun_substance" },
+	{ "word": "comida", "reading": "", "priority": "high", "category": "noun_substance" },
+
+	{ "word": "música", "reading": "", "priority": "high", "category": "tutor_activity" },
+	{ "word": "periódico", "reading": "", "priority": "high", "category": "tutor_activity" },
+	{ "word": "televisión", "reading": "", "priority": "high", "category": "tutor_activity" },
+
+	{ "word": "madre", "reading": "", "priority": "medium", "category": "family" },
+	{ "word": "padre", "reading": "", "priority": "medium", "category": "family" },
+	{ "word": "hermano", "reading": "", "priority": "medium", "category": "family" },
+	{ "word": "hermana", "reading": "", "priority": "medium", "category": "family" },
+
+	{ "word": "y", "reading": "", "priority": "critical", "category": "connector" },
+	{ "word": "pero", "reading": "", "priority": "high", "category": "connector" },
+	{ "word": "porque", "reading": "", "priority": "high", "category": "connector" },
+	{ "word": "o", "reading": "", "priority": "medium", "category": "connector" },
+
+	{ "word": "muy", "reading": "", "priority": "high", "category": "modifier" },
+	{ "word": "también", "reading": "", "priority": "medium", "category": "modifier" },
+
+	{ "word": "el", "reading": "", "priority": "critical", "category": "article" },
+	{ "word": "la", "reading": "", "priority": "critical", "category": "article" },
+	{ "word": "un", "reading": "", "priority": "high", "category": "article" },
+	{ "word": "una", "reading": "", "priority": "high", "category": "article" },
+
+	{ "word": "por favor", "reading": "", "priority": "high", "category": "politeness" },
+	{ "word": "gracias", "reading": "", "priority": "high", "category": "politeness" },
+
+	{ "word": "hola", "reading": "", "priority": "high", "category": "greeting" },
+	{ "word": "adiós", "reading": "", "priority": "high", "category": "greeting" }
+]

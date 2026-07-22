@@ -1,0 +1,76 @@
+{
+	"get_confirmed_vocab": {
+		"description": "Devuelve todas las palabras que ella ya domina (el 80 %). Llámalo al empezar la sesión para saber sobre qué puedes apoyarte."
+	},
+	"get_testing_vocab": {
+		"description": "Devuelve las palabras que está aprendiendo (aún sin afianzar). Llámalo al empezar la sesión. Si son menos de 10: usa introduce_new."
+	},
+	"increment_correct_use": {
+		"description": "Sube el contador de una palabra que ella ha usado bien. Llámalo cuando la haya usado de forma correcta y con sentido en una frase.",
+		"params": {
+			"word": "La palabra en español"
+		}
+	},
+	"introduce_new": {
+		"description": "Añade una palabra nueva al grupo de aprendizaje. Úsalo solo si get_testing_vocab devuelve menos de 10 palabras.",
+		"params": {
+			"word": "La palabra en español",
+			"reading": "Ayuda de pronunciación (solo si de verdad hace falta; en español casi nunca)"
+		}
+	},
+	"express": {
+		"description": "Exprésate en la habitación (úsalo para moverte o cambiar de cara, NO lo escribas como texto). Posturas: sentarse sit / ponerte de pie stand / andar de un lado a otro pace / dar vueltas wander / acercarte come_closer / dormir sleep. Gestos: saludar con la mano wave / asentir nod / mirarla look / estirarte stretch / levantar los brazos arms_up / cruzar los brazos cross_arms / encogerte de hombros shrug. Caras: contenta happy / triste sad / sorprendida surprised / cansada tired / con cara de duda (no entendiste / ella mandó «?») puzzled / normal neutral. Si te apetece moverte o cambiar de gesto, hazlo con naturalidad.",
+		"params": {
+			"action": "Postura, gesto o expresión"
+		}
+	},
+	"get_structures": {
+		"description": "Mira qué patrones o maneras de decir está aprendiendo Sasha (gramática/expresiones, no solo palabras sueltas)."
+	},
+	"introduce_structure": {
+		"description": "Cuando las palabras que ya tiene estén afianzadas, de vez en cuando añade un patrón nuevo (una forma de decir algo). No metas varios a la vez.",
+		"params": {
+			"pattern": "El patrón, p. ej. «me gusta + …»",
+			"note": "Nota breve (opcional)"
+		}
+	},
+	"increment_structure": {
+		"description": "Llámalo cuando Sasha haya usado bien un patrón, para ayudar a afianzarlo."
+	},
+	"watch_tv": {
+		"description": "Úsalo cuando quieras encender la tele y ver algo (según el ánimo; elígele algo fácil de seguir). chill tranquilo / happy alegre / focus tranquilo y concentrado / sad calmado. Al encenderla, di de pasada qué echan, sin dar la brasa.",
+		"params": {
+			"mood": "El ánimo"
+		}
+	},
+	"turn_off_tv": {
+		"description": "Apagar la tele."
+	},
+	"play_music": {
+		"description": "Úsalo cuando quieras poner algo de música en la habitación (según el ánimo). chill tranquila / happy alegre / focus concentración / sad calmada / energetic con marcha. Ponla y ya, no estés todo el rato hablando de la música.",
+		"params": {
+			"mood": "El ánimo"
+		}
+	},
+	"stop_music": {
+		"description": "Parar la música."
+	},
+	"get_local_news": {
+		"description": "Úsalo cuando te apetezca comentar de pasada algo de España (el tiempo, la comida, las fiestas, de qué habla la gente). Devuelve un tema; suéltalo con naturalidad en una frase, no como si leyeras un telediario, y no te quedes clavada en él. Eres una IA: es cómo son las cosas en España, no algo que hayas vivido tú."
+	},
+	"mark_known": {
+		"description": "Al principio, ve viendo qué palabras ya sabe Sasha: las que entiende o dice, márcalas con esto (como «ya la domina»). Es lo contrario de show_thought, que enseña una palabra nueva.",
+		"params": {
+			"word": "La palabra que ella ya sabe (en español)",
+			"reading": "Ayuda de pronunciación (solo si hace falta)"
+		}
+	},
+	"show_thought": {
+		"description": "Para cada palabra que ella todavía no conoce, usa esto siempre: muéstrale en tu mente la palabra y su significado (una imagen o la traducción), para que lo pille de un vistazo — mejor que explicarlo con muchas palabras. (Esto también añade la palabra a su lista de vocabulario, no hace falta apuntarla aparte.)",
+		"params": {
+			"word": "La palabra a mostrar (en español)",
+			"meaning": "El significado en alemán / la traducción",
+			"reading": "Ayuda de pronunciación (solo si hace falta)"
+		}
+	}
+}

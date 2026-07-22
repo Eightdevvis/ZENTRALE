@@ -1,35 +1,109 @@
 # tutor/langs/es/ — Spanisch, Persona: Lucía.
 #
-# SKIZZE (enabled=False): Persona/Land/Provider stehen, der Prompt kommt noch aus
-# der generischen build_prompt (deutsch). BEIM AKTIVIEREN: einen eigenen prompt.md
-# IN DER ZIELSPRACHE hand-tunen (wie tutor/langs/zh/prompt.md) — ein deutscher
-# Prompt lässt das Modell auf Deutsch antworten (memory/tutor_persona_tuning.md).
-# Dann prompt.de.md als Referenz daneben, tool_texts.json + phrases + expect.json
-# in der Zielsprache, seeds/ füllen, und enabled=True.
+# LIVE (enabled=True). Alles, was diese Sprache ausmacht, liegt in diesem Ordner —
+# Code muss dafür nirgends angefasst werden.
+#
+#   prompt.md        System-Prompt, AUF SPANISCH (der Hebel, der das Modell in der
+#                    Zielsprache hält; siehe base.py + memory/tutor_persona_tuning.md).
+#   prompt.de.md     Deutsche Referenz-Fassung (nur Review; NICHT was das Modell sieht).
+#   vocab_hint.md    {words}-Template, das session ans Prompt-Ende hängt.
+#   expect.json      Register-Leiter [[grenze, text], …] — Sprechweise skaliert mit
+#                    dem Wortschatz.
+#   core_vocab.json  Kern-Syllabus: die ersten ~75 Wörter, die drankommen sollen
+#                    (tools.core_coverage/core_todo, session hängt core_hint an).
+#   tool_texts.json  Tool-Beschriftung, die das Modell sieht (Spanisch).
+#   seeds/news.json  leichte Spanien-Themen (Content-Lücke: kein echter Feed)
+#   seeds/tv.json    Mediathek-Katalog (nur Titel/Meta, kein Video)
+#
+# ── Provider: qwen (statt der früheren Skizzen-Wahl mistral) ─────────────
+# Die Skizze zeigte auf mistral/ministral-3b — der „ideale Spanisch-Default" auf
+# dem Papier, aber (a) enabled=False, (b) braucht einen MISTRAL_API_KEY (nur PAID,
+# sonst trainiert der Free-Tier). Damit die Sprache HEUTE läuft, zeigt sie auf
+# qwen-plus: enabled, Key vorhanden (DASHSCOPE), no-train, „solide bei es"
+# (providers.py). Umstellen jederzeit über tutor/data/tutor_config.json
+# (provider/model) — die Sprache ist an keinen Anbieter gebunden.
+#
+# ── Noch nicht gegen echtes Modell gegengetestet ────────────────────────
+# prompt.md ist 1:1 nach dem zh-Bauplan übersetzt, aber noch nicht in einer echten
+# qwen-Session gegengeprüft (siehe prompt.de.md). Beim ersten Live-Lauf: bleibt
+# Lucía auf Spanisch, kurz, mit show_thought-Reflex? Sonst am prompt.md feilen.
 
-from ..base import profile, build_prompt
+from ..base import profile, load_text, load_json
 
 PROFILE = profile(
     "es",
-    name         = 'Spanisch',
-    persona_name = 'Lucía',
-    country      = 'Spanien',
-    enabled      = False,
+    name         = "Spanisch",       # Sprach-Anzeigename (UI/lang_name)
+    persona_name = "Lucía",          # die Figur
+    country      = "Spanien",
+    enabled      = True,
 
-    reading  = 'none',
-    script   = 'ltr',
-    stt_lang = 'es',
-    tts_lang = 'es',
+    # Spanisch braucht keine Lesehilfe → das 'reading'-Feld bleibt leer.
+    reading        = "none",
+    reading_label  = "",
+    script         = "ltr",
+    stt_lang       = "es",
+    tts_lang       = "es",
 
-    provider = 'mistral',
-    model    = 'ministral-3b-latest',
+    provider = "qwen",           # siehe Kopf: läuft heute; über Config umstellbar
+    model    = "qwen-plus",
 
-    # ACHTUNG: die Argumente hier sind bewusst NICHT name/country von oben —
-    # der Prompt spricht 'Spanisch' an, das Profil heisst 'Spanisch' (UI).
-    system_prompt = build_prompt(
-        'Lucía',
-        'Spanisch',
-        'Spanien',
-        'Bei Substantiven das Genus mitnennen, z.B. la casa.',
-    ),
+    system_prompt = load_text(__file__, "prompt.md"),
+    vocab_hint    = load_text(__file__, "vocab_hint.md").strip(),
+    expect_ladder = load_json(__file__, "expect.json"),
+    tool_texts    = load_json(__file__, "tool_texts.json", {}),
+
+    # Kern-Syllabus + der Hinweis, den session ans Prompt-Ende hängt (Zielsprache).
+    core_vocab = load_json(__file__, "core_vocab.json", []),
+    core_hint  = ("(Vocabulario básico: {got}/{total} afianzadas. Aún por enseñar, "
+                  "por orden: {words}. Prioriza estas cuando encaje, sin forzar ni "
+                  "soltarlas de golpe.)"),
+
+    # Beschriftung des Vokabel-Blocks (session hängt ihn ans Prompt-Ende) — Spanisch,
+    # sonst bekäme eine es-Session einen deutschen Block.
+    vocab_labels = {
+        "solid":   "ya domina (úsalas sin miedo): ",
+        "learn":   "está aprendiendo (repítelas, y si las usa bien afiánzalas): ",
+        "structs": "patrones que está aprendiendo: ",
+        "plain":   "está aprendiendo: ",
+        "join":    ", ",
+        "sep":     "; ",
+    },
+
+    # Rückgaben + Regie-Sätze der Tools — in der Zielsprache, sonst liest das Modell
+    # mitten in der Session Deutsch und kippt zurück.
+    phrases = {
+        "vocab_none":             "Todavía no hay palabras afianzadas.",
+        "vocab_confirmed_header": "Palabras afianzadas (el 80 %):",
+        "vocab_testing_empty":    "no hay palabras en aprendizaje (0) — usa introduce_new",
+        "vocab_testing_header":   "Palabras en aprendizaje (el 20 %, son {count}):",
+        "vocab_confirmed_now":    "✓ «{word}» ya afianzada (tras usarla bien {uses} veces)",
+        "vocab_progress":         "✓ contador de «{word}» → {uses}/{threshold}",
+        "vocab_notfound":         "[la palabra «{word}» no está en la lista]",
+        "vocab_dup":              "[«{word}» ya está en la lista]",
+        "vocab_added":            "✓ palabra nueva añadida: «{word}»",
+        "known_noword":           "[ninguna palabra]",
+        "known_marked":           "✓ «{word}» marcada como que ya la sabe",
+        "known_added":            "✓ «{word}» añadida como que ya la sabe",
+        "stats":                  "Palabras en total: {total} | afianzadas: {confirmed} | en aprendizaje: {testing}",
+
+        "struct_none":            "Aún no hay patrones. Cuando esté suelta, puedes añadir uno con introduce_structure.",
+        "struct_header":          "Patrones / maneras de decir en aprendizaje:",
+        "struct_line":            "{pattern} — {note} ({uses} veces{tag})",
+        "struct_mastered_tag":    ", afianzado",
+        "struct_nopattern":       "[ningún patrón]",
+        "struct_dup":             "[«{pattern}» ya existe]",
+        "struct_new":             "✓ patrón nuevo: {pattern}",
+        "struct_mastered":        "✓ patrón «{pattern}» afianzado",
+        "struct_progress":        "✓ «{pattern}» {uses}/{threshold}",
+        "struct_notfound":        "[«{pattern}» no encontrado]",
+
+        "news_none":              "(ahora no hay tema, tú sigue charlando sin más)",
+        "news_wrap":              "(suéltalo de pasada, no como un telediario) De España se suele comentar: {topic}",
+        "tv_wrap":                "(has encendido la tele, di una frase sin más) Están echando: {title} ({level}, {note})",
+    },
+
+    seeds = {
+        "news": load_json(__file__, "seeds/news.json", []),
+        "tv":   load_json(__file__, "seeds/tv.json", []),
+    },
 )

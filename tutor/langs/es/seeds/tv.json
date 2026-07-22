@@ -1,0 +1,50 @@
+[
+	{
+		"title": "Pocoyó",
+		"mood": "chill",
+		"level": "fácil",
+		"note": "dibujos, lento, pocas palabras, ideal para empezar"
+	},
+	{
+		"title": "Un vídeo de recetas de la abuela",
+		"mood": "chill",
+		"level": "fácil",
+		"note": "se ve bonito, casi no hace falta entender para seguirlo"
+	},
+	{
+		"title": "Un documental de naturaleza de La 2",
+		"mood": "chill",
+		"level": "fácil",
+		"note": "imágenes tranquilas, la voz va despacio"
+	},
+	{
+		"title": "Una peli de Pixar doblada",
+		"mood": "happy",
+		"level": "medio",
+		"note": "historia que ya conoces, fácil de seguir por el dibujo"
+	},
+	{
+		"title": "Un programa de cocina en la tele",
+		"mood": "happy",
+		"level": "medio",
+		"note": "cuentan platos de cada sitio, se explica claro"
+	},
+	{
+		"title": "Los Lunnis",
+		"mood": "happy",
+		"level": "fácil",
+		"note": "para niños, canciones y palabras sencillas"
+	},
+	{
+		"title": "Un directo de un paisaje con música",
+		"mood": "focus",
+		"level": "fácil",
+		"note": "casi sin diálogo, bueno para estudiar en calma"
+	},
+	{
+		"title": "Un vídeo de música tranquila",
+		"mood": "sad",
+		"level": "fácil",
+		"note": "imágenes y música suaves, nada de ruido"
+	}
+]
