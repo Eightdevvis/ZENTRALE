@@ -1421,15 +1421,21 @@ def run_ui(stdscr, store):
         Chat-Box, sondern eine Person: hier wohnt sie, läuft rum, sitzt auf der
         Couch. Detached gestartet (eigener Prozess), die TUI läuft weiter; das
         Fenster spricht dieselbe /api/tutor/*-Session. BASE_URL wird mitgereicht,
-        damit es auch vom Laptop (zentrale-remote) ans PC-Backend findet."""
+        damit es auch vom Laptop (zentrale-remote) ans PC-Backend findet.
+
+        Gestartet wird NICHT room.py direkt, sondern der On-demand-Launcher
+        scripts/open_tutor_room.py: der fährt die lokalen Audio-Dienste (Whisper
+        :5050, TTS :5051) beim Öffnen hoch und beim Schließen wieder runter —
+        weil 0RAMMachine die Modelle nicht ab Boot tragen darf. Was schon läuft
+        (systemd am PC) bleibt unangetastet."""
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         py = os.path.join(root, "venv", "bin", "python")
-        script = os.path.join(root, "tutor", "room.py")
+        script = os.path.join(root, "scripts", "open_tutor_room.py")
         if not os.environ.get("DISPLAY"):
             with TUTOR_LOCK: TUTOR["msg"] = "kein DISPLAY (X11?)"
             return
         if not os.path.exists(script):
-            with TUTOR_LOCK: TUTOR["msg"] = "tutor/room.py fehlt"
+            with TUTOR_LOCK: TUTOR["msg"] = "open_tutor_room.py fehlt"
             return
         # Nur EIN Fenster: läuft das vorige noch (poll() is None), kein neues.
         proc = TUTOR.get("proc")
