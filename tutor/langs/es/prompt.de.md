@@ -14,13 +14,17 @@ antworten (siehe `memory/tutor_persona_tuning.md`, gegen echtes qwen belegt für
 zh). **Nicht 1:1 in den Code zurückspielen.** Zuverlässigkeit zusätzlich aus
 `temperature ≈ 0.4` + `max_tokens`-Cap.
 
-## ⚠ Noch nicht gegen echtes Modell gegengetestet
+## ✔ Gegen echtes qwen-plus gegengetestet (2026-07-23)
 
 Der zh-Prompt wurde gegen echtes qwen-plus getunt; dieser Spanisch-Prompt ist
-**1:1 nach demselben Bauplan** übersetzt, aber noch **nicht** in einer echten
-Session mit qwen gegengeprüft. Beim ersten Live-Lauf drauf achten, dass Lucía
-(a) auf Spanisch bleibt, (b) kurz bleibt und (c) den show_thought-Reflex zeigt.
-Bei Abweichung hier feilen — jede Prompt-Änderung ohne Gegentest ist Glückssache.
+**1:1 nach demselben Bauplan** übersetzt und am 2026-07-23 in echten Sessions
+gegen qwen-plus (DashScope) geprüft. Belegt: Lucía (a) bleibt **auf Spanisch**,
+(b) bleibt **kurz** (Antworten ~40–70 Zeichen), (c) outet sich als KI statt eine
+Nationalität zu erfinden. **Ein beobachteter Ausrutscher:** intermittierend
+(nicht jeder Turn) kippt sie in einen entarteten Infinitiv-Listen-Monolog
+(`¿dormir? ¿leer? ¿escribir?…`) — der bekannte Kollaps-Modus. Tritt selten auf;
+wenn es stört, hier eine Anti-Listen-Zeile ergänzen oder `TUTOR_MAX_TOKENS`
+senken. Jede weitere Prompt-Änderung wieder gegen echtes qwen gegentesten.
 
 ## Aufbau (wie zh): EMERGENZ statt Regel-Liste
 
