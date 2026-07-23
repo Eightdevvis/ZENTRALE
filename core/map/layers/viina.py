@@ -19,9 +19,13 @@
 # Lizenz: Open Database License (ODbL) — Namensnennung + Share-alike →
 #   `commit_ok = True` (mit Copyleft). Wie UCDP holen wir live + cachen lokal.
 #
-# Format: die Kontrolldatei liegt als ZIP im Repo (`control_latest_<jahr>.zip`,
-# GeoNames, N≈33k), NICHT als rohes CSV. Wir laden das ZIP, entpacken im Speicher
-# und lesen die CSV-Spalten geonameid/longitude/latitude/asciiname/status(+Quellen).
+# Format: ZWEI VIINA-Dateien werden gejoint (die Kontrolldatei trägt KEINE
+# Koordinaten). (1) `control_latest_<jahr>.zip` (git-LFS) — je Ort und TAG eine
+# Zeile mit Kontroll-Status; Spalten geonameid/date/status(+Einzelquellen). Das
+# ist eine ganze Tageszeitreihe (~6,7 Mio Zeilen, ~33k Orte je Jahr). (2) Der
+# Gazetteer `gn_UA_tess.geojson` — je geonameid Punkt (latitude/longitude) + Name
+# (+Polygon für später). Wir nehmen je Ort die JÜNGSTE Status-Zeile (Gegenwarts-
+# Snapshot) und joinen über geonameid auf die Koordinaten.
 
 import io
 import os
@@ -54,26 +58,45 @@ _YEAR = os.environ.get("VIINA_YEAR") or str(datetime.now(timezone.utc).year)
 _MEDIA = "https://media.githubusercontent.com/media/zhukovyuri/VIINA/main/Data"
 _URL = "%s/control_latest_%s.zip" % (_MEDIA, _YEAR)
 
+# Gazetteer geonameid → Koordinaten+Name (statische Struktur, ändert sich kaum).
+# KEIN git-LFS → normaler raw-Endpoint liefert die echte Datei (~31 MB).
+_GAZETTEER_URL = (
+    "https://raw.githubusercontent.com/zhukovyuri/VIINA/main/Data/gn_UA_tess.geojson")
+
 _CACHE_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "data", "cache")
 _CACHE_FILE = os.path.join(_CACHE_DIR, "viina_control.json")
 
 
-def _num(v):
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return None
+def _download(url, timeout=180):
+    req = urllib.request.Request(url, headers={"User-Agent": "ZENTRALE-maps/1"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read()
 
 
-def _fetch():
-    """VIINA-Kontroll-ZIP laden, im Speicher entpacken, CSV lesen. Gibt das
-    fertige Cache-Payload (dict) zurück — schreibt NICHT selbst."""
-    req = urllib.request.Request(_URL, headers={"User-Agent": "ZENTRALE-maps/1"})
-    with urllib.request.urlopen(req, timeout=180) as resp:
-        blob = resp.read()
+def _gazetteer():
+    """geonameid → (lon, lat, asciiname) aus VIINAs `gn_UA_tess.geojson`.
+    Der Gazetteer trägt die Punktkoordinaten je Ort; die Kontrolldatei hat nur
+    den Status. GeoNames-ids stehen dort als Float ('461727.0') → auf str(int)
+    normalisieren, damit der Join mit den CSV-ids (String) trifft."""
+    fc = json.loads(_download(_GAZETTEER_URL))
+    gaz = {}
+    for feat in fc.get("features", []):
+        p = feat.get("properties") or {}
+        gid, lon, lat = p.get("geonameid"), p.get("longitude"), p.get("latitude")
+        if gid is None or lon is None or lat is None:
+            continue
+        gaz[str(int(float(gid)))] = (float(lon), float(lat), p.get("asciiname"))
+    if not gaz:
+        raise ValueError("VIINA: Gazetteer leer — Join unmöglich")
+    return gaz
 
+
+def _latest_status():
+    """Jüngste Kontroll-Zeile je geonameid aus der Jahres-ZIP (die eine ganze
+    Tageszeitreihe enthält). Gibt (dict geonameid → status-felder, max_date)."""
+    blob = _download(_URL)
     # Sicherung: kam versehentlich der LFS-Pointer statt der Binärdatei?
     if blob[:40].startswith(b"version https://git-lfs"):
         raise ValueError("VIINA: LFS-Pointer statt ZIP erhalten (falsche URL?)")
@@ -83,40 +106,72 @@ def _fetch():
     if member is None:
         raise ValueError("VIINA-ZIP enthält kein CSV")
 
+    latest = {}
+    max_date = None
     with zf.open(member) as fh:
-        reader = csv.DictReader(io.TextIOWrapper(fh, encoding="utf-8"))
-        items = []
-        max_date = None
-        for row in reader:
-            lon, lat = _num(row.get("longitude")), _num(row.get("latitude"))
-            if lon is None or lat is None:
+        for row in csv.DictReader(io.TextIOWrapper(fh, encoding="utf-8")):
+            gid, d = row.get("geonameid"), row.get("date")
+            if not gid or not d:
                 continue
-            wx, wy = lonlat_to_world(lon, lat)
-            items.append({
-                "geonameid": row.get("geonameid"),
-                "name": row.get("asciiname"),
-                "lon": lon, "lat": lat, "wx": wx, "wy": wy,
-                # Konsens-Status (Mehrheitsvotum) …
-                "status": row.get("status"),
-                # … plus Einzelquellen, damit man sie vergleichen kann
-                "status_dsm": row.get("status_dsm"),
-                "status_isw": row.get("status_isw"),
-                "status_wiki": row.get("status_wiki"),
-            })
-            d = row.get("date")
-            if d and (max_date is None or d > max_date):
+            cur = latest.get(gid)
+            if cur is None or d > cur["date"]:
+                latest[gid] = {
+                    "date": d,
+                    # Konsens-Status (Mehrheitsvotum) …
+                    "status": row.get("status"),
+                    # … plus Einzelquellen, damit man sie vergleichen kann
+                    "status_dsm": row.get("status_dsm"),
+                    "status_isw": row.get("status_isw"),
+                    "status_wiki": row.get("status_wiki"),
+                    "status_boost": row.get("status_boost"),
+                }
+            if max_date is None or d > max_date:
                 max_date = d
+    return latest, max_date
+
+
+def _iso_date(d):
+    """VIINA-Datum 'YYYYMMDD' → 'YYYY-MM-DD' (sonst unverändert)."""
+    if d and len(d) == 8 and d.isdigit():
+        return "%s-%s-%s" % (d[:4], d[4:6], d[6:])
+    return d
+
+
+def _fetch():
+    """Gegenwarts-Snapshot der Gebietskontrolle: jüngsten Status je Ort holen und
+    über geonameid auf die Gazetteer-Koordinaten joinen. Gibt das fertige
+    Cache-Payload (dict) zurück — schreibt NICHT selbst."""
+    gaz = _gazetteer()
+    latest, max_date = _latest_status()
+
+    items = []
+    for gid, st in latest.items():
+        coords = gaz.get(gid)
+        if coords is None:                 # Ort ohne Koordinate → nicht kartierbar
+            continue
+        lon, lat, name = coords
+        wx, wy = lonlat_to_world(lon, lat)
+        items.append({
+            "geonameid": gid,
+            "name": name,
+            "lon": lon, "lat": lat, "wx": wx, "wy": wy,
+            "status": st["status"],
+            "status_dsm": st["status_dsm"],
+            "status_isw": st["status_isw"],
+            "status_wiki": st["status_wiki"],
+            "status_boost": st["status_boost"],
+        })
 
     # Leeres Ergebnis NICHT cachen (sonst cache-first für immer leer, kein Retry).
     if not items:
-        raise ValueError("VIINA: 0 Orte im ZIP — nicht cachen (falsche URL/leer?)")
+        raise ValueError("VIINA: 0 Orte nach Join — nicht cachen (falsche URL/leer?)")
 
     return {
         "schema": 1,
         "source": SOURCE,
         "year": _YEAR,
-        # Stand: jüngstes Datum in der Datei, sonst Abrufdatum (Snapshot „latest").
-        "vintage": max_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        # Stand: jüngstes Datum in der Zeitreihe, sonst Abrufdatum.
+        "vintage": _iso_date(max_date) or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "retrieved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "count": len(items),
         "items": items,
