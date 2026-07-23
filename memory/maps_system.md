@@ -354,9 +354,20 @@ Grenzen) sind die Zeitreihen-Quellen.
   Projektbeschreibung, Antwort 3–5 Werktage). Danach `export UCDP_ACCESS_TOKEN=…`
   + `python -m map.layers.ucdp` → Ereignisse landen wie VIINA im Cache. Der
   Header-Code (`x-ucdp-access-token`) steht schon.
-- **NÄCHSTER SCHRITT: Achse 3 (Zeitstrahl).** Die VIINA-Zeitreihe (täglich, ganzes
-  Jahr) ist genau das Material — `viina._latest_status()` muss dafür nur von
-  „jüngste Zeile je Ort" zu „Status an Datum X je Ort" verallgemeinert werden.
+- ✅ **Achse 3 (Zeitstrahl) für `control-ua`** (commit `416320a`): VIINA ist
+  zeitreisefähig. Cache-schema 2 hält je Ort die auf Change-Points komprimierte
+  Konsens-Zeitachse (Ø 1,1 Punkte/Ort → 36,6k statt 6,7 Mio Zeilen). `control(at)`
+  löst per `_asof` „Status wie an Tag X" auf (at=None → jetzt); Orte vor ihrem
+  ersten Trackingtag fallen raus. `political.features` reicht `at` durch und gibt
+  `out["time"]={min,max,at}`. TUI-Scrubber: Tasten `,`/`.` (±1 Woche), `;` zurück
+  auf jetzt, `⏱`-Marker in der Statuszeile. `_download` bekam Retry+Backoff (die
+  großen Downloads rissen sonst mit Timeout/IncompleteRead den Job ab). Belegt:
+  RU im Blick 140 (01.02.) → 162 (jetzt) = Front bewegt sich.
+- **OFFEN Achse 3:** (a) **UCDP/ACLED-Ereignisse** filtern noch NICHT nach `at` —
+  bewusst offen, bis der UCDP-Token da ist (Design „Fenster vs. kumulativ ab 1989"
+  mit Sasha klären). (b) **historische Grenzen** (CShapes 2.0, 1886–2019) als
+  eigene Zeitachse für `borders` — später. (c) Feineres Scrub-UI (Tag-Schritt,
+  Datum direkt eingeben, Zeitleiste zeichnen) nur bei Bedarf.
 
 ## Geparkte / offene Entscheidungen
 
