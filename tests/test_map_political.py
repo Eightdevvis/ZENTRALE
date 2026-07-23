@@ -79,7 +79,7 @@ def test_ucdp_unavailable_when_source_down(monkeypatch):
 
 # --- VIINA-Kontrolle -------------------------------------------------------
 
-def _fake_viina():
+def _fake_viina(at=None):               # control(at) — at hier ohne Wirkung
     kh = lonlat_to_world(36.3, 49.99)   # Charkiw-Region
     return {
         "source": viina.SOURCE, "vintage": "2026-07-20",
@@ -125,7 +125,7 @@ def test_acled_absent_from_composite(monkeypatch):
     # Selbst wenn ACLED Daten hätte: das Standard-Komposit zieht es NICHT.
     monkeypatch.setattr(acled, "events", _fake_acled)
     monkeypatch.setattr(ucdp, "events", lambda: None)
-    monkeypatch.setattr(viina, "control", lambda: None)
+    monkeypatch.setattr(viina, "control", lambda at=None: None)
     out = political.features(44.0, 33.0, 4.0, 120, 60)   # kein sub → Komposit
     assert not any(p.get("cat") == "event-acled" for p in out.get("points", []))
 

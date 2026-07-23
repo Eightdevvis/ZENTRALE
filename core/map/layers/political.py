@@ -138,7 +138,9 @@ def features(cx, cy, zoom, cols, rows, aspect=0.5, sub=None, at=None):
 
     sub: 'events-ucdp' | 'control-ua' | 'borders' | 'events-acled' | sonst
          Komposit (UCDP-Ereignisse + VIINA-Kontrolle + Grenzen; ACLED NUR explizit).
-    at:  Achse 3 (Zeit) — HEUTE ignoriert (Gegenwarts-Layer zuerst).
+    at:  Achse 3 (Zeit, 'YYYY-MM-DD') — greift für `control-ua` (VIINA-Zeitreise:
+         Kontrolle wie an dem Tag). Ereignisse (UCDP/ACLED) filtern noch nicht
+         nach at. at=None → Gegenwart. `out["time"]` trägt die Scrub-Grenzen.
     Rückgabe (JSON-fähig): center/zoom/bounds/cols/rows/sub + sources/source/vintage +
       points:[{name,col,row,value,cat,…},…]   (Ereignisse und/oder Kontrolle)
       lines:[[[col,row],…],…]                  (umstrittene Gebiete, falls enthalten)
@@ -181,11 +183,16 @@ def features(cx, cy, zoom, cols, rows, aspect=0.5, sub=None, at=None):
 
     if sub in ("all", "control-ua"):
         sources.append(viina.SOURCE)
-        p, v, _s, t = _control_points(vp, viina.control())
+        # Achse 3: at reicht bis in die VIINA-Zeitreise (at=None → Gegenwart).
+        p, v, _s, t = _control_points(vp, viina.control(at))
         points += p
         truncated = truncated or t
         if v:
             vintages.append(v)
+        # Scrub-Grenzen mitgeben, damit die Front die Zeitachse aufziehen kann.
+        dr = viina.date_range()
+        if dr:
+            out["time"] = {"min": dr[0], "max": dr[1], "at": at or dr[1]}
 
     if sub in ("all", "borders"):
         sources.append(borders.SOURCE)

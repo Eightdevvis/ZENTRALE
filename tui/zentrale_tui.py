@@ -513,7 +513,7 @@ TUI_KEYS = [
     ("t",   "Theme wechseln (auto/hell/dunkel)"),
     ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
     ("n",   "Notizen (Mitte): freie notiz aus blöcken · ↑↓ block · t/l/f text/liste/float · e bearbeiten · d weg (fragt bei inhalt) · r titel · n übersicht · esc speichern & zu"),
-    ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Overlay (Handel→Politik→aus) · w=Fenster"),
+    ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Overlay (Handel→Politik→aus) · ,/. Zeit ←→ · ; jetzt · w=Fenster"),
     ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · v Woche/Monat"),
     ("p",   "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
     ("a",   "KI-Chat (Mitte): tippen + enter fragt die lokale KI (PC-Hirn via tunnel) · ↑↓ scrollen · esc zu"),
@@ -1012,6 +1012,7 @@ def run_ui(stdscr, store):
          "data": None, "grid": None, "msg": "", "proc": None,
          "overlay": False,      # thematisches Overlay (Achse 2) ein/aus
          "overlay_layer": "trade",  # welches Overlay: 'trade'|'political' (Taste o zykliert)
+         "overlay_at": None,    # Achse 3: Zeitpunkt 'YYYY-MM-DD' oder None=jetzt (Tasten ,/. ;)
          "odata": None,         # letzte /api/map/layer/<overlay_layer>-Antwort (None ⇒ neu holen)
          "ogrid": None,         # (cols,rows), für die odata geholt wurde
          "focus": None,         # Name des fokussierten Landes (Alt+Pfeile), None=keins
@@ -1590,9 +1591,41 @@ def run_ui(stdscr, store):
             q = ("/api/map/layer/%s?"
                  "cx=%.5f&cy=%.5f&zoom=%.2f&cols=%d&rows=%d&aspect=0.5"
                  % (M["overlay_layer"], M["cx"], M["cy"], M["zoom"], cols, rows))
+            if M.get("overlay_at"):            # Achse 3: Zeitpunkt mitgeben
+                q += "&at=" + M["overlay_at"]
             M["odata"] = api_call(q, timeout=2.0) or {"failed": True}
         except Exception:
             M["odata"] = {"failed": True}
+
+    def m_time_step(days):
+        """Achse 3: den Overlay-Zeitpunkt um `days` verschieben — aber nur, wenn
+        das aktive Overlay eine Zeitachse liefert (odata['time']), sonst no-op.
+        Grenzen aus min/max der Zeitreihe: über max hinaus schnappt es auf „jetzt"
+        (None) zurück, unter min wird geklemmt. None = Gegenwart."""
+        d = M["odata"] if isinstance(M["odata"], dict) else None
+        t = d.get("time") if d else None
+        if not t or not t.get("min") or not t.get("max"):
+            return
+        cur = M.get("overlay_at") or t["max"]
+        try:
+            loD = date(*(int(x) for x in t["min"].split("-")))
+            hiD = date(*(int(x) for x in t["max"].split("-")))
+            nd = date(*(int(x) for x in cur.split("-"))) + timedelta(days=days)
+        except (ValueError, TypeError):
+            return
+        if nd >= hiD:
+            M["overlay_at"] = None             # ab „heute" → zurück auf jetzt
+        elif nd <= loD:
+            M["overlay_at"] = t["min"]
+        else:
+            M["overlay_at"] = nd.isoformat()
+        M["odata"] = None                      # mit neuem at neu holen
+
+    def m_time_now():
+        """Achse 3 auf Gegenwart zurücksetzen."""
+        if M.get("overlay_at") is not None:
+            M["overlay_at"] = None
+            M["odata"] = None
 
     def m_pan(fx, fy):
         """Mittelpunkt um einen Bruchteil der sichtbaren Spanne verschieben.
@@ -3496,6 +3529,10 @@ def run_ui(stdscr, store):
                 info += " · [%s] %s %s" % (lbl, nm, extra)
             else:
                 info += " · %s %s" % (lbl, ovintage or "?")
+            # Achse 3: Zeit-Marker, sobald das Overlay eine Zeitachse liefert.
+            _od = M["odata"] if isinstance(M["odata"], dict) else None
+            if _od and _od.get("time"):
+                info += " · ⏱%s" % (M.get("overlay_at") or "jetzt")
         addclip(by + bh - 2, ox, info, iw, C["bright"])
         # Fenster-Status LIVE aus dem Prozess lesen (poll()), nicht aus klebendem
         # Text — so verschwindet „● fenster", sobald das native Fenster zu ist.
@@ -5708,7 +5745,14 @@ def run_ui(stdscr, store):
                         M["overlay"] = False   # nach dem letzten: Overlay aus
                     else:
                         M["overlay_layer"] = OVERLAY_CYCLE[i]
+                M["overlay_at"] = None         # Layer-Wechsel → Zeitachse auf „jetzt"
                 M["odata"] = None              # bei Wechsel/Einschalten frisch holen
+            elif ch in (ord(","), ord("<")):   # Achse 3: Zeit zurück (1 Woche)
+                m_time_step(-7)
+            elif ch in (ord("."), ord(">")):   # Achse 3: Zeit vor (1 Woche)
+                m_time_step(7)
+            elif ch == ord(";"):               # Achse 3: zurück auf „jetzt"
+                m_time_now()
             elif ch in (ord("w"), ord("W"), 10, 13, curses.KEY_ENTER):
                 m_window()                     # natives Fenster aufklappen
             elif ch in (ord("t"), ord("T")):   # Theme darf auch hier zyklieren

@@ -1,9 +1,10 @@
 # tests/test_map_viina.py
 #
-# Deckt den Join ab, an dem der Layer zuvor still auf 0 Orte lief: die VIINA-
-# Kontrolldatei trägt KEINE Koordinaten (nur geonameid+Status je Tag), die
-# Koordinaten kommen aus dem Gazetteer `gn_UA_tess.geojson`. Netz ist gemockt
-# (`_download`), damit der Test offline und deterministisch bleibt.
+# Deckt zwei Dinge ab: (1) den Join, an dem der Layer zuvor still auf 0 Orte lief
+# — die VIINA-Kontrolldatei trägt KEINE Koordinaten (nur geonameid+Status je Tag),
+# die kommen aus dem Gazetteer `gn_UA_tess.geojson`. (2) die Achse-3-Zeitreise:
+# je Ort eine komprimierte Konsens-Zeitachse (Change-Points), aus der `control(at)`
+# den Stand an einem Tag auflöst. Netz ist gemockt (`_download`) → offline.
 
 import io
 import csv
@@ -42,25 +43,27 @@ def _gazetteer_geojson(feats):
     }).encode("utf-8")
 
 
+# 461727 = Olenevka: durchgehend RU (1 Change-Point).
+# 700000 = Kupiansk: UA am 01.01., RU ab 15.03. (2 Change-Points, Wechsel).
+# 999999 = ohne Gazetteer-Koordinate → fällt aus dem Join.
 def _fake_download(url, timeout=180):
     if url == viina._GAZETTEER_URL:
         return _gazetteer_geojson([
             (461727, "Olenevka", 32.53, 45.38),
             (700000, "Kupiansk", 37.62, 49.71),
         ])
-    # sonst: die Control-ZIP. Kupiansk (700000) hat zwei Tage → jüngster gewinnt.
     return _control_zip([
         {"geonameid": "461727", "date": "20260101", "status": "RU",
          "status_dsm": "RU", "status_isw": "RU", "status_wiki": "RU",
          "status_boost": "RU"},
+        {"geonameid": "461727", "date": "20260315", "status": "RU"},
         {"geonameid": "700000", "date": "20260101", "status": "UA",
          "status_dsm": "UA", "status_isw": "UA", "status_wiki": "UA",
          "status_boost": "UA"},
-        {"geonameid": "700000", "date": "20260722", "status": "RU",
+        {"geonameid": "700000", "date": "20260315", "status": "RU",
          "status_dsm": "RU", "status_isw": "CONTESTED", "status_wiki": "RU",
          "status_boost": "RU"},
-        # Ort ohne Gazetteer-Koordinate → muss rausfallen (nicht kartierbar).
-        {"geonameid": "999999", "date": "20260722", "status": "UA"},
+        {"geonameid": "999999", "date": "20260315", "status": "UA"},
     ])
 
 
@@ -70,23 +73,68 @@ def test_iso_date():
     assert viina._iso_date(None) is None
 
 
-def test_fetch_joins_latest_status(monkeypatch):
+def test_fetch_builds_timelines(monkeypatch):
     monkeypatch.setattr(viina, "_download", _fake_download)
     payload = viina._fetch()
 
+    assert payload["schema"] == 2
     assert payload["count"] == 2                 # 999999 ohne Koordinate raus
-    assert payload["vintage"] == "2026-07-22"    # jüngstes Datum, ISO-formatiert
+    assert payload["date_min"] == "2026-01-01"
+    assert payload["date_max"] == "2026-03-15"
 
     by_id = {i["geonameid"]: i for i in payload["items"]}
     assert set(by_id) == {"461727", "700000"}
 
-    # Kupiansk: jüngste Zeile (20260722) gewinnt gegen den älteren UA-Stand.
-    kup = by_id["700000"]
-    assert kup["status"] == "RU"
-    assert kup["status_isw"] == "CONTESTED"      # Einzelquellen mitgeführt
-    assert kup["name"] == "Kupiansk"
-    assert kup["lon"] == 37.62 and kup["lat"] == 49.71
-    assert kup["wx"] is not None and kup["wy"] is not None
+    # Olenevka: durchgehend RU → EIN Change-Point (Lauflängen-Kompression).
+    assert by_id["461727"]["timeline"] == [["2026-01-01", "RU"]]
+    # Kupiansk: Wechsel UA→RU → ZWEI Change-Points.
+    assert by_id["700000"]["timeline"] == [["2026-01-01", "UA"], ["2026-03-15", "RU"]]
+    # jüngste Einzelquellen mitgeführt (für den Gegenwarts-Vergleich)
+    assert by_id["700000"]["status_isw"] == "CONTESTED"
+    assert by_id["700000"]["name"] == "Kupiansk"
+
+
+def test_asof():
+    tl = [["2026-01-01", "UA"], ["2026-03-15", "RU"]]
+    assert viina._asof(tl, None) == ["2026-03-15", "RU"]     # jüngster
+    assert viina._asof(tl, "2026-03-15") == ["2026-03-15", "RU"]  # genau am Wechsel
+    assert viina._asof(tl, "2026-02-01") == ["2026-01-01", "UA"]  # davor
+    assert viina._asof(tl, "2026-06-01") == ["2026-03-15", "RU"]  # weit danach
+    assert viina._asof(tl, "2025-12-31") is None             # vor dem ersten Tag
+    assert viina._asof([], "2026-01-01") is None
+
+
+def _cache_from_fetch(monkeypatch):
+    monkeypatch.setattr(viina, "_download", _fake_download)
+    return viina._fetch()
+
+
+def test_control_time_travel(monkeypatch):
+    cache = _cache_from_fetch(monkeypatch)
+    monkeypatch.setattr(viina, "_read", lambda _path: cache)
+
+    # Gegenwart (at=None): Kupiansk jüngster Stand RU, Einzelquellen befüllt.
+    now = {i["geonameid"]: i for i in viina.control()["items"]}
+    assert now["700000"]["status"] == "RU"
+    assert now["700000"]["status_isw"] == "CONTESTED"
+
+    # Rückblick 01.02.: Kupiansk war noch UA; Einzelquellen bei Zeitreise = None.
+    past = viina.control(at="2026-02-01")
+    pm = {i["geonameid"]: i for i in past["items"]}
+    assert pm["700000"]["status"] == "UA"
+    assert pm["700000"]["status_isw"] is None
+    assert past["vintage"] == "2026-02-01"
+
+    # Vor date_min: alle Orte ungetrackt → leer (ehrlich, keine Daten).
+    assert viina.control(at="2025-06-01")["count"] == 0
+
+
+def test_control_schema1_passthrough(monkeypatch):
+    # Alt-Cache ohne timeline → unverändert zurück, at ignoriert (Abwärtskompat).
+    flat = {"schema": 1, "items": [{"geonameid": "1", "wx": 0.5, "wy": 0.5,
+                                    "status": "UA"}]}
+    monkeypatch.setattr(viina, "_read", lambda _path: flat)
+    assert viina.control(at="2020-01-01") is flat
 
 
 def test_fetch_raises_when_no_join(monkeypatch):
