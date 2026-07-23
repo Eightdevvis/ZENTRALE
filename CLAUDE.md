@@ -4,6 +4,41 @@ Event-getriebenes Dashboard (Raspberry Pi + Linux-PC), vollständig
 offline. KI läuft lokal via Ollama (Default-Modell: qwen3.5:9b, per
 `OLLAMA_MODEL` umstellbar).
 
+## Git-Workflow (gilt für ALLE Agenten — überschreibt die Default-Regel)
+
+Dieses Projekt gehört **einem** Menschen (Sasha), das GitHub-`origin` ist
+**privat**. Deshalb gilt hier **nicht** die generische „niemals auf main
+mergen / niemals nach origin pushen"-Vorsicht. Der Ablauf ist bewusst
+schlank — kein Branch/PR-Zeremoniell:
+
+1. Arbeit im (Harness-erzwungenen) Worktree machen, testen.
+2. Committen, dann lokalen `main` per **`git -C <haupt-checkout> merge
+   --ff-only <branch>`** vorziehen. Fast-forward hält die History linear.
+   Geht kein FF (main ist weitergelaufen) → Commit auf die main-Spitze
+   **rebasen**, neu testen, dann ff. Nie `--no-ff`, nie `--force`.
+3. **`git push origin main` ist erwünscht, nicht »nur auf Ansage«.** Sasha
+   will die Änderungen direkt live auf den anderen Knoten (PC/Pi) anschauen
+   können, ohne Umstand — ein normaler ff-Push nach dem Merge ist genau
+   dafür da und der Normalfall.
+
+**Die einzigen zwei echten Gefahren** (die bleiben hart tabu):
+- **`push --force` / History umschreiben.** Ein normaler Push wird von git
+  *abgelehnt*, wenn origin divergierte — das ist der Schutz. Niemals mit
+  `--force`/`--force-with-lease` drüberbügeln, das zerstört Historie, auf
+  die ein anderer Knoten/Agent baut. Bei Ablehnung: erst `pull --rebase`,
+  prüfen, dann normal pushen.
+- **Secrets committen.** Ein versehentlich mitcommitteter Key/Token/die
+  Mail-Passphrase ist lokal per `reset`/`amend` folgenlos zurückzunehmen —
+  einmal bei origin (selbst privat, liegt auf GitHubs Servern) gilt er als
+  kompromittiert → rotieren. Deshalb: `data/*.json`, Keys, Passphrasen
+  bleiben gitignored (siehe `memory/datei_zugriffe.md`). **Der Push selbst
+  ist harmlos; gefährlich ist nur, WAS im Commit steckt.** Vor dem ersten
+  Push eines neuen Pfades kurz `git status`/`git diff --cached` prüfen.
+
+Alles andere (versehentlich mal einen WIP-Commit gepusht o.ä.) ist bei
+einem privaten Solo-Repo folgenlos und leicht per weiterem Commit zu
+glätten — kein Grund zur Zurückhaltung.
+
 ## Feature-Tracking — die »zentrale«-Liste (pflegt CLAUDE, grundsätzlich)
 
 Die **Feature-Verwaltung des ZENTRALE-Projekts** ist die Liste **`zentrale`**
