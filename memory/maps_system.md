@@ -339,6 +339,25 @@ Zeichen-Code. (b) **Achse 3 (Zeitstrahl)** — `at` wird schon durchgereicht, ab
 ignoriert; UCDP (1989–) + VIINA (2022–) + CShapes 2.0 (1886–2019, historische
 Grenzen) sind die Zeitreihen-Quellen.
 
+**CHECKPOINT (2026-07-23) — Cache befüllt, VIINA-Join gefixt:**
+- ✅ **VIINA-Kontrolle live** (commit `316b3e2`): Der Refresh lief zunächst auf
+  0 Orte — `control_latest_<jahr>.zip` trägt KEINE Koordinaten, nur geonameid +
+  Status je Tag (eine ganze Jahres-Tageszeitreihe, ~6,7 Mio Zeilen / ~33k Orte).
+  Der alte `_fetch` las fälschlich longitude/latitude aus der CSV. Gefixt: jüngste
+  Status-Zeile je Ort ziehen + über geonameid auf die Punktkoordinaten aus dem
+  Gazetteer `gn_UA_tess.geojson` joinen (kein LFS → raw-URL, ~31 MB). Cache lokal:
+  33.140 Orte (RU/UA/CONTESTED). Offline-Unit-Test `tests/test_map_viina.py`.
+- ✅ **Grenzen** rendern (committet). Damit zeigt `o`→Politik im TUI Frontverlauf
+  + umstrittene Grenzen; 3000-Punkt-Cap wird derzeit ganz von VIINA gefüllt.
+- ⏳ **UCDP-TOKEN — TODO Sasha:** GED-API gibt 401 auf ALLEN Versionen (24.1–26.1),
+  Token zwingend, kein Self-Service. Mail an **mertcan.yilmaz@pcr.uu.se** (kurze
+  Projektbeschreibung, Antwort 3–5 Werktage). Danach `export UCDP_ACCESS_TOKEN=…`
+  + `python -m map.layers.ucdp` → Ereignisse landen wie VIINA im Cache. Der
+  Header-Code (`x-ucdp-access-token`) steht schon.
+- **NÄCHSTER SCHRITT: Achse 3 (Zeitstrahl).** Die VIINA-Zeitreihe (täglich, ganzes
+  Jahr) ist genau das Material — `viina._latest_status()` muss dafür nur von
+  „jüngste Zeile je Ort" zu „Status an Datum X je Ort" verallgemeinert werden.
+
 ## Geparkte / offene Entscheidungen
 
 - ~~**Konflikt-/Overlay-Datenquelle offline**~~ **→ GELÖST (Schritt 2):** UCDP GED
