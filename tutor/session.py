@@ -178,7 +178,17 @@ def presence_ping() -> bool:
 
 
 def room_state() -> dict:
-    """Aktueller Ausdrucks-Zustand + Stimmung fürs Zimmer-Fenster (leichtgewichtig)."""
+    """Aktueller Ausdrucks-Zustand + Stimmung fürs Zimmer-Fenster (leichtgewichtig).
+    Enthält auch den ASSESSMENT-GATE-Stand: mode ('assessment' = Drill, Zimmer zu /
+    'room' = Persona frei), Kern-Deckung + gerampter TTS-Speed. Das Fenster
+    rendert danach den Drill-Screen oder das Zimmer."""
+    lang = active_lang()
+    try:
+        got, total = tools.core_coverage(lang)
+        assess = bool(_active) and tools.assessment_active(lang)
+        speed = tools.tts_speed_for(lang)
+    except Exception:
+        got, total, assess, speed = 0, 0, False, 1.0
     with _lock:
         bat = _battery_now()
         mood = "happy" if bat >= 68 else ("low" if bat < 32 else "ok")
@@ -189,7 +199,12 @@ def room_state() -> dict:
                 "thought_id": _thought["id"],
                 "music_action": _music["action"], "music_mood": _music["mood"],
                 "music_id": _music["id"],
-                "tv_on": _tv["on"], "tv_title": _tv["title"], "tv_id": _tv["id"]}
+                "tv_on": _tv["on"], "tv_title": _tv["title"], "tv_id": _tv["id"],
+                # Assessment-Gate:
+                "mode": "assessment" if assess else "room",
+                "core_got": got, "core_total": total,
+                "core_ratio": round(got / total, 3) if total else 0.0,
+                "tts_speed": speed}
 
 def _history_window() -> int:
     """Wieviele der letzten Turns ans Modell gesendet werden (Kosten-Hebel: die
@@ -431,7 +446,13 @@ def respond_stream(user_text: str = None, nudge: bool = False,
         history = get_history()[-_history_window():]
         if nudge:
             history = history + [{"role": "user", "content": _nudge_situation(prof, focus, sound)}]
-    system  = prof["system_prompt"]
+
+    # Hartes Assessment-Gate: solange der Kern-Wortschatz NICHT gemeistert ist,
+    # spricht die Persona im DRILL-/Prüf-Prompt (Wort für Wort, kein Zimmer-Leben)
+    # — das Persona-Zimmer bleibt zu, bis ≥GRADUATE_AT gefestigt sind. Trägt die
+    # Sprache keinen assessment_prompt/kein Curriculum, gibt es kein Gate.
+    _gate = bool(prof.get("assessment_prompt")) and tools.assessment_active(lang)
+    system  = prof["assessment_prompt"] if _gate else prof["system_prompt"]
 
     # Vokabel-Kontext ans Prompt-Ende hängen: welche Wörter Sasha lernt, damit
     # die Persona sich ans begrenzte Set hält. Ersetzt das frühere "ruf zu Beginn

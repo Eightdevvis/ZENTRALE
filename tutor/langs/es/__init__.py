@@ -48,6 +48,8 @@ PROFILE = profile(
     model    = "qwen-plus",
 
     system_prompt = load_text(__file__, "prompt.md"),
+    # Drill-/Prüf-Prompt fürs harte Assessment-Gate (aktiv bis Kern gemeistert).
+    assessment_prompt = load_text(__file__, "assessment_prompt.md"),
     vocab_hint    = load_text(__file__, "vocab_hint.md").strip(),
     expect_ladder = load_json(__file__, "expect.json"),
     tool_texts    = load_json(__file__, "tool_texts.json", {}),

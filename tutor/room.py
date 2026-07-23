@@ -832,6 +832,72 @@ def draw_bubble(surf, font, text, cx, top_y, w, alpha=255):
 
 
 # ── App ──────────────────────────────────────────────────────────────────────
+# ── Assessment-Screen: das harte Gate vor der Persona ────────────────────────
+# Solange der Kern-Wortschatz nicht gemeistert ist, sieht Sasha NICHT das Zimmer
+# und nicht die Figur — nur diesen ruhigen Übungs-Screen. Lucías STIMME liest die
+# Wörter vor (TTS läuft normal), aber die Persona „lebt" hier nicht. Freischaltung
+# bei ratio ≥ 0.75; dann übernimmt wieder die Zimmer-Darstellung.
+ASSESS_TOP = (28, 36, 52)
+ASSESS_BOT = (40, 50, 70)
+ASSESS_ACC = (150, 200, 230)     # kühles Blau (= ROLE_USER), Fortschritt
+
+
+def draw_assessment(screen, w, h, fonts, got, total, ratio, bubble_text, bubble_alpha,
+                    thought, caret_t):
+    # ruhiger Vertikal-Verlauf (bewusst anders als das Zimmer-Aubergine)
+    for y in range(h):
+        f = y / max(1, h - 1)
+        col = tuple(int(a + (b - a) * f) for a, b in zip(ASSESS_TOP, ASSESS_BOT))
+        pygame.draw.line(screen, col, (0, y), (w, y))
+
+    # Titel + Untertitel (mittig oben)
+    title = fonts['big'].render('Vokabel-Aufwärmen', True, (232, 236, 244))
+    screen.blit(title, (w // 2 - title.get_width() // 2, 74))
+    sub = fonts['hud'].render('Lucía kommt heraus, sobald du die Basis kannst (75 %)',
+                              True, HUD_DIM)
+    screen.blit(sub, (w // 2 - sub.get_width() // 2, 74 + title.get_height() + 6))
+
+    # Fortschrittsbalken mit 75%-Freischalt-Marke
+    bw = min(560, w - 120); bx = w // 2 - bw // 2; by = 150; bh = 20
+    pygame.draw.rect(screen, (22, 28, 40), (bx, by, bw, bh), border_radius=8)
+    fillw = int(bw * max(0.0, min(1.0, ratio)))
+    if fillw > 0:
+        pygame.draw.rect(screen, ASSESS_ACC, (bx, by, fillw, bh), border_radius=8)
+    # 75%-Marke
+    mx = bx + int(bw * 0.75)
+    pygame.draw.line(screen, (240, 220, 120), (mx, by - 5), (mx, by + bh + 5), 2)
+    unlock = fonts['hud'].render('75%', True, (240, 220, 120))
+    screen.blit(unlock, (mx - unlock.get_width() // 2, by + bh + 7))
+    pct = int(round(100 * ratio))
+    cnt = fonts['hud'].render(f'{got} / {total} Wörter · {pct}%', True, HUD_FG)
+    screen.blit(cnt, (bx, by - cnt.get_height() - 6))
+
+    # Wort-Karte in der Mitte: das aktuelle Übungs-Wort + Übersetzung (aus thought),
+    # sonst die aktuelle Sprech-Zeile.
+    cy = h // 2 + 6
+    if thought and thought[0]:
+        word, meaning = thought[0], (thought[1] or '')
+        wsurf = fonts['big'].render(word, True, BUBBLE_FG)
+        cardw = max(220, wsurf.get_width() + 80)
+        cardh = 116
+        cardx = w // 2 - cardw // 2
+        cardy = cy - cardh // 2
+        card = pygame.Surface((cardw, cardh), pygame.SRCALPHA)
+        pygame.draw.rect(card, BUBBLE_BG, (0, 0, cardw, cardh), border_radius=14)
+        pygame.draw.rect(card, BUBBLE_BD, (0, 0, cardw, cardh), 2, border_radius=14)
+        screen.blit(card, (cardx, cardy))
+        screen.blit(wsurf, (w // 2 - wsurf.get_width() // 2, cardy + 22))
+        if meaning:
+            msurf = fonts['log'].render(meaning, True, (120, 110, 116))
+            screen.blit(msurf, (w // 2 - msurf.get_width() // 2, cardy + 22 + wsurf.get_height() + 8))
+    elif bubble_text:
+        # nur die gesprochene Zeile (mittig), wenn gerade kein Wort-Gedanke ansteht
+        for i, ln in enumerate(_wrap(fonts['bubble'], bubble_text, min(600, w - 120))[:3]):
+            s = fonts['bubble'].render(ln, True, (236, 236, 242))
+            s.set_alpha(bubble_alpha)
+            screen.blit(s, (w // 2 - s.get_width() // 2, cy - 20 + i * (fonts['bubble'].get_linesize())))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--url', default=os.environ.get('ZENTRALE_URL', 'http://localhost:5000'))
@@ -905,6 +971,13 @@ def main():
         'transcribing': False, # Segment wird gerade erkannt
         'mic_err': '',         # kein Mikro / Lib fehlt
         'focused': True,       # Fenster fokussiert? (Sensor: wird sie „angeschaut")
+        # ── Assessment-Gate (room_state-Poll) ──────────────────────────────
+        'mode': 'room',        # 'assessment' = Drill (kein Zimmer) / 'room' = Persona frei
+        'core_got': 0,         # gefestigte Kern-Wörter
+        'core_total': 0,       # Kern-Wörter gesamt
+        'core_ratio': 0.0,     # Deckung 0..1 (Fortschritt zur Freischaltung)
+        'tts_speed': a.speed,  # gerampter Sprech-Speed (0.7→1.0 nach Meisterung)
+        'was_assessment': False,  # war letzter Frame Assessment? (für Freischalt-Feier)
     }
 
     def log_add(role, text):
@@ -929,7 +1002,8 @@ def main():
             if S['mute']:
                 return
             lang = S['lang']
-        wav = be.speak(text, lang, a.speaker, a.speed)
+            spd = S['tts_speed']       # gerampt: im Assessment langsam, dann natürlich
+        wav = be.speak(text, lang, a.speaker, spd)
         if not wav:
             return
         music_duck(True)         # Musik leiser, solange sie redet
@@ -1091,6 +1165,13 @@ def main():
                 S['stance'] = rs.get('stance') or 'idle'
                 S['face'] = rs.get('face') or 'neutral'
                 S['battery'] = int(rs.get('battery', 60)); S['mood'] = rs.get('mood') or 'ok'
+                # Assessment-Gate: Modus + Fortschritt + gerampter Speed
+                S['mode'] = rs.get('mode') or 'room'
+                S['core_got'] = int(rs.get('core_got') or 0)
+                S['core_total'] = int(rs.get('core_total') or 0)
+                S['core_ratio'] = float(rs.get('core_ratio') or 0.0)
+                if rs.get('tts_speed'):
+                    S['tts_speed'] = float(rs['tts_speed'])
                 if gid != last_gid:
                     S['pending_gesture'] = rs.get('gesture')
                 if tid != last_tid:   # neuer Vokabel-Gedanke → Blase zeigen
@@ -1317,6 +1398,8 @@ def main():
             thought_t = S['thought_t']
             music = S['music']; tv_on, tv_title = S['tv']
             menu = S['menu']; menu_langs = list(S['langs']); cur_lang = S['lang']
+            mode = S['mode']; core_got = S['core_got']; core_total = S['core_total']
+            core_ratio = S['core_ratio']
 
         # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft.
         has_text = bool(buf.strip())
@@ -1351,25 +1434,35 @@ def main():
         else:
             bub_age += dt
 
-        # zeichnen
-        draw_room(screen, w, h, caret_t)
-        draw_tv(screen, w, h, tv_on, tv_title, fonts['hud'], caret_t)
-        persona.draw(screen)
-
-        # Blase mit Ausblenden
-        if bub_text and avail is not False and bub_age < BUBBLE_LINGER + BUBBLE_FADE:
+        # zeichnen — HARTES GATE: im Assessment-Modus NICHT das Zimmer/die Figur,
+        # sondern den Übungs-Screen. Lucías Stimme läuft trotzdem (speak()).
+        if mode == 'assessment':
             if bub_age <= BUBBLE_LINGER:
-                alpha = 255
+                a_alpha = 255
             else:
-                alpha = int(255 * max(0.0, 1 - (bub_age - BUBBLE_LINGER) / BUBBLE_FADE))
-            draw_bubble(screen, fonts['bubble'], bub_text, persona.x, persona.head_top(), w, alpha)
+                a_alpha = int(255 * max(0.0, 1 - (bub_age - BUBBLE_LINGER) / BUBBLE_FADE))
+            show_bub = bub_text if (bub_text and bub_age < BUBBLE_LINGER + BUBBLE_FADE) else ''
+            draw_assessment(screen, w, h, fonts, core_got, core_total, core_ratio,
+                            show_bub, a_alpha, thought if thought_t > 0 else None, caret_t)
+        else:
+            draw_room(screen, w, h, caret_t)
+            draw_tv(screen, w, h, tv_on, tv_title, fonts['hud'], caret_t)
+            persona.draw(screen)
 
-        # Gedanken-Blase (Vokabel-Hilfe): Wort + Übersetzung (+ Bild, falls da),
-        # neben dem Kopf, blendet in der letzten Sekunde aus.
-        if thought and avail is not False:
-            t_alpha = 255 if thought_t > 1.0 else int(255 * max(0.0, thought_t))
-            draw_thought(screen, fonts['bubble'], fonts['log'],
-                         thought[0], thought[1], persona.x, persona.head_top(), t_alpha)
+            # Blase mit Ausblenden
+            if bub_text and avail is not False and bub_age < BUBBLE_LINGER + BUBBLE_FADE:
+                if bub_age <= BUBBLE_LINGER:
+                    alpha = 255
+                else:
+                    alpha = int(255 * max(0.0, 1 - (bub_age - BUBBLE_LINGER) / BUBBLE_FADE))
+                draw_bubble(screen, fonts['bubble'], bub_text, persona.x, persona.head_top(), w, alpha)
+
+            # Gedanken-Blase (Vokabel-Hilfe): Wort + Übersetzung (+ Bild, falls da),
+            # neben dem Kopf, blendet in der letzten Sekunde aus.
+            if thought and avail is not False:
+                t_alpha = 255 if thought_t > 1.0 else int(255 * max(0.0, thought_t))
+                draw_thought(screen, fonts['bubble'], fonts['log'],
+                             thought[0], thought[1], persona.x, persona.head_top(), t_alpha)
 
         # schläft/nicht erreichbar
         if avail is False:

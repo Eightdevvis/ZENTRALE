@@ -371,6 +371,31 @@ def check_graduation(lang: str = None) -> bool:
     return True
 
 
+# ── Assessment-Gate (hartes Gate vor der Persona) ───────────────────────
+# Trägt die Sprache ein Kern-Curriculum UND ist es noch nicht gemeistert, dann
+# steckt die Lernende im ASSESSMENT-/Drill-Modus: das Persona-Zimmer bleibt zu,
+# die Figur „lebt" nicht — es wird nur geübt (Wort für Wort, Stimme liest vor),
+# bis ≥GRADUATE_AT der Kern-Wörter gefestigt sind. Sprachen OHNE Kern-Curriculum
+# (z.B. zh) haben kein Gate → sofort Konversation (Verhalten unverändert).
+
+def assessment_active(lang: str = None) -> bool:
+    """Steckt die Lernende noch im Assessment (Kern < Schwelle)? → Zimmer gesperrt."""
+    total = core_coverage(lang)[1]
+    if not total:
+        return False           # kein Curriculum → kein Gate
+    return not core_graduated(lang)
+
+
+def tts_speed_for(lang: str = None) -> float:
+    """Sprech-Tempo nach Meisterung: im Assessment langsam (0.7) und rampt linear
+    hoch bis natürlich (1.0) an der Freischalt-Schwelle; danach immer 1.0. Damit
+    Anfänger die einzelnen Wörter klar hören und es mit dem Können schneller wird."""
+    if not assessment_active(lang):
+        return 1.0
+    r = min(core_ratio(lang), GRADUATE_AT) / GRADUATE_AT     # 0..1 über den Drill
+    return round(0.7 + 0.3 * r, 2)
+
+
 # ── Satz-Strukturen (Feinmodell: nicht nur Wörter) ──────────────────────
 # Parallel zum Vokabel-Pool, aber für Muster/Grammatik — damit die Persona auch
 # neue SAGWEISEN stückweise einführen kann (Sashas Idee), nicht nur Vokabeln.

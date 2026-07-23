@@ -124,9 +124,13 @@ DEFAULTS = {
     # Ein festes Grund-Vokabular, das die Persona bevorzugt durchnimmt (die
     # ersten ~75 Wörter), statt sich rein aufs Emergente zu verlassen. Leer =
     # kein Syllabus (das Feature ist dann einfach inaktiv, nichts bricht).
-    "core_vocab":  [],         # [{word, reading, priority, category}, …] — Paket-DATEN
+    "core_vocab":  [],         # [{word, reading, priority, category, de}, …] — Paket-DATEN
     "core_hint":   "",         # {got}/{total}/{words}-Template, in session gefüllt,
                                # ZIELSPRACHE (ein deutscher Block kippt das Modell)
+    "assessment_prompt": "",   # Drill-/Prüf-Prompt (Zielsprache). Solange der Kern
+                               # NICHT gemeistert ist, nutzt session diesen statt
+                               # system_prompt → hartes Gate: Persona-Zimmer erst
+                               # nach ≥GRADUATE_AT. Leer = kein Gate (sofort Persona).
 
     # ── Situations-Meldungen (Öffnen/Stille) ────────────────────────────
     # Hintergrund-Meldungen (user-role), die session beim Session-Start und bei
