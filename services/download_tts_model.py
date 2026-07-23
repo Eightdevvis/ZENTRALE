@@ -123,11 +123,40 @@ def download_de():
     print(f"de: Fertig. {target_dir}")
 
 
+# Spanische Stimme (Tutor-Persona Lucía) — sherpa-onnx-Piper-Voice, gebündelt
+# mit espeak-ng-data (Phonemik offline). Ordnername = Archiv-Name, exakt wie in
+# tts_service.py ES_VOICE. int8 = halber RAM (0-RAM-Laptop lädt on-demand).
+ES_VOICE = os.environ.get("TUTOR_ES_VOICE", "vits-piper-es_ES-sharvard-medium-int8")
+
+
+def download_es():
+    """Laedt die spanische sherpa-onnx-Piper-Voice (ES_VOICE) fuer Lucía.
+    Ein tar.bz2 mit .onnx/.onnx.json/tokens.txt/espeak-ng-data, extrahiert
+    flach in data/tts_model/<ES_VOICE>/. Idempotent."""
+    import tarfile
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    target = os.path.join(MODEL_DIR, ES_VOICE)
+    if os.path.isdir(target) and any(f.endswith('.onnx') for f in os.listdir(target)):
+        print(f"es: Modell schon vorhanden: {target}")
+        return
+    url = ("https://github.com/k2-fsa/sherpa-onnx/releases/download/"
+           f"tts-models/{ES_VOICE}.tar.bz2")
+    archive = os.path.join(MODEL_DIR, "model_es.tar.bz2")
+    print(f"es: Lade {ES_VOICE} (~22MB) von {url} ...")
+    urllib.request.urlretrieve(url, archive, reporthook=_progress_reporter("es", 22))
+    print("\nes: Extrahiere...")
+    with tarfile.open(archive, 'r:bz2') as tar:
+        tar.extractall(MODEL_DIR)
+    os.remove(archive)
+    print(f"es: Fertig. {target}")
+
+
 def main():
-    # CLI: ohne Arg = beide; mit 'zh'/'de' = nur dieses Modell.
-    requested = set(sys.argv[1:]) or {"zh", "de"}
+    # CLI: ohne Arg = alle; mit 'zh'/'de'/'es' = nur dieses Modell.
+    requested = set(sys.argv[1:]) or {"zh", "de", "es"}
     if "zh" in requested: download_zh()
     if "de" in requested: download_de()
+    if "es" in requested: download_es()
 
 
 if __name__ == '__main__':

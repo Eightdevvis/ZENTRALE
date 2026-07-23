@@ -63,6 +63,13 @@ DEFAULT_LANG = os.environ.get("TTS_DEFAULT_LANG", "de")
 # umstellen – kein Code-Edit noetig.
 DE_VOICE = os.environ.get("PIPER_DE_VOICE", "de_DE-kerstin-low")
 
+# Spanisch (Tutor-Persona Lucía): sherpa-onnx-Piper-Voice, tauschbar wie
+# DE_VOICE (Ordnername unter data/tts_model/). sharvard-medium hat 2 Sprecher
+# (sid 0 = männlich ~122 Hz, sid 1 = weiblich ~204 Hz, gemessen) → Default 1,
+# damit Lucía weiblich klingt. Sprecher-Wechsel per env, kein Code-Edit.
+ES_VOICE   = os.environ.get("TUTOR_ES_VOICE", "vits-piper-es_ES-sharvard-medium-int8")
+ES_SPEAKER = int(os.environ.get("TUTOR_ES_SPEAKER", "1"))
+
 # Engine-Registry: lang -> Dict mit
 #   - "speak"   Callable(text, speed, speaker) -> (samples_np, sample_rate)
 #   - "info"    Dict fuer /health
@@ -234,9 +241,68 @@ def _try_load_de():
     log.info(f"TTS-Engine de geladen (piper, {DE_VOICE}).")
 
 
-# Beim Modul-Start beide Versuche durchlaufen lassen.
+# ── Engine: Spanisch via sherpa-onnx (Piper-Voice, espeak-ng-Phonemik) ──────
+def _try_load_es():
+    """Laedt die spanische Piper-Voice ueber sherpa-onnx (dieselbe Library wie
+    zh — KEIN separates piper-tts noetig) und registriert lang='es' fuer die
+    Tutor-Persona Lucía. Stille No-Op, wenn Modell oder Library fehlen –
+    /speak gibt dann 503 zurueck. Modell/Sprecher via TUTOR_ES_VOICE/
+    TUTOR_ES_SPEAKER umstellbar (siehe oben).
+
+    Aufbau wie der aishell3-Zweig von zh: VITS-Modell + espeak-ng-data als
+    data_dir (Phonemik). sharvard ist multi-speaker → num_speakers>1, wir
+    waehlen ES_SPEAKER (weiblich), es sei denn der Aufrufer gibt explizit eine
+    andere gueltige ID (das Zimmer schickt einen globalen zh-Default, der hier
+    ausserhalb des Bereichs liegt und daher auf ES_SPEAKER zurueckfaellt)."""
+    try:
+        import sherpa_onnx
+    except ImportError:
+        log.error("sherpa-onnx nicht installiert (pip install sherpa-onnx).")
+        return
+
+    model_dir = os.path.join(_DATA_ROOT, ES_VOICE)
+    onnx = os.path.join(model_dir, 'es_ES-sharvard-medium.onnx')
+    if not os.path.exists(onnx):                       # Voice getauscht → erstes *.onnx nehmen
+        import glob
+        cands = sorted(glob.glob(os.path.join(model_dir, '*.onnx')))
+        onnx = cands[0] if cands else onnx
+    tokens = os.path.join(model_dir, 'tokens.txt')
+    espeak = os.path.join(model_dir, 'espeak-ng-data')
+    if not (os.path.exists(onnx) and os.path.exists(tokens) and os.path.isdir(espeak)):
+        log.warning(f"kein es-TTS-Modell gefunden ({model_dir}). "
+                    "'python services/download_tts_model.py es' ausfuehren.")
+        return
+
+    try:
+        vits = sherpa_onnx.OfflineTtsVitsModelConfig(
+            model=onnx, tokens=tokens, data_dir=espeak)
+        model_cfg = sherpa_onnx.OfflineTtsModelConfig(vits=vits, num_threads=2, debug=False)
+        engine = sherpa_onnx.OfflineTts(sherpa_onnx.OfflineTtsConfig(model=model_cfg))
+    except Exception as e:
+        log.error(f"sherpa-onnx es Ladefehler ({model_dir}): {e}")
+        return
+
+    nspk = engine.num_speakers
+
+    def speak_es(text, speed, speaker):
+        sid = speaker if (isinstance(speaker, int) and 0 <= speaker < nspk) else ES_SPEAKER
+        if not (0 <= sid < nspk):
+            sid = 0
+        audio = engine.generate(text, sid=sid, speed=speed)
+        return audio.samples, audio.sample_rate
+
+    _engines["es"] = {
+        "speak": speak_es,
+        "info": {"engine": f"sherpa-onnx / {ES_VOICE}", "speakers": nspk},
+    }
+    log.info(f"TTS-Engine es geladen (sherpa-onnx / {ES_VOICE}, {nspk} Sprecher, "
+             f"Lucía=sid {ES_SPEAKER}).")
+
+
+# Beim Modul-Start alle Versuche durchlaufen lassen.
 _try_load_sherpa_zh()
 _try_load_de()
+_try_load_es()
 
 
 @app.route('/speak', methods=['POST'])
