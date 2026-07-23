@@ -160,8 +160,9 @@ POST /api/speak   (lang='de' default)
 audio.py  ──HTTP──▶  tts_service.py  (Port 5051)
                           │
                           ▼ Engine-Registry, eine Engine pro Sprache:
-                          ▼   zh → sherpa-onnx vits-zh-aishell3 (174 Sprecher)
+                          ▼   zh → sherpa-onnx matcha-icefall-zh-baker (1 Sprecher)
                           ▼   de → piper, Voice via PIPER_DE_VOICE (1 Sprecher)
+                          ▼   es → sherpa-onnx piper es_ES-sharvard (Lucía, weiblich)
                           ▼   andere → 503 + Hinweis
                        WAV-Bytes (audio/wav)
    ◀──────────────────────┘
@@ -210,10 +211,18 @@ audio.py  ──HTTP──▶  tts_service.py  (Port 5051)
 
 ### `services/tts_service.py`
 - Eigenständiger Flask-Service, Port 5051.
-- **Engine-Registry**: pro Sprache ein eigenes Modell, alle parallel
-  geladen:
-  - `zh` – sherpa-onnx mit `vits-zh-aishell3` (174 Sprecher, Apache-2.0)
+- **Engine-Registry**: pro Sprache ein eigenes Modell, alle beim Start
+  parallel geladen:
+  - `zh` – sherpa-onnx, bevorzugt `matcha-icefall-zh-baker` (22 kHz, flow-
+    matching; Fallback MeloTTS/`vits-zh-aishell3`). Tutor-Persona Ling Ling.
   - `de` – Piper, Voice via Env `PIPER_DE_VOICE` (Default `de_DE-kerstin-low`, 1 Sprecher, MIT)
+  - `es` – sherpa-onnx mit einer Piper-Voice (KEIN separates `piper-tts` nötig —
+    dieselbe sherpa-Library wie zh, VITS + `espeak-ng-data` als `data_dir`).
+    Default `vits-piper-es_ES-sharvard-medium-int8`, tauschbar via `TUTOR_ES_VOICE`.
+    `sharvard` hat 2 Sprecher (sid 0 = männlich ~122 Hz, sid 1 = weiblich
+    ~204 Hz gemessen) → `TUTOR_ES_SPEAKER` default `1`, damit die Tutor-Persona
+    Lucía weiblich klingt. Der globale zh-Sprecher-Default des Zimmers (66) liegt
+    ausserhalb und fällt sauber auf diese ID zurück.
   - andere `lang`-Werte → 503 mit Liste der verfügbaren Sprachen.
 - `TTS_DEFAULT_LANG` env-Variable (default `de`).
 - Endpoints: `POST /speak` (`{text, lang, speed, speaker}` → `audio/wav`
@@ -221,13 +230,30 @@ audio.py  ──HTTP──▶  tts_service.py  (Port 5051)
 
 ### `services/download_tts_model.py`
 - Lädt die TTS-Modelle herunter. CLI:
-  - `python services/download_tts_model.py` → beide Sprachen
-  - `python services/download_tts_model.py zh` → nur Mandarin (~120 MB)
+  - `python services/download_tts_model.py` → alle Sprachen
+  - `python services/download_tts_model.py zh` → nur Mandarin (~75 MB + Vocoder)
   - `python services/download_tts_model.py de` → nur Deutsch (~60 MB)
+  - `python services/download_tts_model.py es` → nur Spanisch (~22 MB, int8)
 - Ablage:
-  - `data/tts_model/vits-zh-aishell3/` (sherpa-onnx)
+  - `data/tts_model/matcha-icefall-zh-baker/` + `vocos-22khz-univ.onnx` (sherpa-onnx)
   - `data/tts_model/<PIPER_DE_VOICE>/` (Piper, Default `de_DE-kerstin-low`)
+  - `data/tts_model/<TUTOR_ES_VOICE>/` (sherpa-onnx Piper, Default `vits-piper-es_ES-sharvard-medium-int8`)
 - Idempotent: schon vorhandene Modelle werden übersprungen.
+
+## On-demand-Start am Laptop (0RAMMachine): `scripts/open_tutor_room.py`
+
+Am **PC** laufen Whisper/TTS als systemd-Units (immer da). Am **Laptop**
+(`0RAMMachine`, kaum RAM) dürfen die Modelle **nicht ab Boot** mitlaufen — und
+`zentrale-tui`/`start_tui.sh` startet sie bewusst **nicht** (KI-freie Kassette).
+Damit das Persona-Zimmer trotzdem Stimme/Mikro hat, öffnet die TUI (`tutor_window`)
+es über den Wrapper **`scripts/open_tutor_room.py`** statt `room.py` direkt:
+
+- fährt Whisper (:5050) + TTS (:5051) **beim Öffnen** des Zimmers hoch,
+- **beim Schließen** wieder runter → RAM nur belegt, solange getutort wird,
+- startet aber **nur, was frei ist**, und stoppt **nur, was er selbst startete**
+  → am PC (Ports schon belegt) fasst er nichts an.
+- `WHISPER_MODEL` default `base` (gecacht + leichter als `small`).
+- Ganz aus: `ZENTRALE_TUTOR_AUDIO=0` (nur Fenster, kein Audio-Management).
 
 ## Smoke-Test
 
