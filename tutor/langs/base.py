@@ -127,6 +127,25 @@ DEFAULTS = {
     "core_vocab":  [],         # [{word, reading, priority, category}, …] — Paket-DATEN
     "core_hint":   "",         # {got}/{total}/{words}-Template, in session gefüllt,
                                # ZIELSPRACHE (ein deutscher Block kippt das Modell)
+
+    # ── Situations-Meldungen (Öffnen/Stille) ────────────────────────────
+    # Hintergrund-Meldungen (user-role), die session beim Session-Start und bei
+    # Stille schickt, damit die Persona aus ihrer Rolle reagiert. MUSS in der
+    # Zielsprache sein — eine fremdsprachige Meldung (früher hart chinesisch für
+    # Ling Ling) verwirrt das Modell und triggert Echo-Schleifen. Diese neutrale
+    # englische Fassung ist nur der FALLBACK für ungetunte Skizzen; jede LIVE-
+    # Sprache liefert ihre eigene in der Zielsprache (siehe es/zh).
+    "situation": {
+        "prefix":          "(background, not spoken by the user, don't repeat these words: ",
+        "suffix":          ".)",
+        "join":            ", ",
+        "open":            "the user just came in",
+        "open_focus":      " and is looking at you",
+        "nudge_idle":      "it has been quiet for a moment",
+        "nudge_focus_yes": "someone is watching you but stays silent",
+        "nudge_focus_no":  "nobody is looking",
+        "nudge_sound":     "there is a faint noise, maybe someone",
+    },
 }
 
 

@@ -361,30 +361,44 @@ def push_message(role: str, content: str):
 # Lage-Meldungen sind HINTERGRUND (keine echte Rede von Sasha). WICHTIG: bei
 # Fast-Null-Wortschatz greift sie sonst ein konkretes Wort daraus auf und echot es
 # (Bug: 旁白 „…窗户…" → sie sagt „窗户！"). Darum (a) klar als Hintergrund + „nicht
-# nachplappern" markiert, (b) keine aufgreifbaren Nomen (kein 窗户 o.ä.).
-_SIT_PREFIX = "（背景，不是 Sasha 说的话，别重复里面的字："
-_SIT_SUFFIX = "。）"
+# nachplappern" markiert, (b) keine aufgreifbaren Nomen.
+#
+# Die Texte kommen aus dem SPRACH-PROFIL (prof['situation']) — sie MÜSSEN in der
+# Zielsprache sein. Standen früher hart chinesisch hier; eine es-Session bekam so
+# eine chinesische Meta-Lage und Lucía kippte in einen Echo-Loop ('¿cansada?').
+# Fallback (base.DEFAULTS['situation']) nur für ungetunte Skizzen.
 
 
-def _nudge_situation(focus=None, sound=None) -> str:
-    bits = ["一会儿没动静了"]                       # eine Weile keine Regung
-    if focus is True:
-        bits.append("有人在看着你，可就是不出声")      # jemand schaut, sagt aber nichts
-    elif focus is False:
-        bits.append("也没人看你")                      # niemand schaut zu
-    if sound is True:
-        bits.append("好像有点响动，说不好有没有人")     # ein Geräusch, ungewiss
-    return _SIT_PREFIX + "，".join(bits) + _SIT_SUFFIX
+def _situation_of(prof) -> dict:
+    sit = prof.get("situation")
+    if sit:
+        return sit
+    from .langs import base
+    return base.DEFAULTS["situation"]
 
 
-def _opening_situation(focus=None) -> str:
+def _nudge_situation(prof, focus=None, sound=None) -> str:
+    sit = _situation_of(prof)
+    bits = [sit["nudge_idle"]]                       # eine Weile keine Regung
+    if focus is True and sit.get("nudge_focus_yes"):
+        bits.append(sit["nudge_focus_yes"])          # jemand schaut, sagt aber nichts
+    elif focus is False and sit.get("nudge_focus_no"):
+        bits.append(sit["nudge_focus_no"])           # niemand schaut zu
+    if sound is True and sit.get("nudge_sound"):
+        bits.append(sit["nudge_sound"])              # ein Geräusch, ungewiss
+    return sit["prefix"] + sit.get("join", ", ").join(bits) + sit["suffix"]
+
+
+def _opening_situation(prof, focus=None) -> str:
     """Öffnen = Wahrnehmungs-Ereignis (wie Fokus/Stille): Sasha kommt gerade rein.
     Neutrale HINTERGRUND-Meldung → sie begrüßt/reagiert aus ihrer Person (variabel),
-    statt stale History degeneriert fortzusetzen ('我在'-Bug)."""
-    s = "Sasha 刚过来了"                             # Sasha ist gerade rübergekommen
-    if focus is True:
-        s += "，在看着你"                             # und schaut dich an
-    return _SIT_PREFIX + s + _SIT_SUFFIX
+    statt stale History degeneriert fortzusetzen ('我在'-Bug). Zielsprache aus dem
+    Profil (siehe oben)."""
+    sit = _situation_of(prof)
+    s = sit["open"]                                  # Sasha ist gerade rübergekommen
+    if focus is True and sit.get("open_focus"):
+        s += sit["open_focus"]                       # und schaut dich an
+    return sit["prefix"] + s + sit["suffix"]
 
 
 def respond_stream(user_text: str = None, nudge: bool = False,
@@ -412,11 +426,11 @@ def respond_stream(user_text: str = None, nudge: bool = False,
         # Verlauf. Sonst kapert ein (mit „你在吗？"-Fillern) verseuchter Verlauf den
         # Gruß und sie fällt in eine Frage-/Echo-Schleife. Kontinuität kommt aus
         # persona_memory (Zusammenfassung im System-Prompt), nicht aus History-Replay.
-        history = [{"role": "user", "content": _opening_situation(focus)}]
+        history = [{"role": "user", "content": _opening_situation(prof, focus)}]
     else:
         history = get_history()[-_history_window():]
         if nudge:
-            history = history + [{"role": "user", "content": _nudge_situation(focus, sound)}]
+            history = history + [{"role": "user", "content": _nudge_situation(prof, focus, sound)}]
     system  = prof["system_prompt"]
 
     # Vokabel-Kontext ans Prompt-Ende hängen: welche Wörter Sasha lernt, damit

@@ -58,6 +58,21 @@ PROFILE = profile(
                   "por orden: {words}. Prioriza estas cuando encaje, sin forzar ni "
                   "soltarlas de golpe.)"),
 
+    # Hintergrund-Meldungen (Öffnen/Stille) — MÜSSEN spanisch sein. Vorher hart
+    # chinesisch (für Ling Ling gebaut) → qwen bekam als Lucía eine chinesische
+    # Meta-Lage und kippte in Echo-Schleifen ("¿cansada?"-Loop). Jetzt Zielsprache.
+    situation = {
+        "prefix":          "(contexto, no es lo que dijo Sasha, no repitas estas palabras: ",
+        "suffix":          ".)",
+        "join":            ", ",
+        "open":            "Sasha acaba de entrar",
+        "open_focus":      " y te está mirando",
+        "nudge_idle":      "lleva un momento en silencio",
+        "nudge_focus_yes": "alguien te mira pero no dice nada",
+        "nudge_focus_no":  "no te mira nadie",
+        "nudge_sound":     "se oye algo, quizá haya alguien",
+    },
+
     # Beschriftung des Vokabel-Blocks (session hängt ihn ans Prompt-Ende) — Spanisch,
     # sonst bekäme eine es-Session einen deutschen Block.
     vocab_labels = {

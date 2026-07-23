@@ -47,6 +47,21 @@ PROFILE = profile(
     expect_ladder = load_json(__file__, "expect.json"),
     tool_texts    = load_json(__file__, "tool_texts.json", {}),
 
+    # Situations-Meldungen (Öffnen/Stille) — standen vorher als chinesische
+    # Literale hart in session.py. Wortgleich hierher gezogen, damit Ling Ling
+    # sich exakt gleich verhält und andere Sprachen kein Chinesisch mehr erben.
+    situation = {
+        "prefix":          "（背景，不是 Sasha 说的话，别重复里面的字：",
+        "suffix":          "。）",
+        "join":            "，",
+        "open":            "Sasha 刚过来了",
+        "open_focus":      "，在看着你",
+        "nudge_idle":      "一会儿没动静了",
+        "nudge_focus_yes": "有人在看着你，可就是不出声",
+        "nudge_focus_no":  "也没人看你",
+        "nudge_sound":     "好像有点响动，说不好有没有人",
+    },
+
     # Beschriftung des Vokabel-Blocks, den session ans Prompt-Ende hängt
     # (stand vorher als chinesische Literale in session.py — eine fr-Session
     # hätte damit einen chinesischen Block bekommen).
