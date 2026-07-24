@@ -1361,8 +1361,11 @@ def main():
                 S['core_ratio'] = float(rs.get('core_ratio') or 0.0)
                 if rs.get('tts_speed'):
                     S['tts_speed'] = float(rs['tts_speed'])
-                # Deckung von außen auf ≥75 % gesprungen → Drill auf Freischaltung
-                if S['asv'] and S['mode'] == 'room' and S['asv'].get('phase') != 'unlock':
+                # Deckung von außen auf ≥75 % gesprungen → Drill auf Freischaltung.
+                # NUR am echten Deckungswert festmachen (nicht an mode — das kann
+                # 'room' sein, obwohl noch gar nicht freigeschaltet).
+                if (S['asv'] and S['core_ratio'] >= 0.75
+                        and S['asv'].get('phase') != 'unlock'):
                     S['asv']['phase'] = 'unlock'; S['asv']['cur'] = None
                 if gid != last_gid:
                     S['pending_gesture'] = rs.get('gesture')

@@ -185,7 +185,11 @@ def room_state() -> dict:
     lang = active_lang()
     try:
         got, total = tools.core_coverage(lang)
-        assess = bool(_active) and tools.assessment_active(lang)
+        # Das Gate hängt am LERNSTAND, NICHT an einer aktiven KI-Session: der
+        # deterministische Drill läuft ohne Session (_active=False). Früher gab
+        # bool(_active) hier fälschlich mode='room' → das Zimmer sprang bei 1 %
+        # auf „freigeschaltet". Jetzt rein aus assessment_active.
+        assess = tools.assessment_active(lang)
         speed = tools.tts_speed_for(lang)
     except Exception:
         got, total, assess, speed = 0, 0, False, 1.0
