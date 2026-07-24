@@ -92,10 +92,12 @@ jedem Moduswechsel den Modus (`auto`/`day`/`night`) nach
 (`scripts/zentrale-term-theme`, per Symlink in `~/.local/bin`) an — der färbt
 das umgebende xfce4-terminal live per `xfconf-query` um (day = Solarized Light,
 night = Solarized Dark; `auto` löst nach Uhrzeit auf, exakt wie `resolved_theme`).
-Ein **systemd-User-Timer** `zentrale-term-theme.timer` (Units unter
-`~/.config/systemd/user/`, **nicht** in git) zieht dieselbe Datei jede Minute
-nach → die 05/21-Rotation greift auch ohne laufende TUI. Nur lokal, kein Sync,
-kein Backend — TUI ist die einzige Quelle.
+Ein **systemd-User-Timer** `zentrale-term-theme.timer` zieht dieselbe Datei
+jede Minute nach → die 05/21-Rotation greift auch ohne laufende TUI. Nur lokal,
+kein Sync, kein Backend — TUI ist die einzige Quelle. **Setup reproduzierbar
+in git:** Unit-Templates `deploy/zentrale-term-theme.{service,timer}`, Einrichten
+per `scripts/install_term_theme.sh` (Symlink + Units nach `~/.config/systemd/user/`
++ `enable --now`; idempotent, kein sudo).
 
 **Befehlszeile (unten):** `/` öffnet eine Eingabezeile am unteren Rand (die
 Shell ist im Alternate-Screen nicht erreichbar — das ist der Ersatz). Beim
