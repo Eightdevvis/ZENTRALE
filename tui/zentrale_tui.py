@@ -886,6 +886,31 @@ def run_ui(stdscr, store):
     cur_theme = resolved_theme()
     apply_theme(cur_theme)
 
+    # Das umgebende xfce4-terminal an dieses Theme koppeln: bei jedem
+    # Moduswechsel den Modus (auto/day/night) nach ~/.config/zentrale/theme
+    # schreiben und den Applier anstoßen (der färbt xfce4-terminal live um).
+    # Ein systemd-User-Timer zieht dieselbe Datei zusätzlich jede Minute nach
+    # (fängt die 05/21-Rotation, auch wenn die TUI gerade nicht läuft).
+    _last_term_mode = [None]
+    def _push_term_theme(mode):
+        if mode == _last_term_mode[0]:
+            return
+        _last_term_mode[0] = mode
+        try:
+            cfg = os.path.expanduser("~/.config/zentrale")
+            os.makedirs(cfg, exist_ok=True)
+            with open(os.path.join(cfg, "theme"), "w") as fh:
+                fh.write(mode + "\n")
+            # Applier best-effort im Hintergrund; braucht DISPLAY/xfconf.
+            if os.environ.get("DISPLAY"):
+                subprocess.Popen(
+                    ["zentrale-term-theme"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+        except Exception:
+            pass
+    _push_term_theme(theme_mode)
+
     # Esc soll sofort reagieren (sonst wartet ncurses ~1s auf eine Escape-
     # Sequenz, bevor es ein einzelnes Esc durchreicht).
     try:
@@ -6443,6 +6468,9 @@ def run_ui(stdscr, store):
         if want != cur_theme:
             cur_theme = want
             apply_theme(cur_theme)
+        # Terminal-Theme an den (evtl. gerade per 't'/Befehl geänderten) Modus
+        # koppeln — no-op, solange sich der Modus nicht ändert.
+        _push_term_theme(theme_mode)
 
         # Weiche Kamerafahrt zum fokussierten Land (eine Ease-Stufe pro Frame).
         if M["active"] and M.get("anim"):

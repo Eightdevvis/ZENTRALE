@@ -86,6 +86,17 @@ Themes: Light-Mode mit weißem Hintergrund (kein Gelb auf Weiß), Dark-Mode
 245). Akzent-Grün ist gedämpft (Salbei 108, nie bold → kein Neon). Box-Inhalte
 werden auf die jeweilige Box-Innenbreite gekürzt (kein Überlauf in Nachbarspalten).
 
+**Terminal-Kopplung (Sashas Laptop, xfce4-terminal):** die TUI schreibt bei
+jedem Moduswechsel den Modus (`auto`/`day`/`night`) nach
+`~/.config/zentrale/theme` und stößt `zentrale-term-theme`
+(`scripts/zentrale-term-theme`, per Symlink in `~/.local/bin`) an — der färbt
+das umgebende xfce4-terminal live per `xfconf-query` um (day = Solarized Light,
+night = Solarized Dark; `auto` löst nach Uhrzeit auf, exakt wie `resolved_theme`).
+Ein **systemd-User-Timer** `zentrale-term-theme.timer` (Units unter
+`~/.config/systemd/user/`, **nicht** in git) zieht dieselbe Datei jede Minute
+nach → die 05/21-Rotation greift auch ohne laufende TUI. Nur lokal, kein Sync,
+kein Backend — TUI ist die einzige Quelle.
+
 **Befehlszeile (unten):** `/` öffnet eine Eingabezeile am unteren Rand (die
 Shell ist im Alternate-Screen nicht erreichbar — das ist der Ersatz). Beim
 Tippen klappt eine **Live-Liste** der passenden Befehle nach oben auf und filtert

@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# zentrale-term-theme — koppelt das xfce4-terminal an ZENTRALEs Tag/Nacht-Theme.
+#
+# Quelle der Wahrheit: ~/.config/zentrale/theme  (ein Wort)
+#   auto  → nach Uhrzeit (05–21 Uhr hell, sonst dunkel) — GENAU wie in
+#           tui/zentrale_tui.py resolved_theme() und monolith.html computeTheme()
+#   day   → fest hell   (manuell in der TUI erzwungen)
+#   night → fest dunkel (manuell in der TUI erzwungen)
+#
+# Wird angestoßen von (a) der TUI bei jedem Moduswechsel (instant) und
+# (b) einem systemd-User-Timer jede Minute (fängt die 05/21-Rotation, auch
+# wenn die TUI gar nicht läuft). xfce4-terminal übernimmt xfconf-Farben live.
+set -u
+
+STATE="${ZENTRALE_THEME_FILE:-$HOME/.config/zentrale/theme}"
+
+mode="auto"
+[ -r "$STATE" ] && mode="$(tr -d '[:space:]' < "$STATE")"
+
+case "$mode" in
+  day|night) resolved="$mode" ;;
+  *)  # auto (Default bei fehlender/kaputter Datei)
+      h=$((10#$(date +%H)))          # 10# → keine Oktal-Falle bei 08/09
+      if [ "$h" -ge 5 ] && [ "$h" -lt 21 ]; then resolved="day"; else resolved="night"; fi
+      ;;
+esac
+
+# — Farbpaletten ————————————————————————————————————————————————
+# day  = Sashas aktuelles helles Setup (Solarized Light, so belassen).
+# night= Solarized Dark als dunkles Gegenstück (gleiche 16er-Palette,
+#        nur Hintergrund/Vordergrund/Cursor tauschen).
+if [ "$resolved" = "night" ]; then
+  BG="#002b36"; FG="#93a1a1"; BOLD="#eee8d5"; CURSOR="#93a1a1"
+else
+  BG="#fdf6e3"; FG="#073642"; BOLD="#073642"; CURSOR="#073642"
+fi
+
+command -v xfconf-query >/dev/null 2>&1 || exit 0   # kein xfce → still raus
+
+set_prop() { xfconf-query -c xfce4-terminal -p "$1" -s "$2" 2>/dev/null; }
+
+set_prop /color-background "$BG"
+set_prop /color-foreground "$FG"
+set_prop /color-bold       "$BOLD"
+set_prop /color-cursor     "$CURSOR"
+# Cursor-Farbe erzwingen (Default wäre unsichtbar auf dunklem Grund)
+xfconf-query -c xfce4-terminal -p /color-cursor-use-default -s false 2>/dev/null \
+  || xfconf-query -c xfce4-terminal -n -t bool -p /color-cursor-use-default -s false 2>/dev/null
+
+exit 0
