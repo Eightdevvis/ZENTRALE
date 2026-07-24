@@ -291,26 +291,36 @@ still inaktiv (`core_hint` leer, nichts bricht). **LIVE für `es`** (76 Wörter)
 Bootcamp-Skizze (`tutor/assessment_extension/`, reine Markdown-Playbooks, nie
 lauffähiger Code).
 
-**Hartes Assessment-Gate (die Persona ist verdient).** Der eigentliche Kern der
-Bootcamp-Skizze: **man sieht die Persona/das Zimmer NICHT, bevor der Kern-
-Wortschatz zu ≥75 % sitzt.** Solange `tools.assessment_active(lang)` (= Sprache hat
-ein Curriculum UND ist noch nicht gemeistert), gilt:
-- `session.respond_stream` nimmt **`prof['assessment_prompt']`** (Drill-Prompt,
-  `langs/<lang>/assessment_prompt.md`) statt des Konversations-Prompts: Wort für
-  Wort, immer `show_thought`, langsam, `mark_known`/`increment_correct_use`, nach
-  Priorität — Lucía im Prüf-/Übungsmodus, nicht als Mitbewohnerin.
-- `session.room_state()` meldet `mode:"assessment"` + Deckung + gerampten
-  `tts_speed`. Das Zimmer-Fenster (`room.py`) rendert dann **`draw_assessment`**
-  (Titel, Fortschrittsbalken mit 75%-Marke, Wort-Karte + Übersetzung) — **kein
-  Zimmer, keine lebende Figur**, aber Lucías **Stimme liest vor** (TTS läuft).
-- **Speed-Rampe** `tools.tts_speed_for`: 0.7 (Anfang) → linear → 1.0 an der
-  Schwelle; danach natürlich. Anfänger hören einzelne Wörter klar.
-- Bei ≥75 % kippt `mode` auf `"room"` → das Persona-Zimmer erscheint (Freischaltung
-  ist über die `confirmed`-Wörter monoton, bleibt also frei). Zeitgleich feuert der
-  einmalige `check_graduation`-Meilenstein.
+**Hartes Assessment-Gate (die Persona ist verdient) — DETERMINISTISCH, kein LLM.**
+Der eigentliche Kern der Bootcamp-Skizze: **man sieht die Persona/das Zimmer NICHT,
+bevor der Kern-Wortschatz zu ≥75 % sitzt.** Wichtige Korrektur (2026-07): die
+Abfrage ist **reines Frontend + Logik**, KEIN Sprachmodell. Vokabeln abfragen ist
+deterministisch — ein LLM brachte da nur Latenz (2 Min bis ein Wort kam), Zufall
+und keine Ansage. Das Modell ist die **Belohnung nach** dem Gate, nicht das
+Abfrage-Werkzeug. Solange `tools.assessment_active(lang)` (Sprache hat ein
+Curriculum UND ist noch nicht gemeistert):
+- **Backend (deterministisch, kein Modell):** `tools.assessment_queue(lang)` liefert
+  die Kern-Wörter + Lernstand (`word/de/category/priority/confirmed/correct_use`),
+  `tools.assessment_answer(lang, word, known|learned|again)` verbucht eine Antwort
+  (`known`→sofort gefestigt, `learned`→+1 bis `CONFIRM_THRESHOLD`). Fronten:
+  `GET /api/tutor/assessment`, `POST /api/tutor/assessment/answer` (via
+  `core/tutor_port.py`; **kein** `available()`-Gate — braucht kein Backend-Modell).
+- **Frontend (`room.py`, `asv`-Controller):** das Zimmer geht die Wörter selbst Karte
+  für Karte durch — welcome → card (`[K]` kenne ich / `[N]` zeig mir → Bedeutung /
+  `[R]` nochmal; im Lernen `Enter` verstanden) → unlock. **Lucías Stimme (TTS) liest
+  jedes Wort vor** (`be.speak`, gerampter Speed), aber es gibt **kein Zimmer, keine
+  lebende Figur** (`draw_assessment`: Fortschrittsbalken mit 75%-Marke, Wort-Karte +
+  Übersetzung, Tasten-Hinweise; Persona-HUD aus). `kickoff` startet im Gate das Drill
+  statt der Persona (kein `run_stream`); `feedback_loop` stößt im Drill NIE die KI an.
+- **Speed-Rampe** `tools.tts_speed_for`: 0.7 (Anfang) → linear → 1.0 an der Schwelle.
+- **Freischaltung** bei ≥75 %: der `unlock`-Screen erscheint; `Enter` startet dann die
+  Persona (`run_stream /api/tutor/start`) → Zimmer. `room_state.mode` kippt parallel
+  auf `"room"`; der einmalige `check_graduation`-Meilenstein feuert.
 
-Sprache ohne `assessment_prompt`/`core_vocab` (`zh`) → **kein Gate**, sofort
-Persona (Verhalten unverändert). **LIVE für `es`.**
+Der alte LLM-`assessment_prompt` (`langs/<lang>/assessment_prompt.md`) bleibt als
+Defense-in-Depth im `respond_stream`-Gate, wird aber im deterministischen Fluss nicht
+mehr angesteuert. Sprache ohne `core_vocab` (`zh`) → **kein Gate**, sofort Persona.
+**LIVE für `es`.**
 
 **Direkt-Start (kein Enter):** TUI-Taste `u` öffnet **mit `DISPLAY` das
 Persona-Zimmer** (`zentrale_tui.tutor_window`, eigenes pygame-Fenster, siehe
