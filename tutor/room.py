@@ -194,6 +194,23 @@ class Backend:
         except Exception:
             return None
 
+    def assessment(self):
+        """GET /api/tutor/assessment → Kern-Wörter + Lernstand fürs Drill
+        (deterministisch, kein LLM). None bei Fehler."""
+        return self._get('/api/tutor/assessment', timeout=5.0)
+
+    def answer(self, word, result):
+        """POST /api/tutor/assessment/answer {word, result} → neuer Stand."""
+        try:
+            req = urllib.request.Request(
+                self.url + '/api/tutor/assessment/answer',
+                data=json.dumps({'word': word, 'result': result}).encode('utf-8'),
+                method='POST', headers={'Content-Type': 'application/json'})
+            with urllib.request.urlopen(req, timeout=6) as r:
+                return json.loads(r.read().decode('utf-8', 'replace'))
+        except Exception:
+            return None
+
     def stop(self):
         """POST /api/tutor/stop — laufende Session beenden (vor dem Sprachwechsel,
         damit die neue Persona in der neuen Sprache frisch begrüßt)."""
@@ -834,68 +851,100 @@ def draw_bubble(surf, font, text, cx, top_y, w, alpha=255):
 # ── App ──────────────────────────────────────────────────────────────────────
 # ── Assessment-Screen: das harte Gate vor der Persona ────────────────────────
 # Solange der Kern-Wortschatz nicht gemeistert ist, sieht Sasha NICHT das Zimmer
-# und nicht die Figur — nur diesen ruhigen Übungs-Screen. Lucías STIMME liest die
-# Wörter vor (TTS läuft normal), aber die Persona „lebt" hier nicht. Freischaltung
-# bei ratio ≥ 0.75; dann übernimmt wieder die Zimmer-Darstellung.
-ASSESS_TOP = (28, 36, 52)
-ASSESS_BOT = (40, 50, 70)
-ASSESS_ACC = (150, 200, 230)     # kühles Blau (= ROLE_USER), Fortschritt
+# und nicht die Figur — nur diese ruhige, DETERMINISTISCHE Vokabel-Abfrage (kein
+# LLM). Lucías STIMME liest die Wörter vor (TTS), aber die Persona „lebt" hier
+# nicht. Der Ablauf wird lokal getrieben (asv-Controller in main); dies ist nur
+# das Rendering. Freischaltung bei ratio ≥ 0.75, dann übernimmt das Zimmer.
+ASSESS_TOP  = (28, 36, 52)
+ASSESS_BOT  = (40, 50, 70)
+ASSESS_ACC  = (150, 200, 230)     # kühles Blau, Fortschritt
+ASSESS_GOLD = (240, 206, 120)     # warmer Pop: Ziel/Freischaltung
+
+_CAT_DE = {'pronoun':'Pronomen','verb_core':'Kernverb','verb_action':'Verb',
+           'question':'Fragewort','spatial':'Ort','time':'Zeit','response':'Antwort',
+           'emotion':'Gefühl','adjective':'Eigenschaft','noun_household':'Zuhause',
+           'noun_substance':'Ding','tutor_activity':'Alltag','family':'Familie',
+           'connector':'Bindewort','modifier':'Verstärker','article':'Artikel',
+           'politeness':'Höflichkeit','greeting':'Gruß'}
 
 
-def draw_assessment(screen, w, h, fonts, got, total, ratio, bubble_text, bubble_alpha,
-                    thought, caret_t):
-    # ruhiger Vertikal-Verlauf (bewusst anders als das Zimmer-Aubergine)
+def _hint_row(screen, font, w, y, items):
+    """Zentrierte Reihe [Taste] Label — sagt dem Nutzer, was er tun kann."""
+    gap = 18
+    widths = [(font.size(k)[0] + 16) + 8 + font.size(l)[0] for k, l in items]
+    x = w // 2 - (sum(widths) + gap * (len(items) - 1)) // 2
+    for (k, l), wd in zip(items, widths):
+        ks = font.render(k, True, (16, 22, 32)); kw = ks.get_width() + 16
+        pygame.draw.rect(screen, ASSESS_ACC, (x, y, kw, font.get_height() + 8), border_radius=7)
+        screen.blit(ks, (x + 8, y + 4))
+        screen.blit(font.render(l, True, (206, 216, 230)), (x + kw + 8, y + 4))
+        x += wd + gap
+
+
+def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
     for y in range(h):
         f = y / max(1, h - 1)
         col = tuple(int(a + (b - a) * f) for a, b in zip(ASSESS_TOP, ASSESS_BOT))
         pygame.draw.line(screen, col, (0, y), (w, y))
 
-    # Titel + Untertitel (mittig oben)
-    title = fonts['big'].render('Vokabel-Aufwärmen', True, (232, 236, 244))
-    screen.blit(title, (w // 2 - title.get_width() // 2, 74))
-    sub = fonts['hud'].render('Lucía kommt heraus, sobald du die Basis kannst (75 %)',
-                              True, HUD_DIM)
-    screen.blit(sub, (w // 2 - sub.get_width() // 2, 74 + title.get_height() + 6))
-
-    # Fortschrittsbalken mit 75%-Freischalt-Marke
-    bw = min(560, w - 120); bx = w // 2 - bw // 2; by = 150; bh = 20
-    pygame.draw.rect(screen, (22, 28, 40), (bx, by, bw, bh), border_radius=8)
-    fillw = int(bw * max(0.0, min(1.0, ratio)))
-    if fillw > 0:
-        pygame.draw.rect(screen, ASSESS_ACC, (bx, by, fillw, bh), border_radius=8)
-    # 75%-Marke
-    mx = bx + int(bw * 0.75)
-    pygame.draw.line(screen, (240, 220, 120), (mx, by - 5), (mx, by + bh + 5), 2)
-    unlock = fonts['hud'].render('75%', True, (240, 220, 120))
-    screen.blit(unlock, (mx - unlock.get_width() // 2, by + bh + 7))
-    pct = int(round(100 * ratio))
-    cnt = fonts['hud'].render(f'{got} / {total} Wörter · {pct}%', True, HUD_FG)
-    screen.blit(cnt, (bx, by - cnt.get_height() - 6))
-
-    # Wort-Karte in der Mitte: das aktuelle Übungs-Wort + Übersetzung (aus thought),
-    # sonst die aktuelle Sprech-Zeile.
+    phase = asv.get('phase', 'welcome')
+    got = asv.get('got', 0); total = asv.get('total', 0) or 76; ratio = asv.get('ratio', 0.0)
     cy = h // 2 + 6
-    if thought and thought[0]:
-        word, meaning = thought[0], (thought[1] or '')
-        wsurf = fonts['big'].render(word, True, BUBBLE_FG)
-        cardw = max(220, wsurf.get_width() + 80)
-        cardh = 116
-        cardx = w // 2 - cardw // 2
-        cardy = cy - cardh // 2
-        card = pygame.Surface((cardw, cardh), pygame.SRCALPHA)
-        pygame.draw.rect(card, BUBBLE_BG, (0, 0, cardw, cardh), border_radius=14)
-        pygame.draw.rect(card, BUBBLE_BD, (0, 0, cardw, cardh), 2, border_radius=14)
-        screen.blit(card, (cardx, cardy))
-        screen.blit(wsurf, (w // 2 - wsurf.get_width() // 2, cardy + 22))
-        if meaning:
-            msurf = fonts['log'].render(meaning, True, (120, 110, 116))
-            screen.blit(msurf, (w // 2 - msurf.get_width() // 2, cardy + 22 + wsurf.get_height() + 8))
-    elif bubble_text:
-        # nur die gesprochene Zeile (mittig), wenn gerade kein Wort-Gedanke ansteht
-        for i, ln in enumerate(_wrap(fonts['bubble'], bubble_text, min(600, w - 120))[:3]):
-            s = fonts['bubble'].render(ln, True, (236, 236, 242))
-            s.set_alpha(bubble_alpha)
-            screen.blit(s, (w // 2 - s.get_width() // 2, cy - 20 + i * (fonts['bubble'].get_linesize())))
+
+    def ctr(surf, y): screen.blit(surf, (w // 2 - surf.get_width() // 2, y))
+
+    # Fortschrittsbalken (immer, außer Willkommen)
+    if phase != 'welcome':
+        bw = min(560, w - 120); bx = w // 2 - bw // 2; by = 52; bh = 13
+        pygame.draw.rect(screen, (20, 26, 38), (bx, by, bw, bh), border_radius=7)
+        fw = int(bw * max(0.0, min(1.0, ratio)))
+        if fw > 0:
+            pygame.draw.rect(screen, ASSESS_ACC, (bx, by, fw, bh), border_radius=7)
+        mx = bx + int(bw * 0.75)
+        pygame.draw.line(screen, ASSESS_GOLD, (mx, by - 4), (mx, by + bh + 4), 2)
+        screen.blit(fonts['hud'].render(f'{got} / {total} · {int(round(100*ratio))}%', True, HUD_FG),
+                    (bx, by - fonts['hud'].get_height() - 5))
+        goal = fonts['hud'].render('Lucía ab 75 %', True, ASSESS_GOLD)
+        screen.blit(goal, (bx + bw - goal.get_width(), by - fonts['hud'].get_height() - 5))
+
+    if phase == 'welcome':
+        ctr(fonts['word'].render('Hola', True, (236, 238, 246)), cy - 150)
+        ctr(fonts['big'].render('Ich bin Lucía.', True, (232, 236, 244)), cy - 78)
+        for i, ln in enumerate(['Zuerst gehen wir zusammen die ~75 wichtigsten Wörter durch.',
+                                'Was du kannst, hakst du ab. Bei 75 % reden wir dann richtig.']):
+            ctr(fonts['log'].render(ln, True, HUD_DIM), cy - 22 + i * 26)
+        _hint_row(screen, fonts['hud'], w, cy + 82, [('Enter', 'Los geht’s')])
+        return
+
+    if phase == 'unlock':
+        ctr(fonts['word'].render('¡Hola!', True, ASSESS_GOLD), cy - 96)
+        ctr(fonts['big'].render('Lucía ist da.', True, (236, 238, 246)), cy - 18)
+        ctr(fonts['log'].render('Du kannst genug — ab jetzt redet ihr wirklich, auf Spanisch.',
+                                True, HUD_DIM), cy + 26)
+        _hint_row(screen, fonts['hud'], w, cy + 78, [('Enter', 'zu Lucía')])
+        return
+
+    # phase == 'card'
+    cur = asv.get('cur')
+    if not cur:
+        ctr(fonts['big'].render('…', True, HUD_DIM), cy)
+        return
+    cat = _CAT_DE.get(cur.get('category', ''), '')
+    if cat:
+        lab = fonts['hud'].render(cat.upper(), True, ASSESS_ACC)
+        ctr(lab, cy - 108)
+    ctr(fonts['word'].render(cur.get('word', ''), True, (238, 240, 248)), cy - 74)
+    if speaking:
+        ctr(fonts['hud'].render('◗ Lucía spricht …', True, ASSESS_ACC), cy - 2)
+
+    if asv.get('sub') == 'learn':
+        ctr(fonts['bubble'].render('= ' + (cur.get('de') or '…'), True, ASSESS_GOLD), cy + 26)
+        _hint_row(screen, fonts['hud'], w, cy + 82,
+                  [('Enter', 'verstanden'), ('K', 'kann ich'), ('R', 'nochmal')])
+    else:  # ask
+        ctr(fonts['bubble'].render('Kennst du das Wort?', True, (210, 218, 230)), cy + 26)
+        _hint_row(screen, fonts['hud'], w, cy + 82,
+                  [('K', 'kenne ich'), ('N', 'zeig mir'), ('R', 'nochmal hören')])
 
 
 def main():
@@ -931,7 +980,7 @@ def main():
     set_ime_rect()
 
     fonts = {'bubble': _font(22), 'hud': _font(15), 'input': _font(20),
-             'big': _font(26, True), 'log': _font(18)}
+             'big': _font(26, True), 'log': _font(18), 'word': _font(52, True)}
     be = Backend(a.url)
     persona = Persona()
 
@@ -977,7 +1026,10 @@ def main():
         'core_total': 0,       # Kern-Wörter gesamt
         'core_ratio': 0.0,     # Deckung 0..1 (Fortschritt zur Freischaltung)
         'tts_speed': a.speed,  # gerampter Sprech-Speed (0.7→1.0 nach Meisterung)
-        'was_assessment': False,  # war letzter Frame Assessment? (für Freischalt-Feier)
+        # ── Deterministische Abfrage (asv = assessment view controller) ────
+        # None = keine Abfrage (Zimmer/Persona). Sonst ein Dict mit dem lokalen
+        # Drill-Zustand; die KI ist hier NICHT beteiligt (nur TTS + REST-Antworten).
+        'asv': None,
     }
 
     def log_add(role, text):
@@ -1045,6 +1097,138 @@ def main():
         # stehengebliebene Text has_text ewig true und bub_age wird nie größer.
         with S['lock']:
             S['buf'] = ''
+
+    # ── Deterministische Abfrage (asv) — das harte Gate, KEIN LLM ────────────
+    # Das Frontend geht die Kern-Wörter Karte für Karte durch: zeigen, vorlesen
+    # (TTS), Antwort per REST verbuchen. Kein Sprachmodell, keine Wartezeit. Erst
+    # ab 75 % Deckung wird die Persona (run_stream) gestartet.
+    def asv_speak(word):
+        """Wort vorlesen (TTS, gerampter Speed) — in einem Thread, nicht blockend."""
+        if not word:
+            return
+        def _s():
+            with S['lock']:
+                if S['mute']:
+                    return
+                lang = S['lang']; spd = S['tts_speed']
+            wav = be.speak(word, lang, a.speaker, spd)
+            if not wav:
+                return
+            music_duck(True); ch = play_wav(wav)
+            if ch is None:
+                music_duck(False); return
+            with S['lock']: S['speaking'] = True
+            try:
+                while ch.get_busy(): pygame.time.wait(60)
+            finally:
+                with S['lock']: S['speaking'] = False
+                music_duck(False)
+        threading.Thread(target=_s, daemon=True).start()
+
+    def asv_show():
+        """Aktuelle Karte setzen (sub='ask') und vorlesen."""
+        with S['lock']:
+            v = S['asv']
+            if not v or not v.get('work'):
+                return
+            v['sub'] = 'ask'
+            v['cur'] = v['work'][v['pos'] % len(v['work'])]
+            word = v['cur']['word']
+        asv_speak(word)
+
+    def asv_advance():
+        """Zur nächsten Karte; nichts mehr offen oder ≥75 % → Freischaltung."""
+        with S['lock']:
+            v = S['asv']
+            if not v:
+                return
+            if v.get('ratio', 0) >= 0.75 or not v.get('work'):
+                v['phase'] = 'unlock'; v['cur'] = None; return
+            v['pos'] = (v.get('pos', 0) + 1) % len(v['work'])
+        asv_show()
+
+    def asv_answer(result):
+        """Antwort (known|learned) per REST verbuchen, Stand aktualisieren,
+        gefestigte Karte aus der Runde nehmen, dann weiter."""
+        with S['lock']:
+            v = S['asv']
+            if not v or v.get('busy') or not v.get('cur'):
+                return
+            v['busy'] = True; word = v['cur']['word']
+        res = be.answer(word, result)
+        unlocked = False
+        with S['lock']:
+            v = S['asv']
+            if v:
+                v['busy'] = False
+                if res:
+                    v['got'] = res.get('got', v.get('got', 0))
+                    v['total'] = res.get('total', v.get('total', 0))
+                    v['ratio'] = res.get('ratio', v.get('ratio', 0.0))
+                    if res.get('confirmed'):
+                        v['work'] = [e for e in v.get('work', []) if e['word'] != word]
+                    unlocked = bool(res.get('unlocked'))
+        if unlocked:
+            with S['lock']:
+                if S['asv']:
+                    S['asv']['phase'] = 'unlock'; S['asv']['cur'] = None
+            return
+        asv_advance()
+
+    def asv_key(ev):
+        """Tastendruck im Abfrage-Modus verarbeiten (kein Text-Input dahinter)."""
+        with S['lock']:
+            v = S['asv']
+            if not v:
+                return
+            phase = v.get('phase'); sub = v.get('sub')
+        if phase == 'welcome':
+            if ev.key in (pygame.K_RETURN, pygame.K_SPACE):
+                with S['lock']:
+                    if S['asv']: S['asv']['phase'] = 'card'
+                asv_show()
+            return
+        if phase == 'unlock':
+            if ev.key == pygame.K_RETURN:
+                with S['lock']:
+                    S['asv'] = None; foc = S['focused']       # Abfrage aus → Persona
+                threading.Thread(target=run_stream,
+                                 args=('/api/tutor/start', {'focus': foc}), daemon=True).start()
+            return
+        # phase == 'card'
+        if ev.key == pygame.K_r:                               # nochmal vorlesen
+            with S['lock']:
+                cur = (S['asv'] or {}).get('cur')
+            if cur: asv_speak(cur['word'])
+            return
+        if sub == 'ask':
+            if ev.key == pygame.K_k:
+                threading.Thread(target=asv_answer, args=('known',), daemon=True).start()
+            elif ev.key == pygame.K_n:                         # zeig mir → Bedeutung
+                with S['lock']:
+                    if S['asv']: S['asv']['sub'] = 'learn'
+                    cur = (S['asv'] or {}).get('cur')
+                if cur: asv_speak(cur['word'])
+        else:  # learn
+            if ev.key == pygame.K_RETURN:
+                threading.Thread(target=asv_answer, args=('learned',), daemon=True).start()
+            elif ev.key == pygame.K_k:
+                threading.Thread(target=asv_answer, args=('known',), daemon=True).start()
+
+    def asv_init():
+        """Abfrage starten, falls die Sprache im Assessment-Gate steckt: Queue
+        holen, Willkommen zeigen. Gibt True zurück = Drill übernimmt (KEIN LLM).
+        False = kein Gate → normaler Persona-Start."""
+        data = be.assessment()
+        if not isinstance(data, dict) or data.get('mode') != 'assessment':
+            return False
+        work = [e for e in (data.get('queue') or []) if not e.get('confirmed')]
+        with S['lock']:
+            S['asv'] = {'phase': 'welcome', 'sub': 'ask', 'cur': None,
+                        'work': work, 'pos': 0,
+                        'got': data.get('got', 0), 'total': data.get('total', 0),
+                        'ratio': data.get('ratio', 0.0), 'busy': False}
+        return True
 
     # ── Sprach-Menü (Alt+L): live zwischen Personas/Sprachen umschalten ──────
     # Der Kern kann das schon (POST /api/tutor/config {lang}); hier ist nur die
@@ -1132,6 +1316,11 @@ def main():
             active = bool(st and st.get('active'))
             if st and st.get('privacy_warning'):
                 S['msg'] = st['privacy_warning']
+        # Steckt die Sprache im Assessment-Gate? Dann die DETERMINISTISCHE Abfrage
+        # starten (kein LLM, keine Persona), statt zu begrüßen. Braucht kein
+        # Backend-Modell — nur die Vokabel-Dateien + TTS.
+        if asv_init():
+            return
         if S['available'] and not active:
             with S['lock']:
                 foc = S['focused']
@@ -1172,6 +1361,9 @@ def main():
                 S['core_ratio'] = float(rs.get('core_ratio') or 0.0)
                 if rs.get('tts_speed'):
                     S['tts_speed'] = float(rs['tts_speed'])
+                # Deckung von außen auf ≥75 % gesprungen → Drill auf Freischaltung
+                if S['asv'] and S['mode'] == 'room' and S['asv'].get('phase') != 'unlock':
+                    S['asv']['phase'] = 'unlock'; S['asv']['cur'] = None
                 if gid != last_gid:
                     S['pending_gesture'] = rs.get('gesture')
                 if tid != last_tid:   # neuer Vokabel-Gedanke → Blase zeigen
@@ -1200,7 +1392,9 @@ def main():
             pygame.time.wait(1000)
             now = pygame.time.get_ticks()
             with S['lock']:
-                ok = S['available'] and not S['busy'] and not S['streaming']
+                # im Assessment-Drill (asv) NIE die KI anstoßen — kein LLM da drin
+                ok = (S['asv'] is None and S['available']
+                      and not S['busy'] and not S['streaming'])
                 lu = S['last_user_ms']; nudged = S['nudged']; nm = S['nudge_ms']
             if not ok:
                 continue
@@ -1329,16 +1523,16 @@ def main():
                 set_ime_rect()
             elif ev.type == pygame.TEXTINPUT:
                 # fertig committeter Text (bei CJK: das gewählte Zeichen).
-                # Bei offenem Menü ignorieren (keine Eingabe hinter dem Overlay).
+                # Bei offenem Menü ODER laufender Abfrage ignorieren.
                 with S['lock']:
-                    if S['menu'] is None:
+                    if S['menu'] is None and S['asv'] is None:
                         S['compose'] = ''
                         if len(S['input']) < 200:
                             S['input'] += ev.text
             elif ev.type == pygame.TEXTEDITING:
                 # laufende IME-Komposition (Pinyin, noch nicht bestätigt)
                 with S['lock']:
-                    if S['menu'] is None:
+                    if S['menu'] is None and S['asv'] is None:
                         S['compose'] = ev.text
             elif ev.type == pygame.KEYDOWN:
                 # Offenes Sprach-Menü fängt die Tasten ab (Navigation/Auswahl/
@@ -1350,6 +1544,23 @@ def main():
                     if code:
                         threading.Thread(target=switch_lang, args=(code,),
                                          daemon=True).start()
+                    continue
+                # Deterministische Abfrage: Tasten steuern das Drill (kein Text-
+                # Input, kein Reden). Esc/Alt+M bleiben; alles andere → asv_key.
+                with S['lock']:
+                    asv_on = S['asv'] is not None
+                if asv_on:
+                    if ev.key == pygame.K_ESCAPE:
+                        running = False
+                    elif ev.key == pygame.K_m and (ev.mod & pygame.KMOD_ALT):
+                        with S['lock']:
+                            S['mute'] = not S['mute']; muted = S['mute']
+                            S['msg'] = 'stumm' if muted else 'stimme an'
+                        if muted:
+                            try: pygame.mixer.stop()
+                            except Exception: pass
+                    else:
+                        asv_key(ev)
                     continue
                 if ev.key == pygame.K_ESCAPE:
                     running = False
@@ -1400,6 +1611,7 @@ def main():
             menu = S['menu']; menu_langs = list(S['langs']); cur_lang = S['lang']
             mode = S['mode']; core_got = S['core_got']; core_total = S['core_total']
             core_ratio = S['core_ratio']
+            asv_snap = dict(S['asv']) if S['asv'] else None
 
         # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft.
         has_text = bool(buf.strip())
@@ -1434,16 +1646,11 @@ def main():
         else:
             bub_age += dt
 
-        # zeichnen — HARTES GATE: im Assessment-Modus NICHT das Zimmer/die Figur,
-        # sondern den Übungs-Screen. Lucías Stimme läuft trotzdem (speak()).
-        if mode == 'assessment':
-            if bub_age <= BUBBLE_LINGER:
-                a_alpha = 255
-            else:
-                a_alpha = int(255 * max(0.0, 1 - (bub_age - BUBBLE_LINGER) / BUBBLE_FADE))
-            show_bub = bub_text if (bub_text and bub_age < BUBBLE_LINGER + BUBBLE_FADE) else ''
-            draw_assessment(screen, w, h, fonts, core_got, core_total, core_ratio,
-                            show_bub, a_alpha, thought if thought_t > 0 else None, caret_t)
+        # zeichnen — HARTES GATE: läuft die deterministische Abfrage (asv), NICHT
+        # das Zimmer/die Figur, sondern den Übungs-Screen. Lucías Stimme (TTS)
+        # liest die Wörter vor; kein LLM beteiligt.
+        if asv_snap is not None:
+            draw_assessment(screen, w, h, fonts, asv_snap, speaking, caret_t)
         else:
             draw_room(screen, w, h, caret_t)
             draw_tv(screen, w, h, tv_on, tv_title, fonts['hud'], caret_t)
@@ -1464,84 +1671,87 @@ def main():
                 draw_thought(screen, fonts['bubble'], fonts['log'],
                              thought[0], thought[1], persona.x, persona.head_top(), t_alpha)
 
-        # schläft/nicht erreichbar
-        if avail is False:
-            zz = fonts['big'].render('zzz…', True, HUD_DIM)
-            screen.blit(zz, (int(persona.x)+18, int(persona.head_top())-10))
-        elif stance == 'sleep':
-            screen.blit(fonts['big'].render('zzz', True, HUD_DIM),
-                        (int(persona.x)+18, int(persona.head_top())-6))
+        # Persona-HUD (Name, Mic, Laune, Verlaufs-Leiste, Eingabe) NUR im Zimmer.
+        # Im Drill (asv) ist der Screen bewusst nackt — draw_assessment trägt alles.
+        if asv_snap is None:
+            # schläft/nicht erreichbar
+            if avail is False:
+                zz = fonts['big'].render('zzz…', True, HUD_DIM)
+                screen.blit(zz, (int(persona.x)+18, int(persona.head_top())-10))
+            elif stance == 'sleep':
+                screen.blit(fonts['big'].render('zzz', True, HUD_DIM),
+                            (int(persona.x)+18, int(persona.head_top())-6))
 
-        # HUD oben: Name + kompakte Steuerung/Meldung (unten ist jetzt die Leiste)
-        screen.blit(fonts['big'].render(pname, True, HUD_FG), (16, 12))
-        if msg:
-            hint = msg
-        elif avail is False:
-            hint = 'verbinde…'
-        elif avail and not tts_ok:
-            hint = '🔇 keine Stimme (tts-service aus?)'
-        else:
-            hint = '↑/↓ Verlauf · Enter reden · Alt+L Sprache · Alt+M stumm · Esc'
-        screen.blit(fonts['hud'].render(hint, True, HUD_DIM), (16, 44))
+            # HUD oben: Name + kompakte Steuerung/Meldung (unten ist jetzt die Leiste)
+            screen.blit(fonts['big'].render(pname, True, HUD_FG), (16, 12))
+            if msg:
+                hint = msg
+            elif avail is False:
+                hint = 'verbinde…'
+            elif avail and not tts_ok:
+                hint = '🔇 keine Stimme (tts-service aus?)'
+            else:
+                hint = '↑/↓ Verlauf · Enter reden · Alt+L Sprache · Alt+M stumm · Esc'
+            screen.blit(fonts['hud'].render(hint, True, HUD_DIM), (16, 44))
 
-        # Mic-Indikator (Immer-Zuhören): Zustand + Alt+H
-        if mic_err:
-            mic_line, mic_col = 'Mic: ' + mic_err, HUD_DIM
-        elif not mic:
-            mic_line, mic_col = 'Mic aus · Alt+H', HUD_DIM
-        elif transcribing:
-            mic_line, mic_col = 'Mic: versteht…', ROLE_USER
-        elif hearing:
-            mic_line, mic_col = 'Mic: hört dich ●', ROLE_USER
-        else:
-            mic_line, mic_col = 'Mic: hört zu · Alt+H', HUD_DIM
-        screen.blit(fonts['hud'].render(mic_line, True, mic_col), (16, 66))
-        if music:
-            screen.blit(fonts['hud'].render(f'♪ {music}', True, ROLE_USER), (16, 88))
+            # Mic-Indikator (Immer-Zuhören): Zustand + Alt+H
+            if mic_err:
+                mic_line, mic_col = 'Mic: ' + mic_err, HUD_DIM
+            elif not mic:
+                mic_line, mic_col = 'Mic aus · Alt+H', HUD_DIM
+            elif transcribing:
+                mic_line, mic_col = 'Mic: versteht…', ROLE_USER
+            elif hearing:
+                mic_line, mic_col = 'Mic: hört dich ●', ROLE_USER
+            else:
+                mic_line, mic_col = 'Mic: hört zu · Alt+H', HUD_DIM
+            screen.blit(fonts['hud'].render(mic_line, True, mic_col), (16, 66))
+            if music:
+                screen.blit(fonts['hud'].render(f'♪ {music}', True, ROLE_USER), (16, 88))
 
-        # Soziale Batterie oben rechts (grün hoch / amber mittel / rot niedrig)
-        bw2, bh2 = 92, 12
-        bx2, by2 = w - bw2 - 16, 18
-        bcol = (120, 200, 120) if mood == 'happy' else ((214, 176, 96) if mood == 'ok' else (214, 112, 112))
-        pygame.draw.rect(screen, (44, 38, 48), (bx2, by2, bw2, bh2), border_radius=5)
-        pygame.draw.rect(screen, bcol, (bx2 + 2, by2 + 2, int((bw2 - 4) * max(0, min(100, battery)) / 100), bh2 - 4), border_radius=4)
-        lab = fonts['hud'].render('Laune', True, HUD_DIM)
-        screen.blit(lab, (bx2 - lab.get_width() - 8, by2 - 2))
+            # Soziale Batterie oben rechts (grün hoch / amber mittel / rot niedrig)
+            bw2, bh2 = 92, 12
+            bx2, by2 = w - bw2 - 16, 18
+            bcol = (120, 200, 120) if mood == 'happy' else ((214, 176, 96) if mood == 'ok' else (214, 112, 112))
+            pygame.draw.rect(screen, (44, 38, 48), (bx2, by2, bw2, bh2), border_radius=5)
+            pygame.draw.rect(screen, bcol, (bx2 + 2, by2 + 2, int((bw2 - 4) * max(0, min(100, battery)) / 100), bh2 - 4), border_radius=4)
+            lab = fonts['hud'].render('Laune', True, HUD_DIM)
+            screen.blit(lab, (bx2 - lab.get_width() - 8, by2 - 2))
 
-        # ── Verlaufs-Leiste unten (translucent, umbrechend, ↑/↓ scrollt) ────
-        lf = fonts['log']; lh = lf.get_linesize()
-        VIS = 3
-        input_h = 36
-        bar_h = lh * VIS + 10
-        bar_y = h - input_h - bar_h
-        panel = pygame.Surface((w, bar_h), pygame.SRCALPHA); panel.fill(BAR_BG)
-        screen.blit(panel, (0, bar_y))
-        tl = _transcript_lines(log, pname, lf, w - 24)
-        total = len(tl)
-        maxscroll = max(0, total - VIS)
-        sc = min(scroll, maxscroll)
-        start = max(0, total - VIS - sc)
-        for i, (col, ln) in enumerate(tl[start:start + VIS]):
-            screen.blit(lf.render(ln, True, col), (12, bar_y + 5 + i*lh))
-        if start > 0:                                  # es gibt Älteres oberhalb
-            screen.blit(lf.render('↑', True, BAR_DIM), (w - 22, bar_y + 4))
-        if sc > 0:                                     # nicht ganz unten
-            screen.blit(lf.render('↓', True, BAR_DIM), (w - 22, h - input_h - lh - 2))
+            # ── Verlaufs-Leiste unten (translucent, umbrechend, ↑/↓ scrollt) ────
+            lf = fonts['log']; lh = lf.get_linesize()
+            VIS = 3
+            input_h = 36
+            bar_h = lh * VIS + 10
+            bar_y = h - input_h - bar_h
+            panel = pygame.Surface((w, bar_h), pygame.SRCALPHA); panel.fill(BAR_BG)
+            screen.blit(panel, (0, bar_y))
+            tl = _transcript_lines(log, pname, lf, w - 24)
+            total = len(tl)
+            maxscroll = max(0, total - VIS)
+            sc = min(scroll, maxscroll)
+            start = max(0, total - VIS - sc)
+            for i, (col, ln) in enumerate(tl[start:start + VIS]):
+                screen.blit(lf.render(ln, True, col), (12, bar_y + 5 + i*lh))
+            if start > 0:                                  # es gibt Älteres oberhalb
+                screen.blit(lf.render('↑', True, BAR_DIM), (w - 22, bar_y + 4))
+            if sc > 0:                                     # nicht ganz unten
+                screen.blit(lf.render('↓', True, BAR_DIM), (w - 22, h - input_h - lh - 2))
 
-        # Eingabezeile ganz unten: Text + laufende IME-Komposition (Pinyin)
-        iy = h - input_h + 7
-        pygame.draw.rect(screen, INPUT_BG, (0, h - input_h, w, input_h))
-        base = fonts['input'].render(inp, True, INPUT_FG)
-        screen.blit(base, (14, iy))
-        xo = 14 + base.get_width()
-        if compose:
-            comp = fonts['input'].render(compose, True, CARET)   # Pinyin-Vorschau
-            pygame.draw.line(screen, CARET, (xo, iy + comp.get_height() - 1),
-                             (xo + comp.get_width(), iy + comp.get_height() - 1), 1)
-            screen.blit(comp, (xo, iy))
-            xo += comp.get_width()
-        if (caret_t % 1.0) < 0.5:
-            screen.blit(fonts['input'].render('▏', True, INPUT_FG), (xo, iy))
+            # Eingabezeile ganz unten: Text + laufende IME-Komposition (Pinyin)
+            iy = h - input_h + 7
+            pygame.draw.rect(screen, INPUT_BG, (0, h - input_h, w, input_h))
+            base = fonts['input'].render(inp, True, INPUT_FG)
+            screen.blit(base, (14, iy))
+            xo = 14 + base.get_width()
+            if compose:
+                comp = fonts['input'].render(compose, True, CARET)   # Pinyin-Vorschau
+                pygame.draw.line(screen, CARET, (xo, iy + comp.get_height() - 1),
+                                 (xo + comp.get_width(), iy + comp.get_height() - 1), 1)
+                screen.blit(comp, (xo, iy))
+                xo += comp.get_width()
+            if (caret_t % 1.0) < 0.5:
+                screen.blit(fonts['input'].render('▏', True, INPUT_FG), (xo, iy))
 
         # ── Sprach-Menü-Overlay (Alt+L) ─────────────────────────────────────
         if menu is not None and menu_langs:

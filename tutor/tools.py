@@ -396,6 +396,68 @@ def tts_speed_for(lang: str = None) -> float:
     return round(0.7 + 0.3 * r, 2)
 
 
+# ── Deterministische Abfrage (KEIN LLM) ─────────────────────────────────
+# Das Assessment/Drill ist reine Vokabel-Abfrage: Wort zeigen, „kennst du's?",
+# zählen. Dafür braucht es KEIN Sprachmodell (das kostet nur Latenz + Zufall).
+# Das Frontend (room.py) holt die Queue, geht Karte für Karte durch und meldet
+# Antworten zurück; die Persona/Cloud-AI kommt erst NACH der Freischaltung.
+
+def assessment_queue(lang: str = None) -> list:
+    """Die Kern-Wörter mit Lernstand fürs Frontend-Drill: {word, de, category,
+    priority, confirmed, correct_use}. Unbestätigte zuerst, nach Priorität
+    (critical→low); Bestätigte hinten dran (fürs Auffrischen). Leer = kein
+    Curriculum."""
+    core = _core_list(lang)
+    if not core:
+        return []
+    with _lock:
+        by_word = {e.get('word'): e for e in _load_raw(lang)}
+    out = []
+    for c in core:
+        w = c['word']
+        st = by_word.get(w) or {}
+        out.append({
+            'word': w, 'de': c.get('de', ''), 'category': c.get('category', ''),
+            'priority': c.get('priority', 'medium'),
+            'confirmed': bool(st.get('confirmed')),
+            'correct_use': int(st.get('correct_use', 0) or 0),
+        })
+    out.sort(key=lambda e: (e['confirmed'], _PRIO_ORDER.get(e['priority'], 9)))
+    return out
+
+
+def assessment_answer(lang: str, word: str, result: str) -> dict:
+    """Eine Antwort aus dem Drill deterministisch verbuchen (KEIN LLM):
+      result='known'   → kennt sie schon  → sofort gefestigt (wie mark_known)
+      result='learned' → gerade geübt     → +1 (ab CONFIRM_THRESHOLD gefestigt)
+      result='again'   → nochmal zeigen    → kein Zähler-Effekt
+    Legt das Wort an, falls es noch nicht im Lern-Store ist. Gibt den neuen
+    Stand + Gesamt-Deckung zurück (fürs Fortschritts-UI + Freischalt-Check)."""
+    word = (word or '').strip()
+    with _lock:
+        entries = _load_raw(lang)
+        e = next((x for x in entries if x.get('word') == word), None)
+        if e is None:
+            e = {'word': word, 'reading': '', 'correct_use': 0, 'confirmed': False}
+            entries.append(e)
+        if result == 'known':
+            e['confirmed'] = True
+            if e.get('correct_use', 0) < CONFIRM_THRESHOLD:
+                e['correct_use'] = CONFIRM_THRESHOLD
+        elif result == 'learned':
+            e['correct_use'] = e.get('correct_use', 0) + 1
+            if e['correct_use'] >= CONFIRM_THRESHOLD:
+                e['confirmed'] = True
+        # 'again' → nichts ändern
+        _write_raw(entries, lang)
+        conf, uses = bool(e.get('confirmed')), int(e.get('correct_use', 0))
+    got, total = core_coverage(lang)
+    return {'word': word, 'confirmed': conf, 'correct_use': uses,
+            'got': got, 'total': total,
+            'ratio': round(got / total, 3) if total else 0.0,
+            'unlocked': core_graduated(lang)}
+
+
 # ── Satz-Strukturen (Feinmodell: nicht nur Wörter) ──────────────────────
 # Parallel zum Vokabel-Pool, aber für Muster/Grammatik — damit die Persona auch
 # neue SAGWEISEN stückweise einführen kann (Sashas Idee), nicht nur Vokabeln.

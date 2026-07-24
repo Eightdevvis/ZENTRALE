@@ -159,6 +159,49 @@ def presence_ping() -> bool:
     return bool(_safe(ts.presence_ping, False))
 
 
+# ── Assessment (deterministische Vokabel-Abfrage, KEIN LLM) ─────────────
+# Das harte Gate vor der Persona ist reine Abfrage — das Frontend treibt es,
+# nicht die Cloud-AI. Der Port reicht die Kern-Curriculum-Queue + den Lernstand
+# durch und verbucht Antworten. Kein Backend-Modell involviert.
+
+def assessment() -> dict:
+    """Kern-Wörter + Fortschritt fürs Frontend-Drill (Zimmer). Leer/nicht
+    installiert → {present:False}."""
+    ts = _ts()
+    if ts is None:
+        return {"present": False}
+    try:
+        from tutor import tools, config as tutor_config
+        lang = tutor_config.setting("lang", "zh")
+        got, total = tools.core_coverage(lang)
+        return {
+            "present":  True,
+            "lang":     lang,
+            "mode":     "assessment" if tools.assessment_active(lang) else "room",
+            "got":      got, "total": total,
+            "ratio":    round(got / total, 3) if total else 0.0,
+            "unlocked": tools.core_graduated(lang),
+            "speed":    tools.tts_speed_for(lang),
+            "queue":    tools.assessment_queue(lang),
+        }
+    except Exception as e:
+        return {"present": True, "error": str(e), "queue": []}
+
+
+def assessment_answer(word: str, result: str) -> dict:
+    """Eine Drill-Antwort verbuchen (result: known|learned|again) und den neuen
+    Stand zurückgeben. Deterministisch, kein Modell."""
+    ts = _ts()
+    if ts is None:
+        return {"present": False}
+    try:
+        from tutor import tools, config as tutor_config
+        lang = tutor_config.setting("lang", "zh")
+        return tools.assessment_answer(lang, word, result)
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # ── Status + Config (fertig geformt fürs UI) ────────────────────────────
 
 def status() -> dict:

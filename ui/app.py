@@ -1455,6 +1455,30 @@ def api_tutor_room_state():
     return jsonify(tutor_port.room_state())
 
 
+@app.route('/api/tutor/assessment')
+def api_tutor_assessment():
+    """Kern-Curriculum + Lernstand fuers Frontend-Drill (das harte Gate vor der
+    Persona). DETERMINISTISCH — kein LLM: das Zimmer geht die Wortliste selbst
+    Karte fuer Karte durch. Braucht KEINE aktive KI-Session (nur die lokalen
+    Vokabel-Dateien), darum kein available()-Gate."""
+    a = tutor_port.assessment()
+    if not a.get("present"):
+        return _tutor_unavail()
+    return jsonify(a)
+
+
+@app.route('/api/tutor/assessment/answer', methods=['POST'])
+def api_tutor_assessment_answer():
+    """Eine Drill-Antwort verbuchen. Body: {word, result} mit
+    result = known | learned | again. Gibt den neuen Stand + Deckung zurueck."""
+    body   = request.get_json(silent=True) or {}
+    word   = (body.get('word') or '').strip()
+    result = (body.get('result') or '').strip()
+    if not word or result not in ('known', 'learned', 'again'):
+        return jsonify({"error": "word + result (known|learned|again) noetig"}), 400
+    return jsonify(tutor_port.assessment_answer(word, result))
+
+
 @app.route('/api/tutor/nudge', methods=['POST'])
 def api_tutor_nudge():
     """Stille-Anstoss: Sasha hat eine Weile nichts gesagt → die Persona reagiert
