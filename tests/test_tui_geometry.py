@@ -1,10 +1,8 @@
 """
 TUI-Größencheck.
 
-Genau dieser Schwellwert (min 60x14) und der Boot-Cap im Start-Skript hängen
-zusammen: das Skript deckelt die untere bash so, dass dem TUI ≥14 Zeilen
-bleiben. Wenn jemand hier die Mindesthöhe ändert, muss start_tui.sh mitziehen
-(TUI_MIN_LINES). Dieser Test nagelt das Verhalten fest.
+Unter dem Schwellwert (min 60x14) rendert die TUI nur den "zu klein"-Hinweis
+statt des Dashboards. Dieser Test nagelt das Verhalten fest.
 """
 from tui.zentrale_tui import terminal_too_small, MIN_LINES, MIN_COLS
 

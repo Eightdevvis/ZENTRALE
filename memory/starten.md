@@ -109,11 +109,12 @@ Was passiert: `ZENTRALE_KASSETTE=tui` → Backend ki-frei (wie laptop). Das Skri
 startet `core/main.py` im Hintergrund mit **stdout → Logdatei**
 (`/tmp/zentrale-tui-backend.log`, sonst würde es die curses-Oberfläche
 zerschießen — die Logs erscheinen ohnehin im stdout-Panel der TUI) und dann die
-TUI. `q` in der TUI beendet alles (TUI, tmux-Fenster, Backend).
+TUI **im Vollbild des aktuellen Terminals**. `q` in der TUI beendet alles (TUI +
+Backend). Kein tmux, kein Split, kein angeklebtes zweites Terminal — das gab es
+mal, ist aber raus (Stand 2026-07-25).
 
 - **Dependencies:** nur `flask` + `python-dateutil` fürs Backend; die TUI selbst
-  ist reine stdlib (`curses`). Kein Browser, kein Whisper/TTS. Für das untere
-  echte Terminal (s.u.): `tmux` (sonst Fallback = TUI im Vollbild).
+  ist reine stdlib (`curses`). Kein Browser, kein Whisper/TTS, kein tmux.
 - **Standalone** (TUI gegen ein schon laufendes Backend, z.B. auf einer anderen
   Maschine): `ZENTRALE_URL=http://<host>:5000 venv/bin/python tui/zentrale_tui.py`
 - **Selbsttest** (ein Text-Snapshot, ohne curses):
@@ -121,12 +122,9 @@ TUI. `q` in der TUI beendet alles (TUI, tmux-Fenster, Backend).
 
 ### Diagnose: wenn `zentrale-tui` sofort wieder „weg" ist
 
-Früher killte die TUI beim Beenden sofort die tmux-Session — **inklusive jeder
-Fehlermeldung**, weshalb ein Absturz spurlos „verschwand". Das ist behoben:
-
-- **TUI-Crash** → Traceback landet in **`/tmp/zentrale-tui-crash.log`** und das
-  Start-Skript hält die Pane offen („Taste drücken zum Schließen…"), statt sie
-  wegzureißen. Backend-Crash → **`/tmp/zentrale-tui-backend.log`**.
+- **TUI-Crash** → Traceback landet in **`/tmp/zentrale-tui-crash.log`**; das
+  Start-Skript gibt ihn beim Beenden zusätzlich im Terminal aus.
+  Backend-Crash → **`/tmp/zentrale-tui-backend.log`**.
 - **Kein echtes Terminal** (z.B. aus einem Skript/Pipe gestartet) → klare Ansage
   statt curses-Absturz (Exit 2). Headless prüfen: `--selftest`.
 - **`start_tui.sh`-Exit-Codes** (für Skripte/Diagnose):
@@ -141,58 +139,22 @@ Fehlermeldung**, weshalb ein Absturz spurlos „verschwand". Das ist behoben:
   | 5    | Backend-API nach 15 s nicht erreichbar → Backend-Log            |
 
 - **Häufigste Ursache (Code 3):** ein **verwaistes Backend** hält noch `:5000`
-  (tmux-Session weg, Prozess lebt). Das Skript bricht jetzt mit Hinweis ab statt
-  ein zweites Backend dagegenzufahren. Aufräumen: `pkill -f 'core/main.py'`,
-  dann erneut `zentrale-tui`.
+  (TUI weg, Prozess lebt). Das Skript holt ein eigenes ki-freies Backend
+  automatisch zurück; bei einem fremden/monolith-Backend bricht es mit Hinweis
+  ab. Aufräumen: `pkill -f 'core/main.py'`, dann erneut `zentrale-tui`.
 
-### Unten angeklebtes ECHTES Terminal (tmux-Split)
+### Dateien öffnen
 
-Ist `tmux` installiert, bootet `zentrale-tui` ein **tmux-Fenster mit zwei Panes**:
-oben die TUI (Dashboard), unten eine **echte bash**. Die untere Shell ist ein
-vollwertiges Terminal — `cd`, `ls`, Tab-Completion, History, Pipes, alles. Kein
-nachgebautes „Fake-Terminal": die TUI bleibt reine Anzeige, fürs Navigieren/
-Öffnen nutzt man die echte Shell drunter.
+Die TUI ist reine Anzeige und öffnet selbst keine Dateien. Dafür ein zweites
+Terminal aufmachen und `xdg-open <datei>` nutzen — erkennt den Typ und nimmt die
+Standard-App (PDF-Default ist **zathura**, gesetzt via
+`xdg-mime default org.pwmt.zathura.desktop application/pdf`). Default pro Typ
+ändern: `xdg-mime default <app>.desktop <mime/typ>`; App einmalig auswählen
+statt Default: `mimeopen -a <datei>`.
 
-- **Dateien öffnen:** terminal-nativ mit `xdg-open` — erkennt den Typ und nimmt
-  die Standard-App. PDF-Default ist **zathura** (gesetzt via
-  `xdg-mime default org.pwmt.zathura.desktop application/pdf`). Also einfach:
-  ```
-  xdg-open ~/Downloads/bericht.pdf    # → zathura
-  xdg-open /pfad/bild.png             # → Standard-Bildviewer
-  zathura x.pdf                       # spezifische App direkt
-  ```
-  Default pro Typ ändern: `xdg-mime default <app>.desktop <mime/typ>`. App
-  auswählen statt Default: `mimeopen -a <datei>`.
-- **Pane fokussieren (oben/unten):** Maus-Klick, oder `Ctrl-b` dann **nacktes**
-  `↑`/`↓` (Ctrl loslassen) = `select-pane`, oder `Ctrl-b o` (toggelt). **Nicht
-  `n`** — das ist „next-**window**" und meldet bei nur einem Window „no next
-  window". Fokus startet oben auf der TUI; die untere bash startet im `$HOME`.
-- **Kein versehentliches Detach:** `Ctrl-b d` (tmux-Default) ist **abgeschaltet**
-  — es koppelte sofort ab und riss dabei Backend+Session weg. Raus geht's nur
-  über `q` in der TUI.
-- **Eigener tmux-Socket (`-L zentrale`):** Die Appliance-Härtung (Prefix-Tabelle
-  leeren, `status off`, `mouse on`) läuft auf einem **eigenen tmux-Server**, nicht
-  auf dem Default-Socket. Grund: Keybindings und `status` sind in tmux **server-
-  global**, nicht pro Session — auf dem Default-Socket würde `unbind-key -a` die
-  Tastatur ALLER anderen tmux-Sessions des Nutzers leerräumen (`Ctrl-b` tut nichts
-  mehr) und `status off` überall die Leiste nehmen. Der eigene Socket isoliert das
-  sauber; dein persönliches tmux bleibt unangetastet. Manuell inspizieren:
-  `tmux -L zentrale ls`. Socket-Name überstimmbar via `ZENTRALE_TMUX_L` (nur Tests).
-- **Höhe der bash — live:** **`Ctrl+↑`/`Ctrl+↓` ohne Prefix** — Ctrl gedrückt
-  halten und ↑/↓ dauerfeuern, geht endlos (1 Zeile pro Schritt, kein 500-ms-
-  Repeat-Timeout). Alternativ `Ctrl-b` dann `Ctrl+↑/↓`, oder Rand mit der
-  **Maus** ziehen. Untergrenze ist **1 Zeile** bash. Fokus wechseln dagegen:
-  `Ctrl-b` dann **nacktes** ↑/↓ (Ctrl los). (`Alt+Pfeil` geht nicht — XFCE
-  fängt das fürs Fenster-Tiling ab.)
-- **Höhe wird gemerkt:** die bash-Höhe wird **live bei JEDEM Resize** (Taste oder
-  Maus) nach `~/.config/zentrale/tui_term_lines` geschrieben — via tmux-Hook
-  `after-resize-pane` → `start_tui.sh --save-height`. Sie ist also immer aktuell,
-  egal wie die Session endet (q, Crash, Fenster zu). Beim nächsten `zentrale-tui`
-  wird sie wiederhergestellt — **beim Booten aber nie unter 3 Zeilen** (live
-  runter bis 1 bleibt ok), damit nichts unbrauchbar winzig startet.
-  Erzwingen/überschreiben: `ZENTRALE_TERM_LINES=10 zentrale-tui` (Env gewinnt;
-  ohne alles Default 6).
-- **Kein tmux:** Fallback = TUI im Vollbild + Hinweis `sudo apt install tmux`.
+<!-- Historie: bis 2026-07-25 bootete zentrale-tui in einer eigenen tmux-Session
+     mit angeklebter bash-Pane unten (eigener Socket, Prefix-Härtung, gemerkte
+     Pane-Höhe). Komplett entfernt — die TUI läuft jetzt schlicht im Vollbild. -->
 
 ## Variante B — 3 Terminals manuell
 

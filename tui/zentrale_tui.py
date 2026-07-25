@@ -40,8 +40,8 @@ import urllib.parse
 
 BASE_URL = (os.environ.get("ZENTRALE_URL") or "http://localhost:5000").rstrip("/")
 
-# Dateien öffnet man in der echten bash unten (tmux-Split, siehe
-# scripts/start_tui.sh) via `xdg-open <datei>` — die TUI selbst macht das nicht.
+# Dateien öffnet man in einem normalen Terminal via `xdg-open <datei>` — die TUI
+# selbst macht das nicht (reine Anzeige).
 
 # Sensor-Beschriftung: (ruhe-text, aktiv-text) — gleiche Sprache wie laptop.html
 WARD = {
@@ -214,9 +214,7 @@ class Store:
 # ── Hilfsfunktionen (UI-unabhängig, testbar) ───────────────────────────────
 
 # Mindestgröße fürs Rendern: darunter passt das Dashboard-Layout nicht und wir
-# zeigen nur den "zu klein"-Hinweis. Das Start-Skript (scripts/start_tui.sh)
-# deckelt die untere bash beim Boot anhand DERSELBEN 14, damit dem TUI hier
-# immer genug bleibt — die beiden Zahlen müssen zusammenpassen.
+# zeigen nur den "zu klein"-Hinweis.
 MIN_LINES = 14
 MIN_COLS = 60
 
@@ -6860,8 +6858,8 @@ def main():
                 break                 # sauberer Quit (q / Befehl /quit)
             except KeyboardInterrupt:
                 # Ctrl-C = gewollter Quit (wie 'q'). Sauberer Exit (rc 0), damit
-                # das Start-Skript die tmux-Session SOFORT abräumt statt mit
-                # "kein sauberer Quit" auf einen Tastendruck zu warten.
+                # das Start-Skript still aufräumt statt "kein sauberer Quit" samt
+                # Crash-/Backend-Log auszuspucken.
                 break
             except Exception:
                 tb = traceback.format_exc()
