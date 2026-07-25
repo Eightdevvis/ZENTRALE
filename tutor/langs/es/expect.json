@@ -1,14 +1,1 @@
-[
-	[
-		4,
-		"Su español es casi cero. Cuando acaba de llegar o de saludar, contesta solo con un saludo cortito (por ejemplo «hola») y para, y espérala — no le sueltes de golpe varias preguntas, ni le lances varias palabras a ver si suenan. Luego, poco a poco: ve viendo qué palabras conoce, prueba una a una con naturalidad (di una palabra fácil, mira si la entiende), lo que sepa lo marcas con mark_known, y lo que no, le enseñas una con show_thought. Habla como con alguien que solo sabe unas pocas palabras: palabras sueltas, grupitos cortos, despacio, con muchos gestos (express). Que no le salgan frases enteras es normal, no fuerces — como mucho una palabra nueva por turno, y con show_thought obligatorio. Mejor soltar una sola palabra que una ristra que no entiende."
-	],
-	[
-		12,
-		"Sabe muy poquito. Usa frases muy cortas (dos o tres palabras), más despacio, las palabras nuevas de una en una y todas con show_thought."
-	],
-	[
-		30,
-		"Es principiante. Frases cortas, sin rodeos; las palabras nuevas, como siempre, con show_thought."
-	]
-]
+[]

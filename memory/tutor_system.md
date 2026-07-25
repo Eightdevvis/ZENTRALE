@@ -241,11 +241,26 @@ entkoppelt). **Eine Sprache = ein Ordner** `tutor/langs/<code>/` mit allem, was
 sie ausmacht (Profil, Prompt, Tool-Beschriftung, Register-Leiter, Seeds); die
 Registry `tutor/langs/__init__.py` findet die Pakete selbst.
 **LIVE: `zh` → Ling Ling (China, qwen), `es` → Lucía (Spanien, qwen).** Skizzen
-(`enabled=False`): `fr` Jacqueline, `ru` Ludmila, `ar` Amira. (Der `es`-Prompt ist
-1:1 nach dem zh-Bauplan verfasst, aber noch nicht gegen echtes qwen gegengetestet —
-siehe `tutor/langs/es/prompt.de.md`. Provider zeigt bewusst auf `qwen` statt der
-Skizzen-Wahl `mistral`: qwen läuft heute [Key da, no-train, solide bei es],
-umstellbar über `tutor/data/tutor_config.json`.)
+(`enabled=False`): `fr` Jacqueline, `ru` Ludmila, `ar` Amira. (Provider zeigt bewusst
+auf `qwen` statt der Skizzen-Wahl `mistral`: qwen läuft heute [Key da, no-train, solide
+bei es], umstellbar über `tutor/data/tutor_config.json`.)
+
+**Standard-Prompt-Template (2026-07-25).** `tutor/langs/PROMPT_TEMPLATE.en.md` ist DER
+sprach-neutrale Master-System-Prompt (Englisch, Platzhalter `{persona}/{target_language}/
+{country}/{native}`). Jedes Paket-`prompt.md` ist eine **Hand-Übersetzung** davon in die
+Zielsprache (kein Code-Generat — target-language hält qwen dort). Inhalt = Sashas
+**Roleplay-Rahmen** (commit `1d915f9`): Zimmer als IHRS, Emotion, **leichte emergente
+Vokabel-Handhabung** (nutze Bekanntes aus der Liste, streu dosiert Neues ein). BEWUSST
+RAUS: der Assessment-Ära-Anfänger-Ballast (Wort-für-Wort, Abtasten/`mark_known`,
+`show_thought`-Zwang pro Wort, Register-Leiter) — das trägt jetzt das deterministische
+Assessment. Darum ist **`es/expect.json` leer** (keine Register-Injektion nach dem
+Unlock). zh + es sind aus dem Master abgeleitet und gegen echtes qwen-plus getestet
+(2026-07-25: kurze echte Sätze, in-character, kein „yo/tú"-Abtasten). **Offen:** `zh` hat
+(noch) kein `core_vocab`/Assessment → sein Prompt setzt eine Basis voraus, die ein
+frischer zh-Anfänger nicht hat; für zh entweder ein Kern-Syllabus wie bei `es` anlegen
+oder eine Anfänger-Variante behalten. **Noch offen (nächster Schritt):** Assessment-
+Wörter sollen in die Vokabelliste als **„wacklig"** einlaufen (nicht sofort „ya domina"),
+und erst durch Sashas eigene Nutzung „fest" werden — Level-Modell neu/wacklig/fest.
 
 **Charakter — gegen echtes qwen getunt** (Log: `memory/tutor_persona_tuning.md`):
 - **Kein Lehrer, kein Kurs.** Natürlicher, KURZER Gesprächspartner — 1-2 Sätze,
