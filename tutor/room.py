@@ -869,6 +869,11 @@ COIN_LO     = (206, 158, 66)      # Münze dunkel
 _PART_SCATTER = {'hair': (-72, -46), 'head': (64, -52), 'arml': (-96, 18),
                  'armr': (98, 12), 'dress': (6, 86), 'legl': (-54, 74),
                  'legr': (58, 80)}
+# Session-SR: expanding-retrieval-Abstände (in Karten VORAUS im Stapel). Sashas
+# Ladder, deckt sich mit der Forschung (~2× wachsend, gut für Kurzzeit-Retention).
+SR_LADDER = (7, 14, 25)   # 1./2./3. korrektes Abhaken → so viele Karten voraus
+SR_LAPSE  = 3             # nicht gewusst (Repeat) → in ~3 Karten wieder
+SR_SKIP   = 5             # Next (übersprungen, ohne Wertung) → ein paar voraus
 
 
 def _draw_coin(surf, cx, cy, r):
@@ -1272,24 +1277,39 @@ def main():
                 music_duck(False)
         threading.Thread(target=_s, daemon=True).start()
 
-    # Kein SRS im Drill (Sasha): einfache Rotation. cur = work[0]; Abhaken nimmt
-    # das Wort raus (sofort gemeistert → Leiste +1), Repeat/Next schieben es nach
-    # hinten (kommt in DIESER Runde nochmal). Verteilte Wiederholung erst im
-    # KI-Gespräch.
+    # Session-SR (Working-Memory, Sasha) — Due-Time-Scheduler (stabile Abstände,
+    # kein Positions-Drift): jede Karte hat ein `due` = „ab dieser Karten-Zahl (seen)
+    # wieder fällig". Fällige Karten kommen zuerst (kleinstes due), bei Gleichstand
+    # haben schon gesehene (Review) Vorrang vor neuen. Gewusst → wachsende Abstände
+    # (7/14/25), nicht gewusst → in 3 Karten wieder; neue Wörter (due=Index)
+    # interleaven dazwischen. STATUSLEISTE hängt am ersten Wissen (Backend confirmed
+    # → got), NICHT am SR. Streak > Ladder → Wort graduiert aus der Runde.
+    def _pick(v):
+        work = v.get('work') or []
+        if not work:
+            return None
+        seen = v.get('seen', 0)
+        due = [c for c in work if c.get('due', 0) <= seen]
+        pool = sorted(due or work, key=lambda c: (c.get('due', 0), 0 if c.get('shown') else 1))
+        return pool[0]
+
     def asv_show():
-        """Vorderste Karte setzen (sub='ask') und vorlesen."""
+        """Nächste fällige Karte wählen (sub='ask'), zeigen, vorlesen."""
         with S['lock']:
             v = S['asv']
             if not v or not v.get('work'):
                 return
-            v['sub'] = 'ask'; v['learn_hold'] = None
-            v['cur'] = v['work'][0]
-            word = v['cur']['word']
+            cur = _pick(v)
+            if cur is not None:
+                cur['shown'] = True
+            v['sub'] = 'ask'; v['learn_hold'] = None; v['cur'] = cur
+            v['seen'] = v.get('seen', 0) + 1        # eine Karte mehr gezeigt
+            word = cur['word'] if cur else None
         if word:
             asv_speak(word)
 
     def asv_advance():
-        """Nächste Karte; ALLE Wörter durch → Freischaltung (kein 75%-Frühstart)."""
+        """Stapel leer / alle durch → Freischaltung, sonst nächste Karte."""
         with S['lock']:
             v = S['asv']
             if not v:
@@ -1299,15 +1319,15 @@ def main():
         asv_show()
 
     def asv_abhaken():
-        """ABHAKEN — Review verbuchen (REST), Münzen/Kisten/Teile aus der Antwort
-        übernehmen, Wort ist SOFORT gemeistert → raus aus dem Stapel, dann weiter.
-        Ökonomie kommt komplett vom Backend (persistiert)."""
+        """ABHAKEN (gewusst) — Review verbuchen (REST → Leiste/Münzen/Kisten), dann
+        per SR wieder fällig setzen (1×→+7, 2×→+14, 3×→+25 Karten); nach genug
+        korrekten Reviews graduiert das Wort. Ökonomie vom Backend (persistiert)."""
         with S['lock']:
             v = S['asv']
             if (not v or v.get('busy') or not v.get('cur') or v.get('reveal')
                     or v.get('sub') == 'learn'):      # nach Repeat NICHT abhakbar
                 return
-            v['busy'] = True; word = v['cur']['word']
+            v['busy'] = True; cur = v['cur']; word = cur['word']
         res = be.answer(word, 'learned')
         unlocked = False
         with S['lock']:
@@ -1330,11 +1350,14 @@ def main():
                                        'amount': int(crate.get('amount', 0) or 0), 't': 2.2}
                         if crate.get('kind') == 'part' and crate.get('part'):
                             v['new_part'] = {'name': crate['part'], 't': 0.0}   # schwebt herein
-                    # Wort NUR entfernen, wenn das Backend es wirklich gefestigt/
-                    # gespeichert hat — sonst bliebe es hier weg, käme aber beim
-                    # Neuöffnen wieder (unpersistiert). confirmed==False → dranlassen.
-                    if res.get('confirmed') or res.get('mastered'):
-                        v['work'] = [c for c in v.get('work', []) if c['word'] != word]
+                    # SR: nur bei bestätigtem Save — Streak hoch, neu fällig setzen
+                    # (oder graduieren, wenn Streak über die Ladder hinaus ist).
+                    if res.get('confirmed') and cur is not None:
+                        cur['streak'] = int(cur.get('streak', 0)) + 1
+                        if cur['streak'] <= len(SR_LADDER):
+                            cur['due'] = v.get('seen', 0) + SR_LADDER[cur['streak'] - 1]
+                        else:
+                            v['work'] = [c for c in (v.get('work') or []) if c is not cur]
                     unlocked = bool(res.get('unlocked'))
         if unlocked:
             with S['lock']:
@@ -1343,33 +1366,44 @@ def main():
             return
         asv_advance()
 
-    def _requeue_front(v):
-        """Vorderste Karte ans Ende schieben (kommt in dieser Runde nochmal)."""
-        if v.get('work'):
-            v['work'] = v['work'][1:] + v['work'][:1]
+    def asv_lapse():
+        """Nach Repeat (nicht gewusst): in ~3 Karten wieder fällig, Streak zurück
+        auf 0 (Working-Memory-Auffrischung), dann weiter."""
+        with S['lock']:
+            v = S['asv']
+            if not v:
+                return
+            v['learn_hold'] = None
+            cur = v.get('cur')
+            if cur is not None:
+                cur['due'] = v.get('seen', 0) + SR_LAPSE
+                cur['streak'] = 0
+        asv_advance()
 
     def asv_repeat():
         """REPEAT — Wort nicht gewusst: Bedeutung zeigen + nochmal vorlesen. Danach
-        NICHT abhakbar → nach kurzem Anschauen automatisch weiter (learn_hold), das
-        Wort wandert nach hinten und kommt nochmal."""
+        NICHT abhakbar → nach kurzem Anschauen automatisch weiter (learn_hold →
+        asv_lapse), das Wort kommt per SR in ~3 Karten wieder."""
         with S['lock']:
             v = S['asv']
             if not v or v.get('reveal') or not v.get('cur'):
                 return
             v['sub'] = 'learn'
-            v['learn_hold'] = 3.0        # s Bedeutung zeigen, dann Auto-Next
+            v['learn_hold'] = 3.0        # s Bedeutung zeigen, dann Auto-Lapse
             cur = v.get('cur')
         if cur:
             asv_speak(cur['word'])
 
     def asv_next():
-        """NEXT — Wort ohne Wertung nach hinten schieben, weiter."""
+        """NEXT — ohne Wertung überspringen: in ein paar Karten wieder fällig."""
         with S['lock']:
             v = S['asv']
             if not v or v.get('busy') or not v.get('cur') or v.get('reveal'):
                 return
             v['learn_hold'] = None
-            _requeue_front(v)
+            cur = v.get('cur')
+            if cur is not None:
+                cur['due'] = v.get('seen', 0) + SR_SKIP     # streak unverändert
         asv_advance()
 
     def asv_key(ev):
@@ -1399,7 +1433,7 @@ def main():
             if ev.key == pygame.K_r:
                 asv_repeat()               # nochmal hören (setzt learn_hold neu)
             else:
-                asv_next()                 # jede andere Taste: sofort weiter
+                asv_lapse()                # jede andere Taste: sofort weiter (SR +3)
             return
         if ev.key == pygame.K_r:
             asv_repeat()
@@ -1416,12 +1450,16 @@ def main():
         if not isinstance(data, dict) or data.get('mode') != 'assessment':
             return False
         game = data.get('game') or {}
+        # neue Wörter: due = Einführungs-Index (spreizt sie, statt alle sofort fällig);
+        # Priorität steckt schon in der Queue-Reihenfolge.
+        raw = [e for e in (data.get('queue') or []) if not e.get('confirmed')]
         work = [{'word': e['word'], 'de': e.get('de', ''),
-                 'category': e.get('category', ''), 'priority': e.get('priority', 'medium')}
-                for e in (data.get('queue') or []) if not e.get('confirmed')]
+                 'category': e.get('category', ''), 'priority': e.get('priority', 'medium'),
+                 'streak': 0, 'due': i, 'shown': False}
+                for i, e in enumerate(raw)]
         with S['lock']:
             S['asv'] = {'phase': 'welcome', 'sub': 'ask', 'cur': None,
-                        'work': work, 'learn_hold': None,
+                        'work': work, 'learn_hold': None, 'seen': 0,
                         'got': data.get('got', 0), 'total': data.get('total', 0),
                         'ratio': data.get('ratio', 0.0), 'busy': False,
                         'coins': int(game.get('coins', 0)),
@@ -1835,7 +1873,7 @@ def main():
                     a2['learn_hold'] -= dt
                     if a2['learn_hold'] <= 0:
                         a2['learn_hold'] = None
-                        threading.Thread(target=asv_next, daemon=True).start()
+                        threading.Thread(target=asv_lapse, daemon=True).start()
             asv_snap = dict(S['asv']) if S['asv'] else None
 
         # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft.

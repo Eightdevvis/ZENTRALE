@@ -405,18 +405,20 @@ def tts_speed_for(lang: str = None) -> float:
 #   coins       Münzen gesamt
 #   parts       Liste erhaltener Lucía-Teile (in Erhalt-Reihenfolge, ZUFÄLLIG)
 #   reviews     erfolgreiche Abhak-Reviews gesamt (treibt die Kisten-Kadenz)
-#   next_crate  Review-Zähler, bei dem die nächste Kiste fällt (10–15 Abstand)
-#   srs         {wort: {reps}} — Review-Zähler (informativ). SRS/verteilte
-#               Wiederholung ist im DRILL bewusst RAUS (Sasha) und kommt später
-#               in der KI-Konversation; im Drill ist Abhaken = sofort gemeistert.
+#   crates      Zahl bereits vergebener Kisten (Meilenstein-Cursor)
+#   srs         {wort: {reps}} — Review-Zähler (informativ). Das eigentliche
+#               Insertion-Shuffle (Abstände) läuft im FRONTEND (room.py).
 #
 # GRUNDREGELN (von Sasha bestätigt):
-#   • Abhaken → Wort SOFORT gemeistert + raus aus dem Stapel (Statusleiste = +1);
-#     Münze NUR ZUFÄLLIG (variable reward, verstärkt den Sog).
-#   • Alle 10–15 Reviews eine Kiste; Inhalt ZUFÄLLIG: ein Körperteil ODER eine
-#     Handvoll Münzen. Teile kommen in zufälliger Reihenfolge (random.choice).
-#   • Musste man Repeat drücken (Wort nicht gewusst), geht es NICHT abhakbar —
-#     es wandert nach hinten und kommt in dieser Runde nochmal.
+#   • STATUSLEISTE hängt am ERSTEN Wissen eines Worts: erstes korrektes Abhaken
+#     festigt (confirmed → Leiste +1). Freischaltung, wenn ALLE Wörter einmal
+#     gewusst wurden (Working-Memory-Basis; echte Tage-SR dann im KI-Gespräch).
+#   • SESSION-SR (Frontend): nicht gewusste/gewusste Wörter werden VORAUS in den
+#     Stapel geshuffelt, mit wachsenden Abständen (expanding retrieval — belegt
+#     gut für Kurzzeit-Retention, Landauer&Bjork; ~2× wie Anki/Leitner):
+#     nicht gewusst→3, 1×gewusst→7, 2×→14, 3×→25 Karten voraus.
+#   • Münze NUR ZUFÄLLIG pro Abhaken; Kiste an distinkten Wort-Meilensteinen
+#     (15/35/50/70), Inhalt ZUFÄLLIG: Körperteil ODER Münzen (zufällige Reihenfolge).
 
 # Kanonischer Teile-Satz (deckt sich mit room.py + dem Mockup). Reihenfolge hier
 # ist nur die Referenz-Liste; VERGEBEN wird zufällig (random.choice).
@@ -558,26 +560,34 @@ def assessment_answer(lang: str, word: str, result: str) -> dict:
         g = _game_load(lang)
         sr = g.setdefault('srs', {}).setdefault(word, {'reps': 0, 'due': 0})
 
+        was_confirmed = bool(e.get('confirmed'))
+        first_known = False
         if result in ('known', 'learned'):
-            # SRS im Drill RAUS (Sasha 2026-07): Abhaken = SOFORT gemeistert, damit
-            # die Statusleiste oben direkt Sinn ergibt (jedes Abhaken = +1 gefestigt).
-            # Verteilte Wiederholung kommt später in der KI-Konversation, nicht hier.
+            # STATUSLEISTE hängt am ERSTEN Wissen eines Worts (Sasha): das erste
+            # korrekte Abhaken festigt (confirmed → Leiste +1). Weitere korrekte
+            # Reviews (SRS-Wiederholung) ändern die Leiste NICHT mehr; das
+            # Insertion-Shuffle (Abstände) läuft rein im Frontend (room.py).
             sr['reps'] = int(sr.get('reps', 0)) + 1
+            first_known = not was_confirmed
             e['confirmed'] = True
             e['correct_use'] = max(int(e.get('correct_use', 0) or 0), CONFIRM_THRESHOLD)
             g['reviews'] = int(g.get('reviews', 0)) + 1
-            # Münze NUR zufällig (variable reward)
+            # Münze NUR zufällig (variable reward) — bei jedem Abhaken
             if random.random() < COIN_CHANCE:
                 coin_gain = random.randint(COIN_MIN, COIN_MAX)
                 g['coins'] = int(g.get('coins', 0)) + coin_gain
-            # Kisten-Kadenz: 15, dann +20, dann +15, … (CRATE_GAPS, ausgespaced)
-            if not g.get('next_crate'):
-                g['next_crate'] = CRATE_GAPS[0]
-            if g['reviews'] >= g['next_crate']:
-                crate = _open_crate(g)
-                n = int(g.get('crates', 0)) + 1
-                g['crates'] = n
-                g['next_crate'] = g['reviews'] + CRATE_GAPS[n % len(CRATE_GAPS)]
+            # Kiste an DISTINKTEN Wort-Meilensteinen (15/35/50/70) — nur beim
+            # ERSTEN Wissen, damit die Kisten-Symbole exakt auf der Leiste (got)
+            # sitzen und Wiederholungen keine Kisten auslösen.
+            if first_known:
+                core_words = {c['word'] for c in _core_list(lang)}
+                confirmed_now = {x['word'] for x in entries if x.get('confirmed') and x.get('word')}
+                got_now = len(core_words & confirmed_now)
+                ms = crate_milestones(len(core_words))
+                n = int(g.get('crates', 0))
+                if n < len(ms) and got_now >= ms[n]:
+                    crate = _open_crate(g)
+                    g['crates'] = n + 1
         # 'again' → nichts ändern
 
         _write_raw(entries, lang)
@@ -586,7 +596,7 @@ def assessment_answer(lang: str, word: str, result: str) -> dict:
         coins, parts = int(g['coins']), list(g.get('parts', []))
     got, total = core_coverage(lang)
     return {'word': word, 'confirmed': conf, 'correct_use': uses, 'reps': reps,
-            'mastered': conf, 'got': got, 'total': total,
+            'mastered': conf, 'first_known': first_known, 'got': got, 'total': total,
             'ratio': round(got / total, 3) if total else 0.0,
             'unlocked': core_graduated(lang),
             'coins': coins, 'coin_gain': coin_gain,

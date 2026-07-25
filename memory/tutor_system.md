@@ -327,25 +327,31 @@ mehr angesteuert. Sprache ohne `core_vocab` (`zh`) → **kein Gate**, sofort Per
 **Spiel-Schicht (Phase 1, 2026-07) — aus dem trockenen Drill wird ein Spiel.**
 Persistiert pro Sprache in `data/<lang>/game.json` (Laufzeit, gitignored):
 `coins`, `parts` (erhaltene Lucía-Teile in **Erhalt-Reihenfolge**), `reviews`,
-`next_crate`, `srs` (`{wort:{reps}}`, nur informativ). Regeln (`tutor/tools.py`, alle
-Konstanten dort tunebar):
-- **Abhaken** = „kann ich" → Wort **sofort gemeistert** (confirmed) + raus aus dem
-  Stapel. Bewusst **kein SRS im Drill** (Sasha): so ergibt die **Statusleiste oben
-  direkt Sinn** — jedes Abhaken = +1 gefestigt, Freischaltung erst wenn **alle Wörter
-  durch** sind (kein 75%-Frühstart, `GRADUATE_AT=1.0`). Verteilte
-  Wiederholung kommt später in der KI-Konversation, nicht im Drill.
+`crates` (Meilenstein-Cursor), `srs` (`{wort:{reps}}`, informativ). Regeln
+(`tutor/tools.py`, alle Konstanten dort tunebar):
+- **Statusleiste = erstes Wissen.** Das erste korrekte **Abhaken** eines Worts festigt
+  es (Backend `confirmed` → `got` +1); weitere korrekte Reviews bewegen die Leiste NICHT
+  mehr. **Freischaltung**, wenn ALLE Wörter einmal gewusst wurden (`GRADUATE_AT=1.0`,
+  kein 75%-Frühstart). Ziel: schnell eine Working-Memory-Basis; echte Tage-SR dann im
+  KI-Gespräch.
+- **Session-SR (Frontend, `room.py`) — Due-Time-Scheduler**, KEIN Positions-Insert
+  (das driftet). Jede Karte hat `due` = „ab Karten-Zahl `seen` wieder fällig"; `_pick`
+  nimmt die fällige mit kleinstem `due` (Review vor Neu bei Gleichstand), neue Wörter
+  (`due`=Index) interleaven dazwischen. **Expanding retrieval** (belegt für Kurzzeit-
+  Retention, Landauer&Bjork; ~2× wie Anki/Leitner): **Abhaken** (gewusst) → Streak
+  hoch, `due=seen+SR_LADDER[streak]` mit `SR_LADDER=(7,14,25)` für 1./2./3. korrekt;
+  nach dem 3. Review **graduiert** das Wort aus der Runde. **Repeat** (nicht gewusst) →
+  Bedeutung zeigen, danach **nicht abhakbar**, nach `learn_hold≈3 s` automatisch
+  `asv_lapse`: `due=seen+SR_LAPSE(3)`, Streak zurück auf 0. **Next** = überspringen →
+  `due=seen+SR_SKIP(5)`. Die Abstände sind **Minimums** — bei vielen aktiven Wörtern
+  strecken sie sich (1 Slot/Karte), das ist gewollt (nie zu früh = effortful retrieval).
 - **Münze NUR zufällig** beim Abhaken (`COIN_CHANCE=0.35`, variable reward — *nicht*
   pro Wort).
-- **Repeat** = Wort nicht gewusst → Bedeutung zeigen + nochmal vorlesen, danach **NICHT
-  abhakbar**: nach kurzem Anschauen (`learn_hold≈3 s`, Timer im Main-Loop) geht es
-  **automatisch weiter**, das Wort wandert ans Ende (`_requeue_front`) und kommt in
-  DIESER Runde nochmal. **Next** schiebt ohne Wertung nach hinten. Queue = einfache
-  Rotation (`cur=work[0]`), kein `_pick`/`due`.
-- **Kisten:** ausgespaced — 1. nach **15** Reviews, dann **+20**, dann **+15** … abwechselnd
-  (`CRATE_GAPS`); da nur Abhaken den `reviews`-Zähler hochzählt (≙ gemeisterte Wörter),
-  liegen die Meilensteine (`crate_milestones`) sauber auf der Leiste. Inhalt **zufällig**: ein
-  **Körperteil** (`CRATE_PART_CHANCE=0.6`, `random.choice` aus den fehlenden → zufällige
-  Reihenfolge) **oder** eine Handvoll Münzen. `_open_crate`.
+- **Kisten** an **distinkten Wort-Meilensteinen** (15/35/50/70, `crate_milestones` mit
+  `CRATE_GAPS=(15,20)` abwechselnd) — nur beim ERSTEN Wissen eines Worts, damit die
+  Kisten-Symbole exakt auf der Leiste (`got`) sitzen und Wiederholungen keine Kisten
+  auslösen. Inhalt **zufällig**: **Körperteil** (`CRATE_PART_CHANCE=0.6`, `random.choice`
+  aus den fehlenden → zufällige Reihenfolge) **oder** Münzen. `_open_crate`.
 - **Lucía baut sich zusammen** (`_draw_lucia` in `room.py`, aus denselben Primitiven wie
   die Persona): erhaltene Teile schweben aus einer Streu-Richtung (`_PART_SCATTER`)
   herein und rasten ein (`new_part`-Anim); bei Freischaltung ist sie komplett.
