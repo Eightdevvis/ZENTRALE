@@ -799,9 +799,10 @@ def draw_tv(surf, w, h, on, title, font, t):
 # leakt manchmal Tool-Namen wie „show_thought: …" in den Text). Was Sasha SIEHT
 # und HÖRT, wird hier bereinigt — unabhängig davon, wie brav das Modell ist.
 _TOOL_NAMES = ('express', 'show_thought', 'mark_known', 'play_music', 'stop_music',
-               'watch_tv', 'turn_off_tv', 'get_local_news', 'get_confirmed_vocab',
-               'get_testing_vocab', 'increment_correct_use', 'introduce_new',
-               'get_structures', 'introduce_structure', 'increment_structure')
+               'watch_tv', 'turn_off_tv', 'get_local_news', 'get_due_reviews',
+               'get_confirmed_vocab', 'get_testing_vocab', 'increment_correct_use',
+               'introduce_new', 'get_structures', 'introduce_structure',
+               'increment_structure')
 _PAREN_RE    = re.compile(r'（[^）]*）|\([^)]*\)')          # Regie in Klammern
 _TOOLLINE_RE = re.compile(r'^\s*(?:' + '|'.join(_TOOL_NAMES) + r')\b.*$', re.IGNORECASE)
 

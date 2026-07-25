@@ -358,8 +358,31 @@ Persistiert pro Sprache in `data/<lang>/game.json` (Laufzeit, gitignored):
   **Münze fällt direkt AM Wort** runter (`coin_drop`, Sasha: nicht nur in der Ecke),
   Münz-Gesamtzähler oben rechts; **Kisten-Symbole auf der Fortschrittsleiste**
   (`_draw_crate_icon`, erreichte golden); Kisten-Reveal-Banner (`_draw_reveal`).
-- **Phase 2/3 (offen):** Shop + Küche/Tür-Mechaniken, Etappen + Profil-Quiz; SRS wandert
-  in die Konversation. Siehe `memory/gamified-assessment-plan.md` (Projekt-Notiz).
+- **Phase 2/3 (offen):** Shop + Küche/Tür-Mechaniken, Etappen + Profil-Quiz.
+  Siehe `memory/gamified-assessment-plan.md` (Projekt-Notiz).
+
+**Langzeit-SR fürs GESPRÄCH (FSRS, `tutor/srs.py`).** Klare Arbeitsteilung mit dem
+Drill: das Drill baut die Working-Memory-Basis (Abstände in **Karten**); die echte
+Tage-Retention läuft über **FSRS** — Ankis aktuellen Open-Source-Scheduler (`fsrs`,
+PyPI, **MIT**, pure Python, kein Netz; NICHT selbstgebaut). Bewusst NICHT im Drill
+benutzt: FSRS rechnet in **Tagen** (aus Ratings + über Zeit zerfallender Stabilität),
+im Sekundentakt einer Session wäre alles „in 1 Tag fällig".
+- **Speicher:** `data/<lang>/fsrs.json` `{wort: Card.to_dict()}` (Laufzeit, gitignored).
+- **Soft-Import:** fehlt `fsrs` auf einem Knoten → `srs.available()==False`, alle
+  Funktionen No-ops, der Tutor läuft normal weiter (nur ohne Langzeit-SR).
+- **Anbindung:** (1) **Seed** — erstes Wissen eines Worts im Drill (`first_known` in
+  `assessment_answer`) legt eine FSRS-Karte an (`srs.ensure`). (2) **Rating** —
+  `increment_correct_use` (Persona-Tool bei korrekter Nutzung) und `mark_known` melden
+  ein **„Good"** (`srs.review`) → FSRS terminiert in Tagen neu. (3) **Surfacing** —
+  neues Tool **`get_due_reviews`** (Session-Beginn, wie `get_confirmed_vocab`) gibt die
+  fälligen Wörter; die Persona baut sie beiläufig ein, kein Test. Alles in der
+  Tutor-Sandbox (nur `tutor/data/<lang>/`-Zugriff).
+- **API (`tutor/srs.py`):** `ensure(word)`, `review(word, again|hard|good|easy)`,
+  `due_words(limit)`, `stats()`, `available()`.
+- **Offen / MVP-Grenzen:** kein aktives **„Again"**-Signal aus dem freien Gespräch
+  (vergessene Wörter bleiben einfach fällig, statt hart zurückgesetzt zu werden); das
+  Ziehen fälliger Wörter hängt daran, dass das Modell `get_due_reviews` aufruft (wie
+  bei den anderen Session-Start-Tools). Beides Kandidaten zum Nachschärfen.
 
 **Direkt-Start (kein Enter):** TUI-Taste `u` öffnet **mit `DISPLAY` das
 Persona-Zimmer** (`zentrale_tui.tutor_window`, eigenes pygame-Fenster, siehe

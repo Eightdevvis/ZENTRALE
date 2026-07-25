@@ -60,3 +60,10 @@ openai
 # pfad (provider='claude') nötig. Erst installieren, wenn du den wirklich nutzt:
 #   venv/bin/pip install anthropic
 # anthropic
+
+# Sprach-Tutor – Langzeit-SR (tutor/srs.py). FSRS = Ankis aktueller Open-Source-
+# Scheduler (MIT), pure Python, kein Netz. Berechnet fürs KI-GESPRÄCH, wann ein
+# gelerntes Wort in TAGEN wieder aufgefrischt werden sollte (das Session-Drill
+# nutzt es NICHT). Fehlt es auf einem Knoten, ist die Langzeit-SR still aus
+# (srs.available()==False, No-op) — der Tutor läuft normal weiter.
+fsrs

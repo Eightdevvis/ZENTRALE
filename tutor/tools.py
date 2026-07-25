@@ -40,6 +40,7 @@ import random
 from threading import Lock
 
 from . import langs
+from . import srs   # Langzeit-SR (FSRS) fürs Gespräch — Soft-Import, No-op ohne Lib
 
 _lock = Lock()   # Flask-Thread + Event-Loop können gleichzeitig lesen/schreiben
 
@@ -114,6 +115,8 @@ _DEFAULT_PHRASES = {
     "news_none":             "(gerade kein Thema — quatsch einfach weiter)",
     "news_wrap":             "(beiläufig erwähnen, nicht wie Nachrichten vorlesen) Thema aus {country}: {topic}",
     "tv_wrap":               "(Fernseher an — sag beiläufig, was läuft) Läuft: {title} ({level}, {note})",
+    "srs_none":              "(gerade nichts zum Auffrischen fällig — quatsch normal weiter)",
+    "srs_due":               "(diese fälligen Wörter beiläufig ins Gespräch einbauen, damit sie geübt werden — NICHT wie einen Test abfragen): {words}",
 }
 
 
@@ -182,21 +185,28 @@ def get_testing_vocab(lang: str = None) -> str:
 
 
 def increment_correct_use(word: str, lang: str = None) -> str:
-    """+1 auf ein Wort. Ab CONFIRM_THRESHOLD springt es auf confirmed."""
+    """+1 auf ein Wort. Ab CONFIRM_THRESHOLD springt es auf confirmed. Korrekte
+    Nutzung = zugleich ein FSRS-„Good" fürs Langzeit-SR (nur echte, getrackte Wörter)."""
+    found = False
     with _lock:
         entries = _load_raw(lang)
+        msg = _phrase("vocab_notfound", lang, word=word)
         for e in entries:
             if e['word'] == word:
+                found = True
                 e['correct_use'] = e.get('correct_use', 0) + 1
                 if e['correct_use'] >= CONFIRM_THRESHOLD and not e.get('confirmed'):
                     e['confirmed'] = True
                     _write_raw(entries, lang)
-                    return _phrase("vocab_confirmed_now", lang,
-                                   word=word, uses=e['correct_use'])
-                _write_raw(entries, lang)
-                return _phrase("vocab_progress", lang, word=word,
-                               uses=e['correct_use'], threshold=CONFIRM_THRESHOLD)
-        return _phrase("vocab_notfound", lang, word=word)
+                    msg = _phrase("vocab_confirmed_now", lang, word=word, uses=e['correct_use'])
+                else:
+                    _write_raw(entries, lang)
+                    msg = _phrase("vocab_progress", lang, word=word,
+                                  uses=e['correct_use'], threshold=CONFIRM_THRESHOLD)
+                break
+    if found:
+        srs.review(word, 'good', lang)     # Langzeit-SR: erfolgreicher Recall
+    return msg
 
 
 def introduce_new(word: str, reading: str = "", lang: str = None) -> str:
@@ -219,17 +229,22 @@ def mark_known(word: str, reading: str = "", lang: str = None) -> str:
         return _phrase("known_noword", lang)
     with _lock:
         entries = _load_raw(lang)
+        msg = None
         for e in entries:
             if e['word'] == word:
                 e['confirmed'] = True
                 if e.get('correct_use', 0) < CONFIRM_THRESHOLD:
                     e['correct_use'] = CONFIRM_THRESHOLD
                 _write_raw(entries, lang)
-                return _phrase("known_marked", lang, word=word)
-        entries.append({'word': word, 'reading': reading or '',
-                        'correct_use': CONFIRM_THRESHOLD, 'confirmed': True})
-        _write_raw(entries, lang)
-    return _phrase("known_added", lang, word=word)
+                msg = _phrase("known_marked", lang, word=word)
+                break
+        if msg is None:
+            entries.append({'word': word, 'reading': reading or '',
+                            'correct_use': CONFIRM_THRESHOLD, 'confirmed': True})
+            _write_raw(entries, lang)
+            msg = _phrase("known_added", lang, word=word)
+    srs.ensure(word, lang); srs.review(word, 'good', lang)   # ins Langzeit-SR
+    return msg
 
 
 def term_list(lang: str = None) -> list:
@@ -594,6 +609,8 @@ def assessment_answer(lang: str, word: str, result: str) -> dict:
         _game_save(g, lang)
         conf, uses, reps = bool(e.get('confirmed')), int(e.get('correct_use', 0)), int(sr['reps'])
         coins, parts = int(g['coins']), list(g.get('parts', []))
+    if first_known:
+        srs.ensure(word, lang)          # erstes Wissen → ins Langzeit-SR (FSRS)
     got, total = core_coverage(lang)
     return {'word': word, 'confirmed': conf, 'correct_use': uses, 'reps': reps,
             'mastered': conf, 'first_known': first_known, 'got': got, 'total': total,
@@ -717,6 +734,16 @@ def get_local_news(lang: str = None) -> str:
                    country=_prof(lang).get("country", ""))
 
 
+def get_due_reviews(lang: str = None) -> str:
+    """Fällige Wörter aus dem Langzeit-SR (FSRS, `tutor/srs.py`) — WAS die Persona im
+    Gespräch beiläufig auffrischen sollte. Reine Abfrage der tutor-isolierten Daten;
+    das eigentliche Neu-Terminieren passiert über increment_correct_use (= Recall)."""
+    words = srs.due_words(lang, limit=12)
+    if not words:
+        return _phrase("srs_none", lang)
+    return _phrase("srs_due", lang, words=", ".join(words))
+
+
 # ── TV / Mediathek (persona-isoliert) ───────────────────────────────────
 # Katalog im SPRACH-PAKET (nur Titel/Meta, kein Video — echtes Playback ist
 # deferred). Filtert nach Stimmung, bevorzugt für Anfänger Leichtes.
@@ -827,6 +854,7 @@ _TOOL_SPECS = [
     ("play_music",          {"mood": ("string", ["chill", "happy", "focus", "sad", "energetic"])}, ["mood"]),
     ("stop_music",          {}, []),
     ("get_local_news",      {}, []),
+    ("get_due_reviews",     {}, []),
     ("mark_known",          {"word": "string", "reading": "string"}, ["word"]),
     ("show_thought",        {"word": "string", "meaning": "string", "reading": "string"}, ["word"]),
 ]
@@ -853,6 +881,7 @@ _DEFAULT_TEXTS = {
                              "params": {"mood": "Stimmung"}},
     "stop_music":           {"description": "Musik aus."},
     "get_local_news":       {"description": "Ein leichtes Thema aus deinem Land, um beiläufig darüber zu quatschen. Nicht wie Nachrichten vorlesen. Du bist eine KI — das ist nichts, was du selbst erlebt hast."},
+    "get_due_reviews":      {"description": "Zu Session-Beginn aufrufen: fällige Wörter aus dem Langzeit-Gedächtnis, die aufgefrischt werden sollten. Bau sie beiläufig ins Gespräch ein, damit sie wieder vorkommen — NICHT wie einen Test abfragen. Nutzt sie die Lernende korrekt, zählt increment_correct_use das als Auffrischung."},
     "mark_known":           {"description": "Ein Wort, das sie SCHON kann, als gefestigt ablegen. Gegenstück zu show_thought (das ein NEUES Wort einführt).",
                              "params": {"word": "Das Wort, das sie schon kann",
                                         "reading": "Lesehilfe (falls die Sprache eine braucht)"}},
@@ -930,6 +959,7 @@ _ALLOWED = {
     "play_music":            lambda a: play_music(a.get("mood", "chill")),
     "stop_music":            lambda a: stop_music(),
     "get_local_news":        lambda a: get_local_news(),
+    "get_due_reviews":       lambda a: get_due_reviews(),
     "show_thought":          lambda a: show_thought(a.get("word", ""), a.get("meaning", ""), _read(a)),
     "mark_known":            lambda a: mark_known(a.get("word", ""), _read(a)),
 }
