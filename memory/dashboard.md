@@ -90,8 +90,13 @@ werden auf die jeweilige Box-Innenbreite gekürzt (kein Überlauf in Nachbarspal
 jedem Moduswechsel den Modus (`auto`/`day`/`night`) nach
 `~/.config/zentrale/theme` und stößt `zentrale-term-theme`
 (`scripts/zentrale-term-theme`, per Symlink in `~/.local/bin`) an — der färbt
-das umgebende xfce4-terminal live per `xfconf-query` um (day = Solarized Light,
-night = Solarized Dark; `auto` löst nach Uhrzeit auf, exakt wie `resolved_theme`).
+das umgebende xfce4-terminal live per `xfconf-query` um. **Seit 2026-07-25
+nicht mehr Solarized, sondern dieselben zwei Welten wie in nvim** (day = paper
+`#ece0c0`, night = cyber `#000000`), inklusive **voller 16er-ANSI-Palette** —
+vorher blieben `ls`/Prompt/git in den alten Tönen stehen, weil nur bg/fg gesetzt
+wurden. Auf Papier sind die „hellen" Farben 9–14 bewusst **dunkler** als 1–6:
+auf hellem Grund hebt nur mehr Tiefe hervor (aufgehellt lagen sie bei 3.1–4.2:1,
+jetzt 7:1). `auto` löst nach Uhrzeit auf, exakt wie `resolved_theme`.
 Ein **systemd-User-Timer** `zentrale-theme.timer` zieht dieselbe Datei
 jede Minute nach → die 05/21-Rotation greift auch ohne laufende TUI. Nur lokal,
 kein Sync, kein Backend — TUI ist die einzige Quelle. **Setup reproduzierbar
@@ -143,8 +148,15 @@ Seiten, und man „erkennt nicht viel" (genau Sashas Beobachtung).
 - **Umkehrbar:** der Vorzustand wird beim ersten Lauf nach
   `~/.config/zentrale/desktop-theme.bak` gesichert (hier: GTK
   `Mint-L-Darker-Teal`, Rahmen `Mint-L-Dark-Red`), `--restore` setzt zurück.
-- **Icons bleiben unangetastet** (Sashas `HighContrast`): in der Mint-Reihe gibt
-  es kein passendes hell/dunkel-Gegenstück, ein Wechsel wäre Willkür.
+- **Icons laufen mit:** `ZENTRALE-Cyber` / `ZENTRALE-Paper`, gebaut von
+  `scripts/build_icon_themes.py`. **Kein Download nötig:** Papirus liegt hier
+  ohnehin und bringt seine Ordner in 78 Farbvarianten mit — die abgeleiteten
+  Themes erben Papirus-Dark bzw. -Light und legen nur die Ordner in Akzentfarbe
+  darüber (cyan nachts, palebrown tagsüber), als **Symlinks** (938 Stück, ein
+  paar MB statt ~200 MB Fremd-Set). Das ist die Logik von `papirus-folders`,
+  aber als eigenes Theme im Benutzerverzeichnis: kein sudo, System-Papirus
+  bleibt unberührt, Umschalten heißt Theme-Name wechseln statt Dateien
+  umschreiben. Vorher stand hier `HighContrast` (in der Sicherung).
 
 **Tor Browser wird bewusst NICHT gekoppelt.** Tor vereinheitlicht Fingerprints;
 unter `resistFingerprinting` ist das Farbschema Teil der Angriffsfläche, und an

@@ -10,6 +10,7 @@ landen auf prefer-dark/prefer-light (das, was Brave als Flatpak über
 org.freedesktop.appearance liest).
 """
 import os
+import re
 import subprocess
 import time
 
@@ -100,16 +101,17 @@ def run_desktop(theme_file, *args):
                           text=True, env=env, timeout=20, check=True).stdout.strip()
 
 
-@pytest.mark.parametrize("mode,gtk,wm", [
-    ("night", "Mint-L-Darker-Aqua", "Mint-L-Dark-Aqua"),
-    ("day", "Mint-L-Sand", "Mint-L-Sand"),
+@pytest.mark.parametrize("mode,gtk,wm,icons", [
+    ("night", "Mint-L-Darker-Aqua", "Mint-L-Dark-Aqua", "ZENTRALE-Cyber"),
+    ("day", "Mint-L-Sand", "Mint-L-Sand", "ZENTRALE-Paper"),
 ])
-def test_desktop_theme_pair(theme_file, mode, gtk, wm):
+def test_desktop_theme_pair(theme_file, mode, gtk, wm, icons):
     """night = dunkelste Variante + kühler Akzent (cyber-nah),
     day = warmer Ocker (Sepia/Papier). "Darker" bringt kein xfwm4 mit,
-    deshalb nachts Dark für den Rahmen."""
+    deshalb nachts Dark für den Rahmen. Icons: die abgeleiteten Papirus-Sets."""
     theme_file.write_text(mode + "\n")
-    assert run_desktop(theme_file, "--dry-run") == "%s gtk=%s wm=%s" % (mode, gtk, wm)
+    assert run_desktop(theme_file, "--dry-run") == \
+        "%s gtk=%s wm=%s icons=%s" % (mode, gtk, wm, icons)
 
 
 def test_desktop_pair_is_overridable(theme_file):
@@ -118,7 +120,7 @@ def test_desktop_pair_is_overridable(theme_file):
                ZENTRALE_GTK_NIGHT="Eigenes-Theme", ZENTRALE_WM_NIGHT="Eigener-Rahmen")
     out = subprocess.run(["bash", DESKTOP, "--dry-run"], capture_output=True,
                          text=True, env=env, timeout=20, check=True).stdout.strip()
-    assert out == "night gtk=Eigenes-Theme wm=Eigener-Rahmen"
+    assert out.startswith("night gtk=Eigenes-Theme wm=Eigener-Rahmen")
 
 
 def test_desktop_themes_are_installed(theme_file):
@@ -137,3 +139,64 @@ def test_desktop_all_appliers_share_the_clock_rule(theme_file):
     for f in rule_files:
         src = open(os.path.join(ROOT, "scripts", f)).read()
         assert "-ge 5" in src and "-lt 21" in src, "05/21-Regel fehlt in %s" % f
+
+
+# ── Terminal-Palette (scripts/zentrale-term-theme) ────────────────────────
+TERM = os.path.join(ROOT, "scripts", "zentrale-term-theme")
+
+
+def _term_palette(mode):
+    """Die 16er-Palette + Hintergrund für einen Modus aus dem Skript ziehen."""
+    src = open(TERM).read()
+    block = src.split('if [ "$resolved" = "night" ]; then')[1]
+    night, day = block.split("else")[0], block.split("else")[1]
+    part = night if mode == "night" else day
+    bg = re.search(r'BG="(#[0-9a-f]{6})"', part).group(1)
+    pal = re.search(r'PALETTE="([^"]+)"', part).group(1).split(";")
+    assert len(pal) == 16, "Palette muss 16 Farben haben, hat %d" % len(pal)
+    return bg, pal
+
+
+def _ratio(fg, bg):
+    def lum(h):
+        p = [int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        p = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in p]
+        return 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]
+    a, b = lum(fg), lum(bg)
+    return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+
+
+@pytest.mark.parametrize("mode", ["night", "day"])
+def test_terminal_text_colors_are_legible(mode):
+    """Die echten Textfarben (1-6, 9-14) müssen auf dem eigenen Grund lesbar
+    sein. Die Slots 0/7/8/15 sind Struktur (schwarz/weiß/grau) und bleiben
+    per Konvention außen vor — sonst wäre "weiß auf hell" ein Fehlalarm."""
+    bg, pal = _term_palette(mode)
+    weak = ["%d=%s (%.2f:1)" % (i, pal[i], _ratio(pal[i], bg))
+            for i in list(range(1, 7)) + list(range(9, 15))
+            if _ratio(pal[i], bg) < 4.5]
+    assert not weak, "zu blass in %s: %s" % (mode, ", ".join(weak))
+
+
+def test_bright_colors_stand_out_more_than_normal():
+    """Auf Papier muss "hell" DUNKLER sein als normal — auf hellem Grund hebt
+    nur mehr Tiefe hervor. Aufgehellt lag die Reihe bei 3.1–4.2:1."""
+    bg, pal = _term_palette("day")
+    for i in range(1, 7):
+        normal, bright = _ratio(pal[i], bg), _ratio(pal[i + 8], bg)
+        assert bright > normal, \
+            "Slot %d: hell %s (%.2f) hebt sich nicht ab von normal %s (%.2f)" \
+            % (i + 8, pal[i + 8], bright, pal[i], normal)
+
+
+def test_terminal_matches_nvim_surfaces():
+    """Terminal und nvim sollen DIESELBE Fläche zeigen — sonst sitzt der Editor
+    als Fremdkörper im Terminal statt als eine Welt."""
+    nvim_pal = open(os.path.join(ROOT, "nvim", "lua", "zentrale_theme",
+                                 "palettes.lua")).read()
+    for mode, key in (("night", "cyber"), ("day", "paper")):
+        bg, _ = _term_palette(mode)
+        block = nvim_pal.split("M.%s = {" % key)[1].split("}")[0]
+        nvim_bg = re.search(r'bg\s*=\s*"(#[0-9a-f]{6})"', block).group(1)
+        assert bg == nvim_bg, \
+            "%s: Terminal %s vs nvim %s" % (mode, bg, nvim_bg)

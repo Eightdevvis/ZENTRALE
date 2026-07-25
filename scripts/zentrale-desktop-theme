@@ -18,8 +18,9 @@
 # Alles über Env überstimmbar, ohne dieses Skript anzufassen:
 #   ZENTRALE_GTK_DAY / ZENTRALE_GTK_NIGHT / ZENTRALE_WM_DAY / ZENTRALE_WM_NIGHT
 #
-# ICONS bleiben bewusst unangetastet (Sashas HighContrast-Set) — es gibt in der
-# Mint-Reihe kein passendes helles/dunkles Gegenstück, ein Wechsel wäre Willkür.
+# ICONS laufen seit 2026-07-25 mit: ZENTRALE-Cyber / ZENTRALE-Paper, gebaut von
+# scripts/build_icon_themes.py — Papirus geerbt, nur die Ordner in Akzentfarbe
+# (cyan nachts, warmes Braun tagsüber). Vorher stand hier HighContrast.
 #
 # UMKEHRBAR: beim ERSTEN Lauf werden die vorgefundenen Werte nach
 # ~/.config/zentrale/desktop-theme.bak gesichert; `--restore` setzt sie zurück.
@@ -32,6 +33,13 @@ GTK_DAY="${ZENTRALE_GTK_DAY:-Mint-L-Sand}"
 GTK_NIGHT="${ZENTRALE_GTK_NIGHT:-Mint-L-Darker-Aqua}"
 WM_DAY="${ZENTRALE_WM_DAY:-Mint-L-Sand}"
 WM_NIGHT="${ZENTRALE_WM_NIGHT:-Mint-L-Dark-Aqua}"
+# Icons: die abgeleiteten Papirus-Sets (scripts/build_icon_themes.py) — cyane
+# Ordner nachts, warme tagsüber. Fehlen sie, nehmen wir Papirus direkt, damit
+# der Wechsel trotzdem hell/dunkel folgt statt gar nicht.
+ICON_DAY="${ZENTRALE_ICON_DAY:-ZENTRALE-Paper}"
+ICON_NIGHT="${ZENTRALE_ICON_NIGHT:-ZENTRALE-Cyber}"
+ICON_DAY_FALLBACK="Papirus-Light"
+ICON_NIGHT_FALLBACK="Papirus-Dark"
 
 resolve() {
   local mode="auto"
@@ -44,20 +52,28 @@ resolve() {
 }
 
 RESOLVED="$(resolve)"
-if [ "$RESOLVED" = "night" ]; then GTK="$GTK_NIGHT"; WM="$WM_NIGHT"
-else                               GTK="$GTK_DAY";   WM="$WM_DAY"; fi
+if [ "$RESOLVED" = "night" ]; then
+  GTK="$GTK_NIGHT"; WM="$WM_NIGHT"; ICON="$ICON_NIGHT"; ICON_FB="$ICON_NIGHT_FALLBACK"
+else
+  GTK="$GTK_DAY";   WM="$WM_DAY";   ICON="$ICON_DAY";   ICON_FB="$ICON_DAY_FALLBACK"
+fi
+
+# Icon-Theme da? Sonst auf Papirus zurückfallen (siehe oben).
+icon_installed() { [ -d "/usr/share/icons/$1" ] || [ -d "$HOME/.local/share/icons/$1" ]; }
+icon_installed "$ICON" || { icon_installed "$ICON_FB" && ICON="$ICON_FB"; }
 
 get() { xfconf-query -c "$1" -p "$2" 2>/dev/null; }
 set_prop() { xfconf-query -c "$1" -p "$2" -s "$3" 2>/dev/null; }
 
 case "${1:-}" in
   --resolve) printf '%s\n' "$RESOLVED"; exit 0 ;;
-  --dry-run) printf '%s gtk=%s wm=%s\n' "$RESOLVED" "$GTK" "$WM"; exit 0 ;;
+  --dry-run) printf '%s gtk=%s wm=%s icons=%s\n' "$RESOLVED" "$GTK" "$WM" "$ICON"; exit 0 ;;
   --status)
     printf 'theme-datei : %s\n' "$STATE"
-    printf 'aufgeloest  : %s -> gtk=%s wm=%s\n' "$RESOLVED" "$GTK" "$WM"
-    printf 'jetzt aktiv : gtk=%s wm=%s\n' \
-      "$(get xsettings /Net/ThemeName)" "$(get xfwm4 /general/theme)"
+    printf 'aufgeloest  : %s -> gtk=%s wm=%s icons=%s\n' "$RESOLVED" "$GTK" "$WM" "$ICON"
+    printf 'jetzt aktiv : gtk=%s wm=%s icons=%s\n' \
+      "$(get xsettings /Net/ThemeName)" "$(get xfwm4 /general/theme)" \
+      "$(get xsettings /Net/IconThemeName)"
     [ -f "$BAK" ] && { printf 'sicherung   : %s\n' "$BAK"; cat "$BAK"; } \
                   || printf 'sicherung   : (noch keine)\n'
     exit 0 ;;
@@ -67,7 +83,8 @@ case "${1:-}" in
     . "$BAK"
     [ -n "${PREV_GTK:-}" ] && set_prop xsettings /Net/ThemeName "$PREV_GTK"
     [ -n "${PREV_WM:-}"  ] && set_prop xfwm4     /general/theme "$PREV_WM"
-    echo "zurückgesetzt: gtk=${PREV_GTK:-?} wm=${PREV_WM:-?}"
+    [ -n "${PREV_ICON:-}" ] && set_prop xsettings /Net/IconThemeName "$PREV_ICON"
+    echo "zurückgesetzt: gtk=${PREV_GTK:-?} wm=${PREV_WM:-?} icons=${PREV_ICON:-?}"
     exit 0 ;;
 esac
 
@@ -76,8 +93,9 @@ command -v xfconf-query >/dev/null 2>&1 || exit 0   # kein xfce → still raus
 # Einmalige Sicherung des Vorzustands (nur wenn noch keine da ist).
 if [ ! -f "$BAK" ]; then
   mkdir -p "$(dirname "$BAK")" 2>/dev/null
-  { printf 'PREV_GTK=%s\n' "$(get xsettings /Net/ThemeName)"
-    printf 'PREV_WM=%s\n'  "$(get xfwm4 /general/theme)"; } > "$BAK" 2>/dev/null
+  { printf 'PREV_GTK=%s\n'  "$(get xsettings /Net/ThemeName)"
+    printf 'PREV_WM=%s\n'   "$(get xfwm4 /general/theme)"
+    printf 'PREV_ICON=%s\n' "$(get xsettings /Net/IconThemeName)"; } > "$BAK" 2>/dev/null
 fi
 
 # Nur setzen, wenn ein Theme wirklich installiert ist — sonst stünde der Desktop
@@ -86,5 +104,6 @@ fi
   && set_prop xsettings /Net/ThemeName "$GTK"
 [ -d "/usr/share/themes/$WM/xfwm4" ] || [ -d "$HOME/.themes/$WM/xfwm4" ] \
   && set_prop xfwm4 /general/theme "$WM"
+icon_installed "$ICON" && set_prop xsettings /Net/IconThemeName "$ICON"
 
 exit 0

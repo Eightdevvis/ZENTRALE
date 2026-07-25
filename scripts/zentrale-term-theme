@@ -26,25 +26,57 @@ case "$mode" in
 esac
 
 # — Farbpaletten ————————————————————————————————————————————————
-# day  = Sashas aktuelles helles Setup (Solarized Light, so belassen).
-# night= Solarized Dark als dunkles Gegenstück (gleiche 16er-Palette,
-#        nur Hintergrund/Vordergrund/Cursor tauschen).
+# Seit 2026-07-25 NICHT mehr Solarized, sondern dieselben zwei Welten wie in
+# nvim (nvim/lua/zentrale_theme/palettes.lua) — damit Terminal und Editor aus
+# einem Guss sind statt zwei Farbfamilien nebeneinander:
+#   night = cyber : echtes Schwarz + Neon
+#   day   = paper : Sepia-Papier + botanische Tinte
+# Gesetzt wird auch die volle 16er-ANSI-Palette (vorher nur bg/fg) — sonst
+# blieben ls, Prompt, git & Co. in den alten Solarized-Tönen stehen.
+#
+# Reihenfolge der Palette: 0-7 normal (schwarz, rot, grün, gelb, blau, magenta,
+# cyan, weiß), 8-15 hell. Auf hellem Grund bleiben 7/15 wie bei Solarized Light
+# die HELLEN Töne (sonst wäre "weiß" auf Papier unsichtbar).
+#
+# Und auf Papier sind die "hellen" Farben 9-14 bewusst DUNKLER als 8-13, nicht
+# heller: "hell" heißt in der Praxis "hervorgehoben", und auf hellem Grund hebt
+# nur mehr Tiefe hervor. Aufgehellt lagen sie bei 3.1–4.2:1 (unlesbar), jetzt
+# bei 7:1 gegen die normalen ~5:1 — gemessen, nicht geschätzt.
 if [ "$resolved" = "night" ]; then
-  BG="#002b36"; FG="#93a1a1"; BOLD="#eee8d5"; CURSOR="#93a1a1"
+  BG="#000000"; FG="#ccf7ff"; BOLD="#e8fdff"; CURSOR="#00f0ff"
+  SEL_BG="#16333d"; SEL_FG="#ccf7ff"
+  PALETTE="#05080a;#ff2f5e;#00ff9c;#ffe93d;#38bdff;#ff2bd6;#00f0ff;#ccf7ff;#577c8a;#ff6b8a;#6bffc0;#fff487;#7fd6ff;#ff74e4;#6ff8ff;#ffffff"
 else
-  BG="#fdf6e3"; FG="#073642"; BOLD="#073642"; CURSOR="#073642"
+  BG="#ece0c0"; FG="#33291c"; BOLD="#1f1810"; CURSOR="#44661d"
+  SEL_BG="#d8dcae"; SEL_FG="#33291c"
+  PALETTE="#33291c;#972920;#44661d;#765c14;#2f5f7d;#8a3357;#3a664b;#e2d4ae;#6e6551;#86241c;#354f16;#59450f;#254b63;#792c4c;#2c4e39;#f4ecd6"
 fi
+
+case "${1:-}" in
+  --resolve) printf '%s\n' "$resolved"; exit 0 ;;
+  --dry-run) printf '%s bg=%s fg=%s\n' "$resolved" "$BG" "$FG"; exit 0 ;;
+esac
 
 command -v xfconf-query >/dev/null 2>&1 || exit 0   # kein xfce → still raus
 
 set_prop() { xfconf-query -c xfce4-terminal -p "$1" -s "$2" 2>/dev/null; }
+# Bool-Eigenschaften existieren nicht immer schon → notfalls neu anlegen (-n).
+set_bool() {
+  xfconf-query -c xfce4-terminal -p "$1" -s "$2" 2>/dev/null \
+    || xfconf-query -c xfce4-terminal -n -t bool -p "$1" -s "$2" 2>/dev/null
+}
 
 set_prop /color-background "$BG"
 set_prop /color-foreground "$FG"
 set_prop /color-bold       "$BOLD"
 set_prop /color-cursor     "$CURSOR"
-# Cursor-Farbe erzwingen (Default wäre unsichtbar auf dunklem Grund)
-xfconf-query -c xfce4-terminal -p /color-cursor-use-default -s false 2>/dev/null \
-  || xfconf-query -c xfce4-terminal -n -t bool -p /color-cursor-use-default -s false 2>/dev/null
+set_prop /color-palette    "$PALETTE"
+set_prop /color-selection            "$SEL_FG"
+set_prop /color-selection-background "$SEL_BG"
+# Cursor/Fett/Auswahl erzwingen — die Defaults wären teils unsichtbar
+# (Cursor auf schwarzem Grund) bzw. würden unsere Werte ignorieren.
+set_bool /color-cursor-use-default    false
+set_bool /color-bold-use-default      false
+set_bool /color-selection-use-default false
 
 exit 0

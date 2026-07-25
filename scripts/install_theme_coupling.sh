@@ -22,7 +22,8 @@
 #     nach → 05/21-Rotation greift auch ohne laufende TUI).
 #  4. Seedet ~/.config/zentrale/theme mit 'auto', falls noch nicht da, und
 #     wendet das Theme einmal sofort an.
-#  5. Hängt nvim mit ein (ruft install_nvim_theme.sh), falls nvim da ist.
+#  5. Baut die Icon-Themes ZENTRALE-Cyber/-Paper (build_icon_themes.py) und
+#     hängt nvim mit ein (install_nvim_theme.sh), falls nvim da ist.
 #
 # Diese Units sind USER-Units (kein sudo). Anders als der Pi-Kram in
 # install_pi_services.sh läuft hier nichts als root.
@@ -64,7 +65,13 @@ echo "timer: $(systemctl --user is-active zentrale-theme.timer)"
 "$BIN/zentrale-desktop-theme" || true
 echo "state: $(cat "$HOME/.config/zentrale/theme")  → angewendet"
 
-# 5. nvim mitnehmen (eigener Installer, weil er in ~/.config/nvim/plugin schreibt)
+# 5a. Icon-Themes bauen (Symlink-Overlay über Papirus, ein paar KB)
+if [ -d /usr/share/icons/Papirus-Dark ]; then
+  PY="$REPO/venv/bin/python"; [ -x "$PY" ] || PY="$(command -v python3)"
+  [ -n "$PY" ] && "$PY" "$REPO/scripts/build_icon_themes.py" || true
+fi
+
+# 5b. nvim mitnehmen (eigener Installer, weil er in ~/.config/nvim/plugin schreibt)
 if command -v nvim >/dev/null 2>&1; then
   bash "$REPO/scripts/install_nvim_theme.sh"
 fi
