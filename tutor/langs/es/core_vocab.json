@@ -43,14 +43,14 @@
 	},
 	{
 		"word": "ser",
-		"de": "sein",
+		"de": "sein (dauerhaft: Eigenschaft/Identität)",
 		"reading": "",
 		"priority": "critical",
 		"category": "verb_core"
 	},
 	{
 		"word": "estar",
-		"de": "sein (Zustand)",
+		"de": "sein (Zustand/Ort: gerade, vorübergehend)",
 		"reading": "",
 		"priority": "critical",
 		"category": "verb_core"
