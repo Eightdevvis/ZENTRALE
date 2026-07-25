@@ -952,19 +952,32 @@ def _hint_row(screen, font, w, y, items, center_x=None):
 
 
 def _draw_coin_hud(screen, fonts, w, asv):
-    """Münz-Zähler oben rechts + „+N"-Pop, wenn gerade eine Münze fiel."""
+    """Münz-Gesamtzähler oben rechts (der Zugewinn wird AM Wort gezeigt, s.u.)."""
     coins = int(asv.get('coins', 0))
     r = 9; cx = w - 20 - r; cy = 22
     txt = fonts['big'].render(str(coins), True, COIN_HI)
-    tx = cx - r - 8 - txt.get_width()
-    screen.blit(txt, (tx, cy - txt.get_height() // 2))
+    screen.blit(txt, (cx - r - 8 - txt.get_width(), cy - txt.get_height() // 2))
     _draw_coin(screen, cx, cy, r)
-    pop = asv.get('coin_pop')
-    if pop and pop.get('t', 0) > 0:
-        rise = int((1.0 - pop['t']) * 20)
-        pr = fonts['hud'].render('+%d' % pop['n'], True, COIN_HI)
-        pr.set_alpha(int(255 * min(1.0, pop['t'])))
-        screen.blit(pr, (tx - pr.get_width() - 6, cy - 8 - rise))
+
+
+def _draw_crate_icon(surf, cx, cy, size, done):
+    """Kleines Kisten-Symbol (für die Fortschrittsleiste). done → golden, sonst matt."""
+    col = COIN_LO if done else (66, 78, 98)
+    edge = COIN_HI if done else (104, 118, 138)
+    r = pygame.Rect(0, 0, size, size); r.center = (int(cx), int(cy))
+    pygame.draw.rect(surf, col, r, border_radius=3)
+    pygame.draw.rect(surf, edge, r, width=1, border_radius=3)
+    pygame.draw.line(surf, edge, (r.left + 2, r.centery), (r.right - 2, r.centery), 1)
+
+
+def _draw_coin_drop(surf, x, y0, asv):
+    """Münze fällt direkt AM Vokabelwort runter (Sasha: „nicht nur in der Ecke")."""
+    cd = asv.get('coin_drop')
+    if not cd or cd.get('t', 0) <= 0:
+        return
+    p = 1.0 - max(0.0, min(1.0, cd['t']))       # 0 → 1
+    y = y0 + int(58 * p)
+    _draw_coin(surf, x, y, 9)
 
 
 def _draw_reveal(screen, fonts, w, h, asv):
@@ -1000,18 +1013,25 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
 
     def ctr(surf, y): screen.blit(surf, (w // 2 - surf.get_width() // 2, y))
 
-    # Fortschrittsbalken + Münz-HUD (immer, außer Willkommen)
+    # Fortschrittsleiste (Track mit Kisten-Symbolen) + Münz-HUD (immer, außer Willkommen)
     if phase != 'welcome':
-        bw = min(520, w - 220); bx = 60; by = 52; bh = 13
-        pygame.draw.rect(screen, (20, 26, 38), (bx, by, bw, bh), border_radius=7)
+        bw = min(520, w - 220); bx = 60; by = 56; bh = 12
+        pygame.draw.rect(screen, (20, 26, 38), (bx, by, bw, bh), border_radius=6)
         fw = int(bw * max(0.0, min(1.0, ratio)))
         if fw > 0:
-            pygame.draw.rect(screen, ASSESS_ACC, (bx, by, fw, bh), border_radius=7)
-        mx = bx + int(bw * 0.75)
-        pygame.draw.line(screen, ASSESS_GOLD, (mx, by - 4), (mx, by + bh + 4), 2)
+            pygame.draw.rect(screen, ASSESS_ACC, (bx, by, fw, bh), border_radius=6)
+        # Kisten-Meilensteine als kleine Symbole auf dem Track (erreichte golden)
+        for m in (asv.get('crate_at') or []):
+            if not total or m > total:
+                continue
+            mxp = bx + int(bw * (m / total))
+            _draw_crate_icon(screen, mxp, by + bh // 2, 14, got >= m)
+        # Ziel-Marke ganz rechts = Lucía (komplett)
+        pygame.draw.circle(screen, ASSESS_GOLD, (bx + bw, by + bh // 2), 4)
         screen.blit(fonts['hud'].render(f'{got} / {total} · {int(round(100*ratio))}%', True, HUD_FG),
-                    (bx, by - fonts['hud'].get_height() - 5))
-        screen.blit(fonts['hud'].render('Lucía ab 75 %', True, ASSESS_GOLD), (mx + 6, by + bh + 4))
+                    (bx, by - fonts['hud'].get_height() - 6))
+        gl = fonts['hud'].render('alle Wörter → Lucía', True, ASSESS_GOLD)
+        screen.blit(gl, (bx + bw - gl.get_width(), by - fonts['hud'].get_height() - 6))
         _draw_coin_hud(screen, fonts, w, asv)
 
     if phase == 'welcome':
@@ -1070,6 +1090,7 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
         _hint_row(screen, fonts['hud'], w, cy + 82,
                   [('Leer', 'Abhaken ✓'), ('R', 'Repeat'), ('N', 'Next')], center_x=ccx)
 
+    _draw_coin_drop(screen, ccx, cy - 44, asv)   # Münze fällt am Wort
     _draw_reveal(screen, fonts, w, h, asv)
 
 
@@ -1268,12 +1289,12 @@ def main():
             asv_speak(word)
 
     def asv_advance():
-        """Nächste Karte; nichts mehr offen oder ≥75 % → Freischaltung."""
+        """Nächste Karte; ALLE Wörter durch → Freischaltung (kein 75%-Frühstart)."""
         with S['lock']:
             v = S['asv']
             if not v:
                 return
-            if v.get('ratio', 0) >= 0.75 or not v.get('work'):
+            if not v.get('work'):
                 v['phase'] = 'unlock'; v['cur'] = None; return
         asv_show()
 
@@ -1300,7 +1321,7 @@ def main():
                     v['coins'] = int(res.get('coins', v.get('coins', 0)))
                     gain = int(res.get('coin_gain', 0) or 0)
                     if gain > 0:
-                        v['coin_pop'] = {'n': gain, 't': 1.0}
+                        v['coin_drop'] = {'n': gain, 't': 1.0}   # fällt AM Wort runter
                     if isinstance(res.get('parts'), list):
                         v['parts'] = res['parts']
                     crate = res.get('crate')
@@ -1309,7 +1330,11 @@ def main():
                                        'amount': int(crate.get('amount', 0) or 0), 't': 2.2}
                         if crate.get('kind') == 'part' and crate.get('part'):
                             v['new_part'] = {'name': crate['part'], 't': 0.0}   # schwebt herein
-                    v['work'] = [c for c in v.get('work', []) if c['word'] != word]
+                    # Wort NUR entfernen, wenn das Backend es wirklich gefestigt/
+                    # gespeichert hat — sonst bliebe es hier weg, käme aber beim
+                    # Neuöffnen wieder (unpersistiert). confirmed==False → dranlassen.
+                    if res.get('confirmed') or res.get('mastered'):
+                        v['work'] = [c for c in v.get('work', []) if c['word'] != word]
                     unlocked = bool(res.get('unlocked'))
         if unlocked:
             with S['lock']:
@@ -1402,7 +1427,8 @@ def main():
                         'coins': int(game.get('coins', 0)),
                         'parts': list(game.get('parts', [])),
                         'parts_total': int(game.get('parts_total', 7)),
-                        'reveal': None, 'coin_pop': None, 'new_part': None}
+                        'crate_at': list(game.get('crate_at', [])),
+                        'reveal': None, 'coin_drop': None, 'new_part': None}
         return True
 
     # ── Sprach-Menü (Alt+L): live zwischen Personas/Sprachen umschalten ──────
@@ -1797,10 +1823,10 @@ def main():
                     a2['reveal']['t'] -= dt
                     if a2['reveal']['t'] <= 0:
                         a2['reveal'] = None
-                if a2.get('coin_pop'):
-                    a2['coin_pop']['t'] -= dt
-                    if a2['coin_pop']['t'] <= 0:
-                        a2['coin_pop'] = None
+                if a2.get('coin_drop'):
+                    a2['coin_drop']['t'] -= dt
+                    if a2['coin_drop']['t'] <= 0:
+                        a2['coin_drop'] = None
                 if a2.get('new_part'):
                     a2['new_part']['t'] = min(1.0, a2['new_part']['t'] + dt / 0.6)
                     if a2['new_part']['t'] >= 1.0:

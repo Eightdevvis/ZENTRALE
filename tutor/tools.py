@@ -272,7 +272,8 @@ def get_vocab_stats(lang: str = None) -> str:
 # confirmed markierten Vokabeln schneidet — kein zweiter Zähler, keine Divergenz.
 
 _PRIO_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-GRADUATE_AT = 0.75    # Anteil gefestigter Kern-Wörter → Kern-Wortschatz „gemeistert"
+GRADUATE_AT = 1.0     # Anteil gefestigter Kern-Wörter → „gemeistert". Sasha: ALLE
+                      # Wörter durch, DANN Lucía (kein 75%-Frühstart mehr).
 
 
 def _core_list(lang: str = None) -> list:
@@ -423,13 +424,29 @@ _PARTS = ["legl", "legr", "dress", "arml", "armr", "head", "hair"]
 
 COIN_CHANCE   = 0.35        # W'keit, dass ein Abhaken eine Münze abwirft
 COIN_MIN, COIN_MAX = 1, 3   # Münzen pro (zufälligem) Treffer
-CRATE_MIN, CRATE_MAX = 10, 15   # Reviews zwischen zwei Kisten (zufälliger Abstand)
+# Kisten-Takt (Sasha): 1. Kiste nach 15 Wörtern, dann +20, dann +15, … abwechselnd
+# (etwas ausgespaced). Da nur Abhaken den reviews-Zähler hochzählt (Repeat/Next
+# nicht), ist reviews == Zahl gemeisterter Wörter → die Meilensteine liegen sauber
+# auf der Fortschrittsleiste.
+CRATE_GAPS = (15, 20)
 CRATE_PART_CHANCE = 0.6     # Kiste zeigt ein Teil (sonst Münzen); ohne Teile → Münzen
 CRATE_COINS_MIN, CRATE_COINS_MAX = 5, 12
 
 
+def crate_milestones(limit: int) -> list:
+    """Absolute Review-/Wort-Zahlen, bei denen eine Kiste fällt (15, 35, 50, 70, …),
+    bis `limit`. Fürs Leisten-Rendering (kleine Kisten-Symbole dazwischen)."""
+    out, p, k = [], CRATE_GAPS[0], 1
+    while p <= max(0, limit):
+        out.append(p)
+        p += CRATE_GAPS[k % len(CRATE_GAPS)]
+        k += 1
+    return out
+
+
 def _game_default() -> dict:
-    return {"coins": 0, "parts": [], "reviews": 0, "next_crate": None, "srs": {}}
+    return {"coins": 0, "parts": [], "reviews": 0, "next_crate": None,
+            "crates": 0, "srs": {}}
 
 
 def _game_load(lang: str = None) -> dict:
@@ -460,13 +477,16 @@ def _game_save(d: dict, lang: str = None):
 
 
 def game_state(lang: str = None) -> dict:
-    """Aktueller Spielstand fürs Frontend (Münzen, Teile, Fortschritt)."""
+    """Aktueller Spielstand fürs Frontend (Münzen, Teile, Fortschritt, Kisten-
+    Meilensteine für die Leiste)."""
+    total = core_coverage(lang)[1]
     with _lock:
         g = _game_load(lang)
     return {"coins": int(g.get("coins", 0)),
             "parts": list(g.get("parts", [])),
             "parts_total": len(_PARTS),
-            "reviews": int(g.get("reviews", 0))}
+            "reviews": int(g.get("reviews", 0)),
+            "crate_at": crate_milestones(total)}
 
 
 def _open_crate(g: dict) -> dict:
@@ -550,12 +570,14 @@ def assessment_answer(lang: str, word: str, result: str) -> dict:
             if random.random() < COIN_CHANCE:
                 coin_gain = random.randint(COIN_MIN, COIN_MAX)
                 g['coins'] = int(g.get('coins', 0)) + coin_gain
-            # Kisten-Kadenz (alle 10–15 Reviews, zufälliger Abstand)
+            # Kisten-Kadenz: 15, dann +20, dann +15, … (CRATE_GAPS, ausgespaced)
             if not g.get('next_crate'):
-                g['next_crate'] = random.randint(CRATE_MIN, CRATE_MAX)
+                g['next_crate'] = CRATE_GAPS[0]
             if g['reviews'] >= g['next_crate']:
                 crate = _open_crate(g)
-                g['next_crate'] = g['reviews'] + random.randint(CRATE_MIN, CRATE_MAX)
+                n = int(g.get('crates', 0)) + 1
+                g['crates'] = n
+                g['next_crate'] = g['reviews'] + CRATE_GAPS[n % len(CRATE_GAPS)]
         # 'again' → nichts ändern
 
         _write_raw(entries, lang)

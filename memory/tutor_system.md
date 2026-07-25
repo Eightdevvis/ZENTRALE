@@ -279,7 +279,8 @@ deutsche Übersetzung fürs Drill/`show_thought`, Paket-DATEN, kommt mit dem Rep
 noch-nicht-gefestigten Kern-Wörter nach Priorität (`tools.core_todo`) — damit die
 Persona das Grund-Vokabular **aktiv abarbeitet** statt beliebig. Die **Deckung**
 misst sich, indem die Curriculum-Wörter gegen die `confirmed`-Vokabeln geschnitten
-werden (`tools.core_coverage`) — kein zweiter Zähler. Bei **≥75 %** feuert
+werden (`tools.core_coverage`) — kein zweiter Zähler. Bei **100 %** (alle Kern-
+Wörter, `GRADUATE_AT=1.0`) feuert
 `tools.check_graduation` **genau einmal** einen Meilenstein (`state.push_log`
 „🎓 Kern-Wortschatz gemeistert"), danach fällt der `core_hint` weg (ab da trägt
 die Konversation sich selbst, Register über die `expect`-Leiter). Der einmalige
@@ -293,7 +294,7 @@ lauffähiger Code).
 
 **Hartes Assessment-Gate (die Persona ist verdient) — DETERMINISTISCH, kein LLM.**
 Der eigentliche Kern der Bootcamp-Skizze: **man sieht die Persona/das Zimmer NICHT,
-bevor der Kern-Wortschatz zu ≥75 % sitzt.** Wichtige Korrektur (2026-07): die
+bevor der Kern-Wortschatz KOMPLETT sitzt (alle Wörter).** Wichtige Korrektur (2026-07): die
 Abfrage ist **reines Frontend + Logik**, KEIN Sprachmodell. Vokabeln abfragen ist
 deterministisch — ein LLM brachte da nur Latenz (2 Min bis ein Wort kam), Zufall
 und keine Ansage. Das Modell ist die **Belohnung nach** dem Gate, nicht das
@@ -313,7 +314,8 @@ Curriculum UND ist noch nicht gemeistert):
   `kickoff` startet im Gate das Drill statt der Persona (kein `run_stream`);
   `feedback_loop` stößt im Drill NIE die KI an.
 - **Speed-Rampe** `tools.tts_speed_for`: 0.7 (Anfang) → linear → 1.0 an der Schwelle.
-- **Freischaltung** bei ≥75 %: der `unlock`-Screen erscheint; `Enter` startet dann die
+- **Freischaltung**, wenn ALLE Kern-Wörter durch sind (`GRADUATE_AT=1.0`): der `unlock`-
+  Screen erscheint; `Enter` startet dann die
   Persona (`run_stream /api/tutor/start`) → Zimmer. `room_state.mode` kippt parallel
   auf `"room"`; der einmalige `check_graduation`-Meilenstein feuert.
 
@@ -329,7 +331,8 @@ Persistiert pro Sprache in `data/<lang>/game.json` (Laufzeit, gitignored):
 Konstanten dort tunebar):
 - **Abhaken** = „kann ich" → Wort **sofort gemeistert** (confirmed) + raus aus dem
   Stapel. Bewusst **kein SRS im Drill** (Sasha): so ergibt die **Statusleiste oben
-  direkt Sinn** — jedes Abhaken = +1 gefestigt, Freischaltung bei 75 %. Verteilte
+  direkt Sinn** — jedes Abhaken = +1 gefestigt, Freischaltung erst wenn **alle Wörter
+  durch** sind (kein 75%-Frühstart, `GRADUATE_AT=1.0`). Verteilte
   Wiederholung kommt später in der KI-Konversation, nicht im Drill.
 - **Münze NUR zufällig** beim Abhaken (`COIN_CHANCE=0.35`, variable reward — *nicht*
   pro Wort).
@@ -338,13 +341,17 @@ Konstanten dort tunebar):
   **automatisch weiter**, das Wort wandert ans Ende (`_requeue_front`) und kommt in
   DIESER Runde nochmal. **Next** schiebt ohne Wertung nach hinten. Queue = einfache
   Rotation (`cur=work[0]`), kein `_pick`/`due`.
-- **Kisten:** alle **10–15** Reviews (`CRATE_MIN/MAX`) eine — Inhalt **zufällig**: ein
+- **Kisten:** ausgespaced — 1. nach **15** Reviews, dann **+20**, dann **+15** … abwechselnd
+  (`CRATE_GAPS`); da nur Abhaken den `reviews`-Zähler hochzählt (≙ gemeisterte Wörter),
+  liegen die Meilensteine (`crate_milestones`) sauber auf der Leiste. Inhalt **zufällig**: ein
   **Körperteil** (`CRATE_PART_CHANCE=0.6`, `random.choice` aus den fehlenden → zufällige
   Reihenfolge) **oder** eine Handvoll Münzen. `_open_crate`.
 - **Lucía baut sich zusammen** (`_draw_lucia` in `room.py`, aus denselben Primitiven wie
   die Persona): erhaltene Teile schweben aus einer Streu-Richtung (`_PART_SCATTER`)
   herein und rasten ein (`new_part`-Anim); bei Freischaltung ist sie komplett.
-  Münz-HUD oben rechts (`+N`-Pop bei Treffer), Kisten-Reveal-Banner (`_draw_reveal`).
+  **Münze fällt direkt AM Wort** runter (`coin_drop`, Sasha: nicht nur in der Ecke),
+  Münz-Gesamtzähler oben rechts; **Kisten-Symbole auf der Fortschrittsleiste**
+  (`_draw_crate_icon`, erreichte golden); Kisten-Reveal-Banner (`_draw_reveal`).
 - **Phase 2/3 (offen):** Shop + Küche/Tür-Mechaniken, Etappen + Profil-Quiz; SRS wandert
   in die Konversation. Siehe `memory/gamified-assessment-plan.md` (Projekt-Notiz).
 
