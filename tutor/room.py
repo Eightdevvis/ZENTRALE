@@ -1330,15 +1330,23 @@ def main():
         return pool[0]
 
     def asv_show():
-        """Nächste fällige Karte wählen (sub='ask'), zeigen, vorlesen."""
+        """Nächste fällige Karte wählen, zeigen, vorlesen. ERSTE Sicht eines Worts
+        (`shown` noch False) → Übersetzung automatisch (sub='learn', nicht abhakbar),
+        danach kommt es per SR gleich nochmal zum echten Abfragen. Sonst normale
+        Abfrage (sub='ask')."""
         with S['lock']:
             v = S['asv']
             if not v or not v.get('work'):
                 return
             cur = _pick(v)
+            first_show = cur is not None and not cur.get('shown')
             if cur is not None:
                 cur['shown'] = True
-            v['sub'] = 'ask'; v['learn_hold'] = None; v['cur'] = cur
+            if first_show:
+                v['sub'] = 'learn'; v['learn_hold'] = 3.0   # erste Sicht: Bedeutung zeigen
+            else:
+                v['sub'] = 'ask'; v['learn_hold'] = None
+            v['cur'] = cur
             v['seen'] = v.get('seen', 0) + 1        # eine Karte mehr gezeigt
             word = cur['word'] if cur else None
         if word:

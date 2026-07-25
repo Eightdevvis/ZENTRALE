@@ -337,7 +337,10 @@ Persistiert pro Sprache in `data/<lang>/game.json` (Laufzeit, gitignored):
 - **Session-SR (Frontend, `room.py`) — Due-Time-Scheduler**, KEIN Positions-Insert
   (das driftet). Jede Karte hat `due` = „ab Karten-Zahl `seen` wieder fällig"; `_pick`
   nimmt die fällige mit kleinstem `due` (Review vor Neu bei Gleichstand), neue Wörter
-  (`due`=Index) interleaven dazwischen. **Expanding retrieval** (belegt für Kurzzeit-
+  (`due`=Index) interleaven dazwischen. **Erste Sicht eines Worts** (`shown`-Flag,
+  `asv_show`): Übersetzung kommt automatisch (sub='learn', nicht abhakbar) — reiner
+  Lernmoment, das Wort kommt per SR (Lapse, +3) gleich nochmal zum echten Abfragen.
+  **Expanding retrieval** (belegt für Kurzzeit-
   Retention, Landauer&Bjork; ~2× wie Anki/Leitner): **Abhaken** (gewusst) → Streak
   hoch, `due=seen+SR_LADDER[streak]` mit `SR_LADDER=(7,14,25)` für 1./2./3. korrekt;
   nach dem 3. Review **graduiert** das Wort aus der Runde. **Repeat** (nicht gewusst) →
