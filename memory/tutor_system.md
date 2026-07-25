@@ -405,8 +405,14 @@ Das **Text-Panel** (Slash-Commands `/lang /provider /cloud …`) gibt's weiter p
 **`/tutor`**; `/room` aus dem Panel geht auch noch. Standalone: `venv/bin/python
 tutor/room.py [--url … --speaker N --speed X --mute]`.
 
-- **Szene:** Wand + Dielenboden, Nachtfenster mit Mond, Stehlampe mit Glühen,
-  Couch, Teppich, Pflanze — warme Palette (bewusst anders als die Karte).
+- **Szene:** Wand + Dielenboden, Fenster (nachts Mond, tags Sonne), Stehlampe mit
+  Glühen, Couch, Teppich, Pflanze.
+- **Theme an ZENTRALE gekoppelt** (light/dark): `apply_theme(mode)` + zwei Paletten
+  (`_NIGHT`/`_DAY`, alle Farben Modul-Globals). `resolve_theme_mode()` liest dieselbe
+  Datei wie das Terminal (`~/.config/zentrale/theme`, `auto`→day 5–21 Uhr); ein
+  `watch_theme`-Thread pollt alle 3 s, angewandt im Render-Frame (kein Farb-Race).
+  Assessment-Screen nutzt semantische Keys (`ASSESS_INK/INK2/PANEL/KEY_INK/BAR_BG/
+  NODE`). Sprach-Menü-Modal bleibt fix dunkel. Siehe [[terminal-theme-coupling]].
 - **Persona-Sprite** (`Persona`-Klasse, aus pygame-Primitiven, kein Sprite-Sheet):
   läuft rum, **sitzt sich auf die Couch**, blinzelt; kleine Verhaltens-Maschine
   (idle → schlendern → sitzen → aufstehen). Redet sie (SSE läuft), nickt sie

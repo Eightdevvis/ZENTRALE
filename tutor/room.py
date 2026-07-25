@@ -38,50 +38,84 @@ import urllib.error
 
 import pygame
 
-# ── Palette (warmes Wohnzimmer — bewusst anders als die Karte) ───────────────
-WALL_TOP   = (58, 47, 62)      # Wand oben (gedämpftes Aubergine)
-WALL_BOT   = (74, 60, 74)      # Wand unten, minimal heller
-FLOOR_TOP  = (92, 66, 48)      # Dielenboden hinten
-FLOOR_BOT  = (66, 46, 33)      # Boden vorne (dunkler)
-RUG        = (140, 74, 66)     # Teppich (Terrakotta)
-RUG_RING   = (176, 104, 92)    # Teppich-Rand
-COUCH      = (92, 108, 120)    # Couch (staubiges Blau)
-COUCH_DK   = (70, 84, 96)      # Couch-Schatten
-COUCH_LT   = (116, 134, 148)   # Couch-Highlight
-WINDOW_SKY = (36, 52, 82)      # Nachthimmel im Fenster
-WINDOW_FR  = (150, 132, 120)   # Fensterrahmen
-MOON       = (226, 224, 198)   # Mond
-PLANT      = (78, 120, 70)     # Pflanze
-POT        = (150, 92, 62)     # Blumentopf
-LAMP_GLOW  = (255, 224, 150)   # Lampenlicht
-# Persona
-SKIN       = (240, 206, 178)
-HAIR       = (44, 34, 40)
-DRESS      = (196, 74, 74)     # Ling Lings warmes Rot
-DRESS_DK   = (156, 54, 54)
-LIMB       = (232, 196, 168)
-# UI
-BUBBLE_BG  = (250, 248, 240)
-BUBBLE_FG  = (32, 28, 30)
-BUBBLE_BD  = (210, 205, 194)
-HUD_FG     = (206, 194, 200)
-HUD_DIM    = (150, 138, 146)
-INPUT_BG   = (40, 33, 42)
-INPUT_FG   = (238, 232, 236)
-CARET      = (226, 150, 150)
-# Verlaufs-Leiste + Rollen
-BAR_BG     = (16, 12, 20, 214)   # translucentes Panel unten
-ROLE_USER  = (150, 200, 230)     # Sasha (kühl)
-ROLE_TUTOR = (240, 202, 172)     # Persona (warm)
-BAR_DIM    = (128, 118, 128)
+# ── Palette — an ZENTRALE gekoppelt (night = dunkel, day = hell) ─────────────
+# Alle Farbnamen sind Modul-Globals; `apply_theme()` setzt sie je nach Modus um.
+# Die Draw-Funktionen lesen die Globals zur Laufzeit → Umschalten wirkt sofort.
+# Quelle ist dieselbe Datei wie fürs Terminal: ~/.config/zentrale/theme
+# (auto|day|night); auto → day 5–21 Uhr, sonst night.
+_NIGHT = dict(
+    WALL_TOP=(58, 47, 62), WALL_BOT=(74, 60, 74),
+    FLOOR_TOP=(92, 66, 48), FLOOR_BOT=(66, 46, 33),
+    RUG=(140, 74, 66), RUG_RING=(176, 104, 92),
+    COUCH=(92, 108, 120), COUCH_DK=(70, 84, 96), COUCH_LT=(116, 134, 148),
+    WINDOW_SKY=(36, 52, 82), WINDOW_FR=(150, 132, 120), MOON=(226, 224, 198),
+    PLANT=(78, 120, 70), POT=(150, 92, 62), LAMP_GLOW=(255, 224, 150),
+    SKIN=(240, 206, 178), HAIR=(44, 34, 40), DRESS=(196, 74, 74),
+    DRESS_DK=(156, 54, 54), LIMB=(232, 196, 168),
+    BUBBLE_BG=(250, 248, 240), BUBBLE_FG=(32, 28, 30), BUBBLE_BD=(210, 205, 194),
+    HUD_FG=(206, 194, 200), HUD_DIM=(150, 138, 146),
+    INPUT_BG=(40, 33, 42), INPUT_FG=(238, 232, 236), CARET=(226, 150, 150),
+    BAR_BG=(16, 12, 20, 214), ROLE_USER=(150, 200, 230),
+    ROLE_TUTOR=(240, 202, 172), BAR_DIM=(128, 118, 128),
+    THOUGHT_BG=(240, 242, 250), THOUGHT_FG=(40, 44, 60), THOUGHT_SUB=(96, 102, 128),
+    # Assessment-Screen
+    ASSESS_TOP=(28, 36, 52), ASSESS_BOT=(40, 50, 70),
+    ASSESS_ACC=(150, 200, 230), ASSESS_GOLD=(240, 206, 120),
+    ASSESS_INK=(236, 238, 246), ASSESS_INK2=(210, 218, 230),
+    ASSESS_PANEL=(26, 32, 46, 235), ASSESS_KEY_INK=(16, 22, 32),
+    ASSESS_BAR_BG=(20, 26, 38), ASSESS_NODE=(66, 78, 98), ASSESS_NODE_EDGE=(104, 118, 138),
+    COIN_HI=(246, 214, 128), COIN_LO=(206, 158, 66),
+)
+_DAY = dict(
+    WALL_TOP=(236, 231, 240), WALL_BOT=(248, 244, 250),
+    FLOOR_TOP=(214, 186, 156), FLOOR_BOT=(192, 162, 132),
+    RUG=(206, 140, 126), RUG_RING=(224, 166, 150),
+    COUCH=(158, 178, 194), COUCH_DK=(130, 152, 170), COUCH_LT=(196, 212, 226),
+    WINDOW_SKY=(158, 196, 232), WINDOW_FR=(176, 156, 138), MOON=(250, 232, 158),
+    PLANT=(104, 158, 94), POT=(176, 116, 80), LAMP_GLOW=(255, 238, 182),
+    SKIN=(240, 206, 178), HAIR=(60, 46, 54), DRESS=(198, 80, 80),
+    DRESS_DK=(160, 58, 58), LIMB=(232, 196, 168),
+    BUBBLE_BG=(252, 250, 244), BUBBLE_FG=(40, 34, 36), BUBBLE_BD=(206, 198, 186),
+    HUD_FG=(58, 50, 62), HUD_DIM=(120, 110, 122),
+    INPUT_BG=(232, 226, 236), INPUT_FG=(44, 38, 46), CARET=(198, 90, 90),
+    BAR_BG=(250, 246, 252, 222), ROLE_USER=(52, 116, 168),
+    ROLE_TUTOR=(176, 96, 58), BAR_DIM=(150, 140, 150),
+    THOUGHT_BG=(248, 250, 255), THOUGHT_FG=(40, 44, 60), THOUGHT_SUB=(96, 102, 128),
+    ASSESS_TOP=(228, 236, 246), ASSESS_BOT=(206, 220, 236),
+    ASSESS_ACC=(48, 120, 172), ASSESS_GOLD=(184, 138, 36),
+    ASSESS_INK=(38, 44, 58), ASSESS_INK2=(72, 84, 104),
+    ASSESS_PANEL=(248, 250, 253, 238), ASSESS_KEY_INK=(248, 250, 252),
+    ASSESS_BAR_BG=(206, 214, 226), ASSESS_NODE=(200, 208, 220), ASSESS_NODE_EDGE=(150, 162, 178),
+    COIN_HI=(214, 158, 58), COIN_LO=(176, 128, 44),
+)
+_THEMES = {'night': _NIGHT, 'day': _DAY}
+
+
+def apply_theme(mode):
+    """Farb-Globals auf night(dunkel)/day(hell) setzen. Unbekannt → night."""
+    globals().update(_THEMES.get(mode, _NIGHT))
+
+
+def resolve_theme_mode():
+    """ZENTRALE-Theme lesen (~/.config/zentrale/theme: auto|day|night) und auf
+    day/night auflösen (auto → day 5–21 Uhr, sonst night). Fehlt die Datei → night."""
+    try:
+        import time as _t
+        with open(os.path.expanduser('~/.config/zentrale/theme')) as fh:
+            mode = fh.read().strip().lower()
+    except Exception:
+        mode = 'night'
+    if mode == 'auto':
+        return 'day' if 5 <= int(_t.strftime('%H')) < 21 else 'night'
+    return 'day' if mode == 'day' else 'night'
+
+
+apply_theme('night')   # Default, bis der echte Modus gelesen ist
+
 # Gesagtes „verhallt": Blase steht kurz voll, dann blendet sie aus.
 BUBBLE_LINGER = 4.0   # s voll sichtbar nach dem Sprechen
 BUBBLE_FADE   = 1.3   # s Ausblenden danach
-# Gedanken-Blase (Vokabel-Hilfe: Wort + Übersetzung, optional Bild)
-THOUGHT_BG  = (240, 242, 250)
-THOUGHT_FG  = (40, 44, 60)
-THOUGHT_SUB = (96, 102, 128)
-THOUGHT_TTL = 6.0     # s sichtbar, dann aus
+THOUGHT_TTL   = 6.0   # s Gedanken-Blase sichtbar, dann aus
 _VOCAB_IMG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'vocab_images')
 _img_cache = {}
 
@@ -950,10 +984,10 @@ def _hint_row(screen, font, w, y, items, center_x=None):
     widths = [(font.size(k)[0] + 16) + 8 + font.size(l)[0] for k, l in items]
     x = cx - (sum(widths) + gap * (len(items) - 1)) // 2
     for (k, l), wd in zip(items, widths):
-        ks = font.render(k, True, (16, 22, 32)); kw = ks.get_width() + 16
+        ks = font.render(k, True, ASSESS_KEY_INK); kw = ks.get_width() + 16
         pygame.draw.rect(screen, ASSESS_ACC, (x, y, kw, font.get_height() + 8), border_radius=7)
         screen.blit(ks, (x + 8, y + 4))
-        screen.blit(font.render(l, True, (206, 216, 230)), (x + kw + 8, y + 4))
+        screen.blit(font.render(l, True, HUD_FG), (x + kw + 8, y + 4))
         x += wd + gap
 
 
@@ -968,8 +1002,8 @@ def _draw_coin_hud(screen, fonts, w, asv):
 
 def _draw_crate_icon(surf, cx, cy, size, done):
     """Kleines Kisten-Symbol (für die Fortschrittsleiste). done → golden, sonst matt."""
-    col = COIN_LO if done else (66, 78, 98)
-    edge = COIN_HI if done else (104, 118, 138)
+    col = COIN_LO if done else ASSESS_NODE
+    edge = COIN_HI if done else ASSESS_NODE_EDGE
     r = pygame.Rect(0, 0, size, size); r.center = (int(cx), int(cy))
     pygame.draw.rect(surf, col, r, border_radius=3)
     pygame.draw.rect(surf, edge, r, width=1, border_radius=3)
@@ -994,7 +1028,7 @@ def _draw_reveal(screen, fonts, w, h, asv):
     box_w, box_h = 300, 96
     bx, by = w // 2 - box_w // 2, 96
     panel = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
-    panel.fill((26, 32, 46, 235))
+    panel.fill(ASSESS_PANEL)
     pygame.draw.rect(panel, ASSESS_GOLD, panel.get_rect(), width=2, border_radius=14)
     screen.blit(panel, (bx, by))
     head = fonts['big'].render('▣  Kiste!', True, ASSESS_GOLD)
@@ -1022,7 +1056,7 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
     # Fortschrittsleiste (Track mit Kisten-Symbolen) + Münz-HUD (immer, außer Willkommen)
     if phase != 'welcome':
         bw = min(520, w - 220); bx = 60; by = 56; bh = 12
-        pygame.draw.rect(screen, (20, 26, 38), (bx, by, bw, bh), border_radius=6)
+        pygame.draw.rect(screen, ASSESS_BAR_BG, (bx, by, bw, bh), border_radius=6)
         fw = int(bw * max(0.0, min(1.0, ratio)))
         if fw > 0:
             pygame.draw.rect(screen, ASSESS_ACC, (bx, by, fw, bh), border_radius=6)
@@ -1041,8 +1075,8 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
         _draw_coin_hud(screen, fonts, w, asv)
 
     if phase == 'welcome':
-        ctr(fonts['word'].render('Hola', True, (236, 238, 246)), cy - 150)
-        ctr(fonts['big'].render('Ich bin Lucía.', True, (232, 236, 244)), cy - 78)
+        ctr(fonts['word'].render('Hola', True, ASSESS_INK), cy - 150)
+        ctr(fonts['big'].render('Ich bin Lucía.', True, ASSESS_INK), cy - 78)
         for i, ln in enumerate(['Zuerst gehen wir zusammen die wichtigsten Wörter durch — hak ab, was du kannst.',
                                 'Dabei sammelst du Münzen und puzzelst mich Stück für Stück zusammen.']):
             ctr(fonts['log'].render(ln, True, HUD_DIM), cy - 22 + i * 26)
@@ -1063,7 +1097,7 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
 
     if phase == 'unlock':
         ctr(fonts['word'].render('¡Hola!', True, ASSESS_GOLD), cy - 96)
-        ctr(fonts['big'].render('Lucía ist da.', True, (236, 238, 246)), cy - 18)
+        ctr(fonts['big'].render('Lucía ist da.', True, ASSESS_INK), cy - 18)
         ctr(fonts['log'].render('Du kannst genug — ab jetzt redet ihr wirklich, auf Spanisch.',
                                 True, HUD_DIM), cy + 26)
         _hint_row(screen, fonts['hud'], w, cy + 78, [('Enter', 'zu Lucía')])
@@ -1082,7 +1116,7 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
     cat = _CAT_DE.get(cur.get('category', ''), '')
     if cat:
         ctl(fonts['hud'].render(cat.upper(), True, ASSESS_ACC), cy - 108)
-    ctl(fonts['word'].render(cur.get('word', ''), True, (238, 240, 248)), cy - 74)
+    ctl(fonts['word'].render(cur.get('word', ''), True, ASSESS_INK), cy - 74)
     if speaking:
         ctl(fonts['hud'].render('◗ Lucía spricht …', True, ASSESS_ACC), cy - 2)
 
@@ -1092,7 +1126,7 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
         _hint_row(screen, fonts['hud'], w, cy + 88,
                   [('R', 'nochmal hören'), ('→', 'weiter')], center_x=ccx)
     else:
-        ctl(fonts['bubble'].render('Kennst du das Wort?', True, (210, 218, 230)), cy + 26)
+        ctl(fonts['bubble'].render('Kennst du das Wort?', True, ASSESS_INK2), cy + 26)
         _hint_row(screen, fonts['hud'], w, cy + 82,
                   [('Leer', 'Abhaken ✓'), ('R', 'Repeat'), ('N', 'Next')], center_x=ccx)
 
@@ -1173,6 +1207,7 @@ def main():
         'transcribing': False, # Segment wird gerade erkannt
         'mic_err': '',         # kein Mikro / Lib fehlt
         'focused': True,       # Fenster fokussiert? (Sensor: wird sie „angeschaut")
+        'theme_want': 'night', # gewünschter Theme-Modus (an ZENTRALE gekoppelt)
         # ── Assessment-Gate (room_state-Poll) ──────────────────────────────
         'mode': 'room',        # 'assessment' = Drill (kein Zimmer) / 'room' = Persona frei
         'core_got': 0,         # gefestigte Kern-Wörter
@@ -1577,6 +1612,16 @@ def main():
                     S['available'] = bool(st.get('available'))
                     S['tts'] = bool(st.get('tts'))
 
+    def watch_theme():
+        """ZENTRALE-Theme (~/.config/zentrale/theme) nachpollen und den Wunsch-Modus
+        ablegen. Angewandt wird im RENDER-Thread (kein Farb-Race mitten im Frame).
+        Fängt auch die 05/21-Auto-Rotation, während das Fenster offen ist."""
+        while True:
+            m = resolve_theme_mode()
+            with S['lock']:
+                S['theme_want'] = m
+            pygame.time.wait(3000)
+
     def watch_room():
         """Ausdrucks-Zustand pollen (Haltung/Geste, von der KI per express-Tool
         gesetzt) und ans Fenster reichen. Persona wird NUR im Render-Thread
@@ -1653,10 +1698,14 @@ def main():
                     S['nudge_ms'] = now
                 run_stream('/api/tutor/nudge', {'focus': foc})
 
+    theme_now = resolve_theme_mode()          # gleich richtig starten (nicht erst dunkel)
+    apply_theme(theme_now)
     with S['lock']:
+        S['theme_want'] = theme_now
         S['last_user_ms'] = pygame.time.get_ticks()   # Stille-Uhr ab Fenster-Öffnen
     threading.Thread(target=kickoff, daemon=True).start()
     threading.Thread(target=watch_status, daemon=True).start()
+    threading.Thread(target=watch_theme, daemon=True).start()
     threading.Thread(target=watch_room, daemon=True).start()
     threading.Thread(target=feedback_loop, daemon=True).start()
 
@@ -1753,6 +1802,13 @@ def main():
     while running:
         dt = clock.tick(30) / 1000.0
         caret_t += dt
+        # Theme an ZENTRALE koppeln: gewünschten Modus (vom watch_theme-Poll) hier
+        # im Render-Thread anwenden, damit nie mitten im Frame umgefärbt wird.
+        with S['lock']:
+            want = S['theme_want']
+        if want != theme_now:
+            theme_now = want
+            apply_theme(theme_now)
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
                 running = False
@@ -2025,9 +2081,12 @@ def main():
             mw = min(380, w - 40)
             mh = 52 + rh * len(menu_langs) + 30
             mx = (w - mw) // 2; my = max(20, (h - mh) // 2)
+            # Modal bewusst IMMER dunkel (fester Panel-Look) → Text fix hell, damit
+            # es auch im Day-Theme lesbar bleibt (nicht an die Palette gekoppelt).
+            M_FG, M_DIM = (232, 226, 236), (160, 152, 166)
             pygame.draw.rect(screen, (34, 30, 40), (mx, my, mw, mh), border_radius=12)
             pygame.draw.rect(screen, (96, 86, 104), (mx, my, mw, mh), width=1, border_radius=12)
-            screen.blit(fonts['big'].render('Sprache', True, HUD_FG), (mx + 18, my + 14))
+            screen.blit(fonts['big'].render('Sprache', True, M_FG), (mx + 18, my + 14))
             yy = my + 52
             sel = menu.get('sel', 0)
             for i, l in enumerate(menu_langs):
@@ -2038,9 +2097,9 @@ def main():
                 if l['code'] == cur_lang:
                     label += '   ●'
                 screen.blit(fonts['input'].render(label, True,
-                            HUD_FG if i == sel else HUD_DIM), (mx + 20, yy))
+                            M_FG if i == sel else M_DIM), (mx + 20, yy))
                 yy += rh
-            screen.blit(fonts['hud'].render('↑/↓ · Enter · 1–9 · Esc', True, HUD_DIM),
+            screen.blit(fonts['hud'].render('↑/↓ · Enter · 1–9 · Esc', True, M_DIM),
                         (mx + 18, yy + 6))
 
         pygame.display.flip()
