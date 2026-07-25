@@ -99,6 +99,42 @@ in git:** Unit-Templates `deploy/zentrale-term-theme.{service,timer}`, Einrichte
 per `scripts/install_term_theme.sh` (Symlink + Units nach `~/.config/systemd/user/`
 + `enable --now`; idempotent, kein sudo).
 
+**nvim-Kopplung (dieselbe Datei, seit 2026-07-25):** nvim folgt
+`~/.config/zentrale/theme` mit zwei EIGENEN Colorschemes (Code im Repo unter
+`nvim/`, siehe `nvim/lua/zentrale_theme/`):
+
+- `night` → **`zentrale-cyber`**: echtes Schwarz `#000000` + Neon (Cyan `#00f0ff`
+  Funktionen, Magenta `#ff2bd6` Keywords, Spring `#00ff9c` Strings, Violett
+  Konstanten, Gelb Typen).
+- `day` → **`zentrale-paper`**: Papier `#eee7d3` + pflanzliche Akzente
+  (Blattgrün Strings, Tannentiefe Typen, Rinde Konstanten, Terracotta Zahlen,
+  Beere Keywords, Wasser-Indigo Funktionen); Kommentare wie verblasster
+  Bleistift, kursiv.
+- **Bewusst NICHT die Terminal-Palette geerbt:** die nvim-Fläche soll sich
+  sichtbar abheben (Papier `#eee7d3` gegen Terminal-Creme `#fdf6e3`, Cyber-
+  Schwarz gegen Terminal-Petrol `#002b36`) — man soll sehen, dass man im Editor
+  ist. Deshalb braucht nvim `termguicolors` (die Paletten sind 24-bit).
+- **Warum überhaupt Code?** nvim fragt die Terminal-Hintergrundfarbe per OSC 11
+  nur **beim Start** ab. Ein schon LAUFENDES nvim erfährt vom Live-Umfärben
+  nichts — genau die Lücke. Zwei Netze: **fs_event-Watcher** auf der Theme-Datei
+  (instant beim `t` in der TUI) + **60-s-Tick** (fängt die 05/21-Rotation, bei
+  der sich der Dateiinhalt gar nicht ändert — dieselbe Rolle wie der systemd-
+  Timer fürs Terminal). Beides No-Op, solange der Modus gleich bleibt.
+- **Gegen nvims eigene Erkennung verteidigt:** ein Wechsel von `background`
+  löscht in nvim ALLE Highlights samt `colors_name`, und nvims OSC-11-Erkennung
+  schlägt erst nach `plugin/` zu → das Theme wäre beim Öffnen wieder weg.
+  Abgefangen per `OptionSet background` (nach dem Startup) **und** einmaligem
+  `VimEnter` (während des Startups feuert OptionSet nicht).
+- **Einhängen:** `scripts/install_nvim_theme.sh` schreibt
+  `~/.config/nvim/plugin/zentrale_theme.lua` (nvim sourced `plugin/` selbst) →
+  **Sashas `init.lua` bleibt unangetastet**. Deinstallieren = diese Datei
+  löschen. Manuell/ad hoc: `:ZentraleTheme day|night|auto` (Sitzungs-Override,
+  schreibt die Theme-Datei NICHT), oder `:colorscheme zentrale-cyber|-paper`.
+- **Tests:** `tests/test_nvim_theme.py` fährt echtes nvim headless — Auflösung,
+  Live-Umschalten im laufenden Prozess, Timer-Fallback, Erholung nach fremdem
+  `background`-Wechsel, plus **Kontrast-Wächter** (jede Rolle ≥4.5:1 auf ihrer
+  Fläche; die erste Papier-Palette lag bei 2.9–4.1:1 und war zu blass).
+
 **Befehlszeile (unten):** `/` öffnet eine Eingabezeile am unteren Rand (die
 Shell ist im Alternate-Screen nicht erreichbar — das ist der Ersatz). Beim
 Tippen klappt eine **Live-Liste** der passenden Befehle nach oben auf und filtert
