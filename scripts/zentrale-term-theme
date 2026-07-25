@@ -30,7 +30,11 @@ esac
 # nvim (nvim/lua/zentrale_theme/palettes.lua) — damit Terminal und Editor aus
 # einem Guss sind statt zwei Farbfamilien nebeneinander:
 #   night = cyber : echtes Schwarz + Neon
-#   day   = paper : Sepia-Papier + botanische Tinte
+#   day   = paper : warmes Papier + botanische Tinte
+#
+# ABSICHTLICHER UNTERSCHIED zur nvim-Fläche: das Terminal ist heller (#f3ecd9,
+# Wärme R−B 26) als nvims Blatt (#ece0c0, Wärme 44). Vollflächig las sich das
+# tiefe Sepia zu schwer; und der Sprung macht sichtbar, wo der Editor anfängt.
 # Gesetzt wird auch die volle 16er-ANSI-Palette (vorher nur bg/fg) — sonst
 # blieben ls, Prompt, git & Co. in den alten Solarized-Tönen stehen.
 #
@@ -47,9 +51,9 @@ if [ "$resolved" = "night" ]; then
   SEL_BG="#16333d"; SEL_FG="#ccf7ff"
   PALETTE="#05080a;#ff2f5e;#00ff9c;#ffe93d;#38bdff;#ff2bd6;#00f0ff;#ccf7ff;#577c8a;#ff6b8a;#6bffc0;#fff487;#7fd6ff;#ff74e4;#6ff8ff;#ffffff"
 else
-  BG="#ece0c0"; FG="#33291c"; BOLD="#1f1810"; CURSOR="#44661d"
-  SEL_BG="#d8dcae"; SEL_FG="#33291c"
-  PALETTE="#33291c;#972920;#44661d;#765c14;#2f5f7d;#8a3357;#3a664b;#e2d4ae;#6e6551;#86241c;#354f16;#59450f;#254b63;#792c4c;#2c4e39;#f4ecd6"
+  BG="#f3ecd9"; FG="#33291c"; BOLD="#1f1810"; CURSOR="#44661d"
+  SEL_BG="#dfe3ba"; SEL_FG="#33291c"
+  PALETTE="#33291c;#972920;#44661d;#765c14;#2f5f7d;#8a3357;#3a664b;#e9dfc4;#6e6551;#86241c;#354f16;#59450f;#254b63;#792c4c;#2c4e39;#fbf7ec"
 fi
 
 case "${1:-}" in

@@ -189,14 +189,21 @@ def test_bright_colors_stand_out_more_than_normal():
             % (i + 8, pal[i + 8], bright, pal[i], normal)
 
 
-def test_terminal_matches_nvim_surfaces():
-    """Terminal und nvim sollen DIESELBE Fläche zeigen — sonst sitzt der Editor
-    als Fremdkörper im Terminal statt als eine Welt."""
+def test_terminal_and_nvim_share_the_same_world():
+    """Terminal und nvim gehören zur selben Welt, sind aber NICHT identisch:
+    das Terminal ist die hellere Fläche, nvims Blatt die tiefere. Vollflächig
+    war das nvim-Sepia im Terminal zu schwer — und der Sprung zeigt, wo der
+    Editor anfängt. Nachts dagegen exakt dasselbe Schwarz."""
     nvim_pal = open(os.path.join(ROOT, "nvim", "lua", "zentrale_theme",
                                  "palettes.lua")).read()
     for mode, key in (("night", "cyber"), ("day", "paper")):
         bg, _ = _term_palette(mode)
         block = nvim_pal.split("M.%s = {" % key)[1].split("}")[0]
         nvim_bg = re.search(r'bg\s*=\s*"(#[0-9a-f]{6})"', block).group(1)
-        assert bg == nvim_bg, \
-            "%s: Terminal %s vs nvim %s" % (mode, bg, nvim_bg)
+        if mode == "night":
+            assert bg == nvim_bg, "night: Terminal %s vs nvim %s" % (bg, nvim_bg)
+        else:
+            t = [int(bg[i:i + 2], 16) for i in (1, 3, 5)]
+            n = [int(nvim_bg[i:i + 2], 16) for i in (1, 3, 5)]
+            assert sum(t) > sum(n), "Terminal soll heller sein als nvims Blatt"
+            assert t[0] > t[2] and n[0] > n[2], "beide bleiben warm (R > B)"
