@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# zentrale-browser-theme — koppelt den Browser an ZENTRALEs Tag/Nacht-Theme.
+#
+# Quelle der Wahrheit ist DIESELBE Datei wie bei Terminal und nvim:
+#   ~/.config/zentrale/theme  (ein Wort: auto | day | night)
+#     auto → nach Uhrzeit (05–21 hell, sonst dunkel), exakt wie
+#            tui/zentrale_tui.py resolved_theme(), zentrale-term-theme und
+#            nvim/lua/zentrale_theme.
+#
+# WIE das den Browser erreicht (Brave läuft hier als FLATPAK):
+# Ein Flatpak sieht Hell/Dunkel nicht über GTK-Themes, sondern über das
+# **xdg-desktop-portal**: `org.freedesktop.appearance color-scheme`
+# (0 = keine Vorgabe, 1 = dunkel, 2 = hell). Chromium/Brave abonniert das
+# SettingChanged-Signal → schaltet LIVE um, ohne Neustart, und zwar beides:
+# die Browser-Oberfläche UND `prefers-color-scheme` für die Seiten.
+#
+# Wir setzen also nicht den Browser, sondern die Portal-Einstellung. Welches
+# gsettings-Schema das Portal liest, hängt am Backend:
+#   * Linux Mint (hier): xdg-desktop-portal-xapp → `org.x.apps.portal`
+#   * portal-gtk/GNOME:  `org.gnome.desktop.interface`
+# Beide werden gesetzt, wenn vorhanden — so läuft das Skript auch auf einem
+# Knoten mit anderem Desktop, ohne Sonderfall.
+#
+# VORAUSSETZUNG im Browser: Erscheinungsbild muss auf **System** stehen
+# (brave://settings/appearance). Steht dort fest Hell oder Dunkel, ignoriert
+# Brave das Portal — dann hilft kein Skript.
+#
+# NEBENWIRKUNG, absichtlich in Kauf genommen: die Portal-Einstellung gilt für
+# ALLE portal-bewussten Apps (jedes Flatpak, GTK4/libadwaita). Es gibt keinen
+# Weg, ein laufendes Chromium browser-exklusiv live umzuschalten — Flags
+# brauchen einen Neustart, und eine Extension kann die Browser-Oberfläche
+# überhaupt nicht umfärben. Der GTK-Theme des Desktops (xsettings
+# /Net/ThemeName) bleibt unangetastet.
+#
+# TOR BROWSER wird ABSICHTLICH NICHT angefasst — siehe memory/dashboard.md:
+# Tor vereinheitlicht Fingerprints; an seinen Prefs zu drehen macht den Browser
+# unterscheidbarer. Dort den eigenen Dunkel-Schalter von Hand nutzen.
+set -u
+
+STATE="${ZENTRALE_THEME_FILE:-$HOME/.config/zentrale/theme}"
+
+resolve() {
+  local mode="auto"
+  [ -r "$STATE" ] && mode="$(tr -d '[:space:]' < "$STATE")"
+  case "$mode" in
+    day|night) printf '%s\n' "$mode" ;;
+    *)  h=$((10#$(date +%H)))          # 10# → keine Oktal-Falle bei 08/09
+        if [ "$h" -ge 5 ] && [ "$h" -lt 21 ]; then printf 'day\n'; else printf 'night\n'; fi ;;
+  esac
+}
+
+RESOLVED="$(resolve)"
+[ "$RESOLVED" = "night" ] && SCHEME="prefer-dark" || SCHEME="prefer-light"
+
+# ── Test-/Diagnose-Subcommands (keine Seiteneffekte) ───────────────────────
+case "${1:-}" in
+  --resolve)  printf '%s\n' "$RESOLVED"; exit 0 ;;
+  --dry-run)  printf '%s %s\n' "$RESOLVED" "$SCHEME"; exit 0 ;;
+  --status)
+    printf 'theme-datei : %s\n' "$STATE"
+    printf 'aufgeloest  : %s -> %s\n' "$RESOLVED" "$SCHEME"
+    if command -v gdbus >/dev/null 2>&1; then
+      printf 'portal sagt : %s  (0=keine vorgabe, 1=dunkel, 2=hell)\n' \
+        "$(gdbus call --session --dest org.freedesktop.portal.Desktop \
+             --object-path /org/freedesktop/portal/desktop \
+             --method org.freedesktop.portal.Settings.ReadOne \
+             org.freedesktop.appearance color-scheme 2>&1)"
+    fi
+    exit 0 ;;
+esac
+
+command -v gsettings >/dev/null 2>&1 || exit 0   # kein gsettings → still raus
+
+has_schema() { gsettings list-schemas 2>/dev/null | grep -qx "$1"; }
+
+# Mint/xapp-Portal (das Backend, das Brave hier bedient)
+has_schema org.x.apps.portal \
+  && gsettings set org.x.apps.portal color-scheme "$SCHEME" 2>/dev/null
+
+# GNOME-Schema: portal-gtk auf anderen Desktops + GTK4/libadwaita-Apps direkt
+has_schema org.gnome.desktop.interface \
+  && gsettings set org.gnome.desktop.interface color-scheme "$SCHEME" 2>/dev/null
+
+exit 0

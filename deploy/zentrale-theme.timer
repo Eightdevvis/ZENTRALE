@@ -1,5 +1,5 @@
 [Unit]
-Description=ZENTRALE: Terminal-Theme jede Minute nachziehen (fängt 05/21-Rotation)
+Description=ZENTRALE: Umgebungs-Theme jede Minute nachziehen (fängt 05/21-Rotation)
 
 [Timer]
 OnStartupSec=10

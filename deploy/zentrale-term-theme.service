@@ -1,7 +1,0 @@
-[Unit]
-Description=ZENTRALE: xfce4-terminal an Tag/Nacht-Theme koppeln (einmalig anwenden)
-After=graphical-session.target
-
-[Service]
-Type=oneshot
-ExecStart=%h/.local/bin/zentrale-term-theme

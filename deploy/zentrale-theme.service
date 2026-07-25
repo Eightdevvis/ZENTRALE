@@ -1,0 +1,10 @@
+[Unit]
+Description=ZENTRALE: Umgebung an Tag/Nacht-Theme koppeln (Terminal + Browser)
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+# Zwei Ziele, ein Aufruf. nvim braucht KEINEN Push: es beobachtet die
+# Theme-Datei selbst (fs_event + eigener Tick), siehe nvim/lua/zentrale_theme.
+ExecStart=%h/.local/bin/zentrale-term-theme
+ExecStart=%h/.local/bin/zentrale-browser-theme

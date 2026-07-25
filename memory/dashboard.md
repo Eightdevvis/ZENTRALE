@@ -92,12 +92,44 @@ jedem Moduswechsel den Modus (`auto`/`day`/`night`) nach
 (`scripts/zentrale-term-theme`, per Symlink in `~/.local/bin`) an — der färbt
 das umgebende xfce4-terminal live per `xfconf-query` um (day = Solarized Light,
 night = Solarized Dark; `auto` löst nach Uhrzeit auf, exakt wie `resolved_theme`).
-Ein **systemd-User-Timer** `zentrale-term-theme.timer` zieht dieselbe Datei
+Ein **systemd-User-Timer** `zentrale-theme.timer` zieht dieselbe Datei
 jede Minute nach → die 05/21-Rotation greift auch ohne laufende TUI. Nur lokal,
 kein Sync, kein Backend — TUI ist die einzige Quelle. **Setup reproduzierbar
-in git:** Unit-Templates `deploy/zentrale-term-theme.{service,timer}`, Einrichten
-per `scripts/install_term_theme.sh` (Symlink + Units nach `~/.config/systemd/user/`
-+ `enable --now`; idempotent, kein sudo).
+in git:** Unit-Templates `deploy/zentrale-theme.{service,timer}` (zwei
+`ExecStart`-Zeilen: Terminal + Browser), Einrichten per
+`scripts/install_theme_coupling.sh` (Symlinks + Units nach
+`~/.config/systemd/user/` + `enable --now`, nimmt nvim mit; idempotent, kein
+sudo; hieß bis 2026-07-25 `install_term_theme.sh`, die alten Unit-Namen räumt
+es beim Lauf ab).
+
+**Browser-Kopplung (Brave, seit 2026-07-25):** `scripts/zentrale-browser-theme`.
+Brave läuft hier als **Flatpak** — ein Flatpak sieht Hell/Dunkel nicht am
+GTK-Theme, sondern am **xdg-desktop-portal**
+(`org.freedesktop.appearance color-scheme`: 0 = keine Vorgabe, 1 = dunkel,
+2 = hell). Chromium/Brave abonniert das SettingChanged-Signal → schaltet **live**
+um, ohne Neustart, und zwar Browser-Oberfläche **und** `prefers-color-scheme`
+für die Seiten. Der Applier setzt also nicht den Browser, sondern die
+Portal-Einstellung; welches gsettings-Schema das Portal liest, hängt am Backend:
+
+- **Linux Mint (Sashas Laptop): `org.x.apps.portal`** (`xdg-desktop-portal-xapp`)
+  — das GNOME-Schema `org.gnome.desktop.interface color-scheme` bleibt hier
+  **wirkungslos** (geprüft: Portal meldete stur 0). Beide werden gesetzt, damit
+  ein Knoten mit anderem Desktop ohne Sonderfall funktioniert.
+- **Voraussetzung im Browser:** Erscheinungsbild auf **System**
+  (`brave://settings/appearance`, Pref `browser.theme.color_scheme2 = 0`).
+  Steht dort fest Hell/Dunkel, ignoriert Brave das Portal.
+- **Nebenwirkung, bewusst:** die Portal-Einstellung gilt für **alle**
+  portal-bewussten Apps (jedes Flatpak, GTK4/libadwaita). Ein laufendes Chromium
+  browser-exklusiv live umzuschalten geht nicht — Flags brauchen Neustart, und
+  eine Extension kann die Browser-Oberfläche gar nicht umfärben. Der GTK-Theme
+  des Desktops (xsettings `/Net/ThemeName`) bleibt unangetastet.
+- **Diagnose:** `zentrale-browser-theme --status` (Datei, aufgelöster Modus,
+  was das Portal gerade meldet), `--resolve`/`--dry-run` seiteneffektfrei.
+
+**Tor Browser wird bewusst NICHT gekoppelt.** Tor vereinheitlicht Fingerprints;
+unter `resistFingerprinting` ist das Farbschema Teil der Angriffsfläche, und an
+Tors Prefs zu automatisieren macht genau den Browser unterscheidbarer, den man
+unauffällig haben will. Dort den eingebauten Dunkel-Schalter von Hand nutzen.
 
 **nvim-Kopplung (dieselbe Datei, seit 2026-07-25):** nvim folgt
 `~/.config/zentrale/theme` mit zwei EIGENEN Colorschemes (Code im Repo unter

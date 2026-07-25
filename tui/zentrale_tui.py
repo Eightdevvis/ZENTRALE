@@ -884,12 +884,15 @@ def run_ui(stdscr, store):
     cur_theme = resolved_theme()
     apply_theme(cur_theme)
 
-    # Das umgebende xfce4-terminal an dieses Theme koppeln: bei jedem
-    # Moduswechsel den Modus (auto/day/night) nach ~/.config/zentrale/theme
-    # schreiben und den Applier anstoßen (der färbt xfce4-terminal live um).
+    # Die UMGEBUNG an dieses Theme koppeln: bei jedem Moduswechsel den Modus
+    # (auto/day/night) nach ~/.config/zentrale/theme schreiben und die Applier
+    # anstoßen — Terminal (xfconf) und Browser (Portal-Farbschema; Brave zieht
+    # als Flatpak live nach). **nvim braucht keinen Anstoß**: es beobachtet die
+    # Datei selbst (fs_event + eigener Tick), siehe nvim/lua/zentrale_theme.
     # Ein systemd-User-Timer zieht dieselbe Datei zusätzlich jede Minute nach
     # (fängt die 05/21-Rotation, auch wenn die TUI gerade nicht läuft).
     _last_term_mode = [None]
+    _THEME_APPLIERS = ("zentrale-term-theme", "zentrale-browser-theme")
     def _push_term_theme(mode):
         if mode == _last_term_mode[0]:
             return
@@ -899,12 +902,18 @@ def run_ui(stdscr, store):
             os.makedirs(cfg, exist_ok=True)
             with open(os.path.join(cfg, "theme"), "w") as fh:
                 fh.write(mode + "\n")
-            # Applier best-effort im Hintergrund; braucht DISPLAY/xfconf.
+            # Applier best-effort im Hintergrund; brauchen DISPLAY (xfconf bzw.
+            # die Session-Bus-Verbindung zum Portal). Ein fehlender Applier
+            # (nicht installiert) darf die TUI nicht stören → je einzeln gekapselt.
             if os.environ.get("DISPLAY"):
-                subprocess.Popen(
-                    ["zentrale-term-theme"],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                )
+                for applier in _THEME_APPLIERS:
+                    try:
+                        subprocess.Popen(
+                            [applier],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        )
+                    except OSError:
+                        pass
         except Exception:
             pass
     _push_term_theme(theme_mode)
