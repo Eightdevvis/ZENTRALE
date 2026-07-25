@@ -12,6 +12,9 @@
 #       zentrale-term-theme    → xfce4-terminal live per xfconf-query umfärben
 #       zentrale-browser-theme → Portal-Farbschema setzen; Brave (Flatpak) zieht
 #                                live nach, UI + prefers-color-scheme
+#       zentrale-desktop-theme → GTK-/Fensterrahmen-Theme (day: Mint-L-Sand,
+#                                night: Mint-L-Darker-Aqua); --restore macht es
+#                                rueckgaengig (Vorzustand ist gesichert)
 #  2. Kopiert die systemd-USER-Units aus deploy/ nach ~/.config/systemd/user/
 #     (system-weite Units gehen nicht, das ist eine pro-User-Grafiksession).
 #     Alte Namen zentrale-term-theme.{service,timer} werden abgeräumt.
@@ -33,7 +36,7 @@ UNITS="$HOME/.config/systemd/user"
 mkdir -p "$BIN" "$UNITS" "$HOME/.config/zentrale"
 
 # 1. Applier-Symlinks
-for a in zentrale-term-theme zentrale-browser-theme; do
+for a in zentrale-term-theme zentrale-browser-theme zentrale-desktop-theme; do
   ln -sf "$REPO/scripts/$a" "$BIN/$a"
   echo "symlink: $BIN/$a -> $REPO/scripts/$a"
 done
@@ -58,6 +61,7 @@ echo "timer: $(systemctl --user is-active zentrale-theme.timer)"
 [ -f "$HOME/.config/zentrale/theme" ] || printf 'auto\n' > "$HOME/.config/zentrale/theme"
 "$BIN/zentrale-term-theme"    || true
 "$BIN/zentrale-browser-theme" || true
+"$BIN/zentrale-desktop-theme" || true
 echo "state: $(cat "$HOME/.config/zentrale/theme")  → angewendet"
 
 # 5. nvim mitnehmen (eigener Installer, weil er in ~/.config/nvim/plugin schreibt)

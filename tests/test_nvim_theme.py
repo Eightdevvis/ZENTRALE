@@ -121,7 +121,7 @@ def test_running_nvim_follows_file_change(theme_file, tmp_path):
         # und die Farben hängen wirklich um (nicht nur die Variable)
         bg = remote('luaeval(\'string.format("#%06x",'
                     ' vim.api.nvim_get_hl(0,{name="Normal"}).bg)\')')
-        assert bg == "#eee7d3"
+        assert bg == _palettes(theme_file)["paper"]["bg"]
     finally:
         proc.terminate()
         proc.wait(timeout=10)

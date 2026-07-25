@@ -69,49 +69,52 @@ M.paper = {
   name = "zentrale-paper",
   background = "light",
 
-  bg           = "#eee7d3",  -- Papier (tiefer als Terminal-Creme → Blattkante sichtbar)
-  bg_alt       = "#e5ddc4",  -- Karton: Floats/Pmenu/Statuszeile
-  bg_dim       = "#e7dfc8",  -- CursorLine
-  bg_sel       = "#d9e2c0",  -- Visual: Blattschatten
-  bg_match     = "#cfe3ad",
-  fg           = "#2e2b21",  -- Tinte (warmes Schwarz)
-  fg_dim       = "#5f5b49",  -- Operatoren/Klammern (5.5:1)
-  fg_faint     = "#706b59",  -- verblasster Bleistift (4.3:1 — Kommentare)
-  line_nr      = "#968f7a",
-  line_nr_cur  = "#3f6b27",
-  border       = "#c9c0a4",
+  -- SEPIA statt Creme (2. Runde): die erste Fläche #eee7d3 las sich noch grau.
+  -- Wärme (R−B) von 27 auf 44 gezogen, ohne ins Orange zu kippen; die ganze
+  -- Palette ist auf diese Fläche neu gerechnet (alle Rollen ≥4.8:1).
+  bg           = "#ece0c0",  -- Sepia-Papier (deutlich vom Terminal-Creme abgesetzt)
+  bg_alt       = "#e2d4ae",  -- Karton: Floats/Pmenu/Statuszeile
+  bg_dim       = "#e6dab6",  -- CursorLine
+  bg_sel       = "#d8dcae",  -- Visual: Blattschatten
+  bg_match     = "#d5e0a5",
+  fg           = "#33291c",  -- Sepia-Tinte (warmes Dunkelbraun)
+  fg_dim       = "#5f563f",  -- Operatoren/Klammern (5.5:1)
+  fg_faint     = "#6e6551",  -- verblasster Bleistift (4.4:1 — Kommentare)
+  line_nr      = "#94886b",
+  line_nr_cur  = "#44661d",
+  border       = "#c4b590",
 
-  -- Die Akzente sind gegenüber dem ersten Wurf ABGEDUNKELT (Farbton identisch):
-  -- auf Papier lagen Blattgrün/Pollen/Moos bei 2.9–4.1:1, also unter der
-  -- Lesbarkeitsschwelle. Jetzt alle ≥4.8:1 — botanische Tinte statt Pastell.
-  accent       = "#326384",  -- Wasser-Indigo → Funktionen
-  keyword      = "#8c3b60",  -- Beere
-  string       = "#3f6b27",  -- Blattgrün
-  number       = "#9a4a28",  -- Terracotta
-  type         = "#2f5d3a",  -- Tannentiefe
-  constant     = "#7a5733",  -- Rinde
-  property     = "#3c6a4e",  -- Salbei
-  special      = "#58692d",  -- Moos
-  title        = "#2f5d3a",
+  -- Botanische Tinte, nicht Pastell: alle Akzente sind gegen die Sepia-Fläche
+  -- gerechnet (≥4.8:1). Sie sind bewusst leicht wärmer als in der Creme-Runde,
+  -- damit nichts kalt gegen das Papier steht.
+  accent       = "#2f5f7d",  -- Wasser-Indigo → Funktionen
+  keyword      = "#8a3357",  -- Beere
+  string       = "#44661d",  -- Blattgrün (olivstichig)
+  number       = "#934726",  -- Terracotta
+  type         = "#2f5a33",  -- Tannentiefe
+  constant     = "#785222",  -- Rinde
+  property     = "#3a664b",  -- Salbei
+  special      = "#55652b",  -- Moos
+  title        = "#2f5a33",
 
-  error        = "#9c2b22",  -- Rost
-  warn         = "#7b6015",  -- Pollen
-  info         = "#326384",
-  hint         = "#4d6849",
-  ok           = "#3f6b27",
+  error        = "#972920",  -- Rost
+  warn         = "#765c14",  -- Pollen
+  info         = "#2f5f7d",
+  hint         = "#496346",
+  ok           = "#44661d",
 
-  search_bg    = "#e8d79a", search_fg     = "#2e2b21",
-  cursearch_bg = "#cfe3ad", cursearch_fg  = "#2e2b21",
-  todo_bg      = "#8c3b60", todo_fg       = "#f7f2e2",
+  search_bg    = "#e3cd8c", search_fg     = "#33291c",
+  cursearch_bg = "#cbdc9a", cursearch_fg  = "#33291c",
+  todo_bg      = "#8a3357", todo_fg       = "#f4ecd6",
 
-  diff_add     = "#d9e8c4",
-  diff_del     = "#f0d6cd",
-  diff_chg     = "#e2e2cf",
-  diff_txt     = "#c8ddaa",
+  diff_add     = "#d5e2b2",
+  diff_del     = "#eccdbe",
+  diff_chg     = "#ded9bb",
+  diff_txt     = "#c3d798",
 
-  status_bg    = "#ded5b8", status_fg     = "#3b3729",
-  status_nc_bg = "#e5ddc4", status_nc_fg  = "#7a7460",
-  pmenu_sel_bg = "#cfe3ad", pmenu_sel_fg  = "#2e2b21",
+  status_bg    = "#d9c9a2", status_fg     = "#3d3325",
+  status_nc_bg = "#e2d4ae", status_nc_fg  = "#756a52",
+  pmenu_sel_bg = "#cbdc9a", pmenu_sel_fg  = "#33291c",
 }
 
 -- Kommentare kursiv (beide Paletten) — im Papier-Modus das „Notiz"-Gefühl,

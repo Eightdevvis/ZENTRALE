@@ -88,3 +88,52 @@ def test_same_resolve_rule_as_terminal_applier(theme_file):
     brow = open(APPLIER).read()
     for rule in ('-ge 5', '-lt 21'):
         assert rule in term and rule in brow, "05/21-Regel driftet: %s" % rule
+
+
+# ── Desktop-Applier (scripts/zentrale-desktop-theme) ──────────────────────
+DESKTOP = os.path.join(ROOT, "scripts", "zentrale-desktop-theme")
+
+
+def run_desktop(theme_file, *args):
+    env = dict(os.environ, ZENTRALE_THEME_FILE=str(theme_file))
+    return subprocess.run(["bash", DESKTOP, *args], capture_output=True,
+                          text=True, env=env, timeout=20, check=True).stdout.strip()
+
+
+@pytest.mark.parametrize("mode,gtk,wm", [
+    ("night", "Mint-L-Darker-Aqua", "Mint-L-Dark-Aqua"),
+    ("day", "Mint-L-Sand", "Mint-L-Sand"),
+])
+def test_desktop_theme_pair(theme_file, mode, gtk, wm):
+    """night = dunkelste Variante + kühler Akzent (cyber-nah),
+    day = warmer Ocker (Sepia/Papier). "Darker" bringt kein xfwm4 mit,
+    deshalb nachts Dark für den Rahmen."""
+    theme_file.write_text(mode + "\n")
+    assert run_desktop(theme_file, "--dry-run") == "%s gtk=%s wm=%s" % (mode, gtk, wm)
+
+
+def test_desktop_pair_is_overridable(theme_file):
+    theme_file.write_text("night\n")
+    env = dict(os.environ, ZENTRALE_THEME_FILE=str(theme_file),
+               ZENTRALE_GTK_NIGHT="Eigenes-Theme", ZENTRALE_WM_NIGHT="Eigener-Rahmen")
+    out = subprocess.run(["bash", DESKTOP, "--dry-run"], capture_output=True,
+                         text=True, env=env, timeout=20, check=True).stdout.strip()
+    assert out == "night gtk=Eigenes-Theme wm=Eigener-Rahmen"
+
+
+def test_desktop_themes_are_installed(theme_file):
+    """Die gewählten Themes müssen es auf dieser Maschine wirklich geben —
+    sonst fiele GTK stumm auf Adwaita zurück."""
+    for mode in ("day", "night"):
+        theme_file.write_text(mode + "\n")
+        parts = dict(p.split("=", 1) for p in
+                     run_desktop(theme_file, "--dry-run").split()[1:])
+        assert os.path.isdir("/usr/share/themes/%s" % parts["gtk"]), parts["gtk"]
+        assert os.path.isdir("/usr/share/themes/%s/xfwm4" % parts["wm"]), parts["wm"]
+
+
+def test_desktop_all_appliers_share_the_clock_rule(theme_file):
+    rule_files = ["zentrale-term-theme", "zentrale-browser-theme", "zentrale-desktop-theme"]
+    for f in rule_files:
+        src = open(os.path.join(ROOT, "scripts", f)).read()
+        assert "-ge 5" in src and "-lt 21" in src, "05/21-Regel fehlt in %s" % f

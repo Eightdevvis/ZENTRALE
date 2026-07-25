@@ -1,5 +1,5 @@
 [Unit]
-Description=ZENTRALE: Umgebung an Tag/Nacht-Theme koppeln (Terminal + Browser)
+Description=ZENTRALE: Umgebung an Tag/Nacht-Theme koppeln (Terminal, Browser, Desktop)
 After=graphical-session.target
 
 [Service]
@@ -8,3 +8,4 @@ Type=oneshot
 # Theme-Datei selbst (fs_event + eigener Tick), siehe nvim/lua/zentrale_theme.
 ExecStart=%h/.local/bin/zentrale-term-theme
 ExecStart=%h/.local/bin/zentrale-browser-theme
+ExecStart=%h/.local/bin/zentrale-desktop-theme

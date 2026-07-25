@@ -126,6 +126,26 @@ Portal-Einstellung; welches gsettings-Schema das Portal liest, hängt am Backend
 - **Diagnose:** `zentrale-browser-theme --status` (Datei, aufgelöster Modus,
   was das Portal gerade meldet), `--resolve`/`--dry-run` seiteneffektfrei.
 
+**Desktop-Kopplung (XFCE, seit 2026-07-25):** `scripts/zentrale-desktop-theme`
+setzt GTK-Theme (`xsettings /Net/ThemeName`) und Fensterrahmen
+(`xfwm4 /general/theme`). **Das ist kein Beiwerk, sondern der sichtbare Teil der
+Browser-Kopplung:** Brave steht auf „Use GTK" und holt seine Oberflächenfarben
+aus dem GTK-Theme — bei fest dunklem Theme bewegt das Portal-Signal nur noch die
+Seiten, und man „erkennt nicht viel" (genau Sashas Beobachtung).
+
+- **Paare, angelehnt an die nvim-Paletten** (Mint hat kein Neon, also die
+  nächstverwandten Stock-Themes): `night` → **Mint-L-Darker-Aqua** (dunkelste
+  Variante, kühl-cyaner Akzent `#6cabcd` ≈ cyber), `day` → **Mint-L-Sand**
+  (warmer Ocker `#c8ac69` ≈ Sepia/Papier). Rahmen laufen mit; „Darker" bringt
+  kein `xfwm4` mit → nachts `Mint-L-Dark-Aqua`.
+- **Überstimmbar per Env** (`ZENTRALE_GTK_DAY/_NIGHT`, `ZENTRALE_WM_DAY/_NIGHT`)
+  — Paar tauschen, ohne das Skript anzufassen.
+- **Umkehrbar:** der Vorzustand wird beim ersten Lauf nach
+  `~/.config/zentrale/desktop-theme.bak` gesichert (hier: GTK
+  `Mint-L-Darker-Teal`, Rahmen `Mint-L-Dark-Red`), `--restore` setzt zurück.
+- **Icons bleiben unangetastet** (Sashas `HighContrast`): in der Mint-Reihe gibt
+  es kein passendes hell/dunkel-Gegenstück, ein Wechsel wäre Willkür.
+
 **Tor Browser wird bewusst NICHT gekoppelt.** Tor vereinheitlicht Fingerprints;
 unter `resistFingerprinting` ist das Farbschema Teil der Angriffsfläche, und an
 Tors Prefs zu automatisieren macht genau den Browser unterscheidbarer, den man

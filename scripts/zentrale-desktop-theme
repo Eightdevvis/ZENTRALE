@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# zentrale-desktop-theme — koppelt den XFCE-Desktop an ZENTRALEs Tag/Nacht-Theme.
+#
+# Quelle der Wahrheit ist DIESELBE Datei wie bei Terminal, nvim und Browser:
+#   ~/.config/zentrale/theme  (auto | day | night), auto → 05–21 Uhr hell.
+#
+# WARUM auch der Desktop: Brave steht auf "Use GTK" und holt sich seine
+# Oberflächenfarben damit aus dem GTK-Theme. Solange das fest dunkel ist, sieht
+# man vom Portal-Signal fast nichts — es bewegt dann nur noch die Seiten. Der
+# Desktop ist also nicht Beiwerk, sondern der sichtbare Teil der Browser-Kopplung.
+#
+# THEMEN-WAHL — angelehnt an die nvim-Paletten (cyber/paper), aus Mints Bestand:
+#   night → Mint-L-Darker-Aqua  (dunkelste Variante, kühl-cyaner Akzent #6cabcd
+#                                → nächstverwandt zu cyber-Neon; Mint hat kein Neon)
+#   day   → Mint-L-Sand         (warmer Ocker-Akzent #c8ac69 → Sepia/Papier)
+# Rahmen (xfwm4) laufen mit; "Darker" bringt kein xfwm4 mit, nachts nimmt der
+# Rahmen deshalb Mint-L-Dark-Aqua.
+# Alles über Env überstimmbar, ohne dieses Skript anzufassen:
+#   ZENTRALE_GTK_DAY / ZENTRALE_GTK_NIGHT / ZENTRALE_WM_DAY / ZENTRALE_WM_NIGHT
+#
+# ICONS bleiben bewusst unangetastet (Sashas HighContrast-Set) — es gibt in der
+# Mint-Reihe kein passendes helles/dunkles Gegenstück, ein Wechsel wäre Willkür.
+#
+# UMKEHRBAR: beim ERSTEN Lauf werden die vorgefundenen Werte nach
+# ~/.config/zentrale/desktop-theme.bak gesichert; `--restore` setzt sie zurück.
+set -u
+
+STATE="${ZENTRALE_THEME_FILE:-$HOME/.config/zentrale/theme}"
+BAK="${ZENTRALE_DESKTOP_BAK:-$HOME/.config/zentrale/desktop-theme.bak}"
+
+GTK_DAY="${ZENTRALE_GTK_DAY:-Mint-L-Sand}"
+GTK_NIGHT="${ZENTRALE_GTK_NIGHT:-Mint-L-Darker-Aqua}"
+WM_DAY="${ZENTRALE_WM_DAY:-Mint-L-Sand}"
+WM_NIGHT="${ZENTRALE_WM_NIGHT:-Mint-L-Dark-Aqua}"
+
+resolve() {
+  local mode="auto"
+  [ -r "$STATE" ] && mode="$(tr -d '[:space:]' < "$STATE")"
+  case "$mode" in
+    day|night) printf '%s\n' "$mode" ;;
+    *)  h=$((10#$(date +%H)))          # 10# → keine Oktal-Falle bei 08/09
+        if [ "$h" -ge 5 ] && [ "$h" -lt 21 ]; then printf 'day\n'; else printf 'night\n'; fi ;;
+  esac
+}
+
+RESOLVED="$(resolve)"
+if [ "$RESOLVED" = "night" ]; then GTK="$GTK_NIGHT"; WM="$WM_NIGHT"
+else                               GTK="$GTK_DAY";   WM="$WM_DAY"; fi
+
+get() { xfconf-query -c "$1" -p "$2" 2>/dev/null; }
+set_prop() { xfconf-query -c "$1" -p "$2" -s "$3" 2>/dev/null; }
+
+case "${1:-}" in
+  --resolve) printf '%s\n' "$RESOLVED"; exit 0 ;;
+  --dry-run) printf '%s gtk=%s wm=%s\n' "$RESOLVED" "$GTK" "$WM"; exit 0 ;;
+  --status)
+    printf 'theme-datei : %s\n' "$STATE"
+    printf 'aufgeloest  : %s -> gtk=%s wm=%s\n' "$RESOLVED" "$GTK" "$WM"
+    printf 'jetzt aktiv : gtk=%s wm=%s\n' \
+      "$(get xsettings /Net/ThemeName)" "$(get xfwm4 /general/theme)"
+    [ -f "$BAK" ] && { printf 'sicherung   : %s\n' "$BAK"; cat "$BAK"; } \
+                  || printf 'sicherung   : (noch keine)\n'
+    exit 0 ;;
+  --restore)
+    [ -f "$BAK" ] || { echo "keine Sicherung unter $BAK" >&2; exit 1; }
+    # shellcheck disable=SC1090
+    . "$BAK"
+    [ -n "${PREV_GTK:-}" ] && set_prop xsettings /Net/ThemeName "$PREV_GTK"
+    [ -n "${PREV_WM:-}"  ] && set_prop xfwm4     /general/theme "$PREV_WM"
+    echo "zurückgesetzt: gtk=${PREV_GTK:-?} wm=${PREV_WM:-?}"
+    exit 0 ;;
+esac
+
+command -v xfconf-query >/dev/null 2>&1 || exit 0   # kein xfce → still raus
+
+# Einmalige Sicherung des Vorzustands (nur wenn noch keine da ist).
+if [ ! -f "$BAK" ]; then
+  mkdir -p "$(dirname "$BAK")" 2>/dev/null
+  { printf 'PREV_GTK=%s\n' "$(get xsettings /Net/ThemeName)"
+    printf 'PREV_WM=%s\n'  "$(get xfwm4 /general/theme)"; } > "$BAK" 2>/dev/null
+fi
+
+# Nur setzen, wenn ein Theme wirklich installiert ist — sonst stünde der Desktop
+# auf einem Namen, den es nicht gibt (GTK fällt dann auf Adwaita zurück).
+[ -d "/usr/share/themes/$GTK" ] || [ -d "$HOME/.themes/$GTK" ] \
+  && set_prop xsettings /Net/ThemeName "$GTK"
+[ -d "/usr/share/themes/$WM/xfwm4" ] || [ -d "$HOME/.themes/$WM/xfwm4" ] \
+  && set_prop xfwm4 /general/theme "$WM"
+
+exit 0

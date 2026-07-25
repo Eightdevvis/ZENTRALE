@@ -886,13 +886,15 @@ def run_ui(stdscr, store):
 
     # Die UMGEBUNG an dieses Theme koppeln: bei jedem Moduswechsel den Modus
     # (auto/day/night) nach ~/.config/zentrale/theme schreiben und die Applier
-    # anstoßen — Terminal (xfconf) und Browser (Portal-Farbschema; Brave zieht
-    # als Flatpak live nach). **nvim braucht keinen Anstoß**: es beobachtet die
+    # anstoßen — Terminal (xfconf), Browser (Portal-Farbschema; Brave zieht als
+    # Flatpak live nach) und Desktop (GTK-/Rahmen-Theme, was Brave mit "Use GTK"
+    # als Oberflächenfarbe übernimmt). **nvim braucht keinen Anstoß**: es beobachtet die
     # Datei selbst (fs_event + eigener Tick), siehe nvim/lua/zentrale_theme.
     # Ein systemd-User-Timer zieht dieselbe Datei zusätzlich jede Minute nach
     # (fängt die 05/21-Rotation, auch wenn die TUI gerade nicht läuft).
     _last_term_mode = [None]
-    _THEME_APPLIERS = ("zentrale-term-theme", "zentrale-browser-theme")
+    _THEME_APPLIERS = ("zentrale-term-theme", "zentrale-browser-theme",
+                       "zentrale-desktop-theme")
     def _push_term_theme(mode):
         if mode == _last_term_mode[0]:
             return
