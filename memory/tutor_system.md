@@ -338,9 +338,9 @@ Persistiert pro Sprache in `data/<lang>/game.json` (Laufzeit, gitignored):
   (das driftet). Jede Karte hat `due` = „ab Karten-Zahl `seen` wieder fällig"; `_pick`
   nimmt die fällige mit kleinstem `due` (Review vor Neu bei Gleichstand), neue Wörter
   (`due`=Index) interleaven dazwischen. **Erste Sicht eines Worts** (`shown`-Flag,
-  `asv_show`): Übersetzung kommt automatisch (sub='learn', nicht abhakbar) — reiner
-  Lernmoment, das Wort kommt per SR (Lapse, +3) gleich nochmal zum echten Abfragen.
-  **Expanding retrieval** (belegt für Kurzzeit-
+  `asv_show`): Übersetzung kommt automatisch (eigener sub=`'first'`) UND ist direkt
+  **abhakbar** (kein Auto-Advance) — kennt man's schon, gleich abhaken; sonst Repeat
+  (→ sub=`'learn'`, nicht abhakbar, Lapse +3). **Expanding retrieval** (belegt für Kurzzeit-
   Retention, Landauer&Bjork; ~2× wie Anki/Leitner): **Abhaken** (gewusst) → Streak
   hoch, `due=seen+SR_LADDER[streak]` mit `SR_LADDER=(7,14,25)` für 1./2./3. korrekt;
   nach dem 3. Review **graduiert** das Wort aus der Runde. **Repeat** (nicht gewusst) →
@@ -348,8 +348,8 @@ Persistiert pro Sprache in `data/<lang>/game.json` (Laufzeit, gitignored):
   `asv_lapse`: `due=seen+SR_LAPSE(3)`, Streak zurück auf 0. **Next** = überspringen →
   `due=seen+SR_SKIP(5)`. Die Abstände sind **Minimums** — bei vielen aktiven Wörtern
   strecken sie sich (1 Slot/Karte), das ist gewollt (nie zu früh = effortful retrieval).
-- **Münze NUR zufällig** beim Abhaken (`COIN_CHANCE=0.35`, variable reward — *nicht*
-  pro Wort).
+- **Münze NUR zufällig** und **nur beim ERSTEN Abhaken** eines Worts (`COIN_CHANCE=0.35`,
+  an `first_known` gekoppelt) — SR-Wiederholungen geben KEINE Münzen (kein Coin-Farming).
 - **Kisten** an **distinkten Wort-Meilensteinen** (15/35/50/70, `crate_milestones` mit
   `CRATE_GAPS=(15,20)` abwechselnd) — nur beim ERSTEN Wissen eines Worts, damit die
   Kisten-Symbole exakt auf der Leiste (`got`) sitzen und Wiederholungen keine Kisten

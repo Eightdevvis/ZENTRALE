@@ -587,8 +587,9 @@ def assessment_answer(lang: str, word: str, result: str) -> dict:
             e['confirmed'] = True
             e['correct_use'] = max(int(e.get('correct_use', 0) or 0), CONFIRM_THRESHOLD)
             g['reviews'] = int(g.get('reviews', 0)) + 1
-            # Münze NUR zufällig (variable reward) — bei jedem Abhaken
-            if random.random() < COIN_CHANCE:
+            # Münze NUR zufällig UND nur beim ERSTEN Wissen eines Worts (Sasha):
+            # SR-Wiederholungen geben KEINE Münzen mehr (sonst Coin-Farming).
+            if first_known and random.random() < COIN_CHANCE:
                 coin_gain = random.randint(COIN_MIN, COIN_MAX)
                 g['coins'] = int(g.get('coins', 0)) + coin_gain
             # Kiste an DISTINKTEN Wort-Meilensteinen (15/35/50/70) — nur beim

@@ -1120,12 +1120,18 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
     if speaking:
         ctl(fonts['hud'].render('◗ Lucía spricht …', True, ASSESS_ACC), cy - 2)
 
-    if asv.get('sub') == 'learn':
+    sub = asv.get('sub')
+    if sub == 'learn':                      # nach Repeat (nicht gewusst): nicht abhakbar
         ctl(fonts['bubble'].render('= ' + (cur.get('de') or '…'), True, ASSESS_GOLD), cy + 26)
         ctl(fonts['hud'].render('— merk’s dir, kommt gleich nochmal —', True, HUD_DIM), cy + 58)
         _hint_row(screen, fonts['hud'], w, cy + 88,
                   [('R', 'nochmal hören'), ('→', 'weiter')], center_x=ccx)
-    else:
+    elif sub == 'first':                    # erste Sicht: Übersetzung sichtbar, ABHAKBAR
+        ctl(fonts['bubble'].render('= ' + (cur.get('de') or '…'), True, ASSESS_GOLD), cy + 26)
+        ctl(fonts['hud'].render('neu — kannst du’s schon? sonst Repeat', True, HUD_DIM), cy + 58)
+        _hint_row(screen, fonts['hud'], w, cy + 88,
+                  [('Leer', 'Abhaken ✓'), ('R', 'Repeat'), ('N', 'Next')], center_x=ccx)
+    else:                                   # ask
         ctl(fonts['bubble'].render('Kennst du das Wort?', True, ASSESS_INK2), cy + 26)
         _hint_row(screen, fonts['hud'], w, cy + 82,
                   [('Leer', 'Abhaken ✓'), ('R', 'Repeat'), ('N', 'Next')], center_x=ccx)
@@ -1342,10 +1348,11 @@ def main():
             first_show = cur is not None and not cur.get('shown')
             if cur is not None:
                 cur['shown'] = True
-            if first_show:
-                v['sub'] = 'learn'; v['learn_hold'] = 3.0   # erste Sicht: Bedeutung zeigen
-            else:
-                v['sub'] = 'ask'; v['learn_hold'] = None
+            # Erste Sicht: Übersetzung direkt zeigen ('first'), aber ABHAKBAR und ohne
+            # Auto-Advance (kennt man's schon, gleich abhaken). Repeat-'learn' bleibt
+            # das nicht-abhakbare „nicht gewusst".
+            v['sub'] = 'first' if first_show else 'ask'
+            v['learn_hold'] = None
             v['cur'] = cur
             v['seen'] = v.get('seen', 0) + 1        # eine Karte mehr gezeigt
             word = cur['word'] if cur else None
