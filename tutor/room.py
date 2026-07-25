@@ -859,6 +859,75 @@ ASSESS_TOP  = (28, 36, 52)
 ASSESS_BOT  = (40, 50, 70)
 ASSESS_ACC  = (150, 200, 230)     # kühles Blau, Fortschritt
 ASSESS_GOLD = (240, 206, 120)     # warmer Pop: Ziel/Freischaltung
+COIN_HI     = (246, 214, 128)     # Münze hell
+COIN_LO     = (206, 158, 66)      # Münze dunkel
+
+# Spiel-Schicht: Lucía baut sich beim Lernen aus Teilen zusammen. Die Teile
+# „schweben" beim Erhalt aus einer zufälligen Richtung herein und rasten an
+# ihren Platz (Sashas Vorgabe: keine eigene Box, sie arrangieren sich selbst).
+# Namen decken sich mit tutor/tools.py::_PARTS.
+_PART_SCATTER = {'hair': (-72, -46), 'head': (64, -52), 'arml': (-96, 18),
+                 'armr': (98, 12), 'dress': (6, 86), 'legl': (-54, 74),
+                 'legr': (58, 80)}
+_PRIO_LOCAL = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+
+def _draw_coin(surf, cx, cy, r):
+    """Kleine Münze (Farbverlauf angedeutet) — Währungs-HUD."""
+    pygame.draw.circle(surf, COIN_LO, (int(cx), int(cy)), int(r))
+    pygame.draw.circle(surf, COIN_HI, (int(cx), int(cy)), int(r), max(1, int(r * 0.28)))
+    pygame.draw.circle(surf, COIN_HI, (int(cx - r * 0.3), int(cy - r * 0.3)), max(1, int(r * 0.28)))
+
+
+def _draw_lucia(surf, cx, cy, s, parts, anim=None):
+    """Lucía aus ihren erhaltenen Teilen zeichnen (pygame-Primitive, gleiche
+    Optik wie die Persona). `parts` = erhaltene Teile; `anim=(name, p)` lässt EIN
+    frisches Teil aus seiner Streu-Richtung an den Platz gleiten (p: 0→1)."""
+    pset = set(parts or [])
+
+    def off(name):
+        if anim and anim[0] == name:
+            p = max(0.0, min(1.0, anim[1])); e = 1 - (1 - p) * (1 - p)   # easeOut
+            sx, sy = _PART_SCATTER.get(name, (0, -40))
+            return ((1 - e) * sx * s, (1 - e) * sy * s)
+        return (0.0, 0.0)
+
+    # Boden-Schatten (nur wenn schon etwas da ist)
+    if pset:
+        sh = pygame.Surface((int(70 * s), int(16 * s)), pygame.SRCALPHA)
+        pygame.draw.ellipse(sh, (0, 0, 0, 60), sh.get_rect())
+        surf.blit(sh, (int(cx - 35 * s), int(cy + 88 * s)))
+    # Beine
+    for nm, dx in (('legl', -14), ('legr', 5)):
+        if nm in pset:
+            ox, oy = off(nm)
+            pygame.draw.rect(surf, LIMB, (cx + dx * s + ox, cy + 42 * s + oy, 9 * s, 46 * s), border_radius=int(4 * s))
+    # Kleid (Trapez)
+    if 'dress' in pset:
+        ox, oy = off('dress')
+        pygame.draw.polygon(surf, DRESS, [(cx - 12 * s + ox, cy - 20 * s + oy), (cx + 12 * s + ox, cy - 20 * s + oy),
+                                          (cx + 22 * s + ox, cy + 44 * s + oy), (cx - 22 * s + ox, cy + 44 * s + oy)])
+        pygame.draw.polygon(surf, DRESS_DK, [(cx - 12 * s + ox, cy - 20 * s + oy), (cx - 6 * s + ox, cy - 20 * s + oy),
+                                             (cx - 14 * s + ox, cy + 44 * s + oy), (cx - 22 * s + ox, cy + 44 * s + oy)])
+    # Arme
+    for nm, dx in (('arml', -26), ('armr', 18)):
+        if nm in pset:
+            ox, oy = off(nm)
+            pygame.draw.rect(surf, LIMB, (cx + dx * s + ox, cy - 14 * s + oy, 8 * s, 46 * s), border_radius=int(4 * s))
+    # Haar (hinter dem Kopf)
+    if 'hair' in pset:
+        ox, oy = off('hair')
+        pygame.draw.circle(surf, HAIR, (int(cx + ox), int(cy - 42 * s + oy)), int(16 * s))
+    # Kopf + kleines Gesicht
+    if 'head' in pset:
+        ox, oy = off('head')
+        hx, hy = cx + ox, cy - 38 * s + oy
+        pygame.draw.circle(surf, SKIN, (int(hx), int(hy)), int(15 * s))
+        if 'hair' in pset:   # Ponyfransen, wenn Haar schon da
+            pygame.draw.rect(surf, SKIN, (hx - 15 * s, hy, 30 * s, 14 * s))
+        for sx in (-5 * s, 5 * s):
+            pygame.draw.circle(surf, HAIR, (int(hx + sx), int(hy + 1 * s)), max(1, int(2 * s)))
+        pygame.draw.arc(surf, DRESS_DK, (hx - 5 * s, hy + 4 * s, 10 * s, 7 * s), math.pi, 2 * math.pi, max(1, int(1.6 * s)))
 
 _CAT_DE = {'pronoun':'Pronomen','verb_core':'Kernverb','verb_action':'Verb',
            'question':'Fragewort','spatial':'Ort','time':'Zeit','response':'Antwort',
@@ -868,17 +937,55 @@ _CAT_DE = {'pronoun':'Pronomen','verb_core':'Kernverb','verb_action':'Verb',
            'politeness':'Höflichkeit','greeting':'Gruß'}
 
 
-def _hint_row(screen, font, w, y, items):
-    """Zentrierte Reihe [Taste] Label — sagt dem Nutzer, was er tun kann."""
+def _hint_row(screen, font, w, y, items, center_x=None):
+    """Reihe [Taste] Label — sagt dem Nutzer, was er tun kann. Standard mittig
+    auf w; `center_x` verschiebt die Reihe (z.B. unter die links sitzende Karte)."""
     gap = 18
+    cx = w // 2 if center_x is None else center_x
     widths = [(font.size(k)[0] + 16) + 8 + font.size(l)[0] for k, l in items]
-    x = w // 2 - (sum(widths) + gap * (len(items) - 1)) // 2
+    x = cx - (sum(widths) + gap * (len(items) - 1)) // 2
     for (k, l), wd in zip(items, widths):
         ks = font.render(k, True, (16, 22, 32)); kw = ks.get_width() + 16
         pygame.draw.rect(screen, ASSESS_ACC, (x, y, kw, font.get_height() + 8), border_radius=7)
         screen.blit(ks, (x + 8, y + 4))
         screen.blit(font.render(l, True, (206, 216, 230)), (x + kw + 8, y + 4))
         x += wd + gap
+
+
+def _draw_coin_hud(screen, fonts, w, asv):
+    """Münz-Zähler oben rechts + „+N"-Pop, wenn gerade eine Münze fiel."""
+    coins = int(asv.get('coins', 0))
+    r = 9; cx = w - 20 - r; cy = 22
+    txt = fonts['big'].render(str(coins), True, COIN_HI)
+    tx = cx - r - 8 - txt.get_width()
+    screen.blit(txt, (tx, cy - txt.get_height() // 2))
+    _draw_coin(screen, cx, cy, r)
+    pop = asv.get('coin_pop')
+    if pop and pop.get('t', 0) > 0:
+        rise = int((1.0 - pop['t']) * 20)
+        pr = fonts['hud'].render('+%d' % pop['n'], True, COIN_HI)
+        pr.set_alpha(int(255 * min(1.0, pop['t'])))
+        screen.blit(pr, (tx - pr.get_width() - 6, cy - 8 - rise))
+
+
+def _draw_reveal(screen, fonts, w, h, asv):
+    """Kisten-Ergebnis kurz einblenden (Teil ODER Münzen — beides zufällig)."""
+    rv = asv.get('reveal')
+    if not rv:
+        return
+    box_w, box_h = 300, 96
+    bx, by = w // 2 - box_w // 2, 96
+    panel = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+    panel.fill((26, 32, 46, 235))
+    pygame.draw.rect(panel, ASSESS_GOLD, panel.get_rect(), width=2, border_radius=14)
+    screen.blit(panel, (bx, by))
+    head = fonts['big'].render('▣  Kiste!', True, ASSESS_GOLD)
+    screen.blit(head, (w // 2 - head.get_width() // 2, by + 14))
+    if rv.get('kind') == 'part':
+        sub = fonts['log'].render('ein neues Teil von Lucía', True, HUD_FG)
+    else:
+        sub = fonts['log'].render('+%d Münzen' % int(rv.get('amount', 0)), True, COIN_HI)
+    screen.blit(sub, (w // 2 - sub.get_width() // 2, by + 54))
 
 
 def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
@@ -889,13 +996,14 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
 
     phase = asv.get('phase', 'welcome')
     got = asv.get('got', 0); total = asv.get('total', 0) or 76; ratio = asv.get('ratio', 0.0)
+    parts = asv.get('parts', []); parts_total = asv.get('parts_total', 7)
     cy = h // 2 + 6
 
     def ctr(surf, y): screen.blit(surf, (w // 2 - surf.get_width() // 2, y))
 
-    # Fortschrittsbalken (immer, außer Willkommen)
+    # Fortschrittsbalken + Münz-HUD (immer, außer Willkommen)
     if phase != 'welcome':
-        bw = min(560, w - 120); bx = w // 2 - bw // 2; by = 52; bh = 13
+        bw = min(520, w - 220); bx = 60; by = 52; bh = 13
         pygame.draw.rect(screen, (20, 26, 38), (bx, by, bw, bh), border_radius=7)
         fw = int(bw * max(0.0, min(1.0, ratio)))
         if fw > 0:
@@ -904,17 +1012,29 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
         pygame.draw.line(screen, ASSESS_GOLD, (mx, by - 4), (mx, by + bh + 4), 2)
         screen.blit(fonts['hud'].render(f'{got} / {total} · {int(round(100*ratio))}%', True, HUD_FG),
                     (bx, by - fonts['hud'].get_height() - 5))
-        goal = fonts['hud'].render('Lucía ab 75 %', True, ASSESS_GOLD)
-        screen.blit(goal, (bx + bw - goal.get_width(), by - fonts['hud'].get_height() - 5))
+        screen.blit(fonts['hud'].render('Lucía ab 75 %', True, ASSESS_GOLD), (mx + 6, by + bh + 4))
+        _draw_coin_hud(screen, fonts, w, asv)
 
     if phase == 'welcome':
         ctr(fonts['word'].render('Hola', True, (236, 238, 246)), cy - 150)
         ctr(fonts['big'].render('Ich bin Lucía.', True, (232, 236, 244)), cy - 78)
-        for i, ln in enumerate(['Zuerst gehen wir zusammen die ~75 wichtigsten Wörter durch.',
-                                'Was du kannst, hakst du ab. Bei 75 % reden wir dann richtig.']):
+        for i, ln in enumerate(['Zuerst gehen wir zusammen die wichtigsten Wörter durch — hak ab, was du kannst.',
+                                'Dabei sammelst du Münzen und puzzelst mich Stück für Stück zusammen.']):
             ctr(fonts['log'].render(ln, True, HUD_DIM), cy - 22 + i * 26)
         _hint_row(screen, fonts['hud'], w, cy + 82, [('Enter', 'Los geht’s')])
         return
+
+    # Lucía baut sich rechts zusammen (schwebende Teile). Bei Freischaltung komplett.
+    fig_x = int(w * 0.82); fig_y = int(h * 0.52); fig_s = max(0.8, min(1.5, h / 620.0))
+    show_parts = _PART_SCATTER.keys() if phase == 'unlock' else parts
+    anim = None
+    np = asv.get('new_part')
+    if np and np.get('t', 1) < 1.0:
+        anim = (np['name'], np['t'])
+    _draw_lucia(screen, fig_x, fig_y, fig_s, show_parts, anim)
+    cap = 'Lucía · komplett' if phase == 'unlock' else f'Lucía · {len(parts)}/{parts_total} Teile'
+    capr = fonts['hud'].render(cap, True, HUD_DIM)
+    screen.blit(capr, (fig_x - capr.get_width() // 2, fig_y + int(96 * fig_s)))
 
     if phase == 'unlock':
         ctr(fonts['word'].render('¡Hola!', True, ASSESS_GOLD), cy - 96)
@@ -924,27 +1044,32 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
         _hint_row(screen, fonts['hud'], w, cy + 78, [('Enter', 'zu Lucía')])
         return
 
-    # phase == 'card'
+    # phase == 'card' — die Karte etwas links vom Zentrum, damit sie Lucía nicht überlappt
+    ccx = int(w * 0.40)
+
+    def ctl(surf, y): screen.blit(surf, (ccx - surf.get_width() // 2, y))
+
     cur = asv.get('cur')
     if not cur:
-        ctr(fonts['big'].render('…', True, HUD_DIM), cy)
+        ctl(fonts['big'].render('…', True, HUD_DIM), cy)
+        _draw_reveal(screen, fonts, w, h, asv)
         return
     cat = _CAT_DE.get(cur.get('category', ''), '')
     if cat:
-        lab = fonts['hud'].render(cat.upper(), True, ASSESS_ACC)
-        ctr(lab, cy - 108)
-    ctr(fonts['word'].render(cur.get('word', ''), True, (238, 240, 248)), cy - 74)
+        ctl(fonts['hud'].render(cat.upper(), True, ASSESS_ACC), cy - 108)
+    ctl(fonts['word'].render(cur.get('word', ''), True, (238, 240, 248)), cy - 74)
     if speaking:
-        ctr(fonts['hud'].render('◗ Lucía spricht …', True, ASSESS_ACC), cy - 2)
+        ctl(fonts['hud'].render('◗ Lucía spricht …', True, ASSESS_ACC), cy - 2)
 
     if asv.get('sub') == 'learn':
-        ctr(fonts['bubble'].render('= ' + (cur.get('de') or '…'), True, ASSESS_GOLD), cy + 26)
-        _hint_row(screen, fonts['hud'], w, cy + 82,
-                  [('Enter', 'verstanden'), ('K', 'kann ich'), ('R', 'nochmal')])
-    else:  # ask
-        ctr(fonts['bubble'].render('Kennst du das Wort?', True, (210, 218, 230)), cy + 26)
-        _hint_row(screen, fonts['hud'], w, cy + 82,
-                  [('K', 'kenne ich'), ('N', 'zeig mir'), ('R', 'nochmal hören')])
+        ctl(fonts['bubble'].render('= ' + (cur.get('de') or '…'), True, ASSESS_GOLD), cy + 26)
+    else:
+        ctl(fonts['bubble'].render('Kennst du das Wort?', True, (210, 218, 230)), cy + 26)
+    # Tasten: Abhaken (primär) · Repeat · Next
+    _hint_row(screen, fonts['hud'], w, cy + 82,
+              [('Leer', 'Abhaken ✓'), ('R', 'Repeat'), ('N', 'Next')], center_x=ccx)
+
+    _draw_reveal(screen, fonts, w, h, asv)
 
 
 def main():
@@ -1125,37 +1250,51 @@ def main():
                 music_duck(False)
         threading.Thread(target=_s, daemon=True).start()
 
+    def _pick(v):
+        """Nächste Karte per SRS: fällige (due ≤ seen) zuerst, sonst die mit dem
+        kleinsten due; Gleichstand nach Priorität. Reine Funktion (kein Lock)."""
+        work = v.get('work') or []
+        if not work:
+            return None
+        seen = v.get('seen', 0)
+        ready = [c for c in work if c.get('due', 0) <= seen]
+        pool = sorted(ready or work,
+                      key=lambda c: (c.get('due', 0), _PRIO_LOCAL.get(c.get('priority'), 9)))
+        return pool[0]
+
     def asv_show():
-        """Aktuelle Karte setzen (sub='ask') und vorlesen."""
+        """Aktuelle Karte (per SRS gewählt) setzen (sub='ask') und vorlesen."""
         with S['lock']:
             v = S['asv']
             if not v or not v.get('work'):
                 return
-            v['sub'] = 'ask'
-            v['cur'] = v['work'][v['pos'] % len(v['work'])]
-            word = v['cur']['word']
-        asv_speak(word)
+            cur = _pick(v)
+            v['sub'] = 'ask'; v['cur'] = cur
+            word = cur['word'] if cur else None
+        if word:
+            asv_speak(word)
 
     def asv_advance():
-        """Zur nächsten Karte; nichts mehr offen oder ≥75 % → Freischaltung."""
+        """Zähler hoch, nächste Karte; nichts mehr offen oder ≥75 % → Freischaltung."""
         with S['lock']:
             v = S['asv']
             if not v:
                 return
             if v.get('ratio', 0) >= 0.75 or not v.get('work'):
                 v['phase'] = 'unlock'; v['cur'] = None; return
-            v['pos'] = (v.get('pos', 0) + 1) % len(v['work'])
+            v['seen'] = v.get('seen', 0) + 1
         asv_show()
 
-    def asv_answer(result):
-        """Antwort (known|learned) per REST verbuchen, Stand aktualisieren,
-        gefestigte Karte aus der Runde nehmen, dann weiter."""
+    def asv_abhaken():
+        """ABHAKEN — der Haupt-Zug: Review verbuchen (REST), Münzen/Kisten/Teile
+        aus der Antwort übernehmen, SRS-Fälligkeit setzen (gemeistert → raus),
+        dann weiter. Die Spiel-Ökonomie kommt komplett vom Backend (persistiert)."""
         with S['lock']:
             v = S['asv']
-            if not v or v.get('busy') or not v.get('cur'):
+            if not v or v.get('busy') or not v.get('cur') or v.get('reveal'):
                 return
-            v['busy'] = True; word = v['cur']['word']
-        res = be.answer(word, result)
+            v['busy'] = True; card = v['cur']; word = card['word']
+        res = be.answer(word, 'learned')
         unlocked = False
         with S['lock']:
             v = S['asv']
@@ -1165,8 +1304,25 @@ def main():
                     v['got'] = res.get('got', v.get('got', 0))
                     v['total'] = res.get('total', v.get('total', 0))
                     v['ratio'] = res.get('ratio', v.get('ratio', 0.0))
-                    if res.get('confirmed'):
-                        v['work'] = [e for e in v.get('work', []) if e['word'] != word]
+                    v['coins'] = int(res.get('coins', v.get('coins', 0)))
+                    gain = int(res.get('coin_gain', 0) or 0)
+                    if gain > 0:
+                        v['coin_pop'] = {'n': gain, 't': 1.0}
+                    if isinstance(res.get('parts'), list):
+                        v['parts'] = res['parts']
+                    crate = res.get('crate')
+                    if crate:
+                        v['reveal'] = {'kind': crate.get('kind'),
+                                       'amount': int(crate.get('amount', 0) or 0), 't': 2.2}
+                        if crate.get('kind') == 'part' and crate.get('part'):
+                            v['new_part'] = {'name': crate['part'], 't': 0.0}   # schwebt herein
+                    reps = int(res.get('reps', card.get('reps', 0) + 1))
+                    card['reps'] = reps
+                    if res.get('mastered') or res.get('confirmed'):
+                        v['work'] = [c for c in v.get('work', []) if c['word'] != word]
+                    else:                                     # SRS: später wieder auffrischen
+                        gap = (3, 8, 20)[min(max(reps, 1) - 1, 2)]
+                        card['due'] = v.get('seen', 0) + gap
                     unlocked = bool(res.get('unlocked'))
         if unlocked:
             with S['lock']:
@@ -1175,13 +1331,34 @@ def main():
             return
         asv_advance()
 
+    def asv_repeat():
+        """REPEAT — Bedeutung zeigen + Wort nochmal vorlesen (kein Zähler-Effekt)."""
+        with S['lock']:
+            v = S['asv']
+            if not v or v.get('reveal'):
+                return
+            v['sub'] = 'learn'
+            cur = v.get('cur')
+        if cur:
+            asv_speak(cur['word'])
+
+    def asv_next():
+        """NEXT — Karte kurz zurückstellen (bald wieder dran), ohne zu werten."""
+        with S['lock']:
+            v = S['asv']
+            if not v or v.get('busy') or not v.get('cur') or v.get('reveal'):
+                return
+            v['cur']['due'] = v.get('seen', 0) + 2
+        asv_advance()
+
     def asv_key(ev):
-        """Tastendruck im Abfrage-Modus verarbeiten (kein Text-Input dahinter)."""
+        """Tastendruck im Abfrage-Modus (kein Text-Input dahinter).
+        card-Phase: Leer/Enter = Abhaken · R = Repeat · N/→ = Next."""
         with S['lock']:
             v = S['asv']
             if not v:
                 return
-            phase = v.get('phase'); sub = v.get('sub')
+            phase = v.get('phase')
         if phase == 'welcome':
             if ev.key in (pygame.K_RETURN, pygame.K_SPACE):
                 with S['lock']:
@@ -1196,38 +1373,34 @@ def main():
                                  args=('/api/tutor/start', {'focus': foc}), daemon=True).start()
             return
         # phase == 'card'
-        if ev.key == pygame.K_r:                               # nochmal vorlesen
-            with S['lock']:
-                cur = (S['asv'] or {}).get('cur')
-            if cur: asv_speak(cur['word'])
-            return
-        if sub == 'ask':
-            if ev.key == pygame.K_k:
-                threading.Thread(target=asv_answer, args=('known',), daemon=True).start()
-            elif ev.key == pygame.K_n:                         # zeig mir → Bedeutung
-                with S['lock']:
-                    if S['asv']: S['asv']['sub'] = 'learn'
-                    cur = (S['asv'] or {}).get('cur')
-                if cur: asv_speak(cur['word'])
-        else:  # learn
-            if ev.key == pygame.K_RETURN:
-                threading.Thread(target=asv_answer, args=('learned',), daemon=True).start()
-            elif ev.key == pygame.K_k:
-                threading.Thread(target=asv_answer, args=('known',), daemon=True).start()
+        if ev.key == pygame.K_r:
+            asv_repeat()
+        elif ev.key in (pygame.K_SPACE, pygame.K_RETURN):
+            threading.Thread(target=asv_abhaken, daemon=True).start()
+        elif ev.key in (pygame.K_n, pygame.K_RIGHT):
+            asv_next()
 
     def asv_init():
-        """Abfrage starten, falls die Sprache im Assessment-Gate steckt: Queue
-        holen, Willkommen zeigen. Gibt True zurück = Drill übernimmt (KEIN LLM).
+        """Abfrage starten, falls die Sprache im Assessment-Gate steckt: Queue +
+        Spielstand holen, Willkommen zeigen. True = Drill übernimmt (KEIN LLM);
         False = kein Gate → normaler Persona-Start."""
         data = be.assessment()
         if not isinstance(data, dict) or data.get('mode') != 'assessment':
             return False
-        work = [e for e in (data.get('queue') or []) if not e.get('confirmed')]
+        game = data.get('game') or {}
+        work = [{'word': e['word'], 'de': e.get('de', ''),
+                 'category': e.get('category', ''), 'priority': e.get('priority', 'medium'),
+                 'reps': int(e.get('reps', 0) or 0), 'due': 0}
+                for e in (data.get('queue') or []) if not e.get('confirmed')]
         with S['lock']:
             S['asv'] = {'phase': 'welcome', 'sub': 'ask', 'cur': None,
-                        'work': work, 'pos': 0,
+                        'work': work, 'seen': 0,
                         'got': data.get('got', 0), 'total': data.get('total', 0),
-                        'ratio': data.get('ratio', 0.0), 'busy': False}
+                        'ratio': data.get('ratio', 0.0), 'busy': False,
+                        'coins': int(game.get('coins', 0)),
+                        'parts': list(game.get('parts', [])),
+                        'parts_total': int(game.get('parts_total', 7)),
+                        'reveal': None, 'coin_pop': None, 'new_part': None}
         return True
 
     # ── Sprach-Menü (Alt+L): live zwischen Personas/Sprachen umschalten ──────
@@ -1614,6 +1787,21 @@ def main():
             menu = S['menu']; menu_langs = list(S['langs']); cur_lang = S['lang']
             mode = S['mode']; core_got = S['core_got']; core_total = S['core_total']
             core_ratio = S['core_ratio']
+            # Spiel-Animationen tickern (Kisten-Reveal, Münz-Pop, einschwebendes Teil)
+            if S['asv']:
+                a2 = S['asv']
+                if a2.get('reveal'):
+                    a2['reveal']['t'] -= dt
+                    if a2['reveal']['t'] <= 0:
+                        a2['reveal'] = None
+                if a2.get('coin_pop'):
+                    a2['coin_pop']['t'] -= dt
+                    if a2['coin_pop']['t'] <= 0:
+                        a2['coin_pop'] = None
+                if a2.get('new_part'):
+                    a2['new_part']['t'] = min(1.0, a2['new_part']['t'] + dt / 0.6)
+                    if a2['new_part']['t'] >= 1.0:
+                        a2['new_part'] = None
             asv_snap = dict(S['asv']) if S['asv'] else None
 
         # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft.

@@ -183,6 +183,7 @@ def assessment() -> dict:
             "unlocked": tools.core_graduated(lang),
             "speed":    tools.tts_speed_for(lang),
             "queue":    tools.assessment_queue(lang),
+            "game":     tools.game_state(lang),
         }
     except Exception as e:
         return {"present": True, "error": str(e), "queue": []}

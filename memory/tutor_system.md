@@ -300,18 +300,18 @@ und keine Ansage. Das Modell ist die **Belohnung nach** dem Gate, nicht das
 Abfrage-Werkzeug. Solange `tools.assessment_active(lang)` (Sprache hat ein
 Curriculum UND ist noch nicht gemeistert):
 - **Backend (deterministisch, kein Modell):** `tools.assessment_queue(lang)` liefert
-  die Kern-Wörter + Lernstand (`word/de/category/priority/confirmed/correct_use`),
-  `tools.assessment_answer(lang, word, known|learned|again)` verbucht eine Antwort
-  (`known`→sofort gefestigt, `learned`→+1 bis `CONFIRM_THRESHOLD`). Fronten:
-  `GET /api/tutor/assessment`, `POST /api/tutor/assessment/answer` (via
-  `core/tutor_port.py`; **kein** `available()`-Gate — braucht kein Backend-Modell).
+  die Kern-Wörter + Lernstand (`word/de/category/priority/confirmed/correct_use/reps`),
+  `tools.assessment_answer(lang, word, known|learned|again)` verbucht eine Antwort UND
+  die Spiel-Ökonomie und gibt sie zurück (`reps/mastered/coins/coin_gain/parts/crate`).
+  `tools.game_state(lang)` liefert den Spielstand. Fronten:
+  `GET /api/tutor/assessment` (enthält `game`), `POST /api/tutor/assessment/answer`
+  (via `core/tutor_port.py`; **kein** `available()`-Gate — braucht kein Backend-Modell).
 - **Frontend (`room.py`, `asv`-Controller):** das Zimmer geht die Wörter selbst Karte
-  für Karte durch — welcome → card (`[K]` kenne ich / `[N]` zeig mir → Bedeutung /
-  `[R]` nochmal; im Lernen `Enter` verstanden) → unlock. **Lucías Stimme (TTS) liest
-  jedes Wort vor** (`be.speak`, gerampter Speed), aber es gibt **kein Zimmer, keine
-  lebende Figur** (`draw_assessment`: Fortschrittsbalken mit 75%-Marke, Wort-Karte +
-  Übersetzung, Tasten-Hinweise; Persona-HUD aus). `kickoff` startet im Gate das Drill
-  statt der Persona (kein `run_stream`); `feedback_loop` stößt im Drill NIE die KI an.
+  für Karte durch — welcome → card (`[Leer/Enter]` **Abhaken ✓** / `[R]` **Repeat**
+  = Bedeutung zeigen + nochmal hören / `[N]`/`→` **Next** = kurz zurückstellen) →
+  unlock. **Lucías Stimme (TTS) liest jedes Wort vor** (`be.speak`, gerampter Speed).
+  `kickoff` startet im Gate das Drill statt der Persona (kein `run_stream`);
+  `feedback_loop` stößt im Drill NIE die KI an.
 - **Speed-Rampe** `tools.tts_speed_for`: 0.7 (Anfang) → linear → 1.0 an der Schwelle.
 - **Freischaltung** bei ≥75 %: der `unlock`-Screen erscheint; `Enter` startet dann die
   Persona (`run_stream /api/tutor/start`) → Zimmer. `room_state.mode` kippt parallel
@@ -321,6 +321,30 @@ Der alte LLM-`assessment_prompt` (`langs/<lang>/assessment_prompt.md`) bleibt al
 Defense-in-Depth im `respond_stream`-Gate, wird aber im deterministischen Fluss nicht
 mehr angesteuert. Sprache ohne `core_vocab` (`zh`) → **kein Gate**, sofort Persona.
 **LIVE für `es`.**
+
+**Spiel-Schicht (Phase 1, 2026-07) — aus dem trockenen Drill wird ein Spiel.**
+Persistiert pro Sprache in `data/<lang>/game.json` (Laufzeit, gitignored):
+`coins`, `parts` (erhaltene Lucía-Teile in **Erhalt-Reihenfolge**), `reviews`,
+`next_crate`, `srs` (`{wort:{reps,due}}`). Regeln (`tutor/tools.py`, alle Konstanten
+dort tunebar):
+- **Abhaken** = erfolgreicher Review → Wort raus aus dem aktiven Stapel; **Münze NUR
+  zufällig** (`COIN_CHANCE=0.35`, variable reward — *nicht* pro Wort).
+- **SRS ist Pflicht:** Abhaken löscht nicht für immer. `SRS_MASTER=3` **verteilte**
+  Reviews → Wort „gemeistert" (zählt zur 75%-Freischaltung); dazwischen taucht es per
+  `SRS_GAP=[3,8,20]` (Review-Abstand) wieder auf. `_pick` im `asv` wählt fällige
+  Karten (`due≤seen`) zuerst. Verteilung ersetzt das alte 1-Session-`CONFIRM`.
+- **Kisten:** alle **10–15** Reviews (`CRATE_MIN/MAX`) eine — Inhalt **zufällig**: ein
+  **Körperteil** (`CRATE_PART_CHANCE=0.6`, `random.choice` aus den fehlenden → zufällige
+  Reihenfolge) **oder** eine Handvoll Münzen. `_open_crate`.
+- **Lucía baut sich zusammen** (`_draw_lucia` in `room.py`, aus denselben Primitiven wie
+  die Persona): erhaltene Teile schweben aus einer Streu-Richtung (`_PART_SCATTER`)
+  herein und rasten ein (`new_part`-Anim); bei Freischaltung ist sie komplett.
+  Münz-HUD oben rechts (`+N`-Pop bei Treffer), Kisten-Reveal-Banner (`_draw_reveal`).
+- **Bewusst NICHT in Phase 1 (Sashas Fork offen):** prov/solid/wobble-Teilezustände
+  (das alte „Hybrid" — Teile kamen an Wort-Meisterung; jetzt kommen sie aus Kisten,
+  darum entkoppelt), kein „ich hab's vergessen"-Button (kein Lapse/Wobble-Signal),
+  Shop + Küche/Tür + Etappen/Profil-Quiz (Phase 2/3). Siehe
+  `memory/gamified-assessment-plan.md` (Projekt-Notiz).
 
 **Direkt-Start (kein Enter):** TUI-Taste `u` öffnet **mit `DISPLAY` das
 Persona-Zimmer** (`zentrale_tui.tutor_window`, eigenes pygame-Fenster, siehe

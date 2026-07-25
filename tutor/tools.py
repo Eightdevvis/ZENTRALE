@@ -36,6 +36,7 @@
 
 import json
 import os
+import random
 from threading import Lock
 
 from . import langs
@@ -396,6 +397,93 @@ def tts_speed_for(lang: str = None) -> float:
     return round(0.7 + 0.3 * r, 2)
 
 
+# ── Spiel-Schicht: Münzen, Kisten, Lucía-Teile, SRS (persistiert) ───────
+# Aus dem trockenen Drill wird ein Spiel (Sashas Vision, siehe memory/
+# gamified-assessment-plan.md). Der Spielstand liegt pro Sprache in
+# data/<lang>/game.json (Laufzeit, gitignored — wie vocab.json):
+#   coins       Münzen gesamt
+#   parts       Liste erhaltener Lucía-Teile (in Erhalt-Reihenfolge, ZUFÄLLIG)
+#   reviews     erfolgreiche Abhak-Reviews gesamt (treibt die Kisten-Kadenz)
+#   next_crate  Review-Zähler, bei dem die nächste Kiste fällt (10–15 Abstand)
+#   srs         {wort: {reps, due}} — verteilte Wiederholung (Meisterung = SRS_MASTER
+#               verteilte Reviews); due = Review-Index fürs Wiederauftauchen
+#
+# GRUNDREGELN (von Sasha bestätigt):
+#   • Abhaken → Wort raus aus dem aktiven Stapel; Münze NUR ZUFÄLLIG (variable
+#     reward, verstärkt den Sog).
+#   • Alle 10–15 Reviews eine Kiste; Inhalt ZUFÄLLIG: ein Körperteil ODER eine
+#     Handvoll Münzen. Teile kommen in zufälliger Reihenfolge (random.choice).
+#   • SRS ist PFLICHT — Abhaken löscht nicht für immer, das Wort taucht zum
+#     Auffrischen wieder auf, Meisterung erst nach mehreren verteilten Reviews.
+
+# Kanonischer Teile-Satz (deckt sich mit room.py + dem Mockup). Reihenfolge hier
+# ist nur die Referenz-Liste; VERGEBEN wird zufällig (random.choice).
+_PARTS = ["legl", "legr", "dress", "arml", "armr", "head", "hair"]
+
+COIN_CHANCE   = 0.35        # W'keit, dass ein Abhaken eine Münze abwirft
+COIN_MIN, COIN_MAX = 1, 3   # Münzen pro (zufälligem) Treffer
+CRATE_MIN, CRATE_MAX = 10, 15   # Reviews zwischen zwei Kisten (zufälliger Abstand)
+CRATE_PART_CHANCE = 0.6     # Kiste zeigt ein Teil (sonst Münzen); ohne Teile → Münzen
+CRATE_COINS_MIN, CRATE_COINS_MAX = 5, 12
+SRS_MASTER = 3              # verteilte Abhak-Reviews → Wort „gemeistert" (zählt zur Freischaltung)
+SRS_GAP    = [3, 8, 20]     # Review-Abstand nach rep 1,2,3 bis zum Wiederauftauchen
+
+
+def _game_default() -> dict:
+    return {"coins": 0, "parts": [], "reviews": 0, "next_crate": None, "srs": {}}
+
+
+def _game_load(lang: str = None) -> dict:
+    """Spielstand der Sprache (ohne Lock — nur intern)."""
+    path = _file('game.json', lang)
+    d = _game_default()
+    if not os.path.exists(path):
+        return d
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+        if isinstance(raw, dict):
+            d.update({k: raw.get(k, v) for k, v in d.items()})
+            # nur bekannte Teile behalten (Datei-Reste ignorieren)
+            d["parts"] = [p for p in (d.get("parts") or []) if p in _PARTS]
+            d["srs"] = raw.get("srs") if isinstance(raw.get("srs"), dict) else {}
+    except Exception:
+        return _game_default()
+    return d
+
+
+def _game_save(d: dict, lang: str = None):
+    try:
+        with open(_file('game.json', lang), 'w', encoding='utf-8') as f:
+            json.dump(d, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def game_state(lang: str = None) -> dict:
+    """Aktueller Spielstand fürs Frontend (Münzen, Teile, Fortschritt)."""
+    with _lock:
+        g = _game_load(lang)
+    return {"coins": int(g.get("coins", 0)),
+            "parts": list(g.get("parts", [])),
+            "parts_total": len(_PARTS),
+            "reviews": int(g.get("reviews", 0))}
+
+
+def _open_crate(g: dict) -> dict:
+    """Kiste öffnen: ZUFÄLLIG ein noch fehlendes Teil oder eine Handvoll Münzen.
+    Mutiert g (parts/coins). Gibt das Ergebnis fürs UI zurück."""
+    owned = set(g.get("parts", []))
+    remaining = [p for p in _PARTS if p not in owned]
+    if remaining and random.random() < CRATE_PART_CHANCE:
+        part = random.choice(remaining)          # zufällige Reihenfolge
+        g.setdefault("parts", []).append(part)
+        return {"kind": "part", "part": part}
+    amount = random.randint(CRATE_COINS_MIN, CRATE_COINS_MAX)
+    g["coins"] = int(g.get("coins", 0)) + amount
+    return {"kind": "coins", "amount": amount}
+
+
 # ── Deterministische Abfrage (KEIN LLM) ─────────────────────────────────
 # Das Assessment/Drill ist reine Vokabel-Abfrage: Wort zeigen, „kennst du's?",
 # zählen. Dafür braucht es KEIN Sprachmodell (das kostet nur Latenz + Zufall).
@@ -412,50 +500,80 @@ def assessment_queue(lang: str = None) -> list:
         return []
     with _lock:
         by_word = {e.get('word'): e for e in _load_raw(lang)}
+        srs = _game_load(lang).get('srs') or {}
     out = []
     for c in core:
         w = c['word']
         st = by_word.get(w) or {}
+        sr = srs.get(w) or {}
         out.append({
             'word': w, 'de': c.get('de', ''), 'category': c.get('category', ''),
             'priority': c.get('priority', 'medium'),
             'confirmed': bool(st.get('confirmed')),
             'correct_use': int(st.get('correct_use', 0) or 0),
+            'reps': int(sr.get('reps', 0) or 0),
         })
     out.sort(key=lambda e: (e['confirmed'], _PRIO_ORDER.get(e['priority'], 9)))
     return out
 
 
 def assessment_answer(lang: str, word: str, result: str) -> dict:
-    """Eine Antwort aus dem Drill deterministisch verbuchen (KEIN LLM):
-      result='known'   → kennt sie schon  → sofort gefestigt (wie mark_known)
-      result='learned' → gerade geübt     → +1 (ab CONFIRM_THRESHOLD gefestigt)
-      result='again'   → nochmal zeigen    → kein Zähler-Effekt
-    Legt das Wort an, falls es noch nicht im Lern-Store ist. Gibt den neuen
-    Stand + Gesamt-Deckung zurück (fürs Fortschritts-UI + Freischalt-Check)."""
+    """Eine Antwort aus dem Drill deterministisch verbuchen (KEIN LLM) — inkl.
+    Spiel-Ökonomie (Münzen/Kisten/Teile) und SRS:
+      result='known'   → kennt sie schon → 1 Review reicht zum Meistern
+      result='learned' → abgehakt        → +1 Review; Meisterung nach SRS_MASTER
+                          verteilten Reviews. Münze NUR zufällig; alle 10–15
+                          Reviews eine Kiste (Teil oder Münzen, zufällig).
+      result='again'   → nochmal zeigen  → kein Zähler-/Ökonomie-Effekt
+    Legt das Wort an, falls noch nicht im Lern-Store. Gibt Lernstand + Deckung +
+    Spielstand + evtl. Kisten-Ergebnis zurück (fürs UI + Freischalt-Check)."""
     word = (word or '').strip()
+    crate = None
+    coin_gain = 0
     with _lock:
         entries = _load_raw(lang)
         e = next((x for x in entries if x.get('word') == word), None)
         if e is None:
             e = {'word': word, 'reading': '', 'correct_use': 0, 'confirmed': False}
             entries.append(e)
-        if result == 'known':
-            e['confirmed'] = True
-            if e.get('correct_use', 0) < CONFIRM_THRESHOLD:
-                e['correct_use'] = CONFIRM_THRESHOLD
-        elif result == 'learned':
-            e['correct_use'] = e.get('correct_use', 0) + 1
-            if e['correct_use'] >= CONFIRM_THRESHOLD:
+        g = _game_load(lang)
+        sr = g.setdefault('srs', {}).setdefault(word, {'reps': 0, 'due': 0})
+
+        if result in ('known', 'learned'):
+            sr['reps'] = int(sr.get('reps', 0)) + 1
+            e['correct_use'] = max(int(e.get('correct_use', 0) or 0), sr['reps'])
+            g['reviews'] = int(g.get('reviews', 0)) + 1
+            # Münze NUR zufällig (variable reward)
+            if random.random() < COIN_CHANCE:
+                coin_gain = random.randint(COIN_MIN, COIN_MAX)
+                g['coins'] = int(g.get('coins', 0)) + coin_gain
+            # Meisterung: 'known' sofort, 'learned' nach SRS_MASTER verteilten Reviews
+            need = 1 if result == 'known' else SRS_MASTER
+            if sr['reps'] >= need:
                 e['confirmed'] = True
+                sr['due'] = 10 ** 9            # gemeistert → taucht nicht mehr auf
+            else:
+                gap = SRS_GAP[min(sr['reps'] - 1, len(SRS_GAP) - 1)]
+                sr['due'] = g['reviews'] + gap  # nach `gap` Reviews wieder auffrischen
+            # Kisten-Kadenz (alle 10–15 Reviews, zufälliger Abstand)
+            if not g.get('next_crate'):
+                g['next_crate'] = random.randint(CRATE_MIN, CRATE_MAX)
+            if g['reviews'] >= g['next_crate']:
+                crate = _open_crate(g)
+                g['next_crate'] = g['reviews'] + random.randint(CRATE_MIN, CRATE_MAX)
         # 'again' → nichts ändern
+
         _write_raw(entries, lang)
-        conf, uses = bool(e.get('confirmed')), int(e.get('correct_use', 0))
+        _game_save(g, lang)
+        conf, uses, reps = bool(e.get('confirmed')), int(e.get('correct_use', 0)), int(sr['reps'])
+        coins, parts = int(g['coins']), list(g.get('parts', []))
     got, total = core_coverage(lang)
-    return {'word': word, 'confirmed': conf, 'correct_use': uses,
-            'got': got, 'total': total,
+    return {'word': word, 'confirmed': conf, 'correct_use': uses, 'reps': reps,
+            'mastered': conf, 'got': got, 'total': total,
             'ratio': round(got / total, 3) if total else 0.0,
-            'unlocked': core_graduated(lang)}
+            'unlocked': core_graduated(lang),
+            'coins': coins, 'coin_gain': coin_gain,
+            'parts': parts, 'parts_total': len(_PARTS), 'crate': crate}
 
 
 # ── Satz-Strukturen (Feinmodell: nicht nur Wörter) ──────────────────────
