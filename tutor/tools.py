@@ -405,16 +405,17 @@ def tts_speed_for(lang: str = None) -> float:
 #   parts       Liste erhaltener Lucía-Teile (in Erhalt-Reihenfolge, ZUFÄLLIG)
 #   reviews     erfolgreiche Abhak-Reviews gesamt (treibt die Kisten-Kadenz)
 #   next_crate  Review-Zähler, bei dem die nächste Kiste fällt (10–15 Abstand)
-#   srs         {wort: {reps, due}} — verteilte Wiederholung (Meisterung = SRS_MASTER
-#               verteilte Reviews); due = Review-Index fürs Wiederauftauchen
+#   srs         {wort: {reps}} — Review-Zähler (informativ). SRS/verteilte
+#               Wiederholung ist im DRILL bewusst RAUS (Sasha) und kommt später
+#               in der KI-Konversation; im Drill ist Abhaken = sofort gemeistert.
 #
 # GRUNDREGELN (von Sasha bestätigt):
-#   • Abhaken → Wort raus aus dem aktiven Stapel; Münze NUR ZUFÄLLIG (variable
-#     reward, verstärkt den Sog).
+#   • Abhaken → Wort SOFORT gemeistert + raus aus dem Stapel (Statusleiste = +1);
+#     Münze NUR ZUFÄLLIG (variable reward, verstärkt den Sog).
 #   • Alle 10–15 Reviews eine Kiste; Inhalt ZUFÄLLIG: ein Körperteil ODER eine
 #     Handvoll Münzen. Teile kommen in zufälliger Reihenfolge (random.choice).
-#   • SRS ist PFLICHT — Abhaken löscht nicht für immer, das Wort taucht zum
-#     Auffrischen wieder auf, Meisterung erst nach mehreren verteilten Reviews.
+#   • Musste man Repeat drücken (Wort nicht gewusst), geht es NICHT abhakbar —
+#     es wandert nach hinten und kommt in dieser Runde nochmal.
 
 # Kanonischer Teile-Satz (deckt sich mit room.py + dem Mockup). Reihenfolge hier
 # ist nur die Referenz-Liste; VERGEBEN wird zufällig (random.choice).
@@ -425,8 +426,6 @@ COIN_MIN, COIN_MAX = 1, 3   # Münzen pro (zufälligem) Treffer
 CRATE_MIN, CRATE_MAX = 10, 15   # Reviews zwischen zwei Kisten (zufälliger Abstand)
 CRATE_PART_CHANCE = 0.6     # Kiste zeigt ein Teil (sonst Münzen); ohne Teile → Münzen
 CRATE_COINS_MIN, CRATE_COINS_MAX = 5, 12
-SRS_MASTER = 3              # verteilte Abhak-Reviews → Wort „gemeistert" (zählt zur Freischaltung)
-SRS_GAP    = [3, 8, 20]     # Review-Abstand nach rep 1,2,3 bis zum Wiederauftauchen
 
 
 def _game_default() -> dict:
@@ -540,21 +539,17 @@ def assessment_answer(lang: str, word: str, result: str) -> dict:
         sr = g.setdefault('srs', {}).setdefault(word, {'reps': 0, 'due': 0})
 
         if result in ('known', 'learned'):
+            # SRS im Drill RAUS (Sasha 2026-07): Abhaken = SOFORT gemeistert, damit
+            # die Statusleiste oben direkt Sinn ergibt (jedes Abhaken = +1 gefestigt).
+            # Verteilte Wiederholung kommt später in der KI-Konversation, nicht hier.
             sr['reps'] = int(sr.get('reps', 0)) + 1
-            e['correct_use'] = max(int(e.get('correct_use', 0) or 0), sr['reps'])
+            e['confirmed'] = True
+            e['correct_use'] = max(int(e.get('correct_use', 0) or 0), CONFIRM_THRESHOLD)
             g['reviews'] = int(g.get('reviews', 0)) + 1
             # Münze NUR zufällig (variable reward)
             if random.random() < COIN_CHANCE:
                 coin_gain = random.randint(COIN_MIN, COIN_MAX)
                 g['coins'] = int(g.get('coins', 0)) + coin_gain
-            # Meisterung: 'known' sofort, 'learned' nach SRS_MASTER verteilten Reviews
-            need = 1 if result == 'known' else SRS_MASTER
-            if sr['reps'] >= need:
-                e['confirmed'] = True
-                sr['due'] = 10 ** 9            # gemeistert → taucht nicht mehr auf
-            else:
-                gap = SRS_GAP[min(sr['reps'] - 1, len(SRS_GAP) - 1)]
-                sr['due'] = g['reviews'] + gap  # nach `gap` Reviews wieder auffrischen
             # Kisten-Kadenz (alle 10–15 Reviews, zufälliger Abstand)
             if not g.get('next_crate'):
                 g['next_crate'] = random.randint(CRATE_MIN, CRATE_MAX)

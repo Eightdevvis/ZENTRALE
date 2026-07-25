@@ -325,14 +325,19 @@ mehr angesteuert. Sprache ohne `core_vocab` (`zh`) → **kein Gate**, sofort Per
 **Spiel-Schicht (Phase 1, 2026-07) — aus dem trockenen Drill wird ein Spiel.**
 Persistiert pro Sprache in `data/<lang>/game.json` (Laufzeit, gitignored):
 `coins`, `parts` (erhaltene Lucía-Teile in **Erhalt-Reihenfolge**), `reviews`,
-`next_crate`, `srs` (`{wort:{reps,due}}`). Regeln (`tutor/tools.py`, alle Konstanten
-dort tunebar):
-- **Abhaken** = erfolgreicher Review → Wort raus aus dem aktiven Stapel; **Münze NUR
-  zufällig** (`COIN_CHANCE=0.35`, variable reward — *nicht* pro Wort).
-- **SRS ist Pflicht:** Abhaken löscht nicht für immer. `SRS_MASTER=3` **verteilte**
-  Reviews → Wort „gemeistert" (zählt zur 75%-Freischaltung); dazwischen taucht es per
-  `SRS_GAP=[3,8,20]` (Review-Abstand) wieder auf. `_pick` im `asv` wählt fällige
-  Karten (`due≤seen`) zuerst. Verteilung ersetzt das alte 1-Session-`CONFIRM`.
+`next_crate`, `srs` (`{wort:{reps}}`, nur informativ). Regeln (`tutor/tools.py`, alle
+Konstanten dort tunebar):
+- **Abhaken** = „kann ich" → Wort **sofort gemeistert** (confirmed) + raus aus dem
+  Stapel. Bewusst **kein SRS im Drill** (Sasha): so ergibt die **Statusleiste oben
+  direkt Sinn** — jedes Abhaken = +1 gefestigt, Freischaltung bei 75 %. Verteilte
+  Wiederholung kommt später in der KI-Konversation, nicht im Drill.
+- **Münze NUR zufällig** beim Abhaken (`COIN_CHANCE=0.35`, variable reward — *nicht*
+  pro Wort).
+- **Repeat** = Wort nicht gewusst → Bedeutung zeigen + nochmal vorlesen, danach **NICHT
+  abhakbar**: nach kurzem Anschauen (`learn_hold≈3 s`, Timer im Main-Loop) geht es
+  **automatisch weiter**, das Wort wandert ans Ende (`_requeue_front`) und kommt in
+  DIESER Runde nochmal. **Next** schiebt ohne Wertung nach hinten. Queue = einfache
+  Rotation (`cur=work[0]`), kein `_pick`/`due`.
 - **Kisten:** alle **10–15** Reviews (`CRATE_MIN/MAX`) eine — Inhalt **zufällig**: ein
   **Körperteil** (`CRATE_PART_CHANCE=0.6`, `random.choice` aus den fehlenden → zufällige
   Reihenfolge) **oder** eine Handvoll Münzen. `_open_crate`.
@@ -340,11 +345,8 @@ dort tunebar):
   die Persona): erhaltene Teile schweben aus einer Streu-Richtung (`_PART_SCATTER`)
   herein und rasten ein (`new_part`-Anim); bei Freischaltung ist sie komplett.
   Münz-HUD oben rechts (`+N`-Pop bei Treffer), Kisten-Reveal-Banner (`_draw_reveal`).
-- **Bewusst NICHT in Phase 1 (Sashas Fork offen):** prov/solid/wobble-Teilezustände
-  (das alte „Hybrid" — Teile kamen an Wort-Meisterung; jetzt kommen sie aus Kisten,
-  darum entkoppelt), kein „ich hab's vergessen"-Button (kein Lapse/Wobble-Signal),
-  Shop + Küche/Tür + Etappen/Profil-Quiz (Phase 2/3). Siehe
-  `memory/gamified-assessment-plan.md` (Projekt-Notiz).
+- **Phase 2/3 (offen):** Shop + Küche/Tür-Mechaniken, Etappen + Profil-Quiz; SRS wandert
+  in die Konversation. Siehe `memory/gamified-assessment-plan.md` (Projekt-Notiz).
 
 **Direkt-Start (kein Enter):** TUI-Taste `u` öffnet **mit `DISPLAY` das
 Persona-Zimmer** (`zentrale_tui.tutor_window`, eigenes pygame-Fenster, siehe
