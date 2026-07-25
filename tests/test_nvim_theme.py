@@ -271,6 +271,43 @@ def test_every_highlight_group_resolves(theme_file):
     assert empty == {} or empty == [], "Gruppen ohne Attribute: %s" % (empty,)
 
 
+def test_no_color_hint_outside_tmux(theme_file):
+    """Ohne tmux gibt es nichts zu meckern — und NIE beim Start (Enter-Prompt).
+
+    Die Farbtiefe-Warnung (tmux rundet 24-bit auf 256 → Papier wird grau) läuft
+    absichtlich nur auf Abruf: eine mehrzeilige Startmeldung erzeugt in nvim
+    einen "Press ENTER"-Prompt, den man bei JEDEM Öffnen wegklicken müsste.
+    """
+    env = dict(os.environ, ZENTRALE_THEME_FILE=str(theme_file))
+    env.pop("TMUX", None)
+    out = subprocess.run(
+        [NVIM, "--headless", "-u", "NONE", "--cmd", "set rtp+=%s" % RTP,
+         "-c", 'lua local t = require("zentrale_theme"); t.setup(); '
+               'io.write(vim.json.encode({tostring(t.truecolor_ok()), '
+               'tostring(t.color_hint()), '
+               'vim.trim(vim.api.nvim_exec2("messages", {output=true}).output)}))',
+         "-c", "q"],
+        capture_output=True, text=True, env=env, timeout=30,
+    ).stdout
+    assert json.loads(out) == ["nil", "nil", ""]
+
+
+def test_health_check_runs(theme_file):
+    ":checkhealth zentrale_theme darf nicht selbst kaputtgehen."
+    env = dict(os.environ, ZENTRALE_THEME_FILE=str(theme_file))
+    r = subprocess.run(
+        [NVIM, "--headless", "-u", "NORC", "--cmd", "set rtp+=%s" % RTP,
+         "-c", 'lua require("zentrale_theme").setup()',
+         "-c", "checkhealth zentrale_theme",
+         "-c", 'lua io.write(table.concat('
+               'vim.api.nvim_buf_get_lines(0, 0, -1, false), "\\n"))',
+         "-c", "qa!"],
+        capture_output=True, text=True, env=env, timeout=30,
+    )
+    assert "ZENTRALE-Theme-Kopplung" in r.stdout
+    assert "colorscheme zentrale-" in r.stdout
+
+
 def _contrast(fg, bg):
     """WCAG-Kontrastverhältnis zweier Hex-Farben (1.0 = identisch, 21 = max)."""
     def lum(h):

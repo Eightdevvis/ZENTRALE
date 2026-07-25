@@ -114,6 +114,38 @@ function M._watch()
   if not ok then M._handle = nil end
 end
 
+--- Leitet die Terminal-Kette 24-bit-Farben durch? → true | false | nil (unklar)
+---
+--- Beide Paletten sind 24-bit. Läuft nvim in einem tmux OHNE durchgeleitetes
+--- RGB, wirft tmux z.B. das Papier-Creme #eee7d3 auf 254 = #e4e4e4 — ein
+--- neutrales Grau, dem die ganze Wärme fehlt, und Blattgrün sogar auf #444444.
+--- Das sieht nach "Theme kaputt" aus, ist aber die Terminal-Kette. (cyber fällt
+--- kaum auf: Schwarz bleibt Schwarz, die Neons liegen fast auf 256er-
+--- Stützstellen — deshalb merkt man es nur im Hellmodus.)
+---
+--- BEWUSST kein Hinweis beim Start: eine mehrzeilige Meldung erzeugt in nvim
+--- einen "Press ENTER"-Prompt, den man bei JEDEM Öffnen wegklicken müsste.
+--- Gemeldet wird nur auf Abruf — :ZentraleTheme und :checkhealth zentrale_theme.
+function M.truecolor_ok()
+  local tmux = vim.env.TMUX
+  if tmux == nil or tmux == "" then return nil end   -- kein tmux → nicht unsere Baustelle
+  local ok, res = pcall(function()
+    return vim.system({ "tmux", "display", "-p", "#{client_termfeatures}" },
+      { text = true }):wait(2000)
+  end)
+  if not ok or res == nil or res.code ~= 0 then return nil end
+  return (res.stdout or ""):match("RGB") ~= nil
+end
+
+--- Ein-Satz-Hinweis zur Farbtiefe, oder nil wenn alles in Ordnung ist.
+function M.color_hint()
+  if M.truecolor_ok() == false then
+    return 'tmux rundet die Farben auf 256 (flau). Fix: set -as '
+      .. 'terminal-features ",*:RGB" in ~/.tmux.conf, dann neu attachen.'
+  end
+  return nil
+end
+
 --- Einhängen: sofort anwenden, Watcher + 60-s-Tick starten, :ZentraleTheme.
 --- @param opts table? { file = "<pfad>", interval_ms = <tick> (nur Tests) }
 function M.setup(opts)
@@ -174,8 +206,11 @@ function M.setup(opts)
       vim.notify("ZentraleTheme: day | night | auto", vim.log.levels.WARN)
       return
     end
+    local hint = M.color_hint()
     vim.notify("nvim-Theme: " .. (M.current or "?")
-      .. (M.override and " (Sitzungs-Override)" or " (folgt ZENTRALE)"))
+      .. (M.override and " (Sitzungs-Override)" or " (folgt ZENTRALE)")
+      .. (hint and (" — " .. hint) or ""),
+      hint and vim.log.levels.WARN or vim.log.levels.INFO)
   end, {
     nargs = "?",
     complete = function() return { "day", "night", "auto" } end,
