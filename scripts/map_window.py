@@ -20,6 +20,9 @@
 #   l                           Länder-Labels an/aus
 #   t                           Handelsrouten-Overlay an/aus (Routen + Chokepoints)
 #   d                           Verkehrsdichte-Heatmap an/aus (gemessen, World Bank/IMF)
+#   p                           Politik/Konflikt-Overlay an/aus (Kontrolle + Ereignisse + Grenzen)
+#   , / .                       Achse 3 — Zeit: Kontrolle eine Woche zurück / vor
+#   ;                           Achse 3 — zurück auf „jetzt" (jüngster Stand)
 #   ?                           Glossar-Such-Modal (Begriffe nachschlagen)
 #   Esc / q                     schließen
 #
@@ -35,6 +38,8 @@ import argparse
 # core/ auffindbar machen, egal von wo gestartet (wie ui/app.py & der Prototyp).
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(_ROOT, 'core'))
+
+from datetime import date, timedelta  # noqa: E402  (Achse-3-Zeit-Scrubber)
 
 import numpy as np  # noqa: E402
 import pygame  # noqa: E402
@@ -62,6 +67,15 @@ TRADE_RING = (255, 226, 180)    # heller Rand des Markers
 TRADE_FG   = (255, 232, 196)    # Chokepoint-Label
 ROUTE_COL  = (92, 138, 156)     # Schifffahrtsrouten-Linien (gedämpftes Stahlblau)
 DENS_FG    = (214, 184, 236)    # Verkehrsdichte-Caption (weiches Violett, wie Ramp)
+# Politik/Konflikt-Overlay (Achse 2): Kontroll-Punkte nach Status, Ereignisse,
+# umstrittene Grenzen. Farben bewusst außerhalb der Handels-Palette (Mint/Bernstein).
+CTRL_UA    = (96, 210, 140)     # Kontrolle Ukraine (Grün)
+CTRL_RU    = (232, 96, 168)     # Kontrolle Russland (Magenta)
+CTRL_CONT  = (240, 190, 80)     # umstritten/unklar (Bernsteingelb)
+EVENT_DOT  = (244, 108, 92)     # Konfliktereignis (UCDP) — warmes Rot
+EVENT_RING = (255, 196, 180)    # heller Rand des Ereignis-Markers
+BORDER_COL = (200, 120, 150)    # umstrittene Grenzlinie (gedämpftes Rosa)
+POL_FG     = (232, 176, 200)    # Politik-Caption
 LEG_FG     = (196, 214, 210)    # Legenden-Text
 LEG_KEY    = (130, 222, 212)    # Legenden-Taste (Mint, wie Küste)
 LEG_BG     = (10, 20, 34)       # Legenden-Hintergrund
@@ -83,6 +97,8 @@ LEGEND = [
     ("l",             "Länder-Labels"),
     ("t",             "Handelsrouten (Routen+Engstellen)"),
     ("d",             "Verkehrsdichte (Heatmap, gemessen)"),
+    ("p",             "Politik/Konflikt (Kontrolle+Ereignisse)"),
+    (", . ;",         "Zeit: Woche ◂ ▸ · jetzt"),
     ("?",             "Glossar (Begriffe suchen)"),
     ("Esc / q",       "schließen"),
 ]
@@ -647,6 +663,275 @@ def _draw_density_legend(screen, font, view, bottom):
     return y0
 
 
+# ── Politik/Konflikt-Overlay (Achse 2: control-ua + events-ucdp + borders) ────
+# Wie der Handels-Overlay liest das Fenster die Sub-Layer DIREKT aus core/map/
+# layers (offline-zuerst, Provenienz kommt mit). Drei Bausteine:
+#   • Gebietskontrolle (VIINA) — je Ort ein Punkt, Farbe nach Konsens-Status.
+#     ZEITREISEFÄHIG (Achse 3): control(at) löst den Stand an einem Tag auf.
+#   • Konfliktereignisse (UCDP GED) — Punkte, Radius ~√(Todesopfer).
+#   • Umstrittene Grenzen (Natural Earth) — Linien.
+_POL_CONTROL = {}      # at-Schlüssel ('_now' | 'YYYY-MM-DD') → vorbereitete Arrays
+_POL_EVENTS = None
+_POL_BORDERS = None
+_POL_RANGE = "_unset"  # (date_min, date_max) der VIINA-Zeitreihe oder None
+
+
+def _pol_range():
+    """Zeitreise-Grenzen der Kontrolle einmal lesen (für den Scrubber)."""
+    global _POL_RANGE
+    if _POL_RANGE == "_unset":
+        try:
+            from map.layers import viina  # noqa: E402
+            _POL_RANGE = viina.date_range()
+        except Exception:
+            _POL_RANGE = None
+    return _POL_RANGE
+
+
+# Konsens-Status → (Farbe, Status-Code für die vektorisierte Gruppierung).
+_CTRL_COL = {"UA": (CTRL_UA, 0), "RU": (CTRL_RU, 1)}   # sonst → CONTESTED (2)
+
+
+def _get_control(at):
+    """VIINA-Kontrolle für Zeitpunkt `at` (None=jetzt) laden + je at cachen. Gibt
+    {wx, wy, code (Nx1 int), vintage, source, n} mit Welt-Koord-Arrays zurück."""
+    key = at or "_now"
+    c = _POL_CONTROL.get(key)
+    if c is not None:
+        return c
+    wx, wy, code = [], [], []
+    vintage, source, n = None, None, 0
+    try:
+        from map.layers import viina  # noqa: E402
+        data = viina.control(at)
+        if data:
+            vintage = data.get("vintage")
+            source = (data.get("source") or {}).get("name")
+            for it in data.get("items", []):
+                wx.append(it["wx"])
+                wy.append(it["wy"])
+                code.append(_CTRL_COL.get(it.get("status"), (None, 2))[1])
+            n = len(wx)
+    except Exception:
+        pass
+    c = {"wx": np.asarray(wx, dtype=np.float64),
+         "wy": np.asarray(wy, dtype=np.float64),
+         "code": np.asarray(code, dtype=np.int32),
+         "vintage": vintage, "source": source, "n": n}
+    _POL_CONTROL[key] = c
+    return c
+
+
+def _get_events():
+    """UCDP-Ereignisse einmal laden + cachen (Welt-Koords + Todesopfer). Leer,
+    solange kein Cache da ist (Token-gesperrt) — dann rendert der Sub-Layer nix."""
+    global _POL_EVENTS
+    if _POL_EVENTS is not None:
+        return _POL_EVENTS
+    items, vintage, source = [], None, None
+    try:
+        from map.layers import ucdp  # noqa: E402
+        data = ucdp.events()
+        if data:
+            vintage = data.get("vintage")
+            source = (data.get("source") or {}).get("name")
+            for it in data.get("items", []):
+                items.append({"wx": it["wx"], "wy": it["wy"],
+                              "name": it.get("conflict") or "Ereignis",
+                              "val": it.get("best"), "date": it.get("date")})
+    except Exception:
+        pass
+    _POL_EVENTS = {"items": items, "vintage": vintage, "source": source}
+    return _POL_EVENTS
+
+
+def _get_pol_borders():
+    """Umstrittene-Gebiete-Ringe einmal laden (Welt-Koords als Nx2-Arrays, wie die
+    Küste). Liste von (bbox, np-array)."""
+    global _POL_BORDERS
+    if _POL_BORDERS is not None:
+        return _POL_BORDERS
+    segs = []
+    try:
+        from map.layers import borders  # noqa: E402
+        data = borders.load()
+        if data:
+            for (mnx, mny, mxx, mxy, pts, _name, _cla) in data["rings"]:
+                segs.append(((mnx, mny, mxx, mxy),
+                             np.asarray(pts, dtype=np.float64)))
+    except Exception:
+        pass
+    _POL_BORDERS = segs
+    return _POL_BORDERS
+
+
+def _draw_pol_borders(screen, view):
+    """Umstrittene Grenzen als dezente rosa Linien (unter den Kontroll-Punkten)."""
+    for ox in view.x_offsets():
+        for (bbox, ring) in _get_pol_borders():
+            if not view.visible(*bbox, ox=ox):
+                continue
+            pts = _project(view, ring, ox)
+            if len(pts) < 2:
+                continue
+            pygame.draw.aalines(screen, BORDER_COL, False, pts.tolist())
+
+
+def _draw_control(screen, view, at):
+    """Gebietskontrolle als farbige Punkte je Ort — VOLL VEKTORISIERT: alle Orte
+    auf einmal projizieren (numpy), sichtbare maskieren, nach Status in drei
+    Gruppen einfärben und als 3×3-Punkte in eine RGBA-Fläche stempeln, dann
+    blitten. So bleiben auch ~30 000 Orte pro Frame billig (kein Python-Loop je
+    Punkt), analog zur Dichte-Heatmap."""
+    c = _get_control(at)
+    if not c["n"]:
+        return
+    w, h = view.w, view.h
+    x0, y0, sx, sy = view._view()
+    arr = np.zeros((h, w, 4), dtype=np.uint8)
+    hit = False
+    for ox in view.x_offsets():
+        px = (c["wx"] + ox - x0) / sx * w
+        py = (c["wy"] - y0) / sy * h
+        vis = (px >= 0) & (px < w) & (py >= 0) & (py < h)
+        if not np.any(vis):
+            continue
+        pxi = px[vis].astype(np.int32)
+        pyi = py[vis].astype(np.int32)
+        codev = c["code"][vis]
+        for col, cc in ((CTRL_UA, 0), (CTRL_RU, 1), (CTRL_CONT, 2)):
+            m = codev == cc
+            if not np.any(m):
+                continue
+            xs, ys = pxi[m], pyi[m]
+            for ddx in (-1, 0, 1):                # 3×3-Block → sichtbarer Punkt
+                xx = np.clip(xs + ddx, 0, w - 1)
+                for ddy in (-1, 0, 1):
+                    yy = np.clip(ys + ddy, 0, h - 1)
+                    arr[yy, xx, 0] = col[0]
+                    arr[yy, xx, 1] = col[1]
+                    arr[yy, xx, 2] = col[2]
+                    arr[yy, xx, 3] = 255
+            hit = True
+    if not hit:
+        return
+    surf = pygame.image.frombuffer(np.ascontiguousarray(arr).tobytes(),
+                                   (w, h), 'RGBA')
+    screen.blit(surf, (0, 0))
+
+
+_POL_EVENT_CAP = 4000    # ehrliche Obergrenze gezeichneter Ereignisse pro Frame
+
+
+def _draw_events(screen, view, font, mouse):
+    """UCDP-Ereignisse als warme Punkte (Radius ~√Todesopfer), dem Cursor
+    nächstes bekommt Name + Opferzahl + Datum. Bei sehr vielen sichtbaren
+    Ereignissen greift ein Deckel (stärkste zuerst) — ehrlich, keine stille
+    Kürzung."""
+    ev = _get_events()
+    items = ev["items"]
+    if not items:
+        return
+    mx, my = mouse
+    drawn = []
+    for ox in view.x_offsets():
+        for it in items:
+            if not view.visible(it["wx"], it["wy"], it["wx"], it["wy"], ox=ox):
+                continue
+            sxp, syp = view.to_screen(it["wx"], it["wy"], ox=ox)
+            drawn.append((int(sxp), int(syp), it))
+    if len(drawn) > _POL_EVENT_CAP:
+        drawn.sort(key=lambda d: (d[2]["val"] or 0), reverse=True)
+        drawn = drawn[:_POL_EVENT_CAP]
+    near, nd = None, 1e18
+    for px, py, it in drawn:
+        val = it["val"] or 0
+        r = max(3, min(20, int(3 + math.sqrt(val) * 0.6)))
+        gfxdraw.filled_circle(screen, px, py, r + 3, (244, 108, 92, 50))   # Halo
+        gfxdraw.filled_circle(screen, px, py, r, EVENT_DOT)
+        gfxdraw.aacircle(screen, px, py, r, EVENT_RING)
+        d = (px - mx) ** 2 + (py - my) ** 2
+        if d < nd:
+            nd, near = d, (px, py, r, it)
+    if near is not None and nd < 70 ** 2:
+        px, py, r, it = near
+        val = '—' if it["val"] is None else it["val"]
+        label = "%s  ✝%s  %s" % (it["name"], val, it.get("date") or "")
+        surf = font.render(label.strip(), True, EVENT_RING)
+        screen.blit(surf, (px + r + 4, py - surf.get_height() // 2))
+
+
+def _pol_step(at, days):
+    """Achse-3-Zeit-Scrubber: `at` um `days` verschieben, in [date_min, date_max]
+    geklemmt. Über das Maximum hinaus → None (=jüngster Stand, „jetzt")."""
+    rng = _pol_range()
+    if not rng:
+        return at
+    dmin, dmax = rng
+    base = date.fromisoformat(at) if at else date.fromisoformat(dmax)
+    lo, hi = date.fromisoformat(dmin), date.fromisoformat(dmax)
+    nd = base + timedelta(days=days)
+    if nd >= hi:
+        return None                 # am jüngsten Rand → zurück auf „jetzt"
+    if nd <= lo:
+        return dmin
+    return nd.isoformat()
+
+
+def _pol_caption_text(at):
+    """Provenienz-/Stand-Zeile fürs Politik-Overlay (oben links)."""
+    c = _get_control(at)
+    ev = _get_events()
+    if not c["n"] and not ev["items"] and not _get_pol_borders():
+        return "◈ Politik/Konflikt — keine Daten (Cache leer)"
+    when = at or "jetzt"
+    parts = ["◈ Politik/Konflikt"]
+    if c["n"]:
+        parts.append("Kontrolle %d Orte · Stand %s" % (c["n"], c["vintage"] or when))
+    if ev["items"]:
+        parts.append("Ereignisse %d (UCDP)" % len(ev["items"]))
+    else:
+        parts.append("Ereignisse: kein UCDP-Cache")
+    return " · ".join(parts)
+
+
+# Symbol-/Farb-Erklärung fürs Politik-Overlay (nur sichtbar, wenn 'p' an ist).
+_POL_LEGEND = [
+    ("dot", CTRL_UA,   "Kontrolle Ukraine"),
+    ("dot", CTRL_RU,   "Kontrolle Russland"),
+    ("dot", CTRL_CONT, "umstritten / unklar"),
+    ("dot", EVENT_DOT, "Konfliktereignis (UCDP)"),
+    ("line", BORDER_COL, "umstrittene Grenze"),
+]
+
+
+def _draw_pol_legend(screen, font, view, bottom):
+    """Mini-Legende unten rechts, die die Politik-Farben beschriftet. Unterkante
+    bei `bottom`, gibt die Oberkante zurück (zum Stapeln)."""
+    pad, sw, gap = 8, 24, 8
+    lh = font.get_height() + 6
+    lab_w = max(font.size(t)[0] for _, _, t in _POL_LEGEND)
+    bw = pad * 2 + sw + gap + lab_w
+    bh = pad * 2 + lh * len(_POL_LEGEND)
+    x0 = view.w - bw - 10
+    y0 = bottom - bh
+    bg = pygame.Surface((bw, bh))
+    bg.set_alpha(175)
+    bg.fill(LEG_BG)
+    screen.blit(bg, (x0, y0))
+    for i, (kind, col, text) in enumerate(_POL_LEGEND):
+        ty = y0 + pad + i * lh
+        cyc = ty + font.get_height() // 2
+        sxc = x0 + pad
+        if kind == "line":
+            pygame.draw.line(screen, col, (sxc, cyc), (sxc + sw, cyc), 2)
+        else:
+            gfxdraw.filled_circle(screen, sxc + sw // 2, cyc, 5, col)
+            gfxdraw.aacircle(screen, sxc + sw // 2, cyc, 5, EVENT_RING)
+        screen.blit(font.render(text, True, LEG_FG), (x0 + pad + sw + gap, ty))
+    return y0
+
+
 # Symbol-Erklärung für das Trade-Overlay (nur sichtbar, wenn 't' an ist). Sagt,
 # was Linie / Marker / Zahl bedeuten — eine EIGENE Legende, getrennt von der
 # Shortcut-Legende oben rechts. Unten rechts (über nichts anderem).
@@ -803,6 +1088,27 @@ def _draw_hud(screen, font, view, level=''):
     screen.blit(label, (10 + pad, view.h - label.get_height() - 10 - pad))
 
 
+def _make_icon(size=64):
+    """Fenster-Icon (favicon) programmatisch malen — ein kleiner „Control-Room"-
+    Globus in der Fensterpalette: Tiefsee-Scheibe, zwei Salbei-Landflecken,
+    Mint-Küstenring + Gradnetz-Kreuz und ein Bernstein-Marker. Kein externes
+    Asset nötig, skaliert scharf über gfxdraw-Antialiasing."""
+    s = size
+    icon = pygame.Surface((s, s), pygame.SRCALPHA)
+    c = s // 2
+    r = s // 2 - 2
+    gfxdraw.filled_circle(icon, c, c, r, SEA_BOTTOM)         # Meer-Scheibe
+    gfxdraw.filled_circle(icon, int(s * 0.40), int(s * 0.44), int(s * 0.20), LAND)
+    gfxdraw.filled_circle(icon, int(s * 0.63), int(s * 0.62), int(s * 0.14), LAND)
+    gfxdraw.aacircle(icon, c, c, r, COAST)                   # Küstenring
+    gfxdraw.aacircle(icon, c, c, r - 1, COAST)
+    pygame.draw.line(icon, GRAT_AXIS, (c, 3), (c, s - 3))    # Gradnetz-Kreuz
+    pygame.draw.line(icon, GRAT_AXIS, (3, c), (s - 3, c))
+    gfxdraw.filled_circle(icon, int(s * 0.66), int(s * 0.34), 4, TRADE_DOT)   # Marker
+    gfxdraw.aacircle(icon, int(s * 0.66), int(s * 0.34), 4, TRADE_RING)
+    return icon
+
+
 def main():
     ap = argparse.ArgumentParser(description="Natives Karten-Fenster (pygame).")
     ap.add_argument('--cx', type=float, default=10.0, help="Start-Längengrad")
@@ -813,6 +1119,7 @@ def main():
     a = ap.parse_args()
 
     pygame.init()
+    pygame.display.set_icon(_make_icon())     # Fenster-Icon (favicon) VOR set_mode
     pygame.display.set_caption("ZENTRALE — Karte")
     screen = pygame.display.set_mode((a.w, a.h), pygame.RESIZABLE)
     clock = pygame.time.Clock()
@@ -832,6 +1139,8 @@ def main():
     show_labels = True
     show_trade = False               # Routen + Chokepoints (Taste 't')
     show_density = False             # Verkehrsdichte-Heatmap (Taste 'd')
+    show_political = False           # Kontrolle + Ereignisse + Grenzen (Taste 'p')
+    pol_at = None                    # Achse 3: Zeitpunkt 'YYYY-MM-DD' oder None=jetzt
     show_legend = True               # Shortcut-Legende oben rechts (immer an)
     glossary_open = False            # '?'-Such-Modal (Begriffs-Erklärungen)
     g_query, g_sel = "", 0
@@ -883,6 +1192,16 @@ def main():
                     show_trade = not show_trade
                 elif ev.key == pygame.K_d:
                     show_density = not show_density
+                elif ev.key == pygame.K_p:
+                    show_political = not show_political
+                    if show_political:
+                        pol_at = None            # beim Einschalten auf „jetzt"
+                elif ev.key == pygame.K_COMMA:   # Achse 3: eine Woche zurück
+                    pol_at = _pol_step(pol_at, -7)
+                elif ev.key == pygame.K_PERIOD:  # Achse 3: eine Woche vor
+                    pol_at = _pol_step(pol_at, +7)
+                elif ev.key == pygame.K_SEMICOLON:   # Achse 3: zurück auf „jetzt"
+                    pol_at = None
                 elif ev.key == pygame.K_LEFT:
                     view.pan_target(-0.2, 0)
                 elif ev.key == pygame.K_RIGHT:
@@ -927,6 +1246,10 @@ def main():
         if show_trade:
             _draw_routes(screen, view)       # Routen zuerst (unter den Markern)
             _draw_trade(screen, view, label_fonts[1], pygame.mouse.get_pos())
+        if show_political:
+            _draw_pol_borders(screen, view)  # Grenzen unter den Punkten
+            _draw_control(screen, view, pol_at)
+            _draw_events(screen, view, label_fonts[1], pygame.mouse.get_pos())
         # Provenienz-Captions oben links stapeln (jedes aktive Overlay eine Zeile).
         cap_y = 10
         if show_density:
@@ -934,13 +1257,19 @@ def main():
                                   cap_y, DENS_FG)
         if show_trade:
             cap_y = _draw_caption(screen, hud_font, _trade_caption_text(), cap_y)
-        # Overlay-Legenden unten rechts stapeln (Dichte-Skala unten, Trade darüber).
+        if show_political:
+            cap_y = _draw_caption(screen, hud_font, _pol_caption_text(pol_at),
+                                  cap_y, POL_FG)
+        # Overlay-Legenden unten rechts stapeln (Dichte unten, dann Trade, dann Politik).
         leg_bottom = view.h - 10
         if show_density:
             leg_bottom = _draw_density_legend(screen, legend_font, view,
                                               leg_bottom) - 8
         if show_trade:
-            _draw_trade_legend(screen, legend_font, view, leg_bottom)
+            leg_bottom = _draw_trade_legend(screen, legend_font, view,
+                                            leg_bottom) - 8
+        if show_political:
+            _draw_pol_legend(screen, legend_font, view, leg_bottom)
         _draw_hud(screen, hud_font, view, level)
         if show_legend:
             _draw_legend(screen, legend_font, view.w)
