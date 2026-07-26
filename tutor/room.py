@@ -1126,12 +1126,7 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
         ctl(fonts['hud'].render('— merk’s dir, kommt gleich nochmal —', True, HUD_DIM), cy + 58)
         _hint_row(screen, fonts['hud'], w, cy + 88,
                   [('R', 'nochmal hören'), ('→', 'weiter')], center_x=ccx)
-    elif sub == 'first':                    # erste Sicht: Übersetzung sichtbar, ABHAKBAR
-        ctl(fonts['bubble'].render('= ' + (cur.get('de') or '…'), True, ASSESS_GOLD), cy + 26)
-        ctl(fonts['hud'].render('neu — kannst du’s schon? sonst Repeat', True, HUD_DIM), cy + 58)
-        _hint_row(screen, fonts['hud'], w, cy + 88,
-                  [('Leer', 'Abhaken ✓'), ('R', 'Repeat'), ('N', 'Next')], center_x=ccx)
-    else:                                   # ask
+    else:                                   # ask (auch erste Sicht — nur Wort, keine Übersetzung)
         ctl(fonts['bubble'].render('Kennst du das Wort?', True, ASSESS_INK2), cy + 26)
         _hint_row(screen, fonts['hud'], w, cy + 82,
                   [('Leer', 'Abhaken ✓'), ('R', 'Repeat'), ('N', 'Next')], center_x=ccx)
@@ -1345,13 +1340,10 @@ def main():
             if not v or not v.get('work'):
                 return
             cur = _pick(v)
-            first_show = cur is not None and not cur.get('shown')
             if cur is not None:
-                cur['shown'] = True
-            # Erste Sicht: Übersetzung direkt zeigen ('first'), aber ABHAKBAR und ohne
-            # Auto-Advance (kennt man's schon, gleich abhaken). Repeat-'learn' bleibt
-            # das nicht-abhakbare „nicht gewusst".
-            v['sub'] = 'first' if first_show else 'ask'
+                cur['shown'] = True     # nur fürs _pick-Tie-Break (Review vor Neu)
+            # Immer normale Abfrage (nur Wort). Die Bedeutung kommt NUR über Repeat.
+            v['sub'] = 'ask'
             v['learn_hold'] = None
             v['cur'] = cur
             v['seen'] = v.get('seen', 0) + 1        # eine Karte mehr gezeigt
