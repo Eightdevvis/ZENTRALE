@@ -889,7 +889,7 @@ def draw_bubble(surf, font, text, cx, top_y, w, alpha=255):
 # und nicht die Figur — nur diese ruhige, DETERMINISTISCHE Vokabel-Abfrage (kein
 # LLM). Lucías STIMME liest die Wörter vor (TTS), aber die Persona „lebt" hier
 # nicht. Der Ablauf wird lokal getrieben (asv-Controller in main); dies ist nur
-# das Rendering. Freischaltung bei ratio ≥ 0.75, dann übernimmt das Zimmer.
+# das Rendering. Freischaltung, wenn ALLE Wörter durch sind (100 %), dann übernimmt das Zimmer.
 ASSESS_TOP  = (28, 36, 52)
 ASSESS_BOT  = (40, 50, 70)
 ASSESS_ACC  = (150, 200, 230)     # kühles Blau, Fortschritt
@@ -1295,7 +1295,7 @@ def main():
     # ── Deterministische Abfrage (asv) — das harte Gate, KEIN LLM ────────────
     # Das Frontend geht die Kern-Wörter Karte für Karte durch: zeigen, vorlesen
     # (TTS), Antwort per REST verbuchen. Kein Sprachmodell, keine Wartezeit. Erst
-    # ab 75 % Deckung wird die Persona (run_stream) gestartet.
+    # wenn ALLE Wörter durch sind (100 %), wird die Persona (run_stream) gestartet.
     def asv_speak(word):
         """Wort vorlesen (TTS, gerampter Speed) — in einem Thread, nicht blockend."""
         if not word:
@@ -1661,10 +1661,9 @@ def main():
                 S['core_ratio'] = float(rs.get('core_ratio') or 0.0)
                 if rs.get('tts_speed'):
                     S['tts_speed'] = float(rs['tts_speed'])
-                # Deckung von außen auf ≥75 % gesprungen → Drill auf Freischaltung.
-                # NUR am echten Deckungswert festmachen (nicht an mode — das kann
-                # 'room' sein, obwohl noch gar nicht freigeschaltet).
-                if (S['asv'] and S['core_ratio'] >= 0.75
+                # Deckung von außen auf 100 % gesprungen → Drill auf Freischaltung.
+                # ALLE Wörter durch = Lucía (kein 75%-Frühstart mehr, GRADUATE_AT=1.0).
+                if (S['asv'] and S['core_ratio'] >= 0.999
                         and S['asv'].get('phase') != 'unlock'):
                     S['asv']['phase'] = 'unlock'; S['asv']['cur'] = None
                 if gid != last_gid:

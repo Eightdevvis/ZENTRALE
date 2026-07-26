@@ -568,8 +568,8 @@ def respond_stream(user_text: str = None, nudge: bool = False,
             target=memory.remember,
             args=(user_text, full, lang, pname, model), daemon=True).start()
 
-        # Kern-Syllabus: einmaliger Graduierungs-Meilenstein (≥75% der Kern-
-        # Wörter gefestigt). check_graduation() feuert genau EINMAL — der Zustand
+        # Kern-Syllabus: einmaliger Graduierungs-Meilenstein (ALLE Kern-Wörter
+        # durch, GRADUATE_AT=1.0). check_graduation() feuert genau EINMAL — der Zustand
         # liegt in data/<lang>/progress.json, NICHT in den Persona-Notizen.
         try:
             if tools.check_graduation(lang):
