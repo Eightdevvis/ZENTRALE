@@ -467,7 +467,11 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     hint = prof.get("vocab_hint")
     if hint:
         try:
-            solid, learn = tools.vocab_split(lang)
+            # Fürs Reden zwei Eimer: BEKANNT (assessed|confirmed → einfach benutzen)
+            # und NEU (gerade erst gezeigt). Der wacklig/fest-Unterschied bleibt intern
+            # (Tracking/FSRS) — ihn als „am Lernen, übe sie" zu geben, ließ qwen
+            # abfragen/in Fragen-Schleifen kippen (gegen echtes qwen belegt).
+            solid, learn = tools.vocab_buckets(lang)
             structs = tools.structure_list(lang)
             # Beschriftung + Trennzeichen kommen aus dem Sprach-Paket
             # (prof['vocab_labels']); waren vorher chinesische Literale hier —

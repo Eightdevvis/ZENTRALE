@@ -113,7 +113,15 @@ def ensure(word: str, lang: str = None) -> bool:
         d = _load(lang)
         if word in d:
             return False
-        d[word] = Card().to_dict()
+        # Frisch gedrillt = ein erster erfolgreicher Kontakt → GLEICH einmal „Good"
+        # verbuchen, damit die Karte NICHT sofort fällig ist. Sonst wären nach dem
+        # Assessment alle Kern-Wörter auf einmal fällig und get_due_reviews flutet
+        # die erste Konversation (qwen paukt sie in einer Schleife durch).
+        try:
+            card, _ = _scheduler().review_card(Card(), Rating.Good, review_datetime=_now())
+        except Exception:
+            card = Card()
+        d[word] = card.to_dict()
         _save(d, lang)
     return True
 

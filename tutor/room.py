@@ -1403,7 +1403,7 @@ def main():
                             v['new_part'] = {'name': crate['part'], 't': 0.0}   # schwebt herein
                     # SR: nur bei bestätigtem Save — Streak hoch, neu fällig setzen
                     # (oder graduieren, wenn Streak über die Ladder hinaus ist).
-                    if res.get('confirmed') and cur is not None:
+                    if (res.get('assessed') or res.get('mastered')) and cur is not None:
                         cur['streak'] = int(cur.get('streak', 0)) + 1
                         if cur['streak'] <= len(SR_LADDER):
                             cur['due'] = v.get('seen', 0) + SR_LADDER[cur['streak'] - 1]
@@ -1503,7 +1503,7 @@ def main():
         game = data.get('game') or {}
         # neue Wörter: due = Einführungs-Index (spreizt sie, statt alle sofort fällig);
         # Priorität steckt schon in der Queue-Reihenfolge.
-        raw = [e for e in (data.get('queue') or []) if not e.get('confirmed')]
+        raw = [e for e in (data.get('queue') or []) if not e.get('assessed')]
         work = [{'word': e['word'], 'de': e.get('de', ''),
                  'category': e.get('category', ''), 'priority': e.get('priority', 'medium'),
                  'streak': 0, 'due': i, 'shown': False}

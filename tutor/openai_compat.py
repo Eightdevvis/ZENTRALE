@@ -31,7 +31,9 @@ import json as _json
 # ein max_tokens-Cap machen das Verhalten reproduzierbar kurz. Beide per Env
 # übersteuerbar. Siehe memory/tutor_persona_tuning.md.
 TUTOR_TEMPERATURE = float(os.getenv("TUTOR_TEMPERATURE", "0.4"))
-TUTOR_MAX_TOKENS  = int(os.getenv("TUTOR_MAX_TOKENS", "200"))
+# 200 ließ qwen in der Voll-Vokabel-Lage in Fragen-Wände rambeln → auf 140 gesenkt
+# (harter Deckel gegen den bekannten Kollaps-Modus; Anti-Ketten-Zeile im Prompt dazu).
+TUTOR_MAX_TOKENS  = int(os.getenv("TUTOR_MAX_TOKENS", "140"))
 
 _clients = {}  # provider-name → OpenAI-Client (lazy, gecacht)
 
@@ -76,8 +78,9 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     client = _client(_provider)
     msgs   = _prepare_messages(messages, system)
 
-    # Begrenzung gegen Endlos-Tool-Loops (analog zur Tool-Tiefe in ai.py).
-    for _ in range(12):
+    # Begrenzung gegen Endlos-Tool-Loops (analog zur Tool-Tiefe in ai.py). Niedrig
+    # (6), damit ein Kollaps-Ramble (z.B. express 10×) hart abbricht statt zu spammen.
+    for _ in range(6):
         stream = client.chat.completions.create(
             model=model,
             messages=msgs,

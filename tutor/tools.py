@@ -115,8 +115,8 @@ _DEFAULT_PHRASES = {
     "news_none":             "(gerade kein Thema — quatsch einfach weiter)",
     "news_wrap":             "(beiläufig erwähnen, nicht wie Nachrichten vorlesen) Thema aus {country}: {topic}",
     "tv_wrap":               "(Fernseher an — sag beiläufig, was läuft) Läuft: {title} ({level}, {note})",
-    "srs_none":              "(gerade nichts zum Auffrischen fällig — quatsch normal weiter)",
-    "srs_due":               "(diese fälligen Wörter beiläufig ins Gespräch einbauen, damit sie geübt werden — NICHT wie einen Test abfragen): {words}",
+    "srs_none":              "(gerade nichts fällig — quatsch normal weiter)",
+    "srs_due":               "(vielleicht EINE davon beiläufig einstreuen, wenn's von selbst passt — ganz ohne Druck, nicht abfragen, nicht alle: {words})",
 }
 
 
@@ -255,12 +255,32 @@ def term_list(lang: str = None) -> list:
 
 
 def vocab_split(lang: str = None) -> tuple:
-    """(gefestigt, im Lernen) — damit die Persona weiß, worauf sie bauen kann."""
+    """(gefestigt, im Lernen) nach `confirmed` — Roh-Split (Tracking)."""
     with _lock:
         entries = _load_raw(lang)
     solid = [e['word'] for e in entries if e.get('word') and e.get('confirmed')]
     learn = [e['word'] for e in entries if e.get('word') and not e.get('confirmed')]
     return solid, learn
+
+
+def vocab_buckets(lang: str = None) -> tuple:
+    """Fürs GESPRÄCH: (bekannt, neu). **bekannt** = im Drill bestanden ODER im Gespräch
+    gefestigt (`assessed|confirmed`) → einfach ganz normal benutzen. **neu** = im
+    Gespräch gerade erst gezeigt (weder assessed noch confirmed).
+
+    Bewusst NUR zwei Eimer fürs Reden: der wacklig/fest-Unterschied ist intern
+    (Tracking + FSRS-Auffrischung, `get_due_reviews`) — ihn der Persona als „noch am
+    Lernen, übe sie" zu geben, ließ qwen wieder abfragen und in Fragen-Schleifen
+    kippen (gegen echtes qwen belegt). Fürs Reden zählt: kennt sie's oder ist's neu."""
+    with _lock:
+        entries = _load_raw(lang)
+    known, new = [], []
+    for e in entries:
+        w = e.get('word')
+        if not w:
+            continue
+        (known if (e.get('assessed') or e.get('confirmed')) else new).append(w)
+    return known, new
 
 
 def get_vocab_stats(lang: str = None) -> str:
@@ -303,14 +323,26 @@ def _confirmed_words(lang: str = None) -> set:
     return {e["word"] for e in entries if e.get("confirmed") and e.get("word")}
 
 
+def _assessed_words(lang: str = None) -> set:
+    """Wörter, die das Drill BESTANDEN haben (`assessed`) — das treibt Gate/Leiste/
+    Freischaltung. Bewusst getrennt von `confirmed` (= im GESPRÄCH gefestigt, „fest"):
+    ein Drill-Wort läuft als „wacklig" (assessed, nicht confirmed) rein und wird erst
+    fest, wenn Sasha es selbst benutzt. `confirmed` zählt hier mit (rein-konvers.
+    gefestigte Kern-Wörter + Abwärtskompat. mit altem Drill, der confirmed setzte)."""
+    with _lock:
+        entries = _load_raw(lang)
+    return {e["word"] for e in entries
+            if (e.get("assessed") or e.get("confirmed")) and e.get("word")}
+
+
 def core_coverage(lang: str = None) -> tuple:
-    """(gefestigte Kern-Wörter, Kern-Gesamt). (0,0) wenn die Sprache kein
+    """(im Drill BESTANDENE Kern-Wörter, Kern-Gesamt). (0,0) wenn die Sprache kein
     Curriculum trägt — der Aufrufer behandelt das als „Feature inaktiv"."""
     core = _core_list(lang)
     if not core:
         return (0, 0)
-    confirmed = _confirmed_words(lang)
-    got = sum(1 for e in core if e["word"] in confirmed)
+    assessed = _assessed_words(lang)
+    got = sum(1 for e in core if e["word"] in assessed)
     return (got, len(core))
 
 
@@ -326,8 +358,8 @@ def core_todo(lang: str = None, n: int = 6) -> list:
     core = _core_list(lang)
     if not core:
         return []
-    confirmed = _confirmed_words(lang)
-    todo = [e for e in core if e["word"] not in confirmed]
+    assessed = _assessed_words(lang)
+    todo = [e for e in core if e["word"] not in assessed]
     todo.sort(key=lambda e: _PRIO_ORDER.get(e.get("priority"), 9))
     return todo[:max(0, n)]
 
@@ -545,11 +577,14 @@ def assessment_queue(lang: str = None) -> list:
         out.append({
             'word': w, 'de': c.get('de', ''), 'category': c.get('category', ''),
             'priority': c.get('priority', 'medium'),
+            # `assessed` = im Drill bestanden (treibt die Queue); `confirmed` = im
+            # Gespräch gefestigt (Abwärtskompat: altes Drill setzte confirmed).
+            'assessed': bool(st.get('assessed') or st.get('confirmed')),
             'confirmed': bool(st.get('confirmed')),
             'correct_use': int(st.get('correct_use', 0) or 0),
             'reps': int(sr.get('reps', 0) or 0),
         })
-    out.sort(key=lambda e: (e['confirmed'], _PRIO_ORDER.get(e['priority'], 9)))
+    out.sort(key=lambda e: (e['assessed'], _PRIO_ORDER.get(e['priority'], 9)))
     return out
 
 
@@ -575,30 +610,31 @@ def assessment_answer(lang: str, word: str, result: str) -> dict:
         g = _game_load(lang)
         sr = g.setdefault('srs', {}).setdefault(word, {'reps': 0, 'due': 0})
 
-        was_confirmed = bool(e.get('confirmed'))
+        was_assessed = bool(e.get('assessed') or e.get('confirmed'))
         first_known = False
         if result in ('known', 'learned'):
-            # STATUSLEISTE hängt am ERSTEN Wissen eines Worts (Sasha): das erste
-            # korrekte Abhaken festigt (confirmed → Leiste +1). Weitere korrekte
-            # Reviews (SRS-Wiederholung) ändern die Leiste NICHT mehr; das
-            # Insertion-Shuffle (Abstände) läuft rein im Frontend (room.py).
+            # STATUSLEISTE/Gate hängt am ERSTEN Bestehen eines Worts im Drill
+            # (`assessed`). Das Wort läuft aber als „WACKLIG" rein: NICHT `confirmed`
+            # und `correct_use` bleibt 0 — es wurde nur gedrillt, nicht über Zeit
+            # konsolidiert noch von Sasha selbst benutzt. „Fest" (`confirmed`) wird es
+            # erst im GESPRÄCH durch ihre eigene Nutzung (increment_correct_use).
             sr['reps'] = int(sr.get('reps', 0)) + 1
-            first_known = not was_confirmed
-            e['confirmed'] = True
-            e['correct_use'] = max(int(e.get('correct_use', 0) or 0), CONFIRM_THRESHOLD)
+            first_known = not was_assessed
+            e['assessed'] = True
+            e.setdefault('confirmed', False)
+            e.setdefault('correct_use', 0)
             g['reviews'] = int(g.get('reviews', 0)) + 1
-            # Münze NUR zufällig UND nur beim ERSTEN Wissen eines Worts (Sasha):
-            # SR-Wiederholungen geben KEINE Münzen mehr (sonst Coin-Farming).
+            # Münze NUR zufällig UND nur beim ERSTEN Bestehen (kein Coin-Farming).
             if first_known and random.random() < COIN_CHANCE:
                 coin_gain = random.randint(COIN_MIN, COIN_MAX)
                 g['coins'] = int(g.get('coins', 0)) + coin_gain
-            # Kiste an DISTINKTEN Wort-Meilensteinen (15/35/50/70) — nur beim
-            # ERSTEN Wissen, damit die Kisten-Symbole exakt auf der Leiste (got)
-            # sitzen und Wiederholungen keine Kisten auslösen.
+            # Kiste an DISTINKTEN Wort-Meilensteinen (15/35/50/70) — nur beim ERSTEN
+            # Bestehen, damit die Kisten-Symbole exakt auf der Leiste (got) sitzen.
             if first_known:
                 core_words = {c['word'] for c in _core_list(lang)}
-                confirmed_now = {x['word'] for x in entries if x.get('confirmed') and x.get('word')}
-                got_now = len(core_words & confirmed_now)
+                assessed_now = {x['word'] for x in entries
+                                if (x.get('assessed') or x.get('confirmed')) and x.get('word')}
+                got_now = len(core_words & assessed_now)
                 ms = crate_milestones(len(core_words))
                 n = int(g.get('crates', 0))
                 if n < len(ms) and got_now >= ms[n]:
@@ -608,13 +644,17 @@ def assessment_answer(lang: str, word: str, result: str) -> dict:
 
         _write_raw(entries, lang)
         _game_save(g, lang)
+        assessed = bool(e.get('assessed'))
         conf, uses, reps = bool(e.get('confirmed')), int(e.get('correct_use', 0)), int(sr['reps'])
         coins, parts = int(g['coins']), list(g.get('parts', []))
     if first_known:
-        srs.ensure(word, lang)          # erstes Wissen → ins Langzeit-SR (FSRS)
+        srs.ensure(word, lang)          # erstes Bestehen → ins Langzeit-SR (FSRS)
     got, total = core_coverage(lang)
-    return {'word': word, 'confirmed': conf, 'correct_use': uses, 'reps': reps,
-            'mastered': conf, 'first_known': first_known, 'got': got, 'total': total,
+    # `mastered` = im Drill bestanden (assessed) — das treibt Entfernen/Freischaltung
+    # im Frontend; `confirmed` bleibt separat (im Gespräch gefestigt = „fest").
+    return {'word': word, 'confirmed': conf, 'assessed': assessed, 'correct_use': uses,
+            'reps': reps, 'mastered': assessed, 'first_known': first_known,
+            'got': got, 'total': total,
             'ratio': round(got / total, 3) if total else 0.0,
             'unlocked': core_graduated(lang),
             'coins': coins, 'coin_gain': coin_gain,
@@ -739,7 +779,7 @@ def get_due_reviews(lang: str = None) -> str:
     """Fällige Wörter aus dem Langzeit-SR (FSRS, `tutor/srs.py`) — WAS die Persona im
     Gespräch beiläufig auffrischen sollte. Reine Abfrage der tutor-isolierten Daten;
     das eigentliche Neu-Terminieren passiert über increment_correct_use (= Recall)."""
-    words = srs.due_words(lang, limit=12)
+    words = srs.due_words(lang, limit=3)      # wenige — sonst paukt das Modell sie durch
     if not words:
         return _phrase("srs_none", lang)
     return _phrase("srs_due", lang, words=", ".join(words))

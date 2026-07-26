@@ -77,11 +77,15 @@ PROFILE = profile(
 
     # Beschriftung des Vokabel-Blocks (session hängt ihn ans Prompt-Ende) — Spanisch,
     # sonst bekäme eine es-Session einen deutschen Block.
+    # WICHTIG: die Labels beschreiben nur, WAS sie schon kennt — sie sind KEINE
+    # Drill-Anweisung. „repítelas/afiánzalas/examínala" o.Ä. lassen qwen wieder
+    # abfragen und in Fragen-Schleifen kippen (gegen echtes qwen belegt). Nur zwei
+    # Eimer fürs Reden (session.vocab_buckets): BEKANNT (solid) + NEU (learn).
     vocab_labels = {
-        "solid":   "ya domina (úsalas sin miedo): ",
-        "learn":   "está aprendiendo (repítelas, y si las usa bien afiánzalas): ",
-        "structs": "patrones que está aprendiendo: ",
-        "plain":   "está aprendiendo: ",
+        "solid":   "ya las conoce, úsalas con naturalidad al charlar: ",
+        "learn":   "las acaba de ver, todavía nuevas: ",
+        "structs": "maneras de decir que va cogiendo: ",
+        "plain":   "las acaba de ver, todavía nuevas: ",
         "join":    ", ",
         "sep":     "; ",
     },
@@ -114,6 +118,8 @@ PROFILE = profile(
         "struct_progress":        "✓ «{pattern}» {uses}/{threshold}",
         "struct_notfound":        "[«{pattern}» no encontrado]",
 
+        "srs_none":               "(ahora no hay nada que repasar, tú sigue charlando sin más)",
+        "srs_due":                "(quizá cuela UNA de estas de pasada si sale sola, sin forzar, sin examinarla, no todas: {words})",
         "news_none":              "(ahora no hay tema, tú sigue charlando sin más)",
         "news_wrap":              "(suéltalo de pasada, no como un telediario) De España se suele comentar: {topic}",
         "tv_wrap":                "(has encendido la tele, di una frase sin más) Están echando: {title} ({level}, {note})",
