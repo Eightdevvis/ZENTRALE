@@ -322,6 +322,48 @@
   .mpanel .mp-body { flex: 1; min-height: 0; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: var(--ink); margin: 6px 0; }
   .mpanel .mp-reply textarea { width: 100%; height: 80px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; }
 
+  /* ── Klavier-Panel (Mittel-Exhibit „Klavier") ─────────────────────
+     Aufbau von unten nach oben: Tasten unten, Notensystem darüber. Beides
+     SVG, damit es mit der Box mitskaliert (Kiosk 1920×1080 scale-to-fit). */
+  .ppanel { gap: 6px; }
+  .ppanel .pk-staff { flex: 1; min-height: 80px; border: 1px solid var(--line); }
+  .ppanel .pk-staff svg { width: 100%; height: 100%; display: block; }
+  /* Tastatur: füllt IMMER die Panelbreite, die Höhe folgt dem Seitenverhältnis
+     (height:auto statt fester Höhe — sonst schrumpft „meet" die Klaviatur auf
+     ein Briefmarkenformat in der Mitte). */
+  .ppanel .pk-keys { flex: 0 0 auto; }
+  .ppanel .pk-keys svg { width: 100%; height: auto; display: block; }
+  .ppanel .pk-line { stroke: var(--line); stroke-width: 1; }
+  /* Violinschlüssel als Pfad, nicht als Zeichen 𝄞 (U+1D11E): das Glyph steckt
+     nur in Musik-Fonts (hier zufällig „Noto Music"), auf dem Pi-Kiosk fehlt es
+     → Ersatzkästchen. Ein Pfad braucht keine Schrift. */
+  .ppanel .pk-clef { fill: none; stroke: var(--faint); stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; }
+  .ppanel .gchip i { font-style: normal; margin-left: 7px; color: var(--dim); }
+  .ppanel .gchip i:hover { color: var(--span); }
+  .ppanel .gchip.on i { color: var(--bg); }
+  .ppanel .pk-head { fill: var(--ink); }
+  .ppanel .pk-head.hollow { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+  .ppanel .pk-head.now { fill: var(--acc); }
+  .ppanel .pk-head.hollow.now { fill: none; stroke: var(--acc); }
+  .ppanel .pk-stem { stroke: var(--ink); stroke-width: 1.2; }
+  .ppanel .pk-stem.now { stroke: var(--acc); }
+  .ppanel .pk-acc { fill: var(--dim); font-size: 18px; font-family: serif; }
+  .ppanel .pk-ledger { stroke: var(--ink); stroke-width: 1; }
+  /* Tastenfarben liegen NICHT auf --ink/--bg: sonst dreht sich die Klaviatur im
+     Nachtthema um (weiße Tasten dunkler als schwarze). Eigene Paare pro Thema,
+     damit weiß immer heller ist als schwarz. */
+  .ppanel { --kw: #f6f2e8; --kb: #2a271f; --kwl: #7c7768; --kbl: #ece7dc; }
+  [data-theme="night"] .ppanel { --kw: #5b6572; --kb: #10141a; --kwl: #e7edf4; --kbl: #a9b7c6; }
+  .ppanel .pk-white { fill: var(--kw); stroke: var(--line); stroke-width: 1; }
+  .ppanel .pk-white.on { fill: var(--acc); }
+  .ppanel .pk-black { fill: var(--kb); stroke: var(--line); stroke-width: 1; }
+  .ppanel .pk-black.on { fill: var(--acc); }
+  .ppanel .pk-lw { fill: var(--kwl); font-size: 21px; text-anchor: middle; font-family: 'VT323', monospace; }
+  .ppanel .pk-lb { fill: var(--kbl); font-size: 19px; text-anchor: middle; font-family: 'VT323', monospace; }
+  .ppanel .pk-oct { fill: var(--faint); font-size: 17px; text-anchor: middle; font-family: 'VT323', monospace; }
+  .ppanel .pk-rec { color: var(--tutor); }
+  .ppanel .pk-nowplay { color: var(--acc); }
+
   /* ── Kalender-Panel (Mittel-Exhibit „Kalender") ──────────────────── */
   .cpanel .crow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .cpanel .clabel { font-size: 17px; color: var(--ink); letter-spacing: 0.04em; }
@@ -576,10 +618,11 @@
               <span class="tab" data-ex="kalender">Kalender</span>
               <span class="tab" data-ex="listen">Fokus</span>
               <span class="tab" data-ex="mail">Post</span>
+              <span class="tab" data-ex="klavier">Klavier</span>
               <span class="tab on" data-ex="auto">Auto</span>
             </div>
           </div>
-          <div class="core-wrap"><pre id="core"></pre><div id="graph-panel" class="gpanel" style="display:none"></div><div id="calendar-panel" class="gpanel cpanel" style="display:none"></div><div id="lists-panel" class="gpanel lpanel" style="display:none"></div><div id="mail-panel" class="gpanel mpanel" style="display:none"></div><div id="alarm-corner"></div></div>
+          <div class="core-wrap"><pre id="core"></pre><div id="graph-panel" class="gpanel" style="display:none"></div><div id="calendar-panel" class="gpanel cpanel" style="display:none"></div><div id="lists-panel" class="gpanel lpanel" style="display:none"></div><div id="mail-panel" class="gpanel mpanel" style="display:none"></div><div id="piano-panel" class="gpanel ppanel" style="display:none"></div><div id="alarm-corner"></div></div>
           <div class="core-readout">
             {% if not ki_aus %}<div class="ai-state" id="ai-state"><span class="sp">·</span> BEREIT</div>{% endif %}
             <div class="ai-model" id="ai-meta">zeigt: gesicht</div>
@@ -619,9 +662,11 @@
         <div class="box shortcuts" style="flex:0 0 auto">
           <span class="bt">tastenkürzel</span>
           <div class="sc-grid">
-            <span class="sc-k">Tab-Klick</span><span class="sc-d">Werkzeug wählen (Karte · Graph · Kalender · Fokus · Post) — Fokus auch per Taste f</span>
+            <span class="sc-k">Tab-Klick</span><span class="sc-d">Werkzeug wählen (Karte · Graph · Kalender · Fokus · Post · Klavier) — Fokus auch per Taste f</span>
             <span class="sc-k">AUTO·HELL·DUNKEL</span><span class="sc-d">Theme umschalten (oben rechts)</span>
-            <span class="sc-k">k</span><span class="sc-d">Data-Collection öffnen</span>
+            <span class="sc-k">k</span><span class="sc-d">Klavier auf/zu — spielen mit y x c v b n m , . - (weiß) und s d g h j l ö (schwarz)</span>
+            <span class="sc-k">Leertaste</span><span class="sc-d">im Klavier: Melodie aufnehmen/stoppen · Enter abspielen · ← → Oktave</span>
+            <span class="sc-k">Alt+K</span><span class="sc-d">Data-Collection öffnen</span>
             <span class="sc-k">↑ ↓</span><span class="sc-d">Feld wählen · ← → Smiley · k speichern · ESC zurück</span>
           </div>
         </div>
@@ -1772,6 +1817,393 @@
       load();
     })();
 
+    // ── Klavier-Werkzeug (Mittel-Exhibit „Klavier", Taste k) ────────────
+    // Die Buchstabenreihen der Tastatur SIND die Klaviatur: untere Reihe =
+    // weiße Tasten, die Reihe darüber = schwarze — dort, wo sie physisch
+    // zwischen zwei weißen liegen. Unten die gezeichneten Tasten, darüber das
+    // Notensystem, in das das Gespielte läuft. Ton macht die WebAudio-API
+    // (Oszillator + Hüllkurve), also kein Sample, kein Download — läuft offline
+    // im Pi-Kiosk. Aufnahmen liegen serverseitig (/api/melodies →
+    // data/melodies.json), damit sie Reload/Knoten überleben.
+    (function () {
+      var panel = document.getElementById('piano-panel');
+      if (!panel) return;
+
+      // ── Belegung ──
+      // 'f' und 'k' fallen in die Lücken E–F und H–C, wo es KEINE schwarze
+      // Taste gibt — beide bleiben damit für ihre Shortcuts frei (f = Fokus,
+      // k = Klavier auf/zu). s = Halbton über der weißen Taste links davon.
+      var WHITE = [
+        { k: 'y', s: 0 },  { k: 'x', s: 2 },  { k: 'c', s: 4 },  { k: 'v', s: 5 },  { k: 'b', s: 7 },
+        { k: 'n', s: 9 },  { k: 'm', s: 11 }, { k: ',', s: 12 }, { k: '.', s: 14 }, { k: '-', s: 16 }
+      ];
+      // w = Index der weißen Taste, an deren rechter Kante die schwarze sitzt
+      var BLACK = [
+        { k: 's', s: 1, w: 0 },  { k: 'd', s: 3, w: 1 },  { k: 'g', s: 6, w: 3 },  { k: 'h', s: 8, w: 4 },
+        { k: 'j', s: 10, w: 5 }, { k: 'l', s: 13, w: 7 }, { k: 'ö', s: 15, w: 8 }
+      ];
+      var KEYMAP = {};   // tastatur-taste → halbton-offset über dem Grund-C
+      WHITE.forEach(function (e) { KEYMAP[e.k] = e.s; });
+      BLACK.forEach(function (e) { KEYMAP[e.k] = e.s; });
+      // Deutsche Notennamen (H statt B) — Sasha liest die Zeile, nicht ein Programm.
+      var NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'H'];
+      var SEMI_TO_DIA = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];   // Halbton → Stufe im Notensystem
+      var IS_SHARP    = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0];
+      var OCT_MIN = 3, OCT_MAX = 6;   // Grenzen, damit alles im Notensystem Platz hat
+
+      var PK = {
+        oct: 4,            // Grund-Oktave der untersten weißen Taste (C4 = mittleres C)
+        lit: {},           // midi → gedrückt/klingt (für die gezeichneten Tasten)
+        seq: [],           // was im Notensystem steht: [{n, d}] (d = ms, 0 = klingt noch)
+        held: {},          // tastatur-taste → midi (beim Drücken festgehalten)
+        open: {},          // midi → { start, seq, rec, voice }
+        rec: null,         // { t0, notes: [{n,t,d}] } solange aufgezeichnet wird
+        play: null,        // { id, timers, voices } solange abgespielt wird
+        mel: [],           // gespeicherte Melodien
+        msg: ''            // kurze Rückmeldung in der Statuszeile
+      };
+
+      function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+      function q(sel) { return panel.querySelector(sel); }
+      function midiOf(off) { return (PK.oct + 1) * 12 + off; }
+      function noteName(n) { return NAMES[n % 12] + (Math.floor(n / 12) - 1); }
+      function diaOf(n) { return (Math.floor(n / 12) - 1) * 7 + SEMI_TO_DIA[n % 12]; }
+      function fmtMs(ms) { var s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
+
+      // ── Ton (WebAudio) ──────────────────────────────────────────────
+      // Ein Oszillator pro klingender Note, dreieckig (weicher als Sägezahn,
+      // kerniger als Sinus) + kurze Hüllkurve. AudioContext wird ERST beim
+      // ersten Tastendruck gebaut: vorher blockt die Autoplay-Policy ihn,
+      // ein Tastendruck ist die nötige Nutzergeste.
+      var AC = null, master = null;
+      function actx() {
+        if (!AC) {
+          var Ctor = window.AudioContext || window.webkitAudioContext;
+          if (!Ctor) return null;
+          AC = new Ctor();
+          master = AC.createGain(); master.gain.value = 0.16; master.connect(AC.destination);
+        }
+        if (AC.state === 'suspended') AC.resume();
+        return AC;
+      }
+      function voiceOn(n) {
+        var ac = actx(); if (!ac) return null;
+        var t = ac.currentTime;
+        var o = ac.createOscillator(), g = ac.createGain();
+        o.type = 'triangle'; o.frequency.value = 440 * Math.pow(2, (n - 69) / 12);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.9, t + 0.012);   // Anschlag
+        g.gain.exponentialRampToValueAtTime(0.4, t + 0.30);    // Abfall aufs Halten
+        o.connect(g); g.connect(master); o.start(t);
+        return { o: o, g: g };
+      }
+      function voiceOff(v) {
+        if (!v || !AC) return;
+        var t = AC.currentTime;
+        try {
+          v.g.gain.cancelScheduledValues(t);
+          v.g.gain.setValueAtTime(Math.max(0.0001, v.g.gain.value), t);
+          v.g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);   // Ausklang
+          v.o.stop(t + 0.18);
+        } catch (e) { /* Kontext schon zu */ }
+      }
+
+      // ── Spielen ─────────────────────────────────────────────────────
+      function noteOn(n) {
+        if (PK.open[n]) return;
+        var now = performance.now();
+        var sq = { n: n, d: 0, t: now };
+        PK.seq.push(sq); if (PK.seq.length > 96) PK.seq.shift();
+        var rc = null;
+        if (PK.rec) { rc = { n: n, t: Math.round(now - PK.rec.t0), d: 0 }; PK.rec.notes.push(rc); }
+        PK.open[n] = { start: now, seq: sq, rec: rc, voice: voiceOn(n) };
+        PK.lit[n] = 1;
+        draw();
+      }
+      function noteOff(n) {
+        var o = PK.open[n]; if (!o) return;
+        delete PK.open[n];
+        var d = Math.max(1, Math.round(performance.now() - o.start));
+        o.seq.d = d; if (o.rec) o.rec.d = d;
+        voiceOff(o.voice); delete PK.lit[n];
+        draw();
+      }
+      function allOff() {
+        Object.keys(PK.open).forEach(function (n) { noteOff(Number(n)); });
+        PK.held = {};
+      }
+      function shiftOct(d) {
+        var o = Math.min(OCT_MAX, Math.max(OCT_MIN, PK.oct + d));
+        if (o === PK.oct) return;
+        allOff(); PK.oct = o; PK.msg = ''; draw();
+      }
+
+      // ── Aufnahme ────────────────────────────────────────────────────
+      // Leertaste startet/stoppt. Beim Stoppen einmal nach dem Namen fragen
+      // und ab zum Backend; Abbrechen verwirft die Aufnahme (nichts wird
+      // heimlich gespeichert).
+      var recTick = null;
+      function toggleRec() {
+        if (PK.rec) { stopRec(); return; }
+        stopPlay();
+        PK.rec = { t0: performance.now(), notes: [] };
+        PK.msg = '';
+        recTick = setInterval(draw, 250);   // laufende Zeit in der Statuszeile
+        draw();
+      }
+      async function stopRec() {
+        var rec = PK.rec; PK.rec = null;
+        if (recTick) { clearInterval(recTick); recTick = null; }
+        allOff();
+        if (!rec || !rec.notes.length) { PK.msg = 'aufnahme leer — nichts gespeichert'; draw(); return; }
+        var vorschlag = 'melodie ' + (PK.mel.length + 1);
+        var name = prompt('melodie speichern als…', vorschlag);
+        if (name === null || !name.trim()) { PK.msg = 'aufnahme verworfen'; draw(); return; }
+        try {
+          var r = await fetch('/api/melodies', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name.trim(), notes: rec.notes })
+          });
+          var m = await r.json();
+          if (!r.ok) throw new Error(m.error || 'fehler');
+          PK.msg = '„' + m.name + '" gespeichert · ' + m.notes.length + ' noten';
+          await loadMel();
+        } catch (e) { PK.msg = 'speichern fehlgeschlagen'; draw(); }
+      }
+
+      // ── Abspielen ───────────────────────────────────────────────────
+      function stopPlay() {
+        if (!PK.play) return;
+        PK.play.timers.forEach(clearTimeout);
+        PK.play.voices.forEach(voiceOff);
+        PK.lit = {}; PK.play = null;
+        draw();
+      }
+      function playMel(mel) {
+        stopPlay();
+        if (!mel || !(mel.notes || []).length) return;
+        var p = { id: mel.id, timers: [], voices: [] };
+        PK.play = p;
+        PK.seq = mel.notes.map(function (e) { return { n: e.n, d: e.d, t: e.t }; }).slice(-96);
+        mel.notes.forEach(function (e) {
+          p.timers.push(setTimeout(function () {
+            var v = voiceOn(e.n); p.voices.push(v);
+            PK.lit[e.n] = 1; draw();
+            p.timers.push(setTimeout(function () { voiceOff(v); delete PK.lit[e.n]; draw(); }, e.d));
+          }, e.t));
+        });
+        p.timers.push(setTimeout(stopPlay, (mel.dur || 0) + 500));
+        draw();
+      }
+
+      // ── Melodien-Registry ───────────────────────────────────────────
+      async function loadMel() {
+        try { PK.mel = await (await fetch('/api/melodies')).json() || []; } catch (e) { PK.mel = []; }
+        draw();
+      }
+      async function renameMel(id) {
+        var m = PK.mel.filter(function (x) { return x.id === id; })[0]; if (!m) return;
+        var name = prompt('melodie umbenennen', m.name);
+        if (name === null || !name.trim()) return;
+        await fetch('/api/melodies/' + encodeURIComponent(id) + '/rename', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name.trim() })
+        });
+        await loadMel();
+      }
+      async function delMel(id) {
+        var m = PK.mel.filter(function (x) { return x.id === id; })[0]; if (!m) return;
+        if (!confirm('melodie „' + m.name + '" löschen?')) return;
+        if (PK.play && PK.play.id === id) stopPlay();
+        await fetch('/api/melodies/' + encodeURIComponent(id), { method: 'DELETE' });
+        await loadMel();
+      }
+
+      // ── Zeichnen: Notensystem (oben) ────────────────────────────────
+      // Violinschlüssel, 5 Linien, Hilfslinien nach Bedarf. Kein Takt, kein
+      // Notenwert — die Noten stehen in Spielreihenfolge nebeneinander, lange
+      // Töne bekommen einen hohlen Kopf. Der Schlüssel ist als Pfad gezeichnet
+      // (nicht als Zeichen 𝄞): die Musik-Glyphen fehlen auf dem Pi.
+      var SW = 900, SH = 260, S = 14, HALF = 7, Y_E4 = 150, X0 = 74, SLOT = 29, CHORD_MS = 70;
+      function yOfDia(dia) { return Y_E4 - (dia - 30) * HALF; }
+      // Gezeichnet in Notensystem-Koordinaten: die Spirale liegt auf der
+      // G4-Linie (y=136, zweite von unten — daher »G-Schlüssel«), der Bogen
+      // reicht über die oberste Linie hinaus, der Schwanz unter die unterste.
+      var CLEF = 'M 34,136 C 22,133 19,120 30,115 C 43,110 51,123 46,138 C 41,154 23,157 16,143'
+               + ' C 9,129 19,107 31,93 C 40,82 45,74 43,66 C 41,58 33,58 30,66 C 27,74 30,84 35,93'
+               + ' M 35,93 C 40,113 45,140 46,158 C 47,172 46,182 36,185 C 27,188 22,180 25,173';
+
+      function drawStaff() {
+        var h = ['<svg viewBox="0 0 ' + SW + ' ' + SH + '" preserveAspectRatio="xMidYMid meet">'];
+        for (var i = 0; i < 5; i++) {
+          var y = Y_E4 - i * S;
+          h.push('<line class="pk-line" x1="14" y1="' + y + '" x2="' + (SW - 10) + '" y2="' + y + '"/>');
+        }
+        h.push('<path class="pk-clef" d="' + CLEF + '"/>');
+        // Gleichzeitig Angeschlagenes gehört in EINE Spalte (Akkord), nicht
+        // nebeneinander — sonst liest sich ein Dreiklang wie drei Töne. CHORD_MS
+        // ist die Toleranz: schneller als das kriegt keine Hand drei Tasten.
+        var cols = [];
+        PK.seq.forEach(function (e) {
+          var c = cols[cols.length - 1];
+          if (c && Math.abs(e.t - c.t) <= CHORD_MS) { c.notes.push(e); return; }
+          cols.push({ t: e.t, notes: [e] });
+        });
+        var fit = Math.floor((SW - X0 - 20) / SLOT);
+        cols.slice(-fit).forEach(function (col, i) {
+          var cx = X0 + i * SLOT + SLOT / 2;
+          // Im Akkord von unten nach oben; zwei Töne im Sekundabstand können
+          // nicht auf derselben Seite des Halses stehen (die Köpfe lägen
+          // aufeinander) → der obere rückt nach rechts, wie im Notensatz.
+          var prevDia = null;
+          col.notes.slice().sort(function (a, b) { return diaOf(a.n) - diaOf(b.n); }).forEach(function (e) {
+            var dia = diaOf(e.n), y = yOfDia(dia);
+            var x = (prevDia !== null && dia - prevDia === 1) ? cx + 11 : cx;
+            prevDia = dia;
+            var now = PK.lit[e.n] ? ' now' : '';
+            // Hilfslinien: jede zweite Stufe außerhalb des Systems bis zur Note
+            var d;
+            for (d = 28; d >= dia; d -= 2) h.push('<line class="pk-ledger" x1="' + (x - 9) + '" y1="' + yOfDia(d) + '" x2="' + (x + 9) + '" y2="' + yOfDia(d) + '"/>');
+            for (d = 40; d <= dia; d += 2) h.push('<line class="pk-ledger" x1="' + (x - 9) + '" y1="' + yOfDia(d) + '" x2="' + (x + 9) + '" y2="' + yOfDia(d) + '"/>');
+            if (IS_SHARP[e.n % 12]) h.push('<text class="pk-acc" x="' + (x - 21) + '" y="' + (y + 5) + '">♯</text>');
+            var hollow = (e.d >= 500 || e.d === 0) ? ' hollow' : '';   // lang gehalten / klingt noch
+            h.push('<ellipse class="pk-head' + hollow + now + '" cx="' + x + '" cy="' + y + '" rx="6.4" ry="4.8" transform="rotate(-18 ' + x + ' ' + y + ')"/>');
+            var up = dia < 34;   // unterhalb der Mittellinie → Hals nach oben
+            var sx = up ? x + 6 : x - 6, sy2 = up ? y - 27 : y + 27;
+            h.push('<line class="pk-stem' + now + '" x1="' + sx + '" y1="' + y + '" x2="' + sx + '" y2="' + sy2 + '"/>');
+          });
+        });
+        h.push('</svg>');
+        return h.join('');
+      }
+
+      // ── Zeichnen: Tastatur (unten) ──────────────────────────────────
+      // Weiße Tasten nebeneinander, schwarze halb überlappend an den Kanten.
+      // Auf jeder Taste steht die Computertaste, die sie spielt.
+      var KW = 112, KH = 204, BW = 60, BH = 126;
+      function drawKeys() {
+        var W = WHITE.length * KW, h = ['<svg viewBox="0 0 ' + W + ' 234" preserveAspectRatio="xMidYMid meet">'];
+        WHITE.forEach(function (e, i) {
+          var n = midiOf(e.s), on = PK.lit[n] ? ' on' : '';
+          h.push('<rect class="pk-white' + on + '" x="' + (i * KW) + '" y="4" width="' + KW + '" height="' + KH + '" rx="3"/>');
+          h.push('<text class="pk-lw" x="' + (i * KW + KW / 2) + '" y="' + (KH - 12) + '">' + esc(e.k) + '</text>');
+          if (e.s % 12 === 0) h.push('<text class="pk-oct" x="' + (i * KW + KW / 2) + '" y="' + (KH + 22) + '">' + esc(noteName(n)) + '</text>');
+        });
+        BLACK.forEach(function (e) {
+          var n = midiOf(e.s), on = PK.lit[n] ? ' on' : '';
+          var x = (e.w + 1) * KW - BW / 2;
+          h.push('<rect class="pk-black' + on + '" x="' + x + '" y="4" width="' + BW + '" height="' + BH + '" rx="2"/>');
+          h.push('<text class="pk-lb" x="' + (x + BW / 2) + '" y="' + (BH - 10) + '">' + esc(e.k) + '</text>');
+        });
+        h.push('</svg>');
+        return h.join('');
+      }
+
+      function statusLine() {
+        if (PK.rec) {
+          return '<span class="pk-rec">● aufnahme</span> · ' + PK.rec.notes.length + ' noten · '
+               + fmtMs(performance.now() - PK.rec.t0) + ' · leertaste = stopp';
+        }
+        if (PK.play) {
+          var m = PK.mel.filter(function (x) { return x.id === PK.play.id; })[0];
+          return '<span class="pk-nowplay">▸ spielt' + (m ? ' „' + esc(m.name) + '"' : '') + '</span> · enter = stopp';
+        }
+        return 'oktave ' + noteName(midiOf(0)) + ' · leertaste = aufnehmen' + (PK.msg ? ' · ' + esc(PK.msg) : '');
+      }
+
+      // Skelett einmal bauen, danach nur die drei Teile nachziehen — sonst
+      // flackert bei jedem Tastendruck die ganze Chip-Reihe.
+      var built = false;
+      function build() {
+        panel.innerHTML =
+            '<div class="gchips" id="pk-chips"></div>'
+          + '<div class="pk-staff" id="pk-staff"></div>'
+          + '<div class="pk-keys" id="pk-keys"></div>'
+          + '<div class="gmeta" id="pk-status"></div>'
+          + '<div class="ghint">weiß: y x c v b n m , . -  ·  schwarz: s d · g h j · l ö  ·  ←→ oktave  ·  leertaste aufnahme  ·  enter abspielen  ·  k/esc zu</div>';
+        built = true;
+      }
+      function drawChips() {
+        var h = [];
+        PK.mel.forEach(function (m) {
+          var on = (PK.play && PK.play.id === m.id) ? ' on' : '';
+          h.push('<span class="gchip' + on + '" data-play="' + esc(m.id) + '">▸ ' + esc(m.name)
+               + ' <i data-ren="' + esc(m.id) + '">✎</i><i data-del="' + esc(m.id) + '">✕</i></span>');
+        });
+        if (!PK.mel.length) h.push('<span class="ghint">— noch keine melodie aufgenommen —</span>');
+        q('#pk-chips').innerHTML = h.join('');
+        [].forEach.call(panel.querySelectorAll('[data-play]'), function (el) {
+          el.onclick = function (ev) {
+            var id = ev.target.getAttribute('data-ren') || ev.target.getAttribute('data-del');
+            if (id) { if (ev.target.hasAttribute('data-ren')) renameMel(id); else delMel(id); return; }
+            var mid = el.getAttribute('data-play');
+            if (PK.play && PK.play.id === mid) { stopPlay(); return; }
+            playMel(PK.mel.filter(function (x) { return x.id === mid; })[0]);
+          };
+        });
+      }
+      var chipKey = '';
+      function draw() {
+        if (!built) build();
+        // Chips nur neu bauen, wenn sich wirklich etwas geändert hat
+        var ck = PK.mel.map(function (m) { return m.id + m.name; }).join('|') + '#' + (PK.play ? PK.play.id : '');
+        if (ck !== chipKey) { chipKey = ck; drawChips(); }
+        q('#pk-staff').innerHTML = drawStaff();
+        q('#pk-keys').innerHTML = drawKeys();
+        q('#pk-status').innerHTML = statusLine();
+      }
+
+      // ── Tastatur ────────────────────────────────────────────────────
+      // capture=true, damit die Klaviertasten vor allem anderen greifen. Aktiv
+      // NUR solange das Panel sichtbar ist und kein Eingabefeld den Fokus hat —
+      // wer in die Konsole tippt, tippt weiter, statt Töne zu spielen.
+      function live() {
+        if (panel.style.display === 'none') return false;
+        var ae = document.activeElement;
+        if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return false;
+        return true;
+      }
+      document.addEventListener('keydown', function (e) {
+        if (!live() || e.altKey || e.ctrlKey || e.metaKey) return;
+        var k = (e.key || '').toLowerCase();
+        if (k === ' ' || k === 'spacebar') { e.preventDefault(); if (!e.repeat) toggleRec(); return; }
+        if (k === 'arrowleft')  { e.preventDefault(); shiftOct(-1); return; }
+        if (k === 'arrowright') { e.preventDefault(); shiftOct(+1); return; }
+        if (k === 'enter') {
+          e.preventDefault();
+          if (PK.play) { stopPlay(); return; }
+          if (PK.mel.length) playMel(PK.mel[PK.mel.length - 1]);
+          return;
+        }
+        if (!(k in KEYMAP)) return;
+        e.preventDefault();
+        if (e.repeat || PK.held[k] !== undefined) return;   // Tastenwiederholung ist kein neuer Anschlag
+        var n = midiOf(KEYMAP[k]);
+        PK.held[k] = n; noteOn(n);
+      }, true);
+      document.addEventListener('keyup', function (e) {
+        var k = (e.key || '').toLowerCase();
+        if (PK.held[k] === undefined) return;
+        var n = PK.held[k]; delete PK.held[k];
+        noteOff(n);
+      }, true);
+      window.addEventListener('blur', allOff);
+      // Panel zugemacht, während Tasten hängen (k/esc/Tab-Klick) → Ton aus.
+      setInterval(function () {
+        if (panel.style.display === 'none' && Object.keys(PK.open).length) allOff();
+      }, 400);
+
+      // Beim Öffnen des Klavier-Tabs: Fokus aus der Konsole holen (sonst
+      // landen die Klaviertasten als Buchstaben im Chat) und frisch laden.
+      document.getElementById('tabs').addEventListener('click', function (e) {
+        var t = e.target.closest('.tab');
+        if (!t || t.getAttribute('data-ex') !== 'klavier') return;
+        var ae = document.activeElement; if (ae && ae.blur) ae.blur();
+        loadMel();
+      });
+      build(); loadMel();
+    })();
+
     // ── ASCII-Bibliothek aufbauen (rein Frontend, einmalig) ──
     var books = {
       torus:  ASCII.torusFlipbook({ cols: 60, rows: 28, frames: 60 }),
@@ -1914,8 +2346,9 @@
     var calendarPanel = document.getElementById('calendar-panel');
     var listsPanel = document.getElementById('lists-panel');
     var mailPanel = document.getElementById('mail-panel');
+    var pianoPanel = document.getElementById('piano-panel');
     var EX = { mode: 'auto', current: 'gesicht' };
-    var EXNAMES = { gesicht: 'gesicht', torus: 'torus', wuerfel: 'würfel', globus: 'globus', welt: 'weltkarte', filter: 'ascii-filter', graph: 'graph-werkzeug', kalender: 'kalender', listen: 'fokus', mail: 'post' };
+    var EXNAMES = { gesicht: 'gesicht', torus: 'torus', wuerfel: 'würfel', globus: 'globus', welt: 'weltkarte', filter: 'ascii-filter', graph: 'graph-werkzeug', kalender: 'kalender', listen: 'fokus', mail: 'post', klavier: 'klavier' };
     var fi = 0, gestureLeft = 0, autoT = 0;
     var tabs = document.getElementById('tabs');
     function syncTabs() {
@@ -1949,6 +2382,30 @@
       if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return;
       var lt = tabs.querySelector('[data-ex="listen"]'); if (!lt) return;
       e.preventDefault(); lt.click();
+    });
+    // Taste 'k' → Klavier auf/zu (toggle: nochmal 'k' zurück ins Auto-Programm).
+    // Gleiche Regel wie 'f': nur ohne Modifier und nur wenn kein Eingabefeld
+    // fokussiert ist. Alt+K (Data-Collection) bleibt davon unberührt, weil wir
+    // hier auf altKey aussteigen. Die Klaviertasten selbst fängt das
+    // Klavier-Panel ab (eigener capture-Listener, siehe Klavier-Werkzeug).
+    document.addEventListener('keydown', function (e) {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key !== 'k' && e.key !== 'K') return;
+      var ae = document.activeElement;
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return;
+      var kt = tabs.querySelector('[data-ex="' + (EX.current === 'klavier' ? 'auto' : 'klavier') + '"]');
+      if (!kt) return;
+      e.preventDefault(); kt.click();
+    });
+    // Esc schließt ein offenes Werkzeug-Panel (zurück ins Auto-Programm).
+    // Greift nur, wenn kein Eingabefeld fokussiert ist — dort blurrt Esc wie
+    // gehabt das Feld.
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || EX.current !== 'klavier') return;
+      var ae = document.activeElement;
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+      var at = tabs.querySelector('[data-ex="auto"]'); if (!at) return;
+      e.preventDefault(); at.click();
     });
 
     // ── KI-Bild-Übernahme (zeige_ascii) ──────────────────────────────────
@@ -2015,19 +2472,21 @@
         calendarPanel.style.display = 'none';
         listsPanel.style.display = 'none';
         mailPanel.style.display = 'none';
+        pianoPanel.style.display = 'none';
         coreEl.style.display = '';
         coreEl.textContent = reflectText ? wrapReflect(reflectText) : '…';
         return;
       }
       coreEl.classList.remove('reflecting');
-      // Werkzeug-Panels (Graph/Kalender/Listen/Post) übernehmen den Kern, wenn
-      // ihr Tab aktiv ist — passendes Panel ein, Rest + #core aus.
-      var panelMap = { graph: graphPanel, kalender: calendarPanel, listen: listsPanel, mail: mailPanel };
+      // Werkzeug-Panels (Graph/Kalender/Listen/Post/Klavier) übernehmen den Kern,
+      // wenn ihr Tab aktiv ist — passendes Panel ein, Rest + #core aus.
+      var panelMap = { graph: graphPanel, kalender: calendarPanel, listen: listsPanel, mail: mailPanel, klavier: pianoPanel };
       var activePanel = panelMap[EX.current] || null;
       graphPanel.style.display = (activePanel === graphPanel) ? '' : 'none';
       calendarPanel.style.display = (activePanel === calendarPanel) ? '' : 'none';
       listsPanel.style.display = (activePanel === listsPanel) ? '' : 'none';
       mailPanel.style.display = (activePanel === mailPanel) ? '' : 'none';
+      pianoPanel.style.display = (activePanel === pianoPanel) ? '' : 'none';
       coreEl.style.display = activePanel ? 'none' : '';
       if (activePanel) return;
       // KI-Bild hat Vorrang und übernimmt den Kern auf Zeit.

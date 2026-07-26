@@ -54,7 +54,8 @@ Chat-Konsole (Input/Mic/Permission), Cinema-Mode, Tutor — und `engine.js`
 überspringt die KI-Polls (`/api/ai/status`, `/api/chat/history`), pollt also
 nur `/api/state` (1 s) + `/api/telemetry` (2 s). **Bleibt** für alle Fronten:
 das Mittel-Exhibit mit ASCII-Animationen + Tabs (das ist Visualizer, keine KI),
-Karte/Graphen/Kalender/Listen/Post, Telemetrie, Logs, Data-Collection (Alt+K).
+Karte/Graphen/Kalender/Listen/Post/Klavier, Telemetrie, Logs, Data-Collection
+(Alt+K).
 Statt der Chat-Zeile steht unten die **Tastenkürzel-Box** (Quelle:
 `tastatur.md`).
 
@@ -66,8 +67,9 @@ Statt der Chat-Zeile steht unten die **Tastenkürzel-Box** (Quelle:
 
 - **Mitte:** dieselben Werkzeug-Tabs wie im Monolith — **Graph**, **Kalender**,
   **Fokus** (Listen·Fokus, auch per Taste `f`), **Post** (Mail), **Karte**
-  (Globus/Welt) — plus die Animationen.
-  In der **TUI** dieselben Werkzeuge über Tasten (`g`/`c`/`l`/`p`/`m`).
+  (Globus/Welt), **Klavier** (auch per Taste `k`) — plus die Animationen.
+  In der **TUI** dieselben Werkzeuge über Tasten (`g`/`c`/`l`/`p`/`m`) — **außer
+  dem Klavier**: curses hat keine Tonausgabe.
 - **Minimale Boot-Dependencies:** nur `flask` + `python-dateutil` (kein
   Whisper/TTS/sherpa/piper nötig — die Kassette ist KI-frei). Siehe `starten.md`.
 
@@ -473,8 +475,9 @@ animierter **ASCII-Kern** (`#core`), gesteuert vom *Exhibit-Direktor*
 (`frameTick`, 90 ms/Frame). Umschaltbare Exhibits über Tabs: `gesicht`
 (Avatar), `torus`, `würfel`, `globus`, `welt` (Weltkarte), `filter`
 (Bild→ASCII-Filter aus `data/photos/`, mono/farbe per Re-Klick), `graph`
-(s.u., interaktives Panel statt ASCII) und `kalender` (s.u.). `graph` und
-`kalender` sind **nicht** im Auto-Direktor (interaktiv, nicht zum Durchzappen).
+(s.u., interaktives Panel statt ASCII), `kalender` (s.u.) und `klavier` (s.u.).
+`graph`, `kalender` und `klavier` sind **nicht** im Auto-Direktor (interaktiv,
+nicht zum Durchzappen).
 
 > **Graph-Werkzeug (Exhibit `graph`)** — der Mittelbereich wird zum
 > interaktiven Lifestyle-Tracker: eigene Graphen **anlegen** (Typ `number`
@@ -519,6 +522,35 @@ animierter **ASCII-Kern** (`#core`), gesteuert vom *Exhibit-Direktor*
 > Schreiben ist direkte Nutzeraktion, **nicht** KI-gegatet. Details:
 > [kalender_system.md](kalender_system.md).
 
+> **Klavier (Exhibit `klavier`, Taste `k`)** — der Mittelbereich wird zur
+> Klaviatur: **unten die gezeichneten Tasten, darüber das Notensystem**, in das
+> das Gespielte einläuft. Eigenes `#piano-panel` (`.ppanel`, `frameTick` blendet
+> wie bei `graph` `#core` aus). Gespielt wird auf der **Computertastatur**: untere
+> Buchstabenreihe = weiße Tasten (`y x c v b n m , . -`), die Reihe darüber die
+> schwarzen, genau dort wo sie physisch dazwischen liegen (`s d · g h j · l ö`).
+> `f` und `k` fallen dabei in die Lücken E–F und H–C, wo es **keine** schwarze
+> Taste gibt — beide bleiben so für ihre Shortcuts frei (`f` = Fokus, `k` =
+> Klavier auf/zu). `←`/`→` verschiebt die Oktave (C3…C6), `Esc` schließt.
+>
+> - **Ton:** WebAudio (ein Dreieck-Oszillator + Hüllkurve pro klingender Note),
+>   kein Sample, kein Download → läuft offline im Pi-Kiosk. Der AudioContext wird
+>   erst beim ersten Tastendruck gebaut (Autoplay-Policy braucht die Nutzergeste).
+> - **Noten:** Violinschlüssel + 5 Linien, Hilfslinien nach Bedarf, `♯` vor
+>   schwarzen Tasten, lang gehaltene Töne als **hohler** Notenkopf, klingende Noten
+>   in Akzentfarbe. Bewusst **kein Takt/Notenwert** — die Noten stehen in
+>   Spielreihenfolge nebeneinander (Quantisieren würde das Gespielte verfälschen).
+>   Der Schlüssel ist ein **SVG-Pfad**, kein Zeichen `𝄞`: das Glyph steckt nur in
+>   Musik-Fonts, auf dem Pi käme ein Ersatzkästchen.
+> - **Aufnahme:** `Leertaste` startet/stoppt. Beim Stoppen fragt es einmal nach
+>   dem Namen (Abbrechen verwirft — nichts wird heimlich gespeichert) und legt sie
+>   über `POST /api/melodies` in `data/melodies.json` ab. Die Chips oben sind die
+>   gespeicherten Melodien: Klick = abspielen (Tasten leuchten mit, die Noten
+>   stehen im System), nochmal Klick = stopp, `✎` umbenennen, `✕` löschen.
+>   `Enter` spielt die zuletzt aufgenommene. Details: [api_endpoints.md](api_endpoints.md).
+> - **Kassetten:** monolith + laptop (dasselbe Template, nicht KI-gegatet). Die
+>   **TUI hat kein Klavier** — curses hat keine Tonausgabe; die Melodien-Registry
+>   liegt aber im Core und wäre für eine TUI-Ansicht bereit.
+
 > Die IIFEs sind getrennte Scopes. Cross-Scope-Signale laufen über den
 > CustomEvent-Bus auf `window` (`zentrale:logged`, `zentrale:ascii`),
 > nicht über geteilte Funktionen.
@@ -547,7 +579,7 @@ AUTO/HELL/DUNKEL). Darunter `.body` als 3 Spalten:
 - **LINKS:** `telemetrie` (PC·CPU-Meter), `stdout` (`#term`, voller Log-Stream
   aus `state.push_log`).
 - **MITTE (`#col-mid`):** die `ki-kern`-Box mit Exhibit-Tabs (Gesicht/Torus/
-  Würfel/Globus/Welt/Filter/Graph/Auto) + dem ASCII-Kern `#core` (s.u.) + der
+  Würfel/Globus/Welt/Filter/Graph/Kalender/Fokus/Post/Klavier/Auto) + dem ASCII-Kern `#core` (s.u.) + der
   Alarm-Ecke; darunter `core-readout` (AI-State „BEREIT", „zeigt: gesicht"), das
   `minilog` (letzte Konversationszeilen) und `#cinema-sub`. Darunter die
   `konsole` (`#chat-input`, wo Sasha tippt). Der `Graph`-Tab macht den

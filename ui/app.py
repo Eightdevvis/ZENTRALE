@@ -29,6 +29,7 @@ import state         # type: ignore  – in core/, aber durch sys.path.insert au
 import categories   # type: ignore
 import graphs       # type: ignore  – dynamische Lifestyle-Graph-Registry
 import lists        # type: ignore  – dynamische Listen-Registry (Todo/Sammel-Listen)
+import melodies     # type: ignore  – Melodie-Registry (Klavier-Werkzeug, data/melodies.json)
 import notes        # type: ignore  – Notiz-Registry (Text-/Listen-/Float-Blöcke, TUI-Werkzeug)
 import kalender     # type: ignore  – Kalender-Layer (Woche/Monat, data/ai_calendar.json)
 import ai           # type: ignore
@@ -305,6 +306,56 @@ def api_graphs_reminders():
     »bitte eintragen«-Modal, die TUI ihren Nag. Liefert [{id, name, remind_at}].
     """
     return jsonify(graphs.due_reminders())
+
+
+# ── Melodien (Klavier-Werkzeug, Canvas-Exhibit „Klavier") ──────────────
+#
+# Auf der Computertastatur gespielte und aufgezeichnete Melodien. Wie die
+# Listen liegen Definition UND Inhalt inline in data/melodies.json
+# (core/melodies.py). Direkte Nutzeraktion, also NICHT KI-gegatet — die
+# Routen stehen in allen Kassetten offen (laptop rendert dasselbe Template).
+
+@app.route('/api/melodies')
+def api_melodies():
+    """Alle aufgezeichneten Melodien inkl. ihrer Noten."""
+    return jsonify(melodies.list_melodies())
+
+
+@app.route('/api/melodies', methods=['POST'])
+def api_melodies_create():
+    """
+    Aufnahme ablegen.
+    Body (JSON): {"name": "Regen", "notes": [{"n": 60, "t": 0, "d": 320}, …]}
+    n = MIDI-Note, t = Startzeit ab Aufnahmebeginn (ms), d = Klingdauer (ms).
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        m = melodies.create_melody(body.get('name'), body.get('notes'))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    state.push_log(f"MELODIE+: {m['id']} ({len(m['notes'])} noten)")
+    return jsonify(m)
+
+
+@app.route('/api/melodies/<mid>/rename', methods=['POST'])
+def api_melodies_rename(mid):
+    """Melodie umbenennen. Body (JSON): {"name": "…"}"""
+    body = request.get_json(silent=True) or {}
+    try:
+        m = melodies.rename_melody(mid, body.get('name'))
+    except KeyError:
+        return jsonify({"error": "unbekannte melodie"}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(m)
+
+
+@app.route('/api/melodies/<mid>', methods=['DELETE'])
+def api_melodies_delete(mid):
+    """Melodie löschen."""
+    melodies.delete_melody(mid)
+    state.push_log(f"MELODIE-: {mid}")
+    return jsonify({"ok": True})
 
 
 # ── Listen (dynamisch, vom Dashboard angelegt) ─────────────────────────

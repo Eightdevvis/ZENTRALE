@@ -16,9 +16,38 @@ ohne Inputs).
 | `b`    | Button gedrückt (Sensor)              |
 | `l`    | Light Sensor Trigger                  |
 | `m`    | Motion Sensor (Presence) – `PRESENCE_DETECTED` → `tutor_port.presence_ping()`: nonverbale Reaktion (schaut hoch, Mimik) **nur bei laufender Tutor-Session**, kein Auto-Start, kein verbaler Gruß. Default an, per `TUTOR_PRESENCE_REACT=0` aus |
-| `k`    | Data-Collection-Modus öffnen          |
 | `c`    | Chat-Panel öffnen                     |
 | `ESC`  | Zurück zum Haupt-Dashboard            |
+
+## Im Canvas (Browser: monolith + laptop)
+
+Nackte Buchstaben wirken nur, wenn **kein Eingabefeld fokussiert** ist (im
+Monolith hängt der Fokus beim Start in der Chat-Konsole → einmal `ESC`, dann
+greifen sie). Mit Modifier gehts immer.
+
+| Taste     | Funktion                                                          |
+|-----------|-------------------------------------------------------------------|
+| `f`       | Fokus-Werkzeug (Listen) auf                                       |
+| `k`       | **Klavier auf/zu** (Toggle; nochmal `k` → zurück ins Auto-Programm) |
+| `Alt + K` | Data-Collection-Modus öffnen (**nicht** nacktes `k` — das ist das Klavier) |
+| `ESC`     | offenes Klavier zu                                                |
+
+### Im Klavier (Exhibit „Klavier")
+
+Die Buchstabenreihen **sind** die Klaviatur: untere Reihe weiß, die Reihe
+darüber schwarz — dort, wo sie physisch dazwischen liegt. `f` und `k` fallen
+in die Lücken E–F und H–C (keine schwarze Taste) und bleiben deshalb frei.
+
+| Taste                   | Funktion                                        |
+|-------------------------|-------------------------------------------------|
+| `y x c v b n m , . -`   | weiße Tasten (C D E F G A H C D E)              |
+| `s d · g h j · l ö`     | schwarze Tasten                                 |
+| `←` / `→`               | Oktave runter/rauf (C3 … C6)                    |
+| `Leertaste`             | Melodie aufnehmen / stoppen (fragt beim Stoppen nach dem Namen) |
+| `Enter`                 | zuletzt aufgenommene Melodie abspielen / Wiedergabe stoppen |
+| `k` / `ESC`             | Klavier zu                                      |
+
+Siehe `dashboard.md` → „Klavier".
 
 > Der Sprachtutor ist **reaktiviert** und wird im Chat-Modus per `Alt + T`
 > umgeschaltet (nicht mehr über diesen Sensor-Trigger). Der Presence-Auto-Start

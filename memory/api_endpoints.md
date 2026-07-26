@@ -56,6 +56,22 @@ Werte teilen sich `/api/log` + `/api/data/<id>` mit der Data Collection).
 | `/api/graphs/<id>/remind`      | POST    | Tages-Reminder setzen `{remind, at?}` (`at`=HH:MM, optional → unverändert) |
 | `/api/graphs/reminders`        | GET     | Heute fällige Reminder `[{id,name,remind_at}]`: remind an, Uhrzeit erreicht, heute noch nicht geloggt. Quelle für das »bitte eintragen«-Modal (monolith/laptop) und den TUI-Nag. |
 
+## Melodien (Klavier-Werkzeug, `core/melodies.py`)
+
+Auf der Computertastatur gespielte und aufgezeichnete Melodien
+(`data/melodies.json`). Eine Melodie ist eine flache Noten-Liste, so wie
+gespielt: `n` = MIDI-Note (21–108), `t` = Startzeit ab Aufnahmebeginn in ms,
+`d` = Klingdauer in ms. **Kein Takt/Tempo** — nicht quantisiert, damit das
+Gespielte nicht verfälscht wird. Nicht KI-gegatet (direkte Nutzeraktion), also
+in allen Kassetten offen. Front: Canvas-Exhibit „Klavier" (Taste `k`).
+
+| Endpoint                  | Methode | Beschreibung                              |
+|---------------------------|---------|-------------------------------------------|
+| `/api/melodies`           | GET     | Alle Melodien inkl. Noten (`[{id,name,created,dur,notes:[{n,t,d}]}]`) |
+| `/api/melodies`           | POST    | Aufnahme ablegen. Body `{name, notes}`. Noten werden geputzt (nur 21–108, Zeiten ≥0, sortiert, max 5000). 400 bei leerem Namen/leerer Melodie. id = `m_<slug>` (kollisionsfrei) |
+| `/api/melodies/<id>/rename` | POST  | Umbenennen. Body `{name}`. id bleibt stabil. 400 leer, 404 unbekannt |
+| `/api/melodies/<id>`      | DELETE  | Melodie löschen (still bei unbekannter id) |
+
 ## Listen (Todo-/Sammel-Listen)
 
 Zur Laufzeit angelegte, abhakbare Listen — Pendant zum Lifestyle-Graph-Werkzeug

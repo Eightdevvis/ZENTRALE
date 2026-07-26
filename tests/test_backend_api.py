@@ -504,7 +504,8 @@ def test_index_ki_frei_in_tui_kassette(client):
     assert 'id="core"' in html                    # ASCII-Exhibit
     assert 'id="ai-meta"' in html                 # Direktor-Meta (kein KI)
     assert 'class="box shortcuts"' in html        # Shortcut-Footer statt Chat
-    for tab in ('data-ex="listen"', 'data-ex="mail"', 'id="lists-panel"', 'id="mail-panel"'):
+    for tab in ('data-ex="listen"', 'data-ex="mail"', 'data-ex="klavier"',
+                'id="lists-panel"', 'id="mail-panel"', 'id="piano-panel"'):
         assert tab in html, f"Werkzeug fehlt in der KI-freien Front: {tab}"
 
 
@@ -530,3 +531,40 @@ def test_mail_endpoint_no_500_without_key(client):
     r = client.get("/api/mail")
     assert r.status_code == 200
     assert isinstance(r.get_json(), dict)
+
+
+def test_api_melodies_crud(client, tmp_path, monkeypatch):
+    # Klavier-Werkzeug: aufnehmen → umbenennen → löschen. Auf eine TEMP-Registry
+    # umgebogen, damit data/melodies.json unberührt bleibt. NICHT KI-gegatet →
+    # muss auch in der tui-Kassette durchgehen (laptop rendert dasselbe Template).
+    import melodies
+    monkeypatch.setattr(melodies, "_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(melodies, "_REGISTRY", str(tmp_path / "melodies.json"))
+
+    assert client.get("/api/melodies").get_json() == []
+
+    r = client.post("/api/melodies", json={"name": "Regen", "notes": [
+        {"n": 60, "t": 0, "d": 300}, {"n": 67, "t": 400, "d": 500}]})
+    assert r.status_code == 200
+    m = r.get_json()
+    assert m["id"] == "m_regen" and m["dur"] == 900 and len(m["notes"]) == 2
+
+    assert client.post("/api/melodies/m_regen/rename", json={"name": "Regen im Hof"}).get_json()["name"] == "Regen im Hof"
+    assert client.get("/api/melodies").get_json()[0]["name"] == "Regen im Hof"
+
+    assert client.delete("/api/melodies/m_regen").get_json()["ok"] is True
+    assert client.get("/api/melodies").get_json() == []
+
+
+def test_api_melodies_validation(client, tmp_path, monkeypatch):
+    # Leere Aufnahme / leerer Name / unbekannte id: sauberer 400 bzw. 404,
+    # kein 500 und keine Mutation.
+    import melodies
+    monkeypatch.setattr(melodies, "_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(melodies, "_REGISTRY", str(tmp_path / "melodies.json"))
+
+    assert client.post("/api/melodies", json={"name": "Leer", "notes": []}).status_code == 400
+    assert client.post("/api/melodies", json={"name": "", "notes": [{"n": 60, "t": 0, "d": 10}]}).status_code == 400
+    assert client.post("/api/melodies", json={}).status_code == 400
+    assert client.post("/api/melodies/m_weg/rename", json={"name": "X"}).status_code == 404
+    assert client.get("/api/melodies").get_json() == []
