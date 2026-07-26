@@ -72,18 +72,66 @@ GLOSSARY = [
     {
         "term": "Achse 2 — Overlays",
         "keys": ["achse 2", "overlay", "layer", "thematisch", "handelsrouten",
-                 "trade"],
+                 "trade", "politik", "konflikt"],
         "text": "Thematische Ebenen, die ÜBER der Grundkarte liegen und stapelbar "
-                "sind. Erster gebauter Overlay: trade/chokepoints. Jeder Sub-Layer "
-                "zieht aus genau einer offiziellen Quelle (Provenienz inklusive).",
+                "sind. Gebaut: (1) Handel — Routen + Chokepoints + Verkehrsdichte; "
+                "(2) Politik/Konflikt — Gebietskontrolle + Konfliktereignisse + "
+                "umstrittene Grenzen. Jeder Sub-Layer zieht aus genau einer "
+                "offiziellen Quelle (Provenienz inklusive). Der Politik-Layer läuft "
+                "derzeit in der Terminal-TUI; im nativen Fenster ist bislang nur "
+                "Handel/Dichte verdrahtet.",
     },
     {
         "term": "Achse 3 — Zeit",
         "keys": ["achse 3", "zeit", "zeitreise", "vintage", "stand", "datum",
-                 "historie"],
+                 "historie", "scrubber", "zeitstrahl"],
         "text": "Denselben Layer zu einem anderen Zeitpunkt ansehen (Vergangenheit/"
                 "Prognose). Nicht jeder Layer ist zeitfähig. Bei den Chokepoints "
-                "ist 'Stand' das Datum der gezeigten Tagesdaten.",
+                "ist 'Stand' das Datum der gezeigten Tagesdaten. Voll zeitreisefähig "
+                "ist die Gebietskontrolle (VIINA): der Scrubber (Tasten ,/. Woche "
+                "vor/zurück, ; = jetzt) zeigt die Frontlage wie an einem beliebigen "
+                "Tag seit Jahresbeginn.",
+    },
+    {
+        "term": "Politik / Konflikt-Overlay",
+        "keys": ["politik", "konflikt", "political", "krieg", "front", "overlay",
+                 "gewalt", "ukraine"],
+        "text": "Der zweite Achse-2-Overlay: ein Komposit aus Gebietskontrolle "
+                "(VIINA, Ukraine), Konfliktereignissen (UCDP) und umstrittenen "
+                "Grenzen (Natural Earth). ACLED liefert reichere Ereignisse, ist "
+                "aber lizenz-gesperrt und nur lokal/explizit dazuschaltbar. Jeder "
+                "Sub-Layer trägt seine Provenienz mit. Aktuell in der Terminal-TUI "
+                "sichtbar (im nativen Fenster noch nicht verdrahtet).",
+    },
+    {
+        "term": "Gebietskontrolle (VIINA)",
+        "keys": ["kontrolle", "gebietskontrolle", "viina", "front", "frontlinie",
+                 "besetzt", "ukraine", "ua", "ru", "umstritten", "control"],
+        "text": "Wer welchen Ort kontrolliert — je Siedlung ein Punkt, eingefärbt "
+                "nach Status (UA / RU / umstritten). Quelle: VIINA (Yuri Zhukov, "
+                "Yale/U-Michigan), ein tägliches MEHRHEITSVOTUM aus DeepStateMap, "
+                "ISW und Wikipedia (ODbL, Namensnennung + Share-alike; kein reiner "
+                "Primärdatensatz, sondern Aggregat). Voll zeitreisefähig (Achse 3): "
+                "die Statuswechsel sind als Zeitachse gecacht.",
+    },
+    {
+        "term": "Konfliktereignisse (UCDP)",
+        "keys": ["ucdp", "ereignis", "ereignisse", "gewalt", "opfer", "ged",
+                 "uppsala", "konfliktereignis", "event"],
+        "text": "Einzelne bewaffnete Gewaltereignisse als Punkte (Ort + Opferzahl). "
+                "Quelle: UCDP GED — Georeferenced Event Dataset der Universität "
+                "Uppsala (CC BY 4.0, deckt 1989–heute). Für Tagesaktualität braucht "
+                "es einen Zugangstoken (per Mail bei UCDP); der Zeitfilter für "
+                "Ereignisse ist noch nicht scharfgestellt.",
+    },
+    {
+        "term": "ACLED",
+        "keys": ["acled", "armed conflict", "ereignisse", "lizenz", "eula",
+                 "nur lokal", "event"],
+        "text": "Armed Conflict Location & Event Data — reichere Konfliktereignisse "
+                "als UCDP. Lizenz (ACLED EULA): nicht-kommerziell, KEINE "
+                "Weiterverteilung → wird nie ins Repo committet, nur lokal gecacht "
+                "und nur explizit zugeschaltet. Braucht API-Key + Registrierung.",
     },
     {
         "term": "Web-Mercator",
