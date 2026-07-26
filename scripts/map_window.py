@@ -18,10 +18,11 @@
 #   0                           Reset auf Weltansicht
 #   g                           Gradnetz an/aus
 #   l                           Länder-Labels an/aus
-#   t                           Handelsrouten-Overlay an/aus (Routen + Chokepoints)
+#   h                           Handelsrouten-Overlay an/aus (Routen + Chokepoints)
 #   d                           Verkehrsdichte-Heatmap an/aus (gemessen, World Bank/IMF)
 #   p                           Politik/Konflikt-Overlay an/aus (Kontrolle + Ereignisse + Grenzen)
-#   , / .                       Achse 3 — Zeit: Kontrolle eine Woche zurück / vor
+#   t                           Zeit-Schrittweite zyklieren (Woche→Monat→Jahr→10/50/100 J.)
+#   , / .                       Achse 3 — Zeit: einen Schritt zurück / vor (gedrückt halten geht)
 #   ;                           Achse 3 — zurück auf „jetzt" (jüngster Stand)
 #   ?                           Glossar-Such-Modal (Begriffe nachschlagen)
 #   Esc / q                     schließen
@@ -95,10 +96,11 @@ LEGEND = [
     ("0",             "Weltansicht"),
     ("g",             "Gradnetz"),
     ("l",             "Länder-Labels"),
-    ("t",             "Handelsrouten (Routen+Engstellen)"),
+    ("h",             "Handelsrouten (Routen+Engstellen)"),
     ("d",             "Verkehrsdichte (Heatmap, gemessen)"),
     ("p",             "Politik/Konflikt (Kontrolle+Ereignisse)"),
-    (", . ;",         "Zeit: Woche ◂ ▸ · jetzt"),
+    ("t",             "Zeit-Schrittweite (Woche…100 J.)"),
+    (", . ;",         "Zeit: Schritt ◂ ▸ (halten) · jetzt"),
     ("?",             "Glossar (Begriffe suchen)"),
     ("Esc / q",       "schließen"),
 ]
@@ -777,18 +779,34 @@ def _draw_pol_borders(screen, view):
             pygame.draw.aalines(screen, BORDER_COL, False, pts.tolist())
 
 
-def _draw_control(screen, view, at):
-    """Gebietskontrolle als farbige Punkte je Ort — VOLL VEKTORISIERT: alle Orte
-    auf einmal projizieren (numpy), sichtbare maskieren, nach Status in drei
-    Gruppen einfärben und als 3×3-Punkte in eine RGBA-Fläche stempeln, dann
-    blitten. So bleiben auch ~30 000 Orte pro Frame billig (kein Python-Loop je
-    Punkt), analog zur Dichte-Heatmap."""
+# Kontroll-Fläche wird zwischengespeichert und NUR neu gerechnet, wenn sich der
+# Blick (Mittelpunkt/Zoom), die Fenstergröße oder der Zeitpunkt ändern. Im
+# Ruhezustand (Lesen, kein Pan/Zoom/Scrub) kostet der Layer dann nur EINEN Blit
+# statt einer Vollbild-Neuberechnung je Frame — das war die Hauptlast.
+_CTRL_SURF = {"sig": None, "surf": None, "buf": None}
+
+
+def _control_surface(view, at):
+    """RGBA-Fläche mit den Kontroll-Punkten (2×2 je Ort, nach Status gefärbt),
+    signatur-gecacht. Baut nur bei Änderung neu: alle Orte vektorisiert
+    projizieren (numpy), sichtbare maskieren, in einen WIEDERVERWENDETEN Puffer
+    stempeln. Gibt die Surface (oder None, wenn nichts sichtbar) zurück."""
+    w, h = view.w, view.h
+    # Blick grob quantisieren → Mikro-Jitter am Ende des Easings baut nicht neu.
+    sig = (round(view.cx, 4), round(view.cy, 4), round(view.zoom, 3), w, h, at)
+    if _CTRL_SURF["sig"] == sig:
+        return _CTRL_SURF["surf"]
     c = _get_control(at)
     if not c["n"]:
-        return
-    w, h = view.w, view.h
+        _CTRL_SURF.update(sig=sig, surf=None)
+        return None
+    buf = _CTRL_SURF["buf"]
+    if buf is None or buf.shape[0] != h or buf.shape[1] != w:
+        buf = np.zeros((h, w, 4), dtype=np.uint8)
+        _CTRL_SURF["buf"] = buf
+    else:
+        buf[:] = 0                               # Puffer nullen statt neu allozieren
     x0, y0, sx, sy = view._view()
-    arr = np.zeros((h, w, 4), dtype=np.uint8)
     hit = False
     for ox in view.x_offsets():
         px = (c["wx"] + ox - x0) / sx * w
@@ -804,20 +822,26 @@ def _draw_control(screen, view, at):
             if not np.any(m):
                 continue
             xs, ys = pxi[m], pyi[m]
-            for ddx in (-1, 0, 1):                # 3×3-Block → sichtbarer Punkt
+            for ddx in (0, 1):                   # 2×2-Block → sichtbarer, günstiger Punkt
                 xx = np.clip(xs + ddx, 0, w - 1)
-                for ddy in (-1, 0, 1):
+                for ddy in (0, 1):
                     yy = np.clip(ys + ddy, 0, h - 1)
-                    arr[yy, xx, 0] = col[0]
-                    arr[yy, xx, 1] = col[1]
-                    arr[yy, xx, 2] = col[2]
-                    arr[yy, xx, 3] = 255
+                    buf[yy, xx, 0] = col[0]
+                    buf[yy, xx, 1] = col[1]
+                    buf[yy, xx, 2] = col[2]
+                    buf[yy, xx, 3] = 255
             hit = True
-    if not hit:
-        return
-    surf = pygame.image.frombuffer(np.ascontiguousarray(arr).tobytes(),
-                                   (w, h), 'RGBA')
-    screen.blit(surf, (0, 0))
+    surf = pygame.image.frombuffer(np.ascontiguousarray(buf).tobytes(),
+                                   (w, h), 'RGBA') if hit else None
+    _CTRL_SURF.update(sig=sig, surf=surf)
+    return surf
+
+
+def _draw_control(screen, view, at):
+    """Kontroll-Punkte zeichnen: die (gecachte) Fläche holen und blitten."""
+    surf = _control_surface(view, at)
+    if surf is not None:
+        screen.blit(surf, (0, 0))
 
 
 _POL_EVENT_CAP = 4000    # ehrliche Obergrenze gezeichneter Ereignisse pro Frame
@@ -861,6 +885,13 @@ def _draw_events(screen, view, font, mouse):
         screen.blit(surf, (px + r + 4, py - surf.get_height() // 2))
 
 
+# Zeit-Schrittweite (Taste t zykliert): Label + Tage je ,/.-Schritt. Für heutige
+# VIINA-Daten (~7 Monate) sind die großen Sprünge meist auf die Grenzen geklemmt,
+# aber der Mechanismus ist generisch (künftige historische Layer spannen weiter).
+_TIME_GRAN = [("Woche", 7), ("Monat", 30), ("Jahr", 365),
+              ("10 Jahre", 3650), ("50 Jahre", 18250), ("100 Jahre", 36500)]
+
+
 def _pol_step(at, days):
     """Achse-3-Zeit-Scrubber: `at` um `days` verschieben, in [date_min, date_max]
     geklemmt. Über das Maximum hinaus → None (=jüngster Stand, „jetzt")."""
@@ -878,8 +909,9 @@ def _pol_step(at, days):
     return nd.isoformat()
 
 
-def _pol_caption_text(at):
-    """Provenienz-/Stand-Zeile fürs Politik-Overlay (oben links)."""
+def _pol_caption_text(at, gran_label):
+    """Provenienz-/Stand-Zeile fürs Politik-Overlay (oben links), inkl. der
+    aktuellen Zeit-Schrittweite (was ,/. springen)."""
     c = _get_control(at)
     ev = _get_events()
     if not c["n"] and not ev["items"] and not _get_pol_borders():
@@ -892,6 +924,7 @@ def _pol_caption_text(at):
         parts.append("Ereignisse %d (UCDP)" % len(ev["items"]))
     else:
         parts.append("Ereignisse: kein UCDP-Cache")
+    parts.append("Schritt: %s (,/.)" % gran_label)
     return " · ".join(parts)
 
 
@@ -1122,6 +1155,9 @@ def main():
     pygame.display.set_icon(_make_icon())     # Fenster-Icon (favicon) VOR set_mode
     pygame.display.set_caption("ZENTRALE — Karte")
     screen = pygame.display.set_mode((a.w, a.h), pygame.RESIZABLE)
+    # Tasten-Wiederholung bei Halten: 300 ms Anlauf, dann alle 55 ms. Damit lässt
+    # sich die Zeit (,/.) UND Pan/Zoom durch Gedrückthalten flüssig durchfahren.
+    pygame.key.set_repeat(300, 55)
     clock = pygame.time.Clock()
     hud_font = pygame.font.SysFont("monospace", 15)
     legend_font = pygame.font.SysFont("monospace", 13)
@@ -1141,6 +1177,7 @@ def main():
     show_density = False             # Verkehrsdichte-Heatmap (Taste 'd')
     show_political = False           # Kontrolle + Ereignisse + Grenzen (Taste 'p')
     pol_at = None                    # Achse 3: Zeitpunkt 'YYYY-MM-DD' oder None=jetzt
+    time_gran_idx = 0                # Zeit-Schrittweite (Index in _TIME_GRAN, Taste 't')
     show_legend = True               # Shortcut-Legende oben rechts (immer an)
     glossary_open = False            # '?'-Such-Modal (Begriffs-Erklärungen)
     g_query, g_sel = "", 0
@@ -1188,7 +1225,7 @@ def main():
                     show_grat = not show_grat
                 elif ev.key == pygame.K_l:
                     show_labels = not show_labels
-                elif ev.key == pygame.K_t:
+                elif ev.key == pygame.K_h:
                     show_trade = not show_trade
                 elif ev.key == pygame.K_d:
                     show_density = not show_density
@@ -1196,11 +1233,15 @@ def main():
                     show_political = not show_political
                     if show_political:
                         pol_at = None            # beim Einschalten auf „jetzt"
-                elif ev.key == pygame.K_COMMA:   # Achse 3: eine Woche zurück
-                    pol_at = _pol_step(pol_at, -7)
-                elif ev.key == pygame.K_PERIOD:  # Achse 3: eine Woche vor
-                    pol_at = _pol_step(pol_at, +7)
-                elif ev.key == pygame.K_SEMICOLON:   # Achse 3: zurück auf „jetzt"
+                elif ev.key == pygame.K_t:       # Zeit-Schrittweite zyklieren
+                    time_gran_idx = (time_gran_idx + 1) % len(_TIME_GRAN)
+                # Zeit-Scrubber über ev.unicode (layout-sicher, auch für ';' das auf
+                # dt. Layout Shift+, ist) — und über set_repeat gedrückt-haltbar.
+                elif ev.unicode == ',':          # Achse 3: einen Schritt zurück
+                    pol_at = _pol_step(pol_at, -_TIME_GRAN[time_gran_idx][1])
+                elif ev.unicode == '.':          # Achse 3: einen Schritt vor
+                    pol_at = _pol_step(pol_at, +_TIME_GRAN[time_gran_idx][1])
+                elif ev.unicode == ';':          # Achse 3: zurück auf „jetzt"
                     pol_at = None
                 elif ev.key == pygame.K_LEFT:
                     view.pan_target(-0.2, 0)
@@ -1258,8 +1299,10 @@ def main():
         if show_trade:
             cap_y = _draw_caption(screen, hud_font, _trade_caption_text(), cap_y)
         if show_political:
-            cap_y = _draw_caption(screen, hud_font, _pol_caption_text(pol_at),
-                                  cap_y, POL_FG)
+            cap_y = _draw_caption(
+                screen, hud_font,
+                _pol_caption_text(pol_at, _TIME_GRAN[time_gran_idx][0]),
+                cap_y, POL_FG)
         # Overlay-Legenden unten rechts stapeln (Dichte unten, dann Trade, dann Politik).
         leg_bottom = view.h - 10
         if show_density:

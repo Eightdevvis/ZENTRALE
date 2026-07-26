@@ -20,7 +20,7 @@ GLOSSARY = [
                 "Durchfahrt, durch die sich ein Großteil des Seehandels zwängen "
                 "muss (Suez, Panama, Hormuz, Malakka …). Staut oder blockiert es "
                 "dort, hat das überproportionale Folgen für globale Lieferketten. "
-                "Das Overlay (Taste t) zeigt diese Punkte + Schiffe pro Tag — "
+                "Das Overlay (Taste h) zeigt diese Punkte + Schiffe pro Tag — "
                 "keine Routen/Wege.",
     },
     {
@@ -56,7 +56,7 @@ GLOSSARY = [
                 "dezente Pfade unter den Chokepoint-Markern. Reine Geometrie aus "
                 "IMF PortWatch (statisch), ohne Namen/Verkehr. Zusammen mit den "
                 "Engstellen-Punkten ergeben sie das Handelsrouten-Overlay (Taste "
-                "t im Fenster, o in der TUI).",
+                "h im Fenster, o in der TUI).",
     },
     {
         "term": "Verkehrsdichte (Heatmap)",
@@ -77,9 +77,8 @@ GLOSSARY = [
                 "sind. Gebaut: (1) Handel — Routen + Chokepoints + Verkehrsdichte; "
                 "(2) Politik/Konflikt — Gebietskontrolle + Konfliktereignisse + "
                 "umstrittene Grenzen. Jeder Sub-Layer zieht aus genau einer "
-                "offiziellen Quelle (Provenienz inklusive). Der Politik-Layer läuft "
-                "derzeit in der Terminal-TUI; im nativen Fenster ist bislang nur "
-                "Handel/Dichte verdrahtet.",
+                "offiziellen Quelle (Provenienz inklusive). Beide laufen sowohl im "
+                "nativen Fenster (Handel=h, Dichte=d, Politik=p) als auch in der TUI.",
     },
     {
         "term": "Achse 3 — Zeit",
@@ -88,9 +87,10 @@ GLOSSARY = [
         "text": "Denselben Layer zu einem anderen Zeitpunkt ansehen (Vergangenheit/"
                 "Prognose). Nicht jeder Layer ist zeitfähig. Bei den Chokepoints "
                 "ist 'Stand' das Datum der gezeigten Tagesdaten. Voll zeitreisefähig "
-                "ist die Gebietskontrolle (VIINA): der Scrubber (Tasten ,/. Woche "
-                "vor/zurück, ; = jetzt) zeigt die Frontlage wie an einem beliebigen "
-                "Tag seit Jahresbeginn.",
+                "ist die Gebietskontrolle (VIINA): der Scrubber (Tasten ,/. einen "
+                "Schritt vor/zurück — gedrückt halten geht, ; = jetzt) zeigt die "
+                "Frontlage wie an einem beliebigen Tag. Taste t stellt die "
+                "Schrittweite: Woche→Monat→Jahr→10/50/100 Jahre.",
     },
     {
         "term": "Politik / Konflikt-Overlay",
@@ -100,8 +100,8 @@ GLOSSARY = [
                 "(VIINA, Ukraine), Konfliktereignissen (UCDP) und umstrittenen "
                 "Grenzen (Natural Earth). ACLED liefert reichere Ereignisse, ist "
                 "aber lizenz-gesperrt und nur lokal/explizit dazuschaltbar. Jeder "
-                "Sub-Layer trägt seine Provenienz mit. Aktuell in der Terminal-TUI "
-                "sichtbar (im nativen Fenster noch nicht verdrahtet).",
+                "Sub-Layer trägt seine Provenienz mit. Im nativen Fenster mit Taste "
+                "p, in der TUI über den Overlay-Zyklus (o).",
     },
     {
         "term": "Gebietskontrolle (VIINA)",
