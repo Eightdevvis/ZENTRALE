@@ -203,6 +203,22 @@ def assessment_answer(word: str, result: str) -> dict:
         return {"error": str(e)}
 
 
+# ── Devtools ────────────────────────────────────────────────────────────
+def debug_snapshot() -> dict:
+    """Momentaufnahme fürs Devtools-Terminal: komplette User-Vokabel + Assessment-
+    Routing (braucht der User noch das Drill?). Live-Events kommen über den
+    Ereignisbus tutor/debug.py (SSE-Endpunkt in ui/app.py)."""
+    ts = _ts()
+    if ts is None:
+        return {"present": False}
+    try:
+        from tutor import tools, config as tutor_config
+        lang = tutor_config.setting("lang", "zh")
+        return tools.debug_snapshot(lang)
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # ── Status + Config (fertig geformt fürs UI) ────────────────────────────
 
 def status() -> dict:

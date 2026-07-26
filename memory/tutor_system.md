@@ -402,6 +402,17 @@ im Sekundentakt einer Session wäre alles „in 1 Tag fällig".
   Ziehen fälliger Wörter hängt daran, dass das Modell `get_due_reviews` aufruft (wie
   bei den anderen Session-Start-Tools). Beides Kandidaten zum Nachschärfen.
 
+**Devtools-Terminal (2026-07).** `scripts/tutor_devtools.py [--url …]` in einem eigenen
+Terminal → zeigt LIVE + zeitgestempelt: (1) Snapshot beim Verbinden — komplette
+User-Vokabel mit Level (neu/wacklig/fest) + Assessment-Routing (braucht noch Drill?),
+(2) jede Vokabel-Statusänderung (`vocab`-Events aus `introduce_new`/`increment_correct_use`/
+`mark_known`/`assessment_answer`), (3) den KOMPLETTEN AI-Stream: `ai.req` (voller
+System-Prompt + Messages + Tools + Modell — was sie KRIEGT), `ai.out` (ROH-Ausgabe inkl.
+versteckter (Regie)/Tool-Leaks — was sie AUSGIBT), `ai.tool` (jeder Tool-Call). Naht:
+Ereignisbus `tutor/debug.py` (Ring-Puffer + Subscriber), Snapshot `tools.debug_snapshot`,
+SSE-Endpunkt `GET /api/tutor/debug/stream`. `debug.emit()` schluckt jeden Fehler — stört
+die echte Logik nie.
+
 **Direkt-Start (kein Enter):** TUI-Taste `u` öffnet **mit `DISPLAY` das
 Persona-Zimmer** (`zentrale_tui.tutor_window`, eigenes pygame-Fenster, siehe
 unten); **ohne `DISPLAY`** fällt sie auf das Text-Panel zurück

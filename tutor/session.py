@@ -35,6 +35,7 @@ from . import langs             # Sprach-/Persona-Profile
 from . import providers         # Provider-Registry des Tutors
 from . import config            # tutor/data/tutor_config.json (Sprache/Provider/Modell)
 from . import memory            # eigenes Grob-Gedächtnis pro Persona
+from . import debug             # Devtools-Ereignisbus (zeitgestempelt)
 
 _lock     = Lock()
 _active   = False
@@ -524,6 +525,14 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     if mem_ctx:
         system = system + "\n\n" + mem_ctx
 
+    # Devtools: was die KI KRIEGT — voller System-Prompt (inkl. Vokabel-Kontext +
+    # Lage-Meldung + Gedächtnis), die Messages, Provider/Modell, verfügbare Tools.
+    debug.emit('ai.req',
+               phase=('start' if (user_text is None and not nudge) else 'nudge' if nudge else 'respond'),
+               lang=lang, provider=pname, model=model,
+               system=system, messages=history,
+               tools=[t['function']['name'] for t in tools.tools_for(lang)])
+
     # Backend-Dispatch nach provider.kind. Alle haben dieselbe chat_stream()-
     # Signatur (yieldet Plain-Text-Tokens); der Tutor bleibt sauberes Addon.
     kind = provider.get("kind")
@@ -549,6 +558,10 @@ def respond_stream(user_text: str = None, nudge: bool = False,
         yield token
 
     full = "".join(full_response)
+    # Devtools: was die KI AUSGIBT — die ROH-Antwort (inkl. dem, was das Zimmer sonst
+    # versteckt: (Regie-Klammern), geleakte Tool-Zeilen; die Bereinigung passiert
+    # erst im Frontend via _clean_speech).
+    debug.emit('ai.out', phase=('nudge' if nudge else 'respond'), lang=lang, raw=full)
 
     # Nudge-Antworten sind AMBIENTES Verhalten (sie reagiert auf Stille), kein
     # Gespräch — NICHT ins Gedächtnis (sonst füllt sich die persistente History mit

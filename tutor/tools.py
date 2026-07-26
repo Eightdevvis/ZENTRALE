@@ -41,6 +41,7 @@ from threading import Lock
 
 from . import langs
 from . import srs   # Langzeit-SR (FSRS) fürs Gespräch — Soft-Import, No-op ohne Lib
+from . import debug  # Devtools-Ereignisbus (zeitgestempelt) — emit() schluckt Fehler
 
 _lock = Lock()   # Flask-Thread + Event-Loop können gleichzeitig lesen/schreiben
 
@@ -187,7 +188,7 @@ def get_testing_vocab(lang: str = None) -> str:
 def increment_correct_use(word: str, lang: str = None) -> str:
     """+1 auf ein Wort. Ab CONFIRM_THRESHOLD springt es auf confirmed. Korrekte
     Nutzung = zugleich ein FSRS-„Good" fürs Langzeit-SR (nur echte, getrackte Wörter)."""
-    found = False
+    found = False; snap = None
     with _lock:
         entries = _load_raw(lang)
         msg = _phrase("vocab_notfound", lang, word=word)
@@ -203,9 +204,11 @@ def increment_correct_use(word: str, lang: str = None) -> str:
                     _write_raw(entries, lang)
                     msg = _phrase("vocab_progress", lang, word=word,
                                   uses=e['correct_use'], threshold=CONFIRM_THRESHOLD)
+                snap = dict(e)
                 break
     if found:
-        srs.review(word, 'good', lang)     # Langzeit-SR: erfolgreicher Recall
+        _dbg_vocab('use', word, snap, lang)   # eigene Nutzung → Devtools (evtl. → fest)
+        srs.review(word, 'good', lang)        # Langzeit-SR: erfolgreicher Recall
     return msg
 
 
@@ -215,9 +218,10 @@ def introduce_new(word: str, reading: str = "", lang: str = None) -> str:
         entries = _load_raw(lang)
         if any(e['word'] == word for e in entries):
             return _phrase("vocab_dup", lang, word=word)
-        entries.append({'word': word, 'reading': reading or '',
-                        'correct_use': 0, 'confirmed': False})
+        new_e = {'word': word, 'reading': reading or '', 'correct_use': 0, 'confirmed': False}
+        entries.append(new_e)
         _write_raw(entries, lang)
+    _dbg_vocab('new', word, new_e, lang)     # neu reingekommen → Devtools
     return _phrase("vocab_added", lang, word=word, reading=reading or '')
 
 
@@ -229,20 +233,22 @@ def mark_known(word: str, reading: str = "", lang: str = None) -> str:
         return _phrase("known_noword", lang)
     with _lock:
         entries = _load_raw(lang)
-        msg = None
+        msg = None; snap = None
         for e in entries:
             if e['word'] == word:
                 e['confirmed'] = True
                 if e.get('correct_use', 0) < CONFIRM_THRESHOLD:
                     e['correct_use'] = CONFIRM_THRESHOLD
                 _write_raw(entries, lang)
-                msg = _phrase("known_marked", lang, word=word)
+                msg = _phrase("known_marked", lang, word=word); snap = dict(e)
                 break
         if msg is None:
-            entries.append({'word': word, 'reading': reading or '',
-                            'correct_use': CONFIRM_THRESHOLD, 'confirmed': True})
+            snap = {'word': word, 'reading': reading or '',
+                    'correct_use': CONFIRM_THRESHOLD, 'confirmed': True}
+            entries.append(snap)
             _write_raw(entries, lang)
             msg = _phrase("known_added", lang, word=word)
+    _dbg_vocab('known', word, snap, lang)                    # → fest, Devtools
     srs.ensure(word, lang); srs.review(word, 'good', lang)   # ins Langzeit-SR
     return msg
 
@@ -261,6 +267,46 @@ def vocab_split(lang: str = None) -> tuple:
     solid = [e['word'] for e in entries if e.get('word') and e.get('confirmed')]
     learn = [e['word'] for e in entries if e.get('word') and not e.get('confirmed')]
     return solid, learn
+
+
+def word_level(e: dict) -> str:
+    """Level einer Vokabel: fest (im Gespräch gefestigt) > wacklig (im Drill
+    bestanden, aber noch nicht selbst benutzt) > neu (gerade erst gezeigt)."""
+    if e.get('confirmed'):
+        return 'fest'
+    if e.get('assessed'):
+        return 'wacklig'
+    return 'neu'
+
+
+def _dbg_vocab(action: str, word: str, e: dict, lang: str = None):
+    """Eine Vokabel-Statusänderung ins Devtools loggen (zeitgestempelt)."""
+    debug.emit('vocab', action=action, word=word, lang=_lang(lang),
+               level=word_level(e), assessed=bool(e.get('assessed')),
+               confirmed=bool(e.get('confirmed')),
+               correct_use=int(e.get('correct_use', 0) or 0))
+
+
+def debug_snapshot(lang: str = None) -> dict:
+    """Momentaufnahme fürs Devtools beim Verbinden: die KOMPLETTE User-Vokabel mit
+    Leveln + das Assessment-Routing (braucht der User noch das Drill?)."""
+    lang = _lang(lang)
+    with _lock:
+        entries = _load_raw(lang)
+    vocab = sorted(
+        [{'word': e.get('word'), 'level': word_level(e),
+          'assessed': bool(e.get('assessed')), 'confirmed': bool(e.get('confirmed')),
+          'correct_use': int(e.get('correct_use', 0) or 0)}
+         for e in entries if e.get('word')],
+        key=lambda v: ({'fest': 0, 'wacklig': 1, 'neu': 2}.get(v['level'], 3), v['word']))
+    got, total = core_coverage(lang)
+    return {
+        'lang': lang, 'vocab': vocab,
+        'needs_assessment': assessment_active(lang),  # True = Drill noch nötig
+        'graduated': core_graduated(lang),
+        'core_got': got, 'core_total': total,
+        'game': game_state(lang), 'srs': srs.stats(lang),
+    }
 
 
 def vocab_buckets(lang: str = None) -> tuple:
@@ -647,6 +693,9 @@ def assessment_answer(lang: str, word: str, result: str) -> dict:
         assessed = bool(e.get('assessed'))
         conf, uses, reps = bool(e.get('confirmed')), int(e.get('correct_use', 0)), int(sr['reps'])
         coins, parts = int(g['coins']), list(g.get('parts', []))
+        snap = dict(e)
+    if result in ('known', 'learned'):
+        _dbg_vocab('assessed', word, snap, lang)   # Drill-Antwort → Devtools
     if first_known:
         srs.ensure(word, lang)          # erstes Bestehen → ins Langzeit-SR (FSRS)
     got, total = core_coverage(lang)
@@ -1012,6 +1061,7 @@ def execute_tool(name: str, args: dict) -> str:
     nicht still durchrutschen)."""
     fn = _ALLOWED.get(name)
     if fn is None:
+        debug.emit('ai.tool', name=name, args=args, result='[abgelehnt: nicht in Allowlist]')
         try:
             import state
             state.push_log(f"⚠ TUTOR-SANDBOX: Tool '{name}' abgelehnt (nicht in der Allowlist)")
@@ -1019,4 +1069,6 @@ def execute_tool(name: str, args: dict) -> str:
             pass
         return (f"[Abgelehnt: '{name}' ist kein Tutor-Tool – die Tutor-/Cloud-AI "
                 f"darf nur die Tutor-Tools nutzen.]")
-    return fn(args or {})
+    result = fn(args or {})
+    debug.emit('ai.tool', name=name, args=args, result=result)   # KI-Tool-Call → Devtools
+    return result

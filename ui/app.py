@@ -1479,6 +1479,34 @@ def api_tutor_assessment_answer():
     return jsonify(tutor_port.assessment_answer(word, result))
 
 
+@app.route('/api/tutor/debug/stream')
+def api_tutor_debug_stream():
+    """Devtools-Stream (SSE) fuers Tutor-Terminal (scripts/tutor_devtools.py):
+    schickt ZUERST einen Snapshot (User-Vokabel + Assessment-Routing), dann die
+    Event-Historie, dann LIVE jedes Event (Vokabel-Statusaenderung + kompletter
+    AI-Stream: voller System-Prompt, Roh-Ausgabe, Tool-Calls). Alles zeitgestempelt."""
+    from tutor import debug as tutor_debug
+
+    def generate():
+        snap = tutor_port.debug_snapshot()
+        yield 'data: ' + json.dumps({'ts': tutor_debug._ts(), 'kind': 'snapshot', **snap},
+                                     ensure_ascii=False) + '\n\n'
+        for ev in tutor_debug.history():
+            yield 'data: ' + json.dumps(ev, ensure_ascii=False) + '\n\n'
+        q = tutor_debug.subscribe()
+        try:
+            while True:
+                try:
+                    ev = q.get(timeout=15)
+                    yield 'data: ' + json.dumps(ev, ensure_ascii=False) + '\n\n'
+                except Exception:
+                    yield ': keepalive\n\n'   # Heartbeat, damit die Verbindung lebt
+        finally:
+            tutor_debug.unsubscribe(q)
+
+    return Response(stream_with_context(generate()), content_type='text/event-stream')
+
+
 @app.route('/api/tutor/nudge', methods=['POST'])
 def api_tutor_nudge():
     """Stille-Anstoss: Sasha hat eine Weile nichts gesagt → die Persona reagiert
