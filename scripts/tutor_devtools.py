@@ -25,15 +25,17 @@ import urllib.request
 C = {  # ANSI-Farben (leer, wenn kein TTY)
     'dim': '\033[2m', 'rst': '\033[0m', 'b': '\033[1m',
     'ts': '\033[90m', 'vocab': '\033[36m', 'req': '\033[35m', 'out': '\033[32m',
-    'tool': '\033[33m', 'head': '\033[1;37m', 'warn': '\033[31m',
-    'fest': '\033[32m', 'wacklig': '\033[33m', 'neu': '\033[90m',
+    'tool': '\033[33m', 'head': '\033[1;37m', 'warn': '\033[31m', 'ok': '\033[32m',
+    # Vokabel-Status
+    'new': '\033[90m', 'understood': '\033[36m', 'learning': '\033[33m',
+    'learned': '\033[32m', 'intuitive': '\033[1;32m',
 }
 if not sys.stdout.isatty():
     C = {k: '' for k in C}
 
 
-def _lvl(level):
-    return f"{C.get(level, '')}{level}{C['rst']}"
+def _stat(status):
+    return f"{C.get(status, '')}{status}{C['rst']}"
 
 
 def _indent(text, pad='      │ '):
@@ -50,7 +52,7 @@ def render(ev):
         print(f"\n{C['head']}══ SNAPSHOT ({ev.get('lang')}) ══{C['rst']}  {ts}")
         got, tot = ev.get('core_got', 0), ev.get('core_total', 0)
         route = (f"{C['warn']}ASSESSMENT nötig{C['rst']}" if r_need
-                 else f"{C['fest']}durch — freie Konversation{C['rst']}")
+                 else f"{C['ok']}durch — freie Konversation{C['rst']}")
         print(f"  Routing: {route}   Kern {got}/{tot}"
               f"   graduated={ev.get('graduated')}")
         g = ev.get('game') or {}
@@ -62,15 +64,15 @@ def render(ev):
         if not vocab:
             print(f"    {C['dim']}(leer){C['rst']}")
         for v in vocab:
-            print(f"    {_lvl(v['level']):<20} {v['word']:<16} "
-                  f"{C['dim']}use={v['correct_use']} assessed={v['assessed']} confirmed={v['confirmed']}{C['rst']}")
+            print(f"    {_stat(v.get('status', '')):<24} {v['word']:<16} "
+                  f"{C['dim']}spoken={v.get('spoken', 0)} listened={v.get('listened', 0)}{C['rst']}")
         print()
         return
 
     if kind == 'vocab':
         print(f"{ts} {C['vocab']}VOKABEL{C['rst']} {ev.get('action', ''):<8} "
-              f"{C['b']}{ev.get('word', '')}{C['rst']} → {_lvl(ev.get('level', ''))} "
-              f"{C['dim']}(use={ev.get('correct_use')} assessed={ev.get('assessed')} confirmed={ev.get('confirmed')}){C['rst']}")
+              f"{C['b']}{ev.get('word', '')}{C['rst']} → {_stat(ev.get('status', ''))} "
+              f"{C['dim']}(spoken={ev.get('spoken')} listened={ev.get('listened')}){C['rst']}")
         return
 
     if kind == 'ai.req':

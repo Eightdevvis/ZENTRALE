@@ -82,12 +82,19 @@ PROFILE = profile(
     # abfragen und in Fragen-Schleifen kippen (gegen echtes qwen belegt). Nur zwei
     # Eimer fürs Reden (session.vocab_buckets): BEKANNT (solid) + NEU (learn).
     vocab_labels = {
-        "solid":   "ya las conoce, úsalas con naturalidad al charlar: ",
-        "learn":   "las acaba de ver, todavía nuevas: ",
         "structs": "maneras de decir que va cogiendo: ",
-        "plain":   "las acaba de ver, todavía nuevas: ",
         "join":    ", ",
         "sep":     "; ",
+    },
+
+    # Status-Beschriftung (die KI kriegt {wort: status} — NUR beschreibend, KEINE
+    # Drill-Anweisung; „úsala/examínala/repite" ließen qwen abfragen).
+    status_labels = {
+        "new":        "nueva",
+        "understood": "la reconoce",
+        "learning":   "empieza a usarla",
+        "learned":    "la usa bien",
+        "intuitive":  "le sale sola",
     },
 
     # Rückgaben + Regie-Sätze der Tools — in der Zielsprache, sonst liest das Modell

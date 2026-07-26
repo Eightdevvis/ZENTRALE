@@ -17,7 +17,7 @@
 #
 # ── Wo was liegt ────────────────────────────────────────────────────────
 #   Lernstand (pro Sprache, Laufzeit, gitignored):
-#       tutor/data/<lang>/vocab.json       {word, reading, correct_use, confirmed}
+#       tutor/data/<lang>/vocab.json       {word, reading, spoken, listened}
 #       tutor/data/<lang>/structures.json  Satzmuster
 #       tutor/data/<lang>/news.json        nur der Rotations-Cursor
 #       tutor/data/<lang>/tv.json          nur der Rotations-Cursor
@@ -29,10 +29,11 @@
 # zh=Pinyin, ru=Betonung, ar=Translit, fr/es=leer. Vorher war das Datenmodell
 # mandarin-förmig und jede andere Sprache hätte lügen müssen.
 #
-# ── Konzept: confirmed vs. testing ──────────────────────────────────────
-#   confirmed = False  → Wort wird gerade gelernt (20%-Pool)
-#   confirmed = True   → Wort ist gefestigt (80%-Pool)
-#   correct_use >= CONFIRM_THRESHOLD → confirmed springt automatisch auf True
+# ── Vokabel-Modell: nur spoken + listened → word_status ─────────────────
+#   spoken   = wie oft der User das Wort SELBST benutzt hat (deterministisch)
+#   listened = wie oft gehört (KI sagt's + sinnhafte Antwort / 1× Assessment)
+#   Daraus leitet word_status() die Stufe ab (new→understood→learning→learned→
+#   intuitive; spoken schlägt listened). Die KI kriegt NUR den Status, nie Zahlen.
 
 import json
 import os
@@ -45,8 +46,37 @@ from . import debug  # Devtools-Ereignisbus (zeitgestempelt) — emit() schluckt
 
 _lock = Lock()   # Flask-Thread + Event-Loop können gleichzeitig lesen/schreiben
 
-CONFIRM_THRESHOLD = 5    # so oft korrekt genutzt → Wort gilt als gefestigt
 STRUCT_THRESHOLD  = 3    # so oft genutzt → Satzmuster gilt als gefestigt
+
+# ── Vokabel-Modell: NUR zwei Properties pro Wort (Sasha, 2026-07) ────────
+#   spoken   +1 sobald der User das Wort SELBST benutzt hat (deterministisch aus
+#            seiner Eingabe gematcht — die KI zählt nicht).
+#   listened +1 wenn die KI es sagt + der User sinnhaft antwortet ODER beim ERSTEN
+#            Abhaken im Assessment (nur einmal, kein Spam).
+# Daraus wird intern der STATUS abgeleitet (spoken schlägt listened). Die KI kriegt
+# NIE die Zahlen — nur {wort: status}. (Die Konversations-„sinnhafte Antwort"-Wertung
+# + die Embedding-Auswahl langer Listen sind eigene, noch offene Schritte.)
+LISTEN_UNDERSTOOD = 4    # ab so oft gehört → „understood" (passiv verstanden)
+SPEAK_LEARNING    = 2    # ab so oft selbst benutzt → „learning"
+SPEAK_LEARNED     = 4    # → „learned"
+SPEAK_INTUITIVE   = 12   # → „intuitive"
+_STATUS_ORDER = {'new': 0, 'understood': 1, 'learning': 2, 'learned': 3, 'intuitive': 4}
+
+
+def word_status(e: dict) -> str:
+    """Status einer Vokabel aus spoken/listened. spoken (selbst benutzt) schlägt
+    listened (gehört): jede spoken-Stufe steht über „understood"."""
+    sp = int(e.get('spoken', 0) or 0)
+    li = int(e.get('listened', 0) or 0)
+    if sp >= SPEAK_INTUITIVE:
+        return 'intuitive'
+    if sp >= SPEAK_LEARNED:
+        return 'learned'
+    if sp >= SPEAK_LEARNING:
+        return 'learning'
+    if li >= LISTEN_UNDERSTOOD:
+        return 'understood'
+    return 'new'
 
 _DATA_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 
@@ -133,16 +163,36 @@ def _phrase(key: str, lang: str = None, **fmt) -> str:
 
 # ── Vokabeln ────────────────────────────────────────────────────────────
 
+def _migrate_entry(e: dict):
+    """Altes Schema (confirmed/correct_use/assessed) → neu (spoken/listened). Nur die
+    zwei State-Properties bleiben; alte Flags fliegen raus. Idempotent (in-place)."""
+    if 'spoken' not in e and 'listened' not in e:
+        # altes confirmed/correct_use war DRILL-Ergebnis, keine EIGEN-Nutzung → spoken=0;
+        # drill-bestanden (confirmed/assessed) zählt als 1× gehört.
+        e['listened'] = 1 if (e.get('confirmed') or e.get('assessed')) else 0
+    e['spoken'] = int(e.get('spoken', 0) or 0)
+    e['listened'] = int(e.get('listened', 0) or 0)
+    for k in ('confirmed', 'assessed', 'correct_use'):
+        e.pop(k, None)
+
+
 def _load_raw(lang: str = None) -> list:
-    """Vokabelliste der Sprache von Disk (ohne Lock – nur intern)."""
+    """Vokabelliste der Sprache von Disk (ohne Lock – nur intern). Migriert altes
+    Schema beim Laden aufs neue spoken/listened-Modell."""
     path = _file('vocab.json', lang)
     if not os.path.exists(path):
         return []
     try:
         with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            raw = json.load(f)
     except Exception:
         return []
+    if not isinstance(raw, list):
+        return []
+    for e in raw:
+        if isinstance(e, dict):
+            _migrate_entry(e)
+    return raw
 
 
 def _write_raw(entries: list, lang: str = None):
@@ -162,143 +212,109 @@ def _fmt(e: dict) -> str:
     return f"{e['word']} ({r})" if r else str(e.get('word', ''))
 
 
-def get_confirmed_vocab(lang: str = None) -> str:
-    """Alle gefestigten Vokabeln (confirmed=True) — der 80%-Pool."""
+def _is_junk(word: str, lang: str = None) -> bool:
+    """Offensichtlicher Nicht-Vokabel-Müll (Persona-/User-Name, leer) → nicht anlegen.
+    Verhindert, dass „sasha" o.Ä. per show_thought in die Liste rutscht."""
+    w = (word or '').strip().lower()
+    if not w:
+        return True
+    bad = {'sasha'}
+    try:
+        pn = (_prof(lang).get('persona_name') or '').strip().lower()
+        if pn:
+            bad.add(pn)
+    except Exception:
+        pass
+    return w in bad
+
+
+def bump_spoken(word: str, lang: str = None) -> bool:
+    """spoken +1 (der User hat das Wort SELBST benutzt). Legt nichts an — zählt nur,
+    was schon in der Liste ist. Zugleich FSRS-„Good". True, wenn getroffen."""
+    word = (word or '').strip()
+    if not word:
+        return False
+    snap = None
     with _lock:
         entries = _load_raw(lang)
-    confirmed = [e for e in entries if e.get('confirmed')]
-    if not confirmed:
-        return _phrase("vocab_none", lang)
-    return (_phrase("vocab_confirmed_header", lang) + "\n"
-            + "\n".join(_fmt(e) for e in confirmed))
-
-
-def get_testing_vocab(lang: str = None) -> str:
-    """Alle Vokabeln im Lernen (confirmed=False) — der 20%-Pool + count."""
-    with _lock:
-        entries = _load_raw(lang)
-    testing = [e for e in entries if not e.get('confirmed')]
-    if not testing:
-        return _phrase("vocab_testing_empty", lang)
-    lines = [f"{_fmt(e)} – {e.get('correct_use', 0)}x" for e in testing]
-    return (_phrase("vocab_testing_header", lang, count=len(testing)) + "\n"
-            + "\n".join(lines))
-
-
-def increment_correct_use(word: str, lang: str = None) -> str:
-    """+1 auf ein Wort. Ab CONFIRM_THRESHOLD springt es auf confirmed. Korrekte
-    Nutzung = zugleich ein FSRS-„Good" fürs Langzeit-SR (nur echte, getrackte Wörter)."""
-    found = False; snap = None
-    with _lock:
-        entries = _load_raw(lang)
-        msg = _phrase("vocab_notfound", lang, word=word)
         for e in entries:
             if e['word'] == word:
-                found = True
-                e['correct_use'] = e.get('correct_use', 0) + 1
-                if e['correct_use'] >= CONFIRM_THRESHOLD and not e.get('confirmed'):
-                    e['confirmed'] = True
-                    _write_raw(entries, lang)
-                    msg = _phrase("vocab_confirmed_now", lang, word=word, uses=e['correct_use'])
-                else:
-                    _write_raw(entries, lang)
-                    msg = _phrase("vocab_progress", lang, word=word,
-                                  uses=e['correct_use'], threshold=CONFIRM_THRESHOLD)
+                e['spoken'] = int(e.get('spoken', 0) or 0) + 1
+                _write_raw(entries, lang)
                 snap = dict(e)
                 break
-    if found:
-        _dbg_vocab('use', word, snap, lang)   # eigene Nutzung → Devtools (evtl. → fest)
-        srs.review(word, 'good', lang)        # Langzeit-SR: erfolgreicher Recall
-    return msg
+    if snap is not None:
+        _dbg_vocab('spoken', word, snap, lang)
+        srs.review(word, 'good', lang)
+        return True
+    return False
+
+
+def note_spoken(text: str, lang: str = None) -> list:
+    """DETERMINISTISCH: die User-Eingabe gegen die Vokabelliste matchen und für jedes
+    getrackte Wort darin spoken +1. Die KI zählt NICHT — das hier tut's. Gibt die
+    getroffenen Wörter zurück. (Grobes Wortgrenzen-Matching; Flexion/Feinheiten später.)"""
+    text = (text or '').strip()
+    if not text:
+        return []
+    low = ' ' + text.lower() + ' '
+    with _lock:
+        words = [e['word'] for e in _load_raw(lang) if e.get('word')]
+    hits = [w for w in words if w and (' ' + w.lower() + ' ') in low]
+    for w in hits:
+        bump_spoken(w, lang)
+    return hits
 
 
 def introduce_new(word: str, reading: str = "", lang: str = None) -> str:
-    """Neues Wort in den Lern-Pool. Dedupt selbst (bekannt → no-op)."""
+    """Neues Wort in die Liste (spoken=0/listened=0). Dedupt selbst; Junk (Namen) raus."""
+    word = (word or '').strip()
+    if not word or _is_junk(word, lang):
+        return _phrase("vocab_notfound", lang, word=word)
     with _lock:
         entries = _load_raw(lang)
         if any(e['word'] == word for e in entries):
             return _phrase("vocab_dup", lang, word=word)
-        new_e = {'word': word, 'reading': reading or '', 'correct_use': 0, 'confirmed': False}
+        new_e = {'word': word, 'reading': reading or '', 'spoken': 0, 'listened': 0}
         entries.append(new_e)
         _write_raw(entries, lang)
     _dbg_vocab('new', word, new_e, lang)     # neu reingekommen → Devtools
     return _phrase("vocab_added", lang, word=word, reading=reading or '')
 
 
-def mark_known(word: str, reading: str = "", lang: str = None) -> str:
-    """Vokabel-Check: das kann sie SCHON → direkt als gefestigt ablegen.
-    Gegenstück zu show_thought/introduce_new (die etwas NEUES anlegen)."""
-    word = (word or "").strip()
-    if not word:
-        return _phrase("known_noword", lang)
-    with _lock:
-        entries = _load_raw(lang)
-        msg = None; snap = None
-        for e in entries:
-            if e['word'] == word:
-                e['confirmed'] = True
-                if e.get('correct_use', 0) < CONFIRM_THRESHOLD:
-                    e['correct_use'] = CONFIRM_THRESHOLD
-                _write_raw(entries, lang)
-                msg = _phrase("known_marked", lang, word=word); snap = dict(e)
-                break
-        if msg is None:
-            snap = {'word': word, 'reading': reading or '',
-                    'correct_use': CONFIRM_THRESHOLD, 'confirmed': True}
-            entries.append(snap)
-            _write_raw(entries, lang)
-            msg = _phrase("known_added", lang, word=word)
-    _dbg_vocab('known', word, snap, lang)                    # → fest, Devtools
-    srs.ensure(word, lang); srs.review(word, 'good', lang)   # ins Langzeit-SR
-    return msg
-
-
 def term_list(lang: str = None) -> list:
-    """Alle Wörter (gefestigt + im Lernen) — für den Vokabel-Kontext."""
+    """Alle Wörter — für den Vokabel-Kontext."""
     with _lock:
         entries = _load_raw(lang)
     return [e['word'] for e in entries if e.get('word')]
 
 
-def vocab_split(lang: str = None) -> tuple:
-    """(gefestigt, im Lernen) nach `confirmed` — Roh-Split (Tracking)."""
+def vocab_status_list(lang: str = None) -> list:
+    """[(wort, status)] — was die KI im Kontext kriegt (NUR Status, nie Zahlen)."""
     with _lock:
         entries = _load_raw(lang)
-    solid = [e['word'] for e in entries if e.get('word') and e.get('confirmed')]
-    learn = [e['word'] for e in entries if e.get('word') and not e.get('confirmed')]
-    return solid, learn
-
-
-def word_level(e: dict) -> str:
-    """Level einer Vokabel: fest (im Gespräch gefestigt) > wacklig (im Drill
-    bestanden, aber noch nicht selbst benutzt) > neu (gerade erst gezeigt)."""
-    if e.get('confirmed'):
-        return 'fest'
-    if e.get('assessed'):
-        return 'wacklig'
-    return 'neu'
+    return [(e['word'], word_status(e)) for e in entries if e.get('word')]
 
 
 def _dbg_vocab(action: str, word: str, e: dict, lang: str = None):
     """Eine Vokabel-Statusänderung ins Devtools loggen (zeitgestempelt)."""
     debug.emit('vocab', action=action, word=word, lang=_lang(lang),
-               level=word_level(e), assessed=bool(e.get('assessed')),
-               confirmed=bool(e.get('confirmed')),
-               correct_use=int(e.get('correct_use', 0) or 0))
+               status=word_status(e),
+               spoken=int(e.get('spoken', 0) or 0),
+               listened=int(e.get('listened', 0) or 0))
 
 
 def debug_snapshot(lang: str = None) -> dict:
     """Momentaufnahme fürs Devtools beim Verbinden: die KOMPLETTE User-Vokabel mit
-    Leveln + das Assessment-Routing (braucht der User noch das Drill?)."""
+    spoken/listened/status + das Assessment-Routing (braucht der User noch das Drill?)."""
     lang = _lang(lang)
     with _lock:
         entries = _load_raw(lang)
     vocab = sorted(
-        [{'word': e.get('word'), 'level': word_level(e),
-          'assessed': bool(e.get('assessed')), 'confirmed': bool(e.get('confirmed')),
-          'correct_use': int(e.get('correct_use', 0) or 0)}
+        [{'word': e.get('word'), 'status': word_status(e),
+          'spoken': int(e.get('spoken', 0) or 0), 'listened': int(e.get('listened', 0) or 0)}
          for e in entries if e.get('word')],
-        key=lambda v: ({'fest': 0, 'wacklig': 1, 'neu': 2}.get(v['level'], 3), v['word']))
+        key=lambda v: (-_STATUS_ORDER.get(v['status'], 0), v['word']))
     got, total = core_coverage(lang)
     return {
         'lang': lang, 'vocab': vocab,
@@ -310,14 +326,8 @@ def debug_snapshot(lang: str = None) -> dict:
 
 
 def vocab_buckets(lang: str = None) -> tuple:
-    """Fürs GESPRÄCH: (bekannt, neu). **bekannt** = im Drill bestanden ODER im Gespräch
-    gefestigt (`assessed|confirmed`) → einfach ganz normal benutzen. **neu** = im
-    Gespräch gerade erst gezeigt (weder assessed noch confirmed).
-
-    Bewusst NUR zwei Eimer fürs Reden: der wacklig/fest-Unterschied ist intern
-    (Tracking + FSRS-Auffrischung, `get_due_reviews`) — ihn der Persona als „noch am
-    Lernen, übe sie" zu geben, ließ qwen wieder abfragen und in Fragen-Schleifen
-    kippen (gegen echtes qwen belegt). Fürs Reden zählt: kennt sie's oder ist's neu."""
+    """Fürs GESPRÄCH grob (bekannt, neu) aus dem Status abgeleitet: **bekannt** = alles
+    außer 'new' (kennt sie schon irgendwie → normal benutzen), **neu** = Status 'new'."""
     with _lock:
         entries = _load_raw(lang)
     known, new = [], []
@@ -325,18 +335,17 @@ def vocab_buckets(lang: str = None) -> tuple:
         w = e.get('word')
         if not w:
             continue
-        (known if (e.get('assessed') or e.get('confirmed')) else new).append(w)
+        (new if word_status(e) == 'new' else known).append(w)
     return known, new
 
 
 def get_vocab_stats(lang: str = None) -> str:
-    """Kurz-Statistik (Dashboard/Session-Start). KEIN AI-Tool."""
+    """Kurz-Statistik (Dashboard). KEIN AI-Tool."""
     with _lock:
         entries = _load_raw(lang)
-    total     = len(entries)
-    confirmed = sum(1 for e in entries if e.get('confirmed'))
-    return _phrase("stats", lang, total=total, confirmed=confirmed,
-                   testing=total - confirmed)
+    total = len(entries)
+    known = sum(1 for e in entries if word_status(e) != 'new')
+    return _phrase("stats", lang, total=total, confirmed=known, testing=total - known)
 
 
 # ── Kern-Syllabus: festes Grund-Vokabular + Fortschritt ─────────────────
@@ -363,32 +372,23 @@ def _core_list(lang: str = None) -> list:
             if isinstance(e, dict) and e.get("word")]
 
 
-def _confirmed_words(lang: str = None) -> set:
-    with _lock:
-        entries = _load_raw(lang)
-    return {e["word"] for e in entries if e.get("confirmed") and e.get("word")}
-
-
-def _assessed_words(lang: str = None) -> set:
-    """Wörter, die das Drill BESTANDEN haben (`assessed`) — das treibt Gate/Leiste/
-    Freischaltung. Bewusst getrennt von `confirmed` (= im GESPRÄCH gefestigt, „fest"):
-    ein Drill-Wort läuft als „wacklig" (assessed, nicht confirmed) rein und wird erst
-    fest, wenn Sasha es selbst benutzt. `confirmed` zählt hier mit (rein-konvers.
-    gefestigte Kern-Wörter + Abwärtskompat. mit altem Drill, der confirmed setzte)."""
+def _drilled_words(lang: str = None) -> set:
+    """Kern-Wörter, die im Drill DRAN waren = mind. 1× gehört (`listened ≥ 1`). Treibt
+    Gate/Leiste/Freischaltung. Kein `assessed`-Flag mehr — nur listened."""
     with _lock:
         entries = _load_raw(lang)
     return {e["word"] for e in entries
-            if (e.get("assessed") or e.get("confirmed")) and e.get("word")}
+            if int(e.get("listened", 0) or 0) >= 1 and e.get("word")}
 
 
 def core_coverage(lang: str = None) -> tuple:
-    """(im Drill BESTANDENE Kern-Wörter, Kern-Gesamt). (0,0) wenn die Sprache kein
-    Curriculum trägt — der Aufrufer behandelt das als „Feature inaktiv"."""
+    """(im Drill dran gewesene Kern-Wörter [listened≥1], Kern-Gesamt). (0,0) wenn die
+    Sprache kein Curriculum trägt — der Aufrufer behandelt das als „Feature inaktiv"."""
     core = _core_list(lang)
     if not core:
         return (0, 0)
-    assessed = _assessed_words(lang)
-    got = sum(1 for e in core if e["word"] in assessed)
+    drilled = _drilled_words(lang)
+    got = sum(1 for e in core if e["word"] in drilled)
     return (got, len(core))
 
 
@@ -398,14 +398,12 @@ def core_ratio(lang: str = None) -> float:
 
 
 def core_todo(lang: str = None, n: int = 6) -> list:
-    """Die nächsten n noch nicht gefestigten Kern-Wörter, nach Priorität
-    (critical→low). Für den Syllabus-Hinweis an die Persona: WAS als Nächstes
-    dran ist, damit sie das Curriculum aktiv abarbeitet statt beliebig."""
+    """Die nächsten n noch nicht gedrillten Kern-Wörter, nach Priorität (critical→low)."""
     core = _core_list(lang)
     if not core:
         return []
-    assessed = _assessed_words(lang)
-    todo = [e for e in core if e["word"] not in assessed]
+    drilled = _drilled_words(lang)
+    todo = [e for e in core if e["word"] not in drilled]
     todo.sort(key=lambda e: _PRIO_ORDER.get(e.get("priority"), 9))
     return todo[:max(0, n)]
 
@@ -623,11 +621,9 @@ def assessment_queue(lang: str = None) -> list:
         out.append({
             'word': w, 'de': c.get('de', ''), 'category': c.get('category', ''),
             'priority': c.get('priority', 'medium'),
-            # `assessed` = im Drill bestanden (treibt die Queue); `confirmed` = im
-            # Gespräch gefestigt (Abwärtskompat: altes Drill setzte confirmed).
-            'assessed': bool(st.get('assessed') or st.get('confirmed')),
-            'confirmed': bool(st.get('confirmed')),
-            'correct_use': int(st.get('correct_use', 0) or 0),
+            # `assessed` = im Drill dran gewesen (listened≥1) → treibt die Queue.
+            'assessed': int(st.get('listened', 0) or 0) >= 1,
+            'status': word_status(st),
             'reps': int(sr.get('reps', 0) or 0),
         })
     out.sort(key=lambda e: (e['assessed'], _PRIO_ORDER.get(e['priority'], 9)))
@@ -651,36 +647,33 @@ def assessment_answer(lang: str, word: str, result: str) -> dict:
         entries = _load_raw(lang)
         e = next((x for x in entries if x.get('word') == word), None)
         if e is None:
-            e = {'word': word, 'reading': '', 'correct_use': 0, 'confirmed': False}
+            e = {'word': word, 'reading': '', 'spoken': 0, 'listened': 0}
             entries.append(e)
         g = _game_load(lang)
         sr = g.setdefault('srs', {}).setdefault(word, {'reps': 0, 'due': 0})
 
-        was_assessed = bool(e.get('assessed') or e.get('confirmed'))
+        was_drilled = int(e.get('listened', 0) or 0) >= 1
         first_known = False
         if result in ('known', 'learned'):
-            # STATUSLEISTE/Gate hängt am ERSTEN Bestehen eines Worts im Drill
-            # (`assessed`). Das Wort läuft aber als „WACKLIG" rein: NICHT `confirmed`
-            # und `correct_use` bleibt 0 — es wurde nur gedrillt, nicht über Zeit
-            # konsolidiert noch von Sasha selbst benutzt. „Fest" (`confirmed`) wird es
-            # erst im GESPRÄCH durch ihre eigene Nutzung (increment_correct_use).
+            # Abhaken im Drill = 1× GEHÖRT. „listened" zählt hier NUR das ERSTE Mal
+            # (kein Spam durch SR-Wiederholungen); das treibt Gate/Leiste. spoken (=
+            # selbst benutzt) rührt das Drill NIE an — das kommt erst im Gespräch.
             sr['reps'] = int(sr.get('reps', 0)) + 1
-            first_known = not was_assessed
-            e['assessed'] = True
-            e.setdefault('confirmed', False)
-            e.setdefault('correct_use', 0)
+            first_known = not was_drilled
+            if first_known:
+                e['listened'] = 1
             g['reviews'] = int(g.get('reviews', 0)) + 1
-            # Münze NUR zufällig UND nur beim ERSTEN Bestehen (kein Coin-Farming).
+            # Münze NUR zufällig UND nur beim ERSTEN Abhaken (kein Coin-Farming).
             if first_known and random.random() < COIN_CHANCE:
                 coin_gain = random.randint(COIN_MIN, COIN_MAX)
                 g['coins'] = int(g.get('coins', 0)) + coin_gain
             # Kiste an DISTINKTEN Wort-Meilensteinen (15/35/50/70) — nur beim ERSTEN
-            # Bestehen, damit die Kisten-Symbole exakt auf der Leiste (got) sitzen.
+            # Abhaken, damit die Kisten-Symbole exakt auf der Leiste (got) sitzen.
             if first_known:
                 core_words = {c['word'] for c in _core_list(lang)}
-                assessed_now = {x['word'] for x in entries
-                                if (x.get('assessed') or x.get('confirmed')) and x.get('word')}
-                got_now = len(core_words & assessed_now)
+                drilled_now = {x['word'] for x in entries
+                               if int(x.get('listened', 0) or 0) >= 1 and x.get('word')}
+                got_now = len(core_words & drilled_now)
                 ms = crate_milestones(len(core_words))
                 n = int(g.get('crates', 0))
                 if n < len(ms) and got_now >= ms[n]:
@@ -690,19 +683,19 @@ def assessment_answer(lang: str, word: str, result: str) -> dict:
 
         _write_raw(entries, lang)
         _game_save(g, lang)
-        assessed = bool(e.get('assessed'))
-        conf, uses, reps = bool(e.get('confirmed')), int(e.get('correct_use', 0)), int(sr['reps'])
+        drilled = int(e.get('listened', 0) or 0) >= 1
+        reps = int(sr['reps'])
         coins, parts = int(g['coins']), list(g.get('parts', []))
         snap = dict(e)
     if result in ('known', 'learned'):
-        _dbg_vocab('assessed', word, snap, lang)   # Drill-Antwort → Devtools
+        _dbg_vocab('drilled', word, snap, lang)   # Drill-Antwort → Devtools
     if first_known:
-        srs.ensure(word, lang)          # erstes Bestehen → ins Langzeit-SR (FSRS)
+        srs.ensure(word, lang)          # erstes Abhaken → ins Langzeit-SR (FSRS)
     got, total = core_coverage(lang)
-    # `mastered` = im Drill bestanden (assessed) — das treibt Entfernen/Freischaltung
-    # im Frontend; `confirmed` bleibt separat (im Gespräch gefestigt = „fest").
-    return {'word': word, 'confirmed': conf, 'assessed': assessed, 'correct_use': uses,
-            'reps': reps, 'mastered': assessed, 'first_known': first_known,
+    # `mastered`/`assessed` = im Drill dran gewesen (listened≥1) — treibt Entfernen/
+    # Freischaltung im Frontend; `status` ist der abgeleitete Vokabel-Status.
+    return {'word': word, 'assessed': drilled, 'mastered': drilled,
+            'status': word_status(snap), 'reps': reps, 'first_known': first_known,
             'got': got, 'total': total,
             'ratio': round(got / total, 3) if total else 0.0,
             'unlocked': core_graduated(lang),
@@ -930,10 +923,10 @@ _EXPRESS_ACTIONS = ["sit", "stand", "pace", "wander", "come_closer", "sleep",
                     "shrug", "happy", "sad", "surprised", "tired", "puzzled",
                     "neutral"]
 
+# Die KI ZÄHLT NICHT mehr: get_confirmed_vocab/get_testing_vocab/increment_correct_use/
+# mark_known sind RAUS. spoken kommt deterministisch aus der User-Eingabe (note_spoken),
+# listened aus dem Drill; die KI kriegt den Vokabel-Status im Kontext, keine Tools dafür.
 _TOOL_SPECS = [
-    ("get_confirmed_vocab", {}, []),
-    ("get_testing_vocab",   {}, []),
-    ("increment_correct_use", {"word": "string"}, ["word"]),
     ("introduce_new",       {"word": "string", "reading": "string"}, ["word"]),
     ("express",             {"action": ("string", _EXPRESS_ACTIONS)}, ["action"]),
     ("get_structures",      {}, []),
@@ -945,16 +938,11 @@ _TOOL_SPECS = [
     ("stop_music",          {}, []),
     ("get_local_news",      {}, []),
     ("get_due_reviews",     {}, []),
-    ("mark_known",          {"word": "string", "reading": "string"}, ["word"]),
     ("show_thought",        {"word": "string", "meaning": "string", "reading": "string"}, ["word"]),
 ]
 
 _DEFAULT_TEXTS = {
-    "get_confirmed_vocab":  {"description": "Gibt alle gefestigten Vokabeln zurück (80%-Pool). Zu Session-Beginn aufrufen."},
-    "get_testing_vocab":    {"description": "Gibt die Vokabeln im Lernen zurück (20%-Pool). Zu Session-Beginn aufrufen; count < 10 → introduce_new."},
-    "increment_correct_use": {"description": "Zähler für ein korrekt verwendetes Wort erhöhen. Aufrufen, wenn sie das Wort korrekt und sinnvoll genutzt hat.",
-                              "params": {"word": "Das Wort in der Zielsprache"}},
-    "introduce_new":        {"description": "Fügt ein neues Wort zum Lern-Pool hinzu. Nur aufrufen, wenn get_testing_vocab weniger als 10 Wörter zurückgibt.",
+    "introduce_new":        {"description": "Ein neues Wort in ihre Vokabelliste aufnehmen. Meist über show_thought (das ruft das mit auf).",
                              "params": {"word": "Das Wort in der Zielsprache",
                                         "reading": "Lesehilfe (Aussprache/Umschrift), falls die Sprache eine braucht"}},
     "express":              {"description": "Ausdruck im Zimmer (Haltung/Geste/Mimik) — nutz das zum Bewegen, schreib es NICHT als Text.",
@@ -971,10 +959,7 @@ _DEFAULT_TEXTS = {
                              "params": {"mood": "Stimmung"}},
     "stop_music":           {"description": "Musik aus."},
     "get_local_news":       {"description": "Ein leichtes Thema aus deinem Land, um beiläufig darüber zu quatschen. Nicht wie Nachrichten vorlesen. Du bist eine KI — das ist nichts, was du selbst erlebt hast."},
-    "get_due_reviews":      {"description": "Zu Session-Beginn aufrufen: fällige Wörter aus dem Langzeit-Gedächtnis, die aufgefrischt werden sollten. Bau sie beiläufig ins Gespräch ein, damit sie wieder vorkommen — NICHT wie einen Test abfragen. Nutzt sie die Lernende korrekt, zählt increment_correct_use das als Auffrischung."},
-    "mark_known":           {"description": "Ein Wort, das sie SCHON kann, als gefestigt ablegen. Gegenstück zu show_thought (das ein NEUES Wort einführt).",
-                             "params": {"word": "Das Wort, das sie schon kann",
-                                        "reading": "Lesehilfe (falls die Sprache eine braucht)"}},
+    "get_due_reviews":      {"description": "Zu Session-Beginn aufrufen: fällige Wörter aus dem Langzeit-Gedächtnis. Bau EINES davon beiläufig ins Gespräch ein, wenn's von selbst passt — NICHT abfragen, nicht alle."},
     "show_thought":         {"description": "Für jedes Wort, das sie noch nicht kennt: zeig es ihr in Gedanken (Bild oder Übersetzung), statt es mit vielen Worten zu erklären. Legt das Wort automatisch mit in die Vokabelliste.",
                              "params": {"word": "Das zu zeigende Wort",
                                         "meaning": "Deutsche Bedeutung/Übersetzung",
@@ -1036,9 +1021,6 @@ def _read(a: dict) -> str:
 
 
 _ALLOWED = {
-    "get_confirmed_vocab":   lambda a: get_confirmed_vocab(),
-    "get_testing_vocab":     lambda a: get_testing_vocab(),
-    "increment_correct_use": lambda a: increment_correct_use(a.get("word", "")),
     "introduce_new":         lambda a: introduce_new(a.get("word", ""), _read(a)),
     "express":               lambda a: express(a.get("action", "")),
     "get_structures":        lambda a: get_structures(),
@@ -1051,7 +1033,6 @@ _ALLOWED = {
     "get_local_news":        lambda a: get_local_news(),
     "get_due_reviews":       lambda a: get_due_reviews(),
     "show_thought":          lambda a: show_thought(a.get("word", ""), a.get("meaning", ""), _read(a)),
-    "mark_known":            lambda a: mark_known(a.get("word", ""), _read(a)),
 }
 
 

@@ -440,6 +440,15 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     prof, pname, provider, model = _resolve()
     lang = active_lang()
 
+    # spoken DETERMINISTISCH aus der User-Eingabe: jedes getrackte Wort, das Sasha
+    # gerade selbst benutzt hat, → spoken +1 (die KI zählt nicht). Vor dem Kontext-
+    # Bau, damit der Status im Prompt schon aktuell ist.
+    if user_text:
+        try:
+            tools.note_spoken(user_text, lang)
+        except Exception:
+            pass
+
     # Kosten-Hebel: nur die letzten N Turns senden (zustandslose API).
     if user_text is None and not nudge:
         # Öffnen/Session-Start: NUR die Lage-Meldung „Sasha kommt rein", KEIN roher
@@ -468,32 +477,27 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     hint = prof.get("vocab_hint")
     if hint:
         try:
-            # Fürs Reden zwei Eimer: BEKANNT (assessed|confirmed → einfach benutzen)
-            # und NEU (gerade erst gezeigt). Der wacklig/fest-Unterschied bleibt intern
-            # (Tracking/FSRS) — ihn als „am Lernen, übe sie" zu geben, ließ qwen
-            # abfragen/in Fragen-Schleifen kippen (gegen echtes qwen belegt).
-            solid, learn = tools.vocab_buckets(lang)
+            # Die KI kriegt die Liste {wort: STATUS} — nie die Zahlen (spoken/listened).
+            # Status-Label kommt in der ZIELSPRACHE (prof['status_labels']); neutral
+            # formuliert (KEINE Drill-Verben — „übe/afiánza" ließ qwen abfragen).
+            # HINWEIS: bei sehr vielen Wörtern wird das lang → Embedding-Auswahl ist der
+            # nächste, noch offene Schritt (dann nur die relevanten Wörter senden).
+            sl = tools.vocab_status_list(lang)          # [(wort, status)]
             structs = tools.structure_list(lang)
-            # Beschriftung + Trennzeichen kommen aus dem Sprach-Paket
-            # (prof['vocab_labels']); waren vorher chinesische Literale hier —
-            # eine fr-Session hätte damit einen chinesischen Block bekommen.
-            lab  = prof.get("vocab_labels") or {}
+            lab = prof.get("vocab_labels") or {}
+            slab = prof.get("status_labels") or {}
             join = lab.get("join", ", ")
-            sep  = lab.get("sep", "; ")
+            sep = lab.get("sep", "; ")
             parts = []
-            if solid:   parts.append(lab.get("solid",  "kann sie schon: ") + join.join(solid))
-            if learn:   parts.append(lab.get("learn",  "lernt sie gerade: ") + join.join(learn))
-            if structs: parts.append(lab.get("structs", "Satzmuster im Lernen: ") + join.join(structs))
-            if not parts:                      # ganz frisch: einfach die Wörter
-                terms = tools.term_list(lang)
-                if terms:
-                    parts = [lab.get("plain", "sie lernt: ") + join.join(terms)]
+            if sl:
+                parts.append(join.join(f"{w} ({slab.get(s, s)})" for w, s in sl))
+            if structs:
+                parts.append(lab.get("structs", "Satzmuster: ") + join.join(structs))
             if parts:
                 system = system + "\n\n" + hint.format(words=sep.join(parts))
-            # Erwartung skalieren: kleine Liste/wenig Strukturen → Bremse davor
-            # setzen (winzige Gespräche ok, kein Lehrdruck). Die Leiter ist
-            # Paket-DATEN (langs/<lang>/expect.json), in der Zielsprache.
-            exp = langs.expect(lang, len(solid) + len(learn) + len(structs))
+            # Erwartung skalieren (fast immer leer nach dem Umbau — Register trägt
+            # der Prompt). Paket-DATEN (langs/<lang>/expect.json), Zielsprache.
+            exp = langs.expect(lang, len(sl) + len(structs))
             if exp:
                 system = system + "\n" + exp
         except Exception:

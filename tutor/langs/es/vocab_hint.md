@@ -1,1 +1,1 @@
-(Contexto, no lo menciones en la charla, solo para calibrar cuánto sabe ella: {words}.)
+(Contexto, no lo menciones; solo para saber con qué palabras puedes contar y cómo de firmes las tiene. Úsalas con naturalidad al charlar, sin examinarla: {words}.)

@@ -98,9 +98,16 @@ def main():
         # die alte 800er-Schwelle stammt aus der Zeit davor).
         check("zh-prompt: schlank (< 1200 zeichen)", len(sp) < 1200)
 
-        check("vokabel-tools erhalten", hasattr(tools, "get_confirmed_vocab")
-              and any(t["function"]["name"] == "introduce_new"
-                      for t in tools.tools_for("zh")))
+        # Vokabel-Modell: nur spoken/listened → word_status; die KI zählt nicht mehr
+        # (keine get_confirmed_vocab/increment_correct_use/mark_known-Tools).
+        check("vokabel-status-modell", hasattr(tools, "word_status")
+              and tools.word_status({"spoken": 4}) == "learned"
+              and tools.word_status({"listened": 4}) == "understood")
+        tool_names = {t["function"]["name"] for t in tools.tools_for("zh")}
+        check("show_thought/introduce_new erhalten",
+              "introduce_new" in tool_names and "show_thought" in tool_names)
+        check("keine Zähl-Tools mehr für die KI",
+              not ({"get_confirmed_vocab", "increment_correct_use", "mark_known"} & tool_names))
 
         fr = langs.get("fr")["system_prompt"]
         check("fr-fallback: nur-Zielsprache-Regel", "NUR auf Französisch" in fr)
