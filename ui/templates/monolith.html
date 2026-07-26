@@ -1854,7 +1854,8 @@
       var PK = {
         oct: 4,            // Grund-Oktave der untersten weißen Taste (C4 = mittleres C)
         lit: {},           // midi → gedrückt/klingt (für die gezeichneten Tasten)
-        seq: [],           // was im Notensystem steht: [{n, d}] (d = ms, 0 = klingt noch)
+        seq: [],           // was im Notensystem steht: [{n, d, t}] (d = ms, 0 = klingt
+                           // noch; t = Startzeit, gleiche t = ein Akkord)
         held: {},          // tastatur-taste → midi (beim Drücken festgehalten)
         open: {},          // midi → { start, seq, rec, voice }
         rec: null,         // { t0, notes: [{n,t,d}] } solange aufgezeichnet wird
