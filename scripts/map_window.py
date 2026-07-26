@@ -1182,6 +1182,13 @@ def main():
     glossary_open = False            # '?'-Such-Modal (Begriffs-Erklärungen)
     g_query, g_sel = "", 0
 
+    # Basiskarten-Cache: die fertig gezeichnete Basis (Meer+Land+Küste+Vignette)
+    # wird im Ruhezustand als Fläche zwischengespeichert und nur geblittet —
+    # _draw_land bei 10m-LOD kostet ~160 ms/Frame, jeden Frame neu wäre ~2 fps.
+    last_pose = None                 # (cx,cy,zoom) des Vorframes → Bewegung erkennen
+    base_snap = None                 # gecachte Basis-Fläche (Standbild, voller LOD)
+    base_snap_key = None             # Identität der gecachten Basis (View+Toggles+LOD)
+
     dragging = False
     running = True
     while running:
@@ -1266,21 +1273,37 @@ def main():
 
         view.update(dt)                      # sanftes Zoom-Easing pro Frame
 
-        # Achse 1 / LOD: Detailstufe nach Zoom wählen. basemap cacht pro Stufe,
-        # der Aufruf ist also nach dem Erstladen nur ein Dict-Lookup. (Beim
-        # ersten Überschreiten einer Schwelle lädt die feinere Datei einmalig —
-        # ein kurzer Frame-Hänger, danach flüssig.)
-        level = basemap.lod_for_zoom(view.zoom)
-        geom = _get_geom(level)
+        # Achse 1 / LOD: Detailstufe nach Zoom. _get_geom cacht pro Stufe (nur
+        # Dict-Lookup); teuer ist NUR _draw_land. Deshalb wird die Basiskarte
+        # nicht blind jeden Frame gemalt:
+        #   • Ruhezustand → die zuletzt scharf gerenderte Basis-Fläche blitten.
+        #   • WÄHREND Bewegung → grob (110m, ~5 ms) zeichnen, damit Pan/Zoom
+        #     flüssig bleibt; beim Stillstand einmal scharf (voller LOD) + cachen.
+        pose = (view.cx, view.cy, view.zoom)
+        moving = pose != last_pose
+        last_pose = pose
+        full_level = basemap.lod_for_zoom(view.zoom)
+        geom = _get_geom(full_level)         # für Hover-Labels (Punkt-in-Polygon)
 
-        screen.blit(sea, (0, 0))
-        if show_density:
-            _draw_density(screen, view)      # Meer-Heatmap unter Gradnetz/Land
-        if show_grat:
-            _draw_graticule(screen, view)
-        _draw_land(screen, view, geom['countries'])
-        _draw_coast(screen, view, geom['coast'])
-        screen.blit(vig, (0, 0))
+        base_key = (round(view.cx, 3), round(view.cy, 3), round(view.zoom, 3),
+                    view.w, view.h, show_grat, show_density, full_level)
+        if (not moving) and base_snap is not None and base_key == base_snap_key:
+            screen.blit(base_snap, (0, 0))   # Ruhezustand: nur blitten (billig)
+            level = full_level
+        else:
+            level = full_level if not moving else "110m"
+            bgeom = _get_geom(level)
+            screen.blit(sea, (0, 0))
+            if show_density:
+                _draw_density(screen, view)  # Meer-Heatmap unter Gradnetz/Land
+            if show_grat:
+                _draw_graticule(screen, view)
+            _draw_land(screen, view, bgeom['countries'])
+            _draw_coast(screen, view, bgeom['coast'])
+            screen.blit(vig, (0, 0))
+            if not moving:                   # scharfe Standbild-Basis cachen
+                base_snap = screen.copy()
+                base_snap_key = base_key
         if show_labels:
             _draw_hover_label(screen, view, geom['countries'], label_fonts,
                               label_cache, pygame.mouse.get_pos())
@@ -1288,9 +1311,10 @@ def main():
             _draw_routes(screen, view)       # Routen zuerst (unter den Markern)
             _draw_trade(screen, view, label_fonts[1], pygame.mouse.get_pos())
         if show_political:
-            _draw_pol_borders(screen, view)  # Grenzen unter den Punkten
-            _draw_control(screen, view, pol_at)
-            _draw_events(screen, view, label_fonts[1], pygame.mouse.get_pos())
+            _draw_pol_borders(screen, view)  # Grenzen: billig, auch in Bewegung
+            if not moving:                   # Punkte/Ereignisse erst im Stillstand
+                _draw_control(screen, view, pol_at)
+                _draw_events(screen, view, label_fonts[1], pygame.mouse.get_pos())
         # Provenienz-Captions oben links stapeln (jedes aktive Overlay eine Zeile).
         cap_y = 10
         if show_density:
