@@ -76,22 +76,6 @@ def _start_services():
     return started
 
 
-def _wait_ready(started, budget_s: float = 12.0):
-    """Kurz auf die frisch gestarteten Dienste warten (Port offen), damit die
-    erste Persona-Äußerung schon Stimme hat. Blockiert höchstens budget_s —
-    lieber das Fenster früh zeigen als lange schwarz warten; TTS wärmt sonst
-    eben ein, zwei Sekunden nach."""
-    pending = [(p, port, label) for (p, port, label, _) in started]
-    deadline = time.time() + budget_s
-    while pending and time.time() < deadline:
-        pending = [(p, port, label) for (p, port, label) in pending
-                   if not _port_open(port)]
-        if pending:
-            time.sleep(0.4)
-    for _, port, label in pending:
-        print(f"[{label}] noch nicht bereit (:{port}) — Fenster startet, Audio wärmt nach", flush=True)
-
-
 def _stop_services(started):
     """NUR die selbst gestarteten Dienste beenden (SIGTERM, dann SIGKILL)."""
     for proc, port, label, logf in started:
@@ -116,9 +100,12 @@ def main():
         print("tutor/room.py fehlt", file=sys.stderr)
         return 1
 
+    # Dienste im HINTERGRUND hochfahren (Popen blockiert nicht) und das Fenster
+    # SOFORT öffnen — NICHT auf die Audio-Modelle warten. Früher blockierte
+    # _wait_ready hier bis zu 12 s (Whisper+TTS laden frisch am Laptop) → das war
+    # die gefühlte „Tutor braucht ewig zum Öffnen"-Verzögerung. room.py kommt mit
+    # später-Audio klar (pollt tts/available nach, stumm bis bereit).
     started = _start_services()
-    if started:
-        _wait_ready(started)
 
     try:
         # room.py mit denselben Argumenten (--url …) starten und darauf warten.
