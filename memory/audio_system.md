@@ -1,5 +1,11 @@
 # Audio-System
 
+> **Nicht hier drin: `core/tone.py`.** Das ist der Ton-Erzeuger des
+> TUI-Klaviers (Wellenform selbst gerechnet → sounddevice, siehe
+> `dashboard.md` → „Klavier in der TUI"). Er hat mit Sprache, Whisper, Piper
+> und dem Backend **nichts** zu tun: er läuft rein lokal auf dem Knoten, an dem
+> jemand spielt — ein Lautsprecher lässt sich nicht über HTTP bedienen.
+
 ## Position: Core, sprachneutral
 
 Die Voice-Pipeline (STT + TTS) gehört zur **Core-AI**. Sprache ist ein

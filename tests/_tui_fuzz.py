@@ -26,7 +26,11 @@ KEYS = [b'g', b'm', b'/', b'n', b'd', b't', b'j', b'k', b'h', b'l', b'q',
         b'\t', b'\x7f', b'\x08', b'\x1b', b'\x1b[A', b'\x1b[B', b'\x1b[C', b'\x1b[D',
         b'a', b'Z', b' ', b'\x00', b'\xff', b'\x1b[3~', b'x', b'w', b'2', b'9',
         b'G', b'M', b'N', b'D', b'T', b'p', b'r', b'3', b'4', b'8', b'_', b'=',
-        b'c', b'C', b'v', b'V', b'e', b'E', b's', b'S']
+        b'c', b'C', b'v', b'V', b'e', b'E', b's', b'S',
+        # Klavier: 'ö' ist eine schwarze Taste und kommt als ZWEI UTF-8-Bytes
+        # rein — plus ein einzelnes Startbyte, damit auch der halbe Umlaut
+        # (Sequenz reißt ab) getestet wird.
+        b'\xc3\xb6', b'\xc3']
 SIZES = [(1, 1), (2, 5), (3, 40), (5, 59), (13, 80), (14, 60), (10, 200),
          (40, 300), (24, 80), (50, 250), (60, 400), (8, 8), (200, 600), (15, 61)]
 
@@ -47,7 +51,12 @@ def run_session(seed, n_keys, url, deadline_s=12):
     master, slave = pty.openpty()
     _set_winsize(slave, 30, 100)
     env = dict(os.environ, TERM="xterm-256color", ZENTRALE_URL=url,
-               ZENTRALE_TUI_CRASH_LOG=crashlog, ZENTRALE_TUI_FRAME_ERR_LOG=errlog)
+               ZENTRALE_TUI_CRASH_LOG=crashlog, ZENTRALE_TUI_FRAME_ERR_LOG=errlog,
+               # 'k' liegt im Fuzz-Alphabet → das Klavier geht auf. Es soll die
+               # Soundkarte des Test-Rechners NICHT beschlagnahmen (und keine
+               # zufälligen Töne spielen): Panel und Tastenlogik werden trotzdem
+               # voll durchgeklopft, nur eben stumm.
+               ZENTRALE_NO_AUDIO="1")
     # WICHTIG: KEIN DISPLAY für die getestete TUI. Der Fuzzer landet zwangsläufig
     # im Karten-Modus und drückt dort w/Enter, was m_window() → scripts/map_window.py
     # (natives pygame-Fenster) startet. Ohne DISPLAY greift der Guard in m_window()

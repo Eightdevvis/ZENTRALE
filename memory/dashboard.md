@@ -68,8 +68,8 @@ Statt der Chat-Zeile steht unten die **Tastenkürzel-Box** (Quelle:
 - **Mitte:** dieselben Werkzeug-Tabs wie im Monolith — **Graph**, **Kalender**,
   **Fokus** (Listen·Fokus, auch per Taste `f`), **Post** (Mail), **Karte**
   (Globus/Welt), **Klavier** (auch per Taste `k`) — plus die Animationen.
-  In der **TUI** dieselben Werkzeuge über Tasten (`g`/`c`/`l`/`p`/`m`) — **außer
-  dem Klavier**: curses hat keine Tonausgabe.
+  In der **TUI** dieselben Werkzeuge über Tasten (`g`/`c`/`l`/`p`/`m`/`k`),
+  das Klavier inklusive (Ton rechnet `core/tone.py` selbst, siehe unten).
 - **Minimale Boot-Dependencies:** nur `flask` + `python-dateutil` (kein
   Whisper/TTS/sherpa/piper nötig — die Kassette ist KI-frei). Siehe `starten.md`.
 
@@ -555,9 +555,53 @@ nicht zum Durchzappen).
 >   gespeicherten Melodien: Klick = abspielen (Tasten leuchten mit, die Noten
 >   stehen im System), nochmal Klick = stopp, `✎` umbenennen, `✕` löschen.
 >   `Enter` spielt die zuletzt aufgenommene. Details: [api_endpoints.md](api_endpoints.md).
-> - **Kassetten:** monolith + laptop (dasselbe Template, nicht KI-gegatet). Die
->   **TUI hat kein Klavier** — curses hat keine Tonausgabe; die Melodien-Registry
->   liegt aber im Core und wäre für eine TUI-Ansicht bereit.
+> - **Kassetten:** monolith + laptop (dasselbe Template, nicht KI-gegatet) **und
+>   die TUI** (Taste `k`, s.u.). Alle drei arbeiten auf derselben Melodien-
+>   Registry (`core/melodies.py` → `data/melodies.json`), im Browser
+>   Aufgenommenes lässt sich also im Terminal abspielen und umgekehrt.
+
+> **Klavier in der TUI (Taste `k`)** — dieselbe Klaviatur, dieselben Melodien,
+> gezeichnet in curses: unten die Tasten (weiße als Kästchen mit ihrem
+> Buchstaben, schwarze als dunkle Zellen auf der Kante dazwischen), darüber das
+> Notensystem. Anschlagene Tasten und klingende Notenköpfe leuchten in der
+> Akzentfarbe. Solange das Panel offen ist, tickt die Zeichenschleife schnell
+> (33 ms statt 250 ms) — sonst käme der Ton spürbar nach dem Tastendruck.
+>
+> - **Ton:** `core/tone.py` rechnet die Wellenform selbst (Grundton + vier
+>   Obertöne, Anschlag-Rampe + exponentielles Abklingen) und schiebt sie über
+>   **sounddevice** raus; gemischt wird im Audio-Callback, mehrere Töne
+>   gleichzeitig sind also Akkorde. Kein Sample, kein Download. Der Import
+>   passiert **erst beim Öffnen des Panels** — die TUI bleibt sonst stdlib-only
+>   und startet unverändert, wenn numpy/sounddevice oder das Audio-Gerät fehlen
+>   (dann steht `♪ stumm` im Kopf, Noten und Aufnahme laufen weiter).
+>   `ZENTRALE_NO_AUDIO=1` schaltet den Ton bewusst ab (nutzt der TUI-Fuzzer).
+> - **Wenn das Gerät hängt:** läuft der System-Default über einen Audio-Server,
+>   der gerade nicht erreichbar ist (PipeWire ohne Session — z.B. in einem
+>   Hintergrund-Job oder headless über SSH), **blockiert PortAudio beim Öffnen**
+>   und lässt sich aus Python nicht abbrechen. Deshalb geht das Gerät in einem
+>   Daemon-Thread auf und der Kopf sagt `♪ ton öffnet…` bzw. nach 4 s
+>   `♪ ton reagiert nicht`; die TUI bleibt die ganze Zeit bedienbar. Ausweg:
+>   **`ZENTRALE_AUDIO_DEVICE`** (Index wie `0` oder Name wie `hw:0,0`) geht an
+>   der ALSA-/PipeWire-Kette vorbei direkt auf die Karte.
+> - **Anschlag hat eine FESTE Länge** (`PIANO_NOTE_MS`, 420 ms): das Terminal
+>   meldet nur Tastendrücke, **kein Loslassen** — eine Haltedauer ist hier
+>   physisch nicht messbar. Im Browser aufgenommene Melodien tragen ihre echten
+>   Haltedauern und klingen in der TUI auch so lang.
+> - **Noten:** 5 Linien im Violinschlüssel (E4…F5), eine Terminal-Zeile pro
+>   diatonischer Stufe, Hilfslinien nach Bedarf, `♯` vor der Note, hohler Kopf
+>   ab 500 ms (wie im Browser). Kein Notenschlüssel-Glyph — `𝄞` fehlt in
+>   Terminal-Fonts; stattdessen ein Taktstrich links. Noten außerhalb des
+>   Systems (Oktave 3/6) werden an den Rand geklemmt und als `◇` markiert,
+>   statt unsichtbar zu verschwinden.
+> - **Aufnahme:** `Leertaste` startet/stoppt, beim Stoppen wird der Name im
+>   Panel getippt (`Esc` verwirft). `↑↓` wählt eine Melodie, `Enter` spielt sie
+>   ab (nochmal `Enter` = stopp, die Noten laufen dabei live ins System),
+>   `r` benennt um, **`D`** (groß!) löscht — das nackte `d` ist eine
+>   Klaviertaste (D♯) und darf nichts wegwerfen.
+> - **Testbar ohne Terminal und ohne Soundkarte:** die Geometrie steckt in den
+>   puren Funktionen `piano_keyboard`/`piano_staff`/`piano_columns`
+>   (`tests/test_tui_piano.py`), die Klangrechnung in `tone.Voice`
+>   (`tests/test_tone.py`). Der PTY-Fuzzer drückt `k` und die Klaviatur mit.
 
 > Die IIFEs sind getrennte Scopes. Cross-Scope-Signale laufen über den
 > CustomEvent-Bus auf `window` (`zentrale:logged`, `zentrale:ascii`),

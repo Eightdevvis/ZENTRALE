@@ -49,6 +49,25 @@ in die Lücken E–F und H–C (keine schwarze Taste) und bleiben deshalb frei.
 
 Siehe `dashboard.md` → „Klavier".
 
+### Im Klavier der TUI (Taste `k`, Terminal-Kassette)
+
+Gleiche Klaviatur, gleiche Melodien (dieselbe Registry `data/melodies.json`).
+Drei Unterschiede, die aus dem Terminal kommen:
+
+| Taste        | Funktion                                                       |
+|--------------|----------------------------------------------------------------|
+| `↑` / `↓`    | Melodie wählen (der Browser klickt stattdessen ihren Chip)      |
+| `Enter`      | **gewählte** Melodie abspielen / Wiedergabe stoppen             |
+| `r`          | gewählte Melodie umbenennen                                     |
+| `D` (groß)   | gewählte Melodie löschen — nacktes `d` ist die Taste D♯          |
+
+- **Kein Halten:** curses meldet nur Tastendrücke, kein Loslassen. Jeder
+  Anschlag klingt deshalb fest 420 ms aus; im Browser aufgenommene Melodien
+  behalten ihre echten Haltedauern.
+- **Ton kommt aus `core/tone.py`** (numpy + sounddevice, erst beim Öffnen
+  geladen). Fehlt das Gerät, steht `♪ stumm` im Kopf und Noten + Aufnahme
+  laufen trotzdem. `ZENTRALE_NO_AUDIO=1` schaltet den Ton bewusst ab.
+
 > Der Sprachtutor ist **reaktiviert** und wird im Chat-Modus per `Alt + T`
 > umgeschaltet (nicht mehr über diesen Sensor-Trigger). Der Presence-Auto-Start
 > bleibt bewusst aus – siehe `tutor_system.md`.

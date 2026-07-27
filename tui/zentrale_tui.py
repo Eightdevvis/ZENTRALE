@@ -16,6 +16,11 @@
 #
 # BEWUSST nur Python-stdlib (curses + urllib + json + threading) — null
 # Extra-Dependencies, passt zur Offline-/Lean-Philosophie des Projekts.
+# EINE Ausnahme, und nur auf Anforderung: das Klavier-Werkzeug (Taste 'k')
+# lädt beim Öffnen core/tone.py nach (numpy + sounddevice), weil Klang auf dem
+# Knoten entstehen MUSS, an dem der Mensch sitzt — über HTTP lässt sich kein
+# Lautsprecher bedienen. Fehlt beides, bleibt das Klavier still und
+# funktioniert weiter (Noten, Aufnahme, Melodien); die TUI startet unverändert.
 #
 # Die KI ist in dieser Kassette aus (das Backend läuft im ki-freien Modus,
 # siehe core/kassette.py). Die TUI fragt KEINE KI-Endpoints ab.
@@ -432,6 +437,217 @@ def log_prefix(text):
     return None, None
 
 
+# ── Klavier: pure Geometrie + Belegung (curses-frei, daher unit-testbar) ────
+# Dieselbe Klaviatur wie im Browser (ui/templates/monolith.html): die
+# Buchstabenreihen SIND die Tasten — untere Reihe weiß, die Reihe darüber die
+# schwarzen, dort wo sie physisch dazwischen liegen. 'f' und 'k' fallen in die
+# Lücken E–F und H–C, wo es keine schwarze Taste gibt, und bleiben so für ihre
+# Shortcuts frei (k = Klavier zu). Halbton-Werte = Abstand über dem Grund-C.
+PIANO_WHITE = [("y", 0), ("x", 2), ("c", 4), ("v", 5), ("b", 7),
+               ("n", 9), ("m", 11), (",", 12), (".", 14), ("-", 16)]
+# (taste, halbton, w) — w = Index der weißen Taste, an deren rechter Kante die
+# schwarze sitzt.
+PIANO_BLACK = [("s", 1, 0), ("d", 3, 1), ("g", 6, 3), ("h", 8, 4),
+               ("j", 10, 5), ("l", 13, 7), ("ö", 15, 8)]
+PIANO_KEYMAP = dict([(k, s) for k, s in PIANO_WHITE] +
+                    [(k, s) for k, s, _w in PIANO_BLACK])
+# Deutsche Notennamen (H statt B) — Sasha liest die Zeile, nicht ein Programm.
+PIANO_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "H"]
+PIANO_SEMI_TO_DIA = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6]   # Halbton → Stufe
+PIANO_IS_SHARP = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0]
+PIANO_OCT_MIN, PIANO_OCT_MAX = 3, 6
+PIANO_NOTE_MS = 420        # Länge eines Anschlags (Terminal kennt kein Loslassen)
+PIANO_HOLLOW_MS = 500      # ab hier hohler Notenkopf (wie im Browser: lang gehalten)
+PIANO_CHORD_MS = 70        # bis hierhin gilt es als gleichzeitig = eine Spalte (wie im Browser)
+PIANO_LIT_MS = 260         # so lange leuchtet eine angeschlagene Taste nach
+PIANO_MAX_COLS = 64        # so viele Noten-Spalten hält das Notensystem vor
+# Notensystem: 5 Linien im Violinschlüssel, von unten E4 bis oben F5. Eine
+# Terminal-Zeile = eine diatonische Stufe (Linie ODER Zwischenraum).
+PIANO_TOP_DIA = 38         # F5 = oberste Linie
+PIANO_BOT_DIA = 30         # E4 = unterste Linie
+PIANO_STAFF_ROWS = PIANO_TOP_DIA - PIANO_BOT_DIA + 1        # 9 Zeilen
+
+
+def piano_dia(n):
+    """MIDI-Note → diatonische Stufe (C0=0, jede weiße Taste eine Stufe höher).
+    Das ist die Höhe im Notensystem: Halbtöne teilen sich eine Stufe."""
+    n = int(n)
+    return (n // 12 - 1) * 7 + PIANO_SEMI_TO_DIA[n % 12]
+
+
+def piano_note_name(n):
+    """MIDI-Note → deutscher Notenname mit Oktave, z.B. 60 → 'C4'."""
+    n = int(n)
+    return PIANO_NAMES[n % 12] + str(n // 12 - 1)
+
+
+def piano_midi(octave, semi):
+    """Grund-Oktave + Halbton-Offset → MIDI-Note (Oktave 4 → C4 = 60)."""
+    return (int(octave) + 1) * 12 + int(semi)
+
+
+def piano_keyboard(width):
+    """
+    Klaviatur als fertige Zeichenzeilen + Trefferzonen. PURE Funktion:
+      width (verfügbare Spalten) -> (rows, zones)
+      rows  = [str, …] von oben nach unten (schwarze Reihe, dann die weißen)
+      zones = [(zeile, x, breite, halbton, schwarz?), …] — die Stellen, die die
+              TUI beim Anschlag einfärbt (und die schwarzen Tasten dunkel malt).
+
+    Die weißen Tasten sind Kästchen mit ihrem Buchstaben, die schwarzen sitzen
+    als Zellen auf der Kante zwischen zwei weißen — wie auf einem echten
+    Klavier. Bei wenig Platz schrumpfen die Tasten von 3 auf 2 Spalten; darunter
+    lohnt keine Zeichnung mehr (dann leere Rückgabe, der Aufrufer schreibt eine
+    Textzeile hin).
+    """
+    nw = len(PIANO_WHITE)
+    for kw in (3, 2):
+        if nw * (kw + 1) + 1 <= max(0, width):
+            break
+    else:
+        kw = 0
+    if kw == 0:
+        return [], []
+    total = nw * (kw + 1) + 1
+
+    def cell(label):
+        # Buchstabe linksbündig auf die Tastenbreite auffüllen
+        return (label + " " * kw)[:kw]
+
+    top = ["│"] + [cell(" ") + "│" for _ in PIANO_WHITE]
+    lab = ["│"] + [cell(k) + "│" for k, _s in PIANO_WHITE]
+    rows = [
+        " " * total,                                        # schwarze Reihe
+        "┌" + "┬".join(["─" * kw] * nw) + "┐",
+        "".join(top),
+        "".join(lab),
+        "└" + "┴".join(["─" * kw] * nw) + "┘",
+    ]
+    zones = []
+    for i, (k, s) in enumerate(PIANO_WHITE):
+        x = 1 + i * (kw + 1)
+        zones.append((3, x, kw, s, False))                  # Zeile mit dem Buchstaben
+        zones.append((2, x, kw, s, False))                  # Tastenkörper darüber
+    black_row = list(rows[0])
+    for k, s, w in PIANO_BLACK:
+        x = (kw + 1) * (w + 1) - kw // 2                    # mittig auf der Kante
+        x = max(0, min(x, total - kw))
+        for j, chx in enumerate(cell(k)):
+            black_row[x + j] = chx
+        zones.append((0, x, kw, s, True))
+    rows[0] = "".join(black_row)
+    return rows, zones
+
+
+def piano_columns(seq, max_cols=PIANO_MAX_COLS, chord_ms=PIANO_CHORD_MS):
+    """
+    Gespielte Noten zu Notensystem-SPALTEN gruppieren. PURE Funktion:
+      seq = [{n, d, t}, …]  ->  [[note, …], …] (je Spalte ein Akkord)
+
+    Fast gleichzeitig Angeschlagenes (bis chord_ms auseinander) gehört in EINE
+    Spalte — sonst liest sich ein Dreiklang wie drei einzelne Töne. Dieselbe
+    Toleranz wie im Browser (CHORD_MS), damit dieselbe Aufnahme in beiden
+    Fronten gleich notiert erscheint. Es bleiben nur die letzten max_cols
+    Spalten stehen: das Notensystem läuft mit, Rausgelaufenes ist gespielt.
+    """
+    cols = []
+    for e in (seq or []):
+        if not isinstance(e, dict):
+            continue
+        try:
+            t = int(e.get("t", 0))
+            int(e.get("n"))
+        except (TypeError, ValueError):
+            continue
+        if cols and abs(t - cols[-1][0]) <= chord_ms:
+            cols[-1][1].append(e)
+        else:
+            cols.append((t, [e]))
+    out = [sorted(notes, key=lambda x: int(x.get("n", 0))) for _t, notes in cols]
+    return out[-max_cols:] if max_cols and len(out) > max_cols else out
+
+
+def piano_staff(seq, height, width, lit=None):
+    """
+    Das Notensystem als fertiges Zeichenbild. PURE Funktion:
+      (seq, höhe, breite) -> (rows, marks)
+      rows  = [str, …] — Linien und Zwischenräume (Hilfslinien inklusive)
+      marks = [(zeile, x, zeichen, klingt?), …] — die Notenköpfe, damit die TUI
+              die gerade klingenden farbig setzen kann.
+
+    Höhe: die 5 Linien brauchen 9 Zeilen; alles darüber wird gleichmäßig als
+    Hilfslinien-Raum ober- und unterhalb verteilt. Noten außerhalb werden auf
+    den Rand geklemmt (statt zu verschwinden) — bei Oktave 3 oder 6 liegt das
+    Gespielte weit außerhalb des Violinschlüssels, und ein Notensystem, das
+    dann leer bleibt, wäre die schlechtere Lüge.
+    """
+    height = int(height)
+    if height < PIANO_STAFF_ROWS or width < 6:
+        return [], []
+    extra = height - PIANO_STAFF_ROWS
+    pad_top = extra // 2
+    pad_bot = extra - pad_top
+    rows_n = height
+    gut = 3                                   # linker Rand (Taktstrich)
+    colw = 3                                  # je Spalte: [♯][kopf][luft]
+    ncols = max(1, (width - gut) // colw)
+    cols = piano_columns(seq, ncols)
+
+    def row_of(dia):
+        return pad_top + (PIANO_TOP_DIA - int(dia))
+
+    grid = [[" "] * width for _ in range(rows_n)]
+    # Die fünf Linien (jede zweite Stufe) über die ganze Breite.
+    for d in range(PIANO_BOT_DIA, PIANO_TOP_DIA + 1, 2):
+        r = row_of(d)
+        for x in range(width):
+            grid[r][x] = "─"
+    # Taktstrich links, damit das System einen Anfang hat.
+    for d in range(PIANO_BOT_DIA, PIANO_TOP_DIA + 1):
+        r = row_of(d)
+        if 0 <= r < rows_n:
+            grid[r][0] = "│"
+
+    lit = lit or {}
+    marks = []
+    for ci, col in enumerate(cols):
+        x = gut + ci * colw + 1
+        if x >= width:
+            break
+        for e in col:
+            n = int(e.get("n", 60))
+            dia = piano_dia(n)
+            r = row_of(dia)
+            clamped = False
+            if r < 0:
+                r, clamped = 0, True
+            elif r >= rows_n:
+                r, clamped = rows_n - 1, True
+            # Hilfslinien: jede LINIEN-Stufe zwischen System und Note
+            if not clamped:
+                step = 2 if dia > PIANO_TOP_DIA else -2
+                d = PIANO_TOP_DIA + step if dia > PIANO_TOP_DIA else PIANO_BOT_DIA + step
+                while (dia > PIANO_TOP_DIA and d <= dia) or (dia < PIANO_BOT_DIA and d >= dia):
+                    rr = row_of(d)
+                    if 0 <= rr < rows_n:
+                        for xx in range(max(0, x - 1), min(width, x + 2)):
+                            if grid[rr][xx] == " ":
+                                grid[rr][xx] = "─"
+                    d += step
+            # hohl = lang gehalten ODER klingt noch (d=0) — wie im Browser
+            try:
+                dur = int(e.get("d", 0) or 0)
+            except (TypeError, ValueError):
+                dur = 0
+            long_note = dur >= PIANO_HOLLOW_MS or dur == 0
+            head = "◇" if clamped else ("○" if long_note else "●")
+            if PIANO_IS_SHARP[n % 12] and x - 1 > 0:
+                grid[r][x - 1] = "♯"
+            grid[r][x] = head
+            marks.append((r, x, head, bool(lit.get(n))))
+    return ["".join(r) for r in grid], marks
+
+
 # ── Selbsttest: ein Snapshot als Text, ohne curses (kein TTY nötig) ─────────
 def selftest():
     store = Store()
@@ -517,6 +733,7 @@ TUI_KEYS = [
     ("a",   "KI-Chat (Mitte): tippen + enter fragt die lokale KI (PC-Hirn via tunnel) · ↑↓ scrollen · esc zu"),
     ("u",   "Persona-Zimmer (eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · ohne DISPLAY → text-panel · /tutor = text-panel"),
     ("f",   "Fokus (Mitte): oben projekte, drunter alle listen · enter reindiven · a/s neu · space abhaken · r name · d weg · p projekt · f setzt den knoten als alleinigen fokus (rendert dann allein in der FOCUS-box) · m/> verschieben"),
+    ("k",   "Klavier (Mitte): die Tastatur IST die Klaviatur — y x c v b n m , . - weiß, s d g h j l ö schwarz · ←→ oktave · space nimmt eine melodie auf (fragt beim stoppen nach dem namen) · ↑↓ melodie wählen · enter abspielen · r umbenennen · D löschen · k/esc zu"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
@@ -530,7 +747,7 @@ CTX_KEYS = {
     "home": [
         ("f", "fokus"), ("n", "notizen"), ("g", "graph"), ("m", "karte"),
         ("c", "kalender"), ("p", "post / mail"), ("a", "ki-chat"),
-        ("u", "tutor"), ("t", "theme"), ("q", "beenden"),
+        ("u", "tutor"), ("k", "klavier"), ("t", "theme"), ("q", "beenden"),
     ],
     "note:edit": [
         ("↑↓", "block wählen"), ("t/l/f", "neu: text/liste/float"),
@@ -540,6 +757,12 @@ CTX_KEYS = {
     "note:list": [
         ("↑↓", "wählen"), ("enter", "öffnen"), ("n", "neu"),
         ("d", "löschen"), ("esc", "zurück"),
+    ],
+    "piano": [
+        ("y x c v b n m , . -", "weiße tasten"), ("s d g h j l ö", "schwarze"),
+        ("←→", "oktave"), ("space", "aufnahme an/aus"),
+        ("↑↓", "melodie wählen"), ("enter", "abspielen / stopp"),
+        ("r", "umbenennen"), ("D", "löschen"), ("k/esc", "zu"),
     ],
     "ai": [
         ("tippen", "frage"), ("enter", "senden"),
@@ -612,7 +835,7 @@ CTX_TITLES = {
     "cal:list": "kalender · liste", "cal:sort": "kalender · sortieren",
     "mail:cats": "post", "mail:list": "post · liste", "mail:read": "post · lesen",
     "ai": "ki-chat", "tutor": "tutor",
-    "note:edit": "notiz", "note:list": "notizen",
+    "note:edit": "notiz", "note:list": "notizen", "piano": "klavier",
 }
 
 
@@ -1039,6 +1262,36 @@ def run_ui(stdscr, store):
             "esel": 0, "buf": "",
             "titling": False,
             "scroll": 0, "confirm": False, "bconfirm": False, "msg": ""}
+
+    # ── Klavier (füllt die MITTE-Box, Taste 'k') ────────────────────────
+    # Das Pendant zum Klavier-Exhibit des Browsers: unten die gezeichneten
+    # Tasten, darüber das Notensystem, in das das Gespielte läuft. Gespielt
+    # wird auf der Computertastatur (PIANO_KEYMAP), den Ton rechnet core/tone.py
+    # selbst und schiebt ihn über sounddevice raus — kein Sample, offline.
+    # Aufnahmen liegen wie im Browser serverseitig (/api/melodies →
+    # data/melodies.json), beide Fronten sehen also dieselben Melodien.
+    #
+    # EIN Unterschied zum Browser, der sich nicht wegprogrammieren lässt: das
+    # Terminal meldet nur Tastendrücke, kein Loslassen. Eine Haltedauer ist
+    # hier nicht messbar → jeder Anschlag klingt PIANO_NOTE_MS lang aus (wie
+    # eine angeschlagene Saite). Im Browser aufgenommene Melodien behalten ihre
+    # echten Haltedauern und klingen hier auch so.
+    #   active : Panel hat den Fokus
+    #   oct    : Grund-Oktave der untersten weißen Taste (←→, C3…C6)
+    #   lit    : midi → Zeitpunkt, bis zu dem die Taste aufleuchtet
+    #   seq    : was im Notensystem steht ([{n,d,t}], t = Akkord-Gruppierung)
+    #   rec    : {t0, notes} solange aufgezeichnet wird, sonst None
+    #   naming : nach dem Stoppen den Namen tippen (Freitext) — None = nicht
+    #   mel/sel: gespeicherte Melodien + Auswahl-Cursor
+    #   play   : laufende Wiedergabe (tone.Playback) oder None
+    #   synth  : offener Ton-Ausgang (tone.Synth) oder None = noch nicht auf
+    #   sound  : macht dieser Knoten Ton? (False = stumm, Grund steht in msg)
+    PIANO = {"active": False, "oct": 4, "lit": {}, "seq": [], "rec": None,
+             "naming": None, "mel": [], "sel": 0, "play": None,
+             "synth": None, "sound": False, "confirm": False,
+             "renaming": None, "msg": "", "_u8": b"",
+             "opening": None,      # seit wann geht das Audio-Gerät auf? (None = fertig)
+             "t0": 0.0}            # Zeitnullpunkt der Noten im System
 
     # ── Karte (füllt die MITTE-Box, Taste 'm') ──────────────────────────
     # Maps-System Schritt 1: grobe Basiskarte (Küsten 1:110m). Die TUI ist
@@ -3496,6 +3749,372 @@ def run_ui(stdscr, store):
         addclip(by + bh - 2, ix, (tip + ("  " + NOTE["msg"] if NOTE["msg"] else "")).strip(),
                 iw, C["faint"])
 
+    # ── Klavier-Werkzeug (Taste 'k') ────────────────────────────────────
+    # Ton macht core/tone.py: die TUI ist sonst stdlib-only, aber Klang MUSS
+    # auf dem Knoten entstehen, an dem der Mensch sitzt — über HTTP lässt sich
+    # kein Lautsprecher bedienen. Der Import passiert deshalb erst beim Öffnen
+    # des Panels (und darf scheitern: dann bleibt es still, Noten und Aufnahme
+    # laufen weiter).
+    def p_tone():
+        """core/tone.py nachladen — None, wenn es das Modul nicht gibt."""
+        try:
+            core_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "core")
+            if core_dir not in sys.path:
+                sys.path.insert(0, core_dir)
+            import tone
+            return tone
+        except Exception:
+            return None
+
+    def p_sound_up():
+        """Ton-Ausgang öffnen (Hintergrund-Thread: das Gerät aufzumachen kostet
+        auf dem Pi spürbar Zeit, die Zeichenschleife soll nicht warten).
+
+        Das kann auch HÄNGEN: läuft der System-Default über einen Audio-Server,
+        der gerade nicht erreichbar ist (PipeWire ohne Session), blockiert
+        PortAudio beim Öffnen — abbrechen lässt sich das aus Python nicht.
+        Darum läuft es hier im Daemon-Thread und der Kopf des Panels sagt, in
+        welchem Zustand der Ton steckt (ZENTRALE_AUDIO_DEVICE=0 o.ä. geht dann
+        direkt auf die Soundkarte)."""
+        PIANO["opening"] = time.time()
+        try:
+            if os.environ.get("ZENTRALE_NO_AUDIO"):
+                # Bewusst still: Testläufe (Fuzzer) und Knoten, die keinen Ton
+                # machen sollen, öffnen gar kein Gerät.
+                PIANO["sound"] = False
+                PIANO["msg"] = "stumm (ZENTRALE_NO_AUDIO)"
+                return
+            tone = p_tone()
+            if tone is None:
+                PIANO["sound"] = False
+                PIANO["msg"] = "stumm (core/tone.py fehlt)"
+                return
+            syn = tone.Synth()
+            if syn.start():
+                PIANO["synth"] = syn
+                PIANO["sound"] = True
+            else:
+                PIANO["sound"] = False
+                PIANO["msg"] = "stumm: " + (syn.error or "kein audio")
+        finally:
+            PIANO["opening"] = None
+
+    def p_load():
+        """Gespeicherte Melodien holen (dieselbe Quelle wie der Browser)."""
+        try:
+            mel = api_call("/api/melodies")
+        except (urllib.error.URLError, OSError, ValueError):
+            mel = None
+        if isinstance(mel, list):
+            PIANO["mel"] = mel
+            PIANO["sel"] = max(0, min(PIANO["sel"], len(mel) - 1))
+
+    def p_open():
+        PIANO["active"] = True
+        PIANO["seq"] = []; PIANO["lit"] = {}; PIANO["rec"] = None
+        PIANO["naming"] = None; PIANO["renaming"] = None
+        PIANO["confirm"] = False; PIANO["msg"] = ""; PIANO["_u8"] = b""
+        PIANO["t0"] = time.time()
+        threading.Thread(target=p_sound_up, daemon=True).start()
+        threading.Thread(target=p_load, daemon=True).start()
+
+    def p_close():
+        p_stop_play()
+        PIANO["rec"] = None
+        syn = PIANO.get("synth")
+        if syn is not None:
+            try:
+                syn.close()
+            except Exception:
+                pass
+        PIANO["synth"] = None; PIANO["sound"] = False
+        PIANO["active"] = False; PIANO["lit"] = {}
+
+    def p_strike(midi, dur_ms=PIANO_NOTE_MS, record=True):
+        """Einen Ton anschlagen: klingen lassen, Taste aufleuchten, ins
+        Notensystem schreiben und (wenn aufgenommen wird) mitschneiden."""
+        now = time.time()
+        syn = PIANO.get("synth")
+        if syn is not None:
+            try:
+                syn.strike(midi, dur_ms=dur_ms)
+            except Exception:
+                pass
+        PIANO["lit"][midi] = now + PIANO_LIT_MS / 1000.0
+        t_ms = int((now - PIANO.get("t0", now)) * 1000)
+        PIANO["seq"].append({"n": int(midi), "d": int(dur_ms), "t": t_ms})
+        if len(PIANO["seq"]) > 96:
+            del PIANO["seq"][0:len(PIANO["seq"]) - 96]
+        rec = PIANO.get("rec")
+        if record and rec is not None:
+            rec["notes"].append({"n": int(midi),
+                                 "t": int((now - rec["t0"]) * 1000),
+                                 "d": int(dur_ms)})
+
+    def p_play_key(name):
+        """Buchstaben-Taste → Ton (None, wenn die Taste keine Klaviertaste ist)."""
+        if name not in PIANO_KEYMAP:
+            return False
+        p_strike(piano_midi(PIANO["oct"], PIANO_KEYMAP[name]))
+        return True
+
+    def p_shift_oct(d):
+        o = max(PIANO_OCT_MIN, min(PIANO_OCT_MAX, PIANO["oct"] + d))
+        if o != PIANO["oct"]:
+            PIANO["oct"] = o; PIANO["msg"] = ""
+
+    # ── Aufnahme ────────────────────────────────────────────────────────
+    def p_rec_toggle():
+        """Leertaste: aufnehmen an/aus. Beim Stoppen fragt das Panel nach dem
+        Namen — abgebrochen wird nichts heimlich gespeichert."""
+        if PIANO["rec"] is not None:
+            rec = PIANO["rec"]; PIANO["rec"] = None
+            if not rec["notes"]:
+                PIANO["msg"] = "aufnahme leer — nichts gespeichert"
+                return
+            # Der Vorschlag steht NICHT im Tipppuffer (sonst hängt das Getippte
+            # hinten dran: „melodie 1testlied"). Er gilt, wenn nichts getippt
+            # wird — wie ein Browser-prompt mit vorausgewähltem Default.
+            PIANO["naming"] = {"notes": rec["notes"], "buf": "",
+                               "vorschlag": "melodie %d" % (len(PIANO["mel"]) + 1)}
+            PIANO["msg"] = ""
+            return
+        p_stop_play()
+        PIANO["rec"] = {"t0": time.time(), "notes": []}
+        PIANO["msg"] = ""
+
+    def p_save(name, notes):
+        """Aufnahme ans Backend (Hintergrund-Thread — POST darf nicht blocken)."""
+        def _do():
+            try:
+                m = api_call("/api/melodies", "POST", {"name": name, "notes": notes})
+            except (urllib.error.URLError, OSError, ValueError):
+                m = None
+            if isinstance(m, dict) and m.get("id"):
+                PIANO["msg"] = "gespeichert: " + str(m.get("name"))
+                p_load()
+            else:
+                PIANO["msg"] = "speichern fehlgeschlagen (backend?)"
+        threading.Thread(target=_do, daemon=True).start()
+
+    # ── Wiedergabe ──────────────────────────────────────────────────────
+    def p_sel_melody():
+        mel = PIANO["mel"]
+        if not mel:
+            return None
+        return mel[max(0, min(PIANO["sel"], len(mel) - 1))]
+
+    def p_stop_play():
+        pl = PIANO.get("play")
+        PIANO["play"] = None
+        if pl is not None:
+            try:
+                pl.stop()
+            except Exception:
+                pass
+        syn = PIANO.get("synth")
+        if syn is not None:
+            try:
+                syn.silence()
+            except Exception:
+                pass
+
+    def p_play():
+        """Ausgewählte Melodie abspielen (nochmal enter = abbrechen). Die Noten
+        laufen dabei live ins Notensystem — man sieht, was man hört."""
+        if PIANO.get("play") is not None:
+            p_stop_play(); PIANO["msg"] = "abgebrochen"
+            return
+        m = p_sel_melody()
+        if not m:
+            PIANO["msg"] = "noch keine melodie — leertaste nimmt auf"
+            return
+        tone = p_tone()
+        syn = PIANO.get("synth")
+        if tone is None or syn is None:
+            PIANO["msg"] = "stumm — nur die noten laufen"
+        PIANO["seq"] = []; PIANO["t0"] = time.time()
+        notes = m.get("notes") or []
+
+        def _on(n, dur):
+            # Den Ton macht die Wiedergabe selbst (tone.Playback) — hier nur
+            # Taste aufleuchten und die Note ins Notensystem schreiben.
+            now = time.time()
+            PIANO["lit"][n] = now + PIANO_LIT_MS / 1000.0
+            PIANO["seq"].append({"n": int(n), "d": int(dur),
+                                 "t": int((now - PIANO["t0"]) * 1000)})
+            if len(PIANO["seq"]) > 96:
+                del PIANO["seq"][0:len(PIANO["seq"]) - 96]
+
+        def _done():
+            PIANO["play"] = None
+
+        if tone is not None and syn is not None:
+            PIANO["play"] = tone.play_sequence(syn, notes, on_note=_on, on_done=_done)
+        else:
+            # Ohne Ton wenigstens die Noten durchlaufen lassen (stummer Knoten).
+            def _silent():
+                t0 = time.time()
+                for e in sorted(notes, key=lambda x: int(x.get("t", 0))):
+                    if PIANO.get("play") is None:
+                        return
+                    wait = t0 + int(e.get("t", 0)) / 1000.0 - time.time()
+                    if wait > 0:
+                        time.sleep(min(wait, 5.0))
+                    _on(int(e.get("n", 60)), int(e.get("d", PIANO_NOTE_MS) or PIANO_NOTE_MS))
+                PIANO["play"] = None
+            PIANO["play"] = threading.Thread(target=_silent, daemon=True)
+            PIANO["play"].start()
+        PIANO["msg"] = "spielt: " + str(m.get("name", ""))
+
+    def p_rename(name):
+        m = p_sel_melody()
+        if not m:
+            return
+        mid = m.get("id")
+
+        def _do():
+            try:
+                r = api_call("/api/melodies/%s/rename" % mid, "POST", {"name": name})
+            except (urllib.error.URLError, OSError, ValueError):
+                r = None
+            PIANO["msg"] = "umbenannt" if isinstance(r, dict) else "umbenennen fehlgeschlagen"
+            p_load()
+        threading.Thread(target=_do, daemon=True).start()
+
+    def p_delete():
+        m = p_sel_melody()
+        if not m:
+            return
+        mid = m.get("id")
+
+        def _do():
+            try:
+                api_call("/api/melodies/%s" % mid, "DELETE")
+            except (urllib.error.URLError, OSError, ValueError):
+                PIANO["msg"] = "löschen fehlgeschlagen"
+                return
+            PIANO["msg"] = "gelöscht"
+            p_load()
+        PIANO["sel"] = max(0, PIANO["sel"] - 1)
+        threading.Thread(target=_do, daemon=True).start()
+
+    def p_lit_now():
+        """Welche Tasten leuchten gerade? (abgelaufene rausräumen)"""
+        now = time.time()
+        lit = {n: 1 for n, until in list(PIANO["lit"].items()) if until > now}
+        if len(lit) != len(PIANO["lit"]):
+            PIANO["lit"] = {n: until for n, until in PIANO["lit"].items() if until > now}
+        return lit
+
+    def draw_piano_tool(by, bx, bh, bw):
+        """Inhalt der MITTE-Box fürs Klavier: unten die Tasten, darüber das
+        Notensystem — dieselbe Anordnung wie im Browser-Exhibit."""
+        ix, iw = bx + 2, bw - 4
+        bottom = by + bh - 2
+        if iw < 12:
+            return
+        lit = p_lit_now()
+
+        # ── Kopfzeile: Oktave, Ton-Zustand, Aufnahme ──
+        rng = "%s–%s" % (piano_note_name(piano_midi(PIANO["oct"], 0)),
+                         piano_note_name(piano_midi(PIANO["oct"], 16)))
+        head = "okt %d  %s" % (PIANO["oct"], rng)
+        if PIANO["rec"] is not None:
+            el = int(time.time() - PIANO["rec"]["t0"])
+            head += "   ● aufnahme %d:%02d (%d)" % (el // 60, el % 60,
+                                                    len(PIANO["rec"]["notes"]))
+        elif PIANO.get("opening"):
+            # Gerät geht gerade auf — und wenn das zu lange dauert, sagen wir
+            # das auch, statt den Nutzer auf Ton warten zu lassen, der nicht kommt.
+            wartet = time.time() - PIANO["opening"]
+            head += ("   ♪ ton reagiert nicht (ZENTRALE_AUDIO_DEVICE setzen?)"
+                     if wartet > 4 else "   ♪ ton öffnet…")
+        elif not PIANO["sound"]:
+            head += "   ♪ stumm"
+        addclip(by + 1, ix, head, iw,
+                C["warn"] if PIANO["rec"] is not None else C["bright"])
+
+        # ── Klaviatur (unten) ──
+        kb_rows, zones = piano_keyboard(iw)
+        if not kb_rows:
+            # Zu schmal für gezeichnete Tasten → wenigstens sagen, worauf man
+            # spielt (statt einer leeren Fläche).
+            addclip(bottom - 1, ix, "tasten: y x c v b n m , . -", iw, C["faint"])
+        kb_h = len(kb_rows)
+        kb_top = bottom - 1 - kb_h
+        for i, ln in enumerate(kb_rows):
+            addclip(kb_top + i, ix, ln, iw, C["faint"])
+        base = piano_midi(PIANO["oct"], 0)
+        for (r, x, w, semi, black) in zones:
+            y = kb_top + r
+            if y < by + 1 or y > bottom:
+                continue
+            on = lit.get(base + semi)
+            seg = kb_rows[r][x:x + w]
+            if black:
+                attr = (C["acc"] if on else C["ink"]) | curses.A_REVERSE
+            elif on:
+                attr = C["acc"] | curses.A_REVERSE
+            else:
+                continue
+            addclip(y, ix + x, seg, max(0, iw - x), attr)
+
+        # ── Notensystem (zwischen Kopfzeile und Klaviatur) ──
+        st_top = by + 2
+        st_h = kb_top - st_top - 1
+        if st_h >= PIANO_STAFF_ROWS:
+            # Das System darf die freie Höhe ausnutzen: die 5 Linien bleiben in
+            # der Mitte, der Rest wird Hilfslinien-Raum. Ab ~22 Zusatzzeilen ist
+            # der ganze Tastatur-Umfang (C3…C6) sichtbar, mehr bringt nichts.
+            st_h = min(st_h, PIANO_STAFF_ROWS + 22)
+            rows, marks = piano_staff(PIANO["seq"], st_h, iw, lit)
+            for i, ln in enumerate(rows):
+                addclip(st_top + i, ix, ln, iw, C["faint"])
+            for (r, x, chx, now_on) in marks:
+                addclip(st_top + r, ix + x, chx, max(0, iw - x),
+                        C["acc"] | curses.A_BOLD if now_on else C["ink"] | curses.A_BOLD)
+        elif st_h > 0:
+            addclip(st_top, ix, "(fenster zu flach fürs notensystem)", iw, C["faint"])
+
+        # ── Melodien-Zeile direkt über der Klaviatur ──
+        mrow = kb_top - 1
+        if mrow > st_top:
+            mel = PIANO["mel"]
+            if PIANO["naming"] is not None:
+                nm = PIANO["naming"]
+                zeile = "name: " + nm["buf"] + "_"
+                if not nm["buf"]:                  # leer → der Vorschlag gilt
+                    zeile += "  (enter = »%s«)" % nm.get("vorschlag", "")
+                addclip(mrow, ix, zeile, iw, C["bright"])
+            elif PIANO["renaming"] is not None:
+                addclip(mrow, ix, "neuer name: " + PIANO["renaming"] + "_", iw, C["bright"])
+            elif PIANO["confirm"]:
+                addclip(mrow, ix, "melodie löschen? j/n", iw, C["warn"])
+            elif mel:
+                i = max(0, min(PIANO["sel"], len(mel) - 1))
+                m = mel[i]
+                dur = int(m.get("dur", 0) or 0) // 1000
+                addclip(mrow, ix, "♪ %d/%d  %s  %d:%02d" % (
+                    i + 1, len(mel), str(m.get("name", "?")), dur // 60, dur % 60),
+                    iw, C["acc"] if PIANO.get("play") is not None else C["ink"])
+            else:
+                addclip(mrow, ix, "noch keine melodie aufgenommen", iw, C["faint"])
+
+        # ── Statuszeile ──
+        if PIANO["naming"] is not None:
+            tip = "enter speichern · esc verwerfen"
+        elif PIANO["renaming"] is not None:
+            tip = "enter übernehmen · esc abbrechen"
+        elif PIANO["confirm"]:
+            tip = "j löschen · n abbrechen"
+        else:
+            tip = ("spielen: y x c v b n m , . -  (schwarz s d g h j l ö) · ←→ oktave · "
+                   "space aufnahme · ↑↓ melodie · enter spielen · r name · D weg · k/esc zu")
+        addclip(bottom, ix, (tip + ("  " + PIANO["msg"] if PIANO["msg"] else "")).strip(),
+                iw, C["faint"])
+
     def draw_map(by, bx, bh, bw):
         """Inhalt der MITTE-Box, wenn die Karte Fokus hat. Holt bei Bedarf
         frische Daten (Resize/Pan/Zoom) und druckt die fertig gefüllte
@@ -5169,6 +5788,10 @@ def run_ui(stdscr, store):
         if NOTE["active"]:
             # Ebene 2 (Block bearbeiten) oder Titel tippen → Freitext, '/' literal.
             return NOTE["layer"] == 2 or NOTE["titling"]
+        if PIANO["active"]:
+            # Beim Namen-Tippen ist '/' ein Zeichen; sonst ist die ganze
+            # Tastatur Klaviatur — die Befehlszeile hat da nichts verloren.
+            return True
         if AI["active"]:
             # Ganzes Panel ist Prompt-Eingabe → '/' bleibt ein Zeichen, öffnet
             # nicht die Befehlszeile. (Bei offener Erlaubnis-Frage ignoriert der
@@ -5212,6 +5835,8 @@ def run_ui(stdscr, store):
             return "ai"
         if TUTOR["active"]:
             return "tutor"
+        if PIANO["active"]:
+            return "piano"
         if NOTE["active"]:
             # Ebene 2 / Titel-Eingabe sind Freitext → '/' ist dort ein Zeichen,
             # das Overlay geht gar nicht erst auf (siehe in_text_entry). Bleibt
@@ -5225,8 +5850,10 @@ def run_ui(stdscr, store):
         # Während einer Länder-Kamerafahrt ODER eines laufenden KI-Streams
         # schneller ticken (~30 fps) für weiche Bewegung / live nachlaufende
         # Token; sonst die ruhige 250-ms-Kadenz (spart CPU/Backend-Last).
+        # Das Klavier tickt IMMER schnell: bei 250 ms Kadenz käme der Ton
+        # spürbar nach dem Tastendruck und die Tasten würden träge leuchten.
         fast = ((M["active"] and M.get("anim")) or (AI["active"] and AI["streaming"])
-                or (TUTOR["active"] and TUTOR["streaming"]))
+                or (TUTOR["active"] and TUTOR["streaming"]) or PIANO["active"])
         stdscr.timeout(33 if fast else 250)
         ch = stdscr.getch()
 
@@ -6449,6 +7076,92 @@ def run_ui(stdscr, store):
                             NOTE["esel"] = min(NOTE["esel"], len(terms)); n_loadbuf(blk); n_save()
                     elif 32 <= ch <= 126:
                         NOTE["buf"] += chr(ch)
+        elif PIANO["active"]:                  # Klavier hat den Fokus
+            # Reihenfolge zählt: erst die Freitext-Zustände (Namen tippen),
+            # dann Steuertasten, ZULETZT die Klaviatur — sonst würde 'd'
+            # (= D♯ bzw. löschen) im falschen Zustand landen.
+            if PIANO["naming"] is not None:                 # Name der Aufnahme
+                nm = PIANO["naming"]
+                if ch == 27:
+                    PIANO["naming"] = None; PIANO["msg"] = "aufnahme verworfen"
+                elif ch in (10, 13, curses.KEY_ENTER):
+                    name = nm["buf"].strip() or nm.get("vorschlag", "")
+                    if name:
+                        p_save(name, nm["notes"]); PIANO["naming"] = None
+                    else:
+                        PIANO["msg"] = "name fehlt"
+                elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                    nm["buf"] = nm["buf"][:-1]
+                elif 32 <= ch <= 126 and len(nm["buf"]) < 60:
+                    nm["buf"] += chr(ch)
+                elif ch >= 128:                             # UTF-8 best effort (Umlaute)
+                    buf = PIANO.get("_u8", b"") + bytes([ch & 0xFF])
+                    try:
+                        nm["buf"] += buf.decode("utf-8"); PIANO["_u8"] = b""
+                    except UnicodeDecodeError:
+                        PIANO["_u8"] = buf if len(buf) < 4 else b""
+            elif PIANO["renaming"] is not None:             # Melodie umbenennen
+                if ch == 27:
+                    PIANO["renaming"] = None
+                elif ch in (10, 13, curses.KEY_ENTER):
+                    name = PIANO["renaming"].strip()
+                    if name:
+                        p_rename(name); PIANO["renaming"] = None
+                    else:
+                        PIANO["msg"] = "name fehlt"
+                elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                    PIANO["renaming"] = PIANO["renaming"][:-1]
+                elif 32 <= ch <= 126 and len(PIANO["renaming"]) < 60:
+                    PIANO["renaming"] += chr(ch)
+                elif ch >= 128:
+                    buf = PIANO.get("_u8", b"") + bytes([ch & 0xFF])
+                    try:
+                        PIANO["renaming"] += buf.decode("utf-8"); PIANO["_u8"] = b""
+                    except UnicodeDecodeError:
+                        PIANO["_u8"] = buf if len(buf) < 4 else b""
+            elif PIANO["confirm"]:                          # Melodie löschen? j/n
+                if ch in (ord("j"), ord("J")):
+                    p_delete(); PIANO["confirm"] = False
+                elif ch in (ord("n"), ord("N"), 27):
+                    PIANO["confirm"] = False
+            elif ch == 27 or ch in (ord("k"), ord("K")):    # zu (k wie im Browser)
+                p_close()
+            elif ch == ord(" "):                            # aufnehmen an/aus
+                p_rec_toggle()
+            elif ch in (10, 13, curses.KEY_ENTER):          # melodie spielen/abbrechen
+                p_play()
+            elif ch == curses.KEY_LEFT:
+                p_shift_oct(-1)
+            elif ch == curses.KEY_RIGHT:
+                p_shift_oct(1)
+            elif ch == curses.KEY_UP:
+                if PIANO["mel"]:
+                    PIANO["sel"] = max(0, PIANO["sel"] - 1)
+            elif ch == curses.KEY_DOWN:
+                if PIANO["mel"]:
+                    PIANO["sel"] = min(len(PIANO["mel"]) - 1, PIANO["sel"] + 1)
+            elif ch in (ord("r"), ord("R")):                # ausgewählte umbenennen
+                m = p_sel_melody()
+                PIANO["renaming"] = str(m.get("name", "")) if m else None
+                if m is None:
+                    PIANO["msg"] = "keine melodie"
+            elif ch == ord("D"):
+                # Löschen liegt auf SHIFT+D: das nackte 'd' ist hier eine
+                # Klaviertaste (D♯) und darf keine Melodie wegwerfen.
+                if PIANO["mel"]:
+                    PIANO["confirm"] = True
+                else:
+                    PIANO["msg"] = "keine melodie"
+            elif 32 <= ch <= 126 and chr(ch).lower() in PIANO_KEYMAP:
+                p_play_key(chr(ch).lower())
+            elif ch >= 128:                                 # 'ö' kommt als UTF-8 (2 bytes)
+                buf = PIANO.get("_u8", b"") + bytes([ch & 0xFF])
+                try:
+                    s = buf.decode("utf-8"); PIANO["_u8"] = b""
+                    if not p_play_key(s.lower()):
+                        PIANO["msg"] = ""
+                except UnicodeDecodeError:
+                    PIANO["_u8"] = buf if len(buf) < 4 else b""
         elif TUTOR["active"]:                  # Sprach-Tutor hat den Fokus
             if ch == 27:                       # esc schließt Panel (Session bleibt aktiv)
                 TUTOR["active"] = False
@@ -6539,6 +7252,8 @@ def run_ui(stdscr, store):
                     threading.Thread(target=tutor_open, daemon=True).start()
             elif ch in (ord("n"), ord("N")):   # Notiz-Werkzeug öffnen (direkt in eine Notiz)
                 NOTE["active"] = True; n_open()
+            elif ch in (ord("k"), ord("K")):   # Klavier öffnen (wie im Browser: k)
+                p_open()
             elif ch in (ord("f"), ord("F")):   # Fokus-Werkzeug öffnen (primäre Taste)
                 L["active"] = True; L["view"] = "forest"; L["fsel"] = 0
                 L["adding"] = False; L["confirm"] = False; L["msg"] = ""; l_load()
@@ -6723,17 +7438,22 @@ def run_ui(stdscr, store):
         elif NOTE["active"]:
             draw_box(top, mx, body_h, midw, "notiz" if NOTE["view"] == "edit" else "notizen")
             draw_note_tool(top, mx, body_h, midw)
+        elif PIANO["active"]:
+            draw_box(top, mx, body_h, midw, "klavier")
+            draw_piano_tool(top, mx, body_h, midw)
         else:
             draw_box(top, mx, body_h, midw, "mitte")
             cyc = top + body_h // 2
             big = "KASSETTE · TUI"
             invite = ["g · graph-werkzeug", "f · fokus", "n · notizen",
                       "m · karte", "c · kalender", "p · post/mail",
-                      "a · ki-chat", "u · tutor"]
+                      "a · ki-chat", "u · tutor", "k · klavier"]
             addclip(cyc - 4, mx + max(1, (midw - len(big)) // 2), big, midw - 2, C["bright"])
             for i, ln in enumerate(invite):
-                addclip(cyc - 2 + i, mx + max(1, (midw - len(ln)) // 2),
-                        ln, midw - 2, C["acc"])
+                y = cyc - 2 + i
+                if y > top + body_h - 2:       # nicht in den Box-Rahmen schreiben
+                    break
+                addclip(y, mx + max(1, (midw - len(ln)) // 2), ln, midw - 2, C["acc"])
 
         # ── RECHTS: lifestyle / outbound ──────────────────────────────────
         # lifestyle = ÜBERLAGERUNG aller Graphen in EINEM Gitter. X = Datum

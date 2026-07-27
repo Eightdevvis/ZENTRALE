@@ -77,7 +77,9 @@ Auf der Computertastatur gespielte und aufgezeichnete Melodien
 gespielt: `n` = MIDI-Note (21–108), `t` = Startzeit ab Aufnahmebeginn in ms,
 `d` = Klingdauer in ms. **Kein Takt/Tempo** — nicht quantisiert, damit das
 Gespielte nicht verfälscht wird. Nicht KI-gegatet (direkte Nutzeraktion), also
-in allen Kassetten offen. Front: Canvas-Exhibit „Klavier" (Taste `k`).
+in allen Kassetten offen. Fronten: Canvas-Exhibit „Klavier" (monolith/laptop,
+Taste `k`) **und das TUI-Klavier** (dieselbe Taste) — beide lesen und schreiben
+dieselbe Registry, im Browser Aufgenommenes spielt also auch das Terminal ab.
 
 | Endpoint                  | Methode | Beschreibung                              |
 |---------------------------|---------|-------------------------------------------|

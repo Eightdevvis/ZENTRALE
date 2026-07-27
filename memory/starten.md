@@ -115,6 +115,13 @@ mal, ist aber raus (Stand 2026-07-25).
 
 - **Dependencies:** nur `flask` + `python-dateutil` fürs Backend; die TUI selbst
   ist reine stdlib (`curses`). Kein Browser, kein Whisper/TTS, kein tmux.
+  **Ausnahme auf Anforderung:** das Klavier (Taste `k`) lädt beim Öffnen
+  `core/tone.py` nach (`numpy` + `sounddevice`, beide in `requirements.txt`).
+  Fehlen sie oder gibt es kein Audio-Gerät, bleibt das Klavier still und
+  funktioniert weiter. Zwei Schalter: `ZENTRALE_NO_AUDIO=1` = bewusst stumm,
+  `ZENTRALE_AUDIO_DEVICE=0` (Index) bzw. `=hw:0,0` (Name) = anderes
+  Ausgabegerät, wenn der System-Default über einen toten Audio-Server läuft
+  und PortAudio beim Öffnen blockiert.
 - **Standalone** (TUI gegen ein schon laufendes Backend, z.B. auf einer anderen
   Maschine): `ZENTRALE_URL=http://<host>:5000 venv/bin/python tui/zentrale_tui.py`
 - **Selbsttest** (ein Text-Snapshot, ohne curses):

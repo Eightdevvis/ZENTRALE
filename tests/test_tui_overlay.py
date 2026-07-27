@@ -11,7 +11,12 @@ mitschreibt — so ist das ein Bild-Test, kein Logik-Abklatsch.
 """
 from tui.zentrale_tui import overlay_rows, render_overlay_body
 
-STDOUT_CH = "X"   # simuliert bereits gezeichneten stdout-Text unter dem Overlay
+# Simuliert bereits gezeichneten stdout-Text unter dem Overlay. Bewusst ein
+# Zeichen, das in KEINEM Hilfetext vorkommen kann: mit 'X' schlug der Test
+# falschen Alarm, sobald eine Beschreibung ein großes X enthielt („TEXT-panel"
+# in der /tutor-Zeile) — gemessen wurde dann der Hilfetext selbst, nicht der
+# durchblutende stdout.
+STDOUT_CH = "▚"
 
 
 class FakeScreen:

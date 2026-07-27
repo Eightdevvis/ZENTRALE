@@ -99,6 +99,9 @@ ZENTRALE/
 │   ├── host_metrics.py      # PC-Host-Metriken (CPU/GPU/VRAM/Temp/RAM)
 │   ├── telemetry.py         # Telemetrie-Aggregat (PC + Pi) fürs Dashboard
 │   ├── audio.py             # HTTP-Client für Whisper + TTS
+│   ├── melodies.py          # Melodie-Registry des Klaviers (data/melodies.json)
+│   ├── tone.py              # Ton-Erzeuger fürs TUI-Klavier (Wellenform → sounddevice;
+│   │                        # rein lokal, KEIN Backend-Weg — Lautsprecher sitzt am Knoten)
 │   ├── tutor_port.py        # ★ EINZIGE Naht zum Tutor (Policy/Gate, lazy, sys.path)
 │   └── map/                 # Geo-Layer-System (front-agnostisch, pure stdlib)
 │       ├── basemap.py       # Basiskarte (Natural Earth, data/*.geojson)
