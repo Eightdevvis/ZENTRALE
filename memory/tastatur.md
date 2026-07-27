@@ -60,6 +60,7 @@ Drei Unterschiede, die aus dem Terminal kommen:
 | `Enter`      | **gewählte** Melodie abspielen / Wiedergabe stoppen             |
 | `r`          | gewählte Melodie umbenennen                                     |
 | `D` (groß)   | gewählte Melodie löschen — nacktes `d` ist die Taste D♯          |
+| `t`          | Theme wechseln (gilt im Klavier wie überall sonst)               |
 
 - **Die Tasten sind beschriftet:** die gezeichnete Klaviatur trägt jeden
   Buchstaben auf seiner Taste (weiße vorne, schwarze oben), deshalb steht in

@@ -840,7 +840,7 @@ CTX_KEYS = {
         ("y x c v b n m , . -", "weiße tasten"), ("s d g h j l ö", "schwarze"),
         ("←→", "oktave"), ("space", "aufnahme an/aus"),
         ("↑↓", "melodie wählen"), ("enter", "abspielen / stopp"),
-        ("r", "umbenennen"), ("D", "löschen"), ("k/esc", "zu"),
+        ("r", "umbenennen"), ("D", "löschen"), ("t", "theme"), ("k/esc", "zu"),
     ],
     "ai": [
         ("tippen", "frage"), ("enter", "senden"),
@@ -1265,33 +1265,54 @@ def run_ui(stdscr, store):
     # Datei selbst (fs_event + eigener Tick), siehe nvim/lua/zentrale_theme.
     # Ein systemd-User-Timer zieht dieselbe Datei zusätzlich jede Minute nach
     # (fängt die 05/21-Rotation, auch wenn die TUI gerade nicht läuft).
+    #
+    # ZWEI Bremsen sind hier bewusst eingebaut, weil das Umfärben der ganzen
+    # XFCE-Sitzung (GTK-, Fenster- UND Icon-Theme) teuer ist — jede GTK-App lädt
+    # dabei ihre Icons neu, das ruckelt sichtbar:
+    #   1. Die Applier laufen nur, wenn sich das AUFGELÖSTE Theme (hell/dunkel)
+    #      wirklich ändert. `t` zykliert auto→day→night→auto; zwei dieser drei
+    #      Schritte lassen die Farbe gleich (z.B. auto(night)→night) und haben
+    #      früher trotzdem den ganzen Desktop umgefärbt.
+    #   2. Danach wird um ENV_DEBOUNCE verzögert: wer dreimal schnell `t`
+    #      drückt, löst EINEN Umbau aus statt drei.
+    # Die Datei selbst wird sofort geschrieben (nvim & der systemd-Timer lesen
+    # den MODUS, nicht die Farbe) — sie ist billig.
     _last_term_mode = [None]
+    _last_env_theme = [None]      # zuletzt an die Umgebung gemeldetes day/night
+    _env_due = [0.0]              # >0: Applier stehen aus (Zeitstempel)
+    ENV_DEBOUNCE = 0.5
     _THEME_APPLIERS = ("zentrale-term-theme", "zentrale-browser-theme",
                        "zentrale-desktop-theme")
-    def _push_term_theme(mode):
-        if mode == _last_term_mode[0]:
+    def _push_term_theme(mode, resolved=None):
+        if mode != _last_term_mode[0]:
+            _last_term_mode[0] = mode
+            try:
+                cfg = os.path.expanduser("~/.config/zentrale")
+                os.makedirs(cfg, exist_ok=True)
+                with open(os.path.join(cfg, "theme"), "w") as fh:
+                    fh.write(mode + "\n")
+            except OSError:
+                pass
+            _env_due[0] = time.time() + ENV_DEBOUNCE
+        if not _env_due[0] or time.time() < _env_due[0]:
             return
-        _last_term_mode[0] = mode
-        try:
-            cfg = os.path.expanduser("~/.config/zentrale")
-            os.makedirs(cfg, exist_ok=True)
-            with open(os.path.join(cfg, "theme"), "w") as fh:
-                fh.write(mode + "\n")
-            # Applier best-effort im Hintergrund; brauchen DISPLAY (xfconf bzw.
-            # die Session-Bus-Verbindung zum Portal). Ein fehlender Applier
-            # (nicht installiert) darf die TUI nicht stören → je einzeln gekapselt.
-            if os.environ.get("DISPLAY"):
-                for applier in _THEME_APPLIERS:
-                    try:
-                        subprocess.Popen(
-                            [applier],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                        )
-                    except OSError:
-                        pass
-        except Exception:
-            pass
-    _push_term_theme(theme_mode)
+        _env_due[0] = 0.0
+        if resolved is not None and resolved == _last_env_theme[0]:
+            return                 # Farbe unverändert → Desktop nicht anfassen
+        _last_env_theme[0] = resolved
+        # Applier best-effort im Hintergrund; brauchen DISPLAY (xfconf bzw.
+        # die Session-Bus-Verbindung zum Portal). Ein fehlender Applier
+        # (nicht installiert) darf die TUI nicht stören → je einzeln gekapselt.
+        if os.environ.get("DISPLAY"):
+            for applier in _THEME_APPLIERS:
+                try:
+                    subprocess.Popen(
+                        [applier],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    )
+                except OSError:
+                    pass
+    _push_term_theme(theme_mode, cur_theme)
 
     # Esc soll sofort reagieren (sonst wartet ncurses ~1s auf eine Escape-
     # Sequenz, bevor es ein einzelnes Esc durchreicht).
@@ -7382,6 +7403,8 @@ def run_ui(stdscr, store):
                     PIANO["confirm"] = True
                 else:
                     PIANO["msg"] = "keine melodie"
+            elif ch in (ord("t"), ord("T")):    # Theme darf auch hier zyklieren
+                theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
             elif 32 <= ch <= 126 and chr(ch).lower() in PIANO_KEYMAP:
                 p_play_key(chr(ch).lower())
             elif ch >= 128:                                 # 'ö' kommt als UTF-8 (2 bytes)
@@ -7497,8 +7520,9 @@ def run_ui(stdscr, store):
             cur_theme = want
             apply_theme(cur_theme)
         # Terminal-Theme an den (evtl. gerade per 't'/Befehl geänderten) Modus
-        # koppeln — no-op, solange sich der Modus nicht ändert.
-        _push_term_theme(theme_mode)
+        # koppeln — no-op, solange sich der Modus nicht ändert. Die teuren
+        # Umgebungs-Applier laufen entkoppelt (siehe _push_term_theme).
+        _push_term_theme(theme_mode, cur_theme)
 
         # Weiche Kamerafahrt zum fokussierten Land (eine Ease-Stufe pro Frame).
         if M["active"] and M.get("anim"):

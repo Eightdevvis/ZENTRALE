@@ -88,6 +88,18 @@ Themes: Light-Mode mit weißem Hintergrund (kein Gelb auf Weiß), Dark-Mode
 245). Akzent-Grün ist gedämpft (Salbei 108, nie bold → kein Neon). Box-Inhalte
 werden auf die jeweilige Box-Innenbreite gekürzt (kein Überlauf in Nachbarspalten).
 
+**Wann die Applier laufen (seit 2026-07-27):** die TUI färbt sich selbst sofort
+um (~18 ms), die **Umgebungs-Applier** sind davon entkoppelt — sie färben die
+ganze XFCE-Sitzung um (GTK-, Fenster- **und Icon-Theme**), und besonders der
+Icon-Wechsel lässt jede GTK-App neu laden, das ruckelt sichtbar. Deshalb:
+(1) sie laufen nur, wenn sich das **aufgelöste** Theme (hell/dunkel) wirklich
+ändert — `t` zykliert `auto→day→night→auto`, und zwei dieser drei Schritte
+lassen die Farbe gleich (z.B. `auto(night)→night`); früher färbte jeder davon
+den Desktop um. (2) Danach 0,5 s **Debounce**: dreimal schnell `t` löst EINEN
+Umbau aus statt drei. Die Datei `~/.config/zentrale/theme` wird weiterhin
+sofort geschrieben (nvim und der systemd-Timer lesen den MODUS, nicht die
+Farbe) — sie ist billig.
+
 **Terminal-Kopplung (Sashas Laptop, xfce4-terminal):** die TUI schreibt bei
 jedem Moduswechsel den Modus (`auto`/`day`/`night`) nach
 `~/.config/zentrale/theme` und stößt `zentrale-term-theme`
