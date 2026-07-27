@@ -228,8 +228,8 @@ def test_klaviatur_zeilen_sind_alle_gleich_lang():
 
 def test_klaviatur_zonen_decken_jede_taste_ab():
     _rows, zones = piano_keyboard(101, 13)
-    weiss = {s for _r, _x, _w, s, black in zones if not black}
-    schwarz = {s for _r, _x, _w, s, black in zones if black}
+    weiss = {s for _r, _x, _w, s, black, _a in zones if not black}
+    schwarz = {s for _r, _x, _w, s, black, _a in zones if black}
     assert weiss == {s for _k, s in PIANO_WHITE}
     assert schwarz == {s for _k, s, _w in PIANO_BLACK}
 
@@ -239,7 +239,7 @@ def test_schwarze_taste_sitzt_oben_auf_der_kante_zwischen_ihren_weissen():
     # linke Kante jeder Taste über alle ihre Zonen
     links = {}
     rechts = {}
-    for _r, x, w, s, _b in zones:
+    for _r, x, w, s, _b, _a in zones:
         links[s] = min(links.get(s, x), x)
         rechts[s] = max(rechts.get(s, x + w), x + w)
     for _k, s, _w in PIANO_BLACK:
@@ -248,13 +248,13 @@ def test_schwarze_taste_sitzt_oben_auf_der_kante_zwischen_ihren_weissen():
         assert links[s - 1] < links[s] < links[s + 1]
         assert links[s] < rechts[s - 1] and rechts[s] > links[s + 1]
     for _k, s, _w in PIANO_BLACK:                  # reicht bis an die Hinterkante
-        assert 0 in [r for r, _x, _w, ss, b in zones if b and ss == s]
+        assert 0 in [r for r, _x, _w, ss, b, _a in zones if b and ss == s]
 
 
 def test_keine_spalte_gehoert_zwei_tasten_gleichzeitig():
     for w, h in ((101, 13), (61, 9), (41, 6), (31, 5)):
         belegt = {}
-        for r, x, kw, s, _b in piano_keyboard(w, h)[1]:
+        for r, x, kw, s, _b, _a in piano_keyboard(w, h)[1]:
             for c in range(x, x + kw):
                 assert belegt.setdefault((r, c), s) == s
         assert belegt                              # und es ist überhaupt was da
@@ -266,8 +266,55 @@ def test_klaviatur_passt_immer_in_den_platz():
             rows, zones = piano_keyboard(w, h)
             assert all(len(r) <= w for r in rows)
             assert len(rows) <= max(h, 0)
-            for r, x, kw, _s, _b in zones:
+            for r, x, kw, _s, _b, _a in zones:
                 assert x + kw <= w and 0 <= r < len(rows)
+
+
+# ── 2d. Tastenbeleuchtung: Rahmen, Buchstaben, Flächen ──────────────────────
+def test_jede_taste_hat_genau_eine_buchstaben_zelle():
+    for w, h in ((101, 13), (61, 9), (41, 6), (31, 5)):
+        rows, zones = piano_keyboard(w, h)
+        labels = [z for z in zones if z[5] == "label"]
+        assert len(labels) == len(PIANO_WHITE) + len(PIANO_BLACK)
+        assert all(b == 1 for _r, _x, b, _s, _bl, _a in labels)
+        # jede Buchstaben-Zelle trägt wirklich den Buchstaben dieser Taste
+        namen = dict([(s, k) for k, s in PIANO_WHITE] +
+                     [(s, k) for k, s, _w in PIANO_BLACK])
+        for r, x, _b, s, _bl, _a in labels:
+            assert rows[r][x] == namen[s]
+
+
+def test_schwarze_keycap_hat_einen_rahmen_der_sie_ganz_umschliesst():
+    rows, zones = piano_keyboard(101, 13)
+    for _k, s, _w in PIANO_BLACK:
+        cells = set()
+        for r, x, b, ss, _bl, art in zones:
+            if ss == s and art == "frame":
+                cells |= {(r, c) for c in range(x, x + b)}
+        assert cells, "breite Keycap muss einen Rahmen haben"
+        rs = [r for r, _c in cells]
+        cs = [c for _r, c in cells]
+        # oben/unten geschlossen, links/rechts durchgehend
+        top, bot, lo, hi = min(rs), max(rs), min(cs), max(cs)
+        assert top == 0                                  # bis an die Hinterkante
+        for c in range(lo, hi + 1):
+            assert (top, c) in cells and (bot, c) in cells
+        for r in range(top, bot + 1):
+            assert (r, lo) in cells and (r, hi) in cells
+        # und der Buchstabe sitzt INNERHALB des Rahmens, nicht darauf
+        lbl = [(r, x) for r, x, _b, ss, _bl, a in zones if ss == s and a == "label"]
+        assert lbl and all(top < r < bot and lo < c < hi for r, c in lbl)
+
+
+def test_schmale_klaviatur_hat_keinen_rahmen_aber_alle_tasten():
+    rows, zones = piano_keyboard(41, 6)              # schwarze Taste = 1 Spalte
+    assert not [z for z in zones if z[5] == "frame"]
+    assert {s for _r, _x, _w, s, b, _a in zones if b} == {s for _k, s, _w in PIANO_BLACK}
+
+
+def test_zonen_kennen_nur_die_drei_arten():
+    for w, h in ((101, 13), (61, 9), (41, 6), (31, 5)):
+        assert {z[5] for z in piano_keyboard(w, h)[1]} <= {"face", "frame", "label"}
 
 
 def test_klaviatur_waechst_mit_dem_platz_und_gibt_bei_zu_wenig_auf():

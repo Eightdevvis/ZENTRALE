@@ -503,6 +503,10 @@ PIANO_BLACK = [("s", 1, 0), ("d", 3, 1), ("g", 6, 3), ("h", 8, 4),
                ("j", 10, 5), ("l", 13, 7), ("ö", 15, 8)]
 PIANO_KEYMAP = dict([(k, s) for k, s in PIANO_WHITE] +
                     [(k, s) for k, s, _w in PIANO_BLACK])
+# Halbton → laufende Nummer der Taste (von links). Nur fürs Licht: sie sagt,
+# welche Farbe der Leuchtreihe eine Taste gerade abbekommt.
+PIANO_BLACK_NR = {s: i for i, (_k, s, _w) in enumerate(PIANO_BLACK)}
+PIANO_WHITE_NR = {s: i for i, (_k, s) in enumerate(PIANO_WHITE)}
 # Deutsche Notennamen (H statt B) — Sasha liest die Zeile, nicht ein Programm.
 PIANO_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "H"]
 PIANO_SEMI_TO_DIA = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6]   # Halbton → Stufe
@@ -515,6 +519,8 @@ PIANO_LIT_MS = 260         # so lange leuchtet eine angeschlagene Taste nach
 PIANO_MAX_COLS = 64        # so viele Noten-Spalten hält das Notensystem vor
 PIANO_KB_MIN_H = 5         # flacher lohnt keine gezeichnete Klaviatur
 PIANO_KB_MAX_H = 13        # höher wirken die Tasten nur noch klobig
+PIANO_LIGHTS = ("neon", "regenbogen", "aus")   # Taste 'L' zykliert das durch
+PIANO_SHIMMER_HZ = 6.0     # Stufen pro Sekunde, mit denen der Schimmer wandert
 # Notensystem: 5 Linien im Violinschlüssel, von unten E4 bis oben F5. Eine
 # Terminal-Zeile = eine diatonische Stufe (Linie ODER Zwischenraum).
 PIANO_TOP_DIA = 38         # F5 = oberste Linie
@@ -545,13 +551,20 @@ def piano_keyboard(width, height=PIANO_KB_MIN_H):
     Klaviatur als fertige Zeichenzeilen + Trefferzonen. PURE Funktion:
       width, height (verfügbarer Platz) -> (rows, zones)
       rows  = [str, …] von oben nach unten, alle gleich lang
-      zones = [(zeile, x, breite, halbton, schwarz?), …] — die Stellen, die die
-              TUI beim Anschlag einfärbt (und die schwarzen Tasten dunkel malt).
+      zones = [(zeile, x, breite, halbton, schwarz?, art), …] — die Stellen, die
+              die TUI einfärbt. `art` sagt, WAS die Stelle ist:
+                "face"  = Tastenfläche (schwarz füllen bzw. beim Anschlag leuchten)
+                "frame" = Rand der schwarzen Keycap (kriegt die Leuchtfarbe)
+                "label" = die eine Zelle mit dem Buchstaben
+              Erst face, dann frame, dann label — in dieser Reihenfolge gemalt.
 
     Gezeichnet wird die Aufsicht auf eine echte Klaviatur: die weißen Tasten
     stehen als Kästchen nebeneinander, die schwarzen sind schmaler, reichen bis
     an die Hinterkante (oberste Zeile) und liegen mittig auf der Kante zwischen
     zwei weißen — vorne bleibt die weiße Taste frei, dort steht ihr Buchstabe.
+    Ist die schwarze Taste breit genug (ab 3 Spalten), bekommt sie eine echte
+    Keycap-Umrandung mit dem Buchstaben in der Mitte; sonst steht der Buchstabe
+    wie früher unten in der Taste.
     Breite und Höhe der Tasten wachsen mit dem Platz (weiße Taste 2…9 Spalten);
     ist es zu eng oder zu flach, kommt eine leere Rückgabe und der Aufrufer
     schreibt stattdessen eine Textzeile hin.
@@ -586,6 +599,10 @@ def piano_keyboard(width, height=PIANO_KB_MIN_H):
 
     # Schwarze Tasten drüberlegen — sie überschreiben oben auch die Kante
     # zwischen ihren beiden weißen Nachbarn, genau das macht sie zur Taste.
+    # Ab 3 Spalten Breite bekommt sie eine Keycap-Umrandung (die kriegt später
+    # die Leuchtfarbe), darunter bleibt sie ein schlichter Block.
+    cap = kb >= 3 and hb >= 2
+    mid = max(1, hb // 2)                               # Zeile des Buchstabens
     blocked = [False] * total
     spans = {}
     for k, s, w in PIANO_BLACK:
@@ -596,13 +613,23 @@ def piano_keyboard(width, height=PIANO_KB_MIN_H):
         for r in range(0, hb + 1):
             for j in range(kb):
                 rows[r][x + j] = " "
-        rows[hb][x + (kb - 1) // 2] = k
+        if cap:
+            for j, chx in enumerate("┌" + "─" * (kb - 2) + "┐"):
+                rows[0][x + j] = chx
+            for j, chx in enumerate("└" + "─" * (kb - 2) + "┘"):
+                rows[hb][x + j] = chx
+            for r in range(1, hb):
+                rows[r][x] = "│"
+                rows[r][x + kb - 1] = "│"
+            rows[mid][x + kb // 2] = k
+        else:
+            rows[hb][x + (kb - 1) // 2] = k
 
     zones = []
     for i, (_k, s) in enumerate(PIANO_WHITE):
         x0 = 1 + i * (kw + 1)
         for r in range(hb + 1, h - 1):                  # freier Teil vorne
-            zones.append((r, x0, kw, s, False))
+            zones.append((r, x0, kw, s, False, "face"))
         a, b = x0, x0 + kw                              # oben: um die schwarzen herum
         while a < b and blocked[a]:
             a += 1
@@ -610,10 +637,23 @@ def piano_keyboard(width, height=PIANO_KB_MIN_H):
             b -= 1
         if b > a:
             for r in range(1, hb + 1):
-                zones.append((r, a, b - a, s, False))
+                zones.append((r, a, b - a, s, False, "face"))
+        zones.append((h - 2, x0 + (kw - 1) // 2, 1, s, False, "label"))
     for _k, s, _w in PIANO_BLACK:
-        for r in range(0, hb + 1):
-            zones.append((r, spans[s], kb, s, True))
+        x = spans[s]
+        if cap:
+            for r in range(1, hb):
+                zones.append((r, x + 1, kb - 2, s, True, "face"))
+            zones.append((0, x, kb, s, True, "frame"))
+            zones.append((hb, x, kb, s, True, "frame"))
+            for r in range(1, hb):
+                zones.append((r, x, 1, s, True, "frame"))
+                zones.append((r, x + kb - 1, 1, s, True, "frame"))
+            zones.append((mid, x + kb // 2, 1, s, True, "label"))
+        else:
+            for r in range(0, hb + 1):
+                zones.append((r, x, kb, s, True, "face"))
+            zones.append((hb, x + (kb - 1) // 2, 1, s, True, "label"))
     return ["".join(r) for r in rows], zones
 
 
@@ -840,7 +880,8 @@ CTX_KEYS = {
         ("y x c v b n m , . -", "weiße tasten"), ("s d g h j l ö", "schwarze"),
         ("←→", "oktave"), ("space", "aufnahme an/aus"),
         ("↑↓", "melodie wählen"), ("enter", "abspielen / stopp"),
-        ("r", "umbenennen"), ("D", "löschen"), ("t", "theme"), ("k/esc", "zu"),
+        ("r", "umbenennen"), ("D", "löschen"),
+        ("L", "licht: neon/regenbogen/aus"), ("t", "theme"), ("k/esc", "zu"),
     ],
     "ai": [
         ("tippen", "frage"), ("enter", "senden"),
@@ -1088,6 +1129,11 @@ def run_ui(stdscr, store):
             # Klavier: Fläche der schwarzen Taste. Auf schwarzem Grund NICHT 16
             # (dann verschwände die Taste), sondern ein Hauch heller.
             "key_bg": 236,
+            # Leuchtfarben der Keycaps: im Dunkeln echtes Neon (Cyan, Magenta,
+            # Grün, Gelb, Orange, Pink, Violett) — jede Taste kriegt eine, im
+            # Schimmer-Modus wandern sie durch. Bewusst grell: das ist der
+            # einzige Ort in der TUI, wo Neon erwünscht ist.
+            "key_neon": [51, 201, 46, 226, 208, 199, 129],
             # Ombre der Sidebar-Liste: 256-Grau-Rampe, die nach unten in den
             # (schwarzen) Hintergrund verblasst → „weiter unten = transparenter".
             "ombre": [252, 246, 241, 237, 235],
@@ -1118,6 +1164,9 @@ def run_ui(stdscr, store):
             "cyc_bg": 224,
             # Klavier: schwarze Taste auf weißem Grund darf echtes Schwarz sein.
             "key_bg": 16,
+            # Leuchtfarben auf Papier: dieselbe Reihenfolge, aber aus der
+            # Tages-Palette (kein Neon auf Papier, das flimmert nur).
+            "key_neon": [26, 90, 65, 172, 124, 132, 67],
             # Ombre der Sidebar-Liste: nach unten in den (weißen) Hintergrund
             # verblassend → Grau wird heller.
             "ombre": [238, 244, 248, 251, 253],
@@ -1138,6 +1187,7 @@ def run_ui(stdscr, store):
             # Klaviertasten ohne Farbe: invertiert ist alles, was bleibt.
             C["key_black"] = curses.A_REVERSE
             C["key_press"] = curses.A_REVERSE | curses.A_BOLD
+            C["keyframe"], C["keyglow"] = [], []   # Beleuchtung braucht Farben
             # Zyklus-Fenster ohne Farbe: keine Fläche, nur die Rückfall-Linie.
             C["cycbg"] = curses.A_DIM
             C["cyc_is_bg"] = False
@@ -1244,6 +1294,21 @@ def run_ui(stdscr, store):
             pp += 1
             curses.init_pair(pp, curses.COLOR_BLACK, th["acc"][0])
             C["key_press"] = curses.color_pair(pp)
+        pp += 1
+        # Tastenbeleuchtung: je eine Farbe für den RAND der schwarzen Keycap
+        # (Neon auf der schwarzen Fläche) und dieselbe Farbe als Glühen für die
+        # Buchstaben der weißen Tasten (auf Theme-Grund). Ohne 256 Farben gibt
+        # es das nicht — dann bleiben die Listen leer und alles sieht aus wie
+        # vorher, statt in acht Farben zu raten.
+        C["keyframe"], C["keyglow"] = [], []
+        if c256:
+            for col in th.get("key_neon", []):
+                curses.init_pair(pp, col, th.get("key_bg", 16))
+                C["keyframe"].append(curses.color_pair(pp) | curses.A_BOLD)
+                pp += 1
+                curses.init_pair(pp, col, bg)
+                C["keyglow"].append(curses.color_pair(pp) | curses.A_BOLD)
+                pp += 1
         # leere Zellen (erase) bekommen den Theme-Hintergrund
         stdscr.bkgd(" ", C["ink"])
 
@@ -1457,6 +1522,7 @@ def run_ui(stdscr, store):
              "synth": None, "sound": False, "confirm": False,
              "renaming": None, "msg": "", "_u8": b"",
              "opening": None,      # seit wann geht das Audio-Gerät auf? (None = fertig)
+             "light": PIANO_LIGHTS[0],   # Tastenbeleuchtung: neon|regenbogen|aus ('L')
              "t0": 0.0}            # Zeitnullpunkt der Noten im System
 
     # ── Karte (füllt die MITTE-Box, Taste 'm') ──────────────────────────
@@ -4276,6 +4342,8 @@ def run_ui(stdscr, store):
                      if wartet > 4 else "   ♪ ton öffnet…")
         elif not PIANO["sound"]:
             head += "   ♪ stumm"
+        if PIANO.get("light", PIANO_LIGHTS[0]) != PIANO_LIGHTS[0]:
+            head += "   ✦ licht " + PIANO["light"]      # nur wenn NICHT Standard
         addclip(by + 1, ix, head, iw,
                 C["warn"] if PIANO["rec"] is not None else C["bright"])
 
@@ -4296,18 +4364,34 @@ def run_ui(stdscr, store):
         for i, ln in enumerate(kb_rows):
             addclip(kb_top + i, kx, ln, max(0, iw - (kx - ix)), C["faint"])
         base = piano_midi(PIANO["oct"], 0)
-        for (r, x, w, semi, black) in zones:
+        # Tastenbeleuchtung: "neon" = jede Keycap trägt ihre eigene Farbe,
+        # "regenbogen" = dieselben Farben wandern (und die weißen Buchstaben
+        # glühen mit), "aus" = wie ein normales Klavier. Der Schimmer läuft
+        # über die Uhr, nicht über einen Zähler — dann ist er unabhängig davon,
+        # wie oft gerade neu gezeichnet wird.
+        pal, glow = C.get("keyframe") or [], C.get("keyglow") or []
+        licht = PIANO.get("light", PIANO_LIGHTS[0])
+        schimmer = licht == "regenbogen"
+        ph = int(time.time() * PIANO_SHIMMER_HZ) if schimmer else 0
+        for (r, x, w, semi, black, art) in zones:
             y = kb_top + r
             if y < by + 1 or y > bottom:
                 continue
             on = lit.get(base + semi)
             seg = kb_rows[r][x:x + w]
             if black:
-                attr = C["key_press"] if on else C["key_black"]
+                if on:                                  # angeschlagen: ganze Taste
+                    attr = C["key_press"]
+                elif art == "frame" and pal and licht != "aus":
+                    attr = pal[(PIANO_BLACK_NR.get(semi, 0) + ph) % len(pal)]
+                else:
+                    attr = C["key_black"]
             elif on:
                 attr = C["acc"] | curses.A_REVERSE
+            elif art == "label" and schimmer and glow:
+                attr = glow[(PIANO_WHITE_NR.get(semi, 0) + ph) % len(glow)]
             else:
-                continue
+                continue                                # unberührte weiße Fläche
             addclip(y, kx + x, seg, max(0, iw - (kx - ix) - x), attr)
 
         # ── Notensystem (zwischen Kopfzeile und Klaviatur) ──
@@ -4362,7 +4446,7 @@ def run_ui(stdscr, store):
             # Welche Taste welchen Ton spielt, steht auf der Taste selbst —
             # hier nur, was man sonst nirgends sieht.
             tip = ("←→ oktave · space aufnahme · ↑↓ melodie · enter spielen · "
-                   "r name · D weg · k/esc zu")
+                   "r name · D weg · L licht · k/esc zu")
         addclip(bottom, ix, (tip + ("  " + PIANO["msg"] if PIANO["msg"] else "")).strip(),
                 iw, C["faint"])
 
@@ -7403,6 +7487,11 @@ def run_ui(stdscr, store):
                     PIANO["confirm"] = True
                 else:
                     PIANO["msg"] = "keine melodie"
+            elif ch == ord("L"):                # Tastenbeleuchtung zyklieren
+                # Groß-L, weil das nackte 'l' die Taste A♯ ist.
+                i = PIANO_LIGHTS.index(PIANO.get("light", PIANO_LIGHTS[0]))
+                PIANO["light"] = PIANO_LIGHTS[(i + 1) % len(PIANO_LIGHTS)]
+                PIANO["msg"] = "licht: " + PIANO["light"]
             elif ch in (ord("t"), ord("T")):    # Theme darf auch hier zyklieren
                 theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
             elif 32 <= ch <= 126 and chr(ch).lower() in PIANO_KEYMAP:

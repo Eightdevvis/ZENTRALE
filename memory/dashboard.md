@@ -626,6 +626,21 @@ nicht zum Durchzappen).
 >   ab (nochmal `Enter` = stopp, die Noten laufen dabei live ins System),
 >   `r` benennt um, **`D`** (groß!) löscht — das nackte `d` ist eine
 >   Klaviertaste (D♯) und darf nichts wegwerfen.
+> - **Tastenbeleuchtung (Taste `L`, groß — `l` ist A♯):** drei Stufen, die die
+>   schwarzen Tasten als **Keycaps** behandeln (ab 3 Spalten Breite kriegen sie
+>   eine Umrandung, der Buchstabe sitzt mittendrin):
+>   `neon` (Standard) = jede Keycap trägt ihre eigene Leuchtfarbe (im Dunkeln
+>   echtes Neon 51/201/46/226/208/199/129, auf Papier dieselbe Reihenfolge aus
+>   der Tages-Palette); `regenbogen` = dieselben Farben **wandern** über die
+>   Klaviatur (6 Stufen/s, aus `time.time()` — der Lauf hängt damit nicht daran,
+>   wie oft neu gezeichnet wird) und die Buchstaben der **weißen** Tasten glühen
+>   mit; `aus` = schlichte Umrandung wie der Rest der TUI. Ohne 256 Farben
+>   bleiben die Paletten leer und alles sieht aus wie vorher.
+> - **Wie das technisch geht:** `piano_keyboard` liefert zu jeder Zone eine
+>   **Art** — `face` (Tastenfläche), `frame` (Rand der Keycap), `label` (die eine
+>   Zelle mit dem Buchstaben). Damit kann der Zeichner jede Taste in Teilen
+>   einfärben, statt nur ganz — die Grundlage für „nur Teile der Klaviatur
+>   leuchten lassen".
 > - **Farben:** die schwarze Taste hat ein **eigenes Farbpaar** (`C["key_black"]`,
 >   weiß auf Schwarz; im Nacht-Theme 236 statt 16, sonst verschwände sie im
 >   schwarzen Panel-Grund), **nicht** `A_REVERSE` — invertiert würde ihr
