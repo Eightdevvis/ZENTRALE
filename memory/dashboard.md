@@ -254,7 +254,8 @@ Werte/Definitionen holt das Werkzeug synchron per `api_call()` (POST/DELETE).
 Die `lifestyle`-Box rechts zeigt **alle Graphen überlagert** in EINEM Gitter:
 X = **festes Fenster der letzten 7 Tage** (heute rechts, 6 Tage zurück nach
 links, über die volle Breite verteilt — egal wie viel gefüllt ist; leere Tage
-bleiben leer), Y **bewusst mehrdeutig** — jeder Graph nutzt seine *eigene*
+bleiben leer; einzige Ausnahme: für die Zyklus-Vorhersage darf der rechte Rand
+ein Stück in die Zukunft rutschen, s.u.), Y **bewusst mehrdeutig** — jeder Graph nutzt seine *eigene*
 Achse + Darstellung, alles übereinandergelegt zum Vergleich. Gezeichnet als
 **dünne Linien**, je Graph in einer eigenen **Farbe** (Unterscheidung über die
 Farbe, nicht über fette Symbole):
@@ -285,13 +286,24 @@ Browser-Panel `[~vorhersage: an/aus]` neben `[löschen]`; beides ruft
 Schätzung rendert aktuell in der TUI-`lifestyle`-Box; das Flag liegt aber pro
 Graph zentral, Fronten honorieren es, wo sie schätzen.
 
-**Zyklus/PMS-Zeile (nur beim Graphen »periode«):** aus den Werten dieses
+**Zyklus/PMS (nur beim Graphen »periode«):** aus den Werten dieses
 Graphen leitet `core/cycle.py` ab, wann die nächste Periode fällig ist (letzter
 Block-Start + Schnitt der echten Abstände) und färbt die Woche davor als
-PMS-Fenster. Im Graph-Werkzeug steht das als EINE leise Zeile in Altrosa —
-TUI: Liste `◆ dd.mm.` am periode-Graphen, Solo die volle Zeile über der
-Eingabe; Browser: `.gcyc` unter der Kurve. Quelle `GET /api/cycle`, im
-Kalender zusätzlich als Tages-Tönung. Volle Beschreibung: `memory/zyklus_pms.md`.
+PMS-Fenster. Quelle `GET /api/cycle`. Drei Orte:
+- **als Zeile** im Graph-Werkzeug, leise in Altrosa — TUI: Liste `◆ dd.mm.` am
+  periode-Graphen, Solo die volle Zeile über der Eingabe; Browser: `.gcyc`
+  unter der Kurve.
+- **in der Kurve (nur TUI)**: die Zeitachse der Überlagerung — kleine
+  `lifestyle`-Box wie große Ansicht, beides `draw_overlay` — tönt die PMS-Woche
+  (gepunktete Senkrechte je Tag) und markiert den erwarteten Start (`│` + `◆`,
+  Datum in Altrosa). Dafür **wächst die Achse bis zum erwarteten Start in die
+  Zukunft**, aber ganz oder gar nicht (`cycle_axis`: passt er nicht in ein
+  Drittel der Breite, bleibt sie bei heute). Gemalt wird zuerst → echte Werte
+  überzeichnen die Tönung. Im Browser gibt es das nicht: dessen Plot hat keine
+  Datumsachse (x = Nr. des Werts).
+- **im Kalender** als Tages-Tönung.
+
+Volle Beschreibung: `memory/zyklus_pms.md`.
 
 **Tages-Reminder (`remind`/`remind_at`, default aus):** ein Graph kann täglich
 ans Eintragen erinnern. `remind: true` + `remind_at: "HH:MM"` → ab dieser Uhrzeit

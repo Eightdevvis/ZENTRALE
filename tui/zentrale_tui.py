@@ -81,6 +81,7 @@ class Store:
         self.graphs = []       # /api/graphs (Definitionen, für lifestyle-Box)
         self.graph_vals = {}   # graph_id -> /api/data/<id> (Messwerte)
         self.reminders = []    # /api/graphs/reminders (heute fällig, noch nicht geloggt)
+        self.cycle = {}        # /api/cycle (Zyklus-Vorhersage, nur mit »periode«-Graph)
         self.projects = []     # /api/projects (geflaggte Listen, für PROJECTS-Box)
         self.backends = {}     # /api/ai/backends (EXTERNAL-Box: local/cloud erreichbar)
         self.connected = False
@@ -105,10 +106,20 @@ class Store:
                 rm = self._get("/api/graphs/reminders") or []
             except (urllib.error.URLError, OSError, ValueError):
                 rm = []
+            # Zyklus-Vorhersage nur holen, wenn es den »periode«-Graphen
+            # überhaupt gibt — sonst ein Request alle 5 s für ein leeres {}.
+            cy = {}
+            if any(isinstance(g, dict) and (g.get("name") or "").strip().lower() == "periode"
+                   for g in gs):
+                try:
+                    cy = self._get("/api/cycle") or {}
+                except (urllib.error.URLError, OSError, ValueError):
+                    cy = {}
             with self._lock:
                 self.graphs = gs
                 self.graph_vals = gv
                 self.reminders = rm if isinstance(rm, list) else []
+                self.cycle = cy if isinstance(cy, dict) else {}
         except (urllib.error.URLError, OSError, ValueError):
             pass
 
@@ -198,6 +209,12 @@ class Store:
         langsamer frischt als state/telemetry."""
         with self._lock:
             return list(self.graphs), dict(self.graph_vals)
+
+    def cycle_snapshot(self):
+        """Zyklus-Vorhersage (/api/cycle) für die Tönung in der lifestyle-Box.
+        {} = kein »periode«-Graph / noch keine Werte."""
+        with self._lock:
+            return dict(self.cycle)
 
     def reminders_snapshot(self):
         """Heute fällige Graph-Reminder (id/name/remind_at) für den TUI-Nag."""
@@ -351,6 +368,41 @@ def graph_series(gtype, rows):
         else:
             out.append(float(v))
     return out
+
+
+def cycle_axis(cyc, today, avail):
+    """Zyklus-Vorhersage → (zukunfts-tage, {iso-datum: "pms"|"next"}) für die
+    Zeitachse der Graph-Überlagerung. Rein rechnend, damit die Regel ohne
+    Terminal prüfbar ist (tests/test_tui_cycle_axis.py).
+
+    Die Achse endet sonst HEUTE — der erwartete Start und die Woche davor
+    lägen also außerhalb. Sie darf darum in die ZUKUNFT wachsen, aber GANZ
+    ODER GAR NICHT: passt der erwartete Start nicht in ein Drittel der
+    verfügbaren Breite, bleibt sie wie sie war (0). Ein halbes PMS-Fenster
+    ohne seinen Startpunkt wäre nur ein rätselhafter Streifen, und die
+    Historie ist die Hauptsache — gerade in der schmalen lifestyle-Box.
+
+    Markiert wird IMMER das echte Fenster aus core/cycle.py, auch wenn es
+    schon vorbei ist (überfällig): dann liegen die Tage ohnehin links von
+    heute und brauchen keinen Platz.
+    """
+    if not isinstance(cyc, dict):
+        return 0, {}
+    try:
+        c_next = date.fromisoformat(str(cyc.get("next_start")))
+        c_from = date.fromisoformat(str(cyc.get("pms_from")))
+        c_to = date.fromisoformat(str(cyc.get("pms_to")))
+    except (TypeError, ValueError):
+        return 0, {}
+    marks = {}
+    dd = c_from
+    while dd <= c_to and (dd - c_from).days < 60:      # Deckel gegen Müll-Daten
+        marks[dd.isoformat()] = "pms"
+        dd += timedelta(days=1)
+    marks[c_next.isoformat()] = "next"
+    ahead = (c_next - today).days
+    fut = ahead if 0 < ahead <= max(0, int(avail) // 3) else 0
+    return fut, marks
 
 
 def graph_last(g, rows):
@@ -2589,11 +2641,14 @@ def run_ui(stdscr, store):
     # Farb-Palette der Überlagerung, je Graph eine (durchgezykelt).
     LIFE_COL = ["graph", "acc", "warn", "net", "event", "audio", "hook", "num"]
 
-    def draw_overlay(otop, oleft, oh, ow, gs_cache, gv_cache, labeled=False, scroll=0):
+    def draw_overlay(otop, oleft, oh, ow, gs_cache, gv_cache, labeled=False, scroll=0,
+                     cyc=None):
         """ÜBERLAGERUNG aller Graphen in EINEM Gitter (X=Datum/Zeitstrahl, Y je
         Typ eigene Achse). Zeichnet NUR Inhalt in das Rechteck (otop,oleft,oh,ow)
         — den Rahmen setzt der Aufrufer. Zwei Modi, geteilt von rechter
         lifestyle-Box und großer Mitte-Ansicht im Graph-Werkzeug:
+        cyc = Zyklus-Vorhersage (/api/cycle) oder None — tönt die PMS-Woche und
+        den erwarteten Periodenstart in die Zeitachse (siehe unten).
           labeled=False (kompakt): 1 gemeinsame 24h-Achse links, scale als
               Kreis-Zeilen im Plot, mehrzeilige Legende unten. (unverändert)
           labeled=True (groß): links GESTAPELTE beschriftete y-achsen — je
@@ -2693,19 +2748,30 @@ def run_ui(stdscr, store):
         day_x_end = oleft + ow - 2
         avail = max(1, day_x_end - day_x0 + 1)
         maxscroll = 0                          # wie weit man in die Vergangenheit kann
+
+        # ── Zyklus-Fenster (nur »periode«, core/cycle.py → /api/cycle) ─────
+        # Wie weit die Achse dafür in die Zukunft darf, rechnet cycle_axis
+        # (oben, testbar). Ist der »periode«-Graph gerade abgewählt, wird gar
+        # nichts markiert: die Tönung gehört sichtbar zu SEINER Kurve.
+        cyc = cyc if isinstance(cyc, dict) else {}
+        if cyc.get("graph_id") not in {g.get("id") for g in gs_cache if isinstance(g, dict)}:
+            cyc = {}
+        fut, cyc_mark = cycle_axis(cyc, today, avail)
+        right_day = today + timedelta(days=fut)
+
         if labeled:
             all_dates = [dd for s in series for dd in s["dv"].keys()]
             span = avail
             if all_dates:
                 try:
                     ey, em, ed = (int(x) for x in min(all_dates).split("-"))
-                    span = (today - date(ey, em, ed)).days + 1
+                    span = (right_day - date(ey, em, ed)).days + 1
                 except Exception:
                     span = avail
             if span <= avail:
                 # passt komplett in die breite → wie bisher gestreckt, kein scrollen
                 ndays = max(1, min(span, 366))
-                window = [(today - timedelta(days=k)).isoformat() for k in range(ndays - 1, -1, -1)]
+                window = [(right_day - timedelta(days=k)).isoformat() for k in range(ndays - 1, -1, -1)]
                 if ndays == 1:
                     day_col = {window[0]: day_x_end}
                 else:
@@ -2716,11 +2782,11 @@ def run_ui(stdscr, store):
                 # rechte kante = heute minus scroll; ←/→ pant durch die vergangenheit
                 maxscroll = span - avail
                 scroll = max(0, min(int(scroll), maxscroll))
-                right = today - timedelta(days=scroll)
+                right = right_day - timedelta(days=scroll)
                 window = [(right - timedelta(days=k)).isoformat() for k in range(avail - 1, -1, -1)]
                 day_col = {d: day_x0 + i for i, d in enumerate(window)}
         else:
-            window = [(today - timedelta(days=k)).isoformat() for k in range(avail - 1, -1, -1)]
+            window = [(right_day - timedelta(days=k)).isoformat() for k in range(avail - 1, -1, -1)]
             day_col = {d: day_x0 + i for i, d in enumerate(window)}
         day_center = day_col
         cols = window
@@ -2735,7 +2801,7 @@ def run_ui(stdscr, store):
         # Datums-Marken (sparse) EINMAL bestimmen: dieselbe Spalte trägt UNTEN
         # das Label UND (groß) eine feine senkrechte Führungslinie durch den
         # Plot nach oben → man liest Datum↔Spalte exakt ab.
-        date_ticks = []                        # (tick-spalte, label-start, "dd.mm.")
+        date_ticks = []                        # (tick-spalte, label-start, "dd.mm.", zyklus?)
         if labeled:
             prev_end = day_x0 - 2
             for d in window:
@@ -2747,9 +2813,16 @@ def run_ui(stdscr, store):
                     continue
                 lbl = "%s.%s." % (parts[2], parts[1])
                 lx = min(cx, day_x_end + 1 - len(lbl))   # rechts nicht überlaufen
+                # Der erwartete Periodenstart kriegt IMMER sein Datum unter die
+                # Marke — sonst steht da eine Linie ohne Tag. Er hat Vorrang:
+                # ein zu dicht danebenstehendes Nachbar-Label weicht.
+                force = (cyc_mark.get(d) == "next")
                 if lx - prev_end < len(lbl) + 2:         # zu dicht am letzten label
-                    continue
-                date_ticks.append((cx, lx, lbl))
+                    if not force:
+                        continue
+                    if date_ticks:
+                        date_ticks.pop()
+                date_ticks.append((cx, lx, lbl, force))
                 prev_end = lx + len(lbl)
 
         # Linke y-achse: 24h-uhr — ODER 1–5-skala, wenn NUR scale-graphen gewählt
@@ -2770,11 +2843,28 @@ def run_ui(stdscr, store):
                     safe_addstr(gr, cx, "·", C["faint"])
             # senkrechte Führungslinien an den Datums-Marken (gestrichelt, faint,
             # ZUERST → Banden/Linien/Marker überzeichnen sie).
-            for cx, _lx, _lbl in date_ticks:
+            for cx, _lx, _lbl, _cy in date_ticks:
                 for r in range(plot_h):
                     safe_addstr(base + r, cx, "┊", C["faint"])
         for gr, lbl in axrows:
             safe_addstr(gr, ix_clock, lbl.rjust(2), C["faint"])
+
+        # ── Zyklus-Tönung, ZUERST gemalt → Banden/Kurven/Marker überzeichnen
+        # sie (bewusst leise, sie soll nie vor den echten Werten stehen):
+        #   PMS-Woche      gepunktete senkrechte in Altrosa über die ganze
+        #                  Tagesbreite → liest sich als getönter Block
+        #   erwarteter Tag durchgezogene Linie + ◆ obendrauf
+        # Alles nur, wenn der »periode«-Graph gerade sichtbar ist (s.o.).
+        for d, mk in cyc_mark.items():
+            span = day_span.get(d)
+            if span is None:
+                continue
+            ch = "│" if mk == "next" else "┊"
+            for cx in range(span[0], span[1] + 1):
+                for r in range(plot_h):
+                    safe_addstr(base + r, cx, ch, C["cyc"])
+            if mk == "next":
+                safe_addstr(base, day_col[d], "◆", C["cyc"])
 
         NPRED = 7
 
@@ -2798,8 +2888,12 @@ def run_ui(stdscr, store):
 
             mv, me = mean("value"), mean("end")
             out = {}
+            today_iso = today.isoformat()
             for d in window:
-                if d in dv or d < earliest or mv is None:
+                # Nur LÜCKEN in der Vergangenheit schätzen. Seit die Achse für
+                # den Zyklus in die Zukunft reicht, lägen sonst plötzlich
+                # Schätzwerte für Tage im Fenster, die noch gar nicht waren.
+                if d in dv or d < earliest or d > today_iso or mv is None:
                     continue
                 e = {"date": d, "value": mv, "_pred": True}
                 if me is not None:
@@ -2994,8 +3088,8 @@ def run_ui(stdscr, store):
             # verteilt (dd.mm.), damit man grob sieht wann was war. ‹/› zeigen,
             # dass links älteres bzw. rechts neueres außerhalb des fensters liegt.
             drow = otop + oh - 1
-            for _cx, lx, lbl in date_ticks:       # exakt unter der Führungslinie
-                safe_addstr(drow, lx, lbl, C["faint"])
+            for _cx, lx, lbl, cy in date_ticks:   # exakt unter der Führungslinie
+                safe_addstr(drow, lx, lbl, C["cyc"] if cy else C["faint"])
             if scroll < maxscroll:                    # älteres links außerhalb
                 safe_addstr(drow, day_x0 - 1, "‹", C["dim"])
             if scroll > 0 and maxscroll > 0:          # neueres rechts außerhalb
@@ -3070,7 +3164,8 @@ def run_ui(stdscr, store):
                     # Solo editiert einen einzelnen Tag (←/→ = dayoff) → kein
                     # Fenster-Pan; Übersicht dagegen pant per G["gscroll"].
                     ms = draw_overlay(by + 1, bx, ov_h, bw, subset, gv_cache,
-                                      labeled=True, scroll=(0 if solo else G.get("gscroll", 0)))
+                                      labeled=True, scroll=(0 if solo else G.get("gscroll", 0)),
+                                      cyc=G.get("cyc"))
                     if not solo:                  # Scroll auf echte Historie clampen
                         G["gscroll"] = max(0, min(G.get("gscroll", 0), ms or 0))
                     ly = by + 1 + ov_h             # Liste beginnt unter der Ansicht
@@ -7310,6 +7405,7 @@ def run_ui(stdscr, store):
 
         state, metrics, connected = store.snapshot()
         gs_cache, gv_cache = store.graphs_snapshot()
+        cyc_cache = store.cycle_snapshot()      # Zyklus-Tönung der lifestyle-Box
         # Nur der fokussierte Teilbaum ([node] oder []); der Store zieht bereits
         # /api/projects/focused. Kein Fallback auf alle Projekte — die volle
         # Übersicht gibt es allein in der Projektansicht (Taste 'f').
@@ -7526,7 +7622,8 @@ def run_ui(stdscr, store):
         draw_box(top, rx, life_h, rightw, "lifestyle")
         # Inhalt der lifestyle-Box: kompakte Überlagerung aller Graphen
         # (geteilte Routine, auch groß im Graph-Werkzeug — siehe draw_overlay).
-        draw_overlay(top, rx, life_h, rightw, gs_cache, gv_cache, labeled=False)
+        draw_overlay(top, rx, life_h, rightw, gs_cache, gv_cache, labeled=False,
+                     cyc=cyc_cache)
 
         # ── PROJECTS (zwischen lifestyle und outbound) ────────────────────
         # VERSCHACHTELT (Quelle: store.projects_snapshot ← /api/projects, Baum).

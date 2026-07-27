@@ -62,6 +62,41 @@ damit sie in die schmale TUI-Mittelbox passen.
 - *TUI* (Taste `g`): in der Liste hängt am periode-Graphen `◆ dd.mm.`; im Solo
   (Enter) steht die volle Zeile direkt über der Eingabe, Farbrolle `cyc`.
 
+**In der Kurve selbst (TUI)** — die Zeitachse der Überlagerung (`draw_overlay`,
+dieselbe Routine für die kleine lifestyle-Box UND die große Ansicht im
+Graph-Werkzeug) trägt das Fenster mit:
+
+- **PMS-Woche**: je Tag eine gepunktete Senkrechte `┊` in Altrosa über die
+  volle Plot-Höhe → liest sich als getönter Block.
+- **erwarteter Start**: durchgezogene `│` + `◆` obendrauf; sein Datum steht
+  (große Ansicht) in Altrosa in der Datumszeile und **verdrängt** dort ein zu
+  dicht danebenstehendes Nachbar-Label.
+- Gemalt wird **zuerst**, also überzeichnen Banden/Kurven/Marker die Tönung.
+  Sie steht nie vor den echten Werten.
+- Nur, wenn der »periode«-Graph in der Überlagerung gerade **sichtbar** ist
+  (im Werkzeug abwählbar) — die Tönung gehört sichtbar zu seiner Kurve.
+
+**Die Achse wächst dafür in die Zukunft** (`cycle_axis`, rein rechnend und
+ohne Terminal testbar → `tests/test_tui_cycle_axis.py`), sonst läge alles
+rechts außerhalb: sie endet ja normal HEUTE. Regel: bis zum erwarteten Start,
+aber **ganz oder gar nicht** — passt er nicht in ein Drittel der verfügbaren
+Breite, bleibt die Achse wie sie war. Ein halbes PMS-Fenster ohne seinen
+Startpunkt wäre nur ein rätselhafter Streifen, und die Historie ist die
+Hauptsache. Praktisch heißt das: in der schmalen lifestyle-Box taucht die
+Tönung erst auf, wenn es tatsächlich soweit ist; in der großen Ansicht steht
+sie fast immer.
+
+> **Nebenwirkung, bewusst abgefangen:** Graphen mit `predict` füllen Lücken im
+> Fenster mit Schätzwerten. Seit die Achse in die Zukunft reicht, ist das auf
+> Tage **bis heute** begrenzt — sonst stünden plötzlich Schätzungen für Tage
+> im Plot, die noch gar nicht waren.
+
+> **Browser:** dort bleibt es bei Textzeile + Kalender. Die Kurve im
+> Graph-Werkzeug (`plotSvg`) und die Sparkline der lifestyle-Box haben **keine
+> Zeitachse** — x ist die laufende Nummer des Werts, nicht das Datum. »Die
+> Woche vor dem Start« lässt sich da nicht ehrlich platzieren; das ginge erst,
+> wenn der Plot auf eine echte Datumsachse umgebaut wird.
+
 **Kalender** — Tages-Tönung aus `/api/calendar` → `cycle`:
 - *Browser*: `.cday.cyc-pms` / `.cday.cyc-next` (Woche) und `.ccell.cyc-*`
   (Monat) — flächige, sehr leise Tönung (`--cyc-bg`), der vorhergesagte Tag
@@ -82,7 +117,9 @@ Eigene Rolle, bewusst abgesetzt von `--acc` (grün), `--span` (orange) und
 ## Tests
 
 `tests/test_cycle.py` (Blockbildung, Mittelung, Fallback, PMS-Fenster, Phasen,
-Ausreißer, Tages-Marker) und zwei Endpoint-Tests in `tests/test_backend_api.py`.
+Ausreißer, Tages-Marker), `tests/test_tui_cycle_axis.py` (wie weit die Achse
+in die Zukunft darf, welche Tage markiert werden) und zwei Endpoint-Tests in
+`tests/test_backend_api.py`.
 
 > **Falle beim Erweitern der Endpoint-Tests:** `/api/log` schreibt nach
 > `ui.app._DATA_DIR`, der Rechner liest über `graphs._DATA_DIR`. Wer nur eins
