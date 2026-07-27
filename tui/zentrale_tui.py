@@ -1081,6 +1081,10 @@ def run_ui(stdscr, store):
             "ink":   (curses.COLOR_WHITE,   231, 0),
             # Schlaf-Bande: gedämpftes Dunkelmagenta als ZELLEN-HINTERGRUND
             "band_fg": 245, "band_bg": 53,
+            # Zyklus-Fenster im Graphen: dunkles Rosé als ZELLEN-HINTERGRUND —
+            # rötlich gegen das Magenta der Schlaf-Bande, damit die beiden
+            # Flächen nicht verwechselbar sind, wo sie sich kreuzen.
+            "cyc_bg": 52,
             # Klavier: Fläche der schwarzen Taste. Auf schwarzem Grund NICHT 16
             # (dann verschwände die Taste), sondern ein Hauch heller.
             "key_bg": 236,
@@ -1108,6 +1112,10 @@ def run_ui(stdscr, store):
             "ink":   (curses.COLOR_BLACK,   16,  0),
             # Schlaf-Bande: hell-magenta angehauchtes Grau als ZELLEN-HINTERGRUND
             "band_fg": 240, "band_bg": 225,
+            # Zyklus-Fenster im Graphen: blasses Rosé als ZELLEN-HINTERGRUND —
+            # warm/rötlich, die Schlaf-Bande daneben violett: auch dort
+            # unterscheidbar, wo beide Flächen aneinanderstoßen.
+            "cyc_bg": 224,
             # Klavier: schwarze Taste auf weißem Grund darf echtes Schwarz sein.
             "key_bg": 16,
             # Ombre der Sidebar-Liste: nach unten in den (weißen) Hintergrund
@@ -1130,6 +1138,9 @@ def run_ui(stdscr, store):
             # Klaviertasten ohne Farbe: invertiert ist alles, was bleibt.
             C["key_black"] = curses.A_REVERSE
             C["key_press"] = curses.A_REVERSE | curses.A_BOLD
+            # Zyklus-Fenster ohne Farbe: keine Fläche, nur die Rückfall-Linie.
+            C["cycbg"] = curses.A_DIM
+            C["cyc_is_bg"] = False
             return
         c256 = curses.COLORS >= 256
         th = THEMES[tname]
@@ -1174,6 +1185,36 @@ def run_ui(stdscr, store):
         else:
             C["band"] = C["faint"]
             C["band_is_bg"] = False
+        # Zyklus-Fenster (PMS-Woche + erwarteter Start) im Graphen: nach genau
+        # demselben Muster wie die Schlaf-Bande eine ZELLEN-HINTERGRUNDfarbe,
+        # damit es HINTER den Werten liegt statt als Linie davor. Dazu wieder
+        # "Auf-Fläche"-Varianten jeder Rolle, sonst stanzt jeder Punkt, der
+        # durchs Fenster läuft, ein Loch in die Tönung.
+        # Die Schlaf-Bande hat Vorrang: sie wird SPÄTER gemalt und überschreibt
+        # die Zyklus-Fläche (siehe draw_overlay).
+        if c256 and curses.COLOR_PAIRS >= pp + len(ROLES) + 10:
+            curses.init_pair(pp, th["cyc"][1], th["cyc_bg"])
+            C["cycbg"] = curses.color_pair(pp)
+            C["cyc_is_bg"] = True
+            pp += 1
+            for r in ROLES:
+                if r in ("band", "ink"):
+                    continue
+                _c8, c2, extra = th[r]
+                curses.init_pair(pp, c2, th["cyc_bg"])
+                C[r + "@cyc"] = curses.color_pair(pp) | extra
+                pp += 1
+            # Halbblock-Kante der Schlaf-Bande, wenn sie IN der Zyklus-Fläche
+            # liegt: Bandfarbe als fg auf Zyklus-bg — sonst risse die Kante
+            # ein Loch (Theme-bg) in die Tönung.
+            curses.init_pair(pp, th["band_bg"], th["cyc_bg"])
+            C["band_edge@cyc"] = curses.color_pair(pp)
+            pp += 1
+        else:
+            # 8 Farben (oder zu wenig Farbpaare): keine Fläche möglich →
+            # gepunktete Senkrechte im Vordergrund als Rückfallebene.
+            C["cycbg"] = C["cyc"]
+            C["cyc_is_bg"] = False
         # Ombre-Rampe der Sidebar-Liste: eigene Grau-Paare (nur 256-Farben),
         # sonst zweistufiger A_DIM-Fallback.
         if c256:
@@ -2851,6 +2892,36 @@ def run_ui(stdscr, store):
                 date_ticks.append((cx, lx, lbl, force))
                 prev_end = lx + len(lbl)
 
+        # ── Zyklus-Fenster als FLÄCHE, ganz zuerst ─────────────────────────
+        # PMS-Woche + erwarteter Start bekommen einen Zellen-HINTERGRUND (wie
+        # die Schlaf-Bande), keine Glyphen: curses kennt keine Ebenen, und
+        # „hinter den Werten" geht nur so. Alles, was danach in diese Zellen
+        # gemalt wird — Hilfsraster, Kurven, Marker, Kreise —, nimmt die
+        # „@cyc"-Variante seiner Farbe und behält damit die Tönung als
+        # Untergrund, statt ein Loch hineinzustanzen.
+        # Die Schlaf-Bande wird SPÄTER gemalt und verdrängt die Fläche: echte
+        # Messwerte haben Vorrang vor einer Schätzung.
+        cyc_cells = set()
+        cyc_bg = bool(C.get("cyc_is_bg"))
+        for d, mk in cyc_mark.items():
+            span = day_span.get(d)
+            if span is None:
+                continue
+            for cx in range(span[0], span[1] + 1):
+                for r in range(plot_h):
+                    # 8-Farben-Rückfall: keine Fläche möglich → gepunktete
+                    # Senkrechte, erwarteter Tag durchgezogen.
+                    safe_addstr(base + r, cx, " " if cyc_bg else ("│" if mk == "next" else "┊"),
+                                C["cycbg"])
+                    if cyc_bg:
+                        cyc_cells.add((base + r, cx))
+
+        def catt(r, c, col):
+            """Farbe für eine Zelle, die auf der Zyklus-Fläche liegen kann."""
+            if (r, c) in cyc_cells and (col + "@cyc") in C:
+                return C[col + "@cyc"]
+            return C[col]
+
         # Linke y-achse: 24h-uhr — ODER 1–5-skala, wenn NUR scale-graphen gewählt
         # sind (dann sind stunden sinnlos). Senkrechte Linie + Marken-Labels +
         # (groß) feines waagerechtes Hilfsraster: gepunktet, jede 2. Spalte, faint
@@ -2866,31 +2937,15 @@ def run_ui(stdscr, store):
         if labeled:
             for gr in {r for r, _l in axrows}:
                 for cx in range(day_x0, day_x_end + 1, 2):
-                    safe_addstr(gr, cx, "·", C["faint"])
+                    safe_addstr(gr, cx, "·", catt(gr, cx, "faint"))
             # senkrechte Führungslinien an den Datums-Marken (gestrichelt, faint,
             # ZUERST → Banden/Linien/Marker überzeichnen sie).
             for cx, _lx, _lbl, _cy in date_ticks:
                 for r in range(plot_h):
-                    safe_addstr(base + r, cx, "┊", C["faint"])
+                    safe_addstr(base + r, cx, "┊", catt(base + r, cx, "faint"))
         for gr, lbl in axrows:
             safe_addstr(gr, ix_clock, lbl.rjust(2), C["faint"])
 
-        # ── Zyklus-Tönung, ZUERST gemalt → Banden/Kurven/Marker überzeichnen
-        # sie (bewusst leise, sie soll nie vor den echten Werten stehen):
-        #   PMS-Woche      gepunktete senkrechte in Altrosa über die ganze
-        #                  Tagesbreite → liest sich als getönter Block
-        #   erwarteter Tag durchgezogene Linie + ◆ obendrauf
-        # Alles nur, wenn der »periode«-Graph gerade sichtbar ist (s.o.).
-        for d, mk in cyc_mark.items():
-            span = day_span.get(d)
-            if span is None:
-                continue
-            ch = "│" if mk == "next" else "┊"
-            for cx in range(span[0], span[1] + 1):
-                for r in range(plot_h):
-                    safe_addstr(base + r, cx, ch, C["cyc"])
-            if mk == "next":
-                safe_addstr(base, day_col[d], "◆", C["cyc"])
 
         NPRED = 7
 
@@ -2936,6 +2991,13 @@ def run_ui(stdscr, store):
             m = max(0, min(1440, m))
             return base + (plot_h - 1) - (m / 1440.0 * (plot_h - 1))
 
+        def edge_attr(r, c):
+            """Kantenfarbe des Bandes — auf der Zyklus-Fläche mit deren
+            Hintergrund, sonst mit dem Theme-Hintergrund."""
+            if (r, c) in cyc_cells and "band_edge@cyc" in C:
+                return C["band_edge@cyc"]
+            return C["band_edge"]
+
         def draw_band_seg(cx, a, b, pred):
             ftop, fbot = frow(b), frow(a)      # ftop <= fbot (screen)
             rt, rb = int(round(ftop)), int(round(fbot))
@@ -2947,13 +3009,13 @@ def run_ui(stdscr, store):
                     if cover >= 0.75:
                         safe_addstr(r, cx, g, C["band"]); band_cells.add((r, cx))
                     elif cover >= 0.25:
-                        safe_addstr(r, cx, "▄", C["band_edge"])
+                        safe_addstr(r, cx, "▄", edge_attr(r, cx))
                 elif fine and r == rb:         # Unterkante: oberer Zellteil → ▀
                     cover = fbot - (r - 0.5)
                     if cover >= 0.75:
                         safe_addstr(r, cx, g, C["band"]); band_cells.add((r, cx))
                     elif cover >= 0.25:
-                        safe_addstr(r, cx, "▀", C["band_edge"])
+                        safe_addstr(r, cx, "▀", edge_attr(r, cx))
                 else:
                     safe_addstr(r, cx, g, C["band"]); band_cells.add((r, cx))
 
@@ -2972,9 +3034,13 @@ def run_ui(stdscr, store):
                         draw_band_seg(cx, a, b, bool(e.get("_pred")))
 
         def latt(r, c, col):                   # in Banden-Zellen: @band-Variante
+            # Reihenfolge = Vorrang: die Schlaf-Bande liegt ÜBER der
+            # Zyklus-Fläche (sie wurde später gemalt), also gewinnt sie hier
+            # auch. Sonst stanzte ein Wert auf einer Bande, die zufällig im
+            # PMS-Fenster liegt, die Bandfarbe weg.
             if (r, c) in band_cells and (col + "@band") in C:
                 return C[col + "@band"]
-            return C[col]
+            return catt(r, c, col)
 
         # 2. scale: Kreise ◦○◉●⬤. Drei Fälle:
         #   kompakt        → je graph EINE Kreis-Zeile (gestapelt unten im Plot)
@@ -3067,6 +3133,15 @@ def run_ui(stdscr, store):
                     return "%.1f" % x
                 safe_addstr(base, axx, _axlbl(hi)[:AX_W - 1].rjust(AX_W - 1), C[col])
                 safe_addstr(base + plot_h - 1, axx, _axlbl(lo)[:AX_W - 1].rjust(AX_W - 1), C[col])
+
+        # ◆ über dem erwarteten Periodenstart — das EINZIGE Zeichen, das die
+        # Vorhersage selbst setzt (die Fläche allein sagt nicht, WELCHER Tag
+        # der Start ist). Ganz zum Schluss und in der obersten Plot-Zeile: dort
+        # ist praktisch nie ein Messwert, und die eine Zelle darf sichtbar
+        # bleiben. Der Untergrund (Bande/Fläche) wird über latt mitgenommen.
+        for d, mk in cyc_mark.items():
+            if mk == "next" and d in day_col:
+                safe_addstr(base, day_col[d], "◆", latt(base, day_col[d], "cyc"))
 
         if labeled:
             # Kopf-Legende (name+symbol/marker je Graph, farbig) in EINER Zeile.

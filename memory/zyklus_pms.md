@@ -66,13 +66,23 @@ damit sie in die schmale TUI-Mittelbox passen.
 dieselbe Routine für die kleine lifestyle-Box UND die große Ansicht im
 Graph-Werkzeug) trägt das Fenster mit:
 
-- **PMS-Woche**: je Tag eine gepunktete Senkrechte `┊` in Altrosa über die
-  volle Plot-Höhe → liest sich als getönter Block.
-- **erwarteter Start**: durchgezogene `│` + `◆` obendrauf; sein Datum steht
-  (große Ansicht) in Altrosa in der Datumszeile und **verdrängt** dort ein zu
-  dicht danebenstehendes Nachbar-Label.
-- Gemalt wird **zuerst**, also überzeichnen Banden/Kurven/Marker die Tönung.
-  Sie steht nie vor den echten Werten.
+- **PMS-Woche + erwarteter Start** liegen als **Zellen-Hintergrund** unter dem
+  Plot (`cyc_bg`: 52 night / 224 day), nicht als Glyphen. Genau wie bei der
+  Schlaf-Bande: curses kennt keine Ebenen, »hinter den Werten« geht nur über
+  die Hintergrundfarbe. Alles, was danach in diese Zellen gemalt wird
+  (Hilfsraster, Kurven, Kreise, Marker), nimmt die **`@cyc`-Variante** seiner
+  Farbe und behält die Tönung als Untergrund, statt ein Loch hineinzustanzen.
+- **Vorrang, in dieser Reihenfolge:** Zyklus-Fläche ganz zuerst → **Schlaf-Bande
+  drüber** (sie wird später gemalt und gewinnt auch in `latt`; gemessener Schlaf
+  schlägt eine Schätzung, auch an der Halbblock-Kante → `band_edge@cyc`) →
+  Werte/Kurven obenauf.
+- **`◆`** über dem erwarteten Start ist das einzige Zeichen, das die Vorhersage
+  selbst setzt (die Fläche allein sagt nicht, WELCHER Tag der Start ist). Ganz
+  zum Schluss in die oberste Plot-Zeile, wo praktisch nie ein Messwert liegt.
+  Sein Datum steht (große Ansicht) in Altrosa in der Datumszeile und
+  **verdrängt** dort ein zu dicht danebenstehendes Nachbar-Label.
+- Ohne 256 Farben (oder zu wenige Farbpaare) gibt es keine Fläche →
+  Rückfallebene: gepunktete Senkrechte `┊`, erwarteter Tag `│`.
 - Nur, wenn der »periode«-Graph in der Überlagerung gerade **sichtbar** ist
   (im Werkzeug abwählbar) — die Tönung gehört sichtbar zu seiner Kurve.
 
@@ -112,7 +122,10 @@ sie fast immer.
 Eigene Rolle, bewusst abgesetzt von `--acc` (grün), `--span` (orange) und
 `--warn`: gedämpftes **Altrosa**, nie fett.
 - Browser: `--cyc` / `--cyc-bg` je Theme (`#9c5f7a` hell, `#c98fae` dunkel).
-- TUI: Farbrolle `cyc` (256: 175 night / 132 day, 8-Farben-Fallback Magenta).
+- TUI: Farbrolle `cyc` (256: 175 night / 132 day, 8-Farben-Fallback Magenta)
+  für Text/Marker; die **Fläche** im Graphen ist `cyc_bg` (52 night / 224 day)
+  — rötlich gegen das Violett der Schlaf-Bande (53 / 225), damit die beiden
+  Flächen dort unterscheidbar bleiben, wo sie aneinanderstoßen.
 
 ## Tests
 

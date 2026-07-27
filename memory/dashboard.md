@@ -294,12 +294,13 @@ PMS-Fenster. Quelle `GET /api/cycle`. Drei Orte:
   periode-Graphen, Solo die volle Zeile über der Eingabe; Browser: `.gcyc`
   unter der Kurve.
 - **in der Kurve (nur TUI)**: die Zeitachse der Überlagerung — kleine
-  `lifestyle`-Box wie große Ansicht, beides `draw_overlay` — tönt die PMS-Woche
-  (gepunktete Senkrechte je Tag) und markiert den erwarteten Start (`│` + `◆`,
-  Datum in Altrosa). Dafür **wächst die Achse bis zum erwarteten Start in die
-  Zukunft**, aber ganz oder gar nicht (`cycle_axis`: passt er nicht in ein
-  Drittel der Breite, bleibt sie bei heute). Gemalt wird zuerst → echte Werte
-  überzeichnen die Tönung. Im Browser gibt es das nicht: dessen Plot hat keine
+  `lifestyle`-Box wie große Ansicht, beides `draw_overlay` — tönt PMS-Woche und
+  erwarteten Start als **Zellen-Hintergrund** (wie die Schlaf-Bande, nur so
+  liegt es hinter den Werten), `◆` + Datum in Altrosa markieren den Starttag.
+  **Vorrang: Schlaf-Bande vor Zyklus-Fläche**, Werte über beidem. Dafür
+  **wächst die Achse bis zum erwarteten Start in die Zukunft**, aber ganz oder
+  gar nicht (`cycle_axis`: passt er nicht in ein Drittel der Breite, bleibt sie
+  bei heute). Im Browser gibt es das nicht: dessen Plot hat keine
   Datumsachse (x = Nr. des Werts).
 - **im Kalender** als Tages-Tönung.
 
