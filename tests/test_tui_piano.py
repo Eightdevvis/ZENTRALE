@@ -206,44 +206,79 @@ def test_notensystem_passt_in_die_vorgegebene_flaeche():
 
 
 # ── 2c. Gezeichnete Klaviatur ───────────────────────────────────────────────
-def test_klaviatur_zeichnet_alle_zehn_weissen_tasten():
-    rows, zones = piano_keyboard(40)
-    assert len(rows) == 5
-    beschriftung = rows[3]
+def test_klaviatur_beschriftet_jede_taste_mit_ihrem_buchstaben():
+    rows, _zones = piano_keyboard(101, 13)
+    text = "\n".join(rows)
     for k, _s in PIANO_WHITE:
-        assert k in beschriftung
+        assert text.count(k) == 1
     for k, _s, _w in PIANO_BLACK:
-        assert k in rows[0]                        # schwarze Reihe ganz oben
+        assert text.count(k) == 1
+    # Weiße Buchstaben stehen vorne (unterste Innenzeile), schwarze weiter oben.
+    weiss_zeile = max(i for i, r in enumerate(rows) if "y" in r)
+    schwarz_zeile = max(i for i, r in enumerate(rows) if "s" in r)
+    assert schwarz_zeile < weiss_zeile == len(rows) - 2
+
+
+def test_klaviatur_zeilen_sind_alle_gleich_lang():
+    for w, h in ((101, 13), (61, 9), (41, 6), (31, 5)):
+        rows, _z = piano_keyboard(w, h)
+        assert len(rows) == h
+        assert len(set(len(r) for r in rows)) == 1
 
 
 def test_klaviatur_zonen_decken_jede_taste_ab():
-    _rows, zones = piano_keyboard(40)
+    _rows, zones = piano_keyboard(101, 13)
     weiss = {s for _r, _x, _w, s, black in zones if not black}
     schwarz = {s for _r, _x, _w, s, black in zones if black}
     assert weiss == {s for _k, s in PIANO_WHITE}
     assert schwarz == {s for _k, s, _w in PIANO_BLACK}
 
 
-def test_schwarze_zone_liegt_zwischen_ihren_weissen():
-    rows, zones = piano_keyboard(40)
-    weiss = {s: x for _r, x, _w, s, black in zones if not black}
-    for _r, xb, _w, s, black in zones:
-        if black:
-            assert weiss[s - 1] < xb <= weiss[s + 1]
+def test_schwarze_taste_sitzt_oben_auf_der_kante_zwischen_ihren_weissen():
+    rows, zones = piano_keyboard(101, 13)
+    # linke Kante jeder Taste über alle ihre Zonen
+    links = {}
+    rechts = {}
+    for _r, x, w, s, _b in zones:
+        links[s] = min(links.get(s, x), x)
+        rechts[s] = max(rechts.get(s, x + w), x + w)
+    for _k, s, _w in PIANO_BLACK:
+        # zwischen den beiden Nachbarn — und in BEIDE hineinragend, sonst säße
+        # sie nicht auf der Kante, sondern daneben
+        assert links[s - 1] < links[s] < links[s + 1]
+        assert links[s] < rechts[s - 1] and rechts[s] > links[s + 1]
+    for _k, s, _w in PIANO_BLACK:                  # reicht bis an die Hinterkante
+        assert 0 in [r for r, _x, _w, ss, b in zones if b and ss == s]
 
 
-def test_klaviatur_passt_immer_in_die_breite():
-    for w in range(0, 120):
-        rows, zones = piano_keyboard(w)
-        assert all(len(r) <= w for r in rows)
-        for _r, x, kw, _s, _b in zones:
-            assert x + kw <= w
+def test_keine_spalte_gehoert_zwei_tasten_gleichzeitig():
+    for w, h in ((101, 13), (61, 9), (41, 6), (31, 5)):
+        belegt = {}
+        for r, x, kw, s, _b in piano_keyboard(w, h)[1]:
+            for c in range(x, x + kw):
+                assert belegt.setdefault((r, c), s) == s
+        assert belegt                              # und es ist überhaupt was da
 
 
-def test_klaviatur_schrumpft_und_gibt_bei_zu_wenig_platz_auf():
-    assert piano_keyboard(41)[0] and len(piano_keyboard(41)[0][1]) == 41   # 3 breit
-    assert piano_keyboard(31)[0] and len(piano_keyboard(31)[0][1]) == 31   # 2 breit
-    assert piano_keyboard(20) == ([], [])                                   # zu eng
+def test_klaviatur_passt_immer_in_den_platz():
+    for w in range(0, 140):
+        for h in (0, 4, 5, 9, 13, 40):
+            rows, zones = piano_keyboard(w, h)
+            assert all(len(r) <= w for r in rows)
+            assert len(rows) <= max(h, 0)
+            for r, x, kw, _s, _b in zones:
+                assert x + kw <= w and 0 <= r < len(rows)
+
+
+def test_klaviatur_waechst_mit_dem_platz_und_gibt_bei_zu_wenig_auf():
+    breit = len(piano_keyboard(101, 9)[0][0])
+    schmal = len(piano_keyboard(61, 9)[0][0])
+    assert breit > schmal > 31
+    assert len(piano_keyboard(101, 13)[0]) > len(piano_keyboard(101, 6)[0])
+    assert piano_keyboard(101, 40)[0]                      # Höhe gedeckelt, nicht endlos
+    assert len(piano_keyboard(101, 40)[0]) <= 20
+    assert piano_keyboard(20, 9) == ([], [])               # zu eng
+    assert piano_keyboard(101, 4) == ([], [])              # zu flach
 
 
 # ── 3. Darf NIE werfen ──────────────────────────────────────────────────────
@@ -262,7 +297,7 @@ def test_helfer_werfen_nie():
         w = rnd.choice([0, 1, 5, 12, 40, 200])
         piano_staff(seq, h, w)
         piano_columns(seq, max_cols=rnd.choice([0, 1, 8, 64]))
-        piano_keyboard(w)
+        piano_keyboard(w, rnd.choice([0, 1, 5, 9, 13, 40, None, "x"]))
 
 
 def test_tonhoehen_helfer_werfen_bei_ganzzahlen_nie():

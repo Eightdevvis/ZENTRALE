@@ -61,6 +61,10 @@ Drei Unterschiede, die aus dem Terminal kommen:
 | `r`          | gewählte Melodie umbenennen                                     |
 | `D` (groß)   | gewählte Melodie löschen — nacktes `d` ist die Taste D♯          |
 
+- **Die Tasten sind beschriftet:** die gezeichnete Klaviatur trägt jeden
+  Buchstaben auf seiner Taste (weiße vorne, schwarze oben), deshalb steht in
+  der Statuszeile nur noch, was man sonst nirgends sieht (Oktave, Aufnahme,
+  Melodien).
 - **Kein Halten:** curses meldet nur Tastendrücke, kein Loslassen. Jeder
   Anschlag klingt deshalb fest 420 ms aus; im Browser aufgenommene Melodien
   behalten ihre echten Haltedauern.

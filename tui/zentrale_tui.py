@@ -461,6 +461,8 @@ PIANO_HOLLOW_MS = 500      # ab hier hohler Notenkopf (wie im Browser: lang geha
 PIANO_CHORD_MS = 70        # bis hierhin gilt es als gleichzeitig = eine Spalte (wie im Browser)
 PIANO_LIT_MS = 260         # so lange leuchtet eine angeschlagene Taste nach
 PIANO_MAX_COLS = 64        # so viele Noten-Spalten hält das Notensystem vor
+PIANO_KB_MIN_H = 5         # flacher lohnt keine gezeichnete Klaviatur
+PIANO_KB_MAX_H = 13        # höher wirken die Tasten nur noch klobig
 # Notensystem: 5 Linien im Violinschlüssel, von unten E4 bis oben F5. Eine
 # Terminal-Zeile = eine diatonische Stufe (Linie ODER Zwischenraum).
 PIANO_TOP_DIA = 38         # F5 = oberste Linie
@@ -486,57 +488,81 @@ def piano_midi(octave, semi):
     return (int(octave) + 1) * 12 + int(semi)
 
 
-def piano_keyboard(width):
+def piano_keyboard(width, height=PIANO_KB_MIN_H):
     """
     Klaviatur als fertige Zeichenzeilen + Trefferzonen. PURE Funktion:
-      width (verfügbare Spalten) -> (rows, zones)
-      rows  = [str, …] von oben nach unten (schwarze Reihe, dann die weißen)
+      width, height (verfügbarer Platz) -> (rows, zones)
+      rows  = [str, …] von oben nach unten, alle gleich lang
       zones = [(zeile, x, breite, halbton, schwarz?), …] — die Stellen, die die
               TUI beim Anschlag einfärbt (und die schwarzen Tasten dunkel malt).
 
-    Die weißen Tasten sind Kästchen mit ihrem Buchstaben, die schwarzen sitzen
-    als Zellen auf der Kante zwischen zwei weißen — wie auf einem echten
-    Klavier. Bei wenig Platz schrumpfen die Tasten von 3 auf 2 Spalten; darunter
-    lohnt keine Zeichnung mehr (dann leere Rückgabe, der Aufrufer schreibt eine
-    Textzeile hin).
+    Gezeichnet wird die Aufsicht auf eine echte Klaviatur: die weißen Tasten
+    stehen als Kästchen nebeneinander, die schwarzen sind schmaler, reichen bis
+    an die Hinterkante (oberste Zeile) und liegen mittig auf der Kante zwischen
+    zwei weißen — vorne bleibt die weiße Taste frei, dort steht ihr Buchstabe.
+    Breite und Höhe der Tasten wachsen mit dem Platz (weiße Taste 2…9 Spalten);
+    ist es zu eng oder zu flach, kommt eine leere Rückgabe und der Aufrufer
+    schreibt stattdessen eine Textzeile hin.
     """
     nw = len(PIANO_WHITE)
-    for kw in (3, 2):
-        if nw * (kw + 1) + 1 <= max(0, width):
+    kw = 0
+    for cand in (9, 7, 5, 3, 2):
+        if nw * (cand + 1) + 1 <= max(0, width):
+            kw = cand
             break
-    else:
-        kw = 0
-    if kw == 0:
+    try:
+        h = int(height)
+    except (TypeError, ValueError):
+        h = PIANO_KB_MIN_H
+    if kw == 0 or h < PIANO_KB_MIN_H:
         return [], []
+    h = min(h, PIANO_KB_MAX_H)
     total = nw * (kw + 1) + 1
+    # Schwarze Taste: gut halb so breit wie eine weiße und ungerade, damit sie
+    # symmetrisch auf der Trennlinie sitzt. Länge ~60% der weißen (wie echt).
+    kb = max(1, (kw // 2) | 1)
+    hb = max(0, min(h - 3, int(round(h * 0.6)) - 1))    # letzte Zeile der schwarzen Taste
 
-    def cell(label):
-        # Buchstabe linksbündig auf die Tastenbreite auffüllen
-        return (label + " " * kw)[:kw]
+    rows = [list("┌" + "┬".join(["─" * kw] * nw) + "┐")]
+    for _ in range(h - 2):
+        rows.append(list("│" + "│".join([" " * kw] * nw) + "│"))
+    rows.append(list("└" + "┴".join(["─" * kw] * nw) + "┘"))
 
-    top = ["│"] + [cell(" ") + "│" for _ in PIANO_WHITE]
-    lab = ["│"] + [cell(k) + "│" for k, _s in PIANO_WHITE]
-    rows = [
-        " " * total,                                        # schwarze Reihe
-        "┌" + "┬".join(["─" * kw] * nw) + "┐",
-        "".join(top),
-        "".join(lab),
-        "└" + "┴".join(["─" * kw] * nw) + "┘",
-    ]
-    zones = []
-    for i, (k, s) in enumerate(PIANO_WHITE):
-        x = 1 + i * (kw + 1)
-        zones.append((3, x, kw, s, False))                  # Zeile mit dem Buchstaben
-        zones.append((2, x, kw, s, False))                  # Tastenkörper darüber
-    black_row = list(rows[0])
+    # Weiße Buchstaben nach vorn (unterste Innenzeile), mittig auf der Taste.
+    for i, (k, _s) in enumerate(PIANO_WHITE):
+        rows[h - 2][1 + i * (kw + 1) + (kw - 1) // 2] = k
+
+    # Schwarze Tasten drüberlegen — sie überschreiben oben auch die Kante
+    # zwischen ihren beiden weißen Nachbarn, genau das macht sie zur Taste.
+    blocked = [False] * total
+    spans = {}
     for k, s, w in PIANO_BLACK:
-        x = (kw + 1) * (w + 1) - kw // 2                    # mittig auf der Kante
-        x = max(0, min(x, total - kw))
-        for j, chx in enumerate(cell(k)):
-            black_row[x + j] = chx
-        zones.append((0, x, kw, s, True))
-    rows[0] = "".join(black_row)
-    return rows, zones
+        x = max(0, min((kw + 1) * (w + 1) - kb // 2, total - kb))
+        spans[s] = x
+        for j in range(kb):
+            blocked[x + j] = True
+        for r in range(0, hb + 1):
+            for j in range(kb):
+                rows[r][x + j] = " "
+        rows[hb][x + (kb - 1) // 2] = k
+
+    zones = []
+    for i, (_k, s) in enumerate(PIANO_WHITE):
+        x0 = 1 + i * (kw + 1)
+        for r in range(hb + 1, h - 1):                  # freier Teil vorne
+            zones.append((r, x0, kw, s, False))
+        a, b = x0, x0 + kw                              # oben: um die schwarzen herum
+        while a < b and blocked[a]:
+            a += 1
+        while b > a and blocked[b - 1]:
+            b -= 1
+        if b > a:
+            for r in range(1, hb + 1):
+                zones.append((r, a, b - a, s, False))
+    for _k, s, _w in PIANO_BLACK:
+        for r in range(0, hb + 1):
+            zones.append((r, spans[s], kb, s, True))
+    return ["".join(r) for r in rows], zones
 
 
 def piano_columns(seq, max_cols=PIANO_MAX_COLS, chord_ms=PIANO_CHORD_MS):
@@ -4037,15 +4063,21 @@ def run_ui(stdscr, store):
                 C["warn"] if PIANO["rec"] is not None else C["bright"])
 
         # ── Klaviatur (unten) ──
-        kb_rows, zones = piano_keyboard(iw)
+        # Sie darf so groß werden, wie über dem Notensystem (PIANO_STAFF_ROWS)
+        # und der Melodien-Zeile übrig bleibt — aber nie unter ihre Mindesthöhe:
+        # gespielt wird auf den Tasten, das System muss dann eben weichen.
+        frei = bottom - 1 - (by + 2)
+        kb_h = max(PIANO_KB_MIN_H, min(PIANO_KB_MAX_H, frei - PIANO_STAFF_ROWS - 1))
+        kb_rows, zones = piano_keyboard(iw, min(kb_h, frei - 1))
         if not kb_rows:
-            # Zu schmal für gezeichnete Tasten → wenigstens sagen, worauf man
-            # spielt (statt einer leeren Fläche).
+            # Zu schmal/flach für gezeichnete Tasten → wenigstens sagen, worauf
+            # man spielt (statt einer leeren Fläche).
             addclip(bottom - 1, ix, "tasten: y x c v b n m , . -", iw, C["faint"])
         kb_h = len(kb_rows)
         kb_top = bottom - 1 - kb_h
+        kx = ix + max(0, (iw - len(kb_rows[0] if kb_rows else "")) // 2)   # mittig
         for i, ln in enumerate(kb_rows):
-            addclip(kb_top + i, ix, ln, iw, C["faint"])
+            addclip(kb_top + i, kx, ln, max(0, iw - (kx - ix)), C["faint"])
         base = piano_midi(PIANO["oct"], 0)
         for (r, x, w, semi, black) in zones:
             y = kb_top + r
@@ -4059,7 +4091,7 @@ def run_ui(stdscr, store):
                 attr = C["acc"] | curses.A_REVERSE
             else:
                 continue
-            addclip(y, ix + x, seg, max(0, iw - x), attr)
+            addclip(y, kx + x, seg, max(0, iw - (kx - ix) - x), attr)
 
         # ── Notensystem (zwischen Kopfzeile und Klaviatur) ──
         st_top = by + 2
@@ -4110,8 +4142,10 @@ def run_ui(stdscr, store):
         elif PIANO["confirm"]:
             tip = "j löschen · n abbrechen"
         else:
-            tip = ("spielen: y x c v b n m , . -  (schwarz s d g h j l ö) · ←→ oktave · "
-                   "space aufnahme · ↑↓ melodie · enter spielen · r name · D weg · k/esc zu")
+            # Welche Taste welchen Ton spielt, steht auf der Taste selbst —
+            # hier nur, was man sonst nirgends sieht.
+            tip = ("←→ oktave · space aufnahme · ↑↓ melodie · enter spielen · "
+                   "r name · D weg · k/esc zu")
         addclip(bottom, ix, (tip + ("  " + PIANO["msg"] if PIANO["msg"] else "")).strip(),
                 iw, C["faint"])
 

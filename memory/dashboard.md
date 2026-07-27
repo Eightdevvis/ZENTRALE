@@ -561,11 +561,14 @@ nicht zum Durchzappen).
 >   Aufgenommenes lässt sich also im Terminal abspielen und umgekehrt.
 
 > **Klavier in der TUI (Taste `k`)** — dieselbe Klaviatur, dieselben Melodien,
-> gezeichnet in curses: unten die Tasten (weiße als Kästchen mit ihrem
-> Buchstaben, schwarze als dunkle Zellen auf der Kante dazwischen), darüber das
-> Notensystem. Anschlagene Tasten und klingende Notenköpfe leuchten in der
-> Akzentfarbe. Solange das Panel offen ist, tickt die Zeichenschleife schnell
-> (33 ms statt 250 ms) — sonst käme der Ton spürbar nach dem Tastendruck.
+> gezeichnet in curses: unten mittig die Tasten in **Aufsicht** wie auf einem
+> echten Klavier — weiße Tasten als Kästchen nebeneinander, die schwarzen
+> schmaler (gut halb so breit), bis an die Hinterkante reichend und mittig auf
+> der Kante zwischen zwei weißen; vorne bleibt die weiße Taste frei, dort steht
+> ihr Buchstabe. Darüber das Notensystem. Anschlagene Tasten und klingende
+> Notenköpfe leuchten in der Akzentfarbe. Solange das Panel offen ist, tickt die
+> Zeichenschleife schnell (33 ms statt 250 ms) — sonst käme der Ton spürbar nach
+> dem Tastendruck.
 >
 > - **Ton:** `core/tone.py` rechnet die Wellenform selbst (Grundton + vier
 >   Obertöne, Anschlag-Rampe + exponentielles Abklingen) und schiebt sie über
@@ -598,6 +601,14 @@ nicht zum Durchzappen).
 >   ab (nochmal `Enter` = stopp, die Noten laufen dabei live ins System),
 >   `r` benennt um, **`D`** (groß!) löscht — das nackte `d` ist eine
 >   Klaviertaste (D♯) und darf nichts wegwerfen.
+> - **Größe wächst mit dem Fenster:** weiße Taste 2…9 Spalten breit, Klaviatur
+>   5…13 Zeilen hoch (`piano_keyboard(width, height)` sucht das größte, was
+>   passt, und der Aufrufer zentriert). Wird es eng, hat die **Klaviatur
+>   Vorrang** vor dem Notensystem — gespielt wird auf den Tasten; erst wenn
+>   nicht mal die Mindestgröße passt, steht dort nur noch die Textzeile
+>   `tasten: y x c v b n m , . -`. In der Statuszeile stehen deshalb **nur die
+>   Funktionstasten**, nicht die Notentasten: welcher Buchstabe welchen Ton
+>   spielt, steht auf der Taste selbst.
 > - **Testbar ohne Terminal und ohne Soundkarte:** die Geometrie steckt in den
 >   puren Funktionen `piano_keyboard`/`piano_staff`/`piano_columns`
 >   (`tests/test_tui_piano.py`), die Klangrechnung in `tone.Voice`
