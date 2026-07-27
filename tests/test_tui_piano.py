@@ -19,7 +19,7 @@ from tui.zentrale_tui import (
     PIANO_CHORD_MS, PIANO_HOLLOW_MS, PIANO_BEAT_DEFAULT, PIANO_REST_GLYPH,
     PIANO_HOLD_MS,
     piano_dia, piano_note_name, piano_midi, piano_keyboard, piano_columns,
-    piano_staff, piano_beat, piano_flow, piano_hold_decide,
+    piano_staff, piano_beat, piano_flow, piano_is_hold,
 )
 
 
@@ -441,31 +441,24 @@ def test_piano_staff_ohne_noten_ist_ein_leeres_system():
 
 # ── 4. Gehaltene Taste vs. echter zweiter Anschlag ──────────────────────────
 def test_zu_schnell_fuer_menschenhand_ist_tastenwiederholung():
-    """Die Salve einer gehaltenen Taste kommt alle ~50 ms — das schafft keine
-    Hand. Alles darunter ist Halten, nicht Tippen."""
-    assert piano_hold_decide(50, 3)[0] == "halten"
-    assert piano_hold_decide(0, 3)[0] == "halten"
-    assert piano_hold_decide(PIANO_HOLD_MS, 3)[0] == "halten"
-    assert piano_hold_decide(PIANO_HOLD_MS + 1, 3)[0] == "neu"
-    assert piano_hold_decide(400, 0)[0] == "neu"      # bewusst nochmal gedrückt
-    assert piano_hold_decide(3000, 9)[0] == "neu"
+    """Solange das Klavier offen ist, läuft die Tastenwiederholung kurz und
+    dicht (~80 ms bis zur ersten, dann alle ~33 ms). Das schafft keine Hand —
+    alles darunter ist Halten, nicht Tippen."""
+    assert piano_is_hold(0) is True
+    assert piano_is_hold(33) is True
+    assert piano_is_hold(80) is True
+    assert piano_is_hold(PIANO_HOLD_MS) is True
+    assert piano_is_hold(PIANO_HOLD_MS + 1) is False
+    assert piano_is_hold(400) is False            # bewusst nochmal gedrückt
+    assert piano_is_hold(-5) is False             # Uhr rückwärts → lieber neu
 
 
-def test_erste_erkannte_wiederholung_nimmt_die_falsche_note_zurueck():
-    """Die System-Verzögerung (~500 ms) sieht aus wie ein zweiter Anschlag —
-    erst die Salve danach verrät sie. Dann muss die Note wieder weg."""
-    assert piano_hold_decide(50, 0) == ("halten", True)     # erste Wiederholung
-    assert piano_hold_decide(50, 1) == ("halten", False)    # danach nichts mehr
-    assert piano_hold_decide(50, 7) == ("halten", False)
-    # ein echter Anschlag nimmt NIE etwas zurück
-    assert piano_hold_decide(500, 0) == ("neu", False)
+def test_halte_schwelle_laesst_der_hand_luft():
+    """Zwischen der Wiederholung (33 ms) und dem, was eine Hand schafft
+    (~150 ms für zweimal dieselbe Taste), muss die Schwelle liegen."""
+    assert 33 < PIANO_HOLD_MS < 150
 
 
 def test_hold_entscheidung_wirft_bei_muell_nie():
-    for g in (None, "x", [], {}, float("nan"), -5, 10 ** 9):
-        for r in (None, 0, 3, "x"):
-            try:
-                a, w = piano_hold_decide(g, r)
-            except TypeError:
-                a, w = piano_hold_decide(g, 0)
-            assert a in ("neu", "halten") and isinstance(w, bool)
+    for g in (None, "x", [], {}, float("nan"), 10 ** 9):
+        assert piano_is_hold(g) in (True, False)

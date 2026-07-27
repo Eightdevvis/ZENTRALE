@@ -69,11 +69,14 @@ Drei Unterschiede, die aus dem Terminal kommen:
   der Statuszeile nur noch, was man sonst nirgends sieht (Oktave, Aufnahme,
   Melodien).
 - **Gedrückt halten geht:** curses meldet zwar kein Loslassen, aber die
-  Tastenwiederholung des Systems (~500 ms, dann alle ~50 ms) verrät die
-  gehaltene Taste — der Ton klingt dann durch und fadet aus, wenn der Finger
-  geht, und es wird **eine** Note notiert statt zwanzig. Ein bewusster zweiter
-  Anschlag zählt weiterhin als neue Note. Ohne Halten: 420 ms; im Browser
-  aufgenommene Melodien behalten ihre echten Haltedauern.
+  Tastenwiederholung verrät die gehaltene Taste. Damit sie das sauber tut,
+  stellt die TUI sie fürs offene Klavier auf kurz und dicht (80 ms / 30 pro
+  Sekunde) und **beim Schließen zurück** — beim Tippen eines Melodienamens
+  ebenfalls, sonst verdoppelt jeder längere Tastendruck Buchstaben. Der Ton
+  klingt dann durch und fadet aus, wenn der Finger geht, und es wird **eine**
+  Note notiert statt zwanzig. Ein bewusster zweiter Anschlag (≥150 ms) zählt
+  weiterhin als neue Note. Ohne Halten: 420 ms; im Browser aufgenommene
+  Melodien behalten ihre echten Haltedauern.
 - **Ton kommt aus `core/tone.py`** (numpy + sounddevice, erst beim Öffnen
   geladen). Fehlt das Gerät, steht `♪ stumm` im Kopf und Noten + Aufnahme
   laufen trotzdem. `ZENTRALE_NO_AUDIO=1` schaltet den Ton bewusst ab.

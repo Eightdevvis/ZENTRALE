@@ -611,24 +611,38 @@ nicht zum Durchzappen).
 >   **`ZENTRALE_AUDIO_DEVICE`** (Index wie `0` oder Name wie `hw:0,0`) geht an
 >   der ALSA-/PipeWire-Kette vorbei direkt auf die Karte.
 > - **Gedrückt halten klingt wie am Flügel** — obwohl das Terminal **kein
->   Loslassen** meldet. Der Trick ist die **Tastenwiederholung des Systems**:
->   hält man eine Taste, schickt X sie nach ~500 ms als Salve alle ~50 ms
->   nach. So schnell drückt keine Hand dieselbe Taste zweimal — alles unter
->   `PIANO_HOLD_MS` ist deshalb sicher „gehalten" (`piano_hold_decide`; die
->   Schwelle wird beim Öffnen an die echte Rate angepasst, `xset q`). Der Ton
->   läuft dann in `tone.Voice(hold=True)`: er fällt nur langsam (`HOLD_TAU_S`),
->   und wenn die Salve ausbleibt = Finger weg, klingt er ab der erreichten
->   Lautstärke normal aus — nahtlos, ohne Knacken. Ohne Halten bleibt alles wie
->   vorher (`PIANO_NOTE_MS`, 420 ms); gespeicherte Melodien laufen NIE über die
->   Halte-Kurve, die tragen ihre echten Haltedauern.
-> - **Und es entsteht nur EINE Note.** Die erste Wiederholung kommt nach der
->   System-Verzögerung und sieht aus wie ein zweiter Anschlag — erst die Salve
->   50 ms danach verrät sie, denn ein echter zweiter Anschlag begänne seine
->   eigene Salve erst eine volle Verzögerung später. Darum nimmt die TUI die
->   dafür geschriebene Note **rückwirkend wieder weg** (auch aus einer laufenden
->   Aufnahme). Beim Loslassen wird die wirklich gehaltene Dauer in die Note
->   geschrieben — im Browser klingt sie dann genauso lang. Ein bewusster zweiter
->   Anschlag wird also nie verschluckt.
+>   Loslassen** meldet. Das Halte-Signal ist die **Tastenwiederholung des
+>   Systems**, und die wird dafür passend gemacht: solange das Klavier gespielt
+>   wird, stellt die TUI sie auf **kurz und dicht** (`xset r rate 80 30`) und
+>   beim Schließen zurück. Damit setzt die Salve schon nach ~80 ms ein und läuft
+>   alle ~33 ms weiter — alles unter `PIANO_HOLD_MS` (120 ms) ist sicher
+>   „gehalten" (`piano_is_hold`), so schnell drückt keine Hand dieselbe Taste
+>   zweimal, und ein bewusster zweiter Anschlag (≥150 ms) wird nie verschluckt.
+>   Bleibt die Salve aus, ist der Finger weg.
+>   **Warum das nötig war:** mit der Voreinstellung (~500 ms bis zur ersten
+>   Wiederholung) klaffte zwischen Anschlag und Salve ein halbsekundenlanges
+>   Loch — der Ton war da längst gedämpft und schlug danach neu an. Gemessen:
+>   Anschlag, nach 144 ms Loslassen, bei 520 ms neuer Anschlag. Genau das hat
+>   man als „unterbrochen" gehört. Jetzt: ein Anschlag, durchgehendes Halten,
+>   ein Loslassen.
+> - **Zwei Vorsichtsmaßnahmen dabei:** beim Tippen (Melodie benennen) geht die
+>   Wiederholung zurück auf normal — mit 80 ms verdoppelt sonst jeder längere
+>   Tastendruck Buchstaben. Und der Ursprungswert wird per `atexit` immer
+>   zurückgesetzt; findet die TUI beim Start schon den Spiel-Wert vor (die
+>   letzte Sitzung wurde hart abgeschossen, `SIGKILL` überspringt `atexit`),
+>   nimmt sie NICHT den als Original, sondern den X-Standard 500/20 — sonst
+>   bliebe die Tastatur des ganzen Rechners für immer auf hektisch.
+> - **Der Ton selbst** läuft in `tone.Voice(hold=True)`: er fällt nur langsam
+>   (`HOLD_TAU_S`), und beim Loslassen klingt er ab der erreichten Lautstärke
+>   normal aus — nahtlos, weil die zweite Kurve genau dort ansetzt, wo die erste
+>   steht. **Jeder Teilton hat seine eigene Hüllkurve** und die oberen sterben
+>   schneller (`PARTIAL_DECAY`): der Anschlag ist hell, das Ausklingen dunkel und
+>   weich — mit einer gemeinsamen Hüllkurve klingt es die ganze Zeit gleich hell,
+>   also nach Orgel statt nach Klavier. Ohne Halten bleibt alles wie vorher
+>   (`PIANO_NOTE_MS`, 420 ms); gespeicherte Melodien laufen NIE über die
+>   Halte-Kurve, die tragen ihre echten Haltedauern. Beim Loslassen wandert die
+>   wirklich gehaltene Dauer in die Note — im Browser klingt sie dann genauso
+>   lang.
 > - **Noten:** 5 Linien im Violinschlüssel (E4…F5), eine Terminal-Zeile pro
 >   diatonischer Stufe, Hilfslinien nach Bedarf, `♯` vor der Note. Kein
 >   Notenschlüssel-Glyph — `𝄞` fehlt in Terminal-Fonts; stattdessen ein

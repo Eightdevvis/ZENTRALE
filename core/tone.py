@@ -32,8 +32,10 @@ SAMPLERATE = 44100
 BLOCKSIZE = 256              # ~6 ms Latenz — klein genug, dass Spielen sich direkt anfühlt
 DEFAULT_DUR_MS = 420         # Länge eines Anschlags (Terminal kennt kein Loslassen)
 MAX_VOICES = 24              # Deckel: mehr gleichzeitig klingende Töne bringt nur Matsch
-HOLD_TAU_S = 6.0             # gehaltener Ton: fällt langsam wie am Flügel mit Dämpfer
+HOLD_TAU_S = 3.5             # gehaltener Ton: fällt langsam wie am Flügel mit Dämpfer
 MAX_HOLD_S = 30.0            # Notbremse: eine hängende Taste soll nicht ewig klingen
+PARTIAL_DECAY = 0.62         # jeder Oberton klingt um diesen Faktor kürzer als der
+                             # darunter — hell im Anschlag, weich im Ausklang
 MASTER_GAIN = 0.22           # Kopfraum, damit ein voller Akkord nicht übersteuert
 ATTACK_S = 0.006             # Anschlag-Rampe (ohne sie knackst der Einsatz)
 
@@ -135,22 +137,28 @@ class Voice:
         i = np.arange(self.pos, self.pos + n, dtype=np.float64)
         t = i / float(self.sr)
         rel = self.rel_t
-        if rel is None:                          # wird noch gehalten
-            env = np.exp(-t / HOLD_TAU_S)
-        elif rel <= 0.0:                         # nie gehalten: eine Kurve
-            env = np.exp(-t / self.tau)
-        else:                                    # gehalten, dann losgelassen
-            env = np.where(t < rel,
-                           np.exp(-t / HOLD_TAU_S),
-                           np.exp(-rel / HOLD_TAU_S) * np.exp(-(t - rel) / self.tau))
         att = max(1.0, ATTACK_S * self.sr)
-        if self.pos < att:                       # Einsatz weich anrampen
-            env = env * np.minimum(1.0, i / att)
+        ramp = np.minimum(1.0, i / att) if self.pos < att else 1.0
         sig = np.zeros(n, dtype=np.float64)
         two_pi_t = (2.0 * np.pi) * t
-        for mult, amp in self.parts:
-            sig += amp * np.sin(two_pi_t * (self.freq * mult))
-        out += (self.gain * env * sig).astype(out.dtype)
+        # JEDER Teilton hat seine EIGENE Hüllkurve und die oberen sterben
+        # schneller — das ist der halbe Klaviercharakter: der Anschlag ist hell
+        # und wird beim Ausklingen dunkel und weich. Eine gemeinsame Hüllkurve
+        # klingt dagegen die ganze Zeit gleich hell, also nach Orgel/Synthie.
+        for k, (mult, amp) in enumerate(self.parts):
+            zerfall = PARTIAL_DECAY ** k         # k=0 Grundton, dann immer flotter
+            if rel is None:                      # wird noch gehalten
+                env = np.exp(-t / (HOLD_TAU_S * zerfall))
+            elif rel <= 0.0:                     # nie gehalten: eine Kurve
+                env = np.exp(-t / (self.tau * zerfall))
+            else:                                # gehalten, dann losgelassen
+                env = np.where(
+                    t < rel,
+                    np.exp(-t / (HOLD_TAU_S * zerfall)),
+                    np.exp(-rel / (HOLD_TAU_S * zerfall))
+                    * np.exp(-(t - rel) / (self.tau * zerfall)))
+            sig += (amp * env) * np.sin(two_pi_t * (self.freq * mult))
+        out += (self.gain * ramp * sig).astype(out.dtype)
         self.pos += n
         if self.pos >= self.life:
             self.done = True
