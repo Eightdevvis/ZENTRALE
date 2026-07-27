@@ -56,6 +56,20 @@ Werte teilen sich `/api/log` + `/api/data/<id>` mit der Data Collection).
 | `/api/graphs/<id>/remind`      | POST    | Tages-Reminder setzen `{remind, at?}` (`at`=HH:MM, optional → unverändert) |
 | `/api/graphs/reminders`        | GET     | Heute fällige Reminder `[{id,name,remind_at}]`: remind an, Uhrzeit erreicht, heute noch nicht geloggt. Quelle für das »bitte eintragen«-Modal (monolith/laptop) und den TUI-Nag. |
 
+## Zyklus/PMS-Rechner (`core/cycle.py`)
+
+Abgeleitet aus dem Lifestyle-Graphen namens **»periode«** — kein eigener
+Speicher, keine eigene Datei, kein Kalender-Layer. Details siehe
+`memory/zyklus_pms.md`.
+
+| Endpoint       | Methode | Beschreibung                                        |
+|----------------|---------|-----------------------------------------------------|
+| `/api/cycle`   | GET     | Vorhersage `{graph_id, graph_name, last_start, cycle_len, len_source, n_cycles, spread, next_start, pms_from, pms_to, days_to_next, overdue, phase, summary}` — oder `{}`, wenn es keinen »periode«-Graphen bzw. noch keine Werte gibt (kein 404: der Graph ist optional, die Fronten zeichnen dann nichts). Nicht KI-gegatet. |
+
+Zusätzlich hängt `/api/calendar` (Woche **und** Monat) ein Feld
+`cycle: {"<iso>": "pms"|"next"}` für die sichtbaren Tage an — damit die Fronten
+nur noch einfärben und keine Datums-Mathematik machen.
+
 ## Melodien (Klavier-Werkzeug, `core/melodies.py`)
 
 Auf der Computertastatur gespielte und aufgezeichnete Melodien

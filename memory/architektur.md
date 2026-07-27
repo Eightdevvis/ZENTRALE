@@ -81,6 +81,7 @@ ZENTRALE/
 │   ├── net.py               # HTTP-Wrapper mit Terminal-Logging
 │   ├── graph.py             # KONZEPT-Graph Memory der KI (PRIMARY, data/ai_graph.json)
 │   ├── graphs.py            # Lifestyle-GRAPHEN-Registry (Messreihen-Werkzeug, ≠ graph.py!)
+│   ├── cycle.py             # Zyklus/PMS-Vorhersage AUS dem »periode«-Graphen (kein eigener Speicher)
 │   ├── consolidation.py     # async Fakt-Extraktor in den Graphen
 │   ├── embeddings.py        # bge-m3 via Ollama (Alias-Resolution, Entry-Points)
 │   ├── context.py           # Whitelist-Dateizugriff (Cap 8000 Zeichen)

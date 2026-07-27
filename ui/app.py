@@ -28,6 +28,7 @@ from datetime import datetime, date
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
 import categories   # type: ignore
 import graphs       # type: ignore  – dynamische Lifestyle-Graph-Registry
+import cycle        # type: ignore  – Zyklus/PMS-Vorhersage aus dem »periode«-Graphen
 import lists        # type: ignore  – dynamische Listen-Registry (Todo/Sammel-Listen)
 import melodies     # type: ignore  – Melodie-Registry (Klavier-Werkzeug, data/melodies.json)
 import notes        # type: ignore  – Notiz-Registry (Text-/Listen-/Float-Blöcke, TUI-Werkzeug)
@@ -306,6 +307,25 @@ def api_graphs_reminders():
     »bitte eintragen«-Modal, die TUI ihren Nag. Liefert [{id, name, remind_at}].
     """
     return jsonify(graphs.due_reminders())
+
+
+@app.route('/api/cycle')
+def api_cycle():
+    """
+    Zyklus-Vorhersage aus dem »periode«-Graphen (core/cycle.py): wann die
+    nächste Periode fällig ist und welche Woche davor als PMS gilt. Reine
+    Ableitung aus den Graph-Werten, kein eigener Speicher.
+
+    Liefert die predict()-Form (+ `summary`, der fertige Einzeiler) oder
+    {} wenn es keinen »periode«-Graphen bzw. noch keine Werte gibt — die
+    Fronten zeichnen dann einfach nichts. NICHT KI-gegatet: reine Anzeige,
+    also in allen Kassetten offen.
+    """
+    p = cycle.predict()
+    if not p:
+        return jsonify({})
+    p['summary'] = cycle.summary(p)
+    return jsonify(p)
 
 
 # ── Melodien (Klavier-Werkzeug, Canvas-Exhibit „Klavier") ──────────────
@@ -817,6 +837,15 @@ def api_calendar():
     out['view'] = view
     out['ref'] = ref.isoformat()
     out['today'] = date.today().isoformat()
+    # Zyklus-Marker für die sichtbaren Tage (abgeleitet aus dem »periode«-
+    # Graphen, KEIN Kalender-Layer und nichts Gespeichertes): {iso: 'pms'|
+    # 'next'}. Die Front tönt die Tage nur ein. Defensiv: nie crashen.
+    try:
+        c_start = date.fromisoformat(out['start'])
+        c_end = date.fromisoformat(out['end'])
+        out['cycle'] = cycle.day_marks(c_start, c_end)
+    except Exception:
+        out['cycle'] = {}
     # Offene Kalender-Alarme mitschicken (gleiche Quelle wie die Canvas-Ecke),
     # damit die Front pro Tag/Header dezent warnen kann. Defensiv: nie crashen.
     try:

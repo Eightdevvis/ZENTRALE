@@ -17,6 +17,10 @@
     /* Tutor-Kanal: prägnantes Rot, deutlich vom grünen --acc/bernstein --warn
        abgesetzt → unmissverständlich "die Mitte gehört jetzt dem Sprachtutor". */
     --tutor: #c0392b;
+    /* Zyklus/PMS (aus dem »periode«-Graphen abgeleitet): bewusst LEISE — ein
+       gedämpftes Altrosa, das weder mit --acc (grün) noch --span/--warn
+       kollidiert. -bg ist nur ein Hauch Tönung, kein Block. */
+    --cyc: #9c5f7a; --cyc-bg: rgba(156, 95, 122, 0.10);
     --scan: rgba(0,0,0,0.045);
   }
   /* ── Theme: NACHT (code-dark / tech-dark) ── */
@@ -28,6 +32,8 @@
     --t-hook: #e0a458; --t-num: #d19a66; --t-dim: #5c6773; --warn: #e0a458;
     /* Tutor-Rot, im Dark-Theme etwas heller fürs dunkle BG (siehe Tag-Theme). */
     --tutor: #e5534b;
+    /* Zyklus/PMS im Dark-Theme etwas heller fürs dunkle BG (siehe Tag-Theme). */
+    --cyc: #c98fae; --cyc-bg: rgba(201, 143, 174, 0.12);
     --scan: rgba(0,0,0,0.16);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -270,6 +276,10 @@
   .gplot svg .garea { fill: var(--acc); opacity: 0.12; }
   .gplot svg .gline { fill: none; stroke: var(--acc); stroke-width: 1.4; }
   .gplot svg circle { fill: var(--acc); }
+  /* Zyklus-Zeile im Graph-Werkzeug (nur beim »periode«-Graphen): leise, eine
+     Zeile, kein Kasten — sie soll nebenbei dastehen, nicht dominieren. */
+  .gcyc { font-size: 13px; color: var(--cyc); opacity: 0.85; letter-spacing: 0.02em; }
+  .gcyc em { font-style: normal; opacity: 0.75; }
   .gmeta { font-size: 14px; color: var(--dim); }
   .gscale { display: flex; gap: 4px; }
   .ghint { color: var(--dim); font-size: 14px; }
@@ -385,6 +395,22 @@
   .cent.span .spantime { color: var(--dim); }
   .cfl { color: var(--dim); font-size: 12px; align-self: center; }
   .cempty { color: var(--dim); opacity: 0.5; }
+  /* Zyklus-Tönung (Quelle: /api/calendar → `cycle`, abgeleitet aus dem
+     »periode«-Graphen). PMS-Woche = flächige, sehr leise Tönung; der
+     vorhergesagte Perioden-Tag zusätzlich mit gestricheltem Rand — beides
+     LIEGT UNTER den Terminen und drängelt sich nirgends vor. `today` gewinnt
+     weiter beim linken Balken. */
+  .cday.cyc-pms, .cday.cyc-next { background: var(--cyc-bg); }
+  .cday.cyc-next { border-left-color: var(--cyc); }
+  .cday.cyc-next .cdate, .cday.cyc-pms .cdate { color: var(--cyc); }
+  .cday.today.cyc-pms, .cday.today.cyc-next { border-left-color: var(--acc); }
+  .cday.today .cdate { color: var(--acc); }
+  .ccell.cyc-pms, .ccell.cyc-next { background: var(--cyc-bg); }
+  .ccell.cyc-next { border-color: var(--cyc); border-style: dashed; }
+  .ccell.cyc-pms .cnum, .ccell.cyc-next .cnum { color: var(--cyc); }
+  .ccell.today .cnum { color: var(--acc); }
+  /* der kleine Punkt, der den Tag benennt (Titel per title=) */
+  .cycdot { color: var(--cyc); font-size: 12px; opacity: 0.8; margin-left: 4px; }
   /* Kalender-Sidebar (rechts neben der Woche): die FLACHE »week«-Liste — EINE
      Spalte, wochenunabhängig, nicht mehr pro Tag. Bearbeitbar (abhaken/umbenennen/
      löschen/neu); Move in andere Listen gibt es hier bewusst NICHT. */
@@ -909,6 +935,18 @@
         render();
       }
 
+      // Zyklus-Vorhersage (nur relevant für den »periode«-Graphen). Gerechnet
+      // wird serverseitig (core/cycle.py → /api/cycle) aus genau den Werten,
+      // die hier eingetragen werden; die Front zeigt nur den Einzeiler. {} =
+      // kein periode-Graph / noch keine Werte → es wird nichts gezeigt.
+      // Gefragt wird nur, wenn gerade DIESER Graph offen ist — sonst wäre es
+      // ein Request pro Graph-Klick für etwas, das niemand sieht.
+      async function loadCycle() {
+        var n = (GT.def && GT.def.name || '').trim().toLowerCase();
+        if (n !== 'periode') { GT.cyc = {}; return; }
+        try { GT.cyc = await (await fetch('/api/cycle')).json() || {}; } catch (e) { GT.cyc = {}; }
+      }
+
       async function loadVals() {
         GT.vals = [];
         if (!GT.selId) return;
@@ -923,7 +961,7 @@
       function selectGraph(id) {
         GT.selId = id; GT.newMode = false;
         GT.def = GT.graphs.filter(function (g) { return g.id === id; })[0] || null;
-        loadVals().then(render);
+        Promise.all([loadVals(), loadCycle()]).then(render);
       }
 
       function plotSvg() {
@@ -962,6 +1000,16 @@
             + '<span class="ghint" data-del="' + GT.def.id + '" style="cursor:pointer;float:right">[löschen]</span>'
             + '<span class="ghint" data-pred="' + GT.def.id + '" style="cursor:pointer;float:right;margin-right:12px">[~vorhersage: ' + (GT.def.predict ? 'an' : 'aus') + ']</span>'
             + '<span class="ghint" data-rem="' + GT.def.id + '" style="cursor:pointer;float:right;margin-right:12px">[⏰ remind: ' + (GT.def.remind ? esc(GT.def.remind_at || '20:00') : 'aus') + ']</span></div>');
+          // Zyklus-Zeile: nur beim »periode«-Graphen, bewusst leise (kleine
+          // Schrift, gedämpftes Altrosa). Der Text kommt fertig vom Backend.
+          if (GT.cyc && GT.cyc.graph_id === GT.def.id && GT.cyc.summary) {
+            // Der Text nennt die Phase schon selbst (core/cycle.summary) —
+            // hier kommt nur noch die Schwankung dazu, wenn es eine gibt.
+            h.push('<div class="gcyc" title="geschätzt aus deinen eigenen abständen — kein medizinisches werkzeug">'
+              + '◆ ' + esc(GT.cyc.summary)
+              + (GT.cyc.spread ? ' · <em>schwankt ±' + (GT.cyc.spread | 0) + ' t</em>' : '')
+              + '</div>');
+          }
           h.push('<div class="grow"><button data-day="-1">◀</button><input id="gt-date" type="date" value="' + GT.date + '" /><button data-day="1">▶</button>');
           if (GT.def.type === 'scale') {
             h.push('<span class="gscale">');
@@ -1003,7 +1051,7 @@
         if (v === '' || v == null || isNaN(Number(v))) return;
         var date = (q('#gt-date') && q('#gt-date').value) || GT.date;
         await fetch('/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category: GT.selId, data: { date: date, value: Number(v) } }) });
-        await loadVals(); render();
+        await loadVals(); await loadCycle(); render();   // neuer Wert → Vorhersage rückt nach
         window.dispatchEvent(new Event('zentrale:logged'));
       }
 
@@ -1191,6 +1239,16 @@
         return o.join('');
       }
 
+      // Zyklus-Marker eines Tages: '' | 'pms' | 'next' (Quelle: d.cycle vom
+      // Backend, abgeleitet aus dem »periode«-Graphen — nichts Gespeichertes).
+      function cycOf(d, isoDay) {
+        var c = (d && d.cycle && typeof d.cycle === 'object') ? d.cycle : null;
+        return (c && c[isoDay]) || '';
+      }
+      function cycTitle(m) {
+        return m === 'next' ? 'vorhergesagter periodenstart' : (m === 'pms' ? 'pms-fenster (woche davor)' : '');
+      }
+
       function renderWeek(d, days, today) {
         var start = parseISO(d.start), end = parseISO(d.end);
         if (!start || !end) return '<div class="ghint">keine daten.</div>';
@@ -1198,8 +1256,10 @@
         var out = ['<div class="cweekwrap"><div class="cweek">'], cur = start, guard = 0;
         while (cur <= end && guard++ < 40) {
           var k = iso(cur), ents = dayList(days, k), isT = (k === today);
-          out.push('<div class="cday' + (isT ? ' today' : '') + '">');
-          out.push('<span class="cdate">' + WD[(cur.getDay() + 6) % 7] + ' ' + ('0' + cur.getDate()).slice(-2) + '.' + ('0' + (cur.getMonth() + 1)).slice(-2) + '.</span>');
+          var cyc = cycOf(d, k);
+          out.push('<div class="cday' + (isT ? ' today' : '') + (cyc ? ' cyc-' + cyc : '') + '">');
+          out.push('<span class="cdate">' + WD[(cur.getDay() + 6) % 7] + ' ' + ('0' + cur.getDate()).slice(-2) + '.' + ('0' + (cur.getMonth() + 1)).slice(-2) + '.'
+            + (cyc ? '<span class="cycdot" title="' + cycTitle(cyc) + '">' + (cyc === 'next' ? '◆' : '·') + '</span>' : '') + '</span>');
           out.push('<span class="cents">');
           if (!ents.length) out.push('<span class="cempty">—</span>');
           else ents.forEach(function (e) { out.push(entChip(e, k)); });
@@ -1223,8 +1283,12 @@
         while (cur <= end && guard++ < 50) {
           var k = iso(cur), ents = dayList(days, k), isT = (k === today);
           var isOut = (first && cur < first) || (last && cur > last);
-          out.push('<div class="ccell' + (isT ? ' today' : '') + (isOut ? ' out' : '') + '">');
-          out.push('<span class="cnum">' + cur.getDate() + '</span>');
+          var mcyc = cycOf(d, k);
+          out.push('<div class="ccell' + (isT ? ' today' : '') + (isOut ? ' out' : '')
+            + (mcyc ? ' cyc-' + mcyc : '') + '"'
+            + (mcyc ? ' title="' + cycTitle(mcyc) + '"' : '') + '>');
+          out.push('<span class="cnum">' + cur.getDate()
+            + (mcyc ? '<span class="cycdot">' + (mcyc === 'next' ? '◆' : '·') + '</span>' : '') + '</span>');
           if (ents.length) {
             var marks = ents.slice(0, 3).map(function (e) {
               return (e && e.ausfall ? 'ℹ ' : (e && e.time ? e.time + ' ' : '')) + ((e && e.label) || '');

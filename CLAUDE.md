@@ -112,6 +112,7 @@ hält die Antworten fokussiert.
 | Sensoren, Events, Brain, Actions          | `memory/event_system.md`             |
 | Ollama, Memory, Tools, Net-Logging        | `memory/ki_system.md`                |
 | Kalender-System (Layer, Termine)          | `memory/kalender_system.md`          |
+| Zyklus/PMS-Rechner (»periode«-Graph)      | `memory/zyklus_pms.md`               |
 | News-System (Tagesschau, KI-Briefing)     | `memory/news_system.md`              |
 | Mail-System (IMAP-Triage, Sender-Keymap)  | `memory/mail_system.md`              |
 | Notizen (Blöcke: text/liste/float, Taste n)| `memory/notizen_system.md`          |

@@ -568,3 +568,49 @@ def test_api_melodies_validation(client, tmp_path, monkeypatch):
     assert client.post("/api/melodies", json={}).status_code == 400
     assert client.post("/api/melodies/m_weg/rename", json={"name": "X"}).status_code == 404
     assert client.get("/api/melodies").get_json() == []
+
+
+def test_api_cycle_leer_ohne_periode_graph(client, tmp_path, monkeypatch):
+    # Kein »periode«-Graph → sauberes {} statt 404/500. Die Fronten zeichnen
+    # dann einfach nichts; ein Fehler wäre hier falsch (der Graph ist optional).
+    import graphs
+    monkeypatch.setattr(graphs, "_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(graphs, "_REGISTRY", str(tmp_path / "graphs.json"))
+    graphs.create_graph("Gewicht", "number", "kg")
+    r = client.get("/api/cycle")
+    assert r.status_code == 200 and r.get_json() == {}
+
+
+def test_api_cycle_rechnet_aus_den_graph_werten(client, tmp_path, monkeypatch):
+    # Der Rechner hat KEINEN eigenen Speicher: er liest genau die Werte, die
+    # über /api/log in den »periode«-Graphen laufen. Zwei Blöcke im Abstand von
+    # 26 Tagen → nächste = letzter Start + 26, PMS die Woche davor.
+    #
+    # ACHTUNG beim Erweitern: /api/log schreibt nach ui.app._DATA_DIR, NICHT
+    # nach graphs._DATA_DIR. Beide müssen auf tmp zeigen, sonst landen
+    # Test-Werte in den echten data/<graph>.json.
+    import graphs
+    import ui.app as app_mod
+    monkeypatch.setattr(graphs, "_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(graphs, "_REGISTRY", str(tmp_path / "graphs.json"))
+    monkeypatch.setattr(app_mod, "_DATA_DIR", str(tmp_path))
+    g = graphs.create_graph("Periode", "scale")
+    for day in ("2026-06-11", "2026-06-12", "2026-07-07", "2026-07-08"):
+        client.post("/api/log", json={"category": g["id"],
+                                      "data": {"date": day, "value": 3}})
+
+    d = client.get("/api/cycle").get_json()
+    assert d["graph_id"] == g["id"]
+    assert d["last_start"] == "2026-07-07"          # Blockanfang, nicht 08.07.
+    assert (d["cycle_len"], d["len_source"]) == (26, "avg")
+    assert d["next_start"] == "2026-08-02"
+    assert (d["pms_from"], d["pms_to"]) == ("2026-07-26", "2026-08-01")
+    assert d["summary"]
+
+    # …und dieselbe Rechnung hängt an der Kalender-Woche, damit die Front nur
+    # noch einfärben muss (kein zweiter Request, keine Datums-Mathe im Browser).
+    cal = client.get("/api/calendar?view=week&ref=2026-07-27").get_json()
+    assert cal["cycle"]["2026-08-02"] == "next"
+    assert cal["cycle"]["2026-07-27"] == "pms"
+    # Woche ohne Zyklus-Tage bleibt leer (kein Dauer-Einfärben).
+    assert client.get("/api/calendar?view=week&ref=2026-09-14").get_json()["cycle"] == {}

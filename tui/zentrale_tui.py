@@ -756,7 +756,7 @@ def run_ui(stdscr, store):
     # Rahmen ein klar sichtbares Grau (245). Grün NIE bold (= sonst Neon),
     # gedämpftes Salbeigrün (108) statt grellem Standard-Grün.
     ROLES = ["acc", "warn", "net", "graph", "event", "audio", "hook", "span",
-             "num", "amber", "dim", "faint", "bright", "ink", "band"]
+             "num", "amber", "cyc", "dim", "faint", "bright", "ink", "band"]
     THEMES = {
         "night": {
             "bg8": curses.COLOR_BLACK, "bg256": 16,
@@ -771,6 +771,9 @@ def run_ui(stdscr, store):
             "span":  (curses.COLOR_YELLOW,  216, 0),    # Mehrtages-Klammer: weiches Orange
             "num":   (curses.COLOR_YELLOW,  222, 0),
             "amber": (curses.COLOR_YELLOW,  214, curses.A_BOLD),  # Fokus-Leiste: Bernstein
+            # Zyklus/PMS (aus dem »periode«-Graphen): weiches Altrosa, bewusst
+            # NICHT bold — die Vorhersage soll dastehen, nicht rufen.
+            "cyc":   (curses.COLOR_MAGENTA, 175, 0),
             "dim":   (curses.COLOR_WHITE,   231, 0),    # normaler Text: reinweiß = max Kontrast
             "faint": (curses.COLOR_WHITE,   245, 0),    # Rahmen: sichtbares Grau (nicht gedimmt)
             "bright":(curses.COLOR_WHITE,   231, curses.A_BOLD),
@@ -793,6 +796,8 @@ def run_ui(stdscr, store):
             "span":  (curses.COLOR_RED,     166, 0),    # Mehrtages-Klammer: kräftiges Orange (auf Weiss lesbar)
             "num":   (curses.COLOR_BLUE,    26,  0),
             "amber": (curses.COLOR_YELLOW,  172, curses.A_BOLD),  # Fokus-Leiste: Bernstein (auf weiß lesbar)
+            # Zyklus/PMS: dasselbe Altrosa, auf Weiß dunkler gesetzt (lesbar).
+            "cyc":   (curses.COLOR_MAGENTA, 132, 0),
             "dim":   (curses.COLOR_BLACK,   16,  0),    # schwarzer Text auf weiß
             "faint": (curses.COLOR_BLUE,    67,  0),    # Rahmen blau-grau (auf weiß sichtbar)
             "bright":(curses.COLOR_BLACK,   16,  curses.A_BOLD),
@@ -961,6 +966,9 @@ def run_ui(stdscr, store):
          "gscroll": 0,                 # Kombigraph-Zeitfenster (nur Übersicht):
                                        # 0=heute rechts, N=N Tage in die
                                        # Vergangenheit gepant (←/→ scrollt)
+         "cyc": {},                    # /api/cycle: Zyklus-Vorhersage aus dem
+                                       # »periode«-Graphen ({} = keiner/keine
+                                       # werte → es wird nichts gezeigt)
          "shown": set(),               # in der Überlagerung gezeigte graph-ids:
                                        # leer=alle (Übersicht), 1=solo+editieren,
                                        # mehrere=Kombi (nur Anzeige, später)
@@ -1862,6 +1870,28 @@ def run_ui(stdscr, store):
             G["graphs"] = []
         if G["sel"] >= len(G["graphs"]):
             G["sel"] = max(0, len(G["graphs"]) - 1)
+        g_load_cycle()
+
+    def g_load_cycle():
+        """Zyklus-Vorhersage ziehen (nur der »periode«-Graph hat eine). Gerechnet
+        wird im Backend aus genau den Werten, die hier eingetragen werden —
+        die TUI zeigt bloß den fertigen Einzeiler. {} = nichts zu zeigen.
+
+        Ohne einen so benannten Graphen wird GAR NICHT gefragt: api_call ist
+        synchron, und ein zweiter Request pro Aktion soll die Bedienung nicht
+        ausbremsen (hängendes Backend = doppelte Wartezeit)."""
+        if not any(isinstance(g, dict)
+                   and (g.get("name") or "").strip().lower() == "periode"
+                   for g in (G["graphs"] or [])):
+            G["cyc"] = {}
+            return
+        try:
+            c = api_call("/api/cycle")
+        except Exception:
+            c = None
+        # Alles kommt über HTTP/JSON: ein kaputtes Backend darf hier auch
+        # Liste/String/None liefern, ohne dass der Render später stolpert.
+        G["cyc"] = c if isinstance(c, dict) else {}
 
     def g_load_vals():
         """Messwerte des gewählten Graphen ziehen (sortiert nach Datum)."""
@@ -1906,6 +1936,7 @@ def run_ui(stdscr, store):
             api_call("/api/log", method="POST",
                      body={"category": G["def"]["id"], "data": data, "upsert": True})
             g_load_vals()
+            g_load_cycle()          # neuer Wert → Vorhersage rückt nach
             tag = "" if G.get("dayoff", 0) == 0 else " (%s)" % g_daylabel()
             t = G["def"].get("type")
             if t == "period":
@@ -2796,10 +2827,31 @@ def run_ui(stdscr, store):
                         _tlabel(g.get("type")), spark)
                     if g.get("remind"):                       # @HH:MM = täglicher Reminder
                         line += "  @" + (g.get("remind_at") or "")
+                    # »periode«: das vorhergesagte Datum leise ans Ende der Zeile
+                    # (◆ = erwarteter Start). Volle Auskunft gibt es im Solo.
+                    cyc = G.get("cyc") or {}
+                    if cyc.get("graph_id") == g.get("id") and cyc.get("next_start"):
+                        try:
+                            line += "  ◆ " + date.fromisoformat(
+                                cyc["next_start"]).strftime("%d.%m.")
+                        except (TypeError, ValueError):
+                            pass
                     attr = C["bright"] if cur else (C["dim"] if on else C["faint"])
                     addclip(yy, ix, line, iw, attr)
                     yy += 1
             if solo:
+                # Zyklus-Zeile direkt über der Eingabe — nur beim »periode«-
+                # Graphen, in Altrosa (C["cyc"]), bewusst eine einzige Zeile.
+                # Der Text kommt fertig vom Backend (core/cycle.summary).
+                cyc = G.get("cyc") or {}
+                if cyc.get("graph_id") == solo.get("id") and cyc.get("summary"):
+                    # Der Text nennt die Phase schon selbst (core/cycle.summary);
+                    # hier kommt nur noch die Schwankung dazu, wenn es eine gibt.
+                    ct = "◆ " + str(cyc["summary"])
+                    sp = _num(cyc.get("spread"))
+                    if sp:
+                        ct += " · ±%d t" % sp
+                    addclip(input_row - 1, ix, ct, iw, C["cyc"])
                 # Eingabezeile des solo-Graphen (Tag-Nav, HH:MM, 1–5 — wie gehabt).
                 dl = g_daylabel()
                 exv = g_existing()                     # vorhandener Eintrag am Ziel-Tag
@@ -3900,6 +3952,12 @@ def run_ui(stdscr, store):
             label = ""
         alarms = d.get("alarms")
         nalarm = len(alarms) if isinstance(alarms, list) else 0
+        # Zyklus-Marker der sichtbaren Tage ({iso: 'pms'|'next'}), abgeleitet vom
+        # Backend aus dem »periode«-Graphen (core/cycle.py) — kein Kalender-Layer,
+        # nichts Gespeichertes, reine Tönung. Defensiv: fehlt/kaputt → leer.
+        cmarks = d.get("cycle")
+        if not isinstance(cmarks, dict):
+            cmarks = {}
         head = ("Woche " if K["view"] == "week" else "Monat ") + label
         if nalarm:
             head += "  ⚠%d" % nalarm
@@ -3998,13 +4056,21 @@ def run_ui(stdscr, store):
                             if not (isinstance(e, dict)
                                     and (e.get("deaktiviert") or e.get("ausfall")))]
                 has = bool(ents) and isinstance(ents, list)
-                cell = "%2d" % cur.day + ("•" if has else "")
+                # Zyklus: ◆ = vorhergesagter Perioden-Start, · = PMS-Fenster.
+                # Der Marker steht IMMER (auch wenn Termine da sind); die Farbe
+                # nimmt sich der Tag nur, wenn er sonst nichts zu sagen hat —
+                # ein Termin bleibt wichtiger als eine Schätzung.
+                cyc = cmarks.get(iso)
+                cell = "%2d" % cur.day + ("•" if has else "") + \
+                    ("◆" if cyc == "next" else ("·" if cyc == "pms" else ""))
                 if iso == today:
                     attr = C["bright"] | curses.A_REVERSE
                 elif not in_month:
                     attr = C["faint"]
                 elif has:
                     attr = C["acc"]
+                elif cyc:
+                    attr = C["cyc"]
                 else:
                     attr = C["dim"]
                 addclip(row, ix + c * colw, cell, colw, attr)
@@ -4153,8 +4219,16 @@ def run_ui(stdscr, store):
                 day_top[idx] = yy
                 is_today = (iso == today)
                 hdr = "%s %s" % (KAL_WD[cd.weekday()], cd.strftime("%d.%m."))
+                # Zyklus-Anhang an der Tages-Kopfzeile (aus dem »periode«-Graphen
+                # geschätzt): der vorhergesagte Start als ◆, die Woche davor als
+                # leises »· pms«. Heute behält seine eigene Hervorhebung.
+                cyc = cmarks.get(iso)
+                if cyc == "next":
+                    hdr += "  ◆ periode (erwartet)"
+                elif cyc == "pms":
+                    hdr += "  · pms"
                 addclip(yy, cx, hdr + ("  ‹heute›" if is_today else ""),
-                        lw, C["bright"] if is_today else C["acc"])
+                        lw, C["bright"] if is_today else (C["cyc"] if cyc else C["acc"]))
                 if rcw:
                     safe_addstr(yy, divx, "│", C["faint"])
                 day_bot[idx] = yy

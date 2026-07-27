@@ -285,6 +285,14 @@ Browser-Panel `[~vorhersage: an/aus]` neben `[löschen]`; beides ruft
 Schätzung rendert aktuell in der TUI-`lifestyle`-Box; das Flag liegt aber pro
 Graph zentral, Fronten honorieren es, wo sie schätzen.
 
+**Zyklus/PMS-Zeile (nur beim Graphen »periode«):** aus den Werten dieses
+Graphen leitet `core/cycle.py` ab, wann die nächste Periode fällig ist (letzter
+Block-Start + Schnitt der echten Abstände) und färbt die Woche davor als
+PMS-Fenster. Im Graph-Werkzeug steht das als EINE leise Zeile in Altrosa —
+TUI: Liste `◆ dd.mm.` am periode-Graphen, Solo die volle Zeile über der
+Eingabe; Browser: `.gcyc` unter der Kurve. Quelle `GET /api/cycle`, im
+Kalender zusätzlich als Tages-Tönung. Volle Beschreibung: `memory/zyklus_pms.md`.
+
 **Tages-Reminder (`remind`/`remind_at`, default aus):** ein Graph kann täglich
 ans Eintragen erinnern. `remind: true` + `remind_at: "HH:MM"` → ab dieser Uhrzeit
 gilt der Graph als **fällig**, SOLANGE für *heute* noch kein Wert da ist; sobald
