@@ -68,9 +68,12 @@ Drei Unterschiede, die aus dem Terminal kommen:
   Buchstaben auf seiner Taste (weiße vorne, schwarze oben), deshalb steht in
   der Statuszeile nur noch, was man sonst nirgends sieht (Oktave, Aufnahme,
   Melodien).
-- **Kein Halten:** curses meldet nur Tastendrücke, kein Loslassen. Jeder
-  Anschlag klingt deshalb fest 420 ms aus; im Browser aufgenommene Melodien
-  behalten ihre echten Haltedauern.
+- **Gedrückt halten geht:** curses meldet zwar kein Loslassen, aber die
+  Tastenwiederholung des Systems (~500 ms, dann alle ~50 ms) verrät die
+  gehaltene Taste — der Ton klingt dann durch und fadet aus, wenn der Finger
+  geht, und es wird **eine** Note notiert statt zwanzig. Ein bewusster zweiter
+  Anschlag zählt weiterhin als neue Note. Ohne Halten: 420 ms; im Browser
+  aufgenommene Melodien behalten ihre echten Haltedauern.
 - **Ton kommt aus `core/tone.py`** (numpy + sounddevice, erst beim Öffnen
   geladen). Fehlt das Gerät, steht `♪ stumm` im Kopf und Noten + Aufnahme
   laufen trotzdem. `ZENTRALE_NO_AUDIO=1` schaltet den Ton bewusst ab.

@@ -102,11 +102,86 @@ def test_voices_addieren_sich_zum_akkord():
     assert np.abs(buf).max() > np.abs(einzeln).max()
 
 
+# ── Gehaltene Taste: klingt weiter statt abzureißen ────────────────────────
+def _huelle(voice, secs, rel_at=None, sr=44100, blk=256):
+    """Blockweise Spitzenwerte über die Zeit — die gemessene Hüllkurve."""
+    out = []
+    for b in range(int(secs * sr / blk)):
+        if rel_at is not None and b * blk / float(sr) >= rel_at:
+            voice.release(); rel_at = None
+        buf = np.zeros(blk, dtype=np.float32)
+        voice.render(buf, np)
+        out.append(float(np.abs(buf).max()))
+    return out
+
+
+def test_gehaltener_ton_faellt_nur_langsam():
+    """Wie am Flügel mit gedrücktem Dämpfer: nach 2 s steht noch was."""
+    gehalten = _huelle(tone.Voice(60, dur_ms=420, hold=True), 2.5)
+    normal = _huelle(tone.Voice(60, dur_ms=420), 2.5)
+    assert gehalten[344] > 0.5             # bei ~2 s noch deutlich hörbar
+    assert normal[344] < 1e-3              # der normale ist da längst verklungen
+
+
+def test_gehaltener_ton_endet_erst_nach_dem_loslassen():
+    v = tone.Voice(60, dur_ms=420, hold=True)
+    _huelle(v, 2.0)
+    assert not v.done                      # solange gehalten wird: bleibt
+    v.release()
+    _huelle(v, 1.5)
+    assert v.done                          # danach klingt er normal aus
+
+
+def test_loslassen_bricht_den_ton_nicht_ab_sondern_setzt_ihn_fort():
+    """Die Abklingkurve muss GENAU dort anfangen, wo die Haltekurve steht —
+    sonst knackt es beim Loslassen."""
+    h = _huelle(tone.Voice(60, dur_ms=420, hold=True), 2.0, rel_at=1.0)
+    i = int(1.0 * 44100 / 256)
+    assert h[i - 1] > 0.3                  # davor klingt es
+    assert h[i + 1] < h[i - 1]             # danach fällt es
+    assert h[i + 1] > 0.5 * h[i - 1]       # aber ohne Sprung ins Nichts
+    assert h[-1] < 0.01                    # und ist am Ende wirklich aus
+
+
+def test_mehrfaches_loslassen_ist_harmlos():
+    v = tone.Voice(60, hold=True)
+    v.release(); erste = v.life
+    v.release()
+    assert v.life == erste                 # das zweite Mal ändert nichts
+
+
+def test_nie_gehaltene_voice_verhaelt_sich_wie_vorher():
+    """Wiedergabe gespeicherter Melodien geht NICHT über die Halte-Kurve."""
+    v = tone.Voice(60, dur_ms=200)
+    assert v.rel_t == 0.0
+    sig = _render(v, blocks=16)
+    assert np.abs(sig[:1024]).max() > np.abs(sig[-1024:]).max()
+
+
 # ── Synth ohne Gerät: darf nie werfen, bleibt einfach still ─────────────────
 def test_synth_ohne_geraet_ist_still_aber_harmlos():
     s = tone.Synth()
     assert s.strike(60) is False          # nicht gestartet → kein Ton, kein Fehler
+    assert s.strike(60, hold=True) is False
+    assert s.holding(60) is False
+    s.release(60)                         # kein Gerät, keine Stimme → egal
     s.silence()
+
+
+def test_synth_haelt_und_laesst_los():
+    """Mit vorgetäuschtem Gerät: eine gehaltene Taste klingt weiter, ein
+    zweiter Anschlag derselben Höhe löst den ersten ab (eine Saite pro Taste)."""
+    s = tone.Synth()
+    s._np = np
+    s._stream = object()                  # Gerät vortäuschen, ohne Soundkarte
+    assert s.strike(60, hold=True) is True
+    assert s.holding(60) is True
+    assert s.holding(64) is False
+    s.strike(60, hold=True)
+    assert len([v for v in s._voices if v.rel_t is None]) == 1
+    s.release(60)
+    assert s.holding(60) is False
+    assert all(v.rel_t is not None for v in s._voices)
     s.close()
 
 

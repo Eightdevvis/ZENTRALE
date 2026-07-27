@@ -17,8 +17,9 @@ from tui.zentrale_tui import (
     PIANO_WHITE, PIANO_BLACK, PIANO_KEYMAP, PIANO_NAMES, PIANO_OCT_MIN,
     PIANO_OCT_MAX, PIANO_STAFF_ROWS, PIANO_TOP_DIA, PIANO_BOT_DIA,
     PIANO_CHORD_MS, PIANO_HOLLOW_MS, PIANO_BEAT_DEFAULT, PIANO_REST_GLYPH,
+    PIANO_HOLD_MS,
     piano_dia, piano_note_name, piano_midi, piano_keyboard, piano_columns,
-    piano_staff, piano_beat, piano_flow,
+    piano_staff, piano_beat, piano_flow, piano_hold_decide,
 )
 
 
@@ -436,3 +437,35 @@ def test_piano_staff_ohne_noten_ist_ein_leeres_system():
     rows, marks = piano_staff([], 13, 40)
     assert marks == []
     assert any("─" in r for r in rows)
+
+
+# ── 4. Gehaltene Taste vs. echter zweiter Anschlag ──────────────────────────
+def test_zu_schnell_fuer_menschenhand_ist_tastenwiederholung():
+    """Die Salve einer gehaltenen Taste kommt alle ~50 ms — das schafft keine
+    Hand. Alles darunter ist Halten, nicht Tippen."""
+    assert piano_hold_decide(50, 3)[0] == "halten"
+    assert piano_hold_decide(0, 3)[0] == "halten"
+    assert piano_hold_decide(PIANO_HOLD_MS, 3)[0] == "halten"
+    assert piano_hold_decide(PIANO_HOLD_MS + 1, 3)[0] == "neu"
+    assert piano_hold_decide(400, 0)[0] == "neu"      # bewusst nochmal gedrückt
+    assert piano_hold_decide(3000, 9)[0] == "neu"
+
+
+def test_erste_erkannte_wiederholung_nimmt_die_falsche_note_zurueck():
+    """Die System-Verzögerung (~500 ms) sieht aus wie ein zweiter Anschlag —
+    erst die Salve danach verrät sie. Dann muss die Note wieder weg."""
+    assert piano_hold_decide(50, 0) == ("halten", True)     # erste Wiederholung
+    assert piano_hold_decide(50, 1) == ("halten", False)    # danach nichts mehr
+    assert piano_hold_decide(50, 7) == ("halten", False)
+    # ein echter Anschlag nimmt NIE etwas zurück
+    assert piano_hold_decide(500, 0) == ("neu", False)
+
+
+def test_hold_entscheidung_wirft_bei_muell_nie():
+    for g in (None, "x", [], {}, float("nan"), -5, 10 ** 9):
+        for r in (None, 0, 3, "x"):
+            try:
+                a, w = piano_hold_decide(g, r)
+            except TypeError:
+                a, w = piano_hold_decide(g, 0)
+            assert a in ("neu", "halten") and isinstance(w, bool)

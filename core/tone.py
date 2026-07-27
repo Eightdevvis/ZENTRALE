@@ -32,6 +32,8 @@ SAMPLERATE = 44100
 BLOCKSIZE = 256              # ~6 ms Latenz — klein genug, dass Spielen sich direkt anfühlt
 DEFAULT_DUR_MS = 420         # Länge eines Anschlags (Terminal kennt kein Loslassen)
 MAX_VOICES = 24              # Deckel: mehr gleichzeitig klingende Töne bringt nur Matsch
+HOLD_TAU_S = 6.0             # gehaltener Ton: fällt langsam wie am Flügel mit Dämpfer
+MAX_HOLD_S = 30.0            # Notbremse: eine hängende Taste soll nicht ewig klingen
 MASTER_GAIN = 0.22           # Kopfraum, damit ein voller Akkord nicht übersteuert
 ATTACK_S = 0.006             # Anschlag-Rampe (ohne sie knackst der Einsatz)
 
@@ -87,9 +89,15 @@ class Voice:
     Die Hüllkurve ist die eines angeschlagenen Klaviertons: kurze Rampe hoch,
     dann exponentielles Abklingen. dur_ms steuert, wie schnell abgeklungen
     wird — eine lang gehaltene Browser-Note klingt also wirklich länger.
+
+    GEHALTEN (`hold=True`) klingt wie am echten Flügel mit gedrücktem Dämpfer:
+    der Ton fällt nur ganz langsam (HOLD_TAU_S), bis losgelassen wird; ab dann
+    greift die normale, schnelle Abklingkurve — nahtlos, ohne Knacken, weil die
+    zweite Kurve genau da anfängt, wo die erste steht.
     """
 
-    def __init__(self, midi, dur_ms=DEFAULT_DUR_MS, gain=1.0, samplerate=SAMPLERATE):
+    def __init__(self, midi, dur_ms=DEFAULT_DUR_MS, gain=1.0, samplerate=SAMPLERATE,
+                 hold=False):
         self.midi = int(midi)
         self.freq = midi_to_freq(self.midi)
         self.gain = float(gain)
@@ -97,13 +105,26 @@ class Voice:
         dur = max(0.02, float(dur_ms) / 1000.0)
         # Zeitkonstante so, dass der Ton am Ende von dur auf ~5 % gefallen ist.
         self.tau = dur / 3.0
+        self._tail = dur * 1.6      # so lange klingt es nach dem Loslassen noch
+        self.rel_t = None           # Sekunde, in der losgelassen wurde (None = hält)
         # Danach noch ein Stück ausklingen lassen, sonst bricht der Ton hörbar ab.
-        self.life = int(self.sr * dur * 1.6)
+        self.life = int(self.sr * (MAX_HOLD_S if hold else dur * 1.6))
+        if not hold:
+            self.rel_t = 0.0        # nie gehalten: sofort die normale Kurve
         self.pos = 0
         self.done = False
         # Nur Teiltöne unter der Nyquist-Grenze — höhere würden als
         # Alias-Pfeifen zurückfalten.
         self.parts = [(m, a) for m, a in HARMONICS if self.freq * m < self.sr * 0.45]
+
+    def release(self):
+        """Taste losgelassen: ab hier normal ausklingen. Mehrfach harmlos."""
+        if self.rel_t is None:
+            # Reihenfolge zählt: erst der Zeitpunkt, dann die Lebensdauer —
+            # sonst könnte der Audio-Thread dazwischen ein zu kurzes life sehen
+            # und den Ton hart abschneiden.
+            self.rel_t = self.pos / float(self.sr)
+            self.life = int(self.sr * (self.rel_t + self._tail))
 
     def render(self, out, np):
         """Nächsten Block in out addieren (out: 1-D float-Array). Setzt done,
@@ -113,7 +134,15 @@ class Voice:
             return
         i = np.arange(self.pos, self.pos + n, dtype=np.float64)
         t = i / float(self.sr)
-        env = np.exp(-t / self.tau)
+        rel = self.rel_t
+        if rel is None:                          # wird noch gehalten
+            env = np.exp(-t / HOLD_TAU_S)
+        elif rel <= 0.0:                         # nie gehalten: eine Kurve
+            env = np.exp(-t / self.tau)
+        else:                                    # gehalten, dann losgelassen
+            env = np.where(t < rel,
+                           np.exp(-t / HOLD_TAU_S),
+                           np.exp(-rel / HOLD_TAU_S) * np.exp(-(t - rel) / self.tau))
         att = max(1.0, ATTACK_S * self.sr)
         if self.pos < att:                       # Einsatz weich anrampen
             env = env * np.minimum(1.0, i / att)
@@ -192,17 +221,39 @@ class Synth:
                 pass
 
     # ── Spielen ────────────────────────────────────────────────────────
-    def strike(self, midi, dur_ms=DEFAULT_DUR_MS, gain=1.0):
-        """Einen Ton anschlagen. Still (und harmlos), wenn kein Gerät offen ist."""
+    def strike(self, midi, dur_ms=DEFAULT_DUR_MS, gain=1.0, hold=False):
+        """Einen Ton anschlagen. Still (und harmlos), wenn kein Gerät offen ist.
+        `hold=True`: der Ton hält, bis `release(midi)` kommt — für Tasten, die
+        gedrückt bleiben. Ein noch klingender Ton derselben Höhe wird dabei
+        losgelassen, sonst stapeln sich zwei Töne aufeinander."""
         if self._stream is None or self._np is None:
             return False
-        v = Voice(midi, dur_ms=dur_ms, gain=gain, samplerate=self.sr)
+        v = Voice(midi, dur_ms=dur_ms, gain=gain, samplerate=self.sr, hold=hold)
         with self._lock:
+            for old in self._voices:
+                if old.midi == int(midi):
+                    old.release()
             # Ältestes opfern, wenn zu viel gleichzeitig klingt.
             if len(self._voices) >= MAX_VOICES:
                 del self._voices[0:len(self._voices) - MAX_VOICES + 1]
             self._voices.append(v)
         return True
+
+    def holding(self, midi):
+        """Klingt dieser Ton gerade noch als GEHALTENE Taste? (dann muss ein
+        Tastatur-Repeat nichts tun — der Ton läuft ja schon)."""
+        midi = int(midi)
+        with self._lock:
+            return any(v.midi == midi and v.rel_t is None and not v.done
+                       for v in self._voices)
+
+    def release(self, midi):
+        """Taste losgelassen: alle gehaltenen Töne dieser Höhe ausklingen lassen."""
+        midi = int(midi)
+        with self._lock:
+            for v in self._voices:
+                if v.midi == midi:
+                    v.release()
 
     def silence(self):
         """Alles sofort verstummen lassen (Panel zu, Wiedergabe abgebrochen)."""

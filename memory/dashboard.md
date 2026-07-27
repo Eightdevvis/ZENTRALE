@@ -610,10 +610,25 @@ nicht zum Durchzappen).
 >   `♪ ton reagiert nicht`; die TUI bleibt die ganze Zeit bedienbar. Ausweg:
 >   **`ZENTRALE_AUDIO_DEVICE`** (Index wie `0` oder Name wie `hw:0,0`) geht an
 >   der ALSA-/PipeWire-Kette vorbei direkt auf die Karte.
-> - **Anschlag hat eine FESTE Länge** (`PIANO_NOTE_MS`, 420 ms): das Terminal
->   meldet nur Tastendrücke, **kein Loslassen** — eine Haltedauer ist hier
->   physisch nicht messbar. Im Browser aufgenommene Melodien tragen ihre echten
->   Haltedauern und klingen in der TUI auch so lang.
+> - **Gedrückt halten klingt wie am Flügel** — obwohl das Terminal **kein
+>   Loslassen** meldet. Der Trick ist die **Tastenwiederholung des Systems**:
+>   hält man eine Taste, schickt X sie nach ~500 ms als Salve alle ~50 ms
+>   nach. So schnell drückt keine Hand dieselbe Taste zweimal — alles unter
+>   `PIANO_HOLD_MS` ist deshalb sicher „gehalten" (`piano_hold_decide`; die
+>   Schwelle wird beim Öffnen an die echte Rate angepasst, `xset q`). Der Ton
+>   läuft dann in `tone.Voice(hold=True)`: er fällt nur langsam (`HOLD_TAU_S`),
+>   und wenn die Salve ausbleibt = Finger weg, klingt er ab der erreichten
+>   Lautstärke normal aus — nahtlos, ohne Knacken. Ohne Halten bleibt alles wie
+>   vorher (`PIANO_NOTE_MS`, 420 ms); gespeicherte Melodien laufen NIE über die
+>   Halte-Kurve, die tragen ihre echten Haltedauern.
+> - **Und es entsteht nur EINE Note.** Die erste Wiederholung kommt nach der
+>   System-Verzögerung und sieht aus wie ein zweiter Anschlag — erst die Salve
+>   50 ms danach verrät sie, denn ein echter zweiter Anschlag begänne seine
+>   eigene Salve erst eine volle Verzögerung später. Darum nimmt die TUI die
+>   dafür geschriebene Note **rückwirkend wieder weg** (auch aus einer laufenden
+>   Aufnahme). Beim Loslassen wird die wirklich gehaltene Dauer in die Note
+>   geschrieben — im Browser klingt sie dann genauso lang. Ein bewusster zweiter
+>   Anschlag wird also nie verschluckt.
 > - **Noten:** 5 Linien im Violinschlüssel (E4…F5), eine Terminal-Zeile pro
 >   diatonischer Stufe, Hilfslinien nach Bedarf, `♯` vor der Note. Kein
 >   Notenschlüssel-Glyph — `𝄞` fehlt in Terminal-Fonts; stattdessen ein

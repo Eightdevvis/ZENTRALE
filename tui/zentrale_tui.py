@@ -509,6 +509,12 @@ PIANO_NOTE_MS = 420        # Länge eines Anschlags (Terminal kennt kein Loslass
 PIANO_HOLLOW_MS = 500      # ab hier hohler Notenkopf (wie im Browser: lang gehalten)
 PIANO_CHORD_MS = 70        # bis hierhin gilt es als gleichzeitig = eine Spalte (wie im Browser)
 PIANO_LIT_MS = 260         # so lange leuchtet eine angeschlagene Taste nach
+# Tastenwiederholung: kommt dieselbe Taste schneller als das wieder, hält sie
+# jemand gedrückt (X11 hier: ~500 ms Verzögerung, dann alle 50 ms). Derselbe
+# Wert sagt auch, wann eine gehaltene Taste als losgelassen gilt — bleibt die
+# Salve so lange aus, ist der Finger weg. Wird beim Öffnen des Panels an die
+# echte Wiederholrate des Systems angepasst (`xset q`).
+PIANO_HOLD_MS = 120
 PIANO_MAX_COLS = 64        # so viele Noten-Spalten hält das Notensystem vor
 PIANO_KB_MIN_H = 5         # flacher lohnt keine gezeichnete Klaviatur
 PIANO_KB_MAX_H = 13        # höher wirken die Tasten nur noch klobig
@@ -687,6 +693,34 @@ def piano_columns(seq, max_cols=PIANO_MAX_COLS, chord_ms=PIANO_CHORD_MS):
             cols.append((t, [e]))
     out = [sorted(notes, key=lambda x: int(x.get("n", 0))) for _t, notes in cols]
     return out[-max_cols:] if max_cols and len(out) > max_cols else out
+
+
+def piano_hold_decide(gap_ms, reps, hold_ms=PIANO_HOLD_MS):
+    """
+    Was bedeutet ein erneuter Anschlag DERSELBEN Taste? PURE Funktion:
+      gap_ms = Abstand zum letzten Ereignis dieser Taste
+      reps   = wie viele Wiederholungen dafür schon erkannt wurden
+      -> (aktion, letzte_note_wieder_weg)   aktion: "neu" | "halten"
+
+    Das Terminal meldet kein Loslassen — was es meldet, ist die
+    TASTENWIEDERHOLUNG des Systems: hält man eine Taste, kommt sie nach der
+    Verzögerung (hier ~500 ms) als schnelle Salve wieder, ~50 ms auseinander.
+    Unter `hold_ms` kann es deshalb nur Wiederholung sein; so schnell drückt
+    kein Mensch dieselbe Taste zweimal.
+
+    Und die ERSTE erkannte Wiederholung verrät rückwirkend etwas: das Ereignis
+    davor war auch schon eine. Ein echter zweiter Anschlag hätte seine eigene
+    Salve erst eine volle Verzögerung später begonnen, nie 50 ms danach. Die
+    Note, die für dieses Ereignis geschrieben wurde, muss also wieder weg —
+    sonst steht die gehaltene Taste zweimal im System.
+    """
+    try:
+        gap_ms = float(gap_ms)
+    except (TypeError, ValueError):
+        return "neu", False
+    if not (0 <= gap_ms <= float(hold_ms)):
+        return "neu", False
+    return "halten", int(reps or 0) == 0
 
 
 def piano_beat(ms):
@@ -1600,6 +1634,8 @@ def run_ui(stdscr, store):
              "renaming": None, "msg": "", "_u8": b"",
              "opening": None,      # seit wann geht das Audio-Gerät auf? (None = fertig)
              "light": PIANO_LIGHTS[0],   # Tastenbeleuchtung: neon|regenbogen|aus ('L')
+             "held": {},           # gedrückt gehaltene Tasten (Tastenwiederholung)
+             "holdms": PIANO_HOLD_MS,   # ab wann gilt dieselbe Taste als gehalten
              "t0": 0.0}            # Zeitnullpunkt der Noten im System
 
     # ── Karte (füllt die MITTE-Box, Taste 'm') ──────────────────────────
@@ -4149,6 +4185,24 @@ def run_ui(stdscr, store):
         except Exception:
             return None
 
+    def p_read_repeat_rate():
+        """Die echte Tastenwiederholrate des Systems holen (X11: `xset q`) und
+        die Halte-Schwelle danach setzen: alles, was schneller als ~2 Wieder-
+        holungen kommt, ist gehalten und nicht getippt. Ohne X (tty, SSH) bleibt
+        der Standard stehen — er passt für die üblichen 20–30/s."""
+        if not os.environ.get("DISPLAY"):
+            return
+        try:
+            out = subprocess.run(["xset", "q"], stdout=subprocess.PIPE,
+                                 stderr=subprocess.DEVNULL, timeout=2).stdout
+            for wort in (out or b"").decode("utf-8", "replace").split("repeat rate:")[1:]:
+                rate = int(wort.split()[0])
+                if rate > 0:
+                    PIANO["holdms"] = max(90, min(400, int(2200.0 / rate)))
+                break
+        except Exception:
+            pass
+
     def p_sound_up():
         """Ton-Ausgang öffnen (Hintergrund-Thread: das Gerät aufzumachen kostet
         auf dem Pi spürbar Zeit, die Zeichenschleife soll nicht warten).
@@ -4160,6 +4214,7 @@ def run_ui(stdscr, store):
         welchem Zustand der Ton steckt (ZENTRALE_AUDIO_DEVICE=0 o.ä. geht dann
         direkt auf die Soundkarte)."""
         PIANO["opening"] = time.time()
+        p_read_repeat_rate()
         try:
             if os.environ.get("ZENTRALE_NO_AUDIO"):
                 # Bewusst still: Testläufe (Fuzzer) und Knoten, die keinen Ton
@@ -4211,16 +4266,18 @@ def run_ui(stdscr, store):
             except Exception:
                 pass
         PIANO["synth"] = None; PIANO["sound"] = False
-        PIANO["active"] = False; PIANO["lit"] = {}
+        PIANO["active"] = False; PIANO["lit"] = {}; PIANO["held"] = {}
 
-    def p_strike(midi, dur_ms=PIANO_NOTE_MS, record=True):
+    def p_strike(midi, dur_ms=PIANO_NOTE_MS, record=True, hold=False):
         """Einen Ton anschlagen: klingen lassen, Taste aufleuchten, ins
-        Notensystem schreiben und (wenn aufgenommen wird) mitschneiden."""
+        Notensystem schreiben und (wenn aufgenommen wird) mitschneiden.
+        Gibt die geschriebenen Einträge zurück (System, Aufnahme) — die
+        Halte-Erkennung braucht sie, um sie notfalls wieder wegzunehmen."""
         now = time.time()
         syn = PIANO.get("synth")
         if syn is not None:
             try:
-                syn.strike(midi, dur_ms=dur_ms)
+                syn.strike(midi, dur_ms=dur_ms, hold=hold)
             except Exception:
                 pass
         PIANO["lit"][midi] = now + PIANO_LIT_MS / 1000.0
@@ -4232,11 +4289,14 @@ def run_ui(stdscr, store):
         PIANO["seq"].append(note)
         if len(PIANO["seq"]) > 96:
             del PIANO["seq"][0:len(PIANO["seq"]) - 96]
+        recnote = None
         rec = PIANO.get("rec")
         if record and rec is not None:
-            rec["notes"].append({"n": int(midi),
-                                 "t": int((now - rec["t0"]) * 1000),
-                                 "d": int(dur_ms)})
+            recnote = {"n": int(midi),
+                       "t": int((now - rec["t0"]) * 1000),
+                       "d": int(dur_ms)}
+            rec["notes"].append(recnote)
+        return note, recnote
 
     def p_undo_note():
         """Rücktaste: die zuletzt geschriebene Note wieder weg — wie im Text.
@@ -4254,11 +4314,79 @@ def run_ui(stdscr, store):
             rec["notes"].pop()          # aus der Aufnahme fällt sie genauso raus
         PIANO["msg"] = "%s weg" % piano_note_name(weg.get("n", 60))
 
+    def p_drop(ref, wo):
+        """Einen bereits geschriebenen Eintrag wieder aus einer Liste nehmen —
+        über Identität, nicht über Gleichheit: dieselbe Note kann mehrfach
+        vorkommen, weg soll genau DIESE."""
+        if not isinstance(ref, dict):
+            return
+        for i in range(len(wo) - 1, -1, -1):
+            if wo[i] is ref:
+                del wo[i]
+                return
+
+    def p_press(midi):
+        """Ein Tasten-Ereignis am Klavier — echter Anschlag ODER die
+        Tastenwiederholung einer gehaltenen Taste (siehe piano_hold_decide).
+        Gehalten wird der Ton am Leben gehalten statt neu angeschlagen, und es
+        entsteht keine zweite Note."""
+        now = time.time()
+        h = PIANO["held"].get(midi)
+        if h is not None:
+            aktion, weg = piano_hold_decide((now - h["t"]) * 1000.0, h["reps"],
+                                            PIANO.get("holdms", PIANO_HOLD_MS))
+            if aktion == "halten":
+                h["t"] = now
+                h["reps"] += 1
+                if weg:
+                    # Das Ereignis davor war auch schon Wiederholung — seine
+                    # Note wieder wegnehmen, es bleibt die vom echten Anschlag.
+                    p_drop(h.get("note"), PIANO["seq"])
+                    rec = PIANO.get("rec")
+                    if rec is not None:
+                        p_drop(h.get("rec"), rec["notes"])
+                    vor = h.get("prev") or {}
+                    h["note"], h["rec"] = vor.get("note"), vor.get("rec")
+                    h["t0"] = vor.get("t0", h["t0"])
+                PIANO["lit"][midi] = now + PIANO_LIT_MS / 1000.0
+                syn = PIANO.get("synth")
+                if syn is not None:
+                    try:
+                        if not syn.holding(midi):   # so lange gehalten, dass
+                            syn.strike(midi, hold=True)   # der Ton schon aus war
+                    except Exception:
+                        pass
+                return
+        note, recnote = p_strike(midi, hold=True)
+        PIANO["held"][midi] = {"t": now, "t0": now, "reps": 0,
+                               "note": note, "rec": recnote, "prev": h}
+
+    def p_hold_tick():
+        """Bleibt die Wiederholung aus, ist der Finger weg: Ton ausklingen
+        lassen und die wirklich gehaltene Dauer in die Note schreiben (im
+        Browser klingt sie dann genauso lang)."""
+        now = time.time()
+        grenze = PIANO.get("holdms", PIANO_HOLD_MS) / 1000.0
+        for midi, h in list(PIANO["held"].items()):
+            if now - h["t"] <= grenze:
+                continue
+            del PIANO["held"][midi]
+            syn = PIANO.get("synth")
+            if syn is not None:
+                try:
+                    syn.release(midi)
+                except Exception:
+                    pass
+            gehalten = max(PIANO_NOTE_MS, int((h["t"] - h["t0"]) * 1000) + PIANO_NOTE_MS)
+            for ref in (h.get("note"), h.get("rec")):
+                if isinstance(ref, dict):
+                    ref["d"] = gehalten
+
     def p_play_key(name):
         """Buchstaben-Taste → Ton (None, wenn die Taste keine Klaviertaste ist)."""
         if name not in PIANO_KEYMAP:
             return False
-        p_strike(piano_midi(PIANO["oct"], PIANO_KEYMAP[name]))
+        p_press(piano_midi(PIANO["oct"], PIANO_KEYMAP[name]))
         return True
 
     def p_shift_oct(d):
@@ -4404,10 +4532,13 @@ def run_ui(stdscr, store):
 
     def p_lit_now():
         """Welche Tasten leuchten gerade? (abgelaufene rausräumen)"""
+        p_hold_tick()                  # losgelassene Tasten zuerst ausklingen lassen
         now = time.time()
         lit = {n: 1 for n, until in list(PIANO["lit"].items()) if until > now}
         if len(lit) != len(PIANO["lit"]):
             PIANO["lit"] = {n: until for n, until in PIANO["lit"].items() if until > now}
+        for n in PIANO["held"]:
+            lit[n] = 1                 # gedrückt gehalten = leuchtet, ohne Flackern
         return lit
 
     def draw_piano_tool(by, bx, bh, bw):
