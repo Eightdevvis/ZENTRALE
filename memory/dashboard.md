@@ -266,8 +266,8 @@ Werte/Definitionen holt das Werkzeug synchron per `api_call()` (POST/DELETE).
 Die `lifestyle`-Box rechts zeigt **alle Graphen überlagert** in EINEM Gitter:
 X = **festes Fenster der letzten 7 Tage** (heute rechts, 6 Tage zurück nach
 links, über die volle Breite verteilt — egal wie viel gefüllt ist; leere Tage
-bleiben leer; einzige Ausnahme: für die Zyklus-Vorhersage darf der rechte Rand
-ein Stück in die Zukunft rutschen, s.u.), Y **bewusst mehrdeutig** — jeder Graph nutzt seine *eigene*
+bleiben leer; der rechte Rand ist IMMER heute und rollt tageweise weiter, auch
+die Zyklus-Vorhersage schiebt ihn nicht vor), Y **bewusst mehrdeutig** — jeder Graph nutzt seine *eigene*
 Achse + Darstellung, alles übereinandergelegt zum Vergleich. Gezeichnet als
 **dünne Linien**, je Graph in einer eigenen **Farbe** (Unterscheidung über die
 Farbe, nicht über fette Symbole):
@@ -309,11 +309,10 @@ PMS-Fenster. Quelle `GET /api/cycle`. Drei Orte:
   `lifestyle`-Box wie große Ansicht, beides `draw_overlay` — tönt PMS-Woche und
   erwarteten Start als **Zellen-Hintergrund** (wie die Schlaf-Bande, nur so
   liegt es hinter den Werten), `◆` + Datum in Altrosa markieren den Starttag.
-  **Vorrang: Schlaf-Bande vor Zyklus-Fläche**, Werte über beidem. Dafür
-  **wächst die Achse bis zum erwarteten Start in die Zukunft**, aber ganz oder
-  gar nicht (`cycle_axis`: passt er nicht in ein Drittel der Breite, bleibt sie
-  bei heute). Im Browser gibt es das nicht: dessen Plot hat keine
-  Datumsachse (x = Nr. des Werts).
+  **Vorrang: Schlaf-Bande vor Zyklus-Fläche**, Werte über beidem. Die **Achse
+  bleibt unangetastet** — sie endet heute und rollt tageweise weiter, getönt
+  wird nur, was schon im Bild ist (`cycle_axis`). Im Browser gibt es das nicht:
+  dessen Plot hat keine Datumsachse (x = Nr. des Werts).
 - **im Kalender** als Tages-Tönung.
 
 Volle Beschreibung: `memory/zyklus_pms.md`.

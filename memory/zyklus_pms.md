@@ -80,26 +80,25 @@ Graph-Werkzeug) trägt das Fenster mit:
   selbst setzt (die Fläche allein sagt nicht, WELCHER Tag der Start ist). Ganz
   zum Schluss in die oberste Plot-Zeile, wo praktisch nie ein Messwert liegt.
   Sein Datum steht (große Ansicht) in Altrosa in der Datumszeile und
-  **verdrängt** dort ein zu dicht danebenstehendes Nachbar-Label.
+  **verdrängt** dort ein zu dicht danebenstehendes Nachbar-Label. Sichtbar nur,
+  wenn der Tag schon in der Achse liegt (heute/überfällig) — siehe unten.
 - Ohne 256 Farben (oder zu wenige Farbpaare) gibt es keine Fläche →
   Rückfallebene: gepunktete Senkrechte `┊`, erwarteter Tag `│`.
 - Nur, wenn der »periode«-Graph in der Überlagerung gerade **sichtbar** ist
   (im Werkzeug abwählbar) — die Tönung gehört sichtbar zu seiner Kurve.
 
-**Die Achse wächst dafür in die Zukunft** (`cycle_axis`, rein rechnend und
-ohne Terminal testbar → `tests/test_tui_cycle_axis.py`), sonst läge alles
-rechts außerhalb: sie endet ja normal HEUTE. Regel: bis zum erwarteten Start,
-aber **ganz oder gar nicht** — passt er nicht in ein Drittel der verfügbaren
-Breite, bleibt die Achse wie sie war. Ein halbes PMS-Fenster ohne seinen
-Startpunkt wäre nur ein rätselhafter Streifen, und die Historie ist die
-Hauptsache. Praktisch heißt das: in der schmalen lifestyle-Box taucht die
-Tönung erst auf, wenn es tatsächlich soweit ist; in der großen Ansicht steht
-sie fast immer.
+**Die Achse rührt das nicht an** (`cycle_axis`, rein rechnend und ohne
+Terminal testbar → `tests/test_tui_cycle_axis.py`): sie endet weiter **heute**
+und rollt Tag für Tag weiter, die Vorhersage schiebt sie **nicht** vor. Getönt
+wird also nur, was gerade im Bild ist — vom PMS-Fenster erst die Tage, die
+schon eingerollt sind; der Rest kommt von selbst dazu, Tag für Tag. Der
+erwartete Start (und sein `◆`) ist entsprechend erst zu sehen, wenn er da ist
+bzw. überfällig wurde.
 
-> **Nebenwirkung, bewusst abgefangen:** Graphen mit `predict` füllen Lücken im
-> Fenster mit Schätzwerten. Seit die Achse in die Zukunft reicht, ist das auf
-> Tage **bis heute** begrenzt — sonst stünden plötzlich Schätzungen für Tage
-> im Plot, die noch gar nicht waren.
+> Zwischenzeitlich (commit `f256712`/`1ac40e4`) ließ die Achse sich für das
+> volle Fenster in die Zukunft strecken — das schob den Graphen sichtbar vor
+> und wurde wieder entfernt. Die stetig weiterrollende Zeitachse ist wichtiger
+> als ein vollständig gezeigtes Fenster.
 
 > **Browser:** dort bleibt es bei Textzeile + Kalender. Die Kurve im
 > Graph-Werkzeug (`plotSvg`) und die Sparkline der lifestyle-Box haben **keine

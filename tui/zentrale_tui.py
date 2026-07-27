@@ -370,39 +370,32 @@ def graph_series(gtype, rows):
     return out
 
 
-def cycle_axis(cyc, today, avail):
-    """Zyklus-Vorhersage → (zukunfts-tage, {iso-datum: "pms"|"next"}) für die
-    Zeitachse der Graph-Überlagerung. Rein rechnend, damit die Regel ohne
-    Terminal prüfbar ist (tests/test_tui_cycle_axis.py).
+def cycle_axis(cyc):
+    """Zyklus-Vorhersage → {iso-datum: "pms"|"next"} für die Zeitachse der
+    Graph-Überlagerung. Rein rechnend, damit die Regel ohne Terminal prüfbar
+    ist (tests/test_tui_cycle_axis.py).
 
-    Die Achse endet sonst HEUTE — der erwartete Start und die Woche davor
-    lägen also außerhalb. Sie darf darum in die ZUKUNFT wachsen, aber GANZ
-    ODER GAR NICHT: passt der erwartete Start nicht in ein Drittel der
-    verfügbaren Breite, bleibt sie wie sie war (0). Ein halbes PMS-Fenster
-    ohne seinen Startpunkt wäre nur ein rätselhafter Streifen, und die
-    Historie ist die Hauptsache — gerade in der schmalen lifestyle-Box.
-
-    Markiert wird IMMER das echte Fenster aus core/cycle.py, auch wenn es
-    schon vorbei ist (überfällig): dann liegen die Tage ohnehin links von
-    heute und brauchen keinen Platz.
+    Die Achse bleibt, wie sie ist: sie endet HEUTE und rollt Tag für Tag
+    weiter — die Vorhersage schiebt sie NICHT vor. Markiert werden darum
+    schlicht die Tage des Fensters, die gerade im Bild sind; der Rest tönt
+    sich von selbst ein, sobald er eingerollt ist. Auch ein vorbeigezogenes
+    (überfälliges) Fenster wird markiert, es liegt dann links von heute.
     """
     if not isinstance(cyc, dict):
-        return 0, {}
+        return {}
     try:
         c_next = date.fromisoformat(str(cyc.get("next_start")))
         c_from = date.fromisoformat(str(cyc.get("pms_from")))
         c_to = date.fromisoformat(str(cyc.get("pms_to")))
     except (TypeError, ValueError):
-        return 0, {}
+        return {}
     marks = {}
     dd = c_from
     while dd <= c_to and (dd - c_from).days < 60:      # Deckel gegen Müll-Daten
         marks[dd.isoformat()] = "pms"
         dd += timedelta(days=1)
     marks[c_next.isoformat()] = "next"
-    ahead = (c_next - today).days
-    fut = ahead if 0 < ahead <= max(0, int(avail) // 3) else 0
-    return fut, marks
+    return marks
 
 
 def graph_last(g, rows):
@@ -2904,14 +2897,14 @@ def run_ui(stdscr, store):
         maxscroll = 0                          # wie weit man in die Vergangenheit kann
 
         # ── Zyklus-Fenster (nur »periode«, core/cycle.py → /api/cycle) ─────
-        # Wie weit die Achse dafür in die Zukunft darf, rechnet cycle_axis
-        # (oben, testbar). Ist der »periode«-Graph gerade abgewählt, wird gar
-        # nichts markiert: die Tönung gehört sichtbar zu SEINER Kurve.
+        # Nur Tönung für Tage, die ohnehin im Bild sind — die Achse endet
+        # weiter HEUTE und rollt tageweise weiter (cycle_axis, oben, testbar).
+        # Ist der »periode«-Graph gerade abgewählt, wird gar nichts markiert:
+        # die Tönung gehört sichtbar zu SEINER Kurve.
         cyc = cyc if isinstance(cyc, dict) else {}
         if cyc.get("graph_id") not in {g.get("id") for g in gs_cache if isinstance(g, dict)}:
             cyc = {}
-        fut, cyc_mark = cycle_axis(cyc, today, avail)
-        right_day = today + timedelta(days=fut)
+        cyc_mark = cycle_axis(cyc)
 
         if labeled:
             all_dates = [dd for s in series for dd in s["dv"].keys()]
@@ -2919,13 +2912,13 @@ def run_ui(stdscr, store):
             if all_dates:
                 try:
                     ey, em, ed = (int(x) for x in min(all_dates).split("-"))
-                    span = (right_day - date(ey, em, ed)).days + 1
+                    span = (today - date(ey, em, ed)).days + 1
                 except Exception:
                     span = avail
             if span <= avail:
                 # passt komplett in die breite → wie bisher gestreckt, kein scrollen
                 ndays = max(1, min(span, 366))
-                window = [(right_day - timedelta(days=k)).isoformat() for k in range(ndays - 1, -1, -1)]
+                window = [(today - timedelta(days=k)).isoformat() for k in range(ndays - 1, -1, -1)]
                 if ndays == 1:
                     day_col = {window[0]: day_x_end}
                 else:
@@ -2936,11 +2929,11 @@ def run_ui(stdscr, store):
                 # rechte kante = heute minus scroll; ←/→ pant durch die vergangenheit
                 maxscroll = span - avail
                 scroll = max(0, min(int(scroll), maxscroll))
-                right = right_day - timedelta(days=scroll)
+                right = today - timedelta(days=scroll)
                 window = [(right - timedelta(days=k)).isoformat() for k in range(avail - 1, -1, -1)]
                 day_col = {d: day_x0 + i for i, d in enumerate(window)}
         else:
-            window = [(right_day - timedelta(days=k)).isoformat() for k in range(avail - 1, -1, -1)]
+            window = [(today - timedelta(days=k)).isoformat() for k in range(avail - 1, -1, -1)]
             day_col = {d: day_x0 + i for i, d in enumerate(window)}
         day_center = day_col
         cols = window
@@ -3056,12 +3049,8 @@ def run_ui(stdscr, store):
 
             mv, me = mean("value"), mean("end")
             out = {}
-            today_iso = today.isoformat()
             for d in window:
-                # Nur LÜCKEN in der Vergangenheit schätzen. Seit die Achse für
-                # den Zyklus in die Zukunft reicht, lägen sonst plötzlich
-                # Schätzwerte für Tage im Fenster, die noch gar nicht waren.
-                if d in dv or d < earliest or d > today_iso or mv is None:
+                if d in dv or d < earliest or mv is None:
                     continue
                 e = {"date": d, "value": mv, "_pred": True}
                 if me is not None:
