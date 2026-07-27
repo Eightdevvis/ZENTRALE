@@ -629,8 +629,9 @@ nicht zum Durchzappen).
 >   schwarzen Tasten als **Keycaps** behandeln (ab 3 Spalten Breite kriegen sie
 >   eine Umrandung, der Buchstabe sitzt mittendrin):
 >   `neon` (Standard) = jede Keycap trägt ihre eigene Leuchtfarbe (im Dunkeln
->   echtes Neon 51/201/46/226/208/199/129, auf Papier dieselbe Reihenfolge aus
->   der Tages-Palette); `regenbogen` = dieselben Farben **wandern** über die
+>   echtes Neon 51/201/46/226/208/199/129 — auf **Papier gibt es das bewusst
+>   nicht**, Leuchttasten sind eine Nacht-Sache; tagsüber bleibt die Keycap
+>   schlicht schwarz-weiß und der Kopf sagt bei `L` „nur nachts"); `regenbogen` = dieselben Farben **wandern** über die
 >   Klaviatur (6 Stufen/s, aus `time.time()` — der Lauf hängt damit nicht daran,
 >   wie oft neu gezeichnet wird) und die Buchstaben der **weißen** Tasten glühen
 >   mit; `aus` = schlichte Umrandung wie der Rest der TUI. Ohne 256 Farben

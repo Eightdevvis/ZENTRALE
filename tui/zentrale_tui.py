@@ -1157,9 +1157,9 @@ def run_ui(stdscr, store):
             "cyc_bg": 224,
             # Klavier: schwarze Taste auf weißem Grund darf echtes Schwarz sein.
             "key_bg": 16,
-            # Leuchtfarben auf Papier: dieselbe Reihenfolge, aber aus der
-            # Tages-Palette (kein Neon auf Papier, das flimmert nur).
-            "key_neon": [26, 90, 65, 172, 124, 132, 67],
+            # KEIN "key_neon" auf Papier: Leuchttasten sind eine Nacht-Sache.
+            # Tagsüber bleibt die Keycap schlicht schwarz-weiß, 'L' hat hier
+            # nichts zu färben (die TUI sagt das auch, wenn man es drückt).
             # Ombre der Sidebar-Liste: nach unten in den (weißen) Hintergrund
             # verblassend → Grau wird heller.
             "ombre": [238, 244, 248, 251, 253],
@@ -4333,6 +4333,8 @@ def run_ui(stdscr, store):
             head += "   ♪ stumm"
         if PIANO.get("light", PIANO_LIGHTS[0]) != PIANO_LIGHTS[0]:
             head += "   ✦ licht " + PIANO["light"]      # nur wenn NICHT Standard
+            if not C.get("keyframe"):    # helles Theme: es gibt nichts zu färben
+                head += " (nur nachts)"
         addclip(by + 1, ix, head, iw,
                 C["warn"] if PIANO["rec"] is not None else C["bright"])
 
