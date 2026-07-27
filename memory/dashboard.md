@@ -615,11 +615,27 @@ nicht zum Durchzappen).
 >   physisch nicht messbar. Im Browser aufgenommene Melodien tragen ihre echten
 >   Haltedauern und klingen in der TUI auch so lang.
 > - **Noten:** 5 Linien im Violinschlüssel (E4…F5), eine Terminal-Zeile pro
->   diatonischer Stufe, Hilfslinien nach Bedarf, `♯` vor der Note, hohler Kopf
->   ab 500 ms (wie im Browser). Kein Notenschlüssel-Glyph — `𝄞` fehlt in
->   Terminal-Fonts; stattdessen ein Taktstrich links. Noten außerhalb des
->   Systems (Oktave 3/6) werden an den Rand geklemmt und als `◇` markiert,
->   statt unsichtbar zu verschwinden.
+>   diatonischer Stufe, Hilfslinien nach Bedarf, `♯` vor der Note. Kein
+>   Notenschlüssel-Glyph — `𝄞` fehlt in Terminal-Fonts; stattdessen ein
+>   Taktstrich links. Noten außerhalb des Systems (Oktave 3/6) werden an den
+>   Rand geklemmt und als `◇` markiert, statt unsichtbar zu verschwinden.
+> - **Rücktaste löscht die letzte Note** — wie beim Tippen von Text. Ein
+>   Anschlag = eine Note, also fällt genau einer weg (bei einem Akkord der
+>   zuletzt getippte Ton). Läuft eine Aufnahme, fliegt die Note auch dort raus.
+> - **Grober Rhythmus** (`piano_beat`/`piano_flow`): wie lang eine Note war,
+>   meldet das Terminal nicht — messbar ist nur der **Abstand zum nächsten
+>   Anschlag**, und der ist die Notenlänge: wer wartet, hält. Vier Stufen
+>   (achtel/viertel/halbe/ganze, `PIANO_BEAT_MS`), mehr wäre vorgetäuschte
+>   Genauigkeit. Achtel und Viertel sind volle Köpfe, Halbe und Ganze hohle mit
+>   einem Halte-Strich daneben (`─` bzw. `═`) — sonst sähen beide gleich aus.
+>   Bleibt nach dem Runden Zeit übrig, wird daraus eine **Pause**: ein Block auf
+>   der Mittellinie, je länger die Stille, desto höher (`▁▂▄█`).
+>   **Zwei Stellen schreiben bewusst KEINE Pause** — vor der ersten Note und
+>   nach dem Löschen (die Note danach trägt `np`): das ist Bedenkzeit, keine
+>   Musik, sonst wäre das Blatt voller Pausen statt Noten. Die **letzte** Note
+>   ist immer „offen" (hohl) und bekommt ihre Länge erst, wenn es weitergeht.
+>   Alles davon wird beim Zeichnen aus den Zeitstempeln abgeleitet — Löschen
+>   räumt seine Pause deshalb von selbst mit weg.
 > - **Aufnahme:** `Leertaste` startet/stoppt, beim Stoppen wird der Name im
 >   Panel getippt (`Esc` verwirft). `↑↓` wählt eine Melodie, `Enter` spielt sie
 >   ab (nochmal `Enter` = stopp, die Noten laufen dabei live ins System),

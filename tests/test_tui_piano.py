@@ -16,9 +16,9 @@ import pytest
 from tui.zentrale_tui import (
     PIANO_WHITE, PIANO_BLACK, PIANO_KEYMAP, PIANO_NAMES, PIANO_OCT_MIN,
     PIANO_OCT_MAX, PIANO_STAFF_ROWS, PIANO_TOP_DIA, PIANO_BOT_DIA,
-    PIANO_CHORD_MS, PIANO_HOLLOW_MS,
+    PIANO_CHORD_MS, PIANO_HOLLOW_MS, PIANO_BEAT_DEFAULT, PIANO_REST_GLYPH,
     piano_dia, piano_note_name, piano_midi, piano_keyboard, piano_columns,
-    piano_staff,
+    piano_staff, piano_beat, piano_flow,
 )
 
 
@@ -173,12 +173,89 @@ def test_note_ausserhalb_wird_geklemmt_und_markiert():
 
 
 def test_kopf_zeigt_die_laenge():
-    """Voll = kurz angeschlagen, hohl = lang gehalten oder klingt noch."""
-    _r, kurz = piano_staff([{"n": 64, "t": 0, "d": 100}], PIANO_STAFF_ROWS, 40)
-    _r, lang = piano_staff([{"n": 64, "t": 0, "d": PIANO_HOLLOW_MS}], PIANO_STAFF_ROWS, 40)
-    _r, offen = piano_staff([{"n": 64, "t": 0, "d": 0}], PIANO_STAFF_ROWS, 40)
-    assert kurz[0][2] == "●"
-    assert lang[0][2] == "○" and offen[0][2] == "○"
+    """Voll = kurz (achtel/viertel), hohl = lang (halbe/ganze). Die Länge kommt
+    aus dem Abstand zum NÄCHSTEN Anschlag — das Terminal kennt kein Loslassen,
+    `d` sagt darüber nichts."""
+    def kopf(gap):
+        seq = [{"n": 64, "t": 0, "d": 420}, {"n": 64, "t": gap, "d": 420}]
+        return piano_staff(seq, PIANO_STAFF_ROWS, 40)[1][0][2]
+    assert kopf(200) == "●" and kopf(600) == "●"
+    assert kopf(1000) == "○" and kopf(2500) == "○"
+    # die letzte Note hat noch keinen Nachfolger → offen, also hohl
+    _r, offen = piano_staff([{"n": 64, "t": 0, "d": 420}], PIANO_STAFF_ROWS, 40)
+    assert offen[0][2] == "○"
+
+
+# ── 2b2. Grober Rhythmus: Notenlängen und Pausen ────────────────────────────
+def test_notenwert_stufen_sind_grob_und_monoton():
+    assert piano_beat(0) == 0 and piano_beat(100) == 0
+    assert piano_beat(500) == 1
+    assert piano_beat(1000) == 2
+    assert piano_beat(5000) == 3
+    stufen = [piano_beat(ms) for ms in range(0, 4000, 25)]
+    assert stufen == sorted(stufen)                 # nie rückwärts
+    for muell in (None, "x", [], {}, float("nan")):
+        assert 0 <= piano_beat(muell) <= 3          # wirft nie
+
+
+def test_lange_luecke_wird_zur_pause_kurze_nicht():
+    schnell = piano_flow([{"n": 64, "t": 0}, {"n": 65, "t": 300}])
+    assert [i[0] for i in schnell] == ["n", "n"]     # kein Pausenzeichen
+    lang = piano_flow([{"n": 64, "t": 0}, {"n": 65, "t": 3000}])
+    assert [i[0] for i in lang] == ["n", "p", "n"]
+    # die Pause steht zwischen den beiden Noten, nicht davor oder dahinter
+    assert lang[1][0] == "p" and 0 <= lang[1][1] <= 3
+
+
+def test_vor_der_ersten_note_gibt_es_nie_eine_pause():
+    """Auch wenn die erste Note spät kommt (t ist die Zeit seit Panel-Start)."""
+    for t0 in (0, 5000, 120000):
+        flow = piano_flow([{"n": 64, "t": t0}])
+        assert [i[0] for i in flow] == ["n"]
+
+
+def test_nach_dem_loeschen_wird_keine_pause_geschrieben():
+    """Die Bedenkzeit nach der Rücktaste ist keine Musik: die Note danach trägt
+    `np`, und dann entsteht aus der Lücke KEINE Pause."""
+    mit = piano_flow([{"n": 64, "t": 0}, {"n": 65, "t": 9000}])
+    ohne = piano_flow([{"n": 64, "t": 0}, {"n": 65, "t": 9000, "np": 1}])
+    assert [i[0] for i in mit] == ["n", "p", "n"]
+    assert [i[0] for i in ohne] == ["n", "n"]
+    # und die Note davor wird mit der Ersatzlänge geschlossen, nicht gemessen
+    assert ohne[0][2] == PIANO_BEAT_DEFAULT
+
+
+def test_letzte_note_bleibt_offen_und_kriegt_ihre_laenge_erst_danach():
+    eine = piano_flow([{"n": 64, "t": 0}])
+    assert eine[0][2] is None                        # offen
+    zwei = piano_flow([{"n": 64, "t": 0}, {"n": 65, "t": 500}])
+    assert zwei[0][2] == 1 and zwei[1][2] is None    # erste geschlossen, zweite offen
+
+
+def test_akkord_bleibt_eine_spalte_und_kriegt_eine_laenge():
+    seq = [{"n": 60, "t": 0}, {"n": 64, "t": 20}, {"n": 67, "t": 30},
+           {"n": 72, "t": 900}]
+    flow = piano_flow(seq)
+    assert [i[0] for i in flow] == ["n", "n"]
+    assert len(flow[0][1]) == 3 and flow[0][2] == 2  # zusammen, halbe lang
+
+
+def test_pause_wird_im_system_gezeichnet():
+    rows, marks = piano_staff([{"n": 64, "t": 0}, {"n": 65, "t": 4000}],
+                              PIANO_STAFF_ROWS, 40)
+    assert any(g in "".join(rows) for g in PIANO_REST_GLYPH)
+    # sie sitzt zwischen den beiden Notenköpfen
+    xs = [m[1] for m in marks]
+    assert xs == sorted(xs) and len(marks) == 3
+
+
+def test_flow_wirft_bei_muell_nie():
+    rnd = random.Random(99)
+    muell = [None, "x", 5, {}, {"n": None}, {"n": 60, "t": "spät"},
+             {"n": 60, "t": -10 ** 9}, {"n": 60, "t": 10 ** 9, "np": "ja"}]
+    for _ in range(2000):
+        seq = [rnd.choice(muell) for _ in range(rnd.randint(0, 6))]
+        piano_flow(seq, max_cols=rnd.choice([0, 1, 8, 64]))
 
 
 def test_kreuz_steht_vor_der_note():

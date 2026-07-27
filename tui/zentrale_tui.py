@@ -514,6 +514,17 @@ PIANO_KB_MIN_H = 5         # flacher lohnt keine gezeichnete Klaviatur
 PIANO_KB_MAX_H = 13        # höher wirken die Tasten nur noch klobig
 PIANO_LIGHTS = ("neon", "regenbogen", "aus")   # Taste 'L' zykliert das durch
 PIANO_SHIMMER_HZ = 6.0     # Stufen pro Sekunde, mit denen der Schimmer wandert
+# GROBE Rhythmus-Notation. Das Terminal meldet kein Loslassen — wie lang eine
+# Note war, steht also nirgends. Was messbar IST, ist der Abstand zum nächsten
+# Anschlag: wer wartet, hält. Daraus wird die Notenlänge, und was nach dem
+# Runden übrig bleibt, wird zur Pause. Vier Stufen, mehr wäre Genauigkeit
+# vorgetäuscht, die die Tipperei nicht hergibt.
+PIANO_BEAT_MS = (250, 500, 1000, 2000)          # achtel, viertel, halbe, ganze
+PIANO_BEAT_NAMES = ("achtel", "viertel", "halbe", "ganze")
+PIANO_BEAT_MIN = 350       # kürzere Reste werden keine Pause (das wäre Zittern)
+PIANO_BEAT_DEFAULT = 1     # Ersatzlänge, wo nichts zu messen ist (viertel)
+PIANO_REST_GLYPH = ("▁", "▂", "▄", "█")   # Pause: je länger, desto höher der Block
+PIANO_HOLD_GLYPH = ("", "", "─", "═")     # Halte-Strich hinter langen Noten
 # Notensystem: 5 Linien im Violinschlüssel, von unten E4 bis oben F5. Eine
 # Terminal-Zeile = eine diatonische Stufe (Linie ODER Zwischenraum).
 PIANO_TOP_DIA = 38         # F5 = oberste Linie
@@ -678,6 +689,68 @@ def piano_columns(seq, max_cols=PIANO_MAX_COLS, chord_ms=PIANO_CHORD_MS):
     return out[-max_cols:] if max_cols and len(out) > max_cols else out
 
 
+def piano_beat(ms):
+    """Millisekunden → grobe Notenwert-Stufe (0 achtel … 3 ganze). PURE."""
+    try:
+        ms = int(ms)
+    except (TypeError, ValueError):
+        ms = 0
+    if ms < PIANO_BEAT_MIN:
+        return 0
+    if ms < 750:
+        return 1
+    if ms < 1500:
+        return 2
+    return 3
+
+
+def piano_flow(seq, max_cols=PIANO_MAX_COLS, chord_ms=PIANO_CHORD_MS):
+    """
+    Was das Notensystem von links nach rechts hinschreibt — Noten UND Pausen.
+    PURE Funktion:
+      seq -> [("n", [note, …], stufe|None), ("p", stufe), …]
+
+    Die Länge einer Note kommt aus dem Abstand zum NÄCHSTEN Anschlag (das
+    Terminal kennt kein Loslassen, siehe PIANO_BEAT_MS): wer wartet, hält.
+    Bleibt nach dem Runden auf die Stufe noch Zeit übrig, wird daraus eine
+    Pause. Die letzte Note hat noch keinen Nachfolger — ihre Stufe ist `None`
+    (offen, hohler Kopf), sie bekommt ihre Länge, sobald es weitergeht.
+
+    Zwei Stellen schreiben BEWUSST keine Pause, sonst wäre das Blatt voller
+    Bedenkzeit statt Musik: vor der ersten Note, und vor einer Note mit dem
+    Flag `np` — das setzt die TUI nach dem Löschen mit der Rücktaste. Die Note
+    davor wird dann mit der Ersatzlänge geschlossen, statt die Lücke zu messen.
+    """
+    cols = piano_columns(seq, max_cols=0, chord_ms=chord_ms)
+    starts, breaks = [], []
+    for col in cols:
+        t = None
+        for e in col:
+            try:
+                ti = int(e.get("t", 0))
+            except (TypeError, ValueError):
+                continue
+            t = ti if t is None else min(t, ti)
+        starts.append(0 if t is None else t)
+        breaks.append(any(bool(e.get("np")) for e in col))
+
+    out = []
+    for i, col in enumerate(cols):
+        if i > 0:
+            if breaks[i]:
+                out.append(("n", cols[i - 1], PIANO_BEAT_DEFAULT))
+            else:
+                gap = starts[i] - starts[i - 1]
+                stufe = piano_beat(gap)
+                out.append(("n", cols[i - 1], stufe))
+                rest = gap - PIANO_BEAT_MS[stufe]
+                if rest >= PIANO_BEAT_MIN:
+                    out.append(("p", piano_beat(rest)))
+    if cols:
+        out.append(("n", cols[-1], None))          # die letzte ist noch offen
+    return out[-max_cols:] if max_cols and len(out) > max_cols else out
+
+
 def piano_staff(seq, height, width, lit=None):
     """
     Das Notensystem als fertiges Zeichenbild. PURE Funktion:
@@ -702,7 +775,7 @@ def piano_staff(seq, height, width, lit=None):
     gut = 3                                   # linker Rand (Taktstrich)
     colw = 3                                  # je Spalte: [♯][kopf][luft]
     ncols = max(1, (width - gut) // colw)
-    cols = piano_columns(seq, ncols)
+    flow = piano_flow(seq, ncols)
 
     def row_of(dia):
         return pad_top + (PIANO_TOP_DIA - int(dia))
@@ -721,10 +794,18 @@ def piano_staff(seq, height, width, lit=None):
 
     lit = lit or {}
     marks = []
-    for ci, col in enumerate(cols):
+    mitte = row_of(PIANO_BOT_DIA + 4)             # mittlere Linie: dort ruht die Pause
+    for ci, item in enumerate(flow):
         x = gut + ci * colw + 1
         if x >= width:
             break
+        if item[0] == "p":                        # ── Pause ──
+            g = PIANO_REST_GLYPH[max(0, min(len(PIANO_REST_GLYPH) - 1, int(item[1])))]
+            if 0 <= mitte < rows_n:
+                grid[mitte][x] = g
+                marks.append((mitte, x, g, False))
+            continue
+        col, stufe = item[1], item[2]
         for e in col:
             n = int(e.get("n", 60))
             dia = piano_dia(n)
@@ -745,17 +826,20 @@ def piano_staff(seq, height, width, lit=None):
                             if grid[rr][xx] == " ":
                                 grid[rr][xx] = "─"
                     d += step
-            # hohl = lang gehalten ODER klingt noch (d=0) — wie im Browser
-            try:
-                dur = int(e.get("d", 0) or 0)
-            except (TypeError, ValueError):
-                dur = 0
-            long_note = dur >= PIANO_HOLLOW_MS or dur == 0
+            # hohl = lang gehalten oder noch offen (letzte Note) — wie im Browser
+            # Achtel und Viertel voll, Halbe und Ganze hohl — wie im richtigen
+            # Notensatz; die offene letzte Note zählt als lang.
+            long_note = stufe is None or PIANO_BEAT_MS[stufe] > PIANO_HOLLOW_MS
             head = "◇" if clamped else ("○" if long_note else "●")
             if PIANO_IS_SHARP[n % 12] and x - 1 > 0:
                 grid[r][x - 1] = "♯"
             grid[r][x] = head
             marks.append((r, x, head, bool(lit.get(n))))
+            # Halbe/Ganze kriegen einen Halte-Strich in die Luftspalte daneben —
+            # sonst sähen sie aus wie eine Viertel (beide hohl).
+            hold = PIANO_HOLD_GLYPH[stufe] if stufe is not None else ""
+            if hold and x + 1 < width and grid[r][x + 1] in (" ", "─"):
+                grid[r][x + 1] = hold
     return ["".join(r) for r in grid], marks
 
 
@@ -871,9 +955,9 @@ CTX_KEYS = {
     ],
     "piano": [
         ("y x c v b n m , . -", "weiße tasten"), ("s d g h j l ö", "schwarze"),
-        ("←→", "oktave"), ("space", "aufnahme an/aus"),
+        ("←→", "oktave"), ("⌫", "letzte note weg"), ("space", "aufnahme an/aus"),
         ("↑↓", "melodie wählen"), ("enter", "abspielen / stopp"),
-        ("r", "umbenennen"), ("D", "löschen"),
+        ("r", "umbenennen"), ("D", "melodie löschen"),
         ("L", "licht: neon/regenbogen/aus"), ("t", "theme"), ("k/esc", "zu"),
     ],
     "ai": [
@@ -4141,7 +4225,11 @@ def run_ui(stdscr, store):
                 pass
         PIANO["lit"][midi] = now + PIANO_LIT_MS / 1000.0
         t_ms = int((now - PIANO.get("t0", now)) * 1000)
-        PIANO["seq"].append({"n": int(midi), "d": int(dur_ms), "t": t_ms})
+        note = {"n": int(midi), "d": int(dur_ms), "t": t_ms}
+        if PIANO.pop("nopause", False):
+            # Nach dem Löschen: die Lücke davor ist Bedenkzeit, keine Pause.
+            note["np"] = 1
+        PIANO["seq"].append(note)
         if len(PIANO["seq"]) > 96:
             del PIANO["seq"][0:len(PIANO["seq"]) - 96]
         rec = PIANO.get("rec")
@@ -4149,6 +4237,22 @@ def run_ui(stdscr, store):
             rec["notes"].append({"n": int(midi),
                                  "t": int((now - rec["t0"]) * 1000),
                                  "d": int(dur_ms)})
+
+    def p_undo_note():
+        """Rücktaste: die zuletzt geschriebene Note wieder weg — wie im Text.
+        Ein Anschlag = eine Note, also verschwindet auch genau einer (bei einem
+        Akkord der zuletzt getippte Ton, nicht der ganze Griff). Die Lücke, die
+        beim Überlegen entsteht, darf danach KEINE Pause werden: das merkt sich
+        `nopause` für den nächsten Anschlag."""
+        if not PIANO["seq"]:
+            PIANO["msg"] = "nichts zu löschen"
+            return
+        weg = PIANO["seq"].pop()
+        PIANO["nopause"] = True
+        rec = PIANO.get("rec")
+        if rec is not None and rec["notes"]:
+            rec["notes"].pop()          # aus der Aufnahme fällt sie genauso raus
+        PIANO["msg"] = "%s weg" % piano_note_name(weg.get("n", 60))
 
     def p_play_key(name):
         """Buchstaben-Taste → Ton (None, wenn die Taste keine Klaviertaste ist)."""
@@ -4436,8 +4540,8 @@ def run_ui(stdscr, store):
         else:
             # Welche Taste welchen Ton spielt, steht auf der Taste selbst —
             # hier nur, was man sonst nirgends sieht.
-            tip = ("←→ oktave · space aufnahme · ↑↓ melodie · enter spielen · "
-                   "r name · D weg · L licht · k/esc zu")
+            tip = ("←→ oktave · ⌫ note weg · space aufnahme · ↑↓ melodie · "
+                   "enter spielen · r name · D melodie weg · L licht · k/esc zu")
         addclip(bottom, ix, (tip + ("  " + PIANO["msg"] if PIANO["msg"] else "")).strip(),
                 iw, C["faint"])
 
@@ -7452,6 +7556,8 @@ def run_ui(stdscr, store):
                     PIANO["confirm"] = False
             elif ch == 27 or ch in (ord("k"), ord("K")):    # zu (k wie im Browser)
                 p_close()
+            elif ch in (curses.KEY_BACKSPACE, 127, 8):      # letzte note weg
+                p_undo_note()
             elif ch == ord(" "):                            # aufnehmen an/aus
                 p_rec_toggle()
             elif ch in (10, 13, curses.KEY_ENTER):          # melodie spielen/abbrechen
