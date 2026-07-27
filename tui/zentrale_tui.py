@@ -1081,6 +1081,9 @@ def run_ui(stdscr, store):
             "ink":   (curses.COLOR_WHITE,   231, 0),
             # Schlaf-Bande: gedämpftes Dunkelmagenta als ZELLEN-HINTERGRUND
             "band_fg": 245, "band_bg": 53,
+            # Klavier: Fläche der schwarzen Taste. Auf schwarzem Grund NICHT 16
+            # (dann verschwände die Taste), sondern ein Hauch heller.
+            "key_bg": 236,
             # Ombre der Sidebar-Liste: 256-Grau-Rampe, die nach unten in den
             # (schwarzen) Hintergrund verblasst → „weiter unten = transparenter".
             "ombre": [252, 246, 241, 237, 235],
@@ -1105,6 +1108,8 @@ def run_ui(stdscr, store):
             "ink":   (curses.COLOR_BLACK,   16,  0),
             # Schlaf-Bande: hell-magenta angehauchtes Grau als ZELLEN-HINTERGRUND
             "band_fg": 240, "band_bg": 225,
+            # Klavier: schwarze Taste auf weißem Grund darf echtes Schwarz sein.
+            "key_bg": 16,
             # Ombre der Sidebar-Liste: nach unten in den (weißen) Hintergrund
             # verblassend → Grau wird heller.
             "ombre": [238, 244, 248, 251, 253],
@@ -1122,6 +1127,9 @@ def run_ui(stdscr, store):
             C["acc"] = curses.A_BOLD
             # Ombre ohne Farbe: nur zwei Stufen (normal → gedimmt)
             C["ombre"] = [0, 0, curses.A_DIM, curses.A_DIM, curses.A_DIM]
+            # Klaviertasten ohne Farbe: invertiert ist alles, was bleibt.
+            C["key_black"] = curses.A_REVERSE
+            C["key_press"] = curses.A_REVERSE | curses.A_BOLD
             return
         c256 = curses.COLORS >= 256
         th = THEMES[tname]
@@ -1141,6 +1149,7 @@ def run_ui(stdscr, store):
         # bg-Farbe, Punkt/Kurve wird als Glyph DAVOR in dieselbe Zelle gesetzt.
         # Echtes bg-Färben geht nur mit 256 Farben; sonst Schattenblock ▒.
         bi = ROLES.index("band") + 1
+        pp = len(ROLES) + 1                # nächstes freies Farbpaar
         if c256:
             curses.init_pair(bi, th["band_fg"], th["band_bg"])
             C["band"] = curses.color_pair(bi)
@@ -1148,7 +1157,6 @@ def run_ui(stdscr, store):
             # "Auf-Band"-Varianten: gleiche fg jeder Rolle, aber band-bg. Eine
             # Kurve, die DURCH die Bande läuft, wird damit gezeichnet → ihr Glyph
             # liegt sichtbar VOR dem Band, statt ein Loch (Theme-bg) zu stanzen.
-            pp = len(ROLES) + 1
             for r in ROLES:
                 if r in ("band", "ink"):
                     continue
@@ -1177,6 +1185,24 @@ def run_ui(stdscr, store):
         else:
             C["ombre"] = [C["dim"], C["dim"], C["faint"],
                           C["faint"], C["faint"] | curses.A_DIM]
+        # Klaviertasten (Klavier-Werkzeug): die schwarze Taste kriegt einen
+        # eigenen HINTERGRUND statt A_REVERSE. Invertiert wäre ihr Buchstabe in
+        # Theme-Hintergrundfarbe gezeichnet und stanzte ein Loch in die Taste;
+        # so bleibt die Taste eine geschlossene Fläche mit heller Schrift darauf.
+        # Gedrückt wird die Fläche zur Akzentfarbe (Schrift dann dunkel).
+        if c256:
+            curses.init_pair(pp, 231, th.get("key_bg", 16))
+            C["key_black"] = curses.color_pair(pp)
+            pp += 1
+            curses.init_pair(pp, th.get("key_bg", 16), th["acc"][1])
+            C["key_press"] = curses.color_pair(pp)
+        else:
+            # 8 Farben: schwarze Fläche, weiße Schrift nur via A_BOLD.
+            curses.init_pair(pp, curses.COLOR_WHITE, curses.COLOR_BLACK)
+            C["key_black"] = curses.color_pair(pp) | curses.A_BOLD
+            pp += 1
+            curses.init_pair(pp, curses.COLOR_BLACK, th["acc"][0])
+            C["key_press"] = curses.color_pair(pp)
         # leere Zellen (erase) bekommen den Theme-Hintergrund
         stdscr.bkgd(" ", C["ink"])
 
@@ -4181,7 +4207,7 @@ def run_ui(stdscr, store):
             on = lit.get(base + semi)
             seg = kb_rows[r][x:x + w]
             if black:
-                attr = (C["acc"] if on else C["ink"]) | curses.A_REVERSE
+                attr = C["key_press"] if on else C["key_black"]
             elif on:
                 attr = C["acc"] | curses.A_REVERSE
             else:

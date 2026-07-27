@@ -613,6 +613,12 @@ nicht zum Durchzappen).
 >   ab (nochmal `Enter` = stopp, die Noten laufen dabei live ins System),
 >   `r` benennt um, **`D`** (groß!) löscht — das nackte `d` ist eine
 >   Klaviertaste (D♯) und darf nichts wegwerfen.
+> - **Farben:** die schwarze Taste hat ein **eigenes Farbpaar** (`C["key_black"]`,
+>   weiß auf Schwarz; im Nacht-Theme 236 statt 16, sonst verschwände sie im
+>   schwarzen Panel-Grund), **nicht** `A_REVERSE` — invertiert würde ihr
+>   Buchstabe in Hintergrundfarbe gezeichnet und stanzte ein Loch in die Taste.
+>   Gedrückt wird die Fläche zur Akzentfarbe (`C["key_press"]`, dunkle Schrift);
+>   eine gedrückte weiße Taste leuchtet weiter per Invertierung.
 > - **Größe wächst mit dem Fenster:** weiße Taste 2…9 Spalten breit, Klaviatur
 >   5…13 Zeilen hoch (`piano_keyboard(width, height)` sucht das größte, was
 >   passt, und der Aufrufer zentriert). Wird es eng, hat die **Klaviatur
