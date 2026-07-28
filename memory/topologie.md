@@ -163,8 +163,15 @@ Eingehängt über `zentrale-launch` je nach Pfad:
   Hintergrund, der 100%-Balken shimmert weiter bis der Sync fertig ist —
   keine separate Ladesequenz. (Auf PC/Pi ohne `zentrale-sync-boot` in PATH:
   No-Op, Start wie bisher.)
-- **`zentrale-tui`/`zentrale-laptop` (Direktstart):** stiller Sync im Wrapper
-  (Ausgabe ins Log `/tmp/zentrale-sync-boot.log`, kurze `⟳`-Zeile).
+- **`zentrale-tui`/`zentrale-laptop` (Direktstart):** der Sync läuft hinter dem
+  **Blumenwind** (`tui/boot_loader.py`) — ein Feld über mehrere Zeilen, durch
+  das langsam Blüten von rechts nach links wehen, darunter »Abgleich mit PC …«.
+  Das Modul startet `zentrale-sync-boot` **selbst** und animiert, bis er durch
+  ist (mind. ~2,5 s, danach blendet es die Blüten aus) — der Wrapper ruft den
+  Sync deshalb NICHT zusätzlich auf. Ausgabe geht ins Log
+  `/tmp/zentrale-sync-boot.log`. Kein TTY / Modul fehlt → stiller Sync im
+  Wrapper (kurze `⟳`-Zeile). Anschauen ohne Sync:
+  `python3 tui/boot_loader.py --demo`.
 
 ### Push-on-write (live, event-getrieben — ergänzt den Boot-Sync)
 
