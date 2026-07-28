@@ -736,9 +736,24 @@
     var stage = document.getElementById('stage');
 
     // ── Theme (Tag/Nacht) ──
+    // Die 05/21-Rotation hängt AN NICHTS AUSSER DER UHR — bewusst kein Umweg
+    // über den Datenpuls. Vorher wurde ausschließlich in ZS.on('tick')
+    // nachgezogen, und der Tick entsteht nur bei ERFOLGREICHEM /api/state
+    // (engine.js pollState, im .then). Ist das Backend weg — abgestürzt, neu
+    // gestartet, oder die Maschine schlief über 05/21 hinweg und kam ohne
+    // Backend zurück —, blieb das Dashboard bis zum Neuladen in der alten
+    // Farbe stehen, während Terminal, Desktop und Browser über
+    // zentrale-theme.timer längst umgeschaltet hatten. Die Uhrzeit-Rotation
+    // war damit nicht ans zentrale Theme gebunden, sondern an die
+    // Backend-Verbindung — sah nur genauso aus.
     var themeMode = 'auto';
     function computeTheme() { var h = new Date().getHours(); return (h >= 5 && h < 21) ? 'day' : 'night'; } // hell 05–21, sonst dunkel
-    function applyTheme() { stage.setAttribute('data-theme', themeMode === 'auto' ? computeTheme() : themeMode); }
+    function applyTheme() {
+      var want = themeMode === 'auto' ? computeTheme() : themeMode;
+      // Nur bei echtem Wechsel ins DOM greifen — so darf dieser Aufruf beliebig
+      // oft kommen (Timer, Tab-Rückkehr, Fokus), ohne Stil-Neuberechnung.
+      if (stage.getAttribute('data-theme') !== want) stage.setAttribute('data-theme', want);
+    }
     document.getElementById('theme-ctl').addEventListener('click', function (e) {
       var b = e.target.closest('button'); if (!b) return;
       themeMode = b.getAttribute('data-tm');
@@ -746,6 +761,16 @@
       applyTheme();
     });
     applyTheme();
+    // Eigener Puls (30 s) — dieselbe Rolle wie zentrale-theme.timer fürs
+    // Terminal und der 60-s-Tick in nvim/lua/zentrale_theme. Hier schneller,
+    // weil dem Dashboard sonst niemand nachhilft.
+    setInterval(applyTheme, 30000);
+    // Zwei Netze für den Fall, dass der Timer gar nicht lief: Browser drosseln
+    // setInterval in Hintergrund-Tabs stark, und über Suspend/Ruhezustand steht
+    // die Seite komplett. Beim Zurückkommen sofort nachziehen statt bis zu
+    // 30 s (oder beliebig lange) in der Nachtfarbe zu stehen.
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) applyTheme(); });
+    window.addEventListener('focus', applyTheme);
 
     // ── Telemetrie: EIN rotierendes Meter ──
     // Statt 9 Balken zeigt ein einziges Meter nacheinander jeden Wert und
@@ -2591,7 +2616,8 @@
     ZS.on('tick', function (e) {
       document.getElementById('clock').textContent = e.time;
       document.getElementById('date').textContent = e.date;
-      if (themeMode === 'auto') applyTheme();
+      // Theme NICHT mehr hier — es hat einen eigenen Puls (siehe oben) und darf
+      // nicht daran hängen, ob /api/state gerade antwortet.
       // Backend-Uptime (echte Laufzeit vom /api/state). Stunden unbegrenzt.
       if (e.uptime_s != null) {
         var u = e.uptime_s;

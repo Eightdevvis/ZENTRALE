@@ -220,7 +220,10 @@
     // ── Theme (Tag/Nacht) ──
     var themeMode = 'auto';
     function computeTheme() { var h = new Date().getHours(); return (h >= 5 && h < 21) ? 'day' : 'night'; } // hell 05–21, sonst dunkel
-    function applyTheme() { stage.setAttribute('data-theme', themeMode === 'auto' ? computeTheme() : themeMode); }
+    function applyTheme() {
+      var want = themeMode === 'auto' ? computeTheme() : themeMode;
+      if (stage.getAttribute('data-theme') !== want) stage.setAttribute('data-theme', want);
+    }
     document.getElementById('theme-ctl').addEventListener('click', function (e) {
       var b = e.target.closest('button'); if (!b) return;
       themeMode = b.getAttribute('data-tm');
@@ -228,6 +231,13 @@
       applyTheme();
     });
     applyTheme();
+    // Eigener Puls, wie im echten Dashboard (ui/templates/monolith.html): die
+    // 05/21-Rotation darf nicht am Datenpuls hängen. Siehe dort den langen
+    // Kommentar — hier nur mitgezogen, damit Entwurf und Produktion nicht
+    // auseinanderlaufen.
+    setInterval(applyTheme, 30000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) applyTheme(); });
+    window.addEventListener('focus', applyTheme);
 
     // ── Telemetrie (Game-Balken) ──
     var meters = document.getElementById('meters');
@@ -313,7 +323,7 @@
     ZS.on('tick', function (e) {
       document.getElementById('clock').textContent = e.time;
       document.getElementById('date').textContent = e.date;
-      if (themeMode === 'auto') applyTheme();
+      // Theme NICHT hier — eigener Puls oben, siehe ui/templates/monolith.html.
       var up = Math.floor((Date.now()-upStart)/1000);
       document.getElementById('p-up').textContent = [Math.floor(up/3600),Math.floor(up/60)%60,up%60].map(n=>('0'+n).slice(-2)).join(':');
       var m = e.metrics;
