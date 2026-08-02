@@ -21,10 +21,16 @@ set -u
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 TITLE="ZENTRALE · morgen"
-COLS=64
-ROWS=18
-PX=720          # Pixel-Maße für das schwebende Fenster (i3 rechnet nicht in Zeichen)
-PY=430
+# Terminalgröße in Zeichen — der Kasten des Messengers füllt genau das aus,
+# es gibt keinen Rand dazwischen. 14 Zeilen: Kopf, Inhalt (8 Zeilen, genug für
+# umgebrochene Aufgabentexte), Rückmeldung, Tastenzeile.
+COLS=60
+ROWS=14
+# Pixelmaße für das schwebende Fenster (i3 rechnet nicht in Zeichen). Passen
+# zu COLS×ROWS bei der Standard-Terminalschrift; sitzt die Schrift anders,
+# stimmt nur die Fenstergröße nicht exakt — der Kasten füllt sie trotzdem.
+PX=680
+PY=340
 
 FORCE=""
 [[ "${1:-}" == "--force" ]] && FORCE="--force"

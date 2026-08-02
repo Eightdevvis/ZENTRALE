@@ -253,7 +253,10 @@ def test_flow_sleep_then_take_on_and_conclude(welt):
 
     m.key(ENTER); m.key(ord("y"))
     assert lists.week_items()["items"][0]["done"] is True
-    assert m.task["text"] == "zweite"     # die nächste rückt nach
+    # Abgehakt → Schluss für heute. Keine nächste Aufgabe hinterher: der
+    # Messenger bietet morgens EINE an, er arbeitet die Liste nicht durch.
+    assert m.done is True
+    assert morgen.is_closed() is True
 
 
 def test_flow_skip_sleep(welt):

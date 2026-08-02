@@ -32,11 +32,14 @@ sys.path.insert(0, os.path.join(_ROOT, 'core'))
 
 import morgen  # noqa: E402  (core/morgen.py — die ganze Logik)
 
-MIN_H, MIN_W = 14, 46
-# Feste Kastenmaße (in Zeichen, nach oben durch das Terminal begrenzt). Bewusst
-# NICHT nach Inhalt wachsend: der Kasten steht bei jedem Schritt gleich da,
-# statt bei jeder Antwort zu zappeln.
-BOX_W, BOX_H = 56, 13
+# Kleinstmaß: darunter bleibt vom Kasten nichts Lesbares übrig (Kopfzeile,
+# drei Inhaltszeilen, Rückmeldung, Tastenzeile, zwei Rahmenkanten).
+MIN_H, MIN_W = 10, 40
+# Der Kasten füllt das GANZE Terminal — sein Rahmen ist die Fensterkante.
+# Vorher stand er als fester 56×13-Block in einem 64×18-Terminal, also mit
+# totem Rand ringsum; das sah aus wie ein Fenster im Fenster. Wie groß das
+# Terminal ist, bestimmt scripts/morgen_start.sh (und die Schriftgröße) —
+# gezeichnet wird auf das, was tatsächlich da ist, statt auf feste Maße.
 
 # Kein de_DE auf der Maschine (locale -a kennt nur en_US), strftime('%a') gäbe
 # also 'sun' mitten in einer deutschen Oberfläche. Wochentage deshalb fest —
@@ -106,13 +109,35 @@ class Screen:
         self.s.bkgd(' ', self.C['ink'])
 
     def put(self, y, x, text, attr=0):
-        """Text schreiben, am Rand abgeschnitten. curses wirft am letzten
-        Zeichen der letzten Zeile — das fangen wir stumm ab."""
+        """
+        Text schreiben, am rechten Rand abgeschnitten.
+
+        Sonderfall allerletzte Zelle (unten rechts): `addstr` wirft dort immer,
+        weil curses den Cursor danach nicht mehr setzen kann — die Zelle bliebe
+        leer und dem Rahmen fehlte die Ecke. `insstr` hat das Problem nicht,
+        also das letzte Zeichen getrennt einfügen. Genau diese Zelle braucht
+        der Kasten, seit er das ganze Terminal ausfüllt.
+        """
         h, w = self.s.getmaxyx()
         if y < 0 or y >= h or x < 0 or x >= w:
             return
+        text = text[:w - x]
+        if not text:
+            return
+        if y == h - 1 and x + len(text) >= w:
+            head, tail = text[:-1], text[-1]
+            if head:
+                try:
+                    self.s.addstr(y, x, head, attr)
+                except curses.error:
+                    pass
+            try:
+                self.s.insstr(y, w - 1, tail, attr)
+            except curses.error:
+                pass
+            return
         try:
-            self.s.addstr(y, x, text[:max(0, w - x - 1)], attr)
+            self.s.addstr(y, x, text, attr)
         except curses.error:
             pass
 
@@ -214,7 +239,7 @@ class Messenger:
     def _inner(self):
         """Textbreite im Kasten — danach richtet sich der Umbruch."""
         _, w = self.sc.s.getmaxyx()
-        return max(10, min(w - 2, BOX_W) - 6)
+        return max(10, w - 6)
 
     # ── Tasten ──────────────────────────────────────────────────────────
 
@@ -283,9 +308,12 @@ class Messenger:
 
         if st == 'bestaetigen':
             if ch in (ord('y'), ord('Y'), ord('j'), ord('J')):
+                # Abgehakt = Tagwerk getan, Fenster zu. NICHT die nächste
+                # Aufgabe nachschieben: der Messenger bietet morgens EINE an,
+                # er ist keine Abarbeitungs-Schleife. Weitergeblättert wird
+                # nur beim Vertagen (l) und beim Überspringen (n).
                 morgen.conclude(self.task['lid'], self.task['iid'])
-                self.msg = 'erledigt: ' + self.task['text']
-                self.state = 'aufgabe'; self._next_task(); return
+                return self._close()
             if ch in (ord('n'), ord('N'), 27):
                 self.state = 'uebernommen'; return
             return
@@ -354,8 +382,7 @@ class Messenger:
             return
         title, lines, keys = self.view()
         body = list(lines)
-        w, h = min(W - 2, BOX_W), min(H - 2, BOX_H)
-        y, x = max(0, (H - h) // 2), max(0, (W - w) // 2)
+        y, x, h, w = 0, 0, H, W
         s.box(y, x, h, w, title)
 
         # Kopfzeile: die Marke, wie in der TUI — ZEN invers, TRALE in Akzent.
