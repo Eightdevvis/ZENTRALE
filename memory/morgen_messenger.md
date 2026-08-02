@@ -49,6 +49,11 @@ Beim Vertagen ist ein **leeres Datum = heute**; `5`, `05.09.`, `2026-12-24`
 werden ebenso verstanden. Fehlt bei `TT.MM.` das Jahr und läge der Termin
 schon hinter uns, rutscht er ins nächste Jahr.
 
+Ein Zeitpunkt, der **schon vorbei ist**, wird abgelehnt (»das ist schon
+vorbei«) statt gespeichert — sonst stünde die eben vertagte Aufgabe sofort
+wieder im Angebot. Das leere Datum macht den Fehler leicht: abends um 18:00
+auf »17:30« zu vertagen ist ein Tippfehler, kein Wunsch.
+
 ## Wo was landet
 
 - **Schlaf** → in den `sleep`-Graphen, als Zeitspanne (`value` = Einschlaf-,
@@ -93,9 +98,9 @@ nächsten Deckel-Auf ist der Messenger wieder da.
 
 ## Das Fenster auf dem Schirm
 
-`morgen_start.sh` startet ein kleines `xfce4-terminal` (60×14, ohne Menü- und
-Werkzeugleisten; Alacritty/kitty/xterm/gnome-terminal als Ausweichlösungen)
-mit dem Titel `ZENTRALE · morgen`.
+`morgen_start.sh` startet ein kleines `xfce4-terminal` (**52×12 Zeichen**, ohne
+Menü- und Werkzeugleisten; Alacritty/kitty/xterm/gnome-terminal als
+Ausweichlösungen) mit dem Titel `ZENTRALE · morgen`.
 
 Der gezeichnete Kasten **füllt das Terminal ganz aus** — sein Rahmen ist die
 Fensterkante, es gibt keinen toten Rand dazwischen. Deshalb muss `put()` die
@@ -104,8 +109,22 @@ allerletzte Zelle unten rechts beschreiben können: `addstr` wirft dort immer
 die Ecke — das letzte Zeichen geht über `insstr` rein. Wer die Fenstergröße
 ändern will, ändert `COLS`/`ROWS` in `morgen_start.sh`; der Kasten zieht mit.
 
+Die Maße sind knapp geschnitten: 52 Spalten sind die längste Tastenzeile
+(»enter erledigt · l später · n nächste · esc zu«, 45 Zeichen) plus Rand —
+`tests/test_morgen.py` wacht darüber und schlägt an, wenn eine Tastenzeile
+darüber hinauswächst. 12 Zeilen lassen 6 Zeilen Inhalt; ein längerer
+Aufgabentext wird mit »…« gekürzt, **nie** die Frage darunter (sonst stünde
+man vor einem Eingabefeld ohne zu wissen, was gefragt ist).
+
 Unter **i3** wird das Fenster danach per `i3-msg` auf schwebend gesetzt und
-mittig gerückt (680×340). **Nicht** per `for_window`: das ist eine reine
+mittig gerückt — **ohne `resize`**. Die Größe bringt das Terminal über
+`--geometry` schon mit, und i3 behält sie beim Umschalten auf schwebend bei.
+Eine Pixelgröße zu setzen war genau der Fehler, der das Fenster einmal fast
+doppelt so groß machte: 680×340 px ergaben mit dieser Schrift **85×19
+Zeichen** statt der gewollten 60×14. In Zeichen zu denken ist auch das
+einzige, was bei anderer Schriftgröße oder DPI noch stimmt.
+
+Gesetzt wird **nicht** per `for_window`: das ist eine reine
 Konfigurations-Direktive, i3-msg weist sie zur Laufzeit zurück (geprüft an
 i3 4.23). Ein Kriterien-Kommando auf ein bereits offenes Fenster geht dagegen
 — also wartet ein Hintergrund-Zweig per `xdotool search` auf das Fenster und

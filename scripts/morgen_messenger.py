@@ -212,26 +212,46 @@ class Messenger:
             if not self.task:
                 return ('morgen', ['keine offene aufgabe.', 'schöner tag.'],
                         'enter zu')
-            return ('aufgabe', wrap(self.task['text'], self._inner()) + ['', 'übernehmen?'],
+            return ('aufgabe', self._task_block(['', 'übernehmen?']),
                     'enter ja · l später · n nächste · esc zu')
         if st == 'uebernommen':
-            return ('aufgabe', wrap(self.task['text'], self._inner())
-                    + ['', '▸ übernommen'],
+            return ('aufgabe', self._task_block(['', '▸ übernommen']),
                     'enter erledigt · l später · n nächste · esc zu')
         if st == 'bestaetigen':
-            return ('erledigt?', wrap(self.task['text'], self._inner())
-                    + ['', 'wirklich erledigt?'],
+            return ('erledigt?', self._task_block(['', 'wirklich erledigt?']),
                     'y ja · n nein')
         if st == 'vertagen_datum':
-            return ('später', wrap(self.task['text'], self._inner())
-                    + ['', 'an welchem tag?', '  ' + self._field(),
-                       '  leer = heute'],
+            return ('später', self._task_block(['', 'an welchem tag?',
+                                                '  ' + self._field(),
+                                                '  leer = heute']),
                     'enter weiter · esc zurück')
         if st == 'vertagen_zeit':
-            return ('später', wrap(self.task['text'], self._inner())
-                    + ['', 'um wie viel uhr?', '  ' + self._field()],
+            return ('später', self._task_block(['', 'um wie viel uhr?',
+                                                '  ' + self._field()]),
                     'enter vertagen · esc zurück')
         return ('morgen', ['bis später.'], 'enter zu')
+
+    def _task_block(self, unten):
+        """
+        Aufgabentext umgebrochen, darunter `unten` (Frage, Eingabefeld …).
+
+        Passt beides zusammen nicht in den Kasten, wird der TEXT gekürzt (mit
+        »…«), nie das, was darunter steht: sonst verschwände bei einer langen
+        Aufgabe genau die Frage, auf die man antworten soll. Das Fenster ist
+        knapp geschnitten — diese Vorfahrt ist der Preis dafür.
+        """
+        breite = self._inner()
+        lines = wrap(self.task['text'], breite)
+        platz = max(1, self._rows() - len(unten))
+        if len(lines) > platz:
+            lines = lines[:platz]
+            lines[-1] = lines[-1][:max(1, breite - 1)].rstrip() + '…'
+        return lines + unten
+
+    def _rows(self):
+        """Wie viele Zeilen der Inhaltsbereich hoch ist (siehe draw())."""
+        h, _ = self.sc.s.getmaxyx()
+        return max(1, h - 6)
 
     def _field(self):
         return (self.buf or '') + '▌'
@@ -337,6 +357,15 @@ class Messenger:
                 when = morgen.parse_when(self.datum, self.buf)
                 if when is None:
                     self.msg = 'datum/zeit? z.b. 14:30'
+                    return
+                if when <= datetime.now():
+                    # »Später« muss später sein. Ohne diese Bremse landet die
+                    # Aufgabe mit einem schon vergangenen Zeitpunkt sofort
+                    # wieder im Angebot — man vertagt sie und sie steht direkt
+                    # wieder da. Das leere Datum (= heute) macht das leicht:
+                    # abends 18:00 auf »17:30« vertagen ist ein Tippfehler,
+                    # kein Wunsch.
+                    self.msg = 'das ist schon vorbei'
                     return
                 morgen.snooze(self.task['key'], when)
                 morgen.drop(self.task['key'])

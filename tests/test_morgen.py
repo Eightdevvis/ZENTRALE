@@ -221,6 +221,16 @@ class FakeScreen:
     C = {}
 
 
+class TinyScreen(FakeScreen):
+    """So klein, dass ein langer Aufgabentext nicht mehr ganz hineinpasst:
+    12 Zeilen → 6 Zeilen Inhalt, 52 Spalten → 46 Zeichen Textbreite."""
+    class _S:
+        @staticmethod
+        def getmaxyx():
+            return (12, 52)
+    s = _S()
+
+
 def _keys(m, text):
     for c in text:
         m.key(ord(c))
@@ -282,6 +292,19 @@ def test_flow_snooze_shows_next_task(welt):
     assert morgen.next_task()["text"] == "zweite"
 
 
+def test_flow_snooze_rejects_a_time_already_gone(welt):
+    """Vertagen auf einen vergangenen Zeitpunkt würde die Aufgabe sofort
+    wieder anbieten — das ist nie gewollt, also abgelehnt."""
+    morgen.skip_sleep()
+    m = MM.Messenger(FakeScreen())
+    m.key(ord("l")); m.key(ENTER)                 # leeres datum = heute
+    vorbei = (datetime.now() - timedelta(hours=1)).strftime("%H:%M")
+    _keys(m, vorbei); m.key(ENTER)
+    assert m.state == "vertagen_zeit" and m.msg == "das ist schon vorbei"
+    assert morgen._load_state().get("snooze", {}) == {}
+    assert morgen.next_task()["text"] == "erste"
+
+
 def test_flow_snooze_rejects_bad_time(welt):
     morgen.skip_sleep()
     m = MM.Messenger(FakeScreen())
@@ -315,6 +338,47 @@ def test_flow_reopens_on_taken_task(welt):
     morgen.take_on(t["key"])
     m = MM.Messenger(FakeScreen())
     assert m.state == "uebernommen" and m.task["text"] == "erste"
+
+
+def test_long_task_is_shortened_but_the_question_survives(data):
+    """Das Fenster ist knapp geschnitten. Passt ein langer Aufgabentext nicht,
+    wird ER gekürzt — nie die Frage darunter, sonst stünde man vor einem
+    Eingabefeld ohne zu wissen, was gefragt ist."""
+    graphs.create_graph("sleep", gtype="period", remind=True, remind_at="05:00")
+    wl = lists.create_list("week")
+    lists.add_item(wl["id"], "wort " * 60)          # weit mehr als 6 Zeilen
+    morgen.skip_sleep()
+
+    m = MM.Messenger(TinyScreen())
+    _, lines, keys = m.view()
+    assert len(lines) <= 6                          # passt in den Inhaltsbereich
+    assert lines[-1] == "übernehmen?"               # die Frage steht noch da
+    assert lines[-3].endswith("…")                  # gekürzt statt abgeschnitten
+    assert all(len(x) <= 46 for x in lines)
+
+
+def test_short_task_is_not_shortened(data):
+    graphs.create_graph("sleep", gtype="period", remind=True, remind_at="05:00")
+    wl = lists.create_list("week")
+    lists.add_item(wl["id"], "oma anrufen")
+    morgen.skip_sleep()
+
+    _, lines, _ = MM.Messenger(TinyScreen()).view()
+    assert lines == ["oma anrufen", "", "übernehmen?"]
+
+
+def test_longest_key_line_fits_the_window(welt):
+    """52 Spalten sind so gewählt, dass die längste Tastenzeile hineinpasst
+    (3 Zeichen Rand links, Rahmen rechts). Wächst eine Zeile, muss COLS in
+    scripts/morgen_start.sh mitwachsen — dieser Test schlägt dann an."""
+    morgen.skip_sleep()
+    m = MM.Messenger(TinyScreen())
+    laengste = 0
+    for zustand in ("aufgabe", "uebernommen", "bestaetigen",
+                    "vertagen_datum", "vertagen_zeit"):
+        m.state = zustand
+        laengste = max(laengste, len(m.view()[2]))
+    assert laengste <= 52 - 4
 
 
 def test_messenger_selftest_runs():

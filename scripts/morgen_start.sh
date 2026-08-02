@@ -21,16 +21,16 @@ set -u
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 TITLE="ZENTRALE · morgen"
-# Terminalgröße in Zeichen — der Kasten des Messengers füllt genau das aus,
-# es gibt keinen Rand dazwischen. 14 Zeilen: Kopf, Inhalt (8 Zeilen, genug für
-# umgebrochene Aufgabentexte), Rückmeldung, Tastenzeile.
-COLS=60
-ROWS=14
-# Pixelmaße für das schwebende Fenster (i3 rechnet nicht in Zeichen). Passen
-# zu COLS×ROWS bei der Standard-Terminalschrift; sitzt die Schrift anders,
-# stimmt nur die Fenstergröße nicht exakt — der Kasten füllt sie trotzdem.
-PX=680
-PY=340
+# DIE Fenstergröße, in Zeichen. Der Kasten des Messengers füllt genau das aus,
+# es gibt keinen Rand dazwischen — hier wird also die Fenstergröße bestimmt.
+#   52 Spalten: die längste Tastenzeile ("enter erledigt · l später · …",
+#               45 Zeichen) plus Rand.
+#   12 Zeilen:  Rahmen, Kopf, Leerzeile, 6 Zeilen Inhalt, Rückmeldung,
+#               Tastenzeile, Rahmen.
+# Passt der Aufgabentext mal nicht in die 6 Zeilen, kürzt ihn der Messenger
+# mit »…« — die Frage darunter bleibt IMMER stehen.
+COLS=52
+ROWS=12
 
 FORCE=""
 [[ "${1:-}" == "--force" ]] && FORCE="--force"
@@ -65,19 +65,30 @@ fi
 # Der Umweg über xdotool statt „i3-msg und gucken, ob's geklappt hat": ein
 # Kriterien-Kommando, das auf NICHTS passt, meldet i3 trotzdem als Erfolg —
 # daran ließe sich nicht erkennen, ob das Fenster schon existiert.
+# WICHTIG: hier wird NUR schweben und mittig gesetzt, NICHT die Größe. Die
+# bringt das Terminal über --geometry (COLS×ROWS) schon mit, und i3 behält
+# sie beim Umschalten auf schwebend bei. Ein `resize set` in Pixeln wäre
+# genau der Fehler, den es hier schon gab: 680×340 px ergaben mit dieser
+# Schrift 85×19 Zeichen statt der gewollten 60×14 — das Fenster war fast
+# doppelt so groß wie gedacht. In Zeichen zu denken ist auch das einzige,
+# was bei anderer Schriftgröße oder DPI noch stimmt.
 place_window() {
     local i=0
     while [ $i -lt 50 ]; do                     # max. ~5 s, dann aufgeben
         if xdotool search --name "^${TITLE}\$" >/dev/null 2>&1; then
             if [ "$WM" = "i3" ]; then
-                i3-msg -q "[title=\"^${TITLE}\$\"] floating enable, resize set ${PX} ${PY}, move position center" >/dev/null 2>&1
+                i3-msg -q "[title=\"^${TITLE}\$\"] floating enable, move position center" >/dev/null 2>&1
             else
                 # Sonstige WMs setzen das Fenster ohnehin frei; hier nur mittig
-                # rücken. -e 0,x,y,w,h — die Bildschirmmitte aus der Geometrie.
-                local geo sw sh
+                # rücken. -e 0,x,y,-1,-1 — die -1 lassen die Größe unangetastet.
+                local geo sw sh wgeo ww wh
                 geo="$(xdotool getdisplaygeometry 2>/dev/null)" || return
                 sw="${geo% *}"; sh="${geo#* }"
-                wmctrl -r "$TITLE" -e "0,$(( (sw - PX) / 2 )),$(( (sh - PY) / 2 )),${PX},${PY}" 2>/dev/null
+                wgeo="$(xdotool search --name "^${TITLE}\$" getwindowgeometry --shell 2>/dev/null)" || return
+                ww="$(sed -n 's/^WIDTH=//p' <<< "$wgeo")"
+                wh="$(sed -n 's/^HEIGHT=//p' <<< "$wgeo")"
+                [ -n "$ww" ] && [ -n "$wh" ] || return
+                wmctrl -r "$TITLE" -e "0,$(( (sw - ww) / 2 )),$(( (sh - wh) / 2 )),-1,-1" 2>/dev/null
             fi
             return
         fi
