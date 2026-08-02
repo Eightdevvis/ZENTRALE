@@ -364,7 +364,8 @@ def add_item(lid, text, parent_iid=None):
     Eintrag an eine Liste hängen. Liefert den Eintrag ({id, text, done}).
     Ohne parent_iid landet er auf der obersten Ebene; mit parent_iid wird er
     Unterpunkt des Eintrags mit dieser id (der dadurch zum Container wird).
-    Wirft ValueError bei leerem Text, KeyError bei unbekannter Liste /
+    Ausnahme »week«: dort wird oben eingefügt statt hinten angehängt (siehe
+    unten). Wirft ValueError bei leerem Text, KeyError bei unbekannter Liste /
     unbekanntem Eltern-Eintrag.
     """
     text = (text or '').strip()
@@ -379,7 +380,16 @@ def add_item(lid, text, parent_iid=None):
     iid = lst.get('next_item') or (max((i.get('id', 0) for i in _walk(lst.get('items'))), default=0) + 1)
     item = {'id': iid, 'text': text, 'done': False}
     if parent_iid is None:
-        lst.setdefault('items', []).append(item)
+        # Die »week«-Liste (die Kalender-Sidebar) ist ein Vorrat, der von OBEN
+        # abgearbeitet wird — der Morgen-Messenger greift sich das erste Item.
+        # Neues gehört deshalb an den Anfang, sonst versinkt es sofort unter
+        # dem Altbestand und wird nie das, was einem morgens angeboten wird.
+        # Alle anderen Listen hängen unverändert hinten an.
+        top = lst.setdefault('items', [])
+        if _is_week_list(lst):
+            top.insert(0, item)
+        else:
+            top.append(item)
     else:
         parent = _find_item(lst.get('items'), parent_iid)
         if parent is None:

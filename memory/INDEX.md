@@ -19,6 +19,7 @@ hier sofort mitziehen, sonst tote Links.
 | Event-System (Sensoren → Actions)  | memory/event_system.md              |
 | KI-System (Ollama, Graph-Memory)   | memory/ki_system.md                 |
 | Kalender-System (Layer, Termine)   | memory/kalender_system.md           |
+| Morgen-Messenger (Deckel auf → Fenster) | memory/morgen_messenger.md     |
 | Zyklus/PMS-Rechner (»periode«-Graph)| memory/zyklus_pms.md               |
 | News-System (Tagesschau, Briefing) | memory/news_system.md               |
 | Mail-System (IMAP-Triage, Keymap)  | memory/mail_system.md               |

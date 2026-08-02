@@ -116,6 +116,21 @@ Verdrahtung passiert in `scripts/install_xfce_autostart.sh` via
 | `Ctrl+Alt+Esc`     | **Notaus** — stoppt `lightdm`, Pi landet auf TTY1. Backend-Services laufen weiter. Zurueck zum Kiosk: `sudo systemctl start lightdm`. Details: `deployment.md` → „Notaus-Hotkey". |
 | `Ctrl+Alt+T`       | **Pi-Terminal aufrufen** — oeffnet ein xterm floating ueber dem Firefox-Kiosk. Zum Schliessen `Ctrl+D` oder Fenster zu, dann ist der Kiosk wieder vorn. Nuetzlich um schnell etwas auf dem Pi zu checken ohne SSH-Umweg. |
 
+## Im Morgen-Messenger (eigenes Fenster, `scripts/morgen_messenger.py`)
+
+Das kleine Fenster, das beim Aufklappen des Laptops aufgeht. Volle
+Beschreibung: `morgen_messenger.md`.
+
+| Taste            | Funktion                                                |
+|------------------|---------------------------------------------------------|
+| Ziffern / `:`    | Uhrzeit tippen (`23:15`, `2315`, `7`)                   |
+| `Enter`          | weiter / bestätigen                                     |
+| `s`              | Schlaf-Frage überspringen (kommt heute nicht wieder)    |
+| `l`              | Aufgabe später erinnern (Datum + Uhrzeit, leer = heute) |
+| `n`              | nächste Aufgabe zeigen (ändert nichts an der Liste)     |
+| `y` / `n`        | Erledigt-Rückfrage: wirklich abhaken / doch nicht       |
+| `Esc`            | einen Schritt zurück, sonst Fenster zu (Tag geschlossen)|
+
 ## Im Data-Collection-Modus (zusätzlich)
 
 Im Kategorie-Auswahlbildschirm:

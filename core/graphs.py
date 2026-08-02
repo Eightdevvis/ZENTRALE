@@ -159,18 +159,58 @@ def set_remind(gid, on, at=None):
     return g
 
 
-def _logged_today(gid, today):
-    """True, wenn data/<gid>.json schon einen Eintrag mit date==today trägt.
-    Quelle ist dieselbe Messwert-Datei, die /api/log schreibt."""
-    path = os.path.join(_DATA_DIR, gid + '.json')
+def _values_path(gid):
+    """Pfad der Messwert-Datei eines Graphen (dieselbe, die /api/log schreibt)."""
+    return os.path.join(_DATA_DIR, gid + '.json')
+
+
+def read_values(gid):
+    """Messwerte eines Graphen als Liste (leer, wenn nichts/kaputt).
+    Lese-Pendant zu /api/data/<gid>, aber ohne laufendes Backend."""
+    path = _values_path(gid)
     if not os.path.exists(path):
-        return False
+        return []
     try:
         with open(path, 'r', encoding='utf-8') as f:
             rows = json.load(f)
     except Exception:
-        return False
-    return any(isinstance(e, dict) and e.get('date') == today for e in (rows or []))
+        return []
+    return rows if isinstance(rows, list) else []
+
+
+def logged_on(gid, day):
+    """True, wenn data/<gid>.json schon einen Eintrag mit date==day trägt."""
+    return any(isinstance(e, dict) and e.get('date') == day for e in read_values(gid))
+
+
+def log_value(gid, day, value, end=None):
+    """
+    Einen Messwert für `day` (ISO-Datum) schreiben — ohne Umweg übers Backend.
+
+    Format und Datei sind IDENTISCH zu /api/log mit upsert=True (ein Eintrag
+    pro Tag, `logged_at` als Zeitstempel); `end` gesetzt heißt Zeitspanne
+    (value = Start-Minute, end = End-Minute). Bewusst eine zweite Schreibstelle
+    neben `ui/app.py::api_log`: der Morgen-Messenger (scripts/morgen_*) läuft,
+    BEVOR ZENTRALE wach ist — er kann sich auf keinen HTTP-Port verlassen.
+    Wer beides ändert, muss beide Stellen anfassen.
+    """
+    rows = [e for e in read_values(gid)
+            if not (isinstance(e, dict) and e.get('date') == day)]
+    entry = {'date': day, 'value': value}
+    if end is not None:
+        entry['end'] = end
+    entry['logged_at'] = datetime.now().isoformat()
+    rows.append(entry)
+    os.makedirs(_DATA_DIR, exist_ok=True)
+    with open(_values_path(gid), 'w', encoding='utf-8') as f:
+        json.dump(rows, f, indent=2, ensure_ascii=False)
+    return entry
+
+
+def _logged_today(gid, today):
+    """True, wenn data/<gid>.json schon einen Eintrag mit date==today trägt.
+    Quelle ist dieselbe Messwert-Datei, die /api/log schreibt."""
+    return logged_on(gid, today)
 
 
 def due_reminders(now=None):
