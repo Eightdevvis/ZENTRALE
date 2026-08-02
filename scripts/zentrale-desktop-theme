@@ -9,6 +9,10 @@
 # man vom Portal-Signal fast nichts — es bewegt dann nur noch die Seiten. Der
 # Desktop ist also nicht Beiwerk, sondern der sichtbare Teil der Browser-Kopplung.
 #
+# ACHTUNG (2026-08-03): Das galt nur, solange Brave NICHT als Flatpak lief. Als
+# Flatpak sieht er weder die Theme-Dateien noch den Namen aus xfconf — Details
+# und Abhilfe stehen im Abschnitt "Flatpaks nachziehen" ganz unten.
+#
 # THEMEN-WAHL — angelehnt an die nvim-Paletten (cyber/paper), aus Mints Bestand:
 #   night → Mint-L-Darker-Aqua  (dunkelste Variante, kühl-cyaner Akzent #6cabcd
 #                                → nächstverwandt zu cyber-Neon; Mint hat kein Neon)
@@ -105,5 +109,39 @@ fi
 [ -d "/usr/share/themes/$WM/xfwm4" ] || [ -d "$HOME/.themes/$WM/xfwm4" ] \
   && set_prop xfwm4 /general/theme "$WM"
 icon_installed "$ICON" && set_prop xsettings /Net/IconThemeName "$ICON"
+
+# ── Flatpaks nachziehen (Brave!) ──────────────────────────────────────────────
+# xfconf/XSettings erreicht nur Programme, die auf dem HOST laufen. Brave ist
+# hier ein Flatpak und sieht davon zweierlei nicht:
+#   1. den NAMEN   – ein Flatpak liest ihn über GSettings, nicht über xfconf.
+#   2. die DATEIEN – im Sandkasten liegt unter /usr/share/themes nur "Default"
+#      und "Emacs". /usr ist von Flatpak reserviert und lässt sich auch per
+#      `flatpak override --filesystem=/usr/share/themes` NICHT durchreichen
+#      ("Path /usr is reserved by Flatpak"). Der einzige Weg führt übers
+#      Heimverzeichnis.
+# Deshalb hat der Kommentar oben ("Brave steht auf Use GTK und holt sich seine
+# Farben aus dem GTK-Theme") bis 2026-08-03 nicht gestimmt: Das Portal-Signal
+# kam an, das Theme selbst nie.
+#
+# EINMALIG nötig, steht nicht in diesem Skript, weil es Sandkasten-Rechte sind:
+#   flatpak override --user com.brave.Browser --filesystem=xdg-data/themes:ro
+# UND im Browser brave://settings/appearance auf GTK stellen – steht dort das
+# klassische Theme, ignoriert Brave alles hier
+# (Pref extensions.theme.system_theme: 0 = klassisch, 1 = GTK).
+
+# 1. Dateien: aktives Theme ins Heimverzeichnis spiegeln, falls noch nicht da.
+#    Nur bei Bedarf – kostet einmalig ~3–4 MB je Theme, danach nichts mehr.
+USER_THEMES="$HOME/.local/share/themes"
+if [ -d "/usr/share/themes/$GTK" ] && [ ! -d "$USER_THEMES/$GTK" ]; then
+  mkdir -p "$USER_THEMES" 2>/dev/null
+  cp -a "/usr/share/themes/$GTK" "$USER_THEMES/" 2>/dev/null
+fi
+
+# 2. Name: dieselben Werte nach GSettings spiegeln, damit das Portal sie meldet.
+#    color-scheme bleibt außen vor – das setzt zentrale-browser-theme.
+if command -v gsettings >/dev/null 2>&1; then
+  gsettings set org.gnome.desktop.interface gtk-theme  "$GTK"  2>/dev/null
+  gsettings set org.gnome.desktop.interface icon-theme "$ICON" 2>/dev/null
+fi
 
 exit 0
