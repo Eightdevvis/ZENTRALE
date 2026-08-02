@@ -128,7 +128,7 @@ Beschreibung: `morgen_messenger.md`.
 | `s`              | Schlaf-Frage überspringen (kommt heute nicht wieder)    |
 | `l`              | Aufgabe später erinnern (Datum + Uhrzeit, leer = heute) |
 | `n`              | nächste Aufgabe zeigen (ändert nichts an der Liste)     |
-| `y` / `n`        | Erledigt-Rückfrage: wirklich abhaken / doch nicht       |
+| `y` / `n`        | Erledigt-Rückfrage: `y` hakt ab **und schließt** / `n` zurück |
 | `Esc`            | einen Schritt zurück, sonst Fenster zu (Tag geschlossen)|
 
 ## Im Data-Collection-Modus (zusätzlich)

@@ -25,10 +25,15 @@ gerechnet und gespeichert wird in `core/`.
 ## Der Ablauf im Fenster
 
 ```
-schlaf_von → schlaf_bis → aufgabe ⇄ uebernommen → bestaetigen
+schlaf_von → schlaf_bis → aufgabe ⇄ uebernommen → bestaetigen → y → ZU
                              ↓ (l = später)
                       vertagen_datum → vertagen_zeit → nächste aufgabe
 ```
+
+**Abgehakt heißt Schluss**: nach dem `y` macht das Fenster zu, es schiebt
+nicht die nächste Aufgabe nach. Der Messenger bietet morgens EINE an, er ist
+keine Abarbeitungs-Schleife. Weitergeblättert wird nur beim Vertagen (`l`)
+und beim Überspringen (`n`).
 
 | Taste            | Wo                    | Was                                     |
 |------------------|-----------------------|-----------------------------------------|
@@ -88,12 +93,19 @@ nächsten Deckel-Auf ist der Messenger wieder da.
 
 ## Das Fenster auf dem Schirm
 
-`morgen_start.sh` startet ein kleines `xfce4-terminal` (64×18, ohne Menü- und
+`morgen_start.sh` startet ein kleines `xfce4-terminal` (60×14, ohne Menü- und
 Werkzeugleisten; Alacritty/kitty/xterm/gnome-terminal als Ausweichlösungen)
 mit dem Titel `ZENTRALE · morgen`.
 
+Der gezeichnete Kasten **füllt das Terminal ganz aus** — sein Rahmen ist die
+Fensterkante, es gibt keinen toten Rand dazwischen. Deshalb muss `put()` die
+allerletzte Zelle unten rechts beschreiben können: `addstr` wirft dort immer
+(curses kann den Cursor danach nicht mehr setzen), dem Rahmen fehlte sonst
+die Ecke — das letzte Zeichen geht über `insstr` rein. Wer die Fenstergröße
+ändern will, ändert `COLS`/`ROWS` in `morgen_start.sh`; der Kasten zieht mit.
+
 Unter **i3** wird das Fenster danach per `i3-msg` auf schwebend gesetzt und
-mittig gerückt (726×431). **Nicht** per `for_window`: das ist eine reine
+mittig gerückt (680×340). **Nicht** per `for_window`: das ist eine reine
 Konfigurations-Direktive, i3-msg weist sie zur Laufzeit zurück (geprüft an
 i3 4.23). Ein Kriterien-Kommando auf ein bereits offenes Fenster geht dagegen
 — also wartet ein Hintergrund-Zweig per `xdotool search` auf das Fenster und
