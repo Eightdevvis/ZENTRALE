@@ -44,6 +44,7 @@ hier sofort mitziehen, sonst tote Links.
 | Deployment (Pi, systemd, Kiosk)    | memory/deployment.md                |
 | Display-Debug (Pi-Monitor schwarz) | memory/display_debug.md             |
 | Sicherheit (Bedrohungsmodell, LUKS)| memory/sicherheit.md                |
+| Browser (Brave-Theme, Terminal-Browsing, Tor) | memory/browser.md        |
 | Remote-LUKS-Unlock (Dropbear)      | memory/auto_unlock.md               |
 | Dateizugriffe (Whitelist, Ignore)  | memory/datei_zugriffe.md            |
 | Claude-spezifische Hinweise        | memory/claude_hinweise.md           |

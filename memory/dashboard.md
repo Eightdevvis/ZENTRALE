@@ -152,6 +152,44 @@ Browser-Kopplung:** Brave steht auf „Use GTK" und holt seine Oberflächenfarbe
 aus dem GTK-Theme — bei fest dunklem Theme bewegt das Portal-Signal nur noch die
 Seiten, und man „erkennt nicht viel" (genau Sashas Beobachtung).
 
+> **Korrektur 2026-08-03 — der „Use GTK"-Teil griff bei Brave nie.**
+> Der Absatz darüber beschreibt die *Absicht*, nicht das, was passiert ist. Brave
+> ist hier ein **Flatpak**, und daran sind drei Dinge gescheitert:
+> 1. **Brave stand gar nicht auf GTK.** Pref `extensions.theme.system_theme` war
+>    `0` (= klassisches Theme), nicht `1` (= GTK). Damit ignoriert Brave das
+>    GTK-Theme vollständig. Das war die Hauptursache.
+> 2. **Der Sandkasten sah die Theme-Dateien nicht.** Unter `/usr/share/themes`
+>    lagen dort nur „Default" und „Emacs". Durchreichen per
+>    `flatpak override --filesystem=/usr/share/themes:ro` wird **abgelehnt**:
+>    *„Not sharing /usr/share/themes with sandbox: Path /usr is reserved by
+>    Flatpak"* — der Exit-Code ist trotzdem 0, es fällt also nur auf, wenn man
+>    hinterher nachsieht. Der einzige Weg führt übers Heimverzeichnis.
+> 3. **Flatpaks lesen den Theme-NAMEN aus GSettings, nicht aus xfconf.** Dort
+>    standen noch die Vor-ZENTRALE-Werte (`Mint-L-Darker-Teal`, `HighContrast`),
+>    weil `zentrale-desktop-theme` nur xfconf beschrieben hat.
+>
+> **Gefixt** (Commit `a73af03`): aktives Theme wird nach
+> `~/.local/share/themes` gespiegelt (~3–4 MB je Theme, das Skript heilt das
+> selbst), Sandkasten geöffnet mit
+> `flatpak override --user com.brave.Browser --filesystem=xdg-data/themes:ro`,
+> und `zentrale-desktop-theme` spiegelt `gtk-theme`/`icon-theme` zusätzlich nach
+> `org.gnome.desktop.interface`. `color-scheme` bleibt dort außen vor — das
+> gehört `zentrale-browser-theme`.
+> Nebenbefund: `cp -al` (Hardlinks, 0 Byte) geht **nicht** —
+> `fs.protected_hardlinks` verbietet Hardlinks auf fremde Dateien.
+>
+> **Zwei Handgriffe bleiben von Hand:** `brave://settings/appearance` auf **GTK**
+> stellen (Chromium überschreibt `Preferences` beim Beenden, solange es läuft —
+> kein Skript kann das) und Brave **neu starten** (neue Sandkasten-Rechte gelten
+> nur für eine frisch gestartete Instanz).
+>
+> **Nachprüfen, ob es im Sandkasten ankommt:**
+> ```
+> flatpak run --command=sh com.brave.Browser -c \
+>   'ls ~/.local/share/themes; gsettings get org.gnome.desktop.interface gtk-theme'
+> ```
+> Ausführlich in `memory/browser.md`.
+
 - **Paare, angelehnt an die nvim-Paletten** (Mint hat kein Neon, also die
   nächstverwandten Stock-Themes): `night` → **Mint-L-Darker-Aqua** (dunkelste
   Variante, kühl-cyaner Akzent `#6cabcd` ≈ cyber), `day` → **Mint-L-Sand**
