@@ -1,0 +1,732 @@
+[
+  {
+    "word": "ich",
+    "pinyin": "",
+    "de": "ich",
+    "tier": 1,
+    "priority": "critical",
+    "category": "pronoun",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "du",
+    "pinyin": "",
+    "de": "du (informal you)",
+    "tier": 1,
+    "priority": "critical",
+    "category": "pronoun",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "er",
+    "pinyin": "",
+    "de": "he",
+    "tier": 1,
+    "priority": "critical",
+    "category": "pronoun",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "sie",
+    "pinyin": "",
+    "de": "she / they",
+    "tier": 1,
+    "priority": "critical",
+    "category": "pronoun",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "es",
+    "pinyin": "",
+    "de": "it",
+    "tier": 1,
+    "priority": "critical",
+    "category": "pronoun",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "sein",
+    "pinyin": "",
+    "de": "to be",
+    "tier": 1,
+    "priority": "critical",
+    "category": "verb_core",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "haben",
+    "pinyin": "",
+    "de": "to have",
+    "tier": 1,
+    "priority": "critical",
+    "category": "verb_core",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "gehen",
+    "pinyin": "",
+    "de": "to go",
+    "tier": 1,
+    "priority": "critical",
+    "category": "verb_core",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "machen",
+    "pinyin": "",
+    "de": "to do / make",
+    "tier": 1,
+    "priority": "critical",
+    "category": "verb_core",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "sagen",
+    "pinyin": "",
+    "de": "to say",
+    "tier": 1,
+    "priority": "critical",
+    "category": "verb_core",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "essen",
+    "pinyin": "",
+    "de": "to eat",
+    "tier": 1,
+    "priority": "high",
+    "category": "verb_action",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "trinken",
+    "pinyin": "",
+    "de": "to drink",
+    "tier": 1,
+    "priority": "high",
+    "category": "verb_action",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "sehen",
+    "pinyin": "",
+    "de": "to see",
+    "tier": 1,
+    "priority": "high",
+    "category": "verb_action",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "hören",
+    "pinyin": "",
+    "de": "to hear",
+    "tier": 1,
+    "priority": "high",
+    "category": "verb_action",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "verstehen",
+    "pinyin": "",
+    "de": "to understand",
+    "tier": 1,
+    "priority": "critical",
+    "category": "verb_core",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "wissen",
+    "pinyin": "",
+    "de": "to know",
+    "tier": 1,
+    "priority": "high",
+    "category": "verb_core",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "wer",
+    "pinyin": "",
+    "de": "who",
+    "tier": 1,
+    "priority": "critical",
+    "category": "question",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "was",
+    "pinyin": "",
+    "de": "what",
+    "tier": 1,
+    "priority": "critical",
+    "category": "question",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "wo",
+    "pinyin": "",
+    "de": "where",
+    "tier": 1,
+    "priority": "critical",
+    "category": "question",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "wann",
+    "pinyin": "",
+    "de": "when",
+    "tier": 1,
+    "priority": "high",
+    "category": "question",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "warum",
+    "pinyin": "",
+    "de": "why",
+    "tier": 1,
+    "priority": "high",
+    "category": "question",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "wie",
+    "pinyin": "",
+    "de": "how",
+    "tier": 1,
+    "priority": "critical",
+    "category": "question",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "hier",
+    "pinyin": "",
+    "de": "here",
+    "tier": 1,
+    "priority": "high",
+    "category": "spatial",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "dort",
+    "pinyin": "",
+    "de": "there",
+    "tier": 1,
+    "priority": "high",
+    "category": "spatial",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "oben",
+    "pinyin": "",
+    "de": "above",
+    "tier": 1,
+    "priority": "medium",
+    "category": "spatial",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "unten",
+    "pinyin": "",
+    "de": "below",
+    "tier": 1,
+    "priority": "medium",
+    "category": "spatial",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "jetzt",
+    "pinyin": "",
+    "de": "now",
+    "tier": 1,
+    "priority": "critical",
+    "category": "time",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "heute",
+    "pinyin": "",
+    "de": "today",
+    "tier": 1,
+    "priority": "high",
+    "category": "time",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "morgen",
+    "pinyin": "",
+    "de": "tomorrow / morning",
+    "tier": 1,
+    "priority": "high",
+    "category": "time",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "gestern",
+    "pinyin": "",
+    "de": "yesterday",
+    "tier": 1,
+    "priority": "medium",
+    "category": "time",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "ja",
+    "pinyin": "",
+    "de": "yes",
+    "tier": 1,
+    "priority": "critical",
+    "category": "response",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "nein",
+    "pinyin": "",
+    "de": "no",
+    "tier": 1,
+    "priority": "critical",
+    "category": "response",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "vielleicht",
+    "pinyin": "",
+    "de": "maybe",
+    "tier": 1,
+    "priority": "medium",
+    "category": "response",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "gut",
+    "pinyin": "",
+    "de": "good / well",
+    "tier": 1,
+    "priority": "critical",
+    "category": "emotion",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "schlecht",
+    "pinyin": "",
+    "de": "bad",
+    "tier": 1,
+    "priority": "high",
+    "category": "emotion",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "glücklich",
+    "pinyin": "",
+    "de": "happy",
+    "tier": 1,
+    "priority": "high",
+    "category": "emotion",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "traurig",
+    "pinyin": "",
+    "de": "sad",
+    "tier": 1,
+    "priority": "high",
+    "category": "emotion",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "müde",
+    "pinyin": "",
+    "de": "tired",
+    "tier": 1,
+    "priority": "medium",
+    "category": "emotion",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "Tisch",
+    "pinyin": "",
+    "de": "table",
+    "tier": 1,
+    "priority": "high",
+    "category": "noun_household",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "Stuhl",
+    "pinyin": "",
+    "de": "chair",
+    "tier": 1,
+    "priority": "high",
+    "category": "noun_household",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "Tür",
+    "pinyin": "",
+    "de": "door",
+    "tier": 1,
+    "priority": "medium",
+    "category": "noun_household",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "Fenster",
+    "pinyin": "",
+    "de": "window",
+    "tier": 1,
+    "priority": "medium",
+    "category": "noun_household",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "Wasser",
+    "pinyin": "",
+    "de": "water",
+    "tier": 1,
+    "priority": "high",
+    "category": "noun_substance",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "Essen",
+    "pinyin": "",
+    "de": "food",
+    "tier": 1,
+    "priority": "high",
+    "category": "noun_substance",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "Musik",
+    "pinyin": "",
+    "de": "music",
+    "tier": 1,
+    "priority": "high",
+    "category": "tutor_activity",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "Zeitung",
+    "pinyin": "",
+    "de": "newspaper",
+    "tier": 1,
+    "priority": "high",
+    "category": "tutor_activity",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "Fernsehen",
+    "pinyin": "",
+    "de": "television",
+    "tier": 1,
+    "priority": "high",
+    "category": "tutor_activity",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "groß",
+    "pinyin": "",
+    "de": "big",
+    "tier": 1,
+    "priority": "high",
+    "category": "adjective",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "klein",
+    "pinyin": "",
+    "de": "small",
+    "tier": 1,
+    "priority": "high",
+    "category": "adjective",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "neu",
+    "pinyin": "",
+    "de": "new",
+    "tier": 1,
+    "priority": "medium",
+    "category": "adjective",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "alt",
+    "pinyin": "",
+    "de": "old",
+    "tier": 1,
+    "priority": "medium",
+    "category": "adjective",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "schnell",
+    "pinyin": "",
+    "de": "fast",
+    "tier": 1,
+    "priority": "medium",
+    "category": "adjective",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "langsam",
+    "pinyin": "",
+    "de": "slow",
+    "tier": 1,
+    "priority": "high",
+    "category": "adjective",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "heiß",
+    "pinyin": "",
+    "de": "hot",
+    "tier": 1,
+    "priority": "medium",
+    "category": "adjective",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "kalt",
+    "pinyin": "",
+    "de": "cold",
+    "tier": 1,
+    "priority": "medium",
+    "category": "adjective",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "Mutter",
+    "pinyin": "",
+    "de": "mother",
+    "tier": 1,
+    "priority": "medium",
+    "category": "family",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "Vater",
+    "pinyin": "",
+    "de": "father",
+    "tier": 1,
+    "priority": "medium",
+    "category": "family",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "Bruder",
+    "pinyin": "",
+    "de": "brother",
+    "tier": 1,
+    "priority": "medium",
+    "category": "family",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "Schwester",
+    "pinyin": "",
+    "de": "sister",
+    "tier": 1,
+    "priority": "medium",
+    "category": "family",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "und",
+    "pinyin": "",
+    "de": "and",
+    "tier": 1,
+    "priority": "critical",
+    "category": "connector",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "aber",
+    "pinyin": "",
+    "de": "but",
+    "tier": 1,
+    "priority": "high",
+    "category": "connector",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "weil",
+    "pinyin": "",
+    "de": "because",
+    "tier": 1,
+    "priority": "high",
+    "category": "connector",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "oder",
+    "pinyin": "",
+    "de": "or",
+    "tier": 1,
+    "priority": "medium",
+    "category": "connector",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "nicht",
+    "pinyin": "",
+    "de": "not",
+    "tier": 1,
+    "priority": "critical",
+    "category": "modifier",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "sehr",
+    "pinyin": "",
+    "de": "very",
+    "tier": 1,
+    "priority": "high",
+    "category": "modifier",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "ein",
+    "pinyin": "",
+    "de": "a / an (indefinite article)",
+    "tier": 1,
+    "priority": "critical",
+    "category": "article",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "der",
+    "pinyin": "",
+    "de": "the (definite article, masculine)",
+    "tier": 1,
+    "priority": "critical",
+    "category": "article",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "die",
+    "pinyin": "",
+    "de": "the (definite article, feminine / plural)",
+    "tier": 1,
+    "priority": "critical",
+    "category": "article",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "das",
+    "pinyin": "",
+    "de": "the (definite article, neuter)",
+    "tier": 1,
+    "priority": "critical",
+    "category": "article",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "bitte",
+    "pinyin": "",
+    "de": "please",
+    "tier": 1,
+    "priority": "high",
+    "category": "politeness",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "danke",
+    "pinyin": "",
+    "de": "thank you",
+    "tier": 1,
+    "priority": "high",
+    "category": "politeness",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "bru",
+    "pinyin": "",
+    "de": "hello (casual)",
+    "tier": 1,
+    "priority": "medium",
+    "category": "greeting",
+    "correct_use": 0,
+    "confirmed": false
+  },
+  {
+    "word": "auf Wiedersehen",
+    "pinyin": "",
+    "de": "goodbye",
+    "tier": 1,
+    "priority": "high",
+    "category": "greeting",
+    "correct_use": 0,
+    "confirmed": false
+  }
+]
