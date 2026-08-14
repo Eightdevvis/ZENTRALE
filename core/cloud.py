@@ -277,7 +277,15 @@ def chat_stream(messages: list, model: str = None, system: str = None,
             yield "[Die Cloud-KI hat diese Anfrage abgelehnt.]"
             return
 
-        if final.stop_reason != "tool_use":
+        tool_blocks = [b for b in final.content
+                       if getattr(b, "type", None) == "tool_use"]
+
+        # Fertig, wenn das Modell keine Tools mehr will — ODER wenn es
+        # stop_reason=tool_use meldet, aber gar keinen tool_use-Block liefert.
+        # Der zweite Fall sieht nach Haarspalterei aus, ist aber der Unterschied
+        # zwischen "Antwort" und einer user-Message mit LEEREM content, die die
+        # API mit 400 ablehnt — und einer Runde, die nichts tut außer zu kosten.
+        if final.stop_reason != "tool_use" or not tool_blocks:
             answer = "".join(round_text) or _text_of(final.content)
             if tutor_mode:
                 if answer:
@@ -293,9 +301,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         anthro_msgs.append({"role": "assistant", "content": final.content})
 
         results = []
-        for block in final.content:
-            if getattr(block, "type", None) != "tool_use":
-                continue
+        for block in tool_blocks:
             name = block.name
             args = dict(block.input or {})
 
@@ -332,7 +338,17 @@ def chat_stream(messages: list, model: str = None, system: str = None,
                         f"du es lässt.")))
                     continue
 
-            results.append(_tool_result(block.id, active_exec(name, args)))
+            # Ein krachendes Tool darf den Turn nicht abreißen: die Runde ist
+            # bezahlt, und die API hat für genau das einen Weg vorgesehen.
+            # is_error → das Modell sieht den Fehler und kann es anders
+            # versuchen oder sagen, dass es nicht geht, statt zu behaupten,
+            # es hätte funktioniert. (Der lokale Pfad wirft hier weiter, weil
+            # das Ollama-Tool-Protokoll kein is_error kennt.)
+            try:
+                ergebnis, fehler = active_exec(name, args), False
+            except Exception as e:
+                ergebnis, fehler = f"Tool '{name}' ist fehlgeschlagen: {e}", True
+            results.append(_tool_result(block.id, ergebnis, is_error=fehler))
 
         # ALLE tool_results in EINER user-Message zurück. Auf mehrere
         # Nachrichten aufzuteilen bringt dem Modell bei, keine parallelen
@@ -344,9 +360,12 @@ def chat_stream(messages: list, model: str = None, system: str = None,
 
 # ── Helfer ─────────────────────────────────────────────────────────────
 
-def _tool_result(tool_use_id: str, content) -> dict:
-    return {"type": "tool_result", "tool_use_id": tool_use_id,
-            "content": str(content)}
+def _tool_result(tool_use_id: str, content, is_error: bool = False) -> dict:
+    r = {"type": "tool_result", "tool_use_id": tool_use_id,
+         "content": str(content)}
+    if is_error:
+        r["is_error"] = True
+    return r
 
 
 def _ask_buttons(args: dict):
