@@ -12,6 +12,7 @@ ob es Sinn hat weiterzumachen:
   1  Erreichbarkeit  Key gültig, Modell-ID existiert, Parameter akzeptiert
   2  Prompt-Cache    zweiter identischer Turn (nur bei Anthropic messbar)
   3  Tool-Loop       ein lesendes Tool einmal komplett durch
+  4  Erlaubnis-Gate  ein SCHREIBENDES Tool wird abgefangen und abgelehnt
 
 ── Was rausgeht ────────────────────────────────────────────────────────
 Stufe 1+2 schicken den System-Prompt und einen Gruß. Stufe 3 schickt
@@ -125,7 +126,7 @@ def main():
 
     state.push_log = mitschreiben
 
-    stufen = [args.stufe] if args.stufe else [1, 2, 3]
+    stufen = [args.stufe] if args.stufe else [1, 2, 3, 4]
     frage = "Sag in genau einem kurzen Satz Hallo."
 
     # ── Stufe 1 ───────────────────────────────────────────────────────
@@ -180,6 +181,52 @@ def main():
             print("    Kontext - oder das Tool-Schema kommt nicht an.")
         if any(isinstance(e, dict) and "permission" in e for e in sonst):
             print("  ⚠ Das Gate hat gefeuert (und wurde auf 'nein' verdrahtet).")
+
+    # ── Stufe 4 ───────────────────────────────────────────────────────
+    if 4 in stufen:
+        print("\n[4] Erlaubnis-Gate (schreibendes Tool) …")
+        # Das Gate ist das Stück, bei dem ein Fehler wirklich weh tut: es ist
+        # das Einzige, was zwischen einem Modell-Einfall und Sashas echtem
+        # Kalender steht. Ein Fake-Test reicht dafür nicht.
+        # Das Tool wird HIER hart blockiert, egal was das Gate sagt - falls
+        # das Gate versagt, soll trotzdem nichts geschrieben werden.
+        import ai
+        geschrieben = []
+        echt = ai._execute_tool
+
+        def nur_mitschreiben(name, args):
+            if name in ai.PERMISSION_REQUIRED_TOOLS:
+                geschrieben.append(name)
+                return "(vom Rauchtest blockiert)"
+            return echt(name, args)
+
+        ai._execute_tool = nur_mitschreiben
+        try:
+            vorher = len(protokoll)
+            text, _, sonst = _sammle(ruf([{
+                "role": "user",
+                "content": "Trag mir bitte morgen um 15 Uhr 'Rauchtest' in den "
+                           "Kalender ein."}]))
+        finally:
+            ai._execute_tool = echt
+
+        gefragt = [e for e in sonst if isinstance(e, dict) and "permission" in e]
+        if gefragt:
+            print(f"  ✓ Gate hat gefeuert: \"{gefragt[0]['permission']['frage'][:120]}\"")
+            print("    (Antwort war 'nein' - genau wie ein Klick auf NEIN)")
+        else:
+            tool_zeilen = [z for z in protokoll[vorher:] if "TOOL" in z]
+            if any("add_calendar" in z for z in tool_zeilen):
+                print("  ⚠⚠ Das Modell hat ein Schreib-Tool gerufen und das Gate")
+                print("     hat NICHT gefragt. Das ist ein echter Befund.")
+            else:
+                print("  — Das Modell hat gar kein Schreib-Tool gerufen; über das")
+                print("    Gate sagt dieser Lauf dann nichts. Nochmal versuchen")
+                print("    oder direkter formulieren.")
+        if geschrieben:
+            print(f"  ⚠ Ausführung wurde versucht: {geschrieben} "
+                  f"(vom Rauchtest abgefangen, nichts eingetragen)")
+        print(f"  Antwort:  {text.strip()[:200]}")
 
     print("\n=== fertig ===")
     print("Der Turn wird erst nach ~45 s Gesprächspause in den Cloud-Graphen")
