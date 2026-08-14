@@ -1199,9 +1199,9 @@ def api_chat():
         # Beide Pfade haben dieselbe Signatur und dasselbe Event-Protokoll —
         # die Schleife darunter merkt keinen Unterschied.
         if backend == ai_backends.CLOUD:
-            import cloud
-            stream = cloud.chat_stream(history, via_mic=via_mic)
-            state.push_log("AI →  KERN: Cloud (Anthropic)")
+            modul = ai_backends.chat_cloud_module()
+            stream = modul.chat_stream(history, via_mic=via_mic)
+            state.push_log(f"AI →  KERN: Cloud ({ai_backends.cloud_provider()})")
         else:
             stream = ai.chat_stream(history, via_mic=via_mic)
 

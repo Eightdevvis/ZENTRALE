@@ -431,6 +431,38 @@ out=…` ins Dashboard-Terminal. Bleibt `cache_read` über mehrere Turns 0, hat
 sich etwas im statischen Block verändert — ein kaputter Cache fällt sonst nur
 auf der Monatsrechnung auf.
 
+### Zweiter Dialekt – `core/cloud_openai.py`
+
+Der Kern spricht **zwei** Cloud-Dialekte. Welchen, sagt `kind` in
+`core/providers.py`:
+
+| `kind` | Modul | Provider |
+|---|---|---|
+| `anthropic` | `core/cloud.py` | claude |
+| `openai_compat` | `core/cloud_openai.py` | qwen (DashScope), openai, mistral |
+
+Beide sind Drop-ins für `ai.chat_stream()` mit identischem Event-Protokoll.
+Die **Bedeutung** eines Tool-Calls — was terminal ist (`antwort`, `lies_news`),
+was durchs Gate muss — steht genau einmal, in `cloud.run_tool()`; die beiden
+Loops unterscheiden sich nur darin, wie sie das Ergebnis verpacken
+(`tool_result`-Block vs. `role: "tool"`-Message). Auch der System-Prompt kommt
+aus derselben Funktion (`cloud._system_blocks`), der OpenAI-Pfad faltet die
+zwei Blöcke nur zu einem String.
+
+Der OpenAI-Pfad existiert vor allem, weil er die Struktur **prüfbar** macht,
+ohne dass ein Anthropic-Key da sein muss: Routing, getrennter Cloud-Graph,
+Gate, SSE bis in den Browser sind providerunabhängig. Ein zweiter echter
+Provider ist der ehrlichere Test der Naht als ein zweiter Mock — erst wenn ein
+fremdes Modell durch dieselbe Naht passt, ist es wirklich eine.
+
+Was er **nicht** kann: `cache_control` (Anthropic-spezifisch; DashScope cacht
+implizit und ohne messbares Signal), `thinking`/`effort`, `is_error` auf
+Tool-Ergebnissen. `temperature` ist hier dagegen erlaubt und wird genutzt.
+Liefert ein Modell `reasoning_content`, wird es als `reflect`-Event gespiegelt.
+
+**Beide Provider teilen sich denselben Cloud-Graphen.** Die Grenze verläuft
+zwischen „im Haus" und „draußen", nicht zwischen zwei Anbietern.
+
 ### Backend-Wahl
 
 `ai_backends.pick("chat")` entscheidet pro Turn, wer denkt. Reihenfolge aus
@@ -444,8 +476,8 @@ Vorwahl `chat_backend()` (`auto` | `local` | `cloud`, in
 - Eine ausdrückliche Wahl fällt **nicht still** auf das andere Backend zurück.
   Der Unterschied ist, ob Daten das Haus verlassen; das darf nicht aus
   Versehen passieren.
-- Ein fremder Cloud-Provider (DashScope-Key) zählt für den Chat nicht —
-  `core/cloud.py` spricht Anthropic.
+- Erreichbar heißt nicht bedienbar: ein Provider ohne `kind` in der Registry
+  zählt für den Chat nicht, auch wenn ein Key gesetzt ist.
 
 ### Modell-Parameter (Stand 2026-08)
 

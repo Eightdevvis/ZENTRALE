@@ -221,14 +221,56 @@ def test_vorwahl_faellt_nicht_still_auf_das_andere_zurueck(monkeypatch,
     assert ai_backends.pick("chat") is None
 
 
-def test_fremder_cloud_provider_zaehlt_fuer_den_chat_nicht(monkeypatch,
-                                                           kein_env_override):
-    """core/cloud.py spricht Anthropic. Ein gesetzter DashScope-Key macht
-    status()['cloud'] wahr, hilft dem Kern aber nicht."""
+def test_provider_ohne_dialekt_zaehlt_fuer_den_chat_nicht(monkeypatch,
+                                                          kein_env_override):
+    """Erreichbar heißt noch nicht bedienbar: kennt die Registry für den
+    Provider kein 'kind', kann der Kern nicht mit ihm reden - dann ist Cloud
+    für den Chat nicht da, auch wenn ein Key gesetzt ist."""
+    monkeypatch.setattr(ai_backends, "status",
+                        lambda *a, **k: _status(False, True, provider="gibtsnicht"))
+    monkeypatch.setattr(ai_backends, "chat_backend", lambda: "auto")
+    assert ai_backends.pick("chat") is None
+
+
+def test_qwen_zaehlt_seit_dem_openai_pfad(monkeypatch, kein_env_override):
+    """DashScope spricht OpenAI-kompatibel - seit core/cloud_openai.py kann
+    der Kern das bedienen."""
     monkeypatch.setattr(ai_backends, "status",
                         lambda *a, **k: _status(False, True, provider="qwen"))
     monkeypatch.setattr(ai_backends, "chat_backend", lambda: "auto")
-    assert ai_backends.pick("chat") is None
+    assert ai_backends.pick("chat") == ai_backends.CLOUD
+
+
+# ── Welches Modul bedient welchen Provider ─────────────────────────────
+
+def test_dialekt_pro_provider():
+    assert ai_backends.cloud_kind_for("claude") == "anthropic"
+    assert ai_backends.cloud_kind_for("qwen") == "openai_compat"
+    assert ai_backends.cloud_kind_for("gibtsnicht") is None
+    assert ai_backends.cloud_kind_for(None) is None
+
+
+def test_jeder_provider_mit_key_hat_einen_dialekt():
+    """Sonst faellt ein Provider still durch: Key gesetzt, status()=cloud da,
+    aber niemand kann mit ihm reden."""
+    import providers
+    for name, p in providers.PROVIDERS.items():
+        assert ai_backends.cloud_kind_for(name), f"{name} hat kein nutzbares kind"
+        assert p.get("default_model"), f"{name} hat kein default_model"
+
+
+def test_modul_wahl_folgt_dem_dialekt(monkeypatch):
+    import cloud
+    import cloud_openai
+    monkeypatch.setattr(ai_backends, "status",
+                        lambda *a, **k: _status(False, True, provider="claude"))
+    assert ai_backends.chat_cloud_module() is cloud
+    monkeypatch.setattr(ai_backends, "status",
+                        lambda *a, **k: _status(False, True, provider="qwen"))
+    assert ai_backends.chat_cloud_module() is cloud_openai
+    monkeypatch.setattr(ai_backends, "status",
+                        lambda *a, **k: _status(False, True, provider="gibtsnicht"))
+    assert ai_backends.chat_cloud_module() is None
 
 
 def test_env_uebersteuert_die_config(monkeypatch):

@@ -475,9 +475,24 @@ def _smoke_modul():
 
 def test_rauchtest_bricht_ohne_key_ab(monkeypatch):
     """Fail-safe: lieber gar nicht starten als mit halber Konfiguration."""
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    import providers
+    for p in providers.PROVIDERS.values():
+        monkeypatch.delenv(p["key_env"], raising=False)
     mod = _smoke_modul()
     monkeypatch.setattr("sys.argv", ["cloud_smoke.py"])
+    with pytest.raises(SystemExit) as e:
+        mod.main()
+    assert e.value.code == 1
+
+
+def test_rauchtest_lehnt_provider_ohne_dialekt_ab(monkeypatch):
+    import providers
+    monkeypatch.setattr(providers, "PROVIDERS",
+                        dict(providers.PROVIDERS,
+                             seltsam={"base_url": "http://x", "key_env": "SELTSAM_KEY"}))
+    monkeypatch.setenv("SELTSAM_KEY", "x")
+    mod = _smoke_modul()
+    monkeypatch.setattr("sys.argv", ["cloud_smoke.py", "--provider", "seltsam"])
     with pytest.raises(SystemExit) as e:
         mod.main()
     assert e.value.code == 1

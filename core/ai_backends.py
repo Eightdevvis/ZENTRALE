@@ -171,10 +171,10 @@ def pick(module: str) -> str | None:
     st = status()
     order = module_backends(module)
     if module == "chat":
-        # core/cloud.py spricht Anthropic, sonst nichts. Ein gesetzter
-        # DashScope-Key macht status()[CLOUD] wahr, hilft dem Kern aber kein
-        # Stück — dann ist Cloud für den Chat schlicht nicht da.
-        if st.get(CLOUD) and st.get("cloud_provider") != "claude":
+        # Erreichbar heißt noch nicht bedienbar: für einen Provider, dessen
+        # Dialekt der Kern nicht spricht (kein 'kind' in der Registry), ist
+        # Cloud für den Chat schlicht nicht da.
+        if st.get(CLOUD) and not cloud_kind_for(st.get("cloud_provider")):
             st = dict(st, **{CLOUD: False})
         want = chat_backend()
         if want in (LOCAL, CLOUD):
@@ -186,6 +186,37 @@ def pick(module: str) -> str | None:
     for b in order:
         if st.get(b):
             return b
+    return None
+
+
+def cloud_kind_for(provider: str | None) -> str | None:
+    """
+    Welchen Dialekt ein Provider spricht — oder None, wenn der Kern mit ihm
+    nicht reden kann. 'anthropic' | 'openai_compat'.
+    """
+    kind = providers.get(provider or "").get("kind")
+    return kind if kind in ("anthropic", "openai_compat") else None
+
+
+def chat_cloud_kind() -> str | None:
+    """Dialekt des AKTUELLEN Cloud-Providers (über status(), damit Aufrufer
+    und Tests dieselbe Quelle sehen)."""
+    return cloud_kind_for(status().get("cloud_provider"))
+
+
+def chat_cloud_module():
+    """
+    Das Modul, das den Cloud-Chat bedient — nach Dialekt des Providers.
+    Lazy importiert: beide Module ziehen ai/graph nach und sollen nicht schon
+    beim Import von ai_backends geladen werden.
+    """
+    kind = chat_cloud_kind()
+    if kind == "anthropic":
+        import cloud
+        return cloud
+    if kind == "openai_compat":
+        import cloud_openai
+        return cloud_openai
     return None
 
 

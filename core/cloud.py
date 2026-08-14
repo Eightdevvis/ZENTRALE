@@ -301,54 +301,19 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         anthro_msgs.append({"role": "assistant", "content": final.content})
 
         results = []
+        beendet = False
         for block in tool_blocks:
-            name = block.name
-            args = dict(block.input or {})
-
-            # antwort-Tool ist TERMINAL: der Text IST die finale Antwort.
-            if not tutor_mode and name == "antwort":
-                answer = str(args.get("text", "")).strip()
-                yield from ai._answer_with_images(answer, user_query, store=store)
-                return
-
-            # lies_news ist TERMINAL: das Briefing ist schon moderiert und
-            # wird direkt gestreamt, statt es nacherzählen zu lassen.
-            if not tutor_mode and name == "lies_news":
-                yield {"cinema": True}
-                show = active_exec(name, args)
-                if show.startswith("Sendung (Stand") and "\n\n" in show:
-                    show = show.split("\n\n", 1)[1]
-                yield show
-                return
-
-            # frage_knopf: die KI baut selbst einen Knopf-Dialog.
-            if not tutor_mode and name == "frage_knopf":
-                wahl = yield from _ask_buttons(args)
-                results.append(_tool_result(block.id, f"Sasha hat gewählt: {wahl}."))
-                continue
-
-            # Erlaubnis-Gate: Python-seitig, NICHT modellgetrieben. Fremde
-            # Tool-Sets (Tutor) gaten wir nicht.
-            if not tutor_mode and name in ai.PERMISSION_REQUIRED_TOOLS:
-                erlaubt = yield from _ask_permission(name, args)
-                if not erlaubt:
-                    results.append(_tool_result(block.id, (
-                        f"Sasha hat die Aktion '{name}' abgelehnt - NICHT "
-                        f"ausführen, nichts eintragen. Kurz bestätigen dass "
-                        f"du es lässt.")))
-                    continue
-
-            # Ein krachendes Tool darf den Turn nicht abreißen: die Runde ist
-            # bezahlt, und die API hat für genau das einen Weg vorgesehen.
-            # is_error → das Modell sieht den Fehler und kann es anders
-            # versuchen oder sagen, dass es nicht geht, statt zu behaupten,
-            # es hätte funktioniert. (Der lokale Pfad wirft hier weiter, weil
-            # das Ollama-Tool-Protokoll kein is_error kennt.)
-            try:
-                ergebnis, fehler = active_exec(name, args), False
-            except Exception as e:
-                ergebnis, fehler = f"Tool '{name}' ist fehlgeschlagen: {e}", True
-            results.append(_tool_result(block.id, ergebnis, is_error=fehler))
+            ausgang = yield from run_tool(
+                block.name, dict(block.input or {}),
+                tutor_mode=tutor_mode, active_exec=active_exec,
+                user_query=user_query, store=store)
+            if ausgang[0] == "stop":
+                beendet = True
+                break
+            _, text, fehler = ausgang
+            results.append(_tool_result(block.id, text, is_error=fehler))
+        if beendet:
+            return
 
         # ALLE tool_results in EINER user-Message zurück. Auf mehrere
         # Nachrichten aufzuteilen bringt dem Modell bei, keine parallelen
@@ -356,6 +321,66 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         anthro_msgs.append({"role": "user", "content": results})
 
     yield "\n[Maximale Tool-Tiefe erreicht]"
+
+
+# ── Ein Tool-Call, dialekt-unabhängig ──────────────────────────────────
+
+def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
+             user_query, store):
+    """
+    Behandelt EINEN Tool-Call: terminale Tools, Knopf-Dialog, Erlaubnis-Gate,
+    Ausführung. Generator — yieldet die Events, mit `yield from` aufrufen.
+
+    Rückgabe:
+      ("stop",)                  Turn ist zu Ende (terminales Tool hat die
+                                 Antwort schon geyieldet)
+      ("result", text, is_error) Ergebnis, das als tool_result zurück soll
+
+    Warum hier und nicht im Loop: es gibt ZWEI Cloud-Dialekte (Anthropic mit
+    tool_use-Blöcken, OpenAI-kompatibel mit tool_calls). Was ein Tool-Call
+    BEDEUTET — was terminal ist, was bestätigt werden muss — ist in beiden
+    dasselbe und darf nicht zweimal gepflegt werden. Nur das Verpacken des
+    Ergebnisses unterscheidet sich, und das macht der jeweilige Loop.
+    """
+    # antwort-Tool ist TERMINAL: der Text IST die finale Antwort.
+    if not tutor_mode and name == "antwort":
+        answer = str(args.get("text", "")).strip()
+        yield from ai._answer_with_images(answer, user_query, store=store)
+        return ("stop",)
+
+    # lies_news ist TERMINAL: das Briefing ist schon moderiert und wird
+    # direkt gestreamt, statt es nacherzählen zu lassen.
+    if not tutor_mode and name == "lies_news":
+        yield {"cinema": True}
+        show = active_exec(name, args)
+        if show.startswith("Sendung (Stand") and "\n\n" in show:
+            show = show.split("\n\n", 1)[1]
+        yield show
+        return ("stop",)
+
+    # frage_knopf: die KI baut selbst einen Knopf-Dialog.
+    if not tutor_mode and name == "frage_knopf":
+        wahl = yield from _ask_buttons(args)
+        return ("result", f"Sasha hat gewählt: {wahl}.", False)
+
+    # Erlaubnis-Gate: Python-seitig, NICHT modellgetrieben. Fremde Tool-Sets
+    # (Tutor) gaten wir nicht.
+    if not tutor_mode and name in ai.PERMISSION_REQUIRED_TOOLS:
+        erlaubt = yield from _ask_permission(name, args)
+        if not erlaubt:
+            return ("result",
+                    f"Sasha hat die Aktion '{name}' abgelehnt - NICHT "
+                    f"ausführen, nichts eintragen. Kurz bestätigen dass du "
+                    f"es lässt.", False)
+
+    # Ein krachendes Tool darf den Turn nicht abreißen: die Runde ist bezahlt.
+    # Das Modell soll den Fehler SEHEN und reagieren können, statt zu
+    # behaupten, es hätte funktioniert. (Der lokale Ollama-Pfad wirft hier
+    # weiter — sein Tool-Protokoll kennt keine Fehler-Markierung.)
+    try:
+        return ("result", active_exec(name, args), False)
+    except Exception as e:
+        return ("result", f"Tool '{name}' ist fehlgeschlagen: {e}", True)
 
 
 # ── Helfer ─────────────────────────────────────────────────────────────

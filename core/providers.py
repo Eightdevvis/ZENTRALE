@@ -21,28 +21,41 @@
 # Erreichbarkeits-Frage. Wächst der Kern mal einen echten Cloud-Pfad, kommt der
 # Client hierher — nicht in den Tutor zurück.
 
+# kind sagt, WELCHES Kern-Modul den Provider bedienen kann:
+#   'anthropic'      → core/cloud.py        (tool_use-Blöcke, cache_control)
+#   'openai_compat'  → core/cloud_openai.py (tool_calls, /v1/chat/completions)
+# Ohne kind kann der Kern mit dem Provider nicht reden, auch wenn ein Key da
+# ist — die Erreichbarkeit allein macht ihn noch nicht nutzbar.
 PROVIDERS = {
     "qwen": {
-        "base_url":     "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-        "key_env":      "DASHSCOPE_API_KEY",
-        "jurisdiction": "SG",
-        "note":         "Alibaba Qwen (intl/Singapur). Sashas aktiver Cloud-Key.",
+        "base_url":      "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        "key_env":       "DASHSCOPE_API_KEY",
+        "kind":          "openai_compat",
+        "default_model": "qwen-plus",
+        "jurisdiction":  "SG",
+        "note":          "Alibaba Qwen (intl/Singapur). Sashas aktiver Cloud-Key.",
     },
     "claude": {
-        "base_url":     "https://api.anthropic.com",
-        "key_env":      "ANTHROPIC_API_KEY",
-        "jurisdiction": "US",
-        "note":         "Anthropic — Verifikations-Pfad.",
+        "base_url":      "https://api.anthropic.com",
+        "key_env":       "ANTHROPIC_API_KEY",
+        "kind":          "anthropic",
+        "default_model": "claude-opus-5",
+        "jurisdiction":  "US",
+        "note":          "Anthropic — der eigentliche Ziel-Pfad des Kerns.",
     },
     "openai": {
-        "base_url":     "https://api.openai.com/v1",
-        "key_env":      "OPENAI_API_KEY",
-        "jurisdiction": "US",
+        "base_url":      "https://api.openai.com/v1",
+        "key_env":       "OPENAI_API_KEY",
+        "kind":          "openai_compat",
+        "default_model": "gpt-4o",
+        "jurisdiction":  "US",
     },
     "mistral": {
-        "base_url":     "https://api.mistral.ai/v1",
-        "key_env":      "MISTRAL_API_KEY",
-        "jurisdiction": "EU",
+        "base_url":      "https://api.mistral.ai/v1",
+        "key_env":       "MISTRAL_API_KEY",
+        "kind":          "openai_compat",
+        "default_model": "mistral-large-latest",
+        "jurisdiction":  "EU",
     },
 }
 
