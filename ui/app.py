@@ -1170,10 +1170,13 @@ def api_chat():
     """
     if kassette.ki_aus():
         return _ki_aus()
-    # Lokal-Drossel (Pendant zum Cloud-Kill-Switch): bewusst aus → hier hart
-    # abriegeln, damit die Drossel wirklich drosselt (nicht nur die Anzeige).
-    if not ai_backends.local_enabled():
-        return jsonify({"error": "lokale KI gedrosselt"}), 503
+    # Welcher Kern denkt diesen Turn — lokal (Ollama) oder Cloud (Anthropic)?
+    # ai_backends.pick() berücksichtigt beide Drosseln, die Erreichbarkeit und
+    # Sashas ausdrückliche Vorwahl (chat_backend). Kein Backend → hart
+    # abriegeln, damit eine gesetzte Drossel wirklich drosselt.
+    backend = ai_backends.pick("chat")
+    if backend is None:
+        return jsonify({"error": "kein KI-Backend für den Chat verfügbar"}), 503
     body    = request.get_json()
     message = (body.get('message') or '').strip()
     # via_mic-Flag aus dem Body. True bedeutet: diese Message kam aus
@@ -1193,7 +1196,16 @@ def api_chat():
         # Tokens sammeln um am Ende die komplette Antwort zu speichern
         collected = []
 
-        for token in ai.chat_stream(history, via_mic=via_mic):
+        # Beide Pfade haben dieselbe Signatur und dasselbe Event-Protokoll —
+        # die Schleife darunter merkt keinen Unterschied.
+        if backend == ai_backends.CLOUD:
+            import cloud
+            stream = cloud.chat_stream(history, via_mic=via_mic)
+            state.push_log("AI →  KERN: Cloud (Anthropic)")
+        else:
+            stream = ai.chat_stream(history, via_mic=via_mic)
+
+        for token in stream:
             # zeige_ascii liefert ein Dict statt eines Text-Tokens: ein
             # Inline-Bild-Event. Es geht als eigenes SSE-Event 'ascii' raus
             # und NICHT in collected - es ist kein Antworttext, wird also

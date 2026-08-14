@@ -17,7 +17,7 @@ hier sofort mitziehen, sonst tote Links.
 | Topologie (PC ↔ Pi, wer macht was) | memory/topologie.md                 |
 | Gesamt-Architektur & Threads       | memory/architektur.md               |
 | Event-System (Sensoren → Actions)  | memory/event_system.md              |
-| KI-System (Ollama, Graph-Memory)   | memory/ki_system.md                 |
+| KI-System (Ollama + Cloud, Graph-Memory) | memory/ki_system.md           |
 | Kalender-System (Layer, Termine)   | memory/kalender_system.md           |
 | Morgen-Messenger (Deckel auf → Fenster) | memory/morgen_messenger.md     |
 | Zyklus/PMS-Rechner (»periode«-Graph)| memory/zyklus_pms.md               |

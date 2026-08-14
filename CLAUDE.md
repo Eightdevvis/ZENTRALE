@@ -110,7 +110,7 @@ hält die Antworten fokussiert.
 | Wer läuft wo (PC ↔ Pi)                    | `memory/topologie.md`                |
 | Threads, Datenfluss, Modul-Übersicht      | `memory/architektur.md`              |
 | Sensoren, Events, Brain, Actions          | `memory/event_system.md`             |
-| Ollama, Memory, Tools, Net-Logging        | `memory/ki_system.md`                |
+| Ollama, Cloud-Kern, Memory, Tools, Netlog | `memory/ki_system.md`                |
 | Kalender-System (Layer, Termine)          | `memory/kalender_system.md`          |
 | Zyklus/PMS-Rechner (»periode«-Graph)      | `memory/zyklus_pms.md`               |
 | News-System (Tagesschau, KI-Briefing)     | `memory/news_system.md`              |

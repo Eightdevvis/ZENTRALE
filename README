@@ -5,11 +5,19 @@ Event-getriebene Zentrale für einen Wand-Monitor. Backend läuft auf
 einem Linux-PC, der Raspberry Pi ist nur noch Display-Kiosk +
 Sensor-Bridge (siehe `memory/topologie.md`). Sensoren und Zeitgeber
 erzeugen Events, der Core verarbeitet sie, das Web-Dashboard zeigt
-alles an – vollständig offline.
+alles an – im Normalbetrieb vollständig offline.
 
 KI läuft lokal via Ollama (Chat-Default `qwen3.5:9b` per `OLLAMA_MODEL`,
 Embeddings `bge-m3` per `OLLAMA_EMBED_MODEL`, beide umstellbar).
-Kein Cloud-Zugriff, keine Daten verlassen das Heimnetz.
+
+Es gibt zusätzlich einen Cloud-Kern (`core/cloud.py`, Anthropic), der die
+Offline-Eigenschaft für den CHAT bewusst bricht – als Opt-in, standardmäßig
+aus. Er ist erst aktiv, wenn ein API-Key hinterlegt UND `chat_backend` auf
+`cloud` gestellt ist. Dann verlassen Frage, Gesprächsverlauf, ein eigener
+Memory-Graph und alle Tool-Ergebnisse (Dateiinhalte, Kalender, Mail-Betreffs)
+das Heimnetz. Alles unterhalb der Modellschicht bleibt in jedem Fall lokal:
+Whisper, TTS, Kalender, Mail, News, Sensorik und die Embeddings.
+Details + Bedrohungsmodell: `memory/ki_system.md`, `memory/sicherheit.md`.
 
 
 Quick Start

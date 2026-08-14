@@ -835,7 +835,7 @@ _OBSOLETE_INTERNET_LIMITS = [
 ]
 
 
-def ensure_seed():
+def ensure_seed(store: str | None = None):
     """
     Stellt sicher dass die KI-Identität im Graphen verankert ist.
     Idempotent - läuft nur wenn der "KI"-Knoten noch nicht existiert.
@@ -843,15 +843,19 @@ def ensure_seed():
     Wird beim ersten chat_stream-Call lazy aufgerufen (siehe ai.py).
     Kann auch manuell für Debugging gerufen werden.
 
+    store: welcher Graph geseedet wird (None = Core-Graph). Der Cloud-Pfad
+    hat einen eigenen Graphen (data/ai_graph_cloud.json) und braucht denselben
+    Identity-Seed - die kann/kann-nicht-Kanten SIND das Selbstbild der KI.
+
     Was passiert:
       1. KI-Knoten anlegen (type: "self")
       2. Pro Capability: Knoten + Edge KI ─[kann]─► capability
       3. Pro Limit: Knoten + Edge KI ─[kann-nicht]─► limit
 
-    Nur der Core-Graph kriegt diesen Identity-Seed — Persona-Graphen haben
-    keine KI-Selbst-Knoten (siehe context_for_persona).
+    Persona-Graphen kriegen diesen Seed nicht (siehe context_for_persona) —
+    Core- und Cloud-Graph beide schon.
     """
-    st = _get_store()
+    st = _get_store(store)
     with st.lock:
         data = _load_raw(st, for_write=True)
         if "KI" in data["nodes"]:
@@ -892,7 +896,7 @@ def ensure_seed():
     _log(f"GRAPH ⊕ Seed: KI-Identität mit {len(_SEED_CAPABILITIES)} kann + {len(_SEED_LIMITS)} kann-nicht")
 
 
-def migrate_internet_access():
+def migrate_internet_access(store: str | None = None):
     """
     Einmal-Migration für BEREITS geseedete Graphen (2026-06-07, Internet-Pipe).
 
@@ -914,7 +918,7 @@ def migrate_internet_access():
     new_caps = ["im Internet suchen", "Webseiten abrufen",
                 "dir die aktuellen Nachrichten und die Weltlage holen"]
     removed, added = [], []
-    st = _get_store()
+    st = _get_store(store)
     with st.lock:
         data = _load_raw(st, for_write=True)
         obsolete = set(_OBSOLETE_INTERNET_LIMITS)

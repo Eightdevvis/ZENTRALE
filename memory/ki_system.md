@@ -326,24 +326,20 @@ warten, dann Tools auflösen.
 
 ## System-Prompt-Komposition
 
-Reihenfolge im System-Prompt (siehe `core/ai.py`):
+Reihenfolge im System-Prompt (siehe `_PROMPT_ORDER` in `core/ai.py`):
+**erst alles Statische, dann alles, was sich pro Turn ändert.** Zwei Gründe
+für diesen Schnitt, ein Handgriff — Prompt-Cache (ein Treffer braucht ein
+byte-identisches Präfix, und der Jetzt-Block enthält die Uhrzeit) und Recency
+(was zuletzt steht, sitzt am dichtesten an der User-Message).
 
-1. **`_now_prompt()`** – dynamisch pro Turn gebaut: heutiges Datum,
-   Wochentag, aktuelle Uhrzeit. **Ganz vorne**, damit das LLM bevor es
-   irgendetwas anderes liest weiß welcher Tag jetzt ist. Schließt das
-   Zeit-Loch: vorher lebte das Datum nur als Aktivierungs-Anker im
-   Graphen – die KI konnte Time-Knoten sehen, aber nicht wissen welcher
-   davon "heute" ist, und hat dann aus den aktivierten alten Tagen
-   geraten. Symptom war "die letzte Konversation war am 19.5., die am
-   21.5. war bereits danach"-Logik-Quatsch.
-2. **`_SYSTEM_PROMPT`** – Persona (entspannt, direkt, deutsch).
-3. **`_CAPABILITIES_PROMPT`** – Meta-Regeln: nicht lügen über Memory;
+1. **`_SYSTEM_PROMPT`** – Persona (entspannt, direkt, deutsch).
+2. **`_CAPABILITIES_PROMPT`** – Meta-Regeln: nicht lügen über Memory;
    nicht erfinden über Sasha; **Subjekt-Grenze** (Sashas Gefühle/Zustände
    NIE als eigene ausgeben → Anti-Identity-Bleed, mit konkretem Beispiel);
    nicht erfinden über eigene Fähigkeiten (was unter „Das kannst DU NICHT"
    steht, nie behaupten zu können); lateinische Schrift; reale Wörter.
    Bei jedem Turn injiziert.
-4. **`graph.context_for_query(user_query)`** – aktiviertes Wissen aus
+3. **`graph.context_for_query(user_query)`** – aktiviertes Wissen aus
    dem Graphen (Spread-Aktivierung von Entry-Points aus). Kann leer
    sein → KI sagt dann "noch nichts gespeichert" statt zu raten
    (Anti-Konfabulation). **Seit 2026-06-06 nach SUBJEKT getrennt
@@ -353,7 +349,16 @@ Reihenfolge im System-Prompt (siehe `core/ai.py`):
    („Bilder generieren") als eigene Fähigkeit liest. Nötig mit qwen3.5
    (weniger guarded als qwen2.5). Trennung nur per `type`-Feld
    (self/capability/limit), siehe Render-Block in `core/graph.py`.
-5. **`_MIC_INPUT_HINT`** – *konditional*, nur wenn die letzte
+4. **`_now_prompt()`** – dynamisch pro Turn: heutiges Datum, Wochentag,
+   Uhrzeit. Schließt das Zeit-Loch: vorher lebte das Datum nur als
+   Aktivierungs-Anker im Graphen – die KI konnte Time-Knoten sehen, aber
+   nicht wissen welcher davon "heute" ist, und hat dann aus den aktivierten
+   alten Tagen geraten (Symptom: "die letzte Konversation war am 19.5., die
+   am 21.5. war bereits danach"-Logik-Quatsch). Steht **direkt hinter dem
+   Graph-Kontext**, weil er genau dessen Datums-Knoten korrigiert – und
+   hinten ist er nicht schwächer als vorne, sondern präsenter.
+5. **`_alarm_prompt()`** – *konditional*, offene Kalender-Erinnerungen.
+6. **`_MIC_INPUT_HINT`** – *konditional*, nur wenn die letzte
    User-Message per Whisper-Spracheingabe kam (`via_mic=True`). Sagt
    der KI: Transkription kann Wörter verfälschen, bei semantischen
    Brüchen lieber nachfragen statt wörtlich antworten. Standard-Chat
@@ -370,6 +375,94 @@ hardzucoden – fügt man der KI einen neuen Knoten "Tool X" hinzu, weiß
 sie es ohne Prompt-Änderung. Verhindert auch, dass das Pretraining
 (qwen kennt Claude-Code-Skill-Namen wie `update-config` aus öffentlichen
 Docs) sich als eigene Fähigkeit ausgibt.
+
+## Cloud-Kern – `core/cloud.py` (Anthropic)
+
+Zweiter Denk-Pfad für den Kern, **Drop-in für `ai.chat_stream()`**: gleiche
+Signatur, gleiches Event-Protokoll (`reflect` / `ascii` / `permission` /
+`cinema` / Text), gleiches Erlaubnis-Gate. Grund für den Umstieg: das Projekt
+hing nie an der Architektur, sondern daran, dass ein 9B nicht klug genug war
+und immer mehr Prompt-Absicherung brauchte.
+
+**Was sich ändert, ist WER DENKT — nicht wer ausführt.** `_dispatch_tool` /
+`_execute_tool` in `core/ai.py` bleiben unangetastet und laufen weiter lokal;
+`core/cloud.py` übersetzt nur zwischen zwei Tool-Dialekten (geparste
+Ollama-Textblöcke ↔ native `tool_use`-Blöcke). Whisper, TTS, Kalender, Mail,
+News und **Ollama für die Embeddings** laufen unverändert lokal weiter — der
+Wechsel tauscht genau eine Komponente aus.
+
+| | lokal | Cloud |
+|---|---|---|
+| Modell **entscheidet**, welches Tool | Ollama | Anthropic |
+| Aufruf wird **geparst** | Text-Parsing | native `tool_use`-Blocks |
+| Tool **läuft** | lokal | **weiterhin lokal** |
+
+### Isolations-Invariante
+
+**Lokal sieht alles von Cloud. Cloud sieht nichts von lokal.**
+
+Der Cloud-Pfad hat einen **eigenen Graphen**: `data/ai_graph_cloud.json`
+(`cloud.CLOUD_GRAPH`). Würde er `graph.context_for_query()` ohne `store`
+rufen, ginge Sashas kompletter Konzept-Graph mit jedem Turn an die API.
+Getragen wird das vom Multi-Store in `core/graph.py` (`store`-Parameter, war
+schon da) plus `store`-Durchreichung in `ai._answer_with_images` →
+`ai._async_save_turn` → `consolidation.extract_turn_into_graph`. Der Extraktor
+selbst läuft weiterhin lokal — er schreibt nur in DEN Graphen, aus dem der
+Turn kam. Das lokale Modell darf den Cloud-Graphen später lesen und einen
+zweiten Layer darauf bauen; es schreibt nie hinein.
+
+> **Was die Cloud trotzdem sieht:** Tool-*Ergebnisse* gehen zurück ans Modell
+> — Dateiinhalte aus `read_file`, Kalendereinträge, Mail-Betreffzeilen,
+> News-Texte. Nicht nur die Frage. Der Erlaubnis-Dialog begrenzt schreibende
+> Aktionen, nicht den Abfluss lesender. Bewusst so, siehe `sicherheit.md`.
+
+### Prompt-Cache
+
+Der System-Prompt geht als **zwei Blöcke** raus: `[0]` statisch mit
+`cache_control: ephemeral`, `[1]` wechselnd (Graph, Jetzt, Alarme, Mic).
+Gerendert wird `tools → system → messages`, ein Breakpoint auf dem letzten
+statischen Block cacht also **Tool-Schema und statischen Prompt zusammen** —
+die ~8.000 Token, die sonst bei jedem Turn UND jeder Tool-Runde voll bezahlt
+würden. Cache-Treffer kosten 10 % des Input-Preises; das ist der mit Abstand
+größte Kostenhebel (~45 €/Monat → ~18 €/Monat bei 30 Austauschen/Tag).
+
+**Kontrolle:** jede Runde loggt `CLOUD ← in=… cache_read=… cache_write=…
+out=…` ins Dashboard-Terminal. Bleibt `cache_read` über mehrere Turns 0, hat
+sich etwas im statischen Block verändert — ein kaputter Cache fällt sonst nur
+auf der Monatsrechnung auf.
+
+### Backend-Wahl
+
+`ai_backends.pick("chat")` entscheidet pro Turn, wer denkt. Reihenfolge aus
+`MODULE_BACKENDS["chat"] = (LOCAL, CLOUD)`, **aber** mit ausdrücklicher
+Vorwahl `chat_backend()` (`auto` | `local` | `cloud`, in
+`data/ai_config.json`, per `ZENTRALE_CHAT_BACKEND` übersteuerbar):
+
+- `auto` (Default) → lokal zuerst, solange Ollama läuft. **Wer den
+  Cloud-Assistenten will, muss `cloud` setzen** — sonst gewinnt das lokale 9b
+  jeden Turn, einfach weil es erreichbar ist.
+- Eine ausdrückliche Wahl fällt **nicht still** auf das andere Backend zurück.
+  Der Unterschied ist, ob Daten das Haus verlassen; das darf nicht aus
+  Versehen passieren.
+- Ein fremder Cloud-Provider (DashScope-Key) zählt für den Chat nicht —
+  `core/cloud.py` spricht Anthropic.
+
+### Modell-Parameter (Stand 2026-08)
+
+`claude-opus-5` (`ZENTRALE_CLOUD_MODEL`), `effort: medium`
+(`ZENTRALE_CLOUD_EFFORT`), `max_tokens 16000` (`ZENTRALE_CLOUD_MAX_TOKENS`),
+`thinking: adaptive` mit `display: summarized` → die Denk-Tokens werden live
+als `reflect`-Event ins HUD gespiegelt, genau wie Ollamas `thinking`-Feld.
+
+**Fallen der aktuellen API** (gelten auch für `tutor/cloud.py`):
+- `temperature` / `top_p` / `top_k` → **400**. Kürze/Reproduzierbarkeit
+  kommen nur noch aus dem Prompt.
+- `thinking: {budget_tokens: N}` → **400**. Steuerung läuft über `effort`.
+- `max_tokens` deckelt **Denken UND Antwort zusammen** — zu knapp heißt, die
+  Antwort bricht ab, nachdem das Denken das Budget aufgefressen hat.
+- `thinking: disabled` schreibt Tool-Calls gelegentlich als Fließtext statt
+  als `tool_use`-Block; der Call läuft dann nie, ohne Fehler. Deshalb bleibt
+  Denken überall an, notfalls auf `effort: low`.
 
 ## Warmup
 

@@ -37,11 +37,25 @@ import os
 #  Cloud-Aufruf wäre mit einem 404 vom API gestorben.)
 _MODEL = os.getenv("TUTOR_CLOUD_MODEL", "claude-opus-5")
 
-# Tutor-Antworten sollen KURZ sein (1-2 Sätze). Cap + niedrige Temperatur halten
-# das Verhalten reproduzierbar knapp (wie beim openai_compat-Pfad, siehe dort +
-# memory/tutor_persona_tuning.md). Beide per Env übersteuerbar.
-_MAX_TOKENS   = int(os.getenv("TUTOR_MAX_TOKENS", "200"))
-_TEMPERATURE  = float(os.getenv("TUTOR_TEMPERATURE", "0.4"))
+# Tutor-Antworten sollen KURZ sein (1-2 Sätze).
+#
+# ⚠ Auf diesem Pfad hält NUR noch der Prompt sie kurz, nicht mehr Sampling:
+# temperature/top_p/top_k werden ab Opus 4.7 mit einem 400 abgelehnt. Die
+# frühere TUTOR_TEMPERATURE ist damit tot (der openai_compat-Pfad für Qwen &
+# Co. nutzt sie unverändert weiter — nur Anthropic kennt sie nicht mehr).
+#
+# max_tokens deckelt Denken UND Antwort zusammen. Die alten 200 waren als
+# Brevity-Bremse gedacht; mit eingeschaltetem Denken würden sie die Antwort
+# abschneiden, bevor sie beginnt. Deshalb: großzügiger Deckel, Kürze kommt
+# aus dem Prompt (Zielsprache + Few-Shot, siehe memory/tutor_persona_tuning.md).
+_MAX_TOKENS   = int(os.getenv("TUTOR_MAX_TOKENS", "2000"))
+
+# effort=low: der Tutor braucht keine Tiefe, sondern kurze schnelle Repliken.
+# Denken bleibt trotzdem AN — mit thinking=disabled schreibt Opus 5 Tool-Calls
+# gelegentlich als Fließtext statt als tool_use-Block; der Call läuft dann
+# nie, ohne Fehler. Für einen Tutor, der an get_confirmed_vocab hängt, wäre
+# das ein stiller Totalausfall der Vokabel-Logik.
+_EFFORT       = os.getenv("TUTOR_CLOUD_EFFORT", "low")
 
 _client = None  # lazy: anthropic erst importieren/instanziieren wenn wirklich genutzt
 
@@ -112,7 +126,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         with client.messages.stream(
             model=model or _MODEL,
             max_tokens=_MAX_TOKENS,
-            temperature=_TEMPERATURE,
+            output_config={"effort": _EFFORT},
             system=system or "",
             tools=anthro_tools,
             messages=anthro_msgs,

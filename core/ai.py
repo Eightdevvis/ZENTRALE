@@ -925,7 +925,7 @@ def _extract_ascii_markers(text: str):
     return clean, names
 
 
-def _answer_with_images(answer: str, user_query: str):
+def _answer_with_images(answer: str, user_query: str, store: str | None = None):
     """
     Verarbeitet eine FINALE Antwort (regulaerer Chat): zieht Bild-Marker raus,
     feuert pro Treffer ein Inline-Bild-Event ({"ascii","name"}) - app.py macht
@@ -933,6 +933,12 @@ def _answer_with_images(answer: str, user_query: str):
     Text. Speichert den bereinigten Text (ohne Marker) in den Graphen.
     Generator: in chat_stream via `yield from` nutzen. Nur fuer tools is None
     aufrufen (Tutor kennt keine Marker).
+
+    store: in WELCHEN Graphen der Turn gespeichert wird. None = Core-Graph
+    (data/ai_graph.json, lokales Modell). Der Cloud-Pfad (core/cloud.py) reicht
+    hier seinen eigenen Graphen durch - die Isolations-Invariante lautet
+    "lokal sieht alles von cloud, cloud sieht nichts von lokal", und die
+    steht und faellt damit, dass Cloud-Turns NICHT im Core-Graphen landen.
     """
     import state as _state
     clean, names = _extract_ascii_markers(answer)
@@ -945,7 +951,7 @@ def _answer_with_images(answer: str, user_query: str):
             _state.push_log(f"AI →  BILD [[bild: {nm}]] → kein Treffer")
     if clean:
         yield clean
-    _async_save_turn(user_query, clean)
+    _async_save_turn(user_query, clean, store=store)
 
 
 # ── Bestätigungspflichtige Tools (Erlaubnis-Gate) ──────────────────────
@@ -1338,11 +1344,13 @@ def _consolidation_worker():
                     break
                 _consol_cv.wait(timeout=rest)
             # 3. Genau einen Turn entnehmen.
-            user_msg, ai_msg = _consol_pending.pop(0)
+            user_msg, ai_msg, store = _consol_pending.pop(0)
         # LLM-Extraktion AUSSERHALB des Locks (langer Call – darf das
         # Einreihen weiterer Turns nicht blockieren).
+        # store reist mit dem Turn mit: der Extraktor laeuft zwar immer lokal
+        # (Ollama), schreibt aber in DEN Graphen, aus dem der Turn kam.
         try:
-            consolidation.extract_turn_into_graph(user_msg, ai_msg)
+            consolidation.extract_turn_into_graph(user_msg, ai_msg, store=store)
         except Exception as e:
             try:
                 import state
@@ -1351,9 +1359,12 @@ def _consolidation_worker():
                 pass
 
 
-def _async_save_turn(user_msg: str, ai_msg: str):
+def _async_save_turn(user_msg: str, ai_msg: str, store: str | None = None):
     """
     Turn für die spätere Graph-Konsolidierung vormerken (Phase G).
+
+    store: Ziel-Graph (None = Core-Graph). Der Cloud-Pfad reicht seinen
+    eigenen durch, damit Cloud-Turns nie im lokalen Graphen landen.
 
     Reiht den Turn in die Queue und stupst den Worker an; die eigentliche
     LLM-Extraktion läuft gebündelt erst in der nächsten Gesprächspause
@@ -1375,31 +1386,34 @@ def _async_save_turn(user_msg: str, ai_msg: str):
             _consol_started = True
             threading.Thread(target=_consolidation_worker, daemon=True,
                              name='ai-consolidation').start()
-        _consol_pending.append((user_msg, ai_msg))
+        _consol_pending.append((user_msg, ai_msg, store))
         _consol_last_ts = time.monotonic()   # Debounce-Frist neu setzen
         _consol_cv.notify()
 
 
-_seed_done = False
+_seed_done = set()   # Pfade (bzw. None fuer den Core-Graph), die schon geseedet sind
 
-def _ensure_seed_once():
-    """Lazy idempotent seed des Identity-Graphen. Bei erstem Chat ausgeführt."""
-    global _seed_done
-    if _seed_done:
+def _ensure_seed_once(store: str | None = None):
+    """Lazy idempotent seed des Identity-Graphen. Bei erstem Chat ausgeführt.
+
+    Pro Store einmal: der Cloud-Pfad hat einen EIGENEN Graphen und braucht
+    denselben Identity-Seed, sonst weiss die Cloud-KI nicht, was sie kann und
+    was nicht (die kann/kann-nicht-Kanten sind ihr Selbstbild)."""
+    if store in _seed_done:
         return
     try:
-        graph.ensure_seed()
+        graph.ensure_seed(store=store)
         # Internet-Pipe (2026-06-07): bereits geseedete Graphen nachziehen -
         # Internet-Limits zu Fähigkeiten machen. Idempotent + no-op wenn schon
         # migriert (siehe graph.migrate_internet_access).
-        graph.migrate_internet_access()
+        graph.migrate_internet_access(store=store)
     except Exception as e:
         try:
             import state
             state.push_log(f"[seed] FEHLER: {e}")
         except Exception:
             pass
-    _seed_done = True
+    _seed_done.add(store)
 
 
 def chat(messages: list, model: str = None, system: str = None) -> str:

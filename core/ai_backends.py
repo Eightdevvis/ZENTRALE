@@ -36,7 +36,7 @@ CLOUD = "cloud"
 # Welche Backends ein Modul nutzen KANN (geordnete Präferenz). Verfügbar, sobald
 # eines davon da ist. Tutor = beide → Multi-Backend strukturell vorbereitet.
 MODULE_BACKENDS = {
-    "chat":  (LOCAL,),
+    "chat":  (LOCAL, CLOUD),   # seit core/cloud.py existiert (Anthropic-Kernpfad)
     "news":  (LOCAL,),
     "tutor": (LOCAL, CLOUD),
 }
@@ -155,3 +155,62 @@ def module_ok(module: str) -> bool:
     """Hat das Modul mindestens EIN nutzbares Backend? (sonst: 'backend not here')"""
     st = status()
     return any(st.get(b) for b in module_backends(module))
+
+
+def pick(module: str) -> str | None:
+    """
+    Welches Backend dieses Modul JETZT konkret nutzt — oder None (keins da).
+
+    Unterschied zu module_ok(): das sagt nur OB eins da ist, das hier sagt
+    WELCHES. Erstes verfügbares aus der Präferenz-Reihenfolge.
+
+    Für 'chat' gibt es zusätzlich eine bewusste Vorwahl (siehe chat_backend()):
+    beide Backends können gleichzeitig da sein, und dann ist die Reihenfolge
+    in MODULE_BACKENDS eine Design-Entscheidung, keine Verfügbarkeitsfrage.
+    """
+    st = status()
+    order = module_backends(module)
+    if module == "chat":
+        # core/cloud.py spricht Anthropic, sonst nichts. Ein gesetzter
+        # DashScope-Key macht status()[CLOUD] wahr, hilft dem Kern aber kein
+        # Stück — dann ist Cloud für den Chat schlicht nicht da.
+        if st.get(CLOUD) and st.get("cloud_provider") != "claude":
+            st = dict(st, **{CLOUD: False})
+        want = chat_backend()
+        if want in (LOCAL, CLOUD):
+            # Ausdrückliche Wahl: nur dieses Backend, kein stiller Rückfall auf
+            # das andere. Ein stiller Fallback wäre hier gefährlich — der
+            # Unterschied ist, ob Sashas Daten das Haus verlassen.
+            return want if st.get(want) else None
+        # 'auto' → wie jedes andere Modul: erstes verfügbares.
+    for b in order:
+        if st.get(b):
+            return b
+    return None
+
+
+def chat_backend() -> str:
+    """
+    Vorwahl für den Chat-Kern: 'auto' | 'local' | 'cloud'.
+
+    'auto' (Default) folgt MODULE_BACKENDS — also lokal zuerst, solange Ollama
+    läuft. Wer den Cloud-Assistenten WILL (der ganze Grund für core/cloud.py),
+    stellt hier 'cloud' ein; sonst gewinnt das lokale 9b weiterhin jeden Turn,
+    einfach weil es erreichbar ist.
+
+    Persistiert in data/ai_config.json (key 'chat_backend'), per Env
+    ZENTRALE_CHAT_BACKEND übersteuerbar.
+    """
+    v = os.environ.get("ZENTRALE_CHAT_BACKEND") or ai_config.setting("chat_backend", "auto")
+    v = str(v).strip().lower()
+    return v if v in (LOCAL, CLOUD, "auto") else "auto"
+
+
+def set_chat_backend(which: str, persist: bool = True) -> str:
+    """Chat-Vorwahl umlegen (live, optional persistiert). Invalidiert den Cache."""
+    which = str(which).strip().lower()
+    if which not in (LOCAL, CLOUD, "auto"):
+        raise ValueError(f"chat_backend: 'auto', '{LOCAL}' oder '{CLOUD}', nicht {which!r}")
+    ai_config.set_override("chat_backend", which, persist=persist)
+    _cache["val"] = None
+    return which
