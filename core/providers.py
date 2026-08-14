@@ -53,12 +53,42 @@ def get(name: str) -> dict:
     return PROVIDERS.get(name) or {}
 
 
+# Welchen Provider der Kern nimmt, wenn MEHRERE Keys gesetzt sind — bewusst als
+# eigene Liste, nicht als Reihenfolge der Tabelle oben. Vorher fiel die Wahl über
+# die Einfüge-Reihenfolge von PROVIDERS: qwen stand vorne, also gewann bei
+# gesetztem DASHSCOPE_API_KEY still Qwen, obwohl der Kern-Cloud-Pfad auf
+# Anthropic gebaut wird. Diese Kopplung („Tabellen-Position = Vorrang") ist die
+# Art Falle, die man beim nächsten Umsortieren wieder tritt.
+# Nicht gelistete Provider hängen hinten dran, in Tabellen-Reihenfolge.
+PREFERENCE = ("claude", "qwen", "openai", "mistral")
+
+# Harte Vorwahl per Env, falls mal gezielt ein anderer dran soll (Vergleich,
+# Kostenbremse). Unbekannter/keyloser Name → wird ignoriert, normale Reihenfolge.
+PREFERENCE_ENV = "ZENTRALE_CLOUD_PROVIDER"
+
+
+def preference() -> list[str]:
+    """Provider-Namen in Vorrang-Reihenfolge, inklusive der in PREFERENCE
+    vergessenen (die landen hinten). Reine Namensliste, prüft keine Keys."""
+    rest = [n for n in PROVIDERS if n not in PREFERENCE]
+    return [n for n in PREFERENCE if n in PROVIDERS] + rest
+
+
 def configured() -> str | None:
-    """Name des ersten Cloud-Providers, dessen Key in der Env liegt — oder None.
-    Keys kommen über ai_config aus data/ai_config.json (bzw. dem Legacy-Fallback)."""
+    """Name des bevorzugten Cloud-Providers, dessen Key in der Env liegt — oder
+    None. Keys kommen über ai_config aus data/ai_config.json (bzw. dem
+    Legacy-Fallback)."""
     import os
-    for name, p in PROVIDERS.items():
-        env = p.get("key_env")
-        if env and os.environ.get(env):
+
+    def has_key(name: str) -> bool:
+        env = (PROVIDERS.get(name) or {}).get("key_env")
+        return bool(env and os.environ.get(env))
+
+    forced = (os.environ.get(PREFERENCE_ENV) or "").strip()
+    if forced and has_key(forced):
+        return forced
+
+    for name in preference():
+        if has_key(name):
             return name
     return None

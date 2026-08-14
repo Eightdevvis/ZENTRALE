@@ -7,9 +7,11 @@
 # Texte landen nah beieinander, auch wenn sie keine Worte teilen
 # ("Geschwindigkeit war schlecht" liegt nahe an "Latenz war hoch").
 #
-# Wir nutzen das lokale Ollama-Modell `nomic-embed-text` (768 Dimensionen,
-# ~274 MB Disk, CPU-schnell). Damit bleibt das gesamte Memory-System
-# offline - kein Cloud-Embedding-Provider.
+# Wir nutzen das lokale Ollama-Modell `bge-m3` (1024 Dimensionen, ~570 MB
+# Disk, mehrsprachig) - siehe EMBED_MODEL unten. Damit bleibt das gesamte
+# Memory-System offline - kein Cloud-Embedding-Provider. `nomic-embed-text`
+# (768 Dim, nur Englisch) war die frühere Wahl und ist über
+# OLLAMA_EMBED_MODEL weiter nutzbar, inkl. seiner Prefix-Eigenheit unten.
 #
 # Verantwortlichkeiten dieses Moduls:
 #   - embed(text)                 → Vektor erzeugen
@@ -94,7 +96,7 @@ def _embed_raw(text: str) -> list[float] | None:
     Erzeugt ein Embedding für den exakten Text via Ollama (kein Prefix).
 
     Returns:
-        list[float]: der Embedding-Vektor (768 dim bei nomic-embed-text).
+        list[float]: der Embedding-Vektor (1024 dim bei bge-m3).
         None: wenn Ollama nicht erreichbar war oder das Modell fehlt.
 
     Der Ollama-Endpoint /api/embed nimmt ein 'input'-Feld (String oder

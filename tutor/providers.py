@@ -39,7 +39,7 @@ PROVIDERS = {
         "kind":           "anthropic",
         "base_url":       None,           # Anthropic-SDK kennt den Endpoint
         "key_env":        "ANTHROPIC_API_KEY",
-        "default_model":  "claude-opus-4-8",   # smart = Verifikation; per TUTOR_MODEL änderbar
+        "default_model":  "claude-opus-5",     # smart = Verifikation; per TUTOR_MODEL änderbar
         "trains_on_data": False,          # Anthropic trainiert nicht auf API-Daten
         "jurisdiction":   "US",
         "enabled":        True,

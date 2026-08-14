@@ -7,8 +7,9 @@ Sensor-Bridge (siehe `memory/topologie.md`). Sensoren und Zeitgeber
 erzeugen Events, der Core verarbeitet sie, das Web-Dashboard zeigt
 alles an – vollständig offline.
 
-KI läuft lokal via Ollama (Default: `qwen2.5:14b`, per `OLLAMA_MODEL`
-umstellbar). Kein Cloud-Zugriff, keine Daten verlassen das Heimnetz.
+KI läuft lokal via Ollama (Chat-Default `qwen3.5:9b` per `OLLAMA_MODEL`,
+Embeddings `bge-m3` per `OLLAMA_EMBED_MODEL`, beide umstellbar).
+Kein Cloud-Zugriff, keine Daten verlassen das Heimnetz.
 
 
 Quick Start
@@ -19,7 +20,8 @@ Quick Start
 python3 -m venv venv
 venv/bin/pip install -r requirements.txt
 curl -fsSL https://ollama.com/install.sh | sh
-ollama pull qwen2.5:14b
+ollama pull qwen3.5:9b
+ollama pull bge-m3
 venv/bin/python services/download_tts_model.py
 
 # Start (alle drei Services in einem Terminal, mit Farb-Prefixen)

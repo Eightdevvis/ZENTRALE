@@ -118,14 +118,31 @@ QWEN_SAMPLING = {
 }
 
 
+# ── _PROMPT_ORDER: Reihenfolge im System-Prompt ───────────────────────
+# Erst alles, was über alle Turns GLEICH bleibt, dann alles, was sich pro
+# Turn ändert:
+#
+#   System-Prompt · Capabilities · Antwort-Suffix · ASCII · Dashboard
+#   ─────────────── ab hier wechselnd ───────────────
+#   Graph-Kontext · Jetzt-Block · Alarme · Mic-Hinweis
+#
+# Zwei Gründe, ein Handgriff:
+#  * Prompt-Cache. Ein Cache-Treffer braucht ein byte-identisches Präfix.
+#    Der Jetzt-Block enthält die UHRZEIT — stand er vorne, war das Präfix
+#    bei jedem Turn und jeder Tool-Runde ein anderes und der Cache tot.
+#    Bei einem Cloud-Modell ist das der größte einzelne Kostenposten.
+#  * Recency. Was zuletzt im Prompt steht, sitzt am dichtesten an der
+#    User-Message. Hinten ist der Jetzt-Block also nicht schwächer als
+#    vorne, sondern präsenter — und er steht direkt hinter dem
+#    Graph-Kontext, dessen Datums-Knoten er ja gerade korrigiert.
+#
 # ── Jetzt-Block ───────────────────────────────────────────────────────
-# Wird bei JEDEM Turn frisch gebaut und ganz vorne in den System-Prompt
-# gehängt. Schließt die strukturelle Zeit-Blindheit: vorher lebte das
-# heutige Datum nur als Aktivierungs-Anker im Graphen - die KI konnte
-# Time-Nodes sehen, aber nicht wissen welche davon "jetzt" ist. Resultat
-# war dass sie bei "welcher Tag ist heute" oder "wann war unsere letzte
-# Konversation" aus den aktivierten Time-Knoten geraten hat - und das
-# war oft historisches statt aktuelles.
+# Wird bei JEDEM Turn frisch gebaut. Schließt die strukturelle Zeit-
+# Blindheit: vorher lebte das heutige Datum nur als Aktivierungs-Anker
+# im Graphen - die KI konnte Time-Nodes sehen, aber nicht wissen welche
+# davon "jetzt" ist. Resultat war dass sie bei "welcher Tag ist heute"
+# oder "wann war unsere letzte Konversation" aus den aktivierten
+# Time-Knoten geraten hat - und das war oft historisches statt aktuelles.
 #
 # Hart und explizit reinschreiben ist billiger als ein Tool-Call und
 # eindeutig: das LLM kann das nicht halluzinieren weg.
@@ -1401,11 +1418,11 @@ def chat(messages: list, model: str = None, system: str = None) -> str:
     # drei separaten Schichten. Aktivierungs-Spread holt was relevant
     # ist, inklusive Zeit-Anker und Sasha-Profil über die Graph-Topologie.
     mem_ctx = graph.context_for_query(user_query)
-    # Jetzt-Block ganz vorne - die KI soll wissen welcher Tag heute ist,
-    # bevor sie irgendetwas anderes liest (siehe _now_prompt-Doku).
-    sys_prompt = _now_prompt() + "\n\n" + (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
+    # Statisches zuerst, Wechselndes ans Ende (siehe _PROMPT_ORDER-Notiz oben).
+    sys_prompt = (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
     if mem_ctx:
         sys_prompt += "\n\n" + mem_ctx
+    sys_prompt += "\n\n" + _now_prompt()
 
     payload = {
         "model":      model,
@@ -1479,16 +1496,21 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         # LTM-Top-K). Der Graph weiß welche Konzepte mit der aktuellen
         # Frage assoziiert sind und liefert sie alle mit Beziehungen.
         mem_ctx    = graph.context_for_query(user_query)
-        # Jetzt-Block ganz vorne (siehe _now_prompt-Doku).
-        sys_prompt = _now_prompt() + "\n\n" + (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
+        # ── Statischer Kopf (byte-identisch über alle Turns, cachebar) ──
+        sys_prompt = (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
         # Antwort-Suffix + visuelle-Stimme-Marker nur im regulaeren Chat
         # (Tutor hat eigenes Tool-Set und kennt keine Bild-Marker).
         sys_prompt += ANTWORT_SUFFIX
         sys_prompt += _ASCII_MARKER_PROMPT
         if _DASHVIEW:
             sys_prompt += _DASHBOARD_VIEW   # damit „diese Warnung im Dashboard" andockt
+        # ── Ab hier wechselt es pro Turn (siehe _PROMPT_ORDER-Notiz oben) ──
         if mem_ctx:
             sys_prompt += "\n\n" + mem_ctx
+        # Jetzt-Block direkt HINTER den Graph-Kontext: er widerspricht genau
+        # dessen Datums-Knoten („das sind Erinnerungen, nicht heute"), und was
+        # zuletzt steht, sitzt am dichtesten an der User-Message.
+        sys_prompt += "\n\n" + _now_prompt()
         # Alarm-Kanal: offene Kalender-Erinnerungen randständig anhängen (nicht
         # mehr inline in der read_calendar-Ausgabe). Leer → kein Block.
         alarm_block = _alarm_prompt()
@@ -1501,7 +1523,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     else:
         # Tutor-Modus: eigener System-Prompt, aber Jetzt-Block kriegt er
         # trotzdem - "welcher Tag ist heute" ist sprach-/modus-unabhängig.
-        sys_prompt = _now_prompt() + "\n\n" + (system or _SYSTEM_PROMPT)
+        # Auch hier der statische Teil zuerst, der Jetzt-Block hinten dran.
+        sys_prompt = (system or _SYSTEM_PROMPT) + "\n\n" + _now_prompt()
 
     # Arbeits-Nachrichtenliste – wird pro Runde mit Tool-Ergebnissen erweitert
     working_messages = [

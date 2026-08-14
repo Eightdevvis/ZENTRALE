@@ -27,13 +27,15 @@
 #
 # ── Konfiguration (Env-Vars) ────────────────────────────────────────────
 #   ANTHROPIC_API_KEY   – Pflicht. Secret, NIE committen.
-#   TUTOR_CLOUD_MODEL   – optional, Default 'claude-opus-4-8' (fähigstes Opus).
+#   TUTOR_CLOUD_MODEL   – optional, Default 'claude-opus-5' (fähigstes Opus).
 
 import os
 
-# Default-Modell: Opus 4.8 = Anthropics fähigstes Opus, ideal um das Konzept
+# Default-Modell: Opus 5 = Anthropics fähigstes Opus, ideal um das Konzept
 # ohne Schwachmodell-Faktor zu verifizieren. Per Env überschreibbar.
-_MODEL = os.getenv("TUTOR_CLOUD_MODEL", "claude-opus-4-8")
+# (Vorher stand hier 'claude-opus-4-8' — diese Modell-ID gibt es nicht, jeder
+#  Cloud-Aufruf wäre mit einem 404 vom API gestorben.)
+_MODEL = os.getenv("TUTOR_CLOUD_MODEL", "claude-opus-5")
 
 # Tutor-Antworten sollen KURZ sein (1-2 Sätze). Cap + niedrige Temperatur halten
 # das Verhalten reproduzierbar knapp (wie beim openai_compat-Pfad, siehe dort +
