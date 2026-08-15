@@ -241,6 +241,48 @@ def test_qwen_zaehlt_seit_dem_openai_pfad(monkeypatch, kein_env_override):
     assert ai_backends.pick("chat") == ai_backends.CLOUD
 
 
+# ── Kassetten-Regel: unterwegs darf die Cloud ran ──────────────────────
+
+def test_ki_freie_kassette_darf_die_cloud_nutzen(monkeypatch, kein_env_override):
+    """Der Unterwegs-Fall: Laptop, kein Ollama, tui-Kassette. Eine Cloud-KI
+    ist nicht die KI dieser Kassette, sondern eine externe Leitung."""
+    import kassette
+    monkeypatch.setattr(kassette, "ki_aus", lambda: True)
+    monkeypatch.setattr(ai_backends, "status",
+                        lambda *a, **k: _status(False, True, provider="qwen"))
+    monkeypatch.setattr(ai_backends, "chat_backend", lambda: "auto")
+    assert ai_backends.chat_available() == ai_backends.CLOUD
+
+
+def test_ki_freie_kassette_bringt_keine_eigene_ki_mit(monkeypatch,
+                                                      kein_env_override):
+    """Läuft die tui-Kassette daheim auf dem PC, bleibt das lokale Ollama
+    trotzdem aus - genau dafür gibt es die Kassette."""
+    import kassette
+    monkeypatch.setattr(kassette, "ki_aus", lambda: True)
+    monkeypatch.setattr(ai_backends, "status",
+                        lambda *a, **k: _status(True, False))
+    monkeypatch.setattr(ai_backends, "chat_backend", lambda: "auto")
+    assert ai_backends.chat_available() is None
+
+
+def test_monolith_darf_weiter_lokal(monkeypatch, kein_env_override):
+    import kassette
+    monkeypatch.setattr(kassette, "ki_aus", lambda: False)
+    monkeypatch.setattr(ai_backends, "status",
+                        lambda *a, **k: _status(True, False))
+    monkeypatch.setattr(ai_backends, "chat_backend", lambda: "auto")
+    assert ai_backends.chat_available() == ai_backends.LOCAL
+
+
+def test_ohne_alles_kein_chat(monkeypatch, kein_env_override):
+    import kassette
+    monkeypatch.setattr(kassette, "ki_aus", lambda: True)
+    monkeypatch.setattr(ai_backends, "status",
+                        lambda *a, **k: _status(False, False))
+    assert ai_backends.chat_available() is None
+
+
 # ── Welches Modul bedient welchen Provider ─────────────────────────────
 
 def test_dialekt_pro_provider():

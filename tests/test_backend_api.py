@@ -36,10 +36,52 @@ def test_api_state_shape(client):
 
 
 def test_ki_endpoint_locked_in_tui_kassette(client):
-    # In der tui-Kassette (conftest setzt ZENTRALE_KASSETTE=tui) darf der Chat
-    # NIE durchkommen — sonst spräche eine ki-freie Front doch Ollama an.
+    # In der tui-Kassette (conftest setzt ZENTRALE_KASSETTE=tui) und ohne
+    # erreichbares Backend bleibt der Chat zu.
     r = client.post("/api/chat", json={"message": "hallo"})
     assert r.status_code == 503
+
+
+def test_tui_kassette_spricht_nie_das_lokale_ollama_an(client, monkeypatch):
+    # Das ist die eigentliche Absicht der ki-freien Kassette: sie bringt KEINE
+    # eigene KI mit. Auch wenn Ollama erreichbar waere (tui-Kassette daheim auf
+    # dem PC), darf der Chat es nicht benutzen.
+    import ai_backends
+    monkeypatch.setattr(ai_backends, "status",
+                        lambda *a, **k: {"local": True, "cloud": False,
+                                         "cloud_provider": None, "any": True})
+    assert ai_backends.chat_available() is None
+    assert client.post("/api/chat", json={"message": "hallo"}).status_code == 503
+
+
+def test_tui_kassette_darf_ueber_die_cloud_chatten(client, monkeypatch):
+    # Unterwegs: kein Ollama, aber ein Cloud-Provider. Dann ist der Chat offen -
+    # und mit ihm die Erlaubnis-Antwort, sonst haengt ein Gate-Dialog fuer immer.
+    import ai_backends
+    monkeypatch.setattr(ai_backends, "status",
+                        lambda *a, **k: {"local": False, "cloud": True,
+                                         "cloud_provider": "qwen", "any": True})
+    monkeypatch.setattr(ai_backends, "chat_backend", lambda: "auto")
+    assert ai_backends.chat_available() == ai_backends.CLOUD
+    assert client.post("/api/permission_answer",
+                       json={"answer": "nein"}).status_code != 503
+
+
+def test_ai_status_meldet_welcher_kern_denkt(client, monkeypatch):
+    import ai_backends
+    monkeypatch.setattr(ai_backends, "status",
+                        lambda *a, **k: {"local": False, "cloud": True,
+                                         "cloud_provider": "qwen", "any": True})
+    monkeypatch.setattr(ai_backends, "chat_backend", lambda: "auto")
+    d = client.get("/api/ai/status").get_json()
+    assert d["available"] is True and d["backend"] == "cloud"
+    assert d["provider"] == "qwen"
+
+    monkeypatch.setattr(ai_backends, "status",
+                        lambda *a, **k: {"local": False, "cloud": False,
+                                         "cloud_provider": None, "any": False})
+    d = client.get("/api/ai/status").get_json()
+    assert d["available"] is False and d["backend"] is None
 
 
 def test_unknown_sensor_rejected(client):

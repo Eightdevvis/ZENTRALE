@@ -220,6 +220,28 @@ def chat_cloud_module():
     return None
 
 
+def chat_available() -> str | None:
+    """
+    Welches Backend den Chat JETZT bedienen darf — inklusive Kassetten-Regel.
+    None heißt: kein Chat. DIE Frage, die alle Chat-Endpoints stellen sollten,
+    damit sie nicht auseinanderlaufen.
+
+    Die Regel: eine ki-freie Kassette (laptop/tui) bringt **keine eigene KI**
+    mit — deshalb ist LOCAL dort aus. Eine CLOUD-KI ist aber nicht die KI
+    dieser Kassette, sondern eine externe Leitung; die darf sie nutzen. Genau
+    das ist der Unterwegs-Fall: Laptop ohne Ollama, Chat trotzdem da.
+
+    Vorher war das kassetten-HART (`ki_aus()` → 503, egal was erreichbar ist).
+    Derselbe Umbau, den der Tutor 2026-07-16 schon bekommen hat: nicht fragen
+    "welche Kassette", sondern "was ist erreichbar".
+    """
+    import kassette
+    b = pick("chat")
+    if b == LOCAL and kassette.ki_aus():
+        return None
+    return b
+
+
 def chat_backend() -> str:
     """
     Vorwahl für den Chat-Kern: 'auto' | 'local' | 'cloud'.

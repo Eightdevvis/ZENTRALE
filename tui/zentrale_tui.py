@@ -1766,9 +1766,12 @@ def run_ui(stdscr, store):
     #   perm     : offene Erlaubnis-Frage {frage, optionen} oder None (Tool-Gate)
     #   msg      : kurze Statuszeile (Fehler/Hinweis)
     #   loaded   : History schon einmal vom Backend geholt?
+    #   backend  : "local" | "cloud" | None — wer gerade denkt (Kasten-Titel)
+    #   model    : Modell-Name dazu, provider: bei cloud der Anbieter
     AI = {"active": False, "input": "", "log": [], "answer": None,
           "reflect": "", "streaming": False, "scroll": 0,
-          "perm": None, "msg": "", "loaded": False}
+          "perm": None, "msg": "", "loaded": False,
+          "backend": None, "model": "", "provider": ""}
     AI_LOCK = threading.Lock()
 
     def ai_stream(message):
@@ -1805,8 +1808,17 @@ def run_ui(stdscr, store):
                         break
                     # ascii/cinema: im Terminal ohne Bild/Sound → ignorieren
         except urllib.error.HTTPError as e:
+            # 503 heißt nicht mehr automatisch "lokale ki aus" - es kann auch
+            # heißen, dass gar kein Backend da ist (weder Ollama noch Cloud).
+            # Den echten Grund schickt der Server im Body mit.
+            grund = ""
+            try:
+                grund = (json.loads(e.read().decode("utf-8", "replace"))
+                         .get("error") or "")
+            except Exception:
+                pass
             with AI_LOCK:
-                AI["msg"] = ("lokale ki gedrosselt / aus — tunnel? (/local on)"
+                AI["msg"] = ((grund or "kein ki-backend — tunnel? (/local on)")
                              if e.code == 503 else "fehler: HTTP %s" % e.code)
         except (urllib.error.URLError, OSError):
             with AI_LOCK:
@@ -1850,8 +1862,21 @@ def run_ui(stdscr, store):
             AI["perm"] = None
 
     def ai_load_history():
-        """Chat-Verlauf vom Backend holen (gemeinsam mit dem Browser). Läuft im
-        Hintergrund beim ersten Öffnen; scheitert still (dann leerer Verlauf)."""
+        """Chat-Verlauf + Backend-Status vom Backend holen (gemeinsam mit dem
+        Browser). Läuft im Hintergrund beim ersten Öffnen; scheitert still
+        (dann leerer Verlauf)."""
+        # Welcher Kern antwortet gerade? Steht im Kasten-Titel, damit beim
+        # Testen ohne Rätselraten sichtbar ist, ob lokal oder Cloud gedacht
+        # wird - unterwegs ohne Ollama ist das der ganze Unterschied.
+        try:
+            st = api_call("/api/ai/status")
+            if isinstance(st, dict):
+                with AI_LOCK:
+                    AI["backend"] = st.get("backend")
+                    AI["model"] = st.get("model") or ""
+                    AI["provider"] = st.get("provider") or ""
+        except (urllib.error.URLError, OSError, ValueError):
+            pass
         try:
             h = api_call("/api/chat/history")
         except (urllib.error.URLError, OSError, ValueError):
@@ -1869,6 +1894,20 @@ def run_ui(stdscr, store):
             if not AI["log"]:
                 AI["log"] = log
             AI["loaded"] = True
+
+    def ai_titel():
+        """Kasten-Titel mit dem Kern, der gerade denkt.
+
+        »ki-chat« allein reicht nicht mehr: seit der Chat auch über die Cloud
+        laufen kann, ist der Unterschied zwischen lokal und draußen genau das,
+        was man beim Hinschauen wissen will."""
+        with AI_LOCK:
+            b, mdl, prov = AI["backend"], AI["model"], AI["provider"]
+        if b == "cloud":
+            return f"ki-chat · cloud ({prov or mdl})".lower()
+        if b == "local":
+            return f"ki-chat · lokal ({mdl})".lower()
+        return "ki-chat"
 
     def ai_wrap(role, text, w):
         """Text auf Breite w umbrechen; jede Zeile trägt ihre Rolle (für Farbe).
@@ -8005,7 +8044,7 @@ def run_ui(stdscr, store):
             draw_box(top, mx, body_h, midw, "post · mail")
             draw_mail(top, mx, body_h, midw)
         elif AI["active"]:
-            draw_box(top, mx, body_h, midw, "ki-chat")
+            draw_box(top, mx, body_h, midw, ai_titel())
             draw_ai(top, mx, body_h, midw)
         elif TUTOR["active"]:
             draw_box(top, mx, body_h, midw, "tutor")

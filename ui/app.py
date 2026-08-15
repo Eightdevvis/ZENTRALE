@@ -39,6 +39,7 @@ import tutor_port    # type: ignore  – EINZIGER Griff am Sprach-Tutor (Addon).
                      # Nicht tutor_* direkt importieren: der Port haelt den Tutor
                      # rausziehbar und wendet die ZENTRALE-Drossel an.
 import ai_backends     # type: ignore  – AI-Backend-Verfügbarkeit (local/cloud, EXTERNAL-Box)
+import providers      # type: ignore  – Cloud-Registry des Kerns (base_url/kind)
 import consolidation # type: ignore  – Phase E: STM → LTM Konsolidierung
 import telemetry    # type: ignore  – PC-Host-Telemetrie (CPU/GPU/VRAM/Temp/RAM)
 import kassette     # type: ignore  – welche Kassette läuft (monolith | laptop)
@@ -1168,13 +1169,11 @@ def api_chat():
     stream_with_context() ist Flask-spezifisch: es stellt sicher dass der
     Flask-Request-Context (für g, session etc.) im Generator noch verfügbar ist.
     """
-    if kassette.ki_aus():
-        return _ki_aus()
-    # Welcher Kern denkt diesen Turn — lokal (Ollama) oder Cloud (Anthropic)?
-    # ai_backends.pick() berücksichtigt beide Drosseln, die Erreichbarkeit und
-    # Sashas ausdrückliche Vorwahl (chat_backend). Kein Backend → hart
-    # abriegeln, damit eine gesetzte Drossel wirklich drosselt.
-    backend = ai_backends.pick("chat")
+    # Welcher Kern denkt diesen Turn — lokal (Ollama) oder Cloud?
+    # chat_available() berücksichtigt beide Drosseln, die Erreichbarkeit,
+    # Sashas Vorwahl (chat_backend) UND die Kassetten-Regel. Kein Backend →
+    # hart abriegeln, damit eine gesetzte Drossel wirklich drosselt.
+    backend = ai_backends.chat_available()
     if backend is None:
         return jsonify({"error": "kein KI-Backend für den Chat verfügbar"}), 503
     body    = request.get_json()
@@ -1262,8 +1261,8 @@ def api_chat():
 @app.route('/api/chat/history')
 def api_chat_history():
     """Gibt die aktuelle Chat-History zurück (für initiales Laden der Chat-View)."""
-    if kassette.ki_aus():
-        return jsonify([])   # Laptop-Kassette: kein Chat
+    if ai_backends.chat_available() is None:
+        return jsonify([])   # kein Chat möglich → nichts anzuzeigen
     return jsonify(state.get_chat_history())
 
 
@@ -1286,7 +1285,10 @@ def api_permission_answer():
     bereits offenen SSE-Verbindung weiter. Funktioniert nur weil Flask
     multi-threaded läuft (siehe app.run(threaded=True) ganz unten).
     """
-    if kassette.ki_aus():
+    # Muss überall dort offen sein, wo auch gechattet werden kann — sonst
+    # blockiert ein Erlaubnis-Dialog den Stream für immer, weil niemand die
+    # Antwort loswerden kann.
+    if ai_backends.chat_available() is None:
         return _ki_aus()
     body    = request.get_json(silent=True) or {}
     answer  = (body.get('answer') or '').strip()
@@ -1309,19 +1311,38 @@ def api_permission_answer():
 @app.route('/api/ai/status')
 def api_ai_status():
     """
-    Prüft ob Ollama erreichbar ist und gibt Status + Konfiguration zurück.
-    Wird vom Dashboard alle 30s gecheckt und als Statusanzeige genutzt.
+    Sagt, ob der Chat JETZT geht - und über welchen Kern. Wird vom Dashboard
+    und von der TUI als Statusanzeige gepollt.
+
+    Nicht mehr "läuft Ollama", sondern "kann ich chatten": unterwegs ist die
+    Antwort Cloud, daheim lokal. Die Fronten sollen den Unterschied sehen
+    können, statt bei fehlendem Ollama pauschal "KI aus" anzuzeigen.
     """
-    if kassette.ki_aus():
-        # KI-freie Kassette (laptop/tui): KI ist nicht "unerreichbar", sondern
-        # bewusst aus. Ollama wird hier NICHT angepingt (ai.is_available() würde
-        # einen HTTP-Call absetzen) – wir antworten direkt deaktiviert.
-        return jsonify({"available": False, "url": None, "model": "—", "kassette": kassette.name()})
-    return jsonify({
-        "available": ai.is_available(),
-        "url":       ai.OLLAMA_URL,
-        "model":     ai.OLLAMA_MODEL,
-    })
+    backend = ai_backends.chat_available()
+    if backend == ai_backends.CLOUD:
+        # Provider aus status() lesen, nicht neu ermitteln - sonst sehen
+        # Endpoint und Backend-Wahl unterschiedliche Wahrheiten.
+        prov = ai_backends.status().get("cloud_provider")
+        modul = ai_backends.chat_cloud_module()
+        return jsonify({
+            "available": True,
+            "backend":   "cloud",
+            "url":       (providers.get(prov) or {}).get("base_url"),
+            "model":     getattr(modul, "_MODEL", None)
+                         or (providers.get(prov) or {}).get("default_model") or "—",
+            "provider":  prov,
+            "kassette":  kassette.name(),
+        })
+    if backend == ai_backends.LOCAL:
+        return jsonify({
+            "available": True,
+            "backend":   "local",
+            "url":       ai.OLLAMA_URL,
+            "model":     ai.OLLAMA_MODEL,
+            "kassette":  kassette.name(),
+        })
+    return jsonify({"available": False, "backend": None, "url": None,
+                    "model": "—", "kassette": kassette.name()})
 
 
 # ── Voice-Pipeline (sprachneutral) ─────────────────────────────────────
