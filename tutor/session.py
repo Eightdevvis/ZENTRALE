@@ -17,7 +17,7 @@
 #
 # ── Privacy ───────────────────────────────────────────────────────────
 # Provider mit trains_on_data werden NICHT verboten, aber bei Session-Beginn
-# LAUT geflaggt (Log + privacy_notice() fürs UI). Siehe memory/tutor_system.md.
+# LAUT geflaggt (Log + privacy_notice() fürs UI). Siehe memory/tutor/tutor_system.md.
 #
 # ── Thread-Safety ─────────────────────────────────────────────────────
 # _active/_history werden von Flask und Event-Loop gelesen/geschrieben → Lock.
@@ -112,7 +112,7 @@ def set_thought(word: str, meaning: str = ""):
 
 # ── Presence-Reaktion (Sasha tauct im Raum auf) ──────────────────────────────
 # Sashas Roleplay-Idee: die Persona merkt, wenn du reinkommst. WICHTIG — der
-# Presence-AUTO-START bleibt bewusst pausiert (memory/tutor_system.md,
+# Presence-AUTO-START bleibt bewusst pausiert (memory/tutor/tutor_system.md,
 # Sequencing): dieser Ping STARTET NIE eine Session. Läuft die Session schon,
 # reagiert sie nur NONVERBAL (schaut hoch, hellt auf, kleiner Batterie-Schub) —
 # KEIN erzwungener Cloud-Turn (genau der schlechte Auto-Trigger, der 05-14 zur

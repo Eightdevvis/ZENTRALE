@@ -4,7 +4,7 @@
 # Nutzt die Open-Source-Engine FSRS (py-fsrs, MIT) — Ankis aktueller Algorithmus,
 # akademisch validiert — statt selbstgebauter Intervalle.
 #
-# ── Arbeitsteilung (siehe memory/tutor_system.md) ───────────────────────
+# ── Arbeitsteilung (siehe memory/tutor/tutor_system.md) ───────────────────────
 #   • room.py-Drill  = WORKING MEMORY: schnelle Basis, Abstände in KARTEN
 #     (expanding-retrieval-Ladder 3/7/14/25). Baut den Grundwortschatz auf.
 #   • srs.py (hier)   = LANGZEIT-RETENTION: Abstände in TAGEN. Gelernte Wörter

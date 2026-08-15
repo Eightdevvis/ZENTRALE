@@ -9,7 +9,7 @@
 ## ⚠ Der LIVE-Prompt ist SPANISCH
 Deutsche Fassung nur zum Review. Der Prompt steht bewusst auf Spanisch, weil ein
 Prompt in der Zielsprache das Modell dort hält — ein deutscher Prompt ließ qwen zu
-~95 % auf Deutsch antworten (`memory/tutor_persona_tuning.md`). **Nicht 1:1 in den
+~95 % auf Deutsch antworten (`memory/tutor/tutor_persona_tuning.md`). **Nicht 1:1 in den
 Code zurückspielen.** Zuverlässigkeit zusätzlich aus `temperature ≈ 0.4` +
 `max_tokens`-Cap.
 

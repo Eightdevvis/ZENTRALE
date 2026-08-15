@@ -29,7 +29,7 @@ import json as _json
 # getunte Persona-Prompt allein hielt qwen NICHT stabil kurz+in-der-Zielsprache —
 # es driftete je nach Sampling in deutsche Monologe. Eine niedrige Temperatur +
 # ein max_tokens-Cap machen das Verhalten reproduzierbar kurz. Beide per Env
-# übersteuerbar. Siehe memory/tutor_persona_tuning.md.
+# übersteuerbar. Siehe memory/tutor/tutor_persona_tuning.md.
 TUTOR_TEMPERATURE = float(os.getenv("TUTOR_TEMPERATURE", "0.4"))
 # 200 ließ qwen in der Voll-Vokabel-Lage in Fragen-Wände rambeln → auf 140 gesenkt
 # (harter Deckel gegen den bekannten Kollaps-Modus; Anti-Ketten-Zeile im Prompt dazu).

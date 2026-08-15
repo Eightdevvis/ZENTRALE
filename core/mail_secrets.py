@@ -4,7 +4,7 @@
 #
 # ── Warum verschlüsselt + warum so ────────────────────────────────────
 # Mail-Passwörter sind das "HIGH value"-Asset aus Sashas Bedrohungsmodell
-# (sicherheit.md). Zwei Anforderungen, die zusammen die Wahl bestimmen:
+# (memory/betrieb/sicherheit.md). Zwei Anforderungen, die zusammen die Wahl bestimmen:
 #   - SECURITY: nicht im Klartext auf der Platte.
 #   - MULTI-DEVICE: ZENTRALE läuft auf mehreren Geräten, die Konten sollen
 #     überall verfügbar sein.

@@ -14,7 +14,7 @@
 # Bei fünf hand-getunten Sprachen wäre das eine Monsterdatei aus fremdsprachigen
 # String-Literalen. Und getunt MÜSSEN sie sein — siehe unten.
 #
-# ── Die wichtigste Regel (aus memory/tutor_persona_tuning.md) ───────────
+# ── Die wichtigste Regel (aus memory/tutor/tutor_persona_tuning.md) ───────────
 # Der System-Prompt einer LIVE-Sprache ist in der ZIELSPRACHE verfasst. Das ist
 # der Hebel, der das Modell zuverlässig in der Zielsprache hält; ein deutscher
 # Prompt ließ qwen zu ~95% auf Deutsch antworten. Dasselbe gilt für die

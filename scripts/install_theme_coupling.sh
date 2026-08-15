@@ -3,7 +3,7 @@
 # install_theme_coupling.sh   (hieß bis 2026-07-25 install_term_theme.sh)
 # -----------------------------------------------------------------------------
 # Richtet die Kopplung der UMGEBUNG an ZENTRALEs Tag/Nacht-Theme ein
-# (Sashas Laptop, siehe memory/dashboard.md). Idempotent — mehrfach aufrufbar.
+# (Sashas Laptop, siehe memory/system/dashboard.md). Idempotent — mehrfach aufrufbar.
 #
 # Alle Ziele hängen an EINER Datei: ~/.config/zentrale/theme (auto|day|night).
 #

@@ -683,7 +683,7 @@
         {% else %}
         <!-- KI-freie Front (laptop/tui): statt der Chat-Zeile die Tastenkürzel.
              Nur die im Browser wirksamen Tasten (Tabs/Theme/Data-Collection);
-             Chat/Mic entfallen, b/l/m sind OS-Ebene. Quelle: memory/tastatur.md
+             Chat/Mic entfallen, b/l/m sind OS-Ebene. Quelle: memory/system/tastatur.md
              — bei Änderung dort mitziehen. -->
         <div class="box shortcuts" style="flex:0 0 auto">
           <span class="bt">tastenkürzel</span>
@@ -3428,7 +3428,7 @@
       if (altSChordActive && e.altKey && e.key === 'ArrowDown') { e.preventDefault(); altSChordUsed = true; changeVolume(-0.1); return; }
       // Alt+T: Tutorkanal an/aus. Nur in der KI-Front sinnvoll (ki_aus hat keine
       // Konsole) → an inputEl gekoppelt. nacktes 'T' wäre wertlos, es landet eh
-      // im fokussierten Chat-Input; Alt+T ist frei (siehe memory/tastatur.md).
+      // im fokussierten Chat-Input; Alt+T ist frei (siehe memory/system/tastatur.md).
       if (e.altKey && (e.key === 't' || e.key === 'T') && inputEl) { e.preventDefault(); toggleTutor(); return; }
     });
     document.addEventListener('keyup', function (e) {

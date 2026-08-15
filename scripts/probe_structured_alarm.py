@@ -4,7 +4,7 @@ Fokus-Probe: hebt ERZWUNGENE STRUKTUR (Ollama `format`/JSON-Schema) die
 Alarm-Zuordnung des 9b gegenüber Freitext?
 ================================================================================
 
-Hintergrund (memory/grounding_recherche.md): Maker-Lead, dass strukturierte
+Hintergrund (memory/ki/grounding_recherche.md): Maker-Lead, dass strukturierte
 Outputs (Ollama `format`) Halluzination dämpfen, weil das Modell SCHEMA-FELDER
 füllen muss statt frei zu fabulieren. Lead ① (Modell ist nicht das Problem,
 Hebel = Architektur) macht genau das zum richtigen Versuch - im Gegensatz zum

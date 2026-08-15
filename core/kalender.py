@@ -1,7 +1,7 @@
 # core/calendar.py
 #
 # Kalender-System mit Layer-Struktur – zeitliche Klammer um den
-# assoziativen Graph (siehe ki_system.md).
+# assoziativen Graph (siehe memory/ki/ki_system.md).
 #
 # Idee: der Konzept-Graph ist assoziativ und gut darin "wer mag was,
 # wer kennt wen, was hängt mit was zusammen" abzubilden. Was er
@@ -1177,7 +1177,7 @@ def _absage_alarms(away_blocks: list[dict]) -> list[str]:
                 # ans Modell (die steht in der Tool-/Persona-Beschreibung).
                 # Formulierung gemessen prod-treu (N=20, temp 0.7): diese Zeile vs.
                 # die alte „Routine 'X' liegt in Reise Y - Pflicht-Absage" → T2-Alarm-
-                # Zuordnung 100 % vs 80 %, Episode 85 % vs 60 % (bench_history.md P5).
+                # Zuordnung 100 % vs 80 %, Episode 85 % vs 60 % (memory/ki/bench_history.md P5).
                 # Der Umbau trägt also echt, nicht nur ein temp-1-Artefakt.
                 d  = date.fromisoformat(day_iso)
                 wd = _WEEKDAYS_FULL_DE[d.weekday()]

@@ -40,7 +40,7 @@ REPO_DIR="${REPO_DIR:-/opt/zentrale}"
 # matters: zentrale (Core) zuerst, whisper/tts danach (die haben ein
 # After=zentrale.service in ihren Unit-Files).
 #
-# Seit der PC↔Pi-Topologie-Migration (siehe memory/topologie.md) sind
+# Seit der PC↔Pi-Topologie-Migration (siehe memory/system/topologie.md) sind
 # auf einem reinen Display-Pi die ersten drei `disabled` und nur
 # pi_sensor_bridge.service ist aktiv. Wir behalten die alte Liste hier
 # fuer Solo-Setups (Pi laeuft auch als Backend) und filtern in Schritt 7

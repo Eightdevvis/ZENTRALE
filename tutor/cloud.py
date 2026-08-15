@@ -47,7 +47,7 @@ _MODEL = os.getenv("TUTOR_CLOUD_MODEL", "claude-opus-5")
 # max_tokens deckelt Denken UND Antwort zusammen. Die alten 200 waren als
 # Brevity-Bremse gedacht; mit eingeschaltetem Denken würden sie die Antwort
 # abschneiden, bevor sie beginnt. Deshalb: großzügiger Deckel, Kürze kommt
-# aus dem Prompt (Zielsprache + Few-Shot, siehe memory/tutor_persona_tuning.md).
+# aus dem Prompt (Zielsprache + Few-Shot, siehe memory/tutor/tutor_persona_tuning.md).
 _MAX_TOKENS   = int(os.getenv("TUTOR_MAX_TOKENS", "2000"))
 
 # effort=low: der Tutor braucht keine Tiefe, sondern kurze schnelle Repliken.

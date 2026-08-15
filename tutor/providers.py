@@ -11,7 +11,7 @@
 #   openai_compat → OpenAI-/v1-kompatibel (tutor/openai_compat.py):
 #                   Qwen, DeepSeek, Mistral, OpenAI, Groq, Gemini, …
 #
-# ── trains_on_data (HART, siehe memory/tutor_system.md) ──────────────────
+# ── trains_on_data (HART, siehe memory/tutor/tutor_system.md) ──────────────────
 #   True  → Anbieter trainiert/nutzt offiziell die Nutzdaten. NICHT verboten,
 #           aber MUSS während der Nutzung laut geflaggt werden (tutor_session
 #           setzt eine prominente Warnung; /api/tutor/status liefert sie).

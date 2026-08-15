@@ -25,7 +25,7 @@
 # werden NIE als Knoten gespeichert - immer zu absoluten ISO-Dates
 # aufgelöst, sonst verschiebt sich "heute" jeden Tag.
 #
-# Detail-Plan: memory/ki_memory_plan.md (Phase-G-Abschnitt kommt nach).
+# Detail-Plan: memory/ki/ki_memory_plan.md (Phase-G-Abschnitt kommt nach).
 
 import json
 import os

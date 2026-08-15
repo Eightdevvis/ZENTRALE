@@ -1,6 +1,6 @@
 # core/embeddings.py
 #
-# Embedding-Schicht für das KI-Memory-System (siehe memory/ki_memory_plan.md).
+# Embedding-Schicht für das KI-Memory-System (siehe memory/ki/ki_memory_plan.md).
 #
 # Embeddings sind numerische Vektoren, die die *Bedeutung* eines Textes
 # in einem hochdimensionalen Raum kodieren - zwei semantisch verwandte

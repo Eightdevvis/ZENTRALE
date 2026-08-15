@@ -685,7 +685,7 @@ def api_map_base():
     Basiskarte (Küstenlinien 1:110m) für den Viewport der anfragenden Front,
     fertig auf deren Zellraster projiziert. Front-agnostisch: TUI und Browser
     rufen denselben Endpoint, schicken nur ihr eigenes cols/rows/aspect mit.
-    Alle Geo-Mathematik steckt in core/map/ (siehe memory/maps_system.md).
+    Alle Geo-Mathematik steckt in core/map/ (siehe memory/maps/maps_system.md).
 
     Query: cx,cy (lon/lat Mittelpunkt), zoom (≥0), cols,rows (Zielraster),
            aspect (Zellbreite/Höhe; TUI ≈ 0.5, SVG = 1.0).
@@ -1305,7 +1305,7 @@ def api_permission_answer():
 
 # /api/memory und /api/memory/<id> entfielen mit dem Legacy-LTM-Pfad.
 # Graph-Stats werden über graph.stats() bzw. den Konzept-Browser
-# bereitgestellt (siehe ki_system.md).
+# bereitgestellt (siehe memory/ki/ki_system.md).
 
 
 @app.route('/api/ai/status')
@@ -1355,7 +1355,7 @@ def api_ai_status():
 #
 # Die frueheren Tutor-Aliase (/api/tutor/speak, /api/tutor/transcribe)
 # sind raus – der Mandarin-Tutor ist pausiert (siehe
-# memory/tutor_system.md). Wer Mandarin sprechen will, ruft die
+# memory/tutor/tutor_system.md). Wer Mandarin sprechen will, ruft die
 # generische API mit `lang='zh'` auf.
 
 
@@ -1432,7 +1432,7 @@ def api_transcribe():
 # Start ist rein MANUELL ueber Alt+T (Browser) bzw. Taste 'u' (TUI) → POST
 # /api/tutor/start.
 # Es gibt KEINEN Presence-Auto-Trigger in brain.py (bewusst: erst Core-KI
-# sauber, dann Addon – siehe memory/tutor_system.md).
+# sauber, dann Addon – siehe memory/tutor/tutor_system.md).
 #
 # Audio laeuft ueber die generische Voice-API (/api/transcribe, /api/speak)
 # mit lang='zh' – der Tutor besitzt die Pipeline nicht, er ruft sie nur auf.

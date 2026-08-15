@@ -8,14 +8,14 @@
 # Ortsebene, tagesgenau, peer-reviewed. Deckung 1989–heute → ideal auch für die
 # spätere Zeitachse (Achse 3).
 #
-# WICHTIG — Lizenz/Provenienz (siehe memory/maps_quellen.md):
+# WICHTIG — Lizenz/Provenienz (siehe memory/maps/maps_quellen.md):
 #   UCDP-Daten sind CC BY 4.0 → `commit_ok = True`: anders als IMF PortWatch
 #   DARF ein abgeleiteter Auszug (mit Namensnennung) ins Repo. Wir holen die
 #   Ereignisse trotzdem LIVE und cachen sie lokal (cache-first wie portwatch.py),
 #   denn der Layer ist DYNAMISCH (neue Ereignisse laufend). Ein späterer,
 #   committeter Snapshot ist erlaubt, aber nicht nötig für den Betrieb.
 #
-# Frische (A/B-Trennung, siehe maps_quellen.md):
+# Frische (A/B-Trennung, siehe memory/maps/maps_quellen.md):
 #   • GED-Kern (`gedevents`) wird jährlich final veröffentlicht.
 #   • Der UCDP Candidate Events Dataset liefert MONATLICH neue Ereignisse mit
 #     höchstens ~1 Monat Verzug — das ist unser „tagesaktueller" Kanal. Über

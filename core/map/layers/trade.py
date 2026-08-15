@@ -1,7 +1,7 @@
 # core/map/layers/trade.py
 #
 # Das Handelsrouten-Overlay (Achse 2). KOMPOSIT aus Sub-Layern, jeder mit EINER
-# offiziellen Quelle + mitgeführter Provenienz (siehe memory/maps_quellen.md):
+# offiziellen Quelle + mitgeführter Provenienz (siehe memory/maps/maps_quellen.md):
 #   • routes      — Welt-Schifffahrtsrouten als LINIEN (Struktur, statisch).
 #   • chokepoints — maritime Engstellen als PUNKTE + täglicher Schiffsverkehr.
 # Beide aus IMF PortWatch. Ohne `sub` (oder sub='all') liefert die Engine das

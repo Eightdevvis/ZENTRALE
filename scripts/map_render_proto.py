@@ -5,7 +5,7 @@
 # AUSSEHEN könnte, je nach Rasterisierung. Reines Dev-Werkzeug — kein curses,
 # druckt nur nach stdout (Farben optional via ANSI). Damit lässt sich der Look
 # durchprobieren, BEVOR wir den echten TUI-Renderer (tui/zentrale_tui.py)
-# darauf umstellen. Hintergrund + die drei „Achsen": memory/maps_system.md.
+# darauf umstellen. Hintergrund + die drei „Achsen": memory/maps/maps_system.md.
 #
 # Nutzt die echte Engine-Projektion (core/map/projection.py), damit die Vorschau
 # 1:1 dem entspricht, was die TUI später zeichnet. Geometrie kommt aus den

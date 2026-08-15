@@ -32,7 +32,7 @@ cd "$SCRIPT_DIR/.."
 
 PY="venv/bin/python"
 if [[ ! -x "$PY" ]]; then
-  echo "ERROR: $PY nicht gefunden. Bitte erst venv aufsetzen (siehe memory/setup.md)." >&2
+  echo "ERROR: $PY nicht gefunden. Bitte erst venv aufsetzen (siehe memory/betrieb/setup.md)." >&2
   exit 1
 fi
 

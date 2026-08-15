@@ -52,5 +52,5 @@ Der `action`-Enum bleibt englisch (technische Schnittstelle zum Fenster).
 ## Roleplay-Erweiterung (2026-07-09/10)
 
 Alle Tools ab `express` kamen mit der Roleplay-/Anfangsphasen-Runde dazu (Log:
-`memory/tutor_roleplay_features.md`). Details zur Anfangsphase (Register, Check,
-`?`→puzzled, Fehlhör) in `memory/tutor_system.md`.
+`memory/tutor/tutor_roleplay_features.md`). Details zur Anfangsphase (Register, Check,
+`?`→puzzled, Fehlhör) in `memory/tutor/tutor_system.md`.

@@ -12,9 +12,9 @@ Die KI ist lokal (Ollama + qwen3.5:9b). Kein Cloud-Modell, keine Telemetrie.
 (Tools `web_suche`/`hole_url`, Suche via SearXNG self-hosted) – jeder Call nach draußen
 muss von Sasha per Knopf bestätigt werden und leuchtet im Internet-Monitor
 des Dashboards auf. Ohne diese bewusste Freigabe verlässt nichts das Heimnetz.
-Details: `ki_system.md` → „Internet-Pipe". Die KI hat zusätzlich Lese-Zugriff
+Details: `memory/ki/ki_system.md` → „Internet-Pipe". Die KI hat zusätzlich Lese-Zugriff
 auf eine fest definierte Whitelist von Projektdateien (siehe
-`datei_zugriffe.md`) und eine persistente Memory über Sessions hinweg.
+`memory/betrieb/datei_zugriffe.md`) und eine persistente Memory über Sessions hinweg.
 
 ## Aktueller Stand (2026-06)
 
@@ -23,10 +23,10 @@ auf eine fest definierte Whitelist von Projektdateien (siehe
 | Dashboard, Data Collection, Chat              | fertig + getestet                  |
 | KI-Memory (Konzept-Graph), Tool-Use           | fertig + getestet                  |
 | Monolith-Dashboard (`/monolith`)              | in Integration, parallel zu `/`    |
-| Visuelle Stimme (Bild-Marker `[[bild:]]`)     | live (siehe `ki_system.md`)        |
+| Visuelle Stimme (Bild-Marker `[[bild:]]`)     | live (siehe `memory/ki/ki_system.md`)        |
 | Gegatete Internet-Pipe (`web_suche`/`hole_url`)| live, JA/NEIN-Knopf-Gate          |
 | Kalender + Konflikt-Alarm                     | live                               |
-| Sprach-Tutor (Persona-Portal, `tutor/`)       | live: `zh`/Ling Ling über qwen; `fr`/`ru`/`ar`/`es` als Skizzen (siehe `tutor_system.md`) |
+| Sprach-Tutor (Persona-Portal, `tutor/`)       | live: `zh`/Ling Ling über qwen; `fr`/`ru`/`ar`/`es` als Skizzen (siehe `memory/tutor/tutor_system.md`) |
 | Echter PIR-Sensor + GPIO                      | nicht angebunden – `sensors.py` simuliert via Tastatur |
 
 ## Geplante Features (Roadmap)
@@ -40,5 +40,5 @@ auf eine fest definierte Whitelist von Projektdateien (siehe
 
 ## Verwandt
 
-- Architektur-Details: `architektur.md`
+- Architektur-Details: `memory/system/architektur.md`
 - Was funktioniert wie: jeweils das Thema-File

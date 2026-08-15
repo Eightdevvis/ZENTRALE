@@ -1641,7 +1641,7 @@ def run_ui(stdscr, store):
     # ── Karte (füllt die MITTE-Box, Taste 'm') ──────────────────────────
     # Maps-System Schritt 1: grobe Basiskarte (Küsten 1:110m). Die TUI ist
     # ein reiner Zeichner — alle Geo-Logik liegt im Backend (core/map/ →
-    # /api/map/base, siehe memory/maps_system.md). Wir halten nur den
+    # /api/map/base, siehe memory/maps/maps_system.md). Wir halten nur den
     # Viewport (Mittelpunkt lon/lat + Zoom) und die letzte Server-Antwort.
     #   active : Karte hat den Fokus (Pan/Zoom-Tasten gehen an die Karte)
     #   cx,cy  : Mittelpunkt in lon/lat (Start: 0°/20°, ganze Welt zentriert)

@@ -33,7 +33,7 @@
 # Tool-ERGEBNISSE gehen zurück ans Modell: Dateiinhalte aus read_file,
 # Kalendereinträge, Mail-Betreffzeilen, News-Texte. Nicht nur die Frage. Der
 # Erlaubnis-Dialog begrenzt SCHREIBENDE Aktionen, nicht den Abfluss lesender.
-# Das ist bewusst so und gehört zum Bedrohungsmodell (memory/sicherheit.md).
+# Das ist bewusst so und gehört zum Bedrohungsmodell (memory/betrieb/sicherheit.md).
 #
 # ── Konfiguration ───────────────────────────────────────────────────────
 #   ANTHROPIC_API_KEY        Pflicht (kommt via ai_config aus data/ai_config.json)

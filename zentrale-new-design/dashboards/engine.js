@@ -7,7 +7,7 @@
    KI-Denk-/Stream-Zyklen und Tracker-Daten (Schlaf, Stimmung, Projekte, Pi-
    Telemetrie). Jede Design-Richtung abonniert dieselbe Quelle und rendert sie
    in ihrer eigenen Ästhetik. Vanilla JS, kein Build, kein CDN — wie das echte
-   Projekt (siehe memory/dashboard.md).
+   Projekt (siehe memory/system/dashboard.md).
    ========================================================================== */
 (function (global) {
   'use strict';

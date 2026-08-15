@@ -37,7 +37,7 @@
 #    Skriptversion da). xfdesktop wollen wir explizit NICHT mehr.
 #
 # 4. Schreibt ~/.xprofile mit xrandr-Force auf 1920x1080@60. Grund: nach
-#    dem fkms-Umstieg (siehe memory/display_debug.md) wird der EDID-
+#    dem fkms-Umstieg (siehe memory/betrieb/display_debug.md) wird der EDID-
 #    preferred Mode des Pi-Monitors nicht zuverlaessig genommen.
 #
 # 5. Aktiviert den Kiosk-Autostart (~/.config/autostart/zentrale.desktop):
@@ -98,7 +98,7 @@ mkdir -p "$AUTOSTART_DIR" "$XFCONF_DIR"
 #
 # Quelle der URL: env-Variable ZENTRALE_BACKEND_URL (z.B.
 # "http://192.168.50.1:5000"). Default ist die feste PC-LAN-IP
-# (192.168.50.1, siehe memory/topologie.md) — denn der Normalfall
+# (192.168.50.1, siehe memory/system/topologie.md) — denn der Normalfall
 # fuer dieses Skript IST der Pi-Kiosk, und der MUSS auf den PC zeigen,
 # nicht auf sich selbst.
 #
@@ -217,7 +217,7 @@ EOF
 
 # --- zentrale.desktop: Kiosk-Autostart ---------------------------------------
 # Waehrend des Display-Debuggings war diese Datei nach .disabled umbenannt
-# (siehe display_debug.md). Jetzt schreiben wir sie sauber neu, sodass
+# (siehe memory/betrieb/display_debug.md). Jetzt schreiben wir sie sauber neu, sodass
 # der Pi nach Reboot wirklich direkt im Kiosk landet. Idempotent: alte
 # Varianten (auch .disabled) werden geloescht und durch das frische
 # File ersetzt.

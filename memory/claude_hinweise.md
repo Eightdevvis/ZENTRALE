@@ -95,7 +95,7 @@ hängen), weicht diese Trennung bewusst auf – im Zweifel sein lassen.
   HTTP-Client zu den beiden Services auf Port 5050 (Whisper) und
   5051 (TTS).
 - Drei separate Prozesse (ZENTRALE, Whisper, TTS) sind bewusst – siehe
-  `audio_system.md`.
+  `memory/ki/audio_system.md`.
 - TTS-Service ist **hardcoded** auf sherpa-onnx + `vits-zh-aishell3`.
   Kein Auto-Switch zu MeloTTS. Whisper-Service ist hardcoded auf
   `language="zh"`.
@@ -112,7 +112,7 @@ hängen), weicht diese Trennung bewusst auf – im Zweifel sein lassen.
   sondern nur wenn sich `deploy/RELEASE` ändert. Wenn ein Deploy
   auslösen soll: Zahl in `deploy/RELEASE` hochziehen, committen,
   pushen. Code-only-Commits ohne RELEASE-Bump bleiben auf dem Pi
-  unsichtbar bis zum nächsten Bump. Details: `deployment.md`.
+  unsichtbar bis zum nächsten Bump. Details: `memory/betrieb/deployment.md`.
 
 ### Kassetten-Prinzip: geteilte Logik, pro Front gerendert
 
@@ -139,7 +139,7 @@ Generelles Bau-Prinzip für **jedes** neue Feature, das in mehreren Fronten
   passiert ist.)
 
 Gelebte Vorbilder: das **Graph-Werkzeug** (`core/graphs.py` + `/api/graphs`,
-dreifach gerendert) und das geplante **Maps-System** (`memory/maps_system.md`,
+dreifach gerendert) und das geplante **Maps-System** (`memory/maps/maps_system.md`,
 `core/map/` + `/api/map`). Wer ein Feature „nur schnell ins Monolith-HTML"
 baut, das später überall hin soll, verletzt dieses Prinzip — Logik gehört nach
 `core/`, nicht ins Template.

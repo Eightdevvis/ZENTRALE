@@ -1,6 +1,6 @@
 # core/map/ — das Maps-System (Geo-Logik, front-agnostisch)
 #
-# Architektur & großer Plan: memory/maps_system.md.
+# Architektur & großer Plan: memory/maps/maps_system.md.
 #
 # Hier liegt ALLE Karten-Logik EINMAL, ohne curses/HTML/SVG — die Fronten
 # (TUI, Laptop, Monolith) holen sich fertig aufbereitete Features über den

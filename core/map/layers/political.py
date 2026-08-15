@@ -1,7 +1,7 @@
 # core/map/layers/political.py
 #
 # Das politische / Konflikt-Overlay (Achse 2) — der „liveuamap-Gedanke", aber aus
-# seriösen Primärquellen und nach der Charter (memory/maps_quellen.md): KOMPOSIT
+# seriösen Primärquellen und nach der Charter (memory/maps/maps_quellen.md): KOMPOSIT
 # aus Sub-Layern, jeder mit GENAU EINER Quelle + mitgeführter Provenienz, jeder
 # einzeln togglebar (STAPELN statt verschmelzen — Quellen bleiben vergleichbar).
 #
@@ -19,7 +19,7 @@
 #
 # Achse 3 (Zeit): die Ereignis-/Kontroll-Sublayer sind zeitfähig (`time: True`,
 # UCDP deckt 1989–heute) — der `at`-Parameter wird HEUTE noch ignoriert
-# (Gegenwarts-Layer zuerst, Zeitstrahl kommt danach; siehe maps_system.md).
+# (Gegenwarts-Layer zuerst, Zeitstrahl kommt danach; siehe memory/maps/maps_system.md).
 
 from .. import render
 from . import ucdp, acled, viina, borders

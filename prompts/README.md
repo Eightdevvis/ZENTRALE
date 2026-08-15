@@ -13,7 +13,7 @@ Ein Teil der Tutor-Prompts (die Persona **Ling Ling**, Mandarin) steht im Code
 **absichtlich auf Chinesisch**. Das ist **verifiziert kein Zufall**: ein Prompt
 in der Zielsprache hält qwen zuverlässig in der Zielsprache — ein **deutscher**
 Prompt ließ qwen zu ~95 % auf **Deutsch** antworten (Tuning-Log:
-`memory/tutor_persona_tuning.md`).
+`memory/tutor/tutor_persona_tuning.md`).
 
 Darum gilt für jede Datei, die als `Live-Sprache: zh` markiert ist:
 
@@ -43,7 +43,7 @@ kopiert** und können direkt gelesen/umgeschrieben werden.
 
 | Datei | Was | Live-Sprache |
 |-------|-----|--------------|
-| [core-ki_system.md](core-ki_system.md) | Persönlichkeit/Stimme (System-Prompt) | de |
+| [core-memory/ki/ki_system.md](core-memory/ki/ki_system.md) | Persönlichkeit/Stimme (System-Prompt) | de |
 | [core-ki_meta-regeln.md](core-ki_meta-regeln.md) | Meta-Regeln (nicht lügen/erfinden) | de |
 | [core-ki_selbstbild.md](core-ki_selbstbild.md) | Selbstbild-Seed (kann / kann-nicht) | de |
 | [core-ki_mic-hint.md](core-ki_mic-hint.md) | Spracheingabe-Hinweis + Jetzt-Block | de |

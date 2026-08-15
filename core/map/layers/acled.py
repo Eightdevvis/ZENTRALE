@@ -5,7 +5,7 @@
 # Reicher als UCDP (mehr Ereignistypen, u.a. als Einziges nicht-gewaltsame
 # „Strategic Developments" wie Truppenverlegungen), akademischer Primär-Datensatz.
 #
-# WICHTIG — Lizenz/Provenienz (siehe memory/maps_quellen.md):
+# WICHTIG — Lizenz/Provenienz (siehe memory/maps/maps_quellen.md):
 #   ACLED ist NICHT offen lizenziert. Das EULA erlaubt nur nicht-kommerzielle
 #   Nutzung und VERBIETET Weiterverteilung/Republishing der Rohdaten. Konsequenz,
 #   die dieser Code erzwingt — exakt wie IMF PortWatch:

@@ -3,7 +3,7 @@
 # SKIZZE (enabled=False): Persona/Land/Provider stehen, der Prompt kommt noch aus
 # der generischen build_prompt (deutsch). BEIM AKTIVIEREN: einen eigenen prompt.md
 # IN DER ZIELSPRACHE hand-tunen (wie tutor/langs/zh/prompt.md) — ein deutscher
-# Prompt lässt das Modell auf Deutsch antworten (memory/tutor_persona_tuning.md).
+# Prompt lässt das Modell auf Deutsch antworten (memory/tutor/tutor_persona_tuning.md).
 # Dann prompt.de.md als Referenz daneben, tool_texts.json + phrases + expect.json
 # in der Zielsprache, seeds/ füllen, und enabled=True.
 

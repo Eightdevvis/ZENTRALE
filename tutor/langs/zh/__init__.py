@@ -4,7 +4,7 @@
 # Ordner — Code muss dafür nirgends angefasst werden.
 #
 #   prompt.md        System-Prompt, AUF CHINESISCH hand-getunt gegen echtes
-#                    qwen-plus (Log: memory/tutor_persona_tuning.md). Das ist der
+#                    qwen-plus (Log: memory/tutor/tutor_persona_tuning.md). Das ist der
 #                    Hebel, der das Modell in der Zielsprache hält.
 #   prompt.de.md     Deutsche Referenz-Fassung desselben Prompts (nur Review;
 #                    NICHT das, was das Modell sieht).

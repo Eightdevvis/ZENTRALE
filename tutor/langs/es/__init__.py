@@ -4,7 +4,7 @@
 # Code muss dafür nirgends angefasst werden.
 #
 #   prompt.md        System-Prompt, AUF SPANISCH (der Hebel, der das Modell in der
-#                    Zielsprache hält; siehe base.py + memory/tutor_persona_tuning.md).
+#                    Zielsprache hält; siehe base.py + memory/tutor/tutor_persona_tuning.md).
 #   prompt.de.md     Deutsche Referenz-Fassung (nur Review; NICHT was das Modell sieht).
 #   vocab_hint.md    {words}-Template, das session ans Prompt-Ende hängt.
 #   expect.json      Register-Leiter [[grenze, text], …] — Sprechweise skaliert mit

@@ -4,7 +4,7 @@
 # auf demselben Geo-Substrat (Projektion/Viewport aus core/map/). Die Fronten
 # holen Features über /api/map/layer/<id> und zeichnen nur (Kassetten-Prinzip).
 #
-# Architektur-Detail (siehe memory/maps_system.md, memory/maps_quellen.md):
+# Architektur-Detail (siehe memory/maps/maps_system.md, memory/maps/maps_quellen.md):
 # ein Overlay kann ein KOMPOSIT aus mehreren Sub-Layern sein, jeder Sub-Layer
 # mit EINER offiziellen Quelle + mitgeführter Provenienz.
 

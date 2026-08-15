@@ -1,5 +1,5 @@
 """
-nvim-Theme-Kopplung (nvim/lua/zentrale_theme/, siehe memory/dashboard.md).
+nvim-Theme-Kopplung (nvim/lua/zentrale_theme/, siehe memory/system/dashboard.md).
 
 Getestet wird gegen ein ECHTES nvim (headless, eigene Wegwerf-Theme-Datei —
 Sashas ~/.config/zentrale/theme wird nie angefasst):

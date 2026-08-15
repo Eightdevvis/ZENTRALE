@@ -6,7 +6,7 @@
 # Yale/U-Michigan, https://github.com/zhukovyuri/VIINA). Liefert je Ort täglich
 # einen Kontroll-Status (UA / RU / CONTESTED) auf GeoNames-Ebene.
 #
-# EHRLICHKEITS-Hinweis (siehe memory/maps_quellen.md, „genau EINE Primärquelle"):
+# EHRLICHKEITS-Hinweis (siehe memory/maps/maps_quellen.md, „genau EINE Primärquelle"):
 #   Die Kontroll-Ebene von VIINA ist ein ABGELEITETES Aggregat — Mehrheitsvotum
 #   über DeepStateMap (`status_dsm`), ISW (`status_isw`) und Wikipedia
 #   (`status_wiki`). Das ist streng genommen keine reine Primärquelle. Wir führen

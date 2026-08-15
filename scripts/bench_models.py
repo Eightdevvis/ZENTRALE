@@ -98,7 +98,7 @@ CASES = [
      "Welche Dateien kannst du eigentlich alles lesen?",
      "list_files"),
     ("read_file",
-     "Lies die Datei memory/setup.md und sag mir in einem Satz worum's geht.",
+     "Lies die Datei memory/betrieb/setup.md und sag mir in einem Satz worum's geht.",
      "read_file"),
     ("read_calendar",
      "Was hatte ich letzten Monat alles an Terminen im Kalender?",

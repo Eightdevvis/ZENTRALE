@@ -14,7 +14,7 @@
 #   • Dieses kleine .npz liegt COMMITTET in core/map/data/ (mit Namensnennung),
 #     nicht im gitignore'ten cache/. Es ist statisch (Aggregat 2015–2021), muss
 #     also nie „frisch gehalten" werden — Tagesaktualität sitzt in den
-#     Chokepoints (siehe portwatch.py / maps_quellen.md, A/B-Trennung).
+#     Chokepoints (siehe portwatch.py / memory/maps/maps_quellen.md, A/B-Trennung).
 #   • Das Raster bleibt in seiner NATIVEN Projektion (Plattkarte, lat/lon
 #     linear). Die Mercator-Umrechnung passiert erst beim Zeichnen — so geht
 #     keine Auflösung durch doppeltes Resampling verloren.

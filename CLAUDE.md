@@ -31,7 +31,7 @@ schlank — kein Branch/PR-Zeremoniell:
   Mail-Passphrase ist lokal per `reset`/`amend` folgenlos zurückzunehmen —
   einmal bei origin (selbst privat, liegt auf GitHubs Servern) gilt er als
   kompromittiert → rotieren. Deshalb: `data/*.json`, Keys, Passphrasen
-  bleiben gitignored (siehe `memory/datei_zugriffe.md`). **Der Push selbst
+  bleiben gitignored (siehe `memory/betrieb/datei_zugriffe.md`). **Der Push selbst
   ist harmlos; gefährlich ist nur, WAS im Commit steckt.** Vor dem ersten
   Push eines neuen Pfades kurz `git status`/`git diff --cached` prüfen.
 
@@ -55,7 +55,7 @@ in einer **eigenen Datei**: `data/features.json`.
   TUI als Projekt **flaggt** oder abhakt (`l_zentrale` lebt in dieser Datei).
   Die früher hier behauptete „features.json=Claude, lists.json=Sasha → kein
   Clash"-Logik war **falsch** und hat genau zum Flag-Verlust geführt.
-- **Sync (`data/*.json`, nicht in git, siehe `topologie.md`):** läuft über
+- **Sync (`data/*.json`, nicht in git, siehe `memory/system/topologie.md`):** läuft über
   rsync per SSH, **beide Richtungen vom jeweiligen Knoten aus** (Laptop→`pc`
   via `find-pc`, PC→`0RAMMachine` via `find-0RAMMachine`). Zwei Schutzschichten
   gegen Überschreiben: (1) **`zentrale-push`/`zentrale-pull` sind jetzt
@@ -102,40 +102,31 @@ Statt das ganze README/diese Datei zu lesen: über den Index gezielt
 das Thema öffnen, das gerade gebraucht wird – das spart Tokens und
 hält die Antworten fokussiert.
 
-## Schnell-Zeiger nach Thema
+## Schnell-Zeiger nach Bereich
 
-| Was du wissen willst                      | Wo es steht                          |
-|-------------------------------------------|--------------------------------------|
-| Was ist ZENTRALE, aktueller Stand         | `memory/ueberblick.md`               |
-| Wer läuft wo (PC ↔ Pi)                    | `memory/topologie.md`                |
-| Threads, Datenfluss, Modul-Übersicht      | `memory/architektur.md`              |
-| Sensoren, Events, Brain, Actions          | `memory/event_system.md`             |
-| Ollama, Cloud-Kern, Memory, Tools, Netlog | `memory/ki_system.md`                |
-| Kalender-System (Layer, Termine)          | `memory/kalender_system.md`          |
-| Zyklus/PMS-Rechner (»periode«-Graph)      | `memory/zyklus_pms.md`               |
-| News-System (Tagesschau, KI-Briefing)     | `memory/news_system.md`              |
-| Mail-System (IMAP-Triage, Sender-Keymap)  | `memory/mail_system.md`              |
-| Notizen (Blöcke: text/liste/float, Taste n)| `memory/notizen_system.md`          |
-| Maps-System (Layer-Karte, 3 Achsen)       | `memory/maps_system.md`              |
-| KI-Persönlichkeit & Fine-Tuning-Plan      | `memory/ki_personality_plan.md`      |
-| Sprach-Tutor (eigenes Projekt `tutor/`)   | `memory/tutor_system.md`             |
-| Whisper STT + TTS, Audio-Architektur      | `memory/audio_system.md`             |
-| Dashboard-UI, Modi, Polling               | `memory/dashboard.md`                |
-| Tastatur in jedem Modus                   | `memory/tastatur.md`                 |
-| REST API                                  | `memory/api_endpoints.md`            |
-| Setup, Dependencies, Modelle              | `memory/setup.md`                    |
-| Starten (3 Terminals, Env-Vars)           | `memory/starten.md`                  |
-| Hardware (Pi, Mikro, PIR, GPIO)           | `memory/hardware.md`                 |
-| Deployment (rsync, systemd, Kiosk)        | `memory/deployment.md`               |
-| Sicherheit (Bedrohungsmodell, LUKS, EvilMaid)| `memory/sicherheit.md`            |
-| Whitelist, .gitignore-relevantes          | `memory/datei_zugriffe.md`           |
-| Architektur-Entscheidungen für Claude     | `memory/claude_hinweise.md`          |
+Die Doku hat seit 2026-08-15 **zwei Ebenen**: `memory/INDEX.md` nennt nur die
+Bereiche, jeder Bereich hat einen eigenen Index mit seinen Themen. Nicht hier
+nach dem Thema suchen — in den Bereich springen und dessen Index lesen.
+
+| Bereich | Was drinsteht | Index |
+|---|---|---|
+| KI | denkt: lokal + Cloud, Graph-Memory, Tools, Gate, Sprache, Pläne, Benchmarks | `memory/ki/INDEX.md` |
+| Werkzeuge | tut: Kalender, Mail, News, Notizen, Zyklus, Morgen-Messenger | `memory/werkzeuge/INDEX.md` |
+| System | gebaut: Architektur, Events, Topologie, API, Dashboard, Tastatur | `memory/system/INDEX.md` |
+| Betrieb | läuft: Setup, Starten, Deployment, Hardware, Sicherheit, Zugriffe | `memory/betrieb/INDEX.md` |
+| Maps | die Karte: Layer, Quellen-Charta, Design-Brief | `memory/maps/INDEX.md` |
+| Tutor | eigenes Projekt in `tutor/` | `memory/tutor/INDEX.md` |
+
+Flach geblieben: `memory/ueberblick.md` (Einstieg, was ZENTRALE ist) und
+`memory/claude_hinweise.md` (Architektur-Entscheidungen für mich).
 
 ## Pflege
 
 - Jede strukturelle Änderung (neue Module, umbenannte Dateien, neue
   Features) → das passende `memory/`-File aktualisieren **und** den
-  Index prüfen.
-- Inhalte gehören in die Theme-Files, nicht in diese Datei.
-- Bei Umbenennungen: alle Stellen mitziehen, sonst tote Referenzen
-  in der Doku.
+  Index des Bereichs prüfen. Der Haupt-Index bleibt unangetastet, solange
+  kein neuer *Bereich* entsteht.
+- Inhalte gehören in die Theme-Files, nicht in diese Datei und nicht in
+  einen Index. Ein Index sagt, WO etwas steht, nie WAS gilt.
+- Bei Umbenennungen/Verschiebungen: alle Stellen im ganzen Repo mitziehen,
+  nicht nur im Index — auch Code-Kommentare zeigen auf `memory/`-Dateien.

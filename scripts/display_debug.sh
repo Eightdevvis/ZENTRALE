@@ -11,7 +11,7 @@
 # greift der modesetting-Treiber zu einem ungewoehnlichen 1024x768@99.97Hz-
 # Mode, den der HDMI-Encoder oder der Monitor nicht sauber ausgibt.
 # Nach X-Stop bleibt der Encoder im broken state -> Konsole bleibt schwarz,
-# erst ein Reboot setzt zurueck. Siehe memory/display_debug.md.
+# erst ein Reboot setzt zurueck. Siehe memory/betrieb/display_debug.md.
 #
 # WAS DAS SKRIPT MACHT:
 # Schreibt einen vollstaendigen Snapshot des Display-States in eine

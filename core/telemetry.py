@@ -3,7 +3,7 @@
 # Baut den PC-Telemetrie-Snapshot fuer das Dashboard (/api/telemetry).
 # Der PC ist die Maschine, auf der Backend + Ollama (RTX 4070) laufen -
 # darum ist hier VRAM die wichtigste Zahl (genau das ist beim Modell-Wechsel
-# der Crash-Ausloeser gewesen, siehe memory/ki_system.md).
+# der Crash-Ausloeser gewesen, siehe memory/ki/ki_system.md).
 #
 # Quelle: core/host_metrics.py (dependency-frei, /proc + /sys + nvidia-smi).
 # Die Pi-Telemetrie kommt NICHT von hier, sondern wird vom Pi an

@@ -19,7 +19,7 @@
    während der SSE-Stream läuft.
 
    Bewusst framework-frei, kein Build, kein CDN — wie das restliche Projekt
-   (siehe memory/dashboard.md). viz.js und ascii.js bleiben unverändert; nur
+   (siehe memory/system/dashboard.md). viz.js und ascii.js bleiben unverändert; nur
    diese Datei trägt den Unterschied Fake→Echt.
 
    Daten-Lücken: Panels ohne echte Quelle (Telemetrie, Tracker Gemüt/Fokus/

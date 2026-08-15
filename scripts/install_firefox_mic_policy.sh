@@ -11,7 +11,7 @@
 #   /etc-Datei die niemand mehr nachvollziehen kann.
 # - Single-Source: die erlaubte Origin steht hier als ENV-Variable
 #   (KIOSK_ORIGIN), default ist die feste LAN-IP des PC laut
-#   memory/topologie.md. Wenn die IP sich aendert, hier einen Wert ueberschreiben
+#   memory/system/topologie.md. Wenn die IP sich aendert, hier einen Wert ueberschreiben
 #   und neu aufrufen.
 #
 # WAS DAS NICHT MACHT:
@@ -40,7 +40,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # Die erlaubte Origin. Default ist die feste LAN-IP des PC-Backends
-# (memory/topologie.md, project_lan_migration_2026_05_19). Format: scheme://host:port,
+# (memory/system/topologie.md, project_lan_migration_2026_05_19). Format: scheme://host:port,
 # ohne trailing slash — Firefox matcht exakt auf diese Origin.
 KIOSK_ORIGIN="${KIOSK_ORIGIN:-http://192.168.50.1:5000}"
 

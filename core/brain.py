@@ -27,7 +27,7 @@ def process_event(event, data=None):
         print("Brain: Light sensor triggered")
 
     elif event == PRESENCE_DETECTED:
-        # Tutor-Auto-START bleibt bewusst pausiert (memory/tutor_system.md,
+        # Tutor-Auto-START bleibt bewusst pausiert (memory/tutor/tutor_system.md,
         # Sequencing). Der Presence-Event reicht STANDARDMÄSSIG einen NONVERBALEN
         # Ping an die Persona weiter — und der wirkt auch dann nur, wenn die
         # Tutor-Session bereits LÄUFT (er startet nie eine); die Guards dafür

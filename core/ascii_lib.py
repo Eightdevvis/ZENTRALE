@@ -14,7 +14,7 @@
 # Fehlt die tags-Zeile, wird der Dateiname (ohne .txt) als einziger Tag
 # genutzt. Neue Bilder einfach als .txt in den Ordner legen.
 #
-# ── Matching (Hybrid, siehe memory/ki_system.md) ──────────────────────
+# ── Matching (Hybrid, siehe memory/ki/ki_system.md) ──────────────────────
 #   Stufe 1 — Tag/Keyword: exakter Tag-Treffer > Substring in Tag/Name >
 #             Token-Überlappung. Schnell, vorhersehbar, debuggbar.
 #   Stufe 2 — Embedding-Fallback: greift NUR wenn Stufe 1 nichts findet.

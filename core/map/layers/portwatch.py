@@ -5,7 +5,7 @@
 # TÄGLICH aktualisierte Schätzungen des Schiffsverkehrs an den großen
 # maritimen Engstellen (Suez, Panama, Hormuz, Malakka, …).
 #
-# WICHTIG — Lizenz/Provenienz (siehe memory/maps_quellen.md):
+# WICHTIG — Lizenz/Provenienz (siehe memory/maps/maps_quellen.md):
 #   PortWatch-Daten sind NICHT public domain (anders als Natural Earth). Die
 #   IMF-Terms erlauben Anzeige mit Namensnennung, aber keine Weiterverteilung.
 #   Konsequenz, die dieser Code erzwingt:

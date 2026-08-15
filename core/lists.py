@@ -26,9 +26,9 @@ _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data
 # Datei angefasst, die sich wirklich geändert hat. ACHTUNG: das ist KEIN sauberer
 # Besitz-Schnitt — features.json schreiben beide (Claude den Inhalt, Sasha das
 # Projekt-Flag/Abhaken in der TUI). Beide Dateien sind NICHT in git (siehe
-# .gitignore / datei_zugriffe.md); der Abgleich Laptop↔PC läuft über den
+# .gitignore / memory/betrieb/datei_zugriffe.md); der Abgleich Laptop↔PC läuft über den
 # rsync-Sync (zentrale-push/-pull, newest-wins) + Push-on-write (datasync.py →
-# _save_file unten stößt zentrale-push-data an). Details: CLAUDE.md / topologie.md.
+# _save_file unten stößt zentrale-push-data an). Details: CLAUDE.md / memory/system/topologie.md.
 _REGISTRY = os.path.join(_DATA_DIR, 'lists.json')
 _FEATURES = os.path.join(_DATA_DIR, 'features.json')
 

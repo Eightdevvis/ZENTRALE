@@ -82,7 +82,7 @@ def main():
         sp = p["system_prompt"]
         # Der Prompt ist SELBST auf Chinesisch verfasst — das ist der Hebel, der
         # qwen in der Zielsprache hält (deutscher Prompt → deutsche Monologe,
-        # siehe memory/tutor_persona_tuning.md). Darum keine Literal-Regel
+        # siehe memory/tutor/tutor_persona_tuning.md). Darum keine Literal-Regel
         # ("只用中文") mehr, sondern die Eigenschaft direkt prüfen.
         cjk = sum(1 for c in sp if '一' <= c <= '鿿')
         check("zh-prompt ist auf Chinesisch verfasst (>60% CJK)",

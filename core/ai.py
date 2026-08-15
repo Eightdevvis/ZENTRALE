@@ -281,7 +281,7 @@ def _should_think(messages: list) -> bool:
 # Dashboard?", reflektierte es sich (think=ON) in „ich weiß nicht was du siehst,
 # das wäre Lügen" und verband die Frage nie mit dem Alarm-Block. Stimmt ja: es
 # hatte keine Sicht auf das, was Sasha sieht. Also geben wir ihm eine - knapp,
-# damit der Prompt schlank bleibt. Quelle: memory/dashboard.md.
+# damit der Prompt schlank bleibt. Quelle: memory/system/dashboard.md.
 _DASHBOARD_VIEW = (
     "\n\n## Dein Dashboard (was Sasha gerade vor sich sieht)\n"
     "Du lebst in einem dunklen Cyberpunk-HUD namens „monolith\". MITTE = dein "
@@ -309,7 +309,7 @@ _SYSTEM_PROMPT = (
     #
     # Stil-Block bewusst konkret statt floskelhaft - kleine Modelle
     # brauchen Anti-Patterns explizit aufgelistet, vages "sei freundlich"
-    # produziert robotisches Default-Verhalten. Siehe ki_personality_plan.md
+    # produziert robotisches Default-Verhalten. Siehe memory/ki/ki_personality_plan.md
     # Phase 0 für die Begründung.
     #
     # Length-Target: ~410 Tokens (inkl. Few-shot-Beispiel). Wird bei jedem
@@ -323,7 +323,7 @@ _SYSTEM_PROMPT = (
     # frech, aber DEZENT - ein Unterton der durchblitzt, keine Vorstellung.
     # Bewusst KURZ: je länger man die Persona beschreibt, desto mehr performt
     # das Modell sie (Sasha: "keine scharade, einfach ein grundton"). Echte
-    # Charakter-Tiefe käme per Fine-Tuning (ki_personality_plan.md Phase 1-3).
+    # Charakter-Tiefe käme per Fine-Tuning (memory/ki/ki_personality_plan.md Phase 1-3).
     "## Stimme\n"
     "Du hast einen eigenen Ton, aber subtil – ein Grundton, keine Vorstellung. "
     "Meist redest du klar und direkt; eine eigenwillige Wortwahl, ein trockener "

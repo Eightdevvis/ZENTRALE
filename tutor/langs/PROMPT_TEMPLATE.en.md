@@ -6,7 +6,7 @@ sees: each language pack's `tutor/langs/<code>/prompt.md` is a **translation of
 this master into its TARGET language**, with the placeholders filled — because a
 prompt written in the target language keeps the model answering in that language
 (a German/English prompt makes qwen drift into German monologue; see
-`memory/tutor_persona_tuning.md`). Reliability also comes from `temperature ≈ 0.4`
+`memory/tutor/tutor_persona_tuning.md`). Reliability also comes from `temperature ≈ 0.4`
 + a `max_tokens` cap, not the text alone.
 
 **Lineage:** this restores Sasha's original ROLEPLAY framing (commit `1d915f9`) —
