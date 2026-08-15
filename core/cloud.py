@@ -37,8 +37,9 @@
 #
 # ── Konfiguration ───────────────────────────────────────────────────────
 #   ANTHROPIC_API_KEY        Pflicht (kommt via ai_config aus data/ai_config.json)
-#   ZENTRALE_CLOUD_MODEL     Default 'claude-opus-5'
-#   ZENTRALE_CLOUD_EFFORT    low|medium|high|xhigh|max, Default 'medium'
+#   Modell + Denk-Tiefe kommen aus ai_backends (chat_model/chat_effort),
+#   umstellbar per data/ai_config.json oder ZENTRALE_CLOUD_MODEL /
+#   ZENTRALE_CHAT_EFFORT.
 #   ZENTRALE_CLOUD_MAX_TOKENS Default 16000
 
 import os
@@ -52,12 +53,18 @@ import graph
 _DATA_DIR   = os.path.join(os.path.dirname(__file__), '..', 'data')
 CLOUD_GRAPH = os.path.abspath(os.path.join(_DATA_DIR, 'ai_graph_cloud.json'))
 
-_MODEL      = os.environ.get("ZENTRALE_CLOUD_MODEL", "claude-opus-5")
+# Modell und Denk-Tiefe kommen aus ai_backends (pro Anbieter gespeichert,
+# per Config und Env umstellbar) — NICHT mehr aus eigenen Env-Vars hier. Sonst
+# gäbe es zwei Wahrheiten darüber, welches Modell gerade läuft, und die
+# Kostenrechnung würde eine davon nicht sehen.
+def _model() -> str:
+    import ai_backends
+    return ai_backends.chat_model("claude") or "claude-sonnet-5"
 
-# Effort steuert Denk-Tiefe UND Token-Verbrauch. 'medium' als Default, weil der
-# Kern ein Dashboard-Assistent ist: viele kurze Turns, Latenz sichtbar, Kosten
-# laufen über die Menge. Für eine harte Analyse per Env auf 'high'/'xhigh'.
-_EFFORT     = os.environ.get("ZENTRALE_CLOUD_EFFORT", "medium")
+
+def _effort() -> str:
+    import ai_backends
+    return ai_backends.chat_effort()
 
 # max_tokens deckelt Denken UND Antwort zusammen. Zu knapp → die Antwort bricht
 # mitten im Satz ab, nachdem das Denken das Budget aufgefressen hat. 16k ist
@@ -272,19 +279,20 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     anthro_tools = _to_anthropic_tools(active_tools)
 
     client = _get_client()
+    mdl    = model or _model()
 
     for _ in range(_MAX_ROUNDS):
         round_text = []
         try:
             with client.messages.stream(
-                model=model or _MODEL,
+                model=mdl,
                 max_tokens=_MAX_TOKENS,
                 # display=summarized: sonst kommen die thinking-Blöcke mit
                 # LEEREM Text und das HUD zeigt eine lange Pause statt "ich
                 # schau kurz nach…". Kostet nichts extra — gedacht (und
                 # abgerechnet) wird so oder so.
                 thinking={"type": "adaptive", "display": "summarized"},
-                output_config={"effort": _EFFORT},
+                output_config={"effort": _effort()},
                 system=sys_blocks,
                 tools=anthro_tools,
                 messages=anthro_msgs,
@@ -304,7 +312,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
             yield f"[Cloud-Fehler: {e}]"
             return
 
-        _log_usage(final)
+        _log_usage(final, mdl)
 
         if final.stop_reason == "refusal":
             # Sicherheits-Klassifikator hat abgelehnt. Kein Fehler im Sinne der
@@ -458,21 +466,32 @@ def _ask_permission(name: str, args: dict):
     return antwort == "ja"
 
 
-def _log_usage(final):
-    """Token-Verbrauch pro Runde ins Dashboard-Terminal.
+def _log_usage(final, model: str):
+    """Token-Verbrauch UND geschätzte Kosten pro Runde ins Terminal, plus
+    Buchung in data/ai_usage.json.
 
     cache_read > 0 heißt: das Präfix saß im Cache und kostete 10 %. Bleibt der
     Wert über mehrere Turns 0, ist der Cache kaputt — dann hat sich etwas im
     statischen Block verändert (siehe _system_blocks). Das ist der einzige
     verlässliche Weg, das zu merken; ein kaputter Cache fällt sonst nur auf
-    der Monatsrechnung auf."""
+    der Monatsrechnung auf.
+
+    Der €-Wert ist geschätzt (siehe core/prices.py). Er ist trotzdem das
+    Wichtigste an dieser Zeile: ohne Zahl nach jedem Turn ist jede
+    Sparmaßnahme Bauchgefühl."""
     try:
         import state
+        import usage
         u = final.usage
+        rd = int(getattr(u, "cache_read_input_tokens", 0) or 0)
+        wr = int(getattr(u, "cache_creation_input_tokens", 0) or 0)
+        eur = usage.buchen(model,
+                           input_tokens=int(u.input_tokens or 0),
+                           output_tokens=int(u.output_tokens or 0),
+                           cache_read=rd, cache_write=wr)
         state.push_log(
-            f"CLOUD ← in={u.input_tokens} "
-            f"cache_read={getattr(u, 'cache_read_input_tokens', 0)} "
-            f"cache_write={getattr(u, 'cache_creation_input_tokens', 0)} "
-            f"out={u.output_tokens}")
+            f"CLOUD ← {model} in={u.input_tokens} cache_read={rd} "
+            f"cache_write={wr} out={u.output_tokens} "
+            f"≈{eur:.4f}€ (heute {usage.heute_euro():.2f}€)")
     except Exception:
         pass

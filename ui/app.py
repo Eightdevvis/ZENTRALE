@@ -1318,19 +1318,23 @@ def api_ai_status():
     Antwort Cloud, daheim lokal. Die Fronten sollen den Unterschied sehen
     können, statt bei fehlendem Ollama pauschal "KI aus" anzuzeigen.
     """
+    import usage as _usage
+    kosten = {"heute": _usage.heute_euro(), "monat": _usage.monat_euro(),
+              "budget": ai_backends.budget_lage()}
+
     backend = ai_backends.chat_available()
     if backend == ai_backends.CLOUD:
         # Provider aus status() lesen, nicht neu ermitteln - sonst sehen
         # Endpoint und Backend-Wahl unterschiedliche Wahrheiten.
         prov = ai_backends.status().get("cloud_provider")
-        modul = ai_backends.chat_cloud_module()
         return jsonify({
             "available": True,
             "backend":   "cloud",
             "url":       (providers.get(prov) or {}).get("base_url"),
-            "model":     getattr(modul, "_MODEL", None)
-                         or (providers.get(prov) or {}).get("default_model") or "—",
+            "model":     ai_backends.chat_model(prov) or "—",
             "provider":  prov,
+            "effort":    ai_backends.chat_effort(),
+            "kosten":    kosten,
             "kassette":  kassette.name(),
         })
     if backend == ai_backends.LOCAL:
@@ -1339,10 +1343,12 @@ def api_ai_status():
             "backend":   "local",
             "url":       ai.OLLAMA_URL,
             "model":     ai.OLLAMA_MODEL,
+            "kosten":    kosten,     # lokal kostet nichts, der Monat aber schon
             "kassette":  kassette.name(),
         })
     return jsonify({"available": False, "backend": None, "url": None,
-                    "model": "—", "kassette": kassette.name()})
+                    "model": "—", "kosten": kosten,
+                    "kassette": kassette.name()})
 
 
 # ── Voice-Pipeline (sprachneutral) ─────────────────────────────────────

@@ -99,11 +99,11 @@ def main():
     if kind == "anthropic":
         import cloud as modul
         ruf = lambda h: modul.chat_stream(h)
-        mdl, extra = modul._MODEL, f"effort {modul._EFFORT}"
+        mdl, extra = modul._model(), f"effort {modul._effort()}"
     elif kind == "openai_compat":
         import cloud_openai as modul
         ruf = lambda h: modul.chat_stream(h, provider=name)
-        mdl = os.environ.get("ZENTRALE_CLOUD_OPENAI_MODEL") or prov.get("default_model")
+        mdl = ai_backends.chat_model(name) or prov.get("default_model")
         extra = f"temp {modul._TEMP}"
     else:
         _abbruch(f"Der Kern kann mit '{name}' nicht reden (kein kind).")

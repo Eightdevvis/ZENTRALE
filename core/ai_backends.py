@@ -51,11 +51,52 @@ def local_ok() -> bool:
 
 
 def cloud_provider() -> str:
-    """Name eines KONFIGURIERTEN Cloud-Providers (Key gesetzt) – oder None.
-    Keys kommen via ai_config NUR aus data/ai_config.json (Single Source of
-    Truth seit 2026-07-17; ein Legacy-keys-Block in data/tutor_config.json wird
-    ignoriert). Nur die Switches cloud/local haben noch den Legacy-Fallback."""
+    """
+    Welcher Cloud-Provider JETZT dran ist – oder None.
+
+    Drei Dinge entscheiden das, in dieser Reihenfolge:
+      1. **Budget aufgebraucht** → der billigste erreichbare Provider. Lieber
+         weiterreden auf einem günstigen Modell als gar nicht mehr reden.
+      2. **Ausdrückliche Wahl** (`chat_provider`, z.B. 'claude' oder 'grok').
+         Ohne Key für genau den → None. Nichts vortäuschen und still auf einen
+         anderen Anbieter ausweichen: wohin die Daten gehen, ist keine
+         Nebensache.
+      3. **'auto'** → erster Provider mit Key aus providers.PREFERENCE.
+
+    Keys kommen via ai_config NUR aus data/ai_config.json.
+    """
+    if budget_lage()["status"] == "over":
+        billig = _billigster_erreichbarer()
+        if billig:
+            return billig
+    want = chat_provider()
+    if want != "auto":
+        p = providers.get(want)
+        if p and os.environ.get(p.get("key_env") or ""):
+            return want
+        return None
     return providers.configured()
+
+
+def _erreichbare_provider() -> list:
+    """Provider, für die ein Key gesetzt ist UND deren Dialekt der Kern
+    spricht. Reine Konfigurations-Frage, kein Netz-Ping."""
+    return [n for n, p in providers.PROVIDERS.items()
+            if os.environ.get(p.get("key_env") or "")
+            and cloud_kind_for(n)]
+
+
+def _billigster_erreichbarer() -> str | None:
+    """Der günstigste erreichbare Provider, gemessen am Ausgabepreis seines
+    Modells (Ausgabe kostet ein Vielfaches der Eingabe). Für den
+    Budget-Rückfall."""
+    import prices
+    kandidaten = _erreichbare_provider()
+    if not kandidaten:
+        return None
+    return min(kandidaten,
+               key=lambda n: (prices.fuer(chat_model(n))["out"],
+                              prices.fuer(chat_model(n))["in"]))
 
 
 def cloud_enabled() -> bool:
@@ -240,6 +281,145 @@ def chat_available() -> str | None:
     if b == LOCAL and kassette.ki_aus():
         return None
     return b
+
+
+# ── Wer denkt, womit, wie tief ─────────────────────────────────────────
+#
+# Drei Regler, die zusammengehören und bewusst getrennt sind:
+#
+#   chat_provider  WELCHER ANBIETER   'auto' | claude | qwen | grok | …
+#   chat_model     WELCHES MODELL     pro Anbieter eigen — 'claude-opus-5'
+#                                     bedeutet Grok nichts
+#   chat_effort    WIE TIEF           nur Anthropic kennt das; anderswo
+#                                     läuft es ins Leere statt zu krachen
+#
+# Umschalten ist damit eine Config-Zeile, kein Umbau — auch auf einen
+# Anbieter, für den heute noch gar kein Key existiert.
+
+def chat_provider() -> str:
+    """Ausdrücklich gewählter Cloud-Anbieter, oder 'auto'."""
+    v = os.environ.get("ZENTRALE_CHAT_PROVIDER") or \
+        ai_config.setting("chat_provider", "auto")
+    v = str(v).strip().lower()
+    return v if v == "auto" or v in providers.PROVIDERS else "auto"
+
+
+def set_chat_provider(name: str, persist: bool = True) -> str:
+    name = str(name).strip().lower()
+    if name != "auto" and name not in providers.PROVIDERS:
+        raise ValueError(f"unbekannter Provider: {name!r} — bekannt sind "
+                         f"{sorted(providers.PROVIDERS)} oder 'auto'")
+    ai_config.set_override("chat_provider", name, persist=persist)
+    _cache["val"] = None
+    return name
+
+
+def chat_model(provider: str | None = None) -> str:
+    """
+    Modell für einen Anbieter. PRO ANBIETER gespeichert, damit ein Wechsel
+    hin und zurück nicht jedes Mal die Modellwahl vergisst — und damit nie
+    ein Anthropic-Modellname an Grok geschickt wird.
+
+    Reihenfolge: Env → gespeicherte Wahl → default_model des Anbieters.
+    """
+    # Env meint immer „das Modell, das JETZT läuft" — also nur, wenn nach dem
+    # aktuellen Anbieter gefragt wird (provider=None). Sonst käme beim Blick
+    # auf einen anderen Anbieter dessen Modell falsch heraus.
+    if provider is None:
+        env = os.environ.get("ZENTRALE_CLOUD_MODEL")
+        if env:
+            return env
+    name = provider or cloud_provider() or ""
+    gespeichert = ai_config.setting("chat_models", None) or {}
+    if isinstance(gespeichert, dict) and gespeichert.get(name):
+        return str(gespeichert[name])
+    return providers.get(name).get("default_model") or ""
+
+
+def set_chat_model(model: str, provider: str | None = None) -> str:
+    """Modell für einen Anbieter festlegen (Default: den aktuellen)."""
+    name = provider or cloud_provider() or ""
+    if not name:
+        raise ValueError("kein Provider aktiv — erst set_chat_provider()")
+    gespeichert = dict(ai_config.setting("chat_models", None) or {})
+    gespeichert[name] = str(model).strip()
+    ai_config.set_override("chat_models", gespeichert, persist=True)
+    _cache["val"] = None
+    return gespeichert[name]
+
+
+EFFORT_STUFEN = ("low", "medium", "high", "xhigh", "max")
+
+
+def chat_effort() -> str:
+    """
+    Denk-Tiefe. Nur Anthropic kennt den Regler; bei allen anderen ignoriert
+    ihn das jeweilige Modul stillschweigend.
+
+    Default 'low': auf Opus 5 ist Denken per Default AN und zählt als OUTPUT,
+    und Output ist der teuerste Token (25 $/Mio gegen 5 $ für Input). Ein Turn
+    auf 'high' erzeugt schnell das Dreifache an Denk-Token. Fürs Plaudern ist
+    das rausgeworfenes Geld.
+    """
+    v = os.environ.get("ZENTRALE_CHAT_EFFORT") or \
+        ai_config.setting("chat_effort", "low")
+    v = str(v).strip().lower()
+    return v if v in EFFORT_STUFEN else "low"
+
+
+def set_chat_effort(level: str, persist: bool = True) -> str:
+    level = str(level).strip().lower()
+    if level not in EFFORT_STUFEN:
+        raise ValueError(f"effort: {EFFORT_STUFEN}, nicht {level!r}")
+    ai_config.set_override("chat_effort", level, persist=persist)
+    return level
+
+
+# ── Budget ─────────────────────────────────────────────────────────────
+#
+# Ein Deckel, der NICHT abschaltet, sondern auf den billigsten erreichbaren
+# Anbieter zurückfällt. Der Unterschied ist wichtig: eine Assistentin, die
+# ab dem 20. des Monats schweigt, ist kaputt. Eine, die ab dem 20. billiger
+# denkt, ist immer noch da.
+
+def budget_monat() -> float | None:
+    """Monatsdeckel in Euro, oder None (kein Deckel)."""
+    v = ai_config.setting("budget_monat_euro", None)
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def set_budget_monat(euro: float | None, persist: bool = True):
+    ai_config.set_override("budget_monat_euro",
+                           None if euro is None else float(euro),
+                           persist=persist)
+    _cache["val"] = None
+    return euro
+
+
+BUDGET_WARNUNG = 0.8   # ab 80 % des Deckels warnen
+
+
+def budget_lage() -> dict:
+    """
+    Wo stehen wir im Monat? {'status': 'ok'|'warn'|'over', 'ausgegeben',
+    'limit', 'anteil'}. Ohne Deckel immer 'ok'.
+    """
+    limit = budget_monat()
+    try:
+        import usage
+        ausgegeben = usage.monat_euro()
+    except Exception:
+        ausgegeben = 0.0
+    if not limit or limit <= 0:
+        return {"status": "ok", "ausgegeben": ausgegeben,
+                "limit": None, "anteil": 0.0}
+    anteil = ausgegeben / limit
+    status_ = "over" if anteil >= 1.0 else ("warn" if anteil >= BUDGET_WARNUNG else "ok")
+    return {"status": status_, "ausgegeben": ausgegeben,
+            "limit": limit, "anteil": anteil}
 
 
 def chat_backend() -> str:

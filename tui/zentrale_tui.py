@@ -1771,7 +1771,8 @@ def run_ui(stdscr, store):
     AI = {"active": False, "input": "", "log": [], "answer": None,
           "reflect": "", "streaming": False, "scroll": 0,
           "perm": None, "msg": "", "loaded": False,
-          "backend": None, "model": "", "provider": ""}
+          "backend": None, "model": "", "provider": "",
+          "kosten_heute": 0.0, "budget": {}}
     AI_LOCK = threading.Lock()
 
     def ai_stream(message):
@@ -1871,10 +1872,13 @@ def run_ui(stdscr, store):
         try:
             st = api_call("/api/ai/status")
             if isinstance(st, dict):
+                k = st.get("kosten") or {}
                 with AI_LOCK:
                     AI["backend"] = st.get("backend")
                     AI["model"] = st.get("model") or ""
                     AI["provider"] = st.get("provider") or ""
+                    AI["kosten_heute"] = k.get("heute") or 0.0
+                    AI["budget"] = k.get("budget") or {}
         except (urllib.error.URLError, OSError, ValueError):
             pass
         try:
@@ -1896,18 +1900,26 @@ def run_ui(stdscr, store):
             AI["loaded"] = True
 
     def ai_titel():
-        """Kasten-Titel mit dem Kern, der gerade denkt.
+        """Kasten-Titel mit dem Kern, der gerade denkt — und was er heute
+        gekostet hat.
 
         »ki-chat« allein reicht nicht mehr: seit der Chat auch über die Cloud
         laufen kann, ist der Unterschied zwischen lokal und draußen genau das,
-        was man beim Hinschauen wissen will."""
+        was man beim Hinschauen wissen will. Und wer knapp bei Kasse ist, will
+        die Tageskosten sehen, ohne danach zu suchen — eine Zahl, die man
+        nebenbei mitbekommt, verhindert böse Überraschungen am Monatsende.
+
+        Das ⚠ erscheint ab 80 % des Monatsbudgets."""
         with AI_LOCK:
             b, mdl, prov = AI["backend"], AI["model"], AI["provider"]
-        if b == "cloud":
-            return f"ki-chat · cloud ({prov or mdl})".lower()
+            eur, budget = AI.get("kosten_heute") or 0.0, AI.get("budget") or {}
         if b == "local":
             return f"ki-chat · lokal ({mdl})".lower()
-        return "ki-chat"
+        if b != "cloud":
+            return "ki-chat"
+        warn = " ⚠" if budget.get("status") in ("warn", "over") else ""
+        geld = f" · {eur:.2f}€ heute" if eur else ""
+        return f"ki-chat · cloud ({prov or mdl}){geld}{warn}".lower()
 
     def ai_wrap(role, text, w):
         """Text auf Breite w umbrechen; jede Zeile trägt ihre Rolle (für Farbe).

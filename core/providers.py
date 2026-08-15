@@ -26,22 +26,35 @@
 #   'openai_compat'  → core/cloud_openai.py (tool_calls, /v1/chat/completions)
 # Ohne kind kann der Kern mit dem Provider nicht reden, auch wenn ein Key da
 # ist — die Erreichbarkeit allein macht ihn noch nicht nutzbar.
+#
+# ── Warum hier Anbieter ohne Key stehen ────────────────────────────────
+# Fast alle sprechen inzwischen OpenAI-kompatibel. Ein neuer Anbieter ist damit
+# HIER EINE ZEILE, kein neues Modul — core/cloud_openai.py bedient sie alle.
+# Nur Anthropic hat einen eigenen Dialekt (tool_use-Blöcke, cache_control) und
+# deshalb ein eigenes Modul.
+#
+# Die Einträge stehen bewusst schon da, bevor die Keys existieren: umschalten
+# soll später eine Config-Zeile sein und kein Umbau. `configured()` überspringt
+# alles ohne Key, `preference()` sortiert nur.
 PROVIDERS = {
+    "claude": {
+        "base_url":      "https://api.anthropic.com",
+        "key_env":       "ANTHROPIC_API_KEY",
+        "kind":          "anthropic",
+        "default_model": "claude-sonnet-5",
+        "jurisdiction":  "US",
+        "note":          "Anthropic — der Ziel-Pfad des Kerns. Einziger "
+                         "Anbieter mit steuerbarem Prompt-Cache "
+                         "(cache_control) und effort-Regler.",
+    },
     "qwen": {
         "base_url":      "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
         "key_env":       "DASHSCOPE_API_KEY",
         "kind":          "openai_compat",
         "default_model": "qwen-plus",
         "jurisdiction":  "SG",
-        "note":          "Alibaba Qwen (intl/Singapur). Sashas aktiver Cloud-Key.",
-    },
-    "claude": {
-        "base_url":      "https://api.anthropic.com",
-        "key_env":       "ANTHROPIC_API_KEY",
-        "kind":          "anthropic",
-        "default_model": "claude-opus-5",
-        "jurisdiction":  "US",
-        "note":          "Anthropic — der eigentliche Ziel-Pfad des Kerns.",
+        "note":          "Alibaba Qwen (intl/Singapur), no-train verifiziert. "
+                         "Billig — die Rückfallebene, wenn das Budget alle ist.",
     },
     "openai": {
         "base_url":      "https://api.openai.com/v1",
@@ -49,6 +62,39 @@ PROVIDERS = {
         "kind":          "openai_compat",
         "default_model": "gpt-4o",
         "jurisdiction":  "US",
+    },
+    "grok": {
+        "base_url":      "https://api.x.ai/v1",
+        "key_env":       "XAI_API_KEY",
+        "kind":          "openai_compat",
+        "default_model": "grok-4",
+        "jurisdiction":  "US",
+        "note":          "xAI, OpenAI-kompatibler Endpoint.",
+    },
+    "gemini": {
+        # Google fährt neben seiner eigenen API einen OpenAI-kompatiblen
+        # Endpoint — darüber passt Gemini durch dieselbe Naht wie alle anderen.
+        "base_url":      "https://generativelanguage.googleapis.com/v1beta/openai",
+        "key_env":       "GEMINI_API_KEY",
+        "kind":          "openai_compat",
+        "default_model": "gemini-2.5-pro",
+        "jurisdiction":  "US",
+    },
+    "deepseek": {
+        "base_url":      "https://api.deepseek.com/v1",
+        "key_env":       "DEEPSEEK_API_KEY",
+        "kind":          "openai_compat",
+        "default_model": "deepseek-chat",
+        "jurisdiction":  "CN",
+        "note":          "⚠ Jurisdiktion CN — bewusst wählen.",
+    },
+    "groq": {
+        "base_url":      "https://api.groq.com/openai/v1",
+        "key_env":       "GROQ_API_KEY",
+        "kind":          "openai_compat",
+        "default_model": "llama-3.3-70b-versatile",
+        "jurisdiction":  "US",
+        "note":          "Groq — sehr schnell, offene Modelle.",
     },
     "mistral": {
         "base_url":      "https://api.mistral.ai/v1",
@@ -73,7 +119,8 @@ def get(name: str) -> dict:
 # Anthropic gebaut wird. Diese Kopplung („Tabellen-Position = Vorrang") ist die
 # Art Falle, die man beim nächsten Umsortieren wieder tritt.
 # Nicht gelistete Provider hängen hinten dran, in Tabellen-Reihenfolge.
-PREFERENCE = ("claude", "qwen", "openai", "mistral")
+PREFERENCE = ("claude", "qwen", "openai", "grok", "gemini",
+              "deepseek", "groq", "mistral")
 
 # Harte Vorwahl per Env, falls mal gezielt ein anderer dran soll (Vergleich,
 # Kostenbremse). Unbekannter/keyloser Name → wird ignoriert, normale Reihenfolge.

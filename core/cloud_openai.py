@@ -91,6 +91,31 @@ def _system_text(system, mem_ctx, via_mic, tutor_mode) -> str:
     return "\n\n".join(b["text"] for b in blocks)
 
 
+def _log_usage(verbrauch, model: str):
+    """Verbrauch + geschätzte Kosten ins Terminal, plus Buchung.
+
+    Dieser Dialekt kennt keine getrennten Cache-Zähler; manche Anbieter
+    liefern `prompt_tokens_details.cached_tokens`, viele gar nichts. Wir
+    rechnen deshalb konservativ: was nicht ausgewiesen als gecacht gilt, gilt
+    als voll bezahlt. Lieber zu hoch schätzen als sich arm rechnen."""
+    if verbrauch is None:
+        return
+    try:
+        import state
+        import usage
+        rein = int(getattr(verbrauch, "prompt_tokens", 0) or 0)
+        raus = int(getattr(verbrauch, "completion_tokens", 0) or 0)
+        det  = getattr(verbrauch, "prompt_tokens_details", None)
+        gecacht = int(getattr(det, "cached_tokens", 0) or 0) if det else 0
+        eur = usage.buchen(model, input_tokens=max(rein - gecacht, 0),
+                           output_tokens=raus, cache_read=gecacht)
+        state.push_log(
+            f"CLOUD ← {model} in={rein} cache_read={gecacht} out={raus} "
+            f"≈{eur:.4f}€ (heute {usage.heute_euro():.2f}€)")
+    except Exception:
+        pass
+
+
 def _prepare_messages(messages: list, system_text: str) -> list:
     out = [{"role": "system", "content": system_text}]
     for m in (messages or []):
@@ -134,12 +159,19 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     msgs   = _prepare_messages(messages,
                                _system_text(system, mem_ctx, via_mic, tutor_mode))
     client = _get_client(prov)
-    mdl    = model or os.environ.get("ZENTRALE_CLOUD_OPENAI_MODEL") \
-             or prov.get("default_model")
+    # Modell aus derselben Quelle wie beim Anthropic-Pfad: pro Anbieter
+    # gespeichert. Sonst gäbe es zwei Wahrheiten darüber, was gerade läuft.
+    if model:
+        mdl = model
+    else:
+        import ai_backends
+        mdl = ai_backends.chat_model(provider or providers.configured()) \
+            or prov.get("default_model")
 
     for _ in range(_MAX_ROUNDS):
         round_text = []
         tool_calls = {}       # index → {id, name, args}
+        verbrauch = None
         try:
             stream = client.chat.completions.create(
                 model=mdl,
@@ -148,8 +180,17 @@ def chat_stream(messages: list, model: str = None, system: str = None,
                 stream=True,
                 temperature=_TEMP,
                 max_tokens=_MAX_TOKENS,
+                # Verbrauch am Stream-Ende mitschicken lassen — sonst wüssten
+                # wir bei jedem Nicht-Anthropic-Anbieter nicht, was der Turn
+                # gekostet hat. Anbieter, die das Feld nicht kennen, ignorieren
+                # es; deshalb steht es in stream_options und nicht als Pflicht.
+                stream_options={"include_usage": True},
             )
             for chunk in stream:
+                # Der Usage-Chunk kommt am Ende und hat KEINE choices - er
+                # darf nicht als leerer Delta durchrutschen.
+                if getattr(chunk, "usage", None):
+                    verbrauch = chunk.usage
                 if not chunk.choices:
                     continue
                 delta = chunk.choices[0].delta
@@ -180,6 +221,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         except Exception as e:
             yield f"[Cloud-Fehler: {e}]"
             return
+
+        _log_usage(verbrauch, mdl)
 
         if not tool_calls:
             answer = "".join(round_text)

@@ -175,7 +175,7 @@ def test_request_traegt_cache_breakpoint_und_tools(fake):
     assert kw["system"][0]["cache_control"] == {"type": "ephemeral"}
     assert len(kw["tools"]) == len(ai.TOOLS)
     assert kw["thinking"]["type"] == "adaptive"
-    assert kw["output_config"]["effort"] == cloud._EFFORT
+    assert kw["output_config"]["effort"] == cloud._effort()
     # Sampling-Parameter sind ab Opus 4.7 ein 400 - sie dürfen NIE mitgehen.
     for verboten in ("temperature", "top_p", "top_k"):
         assert verboten not in kw
