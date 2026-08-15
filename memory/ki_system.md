@@ -463,6 +463,42 @@ Liefert ein Modell `reasoning_content`, wird es als `reflect`-Event gespiegelt.
 **Beide Provider teilen sich denselben Cloud-Graphen.** Die Grenze verläuft
 zwischen „im Haus" und „draußen", nicht zwischen zwei Anbietern.
 
+### Memory unterwegs – zwei Embedder, zwei Extraktoren
+
+**Ollama läuft nur daheim.** Ohne Embeddings findet der Graph keine
+Entry-Points und ohne Extraktor kommen keine Fakten rein — die Cloud-KI wäre
+ausgerechnet unterwegs gedächtnislos, also dort, wo sie gebraucht wird.
+Deshalb kann der **Cloud-Graph** über Cloud-Dienste laufen:
+
+| | lokaler Graph | Cloud-Graph |
+|---|---|---|
+| Embedder | Ollama (`bge-m3`) — **immer** | Cloud (`text-embedding-v3`), sonst Ollama |
+| Extraktor | Ollama — **immer** | Ollama; ohne Ollama Cloud-Rückfall |
+
+**Der lokale Graph verlässt das Haus nie** — weder als Embedding- noch als
+Extraktions-Auftrag. Ohne Ollama wird er eben nicht verdichtet, Punkt. Der
+Rückfall gilt nur für den Cloud-Graphen, dessen Turn ohnehin schon durch die
+Cloud gelaufen ist.
+
+> ⚠ **Vektorräume nie mischen.** `bge-m3` und `text-embedding-v3` haben beide
+> 1024 Dimensionen und liegen in völlig verschiedenen Räumen. Vergleicht man
+> sie, kracht **nichts** — die Suche liefert einfach Rauschen. Deshalb steht
+> der Embedder **in der Graph-Datei** (`embedder` / `embed_model`), und **die
+> Datei gewinnt gegen die Konfiguration**: was mit bge-m3 gebaut wurde, bleibt
+> bge-m3. Auch der Query-Cache hat den Embedder im Schlüssel.
+
+`graph.register_store(pfad, "cloud"|"local")` meldet einen Store an (macht
+`cloud.prepare_store()`); die Anmeldung greift nur für **neue** Dateien.
+
+`graph.reembed_missing(store)` zieht Knoten nach, die ohne erreichbaren
+Embedder angelegt wurden — die haben gar keinen Vektor und wären für die Suche
+**dauerhaft** unsichtbar, weil `ensure_seed` idempotent ist und sie nie wieder
+anfasst. Genau das war dem Cloud-Graphen passiert (23 Knoten ohne Vektor).
+Idempotent; bei nicht erreichbarem Embedder wird **nichts** geschrieben.
+
+Anthropic hat keine Embeddings-API — dort fällt der Cloud-Graph auf Ollama
+zurück und hat unterwegs eben kein Gedächtnis.
+
 ### Backend-Wahl
 
 `ai_backends.pick("chat")` entscheidet pro Turn, wer denkt. Reihenfolge aus
@@ -470,14 +506,39 @@ zwischen „im Haus" und „draußen", nicht zwischen zwei Anbietern.
 Vorwahl `chat_backend()` (`auto` | `local` | `cloud`, in
 `data/ai_config.json`, per `ZENTRALE_CHAT_BACKEND` übersteuerbar):
 
-- `auto` (Default) → lokal zuerst, solange Ollama läuft. **Wer den
-  Cloud-Assistenten will, muss `cloud` setzen** — sonst gewinnt das lokale 9b
-  jeden Turn, einfach weil es erreichbar ist.
+- **Stand 2026-08-15: `cloud`.** Sasha fährt daheim wie unterwegs bewusst
+  cloud-only. `auto` ist die Zielform für später: sobald lokal wieder
+  dazukommt, schaltet `auto` von selbst auf lokal, sobald Ollama da ist, und
+  drosselt die Cloud. Der Umbau dafür ist dann eine Config-Zeile, kein Code.
+- `auto` → lokal zuerst, solange Ollama läuft. Ohne die ausdrückliche Vorwahl
+  gewinnt das lokale 9b jeden Turn, einfach weil es erreichbar ist.
 - Eine ausdrückliche Wahl fällt **nicht still** auf das andere Backend zurück.
   Der Unterschied ist, ob Daten das Haus verlassen; das darf nicht aus
   Versehen passieren.
 - Erreichbar heißt nicht bedienbar: ein Provider ohne `kind` in der Registry
   zählt für den Chat nicht, auch wenn ein Key gesetzt ist.
+
+### Kassetten-Regel (seit 2026-08-15)
+
+Der Chat ist **nicht mehr kassetten-hart** gegatet. `ai_backends.chat_available()`
+ist die eine Frage, die alle Chat-Endpoints stellen:
+
+- Eine ki-freie Kassette (**laptop/tui**) bringt **keine eigene KI** mit →
+  `local` bleibt dort aus, auch wenn Ollama erreichbar wäre.
+- Eine **Cloud**-KI ist nicht die KI dieser Kassette, sondern eine externe
+  Leitung → die darf sie nutzen. Das ist der Unterwegs-Fall: Laptop ohne
+  Ollama, Chat trotzdem da.
+
+Vier Endpoints hängen daran: `/api/chat`, `/api/chat/history`,
+`/api/permission_answer` (sonst hängt ein Gate-Dialog für immer, weil niemand
+die Antwort loswerden kann) und `/api/ai/status`.
+
+`/api/ai/status` sagt seither nicht mehr „läuft Ollama", sondern „kann ich
+chatten — und über welchen Kern": `backend: local|cloud|null` plus Modell und
+Provider. Die **TUI ist ein Thin Client** (kein eigenes Modell, kein Memory —
+nur HTTP gegen `/api/chat`) und schreibt das in ihren Kasten-Titel:
+„ki-chat · cloud (qwen)". Beim Testen soll ohne Rätselraten sichtbar sein,
+wer denkt.
 
 ### Modell-Parameter (Stand 2026-08)
 
