@@ -94,6 +94,37 @@ class _Store:
 _stores       = {}       # Pfad → _Store
 _stores_guard = Lock()
 
+# ── Welcher Embedder gehört zu welchem Store ───────────────────────────
+#
+# Ollama läuft nur daheim; der Cloud-Graph braucht sein Memory aber unterwegs.
+# Also kann ein Store auch über einen Cloud-Embedder laufen. Zwei Regeln, die
+# beide hart sind:
+#
+#  1. NIE MISCHEN. bge-m3 und text-embedding-v3 haben beide 1024 Dimensionen
+#     und liegen trotzdem in verschiedenen Räumen. Verglichen würde nichts
+#     krachen — die Suche lieferte einfach still Rauschen. Deshalb steht der
+#     Embedder IN DER DATEI (`embedder`/`embed_model`), und was einmal
+#     gebaut wurde, wird nicht nachträglich umgedeutet.
+#  2. Der lokale Graph bleibt lokal. Ihn per Cloud zu embedden hieße, Sashas
+#     Konzeptnamen an einen Anbieter zu schicken — genau das, wogegen der
+#     getrennte Graph gebaut wurde.
+#
+# core/cloud.py meldet seinen Store hier an (register_store).
+_store_embedder = {}     # Pfad → "local" | "cloud"
+
+
+def register_store(path: str, embedder: str = "local"):
+    """Einen Store mit seinem Embedder anmelden. Nur für NEUE Dateien
+    wirksam — eine bestehende Datei behält den Embedder, mit dem sie gebaut
+    wurde (siehe _load_raw)."""
+    if embedder not in ("local", "cloud"):
+        raise ValueError(f"embedder: 'local' oder 'cloud', nicht {embedder!r}")
+    _store_embedder[os.path.abspath(path)] = embedder
+
+
+def _embedder_for(st: _Store) -> str:
+    return _store_embedder.get(os.path.abspath(st.path), "local")
+
 
 def _get_store(store: str | None = None) -> _Store:
     """Store-Objekt für einen Pfad (Default: Core-Graph). Lazy angelegt."""
@@ -240,7 +271,7 @@ def _load_raw(st: _Store, for_write: bool = False) -> dict:
     key = _file_key(st)
     if key is None:
         # Datei existiert nicht → frisches leeres Schema, nichts cachen
-        return _empty_graph()
+        return _stamp_embedder(st, _empty_graph())
 
     if for_write:
         # Direkt von Disk, keine Cache-Bedienung
@@ -249,7 +280,7 @@ def _load_raw(st: _Store, for_write: bool = False) -> dict:
         data.setdefault("schema_version", SCHEMA_VERSION)
         data.setdefault("nodes", {})
         data.setdefault("edges", [])
-        return data
+        return _stamp_embedder(st, data)
 
     # Read-Pfad mit Cache
     with st.cache_lock:
@@ -258,11 +289,13 @@ def _load_raw(st: _Store, for_write: bool = False) -> dict:
             # Edge-Dicts) bleiben geteilt - der Read-Pfad mutiert sie eh nicht
             # und das spart ggü. deepcopy einiges. Falls ein Read-Pfad doch
             # mal anfängt zu mutieren: zu copy.deepcopy wechseln.
-            return {
+            return _stamp_embedder(st, {
                 "schema_version": st.cache_data["schema_version"],
                 "nodes":          dict(st.cache_data["nodes"]),
                 "edges":          list(st.cache_data["edges"]),
-            }
+                "embedder":       st.cache_data.get("embedder"),
+                "embed_model":    st.cache_data.get("embed_model"),
+            })
 
         with open(st.path, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -273,11 +306,43 @@ def _load_raw(st: _Store, for_write: bool = False) -> dict:
         st.cache_key  = key
         st.cache_data = data
         # Selbe shallow-Kopier-Strategie wie oben
-        return {
+        return _stamp_embedder(st, {
             "schema_version": data["schema_version"],
             "nodes":          dict(data["nodes"]),
             "edges":          list(data["edges"]),
-        }
+            "embedder":       data.get("embedder"),
+            "embed_model":    data.get("embed_model"),
+        })
+
+
+def _emb_doc(name: str, data: dict):
+    """Dokument-Embedding MIT dem Embedder dieses Graphen. Nie ohne — sonst
+    landet ein Vektor aus dem falschen Raum in der Datei."""
+    return embeddings.embed_document(name, backend=data.get("embedder"))
+
+
+def _emb_query(text: str, data: dict):
+    """Query-Embedding mit dem Embedder dieses Graphen."""
+    return embeddings.embed_query(text, backend=data.get("embedder"))
+
+
+def _stamp_embedder(st: _Store, data: dict) -> dict:
+    """
+    Sorgt dafür, dass jedes geladene Graph-dict weiß, mit welchem Embedder es
+    gebaut wurde. Steht es schon in der Datei, GEWINNT DIE DATEI — was einmal
+    mit bge-m3 embedded wurde, bleibt bge-m3, auch wenn die Konfiguration
+    inzwischen etwas anderes sagt. Sonst würden alte und neue Vektoren
+    verglichen, und das Ergebnis wäre Rauschen ohne Fehlermeldung.
+
+    Steht nichts drin (neue Datei, oder eine aus der Zeit vor diesem Feld),
+    gilt die Anmeldung aus register_store.
+    """
+    if not data.get("embedder"):
+        data["embedder"] = _embedder_for(st)
+        data["embed_model"] = embeddings.model_name(data["embedder"])
+    elif not data.get("embed_model"):
+        data["embed_model"] = embeddings.model_name(data["embedder"])
+    return data
 
 
 def _write_atomic(st: _Store, data: dict):
@@ -335,7 +400,7 @@ def _find_alias(name: str, data: dict, threshold: float = ALIAS_THRESHOLD) -> st
                 return existing
 
     # 4: Embedding + Token-Overlap
-    new_emb = embeddings.embed_document(name)
+    new_emb = _emb_doc(name, data)
     if not new_emb:
         return None
     new_tokens = _tokens(name)
@@ -380,7 +445,7 @@ def _add_or_get_node(name: str, node_type: str, data: dict) -> str:
     # Neuer Knoten - Embedding generieren falls kein Zeit-Knoten
     emb = None
     if not _is_date(name) and node_type not in ("time-day", "time-month", "time-year"):
-        emb = embeddings.embed_document(name)
+        emb = _emb_doc(name, data)
     data["nodes"][name] = {
         "type":       node_type or "concept",
         "embedding":  emb,
@@ -595,7 +660,7 @@ def _find_entry_points(query: str, data: dict,
     weil wir nur Entry-Points brauchen - der Graph-Spread holt dann
     den Rest.
     """
-    qvec = embeddings.embed_query(query)
+    qvec = _emb_query(query, data)
     if not qvec:
         return []
     scored = []
@@ -862,7 +927,7 @@ def ensure_seed(store: str | None = None):
             return  # bereits geseedet
 
         # KI-Node selbst
-        ki_emb = embeddings.embed_document("KI")
+        ki_emb = _emb_doc("KI", data)
         data["nodes"]["KI"] = {
             "type":       "self",
             "embedding":  ki_emb,
@@ -874,7 +939,7 @@ def ensure_seed(store: str | None = None):
         for cap in _SEED_CAPABILITIES:
             data["nodes"][cap] = {
                 "type":       "capability",
-                "embedding":  embeddings.embed_document(cap),
+                "embedding":  _emb_doc(cap, data),
                 "first_seen": _now_iso(),
                 "last_seen":  _now_iso(),
                 "mentions":   1,
@@ -884,7 +949,7 @@ def ensure_seed(store: str | None = None):
         for lim in _SEED_LIMITS:
             data["nodes"][lim] = {
                 "type":       "limit",
-                "embedding":  embeddings.embed_document(lim),
+                "embedding":  _emb_doc(lim, data),
                 "first_seen": _now_iso(),
                 "last_seen":  _now_iso(),
                 "mentions":   1,
@@ -894,6 +959,43 @@ def ensure_seed(store: str | None = None):
         _write_atomic(st, data)
 
     _log(f"GRAPH ⊕ Seed: KI-Identität mit {len(_SEED_CAPABILITIES)} kann + {len(_SEED_LIMITS)} kann-nicht")
+
+
+def reembed_missing(store: str | None = None, limit: int = 300) -> int:
+    """
+    Füllt fehlende Embeddings nach (Knoten mit `embedding: null`) — mit dem
+    Embedder DIESES Graphen. Gibt zurück, wie viele nachgezogen wurden.
+
+    Warum es das braucht: Knoten, die angelegt wurden, während der Embedder
+    nicht erreichbar war, haben gar keinen Vektor. Sie sind damit für die
+    Entry-Point-Suche unsichtbar — für immer, denn ensure_seed ist idempotent
+    und fasst bestehende Knoten nicht mehr an. Genau das ist dem Cloud-Graphen
+    passiert, der unterwegs ohne Ollama geseedet wurde.
+
+    Idempotent und billig: sind keine Lücken da, wird nichts geschrieben.
+    Zeit-Knoten kriegen bewusst keinen Vektor (wie beim Anlegen).
+    """
+    st = _get_store(store)
+    with st.lock:
+        data = _load_raw(st, for_write=True)
+        offen = [n for n, node in data["nodes"].items()
+                 if not node.get("embedding")
+                 and not _is_date(n)
+                 and node.get("type") not in ("time-day", "time-month", "time-year")]
+        if not offen:
+            return 0
+        gefuellt = 0
+        for name in offen[:limit]:
+            emb = _emb_doc(name, data)
+            if emb:
+                data["nodes"][name]["embedding"] = emb
+                gefuellt += 1
+        if not gefuellt:
+            return 0          # Embedder nicht erreichbar → nichts schreiben
+        _write_atomic(st, data)
+    _log(f"GRAPH ⊕ {gefuellt} fehlende Embeddings nachgezogen "
+         f"({data.get('embed_model')})")
+    return gefuellt
 
 
 def migrate_internet_access(store: str | None = None):
@@ -952,7 +1054,7 @@ def migrate_internet_access(store: str | None = None):
             if cap not in data["nodes"]:
                 data["nodes"][cap] = {
                     "type":       "capability",
-                    "embedding":  embeddings.embed_document(cap),
+                    "embedding":  _emb_doc(cap, data),
                     "first_seen": _now_iso(),
                     "last_seen":  _now_iso(),
                     "mentions":   1,

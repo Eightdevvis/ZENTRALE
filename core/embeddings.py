@@ -141,19 +141,97 @@ def _embed_raw(text: str) -> list[float] | None:
         return None
 
 
-def embed_document(text: str) -> list[float] | None:
+# ── Cloud-Embedder (für unterwegs) ─────────────────────────────────────
+#
+# Ollama läuft nur daheim. Der Cloud-Chat braucht sein Memory aber überall —
+# ohne Embeddings findet der Graph keine Entry-Points und die KI ist
+# gedächtnislos. Deshalb ein zweiter Embedder über den OpenAI-kompatiblen
+# /v1/embeddings-Endpoint (DashScope & Co).
+#
+# ⚠ ZWEI VEKTORRÄUME, DIE MAN NIE MISCHEN DARF. Ein bge-m3-Vektor und ein
+# text-embedding-v3-Vektor haben beide 1024 Dimensionen, sind aber in völlig
+# verschiedenen Räumen — ihre Kosinus-Ähnlichkeit ist Rauschen, kein Signal.
+# Nichts würde krachen; die Suche würde einfach still Unsinn liefern. Deshalb
+# merkt sich JEDER Graph in seiner Datei, mit welchem Embedder er gebaut
+# wurde (siehe graph.py), und es wird nie quer verglichen.
+#
+# Isolations-Invariante: der Cloud-Embedder ist NUR für den Cloud-Graphen.
+# Den lokalen Graphen embedden hieße, Sashas Konzeptnamen an einen Anbieter
+# zu schicken — genau das, was der getrennte Graph verhindern soll.
+CLOUD_EMBED_PROVIDER = os.environ.get("ZENTRALE_CLOUD_EMBED_PROVIDER", "")
+CLOUD_EMBED_MODEL    = os.environ.get("ZENTRALE_CLOUD_EMBED_MODEL",
+                                      "text-embedding-v3")
+
+_cloud_client = None
+
+
+def _cloud_provider() -> dict:
+    """Provider-Eintrag für den Cloud-Embedder. Default: der konfigurierte
+    Cloud-Provider, sofern er OpenAI-kompatibel ist (Anthropic hat gar keine
+    Embeddings-API — dort bleibt es beim lokalen Embedder)."""
+    import providers
+    name = CLOUD_EMBED_PROVIDER or providers.configured() or ""
+    p = providers.get(name)
+    return p if p.get("kind") == "openai_compat" else {}
+
+
+def cloud_available() -> bool:
+    """Ist ein Cloud-Embedder konfiguriert und benutzbar?"""
+    p = _cloud_provider()
+    if not p or not os.environ.get(p.get("key_env") or ""):
+        return False
+    try:
+        import openai  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _cloud_embed(text: str) -> list[float] | None:
+    """Ein Embedding über den OpenAI-kompatiblen /v1/embeddings-Endpoint.
+    Fehler → None, genau wie beim lokalen Pfad (Caller läuft weiter)."""
+    global _cloud_client
+    p = _cloud_provider()
+    if not p:
+        return None
+    try:
+        if _cloud_client is None:
+            from openai import OpenAI  # type: ignore
+            _cloud_client = OpenAI(
+                base_url=p.get("base_url"),
+                api_key=os.environ.get(p.get("key_env") or "", "") or "missing-key")
+        r = _cloud_client.embeddings.create(model=CLOUD_EMBED_MODEL, input=text)
+        return list(r.data[0].embedding)
+    except Exception as e:
+        try:
+            import state
+            state.push_log(f"[embed-cloud] FEHLER: {e}")
+        except Exception:
+            pass
+        return None
+
+
+def model_name(backend: str | None = None) -> str:
+    """Wie der Embedder heißt, mit dem gerade gearbeitet wird — landet als
+    Herkunfts-Stempel in der Graph-Datei."""
+    return CLOUD_EMBED_MODEL if backend == "cloud" else EMBED_MODEL
+
+
+def embed_document(text: str, backend: str | None = None) -> list[float] | None:
     """
     Embedding für etwas, das ins LTM eingelagert wird (Dokument-Seite
     der asymmetrischen Suche).
 
-    Wird in memory.save() und backfill_missing_embeddings() genutzt.
+    backend: None/'local' → Ollama, 'cloud' → OpenAI-kompatibler Endpoint.
     """
     if not text or not text.strip():
         return None
+    if backend == "cloud":
+        return _cloud_embed(text)
     return _embed_raw(_PREFIX_DOC + text)
 
 
-def embed_query(text: str) -> list[float] | None:
+def embed_query(text: str, backend: str | None = None) -> list[float] | None:
     """
     Embedding für eine Suchanfrage (Query-Seite der asymmetrischen Suche).
 
@@ -165,8 +243,14 @@ def embed_query(text: str) -> list[float] | None:
     """
     if not text or not text.strip():
         return None
-    full_input = _PREFIX_QUERY + text.strip()
-    cache_key  = (EMBED_MODEL, full_input)
+    if backend == "cloud":
+        # Eigener Cache-Schlüssel über model_name(): sonst käme bei gleichem
+        # Wortlaut ein bge-m3-Vektor aus dem Cache zurück, wenn eigentlich ein
+        # Cloud-Vektor gebraucht wird - der stille Vektorraum-Mix.
+        full_input = text.strip()
+    else:
+        full_input = _PREFIX_QUERY + text.strip()
+    cache_key  = (model_name(backend), full_input)
 
     # Cache-Lookup
     with _query_cache_lock:
@@ -177,7 +261,7 @@ def embed_query(text: str) -> list[float] | None:
             return cached
 
     # Cache-Miss → frisches Embedding holen
-    vec = _embed_raw(full_input)
+    vec = _cloud_embed(full_input) if backend == "cloud" else _embed_raw(full_input)
     if vec is None:
         return None
 

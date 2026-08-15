@@ -78,6 +78,40 @@ def _get_client():
     return _client
 
 
+_store_bereit = False
+
+
+def prepare_store():
+    """
+    Meldet den Cloud-Graphen mit seinem Embedder an und zieht fehlende
+    Vektoren nach. Einmal pro Prozess, lazy — nicht beim Import, weil die
+    API-Keys erst über ai_config in die Env wandern.
+
+    Warum überhaupt ein eigener Embedder: Ollama läuft nur daheim. Ohne
+    Embeddings findet der Graph keine Entry-Points und die Cloud-KI ist
+    unterwegs gedächtnislos — also genau dort blind, wo sie gebraucht wird.
+    Gibt es einen Cloud-Embedder, läuft der Cloud-Graph über den; sonst
+    bleibt es beim lokalen (dann eben nur daheim mit Gedächtnis).
+
+    Der LOKALE Graph bleibt in jedem Fall bei Ollama. Ihn per Cloud zu
+    embedden hieße, Sashas Konzeptnamen an einen Anbieter zu schicken.
+    """
+    global _store_bereit
+    if _store_bereit:
+        return
+    import embeddings
+    kind = "cloud" if embeddings.cloud_available() else "local"
+    graph.register_store(CLOUD_GRAPH, kind)
+    _store_bereit = True
+    # Knoten, die ohne erreichbaren Embedder angelegt wurden, haben keinen
+    # Vektor und wären für die Suche unsichtbar. Idempotent, no-op wenn nichts
+    # fehlt.
+    try:
+        graph.reembed_missing(CLOUD_GRAPH)
+    except Exception:
+        pass
+
+
 def is_available() -> bool:
     """Ist der Cloud-Pfad überhaupt benutzbar? (SDK installiert + Key gesetzt.)
     Sagt NICHTS über die Erreichbarkeit — dafür ist ai_backends zuständig."""
@@ -228,7 +262,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     if tutor_mode:
         mem_ctx = ""
     else:
-        # Identity-Seed im CLOUD-Graphen sicherstellen, dann Kontext von dort.
+        # Embedder anmelden, Identity-Seed sicherstellen, dann Kontext von dort.
+        prepare_store()
         ai._ensure_seed_once(store=store)
         mem_ctx = graph.context_for_query(user_query, store=store)
 

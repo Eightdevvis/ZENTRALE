@@ -225,6 +225,62 @@ def _finalize_extraction(content: str) -> tuple[list[dict], list[dict]]:
     return (nodes, edges)
 
 
+def _local_da() -> bool:
+    """Ist Ollama gerade erreichbar? Entscheidet, ob der Cloud-Extraktor
+    überhaupt in Frage kommt."""
+    try:
+        import ai
+        return bool(ai.is_available())
+    except Exception:
+        return False
+
+
+def _call_graph_extractor_cloud(user_msg: str, ai_msg: str,
+                                today: str) -> tuple[list[dict], list[dict]]:
+    """
+    CLOUD-Extraktor (OpenAI-kompatibel): dasselbe wie unten, nur über einen
+    Anbieter statt über Ollama.
+
+    Wozu: unterwegs läuft kein Ollama. Ohne Extraktor bekäme der Cloud-Graph
+    nie Fakten — die Cloud-KI könnte reden, würde sich aber nichts merken,
+    und das Memory bliebe ein Feature, das nur daheim existiert.
+
+    NUR für den Cloud-Graphen. Den lokalen Graphen hier zu füttern hieße,
+    Sashas Gespräche an einen Anbieter zu schicken; die Entscheidung trifft
+    extract_turn_into_graph, nicht diese Funktion.
+
+    Fleißarbeit, kein Denken: Konzepte und Kanten aus einem Turn ziehen. Ein
+    kleines/billiges Modell reicht (ZENTRALE_CONSOL_CLOUD_MODEL).
+    """
+    body = _extractor_body(user_msg, ai_msg, today)
+    try:
+        import os as _os
+        import providers
+        from openai import OpenAI  # type: ignore
+
+        prov = providers.get(providers.configured() or "")
+        if prov.get("kind") != "openai_compat":
+            return ([], [])
+        client = OpenAI(base_url=prov.get("base_url"),
+                        api_key=_os.environ.get(prov.get("key_env") or "", ""))
+        mdl = _os.environ.get("ZENTRALE_CONSOL_CLOUD_MODEL") \
+            or prov.get("default_model")
+        resp = client.chat.completions.create(
+            model=mdl,
+            messages=[{"role": "system", "content": _GRAPH_EXTRACTOR_PROMPT},
+                      {"role": "user",   "content": body}],
+            response_format={"type": "json_object"},
+            stream=False,
+            timeout=90,
+        )
+        content = (resp.choices[0].message.content or "").strip()
+    except Exception as e:
+        state.push_log(f"[konsolidierung-cloud] FEHLER: {e}")
+        return ([], [])
+
+    return _finalize_extraction(content)
+
+
 def _call_graph_extractor(user_msg: str, ai_msg: str, today: str) -> tuple[list[dict], list[dict]]:
     """
     LOKALER Extraktor (Ollama): übersetzt einen Chat-Turn in (nodes, edges).
@@ -304,11 +360,19 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
                          Für Persona-Turns AUS: Tutor-Geschwätz gehört nicht
                          in den gemeinsamen Kalender.
 
-    Verdichtet IMMER lokal über Ollama. Es gab hier mal einen Cloud-Extraktor
-    für die alte Graph-basierte Persona-Memory; die ist seit dem Notiz-Umbau
-    (2026-07-10) weg und rief ihn nicht mehr. Er hing als einziger Grund dafür,
-    dass core/ in tutor_providers greifen musste — entfernt. Der Tutor macht
-    seine Verdichtung selbst (tutor/memory.py, `_distill`).
+    ── Wer verdichtet ────────────────────────────────────────────────
+    Bevorzugt IMMER lokal (Ollama): daheim ist das gratis und für
+    Fleißarbeit gut genug.
+
+    Für den CLOUD-Graphen gibt es einen Rückfall auf den Cloud-Extraktor,
+    wenn Ollama nicht da ist — unterwegs würde sich die Cloud-KI sonst nie
+    etwas merken. Der Turn ist in dem Fall ohnehin schon durch die Cloud
+    gelaufen; ihn zum Verdichten noch einmal hinzuschicken gibt nichts preis,
+    was der Anbieter nicht schon gesehen hat.
+
+    Für den LOKALEN Graphen gibt es diesen Rückfall NICHT. Ohne Ollama wird
+    dort nicht verdichtet, Punkt — Sashas privater Graph verlässt das Haus
+    nicht, auch nicht als Extraktions-Auftrag.
     """
     user_msg = (user_msg or '').strip()
     ai_msg   = (ai_msg   or '').strip()
@@ -317,6 +381,9 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
 
     today = date.today().isoformat()
     nodes, edges = _call_graph_extractor(user_msg, ai_msg, today)
+    if not nodes and not edges and store and not _local_da():
+        state.push_log("[konsolidierung] lokal nicht da → Cloud-Extraktor")
+        nodes, edges = _call_graph_extractor_cloud(user_msg, ai_msg, today)
     if not nodes and not edges:
         return
     graph.add_turn_extraction(nodes, edges, store=store)

@@ -127,6 +127,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     if tutor_mode:
         mem_ctx = ""
     else:
+        cloud.prepare_store()      # Embedder anmelden (derselbe Cloud-Graph)
         ai._ensure_seed_once(store=store)
         mem_ctx = graph.context_for_query(user_query, store=store)
 
