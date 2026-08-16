@@ -1,8 +1,9 @@
 # Tutor-Roleplay-Features — Über-Nacht-Bau (2026-07-09) + Entscheidungs-Log
 
 Sasha hat den Tutor-Prompt auf ein reiches **Roleplay-Framing** umgestellt (gegen
-qwen validiert, `tutor_langs._ZH_PROMPT`) und darin viele neue Features skizziert
-(`prompts/tutor_generisch-fallback.md`, sein „Sasha Stil"-Draft). Auftrag: über
+qwen validiert; damals `tutor_langs._ZH_PROMPT`, heute `tutor/langs/zh/prompt.md`)
+und darin viele neue Features skizziert (heute
+`tutor/prompts/generisch-fallback.md`, sein „Sasha Stil"-Draft). Auftrag: über
 Nacht alle Features durchbauen, bei Unsicherheit selbst entscheiden + hier
 dokumentieren, morgen gemeinsam reviewen.
 

@@ -598,6 +598,30 @@ Anthropic cacht erst ab 1.024 Token (Sonnet 5) bzw. 512 (Opus 5) — wer weiter
 eindampft, spart Zeichen und verliert den Cache, also unterm Strich teurer.
 Ein Test hält das fest.
 
+#### Den Prompt einer Schiene ansehen — `scripts/prompt_zeigen.py`
+
+Weil `gross` die Persona **ableitet**, gibt es von ihm bewusst keine Abschrift
+in `prompts/` — eine dritte Fassung würde still wegdriften. Das Skript baut
+den Prompt stattdessen aus dem Live-Code:
+
+```
+scripts/prompt_zeigen.py                 # der Cloud-Prompt, wie er rausgeht
+scripts/prompt_zeigen.py --tools         # dazu das Tool-Schema
+scripts/prompt_zeigen.py --diff          # was gross gegenüber klein weglässt
+scripts/prompt_zeigen.py --woher         # welchen Regler dreh ich in welcher Datei?
+scripts/prompt_zeigen.py --schiene klein # die lokale Fassung
+```
+
+`--woher` ist der Griff, den man beim Ändern braucht: die **Persona ist
+geteilt** (ein Schnitt in `klein._SYSTEM_PROMPT` trifft beide Schienen), die
+**Meta-Regeln sind es nicht** (`gross._CAPABILITIES_PROMPT` ist eigener Text).
+Wer das verwechselt, ändert den lokalen Prompt mit, ohne es zu merken.
+
+Unterschied zu `scripts/ai_devtools.py`: das Devtools-Terminal zeigt einen
+**echten Turn** samt Graph-Kontext, Verlauf und Cache-Breakpoints, braucht aber
+ein laufendes Gespräch. `prompt_zeigen.py` zeigt den **statischen Teil** allein,
+jederzeit und ohne Backend.
+
 Der OpenAI-Pfad existiert vor allem, weil er die Struktur **prüfbar** macht,
 ohne dass ein Anthropic-Key da sein muss: Routing, getrennter Cloud-Graph,
 Gate, SSE bis in den Browser sind providerunabhängig. Ein zweiter echter

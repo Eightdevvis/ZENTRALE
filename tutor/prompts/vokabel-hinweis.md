@@ -1,8 +1,13 @@
-# Tutor: Vokabel-Kontext + Register-Leiter (Ling Ling)
+# Tutor: Vokabel-Kontext + Register-Leiter (Mandarin/Ling Ling)
 
-- **Quelle:** `core/tutor_langs.py` → `_ZH_VOCAB_HINT` + `_zh_expect(n)`
+- **Quelle:** **Paket-Daten, kein Code mehr** — `tutor/langs/zh/vocab_hint.md`
+  (der Block) und `tutor/langs/zh/expect.json` (die Leiter). Ausgewertet von
+  `tutor/langs/__init__.py::expect()` über `tutor/langs/base.py::expect_from_ladder()`.
+  Früher lagen beide als `_ZH_VOCAB_HINT`/`_zh_expect(n)` fest in `core/` —
+  seit dem Sprach-Framework hat **jede** Sprache ihr eigenes Paar, Mandarin ist
+  nur noch eine davon.
 - **Live-Sprache:** zh
-- **Rolle:** In `tutor_session.respond_stream` wird ans Prompt-Ende gehängt:
+- **Rolle:** In `tutor/session.py::respond_stream` wird ans Prompt-Ende gehängt:
   (1) der **Vokabel-Block** (welche Wörter Sasha kann/lernt) und (2) die
   **Register-Bremse** (wie einfach sie reden soll — skaliert mit dem Wortschatz).
 

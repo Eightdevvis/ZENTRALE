@@ -1,14 +1,24 @@
 # Memory: Graph-Extraktor
 
-- **Quelle:** `core/consolidation.py:117` (`_GRAPH_EXTRACTOR_PROMPT`)
+- **Quelle:** `core/consolidation.py` (`_GRAPH_EXTRACTOR_PROMPT`)
 - **Live-Sprache:** de
-- **Rolle:** Läuft nach **jedem** Chat-Turn (async, im Daemon-Thread). Ein
-  LLM-Extraktor liest den Turn (User = Sasha, AI = die KI) und zieht daraus
-  strukturierte Konzepte (Knoten) und Beziehungen (Kanten) für den Konzept-Graphen
-  (`graph.add_turn_extraction`). Der System-Prompt ist unten; den User-Body baut
-  `_extractor_body` (Datum + „User (Sasha): … / AI: …" + „Extrahiere als JSON …").
-  Läuft für die Core-KI lokal (Ollama), für Personas gegen den Cloud-Anbieter, der
-  eh gerade redet — mit **demselben** Prompt.
+- **Schiene:** keine — **derselbe** Prompt für lokal und Cloud. Der Extraktor
+  redet nie mit Sasha, er sortiert; da braucht es keine zwei Fassungen.
+- **Rolle:** Läuft **nicht** sofort nach dem Turn, sondern gebündelt: ein
+  Hintergrund-Worker sammelt die Turns und leert die Queue erst nach einer
+  Gesprächspause (`CONSOLIDATION_IDLE_S`) — **alle gesammelten Turns in EINEM
+  Call**. Ein LLM-Extraktor liest sie (User = Sasha, AI = die KI) und zieht
+  daraus Knoten und Kanten für den Konzept-Graphen (`graph.add_turn_extraction`).
+  Der System-Prompt steht unten; den User-Body baut `_extractor_body` (Datum +
+  „User (Sasha): … / AI: …" + „Extrahiere als JSON …") — er nimmt einen
+  einzelnen Turn **oder** eine Liste.
+- **Womit:** absichtlich mit dem **billigsten** Modell des jeweiligen Anbieters
+  (`providers.cheap_model`, bei Claude `claude-haiku-4-5`), nicht mit dem
+  Chat-Modell — Konzepte ziehen ist Fleißarbeit, kein Denken. Der Cloud-Pfad
+  beherrscht beide Dialekte (`anthropic` und `openai_compat`).
+- **Vorher:** das Gesagte wandert wörtlich ins Transkript
+  (`data/ai_transcripts/…jsonl`), und die entstehenden Knoten tragen dessen ids
+  in `quellen` — der Graph sagt, DASS etwas gilt, das Transkript, was gesagt wurde.
 
 Deutscher Prompt, vollständig und wörtlich aus dem Code kopiert.
 

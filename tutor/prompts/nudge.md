@@ -1,6 +1,6 @@
 # Tutor: Wahrnehmungs-Meldungen (Öffnen / Nudge)
 
-- **Quelle:** `core/tutor_session.py` → `_opening_situation()`, `_nudge_situation()`
+- **Quelle:** `tutor/session.py` → `_opening_situation()`, `_nudge_situation()`
 - **Live-Sprache:** zh
 - **Rolle:** Neutrale **Lage-Meldungen**, die der Persona als `user`-Nachricht
   zugehen, damit sie **aus ihrer Person heraus** reagiert. Werden **nur gesendet,

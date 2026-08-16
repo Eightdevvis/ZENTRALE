@@ -1,7 +1,8 @@
 # Core-KI: Selbstbild-Seed (kann / kann-nicht)
 
-- **Quelle:** `core/graph.py:782` (`_SEED_CAPABILITIES`) und `core/graph.py:804`
-  (`_SEED_LIMITS`)
+- **Quelle:** `core/graph.py` (`_SEED_CAPABILITIES` und `_SEED_LIMITS`)
+- **Schiene:** keine — das Selbstbild liegt im Graphen, nicht im Prompt, und
+  gilt darum für `klein` und `gross` gleichermaßen.
 - **Live-Sprache:** de
 - **Rolle:** Das KI-Selbstbild — steht **nicht** als Dauer-Prompt-Block im
   System-Prompt, sondern als **Graph-Knoten** (verankert per `ensure_seed()` am

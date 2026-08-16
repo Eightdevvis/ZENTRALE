@@ -1,6 +1,10 @@
-# Tutor: Tool-Beschreibungen (15 Tools)
+# Tutor: Tool-Beschreibungen (12 Tools)
 
-- **Quelle:** `core/tutor.py` → `TUTOR_TOOLS` + `_ALLOWED`
+- **Quelle:** `tutor/tools.py` → `_TOOL_SPECS` + `tools_for(lang)` (Schema) und
+  `_ALLOWED` (Ausführung). Die früher statische `TUTOR_TOOLS`-Liste **gibt es
+  nicht mehr**: sie trug chinesische Beschreibungen und ein `pinyin`-Feld, also
+  bekam jede andere Sprache ihre Anweisungen auf Chinesisch. `tools_for()` baut
+  das Schema jetzt pro Sprache aus `tool_texts.json` des Sprachpakets.
 - **Rolle:** Werkzeuge, die die Tutor-KI während einer Session hat.
 - **Sandbox (Choke-Point `_ALLOWED`):** JEDES Tool fasst NUR tutor-isolierte Daten
   an — Vokabel-/Struktur-/News-Dateien (`vocab_*.json`, `structures_mandarin.json`,

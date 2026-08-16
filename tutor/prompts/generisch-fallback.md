@@ -1,13 +1,13 @@
 # Tutor: generischer Fallback-Prompt (Skizzen-Sprachen)
 
-- **Quelle:** `core/tutor_langs.py:35` (`_build_prompt(...)`)
+- **Quelle:** `tutor/langs/base.py` (`build_prompt(...)`)
 - **Live-Sprache:** de
 - **Rolle:** Schlanker, **generischer** Persona-Prompt für noch **nicht
   hand-getunte** Sprachen (die Skizzen `fr` Jacqueline, `ru` Ludmila, `ar` Amira,
   `es` Lucía). Er wird pro Sprache aus Persona-Name, Sprache, Land und einem
   optionalen `flavor` (Lesehilfe-Regel) zusammengesetzt. **Wichtig:** Beim
   Aktivieren einer Sprache soll sie einen **eigenen, in der Zielsprache
-  verfassten** Prompt bekommen (wie `_ZH_PROMPT` für Ling Ling) — dieser deutsche
+  verfassten** Prompt bekommen (wie `tutor/langs/zh/prompt.md` für Ling Ling) — dieser deutsche
   Prompt ist nur der Übergangs-Fallback, denn ein deutscher Prompt lässt qwen
   häufig auf Deutsch statt in der Zielsprache antworten.
 
