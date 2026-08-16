@@ -21,10 +21,61 @@ import sys
 
 HIER = os.path.dirname(os.path.abspath(__file__))
 WURZEL = os.path.dirname(HIER)
+
+
+def _ins_venv():
+    """Notfalls ins Projekt-venv wechseln und von vorn anfangen.
+
+    Der Prompt haengt an `profil` -> `klein` -> `kalender` -> dateutil, und
+    das System-Python hat dateutil nicht. Ohne diesen Sprung wirft ein
+    schlichtes `scripts/prompt_zeigen.py` einen ModuleNotFoundError, der
+    nichts mit der Frage zu tun hat, die man gerade stellen wollte.
+
+    Die Umgebungsvariable ist die Reissleine: sie verhindert eine Schleife,
+    falls das venv-Python doch wieder hier landet.
+    """
+    if os.environ.get("ZENTRALE_PROMPT_ZEIGEN_REEXEC"):
+        return
+    for py in _venv_kandidaten():
+        # NICHT die Interpreter-Pfade vergleichen: venv/bin/python ist meist
+        # ein Symlink aufs System-Python, ein realpath-Vergleich haelt uns
+        # dann faelschlich fuer schon-drin. Was das venv ausmacht, ist sein
+        # sys.prefix (und damit site-packages), nicht die Binary.
+        if sys.prefix == os.path.dirname(os.path.dirname(py)):
+            return
+        os.environ["ZENTRALE_PROMPT_ZEIGEN_REEXEC"] = "1"
+        os.execv(py, [py, os.path.abspath(__file__)] + sys.argv[1:])
+
+
+def _venv_kandidaten():
+    """Das eigene venv — und, aus einem Worktree heraus, das des Haupt-Checkouts.
+
+    Worktrees unter .claude/worktrees/<name>/ haben kein eigenes venv; die
+    Abhaengigkeiten liegen im Original daneben.
+    """
+    wurzeln = [WURZEL]
+    marke = os.sep + os.path.join(".claude", "worktrees") + os.sep
+    if marke in WURZEL + os.sep:
+        wurzeln.append(WURZEL.split(marke)[0])
+    for w in wurzeln:
+        py = os.path.join(w, "venv", "bin", "python")
+        if os.path.exists(py):
+            yield py
+
+
+try:
+    import dateutil  # noqa: F401
+except ImportError:
+    _ins_venv()
+
 sys.path.insert(0, os.path.join(WURZEL, "core"))
 os.environ.setdefault("ZENTRALE_MAIL", "off")
 
-import profil  # noqa: E402
+try:
+    import profil  # noqa: E402
+except ImportError as e:
+    sys.exit(f"{e}\n\nFehlt eine Abhaengigkeit? Dann mit dem Projekt-Python "
+             f"starten:\n    venv/bin/python scripts/prompt_zeigen.py")
 
 
 # Wo welcher Teil des Cloud-Prompts herkommt. Der einzige Grund, warum das
