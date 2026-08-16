@@ -55,7 +55,7 @@ def test_uebersetzung_ohne_tools():
 def test_statischer_block_traegt_cache_control():
     blocks = cloud._system_blocks(None, "", False, tutor_mode=False)
     assert len(blocks) == 2
-    assert blocks[0]["cache_control"] == {"type": "ephemeral"}
+    assert blocks[0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
     # Der wechselnde Block darf KEINEN Breakpoint haben - sonst würde jeder
     # Turn eine eigene Cache-Zeile schreiben, die nie wieder gelesen wird.
     assert "cache_control" not in blocks[1]
@@ -120,7 +120,8 @@ def test_system_rollen_fliegen_raus():
         {"role": "system", "content": "prompt"},
         {"role": "user", "content": "hallo"},
     ])
-    assert msgs == [{"role": "user", "content": "hallo"}]
+    assert msgs == [{"role": "user",
+                     "content": [{"type": "text", "text": "hallo"}]}]
 
 
 def test_history_beginnt_immer_mit_user():
@@ -144,7 +145,7 @@ def test_leere_turns_fliegen_raus():
         {"role": "assistant", "content": ""},
         {"role": "user", "content": "zwei"},
     ])
-    assert [m["content"] for m in msgs] == ["eins", "zwei"]
+    assert [m["content"][0]["text"] for m in msgs] == ["eins", "zwei"]
 
 
 # ── Isolations-Invariante ──────────────────────────────────────────────

@@ -82,13 +82,16 @@ def is_available(name: str | None = None) -> bool:
 
 
 def _system_text(system, mem_ctx, via_mic, tutor_mode) -> str:
-    """Die zwei Bloecke aus cloud._system_blocks zu EINEM String falten.
+    """Der statische Kopf — dieselbe Funktion wie im Anthropic-Pfad, damit die
+    beiden Dialekte nicht auseinanderlaufen.
 
-    Bewusst ueber dieselbe Funktion: so bleibt die Reihenfolge (statisch
-    zuerst, Uhrzeit und Graph hinten) in beiden Pfaden identisch und kann
-    nicht auseinanderlaufen."""
-    blocks = cloud._system_blocks(system, mem_ctx, via_mic, tutor_mode)
-    return "\n\n".join(b["text"] for b in blocks)
+    mem_ctx/via_mic werden hier NICHT mehr eingefaltet: das Wechselnde haengt
+    seit dem Cache-Umbau hinten an der neuesten User-Nachricht. Explizites
+    cache_control gibt es in diesem Dialekt zwar nicht, aber die impliziten
+    Praefix-Caches der Anbieter arbeiten nach derselben Logik — was sich
+    aendert, gehoert ans Ende, nicht an den Anfang. Die Parameter bleiben in
+    der Signatur, damit die Aufrufstelle in beiden Modulen gleich aussieht."""
+    return cloud._static_system(system, tutor_mode)
 
 
 def _log_usage(verbrauch, model: str):
@@ -116,13 +119,20 @@ def _log_usage(verbrauch, model: str):
         pass
 
 
-def _prepare_messages(messages: list, system_text: str) -> list:
+def _prepare_messages(messages: list, system_text: str,
+                      volatile: str = "") -> list:
+    """Verlauf in OpenAI-Form. `volatile` (Graph, Jetzt, Alarme, Mic) haengt
+    hinten an der letzten User-Nachricht statt vorne im System-Prompt — siehe
+    cloud._volatile_text."""
     out = [{"role": "system", "content": system_text}]
     for m in (messages or []):
         if m.get("role") in ("user", "assistant") and m.get("content"):
             out.append({"role": m["role"], "content": m["content"]})
     if not any(m["role"] == "user" for m in out):
         out.append({"role": "user", "content": "(kein Text)"})
+    if volatile and out[-1]["role"] == "user":
+        out[-1] = {"role": "user",
+                   "content": f"{out[-1]['content']}\n\n{volatile}"}
     return out
 
 
@@ -156,8 +166,10 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         ai._ensure_seed_once(store=store)
         mem_ctx = graph.context_for_query(user_query, store=store)
 
-    msgs   = _prepare_messages(messages,
-                               _system_text(system, mem_ctx, via_mic, tutor_mode))
+    msgs   = _prepare_messages(
+        messages,
+        _system_text(system, mem_ctx, via_mic, tutor_mode),
+        cloud._volatile_text(mem_ctx, via_mic, tutor_mode))
     client = _get_client(prov)
     # Modell aus derselben Quelle wie beim Anthropic-Pfad: pro Anbieter
     # gespeichert. Sonst gäbe es zwei Wahrheiten darüber, was gerade läuft.

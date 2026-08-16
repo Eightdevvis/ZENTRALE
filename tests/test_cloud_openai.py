@@ -142,12 +142,19 @@ def test_tools_gehen_ohne_uebersetzung_raus(fake):
 
 
 def test_system_prompt_hat_dieselbe_reihenfolge_wie_anthropic(fake):
-    """Beide Pfade falten denselben Block-Bauer - die Uhrzeit gehoert hinten,
-    egal welcher Provider."""
+    """Beide Pfade benutzen denselben Bauer - der statische Kopf steht im
+    System-Prompt, das Wechselnde (Uhrzeit, Graph) haengt hinten an der
+    letzten User-Nachricht. Egal welcher Provider."""
     c = fake([_text("ok")])
     _lauf(cloud_openai.chat_stream(_msgs()))
-    sys_text = c.calls[0]["messages"][0]["content"]
-    assert sys_text.index(ai._SYSTEM_PROMPT) < sys_text.index("## Jetzt")
+    msgs = c.calls[0]["messages"]
+    sys_text = msgs[0]["content"]
+    assert ai._SYSTEM_PROMPT in sys_text
+    # Die Uhrzeit darf NICHT im System-Prompt stehen - sie wuerde jeden
+    # impliziten Praefix-Cache des Anbieters bei jedem Turn wegwerfen.
+    assert "## Jetzt" not in sys_text
+    assert msgs[-1]["role"] == "user"
+    assert "## Jetzt" in msgs[-1]["content"]
 
 
 # ── Tool-Loop ──────────────────────────────────────────────────────────

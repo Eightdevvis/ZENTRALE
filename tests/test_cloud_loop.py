@@ -172,13 +172,119 @@ def test_request_traegt_cache_breakpoint_und_tools(fake):
     c = fake([{"text": ["ok"], "stop_reason": "end_turn"}])
     _lauf(cloud.chat_stream(_msgs()))
     kw = c.calls[0]
-    assert kw["system"][0]["cache_control"] == {"type": "ephemeral"}
+    assert kw["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
     assert len(kw["tools"]) == len(ai.TOOLS)
     assert kw["thinking"]["type"] == "adaptive"
     assert kw["output_config"]["effort"] == cloud._effort()
     # Sampling-Parameter sind ab Opus 4.7 ein 400 - sie dürfen NIE mitgehen.
     for verboten in ("temperature", "top_p", "top_k"):
         assert verboten not in kw
+
+
+def _breakpoints(kw) -> list:
+    """Alle Cache-Breakpoints eines Requests einsammeln (system + messages)."""
+    treffer = list(kw["system"])
+    for m in kw["messages"]:
+        c = m.get("content")
+        if isinstance(c, list):
+            treffer.extend(b for b in c if isinstance(b, dict))
+    return [b for b in treffer if "cache_control" in b]
+
+
+def test_wechselndes_haengt_hinten_an_der_letzten_user_nachricht(fake):
+    """Der Kern des Cache-Umbaus. Graph-Kontext und Uhrzeit standen frueher im
+    system-Feld, also VOR dem gesamten Verlauf — und weil die Uhr jeden Turn
+    eine andere ist, ging der ganze Verlauf jedes Mal ungecacht raus
+    (gemessen: in=7236, cache_read=0 fuer eine Drei-Wort-Antwort)."""
+    c = fake([{"text": ["ok"], "stop_reason": "end_turn"}])
+    _lauf(cloud.chat_stream(_msgs()))
+    kw = c.calls[0]
+
+    system = kw["system"][0]["text"]
+    assert ai._SYSTEM_PROMPT in system
+    assert "## Jetzt" not in system          # die Uhr gehoert NICHT nach vorn
+    assert "## Erinnerung" not in system     # der Graph auch nicht
+
+    letzte = kw["messages"][-1]
+    assert letzte["role"] == "user"
+    bloecke = letzte["content"]
+    assert bloecke[0]["text"] == "was steht an?"
+    assert "## Jetzt" in bloecke[-1]["text"]
+    assert "## Erinnerung" in bloecke[-1]["text"]
+
+
+def test_breakpoint_sitzt_vor_dem_wechselnden(fake):
+    """Der Breakpoint muss auf dem User-Text liegen, nicht auf dem Block
+    dahinter. Saesse er hinter dem Wechselnden, wuerde jeder Turn eine eigene
+    Cache-Zeile schreiben, die nie wieder gelesen wird — reine Mehrkosten."""
+    c = fake([{"text": ["ok"], "stop_reason": "end_turn"}])
+    _lauf(cloud.chat_stream(_msgs()))
+    bloecke = c.calls[0]["messages"][-1]["content"]
+    assert bloecke[-2]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
+    assert "cache_control" not in bloecke[-1]
+
+
+def test_verlauf_ist_ueber_die_turns_praefix_identisch(fake):
+    """Ein Cache-Treffer verlangt einen byte-identischen Praefix. Was in Turn 1
+    die neueste Nachricht war, muss in Turn 2 als Verlauf ZEICHENGLEICH wieder
+    auftauchen — sonst waechst cache_read nie."""
+    c = fake([{"text": ["ok"], "stop_reason": "end_turn"}])
+    _lauf(cloud.chat_stream(_msgs("erste frage")))
+    erste = c.calls[0]["messages"][0]["content"][0]["text"]
+
+    c2 = fake([{"text": ["ok"], "stop_reason": "end_turn"}])
+    _lauf(cloud.chat_stream([
+        {"role": "user",      "content": "erste frage"},
+        {"role": "assistant", "content": "erste antwort"},
+        {"role": "user",      "content": "zweite frage"},
+    ]))
+    assert c2.calls[0]["messages"][0]["content"][0]["text"] == erste
+
+
+def test_hoechstens_vier_breakpoints(fake):
+    """Anthropic erlaubt maximal 4. Einer mehr ist eine 400 mitten im
+    Gespraech — und zwar erst dann, wenn genug Tool-Runden zusammenkommen."""
+    c = fake([
+        {"content": [_tool_block("read_calendar", {}, id="t1")],
+         "stop_reason": "tool_use"},
+        {"content": [_tool_block("read_calendar", {}, id="t2")],
+         "stop_reason": "tool_use"},
+        {"content": [_tool_block("read_calendar", {}, id="t3")],
+         "stop_reason": "tool_use"},
+        {"text": ["nix los"], "stop_reason": "end_turn"},
+    ])
+    _lauf(cloud.chat_stream(_msgs()))
+    for kw in c.calls:
+        assert len(_breakpoints(kw)) <= 4
+
+
+def test_tool_runde_zieht_den_breakpoint_nach(fake):
+    """Ohne mitwandernden Breakpoint zahlt Runde 3 die Ergebnisse von Runde 2
+    noch einmal voll. Der alte muss dabei weg — sonst sammeln sich die
+    Breakpoints bis zur 400."""
+    c = fake([
+        {"content": [_tool_block("read_calendar", {}, id="t1")],
+         "stop_reason": "tool_use"},
+        {"content": [_tool_block("read_calendar", {}, id="t2")],
+         "stop_reason": "tool_use"},
+        {"text": ["nix los"], "stop_reason": "end_turn"},
+    ])
+    _lauf(cloud.chat_stream(_msgs()))
+
+    # Runde 2 sieht die tool_results von Runde 1 — markiert.
+    runde2 = c.calls[1]["messages"]
+    assert runde2[-1]["content"][-1]["type"] == "tool_result"
+    assert "cache_control" in runde2[-1]["content"][-1]
+
+    # Runde 3: der Breakpoint ist weitergewandert, der alte ist abgeraeumt.
+    runde3 = c.calls[2]["messages"]
+    assert "cache_control" in runde3[-1]["content"][-1]
+    alte_results = [m for m in runde3[:-1]
+                    if isinstance(m.get("content"), list)
+                    and any(isinstance(b, dict) and b.get("type") == "tool_result"
+                            for b in m["content"])]
+    for m in alte_results:
+        assert not any("cache_control" in b for b in m["content"])
 
 
 def test_zweite_runde_nutzt_denselben_statischen_block(fake):

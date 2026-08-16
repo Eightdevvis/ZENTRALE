@@ -73,6 +73,25 @@ _MAX_TOKENS = int(os.environ.get("ZENTRALE_CLOUD_MAX_TOKENS", "16000"))
 
 _MAX_ROUNDS = 8   # Sicherheitsnetz gegen Endlos-Tool-Schleifen
 
+# Lebensdauer eines Cache-Eintrags. Default sind bei Anthropic 5 Minuten — wer
+# zwischen zwei Nachrichten nachdenkt, liest oder telefoniert, hat den Cache
+# verloren und schreibt ihn beim nächsten Turn komplett neu. Eine Stunde kostet
+# beim SCHREIBEN 2× statt 1,25× des Input-Preises, geschrieben wird pro Turn
+# aber nur das Delta — dafür überlebt der Präfix eine ganze Sitzung.
+# "5m" für den Rückweg, falls sich das je als Fehlrechnung erweist.
+_CACHE_TTL = os.environ.get("ZENTRALE_CACHE_TTL", "1h")
+
+
+def _cc() -> dict:
+    """Ein Cache-Breakpoint.
+
+    Anthropic cacht nicht den markierten Block, sondern ALLES davor
+    (tools → system → messages, in dieser Reihenfolge gerendert). Ein
+    Breakpoint sagt also: "bis hierher ist der Präfix stabil, merk ihn dir".
+    Treffer kosten 10 % des Input-Preises.
+    """
+    return {"type": "ephemeral", "ttl": _CACHE_TTL}
+
 _client = None    # lazy: anthropic erst importieren, wenn wirklich genutzt
 
 
@@ -157,35 +176,44 @@ def _to_anthropic_tools(openai_tools: list) -> list:
 
 # ── System-Prompt: statisch vorn (gecacht), Wechselndes hinten ─────────
 
-def _system_blocks(system: str | None, mem_ctx: str, via_mic: bool,
-                   tutor_mode: bool) -> list:
+def _static_system(system: str | None, tutor_mode: bool) -> str:
     """
-    Baut den System-Prompt als ZWEI Blöcke:
+    Der statische Kopf: über alle Turns einer Sitzung BYTE-IDENTISCH.
 
-      [0] statisch  — über alle Turns byte-identisch, mit cache_control
-      [1] wechselnd — Graph-Kontext, Jetzt-Block, Alarme, Mic-Hinweis
+    Gerendert wird tools → system → messages. Ein Breakpoint hinter diesem
+    Block cacht also Tool-Schema UND Prompt zusammen — die ~4.700 Token, die
+    sonst bei jedem Turn und jeder Tool-Runde voll bezahlt würden.
 
-    Warum getrennt: ein Cache-Treffer verlangt ein byte-identisches Präfix.
-    Gerendert wird tools → system → messages, ein Breakpoint auf dem letzten
-    statischen System-Block cacht also Tool-Schema UND statischen Prompt
-    zusammen — genau die ~8.000 Token, die sonst bei JEDEM Turn und JEDER
-    Tool-Runde voll bezahlt würden. Cache-Treffer kosten 10 % des Input-
-    Preises; das ist der mit Abstand größte Kostenhebel im ganzen Umbau.
-    Der Jetzt-Block enthält die Uhrzeit und darf deshalb NIEMALS in Block [0].
-    (Die Reihenfolge im lokalen Pfad ist dieselbe, siehe _PROMPT_ORDER in ai.py.)
+    Hier darf NICHTS hinein, was sich ändert. Eine Uhrzeit an dieser Stelle
+    macht den Cache zu einer reinen Kostensteigerung: jeder Turn schreibt neu,
+    keiner trifft.
     """
     if tutor_mode:
         # Fremdes Tool-Set (Tutor): eigener vollständiger Prompt, kein Memory,
-        # keine Bild-Marker. Trotzdem statisch/wechselnd getrennt.
-        static = system or ai._SYSTEM_PROMPT
-    else:
-        static = (system or ai._SYSTEM_PROMPT) + "\n\n" + ai._CAPABILITIES_PROMPT
-        static += ai.ANTWORT_SUFFIX
-        static += ai._ASCII_MARKER_PROMPT
-        if ai._DASHVIEW:
-            static += ai._DASHBOARD_VIEW
+        # keine Bild-Marker.
+        return system or ai._SYSTEM_PROMPT
 
-    # Wechselnder Teil, gleiche Reihenfolge wie im lokalen Pfad.
+    static = (system or ai._SYSTEM_PROMPT) + "\n\n" + ai._CAPABILITIES_PROMPT
+    static += ai.ANTWORT_SUFFIX
+    static += ai._ASCII_MARKER_PROMPT
+    if ai._DASHVIEW:
+        static += ai._DASHBOARD_VIEW
+    return static
+
+
+def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
+    """
+    Das Wechselnde: Graph-Kontext, Jetzt-Block, Alarme, Mic-Hinweis.
+
+    Das steht NICHT mehr im System-Prompt. Dort saß es vor dem gesamten
+    Verlauf — und weil die Uhr jeden Turn eine andere ist, hat es alles
+    dahinter mitinvalidiert: der ganze Verlauf ging bei jedem Turn ungecacht
+    raus (gemessen: in=7236, cache_read=0 für eine Drei-Wort-Antwort).
+
+    Jetzt hängt es als letzter Block an der neuesten User-Nachricht, also
+    hinter allem Cachebaren. Es bleibt ungecacht — aber nur es.
+    Reihenfolge wie im lokalen Pfad (siehe _PROMPT_ORDER in ai.py).
+    """
     parts = []
     if mem_ctx:
         parts.append(mem_ctx)
@@ -196,11 +224,18 @@ def _system_blocks(system: str | None, mem_ctx: str, via_mic: bool,
             parts.append(alarm)
         if via_mic:
             parts.append(ai._MIC_INPUT_HINT)
+    return "\n\n".join(parts)
 
+
+def _system_blocks(system: str | None, mem_ctx: str, via_mic: bool,
+                   tutor_mode: bool) -> list:
+    """Beide Teile als System-Blöcke — nur noch für Aufrufer, die den Prompt
+    am Stück wollen (Tests, Größen-Messung). Der Live-Pfad benutzt
+    _static_system und _volatile_text getrennt."""
     return [
-        {"type": "text", "text": static,
-         "cache_control": {"type": "ephemeral"}},
-        {"type": "text", "text": "\n\n".join(parts)},
+        {"type": "text", "text": _static_system(system, tutor_mode),
+         "cache_control": _cc()},
+        {"type": "text", "text": _volatile_text(mem_ctx, via_mic, tutor_mode)},
     ]
 
 
@@ -214,6 +249,10 @@ def _prepare_messages(messages: list) -> list:
     Der lokale Pfad hängt den System-Prompt als erste 'system'-Message in die
     Liste; bei Anthropic ist system ein EIGENES Feld. Solche Einsprengsel
     fliegen hier raus, statt eine 400 zu provozieren.
+
+    Jeder Text wird auf BLOCK-LISTEN-Form normalisiert. Klingt nach Kosmetik,
+    ist aber Cache-Voraussetzung: käme dieselbe Nachricht mal als String und
+    mal als Ein-Block-Liste, wäre der Präfix nicht mehr verlässlich derselbe.
     """
     msgs = []
     for m in (messages or []):
@@ -223,12 +262,38 @@ def _prepare_messages(messages: list) -> list:
         content = m.get("content")
         if not content:
             continue          # leere Turns lehnt die API ab
+        if isinstance(content, str):
+            content = [{"type": "text", "text": content}]
         msgs.append({"role": role, "content": content})
     while msgs and msgs[0]["role"] != "user":
         msgs.pop(0)
     if not msgs:
-        msgs = [{"role": "user", "content": "(kein Text)"}]
+        msgs = [{"role": "user", "content": [{"type": "text",
+                                              "text": "(kein Text)"}]}]
     return msgs
+
+
+def _append_volatile(msgs: list, volatile: str) -> None:
+    """
+    Hängt das Wechselnde als letzten Block an die neueste User-Nachricht und
+    setzt den Cache-Breakpoint auf den Block DAVOR.
+
+    Die Reihenfolge ist der ganze Trick: bis einschließlich des User-Textes
+    ist der Präfix über die Turns stabil und wird gecacht; das Wechselnde
+    steht dahinter und kostet als einziges vollen Preis.
+
+    Ändert `msgs` in place.
+    """
+    if not msgs:
+        return
+    letzte = msgs[-1]
+    if letzte.get("role") != "user" or not isinstance(letzte.get("content"), list):
+        return
+    blocks = letzte["content"]
+    if blocks:
+        blocks[-1]["cache_control"] = _cc()     # Breakpoint VOR dem Wechselnden
+    if volatile:
+        blocks.append({"type": "text", "text": volatile})
 
 
 def _text_of(blocks) -> str:
@@ -274,12 +339,21 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         ai._ensure_seed_once(store=store)
         mem_ctx = graph.context_for_query(user_query, store=store)
 
-    sys_blocks   = _system_blocks(system, mem_ctx, via_mic, tutor_mode)
-    anthro_msgs  = _prepare_messages(messages)
+    # Statischer Kopf ins system-Feld (gecacht), Wechselndes ans Ende der
+    # neuesten User-Nachricht (ungecacht, aber hinter allem Cachebaren).
+    sys_blocks = [{"type": "text", "text": _static_system(system, tutor_mode),
+                   "cache_control": _cc()}]
+    anthro_msgs = _prepare_messages(messages)
+    _append_volatile(anthro_msgs, _volatile_text(mem_ctx, via_mic, tutor_mode))
     anthro_tools = _to_anthropic_tools(active_tools)
 
     client = _get_client()
     mdl    = model or _model()
+
+    # Dritter Breakpoint, der zwischen den Tool-Runden mitwandert: ohne ihn
+    # zahlt Runde 3 die Ergebnisse von Runde 2 noch einmal voll. Der alte wird
+    # vor dem Setzen des neuen entfernt — es sind maximal 4 erlaubt.
+    runden_bp = None
 
     for _ in range(_MAX_ROUNDS):
         round_text = []
@@ -362,6 +436,13 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         # Nachrichten aufzuteilen bringt dem Modell bei, keine parallelen
         # Tool-Calls mehr zu machen.
         anthro_msgs.append({"role": "user", "content": results})
+
+        # Breakpoint ans Ende der Runde nachziehen (alten abräumen).
+        if runden_bp is not None:
+            runden_bp.pop("cache_control", None)
+        if results:
+            results[-1]["cache_control"] = _cc()
+            runden_bp = results[-1]
 
     yield "\n[Maximale Tool-Tiefe erreicht]"
 
