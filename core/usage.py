@@ -33,7 +33,16 @@ from threading import Lock
 import prices
 
 _DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
-_FILE     = os.path.abspath(os.path.join(_DATA_DIR, 'ai_usage.json'))
+
+# Ziel-Datei per Env umlenkbar. Das ist keine Bequemlichkeit, sondern eine
+# Schutzmassnahme: die Testsuite fährt einen gefälschten API-Client, der ganz
+# normal durch buchen() läuft — ein voller Testlauf hat so 345 erfundene
+# claude-sonnet-5-Calls für 0,20 € in die echte Buchhaltung geschrieben.
+# Damit ist nicht nur die Anzeige wertlos, sondern auch der Budget-Deckel:
+# er würde gegen Geld rechnen, das nie jemand ausgegeben hat.
+# Gesetzt wird das in tests/conftest.py.
+_FILE = os.path.abspath(os.environ.get("ZENTRALE_USAGE_FILE") or
+                        os.path.join(_DATA_DIR, 'ai_usage.json'))
 
 KEEP_TAGE = 90     # Tagesdetails so lange behalten, Monatssummen bleiben
 

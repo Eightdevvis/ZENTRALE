@@ -13,8 +13,10 @@ Zwei Dinge, die jeder Test braucht:
    spricht nichts Ollama an, kein News-Fetcher, keine Mail — und wir können
    prüfen, dass die KI-Endpoints in dieser Kassette hart abgeriegelt sind.
 """
+import atexit
 import os
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CORE = os.path.join(ROOT, "core")
@@ -25,3 +27,15 @@ for p in (CORE, ROOT):
 # Ki-frei + Mail aus, BEVOR irgendein Modul die Env liest.
 os.environ.setdefault("ZENTRALE_KASSETTE", "tui")
 os.environ.setdefault("ZENTRALE_MAIL", "off")
+
+# 3. Buchhaltung in eine Wegwerf-Datei umlenken.
+#
+# Die Cloud-Tests fahren einen gefälschten API-Client mit erfundenen
+# Token-Zahlen — der läuft ganz normal durch usage.buchen(). Ohne diese Zeile
+# schrieb ein Testlauf 345 Claude-Calls für 0,20 € in data/ai_usage.json.
+# Damit wäre die Kostenanzeige gelogen UND der Budget-Deckel würde gegen
+# Ausgaben rechnen, die es nie gab.
+_USAGE_TMP = os.path.join(tempfile.gettempdir(),
+                          f"zentrale_usage_test_{os.getpid()}.json")
+os.environ.setdefault("ZENTRALE_USAGE_FILE", _USAGE_TMP)
+atexit.register(lambda: os.path.exists(_USAGE_TMP) and os.remove(_USAGE_TMP))

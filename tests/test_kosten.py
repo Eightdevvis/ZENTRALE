@@ -38,6 +38,24 @@ def keine_env(monkeypatch):
         monkeypatch.delenv(v, raising=False)
 
 
+# ── Die Testsuite darf die echte Buchhaltung nicht anfassen ────────────
+
+def test_die_suite_bucht_nicht_in_die_echte_datei():
+    """Passiert, ohne dass es jemand merkt: die Cloud-Tests fahren einen
+    gefälschten API-Client mit erfundenen Token-Zahlen, und der läuft ganz
+    normal durch usage.buchen(). Ein Testlauf schrieb so 345 Claude-Calls für
+    0,20 € in data/ai_usage.json — die Anzeige lügt, und der Budget-Deckel
+    rechnet gegen Geld, das nie jemand ausgegeben hat.
+
+    Abgesichert in tests/conftest.py über ZENTRALE_USAGE_FILE."""
+    import os
+    ziel = os.environ.get("ZENTRALE_USAGE_FILE")
+    assert ziel, "conftest.py setzt ZENTRALE_USAGE_FILE nicht mehr"
+    repo_data = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "data"))
+    assert not os.path.abspath(ziel).startswith(repo_data)
+
+
 # ── Preistabelle ───────────────────────────────────────────────────────
 
 def test_jeder_provider_hat_einen_preis_fuer_sein_default_modell():

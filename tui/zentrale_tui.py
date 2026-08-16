@@ -260,6 +260,30 @@ def fmt_uptime(u):
     return ":".join("%02d" % n for n in (u // 3600, (u // 60) % 60, u % 60))
 
 
+def fmt_euro(eur):
+    """Einen Euro-Betrag so anzeigen, dass man ihn auch sieht.
+
+    Zwei Fallen, die vorher beide zuschlugen: `f"{eur:.2f}"` macht aus
+    0,0027 € eine glatte „0.00€", und die Anzeige verschwand ganz, wenn der
+    Betrag 0 war. Ein Posten, der stumm bleibt, kann auch stumm wachsen —
+    genau das soll die Zahl ja verhindern. Also: die Null wird gezeigt, und
+    alles unter einem Cent bekommt ein sichtbares '<'.
+
+    Defensiv wie fmt_uptime: der Wert kommt über HTTP/JSON.
+    """
+    try:
+        eur = float(eur)
+    except (TypeError, ValueError):
+        return "—"
+    if eur != eur or eur in (float("inf"), float("-inf")):   # NaN/inf
+        return "—"
+    if eur <= 0:
+        return "0,00€"
+    if eur < 0.01:
+        return "<0,01€"
+    return f"{eur:.2f}".replace(".", ",") + "€"
+
+
 def bar(pct, length=10):
     """Zweifarbiger Balken-String: n gefüllt + Rest leer. (Ohne Farbe hier.)"""
     n = round(max(0.0, min(100.0, pct)) / 100.0 * length)
@@ -1918,8 +1942,7 @@ def run_ui(stdscr, store):
         if b != "cloud":
             return "ki-chat"
         warn = " ⚠" if budget.get("status") in ("warn", "over") else ""
-        geld = f" · {eur:.2f}€ heute" if eur else ""
-        return f"ki-chat · cloud ({prov or mdl}){geld}{warn}".lower()
+        return f"ki-chat · cloud ({prov or mdl}) · {fmt_euro(eur)} heute{warn}".lower()
 
     def ai_wrap(role, text, w):
         """Text auf Breite w umbrechen; jede Zeile trägt ihre Rolle (für Farbe).

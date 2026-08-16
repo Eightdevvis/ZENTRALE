@@ -13,7 +13,7 @@ import random
 import pytest
 
 from tui.zentrale_tui import (
-    _num, fmt_uptime, fmt_clock, parse_clock, period_duration,
+    _num, fmt_uptime, fmt_clock, fmt_euro, parse_clock, period_duration,
     graph_series, graph_last, tele_value, parse_command, log_prefix,
     blockspark, bar, overlay_rows, terminal_too_small,
 )
@@ -24,6 +24,32 @@ NASTY = [None, True, False, 0, 1, -1, 1440, 1441, 99999999, -99999999,
          "", "x", "12:30", "2515", "nicht-zahl", "99:99", "  ", "ünî 🚀",
          "\x00\x01", "—" * 50, b"bytes", [], [1, 2], {}, {"a": 1},
          {"value": None}, {"value": 5, "end": None}, {"v": None}, {"v": "x"}]
+
+
+# ── fmt_euro ────────────────────────────────────────────────────────────────
+def test_euro_zeigt_die_null_statt_zu_verschwinden():
+    """Vorher fiel die Anzeige bei 0 komplett weg — und ein Posten, der stumm
+    bleibt, kann auch stumm wachsen."""
+    assert fmt_euro(0) == "0,00€"
+    assert fmt_euro(0.0) == "0,00€"
+
+
+def test_euro_rundet_cent_betraege_nicht_auf_null():
+    """Der echte Fall: ein Tag mit 0,0027 € wurde als '0.00€' angezeigt, also
+    faktisch als 'nichts ausgegeben'."""
+    assert fmt_euro(0.0027) == "<0,01€"
+    assert fmt_euro(0.009) == "<0,01€"
+
+
+def test_euro_normale_betraege_mit_komma():
+    assert fmt_euro(0.21) == "0,21€"
+    assert fmt_euro(1) == "1,00€"
+    assert fmt_euro(12.345) == "12,35€"
+
+
+def test_euro_wirft_nie():
+    for a in NASTY:
+        assert isinstance(fmt_euro(a), str)
 
 
 # ── _num ────────────────────────────────────────────────────────────────────
