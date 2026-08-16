@@ -153,7 +153,9 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         return
 
     tutor_mode   = tools is not None
-    active_tools = tools         if tools         is not None else ai.TOOLS
+    # Tool-Set von der Schiene, nicht aus ai.TOOLS: dort haengt das
+    # Set fuer KLEINE Modelle (siehe core/profil/).
+    active_tools = tools if tools is not None else cloud.cloud_tools()
     active_exec  = tool_executor if tool_executor is not None else ai._execute_tool
     store        = None if tutor_mode else cloud.CLOUD_GRAPH
 

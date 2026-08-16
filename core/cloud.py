@@ -190,15 +190,23 @@ def _static_system(system: str | None, tutor_mode: bool) -> str:
     """
     if tutor_mode:
         # Fremdes Tool-Set (Tutor): eigener vollständiger Prompt, kein Memory,
-        # keine Bild-Marker.
+        # keine Bild-Marker. Faktisch eine eigene, dritte Schiene.
         return system or ai._SYSTEM_PROMPT
 
-    static = (system or ai._SYSTEM_PROMPT) + "\n\n" + ai._CAPABILITIES_PROMPT
-    static += ai.ANTWORT_SUFFIX
-    static += ai._ASCII_MARKER_PROMPT
-    if ai._DASHVIEW:
-        static += ai._DASHBOARD_VIEW
-    return static
+    # Die Schiene entscheidet, was hier drinsteht — nicht dieser Modul.
+    # Hier draussen faehrt ein Frontier-Modell, also `gross`.
+    return _profil().system(system, dashview=ai._DASHVIEW)
+
+
+def _profil():
+    """Die Schiene für den Cloud-Pfad (siehe core/profil/)."""
+    import profil
+    return profil.fuer_backend("cloud")
+
+
+def cloud_tools() -> list:
+    """Das Tool-Set der Cloud-Schiene, im OpenAI-Schema wie ai.TOOLS."""
+    return _profil().TOOLS
 
 
 def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
@@ -325,7 +333,9 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     wie im lokalen Pfad.
     """
     tutor_mode = tools is not None
-    active_tools = tools         if tools         is not None else ai.TOOLS
+    # Tool-Set von der Schiene, nicht aus ai.TOOLS: dort haengt das
+    # Set fuer KLEINE Modelle (siehe core/profil/).
+    active_tools = tools if tools is not None else cloud_tools()
     active_exec  = tool_executor if tool_executor is not None else ai._execute_tool
     store        = None if tutor_mode else CLOUD_GRAPH
 
@@ -466,15 +476,21 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
     dasselbe und darf nicht zweimal gepflegt werden. Nur das Verpacken des
     Ergebnisses unterscheidet sich, und das macht der jeweilige Loop.
     """
+    # Auf das Vokabular des Kerns bringen — welche Schiene ihr Tool wie nennt,
+    # ist ihre Sache (siehe core/profil/). Der ausfuehrende Name bleibt der
+    # kanonische, auch fuer den Gate-Text.
+    import profil
+    name = profil.kanonisch(name)
+
     # antwort-Tool ist TERMINAL: der Text IST die finale Antwort.
     if not tutor_mode and name == "antwort":
         answer = str(args.get("text", "")).strip()
         yield from ai._answer_with_images(answer, user_query, store=store)
         return ("stop",)
 
-    # lies_news ist TERMINAL: das Briefing ist schon moderiert und wird
+    # read_news ist TERMINAL: das Briefing ist schon moderiert und wird
     # direkt gestreamt, statt es nacherzählen zu lassen.
-    if not tutor_mode and name == "lies_news":
+    if not tutor_mode and name == "read_news":
         yield {"cinema": True}
         show = active_exec(name, args)
         if show.startswith("Sendung (Stand") and "\n\n" in show:
@@ -482,14 +498,14 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
         yield show
         return ("stop",)
 
-    # frage_knopf: die KI baut selbst einen Knopf-Dialog.
-    if not tutor_mode and name == "frage_knopf":
+    # ask_choice: die KI baut selbst einen Knopf-Dialog.
+    if not tutor_mode and name == "ask_choice":
         wahl = yield from _ask_buttons(args)
         return ("result", f"Sasha hat gewählt: {wahl}.", False)
 
     # Erlaubnis-Gate: Python-seitig, NICHT modellgetrieben. Fremde Tool-Sets
     # (Tutor) gaten wir nicht.
-    if not tutor_mode and name in ai.PERMISSION_REQUIRED_TOOLS:
+    if not tutor_mode and ai.braucht_erlaubnis(name):
         erlaubt = yield from _ask_permission(name, args)
         if not erlaubt:
             return ("result",
