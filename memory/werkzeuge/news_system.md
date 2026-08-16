@@ -1,7 +1,9 @@
 # News-System – Persönliche Tagesschau (Baustein-Modell)
 
 Periodisch gefetchte, KI-moderierte Weltpolitik-Sendung. Kern-Modul:
-`core/news.py`. KI-Tool: `lies_news`. Eingeführt 2026-06-07.
+`core/news.py`. KI-Tool: `read_news` (in der `klein`-Schiene weiterhin
+`lies_news` — siehe „Zwei Schienen" in `memory/ki/ki_system.md`; der Kern
+normalisiert über `profil.kanonisch()`). Eingeführt 2026-06-07.
 
 ## Idee
 
@@ -141,7 +143,7 @@ markiert (Auslieferung = gesehen).
   `{erstellt, text, story_ids}`. `lies()` liefert `text` und markiert die
   `story_ids` als gesehen.
 
-## Tool `lies_news` (`core/ai.py`)
+## Tool `read_news` / `lies_news` (`core/ai.py`)
 
 Read-only + lokal → **nicht** in `PERMISSION_REQUIRED_TOOLS`. Dispatch →
 `news.lies(args.get("tage", 0))`. Optionaler Param **`tage`**:

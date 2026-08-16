@@ -54,7 +54,8 @@ Provider-agnostischer Poller. `PROVIDERS`-Vorlagen, `_connect` (SSL/STARTTLS,
 UID-Watermark mehr — die INBOX selbst ist die Arbeitsschlange).
 Lese-/Auswert-Helfer: `recent()`, `counts()` (Kategorie→Anzahl),
 `review_stack()` (unbekannte Absender) und `lies(modus)` — die Textfassung
-fürs KI-Tool `lies_mail` (read-only, kein Netz). Review-CLI:
+fürs KI-Tool `read_mail` (in der `klein`-Schiene `lies_mail`; read-only, kein
+Netz). Review-CLI:
 `python -m core.mail review` arbeitet den Stapel interaktiv ab (schreibt nur
 die Keymap, keine Passphrase nötig).
 

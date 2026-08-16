@@ -94,8 +94,9 @@ ZENTRALE/
 │   ├── mail_secrets.py      # Verschlüsselter Zugangsdaten-Speicher (Mail-Konten)
 │   ├── mail_oauth.py        # OAuth2/XOAUTH2 für Outlook.com-IMAP
 │   ├── ascii_lib.py         # ASCII-Bibliothek für Bild-Marker [[bild: name]]
-│   ├── web.py               # gegatete Internet-Pipe (web_suche / hole_url)
-│   ├── news.py              # Persönliche Tagesschau: RSS-Fetch + KI-Briefing (lies_news)
+│   ├── web.py               # gegatete Internet-Pipe (web_search / fetch_url)
+│   ├── news.py              # Persönliche Tagesschau: RSS-Fetch + KI-Briefing (read_news)
+│   ├── profil/              # Prompt-Schienen: klein (9B) / gross (Frontier)
 │   ├── host_metrics.py      # PC-Host-Metriken (CPU/GPU/VRAM/Temp/RAM)
 │   ├── telemetry.py         # Telemetrie-Aggregat (PC + Pi) fürs Dashboard
 │   ├── audio.py             # HTTP-Client für Whisper + TTS

@@ -205,7 +205,8 @@ bleibt (9B-Decke / History-Vergiftung) — weiter offen.
 
 **Absage-Eskalation per Knopf-Dialog (2026-06-07):** nach jedem Absage-Alarm
 (ABSAGEN, oder Einzeltermin den Sasha absagen müsste) hakt die KI per
-`frage_knopf`-Tool nach - eskalierend: „Hast du es abgesagt?" (ja/nein) → bei
+`ask_choice`-Tool nach (in der `klein`-Schiene `frage_knopf`) - eskalierend:
+„Hast du es abgesagt?" (ja/nein) → bei
 nein „Wirst du es jetzt absagen?" (ja/nein) → bei nochmal nein „Katastrophe."
 mit optionen `['ja','ja']` (Schabernack). `frage_knopf` kann das nativ: Klick
 kommt als Tool-Result zurück, die KI legt im selben Zug den nächsten Knopf nach

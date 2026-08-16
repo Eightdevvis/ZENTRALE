@@ -138,16 +138,26 @@ Das Modell kann Tools "aufrufen" – ZENTRALE führt sie aus und schickt
 das Ergebnis zurück in den Kontext. Funktioniert mit jedem Tool-Use-
 fähigen Ollama-Modell; Default `qwen3.5:9b` (Env `OLLAMA_MODEL`).
 
-| Tool          | Funktion                                            |
-|---------------|-----------------------------------------------------|
-| `read_file`   | Datei aus der Whitelist lesen                       |
-| `list_files`  | Verfügbare lesbare Dateien auflisten                |
-| `read_calendar` / `add_calendar_*` / `delete_calendar_entry` | Kalender lesen/schreiben/löschen (s. memory/werkzeuge/kalender_system.md) |
-| `web_suche`   | Im Internet suchen (gegatet, s. „Internet-Pipe")    |
-| `hole_url`    | Webseite laden + Text holen (gegatet)               |
-| `lies_news`   | Weltpolitik-Briefing lesen (persönliche Tagesschau, s. `memory/werkzeuge/news_system.md`) |
-| `antwort`     | Finale Antwort über Tool-Kanal (Framing-Effekt)     |
-| `frage_knopf` | Sasha eine Frage mit Knöpfen stellen (s. unten)     |
+Der Kern spricht **ein** Vokabular (englisch, Spalte „kanonisch"). Wie eine
+Schiene ihr Tool nennt, ist ihre Sache — `profil.kanonisch()` übersetzt darauf
+und nimmt beide Schreibweisen an (siehe „Zwei Schienen" weiter unten).
+
+| kanonisch | in `klein` | Funktion |
+|---|---|---|
+| `read_file`   | =            | Datei aus der Whitelist lesen |
+| `list_files`  | =            | Verfügbare lesbare Dateien auflisten |
+| `read_calendar` / `add_calendar_*` / `delete_calendar_entry` | = | Kalender lesen/schreiben/löschen (s. `memory/werkzeuge/kalender_system.md`) |
+| `web_search`  | `web_suche`  | Im Internet suchen (gegatet, s. „Internet-Pipe") |
+| `fetch_url`   | `hole_url`   | Webseite laden + Text holen (gegatet) |
+| `read_news`   | `lies_news`  | Weltpolitik-Briefing lesen (s. `memory/werkzeuge/news_system.md`) |
+| `read_mail`   | `lies_mail`  | Stand der Mail-Triage (s. `memory/werkzeuge/mail_system.md`) |
+| `ask_choice`  | `frage_knopf`| Sasha eine Frage mit Knöpfen stellen (s. unten) |
+| `antwort`     | nur `klein`  | Finale Antwort über den Tool-Kanal (Framing-Effekt, 9B-Krücke) |
+
+Gegen das Erlaubnis-Gate wird **nie** direkt geprüft, sondern über
+`ai.braucht_erlaubnis()` — die normalisiert erst. Ein Schreib-Tool, das unter
+seinem Alias am Gate vorbeirutscht, würde ungefragt in den Kalender schreiben,
+und der Fehler wäre völlig lautlos.
 
 Tool-Calls werden streng ans Dashboard-Terminal geloggt
 (`AI → TOOL read_file(...)` / `AI ← TOOL read_file → ok`). Sichtbar
@@ -442,12 +452,97 @@ Der Kern spricht **zwei** Cloud-Dialekte. Welchen, sagt `kind` in
 | `openai_compat` | `core/cloud_openai.py` | qwen (DashScope), openai, mistral |
 
 Beide sind Drop-ins für `ai.chat_stream()` mit identischem Event-Protokoll.
-Die **Bedeutung** eines Tool-Calls — was terminal ist (`antwort`, `lies_news`),
-was durchs Gate muss — steht genau einmal, in `cloud.run_tool()`; die beiden
-Loops unterscheiden sich nur darin, wie sie das Ergebnis verpacken
-(`tool_result`-Block vs. `role: "tool"`-Message). Auch der System-Prompt kommt
-aus derselben Funktion (`cloud._system_blocks`), der OpenAI-Pfad faltet die
-zwei Blöcke nur zu einem String.
+Die **Bedeutung** eines Tool-Calls — was terminal ist (`read_news`, in `klein`
+zusätzlich `antwort`), was durchs Gate muss — steht genau einmal, in
+`cloud.run_tool()`; die beiden Loops unterscheiden sich nur darin, wie sie das
+Ergebnis verpacken (`tool_result`-Block vs. `role: "tool"`-Message). Auch der
+statische System-Prompt kommt aus derselben Funktion
+(`cloud._static_system()`), die ihn bei der aktiven Schiene holt.
+
+### Prompt-Cache: statisch vorn, Wechselndes ganz hinten
+
+Anthropic rendert `tools → system → messages` und cacht alles VOR einem
+`cache_control`-Breakpoint. Ein Treffer kostet 10 % des Input-Preises.
+
+Bis 08/2026 saß der Graph-Kontext samt Uhrzeit im `system`-Feld, also **vor**
+dem gesamten Verlauf. Die Uhr ist jeden Turn eine andere — damit war alles
+dahinter mit-invalidiert und der komplette Verlauf ging bei jedem Turn
+ungecacht raus. Gemessen: `in=7236 cache_read=0` für eine Drei-Wort-Antwort.
+
+Jetzt:
+
+* `cloud._static_system()` → nur Byte-identisches, ins `system`-Feld, mit
+  Breakpoint (`ttl: 1h`, per `ZENTRALE_CACHE_TTL` zurückstellbar).
+* `cloud._volatile_text()` → Graph, Jetzt-Block, Alarme, Mic-Hinweis. Hängt als
+  **letzter Block der neuesten User-Nachricht**, also hinter allem Cachebaren.
+  Bewusst nicht als `{"role":"system"}`-Nachricht: das können nur Opus 5/4.8,
+  Sonnet 5 quittiert es mit 400.
+* Breakpoint Nr. 2 sitzt auf dem User-Text, **vor** dem Wechselnden. Dahinter
+  wäre er wertlos — jeder Turn schriebe eine Cache-Zeile, die nie gelesen wird.
+* Breakpoint Nr. 3 wandert zwischen den Tool-Runden mit (max. 4 erlaubt).
+* `_prepare_messages` normalisiert jeden Text auf Block-Listen-Form; sonst wäre
+  der Präfix nicht verlässlich derselbe.
+
+Gemessen nach dem Umbau (Sonnet 5, drei Turns):
+
+```
+Turn 1  in=250  cache_read=0     cache_write=5459  ≈3,09 ct
+Turn 2  in=250  cache_read=5459  cache_write=20    ≈0,24 ct
+Turn 3  in=250  cache_read=5479  cache_write=20    ≈0,25 ct
+```
+
+Der Präfix wird einmal geschrieben, danach gelesen; geschrieben wird pro Turn
+nur noch das Delta. Die 250 ungecachten Token sind das Wechselnde.
+
+Deckel gegen Aufblähen: `ZENTRALE_CLOUD_CTX_CHARS` (Graph-Kontext, Default
+2.500) und `ZENTRALE_CLOUD_MSG_CHARS` (eine einzelne Verlauf-Nachricht,
+Default 4.000 — `cloud.kappen()` kürzt in der Mitte, deterministisch, damit
+der Präfix byte-stabil bleibt). Das Nachrichten-FENSTER wird bewusst nicht
+beschnitten: vorne etwas wegzuwerfen verschiebt den Präfix-Anfang und wirft
+genau diesen Cache weg.
+
+### Zwei Schienen: `core/profil/`
+
+Ein 9B-Ollama-Modell und ein Frontier-Modell teilten sich bis 08/2026 EINEN
+System-Prompt und EIN Tool-Set. Jede Anpassung für das eine war Ballast oder
+Gift für das andere — und jeder Ballast geht bei JEDEM Turn und JEDER
+Tool-Runde mit raus.
+
+Der Zug bleibt einer (Tool-Ausführung, Kalender, Graph, Gate, Event-Protokoll,
+Loop). Die Schiene — Prompt-Texte, Tool-Set, Beschreibungen, Namen — bekommt
+jedes Modell für sich:
+
+| Datei | Für wen |
+|---|---|
+| `profil/klein.py` | qwen3.5:9b und Verwandte. Wörtlich aus `ai.py` umgezogen, unverändert. |
+| `profil/gross.py` | Frontier-Modelle. Der zusammengestrichene Prompt. |
+| `profil/__init__.py` | Registry, Auswahl, Alias-Tabelle |
+
+* **Auswahl:** lokal → `klein`, cloud → `gross`. Übersteuerbar per
+  `ZENTRALE_PROMPT_PROFIL` oder `chat_profil` in `data/ai_config.json`.
+  Zurücktauschen ist eine Zeile — das ist der Sinn der Sache.
+* **`klein` ist Kanon.** `ai.py` re-exportiert die Namen (`ai._SYSTEM_PROMPT`,
+  `ai.TOOLS` …), deshalb laufen der lokale Pfad, die vier `scripts/bench_*.py`
+  und alle alten Tests unverändert. Wer dort aufräumen will, macht das erst,
+  wenn er es gegen ein echtes qwen nachmessen kann.
+* **Die Persona wird nicht kopiert**, sondern in `gross` aus `klein` abgeleitet
+  (`_ohne()` nimmt zwei Abschnitte heraus und wirft, wenn sie nicht genau
+  einmal da sind). Zwei Kopien wären zwei Persönlichkeiten, je nachdem welches
+  Backend gerade läuft.
+* **Parameter-Schemata werden übernommen, nie neu getippt.** Sie sind der
+  Vertrag mit Python (`kalender.RANGE_BUCKETS` & Co.); dort auseinanderzulaufen
+  wäre ein Bug, kein Feintuning. Getrennt wird nur, was *Anrede* ist.
+
+Was `gross` nicht mitschleppt: das `antwort`-Tool samt `ANTWORT_SUFFIX`, die
+Bild-Marker, die Dashboard-Sicht, den `## Text-Effekte`-Block (die TUI rendert
+das Markup nicht), das Turn-Ende-Few-Shot, die Anti-Konfabulations-Belehrungen
+und die ausbuchstabierte ⚠-Choreografie. Was bleibt, ist Inhalt statt
+Modellgröße — vor allem die **Subjekt-Grenze**.
+
+Ergebnis: Präfix **4.630 → 2.587 Token** (−45 %). Untergrenze beachten:
+Anthropic cacht erst ab 1.024 Token (Sonnet 5) bzw. 512 (Opus 5) — wer weiter
+eindampft, spart Zeichen und verliert den Cache, also unterm Strich teurer.
+Ein Test hält das fest.
 
 Der OpenAI-Pfad existiert vor allem, weil er die Struktur **prüfbar** macht,
 ohne dass ein Anthropic-Key da sein muss: Routing, getrennter Cloud-Graph,

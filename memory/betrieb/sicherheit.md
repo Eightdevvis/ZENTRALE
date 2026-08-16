@@ -30,7 +30,9 @@ relevanten Achsen. Hochsicherheits-Setup wäre Overkill.
 ## Ausgehender Kanal: Internet-Pipe der KI (seit 2026-06-07)
 
 Bis hierher hatte ZENTRALE **keinen** gewollten Ausgangskanal (offline by
-default). Die KI-Tools `web_suche`/`hole_url` (`core/web.py`) öffnen einen –
+default). Die KI-Tools `web_search`/`fetch_url` (`core/web.py`; in der
+`klein`-Schiene `web_suche`/`hole_url`, das Gate prüft über
+`ai.braucht_erlaubnis()` immer den kanonischen Namen) öffnen einen –
 und damit theoretisch einen **Exfiltrations-Pfad**: ein lokales 9b-Modell
 könnte (durch böswillige User-Eingabe oder **Prompt-Injection** aus dem Text
 einer geholten Seite) dazu gebracht werden, privates Graph-Wissen in eine

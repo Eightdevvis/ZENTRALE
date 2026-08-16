@@ -6,7 +6,8 @@ Zwei kleine, konditional/dynamisch eingesetzte Prompt-Bausteine der Core-KI.
 
 ## 1. Spracheingabe-Hinweis (`_MIC_INPUT_HINT`)
 
-- **Quelle:** `core/ai.py:400` (`_MIC_INPUT_HINT`)
+- **Quelle:** `core/profil/klein.py` (`_MIC_INPUT_HINT`; gilt für beide
+  Schienen, `gross` reicht ihn durch)
 - **Rolle:** Wird **nur** injiziert, wenn die User-Message tatsächlich aus dem
   Mikrofon kam (Whisper, `via_mic=True`). Tastatur-Eingaben sehen den Block nicht.
   Warnt die KI, dass Whisper-small auf CPU einzelne Wörter verstümmeln kann

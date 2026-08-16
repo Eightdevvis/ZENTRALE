@@ -1,12 +1,20 @@
 # Core-KI: Meta-Regeln
 
-- **Quelle:** `core/ai.py:371` (`_CAPABILITIES_PROMPT`)
+- **Quelle:** `core/profil/klein.py` (`_CAPABILITIES_PROMPT`)
 - **Live-Sprache:** de
 - **Rolle:** Die Meta-Regeln, die kein Retrieval-Treffer ersetzen kann: nicht
   lügen über Memory-Aktionen, nichts über Sasha erfinden, Subjekt-Grenze (Sashas
   Gefühle nicht als eigene ausgeben), keine erfundenen Fähigkeiten, reale Wörter,
   Tools statt Gedächtnis für News/Mail. Wird bei jedem Turn in den System-Prompt
   gehängt.
+
+⚠ **Das hier ist die `klein`-Schiene** (qwen3.5:9b und Verwandte). Seit dem
+Schienen-Umbau 08/2026 hat der Cloud-Pfad einen eigenen, deutlich kürzeren
+Satz Meta-Regeln in `core/profil/gross.py`: 2.945 → ~1.100 Zeichen. Raus sind
+dort die Anti-Konfabulations-Belehrungen ("nur reale Wörter") und die
+Tool-Ermahnungen 8+9 — die stehen jetzt in der Beschreibung des jeweiligen
+Tools, wo das Modell sie liest, wenn es zählt. Geblieben ist die
+Subjekt-Grenze. Hintergrund: „Zwei Schienen" in `memory/ki/ki_system.md`.
 
 Deutscher Prompt, vollständig und wörtlich aus dem Code kopiert.
 
