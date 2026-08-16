@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# zentrale-bat-theme — koppelt bat (batcat) an ZENTRALEs Tag/Nacht-Theme.
+#
+# Quelle der Wahrheit: ~/.config/zentrale/theme  (ein Wort)
+#   auto  → nach Uhrzeit (05–21 Uhr hell, sonst dunkel) — GENAU wie in
+#           tui/zentrale_tui.py resolved_theme(), monolith.html computeTheme()
+#           und den anderen Appliern.
+#   day   → zentrale-paper
+#   night → zentrale-cyber
+#
+# WIE bat umgeschaltet wird: bat ist kein laufender Prozess, den man umfärben
+# könnte — es liest bei JEDEM Aufruf `~/.config/bat/config`. Also schreiben wir
+# dort die `--theme`-Zeile um; der nächste bat-Aufruf hat die neue Farbe. Kein
+# Shell-Neustart, kein Env-Gefummel.
+#
+# Die Themes selbst liegen im Repo unter bat/themes/ (erzeugt aus DERSELBEN
+# Palette wie nvim, siehe scripts/build_bat_themes.py) und werden von
+# scripts/install_bat_theme.sh nach ~/.config/bat/themes/ gelegt.
+set -u
+
+STATE="${ZENTRALE_THEME_FILE:-$HOME/.config/zentrale/theme}"
+BAT_CFG="${ZENTRALE_BAT_CONFIG:-$HOME/.config/bat/config}"
+
+mode="auto"
+[ -r "$STATE" ] && mode="$(tr -d '[:space:]' < "$STATE")"
+
+case "$mode" in
+  day|night) resolved="$mode" ;;
+  *)  # auto (Default bei fehlender/kaputter Datei)
+      h=$((10#$(date +%H)))          # 10# → keine Oktal-Falle bei 08/09
+      if [ "$h" -ge 5 ] && [ "$h" -lt 21 ]; then resolved="day"; else resolved="night"; fi
+      ;;
+esac
+
+if [ "$resolved" = "night" ]; then THEME="zentrale-cyber"; else THEME="zentrale-paper"; fi
+
+case "${1:-}" in
+  --resolve) printf '%s\n' "$resolved"; exit 0 ;;
+  --dry-run) printf '%s theme=%s config=%s\n' "$resolved" "$THEME" "$BAT_CFG"; exit 0 ;;
+esac
+
+# — Nur bei ÄNDERUNG schreiben ————————————————————————————————————
+# Der systemd-Timer ruft uns jede Minute. Steht schon das richtige Theme drin,
+# fassen wir die Datei nicht an — sonst hätte sie im Minutentakt eine neue mtime
+# (und jedes Werkzeug, das darauf schaut, hätte im Minutentakt „Änderung").
+# Gleiche Bremse wie in zentrale-term-/desktop-/browser-theme.
+current="$(sed -n 's/^--theme=\"\(.*\)\"$/\1/p' "$BAT_CFG" 2>/dev/null | tail -1)"
+[ "$current" = "$THEME" ] && exit 0
+
+mkdir -p "$(dirname "$BAT_CFG")" 2>/dev/null || exit 0
+
+# Die Zeile ERSETZEN, nicht die Datei überschreiben: Sasha darf dort eigene
+# Optionen stehen haben (--style, --paging, …), die uns nichts angehen.
+# Geschrieben wird über eine tmp-Datei + mv, damit ein bat-Aufruf mitten im
+# Schreiben nie eine halbe Config sieht.
+tmp="$BAT_CFG.tmp.$$"
+if [ -f "$BAT_CFG" ]; then
+  grep -v '^--theme=' "$BAT_CFG" > "$tmp" 2>/dev/null || : > "$tmp"
+else
+  { printf '# ZENTRALE-Kopplung: die --theme-Zeile pflegt zentrale-bat-theme.\n'
+    printf '# Eigene bat-Optionen koennen hier stehen bleiben.\n'; } > "$tmp"
+fi
+printf -- '--theme="%s"\n' "$THEME" >> "$tmp"
+mv -f "$tmp" "$BAT_CFG" 2>/dev/null || rm -f "$tmp"
+
+exit 0

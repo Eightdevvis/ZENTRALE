@@ -132,7 +132,8 @@ gesetzten Modus in `~/.cache/zentrale/term-theme.applied` (erst NACH dem
 Setzen gestempelt, damit ein Abbruch beim nächsten Lauf erneut greift;
 `--force` übergeht das Gate); `zentrale-desktop-theme` und
 `zentrale-browser-theme` vergleichen stattdessen den aktiven
-xfconf-/gsettings-Wert und setzen nur bei Abweichung. Nur lokal,
+xfconf-/gsettings-Wert und setzen nur bei Abweichung, `zentrale-bat-theme` die
+`--theme`-Zeile in seiner Config. Nur lokal,
 kein Sync, kein Backend — TUI ist die einzige Quelle. **Setup reproduzierbar
 in git:** Unit-Templates `deploy/zentrale-theme.{service,timer}` (zwei
 `ExecStart`-Zeilen: Terminal + Browser), Einrichten per
@@ -140,6 +141,44 @@ in git:** Unit-Templates `deploy/zentrale-theme.{service,timer}` (zwei
 `~/.config/systemd/user/` + `enable --now`, nimmt nvim mit; idempotent, kein
 sudo; hieß bis 2026-07-25 `install_term_theme.sh`, die alten Unit-Namen räumt
 es beim Lauf ab).
+
+**bat-Kopplung (`batcat`, seit 2026-08-16):** zwei eigene Themes,
+`zentrale-cyber` (night) und `zentrale-paper` (day), im Repo unter
+`bat/themes/*.tmTheme`.
+
+- **Generiert, nicht handgepflegt:** `scripts/build_bat_themes.py` liest die
+  Farben aus **derselben** `nvim/lua/zentrale_theme/palettes.lua` wie nvim und
+  die Fläche aus `scripts/zentrale-term-theme`. Zwei handgepflegte XML-Dateien
+  daneben wären beim nächsten Palette-Nachjustieren still auseinandergelaufen
+  (das Papier ist schon einmal von Creme auf Sepia gewandert). Die erzeugten
+  Dateien sind eingecheckt; `--check` vergleicht sie gegen die Palette und
+  `tests/test_bat_theme.py` schlägt bei Drift Alarm.
+- **Fläche vom TERMINAL, nicht von nvim — bewusster Unterschied.** nvim setzt
+  sich ab (Sepia `#ece0c0` gegen Terminal-Creme `#f3ecd9`), damit man sieht,
+  dass man im Editor ist. bat ist kein Editor, sondern Terminalausgabe: sie
+  soll nahtlos in den Scrollback fließen. Praktischer Nebenbefund: **bat malt
+  die Grundfläche ohnehin nicht** — es setzt nur Vordergrundfarben und erbt den
+  Terminalhintergrund. Der `background`-Wert im tmTheme dient der Hell/Dunkel-
+  Einordnung; gemalt wird eine Fläche nur bei `--highlight-line`
+  (`lineHighlight`). Die Syntaxfarben sind gegen nvims dunklere Fläche
+  gerechnet, stehen hier also auf hellerem Grund → Kontrast wird besser, nie
+  schlechter. Der Kontrast-Wächter im Test misst gegen die Terminalfläche.
+- **Scope→Rolle spiegelt `highlights.lua`:** dieselbe Rolle bekommt dieselbe
+  Farbe, damit eine Datei in bat und nvim gleich aussieht. Sublime-Scopes sind
+  feiner als nvims Gruppen, deshalb mehrere Scopes pro Rolle. Kommentare kursiv
+  wie in nvim.
+- **Umgeschaltet wird über die Config:** bat ist kein laufender Prozess, den man
+  umfärben könnte — es liest `~/.config/bat/config` bei **jedem** Aufruf.
+  `scripts/zentrale-bat-theme` schreibt dort nur die `--theme`-Zeile um (Rest
+  der Datei bleibt, Schreiben über tmp + `mv`), der nächste `batcat` hat die
+  neue Farbe. Eigenes „nur bei Änderung"-Gate wie die anderen Applier.
+- **Einhängen:** `scripts/install_bat_theme.sh` (kopiert die Themes nach
+  `~/.config/bat/themes/`, **baut den bat-Cache neu** — ohne das kennt bat
+  eigene Themes nicht — und verlinkt den Applier). Läuft aus
+  `install_theme_coupling.sh` mit, wenn `bat`/`batcat` da ist; der
+  systemd-Service ruft den Applier mit führendem `-` auf, weil bat optional ist.
+  Auf Debian/Mint heißt das Binary **`batcat`** (Paketnamen-Kollision), sonst
+  `bat` — beide Installer und Tests suchen erst `batcat`, dann `bat`.
 
 **Browser-Kopplung (Brave, seit 2026-07-25):** `scripts/zentrale-browser-theme`.
 Brave läuft hier als **Flatpak** — ein Flatpak sieht Hell/Dunkel nicht am

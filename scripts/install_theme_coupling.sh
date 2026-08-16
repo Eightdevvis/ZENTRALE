@@ -15,6 +15,7 @@
 #       zentrale-desktop-theme → GTK-/Fensterrahmen-Theme (day: Mint-L-Sand,
 #                                night: Mint-L-Darker-Aqua); --restore macht es
 #                                rueckgaengig (Vorzustand ist gesichert)
+#     (zentrale-bat-theme wird von install_bat_theme.sh verlinkt, s.u. Punkt 5)
 #  2. Kopiert die systemd-USER-Units aus deploy/ nach ~/.config/systemd/user/
 #     (system-weite Units gehen nicht, das ist eine pro-User-Grafiksession).
 #     Alte Namen zentrale-term-theme.{service,timer} werden abgeräumt.
@@ -22,8 +23,9 @@
 #     nach → 05/21-Rotation greift auch ohne laufende TUI).
 #  4. Seedet ~/.config/zentrale/theme mit 'auto', falls noch nicht da, und
 #     wendet das Theme einmal sofort an.
-#  5. Baut die Icon-Themes ZENTRALE-Cyber/-Paper (build_icon_themes.py) und
-#     hängt nvim mit ein (install_nvim_theme.sh), falls nvim da ist.
+#  5. Baut die Icon-Themes ZENTRALE-Cyber/-Paper (build_icon_themes.py), hängt
+#     nvim mit ein (install_nvim_theme.sh) und bat (install_bat_theme.sh),
+#     jeweils falls das Programm da ist.
 #
 # Diese Units sind USER-Units (kein sudo). Anders als der Pi-Kram in
 # install_pi_services.sh läuft hier nichts als root.
@@ -74,4 +76,10 @@ fi
 # 5b. nvim mitnehmen (eigener Installer, weil er in ~/.config/nvim/plugin schreibt)
 if command -v nvim >/dev/null 2>&1; then
   bash "$REPO/scripts/install_nvim_theme.sh"
+fi
+
+# 5c. bat mitnehmen (eigener Installer: legt die Themes ab und baut den
+#     bat-Cache neu — ohne Cache-Neubau kennt bat eigene Themes nicht).
+if command -v batcat >/dev/null 2>&1 || command -v bat >/dev/null 2>&1; then
+  bash "$REPO/scripts/install_bat_theme.sh"
 fi
