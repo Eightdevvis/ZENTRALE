@@ -8,6 +8,10 @@ data/tts_model/
 # Auto-generierte Daten - persoenliche Logs + KI-Memory, gehoeren nicht
 # ins Repo. Siehe memory/datei_zugriffe.md.
 data/*.json
+# Woertliche Gespraechs-Transkripte unter dem Konzept-Graphen. Noch
+# persoenlicher als der Graph selbst - der destilliert, das hier ist roh.
+# Eigene Zeile, weil .jsonl NICHT unter data/*.json faellt.
+data/ai_transcripts/
 # Graph-/Memory-Backups (z.B. ai_graph.json.bak.<timestamp>) - ebenfalls
 # privater KI-Inhalt, niemals committen.
 data/*.bak*

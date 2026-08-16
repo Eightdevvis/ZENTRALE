@@ -22,6 +22,7 @@ import net      # HTTP-Wrapper mit Logging
 import graph    # Konzept-Graph (Phase G)
 import state    # Logging in den UI-Terminal-Stream
 import kalender              # Auto-Capture in den erlebt-Layer
+import transkript            # Rohmaterial unter dem Graphen (append-only)
 
 # ── Konfiguration ──────────────────────────────────────────────────────
 OLLAMA_URL        = os.environ.get("OLLAMA_URL",        "http://localhost:11434")
@@ -466,6 +467,12 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
         if not _is_substantive(user_msg):
             return
         argument = user_msg
+        turns = [(user_msg, ai_msg)]
+
+    # Rohmaterial wegschreiben, BEVOR der Extraktor destilliert. Was er
+    # wegwirft, waere sonst weg — der Graph merkt sich, DASS eine Beziehung
+    # besteht, nicht WAS gesagt wurde. Append-only, wird nie durchsucht.
+    quellen = transkript.schreiben(turns, store=store)
 
     today = date.today().isoformat()
     if isinstance(argument, list):
@@ -480,7 +487,7 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
             nodes, edges = _call_graph_extractor_cloud(argument, ai_msg, today)
     if not nodes and not edges:
         return
-    graph.add_turn_extraction(nodes, edges, store=store)
+    graph.add_turn_extraction(nodes, edges, store=store, quellen=quellen)
 
     if not mirror_calendar:
         return

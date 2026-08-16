@@ -362,25 +362,34 @@ def _write_atomic(st: _Store, data: dict):
 
 # ── Node Operations ───────────────────────────────────────────────────
 
-def _find_alias(name: str, data: dict, threshold: float = ALIAS_THRESHOLD) -> str | None:
+def _find_alias(name: str, data: dict) -> str | None:
     """
-    Sucht ob ein bestehender Knoten dem `name` als Alias zugeordnet
-    werden kann. Returns kanonischer Knotenname oder None.
+    Sucht, ob ein bestehender Knoten DERSELBE ist wie `name`. Returns den
+    kanonischen Knotennamen oder None.
 
-    Mehrstufige Strategie, von billig zu teuer:
+    Nur die drei STRING-Stufen, die man nachvollziehen kann:
 
       1. Exakter Match auf den raw name.
       2. Case-insensitive exakter Match ("Zentrale" == "zentrale").
       3. Stem-Match: leichtes deutsches Stemming für Plural/Flexion
          ("Hund" == "Hunde", "Wohnung" == "Wohnungen").
-      4. Embedding-Cosinus mit optionalem Token-Overlap-Bonus.
-         Einzelnes Cosinus reicht nicht zuverlässig (zu enges Window
-         zwischen False-Positives und echten Synonymen), aber mit
-         Token-Overlap-Bonus kommen Sub-Phrasen sicher rüber
-         ("raspberry pi" + "Pi" via gemeinsamen "pi"-Token).
 
-    Zeit-Knoten haben kein Embedding und werden nur über exakten
-    String-Match gefunden (ISO-Dates haben sowieso keine Aliase).
+    ── Warum die Embedding-Stufe hier NICHT mehr steht ─────────────────
+    Sie hat bei Cosinus ≥ 0.78 (plus Token-Bonus) automatisch verschmolzen.
+    Das ist die einzige Operation im ganzen Graphen, die INFORMATION
+    VERNICHTET: nach dem Merge gibt es keinen zweiten Knoten mehr, den man
+    wieder auseinandernehmen könnte. Und ein Fehlmerge ist völlig still —
+    niemand sieht ihn, keine Meldung, kein Log. "Pi" und "Pizza" standen
+    nicht umsonst als Warnung im alten Kommentar.
+
+    Ein Fehler, der still ist UND nicht reparierbar, ist der teuerste, den
+    man bauen kann. Deshalb: die Ähnlichkeits-Stufe schlägt jetzt nur noch
+    eine KANTE vor (siehe _naechster_verwandter), statt zwei Knoten zu einem
+    zu machen. Der Aktivierungs-Spread erreicht den Nachbarn über diese Kante
+    genauso — nur eben ohne Datenverlust, und sichtbar.
+
+    Zeit-Knoten haben kein Embedding und werden ohnehin nur über exakten
+    String-Match gefunden (ISO-Dates haben keine Aliase).
     """
     if name in data["nodes"]:
         return name
@@ -399,7 +408,24 @@ def _find_alias(name: str, data: dict, threshold: float = ALIAS_THRESHOLD) -> st
             if _light_stem(existing) == name_stem:
                 return existing
 
-    # 4: Embedding + Token-Overlap
+    return None
+
+
+def _naechster_verwandter(name: str, data: dict,
+                          threshold: float = ALIAS_THRESHOLD) -> str | None:
+    """
+    Der ähnlichste bestehende Knoten — als KANTEN-Vorschlag, nicht als Merge.
+
+    Embedding-Cosinus mit Token-Overlap-Bonus: einzelnes Cosinus reicht nicht
+    zuverlässig (zu enges Fenster zwischen False Positives und echten
+    Synonymen), mit Token-Overlap kommen Sub-Phrasen sicher rüber
+    ("raspberry pi" + "Pi" über den gemeinsamen "pi"-Token).
+
+    Dieselbe Rechnung wie früher, nur eine andere Konsequenz: aus dem Treffer
+    wird eine `alias-von`-Kante statt einer Verschmelzung. Liegt sie falsch,
+    löscht man eine Kante — statt einen Knoten zu vermissen, von dem man nicht
+    mehr weiß, dass es ihn je gab.
+    """
     new_emb = _emb_doc(name, data)
     if not new_emb:
         return None
@@ -408,6 +434,8 @@ def _find_alias(name: str, data: dict, threshold: float = ALIAS_THRESHOLD) -> st
     best_score = 0.0
     best_name  = None
     for existing_name, node in data["nodes"].items():
+        if existing_name == name:
+            continue
         ex_emb = node.get("embedding")
         if not ex_emb:
             continue
@@ -428,9 +456,12 @@ def _find_alias(name: str, data: dict, threshold: float = ALIAS_THRESHOLD) -> st
 
 def _add_or_get_node(name: str, node_type: str, data: dict) -> str:
     """
-    Fügt einen Knoten hinzu falls noch nicht da (oder findet Alias).
+    Fügt einen Knoten hinzu falls noch nicht da (oder findet ihn als Alias).
     Returns kanonischer Knotenname. Updated mentions/last_seen bei
     bestehendem Knoten.
+
+    Ist der Knoten neu und gibt es einen sehr ähnlichen, wird eine
+    `alias-von`-Kante gezogen statt zu verschmelzen — siehe _find_alias.
     """
     name = _normalize_name(name)
     if not name:
@@ -443,9 +474,9 @@ def _add_or_get_node(name: str, node_type: str, data: dict) -> str:
         return alias
 
     # Neuer Knoten - Embedding generieren falls kein Zeit-Knoten
-    emb = None
-    if not _is_date(name) and node_type not in ("time-day", "time-month", "time-year"):
-        emb = _emb_doc(name, data)
+    ist_zeit = _is_date(name) or node_type in ("time-day", "time-month",
+                                               "time-year")
+    emb = None if ist_zeit else _emb_doc(name, data)
     data["nodes"][name] = {
         "type":       node_type or "concept",
         "embedding":  emb,
@@ -453,6 +484,15 @@ def _add_or_get_node(name: str, node_type: str, data: dict) -> str:
         "last_seen":  _now_iso(),
         "mentions":   1,
     }
+
+    # Sehr ähnlicher Nachbar? Dann verbinden statt verschmelzen. Schwaches
+    # Gewicht, weil die Vermutung falsch sein kann — sie soll den Spread
+    # erreichbar machen, nicht den Graphen dominieren.
+    if not ist_zeit:
+        verwandt = _naechster_verwandter(name, data)
+        if verwandt:
+            _add_edge(name, verwandt, "alias-von", data, weight_delta=0.5)
+
     return name
 
 
@@ -523,10 +563,27 @@ def _ensure_time_node(date_str: str, data: dict):
     _add_edge(month_str, date_str, "enthält", data, weight_delta=1.0)
 
 
+def _quellen_anhaengen(node: dict, quellen: list[str] | None) -> None:
+    """Transkript-IDs an einen Knoten hängen, ohne Duplikate, gedeckelt.
+
+    Ein oft erwähntes Konzept sammelte sonst hunderte IDs — der Graph soll
+    klein bleiben. Die ältesten fallen raus; gefragt wird nach den jüngsten.
+    """
+    if not quellen:
+        return
+    import transkript
+    vorhanden = node.get("quellen") or []
+    for q in quellen:
+        if q not in vorhanden:
+            vorhanden.append(q)
+    node["quellen"] = vorhanden[-transkript.MAX_QUELLEN:]
+
+
 # ── Public Write API ──────────────────────────────────────────────────
 
 def add_turn_extraction(nodes_in: list[dict], edges_in: list[dict],
-                        store: str | None = None):
+                        store: str | None = None,
+                        quellen: list[str] | None = None):
     """
     Hauptweg um den Graphen zu erweitern. Wird vom Extraktor in
     consolidation.py nach jedem Turn (async) aufgerufen.
@@ -535,6 +592,10 @@ def add_turn_extraction(nodes_in: list[dict], edges_in: list[dict],
         nodes_in: Liste von {"name": str, "type": str}
         edges_in: Liste von {"from": str, "to": str, "rel": str}
         store:    Pfad eines Persona-Graphen, oder None (Core-Graph).
+        quellen:  Transkript-IDs der Turns, aus denen diese Extraktion
+                  stammt (siehe core/transkript.py). Werden an jeden
+                  berührten Knoten gehängt — so weiß man später, WORAUS
+                  ein Konzept entstanden ist, und nicht nur, dass es da ist.
 
     Macht:
       1. Alle Knoten via Alias-Resolution adden (Mapping orig→canonical).
@@ -563,6 +624,7 @@ def add_turn_extraction(nodes_in: list[dict], edges_in: list[dict],
             canonical = _add_or_get_node(orig, node_type, data)
             if canonical:
                 name_map[orig] = canonical
+                _quellen_anhaengen(data["nodes"][canonical], quellen)
 
         # 2. Heutiger Time-Node
         today = _today_str()

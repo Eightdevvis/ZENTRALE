@@ -39,10 +39,10 @@ das System hochgefahren ist).
 - **Knoten:** Konzepte als Labels (Entitäten, Zustände, Orte, Zeitpunkte).
 - **Edges:** typisierte, gewichtete Relationen.
 - **Speichert nur Sashas konkrete Realität**, kein generisches Weltwissen.
-- **Embeddings drei Rollen:**
-  1. Alias-Resolution beim Schreiben ("der Pi" == "mein Raspberry"),
-     Cosinus + Token-Overlap-Bonus, Schwelle `ALIAS_THRESHOLD=0.78`.
-  2. Fuzzy Entry-Point beim Lesen (Query → nächste Knoten finden).
+- **Embeddings zwei Rollen:**
+  1. Fuzzy Entry-Point beim Lesen (Query → nächste Knoten finden).
+  2. Ähnlichkeits-Vorschlag beim Schreiben — als **Kante**, nicht als Merge
+     (siehe unten).
   3. **Kein** Top-K-Retrieval – das macht Aktivierungs-Spread (`DEFAULT_HOPS=2`,
      `DEFAULT_DECAY=0.5`).
 - **Zeit als Knoten:** Tage/Monate/Jahre sind eigene Knoten. Jedes
@@ -52,6 +52,60 @@ das System hochgefahren ist).
 - **Datei:** `data/ai_graph.json`.
 - **Public API:** `context_for_query(query)`, `add_turn_extraction(nodes, edges)`,
   `ensure_seed()`, `stats()`, `dump()`.
+
+#### Alias-Auflösung: verbinden statt verschmelzen (seit 08/2026)
+
+`_find_alias()` macht nur noch die drei **String**-Stufen — exakt,
+Groß-/Kleinschreibung, leichtes Stemming (`Hund` == `Hunde`). Das sind
+Schreibweisen desselben Wortes, keine Vermutung.
+
+Die vierte Stufe (Embedding-Cosinus ≥ `ALIAS_THRESHOLD=0.78` plus
+`ALIAS_TOKEN_BONUS=0.15`) hat früher **automatisch verschmolzen**. Das war die
+einzige Operation im ganzen Graphen, die Information vernichtet: nach dem Merge
+gibt es keinen zweiten Knoten mehr, den man auseinandernehmen könnte — und ein
+Fehlmerge ist völlig still. Keine Meldung, kein Log. „Pi" und „Pizza" standen
+nicht umsonst als Warnung im alten Kommentar. Ein Fehler, der still ist UND
+nicht reparierbar ist, ist der teuerste, den man bauen kann.
+
+Jetzt schlägt dieselbe Rechnung (`_naechster_verwandter()`) eine **Kante** vor:
+der neue Knoten wird angelegt und bekommt `alias-von` zum ähnlichsten
+Bestehenden, Gewicht 0.5. Der Aktivierungs-Spread erreicht den Nachbarn
+darüber genauso — nur ohne Datenverlust, sichtbar im Kontext-Block, und
+falls die Vermutung daneben lag, löscht man eine Kante statt einen Knoten zu
+vermissen, von dem man nicht mehr weiß, dass es ihn je gab.
+
+Zeit-Knoten bekommen keine `alias-von`-Kanten (kein Embedding, keine Synonyme).
+
+⚠ **Was vor 08/2026 verschmolzen wurde, ist verschmolzen.** Die Umstellung
+wirkt nur nach vorne; alte Fehlmerges lassen sich nicht rekonstruieren.
+
+#### Transkript-Schicht (`core/transkript.py`)
+
+Der Graph merkt sich, **DASS** eine Beziehung besteht, nicht **WAS** gesagt
+wurde. `Sasha ─[besitzt]─► Falter` — dass es ein blaues Klapprad ist und woher
+der Name kommt, hat der Extraktor beim Destillieren weggeworfen.
+
+Deshalb liegt das Rohmaterial daneben: append-only
+`data/ai_transcripts/YYYY-MM.jsonl` (Cloud-Graph: `cloud-YYYY-MM.jsonl`,
+getrennt, damit nicht verwischt, welcher Turn zu welchem Gedächtnis gehört).
+Eine Zeile pro Turn:
+
+```json
+{"id": "2026-08:10", "zeit": "2026-08-16T15:19:06", "user": "…", "ai": "…"}
+```
+
+Die id ist Monat + Zeilennummer — ohne Index und ohne Zufallszahl auffindbar.
+Jeder berührte Knoten trägt sie in `quellen` (max. `MAX_QUELLEN=20`, ohne
+Dubletten).
+
+**Das ist ausdrücklich kein zweiter Suchindex.** Hier wird nie gesucht, nie
+embedded, nie etwas in den Prompt geladen. Würde die Datei durchsucht, hätte
+ZENTRALE zwei konkurrierende Gedächtnisse mit unterschiedlichen Antworten —
+genau das soll der Graph verhindern. Sie ist ein Archiv, auf das der Graph
+zeigt.
+
+Gitignored (`data/ai_transcripts/` — `.jsonl` fällt nicht unter `data/*.json`):
+noch persönlicher als der Graph, weil roh.
 
 ### `core/consolidation.py` – async Extraktor
 
