@@ -42,6 +42,7 @@ import os
 import ai
 import cloud      # geteilt: Graph-Pfad, System-Bloecke, run_tool, Gate
 import graph
+import kidebug    # Devtools-Bus (scripts/ai_devtools.py)
 import providers
 
 _MAX_TOKENS = int(os.environ.get("ZENTRALE_CLOUD_OPENAI_MAX_TOKENS", "2000"))
@@ -188,6 +189,12 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         round_text = []
         tool_calls = {}       # index → {id, name, args}
         verbrauch = None
+        # Devtools: den vollstaendigen Request mitschneiden, bevor er rausgeht.
+        # Dieser Dialekt hat den System-Prompt als erste Message; kidebug
+        # nimmt beide Formen an.
+        kidebug.request(modell=mdl, schiene=cloud._profil().NAME,
+                        system=msgs[0]["content"], messages=msgs[1:],
+                        tools=active_tools)
         try:
             stream = client.chat.completions.create(
                 model=mdl,
@@ -239,6 +246,13 @@ def chat_stream(messages: list, model: str = None, system: str = None,
             return
 
         _log_usage(verbrauch, mdl)
+        kidebug.emit("ai.out", modell=mdl,
+                     stop_reason="tool_calls" if tool_calls else "end_turn",
+                     bloecke=["".join(round_text)],
+                     verbrauch={
+                         "in":  getattr(verbrauch, "prompt_tokens", 0),
+                         "out": getattr(verbrauch, "completion_tokens", 0),
+                     } if verbrauch else None)
 
         if not tool_calls:
             answer = "".join(round_text)

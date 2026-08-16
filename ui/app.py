@@ -1598,6 +1598,49 @@ def api_tutor_assessment_answer():
     return jsonify(tutor_port.assessment_answer(word, result))
 
 
+@app.route('/api/ai/debug/stream')
+def api_ai_debug_stream():
+    """Devtools-Stream (SSE) fuer die KERN-KI (scripts/ai_devtools.py).
+
+    Schickt die Historie und danach live jedes Event: den VOLLEN Request
+    (System-Prompt, alle Messages, Tool-Namen, wo die Cache-Breakpoints
+    sitzen), die Roh-Antwort, jeden Tool-Call und was der Extraktor in den
+    Graphen geschrieben hat.
+
+    Der Bus ist normalerweise AUS — Verbinden schaltet ihn an, damit man ihn
+    nicht vorher per Env scharfstellen muss. Er bleibt danach an; das ist
+    gewollt (man will meist mehrere Sitzungen mitlesen) und kostet wenig.
+
+    ⚠ Hier geht der komplette Prompt raus, inklusive Graph-Kontext — also
+    Sashas Zustaende und Erlebnisse. So privat wie der Graph selbst; laeuft
+    ueber dieselbe lokale API wie alles andere (memory/betrieb/sicherheit.md).
+    """
+    import kidebug
+
+    kidebug.einschalten(True)
+
+    def generate():
+        yield 'data: ' + json.dumps(
+            {'ts': kidebug._ts(), 'kind': 'hallo',
+             'backend': ai_backends.chat_backend(),
+             'provider': ai_backends.status().get('cloud_provider')},
+            ensure_ascii=False) + '\n\n'
+        for ev in kidebug.history():
+            yield 'data: ' + json.dumps(ev, ensure_ascii=False) + '\n\n'
+        q = kidebug.subscribe()
+        try:
+            while True:
+                try:
+                    ev = q.get(timeout=15)
+                    yield 'data: ' + json.dumps(ev, ensure_ascii=False) + '\n\n'
+                except Exception:
+                    yield ': keepalive\n\n'   # Heartbeat, damit die Verbindung lebt
+        finally:
+            kidebug.unsubscribe(q)
+
+    return Response(stream_with_context(generate()), content_type='text/event-stream')
+
+
 @app.route('/api/tutor/debug/stream')
 def api_tutor_debug_stream():
     """Devtools-Stream (SSE) fuers Tutor-Terminal (scripts/tutor_devtools.py):

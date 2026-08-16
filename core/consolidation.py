@@ -22,6 +22,7 @@ import net      # HTTP-Wrapper mit Logging
 import graph    # Konzept-Graph (Phase G)
 import state    # Logging in den UI-Terminal-Stream
 import kalender              # Auto-Capture in den erlebt-Layer
+import kidebug               # Devtools-Bus (scripts/ai_devtools.py)
 import transkript            # Rohmaterial unter dem Graphen (append-only)
 
 # ── Konfiguration ──────────────────────────────────────────────────────
@@ -488,6 +489,12 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
     if not nodes and not edges:
         return
     graph.add_turn_extraction(nodes, edges, store=store, quellen=quellen)
+    kidebug.emit("ai.graph",
+                 knoten=[n.get("name") for n in nodes],
+                 kanten=[f"{e.get('from')} -[{e.get('rel')}]-> {e.get('to')}"
+                         for e in edges],
+                 quellen=quellen,
+                 store="cloud" if store else "lokal")
 
     if not mirror_calendar:
         return

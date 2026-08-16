@@ -46,6 +46,7 @@ import os
 
 import ai        # Prompt-Blöcke, TOOLS, Gate, Tool-Ausführung — alles wiederverwendet
 import graph
+import kidebug   # Devtools-Bus: was WIRKLICH rausgeht (scripts/ai_devtools.py)
 
 # ── Der getrennte Cloud-Graph ──────────────────────────────────────────
 # Absoluter Pfad, damit derselbe String immer denselben _Store trifft (graph.py
@@ -406,6 +407,11 @@ def chat_stream(messages: list, model: str = None, system: str = None,
 
     for _ in range(_MAX_ROUNDS):
         round_text = []
+        # Devtools: den vollstaendigen Request mitschneiden, BEVOR er rausgeht
+        # (siehe core/kidebug.py — aus, solange niemand zuschaut).
+        kidebug.request(modell=mdl, schiene=_profil().NAME,
+                        system=sys_blocks, messages=anthro_msgs,
+                        tools=anthro_tools)
         try:
             with client.messages.stream(
                 model=mdl,
@@ -436,6 +442,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
             return
 
         _log_usage(final, mdl)
+        _debug_out(final, mdl)
 
         if final.stop_reason == "refusal":
             # Sicherheits-Klassifikator hat abgelehnt. Kein Fehler im Sinne der
@@ -557,8 +564,11 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
     # behaupten, es hätte funktioniert. (Der lokale Ollama-Pfad wirft hier
     # weiter — sein Tool-Protokoll kennt keine Fehler-Markierung.)
     try:
-        return ("result", active_exec(name, args), False)
+        ergebnis = active_exec(name, args)
+        kidebug.emit("ai.tool", name=name, args=args, ergebnis=str(ergebnis))
+        return ("result", ergebnis, False)
     except Exception as e:
+        kidebug.emit("ai.tool", name=name, args=args, fehler=str(e))
         return ("result", f"Tool '{name}' ist fehlgeschlagen: {e}", True)
 
 
@@ -600,6 +610,27 @@ def _ask_permission(name: str, args: dict):
     antwort = state.wait_permission()     # BLOCKIERT bis Klick/Timeout
     state.push_log(f"AI ←  ERLAUBNIS: {antwort}")
     return antwort == "ja"
+
+
+def _debug_out(final, model: str) -> None:
+    """Die ROH-Antwort in den Devtools-Bus — inklusive dem, was der Chat sonst
+    versteckt (Denk-Blöcke, Vorgeplänkel vor einem Tool-Call)."""
+    if not kidebug.an():
+        return
+    try:
+        u = getattr(final, "usage", None)
+        kidebug.emit(
+            "ai.out", modell=model,
+            stop_reason=getattr(final, "stop_reason", None),
+            bloecke=[kidebug._text_von_block(b) for b in (final.content or [])],
+            verbrauch={
+                "in":          getattr(u, "input_tokens", 0),
+                "out":         getattr(u, "output_tokens", 0),
+                "cache_read":  getattr(u, "cache_read_input_tokens", 0),
+                "cache_write": getattr(u, "cache_creation_input_tokens", 0),
+            } if u else None)
+    except Exception:
+        pass
 
 
 def _log_usage(final, model: str):

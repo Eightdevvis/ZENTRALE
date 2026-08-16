@@ -170,7 +170,8 @@ Listen·Fokus-Werkzeug (Toggle).
 | Endpoint                 | Methode | Beschreibung                          |
 |--------------------------|---------|---------------------------------------|
 | `/api/ai/status`         | GET     | Ollama-Verfügbarkeit + Modell-Name    |
-| `/api/permission_answer` | POST    | Antwort auf eine `frage_knopf`-/Internet-Erlaubnis-Frage (JSON `{answer}`). Entsperrt den wartenden Chat-Stream. Siehe `memory/ki/ki_system.md` → Permission-Gate. |
+| `/api/permission_answer` | POST    | Antwort auf eine `ask_choice`-/Internet-Erlaubnis-Frage (JSON `{answer}`). Entsperrt den wartenden Chat-Stream. Siehe `memory/ki/ki_system.md` → Permission-Gate. |
+| `/api/ai/debug/stream`   | GET     | Devtools-Stream (SSE) für `scripts/ai_devtools.py`: der VOLLE Request (System-Prompt, alle Messages, Tool-Namen, Cache-Breakpoints), die Roh-Antwort, jeder Tool-Call, was der Extraktor in den Graphen schrieb. Verbinden schaltet den Bus (`core/kidebug.py`) an. ⚠ Enthält den kompletten Prompt inkl. Graph-Kontext. |
 
 > `/api/memory` + `/api/memory/<id>` (Legacy-LTM) sind entfallen – Memory
 > läuft jetzt über den Konzept-Graphen (siehe `memory/ki/ki_system.md`).

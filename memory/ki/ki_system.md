@@ -737,6 +737,58 @@ als `reflect`-Event ins HUD gespiegelt, genau wie Ollamas `thinking`-Feld.
   Fakten eh) oder nicht-bilinguales Modell — beides teurer, daher erst der
   num_ctx-Fix.
 
+## Devtools-Terminal — `scripts/ai_devtools.py` (seit 08/2026)
+
+Das Dashboard-Log sagt, WAS gekostet hat und DASS ein Tool lief. Was
+tatsächlich rausgeht — der vollständige System-Prompt, der Graph-Kontext, das
+Tool-Schema, die Reihenfolge der Blöcke, wo die Cache-Breakpoints sitzen —
+sah man nirgends. Seit es zwei Prompt-Schienen gibt, ist genau das die Frage,
+die man ständig hat.
+
+In einem eigenen Terminal, aus dem Projekt-Root:
+
+```
+scripts/ai_devtools.py                    # localhost:5000
+scripts/ai_devtools.py --url http://<pc>:5000
+scripts/ai_devtools.py --voll             # nichts kürzen
+```
+
+Ausgabe pro Turn:
+
+```
+→ REQUEST claude-sonnet-5 | Schiene: gross
+System-Prompt (1 Block, 2959 Zeichen ≈ 739 Token)
+  [0] ◄ CACHE-BREAKPOINT
+Messages (1)
+  user:
+    ◄ CACHE-BREAKPOINT
+    was steht heute an?
+    ## Aktiviertes Wissen …          ← das Wechselnde, ungecacht dahinter
+Tools (12)  read_calendar, …, ask_choice
+← ANTWORT tool_use in=677 out=54 cache_read=5458
+⚙ TOOL read_calendar
+⊕ GRAPH (cloud) knoten: Falter, blau, Klapprad
+```
+
+Events: `ai.req` (voller Request), `ai.out` (Roh-Antwort inkl. Denk-Blöcken und
+dem Vorgeplänkel vor einem Tool-Call, das der Chat sonst schluckt), `ai.tool`,
+`ai.graph` (was der Extraktor geschrieben hat).
+
+- **Bus:** `core/kidebug.py`, Ring-Puffer + Subscriber-Queues, `emit()` schluckt
+  jeden Fehler — ein Debug-Kanal, der ein Gespräch abreißen lässt, ist
+  schlimmer als keiner.
+- **Normalerweise AUS** (`ZENTRALE_AI_DEBUG=0`). Das Terminal schaltet ihn beim
+  Verbinden selbst an; den vollen Prompt im Speicher zu halten lohnt nur, wenn
+  jemand zuschaut.
+- **Endpunkt:** `GET /api/ai/debug/stream` (SSE).
+- **Eigener Bus, nicht der des Tutors.** `tutor/debug.py` bleibt getrennt: der
+  Tutor ist ein Addon und muss am Stück rausziehbar bleiben, der Kern darf
+  nicht aus `tutor/` importieren. Dieselbe Entscheidung wie `providers.py` vs.
+  `tutor_providers.py`.
+
+⚠ Hier geht der komplette Prompt raus, inklusive Graph-Kontext — also Sashas
+Zustände und Erlebnisse. So privat wie der Graph selbst.
+
 ## Network-Transparenz
 
 Alle HTTP-Requests werden im Dashboard-Terminal sichtbar geloggt
