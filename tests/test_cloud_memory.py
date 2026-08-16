@@ -110,6 +110,66 @@ def test_suche_nutzt_den_embedder_des_graphen(tmp_path, kein_echter_embedder):
     assert all(b == "cloud" for b, _ in kein_echter_embedder)
 
 
+# ── Zeichenbudget für den Graph-Kontext ────────────────────────────────
+#
+# Der Block geht bei JEDEM Turn ungecacht raus — er ändert sich ja mit der
+# Frage. max_nodes deckelt die Anzahl; über die LÄNGE sagt eine Knotenzahl
+# nichts, und Knotennamen können beliebig lang sein.
+
+def _voller_graph(p, extra=()):
+    """Graph-Datei direkt schreiben.
+
+    Nicht über add_turn_extraction: der Stub-Embedder gibt für JEDEN Text
+    denselben Vektor zurück, damit greift die Alias-Auflösung und alle Knoten
+    verschmelzen zu einem. (Genau der Fehlmerge-Mechanismus, den Stufe 3
+    abschaltet — hier stört er nur den Aufbau.)
+    """
+    import json
+    # "Sasha" ist der Anker, von dem der Aktivierungs-Spread ausgeht — ohne
+    # ihn findet context_for_query() keinen Einstieg und liefert leer.
+    nodes = {"Sasha": {"type": "concept"}}
+    nodes.update({f"Konzept-Nummer-{i}-mit-einem-recht-langen-Namen":
+                  {"type": "concept"} for i in range(40)})
+    for name, typ in extra:
+        nodes[name] = {"type": typ}
+    edges = [{"from": "Sasha", "to": n, "rel": "hat"}
+             for n in nodes if n != "Sasha"]
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump({"schema_version": graph.SCHEMA_VERSION,
+                   "nodes": nodes, "edges": edges}, f)
+    graph._invalidate(p) if hasattr(graph, "_invalidate") else None
+
+
+def test_kontext_haelt_das_zeichenbudget(tmp_path, kein_echter_embedder):
+    p = str(tmp_path / "voll.json")
+    _voller_graph(p)
+    ohne = graph.context_for_query(None, store=p, max_nodes=40)
+    mit  = graph.context_for_query(None, store=p, max_nodes=40, max_chars=600)
+    assert len(ohne) > 600
+    assert len(mit) <= 600
+
+
+def test_ohne_budget_bleibt_alles_wie_bisher(tmp_path, kein_echter_embedder):
+    """max_chars=0 ist der Default — der lokale Pfad darf sich nicht ändern."""
+    p = str(tmp_path / "voll.json")
+    _voller_graph(p)
+    assert (graph.context_for_query(None, store=p, max_nodes=40) ==
+            graph.context_for_query(None, store=p, max_nodes=40, max_chars=0))
+
+
+def test_die_leitplanken_ueberleben_das_kuerzen(tmp_path, kein_echter_embedder):
+    """Was die KI über SICH weiß (kann / kann nicht) bleibt stehen. Das sind
+    die Leitplanken gegen erfundene Fähigkeiten, und sie kosten fast nichts —
+    sie wegzukürzen hieße, an der falschen Stelle zu sparen."""
+    p = str(tmp_path / "mitgrenzen.json")
+    _voller_graph(p, extra=[("Bilder generieren", "limit"),
+                            ("Kalender lesen", "capability")])
+    kurz = graph.context_for_query(None, store=p, max_nodes=45, max_chars=700)
+    assert len(kurz) <= 700
+    assert "Bilder generieren" in kurz
+    assert "Kalender lesen" in kurz
+
+
 # ── Der Query-Cache darf die Räume nicht vermischen ────────────────────
 
 def test_query_cache_trennt_die_backends(kein_echter_embedder):

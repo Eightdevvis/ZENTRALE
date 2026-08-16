@@ -127,7 +127,8 @@ def _prepare_messages(messages: list, system_text: str,
     out = [{"role": "system", "content": system_text}]
     for m in (messages or []):
         if m.get("role") in ("user", "assistant") and m.get("content"):
-            out.append({"role": m["role"], "content": m["content"]})
+            out.append({"role": m["role"],
+                        "content": cloud.kappen(m["content"])})
     if not any(m["role"] == "user" for m in out):
         out.append({"role": "user", "content": "(kein Text)"})
     if volatile and out[-1]["role"] == "user":
@@ -166,7 +167,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     else:
         cloud.prepare_store()      # Embedder anmelden (derselbe Cloud-Graph)
         ai._ensure_seed_once(store=store)
-        mem_ctx = graph.context_for_query(user_query, store=store)
+        mem_ctx = graph.context_for_query(user_query, store=store,
+                                          max_chars=cloud._CTX_CHARS)
 
     msgs   = _prepare_messages(
         messages,

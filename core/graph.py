@@ -717,7 +717,8 @@ def _activated_view(query: str | None, st: _Store,
 def context_for_query(query: str | None,
                       hops: int = DEFAULT_HOPS,
                       max_nodes: int = 25,
-                      store: str | None = None) -> str:
+                      store: str | None = None,
+                      max_chars: int = 0) -> str:
     """
     Hauptweg um Memory-Kontext für einen Chat-Turn zu holen (Core-KI).
 
@@ -731,6 +732,15 @@ def context_for_query(query: str | None,
       5. Als strukturierter Text-Block für den System-Prompt formatieren.
 
     Wenn der Graph leer ist oder kein Entry-Point findbar: leerer String.
+
+    max_chars: Zeichenbudget für den fertigen Block (0 = unbegrenzt).
+      `max_nodes` deckelt die ANZAHL — über die Länge sagt eine Knotenzahl
+      nichts, und dieser Block geht bei jedem Turn ungecacht mit raus (er
+      ändert sich ja mit der Frage). Gekürzt wird von hinten, in dieser
+      Reihenfolge: erst die Kantenliste, dann die schwächst aktivierten
+      Sasha-Knoten. Was die KI über SICH weiß (kann / kann nicht) bleibt in
+      jedem Fall stehen — das sind die Leitplanken gegen erfundene
+      Fähigkeiten, und die kosten fast nichts.
     """
     st = _get_store(store)
     data, sorted_nodes, relevant_edges = _activated_view(query, st, hops, max_nodes)
@@ -764,32 +774,50 @@ def context_for_query(query: str | None,
     cap_nodes   = [(n, s) for n, s in sorted_nodes if _typ(n) == "capability"]
     lim_nodes   = [(n, s) for n, s in sorted_nodes if _typ(n) == "limit"]
 
-    lines = ["## Aktiviertes Wissen", ""]
-    if world_nodes:
-        lines.append("### Über SASHA und seine/ihre Welt "
-                     "(Gefühle, Zustände, Erlebnisse, Leben — das gehört SASHA, NICHT dir):")
-        for name, score in world_nodes:
-            lines.append(_fmt(name, score))
-        lines.append("")
-    if cap_nodes:
-        lines.append("### Das kannst DU wirklich (deine echten Tools/Fähigkeiten):")
-        for name, score in cap_nodes:
-            lines.append(_fmt(name, score))
-        lines.append("")
-    if lim_nodes:
-        lines.append("### Das kannst DU NICHT — auch wenn es aus dem Pretraining "
-                     "vertraut klingt, du hast es NICHT:")
-        for name, score in lim_nodes:
-            lines.append(_fmt(name, score))
-        lines.append("")
-    if relevant_edges:
-        lines.append("### Verbindungen (das Subjekt steht immer LINKS):")
-        for e in relevant_edges[:40]:  # cap
-            w = e.get("weight", 1.0)
-            w_str = f" w={w:.1f}" if w != 1.0 else ""
-            lines.append(f"  {e['from']} ─[{e['rel']}{w_str}]─► {e['to']}")
+    def _bauen(welt, kanten):
+        lines = ["## Aktiviertes Wissen", ""]
+        if welt:
+            lines.append("### Über SASHA und seine/ihre Welt "
+                         "(Gefühle, Zustände, Erlebnisse, Leben — das gehört SASHA, NICHT dir):")
+            for name, score in welt:
+                lines.append(_fmt(name, score))
+            lines.append("")
+        if cap_nodes:
+            lines.append("### Das kannst DU wirklich (deine echten Tools/Fähigkeiten):")
+            for name, score in cap_nodes:
+                lines.append(_fmt(name, score))
+            lines.append("")
+        if lim_nodes:
+            lines.append("### Das kannst DU NICHT — auch wenn es aus dem Pretraining "
+                         "vertraut klingt, du hast es NICHT:")
+            for name, score in lim_nodes:
+                lines.append(_fmt(name, score))
+            lines.append("")
+        if kanten:
+            lines.append("### Verbindungen (das Subjekt steht immer LINKS):")
+            for e in kanten:
+                w = e.get("weight", 1.0)
+                w_str = f" w={w:.1f}" if w != 1.0 else ""
+                lines.append(f"  {e['from']} ─[{e['rel']}{w_str}]─► {e['to']}")
+        return "\n".join(lines)
 
-    return "\n".join(lines)
+    welt   = list(world_nodes)
+    kanten = list(relevant_edges[:40])          # harte Obergrenze wie bisher
+    block  = _bauen(welt, kanten)
+    if not max_chars or len(block) <= max_chars:
+        return block
+
+    # Zu lang: erst Kanten opfern (die Knoten tragen die Fakten, die Kanten
+    # nur ihre Verknüpfung), dann die schwächst aktivierten Sasha-Knoten.
+    while kanten and len(block) > max_chars:
+        kanten = kanten[:max(1, len(kanten) * 3 // 4)]
+        if len(kanten) == 1:
+            kanten = []
+        block = _bauen(welt, kanten)
+    while len(welt) > 1 and len(block) > max_chars:
+        welt = welt[:-1]
+        block = _bauen(welt, kanten)
+    return block
 
 
 def context_for_persona(query: str | None, store: str,

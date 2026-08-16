@@ -81,6 +81,22 @@ _MAX_ROUNDS = 8   # Sicherheitsnetz gegen Endlos-Tool-Schleifen
 # "5m" für den Rückweg, falls sich das je als Fehlrechnung erweist.
 _CACHE_TTL = os.environ.get("ZENTRALE_CACHE_TTL", "1h")
 
+# Zeichenbudget für den Graph-Kontext. Er ändert sich mit jeder Frage, geht
+# also bei JEDEM Turn ungecacht raus — und `max_nodes` deckelt nur die Anzahl,
+# über die Länge sagt eine Knotenzahl nichts.
+_CTX_CHARS = int(os.environ.get("ZENTRALE_CLOUD_CTX_CHARS", "2500"))
+
+# Obergrenze für EINE Verlauf-Nachricht. Die Zahl der Nachrichten ist längst
+# gedeckelt (state._chat_history, maxlen=50), ihre Länge nicht: eine komplette
+# News-Sendung reitet sonst fünfzig Turns lang mit.
+#
+# Bewusst NICHT das Fenster von vorne beschneiden. Vorne Nachrichten
+# wegzuwerfen verschiebt den Präfix-Anfang und wirft bei jedem Rutsch genau
+# den Cache weg, den der ganze Umbau gerade aufgebaut hat. Eine einzelne
+# Nachricht zu kürzen ist dagegen deterministisch aus dem gespeicherten Text
+# und damit über alle Turns byte-stabil.
+_MSG_CHARS = int(os.environ.get("ZENTRALE_CLOUD_MSG_CHARS", "4000"))
+
 
 def _cc() -> dict:
     """Ein Cache-Breakpoint.
@@ -249,6 +265,28 @@ def _system_blocks(system: str | None, mem_ctx: str, via_mic: bool,
 
 # ── History-Aufbereitung ───────────────────────────────────────────────
 
+def kappen(text: str, grenze: int = None) -> str:
+    """Eine einzelne Verlauf-Nachricht auf `grenze` Zeichen bringen.
+
+    Deterministisch aus dem gespeicherten Text — dieselbe Nachricht ergibt in
+    jedem Turn dieselben Bytes, sonst wäre der Cache-Präfix hin.
+
+    Gekappt wird in der MITTE: der Anfang einer langen Nachricht sagt, worum
+    es ging, das Ende trägt oft das Fazit. Wer nur vorne abschneidet, behält
+    die Überschrift einer News-Sendung und verliert, was daraus folgte.
+
+    state._chat_history bleibt unangetastet — die TUI zeigt weiter den
+    vollen Text. Gekürzt wird nur, was an die API geht.
+    """
+    grenze = _MSG_CHARS if grenze is None else grenze
+    if grenze <= 0 or len(text) <= grenze:
+        return text
+    marke = "\n…[gekürzt]…\n"
+    rest  = grenze - len(marke)
+    kopf  = rest * 2 // 3
+    return text[:kopf] + marke + text[len(text) - (rest - kopf):]
+
+
 def _prepare_messages(messages: list) -> list:
     """
     Bringt die Verlauf-Liste in die Form, die Anthropic akzeptiert:
@@ -271,7 +309,7 @@ def _prepare_messages(messages: list) -> list:
         if not content:
             continue          # leere Turns lehnt die API ab
         if isinstance(content, str):
-            content = [{"type": "text", "text": content}]
+            content = [{"type": "text", "text": kappen(content)}]
         msgs.append({"role": role, "content": content})
     while msgs and msgs[0]["role"] != "user":
         msgs.pop(0)
@@ -347,7 +385,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         # Embedder anmelden, Identity-Seed sicherstellen, dann Kontext von dort.
         prepare_store()
         ai._ensure_seed_once(store=store)
-        mem_ctx = graph.context_for_query(user_query, store=store)
+        mem_ctx = graph.context_for_query(user_query, store=store,
+                                          max_chars=_CTX_CHARS)
 
     # Statischer Kopf ins system-Feld (gecacht), Wechselndes ans Ende der
     # neuesten User-Nachricht (ungecacht, aber hinter allem Cachebaren).

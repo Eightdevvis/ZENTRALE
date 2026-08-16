@@ -127,6 +127,38 @@ def test_system_rollen_fliegen_raus():
                      "content": [{"type": "text", "text": "hallo"}]}]
 
 
+def test_ueberlange_nachricht_wird_gekappt():
+    """Die ZAHL der Nachrichten ist gedeckelt (state._chat_history, maxlen=50),
+    ihre Länge nicht — eine komplette News-Sendung reitet sonst fünfzig Turns
+    lang mit."""
+    lang = "x" * 20000
+    msgs = cloud._prepare_messages([{"role": "user", "content": lang}])
+    text = msgs[0]["content"][0]["text"]
+    assert len(text) < len(lang)
+    assert "[gekürzt]" in text
+
+
+def test_kappen_ist_deterministisch():
+    """Cache-Voraussetzung: dieselbe Nachricht muss in jedem Turn dieselben
+    Bytes ergeben, sonst ist der Präfix hin."""
+    lang = "abc" * 5000
+    assert cloud.kappen(lang) == cloud.kappen(lang)
+
+
+def test_kappen_behaelt_anfang_und_ende():
+    """In der Mitte kappen, nicht hinten: der Anfang sagt worum es ging, das
+    Ende trägt oft das Fazit."""
+    text = "ANFANG" + "-" * 20000 + "SCHLUSS"
+    kurz = cloud.kappen(text, 200)
+    assert kurz.startswith("ANFANG")
+    assert kurz.endswith("SCHLUSS")
+    assert len(kurz) <= 200
+
+
+def test_kurze_nachrichten_bleiben_unangetastet():
+    assert cloud.kappen("hallo") == "hallo"
+
+
 def test_history_beginnt_immer_mit_user():
     msgs = cloud._prepare_messages([
         {"role": "assistant", "content": "ich zuerst"},
