@@ -130,8 +130,9 @@ neu, und jedes `gsettings set` feuerte ein Portal-Signal, auf das Brave mit
 einem Theme-Neuaufbau antwortete. `zentrale-term-theme` merkt sich den zuletzt
 gesetzten Modus in `~/.cache/zentrale/term-theme.applied` (erst NACH dem
 Setzen gestempelt, damit ein Abbruch beim nächsten Lauf erneut greift;
-`--force` übergeht das Gate); `zentrale-desktop-theme` vergleicht stattdessen
-den aktiven xfconf-/gsettings-Wert und setzt nur bei Abweichung. Nur lokal,
+`--force` übergeht das Gate); `zentrale-desktop-theme` und
+`zentrale-browser-theme` vergleichen stattdessen den aktiven
+xfconf-/gsettings-Wert und setzen nur bei Abweichung. Nur lokal,
 kein Sync, kein Backend — TUI ist die einzige Quelle. **Setup reproduzierbar
 in git:** Unit-Templates `deploy/zentrale-theme.{service,timer}` (zwei
 `ExecStart`-Zeilen: Terminal + Browser), Einrichten per

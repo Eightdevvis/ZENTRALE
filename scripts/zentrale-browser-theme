@@ -73,12 +73,23 @@ command -v gsettings >/dev/null 2>&1 || exit 0   # kein gsettings → still raus
 
 has_schema() { gsettings list-schemas 2>/dev/null | grep -qx "$1"; }
 
+# Nur schreiben, wenn sich der Wert wirklich ändert (`gsettings get` liefert ihn
+# in Hochkommas). Der systemd-Timer ruft uns jede Minute; vorher wurde das
+# Farbschema dabei jedes Mal neu gesetzt, obwohl fast immer schon der richtige
+# Wert stand. Jedes set feuert ein Portal-Signal, auf das Brave & alle
+# libadwaita-Apps mit einem Theme-Neuaufbau antworten — grundloses Flimmern im
+# Minutentakt. Gleiche Bremse wie in zentrale-desktop-theme/-term-theme.
+gset() {   # $1 schema, $2 wert
+  [ "$(gsettings get "$1" color-scheme 2>/dev/null)" = "'$2'" ] && return 0
+  gsettings set "$1" color-scheme "$2" 2>/dev/null
+}
+
 # Mint/xapp-Portal (das Backend, das Brave hier bedient)
 has_schema org.x.apps.portal \
-  && gsettings set org.x.apps.portal color-scheme "$SCHEME" 2>/dev/null
+  && gset org.x.apps.portal "$SCHEME"
 
 # GNOME-Schema: portal-gtk auf anderen Desktops + GTK4/libadwaita-Apps direkt
 has_schema org.gnome.desktop.interface \
-  && gsettings set org.gnome.desktop.interface color-scheme "$SCHEME" 2>/dev/null
+  && gset org.gnome.desktop.interface "$SCHEME"
 
 exit 0
