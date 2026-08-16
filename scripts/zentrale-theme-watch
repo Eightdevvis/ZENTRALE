@@ -54,8 +54,25 @@ vorher="$(tr -d '[:space:]' < "$STATE" 2>/dev/null)"
 dir="$(dirname "$STATE")"
 name="$(basename "$STATE")"
 
-inotifywait -m -q -e close_write,moved_to,create --format '%e %f' "$dir" |
-while read -r ereignis datei; do
+# --- inotifywait beim Beenden MITNEHMEN. In der naheliegenden Form
+#       inotifywait ... | while read ...
+# läuft inotifywait als eigener Prozess: wer diesem Skript ein TERM schickt,
+# trifft nur die Shell — inotifywait bleibt als Waise zurück und lauscht weiter
+# auf ein Verzeichnis, das es womöglich gar nicht mehr gibt. (Genau so haben
+# die Tests hier neun Waisen hinterlassen.) Unter systemd fällt das nicht auf,
+# weil es die ganze Control-Group einsammelt; von Hand oder aus einem Test
+# gestartet aber sehr wohl. Also: PID merken und im trap killen.
+#
+# Der Umweg über einen Deskriptor (statt einer Pipe) ist nötig, weil `$!` nur
+# so die PID des Lauschers liefert. Ein FIFO tut es NICHT: dort bekam `read`
+# sofort EOF, das Skript war nach einem Wimpernschlag durch und liess den
+# Lauscher erst recht allein zurück — mit einer Pipe ist die while-Schleife
+# ausserdem eine Subshell, deren trap den Elternprozess nicht erreicht.
+exec 3< <(inotifywait -m -q -e close_write,moved_to,create --format '%e %f' "$dir")
+IW_PID=$!          # bash setzt $! bei <(…) auf die PID der Prozess-Substitution
+trap 'kill "$IW_PID" 2>/dev/null' INT TERM EXIT
+
+while read -r ereignis datei <&3; do
   [ "$datei" = "$name" ] || continue
   nachher="$(tr -d '[:space:]' < "$STATE" 2>/dev/null)"
   [ "$nachher" = "$vorher" ] && continue      # nur neu geschrieben, gleicher Inhalt
@@ -66,8 +83,10 @@ while read -r ereignis datei; do
   # Kurzlebige Schreiber (ein `printf > datei` aus einer Shell) sind hier schon
   # wieder weg — dann bleibt der Eintrag leer, und genau DAS ist auch eine
   # Information: es war kein Dauerläufer.
+  # -ww, weil ps als Dienst (ohne Terminal) sonst bei 80 Zeichen abschneidet —
+  # dann fehlt genau der Pfad, an dem man den Schreiber erkennen würde.
   log "  laufende kandidaten:"
-  ps -eo pid,lstart,etimes,cmd 2>/dev/null \
+  ps -ww -eo pid,lstart,etimes,cmd 2>/dev/null \
     | grep -iE "zentrale|tutor|morgen|nvim|bat" | grep -v grep \
     | sed 's/^/    /' >> "$LOG"
 
