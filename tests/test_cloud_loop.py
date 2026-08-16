@@ -173,7 +173,8 @@ def test_request_traegt_cache_breakpoint_und_tools(fake):
     _lauf(cloud.chat_stream(_msgs()))
     kw = c.calls[0]
     assert kw["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
-    assert len(kw["tools"]) == len(ai.TOOLS)
+    from profil import gross
+    assert len(kw["tools"]) == len(gross.TOOLS)
     assert kw["thinking"]["type"] == "adaptive"
     assert kw["output_config"]["effort"] == cloud._effort()
     # Sampling-Parameter sind ab Opus 4.7 ein 400 - sie dürfen NIE mitgehen.
@@ -200,8 +201,9 @@ def test_wechselndes_haengt_hinten_an_der_letzten_user_nachricht(fake):
     _lauf(cloud.chat_stream(_msgs()))
     kw = c.calls[0]
 
+    from profil import gross
     system = kw["system"][0]["text"]
-    assert ai._SYSTEM_PROMPT in system
+    assert gross.SYSTEM in system
     assert "## Jetzt" not in system          # die Uhr gehoert NICHT nach vorn
     assert "## Erinnerung" not in system     # der Graph auch nicht
 

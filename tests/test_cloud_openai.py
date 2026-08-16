@@ -133,11 +133,12 @@ def test_reasoning_wird_reflect_event(fake):
 
 
 def test_tools_gehen_ohne_uebersetzung_raus(fake):
-    """ai.TOOLS ist bereits OpenAI-Schema - anders als beim Anthropic-Pfad
-    ist hier nichts zu uebersetzen."""
+    """Das Tool-Set der Schiene ist bereits OpenAI-Schema - anders als beim
+    Anthropic-Pfad ist hier nichts zu uebersetzen."""
+    from profil import gross
     c = fake([_text("ok")])
     _lauf(cloud_openai.chat_stream(_msgs()))
-    assert c.calls[0]["tools"] is ai.TOOLS
+    assert c.calls[0]["tools"] is gross.TOOLS
     assert c.calls[0]["messages"][0]["role"] == "system"
 
 
@@ -148,8 +149,9 @@ def test_system_prompt_hat_dieselbe_reihenfolge_wie_anthropic(fake):
     c = fake([_text("ok")])
     _lauf(cloud_openai.chat_stream(_msgs()))
     msgs = c.calls[0]["messages"]
+    from profil import gross
     sys_text = msgs[0]["content"]
-    assert ai._SYSTEM_PROMPT in sys_text
+    assert gross.SYSTEM in sys_text
     # Die Uhrzeit darf NICHT im System-Prompt stehen - sie wuerde jeden
     # impliziten Praefix-Cache des Anbieters bei jedem Turn wegwerfen.
     assert "## Jetzt" not in sys_text

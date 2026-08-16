@@ -91,6 +91,77 @@ def test_klein_behaelt_seine_kruecken():
     assert klein._ASCII_MARKER_PROMPT in klein.system()
 
 
+# ── Was gross NICHT mehr mitschleppt ───────────────────────────────────
+
+def test_gross_hat_die_kruecken_abgeworfen():
+    namen = {t["function"]["name"] for t in gross.TOOLS}
+    assert "antwort" not in namen
+    assert klein.ANTWORT_SUFFIX not in gross.system()
+    assert klein._ASCII_MARKER_PROMPT not in gross.system()
+    assert klein._DASHBOARD_VIEW not in gross.system()
+    # Dashboard-Markup, das die TUI gar nicht rendert — das Modell wuerde
+    # Marker tippen, die als roher Text erscheinen.
+    assert "## Text-Effekte" not in gross.system()
+    # Few-Shot: eine Technik fuer kleine Modelle.
+    assert "## So endet ein Turn" not in gross.system()
+
+
+def test_gross_behaelt_die_subjekt_grenze():
+    """Die einzige Regel, bei der Kuerzen wirklich gefaehrlich waere. Sie ist
+    kein Prompt-Trick, sondern die Grenze zwischen Sashas Leben und dem, was
+    die KI von sich behauptet."""
+    kopf = gross.system()
+    assert "Subjekt-Grenze" in kopf
+    assert "ich bin einsam seit dem 19. Mai" in kopf   # das Gegenbeispiel
+    assert "Aktiviertes Wissen" in kopf                # woher sie es weiss
+
+
+def test_der_schnitt_haelt():
+    """Die Zahl, um die es geht. Faellt sie zurueck, hat jemand wieder etwas
+    in den Praefix gelegt, das jeden Turn mitbezahlt wird."""
+    assert len(gross.system()) < len(klein.system()) / 2
+    besch = sum(len(t["function"]["description"]) for t in gross.TOOLS)
+    assert besch < 3000
+
+
+def test_praefix_bleibt_ueber_der_cache_mindestgroesse():
+    """Anthropic cacht erst ab 1.024 Token (Sonnet 5) bzw. 512 (Opus 5). Wer
+    weiter eindampft, spart Zeichen und verliert dafuer den Cache — das waere
+    unterm Strich TEURER. Grobe Schaetzung: 4 Zeichen je Token."""
+    assert len(gross.system()) // 4 > 512
+
+
+def test_parameter_schemata_laufen_nicht_auseinander():
+    """Die Parameter sind der Vertrag mit Python (kalender.RANGE_BUCKETS & Co).
+    Beschreibungen darf jede Schiene selbst formulieren — Parameter nicht.
+    Zwei Schienen mit verschiedenen Parametern waeren ein Bug, kein Feintuning."""
+    aus_klein = {t["function"]["name"]: t["function"]["parameters"]
+                 for t in klein.TOOLS}
+    for t in gross.TOOLS:
+        fn = t["function"]
+        # gross benennt um; ueber den kanonischen Namen wieder zusammenfuehren.
+        passend = [k for k, v in aus_klein.items()
+                   if profil.kanonisch(k) == profil.kanonisch(fn["name"])]
+        assert len(passend) == 1, fn["name"]
+        assert fn["parameters"] == aus_klein[passend[0]], fn["name"]
+
+
+def test_gross_teilt_die_persona_mit_klein():
+    """Zwei Kopien waeren zwei Persoenlichkeiten, je nachdem welches Backend
+    laeuft — und sie wuerden auseinanderlaufen, ohne dass es jemand merkt."""
+    for teil in ("## Stimme", "## Länge", "## Floskel-Stopliste",
+                 "## Substanz statt Pflichtprogramm"):
+        assert teil in klein.SYSTEM
+        assert teil in gross.SYSTEM
+
+
+def test_jede_beschreibung_ist_gesetzt():
+    """Ein Tool ohne Beschreibung faellt beim Bauen auf, nicht erst, wenn das
+    Modell raet, wofuer es gut ist."""
+    for t in gross.TOOLS:
+        assert t["function"]["description"].strip()
+
+
 # ── Kanonische Namen ───────────────────────────────────────────────────
 
 def test_deutsche_namen_werden_uebersetzt():

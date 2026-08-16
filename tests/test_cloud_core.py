@@ -88,9 +88,12 @@ def test_graph_kontext_steht_im_wechselnden_teil():
 
 
 def test_statischer_block_enthaelt_die_persona():
+    """Die Persona der CLOUD-Schiene (gross), nicht die aus ai.* — dort haengt
+    seit dem Schienen-Umbau das Set fuer kleine Modelle."""
+    from profil import gross
     blocks = cloud._system_blocks(None, "", False, tutor_mode=False)
-    assert ai._SYSTEM_PROMPT in blocks[0]["text"]
-    assert ai._CAPABILITIES_PROMPT in blocks[0]["text"]
+    assert gross.SYSTEM in blocks[0]["text"]
+    assert gross.CAPABILITIES in blocks[0]["text"]
 
 
 def test_tutor_modus_ohne_kern_bloecke():
