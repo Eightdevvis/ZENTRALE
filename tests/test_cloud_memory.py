@@ -314,6 +314,12 @@ def test_der_cloud_extraktor_kennt_beide_dialekte(monkeypatch):
     assert [n["name"] for n in nodes] == ["Brummer"]
     # Billigmodell, nicht das Chat-Modell: Konzepte ziehen ist Fleissarbeit.
     assert gerufen["model"] == "claude-haiku-4-5"
+    # KEIN effort: die kleinen Modelle kennen den Parameter nicht und
+    # quittieren ihn mit 400. Live gemessen, und der Fehler war doppelt
+    # gemein — er traf nur den Hintergrund-Extraktor. Das Gespraech lief
+    # weiter, gemerkt hat sich die KI nichts.
+    assert "output_config" not in gerufen
+    assert "temperature" not in gerufen       # ab Opus 4.7 ebenfalls 400
 
 
 def test_konsolidierung_nimmt_ein_buendel(extraktoren, monkeypatch):

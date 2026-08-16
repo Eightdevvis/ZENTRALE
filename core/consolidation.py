@@ -292,15 +292,15 @@ def _call_graph_extractor_cloud(user_msg: str, ai_msg: str,
         if art == "anthropic":
             import anthropic  # type: ignore
             client = anthropic.Anthropic()
-            # Kein Streaming, kein Denken: das Ergebnis ist strukturiertes
-            # JSON gegen eine feste Verb-Whitelist. effort minimal, damit das
-            # Modell nicht über eine Fleißaufgabe nachdenkt und dafür Output-
-            # Token abrechnet (die teuersten, die es gibt).
+            # Kein Streaming. KEIN output_config/effort: die kleinen Modelle
+            # (haiku) kennen den Parameter nicht und quittieren ihn mit einer
+            # 400 — live gemessen, und der Fehler war doppelt gemein, weil er
+            # nur den Hintergrund-Extraktor traf. Das Gespraech lief weiter,
+            # nur gemerkt hat sich die KI nichts.
             antwort = client.messages.create(
                 model=mdl,
                 max_tokens=2000,
                 system=_GRAPH_EXTRACTOR_PROMPT,
-                output_config={"effort": "low"},
                 messages=[{"role": "user", "content": body},
                           # Vorgefüllter Assistant-Turn: zwingt das Modell in
                           # JSON, ohne dass ein Vorwort ("Hier sind die
