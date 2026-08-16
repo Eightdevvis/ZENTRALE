@@ -98,7 +98,16 @@ lassen die Farbe gleich (z.B. `auto(night)→night`); früher färbte jeder davo
 den Desktop um. (2) Danach 0,5 s **Debounce**: dreimal schnell `t` löst EINEN
 Umbau aus statt drei. Die Datei `~/.config/zentrale/theme` wird weiterhin
 sofort geschrieben (nvim und der systemd-Timer lesen den MODUS, nicht die
-Farbe) — sie ist billig.
+Farbe) — sie ist billig, aber **atomar** (tmp + `os.replace`, siehe
+nvim-Kopplung unten).
+
+**Der Start-Modus kommt seit 2026-08-16 aus der Datei, nicht mehr hart aus
+`auto`.** Vorher stand `theme_mode = "auto"` fest im Code und wurde beim Start
+sofort in die Datei geschrieben: **jeder** TUI-Start — auch ein tmux-Restore,
+ein Neustart nach Absturz oder eine zweite Instanz — hat damit ein von Hand
+gesetztes `day`/`night` überschrieben, worauf nvim und Terminal auf die
+Uhrzeit-Auflösung sprangen. Jetzt liest die TUI die Datei beim Start und
+schreibt nur noch, wenn SIE etwas ändert.
 
 **Terminal-Kopplung (Sashas Laptop, xfce4-terminal):** die TUI schreibt bei
 jedem Moduswechsel den Modus (`auto`/`day`/`night`) nach
@@ -112,7 +121,17 @@ wurden. Auf Papier sind die „hellen" Farben 9–14 bewusst **dunkler** als 1�
 auf hellem Grund hebt nur mehr Tiefe hervor (aufgehellt lagen sie bei 3.1–4.2:1,
 jetzt 7:1). `auto` löst nach Uhrzeit auf, exakt wie `resolved_theme`.
 Ein **systemd-User-Timer** `zentrale-theme.timer` zieht dieselbe Datei
-jede Minute nach → die 05/21-Rotation greift auch ohne laufende TUI. Nur lokal,
+jede Minute nach → die 05/21-Rotation greift auch ohne laufende TUI.
+**Die Applier fassen dabei seit 2026-08-16 nur noch an, was sich wirklich
+ändert** — vorher schrieben sie jede Minute bedingungslos die volle Palette
+bzw. GTK-/Fenster-/Icon-Theme neu. Sichtbare Folgen: das Terminal färbte im
+Minutentakt live um (ein Zucken mitten in nvim), jede GTK-App lud ihre Icons
+neu, und jedes `gsettings set` feuerte ein Portal-Signal, auf das Brave mit
+einem Theme-Neuaufbau antwortete. `zentrale-term-theme` merkt sich den zuletzt
+gesetzten Modus in `~/.cache/zentrale/term-theme.applied` (erst NACH dem
+Setzen gestempelt, damit ein Abbruch beim nächsten Lauf erneut greift;
+`--force` übergeht das Gate); `zentrale-desktop-theme` vergleicht stattdessen
+den aktiven xfconf-/gsettings-Wert und setzt nur bei Abweichung. Nur lokal,
 kein Sync, kein Backend — TUI ist die einzige Quelle. **Setup reproduzierbar
 in git:** Unit-Templates `deploy/zentrale-theme.{service,timer}` (zwei
 `ExecStart`-Zeilen: Terminal + Browser), Einrichten per
@@ -236,11 +255,41 @@ unauffällig haben will. Dort den eingebauten Dunkel-Schalter von Hand nutzen.
   (instant beim `t` in der TUI) + **60-s-Tick** (fängt die 05/21-Rotation, bei
   der sich der Dateiinhalt gar nicht ändert — dieselbe Rolle wie der systemd-
   Timer fürs Terminal). Beides No-Op, solange der Modus gleich bleibt.
-- **Gegen nvims eigene Erkennung verteidigt:** ein Wechsel von `background`
-  löscht in nvim ALLE Highlights samt `colors_name`, und nvims OSC-11-Erkennung
-  schlägt erst nach `plugin/` zu → das Theme wäre beim Öffnen wieder weg.
-  Abgefangen per `OptionSet background` (nach dem Startup) **und** einmaligem
-  `VimEnter` (während des Startups feuert OptionSet nicht).
+- **Nvims eigene Erkennung wird ABGESCHALTET (seit 2026-08-16) — das war die
+  Ursache für dauerndes Theme-Flackern.** nvim hängt beim TTY-Start in der
+  Gruppe `nvim.tty` eine `TermResponse`-autocmd ein, die bei **jeder**
+  OSC-11-Antwort des Terminals die Luminanz misst und `background` danach setzt
+  — die ganze Sitzung lang. Sie räumt sich bei `VimEnter` selbst weg, aber nur
+  wenn `background` gesetzt wurde **und** `last_set_sid ~= -8`; `-8` ist
+  `SID_LUA`, also gilt alles aus Lua Gesetzte dort als „nicht vom Benutzer".
+  Wir setzen aus Lua → sie überlebte und kämpfte gegen unser Theme: Terminal
+  färbt um (der systemd-Timer tat das **im Minutentakt bedingungslos**), eine
+  OSC-11-Antwort trudelt ein — bei mehreren nvims an EINEM tmux-Server gern in
+  der falschen Pane —, nvim stellt `background` um, unsere `OptionSet`-autocmd
+  trug alles neu auf, die nächste Antwort drehte es zurück. Ping-Pong.
+  `M._disarm_nvim_bg_detect()` löscht die autocmd jetzt in `setup()` und
+  nochmal bei `VimEnter`. Für uns ist die Terminal-Luminanz ohnehin keine
+  Quelle — die Wahrheit steht in `~/.config/zentrale/theme`.
+- **Gegen fremde `background`-Wechsel verteidigt:** ein Wechsel von `background`
+  löscht in nvim ALLE Highlights samt `colors_name`. Abgefangen per
+  `OptionSet background` **und** einmaligem `VimEnter` (während des Startups
+  feuert OptionSet nicht). Beide reagieren nur noch, wenn `_needs_reapply()`
+  eine echte Abweichung vom Soll sieht — Wert **oder** `colors_name` (nvim
+  wischt auch dann, wenn der neue Wert derselbe ist, den wir wollten). Das
+  frühere blinde `refresh(true)` bei jedem Ereignis war der halbe Flacker-Motor.
+- **Kein Blitz beim Umschalten mehr:** `load()` setzt `colors_name` auf `nil`,
+  BEVOR `background` kippt. Sonst lud nvim bei jedem Wechsel das noch
+  eingetragene — also das gegenteilige — Scheme neu, das per `_applying` zum
+  No-Op wurde und für einen Frame nackte Default-Highlights stehen ließ.
+- **Kein Fehl-Flip bei halb geschriebener Datei:** wer die Theme-Datei per
+  truncate+write ersetzt, ist dazwischen kurz bei **null Bytes** — und genau da
+  feuert der fs_event. Das als `auto` zu lesen hieß: auf die Uhrzeit fallen und
+  beim Folge-Event zurückspringen. `resolve()` behält bei leerem Inhalt jetzt
+  den aktuellen Modus; die TUI schreibt zusätzlich **atomar** (tmp + `os.replace`).
+  Der Watcher sammelt Events außerdem 60 ms auf, statt pro Schreibvorgang zwei-
+  bis dreimal den vollen Highlight-Aufbau zu fahren, und gibt sein altes
+  fs_event-Handle beim Neu-Bewaffnen wirklich frei (`:close()`, vorher leckte
+  eines pro Theme-Wechsel).
 - **Einhängen:** `scripts/install_nvim_theme.sh` schreibt
   `~/.config/nvim/plugin/zentrale_theme.lua` (nvim sourced `plugin/` selbst) →
   **Sashas `init.lua` bleibt unangetastet**. Deinstallieren = diese Datei

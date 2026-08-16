@@ -67,7 +67,15 @@ icon_installed() { [ -d "/usr/share/icons/$1" ] || [ -d "$HOME/.local/share/icon
 icon_installed "$ICON" || { icon_installed "$ICON_FB" && ICON="$ICON_FB"; }
 
 get() { xfconf-query -c "$1" -p "$2" 2>/dev/null; }
-set_prop() { xfconf-query -c "$1" -p "$2" -s "$3" 2>/dev/null; }
+# Nur schreiben, wenn sich der Wert wirklich ändert. Der systemd-Timer ruft uns
+# jede Minute; vorher wurde GTK-, Fenster- UND Icon-Theme dabei jedes Mal neu
+# gesetzt, obwohl fast immer schon der richtige Wert stand. Jede GTK-App lädt
+# daraufhin ihre Icons neu — der Desktop ruckelt sichtbar, und Programme, die
+# auf Theme-Wechsel reagieren, tun das im Minutentakt völlig grundlos.
+set_prop() {
+  [ "$(get "$1" "$2")" = "$3" ] && return 0
+  xfconf-query -c "$1" -p "$2" -s "$3" 2>/dev/null
+}
 
 case "${1:-}" in
   --resolve) printf '%s\n' "$RESOLVED"; exit 0 ;;
@@ -139,9 +147,16 @@ fi
 
 # 2. Name: dieselben Werte nach GSettings spiegeln, damit das Portal sie meldet.
 #    color-scheme bleibt außen vor – das setzt zentrale-browser-theme.
+#    Auch hier nur bei Abweichung: jedes gsettings-set feuert ein Portal-Signal,
+#    auf das Flatpaks (Brave) mit einem Theme-Neuaufbau antworten.
 if command -v gsettings >/dev/null 2>&1; then
-  gsettings set org.gnome.desktop.interface gtk-theme  "$GTK"  2>/dev/null
-  gsettings set org.gnome.desktop.interface icon-theme "$ICON" 2>/dev/null
+  gset() {   # $1 key, $2 wert — gsettings get liefert den Wert in Hochkommas
+    [ "$(gsettings get org.gnome.desktop.interface "$1" 2>/dev/null)" = "'$2'" ] \
+      && return 0
+    gsettings set org.gnome.desktop.interface "$1" "$2" 2>/dev/null
+  }
+  gset gtk-theme  "$GTK"
+  gset icon-theme "$ICON"
 fi
 
 exit 0

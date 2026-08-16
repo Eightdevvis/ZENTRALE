@@ -63,6 +63,21 @@ esac
 
 command -v xfconf-query >/dev/null 2>&1 || exit 0   # kein xfce → still raus
 
+# — Nur bei ÄNDERUNG anfassen ————————————————————————————————————
+# Der systemd-Timer ruft uns jede Minute, und bis hierher wurde die komplette
+# Palette dann auch jede Minute neu in xfconf geschrieben — obwohl sich fast nie
+# etwas ändert. xfce4-terminal färbt bei jedem dieser Schreibvorgänge live um;
+# in einem Terminal mit nvim ist das ein sichtbares Zucken, und es kann das
+# Terminal dazu bringen, seine Hintergrundfarbe erneut zu melden — worauf nvim
+# frueher sein 'background' umstellte (siehe nvim/lua/zentrale_theme/init.lua,
+# _disarm_nvim_bg_detect). Wir merken uns deshalb, was zuletzt gesetzt wurde,
+# und tun nichts, solange das gleich bleibt. --force übergeht das Gate.
+STAMP="${XDG_CACHE_HOME:-$HOME/.cache}/zentrale/term-theme.applied"
+if [ "${1:-}" != "--force" ]; then
+  [ -r "$STAMP" ] && [ "$(cat "$STAMP" 2>/dev/null)" = "$resolved" ] && exit 0
+fi
+mkdir -p "$(dirname "$STAMP")" 2>/dev/null
+
 set_prop() { xfconf-query -c xfce4-terminal -p "$1" -s "$2" 2>/dev/null; }
 # Bool-Eigenschaften existieren nicht immer schon → notfalls neu anlegen (-n).
 set_bool() {
@@ -82,5 +97,9 @@ set_prop /color-selection-background "$SEL_BG"
 set_bool /color-cursor-use-default    false
 set_bool /color-bold-use-default      false
 set_bool /color-selection-use-default false
+
+# Erst NACH dem erfolgreichen Setzen stempeln — bricht etwas ab, versucht es der
+# nächste Timer-Lauf wieder, statt den Zustand für erledigt zu halten.
+printf '%s\n' "$resolved" > "$STAMP" 2>/dev/null
 
 exit 0

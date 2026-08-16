@@ -216,6 +216,65 @@ def test_survives_foreign_background_change(theme_file, tmp_path):
         proc.wait(timeout=10)
 
 
+def test_disarms_nvims_own_background_detection(theme_file):
+    """nvims OSC-11-autocmd muss WEG — sie war die Quelle des Dauerflackerns.
+
+    nvim hängt in der Gruppe `nvim.tty` eine TermResponse-autocmd ein, die bei
+    jeder Hintergrundfarb-Antwort des Terminals 'background' umstellt. Selbst
+    entfernt wird sie nur, wenn 'background' aus etwas anderem als Lua gesetzt
+    wurde (`last_set_sid ~= -8`) — wir setzen aus Lua, sie überlebt also und
+    kämpft die ganze Sitzung gegen uns. Hier mit einer Attrappe geprüft, weil
+    headless (-u NONE) gar kein TTY-Setup läuft: die background-autocmd muss
+    fallen, eine fremde in derselben Gruppe muss stehenbleiben.
+    """
+    lua = (
+        'vim.api.nvim_create_augroup("nvim.tty", {clear = true}); '
+        'vim.api.nvim_create_autocmd("TermResponse", {group = "nvim.tty", '
+        'desc = "Update the value of \'background\' automatically based on the '
+        'terminal emulator\'s background color", callback = function() end}); '
+        'vim.api.nvim_create_autocmd("TermResponse", {group = "nvim.tty", '
+        'desc = "etwas ganz anderes", callback = function() end}); '
+        'local t = require("zentrale_theme"); '
+        'local killed = t._disarm_nvim_bg_detect(); '
+        'local left = {}; '
+        'for _, c in ipairs(vim.api.nvim_get_autocmds({group = "nvim.tty", '
+        'event = "TermResponse"})) do table.insert(left, c.desc) end; '
+        'io.write(vim.json.encode({killed, left}))'
+    )
+    env = dict(os.environ, ZENTRALE_THEME_FILE=str(theme_file))
+    out = subprocess.run(
+        [NVIM, "--headless", "-u", "NONE", "--cmd", "set rtp+=%s" % RTP,
+         "-c", "lua " + lua, "-c", "q"],
+        capture_output=True, text=True, env=env, timeout=30,
+    ).stdout
+    killed, left = json.loads(out)
+    assert killed == 1, "background-autocmd nicht entfernt"
+    assert left == ["etwas ganz anderes"], "falsche autocmd erwischt: %s" % (left,)
+
+
+def test_disarm_survives_missing_tty_group(theme_file):
+    """Ohne TTY-Setup (headless) darf das Abräumen nicht knallen."""
+    assert _probe(theme_file,
+                  'require("zentrale_theme")._disarm_nvim_bg_detect()') == 0
+
+
+def test_empty_file_keeps_mode(theme_file, tmp_path):
+    """Halb geschriebene (0-Byte) Datei darf NICHT als auto gelesen werden.
+
+    Wer die Datei per truncate+write ersetzt, ist dazwischen kurz bei null
+    Bytes — und genau da feuert der fs_event. Das als auto zu lesen hieß: auf
+    die Uhrzeit fallen und beim nächsten Event zurückspringen, also ein
+    sichtbarer Fehl-Flip pro Moduswechsel.
+    """
+    # night gesetzt, dann geleert: der Modus muss night bleiben, egal wie spät.
+    _write(theme_file, "night")
+    got = _probe(theme_file, (
+        '(function() local t = require("zentrale_theme")'
+        ' local f = io.open(t.theme_file(), "w") f:close()'
+        ' return {t.current, t.resolve()} end)()'))
+    assert got == ["night", "night"]
+
+
 def test_session_override_ignores_file(theme_file):
     """:ZentraleTheme night erzwingt für die Sitzung, schreibt aber NICHT."""
     _write(theme_file, "day")

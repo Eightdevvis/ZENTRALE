@@ -31,6 +31,7 @@ M.current = nil        -- aktuell angewendeter Modus ("day"/"night")
 M.override = nil       -- Sitzungs-Override via :ZentraleTheme day|night
 M._applying = false    -- Rekursions-Schutz (siehe apply())
 M._file = nil          -- Pfad der Theme-Datei (in setup() gesetzt)
+M._pending = false     -- fs_event-Aufschub läuft (siehe _watch())
 
 --- Pfad der Theme-Datei. ZENTRALE_THEME_FILE sticht (wie im Bash-Applier).
 function M.theme_file()
@@ -49,6 +50,13 @@ function M.resolve()
     local raw = fh:read("l") or ""
     fh:close()
     raw = raw:gsub("%s", "")
+    -- LEERE Datei ist kein Zustand, sondern ein Wettlauf: wer die Datei per
+    -- truncate+write neu schreibt, ist zwischen den beiden Schritten kurz bei
+    -- null Bytes — und genau da feuert unser fs_event. Das als "auto" zu lesen
+    -- hieß: auf die Uhrzeit fallen, evtl. umschalten und beim Folge-Event
+    -- zurückschalten — ein sichtbarer Fehl-Flip pro Moduswechsel. Also nichts
+    -- tun und auf das Event nach dem write warten.
+    if raw == "" and M.current then return M.current end
     if raw == "day" or raw == "night" or raw == "auto" then mode = raw end
   end
   if mode ~= "auto" then return mode end
@@ -70,6 +78,12 @@ function M.load(mode)
   M._applying = true
 
   local ok = pcall(function()
+    -- colors_name WEG, bevor 'background' kippt. Sonst lädt nvim bei jedem
+    -- Wechsel das noch eingetragene — also das GEGENTEILIGE — Scheme neu
+    -- (colors/zentrale-*.lua), das hier per _applying zum No-Op wird und für
+    -- einen Frame nackte Default-Highlights stehen lässt. Genau das war der
+    -- sichtbare Blitz beim Umschalten. Der Name wird unten wieder gesetzt.
+    vim.g.colors_name = nil
     if vim.fn.exists("syntax_on") == 1 then vim.cmd("syntax reset") end
     vim.cmd("highlight clear")
     -- 'background' VOR den Gruppen: der Wechsel setzt Highlights auf die
@@ -97,18 +111,87 @@ function M.refresh(force)
   return mode
 end
 
+--- Der gewünschte 'background'-Wert zum aktuell aufgelösten Modus.
+function M.wanted_background()
+  local p = palettes.by_mode[M.resolve()]
+  return p and p.background or nil
+end
+
+--- Steht unser Theme gerade WIRKLICH? → true, wenn neu aufgetragen werden muss.
+---
+--- Zwei Indizien, beide nötig: 'background' kann vom Soll abweichen (dann ist
+--- die Fläche falsch), UND colors_name kann fehlen, obwohl 'background' zufällig
+--- stimmt — nvim wischt bei jedem Wert-Wechsel Highlights samt colors_name weg,
+--- auch wenn der neue Wert derselbe ist, den wir wollten. Nur der Vergleich
+--- beider Größen erkennt sowohl "falsche Farbe" als auch "gar keine Farbe".
+function M._needs_reapply()
+  local p = palettes.by_mode[M.resolve()]
+  if not p then return false end
+  return vim.o.background ~= p.background or vim.g.colors_name ~= p.name
+end
+
+--- nvims EIGENE Hintergrund-Erkennung abschalten. DIE Ursache des Flackerns.
+---
+--- nvim hängt beim TTY-Start (runtime/lua/vim/_core/defaults.lua, augroup
+--- `nvim.tty`) eine TermResponse-autocmd ein, die bei JEDER OSC-11-Antwort des
+--- Terminals die Luminanz misst und 'background' danach setzt — die ganze
+--- Sitzung lang, nicht nur beim Start. Selbst wieder entfernt wird sie bei
+--- VimEnter nur, wenn 'background' schon gesetzt wurde UND `last_set_sid ~= -8`
+--- ist. -8 ist SID_LUA: alles, was aus LUA gesetzt wird, zählt für diesen Test
+--- als "nicht vom Benutzer". Wir setzen aus Lua — die autocmd überlebt also,
+--- egal wie oft oder wie früh wir 'background' setzen.
+---
+--- Folge im Alltag: das Terminal wird umgefärbt (der systemd-Timer tut das im
+--- Minutentakt), irgendwas fragt OSC 11 ab, die Antwort landet in einer nvim-
+--- Pane — bei mehreren nvims an EINEM tmux-Server gern in der falschen —, nvim
+--- stellt 'background' um, unsere OptionSet-autocmd trägt das Theme neu auf,
+--- die nächste Antwort dreht es zurück. Ping-Pong.
+---
+--- Für uns ist die Terminal-Luminanz ohnehin keine Quelle: die Wahrheit steht
+--- in ~/.config/zentrale/theme. Also raus mit der autocmd.
+function M._disarm_nvim_bg_detect()
+  local ok, cmds = pcall(vim.api.nvim_get_autocmds, {
+    group = "nvim.tty", event = "TermResponse",
+  })
+  if not ok or not cmds then return 0 end
+  local killed = 0
+  for _, c in ipairs(cmds) do
+    if c.id and (c.desc or ""):find("background", 1, true) then
+      if pcall(vim.api.nvim_del_autocmd, c.id) then killed = killed + 1 end
+    end
+  end
+  return killed
+end
+
 --- Watcher auf die Theme-Datei (instant bei Moduswechsel in der TUI).
 --- Nach JEDEM Event neu bewaffnet: schreibt jemand die Datei per rename/replace
 --- statt truncate, ist der alte Watcher auf einem toten inode und stirbt still.
 function M._watch()
-  if M._handle then pcall(function() M._handle:stop() end) end
+  -- Altes Handle wirklich FREIGEBEN. Früher nur :stop() — das Handle blieb dem
+  -- Eventloop erhalten, und da hier bei jedem Event neu bewaffnet wird, leckte
+  -- eine lange Sitzung ein Handle pro Theme-Wechsel.
+  if M._handle then
+    pcall(function() M._handle:stop() end)
+    pcall(function() M._handle:close() end)
+    M._handle = nil
+  end
   local handle = vim.uv.new_fs_event()
   if not handle then return end
   M._handle = handle
   local ok = pcall(function()
     handle:start(M.theme_file(), {}, vim.schedule_wrap(function()
-      M.refresh()
-      vim.defer_fn(function() M._watch() end, 50)   -- neu bewaffnen
+      -- Ein einzelnes Schreiben löst mehrere Events aus (truncate, write,
+      -- close). Erst kurz sammeln, dann EINMAL anwenden — sonst läuft der
+      -- volle Highlight-Aufbau zwei-, dreimal pro Tastendruck. Das Neu-
+      -- Bewaffnen steckt bewusst im selben Aufschub: das alte Handle aus
+      -- seinem EIGENEN Callback heraus zu schließen ist in libuv heikel.
+      if M._pending then return end
+      M._pending = true
+      vim.defer_fn(function()
+        M._pending = false
+        M.refresh()
+        M._watch()
+      end, 60)
     end))
   end)
   if not ok then M._handle = nil end
@@ -152,6 +235,7 @@ function M.setup(opts)
   opts = opts or {}
   M._file = opts.file
 
+  M._disarm_nvim_bg_detect()
   M.refresh(true)
   M._watch()
 
@@ -160,22 +244,28 @@ function M.setup(opts)
     if timer then
       M._timer = timer
       local every = opts.interval_ms or 60000
-      timer:start(every, every, vim.schedule_wrap(function() M.refresh() end))
+      -- Der Tick ist auch der Reparatur-Tick: hat irgendwas unsere Highlights
+      -- weggewischt, ohne dass der Modus wechselte, holt _needs_reapply() das
+      -- spätestens hier zurück.
+      timer:start(every, every, vim.schedule_wrap(function()
+        M.refresh(M._needs_reapply())
+      end))
     end
   end
 
-  -- ── Gegen nvims EIGENE Hintergrund-Erkennung verteidigen ────────────────
-  -- nvim fragt beim Start per OSC 11 die Terminal-Hintergrundfarbe ab und setzt
-  -- danach 'background'. Das passiert ERST bei/nach VimEnter — also NACH dieser
-  -- Datei (plugin/ wird vorher gesourct). Und ein Wert-WECHSEL von 'background'
-  -- löscht in nvim alle Highlights samt colors_name → unser Theme wäre beim
-  -- Öffnen wieder weg. Zwei Netze, weil je eines allein Löcher hat:
-  --   * OptionSet: greift bei jeder Änderung NACH dem Startup (die Antwort auf
-  --     die OSC-11-Abfrage kann noch nach VimEnter eintrudeln) — feuert aber
-  --     WÄHREND des Startups gar nicht.
-  --   * VimEnter (einmal): fängt genau den Startup-Fall, den OptionSet verpasst.
-  -- Ein Setzen auf denselben Wert ist in nvim ein No-Op (kein Wipe, kein Event),
-  -- der Normalfall kostet also nichts.
+  -- ── Gegen fremde 'background'-Wechsel verteidigen ───────────────────────
+  -- Ein Wert-WECHSEL von 'background' löscht in nvim alle Highlights samt
+  -- colors_name → unser Theme wäre weg. Deshalb tragen wir es danach neu auf.
+  -- Der Hauptverursacher (nvims eigene Erkennung) ist oben schon abgeräumt;
+  -- das hier fängt den Rest — ein Plugin, ein `:set background=…` von Hand.
+  --
+  -- WICHTIG, und früher der halbe Flacker-Motor: nur reagieren, wenn der Wert
+  -- wirklich vom SOLL abweicht. Vorher lief hier ein blindes refresh(true) bei
+  -- jedem Ereignis; sobald irgendwas 'background' im Sekundentakt anfasste,
+  -- lief der volle Highlight-Aufbau genauso oft. `_applying` allein reicht als
+  -- Schutz nicht, weil OptionSet auch verschachtelt/verzögert eintreffen kann,
+  -- wenn das Flag längst wieder false ist. Der Soll-Vergleich ist unabhängig
+  -- vom Timing.
   local aug = vim.api.nvim_create_augroup("zentrale_theme", { clear = true })
   vim.api.nvim_create_autocmd("OptionSet", {
     group = aug,
@@ -183,6 +273,7 @@ function M.setup(opts)
     desc = "ZENTRALE-Theme nach fremdem 'background'-Wechsel neu auftragen",
     callback = function()
       if M._applying then return end   -- unser eigenes Setzen, kein Fremdeingriff
+      if not M._needs_reapply() then return end
       M.refresh(true)
     end,
   })
@@ -191,7 +282,12 @@ function M.setup(opts)
     once = true,
     nested = true,
     desc = "ZENTRALE-Theme nach nvims Hintergrund-Erkennung neu auftragen",
-    callback = function() M.refresh(true) end,
+    callback = function()
+      -- Zweiter Versuch: bei --headless/frühem setup() kann die tty-autocmd
+      -- noch nicht existiert haben.
+      M._disarm_nvim_bg_detect()
+      M.refresh(M._needs_reapply())
+    end,
   })
 
   vim.api.nvim_create_user_command("ZentraleTheme", function(a)

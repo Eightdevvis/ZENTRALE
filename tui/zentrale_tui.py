@@ -1447,7 +1447,24 @@ def run_ui(stdscr, store):
         stdscr.bkgd(" ", C["ink"])
 
     # Theme-Modus: auto (nach Uhrzeit) | day | night. Taste 't' zykliert.
-    theme_mode = "auto"
+    #
+    # Der Startwert kommt aus ~/.config/zentrale/theme, NICHT hart aus "auto".
+    # Vorher war er hart "auto" und wurde unten sofort in die Datei geschrieben:
+    # jeder TUI-Start (auch ein tmux-Restore oder eine zweite Instanz) hat damit
+    # ein von Hand gesetztes day/night überschrieben — nvim und Terminal sprangen
+    # daraufhin auf die Uhrzeit-Auflösung. Die Datei ist die Wahrheit; die TUI
+    # liest sie beim Start und schreibt nur noch, wenn SIE etwas ändert.
+    def _read_theme_mode():
+        try:
+            path = os.path.expanduser("~/.config/zentrale/theme")
+            with open(path) as fh:
+                raw = fh.read().strip()
+            if raw in ("auto", "day", "night"):
+                return raw
+        except OSError:
+            pass
+        return "auto"
+    theme_mode = _read_theme_mode()
     def resolved_theme():
         if theme_mode == "auto":
             h = int(time.strftime("%H"))
@@ -1476,7 +1493,9 @@ def run_ui(stdscr, store):
     #      drückt, löst EINEN Umbau aus statt drei.
     # Die Datei selbst wird sofort geschrieben (nvim & der systemd-Timer lesen
     # den MODUS, nicht die Farbe) — sie ist billig.
-    _last_term_mode = [None]
+    # Startwert = was in der Datei steht (oben gelesen). Damit ist der erste
+    # _push_term_theme() unten ein No-Op statt eines Überschreibens.
+    _last_term_mode = [theme_mode]
     _last_env_theme = [None]      # zuletzt an die Umgebung gemeldetes day/night
     _env_due = [0.0]              # >0: Applier stehen aus (Zeitstempel)
     ENV_DEBOUNCE = 0.5
@@ -1488,8 +1507,16 @@ def run_ui(stdscr, store):
             try:
                 cfg = os.path.expanduser("~/.config/zentrale")
                 os.makedirs(cfg, exist_ok=True)
-                with open(os.path.join(cfg, "theme"), "w") as fh:
+                dest = os.path.join(cfg, "theme")
+                # ATOMAR schreiben (tmp + rename). Mit "w" wird die Datei erst
+                # auf null Bytes gekürzt und dann gefüllt — nvims fs_event feuert
+                # aber schon beim Kürzen und las dann eine LEERE Datei, fiel auf
+                # auto zurück und sprang kurz auf die Uhrzeit-Farbe, bis das
+                # zweite Event kam. Ein Rename ist für den Leser unteilbar.
+                tmp = dest + ".tmp"
+                with open(tmp, "w") as fh:
                     fh.write(mode + "\n")
+                os.replace(tmp, dest)
             except OSError:
                 pass
             _env_due[0] = time.time() + ENV_DEBOUNCE
