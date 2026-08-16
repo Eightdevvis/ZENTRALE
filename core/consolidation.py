@@ -173,15 +173,34 @@ OUTPUT: gültiges JSON mit zwei Arrays. Auch bei nur einem Knoten/Edge ein Array
 }"""
 
 
-def _extractor_body(user_msg: str, ai_msg: str, today: str) -> str:
-    """Der User-Prompt-Body für den Extraktor (identisch für lokal + cloud)."""
-    return (
-        f"Heutiges Datum: {today}\n\n"
-        f"Chat-Turn:\n"
-        f"User (Sasha): {user_msg}\n"
-        f"AI:           {ai_msg}\n\n"
-        f"Extrahiere als JSON mit 'nodes' und 'edges' Arrays:"
-    )
+def _extractor_body(user_msg, ai_msg=None, today: str = "") -> str:
+    """Der User-Prompt-Body für den Extraktor (identisch für lokal + cloud).
+
+    Nimmt EINEN Turn (user_msg, ai_msg) oder eine LISTE von Turns
+    [(user, ai), …]. Mehrere Turns in einem Call sind billiger und obendrein
+    besser: der Extraktor sieht den Zusammenhang über die Turns hinweg statt
+    jeden für sich, und die Anweisungen im System-Prompt werden einmal statt
+    fünfmal bezahlt.
+    """
+    if isinstance(user_msg, (list, tuple)):
+        turns = list(user_msg)
+        if today == "" and isinstance(ai_msg, str):
+            today = ai_msg            # alte Positions-Reihenfolge tolerieren
+    else:
+        turns = [(user_msg, ai_msg)]
+
+    teile = [f"Heutiges Datum: {today}", ""]
+    if len(turns) == 1:
+        u, a = turns[0]
+        teile += [f"Chat-Turn:", f"User (Sasha): {u}", f"AI:           {a}", ""]
+    else:
+        teile.append(f"{len(turns)} Chat-Turns, chronologisch:")
+        for i, (u, a) in enumerate(turns, 1):
+            teile += [f"", f"[Turn {i}]",
+                      f"User (Sasha): {u}", f"AI:           {a}"]
+        teile.append("")
+    teile.append("Extrahiere als JSON mit 'nodes' und 'edges' Arrays:")
+    return "\n".join(teile)
 
 
 def _finalize_extraction(content: str) -> tuple[list[dict], list[dict]]:
@@ -250,35 +269,91 @@ def _call_graph_extractor_cloud(user_msg: str, ai_msg: str,
     extract_turn_into_graph, nicht diese Funktion.
 
     Fleißarbeit, kein Denken: Konzepte und Kanten aus einem Turn ziehen. Ein
-    kleines/billiges Modell reicht (ZENTRALE_CONSOL_CLOUD_MODEL).
-    """
-    body = _extractor_body(user_msg, ai_msg, today)
-    try:
-        import os as _os
-        import providers
-        from openai import OpenAI  # type: ignore
+    kleines/billiges Modell reicht (providers.cheap_model, übersteuerbar per
+    ZENTRALE_CONSOL_CLOUD_MODEL).
 
-        prov = providers.get(providers.configured() or "")
-        if prov.get("kind") != "openai_compat":
+    Beide Dialekte. Der Anthropic-Zweig ist nicht optional: sobald Claude der
+    konfigurierte Anbieter ist — und genau darauf läuft der Kern hinaus —
+    stieg diese Funktion vorher mit ([], []) aus. Der Cloud-Graph hätte
+    einfach nichts mehr bekommen, still, und das Gedächtnis wäre genau beim
+    Umschalten auf das Modell gestorben, um das es geht.
+    """
+    import os as _os
+    import providers
+
+    body = _extractor_body(user_msg, ai_msg, today)
+    name = providers.configured() or ""
+    prov = providers.get(name)
+    mdl  = _os.environ.get("ZENTRALE_CONSOL_CLOUD_MODEL") \
+        or providers.cheap_model(name)
+    art  = prov.get("kind")
+
+    try:
+        if art == "anthropic":
+            import anthropic  # type: ignore
+            client = anthropic.Anthropic()
+            # Kein Streaming, kein Denken: das Ergebnis ist strukturiertes
+            # JSON gegen eine feste Verb-Whitelist. effort minimal, damit das
+            # Modell nicht über eine Fleißaufgabe nachdenkt und dafür Output-
+            # Token abrechnet (die teuersten, die es gibt).
+            antwort = client.messages.create(
+                model=mdl,
+                max_tokens=2000,
+                system=_GRAPH_EXTRACTOR_PROMPT,
+                output_config={"effort": "low"},
+                messages=[{"role": "user", "content": body},
+                          # Vorgefüllter Assistant-Turn: zwingt das Modell in
+                          # JSON, ohne dass ein Vorwort ("Hier sind die
+                          # Konzepte:") den Parser zerlegt.
+                          {"role": "assistant", "content": "{"}],
+            )
+            text = "".join(b.text for b in antwort.content
+                           if getattr(b, "type", None) == "text")
+            content = "{" + text
+            _buchen(mdl, antwort.usage)
+
+        elif art == "openai_compat":
+            from openai import OpenAI  # type: ignore
+            client = OpenAI(base_url=prov.get("base_url"),
+                            api_key=_os.environ.get(prov.get("key_env") or "", ""))
+            resp = client.chat.completions.create(
+                model=mdl,
+                messages=[{"role": "system", "content": _GRAPH_EXTRACTOR_PROMPT},
+                          {"role": "user",   "content": body}],
+                response_format={"type": "json_object"},
+                stream=False,
+                timeout=90,
+            )
+            content = (resp.choices[0].message.content or "").strip()
+            _buchen(mdl, getattr(resp, "usage", None))
+
+        else:
             return ([], [])
-        client = OpenAI(base_url=prov.get("base_url"),
-                        api_key=_os.environ.get(prov.get("key_env") or "", ""))
-        mdl = _os.environ.get("ZENTRALE_CONSOL_CLOUD_MODEL") \
-            or prov.get("default_model")
-        resp = client.chat.completions.create(
-            model=mdl,
-            messages=[{"role": "system", "content": _GRAPH_EXTRACTOR_PROMPT},
-                      {"role": "user",   "content": body}],
-            response_format={"type": "json_object"},
-            stream=False,
-            timeout=90,
-        )
-        content = (resp.choices[0].message.content or "").strip()
     except Exception as e:
         state.push_log(f"[konsolidierung-cloud] FEHLER: {e}")
         return ([], [])
 
     return _finalize_extraction(content)
+
+
+def _buchen(model: str, verbrauch) -> None:
+    """Den Extraktor-Call mitrechnen.
+
+    Er lief bisher an der Buchhaltung vorbei — und ist der einzige Posten, der
+    OHNE Sashas Zutun feuert. Was man nicht sieht, kann man nicht deckeln.
+    """
+    if verbrauch is None:
+        return
+    try:
+        import usage
+        rein = int(getattr(verbrauch, "input_tokens", 0)
+                   or getattr(verbrauch, "prompt_tokens", 0) or 0)
+        raus = int(getattr(verbrauch, "output_tokens", 0)
+                   or getattr(verbrauch, "completion_tokens", 0) or 0)
+        eur = usage.buchen(model, input_tokens=rein, output_tokens=raus)
+        state.push_log(f"GRAPH ← {model} in={rein} out={raus} ≈{eur:.4f}€")
+    except Exception:
+        pass
 
 
 def _call_graph_extractor(user_msg: str, ai_msg: str, today: str) -> tuple[list[dict], list[dict]]:
@@ -374,16 +449,35 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
     dort nicht verdichtet, Punkt — Sashas privater Graph verlässt das Haus
     nicht, auch nicht als Extraktions-Auftrag.
     """
-    user_msg = (user_msg or '').strip()
-    ai_msg   = (ai_msg   or '').strip()
-    if not _is_substantive(user_msg):
-        return
+    # Ein Turn oder ein Buendel — der Worker sammelt in der Gespraechspause
+    # ohnehin schon mehrere an. Sie in EINEM Call zu verdichten ist billiger
+    # (die Extraktor-Anweisungen gehen einmal statt fuenfmal raus) und
+    # obendrein besser: der Extraktor sieht den Zusammenhang ueber die Turns
+    # hinweg, statt jeden fuer sich zu lesen.
+    if isinstance(user_msg, (list, tuple)):
+        turns = [((u or '').strip(), (a or '').strip()) for u, a in user_msg]
+        turns = [(u, a) for u, a in turns if _is_substantive(u)]
+        if not turns:
+            return
+        argument = turns
+    else:
+        user_msg = (user_msg or '').strip()
+        ai_msg   = (ai_msg   or '').strip()
+        if not _is_substantive(user_msg):
+            return
+        argument = user_msg
 
     today = date.today().isoformat()
-    nodes, edges = _call_graph_extractor(user_msg, ai_msg, today)
+    if isinstance(argument, list):
+        nodes, edges = _call_graph_extractor(argument, None, today)
+    else:
+        nodes, edges = _call_graph_extractor(argument, ai_msg, today)
     if not nodes and not edges and store and not _local_da():
         state.push_log("[konsolidierung] lokal nicht da → Cloud-Extraktor")
-        nodes, edges = _call_graph_extractor_cloud(user_msg, ai_msg, today)
+        if isinstance(argument, list):
+            nodes, edges = _call_graph_extractor_cloud(argument, None, today)
+        else:
+            nodes, edges = _call_graph_extractor_cloud(argument, ai_msg, today)
     if not nodes and not edges:
         return
     graph.add_turn_extraction(nodes, edges, store=store)

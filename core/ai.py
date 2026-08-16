@@ -761,20 +761,30 @@ def _consolidation_worker():
                 if rest <= 0:
                     break
                 _consol_cv.wait(timeout=rest)
-            # 3. Genau einen Turn entnehmen.
-            user_msg, ai_msg, store = _consol_pending.pop(0)
+            # 3. ALLE wartenden Turns entnehmen, nach Ziel-Graph gruppiert.
+            #    Frueher genau einer pro Durchgang. Ein Call pro Turn heisst
+            #    aber: die Extraktor-Anweisungen (rund 2.000 Zeichen) gehen
+            #    fuenfmal statt einmal raus. Und der Extraktor sieht jeden
+            #    Turn fuer sich, statt den Zusammenhang ueber das Gespraech.
+            #    Gruppiert wird nach store, weil die Isolations-Invariante
+            #    (lokal/cloud) unter keinen Umstaenden verwaessert werden darf.
+            buendel = {}
+            for u, a, s in _consol_pending:
+                buendel.setdefault(s, []).append((u, a))
+            _consol_pending.clear()
         # LLM-Extraktion AUSSERHALB des Locks (langer Call – darf das
         # Einreihen weiterer Turns nicht blockieren).
-        # store reist mit dem Turn mit: der Extraktor laeuft zwar immer lokal
-        # (Ollama), schreibt aber in DEN Graphen, aus dem der Turn kam.
-        try:
-            consolidation.extract_turn_into_graph(user_msg, ai_msg, store=store)
-        except Exception as e:
+        # store reist mit den Turns mit: der Extraktor laeuft zwar bevorzugt
+        # lokal (Ollama), schreibt aber in DEN Graphen, aus dem sie kamen.
+        for store, turns in buendel.items():
             try:
-                import state
-                state.push_log(f"[auto-save] FEHLER: {e}")
-            except Exception:
-                pass
+                consolidation.extract_turn_into_graph(turns, None, store=store)
+            except Exception as e:
+                try:
+                    import state
+                    state.push_log(f"[auto-save] FEHLER: {e}")
+                except Exception:
+                    pass
 
 
 def _async_save_turn(user_msg: str, ai_msg: str, store: str | None = None):

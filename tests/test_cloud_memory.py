@@ -278,6 +278,99 @@ def test_mit_ollama_bleibt_es_lokal(extraktoren, monkeypatch):
     assert extraktoren == ["local"]
 
 
+def test_der_cloud_extraktor_kennt_beide_dialekte(monkeypatch):
+    """Die Luecke, die das Gedaechtnis genau beim Umschalten auf Claude
+    getoetet haette: _call_graph_extractor_cloud stieg bei allem, was nicht
+    OpenAI-kompatibel ist, still mit ([], []) aus. Der Cloud-Graph haette
+    einfach nichts mehr bekommen — ohne Fehler, ohne Log."""
+    import consolidation
+    import providers
+
+    gerufen = {}
+
+    class FakeAntwort:
+        content = [type("B", (), {"type": "text",
+                                  "text": '"nodes": [{"name": "Brummer"}], '
+                                          '"edges": []}'})()]
+        usage = type("U", (), {"input_tokens": 100, "output_tokens": 20})()
+
+    class FakeMessages:
+        def create(self, **kw):
+            gerufen.update(kw)
+            return FakeAntwort()
+
+    class FakeAnthropic:
+        def __init__(self, *a, **k):
+            self.messages = FakeMessages()
+
+    import sys
+    modul = type(sys)("anthropic")
+    modul.Anthropic = FakeAnthropic
+    monkeypatch.setitem(sys.modules, "anthropic", modul)
+    monkeypatch.setattr(providers, "configured", lambda: "claude")
+
+    nodes, edges = consolidation._call_graph_extractor_cloud(
+        "ich hab ein fahrrad", "aha", "2026-08-16")
+    assert [n["name"] for n in nodes] == ["Brummer"]
+    # Billigmodell, nicht das Chat-Modell: Konzepte ziehen ist Fleissarbeit.
+    assert gerufen["model"] == "claude-haiku-4-5"
+
+
+def test_konsolidierung_nimmt_ein_buendel(extraktoren, monkeypatch):
+    """Ein Call pro Turn heisst: die Extraktor-Anweisungen gehen fuenfmal
+    statt einmal raus."""
+    import consolidation
+    monkeypatch.setattr(consolidation, "_local_da", lambda: True)
+    consolidation.extract_turn_into_graph(
+        [("ich hab ein fahrrad", "aha"), ("es heisst brummer", "schoen")],
+        None, store="/tmp/ai_graph_cloud.json")
+    assert extraktoren == ["local"]          # EIN Call, nicht zwei
+
+
+def test_buendel_body_haelt_die_turns_auseinander():
+    import consolidation
+    body = consolidation._extractor_body(
+        [("erste frage", "erste antwort"), ("zweite frage", "zweite antwort")],
+        None, "2026-08-16")
+    assert "[Turn 1]" in body and "[Turn 2]" in body
+    assert "zweite antwort" in body
+
+
+def test_einzelner_turn_sieht_aus_wie_vorher():
+    """Der lokale Pfad ist unterwegs nicht testbar — sein Prompt darf sich
+    durch das Buendeln nicht nebenbei aendern."""
+    import consolidation
+    body = consolidation._extractor_body("frage", "antwort", "2026-08-16")
+    assert "Chat-Turn:" in body
+    assert "[Turn 1]" not in body
+
+
+def test_worker_buendelt_getrennt_nach_graph(monkeypatch):
+    """Die Isolations-Invariante darf das Buendeln nicht verwaessern: Turns
+    aus dem lokalen und dem Cloud-Graphen duerfen NIE in einem Call landen —
+    das waere genau der Abfluss, den der getrennte Store verhindert."""
+    import ai
+    import consolidation
+    calls = []
+    monkeypatch.setattr(consolidation, "extract_turn_into_graph",
+                        lambda turns, _a, store=None: calls.append((store, turns)))
+    monkeypatch.setattr(ai, "_consol_pending",
+                        [("a", "1", None), ("b", "2", "/tmp/wolke.json"),
+                         ("c", "3", None)])
+    monkeypatch.setattr(ai, "CONSOLIDATION_IDLE_S", 0)
+
+    # Den Rumpf des Workers einmal von Hand fahren (er laeuft sonst ewig).
+    buendel = {}
+    for u, a, s in ai._consol_pending:
+        buendel.setdefault(s, []).append((u, a))
+    for store, turns in buendel.items():
+        consolidation.extract_turn_into_graph(turns, None, store=store)
+
+    ziele = dict(calls)
+    assert ziele[None] == [("a", "1"), ("c", "3")]
+    assert ziele["/tmp/wolke.json"] == [("b", "2")]
+
+
 # ── Verdrahtung ────────────────────────────────────────────────────────
 
 def test_cloud_meldet_seinen_store_an(monkeypatch):

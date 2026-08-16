@@ -42,6 +42,7 @@ PROVIDERS = {
         "key_env":       "ANTHROPIC_API_KEY",
         "kind":          "anthropic",
         "default_model": "claude-sonnet-5",
+        "cheap_model":   "claude-haiku-4-5",
         "jurisdiction":  "US",
         "note":          "Anthropic — der Ziel-Pfad des Kerns. Einziger "
                          "Anbieter mit steuerbarem Prompt-Cache "
@@ -52,6 +53,7 @@ PROVIDERS = {
         "key_env":       "DASHSCOPE_API_KEY",
         "kind":          "openai_compat",
         "default_model": "qwen-plus",
+        "cheap_model":   "qwen-turbo",
         "jurisdiction":  "SG",
         "note":          "Alibaba Qwen (intl/Singapur), no-train verifiziert. "
                          "Billig — die Rückfallebene, wenn das Budget alle ist.",
@@ -61,6 +63,7 @@ PROVIDERS = {
         "key_env":       "OPENAI_API_KEY",
         "kind":          "openai_compat",
         "default_model": "gpt-4o",
+        "cheap_model":   "gpt-4o-mini",
         "jurisdiction":  "US",
     },
     "grok": {
@@ -78,6 +81,7 @@ PROVIDERS = {
         "key_env":       "GEMINI_API_KEY",
         "kind":          "openai_compat",
         "default_model": "gemini-2.5-pro",
+        "cheap_model":   "gemini-2.5-flash",
         "jurisdiction":  "US",
     },
     "deepseek": {
@@ -110,6 +114,22 @@ def get(name: str) -> dict:
     """Provider-Eintrag oder {} — anders als beim Tutor gibt es hier KEINEN
     local-Fallback: wer hier fragt, fragt nach einem Cloud-Endpunkt."""
     return PROVIDERS.get(name) or {}
+
+
+def cheap_model(name: str) -> str | None:
+    """Das billige Modell dieses Anbieters — für Fleißarbeit statt Denken.
+
+    Konzepte und Kanten aus einem Chat-Turn ziehen ist Fleißarbeit: das
+    Ergebnis ist strukturiertes JSON gegen eine feste Verb-Whitelist, kein
+    Urteil. Dafür das Modell zu bezahlen, das auch das Gespräch führt, ist
+    reine Verschwendung — bei Anthropic Faktor fünf.
+
+    Fällt auf das Default-Modell zurück, wenn kein billiges eingetragen ist:
+    lieber teurer konsolidieren als gar nicht (ohne Extraktor merkt sich die
+    KI nichts, und DAS ist der Punkt der ganzen Sache).
+    """
+    p = get(name)
+    return p.get("cheap_model") or p.get("default_model")
 
 
 # Welchen Provider der Kern nimmt, wenn MEHRERE Keys gesetzt sind — bewusst als

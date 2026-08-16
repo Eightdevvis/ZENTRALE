@@ -58,6 +58,33 @@ def test_die_suite_bucht_nicht_in_die_echte_datei():
 
 # ── Preistabelle ───────────────────────────────────────────────────────
 
+def test_jeder_provider_hat_einen_preis_fuer_sein_billigmodell():
+    """Die Konsolidierung laeuft ueber cheap_model und feuert OHNE Sashas
+    Zutun. Ein Modell ohne Preis waere genau dort ein blinder Fleck."""
+    for name in providers.PROVIDERS:
+        mdl = providers.cheap_model(name)
+        assert mdl, f"{name}: kein cheap_model und kein default_model"
+        assert prices.bekannt(mdl), \
+            f"{name}: kein Preis für {mdl!r} in core/prices.py"
+
+
+def test_das_billigmodell_ist_auch_wirklich_billiger():
+    """Sonst ist die Umstellung ein Kommentar ohne Wirkung."""
+    for name, p in providers.PROVIDERS.items():
+        if not p.get("cheap_model"):
+            continue
+        billig = prices.fuer(p["cheap_model"])
+        normal = prices.fuer(p["default_model"])
+        assert billig["out"] < normal["out"], name
+
+
+def test_ohne_eintrag_faellt_cheap_model_auf_das_default_zurueck():
+    """Lieber teurer konsolidieren als gar nicht — ohne Extraktor merkt sich
+    die KI nichts, und das ist der Punkt der ganzen Sache."""
+    assert providers.cheap_model("mistral") == \
+        providers.PROVIDERS["mistral"]["default_model"]
+
+
 def test_jeder_provider_hat_einen_preis_fuer_sein_default_modell():
     """Sonst zeigt die €-Anzeige beim ersten Umschalten Unsinn — und der
     Deckel rechnet gegen eine Fantasiezahl."""
