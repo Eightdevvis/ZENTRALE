@@ -1454,16 +1454,45 @@ def run_ui(stdscr, store):
     # ein von Hand gesetztes day/night überschrieben — nvim und Terminal sprangen
     # daraufhin auf die Uhrzeit-Auflösung. Die Datei ist die Wahrheit; die TUI
     # liest sie beim Start und schreibt nur noch, wenn SIE etwas ändert.
+    THEME_FILE = os.path.expanduser("~/.config/zentrale/theme")
+    THEME_LOG = os.path.expanduser("~/.cache/zentrale/theme-changes.log")
+
     def _read_theme_mode():
         try:
-            path = os.path.expanduser("~/.config/zentrale/theme")
-            with open(path) as fh:
+            with open(THEME_FILE) as fh:
                 raw = fh.read().strip()
             if raw in ("auto", "day", "night"):
                 return raw
         except OSError:
             pass
         return "auto"
+
+    def _theme_stamp():
+        """mtime der Theme-Datei (ns) — oder None, wenn es sie nicht gibt."""
+        try:
+            return os.stat(THEME_FILE).st_mtime_ns
+        except OSError:
+            return None
+
+    def _log_theme(quelle, alt, neu):
+        """Jeden Moduswechsel protokollieren — wer, wann, von wo nach wo.
+
+        Es gab einen Fall, in dem das Theme nachweislich umsprang, ohne dass
+        jemand in der TUI umgeschaltet hatte; rückwirkend war nicht mehr
+        feststellbar, wer die Datei geschrieben hatte. Seitdem schreibt jeder
+        Wechsel eine Zeile mit. `quelle=tui` heißt: wir waren es (Taste oder
+        Befehl). `quelle=fremd` heißt: die Datei hat sich unter uns geändert —
+        dann war es ein anderer Prozess, und `scripts/zentrale-theme-watch`
+        hält fest, welcher.
+        """
+        try:
+            os.makedirs(os.path.dirname(THEME_LOG), exist_ok=True)
+            with open(THEME_LOG, "a") as fh:
+                fh.write("%s  %-5s  %s -> %s\n"
+                         % (time.strftime("%F %T"), quelle, alt, neu))
+        except OSError:
+            pass
+
     theme_mode = _read_theme_mode()
     def resolved_theme():
         if theme_mode == "auto":
@@ -1498,9 +1527,13 @@ def run_ui(stdscr, store):
     _last_term_mode = [theme_mode]
     _last_env_theme = [None]      # zuletzt an die Umgebung gemeldetes day/night
     _env_due = [0.0]              # >0: Applier stehen aus (Zeitstempel)
+    _theme_seen = [_theme_stamp()]  # mtime, die WIR zuletzt gesehen/erzeugt haben
     ENV_DEBOUNCE = 0.5
+    # bat ist mit dabei, obwohl es nichts „umfärbt": es liest seine Config bei
+    # jedem Aufruf neu, und ohne diesen Anstoß zöge es erst beim nächsten
+    # Minuten-Tick des systemd-Timers nach (bis zu 60 s Verzug).
     _THEME_APPLIERS = ("zentrale-term-theme", "zentrale-browser-theme",
-                       "zentrale-desktop-theme")
+                       "zentrale-desktop-theme", "zentrale-bat-theme")
     def _push_term_theme(mode, resolved=None):
         if mode != _last_term_mode[0]:
             _last_term_mode[0] = mode
@@ -1519,6 +1552,9 @@ def run_ui(stdscr, store):
                 os.replace(tmp, dest)
             except OSError:
                 pass
+            # Unsere eigene Schreibspur merken, sonst liest _pull_term_theme()
+            # sie gleich als „Fremdänderung" zurück.
+            _theme_seen[0] = _theme_stamp()
             _env_due[0] = time.time() + ENV_DEBOUNCE
         if not _env_due[0] or time.time() < _env_due[0]:
             return
@@ -1538,6 +1574,32 @@ def run_ui(stdscr, store):
                     )
                 except OSError:
                     pass
+
+    def _pull_term_theme():
+        """Fremdänderung der Theme-Datei übernehmen → neuer Modus oder None.
+
+        Bis hierher war die TUI der einzige Teilnehmer der Kopplung OHNE
+        Rückkanal: nvim beobachtet die Datei (fs_event + Tick), Terminal,
+        Browser, Desktop und bat ziehen sie per Minuten-Timer nach — nur die
+        TUI las sie einmal beim Start und behauptete danach ihren eigenen Modus.
+        Schrieb irgendwer sonst in die Datei, lief die TUI-Anzeige gegen den
+        Rest der Umgebung: alles dunkel, TUI zeigt weiter hell. Genau dieses
+        Bild ist aufgetreten.
+
+        Erkannt wird über die mtime — unser eigenes Schreiben merkt sich
+        _push_term_theme() in _theme_seen, es kommt also nicht als fremd zurück.
+        """
+        stamp = _theme_stamp()
+        if stamp is None or stamp == _theme_seen[0]:
+            return None
+        _theme_seen[0] = stamp
+        neu = _read_theme_mode()
+        if neu == _last_term_mode[0]:
+            return None            # Inhalt gleich (z.B. nur neu geschrieben)
+        _log_theme("fremd", _last_term_mode[0], neu)
+        _last_term_mode[0] = neu   # nicht zurückschreiben, nur mitziehen
+        return neu
+
     _push_term_theme(theme_mode, cur_theme)
 
     # Esc soll sofort reagieren (sonst wartet ncurses ~1s auf eine Escape-
@@ -7934,6 +7996,16 @@ def run_ui(stdscr, store):
             # '/' wird global oben abgefangen (greift in JEDEM Fenster), darum
             # hier kein eigener Zweig mehr.
         # KEY_RESIZE oder Timeout → einfach neu zeichnen
+
+        # Hat jemand ANDERES die Theme-Datei geändert? Dann mitziehen statt den
+        # eigenen Modus weiter zu behaupten (siehe _pull_term_theme).
+        _fremd = _pull_term_theme()
+        if _fremd is not None:
+            theme_mode = _fremd
+        elif theme_mode != _last_term_mode[0]:
+            # WIR schalten gerade um (Taste 't' oder /theme) — mitschreiben,
+            # damit im Protokoll später unterscheidbar ist, wer es war.
+            _log_theme("tui", _last_term_mode[0], theme_mode)
 
         # Theme nachziehen (auto wechselt nach Uhrzeit, oder nach 't'/Befehl)
         want = resolved_theme()

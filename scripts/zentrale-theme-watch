@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# zentrale-theme-watch — hält fest, WER ~/.config/zentrale/theme ändert.
+#
+# Anlass: das Theme ist nachweislich umgesprungen, ohne dass in der TUI jemand
+# umgeschaltet hatte. Der Zeitstempel der Datei verriet nur das WANN — der
+# Schreiber war rückwirkend nicht mehr zu ermitteln. Dieser Beobachter läuft
+# mit und protokolliert bei JEDER Änderung, was zu diesem Moment lief.
+#
+# Grenze, ehrlich gesagt: inotify meldet das Ereignis, nicht den Verursacher.
+# Den Prozess sauber zu benennen bräuchte fanotify/auditd und damit root. Was
+# hier steht, ist deshalb ein Schnappschuss der Verdächtigen (alles, was mit
+# ZENTRALE zu tun hat) plus die Frage, ob die TUI sich selbst als Urheber
+# eingetragen hat. Zusammen reicht das zur Zuordnung:
+#   * Die TUI schreibt bei jedem eigenen Wechsel eine `tui`-Zeile ins
+#     Änderungsprotokoll (~/.cache/zentrale/theme-changes.log).
+#   * Steht hier eine Änderung, zu der es KEINE `tui`-Zeile gibt, war es ein
+#     Dritter — und der Schnappschuss zeigt, welche Kandidaten liefen.
+#
+# Aufruf: zentrale-theme-watch            (läuft im Vordergrund, Strg-C beendet)
+#         zentrale-theme-watch --status   (letzte Einträge zeigen)
+set -u
+
+STATE="${ZENTRALE_THEME_FILE:-$HOME/.config/zentrale/theme}"
+LOGDIR="${XDG_CACHE_HOME:-$HOME/.cache}/zentrale"
+LOG="$LOGDIR/theme-watch.log"
+CHANGES="$LOGDIR/theme-changes.log"
+
+if [ "${1:-}" = "--status" ]; then
+  printf '── beobachtete Aenderungen (%s) ──\n' "$LOG"
+  tail -n 40 "$LOG" 2>/dev/null || echo "(noch nichts)"
+  printf '\n── was die TUI selbst gemeldet hat (%s) ──\n' "$CHANGES"
+  tail -n 40 "$CHANGES" 2>/dev/null || echo "(noch nichts)"
+  exit 0
+fi
+
+command -v inotifywait >/dev/null 2>&1 || {
+  echo "inotifywait fehlt (Paket inotify-tools) — Beobachter kann nicht laufen" >&2
+  exit 1
+}
+
+mkdir -p "$LOGDIR" "$(dirname "$STATE")"
+[ -f "$STATE" ] || printf 'auto\n' > "$STATE"
+
+log() { printf '%s  %s\n' "$(date '+%F %T')" "$*" >> "$LOG"; }
+
+log "beobachte $STATE (start, inhalt=$(tr -d '[:space:]' < "$STATE" 2>/dev/null))"
+
+vorher="$(tr -d '[:space:]' < "$STATE" 2>/dev/null)"
+
+# --- Warum diese Ereignisse: die Datei wird atomar per tmp+rename ersetzt
+# (siehe tui/zentrale_tui.py). Bei einem Rename ist der alte inode weg, ein
+# Watch auf der DATEI wäre danach tot. Deshalb beobachten wir das VERZEICHNIS
+# und filtern auf den Dateinamen.
+dir="$(dirname "$STATE")"
+name="$(basename "$STATE")"
+
+inotifywait -m -q -e close_write,moved_to,create --format '%e %f' "$dir" |
+while read -r ereignis datei; do
+  [ "$datei" = "$name" ] || continue
+  nachher="$(tr -d '[:space:]' < "$STATE" 2>/dev/null)"
+  [ "$nachher" = "$vorher" ] && continue      # nur neu geschrieben, gleicher Inhalt
+
+  log "AENDERUNG $vorher -> $nachher  (inotify: $ereignis)"
+
+  # Verdächtige: alles, was mit ZENTRALE zu tun hat, mit Start- und CPU-Zeit.
+  # Kurzlebige Schreiber (ein `printf > datei` aus einer Shell) sind hier schon
+  # wieder weg — dann bleibt der Eintrag leer, und genau DAS ist auch eine
+  # Information: es war kein Dauerläufer.
+  log "  laufende kandidaten:"
+  ps -eo pid,lstart,etimes,cmd 2>/dev/null \
+    | grep -iE "zentrale|tutor|morgen|nvim|bat" | grep -v grep \
+    | sed 's/^/    /' >> "$LOG"
+
+  # Hat die TUI sich in derselben Sekunde als Urheber eingetragen?
+  if [ -r "$CHANGES" ] \
+     && tail -n 3 "$CHANGES" 2>/dev/null | grep -q "$(date '+%F %T')"; then
+    log "  → die TUI hat sich als Urheber eingetragen (siehe theme-changes.log)"
+  else
+    log "  → KEIN TUI-Eintrag zu dieser Sekunde: der Schreiber war ein Dritter"
+  fi
+
+  vorher="$nachher"
+done

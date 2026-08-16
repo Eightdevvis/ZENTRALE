@@ -39,7 +39,8 @@ UNITS="$HOME/.config/systemd/user"
 mkdir -p "$BIN" "$UNITS" "$HOME/.config/zentrale"
 
 # 1. Applier-Symlinks
-for a in zentrale-term-theme zentrale-browser-theme zentrale-desktop-theme; do
+for a in zentrale-term-theme zentrale-browser-theme zentrale-desktop-theme \
+         zentrale-theme-watch; do
   ln -sf "$REPO/scripts/$a" "$BIN/$a"
   echo "symlink: $BIN/$a -> $REPO/scripts/$a"
 done
@@ -59,6 +60,18 @@ done
 systemctl --user daemon-reload
 systemctl --user enable --now zentrale-theme.timer
 echo "timer: $(systemctl --user is-active zentrale-theme.timer)"
+
+# 3b. Beobachter: protokolliert, WER die Theme-Datei aendert. Braucht
+#     inotifywait; ohne das Paket wird er einfach nicht aktiviert.
+if command -v inotifywait >/dev/null 2>&1; then
+  install -m 0644 "$REPO/deploy/zentrale-theme-watch.service" \
+                  "$UNITS/zentrale-theme-watch.service"
+  systemctl --user daemon-reload
+  systemctl --user enable --now zentrale-theme-watch.service
+  echo "watch: $(systemctl --user is-active zentrale-theme-watch.service)"
+else
+  echo "watch: uebersprungen (inotifywait fehlt, Paket inotify-tools)"
+fi
 
 # 4. State seeden + einmal anwenden
 [ -f "$HOME/.config/zentrale/theme" ] || printf 'auto\n' > "$HOME/.config/zentrale/theme"

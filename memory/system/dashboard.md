@@ -101,6 +101,36 @@ sofort geschrieben (nvim und der systemd-Timer lesen den MODUS, nicht die
 Farbe) — sie ist billig, aber **atomar** (tmp + `os.replace`, siehe
 nvim-Kopplung unten).
 
+**Die TUI zieht Fremdänderungen seit 2026-08-16 nach (`_pull_term_theme`).**
+Bis dahin war sie der einzige Teilnehmer der Kopplung **ohne Rückkanal**: nvim
+beobachtet die Datei (fs_event + Tick), Terminal/Browser/Desktop/bat ziehen sie
+per Minuten-Timer nach — die TUI las sie einmal beim Start und behauptete
+danach ihren eigenen Modus. Schrieb irgendwer sonst hinein, lief die Anzeige
+gegen den Rest der Umgebung: **alles dunkel, TUI zeigt weiter hell.** Genau
+dieses Bild ist am 2026-08-16 aufgetreten (Datei um 15:21:38 auf `night`
+gesetzt, die Applier zogen erst beim Timer-Tick 62 s später nach — also hatte
+sie *nicht* die TUI geschrieben, die stößt sie sofort an). Erkannt wird über
+die mtime; das eigene Schreiben merkt sich `_push_term_theme` in `_theme_seen`
+und kommt daher nicht als fremd zurück. Beim Mitziehen wird **nicht**
+zurückgeschrieben — die Datei bleibt die Wahrheit.
+
+**Änderungsprotokoll + Beobachter.** Wer die Datei ändert, war rückwirkend
+nicht feststellbar (der Zeitstempel verrät nur das WANN). Seitdem:
+- Die TUI schreibt jeden Wechsel nach `~/.cache/zentrale/theme-changes.log`,
+  mit Quelle `tui` (Taste/Befehl) oder `fremd` (Datei änderte sich unter uns).
+- `scripts/zentrale-theme-watch` hängt per inotify am **Verzeichnis** (die
+  Datei wird atomar per tmp+rename ersetzt — ein Watch auf der Datei säße
+  danach auf einem toten inode) und protokolliert jede echte Inhaltsänderung
+  nach `~/.cache/zentrale/theme-watch.log`, mit Prozess-Schnappschuss und dem
+  Hinweis, ob die TUI sich als Urheber eingetragen hat. **Grenze:** inotify
+  meldet das Ereignis, nicht den Verursacher — den sauber zu benennen bräuchte
+  fanotify/auditd und damit root. Ein kurzlebiger Schreiber (`printf > datei`
+  aus einer Shell) ist im Schnappschuss schon wieder weg; auch das ist eine
+  Aussage (kein Dauerläufer). Läuft als User-Dienst
+  `deploy/zentrale-theme-watch.service`, aktiviert von
+  `install_theme_coupling.sh`, sofern `inotifywait` da ist.
+  `zentrale-theme-watch --status` zeigt beide Protokolle.
+
 **Der Start-Modus kommt seit 2026-08-16 aus der Datei, nicht mehr hart aus
 `auto`.** Vorher stand `theme_mode = "auto"` fest im Code und wurde beim Start
 sofort in die Datei geschrieben: **jeder** TUI-Start — auch ein tmux-Restore,
@@ -133,7 +163,9 @@ Setzen gestempelt, damit ein Abbruch beim nächsten Lauf erneut greift;
 `--force` übergeht das Gate); `zentrale-desktop-theme` und
 `zentrale-browser-theme` vergleichen stattdessen den aktiven
 xfconf-/gsettings-Wert und setzen nur bei Abweichung, `zentrale-bat-theme` die
-`--theme`-Zeile in seiner Config. Nur lokal,
+`--theme`-Zeile in seiner Config. Beim Umschalten in der TUI werden **alle
+vier** Applier direkt angestoßen (bat inklusive — sonst zöge es erst beim
+nächsten Minuten-Tick nach). Nur lokal,
 kein Sync, kein Backend — TUI ist die einzige Quelle. **Setup reproduzierbar
 in git:** Unit-Templates `deploy/zentrale-theme.{service,timer}` (zwei
 `ExecStart`-Zeilen: Terminal + Browser), Einrichten per

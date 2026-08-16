@@ -1,0 +1,15 @@
+[Unit]
+Description=ZENTRALE: protokollieren, wer die Theme-Datei aendert
+After=graphical-session.target
+
+[Service]
+# Dauerlaeufer (kein oneshot): haengt an inotify und schreibt nur, wenn sich
+# der Inhalt von ~/.config/zentrale/theme wirklich aendert. Im Ruhezustand
+# kostet das nichts — ein blockierter inotifywait plus eine Shell-Schleife.
+Type=simple
+ExecStart=%h/.local/bin/zentrale-theme-watch
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
