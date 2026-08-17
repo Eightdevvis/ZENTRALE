@@ -156,6 +156,23 @@ def _is_date(s: str) -> bool:
         return False
 
 
+_ZEIT_RE = re.compile(r"^\d{4}(-\d{2}(-\d{2})?)?$")
+
+
+def _zeit_typ(name: str) -> str | None:
+    """Zeit-Knotentyp aus dem Namen: "2026" / "2026-08" / "2026-08-17".
+
+    Der Graph kennt Zeit in drei Auflösungen, und die GROBEN sind kein
+    Notbehelf: sagt Sasha „vor ein paar Tagen", ist der Monat die
+    genaueste wahre Aussage. Ein Tages-Knoten wäre präziser, aber
+    erfunden — und genau daraus wurde am 17.08.2026 „du hattest bis
+    gestern Fieber".
+    """
+    if not _ZEIT_RE.match(name or ""):
+        return None
+    return {4: "time-year", 7: "time-month", 10: "time-day"}[len(name)]
+
+
 def _log(line: str):
     """Lazy state-import damit Tests ohne live state importieren können."""
     try:
@@ -474,8 +491,16 @@ def _add_or_get_node(name: str, node_type: str, data: dict) -> str:
         node["mentions"]  = node.get("mentions", 1) + 1
         return alias
 
-    # Neuer Knoten - Embedding generieren falls kein Zeit-Knoten
-    ist_zeit = _is_date(name) or node_type in ("time-day", "time-month",
+    # Neuer Knoten - Embedding generieren falls kein Zeit-Knoten.
+    # Heißt der Knoten wie ein Zeitpunkt, IST er einer — egal was der
+    # Extraktor als type geraten hat. Vorher stand "2026-08-10" als `event`
+    # und "2026-08-09" als `concept` im Graphen, nur weil das Modell mal so
+    # und mal so getippt hat; die Filter, die Zeit-Knoten aussortieren
+    # (Persona-Kontext, reembed_missing), griffen dann nicht.
+    zeit_typ = _zeit_typ(name)
+    if zeit_typ:
+        node_type = zeit_typ
+    ist_zeit = bool(zeit_typ) or node_type in ("time-day", "time-month",
                                                "time-year")
     emb = None if ist_zeit else _emb_doc(name, data)
     data["nodes"][name] = {

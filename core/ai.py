@@ -123,9 +123,9 @@ QWEN_SAMPLING = {
 # Erst alles, was über alle Turns GLEICH bleibt, dann alles, was sich pro
 # Turn ändert:
 #
-#   System-Prompt · Capabilities · Antwort-Suffix · ASCII · Dashboard
+#   System-Prompt · Capabilities · Antwort-Suffix · ASCII · Dashboard · Imprint
 #   ─────────────── ab hier wechselnd ───────────────
-#   Graph-Kontext · Jetzt-Block · Imprint · Alarme · Mic-Hinweis
+#   Graph-Kontext · Jetzt-Block · Alarme · Mic-Hinweis
 #
 # Zwei Gründe, ein Handgriff:
 #  * Prompt-Cache. Ein Cache-Treffer braucht ein byte-identisches Präfix.
@@ -960,6 +960,12 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         # Antwort-Suffix und Bild-Markern, die ein 9B braucht. Der Cloud-Pfad
         # holt sich denselben Kopf von seiner eigenen Schiene.
         sys_prompt = profil.klein.system(system, dashview=_DASHVIEW)
+        # Der Imprint (heute/morgen) gehört noch zum stabilen Teil: er ändert
+        # sich mit dem Tag und mit echten Kalender-Änderungen, nicht mit dem
+        # Turn. Im wechselnden Teil würde er bei jedem Turn ungecacht bezahlt.
+        imprint = _imprint_prompt()
+        if imprint:
+            sys_prompt += "\n\n" + imprint
         # ── Ab hier wechselt es pro Turn (siehe _PROMPT_ORDER-Notiz oben) ──
         if mem_ctx:
             sys_prompt += "\n\n" + mem_ctx
@@ -967,11 +973,6 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         # dessen Datums-Knoten („das sind Erinnerungen, nicht heute"), und was
         # zuletzt steht, sitzt am dichtesten an der User-Message.
         sys_prompt += "\n\n" + _now_prompt()
-        # Direkt hinter dem Jetzt-Block: was heute/morgen ansteht. Braucht das
-        # Datum als Bezug, und erspart die häufigste Tool-Runde überhaupt.
-        imprint = _imprint_prompt()
-        if imprint:
-            sys_prompt += "\n\n" + imprint
         # Alarm-Kanal: offene Kalender-Erinnerungen randständig anhängen (nicht
         # mehr inline in der read_calendar-Ausgabe). Leer → kein Block.
         alarm_block = _alarm_prompt()

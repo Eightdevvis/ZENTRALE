@@ -201,9 +201,17 @@ def _static_system(system: str | None, tutor_mode: bool) -> str:
     Block cacht also Tool-Schema UND Prompt zusammen — die ~4.700 Token, die
     sonst bei jedem Turn und jeder Tool-Runde voll bezahlt würden.
 
-    Hier darf NICHTS hinein, was sich ändert. Eine Uhrzeit an dieser Stelle
-    macht den Cache zu einer reinen Kostensteigerung: jeder Turn schreibt neu,
-    keiner trifft.
+    Hier darf nichts hinein, was sich PRO TURN ändert. Eine Uhrzeit an dieser
+    Stelle macht den Cache zu einer reinen Kostensteigerung: jeder Turn
+    schreibt neu, keiner trifft.
+
+    Der Imprint (heute/morgen) darf trotzdem hier stehen — und gehört hierher.
+    Er ändert sich nicht mit dem Turn, sondern nur, wenn der Tag umspringt
+    oder am Kalender wirklich etwas passiert. Das sind ein, zwei
+    Cache-Schreibvorgänge am Tag statt eines pro Turn; im wechselnden Teil
+    hätte derselbe Text bei JEDEM Turn ungecacht bezahlt werden müssen.
+    Bedingung dafür ist, dass er byte-stabil ist: deshalb Tages-Granularität
+    (kein „ab jetzt", keine ablaufenden Uhrzeiten) und kein Blick zurück.
     """
     if tutor_mode:
         # Fremdes Tool-Set (Tutor): eigener vollständiger Prompt, kein Memory,
@@ -212,7 +220,9 @@ def _static_system(system: str | None, tutor_mode: bool) -> str:
 
     # Die Schiene entscheidet, was hier drinsteht — nicht dieser Modul.
     # Hier draussen faehrt ein Frontier-Modell, also `gross`.
-    return _profil().system(system, dashview=ai._DASHVIEW)
+    kopf = _profil().system(system, dashview=ai._DASHVIEW)
+    imprint = ai._imprint_prompt()
+    return f"{kopf}\n\n{imprint}" if imprint else kopf
 
 
 def _profil():
@@ -228,8 +238,8 @@ def cloud_tools() -> list:
 
 def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
     """
-    Das Wechselnde: Graph-Kontext, Jetzt-Block, Imprint (heute/morgen),
-    Alarme, Mic-Hinweis.
+    Das Wechselnde: Graph-Kontext, Jetzt-Block, Alarme, Mic-Hinweis.
+    (Der Imprint gehoert NICHT hierher — siehe _static_system.)
 
     Das steht NICHT mehr im System-Prompt. Dort saß es vor dem gesamten
     Verlauf — und weil die Uhr jeden Turn eine andere ist, hat es alles
@@ -245,13 +255,9 @@ def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
         parts.append(mem_ctx)
     parts.append(ai._now_prompt())
     if not tutor_mode:
-        # Was heute/morgen ansteht, direkt hinter dem Jetzt-Block — erspart
-        # die häufigste Tool-Runde überhaupt. Gehört ins Wechselnde: es
-        # ändert sich mit dem Tag, nicht mit dem Turn, aber der statische
-        # Kopf muss byte-identisch bleiben.
-        imprint = ai._imprint_prompt()
-        if imprint:
-            parts.append(imprint)
+        # Der Imprint steht NICHT hier, sondern im gecachten Kopf
+        # (_static_system). Er ändert sich mit dem Tag, nicht mit dem Turn —
+        # hier unten würde er bei jedem Turn ungecacht mitbezahlt.
         alarm = ai._alarm_prompt()
         if alarm:
             parts.append(alarm)

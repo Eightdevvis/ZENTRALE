@@ -287,15 +287,37 @@ def test_leerer_tag_sagt_das_auch(tmp_kalender):
     assert "Keine Einträge" in text
 
 
-def test_imprint_haengt_im_wechselnden_teil(monkeypatch):
-    """Im Prompt hinten, nicht im gecachten Kopf — er ändert sich mit dem
-    Tag, der statische Kopf muss byte-identisch bleiben."""
+def test_imprint_steht_im_gecachten_kopf(monkeypatch):
+    """In den gecachten Teil, nicht ins Wechselnde.
+
+    Der Imprint ändert sich mit dem TAG und mit echten Kalender-Änderungen,
+    nicht mit dem Turn. Im wechselnden Teil müsste derselbe Text bei jedem
+    Turn ungecacht bezahlt werden; im Kopf sind es ein, zwei
+    Cache-Schreibvorgänge am Tag.
+    """
     import cloud
     monkeypatch.setattr(ai, "_imprint_prompt", lambda: "## Was ansteht\nZahnarzt")
-    fluechtig = cloud._volatile_text("", via_mic=False, tutor_mode=False)
     statisch  = cloud._static_system(None, tutor_mode=False)
-    assert "Zahnarzt" in fluechtig
-    assert "Zahnarzt" not in statisch
+    fluechtig = cloud._volatile_text("", via_mic=False, tutor_mode=False)
+    assert "Zahnarzt" in statisch
+    assert "Zahnarzt" not in fluechtig
+
+
+def test_gecachter_kopf_bleibt_ueber_turns_gleich(monkeypatch):
+    """Byte-identisch, solange sich am Kalender nichts ändert — sonst wäre
+    der Cache-Treffer weg und der Imprint teurer als die Tool-Runde."""
+    import cloud
+    monkeypatch.setattr(ai, "_imprint_prompt", lambda: "## Was ansteht\nZahnarzt")
+    assert (cloud._static_system(None, tutor_mode=False)
+            == cloud._static_system(None, tutor_mode=False))
+
+
+def test_imprint_blickt_nicht_zurueck(tmp_kalender):
+    """Vergangenes darf den Cache nicht vollmüllen — der Block fängt heute
+    an, nicht gestern."""
+    gestern = (date.today() - timedelta(days=1)).isoformat()
+    kalender.add_entry("termine", gestern, "Umzug")
+    assert "Umzug" not in kalender.imprint_for_prompt()
 
 
 def test_kalender_faellt_aus_chat_laeuft_weiter(monkeypatch):
@@ -308,11 +330,46 @@ def test_kalender_faellt_aus_chat_laeuft_weiter(monkeypatch):
 
 # ── Die Zeit-Regel im Extraktor-Prompt ─────────────────────────────────
 
-def test_extraktor_prompt_verbietet_datum_auf_verdacht():
+def test_extraktor_prompt_datiert_grob_statt_falsch():
     """Regel 5 kannte nur das Beispiel „ich war heute müde" und stempelte
-    darum auf alles das heutige Datum. Die Unterscheidung Erzähltag ↔
-    Ereignistag muss drinstehen bleiben."""
-    p = consolidation._GRAPH_EXTRACTOR_PROMPT
-    assert "vor ein paar Tagen" in p          # ungefähre Vergangenheit
+    darum auf alles das heutige Datum. Drei Sachen müssen drinstehen
+    bleiben: die Unterscheidung Erzähltag ↔ Ereignistag, der GRÖBERE
+    Knoten statt eines erfundenen Tages, und dass Gegenwart trotzdem
+    normal datiert wird."""
+    p = " ".join(consolidation._GRAPH_EXTRACTOR_PROMPT.split())
+    assert "GRÖBER, NICHT FALSCH" in p        # Monat statt erfundener Tag
+    assert "MONATS-Knoten" in p
+    assert "GEGENWART IST DAGEGEN EINFACH" in p
     assert "NICHT-EREIGNISSE" in p            # Fragen und Vorhaben
     assert "nicht der des Geschehens" in p    # der Kern der Verwechslung
+
+
+def test_monatsknoten_ist_ein_zeitknoten():
+    """„2026-08" muss als Zeit erkannt werden — sonst kriegt es einen
+    Embedding-Vektor und rutscht durch jeden Zeit-Filter."""
+    assert graph._zeit_typ("2026-08") == "time-month"
+    assert graph._zeit_typ("2026") == "time-year"
+    assert graph._zeit_typ("2026-08-17") == "time-day"
+    assert graph._zeit_typ("Fieber") is None
+
+
+def test_datum_wird_als_zeit_getypt_egal_was_der_extraktor_raet(tmp_path,
+                                                               ohne_embeddings):
+    """Der Extraktor tippte Datums-Knoten mal als `event`, mal als
+    `concept` — dann greifen die Filter nicht, die Zeit aussortieren."""
+    p = str(tmp_path / "g.json")
+    graph.add_turn_extraction(
+        [{"name": "2026-08-10", "type": "event"},
+         {"name": "2026-08", "type": "concept"}], [], store=p)
+    with open(p, encoding="utf-8") as f:
+        nodes = json.load(f)["nodes"]
+    assert nodes["2026-08-10"]["type"] == "time-day"
+    assert nodes["2026-08"]["type"] == "time-month"
+
+
+def test_monat_als_subjekt_fliegt_raus():
+    """Ein Monat am falschen Ende ist genauso Müll wie ein Tag."""
+    sauber, drops = consolidation._sanitize_extracted(
+        [], [{"from": "2026-08", "to": "Fieber", "rel": "hat"}])
+    assert sauber == []
+    assert drops["date_subject"] == 1

@@ -270,9 +270,16 @@ keinen automatischen Zulauf mehr.
 ### Imprint: der nahe Horizont im Prompt
 
 `kalender.imprint_for_prompt(tage=IMPRINT_TAGE)` liefert, was **heute und
-morgen** ansteht, als fertigen Block. Er hängt im **wechselnden** Teil des
-Prompts, direkt hinter dem Jetzt-Block — lokal (`ai.chat_stream`) wie in
-beiden Cloud-Dialekten (`cloud._volatile_text`).
+morgen** ansteht, als fertigen Block. Er hängt im **gecachten Kopf** —
+`cloud._static_system` bzw. hinter `profil.klein.system(...)` im lokalen Pfad.
+
+**Warum gecacht und nicht im wechselnden Teil:** er ändert sich nicht mit dem
+Turn, sondern nur, wenn der Tag umspringt oder am Kalender wirklich etwas
+passiert. Das sind ein, zwei Cache-Schreibvorgänge am Tag; im wechselnden Teil
+hätte derselbe Text bei JEDEM Turn ungecacht bezahlt werden müssen. Bedingung
+ist Byte-Stabilität — deshalb **Tages-Granularität** (kein „ab jetzt", keine
+ablaufenden Uhrzeiten) und **kein Blick zurück**: der Block fängt heute an, nie
+gestern. Vergangenes würde den Cache nur vollmüllen.
 
 Das ist der Ersatz für den Spiegel, in der richtigen Richtung: der Spiegel
 wollte den Tag präsent machen, indem er **schrieb**; der Imprint **liest**.

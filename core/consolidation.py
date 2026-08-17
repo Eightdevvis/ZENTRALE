@@ -68,7 +68,9 @@ _ALLOWED_EDGE_VERBS = {
 # immer Extraktor-Müll - korrekte Richtung ist <konzept> ─[erwähnt-am
 # /geschah-am]─► <datum>. Subjekt-Datum produziert "2026-05-31 hat
 # zustand Sasha" - sowas verdaut das LLM beim Lesen unmöglich richtig.
-_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_DATE_RE = re.compile(r"^\d{4}(-\d{2}(-\d{2})?)?$")   # Tag, Monat ODER Jahr:
+# seit der Zeit-Regel darf der Extraktor auch gröber datieren ("2026-08"),
+# und ein Monat als SUBJEKT ist genauso Müll wie ein Tag als Subjekt.
 
 # Relations die richtungs-anfällig sind: KI/Sasha sind hier oft am
 # falschen Ende, wenn die KI in der Antwort über Sasha geredet hat
@@ -135,14 +137,21 @@ ABSOLUTE REGELN:
       Beispiel "ich war heute müde": {Sasha→müde, rel=zustand},
       {müde→2026-05-15, rel=geschah-am}.
 
-   b) UNGEFÄHRE VERGANGENHEIT IST KEIN DATUM. "vor ein paar Tagen",
-      "letztens", "neulich", "vor Wochen", "als ich krank war" → KEIN
-      geschah-am. Das heutige Datum ist hier die SCHLECHTESTE Wahl: es ist
-      der Tag des Erzählens, nicht der des Geschehens. Lieber gar keine
-      Zeitkante als eine erfundene.
+   b) UNGEFÄHRE VERGANGENHEIT WIRD GRÖBER, NICHT FALSCH. "vor ein paar
+      Tagen", "letztens", "neulich", "vor Wochen", "als ich krank war" →
+      NIEMALS ein Tages-Datum. Nimm stattdessen den MONATS-Knoten im Format
+      "2026-08" (bzw. das Jahr "2026", wenn nicht mal der Monat klar ist):
+      {Fieber→2026-08, rel=geschah-am}. Das ist unschärfer, aber wahr — und
+      man sieht ihm an, dass der genaue Tag unbekannt ist. Ein Tages-Datum
+      auf Verdacht ist der schlimmste Fehler überhaupt: das heutige wäre
+      der Tag des Erzählens, nicht der des Geschehens. Passt nicht mal ein
+      Monat: gar keine Zeitkante.
 
-   c) Das heutige Datum ist NICHT die Standard-Antwort. Setz es nur, wenn
-      der Turn sagt, dass es heute war.
+   c) GEGENWART IST DAGEGEN EINFACH. "ich hab grad Fieber", "mir ist heute
+      schlecht", "ich bin gerade in Berlin" beschreiben JETZT → heutiges
+      Datum, ganz normal als Tages-Knoten. Sei hier nicht übervorsichtig:
+      Regel (b) gilt für UNBESTIMMTE Vergangenheit, nicht für Aussagen im
+      Präsens. Was der Turn klar sagt, wird klar datiert.
 
    d) NICHT-EREIGNISSE bekommen NIEMALS ein geschah-am: Fragen ("kann ich
       heute wieder Sport machen?"), Vorhaben und Pläne ("ich will nachher

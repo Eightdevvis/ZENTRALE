@@ -68,10 +68,17 @@ Drei Stellen tragen die Regel jetzt:
 
 - **Extraktor-Prompt, Regel 5** (`core/consolidation.py`): `geschah-am` nur
   mit einem Datum, das im Turn wirklich steht. Ungefähre Vergangenheit
-  („vor ein paar Tagen") bekommt **gar keine** Zeitkante — das heutige Datum
-  ist dort die schlechteste Wahl. Fragen, Vorhaben, Hypothetisches und
-  Verneintes sind **keine** Ereignisse. `erwähnt-am` ist das Gegenstück und
-  datiert das Reden.
+  („vor ein paar Tagen") wird **gröber, nicht falsch** — Monats-Knoten
+  (`2026-08`) statt eines erfundenen Tages; das heutige Datum wäre dort die
+  schlechteste Wahl. **Gegenwart ist davon nicht betroffen:** „ich hab grad
+  Fieber" heißt heute und wird ganz normal auf den Tag datiert. Fragen,
+  Vorhaben, Hypothetisches und Verneintes sind **keine** Ereignisse.
+  `erwähnt-am` ist das Gegenstück und datiert das Reden.
+- **Zeit in drei Auflösungen** (`graph._zeit_typ`): `2026` / `2026-08` /
+  `2026-08-17` werden am Namen erkannt und als `time-year`/`time-month`/
+  `time-day` getypt — egal was der Extraktor geraten hat. Vorher stand
+  „2026-08-10" als `event` und „2026-08-09" als `concept` im Graphen, und die
+  Filter, die Zeit-Knoten aussortieren, griffen nicht.
 - **Kontext-Legende** (`graph.context_for_query`): steht eine Datums-Kante im
   Block, erklärt eine Zeile, dass `geschah-am` **genau einen Tag** meint und
   keinen Zeitraum. Ein Zustand hängt an seinem Datum und sagt nichts über
@@ -95,9 +102,16 @@ die zwei größten **Naben** — an `Sasha` hängt alles, an `heute` jedes
 brain organoids zurück, alle gleichauf, während „Sport" selbst nur über zwei
 Ecken mitschwamm.
 
-Wer volle Vektor-Abdeckung will, muss den **Embedder vom Chat-Anbieter
-entkoppeln**: `ZENTRALE_CLOUD_EMBED_PROVIDER=qwen` hält das Embedding auf
-DashScope (`text-embedding-v3`), egal welches Modell gerade redet.
+**Seit 17.08.2026 ist das strukturell gelöst:** `embeddings._cloud_provider()`
+nimmt den erstbesten Anbieter, der einen `/v1/embeddings`-Endpoint hat und
+dessen Key dasteht — unabhängig davon, wer gerade chattet. Wer redet und wer
+sich erinnert, sind zwei Rollen. Bevorzugt wird trotzdem der Chat-Anbieter
+(schmalere Datenspur); läuft der Chat auf Claude, embeddet DashScope
+(`text-embedding-v3`). `ZENTRALE_CLOUD_EMBED_PROVIDER` übersteuert hart.
+
+`graph.reembed_missing()` füllt beim nächsten Start die Knoten mit
+`embedding: null` nach — es rechnet nur die fehlenden Vektoren aus, es erfindet
+oder holt keine Inhalte.
 
 - `graph._lexical_entry_points()`: Knoten, deren Name **wörtlich** in der
   Frage vorkommt. Stumpf, aber unabhängig von Ollama. Mehrwortige Knoten

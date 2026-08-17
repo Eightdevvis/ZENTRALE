@@ -166,13 +166,37 @@ _cloud_client = None
 
 
 def _cloud_provider() -> dict:
-    """Provider-Eintrag für den Cloud-Embedder. Default: der konfigurierte
-    Cloud-Provider, sofern er OpenAI-kompatibel ist (Anthropic hat gar keine
-    Embeddings-API — dort bleibt es beim lokalen Embedder)."""
+    """Provider-Eintrag für den Cloud-Embedder.
+
+    WER EMBEDDET, IST UNABHÄNGIG DAVON, WER REDET. Das ist keine Feinheit,
+    sondern der Grund für einen realen Gedächtnisverlust: Anthropic hat gar
+    keine Embeddings-API. Solange hier "erst der konfigurierte Chat-Provider"
+    stand, lieferte diese Funktion beim Chatten auf Claude schlicht nichts —
+    und JEDER in der Sitzung entstandene Knoten blieb ohne Vektor, also für
+    die Einstiegspunkt-Suche unsichtbar. Am 17.08.2026 waren das 30 von 59
+    Knoten, darunter genau die, um die es im Gespräch ging.
+
+    Deshalb: nimm den erstbesten Provider, der (a) OpenAI-kompatibel ist,
+    also überhaupt einen /v1/embeddings-Endpoint hat, und (b) dessen Key
+    dasteht — egal ob er gerade der Chat-Provider ist. Reihenfolge kommt aus
+    providers.preference(); ZENTRALE_CLOUD_EMBED_PROVIDER übersteuert hart.
+    """
+    import os
     import providers
-    name = CLOUD_EMBED_PROVIDER or providers.configured() or ""
-    p = providers.get(name)
-    return p if p.get("kind") == "openai_compat" else {}
+
+    def eintrag(name: str) -> dict:
+        p = providers.get(name or "")
+        if p.get("kind") != "openai_compat":
+            return {}
+        key = p.get("key_env")
+        return p if key and os.environ.get(key) else {}
+
+    if CLOUD_EMBED_PROVIDER:
+        return eintrag(CLOUD_EMBED_PROVIDER)
+    # Erst der Chat-Provider (dann laufen Reden und Erinnern über denselben
+    # Anbieter, was die Datenspur schmal hält), sonst der nächstbeste mit Key.
+    return (eintrag(providers.configured() or "")
+            or next((p for p in map(eintrag, providers.preference()) if p), {}))
 
 
 def cloud_available() -> bool:
