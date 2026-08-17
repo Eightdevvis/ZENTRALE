@@ -23,12 +23,19 @@ Sashas echtem Cloud-Graphen hinterlassen.
 
 ── Was rausgeht ────────────────────────────────────────────────────────
 Erfundene Testdaten (Fieber, Zahnarzt, Sport) plus der System-Prompt. Keine
-echten Termine, keine echten Konzepte. Kosten: gut ein Dutzend kurze Calls,
-Chat auf dem Chat-Modell, Extraktion auf dem billigen — Cent-Bereich.
+echten Termine, keine echten Konzepte.
+
+── Kosten ──────────────────────────────────────────────────────────────
+Standard laeuft ALLES auf dem billigen Modell: rund 2 Cent fuer den ganzen
+Lauf, 1 Cent fuer die Extraktions-Haelfte allein. Das ist keine Sparversion
+mit Qualitaetsverlust — es ist die HAERTERE Probe. Getestet wird der Kaefig,
+nicht die Intelligenz: kommt ein kleines Modell mit unserem Kontext zurecht,
+kommt ein grosses erst recht zurecht. --voll faehrt das echte Chatmodell
+(rund 9 Cent) und beantwortet die andere Frage: reicht es auch im Alltag.
 
     venv/bin/python scripts/gedaechtnis_probe.py
     venv/bin/python scripts/gedaechtnis_probe.py --nur extraktion
-    venv/bin/python scripts/gedaechtnis_probe.py --zeige-kontext
+    venv/bin/python scripts/gedaechtnis_probe.py --voll --zeige-kontext
 """
 import argparse
 import os
@@ -107,28 +114,40 @@ def szenario_bauen():
 
 # ── Ein Turn fahren, mitschreiben was passiert ─────────────────────────
 
-def turn(frage):
-    """Eine Frage durchs echte Cloud-Backend. Gibt (text, tools) zurück."""
+def turn(frage, modell=None):
+    """Eine Frage durchs echte Cloud-Backend. Gibt (text, tools) zurück.
+
+    Das Turn-Speichern wird stillgelegt. Zwei Gründe, beide wichtig:
+    es spart pro Frage einen Extraktor-Call (halbe Rechnung), und es hält
+    die Messung sauber — sonst schreibt die Konsolidierung der Chat-Phase
+    schon Kanten in den Graphen, die die Extraktions-Fallen danach als
+    "nichts Neues" sehen. Genau das hat am 17.08. einen Fehlschlag
+    vorgetäuscht, den es nicht gab.
+    """
     import ai, cloud, state
 
     gerufen = []
     echt = ai._execute_tool
+    echt_save = ai._async_save_turn
 
     def mitschreiben(name, args):
         gerufen.append(name)
         return echt(name, args)
 
     ai._execute_tool = mitschreiben
+    ai._async_save_turn = lambda *a, **k: None
     state.wait_permission = lambda: "nein"      # nichts schreiben lassen
     state.request_permission = lambda **k: None
     try:
         text = ""
-        for ev in cloud.chat_stream([{"role": "user", "content": frage}]):
+        for ev in cloud.chat_stream([{"role": "user", "content": frage}],
+                                    model=modell):
             if isinstance(ev, str):
                 text += ev
         return text.strip(), gerufen
     finally:
         ai._execute_tool = echt
+        ai._async_save_turn = echt_save
 
 
 # ── Die Fallen ─────────────────────────────────────────────────────────
@@ -300,6 +319,9 @@ def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--nur", choices=["chat", "extraktion"])
+    p.add_argument("--voll", action="store_true",
+                   help="auf dem echten Chat-Modell statt dem billigen "
+                        "(teurer; das billige ist die HÄRTERE Probe)")
     p.add_argument("--zeige-kontext", action="store_true",
                    help="bei jedem Fehlschlag den Kontext mit ausgeben")
     a = p.parse_args()
@@ -310,8 +332,16 @@ def main():
         sys.exit("Kein Cloud-Key in data/ai_config.json — nichts zu proben.")
 
     ordner = sandkasten()
+    # Standardmaessig das BILLIGE Modell. Das ist keine Sparmassnahme mit
+    # Qualitaetsverlust, sondern die haertere Probe: getestet wird der
+    # Kaefig, nicht die Intelligenz. Kommt ein kleines Modell mit unserem
+    # Kontext zurecht, kommt ein grosses erst recht zurecht — und wenn
+    # nicht, liegt es an uns. Ein voller Lauf kostet so rund 2 statt 9 Cent.
+    name = providers.configured()
+    modell = None if a.voll else providers.cheap_model(name)
     print(f"Sandkasten: {ordner}")
-    print(f"Anbieter:   {providers.configured()}\n")
+    print(f"Anbieter:   {name}")
+    print(f"Modell:     {modell or 'Standard-Chatmodell (--voll)'}\n")
     try:
         szenario_bauen()
         import cloud, usage
@@ -321,7 +351,7 @@ def main():
         if a.nur != "extraktion":
             print("── Antworten " + "─" * 55)
             for titel, frage, pruefung in FAELLE:
-                text, tools = turn(frage)
+                text, tools = turn(frage, modell)
                 grund = pruefung(text, tools)
                 fehler += bool(grund)
                 print(f"\n{'✗' if grund else '✓'} {titel}")

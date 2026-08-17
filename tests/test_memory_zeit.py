@@ -408,3 +408,18 @@ def test_monat_als_subjekt_fliegt_raus():
         [], [{"from": "2026-08", "to": "Fieber", "rel": "hat"}])
     assert sauber == []
     assert drops["date_subject"] == 1
+
+
+def test_tages_knoten_tragen_ihren_bezug(tmp_path, ohne_embeddings):
+    """Ein nacktes ISO-Datum zwingt das Modell zum Rechnen — und es hat
+    den heutigen Tag prompt „gestern" genannt, obwohl der Jetzt-Block
+    danebenstand. Wochentag und Bezug kommen jetzt fertig mit."""
+    heute = date.today().isoformat()
+    gestern = (date.today() - timedelta(days=1)).isoformat()
+    p = str(tmp_path / "g.json")
+    graph.add_turn_extraction(
+        [{"name": "Fieber", "type": "state"}],
+        [{"from": "Fieber", "to": gestern, "rel": "geschah-am"}], store=p)
+    text = graph.context_for_query("wann hatte ich fieber", store=p)
+    assert f"{heute} [time-day] (" in text and "HEUTE)" in text
+    assert "gestern)" in text

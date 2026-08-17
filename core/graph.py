@@ -200,6 +200,37 @@ def woche_von(tag: date) -> str:
     return f"{jahr}-W{kw:02d}"
 
 
+_WOCHENTAGE = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag",
+               "Samstag", "Sonntag"]
+
+
+def _tages_bezug(name: str) -> str:
+    """Wochentag und Bezug zum Heute für einen Tages-Knoten.
+
+    „2026-08-17" allein zwingt das Modell, gegen das heutige Datum zu
+    rechnen — und genau da ist es am 17.08. gestolpert: es nannte den
+    heutigen Tag „gestern", obwohl der Jetzt-Block direkt daneben stand.
+    Wochentag und Abstand sind billig auszurechnen und ersparen ihm die
+    Rechnerei. Dieselbe Linie wie beim Kalender-Renderer und den
+    Wochen-Spannen: Python rechnet, das Modell liest ab.
+
+    Nur die nahen Tage kriegen ein Wort — bei „vor 43 Tagen" hilft es
+    nicht mehr, und der Block geht bei jedem Turn ungecacht mit raus.
+    """
+    if not _is_date(name):
+        return ""
+    try:
+        d = date.fromisoformat(name)
+    except ValueError:
+        return ""
+    abstand = (d - date.today()).days
+    wort = {0: "HEUTE", -1: "gestern", -2: "vorgestern",
+            1: "morgen", 2: "übermorgen"}.get(abstand)
+    if wort:
+        return f" ({_WOCHENTAGE[d.weekday()]}, {wort})"
+    return f" ({_WOCHENTAGE[d.weekday()]})"
+
+
 def _log(line: str):
     """Lazy state-import damit Tests ohne live state importieren können."""
     try:
@@ -978,6 +1009,12 @@ def context_for_query(query: str | None,
         if spanne:
             mo, so = spanne
             zusatz = f" ({mo.strftime('%d.%m.')}–{so.strftime('%d.%m.%Y')})"
+        else:
+            # Tages-Knoten: den Bezug zum Heute mitliefern. Das Datum allein
+            # steht zwar da, aber sie hat den 17.08. schon "gestern" genannt,
+            # obwohl der Jetzt-Block ihn als heute auswies — zwei Zahlen im
+            # Kopf zu vergleichen ist genau die Arithmetik, die schiefgeht.
+            zusatz = _tages_bezug(name)
         if score >= 0.999:                       # Entry-Points sind 1.0
             return f"  - {name} [{_typ(name)}]{zusatz}"
         return f"  - {name} [{_typ(name)}]{zusatz} (a={score:.2f})"
