@@ -297,3 +297,20 @@ def test_jetzt_block_widerspricht_dem_imprint_nicht(leerer_kalender):
     assert "Was ansteht" in hinweis
     assert "du hast keine Termine im Kopf" not in hinweis.lower()
     assert "read_calendar" in hinweis
+
+
+# ── Falle 9: das Billigmodell muss überhaupt antworten können ──────────
+
+def test_billigmodell_kriegt_kein_adaptives_denken():
+    """Haiku quittiert `thinking` mit 400 — und Haiku ist die
+    Budget-Rückfallebene.
+
+    Wäre das Monatsbudget alle und der Chat schaltet auf das billige
+    Modell, wäre er ohne diese Weiche nicht billig, sondern kaputt.
+    """
+    import cloud
+    assert cloud._denk_opts("claude-haiku-4-5") == {}
+    assert cloud._denk_opts("irgendein-neues-modell") == {}
+    voll = cloud._denk_opts("claude-sonnet-5")
+    assert voll["thinking"]["type"] == "adaptive"
+    assert "effort" in voll["output_config"]

@@ -67,6 +67,32 @@ def _effort() -> str:
     import ai_backends
     return ai_backends.chat_effort()
 
+
+# Adaptives Denken (und der effort-Regler dazu) gibt es nicht auf jedem
+# Modell. Haiku 4.5 quittiert es mit `400 adaptive thinking is not supported
+# on this model` — und Haiku ist ausgerechnet die BUDGET-RÜCKFALLEBENE. Ist
+# das Monatsbudget alle und der Chat schaltet auf das billige Modell, wäre
+# er ohne diese Weiche schlicht kaputt statt billig.
+#
+# Bewusst als Positiv-Liste: ein unbekanntes Modell kriegt kein Denken
+# geschickt und funktioniert damit auf jeden Fall. Andersherum (Negativ-
+# Liste) wäre jedes neue Billigmodell ein 400er beim ersten Kontakt.
+_DENKT_ADAPTIV = ("claude-opus-5", "claude-sonnet-5", "claude-opus-4.8")
+
+
+def _denk_opts(mdl: str) -> dict:
+    """Denk-Parameter für dieses Modell — oder gar keine."""
+    if not any(mdl.startswith(m) for m in _DENKT_ADAPTIV):
+        return {}
+    return {
+        # display=summarized: sonst kommen die thinking-Blöcke mit LEEREM
+        # Text und das HUD zeigt eine lange Pause statt "ich schau kurz
+        # nach…". Kostet nichts extra — gedacht (und abgerechnet) wird so
+        # oder so.
+        "thinking": {"type": "adaptive", "display": "summarized"},
+        "output_config": {"effort": _effort()},
+    }
+
 # max_tokens deckelt Denken UND Antwort zusammen. Zu knapp → die Antwort bricht
 # mitten im Satz ab, nachdem das Denken das Budget aufgefressen hat. 16k ist
 # reichlich für Dashboard-Antworten; es kostet nichts, was nicht erzeugt wird.
@@ -430,15 +456,10 @@ def chat_stream(messages: list, model: str = None, system: str = None,
             with client.messages.stream(
                 model=mdl,
                 max_tokens=_MAX_TOKENS,
-                # display=summarized: sonst kommen die thinking-Blöcke mit
-                # LEEREM Text und das HUD zeigt eine lange Pause statt "ich
-                # schau kurz nach…". Kostet nichts extra — gedacht (und
-                # abgerechnet) wird so oder so.
-                thinking={"type": "adaptive", "display": "summarized"},
-                output_config={"effort": _effort()},
                 system=sys_blocks,
                 tools=anthro_tools,
                 messages=anthro_msgs,
+                **_denk_opts(mdl),
             ) as stream:
                 for event in stream:
                     if event.type != "content_block_delta":
