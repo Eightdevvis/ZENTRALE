@@ -314,3 +314,23 @@ def test_billigmodell_kriegt_kein_adaptives_denken():
     voll = cloud._denk_opts("claude-sonnet-5")
     assert voll["thinking"]["type"] == "adaptive"
     assert "effort" in voll["output_config"]
+
+
+def test_grober_zeitpunkt_wird_nicht_zur_gegenwart(tmp_path, ohne_embeddings):
+    """Ein Monats-Datum heißt „irgendwann im August", nicht „jetzt".
+
+    Auf dem Billigmodell kam „du hast momentan Fieber", obwohl im Graphen
+    nur `Fieber ─[geschah-am]─► 2026-08` stand. Die Legende sagte damals
+    nur etwas über TAGE — für die gröberen Stufen las sie sich wie eine
+    Erlaubnis, den Zustand in die Gegenwart zu verlängern.
+    """
+    p = _graph_bauen(tmp_path,
+        {"Sasha": {"type": "person"}, "Fieber": {"type": "state"},
+         DIESER_MONAT: {"type": "time-month"}},
+        [{"from": "Sasha", "to": "Fieber", "rel": "zustand"},
+         {"from": "Fieber", "to": DIESER_MONAT, "rel": "geschah-am"}])
+
+    text = graph.context_for_query("kann ich heute sport machen", store=p)
+    assert "und sonst nicht" in text
+    assert "schon gar nicht bis heute" in text
+    assert "Tag unbekannt" in text

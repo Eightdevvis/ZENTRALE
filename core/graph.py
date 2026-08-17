@@ -1053,9 +1053,11 @@ def context_for_query(query: str | None,
             # Erlebnis an genau dem Tag, an dem davon erzählt wurde.
             if any(e.get("rel") in ("geschah-am", "erwähnt-am") for e in kanten):
                 lines.append(
-                    "  (geschah-am = an genau DIESEM Tag passiert, sagt nichts über "
-                    "andere Tage — kein Zeitraum. erwähnt-am = an diesem Tag darüber "
-                    "GEREDET, nicht passiert. Fehlt ein Datum, ist der Zeitpunkt "
+                    "  (geschah-am = GENAU dann passiert und sonst nicht — kein "
+                    "Zeitraum drumherum, und schon gar nicht bis heute. Ein "
+                    "Wochen- oder Monats-Ziel heißt: irgendwann darin, Tag "
+                    "unbekannt. erwähnt-am = an diesem Tag darüber GEREDET, "
+                    "nicht passiert. Fehlt ein Datum ganz, ist der Zeitpunkt "
                     "unbekannt — dann nachfragen statt schätzen.)")
             for e in kanten:
                 w = e.get("weight", 1.0)
