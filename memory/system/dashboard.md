@@ -101,18 +101,40 @@ sofort geschrieben (nvim und der systemd-Timer lesen den MODUS, nicht die
 Farbe) — sie ist billig, aber **atomar** (tmp + `os.replace`, siehe
 nvim-Kopplung unten).
 
-**Die TUI zieht Fremdänderungen seit 2026-08-16 nach (`_pull_term_theme`).**
-Bis dahin war sie der einzige Teilnehmer der Kopplung **ohne Rückkanal**: nvim
-beobachtet die Datei (fs_event + Tick), Terminal/Browser/Desktop/bat ziehen sie
-per Minuten-Timer nach — die TUI las sie einmal beim Start und behauptete
-danach ihren eigenen Modus. Schrieb irgendwer sonst hinein, lief die Anzeige
-gegen den Rest der Umgebung: **alles dunkel, TUI zeigt weiter hell.** Genau
-dieses Bild ist am 2026-08-16 aufgetreten (Datei um 15:21:38 auf `night`
-gesetzt, die Applier zogen erst beim Timer-Tick 62 s später nach — also hatte
-sie *nicht* die TUI geschrieben, die stößt sie sofort an). Erkannt wird über
-die mtime; das eigene Schreiben merkt sich `_push_term_theme` in `_theme_seen`
-und kommt daher nicht als fremd zurück. Beim Mitziehen wird **nicht**
-zurückgeschrieben — die Datei bleibt die Wahrheit.
+**Der Modus lebt in EINER Quelle: der Datei — `core/theme.py` (seit
+2026-08-17).** Die TUI hält keine eigene Modus-Variable mehr.
+
+*Was vorher schiefging und warum es kein Zufall war:* der Modus lag **doppelt**
+vor — als lokale Variable `theme_mode` in der TUI UND als Datei —, abgeglichen
+über drei Hilfspuffer (zuletzt geschriebener Modus, zuletzt gesehene mtime,
+zuletzt gemeldete Farbe). Dieser Abgleich ist **nicht atomar**: zwischen »Taste
+ändert die Variable« und »Schleife schreibt die Datei« liegt ein Fenster, in dem
+ein Lesevorgang die Variable wieder überschrieb — der Tastendruck wurde
+verschluckt oder der Wert sprang zurück. Am 2026-08-17 um 22:14:50–22:15:01 hat
+der Beobachter das eingefangen: **fünfzehn Wechsel in elf Sekunden** von einer
+einzigen TUI, und im Protokoll `fremd`-Zeilen mit exakt den Werten, die die TUI
+selbst eine Zeile vorher geschrieben hatte. **Sie las ihr eigenes Echo.** Das
+ist das Bild »kurz umgesprungen und wieder zurück«.
+
+*Die Antwort war nicht ein weiterer Puffer, sondern der zweite Zustand weg:*
+- `mode()` liest die Datei (per mtime gecacht, damit die Bildschleife billig
+  bleibt). Der Cache **widerspricht der Datei nie** — er wird verworfen, sobald
+  die mtime abweicht, und nie gegen sie behauptet.
+- `set()` schreibt die Datei, atomar (tmp + rename). Einziger Schreibweg.
+- `cycle()` rechnet auf dem **Datei-Stand**, nicht auf einer mitgeführten
+  Variablen — zwei schnelle Tastendrücke können sich nicht überholen.
+Damit ist eine Rückkopplung **strukturell unmöglich** statt nur unwahrscheinlich:
+es gibt nichts mehr, das man zurückziehen müsste. Eine Fremdänderung wird
+mitgezogen und **nicht** zurückgeschrieben.
+
+Die Logik liegt bewusst in `core/theme.py` statt in der 8000-Zeilen-curses-
+Funktion: dort ist sie **testbar** (`tests/test_theme_state.py`, 22 Fälle — u.a.
+»eigenes Schreiben kommt nie als fremd zurück«, »zwölf Zyklen landen wieder am
+Start«, »zwei Zustände auf derselben Datei bleiben einig«) und sie kennt
+`ZENTRALE_THEME_FILE`, sodass Tests nie die echte Konfiguration anfassen. Beim
+Start schreibt die TUI **nichts** — sie folgt der Datei. (Vorher stand
+`theme_mode = "auto"` hart im Code und wurde sofort geschrieben: jeder Start,
+auch ein tmux-Restore, überbügelte damit ein von Hand gesetztes `day`/`night`.)
 
 **Änderungsprotokoll + Beobachter.** Wer die Datei ändert, war rückwirkend
 nicht feststellbar (der Zeitstempel verrät nur das WANN). Seitdem:
@@ -130,14 +152,6 @@ nicht feststellbar (der Zeitstempel verrät nur das WANN). Seitdem:
   `deploy/zentrale-theme-watch.service`, aktiviert von
   `install_theme_coupling.sh`, sofern `inotifywait` da ist.
   `zentrale-theme-watch --status` zeigt beide Protokolle.
-
-**Der Start-Modus kommt seit 2026-08-16 aus der Datei, nicht mehr hart aus
-`auto`.** Vorher stand `theme_mode = "auto"` fest im Code und wurde beim Start
-sofort in die Datei geschrieben: **jeder** TUI-Start — auch ein tmux-Restore,
-ein Neustart nach Absturz oder eine zweite Instanz — hat damit ein von Hand
-gesetztes `day`/`night` überschrieben, worauf nvim und Terminal auf die
-Uhrzeit-Auflösung sprangen. Jetzt liest die TUI die Datei beim Start und
-schreibt nur noch, wenn SIE etwas ändert.
 
 **Terminal-Kopplung (Sashas Laptop, xfce4-terminal):** die TUI schreibt bei
 jedem Moduswechsel den Modus (`auto`/`day`/`night`) nach

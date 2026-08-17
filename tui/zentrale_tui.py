@@ -46,6 +46,22 @@ import urllib.parse
 
 BASE_URL = (os.environ.get("ZENTRALE_URL") or "http://localhost:5000").rstrip("/")
 
+
+def _load_theme_state():
+    """core/theme.py laden und einen ThemeState bauen.
+
+    Bewusst KEIN Fallback auf eine eingebaute Kopie: der Tag/Nacht-Modus darf
+    genau eine Implementierung haben. Eine zweite, die einspringt, wenn der
+    Import scheitert, wäre wieder der doppelte Zustand, der hier gerade
+    abgeschafft wurde — dann lieber ein klarer Fehler beim Start.
+    """
+    core_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "core")
+    if core_dir not in sys.path:
+        sys.path.insert(0, core_dir)
+    import theme
+    return theme.ThemeState()
+
 # Dateien öffnet man in einem normalen Terminal via `xdg-open <datei>` — die TUI
 # selbst macht das nicht (reine Anzeige).
 
@@ -1446,59 +1462,49 @@ def run_ui(stdscr, store):
         # leere Zellen (erase) bekommen den Theme-Hintergrund
         stdscr.bkgd(" ", C["ink"])
 
-    # Theme-Modus: auto (nach Uhrzeit) | day | night. Taste 't' zykliert.
+    # ── Theme-Modus: auto (nach Uhrzeit) | day | night. Taste 't' zykliert. ──
     #
-    # Der Startwert kommt aus ~/.config/zentrale/theme, NICHT hart aus "auto".
-    # Vorher war er hart "auto" und wurde unten sofort in die Datei geschrieben:
-    # jeder TUI-Start (auch ein tmux-Restore oder eine zweite Instanz) hat damit
-    # ein von Hand gesetztes day/night überschrieben — nvim und Terminal sprangen
-    # daraufhin auf die Uhrzeit-Auflösung. Die Datei ist die Wahrheit; die TUI
-    # liest sie beim Start und schreibt nur noch, wenn SIE etwas ändert.
-    THEME_FILE = os.path.expanduser("~/.config/zentrale/theme")
-    THEME_LOG = os.path.expanduser("~/.cache/zentrale/theme-changes.log")
+    # EINE QUELLE DER WAHRHEIT: die Datei ~/.config/zentrale/theme. Die TUI hält
+    # KEINE eigene Modus-Variable mehr.
+    #
+    # Warum das wichtig ist (und warum es vorher glitchte): der Modus lag früher
+    # doppelt vor — als lokale Variable `theme_mode` UND als Datei —, abgeglichen
+    # über drei Hilfspuffer (zuletzt geschriebener Modus, zuletzt gesehene mtime,
+    # zuletzt gemeldete Farbe). Dieser Abgleich ist nicht atomar: zwischen „Taste
+    # ändert die Variable" und „Schleife schreibt die Datei" liegt ein Fenster, in
+    # dem ein Lesevorgang die Variable wieder überschrieb. Ergebnis war genau das
+    # beobachtete Bild — das Theme sprang kurz um und wieder zurück, und im
+    # Protokoll standen Fremd-Einträge mit exakt den Werten, die die TUI selbst
+    # eine Zeile vorher geschrieben hatte: sie las ihr eigenes Echo.
+    #
+    # Jetzt gibt es nichts mehr abzugleichen. Lesen heißt Datei lesen (per mtime
+    # gecacht, damit es billig bleibt), Umschalten heißt Datei schreiben. Der
+    # Cache ist keine zweite Wahrheit: er wird bei jeder fremden mtime verworfen
+    # und nie gegen die Datei behauptet. Damit ist eine Rückkopplung strukturell
+    # unmöglich, statt nur unwahrscheinlich gemacht.
+    # Die Logik selbst liegt in core/theme.py — dort ist sie testbar, statt in
+    # dieser 8000-Zeilen-Funktion vergraben zu sein (und sie kennt
+    # ZENTRALE_THEME_FILE, sodass Tests nie die echte Konfiguration anfassen).
+    _theme = _load_theme_state()
 
-    def _read_theme_mode():
-        try:
-            with open(THEME_FILE) as fh:
-                raw = fh.read().strip()
-            if raw in ("auto", "day", "night"):
-                return raw
-        except OSError:
-            pass
-        return "auto"
+    def theme_mode_now():
+        """Aktueller Modus — kommt immer aus der Datei."""
+        return _theme.mode()
 
-    def _theme_stamp():
-        """mtime der Theme-Datei (ns) — oder None, wenn es sie nicht gibt."""
-        try:
-            return os.stat(THEME_FILE).st_mtime_ns
-        except OSError:
-            return None
+    def set_theme_mode(neu, quelle="tui"):
+        """Modus setzen = Datei schreiben; danach die Applier einplanen."""
+        if _theme.set(neu, quelle):
+            _env_due[0] = time.time() + ENV_DEBOUNCE
 
-    def _log_theme(quelle, alt, neu):
-        """Jeden Moduswechsel protokollieren — wer, wann, von wo nach wo.
+    def cycle_theme():
+        """Taste 't' bzw. '/theme' ohne Argument: auto → day → night → auto."""
+        if _theme.cycle():
+            _env_due[0] = time.time() + ENV_DEBOUNCE
 
-        Es gab einen Fall, in dem das Theme nachweislich umsprang, ohne dass
-        jemand in der TUI umgeschaltet hatte; rückwirkend war nicht mehr
-        feststellbar, wer die Datei geschrieben hatte. Seitdem schreibt jeder
-        Wechsel eine Zeile mit. `quelle=tui` heißt: wir waren es (Taste oder
-        Befehl). `quelle=fremd` heißt: die Datei hat sich unter uns geändert —
-        dann war es ein anderer Prozess, und `scripts/zentrale-theme-watch`
-        hält fest, welcher.
-        """
-        try:
-            os.makedirs(os.path.dirname(THEME_LOG), exist_ok=True)
-            with open(THEME_LOG, "a") as fh:
-                fh.write("%s  %-5s  %s -> %s\n"
-                         % (time.strftime("%F %T"), quelle, alt, neu))
-        except OSError:
-            pass
-
-    theme_mode = _read_theme_mode()
     def resolved_theme():
-        if theme_mode == "auto":
-            h = int(time.strftime("%H"))
-            return "day" if 5 <= h < 21 else "night"
-        return theme_mode
+        """Modus → sichtbare Farbe. auto löst nach der Uhrzeit auf."""
+        return _theme.resolved()
+
     cur_theme = resolved_theme()
     apply_theme(cur_theme)
 
@@ -1522,40 +1528,16 @@ def run_ui(stdscr, store):
     #      drückt, löst EINEN Umbau aus statt drei.
     # Die Datei selbst wird sofort geschrieben (nvim & der systemd-Timer lesen
     # den MODUS, nicht die Farbe) — sie ist billig.
-    # Startwert = was in der Datei steht (oben gelesen). Damit ist der erste
-    # _push_term_theme() unten ein No-Op statt eines Überschreibens.
-    _last_term_mode = [theme_mode]
     _last_env_theme = [None]      # zuletzt an die Umgebung gemeldetes day/night
     _env_due = [0.0]              # >0: Applier stehen aus (Zeitstempel)
-    _theme_seen = [_theme_stamp()]  # mtime, die WIR zuletzt gesehen/erzeugt haben
     ENV_DEBOUNCE = 0.5
     # bat ist mit dabei, obwohl es nichts „umfärbt": es liest seine Config bei
     # jedem Aufruf neu, und ohne diesen Anstoß zöge es erst beim nächsten
     # Minuten-Tick des systemd-Timers nach (bis zu 60 s Verzug).
     _THEME_APPLIERS = ("zentrale-term-theme", "zentrale-browser-theme",
                        "zentrale-desktop-theme", "zentrale-bat-theme")
-    def _push_term_theme(mode, resolved=None):
-        if mode != _last_term_mode[0]:
-            _last_term_mode[0] = mode
-            try:
-                cfg = os.path.expanduser("~/.config/zentrale")
-                os.makedirs(cfg, exist_ok=True)
-                dest = os.path.join(cfg, "theme")
-                # ATOMAR schreiben (tmp + rename). Mit "w" wird die Datei erst
-                # auf null Bytes gekürzt und dann gefüllt — nvims fs_event feuert
-                # aber schon beim Kürzen und las dann eine LEERE Datei, fiel auf
-                # auto zurück und sprang kurz auf die Uhrzeit-Farbe, bis das
-                # zweite Event kam. Ein Rename ist für den Leser unteilbar.
-                tmp = dest + ".tmp"
-                with open(tmp, "w") as fh:
-                    fh.write(mode + "\n")
-                os.replace(tmp, dest)
-            except OSError:
-                pass
-            # Unsere eigene Schreibspur merken, sonst liest _pull_term_theme()
-            # sie gleich als „Fremdänderung" zurück.
-            _theme_seen[0] = _theme_stamp()
-            _env_due[0] = time.time() + ENV_DEBOUNCE
+    def _run_appliers(resolved):
+        """Die teuren Umgebungs-Applier anstoßen — gebremst (siehe oben)."""
         if not _env_due[0] or time.time() < _env_due[0]:
             return
         _env_due[0] = 0.0
@@ -1575,32 +1557,9 @@ def run_ui(stdscr, store):
                 except OSError:
                     pass
 
-    def _pull_term_theme():
-        """Fremdänderung der Theme-Datei übernehmen → neuer Modus oder None.
-
-        Bis hierher war die TUI der einzige Teilnehmer der Kopplung OHNE
-        Rückkanal: nvim beobachtet die Datei (fs_event + Tick), Terminal,
-        Browser, Desktop und bat ziehen sie per Minuten-Timer nach — nur die
-        TUI las sie einmal beim Start und behauptete danach ihren eigenen Modus.
-        Schrieb irgendwer sonst in die Datei, lief die TUI-Anzeige gegen den
-        Rest der Umgebung: alles dunkel, TUI zeigt weiter hell. Genau dieses
-        Bild ist aufgetreten.
-
-        Erkannt wird über die mtime — unser eigenes Schreiben merkt sich
-        _push_term_theme() in _theme_seen, es kommt also nicht als fremd zurück.
-        """
-        stamp = _theme_stamp()
-        if stamp is None or stamp == _theme_seen[0]:
-            return None
-        _theme_seen[0] = stamp
-        neu = _read_theme_mode()
-        if neu == _last_term_mode[0]:
-            return None            # Inhalt gleich (z.B. nur neu geschrieben)
-        _log_theme("fremd", _last_term_mode[0], neu)
-        _last_term_mode[0] = neu   # nicht zurückschreiben, nur mitziehen
-        return neu
-
-    _push_term_theme(theme_mode, cur_theme)
+    # Beim Start NICHTS schreiben: die Datei steht schon, wir folgen ihr nur.
+    # (Früher schrieb die TUI hier ihren hart auf "auto" gesetzten Startwert und
+    # überbügelte damit bei jedem Start ein von Hand gesetztes day/night.)
 
     # Esc soll sofort reagieren (sonst wartet ncurses ~1s auf eine Escape-
     # Sequenz, bevor es ein einzelnes Esc durchreicht).
@@ -6599,7 +6558,11 @@ def run_ui(stdscr, store):
             if ch == 27:                       # Esc → Befehl abbrechen
                 cmd_mode = False; cmd_buf = ""
             elif ch in (10, 13, curses.KEY_ENTER):
-                res, theme_mode, cmd_msg = parse_command(cmd_buf, theme_mode)
+                # parse_command bleibt eine reine Funktion (gut testbar): sie
+                # rechnet nur den neuen Modus aus, geschrieben wird er hier.
+                res, _neuer_modus, cmd_msg = parse_command(cmd_buf,
+                                                           theme_mode_now())
+                set_theme_mode(_neuer_modus)
                 cmd_mode = False; cmd_buf = ""
                 if res == "QUIT":
                     break
@@ -7218,7 +7181,7 @@ def run_ui(stdscr, store):
             elif ch in (ord("w"), ord("W"), 10, 13, curses.KEY_ENTER):
                 m_window()                     # natives Fenster aufklappen
             elif ch in (ord("t"), ord("T")):   # Theme darf auch hier zyklieren
-                theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
+                cycle_theme()
         elif K["active"]:                      # Kalender hat den Fokus
             if K["mode"] == "add":             # gestaffeltes Eingabe-Formular
                 cur_key = ("aday", "atime", "alabel")[K["astage"]]
@@ -7339,7 +7302,7 @@ def run_ui(stdscr, store):
                 elif ch in (ord("q"), ord("Q")):
                     break
                 elif ch in (ord("t"), ord("T")):
-                    theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
+                    cycle_theme()
                 elif K["lsort"]:                               # ── Sortier-Modus ──
                     if ch in (27, ord("s"), ord("S"), ord("l"), ord("L"),
                               10, 13, curses.KEY_ENTER):
@@ -7430,7 +7393,7 @@ def run_ui(stdscr, store):
                             else:
                                 K["confirmdel"] = True; K["msg"] = ""
                 elif ch in (ord("t"), ord("T")):               # Theme darf auch hier zyklieren
-                    theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
+                    cycle_theme()
         elif MAIL["active"] and MAIL["replying"]:   # Antwort-Editor hat den Fokus
             if MAIL["reply_confirm"]:                          # Verlassen-Leiste
                 if ch in (ord("j"), ord("J"), ord("y"), ord("Y")):
@@ -7605,7 +7568,7 @@ def run_ui(stdscr, store):
                                  lambda: _do_refresh_counts(force=True))
                     MAIL["msg"] = "zähle neu…"
                 elif ch in (ord("t"), ord("T")):
-                    theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
+                    cycle_theme()
             else:                                              # Ebene 1: Kategorien wählen
                 if ch in (27, ord("p"), ord("P")):             # Esc/p → Panel zu
                     MAIL["active"] = False
@@ -7631,7 +7594,7 @@ def run_ui(stdscr, store):
                                  lambda: _do_refresh_counts(force=True))
                     MAIL["msg"] = "zähle neu…"
                 elif ch in (ord("t"), ord("T")):
-                    theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
+                    cycle_theme()
         elif NOTE["active"]:                   # Notiz-Werkzeug hat den Fokus
             n = NOTE["note"]
             blocks = (n.get("blocks") if n else None) or []
@@ -7887,7 +7850,7 @@ def run_ui(stdscr, store):
                 PIANO["light"] = PIANO_LIGHTS[(i + 1) % len(PIANO_LIGHTS)]
                 PIANO["msg"] = "licht: " + PIANO["light"]
             elif ch in (ord("t"), ord("T")):    # Theme darf auch hier zyklieren
-                theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
+                cycle_theme()
             elif 32 <= ch <= 126 and chr(ch).lower() in PIANO_KEYMAP:
                 p_play_key(chr(ch).lower())
             elif ch >= 128:                                 # 'ö' kommt als UTF-8 (2 bytes)
@@ -7955,7 +7918,7 @@ def run_ui(stdscr, store):
             if ch in (ord("q"), ord("Q")):
                 break
             elif ch in (ord("t"), ord("T")):   # Theme zyklieren
-                theme_mode = {"auto": "day", "day": "night", "night": "auto"}[theme_mode]
+                cycle_theme()
             elif ch in (ord("g"), ord("G")):   # Graph-Werkzeug öffnen
                 G["active"] = True; G["view"] = "list"; G["msg"] = ""
                 G["shown"] = set(); G["gscroll"] = 0; g_load()  # übersicht, heute rechts
@@ -7997,25 +7960,17 @@ def run_ui(stdscr, store):
             # hier kein eigener Zweig mehr.
         # KEY_RESIZE oder Timeout → einfach neu zeichnen
 
-        # Hat jemand ANDERES die Theme-Datei geändert? Dann mitziehen statt den
-        # eigenen Modus weiter zu behaupten (siehe _pull_term_theme).
-        _fremd = _pull_term_theme()
-        if _fremd is not None:
-            theme_mode = _fremd
-        elif theme_mode != _last_term_mode[0]:
-            # WIR schalten gerade um (Taste 't' oder /theme) — mitschreiben,
-            # damit im Protokoll später unterscheidbar ist, wer es war.
-            _log_theme("tui", _last_term_mode[0], theme_mode)
-
-        # Theme nachziehen (auto wechselt nach Uhrzeit, oder nach 't'/Befehl)
+        # Farbe nachziehen. resolved_theme() liest den Modus aus der Datei —
+        # damit ist hier BEIDES abgedeckt, ohne Fallunterscheidung: die
+        # 05/21-Rotation im auto-Modus UND eine Änderung durch irgendwen sonst.
+        # Es gibt nichts mehr zu vergleichen oder zurückzuziehen; wer den Modus
+        # ändert, ändert die Datei, und die lesen wir einfach.
         want = resolved_theme()
         if want != cur_theme:
             cur_theme = want
             apply_theme(cur_theme)
-        # Terminal-Theme an den (evtl. gerade per 't'/Befehl geänderten) Modus
-        # koppeln — no-op, solange sich der Modus nicht ändert. Die teuren
-        # Umgebungs-Applier laufen entkoppelt (siehe _push_term_theme).
-        _push_term_theme(theme_mode, cur_theme)
+        # Die teuren Umgebungs-Applier laufen entkoppelt und gebremst.
+        _run_appliers(cur_theme)
 
         # Weiche Kamerafahrt zum fokussierten Land (eine Ease-Stufe pro Frame).
         if M["active"] and M.get("anim"):
@@ -8332,7 +8287,8 @@ def run_ui(stdscr, store):
                 safe_addstr(input_row, 3, "/ für befehle", C["faint"])
 
         # ── Footer (Tasten + Theme + Backend) ─────────────────────────────
-        tm_txt = "auto(%s)" % cur_theme if theme_mode == "auto" else cur_theme
+        tm_txt = ("auto(%s)" % cur_theme if theme_mode_now() == "auto"
+                  else cur_theme)
         addclip(footer_row, 0,
                 " q quit · t theme: %s · g graph · m karte · c kalender · a ki · u tutor · / befehle · %s" % (tm_txt, BASE_URL),
                 W - 1, C["faint"])
