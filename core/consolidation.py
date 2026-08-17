@@ -21,7 +21,6 @@ from datetime import date
 import net      # HTTP-Wrapper mit Logging
 import graph    # Konzept-Graph (Phase G)
 import state    # Logging in den UI-Terminal-Stream
-import kalender              # Auto-Capture in den erlebt-Layer
 import kidebug               # Devtools-Bus (scripts/ai_devtools.py)
 import transkript            # Rohmaterial unter dem Graphen (append-only)
 
@@ -44,20 +43,6 @@ OLLAMA_NUM_CTX    = int(os.environ.get("OLLAMA_NUM_CTX", "8192"))
 # Thinking aus. Nur fuer qwen3* gueltig (qwen2.5 -> Ollama 400), daher kond.
 SUPPORTS_THINK    = OLLAMA_MODEL.startswith("qwen3")
 
-# Spiegelt jede geschah-am-Kante als "erlebt"-Eintrag in den Kalender.
-# DEFAULT AUS, und das ist eine Konsequenz aus einem realen Schaden
-# (17.08.2026): Sasha fragte "kann ich heute wieder Sport machen?", der
-# Extraktor stempelte daraus {Sport ─[geschah-am]─► 2026-08-17}, der
-# Spiegel schrieb "Sport" in den erlebt-Layer — und der NÄCHSTE Turn las
-# per read_calendar genau diesen Eintrag zurück und behandelte ihn als
-# Beleg. Eine Frage war binnen einer Minute zur Tatsache geworden.
-#
-# Das ist die gefährliche Eigenschaft dieses Pfades: er macht aus einem
-# Extraktions-Irrtum keinen Graph-Knoten (den man später korrigieren
-# kann), sondern einen KALENDER-Eintrag — also genau die Quelle, der die
-# KI von allen am meisten glaubt. Solange die Zeit-Extraktion nicht
-# nachweislich sauber datiert, bleibt der Spiegel aus.
-MIRROR_CALENDAR   = os.environ.get("ZENTRALE_GRAPH_MIRROR_CAL", "0") == "1"
 
 
 # ── Sanitization für extrahierte Edges ────────────────────────────────
@@ -456,8 +441,7 @@ def _is_substantive(user_msg: str) -> bool:
 
 
 def extract_turn_into_graph(user_msg: str, ai_msg: str,
-                            store: str | None = None,
-                            mirror_calendar: bool | None = None):
+                            store: str | None = None):
     """
     Hauptweg um einen Turn in den Graphen zu kippen. Wird async von
     ai._async_save_turn aufgerufen. Macht den LLM-Extraktor-Call und
@@ -476,10 +460,6 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
                          Graphen — heute wird diese Funktion nur mit store=None
                          (Core-Graph) aufgerufen. Die Grenze Tutor ↔ Core-KI
                          liegt darin, dass die Stores sich NIE anfassen.
-        mirror_calendar: geschah-am-Konzepte in Sashas erlebt-Layer spiegeln.
-                         None → MIRROR_CALENDAR (Default AUS, siehe dort).
-                         Für Persona-Turns AUS: Tutor-Geschwätz gehört nicht
-                         in den gemeinsamen Kalender.
 
     ── Wer verdichtet ────────────────────────────────────────────────
     Bevorzugt IMMER lokal (Ollama): daheim ist das gratis und für
@@ -540,23 +520,8 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
                  quellen=quellen,
                  store="cloud" if store else "lokal")
 
-    if not (MIRROR_CALENDAR if mirror_calendar is None else mirror_calendar):
-        return
-
-    # Auto-Capture in den Kalender: jedes Konzept das im Graph einen
-    # geschah-am-Edge zu einem ISO-Datum kriegt, spiegeln wir in den
-    # erlebt-Layer. Das gibt dem Kalender ein "war da was?"-Skelett
-    # ohne dass die KI dafür explizit Tool-Calls machen muss.
-    for e in edges:
-        if e.get("rel") != "geschah-am":
-            continue
-        target = e.get("to", "")
-        if not _DATE_RE.match(target):
-            continue
-        concept = e.get("from", "")
-        if not concept or concept in ("Sasha", "KI"):
-            continue  # Subjekt-Anker selbst nicht als Erlebnis spiegeln
-        try:
-            kalender.auto_capture(concept, target)
-        except Exception:
-            pass
+    # Hier stand der Kalender-Spiegel (jede geschah-am-Kante als erlebt-
+    # Eintrag). Ersatzlos gestrichen am 17.08.2026 — Begründung steht bei
+    # der gelöschten `kalender.auto_capture`. Kurzfassung: ein Schreibweg
+    # am Erlaubnis-Gate vorbei, in eine Ebene, die nur die KI lesen konnte.
+    # Die Konsolidierung schreibt ab jetzt ausschließlich in den Graphen.

@@ -125,7 +125,7 @@ QWEN_SAMPLING = {
 #
 #   System-Prompt · Capabilities · Antwort-Suffix · ASCII · Dashboard
 #   ─────────────── ab hier wechselnd ───────────────
-#   Graph-Kontext · Jetzt-Block · Alarme · Mic-Hinweis
+#   Graph-Kontext · Jetzt-Block · Imprint · Alarme · Mic-Hinweis
 #
 # Zwei Gründe, ein Handgriff:
 #  * Prompt-Cache. Ein Cache-Treffer braucht ein byte-identisches Präfix.
@@ -170,19 +170,36 @@ def _now_prompt() -> str:
         "Datums-Knoten aus dem Konzept-Graph sind Erinnerungen an frühere "
         "Tage, NICHT der aktuelle Tag."
     )
-    # Bewusst KEIN Kalender-Listing mehr im Jetzt-Block. Der Kalender wird
-    # nicht mitgeschleppt, sondern ausschließlich über das read_calendar-Tool
-    # abgefragt (siehe kalender.resolve_range / render_range_for_tool). Hier
-    # steht nur ein knapper Verweis, damit das Modell weiß, dass es für
-    # JEDE zeitliche Frage das Tool nutzen muss statt aus dem Gedächtnis zu
-    # antworten oder zurückzufragen.
+    # Der Kalender wird weiterhin NICHT als Ganzes mitgeschleppt — nur der
+    # nahe Horizont steht als eigener Block direkt hinter diesem hier
+    # (_imprint_prompt). Alles andere kommt über read_calendar.
+    #
+    # Der Satz war früher "du hast keine Termine im Kopf, ruf bei JEDER
+    # Zeitfrage read_calendar". Mit dem Imprint stimmt das nicht mehr: die
+    # Termine für heute und morgen STEHEN da, und das Tool trotzdem zu
+    # verlangen erzwingt genau die Runde, die der Imprint einsparen soll.
     head += (
-        "\n\nKalender/Termine: du hast keine Termine im Kopf. Für JEDE Frage "
-        "nach Plänen, Terminen oder Daten (heute, diese/nächste Woche, Monat, "
-        "Vergangenheit, beliebiger Zeitraum) rufst du zuerst read_calendar - "
-        "nie raten, nie ohne Tool zurückfragen."
+        "\n\nKalender/Termine: was heute und morgen ansteht, steht im Block "
+        "'Was ansteht' - daraus darfst du direkt antworten. Alles andere "
+        "(jeder weitere Zeitraum, ein bestimmtes Datum, die Vergangenheit) "
+        "hast du NICHT im Kopf: dafür read_calendar rufen, nie raten, nie "
+        "ohne Tool zurückfragen."
     )
     return head
+
+
+def _imprint_prompt() -> str:
+    """Der nahe Horizont (heute/morgen) als Prompt-Block.
+
+    Dünner Wrapper um kalender.imprint_for_prompt — die Begründung steht
+    dort. Hier nur die Kapselung: fällt der Kalender aus, darf der Chat
+    nicht mitfallen, also Fehler schlucken und lieber ohne Block antworten.
+    """
+    try:
+        import kalender
+        return kalender.imprint_for_prompt()
+    except Exception:
+        return ""
 
 
 def _alarm_prompt() -> str:
@@ -950,6 +967,11 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         # dessen Datums-Knoten („das sind Erinnerungen, nicht heute"), und was
         # zuletzt steht, sitzt am dichtesten an der User-Message.
         sys_prompt += "\n\n" + _now_prompt()
+        # Direkt hinter dem Jetzt-Block: was heute/morgen ansteht. Braucht das
+        # Datum als Bezug, und erspart die häufigste Tool-Runde überhaupt.
+        imprint = _imprint_prompt()
+        if imprint:
+            sys_prompt += "\n\n" + imprint
         # Alarm-Kanal: offene Kalender-Erinnerungen randständig anhängen (nicht
         # mehr inline in der read_calendar-Ausgabe). Leer → kein Block.
         alarm_block = _alarm_prompt()

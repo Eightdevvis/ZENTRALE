@@ -31,6 +31,8 @@
 #   als gemeinsamer Schlüssel - keine harte Referenz, beide Systeme
 #   bleiben unabhängig wartbar.
 
+import os
+import copy
 import json
 import hashlib
 import threading
@@ -83,7 +85,12 @@ _MONTHS_FULL_DE    = ["Januar", "Februar", "März", "April", "Mai", "Juni",
 # ── Persistenz ─────────────────────────────────────────────────────────
 def _load_raw() -> dict:
     if not CAL_PATH.exists():
-        return {"version": 1, "layers": {k: dict(v) for k, v in _DEFAULT_LAYERS.items()}}
+        # TIEF kopieren. `dict(v)` kopierte nur die Layer-Hülle — `entries`
+        # und `routines` blieben DIESELBEN Objekte wie in _DEFAULT_LAYERS.
+        # Ein Eintrag, der vor der ersten gespeicherten Datei geschrieben
+        # wurde, landete damit in der Vorlage und tauchte danach in jedem
+        # "frischen" Kalender dieses Prozesses wieder auf.
+        return {"version": 1, "layers": copy.deepcopy(_DEFAULT_LAYERS)}
     with CAL_PATH.open() as f:
         return json.load(f)
 
@@ -496,36 +503,28 @@ def add_pause(label: str, von: str, bis: str, grund: str | None = None) -> bool:
         return True
 
 
-# ── Auto-Capture aus dem Graph ─────────────────────────────────────────
-def auto_capture(concept: str, day_iso: str) -> None:
-    """
-    Wird vom Graph-Extraktor aufgerufen wenn er einen geschah-am-Edge
-    extrahiert hat. Spiegelt das Konzept in den `erlebt`-Layer für den
-    Tag. Dedup: wenn derselbe Concept+Day schon drin ist, nicht
-    nochmal anhängen - wir wollen nicht "Geige" dreimal sehen weil es
-    in drei Turns erwähnt wurde.
-
-    Stilles No-Op wenn der Layer nicht existiert (z.B. weil jemand ihn
-    explizit gelöscht hat) - kein Fehler nach oben, der Graph-Pfad ist
-    der Hauptpfad und darf an Auto-Capture nicht hängen.
-    """
-    with _lock:
-        try:
-            data = _load_raw()
-        except Exception:
-            return
-        layer = data.get("layers", {}).get("erlebt")
-        if not layer:
-            return
-        entries = layer.setdefault("entries", {})
-        day_entries = entries.setdefault(day_iso, [])
-        if any(e.get("label") == concept for e in day_entries):
-            return
-        day_entries.append({"label": concept})
-        try:
-            _save_raw(data)
-        except Exception:
-            pass
+# ── Auto-Capture aus dem Graph: ERSATZLOS GESTRICHEN (17.08.2026) ──────
+#
+# Hier stand `auto_capture(concept, day_iso)`: der Graph-Extraktor spiegelte
+# jede `geschah-am`-Kante als Eintrag in den `erlebt`-Layer. Absicht war ein
+# „war da was?"-Skelett, „ohne dass die KI dafür explizit Tool-Calls machen
+# muss". Genau das war der Fehler — es war ein SCHREIBWEG AM GATE VORBEI:
+#
+#  * Jeder Kalender-Schreib-Tool-Call (`add_calendar_entry` & Co.) steht in
+#    `ai.PERMISSION_REQUIRED_TOOLS` und muss von Sasha bestätigt werden.
+#    Auto-Capture war kein Tool-Call, sondern ein Nebeneffekt der
+#    Konsolidierung im Hintergrund-Thread — nie gefragt, nie gesehen.
+#  * Der `erlebt`-Layer ist `default_visible: False`. Sashas Ansichten
+#    (`week_view`/`day_view`) filtern ihn weg, `entries_in_range` — der
+#    Tool-Pfad der KI — nicht. Geschrieben wurde also ungefragt in eine
+#    Ebene, die NUR die KI lesen konnte.
+#  * Damit wurde aus einem Extraktions-Irrtum eine Kalender-Tatsache: aus
+#    der FRAGE „kann ich heute wieder Sport machen?" wurde ein erlebter
+#    Sport-Termin, den der nächste Turn als Beleg zurücklas.
+#
+# Was den Kalender füllt, sind jetzt wieder nur Sasha und bestätigte
+# Tool-Calls. Was die KI ohne Tool-Runde über den Tag wissen soll, liefert
+# `imprint_for_prompt()` weiter unten — lesend statt schreibend.
 
 
 # ── Lese-API ───────────────────────────────────────────────────────────
@@ -1276,6 +1275,63 @@ def render_range_for_tool(start: date, end: date,
         # (Keine ⚠-Warnzeilen mehr hier - die laufen über den Alarm-Kanal,
         #  siehe open_alarms. Der Read bleibt saubere Terminliste.)
     return "\n".join(lines)
+
+
+# ── Imprint: was ansteht, ohne Tool-Runde ──────────────────────────────
+
+IMPRINT_TAGE = int(os.environ.get("ZENTRALE_IMPRINT_TAGE", "1"))
+
+
+def imprint_for_prompt(tage: int | None = None) -> str:
+    """Der nahe Horizont, fest im Prompt: heute und morgen.
+
+    Das ersetzt den gelöschten Kalender-Spiegel — und zwar in der richtigen
+    Richtung. Der Spiegel wollte der KI den Tag präsent machen, indem er in
+    den Kalender SCHRIEB; hier liest sie ihn einfach mit. Nichts wird
+    verändert, also braucht es auch keine Erlaubnis.
+
+    Warum überhaupt mitgeliefert, wo es doch `read_calendar` gibt: „was
+    steht heute an" ist die häufigste Frage überhaupt, und jede Tool-Runde
+    kostet einen kompletten zweiten Call mit vollem Präfix. Zwei Tage sind
+    ein paar Zeilen — billiger als die Runde, die sie erspart.
+
+    ── Achtung, das widerspricht einer alten Entscheidung ──
+    2026-06 wurde der Kalender BEWUSST aus dem Prompt genommen (siehe die
+    Notiz über `RANGE_BUCKETS`): Kleben skaliert nicht, und das damalige
+    14B-Modell antwortete faul aus dem geklebten Block, statt für andere
+    Zeiträume das Tool zu rufen. Beides gilt hier NICHT:
+      * Geklebt wird nur der nahe Horizont, nicht „irgendein Zeitraum" —
+        die Skalierungs-Sorge trifft genau das nicht.
+      * Gegen die Faulheit steht der Schlusssatz des Blocks, der die Grenze
+        ausdrücklich benennt. Bleibt er wirkungslos, gehört der Imprint
+        wieder raus — das ist der Prüfstein.
+
+    Sichtbarkeits-Regel: nur Layer, die auch Sasha sieht
+    (`default_visible`). Die KI soll nichts wissen, was er nicht nachlesen
+    kann — genau diese Asymmetrie hat der `erlebt`-Layer erzeugt.
+
+    Vorlaufzeiten (zwei Tage vor der Abreise ans Packen denken) gehören
+    NICHT hierher, sondern in die Schemen-Mechanik: die kennt die Vorhaben
+    und kann entscheiden, was wie früh sichtbar werden muss. `tage` ist der
+    Hebel, an dem sie das später dreht.
+    """
+    tage = IMPRINT_TAGE if tage is None else tage
+    if tage < 0:
+        return ""
+    heute = date.today()
+    try:
+        data = _load_raw()
+    except Exception:
+        return ""
+    layers = [name for name, lyr in data.get("layers", {}).items()
+              if lyr.get("default_visible", True)]
+    liste = render_range_for_tool(heute, heute + timedelta(days=tage),
+                                  layers=layers)
+    grenze = ("Das ist NUR der nahe Horizont. Für jeden anderen Zeitraum "
+              "(nächste Woche, ein bestimmtes Datum, 'wann war X') "
+              "read_calendar rufen — aus diesem Block lässt sich das "
+              "nicht beantworten.")
+    return f"## Was ansteht\n{liste}\n\n{grenze}"
 
 
 def conflicts_for_proposed(layer: str, day: str, label: str,

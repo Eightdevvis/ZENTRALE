@@ -45,8 +45,10 @@ Datei: `data/ai_calendar.json`. Format:
 - **puffer_min** (top-level, optional, Default 15) – Reserve, die bei der
   Knapp-Prüfung auf jede Fahrzeit draufkommt.
 - **default_visible** – Sichtbarkeits-Flag für die Dashboard-UI (`erlebt`
-  ist standardmäßig aus). Seit dem Glue-Wegfall (2026-06) NICHT mehr für den
-  Jetzt-Block relevant — `read_calendar` liefert per Default alle Layer.
+  ist standardmäßig aus). `read_calendar` liefert weiterhin ALLE Layer, auch
+  ausgeblendete — der `imprint_for_prompt`-Block dagegen nur die sichtbaren.
+  Die Asymmetrie „KI sieht mehr als Sasha" ist der Grund, warum der
+  Auto-Spiegel unbemerkt Schaden anrichten konnte (siehe unten).
 
 ## Default-Layer beim ersten Boot
 
@@ -54,7 +56,7 @@ Datei: `data/ai_calendar.json`. Format:
 |-----------|-----------|----------|-------------------------------------------------|
 | termine   | manuell   | ja       | Arzt, Frist, Geburtstag, Einmal-Events          |
 | routinen  | manuell   | ja       | Wiederholungs-Regeln                            |
-| erlebt    | (still)   | nein     | Spiegelung der `geschah-am`-Edges — **aus**, s.u. |
+| erlebt    | manuell   | nein     | früher Auto-Spiegel des Graphen — **gelöscht**, s.u. |
 
 Weitere Layer (`ernaehrung`, `schlaf`, `training`, …) kommen via
 `kalender.add_layer(name, label, color, default_visible)` dazu, sobald
@@ -73,7 +75,9 @@ Public API:
 - `add_pause(label, von, bis, grund=None)` – Routine über eine Spanne aussetzen (Tool `add_calendar_pause`, gegatet).
 - `delete_entry(day, label, layer=None)` → `int` – Einträge an einem Tag löschen, gibt Anzahl zurück (Tool `delete_calendar_entry`, gegatet). Tool-Hinweis: DIREKT rufen, KEIN read_calendar davor – gemessen (2026-06-07): mit vorherigem read lenken die ⚠-Alarm-Zeilen das 9B 5/8-mal von der Löschung ab; direkt = 8/8. Deterministisch die Ablenkung wegnehmen schlägt Prompt-Nudging.
 - `add_layer(name, label, color, default_visible)` – neuer Layer.
-- `auto_capture(concept, day_iso)` – Spiegelung vom Graph-Extraktor.
+- `imprint_for_prompt(tage=None)` – „was heute/morgen ansteht" als fertiger
+  Prompt-Block, nur SICHTBARE Layer. Ersetzt den gelöschten `auto_capture`
+  (siehe unten).
 - `entries_in_range(start, end, layers=None)` – Range-Query, Routinen werden expandiert.
 - `week_view(reference=None, only_default_visible=True)` – laufende Woche um `reference`.
 - `resolve_range(zeitraum, reference=None)` – relativer Bucket-Name
@@ -238,29 +242,60 @@ und `dateutil.rrule` importiert intern `from calendar import monthrange`.
 Lokales `core/calendar.py` würde das shadowen → ImportError. Deutscher
 Name löst es eindeutig und passt zur ZENTRALE-Domain.
 
-### Auto-Capture vom Graph — seit 17.08.2026 AUS
+### Auto-Capture vom Graph — ERSATZLOS GESTRICHEN (17.08.2026)
 
-`core/consolidation.py:extract_turn_into_graph` ruft nach jedem
-Graph-Write `kalender.auto_capture(concept, day_iso)` für jeden
-`geschah-am`-Edge mit ISO-Datum als Ziel. „Sasha" und „KI" werden
-übersprungen (sind Anker, keine Erlebnisse). Dedup auf `(concept, day)`,
-damit dasselbe Konzept bei mehrfachem Erwähnen nicht mehrfach im
-`erlebt`-Layer landet.
+Hier stand `kalender.auto_capture(concept, day_iso)`: `extract_turn_into_graph`
+spiegelte nach jedem Graph-Write jede `geschah-am`-Kante als Eintrag in den
+`erlebt`-Layer. Gedacht als „war da was?"-Skelett, *„ohne dass die KI dafür
+explizit Tool-Calls machen muss"* — und genau darin lag der Fehler. **Es war
+ein Schreibweg am Erlaubnis-Gate vorbei:**
 
-**Der Pfad ist per Default abgeschaltet** (`consolidation.MIRROR_CALENDAR`,
-anschaltbar mit `ZENTRALE_GRAPH_MIRROR_CAL=1`). Grund ist ein realer
-Schaden: aus Sashas **Frage** „kann ich heute wieder Sport machen?" machte
-der Extraktor `{Sport ─[geschah-am]─► 2026-08-17}`, der Spiegel schrieb
-„Sport" in den `erlebt`-Layer, und der nächste Turn las per `read_calendar`
-genau diesen Eintrag als Beleg zurück.
+- Jeder schreibende Kalender-**Tool**-Call (`add_calendar_entry`,
+  `add_calendar_routine`, `add_calendar_pause`, `delete_calendar_entry`) steht
+  in `ai.PERMISSION_REQUIRED_TOOLS` und muss von Sasha bestätigt werden.
+  Auto-Capture war kein Tool-Call, sondern ein Nebeneffekt der Konsolidierung
+  im Hintergrund-Thread — nie gefragt, nie angezeigt.
+- Geschrieben wurde in einen Layer mit `default_visible: False`. Sashas
+  Ansichten (`week_view`, `month_view`) filtern ihn weg; `entries_in_range` —
+  der Tool-Pfad der KI — nicht. **Die KI konnte lesen, was Sasha nicht
+  nachschlagen konnte.**
+- Damit wurde aus einem Extraktions-Irrtum eine Kalender-Tatsache: aus der
+  FRAGE „kann ich heute wieder Sport machen?" wurde ein erlebter Sport-Termin,
+  den der nächste Turn per `read_calendar` als Beleg zurücklas.
 
-Das ist die gefährliche Eigenschaft dieses Pfades: er macht aus einem
-Extraktions-Irrtum keinen Graph-Knoten (korrigierbar, mit Aktivierungswert
-relativiert), sondern einen **Kalender-Eintrag** — also die Quelle, der die
-KI von allen am meisten glaubt. Solange die Zeit-Extraktion nicht
-nachweislich sauber datiert (`memory/ki/ki_system.md`, „Der Erzähltag ist
-nicht der Ereignistag"), bleibt der Spiegel aus. Der `erlebt`-Layer wird
-damit nur noch von Sasha und echten Tool-Calls gefüllt.
+Den Kalender füllen ab jetzt nur noch Sasha und bestätigte Tool-Calls. Der
+`erlebt`-Layer bleibt bestehen (alte Einträge, manuelle Nutzung), bekommt aber
+keinen automatischen Zulauf mehr.
+
+### Imprint: der nahe Horizont im Prompt
+
+`kalender.imprint_for_prompt(tage=IMPRINT_TAGE)` liefert, was **heute und
+morgen** ansteht, als fertigen Block. Er hängt im **wechselnden** Teil des
+Prompts, direkt hinter dem Jetzt-Block — lokal (`ai.chat_stream`) wie in
+beiden Cloud-Dialekten (`cloud._volatile_text`).
+
+Das ist der Ersatz für den Spiegel, in der richtigen Richtung: der Spiegel
+wollte den Tag präsent machen, indem er **schrieb**; der Imprint **liest**.
+Nichts wird verändert, also braucht es keine Erlaubnis. Und er spart die
+häufigste Tool-Runde überhaupt — „was steht heute an" kostete bisher einen
+zweiten Call mit vollem Präfix.
+
+Zwei Regeln, die daran hängen:
+
+- **Nur sichtbare Layer** (`default_visible`). Die KI soll nichts wissen, was
+  Sasha nicht nachlesen kann — genau diese Asymmetrie hat den Schaden oben
+  überhaupt erst ermöglicht.
+- **Nur der nahe Horizont.** 2026-06 wurde der Kalender bewusst aus dem Prompt
+  genommen (siehe die Notiz über `RANGE_BUCKETS`): Kleben skaliert nicht, und
+  das damalige 14B-Modell antwortete faul aus dem geklebten Block. Der Imprint
+  klebt deshalb nur zwei Tage und benennt seine Grenze im Schlusssatz
+  („für jeden anderen Zeitraum read_calendar rufen"). **Bleibt der wirkungslos,
+  gehört der Imprint wieder raus** — das ist der Prüfstein.
+
+**Vorlaufzeiten gehören NICHT hierher.** „Freitag Abreise → zwei Tage vorher
+ans Packen denken" braucht Wissen über Vorhaben, nicht über Termine; das ist
+Sache der Schemen-Mechanik. `tage` ist der Hebel, an dem sie den Horizont
+später aufzieht.
 
 ## Tools (KI-side)
 
@@ -291,10 +326,16 @@ RRULE-Beispiele die die KI im Prompt kennt:
 - `FREQ=MONTHLY;BYDAY=2TU` – zweiter Dienstag im Monat
 - `FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=25` – jedes Jahr 25.12.
 
-## Integration in den Jetzt-Block (kein Glue mehr)
+## Integration in den Jetzt-Block (kein Glue — außer dem nahen Horizont)
 
-`core/ai.py:_now_prompt()` baut bei jedem Turn NUR einen Zeit-Anker plus
-die Pflicht-Regel zum Tool — **kein Kalender-Listing**:
+`core/ai.py:_now_prompt()` baut bei jedem Turn einen Zeit-Anker plus die
+Regel zum Tool. Ein **vollständiges** Kalender-Listing steht weiterhin nicht
+drin; seit 17.08.2026 hängt aber direkt dahinter der Imprint-Block mit
+**heute und morgen** (siehe oben, „Imprint: der nahe Horizont im Prompt").
+Der Satz im Jetzt-Block wurde entsprechend nachgezogen: früher „du hast keine
+Termine im Kopf, ruf bei JEDER Zeitfrage read_calendar" — das hätte genau die
+Runde erzwungen, die der Imprint einspart. Heute: aus dem Imprint direkt
+antworten, für alles andere das Tool.
 
 ```
 ## Jetzt

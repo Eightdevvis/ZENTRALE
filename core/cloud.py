@@ -228,7 +228,8 @@ def cloud_tools() -> list:
 
 def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
     """
-    Das Wechselnde: Graph-Kontext, Jetzt-Block, Alarme, Mic-Hinweis.
+    Das Wechselnde: Graph-Kontext, Jetzt-Block, Imprint (heute/morgen),
+    Alarme, Mic-Hinweis.
 
     Das steht NICHT mehr im System-Prompt. Dort saß es vor dem gesamten
     Verlauf — und weil die Uhr jeden Turn eine andere ist, hat es alles
@@ -244,6 +245,13 @@ def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
         parts.append(mem_ctx)
     parts.append(ai._now_prompt())
     if not tutor_mode:
+        # Was heute/morgen ansteht, direkt hinter dem Jetzt-Block — erspart
+        # die häufigste Tool-Runde überhaupt. Gehört ins Wechselnde: es
+        # ändert sich mit dem Tag, nicht mit dem Turn, aber der statische
+        # Kopf muss byte-identisch bleiben.
+        imprint = ai._imprint_prompt()
+        if imprint:
+            parts.append(imprint)
         alarm = ai._alarm_prompt()
         if alarm:
             parts.append(alarm)

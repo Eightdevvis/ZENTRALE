@@ -76,7 +76,11 @@ Drei Stellen tragen die Regel jetzt:
   Block, erklärt eine Zeile, dass `geschah-am` **genau einen Tag** meint und
   keinen Zeitraum. Ein Zustand hängt an seinem Datum und sagt nichts über
   andere Tage — Sashas Modell, ausdrücklich so gewollt.
-- **Kalender-Spiegel aus** (siehe `memory/werkzeuge/kalender_system.md`).
+- **Kalender-Spiegel gelöscht** — er war ein Schreibweg am Erlaubnis-Gate
+  vorbei, in einen Layer, den nur die KI lesen konnte. An seiner Stelle steht
+  `kalender.imprint_for_prompt()`: der nahe Horizont (heute/morgen) wird
+  **gelesen** statt geschrieben und hängt im wechselnden Prompt-Teil.
+  Beides in `memory/werkzeuge/kalender_system.md`.
 
 #### Wovon der Kontext ausgeht: wörtliche Treffer + gedämpfte Anker
 
@@ -582,7 +586,8 @@ Jetzt:
 
 * `cloud._static_system()` → nur Byte-identisches, ins `system`-Feld, mit
   Breakpoint (`ttl: 1h`, per `ZENTRALE_CACHE_TTL` zurückstellbar).
-* `cloud._volatile_text()` → Graph, Jetzt-Block, Alarme, Mic-Hinweis. Hängt als
+* `cloud._volatile_text()` → Graph, Jetzt-Block, Imprint (heute/morgen),
+  Alarme, Mic-Hinweis. Hängt als
   **letzter Block der neuesten User-Nachricht**, also hinter allem Cachebaren.
   Bewusst nicht als `{"role":"system"}`-Nachricht: das können nur Opus 5/4.8,
   Sonnet 5 quittiert es mit 400.
