@@ -337,20 +337,55 @@ def test_extraktor_prompt_datiert_grob_statt_falsch():
     Knoten statt eines erfundenen Tages, und dass Gegenwart trotzdem
     normal datiert wird."""
     p = " ".join(consolidation._GRAPH_EXTRACTOR_PROMPT.split())
-    assert "GRÖBER, NICHT FALSCH" in p        # Monat statt erfundener Tag
-    assert "MONATS-Knoten" in p
+    assert "GRÖBER, NICHT FALSCH" in p        # gröber statt erfundener Tag
+    assert "nur so grob wie nötig" in p       # aber die feinste WAHRE Stufe
+    assert "2026-W34" in p                    # Wochenstufe als Beispiel
     assert "GEGENWART IST DAGEGEN EINFACH" in p
     assert "NICHT-EREIGNISSE" in p            # Fragen und Vorhaben
     assert "nicht der des Geschehens" in p    # der Kern der Verwechslung
 
 
-def test_monatsknoten_ist_ein_zeitknoten():
-    """„2026-08" muss als Zeit erkannt werden — sonst kriegt es einen
-    Embedding-Vektor und rutscht durch jeden Zeit-Filter."""
+def test_vier_zeit_aufloesungen():
+    """Tag, Woche, Monat, Jahr müssen als Zeit erkannt werden — sonst
+    kriegen sie einen Embedding-Vektor und rutschen durch jeden
+    Zeit-Filter."""
+    assert graph._zeit_typ("2026-08-17") == "time-day"
+    assert graph._zeit_typ("2026-W34") == "time-week"
     assert graph._zeit_typ("2026-08") == "time-month"
     assert graph._zeit_typ("2026") == "time-year"
-    assert graph._zeit_typ("2026-08-17") == "time-day"
     assert graph._zeit_typ("Fieber") is None
+    assert graph._zeit_typ("W34") is None
+
+
+def test_woche_wird_als_spanne_ausgeschrieben(tmp_path, ohne_embeddings):
+    """„2026-W34" allein zwingt das Modell, ISO-Wochen selbst
+    auszurechnen — genau die Arithmetik, die reihenweise schiefgeht.
+    Python rechnet, das Modell liest ab."""
+    p = str(tmp_path / "g.json")
+    graph.add_turn_extraction(
+        [{"name": "Schüttelfrost", "type": "state"},
+         {"name": "2026-W34", "type": "concept"}],
+        [{"from": "Schüttelfrost", "to": "2026-W34", "rel": "geschah-am"}],
+        store=p)
+    text = graph.context_for_query("wann hatte ich schüttelfrost", store=p)
+    assert "2026-W34" in text
+    assert "17.08.–23.08.2026" in text
+
+
+def test_woche_als_subjekt_fliegt_raus():
+    """Eine Woche am falschen Ende ist genauso Müll wie ein Tag."""
+    sauber, drops = consolidation._sanitize_extracted(
+        [], [{"from": "2026-W34", "to": "Fieber", "rel": "hat"}])
+    assert sauber == []
+    assert drops["date_subject"] == 1
+
+
+def test_extraktor_kriegt_die_kalenderwoche_gesagt():
+    """Ohne Anker müsste der Extraktor die ISO-Woche selbst ausrechnen."""
+    body = consolidation._extractor_body("test", "antwort", "2026-08-17")
+    assert "2026-W34" in body          # diese Woche
+    assert "2026-W33" in body          # und die vorige, für „vor ein paar Tagen"
+    assert "Montag" in body
 
 
 def test_datum_wird_als_zeit_getypt_egal_was_der_extraktor_raet(tmp_path,

@@ -74,11 +74,20 @@ Drei Stellen tragen die Regel jetzt:
   Fieber" heißt heute und wird ganz normal auf den Tag datiert. Fragen,
   Vorhaben, Hypothetisches und Verneintes sind **keine** Ereignisse.
   `erwähnt-am` ist das Gegenstück und datiert das Reden.
-- **Zeit in drei Auflösungen** (`graph._zeit_typ`): `2026` / `2026-08` /
-  `2026-08-17` werden am Namen erkannt und als `time-year`/`time-month`/
-  `time-day` getypt — egal was der Extraktor geraten hat. Vorher stand
-  „2026-08-10" als `event` und „2026-08-09" als `concept` im Graphen, und die
-  Filter, die Zeit-Knoten aussortieren, griffen nicht.
+- **Zeit in vier Auflösungen** (`graph._zeit_typ`): `2026` / `2026-W34` /
+  `2026-08` / `2026-08-17` werden am Namen erkannt und als `time-year` /
+  `time-week` / `time-month` / `time-day` getypt — egal was der Extraktor
+  geraten hat. Vorher stand „2026-08-10" als `event` und „2026-08-09" als
+  `concept` im Graphen, und die Filter, die Zeit-Knoten aussortieren, griffen
+  nicht.
+- **Die Woche ist die wichtigste grobe Stufe.** „vor ein paar Tagen" ist
+  wochengenau bekannt; es auf den ganzen Monat zu werfen verschenkt drei
+  Wochen Genauigkeit, die man ehrlich hat. Damit das Modell keine ISO-Wochen
+  rechnen muss (dieselbe Arithmetik, die beim Wochentag reihenweise
+  schiefging), bekommt es beides fertig geliefert: der Extraktor-Body nennt
+  die laufende und die vorige Kalenderwoche (`consolidation._wochen_anker`),
+  und der Kontext-Renderer schreibt jeden Wochen-Knoten mit seiner Spanne aus
+  („2026-W34 [time-week] (17.08.–23.08.2026)").
 - **Kontext-Legende** (`graph.context_for_query`): steht eine Datums-Kante im
   Block, erklärt eine Zeile, dass `geschah-am` **genau einen Tag** meint und
   keinen Zeitraum. Ein Zustand hängt an seinem Datum und sagt nichts über

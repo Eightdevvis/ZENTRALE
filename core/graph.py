@@ -30,7 +30,7 @@
 import json
 import os
 import re
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from threading import Lock
 
 import embeddings
@@ -156,21 +156,48 @@ def _is_date(s: str) -> bool:
         return False
 
 
-_ZEIT_RE = re.compile(r"^\d{4}(-\d{2}(-\d{2})?)?$")
+_ZEIT_RE  = re.compile(r"^\d{4}(-\d{2}(-\d{2})?)?$")
+_WOCHE_RE = re.compile(r"^(\d{4})-W(\d{2})$")
 
 
 def _zeit_typ(name: str) -> str | None:
-    """Zeit-Knotentyp aus dem Namen: "2026" / "2026-08" / "2026-08-17".
+    """Zeit-Knotentyp aus dem Namen: "2026" / "2026-W34" / "2026-08" /
+    "2026-08-17".
 
-    Der Graph kennt Zeit in drei Auflösungen, und die GROBEN sind kein
-    Notbehelf: sagt Sasha „vor ein paar Tagen", ist der Monat die
+    Der Graph kennt Zeit in VIER Auflösungen, und die groben sind kein
+    Notbehelf: sagt Sasha „vor ein paar Tagen", ist die Kalenderwoche die
     genaueste wahre Aussage. Ein Tages-Knoten wäre präziser, aber
     erfunden — und genau daraus wurde am 17.08.2026 „du hattest bis
     gestern Fieber".
+
+    Die Woche liegt bewusst ZWISCHEN Monat und Tag: „vor ein paar Tagen"
+    auf den ganzen Monat zu werfen verschenkt drei Wochen Genauigkeit,
+    die man ehrlich hat.
     """
-    if not _ZEIT_RE.match(name or ""):
+    name = name or ""
+    if _WOCHE_RE.match(name):
+        return "time-week"
+    if not _ZEIT_RE.match(name):
         return None
     return {4: "time-year", 7: "time-month", 10: "time-day"}[len(name)]
+
+
+def _woche_spanne(name: str) -> tuple[date, date] | None:
+    """Montag und Sonntag einer ISO-Woche ("2026-W34")."""
+    m = _WOCHE_RE.match(name or "")
+    if not m:
+        return None
+    try:
+        mo = date.fromisocalendar(int(m.group(1)), int(m.group(2)), 1)
+    except ValueError:
+        return None
+    return mo, mo + timedelta(days=6)
+
+
+def woche_von(tag: date) -> str:
+    """ISO-Wochen-Knotenname zu einem Tag ("2026-W34")."""
+    jahr, kw, _ = tag.isocalendar()
+    return f"{jahr}-W{kw:02d}"
 
 
 def _log(line: str):
@@ -500,8 +527,8 @@ def _add_or_get_node(name: str, node_type: str, data: dict) -> str:
     zeit_typ = _zeit_typ(name)
     if zeit_typ:
         node_type = zeit_typ
-    ist_zeit = bool(zeit_typ) or node_type in ("time-day", "time-month",
-                                               "time-year")
+    ist_zeit = bool(zeit_typ) or node_type in ("time-day", "time-week",
+                                               "time-month", "time-year")
     emb = None if ist_zeit else _emb_doc(name, data)
     data["nodes"][name] = {
         "type":       node_type or "concept",
@@ -941,9 +968,19 @@ def context_for_query(query: str | None,
         return data["nodes"][n].get("type", "concept")
 
     def _fmt(name, score):
+        # Wochen-Knoten mit ihrer Spanne ausschreiben. "2026-W34" ist für ein
+        # Modell zwar lesbar, aber es müsste die Tage SELBER ausrechnen — und
+        # genau diese Art Datums-Arithmetik geht regelmäßig schief (dieselbe
+        # Erfahrung wie beim Wochentag im Kalender-Renderer: Python rechnet,
+        # das Modell liest ab).
+        zusatz = ""
+        spanne = _woche_spanne(name)
+        if spanne:
+            mo, so = spanne
+            zusatz = f" ({mo.strftime('%d.%m.')}–{so.strftime('%d.%m.%Y')})"
         if score >= 0.999:                       # Entry-Points sind 1.0
-            return f"  - {name} [{_typ(name)}]"
-        return f"  - {name} [{_typ(name)}] (a={score:.2f})"
+            return f"  - {name} [{_typ(name)}]{zusatz}"
+        return f"  - {name} [{_typ(name)}]{zusatz} (a={score:.2f})"
 
     world_nodes = [(n, s) for n, s in sorted_nodes
                    if _typ(n) not in ("self", "capability", "limit")]
@@ -1035,7 +1072,8 @@ def context_for_persona(query: str | None, store: str,
     # Zeit-/Anker-Knoten selbst tragen keine Info fürs Gespräch → rausfiltern
     world = [(n, s) for n, s in sorted_nodes
              if data["nodes"][n].get("type", "concept")
-             not in ("time-day", "time-month", "time-year", "self")]
+             not in ("time-day", "time-week", "time-month", "time-year",
+                     "self")]
     if not world:
         return ""
 
@@ -1197,7 +1235,8 @@ def reembed_missing(store: str | None = None, limit: int = 300) -> int:
         offen = [n for n, node in data["nodes"].items()
                  if not node.get("embedding")
                  and not _is_date(n)
-                 and node.get("type") not in ("time-day", "time-month", "time-year")]
+                 and node.get("type") not in ("time-day", "time-week",
+                                              "time-month", "time-year")]
         if not offen:
             return 0
         gefuellt = 0

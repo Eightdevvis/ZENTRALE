@@ -16,7 +16,7 @@
 import os
 import re
 import json as _json
-from datetime import date
+from datetime import date, timedelta
 
 import net      # HTTP-Wrapper mit Logging
 import graph    # Konzept-Graph (Phase G)
@@ -68,9 +68,10 @@ _ALLOWED_EDGE_VERBS = {
 # immer Extraktor-Müll - korrekte Richtung ist <konzept> ─[erwähnt-am
 # /geschah-am]─► <datum>. Subjekt-Datum produziert "2026-05-31 hat
 # zustand Sasha" - sowas verdaut das LLM beim Lesen unmöglich richtig.
-_DATE_RE = re.compile(r"^\d{4}(-\d{2}(-\d{2})?)?$")   # Tag, Monat ODER Jahr:
-# seit der Zeit-Regel darf der Extraktor auch gröber datieren ("2026-08"),
-# und ein Monat als SUBJEKT ist genauso Müll wie ein Tag als Subjekt.
+# Tag, Woche, Monat ODER Jahr: seit der Zeit-Regel darf der Extraktor gröber
+# datieren ("2026-W34", "2026-08"), und eine Woche als SUBJEKT ist genauso
+# Müll wie ein Tag als Subjekt.
+_DATE_RE = re.compile(r"^\d{4}(-(W\d{2}|\d{2}(-\d{2})?))?$")
 
 # Relations die richtungs-anfällig sind: KI/Sasha sind hier oft am
 # falschen Ende, wenn die KI in der Antwort über Sasha geredet hat
@@ -137,15 +138,23 @@ ABSOLUTE REGELN:
       Beispiel "ich war heute müde": {Sasha→müde, rel=zustand},
       {müde→2026-05-15, rel=geschah-am}.
 
-   b) UNGEFÄHRE VERGANGENHEIT WIRD GRÖBER, NICHT FALSCH. "vor ein paar
-      Tagen", "letztens", "neulich", "vor Wochen", "als ich krank war" →
-      NIEMALS ein Tages-Datum. Nimm stattdessen den MONATS-Knoten im Format
-      "2026-08" (bzw. das Jahr "2026", wenn nicht mal der Monat klar ist):
-      {Fieber→2026-08, rel=geschah-am}. Das ist unschärfer, aber wahr — und
-      man sieht ihm an, dass der genaue Tag unbekannt ist. Ein Tages-Datum
-      auf Verdacht ist der schlimmste Fehler überhaupt: das heutige wäre
-      der Tag des Erzählens, nicht der des Geschehens. Passt nicht mal ein
-      Monat: gar keine Zeitkante.
+   b) UNGEFÄHRE VERGANGENHEIT WIRD GRÖBER, NICHT FALSCH — aber nur so grob
+      wie nötig. Nimm IMMER die feinste Stufe, die noch WAHR ist:
+
+        Tag     "2026-08-17"  wenn der Tag dasteht oder eindeutig folgt
+        Woche   "2026-W34"    "vor ein paar Tagen", "letztens", "diese
+                              Woche", "Anfang der Woche", "am Wochenende"
+        Monat   "2026-08"     "vor ein paar Wochen", "Anfang August",
+                              "letzten Monat"
+        Jahr    "2026"        wenn nicht mal der Monat klar ist
+
+      Die heutige Kalenderwoche steht oben im Body; "vor ein paar Tagen"
+      ist je nach Wochentag diese oder die vorige. Beispiel:
+      {Schüttelfrost→2026-W33, rel=geschah-am}.
+
+      NIEMALS ein Tages-Datum auf Verdacht — das ist der schlimmste Fehler
+      überhaupt, denn das heutige wäre der Tag des Erzählens, nicht der des
+      Geschehens. Passt nicht mal ein Jahr: gar keine Zeitkante.
 
    c) GEGENWART IST DAGEGEN EINFACH. "ich hab grad Fieber", "mir ist heute
       schlecht", "ich bin gerade in Berlin" beschreiben JETZT → heutiges
@@ -212,6 +221,26 @@ OUTPUT: gültiges JSON mit zwei Arrays. Auch bei nur einem Knoten/Edge ein Array
 }"""
 
 
+def _wochen_anker(today: str) -> str:
+    """Kalenderwoche + Wochentag zum heutigen Datum, als Klammerzusatz.
+
+    Ohne das müsste der Extraktor die ISO-Woche selbst ausrechnen, um "vor
+    ein paar Tagen" auf einen Wochen-Knoten zu legen — und Datums-Arithmetik
+    ist genau das, was Modelle zuverlässig verhauen. Python rechnet, das
+    Modell liest ab. Dieselbe Linie wie beim Wochentag im Kalender-Renderer.
+    """
+    try:
+        d = date.fromisoformat(today)
+    except (TypeError, ValueError):
+        return ""
+    import graph
+    tage = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag",
+            "Samstag", "Sonntag"]
+    vorwoche = graph.woche_von(d - timedelta(days=7))
+    return (f" ({tage[d.weekday()]}, Kalenderwoche {graph.woche_von(d)}"
+            f", vorige Woche {vorwoche})")
+
+
 def _extractor_body(user_msg, ai_msg=None, today: str = "") -> str:
     """Der User-Prompt-Body für den Extraktor (identisch für lokal + cloud).
 
@@ -228,7 +257,7 @@ def _extractor_body(user_msg, ai_msg=None, today: str = "") -> str:
     else:
         turns = [(user_msg, ai_msg)]
 
-    teile = [f"Heutiges Datum: {today}", ""]
+    teile = [f"Heutiges Datum: {today}{_wochen_anker(today)}", ""]
     if len(turns) == 1:
         u, a = turns[0]
         teile += [f"Chat-Turn:", f"User (Sasha): {u}", f"AI:           {a}", ""]

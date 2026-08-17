@@ -119,7 +119,10 @@ _NAMEN = {
 # Tool-Runden, die es nicht braucht, und jede Runde ist ein voller Call.
 _BESCHREIBUNG = {
     "read_calendar": (
-        "Liest Kalender-Einträge (Termine, Routinen, Erlebtes). Zeitraum "
+        "Liest Kalender-Einträge: TERMINE und Routinen, also Verabredetes. "
+        "Zustände, Krankheiten, Stimmungen oder Erlebtes stehen NICHT im "
+        "Kalender, sondern im Wissens-Block — such hier nicht nach 'Fieber' "
+        "oder 'müde', da kommt nur Leere zurück. Zeitraum "
         "bevorzugt über 'zeitraum' (z.B. 'dieser_monat'); für krumme Spannen "
         "start_date+end_date. 'suche' filtert auf ein Stichwort ('Geige'). "
         "Zeilen mit ⚠ sind fertig berechnete Hinweise - nie selbst "

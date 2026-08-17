@@ -135,6 +135,15 @@ def turn(frage):
 #
 # Jede: (Titel, Frage, Prüfung(text, tools) -> None | Grund)
 
+def _sucht_zustaende_nicht_im_kalender(text, tools):
+    """Krankheiten stehen nicht im Kalender — dort danach zu suchen sind
+    zwei volle Tool-Runden mit komplettem Praefix fuer garantiert nichts."""
+    if tools:
+        return (f"durchsucht den Kalender nach einem Zustand ({tools}) — "
+                f"da steht garantiert nichts drin")
+    return None
+
+
 def _kein_erfundener_tag(text, tools):
     """Sie darf den Krankheits-Tag nicht erfinden — er steht nirgends."""
     tage = set(_TAG_RE.findall(text))
@@ -191,7 +200,8 @@ def _nennt_morgen_termine(text, tools):
 FAELLE = [
     ("Krankheits-Tag wird nicht erfunden",
      "wann hatte ich eigentlich fieber?",
-     lambda t, w: _kein_erfundener_tag(t, w) or _weiss_dass_es_august_war(t, w)),
+     lambda t, w: (_kein_erfundener_tag(t, w) or _weiss_dass_es_august_war(t, w)
+                   or _sucht_zustaende_nicht_im_kalender(t, w))),
 
     ("Frage nach Sport ist kein erledigter Sport",
      "kann ich heute wieder sport machen?",
@@ -233,10 +243,25 @@ def kanten_aus(user_text, ai_text):
     return nachher - vorher
 
 
-def _kein_tages_datum(kanten):
+_WOCHE_RE = re.compile(r"^\d{4}-W\d{2}$")
+
+
+def _wochengenau(kanten):
+    """Gröber als ein Tag — aber nicht gröber als nötig.
+
+    "vor ein paar Tagen" ist wochengenau bekannt. Auf den ganzen Monat zu
+    werfen verschenkt drei Wochen Genauigkeit, die man ehrlich hat.
+    """
     schlimm = [k for k in kanten
                if k[1] == "geschah-am" and _TAG_RE.fullmatch(k[2])]
-    return f"datiert auf einen TAG statt gröber: {schlimm}" if schlimm else None
+    if schlimm:
+        return f"datiert auf einen TAG statt gröber: {schlimm}"
+    zeit = [k for k in kanten if k[1] == "geschah-am"]
+    if not zeit:
+        return "datiert gar nicht — die Woche wäre bekannt gewesen"
+    if not any(_WOCHE_RE.fullmatch(k[2]) for k in zeit):
+        return f"gröber als nötig (Woche wäre bekannt): {zeit}"
+    return None
 
 
 def _heutiges_datum_da(kanten):
@@ -252,10 +277,10 @@ def _kein_sport_ereignis(kanten):
 
 
 EXTRAKTIONS_FAELLE = [
-    ("Unscharfe Vergangenheit wird nicht auf heute gestempelt",
+    ("Unscharfe Vergangenheit landet wochengenau, nicht auf heute",
      "ich hatte vor ein paar tagen ganz schlimmen schüttelfrost",
      "Klingt unangenehm. Ist es jetzt weg?",
-     _kein_tages_datum),
+     _wochengenau),
 
     ("Gegenwart wird ganz normal auf heute datiert",
      "ich hab grad fieber, mir ist total schlecht",

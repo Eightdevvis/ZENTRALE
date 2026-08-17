@@ -306,6 +306,14 @@ später aufzieht.
 
 ## Tools (KI-side)
 
+**Der Kalender führt Verabredetes, keine Zustände.** Die `read_calendar`-
+Beschreibung der `gross`-Schiene sagt das seit 17.08.2026 ausdrücklich: nach
+„Fieber" oder „müde" dort zu suchen kostet zwei volle Tool-Runden mit
+komplettem Präfix (gemessen 1,4 Cent) für garantiert nichts — Zustände stehen
+im Wissens-Block. Vorher fand sie dort manchmal etwas, weil der gelöschte
+Auto-Spiegel Krankheiten in den `erlebt`-Layer geschrieben hatte.
+
+
 | Tool                    | Wann                                                |
 |-------------------------|-----------------------------------------------------|
 | `read_calendar`         | JEDE Frage nach Terminen/Plänen/Daten (Pflicht)     |
