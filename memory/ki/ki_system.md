@@ -81,11 +81,19 @@ Drei Stellen tragen die Regel jetzt:
 #### Wovon der Kontext ausgeht: wörtliche Treffer + gedämpfte Anker
 
 Einstiegspunkte waren Embedding-Treffer plus `Sasha` plus heutiges Datum.
-Ohne Ollama gibt es keine Embeddings (am 17.08. hatten 29 von 59 Knoten
-einen), also blieben die zwei größten **Naben** — an `Sasha` hängt alles, an
-`heute` jedes `erwähnt-am`. Ergebnis: auf die Frage nach Sport kamen Geige,
-Spanien und brain organoids zurück, alle gleichauf, während „Sport" selbst
-nur über zwei Ecken mitschwamm.
+Am 17.08. hatten nur 29 von 59 Cloud-Knoten einen Vektor — **nicht** wegen
+Ollama, sondern weil **Anthropic keine Embeddings-API hat**: chattet der Kern
+auf Claude, liefert `embeddings._cloud_provider()` nichts, und jeder in der
+Sitzung entstandene Knoten bleibt vektorlos (`graph.reembed_missing` zieht sie
+beim nächsten Start nach — aber nur, wenn dann ein Embedder da ist). Blieben
+die zwei größten **Naben** — an `Sasha` hängt alles, an `heute` jedes
+`erwähnt-am`. Ergebnis: auf die Frage nach Sport kamen Geige, Spanien und
+brain organoids zurück, alle gleichauf, während „Sport" selbst nur über zwei
+Ecken mitschwamm.
+
+Wer volle Vektor-Abdeckung will, muss den **Embedder vom Chat-Anbieter
+entkoppeln**: `ZENTRALE_CLOUD_EMBED_PROVIDER=qwen` hält das Embedding auf
+DashScope (`text-embedding-v3`), egal welches Modell gerade redet.
 
 - `graph._lexical_entry_points()`: Knoten, deren Name **wörtlich** in der
   Frage vorkommt. Stumpf, aber unabhängig von Ollama. Mehrwortige Knoten

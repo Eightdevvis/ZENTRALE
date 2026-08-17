@@ -753,15 +753,21 @@ ANKER_START = 0.35
 def _lexical_entry_points(query: str, data: dict, top_k: int = 5) -> list[str]:
     """Knoten, deren Name wörtlich in der Frage vorkommt.
 
-    Warum es das zusätzlich zu den Embeddings gibt: Embeddings brauchen
-    das lokale Ollama. Ist das aus (unterwegs, Cloud-Betrieb), hat ein
-    frischer Knoten gar keinen Vektor — am 17.08.2026 hatten 29 von 59
-    Knoten einen. Dann fand _find_entry_points NICHTS und der Spread
-    startete nur an Sasha + heutigem Datum, also an den beiden größten
-    Naben. Ergebnis: auf die Frage nach Sport kamen Geige, Spanien und
-    brain organoids zurück, während "Sport" selbst nur über zwei Ecken
-    mitschwamm. Ein wörtlicher Treffer ist stumpf, aber er funktioniert
-    immer und trifft genau das Gefragte.
+    Warum es das zusätzlich zu den Embeddings gibt: ein Knoten OHNE
+    Vektor ist für _find_entry_points unsichtbar, und Vektoren fehlen
+    öfter, als man denkt. Am 17.08.2026 hatten 29 von 59 Cloud-Knoten
+    einen. Grund war nicht Ollama, sondern der Chat-Anbieter: Anthropic
+    hat gar keine Embeddings-API, also liefert _cloud_provider() nichts,
+    sobald auf Claude gechattet wird — jeder in der Sitzung entstandene
+    Knoten bleibt vektorlos. Dann fand die Einstiegspunkt-Suche NICHTS
+    und der Spread startete nur an Sasha + heutigem Datum, also an den
+    beiden größten Naben: auf die Frage nach Sport kamen Geige, Spanien
+    und brain organoids zurück, während "Sport" selbst nur über zwei
+    Ecken mitschwamm.
+
+    Ein wörtlicher Treffer ist stumpf, aber er hängt an gar keinem
+    Dienst und trifft Eigennamen genauer als jeder Vektor. Er ersetzt
+    die Embeddings nicht, er fängt sie auf.
 
     Mehrwortige Knoten ("work badhausen") brauchen ALLE ihre Wörter in
     der Frage. Ab 5 Zeichen zählt auch ein Präfix, damit "krank" den
