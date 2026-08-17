@@ -54,7 +54,7 @@ Datei: `data/ai_calendar.json`. Format:
 |-----------|-----------|----------|-------------------------------------------------|
 | termine   | manuell   | ja       | Arzt, Frist, Geburtstag, Einmal-Events          |
 | routinen  | manuell   | ja       | Wiederholungs-Regeln                            |
-| erlebt    | automatisch | nein   | Spiegelung aller `geschah-am`-Edges vom Graph   |
+| erlebt    | (still)   | nein     | Spiegelung der `geschah-am`-Edges — **aus**, s.u. |
 
 Weitere Layer (`ernaehrung`, `schlaf`, `training`, …) kommen via
 `kalender.add_layer(name, label, color, default_visible)` dazu, sobald
@@ -238,7 +238,7 @@ und `dateutil.rrule` importiert intern `from calendar import monthrange`.
 Lokales `core/calendar.py` würde das shadowen → ImportError. Deutscher
 Name löst es eindeutig und passt zur ZENTRALE-Domain.
 
-### Auto-Capture vom Graph
+### Auto-Capture vom Graph — seit 17.08.2026 AUS
 
 `core/consolidation.py:extract_turn_into_graph` ruft nach jedem
 Graph-Write `kalender.auto_capture(concept, day_iso)` für jeden
@@ -246,6 +246,21 @@ Graph-Write `kalender.auto_capture(concept, day_iso)` für jeden
 übersprungen (sind Anker, keine Erlebnisse). Dedup auf `(concept, day)`,
 damit dasselbe Konzept bei mehrfachem Erwähnen nicht mehrfach im
 `erlebt`-Layer landet.
+
+**Der Pfad ist per Default abgeschaltet** (`consolidation.MIRROR_CALENDAR`,
+anschaltbar mit `ZENTRALE_GRAPH_MIRROR_CAL=1`). Grund ist ein realer
+Schaden: aus Sashas **Frage** „kann ich heute wieder Sport machen?" machte
+der Extraktor `{Sport ─[geschah-am]─► 2026-08-17}`, der Spiegel schrieb
+„Sport" in den `erlebt`-Layer, und der nächste Turn las per `read_calendar`
+genau diesen Eintrag als Beleg zurück.
+
+Das ist die gefährliche Eigenschaft dieses Pfades: er macht aus einem
+Extraktions-Irrtum keinen Graph-Knoten (korrigierbar, mit Aktivierungswert
+relativiert), sondern einen **Kalender-Eintrag** — also die Quelle, der die
+KI von allen am meisten glaubt. Solange die Zeit-Extraktion nicht
+nachweislich sauber datiert (`memory/ki/ki_system.md`, „Der Erzähltag ist
+nicht der Ereignistag"), bleibt der Spiegel aus. Der `erlebt`-Layer wird
+damit nur noch von Sasha und echten Tool-Calls gefüllt.
 
 ## Tools (KI-side)
 

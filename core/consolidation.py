@@ -44,6 +44,21 @@ OLLAMA_NUM_CTX    = int(os.environ.get("OLLAMA_NUM_CTX", "8192"))
 # Thinking aus. Nur fuer qwen3* gueltig (qwen2.5 -> Ollama 400), daher kond.
 SUPPORTS_THINK    = OLLAMA_MODEL.startswith("qwen3")
 
+# Spiegelt jede geschah-am-Kante als "erlebt"-Eintrag in den Kalender.
+# DEFAULT AUS, und das ist eine Konsequenz aus einem realen Schaden
+# (17.08.2026): Sasha fragte "kann ich heute wieder Sport machen?", der
+# Extraktor stempelte daraus {Sport ─[geschah-am]─► 2026-08-17}, der
+# Spiegel schrieb "Sport" in den erlebt-Layer — und der NÄCHSTE Turn las
+# per read_calendar genau diesen Eintrag zurück und behandelte ihn als
+# Beleg. Eine Frage war binnen einer Minute zur Tatsache geworden.
+#
+# Das ist die gefährliche Eigenschaft dieses Pfades: er macht aus einem
+# Extraktions-Irrtum keinen Graph-Knoten (den man später korrigieren
+# kann), sondern einen KALENDER-Eintrag — also genau die Quelle, der die
+# KI von allen am meisten glaubt. Solange die Zeit-Extraktion nicht
+# nachweislich sauber datiert, bleibt der Spiegel aus.
+MIRROR_CALENDAR   = os.environ.get("ZENTRALE_GRAPH_MIRROR_CAL", "0") == "1"
+
 
 # ── Sanitization für extrahierte Edges ────────────────────────────────
 # Der Extraktor halluziniert munter neue Edge-Verben ("wohlbehalten",
@@ -128,7 +143,35 @@ ABSOLUTE REGELN:
 
 4. EDGES haben kurze deutsche Relations-Labels - NUR aus dieser geschlossenen Liste, keine neuen Verben erfinden: "besitzt", "ist", "arbeitet-an", "zustand", "wohnt-in", "geschah-am", "hat", "kann", "kann-nicht", "mag", "fühlt", "erwähnt-am", "kennt", "kommuniziert-mit", "macht", "war-am". Wenn keins davon passt: Edge weglassen, lieber gar nichts als ein erfundenes Verb wie "wohlbehalten", "definiert", "aktuelles-Datum", "kennet".
 
-5. ZEIT: bei Aussagen wie "ich war heute müde" extrahiere das heutige Datum als Knoten im ISO-Format ("2026-05-15"). Edges: {Sasha→müde, rel=zustand}, {müde→2026-05-15, rel=geschah-am}. NIE "heute"/"gestern"/"morgen" als Knoten - immer absolutes Datum. Datums-Knoten sind NIE Subjekt eines Edges - immer am Pfeil-Ziel-Ende (X ─[erwähnt-am]─► 2026-05-15, niemals 2026-05-15 ─[X]─► Y).
+5. ZEIT - die häufigste Fehlerquelle. Trenne strikt, WANN etwas passiert ist, von WANN darüber geredet wird. Das heutige Datum steht oben im Body; rechne relative Angaben dagegen um und schreib sie absolut ("2026-05-15"). NIE "heute"/"gestern"/"morgen" als Knoten. Datums-Knoten sind NIE Subjekt eines Edges - immer am Pfeil-Ziel-Ende (X ─[erwähnt-am]─► 2026-05-15, niemals 2026-05-15 ─[X]─► Y).
+
+   a) `geschah-am` NUR mit einem Datum, das im Turn wirklich dasteht oder
+      eindeutig ableitbar ist: "heute", "gestern", "am Dienstag", "am 12.8.".
+      Beispiel "ich war heute müde": {Sasha→müde, rel=zustand},
+      {müde→2026-05-15, rel=geschah-am}.
+
+   b) UNGEFÄHRE VERGANGENHEIT IST KEIN DATUM. "vor ein paar Tagen",
+      "letztens", "neulich", "vor Wochen", "als ich krank war" → KEIN
+      geschah-am. Das heutige Datum ist hier die SCHLECHTESTE Wahl: es ist
+      der Tag des Erzählens, nicht der des Geschehens. Lieber gar keine
+      Zeitkante als eine erfundene.
+
+   c) Das heutige Datum ist NICHT die Standard-Antwort. Setz es nur, wenn
+      der Turn sagt, dass es heute war.
+
+   d) NICHT-EREIGNISSE bekommen NIEMALS ein geschah-am: Fragen ("kann ich
+      heute wieder Sport machen?"), Vorhaben und Pläne ("ich will nachher
+      laufen"), Hypothetisches ("wenn ich morgen fit bin"), Verneintes
+      ("ich war nicht joggen"). Nach etwas zu FRAGEN heißt nicht, es getan
+      zu haben. Im Zweifel: keine Zeitkante.
+
+   e) Ein datierter Zustand gilt GENAU an diesem Tag und sagt NICHTS über
+      andere Tage. "Fieber geschah-am 2026-08-09" heißt nicht, dass das
+      Fieber davor oder danach bestand.
+
+   f) `erwähnt-am` ist das Gegenstück und datiert das REDEN: wenn du weißt,
+      dass etwas Thema war, aber nicht wann es passierte, nimm erwähnt-am
+      aufs heutige Datum - nie geschah-am.
 
 6. AI-LÜGEN UND HALLUZINATIONEN NICHT EXTRAHIEREN:
 
@@ -414,7 +457,7 @@ def _is_substantive(user_msg: str) -> bool:
 
 def extract_turn_into_graph(user_msg: str, ai_msg: str,
                             store: str | None = None,
-                            mirror_calendar: bool = True):
+                            mirror_calendar: bool | None = None):
     """
     Hauptweg um einen Turn in den Graphen zu kippen. Wird async von
     ai._async_save_turn aufgerufen. Macht den LLM-Extraktor-Call und
@@ -434,6 +477,7 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
                          (Core-Graph) aufgerufen. Die Grenze Tutor ↔ Core-KI
                          liegt darin, dass die Stores sich NIE anfassen.
         mirror_calendar: geschah-am-Konzepte in Sashas erlebt-Layer spiegeln.
+                         None → MIRROR_CALENDAR (Default AUS, siehe dort).
                          Für Persona-Turns AUS: Tutor-Geschwätz gehört nicht
                          in den gemeinsamen Kalender.
 
@@ -496,7 +540,7 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
                  quellen=quellen,
                  store="cloud" if store else "lokal")
 
-    if not mirror_calendar:
+    if not (MIRROR_CALENDAR if mirror_calendar is None else mirror_calendar):
         return
 
     # Auto-Capture in den Kalender: jedes Konzept das im Graph einen

@@ -53,6 +53,53 @@ das System hochgefahren ist).
 - **Public API:** `context_for_query(query)`, `add_turn_extraction(nodes, edges)`,
   `ensure_seed()`, `stats()`, `dump()`.
 
+#### Zeit: der Erzähltag ist nicht der Ereignistag (seit 08/2026)
+
+Am 17.08.2026 fragte Sasha „kann ich heute wieder Sport machen?" und bekam
+eine Antwort, in der drei Fehler ineinandergriffen. Der Extraktor stempelte
+aus der **Frage** `{Sport ─[geschah-am]─► 2026-08-17}`, der Kalender-Spiegel
+machte daraus einen `erlebt`-Eintrag, und der nächste Turn las per
+`read_calendar` genau diesen Eintrag als **Beleg** zurück. Eine Frage war
+binnen einer Minute Kalender-Wahrheit. Dasselbe Muster hatte vorher schon
+„ich hatte vor ein paar Tagen Schüttelfrost" auf den Tag des Erzählens
+datiert — woraus die KI dann „du hattest bis gestern Fieber" ableitete.
+
+Drei Stellen tragen die Regel jetzt:
+
+- **Extraktor-Prompt, Regel 5** (`core/consolidation.py`): `geschah-am` nur
+  mit einem Datum, das im Turn wirklich steht. Ungefähre Vergangenheit
+  („vor ein paar Tagen") bekommt **gar keine** Zeitkante — das heutige Datum
+  ist dort die schlechteste Wahl. Fragen, Vorhaben, Hypothetisches und
+  Verneintes sind **keine** Ereignisse. `erwähnt-am` ist das Gegenstück und
+  datiert das Reden.
+- **Kontext-Legende** (`graph.context_for_query`): steht eine Datums-Kante im
+  Block, erklärt eine Zeile, dass `geschah-am` **genau einen Tag** meint und
+  keinen Zeitraum. Ein Zustand hängt an seinem Datum und sagt nichts über
+  andere Tage — Sashas Modell, ausdrücklich so gewollt.
+- **Kalender-Spiegel aus** (siehe `memory/werkzeuge/kalender_system.md`).
+
+#### Wovon der Kontext ausgeht: wörtliche Treffer + gedämpfte Anker
+
+Einstiegspunkte waren Embedding-Treffer plus `Sasha` plus heutiges Datum.
+Ohne Ollama gibt es keine Embeddings (am 17.08. hatten 29 von 59 Knoten
+einen), also blieben die zwei größten **Naben** — an `Sasha` hängt alles, an
+`heute` jedes `erwähnt-am`. Ergebnis: auf die Frage nach Sport kamen Geige,
+Spanien und brain organoids zurück, alle gleichauf, während „Sport" selbst
+nur über zwei Ecken mitschwamm.
+
+- `graph._lexical_entry_points()`: Knoten, deren Name **wörtlich** in der
+  Frage vorkommt. Stumpf, aber unabhängig von Ollama. Mehrwortige Knoten
+  brauchen alle ihre Wörter; ab 5 Zeichen zählt ein Präfix, damit „krank"
+  den Knoten „Krankheit" findet.
+- **Anker gedämpft:** `Sasha` und das heutige Datum starten bei
+  `graph.ANKER_START` (0.35) statt 1.0, **sobald die Frage eigene
+  Einstiegspunkte hatte**. Ohne Treffer tragen sie den Kontext weiterhin
+  allein und behalten volle Kraft.
+- **Kanten nach Relevanz** statt Datei-Reihenfolge: Rang = Aktivierung des
+  schwächeren Endknotens, `erwähnt-am` mit Faktor 0.3 nach hinten. Sonst
+  entschied der Zufall der Entstehung, was den 40er-Schnitt und das
+  Zeichenbudget überlebt.
+
 #### Alias-Auflösung: verbinden statt verschmelzen (seit 08/2026)
 
 `_find_alias()` macht nur noch die drei **String**-Stufen — exakt,

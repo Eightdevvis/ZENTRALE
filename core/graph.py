@@ -29,6 +29,7 @@
 
 import json
 import os
+import re
 from datetime import datetime, date
 from threading import Lock
 
@@ -681,15 +682,20 @@ def _neighbors(node_name: str, data: dict):
 
 
 def _activate(entry_nodes: list[str], data: dict,
-              hops: int = DEFAULT_HOPS, decay: float = DEFAULT_DECAY) -> dict[str, float]:
+              hops: int = DEFAULT_HOPS, decay: float = DEFAULT_DECAY,
+              starts: dict[str, float] | None = None) -> dict[str, float]:
     """
     Aktivierungs-Spread: ausgehend von entry_nodes, breitet sich
     Aktivierung durch den Graphen aus. Pro Hop wird's um `decay`
     verringert, Edge-Weight moduliert.
 
+    starts: Start-Aktivierung je Knoten, Default 1.0. Gebraucht für die
+    gedämpften Anker (Sasha/heute) — siehe _activated_view.
+
     Returns: {node_name: score} mit Werten in (0, 1].
     """
-    activation = {n: 1.0 for n in entry_nodes if n in data["nodes"]}
+    starts = starts or {}
+    activation = {n: starts.get(n, 1.0) for n in entry_nodes if n in data["nodes"]}
     frontier   = set(activation.keys())
 
     for _ in range(hops):
@@ -737,6 +743,50 @@ def _find_entry_points(query: str, data: dict,
     return [n for n, _ in scored[:top_k]]
 
 
+_WORT_RE = re.compile(r"[0-9a-zäöüßáéíóúñâçèêëîïôûùü]+", re.I)
+
+# Start-Aktivierung der Anker (Sasha, heutiges Datum), wenn die Frage
+# eigene Einstiegspunkte geliefert hat. Siehe _activated_view.
+ANKER_START = 0.35
+
+
+def _lexical_entry_points(query: str, data: dict, top_k: int = 5) -> list[str]:
+    """Knoten, deren Name wörtlich in der Frage vorkommt.
+
+    Warum es das zusätzlich zu den Embeddings gibt: Embeddings brauchen
+    das lokale Ollama. Ist das aus (unterwegs, Cloud-Betrieb), hat ein
+    frischer Knoten gar keinen Vektor — am 17.08.2026 hatten 29 von 59
+    Knoten einen. Dann fand _find_entry_points NICHTS und der Spread
+    startete nur an Sasha + heutigem Datum, also an den beiden größten
+    Naben. Ergebnis: auf die Frage nach Sport kamen Geige, Spanien und
+    brain organoids zurück, während "Sport" selbst nur über zwei Ecken
+    mitschwamm. Ein wörtlicher Treffer ist stumpf, aber er funktioniert
+    immer und trifft genau das Gefragte.
+
+    Mehrwortige Knoten ("work badhausen") brauchen ALLE ihre Wörter in
+    der Frage. Ab 5 Zeichen zählt auch ein Präfix, damit "krank" den
+    Knoten "Krankheit" findet — deutsche Komposita sonst nie.
+    """
+    q_worte = set(_WORT_RE.findall(query.lower()))
+    if not q_worte:
+        return []
+
+    def passt(teil: str) -> bool:
+        if teil in q_worte:
+            return True
+        return any((len(teil) >= 5 and w.startswith(teil)) or
+                   (len(w) >= 5 and teil.startswith(w)) for w in q_worte)
+
+    treffer = []
+    for name in data["nodes"]:
+        teile = _WORT_RE.findall(name.lower())
+        if teile and all(passt(t) for t in teile):
+            treffer.append(name)
+    # Längere Namen zuerst: "work badhausen" ist spezifischer als "work".
+    treffer.sort(key=lambda n: -len(n))
+    return treffer[:top_k]
+
+
 def _activated_view(query: str | None, st: _Store,
                     hops: int, max_nodes: int):
     """
@@ -755,23 +805,56 @@ def _activated_view(query: str | None, st: _Store,
 
     entries: list[str] = []
     if query:
-        entries.extend(_find_entry_points(query, data))
-    if "Sasha" in data["nodes"] and "Sasha" not in entries:
-        entries.append("Sasha")
-    today = _today_str()
-    if today in data["nodes"] and today not in entries:
-        entries.append(today)
+        entries.extend(_lexical_entry_points(query, data))
+        for n in _find_entry_points(query, data):
+            if n not in entries:
+                entries.append(n)
+
+    # Sasha und das heutige Datum kommen IMMER dazu — aber gedämpft, sobald
+    # die Frage eigene Einstiegspunkte hatte. Beide sind Naben: an "Sasha"
+    # hängt per Definition alles, und an das heutige Datum hängt jedes
+    # `erwähnt-am`. Mit voller Aktivierung übertönten sie das Gefragte, und
+    # der halbe Graph landete gleichauf im Kontext (alles 1 Hop von Sasha =
+    # dieselbe 0.50, unabhängig vom Thema). Gedämpft bleiben sie das, was
+    # sie sein sollen: der Anker fürs Subjekt und fürs Heute, nicht der
+    # Themen-Geber. Ohne eigene Einstiegspunkte (leere Frage, kein Treffer)
+    # tragen sie den Kontext weiterhin allein und behalten volle Kraft.
+    starts: dict[str, float] = {}
+    daempfung = ANKER_START if entries else 1.0
+    for anker in ("Sasha", _today_str()):
+        if anker in data["nodes"] and anker not in entries:
+            entries.append(anker)
+            starts[anker] = daempfung
 
     if not entries:
         return data, [], []
 
-    activation   = _activate(entries, data, hops=hops)
+    activation   = _activate(entries, data, hops=hops, starts=starts)
     sorted_nodes = sorted(activation.items(), key=lambda x: -x[1])[:max_nodes]
     node_set     = {n for n, _ in sorted_nodes}
     relevant_edges = [
         e for e in data["edges"]
         if e["from"] in node_set and e["to"] in node_set
     ]
+
+    # Kanten nach Relevanz sortieren, nicht nach Datei-Reihenfolge. Sonst
+    # entscheidet der Zufall der Entstehung, was den 40er-Schnitt und das
+    # Zeichenbudget überlebt — und die ältesten Kanten (Spanien, Geige)
+    # verdrängen die, um die gerade gefragt wurde. Rang = wie stark der
+    # SCHWÄCHERE der beiden Endknoten aktiviert ist: eine Kante ist nur so
+    # relevant wie ihr unwichtigeres Ende.
+    #
+    # `erwähnt-am` wird gedrückt: das ist Buchhaltung darüber, wann geredet
+    # wurde, kein Inhalt. Sie machten die Hälfte der Liste aus und sind
+    # zugleich der Grund, warum das heutige Datum eine Nabe ist. Ganz raus
+    # fliegen sie nicht — "darüber haben wir am X geredet" ist manchmal die
+    # Antwort —, aber sie stehen hinten an.
+    def _rang(e):
+        staerke = min(activation.get(e["from"], 0.0),
+                      activation.get(e["to"], 0.0))
+        return -(staerke * 0.3 if e.get("rel") == "erwähnt-am" else staerke)
+
+    relevant_edges.sort(key=_rang)
     _log(f"GRAPH ←  {len(sorted_nodes)} Knoten, {len(relevant_edges)} Kanten aktiv")
     return data, sorted_nodes, relevant_edges
 
@@ -857,6 +940,18 @@ def context_for_query(query: str | None,
             lines.append("")
         if kanten:
             lines.append("### Verbindungen (das Subjekt steht immer LINKS):")
+            # Zeit-Legende, nur wenn wirklich Datums-Kanten dabei sind. Ohne
+            # sie liest ein Modell aus zwei datierten Nennungen einen ZEITRAUM
+            # ("Fieber bis gestern") - der Graph behauptet das aber nie: er
+            # kennt nur einzelne Tage. Und `erwähnt-am` ist der Tag des
+            # REDENS, nicht des Geschehens; ohne den Hinweis wird daraus ein
+            # Erlebnis an genau dem Tag, an dem davon erzählt wurde.
+            if any(e.get("rel") in ("geschah-am", "erwähnt-am") for e in kanten):
+                lines.append(
+                    "  (geschah-am = an genau DIESEM Tag passiert, sagt nichts über "
+                    "andere Tage — kein Zeitraum. erwähnt-am = an diesem Tag darüber "
+                    "GEREDET, nicht passiert. Fehlt ein Datum, ist der Zeitpunkt "
+                    "unbekannt — dann nachfragen statt schätzen.)")
             for e in kanten:
                 w = e.get("weight", 1.0)
                 w_str = f" w={w:.1f}" if w != 1.0 else ""
