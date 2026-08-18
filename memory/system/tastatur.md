@@ -85,6 +85,19 @@ Drei Unterschiede, die aus dem Terminal kommen:
 > umgeschaltet (nicht mehr über diesen Sensor-Trigger). Der Presence-Auto-Start
 > bleibt bewusst aus – siehe `memory/tutor/tutor_system.md`.
 
+## In der TUI (Terminal-Kassette)
+
+Die Belegung steht **nicht hier**, sondern als einzige Wahrheit im Code:
+`TUI_KEYS` (volle Hilfe, `/help`) und `CTX_KEYS` (die Tasten des gerade
+fokussierten Fensters, nacktes `/`) in `tui/zentrale_tui.py`. Eine zweite
+Liste in der Doku wäre nach dem ersten neuen Werkzeug falsch.
+
+Eine Taste, die man sonst nirgends sieht, weil sie nichts öffnet:
+
+| Taste | Funktion |
+|---|---|
+| `s`   | **stdout-Laufschrift an/aus.** Ist der Pane zu schmal, laufen zu lange Log-Zeilen rotierend durch, statt hinten abgeschnitten zu werden; was ganz passt, steht still. Bleibt gemerkt (`~/.config/zentrale/stdout_lauf`), auch per `/lauf an\|aus`. Details: `memory/system/dashboard.md` → „stdout-Laufschrift". |
+
 ## Im Chat-Modus (zusätzlich)
 
 | Taste     | Funktion                                                    |

@@ -17,6 +17,7 @@ from tui.zentrale_tui import (
     graph_series, graph_last, tele_value, parse_command, log_prefix,
     blockspark, bar, overlay_rows, terminal_too_small,
     md_zeilen, md_inline,
+    lauf_ausschnitt, lauf_schritt, LAUF_TRENNER, LAUF_HALT, LAUF_TAKT,
 )
 
 # ── Gemeiner Werte-Pool (für die Fuzz-Eigenschaft) ──────────────────────────
@@ -234,6 +235,61 @@ def test_terminal_too_small_threshold():
     assert not terminal_too_small(14, 60) and not terminal_too_small(50, 200)
 
 
+# ── stdout-Laufschrift ──────────────────────────────────────────────────────
+def test_lauf_was_passt_steht_still():
+    """Der Sinn der Sache: im breiten Fenster darf sich NICHTS bewegen."""
+    for schritt in range(50):
+        assert lauf_ausschnitt("kurz", 10, schritt) == "kurz"
+        assert lauf_ausschnitt("genau zehn", 10, schritt) == "genau zehn"
+
+
+def test_lauf_haelt_am_zeilenanfang_an():
+    """Ohne Pause erwischt das Auge den Satzanfang nie."""
+    text = "EVENT IN eine viel zu lange zeile fuer die schmale box"
+    erste = [lauf_ausschnitt(text, 12, s) for s in range(LAUF_HALT)]
+    assert erste == [text[:12]] * LAUF_HALT
+    assert lauf_ausschnitt(text, 12, LAUF_HALT) == text[:12]        # Halt endet hier
+    assert lauf_ausschnitt(text, 12, LAUF_HALT + 1) == text[1:13]   # dann rutscht es
+
+
+def test_lauf_zeigt_ueber_eine_runde_jedes_zeichen():
+    """Die harte Regel: es geht kein Zeichen verloren. Über eine volle Runde
+    muss jedes Zeichen des Strings einmal an der linken Kante gestanden haben —
+    sonst wäre die Laufschrift nur ein hübscheres Abschneiden."""
+    text = "TOOL kalender.eintragen zahnarzt dienstag vierzehn uhr"
+    ring = text + LAUF_TRENNER
+    ecke = "".join(lauf_ausschnitt(text, 8, LAUF_HALT + i)[0]
+                   for i in range(len(ring)))
+    assert ecke == ring
+    # und nach genau einer Runde ist es wieder der Anfang
+    assert lauf_ausschnitt(text, 8, LAUF_HALT + len(ring)) == lauf_ausschnitt(text, 8, 0)
+
+
+def test_lauf_fuellt_die_breite_immer_ganz():
+    text = "x" * 40
+    for s in range(0, 120):
+        assert len(lauf_ausschnitt(text, 13, s)) == 13
+
+
+def test_lauf_ohne_platz_gibt_leer_statt_zu_werfen():
+    assert lauf_ausschnitt("irgendwas", 0, 3) == ""
+    assert lauf_ausschnitt("irgendwas", -5, 3) == ""
+
+
+def test_lauf_schritt_haengt_an_der_uhr():
+    assert lauf_schritt(0) == 0
+    assert lauf_schritt(LAUF_TAKT * 3 + 0.01) == 3
+    assert lauf_schritt(float("nan")) == 0
+    assert lauf_schritt(float("inf")) == 0
+    assert lauf_schritt("keine zahl") == 0
+
+
+def test_lauf_befehl_schaltet():
+    assert parse_command("/lauf aus", "auto")[0] == "LAUF_OFF"
+    assert parse_command("/lauf an", "auto")[0] == "LAUF_ON"
+    assert parse_command("/lauf", "auto")[0] == "LAUF_TOGGLE"
+
+
 # ── Eigenschaft: KEIN Helfer wirft je eine Exception (tausende Kombis) ───────
 def test_pure_helpers_never_raise():
     rnd = random.Random(20260611)
@@ -243,7 +299,8 @@ def test_pure_helpers_never_raise():
         a = rnd.choice(NASTY)
         b = rnd.choice(NASTY)
         # jede Single-Arg-Funktion mit Müll
-        for fn in (fmt_uptime, fmt_clock, parse_clock, _num, blockspark):
+        for fn in (fmt_uptime, fmt_clock, parse_clock, _num, blockspark,
+                   lauf_schritt):
             try:
                 fn(a)
             except Exception as e:        # noqa: BLE001 — genau das prüfen wir
@@ -255,6 +312,7 @@ def test_pure_helpers_never_raise():
             period_duration(rnd.randint(0, 1439), rnd.randint(0, 1439))
             parse_command(str(a)[:30] if not isinstance(a, str) else a, rnd.choice(["auto", "day", "night"]))
             log_prefix(a if isinstance(a, str) else "x")
+            lauf_ausschnitt(a, b, rnd.choice(NASTY))
         except Exception as e:            # noqa: BLE001
             pytest.fail(f"Helfer warf bei a={a!r}: {e!r}")
         # graph_series / graph_last / tele_value mit gemeinen Rows/Metrics

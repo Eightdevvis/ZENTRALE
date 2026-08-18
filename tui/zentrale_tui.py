@@ -48,6 +48,16 @@ import urllib.parse
 BASE_URL = (os.environ.get("ZENTRALE_URL") or "http://localhost:5000").rstrip("/")
 
 
+def _theme_modul():
+    """core/theme.py importieren (Pfad einhängen, falls nötig)."""
+    core_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "core")
+    if core_dir not in sys.path:
+        sys.path.insert(0, core_dir)
+    import theme
+    return theme
+
+
 def _load_theme_state():
     """core/theme.py laden und einen ThemeState bauen.
 
@@ -56,12 +66,7 @@ def _load_theme_state():
     Import scheitert, wäre wieder der doppelte Zustand, der hier gerade
     abgeschafft wurde — dann lieber ein klarer Fehler beim Start.
     """
-    core_dir = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "core")
-    if core_dir not in sys.path:
-        sys.path.insert(0, core_dir)
-    import theme
-    return theme.ThemeState()
+    return _theme_modul().ThemeState()
 
 # Dateien öffnet man in einem normalen Terminal via `xdg-open <datei>` — die TUI
 # selbst macht das nicht (reine Anzeige).
@@ -522,6 +527,128 @@ def log_prefix(text):
     if head in LOG_PREFIX_COLOR:
         return head, LOG_PREFIX_COLOR[head]
     return None, None
+
+
+# ── stdout-Laufschrift ("der Lauf") ────────────────────────────────────────
+#
+# Die stdout-Spalte ist die schmalste im Layout, und in einem kleinen tmux-Pane
+# wird fast jede Log-Zeile hinten abgeschnitten — man liest den halben Satz und
+# rät den Rest. Statt zu kürzen LÄUFT eine zu lange Zeile durch: der Text
+# rotiert nach links, hinten schließt er über einen Trenner wieder an seinen
+# eigenen Anfang an. Eine Runde zeigt damit den ganzen String.
+#
+# Drei Regeln, die das erträglich statt nervig machen:
+#   • Nur was nicht passt, bewegt sich. Was ganz in die Box geht, steht still —
+#     sonst zappelt das halbe Panel ohne Not (und im breiten Fenster nie).
+#   • Jede Runde beginnt mit einer kurzen Pause am Zeilenanfang, sonst erwischt
+#     das Auge den Satzanfang nie.
+#   • Der Schritt hängt an der UHR, nicht am Bildaufbau: die Schrift läuft
+#     gleich schnell, egal wie oft die TUI gerade zeichnet.
+#
+# An/aus per Taste 's' bzw. '/lauf'; der Wunsch überlebt den Neustart in
+# ~/.config/zentrale/stdout_lauf — wie beim Theme eine Datei, ein Wort.
+LAUF_TRENNER = "   ·   "     # verbindet Ende und Anfang sichtbar
+LAUF_HALT = 4                # Schritte Pause am Zeilenanfang je Runde
+
+
+def _lauf_takt():
+    """Sekunden pro Zeichen-Schritt. ~5,5 Zeichen/s ist ein Tempo, bei dem man
+    mitliest statt hinterherzuhecheln; ZENTRALE_LAUF_TAKT stellt es um (Tests
+    lassen es rasen, und wem es zu zäh ist, dreht auf)."""
+    try:
+        n = float(os.environ.get("ZENTRALE_LAUF_TAKT") or 0.18)
+    except ValueError:
+        return 0.18
+    return n if 0.005 <= n <= 5 else 0.18
+
+
+LAUF_TAKT = _lauf_takt()
+# Bildtakt, während etwas läuft: halb so lang wie ein Zeichen-Schritt, damit
+# die Bewegung gleichmäßig aussieht — aber nie schneller als 40 ms (CPU) und
+# nie träger als die ruhigen 250 ms der Schleife.
+LAUF_TICK_MS = int(max(40, min(250, LAUF_TAKT * 1000 / 2)))
+
+
+def lauf_schritt(jetzt):
+    """Monotone Sekunden → Schrittzähler der Laufschrift (Müll → 0)."""
+    try:
+        n = float(jetzt)
+    except (TypeError, ValueError):
+        return 0
+    if n != n or n in (float("inf"), float("-inf")):   # NaN/Inf
+        return 0
+    try:
+        return int(n / LAUF_TAKT)
+    except (OverflowError, ValueError):    # 1e308 / LAUF_TAKT läuft über
+        return 0
+
+
+def lauf_ausschnitt(text, breite, schritt):
+    """Sichtbarer Ausschnitt einer laufenden Zeile. PURE Funktion.
+
+    Passt der Text in `breite`, kommt er unverändert zurück — er läuft dann
+    gar nicht. Sonst rotiert `text + LAUF_TRENNER` um `schritt` Zeichen nach
+    links, mit LAUF_HALT Schritten Pause bei Offset 0.
+    """
+    if not isinstance(text, str):
+        text = "" if text is None else str(text)
+    try:
+        breite = int(breite)
+    except (TypeError, ValueError, OverflowError):
+        return ""
+    if breite <= 0:
+        return ""
+    if len(text) <= breite:
+        return text
+    ring = text + LAUF_TRENNER
+    try:
+        schritt = int(schritt)
+    except (TypeError, ValueError, OverflowError):
+        schritt = 0
+    stelle = schritt % (len(ring) + LAUF_HALT)
+    off = 0 if stelle < LAUF_HALT else stelle - LAUF_HALT
+    return (ring + ring)[off:off + breite]
+
+
+def lauf_datei():
+    """Pfad des Lauf-Wunsches. ZENTRALE_LAUF_FILE sticht (Tests, fremde Knoten)."""
+    return (os.environ.get("ZENTRALE_LAUF_FILE")
+            or os.path.expanduser("~/.config/zentrale/stdout_lauf"))
+
+
+def lauf_lesen(default=True):
+    """Ein Wort aus der Datei → an/aus. Fehlt sie, gilt `default` (an)."""
+    try:
+        with open(lauf_datei(), encoding="utf-8") as f:
+            wort = f.read().strip().lower()
+    except OSError:
+        return default
+    if wort in ("an", "on", "1", "ja", "true"):
+        return True
+    if wort in ("aus", "off", "0", "nein", "false"):
+        return False
+    return default
+
+
+def lauf_schreiben(an):
+    """Wunsch merken. Nutzt denselben Riegel wie das Theme: eine Arbeitskopie
+    (Worktree) fasst Sashas laufende Konfiguration NICHT an."""
+    pfad = lauf_datei()
+    try:
+        darf, _grund = _theme_modul().darf_schreiben(pfad)
+    except Exception:                      # noqa: BLE001 — Merken ist Kür
+        darf = True
+    if not darf:
+        return False
+    try:
+        os.makedirs(os.path.dirname(pfad) or ".", exist_ok=True)
+        tmp = pfad + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write("an\n" if an else "aus\n")
+        os.replace(tmp, pfad)              # atomar, wie die Theme-Datei
+        return True
+    except OSError:
+        return False
 
 
 # ── Klavier: pure Geometrie + Belegung (curses-frei, daher unit-testbar) ────
@@ -989,6 +1116,7 @@ TUI_COMMANDS = [
     ("/cloud", "Cloud-Drossel: on | off  (Datenschutz/Kosten)"),
     ("/local", "Lokale KI drosseln: on | off  (Ollama-Leitung)"),
     ("/tutor", "Sprach-Tutor TEXT-panel (Mitte, Cloud/Qwen); 'u' öffnet das Zimmer-Fenster"),
+    ("/lauf",  "stdout-Laufschrift: an | aus  (auch 's')"),
     ("/quit",  "ZENTRALE-TUI beenden  (auch 'q')"),
 ]
 TUI_KEYS = [
@@ -1003,6 +1131,7 @@ TUI_KEYS = [
     ("u",   "Persona-Zimmer (eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · ohne DISPLAY → text-panel · /tutor = text-panel"),
     ("f",   "Fokus (Mitte): oben projekte, drunter alle listen · enter reindiven · a/s neu · space abhaken · r name · d weg · p projekt · f setzt den knoten als alleinigen fokus (rendert dann allein in der FOCUS-box) · m/> verschieben"),
     ("k",   "Klavier (Mitte): die Tastatur IST die Klaviatur — y x c v b n m , . - weiß, s d g h j l ö schwarz · ←→ oktave · space nimmt eine melodie auf (fragt beim stoppen nach dem namen) · ↑↓ melodie wählen · enter abspielen · r umbenennen · D löschen · k/esc zu"),
+    ("s",   "stdout-Laufschrift an/aus: im schmalen Pane laufen zu lange Log-Zeilen einmal durch (rotierend, mit Pause am Anfang), statt hinten abgeschnitten zu werden. Zeilen, die ganz passen, stehen still. Bleibt gemerkt"),
     ("/",   "Befehlszeile öffnen"),
     ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
@@ -1016,7 +1145,8 @@ CTX_KEYS = {
     "home": [
         ("f", "fokus"), ("n", "notizen"), ("g", "graph"), ("m", "karte"),
         ("c", "kalender"), ("p", "post / mail"), ("a", "ki-chat"),
-        ("u", "tutor"), ("k", "klavier"), ("t", "theme"), ("q", "beenden"),
+        ("u", "tutor"), ("k", "klavier"), ("s", "stdout-lauf"),
+        ("t", "theme"), ("q", "beenden"),
     ],
     "note:edit": [
         ("↑↓", "block wählen"), ("t/l/f", "neu: text/liste/float"),
@@ -1142,6 +1272,10 @@ def parse_command(buf, theme_mode):
         return "LOCAL_TOGGLE", theme_mode, ""
     if name in ("tutor", "sprache"):             # Sprach-Tutor-Panel öffnen (Mitte)
         return "TUTOR_OPEN", theme_mode, ""
+    if name in ("lauf", "laufschrift"):          # stdout-Laufschrift (Schalter macht der Aufrufer)
+        if arg in ("on", "an"):   return "LAUF_ON", theme_mode, ""
+        if arg in ("off", "aus"): return "LAUF_OFF", theme_mode, ""
+        return "LAUF_TOGGLE", theme_mode, ""
     return None, theme_mode, "unbekannter befehl: /" + name
 
 
@@ -1674,6 +1808,13 @@ def run_ui(stdscr, store):
     cmd_buf = ""            # inkl. führendem '/'
     help_latched = False    # volle Hilfe stehen lassen (nach '/help')
     cmd_msg = ""            # kurze Rückmeldung (z.B. unbekannter Befehl)
+
+    # ── stdout-Laufschrift (Taste 's' / '/lauf') ────────────────────────
+    # Wunsch aus der Datei, damit ein Aus über den Neustart hält. `laeuft`
+    # merkt sich vom letzten Bild, ob TATSÄCHLICH etwas rotiert — daran hängt
+    # unten die Tick-Rate: nur dann zeichnen wir schneller als die ruhigen
+    # 250 ms, und nur solange wirklich eine Zeile zu lang ist.
+    LAUF = {"an": lauf_lesen(), "laeuft": False}
 
     # ── Graph-Reminder-Nag ──────────────────────────────────────────────
     # Poppt EINMAL pro Sitzung ein „bitte eintragen"-Kästchen, wenn ein Graph
@@ -6696,9 +6837,11 @@ def run_ui(stdscr, store):
         # Token; sonst die ruhige 250-ms-Kadenz (spart CPU/Backend-Last).
         # Das Klavier tickt IMMER schnell: bei 250 ms Kadenz käme der Ton
         # spürbar nach dem Tastendruck und die Tasten würden träge leuchten.
+        # Läuft gerade eine stdout-Zeile durch, reicht ein Mittelding
+        # (LAUF_TICK_MS ≈ halber Zeichen-Schritt) — ein Bruchteil der 30 fps.
         fast = ((M["active"] and M.get("anim")) or (AI["active"] and AI["streaming"])
                 or (TUTOR["active"] and TUTOR["streaming"]) or PIANO["active"])
-        stdscr.timeout(33 if fast else 250)
+        stdscr.timeout(33 if fast else (LAUF_TICK_MS if LAUF["laeuft"] else 250))
         ch = stdscr.getch()
 
         if nag_active:
@@ -6752,6 +6895,10 @@ def run_ui(stdscr, store):
                         cmd_msg = "lokale ki " + ("AN" if (st or {}).get("local_enabled") else "GEDROSSELT")
                     except (urllib.error.URLError, OSError, ValueError):
                         cmd_msg = "lokal-schalter fehlgeschlagen"
+                if res in ("LAUF_ON", "LAUF_OFF", "LAUF_TOGGLE"):
+                    LAUF["an"] = (not LAUF["an"]) if res == "LAUF_TOGGLE" else (res == "LAUF_ON")
+                    lauf_schreiben(LAUF["an"])
+                    cmd_msg = "stdout-lauf " + ("an" if LAUF["an"] else "aus")
                 if res == "TUTOR_OPEN":
                     # Panel öffnen wie Taste 'u': Status holen + falls Backend da
                     # und keine Session, die Persona SOFORT loslegen lassen.
@@ -8111,6 +8258,10 @@ def run_ui(stdscr, store):
                 NOTE["active"] = True; n_open()
             elif ch in (ord("k"), ord("K")):   # Klavier öffnen (wie im Browser: k)
                 p_open()
+            elif ch in (ord("s"), ord("S")):   # stdout-Laufschrift an/aus
+                LAUF["an"] = not LAUF["an"]
+                lauf_schreiben(LAUF["an"])
+                cmd_msg = "stdout-lauf " + ("an" if LAUF["an"] else "aus")
             elif ch in (ord("f"), ord("F")):   # Fokus-Werkzeug öffnen (primäre Taste)
                 L["active"] = True; L["view"] = "forest"; L["fsel"] = 0
                 L["adding"] = False; L["confirm"] = False; L["msg"] = ""; l_load()
@@ -8243,6 +8394,7 @@ def run_ui(stdscr, store):
                 safe_addstr(ty + 1 + i, lx + 11, "n/a", C["faint"])
 
         sy = ty + tele_h
+        laeuft_jetzt = False
         if std_h >= 3:
             draw_box(sy, lx, std_h, leftw, "stdout")
             logs = state.get("logs", []) or []
@@ -8250,6 +8402,7 @@ def run_ui(stdscr, store):
                 logs = []
             inner = std_h - 2
             shown = logs[-inner:]
+            schritt = lauf_schritt(time.monotonic())
             for i, e in enumerate(shown):
                 if not isinstance(e, dict):
                     continue
@@ -8260,13 +8413,29 @@ def run_ui(stdscr, store):
                 # Nachricht auf die Box-Innenbreite kürzen, damit nichts in die
                 # Mittelspalte überläuft (lx+leftw-1 ist der rechte Rahmen).
                 avail = (lx + leftw - 1) - px
-                txt = (e.get("text") or "")[:max(0, avail)]
+                voll = e.get("text") or ""
+                if LAUF["an"] and avail > 6 and len(voll) > avail:
+                    # Passt nicht → laufen lassen statt abschneiden. Die Uhrzeit
+                    # links bleibt stehen, nur die Nachricht rotiert. Unter ~7
+                    # Zeichen Platz ist eine Laufschrift nicht mehr lesbar,
+                    # dann bleibt es beim ehrlichen Schnitt.
+                    txt = lauf_ausschnitt(voll, avail, schritt)
+                    laeuft_jetzt = True
+                else:
+                    txt = voll[:max(0, avail)]
+                # Das Präfix (EVENT IN, TOOL …) färbt sich nur, wenn die Zeile
+                # gerade an ihrem Anfang steht — mitten in der Runde gibt es
+                # keinen Kopf mehr, und einer ohne Zeilenanfang wäre gelogen.
                 head, grp = log_prefix(txt)
                 if head and grp:
                     safe_addstr(yy, px, head, C.get(grp, C["dim"]))
                     safe_addstr(yy, px + len(head), txt[len(head):], C["dim"])
                 else:
                     safe_addstr(yy, px, txt, C["dim"])
+
+        # Zappelt gerade wirklich etwas? Nur dann tickt die Schleife schneller
+        # (siehe oben) — ein breites Fenster bleibt bei den ruhigen 250 ms.
+        LAUF["laeuft"] = laeuft_jetzt
 
         # ── MITTE: Graph-Werkzeug / Karte (oder Einladung, sie zu öffnen) ──
         if G["active"]:
@@ -8444,7 +8613,8 @@ def run_ui(stdscr, store):
         tm_txt = ("auto(%s)" % cur_theme if theme_mode_now() == "auto"
                   else cur_theme)
         addclip(footer_row, 0,
-                " q quit · t theme: %s · g graph · m karte · c kalender · a ki · u tutor · / befehle · %s" % (tm_txt, BASE_URL),
+                " q quit · t theme: %s · g graph · m karte · c kalender · a ki · u tutor · s lauf: %s · / befehle · %s"
+                % (tm_txt, "an" if LAUF["an"] else "aus", BASE_URL),
                 W - 1, C["faint"])
 
         # ── Graph-Reminder-Nag (zuletzt → liegt über allem) ───────────────

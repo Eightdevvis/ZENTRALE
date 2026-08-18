@@ -88,6 +88,32 @@ Themes: Light-Mode mit weißem Hintergrund (kein Gelb auf Weiß), Dark-Mode
 245). Akzent-Grün ist gedämpft (Salbei 108, nie bold → kein Neon). Box-Inhalte
 werden auf die jeweilige Box-Innenbreite gekürzt (kein Überlauf in Nachbarspalten).
 
+**stdout-Laufschrift (Taste `s`, seit 2026-08-18).** Die stdout-Spalte ist die
+schmalste im Layout (~28 Zeichen bei 100 Spalten); in einem kleinen tmux-Pane
+wurde damit fast jede Log-Zeile hinten abgeschnitten. Passt eine Zeile nicht,
+**läuft** sie jetzt durch: der Text rotiert nach links, hinten schließt er über
+den Trenner `   ·   ` wieder an seinen eigenen Anfang an — eine Runde zeigt den
+ganzen String. Drei Eigenschaften, die das erträglich halten:
+
+- **Nur was nicht passt, bewegt sich.** Zeilen, die ganz in die Box gehen,
+  stehen still; im breiten Fenster rührt sich gar nichts.
+- **Pause am Zeilenanfang** (`LAUF_HALT` Schritte), sonst erwischt das Auge den
+  Satzanfang nie. Das Präfix (`EVENT IN`, `TOOL` …) ist genau dann eingefärbt,
+  wenn die Zeile wirklich an ihrem Anfang steht.
+- **Der Schritt hängt an der Uhr** (`LAUF_TAKT`, Default 0,18 s ≈ 5,5 Zeichen/s,
+  per `ZENTRALE_LAUF_TAKT` umstellbar), nicht am Bildaufbau. Die Schleife tickt
+  nur schneller (`LAUF_TICK_MS`, halber Schritt), **solange wirklich etwas
+  läuft** — sonst bleibt es bei den ruhigen 250 ms.
+
+Die Uhrzeit links bleibt stehen, nur die Nachricht rotiert. Unter ~7 Zeichen
+Restbreite wird nicht gelaufen, sondern ehrlich geschnitten (eine Laufschrift
+durch ein 3-Zeichen-Fenster liest niemand). `s` bzw. `/lauf an|aus` schaltet
+um; der Wunsch steht in `~/.config/zentrale/stdout_lauf` (ein Wort) und
+überlebt den Neustart — geschrieben mit demselben Riegel wie das Theme, eine
+Arbeitskopie im Worktree fasst die laufende Konfiguration also nicht an. Die
+Logik ist pur und getestet (`lauf_ausschnitt`/`lauf_schritt` in
+`tests/test_tui_helpers.py`, echter Durchlauf im PTY in `tests/test_tui_lauf.py`).
+
 **Wann die Applier laufen (seit 2026-07-27):** die TUI färbt sich selbst sofort
 um (~18 ms), die **Umgebungs-Applier** sind davon entkoppelt — sie färben die
 ganze XFCE-Sitzung um (GTK-, Fenster- **und Icon-Theme**), und besonders der
