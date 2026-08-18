@@ -1822,7 +1822,18 @@ def run_ui(stdscr, store):
                      "Accept": "text/event-stream"})
         resp = None
         try:
-            resp = urllib.request.urlopen(req, timeout=120)
+            # 300 s, und die Zahl ist NICHT frei gewaehlt: der Timeout gilt
+            # auch fuers LESEN am SSE-Strom, und waehrend die Erlaubnis-Frage
+            # auf einen Klick wartet, fliesst nichts. Der Server gibt dem
+            # Menschen dafuer 180 s (core/state.py::wait_permission). Mit 120 s
+            # starb der Client, BEVOR der Server aufgab: am 18.08.2026 hat
+            # Sasha 184 s zum Antworten gebraucht, die TUI zeigte danach
+            # "keine verbindung zur ki", und die fertige Antwort des Modells —
+            # die es laut Devtools gab — kam nie im Chat an.
+            # Bleibt dieser Wert groesser als wait_permission, kann das nicht
+            # wieder passieren. Waehrend echten Streamens setzt jeder Token den
+            # Timeout ohnehin neu.
+            resp = urllib.request.urlopen(req, timeout=300)
             for raw in resp:
                 line = raw.decode("utf-8", "replace").rstrip("\r\n")
                 if not line.startswith("data:"):
@@ -1857,7 +1868,13 @@ def run_ui(stdscr, store):
                              if e.code == 503 else "fehler: HTTP %s" % e.code)
         except (urllib.error.URLError, OSError):
             with AI_LOCK:
-                AI["msg"] = "keine verbindung zur ki (zentrale-remote?)"
+                # Unterscheiden: gar nicht erst drangekommen vs. mittendrin
+                # abgerissen. "keine verbindung" auf einen halb gelaufenen
+                # Turn zu schreiben, schickt einen auf die falsche Faehrte.
+                if (AI["answer"] or "").strip() or AI["perm"]:
+                    AI["msg"] = "verbindung abgerissen — antwort unvollstaendig"
+                else:
+                    AI["msg"] = "keine verbindung zur ki (zentrale-remote?)"
         finally:
             if resp is not None:
                 try: resp.close()

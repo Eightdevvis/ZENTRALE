@@ -292,3 +292,28 @@ def test_neue_kurve_ist_gegatet():
 def test_log_series_legt_nichts_von_selbst_an():
     antwort = ai._log_series({"series": "gibtsnicht", "value": 3})
     assert "Keine Messreihe" in antwort
+
+
+# ── Nichts als erledigt notieren, was noch aussteht ───────────────────
+
+def test_prompt_verbietet_vorschnelles_notieren():
+    """Realer Fall vom 18.08.2026: Sasha sagt, die Geigenstunde sei jetzt
+    18:00 statt 17:45. Sie ruft add_calendar_routine UND schreibt in
+    derselben Runde ins Tagebuch "(im Kalender aktualisiert)". Dann lehnt
+    er den Knopf ab — und im Gedaechtnis steht eine Unwahrheit.
+
+    Das Tagebuch haengt an, korrigiert also nie von selbst. Deshalb muss
+    die Regel VOR dem Schreiben greifen."""
+    from profil import gross
+    t = gross.system()
+    assert "Notiere nichts als erledigt, was noch aussteht" in t
+    assert "Sasha kann ablehnen" in t
+
+
+def test_ablehnung_verlangt_die_richtigstellung():
+    """Das Sicherheitsnetz: hat sie es doch schon notiert, muss sie es
+    hinterher geradeziehen."""
+    import ai
+    quelle = open(ai.__file__, encoding="utf-8").read()
+    assert "Richtigstellung" in quelle
+    assert "Unwahrheit im Gedächtnis" in quelle

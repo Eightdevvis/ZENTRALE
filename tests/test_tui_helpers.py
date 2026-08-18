@@ -267,3 +267,25 @@ def test_pure_helpers_never_raise():
             pytest.fail(f"graph/tele warf bei a={a!r} rows={rows!r}: {e!r}")
         calls += 6
     assert calls > 15000                  # wir haben WIRKLICH viel durchgeprügelt
+
+
+def test_stream_timeout_ueberlebt_die_erlaubnis_frage():
+    """Der Lese-Timeout am SSE-Strom muss laenger sein als die Zeit, die
+    der Server dem Menschen fuer den Klick gibt.
+
+    Am 18.08.2026 war er kuerzer (120 s gegen 180 s): Sasha brauchte 184 s,
+    die Verbindung starb vorher, die TUI zeigte "keine verbindung zur ki"
+    — und die fertige Antwort des Modells kam nie im Chat an. Waehrend
+    echten Streamens setzt jeder Token den Timeout neu; gefaehrlich ist
+    allein die Stille, in der auf den Klick gewartet wird.
+    """
+    import re
+    import state
+    import tui.zentrale_tui as tuimod
+    quelle = open(tuimod.__file__, encoding="utf-8").read()
+    treffer = re.search(r"urlopen\(req, timeout=(\d+)\)", quelle)
+    assert treffer, "SSE-Aufruf nicht gefunden"
+    import inspect
+    warten = inspect.signature(state.wait_permission).parameters["timeout"].default
+    assert int(treffer.group(1)) > warten, (
+        f"Lese-Timeout {treffer.group(1)}s <= Wartezeit am Knopf {warten}s")

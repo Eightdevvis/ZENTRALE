@@ -1289,7 +1289,11 @@ def chat_stream(messages: list, model: str = None, system: str = None,
                         "role":    "tool",
                         "content": (f"Sasha hat die Aktion '{fn_name}' abgelehnt "
                                     f"- NICHT ausführen, nichts eintragen. Kurz "
-                                    f"bestätigen dass du es lässt."),
+                                    f"bestätigen dass du es lässt. Und falls du "
+                                    f"in derselben Runde schon irgendwo notiert "
+                                    f"hast, dass es passiert sei: schreib die "
+                                    f"Richtigstellung hinterher, sonst steht "
+                                    f"eine Unwahrheit im Gedächtnis."),
                     })
                     continue
                 # „ja" → unten ganz normal ausführen (kein continue)
