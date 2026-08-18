@@ -204,6 +204,20 @@ Zwei Riegel:
 
 Bewacht von `tests/test_keine_seiteneffekte.py`.
 
+**Der Riegel ist pro MASCHINE, nicht pro Repo** — und das war die dritte Falle
+am selben Tag. Er hängt im venv, das venv liegt nicht in git: ein `git pull`
+bringt ihn nicht mit. Auf `0RAMMachine` war er scharf und alles nachweislich
+ruhig, während auf dem **Laptop** — anderer Knoten, eigener Checkout, eigenes
+venv — dasselbe Springen unverändert weiterlief. Wer nur eine Maschine
+betrachtet, hält den Fehler für behoben, obwohl der Mensch davorsitzt und das
+Gegenteil sieht. Die Theme-Dateien werden zwischen den Knoten **nicht**
+gesynct, also ist jedes Springen immer lokal verursacht.
+
+Deshalb hängt `scripts/start_tui.sh` den Riegel beim Start selbst ein, falls er
+fehlt — der TUI-Start ist die eine Stelle, die auf jedem Knoten läuft. Auf einem
+Knoten, der die TUI nie startet, bleibt der Aufruf aus `memory/betrieb/setup.md`
+nötig.
+
 **Terminal-Kopplung (Sashas Laptop, xfce4-terminal):** die TUI schreibt bei
 jedem Moduswechsel den Modus (`auto`/`day`/`night`) nach
 `~/.config/zentrale/theme` und stößt `zentrale-term-theme`

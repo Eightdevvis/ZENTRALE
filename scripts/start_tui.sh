@@ -35,6 +35,20 @@ if [[ ! -x "$PY" ]]; then
   exit 2
 fi
 
+# ── Test-Riegel einhaengen, falls er hier noch fehlt ─────────────────────
+# Der Riegel (scripts/zentrale_testguard.py) haelt Testlaeufe aus veralteten
+# Arbeitsverzeichnissen davon ab, die LAUFENDE ~/.config/zentrale/theme
+# umzuschalten — der Grund steht in memory/system/dashboard.md.
+#
+# Er haengt im venv, und das venv liegt NICHT in git. Auf jedem Knoten (Laptop,
+# PC, Pi) muss er also einmal eingehaengt werden. Genau das wird vergessen:
+# der Riegel war auf einer Maschine scharf und auf der naechsten nicht, und
+# dort sprang das Theme munter weiter. Deshalb haengt er sich hier selbst ein,
+# still und idempotent — der Start ist die Stelle, die auf JEDEM Knoten laeuft.
+if ! compgen -G "venv/lib/python*/site-packages/zentrale_testguard.pth" >/dev/null; then
+  scripts/zentrale-venv-guard >/dev/null 2>&1 || true
+fi
+
 export ZENTRALE_KASSETTE=tui
 BACKEND_LOG="/tmp/zentrale-tui-backend.log"
 

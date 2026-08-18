@@ -104,6 +104,33 @@ def run_desktop(theme_file, *args):
                           text=True, env=env, timeout=20, check=True).stdout.strip()
 
 
+@pytest.fixture(autouse=True)
+def icons_vorhanden():
+    """Die Icon-Sets im laufenden HOME sicherstellen.
+
+    `zentrale-desktop-theme` faellt auf Papirus zurueck, wenn ZENTRALE-Cyber/
+    -Paper nicht installiert sind (icon_installed prueft nur, OB das
+    Verzeichnis existiert). Der Test haette also gemessen, was auf DIESER
+    Maschine gerade installiert ist — und schlug prompt fehl, sobald der
+    Test-Riegel einem Lauf aus einer Arbeitskopie ein Wegwerf-HOME gibt.
+    Ein leeres Verzeichnis genuegt der Pruefung, also legen wir es selbst an;
+    ein bereits vorhandenes echtes Set bleibt unangetastet.
+    """
+    basis = os.path.join(os.path.expanduser("~"), ".local", "share", "icons")
+    selbst_angelegt = []
+    for name in ("ZENTRALE-Cyber", "ZENTRALE-Paper"):
+        pfad = os.path.join(basis, name)
+        if not os.path.isdir(pfad):
+            os.makedirs(pfad, exist_ok=True)
+            selbst_angelegt.append(pfad)
+    yield
+    for pfad in selbst_angelegt:      # nur die eigenen wieder wegraeumen
+        try:
+            os.rmdir(pfad)
+        except OSError:
+            pass
+
+
 @pytest.mark.parametrize("mode,gtk,wm,icons", [
     ("night", "Mint-L-Darker-Aqua", "Mint-L-Dark-Aqua", "ZENTRALE-Cyber"),
     ("day", "Mint-L-Sand", "Mint-L-Sand", "ZENTRALE-Paper"),

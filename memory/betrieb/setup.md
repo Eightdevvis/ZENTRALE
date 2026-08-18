@@ -9,10 +9,20 @@ scripts/zentrale-venv-guard
 ```
 
 Der dritte Schritt hängt den Test-Riegel ins venv (Symlink auf
-`scripts/zentrale_testguard.py`) und **gehört nach jedem venv-Neubau
-dazu**: ohne ihn schaltet ein Testlauf aus einer älteren Arbeitskopie Sashas
-echtes Theme um — die Erklärung steht in `memory/system/dashboard.md`
-(„Warum das Theme trotzdem noch sprang"). Der Aufruf ist idempotent.
+`scripts/zentrale_testguard.py` plus `.pth`-Zeile) und **gehört nach jedem
+venv-Neubau dazu**: ohne ihn schaltet ein Testlauf aus einer älteren
+Arbeitskopie Sashas echtes Theme um — die Erklärung steht in
+`memory/system/dashboard.md` („Warum das Theme trotzdem noch sprang"). Der
+Aufruf ist idempotent.
+
+**Auf JEDEM Knoten nötig, und deshalb automatisiert.** Der Riegel lebt im venv,
+das venv liegt nicht in git — ein `git pull` bringt ihn also nicht mit. Genau
+das ist am 2026-08-18 passiert: auf einem Knoten war er scharf, auf dem Laptop
+nicht, und dort sprang das Theme munter weiter, während auf der ersten Maschine
+alles bewiesen ruhig war. Seither hängt `start_tui.sh` ihn beim Start selbst
+ein, falls er fehlt (still, idempotent) — der TUI-Start ist die eine Stelle, die
+auf jedem Knoten läuft. Der Aufruf oben bleibt für Maschinen, die die TUI nie
+starten.
 
 ## Ollama + Modell
 
