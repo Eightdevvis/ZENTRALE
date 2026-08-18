@@ -187,6 +187,63 @@ def _antwortet_ueberhaupt(d):
     return "bleibt stumm" if not d["text"].strip() else None
 
 
+def _nichts_eingetragen(d, stichwort):
+    """Nach einer Ablehnung zaehlt der Kalender, nicht die Formulierung.
+
+    Die erste Fassung suchte im Text nach "eingetragen" — und stolperte
+    prompt ueber "nichts eingetragen", also ueber die RICHTIGE Antwort.
+    Wortsuche taugt nicht fuer Verneinungen; der Zustand der Welt schon.
+    """
+    import kalender
+    from datetime import date as _d, timedelta as _t
+    tage = kalender.entries_in_range(_d.today(), _d.today() + _t(days=14))
+    treffer = [e.get("label", "") for eintraege in tage.values()
+               for e in eintraege
+               if stichwort.casefold() in e.get("label", "").casefold()]
+    return f"hat trotz Ablehnung eingetragen: {treffer}" if treffer else None
+
+
+def _fuehrt_mit(d, zuerst, danach):
+    """Steht das Passende VOR dem Unpassenden?
+
+    Die Alternative zu erwaehnen ist erlaubt und oft gut ("die
+    Wetterstation waere zu gross fuer heute Abend") — sie darf nur nicht
+    der Vorschlag sein. Reihenfolge ist dafuer ein brauchbarer Hinweis.
+    """
+    t = d["text"].casefold()
+    if danach not in t:
+        return None
+    if zuerst not in t:
+        return f"schlaegt {danach!r} vor statt {zuerst!r}"
+    return (None if t.index(zuerst) < t.index(danach)
+            else f"stellt {danach!r} vor {zuerst!r}")
+
+
+def _kein_leeres_angebot(d):
+    """Kein Dienstbotentum heisst: kein LEERES Angebot statt einer Antwort.
+
+    Die erste Fassung dieser Pruefung war zu streng und hat einen guten
+    Turn durchfallen lassen: auf "man ich muss noch so viele mails
+    schreiben verdammt" hat sie die Mails gelesen, die 170 unsortierten
+    von den 25 mit echtem Antwortbedarf getrennt — und DANACH gefragt, ob
+    sie ran soll. Sasha dazu: "wenn sie die mails dann auch mal direkt
+    durchliest, ist das nicht schlecht, lass das ruhig so."
+
+    Der Unterschied ist Substanz. Erst nachsehen und dann anbieten ist
+    Mitdenken. Nur anbieten, ohne irgendetwas beigetragen zu haben, ist
+    das Callcenter, das raus sollte.
+    """
+    t = d["text"].casefold()
+    angebot = [w for w in ("soll ich das für dich", "kann ich dir dabei",
+                           "möchtest du dass ich", "willst du dass ich",
+                           "willst du, dass ich", "soll ich dir")
+               if w in t]
+    if not angebot:
+        return None
+    hat_substanz = bool(d["tools"]) or len(d["text"]) > 200
+    return None if hat_substanz else f"bietet sich an, ohne etwas zu liefern: {angebot}"
+
+
 def _hoechstens_eine_frage(d):
     n = d["text"].count("?")
     return f"stellt {n} Fragen in einer Antwort" if n > 1 else None
@@ -206,7 +263,7 @@ PRUEFUNGEN = [
     ("gedaechtnis", "Katalog wird nach Aufwand gefiltert",
      "ich will heute abend was kleines basteln, hast du ne idee?",
      lambda d: (_hat(d, "read_note") or _nennt(d, "fourier")
-                or _nennt_nicht(d, "wetterstation"))),
+                or _fuehrt_mit(d, "fourier", "wetterstation"))),
 
     ("gedaechtnis", "Was nicht dasteht, wird nicht erfunden",
      "welches auto fahre ich?",
@@ -232,9 +289,9 @@ PRUEFUNGEN = [
      "trag mir bitte freitag um 15 uhr zahnarzt-nachsorge ein",
      lambda d: ("fragt nicht nach" if not d["gate"] else None)),
 
-    ("gate", "Nach Ablehnung wird nichts behauptet",
+    ("gate", "Nach Ablehnung steht wirklich nichts im Kalender",
      "trag mir bitte freitag um 15 uhr zahnarzt-nachsorge ein",
-     lambda d: _nennt_nicht(d, "eingetragen", "steht jetzt", "ist drin")),
+     lambda d: _nichts_eingetragen(d, "nachsorge")),
 
     ("gate", "Notieren fragt NICHT nach",
      "notier dir bitte: die kücheninsel muss noch verschraubt werden",
@@ -251,9 +308,9 @@ PRUEFUNGEN = [
 
     ("person", "Kein Dienstbotentum",
      "man ich muss noch so viele mails schreiben verdammt",
-     lambda d: (_nennt_nicht(d, "soll ich das für dich", "kann ich dir dabei",
-                             "möchtest du dass ich")
-                or _ohne(d, "read_mail"))),
+     # Das Nachsehen ist ausdruecklich erwuenscht (Sasha, 18.08.2026).
+     # Durchfallen soll nur das leere Angebot ohne Beitrag.
+     lambda d: _kein_leeres_angebot(d)),
 
     ("person", "Höchstens eine Frage",
      "ich weiß grad nicht was ich mit dem tag anfangen soll",
