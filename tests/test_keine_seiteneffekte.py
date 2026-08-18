@@ -60,3 +60,96 @@ def test_ein_fuzz_lauf_laesst_die_echte_theme_datei_in_ruhe(tmp_path):
         "Der Fuzz-Lauf hat Sashas echte Theme-Datei veraendert "
         "(%r -> %r). Die Umlenkung in tests/conftest.py greift nicht.\n%s"
         % (vorher[0], nachher[0], r.stdout[-2000:]))
+
+
+# ── Riegel 2: Code aus einer Arbeitskopie ───────────────────────────────────
+#
+# Die Waechter oben pruefen die Umlenkung — also den Weg, auf dem ein Testlauf
+# an der echten Konfiguration vorbeigeleitet wird. Der zweite Riegel sitzt im
+# Betriebscode selbst und gilt auch dann, wenn gar nicht getestet wird: aus
+# einem Worktree heraus darf nichts Sashas laufende Konfiguration schreiben.
+
+def test_guard_verweigert_der_arbeitskopie_die_echte_datei(monkeypatch):
+    """Worktree + echte Konfiguration = das einzige Nein."""
+    import theme
+    monkeypatch.setattr(theme, "ist_arbeitskopie", lambda: True)
+    erlaubt, grund = theme.darf_schreiben(ECHT_THEME)
+    assert not erlaubt
+    assert grund == "arbeitskopie"
+
+
+def test_guard_laesst_den_haupt_checkout_in_ruhe(monkeypatch):
+    """Sonst koennte die echte TUI ihr Theme nicht mehr schalten."""
+    import theme
+    monkeypatch.setattr(theme, "ist_arbeitskopie", lambda: False)
+    assert theme.darf_schreiben(ECHT_THEME)[0]
+
+
+def test_guard_stoert_einen_umgelenkten_testlauf_nicht(monkeypatch, tmp_path):
+    """Selbst aus dem Worktree: ein tmp-Pfad ist nicht die echte Konfig."""
+    import theme
+    monkeypatch.setattr(theme, "ist_arbeitskopie", lambda: True)
+    assert theme.darf_schreiben(str(tmp_path / "theme"))[0]
+
+
+def test_set_schreibt_aus_der_arbeitskopie_nicht(monkeypatch, tmp_path):
+    """Der Riegel greift im echten Schreibweg, nicht nur in der Abfrage."""
+    import theme
+    ziel = tmp_path / "theme"
+    ziel.write_text("auto\n")
+    st = theme.ThemeState(path=str(ziel), log_path=str(tmp_path / "log"))
+    monkeypatch.setattr(theme, "darf_schreiben", lambda p: (False, "arbeitskopie"))
+    assert st.set("night") is False
+    assert ziel.read_text().strip() == "auto"
+
+
+# ── Der venv-Riegel ─────────────────────────────────────────────────────────
+#
+# scripts/sitecustomize_testguard.py ist die Stelle, die auch VERALTETE
+# Arbeitsverzeichnisse abfaengt — die bringen ihre eigene alte conftest mit,
+# benutzen aber dasselbe venv. Hier geprueft wird die reine Logik; ob der
+# Symlink haengt, sagt scripts/zentrale-venv-guard.
+
+def _guard_modul():
+    import importlib.util
+    pfad = os.path.join(ROOT, "scripts", "sitecustomize_testguard.py")
+    spec = importlib.util.spec_from_file_location("_testguard", pfad)
+    modul = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modul)
+    return modul
+
+
+def test_venv_riegel_biegt_einen_pytest_lauf_um():
+    guard = _guard_modul()
+    umgebung = {}
+    ziel = guard.anwenden(umgebung, "/pfad/venv/bin/pytest", "/tmp", 4711)
+    assert ziel
+    assert umgebung["ZENTRALE_TESTLAUF"] == "1"
+    for var in ("ZENTRALE_THEME_FILE", "ZENTRALE_THEME_NOW",
+                "XDG_CACHE_HOME", "ZENTRALE_USAGE_FILE"):
+        assert umgebung[var].startswith(ziel), var
+
+
+def test_venv_riegel_laesst_die_echte_tui_in_ruhe():
+    """Kein Testlauf = kein Eingriff. Sonst laege die TUI im Wegwerf-Ordner."""
+    guard = _guard_modul()
+    umgebung = {}
+    assert guard.anwenden(umgebung, "tui/zentrale_tui.py", "/tmp", 4711) is None
+    assert umgebung == {}
+
+
+def test_venv_riegel_legt_fuer_kindprozesse_nichts_neues_an():
+    """Die vom Fuzzer gestartete TUI erbt die Pfade — und faengt nicht neu an."""
+    guard = _guard_modul()
+    umgebung = {"ZENTRALE_TESTLAUF": "1", "PYTEST_VERSION": "8",
+                "ZENTRALE_THEME_FILE": "/tmp/geerbt/theme"}
+    assert guard.anwenden(umgebung, "tui/zentrale_tui.py", "/tmp", 4712) is None
+    assert umgebung["ZENTRALE_THEME_FILE"] == "/tmp/geerbt/theme"
+
+
+def test_venv_riegel_ueberschreibt_gesetzte_werte_nicht():
+    """setdefault, wie in conftest — ein Test darf auf sein tmp_path biegen."""
+    guard = _guard_modul()
+    umgebung = {"ZENTRALE_THEME_FILE": "/tmp/eigenes/theme"}
+    guard.anwenden(umgebung, "/pfad/venv/bin/pytest", "/tmp", 4713)
+    assert umgebung["ZENTRALE_THEME_FILE"] == "/tmp/eigenes/theme"

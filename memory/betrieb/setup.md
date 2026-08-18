@@ -5,7 +5,14 @@
 ```bash
 python3 -m venv venv
 venv/bin/pip install -r requirements.txt
+scripts/zentrale-venv-guard
 ```
+
+Der dritte Schritt hängt den Test-Riegel ins venv (Symlink auf
+`scripts/sitecustomize_testguard.py`) und **gehört nach jedem venv-Neubau
+dazu**: ohne ihn schaltet ein Testlauf aus einer älteren Arbeitskopie Sashas
+echtes Theme um — die Erklärung steht in `memory/system/dashboard.md`
+(„Warum das Theme trotzdem noch sprang"). Der Aufruf ist idempotent.
 
 ## Ollama + Modell
 

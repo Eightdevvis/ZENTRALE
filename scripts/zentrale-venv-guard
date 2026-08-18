@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# zentrale-venv-guard — haengt den Test-Riegel in das geteilte venv.
+#
+# Alle Arbeitsverzeichnisse (Worktrees wie liegengebliebene Kopien) benutzen
+# denselben Interpreter aus dem venv des Haupt-Checkouts. Wer dort testet, kann
+# ohne diesen Riegel Sashas echte ~/.config/zentrale/theme umschalten — das war
+# der jahrelang gesuchte "Theme-Glitch". Warum der Schutz nicht in tests/
+# stehen kann, steht ausfuehrlich in scripts/sitecustomize_testguard.py.
+#
+# SYMLINK, keine Kopie: so gilt immer der Stand aus main, auch wenn ein alter
+# Worktree testet. Gleiches Muster wie beim Theme-Dienst (Commit e684cb1).
+# Idempotent — mehrfach aufrufen schadet nicht.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+QUELLE="$ROOT/scripts/sitecustomize_testguard.py"
+VENV="${ZENTRALE_VENV:-$ROOT/venv}"
+
+if [ ! -f "$QUELLE" ]; then
+    echo "zentrale-venv-guard: $QUELLE fehlt" >&2
+    exit 1
+fi
+
+# site-packages selbst suchen statt die Python-Version zu raten.
+SITE="$("$VENV/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])' 2>/dev/null || true)"
+if [ -z "$SITE" ] || [ ! -d "$SITE" ]; then
+    echo "zentrale-venv-guard: kein venv unter $VENV (ZENTRALE_VENV setzt den Pfad)" >&2
+    exit 1
+fi
+
+ZIEL="$SITE/sitecustomize.py"
+
+# Eine FREMDE sitecustomize.py (von einem Paket) nicht stillschweigend
+# ueberschreiben — die haette einen anderen Zweck.
+if [ -e "$ZIEL" ] && [ ! -L "$ZIEL" ]; then
+    echo "zentrale-venv-guard: $ZIEL existiert und ist kein Symlink — bitte von Hand ansehen" >&2
+    exit 1
+fi
+
+ln -sfn "$QUELLE" "$ZIEL"
+echo "zentrale-venv-guard: $ZIEL -> $QUELLE"

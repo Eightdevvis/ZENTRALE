@@ -49,6 +49,36 @@ def theme_file():
             or os.path.expanduser("~/.config/zentrale/theme"))
 
 
+def ist_arbeitskopie():
+    """Laeuft dieses Modul aus einem Worktree statt aus dem Haupt-Checkout?
+
+    Worktrees isolieren, was IM Repo liegt. ~/.config/zentrale/ liegt
+    ausserhalb — da kommt jede Arbeitskopie gleichermassen ran, und genau so
+    hat ein Testlauf aus einem Worktree am 2026-08-18 Sashas echtes Theme
+    umgeschaltet, obwohl der Worktree ansonsten sauber isoliert war.
+    """
+    return "/.claude/worktrees/" in os.path.abspath(__file__)
+
+
+def _echte_konfiguration(pfad):
+    """Zeigt `pfad` auf Sashas LAUFENDE Konfiguration (nicht auf ein tmp)?"""
+    echt = os.path.realpath(os.path.expanduser("~/.config/zentrale"))
+    return os.path.realpath(pfad).startswith(echt + os.sep)
+
+
+def darf_schreiben(pfad):
+    """Darf DIESER Prozess `pfad` schreiben? → (bool, Grund)
+
+    Ein Nein gibt es nur in genau einer Lage: Code aus einer Arbeitskopie will
+    die echte Konfiguration anfassen. Die laufende TUI aus dem Haupt-Checkout
+    schaltet weiter wie immer, und ein Test, der auf sein tmp_path umgelenkt
+    ist, ebenso — sonst waere der Riegel schlimmer als das Problem.
+    """
+    if ist_arbeitskopie() and _echte_konfiguration(pfad):
+        return False, "arbeitskopie"
+    return True, ""
+
+
 def resolve(mode, stunde=None):
     """Modus → sichtbare Farbe ("day"/"night"). auto löst nach der Uhrzeit auf."""
     if mode in ("day", "night"):
@@ -138,6 +168,10 @@ class ThemeState:
         hatte einen zweiten Zustand, der der Datei widersprechen konnte.
         """
         if neu not in MODI or neu == self.mode():
+            return False
+        erlaubt, grund = darf_schreiben(self.path)
+        if not erlaubt:
+            self.log(grund, self._mode, neu)
             return False
         self.log(quelle, self._mode, neu)
         try:
@@ -265,6 +299,11 @@ class ThemeDaemon:
         soll = self.effektiv(stunde)
         if soll == read_now(default=None):
             return None
+        if not darf_schreiben(now_file())[0]:
+            # Aus einer Arbeitskopie fassen wir weder die Datei noch die
+            # Applier an: ein Dienst aus einem Worktree wuerde sonst Sashas
+            # Terminal, nvim und Desktop umfaerben.
+            return None
         self._schreibe(soll)
         for applier in self.appliers:
             self.runner(applier)
@@ -272,6 +311,8 @@ class ThemeDaemon:
 
     def _schreibe(self, farbe):
         pfad = now_file()
+        if not darf_schreiben(pfad)[0]:
+            return
         try:
             os.makedirs(os.path.dirname(pfad), exist_ok=True)
             tmp = pfad + ".tmp"          # atomar, wie überall (siehe set())

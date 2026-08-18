@@ -147,6 +147,48 @@ alten `zentrale-theme.{service,timer}` ab und aktiviert
 `deploy/zentrale-themed.service`. `zentrale-themed --status` zeigt Wunsch,
 Ergebnis und den nächsten Wechsel; `--once` gleicht einmal ab.
 
+### Warum das Theme trotzdem noch sprang: Testläufe aus Arbeitskopien
+
+Der Umbau oben hat die Rückkopplung *im Betriebscode* beseitigt — das Springen
+hörte damit nicht auf, weil die Ursache nie dort lag. Der TUI-Fuzzer
+(`tests/test_tui_fuzz.py`) startet die echte TUI im Pseudo-Terminal und drückt
+zufällige Tasten, darunter `t`. Jeder volle Testlauf schaltete so Sashas
+laufende `~/.config/zentrale/theme` um; Terminal, nvim, Browser, Desktop und bat
+zogen brav nach. Im Betrieb sah das aus wie ein zufälliger Glitch.
+
+`c42c7fe` hat dafür `tests/conftest.py` umgelenkt — und war **die richtige Idee
+an der falschen Stelle**: eine Datei im Repo wird von **jedem Worktree kopiert**.
+Wer aus einem älteren Arbeitsverzeichnis testet, bringt die alte conftest mit,
+die den Schutz nicht kennt. Belegt am 2026-08-18 um 12:58: 126 Wechsel in 19
+Sekunden, ausgelöst von einem `pytest` samt Fuzz-TUI aus einem Worktree, der in
+jeder anderen Hinsicht sauber isoliert war (`~/.cache/zentrale/theme-watch.log`
+hält die PIDs fest).
+
+**Der Kern:** Worktree-Isolation isoliert, was im Repo liegt.
+`~/.config/zentrale/` liegt außerhalb — da kommt jede Arbeitskopie
+gleichermaßen ran. Der Schutz muss deshalb dorthin, wo nicht kopiert wird.
+Zwei Riegel:
+
+1. **`scripts/sitecustomize_testguard.py`**, per Symlink als
+   `sitecustomize.py` im **geteilten venv** (`scripts/zentrale-venv-guard`,
+   idempotent). Kein Worktree hat ein eigenes venv, alle benutzen das des
+   Haupt-Checkouts — dieser Riegel greift also auch für Arbeitsverzeichnisse,
+   die noch nie von main gehört haben. Erkennt einen pytest-Lauf und biegt
+   `ZENTRALE_THEME_FILE`, `ZENTRALE_THEME_NOW`, `XDG_CACHE_HOME` und
+   `ZENTRALE_USAGE_FILE` auf ein Wegwerf-Verzeichnis; gesetzt wird in
+   `os.environ`, damit die vom Fuzzer gestartete TUI (`env=dict(os.environ,…)`)
+   die Umlenkung erbt. Alles per `setdefault`, also bleibt `monkeypatch` in
+   einzelnen Tests wirksam. Der Symlink ist Absicht: so gilt immer der Stand
+   aus main.
+2. **`theme.ist_arbeitskopie()` / `theme.darf_schreiben()`**: liegt das laufende
+   Modul unter `.claude/worktrees/` und zielt der Schreibweg auf die echte
+   Konfiguration, schreibt `ThemeState.set()` nicht und der Dienst stößt auch
+   die Applier nicht an — protokolliert als Quelle `arbeitskopie`. Greift
+   unabhängig von pytest, etwa bei einer versehentlich aus dem Worktree
+   gestarteten Zweit-TUI.
+
+Bewacht von `tests/test_keine_seiteneffekte.py`.
+
 **Terminal-Kopplung (Sashas Laptop, xfce4-terminal):** die TUI schreibt bei
 jedem Moduswechsel den Modus (`auto`/`day`/`night`) nach
 `~/.config/zentrale/theme` und stößt `zentrale-term-theme`
