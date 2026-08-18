@@ -185,8 +185,8 @@ def _now_prompt() -> str:
         "## Jetzt\n"
         f"Heute ist {weekday}, der {now.day}. {month} {now.year}. "
         f"Aktuelle Uhrzeit: {now.strftime('%H:%M')}. "
-        "Dieser Block ist die einzige verlässliche Zeitquelle - aktivierte "
-        "Datums-Knoten aus dem Konzept-Graph sind Erinnerungen an frühere "
+        "Dieser Block ist die einzige verlässliche Zeitquelle - Daten, die "
+        "in Notizen oder im Tagebuch stehen, sind Erinnerungen an frühere "
         "Tage, NICHT der aktuelle Tag."
     )
     # Der Kalender wird weiterhin NICHT als Ganzes mitgeschleppt — nur der

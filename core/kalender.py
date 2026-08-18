@@ -1395,6 +1395,16 @@ def imprint_for_prompt(tage: int | None = None) -> str:
     (`default_visible`). Die KI soll nichts wissen, was er nicht nachlesen
     kann — genau diese Asymmetrie hat der `erlebt`-Layer erzeugt.
 
+    Warum am Ende eine Verhaltensregel steht (18.08.2026): weil der Block
+    im gecachten Kopf sitzt und der Jetzt-Block die Uhr jede Runde neu
+    setzt, rechnete sie bei JEDEM Turn nach, wie lange es noch hin ist —
+    "in 16 Minuten", "noch 3 Minuten", obwohl Sasha den Termin laengst
+    gesehen hatte. Der Alarm-Block (`ai._alarm_prompt`) hat gegen genau das
+    seit jeher einen Satz ("EINMAL aktiv zur Sprache bringen, nicht in jede
+    Antwort quetschen"); der Imprint hatte keinen. Das war die ganze
+    Asymmetrie. Ein Assistent, der dreimal mahnt, wird abgeschaltet — das
+    ist die eigentliche Gefahr proaktiver Schichten.
+
     Vorlaufzeiten (zwei Tage vor der Abreise ans Packen denken) gehören
     NICHT hierher, sondern in die Schemen-Mechanik: die kennt die Vorhaben
     und kann entscheiden, was wie früh sichtbar werden muss. `tage` ist der
@@ -1415,7 +1425,13 @@ def imprint_for_prompt(tage: int | None = None) -> str:
     grenze = ("Das ist NUR der nahe Horizont. Für jeden anderen Zeitraum "
               "(nächste Woche, ein bestimmtes Datum, 'wann war X') "
               "read_calendar rufen — aus diesem Block lässt sich das "
-              "nicht beantworten.")
+              "nicht beantworten.\n\n"
+              "Und: das hier ist stehender Hintergrund, keine Meldung. Sasha "
+              "sieht denselben Kalender vor sich. Einen Termin sagst du "
+              "EINMAL an; hat er ihn zur Kenntnis genommen, ist das Thema "
+              "durch — auch wenn die Uhrzeit näher rückt. Kein zweiter "
+              "Hinweis, kein Countdown. Nur wenn er selbst etwas sagt, das "
+              "damit kollidiert, sagst du es nochmal.")
     return f"## Was ansteht\n{liste}\n\n{grenze}"
 
 
