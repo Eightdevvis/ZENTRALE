@@ -16,6 +16,7 @@ from tui.zentrale_tui import (
     _num, fmt_uptime, fmt_clock, fmt_euro, parse_clock, period_duration,
     graph_series, graph_last, tele_value, parse_command, log_prefix,
     blockspark, bar, overlay_rows, terminal_too_small,
+    md_zeilen, md_inline,
 )
 
 # ── Gemeiner Werte-Pool (für die Fuzz-Eigenschaft) ──────────────────────────
@@ -289,3 +290,91 @@ def test_stream_timeout_ueberlebt_die_erlaubnis_frage():
     warten = inspect.signature(state.wait_permission).parameters["timeout"].default
     assert int(treffer.group(1)) > warten, (
         f"Lese-Timeout {treffer.group(1)}s <= Wartezeit am Knopf {warten}s")
+
+
+# ── Markdown-Renderer ─────────────────────────────────────────────────
+#
+# Die KI antwortet in Markdown. Gezeichnet wurde bisher der Rohtext, also
+# stand "**fett**" als Zeichen im Kasten.
+
+def test_ueberschrift_wird_eigener_stil():
+    zeilen = md_zeilen("## Küche\n\nText", 40)
+    assert ("Küche", "kopf") in zeilen
+    assert ("Text", "") in zeilen
+
+
+def test_liste_bekommt_bullet_und_haengenden_einzug():
+    """Die Folgezeile rueckt unter den TEXT, nicht unter das Bullet —
+    sonst liest sich eine umgebrochene Liste wie zwei Punkte."""
+    zeilen = md_zeilen("- ein ziemlich langer eintrag der umbrechen muss", 24)
+    assert zeilen[0][0].startswith("• ")
+    assert zeilen[0][1] == "liste"
+    assert zeilen[1][0].startswith("  ")
+
+
+def test_verschachtelte_liste_ruecke_ein():
+    zeilen = md_zeilen("- oben\n  - drunter", 40)
+    assert zeilen[0][0] == "• oben"
+    assert zeilen[1][0] == "  • drunter"
+
+
+def test_code_wird_nicht_umgebrochen():
+    """Ein umgebrochener Befehl ist ein falscher Befehl."""
+    befehl = "venv/bin/python scripts/pruefstand.py --voll --zeige-alles"
+    zeilen = md_zeilen("```\n%s\n```" % befehl, 20)
+    assert len(zeilen) == 1
+    assert zeilen[0][1] == "code"
+    assert befehl.startswith(zeilen[0][0])
+
+
+def test_zaun_selbst_erscheint_nicht():
+    assert not any("```" in z for z, _ in md_zeilen("```\nx\n```", 40))
+
+
+def test_marker_weg_inhalt_da():
+    assert md_inline("Die **Regale** hängen") == "Die Regale hängen"
+    assert md_inline("*kursiv* und `code`") == "kursiv und code"
+    assert md_inline("_unterstrichen_") == "unterstrichen"
+
+
+def test_link_behaelt_die_adresse():
+    """Die URL wegzuwerfen waere genau das Verschlucken, das hier nicht
+    passieren darf."""
+    assert md_inline("[Plan](https://x.de/p)") == "Plan (https://x.de/p)"
+
+
+def test_kaputte_marker_bleiben_stehen():
+    """Ein Renderer, der bei unvollstaendigem Markdown Text verschluckt,
+    ist schlimmer als gar keiner — man merkt es nicht."""
+    for roh in ("2 ** 3 = 8", "a * b * c", "snake_case_name", "**offen",
+                "`unfertig", "5*4"):
+        assert md_inline(roh) == roh, roh
+
+
+def test_kein_zeichen_geht_verloren():
+    """Die harte Regel des Renderers, als Eigenschaft geprueft: jedes
+    Wort der Eingabe muss in der Ausgabe wieder auftauchen."""
+    proben = [
+        "Die **Regale** hängen, die *Apparatur* fehlt.",
+        "## Titel\n- eins\n- zwei\n\nSchluss.",
+        "Siehe [Plan](https://example.com/plan) — Seite 3.",
+        "kein markdown weit und breit",
+        "ü" * 30 + " " + "ä" * 30,
+    ]
+    import re as _re
+    marker = _re.compile(r"^(#{1,6}|[-*+]|\d{1,3}[.)]|`{3,})$")
+    for roh in proben:
+        aus = " ".join(z for z, _ in md_zeilen(roh, 30))
+        for wort in md_inline(roh).split():
+            if marker.match(wort):        # Block-Marker sollen ja verschwinden
+                continue
+            assert wort in aus, (wort, roh)
+
+
+def test_md_zeilen_wirft_nie(fuzz_werte=None):
+    """Dieselbe Eigenschaft wie bei den uebrigen Helfern: die TUI darf an
+    keiner Eingabe sterben."""
+    for wert in NASTY:
+        for breite in (0, 1, 6, 40, 10**6, -5, None, "x"):
+            md_zeilen(wert, breite)
+            md_inline(wert)

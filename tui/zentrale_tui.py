@@ -32,6 +32,7 @@
 # ════════════════════════════════════════════════════════════════════════
 
 import os
+import re
 import sys
 import atexit
 import json
@@ -1144,6 +1145,138 @@ def parse_command(buf, theme_mode):
     return None, theme_mode, "unbekannter befehl: /" + name
 
 
+# ── Markdown, so viel wie die KI wirklich benutzt ──────────────────────
+#
+# Ihre Antworten sind Markdown — der Prompt erlaubt ihr Listen ausdruecklich,
+# und Ueberschriften benutzt sie von selbst. Gezeichnet wurde bisher der
+# ROHTEXT: Sasha sah "**fett**" und "## Titel" als Zeichen.
+#
+# WAS HIER NICHT PASSIERT: Auszeichnung INNERHALB einer Zeile. Dafuer
+# muesste eine Zeile in Segmente mit eigenen Attributen zerfallen, und das
+# ginge quer durch addclip und jeden Aufrufer. Die Marker werden deshalb
+# entfernt und der Text bleibt — das loest den sichtbaren Aerger, ohne den
+# Zeichen-Pfad umzubauen. Blockweise (Ueberschrift, Code, Liste) gibt es
+# sehr wohl eigene Stile, denn die haengen an der ganzen Zeile.
+#
+# DIE HARTE REGEL: es geht nie Inhalt verloren. Entfernt werden nur die
+# Marker selbst, und nur wenn sie sauber gepaart sind. Ein Renderer, der
+# bei kaputtem Markdown Text verschluckt, ist schlimmer als gar keiner —
+# man merkt es nicht.
+
+_MD_FETT    = re.compile(r"\*\*(?=\S)(.+?)(?<=\S)\*\*", re.S)
+_MD_KURSIV  = re.compile(r"(?<![\w*])\*(?=\S)([^*\n]+?)(?<=\S)\*(?![\w*])")
+_MD_UNTER   = re.compile(r"(?<![\w_])_(?=\S)([^_\n]+?)(?<=\S)_(?![\w_])")
+_MD_CODE    = re.compile(r"`([^`\n]+)`")
+_MD_LINK    = re.compile(r"\[([^\]\n]+)\]\(([^)\s]+)\)")
+_MD_LISTE   = re.compile(r"^(\s*)([-*+]|\d{1,3}[.)])\s+(.*)$")
+_MD_KOPF    = re.compile(r"^(#{1,6})\s+(.*)$")
+
+
+def md_inline(text):
+    """Inline-Marker entfernen, Inhalt behalten.
+
+    Links werden zu "Text (URL)" — die Adresse wegzuwerfen waere genau das
+    Verschlucken, das hier nicht passieren darf.
+    """
+    if not isinstance(text, str):
+        text = str(text)
+    text = _MD_LINK.sub(lambda m: "%s (%s)" % (m.group(1), m.group(2)), text)
+    text = _MD_FETT.sub(r"\1", text)
+    text = _MD_KURSIV.sub(r"\1", text)
+    text = _MD_UNTER.sub(r"\1", text)
+    text = _MD_CODE.sub(r"\1", text)
+    return text
+
+
+def md_zeilen(text, breite):
+    """Markdown -> [(zeile, stil)] mit stil aus {"", "kopf", "code", "liste"}.
+
+    `stil` ist ABSICHTLICH ein Wort und keine curses-Konstante: so bleibt
+    die Funktion rein, ist ohne Terminal testbar, und der Zeichner
+    entscheidet allein ueber Farben.
+
+    Umgebrochen wird wortweise; Listen ruecken in der Folgezeile unter den
+    Text ein statt unter das Bullet. Code-Zaeune werden NICHT umgebrochen
+    (ein umgebrochener Befehl ist ein falscher Befehl) sondern hart
+    abgeschnitten — der Zeichner kuerzt ohnehin.
+    """
+    try:
+        breite = int(breite)
+    except (TypeError, ValueError):
+        breite = 40
+    if breite < 6:
+        breite = 6
+    if not isinstance(text, str):
+        text = "" if text is None else str(text)
+
+    aus = []
+    im_code = False
+    for roh in text.replace("\r", "").split("\n"):
+        if roh.strip().startswith("```"):
+            im_code = not im_code
+            continue                      # der Zaun selbst ist kein Inhalt
+        if im_code:
+            aus.append((roh[:breite], "code"))
+            continue
+
+        kopf = _MD_KOPF.match(roh)
+        if kopf:
+            for z in _md_umbruch(md_inline(kopf.group(2)), breite, ""):
+                aus.append((z, "kopf"))
+            continue
+
+        liste = _MD_LISTE.match(roh)
+        if liste:
+            tiefe = min(len(liste.group(1)) // 2, 4)
+            kopfzeichen = " " * (2 * tiefe) + "• "
+            einzug = " " * len(kopfzeichen)
+            zeilen = _md_umbruch(md_inline(liste.group(3)),
+                                 breite - len(kopfzeichen), einzug)
+            if not zeilen:
+                zeilen = [""]
+            aus.append((kopfzeichen + zeilen[0], "liste"))
+            for z in zeilen[1:]:
+                aus.append((z, "liste"))
+            continue
+
+        if not roh.strip():
+            aus.append(("", ""))
+            continue
+        for z in _md_umbruch(md_inline(roh), breite, ""):
+            aus.append((z, ""))
+    return aus
+
+
+def _md_umbruch(text, breite, einzug):
+    """Wortweise umbrechen, Folgezeilen mit `einzug`. Ueberlange Woerter
+    hart trennen — sonst waechst eine URL ueber den Kasten hinaus."""
+    if breite < 4:
+        breite = 4
+    aus, cur, erste = [], "", True
+    for wort in (text or "").split():
+        platz = breite if erste else breite - len(einzug)
+        if platz < 2:
+            platz = 2
+        while len(wort) > platz:
+            if cur:
+                aus.append((cur if erste else einzug + cur))
+                erste, cur = False, ""
+                platz = max(2, breite - len(einzug))
+            aus.append((wort[:platz] if erste else einzug + wort[:platz]))
+            erste = False
+            wort = wort[platz:]
+            platz = max(2, breite - len(einzug))
+        kand = (cur + " " + wort) if cur else wort
+        if len(kand) > platz:
+            aus.append(cur if erste else einzug + cur)
+            erste, cur = False, wort
+        else:
+            cur = kand
+    if cur:
+        aus.append(cur if erste else einzug + cur)
+    return aus
+
+
 def overlay_rows(cmd_buf, help_latched, ctx=None):
     """
     Welche Zeilen zeigt das Befehls-Overlay? PURE Funktion → (titel, rows).
@@ -1972,11 +2105,33 @@ def run_ui(stdscr, store):
         return f"ki-chat · cloud ({prov or mdl}) · {fmt_euro(eur)} heute{warn}".lower()
 
     def ai_wrap(role, text, w):
-        """Text auf Breite w umbrechen; jede Zeile trägt ihre Rolle (für Farbe).
-        Rollen-Präfix nur auf der ersten Zeile. Sehr lange Wörter hart brechen."""
+        """Text auf Breite w umbrechen; jede Zeile traegt ihre Rolle (fuer Farbe).
+
+        Antworten der KI laufen durch md_zeilen: sie schreibt Markdown, und
+        roh gezeichnet stand hier "**fett**" und "## Titel" als Zeichen. Die
+        Rolle wird dabei um den Blockstil erweitert ("ai_kopf", "ai_code",
+        "ai_liste") — welche Farbe das ergibt, entscheidet allein der
+        Zeichner weiter unten.
+
+        Sashas Eingaben bleiben roh: was er tippt, soll so dastehen, wie er
+        es getippt hat.
+        """
         if w < 6:
             w = 6
         pre = {"user": "du:", "ai": "ki:"}.get(role, "")
+
+        if role == "ai":
+            out = []
+            for zeile, stil in md_zeilen(text, w - len(pre) if pre else w):
+                out.append(("ai_" + stil if stil else "ai", zeile))
+            if not out:
+                out = [("ai", "")]
+            if pre:                       # Praefix auf die erste Zeile
+                art, ztext = out[0]
+                out[0] = (art, (pre + ztext) if ztext.startswith(("•", " "))
+                          else (pre + " " + ztext if ztext else pre))
+            return out
+
         out = []
         first = True
         for para in text.split("\n"):
@@ -6349,10 +6504,18 @@ def run_ui(stdscr, store):
             sc = min(scroll, maxscroll)
             start = max(0, total - avail - sc)
             y = body_top
+            # Blockstile aus dem Markdown-Renderer auf Attribute abbilden.
+            # Ueberschrift hebt sich ab, Code steht zurueck (er ist Beleg,
+            # nicht Aussage), Listen lesen sich wie Fliesstext.
+            stile = {
+                "user":     C["acc"],
+                "ai":       C["bright"],
+                "ai_kopf":  C["acc"],
+                "ai_code":  C["dim"],
+                "ai_liste": C["bright"],
+            }
             for kind, seg in lines[start:start + avail]:
-                attr = C["acc"] if kind == "user" else (
-                    C["bright"] if kind == "ai" else C["faint"])
-                addclip(y, inx, seg, inw, attr)
+                addclip(y, inx, seg, inw, stile.get(kind, C["faint"]))
                 y += 1
 
         # Fuß unten in den Kasten setzen (wächst nach oben, nicht in den Rahmen)
