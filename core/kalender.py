@@ -232,6 +232,91 @@ def set_span_time(layer: str, von: str, label: str, day: str,
     return False
 
 
+def routine_finden(label: str, layer: str | None = None) -> list:
+    """Alle Routinen, deren Label passt. -> [(layer, index, routine), ...]
+
+    Match wie bei delete_entry: case-insensitiv, exakt ODER Teilstring.
+    """
+    needle = (label or "").strip().lower()
+    if not needle:
+        return []
+    aus = []
+    data = _load_raw()
+    layers = data.get("layers", {})
+    for lname in ([layer] if layer else list(layers.keys())):
+        lyr = layers.get(lname) or {}
+        for i, r in enumerate(lyr.get("routines") or []):
+            if needle in (r.get("label") or "").lower():
+                aus.append((lname, i, r))
+    return aus
+
+
+def routine_aendern(label: str, layer: str | None = None,
+                    neues_label: str | None = None, **felder) -> int:
+    """Felder einer bestehenden Routine aendern. -> Anzahl geaenderter.
+
+    Gab es bis 18.08.2026 nicht, und das war eine echte Luecke: Sasha sagte
+    "Geige ist jetzt um 18 statt 17:45", die KI konnte nur ANLEGEN — also
+    stand die Stunde zweimal im Kalender, und sie musste einraeumen, dass
+    sie die alte nicht wegbekommt.
+
+    `label` ist der SUCHBEGRIFF; ein neuer Titel geht ueber `neues_label`.
+    Die beiden zu trennen ist noetig, nicht huebsch: `label` als Feld in
+    **felder waere derselbe Parametername zweimal und haette beim
+    Umbenennen eine Ausnahme geworfen.
+
+    `felder` mit Wert None werden ignoriert (nicht geloescht), damit man
+    die Uhrzeit aendern kann, ohne Ort und Ende zu verlieren. Ein leerer
+    String LOESCHT das Feld — das ist der Weg, einen Ort wieder loszuwerden.
+    """
+    if neues_label:
+        felder["label"] = neues_label
+    if felder.get("rrule"):
+        try:
+            rrulestr(f"DTSTART:{date.today().strftime('%Y%m%dT000000')}\n"
+                     f"RRULE:{felder['rrule']}")
+        except Exception as e:
+            state.push_log(f"[calendar] ungueltige rrule {felder['rrule']!r}: {e}")
+            return 0
+    treffer = routine_finden(label, layer)
+    if not treffer:
+        return 0
+    geaendert = 0
+    with _lock:
+        data = _load_raw()
+        for lname, i, _ in treffer:
+            r = data["layers"][lname]["routines"][i]
+            for k, v in felder.items():
+                if v is None:
+                    continue
+                if v == "":
+                    if k not in ("label", "rrule"):   # ohne die beiden
+                        r.pop(k, None)                # ist es keine Routine mehr
+                else:
+                    r[k] = v
+            geaendert += 1
+        _save_raw(data)
+    return geaendert
+
+
+def routine_loeschen(label: str, layer: str | None = None) -> int:
+    """Eine Wiederholungs-Regel entfernen. -> Anzahl entfernter.
+
+    Getrennt von delete_entry, weil die Semantik eine andere ist: ein
+    Einmal-Termin verschwindet an EINEM Tag, eine Routine fuer immer.
+    """
+    treffer = routine_finden(label, layer)
+    if not treffer:
+        return 0
+    with _lock:
+        data = _load_raw()
+        # von hinten, damit die Indizes waehrend des Loeschens halten
+        for lname, i, _ in sorted(treffer, key=lambda t: -t[1]):
+            del data["layers"][lname]["routines"][i]
+        _save_raw(data)
+    return len(treffer)
+
+
 def delete_entry(day: str, label: str, layer: str | None = None) -> int:
     """
     Löscht Einmal-Einträge an einem Tag, deren Label passt.

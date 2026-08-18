@@ -406,6 +406,7 @@ PERMISSION_REQUIRED_TOOLS = {
     "add_calendar_routine",
     "add_calendar_pause",
     "delete_calendar_entry",   # Löschen ist destruktiv → immer bestätigen
+    "edit_calendar_routine",   # ändert/löscht dauerhaft → immer bestätigen
     # Dossier komplett neu schreiben ist ebenfalls destruktiv. ANHÄNGEN
     # (write_note) ist es nicht und bleibt bewusst ungegatet: eine KI, die
     # vor jeder Notiz fragt, ist kein Sekretär, sondern eine Zumutung.
@@ -482,6 +483,21 @@ def _permission_question(name: str, args: dict) -> str:
         bis = (args.get("bis") or "").strip()
         spanne = f' von {von} bis {bis}' if von and bis else ''
         return f'Soll ich "{label}"{spanne} pausieren?'
+    if name == "edit_calendar_routine":
+        if (args.get("aktion") or "").strip() == "loeschen":
+            return f'Soll ich die Routine "{label}" wirklich dauerhaft löschen?'
+        # Die Frage nennt, WAS sich aendert. "Soll ich die Routine aendern?"
+        # waere nicht zustimmungsfaehig — Sasha drueckt ja auf einen Knopf,
+        # ohne den Werkzeug-Aufruf zu sehen.
+        teile = []
+        for feld, wort in (("time", "Beginn"), ("ende", "Ende"),
+                           ("ort", "Ort"), ("rrule", "Wiederholung"),
+                           ("neuer_titel", "Titel")):
+            wert = (args.get(feld) or "").strip()
+            if wert:
+                teile.append(f"{wort} {wert}")
+        was = ", ".join(teile) if teile else "etwas"
+        return f'Soll ich die Routine "{label}" ändern auf {was}?'
     if name == "delete_calendar_entry":
         day = (args.get("day") or "").strip()
         wann_txt = f' am {day}' if day else ''
@@ -606,6 +622,28 @@ def _dispatch_tool(name: str, args: dict) -> str:
             grund = args.get("grund"),
         )
         return "OK, Pause eingetragen." if ok else "[Fehler: ungültige Datumsangabe]"
+    elif name == "edit_calendar_routine":
+        label  = (args.get("label") or "").strip()
+        aktion = (args.get("aktion") or "").strip()
+        if not label:
+            return "[Fehler: label ist nötig.]"
+        if aktion == "loeschen":
+            n = kalender.routine_loeschen(label)
+            if n == 0:
+                return f"Keine Routine '{label}' gefunden - nichts gelöscht."
+            return f"{n} Routine(n) '{label}' gelöscht."
+        if aktion != "aendern":
+            return "[Fehler: aktion muss 'aendern' oder 'loeschen' sein.]"
+        felder = {k: args.get(k) for k in ("time", "ende", "ort", "rrule")
+                  if args.get(k)}
+        neu_titel = (args.get("neuer_titel") or "").strip() or None
+        if not felder and not neu_titel:
+            return "[Fehler: nichts zu ändern - gib an, was neu ist.]"
+        n = kalender.routine_aendern(label, neues_label=neu_titel, **felder)
+        if n == 0:
+            return (f"Keine Routine '{label}' geändert - entweder nicht "
+                    f"gefunden oder die Wiederholungs-Regel war ungültig.")
+        return f"OK, {n} Routine(n) '{label}' geändert."
     elif name == "delete_calendar_entry":
         day   = (args.get("day") or "").strip()
         label = (args.get("label") or "").strip()

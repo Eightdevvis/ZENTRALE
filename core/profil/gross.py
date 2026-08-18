@@ -218,6 +218,12 @@ _BESCHREIBUNG = {
         "FREQ=WEEKLY;BYDAY=MO,WE,FR | FREQ=MONTHLY;BYMONTHDAY=1 | "
         "FREQ=MONTHLY;BYDAY=2TU (2. Dienstag im Monat)."
     ),
+    "edit_calendar_routine": (
+        "Ändert oder löscht eine BESTEHENDE Routine. Bei 'Geige ist jetzt "
+        "um 18:00' DIESES Tool, nicht add_calendar_routine - sonst steht "
+        "die Stunde zweimal im Kalender. Titel als Teilstring, "
+        "aktion='aendern' oder 'loeschen'."
+    ),
     "add_calendar_pause": (
         "Trägt eine Pause für eine regelmäßige Aktivität ein - in dem "
         "Zeitraum findet sie NICHT statt (Ferien, Lehrerin im Urlaub). "
@@ -377,7 +383,7 @@ _GEDAECHTNIS = [
         "function": {
             "name": "fetch_document",
             "description": (
-                "Holt etwas aus dem Netz und LEGT ES AB — Modulhandbuch, "
+                "Holt etwas aus dem Netz ODER von der Platte und LEGT ES AB — Modulhandbuch, "
                 "Stundenplan, Datenblatt, Artikel. PDF wird automatisch zu "
                 "Text, HTML entrumpelt, Binaeres als Datei mit Vermerk "
                 "abgelegt. Danach lesbar mit read_note und durchsuchbar mit "
@@ -389,7 +395,10 @@ _GEDAECHTNIS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "url":  {"type": "string", "description": "http(s)-Adresse."},
+                    "url":  {"type": "string",
+                             "description": "http(s)-Adresse ODER ein "
+                                            "Pfad auf der Platte "
+                                            "(unter ~/codicus)."},
                     "name": {"type": "string",
                              "description": "Kurzer Titel, z.B. 'modulhandbuch'."},
                 },

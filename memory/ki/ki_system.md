@@ -412,8 +412,8 @@ geteilter Mechanismus (blockierender `state.wait_permission`):
 
 **(A) Auto-Gate für sensible Tools** — bestätigungspflichtige Tools
 (`PERMISSION_REQUIRED_TOOLS` in `core/ai.py`: die Kalender-Schreiber
-`add_calendar_entry`, `add_calendar_routine`, `add_calendar_pause`,
-`delete_calendar_entry` **plus** die Internet-Pipe `web_suche`, `hole_url`) fängt das Backend **vor der
+`add_calendar_entry`, `add_calendar_routine`, `edit_calendar_routine`,
+`add_calendar_pause`, `delete_calendar_entry` **plus** die Internet-Pipe `web_suche`, `hole_url`) fängt das Backend **vor der
 Ausführung** ab und zeigt **JA / NEIN**. Nur bei „ja" läuft das Tool, bei
 „nein"/Timeout wird es übersprungen. Lokales Lesen/Auskunft (`read_calendar`,
 `read_file`, …) bleibt ungated; alles was Daten schreibt oder das LAN verlässt
@@ -910,11 +910,29 @@ Messages (1)
     ◄ CACHE-BREAKPOINT
     was steht heute an?
     ## Aktiviertes Wissen …          ← das Wechselnde, ungecacht dahinter
-Tools (12)  read_calendar, …, ask_choice
+Tools (20, 5217 Zeichen ≈ 1304 Token)  [339a3b98f42f]
+  read_calendar
+      Liest Kalender-Einträge: TERMINE und Routinen, also Verabredetes. …
+      *zeitraum (string) heute | diese_woche | …
+  …
 ← ANTWORT tool_use in=677 out=54 cache_read=5458
 ⚙ TOOL read_calendar
 ⊕ GRAPH (cloud) knoten: Falter, blau, Klapprad
 ```
+
+**Werkzeuge stehen mit Beschreibung und Parametern da — seit 18.08.2026.**
+Vorher schickte `kidebug.request()` nur die NAMEN; damit log das Terminal seinen
+eigenen Anspruch, alles zu zeigen, was rausgeht. Ausgerechnet die
+Beschreibungen sind das, woraus die KI ableitet, wann sie welches Werkzeug
+nimmt — wer verstehen will, warum sie danebengreift, muss genau die lesen. Sie
+sind außerdem ein spürbarer Teil des gecachten Präfix.
+
+Ausgeschrieben werden sie nur beim **ersten** Request und danach wieder, wenn
+sich der Satz ändert; sonst steht `[Schemata wie oben, <fingerprint>]`. Der
+Satz ist statisch, und ihn 500-mal in einen Puffer von 500 Events zu legen
+hieße, alles andere daraus zu verdrängen. Beim Verbinden vergisst der Bus, was
+er schon gezeigt hat (`subscribe()` setzt `_TOOLS_FP` zurück) — sonst hätte
+ausgerechnet eine frisch geöffnete Sitzung die Schemata nie gesehen.
 
 Events: `ai.req` (voller Request), `ai.out` (Roh-Antwort inkl. Denk-Blöcken und
 dem Vorgeplänkel vor einem Tool-Call, das der Chat sonst schluckt), `ai.tool`,

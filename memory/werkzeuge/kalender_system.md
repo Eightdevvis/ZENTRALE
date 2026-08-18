@@ -319,8 +319,9 @@ Auto-Spiegel Krankheiten in den `erlebt`-Layer geschrieben hatte.
 | `read_calendar`         | JEDE Frage nach Terminen/Plänen/Daten (Pflicht)     |
 | `add_calendar_entry`    | User nennt einmaligen Termin/Frist                  |
 | `add_calendar_routine`  | User nennt regelmäßige Aktivität                    |
+| `edit_calendar_routine` | Bestehende Routine ändern ODER löschen (gegatet)    |
 | `add_calendar_pause`    | Routine über eine Spanne aussetzen (gegatet)        |
-| `delete_calendar_entry` | Eintrag löschen (gegatet)                           |
+| `delete_calendar_entry` | Einmal-Termin löschen (gegatet)                     |
 
 `read_calendar(zeitraum?, start_date?, end_date?, layers?)`. **Kein
 Calendar-Glue mehr im Prompt** — die KI hat keine Termine im Gedächtnis und
@@ -333,6 +334,28 @@ exakte Daten auf. Für krumme Spannen („ab dem 15.", „in 3 Monaten")
 expandiert. `add_calendar_entry(layer, day, label, time?)`
 und `add_calendar_routine(layer, label, rrule, time?)` schreiben in
 benannte Layer. Default-Layer im Tool-Prompt: `termine` bzw. `routinen`.
+
+`edit_calendar_routine(label, aktion, time?, ende?, rrule?, ort?,
+neuer_titel?)` — **seit 18.08.2026**. Bis dahin gab es für Routinen nur
+`add_routine`; `delete_entry` fasst absichtlich nur Einmal-Termine an. Als
+Sasha sagte, die Geigenstunde sei jetzt um 18:00 statt 17:45, legte die KI
+folglich eine ZWEITE Routine an und musste dann einräumen, dass sie die alte
+nicht wegbekommt. Das war kein Prompt-Problem, sondern ein fehlendes Werkzeug.
+
+- `label` ist der **Suchbegriff** (Teilstring, case-insensitiv: „geige" findet
+  „Geigenstunde"), ein neuer Titel geht über `neuer_titel`. Die beiden sind
+  getrennt, weil `label` in beiden Rollen derselbe Parametername gewesen wäre —
+  Umbenennen hätte mit einer Ausnahme quittiert, und zwar erst beim Benutzer.
+- Weggelassene Felder **bleiben stehen** (Uhrzeit verschieben verliert nicht den
+  Ort). Ein leerer String **löscht** das Feld; `label` und `rrule` sind davon
+  ausgenommen — ohne sie wäre es Datenmüll, den niemand mehr findet.
+- Eine ungültige `rrule` wird **vor** dem Schreiben abgewiesen (dieselbe
+  `rrulestr`-Prüfung wie in `add_routine`), sonst fliegt jeder spätere Lesezugriff.
+- Nichts gefunden → **0**, kein Fehler. Der Aufrufer soll „nichts geändert"
+  sagen können statt einen Erfolg zu behaupten.
+- Kern: `kalender.routine_finden/routine_aendern/routine_loeschen`. Gegatet; die
+  Gate-Frage nennt, WAS sich ändert („Soll ich die Routine ‚Geigenstunde' ändern
+  auf Beginn 18:00?") — Sasha sieht nur den Knopf, nicht den Tool-Call.
 
 RRULE-Beispiele die die KI im Prompt kennt:
 - `FREQ=WEEKLY;BYDAY=TU` – jeden Dienstag

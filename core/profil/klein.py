@@ -341,6 +341,56 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "edit_calendar_routine",
+            "description": (
+                "Ändert oder löscht eine BESTEHENDE Wiederholungs-Regel. Nimm dies, "
+                "wenn sich an etwas Regelmäßigem etwas ändert - 'Geige ist jetzt um "
+                "18:00 statt 17:45', 'Sport fällt weg'. NICHT add_calendar_routine "
+                "dafür nehmen: das legt eine zweite Regel an und die alte bleibt "
+                "stehen. Der Titel muss nur ein Stück des Eintrags treffen "
+                "('geige' findet 'Geigenstunde'). Weggelassene Felder bleiben, wie "
+                "sie sind."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "label": {
+                        "type":        "string",
+                        "description": "Titel der bestehenden Routine (Teilstring genügt)",
+                    },
+                    "aktion": {
+                        "type":        "string",
+                        "enum":        ["aendern", "loeschen"],
+                        "description": "'aendern' oder 'loeschen'",
+                    },
+                    "time": {
+                        "type":        "string",
+                        "description": "Neue Uhrzeit HH:MM (24h)",
+                    },
+                    "ende": {
+                        "type":        "string",
+                        "description": "Neues Ende HH:MM (24h)",
+                    },
+                    "rrule": {
+                        "type":        "string",
+                        "description": "Neue Wiederholung, z.B. 'FREQ=WEEKLY;BYDAY=MO'",
+                    },
+                    "ort": {
+                        "type":        "string",
+                        "description": "Neuer Ort",
+                    },
+                    "neuer_titel": {
+                        "type":        "string",
+                        "description": "Neuer Titel, falls die Aktivität anders heißt",
+                    },
+                },
+                "required": ["label", "aktion"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "add_calendar_pause",
             "description": (
                 "Trägt eine Pause/einen Ausfall für eine regelmäßige Aktivität "

@@ -144,7 +144,13 @@ def test_der_schnitt_haelt():
     eigen = {t["function"]["name"] for t in gross._GEDAECHTNIS}
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
                 if t["function"]["name"] not in eigen)
-    assert besch < 3000
+    # 18.08.2026 von 3.000 auf 3.300: edit_calendar_routine kam dazu. Es
+    # kostet ~250 Zeichen und behebt eine Luecke, die sie nicht ueberspielen
+    # konnte — Routinen liessen sich nur ANLEGEN, also stand die verschobene
+    # Geigenstunde zweimal im Kalender. Ein Werkzeug, das fehlt, kostet mehr
+    # als eins, das im Praefix liegt: es kostet eine Runde Erklaeren und am
+    # Ende einen falschen Kalender.
+    assert besch < 3300
     besch_eigen = sum(len(t["function"]["description"]) for t in gross.TOOLS
                       if t["function"]["name"] in eigen)
     # 18.08.2026 von 2.500 auf 2.800: write_note verweist jetzt auf die
