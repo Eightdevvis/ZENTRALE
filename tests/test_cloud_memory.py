@@ -247,6 +247,11 @@ def extraktoren(monkeypatch):
     monkeypatch.setattr(consolidation, "_call_graph_extractor_cloud",
                         lambda u, a, t: gerufen.append("cloud") or ([], []))
     monkeypatch.setattr(consolidation, "_is_substantive", lambda m: True)
+    # Die Tripel-Extraktion ist seit 18.08.2026 per Default AUS (siehe
+    # consolidation.GRAPH_EXTRAKTION). Diese Tests pruefen, WELCHER
+    # Extraktor drankaeme — dafuer muss der Weg offen sein. Sie bleiben
+    # damit gueltig fuer den Tag, an dem der Graph ein Schema hat.
+    monkeypatch.setattr(consolidation, "GRAPH_EXTRAKTION", True)
     return gerufen
 
 

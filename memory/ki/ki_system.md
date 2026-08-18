@@ -53,6 +53,13 @@ das System hochgefahren ist).
 - **Public API:** `context_for_query(query)`, `add_turn_extraction(nodes, edges)`,
   `ensure_seed()`, `stats()`, `dump()`.
 
+> **⚠ Der Konzept-Graph ist seit 18.08.2026 abgeschaltet.** Er liefert weder
+> Kontext in den Prompt (`ai.GRAPH_KONTEXT`) noch nimmt er neue Extraktionen auf
+> (`consolidation.GRAPH_EXTRAKTION`) — beides per Env wieder einschaltbar. An
+> seiner Stelle steht das Datei-Gedächtnis, siehe
+> [gedaechtnis_dateien.md](gedaechtnis_dateien.md). Der folgende Abschnitt
+> beschreibt weiterhin korrekt, WIE der Graph arbeitet, wenn man ihn anschaltet.
+
 #### Zeit: der Erzähltag ist nicht der Ereignistag (seit 08/2026)
 
 Am 17.08.2026 fragte Sasha „kann ich heute wieder Sport machen?" und bekam

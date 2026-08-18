@@ -28,6 +28,7 @@ import re
 import time
 import json as _json
 import threading  # Phase D: Auto-Save läuft in Daemon-Threads
+import datetime as _dt
 from datetime import datetime  # für den Jetzt-Block (Fix Zeit-Blindheit)
 
 import net           # HTTP-Wrapper mit Terminal-Logging
@@ -117,6 +118,20 @@ QWEN_SAMPLING = {
     "min_p":          0.0,
     "repeat_penalty": 1.05,
 }
+
+
+# Der Konzept-Graph als Kontext-Quelle. DEFAULT AUS seit 18.08.2026.
+#
+# Er ging bei JEDEM Turn ungecacht mit raus (~2.500 Zeichen) und lieferte
+# dafuer Rauschen: gemessen waren 42 von 104 Kanten reine Buchhaltung
+# darueber, WANN geredet wurde, und unter den Fakten standen Saetze wie
+# "Sasha wohnt-in Universitaet des Saarlandes". An seine Stelle tritt das
+# Datei-Gedaechtnis (core/gedaechtnis.py): Steckbrief und Ziele stehen im
+# GECACHTEN Kopf, alles andere holt sie per Werkzeug.
+#
+# Die Datei bleibt liegen, nichts geht verloren, und mit
+# ZENTRALE_GRAPH_KONTEXT=1 ist er in einer Zeile zurueck.
+GRAPH_KONTEXT = os.environ.get("ZENTRALE_GRAPH_KONTEXT", "0") == "1"
 
 
 # ── _PROMPT_ORDER: Reihenfolge im System-Prompt ───────────────────────
@@ -387,6 +402,10 @@ PERMISSION_REQUIRED_TOOLS = {
     "add_calendar_routine",
     "add_calendar_pause",
     "delete_calendar_entry",   # Löschen ist destruktiv → immer bestätigen
+    # Dossier komplett neu schreiben ist ebenfalls destruktiv. ANHÄNGEN
+    # (write_note) ist es nicht und bleibt bewusst ungegatet: eine KI, die
+    # vor jeder Notiz fragt, ist kein Sekretär, sondern eine Zumutung.
+    "rewrite_note",
     # Internet-Pipe: jeder Call nach draußen wird bestätigt. ZENTRALE ist
     # sonst offline - was das LAN verlässt, gibt Sasha bewusst frei.
     "web_search",
@@ -412,6 +431,10 @@ def _permission_question(name: str, args: dict) -> str:
     """
     name = profil.kanonisch(name)
     label = (args.get("label") or "").strip() or "diesen Eintrag"
+    if name == "rewrite_note":
+        wie = (args.get("name") or "das Dossier").strip()
+        return (f'Soll ich das Dossier "{wie}" komplett neu schreiben? '
+                f'(Die bisherige Fassung bleibt als .bak liegen.)')
     if name == "add_calendar_entry":
         wann = " ".join(p for p in (
             (args.get("day") or "").strip(),
@@ -585,8 +608,74 @@ def _dispatch_tool(name: str, args: dict) -> str:
         return news.lies(args.get("tage", 0))
     elif name == "read_mail":
         return mail.lies(args.get("modus", ""))
+    # ── Gedächtnis: Notizen statt Tripel (siehe core/gedaechtnis.py) ──
+    elif name == "read_note":
+        import gedaechtnis
+        wie = (args.get("name") or "").strip()
+        if wie.lower() in ("sasha", "steckbrief"):
+            return gedaechtnis.steckbrief() or "[Steckbrief ist noch leer]"
+        if wie.lower() in ("ziele", "goals"):
+            return gedaechtnis.ziele() or "[Ziele sind noch leer]"
+        if wie.lower() in ("tagebuch", "diary"):
+            return gedaechtnis.tagebuch_lesen() or "[Heute noch nichts notiert]"
+        inhalt = gedaechtnis.dossier_lesen(wie)
+        if not inhalt:
+            vorhanden = ", ".join(gedaechtnis.dossier_liste()) or "noch keine"
+            return (f"[Kein Dossier {wie!r}. Vorhanden: {vorhanden}. "
+                    f"Mit write_note legst du eins an.]")
+        return inhalt
+    elif name == "write_note":
+        import gedaechtnis
+        wie  = (args.get("name") or "").strip()
+        text = args.get("text") or ""
+        if wie.lower() in ("tagebuch", "diary", ""):
+            return gedaechtnis.tagebuch_notieren(text)
+        return gedaechtnis.dossier_notieren(wie, text)
+    elif name == "rewrite_note":
+        import gedaechtnis
+        return gedaechtnis.dossier_ersetzen(args.get("name") or "",
+                                            args.get("content") or "")
+    elif name == "search_memory":
+        import gedaechtnis
+        return gedaechtnis.suchen(args.get("query") or "")
+    elif name == "log_series":
+        return _log_series(args)
     else:
         return f"[Unbekanntes Tool: {name}]"
+
+
+def _log_series(args: dict) -> str:
+    """Einen Messwert ins Zyklus-Werkzeug schreiben (core/graphs.py).
+
+    Der fuenfte Speicher: Schlaf, Stimmung, Trainingseinheiten, alles was
+    ueber Monate eine KURVE ergeben soll. Bewusst NICHT im Gedaechtnis-
+    Ordner — Zahlen ueber Zeit koennen die Zyklus-Graphen laengst, samt
+    Anzeige in der TUI. Sie hier nochmal als Text abzulegen hiesse, zwei
+    Wahrheiten ueber denselben Wert zu fuehren.
+
+    Legt eine Reihe NICHT von selbst an: welche Kurven es gibt, ist Sashas
+    Entscheidung, und eine KI, die bei jedem Tippfehler eine neue Reihe
+    erzeugt, macht aus der Uebersicht eine Halde.
+    """
+    import graphs
+    name = (args.get("series") or "").strip()
+    wert = args.get("value")
+    if not name:
+        return "[Fehler: keine Reihe angegeben]"
+    treffer = [g for g in graphs.list_graphs()
+               if g.get("name", "").casefold() == name.casefold()
+               or g.get("id") == name]
+    if not treffer:
+        da = ", ".join(g.get("name", "?") for g in graphs.list_graphs()) or "keine"
+        return (f"[Keine Messreihe {name!r}. Vorhanden: {da}. "
+                f"Neue Reihen legt Sasha selbst an.]")
+    g = treffer[0]
+    tag = (args.get("day") or "").strip() or _dt.date.today().isoformat()
+    try:
+        graphs.log_value(g["id"], tag, wert)
+    except Exception as e:
+        return f"[Fehler beim Eintragen: {e}]"
+    return f"{g.get('name')} fuer {tag}: {wert} eingetragen."
 
 
 def warmup():
@@ -876,7 +965,7 @@ def chat(messages: list, model: str = None, system: str = None) -> str:
     # Phase G: ein einziger Memory-Kontext aus dem Konzept-Graph statt
     # drei separaten Schichten. Aktivierungs-Spread holt was relevant
     # ist, inklusive Zeit-Anker und Sasha-Profil über die Graph-Topologie.
-    mem_ctx = graph.context_for_query(user_query)
+    mem_ctx = graph.context_for_query(user_query) if GRAPH_KONTEXT else ""
     # Statisches zuerst, Wechselndes ans Ende (siehe _PROMPT_ORDER-Notiz oben).
     sys_prompt = (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
     if mem_ctx:
@@ -954,7 +1043,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         # die alten getrennten Schichten (User-Profil, STM-Summary,
         # LTM-Top-K). Der Graph weiß welche Konzepte mit der aktuellen
         # Frage assoziiert sind und liefert sie alle mit Beziehungen.
-        mem_ctx    = graph.context_for_query(user_query)
+        mem_ctx    = graph.context_for_query(user_query) if GRAPH_KONTEXT else ""
         # ── Statischer Kopf (byte-identisch über alle Turns, cachebar) ──
         # Kommt von der Schiene: hier läuft Ollama, also `klein` — mit
         # Antwort-Suffix und Bild-Markern, die ein 9B braucht. Der Cloud-Pfad

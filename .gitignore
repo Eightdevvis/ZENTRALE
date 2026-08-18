@@ -12,6 +12,12 @@ data/*.json
 # persoenlicher als der Graph selbst - der destilliert, das hier ist roh.
 # Eigene Zeile, weil .jsonl NICHT unter data/*.json faellt.
 data/ai_transcripts/
+# Das DATEI-GEDAECHTNIS (Steckbrief, Ziele, Dossiers, Tagebuch). Markdown,
+# faellt also NICHT unter data/*.json — deshalb eine eigene Zeile, und
+# deshalb steht sie hier als erstes: das ist der persoenlichste Inhalt im
+# ganzen Projekt (Schlaf, Stimmung, Zweifel, Breakdowns, Einkaeufe). Ein
+# einmal gepushter Tagebucheintrag ist nicht zurueckzuholen.
+data/gedaechtnis/
 # Graph-/Memory-Backups (z.B. ai_graph.json.bak.<timestamp>) - ebenfalls
 # privater KI-Inhalt, niemals committen.
 data/*.bak*

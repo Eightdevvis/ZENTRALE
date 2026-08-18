@@ -192,11 +192,16 @@ def _breakpoints(kw) -> list:
     return [b for b in treffer if "cache_control" in b]
 
 
-def test_wechselndes_haengt_hinten_an_der_letzten_user_nachricht(fake):
+def test_wechselndes_haengt_hinten_an_der_letzten_user_nachricht(fake, monkeypatch):
     """Der Kern des Cache-Umbaus. Graph-Kontext und Uhrzeit standen frueher im
     system-Feld, also VOR dem gesamten Verlauf — und weil die Uhr jeden Turn
     eine andere ist, ging der ganze Verlauf jedes Mal ungecacht raus
-    (gemessen: in=7236, cache_read=0 fuer eine Drei-Wort-Antwort)."""
+    (gemessen: in=7236, cache_read=0 fuer eine Drei-Wort-Antwort).
+
+    Der Graph-Kontext ist inzwischen per Default aus (Datei-Gedaechtnis).
+    Hier wird er absichtlich eingeschaltet: geprueft wird die PLATZIERUNG
+    des Wechselnden, und der Graph ist davon das anschaulichste Beispiel."""
+    monkeypatch.setattr(cloud.ai, "GRAPH_KONTEXT", True)
     c = fake([{"text": ["ok"], "stop_reason": "end_turn"}])
     _lauf(cloud.chat_stream(_msgs()))
     kw = c.calls[0]

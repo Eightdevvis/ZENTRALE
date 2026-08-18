@@ -6,7 +6,8 @@ Messungen dazu existiert.
 
 | Was du wissen willst | Datei |
 |---|---|
-| **Einstieg.** Wie der Chat läuft: lokal (Ollama) und Cloud, Tools, Erlaubnis-Gate, Konzept-Graph, System-Prompt-Reihenfolge, Prompt-Cache, Backend-Wahl | [ki_system.md](ki_system.md) |
+| **Einstieg.** Wie der Chat läuft: lokal (Ollama) und Cloud, Tools, Erlaubnis-Gate, System-Prompt-Reihenfolge, Prompt-Cache, Backend-Wahl | [ki_system.md](ki_system.md) |
+| **Das Gedächtnis.** Steckbrief, Ziele, Dossiers, Tagebuch, Messreihen — und warum der Konzept-Graph abgelöst wurde | [gedaechtnis_dateien.md](gedaechtnis_dateien.md) |
 | Wie die KI hört und spricht: Whisper-STT + TTS als eigene Services, sprachneutral | [audio_system.md](audio_system.md) |
 | Warum das Memory so aussieht, wie es aussieht — Historie der Phasen A–G, verworfene Ansätze | [ki_memory_plan.md](ki_memory_plan.md) |
 | Wohin die Persönlichkeit soll: vom System-Prompt zum eigenen Modell (Fine-Tuning-Plan) | [ki_personality_plan.md](ki_personality_plan.md) |

@@ -193,6 +193,129 @@ _BESCHREIBUNG = {
 }
 
 
+# ── Eigene Werkzeuge dieser Schiene: das Datei-Gedaechtnis ────────────
+#
+# Stehen NICHT in klein.TOOLS, weil der lokale Pfad gerade nicht testbar
+# ist und ein 9B fuer jedes zusaetzliche Schema bezahlt. Sobald lokal
+# wieder laeuft, wandern sie rueber — der Kern (ai._dispatch_tool) kennt
+# sie ohnehin unter denselben Namen.
+#
+# Fuenf statt zwanzig: jedes Schema reist in JEDEM Turn mit. Deshalb ist
+# das Tagebuch kein eigenes Werkzeug, sondern write_note(name="tagebuch").
+_GEDAECHTNIS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "read_note",
+            "description": (
+                "Liest eine Gedaechtnis-Datei am Stueck. 'name' ist ein "
+                "Dossier-Titel aus dem Kopf-Block (z.B. 'umzug', 'training'), "
+                "oder 'sasha' fuer den Steckbrief, 'ziele' fuer die Ziele, "
+                "'tagebuch' fuer den heutigen Tag. Lies das Dossier, BEVOR du "
+                "ueber die Sache redest oder planst — der Kopf-Block nennt nur "
+                "Titel, nicht Inhalte."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string",
+                             "description": "Dossier-Titel, oder sasha/ziele/tagebuch."},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_note",
+            "description": (
+                "Haelt etwas fest — haengt an, loescht nie. Zwei Verwendungen: "
+                "name='tagebuch' fuer das, was gerade passiert ist oder was "
+                "Sasha erzaehlt hat (in SEINEN Worten, nicht destilliert); ein "
+                "Dossier-Titel fuer den STAND einer laufenden Sache ('Kueche: "
+                "Regale haengen, Apparatur fehlt'). Ein neuer Titel legt ein "
+                "neues Dossier an. Du fragst dafuer nicht um Erlaubnis, du "
+                "machst es einfach — so wie jemand mitschreibt, der danebensitzt."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string",
+                             "description": "'tagebuch' oder ein Dossier-Titel."},
+                    "text": {"type": "string",
+                             "description": "Der Eintrag, in ganzen Saetzen."},
+                },
+                "required": ["name", "text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_memory",
+            "description": (
+                "Volltextsuche ueber Tagebuch und Dossiers. Fuer alles, was "
+                "laenger her ist als das Gespraech: 'wie war Spanien', 'was "
+                "hatte ich zum Umzug gesagt'. Stumpfe Wortsuche — nimm den "
+                "Begriff, den SASHA benutzt haette, nicht eine Umschreibung."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Suchbegriff."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "rewrite_note",
+            "description": (
+                "Schreibt ein Dossier KOMPLETT neu — zum Aufraeumen, wenn aus "
+                "vielen angehaengten Absaetzen ein sauberer Stand werden soll. "
+                "Destruktiv, wird bestaetigt. Der bisherige Inhalt muss vorher "
+                "mit read_note gelesen werden, sonst wirfst du weg, was du nicht "
+                "kennst."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name":    {"type": "string", "description": "Dossier-Titel."},
+                    "content": {"type": "string",
+                                "description": "Der vollstaendige neue Inhalt."},
+                },
+                "required": ["name", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "log_series",
+            "description": (
+                "Traegt einen Messwert in eine bestehende Kurve ein (Schlaf, "
+                "Stimmung, Training …) — fuer alles, was ueber Monate eine "
+                "Kurve ergeben soll. Nur vorhandene Reihen; neue legt Sasha "
+                "selbst an. Ohne 'day' zaehlt heute."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "series": {"type": "string", "description": "Name der Reihe."},
+                    "value":  {"type": "number", "description": "Der Wert."},
+                    "day":    {"type": "string",
+                               "description": "YYYY-MM-DD, sonst heute."},
+                },
+                "required": ["series", "value"],
+            },
+        },
+    },
+]
+
+
 def _bauen() -> list:
     out = []
     for t in klein.TOOLS:
@@ -210,6 +333,7 @@ def _bauen() -> list:
                 "parameters":  copy.deepcopy(fn["parameters"]),
             },
         })
+    out.extend(copy.deepcopy(_GEDAECHTNIS))
     return out
 
 

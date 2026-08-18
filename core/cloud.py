@@ -246,9 +246,22 @@ def _static_system(system: str | None, tutor_mode: bool) -> str:
 
     # Die Schiene entscheidet, was hier drinsteht — nicht dieser Modul.
     # Hier draussen faehrt ein Frontier-Modell, also `gross`.
-    kopf = _profil().system(system, dashview=ai._DASHVIEW)
+    teile = [_profil().system(system, dashview=ai._DASHVIEW)]
+    # Das Datei-Gedaechtnis: Steckbrief, Ziele, Dossier-TITEL. Gehoert in
+    # den gecachten Teil — es aendert sich fast nie, und genau darin liegt
+    # der Unterschied zum alten Graph-Block, der bei jedem Turn neu und
+    # ungecacht mitreiste.
+    try:
+        import gedaechtnis
+        kopf = gedaechtnis.kopf_block()
+    except Exception:
+        kopf = ""
+    if kopf:
+        teile.append(kopf)
     imprint = ai._imprint_prompt()
-    return f"{kopf}\n\n{imprint}" if imprint else kopf
+    if imprint:
+        teile.append(imprint)
+    return "\n\n".join(teile)
 
 
 def _profil():
@@ -426,8 +439,9 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         # Embedder anmelden, Identity-Seed sicherstellen, dann Kontext von dort.
         prepare_store()
         ai._ensure_seed_once(store=store)
-        mem_ctx = graph.context_for_query(user_query, store=store,
-                                          max_chars=_CTX_CHARS)
+        mem_ctx = (graph.context_for_query(user_query, store=store,
+                                           max_chars=_CTX_CHARS)
+                   if ai.GRAPH_KONTEXT else "")
 
     # Statischer Kopf ins system-Feld (gecacht), Wechselndes ans Ende der
     # neuesten User-Nachricht (ungecacht, aber hinter allem Cachebaren).

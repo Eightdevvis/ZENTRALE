@@ -120,8 +120,19 @@ def test_der_schnitt_haelt():
     """Die Zahl, um die es geht. Faellt sie zurueck, hat jemand wieder etwas
     in den Praefix gelegt, das jeden Turn mitbezahlt wird."""
     assert len(gross.system()) < len(klein.system()) / 2
-    besch = sum(len(t["function"]["description"]) for t in gross.TOOLS)
+    # Beschreibungen der GEERBTEN Werkzeuge — das war der Schnitt von
+    # damals (6.342 → ~2.200). Die eigenen Gedaechtnis-Werkzeuge kamen
+    # spaeter dazu und werden getrennt gedeckelt: sie sind kein Ballast,
+    # den jemand vergessen hat, sondern der Ersatz fuer den Graph-Block,
+    # der frueher UNGECACHT bei jedem Turn mitreiste. Ein Schema im
+    # gecachten Praefix kostet ein Zehntel davon.
+    eigen = {t["function"]["name"] for t in gross._GEDAECHTNIS}
+    besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                if t["function"]["name"] not in eigen)
     assert besch < 3000
+    besch_eigen = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                      if t["function"]["name"] in eigen)
+    assert besch_eigen < 2500
 
 
 def test_praefix_bleibt_ueber_der_cache_mindestgroesse():
@@ -137,8 +148,14 @@ def test_parameter_schemata_laufen_nicht_auseinander():
     Zwei Schienen mit verschiedenen Parametern waeren ein Bug, kein Feintuning."""
     aus_klein = {t["function"]["name"]: t["function"]["parameters"]
                  for t in klein.TOOLS}
+    # Werkzeuge, die NUR diese Schiene hat, koennen naturgemaess nicht mit
+    # klein abgeglichen werden — sie haben dort kein Gegenstueck. Der
+    # Vertrag gilt fuer das GETEILTE Set.
+    eigen = {t["function"]["name"] for t in gross._GEDAECHTNIS}
     for t in gross.TOOLS:
         fn = t["function"]
+        if fn["name"] in eigen:
+            continue
         # gross benennt um; ueber den kanonischen Namen wieder zusammenfuehren.
         passend = [k for k, v in aus_klein.items()
                    if profil.kanonisch(k) == profil.kanonisch(fn["name"])]

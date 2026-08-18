@@ -43,6 +43,23 @@ OLLAMA_NUM_CTX    = int(os.environ.get("OLLAMA_NUM_CTX", "8192"))
 # Thinking aus. Nur fuer qwen3* gueltig (qwen2.5 -> Ollama 400), daher kond.
 SUPPORTS_THINK    = OLLAMA_MODEL.startswith("qwen3")
 
+# Die Tripel-Extraktion in den Konzept-Graphen. DEFAULT AUS seit 18.08.2026.
+#
+# Sie kostete pro Turn einen eigenen LLM-Call (gemessen 0,0028 EUR) — bei
+# 30 Kontakten am Tag rund 2,70 EUR im Monat, bei einem 20-EUR-Budget also
+# ein Achtel, ausgegeben fuer ein Ergebnis, das die Antworten messbar
+# schlechter machte: "Sasha wohnt-in Universitaet des Saarlandes",
+# "Fahrradfahren [project]", derselbe Fakt doppelt in zwei Formen.
+#
+# Das ROHMATERIAL wird weiter geschrieben (transkript.schreiben, gleich
+# unten) — es ist die Grundlage des Datei-Gedaechtnisses und jeder
+# spaeteren Auswertung. Verloren geht also nichts; es wird nur nicht mehr
+# jeder Satz in Tripel zerhackt.
+#
+# ZENTRALE_GRAPH_EXTRAKTION=1 schaltet sie zurueck, wenn der Graph eines
+# Tages ein Schema hat (Graphiti o.ae.).
+GRAPH_EXTRAKTION  = os.environ.get("ZENTRALE_GRAPH_EXTRAKTION", "0") == "1"
+
 
 
 # ── Sanitization für extrahierte Edges ────────────────────────────────
@@ -536,6 +553,11 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
     # wegwirft, waere sonst weg — der Graph merkt sich, DASS eine Beziehung
     # besteht, nicht WAS gesagt wurde. Append-only, wird nie durchsucht.
     quellen = transkript.schreiben(turns, store=store)
+
+    # Ab hier beginnt die Tripel-Extraktion. Ist sie aus, endet der Weg
+    # hier — das Rohmaterial steht, und das ist der Teil, der zaehlt.
+    if not GRAPH_EXTRAKTION:
+        return
 
     today = date.today().isoformat()
     if isinstance(argument, list):
