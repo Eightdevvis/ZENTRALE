@@ -44,30 +44,42 @@ _UMLENKUNG = ("ZENTRALE_THEME_FILE", "ZENTRALE_THEME_NOW",
               "XDG_CACHE_HOME", "ZENTRALE_USAGE_FILE")
 
 
-def _ist_testlauf(argv0, umgebung):
+def _ist_testlauf(kommandozeile, umgebung):
     """Laeuft dieser Interpreter gerade unter pytest?
 
-    Zwei Wege, weil beide vorkommen: `venv/bin/pytest` (argv[0] ist das
-    Skript) und `python -m pytest` (argv[0] ist der Modulpfad). pytest selbst
-    setzt PYTEST_VERSION erst spaeter — fuer KINDprozesse eines Testlaufs ist
-    das aber schon gesetzt und der zuverlaessigere Hinweis.
+    `kommandozeile` ist die VOLLSTAENDIGE Zeile (sys.orig_argv), nicht
+    sys.argv. Das ist keine Feinheit, sondern der Punkt, an dem die erste
+    Fassung gescheitert ist: sitecustomize laeuft beim Interpreter-START, und
+    da steht bei `python -m pytest` in sys.argv[0] noch "-m" — den Modulnamen
+    traegt CPython erst danach ein. Die Erkennung lief also genau im
+    haeufigsten Fall ins Leere, und ein Fuzz-Lauf aus einem Worktree hat
+    prompt wieder das echte Theme umgeschaltet. sys.orig_argv enthaelt die
+    Zeile so, wie sie aufgerufen wurde, und deckt beide Formen ab:
+    `venv/bin/pytest` wie `python -m pytest`.
+
+    Die Env-Marker stehen trotzdem zuerst: pytest setzt sie in KINDprozessen
+    (die vom Fuzzer gestartete TUI), deren eigene Kommandozeile nichts mehr
+    von pytest weiss.
     """
     if umgebung.get("PYTEST_VERSION") or umgebung.get("PYTEST_CURRENT_TEST"):
         return True
-    return "pytest" in (argv0 or "")
+    return any("pytest" in teil for teil in (kommandozeile or ()))
 
 
 def _wegwerf_verzeichnis(tempdir, pid):
     return tempdir + "/zentrale_testguard_%d" % pid
 
 
-def anwenden(umgebung, argv0, tempdir, pid):
+def anwenden(umgebung, kommandozeile, tempdir, pid):
     """Umgebung eines Testlaufs umbiegen. → das Verzeichnis, oder None.
 
     Getrennt von der Ausfuehrung unten, damit der Test sie mit erfundenen
-    Werten aufrufen kann, ohne einen echten Interpreter zu starten.
+    Werten aufrufen kann, ohne einen echten Interpreter zu starten. Verlass
+    dich dabei aber NICHT allein darauf: dass die Erkennung im echten
+    Interpreter-Start ueberhaupt zuschlaegt, prueft nur ein Lauf mit echtem
+    Subprozess (siehe tests/test_keine_seiteneffekte.py).
     """
-    if not _ist_testlauf(argv0, umgebung):
+    if not _ist_testlauf(kommandozeile, umgebung):
         return None
     if umgebung.get("ZENTRALE_TESTLAUF"):
         # Schon umgebogen — wir sind ein KIND des Testlaufs (etwa die vom
@@ -92,7 +104,9 @@ try:
 
     # os.environ, nicht eine Kopie: die Fuzz-TUI wird in tests/_tui_fuzz.py mit
     # env=dict(os.environ, …) gestartet und erbt die Umlenkung nur so.
-    _ziel = anwenden(os.environ, sys.argv[0] if sys.argv else "",
+    # orig_argv statt argv: siehe _ist_testlauf. Der Fallback auf argv gilt nur
+    # fuer Python < 3.10, das es hier nicht gibt.
+    _ziel = anwenden(os.environ, getattr(sys, "orig_argv", None) or sys.argv,
                      tempfile.gettempdir(), os.getpid())
     if _ziel:
         os.makedirs(_ziel, exist_ok=True)

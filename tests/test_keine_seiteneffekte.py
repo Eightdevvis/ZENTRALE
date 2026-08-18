@@ -122,7 +122,7 @@ def _guard_modul():
 def test_venv_riegel_biegt_einen_pytest_lauf_um():
     guard = _guard_modul()
     umgebung = {}
-    ziel = guard.anwenden(umgebung, "/pfad/venv/bin/pytest", "/tmp", 4711)
+    ziel = guard.anwenden(umgebung, ["/pfad/venv/bin/pytest"], "/tmp", 4711)
     assert ziel
     assert umgebung["ZENTRALE_TESTLAUF"] == "1"
     for var in ("ZENTRALE_THEME_FILE", "ZENTRALE_THEME_NOW",
@@ -130,11 +130,27 @@ def test_venv_riegel_biegt_einen_pytest_lauf_um():
         assert umgebung[var].startswith(ziel), var
 
 
+def test_venv_riegel_erkennt_auch_python_m_pytest():
+    """Die Form, an der die erste Fassung scheiterte.
+
+    sitecustomize laeuft beim Interpreter-START — da steht in sys.argv[0] noch
+    "-m". Nur sys.orig_argv zeigt, was wirklich aufgerufen wurde. Ohne diesen
+    Fall lief die Erkennung im haeufigsten Aufruf ins Leere.
+    """
+    guard = _guard_modul()
+    umgebung = {}
+    ziel = guard.anwenden(umgebung, ["/pfad/venv/bin/python", "-m", "pytest"],
+                          "/tmp", 4714)
+    assert ziel, "python -m pytest wurde nicht als Testlauf erkannt"
+    assert umgebung["ZENTRALE_THEME_FILE"].startswith(ziel)
+
+
 def test_venv_riegel_laesst_die_echte_tui_in_ruhe():
     """Kein Testlauf = kein Eingriff. Sonst laege die TUI im Wegwerf-Ordner."""
     guard = _guard_modul()
     umgebung = {}
-    assert guard.anwenden(umgebung, "tui/zentrale_tui.py", "/tmp", 4711) is None
+    assert guard.anwenden(umgebung, ["python", "tui/zentrale_tui.py"],
+                          "/tmp", 4711) is None
     assert umgebung == {}
 
 
@@ -143,7 +159,8 @@ def test_venv_riegel_legt_fuer_kindprozesse_nichts_neues_an():
     guard = _guard_modul()
     umgebung = {"ZENTRALE_TESTLAUF": "1", "PYTEST_VERSION": "8",
                 "ZENTRALE_THEME_FILE": "/tmp/geerbt/theme"}
-    assert guard.anwenden(umgebung, "tui/zentrale_tui.py", "/tmp", 4712) is None
+    assert guard.anwenden(umgebung, ["python", "tui/zentrale_tui.py"],
+                          "/tmp", 4712) is None
     assert umgebung["ZENTRALE_THEME_FILE"] == "/tmp/geerbt/theme"
 
 
@@ -151,5 +168,50 @@ def test_venv_riegel_ueberschreibt_gesetzte_werte_nicht():
     """setdefault, wie in conftest — ein Test darf auf sein tmp_path biegen."""
     guard = _guard_modul()
     umgebung = {"ZENTRALE_THEME_FILE": "/tmp/eigenes/theme"}
-    guard.anwenden(umgebung, "/pfad/venv/bin/pytest", "/tmp", 4713)
+    guard.anwenden(umgebung, ["/pfad/venv/bin/pytest"], "/tmp", 4713)
     assert umgebung["ZENTRALE_THEME_FILE"] == "/tmp/eigenes/theme"
+
+
+def _riegel_installiert():
+    """Haengt sitecustomize.py im site-packages des laufenden Interpreters?"""
+    import sysconfig
+    return os.path.exists(os.path.join(sysconfig.get_paths()["purelib"],
+                                       "sitecustomize.py"))
+
+
+@pytest.mark.skipif(not _riegel_installiert(),
+                    reason="venv ohne Riegel — scripts/zentrale-venv-guard läuft nicht")
+def test_venv_riegel_greift_in_einem_echten_subprozess(tmp_path):
+    """Der Waechter mit den echten Handgriffen — und der einzige, der den
+    Fehler der ersten Fassung gefunden haette.
+
+    Die Tests darueber rufen `anwenden()` mit erfundenen Argumenten auf; ob
+    die Erkennung im wirklichen Interpreter-Start zuschlaegt, sagen sie nicht.
+    Deshalb hier ein echtes `python -m pytest` auf eine Wegwerf-Testdatei
+    AUSSERHALB des Repos (damit keine conftest von uns mitlaeuft) und mit aus
+    der Umgebung geloeschten Variablen (damit nichts geerbt wird): uebrig
+    bleibt genau der venv-Riegel.
+    """
+    probe = tmp_path / "test_probe.py"
+    probe.write_text(
+        "import os\n"
+        "def test_umgelenkt():\n"
+        "    p = os.environ.get('ZENTRALE_THEME_FILE', '')\n"
+        "    assert p, 'der venv-Riegel hat gar nichts gesetzt'\n"
+        "    echt = os.path.expanduser('~/.config/zentrale')\n"
+        "    assert not os.path.realpath(p).startswith(os.path.realpath(echt)),\\\n"
+        "        'zeigt auf die echte Konfiguration: %s' % p\n")
+
+    umgebung = {k: v for k, v in os.environ.items()
+                if k not in ("ZENTRALE_THEME_FILE", "ZENTRALE_THEME_NOW",
+                             "ZENTRALE_USAGE_FILE", "ZENTRALE_TESTLAUF",
+                             "XDG_CACHE_HOME", "PYTEST_VERSION",
+                             "PYTEST_CURRENT_TEST")}
+    r = subprocess.run(
+        [sys.executable, "-m", "pytest", str(probe), "-q", "--tb=short",
+         "-p", "no:cacheprovider"],
+        cwd=str(tmp_path), env=umgebung, capture_output=True, text=True,
+        timeout=300)
+    assert r.returncode == 0, (
+        "Der venv-Riegel greift bei `python -m pytest` nicht:\n%s%s"
+        % (r.stdout[-2000:], r.stderr[-500:]))
