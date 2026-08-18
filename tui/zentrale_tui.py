@@ -6264,11 +6264,7 @@ def run_ui(stdscr, store):
         Eingabezeile. Der Stream selbst läuft in ai_stream() im Hintergrund."""
         inx = bx + 2
         inw = max(6, bw - 4)
-        input_y = by + bh - 2
-        info_y = by + bh - 3
         body_top = by + 1
-        body_bot = by + bh - 4
-        avail = max(1, body_bot - body_top + 1)
 
         with AI_LOCK:
             log = list(AI["log"])
@@ -6279,6 +6275,45 @@ def run_ui(stdscr, store):
             inp = AI["input"]
             msg = AI["msg"]
             scroll = AI["scroll"]
+
+        # Fußzeilen zuerst: sie bestimmen, wie viel Platz der Verlauf noch hat.
+        # Bei offener Erlaubnis-Frage brauchen Frage UND Knöpfe je nach Breite
+        # mehrere Zeilen — früher wurden sie hart auf inw gekürzt, in einem
+        # schmalen Fenster war die Frage damit unlesbar.
+        foot = []
+        if perm:
+            opts = perm.get("optionen") or ["ja", "nein"]
+            label = "  ".join("%d) %s" % (i + 1, o) for i, o in enumerate(opts))
+            olines = _wrap("› " + label, inw) or ["›"]
+            frage = (perm.get("frage") or "darf ich?").replace("\n", " ")
+            qlines = _wrap("? " + frage, inw)
+            room = max(1, (bh - 3) - len(olines))   # mind. 1 Zeile Verlauf bleibt
+            if len(qlines) > room:                  # Knöpfe haben Vorrang
+                qlines = qlines[:room]
+                qlines[-1] = qlines[-1][:max(1, inw - 1)] + "…"
+            foot = [(ln, C["warn"]) for ln in qlines + olines]
+        else:
+            # Info-Zeile: Denk-Strom > Fehler/Status > Scroll-Hinweis
+            if streaming and reflect:
+                foot.append((("denkt: " + reflect.replace("\n", " "))[-inw:],
+                             C["faint"]))
+            elif msg:
+                foot.append((msg[:inw], C["warn"]))
+            elif scroll > 0:
+                foot.append(("↑ verlauf (↓ nach unten)", C["faint"]))
+            else:
+                foot.append(("", 0))               # Platz halten, Layout stabil
+            # Unterste Zeile: Stream-läuft > Eingabe
+            if streaming:
+                foot.append(("› …", C["dim"]))
+            else:
+                shown = "› " + inp
+                if len(shown) > inw - 1:
+                    shown = "› …" + inp[-(inw - 5):]
+                foot.append((shown + "_", C["bright"]))
+        foot = foot[-max(1, bh - 3):]
+        body_bot = by + bh - 2 - len(foot)
+        avail = max(1, body_bot - body_top + 1)
 
         # Zeilen bauen: Verlauf + laufende Antwort (jede Zeile trägt ihre Rolle)
         lines = []
@@ -6303,30 +6338,11 @@ def run_ui(stdscr, store):
                 addclip(y, inx, seg, inw, attr)
                 y += 1
 
-        # Info-Zeile: Erlaubnis-Frage > Denk-Strom > Fehler/Status > Scroll-Hinweis
-        if perm:
-            addclip(info_y, inx, ("? " + (perm.get("frage") or "darf ich?"))[:inw],
-                    inw, C["warn"])
-        elif streaming and reflect:
-            addclip(info_y, inx, ("denkt: " + reflect.replace("\n", " "))[-inw:],
-                    inw, C["faint"])
-        elif msg:
-            addclip(info_y, inx, msg[:inw], inw, C["warn"])
-        elif scroll > 0:
-            addclip(info_y, inx, "↑ verlauf (↓ nach unten)", inw, C["faint"])
-
-        # Unterste Zeile: Erlaubnis-Knöpfe > Stream-läuft > Eingabe
-        if perm:
-            opts = perm.get("optionen") or ["ja", "nein"]
-            label = "  ".join("%d) %s" % (i + 1, o) for i, o in enumerate(opts))
-            addclip(input_y, inx, ("› " + label)[:inw], inw, C["warn"])
-        elif streaming:
-            addclip(input_y, inx, "› …", inw, C["dim"])
-        else:
-            shown = "› " + inp
-            if len(shown) > inw - 1:
-                shown = "› …" + inp[-(inw - 5):]
-            addclip(input_y, inx, shown + "_", inw, C["bright"])
+        # Fuß unten in den Kasten setzen (wächst nach oben, nicht in den Rahmen)
+        fy = by + bh - 1 - len(foot)
+        for txt, attr in foot:
+            addclip(fy, inx, txt, inw, attr)
+            fy += 1
 
     def draw_tutor(by, bx, bh, bw):
         """Inhalt der MITTE-Box, wenn der Sprach-Tutor Fokus hat. Reiner Zeichner:
