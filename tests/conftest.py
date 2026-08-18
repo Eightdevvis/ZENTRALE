@@ -39,3 +39,29 @@ _USAGE_TMP = os.path.join(tempfile.gettempdir(),
                           f"zentrale_usage_test_{os.getpid()}.json")
 os.environ.setdefault("ZENTRALE_USAGE_FILE", _USAGE_TMP)
 atexit.register(lambda: os.path.exists(_USAGE_TMP) and os.remove(_USAGE_TMP))
+
+# 4. Theme-Dateien in ein Wegwerf-Verzeichnis umlenken.
+#
+# Dieselbe Klasse Fehler wie Punkt 3, nur teurer, weil man sie SIEHT: der
+# TUI-Fuzzer (tests/test_tui_fuzz.py) startet die echte TUI in einem Pseudo-
+# Terminal und drückt zufällige Tasten — darunter 't'. Ohne diese Zeilen
+# schaltete also JEDER volle Testlauf Sashas echtes Theme wild um: Terminal,
+# nvim, Browser, Desktop und bat zogen brav nach, und im Betrieb sah das aus
+# wie ein zufälliger Glitch. Genau danach ist tagelang an der falschen Stelle
+# gesucht worden (siehe memory/system/dashboard.md).
+#
+# Umgelenkt werden BEIDE Dateien der Kopplung (Wunsch + Ergebnis) und der
+# Cache, in dem das Änderungsprotokoll liegt. Einzelne Tests dürfen die
+# Variablen weiterhin per monkeypatch auf ihr eigenes tmp_path biegen.
+_THEME_TMP = os.path.join(tempfile.gettempdir(),
+                          f"zentrale_theme_test_{os.getpid()}")
+os.makedirs(_THEME_TMP, exist_ok=True)
+os.environ.setdefault("ZENTRALE_THEME_FILE", os.path.join(_THEME_TMP, "theme"))
+os.environ.setdefault("ZENTRALE_THEME_NOW", os.path.join(_THEME_TMP, "theme.now"))
+os.environ.setdefault("XDG_CACHE_HOME", os.path.join(_THEME_TMP, "cache"))
+
+
+@atexit.register
+def _theme_tmp_aufraeumen():
+    import shutil
+    shutil.rmtree(_THEME_TMP, ignore_errors=True)
