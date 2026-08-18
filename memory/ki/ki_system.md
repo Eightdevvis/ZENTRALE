@@ -477,6 +477,38 @@ die Tool-Loop – verhindert Endlosschleifen bei kaputten Tool-Calls.
 (`done=true`) im Feld `tool_calls`. Heißt: erst auf das Ende des Streams
 warten, dann Tools auflösen.
 
+## Wie ihre Antwort im Terminal ankommt
+
+Die KI schreibt Markdown — der Prompt erlaubt ihr Listen ausdrücklich,
+Überschriften benutzt sie von selbst. Gezeichnet wurde bis 18.08.2026 der
+**Rohtext**: im KI-Kasten stand `**fett**` und `## Titel` als Zeichen.
+
+`tui/zentrale_tui.py::md_zeilen(text, breite)` liefert
+`[(zeile, stil)]` mit `stil` aus `{"", "kopf", "code", "liste"}`. Der Stil
+ist absichtlich ein **Wort** und keine curses-Konstante: so bleibt die
+Funktion rein und ohne Terminal testbar, und über Farben entscheidet allein
+der Zeichner (`draw_ai`). Sie liegt auf Modulebene und fällt damit unter
+dieselbe „darf NIE werfen"-Eigenschaft wie die übrigen TUI-Helfer.
+
+- Umgesetzt: Überschriften, Aufzählungen (mit **hängendem Einzug** — eine
+  umgebrochene Zeile rückt unter den Text, nicht unter das Bullet),
+  verschachtelte Listen, Code-Zäune (**nicht** umgebrochen: ein
+  umgebrochener Befehl ist ein falscher Befehl), inline `**fett**`,
+  `*kursiv*`, `` `code` ``, `[Text](URL)`.
+- **Nicht** umgesetzt: Auszeichnung *innerhalb* einer Zeile. Dafür müsste
+  eine Zeile in Segmente mit eigenen Attributen zerfallen — quer durch
+  `addclip` und jeden Aufrufer. Die Marker werden entfernt, der Text bleibt.
+- **Die harte Regel, mit eigenem Test:** es geht nie Inhalt verloren.
+  Entfernt werden nur sauber gepaarte Marker; `2 ** 3 = 8`, `snake_case`
+  und ein offenes `**` bleiben stehen, bei einem Link bleibt die URL
+  erhalten. Ein Renderer, der bei kaputtem Markdown Text verschluckt, ist
+  schlimmer als gar keiner — man merkt es nicht.
+- Sashas eigene Eingaben laufen **nicht** durch den Renderer: was er tippt,
+  soll dastehen, wie er es getippt hat.
+
+Das Browser-Dashboard rendert weiterhin nichts; dort ist gar kein
+Markdown-Renderer eingebunden.
+
 ## System-Prompt-Komposition
 
 Reihenfolge im System-Prompt (siehe `_PROMPT_ORDER` in `core/ai.py`):

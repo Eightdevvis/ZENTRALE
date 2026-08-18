@@ -84,6 +84,54 @@ Status-Vokabular (Sashas Schnitt): `idee`, `priorisiert`, `queued`,
 ist, was ihm wirklich wichtig wäre, was für bald angestellt ist und was
 tatsächlich schon im Stundenplan steht.
 
+### Der Katalog-Eintrag steckt IM Dossier
+
+Ein Dossier **beginnt mit seinem Katalog-Eintrag**, und der Code trägt ihn
+von dort in den Katalog ein:
+
+```
+## Küche fertig bauen
+- katalog:   vorhaben
+- thema:     umzug, wohnung, küche, bad
+- equipment: -
+- aufwand:   gross
+- status:    in_schedule
+
+## Ziel
+Eine benutzbare Küche.
+```
+
+**Warum nicht zwei getrennte Artefakte:** weil zwei Dinge, die man synchron
+halten muss, auf Dauer immer auseinanderlaufen. Vorher war die Kopplung eine
+Anweisung im Prompt — und Anweisungen werden übergangen. Sasha hat gemeldet,
+dass beim Schreiben eines Dossiers nicht verlässlich ein Katalog-Eintrag
+auftauchte. Jetzt kann eine Wahrheit von sich selbst nicht abweichen.
+
+- `gedaechtnis.kopf_lesen(text)` parst den führenden Block. Kein Kopf →
+  nichts passiert; ein Dossier ohne Kopf ist erlaubt (Übersichts-Dossiers
+  über einen ganzen Bereich, etwa `training`, haben absichtlich keinen).
+- `gedaechtnis.katalog_abgleichen(name)` setzt `dossier:` **selbst** — nie
+  aus dem Text, denn genau dieser Teil ging bisher verloren — und
+  **upsertet** den Eintrag: ändert sich der Status im Dossier, wird der
+  Eintrag ersetzt statt gedoppelt.
+- `gedaechtnis.konsistenz()` meldet beide Waisen-Arten. Kein Prompt-Anteil.
+
+**Die Vorlagen** (`vorlagen/dossier.md`, `vorlagen/katalog.md`) sind
+gewöhnliche Dateien, über `read_note("vorlagen/dossier")` erreichbar und von
+Sasha änderbar; beim ersten Zugriff werden sie aus dem Code angelegt. Die
+Dossier-Vorlage **enthält die Katalog-Vorlage als Kopf** — die KI füllt eine
+Vorlage aus und muss an keine Kopplung denken.
+
+**Die Kollision, die dabei zu lösen war:** `dossier_notieren` hängte jeden
+Eintrag unter eine `## <Datum>`-Überschrift. Der Katalog-Kopf beginnt
+ebenfalls mit `##`. Wäre er da durchgelaufen, hätte `kopf_lesen` das Datum
+als Titel gelesen, keine Felder gefunden und **stillschweigend nichts**
+eingetragen — der schlimmste Fehlertyp, weil nichts kaputtgeht, sondern nur
+etwas ausbleibt. Unterschieden werden beide deshalb nicht am `##`, sondern
+an den **Feldzeilen darunter**: was keine hat, ist eine gewöhnliche Notiz
+und landet unter ihrem Datum. Das Fehlverhalten fällt damit auf die sichere
+Seite.
+
 ### Messreihen werden im DOSSIER verlinkt
 
 Bewusst nicht im Katalog-Eintrag. **Was nur als Idee notiert und morgen
@@ -142,6 +190,9 @@ gecachten Präfix und sind damit der billigere Handel.
 | `log_series(series, value)` | Messwert in eine bestehende Kurve | nein |
 | `create_series(name, typ, einheit)` | neue Kurve anlegen | **ja** |
 | `fetch_document(url, name)` | etwas aus dem Netz holen und ablegen | **ja** |
+
+`read_note` erreicht außerdem `sasha`, `ziele`, `hausregeln`, `tagebuch` und
+die Vorlagen (`vorlagen/dossier`, `vorlagen/katalog`).
 
 **`fetch_document` ist die Werkzeugkette, die Sasha wollte:** sie sucht das
 Modulhandbuch, zieht es, legt es richtig ab und kann es danach lesen — ohne
