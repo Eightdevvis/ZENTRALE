@@ -59,21 +59,22 @@ THEMES = {
               'acc': (65, 0), 'warn': (124, curses.A_BOLD), 'num': (26, 0),
               'ink': (16, 0), 'faint': (67, 0), 'bright': (16, curses.A_BOLD)},
 }
-THEME_FILE = os.path.expanduser('~/.config/zentrale/theme')
+# Gelesen wird das ERGEBNIS (day|night), nicht der Wunsch: aufgelöst wird an
+# genau einer Stelle im Projekt, in scripts/zentrale-themed. Vorher stand die
+# 05/21-Regel an acht Orten, jeder mit eigenem Timing — daran lag die Serie von
+# Theme-Glitches.
+THEME_FILE = os.environ.get('ZENTRALE_THEME_NOW') or os.path.expanduser(
+    '~/.config/zentrale/theme.now')
 
 
 def resolved_theme():
-    """day/night — exakt die Regel der TUI: Modus aus der Theme-Datei, 'auto'
-    heißt hell zwischen 05:00 und 21:00."""
-    mode = 'auto'
+    """day/night, so wie es der Theme-Dienst festgelegt hat."""
     try:
         with open(THEME_FILE, 'r', encoding='utf-8') as f:
-            mode = (f.read().strip() or 'auto')
+            wert = f.read().strip()
     except OSError:
-        pass
-    if mode in ('day', 'night'):
-        return mode
-    return 'day' if 5 <= int(time.strftime('%H')) < 21 else 'night'
+        return 'day'
+    return wert if wert in ('day', 'night') else 'day'
 
 
 class Screen:

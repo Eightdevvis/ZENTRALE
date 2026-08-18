@@ -39,27 +39,32 @@ UNITS="$HOME/.config/systemd/user"
 mkdir -p "$BIN" "$UNITS" "$HOME/.config/zentrale"
 
 # 1. Applier-Symlinks
-for a in zentrale-term-theme zentrale-browser-theme zentrale-desktop-theme \
-         zentrale-theme-watch; do
+for a in zentrale-themed zentrale-term-theme zentrale-browser-theme \
+         zentrale-desktop-theme zentrale-theme-watch; do
   ln -sf "$REPO/scripts/$a" "$BIN/$a"
   echo "symlink: $BIN/$a -> $REPO/scripts/$a"
 done
 
-# 2. Alte Unit-Namen abräumen (hießen bis 2026-07-25 …-term-theme.*), dann neu
-if systemctl --user list-unit-files 'zentrale-term-theme.*' 2>/dev/null | grep -q zentrale-term-theme; then
-  systemctl --user disable --now zentrale-term-theme.timer 2>/dev/null || true
-  rm -f "$UNITS/zentrale-term-theme.service" "$UNITS/zentrale-term-theme.timer"
-  echo "aufgeräumt: alte zentrale-term-theme-Units entfernt"
-fi
-for u in zentrale-theme.service zentrale-theme.timer; do
-  install -m 0644 "$REPO/deploy/$u" "$UNITS/$u"
-  echo "unit: $UNITS/$u"
+# 2. Alte Units abräumen. Bis 2026-07-25 hiessen sie …-term-theme.*; bis
+#    2026-08-18 gab es zentrale-theme.{service,timer}, einen Minuten-Timer, der
+#    jede Minute alle Applier anwarf. Den ersetzt jetzt EIN Dienst
+#    (zentrale-themed), der nur bei echten Wechseln laeuft.
+for alt in zentrale-term-theme zentrale-theme; do
+  if systemctl --user list-unit-files "$alt.*" 2>/dev/null | grep -q "$alt"; then
+    systemctl --user disable --now "$alt.timer" 2>/dev/null || true
+    systemctl --user disable --now "$alt.service" 2>/dev/null || true
+    rm -f "$UNITS/$alt.service" "$UNITS/$alt.timer"
+    echo "aufgeräumt: alte $alt-Units entfernt"
+  fi
 done
+install -m 0644 "$REPO/deploy/zentrale-themed.service" "$UNITS/zentrale-themed.service"
+echo "unit: $UNITS/zentrale-themed.service"
 
-# 3. Timer aktivieren
+# 3. Dienst aktivieren — er loest auf, schreibt theme.now und stoesst die
+#    Applier an. Alle anderen Teilnehmer lesen nur noch theme.now.
 systemctl --user daemon-reload
-systemctl --user enable --now zentrale-theme.timer
-echo "timer: $(systemctl --user is-active zentrale-theme.timer)"
+systemctl --user enable --now zentrale-themed.service
+echo "dienst: $(systemctl --user is-active zentrale-themed.service)"
 
 # 3b. Beobachter: protokolliert, WER die Theme-Datei aendert. Braucht
 #     inotifywait; ohne das Paket wird er einfach nicht aktiviert.
@@ -73,12 +78,12 @@ else
   echo "watch: uebersprungen (inotifywait fehlt, Paket inotify-tools)"
 fi
 
-# 4. State seeden + einmal anwenden
+# 4. Wunsch-Datei seeden (auto) und den Dienst einmal rechnen lassen. Die
+#    Applier ruft er selbst — hier stand frueher eine Liste, die man bei jedem
+#    neuen Applier mitpflegen musste.
 [ -f "$HOME/.config/zentrale/theme" ] || printf 'auto\n' > "$HOME/.config/zentrale/theme"
-"$BIN/zentrale-term-theme"    || true
-"$BIN/zentrale-browser-theme" || true
-"$BIN/zentrale-desktop-theme" || true
-echo "state: $(cat "$HOME/.config/zentrale/theme")  → angewendet"
+"$BIN/zentrale-themed" --once || true
+echo "state: wunsch=$(cat "$HOME/.config/zentrale/theme")  ergebnis=$(cat "$HOME/.config/zentrale/theme.now" 2>/dev/null)"
 
 # 5a. Icon-Themes bauen (Symlink-Overlay über Papirus, ein paar KB)
 if [ -d /usr/share/icons/Papirus-Dark ]; then

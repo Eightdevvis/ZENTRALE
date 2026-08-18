@@ -12,18 +12,20 @@
 # wenn die TUI gar nicht läuft). xfce4-terminal übernimmt xfconf-Farben live.
 set -u
 
-STATE="${ZENTRALE_THEME_FILE:-$HOME/.config/zentrale/theme}"
-
-mode="auto"
-[ -r "$STATE" ] && mode="$(tr -d '[:space:]' < "$STATE")"
-
-case "$mode" in
-  day|night) resolved="$mode" ;;
-  *)  # auto (Default bei fehlender/kaputter Datei)
-      h=$((10#$(date +%H)))          # 10# → keine Oktal-Falle bei 08/09
-      if [ "$h" -ge 5 ] && [ "$h" -lt 21 ]; then resolved="day"; else resolved="night"; fi
-      ;;
-esac
+# ── Die effektive Farbe kommt vom Dienst, wir rechnen NICHTS ──────────────
+# Aufgelöst wird an genau einer Stelle im Projekt: scripts/zentrale-themed
+# schreibt day|night nach theme.now. Vorher rechnete jeder Applier die
+# 05/21-Regel selbst — acht Kopien derselben zwei Zahlen, jede mit eigenem
+# Timing, und genau daran lag die Serie von Theme-Glitches.
+NOW="${ZENTRALE_THEME_NOW:-$HOME/.config/zentrale/theme.now}"
+resolved="$(tr -d '[:space:]' < "$NOW" 2>/dev/null)"
+if [ "$resolved" != "day" ] && [ "$resolved" != "night" ]; then
+  # Datei fehlt (Dienst lief noch nie) → ihn EINMAL rechnen lassen, statt hier
+  # eine zweite Auflösung aufzumachen. Erst wenn auch das nichts hergibt, hell.
+  zentrale-themed --once >/dev/null 2>&1 || true
+  resolved="$(tr -d '[:space:]' < "$NOW" 2>/dev/null)"
+  [ "$resolved" = "day" ] || [ "$resolved" = "night" ] || resolved="day"
+fi
 
 # — Farbpaletten ————————————————————————————————————————————————
 # Seit 2026-07-25 NICHT mehr Solarized, sondern dieselben zwei Welten wie in

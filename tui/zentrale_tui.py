@@ -1492,70 +1492,32 @@ def run_ui(stdscr, store):
         return _theme.mode()
 
     def set_theme_mode(neu, quelle="tui"):
-        """Modus setzen = Datei schreiben; danach die Applier einplanen."""
-        if _theme.set(neu, quelle):
-            _env_due[0] = time.time() + ENV_DEBOUNCE
+        """Modus setzen = WUNSCH-Datei schreiben. Mehr ist hier nicht zu tun.
+
+        Das Auflösen und das Anstoßen der Applier macht `zentrale-themed`: der
+        Dienst hängt per inotify an der Datei und ist schneller da, als die
+        TUI ihren nächsten Bildaufbau schafft.
+        """
+        _theme.set(neu, quelle)
 
     def cycle_theme():
         """Taste 't' bzw. '/theme' ohne Argument: auto → day → night → auto."""
-        if _theme.cycle():
-            _env_due[0] = time.time() + ENV_DEBOUNCE
+        _theme.cycle()
 
     def resolved_theme():
-        """Modus → sichtbare Farbe. auto löst nach der Uhrzeit auf."""
+        """Die geltende Farbe — kommt aus theme.now, also vom Dienst."""
         return _theme.resolved()
 
     cur_theme = resolved_theme()
     apply_theme(cur_theme)
 
-    # Die UMGEBUNG an dieses Theme koppeln: bei jedem Moduswechsel den Modus
-    # (auto/day/night) nach ~/.config/zentrale/theme schreiben und die Applier
-    # anstoßen — Terminal (xfconf), Browser (Portal-Farbschema; Brave zieht als
-    # Flatpak live nach) und Desktop (GTK-/Rahmen-Theme, was Brave mit "Use GTK"
-    # als Oberflächenfarbe übernimmt). **nvim braucht keinen Anstoß**: es beobachtet die
-    # Datei selbst (fs_event + eigener Tick), siehe nvim/lua/zentrale_theme.
-    # Ein systemd-User-Timer zieht dieselbe Datei zusätzlich jede Minute nach
-    # (fängt die 05/21-Rotation, auch wenn die TUI gerade nicht läuft).
-    #
-    # ZWEI Bremsen sind hier bewusst eingebaut, weil das Umfärben der ganzen
-    # XFCE-Sitzung (GTK-, Fenster- UND Icon-Theme) teuer ist — jede GTK-App lädt
-    # dabei ihre Icons neu, das ruckelt sichtbar:
-    #   1. Die Applier laufen nur, wenn sich das AUFGELÖSTE Theme (hell/dunkel)
-    #      wirklich ändert. `t` zykliert auto→day→night→auto; zwei dieser drei
-    #      Schritte lassen die Farbe gleich (z.B. auto(night)→night) und haben
-    #      früher trotzdem den ganzen Desktop umgefärbt.
-    #   2. Danach wird um ENV_DEBOUNCE verzögert: wer dreimal schnell `t`
-    #      drückt, löst EINEN Umbau aus statt drei.
-    # Die Datei selbst wird sofort geschrieben (nvim & der systemd-Timer lesen
-    # den MODUS, nicht die Farbe) — sie ist billig.
-    _last_env_theme = [None]      # zuletzt an die Umgebung gemeldetes day/night
-    _env_due = [0.0]              # >0: Applier stehen aus (Zeitstempel)
-    ENV_DEBOUNCE = 0.5
-    # bat ist mit dabei, obwohl es nichts „umfärbt": es liest seine Config bei
-    # jedem Aufruf neu, und ohne diesen Anstoß zöge es erst beim nächsten
-    # Minuten-Tick des systemd-Timers nach (bis zu 60 s Verzug).
-    _THEME_APPLIERS = ("zentrale-term-theme", "zentrale-browser-theme",
-                       "zentrale-desktop-theme", "zentrale-bat-theme")
-    def _run_appliers(resolved):
-        """Die teuren Umgebungs-Applier anstoßen — gebremst (siehe oben)."""
-        if not _env_due[0] or time.time() < _env_due[0]:
-            return
-        _env_due[0] = 0.0
-        if resolved is not None and resolved == _last_env_theme[0]:
-            return                 # Farbe unverändert → Desktop nicht anfassen
-        _last_env_theme[0] = resolved
-        # Applier best-effort im Hintergrund; brauchen DISPLAY (xfconf bzw.
-        # die Session-Bus-Verbindung zum Portal). Ein fehlender Applier
-        # (nicht installiert) darf die TUI nicht stören → je einzeln gekapselt.
-        if os.environ.get("DISPLAY"):
-            for applier in _THEME_APPLIERS:
-                try:
-                    subprocess.Popen(
-                        [applier],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                    )
-                except OSError:
-                    pass
+    # Die UMGEBUNG hängt NICHT mehr an der TUI: `zentrale-themed` beobachtet
+    # die Wunsch-Datei, löst sie auf, schreibt theme.now und stößt Terminal,
+    # Browser, Desktop und bat an. Die TUI schreibt nur den Wunsch — sie ist ein
+    # Teilnehmer wie nvim, kein Verteiler. Das spart hier den ganzen früheren
+    # Apparat aus Applier-Liste, Debounce-Timer und „zuletzt gemeldete Farbe";
+    # die beiden Bremsen (nur bei echtem Farbwechsel, und Sammeln schneller
+    # Tastendrücke) sitzen jetzt im Dienst, an einer Stelle für alle.
 
     # Beim Start NICHTS schreiben: die Datei steht schon, wir folgen ihr nur.
     # (Früher schrieb die TUI hier ihren hart auf "auto" gesetzten Startwert und
@@ -7960,17 +7922,13 @@ def run_ui(stdscr, store):
             # hier kein eigener Zweig mehr.
         # KEY_RESIZE oder Timeout → einfach neu zeichnen
 
-        # Farbe nachziehen. resolved_theme() liest den Modus aus der Datei —
-        # damit ist hier BEIDES abgedeckt, ohne Fallunterscheidung: die
-        # 05/21-Rotation im auto-Modus UND eine Änderung durch irgendwen sonst.
-        # Es gibt nichts mehr zu vergleichen oder zurückzuziehen; wer den Modus
-        # ändert, ändert die Datei, und die lesen wir einfach.
+        # Farbe nachziehen: ein Wort aus theme.now. Damit ist hier ALLES
+        # abgedeckt, ohne Fallunterscheidung — die Uhr-Rotation, ein 't' hier
+        # und eine Änderung durch irgendwen sonst sehen für uns gleich aus.
         want = resolved_theme()
         if want != cur_theme:
             cur_theme = want
             apply_theme(cur_theme)
-        # Die teuren Umgebungs-Applier laufen entkoppelt und gebremst.
-        _run_appliers(cur_theme)
 
         # Weiche Kamerafahrt zum fokussierten Land (eine Ease-Stufe pro Frame).
         if M["active"] and M.get("anim"):

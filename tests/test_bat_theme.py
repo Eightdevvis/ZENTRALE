@@ -179,7 +179,7 @@ def test_alles_ist_auf_der_terminalflaeche_lesbar(mode, fname, pal_key):
 
 # ── Der Applier ───────────────────────────────────────────────────────────
 def _run(args, theme_file, bat_cfg):
-    env = dict(os.environ, ZENTRALE_THEME_FILE=str(theme_file),
+    env = dict(os.environ, ZENTRALE_THEME_NOW=str(theme_file),
                ZENTRALE_BAT_CONFIG=str(bat_cfg))
     return subprocess.run(["bash", APPLIER] + args, capture_output=True,
                           text=True, env=env, timeout=30)

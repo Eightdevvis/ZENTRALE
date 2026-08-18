@@ -4,8 +4,8 @@ nvim-Theme-Kopplung (nvim/lua/zentrale_theme/, siehe memory/system/dashboard.md)
 Getestet wird gegen ein ECHTES nvim (headless, eigene Wegwerf-Theme-Datei —
 Sashas ~/.config/zentrale/theme wird nie angefasst):
 
-  * auflösen: day → zentrale-paper, night → zentrale-cyber, auto → nach Uhrzeit
-    (dieselbe 05/21-Regel wie TUI, monolith.html und der Bash-Applier)
+  * die ERGEBNIS-Datei day/night → zentrale-paper/-cyber. nvim löst NICHTS
+    mehr selbst auf; die 05/21-Regel gehört scripts/zentrale-themed allein
   * LIVE-Umschalten: ein SCHON LAUFENDES nvim zieht nach, wenn sich die Datei
     ändert — das ist der ganze Zweck der Übung (nvims eigene OSC-11-Erkennung
     läuft nur beim Start)
@@ -37,7 +37,7 @@ def _probe(theme_file, expr):
         'local t = require("zentrale_theme"); t.setup(); '
         "io.write(vim.json.encode(%s))" % expr
     )
-    env = dict(os.environ, ZENTRALE_THEME_FILE=str(theme_file))
+    env = dict(os.environ, ZENTRALE_THEME_NOW=str(theme_file))
     out = subprocess.run(
         [NVIM, "--headless", "-u", "NONE", "--cmd", "set rtp+=%s" % RTP,
          "-c", "lua " + lua, "-c", "q"],
@@ -52,8 +52,9 @@ def _write(path, mode):
 
 @pytest.fixture
 def theme_file(tmp_path):
-    f = tmp_path / "theme"
-    _write(f, "auto")
+    """Die ERGEBNIS-Datei (day|night), die der Theme-Dienst schreibt."""
+    f = tmp_path / "theme.now"
+    _write(f, "day")
     return f
 
 
@@ -68,18 +69,32 @@ def test_mode_selects_scheme(theme_file, mode, scheme, bg):
     assert got == [mode, scheme, bg]
 
 
-def test_auto_follows_clock(theme_file):
-    _write(theme_file, "auto")
-    expected = "day" if 5 <= time.localtime().tm_hour < 21 else "night"
-    assert _probe(theme_file, "t.current") == expected
+def test_nvim_rechnet_die_uhrzeit_nicht_mehr_selbst(theme_file):
+    """Die 05/21-Regel gehoert dem Dienst, nicht dem Plugin.
+
+    Frueher stand sie an acht Stellen im Projekt, jede mit eigenem Timing —
+    genau daran lag die Serie von Theme-Glitches. Hier festgehalten: in der
+    Ergebnis-Datei steht night, also ist nvim night. Egal wie spaet es ist.
+    """
+    _write(theme_file, "night")
+    assert _probe(theme_file, "t.current") == "night"
+    _write(theme_file, "day")
+    assert _probe(theme_file, "t.current") == "day"
 
 
-def test_missing_file_is_auto_not_crash(tmp_path):
+def test_kein_uhrzeit_code_mehr_in_der_quelle():
+    """Doppelt genaeht: die Regel darf im Plugin gar nicht mehr vorkommen."""
+    quelle = open(os.path.join(RTP, "lua", "zentrale_theme", "init.lua")).read()
+    assert "os.date" not in quelle, "nvim wertet wieder selbst die Uhr aus"
+
+
+def test_missing_file_is_kein_crash(tmp_path):
+    """Ohne Ergebnis-Datei (Dienst lief nie) faellt nvim auf hell zurueck."""
     missing = tmp_path / "gibt-es-nicht"
     assert _probe(missing, "t.current") in ("day", "night")
 
 
-def test_garbage_file_is_auto_not_crash(theme_file):
+def test_garbage_file_is_kein_crash(theme_file):
     _write(theme_file, "voelliger-muell")
     assert _probe(theme_file, "t.current") in ("day", "night")
 
@@ -89,7 +104,7 @@ def test_running_nvim_follows_file_change(theme_file, tmp_path):
     """nvim läuft, DANN kippt das Theme — der fs_event-Watcher muss greifen."""
     sock = str(tmp_path / "nvim.sock")
     _write(theme_file, "night")
-    env = dict(os.environ, ZENTRALE_THEME_FILE=str(theme_file))
+    env = dict(os.environ, ZENTRALE_THEME_NOW=str(theme_file))
     proc = subprocess.Popen(
         [NVIM, "--headless", "--listen", sock, "-u", "NONE",
          "--cmd", "set rtp+=%s" % RTP,
@@ -137,7 +152,7 @@ def test_timer_catches_change_without_watcher(tmp_path):
     """
     sock = str(tmp_path / "nvim.sock")
     later = tmp_path / "spaeter"                  # existiert noch nicht
-    env = dict(os.environ, ZENTRALE_THEME_FILE=str(later))
+    env = dict(os.environ, ZENTRALE_THEME_NOW=str(later))
     proc = subprocess.Popen(
         [NVIM, "--headless", "--listen", sock, "-u", "NONE",
          "--cmd", "set rtp+=%s" % RTP,
@@ -181,7 +196,7 @@ def test_survives_foreign_background_change(theme_file, tmp_path):
     """
     sock = str(tmp_path / "nvim.sock")
     _write(theme_file, "night")
-    env = dict(os.environ, ZENTRALE_THEME_FILE=str(theme_file))
+    env = dict(os.environ, ZENTRALE_THEME_NOW=str(theme_file))
     proc = subprocess.Popen(
         [NVIM, "--headless", "--listen", sock, "-u", "NONE",
          "--cmd", "set rtp+=%s" % RTP,
@@ -241,7 +256,7 @@ def test_disarms_nvims_own_background_detection(theme_file):
         'event = "TermResponse"})) do table.insert(left, c.desc) end; '
         'io.write(vim.json.encode({killed, left}))'
     )
-    env = dict(os.environ, ZENTRALE_THEME_FILE=str(theme_file))
+    env = dict(os.environ, ZENTRALE_THEME_NOW=str(theme_file))
     out = subprocess.run(
         [NVIM, "--headless", "-u", "NONE", "--cmd", "set rtp+=%s" % RTP,
          "-c", "lua " + lua, "-c", "q"],
@@ -266,7 +281,7 @@ def test_empty_file_keeps_mode(theme_file, tmp_path):
     die Uhrzeit fallen und beim nächsten Event zurückspringen, also ein
     sichtbarer Fehl-Flip pro Moduswechsel.
     """
-    # night gesetzt, dann geleert: der Modus muss night bleiben, egal wie spät.
+    # night gesetzt, dann geleert: der Stand muss night bleiben.
     _write(theme_file, "night")
     got = _probe(theme_file, (
         '(function() local t = require("zentrale_theme")'
@@ -281,7 +296,7 @@ def test_session_override_ignores_file(theme_file):
     lua = ('local t = require("zentrale_theme"); t.setup(); '
            'vim.cmd("ZentraleTheme night"); '
            'io.write(vim.json.encode({t.current, t.override}))')
-    env = dict(os.environ, ZENTRALE_THEME_FILE=str(theme_file))
+    env = dict(os.environ, ZENTRALE_THEME_NOW=str(theme_file))
     out = subprocess.run(
         [NVIM, "--headless", "-u", "NONE", "--cmd", "set rtp+=%s" % RTP,
          "-c", "lua " + lua, "-c", "q"],
@@ -337,7 +352,7 @@ def test_no_color_hint_outside_tmux(theme_file):
     absichtlich nur auf Abruf: eine mehrzeilige Startmeldung erzeugt in nvim
     einen "Press ENTER"-Prompt, den man bei JEDEM Öffnen wegklicken müsste.
     """
-    env = dict(os.environ, ZENTRALE_THEME_FILE=str(theme_file))
+    env = dict(os.environ, ZENTRALE_THEME_NOW=str(theme_file))
     env.pop("TMUX", None)
     out = subprocess.run(
         [NVIM, "--headless", "-u", "NONE", "--cmd", "set rtp+=%s" % RTP,
@@ -353,7 +368,7 @@ def test_no_color_hint_outside_tmux(theme_file):
 
 def test_health_check_runs(theme_file):
     ":checkhealth zentrale_theme darf nicht selbst kaputtgehen."
-    env = dict(os.environ, ZENTRALE_THEME_FILE=str(theme_file))
+    env = dict(os.environ, ZENTRALE_THEME_NOW=str(theme_file))
     r = subprocess.run(
         [NVIM, "--headless", "-u", "NORC", "--cmd", "set rtp+=%s" % RTP,
          "-c", 'lua require("zentrale_theme").setup()',

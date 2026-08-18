@@ -1,0 +1,17 @@
+[Unit]
+Description=ZENTRALE: Tag/Nacht-Theme aufloesen und verteilen
+After=graphical-session.target
+
+[Service]
+# Dauerlaeufer statt Minuten-Timer. Er wartet auf zwei Dinge und schlaeft
+# dazwischen: eine Aenderung des Wunsches (inotify) und den naechsten Zeitpunkt,
+# an dem die Uhr das Ergebnis kippt (05:00 / 21:00). Zwischen den Grenzen gibt
+# es nichts zu tun — der fruehere Timer sah jede Minute nach, obwohl sich
+# hoechstens zweimal am Tag etwas aendert.
+Type=simple
+ExecStart=%h/.local/bin/zentrale-themed
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

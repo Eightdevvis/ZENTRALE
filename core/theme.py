@@ -112,8 +112,19 @@ class ThemeState:
         return self._mode
 
     def resolved(self, stunde=None):
-        """Sichtbare Farbe zum aktuellen Modus ("day"/"night")."""
-        return resolve(self.mode(), stunde)
+        """Die GELTENDE Farbe ("day"/"night").
+
+        Kommt aus theme.now, also von `scripts/zentrale-themed` — der einzigen
+        Stelle, die `auto` auflöst. Nur wenn es die Datei noch nicht gibt (der
+        Dienst lief nie), rechnen wir selbst, damit eine frische Installation
+        nicht im Dunkeln steht; `stunde` erzwingt das für Tests.
+        """
+        if stunde is not None:
+            return resolve(self.mode(), stunde)
+        jetzt = read_now(default=None)
+        if jetzt is not None:
+            return jetzt
+        return resolve(self.mode())
 
     # ── schreiben ────────────────────────────────────────────────────────
     def set(self, neu, quelle="tui"):
@@ -165,3 +176,123 @@ class ThemeState:
                          % (time.strftime("%F %T"), quelle, alt, neu))
         except OSError:
             pass
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Der Dienst: EINE Stelle löst auf, alle anderen lesen nur noch das Ergebnis
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Vorher rechnete JEDER Teilnehmer die 05/21-Regel selbst: die vier Bash-
+# Applier, dieses Modul, nvims Lua, der Morgen-Messenger, das Tutor-Zimmer —
+# acht Implementierungen derselben zwei Zahlen, jede mit eigenem Timing (mal
+# ein Minuten-Timer, mal ein 60-s-Tick, mal beim nächsten Bildaufbau). Deshalb
+# lief immer wieder irgendein Teilnehmer für eine Weile gegen den Rest, und
+# jede Reparatur betraf nur die Stelle, an der es gerade auffiel.
+#
+# Jetzt gibt es ZWEI Dateien mit klaren Rollen:
+#
+#   ~/.config/zentrale/theme      WUNSCH    auto | day | night   ← ZENTRALE schreibt
+#   ~/.config/zentrale/theme.now  ERGEBNIS  day | night          ← der Dienst schreibt
+#
+# Der Dienst (`scripts/zentrale-themed`) ist der einzige, der `auto` auflöst.
+# Er wartet auf zwei Dinge: eine Änderung des Wunsches (inotify) und den
+# nächsten Zeitpunkt, an dem die Uhr das Ergebnis kippt — und schläft bis
+# dahin, statt jede Minute nachzusehen. Ändert sich das Ergebnis, schreibt er
+# theme.now und stößt die Applier an.
+#
+# Alle Konsumenten lesen nur noch theme.now. Sie brauchen keine Uhr, keinen
+# Timer und keine Fallunterscheidung mehr — nur ein Wort aus einer Datei.
+
+def now_file():
+    """Pfad der Ergebnis-Datei (day|night). ZENTRALE_THEME_NOW sticht."""
+    override = os.environ.get("ZENTRALE_THEME_NOW")
+    if override:
+        return override
+    return theme_file() + ".now"
+
+
+def read_now(default="day"):
+    """Die effektive Farbe lesen — das ist ALLES, was ein Konsument tun muss.
+
+    Fehlt die Datei (Dienst läuft noch nicht), fällt der Aufrufer auf `default`
+    zurück statt selbst die Uhrzeit zu befragen: eine zweite Auflösung wäre
+    genau die Doppelung, die hier abgeschafft wird.
+    """
+    try:
+        with open(now_file()) as fh:
+            wert = fh.read().strip()
+    except OSError:
+        return default
+    return wert if wert in ("day", "night") else default
+
+
+def naechster_wechsel(jetzt=None):
+    """Sekunden bis zum nächsten uhrzeitbedingten Wechsel (im auto-Modus).
+
+    Nur an den beiden Grenzen kippt die Farbe; dazwischen gibt es nichts zu
+    tun. Der Dienst schläft deshalb genau bis dahin, statt zu pollen. Es wird
+    immer mindestens eine Sekunde zurückgegeben, damit ein Rundungsfehler
+    genau auf der Grenze keine enge Schleife auslöst.
+    """
+    jetzt = jetzt or time.localtime()
+    sek_heute = jetzt.tm_hour * 3600 + jetzt.tm_min * 60 + jetzt.tm_sec
+    for grenze in (TAG_START * 3600, TAG_ENDE * 3600):
+        if sek_heute < grenze:
+            return grenze - sek_heute
+    return 24 * 3600 - sek_heute + TAG_START * 3600      # morgen früh
+
+
+class ThemeDaemon:
+    """Löst den Wunsch auf, schreibt das Ergebnis, stößt die Applier an.
+
+    Bewusst ohne eigenen Zustand über die Dateien hinaus: was gilt, steht in
+    theme.now; was gewünscht ist, in theme. Ein Neustart des Dienstes ändert
+    nichts, ein zweiter Dienst ebenso wenig (er schriebe dasselbe).
+    """
+
+    def __init__(self, state=None, appliers=None, runner=None):
+        self.state = state or ThemeState()
+        self.appliers = appliers if appliers is not None else APPLIERS
+        # runner injizierbar, damit Tests keine echten Prozesse starten
+        self.runner = runner or _start_applier
+
+    def effektiv(self, stunde=None):
+        """Was JETZT gelten soll — die eine Auflösung im ganzen Projekt."""
+        return resolve(self.state.mode(), stunde)
+
+    def tick(self, stunde=None):
+        """Einmal abgleichen. → die effektive Farbe, oder None ohne Änderung."""
+        soll = self.effektiv(stunde)
+        if soll == read_now(default=None):
+            return None
+        self._schreibe(soll)
+        for applier in self.appliers:
+            self.runner(applier)
+        return soll
+
+    def _schreibe(self, farbe):
+        pfad = now_file()
+        try:
+            os.makedirs(os.path.dirname(pfad), exist_ok=True)
+            tmp = pfad + ".tmp"          # atomar, wie überall (siehe set())
+            with open(tmp, "w") as fh:
+                fh.write(farbe + "\n")
+            os.replace(tmp, pfad)
+        except OSError:
+            pass
+
+
+#: Die Applier, die nach einer Änderung angestoßen werden. bat ist dabei,
+#: obwohl es nichts umfärbt: es liest seine Config bei jedem Aufruf neu.
+APPLIERS = ("zentrale-term-theme", "zentrale-browser-theme",
+            "zentrale-desktop-theme", "zentrale-bat-theme")
+
+
+def _start_applier(name):
+    """Applier best-effort im Hintergrund starten (fehlt einer: egal)."""
+    import subprocess
+    try:
+        subprocess.Popen([name], stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
+    except OSError:
+        pass

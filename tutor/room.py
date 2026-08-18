@@ -97,17 +97,18 @@ def apply_theme(mode):
 
 
 def resolve_theme_mode():
-    """ZENTRALE-Theme lesen (~/.config/zentrale/theme: auto|day|night) und auf
-    day/night auflösen (auto → day 5–21 Uhr, sonst night). Fehlt die Datei → night."""
+    """Die geltende Farbe (day|night) aus ~/.config/zentrale/theme.now.
+
+    Aufgelöst wird an genau einer Stelle im Projekt, in scripts/zentrale-themed;
+    hier steht deshalb bewusst kein Uhrzeit-Code. Fehlt die Datei → night."""
     try:
-        import time as _t
-        with open(os.path.expanduser('~/.config/zentrale/theme')) as fh:
-            mode = fh.read().strip().lower()
+        pfad = os.environ.get('ZENTRALE_THEME_NOW') or os.path.expanduser(
+            '~/.config/zentrale/theme.now')
+        with open(pfad) as fh:
+            wert = fh.read().strip().lower()
     except Exception:
-        mode = 'night'
-    if mode == 'auto':
-        return 'day' if 5 <= int(_t.strftime('%H')) < 21 else 'night'
-    return 'day' if mode == 'day' else 'night'
+        return 'night'
+    return 'day' if wert == 'day' else 'night'
 
 
 apply_theme('night')   # Default, bis der echte Modus gelesen ist

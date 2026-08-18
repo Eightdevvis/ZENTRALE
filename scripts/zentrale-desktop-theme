@@ -45,14 +45,25 @@ ICON_NIGHT="${ZENTRALE_ICON_NIGHT:-ZENTRALE-Cyber}"
 ICON_DAY_FALLBACK="Papirus-Light"
 ICON_NIGHT_FALLBACK="Papirus-Dark"
 
+NOW="${ZENTRALE_THEME_NOW:-$HOME/.config/zentrale/theme.now}"
+
+# ── Die effektive Farbe kommt vom Dienst, wir rechnen NICHTS ──────────────
+# Aufgelöst wird an genau einer Stelle im Projekt: scripts/zentrale-themed
+# schreibt day|night nach theme.now. Vorher rechnete jeder Applier die
+# 05/21-Regel selbst — acht Kopien derselben zwei Zahlen, jede mit eigenem
+# Timing, und genau daran lag die Serie von Theme-Glitches.
 resolve() {
-  local mode="auto"
-  [ -r "$STATE" ] && mode="$(tr -d '[:space:]' < "$STATE")"
-  case "$mode" in
-    day|night) printf '%s\n' "$mode" ;;
-    *)  h=$((10#$(date +%H)))          # 10# → keine Oktal-Falle bei 08/09
-        if [ "$h" -ge 5 ] && [ "$h" -lt 21 ]; then printf 'day\n'; else printf 'night\n'; fi ;;
-  esac
+  local r
+  r="$(tr -d '[:space:]' < "$NOW" 2>/dev/null)"
+  if [ "$r" != "day" ] && [ "$r" != "night" ]; then
+    # Datei fehlt (Dienst lief noch nie) → ihn EINMAL rechnen lassen, statt
+    # hier eine zweite Auflösung aufzumachen.
+    zentrale-themed --once >/dev/null 2>&1 || true
+    r="$(tr -d '[:space:]' < "$NOW" 2>/dev/null)"
+    [ "$r" = "day" ] || [ "$r" = "night" ] || r="day"
+  fi
+  printf '%s
+' "$r"
 }
 
 RESOLVED="$(resolve)"

@@ -1,23 +1,30 @@
 -- zentrale_theme — koppelt nvim an ZENTRALEs Tag/Nacht-Theme.
 --
--- Quelle der Wahrheit ist DIESELBE Datei wie beim Terminal:
---   ~/.config/zentrale/theme  (ein Wort: auto | day | night)
---     auto  → nach Uhrzeit (05–21 Uhr hell, sonst dunkel) — identisch zu
---             tui/zentrale_tui.py resolved_theme(), monolith.html computeTheme()
---             und scripts/zentrale-term-theme.
+-- Gelesen wird die ERGEBNIS-Datei, nicht der Wunsch:
+--   ~/.config/zentrale/theme.now   (ein Wort: day | night)
 --     day   → zentrale-paper  (Papier, pflanzliche Akzente)
 --     night → zentrale-cyber  (echtes Schwarz, Neon)
+--
+-- Aufgelöst wird an genau EINER Stelle im Projekt: `scripts/zentrale-themed`
+-- nimmt den Wunsch (auto|day|night) aus ~/.config/zentrale/theme, wendet die
+-- 05/21-Regel an und schreibt das Ergebnis nach theme.now. Vorher rechnete
+-- jeder Teilnehmer selbst — vier Bash-Applier, die TUI, dieses Plugin, der
+-- Morgen-Messenger, das Tutor-Zimmer —, jeder mit eigenem Timing. Genau daran
+-- lag die Serie von Theme-Glitches: irgendwer lief für eine Weile gegen den
+-- Rest, und jede Reparatur betraf nur die Stelle, an der es gerade auffiel.
+-- Hier steht deshalb bewusst KEIN Uhrzeit-Code mehr.
 --
 -- Warum überhaupt etwas tun, wo nvim doch selbst den Terminal-Hintergrund
 -- abfragt? nvim fragt per OSC 11 nur EINMAL beim Start. Ein SCHON LAUFENDES
 -- nvim erfährt nichts davon, wenn ZENTRALE das Terminal live umfärbt — genau
 -- diese Lücke schließt das hier. Zwei Wege, absichtlich redundant:
---   1. fs_event-Watcher auf der Theme-Datei → schaltet sofort um (die TUI
---      schreibt bei jedem 't' in die Datei).
---   2. Timer alle 60 s → fängt die 05/21-Rotation im auto-Modus, bei der sich
---      der DATEIINHALT gar nicht ändert (dieselbe Rolle wie der systemd-Timer
---      zentrale-term-theme.timer fürs Terminal).
--- Beides ist ein No-Op, solange der aufgelöste Modus derselbe bleibt.
+--   1. fs_event-Watcher auf theme.now → schaltet sofort um.
+--   2. Timer alle 60 s → reines Netz, falls der Watcher stirbt (etwa weil die
+--      Datei per rename ersetzt wurde und das Neu-Bewaffnen scheiterte). Seit
+--      der Dienst die Datei bei JEDEM Wechsel neu schreibt, ist das der
+--      einzige Zweck des Ticks — die Uhr fängt er nicht mehr, das tut der
+--      Dienst.
+-- Beides ist ein No-Op, solange die Farbe dieselbe bleibt.
 --
 -- Wird per ~/.config/nvim/plugin/zentrale_theme.lua eingehängt (schreibt
 -- scripts/install_nvim_theme.sh) — Sashas init.lua bleibt unangetastet.
@@ -33,35 +40,42 @@ M._applying = false    -- Rekursions-Schutz (siehe apply())
 M._file = nil          -- Pfad der Theme-Datei (in setup() gesetzt)
 M._pending = false     -- fs_event-Aufschub läuft (siehe _watch())
 
---- Pfad der Theme-Datei. ZENTRALE_THEME_FILE sticht (wie im Bash-Applier).
+--- Pfad der ERGEBNIS-Datei (day|night). ZENTRALE_THEME_NOW sticht.
+---
+--- Wir lesen NICHT mehr den Wunsch (auto|day|night) und rechnen ihn selbst
+--- aus, sondern nur noch das Ergebnis, das `scripts/zentrale-themed` schreibt.
+--- Die 05/21-Regel stand vorher an acht Stellen im Projekt — vier Bash-Applier,
+--- Python, hier in Lua, im Morgen-Messenger und im Tutor-Zimmer —, jede mit
+--- eigenem Timing. Genau daran lag die Serie von Theme-Glitches: irgendein
+--- Teilnehmer lief für eine Weile gegen den Rest.
 function M.theme_file()
   return M._file
-    or vim.env.ZENTRALE_THEME_FILE
-    or (vim.env.HOME .. "/.config/zentrale/theme")
+    or vim.env.ZENTRALE_THEME_NOW
+    or ((vim.env.ZENTRALE_THEME_FILE and (vim.env.ZENTRALE_THEME_FILE .. ".now"))
+        or (vim.env.HOME .. "/.config/zentrale/theme.now"))
 end
 
---- Modus aus der Datei lesen und auflösen → "day" | "night".
---- Fehlende/kaputte Datei = auto (wie überall sonst im Projekt).
+--- Die geltende Farbe lesen → "day" | "night".
+---
+--- Kein Uhrzeit-Code mehr: in der Datei steht bereits das Ergebnis. Bleibt nur
+--- der Wettlauf beim Schreiben: wer sie per truncate+write ersetzt, ist
+--- zwischen beiden Schritten kurz bei null Bytes — und genau da feuert unser
+--- fs_event. Deshalb bei leerem Inhalt den aktuellen Stand behalten und auf
+--- das Event nach dem write warten. (Der Dienst schreibt atomar per rename,
+--- dieses Fenster entsteht also durch ihn gar nicht erst.)
 function M.resolve()
   if M.override then return M.override end
-  local mode = "auto"
   local fh = io.open(M.theme_file(), "r")
   if fh then
     local raw = fh:read("l") or ""
     fh:close()
     raw = raw:gsub("%s", "")
-    -- LEERE Datei ist kein Zustand, sondern ein Wettlauf: wer die Datei per
-    -- truncate+write neu schreibt, ist zwischen den beiden Schritten kurz bei
-    -- null Bytes — und genau da feuert unser fs_event. Das als "auto" zu lesen
-    -- hieß: auf die Uhrzeit fallen, evtl. umschalten und beim Folge-Event
-    -- zurückschalten — ein sichtbarer Fehl-Flip pro Moduswechsel. Also nichts
-    -- tun und auf das Event nach dem write warten.
+    if raw == "day" or raw == "night" then return raw end
     if raw == "" and M.current then return M.current end
-    if raw == "day" or raw == "night" or raw == "auto" then mode = raw end
   end
-  if mode ~= "auto" then return mode end
-  local h = tonumber(os.date("%H")) or 12
-  return (h >= 5 and h < 21) and "day" or "night"
+  -- Datei fehlt oder ist Müll: den aktuellen Stand halten, sonst hell. NICHT
+  -- die Uhrzeit befragen — das wäre wieder eine zweite Auflösung.
+  return M.current or "day"
 end
 
 --- Palette anwenden. Kein :colorscheme-Umweg — wir setzen die Gruppen direkt,

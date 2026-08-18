@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+"""
+zentrale-themed — DER Dienst, der ZENTRALEs Tag/Nacht-Theme auflöst.
+
+Es gibt genau zwei Dateien mit klaren Rollen:
+
+    ~/.config/zentrale/theme      WUNSCH    auto | day | night   ← ZENTRALE schreibt
+    ~/.config/zentrale/theme.now  ERGEBNIS  day | night          ← dieser Dienst schreibt
+
+Dieser Dienst ist die EINZIGE Stelle im Projekt, die `auto` nach der Uhrzeit
+auflöst. Alle anderen — Terminal, Browser, Desktop, bat, nvim, TUI, Messenger,
+Tutor-Zimmer — lesen nur noch ein Wort aus theme.now. Sie brauchen keine Uhr,
+keinen eigenen Timer und keine Fallunterscheidung mehr.
+
+Vorher rechneten acht Stellen dieselbe 05/21-Regel selbst, jede mit eigenem
+Timing. Genau daran lag die Serie von Theme-Glitches: irgendein Teilnehmer lief
+für eine Weile gegen den Rest, und jede Reparatur betraf nur die Stelle, an der
+es gerade auffiel.
+
+Er wartet auf zwei Dinge und schläft dazwischen:
+  * eine Änderung des Wunsches (inotify auf dem Verzeichnis — die Datei wird
+    atomar per rename ersetzt, ein Watch auf ihr säße danach auf totem inode)
+  * den nächsten Zeitpunkt, an dem die Uhr das Ergebnis kippt (05:00 / 21:00)
+Kein Polling im Minutentakt: zwischen den Grenzen gibt es nichts zu tun.
+
+Aufrufe:
+  zentrale-themed            Dienst (systemd: zentrale-themed.service)
+  zentrale-themed --once     einmal abgleichen und raus (für Skripte/Tests)
+  zentrale-themed --status   Wunsch, Ergebnis und nächster Wechsel
+"""
+import argparse
+import os
+import subprocess
+import sys
+import time
+
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "core"))
+import theme as T  # noqa: E402
+
+
+DEBOUNCE = 0.4          # Sekunden sammeln, bevor der teure Umbau laeuft
+
+
+def warte(sekunden, verzeichnis):
+    """Bis zu `sekunden` warten — oder kürzer, wenn sich etwas ändert.
+
+    → True, wenn uns eine Datei-Änderung geweckt hat; False bei Zeitablauf.
+
+    inotifywait mit Timeout ist genau das richtige Werkzeug: es kehrt sofort
+    zurück, wenn jemand den Wunsch ändert, und sonst erst zum Zeitpunkt des
+    nächsten Uhr-Wechsels. Fehlt inotify-tools, bleibt ein grobes Schlafen —
+    dann reagiert der Dienst eben erst nach ein paar Sekunden.
+    """
+    sekunden = max(1, int(sekunden))
+    try:
+        r = subprocess.run(
+            ["inotifywait", "-q", "-t", str(sekunden),
+             "-e", "close_write,moved_to,create", verzeichnis],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=sekunden + 5)
+        # Rueckgabe 0 = ein Ereignis kam, 2 = Zeit abgelaufen (also die Uhr).
+        return r.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    time.sleep(min(sekunden, 5))
+    return False
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--once", action="store_true",
+                    help="einmal abgleichen statt als Dienst laufen")
+    ap.add_argument("--status", action="store_true",
+                    help="Wunsch, Ergebnis und naechsten Wechsel zeigen")
+    args = ap.parse_args(argv)
+
+    daemon = T.ThemeDaemon()
+
+    if args.status:
+        rest = T.naechster_wechsel()
+        print("wunsch    : %s   (%s)" % (daemon.state.mode(), T.theme_file()))
+        print("ergebnis  : %s   (%s)" % (T.read_now(), T.now_file()))
+        print("effektiv  : %s" % daemon.effektiv())
+        print("naechster wechsel in %dh %dm" % (rest // 3600, rest % 3600 // 60))
+        return 0
+
+    if args.once:
+        neu = daemon.tick()
+        print("theme.now: %s" % (neu or T.read_now()))
+        return 0
+
+    verzeichnis = os.path.dirname(T.theme_file()) or "."
+    os.makedirs(verzeichnis, exist_ok=True)
+    daemon.tick()                       # beim Start sofort in den Soll-Zustand
+    while True:
+        # Nie länger schlafen als bis zur nächsten Uhr-Grenze; ein Wunsch
+        # dazwischen weckt uns über inotify ohnehin sofort.
+        geweckt_von_datei = warte(T.naechster_wechsel(), verzeichnis)
+        if geweckt_von_datei:
+            # Kurz sammeln: wer dreimal schnell 't' drückt, soll EINEN Umbau
+            # auslösen, nicht drei. Das Umfärben der XFCE-Sitzung ist teuer —
+            # jede GTK-App lädt dabei ihre Icons neu, das ruckelt sichtbar.
+            # Diese Bremse sass frueher in der TUI; hier greift sie fuer alle,
+            # egal wer den Wunsch geschrieben hat.
+            time.sleep(DEBOUNCE)
+        daemon.tick()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

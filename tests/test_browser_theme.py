@@ -21,7 +21,7 @@ APPLIER = os.path.join(ROOT, "scripts", "zentrale-browser-theme")
 
 
 def run(theme_file, *args):
-    env = dict(os.environ, ZENTRALE_THEME_FILE=str(theme_file))
+    env = dict(os.environ, ZENTRALE_THEME_NOW=str(theme_file))
     return subprocess.run(["bash", APPLIER, *args], capture_output=True,
                           text=True, env=env, timeout=20, check=True).stdout.strip()
 
@@ -29,7 +29,7 @@ def run(theme_file, *args):
 @pytest.fixture
 def theme_file(tmp_path):
     f = tmp_path / "theme"
-    f.write_text("auto\n")
+    f.write_text("day\n")
     return f
 
 
@@ -79,16 +79,19 @@ def test_dry_run_touches_nothing(theme_file):
     assert after.stdout == before.stdout
 
 
-def test_same_resolve_rule_as_terminal_applier(theme_file):
-    """Browser- und Terminal-Applier müssen IMMER denselben Modus sehen.
+def test_kein_applier_rechnet_die_uhrzeit_noch_selbst(theme_file):
+    """Umgekehrt zu frueher: die Regel darf in KEINEM Applier mehr stehen.
 
-    Der Terminal-Applier hat keinen --resolve-Schalter; wir vergleichen darum
-    die Regel selbst: beide Skripte tragen dieselbe 05/21-Grenze im Code.
+    Bis 2026-08-18 trug jeder Applier die 05/21-Grenze selbst, und dieser Test
+    wachte darueber, dass alle dieselbe haben. Genau diese Vervielfachung war
+    die Ursache der Theme-Glitches — aufgeloest wird jetzt nur noch in
+    scripts/zentrale-themed. Die Applier lesen ein Wort aus theme.now.
     """
-    term = open(os.path.join(ROOT, "scripts", "zentrale-term-theme")).read()
-    brow = open(APPLIER).read()
-    for rule in ('-ge 5', '-lt 21'):
-        assert rule in term and rule in brow, "05/21-Regel driftet: %s" % rule
+    for f in ("zentrale-term-theme", "zentrale-browser-theme",
+              "zentrale-desktop-theme", "zentrale-bat-theme"):
+        src = open(os.path.join(ROOT, "scripts", f)).read()
+        assert "-ge 5" not in src, "%s rechnet wieder selbst" % f
+        assert "theme.now" in src, "%s liest nicht das Ergebnis" % f
 
 
 # ── Desktop-Applier (scripts/zentrale-desktop-theme) ──────────────────────
@@ -96,7 +99,7 @@ DESKTOP = os.path.join(ROOT, "scripts", "zentrale-desktop-theme")
 
 
 def run_desktop(theme_file, *args):
-    env = dict(os.environ, ZENTRALE_THEME_FILE=str(theme_file))
+    env = dict(os.environ, ZENTRALE_THEME_NOW=str(theme_file))
     return subprocess.run(["bash", DESKTOP, *args], capture_output=True,
                           text=True, env=env, timeout=20, check=True).stdout.strip()
 
@@ -116,7 +119,7 @@ def test_desktop_theme_pair(theme_file, mode, gtk, wm, icons):
 
 def test_desktop_pair_is_overridable(theme_file):
     theme_file.write_text("night\n")
-    env = dict(os.environ, ZENTRALE_THEME_FILE=str(theme_file),
+    env = dict(os.environ, ZENTRALE_THEME_NOW=str(theme_file),
                ZENTRALE_GTK_NIGHT="Eigenes-Theme", ZENTRALE_WM_NIGHT="Eigener-Rahmen")
     out = subprocess.run(["bash", DESKTOP, "--dry-run"], capture_output=True,
                          text=True, env=env, timeout=20, check=True).stdout.strip()
@@ -132,13 +135,6 @@ def test_desktop_themes_are_installed(theme_file):
                      run_desktop(theme_file, "--dry-run").split()[1:])
         assert os.path.isdir("/usr/share/themes/%s" % parts["gtk"]), parts["gtk"]
         assert os.path.isdir("/usr/share/themes/%s/xfwm4" % parts["wm"]), parts["wm"]
-
-
-def test_desktop_all_appliers_share_the_clock_rule(theme_file):
-    rule_files = ["zentrale-term-theme", "zentrale-browser-theme", "zentrale-desktop-theme"]
-    for f in rule_files:
-        src = open(os.path.join(ROOT, "scripts", f)).read()
-        assert "-ge 5" in src and "-lt 21" in src, "05/21-Regel fehlt in %s" % f
 
 
 # ── Terminal-Palette (scripts/zentrale-term-theme) ────────────────────────

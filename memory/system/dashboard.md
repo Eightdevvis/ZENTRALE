@@ -101,57 +101,51 @@ sofort geschrieben (nvim und der systemd-Timer lesen den MODUS, nicht die
 Farbe) — sie ist billig, aber **atomar** (tmp + `os.replace`, siehe
 nvim-Kopplung unten).
 
-**Der Modus lebt in EINER Quelle: der Datei — `core/theme.py` (seit
-2026-08-17).** Die TUI hält keine eigene Modus-Variable mehr.
+**Ein Dienst löst auf, alle anderen lesen nur (seit 2026-08-18).** Zwei
+Dateien mit klaren Rollen:
 
-*Was vorher schiefging und warum es kein Zufall war:* der Modus lag **doppelt**
-vor — als lokale Variable `theme_mode` in der TUI UND als Datei —, abgeglichen
-über drei Hilfspuffer (zuletzt geschriebener Modus, zuletzt gesehene mtime,
-zuletzt gemeldete Farbe). Dieser Abgleich ist **nicht atomar**: zwischen »Taste
-ändert die Variable« und »Schleife schreibt die Datei« liegt ein Fenster, in dem
-ein Lesevorgang die Variable wieder überschrieb — der Tastendruck wurde
-verschluckt oder der Wert sprang zurück. Am 2026-08-17 um 22:14:50–22:15:01 hat
-der Beobachter das eingefangen: **fünfzehn Wechsel in elf Sekunden** von einer
-einzigen TUI, und im Protokoll `fremd`-Zeilen mit exakt den Werten, die die TUI
-selbst eine Zeile vorher geschrieben hatte. **Sie las ihr eigenes Echo.** Das
-ist das Bild »kurz umgesprungen und wieder zurück«.
+| Datei | Rolle | wer schreibt |
+|---|---|---|
+| `~/.config/zentrale/theme` | **Wunsch** `auto\|day\|night` | ZENTRALE (TUI) |
+| `~/.config/zentrale/theme.now` | **Ergebnis** `day\|night` | `zentrale-themed` |
 
-*Die Antwort war nicht ein weiterer Puffer, sondern der zweite Zustand weg:*
-- `mode()` liest die Datei (per mtime gecacht, damit die Bildschleife billig
-  bleibt). Der Cache **widerspricht der Datei nie** — er wird verworfen, sobald
-  die mtime abweicht, und nie gegen sie behauptet.
-- `set()` schreibt die Datei, atomar (tmp + rename). Einziger Schreibweg.
-- `cycle()` rechnet auf dem **Datei-Stand**, nicht auf einer mitgeführten
-  Variablen — zwei schnelle Tastendrücke können sich nicht überholen.
-Damit ist eine Rückkopplung **strukturell unmöglich** statt nur unwahrscheinlich:
-es gibt nichts mehr, das man zurückziehen müsste. Eine Fremdänderung wird
-mitgezogen und **nicht** zurückgeschrieben.
+`scripts/zentrale-themed` ist die **einzige** Stelle im Projekt, die `auto`
+nach der Uhrzeit auflöst. Alle anderen — Terminal, Browser, Desktop, bat, nvim,
+TUI, Morgen-Messenger, Tutor-Zimmer — lesen ein Wort aus `theme.now`. Keine Uhr,
+kein eigener Timer, keine Fallunterscheidung.
 
-Die Logik liegt bewusst in `core/theme.py` statt in der 8000-Zeilen-curses-
-Funktion: dort ist sie **testbar** (`tests/test_theme_state.py`, 22 Fälle — u.a.
-»eigenes Schreiben kommt nie als fremd zurück«, »zwölf Zyklen landen wieder am
-Start«, »zwei Zustände auf derselben Datei bleiben einig«) und sie kennt
-`ZENTRALE_THEME_FILE`, sodass Tests nie die echte Konfiguration anfassen. Beim
-Start schreibt die TUI **nichts** — sie folgt der Datei. (Vorher stand
-`theme_mode = "auto"` hart im Code und wurde sofort geschrieben: jeder Start,
-auch ein tmux-Restore, überbügelte damit ein von Hand gesetztes `day`/`night`.)
+*Warum das die Wurzel war:* vorher rechneten **acht** Stellen dieselbe
+05/21-Regel selbst, jede mit eigenem Timing (mal ein Minuten-Timer, mal ein
+60-s-Tick, mal beim nächsten Bildaufbau). Deshalb lief immer wieder irgendein
+Teilnehmer für eine Weile gegen den Rest — und jede Reparatur betraf nur die
+Stelle, an der es gerade auffiel. `tests/test_themed.py` hat einen **Wächter**,
+der fehlschlägt, sobald die Regel wieder an mehr als einer Stelle auftaucht.
 
-**Änderungsprotokoll + Beobachter.** Wer die Datei ändert, war rückwirkend
-nicht feststellbar (der Zeitstempel verrät nur das WANN). Seitdem:
-- Die TUI schreibt jeden Wechsel nach `~/.cache/zentrale/theme-changes.log`,
-  mit Quelle `tui` (Taste/Befehl) oder `fremd` (Datei änderte sich unter uns).
-- `scripts/zentrale-theme-watch` hängt per inotify am **Verzeichnis** (die
-  Datei wird atomar per tmp+rename ersetzt — ein Watch auf der Datei säße
-  danach auf einem toten inode) und protokolliert jede echte Inhaltsänderung
-  nach `~/.cache/zentrale/theme-watch.log`, mit Prozess-Schnappschuss und dem
-  Hinweis, ob die TUI sich als Urheber eingetragen hat. **Grenze:** inotify
-  meldet das Ereignis, nicht den Verursacher — den sauber zu benennen bräuchte
-  fanotify/auditd und damit root. Ein kurzlebiger Schreiber (`printf > datei`
-  aus einer Shell) ist im Schnappschuss schon wieder weg; auch das ist eine
-  Aussage (kein Dauerläufer). Läuft als User-Dienst
-  `deploy/zentrale-theme-watch.service`, aktiviert von
-  `install_theme_coupling.sh`, sofern `inotifywait` da ist.
-  `zentrale-theme-watch --status` zeigt beide Protokolle.
+*Der Dienst pollt nicht.* Er wartet auf zwei Dinge und schläft dazwischen: eine
+Änderung des Wunsches (inotify auf dem **Verzeichnis** — die Datei wird atomar
+per rename ersetzt, ein Watch auf ihr säße danach auf totem inode) und den
+nächsten Zeitpunkt, an dem die Uhr kippt (05:00/21:00). Der frühere
+`zentrale-theme.timer` sah **jede Minute** nach, obwohl sich höchstens zweimal
+am Tag etwas ändert — er ist ersatzlos entfallen.
+
+*Die beiden Bremsen sitzen jetzt im Dienst*, an einer Stelle für alle: Applier
+laufen nur bei echtem **Farb**wechsel (`t` zykliert `auto→day→night`, zwei von
+drei Schritten lassen die Farbe gleich), und schnelle Tastenfolgen werden
+0,4 s gesammelt. Die TUI hat davon nichts mehr — sie schreibt nur den Wunsch
+und ist ein Teilnehmer wie nvim, kein Verteiler.
+
+*Der Modus selbst* lebt in `core/theme.py` (`ThemeState`): `mode()` liest die
+Datei (per mtime gecacht, der Cache widerspricht ihr nie), `set()` schreibt sie
+atomar, `cycle()` rechnet auf dem Datei-Stand. Vorher lag er **doppelt** vor —
+Variable in der TUI *und* Datei, abgeglichen über drei Hilfspuffer —, und weil
+dieser Abgleich nicht atomar ist, verschluckte er Tastendrücke und las das
+eigene Schreiben als Fremdänderung zurück (belegt am 2026-08-17: fünfzehn
+Wechsel in elf Sekunden von einer einzigen TUI).
+
+**Einhängen:** `install_theme_coupling.sh` verlinkt `zentrale-themed`, räumt die
+alten `zentrale-theme.{service,timer}` ab und aktiviert
+`deploy/zentrale-themed.service`. `zentrale-themed --status` zeigt Wunsch,
+Ergebnis und den nächsten Wechsel; `--once` gleicht einmal ab.
 
 **Terminal-Kopplung (Sashas Laptop, xfce4-terminal):** die TUI schreibt bei
 jedem Moduswechsel den Modus (`auto`/`day`/`night`) nach
@@ -163,9 +157,8 @@ nicht mehr Solarized, sondern dieselben zwei Welten wie in nvim** (day = paper
 vorher blieben `ls`/Prompt/git in den alten Tönen stehen, weil nur bg/fg gesetzt
 wurden. Auf Papier sind die „hellen" Farben 9–14 bewusst **dunkler** als 1–6:
 auf hellem Grund hebt nur mehr Tiefe hervor (aufgehellt lagen sie bei 3.1–4.2:1,
-jetzt 7:1). `auto` löst nach Uhrzeit auf, exakt wie `resolved_theme`.
-Ein **systemd-User-Timer** `zentrale-theme.timer` zieht dieselbe Datei
-jede Minute nach → die 05/21-Rotation greift auch ohne laufende TUI.
+jetzt 7:1). Der Applier **rechnet nicht** — er liest `theme.now` (siehe oben: aufgelöst
+wird nur in `zentrale-themed`) und wird von dort auch angestoßen.
 **Die Applier fassen dabei seit 2026-08-16 nur noch an, was sich wirklich
 ändert** — vorher schrieben sie jede Minute bedingungslos die volle Palette
 bzw. GTK-/Fenster-/Icon-Theme neu. Sichtbare Folgen: das Terminal färbte im
@@ -177,8 +170,8 @@ Setzen gestempelt, damit ein Abbruch beim nächsten Lauf erneut greift;
 `--force` übergeht das Gate); `zentrale-desktop-theme` und
 `zentrale-browser-theme` vergleichen stattdessen den aktiven
 xfconf-/gsettings-Wert und setzen nur bei Abweichung, `zentrale-bat-theme` die
-`--theme`-Zeile in seiner Config. Beim Umschalten in der TUI werden **alle
-vier** Applier direkt angestoßen (bat inklusive — sonst zöge es erst beim
+`--theme`-Zeile in seiner Config. Angestoßen werden **alle vier** vom Dienst
+(bat inklusive — sonst zöge es erst beim
 nächsten Minuten-Tick nach). Nur lokal,
 kein Sync, kein Backend — TUI ist die einzige Quelle. **Setup reproduzierbar
 in git:** Unit-Templates `deploy/zentrale-theme.{service,timer}` (zwei
