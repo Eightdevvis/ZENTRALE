@@ -186,3 +186,22 @@ def test_status_zeigt_wunsch_und_ergebnis(umgebung):
     assert r.returncode == 0
     assert "wunsch" in r.stdout and "day" in r.stdout
     assert "ergebnis" in r.stdout
+
+
+def test_laeuft_auch_ueber_einen_symlink(umgebung, tmp_path):
+    """So wird er installiert: als Symlink in ~/.local/bin.
+
+    Regression: das Skript suchte core/ relativ zu abspath(__file__) — beim
+    Aufruf ueber den Symlink also unter ~/.local/core. Der Dienst startete gar
+    nicht ("No module named 'theme'"), und weil alle Tests ihn direkt im Repo
+    aufriefen, fiel das erst auf der echten Maschine auf.
+    """
+    w, now = umgebung
+    w.write_text("night\n")
+    link = tmp_path / "bin" / "zentrale-themed"
+    link.parent.mkdir(parents=True, exist_ok=True)
+    os.symlink(DIENST, str(link))
+    r = subprocess.run([sys.executable, str(link), "--once"],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert now.read_text().strip() == "night"

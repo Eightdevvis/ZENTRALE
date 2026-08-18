@@ -34,8 +34,12 @@ import subprocess
 import sys
 import time
 
+# realpath, NICHT abspath: installiert wird das hier als Symlink in
+# ~/.local/bin. abspath liefert dann den Symlink-Pfad, und core/ läge scheinbar
+# unter ~/.local/core — der Dienst startete gar nicht. Erst realpath führt zum
+# echten Ort im Repo.
 sys.path.insert(0, os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "core"))
+    os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "core"))
 import theme as T  # noqa: E402
 
 
