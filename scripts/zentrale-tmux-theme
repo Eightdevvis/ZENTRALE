@@ -79,7 +79,12 @@ tmux has-session 2>/dev/null || exit 0
 # auch fuer spaeter geoeffnete Fenster.
 tmux set-option -g status-style "bg=$ST_BG,fg=$ST_FG" 2>/dev/null || true
 tmux set-option -g pane-border-style "fg=$BORDER" 2>/dev/null || true
-tmux set-option -g pane-active-border-style "fg=$BORDER_ON,bold" 2>/dev/null || true
+
+# Der AKTIVE Rahmen bleibt Sashas Sache: er setzt ihn in ~/.tmux.conf bewusst
+# auf ein kraeftiges Orange, das auf beiden Gruenden funktioniert. Ihn hier
+# mitzufaerben hiesse, eine persoenliche Einstellung ungefragt zu ueberschreiben
+# — der Applier haelt sich raus. Soll er doch mitgehen, ist der Wert oben schon
+# da ($BORDER_ON) und es ist eine Zeile.
 
 # tmux zeichnet die Leiste erst beim naechsten Tick neu — einmal anstossen,
 # damit die Farbe sofort steht statt bis zu einer Sekunde spaeter.
