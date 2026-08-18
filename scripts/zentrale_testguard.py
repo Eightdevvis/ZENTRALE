@@ -1,5 +1,5 @@
 """
-sitecustomize — der Riegel, den kein Arbeitsverzeichnis umgehen kann.
+zentrale_testguard — der Riegel, den kein Arbeitsverzeichnis umgehen kann.
 
 WARUM DIESE DATEI AUSSERHALB DER TESTS LIEGT
 --------------------------------------------
@@ -18,10 +18,24 @@ Schutz nicht. Genau so ist es am 2026-08-18 um 12:58 passiert: 126 Wechsel in
 
 Das GETEILTE ist nicht das Repo, sondern der Interpreter: alle Arbeits-
 verzeichnisse benutzen dasselbe venv des Haupt-Checkouts (keines hat ein
-eigenes). Deshalb haengt der Riegel hier — an site-packages/sitecustomize.py,
-das Python bei JEDEM Start aus diesem venv laedt, egal aus welchem Verzeichnis
-und egal, wie alt dessen tests/ sind. Installiert wird er als SYMLINK auf diese
-Datei (scripts/zentrale-venv-guard), damit immer der Stand aus main gilt.
+eigenes). Deshalb haengt der Riegel im venv und laeuft bei JEDEM Start daraus,
+egal aus welchem Verzeichnis und egal, wie alt dessen tests/ sind. Eingehaengt
+wird er von scripts/zentrale-venv-guard als SYMLINK, damit immer der Stand aus
+main gilt.
+
+WARUM .pth UND NICHT sitecustomize.py
+-------------------------------------
+Der naheliegende Weg waere site-packages/sitecustomize.py — Python importiert
+diesen Namen beim Start von selbst. Er funktioniert hier aber NICHT: Debian
+legt ein eigenes /usr/lib/python3.12/sitecustomize.py ab (haengt Apports
+Exception-Hook ein), und die stdlib steht im sys.path VOR site-packages. Der
+erste Treffer gewinnt — unsere Datei wurde nie geladen, lautlos. Gekostet hat
+das einen kompletten Reparaturversuch: der Riegel hing sichtbar richtig im
+venv, und der Fuzzer schaltete trotzdem weiter Sashas Theme um.
+
+Der vorgesehene Mechanismus dafuer ist eine .pth-Datei in site-packages: eine
+Zeile, die mit "import " beginnt, fuehrt site.py beim Start aus. Die haengt an
+site-packages, kollidiert also mit keinem stdlib-Namen.
 
 Der zweite Riegel sitzt in core/theme.py (`ist_arbeitskopie`) und faengt den
 Fall ab, dass jemand ohne dieses venv arbeitet.
@@ -63,14 +77,26 @@ def _ist_testlauf(kommandozeile, umgebung):
     """
     if umgebung.get("PYTEST_VERSION") or umgebung.get("PYTEST_CURRENT_TEST"):
         return True
-    return any("pytest" in teil for teil in (kommandozeile or ()))
+    # Genau hinsehen statt "pytest" irgendwo in der Zeile suchen: sonst gilt
+    # `python auswertung.py --log pytest.txt` als Testlauf und laeuft mit
+    # weggebogenem HOME — ein Riegel, der Unbeteiligte einsperrt, ist kaputt.
+    for teil in (kommandozeile or ()):
+        name = teil.replace("\\", "/").rsplit("/", 1)[-1]
+        if name == "pytest" or name.startswith("pytest."):
+            return True
+    return False
 
 
 def _wegwerf_verzeichnis(tempdir, pid):
     return tempdir + "/zentrale_testguard_%d" % pid
 
 
-def anwenden(umgebung, kommandozeile, tempdir, pid):
+def _aus_arbeitskopie(cwd):
+    """Laeuft dieser Testlauf in einem Worktree statt im Haupt-Checkout?"""
+    return "/.claude/worktrees/" in (cwd or "")
+
+
+def anwenden(umgebung, kommandozeile, tempdir, pid, cwd=""):
     """Umgebung eines Testlaufs umbiegen. → das Verzeichnis, oder None.
 
     Getrennt von der Ausfuehrung unten, damit der Test sie mit erfundenen
@@ -94,6 +120,27 @@ def anwenden(umgebung, kommandozeile, tempdir, pid):
     # Marker: daran erkennt core/theme.py (und ein Mensch im Protokoll), dass
     # dieser Prozess zu einem Testlauf gehoert.
     umgebung["ZENTRALE_TESTLAUF"] = "1"
+
+    # ── Der Holzhammer, und warum er noetig ist ──────────────────────────
+    #
+    # Alles oben schuetzt nur Code, der diese Variablen LIEST. Ein Stand vom
+    # 2026-08-16 kennt ZENTRALE_THEME_FILE gar nicht — er expandiert
+    # ~/.config/zentrale/theme hart (tui/zentrale_tui.py:1459 in jenem Stand).
+    # Genau deshalb hat der Fuzzer aus einem alten Worktree Sashas Theme
+    # weiter umgeschaltet, obwohl der Riegel sauber im venv hing: die
+    # Umlenkung ging ins Leere, weil niemand sie las. Sichtbar war das daran,
+    # dass im echten Protokoll nur noch "fremd"-Zeilen ankamen — das LOG lag
+    # schon im Wegwerf-Ordner (XDG_CACHE_HOME liest der alte Code), die
+    # THEME-Datei aber nicht.
+    #
+    # Unterhalb jeder Env-Variable liegt HOME. Wer aus einer Arbeitskopie
+    # testet, bekommt deshalb ein Wegwerf-HOME: dann zeigt auch ein hart
+    # verdrahtetes "~" ins Nichts. Nur fuer Arbeitskopien — im Haupt-Checkout
+    # ist die conftest aktuell, und ein Testlauf soll dort nicht ohne Not
+    # seine ganze Umgebung verlieren.
+    if _aus_arbeitskopie(cwd):
+        umgebung["HOME"] = ziel + "/home"
+        umgebung["XDG_CONFIG_HOME"] = ziel + "/home/.config"
     return ziel
 
 
@@ -107,9 +154,18 @@ try:
     # orig_argv statt argv: siehe _ist_testlauf. Der Fallback auf argv gilt nur
     # fuer Python < 3.10, das es hier nicht gibt.
     _ziel = anwenden(os.environ, getattr(sys, "orig_argv", None) or sys.argv,
-                     tempfile.gettempdir(), os.getpid())
+                     tempfile.gettempdir(), os.getpid(), os.getcwd())
     if _ziel:
         os.makedirs(_ziel, exist_ok=True)
+
+        # Beim Wegwerf-HOME einen plausiblen Startzustand hinlegen, sonst
+        # stolpern alte Testlaeufe ueber eine Konfiguration, die es nirgends
+        # gibt — das waere ein neuer Fehler an der Stelle des alten.
+        if os.environ.get("HOME", "").startswith(_ziel):
+            _konf = os.path.join(os.environ["HOME"], ".config", "zentrale")
+            os.makedirs(_konf, exist_ok=True)
+            with open(os.path.join(_konf, "theme"), "w") as _fh:
+                _fh.write("auto\n")
 
         import atexit
         import shutil

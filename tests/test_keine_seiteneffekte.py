@@ -105,14 +105,14 @@ def test_set_schreibt_aus_der_arbeitskopie_nicht(monkeypatch, tmp_path):
 
 # ── Der venv-Riegel ─────────────────────────────────────────────────────────
 #
-# scripts/sitecustomize_testguard.py ist die Stelle, die auch VERALTETE
+# scripts/zentrale_testguard.py ist die Stelle, die auch VERALTETE
 # Arbeitsverzeichnisse abfaengt — die bringen ihre eigene alte conftest mit,
 # benutzen aber dasselbe venv. Hier geprueft wird die reine Logik; ob der
 # Symlink haengt, sagt scripts/zentrale-venv-guard.
 
 def _guard_modul():
     import importlib.util
-    pfad = os.path.join(ROOT, "scripts", "sitecustomize_testguard.py")
+    pfad = os.path.join(ROOT, "scripts", "zentrale_testguard.py")
     spec = importlib.util.spec_from_file_location("_testguard", pfad)
     modul = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(modul)
@@ -133,7 +133,7 @@ def test_venv_riegel_biegt_einen_pytest_lauf_um():
 def test_venv_riegel_erkennt_auch_python_m_pytest():
     """Die Form, an der die erste Fassung scheiterte.
 
-    sitecustomize laeuft beim Interpreter-START — da steht in sys.argv[0] noch
+    Der Riegel laeuft beim Interpreter-START — da steht in sys.argv[0] noch
     "-m". Nur sys.orig_argv zeigt, was wirklich aufgerufen wurde. Ohne diesen
     Fall lief die Erkennung im haeufigsten Aufruf ins Leere.
     """
@@ -143,6 +143,29 @@ def test_venv_riegel_erkennt_auch_python_m_pytest():
                           "/tmp", 4714)
     assert ziel, "python -m pytest wurde nicht als Testlauf erkannt"
     assert umgebung["ZENTRALE_THEME_FILE"].startswith(ziel)
+
+
+def test_venv_riegel_biegt_HOME_aus_einer_arbeitskopie_um():
+    """Der Fall, an dem die zweite Fassung scheiterte.
+
+    Ein Stand vom 2026-08-16 kennt ZENTRALE_THEME_FILE nicht und expandiert
+    "~" hart — die Env-Umlenkung geht bei ihm ins Leere. Deshalb bekommt ein
+    Lauf aus einer Arbeitskopie ein Wegwerf-HOME.
+    """
+    guard = _guard_modul()
+    umgebung = {"HOME": "/home/sasha"}
+    ziel = guard.anwenden(umgebung, ["python", "-m", "pytest"], "/tmp", 4715,
+                          "/home/sasha/codicus/ZENTRALE/.claude/worktrees/alt")
+    assert umgebung["HOME"].startswith(ziel), "HOME zeigt weiter auf das echte"
+
+
+def test_venv_riegel_laesst_HOME_im_haupt_checkout_stehen():
+    """Dort ist die conftest aktuell — kein Grund, die Umgebung wegzunehmen."""
+    guard = _guard_modul()
+    umgebung = {"HOME": "/home/sasha"}
+    guard.anwenden(umgebung, ["python", "-m", "pytest"], "/tmp", 4716,
+                   "/home/sasha/codicus/ZENTRALE")
+    assert umgebung["HOME"] == "/home/sasha"
 
 
 def test_venv_riegel_laesst_die_echte_tui_in_ruhe():
@@ -173,10 +196,10 @@ def test_venv_riegel_ueberschreibt_gesetzte_werte_nicht():
 
 
 def _riegel_installiert():
-    """Haengt sitecustomize.py im site-packages des laufenden Interpreters?"""
+    """Haengt der Riegel im site-packages des laufenden Interpreters?"""
     import sysconfig
     return os.path.exists(os.path.join(sysconfig.get_paths()["purelib"],
-                                       "sitecustomize.py"))
+                                       "zentrale_testguard.pth"))
 
 
 @pytest.mark.skipif(not _riegel_installiert(),

@@ -169,17 +169,32 @@ hält die PIDs fest).
 gleichermaßen ran. Der Schutz muss deshalb dorthin, wo nicht kopiert wird.
 Zwei Riegel:
 
-1. **`scripts/sitecustomize_testguard.py`**, per Symlink als
-   `sitecustomize.py` im **geteilten venv** (`scripts/zentrale-venv-guard`,
-   idempotent). Kein Worktree hat ein eigenes venv, alle benutzen das des
-   Haupt-Checkouts — dieser Riegel greift also auch für Arbeitsverzeichnisse,
-   die noch nie von main gehört haben. Erkennt einen pytest-Lauf und biegt
-   `ZENTRALE_THEME_FILE`, `ZENTRALE_THEME_NOW`, `XDG_CACHE_HOME` und
-   `ZENTRALE_USAGE_FILE` auf ein Wegwerf-Verzeichnis; gesetzt wird in
-   `os.environ`, damit die vom Fuzzer gestartete TUI (`env=dict(os.environ,…)`)
-   die Umlenkung erbt. Alles per `setdefault`, also bleibt `monkeypatch` in
-   einzelnen Tests wirksam. Der Symlink ist Absicht: so gilt immer der Stand
-   aus main.
+1. **`scripts/zentrale_testguard.py`**, eingehängt ins **geteilte venv** von
+   `scripts/zentrale-venv-guard` (idempotent). Kein Worktree hat ein eigenes
+   venv, alle benutzen das des Haupt-Checkouts — dieser Riegel greift also auch
+   für Arbeitsverzeichnisse, die noch nie von main gehört haben. Erkennt einen
+   pytest-Lauf und biegt `ZENTRALE_THEME_FILE`, `ZENTRALE_THEME_NOW`,
+   `XDG_CACHE_HOME` und `ZENTRALE_USAGE_FILE` auf ein Wegwerf-Verzeichnis;
+   gesetzt wird in `os.environ`, damit die vom Fuzzer gestartete TUI
+   (`env=dict(os.environ,…)`) die Umlenkung erbt. Alles per `setdefault`, also
+   bleibt `monkeypatch` in einzelnen Tests wirksam.
+
+   **Und darüber hinaus `HOME`**, wenn der Lauf aus einer Arbeitskopie kommt.
+   Das ist kein Gürtel-und-Hosenträger, sondern der einzige Weg, der bei alten
+   Ständen überhaupt wirkt: eine Env-Variable schützt nur Code, der sie liest,
+   und der Stand vom 2026-08-16 kennt `ZENTRALE_THEME_FILE` gar nicht — er
+   expandiert `~/.config/zentrale/theme` hart. Erkennbar war das daran, dass im
+   echten Protokoll nur noch `fremd`-Zeilen ankamen: das *Log* lag schon im
+   Wegwerf-Ordner (`XDG_CACHE_HOME` liest auch der alte Code), die *Theme*-Datei
+   nicht. Im Haupt-Checkout bleibt `HOME` unangetastet.
+
+   **Eingehängt als `.pth`, nicht als `sitecustomize.py`.** Der naheliegende
+   Name funktioniert hier nicht: Debian legt ein eigenes
+   `/usr/lib/python3.12/sitecustomize.py` ab (Apport-Hook), und die stdlib steht
+   im `sys.path` vor site-packages — unsere Datei wurde nie geladen, lautlos.
+   Eine `.pth`-Zeile (`import zentrale_testguard`) hängt an site-packages und
+   kollidiert mit keinem stdlib-Namen. Das Modul selbst ist ein Symlink, damit
+   immer der Stand aus main gilt.
 2. **`theme.ist_arbeitskopie()` / `theme.darf_schreiben()`**: liegt das laufende
    Modul unter `.claude/worktrees/` und zielt der Schreibweg auf die echte
    Konfiguration, schreibt `ThemeState.set()` nicht und der Dienst stößt auch

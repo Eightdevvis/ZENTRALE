@@ -9,7 +9,7 @@ scripts/zentrale-venv-guard
 ```
 
 Der dritte Schritt hängt den Test-Riegel ins venv (Symlink auf
-`scripts/sitecustomize_testguard.py`) und **gehört nach jedem venv-Neubau
+`scripts/zentrale_testguard.py`) und **gehört nach jedem venv-Neubau
 dazu**: ohne ihn schaltet ein Testlauf aus einer älteren Arbeitskopie Sashas
 echtes Theme um — die Erklärung steht in `memory/system/dashboard.md`
 („Warum das Theme trotzdem noch sprang"). Der Aufruf ist idempotent.

@@ -4,8 +4,8 @@
 # Alle Arbeitsverzeichnisse (Worktrees wie liegengebliebene Kopien) benutzen
 # denselben Interpreter aus dem venv des Haupt-Checkouts. Wer dort testet, kann
 # ohne diesen Riegel Sashas echte ~/.config/zentrale/theme umschalten — das war
-# der jahrelang gesuchte "Theme-Glitch". Warum der Schutz nicht in tests/
-# stehen kann, steht ausfuehrlich in scripts/sitecustomize_testguard.py.
+# der tagelang gesuchte "Theme-Glitch". Warum der Schutz nicht in tests/
+# stehen kann, steht ausfuehrlich in scripts/zentrale_testguard.py.
 #
 # SYMLINK, keine Kopie: so gilt immer der Stand aus main, auch wenn ein alter
 # Worktree testet. Gleiches Muster wie beim Theme-Dienst (Commit e684cb1).
@@ -13,7 +13,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-QUELLE="$ROOT/scripts/sitecustomize_testguard.py"
+QUELLE="$ROOT/scripts/zentrale_testguard.py"
 VENV="${ZENTRALE_VENV:-$ROOT/venv}"
 
 if [ ! -f "$QUELLE" ]; then
@@ -28,14 +28,26 @@ if [ -z "$SITE" ] || [ ! -d "$SITE" ]; then
     exit 1
 fi
 
-ZIEL="$SITE/sitecustomize.py"
+MODUL="$SITE/zentrale_testguard.py"
+PTH="$SITE/zentrale_testguard.pth"
 
-# Eine FREMDE sitecustomize.py (von einem Paket) nicht stillschweigend
-# ueberschreiben — die haette einen anderen Zweck.
-if [ -e "$ZIEL" ] && [ ! -L "$ZIEL" ]; then
-    echo "zentrale-venv-guard: $ZIEL existiert und ist kein Symlink — bitte von Hand ansehen" >&2
+# NICHT sitecustomize.py: Debian legt ein eigenes unter /usr/lib/python3.12 ab,
+# und die stdlib steht im sys.path vor site-packages — unsere Datei wuerde
+# lautlos nie geladen. Der Grund steht ausfuehrlich in scripts/zentrale_testguard.py.
+if [ -e "$MODUL" ] && [ ! -L "$MODUL" ]; then
+    echo "zentrale-venv-guard: $MODUL existiert und ist kein Symlink — bitte von Hand ansehen" >&2
     exit 1
 fi
 
-ln -sfn "$QUELLE" "$ZIEL"
-echo "zentrale-venv-guard: $ZIEL -> $QUELLE"
+ln -sfn "$QUELLE" "$MODUL"
+printf 'import zentrale_testguard\n' > "$PTH"
+
+# Aufraeumen: der erste Versuch hing als sitecustomize.py hier (wirkungslos).
+ALT="$SITE/sitecustomize.py"
+if [ -L "$ALT" ] && [ "$(readlink "$ALT")" = "$QUELLE" ]; then
+    rm -f "$ALT"
+    echo "zentrale-venv-guard: alten (wirkungslosen) sitecustomize-Symlink entfernt"
+fi
+
+echo "zentrale-venv-guard: $MODUL -> $QUELLE"
+echo "zentrale-venv-guard: $PTH (import zentrale_testguard)"
