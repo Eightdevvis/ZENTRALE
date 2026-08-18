@@ -4,7 +4,10 @@
 # Devtools-Terminal fuer die KERN-KI. In einem eigenen Terminal laufen lassen:
 #     scripts/ai_devtools.py                        # localhost:5000
 #     scripts/ai_devtools.py --url http://<pc>:5000
-#     scripts/ai_devtools.py --voll                 # nichts kuerzen
+#     scripts/ai_devtools.py --voll                 # auch die Messages ungekuerzt
+#
+# Der System-Prompt geht IMMER ungekuerzt raus — deswegen macht man das
+# Terminal ja auf. --grenze/--voll betreffen nur die Messages.
 #
 # Zeigt LIVE, alles zeitgestempelt:
 #   ai.req    Was die KI KRIEGT — das komplette Paket: System-Prompt Block fuer
@@ -70,7 +73,11 @@ def zeig_req(ev, grenze):
         marke = (f" {C['cache']}◄ CACHE-BREAKPOINT{C['rst']}"
                  if b.get('cache') else '')
         print(f"{C['dim']}  [{i}]{C['rst']}{marke}")
-        block(b.get('text', ''), grenze, '    ')
+        # Der System-Prompt wird NIE gekuerzt. Er ist der Grund, warum man
+        # dieses Terminal aufmacht — "(+6700 Zeichen)" ist genau die
+        # Information, die man nicht sehen wollte. Gekuerzt werden nur die
+        # Messages, die im Zweifel eine ganze News-Sendung enthalten.
+        block(b.get('text', ''), 0, '    ')
 
     msgs = ev.get('messages') or []
     print(f"{C['head']}Messages{C['rst']} {C['dim']}({len(msgs)}){C['rst']}")

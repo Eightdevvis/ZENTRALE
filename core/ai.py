@@ -140,7 +140,11 @@ GRAPH_KONTEXT = os.environ.get("ZENTRALE_GRAPH_KONTEXT", "0") == "1"
 #
 #   System-Prompt · Capabilities · Antwort-Suffix · ASCII · Dashboard · Imprint
 #   ─────────────── ab hier wechselnd ───────────────
-#   Graph-Kontext · Jetzt-Block · Alarme · Mic-Hinweis
+#   Jetzt-Block · Alarme · Mic-Hinweis
+#
+# (Der Graph-Kontext stand bis 18.08.2026 vorne im Wechselnden. Er ist aus,
+#  siehe GRAPH_KONTEXT; was sie ueber Sasha weiss, sitzt jetzt im GECACHTEN
+#  Kopf — core/gedaechtnis.py.)
 #
 # Zwei Gründe, ein Handgriff:
 #  * Prompt-Cache. Ein Cache-Treffer braucht ein byte-identisches Präfix.

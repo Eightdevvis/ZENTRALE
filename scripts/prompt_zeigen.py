@@ -97,10 +97,38 @@ WOHER = [
     ("Spracheingabe-Hinweis",
      "core/profil/klein.py  ->  _MIC_INPUT_HINT",
      "gilt fuer jedes Modell gleich"),
-    ("Graph-Kontext, Uhrzeit, Alarme (das Wechselnde)",
+    ("Was sie ueber Sasha weiss (Steckbrief, Ziele, Ablage-Titel)",
+     "data/gedaechtnis/sasha.md + ziele.md, gerendert von gedaechtnis.kopf_block()",
+     "steht im GECACHTEN Kopf — Inhalte holt sie per read_note"),
+    ("Was heute und morgen ansteht",
+     "core/kalender.py  ->  imprint_for_prompt()",
+     "ebenfalls gecacht; aendert sich mit dem Tag, nicht mit dem Turn"),
+    ("Uhrzeit und Alarme (das Wechselnde)",
      "core/cloud.py  ->  _volatile_text()",
-     "steht NICHT im System-Prompt, sondern hinten an der letzten User-Nachricht"),
+     "steht NICHT im System-Prompt, sondern hinten an der letzten "
+     "User-Nachricht. Der Konzept-Graph hing frueher auch hier — er ist seit "
+     "18.08.2026 aus (ai.GRAPH_KONTEXT)"),
 ]
+
+
+def _kopf(prof, schiene: str) -> str:
+    """Der VOLLSTAENDIGE gecachte Kopf, so wie er wirklich rausgeht.
+
+    Nicht nur der Text der Schiene: seit dem Gedaechtnis-Umbau haengen im
+    gecachten Block auch der Gedaechtnis-Kopf (Steckbrief, Ziele, die
+    Titel der Ablagen) und der Imprint (was heute und morgen ansteht).
+    Wer hier nur `prof.system()` zeigte, zeigte weniger, als das Modell
+    bekommt — und genau dafuer gibt es dieses Skript nicht.
+    """
+    if schiene != "gross":
+        return prof.system()
+    try:
+        import cloud
+        return cloud._static_system(None, tutor_mode=False)
+    except Exception:
+        # Ohne Kalender/Gedaechtnis-Daten (frischer Checkout) faellt es auf
+        # den reinen Schienen-Text zurueck, statt gar nichts zu zeigen.
+        return prof.system()
 
 
 def landkarte():
@@ -126,7 +154,7 @@ def main():
         return
 
     prof = profil.hol(a.schiene)
-    text = prof.system()
+    text = _kopf(prof, a.schiene)
 
     if a.roh:
         print(text)
@@ -142,7 +170,7 @@ def main():
         return
 
     print("=" * 72)
-    print(f"SYSTEM-PROMPT DER SCHIENE '{prof.NAME}'"
+    print(f"GECACHTER KOPF DER SCHIENE '{prof.NAME}'"
           f"   {len(text)} zeichen, grob {len(text) // 4} tokens")
     print("=" * 72)
     print(text)

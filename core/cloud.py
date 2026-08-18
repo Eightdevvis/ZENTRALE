@@ -277,8 +277,9 @@ def cloud_tools() -> list:
 
 def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
     """
-    Das Wechselnde: Graph-Kontext, Jetzt-Block, Alarme, Mic-Hinweis.
-    (Der Imprint gehoert NICHT hierher — siehe _static_system.)
+    Das Wechselnde: Jetzt-Block, Alarme, Mic-Hinweis. Der Graph-Kontext
+    stand bis 18.08.2026 hier und ist aus (ai.GRAPH_KONTEXT); Imprint und
+    Gedaechtnis-Kopf gehoeren NICHT hierher, sondern in _static_system.
 
     Das steht NICHT mehr im System-Prompt. Dort saß es vor dem gesamten
     Verlauf — und weil die Uhr jeden Turn eine andere ist, hat es alles
