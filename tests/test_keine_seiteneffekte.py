@@ -103,6 +103,80 @@ def test_set_schreibt_aus_der_arbeitskopie_nicht(monkeypatch, tmp_path):
     assert ziel.read_text().strip() == "auto"
 
 
+# ── Riegel 3: aus einem Testlauf faellt kein Applier an ─────────────────────
+#
+# Der eigentliche Schadensweg, und der unscheinbarste. Applier schreiben nicht
+# in Dateien, sondern in Sitzungs-Dienste (xfconf, gsettings, tmux-Server) —
+# die haengen NICHT an HOME. Keine Umlenkung der Welt faengt sie ein; sie
+# treffen immer die Sitzung des angemeldeten Menschen.
+#
+# Ausgeloest wurde das von einer Stelle, die harmlos aussieht: jeder Applier
+# ruft `zentrale-themed --once`, wenn er theme.now nicht findet. Im Wegwerf-HOME
+# eines Testlaufs fehlt die Datei IMMER — also startete selbst ein `--dry-run`
+# aus einem Test einen Einmal-Lauf des Dienstes, und der hat alle Applier scharf
+# gestartet. Sashas Desktop sprang um, waehrend theme und theme.now unveraendert
+# dastanden; im Protokoll stand nichts, weil keine Theme-Datei angefasst wurde.
+
+def test_dienst_startet_im_testlauf_keine_applier(monkeypatch, tmp_path):
+    """Der Kern-Riegel: im Testlauf faellt kein einziger Applier an."""
+    import theme
+    monkeypatch.setenv("ZENTRALE_TESTLAUF", "1")
+    monkeypatch.setenv("ZENTRALE_THEME_NOW", str(tmp_path / "theme.now"))
+    gestartet = []
+    st = theme.ThemeState(path=str(tmp_path / "theme"),
+                          log_path=str(tmp_path / "log"))
+    (tmp_path / "theme").write_text("night\n")
+    d = theme.ThemeDaemon(state=st, runner=gestartet.append)
+    assert d.tick() == "night", "theme.now soll trotzdem geschrieben werden"
+    assert gestartet == [], "im Testlauf darf KEIN Applier starten: %s" % gestartet
+
+
+def test_dienst_startet_im_echten_lauf_sehr_wohl_applier(monkeypatch, tmp_path):
+    """Gegenprobe — sonst faerbt die Maschine nie wieder um."""
+    import theme
+    monkeypatch.delenv("ZENTRALE_TESTLAUF", raising=False)
+    monkeypatch.delenv("PYTEST_VERSION", raising=False)
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setenv("ZENTRALE_THEME_NOW", str(tmp_path / "theme.now"))
+    gestartet = []
+    st = theme.ThemeState(path=str(tmp_path / "theme"),
+                          log_path=str(tmp_path / "log"))
+    (tmp_path / "theme").write_text("night\n")
+    d = theme.ThemeDaemon(state=st, runner=gestartet.append)
+    d.tick()
+    assert "zentrale-tmux-theme" in gestartet, gestartet
+    assert len(gestartet) == len(theme.APPLIERS)
+
+
+# bat fehlt hier BEWUSST: es schreibt in eine normale Datei unter HOME, die im
+# Testlauf laengst umgelenkt ist, und wird deshalb nicht abgeriegelt — sonst
+# waeren die Tests blind, die genau dieses Schreiben pruefen. Der Riegel gilt
+# nur fuer Applier, die in eine laufende Sitzung schreiben.
+@pytest.mark.parametrize("applier", [
+    "zentrale-term-theme", "zentrale-browser-theme", "zentrale-desktop-theme",
+    "zentrale-tmux-theme",
+])
+def test_applier_schreibt_im_testlauf_nichts(applier, tmp_path):
+    """Jeder Sitzungs-Applier verhaelt sich im Testlauf wie --dry-run.
+
+    Scharf aufgerufen (ohne Flag) darf er die Sitzung nicht anfassen, aber
+    seine Zeile trotzdem ausgeben — daran haengen die Applier-Tests.
+    """
+    now = tmp_path / "theme.now"
+    now.write_text("night\n")
+    pfad = os.path.join(ROOT, "scripts", applier)
+    umgebung = dict(os.environ, ZENTRALE_TESTLAUF="1",
+                    ZENTRALE_THEME_NOW=str(now))
+    scharf = subprocess.run(["bash", pfad], capture_output=True, text=True,
+                            env=umgebung, timeout=30)
+    trocken = subprocess.run(["bash", pfad, "--dry-run"], capture_output=True,
+                             text=True, env=umgebung, timeout=30)
+    assert scharf.returncode == 0, scharf.stderr[-500:]
+    assert scharf.stdout.strip() == trocken.stdout.strip(), (
+        "%s hat im Testlauf NICHT wie --dry-run reagiert" % applier)
+    assert scharf.stdout.strip(), "Ausgabe fehlt — Applier-Tests brauchen sie"
+
+
 # ── Der venv-Riegel ─────────────────────────────────────────────────────────
 #
 # scripts/zentrale_testguard.py ist die Stelle, die auch VERALTETE

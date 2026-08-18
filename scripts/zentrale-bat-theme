@@ -36,6 +36,13 @@ fi
 
 if [ "$resolved" = "night" ]; then THEME="zentrale-cyber"; else THEME="zentrale-paper"; fi
 
+# HIER STEHT BEWUSST KEIN Testlauf-Riegel, anders als bei den anderen vier
+# Appliern. Der Riegel gilt fuer alles, was in eine LAUFENDE Sitzung schreibt
+# (xfconf, gsettings, tmux-Server) — solche Dienste haengen nicht an HOME und
+# sind deshalb nicht isolierbar. bat ist der Gegenfall: es schreibt in eine
+# ganz normale Datei unter HOME, und die ist im Testlauf laengst umgelenkt.
+# Ein Riegel waere hier nur Symmetrie und wuerde die Tests blind machen, die
+# genau dieses Schreiben pruefen (tests/test_bat_theme.py).
 case "${1:-}" in
   --resolve) printf '%s\n' "$resolved"; exit 0 ;;
   --dry-run) printf '%s theme=%s config=%s\n' "$resolved" "$THEME" "$BAT_CFG"; exit 0 ;;

@@ -88,6 +88,28 @@ set_prop() {
   xfconf-query -c "$1" -p "$2" -s "$3" 2>/dev/null
 }
 
+# ── Kein Schreiben in eine LAUFENDE Sitzung aus einem Testlauf ───────────
+# Applier schreiben nicht in Dateien, sondern in Sitzungs-Dienste (xfconf,
+# gsettings). Die haengen NICHT an HOME — jede Isolation ueber HOME oder
+# Env-Variablen greift bei ihnen prinzipiell nicht, sie treffen IMMER die
+# echte Sitzung des angemeldeten Menschen. Ein Testlauf hat dort nichts
+# verloren: am 2026-08-18 stand Sashas Desktop wiederholt auf der
+# Nacht-Kombination, waehrend theme und theme.now unveraendert "day" sagten
+# — erkennbar am Icon-Fallback (Papirus statt ZENTRALE-*), weil der Applier
+# mit einem Wegwerf-HOME lief. Im Protokoll stand nichts, weil dabei gar
+# keine Theme-Datei angefasst wurde.
+#
+# Deshalb: im Testlauf verhaelt sich der Applier wie --dry-run. Ausgabe ja
+# (Tests pruefen sie), Sitzung unberuehrt. Reine Auskunfts-Aufrufe bleiben,
+# was sie sind. Erklaerung: memory/system/dashboard.md.
+case "${1:-}" in
+  --dry-run|--resolve|--help|-h) : ;;
+  *) if [ -n "${ZENTRALE_TESTLAUF:-}" ] || [ -n "${PYTEST_VERSION:-}" ] \
+       || [ -n "${PYTEST_CURRENT_TEST:-}" ]; then
+       set -- --dry-run
+     fi ;;
+esac
+
 case "${1:-}" in
   --resolve) printf '%s\n' "$RESOLVED"; exit 0 ;;
   --dry-run) printf '%s gtk=%s wm=%s icons=%s\n' "$RESOLVED" "$GTK" "$WM" "$ICON"; exit 0 ;;

@@ -66,6 +66,17 @@ def _echte_konfiguration(pfad):
     return os.path.realpath(pfad).startswith(echt + os.sep)
 
 
+def ist_testlauf():
+    """Gehört dieser Prozess zu einem Testlauf?
+
+    Gesetzt wird das von `scripts/zentrale_testguard.py` (ZENTRALE_TESTLAUF)
+    bzw. von pytest selbst, das seine Marker an Kindprozesse vererbt.
+    """
+    return bool(os.environ.get("ZENTRALE_TESTLAUF")
+                or os.environ.get("PYTEST_VERSION")
+                or os.environ.get("PYTEST_CURRENT_TEST"))
+
+
 def darf_schreiben(pfad):
     """Darf DIESER Prozess `pfad` schreiben? → (bool, Grund)
 
@@ -305,6 +316,20 @@ class ThemeDaemon:
             # Terminal, nvim und Desktop umfaerben.
             return None
         self._schreibe(soll)
+        # ── Aus einem Testlauf werden NIE Applier gestartet ──────────────
+        # Das ist die Stelle, an der die Kette bisher riss, und sie ist
+        # unscheinbar: JEDER Applier ruft `zentrale-themed --once`, wenn er
+        # theme.now nicht findet (siehe resolve() dort). Im Wegwerf-HOME eines
+        # Testlaufs fehlt die Datei immer — also loeste selbst ein harmloses
+        # `--dry-run` aus einem Test hier einen Einmal-Lauf aus, und DER hat
+        # dann alle Applier scharf gestartet. Die schreiben in xfconf/gsettings,
+        # und die haengen nicht an HOME: Sashas echter Desktop sprang um,
+        # waehrend beide Theme-Dateien unveraendert dastanden.
+        #
+        # theme.now oben zu schreiben bleibt richtig — die Datei ist im
+        # Testlauf ohnehin umgelenkt, und der Aufrufer braucht eine Antwort.
+        if ist_testlauf():
+            return soll
         for applier in self.appliers:
             self.runner(applier)
         return soll
@@ -325,8 +350,12 @@ class ThemeDaemon:
 
 #: Die Applier, die nach einer Änderung angestoßen werden. bat ist dabei,
 #: obwohl es nichts umfärbt: es liest seine Config bei jedem Aufruf neu.
+#: tmux kam am 2026-08-18 dazu — es war der einzige Teilnehmer, der auf einer
+#: festen Farbe saß, während alle anderen mitzogen. Das sah aus wie »das Theme
+#: schaltet nur halb um«.
 APPLIERS = ("zentrale-term-theme", "zentrale-browser-theme",
-            "zentrale-desktop-theme", "zentrale-bat-theme")
+            "zentrale-desktop-theme", "zentrale-bat-theme",
+            "zentrale-tmux-theme")
 
 
 def _start_applier(name):

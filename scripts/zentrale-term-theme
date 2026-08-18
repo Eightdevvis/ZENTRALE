@@ -58,6 +58,18 @@ else
   PALETTE="#33291c;#972920;#44661d;#765c14;#2f5f7d;#8a3357;#3a664b;#e9dfc4;#6e6551;#86241c;#354f16;#59450f;#254b63;#792c4c;#2c4e39;#fbf7ec"
 fi
 
+# ── Kein Schreiben in eine LAUFENDE Sitzung aus einem Testlauf ───────────
+# Begruendung in scripts/zentrale-desktop-theme (gleicher Block) und in
+# memory/system/dashboard.md: xfconf haengt nicht an HOME, ein Testlauf
+# trifft also immer die echte Sitzung. Im Testlauf = wie --dry-run.
+case "${1:-}" in
+  --dry-run|--resolve|--help|-h) : ;;
+  *) if [ -n "${ZENTRALE_TESTLAUF:-}" ] || [ -n "${PYTEST_VERSION:-}" ] \
+       || [ -n "${PYTEST_CURRENT_TEST:-}" ]; then
+       set -- --dry-run
+     fi ;;
+esac
+
 case "${1:-}" in
   --resolve) printf '%s\n' "$resolved"; exit 0 ;;
   --dry-run) printf '%s bg=%s fg=%s\n' "$resolved" "$BG" "$FG"; exit 0 ;;

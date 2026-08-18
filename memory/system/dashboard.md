@@ -147,6 +147,56 @@ alten `zentrale-theme.{service,timer}` ab und aktiviert
 `deploy/zentrale-themed.service`. `zentrale-themed --status` zeigt Wunsch,
 Ergebnis und den nächsten Wechsel; `--once` gleicht einmal ab.
 
+### Die Kopplung auf einen Blick
+
+```
+   Taste 't'  ───►  ~/.config/zentrale/theme      WUNSCH  auto|day|night
+   (nur die TUI                  │ inotify
+    schreibt hier)               ▼
+                    zentrale-themed (Dienst)      löst 'auto' auf (05/21) —
+                                  │               die EINZIGE Uhr im Projekt
+                                  ▼
+                    ~/.config/zentrale/theme.now  ERGEBNIS  day|night
+                        │                      │
+          PUSH ─────────┘                      └───────── PULL
+   (der Dienst startet sie)              (lesen selbst, bei jedem Zeichnen)
+
+   zentrale-term-theme    → xfconf       TUI      (jeder Bildaufbau)
+   zentrale-browser-theme → gsettings    nvim     (fs_event + 60-s-Reparaturtick)
+   zentrale-desktop-theme → xfconf       morgen_messenger
+   zentrale-bat-theme     → ~/.config    tutor/room
+   zentrale-tmux-theme    → tmux-Server
+```
+
+**Die Pull-Seite ist die gesunde.** Ein Wort aus einer Datei, jeder liest
+selbst, keine Uhr, kein Timer, kein Zustand. Wer hier hängt, hängt nie falsch.
+
+**Die Push-Seite ist die gefährliche**, und zwar aus einem Grund, der sich nicht
+wegkonfigurieren lässt: Applier schreiben nicht in Dateien, sondern in
+**laufende Sitzungs-Dienste** (xfconf, gsettings, der tmux-Server). Die hängen
+**nicht an `HOME`**. Jede Isolation über Umgebungsvariablen — `HOME`,
+`XDG_*`, `ZENTRALE_THEME_*` — greift bei ihnen prinzipiell nicht; sie treffen
+immer die Sitzung des angemeldeten Menschen. Deshalb gilt: **aus einem Testlauf
+darf nie ein Push entstehen** (`theme.ist_testlauf()`, geprüft in
+`ThemeDaemon.tick()` und noch einmal in jedem Applier selbst).
+
+Der Weg, auf dem das riss, sah harmlos aus: Jeder Applier ruft
+`zentrale-themed --once`, wenn er `theme.now` nicht findet. Im Wegwerf-`HOME`
+eines Testlaufs fehlt die Datei **immer** — also löste selbst ein `--dry-run`
+aus einem Test einen Einmal-Lauf des Dienstes aus, und der startete alle
+Applier scharf. Sashas Desktop stand dann auf der Nacht-Kombination, während
+`theme` und `theme.now` unverändert `day` sagten; im Änderungsprotokoll stand
+nichts, weil dabei gar keine Theme-Datei angefasst wurde. Erkennungsmerkmal für
+diesen Fall: die Icons stehen auf `Papirus-*` statt `ZENTRALE-*` — der Fallback,
+den der Applier nur nimmt, wenn er die Icon-Sets unter `HOME` nicht findet.
+
+**Was das Protokoll NICHT kann:** `ThemeState.set()` hat `quelle="tui"` als
+Default. Jeder Aufrufer ohne eigene Angabe steht deshalb als `tui` im Log, und
+`zentrale-theme-watch` schließt daraus „die TUI war es". Das ist ein
+Zirkelschluss — er hat die Suche einen halben Tag in die falsche Richtung
+geschickt. Wer hier etwas beweisen will, misst den **Ist-Zustand** (xfconf,
+`theme.now`, die Applier-Stempel), nicht die Log-Zeile.
+
 ### Warum das Theme trotzdem noch sprang: Testläufe aus Arbeitskopien
 
 Der Umbau oben hat die Rückkopplung *im Betriebscode* beseitigt — das Springen

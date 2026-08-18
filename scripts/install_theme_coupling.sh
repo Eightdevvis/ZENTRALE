@@ -40,7 +40,7 @@ mkdir -p "$BIN" "$UNITS" "$HOME/.config/zentrale"
 
 # 1. Applier-Symlinks
 for a in zentrale-themed zentrale-term-theme zentrale-browser-theme \
-         zentrale-desktop-theme zentrale-theme-watch; do
+         zentrale-desktop-theme zentrale-tmux-theme zentrale-theme-watch; do
   ln -sf "$REPO/scripts/$a" "$BIN/$a"
   echo "symlink: $BIN/$a -> $REPO/scripts/$a"
 done

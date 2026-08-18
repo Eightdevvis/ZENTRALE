@@ -32,6 +32,17 @@ def umgebung(tmp_path, monkeypatch):
     wunsch.write_text("auto\n")
     monkeypatch.setenv("ZENTRALE_THEME_FILE", str(wunsch))
     monkeypatch.setenv("ZENTRALE_THEME_NOW", str(tmp_path / "theme.now"))
+    # Den Testlauf-Riegel hier bewusst ABSCHALTEN: der Dienst startet seit
+    # 2026-08-18 im Testlauf keine Applier mehr (theme.ist_testlauf, siehe
+    # memory/system/dashboard.md) — genau darum geht es in dieser Datei aber.
+    # Gefahrlos ist das, weil jeder Daemon hier per _daemon() einen Fake-Runner
+    # bekommt: es kann gar kein echter Applier-Prozess entstehen. Dass der
+    # Riegel im Ernstfall greift, prueft tests/test_keine_seiteneffekte.py.
+    #
+    # Die Funktion patchen statt die Env-Marker zu loeschen: PYTEST_CURRENT_TEST
+    # setzt pytest vor JEDER Testphase neu, ein delenv in der Fixture waere also
+    # schon beim Aufruf des Tests wieder ueberschrieben.
+    monkeypatch.setattr(T, "ist_testlauf", lambda: False)
     return wunsch, tmp_path / "theme.now"
 
 

@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# zentrale-tmux-theme — koppelt tmux an ZENTRALEs Tag/Nacht-Theme.
+#
+# WARUM ES DIESEN APPLIER GIBT
+# ----------------------------
+# tmux war der einzige Teilnehmer der Kopplung, der KEINER war. Terminal,
+# Browser, Desktop, bat und nvim zogen mit; tmux sass mit `status-style
+# bg=green` auf einer festen Farbe, die weder zu Papier noch zu Cyber passt.
+# Fuer Sasha sah das aus wie "das Theme schaltet nur halb um" — und weil der
+# Rest korrekt umschaltete, wirkte gerade der stumme Teil wie der Fehler.
+#
+# tmux ist dabei ein Sonderfall zwischen den beiden Sorten Teilnehmer: es ist
+# ein LAUFENDER Prozess (also nichts, was beim naechsten Aufruf neu liest wie
+# bat), aber es faerbt sich nicht selbst nach (wie es TUI und nvim tun). Also
+# gehoert es zu den Appliern: einer stoesst es an, es setzt seine Optionen.
+#
+# WAS GESETZT WIRD
+# ----------------
+# Nur die Leiste und die Rahmen — also das, was tmux SELBST malt. Den
+# Pane-Hintergrund fasst dieser Applier bewusst NICHT an: den erbt tmux vom
+# Terminal, und das faerbt zentrale-term-theme. Setzten wir hier zusaetzlich
+# ein window-style, hinge dieselbe Farbe an zwei Stellen — genau die Doppelung,
+# die bei diesem Theme schon einmal Jahre gekostet hat.
+#
+# Farben aus derselben Palette wie nvim/bat (siehe nvim/lua/zentrale_theme/
+# palettes.lua): Papier = warmer Ocker auf Sand, Cyber = Neon auf Schwarz.
+set -u
+
+# ── Die effektive Farbe kommt vom Dienst, wir rechnen NICHTS ──────────────
+# Aufgeloest wird an genau einer Stelle im Projekt: scripts/zentrale-themed
+# schreibt day|night nach theme.now.
+NOW="${ZENTRALE_THEME_NOW:-$HOME/.config/zentrale/theme.now}"
+resolved="$(tr -d '[:space:]' < "$NOW" 2>/dev/null)"
+if [ "$resolved" != "day" ] && [ "$resolved" != "night" ]; then
+  zentrale-themed --once >/dev/null 2>&1 || true
+  resolved="$(tr -d '[:space:]' < "$NOW" 2>/dev/null)"
+  [ "$resolved" = "day" ] || [ "$resolved" = "night" ] || resolved="day"
+fi
+
+if [ "$resolved" = "night" ]; then
+  # cyber: Neon-Cyan auf Schwarz, aktiver Rahmen kraeftig.
+  ST_BG="${ZENTRALE_TMUX_BG_NIGHT:-#0d0d0d}"
+  ST_FG="${ZENTRALE_TMUX_FG_NIGHT:-#5ff2f2}"
+  BORDER="${ZENTRALE_TMUX_BORDER_NIGHT:-#2a3a3a}"
+  BORDER_ON="${ZENTRALE_TMUX_BORDER_ON_NIGHT:-#5ff2f2}"
+else
+  # paper: dunkler Ocker auf Sand, damit es auf hellem Grund Tiefe hat.
+  ST_BG="${ZENTRALE_TMUX_BG_DAY:-#e3d6b8}"
+  ST_FG="${ZENTRALE_TMUX_FG_DAY:-#33291c}"
+  BORDER="${ZENTRALE_TMUX_BORDER_DAY:-#c4b795}"
+  BORDER_ON="${ZENTRALE_TMUX_BORDER_ON_DAY:-#b35a00}"
+fi
+
+# ── Kein Schreiben in eine LAUFENDE Sitzung aus einem Testlauf ───────────
+# Begruendung in scripts/zentrale-desktop-theme (gleicher Block) und in
+# memory/system/dashboard.md: der tmux-Server ist eine laufende Sitzung und
+# haengt nicht an HOME — ein Testlauf trifft also Sashas echte Fenster.
+# Im Testlauf = wie --dry-run.
+case "${1:-}" in
+  --dry-run|--resolve|--help|-h) : ;;
+  *) if [ -n "${ZENTRALE_TESTLAUF:-}" ] || [ -n "${PYTEST_VERSION:-}" ] \
+       || [ -n "${PYTEST_CURRENT_TEST:-}" ]; then
+       set -- --dry-run
+     fi ;;
+esac
+
+case "${1:-}" in
+  --resolve) printf '%s\n' "$resolved"; exit 0 ;;
+  --dry-run) printf '%s status=%s/%s border=%s/%s\n' \
+               "$resolved" "$ST_BG" "$ST_FG" "$BORDER" "$BORDER_ON"; exit 0 ;;
+esac
+
+# Laeuft ueberhaupt ein tmux-Server? Wenn nicht, ist hier nichts zu tun —
+# das ist kein Fehler (der Applier laeuft auf jedem Knoten, auch ohne tmux).
+command -v tmux >/dev/null 2>&1 || exit 0
+tmux has-session 2>/dev/null || exit 0
+
+# -g setzt die globale Option: sie gilt fuer alle Sessions dieses Servers,
+# auch fuer spaeter geoeffnete Fenster.
+tmux set-option -g status-style "bg=$ST_BG,fg=$ST_FG" 2>/dev/null || true
+tmux set-option -g pane-border-style "fg=$BORDER" 2>/dev/null || true
+tmux set-option -g pane-active-border-style "fg=$BORDER_ON,bold" 2>/dev/null || true
+
+# tmux zeichnet die Leiste erst beim naechsten Tick neu — einmal anstossen,
+# damit die Farbe sofort steht statt bis zu einer Sekunde spaeter.
+tmux refresh-client -S 2>/dev/null || true

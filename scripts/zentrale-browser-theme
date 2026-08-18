@@ -64,6 +64,18 @@ RESOLVED="$(resolve)"
 [ "$RESOLVED" = "night" ] && SCHEME="prefer-dark" || SCHEME="prefer-light"
 
 # ── Test-/Diagnose-Subcommands (keine Seiteneffekte) ───────────────────────
+# ── Kein Schreiben in eine LAUFENDE Sitzung aus einem Testlauf ───────────
+# Begruendung in scripts/zentrale-desktop-theme (gleicher Block) und in
+# memory/system/dashboard.md: gsettings haengt nicht an HOME, ein Testlauf
+# trifft also immer die echte Sitzung. Im Testlauf = wie --dry-run.
+case "${1:-}" in
+  --dry-run|--resolve|--help|-h) : ;;
+  *) if [ -n "${ZENTRALE_TESTLAUF:-}" ] || [ -n "${PYTEST_VERSION:-}" ] \
+       || [ -n "${PYTEST_CURRENT_TEST:-}" ]; then
+       set -- --dry-run
+     fi ;;
+esac
+
 case "${1:-}" in
   --resolve)  printf '%s\n' "$RESOLVED"; exit 0 ;;
   --dry-run)  printf '%s %s\n' "$RESOLVED" "$SCHEME"; exit 0 ;;
