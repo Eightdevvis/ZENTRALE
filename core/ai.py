@@ -406,6 +406,13 @@ PERMISSION_REQUIRED_TOOLS = {
     # (write_note) ist es nicht und bleibt bewusst ungegatet: eine KI, die
     # vor jeder Notiz fragt, ist kein Sekretär, sondern eine Zumutung.
     "rewrite_note",
+    # Holt etwas aus dem Netz UND legt es ab — beide Haelften wollen
+    # bestaetigt sein: die Internet-Pipe wie bei fetch_url, und das
+    # Schreiben, weil sonst ungefragt Dateien im Gedaechtnis landen.
+    "fetch_document",
+    # Neue Messkurve: ohne Gate wuerde aus jedem Tippfehler eine weitere
+    # halbtote Reihe in Sashas Uebersicht.
+    "create_series",
     # Internet-Pipe: jeder Call nach draußen wird bestätigt. ZENTRALE ist
     # sonst offline - was das LAN verlässt, gibt Sasha bewusst frei.
     "web_search",
@@ -431,6 +438,11 @@ def _permission_question(name: str, args: dict) -> str:
     """
     name = profil.kanonisch(name)
     label = (args.get("label") or "").strip() or "diesen Eintrag"
+    if name == "fetch_document":
+        return (f'Soll ich {args.get("url", "das")} holen und als '
+                f'"{args.get("name", "Dokument")}" ablegen?')
+    if name == "create_series":
+        return f'Soll ich eine neue Messkurve "{args.get("name", "?")}" anlegen?'
     if name == "rewrite_note":
         wie = (args.get("name") or "das Dossier").strip()
         return (f'Soll ich das Dossier "{wie}" komplett neu schreiben? '
@@ -638,10 +650,39 @@ def _dispatch_tool(name: str, args: dict) -> str:
     elif name == "search_memory":
         import gedaechtnis
         return gedaechtnis.suchen(args.get("query") or "")
+    elif name == "fetch_document":
+        import gedaechtnis
+        return gedaechtnis.dokument_holen(args.get("url") or "",
+                                          args.get("name") or "")
+    elif name == "create_series":
+        return _create_series(args)
     elif name == "log_series":
         return _log_series(args)
     else:
         return f"[Unbekanntes Tool: {name}]"
+
+
+def _create_series(args: dict) -> str:
+    """Eine neue Messkurve anlegen (gegatet).
+
+    Ohne Gate wuerde aus jedem Tippfehler eine weitere halbtote Reihe in
+    Sashas Uebersicht — deshalb legt `log_series` nichts von selbst an und
+    dieser Weg fragt einmal nach.
+    """
+    import graphs
+    wie = (args.get("name") or "").strip()
+    if not wie:
+        return "[Fehler: kein Name]"
+    if any(g.get("name", "").casefold() == wie.casefold()
+           for g in graphs.list_graphs()):
+        return f"[Die Reihe {wie!r} gibt es schon.]"
+    try:
+        graphs.create_graph(wie, gtype=(args.get("typ") or "number"),
+                            unit=(args.get("einheit") or ""))
+    except Exception as e:
+        return f"[Anlegen fehlgeschlagen: {e}]"
+    return (f"Messreihe {wie!r} angelegt. Trag Werte mit log_series ein und "
+            f"verlink sie im Dossier der Sache.")
 
 
 def _log_series(args: dict) -> str:

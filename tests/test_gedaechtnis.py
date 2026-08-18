@@ -187,3 +187,108 @@ def test_beide_schienen_bieten_sich_nicht_an():
     for text in (klein.SYSTEM, gross.system()):
         assert "## Kein Dienstbotentum" in text
         assert "Du bietest dich nicht an" in text
+
+
+# ── Drei Sorten Ablage ────────────────────────────────────────────────
+
+def test_name_findet_seinen_bereich():
+    """"kataloge/ideen" und "ideen" muessen dasselbe treffen — sie soll
+    nicht ueber Pfade nachdenken muessen."""
+    gedaechtnis.dossier_notieren("kataloge/ideen", "## Fourier-Visualisierer")
+    assert gedaechtnis._finden("kataloge/ideen") == ("kataloge", "ideen")
+    assert gedaechtnis._finden("ideen") == ("kataloge", "ideen")
+    assert "Fourier" in gedaechtnis.dossier_lesen("ideen")
+
+
+def test_unbekannter_name_landet_in_dossiers():
+    """Der Prosa-Ordner ist der ungefaehrliche Default: ein versehentlich
+    dort gelandeter Eintrag stoert niemanden, ein versehentlich in einem
+    Katalog gelandeter Absatz zerschiesst dessen Form."""
+    assert gedaechtnis._finden("voellig neues ding")[0] == "dossiers"
+
+
+def test_suche_deckt_alle_bereiche_ab():
+    gedaechtnis.dossier_notieren("kataloge/ideen", "thema: fourier")
+    gedaechtnis.dossier_notieren("quellen/modulhandbuch", "Signalverarbeitung: fourier")
+    gedaechtnis.dossier_notieren("dossiers/organoide", "MEA misst fourier nicht")
+    treffer = gedaechtnis.suchen("fourier")
+    for bereich in ("kataloge", "quellen", "dossiers"):
+        assert bereich in treffer
+
+
+def test_kopf_block_zeigt_die_bereiche_und_das_status_vokabular():
+    """Sie muss wissen, dass es Kataloge gibt und welche Zustaende ein
+    Eintrag haben darf — sonst erfindet sie sich eigene, und wir haetten
+    dasselbe Problem wie beim Graphen."""
+    gedaechtnis.dossier_notieren("kataloge/ideen", "x")
+    gedaechtnis.dossier_notieren("dossiers/umzug", "y")
+    block = gedaechtnis.kopf_block()
+    assert "kataloge/" in block and "dossiers/" in block
+    for zustand in ("idee", "priorisiert", "queued", "in_schedule"):
+        assert zustand in block
+    assert "thema" in block and "dossier" in block
+
+
+# ── Aus dem Netz holen, an EINEN Ort ──────────────────────────────────
+
+def test_nur_http():
+    assert "nur http" in gedaechtnis.dokument_holen("ftp://x/y", "test")
+
+
+def test_html_wird_zu_text(monkeypatch):
+    _fake_abruf(monkeypatch, b"<html><body><h1>Modul</h1>"
+                             b"<script>weg()</script><p>Signalverarbeitung</p>"
+                             b"</body></html>", "text/html")
+    gedaechtnis.dokument_holen("https://uni.de/mh", "modulhandbuch")
+    text = gedaechtnis.dossier_lesen("quellen/modulhandbuch")
+    assert "Signalverarbeitung" in text
+    assert "<p>" not in text and "weg()" not in text
+    assert "https://uni.de/mh" in text        # Herkunft bleibt dran
+
+
+def test_binaeres_landet_als_datei_mit_vermerk(monkeypatch, tmp_path):
+    """Sashas Bedingung: es soll nichts rumfliegen. Also hat jede geholte
+    Sache genau einen Ort UND einen lesbaren Eintrag — auch wenn die Datei
+    selbst binaer ist."""
+    import os
+    _fake_abruf(monkeypatch, b"\x89PNG\r\n\x1a\n" + b"x" * 100, "image/png")
+    antwort = gedaechtnis.dokument_holen("https://x/plan.png", "stundenplan")
+    assert "quellen/dateien" in antwort
+    datei = os.path.join(gedaechtnis._wurzel(), gedaechtnis.DATEIEN,
+                         "stundenplan.png")
+    assert os.path.exists(datei)
+    vermerk = gedaechtnis.dossier_lesen("quellen/stundenplan")
+    assert "Binaerdatei" in vermerk and "stundenplan.png" in vermerk
+
+
+def _fake_abruf(monkeypatch, daten, typ):
+    """urlopen faelschen — kein Netz im Testlauf."""
+    import urllib.request
+
+    class Antwort:
+        headers = {"Content-Type": typ}
+
+        def read(self, n=None):
+            return daten
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: Antwort())
+
+
+# ── Messkurven anlegen ────────────────────────────────────────────────
+
+def test_neue_kurve_ist_gegatet():
+    """Ohne Gate wuerde aus jedem Tippfehler eine weitere halbtote Reihe."""
+    assert ai.braucht_erlaubnis("create_series")
+    assert "Messkurve" in ai._permission_question("create_series",
+                                                  {"name": "spagat_cm"})
+
+
+def test_log_series_legt_nichts_von_selbst_an():
+    antwort = ai._log_series({"series": "gibtsnicht", "value": 3})
+    assert "Keine Messreihe" in antwort

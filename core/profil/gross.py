@@ -297,6 +297,57 @@ _GEDAECHTNIS = [
     {
         "type": "function",
         "function": {
+            "name": "fetch_document",
+            "description": (
+                "Holt etwas aus dem Netz und LEGT ES AB — Modulhandbuch, "
+                "Stundenplan, Datenblatt, Artikel. PDF wird automatisch zu "
+                "Text, HTML entrumpelt, Binaeres als Datei mit Vermerk "
+                "abgelegt. Danach lesbar mit read_note und durchsuchbar mit "
+                "search_memory. Unterschied zu fetch_url: das liest etwas "
+                "JETZT und vergisst es; hier wird abgelegt, um es spaeter "
+                "wiederzufinden. Gib einen sprechenden 'name' — daraus wird "
+                "der Ablageort."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url":  {"type": "string", "description": "http(s)-Adresse."},
+                    "name": {"type": "string",
+                             "description": "Kurzer Titel, z.B. 'modulhandbuch'."},
+                },
+                "required": ["url", "name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_series",
+            "description": (
+                "Legt eine neue Messkurve an — nur wenn Sasha etwas wirklich "
+                "verfolgen will (Spagat in cm, L-Sit in Sekunden). Wird "
+                "bestaetigt, damit aus Tippfehlern keine Halde halbtoter "
+                "Kurven wird. Typen: 'number' (Zahl mit Einheit), 'scale' "
+                "(1-10), 'time' (nur dass es an dem Tag war), 'period' "
+                "(von-bis). Danach traegst du Werte mit log_series ein und "
+                "verlinkst die Reihe im Dossier der Sache."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name":   {"type": "string", "description": "Name der Reihe."},
+                    "typ":    {"type": "string",
+                               "enum": ["number", "scale", "time", "period"]},
+                    "einheit": {"type": "string",
+                                "description": "z.B. 'cm', 's', 'km'. Optional."},
+                },
+                "required": ["name", "typ"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "log_series",
             "description": (
                 "Traegt einen Messwert in eine bestehende Kurve ein (Schlaf, "
