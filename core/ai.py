@@ -634,6 +634,10 @@ def _dispatch_tool(name: str, args: dict) -> str:
             return gedaechtnis.ziele() or "[Ziele sind noch leer]"
         if wie.lower() in ("hausregeln", "regeln"):
             return gedaechtnis.hausregeln() or "[Noch keine Hausregeln]"
+        if wie.lower().startswith(("vorlage", "template")):
+            # ueber vorlage() statt ueber die Datei: sie legt sie beim
+            # ersten Zugriff an, damit ein frischer Rechner sofort eine hat.
+            return gedaechtnis.vorlage(wie.split("/")[-1])
         if wie.lower() in ("tagebuch", "diary"):
             return gedaechtnis.tagebuch_lesen() or "[Heute noch nichts notiert]"
         inhalt = gedaechtnis.dossier_lesen(wie)

@@ -385,3 +385,122 @@ def test_titel_wird_nicht_doppelt_gerendert():
     block = gedaechtnis.kopf_block()
     assert "Studiert Biophysik." in block
     assert "# Sasha" not in block
+
+
+# ── Das Katalog-Item steckt IM Dossier ────────────────────────────────
+#
+# Sasha hat gemeldet, dass beim Schreiben eines Dossiers nicht verlaesslich
+# ein Katalog-Eintrag dazu auftaucht. Das war eine Anweisung im Prompt, und
+# Anweisungen werden uebergangen. Jetzt ist der Kopf des Dossiers DER
+# Eintrag, und der Code traegt ihn ein.
+
+KOPF = """## Küche fertig bauen
+- katalog: ideen
+- thema: umzug, kueche
+- equipment: akkuschrauber
+- aufwand: mittel
+- status: priorisiert
+
+## Ziel
+Eine benutzbare Küche."""
+
+
+def test_kopf_wird_gelesen():
+    kopf = gedaechtnis.kopf_lesen(KOPF)
+    assert kopf["titel"] == "Küche fertig bauen"
+    assert kopf["katalog"] == "ideen"
+    assert kopf["aufwand"] == "mittel"
+
+
+def test_ohne_kopf_kein_dict():
+    """Ein Dossier ohne Kopf ist erlaubt — es taucht dann nur in keinem
+    Katalog auf. Es darf nur nichts Halbes entstehen."""
+    assert gedaechtnis.kopf_lesen("Einfach nur Prosa.") == {}
+    assert gedaechtnis.kopf_lesen("## Titel ohne Felder") == {}
+
+
+def test_dossier_erzeugt_den_katalog_eintrag():
+    gedaechtnis.dossier_notieren("kueche", KOPF)
+    eintrag = gedaechtnis.dossier_lesen("kataloge/ideen")
+    assert "## Küche fertig bauen" in eintrag
+    assert "akkuschrauber" in eintrag
+
+
+def test_der_code_setzt_die_verknuepfung():
+    """`dossier:` kommt nie aus dem Text — genau dieser Teil ging bisher
+    verloren."""
+    gedaechtnis.dossier_notieren("kueche", KOPF + "\n- dossier: unsinn\n")
+    assert "dossier:   kueche" in gedaechtnis.dossier_lesen("kataloge/ideen")
+    assert "unsinn" not in gedaechtnis.dossier_lesen("kataloge/ideen")
+
+
+def test_status_zieht_nach_statt_zu_doppeln():
+    """Die Probe aufs Exempel: eine Wahrheit, nicht zwei. Ein zweiter
+    Eintrag daneben waere die Doppelpflege durch die Hintertuer."""
+    gedaechtnis.dossier_notieren("kueche", KOPF)
+    gedaechtnis.dossier_notieren("kueche",
+                                 KOPF.replace("priorisiert", "in_schedule"))
+    kat = gedaechtnis.dossier_lesen("kataloge/ideen")
+    assert kat.count("## Küche fertig bauen") == 1
+    assert "in_schedule" in kat and "priorisiert" not in kat
+
+
+def test_notizen_ueberleben_einen_neuen_kopf():
+    """Der Kopf wird ersetzt, die Prosa darunter nicht."""
+    gedaechtnis.dossier_notieren("kueche", KOPF)
+    gedaechtnis.dossier_notieren("kueche", "Regale hängen jetzt.")
+    gedaechtnis.dossier_notieren("kueche",
+                                 KOPF.replace("priorisiert", "in_schedule"))
+    text = gedaechtnis.dossier_lesen("kueche")
+    assert "Regale hängen jetzt." in text
+    assert text.count("## Küche fertig bauen") == 1
+
+
+def test_notiz_landet_nicht_im_kopf():
+    """Eine gewoehnliche Notiz kommt weiter unter ihr Datum — sonst stuende
+    sie mitten im Katalog-Block und der Abgleich faende ihn nie."""
+    from datetime import date
+    gedaechtnis.dossier_notieren("kueche", KOPF)
+    gedaechtnis.dossier_notieren("kueche", "Nur eine Notiz.")
+    text = gedaechtnis.dossier_lesen("kueche")
+    assert f"## {date.today().isoformat()}" in text
+
+
+def test_dossier_ohne_kopf_laesst_den_katalog_in_ruhe():
+    gedaechtnis.dossier_notieren("kataloge/ideen", "## Von Hand\n- status: idee")
+    gedaechtnis.dossier_notieren("irgendwas", "Nur Prosa, kein Kopf.")
+    assert "Von Hand" in gedaechtnis.dossier_lesen("kataloge/ideen")
+    assert "irgendwas" not in gedaechtnis.dossier_lesen("kataloge/ideen")
+
+
+def test_unbekannter_katalog_wird_angelegt_und_gesagt():
+    """Anlegen ja — aber sichtbar, damit kein stiller Wildwuchs entsteht."""
+    antwort = gedaechtnis.dossier_notieren(
+        "loeten", KOPF.replace("katalog: ideen", "katalog: werkstatt"))
+    assert "werkstatt" in antwort and "neu angelegt" in antwort
+    assert "werkstatt" in gedaechtnis.liste("kataloge")
+
+
+def test_vorlagen_gibt_es_und_die_dossier_vorlage_traegt_den_kopf():
+    """Die Kopplung entsteht daraus, dass die Dossier-Vorlage den
+    Katalog-Block SCHON enthaelt — die KI muss an nichts denken."""
+    dv = gedaechtnis.vorlage("dossier")
+    assert "katalog:" in dv and "status:" in dv
+    # ab dem ersten "## " muss ein parsbarer Kopf stehen
+    assert gedaechtnis.kopf_lesen(dv[dv.index("## "):])["titel"]
+    assert "katalog:" in gedaechtnis.vorlage("katalog")
+
+
+def test_vorlage_ueber_read_note():
+    assert "Katalog-Eintrag" in ai._dispatch_tool(
+        "read_note", {"name": "vorlagen/dossier"})
+
+
+def test_konsistenz_findet_beide_waisen():
+    gedaechtnis.dossier_notieren("kueche", KOPF)
+    gedaechtnis.dossier_notieren("verwaist", "Prosa ohne Kopf.")
+    import os
+    os.remove(gedaechtnis._pfad("dossiers", "kueche"))
+    befund = " ".join(gedaechtnis.konsistenz())
+    assert "kueche" in befund          # Eintrag zeigt ins Leere
+    assert "verwaist" in befund        # Dossier ohne Kopf

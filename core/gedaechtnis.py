@@ -218,7 +218,7 @@ def regel_notieren(text: str) -> str:
 
 # ── Bereiche ──────────────────────────────────────────────────────────
 
-BEREICHE = ("dossiers", "kataloge", "quellen")
+BEREICHE = ("dossiers", "kataloge", "quellen", "vorlagen")
 
 # Zustaende eines Katalog-Eintrags. Sashas Schnitt, 18.08.2026 — er
 # unterscheidet, was bloss Einfall ist, was ihm wirklich wichtig waere,
@@ -288,6 +288,19 @@ def dossier_notieren(name: str, text: str) -> str:
 
     pfad = _pfad(bereich, schluessel)
     war_da = os.path.exists(pfad)
+
+    # Beginnt der Text mit einem Katalog-Kopf, ist er der KOPF des Dossiers
+    # und keine Tagesnotiz. Ihn unter eine Datums-Ueberschrift zu haengen
+    # waere genau der Fehler, den die Vorlage vermeiden soll — dann stuende
+    # der Eintrag mitten im Text und der Abgleich faende ihn nie.
+    kopf = kopf_lesen(text) if bereich == "dossiers" else {}
+    if kopf:
+        _kopf_setzen(pfad, text)
+        hinweis = katalog_abgleichen(schluessel)
+        return (f"{'Kopf von' if war_da else 'Neu angelegt:'} "
+                f"{bereich}/{schluessel}."
+                + (f" {hinweis}." if hinweis else ""))
+
     _anhaengen(pfad, f"\n## {date.today().isoformat()}\n{text}\n")
 
     zu_lang = len(_lesen(pfad)) > MAX_DOSSIER
@@ -315,8 +328,253 @@ def dossier_ersetzen(name: str, inhalt: str) -> str:
             f.write(alt)
     with open(pfad, "w", encoding="utf-8") as f:
         f.write((inhalt or "").strip() + "\n")
+    hinweis = katalog_abgleichen(schluessel) if bereich == "dossiers" else ""
     return (f"{bereich}/{schluessel} neu geschrieben"
-            + (" (alte Fassung liegt als .bak daneben)." if alt else "."))
+            + (" (alte Fassung liegt als .bak daneben)" if alt else "")
+            + (f". {hinweis}." if hinweis else "."))
+
+
+# ── Vorlagen, Katalog-Kopf und Abgleich ───────────────────────────────
+#
+# Das Problem, das Sasha gemeldet hat: schreibt sie ein Dossier, taucht
+# nicht verlaesslich ein Katalog-Eintrag dazu auf. Das war eine ANWEISUNG
+# im Prompt, und Anweisungen werden uebergangen.
+#
+# Die Loesung ist, das zweite Artefakt abzuschaffen. Der KOPF DES DOSSIERS
+# IST DER KATALOG-EINTRAG; der Code zieht ihn heraus und traegt ihn ein.
+# Zwei Dinge synchron zu halten geht auf Dauer immer schief — eines kann
+# nicht von sich selbst abweichen.
+#
+# Die KI fuellt dafuer nur eine Vorlage aus. Die Vorlagen sind gewoehnliche
+# Dateien (`vorlagen/*.md`), damit Sasha sie aendern kann wie alles andere,
+# und sie sind ueber read_note erreichbar — kein neues Werkzeug, kein
+# zusaetzliches Schema im Prompt.
+
+VORLAGEN = "vorlagen"
+
+_VORLAGE_KATALOG = """# katalog
+
+> Vorlage fuer einen Katalog-Eintrag. Kopieren, ausfuellen, mit write_note
+> in den gewuenschten Katalog schreiben (z.B. name="kataloge/ideen").
+> Fuer eine Sache, die du ernsthaft verfolgst, nimm stattdessen die
+> Dossier-Vorlage — deren Kopf ist genau dieser Block.
+
+## <Titel>
+- katalog:   ideen
+- thema:     <stichworte, kommagetrennt>
+- equipment: <was es braucht, oder ->
+- aufwand:   klein | mittel | gross
+- status:    idee | priorisiert | queued | in_schedule | abgeschlossen | pausiert
+"""
+
+_VORLAGE_DOSSIER = """# dossier
+
+> Vorlage fuer ein Dossier. Der KOPF ist zugleich der Katalog-Eintrag: der
+> Code zieht ihn heraus, ergaenzt `dossier:` selbst und traegt ihn in den
+> unter `katalog:` genannten Katalog ein. Du musst dich um die Verknuepfung
+> nicht kuemmern — und sie kann nicht verlorengehen.
+>
+> Alles unter dem Kopf ist Prosa: schreib in Saetzen, nicht in Stichworten.
+
+## <Titel>
+- katalog:   ideen
+- thema:     <stichworte, kommagetrennt>
+- equipment: <was es braucht, oder ->
+- aufwand:   klein | mittel | gross
+- status:    priorisiert
+
+## Ziel
+<was am Ende dastehen soll>
+
+## Stand
+<wo es gerade steht, mit Datum>
+
+## Naechster Schritt
+<das eine, was als naechstes drankommt>
+
+## Messreihe
+<Name der Kurve, oder - wenn es nichts zu messen gibt>
+"""
+
+_VORLAGEN = {"katalog": _VORLAGE_KATALOG, "dossier": _VORLAGE_DOSSIER}
+
+# Felder eines Katalog-Eintrags, in dieser Reihenfolge gerendert. `dossier`
+# steht hinten, weil es der Code setzt und nicht der Mensch.
+KATALOG_FELDER = ("katalog", "thema", "equipment", "aufwand", "status",
+                  "dossier")
+
+_KOPF_TITEL = re.compile(r"^##\s+(.+?)\s*$")
+_KOPF_FELD = re.compile(r"^-\s*([a-zA-Zaeoeue]+)\s*:\s*(.*?)\s*$")
+
+
+def vorlage(name: str) -> str:
+    """Eine Vorlage lesen; legt sie beim ersten Zugriff an.
+
+    Ausgeliefert wird sie aus dem Code, gespeichert wird sie als Datei —
+    so hat ein frischer Rechner sofort eine, und Sasha kann sie trotzdem
+    umschreiben, ohne dass ein Update sie ueberbuegelt.
+    """
+    schluessel = _slug(name)
+    if schluessel not in _VORLAGEN:
+        return f"[Keine Vorlage {name!r}. Es gibt: {', '.join(_VORLAGEN)}]"
+    pfad = _pfad(VORLAGEN, schluessel)
+    if not os.path.exists(pfad):
+        with open(pfad, "w", encoding="utf-8") as f:
+            f.write(_VORLAGEN[schluessel])
+    return _lesen(pfad).strip()
+
+
+def kopf_lesen(text: str) -> dict:
+    """Den fuehrenden Katalog-Block eines Dossiers parsen.
+
+    Erwartet als erste inhaltliche Zeile `## Titel`, darunter
+    `- feld: wert`-Zeilen. Kein Kopf -> leeres Dict, dann passiert nichts:
+    ein Dossier ohne Kopf ist erlaubt, es taucht dann nur in keinem
+    Katalog auf.
+    """
+    if not isinstance(text, str):
+        return {}
+    zeilen = [z for z in text.strip().splitlines()]
+    # eine fuehrende "# name"-Zeile (Dateititel) ueberspringen
+    while zeilen and (not zeilen[0].strip() or zeilen[0].startswith("# ")):
+        zeilen.pop(0)
+    if not zeilen:
+        return {}
+    titel = _KOPF_TITEL.match(zeilen[0])
+    if not titel:
+        return {}
+    kopf = {"titel": titel.group(1)}
+    for z in zeilen[1:]:
+        if not z.strip():
+            break
+        feld = _KOPF_FELD.match(z)
+        if not feld:
+            break
+        kopf[feld.group(1).lower()] = feld.group(2)
+    return kopf if len(kopf) > 1 else {}
+
+
+def _eintrag_rendern(kopf: dict) -> str:
+    zeilen = [f"## {kopf.get('titel', '?')}"]
+    breite = max(len(f) for f in KATALOG_FELDER) + 1
+    for feld in KATALOG_FELDER:
+        wert = (kopf.get(feld) or "").strip() or "-"
+        zeilen.append(f"- {(feld + ':'):<{breite}} {wert}")
+    return "\n".join(zeilen) + "\n"
+
+
+def _upsert(katalogtext: str, titel: str, eintrag: str) -> str:
+    """Einen `## Titel`-Abschnitt ersetzen oder anhaengen.
+
+    Ersetzen statt anhaengen ist der Punkt: aendert sie im Dossier den
+    Status, soll der Katalog nachziehen — nicht eine zweite Zeile daneben
+    bekommen. Sonst haetten wir die Doppelpflege durch die Hintertuer.
+    """
+    zeilen = (katalogtext or "").splitlines()
+    start = None
+    for i, z in enumerate(zeilen):
+        m = _KOPF_TITEL.match(z)
+        if m and m.group(1).strip().casefold() == titel.strip().casefold():
+            start = i
+            break
+    if start is None:
+        rumpf = katalogtext.rstrip()
+        return (rumpf + "\n\n" + eintrag) if rumpf else eintrag
+    ende = len(zeilen)
+    for j in range(start + 1, len(zeilen)):
+        if _KOPF_TITEL.match(zeilen[j]):
+            ende = j
+            break
+    neu = zeilen[:start] + eintrag.rstrip().splitlines() + [""] + zeilen[ende:]
+    return "\n".join(neu).rstrip() + "\n"
+
+
+def _kopf_setzen(pfad: str, neuer_kopf: str):
+    """Den fuehrenden Katalog-Block einer Datei setzen, Prosa behalten.
+
+    Schreibt sie den Kopf ein zweites Mal (etwa mit geaendertem Status),
+    wird der alte ersetzt statt ein zweiter danebengelegt. Was darunter
+    steht — Ziel, Stand, Tagesnotizen — bleibt unangetastet.
+    """
+    alt = _lesen(pfad)
+    rest = ""
+    if alt:
+        zeilen = alt.splitlines()
+        # ueber Dateititel und alten Kopf hinweg bis zur naechsten
+        # Ueberschrift, die KEIN Feldblock ist
+        i = 0
+        while i < len(zeilen) and (not zeilen[i].strip()
+                                   or zeilen[i].startswith("# ")):
+            i += 1
+        if i < len(zeilen) and _KOPF_TITEL.match(zeilen[i]):
+            i += 1
+            while i < len(zeilen) and (_KOPF_FELD.match(zeilen[i])
+                                       or not zeilen[i].strip()):
+                i += 1
+        rest = "\n".join(zeilen[i:]).strip()
+    with open(pfad, "w", encoding="utf-8") as f:
+        f.write(neuer_kopf.strip() + ("\n\n" + rest + "\n" if rest else "\n"))
+
+
+def katalog_abgleichen(dossier_name: str) -> str:
+    """Den Kopf eines Dossiers in seinen Katalog uebertragen.
+
+    Wird vom Code gerufen, nicht vom Modell — genau deshalb kann die
+    Verknuepfung nicht mehr vergessen werden. `dossier:` setzt ebenfalls
+    der Code; was im Text stand, wird ueberschrieben.
+    """
+    schluessel = _slug(dossier_name)
+    kopf = kopf_lesen(_lesen(_pfad("dossiers", schluessel)))
+    if not kopf:
+        return ""
+    katalog = _slug(kopf.get("katalog") or "") or "ideen"
+    kopf["katalog"] = katalog
+    kopf["dossier"] = schluessel
+
+    pfad = _pfad("kataloge", katalog)
+    neu_angelegt = not os.path.exists(pfad)
+    text = _lesen(pfad)
+    if not text.strip():
+        text = f"# {katalog}\n"
+    with open(pfad, "w", encoding="utf-8") as f:
+        f.write(_upsert(text, kopf["titel"], _eintrag_rendern(kopf)))
+    return (f"kataloge/{katalog} aktualisiert ({kopf['titel']})"
+            + (" — Katalog neu angelegt" if neu_angelegt else ""))
+
+
+def konsistenz() -> list:
+    """Was auseinandergelaufen ist. Fuer Tests und auf Zuruf, nie im Prompt.
+
+    Zwei Arten von Waisen: ein Katalog-Eintrag, dessen `dossier:` ins Leere
+    zeigt (Dossier geloescht oder umbenannt), und ein Dossier ohne Kopf,
+    das darum in keinem Katalog auftaucht.
+    """
+    aus = []
+    verlinkt = set()
+    for katalog in liste("kataloge"):
+        text = _lesen(_pfad("kataloge", katalog))
+        titel = None
+        for z in text.splitlines():
+            m = _KOPF_TITEL.match(z)
+            if m:
+                titel = m.group(1)
+                continue
+            feld = _KOPF_FELD.match(z)
+            if feld and feld.group(1).lower() == "dossier":
+                ziel = feld.group(2).strip()
+                if ziel and ziel != "-":
+                    verlinkt.add(ziel)
+                    if not os.path.exists(_pfad("dossiers", ziel)):
+                        aus.append(f"kataloge/{katalog}: {titel!r} zeigt auf "
+                                   f"dossiers/{ziel}, das es nicht gibt")
+    for dossier in liste("dossiers"):
+        if dossier in verlinkt:
+            continue
+        if not kopf_lesen(_lesen(_pfad("dossiers", dossier))):
+            aus.append(f"dossiers/{dossier}: kein Katalog-Kopf — taucht in "
+                       f"keinem Katalog auf. Absicht (Uebersichts-Dossier "
+                       f"ueber einen ganzen Bereich) oder vergessen?")
+    return aus
 
 
 # ── Tagebuch ──────────────────────────────────────────────────────────
@@ -550,7 +808,12 @@ def kopf_block() -> str:
             "findest du, was zusammengehört — eine Idee passt zu einem Modul "
             "oder zu etwas, das ihn heute interessiert hat.\n"
             "- **quellen/** sind abgelegte Dokumente, meist lang. Such darin "
-            "gezielt mit search_memory, statt sie ganz zu lesen.")
+            "gezielt mit search_memory, statt sie ganz zu lesen.\n"
+            "- **vorlagen/** sind Muster zum Ausfüllen. Bevor du ein Dossier "
+            "oder einen Katalog-Eintrag anlegst, lies die passende: "
+            "read_note(\"vorlagen/dossier\") bzw. \"vorlagen/katalog\". Ein "
+            "Dossier BEGINNT mit dem Katalog-Kopf — den Eintrag im Katalog "
+            "erzeugt der Code daraus von selbst, samt Verknüpfung.")
     if not teile:
         return ""
     return "\n\n".join(teile)

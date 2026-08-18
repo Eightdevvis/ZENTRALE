@@ -147,7 +147,12 @@ def test_der_schnitt_haelt():
     assert besch < 3000
     besch_eigen = sum(len(t["function"]["description"]) for t in gross.TOOLS
                       if t["function"]["name"] in eigen)
-    assert besch_eigen < 2500
+    # 18.08.2026 von 2.500 auf 2.800: write_note verweist jetzt auf die
+    # Vorlagen. Das sind ~110 Zeichen im gecachten Praefix und der Grund,
+    # warum Dossier und Katalog-Eintrag zusammen entstehen — die Kopplung
+    # war vorher eine Bitte, die uebergangen wurde. Die Grenze soll Wildwuchs
+    # BEWUSST machen, nicht verbieten; wer sie anhebt, schreibt dazu warum.
+    assert besch_eigen < 2800
 
 
 def test_praefix_bleibt_ueber_der_cache_mindestgroesse():

@@ -309,7 +309,7 @@ _GEDAECHTNIS = [
                 "name='tagebuch' fuer das, was gerade passiert ist oder was "
                 "Sasha erzaehlt hat (in SEINEN Worten, nicht destilliert); ein "
                 "Dossier-Titel fuer den STAND einer laufenden Sache ('Kueche: "
-                "Regale haengen, Apparatur fehlt'). Ein neuer Titel legt ein "
+                "Regale haengen, Apparatur fehlt'). Fuer etwas NEUES erst die Vorlage lesen (read_note 'vorlagen/dossier' bzw. 'vorlagen/katalog') und ausfuellen. Ein neuer Titel legt ein "
                 "neues Dossier an. name='hausregeln' ist der Sonderfall: dort "
                 "landen Sashas Verhaltens-Ansagen an dich, und die stehen "
                 "bei jedem Turn ganz oben im Kopf. "
