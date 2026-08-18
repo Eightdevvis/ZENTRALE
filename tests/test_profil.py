@@ -158,7 +158,12 @@ def test_der_schnitt_haelt():
     # warum Dossier und Katalog-Eintrag zusammen entstehen — die Kopplung
     # war vorher eine Bitte, die uebergangen wurde. Die Grenze soll Wildwuchs
     # BEWUSST machen, nicht verbieten; wer sie anhebt, schreibt dazu warum.
-    assert besch_eigen < 2800
+    # 18.08.2026 von 2.800 auf 2.900: write_note nennt jetzt notizen/. Das
+    # ist der Ort, den die KI gesucht und nicht gefunden hat — sie ueberlegte
+    # in ihrem Denken korrekt "am einfachsten eine kurze Notiz 'wegzeiten'"
+    # und schrieb die Fahrzeit dann mangels Alternative ins Umzugs-Dossier.
+    # Ein Ort, den sie nicht kennt, existiert fuer sie nicht.
+    assert besch_eigen < 2900
 
 
 def test_praefix_bleibt_ueber_der_cache_mindestgroesse():

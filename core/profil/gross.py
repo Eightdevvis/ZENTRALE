@@ -311,12 +311,19 @@ _GEDAECHTNIS = [
         "function": {
             "name": "write_note",
             "description": (
-                "Haelt etwas fest — haengt an, loescht nie. Zwei Verwendungen: "
+                "Haelt etwas fest — haengt an, loescht nie. Verwendungen: "
                 "name='tagebuch' fuer das, was gerade passiert ist oder was "
                 "Sasha erzaehlt hat (in SEINEN Worten, nicht destilliert); ein "
                 "Dossier-Titel fuer den STAND einer laufenden Sache ('Kueche: "
-                "Regale haengen, Apparatur fehlt'). Fuer etwas NEUES erst die Vorlage lesen (read_note 'vorlagen/dossier' bzw. 'vorlagen/katalog') und ausfuellen. Ein neuer Titel legt ein "
-                "neues Dossier an. name='hausregeln' ist der Sonderfall: dort "
+                "Regale haengen, Apparatur fehlt'); ein NEUER Titel fuer "
+                "alles Uebrige — das landet formlos in notizen/, ohne "
+                "Vorlage, und ist der Ort fuer einzelne Fakten und kurze "
+                "Listen (Wegzeiten, Gewohnheiten). Da nicht lange ueberlegen. "
+                "Wird daraus ein VORHABEN, fuellst du die Vorlage aus "
+                "(read_note 'vorlagen/dossier' bzw. 'vorlagen/katalog'); die "
+                "Notiz wird dann zum Dossier und der Katalog-Eintrag entsteht "
+                "von selbst. "
+                "name='hausregeln' ist der Sonderfall: dort "
                 "landen Sashas Verhaltens-Ansagen an dich, und die stehen "
                 "bei jedem Turn ganz oben im Kopf. "
                 "Du fragst dafuer nicht um Erlaubnis, du "
@@ -329,7 +336,9 @@ _GEDAECHTNIS = [
                 "type": "object",
                 "properties": {
                     "name": {"type": "string",
-                             "description": "'tagebuch' oder ein Dossier-Titel."},
+                             "description": "'tagebuch', ein Dossier-Titel, "
+                                            "oder ein neuer Titel fuer eine "
+                                            "formlose Notiz."},
                     "text": {"type": "string",
                              "description": "Der Eintrag, in ganzen Saetzen."},
                 },

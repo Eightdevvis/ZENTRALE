@@ -44,8 +44,8 @@ def test_notieren_haengt_an_statt_zu_ersetzen():
 
 def test_ersetzen_legt_eine_sicherung_an():
     """Aufräumen ist die Tätigkeit, bei der man am ehesten etwas verliert."""
-    gedaechtnis.dossier_notieren("Umzug", "alter Stand")
-    gedaechtnis.dossier_ersetzen("Umzug", "neuer, sauberer Stand")
+    gedaechtnis.dossier_notieren("dossiers/Umzug", "alter Stand")
+    gedaechtnis.dossier_ersetzen("dossiers/Umzug", "neuer, sauberer Stand")
     assert gedaechtnis.dossier_lesen("umzug") == "neuer, sauberer Stand"
     with open(gedaechtnis._pfad("dossiers", "umzug") + ".bak",
               encoding="utf-8") as f:
@@ -84,7 +84,7 @@ def test_tagebuch_traegt_die_uhrzeit():
 
 def test_suche_findet_ueber_tagebuch_und_dossiers():
     gedaechtnis.tagebuch_notieren("Spanien war anstrengend aber schön")
-    gedaechtnis.dossier_notieren("Umzug", "Spanien-Kisten stehen noch rum")
+    gedaechtnis.dossier_notieren("dossiers/Umzug", "Spanien-Kisten stehen noch rum")
     treffer = gedaechtnis.suchen("Spanien")
     assert "tagebuch" in treffer
     assert "dossiers/umzug" in treffer
@@ -200,11 +200,40 @@ def test_name_findet_seinen_bereich():
     assert "Fourier" in gedaechtnis.dossier_lesen("ideen")
 
 
-def test_unbekannter_name_landet_in_dossiers():
-    """Der Prosa-Ordner ist der ungefaehrliche Default: ein versehentlich
-    dort gelandeter Eintrag stoert niemanden, ein versehentlich in einem
-    Katalog gelandeter Absatz zerschiesst dessen Form."""
-    assert gedaechtnis._finden("voellig neues ding")[0] == "dossiers"
+def test_unbekannter_name_landet_formlos():
+    """Der Default war bis 18.08.2026 `dossiers` und war eine Falle: seit
+    ein Dossier einen Katalog-Kopf hat, ist es ein VORHABEN. Ein schlichter
+    Fakt ("7 Minuten zur Geigenschule") hatte damit keinen Ort mehr, und
+    die KI schrieb ihn ins am wenigsten falsche vorhandene Dossier.
+
+    `notizen` ist jetzt der ungefaehrliche Default: formlos, ohne Kopf,
+    ohne Katalog-Eintrag."""
+    assert gedaechtnis._finden("voellig neues ding")[0] == "notizen"
+
+
+def test_vorhandenes_dossier_bleibt_ein_dossier():
+    """Der Default gilt nur fuer NEUE Namen — sonst wuerde jede Notiz zu
+    einem laufenden Vorhaben das Gedaechtnis in zwei Dateien spalten."""
+    gedaechtnis.dossier_notieren("dossiers/umzug", "Kisten stehen rum")
+    assert gedaechtnis._finden("umzug")[0] == "dossiers"
+
+
+def test_die_vorlage_macht_aus_der_notiz_ein_vorhaben():
+    """Ein Vorhaben entsteht nicht mehr aus Versehen durch einen neuen
+    Namen, sondern absichtlich dadurch, dass sie die Vorlage ausfuellt."""
+    gedaechtnis.dossier_notieren("kueche", "erstmal nur so ne idee")
+    assert gedaechtnis._finden("kueche")[0] == "notizen"
+
+    gedaechtnis.dossier_notieren("kueche", KOPF)
+    assert gedaechtnis._finden("kueche")[0] == "dossiers"
+    # Die Datei zieht MIT um: zwei Dateien unter demselben Namen waeren
+    # genau die stille Divergenz, gegen die das Kopf-im-Dossier-Modell
+    # gebaut ist.
+    import os
+    assert not os.path.exists(gedaechtnis._pfad("notizen", "kueche"))
+    assert "erstmal nur so ne idee" in gedaechtnis.dossier_lesen("kueche")
+    # Und der Katalog-Eintrag entsteht dabei wie bei jedem Dossier.
+    assert "kueche" in gedaechtnis.dossier_lesen("kataloge/ideen")
 
 
 def test_suche_deckt_alle_bereiche_ab():
@@ -504,7 +533,7 @@ def test_vorlage_ueber_read_note():
 
 def test_konsistenz_findet_beide_waisen():
     gedaechtnis.dossier_notieren("kueche", KOPF)
-    gedaechtnis.dossier_notieren("verwaist", "Prosa ohne Kopf.")
+    gedaechtnis.dossier_notieren("dossiers/verwaist", "Prosa ohne Kopf.")
     import os
     os.remove(gedaechtnis._pfad("dossiers", "kueche"))
     befund = " ".join(gedaechtnis.konsistenz())

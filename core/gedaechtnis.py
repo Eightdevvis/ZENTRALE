@@ -218,7 +218,7 @@ def regel_notieren(text: str) -> str:
 
 # ── Bereiche ──────────────────────────────────────────────────────────
 
-BEREICHE = ("dossiers", "kataloge", "quellen", "vorlagen")
+BEREICHE = ("dossiers", "notizen", "kataloge", "quellen", "vorlagen")
 
 # Zustaende eines Katalog-Eintrags. Sashas Schnitt, 18.08.2026 — er
 # unterscheidet, was bloss Einfall ist, was ihm wirklich wichtig waere,
@@ -238,10 +238,21 @@ def _finden(name: str) -> tuple:
     """(bereich, schluessel) zu einem Namen — mit oder ohne Praefix.
 
     Akzeptiert "kataloge/ideen" genauso wie "ideen". Ohne Praefix wird in
-    allen Bereichen gesucht; existiert nichts, landet Neues in `dossiers`
-    (die Prosa-Ablage ist der ungefaehrliche Default — ein versehentlich
-    dort gelandeter Eintrag stoert niemanden, ein versehentlich in einem
-    Katalog gelandeter Absatz zerschiesst dessen Form).
+    allen Bereichen gesucht; existiert nichts, landet Neues in `notizen`.
+
+    Der Default war bis 18.08.2026 `dossiers`, und das war eine Falle.
+    Seit ein Dossier einen Katalog-Kopf hat (thema/equipment/aufwand/
+    status), ist es ein VORHABEN — kein Ort fuer einen schlichten Fakt.
+    Als Sasha fragte, ob sie sich Wegzeiten merken kann, ueberlegte sie
+    genau richtig ("am einfachsten eine kurze Notiz 'wegzeiten'"), konnte
+    das aber nicht ausfuehren: jeder neue Name wurde ein Dossier. Also
+    schrieb sie die Fahrzeit zur Geigenschule in `dossiers/umzug` — die am
+    wenigsten falsche vorhandene Datei.
+
+    `notizen` ist der ungefaehrliche Default: formlos, ohne Kopf, ohne
+    Katalog-Eintrag. Ein Vorhaben entsteht nicht mehr aus Versehen durch
+    einen neuen Namen, sondern absichtlich dadurch, dass sie die Vorlage
+    ausfuellt (siehe `dossier_notieren`).
     """
     roh = (name or "").strip().strip("/")
     if "/" in roh:
@@ -255,7 +266,7 @@ def _finden(name: str) -> tuple:
     for bereich in BEREICHE:
         if os.path.exists(_pfad(bereich, schluessel)):
             return bereich, schluessel
-    return "dossiers", schluessel
+    return "notizen", schluessel
 
 
 # ── Dossiers (und die anderen Bereiche, gleicher Mechanismus) ─────────
@@ -287,13 +298,26 @@ def dossier_notieren(name: str, text: str) -> str:
         text = text[:MAX_NOTIZ] + " …[gekürzt]"
 
     pfad = _pfad(bereich, schluessel)
-    war_da = os.path.exists(pfad)
 
     # Beginnt der Text mit einem Katalog-Kopf, ist er der KOPF des Dossiers
     # und keine Tagesnotiz. Ihn unter eine Datums-Ueberschrift zu haengen
     # waere genau der Fehler, den die Vorlage vermeiden soll — dann stuende
     # der Eintrag mitten im Text und der Abgleich faende ihn nie.
-    kopf = kopf_lesen(text) if bereich == "dossiers" else {}
+    kopf = kopf_lesen(text) if bereich in ("dossiers", "notizen") else {}
+
+    # DIE VORLAGE ENTSCHEIDET DIE ART. Ein Kopf macht aus einer formlosen
+    # Notiz ein Vorhaben — und die Datei zieht mit um, statt eine zweite
+    # neben der alten anzulegen. Getrenntes Gedaechtnis unter demselben
+    # Namen ist genau die stille Divergenz, gegen die das ganze
+    # Kopf-im-Dossier-Modell gebaut ist.
+    if kopf and bereich == "notizen":
+        ziel = _pfad("dossiers", schluessel)
+        if os.path.exists(pfad):
+            os.makedirs(os.path.dirname(ziel), exist_ok=True)
+            os.rename(pfad, ziel)
+        bereich, pfad = "dossiers", ziel
+
+    war_da = os.path.exists(pfad)
     if kopf:
         _kopf_setzen(pfad, text)
         hinweis = katalog_abgleichen(schluessel)
@@ -842,8 +866,16 @@ def kopf_block() -> str:
             "Das sind TITEL, keine Inhalte. Geht es um eines davon, lies es "
             "mit read_note (\"umzug\" oder \"kataloge/ideen\") — rate nicht aus "
             "dem Titel. Was du Neues erfährst, hältst du mit write_note fest.\n"
+            "- **notizen/** sind formlos: einzelne Fakten, kurze Listen, "
+            "alles, was kein Vorhaben ist (Wegzeiten, Gewohnheiten, "
+            "Vorlieben). Ein Name, den es noch nicht gibt, landet hier — "
+            "das ist der richtige Ort für „merk dir das\", und du brauchst "
+            "dafür keine Vorlage.\n"
             "- **dossiers/** sind Prosa über eine Sache, die er ernsthaft "
-            "verfolgt. Dort stehen auch die Messreihen, die dazugehören.\n"
+            "verfolgt. Dort stehen auch die Messreihen, die dazugehören. "
+            "Ein Dossier entsteht, indem du die Vorlage ausfüllst — schreibst "
+            "du einen Katalog-Kopf in eine bestehende Notiz, wird sie zum "
+            "Dossier befördert und zieht mit um.\n"
             "- **kataloge/** sind viele kurze Einträge nach gleichem Schema: "
             "`thema`, `equipment`, `aufwand`, `status`, `dossier`. Status ist "
             f"eines von: {', '.join(STATUS)}. Über die `thema`-Stichworte "

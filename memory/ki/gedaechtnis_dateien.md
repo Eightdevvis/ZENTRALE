@@ -49,11 +49,40 @@ die den Rohtext am Graphen halten.
 |---|---|---|
 | **Steckbrief** | `data/gedaechtnis/sasha.md` | **Sasha.** Die stabilen Regeln über ihn. Zu wichtig für einen Extraktor. |
 | **Ziele** | `data/gedaechtnis/ziele.md` | Sasha; die KI darf vorschlagen. |
+| **Notizen** | `notizen/*.md` | **Formlos.** Einzelne Fakten, kurze Listen — alles, was kein Vorhaben ist. Der Default für neue Namen. |
 | **Dossiers** | `dossiers/*.md` | Prosa über EINE Sache, die er ernsthaft verfolgt. KI schreibt fort, Sasha korrigiert im Text. |
 | **Kataloge** | `kataloge/*.md` | Viele gleichförmige Einträge mit Attributen. Der Ideenpool, die Module, das Material. |
 | **Quellen** | `quellen/*.md` (+ `quellen/dateien/`) | Abgelegte Dokumente, aus PDF/HTML extrahiert. |
 | **Tagebuch** | `tagebuch/YYYY-MM-DD.md` | Die KI. Was gesagt und getan wurde, in SEINEN Worten. |
 | **Messreihen** | `data/g_*.json` (Zyklus-Werkzeug) | Zahlen über Zeit — Schlaf, Stimmung, Spagat in cm. |
+
+### Notiz, Dossier oder Katalog?
+
+**Notizen kamen am 18.08.2026 dazu, und zwar wegen eines Fehlgriffs.** Sasha
+fragte: *„kannst du dir merken wie lang ich zu etwas hinfahre ca?"* Die KI
+überlegte in ihrem Denken völlig richtig — *„am einfachsten eine kurze Notiz
+'wegzeiten', ohne förmlich ein Dossier anzulegen"* — und schrieb die Fahrzeit
+dann in **`dossiers/umzug`**.
+
+Das war kein Modellfehler, sondern eine Falle im Bau: der Default für einen
+unbekannten Namen war `dossiers`, und seit die Vorlage gilt, **ist ein Dossier
+ein Vorhaben** — mit `thema`, `equipment`, `aufwand`, `status`. Eine Liste von
+Wegzeiten ist nichts davon. Sie hatte also nur die Wahl zwischen einem falschen
+Formular und der am wenigsten falschen vorhandenen Datei.
+
+Seitdem gilt:
+
+- **Ein neuer Name landet in `notizen/`.** Formlos, kein Kopf, kein
+  Katalog-Eintrag. Der richtige Ort für „merk dir das".
+- **Ein Vorhaben entsteht absichtlich, nicht durch einen neuen Namen** —
+  nämlich dadurch, dass die Vorlage ausgefüllt wird. **Die Vorlage entscheidet
+  die Art.**
+- **Beförderung mit Umzug:** schreibt sie einen Katalog-Kopf in eine bestehende
+  Notiz, wandert die Datei nach `dossiers/` und der Katalog-Eintrag entsteht wie
+  immer. Zwei Dateien unter demselben Namen stehen zu lassen wäre genau die
+  stille Divergenz, gegen die das Kopf-im-Dossier-Modell gebaut ist.
+- **Der Steckbrief bleibt Sashas** (Entscheidung vom 18.08.2026). Die KI
+  schreibt dort nicht hinein; was sie über ihn erfährt, geht in eine Notiz.
 
 ### Dossier oder Katalog?
 
