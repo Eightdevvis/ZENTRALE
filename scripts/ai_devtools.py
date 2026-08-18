@@ -13,7 +13,10 @@
 #   ai.out    Was sie AUSGIBT — die ROH-Antwort inklusive Denk-Bloecken und dem
 #             Vorgeplaenkel vor einem Tool-Call, das der Chat sonst schluckt.
 #   ai.tool   Jeder Tool-Call: Name, Argumente, Ergebnis.
-#   ai.graph  Was der Extraktor hinterher in den Graphen geschrieben hat.
+#   ai.graph  Was der Extraktor in den Graphen geschrieben hat. Bleibt seit
+#             18.08.2026 STUMM: die Tripel-Extraktion ist aus, das
+#             Gedaechtnis sind Dateien (core/gedaechtnis.py). Was sie sich
+#             merkt, siehst du jetzt als ai.tool — write_note und Co.
 #
 # Das Gegenstueck fuer den Sprach-Tutor ist scripts/tutor_devtools.py — anderer
 # Bus, andere Events, weil der Tutor ein eigenstaendiges Addon ist.
