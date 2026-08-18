@@ -632,6 +632,8 @@ def _dispatch_tool(name: str, args: dict) -> str:
             return gedaechtnis.steckbrief() or "[Steckbrief ist noch leer]"
         if wie.lower() in ("ziele", "goals"):
             return gedaechtnis.ziele() or "[Ziele sind noch leer]"
+        if wie.lower() in ("hausregeln", "regeln"):
+            return gedaechtnis.hausregeln() or "[Noch keine Hausregeln]"
         if wie.lower() in ("tagebuch", "diary"):
             return gedaechtnis.tagebuch_lesen() or "[Heute noch nichts notiert]"
         inhalt = gedaechtnis.dossier_lesen(wie)
@@ -646,6 +648,8 @@ def _dispatch_tool(name: str, args: dict) -> str:
         text = args.get("text") or ""
         if wie.lower() in ("tagebuch", "diary", ""):
             return gedaechtnis.tagebuch_notieren(text)
+        if wie.lower() in ("hausregeln", "regeln"):
+            return gedaechtnis.regel_notieren(text)
         return gedaechtnis.dossier_notieren(wie, text)
     elif name == "rewrite_note":
         import gedaechtnis

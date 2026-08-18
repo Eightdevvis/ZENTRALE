@@ -129,7 +129,12 @@ def test_kein_wort_ueber_den_graphen_im_prompt():
 def test_der_schnitt_haelt():
     """Die Zahl, um die es geht. Faellt sie zurueck, hat jemand wieder etwas
     in den Praefix gelegt, das jeden Turn mitbezahlt wird."""
-    assert len(gross.system()) < len(klein.system()) / 2
+    # Frueher: "gross < klein/2". Das passte, solange gross nur "klein minus
+    # Kruecken" war. Seit dem 18.08.2026 hat es EIGENE Inhalte, die klein
+    # nicht hat (Antwortverhalten aus Anthropics Prompt, die Hausregel-
+    # Mechanik) — ein Verhaeltnis misst dann das Falsche. Was zaehlt, ist
+    # die absolute Groesse: der Kopf geht bei jedem Cache-Write mit raus.
+    assert len(gross.system()) < 5000, "der gecachte Kopf laeuft voll"
     # Beschreibungen der GEERBTEN Werkzeuge — das war der Schnitt von
     # damals (6.342 → ~2.200). Die eigenen Gedaechtnis-Werkzeuge kamen
     # spaeter dazu und werden getrennt gedeckelt: sie sind kein Ballast,

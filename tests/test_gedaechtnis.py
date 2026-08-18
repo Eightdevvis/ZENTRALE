@@ -317,3 +317,71 @@ def test_ablehnung_verlangt_die_richtigstellung():
     quelle = open(ai.__file__, encoding="utf-8").read()
     assert "Richtigstellung" in quelle
     assert "Unwahrheit im Gedächtnis" in quelle
+
+
+# ── Hausregeln: sie darf ihr Verhalten anpassen, nicht ihren Prompt ───
+
+def test_regel_landet_ganz_oben_im_kopf():
+    """Sasha sagt Dinge wie "lass das" oder "frag nicht so viel". Ohne
+    einen Ort dafuer ist die Korrektur nach einem Turn wieder weg.
+
+    Sie steht VOR Steckbrief und Zielen: was er ausdruecklich gesagt hat,
+    schlaegt im Zweifel die allgemeine Anweisung."""
+    gedaechtnis.regel_notieren("Keine Emojis in Antworten.")
+    block = gedaechtnis.kopf_block()
+    assert "Keine Emojis" in block
+    assert block.startswith("## Hausregeln")
+
+
+def test_regel_wird_datiert_und_angehaengt():
+    """Anhaengen statt ersetzen — auch hier verliert ein Modell beim
+    Neuschreiben, was es gerade nicht im Kopf hat."""
+    from datetime import date
+    gedaechtnis.regel_notieren("Keine Emojis.")
+    gedaechtnis.regel_notieren("Kuerzer antworten.")
+    text = gedaechtnis.hausregeln()
+    assert "Keine Emojis." in text and "Kuerzer antworten." in text
+    assert date.today().strftime("%d.%m.%Y") in text
+
+
+def test_regel_ueber_write_note():
+    """Der Weg, den die KI nimmt: write_note(name="hausregeln")."""
+    assert "Hausregel" in ai._dispatch_tool(
+        "write_note", {"name": "hausregeln", "text": "Nicht duzen."})
+    assert "Nicht duzen." in ai._dispatch_tool(
+        "read_note", {"name": "hausregeln"})
+    assert not ai.braucht_erlaubnis("write_note")
+
+
+def test_romane_werden_abgelehnt():
+    """Eine Regel ist ein Satz. Was laenger ist, gehoert ins Dossier."""
+    assert "Zu lang" in gedaechtnis.regel_notieren("x" * 500)
+
+
+def test_der_kernprompt_bleibt_code():
+    """Sie darf ihr VERHALTEN anpassen, nicht ihren Prompt.
+
+    Duerfte sie den Kern-Prompt umschreiben, wuerde sie frueher oder
+    spaeter genau die Regeln entfernen, die sie am Erfinden und am
+    Vorschnell-Notieren hindern — und niemand merkte es, weil der Prompt
+    nur im Devtools sichtbar ist."""
+    import os
+    from profil import gross
+    for name in ("profil", "prompt", "gross", "klein", "system"):
+        antwort = ai._dispatch_tool("write_note",
+                                    {"name": name, "text": "egal"})
+        assert "Fehler" not in antwort           # laeuft ins Gedaechtnis...
+    # ...aber die Prompt-Datei selbst ist unangetastet.
+    assert os.path.getsize(gross.__file__) > 0
+    assert "## Meta-Regeln" in gross.system()
+
+
+def test_titel_wird_nicht_doppelt_gerendert():
+    """Im Kopf steht schon eine Ueberschrift; die aus der Datei waere
+    doppelt — dreimal zwei Zeilen, bei jedem Cache-Write bezahlt."""
+    with open(gedaechtnis._pfad("", gedaechtnis.STECKBRIEF), "w",
+              encoding="utf-8") as f:
+        f.write("# Sasha\n\nStudiert Biophysik.\n")
+    block = gedaechtnis.kopf_block()
+    assert "Studiert Biophysik." in block
+    assert "# Sasha" not in block

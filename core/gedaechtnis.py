@@ -95,6 +95,11 @@ _DIR       = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
                           "data", "gedaechtnis")
 STECKBRIEF = "sasha"
 ZIELE      = "ziele"
+HAUSREGELN = "hausregeln"
+
+# Die drei Dateien, die GANZ OBEN liegen (nicht in einem Bereich) und
+# vollstaendig in den Prompt gehen. Alles andere holt sie per Werkzeug.
+_OBEN = (HAUSREGELN, STECKBRIEF, ZIELE)
 
 # Obergrenzen. Ein Dossier, das ein Modell vollschreibt, bis es den halben
 # Kontext frisst, ist wieder dasselbe Problem in Grün.
@@ -130,6 +135,19 @@ def _pfad(bereich: str, name: str) -> str:
     return os.path.join(ordner, f"{name}.md")
 
 
+def _ohne_titel(text: str) -> str:
+    """Fuehrende "# Titel"-Zeile abschneiden.
+
+    Im Prompt steht ueber jedem Block schon eine Ueberschrift; die des
+    Dateikopfs dazu waere doppelt. Zwei Zeilen Rauschen mal drei Dateien,
+    bei jedem Cache-Write bezahlt.
+    """
+    zeilen = text.lstrip().splitlines()
+    if zeilen and zeilen[0].startswith("# "):
+        zeilen = zeilen[1:]
+    return "\n".join(zeilen).strip()
+
+
 def _lesen(pfad: str) -> str:
     try:
         with open(pfad, encoding="utf-8") as f:
@@ -154,6 +172,48 @@ def steckbrief() -> str:
 
 def ziele() -> str:
     return _lesen(_pfad("", ZIELE)).strip()
+
+
+def hausregeln() -> str:
+    """Verhaltensregeln, die SASHA im Gespraech gesetzt hat.
+
+    Der Kern-Prompt ist Code: versioniert, getestet, reviewbar. Er bleibt
+    es. Aber Sasha sagt Dinge wie "lass das", "frag nicht so viel", "das
+    brauch ich nicht" — und ohne einen Ort dafuer ist die Korrektur nach
+    einem Turn wieder weg.
+
+    Warum die KI NICHT ihren eigenen Prompt umschreiben darf: sie wuerde
+    frueher oder spaeter genau die Regeln entfernen, die sie am Erfinden
+    und am Vorschnell-Notieren hindern — und niemand merkt es, weil der
+    Prompt nur im Devtools sichtbar ist. Eine getrennte Datei kostet
+    dieselbe Wirkung und ist in zehn Sekunden zu ueberpruefen.
+
+    Sie steht deshalb im Prompt VOR allem anderen: was Sasha ausdruecklich
+    gesagt hat, schlaegt im Zweifel die allgemeine Anweisung.
+    """
+    return _lesen(_pfad("", HAUSREGELN)).strip()
+
+
+def regel_notieren(text: str) -> str:
+    """Eine Hausregel anhaengen, mit Datum.
+
+    Bewusst anhaengen und nicht ersetzen — auch hier gilt, dass ein Modell
+    beim Neuschreiben verliert, was es gerade nicht im Kopf hat. Zum
+    Aufraeumen gibt es rewrite_note.
+    """
+    text = (text or "").strip().lstrip("-").strip()
+    if not text:
+        return "[Fehler: leere Regel]"
+    if len(text) > 400:
+        return "[Zu lang fuer eine Regel — sag es in einem Satz.]"
+    pfad = _pfad("", HAUSREGELN)
+    if not os.path.exists(pfad):
+        with open(pfad, "w", encoding="utf-8") as f:
+            f.write("# Hausregeln\n\n> Von Sasha im Gespräch gesetzt. Er darf "
+                    "hier jederzeit streichen und ändern.\n\n")
+    with open(pfad, "a", encoding="utf-8") as f:
+        f.write(f"- {text}  _(seit {date.today().strftime('%d.%m.%Y')})_\n")
+    return f"Als Hausregel festgehalten: {text}"
 
 
 # ── Bereiche ──────────────────────────────────────────────────────────
@@ -190,6 +250,8 @@ def _finden(name: str) -> tuple:
         if kopf in BEREICHE:
             return kopf, _slug(rest)
     schluessel = _slug(roh)
+    if schluessel in _OBEN:
+        return "", schluessel
     for bereich in BEREICHE:
         if os.path.exists(_pfad(bereich, schluessel)):
             return bereich, schluessel
@@ -458,11 +520,16 @@ def kopf_block() -> str:
     in den gecachten Teil (10 % des Preises).
     """
     teile = []
+    r = hausregeln()
+    if r:
+        teile.append("## Hausregeln\n"
+                     "Das hat Sasha dir ausdrücklich gesagt. Im Zweifel geht "
+                     "es jeder allgemeinen Anweisung vor.\n" + _ohne_titel(r))
     s, z = steckbrief(), ziele()
     if s:
-        teile.append("## Über Sasha\n" + s)
+        teile.append("## Über Sasha\n" + _ohne_titel(s))
     if z:
-        teile.append("## Seine Ziele\n" + z)
+        teile.append("## Seine Ziele\n" + _ohne_titel(z))
 
     zeilen = []
     for bereich in BEREICHE:
