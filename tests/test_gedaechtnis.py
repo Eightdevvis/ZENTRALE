@@ -211,6 +211,25 @@ def test_unbekannter_name_landet_formlos():
     assert gedaechtnis._finden("voellig neues ding")[0] == "notizen"
 
 
+def test_notiz_bekommt_keine_datums_ueberschrift():
+    """Eine Notiz ist eine Faktenliste, kein Verlauf. Eine Ueberschrift
+    "## 2026-08-18" ueber jeder Zeile — zweimal dieselbe, wenn zwei
+    Wegzeiten am selben Tag dazukommen — macht die Liste unlesbar. Wann
+    etwas galt, steht im Tagebuch; hier steht, WAS gilt."""
+    gedaechtnis.dossier_notieren("wegzeiten", "- Geigenschule: ca. 7 min")
+    gedaechtnis.dossier_notieren("wegzeiten", "- Uni: 20 min mit dem Rad")
+    text = gedaechtnis.dossier_lesen("wegzeiten")
+    assert "## 20" not in text
+    assert "- Geigenschule: ca. 7 min" in text
+    assert "- Uni: 20 min mit dem Rad" in text
+
+
+def test_dossier_behaelt_die_datums_ueberschrift():
+    """Beim Dossier ist der Verlauf der Punkt — dort bleibt sie."""
+    gedaechtnis.dossier_notieren("dossiers/organoide", "MEA angeschaut")
+    assert "## 20" in gedaechtnis.dossier_lesen("organoide")
+
+
 def test_vorhandenes_dossier_bleibt_ein_dossier():
     """Der Default gilt nur fuer NEUE Namen — sonst wuerde jede Notiz zu
     einem laufenden Vorhaben das Gedaechtnis in zwei Dateien spalten."""

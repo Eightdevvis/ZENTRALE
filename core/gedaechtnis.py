@@ -325,7 +325,15 @@ def dossier_notieren(name: str, text: str) -> str:
                 f"{bereich}/{schluessel}."
                 + (f" {hinweis}." if hinweis else ""))
 
-    _anhaengen(pfad, f"\n## {date.today().isoformat()}\n{text}\n")
+    if bereich == "notizen":
+        # Ohne Datums-Ueberschrift: eine Notiz ist eine Faktenliste, kein
+        # Verlauf. "## 2026-08-18" ueber jeder einzelnen Zeile — zweimal
+        # dasselbe Datum, wenn zwei Wegzeiten am selben Tag dazukommen —
+        # ist Rauschen, das die Liste unlesbar macht. Wann etwas galt,
+        # steht im Tagebuch; hier steht, WAS gilt.
+        _anhaengen(pfad, f"{text}\n")
+    else:
+        _anhaengen(pfad, f"\n## {date.today().isoformat()}\n{text}\n")
 
     zu_lang = len(_lesen(pfad)) > MAX_DOSSIER
     return (f"{'Notiert in' if war_da else 'Neu angelegt:'} "
