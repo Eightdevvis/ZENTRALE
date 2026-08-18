@@ -106,15 +106,25 @@ def test_gross_hat_die_kruecken_abgeworfen():
     assert "## So endet ein Turn" not in gross.system()
 
 
-def test_gross_behaelt_die_subjekt_grenze():
-    """Die einzige Regel, bei der Kuerzen wirklich gefaehrlich waere. Sie ist
-    kein Prompt-Trick, sondern die Grenze zwischen Sashas Leben und dem, was
-    die KI von sich behauptet."""
-    kopf = gross.system()
-    assert "Subjekt-Grenze" in kopf
-    assert "ich bin einsam seit dem 19. Mai" in kopf   # das Gegenbeispiel
-    assert "Aktiviertes Wissen" in kopf                # woher sie es weiss
+def test_kein_wort_ueber_den_graphen_im_prompt():
+    """Hier stand frueher `test_gross_behaelt_die_subjekt_grenze`.
 
+    Die Subjekt-Grenze ("Sashas Gefuehle sind nicht deine") war noetig,
+    solange das Gedaechtnis aus Tripeln bestand: aus `Sasha zustand einsam`
+    konnte ein Modell "ich bin einsam seit dem 19. Mai" machen. In Prosa
+    steht "Sasha war im August krank" — da ist nichts zu verwechseln.
+
+    Was jetzt bewacht wird, ist das eigentliche Risiko: Anweisungen, die
+    auf eine Welt zeigen, die es nicht mehr gibt. Vier der sechs
+    Meta-Regeln beschrieben den Konzept-Graphen und seinen Extraktor.
+    Falsche Anweisungen sind schlimmer als gar keine — das Modell versucht,
+    sie zu befolgen.
+    """
+    text = gross.system() + " ".join(
+        t["function"]["description"] for t in gross.TOOLS)
+    for wort in ("Aktiviertes Wissen", "Wissens-Block", "Konzept-Graph",
+                 "Extraktor", "Das kannst DU"):
+        assert wort not in text, wort
 
 def test_der_schnitt_haelt():
     """Die Zahl, um die es geht. Faellt sie zurueck, hat jemand wieder etwas
@@ -138,8 +148,16 @@ def test_der_schnitt_haelt():
 def test_praefix_bleibt_ueber_der_cache_mindestgroesse():
     """Anthropic cacht erst ab 1.024 Token (Sonnet 5) bzw. 512 (Opus 5). Wer
     weiter eindampft, spart Zeichen und verliert dafuer den Cache — das waere
-    unterm Strich TEURER. Grobe Schaetzung: 4 Zeichen je Token."""
-    assert len(gross.system()) // 4 > 512
+    unterm Strich TEURER. Grobe Schaetzung: 4 Zeichen je Token.
+
+    Gemessen wird der GESAMTE gecachte Praefix, nicht der Text der Schiene:
+    Anthropic rendert tools → system → messages und cacht alles davor. Der
+    Schienentext allein ist seit dem Entruempeln (18.08.2026) unter 512
+    Token — zusammen mit dem Tool-Schema liegt der Praefix aber weit
+    darueber, und nur das entscheidet, ob der Cache greift."""
+    import json
+    praefix = len(json.dumps(gross.TOOLS, ensure_ascii=False)) + len(gross.system())
+    assert praefix // 4 > 1024
 
 
 def test_parameter_schemata_laufen_nicht_auseinander():
@@ -165,11 +183,27 @@ def test_parameter_schemata_laufen_nicht_auseinander():
 
 def test_gross_teilt_die_persona_mit_klein():
     """Zwei Kopien waeren zwei Persoenlichkeiten, je nachdem welches Backend
-    laeuft — und sie wuerden auseinanderlaufen, ohne dass es jemand merkt."""
-    for teil in ("## Stimme", "## Länge", "## Floskel-Stopliste",
-                 "## Substanz statt Pflichtprogramm"):
+    laeuft — und sie wuerden auseinanderlaufen, ohne dass es jemand merkt.
+
+    Geteilt wird, was eine WAHL ist: der Grundton, die Haltung, die Absage
+    ans Dienstbotentum. Ein unangewiesenes Modell ist nicht trocken und
+    bietet sehr wohl seine Hilfe an."""
+    for teil in ("## Stimme", "## Substanz statt Pflichtprogramm",
+                 "## Kein Dienstbotentum"):
         assert teil in klein.SYSTEM
         assert teil in gross.SYSTEM
+
+
+def test_gross_schneidet_die_kalibrierung_weg():
+    """Laenge und Floskel-Stopliste bringt ein Frontier-Modell mit.
+
+    Sasha im Anthropic-Chat: "ich sprech claude einfach direkt an, keine
+    regeln". Fuer das 9B bleiben sie noetig — genau dafuer gibt es zwei
+    Schienen."""
+    for teil in ("## Länge", "## Floskel-Stopliste", "## Text-Effekte",
+                 "## So endet ein Turn"):
+        assert teil in klein.SYSTEM, teil
+        assert teil not in gross.SYSTEM, teil
 
 
 def test_jede_beschreibung_ist_gesetzt():

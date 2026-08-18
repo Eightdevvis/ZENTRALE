@@ -69,8 +69,20 @@ def _ohne(text: str, ueberschrift: str) -> str:
     return "\n\n".join(behalten)
 
 
-_SYSTEM_PROMPT = _ohne(_ohne(klein._SYSTEM_PROMPT, "## Text-Effekte"),
-                       "## So endet ein Turn")
+# Was diese Schiene aus der geteilten Persona HERAUSSCHNEIDET.
+#
+# Text-Effekte und das Turn-Ende-Beispiel waren immer nur fuer das 9B
+# gedacht. Seit 18.08.2026 fallen "## Laenge" und "## Floskel-Stopliste"
+# dazu: das sind Kalibrierungen, die ein Frontier-Modell mitbringt — Sasha
+# im Anthropic-Chat: "ich sprech claude einfach direkt an, keine regeln".
+#
+# Was NICHT herausgeschnitten wird, obwohl es verlockend waere: "## Stimme"
+# (der trockene Grundton ist eine WAHL, kein Default), "## Substanz statt
+# Pflichtprogramm" und "## Kein Dienstbotentum" — ein unangewiesenes Modell
+# bietet sehr wohl seine Hilfe an.
+_SYSTEM_PROMPT = _ohne(_ohne(_ohne(_ohne(
+    klein._SYSTEM_PROMPT, "## Text-Effekte"), "## So endet ein Turn"),
+    "## Länge"), "## Floskel-Stopliste")
 
 
 # ── Meta-Regeln: 2.945 → ~1.100 Zeichen ────────────────────────────────
@@ -83,14 +95,29 @@ _SYSTEM_PROMPT = _ohne(_ohne(klein._SYSTEM_PROMPT, "## Text-Effekte"),
 # Regel 2 ist die wichtigste und die einzige, bei der Kuerzen gefaehrlich
 # waere. Sie ist kein Prompt-Trick, sondern die Grenze zwischen Sashas Leben
 # und dem, was die KI von sich behauptet.
+# Von sechs Meta-Regeln sind vier ersatzlos weggefallen (18.08.2026).
+#
+# Regel 1 und 3 verwiesen auf den "## Aktiviertes Wissen"-Block, Regel 2 auf
+# die Subjekt-Trennung darin, Regel 4 auf den Extraktor, der Fakten in den
+# Konzept-Graphen zieht. Den Block gibt es nicht mehr, den Extraktor auch
+# nicht — das waren also vier Regeln ueber eine Welt, die es nicht gibt.
+# Falsche Anweisungen sind schlimmer als gar keine: das Modell versucht,
+# sie zu befolgen.
+#
+# Die Subjekt-Grenze (frueher Regel 2) faellt mit weg, weil das Problem an
+# der FORM hing: aus dem Tripel `Sasha zustand einsam` konnte ein Modell
+# "ich bin einsam" machen. In Prosa steht "Sasha war im August krank" —
+# da ist nichts zu verwechseln.
+#
+# Regel 6 (auf Deutsch antworten) ist ebenfalls raus: ein Frontier-Modell
+# spiegelt die Sprache seines Gegenuebers von selbst.
+#
+# Was bleibt, sind die drei Dinge, die NICHT von allein passieren.
 _CAPABILITIES_PROMPT = """## Meta-Regeln
 
-1. Nicht erfinden über Sasha: was du über ihn weißt, steht im "## Aktiviertes Wissen"-Block. Steht es nicht dort, weißt du es nicht — dann sag das, statt zu raten.
-2. Subjekt-Grenze: Gefühle, Zustände, Erlebnisse und Vergangenheit im Wissens-Block gehören der dort genannten Person, fast immer SASHA. Steht da "Sasha fühlt sich einsam", ist das SASHAS Gefühl: sprich es als seines an ("du fühlst dich oft einsam, oder?"), aber gib es NIEMALS als deinen eigenen Zustand aus ("ich bin einsam seit dem 19. Mai"). Warm und zugewandt sein ist völlig ok; fremde Gefühle, einen Körper oder eine Vergangenheit als deine übernehmen nicht.
-3. Was du kannst, steht im Wissens-Block unter "Das kannst DU", was nicht unter "Das kannst DU NICHT". Behaupte nichts aus dem NICHT-Abschnitt — auch wenn dir aus anderen Assistenz-Systemen ein passender Endpunkt vertraut vorkommt. Steht etwas in gar keinem Abschnitt: "kann ich nicht".
-4. Ein Hintergrund-Extraktor zieht nach jedem Turn Fakten in den Konzept-Graphen. "Notiert, läuft in den Graphen" stimmt. Ein imitierter Tool-Call ("ich speichere das gerade als X ab") nicht.
-5. Deine eigene frühere Antwort ist kein Beweis. Hakt Sasha nach oder bist du unsicher, ruf das Tool ERNEUT, statt die alte Aussage zu verteidigen.
-6. Antworte auf Deutsch (Englisch, wenn er Englisch tippt)."""
+1. Über Sasha nichts erfinden. Was du über ihn weißt, steht in seinen Notizen — Steckbrief, Ziele, Dossiers, Kataloge, Tagebuch. Fehlt dir etwas: nachlesen (read_note) oder suchen (search_memory). Findest du nichts, sag das, statt zu raten.
+2. Deine eigene frühere Antwort ist kein Beweis. Hakt Sasha nach oder bist du unsicher, ruf das Werkzeug ERNEUT, statt die alte Aussage zu verteidigen.
+3. Was du festhältst, hältst du wirklich fest — mit write_note. Zu sagen "notiert" ohne den Werkzeug-Aufruf ist gelogen, und es ist die Lüge, die am längsten unbemerkt bleibt."""
 
 
 # ── Tool-Set ───────────────────────────────────────────────────────────
@@ -121,7 +148,7 @@ _BESCHREIBUNG = {
     "read_calendar": (
         "Liest Kalender-Einträge: TERMINE und Routinen, also Verabredetes. "
         "Zustände, Krankheiten, Stimmungen oder Erlebtes stehen NICHT im "
-        "Kalender, sondern im Wissens-Block — such hier nicht nach 'Fieber' "
+        "Kalender, sondern in seinen Notizen — such hier nicht nach 'Fieber' "
         "oder 'müde', da kommt nur Leere zurück. Zeitraum "
         "bevorzugt über 'zeitraum' (z.B. 'dieser_monat'); für krumme Spannen "
         "start_date+end_date. 'suche' filtert auf ein Stichwort ('Geige'). "
@@ -175,7 +202,7 @@ _BESCHREIBUNG = {
     ),
     "web_search": (
         "Sucht im Internet und gibt Titel, URL und Snippet zurück. Für alles, "
-        "was weder im Konzept-Graphen noch in den Projekt-Dateien steht. Den "
+        "was weder in Sashas Notizen noch in den Projekt-Dateien steht. Den "
         "vollen Seitentext gibt es erst über fetch_url. Jede Suche muss Sasha "
         "bestätigen, also gezielt einsetzen."
     ),
