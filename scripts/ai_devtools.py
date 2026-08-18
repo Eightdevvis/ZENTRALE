@@ -12,7 +12,12 @@
 # Zeigt LIVE, alles zeitgestempelt:
 #   ai.req    Was die KI KRIEGT — das komplette Paket: System-Prompt Block fuer
 #             Block (mit Markierung, wo ein Cache-Breakpoint sitzt), jede
-#             Message, die Tool-Namen, Modell und Schiene.
+#             Message, jedes Werkzeug MIT Beschreibung und Parametern, Modell
+#             und Schiene. Die Werkzeug-Schemata stehen beim ersten Request
+#             ausgeschrieben da und danach nur noch als "[Schemata wie oben]" —
+#             sie aendern sich nicht, und 500-mal dasselbe wuerde den
+#             Ringpuffer leerdruecken. Aendert sich der Satz, steht er wieder
+#             vollstaendig da (erkennbar am Fingerabdruck dahinter).
 #   ai.out    Was sie AUSGIBT — die ROH-Antwort inklusive Denk-Bloecken und dem
 #             Vorgeplaenkel vor einem Tool-Call, das der Chat sonst schluckt.
 #   ai.tool   Jeder Tool-Call: Name, Argumente, Ergebnis.
@@ -91,8 +96,33 @@ def zeig_req(ev, grenze):
             block(b.get('text', ''), grenze, '    ')
 
     tools = ev.get('tools') or []
-    print(f"{C['head']}Tools{C['rst']} {C['dim']}({len(tools)}){C['rst']}  "
-          + ', '.join(tools))
+    voll  = ev.get('tools_voll')
+    zeichen = sum(len(t.get('beschreibung', ''))
+                  + len(json.dumps(t.get('parameter') or {}, ensure_ascii=False))
+                  for t in (voll or []))
+    kopf = (f"{C['head']}Tools{C['rst']} {C['dim']}({len(tools)}"
+            + (f", {zeichen} Zeichen ≈ {zeichen // 4} Token" if voll else "")
+            + f"){C['rst']}")
+    if voll is None:
+        # Unveraendert seit dem letzten Request — der Emitter spart sich die
+        # Wiederholung, damit der Ringpuffer nicht nur noch Werkzeuge enthaelt.
+        print(kopf + f"  {C['dim']}[Schemata wie oben, "
+                     f"{ev.get('tools_fp','?')}]{C['rst']}  " + ', '.join(tools))
+        return
+    print(kopf + f"  {C['dim']}[{ev.get('tools_fp','?')}]{C['rst']}")
+    for t in voll:
+        print(f"  {C['tool']}{t.get('name','?')}{C['rst']}")
+        block(t.get('beschreibung', ''), 0, '      ')
+        props = (t.get('parameter') or {}).get('properties') or {}
+        pflicht = set((t.get('parameter') or {}).get('required') or [])
+        for pname, pinfo in props.items():
+            marke = '*' if pname in pflicht else ' '
+            typ = pinfo.get('type', '?')
+            enum = pinfo.get('enum')
+            if enum:
+                typ += ' ' + '|'.join(str(e) for e in enum)
+            print(f"      {C['dim']}{marke}{pname} ({typ}){C['rst']} "
+                  f"{pinfo.get('description','')}")
 
 
 def zeig_out(ev, grenze):

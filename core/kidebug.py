@@ -37,6 +37,8 @@
 # über eine offene Schnittstelle — er läuft über dieselbe lokale API wie der
 # Rest (siehe memory/betrieb/sicherheit.md).
 
+import hashlib
+import json
 import os
 import queue
 import threading
@@ -51,6 +53,8 @@ _AN = os.environ.get("ZENTRALE_AI_DEBUG", "0") != "0"
 
 _LOCK = threading.Lock()
 _BUF  = deque(maxlen=500)     # jüngste Events (Historie beim Öffnen)
+_TOOLS_FP = None              # Fingerabdruck des zuletzt AUSGESCHRIEBENEN
+                              # Werkzeug-Satzes (siehe request())
 _SUBS = []                    # aktive Devtools-Verbindungen (queue.Queue)
 
 
@@ -97,8 +101,13 @@ def history() -> list:
 
 
 def subscribe():
+    # Der Merker wird zurueckgesetzt: ein frisch verbundenes Devtools hat die
+    # Schemata noch nie gesehen, auch wenn sie vor Stunden schon mal durch den
+    # Puffer liefen. Sonst haette ausgerechnet die erste Sitzung nichts.
+    global _TOOLS_FP
     q = queue.Queue(maxsize=2000)
     with _LOCK:
+        _TOOLS_FP = None
         _SUBS.append(q)
     return q
 
@@ -162,12 +171,33 @@ def request(*, modell: str, schiene: str, system, messages, tools) -> None:
                             for b in teile],
             })
 
-        namen = []
+        # Werkzeuge: bis 18.08.2026 gingen hier nur die NAMEN raus. Damit log
+        # die Devtools ihren eigenen Anspruch — die Beschreibungen sind das,
+        # woraus die KI ableitet, wann sie was nimmt, und sie sind ein
+        # betraechtlicher Teil des gecachten Prefix. Wer wissen will, warum
+        # sie zum falschen Werkzeug greift, muss genau das lesen koennen.
+        #
+        # Ausgeschrieben werden sie aber nur, wenn sich der Satz seit dem
+        # letzten Request geaendert hat. Er ist statisch; ihn 500-mal in einen
+        # Puffer von 500 Events zu legen hiesse, alles andere daraus zu
+        # verdraengen. `tools_voll=None` heisst darum "unveraendert", nicht
+        # "nicht verfuegbar".
+        global _TOOLS_FP
+        namen, voll = [], []
         for t in (tools or []):
             fn = t.get("function", t) if isinstance(t, dict) else {}
             namen.append(fn.get("name", "?"))
+            voll.append({"name":        fn.get("name", "?"),
+                         "beschreibung": fn.get("description", ""),
+                         "parameter":   fn.get("parameters") or {}})
+        fp = hashlib.sha1(
+            json.dumps(voll, sort_keys=True, ensure_ascii=False).encode()
+        ).hexdigest()[:12]
+        neuer_satz = fp != _TOOLS_FP
+        _TOOLS_FP = fp
 
         emit("ai.req", modell=modell, schiene=schiene,
-             system=bloecke, messages=msgs, tools=namen)
+             system=bloecke, messages=msgs, tools=namen,
+             tools_fp=fp, tools_voll=(voll if neuer_satz else None))
     except Exception:
         pass
