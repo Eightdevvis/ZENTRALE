@@ -236,7 +236,10 @@ _GEDAECHTNIS = [
                 "Dossier-Titel fuer den STAND einer laufenden Sache ('Kueche: "
                 "Regale haengen, Apparatur fehlt'). Ein neuer Titel legt ein "
                 "neues Dossier an. Du fragst dafuer nicht um Erlaubnis, du "
-                "machst es einfach — so wie jemand mitschreibt, der danebensitzt."
+                "machst es einfach — so wie jemand mitschreibt, der "
+                "danebensitzt. Und du antwortest danach ganz normal weiter: "
+                "mitschreiben IST keine Antwort, und ein stummer Turn wirkt "
+                "wie ein Absturz."
             ),
             "parameters": {
                 "type": "object",
