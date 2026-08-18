@@ -32,6 +32,44 @@ notes.md
 > (`tutor/data/<lang>/vocab.json`) stand nie in der Whitelist und ist der lokalen
 > KI unsichtbar — das passt zur Tutor-Sandbox.
 
+## Zweite Wurzel: `~/codicus` (seit 18.08.2026)
+
+Sasha: *"die ai brauch zugriff auf alles unter /codicus/"*. Seitdem hat
+`core/context.py` **zwei Wurzeln** — ZENTRALE selbst (weiter über die
+Whitelist oben) und `~/codicus` (per `ZENTRALE_CODICUS` umstellbar), dort
+**alles**, was nicht ausdrücklich gesperrt ist.
+
+Eine einzige Instanz entscheidet: **`erlaubt(abs_pfad) -> str`**, leerer
+String heißt ja, sonst steht der Grund drin. `read_file` fragt sie, und
+`gedaechtnis.dokument_holen` (das jetzt auch lokale Pfade ablegt, nicht nur
+URLs) fragt dieselbe. Zwei Antworten auf „was darf sie sehen" wären die
+Sorte Lücke, die niemand bemerkt: eine Ablage-Funktion, die weiter reicht
+als die Lese-Funktion, ist ein Umweg um die Sperre.
+
+Gesperrt bleiben, **egal in welcher Wurzel**:
+
+- **Ordner** (`_GESPERRTE_ORDNER`, greift auf jedem Pfad-Segment): `.git`,
+  `.hg`, `.svn`, `node_modules`, `venv`, `.venv`, `__pycache__`,
+  `.mypy_cache`, `.pytest_cache`, `site-packages`, `dist`, `build`,
+  `.cache`, `worktrees` — Innereien und Arbeitskopien, also dieselben
+  Dateien ein zweites Mal — **und `learning`**.
+- **Secret-Muster** im Dateinamen (`_SECRET_MUSTER`): `.env`, `id_rsa`,
+  `id_ed25519`, `id_ecdsa`, `secret`, `token`, `passwor`, `apikey`,
+  `api_key` — plus die alte Sperre. Die trug vorher wenig; mit fremden
+  Repos in Reichweite trägt sie viel.
+- Alles außerhalb der beiden Wurzeln. `..` braucht keine eigene Prüfung:
+  wer hinausklettert, fällt aus der Wurzel und damit durch.
+
+**`learning/` ist eine Entscheidung, keine Notwendigkeit** — Sashas
+Lernordner, in dem er ohne KI arbeitet (Hausregel 3 gilt auch für mich).
+Es ist eine Zeile in `_GESPERRTE_ORDNER`, jederzeit rücknehmbar.
+
+`list_available_files()` listet **ZENTRALE zuerst und vollständig**, füllt
+dann bis `_MAX_LISTE` (300) aus `~/codicus` auf und hängt einen Hinweis an,
+wenn etwas fehlt. Sonst frisst ein alphabetisch frühes Fremdprojekt den
+Deckel auf und ausgerechnet das, was sie täglich braucht, fällt heraus.
+`read_file` erreicht auch das Nichtgelistete.
+
 Die Whitelist gilt für die **lokale Core-KI**. Der Tutor hat eine **eigene,
 strengere** Sandbox (`tutor.tools._ALLOWED`) und kann gar keine Dateien lesen —
 nur seine 15 Tools aufrufen. Siehe `memory/tutor/tutor_system.md`.

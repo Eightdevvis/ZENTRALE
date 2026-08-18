@@ -231,8 +231,14 @@ def test_kopf_block_zeigt_die_bereiche_und_das_status_vokabular():
 
 # ── Aus dem Netz holen, an EINEN Ort ──────────────────────────────────
 
-def test_nur_http():
-    assert "nur http" in gedaechtnis.dokument_holen("ftp://x/y", "test")
+def test_exotische_protokolle_gehen_nicht_durch():
+    """Seit dem 18.08.2026 nimmt dokument_holen auch lokale Pfade — "nur
+    http(s)" gilt also nicht mehr pauschal. Was NICHT http ist, faellt jetzt
+    in den Datei-Zweig und damit unter context.erlaubt(); ein ftp-URL ist
+    dort schlicht kein erlaubter Pfad. Wichtig ist nur, dass es abgelehnt
+    wird — nicht, mit welchem Satz."""
+    antwort = gedaechtnis.dokument_holen("ftp://x/y", "test")
+    assert antwort.startswith("[")
 
 
 def test_html_wird_zu_text(monkeypatch):

@@ -683,20 +683,62 @@ def dokument_holen(url: str, name: str) -> str:
     schluessel = _slug(name)
     if not schluessel:
         return "[Fehler: kein Name fuer die Ablage]"
-    if not (url or "").lower().startswith(("http://", "https://")):
-        return "[Fehler: nur http(s)-Adressen]"
 
-    try:
-        with urllib.request.urlopen(url, timeout=60) as antwort:
-            daten = antwort.read(_MAX_DOKUMENT + 1)
-            typ = (antwort.headers.get("Content-Type") or "").split(";")[0].strip()
-    except Exception as e:
-        return f"[Download fehlgeschlagen: {e}]"
+    quelle = (url or "").strip()
+    aus_dem_netz = quelle.lower().startswith(("http://", "https://"))
+
+    if aus_dem_netz:
+        try:
+            with urllib.request.urlopen(quelle, timeout=60) as antwort:
+                daten = antwort.read(_MAX_DOKUMENT + 1)
+                typ = (antwort.headers.get("Content-Type") or "").split(";")[0].strip()
+        except Exception as e:
+            return f"[Download fehlgeschlagen: {e}]"
+    else:
+        # LOKALE DATEI. Sasha legt Modulhandbuch und Stundenplan als PDF hin,
+        # statt eine URL zu haben — ohne diesen Weg kaeme sie nicht daran.
+        #
+        # Ueber die Erlaubnis entscheidet context.erlaubt(), also dieselbe
+        # Instanz wie bei read_file. Zwei Antworten auf "was darf sie sehen"
+        # waeren die Sorte Sicherheitsluecke, die niemand bemerkt: eine
+        # Ablage-Funktion, die mehr erreicht als die Lese-Funktion, ist ein
+        # Umweg um die Sperre.
+        import context
+        pfad = os.path.expanduser(quelle)
+        if not os.path.isabs(pfad):
+            for wurzel in context._WURZELN:
+                if os.path.exists(os.path.join(wurzel, pfad)):
+                    pfad = os.path.join(wurzel, pfad)
+                    break
+        pfad = os.path.abspath(pfad)
+        grund = context.erlaubt(pfad)
+        if grund:
+            return f"[Zugriff verweigert: {grund}]"
+        if not os.path.isfile(pfad):
+            return f"[Datei nicht gefunden: {quelle}]"
+        if os.path.getsize(pfad) > _MAX_DOKUMENT:
+            return f"[Groesser als {_MAX_DOKUMENT // 1_000_000} MB — abgebrochen.]"
+        with open(pfad, "rb") as f:
+            daten = f.read()
+        endung = os.path.splitext(pfad)[1].lower()
+        typ = {".pdf": "application/pdf", ".md": "text/markdown",
+               ".txt": "text/plain", ".json": "application/json",
+               ".html": "text/html", ".csv": "text/csv"}.get(endung, "")
+        if not typ and daten[:5] != b"%PDF-":
+            # Ohne bekannte Endung: als Text versuchen, wenn es sich als
+            # UTF-8 lesen laesst. Sonst faellt es unten in den Datei-Zweig.
+            try:
+                daten.decode("utf-8")
+                typ = "text/plain"
+            except UnicodeDecodeError:
+                typ = ""
+        quelle = pfad
+
     if len(daten) > _MAX_DOKUMENT:
         return f"[Groesser als {_MAX_DOKUMENT // 1_000_000} MB — abgebrochen.]"
 
-    kopf = (f"# {schluessel}\n\n> Geholt am {date.today().isoformat()} "
-            f"von {url}\n")
+    kopf = (f"# {schluessel}\n\n> {'Geholt' if aus_dem_netz else 'Uebernommen'} "
+            f"am {date.today().isoformat()} von {quelle}\n")
 
     # ── PDF ──────────────────────────────────────────────────────────
     if daten[:5] == b"%PDF-":
