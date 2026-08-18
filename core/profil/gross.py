@@ -208,6 +208,10 @@ _BESCHREIBUNG = {
         "rückversichern, dann deutlich warnen und per ask_choice nachhaken, "
         "ob schon abgesagt wurde."
     ),
+    "read_time": (
+        "Wie spät es jetzt ist, plus der nächste Termin mit Abstand in "
+        "Minuten. Du weißt die Uhrzeit nicht von selbst - rate sie nie."
+    ),
     "add_calendar_entry": (
         "Trägt einen Einmal-Termin oder eine Frist ein. Im Zweifel Layer "
         "'termine'. Datum YYYY-MM-DD."

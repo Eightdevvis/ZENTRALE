@@ -33,6 +33,7 @@ import lists        # type: ignore  – dynamische Listen-Registry (Todo/Sammel-
 import melodies     # type: ignore  – Melodie-Registry (Klavier-Werkzeug, data/melodies.json)
 import notes        # type: ignore  – Notiz-Registry (Text-/Listen-/Float-Blöcke, TUI-Werkzeug)
 import kalender     # type: ignore  – Kalender-Layer (Woche/Monat, data/ai_calendar.json)
+import takt         # type: ignore  – der Takt: wann sie unaufgefordert spricht
 import ai           # type: ignore
 import audio        # type: ignore
 import tutor_port    # type: ignore  – EINZIGER Griff am Sprach-Tutor (Addon).
@@ -2172,6 +2173,80 @@ def api_mail_read():
         return jsonify({"error": str(e)}), 500
 
 
+# ── Der Takt: unaufgefordert sprechen ─────────────────────────────────
+#
+# Bis zum 18.08.2026 erinnerte ZENTRALE nur dann an einen Termin, wenn
+# Sasha ohnehin gerade schrieb — der Kalender stand im Prompt, die Uhr
+# daneben, und das Modell rechnete jedes Mal nach. Genau die falsche
+# Richtung: es mahnte, wenn er da war, und schwieg, wenn er weg war.
+#
+# Jetzt entscheidet core/takt.py das WANN (rein, testbar, ohne Netz), und
+# dieser Thread führt aus. Er ist bewusst dünn: fragen, einmal antworten
+# lassen, in den Verlauf legen, merken.
+
+TAKT_AN   = os.environ.get("ZENTRALE_TAKT", "1") == "1"
+TAKT_TICK = 60          # Sekunden zwischen zwei Prüfungen
+
+
+def _takt_sprechen(anstoss):
+    """Einen Anstoß durch das normale KI-Backend jagen und ablegen.
+
+    Der Auftrag geht als letzte User-Nachricht mit, wird aber NICHT in den
+    Verlauf geschrieben: er ist eine Regieanweisung, keine Äußerung von
+    Sasha. Im Verlauf landet nur, was sie sagt — sonst läse er morgen
+    Sätze, die er nie geschrieben hat.
+    """
+    history = state.get_chat_history() + [
+        {"role": "user", "content": anstoss["auftrag"]}]
+    backend = ai_backends.chat_backend()
+    if backend == ai_backends.CLOUD:
+        stream = ai_backends.chat_cloud_module().chat_stream(history)
+    else:
+        stream = ai.chat_stream(history)
+
+    stuecke = []
+    for token in stream:
+        # Nur Text. Ein Erlaubnis-Dialog kann hier niemanden erreichen —
+        # es sitzt ja niemand vor einem Stream —, also wird er ignoriert
+        # statt 180 Sekunden ins Leere zu warten.
+        if isinstance(token, dict):
+            continue
+        stuecke.append(token)
+
+    text = "".join(stuecke).strip()
+    if not text:
+        return False
+    state.push_chat_message("assistant", text)
+    state.push_event("KI meldet sich")
+    return True
+
+
+def _takt_starten():
+    if not TAKT_AN:
+        state.push_log("TAKT: aus (ZENTRALE_TAKT=0)")
+        return
+
+    def _run():
+        takt.aufraeumen()
+        while True:
+            try:
+                time.sleep(TAKT_TICK)
+                anstoss = takt.faellig()
+                if not anstoss:
+                    continue
+                # ZUERST merken, dann sprechen. Andersherum würde ein
+                # Absturz mitten im Modell-Aufruf denselben Anstoß beim
+                # nächsten Tick wiederholen — und Doppel-Mahnungen sind
+                # genau das, wogegen diese Schicht gebaut ist.
+                takt.merken(anstoss["marke"])
+                state.push_log(f"TAKT: {anstoss['marke']}")
+                _takt_sprechen(anstoss)
+            except Exception as e:
+                state.push_log(f"TAKT: {type(e).__name__}: {e}")
+
+    threading.Thread(target=_run, daemon=True, name="takt").start()
+
+
 # ── Start ──────────────────────────────────────────────────────────────
 
 def start_ui(host='0.0.0.0', port=5000):
@@ -2188,4 +2263,5 @@ def start_ui(host='0.0.0.0', port=5000):
                       POST /api/permission_answer durchkommen muss, um ihn zu
                       wecken. Ohne Threading → Deadlock.
     """
+    _takt_starten()
     app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)

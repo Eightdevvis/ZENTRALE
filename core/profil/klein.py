@@ -272,6 +272,20 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "read_time",
+            "description": (
+                "Sagt dir, wie spät es JETZT ist - und was als nächstes ansteht, "
+                "samt Abstand in Minuten. Du weißt die Uhrzeit nicht von selbst; "
+                "rate sie nie und rechne sie nie aus dem Kopf aus. Ruf dies, wenn "
+                "Sasha nach der Zeit fragt, wenn er wissen will wie lange er noch "
+                "hat, oder wenn die Tageszeit für eine Entscheidung zählt."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "add_calendar_entry",
             "description": (
                 "Trägt einen Einmal-Eintrag in einen Kalender-Layer ein. "

@@ -2080,7 +2080,11 @@ def run_ui(stdscr, store):
           "reflect": "", "streaming": False, "scroll": 0,
           "perm": None, "msg": "", "loaded": False,
           "backend": None, "model": "", "provider": "",
-          "kosten_heute": 0.0, "budget": {}}
+          "kosten_heute": 0.0, "budget": {},
+          # Der Takt kann von sich aus sprechen (core/takt.py). Ohne diese
+          # zwei Felder spraeche sie in einen leeren Raum: der Verlauf wurde
+          # frueher EINMAL beim Oeffnen geholt.
+          "neu": False, "n": 0}
     AI_LOCK = threading.Lock()
 
     def ai_stream(message):
@@ -2222,7 +2226,60 @@ def run_ui(stdscr, store):
             # nur übernehmen, wenn zwischenzeitlich nichts Eigenes dazukam
             if not AI["log"]:
                 AI["log"] = log
+            AI["n"] = len(AI["log"])
             AI["loaded"] = True
+
+    def ai_verlauf_holen():
+        """Den Verlauf vom Backend holen. -> [(rolle, text)] oder None."""
+        try:
+            h = api_call("/api/chat/history")
+        except (urllib.error.URLError, OSError, ValueError):
+            return None
+        if not isinstance(h, list):
+            return None
+        log = []
+        for m in h:
+            if not isinstance(m, dict):
+                continue
+            txt = (m.get("content") or "").strip()
+            if txt:
+                log.append(("user" if m.get("role") == "user" else "ai", txt))
+        return log
+
+    def ai_poll():
+        """Regelmaessig nachsehen, ob die KI von sich aus etwas gesagt hat.
+
+        Der Verlauf im Backend ist die Wahrheit — er enthaelt beide Seiten,
+        auch was der Takt-Thread dort ablegt. Deshalb wird er im Ruhezustand
+        einfach uebernommen statt Nachrichten einzeln zusammenzufuehren:
+        beim Zusammenfuehren muesste man mitzaehlen, was die TUI waehrend
+        eines Streams selbst schon angehaengt hat, und ein Zaehler, der
+        einmal verrutscht, verdoppelt von da an jede Nachricht.
+
+        Waehrend eines Streams wird nichts angefasst — dort waechst die
+        Antwort Token fuer Token und wuerde vom Uebernehmen zerrissen.
+        """
+        while True:
+            time.sleep(20)
+            try:
+                with AI_LOCK:
+                    if AI["streaming"] or not AI["loaded"]:
+                        continue
+                    alt_n = AI["n"]
+                log = ai_verlauf_holen()
+                if log is None or len(log) <= alt_n:
+                    continue
+                with AI_LOCK:
+                    if AI["streaming"]:
+                        continue
+                    AI["log"] = log
+                    AI["n"] = len(log)
+                    # Ein Zeichen im Titel nur, wenn er nicht ohnehin
+                    # hinschaut und die KI das letzte Wort hatte.
+                    if not AI["active"] and log and log[-1][0] == "ai":
+                        AI["neu"] = True
+            except Exception:
+                pass          # ein Poll, der die TUI abschiesst, waere schlimmer
 
     def ai_titel():
         """Kasten-Titel mit dem Kern, der gerade denkt — und was er heute
@@ -2238,12 +2295,16 @@ def run_ui(stdscr, store):
         with AI_LOCK:
             b, mdl, prov = AI["backend"], AI["model"], AI["provider"]
             eur, budget = AI.get("kosten_heute") or 0.0, AI.get("budget") or {}
+            # Sie kann von sich aus sprechen; steht der Kasten zu, sieht er
+            # es sonst nie. Der Punkt steht VORNE — hinten haengt schon die
+            # Kostenzeile und ein Zeichen dort geht unter.
+            neu = "● " if AI.get("neu") else ""
         if b == "local":
-            return f"ki-chat · lokal ({mdl})".lower()
+            return neu + f"ki-chat · lokal ({mdl})".lower()
         if b != "cloud":
-            return "ki-chat"
+            return neu + "ki-chat"
         warn = " ⚠" if budget.get("status") in ("warn", "over") else ""
-        return f"ki-chat · cloud ({prov or mdl}) · {fmt_euro(eur)} heute{warn}".lower()
+        return neu + f"ki-chat · cloud ({prov or mdl}) · {fmt_euro(eur)} heute{warn}".lower()
 
     def ai_wrap(role, text, w):
         """Text auf Breite w umbrechen; jede Zeile traegt ihre Rolle (fuer Farbe).
@@ -2598,6 +2659,7 @@ def run_ui(stdscr, store):
                     MAIL["busy"] = ""
 
     threading.Thread(target=_mail_worker, daemon=True, name="mail-io").start()
+    threading.Thread(target=ai_poll, daemon=True, name="ai-poll").start()
 
     def m_fetch(cols, rows):
         """Karte fürs aktuelle Viewport+Raster synchron holen (localhost, wenige
@@ -8243,6 +8305,7 @@ def run_ui(stdscr, store):
                 mail_refresh_counts()          # echte Ordnergrößen im Hintergrund holen
             elif ch in (ord("a"), ord("A")):   # KI-Chat öffnen (Thin-Client übers PC-Hirn)
                 AI["active"] = True; AI["scroll"] = 0; AI["msg"] = ""
+                AI["neu"] = False              # gesehen
                 if not AI["loaded"]:           # Verlauf einmal im Hintergrund nachladen
                     threading.Thread(target=ai_load_history, daemon=True).start()
             elif ch in (ord("u"), ord("U")):   # 'u' öffnet DIREKT das Persona-Zimmer (natives Fenster)

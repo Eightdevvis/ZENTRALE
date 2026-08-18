@@ -316,6 +316,7 @@ Auto-Spiegel Krankheiten in den `erlebt`-Layer geschrieben hatte.
 
 | Tool                    | Wann                                                |
 |-------------------------|-----------------------------------------------------|
+| `read_time`             | Wie spät es ist + nächster Termin mit Abstand       |
 | `read_calendar`         | JEDE Frage nach Terminen/Plänen/Daten (Pflicht)     |
 | `add_calendar_entry`    | User nennt einmaligen Termin/Frist                  |
 | `add_calendar_routine`  | User nennt regelmäßige Aktivität                    |
@@ -334,6 +335,29 @@ exakte Daten auf. Für krumme Spannen („ab dem 15.", „in 3 Monaten")
 expandiert. `add_calendar_entry(layer, day, label, time?)`
 und `add_calendar_routine(layer, label, rrule, time?)` schreiben in
 benannte Layer. Default-Layer im Tool-Prompt: `termine` bzw. `routinen`.
+
+`read_time()` — **seit 18.08.2026**, und dahinter steckt ein Schnitt: die
+**Uhrzeit steht nicht mehr im Prompt**. Sie stand im Jetzt-Block, war jede
+Runde eine andere, und das Modell rechnete deshalb bei JEDEM Turn nach, wie
+lange es noch bis zum nächsten Termin ist — *„in 16 Minuten"*, *„noch 3
+Minuten"*, obwohl Sasha den Termin längst gesehen hatte. Erst stand dagegen
+eine Prompt-Regel; Sashas Schnitt war strenger und besser: **eine Regel ist
+eine Bitte, keine Uhrzeit zu haben ist eine Tatsache.** Was sie nicht weiß,
+kann sie nicht ausrechnen.
+
+Sie zieht die Zeit jetzt, wenn sie sie braucht. `read_time` gibt Uhrzeit,
+Datum **und** den nächsten Termin mit Abstand in Minuten zurück — beides in
+einem Aufruf, weil sonst zwei Tool-Runden nötig wären und jede Runde ein
+kompletter zweiter Call ist. Ungegatet (reines Lesen). Das **Datum** bleibt
+im Prompt: es wechselt einmal am Tag statt jede Minute, und ohne es wäre
+jede Aussage über „heute" ein Tool-Aufruf.
+
+`kalender.naechster_termin(jetzt)` liefert `{label, time, layer, minuten,
+morgen}` und wird **von beiden** benutzt — vom Werkzeug und vom Takt. Zwei
+getrennte Rechnungen für dieselbe Frage würden auseinanderlaufen, und dann
+sagt der Ping etwas anderes als die Antwort im Chat. Ganztags-Einträge
+liefern keinen Countdown (sonst hieße es dauernd „jetzt gleich"), und
+abends greift die Suche auf morgen über.
 
 `edit_calendar_routine(label, aktion, time?, ende?, rrule?, ort?,
 neuer_titel?)` — **seit 18.08.2026**. Bis dahin gab es für Routinen nur

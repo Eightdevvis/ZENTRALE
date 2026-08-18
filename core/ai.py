@@ -174,9 +174,23 @@ _MONTHS_DE = ["", "Januar", "Februar", "März", "April", "Mai", "Juni",
 
 def _now_prompt() -> str:
     """
-    Baut den Jetzt-Block mit Datum/Uhrzeit und der aktuellen Wochen-
-    Ansicht aus dem Kalender. Wird bei jedem Turn frisch erzeugt, damit
-    Datum, Uhrzeit und Termine immer aktuell sind.
+    Baut den Jetzt-Block: Datum und die Grenzen dessen, was sie ohne
+    Werkzeug weiß.
+
+    ── Warum die UHRZEIT hier nicht mehr steht (18.08.2026) ──
+    Sie stand hier, und weil sie jede Runde eine andere war, rechnete das
+    Modell jedes Mal nach, wie lange es noch bis zum nächsten Termin ist —
+    "in 16 Minuten", "noch 3 Minuten", obwohl Sasha den Termin längst
+    gesehen hatte. Eine Prompt-Regel dagegen ist eine Bitte; das hier ist
+    eine Tatsache: was sie nicht weiß, kann sie nicht ausrechnen.
+
+    Braucht sie die Uhrzeit, holt sie sie mit read_time — ZIEHEN statt
+    DRÜCKEN. Und das aktive Erinnern kommt nicht mehr aus dem Prompt,
+    sondern aus dem Takt: der stößt sie an, wenn ein Termin eine Stunde
+    bzw. eine halbe Stunde entfernt ist (Sashas Entwurf).
+
+    Das Datum bleibt: es wechselt einmal am Tag statt jede Minute, und
+    ohne es wäre jede Aussage über "heute" ein Tool-Aufruf.
     """
     now = datetime.now()
     weekday = _WEEKDAYS_DE[now.weekday()]
@@ -184,10 +198,13 @@ def _now_prompt() -> str:
     head = (
         "## Jetzt\n"
         f"Heute ist {weekday}, der {now.day}. {month} {now.year}. "
-        f"Aktuelle Uhrzeit: {now.strftime('%H:%M')}. "
         "Dieser Block ist die einzige verlässliche Zeitquelle - Daten, die "
         "in Notizen oder im Tagebuch stehen, sind Erinnerungen an frühere "
-        "Tage, NICHT der aktuelle Tag."
+        "Tage, NICHT der aktuelle Tag.\n\n"
+        "Die UHRZEIT steht hier bewusst nicht: du weißt nicht, wie spät es "
+        "ist. Brauchst du sie wirklich - weil Sasha danach fragt oder weil "
+        "es für eine Entscheidung zählt - ruf read_time. Rate nie, und "
+        "rechne nichts aus dem Kopf aus."
     )
     # Der Kalender wird weiterhin NICHT als Ganzes mitgeschleppt — nur der
     # nahe Horizont steht als eigener Block direkt hinter diesem hier
@@ -606,6 +623,20 @@ def _dispatch_tool(name: str, args: dict) -> str:
             time  = args.get("time"),
         )
         return "OK, eingetragen." if ok else "[Fehler: Layer existiert nicht oder Eingabe ungültig]"
+    elif name == "read_time":
+        from datetime import datetime as _dt
+        jetzt = _dt.now()
+        zeile = (f"Es ist {jetzt.strftime('%H:%M')} "
+                 f"({_WEEKDAYS_DE[jetzt.weekday()]}, "
+                 f"{jetzt.day}. {_MONTHS_DE[jetzt.month]} {jetzt.year}).")
+        n = kalender.naechster_termin(jetzt)
+        if not n:
+            return zeile + " Danach steht heute und morgen nichts mehr an."
+        std, rest = divmod(n["minuten"], 60)
+        abstand = (f"{std} Std {rest} min" if std else f"{rest} min")
+        wann = ("morgen " if n["morgen"] else "") + f"um {n['time']}"
+        return (f"{zeile} Als Nächstes: {n['label']} {wann} — "
+                f"in {abstand}.")
     elif name == "add_calendar_routine":
         ok = kalender.add_routine(
             layer     = args.get("layer", "routinen"),

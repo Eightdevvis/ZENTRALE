@@ -232,6 +232,44 @@ def set_span_time(layer: str, von: str, label: str, day: str,
     return False
 
 
+def naechster_termin(jetzt: datetime | None = None) -> dict | None:
+    """Der naechste Termin ab jetzt (heute oder morgen). None = keiner.
+
+    -> {"label", "time", "layer", "minuten", "morgen"}
+
+    Zwei Verwendungen, absichtlich dieselbe Funktion: das Werkzeug
+    `read_time` beantwortet damit "wie lange hab ich noch", und der Takt
+    entscheidet damit, wann er anstoesst. Zwei getrennte Rechnungen fuer
+    dieselbe Frage wuerden irgendwann auseinanderlaufen, und dann sagt der
+    Ping etwas anderes als die Antwort im Chat.
+
+    Nur sichtbare Layer — dieselbe Regel wie beim Imprint: die KI soll
+    nichts wissen, was Sasha nicht nachlesen kann.
+    """
+    jetzt = jetzt or datetime.now()
+    heute = jetzt.date()
+    try:
+        data = _load_raw()
+    except Exception:
+        return None
+    sichtbar = [n for n, lyr in data.get("layers", {}).items()
+                if lyr.get("default_visible", True)]
+    tage = entries_in_range(heute, heute + timedelta(days=1), layers=sichtbar)
+    for iso in sorted(tage):
+        ist_morgen = iso != heute.isoformat()
+        for e in tage[iso]:
+            m = _to_minutes(e.get("time") or "")
+            if m is None:
+                continue          # ganztags: kein Countdown moeglich
+            weg = m - (jetzt.hour * 60 + jetzt.minute) + (1440 if ist_morgen else 0)
+            if weg < 0:
+                continue          # heute schon vorbei
+            return {"label": e.get("label", ""), "time": e.get("time", ""),
+                    "layer": e.get("layer", ""), "minuten": weg,
+                    "morgen": ist_morgen}
+    return None
+
+
 def routine_finden(label: str, layer: str | None = None) -> list:
     """Alle Routinen, deren Label passt. -> [(layer, index, routine), ...]
 
