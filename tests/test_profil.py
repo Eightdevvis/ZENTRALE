@@ -291,3 +291,43 @@ def test_gate_greift_bei_den_schreibenden_tools():
         assert ai.braucht_erlaubnis(name), name
     for name in ("read_calendar", "read_file", "list_files", "lies_news"):
         assert not ai.braucht_erlaubnis(name), name
+
+
+# ── Was von Anthropics eigenem Prompt uebernommen wurde ───────────────
+
+def test_uebernommene_kalibrierung_ist_da():
+    """Aus dem veroeffentlichten claude.ai-Prompt uebernommen, weil es
+    Verhalten kalibriert statt ein Produkt zu konfigurieren.
+
+    Zwei davon loesen gemessene Probleme: die Ein-Frage-Regel ist die
+    Antwort auf "wann ist wieder Zeit fuers Training?" -> "sag mir den
+    Begriff, dann such ich gezielter", und die Floskel-Regel kommt MIT
+    Begruendung, was bei Modellen zuverlaessiger sitzt als ein Verbot.
+    """
+    t = gross.system()
+    assert "## Antwortverhalten" in t
+    assert "höchstens EINE Frage" in t
+    assert "unaufrichtig" in t
+    assert "mündiger Erwachsener" in t
+    assert "ohne Selbstgeißelung" in t
+    assert "sieh selbst nach" in t
+
+
+def test_anthropics_ton_wurde_nicht_uebernommen():
+    """Der Ton-Absatz ("warm tone, kindness") zieht gegen Sashas
+    gewaehlten Grundton. Sasha, 18.08.2026: "der sarkasmus stachel
+    bleibt." Stuenden beide da, gewaenne der ausfuehrlichere."""
+    t = gross.system()
+    assert "Sarkasmus" in t
+    assert "warm tone" not in t
+    assert "ohne negative Annahmen" not in t
+
+
+def test_kein_chat_app_ballast():
+    """Neun Zehntel des veroeffentlichten Prompts konfigurieren eine
+    Chat-App. Nichts davon darf hier hereinrutschen — das waere genau der
+    Fehler, den wir am selben Tag ausgeraeumt haben."""
+    t = gross.system().lower()
+    for wort in ("daumen", "thumbs", "artifact", "minderjährig",
+                 "evenhandedness", "safeguard"):
+        assert wort not in t, wort

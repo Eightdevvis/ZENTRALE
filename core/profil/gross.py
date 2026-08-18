@@ -113,6 +113,52 @@ _SYSTEM_PROMPT = _ohne(_ohne(_ohne(_ohne(
 # spiegelt die Sprache seines Gegenuebers von selbst.
 #
 # Was bleibt, sind die drei Dinge, die NICHT von allein passieren.
+# ── Was von Anthropics eigenem Prompt uebernommen wurde (18.08.2026) ──
+#
+# Anthropic veroeffentlicht die System-Prompts der Claude-Apps:
+# platform.claude.com/docs/en/release-notes/system-prompts
+#
+# NICHT uebernommen wurde er als Ganzes — die aktuelle Fassung sind grob
+# 12.000 bis 15.000 Token, und neun Zehntel davon konfigurieren eine
+# Chat-App: Produktinfos, Safeguard-Routing, Refusal-Handling,
+# Wellbeing-Protokolle, Evenhandedness bei politischen Streitfragen. Auf
+# der Seite steht ausdruecklich, dass das NICHT fuer die API gilt. Es
+# waere genau der Fehler gewesen, den wir am selben Tag ausgeraeumt haben:
+# Anweisungen ueber eine Welt, die es hier nicht gibt.
+#
+# Uebernommen wurde, was VERHALTEN kalibriert und produktunabhaengig ist —
+# sinngemaess ins Deutsche gebracht, weil der Rest des Prompts deutsch ist.
+# Zwei Stellen loesen Probleme, die hier gemessen wurden:
+#
+#   * "hoechstens EINE Frage" ist die Antwort auf "wann ist wieder Zeit
+#     fuer Training?" -> "sag mir den Begriff, dann such ich gezielter".
+#     Erst antworten, dann fragen.
+#   * Die Floskel-Regel kommt MIT Begruendung ("wirkt unaufrichtig"), und
+#     eine begruendete Regel sitzt bei Modellen zuverlaessiger als ein
+#     nacktes Verbot.
+#
+# Bewusst NICHT uebernommen: Anthropics Ton-Absatz ("warm tone, kindness,
+# without making negative assumptions"). Der zieht gegen Sashas gewaehlten
+# Grundton — trocken, mit einem Stachel Sarkasmus. Stuenden beide da,
+# gewaenne der ausfuehrlichere. Sasha, 18.08.2026: "der sarkasmus stachel
+# bleibt."
+_ANTWORTVERHALTEN = """## Antwortverhalten
+
+Halte Antworten fokussiert und knapp, damit sie niemanden erschlagen. Vorbehalte und Einschränkungen bleiben kurz; der Hauptteil gehört der eigentlichen Antwort. Sollst du etwas erklären, gib den Überblick — in die Tiefe nur, wenn ausdrücklich danach gefragt wird.
+
+Listen und Aufzählungen nur, wenn danach gefragt wird oder der Inhalt wirklich mehrteilig ist und dadurch klarer wird. Erklärungen darfst du mit Beispielen, Gedankenexperimenten oder Bildern greifbar machen.
+
+Du fragst nicht ständig nach. Wenn doch, dann höchstens EINE Frage pro Antwort — und selbst eine unklare Frage beantwortest du erst so weit du kannst, bevor du um Klärung bittest.
+
+Verstärker wie "ehrlich gesagt", "wirklich" oder "ganz einfach" lässt du weg. Du bist ohnehin ehrlich; solche Wörter sollen überzeugen und wirken genau dadurch unaufrichtig. Sag es direkt.
+
+Sasha ist ein mündiger Erwachsener und wird so behandelt.
+
+Machst du einen Fehler, stehst du dazu und behebst ihn — ohne Selbstgeißelung, übertriebene Entschuldigungen oder Kapitulation. Wird Sasha ruppig, wirst du nicht unterwürfig. Verantwortung übernehmen, beim Problem bleiben, Selbstachtung behalten.
+
+Was du nachsehen kannst, nimmst du nicht als gegeben an. Dass jemand sagt, etwas liege vor, heißt nicht, dass es da ist — sieh selbst nach."""
+
+
 _CAPABILITIES_PROMPT = """## Meta-Regeln
 
 1. Über Sasha nichts erfinden. Was du über ihn weißt, steht in seinen Notizen — Steckbrief, Ziele, Dossiers, Kataloge, Tagebuch. Fehlt dir etwas: nachlesen (read_note) oder suchen (search_memory). Findest du nichts, sag das, statt zu raten.
@@ -446,4 +492,5 @@ def system(override: str | None = None, *, dashview: bool = True) -> str:
     Dashboard-Sicht. Der Parameter bleibt, damit beide Schienen dieselbe
     Signatur haben und der Kern nicht wissen muss, auf welcher er faehrt.
     """
-    return (override or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
+    return "\n\n".join([(override or _SYSTEM_PROMPT),
+                         _ANTWORTVERHALTEN, _CAPABILITIES_PROMPT])
