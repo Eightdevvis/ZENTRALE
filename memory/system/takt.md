@@ -32,6 +32,11 @@ merken-vor-sprechen ist Absicht: ein Absturz mitten im Modell-Aufruf würde
 sonst denselben Anstoß beim nächsten Tick wiederholen. Abschaltbar mit
 `ZENTRALE_TAKT=0`.
 
+**2b. Die Meldung nach draussen.** Seit dem 19.08.2026 geht jeder Anstoß
+zusätzlich als **Desktop-Benachrichtigung** raus (`core/melden.py`) — aber nur,
+wenn ZENTRALE nicht ohnehin sichtbar vor Sasha steht. Ohne das endet ihre
+Initiative an der Fensterkante. Details in `memory/betrieb/systemeinheit.md`.
+
 **3. Die Zustellung — `ai_poll()` in der TUI.** Der Verlauf wurde früher
 **einmal** beim Öffnen des KI-Kastens geholt; eine unaufgeforderte Nachricht
 wäre also versandet. Jetzt sieht ein Thread alle 20 s nach und übernimmt den
@@ -79,5 +84,9 @@ Alte Tageszustände räumt `aufraeumen()` beim Start weg (7 Tage bleiben).
   Check-in nach längerer Abwesenheit) — die zweite Auslöser-Klasse aus Sashas
   Vorgabe, Gerüst steht, Trigger noch nicht.
 - **Das Schemen** baut später auf dem auf, was der Takt erzeugt.
+- **Anwesenheit erkennen:** jetzt, wo der Kern auch ohne offenes Fenster läuft,
+  weiß ZENTRALE nicht mehr von selbst, ob Sasha überhaupt am Rechner ist. Für
+  die Anwesenheitspings braucht es dafür ein Signal (Bildschirmsperre, letzte
+  Eingabe, sichtbares Fenster).
 - **Kosten im Blick behalten:** jeder Anstoß ist ein Modell-Aufruf.
   `data/ai_usage.json` nach einem Tag mit Takt gegen einen Tag ohne halten.

@@ -7,7 +7,11 @@
 # startet dann die curses-TUI (tui/zentrale_tui.py) im VOLLBILD des aktuellen
 # Terminals. Kein tmux, kein Split, kein angeklebtes zweites Terminal —
 # einfach das Dashboard in dem Terminal, in dem der Befehl abgesetzt wurde.
-# Beenden: 'q' in der TUI → stoppt auch das Backend.
+#
+# Beenden mit 'q': schließt das FENSTER. Läuft das Backend als Dienst
+# (zentrale-kern.service, der Normalfall seit 19.08.2026), bleibt es stehen —
+# sonst wäre der Takt tot, sobald kein Fenster offen ist. Nur ein Backend, das
+# dieses Skript selbst gestartet hat, wird beim Beenden mitgenommen.
 #
 # Das Backend-stdout geht in eine LOGDATEI, NICHT ins Terminal — sonst würde
 # es die curses-Oberfläche zerschießen. Die Logs erscheinen ohnehin im
@@ -58,10 +62,32 @@ BACKEND_LOG="/tmp/zentrale-tui-backend.log"
 # stirbt still), die Readiness-Prüfung träfe das FALSCHE Backend, und die TUI
 # liefe gegen veralteten Code — genau die Art "läuft nicht, keine Ahnung warum".
 # Lieber hart abbrechen mit Aufräum-Tipp.
+ATTACHED=0
 if curl -sf -o /dev/null http://localhost:5000/api/state 2>/dev/null; then
-  # Ist es UNSER verwaistes ki-frei-Backend (von einer toten TUI)? Dann
-  # zurückholen statt abbrechen. Erkennung: ZENTRALE_KASSETTE=tui im Prozess-
-  # Environ — so treffen wir NIE ein fremdes/monolith-Backend.
+  # ── Seit 19.08.2026: ANHÄNGEN ist der Normalfall ──────────────────────
+  # ZENTRALE ist eine Systemeinheit geworden: das Backend läuft als
+  # Benutzer-Dienst (zentrale-kern.service) und muss weiterlaufen, wenn kein
+  # Fenster offen ist — sonst stirbt der Takt, sobald Sasha die TUI zumacht,
+  # und sie erinnert nie wieder an etwas, während er woanders arbeitet.
+  #
+  # Vorher hat dieses Skript ein laufendes Backend ZURÜCKGEHOLT, also
+  # abgeschossen und neu gestartet. Gegen einen Dienst wäre das ein Kampf:
+  # jede TUI würde ihn killen, systemd startet ihn neu, und der Takt-
+  # Tageszustand wäre bei jedem Fensteröffnen frisch.
+  #
+  # Also: antwortet dort etwas Gesundes, hängen wir uns dran und fassen es
+  # nicht an — weder beim Start noch beim Beenden.
+  if [[ "${ZENTRALE_TUI_FRESH:-}" != "1" ]]; then
+    echo "ZENTRALE (tui) — Backend läuft bereits, hänge mich dran."
+    ATTACHED=1
+  fi
+fi
+
+if [[ "$ATTACHED" != "1" ]] && curl -sf -o /dev/null http://localhost:5000/api/state 2>/dev/null; then
+  # ZENTRALE_TUI_FRESH=1: bewusst frisch starten (Entwicklung — die TUI soll
+  # gegen NEUEN Backend-Code laufen, nicht gegen den seit Stunden laufenden).
+  # Erkennung wie bisher: ZENTRALE_KASSETTE=tui im Prozess-Environ, damit wir
+  # NIE ein fremdes/monolith-Backend treffen.
   reclaimed=0
   for pid in $(pgrep -f 'core/main\.py' 2>/dev/null); do
     if tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -qx 'ZENTRALE_KASSETTE=tui'; then
@@ -80,10 +106,17 @@ if curl -sf -o /dev/null http://localhost:5000/api/state 2>/dev/null; then
 fi
 
 # ── Backend im Hintergrund, stdout in die Logdatei ──────────────────────
-"$PY" core/main.py > "$BACKEND_LOG" 2>&1 &
-BACKEND_PID=$!
+BACKEND_PID=""
+if [[ "$ATTACHED" != "1" ]]; then
+  "$PY" core/main.py > "$BACKEND_LOG" 2>&1 &
+  BACKEND_PID=$!
+fi
 
 cleanup() {
+  # NUR beenden, was wir selbst gestartet haben. Ein Backend, an das wir uns
+  # nur drangehängt haben, gehört dem Dienst — es hier zu killen wäre genau
+  # der Fehler, den die Systemeinheit beseitigen soll.
+  [[ -n "$BACKEND_PID" ]] || return 0
   kill "$BACKEND_PID" 2>/dev/null || true
   wait "$BACKEND_PID" 2>/dev/null || true
 }
@@ -93,14 +126,18 @@ cleanup() {
 trap cleanup INT TERM HUP EXIT
 
 # ── Auf die Flask-API warten (max ~15 s) ────────────────────────────────
-echo "ZENTRALE (tui) — Backend startet, warte auf API …"
 ready=0
-for _ in $(seq 1 30); do
-  if curl -sf -o /dev/null http://localhost:5000/api/state 2>/dev/null; then ready=1; break; fi
-  # Backend schon gestorben? Dann raus mit Log-Hinweis (Code 4 = Code-/Import-Fehler).
-  kill -0 "$BACKEND_PID" 2>/dev/null || { echo "FEHLER (4): Backend abgebrochen — siehe $BACKEND_LOG:" >&2; tail -n 20 "$BACKEND_LOG" >&2; exit 4; }
-  sleep 0.5
-done
+if [[ "$ATTACHED" == "1" ]]; then
+  ready=1
+else
+  echo "ZENTRALE (tui) — Backend startet, warte auf API …"
+  for _ in $(seq 1 30); do
+    if curl -sf -o /dev/null http://localhost:5000/api/state 2>/dev/null; then ready=1; break; fi
+    # Backend schon gestorben? Dann raus mit Log-Hinweis (Code 4 = Code-/Import-Fehler).
+    kill -0 "$BACKEND_PID" 2>/dev/null || { echo "FEHLER (4): Backend abgebrochen — siehe $BACKEND_LOG:" >&2; tail -n 20 "$BACKEND_LOG" >&2; exit 4; }
+    sleep 0.5
+  done
+fi
 if [[ "$ready" != "1" ]]; then
   echo "FEHLER (5): Backend-API nach 15s nicht erreichbar — siehe $BACKEND_LOG:" >&2
   tail -n 20 "$BACKEND_LOG" >&2

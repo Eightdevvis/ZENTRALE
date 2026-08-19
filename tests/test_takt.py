@@ -170,7 +170,7 @@ def test_der_auftrag_landet_nicht_im_verlauf(monkeypatch):
         yield "Geige gleich. "
         yield "Los."
 
-    monkeypatch.setattr(ai_backends, "chat_backend", lambda: "local")
+    monkeypatch.setattr(ai_backends, "chat_available", lambda: "local")
     monkeypatch.setattr(ai, "chat_stream", fake_stream)
     vorher = len(state.get_chat_history())
 
@@ -184,6 +184,20 @@ def test_der_auftrag_landet_nicht_im_verlauf(monkeypatch):
     assert all("Erinnere ihn an X." not in m["content"] for m in verlauf)
 
 
+def test_ohne_erreichbares_backend_wird_geschwiegen(monkeypatch):
+    """Auf dem Laptop ohne Ollama und ohne Netz gaebe es sonst jede Minute
+    einen Anlauf gegen ein Backend, das es nicht gibt."""
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "ui"))
+    import ai_backends
+    import app
+    import state
+
+    monkeypatch.setattr(ai_backends, "chat_available", lambda: None)
+    vorher = len(state.get_chat_history())
+    assert app._takt_sprechen({"marke": "x", "auftrag": "y"}) is False
+    assert len(state.get_chat_history()) == vorher
+
+
 def test_eine_leere_antwort_wird_nicht_abgelegt(monkeypatch):
     """Ein stummer Turn (gemessen: das billige Modell nach einem Tool-Call)
     wuerde sonst als leere Blase im Chat stehen."""
@@ -193,7 +207,7 @@ def test_eine_leere_antwort_wird_nicht_abgelegt(monkeypatch):
     import app
     import state
 
-    monkeypatch.setattr(ai_backends, "chat_backend", lambda: "local")
+    monkeypatch.setattr(ai_backends, "chat_available", lambda: "local")
     monkeypatch.setattr(ai, "chat_stream", lambda h, **k: iter(["  "]))
     vorher = len(state.get_chat_history())
     assert app._takt_sprechen({"marke": "x", "auftrag": "y"}) is False

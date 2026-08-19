@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+#
+# zentrale-systemeinheit — ZENTRALE als Teil des Systems einrichten.
+#
+# Macht aus "ein Terminal, das ich aufrufe" etwas, das laeuft:
+#
+#   1. Der KERN als Benutzer-Dienst (zentrale-kern.service). Er haelt das
+#      Backend samt Takt am Leben, auch wenn kein Fenster offen ist — sonst
+#      kann ZENTRALE nur mahnen, wenn ohnehin jemand hinschaut.
+#   2. Das FENSTER im i3-Scratchpad, auf $mod+z (Cmd+z) ueber alles andere
+#      einblendbar, egal auf welchem Workspace.
+#
+# Idempotent: mehrfaches Ausfuehren aendert nichts mehr. Nimmt nichts weg —
+# `--zurueck` macht beides wieder rueckgaengig.
+#
+# Aufrufe:
+#   zentrale-systemeinheit            einrichten
+#   zentrale-systemeinheit --status   nachsehen, was steht
+#   zentrale-systemeinheit --zurueck  wieder abbauen
+
+set -uo pipefail
+
+REPO="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+UNIT_QUELLE="$REPO/deploy/zentrale-kern.service"
+UNIT_ZIEL="$HOME/.config/systemd/user/zentrale-kern.service"
+I3_CONF="$HOME/.config/i3/config"
+I3_TEIL="$REPO/deploy/i3/zentrale.conf"
+MARKE="# ZENTRALE-Systemeinheit (scripts/zentrale-systemeinheit)"
+
+status() {
+  echo "Kern-Dienst:"
+  if [[ -f "$UNIT_ZIEL" ]]; then
+    echo "  installiert  : $UNIT_ZIEL"
+    echo "  eingeschaltet: $(systemctl --user is-enabled zentrale-kern.service 2>&1)"
+    echo "  laeuft       : $(systemctl --user is-active  zentrale-kern.service 2>&1)"
+  else
+    echo "  nicht installiert"
+  fi
+  echo "i3:"
+  if grep -qF "$MARKE" "$I3_CONF" 2>/dev/null; then
+    echo "  eingebunden  : ja ($I3_TEIL)"
+  else
+    echo "  eingebunden  : nein"
+  fi
+  echo "Fenster:"
+  if command -v i3-msg >/dev/null && i3-msg -t get_tree 2>/dev/null | grep -q '"window_role":"zentrale"'; then
+    echo "  offen        : ja"
+  else
+    echo "  offen        : nein"
+  fi
+}
+
+zurueck() {
+  systemctl --user disable --now zentrale-kern.service 2>/dev/null
+  rm -f "$UNIT_ZIEL"
+  systemctl --user daemon-reload
+  if grep -qF "$MARKE" "$I3_CONF" 2>/dev/null; then
+    cp "$I3_CONF" "$I3_CONF.vor-zentrale"
+    grep -vF -e "$MARKE" -e "include $I3_TEIL" "$I3_CONF.vor-zentrale" > "$I3_CONF"
+    echo "i3-Konfiguration bereinigt (Sicherung: $I3_CONF.vor-zentrale)"
+  fi
+  echo "Abgebaut. i3 neu laden nicht vergessen."
+}
+
+case "${1:-}" in
+  --status)  status;  exit 0 ;;
+  --zurueck) zurueck; exit 0 ;;
+  "")        ;;
+  *)         echo "unbekannt: $1  (--status | --zurueck)" >&2; exit 1 ;;
+esac
+
+# ── Riegel: NICHT aus einer Arbeitskopie einrichten ───────────────────
+# Dienst und i3-Konfiguration werden auf den Pfad dieses Repos VERLINKT.
+# Aus einem git-Worktree heraus zeigten beide auf eine temporaere Kopie —
+# und wenn die geloescht wird, haengt ein toter `include` in der i3-
+# Konfiguration. i3 startet damit nicht mehr sauber, und zwar erst beim
+# naechsten Anmelden, wenn niemand mehr an den Worktree denkt.
+if [[ "$REPO" == *"/.claude/worktrees/"* ]]; then
+  echo "FEHLER: $REPO ist eine Arbeitskopie (Worktree)." >&2
+  echo "  Richte die Systemeinheit aus dem echten Checkout ein, sonst zeigen" >&2
+  echo "  Dienst und i3-Konfiguration auf einen Ordner, den es bald nicht" >&2
+  echo "  mehr gibt." >&2
+  exit 2
+fi
+
+# ── 1. Der Kern-Dienst ────────────────────────────────────────────────
+# Symlink statt Kopie: so zieht ein `git pull` Aenderungen an der Unit
+# automatisch mit, statt eine Kopie zurueckzulassen, die irgendwann von der
+# versionierten Fassung abweicht und die niemand mehr anschaut.
+mkdir -p "$(dirname "$UNIT_ZIEL")"
+ln -sfn "$UNIT_QUELLE" "$UNIT_ZIEL"
+systemctl --user daemon-reload
+echo "✓ Kern-Dienst verlinkt: $UNIT_ZIEL → $UNIT_QUELLE"
+
+# WARNUNG bei doppeltem Backend: der System-Dienst zentrale-pc.service macht
+# dasselbe und beide streiten sich um :5000. Genau ein Backend pro Rechner.
+if systemctl is-enabled zentrale-pc.service >/dev/null 2>&1; then
+  echo "⚠ ACHTUNG: zentrale-pc.service (System-Dienst) ist auch aktiv." >&2
+  echo "  Beide zusammen streiten sich um Port 5000 — genau einen behalten." >&2
+fi
+
+systemctl --user enable zentrale-kern.service >/dev/null 2>&1 \
+  && echo "✓ startet ab jetzt mit der Sitzung"
+
+# ── 2. Der i3-Teil ────────────────────────────────────────────────────
+if [[ ! -f "$I3_CONF" ]]; then
+  echo "⚠ $I3_CONF nicht gefunden — i3-Teil uebersprungen." >&2
+elif grep -qF "$MARKE" "$I3_CONF"; then
+  echo "✓ i3 ist schon eingebunden"
+else
+  cp "$I3_CONF" "$I3_CONF.vor-zentrale"
+  {
+    echo
+    echo "$MARKE"
+    echo "include $I3_TEIL"
+  } >> "$I3_CONF"
+  echo "✓ i3 eingebunden (Sicherung: $I3_CONF.vor-zentrale)"
+fi
+
+echo
+echo "Fehlt noch: i3 neu laden, damit die Taste greift — und einmal den"
+echo "Kern-Dienst starten, wenn er jetzt schon laufen soll."
+echo "Danach holt \$mod+z (Cmd+z) ZENTRALE ueber alles andere."

@@ -1,0 +1,59 @@
+[Unit]
+# ZENTRALE als Systemeinheit: das Backend laeuft, solange Sasha angemeldet
+# ist — nicht nur, solange ein Fenster offen ist.
+#
+# Bis zum 19.08.2026 war das Backend ein KIND der TUI: `zentrale-tui` startete
+# beides, und 'q' nahm beides mit. Damit war jede Initiative an ein offenes
+# Fenster gebunden — der Takt (core/takt.py) konnte nur mahnen, wenn Sasha
+# ohnehin hinschaute. Genau die falsche Richtung.
+#
+# ── BENUTZER-Dienst, nicht System-Dienst, und das mit Absicht ──────────
+# Es gibt schon deploy/zentrale-pc.service (System, WantedBy=multi-user).
+# Der ist fuer eine Maschine gedacht, die ZENTRALE ohne angemeldeten
+# Benutzer fahren soll. Hier ist es umgekehrt: ZENTRALE meldet sich auf dem
+# Desktop (core/melden.py → notify-send), liest und schreibt das Theme in
+# ~/.config/zentrale/ und gehoert zur Sitzung. Ein System-Dienst haette
+# keinen Zugang zur Sitzungs-Bus und die Benachrichtigungen fielen still auf
+# die Nase.
+#
+# ACHTUNG: BEIDE zusammen gehen NICHT — sie streiten sich um :5000. Auf
+# einem Rechner genau einen von beiden aktivieren.
+Description=ZENTRALE Kern (Backend + Takt) — laeuft ohne offenes Fenster
+# Genau die Kombination, die bei zentrale-themed.service hier seit Wochen
+# laeuft: eingehaengt wird an default.target (das unter i3 zuverlaessig
+# erreicht wird), die Ordnung nach graphical-session.target ist nur ein
+# Wunsch — sie greift, wenn das Ziel im selben Vorgang hochkommt, und wird
+# sonst schlicht ignoriert. NICHT After=default.target: ein Dienst, der
+# Teil dieses Ziels ist, kann nicht nach ihm starten.
+After=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/codicus/ZENTRALE
+ExecStart=%h/codicus/ZENTRALE/venv/bin/python %h/codicus/ZENTRALE/core/main.py
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+# Die Kassette bestimmt, was hochgefahren wird. `tui` heisst: kein
+# Ollama-Warmup, kein News-Fetcher — die KI kommt hier ueber die Cloud
+# (ai_backends.chat_available entscheidet kapazitaetsbasiert, nicht hart).
+Environment=ZENTRALE_KASSETTE=tui
+
+# Push-on-write: nach jeder echten Datenaenderung schiebt das Backend im
+# Hintergrund `zentrale-push-data` an, damit der andere Knoten sofort den
+# frischen Stand hat.
+Environment=ZENTRALE_AUTOPUSH=1
+
+# ~/.local/bin steht NICHT im systemd-Default-PATH. Ohne diese Zeile findet
+# das Backend seine eigenen Helfer nicht (zentrale-push-data, find-pc) —
+# und notify-send liegt in /usr/bin.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+# DISPLAY fuer die Desktop-Benachrichtigungen. Ein Benutzer-Dienst erbt es
+# nicht von selbst; core/melden.py faellt zwar auf :0 zurueck, aber wer eine
+# zweite Sitzung faehrt, korrigiert es hier.
+Environment=DISPLAY=:0
+
+[Install]
+WantedBy=default.target

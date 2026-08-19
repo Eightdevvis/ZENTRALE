@@ -34,6 +34,7 @@ import melodies     # type: ignore  – Melodie-Registry (Klavier-Werkzeug, data
 import notes        # type: ignore  – Notiz-Registry (Text-/Listen-/Float-Blöcke, TUI-Werkzeug)
 import kalender     # type: ignore  – Kalender-Layer (Woche/Monat, data/ai_calendar.json)
 import takt         # type: ignore  – der Takt: wann sie unaufgefordert spricht
+import melden       # type: ignore  – Desktop-Benachrichtigung (notify-send)
 import ai           # type: ignore
 import audio        # type: ignore
 import tutor_port    # type: ignore  – EINZIGER Griff am Sprach-Tutor (Addon).
@@ -2196,9 +2197,14 @@ def _takt_sprechen(anstoss):
     Sasha. Im Verlauf landet nur, was sie sagt — sonst läse er morgen
     Sätze, die er nie geschrieben hat.
     """
+    # Dieselbe Frage, die auch die Chat-Endpoints stellen. Ohne sie wuerde
+    # der Takt auf dem Laptop ohne Ollama und ohne Netz gegen ein Backend
+    # reden, das es nicht gibt — jede Minute aufs Neue.
+    backend = ai_backends.chat_available()
+    if backend is None:
+        return False
     history = state.get_chat_history() + [
         {"role": "user", "content": anstoss["auftrag"]}]
-    backend = ai_backends.chat_backend()
     if backend == ai_backends.CLOUD:
         stream = ai_backends.chat_cloud_module().chat_stream(history)
     else:
@@ -2218,6 +2224,10 @@ def _takt_sprechen(anstoss):
         return False
     state.push_chat_message("assistant", text)
     state.push_event("KI meldet sich")
+    # Auf den Desktop, wenn ZENTRALE nicht ohnehin vor ihm steht. Ohne das
+    # endet ihre Initiative an der Fensterkante: eine Terminerinnerung, die
+    # man erst nach dem Termin liest, ist keine.
+    melden.desktop(text)
     return True
 
 

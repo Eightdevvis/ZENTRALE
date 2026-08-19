@@ -7,6 +7,7 @@ hier ist „Maschine", nicht „Feature".
 |---|---|
 | **Einstieg.** Setup & Installation: venv, Modelle, Abhängigkeiten | [setup.md](setup.md) |
 | Starten: welche Prozesse, welche Env-Vars, welche Reihenfolge | [starten.md](starten.md) |
+| **Systemeinheit:** Autostart als Dienst, Cmd+z-Scratchpad, Desktop-Meldungen | [systemeinheit.md](systemeinheit.md) |
 | Deployment auf den Pi: rsync, systemd, Kiosk | [deployment.md](deployment.md) |
 | Hardware: Pi, Mikro, PIR, GPIO | [hardware.md](hardware.md) |
 | Pi-Bildschirm bleibt schwarz — Debug-Fährte | [display_debug.md](display_debug.md) |
