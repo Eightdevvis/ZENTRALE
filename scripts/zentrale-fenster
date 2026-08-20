@@ -45,10 +45,25 @@ BEFEHL = os.environ.get("ZENTRALE_FENSTER_BEFEHL", "zentrale-tui")
 STARTER = ["xfce4-terminal", "--disable-server", "--role=" + ROLLE,
            "--title=ZENTRALE", "--command=" + BEFEHL]
 
-# Anteil des Bildschirms. Genau die Proportionen, die i3 einem frischen
-# Scratchpad-Fenster gibt — die hatte Sasha vor Augen, als er sagte, es
-# sitze "perfekt in der mitte".
-BREITE_PPT, HOEHE_PPT = 50, 75
+# Anteil des Bildschirms: fast alles, mit einem Rand drumherum.
+#
+# Sasha, 20.08.2026: "ich fand den allerersten zustand einfach am besten.
+# fast der ganze screen eingenommen aber nen guter rand drum." Das war
+# 1280x780 auf 1440x900 — also knapp 89 % Breite und 87 % Hoehe.
+#
+# Davor standen hier 50/75, die Proportionen eines frischen
+# Scratchpad-Fensters. Die waren kleiner UND fast quadratisch: "kleiner und
+# vertikal gequetschter als vorher". Ein Dashboard mit acht Kaesten
+# nebeneinander braucht die Breite.
+#
+# In Prozent statt in Pixeln, damit es auf dem PC-Bildschirm dasselbe
+# Verhaeltnis ergibt und nicht eine Briefmarke in der Mitte.
+#
+# Nachgemessen auf 1440x900: 1286x781 mit 77 Rand seitlich und 60 oben und
+# unten — gegen die urspruenglichen 1280x780 mit 80/60. Die Prozentwerte
+# rechnet i3 gegen eine etwas groessere Flaeche als den sichtbaren
+# Bildschirm (Rahmen), deshalb sind sie nicht die naive Division.
+BREITE_PPT, HOEHE_PPT = 89, 86
 
 
 def i3(*argumente):

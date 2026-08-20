@@ -80,10 +80,16 @@ versioniert im Repo liegen statt verstreut in einer Konfiguration.
 >
 > Beides liegt jetzt im Skript, nicht in der i3-Regel — eine `for_window`-Regel
 > läuft zu einem Zeitpunkt, an dem das Fenster noch keinen Bildschirm kennt.
-> `starten()` wartet, bis es wirklich da ist, und platziert dann: 50 % Breite,
-> 75 % Höhe, mittig. Genau die Proportionen, die i3 einem frischen
-> Scratchpad-Fenster gibt — die hatte Sasha vor Augen, als er sagte, es sitze
-> „perfekt in der mitte".
+> `starten()` wartet, bis es wirklich da ist, und platziert dann: **89 % Breite,
+> 86 % Höhe, mittig** — fast der ganze Schirm mit einem Rand drumherum.
+> Nachgemessen auf 1440×900: 1286×781 mit 77 px Rand seitlich, 60 px oben und
+> unten.
+>
+> Der Zwischenstand 50 %/75 % (die Proportionen, die i3 einem frischen
+> Scratchpad-Fenster gibt) war falsch: *„kleiner und vertikal gequetschter als
+> vorher"*. Ein Dashboard mit acht Kästen nebeneinander braucht die Breite.
+> Prozent statt Pixel, damit der PC-Bildschirm dasselbe Verhältnis ergibt und
+> nicht eine Briefmarke in der Mitte.
 >
 > In der i3-Regel steht nur noch `floating enable`, und das Skript setzt es
 > zusätzlich selbst: so hängt das Aussehen nicht daran, dass die Konfiguration
