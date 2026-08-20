@@ -163,7 +163,14 @@ def test_der_schnitt_haelt():
     # in ihrem Denken korrekt "am einfachsten eine kurze Notiz 'wegzeiten'"
     # und schrieb die Fahrzeit dann mangels Alternative ins Umzugs-Dossier.
     # Ein Ort, den sie nicht kennt, existiert fuer sie nicht.
-    assert besch_eigen < 2900
+    # 20.08.2026 von 2.900 auf 3.000: zwei Saetze in write_note, beide aus
+    # einem gemessenen Vorfall. Sie hat zu EINER Idee erst einen Katalog-
+    # Eintrag und dann Prosa in dieselbe Datei geschrieben und beide Male
+    # nur "steht drin" gesagt. Dazu kam jetzt der Test, wann etwas ein
+    # Eintrag und wann eine Notiz ist (koennte es einen Status haben?), und
+    # die Pflicht zu sagen WO es steht. Hundert Zeichen im gecachten Praefix
+    # gegen einen Katalog, den hinterher niemand mehr lesen kann.
+    assert besch_eigen < 3000
 
 
 def test_praefix_bleibt_ueber_der_cache_mindestgroesse():

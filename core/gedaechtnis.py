@@ -335,12 +335,51 @@ def dossier_notieren(name: str, text: str) -> str:
     # Dossier, und die Absage sagt genau das: eine Fehlermeldung, die den
     # richtigen Ort nennt, korrigiert an der Stelle, an der es passiert —
     # eine Prompt-Zeile wird uebergangen.
-    if bereich == "kataloge" and not kopf_lesen(text):
-        return ("[Das ist kein Katalog-Eintrag, sondern Prosa — ein Katalog "
-                "nimmt nur Eintraege nach Schema (## Titel, darunter "
-                "- thema:/- equipment:/- aufwand:/- status:). Lies "
-                "read_note('vorlagen/katalog'). Fliesstext gehoert in eine "
-                f"Notiz ('{schluessel}') oder ein Dossier.]")
+    if bereich == "kataloge":
+        eintrag = kopf_lesen(text)
+        if not eintrag:
+            return ("[Das ist kein Katalog-Eintrag, sondern Prosa — ein "
+                    "Katalog nimmt nur Eintraege nach Schema (## Titel, "
+                    "darunter - thema:/- equipment:/- aufwand:/- status:). "
+                    "Lies read_note('vorlagen/katalog'). Fliesstext gehoert "
+                    f"in eine Notiz ('{schluessel}') oder ein Dossier.]")
+
+        # ERSETZEN statt anhaengen, wenn es den Titel schon gibt. Zwei
+        # Eintraege mit demselben Titel sind das schlechteste Ergebnis: dann
+        # steht dieselbe Sache doppelt und niemand weiss, welche Fassung
+        # gilt. Genau das ist am 20.08.2026 fast passiert.
+        alt_text = _lesen(pfad)
+        titel = eintrag.get("titel") or ""
+        gab_es = _hat_titel(alt_text, titel)
+        _schreiben(pfad, _upsert(alt_text, titel, text.strip()))
+        return (f"{'Aktualisiert' if gab_es else 'Neu'} in "
+                f"{bereich}/{schluessel}: '{titel}'. "
+                + _katalog_beweis(pfad, titel))
+
+    # Woertlich dasselbe noch einmal? Dann nichts tun und es SAGEN. Ohne das
+    # steht der Satz zweimal da und sie haelt es fuer zwei Notizen.
+    if text.strip() and text.strip() in _lesen(pfad):
+        return (f"Steht schon woertlich in {bereich}/{schluessel} — nichts "
+                f"geaendert.")
+
+    # ── Dieselbe Sache an ZWEI Orten ──────────────────────────────────
+    # Die letzte offene Gabel: eine neue Idee kann als Notiz ODER als
+    # Katalog-Eintrag festgehalten werden, und beides ist fuer sich
+    # richtig. Am 20.08.2026 hat sie beides gemacht — erst den Eintrag,
+    # dann die Prosa — und Sasha las zwei widerspruechliche "steht drin".
+    #
+    # Entscheiden kann der Code das nicht (ob etwas eine Idee oder ein
+    # Fakt ist, sieht man dem Text nicht an). Aber er kann MERKEN, dass es
+    # die Sache schon woanders gibt, und das ist der Teil, der zaehlt:
+    # nicht die Wahl war falsch, sondern die doppelte Ablage.
+    if bereich == "notizen":
+        anderswo = _wo_steht_der_titel(schluessel)
+        if anderswo:
+            return (f"Achtung: zu '{schluessel}' gibt es schon einen "
+                    f"Katalog-Eintrag in {anderswo}. Trag es DORT nach "
+                    f"(write_note '{anderswo}' mit dem vollen Eintrag) "
+                    f"statt eine zweite Ablage aufzumachen — sonst steht "
+                    f"dieselbe Sache an zwei Orten. Nichts geschrieben.")
 
     if bereich in ("notizen", "kataloge"):
         # Ohne Datums-Ueberschrift: eine Notiz ist eine Faktenliste, kein
@@ -515,6 +554,62 @@ def _eintrag_rendern(kopf: dict) -> str:
         wert = (kopf.get(feld) or "").strip() or "-"
         zeilen.append(f"- {(feld + ':'):<{breite}} {wert}")
     return "\n".join(zeilen) + "\n"
+
+
+def _schreiben(pfad: str, text: str):
+    """Datei ganz ersetzen, Kopfzeile erhalten, wenn sie fehlt."""
+    if not text.lstrip().startswith("#"):
+        text = f"# {os.path.basename(pfad)[:-3]}\n\n" + text.lstrip()
+    with open(pfad, "w", encoding="utf-8") as f:
+        f.write(text.rstrip() + "\n")
+
+
+def _hat_titel(katalogtext: str, titel: str) -> bool:
+    ziel = (titel or "").strip().casefold()
+    for z in (katalogtext or "").splitlines():
+        m = _KOPF_TITEL.match(z)
+        if m and m.group(1).strip().casefold() == ziel:
+            return True
+    return False
+
+
+def _wo_steht_der_titel(schluessel: str) -> str:
+    """In welchem Katalog steht schon ein Eintrag dieses Namens? -> "" oder Pfad.
+
+    Verglichen wird ueber `_slug`, nicht woertlich: "Fraktal-Rendering (3D,
+    wie Infinity SI Channel)" und "fraktal-rendering" sind dieselbe Sache,
+    und genau so schreibt ein Modell zweimal dasselbe auf.
+    """
+    for name in liste("kataloge"):
+        text = _lesen(_pfad("kataloge", name))
+        for z in text.splitlines():
+            m = _KOPF_TITEL.match(z)
+            if m and _slug(m.group(1)).startswith(schluessel):
+                return "kataloge/" + name
+    return ""
+
+
+def _katalog_beweis(pfad: str, titel: str) -> str:
+    """Nachlesen, was jetzt WIRKLICH dasteht. -> ein Satz.
+
+    ── Der Nachpruef-Schritt, und warum er hier steht ────────────────
+    Sasha, 20.08.2026: Nachpruefen ja, "kosten niedrig wie moeglich aber
+    nich auf kosten von qualitaet". Eine zweite Modell-Runde zum
+    Kontrollieren kostet einen vollen Aufruf. Das Tool-ERGEBNIS geht aber
+    ohnehin ans Modell zurueck — steht dort der Beweis statt "OK", hat sie
+    nachgesehen, ohne dass ein Aufruf mehr anfaellt.
+
+    Das ist der Unterschied zwischen "Notiert." und "Neu in
+    kataloge/ideen: 'Fraktal-Rendering'. Der Katalog hat jetzt 2 Eintraege."
+    Beim zweiten Satz faellt IHR selbst auf, wenn sie es gerade zum zweiten
+    Mal geschrieben hat.
+    """
+    text = _lesen(pfad)
+    anzahl = sum(1 for z in text.splitlines() if _KOPF_TITEL.match(z))
+    if not _hat_titel(text, titel):
+        return "⚠ Steht anschliessend NICHT in der Datei — sag das."
+    return ("Der Katalog hat jetzt %d %s."
+            % (anzahl, "Eintrag" if anzahl == 1 else "Eintraege"))
 
 
 def _upsert(katalogtext: str, titel: str, eintrag: str) -> str:

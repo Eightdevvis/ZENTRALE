@@ -529,6 +529,36 @@ def _permission_question(name: str, args: dict) -> str:
     return f'Soll ich die Aktion "{name}" wirklich ausführen?'
 
 
+def _kalender_beweis(tag: str, label: str) -> str:
+    """Nachlesen, was an dem Tag jetzt WIRKLICH steht. -> ein Satz.
+
+    Der Nachpruef-Schritt im Code statt in einer zweiten Modell-Runde
+    (Sasha, 20.08.2026: "kosten niedrig wie moeglich aber nich auf kosten
+    von qualitaet"). Das Tool-Ergebnis geht ohnehin ans Modell zurueck —
+    steht dort der Beweis statt "OK, eingetragen", hat sie nachgesehen,
+    ohne dass ein Aufruf mehr anfaellt.
+
+    Wichtig ist der Fall, in dem der Beweis NICHT aufgeht: dann steht das
+    ausdruecklich da, statt dass sie einen Erfolg meldet.
+    """
+    try:
+        from datetime import date as _date
+        tage = kalender.entries_in_range(_date.fromisoformat(tag),
+                                         _date.fromisoformat(tag))
+    except Exception:
+        return "OK, eingetragen."
+    eintraege = tage.get(tag) or []
+    treffer = [e for e in eintraege
+               if (label or "").lower() in (e.get("label") or "").lower()]
+    if not treffer:
+        return ("[Eingetragen gemeldet, aber am %s steht es NICHT — sag "
+                "das, statt einen Erfolg zu melden.]" % tag)
+    wann = treffer[0].get("time") or "ganztags"
+    return ("Steht jetzt am %s: %s (%s). Der Tag hat %d %s."
+            % (tag, treffer[0].get("label"), wann, len(eintraege),
+               "Eintrag" if len(eintraege) == 1 else "Eintraege"))
+
+
 def _execute_tool(name: str, args: dict) -> str:
     """
     Führt ein Tool aus und gibt das Ergebnis als String zurück.
@@ -622,7 +652,9 @@ def _dispatch_tool(name: str, args: dict) -> str:
             label = args.get("label", ""),
             time  = args.get("time"),
         )
-        return "OK, eingetragen." if ok else "[Fehler: Layer existiert nicht oder Eingabe ungültig]"
+        if not ok:
+            return "[Fehler: Layer existiert nicht oder Eingabe ungültig]"
+        return _kalender_beweis(args.get("day", ""), args.get("label", ""))
     elif name == "read_time":
         from datetime import datetime as _dt
         jetzt = _dt.now()
@@ -644,7 +676,20 @@ def _dispatch_tool(name: str, args: dict) -> str:
             rrule_str = args.get("rrule", ""),
             time      = args.get("time"),
         )
-        return "OK, Routine eingetragen." if ok else "[Fehler: Layer existiert nicht oder rrule ungültig]"
+        if not ok:
+            return "[Fehler: Layer existiert nicht oder rrule ungültig]"
+        gefunden = kalender.routine_finden(args.get("label", ""))
+        if len(gefunden) > 1:
+            # Sie hat gerade eine ZWEITE Regel gleichen Namens angelegt. Das
+            # ist der Geigenstunden-Fall vom 18.08.2026 — er soll ihr im
+            # Ergebnis auffallen, nicht Sasha drei Tage spaeter.
+            zeiten = ", ".join((r.get("time") or "ganztags")
+                               for _l, _i, r in gefunden)
+            return (f"Eingetragen — ABER es gibt jetzt {len(gefunden)} Regeln "
+                    f"namens '{args.get('label','')}' ({zeiten}). Wollte er "
+                    f"eine AENDERN? Dann die alte mit edit_calendar_routine "
+                    f"loeschen und das sagen.")
+        return f"OK, Routine eingetragen: {args.get('label','')}."
     elif name == "add_calendar_pause":
         ok = kalender.add_pause(
             label = args.get("label", ""),

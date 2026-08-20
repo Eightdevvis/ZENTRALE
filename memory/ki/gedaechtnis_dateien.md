@@ -84,6 +84,40 @@ Seitdem gilt:
 - **Der Steckbrief bleibt Sashas** (Entscheidung vom 18.08.2026). Die KI
   schreibt dort nicht hinein; was sie über ihn erfährt, geht in eine Notiz.
 
+### Der Nachprüf-Schritt steht im Werkzeug-Ergebnis
+
+Sasha, 20.08.2026: *„nachprüfschritt natürlich also kosten niedrig wie möglich
+aber nich auf kosten von qualität in diesem ausmaß!"*
+
+Eine zweite Modellrunde zum Kontrollieren kostet einen vollen Aufruf. Das
+Tool-**Ergebnis** geht aber ohnehin ans Modell zurück — steht dort der Beweis
+statt „OK", **hat sie nachgesehen, ohne dass ein Aufruf mehr anfällt.**
+
+| statt | jetzt |
+|---|---|
+| `Notiert in kataloge/ideen.` | `Neu in kataloge/ideen: 'Fraktal-Rendering'. Der Katalog hat jetzt 2 Einträge.` |
+| `OK, eingetragen.` | `Steht jetzt am 2026-08-21: Zahnarzt (09:00). Der Tag hat 2 Einträge.` |
+| `OK, Routine eingetragen.` | `Eingetragen — ABER es gibt jetzt 2 Regeln namens 'Geige' (17:45, 18:00). Wollte er eine ÄNDERN?` |
+
+Der wichtigste Fall ist der, in dem der Beweis **nicht** aufgeht: dann steht das
+ausdrücklich im Ergebnis, statt dass sie einen Erfolg meldet, den es nicht gab.
+
+Dazu drei Sperren, die alle aus demselben Vorfall stammen:
+
+- **Katalog-Einträge werden geupsertet, nicht angehängt.** Zwei Einträge mit
+  demselben Titel sind das schlechteste Ergebnis: dieselbe Sache steht doppelt
+  und niemand weiß, welche Fassung gilt. Ein Status-Wechsel ersetzt jetzt.
+- **Wörtlich Gleiches wird nicht zweimal angehängt** — es wird gesagt.
+- **Dieselbe Sache nicht an zwei Orten.** Schreibt sie eine Notiz zu etwas, das
+  schon als Katalog-Eintrag existiert, wird abgelehnt und der vorhandene Ort
+  genannt. Das ist die letzte offene Gabel im Modell: eine Idee kann als Notiz
+  **oder** als Eintrag festgehalten werden, beides ist für sich richtig — falsch
+  war, **beides** zu tun. Entscheiden kann der Code das nicht; merken, dass es
+  die Sache schon gibt, sehr wohl.
+
+Der Test im Prompt, wenn sie schwankt: **könnte es einen Status haben, also
+etwas sein, das er tun könnte? Dann Katalog-Eintrag, sonst Notiz.**
+
 ### Dossier oder Katalog?
 
 **Was man lesen will, wird Prosa. Was man durchsehen will, wird Katalog.**
