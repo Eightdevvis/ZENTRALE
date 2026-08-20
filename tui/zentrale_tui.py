@@ -1322,6 +1322,104 @@ def md_inline(text):
     return text
 
 
+# ── Der Ring: ZENTRALE zeigt sich selbst ─────────────────────────────────
+#
+# Sasha, 20.08.2026: die Befehle wandern aus der Mitte in die Fussleiste, und
+# in der Mitte bleibt SIE stehen — "sie zeigt sich als einen mit ascii
+# gezeichneten ring".
+#
+# Der Ring zeigt, was sie ueber die Lage weiss (core/anwesenheit.py):
+#
+#   offen     Sasha hat ZENTRALE offen. Sie hat seine Aufmerksamkeit —
+#             heller, geschlossener Ring.
+#   woanders  Er ist da, aber bei etwas anderem. Sie schaut zu, ohne zu
+#             stoeren — matter Ring.
+#   weg       Niemand an der Maschine. Sie ruht — nur noch eine Andeutung.
+#
+# Gerechnet statt gemalt: ein festes ASCII-Bild passt genau in EINE
+# Fenstergroesse. Der Ring hier waechst mit dem Kasten mit, und weil er aus
+# Winkeln entsteht, ist die wandernde Helle beim Denken nur ein Offset —
+# kein zweites Bild, das man synchron halten muesste.
+#
+# Terminalzellen sind etwa doppelt so hoch wie breit. Ohne die Korrektur
+# (rx = 2*ry) waere es kein Ring, sondern ein liegendes Ei.
+
+# Was unter dem Ring steht. Kurz und in Sashas Ton — der Kasten soll den
+# Zustand zeigen, nicht ihn erklaeren.
+LAGE_TEXT = {
+    "offen":     "du bist da",
+    "woanders":  "du bist da, arbeitest woanders",
+    "weg":       "niemand an der maschine",
+    "unbekannt": "",
+}
+
+RING_GLYPHEN = {
+    "offen":     "●",
+    "woanders":  "◦",
+    "weg":       "·",
+    "unbekannt": "·",
+}
+
+
+def ring_punkte(h, breite):
+    """Die Zellen des Rings, nach Winkel sortiert. -> [(dy, dx, winkel)]
+
+    (0,0) ist die Mitte. Doppelt belegte Zellen fallen raus — sonst
+    ueberschreibt der Bogen sich selbst und die wandernde Helle stockt an
+    genau den Stellen, wo zwei Winkel dieselbe Zelle treffen.
+    """
+    import math
+    ry = min((h - 2) // 2, (breite - 2) // 4)
+    if ry < 2:
+        return []
+    rx = ry * 2
+    gesehen, punkte = set(), []
+    # Doppelt so fein abgetastet, wie der Umfang Zellen hat. Bei genau einer
+    # Probe pro Zelle bleiben Loecher: die Schrittzahl war ungerade, der
+    # Winkel fuer "ganz unten" wurde nie getroffen, und im Ring klaffte eine
+    # Luecke an der auffaelligsten Stelle.
+    schritte = max(64, int(4 * math.pi * rx))
+    for i in range(schritte):
+        winkel = 2 * math.pi * i / schritte
+        dy = int(round(-math.cos(winkel) * ry))     # oben = 0 rad
+        dx = int(round(math.sin(winkel) * rx))
+        if (dy, dx) in gesehen:
+            continue
+        gesehen.add((dy, dx))
+        punkte.append((dy, dx, winkel))
+    return punkte
+
+
+def ring_zeilen(h, breite, lage="unbekannt", aktiv=False, phase=0.0):
+    """Der Ring als Plot-Anweisungen. -> [(dy, dx, zeichen, stil)]
+
+    `aktiv` = sie denkt oder spricht gerade: ein heller Bogen wandert mit
+    `phase` (0..1) um den Ring. Ruht sie, steht er still — eine dauernd
+    kreisende Animation wuerde im Augenwinkel ziehen, und das waere genau
+    das Gegenteil von "stoert nicht".
+    """
+    import math
+    punkte = ring_punkte(h, breite)
+    if not punkte:
+        return []
+    grund = RING_GLYPHEN.get(lage, RING_GLYPHEN["unbekannt"])
+    stil_grund = {"offen": "ring", "woanders": "ring_matt",
+                  "weg": "ring_still", "unbekannt": "ring_still"}.get(
+                      lage, "ring_still")
+
+    aus = []
+    kopf = (phase % 1.0) * 2 * math.pi
+    bogen = math.pi / 5          # wie lang die helle Stelle ist
+    for dy, dx, winkel in punkte:
+        zeichen, stil = grund, stil_grund
+        if aktiv:
+            ab = abs((winkel - kopf + math.pi) % (2 * math.pi) - math.pi)
+            if ab < bogen:
+                zeichen, stil = "●", "ring_hell"
+        aus.append((dy, dx, zeichen, stil))
+    return aus
+
+
 def md_zeilen(text, breite):
     """Markdown -> [(zeile, stil)] mit stil aus {"", "kopf", "code", "liste"}.
 
@@ -2076,6 +2174,30 @@ def run_ui(stdscr, store):
     #   loaded   : History schon einmal vom Backend geholt?
     #   backend  : "local" | "cloud" | None — wer gerade denkt (Kasten-Titel)
     #   model    : Modell-Name dazu, provider: bei cloud der Anbieter
+    # Was ZENTRALE ueber die Lage weiss — fuer den Ring in der Mitte.
+    # Bewusst LOKAL bestimmt und nicht vom Backend geholt: die Frage ist,
+    # ob jemand an DIESER Maschine sitzt und ob DIESES Fenster offen ist.
+    # Auf dem Laptop haengt die TUI am PC-Backend; dessen Anwesenheit hilft
+    # hier niemandem.
+    LAGE = {"wert": "unbekannt"}
+
+    def lage_poll():
+        """Alle paar Sekunden nachsehen, ob Sasha da ist. Wirft nie."""
+        try:
+            core_dir = os.path.join(os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__))), "core")
+            if core_dir not in sys.path:
+                sys.path.insert(0, core_dir)
+            import anwesenheit
+        except Exception:
+            return                      # ohne das Modul bleibt es unbekannt
+        while True:
+            try:
+                LAGE["wert"] = anwesenheit.lage()
+            except Exception:
+                LAGE["wert"] = "unbekannt"
+            time.sleep(5)
+
     AI = {"active": False, "input": "", "log": [], "answer": None,
           "reflect": "", "streaming": False, "scroll": 0,
           "perm": None, "msg": "", "loaded": False,
@@ -2660,6 +2782,7 @@ def run_ui(stdscr, store):
 
     threading.Thread(target=_mail_worker, daemon=True, name="mail-io").start()
     threading.Thread(target=ai_poll, daemon=True, name="ai-poll").start()
+    threading.Thread(target=lage_poll, daemon=True, name="lage").start()
 
     def m_fetch(cols, rows):
         """Karte fürs aktuelle Viewport+Raster synchron holen (localhost, wenige
@@ -8531,18 +8654,34 @@ def run_ui(stdscr, store):
             draw_box(top, mx, body_h, midw, "klavier")
             draw_piano_tool(top, mx, body_h, midw)
         else:
-            draw_box(top, mx, body_h, midw, "mitte")
-            cyc = top + body_h // 2
-            big = "KASSETTE · TUI"
-            invite = ["g · graph-werkzeug", "f · fokus", "n · notizen",
-                      "m · karte", "c · kalender", "p · post/mail",
-                      "a · ki-chat", "u · tutor", "k · klavier"]
-            addclip(cyc - 4, mx + max(1, (midw - len(big)) // 2), big, midw - 2, C["bright"])
-            for i, ln in enumerate(invite):
-                y = cyc - 2 + i
-                if y > top + body_h - 2:       # nicht in den Box-Rahmen schreiben
-                    break
-                addclip(y, mx + max(1, (midw - len(ln)) // 2), ln, midw - 2, C["acc"])
+            # ── ZENTRALE selbst ───────────────────────────────────────
+            # Hier stand bis zum 20.08.2026 eine Liste der Tastenbefehle.
+            # Die ist in die Fussleiste gewandert (Sashas Umbau): eine
+            # Merkhilfe gehoert an den Rand, die Mitte gehoert IHR.
+            #
+            # Der Ring zeigt, was sie ueber die Lage weiss — ob Sasha da
+            # ist und ob sie seine Aufmerksamkeit hat. Gezeichnet wird er
+            # von ring_zeilen(), einer reinen Funktion (siehe dort).
+            draw_box(top, mx, body_h, midw, "zentrale · ai")
+            lage_jetzt = LAGE.get("wert") or "unbekannt"
+            cyc = top + body_h // 2 - 1
+            ccx = mx + midw // 2
+            ring_stil = {"ring":       C["acc"] | C["bright"],
+                         "ring_hell":  C["bright"],
+                         "ring_matt":  C["acc"],
+                         "ring_still": C["faint"]}
+            for dy, dx, ch, st in ring_zeilen(
+                    body_h - 2, midw, lage_jetzt,
+                    aktiv=AI["streaming"], phase=(time.time() * 0.6) % 1.0):
+                y, x = cyc + dy, ccx + dx
+                if top < y < top + body_h - 1 and mx < x < mx + midw - 1:
+                    safe_addstr(y, x, ch, ring_stil.get(st, C["faint"]))
+            name = "zentrale ai"
+            addclip(cyc, ccx - len(name) // 2, name, midw - 2, C["bright"])
+            unten = LAGE_TEXT.get(lage_jetzt, "")
+            if unten:
+                addclip(cyc + 1, ccx - len(unten) // 2, unten,
+                        midw - 2, C["faint"])
 
         # ── RECHTS: lifestyle / outbound ──────────────────────────────────
         # lifestyle = ÜBERLAGERUNG aller Graphen in EINEM Gitter. X = Datum
@@ -8675,10 +8814,33 @@ def run_ui(stdscr, store):
         # ── Footer (Tasten + Theme + Backend) ─────────────────────────────
         tm_txt = ("auto(%s)" % cur_theme if theme_mode_now() == "auto"
                   else cur_theme)
-        addclip(footer_row, 0,
-                " q quit · t theme: %s · g graph · m karte · c kalender · a ki · u tutor · s lauf: %s · / befehle · %s"
-                % (tm_txt, "an" if LAUF["an"] else "aus", BASE_URL),
-                W - 1, C["faint"])
+        # Die Befehle standen frueher in der MITTE (und hier nur eine
+        # Auswahl davon, die auseinanderlief). Seit dem 20.08.2026 stehen
+        # sie hier, und zwar vollstaendig aus CTX_KEYS["home"] — der Liste,
+        # die '/' ohnehin schon zeigt. Eine Quelle, kein zweites Pflegen.
+        # Die veraenderlichen Stellen (Theme, Laufschrift) tragen ihren
+        # Zustand gleich mit; addclip schneidet ab, wenn das Fenster schmal
+        # ist, und die wichtigsten Tasten stehen deshalb vorn.
+        zustand = {"t": tm_txt, "s": "an" if LAUF["an"] else "aus"}
+        # 'q beenden' nach VORN. Die Leiste wird bei schmalem Fenster hinten
+        # abgeschnitten, und ausgerechnet das Beenden fiel dabei als erstes
+        # weg — die eine Taste, die man sucht, wenn man nicht mehr weiter
+        # weiss. Die '/'-Uebersicht behaelt ihre gewachsene Reihenfolge.
+        reihenfolge = ([t for t in CTX_KEYS["home"] if t[0] == "q"]
+                       + [t for t in CTX_KEYS["home"] if t[0] != "q"])
+        # Kurzformen NUR fuer die Leiste: die '/'-Uebersicht hat Platz fuer
+        # "post / mail", eine Zeile mit zwoelf Eintraegen nicht. Bei 140
+        # Spalten passte die volle Fassung nicht, und was hinten abfiel, war
+        # ausgerechnet der Theme-Zustand.
+        kurz = {"p": "post", "s": "lauf", "a": "ki"}
+        teile = []
+        for taste, was in reihenfolge:
+            wert = zustand.get(taste)
+            teile.append("%s %s%s" % (taste, kurz.get(taste, was),
+                                      (": " + wert) if wert else ""))
+        # Kein "/ befehle" mehr am Ende: das steht schon in der Zeile
+        # darueber ("› / für befehle") und kostete hier zwoelf Zeichen.
+        addclip(footer_row, 0, " " + " · ".join(teile), W - 1, C["faint"])
 
         # ── Graph-Reminder-Nag (zuletzt → liegt über allem) ───────────────
         if nag_active and nag_items:

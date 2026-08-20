@@ -35,6 +35,7 @@ import notes        # type: ignore  – Notiz-Registry (Text-/Listen-/Float-Blö
 import kalender     # type: ignore  – Kalender-Layer (Woche/Monat, data/ai_calendar.json)
 import takt         # type: ignore  – der Takt: wann sie unaufgefordert spricht
 import melden       # type: ignore  – Desktop-Benachrichtigung (notify-send)
+import anwesenheit  # type: ignore  – ist Sasha da? schaut er ZENTRALE an?
 import ai           # type: ignore
 import audio        # type: ignore
 import tutor_port    # type: ignore  – EINZIGER Griff am Sprach-Tutor (Addon).
@@ -2203,8 +2204,26 @@ def _takt_sprechen(anstoss):
     backend = ai_backends.chat_available()
     if backend is None:
         return False
+
+    # ── In WELCHE Lage hinein sie spricht ─────────────────────────────
+    # Sashas Unterscheidung: schaut er ZENTRALE an, hat sie seine
+    # Aufmerksamkeit sicher und kann sagen, worum es geht. Sonst muss sie
+    # sie erst holen — dann ist die Nachricht eine Benachrichtigung, und
+    # eine Benachrichtigung ist ein Satz, kein Absatz.
+    #
+    # Die Lage wird EINMAL bestimmt und dann beides damit entschieden
+    # (Formulierung und Kanal). Zweimal fragen hiesse zwei i3-Abfragen und
+    # die Moeglichkeit, dass sie sich widersprechen.
+    lage = anwesenheit.lage()
+    auftrag = anstoss["auftrag"] + "\n\n" + anwesenheit.satz(lage)
+    if lage != anwesenheit.OFFEN:
+        auftrag += (" Was du jetzt schreibst, erreicht ihn als kurze "
+                    "Einblendung auf dem Bildschirm — EIN Satz, mehr liest "
+                    "er dort nicht. Reicht das nicht, sag in dem Satz, dass "
+                    "er in den Chat kommen soll, und leg das Ausfuehrliche "
+                    "dort ab.")
     history = state.get_chat_history() + [
-        {"role": "user", "content": anstoss["auftrag"]}]
+        {"role": "user", "content": auftrag}]
     if backend == ai_backends.CLOUD:
         stream = ai_backends.chat_cloud_module().chat_stream(history)
     else:
@@ -2227,7 +2246,13 @@ def _takt_sprechen(anstoss):
     # Auf den Desktop, wenn ZENTRALE nicht ohnehin vor ihm steht. Ohne das
     # endet ihre Initiative an der Fensterkante: eine Terminerinnerung, die
     # man erst nach dem Termin liest, ist keine.
-    melden.desktop(text)
+    #
+    # nur_wenn_versteckt=False, weil die Entscheidung schon oben gefallen
+    # ist: `lage` ist die eine Wahrheit dieses Anstosses. melden noch einmal
+    # selbst nachsehen zu lassen, koennte in der Sekunde dazwischen anders
+    # ausgehen — und dann passt die Formulierung nicht zum Kanal.
+    if lage != anwesenheit.OFFEN:
+        melden.desktop(text, nur_wenn_versteckt=False)
     return True
 
 

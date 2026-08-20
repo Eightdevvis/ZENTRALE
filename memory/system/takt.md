@@ -32,6 +32,12 @@ merken-vor-sprechen ist Absicht: ein Absturz mitten im Modell-Aufruf würde
 sonst denselben Anstoß beim nächsten Tick wiederholen. Abschaltbar mit
 `ZENTRALE_TAKT=0`.
 
+**2a. In welche Lage hinein.** Seit dem 20.08.2026 trägt der Auftrag die
+**Lage** mit (`core/anwesenheit.py`): ob Sasha da ist und ob ZENTRALE vor ihm
+steht. Sie hat also seine Aufmerksamkeit sicher — oder muss sie erst holen, und
+dann ist die Nachricht ein Satz, kein Absatz. Siehe
+`memory/system/anwesenheit_und_ring.md`.
+
 **2b. Die Meldung nach draussen.** Seit dem 19.08.2026 geht jeder Anstoß
 zusätzlich als **Desktop-Benachrichtigung** raus (`core/melden.py`) — aber nur,
 wenn ZENTRALE nicht ohnehin sichtbar vor Sasha steht. Ohne das endet ihre
@@ -82,11 +88,8 @@ Alte Tageszustände räumt `aufraeumen()` beim Start weg (7 Tage bleiben).
 
 - **Anwesenheitspings** (Morgenritual bei der ersten Interaktion des Tages,
   Check-in nach längerer Abwesenheit) — die zweite Auslöser-Klasse aus Sashas
-  Vorgabe, Gerüst steht, Trigger noch nicht.
+  Vorgabe. Das Signal dafür steht seit dem 20.08.2026 (`anwesenheit.da()`),
+  die Auslöser noch nicht.
 - **Das Schemen** baut später auf dem auf, was der Takt erzeugt.
-- **Anwesenheit erkennen:** jetzt, wo der Kern auch ohne offenes Fenster läuft,
-  weiß ZENTRALE nicht mehr von selbst, ob Sasha überhaupt am Rechner ist. Für
-  die Anwesenheitspings braucht es dafür ein Signal (Bildschirmsperre, letzte
-  Eingabe, sichtbares Fenster).
 - **Kosten im Blick behalten:** jeder Anstoß ist ein Modell-Aufruf.
   `data/ai_usage.json` nach einem Tag mit Takt gegen einen Tag ohne halten.

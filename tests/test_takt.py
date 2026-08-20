@@ -177,7 +177,8 @@ def test_der_auftrag_landet_nicht_im_verlauf(monkeypatch):
     assert app._takt_sprechen({"marke": "x", "auftrag": "Erinnere ihn an X."})
 
     verlauf = state.get_chat_history()
-    assert gesehen["letzte"] == {"role": "user", "content": "Erinnere ihn an X."}
+    assert gesehen["letzte"]["role"] == "user"
+    assert gesehen["letzte"]["content"].startswith("Erinnere ihn an X.")
     assert len(verlauf) == vorher + 1
     assert verlauf[-1]["role"] == "assistant"
     assert verlauf[-1]["content"] == "Geige gleich. Los."
@@ -212,6 +213,66 @@ def test_eine_leere_antwort_wird_nicht_abgelegt(monkeypatch):
     vorher = len(state.get_chat_history())
     assert app._takt_sprechen({"marke": "x", "auftrag": "y"}) is False
     assert len(state.get_chat_history()) == vorher
+
+
+# ── In welche Lage hinein sie spricht ─────────────────────────────────
+
+def _treiber(monkeypatch, lage):
+    """Den Treiber mit gestellter Lage und gefaelschtem Modell fahren.
+    -> (was das Modell als letzte Nachricht sah, was gemeldet wurde)"""
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "ui"))
+    import ai
+    import ai_backends
+    import anwesenheit
+    import app
+    import melden
+
+    gesehen, gemeldet = {}, []
+
+    def fake_stream(history, **kw):
+        gesehen["letzte"] = history[-1]["content"]
+        yield "Geige gleich."
+
+    monkeypatch.setattr(ai_backends, "chat_available", lambda: "local")
+    monkeypatch.setattr(ai, "chat_stream", fake_stream)
+    monkeypatch.setattr(anwesenheit, "lage", lambda: lage)
+    monkeypatch.setattr(melden, "desktop",
+                        lambda text, **kw: gemeldet.append(text) or True)
+    app._takt_sprechen({"marke": "x", "auftrag": "Erinnere ihn an X."})
+    return gesehen["letzte"], gemeldet
+
+
+def test_bei_offener_zentrale_kein_popup(monkeypatch):
+    """Sie hat seine Aufmerksamkeit schon — ein Popup waere reine Stoerung."""
+    import anwesenheit
+    auftrag, gemeldet = _treiber(monkeypatch, anwesenheit.OFFEN)
+    assert gemeldet == []
+    assert "offen" in auftrag.lower()
+    assert "Einblendung" not in auftrag
+
+
+def test_bei_geschlossener_zentrale_wird_gemeldet(monkeypatch):
+    """Er arbeitet an etwas anderem: erst Aufmerksamkeit holen."""
+    import anwesenheit
+    auftrag, gemeldet = _treiber(monkeypatch, anwesenheit.WOANDERS)
+    assert gemeldet == ["Geige gleich."]
+    assert "Einblendung" in auftrag
+    assert "in den Chat" in auftrag
+
+
+def test_abwesend_wird_trotzdem_gemeldet(monkeypatch):
+    """Er sieht es, wenn er zurueckkommt. Zu schweigen hiesse, die
+    Erinnerung ganz zu verlieren."""
+    import anwesenheit
+    _, gemeldet = _treiber(monkeypatch, anwesenheit.WEG)
+    assert gemeldet == ["Geige gleich."]
+
+
+def test_unbekannte_lage_wird_wie_abgewandt_behandelt(monkeypatch):
+    """Wer nicht weiss, ob jemand hinschaut, meldet lieber einmal zu viel."""
+    import anwesenheit
+    _, gemeldet = _treiber(monkeypatch, anwesenheit.UNBEKANNT)
+    assert gemeldet == ["Geige gleich."]
 
 
 # ── Aufraeumen ────────────────────────────────────────────────────────
