@@ -67,6 +67,28 @@ versioniert im Repo liegen statt verstreut in einer Konfiguration.
 > erst erfüllt: das Fenster geht beim Anmelden **sichtbar** auf — „default
 > offen" statt versteckt.
 
+> **Und die Folgekorrektur, gleicher Tag:** *„jetzt klebt es links oben in der
+> ecke!"* — `move position center` zentriert auf den **Koordinatenursprung**,
+> nicht auf den Bildschirm. Gemessen: `x=-643, y=-390` bei 1440×900, das Fenster
+> stand also mit seiner Mitte in der Ecke. Das war die ganze Zeit falsch; sichtbar
+> wurde es erst, als `move scratchpad` wegfiel — **das Einblenden hatte die Lage
+> selbst gesetzt und den Fehler verdeckt.**
+>
+> Richtig ist `move absolute position center`, und zwar als **eigener Befehl**:
+> in einer Kette mit `resize set … ppt` rechnet i3 die Mitte noch mit der alten
+> Größe und setzt das Fenster an den Rand (gemessen: `x=0` statt `x=357`).
+>
+> Beides liegt jetzt im Skript, nicht in der i3-Regel — eine `for_window`-Regel
+> läuft zu einem Zeitpunkt, an dem das Fenster noch keinen Bildschirm kennt.
+> `starten()` wartet, bis es wirklich da ist, und platziert dann: 50 % Breite,
+> 75 % Höhe, mittig. Genau die Proportionen, die i3 einem frischen
+> Scratchpad-Fenster gibt — die hatte Sasha vor Augen, als er sagte, es sitze
+> „perfekt in der mitte".
+>
+> In der i3-Regel steht nur noch `floating enable`, und das Skript setzt es
+> zusätzlich selbst: so hängt das Aussehen nicht daran, dass die Konfiguration
+> eingebunden ist.
+
 **3. `start_tui.sh` hängt sich an, statt zu killen.** Vorher hat das Skript ein
 laufendes Backend „zurückgeholt", also abgeschossen und neu gestartet. Gegen
 einen Dienst wäre das ein Kampf: jede TUI würde ihn killen, systemd startet ihn

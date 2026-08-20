@@ -36,10 +36,19 @@ import json
 import os
 import subprocess
 import sys
+import time
 
-ROLLE = "zentrale"
+# Ueber die Umgebung umstellbar, damit sich der Ablauf mit einem
+# Wegwerf-Fenster pruefen laesst, ohne Sashas laufende ZENTRALE anzufassen.
+ROLLE = os.environ.get("ZENTRALE_FENSTER_ROLLE", "zentrale")
+BEFEHL = os.environ.get("ZENTRALE_FENSTER_BEFEHL", "zentrale-tui")
 STARTER = ["xfce4-terminal", "--disable-server", "--role=" + ROLLE,
-           "--title=ZENTRALE", "--command=zentrale-tui"]
+           "--title=ZENTRALE", "--command=" + BEFEHL]
+
+# Anteil des Bildschirms. Genau die Proportionen, die i3 einem frischen
+# Scratchpad-Fenster gibt — die hatte Sasha vor Augen, als er sagte, es
+# sitze "perfekt in der mitte".
+BREITE_PPT, HOEHE_PPT = 50, 75
 
 
 def i3(*argumente):
@@ -74,6 +83,47 @@ def finden(knoten, im_scratchpad=False, ws=None):
     return False, False, None
 
 
+def platzieren():
+    """Groesse setzen und mittig stellen. Zwei GETRENNTE Befehle.
+
+    In einer Kette geht es schief: `resize set … ppt, move absolute
+    position center` rechnet die Mitte mit der alten Groesse und setzt das
+    Fenster an den linken Rand (gemessen: x=0 statt x=357).
+
+    Und `absolute` ist noetig, nicht Beiwerk. `move position center` allein
+    zentriert auf den Koordinatenursprung — Sashas Fenster stand danach auf
+    x=-643, y=-390, also mit seiner Mitte in der Bildschirmecke. Vorher fiel
+    das nicht auf, weil das Scratchpad-Einblenden die Lage selbst gesetzt
+    hat; die Zeile, die den Fehler verdeckte, ist beim Umbau weggefallen.
+    """
+    # Schwebend macht auch die i3-Regel, aber hier noch einmal: dann haengt
+    # das Aussehen nicht daran, dass die Konfiguration eingebunden ist. Eine
+    # gekachelte ZENTRALE mitten im Layout waere das Gegenteil von dem,
+    # was die Taste verspricht.
+    i3("[window_role=%s] floating enable" % ROLLE)
+    i3("[window_role=%s] resize set %d ppt %d ppt" % (ROLLE, BREITE_PPT, HOEHE_PPT))
+    i3("[window_role=%s] move absolute position center" % ROLLE)
+
+
+def starten():
+    """Fenster oeffnen und warten, bis es da ist — dann platzieren.
+
+    Das Warten ist der Punkt: platziert man sofort, gibt es noch nichts zu
+    platzieren. Deshalb liegt das Setzen der Groesse auch NICHT in einer
+    i3-Regel — dort laeuft es zu einem Zeitpunkt, an dem das Fenster noch
+    keinen Bildschirm kennt.
+    """
+    subprocess.Popen(STARTER, start_new_session=True,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    for _ in range(50):                     # bis zu 5 Sekunden
+        time.sleep(0.1)
+        wurzel = baum()
+        if wurzel and finden(wurzel)[0]:
+            platzieren()
+            return True
+    return False
+
+
 def main():
     wurzel = baum()
     if wurzel is None:
@@ -85,8 +135,7 @@ def main():
     if not da:
         # Noch kein Fenster: starten. Es geht sichtbar auf — Sashas Vorgabe
         # ist "default offen", nicht "versteckt und erst auf Tastendruck da".
-        subprocess.Popen(STARTER, start_new_session=True,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        starten()
         return 0
 
     if im_scratchpad:
