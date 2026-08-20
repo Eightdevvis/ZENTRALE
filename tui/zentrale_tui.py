@@ -1369,7 +1369,11 @@ def ring_punkte(h, breite):
     genau den Stellen, wo zwei Winkel dieselbe Zelle treffen.
     """
     import math
-    ry = min((h - 2) // 2, (breite - 2) // 4)
+    # Ein Drittel dessen, was in den Kasten passen wuerde (Sasha,
+    # 20.08.2026: "der ring ist viel zu groß. mach ihn etwa ein drittel so
+    # groß"). Er soll ein Zeichen sein, kein Rahmen — der Kasten hat schon
+    # einen.
+    ry = min((h - 2) // 2, (breite - 2) // 4) // 3
     if ry < 2:
         return []
     rx = ry * 2
@@ -8676,11 +8680,15 @@ def run_ui(stdscr, store):
                 y, x = cyc + dy, ccx + dx
                 if top < y < top + body_h - 1 and mx < x < mx + midw - 1:
                     safe_addstr(y, x, ch, ring_stil.get(st, C["faint"]))
-            name = "zentrale ai"
-            addclip(cyc, ccx - len(name) // 2, name, midw - 2, C["bright"])
+            # Kein Name mehr IM Ring: der Kasten heisst schon "zentrale ·
+            # ai", und der Ring soll fuer sich stehen. Nur die Lage steht
+            # darunter — und zwar UNTER dem Ring, nicht mittendrin, sonst
+            # sprengt sie den kleinen Ring.
             unten = LAGE_TEXT.get(lage_jetzt, "")
             if unten:
-                addclip(cyc + 1, ccx - len(unten) // 2, unten,
+                rand = max((z[0] for z in ring_zeilen(body_h - 2, midw,
+                                                      lage_jetzt)), default=0)
+                addclip(cyc + rand + 2, ccx - len(unten) // 2, unten,
                         midw - 2, C["faint"])
 
         # ── RECHTS: lifestyle / outbound ──────────────────────────────────

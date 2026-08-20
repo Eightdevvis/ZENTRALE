@@ -125,7 +125,12 @@ def schirm():
 
 def test_in_der_mitte_steht_sie_selbst(schirm):
     assert "ZENTRALE · AI" in schirm      # Kasten-Titel (draw_box schreibt gross)
-    assert "zentrale ai" in schirm        # ihr Name mitten im Ring
+
+
+def test_kein_name_im_ring(schirm):
+    """Sasha, 20.08.2026: der Name mittendrin kann weg. Der Kasten heisst
+    schon so, und der kleine Ring soll fuer sich stehen."""
+    assert "zentrale ai" not in schirm
 
 
 def test_der_ring_wird_gezeichnet(schirm):
@@ -142,7 +147,24 @@ def test_der_ring_wird_gezeichnet(schirm):
     except SystemExit:
         pass
     treffer = sum(schirm.count(g) for g in set(modul.RING_GLYPHEN.values()))
-    assert treffer > 40
+    assert treffer > 15
+
+
+def test_der_ring_bleibt_ein_zeichen_kein_rahmen():
+    """Ein Drittel dessen, was passen wuerde. Der Kasten hat schon einen
+    Rahmen; ein zweiter, der ihn fast ausfuellt, ist keiner mehr."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "_tui2", os.path.join(ROOT, "tui", "zentrale_tui.py"))
+    modul = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(modul)
+    except SystemExit:
+        pass
+    h, w = 34, 69
+    punkte = modul.ring_punkte(h, w)
+    hoehe = max(p[0] for p in punkte) - min(p[0] for p in punkte)
+    assert hoehe < (h - 2) // 2
 
 
 def test_die_befehle_stehen_nicht_mehr_in_der_mitte(schirm):

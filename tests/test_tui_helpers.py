@@ -456,12 +456,21 @@ def test_der_ring_ist_geschlossen():
     """Eine Luecke faellt an der auffaelligsten Stelle auf. Genau das ist
     beim ersten Versuch passiert: bei einer Probe pro Zelle war die
     Schrittzahl ungerade, der Winkel fuer 'ganz unten' wurde nie getroffen,
-    und unten im Ring klaffte ein Loch."""
-    for h, w in ((16, 52), (20, 60), (12, 40), (30, 100), (14, 41)):
+    und unten im Ring klaffte ein Loch.
+
+    Gemessen wird der ZUSAMMENHANG der Zellen, nicht der Winkelabstand: bei
+    einem kleinen Ring sind die Winkelspruenge zwischen zwei benachbarten
+    Zellen naturgemaess gross, ohne dass etwas fehlt. Eine feste
+    Winkel-Grenze haette also genau die kleinen Ringe fuer kaputt erklaert
+    — und klein sind sie seit dem 20.08.2026 alle."""
+    for h, w in ((16, 52), (20, 60), (12, 40), (30, 100), (14, 41), (34, 69)):
         punkte = ring_punkte(h, w)
-        winkel = sorted(p[2] for p in punkte)
-        luecken = [b - a for a, b in zip(winkel, winkel[1:])]
-        assert max(luecken) < 0.35, (h, w, max(luecken))
+        if not punkte:
+            continue
+        folge = [(p[0], p[1]) for p in punkte]
+        ring = folge + [folge[0]]         # der Kreis schliesst sich
+        for (y1, x1), (y2, x2) in zip(ring, ring[1:]):
+            assert max(abs(y1 - y2), abs(x1 - x2)) <= 2, (h, w, (y1, x1), (y2, x2))
 
 
 def test_der_ring_ist_rund_und_kein_ei():

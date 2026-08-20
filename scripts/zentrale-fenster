@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""
+zentrale-fenster — EINE Taste, drei Faelle.
+
+Haengt an $mod+z (siehe deploy/i3/zentrale.conf) und entscheidet selbst,
+was zu tun ist:
+
+    Fenster ist sichtbar        -> weglegen (ins Scratchpad)
+    Fenster liegt im Scratchpad -> holen (auf DIESEN Workspace)
+    Fenster gibt es nicht       -> starten
+
+── Warum ein Skript und nicht `scratchpad show` ──────────────────────
+Die erste Fassung war eine reine i3-Regel:
+
+    for_window [window_role="zentrale"] floating enable, … , move scratchpad
+    bindsym $mod+z [window_role="zentrale"] scratchpad show
+
+Das lief einmal sauber und ging dann kaputt: Sasha, 20.08.2026 — *„wenn
+ich modz drücke flackert das fenster aber schließt sich nicht"*, und die
+Anwesenheits-Anzeige behauptete, er arbeite woanders, waehrend er direkt
+auf ZENTRALE schaute. Beides derselbe Grund: das Fenster hing im
+Scratchpad-Ast, obwohl es vor ihm stand.
+
+`for_window` wird von i3 nicht nur beim Erscheinen eines Fensters
+ausgewertet, sondern erneut bei Fenster-Ereignissen. Eine Regel, die
+`move scratchpad` enthaelt, kann das Fenster also jederzeit wieder
+wegziehen — und `scratchpad show` hat noch eine zweite Tuecke: ist das
+Fenster auf einem ANDEREN Workspace sichtbar, holt der Befehl es herueber,
+statt es wegzulegen. Zweimal druecken schliesst dann nichts, es wandert
+nur.
+
+Hier steht der Zustand deshalb explizit im Code, statt sich aus zwei
+i3-Regeln zu ergeben, die einander widersprechen koennen.
+"""
+import json
+import os
+import subprocess
+import sys
+
+ROLLE = "zentrale"
+STARTER = ["xfce4-terminal", "--disable-server", "--role=" + ROLLE,
+           "--title=ZENTRALE", "--command=zentrale-tui"]
+
+
+def i3(*argumente):
+    return subprocess.run(["i3-msg", *argumente], capture_output=True,
+                          text=True, timeout=5)
+
+
+def baum():
+    roh = i3("-t", "get_tree")
+    return json.loads(roh.stdout) if roh.returncode == 0 else None
+
+
+def sichtbare_workspaces():
+    roh = i3("-t", "get_workspaces")
+    if roh.returncode != 0:
+        return set()
+    return {w.get("name") for w in json.loads(roh.stdout) if w.get("visible")}
+
+
+def finden(knoten, im_scratchpad=False, ws=None):
+    """-> (gefunden, im_scratchpad, workspace-name)"""
+    if (knoten.get("name") or "") == "__i3_scratch":
+        im_scratchpad = True
+    if knoten.get("type") == "workspace":
+        ws = knoten.get("name")
+    if (knoten.get("window_properties") or {}).get("window_role") == ROLLE:
+        return True, im_scratchpad, ws
+    for kind in (knoten.get("nodes") or []) + (knoten.get("floating_nodes") or []):
+        treffer = finden(kind, im_scratchpad, ws)
+        if treffer[0]:
+            return treffer
+    return False, False, None
+
+
+def main():
+    wurzel = baum()
+    if wurzel is None:
+        print("i3 antwortet nicht", file=sys.stderr)
+        return 1
+
+    da, im_scratchpad, ws = finden(wurzel)
+
+    if not da:
+        # Noch kein Fenster: starten. Es geht sichtbar auf — Sashas Vorgabe
+        # ist "default offen", nicht "versteckt und erst auf Tastendruck da".
+        subprocess.Popen(STARTER, start_new_session=True,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return 0
+
+    if im_scratchpad:
+        i3("[window_role=%s] scratchpad show" % ROLLE)
+        return 0
+
+    if ws in sichtbare_workspaces():
+        # Steht vor ihm -> weglegen. GENAU hier lag der Fehler der
+        # i3-Regel: `scratchpad show` haette es nur dann weggelegt, wenn es
+        # ein Scratchpad-Fenster IST. War es keins (oder galt es i3 nicht
+        # als solches), passierte nichts Sichtbares ausser einem Zucken.
+        i3("[window_role=%s] move scratchpad" % ROLLE)
+        return 0
+
+    # Offen, aber auf einem anderen Workspace: herholen, nicht weglegen.
+    # Wer die Taste drueckt, will sie SEHEN.
+    i3("[window_role=%s] move workspace current" % ROLLE)
+    i3("[window_role=%s] focus" % ROLLE)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as fehler:                      # nie den WM blockieren
+        print("zentrale-fenster: %s" % fehler, file=sys.stderr)
+        sys.exit(1)

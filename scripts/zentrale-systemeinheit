@@ -48,11 +48,17 @@ status() {
   else
     echo "  offen        : nein"
   fi
+  echo "Umschalter:"
+  if command -v zentrale-fenster >/dev/null; then
+    echo "  im PATH      : $(command -v zentrale-fenster)"
+  else
+    echo "  im PATH      : nein — \$mod+z findet ihn nicht"
+  fi
 }
 
 zurueck() {
   systemctl --user disable --now zentrale-kern.service 2>/dev/null
-  rm -f "$UNIT_ZIEL"
+  rm -f "$UNIT_ZIEL" "$HOME/.local/bin/zentrale-fenster"
   systemctl --user daemon-reload
   if grep -qF "$MARKE" "$I3_CONF" 2>/dev/null; then
     cp "$I3_CONF" "$I3_CONF.vor-zentrale"
@@ -101,6 +107,14 @@ fi
 
 systemctl --user enable zentrale-kern.service >/dev/null 2>&1 \
   && echo "✓ startet ab jetzt mit der Sitzung"
+
+# ── 1b. Der Fenster-Umschalter als Befehl ─────────────────────────────
+# $mod+z ruft `zentrale-fenster`. Damit i3 es findet, muss es im PATH
+# liegen — wie die uebrigen zentrale-* Befehle in ~/.local/bin. Symlink,
+# damit ein `git pull` die Aenderungen mitzieht.
+mkdir -p "$HOME/.local/bin"
+ln -sfn "$REPO/scripts/zentrale-fenster" "$HOME/.local/bin/zentrale-fenster"
+echo "✓ Fenster-Umschalter verlinkt: ~/.local/bin/zentrale-fenster"
 
 # ── 2. Der i3-Teil ────────────────────────────────────────────────────
 if [[ ! -f "$I3_CONF" ]]; then

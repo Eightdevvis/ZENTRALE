@@ -40,10 +40,32 @@ versioniert im Repo liegen statt verstreut in einer Konfiguration.
   würde jedes beliebige Terminal ins Scratchpad ziehen.
 - `--disable-server` ist nötig: xfce4-terminal läuft sonst als ein einziger
   Server-Prozess und hängt neue Fenster dort an — die Rolle ginge verloren.
-- `$mod+z` ist fest an **ZENTRALEs** Fenster gebunden, nicht an „das nächste im
-  Scratchpad": der Scratchpad kann mehrere Fenster halten und blättert bei
-  wiederholtem Drücken durch. Ein zweiter Druck legt sie wieder weg.
-- `$mod+Shift+z` startet das Fenster nach, falls es mal weg ist.
+- **`$mod+z` ruft ein Skript, keine i3-Regel** — `scripts/zentrale-fenster`.
+  Eine Taste muss hier drei Fälle abdecken: sichtbar → weglegen, weggelegt →
+  holen, gar nicht da → starten.
+
+> **Die Korrektur vom 20.08.2026.** Die erste Fassung war eine reine i3-Regel:
+> `for_window … move scratchpad` plus `bindsym $mod+z … scratchpad show`. Das
+> lief einmal sauber und ging dann kaputt — Sasha: *„wenn ich modz drücke
+> flackert das fenster aber schließt sich nicht"*, und die Anwesenheits-Anzeige
+> behauptete, er arbeite woanders, während er direkt auf ZENTRALE schaute.
+> **Beides derselbe Grund:** das Fenster hing im Scratchpad-Ast, obwohl es vor
+> ihm stand.
+>
+> Zwei Ursachen, beide im Werkzeug:
+> 1. **`for_window` feuert nach.** i3 wertet die Regeln nicht nur beim
+>    Erscheinen eines Fensters aus, sondern erneut bei Fenster-Ereignissen. Eine
+>    Regel mit `move scratchpad` darin kann das Fenster also jederzeit wieder
+>    wegziehen. In der Regel steht jetzt nur noch, was gefahrlos wiederholbar
+>    ist: schwebend, Größe, Mitte.
+> 2. **`scratchpad show` legt nicht immer weg.** Ist das Fenster auf einem
+>    *anderen* Workspace sichtbar, holt der Befehl es herüber. Zweimal drücken
+>    schließt dann nichts, es wandert nur.
+>
+> Der Zustand steht deshalb explizit im Skript, statt sich aus zwei i3-Regeln zu
+> ergeben, die einander widersprechen können. Nebeneffekt, der Sashas Vorgabe
+> erst erfüllt: das Fenster geht beim Anmelden **sichtbar** auf — „default
+> offen" statt versteckt.
 
 **3. `start_tui.sh` hängt sich an, statt zu killen.** Vorher hat das Skript ein
 laufendes Backend „zurückgeholt", also abgeschossen und neu gestartet. Gegen
@@ -90,8 +112,10 @@ Abschaltbar mit `ZENTRALE_NOTIFY=0`.
 ## Einrichten
 
 `scripts/zentrale-systemeinheit` — idempotent, mit `--status` und `--zurueck`.
-Es verlinkt die Unit (Symlink statt Kopie, damit ein `git pull` sie mitzieht)
-und hängt eine `include`-Zeile an die i3-Konfiguration, mit Sicherung daneben.
+Es verlinkt die Unit **und den Fenster-Umschalter nach `~/.local/bin`**
+(Symlinks statt Kopien, damit ein `git pull` sie mitzieht) und hängt eine
+`include`-Zeile an die i3-Konfiguration, mit Sicherung daneben. Ohne den
+Umschalter im PATH findet `$mod+z` nichts — `--status` sagt das ausdrücklich.
 
 **Es weigert sich aus einem git-Worktree.** Dienst und `include` zeigen auf den
 Repo-Pfad; aus einer Arbeitskopie heraus zeigten beide auf einen Ordner, den es
