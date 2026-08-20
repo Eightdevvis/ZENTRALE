@@ -578,6 +578,22 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
     import profil
     name = profil.kanonisch(name)
 
+    # ── Sichtbar machen, was sie tut ──────────────────────────────────
+    # Sasha, 20.08.2026: "machen wir im normalen chat einfach die tool calls
+    # usw details was sie macht wie tool call, thinking, usw einfach alle
+    # transparent und sichtbar, so wie man es bei dir claude sieht! das wird
+    # schon helfen. weil keine ahnung was sie hier fabriziert hat."
+    #
+    # Der Anlass war ein Turn, in dem sie zweimal schrieb und beide Male nur
+    # "steht drin" sagte — von aussen sah das aus wie eine Luege beim ersten
+    # Mal. Wer sieht, WELCHES Werkzeug mit WELCHEN Argumenten lief, muss das
+    # nicht mehr raten.
+    #
+    # Hier und nicht im Loop: `run_tool` ist die einzige Stelle, durch die
+    # BEIDE Cloud-Dialekte gehen. Zweimal gepflegt hiesse, dass die Anzeige
+    # auf einer Schiene irgendwann fehlt.
+    yield {"werkzeug": {"phase": "start", "name": name, "args": args}}
+
     # antwort-Tool ist TERMINAL: der Text IST die finale Antwort.
     if not tutor_mode and name == "antwort":
         answer = str(args.get("text", "")).strip()
@@ -616,9 +632,12 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
     try:
         ergebnis = active_exec(name, args)
         kidebug.emit("ai.tool", name=name, args=args, ergebnis=str(ergebnis))
+        yield {"werkzeug": {"phase": "fertig", "name": name,
+                            "text": str(ergebnis)}}
         return ("result", ergebnis, False)
     except Exception as e:
         kidebug.emit("ai.tool", name=name, args=args, fehler=str(e))
+        yield {"werkzeug": {"phase": "fehler", "name": name, "text": str(e)}}
         return ("result", f"Tool '{name}' ist fehlgeschlagen: {e}", True)
 
 

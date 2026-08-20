@@ -1229,6 +1229,13 @@ def api_chat():
             # das Frontend im ki-kern live mitlaufen lässt ("ich schau kurz
             # nach…"). KEIN Antworttext → nicht in collected (nicht gespeichert,
             # nicht gesprochen). Siehe ai.chat_stream / adaptives Thinking.
+            # werkzeug-Event: ein Tool-Call beginnt oder ist fertig. Geht als
+            # eigenes SSE 'werkzeug'-Event raus, damit im Chat sichtbar wird,
+            # WAS sie tut — nicht nur, was sie hinterher darueber sagt. Kein
+            # Antworttext -> nicht in collected.
+            if isinstance(token, dict) and 'werkzeug' in token:
+                yield f"data: {json.dumps({'werkzeug': token['werkzeug']})}\n\n"
+                continue
             if isinstance(token, dict) and 'reflect' in token:
                 yield f"data: {json.dumps({'reflect': token['reflect']})}\n\n"
                 continue

@@ -1424,6 +1424,31 @@ def ring_zeilen(h, breite, lage="unbekannt", aktiv=False, phase=0.0):
     return aus
 
 
+def werkzeug_zeile(w):
+    """Ein Tool-Ereignis als Verlaufs-Zeile. -> (rolle, text)
+
+    Argumente werden gekuerzt, nicht weggelassen: WELCHE Datei sie
+    beschrieben hat, ist genau die Frage, die man hinterher stellt.
+    """
+    name = str(w.get("name") or "?")
+    phase = w.get("phase")
+    if phase == "start":
+        args = w.get("args") or {}
+        teile = []
+        for schluessel, wert in args.items():
+            text = " ".join(str(wert).split())
+            if len(text) > 60:
+                text = text[:59] + "…"
+            teile.append("%s=%s" % (schluessel, text))
+        return ("werkzeug", "%s(%s)" % (name, ", ".join(teile)))
+    text = " ".join(str(w.get("text") or "").split())
+    if len(text) > 200:
+        text = text[:199] + "…"
+    if phase == "fehler":
+        return ("werkzeug_fehler", "%s ✗ %s" % (name, text))
+    return ("werkzeug_ergebnis", "↳ " + text)
+
+
 def md_zeilen(text, breite):
     """Markdown -> [(zeile, stil)] mit stil aus {"", "kopf", "code", "liste"}.
 
@@ -2203,7 +2228,7 @@ def run_ui(stdscr, store):
             time.sleep(5)
 
     AI = {"active": False, "input": "", "log": [], "answer": None,
-          "reflect": "", "streaming": False, "scroll": 0,
+          "reflect": "", "denken": "", "streaming": False, "scroll": 0,
           "perm": None, "msg": "", "loaded": False,
           "backend": None, "model": "", "provider": "",
           "kosten_heute": 0.0, "budget": {},
@@ -2224,6 +2249,17 @@ def run_ui(stdscr, store):
             url, data=data, method="POST",
             headers={"Content-Type": "application/json",
                      "Accept": "text/event-stream"})
+        def denken_ablegen():
+            """Gesammeltes Denken in den Verlauf schieben — in der richtigen
+            Reihenfolge. Aufgerufen, sobald etwas ANDERES passiert (ein
+            Werkzeug, Text, eine Rueckfrage): dann ist der Gedankengang zu
+            Ende, und er steht vor dem, was daraus folgte. Haengt man ihn
+            erst am Turn-Ende an, steht das Denken hinter den Taten."""
+            gedacht = (AI.get("denken") or "").strip()
+            if gedacht:
+                AI["log"].append(("denken", gedacht))
+                AI["denken"] = ""
+
         resp = None
         try:
             # 300 s, und die Zahl ist NICHT frei gewaehlt: der Timeout gilt
@@ -2248,11 +2284,21 @@ def run_ui(stdscr, store):
                     continue
                 with AI_LOCK:
                     if "token" in evt:
+                        denken_ablegen()
                         AI["answer"] = (AI["answer"] or "") + str(evt["token"])
                         AI["perm"] = None          # es fließt wieder Text
                     elif "reflect" in evt:
+                        # Zweimal aufheben: gekuerzt fuer die Lauf-Anzeige,
+                        # vollstaendig fuer den Verlauf. Wer hinterher wissen
+                        # will, warum sie etwas getan hat, braucht das ganze
+                        # Denken, nicht die letzten 400 Zeichen.
                         AI["reflect"] = (AI["reflect"] + str(evt["reflect"]))[-400:]
+                        AI["denken"] = (AI["denken"] + str(evt["reflect"]))[-8000:]
+                    elif "werkzeug" in evt:
+                        denken_ablegen()
+                        AI["log"].append(werkzeug_zeile(evt["werkzeug"]))
                     elif "permission" in evt:
+                        denken_ablegen()
                         AI["perm"] = evt["permission"]
                     elif "done" in evt:
                         break
@@ -2284,6 +2330,7 @@ def run_ui(stdscr, store):
                 try: resp.close()
                 except OSError: pass
             with AI_LOCK:
+                denken_ablegen()
                 ans = (AI["answer"] or "").strip()
                 if ans:
                     AI["log"].append(("ai", ans))
@@ -2355,6 +2402,16 @@ def run_ui(stdscr, store):
             AI["n"] = len(AI["log"])
             AI["loaded"] = True
 
+    def echte_nachrichten(log):
+        """Wie viele Eintraege davon kennt auch das Backend?
+
+        Werkzeug- und Denk-Zeilen stehen NUR in der TUI. Zaehlt man sie mit,
+        sieht der Poll gleich viele Eintraege wie das Backend und uebernimmt
+        dessen Verlauf — womit genau die Zeilen verschwaenden, die gerade
+        sichtbar gemacht werden sollten.
+        """
+        return sum(1 for rolle, _t in log if rolle in ("user", "ai"))
+
     def ai_verlauf_holen():
         """Den Verlauf vom Backend holen. -> [(rolle, text)] oder None."""
         try:
@@ -2391,7 +2448,7 @@ def run_ui(stdscr, store):
                 with AI_LOCK:
                     if AI["streaming"] or not AI["loaded"]:
                         continue
-                    alt_n = AI["n"]
+                    alt_n = echte_nachrichten(AI["log"])
                 log = ai_verlauf_holen()
                 if log is None or len(log) <= alt_n:
                     continue
@@ -2446,7 +2503,19 @@ def run_ui(stdscr, store):
         """
         if w < 6:
             w = 6
-        pre = {"user": "du:", "ai": "ki:"}.get(role, "")
+        # Werkzeuge und Denken bekommen ein eigenes Zeichen statt "du:"/"ki:".
+        # Sie sind keine Aeusserungen, sondern das, was DAZWISCHEN passiert —
+        # und genau das war bisher unsichtbar: Sasha sah "steht drin" und
+        # konnte nicht nachsehen, ob und was wirklich geschrieben wurde.
+        pre = {"user": "du:", "ai": "ki:", "werkzeug": "⚙",
+               "werkzeug_fehler": "⚙", "denken": "…"}.get(role, "")
+        if role.startswith("werkzeug") or role == "denken":
+            eingerueckt = "  " + pre + " "
+            aus = []
+            for i, zeile in enumerate(_md_umbruch(text, w - len(eingerueckt),
+                                                  "")):
+                aus.append((role, (eingerueckt if i == 0 else "    ") + zeile))
+            return aus or [(role, eingerueckt)]
 
         if role == "ai":
             out = []
@@ -6837,12 +6906,21 @@ def run_ui(stdscr, store):
             # Blockstile aus dem Markdown-Renderer auf Attribute abbilden.
             # Ueberschrift hebt sich ab, Code steht zurueck (er ist Beleg,
             # nicht Aussage), Listen lesen sich wie Fliesstext.
+            #
+            # Werkzeuge und Denken stehen ZURUECK: sie sollen nachlesbar
+            # sein, ohne das Gespraech zu uebertoenen. Ein Werkzeug-FEHLER
+            # tritt dagegen hervor — das ist der Fall, in dem sie hinterher
+            # behauptet, es habe geklappt.
             stile = {
-                "user":     C["acc"],
-                "ai":       C["bright"],
-                "ai_kopf":  C["acc"],
-                "ai_code":  C["dim"],
-                "ai_liste": C["bright"],
+                "user":              C["acc"],
+                "ai":                C["bright"],
+                "ai_kopf":           C["acc"],
+                "ai_code":           C["dim"],
+                "ai_liste":          C["bright"],
+                "werkzeug":          C["acc"],
+                "werkzeug_ergebnis": C["faint"],
+                "werkzeug_fehler":   C["warn"],
+                "denken":            C["faint"],
             }
             for kind, seg in lines[start:start + avail]:
                 addclip(y, inx, seg, inw, stile.get(kind, C["faint"]))

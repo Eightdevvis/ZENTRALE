@@ -920,6 +920,38 @@ Tools (20, 5217 Zeichen ≈ 1304 Token)  [339a3b98f42f]
 ⊕ GRAPH (cloud) knoten: Falter, blau, Klapprad
 ```
 
+## Tool-Calls und Denken stehen IM CHAT (seit 20.08.2026)
+
+Sasha nach einem Turn, den niemand nachvollziehen konnte:
+
+> *„machen wir im normalen chat einfach die tool calls usw details was sie macht
+> wie tool call, thinking, usw einfach alle transparent und sichtbar, so wie man
+> es bei dir claude sieht! … weil keine ahnung was sie hier fabriziert hat."*
+
+Der Anlass: sie schrieb dieselbe Idee **zweimal** weg — erst als sauberen
+Katalog-Eintrag, dann als Prosa in dieselbe Katalogdatei — und sagte beide Male
+nur „steht drin" bzw. „jetzt steht's wirklich drin". Von außen sah das aus wie
+eine Lüge beim ersten Mal. Ein sichtbares `write_note(name=ideen, text=…)` hätte
+die Frage in einer Zeile beantwortet.
+
+- **Emittiert** wird in `cloud.run_tool` — der einzigen Stelle, durch die
+  **beide** Cloud-Dialekte gehen. Drei Phasen: `start` (Name + Argumente),
+  `fertig` (Ergebnis), `fehler`. Zweimal gepflegt hieße, dass die Anzeige auf
+  einer Schiene irgendwann fehlt.
+- **Durchgereicht** als eigenes SSE-Event `werkzeug` (`ui/app.py`), kein
+  Antworttext — es landet also nicht im gespeicherten Verlauf.
+- **Gezeigt** in der TUI als eigene Zeilen im Chat: `⚙ write_note(name=ideen,
+  …)` und darunter `↳ Notiert in kataloge/ideen.` Zurückgenommen in der Farbe,
+  ein Werkzeug-**Fehler** dagegen in Warnfarbe — das ist der Fall, in dem sie
+  hinterher behauptet, es habe geklappt.
+- **Denken** wird gesammelt und in den Verlauf gelegt, sobald etwas anderes
+  passiert (ein Werkzeug, Text, eine Rückfrage). Erst am Turn-Ende anzuhängen
+  hieße, den Gedankengang hinter die Taten zu stellen, die aus ihm folgten.
+
+Die `werkzeug`-Ereignisse sind ein reiner **Anzeige-Kanal**: die Tests des
+Tool-Protokolls (`test_cloud_loop.py`, `test_cloud_openai.py`) filtern sie in
+ihrem `_lauf()` heraus, geprüft werden sie in `test_transparenz.py`.
+
 **Werkzeuge stehen mit Beschreibung und Parametern da — seit 18.08.2026.**
 Vorher schickte `kidebug.request()` nur die NAMEN; damit log das Terminal seinen
 eigenen Anspruch, alles zu zeigen, was rausgeht. Ausgerechnet die

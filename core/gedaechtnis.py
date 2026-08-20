@@ -325,12 +325,34 @@ def dossier_notieren(name: str, text: str) -> str:
                 f"{bereich}/{schluessel}."
                 + (f" {hinweis}." if hinweis else ""))
 
-    if bereich == "notizen":
+    # ── Ein Katalog hat eine FORM, und die wird verteidigt ────────────
+    # Am 20.08.2026 hat sie zu einer Idee erst einen sauberen Eintrag
+    # geschrieben und in der naechsten Runde einen Prosa-Absatz in DIESELBE
+    # Katalogdatei. Danach war der Katalog halb Liste, halb Fliesstext —
+    # und Sasha las zwei widerspruechliche "steht drin".
+    #
+    # Ein Katalog nimmt nur Eintraege. Prosa gehoert in eine Notiz oder ein
+    # Dossier, und die Absage sagt genau das: eine Fehlermeldung, die den
+    # richtigen Ort nennt, korrigiert an der Stelle, an der es passiert —
+    # eine Prompt-Zeile wird uebergangen.
+    if bereich == "kataloge" and not kopf_lesen(text):
+        return ("[Das ist kein Katalog-Eintrag, sondern Prosa — ein Katalog "
+                "nimmt nur Eintraege nach Schema (## Titel, darunter "
+                "- thema:/- equipment:/- aufwand:/- status:). Lies "
+                "read_note('vorlagen/katalog'). Fliesstext gehoert in eine "
+                f"Notiz ('{schluessel}') oder ein Dossier.]")
+
+    if bereich in ("notizen", "kataloge"):
         # Ohne Datums-Ueberschrift: eine Notiz ist eine Faktenliste, kein
         # Verlauf. "## 2026-08-18" ueber jeder einzelnen Zeile — zweimal
         # dasselbe Datum, wenn zwei Wegzeiten am selben Tag dazukommen —
         # ist Rauschen, das die Liste unlesbar macht. Wann etwas galt,
         # steht im Tagebuch; hier steht, WAS gilt.
+        #
+        # Fuer Kataloge gilt dasselbe aus einem zweiten Grund: dort stand
+        # das Datum als "## 2026-08-20" DIREKT UEBER dem "## Titel" des
+        # Eintrags — zwei Ueberschriften uebereinander, von denen die obere
+        # nichts bedeutet.
         _anhaengen(pfad, f"{text}\n")
     else:
         _anhaengen(pfad, f"\n## {date.today().isoformat()}\n{text}\n")

@@ -194,7 +194,8 @@ def test_beide_schienen_bieten_sich_nicht_an():
 def test_name_findet_seinen_bereich():
     """"kataloge/ideen" und "ideen" muessen dasselbe treffen — sie soll
     nicht ueber Pfade nachdenken muessen."""
-    gedaechtnis.dossier_notieren("kataloge/ideen", "## Fourier-Visualisierer")
+    gedaechtnis.dossier_notieren(
+        "kataloge/ideen", "## Fourier-Visualisierer\n- thema: fourier\n- status: idee")
     assert gedaechtnis._finden("kataloge/ideen") == ("kataloge", "ideen")
     assert gedaechtnis._finden("ideen") == ("kataloge", "ideen")
     assert "Fourier" in gedaechtnis.dossier_lesen("ideen")
@@ -256,12 +257,45 @@ def test_die_vorlage_macht_aus_der_notiz_ein_vorhaben():
 
 
 def test_suche_deckt_alle_bereiche_ab():
-    gedaechtnis.dossier_notieren("kataloge/ideen", "thema: fourier")
+    gedaechtnis.dossier_notieren(
+        "kataloge/ideen", "## Oszi-Visualisierer\n- thema: fourier\n- status: idee")
     gedaechtnis.dossier_notieren("quellen/modulhandbuch", "Signalverarbeitung: fourier")
     gedaechtnis.dossier_notieren("dossiers/organoide", "MEA misst fourier nicht")
     treffer = gedaechtnis.suchen("fourier")
     for bereich in ("kataloge", "quellen", "dossiers"):
         assert bereich in treffer
+
+
+def test_prosa_kommt_nicht_in_einen_katalog():
+    """Realer Fall vom 20.08.2026: sie schrieb zu einer Idee erst einen
+    sauberen Eintrag und in der naechsten Runde einen Prosa-Absatz in
+    DIESELBE Katalogdatei. Danach war der Katalog halb Liste, halb
+    Fliesstext — und Sasha las zwei widerspruechliche "steht drin".
+
+    Die Absage nennt den richtigen Ort. Eine Fehlermeldung an der Stelle,
+    an der es passiert, korrigiert; eine Prompt-Zeile wird uebergangen."""
+    antwort = gedaechtnis.dossier_notieren(
+        "kataloge/ideen", "Interesse geweckt durch einen YouTube-Kanal.")
+    assert antwort.startswith("[")
+    assert "vorlagen/katalog" in antwort
+    assert "Notiz" in antwort
+    assert "Interesse geweckt" not in gedaechtnis.dossier_lesen("kataloge/ideen")
+
+
+def test_ein_katalog_eintrag_geht_natuerlich_durch():
+    antwort = gedaechtnis.dossier_notieren(
+        "kataloge/ideen",
+        "## Fraktal-Rendering\n- thema: fraktale, shader\n- status: idee")
+    assert not antwort.startswith("[")
+    assert "Fraktal-Rendering" in gedaechtnis.dossier_lesen("kataloge/ideen")
+
+
+def test_katalog_bekommt_keine_datums_ueberschrift():
+    """Dort stand "## 2026-08-20" DIREKT UEBER dem "## Titel" des Eintrags —
+    zwei Ueberschriften uebereinander, von denen die obere nichts bedeutet."""
+    gedaechtnis.dossier_notieren(
+        "kataloge/ideen", "## Etwas\n- thema: x\n- status: idee")
+    assert "## 20" not in gedaechtnis.dossier_lesen("kataloge/ideen")
 
 
 def test_kopf_block_zeigt_die_bereiche_und_das_status_vokabular():

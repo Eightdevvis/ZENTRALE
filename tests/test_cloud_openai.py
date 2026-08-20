@@ -109,7 +109,16 @@ def _msgs(t="was steht an?"):
 
 
 def _lauf(gen):
-    return list(gen)
+    """Generator leerlaufen lassen und die Events einsammeln.
+
+    OHNE die `werkzeug`-Ereignisse: die sind seit dem 20.08.2026 ein reiner
+    ANZEIGE-Kanal (Tool-Calls im Chat sichtbar machen) und gehoeren nicht
+    zum Tool-Protokoll, um das es in dieser Datei geht. Sie stehen in jedem
+    Tool-Lauf drin und wuerden hier nur jede Erwartung um Rauschen
+    ergaenzen. Geprueft werden sie in tests/test_transparenz.py.
+    """
+    return [e for e in gen
+            if not (isinstance(e, dict) and "werkzeug" in e)]
 
 
 # ── Grundfälle ─────────────────────────────────────────────────────────
