@@ -68,12 +68,6 @@ export ZENTRALE_TUI_SUPERVISED=1
 BACKEND_LOG="/tmp/zentrale-tui-backend.log"
 KERN_UNIT="zentrale-kern.service"
 
-# ── Ist :5000 schon belegt? KLARE Ansage statt stillem Zweit-Backend ─────
-# Antwortet etwas auf :5000, ist es ein verwaistes oder fremdes Backend. Würden
-# wir jetzt ein zweites starten, könnte es den Port nicht binden (Flask-Thread
-# stirbt still), die Readiness-Prüfung träfe das FALSCHE Backend, und die TUI
-# liefe gegen veralteten Code — genau die Art "läuft nicht, keine Ahnung warum".
-# Lieber hart abbrechen mit Aufräum-Tipp.
 # ── Backend: gehoert es uns, oder haengen wir uns nur dran? ─────────────
 BACKEND_PID=""
 
@@ -129,6 +123,12 @@ backend_neu() {
 # ── Die Runde: Backend sicherstellen, TUI zeigen. Bei /reboot noch einmal ──
 while true; do
 
+# ── Ist :5000 schon belegt? KLARE Ansage statt stillem Zweit-Backend ─────
+# Antwortet etwas auf :5000, ist es ein verwaistes oder fremdes Backend. Würden
+# wir jetzt ein zweites starten, könnte es den Port nicht binden (Flask-Thread
+# stirbt still), die Readiness-Prüfung träfe das FALSCHE Backend, und die TUI
+# liefe gegen veralteten Code — genau die Art "läuft nicht, keine Ahnung warum".
+# Lieber hart abbrechen mit Aufräum-Tipp.
 ATTACHED=0
 if lebt; then
   # ── Seit 19.08.2026: ANHÄNGEN ist der Normalfall ──────────────────────
