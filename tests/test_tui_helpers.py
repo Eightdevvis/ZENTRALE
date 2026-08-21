@@ -179,6 +179,12 @@ def test_parse_command_action(buf, exp):
     assert action == exp
 
 
+def test_parse_command_reboot():
+    # /reboot ist nur ein Signal: das Start-Skript baut Backend + Fenster neu auf.
+    for buf in ("/reboot", "/neustart", "/restart"):
+        assert parse_command(buf, "auto")[0] == "REBOOT"
+
+
 def test_parse_command_theme_sets_mode():
     assert parse_command("/theme dunkel", "auto")[1] == "night"
     assert parse_command("/theme hell", "auto")[1] == "day"

@@ -13,6 +13,11 @@
 # sonst wäre der Takt tot, sobald kein Fenster offen ist. Nur ein Backend, das
 # dieses Skript selbst gestartet hat, wird beim Beenden mitgenommen.
 #
+# `/reboot` in der TUI: das Fenster endet mit Code 42, und dieses Skript baut
+# ALLES neu auf — erst das Backend (eigenes Kind killen bzw. den Kern-Dienst
+# neu starten), dann die TUI, beide mit frisch geladenem Code. Deshalb läuft
+# der Ablauf unten in einer Schleife statt geradeaus.
+#
 # Das Backend-stdout geht in eine LOGDATEI, NICHT ins Terminal — sonst würde
 # es die curses-Oberfläche zerschießen. Die Logs erscheinen ohnehin im
 # stdout-Panel der TUI (über /api/state). Logdatei live mitlesen:
@@ -27,6 +32,8 @@ set -u
 #   4  Backend beim Hochfahren gestorben (Import-/Code-Fehler → Backend-Log)
 #   5  Backend-API nach 15 s nicht erreichbar (hängt → Backend-Log)
 #   1  TUI selbst abgestürzt (kein sauberer Quit → /tmp/zentrale-tui-crash.log)
+#  (42 kommt aus der TUI und bedeutet /reboot — das Skript FÄNGT es ab und
+#   startet neu; nach aussen gibt es diesen Code nie.)
 
 # ── Ins Projekt-Root (Skript liegt in scripts/, Symlink wird aufgelöst) ──
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
@@ -54,7 +61,12 @@ if ! compgen -G "venv/lib/python*/site-packages/zentrale_testguard.pth" >/dev/nu
 fi
 
 export ZENTRALE_KASSETTE=tui
+# Die TUI darf nur dann einen Neustart ANBIETEN (/reboot), wenn jemand da ist,
+# der wieder aufbaut — genau dieses Skript. Ohne die Variable sagt der Befehl,
+# dass er hier nicht geht, statt das Fenster kommentarlos zu schliessen.
+export ZENTRALE_TUI_SUPERVISED=1
 BACKEND_LOG="/tmp/zentrale-tui-backend.log"
+KERN_UNIT="zentrale-kern.service"
 
 # ── Ist :5000 schon belegt? KLARE Ansage statt stillem Zweit-Backend ─────
 # Antwortet etwas auf :5000, ist es ein verwaistes oder fremdes Backend. Würden
@@ -62,8 +74,63 @@ BACKEND_LOG="/tmp/zentrale-tui-backend.log"
 # stirbt still), die Readiness-Prüfung träfe das FALSCHE Backend, und die TUI
 # liefe gegen veralteten Code — genau die Art "läuft nicht, keine Ahnung warum".
 # Lieber hart abbrechen mit Aufräum-Tipp.
+# ── Backend: gehoert es uns, oder haengen wir uns nur dran? ─────────────
+BACKEND_PID=""
+
+cleanup() {
+  # NUR beenden, was wir selbst gestartet haben. Ein Backend, an das wir uns
+  # nur drangehängt haben, gehört dem Dienst — es hier zu killen wäre genau
+  # der Fehler, den die Systemeinheit beseitigen soll.
+  [[ -n "$BACKEND_PID" ]] || return 0
+  kill "$BACKEND_PID" 2>/dev/null || true
+  wait "$BACKEND_PID" 2>/dev/null || true
+}
+# HUP MUSS dabei sein: schließt man das Terminalfenster, kriegt dieses Skript
+# ein SIGHUP. Ohne HUP im Trap stirbt es OHNE cleanup → Backend bleibt als
+# Waise auf :5000 zurück ("läuft noch" beim nächsten Start).
+trap cleanup INT TERM HUP EXIT
+
+lebt() { curl -sf -o /dev/null http://localhost:5000/api/state 2>/dev/null; }
+
+# ── /reboot: das Backend neu hochziehen, WEM auch immer es gehört ───────
+#
+# Die TUI kann das nicht selbst — sie kennt nur ihre eigene Seite. Hier ist
+# beides bekannt, deshalb liegt der Neustart hier:
+#
+#   eigenes Kind (dieses Skript hat es gestartet) → killen, gleich neu starten
+#   Kern-Dienst (die Systemeinheit)               → systemctl --user restart
+#   fremdes Backend (monolith o.ä.)               → NICHT anfassen, nur sagen
+#
+# Der letzte Fall ist Absicht: ein Fenster, das sich an ein fremdes Backend
+# gehängt hat, darf es nicht abschiessen — dann stünde jemand anderes im Regen.
+backend_neu() {
+  if [[ -n "$BACKEND_PID" ]]; then
+    echo "  … eigenes Backend wird beendet"
+    kill "$BACKEND_PID" 2>/dev/null || true
+    wait "$BACKEND_PID" 2>/dev/null || true
+    BACKEND_PID=""
+    for _ in $(seq 1 40); do lebt || break; sleep 0.25; done   # Port wieder frei?
+    return 0
+  fi
+  if systemctl --user is-active --quiet "$KERN_UNIT" 2>/dev/null; then
+    echo "  … Kern-Dienst ($KERN_UNIT) wird neu gestartet"
+    systemctl --user restart "$KERN_UNIT" 2>/dev/null || true
+    # Warten bis er wieder antwortet. Wichtig: NICHT vorschnell ein eigenes
+    # Backend danebenstellen — das könnte :5000 nicht binden und die TUI liefe
+    # gegen ein halbtotes Gespann.
+    for _ in $(seq 1 60); do lebt && return 0; sleep 0.5; done
+    echo "FEHLER (5): Kern-Dienst nach dem Neustart nicht erreichbar." >&2
+    echo "  Nachsehen:  systemctl --user status $KERN_UNIT" >&2
+    exit 5
+  fi
+  echo "  … Backend gehört diesem Fenster nicht (fremd) — es bleibt, wie es ist." >&2
+}
+
+# ── Die Runde: Backend sicherstellen, TUI zeigen. Bei /reboot noch einmal ──
+while true; do
+
 ATTACHED=0
-if curl -sf -o /dev/null http://localhost:5000/api/state 2>/dev/null; then
+if lebt; then
   # ── Seit 19.08.2026: ANHÄNGEN ist der Normalfall ──────────────────────
   # ZENTRALE ist eine Systemeinheit geworden: das Backend läuft als
   # Benutzer-Dienst (zentrale-kern.service) und muss weiterlaufen, wenn kein
@@ -83,7 +150,7 @@ if curl -sf -o /dev/null http://localhost:5000/api/state 2>/dev/null; then
   fi
 fi
 
-if [[ "$ATTACHED" != "1" ]] && curl -sf -o /dev/null http://localhost:5000/api/state 2>/dev/null; then
+if [[ "$ATTACHED" != "1" ]] && lebt; then
   # ZENTRALE_TUI_FRESH=1: bewusst frisch starten (Entwicklung — die TUI soll
   # gegen NEUEN Backend-Code laufen, nicht gegen den seit Stunden laufenden).
   # Erkennung wie bisher: ZENTRALE_KASSETTE=tui im Prozess-Environ, damit wir
@@ -96,7 +163,7 @@ if [[ "$ATTACHED" != "1" ]] && curl -sf -o /dev/null http://localhost:5000/api/s
   done
   if [[ "$reclaimed" == 1 ]]; then
     echo "Verwaistes ki-frei-Backend auf :5000 zurückgeholt — starte frisch." >&2
-    for _ in $(seq 1 20); do curl -sf -o /dev/null http://localhost:5000/api/state 2>/dev/null || break; sleep 0.2; done
+    for _ in $(seq 1 20); do lebt || break; sleep 0.2; done
   else
     echo "FEHLER (3): Auf http://localhost:5000 antwortet bereits eine ZENTRALE (fremd/monolith)." >&2
     echo "  Backend-PID(s): $(pgrep -f 'core/main.py' 2>/dev/null | tr '\n' ' ')" >&2
@@ -106,24 +173,10 @@ if [[ "$ATTACHED" != "1" ]] && curl -sf -o /dev/null http://localhost:5000/api/s
 fi
 
 # ── Backend im Hintergrund, stdout in die Logdatei ──────────────────────
-BACKEND_PID=""
 if [[ "$ATTACHED" != "1" ]]; then
   "$PY" core/main.py > "$BACKEND_LOG" 2>&1 &
   BACKEND_PID=$!
 fi
-
-cleanup() {
-  # NUR beenden, was wir selbst gestartet haben. Ein Backend, an das wir uns
-  # nur drangehängt haben, gehört dem Dienst — es hier zu killen wäre genau
-  # der Fehler, den die Systemeinheit beseitigen soll.
-  [[ -n "$BACKEND_PID" ]] || return 0
-  kill "$BACKEND_PID" 2>/dev/null || true
-  wait "$BACKEND_PID" 2>/dev/null || true
-}
-# HUP MUSS dabei sein: schließt man das Terminalfenster, kriegt dieses Skript
-# ein SIGHUP. Ohne HUP im Trap stirbt es OHNE cleanup → Backend bleibt als
-# Waise auf :5000 zurück ("läuft noch" beim nächsten Start).
-trap cleanup INT TERM HUP EXIT
 
 # ── Auf die Flask-API warten (max ~15 s) ────────────────────────────────
 ready=0
@@ -132,7 +185,7 @@ if [[ "$ATTACHED" == "1" ]]; then
 else
   echo "ZENTRALE (tui) — Backend startet, warte auf API …"
   for _ in $(seq 1 30); do
-    if curl -sf -o /dev/null http://localhost:5000/api/state 2>/dev/null; then ready=1; break; fi
+    if lebt; then ready=1; break; fi
     # Backend schon gestorben? Dann raus mit Log-Hinweis (Code 4 = Code-/Import-Fehler).
     kill -0 "$BACKEND_PID" 2>/dev/null || { echo "FEHLER (4): Backend abgebrochen — siehe $BACKEND_LOG:" >&2; tail -n 20 "$BACKEND_LOG" >&2; exit 4; }
     sleep 0.5
@@ -147,6 +200,18 @@ fi
 # ── TUI im Vollbild ─────────────────────────────────────────────────────
 "$PY" tui/zentrale_tui.py
 rc=$?
+
+# Code 42 = /reboot: kein Ende, sondern eine Runde von vorn. Erst das Backend
+# (Kind oder Dienst), dann die TUI — beide laufen danach mit frischem Code.
+if [[ "$rc" -eq 42 ]]; then
+  echo
+  echo "ZENTRALE startet neu (/reboot) …"
+  backend_neu
+  continue
+fi
+
+break
+done
 
 # Kein sauberer Quit? Dann die Logs zeigen — curses hat das Terminal beim
 # Beenden zurückgesetzt, die Meldungen bleiben also im Terminal lesbar stehen

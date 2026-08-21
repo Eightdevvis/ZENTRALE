@@ -127,6 +127,38 @@ mal, ist aber raus (Stand 2026-07-25).
 - **Selbsttest** (ein Text-Snapshot, ohne curses):
   `venv/bin/python tui/zentrale_tui.py --selftest`
 
+### Neustart aus der TUI heraus: `/reboot`
+
+`/reboot` (auch `/neustart`, `/restart`) fährt **alles** neu hoch — Backend
+**und** Fenster, beide mit frisch geladenem Code, im selben Terminal. Gedacht
+für den Alltag: nach einem `git pull` oder einer Code-Änderung nicht das
+Fenster zumachen, im Terminal suchen und neu tippen, sondern einen Befehl.
+
+Wie es zusammenhängt: die TUI kann das **nicht allein**. Das Backend gehört ihr
+nicht — es läuft entweder als Benutzer-Dienst (`zentrale-kern.service`, der
+Normalfall) oder als Kind von `start_tui.sh`. Deshalb ist `/reboot` in der TUI
+nur ein Signal: sie endet mit **Exit-Code 42**, und `start_tui.sh` (läuft in
+einer Schleife) baut wieder auf. Was dabei mit dem Backend passiert, hängt
+davon ab, wem es gehört:
+
+| Backend | was `/reboot` macht |
+|---|---|
+| Kind von `start_tui.sh` | beenden, warten bis `:5000` frei ist, neu starten |
+| `zentrale-kern.service` | `systemctl --user restart` und warten, bis die API wieder antwortet |
+| fremd (monolith o.ä.) | **nichts** — es bleibt stehen, nur die Oberfläche startet neu (mit Hinweis) |
+
+Der letzte Fall ist Absicht: ein Fenster, das sich an ein fremdes Backend
+gehängt hat, darf es nicht abschießen.
+
+Startet die TUI **ohne** dieses Skript (z.B. standalone gegen ein Backend auf
+einer anderen Maschine), gibt es niemanden, der wieder aufbaut — dann wäre
+`/reboot` ein Beenden mit Ansage. Das Skript setzt darum
+`ZENTRALE_TUI_SUPERVISED=1`; fehlt die Variable, sagt der Befehl schlicht, dass
+er hier nicht geht, statt das Fenster zuzumachen.
+
+Whisper und TTS fasst `/reboot` nicht an — in der TUI-Kassette laufen sie
+ohnehin nicht.
+
 ### Diagnose: wenn `zentrale-tui` sofort wieder „weg" ist
 
 - **TUI-Crash** → Traceback landet in **`/tmp/zentrale-tui-crash.log`**; das
@@ -144,6 +176,9 @@ mal, ist aber raus (Stand 2026-07-25).
   | 3    | Port :5000 schon belegt (verwaiste/fremde ZENTRALE)             |
   | 4    | Backend beim Hochfahren gestorben → Backend-Log                  |
   | 5    | Backend-API nach 15 s nicht erreichbar → Backend-Log            |
+
+  (42 kommt aus der TUI und heißt `/reboot`. Das Skript **fängt den Code ab**
+  und startet neu — nach außen gibt es ihn nie.)
 
 - **Häufigste Ursache (Code 3):** ein **verwaistes Backend** hält noch `:5000`
   (TUI weg, Prozess lebt). Das Skript holt ein eigenes ki-freies Backend

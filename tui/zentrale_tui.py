@@ -1109,6 +1109,30 @@ def selftest():
     return 0
 
 
+# ── Neustart (/reboot): das Fenster beendet sich, das Skript baut neu auf ───
+#
+# Ein Neustart, den die TUI selbst macht, koennte nur die HAELFTE: das Backend
+# gehoert ihr nicht — es laeuft entweder als Benutzer-Dienst
+# (zentrale-kern.service) oder als Kind von start_tui.sh. Wer beides neu
+# hochziehen will, muss dort stehen, wo beides bekannt ist: im Start-Skript.
+#
+# Deshalb ist /reboot hier nur ein SIGNAL: die TUI endet mit Code 42, und
+# scripts/start_tui.sh (das in einer Schleife laeuft) startet Backend und
+# Fenster neu — im selben Terminal, mit frisch geladenem Code.
+#
+# Ohne dieses Skript (TUI standalone gegen ein fremdes Backend) gaebe es
+# niemanden, der wieder aufbaut: dann waere /reboot ein Beenden mit Ansage
+# statt eines Neustarts. Darum setzt start_tui.sh ZENTRALE_TUI_SUPERVISED=1,
+# und ohne die Variable sagt der Befehl schlicht, dass er hier nicht geht.
+NEUSTART_CODE = 42
+NEUSTART = {"an": False}       # von run_ui gesetzt, von main() ausgewertet
+
+
+def neustart_moeglich():
+    """Laeuft diese TUI unter start_tui.sh (dem Einzigen, der neu aufbauen kann)?"""
+    return os.environ.get("ZENTRALE_TUI_SUPERVISED") == "1"
+
+
 # ── Befehlszeile: pure Logik (curses-frei, daher unit-testbar) ───────────────
 TUI_COMMANDS = [
     ("/help",  "alle Befehle und Tasten zeigen"),
@@ -1117,6 +1141,7 @@ TUI_COMMANDS = [
     ("/local", "Lokale KI drosseln: on | off  (Ollama-Leitung)"),
     ("/tutor", "Sprach-Tutor TEXT-panel (Mitte, Cloud/Qwen); 'u' öffnet das Zimmer-Fenster"),
     ("/lauf",  "stdout-Laufschrift: an | aus  (auch 's')"),
+    ("/reboot", "ZENTRALE neu starten: Backend + Fenster, neuer Code"),
     ("/quit",  "ZENTRALE-TUI beenden  (auch 'q')"),
 ]
 TUI_KEYS = [
@@ -1272,6 +1297,8 @@ def parse_command(buf, theme_mode):
         return "LOCAL_TOGGLE", theme_mode, ""
     if name in ("tutor", "sprache"):             # Sprach-Tutor-Panel öffnen (Mitte)
         return "TUTOR_OPEN", theme_mode, ""
+    if name in ("reboot", "neustart", "restart"):  # ganze ZENTRALE neu (Aufrufer beendet)
+        return "REBOOT", theme_mode, ""
     if name in ("lauf", "laufschrift"):          # stdout-Laufschrift (Schalter macht der Aufrufer)
         if arg in ("on", "an"):   return "LAUF_ON", theme_mode, ""
         if arg in ("off", "aus"): return "LAUF_OFF", theme_mode, ""
@@ -7136,6 +7163,15 @@ def run_ui(stdscr, store):
                     break
                 if res == "HELP":
                     help_latched = True
+                if res == "REBOOT":
+                    # Nur das Signal setzen und raus — neu aufgebaut wird von
+                    # start_tui.sh (siehe NEUSTART_CODE). Ohne Skript drumherum
+                    # waere das ein Beenden, kein Neustart: dann lieber sagen.
+                    if neustart_moeglich():
+                        NEUSTART["an"] = True
+                        break
+                    cmd_msg = ("neustart geht nur ueber zentrale-tui "
+                               "(dieses fenster wurde anders gestartet)")
                 if res in ("CLOUD_ON", "CLOUD_OFF", "CLOUD_TOGGLE"):
                     # Cloud-Kill-Switch umlegen (POST ans Backend, front-agnostisch
                     # dieselbe Quelle wie der Browser). Danach EXTERNAL sofort frisch.
@@ -9036,6 +9072,11 @@ def main():
         sys.exit(1)
     finally:
         store.stop()
+
+    # /reboot: kein Fehler, sondern eine Bitte an das Start-Skript — es killt
+    # sein Backend (bzw. startet den Kern-Dienst neu) und ruft die TUI erneut auf.
+    if NEUSTART["an"]:
+        sys.exit(NEUSTART_CODE)
 
 
 if __name__ == "__main__":

@@ -104,6 +104,15 @@ an — weder beim Start noch beim Beenden. `q` schließt nur noch das Fenster.
 `ZENTRALE_TUI_FRESH=1` erzwingt den alten Weg (Entwicklung: die TUI soll gegen
 **neuen** Backend-Code laufen).
 
+Genau daraus folgt der Befehl **`/reboot`**: seit der Kern ein Dienst ist,
+reicht „Fenster zu, Fenster auf" nicht mehr, um neuen Backend-Code zu laden —
+das Fenster fasst den Dienst ja bewusst nicht an. `/reboot` beendet die TUI mit
+Code 42, `start_tui.sh` startet daraufhin den Kern-Dienst neu
+(`systemctl --user restart`), wartet, bis die API wieder antwortet, und ruft die
+TUI erneut auf. Ist das Backend dagegen ein Kind des Skripts, wird es schlicht
+beendet und neu gestartet; ein **fremdes** Backend bleibt unangetastet.
+Einzelheiten: `memory/betrieb/starten.md` → „Neustart aus der TUI heraus".
+
 ## Die Benachrichtigung — `core/melden.py`
 
 Ohne sie endet ihre Initiative an der Fensterkante: eine Terminerinnerung, die
