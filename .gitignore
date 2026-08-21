@@ -6,8 +6,13 @@ __pycache__/
 data/tts_model/
 
 # Auto-generierte Daten - persoenliche Logs + KI-Memory, gehoeren nicht
-# ins Repo. Siehe memory/datei_zugriffe.md.
+# ins Repo. Siehe memory/betrieb/datei_zugriffe.md.
 data/*.json
+# Tages-Zustand des Takts (data/takt/<datum>.json): welcher Anstoss heute
+# schon lief, damit er einen Neustart nicht wiederholt. Liegt in einem
+# UNTERORDNER und faellt deshalb NICHT unter data/*.json — das Muster
+# erfasst nur direkte Kinder. Pro Maschine verschieden, nie zu teilen.
+data/takt/
 # Woertliche Gespraechs-Transkripte unter dem Konzept-Graphen. Noch
 # persoenlicher als der Graph selbst - der destilliert, das hier ist roh.
 # Eigene Zeile, weil .jsonl NICHT unter data/*.json faellt.
