@@ -34,11 +34,19 @@ import socket
 import subprocess
 import sys
 import time
+from urllib.parse import urlparse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PY = os.path.join(ROOT, "venv", "bin", "python")
-if not os.path.exists(PY):
-    PY = sys.executable
+
+# venv-Ordner heisst nicht ueberall gleich: PC/Laptop 'venv', Pi '.venv'
+# (scripts/deploy_pi.sh, siehe memory/betrieb/deployment.md). Beide probieren,
+# sonst faellt der Pi still auf den System-Python ohne pygame zurueck.
+PY = sys.executable
+for _name in ("venv", ".venv"):
+    _cand = os.path.join(ROOT, _name, "bin", "python")
+    if os.path.exists(_cand):
+        PY = _cand
+        break
 
 # (port, service-datei, label, zusatz-env) — die zwei Audio-Dienste.
 SERVICES = [
@@ -55,10 +63,38 @@ def _port_open(port: int, host: str = "127.0.0.1") -> bool:
         return s.connect_ex((host, port)) == 0
 
 
+def _backend_is_local():
+    """Zeigt das Zimmer auf ein Backend auf DIESER Maschine?
+
+    Whisper/TTS gehören zum BACKEND, nicht zum Fenster: room.py schickt Text an
+    <url>/api/speak und Mikro-WAVs an <url>/api/transcribe — synthetisiert und
+    erkannt wird also auf dem Backend-Host. Lokale Dienste hochzufahren ergibt
+    darum nur Sinn, wenn das Backend hier läuft (Laptop-Solo). Zeigt die URL auf
+    einen anderen Rechner (Pi → PC, Laptop → PC per zentrale-remote), wäre es
+    verschwendeter RAM für Modelle, die niemand anspricht — auf dem Pi (1 GB)
+    sogar schädlich.
+    """
+    url = os.environ.get("ZENTRALE_URL") or ""
+    argv = sys.argv[1:]
+    for i, a in enumerate(argv):
+        if a == "--url" and i + 1 < len(argv):
+            url = argv[i + 1]
+        elif a.startswith("--url="):
+            url = a.split("=", 1)[1]
+    if not url:
+        return True                      # ohne Angabe: room.py nimmt localhost
+    host = urlparse(url).hostname or ""
+    return host in ("localhost", "127.0.0.1", "::1", "")
+
+
 def _start_services():
     """Startet fehlende Audio-Dienste. Gibt die Liste der SELBST gestarteten
     Popen-Objekte zurück (nur die räumen wir später wieder ab)."""
     if os.environ.get("ZENTRALE_TUTOR_AUDIO") == "0":
+        return []
+    if not _backend_is_local():
+        print("[audio] Backend ist remote — Whisper/TTS laufen dort, "
+              "hier wird nichts gestartet", flush=True)
         return []
     started = []
     for port, svc, label, extra_env in SERVICES:

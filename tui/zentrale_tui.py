@@ -264,6 +264,25 @@ MIN_LINES = 14
 MIN_COLS = 60
 
 
+# Die Zusatzfenster (Karte, Persona-Zimmer) brauchen pygame, also den Virtualenv
+# — die TUI selbst ist stdlib-only und laeuft auf dem Pi unter dem System-Python.
+# Der venv-Ordner heisst NICHT ueberall gleich: PC/Laptop 'venv', der Pi '.venv'
+# (scripts/deploy_pi.sh legt ihn so an, siehe memory/betrieb/deployment.md).
+# Frueher stand hier hart 'venv' → auf dem Pi fiel der Start still auf
+# sys.executable zurueck (System-Python OHNE pygame) und das Fenster ging gar
+# nicht auf. Darum beide Namen probieren.
+VENV_DIRS = ("venv", ".venv")
+
+
+def venv_python(root):
+    """Pfad zum Python des Projekt-Virtualenv, oder sys.executable als Fallback."""
+    for name in VENV_DIRS:
+        cand = os.path.join(root, name, "bin", "python")
+        if os.path.exists(cand):
+            return cand
+    return sys.executable
+
+
 def terminal_too_small(h, w):
     """True, wenn das Terminal kleiner als die Mindest-Renderfläche ist."""
     return h < MIN_LINES or w < MIN_COLS
@@ -2750,7 +2769,7 @@ def run_ui(stdscr, store):
         weil 0RAMMachine die Modelle nicht ab Boot tragen darf. Was schon läuft
         (systemd am PC) bleibt unangetastet."""
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        py = os.path.join(root, "venv", "bin", "python")
+        py = venv_python(root)
         script = os.path.join(root, "scripts", "open_tutor_room.py")
         if not os.environ.get("DISPLAY"):
             with TUTOR_LOCK: TUTOR["msg"] = "kein DISPLAY (X11?)"
@@ -2767,7 +2786,7 @@ def run_ui(stdscr, store):
             room_log = os.environ.get("ZENTRALE_ROOM_WINDOW_LOG") or "/tmp/zentrale-tutor-room.log"
             errf = open(room_log, "a", encoding="utf-8")
             TUTOR["proc"] = subprocess.Popen(
-                [py if os.path.exists(py) else sys.executable, script, "--url", BASE_URL],
+                [py, script, "--url", BASE_URL],
                 stdout=subprocess.DEVNULL, stderr=errf, start_new_session=True)
             errf.close()
             with TUTOR_LOCK: TUTOR["msg"] = "zimmer offen (eigenes fenster)"
@@ -2976,7 +2995,7 @@ def run_ui(stdscr, store):
         mit, damit das Fenster genau dort aufgeht, wo die TUI gerade steht.
         Detached gestartet (eigener Prozess), die TUI läuft normal weiter."""
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        py = os.path.join(root, "venv", "bin", "python")
+        py = venv_python(root)
         script = os.path.join(root, "scripts", "map_window.py")
         if not os.environ.get("DISPLAY"):
             M["msg"] = "kein DISPLAY (X11?)"
@@ -3000,7 +3019,7 @@ def run_ui(stdscr, store):
             map_log = os.environ.get("ZENTRALE_MAP_WINDOW_LOG") or "/tmp/zentrale-map-window.log"
             errf = open(map_log, "a", encoding="utf-8")
             M["proc"] = subprocess.Popen(
-                [py if os.path.exists(py) else sys.executable, script,
+                [py, script,
                  "--cx", "%.5f" % M["cx"], "--cy", "%.5f" % M["cy"],
                  "--zoom", "%.2f" % M["zoom"]],
                 stdout=subprocess.DEVNULL, stderr=errf,
