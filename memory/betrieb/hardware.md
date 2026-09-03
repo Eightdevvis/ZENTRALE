@@ -52,3 +52,36 @@ eine bereits laufende Session aus, kein Auto-Start.)
 
 Solange das nicht steht, bleibt die Tastatur-Simulation der
 produktive Trigger-Weg (siehe `memory/system/tastatur.md`).
+
+## Audio am Pi (gemessen 2026-09-03)
+
+Der Pi ist der Ausgabe- und Aufnahme-Knoten für das Persona-Zimmer: er
+**spielt ab und nimmt auf**, synthetisiert und erkennt aber nichts selbst.
+`tutor/room.py` schickt Text an `<pc>/api/speak` und bekommt WAV-Bytes zurück,
+und schickt Mikro-WAVs an `<pc>/api/transcribe` — Whisper und TTS laufen auf
+dem PC.
+
+Was der Pi an Karten sieht (`/proc/asound/cards`):
+
+| Karte | Gerät | Richtung |
+|---|---|---|
+| 0 | `bcm2835 HDMI 1` (onboard) | Ausgabe |
+| 1 | `bcm2835 Headphones` (onboard, Klinke) | Ausgabe |
+| 2 | `UACDemoV1.0` (Jieli, USB-Lautsprecher) | Ausgabe |
+| 3 | `USB PnP Sound Device` (C-Media, USB-Mikro) | **Aufnahme** |
+
+**Ein Pi 3 hat keinen eigenen Audio-Eingang.** HDMI und Klinke sind beides
+Ausgänge; ohne USB-Gerät ist `arecord -l` leer und das „Immer-Zuhören" im
+Zimmer kann gar nicht anlaufen. Das USB-Mikro ist also Pflicht-Hardware, keine
+Einstellung.
+
+**Kein Sound-Server nötig:** Auf dem Pi läuft weder PulseAudio noch PipeWire.
+Das ist unkritisch, weil Wiedergabe und Aufnahme auf **verschiedenen Karten**
+liegen (USB-Lautsprecher bzw. HDMI zum Fernseher = Ausgabe, USB-Mikro =
+Aufnahme). Die klassische ALSA-Falle „device busy" trifft nur zu, wenn zwei
+Prozesse dasselbe Gerät exklusiv wollen. Ab Werk zeigt der Pi allerdings auf
+die Klinke — die gewünschte Ausgabekarte muss gesetzt werden.
+
+Das Zimmer importiert `sounddevice` und `webrtcvad` erst **im Mikro-Thread**.
+Fehlen sie, läuft das Fenster normal weiter und hört nur nicht zu — der Drill
+vor der Freischaltung braucht ohnehin nur Ausgabe und Tastatur.

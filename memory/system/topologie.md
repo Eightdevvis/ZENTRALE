@@ -23,8 +23,13 @@ gedacht – das war für die AI-Last zu schwer.
            ▼
 ┌──────────────────────────────────────────────────────────────┐
 │  Pi  (zentrale, eth0 = 192.168.50.10, fest)                  │
+│  Pi 3 Model B, armv7l (32-bit!), 921 MB RAM, 29 GB SD        │
 │                                                              │
-│   Firefox-Kiosk → http://192.168.50.1:5000                   │
+│   Kiosk (ZENTRALE_KIOSK_MODE, default 'tui')                 │
+│      xterm + tui/zentrale_tui.py → 192.168.50.1:5000         │
+│      'browser' = alter Firefox-Kiosk, nur noch Option        │
+│   tutor/room.py (Persona-Zimmer, aus der TUI per 'u')        │
+│      HDMI-Bild + Ton, USB-Mikro; rechnet NICHTS selbst       │
 │   scripts/pi_sensor_bridge.py                                │
 │      liest GPIO/Tastatur                                     │
 │      pusht Trigger via HTTP an 192.168.50.1                  │
@@ -49,7 +54,7 @@ gedacht – das war für die AI-Last zu schwer.
 
 ## Datenflüsse
 
-**PC → Pi** läuft ausschließlich HTTP-Pull: Der Firefox-Kiosk holt
+**PC → Pi** läuft ausschließlich HTTP-Pull: Der Kiosk holt
 `/api/state` (alle 1 s), `/api/chat`, `/api/tutor/...` usw. vom
 PC-Flask. Keine Push-Verbindung in die Richtung – wenn das Dashboard
 neue Daten will, fragt es einfach erneut. SSE wird für Streaming-Calls
@@ -79,6 +84,35 @@ ab: die Fronten sind nur HTTP-Clients, die gezeigten „pc"-Werte stammen vom
 ihr Telemetrie-Kürzel ab (`host_label`: pop-os→`PC`, 0RAMMachine→`LAP`,
 zentrale→`PI`) — vorher stand dort hart `LAP`, was auf dem Pi-Kiosk (zeigt
 die PC-Werte) falsch war.
+
+## Wie der Pi seinen Code kriegt — zwei Wege, zwei Umfaenge
+
+Wichtig, weil leicht zu verwechseln: **die Positivliste gilt nur fuer den
+rsync-Weg.**
+
+| Weg | Was ankommt | Wer stoesst an |
+|---|---|---|
+| `scripts/pi_autopull.sh` (Cron, alle 5 min) | `git pull --ff-only` → **der ganze getrackte Baum**, ~34 MB (davon 29 MB `core/map/`) | ein Bump von `deploy/RELEASE` |
+| `scripts/deploy_pi.sh` (Default-Modus) | nur `deploy/aussenposten.txt`, 15 Dateien, 660 KB | ein Mensch vom PC/Laptop aus |
+
+Der Pi an der Wand ist heute ein **Git-Clone** unter `/opt/zentrale` (deshalb
+funktioniert der Autopull dort ueberhaupt). Ein RELEASE-Bump holt also den
+kompletten Quellbaum, nicht das Sparpaket. Das ist bewusst in Ordnung:
+`data/` ist gitignored (die 1,0 GB TTS-Modelle kommen per git nie mit), und
+34 MB Quelltext auf einer 29-GB-Karte sind kein Problem. Dafuer ist der Knoten
+selbst-aktualisierend, ohne dass jemand etwas hinschieben muss.
+
+Was die Positivliste trotzdem loest:
+- Sie verhindert den **rsync-Vollspiegel** (dort haetten `data/tts_model/` mit
+  1,0 GB und `core/map/` auf der SD-Karte gelegen) — der Weg, den ein NEUER
+  Knoten geht.
+- Ihre kurze Requirements-Liste greift **auch** auf dem Git-Weg, ueber die
+  Marker-Datei `.aussenposten`: der Autopull installiert dann nicht mehr die
+  grosse `requirements.txt`.
+
+Wer den Git-Weg ebenfalls auf die Liste eindampfen wollte, braeuchte
+`git sparse-checkout`. Fuer 29 MB Kartendaten lohnt das nicht — der Aufwand
+stuende in keinem Verhaeltnis.
 
 ## Netzwerk
 
