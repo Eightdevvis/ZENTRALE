@@ -1,0 +1,53 @@
+# Was ein AUSSENPOSTEN bekommt — die Positivliste.
+#
+# Ein Aussenposten (heute: der Pi an der Wand) hostet KEIN Backend. Er ist
+# Anzeige, Ton und Sensorik; gerechnet wird auf dem PC. Alles hier drin ist
+# entweder ein reiner HTTP-Client gegen das PC-Backend oder Einrichtungs-Kram.
+#
+# Deny-by-default: was nicht hier steht, geht nicht auf den Knoten. Das ist
+# Absicht — beim alten Vollspiegel waeren u.a. data/tts_model/ (1,0 GB
+# Sprachmodelle) und core/map/ (37 MB) auf der SD-Karte gelandet, fuer Code,
+# der auf einem Aussenposten nie laeuft.
+#
+# Format: eine Zeile = ein Pfad relativ zur Projektwurzel (Verzeichnisse
+# werden rekursiv uebertragen). '#' und Leerzeilen werden ignoriert.
+# Gelesen von scripts/deploy_pi.sh.
+
+# ── Die TUI: das Bild an der Wand ────────────────────────────────────────
+# stdlib-only, laeuft unter dem System-Python, spricht per ZENTRALE_URL das
+# PC-Backend an. Braucht keinen venv.
+tui/zentrale_tui.py
+tui/boot_loader.py
+tui/select_kassette.py
+
+# ── Sensorik: der einzige Push-Weg vom Knoten zum PC ─────────────────────
+# Liest GPIO/Tastatur, POSTet /api/sensor/<name> und alle ~30 s Telemetrie.
+# Braucht 'keyboard' + 'requests' und core/host_metrics.py (dependency-frei).
+scripts/pi_sensor_bridge.py
+core/host_metrics.py
+
+# ── Persona-Zimmer: Lucia an der Wand ────────────────────────────────────
+# room.py importiert NICHTS aus dem Projekt (nur stdlib + pygame) und redet
+# ueber /api/tutor/*, /api/speak, /api/transcribe mit dem PC. Der Launcher
+# faehrt hier bewusst keine Audio-Dienste hoch — die gehoeren zum Backend.
+tutor/room.py
+scripts/open_tutor_room.py
+
+# ── Einrichtung auf dem Knoten ───────────────────────────────────────────
+scripts/install_xfce_autostart.sh
+scripts/install_pi_services.sh
+scripts/install_pi_sudoers.sh
+scripts/pi_autopull.sh
+deploy/requirements-aussenposten.txt
+deploy/aussenposten.txt
+deploy/RELEASE
+deploy/zentrale-autopull.cron
+
+# ── NICHT dabei (bewusst) ────────────────────────────────────────────────
+# core/ (Backend), ui/ (Flask+Dashboard), services/ (Whisper/TTS), data/,
+# memory/, tests/, tools/, tutor/ ausser room.py.
+#
+# Das Karten-Fenster (scripts/map_window.py) fehlt ebenfalls: es braucht
+# core/map/ (37 MB), core/glossary.py und numpy. Wer die Karte an der Wand
+# will, nimmt diese vier Zeilen dazu — dann waechst der Knoten aber um den
+# Faktor 20.

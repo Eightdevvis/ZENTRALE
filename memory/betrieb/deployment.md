@@ -153,21 +153,55 @@ sudo apt update
 sudo apt install -y python3 python3-venv python3-pip rsync firefox-esr
 ```
 
-## 2) Deployen
+## 2) Deployen — zwei Sorten Knoten
 
-`scripts/deploy_pi.sh` macht in 6 Schritten:
+`scripts/deploy_pi.sh` kennt seit 2026-09-03 **zwei Modi**, weil es zwei
+Sorten Knoten gibt. Der Default ist der Aussenposten.
 
-1. `rsync -az --delete` (excludes: `__pycache__`, `.git`, `.venv`)
-2. `python3 -m venv .venv` auf dem Pi (falls noch nicht da)
-3. `pip install --upgrade pip`
-4. `pip install -r requirements.txt`
-5. `zentrale.service` mit `User=<deine-pi-user>` patchen + nach
-   `/etc/systemd/system/` kopieren, daemon-reload + enable
-6. `systemctl restart zentrale.service` + Status anzeigen
+### Aussenposten (Default) — Anzeige, Ton, Sensorik, KEIN Backend
+
+Der Pi an der Wand hostet seit der PC↔Pi-Migration kein Backend mehr. Er
+bekommt deshalb **nur die Positivliste `deploy/aussenposten.txt`**
+(deny-by-default) und die kurze `deploy/requirements-aussenposten.txt`;
+systemd-Units werden **uebersprungen**.
+
+Was drin ist: die TUI (`tui/`, stdlib-only), die Sensor-Bridge samt
+`core/host_metrics.py`, das Persona-Zimmer (`tutor/room.py` +
+`scripts/open_tutor_room.py`) und die Einrichtungs-Skripte. Gemessen sind
+das **15 Dateien, ~660 KB**.
+
+Warum die Liste existiert: der alte Vollspiegel schob **alles** rueber —
+darunter `data/tts_model/` (1,0 GB Sprachmodelle) und `core/map/` (37 MB) —
+und installierte faster-whisper/sherpa-onnx/piper-tts in den Pi-venv. Auf
+einem Pi 3 (armv7l, 1 GB RAM) ist das ein langer Build aus dem Quellcode fuer
+Code, der dort nie ausgefuehrt wird.
+
+`room.py` und die TUI importieren **nichts** aus dem Projekt (nur stdlib,
+plus pygame beim Zimmer) — sie sind reine HTTP-Clients gegen das PC-Backend.
+Genau darum ist die Liste so kurz und bleibt stabil.
 
 ```bash
-chmod +x scripts/deploy_pi.sh
-./scripts/deploy_pi.sh pi@192.168.1.xx /opt/zentrale
+./scripts/deploy_pi.sh sasha@192.168.50.10 /opt/zentrale
+```
+
+Der Modus legt auf dem Knoten die Marker-Datei **`.aussenposten`** an. Die
+liest `pi_autopull.sh` (siehe Abschnitt 6) und nimmt dann ebenfalls die kurze
+Requirements-Liste — sonst wuerde ein Backend-Paket per Cron einen
+minutenlangen Build auf dem Pi ausloesen.
+
+**Kein `--delete` im Aussenposten-Modus:** bei einer Positivliste besitzen wir
+den Zielbaum nicht; `--delete` wuerde dort alles ausserhalb der Liste
+wegraeumen (u.a. `.venv` und lokale Configs).
+
+### `--voll` — vollwertiger Backend-Host
+
+Spiegelt das ganze Projekt (`rsync -az --delete`, excludes `__pycache__`,
+`.git`, `.venv`), installiert die komplette `requirements.txt` und
+installiert/enabled/restartet `zentrale.service`, `whisper.service`,
+`tts.service`. Das war frueher der einzige Modus.
+
+```bash
+./scripts/deploy_pi.sh --voll sasha@192.168.50.10 /opt/zentrale
 ```
 
 **Achtung – venv-Inkonsistenz:** lokal heißt der Virtualenv-Ordner
@@ -375,6 +409,14 @@ lokal auf dem Pi. Nur dann wird gepullt + Service neu gestartet.
 | `deploy/RELEASE` | Trigger-Datei. Nur wenn dieser Inhalt sich ändert, deployt der Pi. |
 | `scripts/pi_autopull.sh` | Cron-Worker auf dem Pi: fetch → diff → ggf. pull + pip + restart. |
 | `deploy/zentrale-autopull.cron` | Crontab-Snippet, alle 5 min. |
+| `.aussenposten` (auf dem Knoten, nicht im Repo) | Marker von `deploy_pi.sh`. Liegt er, nimmt der Autopull `deploy/requirements-aussenposten.txt` statt `requirements.txt`. |
+
+**Der pip-Schritt haengt an der richtigen Datei:** Der Autopull prueft, ob
+sich *die fuer diesen Knoten gueltige* Requirements-Liste geaendert hat — auf
+einem Aussenposten also die kurze. Ohne diesen Schnitt haette jede Aenderung
+an der grossen `requirements.txt` (Backend-Pakete wie faster-whisper oder
+sherpa-onnx) per Cron einen minutenlangen Quellcode-Build auf dem 32-bit-Pi
+angeworfen.
 
 ### Einmal-Setup auf dem Pi
 

@@ -153,10 +153,21 @@ log "RELEASE-Bump erkannt: '$CURRENT_RELEASE' -> '$REMOTE_RELEASE'. Deploy start
 # (z.B. die low-prio whisper/tts-Units) wuerden nie wirklich starten.
 #
 # `git diff --quiet A B -- pfad` -> Exit 0 wenn keine Aenderung, sonst 1.
+# Welche Requirements-Datei gilt auf DIESEM Knoten? Ein Aussenposten (Marker
+# .aussenposten, gesetzt von deploy_pi.sh) hostet kein Backend und bekommt die
+# kurze Liste. Wuerde er die grosse nehmen, zoege ein Backend-only-Paket
+# (faster-whisper, sherpa-onnx, piper-tts) per Cron einen minutenlangen
+# Quellcode-Build auf den 32-bit-Pi — fuer Code, der dort nie laeuft.
+if [[ -f ".aussenposten" ]]; then
+  REQ_FILE="deploy/requirements-aussenposten.txt"
+else
+  REQ_FILE="requirements.txt"
+fi
+
 NEEDS_PIP=0
-if ! git diff --quiet "HEAD" "origin/$BRANCH" -- requirements.txt; then
+if ! git diff --quiet "HEAD" "origin/$BRANCH" -- "$REQ_FILE"; then
   NEEDS_PIP=1
-  log "requirements.txt geaendert -> pip install noetig"
+  log "$REQ_FILE geaendert -> pip install noetig"
 fi
 
 NEEDS_UNIT_RELOAD=0
@@ -182,8 +193,8 @@ fi
 # -----------------------------------------------------------------------------
 if [[ $NEEDS_PIP -eq 1 ]]; then
   if [[ -x .venv/bin/pip ]]; then
-    log "Installiere Python-Dependencies (.venv/bin/pip install -r requirements.txt)..."
-    if ! .venv/bin/pip install -r requirements.txt >>"$LOG_FILE" 2>&1; then
+    log "Installiere Python-Dependencies (.venv/bin/pip install -r $REQ_FILE)..."
+    if ! .venv/bin/pip install -r "$REQ_FILE" >>"$LOG_FILE" 2>&1; then
       log "ERROR: pip install fehlgeschlagen. Service wird trotzdem NICHT neu gestartet."
       exit 1
     fi

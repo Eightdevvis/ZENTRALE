@@ -1,0 +1,29 @@
+# Python-Abhaengigkeiten fuer einen AUSSENPOSTEN (Pi an der Wand).
+#
+# Bewusst KURZ. Die grosse requirements.txt gehoert dem Backend-Host: dort
+# stehen faster-whisper, sherpa-onnx, piper-tts, cryptography, fsrs, openai —
+# alles Dinge, die auf einem Aussenposten nie ausgefuehrt werden. Auf einem
+# Pi 3 (armv7l, 1 GB RAM) waeren sie nicht nur nutzlos, sondern ein langer,
+# schmerzhafter Build aus dem Quellcode.
+#
+# Installieren: .venv/bin/pip install -r deploy/requirements-aussenposten.txt
+# (scripts/deploy_pi.sh nimmt im Aussenposten-Modus automatisch diese Datei,
+# scripts/pi_autopull.sh ebenfalls, wenn die Marker-Datei .aussenposten liegt)
+
+# Sensor-Bridge: HTTP-Push an den PC + Tastatur-Simulation fuer Sensor-Tests.
+requests
+keyboard
+
+# Persona-Zimmer (tutor/room.py): das Fenster selbst.
+pygame
+
+# Persona-Zimmer, Mikro-Zweig ("Immer-Zuhoeren"). Beide werden erst IN dem
+# Mikro-Thread importiert — fehlen sie, laeuft das Zimmer normal weiter und
+# hoert nur nicht zu. Ein Pi 3 hat KEINEN Audio-Eingang (arecord -l ist leer),
+# also braucht es dafuer zusaetzlich ein USB-Mikro.
+sounddevice
+webrtcvad-wheels
+
+# NICHT hier: numpy + core/map/ (nur fuers Karten-Fenster), faster-whisper,
+# sherpa-onnx, piper-tts (Backend-Audio), flask (kein Backend), cryptography,
+# secretstorage, jeepney (Mail), openai, fsrs (Tutor-Backend), python-dateutil.
