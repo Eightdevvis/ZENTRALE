@@ -47,6 +47,10 @@ deploy/aussenposten-system.txt
 deploy/aussenposten.txt
 
 # ── Einrichtung auf dem Knoten ───────────────────────────────────────────
+# Bildschirm-Modus: X startet gern in einem Notmodus (am Pi 1024x768 auf einem
+# Ultrawide -> alles gestreckt). Das Skript waehlt den Modus, der zur
+# gemeldeten Panel-Groesse passt.
+scripts/aussenposten_bildschirm.py
 scripts/install_xfce_autostart.sh
 scripts/install_pi_sudoers.sh
 

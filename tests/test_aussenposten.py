@@ -314,3 +314,48 @@ def test_systemliste_nennt_die_bekannten_bibliotheken():
     inhalt = open(pfad, encoding="utf-8").read()
     assert "libsdl2-2.0-0" in inhalt             # pygame
     assert "libportaudio2" in inhalt             # sounddevice
+
+
+# ── Neustart der Front ───────────────────────────────────────────────────
+
+def test_prozesssuche_findet_und_verschont_sich_selbst():
+    """_prozesse() darf den Updater nicht sich selbst melden — sonst schoesse
+    ein Update den eigenen Lauf ab."""
+    import subprocess as sp
+    schlaefer = sp.Popen([sys.executable, "-c",
+                          "import time; time.sleep(30)  # tui/zentrale_tui.py"])
+    try:
+        gefunden = {pid for pid, _ in updater._prozesse("tui/zentrale_tui.py")}
+        assert schlaefer.pid in gefunden
+        assert not any("aussenposten_update" in z
+                       for _, z in updater._prozesse("tui/zentrale_tui.py"))
+    finally:
+        schlaefer.kill(); schlaefer.wait()
+
+
+def test_front_neustart_beendet_die_tui(tmp_path):
+    """Die TUI wird beendet (der Kiosk-Autostart holt sie zurueck); ein Update
+    ohne das laesst den Wand-Knoten mit dem alten Stand stehen."""
+    import subprocess as sp
+    import time as _t
+    schlaefer = sp.Popen([sys.executable, "-c",
+                          "import time; time.sleep(30)  # tui/zentrale_tui.py"])
+    log = tmp_path / "log.txt"
+    try:
+        updater.front_neustarten(str(log))
+        for _ in range(50):
+            if schlaefer.poll() is not None:
+                break
+            _t.sleep(0.1)
+        assert schlaefer.poll() is not None, "TUI lief weiter"
+        assert "beendet" in log.read_text()
+    finally:
+        if schlaefer.poll() is None:
+            schlaefer.kill()
+        schlaefer.wait()
+
+
+def test_kein_neustart_wenn_keine_tui_laeuft(tmp_path):
+    log = tmp_path / "log.txt"
+    updater.front_neustarten(str(log))
+    assert "keine TUI aktiv" in log.read_text()

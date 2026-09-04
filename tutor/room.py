@@ -188,10 +188,54 @@ MIC_MINSPEECH_MS  = 300     # kürzere „Äußerungen" verwerfen (Blips/Husten)
 MIC_MAX_MS        = 12000   # harte Obergrenze pro Äußerung
 
 
+# Schrift-Kandidaten in Wunsch-Reihenfolge. CJK zuerst (Ling Ling schreibt
+# Mandarin), Latein danach — für Lucía reicht DejaVu.
+_FONT_KANDIDATEN = ("notosanscjksc", "notosansmonocjksc", "droidsansfallback",
+                    "dejavusans", "liberationsans", "freesans")
+_font_wahl = None       # einmal ermittelt, dann für alle Größen wiederverwendet
+
+
+def _rendert_wirklich(f):
+    """Malt diese Schrift Buchstaben — oder nur leere Kästchen?
+
+    Am Pi war genau das der Fall: die Wunschliste löste auf
+    DroidSansFallbackFull.ttf auf, und diese Datei lieferte für JEDES Zeichen
+    dasselbe leere Kästchen. Das Tückische daran ist, dass sich die Schrift
+    nicht als kaputt meldet — `metrics()` behauptet, alle Glyphen seien da,
+    und `size()` gibt sogar plausible, unterschiedliche Breiten zurück. Erst
+    das GERENDERTE Bild verrät es.
+
+    Deshalb die Probe am Bild: zwei gleich lange Strings, die in jeder echten
+    Schrift verschieden breit sind. Kommt dasselbe heraus, ist jedes Zeichen
+    gleich breit — also ein Kästchen.
+    """
+    try:
+        schmal = f.render("iiii", True, (255, 255, 255)).get_width()
+        breit = f.render("MMMM", True, (255, 255, 255)).get_width()
+    except Exception:
+        return False
+    return breit > schmal * 1.2
+
+
 def _font(size, bold=False):
-    """CJK-fähige Schrift (Noto Sans CJK), Fallback auf Default. Sasha-Text ist
-    Chinesisch — ohne CJK-Font kämen Kästchen."""
-    f = pygame.font.SysFont("notosanscjksc,notosansmonocjksc,droidsansfallback,dejavusans", size, bold=bold)
+    """Schrift, die auf DIESER Maschine auch wirklich lesbar rendert.
+
+    Die Kandidaten werden der Reihe nach probiert und die erste genommen, die
+    die Kästchen-Probe besteht. Das Ergebnis wird gemerkt — geprüft wird also
+    einmal pro Prozess, nicht pro Textzeile.
+    """
+    global _font_wahl
+    if _font_wahl is None:
+        for name in _FONT_KANDIDATEN:
+            probe = pygame.font.SysFont(name, 24)
+            if probe and _rendert_wirklich(probe):
+                _font_wahl = name
+                break
+        else:
+            _font_wahl = ""      # nichts brauchbar -> pygame-Default
+    if not _font_wahl:
+        return pygame.font.Font(None, size)
+    f = pygame.font.SysFont(_font_wahl, size, bold=bold)
     return f or pygame.font.Font(None, size)
 
 
@@ -1141,6 +1185,11 @@ def main():
     ap.add_argument('--url', default=os.environ.get('ZENTRALE_URL', 'http://localhost:5000'))
     ap.add_argument('--w', type=int, default=920)
     ap.add_argument('--h', type=int, default=600)
+    # Vollbild ist der Normalfall: das Zimmer haengt an der Wand, dort gibt es
+    # keine Fensterleiste und niemanden, der ein Fenster zurechtzieht. Am
+    # Schreibtisch holt --fenster das alte Verhalten zurueck.
+    ap.add_argument('--fenster', action='store_true',
+                    help='im Fenster statt im Vollbild starten')
     # Stimme: Sprecher-ID (vits-zh-aishell3 hat 174 — Wert durchprobieren) + Tempo.
     ap.add_argument('--speaker', type=int, default=int(os.environ.get('TUTOR_TTS_SPEAKER', '66')))
     ap.add_argument('--speed', type=float, default=float(os.environ.get('TUTOR_TTS_SPEED', '1.0')))
@@ -1150,7 +1199,35 @@ def main():
 
     pygame.init()
     pygame.display.set_caption('ZENTRALE — Persona')
-    screen = pygame.display.set_mode((a.w, a.h), pygame.RESIZABLE)
+
+    # Wie gross ist der Bildschirm wirklich? Nicht raten: der Pi an der Wand
+    # haengt an einem anderen Geraet als der Laptop, und ein festes 920x600
+    # sieht dort verloren aus. get_desktop_sizes() gibt die echte Groesse des
+    # Desktops; wo es die nicht gibt (aeltere pygame), tut es display.Info().
+    def _bildschirm():
+        try:
+            groessen = pygame.display.get_desktop_sizes()
+            if groessen:
+                return groessen[0]
+        except Exception:
+            pass
+        try:
+            i = pygame.display.Info()
+            if i.current_w > 0 and i.current_h > 0:
+                return i.current_w, i.current_h
+        except Exception:
+            pass
+        return a.w, a.h
+
+    fenster = a.fenster or os.environ.get('TUTOR_ROOM_FENSTER') == '1'
+    if fenster:
+        screen = pygame.display.set_mode((a.w, a.h), pygame.RESIZABLE)
+    else:
+        bw, bh = _bildschirm()
+        # Vollbild in der Groesse des Desktops: kein Hochskalieren, keine
+        # verzerrten Proportionen — das Zimmer wird einfach fuer die Flaeche
+        # gezeichnet, die da ist.
+        screen = pygame.display.set_mode((bw, bh), pygame.FULLSCREEN)
     clock = pygame.time.Clock()
 
     def set_ime_rect():

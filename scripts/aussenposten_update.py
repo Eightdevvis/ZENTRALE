@@ -250,6 +250,56 @@ def _nicht_ladbar(py, req_pfad):
     return kaputt
 
 
+def _prozesse(muster):
+    """PIDs, deren Kommandozeile `muster` enthaelt. Ohne psutil, ueber /proc."""
+    treffer = []
+    for eintrag in os.listdir("/proc"):
+        if not eintrag.isdigit():
+            continue
+        try:
+            with open("/proc/%s/cmdline" % eintrag, "rb") as f:
+                zeile = f.read().replace(b"\0", b" ").decode("utf-8", "replace")
+        except OSError:
+            continue
+        if muster in zeile and "aussenposten_update" not in zeile:
+            treffer.append((int(eintrag), zeile.strip()))
+    return treffer
+
+
+def front_neustarten(logdatei):
+    """Die laufende TUI beenden, damit sie mit dem neuen Code wiederkommt.
+
+    Ohne das bringt ein Update auf einem Wand-Knoten gar nichts: die alte
+    Sitzung laeuft weiter und zeigt weiter den alten Stand, bis jemand von
+    Hand neu startet. Genau darueber ist Sasha gestolpert.
+
+    Neu gestartet werden MUSS die TUI nicht von uns: der Kiosk-Autostart
+    (scripts/install_xfce_autostart.sh) laeuft in einer `while true`-Schleife,
+    die das xterm zwei Sekunden nach dem Ende neu aufmacht. Wir beenden also
+    nur — die Schleife holt den frischen Code von selbst.
+
+    Das Persona-ZIMMER fassen wir bewusst NICHT an: da koennte gerade jemand
+    mit Lucía reden, und ein Fenster, das mitten im Satz zuklappt, ist
+    schlimmer als eines, das eine Version hinterherhinkt. Es startet ohnehin
+    bei jedem Oeffnen neu.
+    """
+    import signal
+    laeuft = _prozesse("tui/zentrale_tui.py")
+    if not laeuft:
+        log("keine TUI aktiv — nichts neu zu starten", logdatei)
+        return
+    for pid, zeile in laeuft:
+        try:
+            os.kill(pid, signal.SIGTERM)
+            log("TUI (pid %d) beendet — der Kiosk-Autostart holt sie mit dem "
+                "neuen Stand zurueck" % pid, logdatei)
+        except OSError as exc:
+            log("TUI (pid %d) liess sich nicht beenden: %s" % (pid, exc), logdatei)
+    if _prozesse("tutor/room.py"):
+        log("Persona-Zimmer laeuft und bleibt offen (koennte ein Gespraech "
+            "sein) — es startet beim naechsten Oeffnen mit neuem Code", logdatei)
+
+
 def abhaengigkeiten_angleichen(ziel, logdatei, req_vorher):
     """Dafuer sorgen, dass die Pakete des Knotens zur Liste passen.
 
@@ -295,6 +345,10 @@ def main():
         "~/.aussenposten_update.log"))
     ap.add_argument("--pruefen", action="store_true",
                     help="nur vergleichen, nichts installieren")
+    ap.add_argument("--kein-neustart", dest="kein_neustart",
+                    action="store_true",
+                    help="die laufende TUI nach dem Update NICHT beenden "
+                         "(sie zeigt dann weiter den alten Stand)")
     ap.add_argument("--neu", action="store_true",
                     help="neu installieren, auch wenn die Version stimmt "
                          "(repariert lokal veraenderte Dateien — der normale "
@@ -363,6 +417,8 @@ def main():
     log("installiert: %d Dateien" % len(dateien), logdatei)
 
     abhaengigkeiten_angleichen(ziel, logdatei, req_vorher)
+    if not a.kein_neustart:
+        front_neustarten(logdatei)
     return 0
 
 
