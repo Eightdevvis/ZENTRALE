@@ -514,6 +514,56 @@ tutor/room.py [--url … --speaker N --speed X --mute]`.
   erst nach `CHILL_RECHECK_S` (15 min) ein neuer Versuch. Eingabe von Sasha setzt
   die Stille-Uhr zurück.
 
+## Spielstände: mehrere Lernstände nebeneinander
+
+Bis 2026-09-04 hatte der Tutor **einen** Lernstand (`tutor/data/<lang>/`). Wer
+noch einmal von vorn anfangen wollte, musste Dateien löschen und war den alten
+Fortschritt los. Jetzt liegt dazwischen der **Stand**:
+
+```
+tutor/data/staende/<id>/stand.json    Name, angelegt, zuletzt gespielt
+tutor/data/staende/<id>/<lang>/…      vocab, fsrs, game, persona_mem, …
+tutor/data/aktiver_stand              eine Zeile: welcher gerade läuft
+```
+
+**Global, nicht pro Sprache.** Ein Spielstand ist *ein Durchgang* — wer neu
+anfängt, fängt bei allen Sprachen neu an. Die Sprache wählt man weiterhin
+getrennt (`/lang`, Alt+L): sie ist eine Eigenschaft des Spielens, nicht des
+Spielstands.
+
+Der Zeiger steht bewusst **nicht** in `tutor_config.json`. Die hält
+Sprache/Provider/Modell, also Einstellungen — welchen Spielstand man spielt,
+ist keine Einstellung.
+
+**Ein Griff für alle Datenpfade:** `tutor/staende.py`. `memory`, `srs` und
+`tools` haben ihren Ordner früher je selbst zusammengesetzt; läge einer davon
+daneben, mischten sich zwei Stände still. Alle drei fragen jetzt
+`staende.pfad(root, lang)`; ein Test prüft, dass sie beim Wechsel gemeinsam
+mitwandern.
+
+**Umzug statt Verlust:** Beim ersten Start nach dem Umbau wandert ein
+vorhandener alter Lernstand in einen Stand namens »Erster Anlauf« — je Knoten
+einmalig und idempotent. Gemeinsame Ordner (`vocab_images`, `persona_music`)
+gehören keinem Stand und bleiben liegen.
+
+**Gewählt wird im Zimmer**, auf dem Willkommens-Schirm unter »Hola, ich bin
+Lucía«: die vorhandenen Stände, darunter »Neuer Spielstand«. ↑↓ und Enter,
+vorgewählt ist der zuletzt gespielte — Weiterspielen ist ein Tastendruck. Die
+Liste wird im Hintergrund geholt, damit das Fenster sofort da ist.
+
+Beim Wechsel wird die laufende Persona-Sitzung beendet: ihr Verlauf liegt im
+Speicher, nicht auf der Platte — sonst redete Lucía im neuen Stand mit den
+Erinnerungen des alten weiter.
+
+**API** (kein `available()`-Gate, das sind Dateien auf der Platte — den Stand
+soll man auch bei gedrosselter Cloud wechseln können):
+
+| Endpoint | Methode | Zweck |
+|---|---|---|
+| `/api/tutor/staende` | GET | alle Stände + welcher aktiv ist |
+| `/api/tutor/staende` | POST | `{name}` → neu anlegen und aktivieren |
+| `/api/tutor/staende/waehlen` | POST | `{id}` → umschalten |
+
 ## Persona-Memory: der Mitbewohner erinnert sich an dich
 
 Jede Persona hat ein **eigenes Gedächtnis**, getrennt von Sashas privatem

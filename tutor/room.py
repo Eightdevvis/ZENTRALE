@@ -1128,21 +1128,29 @@ def _draw_stand_wahl(screen, w, fonts, asv, top_y, ctr):
     aktiv = asv.get('stand_aktiv')
 
     ctr(fonts['hud'].render('SPIELSTAND', True, ASSESS_ACC), top_y)
-    y = top_y + 34
-    bw = min(560, w - 160)
+
+    # Zeilenhoehe aus den Schriften rechnen, nicht raten: Titel + Unterzeile +
+    # Luft. Mit festen Pixelwerten lag die Unterzeile auf der Grundlinie des
+    # Titels, sobald die Schrift etwas groesser ausfiel als beim Entwurf.
+    h_titel = fonts['big'].get_height()
+    h_unter = fonts['hud'].get_height()
+    innen = 10
+    hoehe = h_titel + h_unter + 2 * innen + 4
+    abstand = 10
+
+    y = top_y + fonts['hud'].get_height() + 14
+    bw = min(620, w - 160)
     bx = w // 2 - bw // 2
 
     for i, z in enumerate(zeilen):
-        gewaehlt = (i == idx)
-        hoehe = 52
-        if gewaehlt:
-            pygame.draw.rect(screen, ASSESS_BAR_BG, (bx, y - 6, bw, hoehe),
+        if i == idx:
+            pygame.draw.rect(screen, ASSESS_BAR_BG, (bx, y, bw, hoehe),
                              border_radius=8)
-            pygame.draw.rect(screen, ASSESS_ACC, (bx, y - 6, 4, hoehe),
+            pygame.draw.rect(screen, ASSESS_ACC, (bx, y, 4, hoehe),
                              border_radius=2)
         if z['art'] == 'neu':
             titel = 'Neuer Spielstand'
-            unter = 'von vorn anfangen — der alte Stand bleibt erhalten'
+            unter = 'von vorn anfangen — die anderen Stände bleiben erhalten'
             farbe = ASSESS_GOLD
         else:
             st = z['stand']
@@ -1151,11 +1159,12 @@ def _draw_stand_wahl(screen, w, fonts, asv, top_y, ctr):
                 titel += '   (zuletzt gespielt)'
             unter = _stand_unterzeile(st)
             farbe = ASSESS_INK
-        screen.blit(fonts['big'].render(titel, True, farbe), (bx + 18, y - 2))
-        screen.blit(fonts['hud'].render(unter, True, HUD_DIM), (bx + 18, y + 26))
-        y += hoehe + 8
+        screen.blit(fonts['big'].render(titel, True, farbe), (bx + 20, y + innen))
+        screen.blit(fonts['hud'].render(unter, True, HUD_DIM),
+                    (bx + 20, y + innen + h_titel + 4))
+        y += hoehe + abstand
 
-    _hint_row(screen, fonts['hud'], w, y + 12,
+    _hint_row(screen, fonts['hud'], w, y + 16,
               [('↑↓', 'wählen'), ('Enter', 'los geht’s')])
 
 
