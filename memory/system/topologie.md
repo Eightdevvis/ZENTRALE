@@ -85,34 +85,62 @@ ihr Telemetrie-Kürzel ab (`host_label`: pop-os→`PC`, 0RAMMachine→`LAP`,
 zentrale→`PI`) — vorher stand dort hart `LAP`, was auf dem Pi-Kiosk (zeigt
 die PC-Werte) falsch war.
 
-## Wie der Pi seinen Code kriegt — zwei Wege, zwei Umfaenge
+## Wie ein Aussenposten seinen Code kriegt
 
-Wichtig, weil leicht zu verwechseln: **die Positivliste gilt nur fuer den
-rsync-Weg.**
+Ein Aussenposten hostet kein Backend. Er bekommt **kein git-Checkout**,
+sondern ein **zugeschnittenes Paket**, das er sich selbst abholt.
 
-| Weg | Was ankommt | Wer stoesst an |
-|---|---|---|
-| `scripts/pi_autopull.sh` (Cron, alle 5 min) | `git pull --ff-only` → **der ganze getrackte Baum**, ~34 MB (davon 29 MB `core/map/`) | ein Bump von `deploy/RELEASE` |
-| `scripts/deploy_pi.sh` (Default-Modus) | nur `deploy/aussenposten.txt`, 15 Dateien, 660 KB | ein Mensch vom PC/Laptop aus |
+```
+PC (Backend)                                   Knoten (Pi an der Wand)
+  deploy/aussenposten.txt   Positivliste
+  core/aussenposten.py      schnuert daraus
+     /api/aussenposten/manifest  ──GET──▶  Version vergleichen
+     /api/aussenposten/paket     ──GET──▶  auspacken, atomar einsetzen
+                                           scripts/aussenposten_update.py
+                                           (Cron, alle 5 min, stdlib-only)
+```
 
-Der Pi an der Wand ist heute ein **Git-Clone** unter `/opt/zentrale` (deshalb
-funktioniert der Autopull dort ueberhaupt). Ein RELEASE-Bump holt also den
-kompletten Quellbaum, nicht das Sparpaket. Das ist bewusst in Ordnung:
-`data/` ist gitignored (die 1,0 GB TTS-Modelle kommen per git nie mit), und
-34 MB Quelltext auf einer 29-GB-Karte sind kein Problem. Dafuer ist der Knoten
-selbst-aktualisierend, ohne dass jemand etwas hinschieben muss.
+**Die Version ist ein Hash ueber den Inhalt**, keine hochgezaehlte Nummer.
+Aendert sich eine Datei im Paket, aendert sich die Version und der Knoten holt
+sie sich; sonst passiert gar nichts — kein Download, kein Schreibzugriff. Es
+gibt nichts zu bumpen und nichts zu vergessen.
 
-Was die Positivliste trotzdem loest:
-- Sie verhindert den **rsync-Vollspiegel** (dort haetten `data/tts_model/` mit
-  1,0 GB und `core/map/` auf der SD-Karte gelegen) — der Weg, den ein NEUER
-  Knoten geht.
-- Ihre kurze Requirements-Liste greift **auch** auf dem Git-Weg, ueber die
-  Marker-Datei `.aussenposten`: der Autopull installiert dann nicht mehr die
-  grosse `requirements.txt`.
+**Pull, nicht Push.** Der Knoten fragt beim PC nach, nicht umgekehrt — dieselbe
+Richtung wie alles andere zwischen PC und Pi. Ein Knoten, der aus war, holt
+beim naechsten Lauf von selbst auf; der PC braucht keine Schluessel nach
+draussen und keine Liste, welche Knoten es ueberhaupt gibt. Beim zehnten
+Bildschirm ist das der Unterschied zwischen »geht einfach« und »Inventar
+pflegen«.
 
-Wer den Git-Weg ebenfalls auf die Liste eindampfen wollte, braeuchte
-`git sparse-checkout`. Fuer 29 MB Kartendaten lohnt das nicht — der Aufwand
-stuende in keinem Verhaeltnis.
+Eigenschaften, die im Betrieb zaehlen:
+
+- **Klein:** 13 Dateien, ~660 KB. Der alte `git pull` brachte den ganzen
+  getrackten Baum (~34 MB, davon 29 MB Kartendaten) und verlangte einen
+  GitHub-Zugang auf jedem Knoten.
+- **Der Updater steckt IM Paket** und erneuert sich selbst mit. Er ist
+  stdlib-only und laeuft unter dem System-Python — ein Updater, der den venv
+  braucht, koennte ihn nicht reparieren.
+- **Atomar pro Datei** (schreiben + `rename`): ein Abbruch mittendrin
+  hinterlaesst nie eine halb geschriebene Datei, die der Knoten beim naechsten
+  Start ausfuehrt.
+- **Raeumt auf:** was im Vorgaengerpaket war und jetzt nicht mehr, wird
+  entfernt. Ein Knoten sammelt keine Karteileichen an.
+- **Kein Ausbruch:** Archiv-Eintraege mit `..` oder absolutem Pfad werden
+  abgelehnt, statt beim Auspacken aus dem Zielordner zu entkommen.
+- **Backend aus ist kein Notfall:** der Lauf scheitert leise und versucht es
+  beim naechsten Mal wieder.
+
+Ein normaler Lauf vergleicht nur Versionen — eine lokal veraenderte Datei
+faellt ihm nicht auf. Dafuer gibt es `--neu` (neu installieren, auch wenn die
+Version stimmt) und `--pruefen` (nur schauen, nichts anfassen).
+
+**Erst-Bespielung** macht `scripts/deploy_pi.sh` (Default-Modus, rsync ueber
+dieselbe Positivliste). Danach traegt man einmal
+`deploy/aussenposten-update.cron` ein und der Knoten haelt sich selbst aktuell.
+
+Der alte Weg — Git-Clone auf dem Pi plus `scripts/pi_autopull.sh`, ausgeloest
+von einem Bump in `deploy/RELEASE` — bleibt fuer einen vollwertigen
+**Backend-Host** liegen. Fuer Aussenposten ist er abgeloest.
 
 ## Netzwerk
 

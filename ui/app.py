@@ -46,6 +46,7 @@ import providers      # type: ignore  – Cloud-Registry des Kerns (base_url/kin
 import consolidation # type: ignore  – Phase E: STM → LTM Konsolidierung
 import telemetry    # type: ignore  – PC-Host-Telemetrie (CPU/GPU/VRAM/Temp/RAM)
 import kassette     # type: ignore  – welche Kassette läuft (monolith | laptop)
+import aussenposten # type: ignore  – Paket-Schnuerer für Knoten ohne Backend
 import mail         # type: ignore  – Mail-Triage (read-only Panel + Live-Poll)
 import mail_secrets # type: ignore  – verschlüsselter Zugangsdaten-Speicher
 import threading    # für den Hintergrund-Poll (blockiert den Request nicht)
@@ -206,6 +207,53 @@ def api_sensor_trigger(name):
     state.queue_sensor(name)
     state.push_log(f"WEBHOOK: sensor/{name} von {request.remote_addr}")
     return jsonify({"ok": True})
+
+
+# ── Aussenposten-Versorgung ────────────────────────────────────────────
+#
+# Ein Aussenposten (Pi an der Wand, spaeter einer pro Raum) hostet kein
+# Backend und hat keinen Git-Clone. Er holt sich hier sein zugeschnittenes
+# Paket ab: Manifest fragen, Version vergleichen, bei Abweichung das tar.gz
+# ziehen. Was drin ist, sagt deploy/aussenposten.txt; geschnuert wird in
+# core/aussenposten.py. Gegenstueck auf dem Knoten:
+# scripts/aussenposten_update.py (stdlib-only, laeuft ohne venv).
+#
+# Absichtlich OHNE Kassetten-/KI-Gate: ein Knoten muss sich auch dann
+# aktualisieren koennen, wenn die KI gedrosselt ist — sonst friert genau die
+# Maschine ein, die man gerade reparieren will.
+
+
+@app.route('/api/aussenposten/manifest')
+def api_aussenposten_manifest():
+    """Was gerade zu holen waere: Version (Inhalts-Hash), Dateizahl, Groesse.
+
+    Billig genug fuer einen Poll alle paar Minuten — es wird nur gehasht,
+    nicht gepackt.
+    """
+    try:
+        return jsonify(aussenposten.manifest())
+    except Exception as exc:
+        return jsonify({"error": "Paket-Manifest fehlgeschlagen: %s" % exc}), 500
+
+
+@app.route('/api/aussenposten/paket')
+def api_aussenposten_paket():
+    """Das Paket selbst als tar.gz.
+
+    Deterministisch gepackt (sortiert, mtime=0) — gleicher Inhalt, gleiche
+    Bytes. Die Version steht im Header X-Paket-Version, damit der Knoten
+    nach dem Download noch einmal abgleichen kann, ob sich zwischen Manifest
+    und Abruf etwas geaendert hat.
+    """
+    try:
+        daten = aussenposten.paket()
+        version = aussenposten.manifest()["version"]
+    except Exception as exc:
+        return jsonify({"error": "Paket-Bau fehlgeschlagen: %s" % exc}), 500
+    return Response(daten, content_type='application/gzip', headers={
+        'X-Paket-Version': version,
+        'Content-Disposition': 'attachment; filename="aussenposten.tar.gz"',
+    })
 
 
 # ── Data Collection ────────────────────────────────────────────────────

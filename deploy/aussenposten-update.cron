@@ -1,0 +1,22 @@
+# ZENTRALE — Aussenposten-Update (Knoten ohne Backend)
+# ------------------------------------------------------------------
+# Holt alle 5 Minuten das Manifest vom Backend-Host und installiert das
+# zugeschnittene Paket, WENN sich die Version geaendert hat. Stimmt sie,
+# passiert nichts — kein Download, keine Schreibzugriffe.
+#
+# Die Version ist ein Hash ueber den Paket-Inhalt: es gibt nichts
+# hochzuzaehlen und nichts zu vergessen. Wer auf dem PC etwas aendert, das
+# im Paket steckt, hat es hier fuenf Minuten spaeter.
+#
+# AKTIVIEREN (auf dem Knoten):
+#   crontab /opt/zentrale/deploy/aussenposten-update.cron
+#
+# ANSCHAUEN:
+#   tail -f ~/.aussenposten_update.log
+#   /opt/zentrale/scripts/aussenposten_update.py --pruefen   # nur vergleichen
+#
+# ZENTRALE_URL zeigt auf das Backend. Default im Skript ist die LAN-IP des
+# PC (192.168.50.1:5000) — hier ueberschreibbar, falls ein Knoten anders haengt.
+ZENTRALE_URL=http://192.168.50.1:5000
+
+*/5 * * * * /opt/zentrale/scripts/aussenposten_update.py >/dev/null 2>&1

@@ -121,10 +121,16 @@ fi
 echo
 echo "Fertig ($MODE)."
 if [[ "$MODE" == "aussenposten" ]]; then
-  echo "Einmalig auf dem Knoten noch erledigen (falls noch nicht):"
-  echo "  Kiosk + Hotkeys einrichten (BACKEND_URL = LAN-IP des PC, sonst localhost-Footgun):"
+  echo "Das war die ERST-Bespielung. Ab jetzt haelt der Knoten sich selbst"
+  echo "aktuell — er holt sein Paket per HTTP vom Backend ab, sobald sich"
+  echo "dessen Inhalts-Hash aendert. Dafuer einmalig den Cron eintragen:"
+  echo "    crontab $REMOTE_DIR/deploy/aussenposten-update.cron"
+  echo "    $REMOTE_DIR/scripts/aussenposten_update.py --pruefen   # Sichtpruefung"
+  echo
+  echo "Ausserdem einmalig (falls noch nicht):"
+  echo "  Kiosk + Hotkeys (BACKEND_URL = LAN-IP des PC, sonst localhost-Footgun):"
   echo "    ZENTRALE_BACKEND_URL=http://192.168.50.1:5000 bash $REMOTE_DIR/scripts/install_xfce_autostart.sh"
-  echo "  Sudo-Rechte fuer Notaus + autopull: sudo bash $REMOTE_DIR/scripts/install_pi_sudoers.sh"
+  echo "  Sudo-Rechte fuer den Notaus: sudo bash $REMOTE_DIR/scripts/install_pi_sudoers.sh"
 else
   echo "Logs: journalctl -u zentrale.service -f"
 fi

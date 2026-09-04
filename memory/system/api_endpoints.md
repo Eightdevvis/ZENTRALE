@@ -33,6 +33,27 @@ dependency-frei (kein psutil), voll offline.
 | `/api/telemetry`      | GET     | PC + Pi kombiniert: `{pc:{cpu,gpu,vram,temp,ram}, pi:{cpu,temp,ram,disk,age_s}}`. Jede Metrik ist ein `{v, …}`-Objekt; `v=null` = Quelle fehlt. `pi={}` solange der Pi nie gesendet hat, `age_s` = Alter des letzten Pushes (Frontend zeigt Pi ab >90s als stale). Dashboard pollt ~2s. |
 | `/api/telemetry/pi`   | POST    | Telemetrie-Push vom Pi. JSON-Body mit Top-Level-Keys aus `{cpu,temp,ram,disk}` (Whitelist `_ALLOWED_PI_METRICS`), gleiche Shape wie ein Meter-Block. Landet via `state.set_pi_telemetry()`. Sender: `scripts/pi_sensor_bridge.py`. |
 
+## Aussenposten-Versorgung
+
+Ein Aussenposten (Knoten ohne Backend — der Pi an der Wand, spaeter einer pro
+Raum) hat **kein git-Checkout**. Er holt sich hier sein zugeschnittenes Paket
+ab: Manifest fragen, Version vergleichen, bei Abweichung das tar.gz ziehen.
+Inhalt = `deploy/aussenposten.txt`, geschnuert von `core/aussenposten.py`,
+eingebaut von `scripts/aussenposten_update.py` (stdlib-only, ohne venv).
+
+Die `version` ist ein **Hash ueber den Paket-Inhalt**, keine hochgezaehlte
+Nummer: aendert sich eine der enthaltenen Dateien, aendert sie sich; sonst
+nicht. Es gibt nichts zu bumpen und nichts zu vergessen.
+
+**Bewusst ohne Kassetten-/KI-Gate:** ein Knoten muss sich auch dann
+aktualisieren koennen, wenn die KI gedrosselt ist — sonst friert genau die
+Maschine ein, die man gerade reparieren will.
+
+| Endpoint                     | Methode | Beschreibung                     |
+|------------------------------|---------|----------------------------------|
+| `/api/aussenposten/manifest` | GET     | `{version, dateien, bytes, gebaut}`. Billig (nur hashen, nicht packen) — gedacht fuer einen Poll alle paar Minuten. |
+| `/api/aussenposten/paket`    | GET     | Das Paket als `application/gzip`. Deterministisch gepackt (sortiert, `mtime=0`) → gleicher Inhalt, gleiche Bytes. Version zusaetzlich im Header `X-Paket-Version`, damit der Knoten nach dem Download abgleichen kann. |
+
 ## Data Collection
 
 | Endpoint              | Methode | Beschreibung                          |

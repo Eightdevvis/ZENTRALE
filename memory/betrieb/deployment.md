@@ -184,10 +184,17 @@ Genau darum ist die Liste so kurz und bleibt stabil.
 ./scripts/deploy_pi.sh sasha@192.168.50.10 /opt/zentrale
 ```
 
-Der Modus legt auf dem Knoten die Marker-Datei **`.aussenposten`** an. Die
-liest `pi_autopull.sh` (siehe Abschnitt 6) und nimmt dann ebenfalls die kurze
-Requirements-Liste — sonst wuerde ein Backend-Paket per Cron einen
-minutenlangen Build auf dem Pi ausloesen.
+Das ist die **Erst-Bespielung**. Danach haelt der Knoten sich selbst aktuell:
+einmal `crontab /opt/zentrale/deploy/aussenposten-update.cron` eintragen, und
+er holt sich sein Paket alle 5 Minuten per HTTP vom Backend, sobald sich
+dessen Inhalts-Hash aendert. Wie das funktioniert, steht in
+`memory/system/topologie.md` (Abschnitt »Wie ein Aussenposten seinen Code
+kriegt«) und `memory/system/api_endpoints.md`.
+
+Der Modus legt zusaetzlich die Marker-Datei **`.aussenposten`** an. Die liest
+`pi_autopull.sh` (Abschnitt 6, der alte Git-Weg) und nimmt dann ebenfalls die
+kurze Requirements-Liste — relevant nur noch fuer Knoten, die weiter am
+Git-Clone haengen.
 
 **Kein `--delete` im Aussenposten-Modus:** bei einer Positivliste besitzen wir
 den Zielbaum nicht; `--delete` wuerde dort alles ausserhalb der Liste
@@ -386,7 +393,14 @@ aus `net.py` und `audio.py`. Die landen ausschließlich in
 journalctl. Wer sie auch in journalctl sehen will, müsste
 `state.push_log` zusätzlich `print()` lassen.
 
-## 6) Auto-Update via RELEASE-Marker (Pull-Cron)
+## 6) Auto-Update via RELEASE-Marker (Pull-Cron) — der Git-Weg
+
+> **Fuer Aussenposten abgeloest.** Ein Knoten ohne Backend braucht seit
+> 2026-09-04 kein git mehr: er holt sich ein zugeschnittenes Paket
+> (`deploy/aussenposten-update.cron` → `scripts/aussenposten_update.py`,
+> siehe `memory/system/topologie.md`). Der hier beschriebene Weg — Git-Clone
+> auf dem Knoten, `pi_autopull.sh`, manueller Bump in `deploy/RELEASE` —
+> bleibt fuer einen vollwertigen **Backend-Host** gueltig.
 
 ### Idee
 

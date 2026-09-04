@@ -11,7 +11,9 @@
 #
 # Format: eine Zeile = ein Pfad relativ zur Projektwurzel (Verzeichnisse
 # werden rekursiv uebertragen). '#' und Leerzeilen werden ignoriert.
-# Gelesen von scripts/deploy_pi.sh.
+#
+# Gelesen von core/aussenposten.py (schnuert daraus das Paket, das der Knoten
+# sich per HTTP abholt) und von scripts/deploy_pi.sh (Erst-Bespielung).
 
 # ── Die TUI: das Bild an der Wand ────────────────────────────────────────
 # stdlib-only, laeuft unter dem System-Python, spricht per ZENTRALE_URL das
@@ -33,19 +35,27 @@ core/host_metrics.py
 tutor/room.py
 scripts/open_tutor_room.py
 
-# ── Einrichtung auf dem Knoten ───────────────────────────────────────────
-scripts/install_xfce_autostart.sh
-scripts/install_pi_services.sh
-scripts/install_pi_sudoers.sh
-scripts/pi_autopull.sh
+# ── Selbst-Aktualisierung ────────────────────────────────────────────────
+# Der Updater steckt IM Paket — sonst koennte er sich nie selbst erneuern und
+# jede Aenderung an ihm muesste von Hand auf jeden Knoten getragen werden.
+# Er ist stdlib-only und laeuft unter dem System-Python: ein Updater, der den
+# venv braucht, kann ihn nicht reparieren.
+scripts/aussenposten_update.py
+deploy/aussenposten-update.cron
 deploy/requirements-aussenposten.txt
 deploy/aussenposten.txt
-deploy/RELEASE
-deploy/zentrale-autopull.cron
+
+# ── Einrichtung auf dem Knoten ───────────────────────────────────────────
+scripts/install_xfce_autostart.sh
+scripts/install_pi_sudoers.sh
 
 # ── NICHT dabei (bewusst) ────────────────────────────────────────────────
 # core/ (Backend), ui/ (Flask+Dashboard), services/ (Whisper/TTS), data/,
 # memory/, tests/, tools/, tutor/ ausser room.py.
+#
+# Auch nicht: scripts/pi_autopull.sh + deploy/RELEASE. Das war der alte Weg
+# (git-Clone auf dem Knoten, manueller RELEASE-Bump als Ausloeser). Ein
+# Paket-Knoten hat kein git und braucht beides nicht.
 #
 # Das Karten-Fenster (scripts/map_window.py) fehlt ebenfalls: es braucht
 # core/map/ (37 MB), core/glossary.py und numpy. Wer die Karte an der Wand
