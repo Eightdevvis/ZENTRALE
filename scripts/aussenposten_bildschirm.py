@@ -84,18 +84,29 @@ def lesen():
     return ausgang, aktuell, modi, mm[0], mm[1]
 
 
+# Wie viel schlechter darf das Seitenverhaeltnis sein, damit ein Modus noch
+# als gleichwertig gilt? Ohne so ein Fenster gewinnt ein winziger Modus, der
+# das Verhaeltnis um Haaresbreite besser trifft — am Pi waehlte genau das
+# 720x400 (Verhaeltnis 1.80) gegen 1920x1080 (1.78) und machte den
+# Wandbildschirm briefmarkengross. Das Seitenverhaeltnis entscheidet also nur
+# GROB vor, innerhalb dieser Toleranz zaehlt die Groesse.
+ASPEKT_TOLERANZ = 0.15
+
+
 def bester(modi, mm_breit, mm_hoch):
     """Der Modus, der am besten zum Panel passt.
 
-    Zuerst das Seitenverhaeltnis (ein gestrecktes Bild faellt sofort auf),
-    danach die Pixelzahl. Kennt der Monitor seine physische Groesse nicht,
+    Erst grob nach Seitenverhaeltnis (ein gestrecktes Bild faellt sofort auf),
+    dann nach Pixelzahl. Kennt der Monitor seine physische Groesse nicht,
     entscheidet allein die Pixelzahl.
     """
-    if mm_breit > 0 and mm_hoch > 0:
-        ziel = mm_breit / mm_hoch
-        return max(modi, key=lambda m: (-round(abs(m[0] / m[1] - ziel), 2),
-                                        m[0] * m[1]))
-    return max(modi, key=lambda m: m[0] * m[1])
+    if not (mm_breit > 0 and mm_hoch > 0):
+        return max(modi, key=lambda m: m[0] * m[1])
+    ziel = mm_breit / mm_hoch
+    abstand = {m: abs(m[0] / m[1] - ziel) for m in modi}
+    beste = min(abstand.values())
+    infrage = [m for m in modi if abstand[m] <= beste + ASPEKT_TOLERANZ]
+    return max(infrage, key=lambda m: m[0] * m[1])
 
 
 def korrektur_matrix(modus, mm_breit, mm_hoch):

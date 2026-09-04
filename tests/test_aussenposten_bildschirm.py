@@ -68,3 +68,19 @@ def test_ohne_masse_keine_korrektur(mm):
     """Ohne physische Groesse laesst sich nichts ausrechnen — dann lieber
     nichts tun als raten."""
     assert bs.korrektur_matrix((1920, 1080), *mm) == (1.0, None)
+
+
+def test_winziger_modus_gewinnt_nicht_um_haaresbreite():
+    """720x400 trifft 21:9 rechnerisch minimal besser als 1920x1080 (1.80 vs
+    1.78 gegen 2.39). Genau daran ist die erste Fassung gescheitert und hat
+    den Wandbildschirm auf Briefmarkengroesse gestellt. Innerhalb der
+    Aspekt-Toleranz muss die Groesse entscheiden."""
+    assert bs.bester(PI_MODI + [(720, 400)], *PI_PANEL) == (1920, 1080)
+
+
+def test_toleranz_macht_das_seitenverhaeltnis_nicht_egal():
+    """Die Toleranz darf nicht so gross sein, dass ein deutlich schlechteres
+    Verhaeltnis nur wegen der Pixelzahl gewinnt."""
+    # 1280x1024 (5:4 = 1.25) ist an einem 21:9-Panel klar schlechter als
+    # 1280x720 (1.78) — auch wenn es mehr Pixel hat.
+    assert bs.bester([(1280, 1024), (1280, 720)], *PI_PANEL) == (1280, 720)
