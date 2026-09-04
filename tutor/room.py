@@ -38,6 +38,21 @@ import urllib.error
 
 import pygame
 
+# Das Rig (gemalte Einzelteile). Fehlt es, laeuft die alte Polygon-Figur —
+# room.py bleibt also auch ohne tutor/sprites.py lauffaehig.
+try:
+    from tutor import sprites as _sprites
+except ImportError:      # als Skript gestartet: tutor/ liegt selbst im Pfad
+    try:
+        import sprites as _sprites
+    except ImportError:
+        _sprites = None
+
+# Umrechnung zwischen den Einheiten der alten Polygon-Figur und Sashas
+# Mal-Leinwand: eine Einheit hier sind so viele Pixel dort. Ergibt sich aus
+# rig.json (Figur 93 Einheiten hoch, auf der Leinwand 558 Pixel).
+_LEINWAND_PRO_EINHEIT = 6.0
+
 # ── Palette — an ZENTRALE gekoppelt (night = dunkel, day = hell) ─────────────
 # Alle Farbnamen sind Modul-Globals; `apply_theme()` setzt sie je nach Modus um.
 # Die Draw-Funktionen lesen die Globals zur Laufzeit → Umschalten wirkt sofort.
@@ -554,6 +569,9 @@ class Persona:
         self.gesture_t = 0.0
         self.pause_t = 0.0           # Schlender-Pause bei 'wander'
         self.face = 'neutral'        # Mimik (happy/sad/surprised/tired/neutral)
+        # Gemalte Teile, falls vorhanden (tutor/bilder/lucia/). Liegt da nichts,
+        # bleibt es bei der Polygon-Figur — siehe draw().
+        self.rig = _sprites.lade_rig('lucia') if _sprites is not None else None
         # layout (in layout() gesetzt)
         self.floor_y = 0.0
         self.couch_x = 0.0
@@ -656,7 +674,204 @@ class Persona:
         bob = math.sin(self.t * 3.0) * 2 * s
         return base - 92 * s + bob
 
+    # -- Gemalte Puppe (Rig) -------------------------------------------------
+    # Winkel-Konvention für alle Gliedmassen: 0° = Teil hängt gerade nach
+    # unten (so, wie es gemalt wurde), +90° = zeigt nach rechts, -90° = links.
+    # Ein Teil dreht sich immer um seinen Drehpunkt aus rig.json.
+    #
+    # Die Zahlen unten sind die Gelenkpositionen der alten Polygon-Figur in
+    # ihren eigenen Einheiten (bei scale=1, gemessen vom Fusspunkt). Genau
+    # diese Punkte sind in rig.json auf die Mal-Leinwand umgerechnet — ein
+    # Schritt in den Einheiten hier entspricht _LEINWAND_PRO_EINHEIT Pixeln
+    # auf Sashas Leinwand.
+    _OBERARM = 15.0
+    _UNTERARM = 15.0
+    _OBERSCHENKEL = 14.0
+    _UNTERSCHENKEL = 14.0
+
+    def _winkel_pose(self, talking, sitting):
+        """Liefert die Winkel aller Gliedmassen für den aktuellen Zustand."""
+        g = self.gesture
+        gp = (1.3 - self.gesture_t) * 7.0
+        walking = self.state == 'walk'
+
+        # Ruhelage: Arme hängen leicht abgespreizt am Körper
+        al, ar = -7.0, 7.0            # Oberarme
+        alu, aru = -3.0, 3.0          # Unterarme
+        if walking:
+            sw = math.sin(self.t * 8.0) * 24.0
+            al, ar = -7.0 + sw, 7.0 - sw
+        elif talking:
+            # beim Reden leichtes Mitgestikulieren
+            sw = math.sin(self.t * 3.4) * 6.0
+            al, ar = -12.0 - sw, 12.0 + sw
+            alu, aru = -10.0 - sw, 10.0 + sw
+
+        if g == 'wave':
+            ar = 158.0
+            aru = 150.0 + math.sin(gp) * 22.0
+        elif g in ('stretch', 'arms_up'):
+            al, ar = -168.0, 168.0
+            alu, aru = -172.0, 172.0
+        elif g == 'shrug':
+            al, ar = -28.0, 28.0
+            alu, aru = -62.0, 62.0
+        elif g == 'cross_arms':
+            # Oberarme hängen fast senkrecht, Unterarme quer VOR den Körper —
+            # also zur Mitte hin, nicht nach aussen.
+            al, ar = -22.0, 22.0
+            alu, aru = 78.0, -78.0
+
+        # Beine
+        bl = br = 0.0
+        blu = bru = 0.0
+        if walking:
+            sw = math.sin(self.t * 8.0) * 19.0
+            bl, br = sw, -sw
+            blu, bru = max(0.0, -sw * 0.5), max(0.0, sw * 0.5)
+        elif sitting:
+            bl, br = -13.0, 13.0
+
+        # Nicken: der Kopf senkt sich (positiv = nach unten), dazu ein Hauch
+        # Kippen — in der Frontalansicht ist das Absenken die ehrliche Lösung.
+        nod = abs(math.sin(gp)) * 6.0 if g == 'nod' else 0.0
+        kopf = math.sin(self.t * 1.7) * 1.5
+        return dict(arm_l=al, arm_r=ar, arm_l_u=alu, arm_r_u=aru,
+                    bein_l=bl, bein_r=br, bein_l_u=blu, bein_r_u=bru,
+                    kopf=kopf, nod=nod)
+
+    def _gesicht_varianten(self, talking):
+        """Welche Augen-/Mundbilder gerade gelten (Mimik + Lidschlag + Reden)."""
+        sleeping = (self.stance == 'sleep')
+        blinking = self.blink < 0.14
+        face = self.face
+        if sleeping or face == 'tired' or blinking:
+            auge = 'zu'
+        elif face == 'surprised':
+            auge = 'weit'
+        else:
+            auge = 'offen'
+        if talking:
+            mund = 'offen' if int(self.t * 8) % 2 == 0 else 'zu'
+        elif face == 'surprised':
+            mund = 'offen'
+        elif face == 'sad':
+            mund = 'traurig'
+        elif face == 'tired' or sleeping:
+            mund = 'strich'
+        elif face == 'happy':
+            mund = 'laecheln'
+        else:
+            mund = 'zu'
+        return auge, mund
+
     def draw(self, surf):
+        """Zeichnet die Persona — gemalt, wenn Bilder da sind, sonst klassisch.
+
+        Solange in tutor/bilder/lucia/ kein einziges Teil liegt, läuft exakt
+        die alte Polygon-Figur. Sobald das erste Bild auftaucht, wird die
+        Puppe gebaut: gemalte Teile werden gezeichnet, noch fehlende als
+        schlichter Platzhalter — so kann Teil für Teil entstehen."""
+        rig = getattr(self, 'rig', None)
+        if rig is None or not rig.aktiv or rig.leer():
+            return self._draw_klassisch(surf)
+        rig.aktualisieren()
+        self._draw_rig(surf, rig)
+
+    def _draw_rig(self, surf, rig):
+        s = self.scale
+        talking = self.state == 'talk'
+        sitting = self.sitting or self.state == 'sit'
+        base_y = (self.couch_seat_y if sitting else self.floor_y)
+        if talking:
+            bob = math.sin(self.t * 7.0) * 2.2 * s
+        elif self.state == 'walk':
+            bob = abs(math.sin(self.t * 8.0)) * 3 * s
+        else:
+            bob = math.sin(self.t * 3.0) * 2 * s
+        x = self.x
+        y = base_y + bob
+        sk = s / _LEINWAND_PRO_EINHEIT      # Mal-Leinwand → Bildschirm
+
+        w = self._winkel_pose(talking, sitting)
+        auge_v, mund_v = self._gesicht_varianten(talking)
+
+        def spitze(px, py, winkel, laenge):
+            r = math.radians(winkel)
+            return (px + math.sin(r) * laenge * s, py + math.cos(r) * laenge * s)
+
+        # Gelenke in Bildschirm-Koordinaten
+        huefte = (x, y - 22 * s)
+        nacken = (x, y - 64 * s + w['nod'] * s)
+        schulter_l = (x - 14 * s, y - 59 * s)
+        schulter_r = (x + 14 * s, y - 59 * s)
+        ellbogen_l = spitze(*schulter_l, w['arm_l'], self._OBERARM)
+        ellbogen_r = spitze(*schulter_r, w['arm_r'], self._OBERARM)
+        bein_l = (x - 5 * s, y - 26 * s)
+        bein_r = (x + 5 * s, y - 26 * s)
+        knie_l = spitze(*bein_l, w['bein_l'], self._OBERSCHENKEL)
+        knie_r = spitze(*bein_r, w['bein_r'], self._OBERSCHENKEL)
+        # Kopfmitte, damit Augen/Mund mitwandern
+        kopf_m = (nacken[0], nacken[1] - 14 * s)
+        auge_ly = (kopf_m[0] - 5.2 * s, kopf_m[1] + 1 * s)
+        auge_ry = (kopf_m[0] + 5.2 * s, kopf_m[1] + 1 * s)
+        mund_p = (kopf_m[0], kopf_m[1] + 8 * s)
+
+        pose = {
+            'torso':        (huefte,      0.0,          None),
+            'kopf':         (nacken,      w['kopf'],    None),
+            'arm_l_ober':   (schulter_l,  w['arm_l'],   None),
+            'arm_l_unter':  (ellbogen_l,  w['arm_l_u'], None),
+            'arm_r_ober':   (schulter_r,  w['arm_r'],   None),
+            'arm_r_unter':  (ellbogen_r,  w['arm_r_u'], None),
+            'bein_l_ober':  (bein_l,      w['bein_l'],  None),
+            'bein_l_unter': (knie_l,      w['bein_l_u'], None),
+            'bein_r_ober':  (bein_r,      w['bein_r'],  None),
+            'bein_r_unter': (knie_r,      w['bein_r_u'], None),
+            'auge_l':       (auge_ly,     w['kopf'],    auge_v),
+            'auge_r':       (auge_ry,     w['kopf'],    auge_v),
+            'mund':         (mund_p,      w['kopf'],    mund_v),
+        }
+
+        for slot in rig.reihenfolge:
+            eintrag = pose.get(slot)
+            if eintrag is None:
+                continue
+            (px, py), winkel, variante = eintrag
+            if not rig.zeichne(surf, slot, px, py, sk, winkel, variante):
+                self._platzhalter(surf, slot, px, py, winkel, s)
+
+    def _platzhalter(self, surf, slot, px, py, winkel, s):
+        """Grobe Form für ein noch nicht gemaltes Teil — damit die Puppe
+        vollständig aussieht, während Sasha sie Stück für Stück malt."""
+        def balken(farbe, laenge, dicke):
+            r = math.radians(winkel)
+            ex = px + math.sin(r) * laenge * s
+            ey = py + math.cos(r) * laenge * s
+            pygame.draw.line(surf, farbe, (px, py), (ex, ey), max(2, int(dicke * s)))
+            pygame.draw.circle(surf, farbe, (int(ex), int(ey)), max(1, int(dicke * s / 2)))
+
+        if slot == 'torso':
+            pygame.draw.polygon(surf, DRESS, [
+                (px - 15 * s, py), (px + 15 * s, py),
+                (px + 12 * s, py - 40 * s), (px - 12 * s, py - 40 * s)])
+        elif slot == 'kopf':
+            pygame.draw.circle(surf, SKIN, (int(px), int(py - 14 * s)), int(15 * s))
+            pygame.draw.circle(surf, HAIR, (int(px), int(py - 17 * s)), int(15 * s))
+            pygame.draw.rect(surf, SKIN, (px - 15 * s, py - 14 * s, 30 * s, 15 * s))
+        elif slot.startswith('arm'):
+            balken(LIMB, self._OBERARM if slot.endswith('ober') else self._UNTERARM, 6)
+        elif slot.startswith('bein'):
+            balken(LIMB, self._OBERSCHENKEL if slot.endswith('ober') else self._UNTERSCHENKEL, 8)
+        elif slot.startswith('auge'):
+            pygame.draw.circle(surf, HAIR, (int(px), int(py)), max(1, int(2 * s)))
+        elif slot == 'mund':
+            pygame.draw.arc(surf, DRESS_DK, (px - 5 * s, py - 4 * s, 10 * s, 8 * s),
+                            math.pi, 2 * math.pi, max(1, int(1.6 * s)))
+
+    def _draw_klassisch(self, surf):
+        """Die alte Figur aus pygame-Primitiven. Läuft unverändert weiter,
+        solange in tutor/bilder/<name>/ noch KEIN einziges Teil gemalt ist."""
         s = self.scale
         talking = self.state == 'talk'
         sitting = self.sitting or self.state == 'sit'

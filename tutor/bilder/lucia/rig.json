@@ -1,0 +1,63 @@
+{
+  "_kommentar": [
+    "Bauplan der Puppe. Sasha malt die Bilder, diese Datei sagt dem Code,",
+    "wo jedes Teil sich dreht und in welcher Reihenfolge gezeichnet wird.",
+    "Alle Koordinaten in Leinwand-Pixeln (siehe leinwand). Siehe LIES_MICH.md."
+  ],
+
+  "leinwand": {
+    "breite": 512,
+    "hoehe": 640,
+    "boden_y": 604,
+    "mitte_x": 256,
+    "_kommentar": "Jedes Teilbild ist GENAU so gross. boden_y = wo die Fuesse stehen."
+  },
+
+  "reihenfolge": [
+    "bein_l_ober", "bein_l_unter",
+    "bein_r_ober", "bein_r_unter",
+    "arm_l_ober", "arm_l_unter",
+    "torso",
+    "kopf", "auge_l", "auge_r", "mund",
+    "arm_r_ober", "arm_r_unter"
+  ],
+
+  "slots": {
+    "torso":        {"pivot": [256, 472], "eltern": null,          "_": "Drehpunkt = Huefte"},
+    "kopf":         {"pivot": [256, 220], "eltern": "torso",       "_": "Drehpunkt = Nacken"},
+
+    "arm_l_ober":   {"pivot": [172, 250], "eltern": "torso",       "_": "Schulter links (Betrachtersicht)"},
+    "arm_l_unter":  {"pivot": [172, 340], "eltern": "arm_l_ober",  "_": "Ellbogen links"},
+    "arm_r_ober":   {"pivot": [340, 250], "eltern": "torso",       "_": "Schulter rechts"},
+    "arm_r_unter":  {"pivot": [340, 340], "eltern": "arm_r_ober",  "_": "Ellbogen rechts"},
+
+    "bein_l_ober":  {"pivot": [226, 448], "eltern": "torso",       "_": "Huefte links"},
+    "bein_l_unter": {"pivot": [226, 532], "eltern": "bein_l_ober", "_": "Knie links"},
+    "bein_r_ober":  {"pivot": [286, 448], "eltern": "torso",       "_": "Huefte rechts"},
+    "bein_r_unter": {"pivot": [286, 532], "eltern": "bein_r_ober", "_": "Knie rechts"},
+
+    "auge_l":       {"pivot": [225, 142], "eltern": "kopf",        "_": "Auge links, Varianten in gesicht/"},
+    "auge_r":       {"pivot": [287, 142], "eltern": "kopf",        "_": "Auge rechts"},
+    "mund":         {"pivot": [256, 184], "eltern": "kopf",        "_": "Mund, Varianten in gesicht/"}
+  },
+
+  "varianten": {
+    "auge_l": {
+      "offen": "gesicht/auge_l_offen.png",
+      "zu": "gesicht/auge_l_zu.png",
+      "weit": "gesicht/auge_l_weit.png"
+    },
+    "auge_r": {
+      "offen": "gesicht/auge_r_offen.png",
+      "zu": "gesicht/auge_r_zu.png",
+      "weit": "gesicht/auge_r_weit.png"
+    },
+    "mund": {
+      "zu": "gesicht/mund_zu.png",
+      "offen": "gesicht/mund_offen.png",
+      "laecheln": "gesicht/mund_laecheln.png",
+      "traurig": "gesicht/mund_traurig.png",
+      "strich": "gesicht/mund_strich.png"
+    }
+  }
+}
