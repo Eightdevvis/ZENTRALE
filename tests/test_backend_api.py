@@ -38,6 +38,15 @@ def test_api_state_shape(client):
 def test_ki_endpoint_locked_in_tui_kassette(client):
     # In der tui-Kassette (conftest setzt ZENTRALE_KASSETTE=tui) und ohne
     # erreichbares Backend bleibt der Chat zu.
+    #
+    # "Ohne erreichbares Backend" ist seit 2026-09-04 GARANTIERT statt
+    # gehofft: conftest legt den Erreichbarkeits-Check von ai_backends in
+    # jedem Test auf False. Vorher hing dieser Test an der Umgebung — lag ein
+    # Cloud-Key vor und stand das Netz, schickte er einen echten Claude-Call
+    # los (~0,07 €) und fiel dann um, weil eine Cloud-Leitung in einer
+    # ki-freien Kassette ERLAUBT ist (ai_backends.chat_available: lokal ist
+    # dort aus, Cloud ist eine externe Leitung). Geprueft wird hier also die
+    # Drossel bei totem Backend, nicht die Kassettenregel an sich.
     r = client.post("/api/chat", json={"message": "hallo"})
     assert r.status_code == 503
 
@@ -120,6 +129,12 @@ def test_refresh_counts_force_bypasses_ttl(client, monkeypatch):
     done = threading.Event()
     monkeypatch.setattr(A.mail, "folder_counts",
                         lambda: (done.set(), {"x": 2})[1])
+    monkeypatch.setattr(A.mail, "category_overview", lambda: [{"name": "x"}])
+    # NICHT auf die echte Disk schreiben: der Worker ruft _mail_counts_save(),
+    # das data/mail_counts.json ueberschreibt. Ein Testlauf hat an Sashas
+    # echten Zaehlstaenden nichts verloren (gleiche Klasse wie usage/theme in
+    # conftest.py).
+    monkeypatch.setattr(A, "_mail_counts_save", lambda: None)
     monkeypatch.setitem(A._mail_live, "counts", {"x": 1})
     monkeypatch.setitem(A._mail_live, "ts", _t.time())        # frisch, aber egal
     monkeypatch.setitem(A._mail_live, "refreshing", False)
@@ -127,6 +142,13 @@ def test_refresh_counts_force_bypasses_ttl(client, monkeypatch):
     r = client.post("/api/mail/refresh-counts?force=1")
     assert r.status_code == 200 and r.get_json().get("started") is True
     assert done.wait(timeout=5.0)                             # Sweep lief wirklich
+    # UND bis zum Ende warten. `done` feuert am ANFANG des Sweeps; der Worker
+    # laeuft danach weiter und stempelt _mail_live["ts"] mit time.time(). Ohne
+    # dieses Warten lebte der Thread in den naechsten Test hinein und schrieb
+    # ihm seinen Zeitstempel unter den Fuessen weg — das war die sporadisch
+    # rote `test_refresh_counts_empty_sweep_keeps_old` (erwartete ts==111.0,
+    # bekam die echte Uhrzeit). Nur im vollen Lauf, nie beim Einzeltest.
+    assert _wait_refresh_done(A)
 
 
 def test_mail_counts_persist_survives_restart(tmp_path, monkeypatch):
