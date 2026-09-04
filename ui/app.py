@@ -1696,6 +1696,22 @@ def api_tutor_stand_waehlen():
     return jsonify(d), (200 if d.get("ok") else 400)
 
 
+@app.route('/api/tutor/staende/loeschen', methods=['POST'])
+def api_tutor_stand_loeschen():
+    """Einen Spielstand samt allem Gelernten entfernen. Body: {id}.
+
+    Bewusst POST mit id im Body statt DELETE auf einen Pfad: die Fronten hier
+    sprechen alle nur GET/POST, und ein versehentlicher Aufruf per Browser-URL
+    kann so nichts loeschen.
+    """
+    body = request.get_json(silent=True) or {}
+    sid = (body.get('id') or '').strip()
+    if not sid:
+        return jsonify({"ok": False, "error": "id noetig"}), 400
+    d = tutor_port.stand_loeschen(sid)
+    return jsonify(d), (200 if d.get("ok") else 400)
+
+
 @app.route('/api/ai/debug/stream')
 def api_ai_debug_stream():
     """Devtools-Stream (SSE) fuer die KERN-KI (scripts/ai_devtools.py).

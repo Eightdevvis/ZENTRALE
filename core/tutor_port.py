@@ -343,3 +343,22 @@ def _sitzung_beenden():
     ts = _ts()
     if ts is not None:
         _safe(ts.deactivate, None)
+
+
+def stand_loeschen(sid: str) -> dict:
+    """Einen Spielstand löschen. Auch den aktiven — dann wird beim nächsten
+    Zugriff auf den zuletzt gespielten der übrigen umgeschaltet (oder ein
+    neuer angelegt, falls keiner mehr da ist)."""
+    if _ts() is None:
+        return {"ok": False, "error": "Tutor nicht installiert"}
+    try:
+        from tutor import staende as st
+        root = _staende_root()
+        war_aktiv = (st.aktiv(root) == sid)
+        if not st.loeschen(root, sid):
+            return {"ok": False, "error": "unbekannter Spielstand: %s" % sid}
+        if war_aktiv:
+            _sitzung_beenden()
+        return {"ok": True, "aktiv": st.aktiv(root), "staende": st.liste(root)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}

@@ -28,12 +28,14 @@ import time
 def _jetzt():
     """Zeitstempel mit Millisekunden.
 
-    Sekundengenau reicht nicht: wer zwei Staende kurz hintereinander waehlt,
-    bekaeme denselben Stempel, und »zuletzt gespielt« waere dann Zufall statt
-    Reihenfolge (im Test sofort aufgefallen, im Betrieb waere es ein seltener
-    und schwer erklaerbarer Sprung in der Liste).
+    Mikrosekunden, nicht Sekunden: wer zwei Staende schnell hintereinander
+    waehlt, bekaeme sonst denselben Stempel, und »zuletzt gespielt« waere
+    Zufall statt Reihenfolge. Mit Millisekunden ist das im vollen Testlauf
+    trotzdem noch kollidiert — zwei Datei-Schreibvorgaenge passen in eine
+    Millisekunde. Im Betrieb waere daraus ein seltener, schwer erklaerbarer
+    Sprung in der Liste geworden.
     """
-    return datetime.datetime.now().isoformat(timespec="milliseconds")
+    return datetime.datetime.now().isoformat(timespec="microseconds")
 
 
 WURZEL_NAME = "staende"
@@ -98,7 +100,9 @@ def liste(daten_root):
             "zuletzt": meta.get("zuletzt") or "",
             "sprachen": _sprachen(pfad),
         })
-    raus.sort(key=lambda s: s["zuletzt"] or s["erstellt"], reverse=True)
+    # Nach »zuletzt gespielt«, absteigend. Die id als zweites Kriterium, damit
+    # die Reihenfolge bei gleichem Stempel nicht von listdir abhaengt.
+    raus.sort(key=lambda s: (s["zuletzt"] or s["erstellt"], s["id"]), reverse=True)
     return raus
 
 
@@ -219,6 +223,33 @@ def waehlen(daten_root, sid):
     meta.setdefault("name", sid)
     meta.setdefault("erstellt", meta["zuletzt"])
     _schreib_meta(pfad, meta)
+    return True
+
+
+def loeschen(daten_root, sid):
+    """Einen Spielstand samt allem Gelernten entfernen. True = weg.
+
+    Auch der AKTIVE darf weg — man raeumt ja meistens den auf, in dem man
+    gerade steht. Der Zeiger wird dann geloescht; der naechste aktiv()-Aufruf
+    nimmt den zuletzt gespielten der uebrigen oder legt einen neuen an. So
+    bleibt der Tutor auch dann bedienbar, wenn jemand ALLE Staende loescht.
+    """
+    import shutil
+    pfad_ = os.path.join(_wurzel(daten_root), sid)
+    if not os.path.isdir(pfad_):
+        return False
+    shutil.rmtree(pfad_)
+    zeiger = os.path.join(daten_root, ZEIGER)
+    try:
+        with open(zeiger, encoding="utf-8") as f:
+            war_aktiv = f.read().strip() == sid
+    except OSError:
+        war_aktiv = False
+    if war_aktiv:
+        try:
+            os.remove(zeiger)
+        except OSError:
+            pass
     return True
 
 

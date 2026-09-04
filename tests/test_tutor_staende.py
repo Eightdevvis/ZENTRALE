@@ -155,3 +155,46 @@ def test_memory_srs_tools_folgen_dem_stand(tmp_path, monkeypatch):
     staende.waehlen(root, b)
     for pfad in (memory.mem_path("es"), srs._file("es"), tools._dir("es")):
         assert ("staende/%s/es" % b) in pfad.replace(os.sep, "/")
+
+
+# ── Löschen ──────────────────────────────────────────────────────────────
+
+def test_loeschen_entfernt_den_stand_samt_inhalt(tmp_path):
+    root = str(tmp_path)
+    a = staende.anlegen(root, "A")
+    b = staende.anlegen(root, "B")
+    _alt_anlegen(os.path.join(root, "staende", a), "es")
+    assert staende.loeschen(root, a) is True
+    assert not os.path.exists(os.path.join(root, "staende", a))
+    assert [s["id"] for s in staende.liste(root)] == [b]
+
+
+def test_unbekannten_stand_loeschen_ist_folgenlos(tmp_path):
+    root = str(tmp_path)
+    a = staende.anlegen(root, "A")
+    assert staende.loeschen(root, "gibtsnicht") is False
+    assert [s["id"] for s in staende.liste(root)] == [a]
+
+
+def test_aktiven_stand_loeschen_faellt_auf_einen_anderen_zurueck(tmp_path):
+    """Man räumt meistens den auf, in dem man gerade steht — danach muss der
+    Tutor weiterlaufen, nicht auf einen toten Zeiger zeigen."""
+    root = str(tmp_path)
+    a = staende.anlegen(root, "A")
+    b = staende.anlegen(root, "B")
+    staende.waehlen(root, b)
+    staende.waehlen(root, a)                     # a ist aktiv
+    assert staende.loeschen(root, a) is True
+    assert staende.aktiv(root) == b
+
+
+def test_letzten_stand_loeschen_legt_einen_neuen_an(tmp_path):
+    """Auch wer ALLES löscht, darf nicht in einem unbedienbaren Zustand
+    landen — aktiv() liefert nie None."""
+    root = str(tmp_path)
+    a = staende.anlegen(root, "Einziger")
+    staende.waehlen(root, a)
+    assert staende.loeschen(root, a) is True
+    neu = staende.aktiv(root)
+    assert neu and neu != a
+    assert os.path.isdir(os.path.join(root, "staende", neu))

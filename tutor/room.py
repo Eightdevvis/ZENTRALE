@@ -302,6 +302,10 @@ class Backend:
         """Auf einen vorhandenen Spielstand umschalten."""
         return self._post('/api/tutor/staende/waehlen', {'id': sid})
 
+    def stand_loeschen(self, sid):
+        """Einen Spielstand samt allem Gelernten entfernen."""
+        return self._post('/api/tutor/staende/loeschen', {'id': sid})
+
     def answer(self, word, result):
         """POST /api/tutor/assessment/answer {word, result} → neuer Stand."""
         try:
@@ -973,6 +977,10 @@ COIN_LO     = (206, 158, 66)      # Münze dunkel
 _PART_SCATTER = {'hair': (-72, -46), 'head': (64, -52), 'arml': (-96, 18),
                  'armr': (98, 12), 'dress': (6, 86), 'legl': (-54, 74),
                  'legr': (58, 80)}
+# Wie viele Karten man per ← zurueckblaettern kann. Genug, um das eben
+# Gesehene nachzuschlagen — kein Sitzungsprotokoll.
+VERLAUF_MAX = 20
+
 # Session-SR: expanding-retrieval-Abstände (in Karten VORAUS im Stapel). Sashas
 # Ladder, deckt sich mit der Forschung (~2× wachsend, gut für Kurzzeit-Retention).
 SR_LADDER = (7, 14, 25)   # 1./2./3. korrektes Abhaken → so viele Karten voraus
@@ -1121,6 +1129,47 @@ def _stand_zeilen(asv):
     return zeilen
 
 
+def _draw_loesch_frage(screen, w, fonts, asv):
+    """Sicherheitsabfrage vor dem Loeschen.
+
+    Ein Spielstand ist Stunden an Arbeit — der darf nicht auf einen einzelnen
+    Tastendruck hin verschwinden. Deshalb steht die Rueckfrage MITTIG ueber
+    allem, nennt den Namen des Standes beim Wort und ist mit Esc weg. Die
+    ungefaehrliche Antwort (Abbrechen) liegt auf der bequemeren Taste.
+    """
+    weg = asv['stand_weg']
+    h = screen.get_height()
+
+    # Hoehe aus dem Inhalt rechnen statt raten — sonst haengt die Tastenzeile
+    # halb aus dem Kasten heraus, sobald die Schrift anders ausfaellt.
+    zeilen = [(fonts['big'], 'Spielstand löschen?', ASSESS_GOLD, 14),
+              (fonts['bubble'], '»%s«' % weg.get('name', ''), ASSESS_INK, 10),
+              (fonts['hud'], weg.get('unter') or '', HUD_DIM, 4),
+              (fonts['hud'], 'Das Gelernte darin ist dann weg — endgültig.',
+               HUD_DIM, 18)]
+    rand = 26
+    bh = rand * 2 + sum(f.get_height() + luft for f, _, _, luft in zeilen) \
+        + fonts['hud'].get_height() + 10
+    bw = min(680, w - 120)
+    bx = w // 2 - bw // 2
+    by = max(20, h // 2 - bh // 2)          # mittig, nicht ueber der Ueberschrift
+
+    schatten = pygame.Surface((w, h), pygame.SRCALPHA)
+    schatten.fill((0, 0, 0, 170))
+    screen.blit(schatten, (0, 0))
+
+    pygame.draw.rect(screen, ASSESS_BAR_BG, (bx, by, bw, bh), border_radius=12)
+    pygame.draw.rect(screen, ASSESS_GOLD, (bx, by, bw, bh), 2, border_radius=12)
+
+    y = by + rand
+    for f, text, farbe, luft in zeilen:
+        surf = f.render(text, True, farbe)
+        screen.blit(surf, (w // 2 - surf.get_width() // 2, y))
+        y += f.get_height() + luft
+    _hint_row(screen, fonts['hud'], w, y,
+              [('Entf', 'ja, löschen'), ('Esc', 'abbrechen')])
+
+
 def _draw_stand_wahl(screen, w, fonts, asv, top_y, ctr):
     """Spielstand waehlen, bevor das Drill losgeht."""
     zeilen = _stand_zeilen(asv)
@@ -1164,8 +1213,13 @@ def _draw_stand_wahl(screen, w, fonts, asv, top_y, ctr):
                     (bx + 20, y + innen + h_titel + 4))
         y += hoehe + abstand
 
-    _hint_row(screen, fonts['hud'], w, y + 16,
-              [('↑↓', 'wählen'), ('Enter', 'los geht’s')])
+    tasten = [('↑↓', 'wählen'), ('Enter', 'los geht’s')]
+    if zeilen[idx]['art'] == 'stand':
+        tasten.append(('Entf', 'löschen'))
+    _hint_row(screen, fonts['hud'], w, y + 16, tasten)
+
+    if asv.get('stand_weg'):
+        _draw_loesch_frage(screen, w, fonts, asv)
 
 
 def _stand_unterzeile(st):
@@ -1262,15 +1316,21 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
         ctl(fonts['hud'].render('◗ Lucía spricht …', True, ASSESS_ACC), cy - 2)
 
     sub = asv.get('sub')
-    if sub == 'learn':                      # nach Repeat (nicht gewusst): nicht abhakbar
+    if asv.get('blick') is not None:        # Rückblick: nur anschauen, nichts wird gewertet
+        ctl(fonts['bubble'].render('= ' + (cur.get('de') or '…'), True, ASSESS_GOLD), cy + 26)
+        ctl(fonts['hud'].render('— Rückblick, zählt nicht —', True, HUD_DIM), cy + 58)
+        _hint_row(screen, fonts['hud'], w, cy + 88,
+                  [('←', 'weiter zurück'), ('→', 'zurück zur Abfrage')], center_x=ccx)
+    elif sub == 'learn':                    # aufgedeckt: zählt nicht mehr als gewusst
         ctl(fonts['bubble'].render('= ' + (cur.get('de') or '…'), True, ASSESS_GOLD), cy + 26)
         ctl(fonts['hud'].render('— merk’s dir, kommt gleich nochmal —', True, HUD_DIM), cy + 58)
         _hint_row(screen, fonts['hud'], w, cy + 88,
-                  [('R', 'nochmal hören'), ('→', 'weiter')], center_x=ccx)
-    else:                                   # ask (auch erste Sicht — nur Wort, keine Übersetzung)
+                  [('↓', 'nochmal hören'), ('→', 'weiter')], center_x=ccx)
+    else:                                   # ask — nur das Wort, keine Übersetzung
         ctl(fonts['bubble'].render('Kennst du das Wort?', True, ASSESS_INK2), cy + 26)
         _hint_row(screen, fonts['hud'], w, cy + 82,
-                  [('Leer', 'Abhaken ✓'), ('R', 'Repeat'), ('N', 'Next')], center_x=ccx)
+                  [('↓', 'aufdecken'), ('→', 'kann ich ✓'), ('←', 'zurück')],
+                  center_x=ccx)
 
     _draw_coin_drop(screen, ccx, cy - 44, asv)   # Münze fällt am Wort
     _draw_reveal(screen, fonts, w, h, asv)
@@ -1521,6 +1581,13 @@ def main():
             v['learn_hold'] = None
             v['cur'] = cur
             v['seen'] = v.get('seen', 0) + 1        # eine Karte mehr gezeigt
+            v['blick'] = None                      # frische Karte -> kein Rueckblick
+            if cur is not None:
+                # Verlauf fuer den Rueckblick (←). Gedeckelt: wir wollen die
+                # letzten Karten nachschlagen koennen, kein Sitzungsprotokoll.
+                verlauf = v.setdefault('verlauf', [])
+                verlauf.append(cur)
+                del verlauf[:-VERLAUF_MAX]
             word = cur['word'] if cur else None
         if word:
             asv_speak(word)
@@ -1597,19 +1664,59 @@ def main():
                 cur['streak'] = 0
         asv_advance()
 
-    def asv_repeat():
-        """REPEAT — Wort nicht gewusst: Bedeutung zeigen + nochmal vorlesen. Danach
-        NICHT abhakbar → nach kurzem Anschauen automatisch weiter (learn_hold →
-        asv_lapse), das Wort kommt per SR in ~3 Karten wieder."""
+    def asv_aufdecken():
+        """AUFDECKEN (↓) — Bedeutung zeigen + nochmal vorlesen.
+
+        Wer aufdeckt, hat das Wort nicht gewusst: die Karte ist danach nicht
+        mehr abhakbar und kommt per SR in ein paar Karten wieder. Frueher lief
+        nach 3 Sekunden automatisch weiter; jetzt bleibt sie stehen, bis man →
+        drueckt — man soll selbst entscheiden, wie lange man draufschaut.
+        """
         with S['lock']:
             v = S['asv']
             if not v or v.get('reveal') or not v.get('cur'):
                 return
             v['sub'] = 'learn'
-            v['learn_hold'] = 3.0        # s Bedeutung zeigen, dann Auto-Lapse
+            v['learn_hold'] = None
             cur = v.get('cur')
         if cur:
             asv_speak(cur['word'])
+
+    def asv_rueckblick(schritt):
+        """RUECKBLICK (←/→) — vorige Karten nachschlagen, ohne zu werten.
+
+        Praktisch, wenn man beim Weiterklicken merkt, dass man das Wort davor
+        doch nicht sicher hatte. Es wird dabei NICHTS verbucht — der Rueckblick
+        ist ein Nachschauen, kein Wiederholen; sonst koennte man sich durch
+        Zurueckblaettern Muenzen holen.
+
+        Rueckgabe: True = Rueckblick aktiv/behandelt, False = normal weiter.
+        """
+        with S['lock']:
+            v = S['asv']
+            if not v:
+                return False
+            verlauf = v.get('verlauf') or []
+            blick = v.get('blick')
+            if blick is None:
+                if schritt >= 0 or len(verlauf) < 2:
+                    return False          # vorwaerts/kein Vorgaenger -> normal
+                blick = len(verlauf) - 2  # erster Schritt zurueck
+            else:
+                blick += schritt
+            if blick >= len(verlauf) - 1 or blick < 0:
+                # ueber das Ende hinaus (oder ganz zurueck) -> zurueck zur Abfrage
+                v['blick'] = None
+                v['cur'] = verlauf[-1] if verlauf else None
+                v['sub'] = 'ask'
+                return True
+            v['blick'] = blick
+            v['cur'] = verlauf[blick]
+            v['sub'] = 'ask'
+            wort = v['cur'].get('word')
+        if wort:
+            asv_speak(wort)
+        return True
 
     def asv_next():
         """NEXT — ohne Wertung überspringen: in ein paar Karten wieder fällig."""
@@ -1633,8 +1740,23 @@ def main():
                 return
             phase = v.get('phase'); sub = v.get('sub')
         if phase == 'welcome':
+            # Steht die Loesch-Rueckfrage offen, beantwortet sie ALLE Tasten —
+            # sonst waehlt man im Hintergrund weiter und loescht am Ende den
+            # falschen Stand.
+            with S['lock']:
+                offen = bool(S['asv'] and S['asv'].get('stand_weg'))
+            if offen:
+                if ev.key == pygame.K_DELETE:
+                    threading.Thread(target=stand_loeschen, daemon=True).start()
+                elif ev.key in (pygame.K_ESCAPE, pygame.K_n):
+                    with S['lock']:
+                        if S['asv']:
+                            S['asv']['stand_weg'] = None
+                return
             # Erst Spielstand waehlen, dann geht das Drill los.
-            if ev.key in (pygame.K_UP, pygame.K_DOWN):
+            if ev.key == pygame.K_DELETE:
+                stand_loesch_fragen()
+            elif ev.key in (pygame.K_UP, pygame.K_DOWN):
                 with S['lock']:
                     v = S['asv']
                     if v:
@@ -1651,19 +1773,27 @@ def main():
                 threading.Thread(target=run_stream,
                                  args=('/api/tutor/start', {'focus': foc}), daemon=True).start()
             return
-        # phase == 'card'
-        if sub == 'learn':                 # nach Repeat: kein Abhaken, nur nochmal/weiter
-            if ev.key == pygame.K_r:
-                asv_repeat()               # nochmal hören (setzt learn_hold neu)
-            else:
-                asv_lapse()                # jede andere Taste: sofort weiter (SR +3)
+        # phase == 'card' — Steuerung:
+        #   ↓          aufdecken (wer aufdeckt, wusste es nicht)
+        #   → / Enter  weiter. NICHT aufgedeckt = gewusst, aufgedeckt = nochmal.
+        #   ←          zurueckblaettern und nachschauen (zaehlt nicht)
+        if ev.key == pygame.K_LEFT:
+            asv_rueckblick(-1)
             return
-        if ev.key == pygame.K_r:
-            asv_repeat()
-        elif ev.key in (pygame.K_SPACE, pygame.K_RETURN):
-            threading.Thread(target=asv_abhaken, daemon=True).start()
-        elif ev.key in (pygame.K_n, pygame.K_RIGHT):
-            asv_next()
+        if v.get('blick') is not None:      # im Rueckblick wird nichts gewertet
+            if ev.key in (pygame.K_RIGHT, pygame.K_RETURN, pygame.K_SPACE):
+                asv_rueckblick(+1)
+            return
+        if ev.key == pygame.K_DOWN:
+            asv_aufdecken()                 # auch im 'learn': nochmal hören
+            return
+        if ev.key in (pygame.K_RIGHT, pygame.K_RETURN, pygame.K_SPACE, pygame.K_n):
+            if sub == 'learn':
+                asv_lapse()                 # war aufgedeckt -> kommt wieder
+            else:
+                # Ohne Aufdecken weiter heisst: konnte ich. Genau so hat Sasha
+                # es sich gewuenscht — ein Tastendruck fuer den Normalfall.
+                threading.Thread(target=asv_abhaken, daemon=True).start()
 
     def staende_laden():
         """Spielstaende im Hintergrund holen und in den Willkommens-Schirm legen.
@@ -1688,6 +1818,41 @@ def main():
             # drueckt dann nur Enter.
             v['stand_idx'] = next((i for i, st in enumerate(liste)
                                    if st.get('id') == aktiv), 0)
+            # Nach einem Loeschen kann der alte Index ins Leere zeigen.
+            v['stand_idx'] = max(0, min(len(liste), v['stand_idx']))
+
+    def stand_loesch_fragen():
+        """Entf auf einem vorhandenen Stand -> Rueckfrage stellen."""
+        with S['lock']:
+            v = S['asv']
+            if not v or v.get('stand_weg'):
+                return
+            zeilen = _stand_zeilen(v)
+            idx = max(0, min(len(zeilen) - 1, int(v.get('stand_idx', 0))))
+            z = zeilen[idx]
+            if z['art'] != 'stand':
+                return                     # »Neuer Spielstand« kann man nicht loeschen
+            st = z['stand']
+            v['stand_weg'] = {'id': st.get('id'),
+                              'name': st.get('name') or st.get('id'),
+                              'unter': _stand_unterzeile(st)}
+
+    def stand_loeschen():
+        """Rueckfrage bejaht: Stand weg, Liste neu holen."""
+        with S['lock']:
+            v = S['asv']
+            weg = v.get('stand_weg') if v else None
+            if not weg or v.get('busy'):
+                return
+            v['busy'] = True
+        try:
+            be.stand_loeschen(weg['id'])
+        finally:
+            with S['lock']:
+                if S['asv']:
+                    S['asv']['stand_weg'] = None
+                    S['asv']['busy'] = False
+        staende_laden()                    # frische Liste + evtl. neuer aktiver Stand
 
     def stand_bestaetigen():
         """Gewaehlten Spielstand aktivieren (oder neu anlegen) und ins Drill."""
@@ -1751,7 +1916,8 @@ def main():
                         'parts_total': int(game.get('parts_total', 7)),
                         'crate_at': list(game.get('crate_at', [])),
                         'reveal': None, 'coin_drop': None, 'new_part': None,
-                        'staende': [], 'stand_aktiv': None, 'stand_idx': 0}
+                        'staende': [], 'stand_aktiv': None, 'stand_idx': 0,
+                        'stand_weg': None, 'verlauf': [], 'blick': None}
         threading.Thread(target=staende_laden, daemon=True).start()
         return True
 
@@ -2175,11 +2341,10 @@ def main():
                     a2['new_part']['t'] = min(1.0, a2['new_part']['t'] + dt / 0.6)
                     if a2['new_part']['t'] >= 1.0:
                         a2['new_part'] = None
-                if a2.get('learn_hold') is not None:      # nach Repeat: automatisch weiter
-                    a2['learn_hold'] -= dt
-                    if a2['learn_hold'] <= 0:
-                        a2['learn_hold'] = None
-                        threading.Thread(target=asv_lapse, daemon=True).start()
+                # Frueher lief eine aufgedeckte Karte nach 3 s von selbst weiter
+                # (learn_hold). Das ist raus: seit ↓/→ getrennt sind, entscheidet
+                # der Mensch, wie lange er auf die Uebersetzung schaut. Das Feld
+                # bleibt auf None und wird nur noch beim Aufraeumen gelesen.
             asv_snap = dict(S['asv']) if S['asv'] else None
 
         # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft.
