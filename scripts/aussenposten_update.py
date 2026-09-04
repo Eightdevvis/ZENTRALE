@@ -32,6 +32,7 @@ import argparse
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -148,21 +149,71 @@ def _datei_inhalt(pfad):
         return None
 
 
-def pip_nachziehen(ziel, logdatei):
-    """Requirements installieren — nur wenn ein venv existiert."""
+def _venv(ziel):
+    """(python, pip) des Knoten-venv, oder (None, None).
+
+    Der Ordner heisst nicht ueberall gleich: PC/Laptop 'venv', der Pi '.venv'.
+    """
     for name in (".venv", "venv"):
+        py = os.path.join(ziel, name, "bin", "python")
         pip = os.path.join(ziel, name, "bin", "pip")
-        if os.path.exists(pip):
-            req = os.path.join(ziel, REQ)
-            log("Requirements geaendert -> %s install -r %s" % (pip, REQ), logdatei)
-            r = subprocess.run([pip, "install", "-q", "-r", req],
-                               capture_output=True, text=True)
-            if r.returncode != 0:
-                log("pip FEHLGESCHLAGEN: %s" % (r.stderr or "").strip()[:500], logdatei)
-            else:
-                log("pip fertig", logdatei)
-            return
-    log("kein venv gefunden — pip-Schritt uebersprungen", logdatei)
+        if os.path.exists(py) and os.path.exists(pip):
+            return py, pip
+    return None, None
+
+
+def _normal(name):
+    """Paketnamen vergleichbar machen (PEP 503: Gross/Klein und -_. egal)."""
+    return re.sub(r"[-_.]+", "-", name).strip().lower()
+
+
+def _gefordert(req_pfad):
+    """Paketnamen aus der Requirements-Datei. Kommentare und Versions-
+    Angaben fliegen raus — wir wollen nur wissen, WAS da sein muss."""
+    namen = []
+    try:
+        with open(req_pfad, encoding="utf-8") as f:
+            for zeile in f:
+                zeile = zeile.split("#")[0].strip()
+                if not zeile or zeile.startswith("-"):
+                    continue
+                namen.append(_normal(re.split(r"[<>=!~;\[]", zeile)[0]))
+    except OSError:
+        pass
+    return [n for n in namen if n]
+
+
+def _fehlende(py, req_pfad):
+    """Welche geforderten Pakete fehlen im venv? Rein lokal, ohne Netz."""
+    gefordert = _gefordert(req_pfad)
+    if not gefordert:
+        return []
+    code = ("import importlib.metadata as m, re, json;"
+            "print(json.dumps([re.sub(r'[-_.]+','-',d.metadata['Name'] or '')"
+            ".lower() for d in m.distributions()]))")
+    try:
+        r = subprocess.run([py, "-c", code], capture_output=True, text=True,
+                           timeout=60)
+        da = set(json.loads(r.stdout or "[]"))
+    except Exception:
+        return gefordert          # nicht feststellbar -> lieber installieren
+    return [n for n in gefordert if n not in da]
+
+
+def pip_nachziehen(ziel, logdatei, grund):
+    """Requirements installieren — nur wenn ein venv existiert."""
+    py, pip = _venv(ziel)
+    if not pip:
+        log("kein venv gefunden — pip-Schritt uebersprungen (%s)" % grund, logdatei)
+        return
+    req = os.path.join(ziel, REQ)
+    log("%s -> pip install -r %s" % (grund, REQ), logdatei)
+    r = subprocess.run([pip, "install", "-q", "-r", req],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        log("pip FEHLGESCHLAGEN: %s" % (r.stderr or "").strip()[:500], logdatei)
+    else:
+        log("pip fertig", logdatei)
 
 
 def main():
@@ -233,8 +284,22 @@ def main():
     stand_schreiben(ziel, geliefert or fern.get("version"), dateien)
     log("installiert: %d Dateien" % len(dateien), logdatei)
 
-    if _datei_inhalt(os.path.join(ziel, REQ)) != req_vorher:
-        pip_nachziehen(ziel, logdatei)
+    # Abhaengigkeiten: ein Paket ist erst nutzbar, wenn auch seine Pakete da
+    # sind. Frueher lief pip NUR, wenn sich die Requirements-Datei geaendert
+    # hat — auf einem frisch bespielten Knoten aendert sie sich aber nicht
+    # (sie kommt ja schon fertig mit), also blieb der venv leer und das
+    # Zimmer startete nie. Deshalb zaehlt jetzt beides: geaenderte Liste ODER
+    # fehlende Pakete. Der Fehlt-Check ist rein lokal (importlib.metadata im
+    # venv), kostet also kein Netz und keine Sekunde.
+    req_pfad = os.path.join(ziel, REQ)
+    py, _ = _venv(ziel)
+    if _datei_inhalt(req_pfad) != req_vorher:
+        pip_nachziehen(ziel, logdatei, "Requirements-Liste geaendert")
+    elif py:
+        fehlt = _fehlende(py, req_pfad)
+        if fehlt:
+            pip_nachziehen(ziel, logdatei,
+                           "fehlende Pakete: %s" % ", ".join(sorted(fehlt)))
 
     return 0
 

@@ -198,3 +198,49 @@ def test_ausbruch_aus_dem_zielordner_blockiert(boese):
 ])
 def test_normale_pfade_gehen_durch(gut):
     assert updater.sicher(gut)
+
+
+# ── Abhaengigkeiten ──────────────────────────────────────────────────────
+#
+# Ein Paket ist erst nutzbar, wenn auch seine Pakete da sind. Frueher lief pip
+# NUR bei geaenderter Requirements-Datei — auf einem frisch bespielten Knoten
+# aendert die sich aber nicht (sie kommt fertig mit), also blieb der venv leer
+# und das Zimmer startete nie. Jetzt zaehlt zusaetzlich, was FEHLT.
+
+def test_requirements_werden_gelesen():
+    req = os.path.join(ROOT, "deploy", "requirements-aussenposten.txt")
+    namen = updater._gefordert(req)
+    assert "pygame" in namen and "sounddevice" in namen
+    assert "webrtcvad-wheels" in namen
+    # Kommentarzeilen und die NICHT-hier-Liste duerfen nicht mitkommen
+    assert not any(n.startswith("#") for n in namen)
+    for backend_paket in ("faster-whisper", "flask", "sherpa-onnx", "openai"):
+        assert backend_paket not in namen, backend_paket
+
+
+@pytest.mark.parametrize("roh,erwartet", [
+    ("webrtcvad_wheels", "webrtcvad-wheels"),
+    ("WebRTCVAD-Wheels", "webrtcvad-wheels"),
+    ("pygame", "pygame"),
+])
+def test_paketnamen_werden_normalisiert(roh, erwartet):
+    """PEP 503: Gross/Klein und -_. sind beim Vergleich egal. Ohne das haelt
+    der Updater ein installiertes 'webrtcvad_wheels' fuer fehlend und ruft bei
+    jedem Lauf pip."""
+    assert updater._normal(roh) == erwartet
+
+
+def test_fehlende_pakete_werden_erkannt(tmp_path):
+    req = tmp_path / "req.txt"
+    req.write_text("# Kommentar\npytest\ngibtesnichtxyz>=1.0\n\n")
+    fehlt = updater._fehlende(sys.executable, str(req))
+    assert "gibtesnichtxyz" in fehlt      # nicht installiert
+    assert "pytest" not in fehlt          # laeuft ja gerade
+
+
+def test_unlesbarer_interpreter_meldet_alles_fehlend(tmp_path):
+    """Laesst sich der venv nicht befragen, wird lieber installiert als
+    stillschweigend nichts zu tun."""
+    req = tmp_path / "req.txt"
+    req.write_text("pygame\n")
+    assert updater._fehlende("/gibt/es/nicht", str(req)) == ["pygame"]
