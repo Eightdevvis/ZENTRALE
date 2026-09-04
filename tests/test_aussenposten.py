@@ -244,3 +244,34 @@ def test_unlesbarer_interpreter_meldet_alles_fehlend(tmp_path):
     req = tmp_path / "req.txt"
     req.write_text("pygame\n")
     assert updater._fehlende("/gibt/es/nicht", str(req)) == ["pygame"]
+
+
+def test_abgleich_installiert_auch_wenn_paket_aktuell_ist(backend, tmp_path, monkeypatch):
+    """Der zweite Lauf darf die Pakete nicht ueberspringen.
+
+    Genau das ist am Pi passiert: erster Lauf installierte das Paket, ab dem
+    zweiten stimmte die Version, der Updater stieg frueh aus — und der venv
+    blieb fuer immer leer. Ein Abgleich muss den SOLL-Zustand herstellen,
+    nicht nur Aenderungen nachfahren.
+    """
+    ziel = tmp_path / "knoten"
+    ziel.mkdir()
+    _lauf(backend, ziel)                       # installiert, Version steht
+    assert _lauf(backend, ziel) == ""          # nichts zu tun (kein venv da)
+
+    # Jetzt einen venv vortaeuschen, in dem etwas fehlt, und pip mitschreiben.
+    gerufen = tmp_path / "pip-aufruf.txt"
+    venv_bin = ziel / ".venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "python").write_text("#!/bin/sh\nexec %s \"$@\"\n" % sys.executable)
+    (venv_bin / "pip").write_text(
+        "#!/bin/sh\necho \"$@\" >> %s\n" % gerufen)
+    for f in ("python", "pip"):
+        os.chmod(venv_bin / f, 0o755)
+
+    req = ziel / "deploy" / "requirements-aussenposten.txt"
+    req.write_text("gibtesnichtxyz\n")         # garantiert nicht installiert
+
+    _lauf(backend, ziel)
+    assert gerufen.exists(), "pip wurde nicht gerufen, obwohl ein Paket fehlt"
+    assert "requirements-aussenposten.txt" in gerufen.read_text()

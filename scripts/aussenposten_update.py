@@ -108,7 +108,15 @@ def installieren(daten, ziel, logdatei):
                     log("ABGELEHNT (unsicherer Pfad): %s" % m.name, logdatei)
                     continue
                 mitglieder.append(m)
-            tar.extractall(tmpdir, members=mitglieder)
+            # filter='data' ist ab Python 3.12 der empfohlene und ab 3.14 der
+            # Default-Modus: er lehnt absolute Pfade, '..', Links und
+            # Sonderrechte ab. Wir pruefen die Namen oben schon selbst; das
+            # hier ist der Guertel zum Hosentraeger — und nimmt die
+            # DeprecationWarning weg, die auf dem Pi im Log stand.
+            try:
+                tar.extractall(tmpdir, members=mitglieder, filter="data")
+            except TypeError:
+                tar.extractall(tmpdir, members=mitglieder)   # Python < 3.12
 
         geschrieben = []
         for m in mitglieder:
@@ -216,6 +224,32 @@ def pip_nachziehen(ziel, logdatei, grund):
         log("pip fertig", logdatei)
 
 
+def abhaengigkeiten_angleichen(ziel, logdatei, req_vorher):
+    """Dafuer sorgen, dass die Pakete des Knotens zur Liste passen.
+
+    Ein Paket ist erst nutzbar, wenn auch seine Pakete da sind. Zwei Gruende
+    zu installieren: die Liste hat sich geaendert (req_vorher != jetzt), oder
+    es fehlt schlicht etwas. Der zweite Fall ist der wichtige — auf einem
+    frisch bespielten Knoten aendert sich die Liste NIE, sie kommt ja fertig
+    im Paket mit.
+
+    req_vorher=None heisst: kein Vergleich moeglich/noetig, nur nachsehen was
+    fehlt. Der Fehlt-Check laeuft lokal ueber importlib.metadata im venv des
+    Knotens — kein Netz, keine Sekunde.
+    """
+    req_pfad = os.path.join(ziel, REQ)
+    if req_vorher is not None and _datei_inhalt(req_pfad) != req_vorher:
+        pip_nachziehen(ziel, logdatei, "Requirements-Liste geaendert")
+        return
+    py, _ = _venv(ziel)
+    if not py:
+        return
+    fehlt = _fehlende(py, req_pfad)
+    if fehlt:
+        pip_nachziehen(ziel, logdatei,
+                       "fehlende Pakete: %s" % ", ".join(sorted(fehlt)))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default=os.environ.get("ZENTRALE_URL",
@@ -250,6 +284,15 @@ def main():
     if hier.get("version") == fern.get("version") and not a.neu:
         if a.pruefen:
             log("aktuell (%s)" % fern.get("version"), logdatei)
+            return 0
+        # Paket ist aktuell — die PAKETE trotzdem pruefen. Sonst konvergiert
+        # ein Knoten nie: genau das ist beim Pi passiert. Der erste Lauf lief
+        # noch mit dem alten Updater (ohne Abhaengigkeits-Pruefung) und
+        # installierte das Paket; ab dem zweiten Lauf stimmte die Version, es
+        # wurde frueh ausgestiegen — und der venv blieb fuer immer leer.
+        # Ein Abgleich muss den SOLL-Zustand herstellen, nicht nur Diffs
+        # nachfahren. Der Check ist rein lokal und kostet nichts.
+        abhaengigkeiten_angleichen(ziel, logdatei, None)
         return 0
 
     log("neue Version: %s -> %s (%s Dateien, %s KB)"
@@ -284,23 +327,7 @@ def main():
     stand_schreiben(ziel, geliefert or fern.get("version"), dateien)
     log("installiert: %d Dateien" % len(dateien), logdatei)
 
-    # Abhaengigkeiten: ein Paket ist erst nutzbar, wenn auch seine Pakete da
-    # sind. Frueher lief pip NUR, wenn sich die Requirements-Datei geaendert
-    # hat — auf einem frisch bespielten Knoten aendert sie sich aber nicht
-    # (sie kommt ja schon fertig mit), also blieb der venv leer und das
-    # Zimmer startete nie. Deshalb zaehlt jetzt beides: geaenderte Liste ODER
-    # fehlende Pakete. Der Fehlt-Check ist rein lokal (importlib.metadata im
-    # venv), kostet also kein Netz und keine Sekunde.
-    req_pfad = os.path.join(ziel, REQ)
-    py, _ = _venv(ziel)
-    if _datei_inhalt(req_pfad) != req_vorher:
-        pip_nachziehen(ziel, logdatei, "Requirements-Liste geaendert")
-    elif py:
-        fehlt = _fehlende(py, req_pfad)
-        if fehlt:
-            pip_nachziehen(ziel, logdatei,
-                           "fehlende Pakete: %s" % ", ".join(sorted(fehlt)))
-
+    abhaengigkeiten_angleichen(ziel, logdatei, req_vorher)
     return 0
 
 
