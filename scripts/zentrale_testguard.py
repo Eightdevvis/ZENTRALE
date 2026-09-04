@@ -55,7 +55,7 @@ Getestet in tests/test_keine_seiteneffekte.py.
 #: also gewinnt, wer zuerst da ist, und einzelne Tests duerfen weiterhin per
 #: monkeypatch auf ihr eigenes tmp_path biegen.
 _UMLENKUNG = ("ZENTRALE_THEME_FILE", "ZENTRALE_THEME_NOW",
-              "XDG_CACHE_HOME", "ZENTRALE_USAGE_FILE")
+              "XDG_CACHE_HOME", "ZENTRALE_USAGE_FILE", "ZENTRALE_NOTIFY")
 
 
 def _ist_testlauf(kommandozeile, umgebung):
@@ -117,6 +117,22 @@ def anwenden(umgebung, kommandozeile, tempdir, pid, cwd=""):
     umgebung.setdefault("ZENTRALE_THEME_NOW", ziel + "/theme.now")
     umgebung.setdefault("XDG_CACHE_HOME", ziel + "/cache")
     umgebung.setdefault("ZENTRALE_USAGE_FILE", ziel + "/ai_usage.json")
+    # Kein Testlauf meldet sich auf Sashas Desktop.
+    #
+    # Die Umlenkungen darueber schuetzen DATEIEN. Eine Benachrichtigung ist
+    # keine Datei — sie geht an notify-send und damit sofort und sichtbar an
+    # den Menschen, egal wohin HOME zeigt. Gekostet hat das Monate lang ein
+    # Popup "Geige gleich. Los." bei JEDEM Lauf von tests/test_takt.py: der
+    # Treiber-Test faehrt absichtlich den ECHTEN ui/app.py:_takt_sprechen,
+    # faelscht nur den Modell-Stream — und dessen letzter Schritt meldet nach
+    # draussen, wenn ZENTRALE nicht sichtbar vor Sasha steht.
+    #
+    # Ein einzelner Test kann das per monkeypatch heilen; genau darauf zu
+    # bauen ist die Wette, die hier verloren wurde. Deshalb der Riegel an der
+    # Stelle, die kein Test vergessen kann. Wer eine echte Meldung PRUEFEN
+    # will, patcht melden.desktop (so macht es tests/test_melden.py) statt
+    # sich auf diese Variable zu verlassen.
+    umgebung.setdefault("ZENTRALE_NOTIFY", "0")
     # Marker: daran erkennt core/theme.py (und ein Mensch im Protokoll), dass
     # dieser Prozess zu einem Testlauf gehoert.
     umgebung["ZENTRALE_TESTLAUF"] = "1"

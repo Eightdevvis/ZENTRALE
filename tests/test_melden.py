@@ -114,6 +114,9 @@ def test_ein_kaputtes_i3_wirft_nicht(monkeypatch):
 # ── Die Meldung selbst ────────────────────────────────────────────────
 
 def test_meldung_geht_raus_wenn_versteckt(monkeypatch):
+    # AN ist im Testlauf aus (ZENTRALE_NOTIFY=0, siehe tests/conftest.py) —
+    # wer den Sendeweg SELBST prueft, schaltet ihn hier ausdruecklich ein.
+    monkeypatch.setattr(melden, "AN", True)
     monkeypatch.setattr(melden, "sichtbar", lambda: False)
     monkeypatch.setattr(melden.shutil, "which", lambda n: "/usr/bin/" + n)
     geschickt = []
@@ -130,6 +133,7 @@ def test_die_meldung_kennt_die_sitzung(monkeypatch):
     """Als systemd-Benutzerdienst ist DISPLAY nicht gesetzt. Ohne Ruecksetzer
     faellt notify-send stumm auf die Nase — und zwar genau dann, wenn
     ZENTRALE als Systemeinheit laeuft, also immer."""
+    monkeypatch.setattr(melden, "AN", True)
     monkeypatch.setattr(melden, "sichtbar", lambda: False)
     monkeypatch.setattr(melden.shutil, "which", lambda n: "/usr/bin/" + n)
     monkeypatch.delenv("DISPLAY", raising=False)
@@ -148,6 +152,7 @@ def test_keine_meldung_wenn_sie_ohnehin_dasteht(i3, monkeypatch):
 
 
 def test_bei_unbekannter_sichtbarkeit_wird_gemeldet(monkeypatch):
+    monkeypatch.setattr(melden, "AN", True)
     monkeypatch.setattr(melden, "sichtbar", lambda: None)
     monkeypatch.setattr(melden.shutil, "which", lambda n: "/usr/bin/" + n)
     gesendet = []

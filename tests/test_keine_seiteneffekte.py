@@ -276,6 +276,50 @@ def _riegel_installiert():
                                        "zentrale_testguard.pth"))
 
 
+def test_kein_testlauf_meldet_sich_auf_dem_desktop():
+    """Eine Benachrichtigung ist der einzige Nebeneffekt, den kein Wegwerf-
+    HOME abfaengt: sie geht an notify-send und damit direkt an den Menschen.
+
+    Gekostet hat das ein Popup "Geige gleich. Los." bei jedem Lauf von
+    tests/test_takt.py — dessen Treiber-Test faehrt absichtlich das echte
+    ui/app.py:_takt_sprechen, und dessen letzter Schritt meldet nach draussen.
+    """
+    sys.path.insert(0, os.path.join(ROOT, "core"))
+    import melden
+
+    assert os.environ.get("ZENTRALE_NOTIFY") == "0"
+    assert melden.AN is False, "melden.AN liest die Variable beim Import"
+    assert melden.desktop("darf nie ankommen") is False
+
+
+def test_der_takt_treiber_meldet_im_testlauf_nichts(monkeypatch):
+    """Der Riegel am Ort des Schadens: der Treiber laeuft ganz normal durch
+    (inklusive Lage-Abfrage), nur nach draussen geht nichts."""
+    sys.path.insert(0, os.path.join(ROOT, "core"))
+    sys.path.insert(0, os.path.join(ROOT, "ui"))
+    import ai
+    import ai_backends
+    import app
+    import melden
+
+    # Nur nach DRAUSSEN darf nichts gehen: die Lage-Abfrage (i3-msg) laeuft
+    # ueber dasselbe subprocess.run und ist voellig in Ordnung.
+    geschickt = []
+
+    def mitschreiben(cmd, *a, **k):
+        if cmd and cmd[0] == "notify-send":
+            geschickt.append(cmd)
+        return None
+
+    monkeypatch.setattr(melden.subprocess, "run", mitschreiben)
+    monkeypatch.setattr(ai_backends, "chat_available", lambda: "local")
+    monkeypatch.setattr(ai, "chat_stream",
+                        lambda h, **k: iter(["Geige gleich. ", "Los."]))
+
+    assert app._takt_sprechen({"marke": "x", "auftrag": "y"}) is True
+    assert geschickt == [], "eine echte Meldung hat den Testlauf verlassen"
+
+
 @pytest.mark.skipif(not _riegel_installiert(),
                     reason="venv ohne Riegel — scripts/zentrale-venv-guard läuft nicht")
 def test_venv_riegel_greift_in_einem_echten_subprozess(tmp_path):
@@ -297,11 +341,15 @@ def test_venv_riegel_greift_in_einem_echten_subprozess(tmp_path):
         "    assert p, 'der venv-Riegel hat gar nichts gesetzt'\n"
         "    echt = os.path.expanduser('~/.config/zentrale')\n"
         "    assert not os.path.realpath(p).startswith(os.path.realpath(echt)),\\\n"
-        "        'zeigt auf die echte Konfiguration: %s' % p\n")
+        "        'zeigt auf die echte Konfiguration: %s' % p\n"
+        "def test_stumm():\n"
+        "    assert os.environ.get('ZENTRALE_NOTIFY') == '0',\\\n"
+        "        'der Riegel laesst Benachrichtigungen durch'\n")
 
     umgebung = {k: v for k, v in os.environ.items()
                 if k not in ("ZENTRALE_THEME_FILE", "ZENTRALE_THEME_NOW",
                              "ZENTRALE_USAGE_FILE", "ZENTRALE_TESTLAUF",
+                             "ZENTRALE_NOTIFY",
                              "XDG_CACHE_HOME", "PYTEST_VERSION",
                              "PYTEST_CURRENT_TEST")}
     r = subprocess.run(

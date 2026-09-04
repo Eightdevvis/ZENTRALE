@@ -28,7 +28,17 @@ for p in (CORE, ROOT):
 os.environ.setdefault("ZENTRALE_KASSETTE", "tui")
 os.environ.setdefault("ZENTRALE_MAIL", "off")
 
-# 3. Buchhaltung in eine Wegwerf-Datei umlenken.
+# 3. Kein Testlauf meldet sich auf Sashas Desktop.
+#
+# Der Zwilling dieser Zeile steht in scripts/zentrale_testguard.py (der greift
+# auch aus einem alten Worktree, dessen conftest diese hier nicht kennt); die
+# Begründung steht dort ausführlich. Kurz: der Treiber-Test in test_takt.py
+# fährt absichtlich das echte ui/app.py:_takt_sprechen, und dessen letzter
+# Schritt schickt eine echte Systembenachrichtigung raus — jahrelang jedes Mal
+# ein Popup "Geige gleich. Los." mitten in Sashas Sitzung.
+os.environ.setdefault("ZENTRALE_NOTIFY", "0")
+
+# 4. Buchhaltung in eine Wegwerf-Datei umlenken.
 #
 # Die Cloud-Tests fahren einen gefälschten API-Client mit erfundenen
 # Token-Zahlen — der läuft ganz normal durch usage.buchen(). Ohne diese Zeile
@@ -40,7 +50,7 @@ _USAGE_TMP = os.path.join(tempfile.gettempdir(),
 os.environ.setdefault("ZENTRALE_USAGE_FILE", _USAGE_TMP)
 atexit.register(lambda: os.path.exists(_USAGE_TMP) and os.remove(_USAGE_TMP))
 
-# 4. Theme-Dateien in ein Wegwerf-Verzeichnis umlenken.
+# 5. Theme-Dateien in ein Wegwerf-Verzeichnis umlenken.
 #
 # Dieselbe Klasse Fehler wie Punkt 3, nur teurer, weil man sie SIEHT: der
 # TUI-Fuzzer (tests/test_tui_fuzz.py) startet die echte TUI in einem Pseudo-
@@ -67,7 +77,7 @@ def _theme_tmp_aufraeumen():
     shutil.rmtree(_THEME_TMP, ignore_errors=True)
 
 
-# 5. Kein Testlauf darf Geld ausgeben.
+# 6. Kein Testlauf darf Geld ausgeben.
 #
 # Gelernt am 2026-09-04: `test_ki_endpoint_locked_in_tui_kassette` prüfte, dass
 # der Chat in der ki-freien Kassette zu bleibt — und ging davon aus, dass in der
