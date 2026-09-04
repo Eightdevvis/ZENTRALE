@@ -82,3 +82,5 @@ core/map/data/cache/
 # Claude Code: lokale Einstellungen + Worktrees/Jobs — Werkzeug-interne
 # Artefakte, gehoeren nie ins Repo.
 .claude/
+# Kontrollbild von tutor/gelenke.py — entsteht bei jedem Einlesen neu
+tutor/assets/figuren/*/KONTROLLE.png

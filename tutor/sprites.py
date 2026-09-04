@@ -226,6 +226,27 @@ class Rig:
         """Höhe der Figur auf der Leinwand — für die Umrechnung der Skalierung."""
         return float(self.leinwand.get('boden_y', 604))
 
+    # Abstand Fusspunkt→Nacken in den Einheiten der alten Polygon-Figur. Diese
+    # Strecke ist der Massstab, an dem gemessen wird, wie gross die gemalte
+    # Figur gegenüber der gerechneten ist.
+    BEZUG_BODEN_NACKEN = 64.0
+
+    def einheiten_faktor(self):
+        """Wie viele Leinwand-Pixel eine Einheit der Figur-Geometrie sind.
+
+        Wird NICHT festgenagelt, sondern aus dem Bauplan abgelesen: Abstand
+        Fusspunkt→Nacken, geteilt durch dieselbe Strecke in Einheiten. Dadurch
+        darf die Figur beliebig proportioniert und die Leinwand beliebig gross
+        sein — das Zimmer skaliert automatisch richtig."""
+        boden = float(self.leinwand.get('boden_y', 604))
+        nacken = (self.slots.get('kopf') or {}).get('pivot')
+        if not nacken:
+            return 6.0
+        strecke = boden - float(nacken[1])
+        if strecke <= 1:
+            return 6.0
+        return strecke / self.BEZUG_BODEN_NACKEN
+
 
 def lade_rig(name='lucia'):
     """Rig aus tutor/assets/figuren/<name>/ laden. Gibt immer ein Rig zurück (evtl. leer)."""

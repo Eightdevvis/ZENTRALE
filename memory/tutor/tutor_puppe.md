@@ -26,7 +26,8 @@ Drei Teile, klar getrennt:
 | `tutor/assets/figuren/<figur>/rig.json` | **Bauplan**: Leinwandmass, Slots, Drehpunkte, Zeichenreihenfolge, Mimik-Varianten |
 | `tutor/sprites.py` | **Lader**: liest den Bauplan, lädt die PNGs, dreht Teile um ihren Drehpunkt, blittet sie |
 | `tutor/room.py` (`Persona`) | **Pose**: rechnet pro Frame die Winkel aller Gliedmassen aus und ruft den Lader |
-| `tutor/schablone.py` | erzeugt die **Mal-Schablone** aus `rig.json` |
+| `tutor/schablone.py` | erzeugt die **Mal-Schablone** aus `rig.json` (Zahlen → Bild) |
+| `tutor/gelenke.py` | liest **gemalte Gelenkpunkte** zurück nach `rig.json` (Bild → Zahlen) |
 
 Anleitung für den Malenden: `tutor/assets/figuren/LIES_MICH.md`.
 
@@ -63,12 +64,21 @@ ist `(sin w, cos w)`; `sprites.py` dreht mit demselben Vorzeichen wie pygame.
 Gelenkketten stecken in `rig.json` (`eltern`), die Positionen rechnet
 `Persona._draw_rig` aus: Ellbogen = Schulter + Richtung(Oberarmwinkel) · Länge.
 
-## Proportionen — offener Punkt
+## Proportionen: Sasha gibt vor, nicht der Bauplan
 
-Die Drehpunkte bilden derzeit **die alte Polygon-Figur** ab (grosser Kopf,
-kurze Beine). Zimmer, Couch und Sprechblase sind darauf ausgerichtet. Malt
-Sasha anders proportioniert, müssen `rig.json` und die Ankerpunkte im Zimmer
-mitwandern — die Schablone wird dann neu erzeugt.
+Die mitgelieferten Drehpunkte bilden noch die alte Polygon-Figur ab (grosser
+Kopf, kurze Beine). Das ist aber nur ein Startwert, keine Bindung: mit
+`tutor/gelenke.py` geht es **andersherum** — Sasha malt die Figur, wie er sie
+will, setzt auf einer eigenen Ebene je Gelenk einen Farbklecks, und der
+Bauplan richtet sich danach. Farbtabelle: `GELENK_FARBEN.png` (aus
+`gelenke.py --farbkarte`), Kontrollbild vor dem Schreiben.
+
+**Der Maßstab wird nicht festgenagelt**, sondern aus dem Bauplan abgelesen:
+`Rig.einheiten_faktor()` misst den Abstand Fusspunkt→Nacken und teilt ihn
+durch dieselbe Strecke in den Einheiten der alten Figur (64). Dadurch darf die
+Leinwand jede Grösse und die Figur jede Proportion haben — das Zimmer skaliert
+automatisch richtig. Eine feste Konstante dafür wäre genau die Falle gewesen,
+die eine schlankere Figur zu gross oder zu klein gemacht hätte.
 
 ## Sitzen
 

@@ -75,20 +75,40 @@ Auch diese auf voller 512 × 640-Leinwand, an der Stelle im Gesicht, wo sie
 hingehören. Fehlt eine Variante, nimmt der Code das nächstbeste vorhandene
 Bild — es müssen also nicht alle auf einmal existieren.
 
-## Größe und Proportionen ändern
+## Eigene Proportionen: die Gelenke selbst setzen
 
-Die Drehpunkte in `rig.json` bilden die **heutige** Figur ab (großer Kopf,
-kurze Beine — sie kommt aus den alten Polygonen). Wenn die gemalte Figur
-anders proportioniert sein soll — kleinerer Kopf, längere Beine, breitere
-Schultern — ist das kein Problem, aber die Drehpunkte müssen mitwandern.
-Sag Bescheid, dann ziehe ich `rig.json` nach und die Schablone wird neu
-erzeugt; Zimmer, Couch und Sprechblase werden dabei mit angepasst.
+Die mitgelieferte Schablone bildet die **alte** Figur ab (großer Kopf, kurze
+Beine — sie stammt aus den Polygonen). Das muss niemanden binden. Der
+bequemere Weg herum ist: **die Figur malen, wie sie sein soll, und dem Code
+hinterher sagen, wo die Gelenke sitzen.**
 
-## Schablone neu bauen
+1. Figur malen, Proportionen völlig frei, Leinwand beliebig groß.
+2. Eine **neue leere Ebene** darüber. Darauf pro Gelenk **einen Klecks** in
+   der jeweiligen Farbe setzen — die Farben stehen in `lucia/GELENK_FARBEN.png`
+   und lassen sich von dort mit der Pipette abgreifen. Pinselgröße egal, die
+   Mitte des Kleckses zählt.
+3. Nur diese Ebene als PNG exportieren.
+4. Einlesen lassen (`tutor/gelenke.py`). Es entsteht ein **Kontrollbild** mit
+   Beschriftungen zum Prüfen; erst danach wird `rig.json` wirklich geändert.
 
-Die Schablone wird aus `rig.json` erzeugt, ist also nie veraltet — sie muss
-nur neu gebaut werden, wenn sich am Bauplan etwas geändert hat. Das
-zuständige Skript ist `tutor/schablone.py`.
+Links und rechts musst du nicht auseinanderhalten: wo eine Farbe zweimal
+vorkommt — Schultern, Ellbogen, Hüftgelenke, Knie, Augen — entscheidet die
+Lage im Bild. Stimmt die Anzahl der Kleckse pro Farbe nicht, wird nichts
+geschrieben, sondern gemeldet, was fehlt oder zu viel ist.
+
+Wichtig ist der **Fusspunkt** (schwarzer Klecks): daran hängt, wie groß die
+Figur im Zimmer erscheint und wo sie auf dem Boden steht. Der Maßstab wird
+aus dem Abstand Fusspunkt→Nacken abgelesen, deshalb darf die Leinwand jede
+Größe haben — das Zimmer rechnet sich automatisch darauf um.
+
+Die Schablone wird nach dem Einlesen neu gezeichnet und zeigt dann **deine**
+Gelenke. Ab da malst du gegen deine eigene Vorlage.
+
+## Schablone von Hand neu bauen
+
+Sie wird aus `rig.json` erzeugt und ist daher nie veraltet. Zuständig ist
+`tutor/schablone.py`; nach einem Einlesen mit `tutor/gelenke.py` passiert es
+von allein.
 
 ## Was hier später dazukommt
 
