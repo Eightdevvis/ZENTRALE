@@ -318,19 +318,32 @@ def test_systemliste_nennt_die_bekannten_bibliotheken():
 
 # ── Neustart der Front ───────────────────────────────────────────────────
 
-def test_prozesssuche_findet_und_verschont_sich_selbst():
-    """_prozesse() darf den Updater nicht sich selbst melden — sonst schoesse
-    ein Update den eigenen Lauf ab."""
+def test_prozesssuche_trifft_nur_echte_python_laeufe(tmp_path):
+    """Nur wer das Skript wirklich AUSFUEHRT, wird gefunden — nicht wer es
+    bloss in seiner Kommandozeile stehen hat.
+
+    Das ist teuer gewesen: der Kiosk startet die TUI aus einer while-Schleife
+    in einem xterm, also steht 'tui/zentrale_tui.py' in drei Kommandozeilen.
+    Eine Textsuche traf alle drei und erschlug mit der Schleife genau das,
+    was die TUI zurueckholen sollte — der Wandbildschirm blieb schwarz.
+    """
     import subprocess as sp
-    schlaefer = sp.Popen([sys.executable, "-c",
-                          "import time; time.sleep(30)  # tui/zentrale_tui.py"])
+    skript = tmp_path / "tui"
+    skript.mkdir()
+    (skript / "zentrale_tui.py").write_text("import time; time.sleep(30)\n")
+
+    echt = sp.Popen([sys.executable, str(skript / "zentrale_tui.py")])
+    # Der Wrapper: erwaehnt den Pfad nur, fuehrt ihn nicht aus.
+    wrapper = sp.Popen(["bash", "-c",
+                        "while true; do : tui/zentrale_tui.py; sleep 5; done"])
     try:
-        gefunden = {pid for pid, _ in updater._prozesse("tui/zentrale_tui.py")}
-        assert schlaefer.pid in gefunden
-        assert not any("aussenposten_update" in z
-                       for _, z in updater._prozesse("tui/zentrale_tui.py"))
+        gefunden = {pid for pid, _ in
+                    updater._python_prozesse("tui/zentrale_tui.py")}
+        assert echt.pid in gefunden, "der echte Lauf muss gefunden werden"
+        assert wrapper.pid not in gefunden, "der Wrapper darf NICHT sterben"
     finally:
-        schlaefer.kill(); schlaefer.wait()
+        for p in (echt, wrapper):
+            p.kill(); p.wait()
 
 
 def test_front_neustart_beendet_die_tui(tmp_path):
@@ -338,8 +351,10 @@ def test_front_neustart_beendet_die_tui(tmp_path):
     ohne das laesst den Wand-Knoten mit dem alten Stand stehen."""
     import subprocess as sp
     import time as _t
-    schlaefer = sp.Popen([sys.executable, "-c",
-                          "import time; time.sleep(30)  # tui/zentrale_tui.py"])
+    skript = tmp_path / "tui"
+    skript.mkdir()
+    (skript / "zentrale_tui.py").write_text("import time; time.sleep(30)\n")
+    schlaefer = sp.Popen([sys.executable, str(skript / "zentrale_tui.py")])
     log = tmp_path / "log.txt"
     try:
         updater.front_neustarten(str(log))

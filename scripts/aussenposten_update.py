@@ -250,19 +250,42 @@ def _nicht_ladbar(py, req_pfad):
     return kaputt
 
 
-def _prozesse(muster):
-    """PIDs, deren Kommandozeile `muster` enthaelt. Ohne psutil, ueber /proc."""
-    treffer = []
+def _argv_liste():
+    """(pid, argv) aller laufenden Prozesse. Ohne psutil, ueber /proc."""
+    raus = []
     for eintrag in os.listdir("/proc"):
         if not eintrag.isdigit():
             continue
         try:
             with open("/proc/%s/cmdline" % eintrag, "rb") as f:
-                zeile = f.read().replace(b"\0", b" ").decode("utf-8", "replace")
+                roh = f.read()
         except OSError:
             continue
-        if muster in zeile and "aussenposten_update" not in zeile:
-            treffer.append((int(eintrag), zeile.strip()))
+        argv = [t.decode("utf-8", "replace") for t in roh.split(b"\0") if t]
+        if argv:
+            raus.append((int(eintrag), argv))
+    return raus
+
+
+def _python_prozesse(skript):
+    """PIDs, die `skript` WIRKLICH ausfuehren — nicht die, die es nur erwaehnen.
+
+    Der Unterschied ist teuer gewesen: der Kiosk startet die TUI aus einer
+    `while true`-Schleife heraus, in einem xterm. Damit steht 'tui/zentrale_tui.py'
+    in DREI Kommandozeilen — in der Schleife, im xterm und im Python selbst.
+    Eine simple Textsuche traf alle drei, und mit der Schleife starb genau das,
+    was die TUI haette zurueckholen sollen: der Wandbildschirm blieb schwarz.
+
+    Deshalb wird hier das argv zerlegt: das erste Wort muss ein Python sein
+    und das Skript ein eigenes Argument. Ein Wrapper, der es nur im Text
+    seiner Kommandozeile stehen hat, faellt damit raus.
+    """
+    treffer = []
+    for pid, argv in _argv_liste():
+        if not os.path.basename(argv[0]).startswith("python"):
+            continue
+        if any(a == skript or a.endswith("/" + skript) for a in argv[1:]):
+            treffer.append((pid, " ".join(argv)))
     return treffer
 
 
@@ -284,7 +307,7 @@ def front_neustarten(logdatei):
     bei jedem Oeffnen neu.
     """
     import signal
-    laeuft = _prozesse("tui/zentrale_tui.py")
+    laeuft = _python_prozesse("tui/zentrale_tui.py")
     if not laeuft:
         log("keine TUI aktiv — nichts neu zu starten", logdatei)
         return
@@ -295,7 +318,7 @@ def front_neustarten(logdatei):
                 "neuen Stand zurueck" % pid, logdatei)
         except OSError as exc:
             log("TUI (pid %d) liess sich nicht beenden: %s" % (pid, exc), logdatei)
-    if _prozesse("tutor/room.py"):
+    if _python_prozesse("tutor/room.py"):
         log("Persona-Zimmer laeuft und bleibt offen (koennte ein Gespraech "
             "sein) — es startet beim naechsten Oeffnen mit neuem Code", logdatei)
 
