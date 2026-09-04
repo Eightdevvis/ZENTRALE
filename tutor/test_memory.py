@@ -69,8 +69,15 @@ def main():
         check("topics gedeckelt", len(capped["topics"]) <= memory._MEM_MAX_TOPICS)
 
         # ── Sandbox: der Persona-Store fasst ai_graph.json NIE an ───────
+        # Seit den Spielstaenden liegt zwischen Store-Wurzel und Sprache noch
+        # der Stand (tutor/data/staende/<id>/zh/). Der Pfad wird deshalb beim
+        # Modul erfragt statt zusammengesetzt — die Frage bleibt dieselbe:
+        # liegt die Notiz im tmp-Sandkasten und nicht in Sashas echten Daten?
+        mp = memory.mem_path("zh")
         check("persona-notizen liegen im tmp-store",
-              os.path.exists(os.path.join(tmp, "zh", "persona_mem.json")))
+              os.path.exists(mp) and os.path.abspath(mp).startswith(
+                  os.path.abspath(tmp) + os.sep))
+        check("spielstand-ebene liegt dazwischen", "staende" in mp)
         check("kein core-graph angelegt",
               not os.path.exists(os.path.join(tmp, "ai_graph.json")))
         check("memory importiert weder graph noch consolidation",

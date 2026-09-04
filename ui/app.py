@@ -1656,6 +1656,46 @@ def api_tutor_assessment_answer():
     return jsonify(tutor_port.assessment_answer(word, result))
 
 
+# ── Spielstaende ──────────────────────────────────────────────────────
+#
+# Mehrere Lernstaende nebeneinander, einer ist aktiv. Bis hierher hatte der
+# Tutor genau einen; wer neu anfangen wollte, musste Dateien loeschen und war
+# den alten Fortschritt los. Gewaehlt wird auf dem Willkommens-Schirm des
+# Zimmers, bevor das Drill losgeht.
+#
+# Wie beim Drill KEIN available()-Gate: Spielstaende sind Dateien auf der
+# Platte, dafuer muss keine KI erreichbar sein. Man soll seinen Stand auch
+# dann wechseln koennen, wenn die Cloud gerade gedrosselt ist.
+
+
+@app.route('/api/tutor/staende')
+def api_tutor_staende():
+    """Alle Spielstaende + welcher gerade aktiv ist."""
+    d = tutor_port.staende()
+    if not d.get("present"):
+        return _tutor_unavail()
+    return jsonify(d)
+
+
+@app.route('/api/tutor/staende', methods=['POST'])
+def api_tutor_stand_anlegen():
+    """Neuen Spielstand anlegen und sofort aktivieren. Body: {name} (optional)."""
+    body = request.get_json(silent=True) or {}
+    d = tutor_port.stand_anlegen((body.get('name') or '').strip() or None)
+    return jsonify(d), (200 if d.get("ok") else 400)
+
+
+@app.route('/api/tutor/staende/waehlen', methods=['POST'])
+def api_tutor_stand_waehlen():
+    """Auf einen vorhandenen Spielstand umschalten. Body: {id}."""
+    body = request.get_json(silent=True) or {}
+    sid = (body.get('id') or '').strip()
+    if not sid:
+        return jsonify({"ok": False, "error": "id noetig"}), 400
+    d = tutor_port.stand_waehlen(sid)
+    return jsonify(d), (200 if d.get("ok") else 400)
+
+
 @app.route('/api/ai/debug/stream')
 def api_ai_debug_stream():
     """Devtools-Stream (SSE) fuer die KERN-KI (scripts/ai_devtools.py).

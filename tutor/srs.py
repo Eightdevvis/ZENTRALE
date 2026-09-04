@@ -20,6 +20,8 @@
 
 import json
 import os
+
+from . import staende   # Spielstaende: welcher Lernstand gerade laeuft
 from threading import Lock
 from datetime import datetime, timezone
 
@@ -62,9 +64,8 @@ def _lang(lang: str = None) -> str:
 
 
 def _file(lang: str = None) -> str:
-    d = os.path.join(_DATA_ROOT, _lang(lang))
-    os.makedirs(d, exist_ok=True)
-    return os.path.join(d, 'fsrs.json')
+    """fsrs.json dieser Sprache im aktiven Spielstand (siehe tutor/staende.py)."""
+    return os.path.join(staende.pfad(_DATA_ROOT, _lang(lang)), 'fsrs.json')
 
 
 def _load(lang: str = None) -> dict:

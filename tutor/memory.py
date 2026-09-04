@@ -32,6 +32,8 @@
 
 import os
 import json
+
+from . import staende   # Spielstaende: welcher Lernstand gerade laeuft
 from threading import Lock
 
 from . import langs as tutor_langs
@@ -60,11 +62,13 @@ def _lang(lang: str | None) -> str:
 
 
 def _dir(lang: str | None = None) -> str:
-    """tutor/data/<lang>/ — pro Sprache ein eigener Ordner (Umbau 2026-07-16;
-    vorher lagen alle Sprachen flach als persona_mem_<lang>.json nebeneinander)."""
-    d = os.path.join(_DATA_DIR, _lang(lang))
-    os.makedirs(d, exist_ok=True)
-    return d
+    """Datenordner dieser Sprache im aktiven Spielstand.
+
+    Zwei Umbauten stecken hier drin: seit 2026-07-16 hat jede Sprache einen
+    eigenen Ordner (vorher lagen alle flach als persona_mem_<lang>.json
+    nebeneinander), und seit den Spielstaenden liegt darueber noch der Stand
+    (siehe tutor/staende.py)."""
+    return staende.pfad(_DATA_DIR, _lang(lang))
 
 
 def mem_path(lang: str | None = None) -> str:

@@ -278,6 +278,30 @@ class Backend:
         (deterministisch, kein LLM). None bei Fehler."""
         return self._get('/api/tutor/assessment', timeout=5.0)
 
+    def _post(self, path, koerper, timeout=8):
+        try:
+            req = urllib.request.Request(
+                self.url + path,
+                data=json.dumps(koerper).encode('utf-8'),
+                method='POST', headers={'Content-Type': 'application/json'})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read().decode('utf-8', 'replace'))
+        except Exception:
+            return None
+
+    # ── Spielstände ──────────────────────────────────────────────────────
+    def staende(self):
+        """GET /api/tutor/staende → {aktiv, staende:[…]}. None bei Fehler."""
+        return self._get('/api/tutor/staende', timeout=5.0)
+
+    def stand_neu(self, name=None):
+        """Neuen Spielstand anlegen und aktivieren."""
+        return self._post('/api/tutor/staende', {'name': name or ''})
+
+    def stand_waehlen(self, sid):
+        """Auf einen vorhandenen Spielstand umschalten."""
+        return self._post('/api/tutor/staende/waehlen', {'id': sid})
+
     def answer(self, word, result):
         """POST /api/tutor/assessment/answer {word, result} → neuer Stand."""
         try:
@@ -1085,6 +1109,69 @@ def _draw_reveal(screen, fonts, w, h, asv):
     screen.blit(sub, (w // 2 - sub.get_width() // 2, by + 54))
 
 
+def _stand_zeilen(asv):
+    """Die Auswahl-Zeilen: vorhandene Spielstaende, danach »neu anfangen«.
+
+    Vorhandene zuerst, weil Weiterspielen der Normalfall ist — neu anfaengt man
+    einmal. Die Liste kommt vom Backend; solange sie laedt, gibt es nur den
+    neuen Stand, damit der Schirm nie leer und unbedienbar dasteht.
+    """
+    zeilen = [{'art': 'stand', 'stand': st} for st in (asv.get('staende') or [])]
+    zeilen.append({'art': 'neu'})
+    return zeilen
+
+
+def _draw_stand_wahl(screen, w, fonts, asv, top_y, ctr):
+    """Spielstand waehlen, bevor das Drill losgeht."""
+    zeilen = _stand_zeilen(asv)
+    idx = max(0, min(len(zeilen) - 1, int(asv.get('stand_idx', 0))))
+    aktiv = asv.get('stand_aktiv')
+
+    ctr(fonts['hud'].render('SPIELSTAND', True, ASSESS_ACC), top_y)
+    y = top_y + 34
+    bw = min(560, w - 160)
+    bx = w // 2 - bw // 2
+
+    for i, z in enumerate(zeilen):
+        gewaehlt = (i == idx)
+        hoehe = 52
+        if gewaehlt:
+            pygame.draw.rect(screen, ASSESS_BAR_BG, (bx, y - 6, bw, hoehe),
+                             border_radius=8)
+            pygame.draw.rect(screen, ASSESS_ACC, (bx, y - 6, 4, hoehe),
+                             border_radius=2)
+        if z['art'] == 'neu':
+            titel = 'Neuer Spielstand'
+            unter = 'von vorn anfangen — der alte Stand bleibt erhalten'
+            farbe = ASSESS_GOLD
+        else:
+            st = z['stand']
+            titel = st.get('name') or st.get('id')
+            if st.get('id') == aktiv:
+                titel += '   (zuletzt gespielt)'
+            unter = _stand_unterzeile(st)
+            farbe = ASSESS_INK
+        screen.blit(fonts['big'].render(titel, True, farbe), (bx + 18, y - 2))
+        screen.blit(fonts['hud'].render(unter, True, HUD_DIM), (bx + 18, y + 26))
+        y += hoehe + 8
+
+    _hint_row(screen, fonts['hud'], w, y + 12,
+              [('↑↓', 'wählen'), ('Enter', 'los geht’s')])
+
+
+def _stand_unterzeile(st):
+    """Woran man einen Stand wiedererkennt: Sprachen, Woerter, Muenzen."""
+    teile = []
+    for lang, d in sorted((st.get('sprachen') or {}).items()):
+        stueck = '%s · %d Wörter' % (lang, d.get('woerter', 0))
+        if d.get('muenzen'):
+            stueck += ' · %d Münzen' % d['muenzen']
+        teile.append(stueck)
+    if not teile:
+        return 'noch nichts gelernt'
+    return '   |   '.join(teile)
+
+
 def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
     for y in range(h):
         f = y / max(1, h - 1)
@@ -1120,12 +1207,12 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
         _draw_coin_hud(screen, fonts, w, asv)
 
     if phase == 'welcome':
-        ctr(fonts['word'].render('Hola', True, ASSESS_INK), cy - 150)
-        ctr(fonts['big'].render('Ich bin Lucía.', True, ASSESS_INK), cy - 78)
+        ctr(fonts['word'].render('Hola', True, ASSESS_INK), cy - 250)
+        ctr(fonts['big'].render('Ich bin Lucía.', True, ASSESS_INK), cy - 178)
         for i, ln in enumerate(['Zuerst gehen wir zusammen die wichtigsten Wörter durch — hak ab, was du kannst.',
                                 'Dabei sammelst du Münzen und puzzelst mich Stück für Stück zusammen.']):
-            ctr(fonts['log'].render(ln, True, HUD_DIM), cy - 22 + i * 26)
-        _hint_row(screen, fonts['hud'], w, cy + 82, [('Enter', 'Los geht’s')])
+            ctr(fonts['log'].render(ln, True, HUD_DIM), cy - 122 + i * 26)
+        _draw_stand_wahl(screen, w, fonts, asv, cy - 46, ctr)
         return
 
     # Lucía baut sich rechts zusammen (schwebende Teile). Bei Freischaltung komplett.
@@ -1537,10 +1624,16 @@ def main():
                 return
             phase = v.get('phase'); sub = v.get('sub')
         if phase == 'welcome':
-            if ev.key in (pygame.K_RETURN, pygame.K_SPACE):
+            # Erst Spielstand waehlen, dann geht das Drill los.
+            if ev.key in (pygame.K_UP, pygame.K_DOWN):
                 with S['lock']:
-                    if S['asv']: S['asv']['phase'] = 'card'
-                asv_show()
+                    v = S['asv']
+                    if v:
+                        n = len(_stand_zeilen(v))
+                        schritt = -1 if ev.key == pygame.K_UP else 1
+                        v['stand_idx'] = (int(v.get('stand_idx', 0)) + schritt) % n
+            elif ev.key in (pygame.K_RETURN, pygame.K_SPACE):
+                threading.Thread(target=stand_bestaetigen, daemon=True).start()
             return
         if phase == 'unlock':
             if ev.key == pygame.K_RETURN:
@@ -1562,6 +1655,67 @@ def main():
             threading.Thread(target=asv_abhaken, daemon=True).start()
         elif ev.key in (pygame.K_n, pygame.K_RIGHT):
             asv_next()
+
+    def staende_laden():
+        """Spielstaende im Hintergrund holen und in den Willkommens-Schirm legen.
+
+        Im Hintergrund, weil das Fenster sofort da sein soll: der Schirm zeigt
+        so lange nur »Neuer Spielstand« und fuellt sich, wenn die Antwort da
+        ist. Ein blockierender Aufruf im Render-Thread wuerde das Zimmer beim
+        Oeffnen haengen lassen.
+        """
+        d = be.staende()
+        if not isinstance(d, dict):
+            return
+        liste = d.get('staende') or []
+        aktiv = d.get('aktiv')
+        with S['lock']:
+            v = S['asv']
+            if not v or v.get('phase') != 'welcome':
+                return
+            v['staende'] = liste
+            v['stand_aktiv'] = aktiv
+            # Auf dem zuletzt gespielten Stand stehen bleiben — wer weiterspielt,
+            # drueckt dann nur Enter.
+            v['stand_idx'] = next((i for i, st in enumerate(liste)
+                                   if st.get('id') == aktiv), 0)
+
+    def stand_bestaetigen():
+        """Gewaehlten Spielstand aktivieren (oder neu anlegen) und ins Drill."""
+        with S['lock']:
+            v = S['asv']
+            if not v or v.get('busy'):
+                return
+            zeilen = _stand_zeilen(v)
+            idx = max(0, min(len(zeilen) - 1, int(v.get('stand_idx', 0))))
+            wahl = zeilen[idx]
+            v['busy'] = True
+        try:
+            if wahl['art'] == 'neu':
+                be.stand_neu()
+            else:
+                sid = wahl['stand'].get('id')
+                # Der aktive Stand braucht keinen Wechsel — das wuerde nur die
+                # Sitzung unnoetig beenden.
+                if sid != v.get('stand_aktiv'):
+                    be.stand_waehlen(sid)
+            # Der Stand bestimmt, WAS gelernt ist: Queue und Spielstand neu holen.
+            if not asv_init():
+                # Kein Gate mehr (z.B. frisch gewaehlter, schon fertiger Stand)
+                with S['lock']:
+                    S['asv'] = None; foc = S['focused']
+                threading.Thread(target=run_stream,
+                                 args=('/api/tutor/start', {'focus': foc}),
+                                 daemon=True).start()
+                return
+            with S['lock']:
+                if S['asv']:
+                    S['asv']['phase'] = 'card'
+            asv_show()
+        finally:
+            with S['lock']:
+                if S['asv']:
+                    S['asv']['busy'] = False
 
     def asv_init():
         """Abfrage starten, falls die Sprache im Assessment-Gate steckt: Queue +
@@ -1587,7 +1741,9 @@ def main():
                         'parts': list(game.get('parts', [])),
                         'parts_total': int(game.get('parts_total', 7)),
                         'crate_at': list(game.get('crate_at', [])),
-                        'reveal': None, 'coin_drop': None, 'new_part': None}
+                        'reveal': None, 'coin_drop': None, 'new_part': None,
+                        'staende': [], 'stand_aktiv': None, 'stand_idx': 0}
+        threading.Thread(target=staende_laden, daemon=True).start()
         return True
 
     # ── Sprach-Menü (Alt+L): live zwischen Personas/Sprachen umschalten ──────

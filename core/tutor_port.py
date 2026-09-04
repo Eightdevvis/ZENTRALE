@@ -276,3 +276,70 @@ def config(changes: dict | None = None, persist: bool = False) -> dict:
                                key=lambda kv: (not kv[1].get("enabled"), kv[0]))
         ],
     }
+
+
+# ── Spielstände ────────────────────────────────────────────────────────
+#
+# Mehrere Lernstände nebeneinander, einer ist aktiv (tutor/staende.py). Der
+# Kern kennt davon nur diese drei Griffe; wo die Dateien liegen und wie ein
+# Stand aussieht, bleibt Sache des Tutors.
+
+def _staende_root():
+    """tutor/data/ — die Basis, unter der die Stände liegen."""
+    from tutor import tools
+    return tools._DATA_ROOT
+
+
+def staende() -> dict:
+    """Alle Spielstände + welcher aktiv ist. Tutor nicht da → present:False."""
+    if _ts() is None:
+        return {"present": False, "staende": [], "aktiv": None}
+    try:
+        from tutor import staende as st
+        root = _staende_root()
+        return {"present": True, "aktiv": st.aktiv(root),
+                "staende": st.liste(root)}
+    except Exception as e:
+        return {"present": True, "error": str(e), "staende": [], "aktiv": None}
+
+
+def stand_anlegen(name: str = None) -> dict:
+    """Neuen Spielstand anlegen UND aktivieren."""
+    if _ts() is None:
+        return {"ok": False, "error": "Tutor nicht installiert"}
+    try:
+        from tutor import staende as st
+        root = _staende_root()
+        sid = st.anlegen(root, name)
+        st.waehlen(root, sid)
+        _sitzung_beenden()
+        return {"ok": True, "aktiv": sid, "staende": st.liste(root)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def stand_waehlen(sid: str) -> dict:
+    """Auf einen vorhandenen Spielstand umschalten."""
+    if _ts() is None:
+        return {"ok": False, "error": "Tutor nicht installiert"}
+    try:
+        from tutor import staende as st
+        root = _staende_root()
+        if not st.waehlen(root, sid):
+            return {"ok": False, "error": "unbekannter Spielstand: %s" % sid}
+        _sitzung_beenden()
+        return {"ok": True, "aktiv": sid, "staende": st.liste(root)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _sitzung_beenden():
+    """Laufende Persona-Sitzung beenden — sie gehört zum alten Stand.
+
+    Ohne das würde Lucía nach dem Wechsel mit den Erinnerungen des vorigen
+    Standes weiterreden: der Verlauf liegt im Speicher der Sitzung, nicht auf
+    der Platte. Beim nächsten Start liest sie dann den neuen Stand.
+    """
+    ts = _ts()
+    if ts is not None:
+        _safe(ts.deactivate, None)

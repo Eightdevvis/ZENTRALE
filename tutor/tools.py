@@ -38,6 +38,8 @@
 import json
 import os
 import random
+
+from . import staende   # Spielstaende: welcher Lernstand gerade laeuft
 from threading import Lock
 
 from . import langs
@@ -100,9 +102,14 @@ def _lang(lang: str = None) -> str:
 
 
 def _dir(lang: str = None) -> str:
-    d = os.path.join(_DATA_ROOT, _lang(lang))
-    os.makedirs(d, exist_ok=True)
-    return d
+    """Datenordner dieser Sprache IM AKTIVEN SPIELSTAND.
+
+    Frueher zeigte das direkt auf tutor/data/<lang>/ — es gab ja nur einen
+    Lernstand. Seit es Spielstaende gibt, liegt dazwischen noch der Stand
+    (tutor/data/staende/<id>/<lang>/); wo genau, weiss tutor/staende.py.
+    _DATA_ROOT bleibt die Basis, damit Tests weiterhin auf ein tmp-Verzeichnis
+    umbiegen koennen."""
+    return staende.pfad(_DATA_ROOT, _lang(lang))
 
 
 def _file(name: str, lang: str = None) -> str:
