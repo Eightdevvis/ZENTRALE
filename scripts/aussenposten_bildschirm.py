@@ -17,9 +17,19 @@ Reine Standardbibliothek, braucht kein root — es aendert nur die eigene
 X-Sitzung. Ohne laufendes X (oder ohne xrandr) tut es gar nichts und meldet
 das; ein Knoten ohne Bildschirm soll daran nicht scheitern.
 
+Zweiter Teil: das Seitenverhaeltnis. Ein Pi 3 kann hoechstens 1920x1080
+(16:9) ausgeben — an einem 21:9-Panel zieht der Monitor dieses Bild auf die
+volle Breite, alles wird breiter als es soll. Dagegen hilft eine Vorkorrektur:
+wir stauchen den Desktop im HDMI-Bild genau so weit horizontal, wie der
+Monitor ihn hinterher wieder auseinanderzieht. Ergebnis sind richtige
+Proportionen und schwarze Balken links und rechts — der Bildschirm wird nicht
+mehr ganz ausgefuellt, dafuer ist nichts mehr verzerrt.
+
 Aufruf:
-  aussenposten_bildschirm.py            # besten Modus setzen
-  aussenposten_bildschirm.py --zeigen   # nur berichten, nichts aendern
+  aussenposten_bildschirm.py                # besten Modus setzen
+  aussenposten_bildschirm.py --zeigen       # nur berichten, nichts aendern
+  aussenposten_bildschirm.py --korrektur    # zusaetzlich Seitenverhaeltnis
+  aussenposten_bildschirm.py --zuruecksetzen  # Korrektur wieder weg
 """
 
 import argparse
@@ -88,10 +98,42 @@ def bester(modi, mm_breit, mm_hoch):
     return max(modi, key=lambda m: m[0] * m[1])
 
 
+def korrektur_matrix(modus, mm_breit, mm_hoch):
+    """Wie stark muss das Bild horizontal gestaucht werden — und die Matrix dazu.
+
+    Der Monitor zieht das gelieferte Bild auf seine volle Breite. Ist das
+    Panel breiter als der Modus (21:9 gegen 16:9), streckt er also um den
+    Faktor panel/modus. Wir nehmen das vorweg: der Desktop wird um genau
+    diesen Faktor schmaler in die HDMI-Flaeche gemalt, links und rechts bleibt
+    Schwarz. Nach der Streckung stimmt es wieder.
+
+    xrandrs --transform bildet AUSGABE-Koordinaten auf FRAMEBUFFER-Koordinaten
+    ab (also die Umkehrung dessen, was man zuerst denkt). Fuer ein um s
+    geschrumpftes, mittig sitzendes Bild heisst das: x_fb = (x_out - rand) / s.
+
+    Rueckgabe: (faktor, matrix-string) oder (1.0, None), wenn nichts zu tun ist.
+    """
+    if not (mm_breit > 0 and mm_hoch > 0):
+        return 1.0, None
+    panel = mm_breit / mm_hoch
+    bild = modus[0] / modus[1]
+    if panel <= bild * 1.02:          # Panel nicht nennenswert breiter
+        return 1.0, None
+    s = bild / panel                  # z.B. 1.778 / 2.386 = 0.745
+    rand = modus[0] * (1 - s) / 2.0
+    matrix = "%.6f,0,%.6f,0,1,0,0,0,1" % (1.0 / s, -rand / s)
+    return s, matrix
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--zeigen", action="store_true",
                     help="nur berichten, nichts aendern")
+    ap.add_argument("--korrektur", action="store_true",
+                    help="Seitenverhaeltnis vorkorrigieren (schwarze Balken "
+                         "statt gestrecktem Bild)")
+    ap.add_argument("--zuruecksetzen", action="store_true",
+                    help="eine gesetzte Korrektur wieder entfernen")
     a = ap.parse_args()
 
     daten = lesen()
@@ -109,18 +151,59 @@ def main():
           % ("%dx%d" % aktuell if aktuell else "unbekannt",
              ziel[0], ziel[1], len(modi)))
 
-    if aktuell == ziel:
-        print("passt schon")
-        return 0
-    if a.zeigen:
-        print("(--zeigen: nichts geaendert)")
-        return 0
+    if aktuell != ziel:
+        if a.zeigen:
+            print("(--zeigen: nichts geaendert)")
+        else:
+            r = xrandr("--output", ausgang, "--mode", "%dx%d" % ziel)
+            if r.returncode != 0:
+                print("xrandr fehlgeschlagen: %s" % (r.stderr or "").strip()[:300])
+                return 1
+            print("gesetzt: %dx%d" % ziel)
+    else:
+        print("Modus passt schon")
+
+    if a.korrektur or a.zuruecksetzen:
+        return _korrektur_anwenden(ausgang, ziel, mm_b, mm_h, a)
+    faktor, _ = korrektur_matrix(ziel, mm_b, mm_h)
+    if faktor < 1.0:
+        print("Hinweis: das Panel ist breiter als jeder verfuegbare Modus — "
+              "der Monitor streckt das Bild um %.2fx. --korrektur gleicht das "
+              "mit schwarzen Balken aus." % (1 / faktor))
+    return 0
 
     r = xrandr("--output", ausgang, "--mode", "%dx%d" % ziel)
     if r.returncode != 0:
         print("xrandr fehlgeschlagen: %s" % (r.stderr or "").strip()[:300])
         return 1
     print("gesetzt: %dx%d" % ziel)
+    return 0
+
+
+def _korrektur_anwenden(ausgang, ziel, mm_b, mm_h, a):
+    """Seitenverhaeltnis-Vorkorrektur setzen oder entfernen."""
+    if a.zuruecksetzen:
+        r = xrandr("--output", ausgang, "--transform", "none")
+        print("Korrektur entfernt" if r.returncode == 0
+              else "Zuruecksetzen fehlgeschlagen: %s" % (r.stderr or "").strip()[:200])
+        return 0 if r.returncode == 0 else 1
+
+    faktor, matrix = korrektur_matrix(ziel, mm_b, mm_h)
+    if not matrix:
+        print("Seitenverhaeltnis passt — keine Korrektur noetig")
+        return 0
+    rand = int(round(ziel[0] * (1 - faktor) / 2))
+    print("Panel ist breiter als der Modus: Bild wird auf %.1f%% Breite "
+          "gestaucht (%d px Schwarz je Seite)" % (faktor * 100, rand))
+    if a.zeigen:
+        print("(--zeigen: nichts geaendert)")
+        return 0
+    r = xrandr("--output", ausgang, "--transform", matrix)
+    if r.returncode != 0:
+        print("Korrektur fehlgeschlagen: %s" % (r.stderr or "").strip()[:300])
+        print("zurueck mit: --zuruecksetzen")
+        return 1
+    print("Korrektur gesetzt (rueckgaengig mit --zuruecksetzen)")
     return 0
 
 
