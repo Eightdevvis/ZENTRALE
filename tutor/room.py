@@ -1365,13 +1365,20 @@ def _hint_row(screen, font, w, y, items, center_x=None):
         x += wd + gap
 
 
-def _draw_coin_hud(screen, fonts, w, asv):
-    """Münz-Gesamtzähler oben rechts (der Zugewinn wird AM Wort gezeigt, s.u.)."""
+def _draw_coin_hud(screen, fonts, asv, cx, cy):
+    """Münz-Konto — mittig unter der Tastenzeile.
+
+    Stand vorher oben rechts in der Ecke, also da, wo man beim Lernen nie
+    hinschaut: der Blick klebt an der Karte. Unter den Tasten liegt es im
+    selben Blickfeld wie alles, was man gerade tut.
+    """
     coins = int(asv.get('coins', 0))
-    r = 9; cx = w - 20 - r; cy = 22
     txt = fonts['big'].render(str(coins), True, COIN_HI)
-    screen.blit(txt, (cx - r - 8 - txt.get_width(), cy - txt.get_height() // 2))
-    _draw_coin(screen, cx, cy, r)
+    r = 10
+    ganz = txt.get_width() + 8 + r * 2
+    links = cx - ganz // 2
+    screen.blit(txt, (links, cy - txt.get_height() // 2))
+    _draw_coin(screen, links + txt.get_width() + 8 + r, cy, r)
 
 
 def _draw_crate_icon(screen, cx, cy, groesse, erreicht):
@@ -1405,14 +1412,27 @@ def _draw_crate_icon(screen, cx, cy, groesse, erreicht):
     pygame.draw.circle(screen, schleife, (cx - ohr, deckel.top - 1), ohr, 0 if erreicht else 1)
     pygame.draw.circle(screen, schleife, (cx + ohr, deckel.top - 1), ohr, 0 if erreicht else 1)
 
-def _draw_coin_drop(surf, x, y0, asv):
-    """Münze fällt direkt AM Vokabelwort runter (Sasha: „nicht nur in der Ecke")."""
+def _draw_coin_drop(surf, fonts, x, y0, asv):
+    """Münze fällt an der Karte runter — mit der Zahl daneben.
+
+    Ohne Zahl sieht man nur, DASS es etwas gab, nicht wie viel. Sie steht mit
+    »+« davor direkt neben der Münze, blendet zum Ende hin aus und faellt mit
+    ihr zusammen — so bleibt der Gewinn dort, wo man ohnehin hinschaut.
+    """
     cd = asv.get('coin_drop')
     if not cd or cd.get('t', 0) <= 0:
         return
     p = 1.0 - max(0.0, min(1.0, cd['t']))       # 0 → 1
-    y = y0 + int(58 * p)
-    _draw_coin(surf, x, y, 9)
+    y = y0 + int(64 * p)
+    r = 11
+    _draw_coin(surf, x, y, r)
+    n = int(cd.get('n', 0) or 0)
+    if n <= 0:
+        return
+    txt = fonts['big'].render('+%d' % n, True, COIN_HI)
+    # Gegen Ende ausblenden, damit die Zahl nicht abrupt verschwindet.
+    txt.set_alpha(int(255 * min(1.0, (1.0 - p) * 3.0)))
+    surf.blit(txt, (x + r + 8, y - txt.get_height() // 2))
 
 
 def _draw_reveal(screen, fonts, w, h, asv):
@@ -1932,7 +1952,6 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
                     (bx, by - fonts['hud'].get_height() - 6))
         gl = fonts['hud'].render(_sym('alle Wörter → Lucía'), True, ASSESS_GOLD)
         screen.blit(gl, (bx + bw - gl.get_width(), by - fonts['hud'].get_height() - 6))
-        _draw_coin_hud(screen, fonts, w, asv)
 
     if phase == 'welcome':
         ctr(fonts['word'].render('Hola', True, ASSESS_INK), cy - 250)
@@ -2001,7 +2020,10 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
                   [('↓', 'umdrehen'), ('→', 'kann ich ✓'), ('←', 'zurück')],
                   center_x=ccx)
 
-    _draw_coin_drop(screen, ccx, kcy, asv)       # Münze fällt an der Karte
+    # Münz-Konto direkt unter die Tastenzeile, Zugewinn faellt an der Karte —
+    # aber an ihrer RECHTEN Kante, sonst liegt die Münze auf dem Wort.
+    _draw_coin_hud(screen, fonts, asv, ccx, unten + 118)
+    _draw_coin_drop(screen, fonts, ccx + kb // 2 + 26, kcy - kh // 4, asv)
     _draw_reveal(screen, fonts, w, h, asv)
     _draw_geschenk(screen, fonts, w, h, asv)     # Meilenstein: über allem
 
