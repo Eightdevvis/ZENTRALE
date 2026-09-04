@@ -563,6 +563,44 @@ soll man auch bei gedrosselter Cloud wechseln können):
 | `/api/tutor/staende` | GET | alle Stände + welcher aktiv ist |
 | `/api/tutor/staende` | POST | `{name}` → neu anlegen und aktivieren |
 | `/api/tutor/staende/waehlen` | POST | `{id}` → umschalten |
+| `/api/tutor/staende/loeschen` | POST | `{id}` → Stand samt allem Gelernten entfernen |
+
+**Löschen** liegt auf `Entf` und fragt nach — mit Namen, Fortschritt und dem
+Satz, dass das Gelernte endgültig weg ist. Solange die Rückfrage offensteht,
+beantworten *alle* Tasten sie; sonst blättert man im Hintergrund weiter und
+löscht am Ende den falschen Stand. Auch der aktive darf weg (man räumt meistens
+den auf, in dem man steht) — der Zeiger wird gelöscht, der nächste Zugriff
+nimmt den zuletzt gespielten der übrigen. Wer alle löscht, bekommt einen neuen:
+`aktiv()` liefert nie `None`.
+
+Bewusst POST mit id im Body statt DELETE auf einen Pfad: die Fronten hier
+sprechen alle nur GET/POST, und ein versehentlicher Browser-Aufruf kann so
+nichts löschen.
+
+## Drill-Steuerung: der Weg bestimmt die Wertung
+
+Seit 2026-09-04 hängt an den Pfeiltasten:
+
+| Taste | Wirkung |
+|---|---|
+| `↓` | aufdecken (Übersetzung + nochmal vorlesen) |
+| `→` / `Enter` | weiter |
+| `←` | zurückblättern und nachschauen |
+
+Der Witz ist die **Kopplung von Weg und Wertung**: wer *ohne* Aufdecken
+weitergeht, hat das Wort gewusst — der Normalfall ist ein einziger
+Tastendruck. Wer aufdeckt, sagt damit »wusste ich nicht«, und die Karte kommt
+per Session-SR in ein paar Karten wieder. Es gibt also keine Extra-Taste fürs
+Abhaken mehr; das Ergebnis ergibt sich daraus, *wie* man weitergegangen ist.
+
+Der **Rückblick** (`←`) verbucht **nichts**. Er ist ein Nachschlagen, kein
+Wiederholen — sonst könnte man sich durch Zurückblättern Münzen holen.
+Gedeckelt auf die letzten `VERLAUF_MAX` (20) Karten: nachschauen, was eben
+war, kein Sitzungsprotokoll.
+
+Weggefallen ist das Auto-Weiter drei Sekunden nach dem Aufdecken. Seit `↓` und
+`→` getrennt sind, entscheidet der Mensch, wie lange er auf die Übersetzung
+schaut.
 
 ## Persona-Memory: der Mitbewohner erinnert sich an dich
 
