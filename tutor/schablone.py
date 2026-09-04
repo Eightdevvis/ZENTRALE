@@ -210,7 +210,7 @@ def main():
     ap.add_argument('--test', metavar='ORDNER', help='Pruef-Teile erzeugen')
     a = ap.parse_args()
 
-    ordner = os.path.join(hier, 'bilder', a.figur)
+    ordner = os.path.join(hier, 'assets', 'figuren', a.figur)
     if a.test:
         os.makedirs(a.test, exist_ok=True)
         testteile_bauen(ordner, a.test)

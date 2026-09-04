@@ -23,12 +23,12 @@ Drei Teile, klar getrennt:
 
 | Datei | Aufgabe |
 |---|---|
-| `tutor/bilder/<figur>/rig.json` | **Bauplan**: Leinwandmass, Slots, Drehpunkte, Zeichenreihenfolge, Mimik-Varianten |
+| `tutor/assets/figuren/<figur>/rig.json` | **Bauplan**: Leinwandmass, Slots, Drehpunkte, Zeichenreihenfolge, Mimik-Varianten |
 | `tutor/sprites.py` | **Lader**: liest den Bauplan, lädt die PNGs, dreht Teile um ihren Drehpunkt, blittet sie |
 | `tutor/room.py` (`Persona`) | **Pose**: rechnet pro Frame die Winkel aller Gliedmassen aus und ruft den Lader |
 | `tutor/schablone.py` | erzeugt die **Mal-Schablone** aus `rig.json` |
 
-Anleitung für den Malenden: `tutor/bilder/LIES_MICH.md`.
+Anleitung für den Malenden: `tutor/assets/figuren/LIES_MICH.md`.
 
 ## Die tragende Idee: gemeinsame Leinwand
 

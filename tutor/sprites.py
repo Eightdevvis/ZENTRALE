@@ -228,6 +228,6 @@ class Rig:
 
 
 def lade_rig(name='lucia'):
-    """Rig aus tutor/bilder/<name>/ laden. Gibt immer ein Rig zurück (evtl. leer)."""
+    """Rig aus tutor/assets/figuren/<name>/ laden. Gibt immer ein Rig zurück (evtl. leer)."""
     hier = os.path.dirname(os.path.abspath(__file__))
-    return Rig(os.path.join(hier, 'bilder', name))
+    return Rig(os.path.join(hier, 'assets', 'figuren', name))

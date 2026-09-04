@@ -1,5 +1,9 @@
 # Bilder für die Tutor-Puppe
 
+Ort: `tutor/assets/figuren/` — neben den anderen Mitgebrachten des
+Tutors (Schriften und dergleichen liegen eine Ebene höher in
+`tutor/assets/`).
+
 Hier liegen die gemalten Teile der Persona. Ein Ordner pro Figur
 (`lucia/`, später weitere). Solange in einem Ordner **kein einziges** Teil
 liegt, zeichnet das Zimmer weiter die alte Polygon-Figur — es geht also
