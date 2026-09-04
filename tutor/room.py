@@ -1661,8 +1661,8 @@ def _karte_flaeche(w, h):
     """Groesse und Mitte der Karte, aus der Fensterflaeche gerechnet."""
     # Bewusst nicht randfuellend: der Stapel dahinter muss zu sehen sein, sonst
     # ist es wieder nur ein Wort auf dunklem Grund.
-    kb = int(min(w * 0.24, h * 0.40))
-    kh = int(kb * 1.34)                      # Hochformat wie eine Karteikarte
+    kb = int(min(w * 0.19, h * 0.32))
+    kh = int(kb * 1.36)                      # Hochformat wie eine Karteikarte
     return kb, kh
 
 
@@ -1688,11 +1688,13 @@ def _karte_malen(kb, kh, rueckseite, wort, uebersetzung, kategorie, fonts):
     if rueckseite:
         kopf = fonts['hud'].render('BEDEUTUNG', True, KARTE_SUB)
         surf.blit(kopf, (kb // 2 - kopf.get_width() // 2, int(kh * 0.16)))
-        for i, zeile in enumerate(_umbrechen(uebersetzung or '…',
-                                             _hand(int(kb * 0.13)), kb - 48)[:3]):
-            r = _hand(int(kb * 0.13)).render(zeile, True, KARTE_INK)
-            surf.blit(r, (kb // 2 - r.get_width() // 2,
-                          int(kh * 0.34) + i * int(kb * 0.16)))
+        f = _hand(int(kb * 0.13))
+        zeilen = _umbrechen(uebersetzung or '…', f, kb - 48)[:3]
+        schritt = int(kb * 0.17)
+        oben = kh // 2 - (len(zeilen) - 1) * schritt // 2
+        for i, zeile in enumerate(zeilen):
+            _blit_optisch_mittig(surf, f.render(zeile, True, KARTE_INK),
+                                 kb // 2, oben + i * schritt)
     else:
         if kategorie:
             k = fonts['hud'].render(kategorie.upper(), True, KARTE_SUB)
@@ -1706,8 +1708,29 @@ def _karte_malen(kb, kh, rueckseite, wort, uebersetzung, kategorie, fonts):
                 break
             groesse -= 4
         r = _hand(groesse).render(wort or '', True, KARTE_INK)
-        surf.blit(r, (kb // 2 - r.get_width() // 2, kh // 2 - r.get_height() // 2))
+        _blit_optisch_mittig(surf, r, kb // 2, kh // 2)
     return surf
+
+
+def _blit_optisch_mittig(ziel, text_surf, cx, cy):
+    """Text so setzen, dass die TINTE mittig sitzt — nicht die Textflaeche.
+
+    Eine gerenderte Zeile ist immer so hoch wie die ganze Schrift (Oberlaengen,
+    Unterlaengen, Akzente), auch wenn das Wort davon nur einen Teil nutzt.
+    »saber« fuellt in Permanent Marker bei 143 px Flaechenhoehe nur y=50..115 —
+    zentriert man die Flaeche, sitzt das Wort sichtbar zu tief. Und weil der
+    Versatz je nach Wort anders ist (»la mañana« mit Tilde faengt viel weiter
+    oben an), wandert es zwischen zwei Karten auch noch hin und her.
+
+    Deshalb wird der wirklich bemalte Bereich gemessen und DER zentriert.
+    """
+    box = text_surf.get_bounding_rect()
+    if box.width == 0 or box.height == 0:
+        ziel.blit(text_surf, (cx - text_surf.get_width() // 2,
+                              cy - text_surf.get_height() // 2))
+        return
+    ziel.blit(text_surf, (cx - box.x - box.width // 2,
+                          cy - box.y - box.height // 2))
 
 
 def _umbrechen(text, font, breite):
@@ -2357,7 +2380,13 @@ def main():
                 v['flip'] = {'t': 0.0, 'nach': 'rueck'}
             cur = v.get('cur')
         if cur:
-            asv_speak(cur['word'])
+            # NEBENHER sprechen. asv_speak() holt das WAV vom Backend und
+            # wartet dabei aufs Netz — direkt aufgerufen blockiert das die
+            # Ereignisschleife, und die Drehung war vorbei, bevor ein einziges
+            # Bild davon gezeichnet wurde. Genau deshalb sah Sasha keine
+            # Animation.
+            threading.Thread(target=asv_speak, args=(cur['word'],),
+                             daemon=True).start()
 
     def asv_rueckblick(schritt):
         """RUECKBLICK (←/→) — vorige Karten nachschlagen, ohne zu werten.
@@ -2392,7 +2421,7 @@ def main():
             v['sub'] = 'ask'
             wort = v['cur'].get('word')
         if wort:
-            asv_speak(wort)
+            threading.Thread(target=asv_speak, args=(wort,), daemon=True).start()
         return True
 
     def asv_next():
@@ -3053,7 +3082,7 @@ def main():
                     elif g['phase'] == 'auf' and g['t'] >= GESCHENK_DAUER['auf']:
                         g['phase'] = 'teil'; g['t'] = 0.0
                 if a2.get('flip'):                        # Karte dreht sich um
-                    a2['flip']['t'] += dt / 0.34
+                    a2['flip']['t'] += dt / 0.42
                     if a2['flip']['t'] >= 1.0:
                         a2['flip'] = None
                 if a2.get('weg'):                         # Karte geht in den Stapel
