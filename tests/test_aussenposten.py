@@ -374,3 +374,18 @@ def test_kein_neustart_wenn_keine_tui_laeuft(tmp_path):
     log = tmp_path / "log.txt"
     updater.front_neustarten(str(log))
     assert "keine TUI aktiv" in log.read_text()
+
+
+def test_schrift_asset_ist_im_paket():
+    """Die Handschrift fuer die Vokabel-Karte ist nirgends installiert — sie
+    MUSS mitgeliefert werden, sonst faellt das Zimmer auf dem Pi still auf die
+    normale Schrift zurueck."""
+    drin = [rel for rel, _ in aussenposten.dateien()]
+    assert "tutor/assets/PermanentMarker-Regular.ttf" in drin
+
+
+def test_demo_schrift_bleibt_draussen():
+    """ugly-form.zip ist eine Demo (kein Spanisch: señor -> SE OR) und nur fuer
+    private Nutzung lizenziert. Sie hat im Paket nichts verloren."""
+    drin = [rel for rel, _ in aussenposten.dateien()]
+    assert not any("ugly-form" in r for r in drin)

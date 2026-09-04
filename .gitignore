@@ -84,3 +84,6 @@ core/map/data/cache/
 .claude/
 # Kontrollbild von tutor/gelenke.py — entsteht bei jedem Einlesen neu
 tutor/assets/figuren/*/KONTROLLE.png
+
+# Demo-Schrift (nur privat lizenziert, kein Spanisch) — bleibt lokal.
+tutor/assets/ugly-form.zip

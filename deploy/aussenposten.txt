@@ -34,6 +34,11 @@ core/host_metrics.py
 # faehrt hier bewusst keine Audio-Dienste hoch — die gehoeren zum Backend.
 tutor/room.py
 scripts/open_tutor_room.py
+# Die Handschrift fuer das Vokabelwort auf der Karte. Muss mitgeliefert
+# werden — sie ist nirgends installiert, und ohne sie faellt das Zimmer still
+# auf die normale Schrift zurueck (lesbar, aber es sieht nicht mehr nach
+# Karteikarte aus).
+tutor/assets/PermanentMarker-Regular.ttf
 
 # ── Selbst-Aktualisierung ────────────────────────────────────────────────
 # Der Updater steckt IM Paket — sonst koennte er sich nie selbst erneuern und

@@ -80,6 +80,10 @@ _NIGHT = dict(
     ASSESS_PANEL=(26, 32, 46, 235), ASSESS_KEY_INK=(16, 22, 32),
     ASSESS_BAR_BG=(20, 26, 38), ASSESS_NODE=(66, 78, 98), ASSESS_NODE_EDGE=(104, 118, 138),
     COIN_HI=(246, 214, 128), COIN_LO=(206, 158, 66),
+    # Vokabel-Karte: Papier bleibt Papier, in beiden Themes. Eine Karteikarte,
+    # die sich mitfaerbt, sieht nicht mehr nach Karte aus.
+    KARTE_BG=(246, 242, 232), KARTE_INK=(34, 38, 50), KARTE_RAND=(206, 198, 182),
+    KARTE_RUECK=(232, 226, 212), KARTE_SUB=(122, 116, 104), KARTE_STAPEL=(214, 208, 194),
 )
 _DAY = dict(
     WALL_TOP=(236, 231, 240), WALL_BOT=(248, 244, 250),
@@ -102,6 +106,8 @@ _DAY = dict(
     ASSESS_PANEL=(248, 250, 253, 238), ASSESS_KEY_INK=(248, 250, 252),
     ASSESS_BAR_BG=(206, 214, 226), ASSESS_NODE=(200, 208, 220), ASSESS_NODE_EDGE=(150, 162, 178),
     COIN_HI=(214, 158, 58), COIN_LO=(176, 128, 44),
+    KARTE_BG=(252, 250, 244), KARTE_INK=(34, 38, 50), KARTE_RAND=(196, 190, 176),
+    KARTE_RUECK=(238, 233, 220), KARTE_SUB=(122, 116, 104), KARTE_STAPEL=(220, 214, 200),
 )
 _THEMES = {'night': _NIGHT, 'day': _DAY}
 
@@ -210,6 +216,37 @@ _FONT_KANDIDATEN = ("notosanscjksc", "notosansmonocjksc", "droidsansfallback",
 _font_wahl = None       # einmal ermittelt, dann für alle Größen wiederverwendet
 
 
+# Zeichen, die in der Oberfläche vorkommen und NICHT in jeder Schrift stecken.
+# Fehlt eines, wird es durch seinen ASCII-Ersatz getauscht — lieber ein »>« als
+# ein leeres Kästchen.
+_SYMBOL_ERSATZ = {"↑": "^", "↓": "v", "←": "<", "→": "->", "✓": "ok",
+                  "·": "-", "—": "-", "’": "'", "…": "...", "▣": "[+]",
+                  "◗": ">", "«": "\"", "»": "\"", "◆": "*", "▸": ">"}
+_fehlende_symbole = set()
+
+
+def _malt_zeichen(f, zeichen):
+    """Kommen beim Rendern dieses Zeichens überhaupt Pixel heraus?
+
+    Die einzige verlässliche Frage. `metrics()` und `size()` melden Zeichen als
+    vorhanden, die dann als leeres Kästchen oder als gar nichts erscheinen —
+    beides ist auf dem Pi passiert (DroidSansFallback: Kästchen; Ugly Form:
+    Akzente unsichtbar). Deshalb wird gerendert und nachgesehen.
+    """
+    try:
+        s = f.render(zeichen, True, (255, 255, 255))
+    except Exception:
+        return False
+    w, h = s.get_size()
+    if w == 0 or h == 0:
+        return False
+    for y in range(0, h, 2):
+        for x in range(0, w, 2):
+            if s.get_at((x, y))[3] > 40:
+                return True
+    return False
+
+
 def _rendert_wirklich(f):
     """Malt diese Schrift Buchstaben — oder nur leere Kästchen?
 
@@ -235,23 +272,51 @@ def _rendert_wirklich(f):
 def _font(size, bold=False):
     """Schrift, die auf DIESER Maschine auch wirklich lesbar rendert.
 
-    Die Kandidaten werden der Reihe nach probiert und die erste genommen, die
-    die Kästchen-Probe besteht. Das Ergebnis wird gemerkt — geprüft wird also
-    einmal pro Prozess, nicht pro Textzeile.
+    Zwei Bedingungen, beide gelernt statt gedacht:
+
+    1. Die Schrift muss es GEBEN. `SysFont` liefert für einen unbekannten
+       Namen klaglos die Standardschrift zurück — die besteht dann jede Probe,
+       ist aber nicht die gewünschte. Genau so landete der Pi auf einer
+       Schrift ohne Pfeile, obwohl DejaVu (mit Pfeilen) dagestanden hätte.
+       `match_font` sagt, ob der Name wirklich auflöst.
+    2. Sie muss Buchstaben malen statt Kästchen (siehe _rendert_wirklich).
+
+    Welche Sonderzeichen die gewählte Schrift kann, wird einmal mitgeprüft und
+    in _fehlende_symbole gemerkt; _sym() tauscht die fehlenden dann aus.
     """
     global _font_wahl
     if _font_wahl is None:
         for name in _FONT_KANDIDATEN:
+            if not pygame.font.match_font(name):
+                continue                      # gibt es hier gar nicht
             probe = pygame.font.SysFont(name, 24)
             if probe and _rendert_wirklich(probe):
                 _font_wahl = name
                 break
         else:
             _font_wahl = ""      # nichts brauchbar -> pygame-Default
+        pruef = (pygame.font.SysFont(_font_wahl, 24) if _font_wahl
+                 else pygame.font.Font(None, 24))
+        _fehlende_symbole.update(z for z in _SYMBOL_ERSATZ
+                                 if not _malt_zeichen(pruef, z))
     if not _font_wahl:
         return pygame.font.Font(None, size)
     f = pygame.font.SysFont(_font_wahl, size, bold=bold)
     return f or pygame.font.Font(None, size)
+
+
+def _sym(text):
+    """Sonderzeichen ersetzen, die die gewählte Schrift nicht malen kann.
+
+    Aufgerufen an jeder Stelle, wo ein Pfeil oder Häkchen im Text steht. Auf
+    einer Maschine mit vollständiger Schrift ändert sich nichts.
+    """
+    if not _fehlende_symbole:
+        return text
+    for zeichen in _fehlende_symbole:
+        if zeichen in text:
+            text = text.replace(zeichen, _SYMBOL_ERSATZ[zeichen])
+    return text
 
 
 # ── Backend (Tutor-API, dumm & robust) ───────────────────────────────────────
@@ -569,7 +634,7 @@ class Persona:
         self.gesture_t = 0.0
         self.pause_t = 0.0           # Schlender-Pause bei 'wander'
         self.face = 'neutral'        # Mimik (happy/sad/surprised/tired/neutral)
-        # Gemalte Teile, falls vorhanden (tutor/bilder/lucia/). Liegt da nichts,
+        # Gemalte Teile, falls vorhanden (tutor/assets/figuren/lucia/). Liegt da nichts,
         # bleibt es bei der Polygon-Figur — siehe draw().
         self.rig = _sprites.lade_rig('lucia') if _sprites is not None else None
         # layout (in layout() gesetzt)
@@ -768,7 +833,7 @@ class Persona:
     def draw(self, surf):
         """Zeichnet die Persona — gemalt, wenn Bilder da sind, sonst klassisch.
 
-        Solange in tutor/bilder/lucia/ kein einziges Teil liegt, läuft exakt
+        Solange in tutor/assets/figuren/lucia/ kein einziges Teil liegt, läuft exakt
         die alte Polygon-Figur. Sobald das erste Bild auftaucht, wird die
         Puppe gebaut: gemalte Teile werden gezeichnet, noch fehlende als
         schlichter Platzhalter — so kann Teil für Teil entstehen."""
@@ -791,7 +856,9 @@ class Persona:
             bob = math.sin(self.t * 3.0) * 2 * s
         x = self.x
         y = base_y + bob
-        sk = s / _LEINWAND_PRO_EINHEIT      # Mal-Leinwand → Bildschirm
+        # Massstab kommt aus dem Bauplan, nicht aus einer Konstante — so
+        # darf die gemalte Figur anders proportioniert sein als die alte.
+        sk = s / rig.einheiten_faktor()     # Mal-Leinwand → Bildschirm
 
         w = self._winkel_pose(talking, sitting)
         auge_v, mund_v = self._gesicht_varianten(talking)
@@ -871,7 +938,7 @@ class Persona:
 
     def _draw_klassisch(self, surf):
         """Die alte Figur aus pygame-Primitiven. Läuft unverändert weiter,
-        solange in tutor/bilder/<name>/ noch KEIN einziges Teil gemalt ist."""
+        solange in tutor/assets/figuren/<name>/ noch KEIN einziges Teil gemalt ist."""
         s = self.scale
         talking = self.state == 'talk'
         sitting = self.sitting or self.state == 'sit'
@@ -1178,6 +1245,13 @@ def draw_bubble(surf, font, text, cx, top_y, w, alpha=255):
 # LLM). Lucías STIMME liest die Wörter vor (TTS), aber die Persona „lebt" hier
 # nicht. Der Ablauf wird lokal getrieben (asv-Controller in main); dies ist nur
 # das Rendering. Freischaltung, wenn ALLE Wörter durch sind (100 %), dann übernimmt das Zimmer.
+KARTE_BG    = (246, 242, 232)     # Papier
+KARTE_INK   = (34, 38, 50)        # Tinte
+KARTE_RAND  = (206, 198, 182)
+KARTE_RUECK = (232, 226, 212)     # Rückseite, einen Hauch dunkler
+KARTE_SUB   = (122, 116, 104)
+KARTE_STAPEL= (214, 208, 194)     # die Karten dahinter
+
 ASSESS_TOP  = (28, 36, 52)
 ASSESS_BOT  = (40, 50, 70)
 ASSESS_ACC  = (150, 200, 230)     # kühles Blau, Fortschritt
@@ -1196,6 +1270,11 @@ _PART_SCATTER = {'hair': (-72, -46), 'head': (64, -52), 'arml': (-96, 18),
 # Gesehene nachzuschlagen — kein Sitzungsprotokoll.
 VERLAUF_MAX = 20
 
+# Wie oft ein Wort gewusst werden muss, bis es aus dem Stapel verschwindet.
+# Vorher ergab sich das still aus der Länge der Ladder (also 4×) — jetzt steht
+# es als eigene Zahl da, weil es die Stellschraube ist, an der man dreht.
+FERTIG_NACH = 3
+
 # Session-SR: expanding-retrieval-Abstände (in Karten VORAUS im Stapel). Sashas
 # Ladder, deckt sich mit der Forschung (~2× wachsend, gut für Kurzzeit-Retention).
 SR_LADDER = (7, 14, 25)   # 1./2./3. korrektes Abhaken → so viele Karten voraus
@@ -1210,7 +1289,7 @@ def _draw_coin(surf, cx, cy, r):
     pygame.draw.circle(surf, COIN_HI, (int(cx - r * 0.3), int(cy - r * 0.3)), max(1, int(r * 0.28)))
 
 
-def _draw_lucia(surf, cx, cy, s, parts, anim=None):
+def _draw_lucia(surf, cx, cy, s, parts, anim=None, boden=True):
     """Lucía aus ihren erhaltenen Teilen zeichnen (pygame-Primitive, gleiche
     Optik wie die Persona). `parts` = erhaltene Teile; `anim=(name, p)` lässt EIN
     frisches Teil aus seiner Streu-Richtung an den Platz gleiten (p: 0→1)."""
@@ -1223,8 +1302,10 @@ def _draw_lucia(surf, cx, cy, s, parts, anim=None):
             return ((1 - e) * sx * s, (1 - e) * sy * s)
         return (0.0, 0.0)
 
-    # Boden-Schatten (nur wenn schon etwas da ist)
-    if pset:
+    # Boden-Schatten (nur wenn schon etwas da ist). `boden=False` fuer die
+    # Nahaufnahme im Geschenk — dort verzerrt der Schatten die Mittelpunkt-
+    # Berechnung, weil er weit unter dem eigentlichen Teil liegt.
+    if pset and boden:
         sh = pygame.Surface((int(70 * s), int(16 * s)), pygame.SRCALPHA)
         pygame.draw.ellipse(sh, (0, 0, 0, 60), sh.get_rect())
         surf.blit(sh, (int(cx - 35 * s), int(cy + 88 * s)))
@@ -1273,10 +1354,11 @@ def _hint_row(screen, font, w, y, items, center_x=None):
     auf w; `center_x` verschiebt die Reihe (z.B. unter die links sitzende Karte)."""
     gap = 18
     cx = w // 2 if center_x is None else center_x
+    items = [(_sym(k), _sym(l)) for k, l in items]
     widths = [(font.size(k)[0] + 16) + 8 + font.size(l)[0] for k, l in items]
     x = cx - (sum(widths) + gap * (len(items) - 1)) // 2
     for (k, l), wd in zip(items, widths):
-        ks = font.render(k, True, ASSESS_KEY_INK); kw = ks.get_width() + 16
+        ks = font.render(_sym(k), True, ASSESS_KEY_INK); kw = ks.get_width() + 16
         pygame.draw.rect(screen, ASSESS_ACC, (x, y, kw, font.get_height() + 8), border_radius=7)
         screen.blit(ks, (x + 8, y + 4))
         screen.blit(font.render(l, True, HUD_FG), (x + kw + 8, y + 4))
@@ -1292,15 +1374,36 @@ def _draw_coin_hud(screen, fonts, w, asv):
     _draw_coin(screen, cx, cy, r)
 
 
-def _draw_crate_icon(surf, cx, cy, size, done):
-    """Kleines Kisten-Symbol (für die Fortschrittsleiste). done → golden, sonst matt."""
-    col = COIN_LO if done else ASSESS_NODE
-    edge = COIN_HI if done else ASSESS_NODE_EDGE
-    r = pygame.Rect(0, 0, size, size); r.center = (int(cx), int(cy))
-    pygame.draw.rect(surf, col, r, border_radius=3)
-    pygame.draw.rect(surf, edge, r, width=1, border_radius=3)
-    pygame.draw.line(surf, edge, (r.left + 2, r.centery), (r.right - 2, r.centery), 1)
+def _draw_crate_icon(screen, cx, cy, groesse, erreicht):
+    """Ein Meilenstein auf der Fortschrittsleiste: ein kleines Geschenk.
 
+    Erreichte Geschenke sind golden und haben eine Schleife, noch offene
+    stehen blass daneben — man sieht auf einen Blick, was schon geholt ist und
+    was noch kommt. Vorher waren das graue Klötzchen, denen man nicht ansah,
+    dass etwas drin ist.
+    """
+    b = max(8, int(groesse))
+    h = int(b * 0.86)
+    koerper = pygame.Rect(0, 0, b, h)
+    koerper.center = (cx, cy + 1)
+
+    if erreicht:
+        papier, band, schleife = ASSESS_GOLD, COIN_LO, ASSESS_GOLD
+    else:
+        papier, band, schleife = ASSESS_NODE, ASSESS_NODE_EDGE, ASSESS_NODE_EDGE
+
+    # Deckel sitzt etwas breiter auf dem Körper — macht es als Päckchen lesbar.
+    deckel = pygame.Rect(0, 0, b + 4, max(3, int(h * 0.30)))
+    deckel.midbottom = (cx, koerper.top + int(h * 0.30))
+
+    pygame.draw.rect(screen, papier, koerper, border_radius=2)
+    pygame.draw.rect(screen, papier, deckel, border_radius=2)
+    # Senkrechtes Band
+    pygame.draw.line(screen, band, (cx, koerper.top), (cx, koerper.bottom), 2)
+    # Schleife: zwei kleine Ohren auf dem Deckel
+    ohr = max(2, b // 5)
+    pygame.draw.circle(screen, schleife, (cx - ohr, deckel.top - 1), ohr, 0 if erreicht else 1)
+    pygame.draw.circle(screen, schleife, (cx + ohr, deckel.top - 1), ohr, 0 if erreicht else 1)
 
 def _draw_coin_drop(surf, x, y0, asv):
     """Münze fällt direkt AM Vokabelwort runter (Sasha: „nicht nur in der Ecke")."""
@@ -1323,13 +1426,337 @@ def _draw_reveal(screen, fonts, w, h, asv):
     panel.fill(ASSESS_PANEL)
     pygame.draw.rect(panel, ASSESS_GOLD, panel.get_rect(), width=2, border_radius=14)
     screen.blit(panel, (bx, by))
-    head = fonts['big'].render('▣  Kiste!', True, ASSESS_GOLD)
+    head = fonts['big'].render(_sym('▣  Kiste!'), True, ASSESS_GOLD)
     screen.blit(head, (w // 2 - head.get_width() // 2, by + 14))
     if rv.get('kind') == 'part':
         sub = fonts['log'].render('ein neues Teil von Lucía', True, HUD_FG)
     else:
         sub = fonts['log'].render('+%d Münzen' % int(rv.get('amount', 0)), True, COIN_HI)
     screen.blit(sub, (w // 2 - sub.get_width() // 2, by + 54))
+
+
+# ── Geschenk-Sequenz ─────────────────────────────────────────────────────────
+#
+# Ein Meilenstein soll sich wie ein Gewinn anfuehlen, nicht wie eine Meldung.
+# Deshalb vier Stufen statt einer Einblendung: das Bild dunkelt ab und das
+# Paket liegt allein da (»zu«) — Pfeil rechts laesst es wackeln (»wackeln«) —
+# die Schleife fliegt weg, der Deckel hebt ab, Konfetti und Sternchen stieben
+# heraus (»auf«) — und erst DANN steht das gewonnene Teil da, mit einem
+# drehenden Strahlenkranz (»teil«).
+#
+# Der Nutzer druesst zweimal: einmal zum Oeffnen, einmal zum Weitermachen.
+# Dazwischen laeuft alles von selbst.
+
+GESCHENK_DAUER = {'wackeln': 0.55, 'auf': 0.85}     # Sekunden je Automatik-Stufe
+KONFETTI_FARBEN = ((246, 214, 128), (150, 200, 230), (232, 120, 140),
+                   (140, 220, 160), (250, 250, 250))
+
+
+def _konfetti_streuen(cx, cy, anzahl=46):
+    """Teilchen, die beim Oeffnen herausfliegen: Schnipsel und Sternchen."""
+    stuecke = []
+    for _ in range(anzahl):
+        winkel = random.uniform(-math.pi * 0.92, -math.pi * 0.08)
+        tempo = random.uniform(190, 430)
+        stuecke.append({
+            'x': cx + random.uniform(-18, 18), 'y': cy + random.uniform(-10, 10),
+            'vx': math.cos(winkel) * tempo, 'vy': math.sin(winkel) * tempo,
+            'farbe': random.choice(KONFETTI_FARBEN),
+            'stern': random.random() < 0.34,
+            'gr': random.uniform(4, 9), 'dreh': random.uniform(0, math.tau),
+            'spin': random.uniform(-9, 9),
+        })
+    return stuecke
+
+
+def _konfetti_takt(stuecke, dt):
+    """Flugbahn: Schwerkraft und etwas Bremsung. Fertig = unten raus."""
+    for k in stuecke:
+        k['vy'] += 900 * dt
+        k['vx'] *= (1 - 1.2 * dt)
+        k['x'] += k['vx'] * dt
+        k['y'] += k['vy'] * dt
+        k['dreh'] += k['spin'] * dt
+
+
+def _draw_stern(surf, cx, cy, r, farbe, dreh):
+    """Vierzackiges Funkeln — schlanker als ein Fuenfeck und liest sich klein."""
+    punkte = []
+    for i in range(8):
+        a = dreh + i * math.pi / 4
+        laenge = r if i % 2 == 0 else r * 0.38
+        punkte.append((cx + math.cos(a) * laenge, cy + math.sin(a) * laenge))
+    pygame.draw.polygon(surf, farbe, punkte)
+
+
+def _draw_konfetti(surf, stuecke):
+    for k in stuecke:
+        if k['stern']:
+            _draw_stern(surf, k['x'], k['y'], k['gr'], k['farbe'], k['dreh'])
+        else:
+            schnipsel = pygame.Surface((int(k['gr'] * 2), int(k['gr'])), pygame.SRCALPHA)
+            schnipsel.fill(k['farbe'])
+            gedreht = pygame.transform.rotate(schnipsel, math.degrees(k['dreh']))
+            surf.blit(gedreht, (k['x'] - gedreht.get_width() // 2,
+                                k['y'] - gedreht.get_height() // 2))
+
+
+def _draw_strahlenkranz(surf, cx, cy, radius, winkel, farbe=None):
+    """Rotierender Strahlenkranz hinter dem gewonnenen Teil.
+
+    Auf eine eigene Flaeche gemalt und halbdurchsichtig darübergelegt, damit
+    sich die Keile nicht gegenseitig aufhellen, wo sie sich am Mittelpunkt
+    treffen.
+    """
+    farbe = farbe or ASSESS_GOLD
+    schicht = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+    m = radius
+    for i in range(14):
+        a = winkel + i * math.tau / 14
+        breit = math.tau / 90            # schmale Keile — ein Funkeln, kein Windrad
+        punkte = [(m, m),
+                  (m + math.cos(a - breit) * radius, m + math.sin(a - breit) * radius),
+                  (m + math.cos(a + breit) * radius, m + math.sin(a + breit) * radius)]
+        pygame.draw.polygon(schicht, (*farbe, 38), punkte)
+    surf.blit(schicht, (cx - radius, cy - radius))
+
+
+def _draw_paket(surf, cx, cy, gr, deckel_hoch=0.0, schleife=True, kippen=0.0):
+    """Das Geschenk selbst. `deckel_hoch` 0→1 hebt den Deckel ab."""
+    b, h = int(gr), int(gr * 0.84)
+    koerper = pygame.Rect(0, 0, b, h)
+    koerper.center = (int(cx), int(cy + gr * 0.12))
+    pygame.draw.rect(surf, ASSESS_GOLD, koerper, border_radius=6)
+    # Band senkrecht + waagerecht
+    pygame.draw.line(surf, COIN_LO, (cx, koerper.top), (cx, koerper.bottom), max(3, b // 12))
+    pygame.draw.line(surf, COIN_LO, (koerper.left, koerper.centery),
+                     (koerper.right, koerper.centery), max(3, b // 16))
+
+    deckel = pygame.Surface((b + int(gr * 0.14), int(h * 0.32)), pygame.SRCALPHA)
+    pygame.draw.rect(deckel, ASSESS_GOLD, deckel.get_rect(), border_radius=5)
+    pygame.draw.line(deckel, COIN_LO, (deckel.get_width() // 2, 0),
+                     (deckel.get_width() // 2, deckel.get_height()), max(3, b // 12))
+    if kippen:
+        deckel = pygame.transform.rotate(deckel, kippen)
+    dy = koerper.top - int(gr * 0.9 * deckel_hoch)
+    surf.blit(deckel, (cx - deckel.get_width() // 2, dy - deckel.get_height() // 2))
+
+    if schleife:
+        ohr = max(5, int(gr * 0.16))
+        oy = dy - deckel.get_height() // 2 - ohr // 2
+        pygame.draw.circle(surf, ASSESS_GOLD, (int(cx - ohr), int(oy)), ohr)
+        pygame.draw.circle(surf, ASSESS_GOLD, (int(cx + ohr), int(oy)), ohr)
+        pygame.draw.circle(surf, COIN_LO, (int(cx - ohr), int(oy)), ohr, 2)
+        pygame.draw.circle(surf, COIN_LO, (int(cx + ohr), int(oy)), ohr, 2)
+
+
+def _draw_teil_mittig(surf, cx, cy, teil, skala):
+    """EIN Koerperteil so zeichnen, dass es wirklich in der Mitte sitzt.
+
+    _draw_lucia() setzt jedes Teil an seinen Platz an der Figur — der Kopf
+    landet also weit oberhalb des uebergebenen Punktes. Fuer die Nahaufnahme im
+    Geschenk brauchen wir es aber mittig: also auf eine eigene Flaeche malen,
+    den tatsaechlich bemalten Bereich messen und DEN zentrieren.
+    """
+    kante = 460
+    flaeche = pygame.Surface((kante, kante), pygame.SRCALPHA)
+    _draw_lucia(flaeche, kante // 2, kante // 2, 1.6, [teil], boden=False)
+    box = flaeche.get_bounding_rect()
+    if box.width == 0 or box.height == 0:
+        return
+    ausschnitt = flaeche.subsurface(box).copy()
+    breite = max(1, int(box.width * skala * 2.2))
+    hoehe = max(1, int(box.height * skala * 2.2))
+    ausschnitt = pygame.transform.smoothscale(ausschnitt, (breite, hoehe))
+    surf.blit(ausschnitt, (cx - breite // 2, cy - hoehe // 2))
+
+
+def _draw_geschenk(screen, fonts, w, h, asv):
+    """Die ganze Sequenz. Zeichnet ueber alles andere."""
+    g = asv.get('geschenk')
+    if not g:
+        return
+    phase, t = g.get('phase', 'zu'), g.get('t', 0.0)
+    cx, cy = w // 2, int(h * 0.46)
+
+    dunkel = pygame.Surface((w, h), pygame.SRCALPHA)
+    dunkel.fill((0, 0, 0, 185))
+    screen.blit(dunkel, (0, 0))
+
+    def mitte(surf, y):
+        screen.blit(surf, (w // 2 - surf.get_width() // 2, y))
+
+    gr = int(min(w, h) * 0.20)
+
+    if phase == 'zu':
+        wippen = math.sin(t * 3.0) * gr * 0.03
+        _draw_paket(screen, cx, cy + wippen, gr)
+        mitte(fonts['big'].render('Ein Geschenk!', True, ASSESS_GOLD), cy - int(gr * 1.5))
+        _hint_row(screen, fonts['hud'], w, cy + int(gr * 0.95), [('→', 'aufmachen')])
+
+    elif phase == 'wackeln':
+        p = min(1.0, t / GESCHENK_DAUER['wackeln'])
+        zittern = math.sin(t * 46) * gr * 0.06 * (1 - p * 0.4)
+        _draw_paket(screen, cx + zittern, cy, gr, kippen=zittern * 0.4)
+        mitte(fonts['big'].render('…', True, ASSESS_GOLD), cy - int(gr * 1.5))
+
+    elif phase == 'auf':
+        p = min(1.0, t / GESCHENK_DAUER['auf'])
+        _draw_paket(screen, cx, cy, gr, deckel_hoch=p, schleife=False,
+                    kippen=-18 * p)
+        # Die Schleife fliegt weg
+        ohr = max(5, int(gr * 0.16))
+        sx = cx + 120 * p
+        sy = cy - int(gr * 0.75) - 190 * p + 240 * p * p
+        pygame.draw.circle(screen, ASSESS_GOLD, (int(sx - ohr), int(sy)), ohr)
+        pygame.draw.circle(screen, ASSESS_GOLD, (int(sx + ohr), int(sy)), ohr)
+        _draw_konfetti(screen, g.get('konfetti') or [])
+
+    else:                                    # 'teil' — der Gewinn steht da
+        p = min(1.0, t / 0.45)
+        skala = 0.4 + 0.6 * (1 - (1 - p) ** 3)
+        _draw_strahlenkranz(screen, cx, cy, int(gr * 1.25), g.get('winkel', 0.0))
+        _draw_konfetti(screen, g.get('konfetti') or [])
+        if g.get('kind') == 'part' and g.get('part'):
+            _draw_teil_mittig(screen, cx, cy, g['part'], skala * gr / 150.0)
+            text = 'Ein neues Teil von Lucía'
+        else:
+            muenze = fonts['word'].render('+%d' % int(g.get('amount', 0)), True, COIN_HI)
+            mitte(muenze, cy - muenze.get_height() // 2)
+            text = 'Münzen'
+        mitte(fonts['big'].render(text, True, ASSESS_GOLD), cy + int(gr * 1.05))
+        _hint_row(screen, fonts['hud'], w, cy + int(gr * 1.55), [('→', 'weiter')])
+
+
+# ── Vokabel-Karte ────────────────────────────────────────────────────────────
+#
+# Jede Vokabel ist eine eigene Karte auf einem sichtbaren Stapel. Gewusste
+# Karten wandern hinten wieder rein, fertige verschwinden. Aufdecken dreht die
+# Karte auf die Rueckseite — dieselbe Geste, die man bei echten Karteikarten
+# macht, und damit spielerischer als ein Textwechsel.
+
+_ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
+_HANDSCHRIFT = os.path.join(_ASSETS, 'PermanentMarker-Regular.ttf')
+_hand_cache = {}
+
+
+def _hand(size):
+    """Die Handschrift fuer das Wort auf der Karte.
+
+    Liegt die Datei nicht (Knoten ohne das Asset), faellt es still auf die
+    normale Schrift zurueck — eine fehlende Zierschrift darf das Drill nicht
+    verhindern.
+    """
+    f = _hand_cache.get(size)
+    if f is None:
+        try:
+            f = pygame.font.Font(_HANDSCHRIFT, size)
+        except Exception:
+            f = _font(size, bold=True)
+        _hand_cache[size] = f
+    return f
+
+
+def _karte_flaeche(w, h):
+    """Groesse und Mitte der Karte, aus der Fensterflaeche gerechnet."""
+    # Bewusst nicht randfuellend: der Stapel dahinter muss zu sehen sein, sonst
+    # ist es wieder nur ein Wort auf dunklem Grund.
+    kb = int(min(w * 0.24, h * 0.40))
+    kh = int(kb * 1.34)                      # Hochformat wie eine Karteikarte
+    return kb, kh
+
+
+def _draw_stapel(screen, cx, cy, kb, kh, rest):
+    """Die Karten HINTER der aktuellen — der Stapel, der sichtbar abnimmt."""
+    sichtbar = max(0, min(5, rest))
+    for i in range(sichtbar, 0, -1):
+        versatz = i * 11
+        rect = pygame.Rect(0, 0, kb - i * 4, kh - i * 2)
+        rect.center = (cx + versatz, cy - versatz)
+        pygame.draw.rect(screen, KARTE_STAPEL, rect, border_radius=14)
+        pygame.draw.rect(screen, KARTE_RAND, rect, 1, border_radius=14)
+
+
+def _karte_malen(kb, kh, rueckseite, wort, uebersetzung, kategorie, fonts):
+    """Eine Karte als eigene Flaeche zeichnen (damit sie sich drehen laesst)."""
+    surf = pygame.Surface((kb, kh), pygame.SRCALPHA)
+    rect = surf.get_rect()
+    pygame.draw.rect(surf, KARTE_RUECK if rueckseite else KARTE_BG, rect,
+                     border_radius=16)
+    pygame.draw.rect(surf, KARTE_RAND, rect, 2, border_radius=16)
+
+    if rueckseite:
+        kopf = fonts['hud'].render('BEDEUTUNG', True, KARTE_SUB)
+        surf.blit(kopf, (kb // 2 - kopf.get_width() // 2, int(kh * 0.16)))
+        for i, zeile in enumerate(_umbrechen(uebersetzung or '…',
+                                             _hand(int(kb * 0.13)), kb - 48)[:3]):
+            r = _hand(int(kb * 0.13)).render(zeile, True, KARTE_INK)
+            surf.blit(r, (kb // 2 - r.get_width() // 2,
+                          int(kh * 0.34) + i * int(kb * 0.16)))
+    else:
+        if kategorie:
+            k = fonts['hud'].render(kategorie.upper(), True, KARTE_SUB)
+            surf.blit(k, (kb // 2 - k.get_width() // 2, int(kh * 0.16)))
+        # Wortgroesse an die Kartenbreite anpassen, damit auch lange Vokabeln
+        # hineinpassen statt ueber den Rand zu laufen.
+        groesse = int(kb * 0.22)
+        while groesse > 14:
+            f = _hand(groesse)
+            if f.size(wort or '')[0] <= kb - 44:
+                break
+            groesse -= 4
+        r = _hand(groesse).render(wort or '', True, KARTE_INK)
+        surf.blit(r, (kb // 2 - r.get_width() // 2, kh // 2 - r.get_height() // 2))
+    return surf
+
+
+def _umbrechen(text, font, breite):
+    """Text auf mehrere Zeilen umbrechen, damit er auf die Karte passt."""
+    worte, zeilen, jetzt = (text or '').split(), [], ''
+    for wort in worte:
+        probe = (jetzt + ' ' + wort).strip()
+        if font.size(probe)[0] <= breite or not jetzt:
+            jetzt = probe
+        else:
+            zeilen.append(jetzt); jetzt = wort
+    if jetzt:
+        zeilen.append(jetzt)
+    return zeilen or ['']
+
+
+def _draw_karte(screen, fonts, asv, cx, cy, kb, kh, cur):
+    """Die aktuelle Karte, ggf. mitten im Drehen oder auf dem Weg nach hinten."""
+    flip = asv.get('flip')
+    weg = asv.get('weg')
+    rueck = (asv.get('sub') == 'learn') or (asv.get('blick') is not None)
+
+    if flip:
+        # Drehung: die Karte wird schmaler, kippt durch und kommt als
+        # Rueckseite wieder heraus. cos() gibt die perspektivische Breite.
+        t = max(0.0, min(1.0, flip.get('t', 0.0)))
+        breite_faktor = abs(math.cos(math.pi * t))
+        rueck = t >= 0.5 if flip.get('nach') == 'rueck' else t < 0.5
+    else:
+        breite_faktor = 1.0
+
+    surf = _karte_malen(kb, kh, rueck, cur.get('word', ''), cur.get('de', ''),
+                        _CAT_DE.get(cur.get('category', ''), ''), fonts)
+
+    if weg:
+        # Zurueck in den Stapel: schrumpfen und nach hinten rutschen.
+        t = max(0.0, min(1.0, weg.get('t', 0.0)))
+        skala = 1.0 - 0.35 * t
+        cx = int(cx + 26 * t)
+        cy = int(cy - 26 * t)
+        surf = pygame.transform.smoothscale(
+            surf, (max(1, int(kb * skala * breite_faktor)),
+                   max(1, int(kh * skala))))
+        surf.set_alpha(int(255 * (1.0 - 0.75 * t)))
+    elif breite_faktor < 0.999:
+        surf = pygame.transform.smoothscale(
+            surf, (max(1, int(kb * breite_faktor)), kh))
+
+    screen.blit(surf, (cx - surf.get_width() // 2, cy - surf.get_height() // 2))
 
 
 def _stand_zeilen(asv):
@@ -1441,7 +1868,7 @@ def _stand_unterzeile(st):
     """Woran man einen Stand wiedererkennt: Sprachen, Woerter, Muenzen."""
     teile = []
     for lang, d in sorted((st.get('sprachen') or {}).items()):
-        stueck = '%s · %d Wörter' % (lang, d.get('woerter', 0))
+        stueck = _sym('%s · %d Wörter' % (lang, d.get('woerter', 0)))
         if d.get('muenzen'):
             stueck += ' · %d Münzen' % d['muenzen']
         teile.append(stueck)
@@ -1478,9 +1905,9 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
             _draw_crate_icon(screen, mxp, by + bh // 2, 14, got >= m)
         # Ziel-Marke ganz rechts = Lucía (komplett)
         pygame.draw.circle(screen, ASSESS_GOLD, (bx + bw, by + bh // 2), 4)
-        screen.blit(fonts['hud'].render(f'{got} / {total} · {int(round(100*ratio))}%', True, HUD_FG),
+        screen.blit(fonts['hud'].render(_sym(f'{got} / {total} · {int(round(100*ratio))}%'), True, HUD_FG),
                     (bx, by - fonts['hud'].get_height() - 6))
-        gl = fonts['hud'].render('alle Wörter → Lucía', True, ASSESS_GOLD)
+        gl = fonts['hud'].render(_sym('alle Wörter → Lucía'), True, ASSESS_GOLD)
         screen.blit(gl, (bx + bw - gl.get_width(), by - fonts['hud'].get_height() - 6))
         _draw_coin_hud(screen, fonts, w, asv)
 
@@ -1523,32 +1950,37 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
         ctl(fonts['big'].render('…', True, HUD_DIM), cy)
         _draw_reveal(screen, fonts, w, h, asv)
         return
-    cat = _CAT_DE.get(cur.get('category', ''), '')
-    if cat:
-        ctl(fonts['hud'].render(cat.upper(), True, ASSESS_ACC), cy - 108)
-    ctl(fonts['word'].render(cur.get('word', ''), True, ASSESS_INK), cy - 74)
+
+    # Karte + Stapel. Die Karte sitzt etwas höher als die Mitte, darunter ist
+    # Platz für die Tastenzeile.
+    kb, kh = _karte_flaeche(w, h)
+    kcy = cy - 34
+    _draw_stapel(screen, ccx, kcy, kb, kh, len(asv.get('work') or []) - 1)
+    _draw_karte(screen, fonts, asv, ccx, kcy, kb, kh, cur)
+
+    unten = kcy + kh // 2
     if speaking:
-        ctl(fonts['hud'].render('◗ Lucía spricht …', True, ASSESS_ACC), cy - 2)
+        ctl(fonts['hud'].render(_sym('◗ Lucía spricht …'), True, ASSESS_ACC), unten + 14)
 
     sub = asv.get('sub')
     if asv.get('blick') is not None:        # Rückblick: nur anschauen, nichts wird gewertet
-        ctl(fonts['bubble'].render('= ' + (cur.get('de') or '…'), True, ASSESS_GOLD), cy + 26)
-        ctl(fonts['hud'].render('— Rückblick, zählt nicht —', True, HUD_DIM), cy + 58)
-        _hint_row(screen, fonts['hud'], w, cy + 88,
+        ctl(fonts['hud'].render(_sym('— Rückblick, zählt nicht —'), True, HUD_DIM), unten + 44)
+        _hint_row(screen, fonts['hud'], w, unten + 72,
                   [('←', 'weiter zurück'), ('→', 'zurück zur Abfrage')], center_x=ccx)
     elif sub == 'learn':                    # aufgedeckt: zählt nicht mehr als gewusst
-        ctl(fonts['bubble'].render('= ' + (cur.get('de') or '…'), True, ASSESS_GOLD), cy + 26)
-        ctl(fonts['hud'].render('— merk’s dir, kommt gleich nochmal —', True, HUD_DIM), cy + 58)
-        _hint_row(screen, fonts['hud'], w, cy + 88,
+        ctl(fonts['hud'].render(_sym('— merk’s dir, kommt gleich nochmal —'), True, HUD_DIM),
+            unten + 44)
+        _hint_row(screen, fonts['hud'], w, unten + 72,
                   [('↓', 'nochmal hören'), ('→', 'weiter')], center_x=ccx)
     else:                                   # ask — nur das Wort, keine Übersetzung
-        ctl(fonts['bubble'].render('Kennst du das Wort?', True, ASSESS_INK2), cy + 26)
-        _hint_row(screen, fonts['hud'], w, cy + 82,
-                  [('↓', 'aufdecken'), ('→', 'kann ich ✓'), ('←', 'zurück')],
+        ctl(fonts['hud'].render('Kennst du das Wort?', True, ASSESS_INK2), unten + 44)
+        _hint_row(screen, fonts['hud'], w, unten + 72,
+                  [('↓', 'umdrehen'), ('→', 'kann ich ✓'), ('←', 'zurück')],
                   center_x=ccx)
 
-    _draw_coin_drop(screen, ccx, cy - 44, asv)   # Münze fällt am Wort
+    _draw_coin_drop(screen, ccx, kcy, asv)       # Münze fällt an der Karte
     _draw_reveal(screen, fonts, w, h, asv)
+    _draw_geschenk(screen, fonts, w, h, asv)     # Meilenstein: über allem
 
 
 def main():
@@ -1807,6 +2239,19 @@ def main():
         if word:
             asv_speak(word)
 
+    def asv_weglegen():
+        """Die Karte nach hinten in den Stapel legen — dann erst die naechste.
+
+        Sichtbar wegzulegen ist der halbe Reiz am Stapel: man SIEHT, dass das
+        Wort wiederkommt (oder eben nicht). Die naechste Karte holt der
+        Render-Takt, sobald die Bewegung durch ist — in einem eigenen Thread,
+        weil asv_show() das Wort vorlesen laesst und dabei aufs Netz wartet.
+        """
+        with S['lock']:
+            v = S['asv']
+            if v and not v.get('weg'):
+                v['weg'] = {'t': 0.0}
+
     def asv_advance():
         """Stapel leer / alle durch → Freischaltung, sonst nächste Karte."""
         with S['lock']:
@@ -1845,25 +2290,36 @@ def main():
                         v['parts'] = res['parts']
                     crate = res.get('crate')
                     if crate:
-                        v['reveal'] = {'kind': crate.get('kind'),
-                                       'amount': int(crate.get('amount', 0) or 0), 't': 2.2}
+                        # Meilenstein: die Geschenk-Sequenz uebernimmt den Schirm.
+                        # Sie laeuft NICHT von selbst durch — der erste Pfeil
+                        # macht auf, der zweite geht weiter. Ein Gewinn, den man
+                        # wegklicken muss, fuehlt sich nach Gewinn an; einer, der
+                        # nach 2 Sekunden verschwindet, nach Systemmeldung.
+                        v['geschenk'] = {'phase': 'zu', 't': 0.0,
+                                         'kind': crate.get('kind'),
+                                         'amount': int(crate.get('amount', 0) or 0),
+                                         'part': crate.get('part'),
+                                         'konfetti': [], 'winkel': 0.0}
                         if crate.get('kind') == 'part' and crate.get('part'):
                             v['new_part'] = {'name': crate['part'], 't': 0.0}   # schwebt herein
                     # SR: nur bei bestätigtem Save — Streak hoch, neu fällig setzen
                     # (oder graduieren, wenn Streak über die Ladder hinaus ist).
                     if (res.get('assessed') or res.get('mastered')) and cur is not None:
                         cur['streak'] = int(cur.get('streak', 0)) + 1
-                        if cur['streak'] <= len(SR_LADDER):
-                            cur['due'] = v.get('seen', 0) + SR_LADDER[cur['streak'] - 1]
-                        else:
+                        if cur['streak'] >= FERTIG_NACH:
+                            # Durch: die Karte kommt NICHT mehr in den Stapel.
                             v['work'] = [c for c in (v.get('work') or []) if c is not cur]
+                            cur['fertig'] = True
+                        else:
+                            stufe = min(cur['streak'], len(SR_LADDER)) - 1
+                            cur['due'] = v.get('seen', 0) + SR_LADDER[stufe]
                     unlocked = bool(res.get('unlocked'))
         if unlocked:
             with S['lock']:
                 if S['asv']:
                     S['asv']['phase'] = 'unlock'; S['asv']['cur'] = None
             return
-        asv_advance()
+        asv_weglegen()
 
     def asv_lapse():
         """Nach Repeat (nicht gewusst): in ~3 Karten wieder fällig, Streak zurück
@@ -1877,7 +2333,7 @@ def main():
             if cur is not None:
                 cur['due'] = v.get('seen', 0) + SR_LAPSE
                 cur['streak'] = 0
-        asv_advance()
+        asv_weglegen()
 
     def asv_aufdecken():
         """AUFDECKEN (↓) — Bedeutung zeigen + nochmal vorlesen.
@@ -1891,8 +2347,14 @@ def main():
             v = S['asv']
             if not v or v.get('reveal') or not v.get('cur'):
                 return
+            schon_offen = v.get('sub') == 'learn'
             v['sub'] = 'learn'
             v['learn_hold'] = None
+            if not schon_offen:
+                # Die Karte dreht sich auf die Rueckseite. Beim zweiten ↓
+                # (nochmal hoeren) liegt sie schon offen — dann nicht erneut
+                # drehen, sonst zappelt sie.
+                v['flip'] = {'t': 0.0, 'nach': 'rueck'}
             cur = v.get('cur')
         if cur:
             asv_speak(cur['word'])
@@ -1943,7 +2405,7 @@ def main():
             cur = v.get('cur')
             if cur is not None:
                 cur['due'] = v.get('seen', 0) + SR_SKIP     # streak unverändert
-        asv_advance()
+        asv_weglegen()
 
     def asv_key(ev):
         """Tastendruck im Abfrage-Modus (kein Text-Input dahinter).
@@ -1988,6 +2450,19 @@ def main():
                 threading.Thread(target=run_stream,
                                  args=('/api/tutor/start', {'focus': foc}), daemon=True).start()
             return
+        # Ein offenes Geschenk bekommt die Tasten zuerst — sonst blaettert man
+        # hinter dem Vorhang weiter, ohne es zu sehen.
+        if v.get('geschenk'):
+            g = v['geschenk']
+            if ev.key in (pygame.K_RIGHT, pygame.K_RETURN, pygame.K_SPACE):
+                with S['lock']:
+                    gg = S['asv'].get('geschenk') if S['asv'] else None
+                    if gg and gg['phase'] == 'zu':
+                        gg['phase'] = 'wackeln'; gg['t'] = 0.0
+                    elif gg and gg['phase'] == 'teil':
+                        S['asv']['geschenk'] = None
+            return
+
         # phase == 'card' — Steuerung:
         #   ↓          aufdecken (wer aufdeckt, wusste es nicht)
         #   → / Enter  weiter. NICHT aufgedeckt = gewusst, aufgedeckt = nochmal.
@@ -2132,7 +2607,8 @@ def main():
                         'crate_at': list(game.get('crate_at', [])),
                         'reveal': None, 'coin_drop': None, 'new_part': None,
                         'staende': [], 'stand_aktiv': None, 'stand_idx': 0,
-                        'stand_weg': None, 'verlauf': [], 'blick': None}
+                        'stand_weg': None, 'verlauf': [], 'blick': None,
+                        'flip': None, 'weg': None, 'geschenk': None}
         threading.Thread(target=staende_laden, daemon=True).start()
         return True
 
@@ -2558,8 +3034,33 @@ def main():
                         a2['new_part'] = None
                 # Frueher lief eine aufgedeckte Karte nach 3 s von selbst weiter
                 # (learn_hold). Das ist raus: seit ↓/→ getrennt sind, entscheidet
-                # der Mensch, wie lange er auf die Uebersetzung schaut. Das Feld
-                # bleibt auf None und wird nur noch beim Aufraeumen gelesen.
+                # der Mensch, wie lange er auf die Uebersetzung schaut.
+                #
+                # Karten-Bewegungen. Beide laufen im Render-Takt, damit sie
+                # unabhaengig von Netz und Sprachausgabe fluessig bleiben.
+                g = a2.get('geschenk')
+                if g:
+                    g['t'] = g.get('t', 0.0) + dt
+                    g['winkel'] = g.get('winkel', 0.0) + dt * 0.9
+                    if g.get('konfetti'):
+                        _konfetti_takt(g['konfetti'], dt)
+                    # Die beiden mittleren Stufen laufen von selbst weiter;
+                    # 'zu' und 'teil' warten auf einen Tastendruck.
+                    if g['phase'] == 'wackeln' and g['t'] >= GESCHENK_DAUER['wackeln']:
+                        g['phase'] = 'auf'; g['t'] = 0.0
+                        g['konfetti'] = _konfetti_streuen(
+                            w // 2, int(h * 0.46) - int(min(w, h) * 0.10))
+                    elif g['phase'] == 'auf' and g['t'] >= GESCHENK_DAUER['auf']:
+                        g['phase'] = 'teil'; g['t'] = 0.0
+                if a2.get('flip'):                        # Karte dreht sich um
+                    a2['flip']['t'] += dt / 0.34
+                    if a2['flip']['t'] >= 1.0:
+                        a2['flip'] = None
+                if a2.get('weg'):                         # Karte geht in den Stapel
+                    a2['weg']['t'] += dt / 0.26
+                    if a2['weg']['t'] >= 1.0:
+                        a2['weg'] = None
+                        threading.Thread(target=asv_advance, daemon=True).start()
             asv_snap = dict(S['asv']) if S['asv'] else None
 
         # Der Mund bewegt sich NUR, wenn wirklich Text ankommt oder Audio läuft.
@@ -2728,7 +3229,7 @@ def main():
                 screen.blit(fonts['input'].render(label, True,
                             M_FG if i == sel else M_DIM), (mx + 20, yy))
                 yy += rh
-            screen.blit(fonts['hud'].render('↑/↓ · Enter · 1–9 · Esc', True, M_DIM),
+            screen.blit(fonts['hud'].render(_sym('↑/↓ · Enter · 1–9 · Esc'), True, M_DIM),
                         (mx + 18, yy + 6))
 
         pygame.display.flip()
