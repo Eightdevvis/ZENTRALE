@@ -1,0 +1,28 @@
+# Systempakete eines Aussenpostens (apt, Debian/Raspberry Pi OS).
+#
+# Diese Zeilen sind KEINE Python-Pakete. Sie werden auch NICHT automatisch
+# installiert: dafuer braucht es root, und ein Updater, der per Cron alle
+# fuenf Minuten mit sudo apt hantiert, ist eine schlechtere Idee als ein
+# Mensch, der einmal etwas installiert.
+#
+# Wozu die Liste dann? Der Updater PRUEFT nach dem pip-Schritt, ob die
+# Python-Pakete sich auch wirklich importieren lassen — ein Wheel kann
+# installiert sein und trotzdem beim Import an einer fehlenden C-Bibliothek
+# scheitern. Genau das war am Pi der Fall: pygame und sounddevice lagen im
+# venv, aber libSDL2 und PortAudio fehlten im System. Ohne diese Pruefung
+# haette das Zimmer beim Start einen ImportError ins Log geschrieben, den
+# niemand liest.
+#
+# Format: <apt-paket>  # wofuer
+
+# ── pygame (Persona-Zimmer, tutor/room.py) ───────────────────────────────
+libsdl2-2.0-0          # das Fenster ueberhaupt
+libsdl2-mixer-2.0-0    # pygame.mixer — Lucias Stimme abspielen
+libsdl2-ttf-2.0-0      # Schrift im Fenster (Sprechblase, Verlaufsleiste)
+libsdl2-image-2.0-0    # Bildformate, von pygame erwartet
+
+# ── sounddevice (Mikro im Zimmer, "Immer-Zuhoeren") ──────────────────────
+libportaudio2          # ohne das: OSError "PortAudio library not found"
+
+# Schriften sind auf Raspberry Pi OS schon da (DejaVu deckt Spanisch ab).
+# Fuer Mandarin braeuchte es zusaetzlich fonts-noto-cjk.

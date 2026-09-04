@@ -275,3 +275,42 @@ def test_abgleich_installiert_auch_wenn_paket_aktuell_ist(backend, tmp_path, mon
     _lauf(backend, ziel)
     assert gerufen.exists(), "pip wurde nicht gerufen, obwohl ein Paket fehlt"
     assert "requirements-aussenposten.txt" in gerufen.read_text()
+
+
+def test_installiert_aber_nicht_ladbar_wird_gemeldet(tmp_path):
+    """Ein Wheel kann installiert sein und beim Import trotzdem an einer
+    fehlenden C-Bibliothek scheitern — pygame ohne libSDL2, sounddevice ohne
+    PortAudio. `pip list` sieht davon nichts; am Pi war genau das der Fall."""
+    req = tmp_path / "req.txt"
+    # 'this' ist immer importierbar, 'antigravity' oeffnet nur einen Browser —
+    # wir brauchen etwas, das SICHER beim Import kracht:
+    (tmp_path / "kaputtesmodul.py").write_text("raise ImportError('libFoo.so fehlt')\n")
+    req.write_text("kaputtesmodul\nsys\n")
+    monkey = dict(os.environ, PYTHONPATH=str(tmp_path))
+    import subprocess as sp
+    r = sp.run([sys.executable, "-c", "import kaputtesmodul"],
+               capture_output=True, text=True, env=monkey)
+    assert r.returncode != 0                      # Vorbedingung des Tests
+
+    alt = os.environ.get("PYTHONPATH")
+    os.environ["PYTHONPATH"] = str(tmp_path)
+    try:
+        kaputt = dict(updater._nicht_ladbar(sys.executable, str(req)))
+    finally:
+        if alt is None:
+            os.environ.pop("PYTHONPATH", None)
+        else:
+            os.environ["PYTHONPATH"] = alt
+
+    assert "kaputtesmodul" in kaputt
+    assert "libFoo.so" in kaputt["kaputtesmodul"]
+    assert "sys" not in kaputt                    # laesst sich laden
+
+
+def test_systemliste_nennt_die_bekannten_bibliotheken():
+    """Die apt-Liste ist Doku fuer Menschen — aber sie muss die zwei Faelle
+    nennen, die am Pi wirklich gefehlt haben."""
+    pfad = os.path.join(ROOT, "deploy", "aussenposten-system.txt")
+    inhalt = open(pfad, encoding="utf-8").read()
+    assert "libsdl2-2.0-0" in inhalt             # pygame
+    assert "libportaudio2" in inhalt             # sounddevice

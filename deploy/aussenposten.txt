@@ -43,6 +43,7 @@ scripts/open_tutor_room.py
 scripts/aussenposten_update.py
 deploy/aussenposten-update.cron
 deploy/requirements-aussenposten.txt
+deploy/aussenposten-system.txt
 deploy/aussenposten.txt
 
 # ── Einrichtung auf dem Knoten ───────────────────────────────────────────

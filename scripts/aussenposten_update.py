@@ -46,6 +46,11 @@ import urllib.request
 # aufzuraeumen — sonst sammelt ein Knoten ueber Jahre Karteileichen an.
 STAND_DATEI = ".aussenposten_stand.json"
 REQ = "deploy/requirements-aussenposten.txt"
+SYS = "deploy/aussenposten-system.txt"
+
+# Wie das Paket beim Importieren heisst, wenn das anders ist als sein Name auf
+# PyPI. Nur Ausnahmen — sonst wird der Name einfach uebernommen.
+IMPORTNAME = {"webrtcvad-wheels": "webrtcvad"}
 
 
 def log(text, logdatei=None):
@@ -224,6 +229,27 @@ def pip_nachziehen(ziel, logdatei, grund):
         log("pip fertig", logdatei)
 
 
+def _nicht_ladbar(py, req_pfad):
+    """Welche geforderten Pakete sind zwar installiert, lassen sich aber
+    nicht importieren? Gibt [(name, fehlermeldung), ...].
+
+    Ein Wheel kann tadellos installiert sein und beim Import trotzdem an einer
+    fehlenden C-Bibliothek scheitern — pygame ohne libSDL2, sounddevice ohne
+    PortAudio. `pip list` sieht davon nichts. Am Pi war genau das der Fall,
+    und ohne diese Pruefung faellt es erst auf, wenn das Zimmer stumm nicht
+    aufgeht.
+    """
+    kaputt = []
+    for name in _gefordert(req_pfad):
+        modul = IMPORTNAME.get(name, name.replace("-", "_"))
+        r = subprocess.run([py, "-c", "import " + modul],
+                           capture_output=True, text=True, timeout=120)
+        if r.returncode != 0:
+            letzte = (r.stderr or "").strip().splitlines()
+            kaputt.append((name, letzte[-1] if letzte else "Importfehler"))
+    return kaputt
+
+
 def abhaengigkeiten_angleichen(ziel, logdatei, req_vorher):
     """Dafuer sorgen, dass die Pakete des Knotens zur Liste passen.
 
@@ -248,6 +274,15 @@ def abhaengigkeiten_angleichen(ziel, logdatei, req_vorher):
     if fehlt:
         pip_nachziehen(ziel, logdatei,
                        "fehlende Pakete: %s" % ", ".join(sorted(fehlt)))
+    # Installiert heisst nicht benutzbar: nach dem pip-Schritt nachsehen, ob
+    # sich auch alles importieren laesst. Fehlt eine C-Bibliothek, hilft kein
+    # weiteres pip — dann muss ein Mensch ein Systempaket nachlegen. Also
+    # sagen wir das deutlich, statt es das Zimmer beim Start herausfinden zu
+    # lassen.
+    for name, fehler in _nicht_ladbar(py, req_pfad):
+        log("ACHTUNG %s ist installiert, laesst sich aber nicht laden: %s "
+            "-> fehlendes Systempaket, siehe %s" % (name, fehler, SYS),
+            logdatei)
 
 
 def main():
