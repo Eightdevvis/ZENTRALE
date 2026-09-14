@@ -40,6 +40,27 @@ auf eine fest definierte Whitelist von Projektdateien (siehe
 - Anbindung an das hauseigene Security-System
 - Multi-Monitor Support
 
+## Prioritäten (Stand 2026-09-14) — Reihenfolge ist verbindlich
+
+Die Verkabelung steht komplett: Monitor an der Wand, Pi am LAN, PC als
+Always-on-Kern (`memory/betrieb/always_on.md`). Was fehlt, ist **Nutzbarkeit**
+— zu viele Blockaden zwischen »ich gehe am Pi vorbei« und »ZENTRALE spricht
+mich an«. Ziel: fertig werden, schnell, in dieser Reihenfolge:
+
+1. **Pi↔PC-Pipe stabil aufspannen.** Sasha geht vorbei, ZENTRALE kann ihn
+   ansprechen und er sie — ohne Knöpfe. Blocker heute: Pi-Bildschirm geht
+   schnell aus; PC schläft dauernd ein; KI nur per Tastendruck, Voice nur per
+   zweitem Tastendruck; die Tastatur liegt auf dem Boden (Monitor + Mikro
+   oben) → entweder Knöpfe hoch oder KI dauerhaft freischalten.
+2. **Tutor-Kerngedanke aufstellen und funktional machen.** Der Tutor hängt an
+   der Wand, merkt wenn Sasha da ist, spricht ihn von sich aus in der
+   Zielsprache an — organisches Lernen nebenbei, er lässt einen nie ganz in
+   Ruhe. Heute: nur per Knopf, dann Menü, dann Drill, muss erst freigeschaltet
+   werden, sieht insgesamt schlecht aus. Die Mechanik steht ungefähr, ist aber
+   ungetestet. **Wichtiger als der Assistent.**
+3. **KI-Assistent.** Memory-Struktur ist überkompliziert und kaputt, die
+   Tests dazu taugten nichts, Tool-Calls inkonsistent. Kommt danach.
+
 ## Verwandt
 
 - Architektur-Details: `memory/system/architektur.md`

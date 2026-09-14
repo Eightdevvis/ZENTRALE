@@ -84,9 +84,13 @@ auf 5000/5050/5051.
 
 ## Wake-on-LAN (Pi weckt PC)
 
+> **Überholt seit 2026-09-14:** der PC läuft permanent (`always_on.md`),
+> es gibt nichts mehr zu wecken. Abschnitt bleibt als Doku der Einrichtung.
+
 Damit man nicht erst zum PC laufen und ihn anschalten muss, wenn man
 heimkommt, weckt der Pi den PC ueber Wake-on-LAN aus S5 (soft-off).
-Das Pi bleibt 24/7 an, der PC darf schlafen.
+Das Pi bleibt 24/7 an, der PC darf schlafen. *(Galt bis 2026-09; jetzt
+bleiben beide an.)*
 
 **PC-Seite (einmalig):**
 

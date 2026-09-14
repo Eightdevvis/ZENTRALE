@@ -106,6 +106,9 @@ Dritter), Secure Boot + TPM-Measurement umsetzen.
 
 ## Auto-Unlock-Strategie (Dropbear im Initramfs)
 
+> **Seit 2026-09-14** läuft der PC permanent (`always_on.md`). Schritt 1 (WoL)
+> entfällt; der Rest gilt nur noch für ungeplante Neustarts.
+
 Damit der Pi den PC remote wecken UND entsperren kann, ohne dass jemand
 am PC sitzen muss, läuft im Initramfs ein minimaler SSH-Server
 (Dropbear). Workflow:

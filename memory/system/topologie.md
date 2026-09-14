@@ -39,6 +39,10 @@ gedacht – das war für die AI-Last zu schwer.
 └──────────────────────────────────────────────────────────────┘
 ```
 
+**Seit 2026-09-14: der PC ist always-on** — Kern zuhause, von unterwegs per
+SSH/WAN erreichbar, kein Schlafen, kein WoL mehr. Siehe
+`memory/betrieb/always_on.md`.
+
 ## Was wo läuft
 
 | Komponente              | Host | Begründung                                |
