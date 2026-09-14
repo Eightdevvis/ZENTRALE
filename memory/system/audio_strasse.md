@@ -48,9 +48,10 @@ alle Fronten (Laptop-Mikro, späteres Handy) benutzen dieselbe Weiche.
 oder `/api/chat`. Schneller gebaut (heute ist es fast so), aber jede Front
 bräuchte die Logik nochmal, und Agent-Wechsel-Regeln lägen im Fenster-Code.
 
-Empfehlung **A**, weil der Pi laut Topologie „rechnet nichts selbst" und die
-Regeln, wer wann spricht, ins Backend gehören (dort wohnt auch der Takt,
-`takt.md`). **Nicht entschieden — Sashas Wahl.**
+**Entschieden 2026-09-14 (Sasha): A — die Weiche sitzt im Core.** Der Pi
+rechnet nichts selbst, und die Regeln, wer wann spricht, gehören ins Backend
+(dort wohnt auch der Takt, `takt.md`). **Der Umbau ist verschoben**: erst muss
+der Tutor rund laufen, die Architektur kommt danach.
 
 ## Der Umbau in Schritten (nach der Entscheidung)
 
