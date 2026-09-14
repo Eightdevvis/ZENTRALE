@@ -87,6 +87,12 @@ POLL_SEC    = float(os.environ.get("ZENTRALE_BRIDGE_POLL", "0.2"))
 KB_ENABLED  = os.environ.get("ZENTRALE_BRIDGE_KB", "1") == "1"
 TELEMETRY_ENABLED = os.environ.get("ZENTRALE_TELEMETRY", "1") == "1" and host_metrics is not None
 TELEMETRY_POLL    = float(os.environ.get("ZENTRALE_TELEMETRY_POLL", "30"))
+# PIR (HC-SR501): DOUT an GPIO4 (BCM) = Board-Pin 7, VCC 5V, GND. Sasha baut
+# ihn 2026-09-14 an, weil Geraeusche als Anwesenheit zu viel Falsches liefern.
+# PI_PIR_GPIO=0 schaltet ab. Bewegung -> POST /api/sensor/motion, hoechstens
+# alle PIR_MIN_GAP s (der Sensor haelt selbst ein paar Sekunden hoch).
+PIR_GPIO    = int(os.environ.get("PI_PIR_GPIO", "4"))
+PIR_MIN_GAP = float(os.environ.get("PI_PIR_MIN_GAP", "5"))
 
 # Sensor-Name -> Taste fuer die Tastatur-Simulation.
 # Muss synchron bleiben mit:
@@ -174,9 +180,42 @@ def _poll_keyboard():
         _kb_last_state[sensor_name] = pressed
 
 
+_pir = {"dev": None, "last": 0.0}
+
+
+def _pir_start():
+    """PIR per gpiozero einhaengen (Interrupt-Callback, kein Polling). Fehlt
+    gpiozero/lgpio im venv oder ist der Pin nicht zu kriegen: Hinweis, weiter
+    ohne — Tastatur/Telemetrie laufen normal."""
+    if PIR_GPIO <= 0:
+        print("## PIR: aus (PI_PIR_GPIO=0)", flush=True)
+        return
+    try:
+        from gpiozero import MotionSensor
+    except Exception as e:
+        print(f"## PIR: gpiozero fehlt ({e}) — pip install gpiozero lgpio", flush=True)
+        return
+    try:
+        dev = MotionSensor(PIR_GPIO)
+    except Exception as e:
+        print(f"## PIR: GPIO{PIR_GPIO} nicht nutzbar: {e}", flush=True)
+        return
+
+    def _bewegung():
+        now = time.monotonic()
+        if now - _pir["last"] < PIR_MIN_GAP:
+            return
+        _pir["last"] = now
+        _post_sensor("motion")
+
+    dev.when_motion = _bewegung
+    _pir["dev"] = dev
+    print(f"## PIR: an (GPIO{PIR_GPIO}, min. Abstand {PIR_MIN_GAP}s)", flush=True)
+
+
 def _poll_gpio():
     """
-    Skelett – noch nicht aktiv.
+    Skelett – noch nicht aktiv (der PIR laeuft per Callback, s. _pir_start).
 
     Sobald die erste Hardware angeschlossen ist (Reed-Switch an der
     Haustuer, HC-SR501 PIR im Flur, …), wird hier mit gpiozero
@@ -216,6 +255,7 @@ def main():
     if TELEMETRY_ENABLED:
         host_metrics.cpu_percent()
     _last_tele = time.monotonic() - TELEMETRY_POLL + 3
+    _pir_start()
 
     while True:
         if KB_ENABLED:

@@ -24,6 +24,10 @@ pygame
 sounddevice
 webrtcvad-wheels
 
+# PIR am GPIO (pi_sensor_bridge.py). lgpio ist das Backend fuer Bookworm.
+gpiozero
+lgpio
+
 # NICHT hier: numpy + core/map/ (nur fuers Karten-Fenster), faster-whisper,
 # sherpa-onnx, piper-tts (Backend-Audio), flask (kein Backend), cryptography,
 # secretstorage, jeepney (Mail), openai, fsrs (Tutor-Backend), python-dateutil.

@@ -3011,6 +3011,12 @@ def main():
                     S['thought_id'] = tid
                     S['thought_t'] = THOUGHT_TTL if w else 0.0
                 S['tv'] = (bool(rs.get('tv_on')), (rs.get('tv_title') or ''))
+                # Bewegungsmelder (ueber den Kern): frischer Treffer = jemand ist
+                # da — zaehlt wie verstandene Worte (Ankunft, Anstoss), im
+                # Gegensatz zu Mikro-Geraeuschen. Poll-Takt ~1 s, deshalb < 3 s.
+                pa = rs.get('presence_age')
+                if pa is not None and float(pa) < 3.0:
+                    S['activity_ms'] = S['voice_ms'] = pygame.time.get_ticks()
                 music_now = rs.get('music_mood') if rs.get('music_action') == 'play' else None
             if mid != last_mid:   # neuer Musik-Wunsch (auflegen/stoppen)
                 if rs.get('music_action') == 'play':
@@ -3100,7 +3106,9 @@ def main():
             # (motion), aber Reden gibt es erst, wenn sie ihn gehört hat.
             ankunft = (last_seen == 0 or ruhe >= PRES_ARRIVE_QUIET_S) and voice == act
             last_seen = act
-            if (now - last_post) / 1000.0 >= PRES_POST_EVERY_S:
+            # motion an den Kern nur bei WORTEN — ein Geraeusch-motion kaeme ueber
+            # room_state (presence_age) als "Person" zurueck und weckte sie doch.
+            if voice == act and (now - last_post) / 1000.0 >= PRES_POST_EVERY_S:
                 last_post = now
                 threading.Thread(target=be.sensor, args=('motion',), daemon=True).start()
             if ankunft and ok:

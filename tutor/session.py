@@ -117,7 +117,7 @@ def set_thought(word: str, meaning: str = ""):
 # reagiert sie nur NONVERBAL (schaut hoch, hellt auf, kleiner Batterie-Schub) —
 # KEIN erzwungener Cloud-Turn (genau der schlechte Auto-Trigger, der 05-14 zur
 # Deaktivierung führte). Gedrosselt, damit PIR-Zucken sie nicht nervös macht.
-_presence = {"ts": 0.0}
+_presence = {"ts": 0.0, "seen": 0.0}   # ts: letzte Reaktion; seen: letzter Sensor-Treffer
 _PRESENCE_COOLDOWN = 90.0    # s zwischen zwei Reaktionen
 
 
@@ -164,8 +164,11 @@ def tv_off():
 
 def presence_ping() -> bool:
     """Presence-Sensor: Sasha ist im Raum. Reagiert nur bei AKTIVER Session,
-    nonverbal + gedrosselt. True = hat sichtbar reagiert."""
+    nonverbal + gedrosselt. True = hat sichtbar reagiert. Der Treffer selbst
+    wird IMMER gemerkt (seen) — das Zimmer liest ihn aus room_state und macht
+    daraus Ankunft/Anrede (PIR statt Mikro-Geraeusch, 2026-09-14)."""
     with _lock:
+        _presence["seen"] = time.time()
         if not _active:
             return False
         now = time.time()
@@ -205,6 +208,9 @@ def room_state() -> dict:
                 "music_action": _music["action"], "music_mood": _music["mood"],
                 "music_id": _music["id"],
                 "tv_on": _tv["on"], "tv_title": _tv["title"], "tv_id": _tv["id"],
+                # Sekunden seit dem letzten Presence-Treffer (PIR/Sensor); None = nie
+                "presence_age": (round(time.time() - _presence["seen"], 1)
+                                 if _presence["seen"] else None),
                 # Assessment-Gate:
                 "mode": "assessment" if assess else "room",
                 "core_got": got, "core_total": total,
