@@ -105,12 +105,14 @@ def transcribe():
         log.info(f"Transkribiere '{audio_file.filename}' lang={lang} ...")
 
         # language=<lang> zwingt Whisper auf eine konkrete Sprache.
-        # beam_size=5 = bessere Qualität auf Kosten von etwas mehr Zeit.
+        # beam_size: 5 = beste Qualität, aber auf CPU ~2 s pro kurzem Satz
+        # (gemessen 2026-09-14, 'small' int8). An der Wand zählt die Antwortzeit
+        # — Default jetzt 2 (WHISPER_BEAM überschreibt), kurze Sätze bleiben gut.
         # vad_filter=True (per Env abschaltbar) laesst Silero-VAD vorher
         # Stille raus - das ist der Anti-Halluzinations-Hebel.
         transcribe_kwargs = {
             "language":  lang,
-            "beam_size": 5,
+            "beam_size": int(os.environ.get("WHISPER_BEAM", "2")),
         }
         if WHISPER_VAD_ENABLED:
             transcribe_kwargs["vad_filter"]     = True

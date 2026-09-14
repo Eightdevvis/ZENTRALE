@@ -200,6 +200,13 @@ def draw_thought(surf, font, small, word, meaning, cx, top_y, alpha=255):
 NUDGE_AFTER_S   = 90.0    # s Stille bis zum ersten Anstoß (war 25 = Spam; sie lebt
                           # lieber in ihrem Zimmer weiter, als dich ständig anzuquatschen)
 CHILL_RECHECK_S = 900.0   # s (15 min) bis zum nächsten Versuch
+FOLLOWUP_S      = 15.0    # s: sie hat gerade etwas gesagt/gefragt, Sasha ist da
+                          # (Mikro) und antwortet nicht → EIN schnelles Nachhaken.
+                          # Sasha 2026-09-14: „hola lucia — hola — ich geh weg" —
+                          # sie soll einen ins Gespräch ziehen, nicht nur zurückgrüßen.
+# Pause (Alt+P): komplett Ruhe — kein Zuhören, kein Anstoß, keine Stimme — bis zum
+# nächsten Alt+P. Überlebt Neustarts (Datei), damit ein Deploy sie nicht weckt.
+PAUSE_DATEI = os.path.join(os.path.expanduser('~'), '.config', 'zentrale', 'tutor_pause')
 # Immer-Zuhören (STT): Mikro im Fenster, webrtcvad segmentiert Sprache, das Mikro
 # ist gegated während die Persona spricht (sonst hört sie sich selbst zu).
 MIC_RATE          = 16000  # Hz (webrtcvad kann 8/16/32k)
@@ -2181,6 +2188,9 @@ def main():
         'last_user_ms': 0,     # letzte Sasha-Eingabe (Feedback-Loop)
         'nudged': False,       # Anstoß in dieser Stille schon gemacht?
         'nudge_ms': 0,
+        'tutor_done_ms': 0,    # wann ihre letzte Antwort fertig war (Nachhaken)
+        'followed': False,     # in dieser Runde schon nachgehakt?
+        'pause': os.path.exists(PAUSE_DATEI),   # Alt+P: sie lässt einen in Ruhe
         'mic': not a.no_mic,   # Immer-Zuhören an? (Alt+H togglet)
         'hearing': False,      # gerade Sprache am Mikro?
         'activity_ms': 0,      # letzte Aktivität am Mikro (Sprache ODER Geräusch)
@@ -2228,7 +2238,9 @@ def main():
 
     def speak(text):
         text = _nur_sprache(text)
-        if not text:
+        with S['lock']:
+            pause = S['pause']
+        if not text or pause:
             return
         """Zeile vom Backend synthetisieren (WAV) und abspielen; währenddessen
         S['speaking'] setzen, damit sich der Mund bewegt. Stumm/kein Audio → egal,
@@ -2278,6 +2290,8 @@ def main():
         if not err and line:
             log_add('tutor', line)   # in den Verlauf
             speak(line)              # ihre Stimme (nach dem Stream, Antworten sind kurz)
+            with S['lock']:
+                S['tutor_done_ms'] = pygame.time.get_ticks()
         # buf jetzt leeren, damit die Blase verhallen KANN — sonst hält der
         # stehengebliebene Text has_text ewig true und bub_age wird nie größer.
         with S['lock']:
@@ -2809,6 +2823,24 @@ def main():
             foc = S['focused']
         run_stream('/api/tutor/start', {'focus': foc})   # neue Begrüßung
 
+    def pause_toggeln():
+        """Alt+P: Pause an/aus. An = kein Zuhören, kein Anstoß, keine Stimme, bis
+        zum nächsten Alt+P — auch über Neustarts (Datei). Sasha braucht manchmal
+        Abstand von ihr, ohne das Zimmer zu schließen."""
+        with S['lock']:
+            S['pause'] = not S['pause']; an = S['pause']
+            S['msg'] = 'pause — sie lässt dich in ruhe (Alt+P hebt auf)' if an else 'pause aus'
+        try:
+            if an:
+                os.makedirs(os.path.dirname(PAUSE_DATEI), exist_ok=True)
+                open(PAUSE_DATEI, 'w').close()
+                try: pygame.mixer.stop()
+                except Exception: pass
+            elif os.path.exists(PAUSE_DATEI):
+                os.remove(PAUSE_DATEI)
+        except Exception:
+            pass
+
     def drill_verlassen():
         """Esc im Drill: Karten weg, zurück ins Zimmer. Läuft noch keine Persona-
         Session (Drill direkt nach dem Öffnen gestartet), begrüßt sie jetzt."""
@@ -2998,9 +3030,10 @@ def main():
             now = pygame.time.get_ticks()
             with S['lock']:
                 # im Assessment-Drill (asv) NIE die KI anstoßen — kein LLM da drin
-                ok = (S['asv'] is None and S['available']
-                      and not S['busy'] and not S['streaming'])
+                ok = (S['asv'] is None and S['available'] and not S['pause']
+                      and not S['busy'] and not S['streaming'] and not S['speaking'])
                 lu = S['last_user_ms']; nudged = S['nudged']; nm = S['nudge_ms']
+                td = S['tutor_done_ms']; followed = S['followed']
             if not ok:
                 continue
             silence = (now - lu) / 1000.0
@@ -3011,6 +3044,14 @@ def main():
             # läuft das Zimmer rund um die Uhr, und in ein leeres Zimmer zu reden
             # kostet Cloud-Calls und wirkt beim Reinkommen wie ein Selbstgespräch.
             if not da:
+                continue
+            # Schnelles Nachhaken: sie hat etwas gesagt, er ist da und sagt nichts
+            # zurück → einmal nachlegen (Gesprächssog), dann die normale Stille-Uhr.
+            if (td and not followed and td > lu
+                    and (now - td) / 1000.0 > FOLLOWUP_S):
+                with S['lock']:
+                    S['followed'] = True
+                run_stream('/api/tutor/nudge', {'focus': foc, 'sound': True})
                 continue
             if not nudged and silence > NUDGE_AFTER_S:
                 with S['lock']:
@@ -3039,7 +3080,7 @@ def main():
             now = pygame.time.get_ticks()
             with S['lock']:
                 act = S['activity_ms']
-                ok = (S['asv'] is None and S['available']
+                ok = (S['asv'] is None and S['available'] and not S['pause']
                       and not S['busy'] and not S['streaming'])
                 foc = S['focused']
             if act == 0 or act == last_seen:
@@ -3083,6 +3124,7 @@ def main():
                 return
             S['last_user_ms'] = pygame.time.get_ticks()   # Stille-Uhr zurücksetzen
             S['nudged'] = False
+            S['followed'] = False      # neue Runde → wieder EIN Nachhaken erlaubt
         log_add('user', text)      # in den Verlauf
         threading.Thread(target=run_stream,
                          args=('/api/tutor/respond', {'text': text}), daemon=True).start()
@@ -3134,7 +3176,8 @@ def main():
         log_ms = 0
         while True:
             with S['lock']:
-                on = S['mic']; gated = S['speaking'] or S['busy'] or S['streaming']
+                on = S['mic'] and not S['pause']
+                gated = S['speaking'] or S['busy'] or S['streaming']
                 musik = S['music'] is not None
             try:
                 data, _ = stream.read(n)
@@ -3297,6 +3340,8 @@ def main():
                         S['msg'] = 'zuhören an' if S['mic'] else 'mikro aus'
                 elif ev.key == pygame.K_z and (ev.mod & pygame.KMOD_ALT):
                     tui_oeffnen()                    # ZENTRALE-TUI ueber das Zimmer
+                elif ev.key == pygame.K_p and (ev.mod & pygame.KMOD_ALT):
+                    pause_toggeln()                  # sie lässt einen in Ruhe
                 elif ev.key == pygame.K_d and (ev.mod & pygame.KMOD_ALT):
                     threading.Thread(target=asv_init, kwargs={'force': True},
                                      daemon=True).start()   # Drill als Spiel
@@ -3458,7 +3503,7 @@ def main():
             elif avail and not tts_ok:
                 hint = '🔇 keine Stimme (tts-service aus?)'
             else:
-                hint = '↑/↓ Verlauf · Enter reden · Alt+L Sprache · Alt+D Drill · Alt+Z Zentrale · Alt+M stumm · Esc'
+                hint = '↑/↓ Verlauf · Enter reden · Alt+P Pause · Alt+D Drill · Alt+Z Zentrale · Alt+L Sprache · Alt+M stumm · Esc'
             screen.blit(fonts['hud'].render(hint, True, HUD_DIM), (16, 44))
 
             # Mic-Indikator (Immer-Zuhören): Zustand + Alt+H
@@ -3478,6 +3523,10 @@ def main():
                 _act = S['activity_ms']
             if _act and (pygame.time.get_ticks() - _act) / 1000.0 < PRES_HERE_S:
                 mic_line += ' · da'
+            with S['lock']:
+                _pause = S['pause']
+            if _pause:
+                mic_line, mic_col = 'PAUSE · sie lässt dich in Ruhe · Alt+P', ASSESS_GOLD
             screen.blit(fonts['hud'].render(mic_line, True, mic_col), (16, 66))
             if music:
                 screen.blit(fonts['hud'].render(f'♪ {music}', True, ROLE_USER), (16, 88))
