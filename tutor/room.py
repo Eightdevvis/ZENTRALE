@@ -1209,7 +1209,17 @@ _TOOL_NAMES = ('express', 'show_thought', 'mark_known', 'play_music', 'stop_musi
                'get_confirmed_vocab', 'get_testing_vocab', 'increment_correct_use',
                'introduce_new', 'get_structures', 'introduce_structure',
                'increment_structure')
-_PAREN_RE    = re.compile(r'（[^）]*）|\([^)]*\)')          # Regie in Klammern
+# Regie in Klammern UND in Sternchen (*tired*, *sonríe*) — die Stimme las die
+# Sternchen-Regie sonst laut mit („asterisko tired asterisko", Sasha 2026-09-14).
+_PAREN_RE    = re.compile(r'（[^）]*）|\([^)]*\)|\*[^*\n]{1,80}\*|\[[^\]\n]{1,80}\]')
+# Whisper erfindet bei Rauschen/Stille ohne echte Sprache gern Untertitel-Floskeln
+# aus seinen Trainingsdaten („Untertitel der Amara.org-Community", „Thanks for
+# watching"). So ein Blip ging 2026-09-14 als Sashas Aussage an Lucía. Was hier
+# trifft, wird verworfen statt gesendet.
+_STT_HALLU_RE = re.compile(
+    r'amara\.org|untertitel|subtit|subscri|suscr[ií]b|thanks? for watching|'
+    r'gracias por ver|copyright|©|www\.|\.com\b|\.org\b|♪|\bMBC\b|'
+    r'zdf|ard\b|kanal|channel', re.IGNORECASE)
 _TOOLLINE_RE = re.compile(r'^\s*(?:' + '|'.join(_TOOL_NAMES) + r')\b.*$', re.IGNORECASE)
 
 
@@ -3026,6 +3036,10 @@ def main():
             if err:
                 S['msg'] = 'STT: ' + err     # sichtbar machen statt still scheitern
         t = (txt or '').strip()
+        if t and _STT_HALLU_RE.search(t):
+            with S['lock']:
+                S['msg'] = 'STT verworfen: ' + t[:40]
+            return
         if t and len(t) >= 2:      # winzige Blips/Halluzinationen verwerfen
             send(t)
 
