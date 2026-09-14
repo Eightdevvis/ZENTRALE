@@ -214,10 +214,16 @@ MIC_MAX_MS        = 12000   # harte Obergrenze pro Äußerung
 # über dem mitlaufenden Grundrauschen — Schritte, Tür, Tasse). Beides zählt als
 # „jemand ist da". Daraus: ANKUNFT = Aktivität nach längerer Ruhe → die Persona
 # spricht von sich aus an; LAUFEND = Sensor-Event ans Backend, gedrosselt.
-PRES_NOISE_K      = 3.5     # Pegel > k × Grundrauschen = Geräusch
-PRES_NOISE_MS     = 200     # so lange muss der Pegel oben bleiben (kein Knacks)
+PRES_NOISE_K      = 5.0     # Pegel > k × Grundrauschen = Geräusch
+PRES_NOISE_MIN    = 400     # ... und mindestens so laut (RMS, int16) — ein leiser
+                            # Raum hat ein winziges Grundrauschen, dann wäre k×floor
+                            # fast nichts und das Nebenzimmer zählte mit
+PRES_NOISE_MS     = 400     # so lange muss der Pegel oben bleiben (kein Knacks)
 PRES_ARRIVE_QUIET_S = 600   # s Ruhe davor, damit Aktivität als ANKUNFT gilt
-PRES_HERE_S       = 120     # s seit letzter Aktivität = „jemand ist da"
+PRES_HERE_S       = 120     # s seit letzter Aktivität = „jemand ist da" (Sensor)
+PRES_NUDGE_HERE_S = 40      # s — fürs ANQUATSCHEN muss sie GERADE jemanden hören;
+                            # sonst redet sie ins Leere, wenn man rausgegangen ist
+                            # (Sasha 2026-09-14: „hat irgendwas in die Luft gesprochen")
 PRES_POST_EVERY_S = 60      # Sensor-Event motion höchstens alle 60 s
 
 
@@ -2969,7 +2975,7 @@ def main():
             silence = (now - lu) / 1000.0
             with S['lock']:
                 foc = S['focused']
-                da = (now - S['activity_ms']) / 1000.0 < PRES_HERE_S
+                da = (now - S['activity_ms']) / 1000.0 < PRES_NUDGE_HERE_S
             # Nur anquatschen, wenn das Mikro jemanden gehört hat: an der Wand
             # läuft das Zimmer rund um die Uhr, und in ein leeres Zimmer zu reden
             # kostet Cloud-Calls und wirkt beim Reinkommen wie ein Selbstgespräch.
@@ -3087,6 +3093,7 @@ def main():
         import array
         buf = []; in_speech = False; silence = 0; speech = 0
         floor = 0.0; loud_ms = 0      # Grundrauschen + wie lange schon laut
+        log_ms = 0
         while True:
             with S['lock']:
                 on = S['mic']; gated = S['speaking'] or S['busy'] or S['streaming']
@@ -3119,16 +3126,23 @@ def main():
                 rms = 0.0
             if floor <= 0.0:
                 floor = max(rms, 1.0)
-            laut = (not musik) and rms > PRES_NOISE_K * floor and rms > 60
+            laut = (not musik) and rms > PRES_NOISE_K * floor and rms > PRES_NOISE_MIN
             if laut:
                 loud_ms += MIC_FRAME_MS
             else:
                 loud_ms = 0
                 floor = floor * 0.995 + rms * 0.005      # nur Ruhe prägt den Boden
             if is_sp or loud_ms >= PRES_NOISE_MS:
+                jetzt = pygame.time.get_ticks()
                 with S['lock']:
-                    S['activity_ms'] = pygame.time.get_ticks()
+                    S['activity_ms'] = jetzt
                     S['noise_floor'] = floor
+                # Zum Nachjustieren der Schwellen: höchstens alle 10 s eine Zeile
+                # ins Log (stderr → /tmp/zentrale-tutor-room.log), was gehört wurde.
+                if jetzt - log_ms > 10000:
+                    log_ms = jetzt
+                    print(f"[mikro] aktiv: {'sprache' if is_sp else 'geräusch'} "
+                          f"rms={rms:.0f} floor={floor:.0f}", file=sys.stderr, flush=True)
             if is_sp:
                 buf.append(frame); in_speech = True; speech += MIC_FRAME_MS; silence = 0
                 with S['lock']: S['hearing'] = True

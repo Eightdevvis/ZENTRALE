@@ -282,13 +282,14 @@ if [ "$KIOSK_MODE" = "room" ]; then
     #
     # Selbstheilung wie beim TUI-Modus: endet das Zimmer (Esc, Crash), kommt es
     # nach 2 s wieder. Backend weg faengt das Zimmer selbst ab (zeigt es an,
-    # pollt weiter) — keine Warteschleife noetig.
+    # pollt weiter) — keine Warteschleife noetig. stderr des Zimmers landet in
+    # /tmp/zentrale-tutor-room.log (Mikro-Aktivitaet, Fehler) — zum Nachschauen.
     cat > "$AUTOSTART_DIR/zentrale.desktop" << EOF
 [Desktop Entry]
 Type=Application
 Name=ZENTRALE Kiosk (Zimmer)
 Comment=Das Persona-Zimmer als Wandbild (tutor/room.py gegen das PC-Backend), TUI per Alt+Z
-Exec=bash -c 'xset s off; xset s noblank; xset -dpms; export ZENTRALE_URL=${BACKEND_URL}; export ZENTRALE_TUI_FONTSIZE=${TUI_FONTSIZE}; cd /opt/zentrale; while true; do python3 scripts/open_tutor_room.py --url ${BACKEND_URL} --wand; sleep 2; done'
+Exec=bash -c 'xset s off; xset s noblank; xset -dpms; export ZENTRALE_URL=${BACKEND_URL}; export ZENTRALE_TUI_FONTSIZE=${TUI_FONTSIZE}; cd /opt/zentrale; while true; do python3 scripts/open_tutor_room.py --url ${BACKEND_URL} --wand 2>>/tmp/zentrale-tutor-room.log; sleep 2; done'
 X-GNOME-Autostart-enabled=true
 EOF
     echo "Kiosk-Autostart (Zimmer, randloses Vollbild) geschrieben."
