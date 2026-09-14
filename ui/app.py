@@ -1576,6 +1576,13 @@ def api_tutor_start():
     body  = request.get_json(silent=True) or {}
     focus = body.get('focus')   # Fenster fokussiert beim Öffnen? (Sensor)
 
+    # still=True: Session nur AKTIVIEREN, keine Begruessung. Fuer das Zimmer an
+    # der Wand, das rund um die Uhr laeuft: nach Deploy/Neustart soll Lucia
+    # nicht in ein leeres Zimmer hinein gruessen — gesprochen wird erst, wenn
+    # das Mikro jemanden hoert (Ankunft → /api/tutor/nudge arrival).
+    if body.get('still'):
+        return jsonify({"ok": True, "active": tutor_port.is_active()})
+
     def generate():
         # user_text=None → KI beginnt das Gespraech (Öffnen = Lage-Meldung)
         for token in tutor_port.respond_stream(user_text=None, focus=focus):

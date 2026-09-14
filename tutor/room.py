@@ -204,7 +204,8 @@ CHILL_RECHECK_S = 900.0   # s (15 min) bis zum nächsten Versuch
 # ist gegated während die Persona spricht (sonst hört sie sich selbst zu).
 MIC_RATE          = 16000  # Hz (webrtcvad kann 8/16/32k)
 MIC_FRAME_MS      = 20      # ms pro VAD-Frame
-MIC_VAD_AGGR      = 2       # 0..3 (höher = strenger, weniger Fehl-Trigger)
+MIC_VAD_AGGR      = 3       # 0..3 (höher = strenger, weniger Fehl-Trigger) — bei
+                            # hohem USB-Pegel hielt Stufe 2 Rauschen für Stimme
 MIC_SILENCE_MS    = 700     # Pause nach Sprache → Äußerung fertig
 MIC_MINSPEECH_MS  = 300     # kürzere „Äußerungen" verwerfen (Blips/Husten)
 MIC_MAX_MS        = 12000   # harte Obergrenze pro Äußerung
@@ -370,6 +371,11 @@ class Backend:
                 return json.loads(r.read().decode('utf-8', 'replace'))
         except Exception:
             return None
+
+    def start_still(self):
+        """POST /api/tutor/start {still:true} → Session aktivieren OHNE Begrüßung
+        (Wand-Modus: gesprochen wird erst, wenn jemand da ist)."""
+        return self._post('/api/tutor/start', {'still': True}, timeout=5)
 
     def sensor(self, name):
         """POST /api/sensor/<name> — derselbe Weg wie die Pi-Bridge (Topologie:
@@ -2864,6 +2870,12 @@ def main():
         if asv_init():
             return
         if S['available'] and not active:
+            if wand:
+                # Wand: still aktivieren. Die Begrüßung kommt als Ankunfts-
+                # Anrede, sobald das Mikro wirklich jemanden hört (presence_loop)
+                # — nicht bei jedem Neustart in ein leeres Zimmer.
+                be.start_still()
+                return
             with S['lock']:
                 foc = S['focused']
             run_stream('/api/tutor/start', {'focus': foc})   # Öffnen = Lage-Meldung
@@ -2897,7 +2909,10 @@ def main():
                 neustart_ms = now
                 with S['lock']:
                     S['msg'] = 'session weg — neu verbunden'
-                run_stream('/api/tutor/start', {'focus': foc})
+                if wand:
+                    be.start_still()             # still; Anrede erst bei Ankunft
+                else:
+                    run_stream('/api/tutor/start', {'focus': foc})
 
     def watch_theme():
         """ZENTRALE-Theme (~/.config/zentrale/theme) nachpollen und den Wunsch-Modus
@@ -3016,7 +3031,10 @@ def main():
             # Lücke seit der vorigen Aktivität: bei Dauer-Anwesenheit < 1 s,
             # nach Weggehen und Wiederkommen entsprechend lang → Ankunft.
             ruhe = (act - (last_seen or start_ms)) / 1000.0
-            ankunft = ruhe >= PRES_ARRIVE_QUIET_S
+            # Erste Aktivität seit dem Start zählt immer als Ankunft: das Zimmer
+            # hat (Wand-Modus) beim Start nicht gegrüßt — das holt sie jetzt nach,
+            # für den Menschen, der wirklich da ist.
+            ankunft = last_seen == 0 or ruhe >= PRES_ARRIVE_QUIET_S
             last_seen = act
             if (now - last_post) / 1000.0 >= PRES_POST_EVERY_S:
                 last_post = now
@@ -3065,8 +3083,12 @@ def main():
         if t and _STT_HALLU_RE.search(t):
             with S['lock']:
                 S['msg'] = 'STT verworfen: ' + t[:40]
+            print(f"[mikro] verworfen: {t[:60]}", file=sys.stderr, flush=True)
             return
         if t and len(t) >= 2:      # winzige Blips/Halluzinationen verwerfen
+            with S['lock']:
+                S['activity_ms'] = pygame.time.get_ticks()   # echte Worte = jemand da
+            print(f"[mikro] verstanden: {t[:60]}", file=sys.stderr, flush=True)
             send(t)
 
     def listen_loop():
@@ -3140,7 +3162,11 @@ def main():
                     floor = floor * 0.9 + rms * 0.1
                 else:
                     floor = floor * 0.995 + rms * 0.005
-            if is_sp or loud_ms >= PRES_NOISE_MS:
+            # Anwesenheit aus GERÄUSCH hier; aus SPRACHE erst in _do_transcribe,
+            # wenn Whisper echte Wörter daraus gemacht hat. Der VAD allein hielt
+            # bei hohem USB-Pegel Rauschen für Stimme (Log: „sprache" im leeren
+            # Zimmer, RMS ~1500) → Lucía redete ins Leere.
+            if loud_ms >= PRES_NOISE_MS:
                 jetzt = pygame.time.get_ticks()
                 with S['lock']:
                     S['activity_ms'] = jetzt
@@ -3149,8 +3175,8 @@ def main():
                 # ins Log (stderr → /tmp/zentrale-tutor-room.log), was gehört wurde.
                 if jetzt - log_ms > 10000:
                     log_ms = jetzt
-                    print(f"[mikro] aktiv: {'sprache' if is_sp else 'geräusch'} "
-                          f"rms={rms:.0f} floor={floor:.0f}", file=sys.stderr, flush=True)
+                    print(f"[mikro] aktiv: geräusch rms={rms:.0f} floor={floor:.0f}",
+                          file=sys.stderr, flush=True)
             if is_sp:
                 buf.append(frame); in_speech = True; speech += MIC_FRAME_MS; silence = 0
                 with S['lock']: S['hearing'] = True
