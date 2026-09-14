@@ -208,6 +208,17 @@ MIC_VAD_AGGR      = 2       # 0..3 (höher = strenger, weniger Fehl-Trigger)
 MIC_SILENCE_MS    = 700     # Pause nach Sprache → Äußerung fertig
 MIC_MINSPEECH_MS  = 300     # kürzere „Äußerungen" verwerfen (Blips/Husten)
 MIC_MAX_MS        = 12000   # harte Obergrenze pro Äußerung
+# Anwesenheit ÜBERS MIKRO (Sasha 2026-09-14: der Geräuschsensor an GPIO schlug
+# je nach Drehung bei allem oder bei nichts an — erstmal nur das Mikro). Zwei
+# Signale aus demselben Strom: Sprache (webrtcvad) und Geräusch (Pegel deutlich
+# über dem mitlaufenden Grundrauschen — Schritte, Tür, Tasse). Beides zählt als
+# „jemand ist da". Daraus: ANKUNFT = Aktivität nach längerer Ruhe → die Persona
+# spricht von sich aus an; LAUFEND = Sensor-Event ans Backend, gedrosselt.
+PRES_NOISE_K      = 3.5     # Pegel > k × Grundrauschen = Geräusch
+PRES_NOISE_MS     = 200     # so lange muss der Pegel oben bleiben (kein Knacks)
+PRES_ARRIVE_QUIET_S = 600   # s Ruhe davor, damit Aktivität als ANKUNFT gilt
+PRES_HERE_S       = 120     # s seit letzter Aktivität = „jemand ist da"
+PRES_POST_EVERY_S = 60      # Sensor-Event motion höchstens alle 60 s
 
 
 # Schrift-Kandidaten in Wunsch-Reihenfolge. CJK zuerst (Ling Ling schreibt
@@ -353,6 +364,11 @@ class Backend:
                 return json.loads(r.read().decode('utf-8', 'replace'))
         except Exception:
             return None
+
+    def sensor(self, name):
+        """POST /api/sensor/<name> — derselbe Weg wie die Pi-Bridge (Topologie:
+        Pi → PC nur über den Sensor-Webhook). 'motion' = jemand ist da."""
+        return self._post('/api/sensor/' + name, {}, timeout=3)
 
     def assessment(self):
         """GET /api/tutor/assessment → Kern-Wörter + Lernstand fürs Drill
@@ -2145,6 +2161,8 @@ def main():
         'nudge_ms': 0,
         'mic': not a.no_mic,   # Immer-Zuhören an? (Alt+H togglet)
         'hearing': False,      # gerade Sprache am Mikro?
+        'activity_ms': 0,      # letzte Aktivität am Mikro (Sprache ODER Geräusch)
+        'noise_floor': 0.0,    # mitlaufendes Grundrauschen (RMS), fürs Geräusch-Signal
         'transcribing': False, # Segment wird gerade erkannt
         'mic_err': '',         # kein Mikro / Lib fehlt
         'focused': True,       # Fenster fokussiert? (Sensor: wird sie „angeschaut")
@@ -2921,14 +2939,58 @@ def main():
             silence = (now - lu) / 1000.0
             with S['lock']:
                 foc = S['focused']
+                da = (now - S['activity_ms']) / 1000.0 < PRES_HERE_S
+            # Nur anquatschen, wenn das Mikro jemanden gehört hat: an der Wand
+            # läuft das Zimmer rund um die Uhr, und in ein leeres Zimmer zu reden
+            # kostet Cloud-Calls und wirkt beim Reinkommen wie ein Selbstgespräch.
+            if not da:
+                continue
             if not nudged and silence > NUDGE_AFTER_S:
                 with S['lock']:
                     S['nudged'] = True; S['nudge_ms'] = now
-                run_stream('/api/tutor/nudge', {'focus': foc})
+                run_stream('/api/tutor/nudge', {'focus': foc, 'sound': True})
             elif nudged and (now - nm) / 1000.0 > CHILL_RECHECK_S:
                 with S['lock']:
                     S['nudge_ms'] = now
-                run_stream('/api/tutor/nudge', {'focus': foc})
+                run_stream('/api/tutor/nudge', {'focus': foc, 'sound': True})
+
+    def presence_loop():
+        """Anwesenheit aus der Mikro-Aktivität (listen_loop setzt activity_ms).
+
+        ANKUNFT: Aktivität nach ≥PRES_ARRIVE_QUIET_S Ruhe → Sensor-Event 'motion'
+        ans Backend (Kern: PRESENCE_DETECTED → presence_ping, Log, Dashboard) UND
+        die Persona spricht von sich aus an (/api/tutor/nudge mit arrival=True →
+        sie bekommt die Lage „Sasha kommt gerade rein"). Genau das ist der
+        Kerngedanke: am Pi vorbeigehen reicht.
+
+        LAUFEND: solange Aktivität kommt, alle PRES_POST_EVERY_S ein 'motion',
+        damit der Kern weiß, dass jemand da ist. Kein LLM-Call dafür."""
+        start_ms = pygame.time.get_ticks()
+        last_post = 0; last_seen = 0       # zuletzt verarbeitete Aktivität
+        while True:
+            pygame.time.wait(500)
+            now = pygame.time.get_ticks()
+            with S['lock']:
+                act = S['activity_ms']
+                ok = (S['asv'] is None and S['available']
+                      and not S['busy'] and not S['streaming'])
+                foc = S['focused']
+            if act == 0 or act == last_seen:
+                continue                    # nichts Neues am Mikro
+            # Lücke seit der vorigen Aktivität: bei Dauer-Anwesenheit < 1 s,
+            # nach Weggehen und Wiederkommen entsprechend lang → Ankunft.
+            ruhe = (act - (last_seen or start_ms)) / 1000.0
+            ankunft = ruhe >= PRES_ARRIVE_QUIET_S
+            last_seen = act
+            if (now - last_post) / 1000.0 >= PRES_POST_EVERY_S:
+                last_post = now
+                threading.Thread(target=be.sensor, args=('motion',), daemon=True).start()
+            if ankunft and ok:
+                with S['lock']:
+                    S['nudged'] = True; S['nudge_ms'] = now
+                    S['last_user_ms'] = now      # Stille-Uhr neu ab Ankunft
+                run_stream('/api/tutor/nudge', {'focus': foc, 'sound': True,
+                                                'arrival': True})
 
     theme_now = resolve_theme_mode()          # gleich richtig starten (nicht erst dunkel)
     apply_theme(theme_now)
@@ -2940,6 +3002,7 @@ def main():
     threading.Thread(target=watch_theme, daemon=True).start()
     threading.Thread(target=watch_room, daemon=True).start()
     threading.Thread(target=feedback_loop, daemon=True).start()
+    threading.Thread(target=presence_loop, daemon=True).start()
 
     def send(text):
         text = text.strip()
@@ -2987,10 +3050,13 @@ def main():
             with S['lock']:
                 S['mic'] = False; S['mic_err'] = 'kein Mikrofon'
             return
+        import array
         buf = []; in_speech = False; silence = 0; speech = 0
+        floor = 0.0; loud_ms = 0      # Grundrauschen + wie lange schon laut
         while True:
             with S['lock']:
                 on = S['mic']; gated = S['speaking'] or S['busy'] or S['streaming']
+                musik = S['music'] is not None
             try:
                 data, _ = stream.read(n)
             except Exception:
@@ -3007,6 +3073,28 @@ def main():
                 is_sp = vad.is_speech(frame, MIC_RATE)
             except Exception:
                 continue
+            # Geräusch-Signal: RMS des Frames gegen ein langsam mitlaufendes
+            # Grundrauschen. Das Grundrauschen lernt nur aus leisen Frames (sonst
+            # zieht ein Gespräch es hoch und danach hört sie nichts mehr). Läuft
+            # Musik aus dem eigenen Lautsprecher, zählt nur Sprache — der Pegel
+            # wäre sonst dauerhaft „laut".
+            try:
+                a = array.array('h', frame)
+                rms = math.sqrt(sum(x * x for x in a) / len(a)) if len(a) else 0.0
+            except Exception:
+                rms = 0.0
+            if floor <= 0.0:
+                floor = max(rms, 1.0)
+            laut = (not musik) and rms > PRES_NOISE_K * floor and rms > 60
+            if laut:
+                loud_ms += MIC_FRAME_MS
+            else:
+                loud_ms = 0
+                floor = floor * 0.995 + rms * 0.005      # nur Ruhe prägt den Boden
+            if is_sp or loud_ms >= PRES_NOISE_MS:
+                with S['lock']:
+                    S['activity_ms'] = pygame.time.get_ticks()
+                    S['noise_floor'] = floor
             if is_sp:
                 buf.append(frame); in_speech = True; speech += MIC_FRAME_MS; silence = 0
                 with S['lock']: S['hearing'] = True
@@ -3286,6 +3374,12 @@ def main():
                 mic_line, mic_col = 'Mic: hört dich ●', ROLE_USER
             else:
                 mic_line, mic_col = 'Mic: hört zu · Alt+H', HUD_DIM
+            # Anwesenheit (aus Sprache/Geräusch am Mikro): sichtbar, damit man
+            # an der Wand sieht, ob sie einen gerade „bemerkt" hat.
+            with S['lock']:
+                _act = S['activity_ms']
+            if _act and (pygame.time.get_ticks() - _act) / 1000.0 < PRES_HERE_S:
+                mic_line += ' · da'
             screen.blit(fonts['hud'].render(mic_line, True, mic_col), (16, 66))
             if music:
                 screen.blit(fonts['hud'].render(f'♪ {music}', True, ROLE_USER), (16, 88))

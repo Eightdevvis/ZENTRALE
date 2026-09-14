@@ -422,7 +422,7 @@ def _opening_situation(prof, focus=None) -> str:
 
 
 def respond_stream(user_text: str = None, nudge: bool = False,
-                   focus=None, sound=None):
+                   focus=None, sound=None, arrival: bool = False):
     """
     Generator: schickt die History (+ optionale neue User-Nachricht) an das
     aufgelöste Backend mit dem Sprach-System-Prompt und den Tutor-Tools.
@@ -432,6 +432,9 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     nudge=True     → Stille: statt eines Befehls kriegt sie eine neutrale Lage-
                      Meldung (mit Fokus-/Ambient-Sensorik), reagiert selbst aus
                      ihrem Charakter. Nur gesendet, nicht in der History.
+    arrival=True   → (mit nudge) jemand kommt gerade rein: die Öffnungs-Lage
+                     statt der Stille-Lage, Session läuft weiter (kein Neustart,
+                     History bleibt). Der Wand-Tutor spricht so von sich aus an.
     """
     if user_text is not None:
         push_message("user", user_text)
@@ -459,7 +462,9 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     else:
         history = get_history()[-_history_window():]
         if nudge:
-            history = history + [{"role": "user", "content": _nudge_situation(prof, focus, sound)}]
+            lage = (_opening_situation(prof, focus) if arrival
+                    else _nudge_situation(prof, focus, sound))
+            history = history + [{"role": "user", "content": lage}]
 
     # Hartes Assessment-Gate: solange der Kern-Wortschatz NICHT gemeistert ist,
     # spricht die Persona im DRILL-/Prüf-Prompt (Wort für Wort, kein Zimmer-Leben)

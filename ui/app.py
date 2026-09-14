@@ -1796,9 +1796,15 @@ def api_tutor_nudge():
 
     body  = request.get_json(silent=True) or {}
     focus = body.get('focus')   # Fenster fokussiert? (Sensor aus dem Zimmer)
+    sound = body.get('sound')   # Mikro hat jemanden gehört? (Zimmer, Anwesenheit)
+    # arrival=True: Aktivität nach längerer Ruhe — jemand kommt rein. Die Persona
+    # bekommt dann die Öffnungs-Lage („Sasha kommt gerade rein") statt der
+    # Stille-Lage und spricht von sich aus an. Kerngedanke Wand-Tutor.
+    arrival = bool(body.get('arrival'))
 
     def generate():
-        for token in tutor_port.respond_stream(nudge=True, focus=focus):
+        for token in tutor_port.respond_stream(nudge=True, focus=focus,
+                                               sound=sound, arrival=arrival):
             yield f"data: {json.dumps({'token': token})}\n\n"
         yield f"data: {json.dumps({'done': True})}\n\n"
 
