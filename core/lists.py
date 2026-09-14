@@ -381,10 +381,9 @@ def add_item(lid, text, parent_iid=None):
     item = {'id': iid, 'text': text, 'done': False}
     if parent_iid is None:
         # Die »week«-Liste (die Kalender-Sidebar) ist ein Vorrat, der von OBEN
-        # abgearbeitet wird — der Morgen-Messenger greift sich das erste Item.
-        # Neues gehört deshalb an den Anfang, sonst versinkt es sofort unter
-        # dem Altbestand und wird nie das, was einem morgens angeboten wird.
-        # Alle anderen Listen hängen unverändert hinten an.
+        # abgearbeitet wird. Neues gehört deshalb an den Anfang, sonst versinkt
+        # es sofort unter dem Altbestand. Alle anderen Listen hängen unverändert
+        # hinten an.
         top = lst.setdefault('items', [])
         if _is_week_list(lst):
             top.insert(0, item)

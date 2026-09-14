@@ -11,7 +11,6 @@ hier ist ein Ding, das man aufmacht und benutzt — im Unterschied zu
 | **News** | persönliche Tagesschau aus Bausteinen, KI-moderiertes Briefing | [news_system.md](news_system.md) |
 | **Notizen** | freie Notiz aus gestapelten Blöcken (text / liste / float) | [notizen_system.md](notizen_system.md) |
 | **Zyklus/PMS** | Vorhersage aus dem »periode«-Graphen | [zyklus_pms.md](zyklus_pms.md) |
-| **Morgen-Messenger** | Deckel auf → ZENTRALE grüßt, auch wenn sie schlief | [morgen_messenger.md](morgen_messenger.md) |
 
 ## Was die KI davon anfassen darf
 

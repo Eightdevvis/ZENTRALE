@@ -111,7 +111,7 @@ nach dem Thema suchen — in den Bereich springen und dessen Index lesen.
 | Bereich | Was drinsteht | Index |
 |---|---|---|
 | KI | denkt: lokal + Cloud, Graph-Memory, Tools, Gate, Sprache, Pläne, Benchmarks | `memory/ki/INDEX.md` |
-| Werkzeuge | tut: Kalender, Mail, News, Notizen, Zyklus, Morgen-Messenger | `memory/werkzeuge/INDEX.md` |
+| Werkzeuge | tut: Kalender, Mail, News, Notizen, Zyklus | `memory/werkzeuge/INDEX.md` |
 | System | gebaut: Architektur, Events, Topologie, API, Dashboard, Tastatur | `memory/system/INDEX.md` |
 | Betrieb | läuft: Setup, Starten, Deployment, Hardware, Sicherheit, Zugriffe | `memory/betrieb/INDEX.md` |
 | Maps | die Karte: Layer, Quellen-Charta, Design-Brief | `memory/maps/INDEX.md` |

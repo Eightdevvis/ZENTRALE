@@ -190,9 +190,9 @@ def log_value(gid, day, value, end=None):
     Format und Datei sind IDENTISCH zu /api/log mit upsert=True (ein Eintrag
     pro Tag, `logged_at` als Zeitstempel); `end` gesetzt heißt Zeitspanne
     (value = Start-Minute, end = End-Minute). Bewusst eine zweite Schreibstelle
-    neben `ui/app.py::api_log`: der Morgen-Messenger (scripts/morgen_*) läuft,
-    BEVOR ZENTRALE wach ist — er kann sich auf keinen HTTP-Port verlassen.
-    Wer beides ändert, muss beide Stellen anfassen.
+    neben `ui/app.py::api_log`: die KI (core/ai.py) und der Prüfstand schreiben
+    direkt auf die Datei, ohne HTTP-Umweg. Wer beides ändert, muss beide
+    Stellen anfassen.
     """
     rows = [e for e in read_values(gid)
             if not (isinstance(e, dict) and e.get('date') == day)]

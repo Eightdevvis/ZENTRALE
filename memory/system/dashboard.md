@@ -137,7 +137,7 @@ Dateien mit klaren Rollen:
 
 `scripts/zentrale-themed` ist die **einzige** Stelle im Projekt, die `auto`
 nach der Uhrzeit auflöst. Alle anderen — Terminal, Browser, Desktop, bat, nvim,
-TUI, Morgen-Messenger, Tutor-Zimmer — lesen ein Wort aus `theme.now`. Keine Uhr,
+TUI, Tutor-Zimmer — lesen ein Wort aus `theme.now`. Keine Uhr,
 kein eigener Timer, keine Fallunterscheidung.
 
 *Warum das die Wurzel war:* vorher rechneten **acht** Stellen dieselbe
@@ -189,8 +189,8 @@ Ergebnis und den nächsten Wechsel; `--once` gleicht einmal ab.
 
    zentrale-term-theme    → xfconf       TUI      (jeder Bildaufbau)
    zentrale-browser-theme → gsettings    nvim     (fs_event + 60-s-Reparaturtick)
-   zentrale-desktop-theme → xfconf       morgen_messenger
-   zentrale-bat-theme     → ~/.config    tutor/room
+   zentrale-desktop-theme → xfconf       tutor/room
+   zentrale-bat-theme     → ~/.config
    zentrale-tmux-theme    → tmux-Server
 ```
 
