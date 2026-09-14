@@ -7,7 +7,12 @@
 # theme-Daemon) laufen — der Kiosk legt sich sofort als einziges Fenster
 # vollflaechig drueber.
 #
-# ZWEI MODI (ZENTRALE_KIOSK_MODE, Default 'tui' seit 2026-06-27):
+# DREI MODI (ZENTRALE_KIOSK_MODE, Default 'room' seit 2026-09-14):
+#   room    — das Persona-ZIMMER (tutor/room.py) IST das Wandbild: randloses
+#             Vollbild, Mikro immer offen, die Persona spricht von sich aus.
+#             Die TUI liegt dahinter und kommt per Alt+Z drueber (q/u = zurueck).
+#             Entscheidung Sasha 2026-09-14: der Tutor ist wichtiger als das
+#             Dashboard, und »am Pi vorbeigehen« muss reichen — kein Knopf.
 #   tui     — maximiertes xterm mit der curses-TUI (tui/zentrale_tui.py)
 #             gegen das PC-Backend. KEIN Browser. Grund: der Pi 3 (1 GB RAM,
 #             schwache VideoCore-IV-GPU) rendert das animierte 1080p-Dashboard
@@ -120,10 +125,11 @@ mkdir -p "$AUTOSTART_DIR" "$XFCONF_DIR"
 BACKEND_URL="${ZENTRALE_BACKEND_URL:-http://192.168.50.1:5000}"
 echo "Kiosk-Backend-URL: $BACKEND_URL"
 
-# Kiosk-Modus: 'tui' (Default) = maximiertes xterm mit der curses-TUI,
-# 'browser' = Firefox-Kiosk. Siehe Kopf-Kommentar. Umschalten z.B.:
-#   ZENTRALE_KIOSK_MODE=browser bash install_xfce_autostart.sh
-KIOSK_MODE="${ZENTRALE_KIOSK_MODE:-tui}"
+# Kiosk-Modus: 'room' (Default) = das Persona-Zimmer als Wandbild, 'tui' =
+# maximiertes xterm mit der curses-TUI, 'browser' = Firefox-Kiosk. Siehe
+# Kopf-Kommentar. Umschalten z.B.:
+#   ZENTRALE_KIOSK_MODE=tui bash install_xfce_autostart.sh
+KIOSK_MODE="${ZENTRALE_KIOSK_MODE:-room}"
 # Schriftgroesse der TUI im xterm (Wand-Monitor aus Distanz -> eher gross).
 TUI_FONTSIZE="${ZENTRALE_TUI_FONTSIZE:-16}"
 echo "Kiosk-Modus: $KIOSK_MODE"
@@ -265,7 +271,28 @@ EOF
 # Timeout und erholt sich auch nach spaetem PC-Start oder Suspend.
 rm -f "$AUTOSTART_DIR/zentrale.desktop.disabled"
 
-if [ "$KIOSK_MODE" = "tui" ]; then
+if [ "$KIOSK_MODE" = "room" ]; then
+    # --- Zimmer-Variante: das Persona-Zimmer als Wandbild -------------------
+    # scripts/open_tutor_room.py startet tutor/room.py mit dem Pi-venv (pygame,
+    # sounddevice, webrtcvad) und faehrt KEINE Audio-Dienste hoch, weil das
+    # Backend nicht lokal ist (Whisper/TTS laufen am PC). --wand = randloses
+    # Fenster in Desktop-Groesse (kein echtes Fullscreen, sonst laege die per
+    # Alt+Z geoeffnete TUI dahinter). ZENTRALE_URL fuer die TUI, die das Zimmer
+    # spawnt; --url fuer das Zimmer selbst.
+    #
+    # Selbstheilung wie beim TUI-Modus: endet das Zimmer (Esc, Crash), kommt es
+    # nach 2 s wieder. Backend weg faengt das Zimmer selbst ab (zeigt es an,
+    # pollt weiter) — keine Warteschleife noetig.
+    cat > "$AUTOSTART_DIR/zentrale.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Name=ZENTRALE Kiosk (Zimmer)
+Comment=Das Persona-Zimmer als Wandbild (tutor/room.py gegen das PC-Backend), TUI per Alt+Z
+Exec=bash -c 'xset s off; xset s noblank; xset -dpms; export ZENTRALE_URL=${BACKEND_URL}; export ZENTRALE_TUI_FONTSIZE=${TUI_FONTSIZE}; cd /opt/zentrale; while true; do python3 scripts/open_tutor_room.py --url ${BACKEND_URL} --wand; sleep 2; done'
+X-GNOME-Autostart-enabled=true
+EOF
+    echo "Kiosk-Autostart (Zimmer, randloses Vollbild) geschrieben."
+elif [ "$KIOSK_MODE" = "tui" ]; then
     # --- TUI-Variante: maximiertes xterm mit der curses-TUI -----------------
     # Kein Browser. xterm (das einzige am Pi vorhandene Terminal), maximiert
     # auf den ganzen Schirm, darin python3 tui/zentrale_tui.py gegen das
@@ -404,10 +431,11 @@ if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
 fi
 
 if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] && command -v xfconf-query >/dev/null 2>&1; then
-    # Randlos beim Maximieren — nur im tui-Modus relevant (das Kiosk-xterm
-    # laeuft maximiert; ohne das klebt eine Titelleiste am Wand-Bild). -n -t
-    # legt die Property an, falls noch nicht vorhanden; sonst nur -s.
-    if [ "$KIOSK_MODE" = "tui" ]; then
+    # Randlos beim Maximieren — im tui-Modus fuer das Kiosk-xterm, im room-
+    # Modus fuer die per Alt+Z drueberliegende TUI (ohne das klebt eine
+    # Titelleiste am Wand-Bild). -n -t legt die Property an, falls noch nicht
+    # vorhanden; sonst nur -s.
+    if [ "$KIOSK_MODE" = "tui" ] || [ "$KIOSK_MODE" = "room" ]; then
         xfconf-query -c xfwm4 -p /general/borderless_maximize -n -t bool -s true 2>/dev/null \
             || xfconf-query -c xfwm4 -p /general/borderless_maximize -s true || true
         echo "xfwm4: borderless_maximize = true (randloses Maximieren)"
@@ -444,7 +472,9 @@ ls -la "${INSTALLED_FILES[@]}"
 echo
 echo "Test mit:"
 echo "  sudo systemctl restart lightdm"
-if [ "$KIOSK_MODE" = "tui" ]; then
+if [ "$KIOSK_MODE" = "room" ]; then
+    echo "  # nach ~5s sollte das Zimmer drauf sein (Lucía), Alt+Z legt die TUI drueber"
+elif [ "$KIOSK_MODE" = "tui" ]; then
     echo "  # nach ~5s sollte das maximierte TUI-xterm drauf sein, KEIN Panel/Titelleiste"
 else
     echo "  # nach ~5s sollte Firefox-Kiosk drauf sein, KEIN Panel, KEIN Wallpaper"

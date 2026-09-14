@@ -8569,6 +8569,12 @@ def run_ui(stdscr, store):
                 if not AI["loaded"]:           # Verlauf einmal im Hintergrund nachladen
                     threading.Thread(target=ai_load_history, daemon=True).start()
             elif ch in (ord("u"), ord("U")):   # 'u' öffnet DIREKT das Persona-Zimmer (natives Fenster)
+                if os.environ.get("ZENTRALE_ROOM_PARENT"):
+                    # Die TUI wurde AUS dem Zimmer heraus geöffnet (Wand-Kiosk,
+                    # room.py Alt+Z): das Zimmer liegt darunter und läuft weiter.
+                    # 'u' heißt hier »zurück ins Zimmer« — TUI zu, kein zweites
+                    # Zimmer, das sich mit dem ersten ums Mikro streitet.
+                    break
                 if os.environ.get("DISPLAY"):
                     # kein Umweg mehr über Panel + /room: das Zimmer geht auf, die
                     # Persona quatscht dort von selbst los (Session startet im Fenster).

@@ -33,6 +33,7 @@ import math
 import random
 import argparse
 import threading
+import subprocess
 import urllib.request
 import urllib.error
 
@@ -2038,6 +2039,14 @@ def main():
     # Schreibtisch holt --fenster das alte Verhalten zurueck.
     ap.add_argument('--fenster', action='store_true',
                     help='im Fenster statt im Vollbild starten')
+    # --wand: das Zimmer IST das Wandbild (Kiosk-Modus 'room'). Randloses Fenster
+    # in Desktop-Groesse statt echtem FULLSCREEN — ein Fullscreen-Fenster legt
+    # xfwm4 in eine eigene oberste Schicht, und alles, was das Zimmer selbst
+    # oeffnet (die TUI per Alt+Z), landet DAHINTER. Randlos-maximiert ist ein
+    # normales Fenster: neue Fenster stapeln sich normal drueber, und wenn sie
+    # zugehen, ist das Zimmer wieder da.
+    ap.add_argument('--wand', action='store_true',
+                    help='randloses Vollbild-Fenster (Wand-Kiosk, TUI darf drueber)')
     # Stimme: Sprecher-ID (vits-zh-aishell3 hat 174 — Wert durchprobieren) + Tempo.
     ap.add_argument('--speaker', type=int, default=int(os.environ.get('TUTOR_TTS_SPEAKER', '66')))
     ap.add_argument('--speed', type=float, default=float(os.environ.get('TUTOR_TTS_SPEED', '1.0')))
@@ -2068,8 +2077,13 @@ def main():
         return a.w, a.h
 
     fenster = a.fenster or os.environ.get('TUTOR_ROOM_FENSTER') == '1'
+    wand = a.wand or os.environ.get('TUTOR_ROOM_WAND') == '1'
     if fenster:
         screen = pygame.display.set_mode((a.w, a.h), pygame.RESIZABLE)
+    elif wand:
+        bw, bh = _bildschirm()
+        os.environ.setdefault('SDL_VIDEO_WINDOW_POS', '0,0')
+        screen = pygame.display.set_mode((bw, bh), pygame.NOFRAME)
     else:
         bw, bh = _bildschirm()
         # Vollbild in der Groesse des Desktops: kein Hochskalieren, keine
@@ -2729,6 +2743,46 @@ def main():
             foc = S['focused']
         run_stream('/api/tutor/start', {'focus': foc})   # neue Begrüßung
 
+    TUI = {'proc': None}
+
+    def tui_oeffnen():
+        """Die ZENTRALE-TUI (Dashboard) ueber das Zimmer legen — Alt+Z.
+
+        An der Wand ist das Zimmer das Bild; die TUI ist der Blick dahinter
+        (Kalender, Listen, Karte). Sie kommt als maximiertes xterm ueber das
+        Zimmer, das darunter weiterlaeuft (Mikro bleibt offen, Session bleibt).
+        'q' oder 'u' in der TUI schliesst sie, und das Zimmer ist wieder da.
+        ZENTRALE_ROOM_PARENT sagt der TUI, dass ein Zimmer schon laeuft — sonst
+        oeffnete ihr 'u' ein zweites, das sich mit diesem ums Mikro streitet.
+
+        Bewusst per xterm + System-python3 (die TUI ist stdlib-only) und ohne
+        Import aus dem Projekt — room.py bleibt fuer sich lauffaehig."""
+        p = TUI.get('proc')
+        if p is not None and p.poll() is None:
+            with S['lock']:
+                S['msg'] = 'tui läuft schon'
+            return
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        tui = os.path.join(root, 'tui', 'zentrale_tui.py')
+        if not os.path.exists(tui) or not os.environ.get('DISPLAY'):
+            with S['lock']:
+                S['msg'] = 'keine tui hier'
+            return
+        fs = os.environ.get('ZENTRALE_TUI_FONTSIZE', '16')
+        env = dict(os.environ, TERM='xterm-256color', ZENTRALE_URL=a.url,
+                   ZENTRALE_ROOM_PARENT='1')
+        try:
+            TUI['proc'] = subprocess.Popen(
+                ['xterm', '-maximized', '-u8', '-fa', 'Monospace', '-fs', fs,
+                 '-bg', 'black', '-fg', 'white', '-e', 'python3', tui],
+                cwd=root, env=env, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, start_new_session=True)
+            with S['lock']:
+                S['msg'] = 'tui offen (q = zurück)'
+        except Exception as exc:
+            with S['lock']:
+                S['msg'] = f'tui-start: {exc}'
+
     def kickoff():
         """Status/Config holen; wenn erreichbar und keine Session läuft, die
         Persona von selbst begrüßen lassen (kein Enter — sie quatscht los)."""
@@ -3034,6 +3088,8 @@ def main():
                     with S['lock']:
                         S['mic'] = not S['mic']
                         S['msg'] = 'zuhören an' if S['mic'] else 'mikro aus'
+                elif ev.key == pygame.K_z and (ev.mod & pygame.KMOD_ALT):
+                    tui_oeffnen()                    # ZENTRALE-TUI ueber das Zimmer
                 elif ev.key == pygame.K_RETURN:
                     with S['lock']:
                         txt = S['input']; S['input'] = ''
