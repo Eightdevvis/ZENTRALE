@@ -1957,8 +1957,8 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
     if phase == 'welcome':
         ctr(fonts['word'].render('Hola', True, ASSESS_INK), cy - 250)
         ctr(fonts['big'].render('Ich bin Lucía.', True, ASSESS_INK), cy - 178)
-        for i, ln in enumerate(['Zuerst gehen wir zusammen die wichtigsten Wörter durch — hak ab, was du kannst.',
-                                'Dabei sammelst du Münzen und puzzelst mich Stück für Stück zusammen.']):
+        for i, ln in enumerate(['Wortspiel: wir gehen die wichtigsten Wörter durch — hak ab, was du kannst.',
+                                'Dabei sammelst du Münzen und puzzelst mich Stück für Stück zusammen. Esc = zurück zu mir.']):
             ctr(fonts['log'].render(ln, True, HUD_DIM), cy - 122 + i * 26)
         _draw_stand_wahl(screen, w, fonts, asv, cy - 46, ctr)
         return
@@ -2646,12 +2646,22 @@ def main():
                 if S['asv']:
                     S['asv']['busy'] = False
 
-    def asv_init():
-        """Abfrage starten, falls die Sprache im Assessment-Gate steckt: Queue +
-        Spielstand holen, Willkommen zeigen. True = Drill übernimmt (KEIN LLM);
-        False = kein Gate → normaler Persona-Start."""
+    def asv_init(force=False):
+        """Abfrage starten: Queue + Spielstand holen, Willkommen zeigen. True =
+        Drill übernimmt (KEIN LLM); False = kein Drill → normaler Persona-Start.
+
+        Ohne force nur, wenn das Backend die Sprache im Assessment-Gate meldet —
+        das Gate ist seit 2026-09-14 abgeschafft (tools.GATE_AKTIV), also praktisch
+        nie. Mit force (Alt+D im Zimmer) startet das Drill freiwillig, als Spiel
+        neben der Persona; Esc führt zurück ins Zimmer."""
         data = be.assessment()
-        if not isinstance(data, dict) or data.get('mode') != 'assessment':
+        if not isinstance(data, dict):
+            return False
+        if not force and data.get('mode') != 'assessment':
+            return False
+        if not (data.get('queue') or []):
+            with S['lock']:
+                S['msg'] = 'alle kernwörter durch — nichts zu drillen'
             return False
         game = data.get('game') or {}
         # neue Wörter: due = Einführungs-Index (spreizt sie, statt alle sofort fällig);
@@ -2742,6 +2752,17 @@ def main():
             S['msg']     = f"→ {S['persona']} ({cf.get('lang_name', '')})"
             foc = S['focused']
         run_stream('/api/tutor/start', {'focus': foc})   # neue Begrüßung
+
+    def drill_verlassen():
+        """Esc im Drill: Karten weg, zurück ins Zimmer. Läuft noch keine Persona-
+        Session (Drill direkt nach dem Öffnen gestartet), begrüßt sie jetzt."""
+        with S['lock']:
+            S['asv'] = None; foc = S['focused']
+        def _weiter():
+            st = be.status()
+            if st and st.get('available') and not st.get('active'):
+                run_stream('/api/tutor/start', {'focus': foc})
+        threading.Thread(target=_weiter, daemon=True).start()
 
     TUI = {'proc': None}
 
@@ -3061,7 +3082,7 @@ def main():
                     asv_on = S['asv'] is not None
                 if asv_on:
                     if ev.key == pygame.K_ESCAPE:
-                        running = False
+                        drill_verlassen()            # zurück ins Zimmer, nicht raus
                     elif ev.key == pygame.K_m and (ev.mod & pygame.KMOD_ALT):
                         with S['lock']:
                             S['mute'] = not S['mute']; muted = S['mute']
@@ -3090,6 +3111,9 @@ def main():
                         S['msg'] = 'zuhören an' if S['mic'] else 'mikro aus'
                 elif ev.key == pygame.K_z and (ev.mod & pygame.KMOD_ALT):
                     tui_oeffnen()                    # ZENTRALE-TUI ueber das Zimmer
+                elif ev.key == pygame.K_d and (ev.mod & pygame.KMOD_ALT):
+                    threading.Thread(target=asv_init, kwargs={'force': True},
+                                     daemon=True).start()   # Drill als Spiel
                 elif ev.key == pygame.K_RETURN:
                     with S['lock']:
                         txt = S['input']; S['input'] = ''
@@ -3248,7 +3272,7 @@ def main():
             elif avail and not tts_ok:
                 hint = '🔇 keine Stimme (tts-service aus?)'
             else:
-                hint = '↑/↓ Verlauf · Enter reden · Alt+L Sprache · Alt+M stumm · Esc'
+                hint = '↑/↓ Verlauf · Enter reden · Alt+L Sprache · Alt+D Drill · Alt+Z Zentrale · Alt+M stumm · Esc'
             screen.blit(fonts['hud'].render(hint, True, HUD_DIM), (16, 44))
 
             # Mic-Indikator (Immer-Zuhören): Zustand + Alt+H

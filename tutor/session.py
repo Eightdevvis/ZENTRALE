@@ -482,7 +482,7 @@ def respond_stream(user_text: str = None, nudge: bool = False,
             # formuliert (KEINE Drill-Verben — „übe/afiánza" ließ qwen abfragen).
             # HINWEIS: bei sehr vielen Wörtern wird das lang → Embedding-Auswahl ist der
             # nächste, noch offene Schritt (dann nur die relevanten Wörter senden).
-            sl = tools.vocab_status_list(lang)          # [(wort, status)]
+            sl = tools.prompt_vocab(lang)               # [(wort, status)] inkl. Kern
             structs = tools.structure_list(lang)
             lab = prof.get("vocab_labels") or {}
             slab = prof.get("status_labels") or {}

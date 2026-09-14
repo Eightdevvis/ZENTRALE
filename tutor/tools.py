@@ -303,6 +303,20 @@ def vocab_status_list(lang: str = None) -> list:
     return [(e['word'], word_status(e)) for e in entries if e.get('word')]
 
 
+def prompt_vocab(lang: str = None) -> list:
+    """[(wort, status)] für den Persona-PROMPT: die User-Vokabel PLUS alle Kern-
+    Wörter (core_vocab), die dort noch nicht stehen — mit Status 'new'.
+
+    Sasha 2026-09-14: das Grundvokabular ist der Persona von Anfang an
+    freigegeben, Drill-Stand egal. Sonst dürfte sie (die sich ans Set hält)
+    anfangs fast nichts sagen, und der Drill wäre doch wieder Pflicht. Der
+    Status bleibt ehrlich ('new' = noch nie gehört) — freigegeben heißt „darfst
+    du benutzen", nicht „kennt sie schon"."""
+    sl = vocab_status_list(lang)
+    have = {w for w, _ in sl}
+    return sl + [(e['word'], 'new') for e in _core_list(lang) if e['word'] not in have]
+
+
 def _dbg_vocab(action: str, word: str, e: dict, lang: str = None):
     """Eine Vokabel-Statusänderung ins Devtools loggen (zeitgestempelt)."""
     debug.emit('vocab', action=action, word=word, lang=_lang(lang),
@@ -471,15 +485,28 @@ def check_graduation(lang: str = None) -> bool:
     return True
 
 
-# ── Assessment-Gate (hartes Gate vor der Persona) ───────────────────────
-# Trägt die Sprache ein Kern-Curriculum UND ist es noch nicht gemeistert, dann
-# steckt die Lernende im ASSESSMENT-/Drill-Modus: das Persona-Zimmer bleibt zu,
-# die Figur „lebt" nicht — es wird nur geübt (Wort für Wort, Stimme liest vor),
-# bis ≥GRADUATE_AT der Kern-Wörter gefestigt sind. Sprachen OHNE Kern-Curriculum
-# (z.B. zh) haben kein Gate → sofort Konversation (Verhalten unverändert).
+# ── Assessment-Gate (ABGESCHAFFT 2026-09-14) ────────────────────────────
+# Früher: trägt die Sprache ein Kern-Curriculum und ist es noch nicht gemeistert,
+# bleibt das Persona-Zimmer zu und es wird nur gedrillt, bis ≥GRADUATE_AT der
+# Kern-Wörter gefestigt sind.
+#
+# Sasha 2026-09-14: „Der Tutor ging nie um den Drill, das genaue Gegenteil." Die
+# Persona redet von Anfang an; das Drill bleibt als Spiel PARALLEL (im Zimmer
+# per Alt+D), erzwingt aber nichts mehr. Den Anfang kann man auch mit einer
+# Vokabel-App machen und dann den Tutor benutzen. Damit es keinen Vokabel-
+# Konflikt gibt, ist das Grundvokabular (core_vocab) der Persona von Anfang an
+# freigegeben — siehe prompt_vocab(). GATE_AKTIV bleibt als Schalter, falls das
+# Gate je wieder gebraucht wird; alles andere (Leiste, Münzen, Kisten,
+# Graduierung) läuft unverändert weiter.
+
+GATE_AKTIV = False
+
 
 def assessment_active(lang: str = None) -> bool:
-    """Steckt die Lernende noch im Assessment (Kern < Schwelle)? → Zimmer gesperrt."""
+    """Steckt die Lernende noch im Assessment (Kern < Schwelle)? → Zimmer gesperrt.
+    Seit 2026-09-14 immer False (GATE_AKTIV) — die Persona ist nie gesperrt."""
+    if not GATE_AKTIV:
+        return False
     total = core_coverage(lang)[1]
     if not total:
         return False           # kein Curriculum → kein Gate
@@ -490,7 +517,9 @@ def tts_speed_for(lang: str = None) -> float:
     """Sprech-Tempo nach Meisterung: im Assessment langsam (0.7) und rampt linear
     hoch bis natürlich (1.0) an der Freischalt-Schwelle; danach immer 1.0. Damit
     Anfänger die einzelnen Wörter klar hören und es mit dem Können schneller wird."""
-    if not assessment_active(lang):
+    # Hängt am LERNSTAND, nicht am (abgeschafften) Gate: ein Anfänger hört die
+    # Persona langsam, auch wenn sie von Anfang an redet.
+    if core_graduated(lang) or not core_coverage(lang)[1]:
         return 1.0
     r = min(core_ratio(lang), GRADUATE_AT) / GRADUATE_AT     # 0..1 über den Drill
     return round(0.7 + 0.3 * r, 2)
