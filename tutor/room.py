@@ -2194,6 +2194,8 @@ def main():
         'mic': not a.no_mic,   # Immer-Zuhören an? (Alt+H togglet)
         'hearing': False,      # gerade Sprache am Mikro?
         'activity_ms': 0,      # letzte Aktivität am Mikro (Sprache ODER Geräusch)
+        'voice_ms': 0,         # letzte VERSTANDENE Worte (Whisper) — nur das darf sie
+                               # zum Reden bringen; Geräusche lösten Gerede ins Leere aus
         'noise_floor': 0.0,    # mitlaufendes Grundrauschen (RMS), fürs Geräusch-Signal
         'transcribing': False, # Segment wird gerade erkannt
         'mic_err': '',         # kein Mikro / Lib fehlt
@@ -3039,7 +3041,10 @@ def main():
             silence = (now - lu) / 1000.0
             with S['lock']:
                 foc = S['focused']
-                da = (now - S['activity_ms']) / 1000.0 < PRES_NUDGE_HERE_S
+                # „da" fürs REDEN = verstandene Worte in den letzten 40 s. Nicht
+                # Geräusche: ein Knall im Nebenzimmer (rms 9474, Whisper: nichts)
+                # ließ sie 2026-09-14 ins Leere quatschen.
+                da = (now - S['voice_ms']) / 1000.0 < PRES_NUDGE_HERE_S
             # Nur anquatschen, wenn das Mikro jemanden gehört hat: an der Wand
             # läuft das Zimmer rund um die Uhr, und in ein leeres Zimmer zu reden
             # kostet Cloud-Calls und wirkt beim Reinkommen wie ein Selbstgespräch.
@@ -3079,7 +3084,7 @@ def main():
             pygame.time.wait(500)
             now = pygame.time.get_ticks()
             with S['lock']:
-                act = S['activity_ms']
+                act = S['activity_ms']; voice = S['voice_ms']
                 ok = (S['asv'] is None and S['available'] and not S['pause']
                       and not S['busy'] and not S['streaming'])
                 foc = S['focused']
@@ -3091,7 +3096,9 @@ def main():
             # Erste Aktivität seit dem Start zählt immer als Ankunft: das Zimmer
             # hat (Wand-Modus) beim Start nicht gegrüßt — das holt sie jetzt nach,
             # für den Menschen, der wirklich da ist.
-            ankunft = last_seen == 0 or ruhe >= PRES_ARRIVE_QUIET_S
+            # Ankunft nur mit WORTEN: Geräusche melden dem Kern „jemand da"
+            # (motion), aber Reden gibt es erst, wenn sie ihn gehört hat.
+            ankunft = (last_seen == 0 or ruhe >= PRES_ARRIVE_QUIET_S) and voice == act
             last_seen = act
             if (now - last_post) / 1000.0 >= PRES_POST_EVERY_S:
                 last_post = now
@@ -3145,7 +3152,7 @@ def main():
             return
         if t and len(t) >= 2:      # winzige Blips/Halluzinationen verwerfen
             with S['lock']:
-                S['activity_ms'] = pygame.time.get_ticks()   # echte Worte = jemand da
+                S['activity_ms'] = S['voice_ms'] = pygame.time.get_ticks()   # echte Worte
             print(f"[mikro] verstanden: {t[:60]}", file=sys.stderr, flush=True)
             send(t)
 
