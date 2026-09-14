@@ -10,6 +10,7 @@ und wie die Fronten daran hängen.
 | Sensoren → Events → Brain → Actions | [event_system.md](event_system.md) |
 | **Der Takt** — wann sie unaufgefordert spricht (Termin-Ping, Schweigeregeln) | [takt.md](takt.md) |
 | **Anwesenheit & Ring** — ist Sasha da, schaut er hin; die Mitte der TUI | [anwesenheit_und_ring.md](anwesenheit_und_ring.md) |
+| **Audio-Straße** — ein Mikro/Lautsprecher am Pi für Tutor, Assistent und weitere Agenten; Weiche offen | [audio_strasse.md](audio_strasse.md) |
 | Die REST-Endpoints, die alle Fronten benutzen | [api_endpoints.md](api_endpoints.md) |
 | Dashboard & Frontend: Modi, Polling, KI-Kern, SSE-Events | [dashboard.md](dashboard.md) |
 | Tastatur-Belegung in jedem Modus | [tastatur.md](tastatur.md) |

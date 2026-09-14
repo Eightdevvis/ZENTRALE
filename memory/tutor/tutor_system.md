@@ -307,6 +307,16 @@ still inaktiv (`core_hint` leer, nichts bricht). **LIVE für `es`** (76 Wörter)
 Bootcamp-Skizze (`tutor/assessment_extension/`, reine Markdown-Playbooks, nie
 lauffähiger Code).
 
+> **Gate ABGESCHAFFT 2026-09-14 (Sasha: „der Tutor ging nie um den Drill, das
+> genaue Gegenteil").** `tools.GATE_AKTIV = False` → `assessment_active()` ist immer
+> False, die Persona redet von Anfang an, das Grundvokabular (`core_vocab`) ist
+> ihr sofort freigegeben (`tools.prompt_vocab()`, Status ehrlich `new`). Das Drill
+> bleibt als **Spiel daneben**: im Zimmer per `Alt+D`, `Esc` zurück; Münzen,
+> Kisten, Teile, Graduierung laufen unverändert. Der Absatz unten beschreibt
+> die alte Sperre — Mechanik stimmt noch, die Pflicht nicht mehr. An der Wand
+> ist das Zimmer jetzt das Kiosk-Bild (`../betrieb/deployment.md`, Modus `room`),
+> Anwesenheit kommt übers Mikro (`../system/audio_strasse.md`).
+
 **Hartes Assessment-Gate (die Persona ist verdient) — DETERMINISTISCH, kein LLM.**
 Der eigentliche Kern der Bootcamp-Skizze: **man sieht die Persona/das Zimmer NICHT,
 bevor der Kern-Wortschatz KOMPLETT sitzt (alle Wörter).** Wichtige Korrektur (2026-07): die
