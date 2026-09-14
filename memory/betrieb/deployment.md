@@ -288,7 +288,9 @@ Mauszeiger** dazwischen.
 2. **xfwm4 backup-autostart** in `~/.config/autostart/xfwm4.desktop`.
    Belt-and-Suspenders falls die Session-XML mal nicht greift —
    Firefox-Kiosk-Fullscreen braucht den WM.
-3. **`~/.xprofile`** mit `xrandr --mode 1920x1080`.
+3. **`~/.xsessionrc`** (nicht `.xprofile` — die liest Debians Xsession
+   nicht): Bildschirm-Modus via `aussenposten_bildschirm.py` + Blanking aus
+   (`xset s off`, `-dpms`), der Wandmonitor bleibt an.
 4. **`~/.config/autostart/zentrale.desktop`** mit Firefox-Kiosk auf
    `$ZENTRALE_BACKEND_URL` (Default **`http://192.168.50.1:5000`** =
    PC-LAN-IP, NICHT mehr localhost — siehe Footgun-Warnung unten).
