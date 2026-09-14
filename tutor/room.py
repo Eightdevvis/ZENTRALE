@@ -2865,13 +2865,33 @@ def main():
     def watch_status():
         """Status leichtgewichtig nachpollen — damit avail/tts aktuell bleiben,
         wenn das Backend oder der TTS-Service später hoch-/runterkommt."""
+        hatte_session = False; neustart_ms = 0
         while True:
             pygame.time.wait(4000)
             st = be.status()
-            if st is not None:
+            if st is None:
+                continue
+            aktiv = bool(st.get('active'))
+            with S['lock']:
+                S['available'] = bool(st.get('available'))
+                S['tts'] = bool(st.get('tts'))
+                ok = (S['available'] and S['asv'] is None
+                      and not S['busy'] and not S['streaming'])
+                foc = S['focused']
+            # Session weg, obwohl wir eine hatten (Backend neu gestartet — die
+            # Session lebt dort nur im Speicher): still eine neue holen. An der
+            # Wand läuft das Zimmer rund um die Uhr; ohne das stand nach jedem
+            # Deploy/Absturz „fehler HTTP 400" da, bis jemand das Zimmer neu
+            # startete. Höchstens alle 30 s, damit ein zickendes Backend keine
+            # Begrüßungs-Schleife bekommt.
+            now = pygame.time.get_ticks()
+            if aktiv:
+                hatte_session = True
+            elif hatte_session and ok and (now - neustart_ms) / 1000.0 > 30:
+                neustart_ms = now
                 with S['lock']:
-                    S['available'] = bool(st.get('available'))
-                    S['tts'] = bool(st.get('tts'))
+                    S['msg'] = 'session weg — neu verbunden'
+                run_stream('/api/tutor/start', {'focus': foc})
 
     def watch_theme():
         """ZENTRALE-Theme (~/.config/zentrale/theme) nachpollen und den Wunsch-Modus
