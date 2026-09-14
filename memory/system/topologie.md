@@ -39,9 +39,9 @@ gedacht – das war für die AI-Last zu schwer.
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**Seit 2026-09-14: der PC ist always-on** — Kern zuhause, von unterwegs per
-SSH/WAN erreichbar, kein Schlafen, kein WoL mehr. Siehe
-`memory/betrieb/always_on.md`.
+**Seit 2026-09-14 gilt der Wachplan** (`memory/betrieb/wachplan.md`): PC ist
+der Kern zuhause — daheim durchgehend an, nachts und unterwegs Suspend,
+Wecken über den Pi. Ein Router kommt später; dann ändert sich dieses Netz.
 
 ## Was wo läuft
 

@@ -2,11 +2,10 @@
 
 **Status: ANGEWENDET 2026-06-01, Reboot-Test noch offen.**
 
-**Zweck seit 2026-09-14 nur noch: ungeplante Neustarts** (Strom weg,
-Kernel-Update, Absturz). Der ursprüngliche Zweck — PC aus, wenn Sasha weg
-ist, beim Heimkommen per Pi wecken + aufschließen — ist mit dem Always-on-
-Plan (`always_on.md`) weg. WoL entfällt, der Pi-Autostart-xterm auch.
-Dropbear + `zentrale-unlock` bleiben für den Reboot-Fall stehen; wird später
+**Zweck seit 2026-09-14: nur noch echtes Aus** (Stromausfall, Reboot,
+bewusst abgeschaltet). Im Normalfall schläft der PC nur (Suspend, kein
+LUKS-Prompt) und wird per WoL vom Pi geweckt — siehe `wachplan.md`.
+Dropbear + `zentrale-unlock` bleiben für den Aus-Fall stehen; wird später
 angeschaut.
 Die drei sudo-Schritte sind durchgelaufen: init-premount-Skript
 `zentrale-lan-unlock` liegt + ist `+x`, `ip=off` steht im gepflegten
