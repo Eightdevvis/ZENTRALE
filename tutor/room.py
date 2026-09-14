@@ -3131,7 +3131,15 @@ def main():
                 loud_ms += MIC_FRAME_MS
             else:
                 loud_ms = 0
-                floor = floor * 0.995 + rms * 0.005      # nur Ruhe prägt den Boden
+            # Der Boden lernt NUR aus stillen Frames (weder Sprache noch laut) —
+            # sonst zieht ein Gespräch ihn auf Sprachpegel hoch (gesehen: floor
+            # 1556) und danach ist nichts mehr „laut". Runter geht es schnell
+            # (Startknacks, Nachhall), rauf nur langsam.
+            if not is_sp and not laut:
+                if rms < floor:
+                    floor = floor * 0.9 + rms * 0.1
+                else:
+                    floor = floor * 0.995 + rms * 0.005
             if is_sp or loud_ms >= PRES_NOISE_MS:
                 jetzt = pygame.time.get_ticks()
                 with S['lock']:
