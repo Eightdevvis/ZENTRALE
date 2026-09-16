@@ -108,6 +108,8 @@ Wand funktioniert hat.
 Zimmer als Wandbild (Kiosk `room`), Persona ohne Sperre, Grundvokabular
 freigegeben, Mikro immer offen (VAD → Whisper), Regie/Emoji nicht vorgelesen,
 Whisper-Floskeln verworfen, Alt+P Pause, Nachhaken nach 15 s, Sprechtempo rampt
-nach Lernstand (0.7 → 1.0). Präsenz: Worte zählen; PIR vorbereitet (Bridge
-GPIO4, kommt später). Siehe `tutor_system.md`,
+nach Lernstand (0.7 → 1.0). Siehe `tutor_system.md`,
 `../system/audio_strasse.md`.
+
+Sensorik (Anwesenheit) steht **nicht** — nur Vorarbeit in der Bridge, kein
+Sensor dran. Kommt später.
