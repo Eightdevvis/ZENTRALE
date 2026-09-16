@@ -7,6 +7,7 @@ gehören dem Kern, nie dem Tutor.
 | Was du wissen willst | Datei |
 |---|---|
 | **Einstieg.** Aufbau des Persona-Portals, Sprachprofile, Vokabel-Modell, austauschbare Provider | [tutor_system.md](tutor_system.md) |
+| **Naturalisierung** — die Referenz für den Ausbau: Kern (leicht anfangen, organisch mitlernen), Umgebungs-Kontext, Skill `no_entiendo`, Tools heute/geplant | [naturalisierung.md](naturalisierung.md) |
 | Wie die Persona zuverlässig kurz und in der Zielsprache bleibt — Testläufe gegen echtes qwen-plus | [tutor_persona_tuning.md](tutor_persona_tuning.md) |
 | Die Roleplay-Features (Zimmer, Shop, Kisten) und warum sie so entschieden wurden | [tutor_roleplay_features.md](tutor_roleplay_features.md) |
 | Wie die Persona aussieht: gemalte Puppe statt Polygone, Drehpunkte, Mal-Schablone | [tutor_puppe.md](tutor_puppe.md) |
