@@ -6,8 +6,7 @@ Wird fortgeschrieben.
 
 ## Der Kern (Sasha, 2026-09-15)
 
-Der Kern des Tutors ist **nicht**, dass sie merkt, wann man da ist. Der Kern:
-**sie fängt leicht an, und man lernt die Vokabeln organisch mit.** Heute:
+**Sie fängt leicht an, und man lernt die Vokabeln organisch mit.** Heute:
 sie redet, Sasha versteht nichts, sagt „no entiendo", sie redet anderes.
 
 Comprehensible Input ist mehr als „sie spricht langsam": es ist eine **ganze
@@ -102,7 +101,7 @@ Nicht als Tool, sondern Kontext: Vokabel-Status pro Wort (`nueva / la reconoce /
 | `write_on(objekt, text)` | Text auf Verpackung/Tasse/Plakat im Zimmer | 4 |
 
 Jedes geplante Tool bekommt erst dann Code, wenn der Zentimeter davor an der
-Wand funktioniert hat. Nichts davon ist Sensorik — die kommt zuletzt.
+Wand funktioniert hat.
 
 ## Was schon steht (damit es nicht nochmal gebaut wird)
 
@@ -110,5 +109,5 @@ Zimmer als Wandbild (Kiosk `room`), Persona ohne Sperre, Grundvokabular
 freigegeben, Mikro immer offen (VAD → Whisper), Regie/Emoji nicht vorgelesen,
 Whisper-Floskeln verworfen, Alt+P Pause, Nachhaken nach 15 s, Sprechtempo rampt
 nach Lernstand (0.7 → 1.0). Präsenz: Worte zählen; PIR vorbereitet (Bridge
-GPIO4), **bewusst zurückgestellt**. Siehe `tutor_system.md`,
+GPIO4, kommt später). Siehe `tutor_system.md`,
 `../system/audio_strasse.md`.
