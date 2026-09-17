@@ -34,6 +34,7 @@ from . import tools             # Vokabel-Tools + Sandbox-Allowlist
 from . import langs             # Sprach-/Persona-Profile
 from . import providers         # Provider-Registry des Tutors
 from . import config            # tutor/data/tutor_config.json (Sprache/Provider/Modell)
+from . import skills            # Situations-Auslöser (no_entiendo), erst nur loggen
 from . import memory            # eigenes Grob-Gedächtnis pro Persona
 from . import debug             # Devtools-Ereignisbus (zeitgestempelt)
 
@@ -42,6 +43,7 @@ _active   = False
 _history  = deque(maxlen=100)   # Tutor-Gesprächsverlauf (separat vom Chat-History)
 _privacy  = None               # gesetzte Privacy-Warnung der laufenden Session (oder None)
 _session_lang = None           # Sprache/Persona der laufenden Session (für History+Memory)
+_verstaendnis = skills.Verstaendnis()   # Skill-Zustand »Sasha versteht nicht« (nur Log)
 
 # ── Ausdruck im Zimmer (vom Modell per express-Tool gesetzt) ─────────────────
 # Die KI drückt sich selbst aus (statt hardcoded-Random): stance = anhaltende
@@ -452,11 +454,24 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     # spoken DETERMINISTISCH aus der User-Eingabe: jedes getrackte Wort, das Sasha
     # gerade selbst benutzt hat, → spoken +1 (die KI zählt nicht). Vor dem Kontext-
     # Bau, damit der Status im Prompt schon aktuell ist.
+    hits = []
     if user_text:
         try:
-            tools.note_spoken(user_text, lang)
+            hits = tools.note_spoken(user_text, lang) or []
         except Exception:
             pass
+        # Skill-Auslöser »no_entiendo«: nur ERKENNEN und loggen (Devtool +
+        # journal), noch nicht handeln. Sasha prüft erst, ob der hart kodierte
+        # Catcher passend greift (memory/tutor/naturalisierung.md).
+        try:
+            lage = _verstaendnis.pruefen(user_text, lang, hits)
+            debug.emit('skill', name='no_entiendo', text=user_text, lang=lang, **lage)
+            print(f"[skill] no_entiendo {'ERKANNT' if lage['erkannt'] else 'nicht'}"
+                  f"{' · ' + lage['grund'] if lage.get('grund') else ''}"
+                  f"{' · ' + lage['uebergang'].upper() if lage.get('uebergang') else ''}"
+                  f" · '{user_text[:60]}'", flush=True)
+        except Exception as e:
+            print(f"[skill] no_entiendo prüfung fehlgeschlagen: {e}", flush=True)
 
     # Kosten-Hebel: nur die letzten N Turns senden (zustandslose API).
     if user_text is None and not nudge:
@@ -585,6 +600,7 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     if nudge:
         return
     push_message("assistant", full)
+    _verstaendnis.antwort_merken(full)     # für den Anschluss-Test des Skills
 
     # Nach dem Turn: KEIN roher Verlauf mehr auf Disk — nur die GROB-Notizen im
     # Hintergrund verdichten (memory.remember, läuft lokal/Cloud, darf das

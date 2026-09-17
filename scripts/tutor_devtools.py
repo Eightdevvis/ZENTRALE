@@ -93,6 +93,17 @@ def render(ev):
         print(_indent(ev.get('raw', ''), pad='      ▸ '))
         return
 
+    if kind == 'skill':
+        ok = ev.get('erkannt')
+        mark = f"{C['warn']}✔ ERKANNT{C['rst']}" if ok else f"{C['ok']}✘ nicht{C['rst']}"
+        ueb = ev.get('uebergang')
+        zustand = f" {C['b']}[{ueb.upper()}]{C['rst']}" if ueb else (
+            f" {C['dim']}[aktiv]{C['rst']}" if ev.get('aktiv') else '')
+        grund = f" {C['dim']}({ev.get('grund')}){C['rst']}" if ev.get('grund') else ''
+        print(f"{ts} {C['tool']}SKILL{C['rst']} {C['b']}{ev.get('name')}{C['rst']} {mark}{zustand}{grund}"
+              f" · '{ev.get('text', '')}'")
+        return
+
     if kind == 'ai.tool':
         print(f"{ts} {C['tool']}AI ⚙ TOOL{C['rst']} {C['b']}{ev.get('name')}{C['rst']}"
               f"({json.dumps(ev.get('args') or {}, ensure_ascii=False)}) "
