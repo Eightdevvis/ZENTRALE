@@ -2191,6 +2191,13 @@ def main():
         'tutor_done_ms': 0,    # wann ihre letzte Antwort fertig war (Nachhaken)
         'followed': False,     # in dieser Runde schon nachgehakt?
         'pause': os.path.exists(PAUSE_DATEI),   # Alt+P: sie lässt einen in Ruhe
+        # Esc-Zwischenmenü (wie in Spielen): Standbild + Blur, alles steht still.
+        # {'seite': 'haupt'|'einst', 'sel': int} oder None. 'freeze' = das
+        # eingefrorene, weichgezeichnete Bild dahinter.
+        'pmenu': None, 'freeze': None,
+        'speed_user': None,    # Sprech-Tempo aus den Einstellungen (None = Rampe)
+        'providers': [],       # Provider-Liste aus be.config() für die Einstellungen
+        'provider': '', 'model': '',
         'mic': not a.no_mic,   # Immer-Zuhören an? (Alt+H togglet)
         'hearing': False,      # gerade Sprache am Mikro?
         'activity_ms': 0,      # letzte Aktivität am Mikro (Sprache ODER Geräusch)
@@ -2254,6 +2261,8 @@ def main():
                 return
             lang = S['lang']
             spd = S['tts_speed']       # gerampt: im Assessment langsam, dann natürlich
+            if S['speed_user'] is not None:
+                spd = S['speed_user']  # Einstellungen schlagen die Rampe
         wav = be.speak(text, lang, a.speaker, spd)
         if not wav:
             return
@@ -2718,7 +2727,7 @@ def main():
                 if S['asv']:
                     S['asv']['busy'] = False
 
-    def asv_init(force=False):
+    def asv_init(force=False, nur_staende=False):
         """Abfrage starten: Queue + Spielstand holen, Willkommen zeigen. True =
         Drill übernimmt (KEIN LLM); False = kein Drill → normaler Persona-Start.
 
@@ -2731,7 +2740,7 @@ def main():
             return False
         if not force and data.get('mode') != 'assessment':
             return False
-        if not (data.get('queue') or []):
+        if not nur_staende and not (data.get('queue') or []):
             with S['lock']:
                 S['msg'] = 'alle kernwörter durch — nichts zu drillen'
             return False
@@ -2824,6 +2833,144 @@ def main():
             S['msg']     = f"→ {S['persona']} ({cf.get('lang_name', '')})"
             foc = S['focused']
         run_stream('/api/tutor/start', {'focus': foc})   # neue Begrüßung
+
+    # ── Esc-Zwischenmenü ─────────────────────────────────────────────────
+    # Klassisch wie in Spielen: Esc → das Bild friert ein (weichgezeichnet,
+    # abgedunkelt), darauf ein Menü: Weiter · Hauptmenü · Einstellungen ·
+    # Beenden. Solange es offen ist: kein Zuhören, kein Anstoß, keine Stimme.
+    # Sasha 2026-09-17.
+    PM_HAUPT = ['Weiter', 'Hauptmenü', 'Einstellungen', 'Beenden']
+
+    def pmenu_oeffnen():
+        with S['lock']:
+            if S['pmenu'] is not None:
+                return
+            S['pmenu'] = {'seite': 'haupt', 'sel': 0}
+            S['freeze'] = None          # Render-Thread friert das nächste Bild ein
+        try:
+            pygame.mixer.stop()
+        except Exception:
+            pass
+        threading.Thread(target=einstellungen_laden, daemon=True).start()
+
+    def pmenu_schliessen():
+        with S['lock']:
+            S['pmenu'] = None; S['freeze'] = None
+
+    def einstellungen_laden():
+        """Provider/Modell für die Einstellungen aus dem Backend holen."""
+        cf = be.config()
+        if not cf:
+            return
+        with S['lock']:
+            S['providers'] = [p for p in (cf.get('providers') or []) if p.get('enabled')]
+            S['provider'] = cf.get('provider') or ''
+            S['model'] = cf.get('model') or ''
+
+    def einstellungen_zeilen():
+        """[(label, wert)] — die Einstellungen, wie sie gerade stehen."""
+        with S['lock']:
+            spd = S['speed_user']
+            prov = S['provider'] or '—'
+            return [
+                ('Stimme',       'stumm' if S['mute'] else 'an'),
+                ('Mikro',        'aus' if not S['mic'] else 'hört zu'),
+                ('Pause',        'an — sie lässt dich in Ruhe' if S['pause'] else 'aus'),
+                ('Sprech-Tempo', 'automatisch (Lernstand)' if spd is None else f'{spd:.1f}×'),
+                ('Muttersprache (Glosse)', 'bald'),          # kommt mit den Spielständen
+                ('KI-Anbieter',  prov + (f' · {S["model"]}' if S['model'] else '')),
+                ('Zurück', ''),
+            ]
+
+    def einstellung_aendern(idx, richtung):
+        """Enter/←/→ auf einer Einstellungs-Zeile. richtung: 0 = umschalten,
+        -1/+1 = kleiner/größer bzw. vorheriger/nächster."""
+        if idx == 0:
+            with S['lock']:
+                S['mute'] = not S['mute']
+            try: pygame.mixer.stop()
+            except Exception: pass
+        elif idx == 1:
+            with S['lock']:
+                S['mic'] = not S['mic']
+        elif idx == 2:
+            pause_toggeln()
+        elif idx == 3:
+            with S['lock']:
+                cur = S['speed_user']
+                if richtung == 0:
+                    S['speed_user'] = None if cur is not None else 1.0
+                else:
+                    base = cur if cur is not None else S['tts_speed']
+                    S['speed_user'] = round(min(1.4, max(0.5, base + 0.1 * richtung)), 1)
+        elif idx == 5:
+            with S['lock']:
+                provs = list(S['providers']); cur = S['provider']
+            if not provs:
+                return
+            names = [p['name'] for p in provs]
+            i = names.index(cur) if cur in names else 0
+            i = (i + (richtung or 1)) % len(names)
+            neu = provs[i]
+            def _set():
+                cf = be.set_config({'provider': neu['name'],
+                                    'model': neu.get('default_model') or '',
+                                    'persist': True})
+                if cf:
+                    with S['lock']:
+                        S['provider'] = cf.get('provider') or neu['name']
+                        S['model'] = cf.get('model') or ''
+            threading.Thread(target=_set, daemon=True).start()
+
+    def pmenu_key(ev):
+        """Tasten im Zwischenmenü: ↑/↓ wählen, Enter/→/← anwenden, Esc zurück."""
+        with S['lock']:
+            pm = S['pmenu']
+            if not pm:
+                return
+            seite = pm['seite']; sel = pm['sel']
+        n = len(PM_HAUPT) if seite == 'haupt' else len(einstellungen_zeilen())
+        if ev.key in (pygame.K_UP, pygame.K_k):
+            with S['lock']:
+                if S['pmenu']: S['pmenu']['sel'] = (sel - 1) % n
+            return
+        if ev.key in (pygame.K_DOWN, pygame.K_j):
+            with S['lock']:
+                if S['pmenu']: S['pmenu']['sel'] = (sel + 1) % n
+            return
+        if ev.key == pygame.K_ESCAPE:
+            if seite == 'einst':
+                with S['lock']:
+                    if S['pmenu']: S['pmenu'].update(seite='haupt', sel=2)
+            else:
+                pmenu_schliessen()
+            return
+        if seite == 'haupt':
+            if ev.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_RIGHT):
+                if sel == 0:
+                    pmenu_schliessen()
+                elif sel == 1:
+                    pmenu_schliessen()
+                    threading.Thread(target=asv_init,
+                                     kwargs={'force': True, 'nur_staende': True},
+                                     daemon=True).start()   # Spielstand-Screen
+                elif sel == 2:
+                    with S['lock']:
+                        if S['pmenu']: S['pmenu'].update(seite='einst', sel=0)
+                elif sel == 3:
+                    pygame.event.post(pygame.event.Event(pygame.QUIT))
+            return
+        # Einstellungen
+        if ev.key in (pygame.K_RETURN, pygame.K_SPACE):
+            if sel == len(einstellungen_zeilen()) - 1:
+                with S['lock']:
+                    if S['pmenu']: S['pmenu'].update(seite='haupt', sel=2)
+            else:
+                einstellung_aendern(sel, 0)
+        elif ev.key == pygame.K_LEFT:
+            einstellung_aendern(sel, -1)
+        elif ev.key == pygame.K_RIGHT:
+            einstellung_aendern(sel, +1)
 
     def pause_toggeln():
         """Alt+P: Pause an/aus. An = kein Zuhören, kein Anstoß, keine Stimme, bis
@@ -3039,6 +3186,7 @@ def main():
             with S['lock']:
                 # im Assessment-Drill (asv) NIE die KI anstoßen — kein LLM da drin
                 ok = (S['asv'] is None and S['available'] and not S['pause']
+                      and S['pmenu'] is None
                       and not S['busy'] and not S['streaming'] and not S['speaking'])
                 lu = S['last_user_ms']; nudged = S['nudged']; nm = S['nudge_ms']
                 td = S['tutor_done_ms']; followed = S['followed']
@@ -3092,6 +3240,7 @@ def main():
             with S['lock']:
                 act = S['activity_ms']; voice = S['voice_ms']
                 ok = (S['asv'] is None and S['available'] and not S['pause']
+                      and S['pmenu'] is None
                       and not S['busy'] and not S['streaming'])
                 foc = S['focused']
             if act == 0 or act == last_seen:
@@ -3191,7 +3340,7 @@ def main():
         log_ms = 0
         while True:
             with S['lock']:
-                on = S['mic'] and not S['pause']
+                on = S['mic'] and not S['pause'] and S['pmenu'] is None
                 gated = S['speaking'] or S['busy'] or S['streaming']
                 musik = S['music'] is not None
             try:
@@ -3300,7 +3449,7 @@ def main():
                 # fertig committeter Text (bei CJK: das gewählte Zeichen).
                 # Bei offenem Menü ODER laufender Abfrage ignorieren.
                 with S['lock']:
-                    if S['menu'] is None and S['asv'] is None:
+                    if S['menu'] is None and S['asv'] is None and S['pmenu'] is None:
                         S['compose'] = ''
                         if len(S['input']) < 200:
                             S['input'] += ev.text
@@ -3312,6 +3461,11 @@ def main():
             elif ev.type == pygame.KEYDOWN:
                 # Offenes Sprach-Menü fängt die Tasten ab (Navigation/Auswahl/
                 # Schließen) — kein Reden, kein Quit, keine Texteingabe dahinter.
+                with S['lock']:
+                    pm_open = S['pmenu'] is not None
+                if pm_open:
+                    pmenu_key(ev)
+                    continue
                 with S['lock']:
                     menu_open = S['menu'] is not None
                 if menu_open:
@@ -3338,7 +3492,7 @@ def main():
                         asv_key(ev)
                     continue
                 if ev.key == pygame.K_ESCAPE:
-                    running = False
+                    pmenu_oeffnen()                  # Zwischenmenü statt Beenden
                 elif ev.key == pygame.K_l and (ev.mod & pygame.KMOD_ALT):
                     open_lang_menu()                 # Sprache/Persona umschalten
                 elif ev.key == pygame.K_m and (ev.mod & pygame.KMOD_ALT):
@@ -3391,6 +3545,8 @@ def main():
             thought_t = S['thought_t']
             music = S['music']; tv_on, tv_title = S['tv']
             menu = S['menu']; menu_langs = list(S['langs']); cur_lang = S['lang']
+            pmenu = dict(S['pmenu']) if S['pmenu'] else None
+            freeze = S['freeze']
             mode = S['mode']; core_got = S['core_got']; core_total = S['core_total']
             core_ratio = S['core_ratio']
             # Spiel-Animationen tickern (Kisten-Reveal, Münz-Pop, einschwebendes Teil,
@@ -3476,7 +3632,10 @@ def main():
         # zeichnen — HARTES GATE: läuft die deterministische Abfrage (asv), NICHT
         # das Zimmer/die Figur, sondern den Übungs-Screen. Lucías Stimme (TTS)
         # liest die Wörter vor; kein LLM beteiligt.
-        if asv_snap is not None:
+        if pmenu is not None and freeze is not None:
+            # Zwischenmenü offen: nur das eingefrorene, weichgezeichnete Bild.
+            screen.blit(freeze, (0, 0))
+        elif asv_snap is not None:
             draw_assessment(screen, w, h, fonts, asv_snap, speaking, caret_t)
         else:
             draw_room(screen, w, h, caret_t)
@@ -3518,7 +3677,7 @@ def main():
             elif avail and not tts_ok:
                 hint = '🔇 keine Stimme (tts-service aus?)'
             else:
-                hint = '↑/↓ Verlauf · Enter reden · Alt+P Pause · Alt+D Drill · Alt+Z Zentrale · Alt+L Sprache · Alt+M stumm · Esc'
+                hint = 'Esc Menü · ↑/↓ Verlauf · Enter reden · Alt+P Pause · Alt+D Drill · Alt+Z Zentrale'
             screen.blit(fonts['hud'].render(hint, True, HUD_DIM), (16, 44))
 
             # Mic-Indikator (Immer-Zuhören): Zustand + Alt+H
@@ -3589,6 +3748,47 @@ def main():
                 xo += comp.get_width()
             if (caret_t % 1.0) < 0.5:
                 screen.blit(fonts['input'].render('▏', True, INPUT_FG), (xo, iy))
+
+        # ── Esc-Zwischenmenü ────────────────────────────────────────────────
+        if pmenu is not None:
+            if freeze is None:
+                # Erstes Bild nach dem Öffnen: den gerade gezeichneten Frame
+                # einfrieren und weichzeichnen (klein skalieren + zurück = billiger
+                # Blur), abdunkeln. Ab jetzt steht alles still.
+                try:
+                    klein = pygame.transform.smoothscale(screen.copy(), (max(1, w // 8), max(1, h // 8)))
+                    fz = pygame.transform.smoothscale(klein, (w, h))
+                except Exception:
+                    fz = screen.copy()
+                dunkel = pygame.Surface((w, h), pygame.SRCALPHA); dunkel.fill((0, 0, 0, 150))
+                fz.blit(dunkel, (0, 0))
+                with S['lock']:
+                    S['freeze'] = fz
+                screen.blit(fz, (0, 0))
+            M_FG, M_DIM, M_ACC = (232, 226, 236), (160, 152, 166), ASSESS_GOLD
+            if pmenu['seite'] == 'haupt':
+                titel, zeilen = 'Pause', [(z, '') for z in PM_HAUPT]
+            else:
+                titel, zeilen = 'Einstellungen', einstellungen_zeilen()
+            rh = fonts['input'].get_linesize() + 10
+            mw = min(560 if pmenu['seite'] == 'einst' else 360, w - 40)
+            mh = 56 + rh * len(zeilen) + 34
+            mx = (w - mw) // 2; my = max(20, (h - mh) // 2)
+            pygame.draw.rect(screen, (34, 30, 40), (mx, my, mw, mh), border_radius=12)
+            pygame.draw.rect(screen, (96, 86, 104), (mx, my, mw, mh), width=1, border_radius=12)
+            screen.blit(fonts['big'].render(titel, True, M_FG), (mx + 18, my + 14))
+            yy = my + 56
+            for i, (label, wert) in enumerate(zeilen):
+                selq = i == pmenu['sel']
+                if selq:
+                    pygame.draw.rect(screen, (62, 55, 74), (mx + 8, yy - 3, mw - 16, rh), border_radius=8)
+                screen.blit(fonts['input'].render(label, True, M_FG if selq else M_DIM), (mx + 20, yy))
+                if wert:
+                    ws = fonts['input'].render(wert, True, M_ACC if selq else M_DIM)
+                    screen.blit(ws, (mx + mw - 20 - ws.get_width(), yy))
+                yy += rh
+            tipp = '↑/↓ · Enter · Esc' if pmenu['seite'] == 'haupt' else '↑/↓ · Enter/←/→ ändern · Esc zurück'
+            screen.blit(fonts['hud'].render(_sym(tipp), True, M_DIM), (mx + 18, yy + 8))
 
         # ── Sprach-Menü-Overlay (Alt+L) ─────────────────────────────────────
         if menu is not None and menu_langs:
