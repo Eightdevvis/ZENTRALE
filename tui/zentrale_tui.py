@@ -2832,7 +2832,12 @@ def run_ui(stdscr, store):
                 with TUTOR_LOCK: TUTOR["msg"] = "cloud-schalter fehlgeschlagen"
             threading.Thread(target=tutor_refresh, daemon=True).start()
             return
-        if name in ("lang", "provider", "model"):
+        if name == "lang":
+            # Sprache = Spielstand (seit 2026-09-17): wechseln heißt im Zimmer
+            # (Esc → Hauptmenü) einen anderen Stand laden — sonst bluten Stände.
+            with TUTOR_LOCK: TUTOR["msg"] = "sprache gehört zum spielstand — im zimmer: Esc → Hauptmenü"
+            return
+        if name in ("provider", "model"):
             if not arg:
                 with TUTOR_LOCK: TUTOR["msg"] = "nutze /%s <wert>" % name
                 return

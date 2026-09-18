@@ -410,9 +410,10 @@ class Backend:
         """GET /api/tutor/staende → {aktiv, staende:[…]}. None bei Fehler."""
         return self._get('/api/tutor/staende', timeout=5.0)
 
-    def stand_neu(self, name=None):
-        """Neuen Spielstand anlegen und aktivieren."""
-        return self._post('/api/tutor/staende', {'name': name or ''})
+    def stand_neu(self, name=None, lang=None, level=0):
+        """Neuen Spielstand (Sprache + Level) anlegen und aktivieren."""
+        return self._post('/api/tutor/staende',
+                          {'name': name or '', 'lang': lang or '', 'level': int(level or 0)})
 
     def stand_waehlen(self, sid):
         """Auf einen vorhandenen Spielstand umschalten."""
@@ -1855,9 +1856,48 @@ def _stand_zeilen(asv):
     einmal. Die Liste kommt vom Backend; solange sie laedt, gibt es nur den
     neuen Stand, damit der Schirm nie leer und unbedienbar dasteht.
     """
+    if not asv.get('geladen'):
+        return [{'art': 'laden'}]        # noch keine Liste → nichts bestätigbar
     zeilen = [{'art': 'stand', 'stand': st} for st in (asv.get('staende') or [])]
     zeilen.append({'art': 'neu'})
     return zeilen
+
+
+LEVEL_NAMEN = {0: 'von vorn', 1: 'Grundlagen', 2: 'kann mich verständigen'}
+LEVEL_ERKLAERUNG = {
+    0: 'nichts bekannt — sie fängt ganz leicht an',
+    1: 'die wichtigsten Grundwörter gelten als bekannt',
+    2: 'alle Grundwörter bekannt — sie redet wie mit jemandem, der sich verständigen kann',
+}
+
+
+def _draw_neu_wahl(screen, w, fonts, asv, top_y, ctr):
+    """Neuer Spielstand: erst die Sprache, dann das Level."""
+    neu = asv.get('neu') or {}
+    schritt = neu.get('schritt', 'sprache')
+    h_titel = fonts['big'].get_height(); h_unter = fonts['hud'].get_height()
+    innen = 10; hoehe = h_titel + h_unter + 2 * innen + 4; abstand = 10
+    bw = min(620, w - 160); bx = w // 2 - bw // 2
+    if schritt == 'sprache':
+        ctr(fonts['hud'].render('NEUER SPIELSTAND · WELCHE SPRACHE?', True, ASSESS_ACC), top_y)
+        zeilen = [(f"{l.get('persona_name', l['code'])} — {l.get('name', l['code'])}",
+                   f"{l.get('country', '')}") for l in neu.get('langs') or []]
+        if not zeilen:
+            zeilen = [('keine fertige Sprache gefunden', 'Backend nicht erreichbar?')]
+    else:
+        ctr(fonts['hud'].render('NEUER SPIELSTAND · WO FÄNGST DU AN?', True, ASSESS_ACC), top_y)
+        zeilen = [(LEVEL_NAMEN[i], LEVEL_ERKLAERUNG[i]) for i in (0, 1, 2)]
+    idx = max(0, min(len(zeilen) - 1, int(neu.get('sel', 0))))
+    y = top_y + h_unter + 14
+    for i, (titel, unter) in enumerate(zeilen):
+        if i == idx:
+            pygame.draw.rect(screen, ASSESS_BAR_BG, (bx, y, bw, hoehe), border_radius=8)
+            pygame.draw.rect(screen, ASSESS_ACC, (bx, y, 4, hoehe), border_radius=2)
+        screen.blit(fonts['big'].render(titel, True, ASSESS_INK), (bx + 20, y + innen))
+        screen.blit(fonts['hud'].render(unter, True, HUD_DIM), (bx + 20, y + innen + h_titel + 4))
+        y += hoehe + abstand
+    _hint_row(screen, fonts['hud'], w, y + 16,
+              [('↑↓', 'wählen'), ('Enter', 'weiter' if schritt == 'sprache' else 'anlegen'), ('Esc', 'zurück')])
 
 
 def _draw_loesch_frage(screen, w, fonts, asv):
@@ -1902,7 +1942,10 @@ def _draw_loesch_frage(screen, w, fonts, asv):
 
 
 def _draw_stand_wahl(screen, w, fonts, asv, top_y, ctr):
-    """Spielstand waehlen, bevor das Drill losgeht."""
+    """Spielstand waehlen (Hauptmenue) — oder einen neuen anlegen."""
+    if asv.get('neu'):
+        _draw_neu_wahl(screen, w, fonts, asv, top_y, ctr)
+        return
     zeilen = _stand_zeilen(asv)
     idx = max(0, min(len(zeilen) - 1, int(asv.get('stand_idx', 0))))
     aktiv = asv.get('stand_aktiv')
@@ -1928,16 +1971,20 @@ def _draw_stand_wahl(screen, w, fonts, asv, top_y, ctr):
                              border_radius=8)
             pygame.draw.rect(screen, ASSESS_ACC, (bx, y, 4, hoehe),
                              border_radius=2)
-        if z['art'] == 'neu':
+        if z['art'] == 'laden':
+            titel = 'Spielstände werden geladen …'
+            unter = 'einen Moment'
+            farbe = HUD_DIM
+        elif z['art'] == 'neu':
             titel = 'Neuer Spielstand'
-            unter = 'von vorn anfangen — die anderen Stände bleiben erhalten'
+            unter = 'Sprache und Startpunkt wählen — die anderen Stände bleiben erhalten'
             farbe = ASSESS_GOLD
         else:
             st = z['stand']
             titel = st.get('name') or st.get('id')
             if st.get('id') == aktiv:
                 titel += '   (zuletzt gespielt)'
-            unter = _stand_unterzeile(st)
+            unter = _stand_unterzeile(st, asv.get('langnamen') or {})
             farbe = ASSESS_INK
         screen.blit(fonts['big'].render(titel, True, farbe), (bx + 20, y + innen))
         screen.blit(fonts['hud'].render(unter, True, HUD_DIM),
@@ -1953,17 +2000,15 @@ def _draw_stand_wahl(screen, w, fonts, asv, top_y, ctr):
         _draw_loesch_frage(screen, w, fonts, asv)
 
 
-def _stand_unterzeile(st):
-    """Woran man einen Stand wiedererkennt: Sprachen, Woerter, Muenzen."""
-    teile = []
-    for lang, d in sorted((st.get('sprachen') or {}).items()):
-        stueck = _sym('%s · %d Wörter' % (lang, d.get('woerter', 0)))
-        if d.get('muenzen'):
-            stueck += ' · %d Münzen' % d['muenzen']
-        teile.append(stueck)
-    if not teile:
-        return 'noch nichts gelernt'
-    return '   |   '.join(teile)
+def _stand_unterzeile(st, langnamen=None):
+    """Woran man einen Stand wiedererkennt: Sprache, Level, Woerter, Muenzen."""
+    lang = st.get('lang') or ''
+    name = (langnamen or {}).get(lang) or lang or '?'
+    teile = [name, LEVEL_NAMEN.get(int(st.get('level') or 0), '')]
+    teile.append(_sym('%d Wörter' % int(st.get('woerter') or 0)))
+    if st.get('muenzen'):
+        teile.append('%d Münzen' % int(st['muenzen']))
+    return ' · '.join(t for t in teile if t)
 
 
 def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
@@ -2000,10 +2045,11 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
         screen.blit(gl, (bx + bw - gl.get_width(), by - fonts['hud'].get_height() - 6))
 
     if phase == 'welcome':
-        ctr(fonts['word'].render('Hola', True, ASSESS_INK), cy - 250)
-        ctr(fonts['big'].render('Ich bin Lucía.', True, ASSESS_INK), cy - 178)
-        for i, ln in enumerate(['Wortspiel: wir gehen die wichtigsten Wörter durch — hak ab, was du kannst.',
-                                'Dabei sammelst du Münzen und puzzelst mich Stück für Stück zusammen. Esc = zurück zu mir.']):
+        pn = asv.get('persona') or 'Lucía'
+        ctr(fonts['word'].render('Hauptmenü', True, ASSESS_INK), cy - 250)
+        ctr(fonts['big'].render(f'Wer spielt weiter — und mit wem?', True, ASSESS_INK), cy - 178)
+        for i, ln in enumerate(['Ein Spielstand ist eine Sprache mit ihrem Lernstand. Wörter, Münzen und Erinnerungen',
+                                'bleiben in ihm — nichts davon wandert in einen anderen. Esc = zurück ins Zimmer.']):
             ctr(fonts['log'].render(ln, True, HUD_DIM), cy - 122 + i * 26)
         _draw_stand_wahl(screen, w, fonts, asv, cy - 46, ctr)
         return
@@ -2198,6 +2244,7 @@ def main():
         'speed_user': None,    # Sprech-Tempo aus den Einstellungen (None = Rampe)
         'providers': [],       # Provider-Liste aus be.config() für die Einstellungen
         'provider': '', 'model': '',
+        'native': 'en', 'natives': [],   # Muttersprache (Glosse) + Auswahl
         'mic': not a.no_mic,   # Immer-Zuhören an? (Alt+H togglet)
         'hearing': False,      # gerade Sprache am Mikro?
         'activity_ms': 0,      # letzte Aktivität am Mikro (Sprache ODER Geräusch)
@@ -2576,6 +2623,34 @@ def main():
                         if S['asv']:
                             S['asv']['stand_weg'] = None
                 return
+            # Unter-Screen »Neuer Spielstand« (Sprache → Level)
+            with S['lock']:
+                neu = dict(S['asv'].get('neu') or {}) if S['asv'] else {}
+            if neu:
+                n = len(neu.get('langs') or []) if neu.get('schritt') == 'sprache' else 3
+                if ev.key == pygame.K_ESCAPE:
+                    with S['lock']:
+                        if S['asv']:
+                            if neu.get('schritt') == 'level':
+                                S['asv']['neu'].update(schritt='sprache', sel=0)
+                            else:
+                                S['asv']['neu'] = None
+                elif ev.key in (pygame.K_UP, pygame.K_DOWN) and n:
+                    with S['lock']:
+                        if S['asv'] and S['asv'].get('neu'):
+                            S['asv']['neu']['sel'] = (int(neu.get('sel', 0)) + (-1 if ev.key == pygame.K_UP else 1)) % n
+                elif ev.key in (pygame.K_RETURN, pygame.K_SPACE) and n:
+                    if neu.get('schritt') == 'sprache':
+                        with S['lock']:
+                            if S['asv'] and S['asv'].get('neu'):
+                                l = (neu.get('langs') or [])[max(0, min(n - 1, int(neu.get('sel', 0))))]
+                                S['asv']['neu'].update(schritt='level', sel=0, lang=l['code'])
+                    else:
+                        with S['lock']:
+                            if S['asv'] and S['asv'].get('neu'):
+                                S['asv']['neu']['level'] = max(0, min(2, int(neu.get('sel', 0))))
+                        threading.Thread(target=stand_bestaetigen, daemon=True).start()
+                return
             # Erst Spielstand waehlen, dann geht das Drill los.
             if ev.key == pygame.K_DELETE:
                 stand_loesch_fragen()
@@ -2639,6 +2714,14 @@ def main():
         ist. Ein blockierender Aufruf im Render-Thread wuerde das Zimmer beim
         Oeffnen haengen lassen.
         """
+        with S['lock']:
+            langs = list(S['langs'])
+        if not langs:
+            cf = be.config()
+            if cf and cf.get('langs'):
+                langs = [l for l in cf['langs'] if l.get('enabled')]
+                with S['lock']:
+                    S['langs'] = langs
         d = be.staende()
         if not isinstance(d, dict):
             return
@@ -2650,6 +2733,8 @@ def main():
                 return
             v['staende'] = liste
             v['stand_aktiv'] = aktiv
+            v['geladen'] = True
+            v['langnamen'] = {l['code']: f"{l.get('persona_name', '')} · {l.get('name', l['code'])}" for l in langs}
             # Auf dem zuletzt gespielten Stand stehen bleiben — wer weiterspielt,
             # drueckt dann nur Enter.
             v['stand_idx'] = next((i for i, st in enumerate(liste)
@@ -2699,16 +2784,42 @@ def main():
             zeilen = _stand_zeilen(v)
             idx = max(0, min(len(zeilen) - 1, int(v.get('stand_idx', 0))))
             wahl = zeilen[idx]
+            if wahl['art'] == 'laden':
+                return                       # Liste noch nicht da: nichts anlegen
+            if wahl['art'] == 'neu' and not v.get('neu'):
+                # Erst Sprache, dann Level — angelegt wird am Ende des Unter-Screens.
+                v['neu'] = {'schritt': 'sprache', 'sel': 0, 'langs': list(S['langs'])}
+                return
+            neu = v.get('neu')
             v['busy'] = True
         try:
+            gewechselt = False
             if wahl['art'] == 'neu':
-                be.stand_neu()
+                r = be.stand_neu(None, neu.get('lang'), neu.get('level', 0))
+                if not (r and r.get('ok')):
+                    with S['lock']:
+                        S['msg'] = 'spielstand: ' + str((r or {}).get('error') or 'fehlgeschlagen')
+                        if S['asv']: S['asv']['neu'] = None
+                    threading.Thread(target=staende_laden, daemon=True).start()
+                    return
+                gewechselt = True
             else:
                 sid = wahl['stand'].get('id')
                 # Der aktive Stand braucht keinen Wechsel — das wuerde nur die
                 # Sitzung unnoetig beenden.
                 if sid != v.get('stand_aktiv'):
                     be.stand_waehlen(sid)
+                    gewechselt = True
+            if gewechselt:
+                # Anderer Stand = andere Sprache/Persona möglich: Zimmer-Zustand
+                # frisch aus dem Backend, Verlauf leer — nichts vom alten Stand
+                # bleibt sichtbar.
+                cf = be.config() or {}
+                with S['lock']:
+                    S['lang'] = cf.get('lang') or S['lang']
+                    S['persona'] = cf.get('persona_name') or S['persona']
+                    S['log'] = []; S['last'] = ''; S['buf'] = ''; S['input'] = ''
+                    S['scroll'] = 0; S['thought'] = None
             # Der Stand bestimmt, WAS gelernt ist: Queue und Spielstand neu holen.
             if not asv_init():
                 # Kein Gate mehr (z.B. frisch gewaehlter, schon fertiger Stand)
@@ -2763,76 +2874,12 @@ def main():
                         'crate_at': list(game.get('crate_at', [])),
                         'reveal': None, 'coin_drop': None, 'new_part': None,
                         'staende': [], 'stand_aktiv': None, 'stand_idx': 0,
+                        'geladen': False, 'neu': None, 'persona': S['persona'],
+                        'langnamen': {},
                         'stand_weg': None, 'verlauf': [], 'blick': None,
                         'flip': None, 'weg': None, 'geschenk': None}
         threading.Thread(target=staende_laden, daemon=True).start()
         return True
-
-    # ── Sprach-Menü (Alt+L): live zwischen Personas/Sprachen umschalten ──────
-    # Der Kern kann das schon (POST /api/tutor/config {lang}); hier ist nur die
-    # sichtbare Auswahl im Zimmer statt eines Konsolen-Befehls (/lang). Wechsel =
-    # Config setzen (persist) → Session beenden → neu starten, damit die neue
-    # Persona in IHRER Sprache frisch begrüßt (active_lang friert beim Start ein).
-    def open_lang_menu():
-        with S['lock']:
-            langs = list(S['langs'])
-        if not langs:                       # Cache leer (kickoff-Race) → nachholen
-            cf = be.config()
-            langs = [l for l in (cf.get('langs') if cf else []) if l.get('enabled')]
-        if not langs:
-            with S['lock']: S['msg'] = 'keine Sprachen verfügbar'
-            return
-        with S['lock']:
-            cur = S['lang']
-            S['langs'] = langs
-            S['menu'] = {'sel': next((i for i, l in enumerate(langs)
-                                      if l['code'] == cur), 0)}
-
-    def menu_key(ev):
-        """Taste im offenen Menü. Gibt einen zu wechselnden Sprachcode zurück
-        (Enter/Zifferwahl) oder None (Navigation/Schließen)."""
-        with S['lock']:
-            m = S['menu']
-            if not m:
-                return None
-            langs = S['langs']; n = len(langs)
-            close = (ev.key == pygame.K_ESCAPE) or \
-                    (ev.key == pygame.K_l and (ev.mod & pygame.KMOD_ALT))
-            if close or n == 0:
-                S['menu'] = None; return None
-            if ev.key in (pygame.K_UP, pygame.K_k):
-                m['sel'] = (m['sel'] - 1) % n; return None
-            if ev.key in (pygame.K_DOWN, pygame.K_j):
-                m['sel'] = (m['sel'] + 1) % n; return None
-            if pygame.K_1 <= ev.key <= pygame.K_9:
-                i = ev.key - pygame.K_1
-                if i < n:
-                    S['menu'] = None; return langs[i]['code']
-                return None
-            if ev.key == pygame.K_RETURN:
-                S['menu'] = None; return langs[m['sel']]['code']
-        return None
-
-    def switch_lang(code):
-        """Sprache/Persona live umschalten (läuft in einem Thread — Netz + Stream)."""
-        with S['lock']:
-            same = (code == S['lang'])
-            S['menu'] = None
-        if same:
-            return
-        cf = be.set_config({'lang': code, 'persist': True})
-        if not cf:
-            with S['lock']: S['msg'] = 'Sprachwechsel fehlgeschlagen'
-            return
-        be.stop()                            # alte Session beenden
-        with S['lock']:
-            S['lang']    = cf.get('lang', code)
-            S['persona'] = cf.get('persona_name', S['persona'])
-            S['log']     = []                # neue Persona → eigener Verlauf
-            S['last']    = ''; S['buf'] = ''
-            S['msg']     = f"→ {S['persona']} ({cf.get('lang_name', '')})"
-            foc = S['focused']
-        run_stream('/api/tutor/start', {'focus': foc})   # neue Begrüßung
 
     # ── Esc-Zwischenmenü ─────────────────────────────────────────────────
     # Klassisch wie in Spielen: Esc → das Bild friert ein (weichgezeichnet,
@@ -2840,6 +2887,8 @@ def main():
     # Beenden. Solange es offen ist: kein Zuhören, kein Anstoß, keine Stimme.
     # Sasha 2026-09-17.
     PM_HAUPT = ['Weiter', 'Hauptmenü', 'Einstellungen', 'Beenden']
+    NATIVE_NAMEN = {'en': 'Englisch', 'de': 'Deutsch', 'es': 'Spanisch', 'zh': 'Chinesisch',
+                    'fr': 'Französisch', 'ru': 'Russisch', 'ar': 'Arabisch'}
 
     def pmenu_oeffnen():
         with S['lock']:
@@ -2866,6 +2915,8 @@ def main():
             S['providers'] = [p for p in (cf.get('providers') or []) if p.get('enabled')]
             S['provider'] = cf.get('provider') or ''
             S['model'] = cf.get('model') or ''
+            S['native'] = cf.get('native') or 'en'
+            S['natives'] = list(cf.get('natives') or ['en', 'de', 'es', 'zh'])
 
     def einstellungen_zeilen():
         """[(label, wert)] — die Einstellungen, wie sie gerade stehen."""
@@ -2877,7 +2928,7 @@ def main():
                 ('Mikro',        'aus' if not S['mic'] else 'hört zu'),
                 ('Pause',        'an — sie lässt dich in Ruhe' if S['pause'] else 'aus'),
                 ('Sprech-Tempo', 'automatisch (Lernstand)' if spd is None else f'{spd:.1f}×'),
-                ('Muttersprache (Glosse)', 'bald'),          # kommt mit den Spielständen
+                ('Muttersprache (Glosse)', NATIVE_NAMEN.get(S['native'], S['native'])),
                 ('KI-Anbieter',  prov + (f' · {S["model"]}' if S['model'] else '')),
                 ('Zurück', ''),
             ]
@@ -2903,6 +2954,20 @@ def main():
                 else:
                     base = cur if cur is not None else S['tts_speed']
                     S['speed_user'] = round(min(1.4, max(0.5, base + 0.1 * richtung)), 1)
+        elif idx == 4:
+            # Muttersprache = Sprache der Glosse auf Karte/Gedanke. Deutsch mit
+            # Glosse Deutsch ist erlaubt (Test/Debug) — bewusst nicht gesperrt.
+            with S['lock']:
+                nats = list(S['natives']); cur = S['native']
+            if not nats:
+                return
+            i = nats.index(cur) if cur in nats else 0
+            neu = nats[(i + (richtung or 1)) % len(nats)]
+            def _setn():
+                cf = be.set_config({'native': neu, 'persist': True})
+                with S['lock']:
+                    S['native'] = (cf or {}).get('native') or neu
+            threading.Thread(target=_setn, daemon=True).start()
         elif idx == 5:
             with S['lock']:
                 provs = list(S['providers']); cur = S['provider']
@@ -3040,6 +3105,10 @@ def main():
         except Exception as exc:
             with S['lock']:
                 S['msg'] = f'tui-start: {exc}'
+
+    # (Alt+L / Sprachwechsel im Zimmer gibt es seit 2026-09-17 nicht mehr: die
+    # Sprache gehört zum Spielstand — wechseln heißt im Hauptmenü einen anderen
+    # Stand laden. So können Stände nicht ineinander bluten.)
 
     def kickoff():
         """Status/Config holen; wenn erreichbar und keine Session läuft, die
@@ -3466,20 +3535,18 @@ def main():
                 if pm_open:
                     pmenu_key(ev)
                     continue
-                with S['lock']:
-                    menu_open = S['menu'] is not None
-                if menu_open:
-                    code = menu_key(ev)
-                    if code:
-                        threading.Thread(target=switch_lang, args=(code,),
-                                         daemon=True).start()
-                    continue
                 # Deterministische Abfrage: Tasten steuern das Drill (kein Text-
                 # Input, kein Reden). Esc/Alt+M bleiben; alles andere → asv_key.
                 with S['lock']:
                     asv_on = S['asv'] is not None
                 if asv_on:
-                    if ev.key == pygame.K_ESCAPE:
+                    with S['lock']:
+                        _v = S['asv']
+                        innen = bool(_v and _v.get('phase') == 'welcome'
+                                     and (_v.get('neu') or _v.get('stand_weg')))
+                    if ev.key == pygame.K_ESCAPE and innen:
+                        asv_key(ev)                  # Unter-Screen/Rückfrage: ein Schritt zurück
+                    elif ev.key == pygame.K_ESCAPE:
                         drill_verlassen()            # zurück ins Zimmer, nicht raus
                     elif ev.key == pygame.K_m and (ev.mod & pygame.KMOD_ALT):
                         with S['lock']:
@@ -3493,8 +3560,6 @@ def main():
                     continue
                 if ev.key == pygame.K_ESCAPE:
                     pmenu_oeffnen()                  # Zwischenmenü statt Beenden
-                elif ev.key == pygame.K_l and (ev.mod & pygame.KMOD_ALT):
-                    open_lang_menu()                 # Sprache/Persona umschalten
                 elif ev.key == pygame.K_m and (ev.mod & pygame.KMOD_ALT):
                     with S['lock']:
                         S['mute'] = not S['mute']
@@ -3789,35 +3854,6 @@ def main():
                 yy += rh
             tipp = '↑/↓ · Enter · Esc' if pmenu['seite'] == 'haupt' else '↑/↓ · Enter/←/→ ändern · Esc zurück'
             screen.blit(fonts['hud'].render(_sym(tipp), True, M_DIM), (mx + 18, yy + 8))
-
-        # ── Sprach-Menü-Overlay (Alt+L) ─────────────────────────────────────
-        if menu is not None and menu_langs:
-            ov = pygame.Surface((w, h), pygame.SRCALPHA); ov.fill((0, 0, 0, 150))
-            screen.blit(ov, (0, 0))
-            rh = fonts['input'].get_linesize() + 8
-            mw = min(380, w - 40)
-            mh = 52 + rh * len(menu_langs) + 30
-            mx = (w - mw) // 2; my = max(20, (h - mh) // 2)
-            # Modal bewusst IMMER dunkel (fester Panel-Look) → Text fix hell, damit
-            # es auch im Day-Theme lesbar bleibt (nicht an die Palette gekoppelt).
-            M_FG, M_DIM = (232, 226, 236), (160, 152, 166)
-            pygame.draw.rect(screen, (34, 30, 40), (mx, my, mw, mh), border_radius=12)
-            pygame.draw.rect(screen, (96, 86, 104), (mx, my, mw, mh), width=1, border_radius=12)
-            screen.blit(fonts['big'].render('Sprache', True, M_FG), (mx + 18, my + 14))
-            yy = my + 52
-            sel = menu.get('sel', 0)
-            for i, l in enumerate(menu_langs):
-                if i == sel:
-                    pygame.draw.rect(screen, (62, 55, 74),
-                                     (mx + 8, yy - 2, mw - 16, rh), border_radius=8)
-                label = f"{i + 1}. {l.get('persona_name', l['code'])} — {l.get('name', l['code'])}"
-                if l['code'] == cur_lang:
-                    label += '   ●'
-                screen.blit(fonts['input'].render(label, True,
-                            M_FG if i == sel else M_DIM), (mx + 20, yy))
-                yy += rh
-            screen.blit(fonts['hud'].render(_sym('↑/↓ · Enter · 1–9 · Esc'), True, M_DIM),
-                        (mx + 18, yy + 6))
 
         pygame.display.flip()
 

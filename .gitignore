@@ -41,6 +41,7 @@ data/*.enc
 # NICHT betroffen: tutor/langs/<lang>/ — das ist die SPRACHE (Prompt, Beschriftung,
 # Seeds), die kommt mit dem Repo und muss getrackt bleiben.
 tutor/data/**/*.json
+tutor/data/aktiver_stand
 tutor/data/**/*.bak*
 tutor/data/**/vocab_images/
 tutor/data/**/persona_music/

@@ -58,7 +58,7 @@ def _lang(lang: str | None) -> str:
         from . import session
         return session.active_lang().lower()
     except Exception:
-        return os.getenv("TUTOR_LANG", "zh").lower()
+        return staende.aktive_sprache(_DATA_DIR).lower()   # nie stilles 'zh'
 
 
 def _dir(lang: str | None = None) -> str:
@@ -155,6 +155,11 @@ def remember(user_text: str, ai_text: str, lang: str | None = None,
         else:
             return   # kein Backend → diesen Turn nicht merken
 
+        # Token VOR dem Laden: zwischen Laden und Speichern liegt ein LLM-Aufruf
+        # (~1 s). Wechselt Sasha in der Zeit den Spielstand, würden die Notizen
+        # des alten Stands in den neuen geschrieben. Deshalb wird vor dem
+        # Speichern geprüft — bei Wechsel verworfen, nicht umgebogen.
+        tok = staende.token(_DATA_DIR)
         notes = _load_notes(lang)
         user_msg = ("现有笔记：" + json.dumps(notes, ensure_ascii=False) +
                     f"\n最新一轮：\nSasha 说：{user_text}\n玲玲说：{ai_text}")
@@ -163,7 +168,13 @@ def remember(user_text: str, ai_text: str, lang: str | None = None,
             return
         new = _parse_notes(raw)
         if new is not None:
-            _save_notes(new, lang)
+            with staende.stand_lock:
+                try:
+                    staende.pruefen(_DATA_DIR, tok)
+                except staende.StandGewechselt as e:
+                    print(f"[tutor.memory] Notiz verworfen — {e}", flush=True)
+                    return
+                _save_notes(new, lang)
     except Exception:
         pass
 

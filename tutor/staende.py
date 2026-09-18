@@ -4,26 +4,62 @@ Bis hierher hatte der Tutor GENAU EINEN Lernstand — `tutor/data/<lang>/`. Wer
 noch einmal von vorn anfangen wollte (oder jemand anderem das Spiel zeigen),
 musste die Dateien löschen; der alte Fortschritt war weg.
 
-Ein Spielstand ist alles, was gelernt wurde, ueber ALLE Sprachen hinweg:
+Ein Spielstand ist GENAU EINE Sprache mit ihrem Lernstand (seit 2026-09-17):
 
-    tutor/data/staende/<id>/stand.json     Name, angelegt, zuletzt gespielt
+    tutor/data/staende/<id>/stand.json     Name, Sprache, Level, angelegt, zuletzt
     tutor/data/staende/<id>/<lang>/…       vocab, fsrs, game, persona_mem, …
 
-Global und nicht pro Sprache, weil ein Spielstand »ein Durchgang« ist: wer
-neu anfaengt, faengt bei allen Sprachen neu an. Die SPRACHE waehlt man
-weiterhin getrennt (/lang, Alt+L im Zimmer) — sie ist eine Eigenschaft des
-Spielens, nicht des Spielstands.
+Bis dahin spannte ein Stand alle Sprachen, und die Sprache kam aus einer
+zweiten Quelle (tutor_config.json). Zwei Quellen fuer »welche Sprache gerade«
+hiessen: Prompt in der einen, Daten in der anderen, Hintergrund-Threads
+schreiben nach einem Wechsel in den falschen Stand. Sasha: »sobald
+Spielstaende ineinander bluten koennen, ist unser ganzes Game im Arsch« —
+also physisch unmoeglich machen:
+
+  - Die aktive Sprache leitet sich NUR aus dem aktiven Stand ab
+    (aktive_sprache()). Sprache wechseln = anderen Stand laden.
+  - pfad(root, lang) weigert sich (StandSprache), wenn lang nicht die Sprache
+    des aktiven Stands ist: kein fremdsprachiger Write in einen Stand.
+  - Wechsel (waehlen/anlegen/loeschen) und jede Lese-Aender-Schreib-Folge in
+    tools/memory/srs laufen unter DERSELBEN Sperre (stand_lock): kein Wechsel
+    zwischen Lesen und Schreiben.
+  - Lange Operationen (memory.remember: LLM-Aufruf zwischen Laden und
+    Speichern) fassen vorher ein token() und pruefen es vor dem Schreiben
+    (pruefen(): StandGewechselt → Write verworfen, geloggt).
 
 Welcher Stand aktiv ist, steht in `tutor/data/aktiver_stand` — eine Zeile,
-bewusst NICHT in tutor_config.json: die haelt Sprache/Provider/Modell, also
-Einstellungen. Welchen Spielstand man spielt, ist keine Einstellung.
+bewusst NICHT in tutor_config.json: die haelt Provider/Modell/Muttersprache,
+also Einstellungen. Welchen Spielstand man spielt, ist keine Einstellung.
 """
 
 import datetime
 import json
 import os
 import re
+import shutil
+import threading
 import time
+
+# EINE Sperre fuer alles, was Stand-Pfade liest und schreibt (tools, memory,
+# srs nehmen dieselbe). RLock, weil tools-Funktionen einander aufrufen.
+stand_lock = threading.RLock()
+
+# Level beim Anlegen: 0 = von vorn, 1 = Grundlagen (wichtigste Kernwoerter
+# gelten als bekannt), 2 = kann mich verstaendigen (alle Kernwoerter bekannt).
+LEVELS = (0, 1, 2)
+LEVEL_NAMEN = {0: "von vorn", 1: "Grundlagen", 2: "kann mich verständigen"}
+
+# Ohne einen einzigen Stand (frische Installation) legt aktiv() einen an —
+# in dieser Sprache. Nur dafuer; ansonsten kommt die Sprache aus dem Stand.
+STANDARD_LANG = os.environ.get("TUTOR_STANDARD_LANG", "es")
+
+
+class StandSprache(Exception):
+    """Zugriff mit einer Sprache, die nicht die des aktiven Stands ist."""
+
+
+class StandGewechselt(Exception):
+    """Zwischen Lesen und Schreiben wurde der Stand gewechselt — Write verworfen."""
 
 def _jetzt():
     """Zeitstempel mit Millisekunden.
@@ -93,12 +129,19 @@ def liste(daten_root):
         if not os.path.isdir(pfad):
             continue
         meta = _lies_meta(pfad)
+        lang = meta.get("lang") or ""
+        stand = _sprach_stand(os.path.join(pfad, lang)) if lang else {"woerter": 0, "muenzen": 0}
         raus.append({
             "id": sid,
             "name": meta.get("name") or sid,
+            "lang": lang,
+            "level": int(meta.get("level") or 0),
             "erstellt": meta.get("erstellt") or "",
             "zuletzt": meta.get("zuletzt") or "",
-            "sprachen": _sprachen(pfad),
+            "woerter": stand["woerter"],
+            "muenzen": stand["muenzen"],
+            # Kompatibilitaet fuer Fronten, die noch je Sprache lesen:
+            "sprachen": {lang: stand} if lang else {},
         })
     # Nach »zuletzt gespielt«, absteigend. Die id als zweites Kriterium, damit
     # die Reihenfolge bei gleichem Stempel nicht von listdir abhaengt.
@@ -106,48 +149,64 @@ def liste(daten_root):
     return raus
 
 
-def _sprachen(stand_pfad):
-    """Was in diesem Stand schon gelernt wurde, je Sprache."""
-    raus = {}
+def _sprach_stand(d):
+    """Was in diesem Sprachordner schon gelernt wurde (Woerter, Muenzen)."""
+    eintrag = {"woerter": 0, "muenzen": 0}
+    try:
+        with open(os.path.join(d, "vocab.json"), encoding="utf-8") as f:
+            v = json.load(f)
+        eintrag["woerter"] = len(v) if isinstance(v, list) else 0
+    except (OSError, ValueError):
+        pass
+    try:
+        with open(os.path.join(d, "game.json"), encoding="utf-8") as f:
+            g = json.load(f)
+        eintrag["muenzen"] = int(g.get("coins") or 0)
+    except (OSError, ValueError, TypeError):
+        pass
+    return eintrag
+
+
+def _sprachordner_mit_daten(stand_pfad):
+    """Sprach-Unterordner, in denen wirklich etwas liegt (vocab.json)."""
+    raus = []
     try:
         kinder = sorted(os.listdir(stand_pfad))
     except OSError:
         return raus
-    for lang in kinder:
-        d = os.path.join(stand_pfad, lang)
-        if not os.path.isdir(d):
-            continue
-        eintrag = {"woerter": 0, "muenzen": 0}
-        try:
-            with open(os.path.join(d, "vocab.json"), encoding="utf-8") as f:
-                v = json.load(f)
-            eintrag["woerter"] = len(v) if isinstance(v, list) else 0
-        except (OSError, ValueError):
-            pass
-        try:
-            with open(os.path.join(d, "game.json"), encoding="utf-8") as f:
-                g = json.load(f)
-            eintrag["muenzen"] = int(g.get("coins") or 0)
-        except (OSError, ValueError, TypeError):
-            pass
-        raus[lang] = eintrag
+    for k in kinder:
+        d = os.path.join(stand_pfad, k)
+        if os.path.isdir(d) and os.path.exists(os.path.join(d, "vocab.json")):
+            raus.append(k)
     return raus
 
 
-def anlegen(daten_root, name=None):
-    """Neuen Spielstand anlegen und zurueckgeben (macht ihn NICHT aktiv)."""
-    wurzel = _wurzel(daten_root)
-    os.makedirs(wurzel, exist_ok=True)
-    name = (name or "").strip() or time.strftime("Neu %d.%m.%Y")
-    basis = _slug(name)
-    sid, n = basis, 2
-    while os.path.exists(os.path.join(wurzel, sid)):
-        sid = "%s-%d" % (basis, n)
-        n += 1
-    jetzt = _jetzt()
-    _schreib_meta(os.path.join(wurzel, sid),
-                  {"name": name, "erstellt": jetzt, "zuletzt": jetzt})
-    return sid
+def anlegen(daten_root, name=None, lang=None, level=0):
+    """Neuen Spielstand anlegen und zurueckgeben (macht ihn NICHT aktiv).
+
+    lang ist Pflicht: ein Stand ohne Sprache waere wieder die alte Zweideutigkeit.
+    """
+    lang = (lang or "").strip().lower()
+    if not re.fullmatch(r"[a-z]{2,8}", lang):
+        raise ValueError("Spielstand braucht eine Sprache (z.B. 'es')")
+    level = int(level or 0)
+    if level not in LEVELS:
+        raise ValueError("Level muss 0, 1 oder 2 sein")
+    with stand_lock:
+        wurzel = _wurzel(daten_root)
+        os.makedirs(wurzel, exist_ok=True)
+        name = (name or "").strip() or time.strftime("Neu %d.%m.%Y")
+        basis = _slug(name)
+        sid, n = basis, 2
+        while os.path.exists(os.path.join(wurzel, sid)):
+            sid = "%s-%d" % (basis, n)
+            n += 1
+        jetzt = _jetzt()
+        _schreib_meta(os.path.join(wurzel, sid),
+                      {"name": name, "lang": lang, "level": level,
+                       "erstellt": jetzt, "zuletzt": jetzt})
+        os.makedirs(os.path.join(wurzel, sid, lang), exist_ok=True)
+        return sid
 
 
 # Ordner unter tutor/data/, die KEINE Sprache sind und beim Umzug in einen
@@ -178,11 +237,60 @@ def migrieren(daten_root):
                 and os.path.exists(os.path.join(daten_root, k, "vocab.json"))]
     if not sprachen:
         return None
-    sid = anlegen(daten_root, STANDARD_NAME)
-    ziel = os.path.join(wurzel, sid)
+    # Ein Stand je Sprache (seit 2026-09-17 kennt ein Stand genau eine).
+    erster = None
     for lang in sprachen:
-        os.replace(os.path.join(daten_root, lang), os.path.join(ziel, lang))
-    return sid
+        sid = anlegen(daten_root, STANDARD_NAME, lang=lang)
+        ziel = os.path.join(wurzel, sid, lang)
+        shutil.rmtree(ziel, ignore_errors=True)
+        os.replace(os.path.join(daten_root, lang), ziel)
+        erster = erster or sid
+    return erster
+
+
+def migrieren_sprachen(daten_root):
+    """Staende ohne Sprache (Modell vor 2026-09-17: ein Stand, viele Sprach-
+    Ordner) in Ein-Sprach-Staende aufteilen. Einmalig, idempotent.
+
+    Der erste Sprachordner mit Daten bleibt unter der alten Id (bekommt lang),
+    jeder weitere wird ein eigener Stand »<name> (<lang>)«. Leere Sprachordner
+    (nur von pfad()s makedirs angelegt) verschwinden. Ein Stand ganz ohne Daten
+    bekommt STANDARD_LANG.
+    """
+    wurzel = _wurzel(daten_root)
+    try:
+        eintraege = sorted(os.listdir(wurzel))
+    except OSError:
+        return []
+    umgezogen = []
+    with stand_lock:
+        for sid in eintraege:
+            pfad_ = os.path.join(wurzel, sid)
+            if not os.path.isdir(pfad_):
+                continue
+            meta = _lies_meta(pfad_)
+            if meta.get("lang"):
+                continue
+            mit_daten = _sprachordner_mit_daten(pfad_)
+            # leere Sprachordner weg
+            for k in os.listdir(pfad_):
+                d = os.path.join(pfad_, k)
+                if os.path.isdir(d) and k not in mit_daten:
+                    shutil.rmtree(d, ignore_errors=True)
+            haupt = mit_daten[0] if mit_daten else STANDARD_LANG
+            for lang in mit_daten[1:]:
+                neu = anlegen(daten_root, "%s (%s)" % (meta.get("name") or sid, lang), lang=lang)
+                ziel = os.path.join(wurzel, neu, lang)
+                shutil.rmtree(ziel, ignore_errors=True)
+                os.replace(os.path.join(pfad_, lang), ziel)
+                umgezogen.append(neu)
+            meta["lang"] = haupt
+            meta.setdefault("level", 0)
+            meta.setdefault("name", sid)
+            os.makedirs(os.path.join(pfad_, haupt), exist_ok=True)
+            _schreib_meta(pfad_, meta)
+            umgezogen.append(sid)
+    return umgezogen
 
 
 def aktiv(daten_root):
@@ -192,38 +300,75 @@ def aktiv(daten_root):
     sonst muesste jede Schreibstelle im Tutor den Sonderfall »noch kein Stand«
     kennen.
     """
-    zeiger = os.path.join(daten_root, ZEIGER)
-    try:
-        with open(zeiger, encoding="utf-8") as f:
-            sid = f.read().strip()
-        if sid and os.path.isdir(os.path.join(_wurzel(daten_root), sid)):
-            return sid
-    except OSError:
-        pass
-    migrieren(daten_root)
-    vorhandene = liste(daten_root)
-    sid = vorhandene[0]["id"] if vorhandene else anlegen(daten_root, STANDARD_NAME)
-    waehlen(daten_root, sid)
-    return sid
+    with stand_lock:
+        zeiger = os.path.join(daten_root, ZEIGER)
+        try:
+            with open(zeiger, encoding="utf-8") as f:
+                sid = f.read().strip()
+            if sid and os.path.isdir(os.path.join(_wurzel(daten_root), sid)):
+                if not _lies_meta(os.path.join(_wurzel(daten_root), sid)).get("lang"):
+                    migrieren_sprachen(daten_root)
+                return sid
+        except OSError:
+            pass
+        migrieren(daten_root)
+        migrieren_sprachen(daten_root)
+        vorhandene = liste(daten_root)
+        sid = vorhandene[0]["id"] if vorhandene else anlegen(daten_root, STANDARD_NAME, lang=STANDARD_LANG)
+        waehlen(daten_root, sid)
+        return sid
+
+
+def aktiv_info(daten_root):
+    """Meta des aktiven Stands (id, name, lang, level, ...). Nie None."""
+    with stand_lock:
+        sid = aktiv(daten_root)
+        meta = _lies_meta(os.path.join(_wurzel(daten_root), sid))
+        meta["id"] = sid
+        meta.setdefault("level", 0)
+        if not meta.get("lang"):
+            migrieren_sprachen(daten_root)
+            meta = _lies_meta(os.path.join(_wurzel(daten_root), sid)); meta["id"] = sid
+        return meta
+
+
+def aktive_sprache(daten_root):
+    """DIE Quelle fuer »welche Sprache gerade«: die des aktiven Stands."""
+    return aktiv_info(daten_root).get("lang") or STANDARD_LANG
+
+
+def token(daten_root):
+    """(id, lang) des aktiven Stands — vor einer langen Operation fassen."""
+    info = aktiv_info(daten_root)
+    return (info["id"], info.get("lang"))
+
+
+def pruefen(daten_root, tok):
+    """Ist der Stand noch derselbe wie beim token()? Sonst StandGewechselt."""
+    jetzt = token(daten_root)
+    if tuple(tok) != tuple(jetzt):
+        raise StandGewechselt("Stand %s/%s → %s/%s" % (tok[0], tok[1], jetzt[0], jetzt[1]))
+    return True
 
 
 def waehlen(daten_root, sid):
     """Diesen Stand aktiv machen. Unbekannte Id -> False, nichts geaendert."""
-    pfad = os.path.join(_wurzel(daten_root), sid)
-    if not os.path.isdir(pfad):
-        return False
-    os.makedirs(daten_root, exist_ok=True)
-    zeiger = os.path.join(daten_root, ZEIGER)
-    tmp = zeiger + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(sid + "\n")
-    os.replace(tmp, zeiger)
-    meta = _lies_meta(pfad)
-    meta["zuletzt"] = _jetzt()
-    meta.setdefault("name", sid)
-    meta.setdefault("erstellt", meta["zuletzt"])
-    _schreib_meta(pfad, meta)
-    return True
+    with stand_lock:
+        pfad = os.path.join(_wurzel(daten_root), sid)
+        if not os.path.isdir(pfad):
+            return False
+        os.makedirs(daten_root, exist_ok=True)
+        zeiger = os.path.join(daten_root, ZEIGER)
+        tmp = zeiger + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(sid + "\n")
+        os.replace(tmp, zeiger)
+        meta = _lies_meta(pfad)
+        meta["zuletzt"] = _jetzt()
+        meta.setdefault("name", sid)
+        meta.setdefault("erstellt", meta["zuletzt"])
+        _schreib_meta(pfad, meta)
+        return True
 
 
 def loeschen(daten_root, sid):
@@ -234,31 +379,39 @@ def loeschen(daten_root, sid):
     nimmt den zuletzt gespielten der uebrigen oder legt einen neuen an. So
     bleibt der Tutor auch dann bedienbar, wenn jemand ALLE Staende loescht.
     """
-    import shutil
-    pfad_ = os.path.join(_wurzel(daten_root), sid)
-    if not os.path.isdir(pfad_):
-        return False
-    shutil.rmtree(pfad_)
-    zeiger = os.path.join(daten_root, ZEIGER)
-    try:
-        with open(zeiger, encoding="utf-8") as f:
-            war_aktiv = f.read().strip() == sid
-    except OSError:
-        war_aktiv = False
-    if war_aktiv:
+    with stand_lock:
+        pfad_ = os.path.join(_wurzel(daten_root), sid)
+        if not os.path.isdir(pfad_):
+            return False
+        shutil.rmtree(pfad_)
+        zeiger = os.path.join(daten_root, ZEIGER)
         try:
-            os.remove(zeiger)
+            with open(zeiger, encoding="utf-8") as f:
+                war_aktiv = f.read().strip() == sid
         except OSError:
-            pass
-    return True
+            war_aktiv = False
+        if war_aktiv:
+            try:
+                os.remove(zeiger)
+            except OSError:
+                pass
+        return True
 
 
-def pfad(daten_root, lang):
-    """Datenordner fuer diese Sprache IM AKTIVEN STAND (wird angelegt).
+def pfad(daten_root, lang=None):
+    """Datenordner der Sprache IM AKTIVEN STAND (wird angelegt).
 
-    Das ist der eine Griff, ueber den memory/srs/tools ihre Dateien finden —
-    frueher zeigten die drei direkt auf tutor/data/<lang>/.
+    Das ist der eine Griff, ueber den memory/srs/tools ihre Dateien finden.
+    lang darf fehlen (dann die Stand-Sprache) — ist es angegeben und NICHT die
+    Sprache des aktiven Stands, gibt es keinen Pfad, sondern StandSprache: ein
+    fremdsprachiger Write in einen Stand ist damit unmoeglich, nicht nur
+    unerwuenscht.
     """
-    d = os.path.join(_wurzel(daten_root), aktiv(daten_root), lang)
-    os.makedirs(d, exist_ok=True)
-    return d
+    with stand_lock:
+        info = aktiv_info(daten_root)
+        eigene = info.get("lang") or STANDARD_LANG
+        if lang and lang != eigene:
+            raise StandSprache("Stand '%s' ist %s, nicht %s" % (info["id"], eigene, lang))
+        d = os.path.join(_wurzel(daten_root), info["id"], eigene)
+        os.makedirs(d, exist_ok=True)
+        return d

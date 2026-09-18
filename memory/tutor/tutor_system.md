@@ -526,6 +526,23 @@ tutor/room.py [--url … --speaker N --speed X --mute]`.
 
 ## Spielstände: mehrere Lernstände nebeneinander
 
+> **Seit 2026-09-17: ein Spielstand = genau EINE Sprache + ein Startlevel.**
+> `stand.json` trägt `lang` und `level`; die aktive Sprache kommt **nur** aus
+> dem aktiven Stand (`staende.aktive_sprache()`), `tutor_config` kennt kein
+> `lang` mehr, Alt+L im Zimmer ist weg (Sprache wechseln = im Hauptmenü,
+> Esc, einen anderen Stand laden). Bluten ist physisch unmöglich:
+> `pfad(root, lang)` wirft `StandSprache` bei fremder Sprache; Wechsel und
+> jede Lese-Änder-Schreib-Folge in tools/memory/srs laufen unter derselben
+> `stand_lock`; lange Operationen (`memory.remember`, `respond_stream`)
+> prüfen ein `token()` und verwerfen bei Wechsel (`StandGewechselt`);
+> `deactivate()` vergisst Sprache + Verlauf. Alte Stände ohne `lang` werden
+> beim ersten Zugriff in Ein-Sprach-Stände aufgeteilt
+> (`migrieren_sprachen`). Level: 0 von vorn · 1 Grundlagen (critical+high
+> gelten als gehört) · 2 kann mich verständigen (alle, graduiert) —
+> `tools.level_anwenden`. **Muttersprache (Glosse)** = Einstellung `native`
+> (Default `en`, Zimmer → Esc → Einstellungen); `core_vocab[].gloss{en,de}`,
+> `{native}` im Prompt. Der Absatz unten beschreibt das Modell davor.
+
 Bis 2026-09-04 hatte der Tutor **einen** Lernstand (`tutor/data/<lang>/`). Wer
 noch einmal von vorn anfangen wollte, musste Dateien löschen und war den alten
 Fortschritt los. Jetzt liegt dazwischen der **Stand**:

@@ -69,7 +69,7 @@
 		"description": "Para cada palabra que ella todavía no conoce, usa esto siempre: muéstrale en tu mente la palabra y su significado (una imagen o la traducción), para que lo pille de un vistazo — mejor que explicarlo con muchas palabras. (Esto también añade la palabra a su lista de vocabulario, no hace falta apuntarla aparte.)",
 		"params": {
 			"word": "La palabra a mostrar (en español)",
-			"meaning": "El significado en alemán / la traducción",
+			"meaning": "El significado en la lengua materna de Sasha / la traducción",
 			"reading": "Ayuda de pronunciación (solo si hace falta)"
 		}
 	}

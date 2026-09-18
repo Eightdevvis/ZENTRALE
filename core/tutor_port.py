@@ -120,6 +120,12 @@ def is_active() -> bool:
     return bool(ts and _safe(ts.is_active, False))
 
 
+def passt_zum_stand() -> bool:
+    """Läuft die Session in der Sprache des aktiven Spielstands?"""
+    ts = _ts()
+    return bool(ts and _safe(ts.passt_zum_stand, False))
+
+
 def activate():
     ts = _ts()
     if ts:
@@ -171,8 +177,8 @@ def assessment() -> dict:
     if ts is None:
         return {"present": False}
     try:
-        from tutor import tools, config as tutor_config
-        lang = tutor_config.setting("lang", "zh")
+        from tutor import tools
+        lang = ts.active_lang()            # Sprache des aktiven Stands
         got, total = tools.core_coverage(lang)
         return {
             "present":  True,
@@ -244,14 +250,23 @@ def config(changes: dict | None = None, persist: bool = False) -> dict:
     from tutor import providers as tutor_providers
     from tutor import langs as tutor_langs
 
-    for k in ("lang", "provider", "model", "history_window"):
+    if changes and "lang" in changes:
+        # Sprache = Spielstand (seit 2026-09-17). Wer sie wechseln will, lädt
+        # einen anderen Stand (/api/tutor/staende/waehlen) oder legt einen an.
+        return {"present": True, "error": "Sprache ist keine Einstellung mehr — "
+                                          "sie gehört zum Spielstand"}
+    for k in ("provider", "model", "history_window", "native"):
         if changes and k in changes:
             tutor_config.set_override(k, changes[k], persist=persist)
 
     prof, pname, _prov, model = ts._resolve()
+    native = tutor_config.setting("native", "en")
     return {
         "present":        True,
-        "lang":           tutor_config.setting("lang", "zh"),
+        "lang":           ts.active_lang(),
+        "native":         native,
+        "native_names":   prof.get("native_names") or {},
+        "natives":        ["en", "de", "es", "zh", "fr", "ru", "ar"],
         "lang_name":      prof["name"],
         "persona_name":   prof.get("persona_name", prof["name"]),
         "country":        prof.get("country", ""),
@@ -298,21 +313,25 @@ def staende() -> dict:
         from tutor import staende as st
         root = _staende_root()
         return {"present": True, "aktiv": st.aktiv(root),
-                "staende": st.liste(root)}
+                "levels": st.LEVEL_NAMEN, "staende": st.liste(root)}
     except Exception as e:
         return {"present": True, "error": str(e), "staende": [], "aktiv": None}
 
 
-def stand_anlegen(name: str = None) -> dict:
-    """Neuen Spielstand anlegen UND aktivieren."""
+def stand_anlegen(name: str = None, lang: str = None, level: int = 0) -> dict:
+    """Neuen Spielstand (Sprache + Level) anlegen UND aktivieren."""
     if _ts() is None:
         return {"ok": False, "error": "Tutor nicht installiert"}
     try:
-        from tutor import staende as st
+        from tutor import staende as st, tools, langs as tutor_langs
         root = _staende_root()
-        sid = st.anlegen(root, name)
-        st.waehlen(root, sid)
-        _sitzung_beenden()
+        if lang not in tutor_langs.enabled():
+            return {"ok": False, "error": "unbekannte oder nicht fertige Sprache: %s" % lang}
+        with st.stand_lock:
+            _sitzung_beenden()
+            sid = st.anlegen(root, name, lang=lang, level=level)
+            st.waehlen(root, sid)
+            tools.level_anwenden(lang, int(level or 0))
         return {"ok": True, "aktiv": sid, "staende": st.liste(root)}
     except Exception as e:
         return {"ok": False, "error": str(e)}
@@ -325,9 +344,10 @@ def stand_waehlen(sid: str) -> dict:
     try:
         from tutor import staende as st
         root = _staende_root()
-        if not st.waehlen(root, sid):
-            return {"ok": False, "error": "unbekannter Spielstand: %s" % sid}
-        _sitzung_beenden()
+        with st.stand_lock:
+            _sitzung_beenden()
+            if not st.waehlen(root, sid):
+                return {"ok": False, "error": "unbekannter Spielstand: %s" % sid}
         return {"ok": True, "aktiv": sid, "staende": st.liste(root)}
     except Exception as e:
         return {"ok": False, "error": str(e)}
@@ -354,11 +374,12 @@ def stand_loeschen(sid: str) -> dict:
     try:
         from tutor import staende as st
         root = _staende_root()
-        war_aktiv = (st.aktiv(root) == sid)
-        if not st.loeschen(root, sid):
-            return {"ok": False, "error": "unbekannter Spielstand: %s" % sid}
-        if war_aktiv:
-            _sitzung_beenden()
+        with st.stand_lock:
+            war_aktiv = (st.aktiv(root) == sid)
+            if war_aktiv:
+                _sitzung_beenden()
+            if not st.loeschen(root, sid):
+                return {"ok": False, "error": "unbekannter Spielstand: %s" % sid}
         return {"ok": True, "aktiv": st.aktiv(root), "staende": st.liste(root)}
     except Exception as e:
         return {"ok": False, "error": str(e)}

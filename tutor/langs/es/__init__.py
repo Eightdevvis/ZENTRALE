@@ -44,6 +44,10 @@ PROFILE = profile(
     stt_lang       = "es",
     tts_lang       = "es",
 
+    # Muttersprache (Glosse) in der Zielsprache benannt — {native} im Prompt.
+    native_names = {"en": "inglés", "de": "alemán", "es": "español", "zh": "chino",
+                    "fr": "francés", "ru": "ruso", "ar": "árabe"},
+
     provider = "qwen",           # siehe Kopf: läuft heute; über Config umstellbar
     model    = "qwen-plus",
 

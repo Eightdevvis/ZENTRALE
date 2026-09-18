@@ -1,534 +1,838 @@
 [
-	{
-		"word": "yo",
-		"de": "ich",
-		"reading": "",
-		"priority": "critical",
-		"category": "pronoun"
-	},
-	{
-		"word": "tú",
-		"de": "du",
-		"reading": "",
-		"priority": "critical",
-		"category": "pronoun"
-	},
-	{
-		"word": "él",
-		"de": "er",
-		"reading": "",
-		"priority": "critical",
-		"category": "pronoun"
-	},
-	{
-		"word": "ella",
-		"de": "sie",
-		"reading": "",
-		"priority": "critical",
-		"category": "pronoun"
-	},
-	{
-		"word": "eso",
-		"de": "das",
-		"reading": "",
-		"priority": "medium",
-		"category": "pronoun"
-	},
-	{
-		"word": "nosotros",
-		"de": "wir",
-		"reading": "",
-		"priority": "medium",
-		"category": "pronoun"
-	},
-	{
-		"word": "ser",
-		"de": "sein (dauerhaft: Eigenschaft/Identität)",
-		"reading": "",
-		"priority": "critical",
-		"category": "verb_core"
-	},
-	{
-		"word": "estar",
-		"de": "sein (Zustand/Ort: gerade, vorübergehend)",
-		"reading": "",
-		"priority": "critical",
-		"category": "verb_core"
-	},
-	{
-		"word": "tener",
-		"de": "haben",
-		"reading": "",
-		"priority": "critical",
-		"category": "verb_core"
-	},
-	{
-		"word": "ir",
-		"de": "gehen",
-		"reading": "",
-		"priority": "critical",
-		"category": "verb_core"
-	},
-	{
-		"word": "hacer",
-		"de": "machen",
-		"reading": "",
-		"priority": "critical",
-		"category": "verb_core"
-	},
-	{
-		"word": "decir",
-		"de": "sagen",
-		"reading": "",
-		"priority": "high",
-		"category": "verb_core"
-	},
-	{
-		"word": "entender",
-		"de": "verstehen",
-		"reading": "",
-		"priority": "critical",
-		"category": "verb_core"
-	},
-	{
-		"word": "saber",
-		"de": "wissen",
-		"reading": "",
-		"priority": "high",
-		"category": "verb_core"
-	},
-	{
-		"word": "querer",
-		"de": "wollen / mögen",
-		"reading": "",
-		"priority": "high",
-		"category": "verb_core"
-	},
-	{
-		"word": "comer",
-		"de": "essen",
-		"reading": "",
-		"priority": "high",
-		"category": "verb_action"
-	},
-	{
-		"word": "beber",
-		"de": "trinken",
-		"reading": "",
-		"priority": "high",
-		"category": "verb_action"
-	},
-	{
-		"word": "ver",
-		"de": "sehen",
-		"reading": "",
-		"priority": "high",
-		"category": "verb_action"
-	},
-	{
-		"word": "oír",
-		"de": "hören",
-		"reading": "",
-		"priority": "high",
-		"category": "verb_action"
-	},
-	{
-		"word": "qué",
-		"de": "was",
-		"reading": "",
-		"priority": "critical",
-		"category": "question"
-	},
-	{
-		"word": "quién",
-		"de": "wer",
-		"reading": "",
-		"priority": "critical",
-		"category": "question"
-	},
-	{
-		"word": "cómo",
-		"de": "wie",
-		"reading": "",
-		"priority": "critical",
-		"category": "question"
-	},
-	{
-		"word": "dónde",
-		"de": "wo",
-		"reading": "",
-		"priority": "critical",
-		"category": "question"
-	},
-	{
-		"word": "cuándo",
-		"de": "wann",
-		"reading": "",
-		"priority": "high",
-		"category": "question"
-	},
-	{
-		"word": "por qué",
-		"de": "warum",
-		"reading": "",
-		"priority": "high",
-		"category": "question"
-	},
-	{
-		"word": "aquí",
-		"de": "hier",
-		"reading": "",
-		"priority": "high",
-		"category": "spatial"
-	},
-	{
-		"word": "allí",
-		"de": "dort",
-		"reading": "",
-		"priority": "high",
-		"category": "spatial"
-	},
-	{
-		"word": "arriba",
-		"de": "oben",
-		"reading": "",
-		"priority": "medium",
-		"category": "spatial"
-	},
-	{
-		"word": "abajo",
-		"de": "unten",
-		"reading": "",
-		"priority": "medium",
-		"category": "spatial"
-	},
-	{
-		"word": "ahora",
-		"de": "jetzt",
-		"reading": "",
-		"priority": "critical",
-		"category": "time"
-	},
-	{
-		"word": "hoy",
-		"de": "heute",
-		"reading": "",
-		"priority": "high",
-		"category": "time"
-	},
-	{
-		"word": "mañana",
-		"de": "morgen",
-		"reading": "",
-		"priority": "high",
-		"category": "time"
-	},
-	{
-		"word": "ayer",
-		"de": "gestern",
-		"reading": "",
-		"priority": "medium",
-		"category": "time"
-	},
-	{
-		"word": "sí",
-		"de": "ja",
-		"reading": "",
-		"priority": "critical",
-		"category": "response"
-	},
-	{
-		"word": "no",
-		"de": "nein",
-		"reading": "",
-		"priority": "critical",
-		"category": "response"
-	},
-	{
-		"word": "quizás",
-		"de": "vielleicht",
-		"reading": "",
-		"priority": "medium",
-		"category": "response"
-	},
-	{
-		"word": "bien",
-		"de": "gut",
-		"reading": "",
-		"priority": "critical",
-		"category": "emotion"
-	},
-	{
-		"word": "mal",
-		"de": "schlecht",
-		"reading": "",
-		"priority": "high",
-		"category": "emotion"
-	},
-	{
-		"word": "feliz",
-		"de": "glücklich",
-		"reading": "",
-		"priority": "high",
-		"category": "emotion"
-	},
-	{
-		"word": "triste",
-		"de": "traurig",
-		"reading": "",
-		"priority": "high",
-		"category": "emotion"
-	},
-	{
-		"word": "cansado",
-		"de": "müde",
-		"reading": "",
-		"priority": "medium",
-		"category": "emotion"
-	},
-	{
-		"word": "grande",
-		"de": "groß",
-		"reading": "",
-		"priority": "high",
-		"category": "adjective"
-	},
-	{
-		"word": "pequeño",
-		"de": "klein",
-		"reading": "",
-		"priority": "high",
-		"category": "adjective"
-	},
-	{
-		"word": "nuevo",
-		"de": "neu",
-		"reading": "",
-		"priority": "medium",
-		"category": "adjective"
-	},
-	{
-		"word": "viejo",
-		"de": "alt",
-		"reading": "",
-		"priority": "medium",
-		"category": "adjective"
-	},
-	{
-		"word": "rápido",
-		"de": "schnell",
-		"reading": "",
-		"priority": "medium",
-		"category": "adjective"
-	},
-	{
-		"word": "lento",
-		"de": "langsam",
-		"reading": "",
-		"priority": "high",
-		"category": "adjective"
-	},
-	{
-		"word": "caliente",
-		"de": "heiß",
-		"reading": "",
-		"priority": "medium",
-		"category": "adjective"
-	},
-	{
-		"word": "frío",
-		"de": "kalt",
-		"reading": "",
-		"priority": "medium",
-		"category": "adjective"
-	},
-	{
-		"word": "mesa",
-		"de": "Tisch",
-		"reading": "",
-		"priority": "high",
-		"category": "noun_household"
-	},
-	{
-		"word": "silla",
-		"de": "Stuhl",
-		"reading": "",
-		"priority": "high",
-		"category": "noun_household"
-	},
-	{
-		"word": "puerta",
-		"de": "Tür",
-		"reading": "",
-		"priority": "medium",
-		"category": "noun_household"
-	},
-	{
-		"word": "ventana",
-		"de": "Fenster",
-		"reading": "",
-		"priority": "medium",
-		"category": "noun_household"
-	},
-	{
-		"word": "agua",
-		"de": "Wasser",
-		"reading": "",
-		"priority": "high",
-		"category": "noun_substance"
-	},
-	{
-		"word": "comida",
-		"de": "Essen",
-		"reading": "",
-		"priority": "high",
-		"category": "noun_substance"
-	},
-	{
-		"word": "música",
-		"de": "Musik",
-		"reading": "",
-		"priority": "high",
-		"category": "tutor_activity"
-	},
-	{
-		"word": "periódico",
-		"de": "Zeitung",
-		"reading": "",
-		"priority": "high",
-		"category": "tutor_activity"
-	},
-	{
-		"word": "televisión",
-		"de": "Fernsehen",
-		"reading": "",
-		"priority": "high",
-		"category": "tutor_activity"
-	},
-	{
-		"word": "madre",
-		"de": "Mutter",
-		"reading": "",
-		"priority": "medium",
-		"category": "family"
-	},
-	{
-		"word": "padre",
-		"de": "Vater",
-		"reading": "",
-		"priority": "medium",
-		"category": "family"
-	},
-	{
-		"word": "hermano",
-		"de": "Bruder",
-		"reading": "",
-		"priority": "medium",
-		"category": "family"
-	},
-	{
-		"word": "hermana",
-		"de": "Schwester",
-		"reading": "",
-		"priority": "medium",
-		"category": "family"
-	},
-	{
-		"word": "y",
-		"de": "und",
-		"reading": "",
-		"priority": "critical",
-		"category": "connector"
-	},
-	{
-		"word": "pero",
-		"de": "aber",
-		"reading": "",
-		"priority": "high",
-		"category": "connector"
-	},
-	{
-		"word": "porque",
-		"de": "weil",
-		"reading": "",
-		"priority": "high",
-		"category": "connector"
-	},
-	{
-		"word": "o",
-		"de": "oder",
-		"reading": "",
-		"priority": "medium",
-		"category": "connector"
-	},
-	{
-		"word": "muy",
-		"de": "sehr",
-		"reading": "",
-		"priority": "high",
-		"category": "modifier"
-	},
-	{
-		"word": "también",
-		"de": "auch",
-		"reading": "",
-		"priority": "medium",
-		"category": "modifier"
-	},
-	{
-		"word": "el",
-		"de": "der",
-		"reading": "",
-		"priority": "critical",
-		"category": "article"
-	},
-	{
-		"word": "la",
-		"de": "die",
-		"reading": "",
-		"priority": "critical",
-		"category": "article"
-	},
-	{
-		"word": "un",
-		"de": "ein",
-		"reading": "",
-		"priority": "high",
-		"category": "article"
-	},
-	{
-		"word": "una",
-		"de": "eine",
-		"reading": "",
-		"priority": "high",
-		"category": "article"
-	},
-	{
-		"word": "por favor",
-		"de": "bitte",
-		"reading": "",
-		"priority": "high",
-		"category": "politeness"
-	},
-	{
-		"word": "gracias",
-		"de": "danke",
-		"reading": "",
-		"priority": "high",
-		"category": "politeness"
-	},
-	{
-		"word": "hola",
-		"de": "hallo",
-		"reading": "",
-		"priority": "high",
-		"category": "greeting"
-	},
-	{
-		"word": "adiós",
-		"de": "tschüss",
-		"reading": "",
-		"priority": "high",
-		"category": "greeting"
-	}
+  {
+    "word": "yo",
+    "de": "ich",
+    "reading": "",
+    "priority": "critical",
+    "category": "pronoun",
+    "gloss": {
+      "en": "I",
+      "de": "ich"
+    }
+  },
+  {
+    "word": "tú",
+    "de": "du",
+    "reading": "",
+    "priority": "critical",
+    "category": "pronoun",
+    "gloss": {
+      "en": "you",
+      "de": "du"
+    }
+  },
+  {
+    "word": "él",
+    "de": "er",
+    "reading": "",
+    "priority": "critical",
+    "category": "pronoun",
+    "gloss": {
+      "en": "he",
+      "de": "er"
+    }
+  },
+  {
+    "word": "ella",
+    "de": "sie",
+    "reading": "",
+    "priority": "critical",
+    "category": "pronoun",
+    "gloss": {
+      "en": "she",
+      "de": "sie"
+    }
+  },
+  {
+    "word": "eso",
+    "de": "das",
+    "reading": "",
+    "priority": "medium",
+    "category": "pronoun",
+    "gloss": {
+      "en": "that",
+      "de": "das"
+    }
+  },
+  {
+    "word": "nosotros",
+    "de": "wir",
+    "reading": "",
+    "priority": "medium",
+    "category": "pronoun",
+    "gloss": {
+      "en": "we",
+      "de": "wir"
+    }
+  },
+  {
+    "word": "ser",
+    "de": "sein (dauerhaft: Eigenschaft/Identität)",
+    "reading": "",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to be (permanent: trait/identity)",
+      "de": "sein (dauerhaft: Eigenschaft/Identität)"
+    }
+  },
+  {
+    "word": "estar",
+    "de": "sein (Zustand/Ort: gerade, vorübergehend)",
+    "reading": "",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to be (state/place: right now, temporary)",
+      "de": "sein (Zustand/Ort: gerade, vorübergehend)"
+    }
+  },
+  {
+    "word": "tener",
+    "de": "haben",
+    "reading": "",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to have",
+      "de": "haben"
+    }
+  },
+  {
+    "word": "ir",
+    "de": "gehen",
+    "reading": "",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to go",
+      "de": "gehen"
+    }
+  },
+  {
+    "word": "hacer",
+    "de": "machen",
+    "reading": "",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to do / make",
+      "de": "machen"
+    }
+  },
+  {
+    "word": "decir",
+    "de": "sagen",
+    "reading": "",
+    "priority": "high",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to say",
+      "de": "sagen"
+    }
+  },
+  {
+    "word": "entender",
+    "de": "verstehen",
+    "reading": "",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to understand",
+      "de": "verstehen"
+    }
+  },
+  {
+    "word": "saber",
+    "de": "wissen",
+    "reading": "",
+    "priority": "high",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to know",
+      "de": "wissen"
+    }
+  },
+  {
+    "word": "querer",
+    "de": "wollen / mögen",
+    "reading": "",
+    "priority": "high",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to want / to like",
+      "de": "wollen / mögen"
+    }
+  },
+  {
+    "word": "comer",
+    "de": "essen",
+    "reading": "",
+    "priority": "high",
+    "category": "verb_action",
+    "gloss": {
+      "en": "to eat",
+      "de": "essen"
+    }
+  },
+  {
+    "word": "beber",
+    "de": "trinken",
+    "reading": "",
+    "priority": "high",
+    "category": "verb_action",
+    "gloss": {
+      "en": "to drink",
+      "de": "trinken"
+    }
+  },
+  {
+    "word": "ver",
+    "de": "sehen",
+    "reading": "",
+    "priority": "high",
+    "category": "verb_action",
+    "gloss": {
+      "en": "to see",
+      "de": "sehen"
+    }
+  },
+  {
+    "word": "oír",
+    "de": "hören",
+    "reading": "",
+    "priority": "high",
+    "category": "verb_action",
+    "gloss": {
+      "en": "to hear",
+      "de": "hören"
+    }
+  },
+  {
+    "word": "qué",
+    "de": "was",
+    "reading": "",
+    "priority": "critical",
+    "category": "question",
+    "gloss": {
+      "en": "what",
+      "de": "was"
+    }
+  },
+  {
+    "word": "quién",
+    "de": "wer",
+    "reading": "",
+    "priority": "critical",
+    "category": "question",
+    "gloss": {
+      "en": "who",
+      "de": "wer"
+    }
+  },
+  {
+    "word": "cómo",
+    "de": "wie",
+    "reading": "",
+    "priority": "critical",
+    "category": "question",
+    "gloss": {
+      "en": "how",
+      "de": "wie"
+    }
+  },
+  {
+    "word": "dónde",
+    "de": "wo",
+    "reading": "",
+    "priority": "critical",
+    "category": "question",
+    "gloss": {
+      "en": "where",
+      "de": "wo"
+    }
+  },
+  {
+    "word": "cuándo",
+    "de": "wann",
+    "reading": "",
+    "priority": "high",
+    "category": "question",
+    "gloss": {
+      "en": "when",
+      "de": "wann"
+    }
+  },
+  {
+    "word": "por qué",
+    "de": "warum",
+    "reading": "",
+    "priority": "high",
+    "category": "question",
+    "gloss": {
+      "en": "why",
+      "de": "warum"
+    }
+  },
+  {
+    "word": "aquí",
+    "de": "hier",
+    "reading": "",
+    "priority": "high",
+    "category": "spatial",
+    "gloss": {
+      "en": "here",
+      "de": "hier"
+    }
+  },
+  {
+    "word": "allí",
+    "de": "dort",
+    "reading": "",
+    "priority": "high",
+    "category": "spatial",
+    "gloss": {
+      "en": "there",
+      "de": "dort"
+    }
+  },
+  {
+    "word": "arriba",
+    "de": "oben",
+    "reading": "",
+    "priority": "medium",
+    "category": "spatial",
+    "gloss": {
+      "en": "up",
+      "de": "oben"
+    }
+  },
+  {
+    "word": "abajo",
+    "de": "unten",
+    "reading": "",
+    "priority": "medium",
+    "category": "spatial",
+    "gloss": {
+      "en": "down",
+      "de": "unten"
+    }
+  },
+  {
+    "word": "ahora",
+    "de": "jetzt",
+    "reading": "",
+    "priority": "critical",
+    "category": "time",
+    "gloss": {
+      "en": "now",
+      "de": "jetzt"
+    }
+  },
+  {
+    "word": "hoy",
+    "de": "heute",
+    "reading": "",
+    "priority": "high",
+    "category": "time",
+    "gloss": {
+      "en": "today",
+      "de": "heute"
+    }
+  },
+  {
+    "word": "mañana",
+    "de": "morgen",
+    "reading": "",
+    "priority": "high",
+    "category": "time",
+    "gloss": {
+      "en": "tomorrow",
+      "de": "morgen"
+    }
+  },
+  {
+    "word": "ayer",
+    "de": "gestern",
+    "reading": "",
+    "priority": "medium",
+    "category": "time",
+    "gloss": {
+      "en": "yesterday",
+      "de": "gestern"
+    }
+  },
+  {
+    "word": "sí",
+    "de": "ja",
+    "reading": "",
+    "priority": "critical",
+    "category": "response",
+    "gloss": {
+      "en": "yes",
+      "de": "ja"
+    }
+  },
+  {
+    "word": "no",
+    "de": "nein",
+    "reading": "",
+    "priority": "critical",
+    "category": "response",
+    "gloss": {
+      "en": "no",
+      "de": "nein"
+    }
+  },
+  {
+    "word": "quizás",
+    "de": "vielleicht",
+    "reading": "",
+    "priority": "medium",
+    "category": "response",
+    "gloss": {
+      "en": "maybe",
+      "de": "vielleicht"
+    }
+  },
+  {
+    "word": "bien",
+    "de": "gut",
+    "reading": "",
+    "priority": "critical",
+    "category": "emotion",
+    "gloss": {
+      "en": "good / well",
+      "de": "gut"
+    }
+  },
+  {
+    "word": "mal",
+    "de": "schlecht",
+    "reading": "",
+    "priority": "high",
+    "category": "emotion",
+    "gloss": {
+      "en": "bad",
+      "de": "schlecht"
+    }
+  },
+  {
+    "word": "feliz",
+    "de": "glücklich",
+    "reading": "",
+    "priority": "high",
+    "category": "emotion",
+    "gloss": {
+      "en": "happy",
+      "de": "glücklich"
+    }
+  },
+  {
+    "word": "triste",
+    "de": "traurig",
+    "reading": "",
+    "priority": "high",
+    "category": "emotion",
+    "gloss": {
+      "en": "sad",
+      "de": "traurig"
+    }
+  },
+  {
+    "word": "cansado",
+    "de": "müde",
+    "reading": "",
+    "priority": "medium",
+    "category": "emotion",
+    "gloss": {
+      "en": "tired",
+      "de": "müde"
+    }
+  },
+  {
+    "word": "grande",
+    "de": "groß",
+    "reading": "",
+    "priority": "high",
+    "category": "adjective",
+    "gloss": {
+      "en": "big",
+      "de": "groß"
+    }
+  },
+  {
+    "word": "pequeño",
+    "de": "klein",
+    "reading": "",
+    "priority": "high",
+    "category": "adjective",
+    "gloss": {
+      "en": "small",
+      "de": "klein"
+    }
+  },
+  {
+    "word": "nuevo",
+    "de": "neu",
+    "reading": "",
+    "priority": "medium",
+    "category": "adjective",
+    "gloss": {
+      "en": "new",
+      "de": "neu"
+    }
+  },
+  {
+    "word": "viejo",
+    "de": "alt",
+    "reading": "",
+    "priority": "medium",
+    "category": "adjective",
+    "gloss": {
+      "en": "old",
+      "de": "alt"
+    }
+  },
+  {
+    "word": "rápido",
+    "de": "schnell",
+    "reading": "",
+    "priority": "medium",
+    "category": "adjective",
+    "gloss": {
+      "en": "fast",
+      "de": "schnell"
+    }
+  },
+  {
+    "word": "lento",
+    "de": "langsam",
+    "reading": "",
+    "priority": "high",
+    "category": "adjective",
+    "gloss": {
+      "en": "slow",
+      "de": "langsam"
+    }
+  },
+  {
+    "word": "caliente",
+    "de": "heiß",
+    "reading": "",
+    "priority": "medium",
+    "category": "adjective",
+    "gloss": {
+      "en": "hot",
+      "de": "heiß"
+    }
+  },
+  {
+    "word": "frío",
+    "de": "kalt",
+    "reading": "",
+    "priority": "medium",
+    "category": "adjective",
+    "gloss": {
+      "en": "cold",
+      "de": "kalt"
+    }
+  },
+  {
+    "word": "mesa",
+    "de": "Tisch",
+    "reading": "",
+    "priority": "high",
+    "category": "noun_household",
+    "gloss": {
+      "en": "table",
+      "de": "Tisch"
+    }
+  },
+  {
+    "word": "silla",
+    "de": "Stuhl",
+    "reading": "",
+    "priority": "high",
+    "category": "noun_household",
+    "gloss": {
+      "en": "chair",
+      "de": "Stuhl"
+    }
+  },
+  {
+    "word": "puerta",
+    "de": "Tür",
+    "reading": "",
+    "priority": "medium",
+    "category": "noun_household",
+    "gloss": {
+      "en": "door",
+      "de": "Tür"
+    }
+  },
+  {
+    "word": "ventana",
+    "de": "Fenster",
+    "reading": "",
+    "priority": "medium",
+    "category": "noun_household",
+    "gloss": {
+      "en": "window",
+      "de": "Fenster"
+    }
+  },
+  {
+    "word": "agua",
+    "de": "Wasser",
+    "reading": "",
+    "priority": "high",
+    "category": "noun_substance",
+    "gloss": {
+      "en": "water",
+      "de": "Wasser"
+    }
+  },
+  {
+    "word": "comida",
+    "de": "Essen",
+    "reading": "",
+    "priority": "high",
+    "category": "noun_substance",
+    "gloss": {
+      "en": "food",
+      "de": "Essen"
+    }
+  },
+  {
+    "word": "música",
+    "de": "Musik",
+    "reading": "",
+    "priority": "high",
+    "category": "tutor_activity",
+    "gloss": {
+      "en": "music",
+      "de": "Musik"
+    }
+  },
+  {
+    "word": "periódico",
+    "de": "Zeitung",
+    "reading": "",
+    "priority": "high",
+    "category": "tutor_activity",
+    "gloss": {
+      "en": "newspaper",
+      "de": "Zeitung"
+    }
+  },
+  {
+    "word": "televisión",
+    "de": "Fernsehen",
+    "reading": "",
+    "priority": "high",
+    "category": "tutor_activity",
+    "gloss": {
+      "en": "television",
+      "de": "Fernsehen"
+    }
+  },
+  {
+    "word": "madre",
+    "de": "Mutter",
+    "reading": "",
+    "priority": "medium",
+    "category": "family",
+    "gloss": {
+      "en": "mother",
+      "de": "Mutter"
+    }
+  },
+  {
+    "word": "padre",
+    "de": "Vater",
+    "reading": "",
+    "priority": "medium",
+    "category": "family",
+    "gloss": {
+      "en": "father",
+      "de": "Vater"
+    }
+  },
+  {
+    "word": "hermano",
+    "de": "Bruder",
+    "reading": "",
+    "priority": "medium",
+    "category": "family",
+    "gloss": {
+      "en": "brother",
+      "de": "Bruder"
+    }
+  },
+  {
+    "word": "hermana",
+    "de": "Schwester",
+    "reading": "",
+    "priority": "medium",
+    "category": "family",
+    "gloss": {
+      "en": "sister",
+      "de": "Schwester"
+    }
+  },
+  {
+    "word": "y",
+    "de": "und",
+    "reading": "",
+    "priority": "critical",
+    "category": "connector",
+    "gloss": {
+      "en": "and",
+      "de": "und"
+    }
+  },
+  {
+    "word": "pero",
+    "de": "aber",
+    "reading": "",
+    "priority": "high",
+    "category": "connector",
+    "gloss": {
+      "en": "but",
+      "de": "aber"
+    }
+  },
+  {
+    "word": "porque",
+    "de": "weil",
+    "reading": "",
+    "priority": "high",
+    "category": "connector",
+    "gloss": {
+      "en": "because",
+      "de": "weil"
+    }
+  },
+  {
+    "word": "o",
+    "de": "oder",
+    "reading": "",
+    "priority": "medium",
+    "category": "connector",
+    "gloss": {
+      "en": "or",
+      "de": "oder"
+    }
+  },
+  {
+    "word": "muy",
+    "de": "sehr",
+    "reading": "",
+    "priority": "high",
+    "category": "modifier",
+    "gloss": {
+      "en": "very",
+      "de": "sehr"
+    }
+  },
+  {
+    "word": "también",
+    "de": "auch",
+    "reading": "",
+    "priority": "medium",
+    "category": "modifier",
+    "gloss": {
+      "en": "also",
+      "de": "auch"
+    }
+  },
+  {
+    "word": "el",
+    "de": "der",
+    "reading": "",
+    "priority": "critical",
+    "category": "article",
+    "gloss": {
+      "en": "the (m.)",
+      "de": "der"
+    }
+  },
+  {
+    "word": "la",
+    "de": "die",
+    "reading": "",
+    "priority": "critical",
+    "category": "article",
+    "gloss": {
+      "en": "the (f.)",
+      "de": "die"
+    }
+  },
+  {
+    "word": "un",
+    "de": "ein",
+    "reading": "",
+    "priority": "high",
+    "category": "article",
+    "gloss": {
+      "en": "a (m.)",
+      "de": "ein"
+    }
+  },
+  {
+    "word": "una",
+    "de": "eine",
+    "reading": "",
+    "priority": "high",
+    "category": "article",
+    "gloss": {
+      "en": "a (f.)",
+      "de": "eine"
+    }
+  },
+  {
+    "word": "por favor",
+    "de": "bitte",
+    "reading": "",
+    "priority": "high",
+    "category": "politeness",
+    "gloss": {
+      "en": "please",
+      "de": "bitte"
+    }
+  },
+  {
+    "word": "gracias",
+    "de": "danke",
+    "reading": "",
+    "priority": "high",
+    "category": "politeness",
+    "gloss": {
+      "en": "thank you",
+      "de": "danke"
+    }
+  },
+  {
+    "word": "hola",
+    "de": "hallo",
+    "reading": "",
+    "priority": "high",
+    "category": "greeting",
+    "gloss": {
+      "en": "hello",
+      "de": "hallo"
+    }
+  },
+  {
+    "word": "adiós",
+    "de": "tschüss",
+    "reading": "",
+    "priority": "high",
+    "category": "greeting",
+    "gloss": {
+      "en": "bye",
+      "de": "tschüss"
+    }
+  }
 ]

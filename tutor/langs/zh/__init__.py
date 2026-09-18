@@ -39,6 +39,8 @@ PROFILE = profile(
     stt_lang       = "zh",
     tts_lang       = "zh",
 
+    native_names = {"en": "英语", "de": "德语", "es": "西班牙语", "zh": "中文",
+                    "fr": "法语", "ru": "俄语", "ar": "阿拉伯语"},
     provider = "qwen",          # nativ stark, billig, no-train (Singapur)
     model    = "qwen-plus",     # qwen-turbo = noch billiger (Verteil-Variante)
 

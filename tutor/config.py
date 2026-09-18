@@ -3,7 +3,10 @@
 # Lokale Tutor-Konfiguration aus tutor/data/tutor_config.json – damit man NICHT
 # bei jedem Start die Modell-Wahl per `export` ins Terminal halten muss.
 # Ideal zum Durchprobieren mehrerer Modelle: Datei editieren, neu starten.
-# Hält NUR: lang / provider / model / history_window.
+# Hält NUR: provider / model / history_window / native.
+# Seit 2026-09-17 KEIN 'lang' mehr: die Sprache kommt aus dem aktiven Spielstand
+# (tutor/staende.py) — ein Wert hier würde ignoriert. 'native' = Muttersprache
+# (Glosse auf Karten/Gedanken), Default 'en'.
 #
 # ── KEINE Keys hier (Umbau 2026-07-16) ──────────────────────────────────
 # Der API-Key-Store gehört dem KERN (core/ai_config.py → data/ai_config.json)
@@ -69,7 +72,9 @@ def setting(name: str, default=None):
     """Wert für eine Tutor-Einstellung.
     Precedence: Runtime-Override > Env (TUTOR_<NAME>) > tutor/data/tutor_config.json
     > data/tutor_config.json (Legacy) > default.
-    Einstellungen: lang, provider, model, history_window."""
+    Einstellungen: provider, model, history_window, native."""
+    if name == "native" and default is None:
+        default = "en"
     if name in _overrides:
         return _overrides[name]
     env = os.environ.get("TUTOR_" + name.upper())

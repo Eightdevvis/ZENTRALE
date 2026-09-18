@@ -46,7 +46,10 @@ from . import langs
 from . import srs   # Langzeit-SR (FSRS) fürs Gespräch — Soft-Import, No-op ohne Lib
 from . import debug  # Devtools-Ereignisbus (zeitgestempelt) — emit() schluckt Fehler
 
-_lock = Lock()   # Flask-Thread + Event-Loop können gleichzeitig lesen/schreiben
+# EINE Sperre mit den Spielständen (staende.stand_lock): jede Lese-Änder-
+# Schreib-Folge hier läuft darunter, und ein Stand-Wechsel wartet darauf —
+# so kann zwischen Lesen und Schreiben nie der Stand wechseln (Bluten).
+_lock = staende.stand_lock
 
 STRUCT_THRESHOLD  = 3    # so oft genutzt → Satzmuster gilt als gefestigt
 
@@ -98,7 +101,8 @@ def _lang(lang: str = None) -> str:
         from . import session
         return session.active_lang()
     except Exception:
-        return "zh"
+        # Kein stilles 'zh' mehr: die Sprache kommt aus dem aktiven Stand.
+        return staende.aktive_sprache(_DATA_ROOT)
 
 
 def _dir(lang: str = None) -> str:
@@ -393,6 +397,61 @@ def _core_list(lang: str = None) -> list:
             if isinstance(e, dict) and e.get("word")]
 
 
+# ── Glosse = Muttersprache (Einstellung 'native', Default en) ────────────
+# Die Bedeutung auf Karte/Gedanke steht in der Muttersprache des Lerners, nicht
+# fest auf Deutsch. core_vocab-Einträge tragen `gloss: {en, de, …}`; ein altes
+# `de`-Feld gilt als gloss.de. Sasha 2026-09-17: Muttersprache ist eine
+# Einstellung (Settings), Deutsch-mit-Glosse-Deutsch bleibt bewusst möglich.
+
+def native() -> str:
+    from . import config
+    return (config.setting("native", "en") or "en").lower()
+
+
+def glosse(e: dict, nat: str = None) -> str:
+    """Bedeutung eines Kern-Eintrags in der Muttersprache (Fallback en → de)."""
+    nat = (nat or native()).lower()
+    g = e.get("gloss") if isinstance(e.get("gloss"), dict) else {}
+    if not g and e.get("de"):
+        g = {"de": e.get("de")}
+    return g.get(nat) or g.get("en") or g.get("de") or next(iter(g.values()), "") if g else ""
+
+
+def level_anwenden(lang: str, level: int):
+    """Startlevel eines neuen Spielstands (staende.LEVELS):
+    0 = von vorn (nichts), 1 = Grundlagen (Kernwörter critical+high gelten als
+    gehört), 2 = kann mich verständigen (alle Kernwörter gehört, graduiert).
+    Die Persona darf die Grundwörter ohnehin von Anfang an benutzen
+    (prompt_vocab); das Level setzt nur den Lernstand, von dem aus sie rechnet."""
+    level = int(level or 0)
+    if level <= 0:
+        return
+    core = _core_list(lang)
+    if not core:
+        return
+    with _lock:
+        entries = _load_raw(lang)
+        have = {e.get("word") for e in entries}
+        for c in core:
+            if level == 1 and c.get("priority") not in ("critical", "high"):
+                continue
+            if c["word"] in have:
+                continue
+            entries.append({"word": c["word"], "reading": c.get("reading", ""),
+                            "meaning": glosse(c), "spoken": 0, "listened": 1})
+        _write_raw(entries, lang)
+        if level >= 2:
+            prog = _progress_load(lang); prog["graduated"] = True
+            _progress_save(prog, lang)
+    for c in core:
+        if level == 1 and c.get("priority") not in ("critical", "high"):
+            continue
+        try:
+            srs.ensure(c["word"], lang)
+        except Exception:
+            pass
+
+
 def _drilled_words(lang: str = None) -> set:
     """Kern-Wörter, die im Drill DRAN waren = mind. 1× gehört (`listened ≥ 1`). Treibt
     Gate/Leiste/Freischaltung. Kein `assessed`-Flag mehr — nur listened."""
@@ -655,7 +714,7 @@ def assessment_queue(lang: str = None) -> list:
         st = by_word.get(w) or {}
         sr = srs.get(w) or {}
         out.append({
-            'word': w, 'de': c.get('de', ''), 'category': c.get('category', ''),
+            'word': w, 'de': glosse(c), 'category': c.get('category', ''),   # 'de' = Glosse (Muttersprache)
             'priority': c.get('priority', 'medium'),
             # `assessed` = im Drill dran gewesen (listened≥1) → treibt die Queue.
             'assessed': int(st.get('listened', 0) or 0) >= 1,

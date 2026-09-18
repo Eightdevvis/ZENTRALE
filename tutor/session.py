@@ -234,7 +234,7 @@ def _resolve():
     Config (data/tutor_config.json), per Env übersteuerbar (siehe tutor_config:
     Precedence Env > Config > Profil-Default). Wird der Provider gewechselt, ohne
     ein Modell zu setzen, greift das default_model des Providers."""
-    lang          = config.setting("lang", "zh")
+    lang          = active_lang()          # aus dem Spielstand, nicht aus der Config
     prof          = langs.get(lang)
     provider_name = config.setting("provider", prof["provider"])
     provider      = providers.get(provider_name)
@@ -251,7 +251,19 @@ def active_lang() -> str:
     aus der Config. Wichtig: tools.py fragt das hier und NICHT config direkt.
     Sonst würde ein `/lang fr` mitten in einer zh-Session die nächsten Tool-Calls
     in die fr-Dateien schreiben und beide Lernstände verderben."""
-    return _session_lang or config.setting("lang", "zh")
+    if _session_lang:
+        return _session_lang
+    # Keine Session: die Sprache des aktiven Spielstands — die EINE Quelle
+    # (seit 2026-09-17; vorher tutor_config 'lang', was mit den Stand-Daten
+    # auseinanderlaufen konnte).
+    from . import staende
+    return staende.aktive_sprache(tools._DATA_ROOT)
+
+
+def stand_token():
+    """(id, lang) des aktiven Stands — für Guards nach langen Operationen."""
+    from . import staende
+    return staende.token(tools._DATA_ROOT)
 
 
 def backend_kind() -> str:
@@ -331,8 +343,9 @@ def activate():
     Provider auf Nutzdaten trainiert.
     """
     global _active, _history, _privacy, _session_lang
+    _session_lang = None                   # frisch aus dem Stand auflösen
     prof, pname, provider, model = _resolve()
-    lang = config.setting("lang", "zh")
+    lang = active_lang()
 
     notice = None
     if providers.trains_on_data(pname):
@@ -360,11 +373,30 @@ def activate():
 
 
 def deactivate():
-    """Beendet die Session. History bleibt für eventuelle Nachbetrachtung."""
-    global _active, _privacy
+    """Beendet die Session — und vergisst sie: Sprache, Verlauf, Ausdruck.
+
+    Früher blieben _session_lang und _history stehen; nach einem Stand-Wechsel
+    lieferte active_lang() dann die ALTE Sprache, bis jemand neu startete —
+    genau der Riss, durch den Stände ineinander bluten.
+    """
+    global _active, _privacy, _session_lang, _history
     with _lock:
         _active  = False
         _privacy = None
+        _session_lang = None
+        _history = deque(maxlen=100)
+        _expr["stance"] = "idle"; _expr["gesture"] = None; _expr["face"] = "neutral"
+    _verstaendnis.__init__()
+
+
+def passt_zum_stand() -> bool:
+    """Läuft die Session in der Sprache des aktiven Stands?"""
+    if not _active or not _session_lang:
+        return False
+    try:
+        return _session_lang == stand_token()[1]
+    except Exception:
+        return False
 
 
 def get_history() -> list:
@@ -450,6 +482,10 @@ def respond_stream(user_text: str = None, nudge: bool = False,
 
     prof, pname, provider, model = _resolve()
     lang = active_lang()
+    try:
+        _tok = stand_token()
+    except Exception:
+        _tok = None
 
     # spoken DETERMINISTISCH aus der User-Eingabe: jedes getrackte Wort, das Sasha
     # gerade selbst benutzt hat, → spoken +1 (die KI zählt nicht). Vor dem Kontext-
@@ -493,6 +529,15 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     # Sprache keinen assessment_prompt/kein Curriculum, gibt es kein Gate.
     _gate = bool(prof.get("assessment_prompt")) and tools.assessment_active(lang)
     system  = prof["assessment_prompt"] if _gate else prof["system_prompt"]
+    # Muttersprache (Glosse) in den Prompt: {native} → Name der Muttersprache in
+    # der Zielsprache (prof['native_names']), Fallback der Code. Einstellung
+    # 'native' (Default en); Deutsch-mit-Glosse-Deutsch ist erlaubt (Test).
+    try:
+        nat = tools.native()
+        nat_name = (prof.get("native_names") or {}).get(nat) or nat
+        system = system.replace("{native}", nat_name)
+    except Exception:
+        pass
 
     # Vokabel-Kontext ans Prompt-Ende hängen: welche Wörter Sasha lernt, damit
     # die Persona sich ans begrenzte Set hält. Ersetzt das frühere "ruf zu Beginn
@@ -599,6 +644,15 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     # Turns + der Eröffnungsgruß landen im Verlauf.
     if nudge:
         return
+    # Stand gewechselt, während sie geantwortet hat? Dann gehört dieser Turn
+    # nirgends mehr hin — nicht in den Verlauf, nicht ins Gedächtnis des neuen.
+    if _tok is not None:
+        try:
+            from . import staende
+            staende.pruefen(tools._DATA_ROOT, _tok)
+        except Exception as e:
+            print(f"[tutor.session] Turn verworfen — {e}", flush=True)
+            return
     push_message("assistant", full)
     _verstaendnis.antwort_merken(full)     # für den Anschluss-Test des Skills
 

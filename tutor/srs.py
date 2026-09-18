@@ -31,7 +31,7 @@ try:
 except Exception:                       # Lib nicht installiert → Feature still aus
     _OK = False
 
-_lock = Lock()
+_lock = staende.stand_lock   # dieselbe Sperre wie tools/staende (kein Bluten)
 _DATA_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 _sched = None
 
@@ -60,7 +60,7 @@ def _lang(lang: str = None) -> str:
         from . import session
         return session.active_lang()
     except Exception:
-        return 'zh'
+        return staende.aktive_sprache(_DATA_ROOT)   # nie stilles 'zh'
 
 
 def _file(lang: str = None) -> str:

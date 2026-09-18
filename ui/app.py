@@ -1570,7 +1570,9 @@ def api_tutor_start():
     if not tutor_port.available():
         return _tutor_unavail()
 
-    if not tutor_port.is_active():
+    # Aktivieren, wenn keine Session läuft ODER die laufende nicht zum aktiven
+    # Spielstand passt (Sprache) — die alte gehört dann zum alten Stand.
+    if not tutor_port.is_active() or not tutor_port.passt_zum_stand():
         tutor_port.activate()
 
     body  = request.get_json(silent=True) or {}
@@ -1688,7 +1690,9 @@ def api_tutor_staende():
 def api_tutor_stand_anlegen():
     """Neuen Spielstand anlegen und sofort aktivieren. Body: {name} (optional)."""
     body = request.get_json(silent=True) or {}
-    d = tutor_port.stand_anlegen((body.get('name') or '').strip() or None)
+    d = tutor_port.stand_anlegen((body.get('name') or '').strip() or None,
+                                 lang=(body.get('lang') or '').strip().lower() or None,
+                                 level=int(body.get('level') or 0))
     return jsonify(d), (200 if d.get("ok") else 400)
 
 
