@@ -202,8 +202,8 @@ def assessment_answer(word: str, result: str) -> dict:
     if ts is None:
         return {"present": False}
     try:
-        from tutor import tools, config as tutor_config
-        lang = tutor_config.setting("lang", "zh")
+        from tutor import tools
+        lang = ts.active_lang()            # Sprache des aktiven Stands, nie Config
         return tools.assessment_answer(lang, word, result)
     except Exception as e:
         return {"error": str(e)}
@@ -218,8 +218,8 @@ def debug_snapshot() -> dict:
     if ts is None:
         return {"present": False}
     try:
-        from tutor import tools, config as tutor_config
-        lang = tutor_config.setting("lang", "zh")
+        from tutor import tools
+        lang = ts.active_lang()            # Sprache des aktiven Stands, nie Config
         return tools.debug_snapshot(lang)
     except Exception as e:
         return {"error": str(e)}
