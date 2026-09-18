@@ -1,5 +1,14 @@
 # Cloud-KI und ihre Umgebung — Bericht vom 21.08.2026
 
+**Stand 2026-09-18:** Punkt-in-der-Zeit-Bericht; seither hat sich am
+Cloud-Kern nichts Grundsätzliches geändert (Konfiguration ist Daten, siehe
+`ki_system.md` Stand). Die „Was offen ist"-Liste steht aus Code/Commits
+unverändert (Anwesenheitspings, Kostenvergleich Takt, Opus/Sonnet, Cache-TTL,
+qwen-Krücken, `werkzeug`-Events lokal, Modulhandbuch, Schemen); ⚠ prüfen: ob
+die Systemeinheit (`../betrieb/systemeinheit.md`) auf dem PC inzwischen
+eingerichtet ist, steht nirgends im Repo. Die Schwierigkeiten und ihre
+Lösungen unten gelten weiter.
+
 Ein Zwischenstand, kein Handbuch: was der Umstieg auf die Cloud gebracht hat,
 woran es hakte, was dagegen unternommen wurde und was offen ist. Die
 technischen Einzelheiten stehen in [ki_system.md](ki_system.md) und
@@ -122,7 +131,8 @@ ersetzt wurde, wurde das Verhalten besser — und der Prompt kürzer.
   kann sie **nicht** lesen.
 - **Schemen** (Wochenpläne, gezogen aus Kalender, Dossiers, Ideen, Pflichten) —
   der nächste große Schritt; wartet bewusst auf Daten aus dem Takt.
-- Die Systemeinheit ist auf PC und Pi noch nicht eingerichtet.
+- Die Systemeinheit ist auf PC und Pi noch nicht eingerichtet (⚠ prüfen:
+  Stand PC unbekannt; auf dem Pi läuft kein Kern, dort entfällt sie).
 
 ## Kurz
 

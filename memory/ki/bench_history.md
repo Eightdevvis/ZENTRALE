@@ -1,5 +1,12 @@
 # Bench-History — ZENTRALE Testdaten
 
+**Stand 2026-09-18:** Protokoll-Datei, Läufe werden unten angehängt. Alle
+Messungen betreffen das **lokale** Modell (qwen3.5:9b & Co.) — seit dem
+Cloud-Umstieg (08/2026, `cloud_bericht.md`) denkt der Kern-Chat in der
+Cloud, die Zahlen hier beschreiben den lokalen Pfad, der als Zielform
+(`chat_backend: auto`) weiter existiert. Sampling-Korrektur vom 2026-06-08
+unten gilt für alles Ältere.
+
 Zentrale Sammelstelle für **alle** Mess-Läufe. Zweck: Fortschritt über Zeit
 nachvollziehbar machen, Doppel-Messungen vermeiden, Hypothesen gegen echte Zahlen
 prüfen statt aus Vibes ([[messen-nicht-vibes]]). **Neue Läufe hier unten anhängen**,

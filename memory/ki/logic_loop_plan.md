@@ -1,5 +1,11 @@
 # Logic-Loop — dialogischer Action-Scaffold fürs lokale 9b (WIP)
 
+**Stand 2026-09-18:** Nur Sketch (2026-06-14), nicht implementiert, kein
+Commit dazu. Der Engpass, den er lösen sollte („das 9b rafft nichts von
+alleine"), wurde im Kern-Chat durch den Cloud-Umstieg (08/2026) umgangen;
+für den lokalen Pfad bleibt die Idee liegen. Entscheidungsgabeln unten vor
+einer Umsetzung mit Sasha klären.
+
 > **STATUS: WIP / nur Sketch — NICHT implementiert.** Konzept-Diskussion vom
 > 2026-06-14, geparkt bis Sasha daheim an der echten lokalen KI sitzt. Hier
 > steht der ganze Denkstand, damit wir nahtlos weitermachen, statt neu

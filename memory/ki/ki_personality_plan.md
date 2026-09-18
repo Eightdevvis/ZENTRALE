@@ -1,6 +1,17 @@
 # KI-Personality-Plan – vom System-Prompt zum eigenen Modell
 
-> **Status: aktiv, Phase 0 erster Pass durch.** Phasen 1–3 noch nicht angefangen.
+**Stand 2026-09-18:** Plan-Dokument; Phase 0 (System-Prompt schärfen) hatte
+einen ersten Pass, Phasen 1–3 (Datensammlung, LoRA, DPO) sind nicht
+angefangen — kein Commit seit dem Cloud-Umstieg (08/2026) betrifft ihn.
+Seither gibt es zwei Prompt-Schienen (`core/profil/klein.py` für das lokale
+9b, `gross.py` für Frontier-Modelle, `ki_system.md`); die Persona lebt in
+`profil/klein.py:_SYSTEM_PROMPT` (re-exportiert als `ai._SYSTEM_PROMPT`), und
+das Faktenwissen liegt nicht mehr im Graphen, sondern im Datei-Gedächtnis.
+⚠ prüfen: ob der Fine-Tuning-Weg nach dem Cloud-Umstieg noch verfolgt
+wird — die Motivation (lokales Modell prägen) ist geblieben, die Priorität
+steht nirgends.
+
+> **Status: Phase 0 erster Pass durch.** Phasen 1–3 noch nicht angefangen.
 >
 > Ziel-Doppelhorizont: kurzfristig pragmatisch die Persönlichkeit der
 > ZENTRALE-KI schärfen; mittelfristig als Vehikel dienen, um echtes
@@ -13,7 +24,8 @@
 - Memory-System: → `memory/ki/ki_memory_plan.md` (archiviert) und `memory/ki/ki_system.md`.
 - Tool-Use, Capabilities-Prompt: → `memory/ki/ki_system.md`.
 - Persona-Inhalt selbst (Tonfall, Vorlieben): wird im Code in
-  `core/ai.py:_SYSTEM_PROMPT` gepflegt, nicht hier.
+  `core/profil/klein.py:_SYSTEM_PROMPT` (lokal) bzw. `gross.py` (Cloud)
+  gepflegt, nicht hier.
 
 ## Designprinzipien
 

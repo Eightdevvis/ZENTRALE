@@ -1,5 +1,15 @@
 # Grounding-Recherche: „nicht raten, nachschauen"
 
+**Stand 2026-09-18:** Recherche-Dokument vom 2026-06-07 (erster Lauf; der
+geplante zweite Lauf mit Praktiker-Fokus hat nicht stattgefunden — nichts
+im Repo belegt ihn). Was daraus umgesetzt wurde: `_DASHBOARD_VIEW`-Prompt,
+Abstention-Bench (`scripts/bench_abstention.py`), das harte Erlaubnis-Gate im
+Code statt im Prompt. Die Kern-Erkenntnis — eine Prompt-Anweisung ist eine
+Bitte, Code eine Tatsache — trägt seither jede Entscheidung
+(`cloud_bericht.md`). Mit dem Cloud-Umstieg ist das Ausgangsproblem (ein 9b
+rät statt nachzuschauen) im Kern-Chat entschärft; für den lokalen Pfad
+gelten die Befunde weiter.
+
 Warum schreibt sich das hier auf: Die zwei Kalender-Symptome (KI **rät** statt
 das Tool zu rufen; KI fällt in **nicht-rettbare Wiederholungs-/Verteidigungs-
 Spiralen**) sind Spezialfälle EINER allgemeinen Krankheit kleiner Modelle: sie

@@ -1,5 +1,19 @@
 # Audio-System
 
+**Stand 2026-09-18:** STT und TTS sind zwei eigene Flask-Dienste auf dem PC
+(`services/whisper_service.py` :5050 mit faster-whisper + Silero-VAD,
+`services/tts_service.py` :5051 mit Engine-Registry `zh` sherpa-onnx /
+`de` Piper / `es` sherpa-onnx mit Piper-Voice), sprachneutral über
+`/api/transcribe` und `/api/speak` (`lang`-Parameter, Default `de`);
+`core/audio.py` ist der HTTP-Client. Aufrufer heute: der Haupt-Chat
+(Browser-Front, aufgegeben) und vor allem das **Persona-Zimmer**, das auf dem
+Pi selbst aufnimmt (`sounddevice` + `webrtcvad`, Mikro immer offen) und
+abspielt — die Regel „nichts auf dem Pi direkt" unten gilt nur noch für den
+Browser-Weg; wie die Straße Mikro→VAD→Whisper→Stimme heute läuft und was für
+den Assistenten offen ist: `../system/audio_strasse.md`. Am Laptop fährt
+`scripts/open_tutor_room.py` die Dienste nur bei Bedarf hoch. Modelle:
+`../betrieb/setup.md`; Pi-Hardware: `../betrieb/hardware.md`.
+
 > **Nicht hier drin: `core/tone.py`.** Das ist der Ton-Erzeuger des
 > TUI-Klaviers (Wellenform selbst gerechnet → sounddevice, siehe
 > `memory/system/dashboard.md` → „Klavier in der TUI"). Er hat mit Sprache, Whisper, Piper
@@ -16,17 +30,15 @@ Parameter:
 | Haupt-Chat     | `POST /api/speak`     | `de` (Piper / `PIPER_DE_VOICE`) |
 | Haupt-Chat     | `POST /api/transcribe`| `de` (Whisper)                 |
 
-> Die früheren Tutor-Aliase `/api/tutor/speak` und `/api/tutor/transcribe`
-> (hardcoded `lang='zh'`) sind raus — **nicht** weil der Tutor pausiert (er läuft,
-> siehe `memory/tutor/tutor_system.md`), sondern weil die Pipeline dem Kern gehört und
-> sprachneutral ist: der Tutor ist ein Aufrufer wie jeder andere und schickt die
-> Sprache seines Profils mit. Wer Mandarin sprechen will, ruft die generischen
-> Endpoints mit `lang='zh'` auf – die Modelle (`vits-zh-aishell3`,
-> Whisper) liegen weiter auf der Platte.
+> Es gibt keine Tutor-eigenen Audio-Routen (die Aliase `/api/tutor/speak`
+> und `/api/tutor/transcribe` mit hartem `lang='zh'` sind seit 2026-06 raus):
+> die Pipeline gehört dem Kern und ist sprachneutral, der Tutor ist ein
+> Aufrufer wie jeder andere und schickt die Sprache seines Profils mit.
 
-## Grundprinzip: nichts auf dem Pi direkt
+## Grundprinzip im Browser-Weg: nichts auf dem Pi direkt
 
-Audio läuft **nicht** durch Python-Audio-Libraries auf dem Pi. Stattdessen:
+Für die Browser-Front lief Audio **nicht** durch Python-Audio-Libraries auf
+dem Pi (das Zimmer macht es seit 2026-09 anders, siehe Stand oben). Stattdessen:
 
 - **Aufnahme**: Browser-MediaRecorder API. Heißt – das Mikrofon wird vom
   Frontend angesprochen, nicht von Python. Spart uns das Hantieren mit
@@ -129,7 +141,7 @@ die Sprachausgabe. Zustand liegt in `localStorage` (`zentraleChatMuted`),
 `stopSpeaking()` die laufende Wiedergabe sofort ab und leert die Queue.
 `goToMain()` (Chat verlassen) ruft ebenfalls `stopSpeaking()`. Der
 state-aware Footer-Hinweis `#chat-mute-hint` zeigt, was Alt+S als
-nächstes tut. DOM/JS-Hooks: siehe `memory/system/ui_hooks.md`, Tasten: `memory/system/tastatur.md`.
+nächstes tut. Tasten: `memory/system/tastatur.md` (die DOM-Hooks in `ui_hooks.md` sind veraltet).
 
 **Lautstärke per `Alt+S` halten + `↑`/`↓`** (Schritt 10%): `chatVolume`
 (0..1) liegt in `localStorage` (`zentraleChatVolume`) und wird auf jedes
@@ -288,3 +300,13 @@ Gründe:
   Gerät auslagern.
 
 Konfiguration der Service-URLs siehe `memory/betrieb/starten.md`.
+
+## Historie
+
+- **2026-05** — Whisper + Piper (de) + sherpa-onnx (zh) als drei Prozesse,
+  Browser-MediaRecorder als Aufnahmeweg, Auto-Speak satzweise im Stream.
+- **2026-06** — Tutor-Audio-Aliase entfernt, Pipeline sprachneutral;
+  Kiosk-Mic-Policy für den Browser (`../betrieb/deployment.md`).
+- **2026-07-23** — `es` (sherpa-onnx mit Piper-Voice sharvard, weiblich).
+- **2026-09** — das Zimmer nimmt auf dem Pi selbst auf (VAD, Gating);
+  `open_tutor_room.py` fährt am Laptop die Dienste on demand hoch.

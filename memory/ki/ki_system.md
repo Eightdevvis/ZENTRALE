@@ -1,5 +1,25 @@
 # KI-System
 
+**Stand 2026-09-18:** Der Kern-Chat denkt über `ai_backends.pick("chat")` —
+Vorwahl `chat_backend` in `data/ai_config.json` (`auto|local|cloud`; seit
+2026-08-15 bewusst **`cloud`**, daheim wie unterwegs). Cloud = `core/cloud.py`
+(Anthropic, Drop-in für `ai.chat_stream()`, Code-Default `claude-sonnet-5`,
+adaptives Denken, Prompt-Cache statisch vorn) oder `core/cloud_openai.py`
+(zweiter Dialekt für qwen/openai/mistral); lokal = Ollama `qwen3.5:9b`
+(`think=false`, Prompt-Schiene `profil/klein`, Cloud nimmt `profil/gross`).
+**Tools laufen immer lokal**, nur die Entscheidung wandert. Schreib-Tools
+gehen durchs Erlaubnis-Gate (`PERMISSION_REQUIRED_TOOLS`, nicht
+modellgetrieben). **Das Gedächtnis ist das Datei-Gedächtnis**
+(`gedaechtnis_dateien.md`); der Konzept-Graph ist seit 2026-08-18
+abgeschaltet (`ZENTRALE_GRAPH_KONTEXT`/`_EXTRAKTION` holen ihn zurück), sein
+Abschnitt unten beschreibt, wie er arbeitet, wenn er an ist. Der Chat ist
+nicht kassetten-hart gegatet (`chat_available()`: ki-freie Kassette darf
+Cloud, nie lokal). Tool-Calls und Denken stehen im Chat, das Devtools-Terminal
+zeigt den vollen Request. Kosten in `data/ai_usage.json`. ⚠ prüfen: der
+Abschnitt „Modell-Parameter" nennt `claude-opus-5`, `cloud_bericht.md` (21.08.)
+Sonnet 5 + Haiku 4.5 für die Verdichtung, der Code-Default ist Sonnet — was
+gilt, steht in `data/ai_config.json` (Daten, nicht im Repo).
+
 ## Architektur
 
 ```
@@ -16,8 +36,7 @@ Browser ──POST /api/chat──▶ ui/app.py ──▶ core/ai.py ──▶ O
 Extraktor-LLM), aber alle gehen durch `core/net.py` – damit landet jeder
 Request im Terminal (siehe Network-Transparenz unten).
 
-**Modell-Update (2026-06-06):** Default ist jetzt **qwen3.5:9b** (vorher
-qwen2.5:14b). Begründung: Reasoning-Bench (`scripts/bench_reasoning.py`)
+**Lokales Modell qwen3.5:9b — warum (2026-06-06, vorher qwen2.5:14b):** Reasoning-Bench (`scripts/bench_reasoning.py`)
 zeigte es gleichstark zu qwen3:14b (10/11 ohne Thinking), aber schneller
 (68 vs 47 tok/s) und kleiner (8.8 statt 11 GB VRAM → ~3 GB frei für
 Browser/Desktop, behebt die VRAM-Contention-Crashes). Tool-Calling 100%,
@@ -27,12 +46,11 @@ per Default vor jeder Antwort (30–80 s Latenz!) → `ai.py` und
 `_think_opts` / `SUPPORTS_THINK`). Per Env `OLLAMA_MODEL` umstellbar
 (Fallback qwen3:14b / qwen2.5:14b).
 
-## Memory-Architektur (Phase G – Konzept-Graph)
+## Memory-Architektur (Phase G – Konzept-Graph, abgeschaltet)
 
-Aktiver Stand: **Graph ist primary** und einzige Memory-Schicht. Was
-die KI bei jedem Turn "sieht", kommt komplett aus dem Graphen
-(plus `_now_prompt`-Zeitstempel, plus optional Kalender-Layer wenn
-das System hochgefahren ist).
+Bis 2026-08-18 war der **Graph primary** und einzige Memory-Schicht: was die
+KI bei jedem Turn „sah", kam komplett aus dem Graphen (plus
+`_now_prompt`-Zeitstempel, plus Kalender-Layer). Heute: `gedaechtnis_dateien.md`.
 
 ### `core/graph.py` – Konzept-Graph (primary)
 
@@ -344,7 +362,7 @@ Marker wird getippt, nicht angekündigt).
   Treffer ein **Inline-Event** (`dict {"ascii","name"}`); `app.py` macht
   daraus ein SSE-Event `ascii`. Der bereinigte Text (ohne Marker) wird
   gesprochen/gespeichert. Tutor-Modus kennt die Marker NICHT. Frontend:
-  siehe „ASCII-Kern / Bild-Marker" in [memory/system/dashboard.md](memory/system/dashboard.md).
+  siehe „ASCII-Kern / Bild-Marker" in [memory/system/dashboard.md](../system/dashboard.md).
 - **Alt-Namen:** die 15 Namen des früheren `[[emoji:]]`-Kanals (shrug,
   happy, flip, …) sind als englische Alias-Tags in der Bibliothek
   hinterlegt, lösen also weiter auf.
@@ -461,14 +479,14 @@ gibt den bei `request_permission` gesetzten `timeout_default` zurück: beim Gate
 **„nein"** (sicher – keine Antwort erlaubt nie eine Schreib-Aktion), bei
 `frage_knopf` ein neutrales `(keine Antwort)`. Log: `AI → ERLAUBNIS?`/`FRAGE …`
 bzw. `AI ← ERLAUBNIS:`/`WAHL: …`. Frontend-Details (perm-bar, N-Knopf-Nav):
-[memory/system/dashboard.md](memory/system/dashboard.md). Tutor-Modus: beides aus (fremdes Tool-Set). Neues
+[memory/system/dashboard.md](../system/dashboard.md). Tutor-Modus: beides aus (fremdes Tool-Set). Neues
 Tool gaten = Name in `PERMISSION_REQUIRED_TOOLS` + ggf. Vorlage in
 `_permission_question`.
 
 `save_memory` ist mit dem Legacy-Pfad rausgeflogen – der Graph-Extraktor
 läuft eh nach jedem Turn automatisch. Kalender-Tools (`read_calendar`,
 `add_entry`, `add_routine`) kommen mit dem Kalender-System (siehe
-[memory/werkzeuge/kalender_system.md](memory/werkzeuge/kalender_system.md)).
+[memory/werkzeuge/kalender_system.md](../werkzeuge/kalender_system.md)).
 
 **Sicherheitsnetz:** `chat_stream` hat ein hartes `max_rounds = 5` für
 die Tool-Loop – verhindert Endlosschleifen bei kaputten Tool-Calls.
@@ -1027,7 +1045,7 @@ erwartete, gewollte Beleg „Paket hat das LAN verlassen", nicht mehr ein
 Alarm. (Nicht-gegateter Internet-Traffic hier wäre weiterhin verdächtig.)
 Implementation: `core/net.py` (`_is_internet`, plus Spiegel-Calls in
 `_log_out/_log_in/_log_err`), `core/state.py` (`_internet_logs`,
-`push_internet_log`), `ui/templates/index.html` (`.terminal-row` +
+`push_internet_log`), `ui/templates/monolith.html` (`#term-net`, Box »outbound · tripwire«; damals `index.html` mit `.terminal-row` +
 `.terminal-net` mit orangefarbenem Akzent).
 
 Tests: `scripts/test_net_internet.py` (48 Cases, untracked).
@@ -1051,3 +1069,22 @@ STT und TTS hängen nicht mehr am Tutor, sondern an der Core-AI:
 Der Tutor ist ein Konsument dieser Pipeline — die Sprache kommt aus dem aktiven
 Sprach-Profil (`stt_lang`/`tts_lang`), `zh` ist nur der heutige Default, kein
 Festwert. Details: `memory/ki/audio_system.md` und `memory/system/api_endpoints.md`.
+
+## Historie
+
+- **2026-05** — Ollama-Chat mit qwen2.5:14b, Legacy LTM/STM (`save_memory`),
+  Phasen A–F des Memorys (`ki_memory_plan.md`).
+- **2026-06-06** — qwen3.5:9b (Bench), Konzept-Graph als primary Memory
+  (Phase G), Subjekt-Trennung im Kontext, `_DASHBOARD_VIEW`-Prompt.
+- **2026-06-07** — Internet-Pipe `web_suche`/`hole_url` mit hartem Gate; das
+  rechte Panel wird Transparenz-Monitor statt Alarm.
+- **2026-07-17** — Key-Store `data/ai_config.json` als einzige Key-Quelle
+  (`../betrieb/datei_zugriffe.md`).
+- **2026-08-10** — Entscheidung für die Cloud (`cloud_umstieg_plan.md`).
+- **2026-08-15** — `core/cloud.py`, `chat_backend: cloud`, Kassetten-Regel
+  (Cloud auch in ki-freien Kassetten), TUI als Thin Client.
+- **2026-08-17/18** — Zeit in vier Auflösungen, Kalender-Spiegel gelöscht,
+  Imprint in den Cache; **Datei-Gedächtnis statt Graph**; zwei
+  Prompt-Schienen `profil/klein|gross`; Devtools zeigen den vollen Request.
+- **2026-08-20** — Tool-Calls und Denken im Chat; Nachprüf-Schritt im
+  Werkzeug-Ergebnis. **08-21** Zwischenbericht `cloud_bericht.md`.

@@ -1,3 +1,7 @@
+**Stand 2026-09-18:** Historisches Entscheidungs-Dokument, umgesetzt am
+15.08.2026 — nichts hier wird nachgezogen; was daraus wurde: `ki_system.md`,
+`cloud_bericht.md`.
+
 > **Historisch, Stand 10.08.2026.** Das Dokument, mit dem der Umstieg auf ein
 > Cloud-Modell entschieden wurde — Befund, Begründung, Reihenfolge. Es ist
 > seither umgesetzt; was daraus wirklich geworden ist, steht in

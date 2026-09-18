@@ -1,8 +1,16 @@
 # KI-Memory-System v2 – Plan (HISTORIE, Phasen A–F)
 
+**Stand 2026-09-18:** Archiv. Phasen A–F (LTM/STM, bge-m3, Tool-Set) wurden
+von Phase G (Konzept-Graph, 06/2026) abgelöst, und der Graph seinerseits am
+18.08.2026 vom Datei-Gedächtnis (`gedaechtnis_dateien.md`). Der Wert dieser
+Datei sind die Begründungen (warum `bge-m3`, `who_said`, `recency`-Enum,
+Tool-Schnitt); die alte Festlegung „kein Graph" wurde verworfen und der
+Graph später selbst wieder — beides mit Grund, siehe unten und dort.
+
 > ⚠️ **Status: archiviert.** Phasen A–F sind durch, Phase G (Konzept-Graph)
-> hat das LTM/STM-Setup als *primary memory* abgelöst. Aktueller Stand:
-> → `memory/ki/ki_system.md`.
+> hat das LTM/STM-Setup als *primary memory* abgelöst — und ist seit
+> 18.08.2026 selbst abgeschaltet. Aktueller Stand:
+> → `memory/ki/ki_system.md`, `memory/ki/gedaechtnis_dateien.md`.
 >
 > Dieses File bleibt als Entscheidungs-Historie liegen – die Begründungen
 > (warum `bge-m3`, warum `who_said`, warum `recency`-Enum, warum Tool-Set

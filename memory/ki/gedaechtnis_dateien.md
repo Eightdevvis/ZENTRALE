@@ -1,4 +1,15 @@
-# Das Datei-Gedächtnis (seit 18.08.2026)
+# Das Datei-Gedächtnis
+
+**Stand 2026-09-18:** Das Gedächtnis der Kern-KI sind **Markdown-Dateien**
+unter `data/gedaechtnis/` (`core/gedaechtnis.py`, seit 18.08.2026): Steckbrief
+und Ziele pflegt Sasha, Notizen (formlos, Default), Dossiers (Prosa über eine
+Sache), Kataloge (gleichförmige Einträge, upsert statt anhängen), Quellen
+(abgelegte Dokumente) und das Tagebuch schreibt die KI über die Werkzeuge der
+`gross`-Schiene; Messreihen bleiben im Graph-Werkzeug (`data/g_*.json`). Im
+gecachten Prompt liegt nur der Kopf-Block, Inhalte kommen auf Abruf. Der
+Nachprüf-Schritt steckt im Werkzeug-Ergebnis. Der Konzept-Graph ist
+abgeschaltet, nicht gelöscht (Warum unten). Offen: Modulhandbuch/Stundenplan,
+`fetch_document` nur http(s), das Schemen.
 
 Nachfolger des Konzept-Graphen als Gedächtnis der Kern-KI. Modul:
 `core/gedaechtnis.py`.
