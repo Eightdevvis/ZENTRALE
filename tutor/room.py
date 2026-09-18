@@ -2004,7 +2004,29 @@ def _draw_stand_wahl(screen, w, fonts, asv, top_y, ctr):
     bw = min(620, w - 160)
     bx = w // 2 - bw // 2
 
+    # Sichtfenster: so viele Zeilen, wie zwischen Kopf und Tastenzeile passen.
+    # Die Auswahl bleibt immer im Bild — bei vielen Ständen scrollt die Liste
+    # (Sasha 2026-09-18: »die Spielstände scrollen nicht«). Die Tastenzeile
+    # sitzt fest unten, nicht unter der letzten Zeile.
+    h = screen.get_height()
+    tasten_y = h - fonts['hud'].get_height() - 40
+    platz = max(1, (tasten_y - 16 - y) // (hoehe + abstand))
+    sichtbar = min(platz, len(zeilen))
+    start = asv.get('stand_scroll', 0)
+    start = max(0, min(start, len(zeilen) - sichtbar))
+    if idx < start:
+        start = idx
+    elif idx >= start + sichtbar:
+        start = idx - sichtbar + 1
+    asv['stand_scroll'] = start
+    ende = start + sichtbar
+    if start > 0:
+        pfeil = fonts['hud'].render(_sym('▲ %d weitere' % start), True, HUD_DIM)
+        screen.blit(pfeil, (bx + bw - pfeil.get_width(), y - fonts['hud'].get_height() - 2))
+
     for i, z in enumerate(zeilen):
+        if i < start or i >= ende:
+            continue
         if i == idx:
             pygame.draw.rect(screen, ASSESS_BAR_BG, (bx, y, bw, hoehe),
                              border_radius=8)
@@ -2030,14 +2052,18 @@ def _draw_stand_wahl(screen, w, fonts, asv, top_y, ctr):
                     (bx + 20, y + innen + h_titel + 4))
         y += hoehe + abstand
 
+    if ende < len(zeilen):
+        pfeil = fonts['hud'].render(_sym('▼ %d weitere' % (len(zeilen) - ende)), True, HUD_DIM)
+        screen.blit(pfeil, (bx + bw - pfeil.get_width(), y + 2))
+
     tasten = [('↑↓', 'wählen'), ('Enter', 'los geht’s')]
     if zeilen[idx]['art'] == 'stand':
         tasten.append(('Entf', 'löschen'))
-    _hint_row(screen, fonts['hud'], w, y + 16, tasten)
+    _hint_row(screen, fonts['hud'], w, tasten_y, tasten)
     if asv.get('meldung'):
         # Fehler beim Anlegen/Wechseln — im Hauptmenü gibt es keinen HUD, also hier.
         m = fonts['log'].render(asv['meldung'], True, ASSESS_GOLD)
-        screen.blit(m, (w // 2 - m.get_width() // 2, y + 16 + fonts['hud'].get_height() + 18))
+        screen.blit(m, (w // 2 - m.get_width() // 2, tasten_y + fonts['hud'].get_height() + 8))
 
     if asv.get('stand_weg'):
         _draw_loesch_frage(screen, w, fonts, asv)
