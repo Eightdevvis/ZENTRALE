@@ -1044,6 +1044,14 @@ def show_thought(word: str, meaning: str = "", reading: str = "",
         # Zielsprache, damit es sich korrigiert.
         debug.emit('vocab', action='abgelehnt', word=word, lang=_lang(lang), grund=grund)
         return _phrase("vocab_invalid", lang, word=word)
+    # Kernwort? Dann gilt die Glosse aus den Daten (Muttersprache), nicht die
+    # Bedeutung, die das Modell mitschickt — die ist nur für emergente Wörter
+    # nötig, zu denen wir nichts wissen. (Sasha 2026-09-18: die Spalte
+    # braucht es nur dort, wo keine Übersetzung vorliegt.)
+    kern = next((c for c in _core_list(lang) if c.get("word") == word), None)
+    if kern is not None:
+        meaning = glosse(kern) or meaning
+        reading = reading or kern.get("reading", "")
     try:
         from . import session as tutor_session
         tutor_session.set_thought(word, meaning)

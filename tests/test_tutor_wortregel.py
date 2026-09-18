@@ -64,3 +64,18 @@ def test_altlast_faellt_beim_laden_raus(welt):
     tools.introduce_new("面", "miàn", lang="zh")
     with open(p, encoding="utf-8") as f:
         assert [e["word"] for e in json.load(f)] == ["还是", "面"]
+
+
+def test_kernwort_nimmt_glosse_aus_den_daten_nicht_vom_modell(welt, monkeypatch):
+    """也许 ist Kernwort: die Blase zeigt die Glosse in der Muttersprache, egal
+    was das Modell als meaning schickt."""
+    from tutor import config
+    monkeypatch.setattr(config, "_overrides", {"native": "de"})
+    sid = staende.anlegen(welt, "LL", lang="zh"); staende.waehlen(welt, sid)
+    session.activate()
+    tools.show_thought("也许", "maybe", "", lang="zh")
+    rs = session.room_state()
+    assert rs["thought_word"] == "也许" and rs["thought_meaning"] == "vielleicht"
+    tools.show_thought("面", "Nudeln", "miàn", lang="zh")      # emergent → Modell-Bedeutung
+    assert session.room_state()["thought_meaning"] == "Nudeln"
+    session.deactivate()
