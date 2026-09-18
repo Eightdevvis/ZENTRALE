@@ -1,7 +1,8 @@
 # ZENTRALE als Systemeinheit
 
-**Stand 2026-09-18:** Der Kern läuft als **Benutzer**-Dienst
-`zentrale-kern.service` (an `default.target`), das TUI-Fenster liegt im
+**Stand 2026-09-18:** Gebaut für den Laptop (i3): der Kern als
+**Benutzer**-Dienst `zentrale-kern.service` (an `default.target`), das
+TUI-Fenster liegt im
 i3-Scratchpad und `$mod+z` ruft `scripts/zentrale-fenster` (drei Fälle:
 sichtbar → weglegen, weggelegt → holen, fehlt → starten; 89 % × 86 %,
 mittig). `start_tui.sh` hängt sich an einen laufenden Dienst an statt ihn
@@ -11,7 +12,9 @@ startet den Dienst neu (`starten.md`). Der Takt meldet sich per
 sichtbar ist; `ZENTRALE_NOTIFY=0` schaltet ab. Einrichten:
 `scripts/zentrale-systemeinheit` (weigert sich aus einem Worktree).
 **Genau ein Backend pro Rechner** — `zentrale-pc.service` (System-Dienst,
-`deployment.md`) ist die Alternative, nicht die Ergänzung.
+`deployment.md`) ist die Alternative, nicht die Ergänzung. ⚠ prüfen: ob die
+Systemeinheit auf dem PC eingerichtet ist, steht nirgends im Repo
+(`../ki/cloud_bericht.md` sagte am 21.08. „noch nicht").
 
 `deploy/zentrale-kern.service` · `deploy/i3/zentrale.conf` ·
 `scripts/zentrale-systemeinheit` · `core/melden.py`

@@ -3,7 +3,8 @@
 **Stand 2026-09-18:** Ein Backend-Knoten (der PC) braucht venv +
 `requirements.txt` + Test-Riegel (`scripts/zentrale-venv-guard`), Ollama mit
 `qwen3.5:9b`, Whisper (lädt sich beim ersten Start selbst) und die TTS-Modelle
-für **drei** Sprachen (`zh` sherpa-onnx, `de` Piper, `es` Piper) unter
+für **drei** Sprachen (`zh` sherpa-onnx, `de` Piper, `es` sherpa-onnx mit
+Piper-Voice) unter
 `data/tts_model/`. Der Pi bekommt nichts davon — er ist Aussenposten (siehe
 `memory/betrieb/deployment.md`). Der Riegel hängt sich beim TUI-Start selbst
 ein, falls er fehlt.
@@ -65,8 +66,10 @@ Eine Engine je Sprache, alle werden parallel von `tts_service.py` geladen
 - `zh` – sherpa-onnx, Stimme der Persona Ling Ling. `_try_load_sherpa_zh` lädt das
   beste vorhandene Modell: **`matcha-icefall-zh-baker` (22 kHz) > MeloTTS
   `vits-melo-tts-zh_en` (44.1 kHz) > `vits-zh-aishell3` (~120 MB, 8 kHz, Fallback)**.
-- `es` – Piper, Stimme der Persona Lucía, Voice via Env `TUTOR_ES_VOICE`
-  (Default `vits-piper-es_ES-sharvard-medium-int8`).
+- `es` – sherpa-onnx mit einer Piper-Voice (dieselbe Library wie zh, kein
+  separates `piper-tts`), Stimme der Persona Lucía, Voice via Env
+  `TUTOR_ES_VOICE` (Default `vits-piper-es_ES-sharvard-medium-int8`,
+  Sprecher `TUTOR_ES_SPEAKER` Default 1 = weiblich).
 - `de` – Piper, Voice via Env `PIPER_DE_VOICE` (Default `de_DE-kerstin-low`,
   ~20 MB; Haupt-Chat und die Persona Lena).
 
@@ -101,7 +104,7 @@ Für Audio-Output am Pi: siehe `memory/betrieb/hardware.md` (Audio am Pi).
   auf einem Knoten scharf, auf dem anderen sprang das Theme weiter, während
   die erste Maschine „bewiesen ruhig" war. Seither hängt `start_tui.sh` ihn
   selbst ein.
-- **2026-07-23** — `es` (Piper es_ES-sharvard, weiblich) als Stimme für
+- **2026-07-23** — `es` (sherpa-onnx, Piper-Voice es_ES-sharvard, weiblich) als Stimme für
   Lucía; bis dahin gab es nur `zh` + `de`.
 - **2026-09-18** — `de` auch als Tutor-Sprache (Lena), nutzt die
   Haupt-Chat-Stimme.
