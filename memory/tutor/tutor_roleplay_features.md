@@ -1,5 +1,23 @@
 # Tutor-Roleplay-Features — Über-Nacht-Bau (2026-07-09) + Entscheidungs-Log
 
+**Stand 2026-09-18:** Alle acht Features sind gebaut und laufen; was von ihnen
+heute im Code steht: Mimik/Gesten/Schlafen über `express`, soziale Batterie
+(`mood` in `room_state`), Satz-Strukturen (3 Tools), Gedanken-Blase
+(`show_thought`, Bilder als Drop-in), nonverbaler Presence-Ping (Default AN,
+`TUTOR_PRESENCE_REACT=0` aus), Landes-News/TV/Musik als Seeds bzw. Drop-in-Ordner.
+Überholt seit dem Bau: das Vokabel-Feinmodell aus §3 (`correct_use`/`confirmed`,
+`vocab_split`) ist durch `spoken`/`listened` ersetzt; die Vokabel-Tools
+`get_confirmed_vocab`/`get_testing_vocab`/`increment_correct_use`/`mark_known`
+sind weg, die Sandbox hat heute **12** Tools (`tutor_system.md`); Seeds
+liegen im Sprachpaket; der Presence-Ping ist per Default **an** (nicht aus wie
+in §5 beschrieben); die Anwesenheit kommt heute zusätzlich über Mikro und PIR
+(`tutor_system.md`, Eigenleben). Die Content-Lücken (Bilder, Musik, echter
+Landes-Feed, Video-Playback) bestehen weiter. Der Live-qwen-Recheck mit dem
+vollen Tool-Set (unten „bewusst offen") ist mit den Prompt-Tests vom
+2026-07-25 (`tutor_persona_tuning.md`, `tutor_system.md`) erledigt. Der Rest
+dieser Datei ist das Entscheidungs-Protokoll der Nacht — das Warum jeder
+Entscheidung gilt weiter.
+
 Sasha hat den Tutor-Prompt auf ein reiches **Roleplay-Framing** umgestellt (gegen
 qwen validiert; damals `tutor_langs._ZH_PROMPT`, heute `tutor/langs/zh/prompt.md`)
 und darin viele neue Features skizziert (heute
@@ -106,9 +124,10 @@ dokumentieren, morgen gemeinsam reviewen.
   schon, reagiert die Persona **nonverbal** — schaut hoch (`look`), Mimik `happy`,
   +6 Batterie. Gedrosselt (`_PRESENCE_COOLDOWN=90s`) gegen PIR-Zucken. Der Laptop-
   Raum sieht die Reaktion über den `room_state`-Poll.
-- `brain.py` PRESENCE_DETECTED: Hook hinter **Env-Flag `TUTOR_PRESENCE_REACT=1`,
-  default AUS** → Default-Laufzeit **unverändert** („kein Trigger aktiv"). Flag an
-  = nonverbale Reaktion (nur bei aktiver Session).
+- `brain.py` PRESENCE_DETECTED: Hook hinter Env-Flag `TUTOR_PRESENCE_REACT`.
+  (In der Nacht als „`=1`, default AUS" gebaut; seit 2026-07-17 ist der Default
+  **AN**, `=0` schaltet ab — `brain.py` prüft `!= "0"`.) Nonverbale Reaktion nur
+  bei aktiver Session.
 - **Bewusst NICHT gebaut:** der verbale Auto-Gruß („Anquatschen" per Cloud-Turn)
   aus einem Sensor-Event — das IST der schlechte Auto-Trigger. Erst wenn Core-KI-
   Sequencing durch ist / Sasha es freigibt, als eigener Schritt (eigenes Flag).
@@ -124,7 +143,7 @@ dokumentieren, morgen gemeinsam reviewen.
 - **Sandbox strikt gewahrt:** eigener persona-isolierter Pool, fasst **NIE**
   core/news.py an (das sind Sashas DE/World-Feeds der Core-KI). Die Allowlist
   (`_ALLOWED` in `tutor/tools.py`) deckt genau die tutor-eigenen Dateien + den
-  Zimmer-UI-State ab (heute 15 Tools, nicht mehr „4 Vokabel-Tools").
+  Zimmer-UI-State ab (damals 14–15 Tools, heute 12 — Stand oben).
 - **Seed lebt im SPRACH-PAKET** (`tutor/langs/<lang>/seeds/news.json`, getrackt),
   NICHT in `tutor/data/` — letzteres ist gitignored (rsync-Runtime, Lernstand) und
   käme sonst nicht mit. Die Datei `tutor/data/<lang>/news.json` hält nur den

@@ -1,9 +1,20 @@
 # Die gemalte Puppe (Rig) — wie die Persona aussieht
 
-Bis 2026-09-04 war die Persona im Zimmerfenster (`tutor/room.py`) aus
-pygame-Primitiven zusammengesetzt: Kleid als Trapez, Gliedmassen als
-Rechtecke, Kopf als Kreis. Das war robust, sah aber grob aus. Sasha malt
-selbst, deshalb wird die Figur durch **gemalte Einzelteile** ersetzt.
+**Stand 2026-09-18:** Die Figur ist eine **gemalte Puppe**: Einzelteile als
+gleich große PNGs (512 × 640, gemeinsame Leinwand) plus Bauplan
+`tutor/assets/figuren/<figur>/rig.json` (Drehpunkte, Slots, Reihenfolge,
+Mimik); `tutor/sprites.py` lädt und dreht, `room.py` posiert,
+`tutor/schablone.py` erzeugt die Mal-Schablone, `tutor/gelenke.py` liest
+gemalte Gelenkpunkte zurück. Eine Figur existiert (`lucia`), alle Personas
+nutzen sie über das Profil-Feld `avatar` (Default `lucia`). Mischbetrieb:
+fehlende Teile → Platzhalter, kein Bild → alte Polygon-Figur; Hot-Reload
+einmal pro Sekunde. Der Maßstab kommt aus dem Bauplan
+(`Rig.einheiten_faktor()`), die Figur gibt den Bauplan vor, nicht umgekehrt
+(Commit 713a746). Offen: Sitz-Teile/Seitenansicht, Kleidung als Schicht.
+Artefakt-Liste: `bauplan.md`.
+
+Sasha malt selbst, deshalb ist die Figur aus **gemalten Einzelteilen**
+gebaut (Warum unten).
 
 ## Warum eine Puppe und kein Video-Modell
 
@@ -95,3 +106,10 @@ Skalierungen des Körperbaus automatisch erben). Bewusst **noch nicht gebaut**:
 Priorität ist ein spielbarer Mockup, nicht ein Baukasten. Fürs Erste wird die
 Figur fertig angezogen gemalt. Der spätere Umbau entwertet nichts, was jetzt
 entsteht.
+
+## Historie
+
+- **bis 2026-09-04** — Persona aus pygame-Primitiven (Kleid als Trapez,
+  Gliedmassen als Rechtecke, Kopf als Kreis): robust, aber grob.
+- **2026-09-04** — Rig + gemalte Teile, Schablone, Gelenke-Rückleser
+  (`b71f318`, `713a746`); Assets nach `tutor/assets/` (`c078bb9`).

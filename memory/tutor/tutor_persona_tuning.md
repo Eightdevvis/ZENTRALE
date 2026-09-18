@@ -1,5 +1,16 @@
 # Ling-Ling Persona-Tuning — Testläufe gegen echtes qwen-plus (2026-07-07)
 
+**Stand 2026-09-18:** Das Rezept aus diesem Protokoll gilt unverändert für
+alle Sprachpakete: Prompt **in der Zielsprache**, Few-Shot + harte Verbote,
+`TUTOR_TEMPERATURE` 0.4 + `TUTOR_MAX_TOKENS` 200 im Cloud-Pfad, Vokabel-Kontext
+in der Zielsprache ans Prompt-Ende. Seit 2026-07-25 sind die Prompts
+Übersetzungen des Masters `tutor/langs/PROMPT_TEMPLATE.en.md` (auch gegen
+qwen-plus getestet); der Vokabel-Hinweis liegt je Paket in `vocab_hint.md`
+(nicht mehr `_ZH_VOCAB_HINT`). Das „Offen/Follow-up" unten
+(`correct_use`-Auto-Progression) ist durch das deterministische
+`spoken`/`listened`-Modell erledigt (`tutor_system.md`). Der Rest ist das
+Punkt-in-der-Zeit-Protokoll — das Warum bleibt.
+
 Punkt-in-der-Zeit-Protokoll. Sasha meldete nach dem ersten Testlauf: die Persona
 redet **fast nur Deutsch**, **labert Monologe**, **fake-lobt** ("ich hab deine
 Töne genau gehört!") und drückt **erzwungenes Länder-Spam** rein. Gewünscht ist
