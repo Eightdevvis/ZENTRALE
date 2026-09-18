@@ -1977,7 +1977,7 @@ def _draw_loesch_frage(screen, w, fonts, asv):
         screen.blit(surf, (w // 2 - surf.get_width() // 2, y))
         y += f.get_height() + luft
     _hint_row(screen, fonts['hud'], w, y,
-              [('Entf', 'ja, löschen'), ('Esc', 'abbrechen')])
+              [('Strg+X', 'ja, löschen'), ('Esc', 'abbrechen')])
 
 
 def _draw_stand_wahl(screen, w, fonts, asv, top_y, ctr):
@@ -2058,7 +2058,7 @@ def _draw_stand_wahl(screen, w, fonts, asv, top_y, ctr):
 
     tasten = [('↑↓', 'wählen'), ('Enter', 'los geht’s')]
     if zeilen[idx]['art'] == 'stand':
-        tasten.append(('Entf', 'löschen'))
+        tasten.append(('Strg+X', 'löschen'))
     _hint_row(screen, fonts['hud'], w, tasten_y, tasten)
     if asv.get('meldung'):
         # Fehler beim Anlegen/Wechseln — im Hauptmenü gibt es keinen HUD, also hier.
@@ -2737,7 +2737,7 @@ def main():
             with S['lock']:
                 offen = bool(S['asv'] and S['asv'].get('stand_weg'))
             if offen:
-                if ev.key == pygame.K_DELETE:
+                if ev.key == pygame.K_x and (ev.mod & pygame.KMOD_CTRL):
                     threading.Thread(target=stand_loeschen, daemon=True).start()
                 elif ev.key in (pygame.K_ESCAPE, pygame.K_n):
                     with S['lock']:
@@ -2773,7 +2773,7 @@ def main():
                         threading.Thread(target=stand_bestaetigen, daemon=True).start()
                 return
             # Erst Spielstand waehlen, dann geht das Drill los.
-            if ev.key == pygame.K_DELETE:
+            if ev.key == pygame.K_x and (ev.mod & pygame.KMOD_CTRL):
                 stand_loesch_fragen()
             elif ev.key in (pygame.K_UP, pygame.K_DOWN):
                 with S['lock']:
