@@ -1,20 +1,23 @@
 # Hardware (Raspberry Pi)
 
-Für den vollen Voice-Betrieb auf dem Pi brauchst du Mikrofon, Speaker
-und einen Bewegungs-/Geräuschsensor. Mikro, Lautsprecher und ein
-Geräuschsensor sind **bereits angeschlossen** (Stand 2026-06-02),
-aber noch nicht voll integriert – Details unter „GPIO – aktueller
-Stand". (Der Sprach-Tutor, der diese Hardware ursprünglich am stärksten
-brauchte, **läuft** – siehe `memory/tutor/tutor_system.md`. Was fehlt, ist nicht der Tutor,
-sondern der Sensor: `PRESENCE_DETECTED` löst nur einen **nonverbalen** Ping in
-eine bereits laufende Session aus, kein Auto-Start.)
+**Stand 2026-09-18:** Der Pi 3 ist Ausgabe-, Aufnahme- und Sensor-Knoten
+für das Persona-Zimmer. Angeschlossen und in Betrieb: USB-Mikro (C-Media,
+Aufnahme — Pflicht, der Pi hat keinen eigenen Eingang), USB-Lautsprecher
+(Jieli) bzw. HDMI zum Fernseher (Ausgabe), und seit 2026-09-14 ein
+**PIR HC-SR501 an GPIO4 (BCM) = Board-Pin 7**, den `pi_sensor_bridge.py`
+per gpiozero (Interrupt, kein Polling) liest und als `motion` an den PC
+meldet; das Zimmer wertet den Treffer als Anwesenheit (`presence_age` in
+`room_state`). Whisper und TTS laufen auf dem PC, der Pi rechnet nichts.
+Kein Sound-Server nötig. ⚠ prüfen: der 2026-06-02 erwähnte Geräuschsensor
+(damals Board-Pin 7) — heute sitzt dort der PIR; ob der Geräuschsensor noch
+angeschlossen ist, ist aus Code/Commits nicht erkennbar.
 
 ## Empfohlene Komponenten
 
 | Hardware       | Wofür             | Empfehlung                    |
 |----------------|-------------------|-------------------------------|
 | USB-Mikrofon   | Spracheingabe     | Fifine K053 o. ä. (~15 €)     |
-| Lautsprecher   | TTS-Ausgabe       | 3,5 mm Klinke am Pi-Audio-Jack |
+| Lautsprecher   | TTS-Ausgabe       | USB oder 3,5 mm Klinke am Pi-Audio-Jack |
 | PIR-Sensor     | Motion Detection  | HC-SR501 (~2 €), an GPIO-Pin   |
 
 ## Was geht ohne diese Hardware?
@@ -22,44 +25,39 @@ eine bereits laufende Session aus, kein Auto-Start.)
 - Auf dem **Linux-PC** funktioniert alles – eingebautes Mikrofon und
   Speaker reichen für Whisper und TTS.
 - Auf dem **Pi ohne USB-Mikro/Speaker**: Voice-Pipeline (STT/TTS) geht
-  nicht. Alles andere (Dashboard, Chat, Data Collection) läuft normal.
+  nicht, das Zimmer hört nicht zu. Alles andere (Dashboard, Chat, Data
+  Collection) läuft normal.
 
-## GPIO – aktueller Stand (2026-06-02)
+## GPIO – PIR an der Bridge
 
-- **Geräuschsensor**: physisch am Pi, an **Board-Pin 7** (laut Sasha,
-  noch zu verifizieren). Erst im **Test**, **noch nicht ins Event-
-  System verkabelt** — der Sensorwert fließt noch nicht über
-  `pi_sensor_bridge.py` → `POST /api/sensor/<name>` in die Event-Loop.
-- **Mikrofon**: angeschlossen, **funktioniert aber noch nicht**
-  (offenes To-do, separat zu debuggen).
-- **Lautsprecher**: angeschlossen (3,5-mm-Klinke).
-- Der Rest: `sensors.py` simuliert weiterhin alle Sensoren über die
-  Tastatur. Der echte GPIO-Lesepfad ist also **noch nicht produktiv
-  angebunden**, der Geräuschsensor ist der erste Kandidat dafür.
-
-## GPIO – geplante Anbindung
-
-- Library: `RPi.GPIO`.
-- Damit kein `sudo` nötig wird: User in die Gruppe `gpio` aufnehmen.
-- **Pin-Nummerierung klären, BEVOR Code geschrieben wird:** „Pin 7"
-  ist mehrdeutig. Physischer Board-Pin 7 = BCM **GPIO4**. RPi.GPIO
-  kann beides adressieren (`GPIO.setmode(GPIO.BOARD)` vs `GPIO.BCM`)
-  — Modus und Nummer müssen zusammenpassen, sonst liest man den
-  falschen Pin.
-- Anbindung eines Sensors = drei Stellen (siehe `memory/system/topologie.md`):
-  `_ALLOWED_SENSORS` + `_SENSOR_TO_EVENT` (PC) und die Lese-/Map-Logik
-  in `pi_sensor_bridge.py` (Pi).
-
-Solange das nicht steht, bleibt die Tastatur-Simulation der
-produktive Trigger-Weg (siehe `memory/system/tastatur.md`).
+- Library: **gpiozero** (`MotionSensor(PIR_GPIO)`, `when_motion`-Callback),
+  braucht `gpiozero` + `lgpio` im Pi-venv. Fehlt eins oder ist der Pin nicht
+  zu kriegen: Hinweis im Log, die Bridge läuft ohne PIR weiter.
+- Verdrahtung: DOUT → GPIO4 (BCM) = Board-Pin 7, VCC 5 V, GND.
+- Env: `PI_PIR_GPIO` (Default 4, `0` schaltet ab), `PI_PIR_MIN_GAP`
+  (Default 5 s — der Sensor hält selbst ein paar Sekunden hoch).
+- Warum PIR statt Mikro-Pegel: Geräusche als Anwesenheit lieferten zu viel
+  Falsches (Commit 933a2be); Geräusche melden dem Kern seither nur noch
+  Anwesenheit, wecken die Persona aber nicht (Commit e46f419,
+  `memory/system/audio_strasse.md`).
+- **Pin-Nummerierung:** „Pin 7" ist mehrdeutig. Physischer Board-Pin 7 = BCM
+  **GPIO4**. gpiozero zählt BCM. Modus und Nummer müssen zusammenpassen,
+  sonst liest man den falschen Pin.
+- Anbindung eines weiteren Sensors = drei Stellen (siehe
+  `memory/system/topologie.md`): `_ALLOWED_SENSORS` (`ui/app.py`) +
+  `_SENSOR_TO_EVENT` (`core/main.py`) und die Lese-Logik in
+  `pi_sensor_bridge.py`. Ein `_poll_gpio()`-Skelett für weitere
+  Sensoren (Reed-Kontakt an der Tür, Buttons) liegt dort, ist aber nicht
+  aktiv.
+- Die Tastatur-Simulation (`memory/system/tastatur.md`) bleibt der
+  Test-Weg am PC; auf dem Pi braucht die Bridge kein `sudo`.
 
 ## Audio am Pi (gemessen 2026-09-03)
 
-Der Pi ist der Ausgabe- und Aufnahme-Knoten für das Persona-Zimmer: er
-**spielt ab und nimmt auf**, synthetisiert und erkennt aber nichts selbst.
-`tutor/room.py` schickt Text an `<pc>/api/speak` und bekommt WAV-Bytes zurück,
-und schickt Mikro-WAVs an `<pc>/api/transcribe` — Whisper und TTS laufen auf
-dem PC.
+Der Pi **spielt ab und nimmt auf**, synthetisiert und erkennt aber nichts
+selbst. `tutor/room.py` schickt Text an `<pc>/api/speak` und bekommt
+WAV-Bytes zurück, und schickt Mikro-WAVs an `<pc>/api/transcribe` — Whisper
+und TTS laufen auf dem PC.
 
 Was der Pi an Karten sieht (`/proc/asound/cards`):
 
@@ -84,4 +82,19 @@ die Klinke — die gewünschte Ausgabekarte muss gesetzt werden.
 
 Das Zimmer importiert `sounddevice` und `webrtcvad` erst **im Mikro-Thread**.
 Fehlen sie, läuft das Fenster normal weiter und hört nur nicht zu — der Drill
-vor der Freischaltung braucht ohnehin nur Ausgabe und Tastatur.
+braucht ohnehin nur Ausgabe und Tastatur. Systempakete dafür (libSDL2,
+PortAudio): `deploy/aussenposten-system.txt`. Wie das Mikro-Signal weiter
+verarbeitet wird (VAD, Gating während die Stimme spricht):
+`memory/system/audio_strasse.md`.
+
+## Historie
+
+- **2026-06-02** — Mikro, Lautsprecher und ein Geräuschsensor angeschlossen,
+  aber nichts davon integriert: Geräuschsensor (Board-Pin 7) nur im Test,
+  Mikro funktionierte noch nicht, `sensors.py` simulierte alles über die
+  Tastatur; geplant war `RPi.GPIO` mit User in Gruppe `gpio`.
+- **2026-09-03** — Audio am Pi vermessen (Tabelle oben); das Zimmer hört
+  und spricht über den Pi.
+- **2026-09-14** — PIR an der Bridge per gpiozero, weil Mikro-Pegel als
+  Anwesenheit zu viel Falsches lieferte. Erster echter GPIO-Sensor im
+  Event-System.

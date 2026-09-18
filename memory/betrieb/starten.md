@@ -1,11 +1,13 @@
 # Starten (lokal)
 
-Seit der PC↔Pi-Migration (siehe `memory/system/topologie.md`) laufen alle drei
-Backend-Prozesse auf dem **PC**, nicht mehr auf dem Pi. Der Pi
-ist Display-Kiosk + Sensor-Bridge.
-
-ZENTRALE besteht aus **drei Prozessen** (Event-Loop+Flask, Whisper, TTS).
-Drei Wege sie hochzufahren:
+**Stand 2026-09-18:** Alle drei Backend-Prozesse (Event-Loop+Flask, Whisper,
+TTS) laufen auf dem **PC** — im Alltag als Dienst (`zentrale-pc.service`
+System-Dienst, oder `zentrale-kern.service` als Benutzer-Dienst, siehe
+`systemeinheit.md`; **genau einer pro Rechner**). Für Entwicklung startet
+`zentrale` ein Kassetten-Menü (monolith / laptop / tui). Der Pi startet
+nichts davon: er ist Aussenposten (Sensor-Bridge + Kiosk, Modus `room` = das
+Persona-Zimmer), siehe `memory/betrieb/deployment.md`. Env-Vars und
+Reihenfolge des Hochfahrens: unten.
 
 ## Variante 0 — systemd Auto-Start (Headless, Boot-getriggert)
 
@@ -13,6 +15,7 @@ Fuer den Alltag: drei System-Units in `deploy/*-pc.service`, die ohne
 Login beim Boot starten. Setup + Befehle: siehe `memory/betrieb/deployment.md`,
 Abschnitt „PC-systemd-Services". Vorteil: PC anschalten reicht – nichts
 zu tippen. Nachteil: keine Tastatur-Sensor-Sim (sudo waere noetig).
+Alternative als Benutzer-Dienst mit i3-Scratchpad: `systemeinheit.md`.
 
 ## Variante A — Ein-Befehl-Start: Kassetten-Menü (interaktiv, Dev)
 
@@ -25,7 +28,7 @@ von jedem Verzeichnis aus. Falls der Symlink mal fehlt:
 `ln -s "$PWD/scripts/select_kassette.sh" ~/.local/bin/zentrale` aus dem
 Projekt-Root.)
 
-`zentrale` zeigt seit 2026-06 ein **Kassetten-Menü** („Welche Kassette wählen?",
+`zentrale` zeigt ein **Kassetten-Menü** („Welche Kassette wählen?",
 `tui/select_kassette.py`): mit ↑/↓ wählen (ein animierter Stern ✶ funkelt auf der
 aktuellen Zeile), Enter startet — danach läuft ein Regenbogen-Ladebalken und das
 Menü exec't in das passende Start-Skript:
@@ -105,8 +108,11 @@ zentrale-tui
 (Symlink `~/.local/bin/zentrale-tui` → `scripts/start_tui.sh`. Falls er fehlt:
 `ln -s "$PWD/scripts/start_tui.sh" ~/.local/bin/zentrale-tui`.)
 
-Was passiert: `ZENTRALE_KASSETTE=tui` → Backend ki-frei (wie laptop). Das Skript
-startet `core/main.py` im Hintergrund mit **stdout → Logdatei**
+Was passiert: `ZENTRALE_KASSETTE=tui` → Backend ki-frei (wie laptop). Antwortet
+auf `:5000` schon ein gesundes Backend (Dienst), **hängt sich das Skript dran
+und fasst es nicht an** (`ZENTRALE_TUI_FRESH=1` erzwingt ein eigenes, frisches
+Backend — Entwicklung; Begründung in `systemeinheit.md`). Sonst startet es
+`core/main.py` im Hintergrund mit **stdout → Logdatei**
 (`/tmp/zentrale-tui-backend.log`, sonst würde es die curses-Oberfläche
 zerschießen — die Logs erscheinen ohnehin im stdout-Panel der TUI) und dann die
 TUI **im Vollbild des aktuellen Terminals**. `q` legt unter der Systemeinheit
@@ -114,7 +120,7 @@ das Fenster nur weg (TUI bleibt warm, `$mod+z` holt sie sofort zurück); ohne
 i3-Fenster beendet `q` die TUI. `/quit` oder Ctrl-C beenden immer — und nehmen
 nur ein Backend mit, das dieses Skript selbst gestartet hat (der Kern-Dienst
 bleibt stehen, siehe `systemeinheit.md`). Kein tmux, kein Split, kein
-angeklebtes zweites Terminal — das gab es mal, ist aber raus (Stand 2026-07-25).
+angeklebtes zweites Terminal (siehe Historie).
 
 - **Dependencies:** nur `flask` + `python-dateutil` fürs Backend; die TUI selbst
   ist reine stdlib (`curses`). Kein Browser, kein Whisper/TTS, kein tmux.
@@ -184,9 +190,9 @@ ohnehin nicht.
   und startet neu — nach außen gibt es ihn nie.)
 
 - **Häufigste Ursache (Code 3):** ein **verwaistes Backend** hält noch `:5000`
-  (TUI weg, Prozess lebt). Das Skript holt ein eigenes ki-freies Backend
-  automatisch zurück; bei einem fremden/monolith-Backend bricht es mit Hinweis
-  ab. Aufräumen: `pkill -f 'core/main.py'`, dann erneut `zentrale-tui`.
+  (TUI weg, Prozess lebt). Antwortet es gesund, hängt sich das Skript dran;
+  ein totes/fremdes Backend blockiert mit Hinweis. Aufräumen:
+  `pkill -f 'core/main.py'`, dann erneut `zentrale-tui`.
 
 ### Dateien öffnen
 
@@ -196,10 +202,6 @@ Standard-App (PDF-Default ist **zathura**, gesetzt via
 `xdg-mime default org.pwmt.zathura.desktop application/pdf`). Default pro Typ
 ändern: `xdg-mime default <app>.desktop <mime/typ>`; App einmalig auswählen
 statt Default: `mimeopen -a <datei>`.
-
-<!-- Historie: bis 2026-07-25 bootete zentrale-tui in einer eigenen tmux-Session
-     mit angeklebter bash-Pane unten (eigener Socket, Prefix-Härtung, gemerkte
-     Pane-Höhe). Komplett entfernt — die TUI läuft jetzt schlicht im Vollbild. -->
 
 ## Variante B — 3 Terminals manuell
 
@@ -232,8 +234,8 @@ Ohne `sudo`: alles läuft, nur die Tastatur-Erkennung schweigt. Das
 Dashboard zeigt keine simulierten Sensor-Events mehr, ist aber sonst
 voll funktional.
 
-Wenn der echte GPIO-Pfad implementiert ist (`RPi.GPIO`, User in der
-Gruppe `gpio`), entfällt `sudo` ganz.
+Der echte Sensor-Pfad läuft ohnehin über den Pi (`pi_sensor_bridge.py`,
+PIR per gpiozero — `memory/betrieb/hardware.md`), dort ist kein `sudo` nötig.
 
 ## Konfiguration via Umgebungsvariablen
 
@@ -268,22 +270,21 @@ nächsten Request erneut.
 
 ## Auf dem Pi: Bridge + Kiosk, KEIN Backend
 
-Seit der Migration läuft auf dem Pi nur noch:
+Auf dem Pi läuft nur `pi_sensor_bridge.service` (GPIO/Tastatur-Trigger per
+HTTP an `/api/sensor/<name>`) und der Kiosk (Default-Modus `room`: das
+Persona-Zimmer als Wandbild, TUI per Alt+Z dahinter). Alles dazu — Units,
+Modi, Logs, IP-Wechsel — steht in `memory/betrieb/deployment.md` und
+`memory/system/topologie.md`.
 
-- `pi_sensor_bridge.service` — leitet GPIO/Tastatur-Trigger per HTTP
-  an das PC-Backend (`/api/sensor/<name>`).
-- Firefox-Kiosk auf `http://<PC-IP>:5000` (via XFCE-Autostart, siehe
-  `memory/betrieb/deployment.md`).
+## Historie
 
-`zentrale.service`, `whisper.service`, `tts.service` sind auf dem Pi
-**deaktiviert** (`systemctl disable`). Sie liegen physisch in
-`/etc/systemd/system/`, weil das deploy-Script sie installiert hat,
-aber sie werden nicht mehr beim Boot gestartet.
-
-Logs der Pi-Bridge:
-
-```bash
-ssh zentrale "sudo journalctl -u pi_sensor_bridge.service -f"
-```
-
-Setup + IP-Wechsel-Pfad: `memory/system/topologie.md` und `memory/betrieb/deployment.md`.
+- **bis 2026-07-25** — `zentrale-tui` bootete in einer eigenen tmux-Session
+  mit angeklebter bash-Pane unten (eigener Socket, Prefix-Härtung, gemerkte
+  Pane-Höhe). Komplett entfernt — die TUI läuft schlicht im Vollbild.
+- **2026-06** — Kassetten-Menü (`zentrale` → monolith/laptop/tui) statt
+  eines festen Start-Skripts.
+- **2026-08-19/20** — Backend wurde Dienst (`systemeinheit.md`); seither
+  „hängt sich `start_tui.sh` an statt zu killen", und `/reboot` entstand,
+  weil „Fenster zu, Fenster auf" keinen neuen Backend-Code mehr lädt.
+- **2026-05** — PC↔Pi-Migration: Backend vom Pi auf den PC
+  (`memory/system/topologie.md`).

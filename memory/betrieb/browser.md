@@ -1,6 +1,15 @@
 # Browser — Ideen, Entscheidungen, offene Handgriffe
 
-Stand 2026-08-05. Gesammelt aus den Sitzungen Ende Juli / Anfang August 2026.
+**Stand 2026-08-05:** (seither nichts geändert) **Brave** (Flatpak) ist der
+Browser, der läuft; seine Theme-Kopplung an ZENTRALE ist gelöst (Commit
+`a73af03`, drei gestapelte Ursachen, Abschnitt 9), zwei Handgriffe stehen noch
+aus (Appearance auf GTK stellen, Brave neu starten — kann kein Skript). Der
+**Terminal-Werkzeugkasten** (w3m, lynx, ddgr, feh, mpv, bwrap-Wrapper) ist
+geplant, **nicht installiert**; die Aliase `such`/`lies`/`links` sind
+versprochen, nicht gebaut. Tor: nur `torsocks` wäre sinnvoll, der Tor Browser
+wird von ZENTRALE bewusst nie angefasst. Whonix/Qubes auf 3,7 GB: fällt weg.
+
+Gesammelt aus den Sitzungen Ende Juli / Anfang August 2026.
 Zwei Stränge, die hier zusammenlaufen:
 
 - **Brave** (Flatpak) — der Browser, der tatsächlich läuft, samt Theme-Kopplung an ZENTRALE.
@@ -259,8 +268,8 @@ Selbst hosten lohnt erst, wenn *mehrere Leute* draufgehen.
 
 ## 9. Brave als Flatpak — was gelöst ist
 
-Die Theme-Kopplung „Appearance: vom Gerät" hat bis 2026-08-03 nie gegriffen.
-**Drei gestapelte Ursachen**, alle drei mussten weg:
+Die Theme-Kopplung „Appearance: vom Gerät" hat lange nie gegriffen (bis
+2026-08-03, Historie). **Drei gestapelte Ursachen**, alle drei mussten weg:
 
 1. **`extensions.theme.system_theme = 0`** in den Brave-Prefs — Brave stand aufs
    klassische Theme und hat GTK komplett ignoriert. *Die Hauptursache.*
@@ -322,3 +331,12 @@ anlegt. Nach jeder Neuinstallation einmal aufrufen.
 - `scripts/zentrale-browser-theme` — Portal `color-scheme`, lässt Tor in Ruhe
 - `memory/system/dashboard.md` — Theme-Kette im Überblick
 - `~/.config/i3/spickzettel` — Tastengriffe
+
+## Historie
+
+- **Ende Juli 2026** — Recherche Terminal-Browsing, Sicherheit, Privacy,
+  Tor (Abschnitte 1–8); Entscheidung: Ergänzung, nie Ersatz.
+- **2026-08-03** — Brave-Theme-Kopplung gefixt (Commit `a73af03`): Prefs
+  `system_theme`, Sandkasten sah Themes nicht, Flatpak liest GSettings statt
+  xfconf. Vorher hatte die Kopplung nie funktioniert.
+- **2026-08-05** — Stand dieser Datei.

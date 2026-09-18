@@ -1,15 +1,17 @@
 # Deployment auf Raspberry Pi
 
-**Stand (2026-05):** Seit der PC↔Pi-Migration (siehe `memory/system/topologie.md`)
-hostet der Pi **kein Backend mehr**. Auf dem Pi laufen nur noch:
-
-- Firefox-Kiosk (zeigt das PC-Dashboard)
-- `pi_sensor_bridge.service` (Hardware-Sensoren → HTTP an PC)
-
-Die unten beschriebenen `zentrale.service` / `whisper.service` /
-`tts.service` sind auf dem Pi `disabled`. Die Anleitung bleibt
-trotzdem hier dokumentiert – falls ein Setup mal ohne PC laufen soll
-oder ein zweiter Pi mit eigenem Backend aufgesetzt wird.
+**Stand 2026-09-18:** Der Pi ist **Aussenposten**: kein Backend, nur
+`pi_sensor_bridge.service` (Sensoren + PIR → HTTP an den PC), der Kiosk und
+der Wecker für den PC (`zentrale-wake-pc.service`, Wake-on-LAN). Der
+**Kiosk-Default ist `room`** (seit 2026-09-14): das Persona-Zimmer
+(`tutor/room.py`) als randloses Wandbild, die TUI liegt dahinter (Alt+Z).
+`tui` und `browser` bleiben als Modi wählbar. Erst-Bespielung per
+`scripts/deploy_pi.sh` (Positivliste `deploy/aussenposten.txt`), danach holt
+sich der Knoten sein Paket alle 5 Minuten selbst vom Backend (kein git). Auf
+dem PC laufen die drei Backend-Units `deploy/*-pc.service`. Der Git-Weg
+(`pi_autopull.sh` + `deploy/RELEASE`) und die Vollspiegel-Units
+(`zentrale.service` usw.) gelten nur noch für einen vollwertigen Backend-Host
+(`--voll`).
 
 ## Pi-Sensor-Bridge (aktiver Service)
 
@@ -23,11 +25,15 @@ sudo systemctl enable --now pi_sensor_bridge.service
 ```
 
 Die PC-IP `192.168.50.1` ist seit der LAN-Migration (siehe
-`memory/system/topologie.md`) **fest**. Frueher musste man bei jedem Hotspot-Wechsel
-die env-Datei updaten – das entfaellt jetzt. Sollte sich die IP doch
-mal aendern (anderes LAN-Subnetz), beide Endpunkte konsistent
-anpassen: hier, im Pi-Kiosk-Autostart (`install_xfce_autostart.sh`
-mit `ZENTRALE_BACKEND_URL=...`) und in den PC-systemd-Services.
+`memory/system/topologie.md`) **fest**. Sollte sich die IP doch mal aendern
+(anderes LAN-Subnetz, z.B. nach dem Router-Umbau aus `wachplan.md`), alle
+Endpunkte konsistent anpassen: hier, im Pi-Kiosk-Autostart
+(`install_xfce_autostart.sh` mit `ZENTRALE_BACKEND_URL=...`) und in den
+PC-systemd-Services.
+
+Die Bridge liest seit 2026-09-14 auch den **PIR** (gpiozero, GPIO4 =
+Board-Pin 7, `PI_PIR_GPIO=0` schaltet ab) — Hardware-Details in
+`memory/betrieb/hardware.md`.
 
 ## PC-systemd-Services (zentrale-pc, whisper-pc, tts-pc)
 
@@ -47,18 +53,20 @@ Alle drei laufen als `User=sasha`, **kein** sudo → Tastatur-Sensor-Sim
 geht hier nicht (das war eh nur Dev-Modus, im echten Betrieb liefert
 der Pi die Sensor-Events ueber `/api/sensor/<name>`).
 
-**Kopplung (seit 2026-06-07):** `zentrale-pc.service` hat zusaetzlich
+> **Genau ein Backend pro Rechner:** `zentrale-kern.service` (Benutzer-Dienst,
+> `systemeinheit.md`) macht dasselbe wie `zentrale-pc.service`; beide zusammen
+> streiten sich um `:5000`.
+
+**Kopplung:** `zentrale-pc.service` hat zusaetzlich
 `Wants=whisper-pc.service tts-pc.service`. Damit zieht `systemctl restart
-zentrale-pc.service` die Audio-Sidecars mit hoch (vorher startete der
-Restart NUR das Backend → standen Whisper/TTS, blieben sie unten, und im
-Dashboard-Terminal stand dauerhaft `[TTS nicht erreichbar]`). **Bewusst
-nur `Wants=`, KEIN `After=`** auf die Sidecars: die deklarieren selbst
-schon `After=zentrale-pc` → ein `After=` zurueck erzeugt einen Ordering-
-Cycle, den systemd durch Verwerfen des Sidecar-Starts bricht (sie kommen
-dann nie hoch). `Wants=` ist ordering-frei. Faustregel bei stummer KI /
-totem Mikro: **zuerst `systemctl is-active zentrale-pc whisper-pc tts-pc`**
-— stehen die Sidecars, `restart zentrale-pc` oder gezielt
-`sudo systemctl start whisper-pc tts-pc`.
+zentrale-pc.service` die Audio-Sidecars mit hoch. **Bewusst nur `Wants=`,
+KEIN `After=`** auf die Sidecars: die deklarieren selbst schon
+`After=zentrale-pc` → ein `After=` zurueck erzeugt einen Ordering-Cycle, den
+systemd durch Verwerfen des Sidecar-Starts bricht (sie kommen dann nie hoch).
+`Wants=` ist ordering-frei. Faustregel bei stummer KI / totem Mikro: **zuerst
+`systemctl is-active zentrale-pc whisper-pc tts-pc`** — stehen die Sidecars,
+`restart zentrale-pc` oder gezielt `sudo systemctl start whisper-pc tts-pc`.
+(Warum die Kopplung kam: Historie 2026-06-07.)
 
 Einmalig installieren:
 
@@ -84,14 +92,9 @@ auf 5000/5050/5051.
 
 ## Wake-on-LAN (Pi weckt PC)
 
-> **Seit 2026-09-14 der Weck-Weg von unterwegs** (`wachplan.md`): der PC
-> darf unterwegs schlafen, SSH weckt ihn nicht — nur dieses Magic-Packet
-> vom Pi.
-
-Damit man nicht erst zum PC laufen und ihn anschalten muss, wenn man
-heimkommt, weckt der Pi den PC ueber Wake-on-LAN aus S5 (soft-off).
-Das Pi bleibt 24/7 an, der PC darf schlafen (nachts und wenn niemand
-daheim ist — siehe `wachplan.md`).
+Der Weck-Weg von unterwegs (`wachplan.md`: der PC darf unterwegs schlafen,
+SSH weckt ihn nicht — nur dieses Magic-Packet vom Pi). Der Pi bleibt 24/7
+an, der PC darf schlafen; das Paket weckt aus Suspend wie aus S5 (soft-off).
 
 **PC-Seite (einmalig):**
 
@@ -120,7 +123,7 @@ Status / Log nachschauen:
 ssh zentrale 'systemctl status zentrale-wake-pc.service; journalctl -u zentrale-wake-pc.service -n 50'
 ```
 
-Manueller Trigger zum Testen (PC vorher in S5 bringen):
+Manueller Trigger zum Testen (PC vorher schlafen legen):
 ```bash
 ssh zentrale 'sudo systemctl start zentrale-wake-pc.service'
 # oder direkt das Skript:
@@ -135,21 +138,11 @@ und das Script wartet bis zu 90s auf eine ZENTRALE-Antwort.
 
 Konfig per Env-Vars: `PC_MAC`, `LAN_BROADCAST`, `PROBE_URL`.
 
-**Kiosk-Start ist selbstheilend (seit 2026-06-02):** Der Firefox-
-Kiosk-Autostart (`install_xfce_autostart.sh`) ist KEINE Einmal-
-Sache mehr (frueher: „240s warten, dann starten"). Stattdessen eine
-Endlos-Schleife: wartet beliebig lange auf das Backend, startet
-Firefox, pollt weiter und laedt bei 3 Fehlern in Folge (~30s) neu.
-Grund fuer den Umbau: die Pi bootet regelmaessig VOR dem PC (PC
-braucht BIOS + manuelle LUKS-Eingabe + Pop-Boot + Warmup). Lief das
-alte 240s-Fenster ab, hing Firefox FUER IMMER auf der Fehlerseite —
-der „unable to connect den ganzen Tag"-Bug. Die Schleife erholt sich
-auch nach spaetem PC-Start, Suspend oder Deploy-Restart von selbst.
-
-Spaeter sinnvoll: zusaetzlicher Aufruf aus `pi_sensor_bridge.py` bei
-PIR-/Tuer-/Button-Trigger fuer den „Sasha kommt zur Tuer rein"-Flow.
 Der Boot-Trigger deckt nur das „Pi geht an"-Szenario (Stromausfall,
-manueller Pi-Start).
+manueller Pi-Start). Spaeter sinnvoll: zusaetzlicher Aufruf aus
+`pi_sensor_bridge.py` bei PIR-/Tuer-/Button-Trigger fuer den „Sasha kommt zur
+Tuer rein"-Flow — mit der Falle aus `wachplan.md` (ein pollender Pi darf
+einen schlafenden PC nicht dauernd wecken).
 
 ## 1) Pi vorbereiten (einmalig)
 
@@ -158,22 +151,25 @@ sudo apt update
 sudo apt install -y python3 python3-venv python3-pip rsync firefox-esr
 ```
 
+Systempakete fuer das Zimmer (libSDL2, PortAudio …): `deploy/aussenposten-system.txt`
+— werden **nicht** automatisch installiert (root), der Updater prueft nur, ob
+die Python-Pakete sich importieren lassen.
+
 ## 2) Deployen — zwei Sorten Knoten
 
-`scripts/deploy_pi.sh` kennt seit 2026-09-03 **zwei Modi**, weil es zwei
-Sorten Knoten gibt. Der Default ist der Aussenposten.
+`scripts/deploy_pi.sh` kennt **zwei Modi**, weil es zwei Sorten Knoten gibt.
+Der Default ist der Aussenposten.
 
 ### Aussenposten (Default) — Anzeige, Ton, Sensorik, KEIN Backend
 
-Der Pi an der Wand hostet seit der PC↔Pi-Migration kein Backend mehr. Er
-bekommt deshalb **nur die Positivliste `deploy/aussenposten.txt`**
+Der Pi an der Wand bekommt **nur die Positivliste `deploy/aussenposten.txt`**
 (deny-by-default) und die kurze `deploy/requirements-aussenposten.txt`;
 systemd-Units werden **uebersprungen**.
 
 Was drin ist: die TUI (`tui/`, stdlib-only), die Sensor-Bridge samt
 `core/host_metrics.py`, das Persona-Zimmer (`tutor/room.py` +
-`scripts/open_tutor_room.py`) und die Einrichtungs-Skripte. Gemessen sind
-das **15 Dateien, ~660 KB**.
+`scripts/open_tutor_room.py` + Handschrift-Font), der Updater und die
+Einrichtungs-Skripte. Die Liste selbst ist die Wahrheit, hier keine Kopie.
 
 Warum die Liste existiert: der alte Vollspiegel schob **alles** rueber —
 darunter `data/tts_model/` (1,0 GB Sprachmodelle) und `core/map/` (37 MB) —
@@ -222,7 +218,7 @@ Das deploy-Script erstellt automatisch `.venv` auf dem Pi und der
 systemd-Service erwartet ebenfalls `.venv`. Wenn du manuell auf dem Pi
 arbeitest: nutze `.venv/bin/python`, nicht `venv/bin/python`.
 
-## 3) systemd-Services
+## 3) systemd-Services (nur `--voll`)
 
 Drei Unit-Templates liegen in `deploy/`:
 
@@ -238,65 +234,63 @@ laufen mit niedrigster Scheduling-Priorität, damit der Boot des
 Dashboards nicht durch den 500-MB-Modell-Load von Whisper ausgebremst
 wird — sobald der Core idle ist, kriegen sie CPU.
 
+Auf dem Pi an der Wand sind sie **`disabled`** (liegen noch in
+`/etc/systemd/system/` vom alten Vollspiegel, starten aber nicht).
+
 **Wichtig:**
 - `User=<dein-pi-user>` (vom Deploy-Script gesetzt) – also **kein**
   `sudo`. Das heißt die Tastatur-Simulation funktioniert auf dem Pi
-  nicht, was ja eh ok ist, weil dort der echte PIR-Sensor (geplant)
-  übernehmen soll.
+  nicht; dort uebernimmt der echte Sensor-Pfad der Bridge.
 - Die Templates haben `User=pi` als Platzhalter, der zur Laufzeit
   durch den SSH-User ersetzt wird.
 
 ## 4) Kiosk-Modus (Auto-Start im Vollbild, ohne XFCE-UI)
 
-> **MODI seit 2026-06-27 (`ZENTRALE_KIOSK_MODE`, Default `tui`):** Der Pi
-> zeigt standardmäßig **kein Firefox mehr**, sondern ein **maximiertes xterm
-> mit der curses-TUI** (`tui/zentrale_tui.py`, gegen das PC-Backend). Grund:
-> Der Pi 3 (1 GB RAM, schwache VideoCore-IV-GPU) rendert das animierte
-> 1080p-Monolith-Dashboard nur in **Software** → ein CPU-Kern dauerhaft am
-> Anschlag (gemessen `firefox-esr` ~120 % CPU), sichtbar ruckelige Framerate.
-> Die TUI malt nur geänderte Terminal-Zellen → Last quasi null; sie ist
-> stdlib-only → **kein venv nötig** (system-`python3` reicht). **ACHTUNG:** die
-> `tui`-Kassette ist **KI-frei** (kein Chat/Kino/Reflexion auf der Wand). Der
-> alte Firefox-Kiosk bleibt unter `ZENTRALE_KIOSK_MODE=browser` erhalten (volle
-> KI-Optik / PC-Solo-Test). Beide schreibt dasselbe
-> `install_xfce_autostart.sh`.
->
-> **`-maximized`, NICHT `-fullscreen`:** Ein echtes Fullscreen-Fenster liegt
-> bei xfwm4 in einem eigenen Layer ganz oben → die Zusatzfenster der TUI
-> (Karte `w` → `scripts/map_window.py` pygame, `/slide`-PDFs) öffnen
-> **dahinter** und sind unerreichbar. `-maximized` ist ein normales Fenster
-> auf voller Größe → neue Fenster stapeln sich normal drüber. Randlos macht es
-> das xfconf-Setting `xfwm4 /general/borderless_maximize = true` (setzt das
-> Skript im tui-Modus selbst).
->
-> **Anwenden nach Deploy:** Der Autopull (Abschnitt 6) zieht nur Code +
-> restartet Services — er ruft `install_xfce_autostart.sh` **nicht**. Nach dem
-> Pull also einmalig auf dem Pi:
-> `bash /opt/zentrale/scripts/install_xfce_autostart.sh && sudo systemctl restart lightdm`.
+**Drei Modi** (`ZENTRALE_KIOSK_MODE`, Default **`room`**), alle schreibt
+dasselbe `install_xfce_autostart.sh`:
 
-Ziel: Pi bootet → kurze Konsole → schwarzer Bildschirm → Kiosk (TUI-xterm
-bzw. Firefox je nach Modus). **Kein XFCE-Panel, kein Wallpaper, kein
-Mauszeiger** dazwischen.
+| Modus | Was an der Wand steht | Warum |
+|---|---|---|
+| `room` (Default) | das Persona-Zimmer (`scripts/open_tutor_room.py --wand`), randloses Fenster in Desktop-Groesse, Mikro immer offen, die Persona spricht von sich aus; TUI per Alt+Z drueber (`q`/`u` = zurueck). Endet das Zimmer (Esc, Crash), kommt es nach 2 s wieder; Backend weg faengt das Zimmer selbst ab. stderr → `/tmp/zentrale-tutor-room.log`. | Entscheidung Sasha 2026-09-14: der Tutor ist wichtiger als das Dashboard, und »am Pi vorbeigehen« muss reichen — kein Knopf. |
+| `tui` | maximiertes xterm mit der curses-TUI gegen das PC-Backend. Stdlib-only → **kein venv noetig**. **KI-frei** (kein Chat/Kino/Reflexion an der Wand). | Der Pi 3 (1 GB RAM, VideoCore IV) rendert das animierte 1080p-Dashboard nur in **Software** → ein Kern dauerhaft am Anschlag (`firefox-esr` ~120 % CPU), ruckelig. Die TUI malt nur geaenderte Zellen. |
+| `browser` | der selbstheilende Firefox-Kiosk auf `$ZENTRALE_BACKEND_URL` (volle KI-Optik / PC-Solo-Test). | der urspruengliche Kiosk. |
+
+**`-maximized` / `--wand`, NICHT Fullscreen:** Ein echtes Fullscreen-Fenster
+liegt bei xfwm4 in einem eigenen Layer ganz oben → Zusatzfenster (die TUI per
+Alt+Z, Karte `w` → `scripts/map_window.py`, `/slide`-PDFs) oeffnen
+**dahinter** und sind unerreichbar. Ein normales Fenster auf voller Groesse
+stapelt sich normal. Randlos macht es das xfconf-Setting
+`xfwm4 /general/borderless_maximize = true` (setzt das Skript selbst).
+
+**Anwenden nach Deploy:** Weder der Paket-Updater noch der alte Autopull ruft
+`install_xfce_autostart.sh` auf. Nach einer Aenderung am Skript also einmalig
+auf dem Pi: `bash /opt/zentrale/scripts/install_xfce_autostart.sh && sudo
+systemctl restart lightdm`.
+
+Ziel: Pi bootet → kurze Konsole → schwarzer Bildschirm → Kiosk. **Kein
+XFCE-Panel, kein Wallpaper, kein Mauszeiger** dazwischen.
 
 `scripts/install_xfce_autostart.sh` macht das komplett (User-Ebene):
 
 1. **Custom `xfce4-session.xml`** (`~/.config/xfce4/xfconf/xfce-perchannel-xml/`):
    überschreibt die Default-Failsafe-Session der XFCE-Installation.
    Startet **nur xfwm4 + xfsettingsd** — kein xfce4-panel, kein
-   xfdesktop, kein Thunar. Root-Window bleibt schwarz bis Firefox
+   xfdesktop, kein Thunar. Root-Window bleibt schwarz bis der Kiosk
    übernimmt.
 2. **xfwm4 backup-autostart** in `~/.config/autostart/xfwm4.desktop`.
    Belt-and-Suspenders falls die Session-XML mal nicht greift —
-   Firefox-Kiosk-Fullscreen braucht den WM.
+   der Kiosk braucht den WM.
 3. **`~/.xsessionrc`** (nicht `.xprofile` — die liest Debians Xsession
    nicht): Bildschirm-Modus via `aussenposten_bildschirm.py` + Blanking aus
    (`xset s off`, `-dpms`), der Wandmonitor bleibt an.
-4. **`~/.config/autostart/zentrale.desktop`** mit Firefox-Kiosk auf
-   `$ZENTRALE_BACKEND_URL` (Default **`http://192.168.50.1:5000`** =
-   PC-LAN-IP, NICHT mehr localhost — siehe Footgun-Warnung unten).
-   Der Exec ist eine **selbstheilende Schleife**: wartet endlos bis
-   der Core antwortet, startet Firefox, und laedt bei Backend-Abriss
-   (3× Fehler in Folge) automatisch neu. Kein 240s-Timeout mehr.
+4. **`~/.config/autostart/zentrale.desktop`** je nach Modus (Tabelle oben).
+   Im `browser`-Modus ist der Exec eine **selbstheilende Schleife**: wartet
+   endlos bis der Core antwortet, startet Firefox, und laedt bei
+   Backend-Abriss (3× Fehler in Folge, ~30 s) automatisch neu. Kein
+   Timeout — der Pi bootet regelmaessig VOR dem PC (BIOS + LUKS + Warmup),
+   und ein Zeitfenster haengt dann fuer immer auf der Fehlerseite
+   (Historie 2026-06-02). Ziel-URL Default **`http://192.168.50.1:5000`**
+   (PC-LAN-IP, NICHT localhost — Footgun unten).
 5. **Notaus-Hotkey `Ctrl+Alt+Esc`** → `scripts/emergency_exit.sh`
    (lightdm-stop → Pi auf TTY1).
 
@@ -317,20 +311,19 @@ bash /opt/zentrale/scripts/install_xfce_autostart.sh
 Idempotent. Der Hotkey-Teil funktioniert nur aus einer aktiven
 XFCE-Session (DBus muss laufen).
 
-> **FOOTGUN (real passiert 2026-06-02):** Bis dahin war der URL-Default
-> `http://localhost:5000`. Wer das Skript auf dem Pi OHNE
-> `ZENTRALE_BACKEND_URL` aufrief — genau so stand's frueher in der
-> `deploy_pi.sh`-Anleitung —, bekam einen Kiosk, der das Backend auf der
-> **Pi selbst** suchte. Ergebnis: „unable to connect" den ganzen Tag,
-> egal wie gesund der PC war. Seitdem ist der Default die PC-LAN-IP
-> `192.168.50.1:5000`. Diagnose-Merker: wenn der Kiosk tot ist, ZUERST
-> `grep kiosk ~/.config/autostart/zentrale.desktop` auf der Pi — zeigt
-> die URL, auf die Firefox wirklich zielt.
+> **FOOTGUN (real passiert 2026-06-02):** Wer das Skript auf dem Pi OHNE
+> `ZENTRALE_BACKEND_URL` aufruft und der Default waere `localhost`, bekommt
+> einen Kiosk, der das Backend auf der **Pi selbst** sucht. Ergebnis: „unable
+> to connect" den ganzen Tag, egal wie gesund der PC war. Seitdem ist der
+> Default die PC-LAN-IP `192.168.50.1:5000`. Diagnose-Merker: wenn der Kiosk
+> tot ist, ZUERST `grep -i url ~/.config/autostart/zentrale.desktop` auf dem
+> Pi — zeigt die URL, auf die der Kiosk wirklich zielt.
 
-### Mikrofon-Berechtigung im Kiosk
+### Mikrofon-Berechtigung im Kiosk (nur `browser`-Modus)
 
-Der Pi-Kiosk laedt das Dashboard von `http://192.168.50.1:5000` (PC-LAN-
-IP). Damit der Mic-Button (`#chat-mic-btn`, siehe `memory/ki/audio_system.md`)
+Im `room`-Modus nimmt das Zimmer selbst per `sounddevice` auf — Firefox ist
+nicht beteiligt. Fuer den Browser-Kiosk gilt: damit der Mic-Button
+(`#chat-mic-btn`, siehe `memory/ki/audio_system.md`) auf `http://192.168.50.1:5000`
 funktioniert, mussten zwei Hindernisse weg:
 
 1. **Insecure-Origin-Block:** Firefox laesst `getUserMedia()` per default
@@ -376,13 +369,19 @@ Wenn der Kiosk zickt oder man ans Terminal will:
 - **Drücken:** `Ctrl+Alt+Esc` → `lightdm` stoppt, Pi landet auf
   **TTY1** (Konsole, Login-Prompt).
 - **Zurück zum Kiosk:** `sudo systemctl start lightdm`.
-- **`zentrale.service` läuft weiter** im Hintergrund — wenn man auch
-  das stoppen will, dann manuell: `sudo systemctl stop zentrale whisper tts`.
+- Die Bridge und (auf einem `--voll`-Host) `zentrale.service` laufen
+  weiter im Hintergrund — wenn man auch das stoppen will, dann manuell.
 - Voraussetzung: `scripts/install_pi_sudoers.sh` wurde einmal mit
   `sudo` ausgeführt, sonst kann `emergency_exit.sh` lightdm nicht
   stoppen (siehe unten).
 
 ## 5) Logs prüfen
+
+Aussenposten: Bridge-Log `sudo journalctl -u pi_sensor_bridge.service -f`,
+Zimmer-stderr `/tmp/zentrale-tutor-room.log`, Updater-Log siehe
+`memory/system/topologie.md`.
+
+Backend-Host (`--voll`):
 
 ```bash
 ssh pi@192.168.1.xx "sudo journalctl -u zentrale.service -f"
@@ -402,8 +401,8 @@ journalctl. Wer sie auch in journalctl sehen will, müsste
 
 ## 6) Auto-Update via RELEASE-Marker (Pull-Cron) — der Git-Weg
 
-> **Fuer Aussenposten abgeloest.** Ein Knoten ohne Backend braucht seit
-> 2026-09-04 kein git mehr: er holt sich ein zugeschnittenes Paket
+> **Fuer Aussenposten abgeloest** (2026-09-04). Ein Knoten ohne Backend
+> braucht kein git mehr: er holt sich ein zugeschnittenes Paket
 > (`deploy/aussenposten-update.cron` → `scripts/aussenposten_update.py`,
 > siehe `memory/system/topologie.md`). Der hier beschriebene Weg — Git-Clone
 > auf dem Knoten, `pi_autopull.sh`, manueller Bump in `deploy/RELEASE` —
@@ -413,7 +412,7 @@ journalctl. Wer sie auch in journalctl sehen will, müsste
 
 Nicht jeder `git push` soll automatisch deployen. Stattdessen prüft ein
 Cronjob auf dem Pi alle 5 Minuten, ob im Remote-Repo die Datei
-[`deploy/RELEASE`](../deploy/RELEASE) einen anderen Inhalt hat als
+[`deploy/RELEASE`](../../deploy/RELEASE) einen anderen Inhalt hat als
 lokal auf dem Pi. Nur dann wird gepullt + Service neu gestartet.
 
 **Workflow:**
@@ -441,7 +440,7 @@ angeworfen.
 
 ### Einmal-Setup auf dem Pi
 
-**a) Erstdeployment** wie oben (`scripts/deploy_pi.sh`). Dadurch liegt
+**a) Erstdeployment** wie oben (`scripts/deploy_pi.sh --voll`). Dadurch liegt
 das Projekt unter `/opt/zentrale` und der systemd-Service läuft.
 
 **b) Repo als Git-Clone hinterlegen** (rsync-Kopie hat kein `.git`,
@@ -545,3 +544,22 @@ crontab -l
   Wenn der Key woanders liegt als `~/.ssh/id_*`, muss er entweder über
   die `~/.ssh/config` (siehe oben) gefunden werden oder im Script via
   `GIT_SSH_COMMAND` gesetzt werden.
+
+## Historie
+
+- **2026-05** — PC↔Pi-Migration: Backend vom Pi auf den PC, Pi nur noch
+  Kiosk + Bridge. Vorher musste bei jedem Hotspot-Wechsel die Bridge-Env
+  angepasst werden; seit der festen LAN-IP `192.168.50.1` entfaellt das.
+- **2026-06-02** — Firefox-Kiosk wurde selbstheilend (Endlos-Schleife statt
+  „240 s warten, dann starten"): der Pi bootete vor dem PC, das Fenster lief
+  ab, Firefox hing fuer immer auf der Fehlerseite. Gleicher Tag: der
+  `localhost`-Footgun (oben).
+- **2026-06-07** — `Wants=`-Kopplung der PC-Units: `restart zentrale-pc`
+  startete NUR das Backend, Whisper/TTS blieben unten, im Dashboard stand
+  dauerhaft `[TTS nicht erreichbar]`.
+- **2026-06-27** — Kiosk-Default `tui` statt Firefox (Pi 3 rendert das
+  Dashboard nur in Software, ein Kern am Anschlag).
+- **2026-09-03/04** — `deploy_pi.sh` mit zwei Modi (Aussenposten-Positivliste
+  vs. `--voll`); Aussenposten holen ihr Paket per HTTP statt git.
+- **2026-09-14** — Kiosk-Default `room`: das Persona-Zimmer ist das Wandbild,
+  die TUI liegt dahinter (Commit f499953).

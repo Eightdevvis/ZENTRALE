@@ -1,5 +1,18 @@
 # ZENTRALE als Systemeinheit
 
+**Stand 2026-09-18:** Der Kern läuft als **Benutzer**-Dienst
+`zentrale-kern.service` (an `default.target`), das TUI-Fenster liegt im
+i3-Scratchpad und `$mod+z` ruft `scripts/zentrale-fenster` (drei Fälle:
+sichtbar → weglegen, weggelegt → holen, fehlt → starten; 89 % × 86 %,
+mittig). `start_tui.sh` hängt sich an einen laufenden Dienst an statt ihn
+zu killen (`ZENTRALE_TUI_FRESH=1` erzwingt ein eigenes Backend), `/reboot`
+startet den Dienst neu (`starten.md`). Der Takt meldet sich per
+`notify-send` (`core/melden.py`), aber nur, wenn das Fenster nicht ohnehin
+sichtbar ist; `ZENTRALE_NOTIFY=0` schaltet ab. Einrichten:
+`scripts/zentrale-systemeinheit` (weigert sich aus einem Worktree).
+**Genau ein Backend pro Rechner** — `zentrale-pc.service` (System-Dienst,
+`deployment.md`) ist die Alternative, nicht die Ergänzung.
+
 `deploy/zentrale-kern.service` · `deploy/i3/zentrale.conf` ·
 `scripts/zentrale-systemeinheit` · `core/melden.py`
 
@@ -44,7 +57,7 @@ versioniert im Repo liegen statt verstreut in einer Konfiguration.
   Eine Taste muss hier drei Fälle abdecken: sichtbar → weglegen, weggelegt →
   holen, gar nicht da → starten.
 
-> **Die Korrektur vom 20.08.2026.** Die erste Fassung war eine reine i3-Regel:
+> **Warum ein Skript und keine i3-Regel (Korrektur 20.08.2026).** Die erste Fassung war eine reine i3-Regel:
 > `for_window … move scratchpad` plus `bindsym $mod+z … scratchpad show`. Das
 > lief einmal sauber und ging dann kaputt — Sasha: *„wenn ich modz drücke
 > flackert das fenster aber schließt sich nicht"*, und die Anwesenheits-Anzeige
@@ -67,8 +80,8 @@ versioniert im Repo liegen statt verstreut in einer Konfiguration.
 > erst erfüllt: das Fenster geht beim Anmelden **sichtbar** auf — „default
 > offen" statt versteckt.
 
-> **Und die Folgekorrektur, gleicher Tag:** *„jetzt klebt es links oben in der
-> ecke!"* — `move position center` zentriert auf den **Koordinatenursprung**,
+> **Warum die Platzierung im Skript liegt (Folgekorrektur, gleicher Tag):**
+> *„jetzt klebt es links oben in der ecke!"* — `move position center` zentriert auf den **Koordinatenursprung**,
 > nicht auf den Bildschirm. Gemessen: `x=-643, y=-390` bei 1440×900, das Fenster
 > stand also mit seiner Mitte in der Ecke. Das war die ganze Zeit falsch; sichtbar
 > wurde es erst, als `move scratchpad` wegfiel — **das Einblenden hatte die Lage
@@ -95,9 +108,9 @@ versioniert im Repo liegen statt verstreut in einer Konfiguration.
 > zusätzlich selbst: so hängt das Aussehen nicht daran, dass die Konfiguration
 > eingebunden ist.
 
-**3. `start_tui.sh` hängt sich an, statt zu killen.** Vorher hat das Skript ein
-laufendes Backend „zurückgeholt", also abgeschossen und neu gestartet. Gegen
-einen Dienst wäre das ein Kampf: jede TUI würde ihn killen, systemd startet ihn
+**3. `start_tui.sh` hängt sich an, statt zu killen.** Ein laufendes Backend
+abzuschießen und neu zu starten (so war es vor dem Dienst) wäre gegen einen
+Dienst ein Kampf: jede TUI würde ihn killen, systemd startet ihn
 neu, und der Takt-Tageszustand wäre bei jedem Fensteröffnen frisch. Jetzt gilt:
 antwortet auf `:5000` etwas Gesundes, hängen wir uns dran und fassen es nicht
 an — weder beim Start noch beim Beenden. `ZENTRALE_TUI_FRESH=1` erzwingt den
@@ -180,3 +193,12 @@ Anmelden auf, wenn niemand mehr an den Worktree denkt.
 
 Nach dem Einrichten fehlen zwei Handgriffe, die Sasha selbst macht: i3 neu
 laden, und den Kern-Dienst einmal starten.
+
+## Historie
+
+- **19.08.2026** — Sashas Auftrag (Zitat oben); Kern als Benutzer-Dienst,
+  Fenster im Scratchpad, erste Fassung als reine i3-Regel.
+- **20.08.2026** — i3-Regel durch `scripts/zentrale-fenster` ersetzt
+  (`for_window` feuert nach, `scratchpad show` legt nicht immer weg), dann
+  Platzierung korrigiert (`move absolute position center` als eigener
+  Befehl, 89 %/86 % statt 50 %/75 %). Beide Begründungen oben.

@@ -1,24 +1,21 @@
 # Remote-LUKS-Unlock via Dropbear im Initramfs
 
-**Status: ANGEWENDET 2026-06-01, Reboot-Test noch offen.**
-
-**Zweck seit 2026-09-14: nur noch echtes Aus** (Stromausfall, Reboot,
-bewusst abgeschaltet). Im Normalfall schläft der PC nur (Suspend, kein
-LUKS-Prompt) und wird per WoL vom Pi geweckt — siehe `wachplan.md`.
-Dropbear + `zentrale-unlock` bleiben für den Aus-Fall stehen; wird später
-angeschaut.
-Die drei sudo-Schritte sind durchgelaufen: init-premount-Skript
-`zentrale-lan-unlock` liegt + ist `+x`, `ip=off` steht im gepflegten
-cmdline (`/etc/kernelstub/configuration`), `update-initramfs -u` ohne
-Fehler durch. Was noch fehlt: der **Reboot + ssh-Unlock vom Pi**
-(Schritt 4 unten). Solange ungetestet gilt: der lokale LUKS-Prompt am
-PC funktioniert normal weiter, der Boot ist nicht brickbar.
+**Stand 2026-09-18:** Funktioniert und ist eingerichtet (angewendet
+2026-06-01; dass der ssh-Unlock ins Initramfs klappt, ist seit 2026-06-26
+belegt — siehe Historie). Gebraucht wird er nur noch nach **echtem Aus**
+(Stromausfall, Reboot, bewusst abgeschaltet): im Normalfall schläft der PC
+nur (Suspend, kein LUKS-Prompt) und wird per WoL vom Pi geweckt — siehe
+`wachplan.md`. Auf dem Pi liegt der Wrapper `zentrale-unlock`
+(`deploy/zentrale-unlock`), der beim Pi-Start automatisch in einem xterm
+aufgeht, auf das Initramfs-Fenster wartet und dann genau einmal entsperrt.
+Der lokale LUKS-Prompt am PC funktioniert daneben immer weiter; der Boot ist
+nicht brickbar.
 
 Zugehöriges Bedrohungsmodell + Design-Entscheidungen: `memory/betrieb/sicherheit.md`.
 
 ---
 
-## Pi-Komfort: `zentrale-unlock` + Auto-Terminal (2026-06-03)
+## Pi-Komfort: `zentrale-unlock` + Auto-Terminal
 
 Auf dem **Pi** liegt ein Bequemlichkeits-Wrapper, damit Sasha vom Sofa
 nicht die volle `ssh`-Zeile tippen muss:
@@ -36,7 +33,7 @@ nicht die volle `ssh`-Zeile tippen muss:
     (zeigt Erfolg/Fehler). Wenn's zuverlässig läuft, `-hold` raus →
     Fenster schließt sich nach erfolgreichem Unlock von selbst.
 
-### Timing-Rennen + Warte-Schleife-Fix (2026-06-26)
+### Warum eine Warte-Schleife (das Timing-Rennen)
 
 **Beobachtet (Sasha):** Pi gebootet während PC **aus** → xterm sagt
 *host unreachable*, gibt auf, nichts passiert; manuell per Terminal
@@ -65,7 +62,7 @@ im selben Sekundenfenster booten.
 Damit poppt der Passphrase-Prompt von allein auf, sobald der PC ins
 Initramfs kommt — kein manuelles Nachtippen mehr.
 
-**„PC läuft schon"-Kurzschluss (2026-06-27):** Die zwei PC-Zustände
+**„PC läuft schon"-Kurzschluss:** Die zwei PC-Zustände
 hängen an zwei Ports — **2222** offen = Initramfs/Dropbear (entsperren),
 **22** offen = schon durchgebootet (normaler sshd). Die Poll-Schleife
 prüft pro Runde beide: 2222 → entsperren; 22 → der PC läuft längst, es
@@ -79,7 +76,7 @@ scp deploy/zentrale-unlock pi@192.168.50.10:/tmp/zentrale-unlock
 ssh pi@192.168.50.10 'sudo install -m755 /tmp/zentrale-unlock /usr/local/bin/zentrale-unlock'
 ```
 
-**Stolperstein 2026-06-03:** `zentrale-unlock` gab `permission denied` —
+**Stolperstein:** `zentrale-unlock` gab `permission denied` —
 dem Skript fehlte das Execute-Bit. `install -m755` oben setzt es gleich
 mit; bei Handarbeit: `sudo chmod +x /usr/local/bin/zentrale-unlock`.
 
@@ -99,7 +96,7 @@ Der PC entsperrt *nicht* von allein, nur der **Eingabe-Ort** wandert
 
 ---
 
-## Ist-Zustand (was schon da ist) — 2026-06-01 verifiziert
+## Bausteine (2026-06-01 verifiziert; die Lücke unten ist seitdem geschlossen)
 
 | Baustein                          | Status | Fundstelle |
 |-----------------------------------|--------|------------|
@@ -108,16 +105,16 @@ Der PC entsperrt *nicht* von allein, nur der **Eingabe-Ort** wandert
 | Pi-SSH-Key hinterlegt             | ✅     | `/etc/dropbear/initramfs/authorized_keys` (192 B, `-rw-------` root) |
 | Dropbear-Optionen / Port          | ✅     | `dropbear.conf`: `DROPBEAR_OPTIONS="-I 60 -j -k -p 2222 -s"` |
 | NIC-Treiber im Initramfs          | ✅     | `r8169`, von `MODULES=most` abgedeckt |
-| **Netzwerk-Bringup im Initramfs** | ❌     | **DAS ist die Lücke — siehe unten** |
+| **Netzwerk-Bringup im Initramfs** | ✅ seit 2026-06-01 | war die Lücke — init-premount-Skript + `ip=off`, siehe unten |
 
-### Die eine fehlende Sache
+### Die eine fehlende Sache (Befund vor dem Fix)
 
-`cat /proc/cmdline` zeigt **kein** `ip=`, `initramfs.conf` hat `DEVICE=`
-leer, `conf.d/` ist leer. Heißt: am LUKS-Prompt kommt **enp4s0 nie hoch**
-→ der PC hat in dem Moment **keine IP** → der Pi kann Port 2222 nicht
-erreichen. Dropbear *läuft*, lauscht aber auf einer toten Leitung.
+`cat /proc/cmdline` zeigte **kein** `ip=`, `initramfs.conf` hatte `DEVICE=`
+leer, `conf.d/` war leer. Heißt: am LUKS-Prompt kam **enp4s0 nie hoch**
+→ der PC hatte in dem Moment **keine IP** → der Pi konnte Port 2222 nicht
+erreichen. Dropbear *lief*, lauschte aber auf einer toten Leitung.
 
-Genau deshalb „kommt der Pi nicht durch LUKS".
+Genau deshalb „kam der Pi nicht durch LUKS".
 
 ---
 
@@ -150,14 +147,14 @@ Der Trick hier: wir umgehen das komplett. Aus den echten Skripten
 Default-Route (unser Skript), Flush vor Boot (dropbear). Die kaputte
 Route von damals kann hier an keiner Stelle entstehen.
 
-**⚠️ Offene Mini-Entscheidung für Sasha:** `ip=off` ist trotzdem ein
-`ip=`-Eintrag im Kernel-Cmdline. Wenn dir das gegen den Strich geht
-(verständlich nach dem Drama), Alternative siehe ganz unten. Default-
-Empfehlung bleibt `ip=off`, weil sauber begründet und vom Skript belegt.
+**Entschieden und angewendet: `ip=off`.** Es ist trotzdem ein
+`ip=`-Eintrag im Kernel-Cmdline. Wenn das doch gegen den Strich geht
+(verständlich nach dem Drama), Alternative siehe ganz unten — sie ist
+fummeliger und race-anfällig, deshalb blieb es bei `ip=off`.
 
 ---
 
-## Schritt-für-Schritt (morgen, mit sudo)
+## Schritt-für-Schritt (angewendet 2026-06-01, mit sudo)
 
 ### 1. Netz-Bringup-Skript anlegen
 
@@ -207,7 +204,7 @@ grep -A20 kernel_options /etc/kernelstub/configuration
 sudo update-initramfs -u
 ```
 
-### 4. Reboot + Test
+### 4. Reboot + Test (so geht der Unlock von Hand)
 
 - PC neu starten, am LUKS-Prompt **stehen lassen** (nicht lokal tippen).
 - Vom Pi aus:
@@ -285,3 +282,22 @@ Skript, das nach dem DHCP-Fehlschlag die IP (re-)setzt — fummelig und
 race-anfällig. **Empfehlung bleibt `ip=off`** (der harmlose Sentinel),
 die saubere Variante. Nur dokumentiert, falls die Reflex-Abneigung
 gegen alles-was-`ip=`-heißt überwiegt.
+
+---
+
+## Historie
+
+- **2026-06-01** — Befund: Dropbear lief, aber ohne Netz im Initramfs.
+  Fix (init-premount-Skript + `ip=off`) noch am selben Tag angewendet,
+  Initramfs neu gebaut. Der Reboot-Test stand danach eine Weile als „offen"
+  in dieser Datei — das war überholt, siehe 06-26.
+- **2026-06-03** — `zentrale-unlock` + xterm-Autostart auf dem Pi;
+  Stolperstein fehlendes Execute-Bit.
+- **2026-06-26** — Sashas Beobachtung: Autostart-xterm scheiterte
+  (Timing-Rennen), manuell getippt **klappte** der Unlock → Beweis, dass
+  ssh ins Initramfs + `cryptroot-unlock` funktionieren. Fix: Warte-Schleife,
+  Skript nach `deploy/zentrale-unlock` versioniert.
+- **2026-06-27** — „PC läuft schon"-Kurzschluss (Port 22 vs 2222, Commit
+  f0ee134).
+- **2026-09-14** — Wachplan: Suspend statt Aus, Dropbear nur noch für den
+  Aus-Fall (`wachplan.md`).

@@ -1,9 +1,13 @@
 # Display-Debug (Pi-Kiosk Bildschirm schwarz)
 
-**Status: GELOEST am 2026-05-12.** Echte Ursache war ein vc4-KMS-Bug
-auf Pi 3 B + diesem Monitor, NICHT die xfce4-Session-Geschichte aus
-dem ersten Anlauf. Fix dokumentiert unten — diese Datei in dieser
-Reihenfolge lesen, sonst geht man wieder in die Sackgassen die wir
+**Stand 2026-09-18:** Gelöst seit 2026-05-12 — `dtoverlay=vc4-fkms-v3d` statt
+`vc4-kms-v3d` in `/boot/firmware/config.txt`. Echte Ursache war ein
+vc4-KMS-Bug auf Pi 3 B + diesem Monitor, NICHT die xfce4-Session-Geschichte
+aus dem ersten Anlauf. Bei neuen Display-Problemen zuerst **Screenshot vom
+Display :0** (Render- vs. Output-Schicht trennen), dann erst Theorien. Der
+Kiosk-Inhalt selbst (Zimmer/TUI/Browser) steht in `deployment.md`; die
+Bildschirm-Modus-Wahl macht `scripts/aussenposten_bildschirm.py`. Diese Datei
+in dieser Reihenfolge lesen, sonst geht man wieder in die Sackgassen, die wir
 schon abgelaufen haben.
 
 ## Der echte Fix
@@ -126,12 +130,12 @@ Installiert den lightdm-Hook fuer den Auto-Modus.
 
 ### `scripts/install_xfce_autostart.sh`
 
-**Aktuelles Setup (Stand 2026-05-12, nach Kiosk-Lockdown):**
 Schreibt eine minimale `~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml`
 die nur `xfwm4` + `xfsettingsd` startet (kein Panel, kein xfdesktop,
 kein Thunar). Plus `xfwm4`-XDG-autostart als Backup. xfdesktop ist
 ABSICHTLICH WEG — wir wollen das Root-Window schwarz haben, damit
-zwischen lightdm-Login und Firefox-Kiosk nichts sichtbar ist.
+zwischen lightdm-Login und Kiosk nichts sichtbar ist. Was der Kiosk dann
+zeigt (Modi `room`/`tui`/`browser`): `deployment.md`.
 
 Historischer Kontext: in einer früheren Variante hatten wir
 xfdesktop hier mit drin, weil unter dem alten vc4-KMS-Display-Bug
@@ -175,8 +179,16 @@ Verwandte Lehre: `[[feedback-debug-tunnel-vision]]` (Claude-Memory).
 
 ## Bekannte Folge-Probleme
 
-- **Dashboard-Layout auf 1920x1080**: das CSS rendert nur in den
-  linken ~1260 px, rechts daneben schwarzer Streifen. Auf dem
-  echten Pi-Monitor (1024x768) faellt das nicht stark auf weil
-  da gerade fast passt. Auf einem 1920x1080-Monitor offensichtlich
-  hässlich. Task „Dashboard CSS für 1920x1080 fluid machen".
+- **Dashboard-Layout auf 1920x1080** (nur `browser`-Kiosk): das CSS rendert
+  nur in den linken ~1260 px, rechts daneben schwarzer Streifen. Auf dem
+  echten Pi-Monitor (1024x768) faellt das nicht stark auf weil da gerade fast
+  passt. ⚠ prüfen: ob das noch gilt — seit dem Monolith-Dashboard (2026-06)
+  und dem Kiosk-Wechsel auf TUI/Zimmer wurde es nicht mehr angeschaut.
+
+## Historie
+
+- **2026-05 (mehrere Sitzungen)** — schwarzer Kiosk-Monitor; Theorien zu
+  DPMS, Modes, xfce4-Session, Kabeln alle ausgeschlossen (Liste oben).
+- **2026-05-12** — Screenshot-Trick trennt Render von Output → vc4-KMS als
+  Ursache, `fkms`-Wechsel löst es. Lehre: die zwei User-Beobachtungen oben
+  hätten es früher verraten.

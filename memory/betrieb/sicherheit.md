@@ -1,5 +1,16 @@
 # Sicherheit – Bedrohungsmodell, LUKS, Auto-Unlock
 
+**Stand 2026-09-18:** Relevante Achsen sind Diebstahlschutz (LUKS, Daten
+at rest) und Remote-Hardening; ein Hochsicherheits-Setup wäre Overkill.
+LUKS-Header-Backup und Notfall-Keyslot existieren (2026-05-19), der
+Remote-Unlock über Dropbear im Initramfs ist eingerichtet und funktioniert
+(`auto_unlock.md`) — seit dem Wachplan nur noch für den echten Aus-Fall.
+Bewusst akzeptierte Lücken: Evil Maid (`/boot` unverschlüsselt),
+Disk-PW = User-PW. Seit 2026-06 gibt es einen gewollten Ausgangskanal
+(KI-Tools `web_search`/`fetch_url`, hart gegated), seit 2026-08 optional den
+Cloud-Kern (`memory/ki/ki_system.md`). Offen: Firewall, SSH-Hardening,
+Notfall-Passphrase auf Papier, Live-USB.
+
 Sammelpunkt für Security-Themen rund um den ZENTRALE-Stack. Konkrete
 Setups gehören in eigene Themen-Files (z.B. `memory/betrieb/auto_unlock.md`, später
 `firewall.md`), hier landen das **Bedrohungsmodell** und bekannte
@@ -27,9 +38,9 @@ Setups gehören in eigene Themen-Files (z.B. `memory/betrieb/auto_unlock.md`, sp
 Schlussfolgerung: **Diebstahlschutz und Remote-Hardening** sind die
 relevanten Achsen. Hochsicherheits-Setup wäre Overkill.
 
-## Ausgehender Kanal: Internet-Pipe der KI (seit 2026-06-07)
+## Ausgehender Kanal: Internet-Pipe der KI
 
-Bis hierher hatte ZENTRALE **keinen** gewollten Ausgangskanal (offline by
+Bis 2026-06-07 hatte ZENTRALE **keinen** gewollten Ausgangskanal (offline by
 default). Die KI-Tools `web_search`/`fetch_url` (`core/web.py`; in der
 `klein`-Schiene `web_suche`/`hole_url`, das Gate prüft über
 `ai.braucht_erlaubnis()` immer den kanonischen Namen) öffnen einen –
@@ -106,7 +117,7 @@ Dritter), Secure Boot + TPM-Measurement umsetzen.
 
 ## Auto-Unlock-Strategie (Dropbear im Initramfs)
 
-> **Seit 2026-09-14** (`wachplan.md`): der PC schläft nur noch (Suspend),
+> Seit dem Wachplan (`wachplan.md`) schläft der PC nur noch (Suspend),
 > Schritt 1 (WoL) ist der normale Weck-Weg; Schritte 2–5 braucht es nur nach
 > echtem Aus.
 
@@ -138,23 +149,15 @@ am PC sitzen muss, läuft im Initramfs ein minimaler SSH-Server
 - User-Login auf X-Session bleibt manuell (gewollt: Brain läuft als
   systemd, kein Autologin).
 
-**Netzwerk-im-Initramfs — Design-Entscheidung (2026-06-01):** Das
-Initramfs braucht eine IP, *bevor* NetworkManager läuft. Wir setzen
-**kein** funktionales `ip=<adresse>`-Kernel-Param (das hat bei der
-LAN-Migration die kaputte Default-Route produziert, siehe `memory/system/topologie.md`
-+ Memory `feedback_no_kernel_ip_param`). Stattdessen: `ip=off` (der
-„mach-nichts"-Sentinel, neutralisiert nur das DHCP) **plus** ein eigenes
-init-premount-Skript, das enp4s0 mit `192.168.50.1/24` **ohne**
-Default-Route hochbringt. `init-bottom/dropbear` flusht eh alles vor dem
-Pivot → NetworkManager startet sauber. Begründung + exakte Befehle:
-`memory/betrieb/auto_unlock.md`.
-
-Setup-Anleitung + Test-Plan: **`memory/betrieb/auto_unlock.md`**
-(angelegt 2026-06-01, vorbereitet aber noch nicht angewendet).
+**Netzwerk-im-Initramfs:** kein funktionales `ip=<adresse>`-Kernel-Param
+(das hat bei der LAN-Migration die kaputte Default-Route produziert, siehe
+`memory/system/topologie.md`), sondern `ip=off` plus eigenes
+init-premount-Skript ohne Default-Route. Begründung, Befehle, Debug-Pfad und
+Rollback: **`memory/betrieb/auto_unlock.md`** (eingerichtet, funktioniert).
 
 ## Recovery-Stand (LUKS)
 
-### Erledigt – 2026-05-19
+### Erledigt (2026-05-19)
 
 - **LUKS-Header-Backup** existiert in zwei Kopien:
   - PC lokal: `/home/sasha/luks-header-nvme0n1p3-20260519.img`
@@ -195,10 +198,8 @@ sudo cryptsetup luksKillSlot /dev/nvme0n1p3 <slot-nr>
 - [ ] **Live-USB beschaffen** (Pop!_OS ISO auf USB-Stick). Pop hat zwar
   Recovery auf `nvme0n1p2` (4 GB FAT), Live-USB ist robuster für
   Initramfs-Reparatur falls's mal nicht bootet. Verschoben auf später.
-- [~] **Dropbear im Initramfs**: installiert + gekeyt + Port 2222 steht,
-  Netz-Bringup (init-premount-Skript + `ip=off`) **angewendet 2026-06-01**
-  (Initramfs neu gebacken, ohne Fehler). Offen nur noch: Reboot +
-  ssh-Unlock-Test vom Pi. Details in `memory/betrieb/auto_unlock.md`.
+- [x] **Dropbear im Initramfs**: eingerichtet und belegt funktionierend
+  (Details + Historie in `memory/betrieb/auto_unlock.md`).
 - [ ] **Firewall** (`nftables`/`ufw`) durchgehen – welche Ports sind
   offen, welche müssen offen sein, was loggt was.
 - [ ] **SSH-Hardening**: Key-only-Auth bestätigen
@@ -210,3 +211,17 @@ sudo cryptsetup luksKillSlot /dev/nvme0n1p3 <slot-nr>
   Eigene LUKS-Passphrase setzen wäre die saubere Lösung.
 - [ ] **Evil-Maid-Mitigation**: Secure Boot + TPM-Measurement, wenn
   das Bedrohungsmodell sich verschärft (aktuell bewusst akzeptiert).
+
+## Historie
+
+- **2026-05-19** — LUKS-Header-Backup (PC + Pi) und Notfall-Keyslot 1.
+- **2026-06-01** — Auto-Unlock-Strategie entschieden (kein TPM, kein
+  Tang/Clevis, Eingabe-Ort wandert nur), Netz-Bringup im Initramfs
+  angewendet.
+- **2026-06-07** — erster gewollter Ausgangskanal: KI-Web-Tools mit hartem
+  Gate.
+- **2026-08** — Cloud-Kern als Opt-in (`memory/ki/ki_system.md`): bricht die
+  Offline-Eigenschaft für den Chat bewusst; was rausgeht, auch
+  Tool-Ergebnisse.
+- **2026-09-14** — Wachplan: Suspend statt Aus, Dropbear nur noch für den
+  Aus-Fall.
