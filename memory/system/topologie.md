@@ -80,7 +80,7 @@ Stream offen).
 mapped sie auf die internen Events (`_SENSOR_TO_EVENT` in `main.py`).
 Wenn ein neuer Sensor dazukommt: an drei Stellen ergänzen
 (`_ALLOWED_SENSORS`, `_SENSOR_TO_EVENT`, `KEYBOARD_MAP` in der Bridge).
-Der PIR läuft in der Bridge per gpiozero-Callback (`../betrieb/hardware.md`).
+Ein PIR ist in der Bridge vorbereitet (gpiozero-Callback), aber noch nicht angeschlossen (`../betrieb/hardware.md`).
 
 Zweiter **Pi → PC**-Push: **Telemetrie**. Dieselbe
 Bridge (`pi_sensor_bridge.py`) pollt alle ~30s CPU/Temp/RAM/SD (aus

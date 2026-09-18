@@ -3,11 +3,13 @@
 **Stand 2026-09-18:** Der Pi 3 ist Ausgabe-, Aufnahme- und Sensor-Knoten
 für das Persona-Zimmer. Angeschlossen und in Betrieb: USB-Mikro (C-Media,
 Aufnahme — Pflicht, der Pi hat keinen eigenen Eingang), USB-Lautsprecher
-(Jieli) bzw. HDMI zum Fernseher (Ausgabe), und seit 2026-09-14 ein
-**PIR HC-SR501 an GPIO4 (BCM) = Board-Pin 7**, den `pi_sensor_bridge.py`
-per gpiozero (Interrupt, kein Polling) liest und als `motion` an den PC
-meldet; das Zimmer wertet den Treffer als Anwesenheit (`presence_age` in
-`room_state`). Whisper und TTS laufen auf dem PC, der Pi rechnet nichts.
+(Jieli) bzw. HDMI zum Fernseher (Ausgabe). **Ein PIR ist NICHT
+angeschlossen** — nur vorbereitet (Sasha, 2026-09-15: »Sensor später«): die
+Bridge `pi_sensor_bridge.py` liest seit 2026-09-14 GPIO4 (BCM) = Board-Pin 7
+per gpiozero und würde Bewegung als `motion` an den PC melden; das Zimmer
+würde den Treffer als Anwesenheit werten (`presence_age` in `room_state`).
+Solange kein Sensor dranhängt, passiert davon nichts. Whisper und TTS laufen
+auf dem PC, der Pi rechnet nichts.
 Kein Sound-Server nötig. ⚠ prüfen: der 2026-06-02 erwähnte Geräuschsensor
 (damals Board-Pin 7) — heute sitzt dort der PIR; ob der Geräuschsensor noch
 angeschlossen ist, ist aus Code/Commits nicht erkennbar.

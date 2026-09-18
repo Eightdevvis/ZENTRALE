@@ -15,9 +15,10 @@ je Wort → Status `new/understood/learning/learned/intuitive`; die KI zählt
 nie. 12 Tools in der Sandbox (`tools._ALLOWED`). Skill-Catcher `tutor/skills.py`
 erkennt `no_entiendo` und **loggt nur**. An der Wand ist das Zimmer
 (`tutor/room.py`) das Kiosk-Bild des Pi (`../betrieb/deployment.md`);
-Anwesenheit kommt über Mikro und PIR (`../system/audio_strasse.md`,
-`../betrieb/hardware.md`), die Persona spricht nur nach verstandenen Worten
-oder PIR-Treffer von sich aus. Die einzige Naht zum Kern ist
+Anwesenheit kommt über das Mikro (`../system/audio_strasse.md`); ein PIR
+ist vorbereitet, aber nicht angeschlossen (`../betrieb/hardware.md`). Die
+Persona spricht nur nach verstandenen Worten von sich aus; das Hauptmenü
+beendet die Session, das Zwischenmenü (Esc) friert sie nur ein. Die einzige Naht zum Kern ist
 `core/tutor_port.py`; Keys und Kill-Switches gehören dem Kern.
 ⚠ prüfen: das TUI-Textpanel (`/tutor`) bietet noch `/lang` an, obwohl
 `/api/tutor/config` ein `lang` ablehnt.
