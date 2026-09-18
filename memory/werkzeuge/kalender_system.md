@@ -1,10 +1,23 @@
 # Kalender-System (Layer-Modell)
 
-Zeitlich strukturierte Schicht neben dem assoziativen Graph. Der Graph
-ist gut für „wer mag was, was hängt mit was zusammen"; der Kalender ist
-gut für „welcher Tag wann, was kommt noch, was ist regelmäßig". Beide
-sind verknüpft über das ISO-Datum als gemeinsamen Schlüssel – keine
-harte Referenz, jeder Teil bleibt unabhängig wartbar.
+**Stand 2026-09-18:** `core/kalender.py` hält Termine in Layern (`termine`,
+`routinen` mit RRULE, `pausen`, `erlebt`), rechnet Konflikte und Alarme
+(eigener Kanal, nicht in den Arbeitsdaten) und liefert allen Fronten dieselbe
+Anzeige (`/api/calendar`, Woche/Monat, Sidebar = flache »week«-Liste,
+mehrtägige Termine, Zyklus-Tönung). Die KI liest per `read_calendar` (Bucket
+→ Python rechnet die Grenzen, Wochentag fertig geliefert); **heute und
+morgen** stehen als Imprint im gecachten Prompt-Kopf, die Uhrzeit **nicht**
+(seit 18.08.2026 nur per `read_time`; erinnern tut der Takt,
+`../system/takt.md`). Schreiben durch die KI nur über bestätigte Tool-Calls
+(Erlaubnis-Gate); direkte Nutzeraktionen in TUI/Browser sind nicht gegatet.
+Der Auto-Capture aus dem Graphen ist gestrichen (17.08.2026), der Graph
+selbst abgeschaltet — die Graph-Verknüpfung unten ist Historie.
+
+Zeitlich strukturierte Schicht — ursprünglich neben dem assoziativen Graph
+(gut für „wer mag was"), heute neben dem Datei-Gedächtnis; der Kalender ist
+gut für „welcher Tag wann, was kommt noch, was ist regelmäßig". Verknüpft nur
+über das ISO-Datum als gemeinsamen Schlüssel – keine harte Referenz, jeder
+Teil bleibt unabhängig wartbar.
 
 ## Datenmodell
 
@@ -410,6 +423,11 @@ Vergangenheit, beliebiger Zeitraum) rufst du zuerst read_calendar -
 nie raten, nie ohne Tool zurückfragen.
 ```
 
+(So sah der Block 2026-05 aus. Heute steht die **Uhrzeit nicht mehr** drin
+— `ai._now_prompt()` sagt ausdrücklich „du weißt nicht, wie spät es ist,
+ruf `read_time`" —, und der Satz „keine Termine im Kopf" ist durch den
+Imprint für heute/morgen relativiert; Begründung in `../system/takt.md`.)
+
 **Warum kein Glue (Designwechsel 2026-06):** Vorher wurde die laufende
 (später: laufende + nächste) Woche fest in den Prompt geklebt. Das hatte
 zwei Probleme:
@@ -656,7 +674,10 @@ aufgeräumt, der Toggle blendet alles **ein**.
   zeigt der ›-Cursor auf den falschen Termin. `ausfall`-Einträge sind ohnehin nie
   auswählbar (`di=None`), lassen sich also gefahrlos gleich mit verstecken.
 
-## Cross-Reference Graph ↔ Kalender (typisches Beispiel)
+## Cross-Reference Graph ↔ Kalender (typisches Beispiel, Historie)
+
+(Der Konzept-Graph ist seit 18.08.2026 abgeschaltet — `../ki/ki_system.md`;
+das Muster gilt sinngemäß mit dem Datei-Gedächtnis.)
 
 User: „wie war Geige letzte Woche?"
 
@@ -671,3 +692,14 @@ Wichtig: beide Systeme dürfen unabhängig wahrheitsgemäß sein. Wenn der
 Kalender „Geige am 26.5." sagt, der Graph aber nichts zur Stimmung
 weiß, sagt die KI „weiß ich nicht" statt zu raten – Anti-Konfabulation
 gilt für beide Schichten.
+
+## Historie
+
+- **2026-05** — Layer-Modell, `read_calendar`, Woche fest im Prompt.
+- **2026-06** — kein Glue mehr: alles per `read_calendar` (Split-Brain-Bug);
+  **06-06** Kollisions-/Machbarkeits-Layer; **06-07** Alarm-Kanal; sichtbare
+  Anzeige in allen Fronten, direktes Eintragen/Ändern/Löschen, Erledigt-Toggle.
+- **2026-07** — Sidebar als flache »week«-Liste, mehrtägige Termine.
+- **2026-08-17** — Auto-Capture aus dem Graphen ersatzlos gestrichen
+  (Schreibweg am Gate vorbei); Imprint für heute/morgen in den Cache.
+- **2026-08-18** — Uhrzeit raus aus dem Prompt, Takt übernimmt das Erinnern.

@@ -1,12 +1,24 @@
 # Mail-System – Triage per Sender-Keymap (read + sortieren)
 
+**Stand 2026-09-18:** Läuft **live gegen Outlook** (OAuth2/XOAUTH2, Login
+2026-06-11; Proton/Gmail sind vorbereitet, nicht angebunden). Der
+**IMAP-Ordner IST der Status**: bekannte Absender werden per Keymap
+(`core/mail_rules.py`, Trie + Domain-Regeln) in Kategorie-Ordner unter
+`ZENTRALE/` verschoben, unbekannte bleiben im Eingang-Tray (INBOX + `\Seen`,
+einsortieren erst beim Lesen), nichts wird je hart gelöscht. TUI-Panel `p`
+mit Kategorien → Mails → Lesen/Antworten (Senden via SMTP XOAUTH2 oder als
+Entwurf; **Senden noch nicht live verifiziert**, braucht einmal Re-Login
+für `SMTP.Send`). Alle IMAP-Ops im Hintergrund-Worker, Verbindungs-Pool,
+Zähl- und Body-Caches (pro Knoten, nicht gesynct). Passphrase aus
+`ZENTRALE_MAIL_KEY` oder OS-Keyring; `MAIL_DRY_RUN` Default an — ⚠ prüfen:
+ob im Betrieb `MAIL_DRY_RUN=0` gesetzt ist, steht nur in der Umgebung. KI
+sieht Mail nur lesend (`read_mail`). Letzter Code-Stand 2026-07-13.
+
 Pollt mehrere IMAP-Postfächer (Proton via Bridge, Outlook, Gmail),
 klassifiziert jede neue Mail über eine **Absender→Kategorie-Keymap** und
 führt die Kategorie-Aktion **am echten Server** aus (verschieben / Papierkorb).
 Kern-Module: `core/mail.py`, `core/mail_rules.py`, `core/mail_secrets.py`,
-`core/mail_oauth.py`. Eingeführt 2026-06-10. **Stand: Fundament + Rule-Engine
-+ Outlook-OAuth (Device-Code) gebaut und ohne Netz verifiziert; noch nicht
-gegen echte Postfächer live.**
+`core/mail_oauth.py`. Eingeführt 2026-06-10.
 
 ## Idee (Sashas Modell)
 
@@ -496,15 +508,15 @@ im News-System).
 
 ## Status / offen (nächste Bausteine)
 
-- **Gebaut + getestet (ohne Netz):** Rule-Engine, Secrets-Schicht
-  (`cryptography`), IMAP-Poller + safe Write-back, Dry-Run, Fetcher-Gating,
-  `main.py`-Einbindung, **Outlook-OAuth2** (Thunderbird-Auth-Code **und**
-  eigener Device-Code, refresh_token-Rotation), **KI-Tool `lies_mail`**
-  (read-only, in `ai.py` verdrahtet + System-Prompt-Regel 9), **Review-CLI**
-  `-m core.mail review`. **Noch nicht** gegen echte Postfächer live.
+- **Gebaut:** Rule-Engine, Secrets-Schicht (`cryptography`), IMAP-Poller +
+  safe Write-back, Dry-Run, Fetcher-Gating, `main.py`-Einbindung,
+  **Outlook-OAuth2** (Thunderbird-Auth-Code **und** eigener Device-Code,
+  refresh_token-Rotation), **KI-Tool `read_mail`/`lies_mail`** (read-only),
+  **Review-CLI** `-m core.mail review`. Live gegen Outlook seit 2026-06/07
+  (die Härtungen unten — SORT-CAPABILITY, Drossel, Login-Aussetzen — kamen
+  aus echtem Betrieb).
 - **Outlook (Login erledigt 2026-06-11):** via Thunderbird-Client-ID
-  eingeloggt, refresh_token verschlüsselt gespeichert. Offen: erster echter
-  `--poll` Dry-Run gegen die INBOX → bei Zufriedenheit `MAIL_DRY_RUN=0`.
+  eingeloggt, refresh_token verschlüsselt gespeichert.
 - **Proton (danach):** Bridge installieren (bezahlter Plan) → `mail_secrets
   add` (provider=proton, Bridge-User + Bridge-Passwort) → Dry-Run.
 - **Gmail (danach):** App-Passwort → läuft sofort mit dem bestehenden Code.
@@ -606,3 +618,19 @@ tippen. Verwaltung (Passphrase tippt der Nutzer per `getpass`, nie geloggt):
 - `… keyring-test` / `keyring-clear` — prüfen / entfernen.
 Deps: `secretstorage` + `jeepney` (pure-Python, im venv). Fehlen sie (headless),
 greift einfach weiter nur die Env-Var.
+
+## Historie
+
+- **2026-06-10/11** — Fundament, Rule-Engine, Outlook-OAuth (Thunderbird-ID
+  statt eigenem Azure), Outlook vor Proton.
+- **2026-06-15** — TUI-Panel `p` mit zwei Ebenen.
+- **2026-06-30 – 07-03** — Verbindungs-Pool, Hintergrund-Worker, Batch-MOVE,
+  Zähl-/Ordner-Caches, Keymap-Reconcile + Trie, Eingang-Tray.
+- **2026-07-06/07** — chronologische Sortierung, SORT nur mit CAPABILITY
+  (Outlook kappte sonst die Verbindung).
+- **2026-07-12/13** — Antworten/Entwurf aus dem Eingang, Auto-Einsortieren,
+  abgelehnter Login setzt das Konto aus. Passphrase aus dem OS-Keyring.
+- **später** — `mail_counts.json`/`mail_folders.json`/`mail_state.json` aus
+  dem Knoten-Sync ausgeschlossen (`~/.local/bin/zentrale-sync`, außerhalb
+  des Repos): der PC ohne Key pushte leere Zähler, der Boot-Pull überschrieb
+  die echten (`../system/topologie.md`).

@@ -1,5 +1,19 @@
 # News-System – Persönliche Tagesschau (Baustein-Modell)
 
+**Stand 2026-09-18:** `core/news.py` zieht RSS aus breit gestreuten Quellen,
+clustert per bge-m3 zu Themen-Bausteinen (LLM labelt nur), hält sie mit
+Wichtigkeit/Decay/`gesehen` im eigenen Store (kein Graph) und baut daraus
+über `read_news`/`lies_news` eine gesprochene Sendung (Cinema-Modus im
+Browser). Der Fetcher läuft nur in der monolith-Kassette. **Die Moderation
+spricht bis heute direkt mit Ollama** (`core/news.py`, `num_ctx`,
+`NEWS_TEMPERATURE` 0.7 — nicht über `ai_backends`/Cloud); der 2026-06-08
+**geparkte** Fabulations-Fix (generate-then-verify pro Sektion, Zitate
+statt Paraphrase) wartet damit weiter auf ein stärkeres Modell — ⚠ prüfen: ob
+die Sendung mit dem Cloud-Kern (08/2026) je neu gebencht oder auf den
+Cloud-Pfad umgestellt werden soll; letzter Code-Stand 2026-06-08.
+Offline-Aufholmodus über SearXNG-Suche ist gebaut. Offen: Eilmeldung,
+Personalisierung, visuelle Phase.
+
 Periodisch gefetchte, KI-moderierte Weltpolitik-Sendung. Kern-Modul:
 `core/news.py`. KI-Tool: `read_news` (in der `klein`-Schiene weiterhin
 `lies_news` — siehe „Zwei Schienen" in `memory/ki/ki_system.md`; der Kern
@@ -324,7 +338,7 @@ Tuning-Konstanten: `NEWS_CLUSTER_SIM=0.64` (Average-Linkage, gemessen),
     der Ehrlichkeits-Guard im `_AUFHOL_PROMPT` verhindert Halluzination.
     **War blockiert** weil DuckDuckGo den Scraper geblockt hat — **gelöst durch
     Such-Backend-Swap auf SearXNG** (self-hosted, `localhost:8888`, JSON;
-    Implementierung + Container-Befehl siehe [memory/ki/ki_system.md](memory/ki/ki_system.md)).
+    Implementierung + Container-Befehl siehe [../ki/ki_system.md](../ki/ki_system.md)).
     End-to-End-Lauf 2026-06-08 verifiziert: 7 SearXNG-Suchen → LLM →
     4187-Zeichen-Rückblick, alle Calls im Internet-Panel sichtbar (expliziter
     `push_internet_log`, da localhost-Hop sonst unsichtbar wäre).
@@ -338,3 +352,10 @@ Tuning-Konstanten: `NEWS_CLUSTER_SIM=0.64` (Average-Linkage, gemessen),
   - **Phase 4 (visuell)**: Lead-Bilder/Videos pro Story auf den
     `monolith`-Canvas während die KI vorliest. Roh-Stimmen halten `link`
     dafür vor.
+
+## Historie
+
+- **2026-06-07** — Baustein-Kern, Wochenrückblick, Cinema-Modus.
+- **2026-06-08** — Clustering auf bge-m3 (LLM labelt nur), Fabulations-Hebel
+  gemessen, Endfix geparkt (Modell-Problem); Offline-Aufholmodus über
+  SearXNG. Seither kein Code-Commit an `core/news.py`.

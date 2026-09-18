@@ -1,5 +1,13 @@
 # Notizen-System (freie Notiz aus gestapelten Blöcken)
 
+**Stand 2026-09-18:** TUI (Taste `n`) + Backend (`core/notes.py`,
+`data/notes.json`, Routen in `../system/api_endpoints.md`) laufen; Blöcke
+text/liste/float stapeln sich in der Mitte. Browser-Front nie gebaut — und
+seit die Browser-Fronten aufgegeben sind (`../system/dashboard.md`), auch
+nicht mehr geplant; verschachtelte Unterpunkte in der Listenbox weiter offen.
+Nicht zu verwechseln mit dem Datei-Gedächtnis der KI (`../ki/gedaechtnis_dateien.md`,
+`notizen/*.md`) — das hier sind Sashas Notizen, die KI liest sie nicht.
+
 > **STATUS (2026-07): TUI + Backend live, browser-front offen.** Taste `n` auf
 > der Startseite öffnet direkt eine Notiz. Eine Notiz ist eine geordnete Folge
 > von **Blöcken** (text / liste / float), die sich in der MITTE-Box automatisch

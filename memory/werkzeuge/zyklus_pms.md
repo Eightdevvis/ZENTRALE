@@ -1,5 +1,14 @@
 # Zyklus-/PMS-Rechner
 
+**Stand 2026-09-18:** `core/cycle.py` leitet aus dem Lifestyle-Graphen
+»periode« (Typ `scale`, gefunden per Namens-Slug) Zykluslänge, nächsten
+Start und PMS-Fenster (7 Tage davor) ab — keine eigene Datei, kein Layer,
+kein Eingabewerkzeug. Sichtbar als Zeile im Graph-Werkzeug, als Fläche in
+der TUI-Kurve (Achse rollt weiter, wird nicht vorgeschoben) und als Tönung
+im Kalender; `GET /api/cycle` + `cycle`-Feld an `/api/calendar`. Kein
+medizinisches Werkzeug. Tests festgenagelt (`tests/test_cycle.py`,
+`tests/test_tui_cycle_axis.py`).
+
 Rechnet aus dem Lifestyle-Graphen **»periode«** aus, wann die nächste Periode
 fällig ist, und markiert die Woche davor als PMS-Fenster. Modul:
 `core/cycle.py`, Endpoint `/api/cycle` (+ Anhang an `/api/calendar`).
