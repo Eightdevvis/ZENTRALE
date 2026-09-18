@@ -1915,6 +1915,30 @@ def _draw_neu_wahl(screen, w, fonts, asv, top_y, ctr):
               [('↑↓', 'wählen'), ('Enter', 'weiter' if schritt == 'sprache' else 'anlegen'), ('Esc', 'zurück')])
 
 
+def _draw_schliessen_frage(screen, w, fonts):
+    """Esc im Hauptmenü: »Tutor schließen?« — Ja macht das Fenster zu, Nein
+    bleibt im Hauptmenü (Sasha 2026-09-18)."""
+    h = screen.get_height()
+    zeilen = [(fonts['big'], 'Tutor schließen?', ASSESS_GOLD, 14),
+              (fonts['hud'], 'Das Fenster geht zu. Die Spielstände bleiben, wie sie sind.', HUD_DIM, 18)]
+    rand = 26
+    bh = rand * 2 + sum(f.get_height() + luft for f, _, _, luft in zeilen) \
+        + fonts['hud'].get_height() + 10
+    bw = min(620, w - 120)
+    bx = w // 2 - bw // 2
+    by = max(20, h // 2 - bh // 2)
+    schatten = pygame.Surface((w, h), pygame.SRCALPHA); schatten.fill((0, 0, 0, 170))
+    screen.blit(schatten, (0, 0))
+    pygame.draw.rect(screen, ASSESS_BAR_BG, (bx, by, bw, bh), border_radius=12)
+    pygame.draw.rect(screen, ASSESS_GOLD, (bx, by, bw, bh), 2, border_radius=12)
+    y = by + rand
+    for f, text, farbe, luft in zeilen:
+        surf = f.render(text, True, farbe)
+        screen.blit(surf, (w // 2 - surf.get_width() // 2, y))
+        y += f.get_height() + luft
+    _hint_row(screen, fonts['hud'], w, y, [('J / Enter', 'ja, schließen'), ('N / Esc', 'nein')])
+
+
 def _draw_loesch_frage(screen, w, fonts, asv):
     """Sicherheitsabfrage vor dem Loeschen.
 
@@ -2010,9 +2034,15 @@ def _draw_stand_wahl(screen, w, fonts, asv, top_y, ctr):
     if zeilen[idx]['art'] == 'stand':
         tasten.append(('Entf', 'löschen'))
     _hint_row(screen, fonts['hud'], w, y + 16, tasten)
+    if asv.get('meldung'):
+        # Fehler beim Anlegen/Wechseln — im Hauptmenü gibt es keinen HUD, also hier.
+        m = fonts['log'].render(asv['meldung'], True, ASSESS_GOLD)
+        screen.blit(m, (w // 2 - m.get_width() // 2, y + 16 + fonts['hud'].get_height() + 18))
 
     if asv.get('stand_weg'):
         _draw_loesch_frage(screen, w, fonts, asv)
+    if asv.get('schliessen'):
+        _draw_schliessen_frage(screen, w, fonts)
 
 
 def _stand_unterzeile(st, langnamen=None):
@@ -2064,7 +2094,7 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
         ctr(fonts['word'].render('Hauptmenü', True, ASSESS_INK), cy - 250)
         ctr(fonts['big'].render(f'Wer spielt weiter — und mit wem?', True, ASSESS_INK), cy - 178)
         for i, ln in enumerate(['Ein Spielstand ist eine Sprache mit ihrem Lernstand. Wörter, Münzen und Erinnerungen',
-                                'bleiben in ihm — nichts davon wandert in einen anderen. Esc = zurück ins Zimmer.']):
+                                'bleiben in ihm — nichts davon wandert in einen anderen. Esc = Tutor schließen.']):
             ctr(fonts['log'].render(ln, True, HUD_DIM), cy - 122 + i * 26)
         _draw_stand_wahl(screen, w, fonts, asv, cy - 46, ctr)
         return
@@ -2334,7 +2364,11 @@ def main():
         # ja gesagt, er hat es nur noch nicht gehört.
         while True:
             with S['lock']:
-                warten = S['pmenu'] is not None; weg = S['pause'] or S['mute']
+                # Zwischenmenü offen: warten (Freeze). Hauptmenü/Drill (asv) vorne:
+                # die Session ist beendet, die Persona nicht zu sehen — diese
+                # Stimme wird verworfen, nicht aufgehoben.
+                warten = S['pmenu'] is not None
+                weg = S['pause'] or S['mute'] or S['asv'] is not None
             if weg:
                 return
             if not warten:
@@ -2351,6 +2385,9 @@ def main():
             while ch.get_busy():
                 with S['lock']:
                     unterbrochen = S['pmenu'] is not None
+                    abbruch = S['asv'] is not None
+                if abbruch:
+                    ch.stop(); break          # Hauptmenü: Satz weg, Session ist zu
                 if unterbrochen:
                     # Menü mitten im Satz geöffnet: anhalten, nach dem Menü den
                     # Satz von vorn (pygame kann einen Channel nicht pausieren
@@ -2358,7 +2395,8 @@ def main():
                     ch.stop()
                     while True:
                         with S['lock']:
-                            warten = S['pmenu'] is not None; weg = S['pause'] or S['mute']
+                            warten = S['pmenu'] is not None
+                            weg = S['pause'] or S['mute'] or S['asv'] is not None
                         if weg or not warten:
                             break
                         pygame.time.wait(100)
@@ -2656,6 +2694,17 @@ def main():
                 return
             phase = v.get('phase'); sub = v.get('sub')
         if phase == 'welcome':
+            # »Tutor schließen?«-Dialog beantwortet alle Tasten.
+            with S['lock']:
+                frage = bool(S['asv'] and S['asv'].get('schliessen'))
+            if frage:
+                if ev.key in (pygame.K_j, pygame.K_y, pygame.K_RETURN):
+                    pygame.event.post(pygame.event.Event(pygame.QUIT))
+                elif ev.key in (pygame.K_n, pygame.K_ESCAPE):
+                    with S['lock']:
+                        if S['asv']:
+                            S['asv']['schliessen'] = False
+                return
             # Steht die Loesch-Rueckfrage offen, beantwortet sie ALLE Tasten —
             # sonst waehlt man im Hintergrund weiter und loescht am Ende den
             # falschen Stand.
@@ -2843,9 +2892,13 @@ def main():
             if wahl['art'] == 'neu':
                 r = be.stand_neu(None, neu.get('lang'), neu.get('level', 0))
                 if not (r and r.get('ok')):
+                    grund = str((r or {}).get('error') or 'Backend antwortet nicht oder kennt lang/level nicht (Neustart?)')
                     with S['lock']:
-                        S['msg'] = 'spielstand: ' + str((r or {}).get('error') or 'fehlgeschlagen')
-                        if S['asv']: S['asv']['neu'] = None
+                        S['msg'] = 'spielstand: ' + grund
+                        if S['asv']:
+                            S['asv']['neu'] = None
+                            S['asv']['meldung'] = 'Anlegen fehlgeschlagen: ' + grund
+                    print(f"[zimmer] spielstand anlegen fehlgeschlagen: {grund}", file=sys.stderr, flush=True)
                     threading.Thread(target=staende_laden, daemon=True).start()
                     return
                 gewechselt = True
@@ -2854,7 +2907,14 @@ def main():
                 # Der aktive Stand braucht keinen Wechsel — das wuerde nur die
                 # Sitzung unnoetig beenden.
                 if sid != v.get('stand_aktiv'):
-                    be.stand_waehlen(sid)
+                    r = be.stand_waehlen(sid)
+                    if not (r and r.get('ok')):
+                        grund = str((r or {}).get('error') or 'Backend antwortet nicht')
+                        with S['lock']:
+                            if S['asv']:
+                                S['asv']['meldung'] = 'Wechsel fehlgeschlagen: ' + grund
+                        print(f"[zimmer] spielstand wechseln fehlgeschlagen: {grund}", file=sys.stderr, flush=True)
+                        return
                     gewechselt = True
             if gewechselt:
                 # Anderer Stand = andere Sprache/Persona möglich: Zimmer-Zustand
@@ -2921,7 +2981,8 @@ def main():
                         'crate_at': list(game.get('crate_at', [])),
                         'reveal': None, 'coin_drop': None, 'new_part': None,
                         'staende': [], 'stand_aktiv': None, 'stand_idx': 0,
-                        'geladen': False, 'neu': None, 'persona': S['persona'],
+                        'geladen': False, 'neu': None, 'persona': S['persona'], 'meldung': '',
+                        'schliessen': False,
                         'langnamen': {},
                         'stand_weg': None, 'verlauf': [], 'blick': None,
                         'flip': None, 'weg': None, 'geschenk': None}
@@ -3063,9 +3124,7 @@ def main():
                     pmenu_schliessen()
                 elif sel == 1:
                     pmenu_schliessen()
-                    threading.Thread(target=asv_init,
-                                     kwargs={'force': True, 'nur_staende': True},
-                                     daemon=True).start()   # Spielstand-Screen
+                    threading.Thread(target=hauptmenue_oeffnen, daemon=True).start()
                 elif sel == 2:
                     with S['lock']:
                         if S['pmenu']: S['pmenu'].update(seite='einst', sel=0)
@@ -3101,6 +3160,28 @@ def main():
                 os.remove(PAUSE_DATEI)
         except Exception:
             pass
+
+    def hauptmenue_oeffnen():
+        """Hauptmenü = KEINE Session. Sasha 2026-09-18: »Im Hauptmenü soll Lucía
+        gar nicht mehr laufen.« Also: Stand-Screen auf, Session am Backend
+        beenden (kein Reden, kein Anstoß, kein Nachhaken), laufende Stimme
+        abbrechen. Eine Session gibt es erst wieder, wenn ein Spielstand
+        gewählt wird (Esc = den zuletzt gespielten weiterspielen)."""
+        if not asv_init(force=True, nur_staende=True):
+            return
+        try:
+            pygame.mixer.stop()
+        except Exception:
+            pass
+        be.stop()
+        with S['lock']:
+            S['buf'] = ''; S['last'] = ''; S['thought'] = None
+
+    def hauptmenue_verlassen():
+        """Esc im Hauptmenü: Rückfrage »Tutor schließen?« öffnen."""
+        with S['lock']:
+            if S['asv']:
+                S['asv']['schliessen'] = True
 
     def drill_verlassen():
         """Esc im Drill: Karten weg, zurück ins Zimmer. Läuft noch keine Persona-
@@ -3591,11 +3672,13 @@ def main():
                     with S['lock']:
                         _v = S['asv']
                         innen = bool(_v and _v.get('phase') == 'welcome'
-                                     and (_v.get('neu') or _v.get('stand_weg')))
+                                     and (_v.get('neu') or _v.get('stand_weg') or _v.get('schliessen')))
                     if ev.key == pygame.K_ESCAPE and innen:
                         asv_key(ev)                  # Unter-Screen/Rückfrage: ein Schritt zurück
+                    elif ev.key == pygame.K_ESCAPE and _v and _v.get('phase') == 'welcome':
+                        hauptmenue_verlassen()       # = zuletzt gespielten Stand wählen
                     elif ev.key == pygame.K_ESCAPE:
-                        drill_verlassen()            # zurück ins Zimmer, nicht raus
+                        drill_verlassen()            # Drill: zurück ins Zimmer (Session läuft weiter)
                     elif ev.key == pygame.K_m and (ev.mod & pygame.KMOD_ALT):
                         with S['lock']:
                             S['mute'] = not S['mute']; muted = S['mute']
