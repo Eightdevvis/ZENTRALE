@@ -26,6 +26,7 @@ den Dateien. Sonst wächst hier wieder eine 40-Zeilen-Tabelle heran, die man
 |---|---|
 | [ueberblick.md](ueberblick.md) | Der Einstieg. Was ZENTRALE ist und wo sie gerade steht — gehört in keinen Bereich, sondern davor. |
 | [claude_hinweise.md](claude_hinweise.md) | Architektur-Entscheidungen speziell für Claude. Bereichsübergreifend. |
+| [doku_regeln.md](doku_regeln.md) | Wie eine `memory/`-Datei aufgebaut ist (Stand zuerst, Warum, Historie unten, ein Fakt eine Datei) — gilt für jede Datei hier. |
 
 ## Pflege
 
