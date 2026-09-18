@@ -2329,6 +2329,17 @@ def main():
         wav = be.speak(text, lang, a.speaker, spd)
         if not wav:
             return
+        # Zwischenmenü offen (Esc)? Dann friert auch die Stimme ein: erst
+        # sprechen, wenn das Menü wieder zu ist. Nicht verwerfen — sie hat es
+        # ja gesagt, er hat es nur noch nicht gehört.
+        while True:
+            with S['lock']:
+                warten = S['pmenu'] is not None; weg = S['pause'] or S['mute']
+            if weg:
+                return
+            if not warten:
+                break
+            pygame.time.wait(100)
         music_duck(True)         # Musik leiser, solange sie redet
         ch = play_wav(wav)
         if ch is None:
@@ -2338,6 +2349,25 @@ def main():
             S['speaking'] = True
         try:
             while ch.get_busy():
+                with S['lock']:
+                    unterbrochen = S['pmenu'] is not None
+                if unterbrochen:
+                    # Menü mitten im Satz geöffnet: anhalten, nach dem Menü den
+                    # Satz von vorn (pygame kann einen Channel nicht pausieren
+                    # und sauber weiterspielen; ein Satz ist kurz).
+                    ch.stop()
+                    while True:
+                        with S['lock']:
+                            warten = S['pmenu'] is not None; weg = S['pause'] or S['mute']
+                        if weg or not warten:
+                            break
+                        pygame.time.wait(100)
+                    if weg:
+                        break
+                    ch = play_wav(wav)
+                    if ch is None:
+                        break
+                    continue
                 pygame.time.wait(60)
         finally:
             with S['lock']:
@@ -3742,7 +3772,9 @@ def main():
 
         # Persona-HUD (Name, Mic, Laune, Verlaufs-Leiste, Eingabe) NUR im Zimmer.
         # Im Drill (asv) ist der Screen bewusst nackt — draw_assessment trägt alles.
-        if asv_snap is None:
+        # Bei offenem Zwischenmenü steckt der HUD schon im Standbild — nicht noch
+        # einmal scharf drüber (Sasha: »die Leiste unten bleibt scharf«).
+        if asv_snap is None and not (pmenu is not None and freeze is not None):
             # schläft/nicht erreichbar
             if avail is False:
                 zz = fonts['big'].render('zzz…', True, HUD_DIM)
