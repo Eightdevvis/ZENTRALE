@@ -1,5 +1,12 @@
 # Maps — Quellen-Charta (Layer → offizielle Quelle → Lizenz)
 
+**Stand 2026-09-18:** Die Charta gilt unverändert. Register-Stand: `trade`
+chokepoints + routes live (PortWatch, cache-only), `trade/density` Render
+fertig, Ingest offen; `political` events-ucdp gebaut, wartet auf Token
+(TODO Sasha, Mail an UCDP), control-ua live + zeitreisefähig, borders live
+(committet), events-acled lizenz-gesperrt (lokal). EU/US/Konsens geplant.
+Seit 2026-07-26 keine Änderung im Code.
+
 > **Grundsatz (Sasha): seriöses Tool = Primärquelle + tagesaktuell + sauber
 > lizenziert.** Keine „random GitHub-Repos" und kein selbstkuratierter Ersatz,
 > wo eine ausstellende Institution existiert. Jeder thematische Sub-Layer (Achse
@@ -71,7 +78,7 @@ keine ehrliche „von-wann/woher"-Antwort mehr → das wäre „devious".
      nie als Rohmessung ausgegeben. (Spezialfall: `routes_validated` = PortWatch-
      Linien × gemessene Dichte → „von Messung bestätigte" Linien statt Deko.)
 
-## Sub-Layer-Register (Stand 2026-06)
+## Sub-Layer-Register (zuletzt 2026-07)
 
 ### `trade/chokepoints` — LIVE ✅
 - **Institution:** IMF PortWatch (https://portwatch.imf.org), mit UN Global

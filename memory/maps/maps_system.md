@@ -1,6 +1,21 @@
 # Maps-System (interaktive Karte, Layer-Architektur)
 
-> **STATUS (2026-06): Schritt 1 (Basiskarte) + erster Achse-2-Overlay live — TUI + natives Fenster.** Die
+**Stand 2026-09-18:** Engine `core/map/` (pure stdlib, Web-Mercator, LOD
+110m/50m/10m), drei Achsen (Detail, Overlays, Zeit), zwei Fronten: TUI
+(Taste `m`, ASCII/Braille, Overlay `o`, Zeit-Scrubber `,`/`.`/`;`) und das
+**native pygame-Fenster** `scripts/map_window.py` (aus der TUI mit `w`;
+Politik/Konflikt-Overlay + Zeit-Scrubber, Density-Heatmap `d`). Overlays
+live: `trade` (PortWatch chokepoints + routes), `political` (VIINA
+Ukraine-Kontrolle **zeitreisefähig**, Natural-Earth-Grenzen; UCDP gebaut,
+**Token fehlt**; ACLED nur lokal). `trade/density` gerendert, **Einmal-Ingest
+auf dem PC steht aus** (kein `.npz` im Repo). Routen: `/api/map/base`,
+`/braille`, `/layers`, `/layer/<id>`, `/countries` (`../system/api_endpoints.md`).
+Letzter Code-Stand 2026-07-26; Browser-Fronten bekommen keine Karte mehr
+(aufgegeben). Regeln: Primärquellen, lizenzierte Daten nur cachen, keine
+Design-/Produktentscheidung ohne Sasha (`maps_quellen.md`,
+`maps_design_brief.md`).
+
+> **Status-Kopf vom 2026-06 (Historie):** Schritt 1 (Basiskarte) + erster Achse-2-Overlay live — TUI + natives Fenster. Die
 > Architektur steht (drei Achsen, gemeinsames Substrat + Overlays); gebaut wird
 > Schritt für Schritt (Roadmap unten), Sasha gibt pro Layer die Details vor.
 > Erledigt: `core/map/`-Engine + `/api/map/base` + TUI-Renderer (Taste `m`) +
@@ -393,3 +408,13 @@ Grenzen) sind die Zeitreihen-Quellen.
   spezialisierte Höhlen-/Bergwerks-Datensätze rein sollen — offen. Plus die
   Grundsatzfrage, ob die Tiefen-Ebene Layer-Eigenschaft bleibt oder zur
   **Achse 4** wird (s. „Tiefen-Dimension" oben).
+
+## Historie
+
+- **2026-06** — Engine + Basiskarte in der TUI (Schritt 1), natives Fenster,
+  erster Overlay `trade/chokepoints` (PortWatch), Quellen-Charta.
+- **2026-07** — Quellen-Recherche politischer Layer (liveuamap nicht nutzbar,
+  Truppenbewegungen offen nicht verfügbar); UCDP/VIINA/Borders/ACLED gebaut;
+  **07-23** VIINA-Join über Gazetteer gefixt, Achse 3 für `control-ua`,
+  TUI-Scrubber; **07-26** Politik-Overlay + Scrubber im nativen Fenster,
+  Basiskarten-Cache gegen Lag.

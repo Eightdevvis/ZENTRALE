@@ -1,5 +1,11 @@
 # Maps — Design-Brief (Handoff für eine Look-/Render-Überarbeitung)
 
+**Stand 2026-09-18:** Handoff-Dokument (2026-06/07); die Look-Überarbeitung
+hat nicht stattgefunden, der Sandkasten (`scripts/map_render_proto.py`) und
+die Medium-Grenzen gelten weiter. Von den drei Render-Zielen sind heute nur
+zwei relevant (TUI + natives Fenster) — die Browser-Fronten sind aufgegeben
+(`../system/dashboard.md`).
+
 > **Zweck:** Alles, was jemand braucht, um den **visuellen Look** der ZENTRALE-
 > Karte zu verbessern — ohne sich in falschen Annahmen zu verrennen. Architektur/
 > Plan stehen in `memory/maps/maps_system.md`; HIER stehen Ziel, Medium-Grenzen, was schon
