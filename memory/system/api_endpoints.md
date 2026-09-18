@@ -1,7 +1,15 @@
 # REST API Endpoints
 
-Alle Endpoints werden von `ui/app.py` bedient. Streaming-Endpoints
-nutzen Server-Sent Events (SSE).
+**Stand 2026-09-18:** Alle Endpoints bedient `ui/app.py` (reiner Adapter auf
+`core/`), Streaming per SSE. Die Fronten (TUI, Zimmer, Browser) sind reine
+HTTP-Clients. Direkte Nutzeraktionen (Kalender schreiben, Listen, Graphen,
+Melodien, Karte, Notizen, Aussenposten-Paket) sind **nicht** KI-gegatet;
+Chat und Tutor hängen an Kill-Switches (`/api/ai/backends`). Die
+`/api/tutor/*`-Routen stehen mit Drift-Test in `memory/tutor/bauplan.md`
+(hier nur die Status-Felder). Mail-Endpoints: Details in
+`memory/werkzeuge/mail_system.md`, Notizen in `memory/werkzeuge/notizen_system.md`.
+Diese Liste hat **keinen** Drift-Test; zuletzt gegen `ui/app.py`
+abgeglichen 2026-09-18.
 
 ## Dashboard / State
 
@@ -9,7 +17,7 @@ nutzen Server-Sent Events (SSE).
 |-----------------------|---------|---------------------------------------|
 | `/`                   | GET     | Monolith-Dashboard (monolith.html) – die einzige UI |
 | `/monolith`           | GET     | Alias auf `/` (Kiosk/Bookmark-Kompat), liefert dieselbe monolith.html |
-| `/api/state`          | GET     | Aktueller State (Events, Sensoren, Logs, Alarme, Uptime) – wird vom Frontend jede Sekunde gepollt. Das frühere Feld `vocab` ist **entfernt** (2026-07-17, war ein toter Tutor-Tentakel) |
+| `/api/state`          | GET     | Aktueller State (Events, Sensoren, Logs, Alarme, Uptime) – wird vom Frontend jede Sekunde gepollt. (Ein Feld `vocab` gab es bis 2026-07-17 — toter Tutor-Tentakel, entfernt.) |
 
 ## Sensor-Webhook
 
@@ -178,6 +186,18 @@ Listen·Fokus-Werkzeug (Toggle).
 | `/api/lists/<lid>/items/<int:iid>/reorder`| POST | Eintrag innerhalb SEINER Geschwister-Ebene verschieben. Body `{delta:-1\|+1}` (rauf/runter, am Rand No-op). 404 unbek. Liefert `{moved:bool}`. |
 | `/api/lists/<lid>/items/<int:iid>`    | DELETE  | Eintrag (samt Teilbaum) löschen, egal wie tief. 404 unbek. Liste/Eintrag. |
 
+## Notizen (`core/notes.py`)
+
+| Endpoint              | Methode | Beschreibung                          |
+|-----------------------|---------|---------------------------------------|
+| `/api/notes`          | GET     | Übersicht aller Notizen (ohne Block-Inhalte), neueste zuerst. |
+| `/api/notes`          | POST    | Neue (leere) Notiz. Body `{title?}`.  |
+| `/api/notes/<nid>`    | GET     | Vollständige Notiz mit allen Blöcken. |
+| `/api/notes/<nid>`    | PUT     | Inhalt ersetzen. Body `{title?, blocks?}`, nur Übergebenes wird angefasst. |
+| `/api/notes/<nid>`    | DELETE  | Notiz löschen.                        |
+
+Datenmodell + Bedienung: `memory/werkzeuge/notizen_system.md`.
+
 ## Chat
 
 | Endpoint              | Methode | Beschreibung                          |
@@ -191,6 +211,7 @@ Listen·Fokus-Werkzeug (Toggle).
 | Endpoint                 | Methode | Beschreibung                          |
 |--------------------------|---------|---------------------------------------|
 | `/api/ai/status`         | GET     | Ollama-Verfügbarkeit + Modell-Name    |
+| `/api/ai/backends`       | GET/POST| Welche Backends erreichbar sind (local/cloud) — speist die EXTERNAL-Box und das kapazitätsbasierte Modul-Gating. POST `{cloud_enabled?, local_enabled?}` legt die Kill-Switches um (persistiert in `data/ai_config.json`). Siehe `memory/ki/ki_system.md`. |
 | `/api/permission_answer` | POST    | Antwort auf eine `ask_choice`-/Internet-Erlaubnis-Frage (JSON `{answer}`). Entsperrt den wartenden Chat-Stream. Siehe `memory/ki/ki_system.md` → Permission-Gate. |
 | `/api/ai/debug/stream`   | GET     | Devtools-Stream (SSE) für `scripts/ai_devtools.py`: der VOLLE Request (System-Prompt, alle Messages, Tool-Namen, Cache-Breakpoints), die Roh-Antwort, jeder Tool-Call, was der Extraktor in den Graphen schrieb. Verbinden schaltet den Bus (`core/kidebug.py`) an. ⚠ Enthält den kompletten Prompt inkl. Graph-Kontext. |
 
@@ -217,6 +238,7 @@ drei Achsen: `memory/maps/maps_system.md`; Quellen/Lizenzen: `memory/maps/maps_q
 | `/api/map/braille`       | GET     | Basiskarte als gefülltes Land in Braille (2×4 Subpixel/Zelle), fertige Zeilen. Query: `cx,cy,zoom,cols,rows`. |
 | `/api/map/layers`        | GET     | Registry der thematischen Overlays (Achse 2): Layer + Sub-Layer + Quelle (Provenienz) + ob zeitfähig (Achse 3). |
 | `/api/map/layer/<id>`    | GET     | Features eines Overlays, projiziert. Query wie `/base` + `sub` (Sub-Layer, z.B. `chokepoints`) + `at` (Zeitpunkt, Achse 3). Antwort trägt `source/vintage/retrieved_at`. 404 bei unbekanntem Layer. |
+| `/api/map/countries`     | GET     | Länder-Mittelpunkte (Richtungs-Navigation) + projizierter Umriss des fokussierten Landes. Query wie `/base` + `focus=<Name>`. |
 
 Live: `trade` (IMF PortWatch) — ohne `sub` das **Komposit** (Routenlinien +
 Chokepoint-Punkte); `?sub=routes` (Schifffahrtslinien, statisch) bzw.
@@ -282,15 +304,14 @@ Details zu Modellen + Sprachen: `memory/ki/audio_system.md`.
 | `/api/mail/delete`          | POST    | Eine Mail in den Papierkorb (umkehrbar). LIVE; `409` ohne Key. Body `{cat, uid, account?}`. |
 | `/api/mail/reply`           | POST    | Antwort senden via SMTP XOAUTH2 (Outlook). LIVE; `409` ohne Key. Body `{cat, uid, text, account?}`. Braucht `SMTP.Send`-Scope (Neu-Login). |
 | `/api/mail/poll`            | POST    | Stößt einen **Live**-Poll im Hintergrund-Thread an. `409`, wenn keine Passphrase (Env/Keyring). Parallel-Polls per Lock verhindert. |
+| `/api/mail/reconcile`       | POST    | Gleicht die Server-Ordner an die Keymap an (schon einsortierte Mail nachziehen), Hintergrund-Thread, kehrt sofort zurück. `409` ohne Key, Lock gegen Parallel-Läufe. |
+| `/api/mail/inbox`           | GET     | Eingang-Tray: INBOX mit Gelesen-Flag + vermuteter Kategorie je Mail. LIVE; ohne Key leer. |
+| `/api/mail/inbox-body?uid=&account=` | GET | Voller Text einer Eingang-Mail, read-only (PEEK, hakt nicht ab). `409` ohne Key. |
+| `/api/mail/read`            | POST    | Eingang-Mail abhaken: `\Seen` setzen und bei bekanntem Absender sofort einsortieren. Body `{uid, account?}`. `409` ohne Key. |
 
 Details: `memory/werkzeuge/mail_system.md` (Panel/Drill-down/Hybrid, Passphrase-Quellen, Keyring-CLI).
 
 ## Tutor (Addon, optional)
-
-Die `/api/tutor/*`-Endpoints gibt es und der Tutor **läuft** (zh/Ling Ling über
-qwen) — dieser Abschnitt behauptete bis 2026-07-17 das Gegenteil („entfernt"),
-das war schlicht falsch. Offen ist nur der **verbale** Presence-Auto-Gruß
-(siehe `memory/tutor/tutor_system.md`); API und Persona sind aktiv.
 
 Der Tutor ist ein **Addon**: `ui/app.py` fasst ihn nur über `core/tutor_port.py`
 an. Fehlt `tutor/` ganz, läuft ZENTRALE normal weiter und die Routen antworten
@@ -298,15 +319,9 @@ an. Fehlt `tutor/` ganz, läuft ZENTRALE normal weiter und die Routen antworten
 sondern über die sprachneutralen Core-Endpoints `/api/speak` + `/api/transcribe`
 mit `lang`-Parameter.
 
-| Endpoint                | Methode  | Beschreibung                          |
-|-------------------------|----------|---------------------------------------|
-| `/api/tutor/status`     | GET      | Kern-Sicht (s.u.) + `whisper`/`tts`. Reicht `tutor_port.status()` 1:1 durch. |
-| `/api/tutor/config`     | GET/POST | Aufgelöste Wahl + wählbare Provider/Sprachen. POST `{lang?, provider?, model?, history_window?, persist?}`. |
-| `/api/tutor/start`      | POST     | Session starten, Persona begrüßt von selbst. SSE-Stream (`data: {token}` … `{done}`). |
-| `/api/tutor/respond`    | POST     | `{text}` → Antwort. SSE wie `/start`.  |
-| `/api/tutor/stop`       | POST     | Session beenden → `{ok:true}`.        |
-| `/api/tutor/room_state` | GET      | Zustand des Persona-Zimmers (pygame-Fenster, `tutor/room.py`). |
-| `/api/tutor/nudge`      | POST     | Nonverbaler Presence-Ping. Startet NIE eine Session. |
+**Die Routen-Tabelle steht in `memory/tutor/bauplan.md` (Abschnitt 3)** und
+wird dort von `tests/test_tutor_bauplan.py` gegen `ui/app.py` geprüft — hier
+bewusst keine Kopie. Was hier bleibt, ist die Bedeutung der Status-Felder:
 
 **`/api/tutor/status` — die Felder, auf die die Fronten bauen:**
 
@@ -318,10 +333,20 @@ mit `lang`-Parameter.
 | `reason`          | **Warum nicht**, im Klartext: `"Cloud ist per Kill-Switch gedrosselt"` · `"lokale KI ist per Kill-Switch gedrosselt"` · `"Provider-Backend nicht erreichbar"` · `"Tutor nicht installiert (…)"`. Leer, wenn `available`. |
 | `privacy_warning` | != null → Provider trainiert auf die Eingaben: laut anzeigen. |
 
-`present` + `reason` fehlten bis 2026-07-17: der Endpunkt baute sich neben
-`tutor_port.status()` ein eigenes Dict und warf beide weg. Damit konnte keine
-Front „gedrosselt" von „gar nicht da" unterscheiden — der Monolith wechselte
-ungeprüft in den Tutor-Kanal und hing dann im 503 fest, die TUI riet
-(„cloud gedrosselt? /cloud on"). Fronten sollen `reason` **wörtlich hinschreiben**,
-nicht selbst formulieren: der Grund wird an genau EINER Stelle formuliert
-(`core/tutor_port.unavailable_reason()`).
+Fronten sollen `reason` **wörtlich hinschreiben**, nicht selbst formulieren:
+der Grund wird an genau EINER Stelle formuliert
+(`core/tutor_port.unavailable_reason()`). Warum: ohne `present` + `reason`
+(fehlten bis 2026-07-17, der Endpunkt warf sie weg) konnte keine Front
+„gedrosselt" von „gar nicht da" unterscheiden — der Monolith wechselte
+ungeprüft in den Tutor-Kanal und hing im 503 fest, die TUI riet
+(„cloud gedrosselt? /cloud on").
+
+## Historie
+
+- **2026-05** — Sensor-Webhook + Telemetrie-Push für den Pi.
+- **2026-06/07** — Graphen, Listen, Melodien, Kalender-Schreib-Endpoints,
+  Karte, Mail-Triage; Legacy `/api/memory*` entfallen (Konzept-Graph).
+- **2026-07-17** — Tutor-Abschnitt korrigiert (behauptete „entfernt",
+  der Tutor lief), `present`/`reason` im Status, `vocab` aus `/api/state`.
+- **2026-09-04** — Aussenposten-Versorgung (`manifest`/`paket`).
+- **2026-09-17** — Tutor-Routen in den Bauplan mit Drift-Test verschoben.

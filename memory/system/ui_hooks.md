@@ -1,5 +1,13 @@
 # UI-Schnittstellen (Anker für Erweiterungen)
 
+**Stand 2026-09-18:** Diese Datei ist **Historie**. Sie beschreibt
+`ui/templates/index.html`, die es seit dem Monolith-Umbau nicht mehr gibt;
+keiner der Hooks unten existiert in `monolith.html` (nachgemessen
+2026-07-17). Wahrheit heute: `dashboard.md` (UI/Modi/Polling),
+`tastatur.md` (Tasten), `api_endpoints.md` (Routen), `../tutor/bauplan.md`
+(Tutor-Routen). Ob die Datei gelöscht wird, entscheidet Sasha; bis dahin
+nur als Hintergrund lesen, nicht als Anleitung.
+
 > # ⚠ DIESE DATEI IST VERALTET — NICHTS HIER STIMMT MEHR
 >
 > Sie beschreibt `ui/templates/index.html`. **Diese Datei existiert nicht mehr**
@@ -14,8 +22,8 @@
 >   um `#col-mid`), Eingaben gehen an `/api/tutor/respond`.
 > - Es gibt **keinen** Motion-Sensor-Trigger, der ein Tutor-Panel aufmacht.
 > - Die Space-Taste ist **nicht** für den Tutor belegt.
-> - Nur `/api/tutor/speak` + `/api/tutor/transcribe` sind entfernt; **sieben**
->   andere `/api/tutor/*`-Routen sind live (`memory/system/api_endpoints.md`).
+> - Nur `/api/tutor/speak` + `/api/tutor/transcribe` sind entfernt; die
+>   lebenden `/api/tutor/*`-Routen stehen in `memory/tutor/bauplan.md`.
 >
 > **Wo die Wahrheit steht:** `memory/system/dashboard.md` (UI/Modi/Polling), `memory/system/tastatur.md`
 > (Tasten), `memory/system/api_endpoints.md` (Routen), `memory/tutor/tutor_system.md` (Tutorkanal).
@@ -24,6 +32,8 @@
 > Ob die Datei gelöscht oder gegen `monolith.html` neu geschrieben wird, ist
 > offen (Sashas Entscheidung); bis dahin darf sie niemanden mehr in die Irre
 > führen.
+
+## Historie (Stand der alten `index.html`, vor 2026-06)
 
 Alles was an `ui/templates/index.html` ein „Hook" war und von späterem
 Code gegriffen wurde. Wenn Namen geändert werden – diese Datei mitziehen,

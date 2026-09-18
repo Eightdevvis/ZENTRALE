@@ -1,18 +1,33 @@
 # Dashboard & Frontend
 
-> **AKTUELLER STAND (2026-06): EIN Browser-Template, mehrere Kassetten.**
-> Die gelebte Haupt-UI ist `ui/templates/monolith.html` — und das ist seit
-> 2026-06 die **einzige** Browser-Front. Die frühere separate `laptop.html`
-> ist **weg**: monolith und laptop liefen auseinander (laptop verlor Karte/
-> Graphen, Mail/Listen kamen nie an). Jetzt rendert `/` für **alle** Browser-
-> Kassetten dasselbe Template; der Unterschied ist allein der Flag
+**Stand 2026-09-18:** Gearbeitet wird nur noch an der **TUI**
+(`tui/zentrale_tui.py`, stdlib-only, Thin Client gegen `/api/*`); die
+Browser-Front `monolith.html` (eine Datei für monolith + laptop, KI-Blöcke
+per `ki_aus` weggelassen) ist praktisch aufgegeben, der Code lebt. Das
+**Theme** (`t` in der TUI → `~/.config/zentrale/theme`, Wunsch) löst allein
+`zentrale-themed` nach 05/21 Uhr auf (`theme.now`, Ergebnis); Terminal,
+Browser, Desktop, bat, nvim, tmux und das Tutor-Zimmer lesen nur — und aus
+einem Testlauf oder Worktree darf nie ein Push entstehen (Riegel im venv,
+`start_tui.sh` hängt ihn ein). Werkzeuge in der TUI-Mitte: Graph `g`,
+Kalender `c`, Fokus `f`, Post `p`, Karte `m`, Klavier `k`, Notizen `n`,
+Tutor `u` (öffnet das Zimmer). Auf dem Pi ist das Wandbild das Zimmer, nicht
+diese Front (`../betrieb/deployment.md`). Der Rest dieser Datei ist die
+ausführliche Mechanik + das Warum; Datumsangaben im Text sind Marken, die
+Historie steht unten.
+
+> **EIN Browser-Template, mehrere Kassetten.** `ui/templates/monolith.html`
+> ist die **einzige** Browser-Front (seit 2026-06). Die frühere separate
+> `laptop.html` ist **weg**: monolith und laptop liefen auseinander (laptop
+> verlor Karte/Graphen, Mail/Listen kamen nie an). `/` rendert für **alle**
+> Browser-Kassetten dasselbe Template; der Unterschied ist allein der Flag
 > `ki_aus` (aus `core/kassette.py`), den `app.py` ans Template durchreicht —
 > bei laptop/tui werden die KI-Blöcke per `{% if not ki_aus %}` weggelassen
 > (Chat/Audio/Tutor/News/OLLAMA-Status), und unten erscheint statt der Chat-
 > Zeile eine **Shortcut-Übersicht**. Alles Nicht-KI (Karte, Graphen, Kalender,
 > Listen, Post/Mail, Telemetrie, Logs) ist damit in allen Fronten gleich.
 > Das alte `index.html` (AI-Orb, `#view-main`-Grid) ist ebenfalls **weg**.
-> Was Sasha real sieht steht unter „## Monolith-Dashboard".
+> Was Sasha real sieht steht unter „## Monolith-Dashboard". Die
+> Kassetten-Logik steht als Rückbau im `zentrale`-Tracker (`INDEX.md`).
 
 ## Kassetten (monolith | laptop | tui)
 
@@ -322,12 +337,11 @@ xfconf-/gsettings-Wert und setzen nur bei Abweichung, `zentrale-bat-theme` die
 (bat inklusive — sonst zöge es erst beim
 nächsten Minuten-Tick nach). Nur lokal,
 kein Sync, kein Backend — TUI ist die einzige Quelle. **Setup reproduzierbar
-in git:** Unit-Templates `deploy/zentrale-theme.{service,timer}` (zwei
-`ExecStart`-Zeilen: Terminal + Browser), Einrichten per
-`scripts/install_theme_coupling.sh` (Symlinks + Units nach
-`~/.config/systemd/user/` + `enable --now`, nimmt nvim mit; idempotent, kein
-sudo; hieß bis 2026-07-25 `install_term_theme.sh`, die alten Unit-Namen räumt
-es beim Lauf ab).
+in git:** `deploy/zentrale-themed.service` (der Dienst, s.o.; die alten
+`zentrale-theme.{service,timer}` sind entfallen), Einrichten per
+`scripts/install_theme_coupling.sh` (Symlinks + Unit nach
+`~/.config/systemd/user/` + `enable --now`, nimmt nvim und bat mit;
+idempotent, kein sudo; die alten Unit-Namen räumt es beim Lauf ab).
 
 **bat-Kopplung (`batcat`, seit 2026-08-16):** zwei eigene Themes,
 `zentrale-cyber` (night) und `zentrale-paper` (day), im Repo unter
@@ -735,13 +749,13 @@ Subpixel/Zelle — Endpoint `/api/map/braille`, gerendert in
 schaltet das **Handelsrouten-Overlay** (Achse 2) ein/aus: leuchtende
 `◆`-Marker an den maritimen Engstellen + Detail (Name/heutiger Verkehr) der dem
 Fadenkreuz nächsten Stelle, samt Datenstand. Quelle: IMF PortWatch über
-`/api/map/layer/trade` (Provenienz/Lizenz: [memory/maps/maps_quellen.md](memory/maps/maps_quellen.md)).
+`/api/map/layer/trade` (Provenienz/Lizenz: [memory/maps/maps_quellen.md](../maps/maps_quellen.md)).
 Mit **`w`** klappt die Karte im
 **nativen pygame-Fenster** auf (`scripts/map_window.py`, echte antialiased
 Vektorgrafik, gleicher Viewport — wie `/slide` PDFs extern öffnet; dort Taste
 **`t`** fürs selbe Overlay als Bernstein-Marker); der
 ASCII-Grid in der TUI ist nur die reduzierte Variante. Architektur + die drei
-Achsen (Detail/Layer/Zeit): [memory/maps/maps_system.md](memory/maps/maps_system.md).
+Achsen (Detail/Layer/Zeit): [memory/maps/maps_system.md](../maps/maps_system.md).
 
 **Kalender (Mitte, Taste `c`):** blätterbare **Woche** (Mo-So-Tagesliste) bzw.
 **Monat** (Zeichen-Gitter), umschaltbar. Wie die Karte reiner Zeichner: holt
@@ -770,7 +784,7 @@ Sortier-Modus** (dann verschieben `↑↓` das fokussierte Item), `l`/esc zurüc
 »week«-Liste kopiert wurden, sind verlinkt (`↔`): abhaken spiegelt bidirektional
 in die Quelle, Löschen bricht nur den Link. Defensiv wie
 der Karten-Pfad (Fehler-Marker statt Dauer-Refetch). Details + die zwei
-Browser-Fronten: [memory/werkzeuge/kalender_system.md](memory/werkzeuge/kalender_system.md).
+Browser-Fronten: [memory/werkzeuge/kalender_system.md](../werkzeuge/kalender_system.md).
 
 - **Nur stdlib:** `curses` + `urllib` + `json` + `threading` — null Extra-Deps.
   Setzt UTF-8-Locale vor curses-Init (für Box-/Block-Zeichen).
@@ -785,9 +799,12 @@ Browser-Fronten: [memory/werkzeuge/kalender_system.md](memory/werkzeuge/kalender
 ## Stack
 
 - **Backend**: Flask (`ui/app.py`).
-- **Frontend**: ein einziges `index.html` mit Vanilla JS, SVG-Charts,
-  kein CDN, kein Build-Step. Bewusst gewählt – das Ding muss auf einem
-  Pi im Kiosk-Modus offline laufen.
+- **Browser-Frontend**: ein einziges `monolith.html` mit Vanilla JS,
+  SVG-Charts, kein CDN, kein Build-Step. Bewusst gewählt – das Ding muss auf
+  einem Pi im Kiosk-Modus offline laufen (dass der Pi 3 es dann nur in
+  Software rendert, war der Grund für die TUI an der Wand —
+  `../betrieb/deployment.md`).
+- **TUI**: `curses` + `urllib`, null Extra-Deps.
 
 ## Polling-Modell
 
@@ -795,7 +812,7 @@ Drei separate Polling-Loops im Frontend, jeder mit eigener Frequenz:
 
 | Endpoint              | Intervall | Was es liefert                                  |
 |-----------------------|-----------|-------------------------------------------------|
-| `GET /api/state`      | 1 s       | Events, Sensoren, Logs (Haupt-State). Das frühere Feld `vocab` ist **entfernt** (2026-07-17): es kam aus `main.py:_load_vocab()`, das die längst gelöschte `vocab_mandarin.json` las (immer `null`) und über den Port hinweg in Tutor-Daten griff — samt der toten `set_vocab`/`_vocab`-Kette in `state.py` raus |
+| `GET /api/state`      | 1 s       | Events, Sensoren, Logs (Haupt-State). (Ein Feld `vocab` gab es bis 2026-07-17: es las die längst gelöschte `vocab_mandarin.json` und griff über den Port hinweg in Tutor-Daten — samt `set_vocab`/`_vocab`-Kette in `state.py` entfernt.) |
 | `GET /api/ai/status`  | 30 s      | Ollama erreichbar? + Modell-Name                |
 
 > Das frühere 3 s-**Dauer**-Polling gegen `/api/tutor/status` ist raus — nicht
@@ -866,7 +883,7 @@ nicht zum Durchzappen).
 > `✕` löschen, Add-Feld; verlinkte Kopien (`↔`) spiegeln beim Abhaken
 > bidirektional in die Quelle. Kein Move in andere Listen.
 > Schreiben ist direkte Nutzeraktion, **nicht** KI-gegatet. Details:
-> [memory/werkzeuge/kalender_system.md](memory/werkzeuge/kalender_system.md).
+> [memory/werkzeuge/kalender_system.md](../werkzeuge/kalender_system.md).
 
 > **Klavier (Exhibit `klavier`, Taste `k`)** — der Mittelbereich wird zur
 > Klaviatur: **unten die gezeichneten Tasten, darüber das Notensystem**, in das
@@ -892,7 +909,7 @@ nicht zum Durchzappen).
 >   über `POST /api/melodies` in `data/melodies.json` ab. Die Chips oben sind die
 >   gespeicherten Melodien: Klick = abspielen (Tasten leuchten mit, die Noten
 >   stehen im System), nochmal Klick = stopp, `✎` umbenennen, `✕` löschen.
->   `Enter` spielt die zuletzt aufgenommene. Details: [memory/system/api_endpoints.md](memory/system/api_endpoints.md).
+>   `Enter` spielt die zuletzt aufgenommene. Details: [memory/system/api_endpoints.md](./api_endpoints.md).
 > - **Kassetten:** monolith + laptop (dasselbe Template, nicht KI-gegatet) **und
 >   die TUI** (Taste `k`, s.u.). Alle drei arbeiten auf derselben Melodien-
 >   Registry (`core/melodies.py` → `data/melodies.json`), im Browser
@@ -1124,7 +1141,7 @@ unten in `.core-wrap`), synchron zur Satz-TTS (`drainSpeakQueue`/`audio.onended`
 Tippen). Trigger: SSE-Event `data.cinema` (Backend yieldet `{cinema:true}` wenn
 `lies_news` läuft) → `enterCinema()` setzt `data-cinema="on"` aufs Stage.
 Schließt am Sendungsende (`done` + letzter Satz) oder bei `stopSpeaking`; bei
-`chatMuted` aus. Voller Mechanismus: [memory/werkzeuge/news_system.md](memory/werkzeuge/news_system.md).
+`chatMuted` aus. Voller Mechanismus: [memory/werkzeuge/news_system.md](../werkzeuge/news_system.md).
 
 ### Knopf-Leiste (2–4 Knöpfe statt Eingabe)
 
@@ -1155,7 +1172,7 @@ Schreib-Tool ab (Auto-Gate, Default JA/NEIN) **oder** die KI ruft selbst
 
 ## Data Collection
 
-Taste `K` öffnet den Data-Collection-Modus.
+`Alt+K` (Browser) öffnet den Data-Collection-Modus.
 
 **Kategorie-Auswahl:**
 - `1`, `2`, … – Kategorie wählen
@@ -1183,9 +1200,11 @@ In `core/categories.py` sind bereits zwei Kategorien definiert:
 | `sleep_quality` | Sleep Quality  | `date` (date), `quality` (smiley_scale, 5 Stufen) |
 | `food_intake`   | Food Intake    | `date` (date), `meal` (text)                      |
 
-Das Sleep-Quality-Chart auf dem Haupt-Dashboard ist hardcoded auf die
-`sleep_quality`-Daten – andere Kategorien werden aktuell nur im
-Data-Collection-Modus verwaltet, nicht visualisiert.
+⚠ prüfen: ob die `lifestyle`-Box noch fest auf `sleep_quality` zeigt —
+seit 2026-09-14 kommen die Schlafzeiten von der Smartwatch (Morgen-Messenger
+gelöscht, Commit f85d005), die Kategorie existiert in `core/categories.py`
+weiter. Andere Kategorien werden nur im Data-Collection-Modus verwaltet,
+nicht visualisiert; Zeitreihen laufen heute über das Graph-Werkzeug.
 
 ### Neue Kategorie hinzufügen
 
@@ -1203,3 +1222,26 @@ In `core/categories.py`:
 ```
 
 Daten landen automatisch in `data/<id>.json`.
+
+## Historie
+
+- **2026-05** — `index.html` mit AI-Orb (Hooks in `ui_hooks.md`, tot).
+- **2026-06** — Monolith-Dashboard unter `/`; Kassetten monolith/laptop/tui;
+  Sensoren-Panel raus; Graph-Werkzeug, Kalender, Klavier, Listen als
+  Exhibits. **06-08** `/` = monolith.
+- **2026-07-17** — `vocab` aus `/api/state`, Tutor-Status nur bei Bedarf.
+- **2026-07-25** — Theme-Kopplung: Terminal (paper/cyber statt Solarized,
+  volle ANSI-Palette), Browser (Portal), Desktop (XFCE), nvim (eigene
+  Schemes); `install_theme_coupling.sh` statt `install_term_theme.sh`.
+- **2026-07-27** — Applier entkoppelt (nur bei echtem Farbwechsel, Debounce).
+- **2026-08-03** — Brave/Flatpak-GTK-Kopplung gefixt (`a73af03`).
+- **2026-08-15** — Arbeit nur noch an der TUI (`INDEX.md`).
+- **2026-08-16** — bat-Kopplung; nvims eigene Hintergrund-Erkennung
+  abgeschaltet (Flacker-Ursache); Applier fassen nur Geändertes an.
+- **2026-08-17/18** — Theme-Springen: Modus doppelt (TUI-Variable + Datei),
+  dann `zentrale-themed` als einziger Auflöser; Testläufe aus Worktrees
+  schalteten Sashas Theme (126 Wechsel in 19 s) → Riegel im venv
+  (`zentrale-venv-guard`) + `darf_schreiben()`; Riegel fehlte auf dem Laptop
+  → `start_tui.sh` hängt ihn ein. stdout-Laufschrift `s`.
+- **2026-08-20** — Ring in der Mitte, Befehle in der Fußleiste
+  (`anwesenheit_und_ring.md`).

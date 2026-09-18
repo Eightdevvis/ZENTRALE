@@ -1,5 +1,20 @@
 # Gesamt-Architektur
 
+**Stand 2026-09-18:** Ein Python-Prozess auf dem PC mit zwei Threads
+(Event-Loop `core/main.py`, Flask `ui/app.py`), verbunden **nur** über
+`state.py`. Dazu zwei Sidecars (Whisper 5050, TTS 5051) und Ollama. Fronten:
+die **TUI** (`tui/zentrale_tui.py`, Thin Client per HTTP) ist die, an der
+gearbeitet wird; `monolith.html` ist die eine Browser-Front (praktisch
+aufgegeben, Kassetten-Logik steht als Rückbau im Tracker). Der Tutor ist ein
+eigenes Projekt in `tutor/`, angebunden allein über `core/tutor_port.py`;
+seine Struktur steht mit Drift-Test in `memory/tutor/bauplan.md`. „Lokal &
+offline" gilt nur noch als Default: die gegatete Internet-Pipe (2026-06) und
+der Cloud-Kern als Opt-in (2026-08, `memory/ki/ki_system.md`) brechen es
+bewusst. Bausteine docken per Konvention an (KI-Tool in `ai.py` + Route in
+`app.py`), keine Plugin-Registry. Für den Kern gibt es **keinen** Bauplan mit
+Drift-Test — die Modul-Liste unten ist Handarbeit (offener Auftrag nach
+`memory/doku_regeln.md`, Regel 6).
+
 ## Zwei Threads, ein Prozess
 
 ZENTRALE läuft als ein einziger Python-Prozess mit zwei Threads:
@@ -50,10 +65,11 @@ monolith.html  (Browser pollt /api/state jede Sekunde)
    └──▶ audio.py ──▶ Whisper (Port 5050) / TTS (Port 5051)
 ```
 
-> Sprach-Tutor: lebt seit 2026-07-16 als EIGENES PROJEKT im Ordner `tutor/`
-> (rausziehbar am Stück). ZENTRALE greift NUR über `core/tutor_port.py` rein —
+> Sprach-Tutor: EIGENES PROJEKT im Ordner `tutor/` (rausziehbar am Stück,
+> seit 2026-07-16). ZENTRALE greift NUR über `core/tutor_port.py` rein —
 > kein Core-/UI-Modul importiert `tutor.*` direkt. Fehlt der Ordner, läuft
-> ZENTRALE normal weiter. Siehe `memory/tutor/tutor_system.md`.
+> ZENTRALE normal weiter. Struktur: `memory/tutor/bauplan.md`, Verhalten:
+> `memory/tutor/tutor_system.md`.
 
 `brain.process_event(e)` und `actions.handle_action(e)` werden vom
 Event-Loop **parallel pro Event** aufgerufen, nicht hintereinander.
@@ -118,59 +134,39 @@ ZENTRALE/
 │       └── monolith.html    # DIE EINE Browser-Front (alle Kassetten); KI-Blöcke
 │                            # werden per ki_aus-Flag weggelassen (laptop/tui)
 ├── tutor/                   # ★ EIGENES PROJEKT, wohnt hier mit. Rausziehbar am Stück.
-│   │                        # ZENTRALE greift NUR über core/tutor_port.py rein;
-│   │                        # fehlt der Ordner, läuft ZENTRALE normal weiter.
-│   ├── __init__.py          # Kontrakt: was der Tutor vom "basic core" braucht
-│   ├── session.py           # Session-State + Auflösung Sprache→Provider→Modell
-│   ├── tools.py             # Tool-MECHANIK + Sandbox-Allowlist — sprach-NEUTRAL
-│   ├── providers.py         # Provider-Registry des TUTORS (≠ core/providers.py)
-│   ├── config.py            # Sprache/Provider/Modell — KEINE Keys (die hat der Core)
-│   ├── memory.py            # Grob-Gedächtnis pro Persona (Notizen, kein Graph)
-│   ├── openai_compat.py     # OpenAI-/v1-Backend (Qwen/DeepSeek/Mistral/OpenAI/Groq/…)
-│   ├── cloud.py             # Anthropic-Backend (Claude, Sashas persönlicher Pfad)
-│   ├── room.py              # Persona-Zimmer (pygame, nativ; reiner HTTP-Client)
-│   ├── test_memory.py       # Regression: Notizen, Sandbox, Persona, Sprach-Isolation
-│   ├── langs/               # ★ EINE SPRACHE = EIN ORDNER (getrackt, kommt mit)
-│   │   ├── __init__.py      #   Registry: findet die Pakete selbst (get/expect/enabled)
-│   │   ├── base.py          #   Profil-Schema + generischer dt. Fallback-Prompt
-│   │   ├── zh/              #   LIVE — Ling Ling: prompt.md (chinesisch, hand-getunt),
-│   │   │                    #   prompt.de.md (Referenz), tool_texts.json, expect.json,
-│   │   │                    #   vocab_hint.md, seeds/news.json + seeds/tv.json
-│   │   └── fr/ ru/ ar/ es/  #   Skizzen (enabled=False, generischer Prompt)
-│   ├── prompts/             # dt. Referenz-Fassungen der übrigen Prompts (Doku)
-│   └── data/                # Laufzeit, nicht committen. Enthält NIE einen API-Key.
-│       ├── tutor_config.json  #   lokale Wahl (Sprache/Provider/Modell)
-│       └── <lang>/          #   LERNSTAND pro Sprache: vocab.json, structures.json,
-│                            #   persona_mem.json, persona_hist.json, Rotations-Cursor
+│                            # Baum, Artefakte, Routen, Sprachpakete: memory/tutor/bauplan.md
+│                            # (mit Drift-Test tests/test_tutor_bauplan.py) — hier bewusst nicht kopiert.
 ├── tui/                     # Terminal-Kassette (curses), redet NUR via HTTP mit ui/app.py
 │   ├── zentrale_tui.py      # Die TUI (Sensoren, Karte, Kalender, Listen, Graphen, Mail)
+│   ├── boot_loader.py       # Ladebalken beim Start
 │   └── select_kassette.py   # Kassetten-Auswahl beim Start
 ├── services/
 │   ├── whisper_service.py   # STT (Port 5050)
 │   ├── tts_service.py       # TTS (Port 5051)
 │   └── download_tts_model.py
-├── data/                    # Auto-generiert, nicht committen (Core-Daten)
-│   ├── ai_config.json       # Kill-Switches (cloud/local) + API-KEY-Store
-│   ├── sleep_quality.json   # Geloggte Einträge
-│   ├── ai_graph.json        # Konzept-Graph (primary memory)
-│   ├── ai_ltm.json          # Legacy LTM (save_memory-Tool)
-│   └── ai_stm.json          # Legacy STM (Session-Turns)
-├── deploy/
-│   ├── zentrale.service          # systemd-Template
-│   ├── RELEASE                   # Trigger für Auto-Update auf dem Pi
-│   └── zentrale-autopull.cron    # Crontab-Snippet (5-min-Tick)
-├── scripts/
-│   ├── deploy_pi.sh              # rsync + systemd Erst-Deploy
-│   ├── pi_autopull.sh            # Cron-Worker: fetch → diff → pull → restart
-│   └── test_audio.py             # manueller Audio-Smoke-Test
-├── memory/                  # Dieser Doku-Ordner
+├── data/                    # Auto-generiert, nicht committen (Core-Daten);
+│                            # was drin liegt und was in git darf: memory/betrieb/datei_zugriffe.md
+├── deploy/                  # systemd-Units (PC, Pi, Kern), Aussenposten-Listen, i3-Snippet
+│                            # → memory/betrieb/deployment.md, systemeinheit.md
+├── scripts/                 # Start-, Deploy-, Theme-, Bench- und Devtool-Skripte
+│                            # → memory/betrieb/starten.md, deployment.md
+├── memory/                  # Dieser Doku-Ordner (Regeln: memory/doku_regeln.md)
 └── notes.md                 # Freie Notizen, KI kann sie lesen
 ```
 
+Weitere `core/`-Module, die oben nicht einzeln stehen: `anwesenheit.py`,
+`takt.py`, `melden.py` (→ `takt.md`, `anwesenheit_und_ring.md`,
+`../betrieb/systemeinheit.md`), `aussenposten.py`, `datasync.py`
+(→ `topologie.md`), `gedaechtnis.py`, `cloud.py`, `cloud_openai.py`,
+`usage.py` (→ `../ki/ki_system.md`), `notes.py`, `prices.py`, `theme.py`
+(→ `dashboard.md`).
+
 ## Eckpfeiler-Entscheidungen
 
-- **Lokal & offline**: keine Cloud-Abhängigkeit – Ollama/Whisper/TTS
-  laufen alle auf demselben Rechner.
+- **Lokal & offline als Default**: Ollama/Whisper/TTS laufen alle auf
+  demselben Rechner. Was das bewusst bricht — die gegatete Internet-Pipe
+  und der Cloud-Kern als Opt-in — steht in `../betrieb/sicherheit.md` und
+  `../ki/ki_system.md`.
 - **Polling-basiert**: das Frontend pollt `/api/state` jede Sekunde.
   Bewusst gewählt statt WebSockets, weil simpler und für
   ein-Browser-Setups völlig ausreichend.
@@ -210,3 +206,14 @@ Registry/Dispatch-Tabelle heben.
 > memory). `graphs.py` ist die **Lifestyle-Graphen-Registry** des Mess-/
 > Tracking-Werkzeugs (viele benannte Messreihen, zur Laufzeit anlegbar).
 > Verschiedene Systeme, nur namensähnlich.
+
+## Historie
+
+- **2026-05** — PC↔Pi-Migration: der Prozess läuft auf dem PC, der Pi
+  liefert Sensoren per Webhook (`topologie.md`).
+- **2026-06** — Monolith-Dashboard als die eine Browser-Front; Kassetten
+  (monolith/laptop/tui); Internet-Pipe mit Gate.
+- **2026-07-16** — Tutor als eigenes Projekt herausgelöst (`tutor/`,
+  einzige Naht `core/tutor_port.py`).
+- **2026-08** — Cloud-Kern als Opt-in; Arbeit nur noch an der TUI, Browser-
+  Fronten aufgegeben (`INDEX.md`, Stand der Fronten).

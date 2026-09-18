@@ -1,6 +1,18 @@
 # Tastatur-Belegung
 
-Solange kein echter GPIO da ist, simulieren wir alle Sensoren über die
+**Stand 2026-09-18:** Für die **TUI** steht die Belegung nur im Code
+(`TUI_KEYS`/`CTX_KEYS` in `tui/zentrale_tui.py`, `/help` bzw. `/`), hier
+nur die Tasten, die nichts öffnen. Für das **Zimmer** (`tutor/room.py`:
+Esc-Menü, Alt+Z zur TUI, Alt+P Ruhe, Drill-Pfeiltasten) gilt dasselbe —
+siehe `../tutor/tutor_system.md`; Alt+L (Sprachwechsel im Zimmer) gibt es
+seit 2026-09-17 nicht mehr, die Sprache kommt aus dem Spielstand. Die
+Tabellen unten für den **Browser-Kiosk** (Canvas, Klavier, Chat mit
+`Alt+T` Tutorkanal, Data-Collection) beschreiben `monolith.html`, an dem
+nicht mehr gearbeitet wird — der Code lebt, die Belegung ist unverändert.
+Sensor-Simulation (`b`/`l`/`m`) braucht `sudo` am PC; auf dem Pi liefert
+die Bridge echte Sensoren.
+
+Am PC gibt es keinen GPIO; dort simulieren wir alle Sensoren über die
 Tastatur. Damit das funktioniert, muss `core/main.py` **mit `sudo`**
 laufen – die `keyboard`-Library braucht Root, um globale Keypress-
 Events abzugreifen.
@@ -81,9 +93,9 @@ Drei Unterschiede, die aus dem Terminal kommen:
   geladen). Fehlt das Gerät, steht `♪ stumm` im Kopf und Noten + Aufnahme
   laufen trotzdem. `ZENTRALE_NO_AUDIO=1` schaltet den Ton bewusst ab.
 
-> Der Sprachtutor ist **reaktiviert** und wird im Chat-Modus per `Alt + T`
-> umgeschaltet (nicht mehr über diesen Sensor-Trigger). Der Presence-Auto-Start
-> bleibt bewusst aus – siehe `memory/tutor/tutor_system.md`.
+> Der Sprachtutor wird im Browser-Chat per `Alt + T` umgeschaltet (nicht über
+> den Sensor-Trigger `m`). Ein Presence-Auto-Start existiert nicht — siehe
+> `memory/tutor/tutor_system.md`.
 
 ## In der TUI (Terminal-Kassette)
 
@@ -127,7 +139,7 @@ Verdrahtung passiert in `scripts/install_xfce_autostart.sh` via
 | Taste              | Funktion                                              |
 |--------------------|-------------------------------------------------------|
 | `Ctrl+Alt+Esc`     | **Notaus** — stoppt `lightdm`, Pi landet auf TTY1. Backend-Services laufen weiter. Zurueck zum Kiosk: `sudo systemctl start lightdm`. Details: `memory/betrieb/deployment.md` → „Notaus-Hotkey". |
-| `Ctrl+Alt+T`       | **Pi-Terminal aufrufen** — oeffnet ein xterm floating ueber dem Firefox-Kiosk. Zum Schliessen `Ctrl+D` oder Fenster zu, dann ist der Kiosk wieder vorn. Nuetzlich um schnell etwas auf dem Pi zu checken ohne SSH-Umweg. |
+| `Ctrl+Alt+T`       | **Pi-Terminal aufrufen** — oeffnet ein xterm floating ueber dem Kiosk (Zimmer/TUI/Firefox). Zum Schliessen `Ctrl+D` oder Fenster zu, dann ist der Kiosk wieder vorn. Nuetzlich um schnell etwas auf dem Pi zu checken ohne SSH-Umweg. |
 
 ## Im Data-Collection-Modus (zusätzlich)
 
@@ -152,3 +164,11 @@ Im Formular:
 > Der Unterschied `k` vs. `ESC` im Formular ist wichtig: `k` ist die
 > einzige Taste, die den Eintrag tatsächlich nach `data/<id>.json`
 > schreibt.
+
+## Historie
+
+- **2026-06** — Klavier (`k`) im Browser und in der TUI; `Alt+K` für
+  Data-Collection, weil `k` das Klavier wurde.
+- **2026-07** — Tutor als Kanalwechsel (`Alt+T`) im Browser-Chat statt
+  eigenem Panel; TUI-Belegung nur noch im Code.
+- **2026-09-17** — Alt+L im Zimmer entfernt (ein Spielstand = eine Sprache).

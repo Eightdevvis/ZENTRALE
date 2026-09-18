@@ -1,10 +1,20 @@
 # Der Takt — wann ZENTRALE von sich aus spricht
 
+**Stand 2026-09-18:** `core/takt.py` entscheidet rein aus dem Kalender,
+**wann** ein Anstoß fällig ist (60 und 30 min vor einem Termin, 5 min
+Nachlauf, Nachtruhe 22–07, 20 min Mindestabstand, jeder Anstoß genau einmal
+in `data/takt/YYYY-MM-DD.json`); ein 60-s-Thread in `ui/app.py` merkt ihn,
+lässt das Modell den Satz formulieren und legt ihn in den Verlauf; die TUI
+holt den Verlauf alle 20 s und zeigt ein ● am Kasten. Die Lage
+(`anwesenheit.py`) geht mit, die Meldung geht zusätzlich als
+Desktop-Benachrichtigung raus (`melden.py`). `ZENTRALE_TAKT=0` schaltet ab.
+Offen: Anwesenheitspings (Morgenritual, Check-in), das Schemen, Kostenblick.
+
 `core/takt.py` (Logik) · `ui/app.py` (Treiber) · `tui/zentrale_tui.py` (Zustellung)
 
 ## Warum
 
-Bis zum 18.08.2026 erinnerte ZENTRALE nur dann an einen Termin, wenn Sasha
+Vor dem Takt (bis 18.08.2026) erinnerte ZENTRALE nur dann an einen Termin, wenn Sasha
 ohnehin gerade schrieb: der Kalender stand im Prompt, die Uhr daneben, und das
 Modell rechnete jeden Turn nach, wie lange es noch hin ist. Genau die falsche
 Richtung — es mahnte, wenn er da war, und schwieg, wenn er weg war. Sein Befund:
@@ -32,20 +42,18 @@ merken-vor-sprechen ist Absicht: ein Absturz mitten im Modell-Aufruf würde
 sonst denselben Anstoß beim nächsten Tick wiederholen. Abschaltbar mit
 `ZENTRALE_TAKT=0`.
 
-**2a. In welche Lage hinein.** Seit dem 20.08.2026 trägt der Auftrag die
-**Lage** mit (`core/anwesenheit.py`): ob Sasha da ist und ob ZENTRALE vor ihm
+**2a. In welche Lage hinein.** Der Auftrag trägt die **Lage** mit (`core/anwesenheit.py`): ob Sasha da ist und ob ZENTRALE vor ihm
 steht. Sie hat also seine Aufmerksamkeit sicher — oder muss sie erst holen, und
 dann ist die Nachricht ein Satz, kein Absatz. Siehe
 `memory/system/anwesenheit_und_ring.md`.
 
-**2b. Die Meldung nach draussen.** Seit dem 19.08.2026 geht jeder Anstoß
-zusätzlich als **Desktop-Benachrichtigung** raus (`core/melden.py`) — aber nur,
+**2b. Die Meldung nach draussen.** Jeder Anstoß geht zusätzlich als **Desktop-Benachrichtigung** raus (`core/melden.py`) — aber nur,
 wenn ZENTRALE nicht ohnehin sichtbar vor Sasha steht. Ohne das endet ihre
 Initiative an der Fensterkante. Details in `memory/betrieb/systemeinheit.md`.
 
-**3. Die Zustellung — `ai_poll()` in der TUI.** Der Verlauf wurde früher
-**einmal** beim Öffnen des KI-Kastens geholt; eine unaufgeforderte Nachricht
-wäre also versandet. Jetzt sieht ein Thread alle 20 s nach und übernimmt den
+**3. Die Zustellung — `ai_poll()` in der TUI.** Ein einmaliges Holen des
+Verlaufs beim Öffnen des KI-Kastens (so war es vorher) ließe eine
+unaufgeforderte Nachricht versanden. Deshalb sieht ein Thread alle 20 s nach und übernimmt den
 Backend-Verlauf, solange kein Stream läuft. Steht der Kasten zu und hatte die
 KI das letzte Wort, erscheint ein **●** vorne im Titel; das Öffnen löscht es.
 
@@ -88,8 +96,15 @@ Alte Tageszustände räumt `aufraeumen()` beim Start weg (7 Tage bleiben).
 
 - **Anwesenheitspings** (Morgenritual bei der ersten Interaktion des Tages,
   Check-in nach längerer Abwesenheit) — die zweite Auslöser-Klasse aus Sashas
-  Vorgabe. Das Signal dafür steht seit dem 20.08.2026 (`anwesenheit.da()`),
-  die Auslöser noch nicht.
+  Vorgabe. Das Signal dafür steht (`anwesenheit.da()`), die Auslöser noch
+  nicht.
 - **Das Schemen** baut später auf dem auf, was der Takt erzeugt.
 - **Kosten im Blick behalten:** jeder Anstoß ist ein Modell-Aufruf.
   `data/ai_usage.json` nach einem Tag mit Takt gegen einen Tag ohne halten.
+
+## Historie
+
+- **18.08.2026** — Takt gebaut: Uhr raus aus dem Prompt, Erinnern in den
+  Code (Sashas Befund oben).
+- **19.08.2026** — Desktop-Benachrichtigung (`melden.py`), Kern als Dienst.
+- **20.08.2026** — Lage (`anwesenheit.py`) geht mit dem Auftrag mit.

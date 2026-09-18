@@ -1,10 +1,21 @@
 # Topologie: PC ↔ Pi
 
-Seit der Migration im Mai 2026 läuft ZENTRALE **nicht mehr alles auf
-dem Pi**, sondern aufgeteilt zwischen Linux-PC und Raspberry Pi. Grund:
-Pi-RAM ist zu knapp für Ollama (~5–9 GB je Modell), Whisper
-(~500 MB) und TTS gleichzeitig. Der Pi war ursprünglich als Core
-gedacht – das war für die AI-Last zu schwer.
+**Stand 2026-09-18:** Der **PC** (pop-os, `192.168.50.1` fest am dummen
+Switch) ist der Kern: Ollama, Whisper, TTS, Flask+Event-Loop. Der **Pi**
+(`192.168.50.10`, Pi 3, 32-bit, 1 GB) ist Aussenposten: Kiosk (Default
+`room` = Persona-Zimmer, TUI dahinter), Sensor-Bridge (PIR, Telemetrie),
+Wecker für den PC; er holt sich sein Code-Paket alle 5 min per HTTP vom
+Backend (kein git). Der **Laptop** (`0RAMMachine`) hängt über den
+Handy-Hotspot dran: `find-pc` (ARP nach MAC) → SSH-Tunnel → TUI gegen das
+PC-Backend; `data/*.json` gleichen sich per Boot-Sync (einmalig, kein
+Daemon) und Push-on-write (newest-wins) ab. Datenrichtung: PC → Pi/Laptop
+nur HTTP-Pull, Pi → PC nur `POST /api/sensor/<name>` + Telemetrie.
+Wachplan (daheim an, Suspend, WoL vom Pi): `../betrieb/wachplan.md`. Ein
+Router kommt später und ändert die Adressen (dort beschrieben).
+
+Warum aufgeteilt: Pi-RAM ist zu knapp für Ollama (~5–9 GB je Modell),
+Whisper (~500 MB) und TTS gleichzeitig. Der Pi war ursprünglich als Core
+gedacht – das war für die AI-Last zu schwer (Migration Mai 2026).
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -25,23 +36,20 @@ gedacht – das war für die AI-Last zu schwer.
 │  Pi  (zentrale, eth0 = 192.168.50.10, fest)                  │
 │  Pi 3 Model B, armv7l (32-bit!), 921 MB RAM, 29 GB SD        │
 │                                                              │
-│   Kiosk (ZENTRALE_KIOSK_MODE, default 'tui')                 │
-│      xterm + tui/zentrale_tui.py → 192.168.50.1:5000         │
-│      'browser' = alter Firefox-Kiosk, nur noch Option        │
-│   tutor/room.py (Persona-Zimmer, aus der TUI per 'u')        │
+│   Kiosk (ZENTRALE_KIOSK_MODE, default 'room')                │
+│      tutor/room.py (Persona-Zimmer) als Wandbild             │
 │      HDMI-Bild + Ton, USB-Mikro; rechnet NICHTS selbst       │
+│      TUI (tui/zentrale_tui.py) dahinter, Alt+Z               │
+│      'tui' / 'browser' = weitere Modi (deployment.md)        │
 │   scripts/pi_sensor_bridge.py                                │
-│      liest GPIO/Tastatur                                     │
+│      liest PIR (GPIO4) / Tastatur, Telemetrie                │
 │      pusht Trigger via HTTP an 192.168.50.1                  │
+│   zentrale-wake-pc.service (WoL-Magic-Packet an den PC)      │
 │                                                              │
 │   WLAN (Hotspot, dyn. IP)  → nur fuer Internet (Apt-Updates) │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
 ```
-
-**Seit 2026-09-14 gilt der Wachplan** (`memory/betrieb/wachplan.md`): PC ist
-der Kern zuhause — daheim durchgehend an, nachts und unterwegs Suspend,
-Wecken über den Pi. Ein Router kommt später; dann ändert sich dieses Netz.
 
 ## Was wo läuft
 
@@ -52,15 +60,15 @@ Wecken über den Pi. Ein Router kommt später; dann ändert sich dieses Netz.
 | TTS (sherpa-onnx)       | PC   | ~120 MB Modell + CPU-intensiv.            |
 | Flask + Event-Loop      | PC   | Damit AI-Calls direkt lokal sind (kein   |
 |                         |      | HTTP-Hop zum Pi und zurück).              |
-| Browser-Kiosk           | Pi   | Anzeige am Wand-Monitor.                  |
+| Kiosk (Zimmer/TUI)      | Pi   | Anzeige + Ton am Wand-Monitor.            |
 | Hardware-Sensoren       | Pi   | GPIO/PIR/Türsensor sitzen physisch hier.  |
 | `pi_sensor_bridge.py`   | Pi   | Übersetzt GPIO-Events in HTTP-POSTs.      |
 
 ## Datenflüsse
 
-**PC → Pi** läuft ausschließlich HTTP-Pull: Der Kiosk holt
-`/api/state` (alle 1 s), `/api/chat`, `/api/tutor/...` usw. vom
-PC-Flask. Keine Push-Verbindung in die Richtung – wenn das Dashboard
+**PC → Pi** läuft ausschließlich HTTP-Pull: Zimmer und TUI holen
+`/api/state`, `/api/chat`, `/api/tutor/...`, `/api/speak`, `/api/transcribe`
+vom PC-Flask. Keine Push-Verbindung in die Richtung – wenn das Dashboard
 neue Daten will, fragt es einfach erneut. SSE wird für Streaming-Calls
 genutzt (AI-Antworten), das ist immer noch Pull (Browser hält den
 Stream offen).
@@ -72,8 +80,9 @@ Stream offen).
 mapped sie auf die internen Events (`_SENSOR_TO_EVENT` in `main.py`).
 Wenn ein neuer Sensor dazukommt: an drei Stellen ergänzen
 (`_ALLOWED_SENSORS`, `_SENSOR_TO_EVENT`, `KEYBOARD_MAP` in der Bridge).
+Der PIR läuft in der Bridge per gpiozero-Callback (`../betrieb/hardware.md`).
 
-Zweiter **Pi → PC**-Push seit 2026-06-06: **Telemetrie**. Dieselbe
+Zweiter **Pi → PC**-Push: **Telemetrie**. Dieselbe
 Bridge (`pi_sensor_bridge.py`) pollt alle ~30s CPU/Temp/RAM/SD (aus
 `core/host_metrics.py`, dependency-frei) und POSTet sie an
 `POST /api/telemetry/pi`. Der PC hält nur den letzten Stand
@@ -82,12 +91,11 @@ Bridge (`pi_sensor_bridge.py`) pollt alle ~30s CPU/Temp/RAM/SD (aus
 kommt dagegen lokal aus `core/telemetry.pc_snapshot()` (inkl. GPU/VRAM via
 `nvidia-smi`) — kein Push nötig, der PC ist ja das Backend.
 
-`pc_snapshot()` legt seit 2026-06-27 auch `host` (`socket.gethostname()`)
-ab: die Fronten sind nur HTTP-Clients, die gezeigten „pc"-Werte stammen vom
+`pc_snapshot()` legt auch `host` (`socket.gethostname()`) ab: die Fronten sind nur HTTP-Clients, die gezeigten „pc"-Werte stammen vom
 **Backend-Host**, nicht von der anzeigenden Maschine. Die TUI leitet daraus
 ihr Telemetrie-Kürzel ab (`host_label`: pop-os→`PC`, 0RAMMachine→`LAP`,
-zentrale→`PI`) — vorher stand dort hart `LAP`, was auf dem Pi-Kiosk (zeigt
-die PC-Werte) falsch war.
+zentrale→`PI`) — ein hartes `LAP` (so war es bis 2026-06-27) war auf dem
+Pi-Kiosk falsch, der zeigt ja die PC-Werte.
 
 ## Wie ein Aussenposten seinen Code kriegt
 
@@ -118,9 +126,9 @@ pflegen«.
 
 Eigenschaften, die im Betrieb zaehlen:
 
-- **Klein:** 13 Dateien, ~660 KB. Der alte `git pull` brachte den ganzen
-  getrackten Baum (~34 MB, davon 29 MB Kartendaten) und verlangte einen
-  GitHub-Zugang auf jedem Knoten.
+- **Klein:** 16 Dateien (Stand der Liste 2026-09-18), weit unter 1 MB. Der
+  alte `git pull` brachte den ganzen getrackten Baum (~34 MB, davon 29 MB
+  Kartendaten) und verlangte einen GitHub-Zugang auf jedem Knoten.
 - **Der Updater steckt IM Paket** und erneuert sich selbst mit. Er ist
   stdlib-only und laeuft unter dem System-Python — ein Updater, der den venv
   braucht, koennte ihn nicht reparieren.
@@ -148,8 +156,8 @@ von einem Bump in `deploy/RELEASE` — bleibt fuer einen vollwertigen
 
 ## Netzwerk
 
-Seit 2026-05-19 hängen PC und Pi an einem **unmanaged Gigabit-Switch**
-mit festen IPs im LAN-Subnetz `192.168.50.0/24`:
+PC und Pi hängen an einem **unmanaged Gigabit-Switch** mit festen IPs im
+LAN-Subnetz `192.168.50.0/24` (seit 2026-05-19):
 
 | Host | Interface | LAN-IP        | Methode    |
 |------|-----------|---------------|------------|
@@ -173,7 +181,9 @@ Wichtig:
   sitzt). Aufraeumen mit
   `sudo kernelstub --delete-options "ip=..."` und einmal
   `sudo ip route del default dev enp4s0 scope link`. War 2026-05-26
-  ein Tag lang das Mystery „Internet kaputt nach LAN-Setup".
+  ein Tag lang das Mystery „Internet kaputt nach LAN-Setup". (Der
+  Remote-Unlock nutzt deshalb `ip=off` + eigenes Skript ohne Default-Route:
+  `../betrieb/auto_unlock.md`.)
 
 **Hotspot ist damit unkritisch.** WLAN-Reconnects wechseln zwar
 weiterhin die Hotspot-IP, aber `192.168.50.1` und `192.168.50.10`
@@ -188,7 +198,7 @@ der Pi-WLAN-MAC `b8:27:eb:34:8b:1c` und schreibt eine passende IP in
 `~/.ssh/config`. Nur als Notfall-Tool gedacht – im Normalbetrieb laeuft
 `ssh zentrale` ueber die feste LAN-IP `192.168.50.10`.
 
-## Laptop als 3. Knoten (seit 2026-06-15)
+## Laptop als 3. Knoten
 
 Ein Laptop (`0RAMMachine`, User `sasha`) greift von unterwegs/daheim auf
 den PC zu. Beide hängen am **Handy-Hotspot** (`Bigme`), wo der PC eine
@@ -276,7 +286,7 @@ der PC kennt den Laptop als `0RAMMachine`/`find-0RAMMachine`). Die
 `~/.local/bin`-Skripte (`zentrale-sync` + `push`/`pull`-Symlinks,
 `zentrale-push-data`, `zentrale-sync-boot`) müssen dort installiert sein.
 
-**Boot-Sync am PC = eigene oneshot-Unit (seit 2026-06-25), NICHT `ExecStartPre`.**
+**Boot-Sync am PC = eigene oneshot-Unit, NICHT `ExecStartPre`.**
 Der frühere Plan „`ExecStartPre=zentrale-sync-boot` an `zentrale-pc`" ist eine
 Falle: `zentrale-pc` hat `Restart=always`/`RestartSec=3`, ein `ExecStartPre`
 feuert bei **jedem** Crash-Neustart erneut → im Crashloop ein Sync-Sturm. Statt
@@ -286,8 +296,8 @@ nur per `Wants=`+`After=` zieht. systemd löst Dependencies **nicht** bei jedem
 `systemctl start`), crashloop-sicher. (Auf dem Laptop bleibt der Boot-Sync wie
 gehabt im `zentrale-launch`-Wrapper, da Direktstart statt systemd.)
 
-**Finder retry-gehärtet (2026-06-25):** `find-pc`/`find-0RAMMachine` machen den
-ARP-Scan jetzt bis zu 3× (`FIND_RETRIES`), weil ein Einzelschuss flackert
+**Finder retry-gehärtet:** `find-pc`/`find-0RAMMachine` machen den
+ARP-Scan bis zu 3× (`FIND_RETRIES`), weil ein Einzelschuss flackert
 (Peer im WLAN-Stromsparmodus / Ping-Verlust → MAC fehlt für eine Runde in
 `ip neigh`, nächste Runde da). Eine Runde ~1s, hilft Boot-Sync **und** Autopush
 (beide rufen denselben Finder; ein verpasster Scan = ein verlorener Push).
@@ -302,22 +312,13 @@ Der „Frontend↔AI"-Weg läuft bewusst über den **SSH-Tunnel** statt direkt
 auf `:5000` (verschlüsselt; `:5000` am PC kann später auf `localhost`
 eingeschränkt werden, dann geht es nur noch via SSH).
 
-## Was der Pi NICHT mehr macht
+## Was der Pi NICHT macht
 
-- Kein `zentrale.service` mehr (stopped + disabled).
-- Kein `whisper.service`, kein `tts.service`.
-- Kein Ollama-Container.
+- Kein `zentrale.service` (stopped + disabled), kein `whisper.service`,
+  kein `tts.service`, kein Ollama.
 - Keine direkten Disk-Writes nach `data/<category>.json` – Logging
   geht über den PC-Flask.
-
-## Was der Pi (noch) tut
-
-- Firefox-Kiosk auf das PC-Dashboard.
-- `pi_sensor_bridge.service` (sobald installiert): leitet Hardware-
-  Sensoren weiter.
-- Auto-Update via `pi_autopull.sh` + `deploy/RELEASE` – funktioniert
-  weiterhin, sodass Codeänderungen am Bridge-Skript oder am
-  Kiosk-Autostart-Skript ohne manuellen rsync auf den Pi kommen.
+- Kein git, kein `pi_autopull.sh` — das Paket kommt per HTTP (oben).
 
 ## Erweiterbarkeit
 
@@ -327,3 +328,24 @@ Anzeige-Pi-Zero, ein Pi an einer Schlafzimmer-Wand) können denselben
 `/api/sensor/<name>`-Endpoint nutzen. Der Sensor-Name wird in beiden
 Schichten geführt – einmal als Eingangskanal, einmal als logisches
 Event.
+
+## Historie
+
+- **2026-05-14** — PC↔Pi-Migration: Backend auf den PC, Pi wird Kiosk +
+  Sensor-Bridge (Commit 6f0b468).
+- **2026-05-19** — Gigabit-Switch mit festen LAN-IPs; Hotspot-Wechsel sind
+  seither egal.
+- **2026-05-26** — „Internet kaputt nach LAN-Setup": `ip=`-Kernel-Param mit
+  leerem Gateway schrieb eine bogus Default-Route (oben, Netzwerk).
+- **2026-06-06** — Telemetrie-Push des Pi; **06-27** `host` im Snapshot,
+  TUI-Kürzel statt hartem `LAP`.
+- **2026-06-15** — Laptop als dritter Knoten (`find-pc`, `zentrale-remote`,
+  Sync-Skripte).
+- **2026-06 (mehrfach)** — Dauer-Sync-Daemon verworfen (racte mit Commits),
+  Boot-Sync + Push-on-write stattdessen; **06-25** Drop-in ohne
+  `[Service]`-Header gefixt, oneshot-Unit statt `ExecStartPre`, Finder mit
+  Retries.
+- **2026-06-27** — Kiosk-Default `tui` statt Firefox.
+- **2026-09-04** — Aussenposten holen ihr Paket per HTTP statt git-Pull.
+- **2026-09-14** — Kiosk-Default `room` (Zimmer), PIR an der Bridge,
+  Wachplan.

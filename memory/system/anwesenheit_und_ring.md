@@ -1,5 +1,17 @@
 # Anwesenheit, Aufmerksamkeit — und der Ring
 
+**Stand 2026-09-18:** `core/anwesenheit.py` misst per Code (nicht per
+Modell), ob Sasha am Rechner sitzt (X11-Leerlauf via XScreenSaver/ctypes,
+Schwelle 10 min) und ob die Sitzung gesperrt ist (logind `LockedHint`);
+`melden.sichtbar()` sagt, ob ZENTRALEs Fenster vor ihm steht. Daraus eine
+von vier Lagen (`offen`, `woanders`, `weg`, `unbekannt`), die als **ein
+Satz** am Takt-Auftrag hängt (`takt.md`) — nie im Prompt jedes Turns. Die
+TUI zeigt in der Mitte einen gerechneten ASCII-Ring (`● ◦ ·` je Lage, heller
+Bogen nur beim Denken), die Befehle stehen in der Fußleiste. Sensorik
+(PIR am Pi, `../betrieb/hardware.md`) speist heute das **Zimmer**
+(`presence_age` in `room_state`), nicht `da()` — ⚠ prüfen: ob PIR-Treffer
+in `anwesenheit.da()` einfließen sollen, ist nicht entschieden.
+
 `core/anwesenheit.py` · `tui/zentrale_tui.py` (`ring_zeilen`) · `ui/app.py`
 
 ## Warum
@@ -47,7 +59,8 @@ entscheidet nur noch, WAS es damit sagt.
   (→ `memory/betrieb/systemeinheit.md`).
 
 **Hier dockt später Sensorik an.** Ein PIR-Melder oder ein Mikrofon ändert
-`da()` — nicht den Prompt, nicht den Takt, nicht die TUI.
+`da()` — nicht den Prompt, nicht den Takt, nicht die TUI. (Der PIR am Pi
+meldet heute `motion` an den Kern und das Zimmer, siehe Stand oben.)
 
 ## Was die KI davon sieht
 
@@ -77,8 +90,8 @@ Sasha: *„die ganzen befehle die in der mitte stehen rutschen einfach in die
 leiste unten. in der mitte bleibt stehen zentrale ai. sie zeigt sich als einen
 mit ascii gezeichneten ring."*
 
-Die Mitte zeigte bis dahin `KASSETTE · TUI` und eine Liste der Tastenbefehle.
-Eine Merkhilfe gehört an den Rand; **die Mitte gehört ihr.**
+Eine Merkhilfe (vorher stand in der Mitte `KASSETTE · TUI` und die
+Tastenliste) gehört an den Rand; **die Mitte gehört ihr.**
 
 - **Gerechnet, nicht gemalt** (`ring_punkte`/`ring_zeilen`, reine Funktionen).
   Ein festes ASCII-Bild passt genau in eine Fenstergröße; dieser Ring wächst
@@ -100,7 +113,7 @@ Eine Merkhilfe gehört an den Rand; **die Mitte gehört ihr.**
 
 ## Die Fußleiste
 
-Trägt jetzt alle Befehle, aus **einer** Quelle (`CTX_KEYS["home"]` — die Liste,
+Trägt alle Befehle, aus **einer** Quelle (`CTX_KEYS["home"]` — die Liste,
 die `/` ohnehin zeigt). Zwei Eigenheiten, beide aus einem gemessenen Problem:
 
 - **`q beenden` steht vorn.** Die Leiste wird bei schmalem Fenster hinten
@@ -109,3 +122,10 @@ die `/` ohnehin zeigt). Zwei Eigenheiten, beide aus einem gemessenen Problem:
 - **Kurzformen nur hier** (`post`, `lauf`, `ki`). Bei 140 Spalten passte die
   volle Fassung nicht, und was hinten abfiel, war der Theme-Zustand. Die
   `/`-Übersicht behält die ausführlichen Namen.
+
+## Historie
+
+- **20.08.2026** — Anwesenheit + Lage gebaut (Sashas Vorgabe oben), Ring in
+  der Mitte, Befehle in die Fußleiste; Falle `light-locker` als
+  Dauer-Daemon erkannt.
+- **2026-09-14** — PIR am Pi; Treffer gehen ans Zimmer, nicht an `da()`.
