@@ -177,16 +177,16 @@ def test_die_befehle_stehen_jetzt_unten(schirm):
     """Und zwar VOLLSTAENDIG. Die alte Fussleiste trug nur eine Auswahl —
     fokus, notizen, post und klavier fehlten dort."""
     for was in ("fokus", "notizen", "graph", "karte", "kalender",
-                "post", "ki", "tutor", "klavier", "beenden"):
+                "post", "ki", "tutor", "klavier", "weglegen"):
         assert was in schirm, was
 
 
-def test_beenden_steht_vorn(schirm):
+def test_weglegen_steht_vorn(schirm):
     """Die Leiste wird bei schmalem Fenster hinten abgeschnitten. Stand 'q
-    beenden' am Ende, fiel ausgerechnet die Taste weg, die man sucht, wenn
+    beenden' (heute: weglegen) am Ende, fiel ausgerechnet die Taste weg, die man sucht, wenn
     man nicht mehr weiterweiss."""
     zeile = next(z for z in schirm.splitlines() if "fokus" in z and "graph" in z)
-    assert zeile.index("beenden") < zeile.index("fokus")
+    assert zeile.index("weglegen") < zeile.index("fokus")
 
 
 def test_die_leiste_traegt_ihren_zustand_mit(schirm):

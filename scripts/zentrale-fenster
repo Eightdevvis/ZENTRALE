@@ -31,6 +31,21 @@ nur.
 
 Hier steht der Zustand deshalb explizit im Code, statt sich aus zwei
 i3-Regeln zu ergeben, die einander widersprechen koennen.
+
+── `--weglegen`: die vierte Bewegung, fuer die TUI selbst ────────────
+Sasha, 18.09.2026: *„zentrale fängt erst an hochzufahren bzw 'abgleich mit
+pc' und blumenwind zu zeigen wenn man das erste mal sie öffnet mit cmd z,
+ich will dass sie von anfang an wach ist."* Gemessen: das Fenster ging beim
+Anmelden auf und lief — bis `q`. Denn `q` BEENDETE die TUI, das Terminal
+schloss sich, und der naechste $mod+z musste alles kalt hochziehen
+(Abgleich, Blumenwind, Python-Start). Seitdem legt `q` nur noch weg: die
+TUI ruft `zentrale-fenster --weglegen` und laeuft versteckt weiter.
+
+Weggelegt wird dabei NUR das fokussierte ZENTRALE-Fenster — die Taste
+kam ja gerade aus ihm. Laeuft die TUI in einem gewoehnlichen Terminal
+(ohne Rolle), findet dieser Modus nichts, gibt 1 zurueck, und die TUI
+beendet sich wie frueher. Ein fremdes ZENTRALE-Fenster im Scratchpad wird
+so nie versehentlich fuer ein anderes Terminal „weggelegt".
 """
 import json
 import os
@@ -98,6 +113,16 @@ def finden(knoten, im_scratchpad=False, ws=None):
     return False, False, None
 
 
+def fokussiert(knoten):
+    """Ist das ZENTRALE-Fenster das gerade fokussierte? -> True/False"""
+    if (knoten.get("window_properties") or {}).get("window_role") == ROLLE:
+        return bool(knoten.get("focused"))
+    for kind in (knoten.get("nodes") or []) + (knoten.get("floating_nodes") or []):
+        if fokussiert(kind):
+            return True
+    return False
+
+
 def platzieren():
     """Groesse setzen und mittig stellen. Zwei GETRENNTE Befehle.
 
@@ -139,7 +164,22 @@ def starten():
     return False
 
 
+def weglegen():
+    """`--weglegen` aus der TUI: das fokussierte ZENTRALE-Fenster ins
+    Scratchpad. 0 = weggelegt, 1 = kein fokussiertes ZENTRALE-Fenster (die
+    TUI laeuft dann in einem gewoehnlichen Terminal und soll sich normal
+    beenden)."""
+    wurzel = baum()
+    if wurzel is None or not fokussiert(wurzel):
+        return 1
+    i3("[window_role=%s] move scratchpad" % ROLLE)
+    return 0
+
+
 def main():
+    if "--weglegen" in sys.argv[1:]:
+        return weglegen()
+
     wurzel = baum()
     if wurzel is None:
         print("i3 antwortet nicht", file=sys.stderr)

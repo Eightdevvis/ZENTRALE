@@ -100,9 +100,28 @@ laufendes Backend „zurückgeholt", also abgeschossen und neu gestartet. Gegen
 einen Dienst wäre das ein Kampf: jede TUI würde ihn killen, systemd startet ihn
 neu, und der Takt-Tageszustand wäre bei jedem Fensteröffnen frisch. Jetzt gilt:
 antwortet auf `:5000` etwas Gesundes, hängen wir uns dran und fassen es nicht
-an — weder beim Start noch beim Beenden. `q` schließt nur noch das Fenster.
-`ZENTRALE_TUI_FRESH=1` erzwingt den alten Weg (Entwicklung: die TUI soll gegen
-**neuen** Backend-Code laufen).
+an — weder beim Start noch beim Beenden. `ZENTRALE_TUI_FRESH=1` erzwingt den
+alten Weg (Entwicklung: die TUI soll gegen **neuen** Backend-Code laufen).
+
+**4. `q` legt weg, statt zu beenden** (seit 18.09.2026). Sasha: *„zentrale
+fängt erst an hochzufahren bzw 'abgleich mit pc' und blumenwind zu zeigen wenn
+man das erste mal sie öffnet mit cmd z, ich will dass sie von anfang an wach
+ist damit ich nicht warten muss."* Gemessen im Journal: das Login-Fenster ging
+um 20:52 auf und lief bis 22:26 — bis `q`. Der Kern blieb warm, aber das
+**Fenster** war weg, und der nächste `$mod+z` am Folgetag zog alles kalt hoch
+(Abgleich mit dem PC, Blumenwind, Python-Start). Deshalb: `q` ruft
+`zentrale-fenster --weglegen` (nur das *fokussierte* ZENTRALE-Fenster wandert
+ins Scratchpad) und baut die Oberfläche versteckt sofort wieder auf — Prozess
+und Poller bleiben warm, `$mod+z` holt sie ohne Wartezeit zurück. Wirklich
+beendet wird nur mit `/quit` oder Ctrl-C. In einem gewöhnlichen Terminal (kein
+fokussiertes ZENTRALE-Fenster in i3) meldet `--weglegen` 1, und `q` beendet
+wie früher — nichts läuft dann unsichtbar weiter.
+
+Dazu gehört: `start_tui.sh` **wartet beim Anmelden auf den Kern-Dienst** (bis
+~20 s, wenn die Unit `active`/`activating` ist und `:5000` noch nicht
+antwortet), statt ein eigenes Backend danebenzustellen — i3 öffnet das Fenster
+im selben Atemzug, in dem systemd den Kern startet, und ein Rennen um den Port
+hätte die TUI gegen ein halbtotes Gespann laufen lassen.
 
 Genau daraus folgt der Befehl **`/reboot`**: seit der Kern ein Dienst ist,
 reicht „Fenster zu, Fenster auf" nicht mehr, um neuen Backend-Code zu laden —

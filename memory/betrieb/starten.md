@@ -109,9 +109,12 @@ Was passiert: `ZENTRALE_KASSETTE=tui` → Backend ki-frei (wie laptop). Das Skri
 startet `core/main.py` im Hintergrund mit **stdout → Logdatei**
 (`/tmp/zentrale-tui-backend.log`, sonst würde es die curses-Oberfläche
 zerschießen — die Logs erscheinen ohnehin im stdout-Panel der TUI) und dann die
-TUI **im Vollbild des aktuellen Terminals**. `q` in der TUI beendet alles (TUI +
-Backend). Kein tmux, kein Split, kein angeklebtes zweites Terminal — das gab es
-mal, ist aber raus (Stand 2026-07-25).
+TUI **im Vollbild des aktuellen Terminals**. `q` legt unter der Systemeinheit
+das Fenster nur weg (TUI bleibt warm, `$mod+z` holt sie sofort zurück); ohne
+i3-Fenster beendet `q` die TUI. `/quit` oder Ctrl-C beenden immer — und nehmen
+nur ein Backend mit, das dieses Skript selbst gestartet hat (der Kern-Dienst
+bleibt stehen, siehe `systemeinheit.md`). Kein tmux, kein Split, kein
+angeklebtes zweites Terminal — das gab es mal, ist aber raus (Stand 2026-07-25).
 
 - **Dependencies:** nur `flask` + `python-dateutil` fürs Backend; die TUI selbst
   ist reine stdlib (`curses`). Kein Browser, kein Whisper/TTS, kein tmux.

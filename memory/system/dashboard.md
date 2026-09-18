@@ -81,7 +81,8 @@ frisst auf einer RAM-schwachen Maschine 300–600 MB+, das Backend selbst nur
 pollt dasselbe `/api/state` (1 s) + `/api/telemetry` (2 s) über HTTP und zeichnet
 ein 3-Spalten-Layout analog zur Laptop-Kassette (telemetrie/stdout |
 mitte-skelett | lifestyle/outbound; Sensoren-Panel entfernt, s.o.). Header mit
-NET/UP/Uhr. Tasten: `q` beendet,
+NET/UP/Uhr. Tasten: `q` legt das Fenster weg (Systemeinheit; sonst beendet
+es, siehe `memory/betrieb/systemeinheit.md`), `/quit` beendet,
 `t` zykliert das Theme (auto/hell/dunkel — auto nach Uhrzeit, wie im Web).
 Themes: Light-Mode mit weißem Hintergrund (kein Gelb auf Weiß), Dark-Mode
 **ultra-high-contrast** (reinweißer Text 231 auf hartem Schwarz 16, Rahmen Grau

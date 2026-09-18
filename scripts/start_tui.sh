@@ -8,7 +8,10 @@
 # Terminals. Kein tmux, kein Split, kein angeklebtes zweites Terminal —
 # einfach das Dashboard in dem Terminal, in dem der Befehl abgesetzt wurde.
 #
-# Beenden mit 'q': schließt das FENSTER. Läuft das Backend als Dienst
+# 'q' unter der Systemeinheit legt das Fenster nur WEG (Scratchpad) — die TUI
+# läuft versteckt weiter, der nächste $mod+z ist sofort da (seit 18.09.2026,
+# siehe tui/zentrale_tui.py → weglegen_statt_beenden). Wirklich beendet wird
+# mit /quit oder Ctrl-C: das schließt das FENSTER. Läuft das Backend als Dienst
 # (zentrale-kern.service, der Normalfall seit 19.08.2026), bleibt es stehen —
 # sonst wäre der Takt tot, sobald kein Fenster offen ist. Nur ein Backend, das
 # dieses Skript selbst gestartet hat, wird beim Beenden mitgenommen.
@@ -129,6 +132,21 @@ while true; do
 # stirbt still), die Readiness-Prüfung träfe das FALSCHE Backend, und die TUI
 # liefe gegen veralteten Code — genau die Art "läuft nicht, keine Ahnung warum".
 # Lieber hart abbrechen mit Aufräum-Tipp.
+# ── Beim Anmelden faehrt der Kern-Dienst gerade erst hoch ────────────────
+# Systemeinheit: i3 oeffnet das Fenster im selben Atemzug, in dem systemd den
+# Kern startet (beide haengen am Login). Antwortet :5000 noch nicht, ist der
+# Dienst meist nur noch nicht so weit — dann WARTEN, statt ein eigenes Backend
+# danebenzustellen, das den Port nicht bekommt und die TUI gegen ein
+# halbtotes Gespann laufen laesst. Sasha will sie "von anfang an wach": das
+# Login-Fenster muss den Dienst treffen, nicht ein Rennen gegen ihn fahren.
+if ! lebt; then
+  kern_zustand="$(systemctl --user is-active "$KERN_UNIT" 2>/dev/null || true)"
+  if [[ "$kern_zustand" == "active" || "$kern_zustand" == "activating" ]]; then
+    echo "ZENTRALE (tui) — Kern-Dienst fährt hoch, warte auf API …"
+    for _ in $(seq 1 40); do lebt && break; sleep 0.5; done     # max ~20 s
+  fi
+fi
+
 ATTACHED=0
 if lebt; then
   # ── Seit 19.08.2026: ANHÄNGEN ist der Normalfall ──────────────────────

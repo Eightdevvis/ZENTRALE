@@ -99,6 +99,56 @@ def test_auch_tief_verschachtelt_gefunden(zf):
     assert zf.finden(baum)[0] is True
 
 
+# ── Die vierte Bewegung: --weglegen aus der TUI ───────────────────────
+#
+# Sasha, 18.09.2026: „ich will dass sie von anfang an wach ist damit ich
+# nicht warten muss." 'q' legte nicht weg, es BEENDETE — und der naechste
+# $mod+z zog alles kalt hoch. Jetzt ruft die TUI `--weglegen`: nur das
+# FOKUSSIERTE ZENTRALE-Fenster wandert ins Scratchpad; gibt es keins, ist
+# die TUI in einem gewoehnlichen Terminal und soll sich normal beenden.
+
+def test_weglegen_legt_das_fokussierte_fenster_weg(zf, monkeypatch):
+    baum = _baum(wo="sichtbar")
+    baum["nodes"][0]["floating_nodes"][0]["focused"] = True
+    gerufen = []
+    monkeypatch.setattr(zf, "baum", lambda: baum)
+    monkeypatch.setattr(zf, "i3", lambda *a: gerufen.append(a[0]))
+    assert zf.weglegen() == 0
+    assert any("move scratchpad" in b for b in gerufen)
+
+
+def test_weglegen_ohne_fokus_tut_nichts(zf, monkeypatch):
+    """Die TUI laeuft in einem gewoehnlichen Terminal, waehrend die echte
+    ZENTRALE sichtbar daneben steht: 'q' darf NICHT das andere Fenster
+    weglegen — sondern muss 1 melden, damit sich diese TUI beendet."""
+    baum = _baum(wo="sichtbar")                 # da, aber nicht fokussiert
+    gerufen = []
+    monkeypatch.setattr(zf, "baum", lambda: baum)
+    monkeypatch.setattr(zf, "i3", lambda *a: gerufen.append(a[0]))
+    assert zf.weglegen() == 1
+    assert gerufen == []
+
+
+def test_weglegen_ohne_fenster_meldet_eins(zf, monkeypatch):
+    monkeypatch.setattr(zf, "baum", lambda: _baum(wo="nirgends"))
+    monkeypatch.setattr(zf, "i3", lambda *a: (_ for _ in ()).throw(AssertionError("kein i3-Aufruf erwartet")))
+    assert zf.weglegen() == 1
+
+
+def test_weglegen_ohne_i3_meldet_eins(zf, monkeypatch):
+    monkeypatch.setattr(zf, "baum", lambda: None)
+    assert zf.weglegen() == 1
+
+
+def test_fokus_wird_auch_tief_gefunden(zf):
+    tief = {"type": "con", "name": "tief", "nodes": [], "floating_nodes": []}
+    fenster = _fenster("zentrale"); fenster["focused"] = True
+    tief["nodes"].append(fenster)
+    baum = _baum(wo="nirgends")
+    baum["nodes"][0]["nodes"].append(tief)
+    assert zf.fokussiert(baum) is True
+
+
 # ── Die Platzierung ───────────────────────────────────────────────────
 
 def test_groesse_und_mitte_sind_zwei_befehle(zf, monkeypatch):

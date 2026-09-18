@@ -1152,6 +1152,43 @@ def neustart_moeglich():
     return os.environ.get("ZENTRALE_TUI_SUPERVISED") == "1"
 
 
+# ── Weglegen statt beenden: 'q' unter der Systemeinheit ─────────────────────
+#
+# Sasha, 18.09.2026: „zentrale fängt erst an hochzufahren bzw 'abgleich mit
+# pc' und blumenwind zu zeigen wenn man das erste mal sie öffnet mit cmd z,
+# ich will dass sie von anfang an wach ist damit ich nicht warten muss."
+#
+# Gemessen: das Fenster ging beim Anmelden auf und lief — bis 'q'. Denn 'q'
+# BEENDETE die TUI, das Terminal schloss sich mit ihr, und der naechste
+# $mod+z musste alles kalt hochziehen: Abgleich mit dem PC, Blumenwind,
+# Python-Start. Der Kern-Dienst blieb zwar warm (das war der Sinn der
+# Systemeinheit), aber das FENSTER nicht.
+#
+# Deshalb legt 'q' jetzt nur noch weg: die TUI ruft `zentrale-fenster
+# --weglegen` (Fenster ins Scratchpad) und baut run_ui sofort wieder auf —
+# versteckt, mit warmem Prozess und laufendem Poller. $mod+z holt sie dann
+# ohne Wartezeit zurueck. Fuer den Benutzer sieht 'q' aus wie vorher (Fenster
+# weg), nur der naechste Blick ist sofort da.
+#
+# Wirklich beendet wird nur noch mit /quit oder Ctrl-C (ENDE["echt"]). Und
+# ohne Systemeinheit — TUI in einem gewoehnlichen Terminal, kein fokussiertes
+# ZENTRALE-Fenster in i3 — gibt `--weglegen` 1 zurueck, und 'q' beendet wie
+# frueher. Nichts haengt dann in einem unsichtbaren Zustand fest.
+ENDE = {"echt": False}          # von run_ui gesetzt (/quit), von main() gelesen
+
+
+def weglegen_statt_beenden():
+    """Nach einem sauberen Ende von run_ui: Fenster weglegen und weiterlaufen?"""
+    if ENDE["echt"] or NEUSTART["an"] or not neustart_moeglich():
+        return False
+    try:
+        r = subprocess.run(["zentrale-fenster", "--weglegen"], timeout=5,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return r.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 # ── Befehlszeile: pure Logik (curses-frei, daher unit-testbar) ───────────────
 TUI_COMMANDS = [
     ("/help",  "alle Befehle und Tasten zeigen"),
@@ -1161,10 +1198,10 @@ TUI_COMMANDS = [
     ("/tutor", "Sprach-Tutor TEXT-panel (Mitte, Cloud/Qwen); 'u' öffnet das Zimmer-Fenster"),
     ("/lauf",  "stdout-Laufschrift: an | aus  (auch 's')"),
     ("/reboot", "ZENTRALE neu starten: Backend + Fenster, neuer Code"),
-    ("/quit",  "ZENTRALE-TUI beenden  (auch 'q')"),
+    ("/quit",  "ZENTRALE-TUI wirklich beenden  ('q' legt das Fenster nur weg)"),
 ]
 TUI_KEYS = [
-    ("q",   "beenden"),
+    ("q",   "Fenster weglegen (wie Cmd+z); ohne Systemeinheit: beenden"),
     ("t",   "Theme wechseln (auto/hell/dunkel)"),
     ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
     ("n",   "Notizen (Mitte): freie notiz aus blöcken · ↑↓ block · t/l/f text/liste/float · e bearbeiten · d weg (fragt bei inhalt) · r titel · n übersicht · esc speichern & zu"),
@@ -1190,7 +1227,7 @@ CTX_KEYS = {
         ("f", "fokus"), ("n", "notizen"), ("g", "graph"), ("m", "karte"),
         ("c", "kalender"), ("p", "post / mail"), ("a", "ki-chat"),
         ("u", "tutor"), ("k", "klavier"), ("s", "stdout-lauf"),
-        ("t", "theme"), ("q", "beenden"),
+        ("t", "theme"), ("q", "weglegen"),
     ],
     "note:edit": [
         ("↑↓", "block wählen"), ("t/l/f", "neu: text/liste/float"),
@@ -7184,6 +7221,7 @@ def run_ui(stdscr, store):
                 set_theme_mode(_neuer_modus)
                 cmd_mode = False; cmd_buf = ""
                 if res == "QUIT":
+                    ENDE["echt"] = True       # wirklich beenden, nicht nur weglegen
                     break
                 if res == "HELP":
                     help_latched = True
@@ -9066,9 +9104,11 @@ def main():
         while True:
             try:
                 curses.wrapper(run_ui, store)
-                break                 # sauberer Quit (q / Befehl /quit)
+                if weglegen_statt_beenden():
+                    continue          # 'q' unter der Systemeinheit: Fenster weg, TUI bleibt warm
+                break                 # sauberer Quit (Befehl /quit, oder 'q' ohne Systemeinheit)
             except KeyboardInterrupt:
-                # Ctrl-C = gewollter Quit (wie 'q'). Sauberer Exit (rc 0), damit
+                # Ctrl-C = gewollter Quit (wie /quit). Sauberer Exit (rc 0), damit
                 # das Start-Skript still aufräumt statt "kein sauberer Quit" samt
                 # Crash-/Backend-Log auszuspucken.
                 break
