@@ -1,0 +1,762 @@
+[
+  {
+    "word": "我",
+    "reading": "wǒ",
+    "priority": "critical",
+    "category": "pronoun",
+    "gloss": {
+      "en": "I",
+      "de": "ich"
+    }
+  },
+  {
+    "word": "你",
+    "reading": "nǐ",
+    "priority": "critical",
+    "category": "pronoun",
+    "gloss": {
+      "en": "you",
+      "de": "du"
+    }
+  },
+  {
+    "word": "他",
+    "reading": "tā",
+    "priority": "critical",
+    "category": "pronoun",
+    "gloss": {
+      "en": "he",
+      "de": "er"
+    }
+  },
+  {
+    "word": "她",
+    "reading": "tā",
+    "priority": "critical",
+    "category": "pronoun",
+    "gloss": {
+      "en": "she",
+      "de": "sie"
+    }
+  },
+  {
+    "word": "那个",
+    "reading": "nà ge",
+    "priority": "medium",
+    "category": "pronoun",
+    "gloss": {
+      "en": "that",
+      "de": "das"
+    }
+  },
+  {
+    "word": "我们",
+    "reading": "wǒ men",
+    "priority": "medium",
+    "category": "pronoun",
+    "gloss": {
+      "en": "we",
+      "de": "wir"
+    }
+  },
+  {
+    "word": "是",
+    "reading": "shì",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to be (is / am / are)",
+      "de": "sein (ist)"
+    }
+  },
+  {
+    "word": "在",
+    "reading": "zài",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to be at / to be (located)",
+      "de": "sein (sich befinden)"
+    }
+  },
+  {
+    "word": "有",
+    "reading": "yǒu",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to have",
+      "de": "haben"
+    }
+  },
+  {
+    "word": "去",
+    "reading": "qù",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to go",
+      "de": "gehen"
+    }
+  },
+  {
+    "word": "做",
+    "reading": "zuò",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to do / make",
+      "de": "machen"
+    }
+  },
+  {
+    "word": "说",
+    "reading": "shuō",
+    "priority": "high",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to say / speak",
+      "de": "sagen"
+    }
+  },
+  {
+    "word": "懂",
+    "reading": "dǒng",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to understand",
+      "de": "verstehen"
+    }
+  },
+  {
+    "word": "知道",
+    "reading": "zhī dào",
+    "priority": "high",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to know",
+      "de": "wissen"
+    }
+  },
+  {
+    "word": "要",
+    "reading": "yào",
+    "priority": "high",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to want",
+      "de": "wollen"
+    }
+  },
+  {
+    "word": "吃",
+    "reading": "chī",
+    "priority": "high",
+    "category": "verb_action",
+    "gloss": {
+      "en": "to eat",
+      "de": "essen"
+    }
+  },
+  {
+    "word": "喝",
+    "reading": "hē",
+    "priority": "high",
+    "category": "verb_action",
+    "gloss": {
+      "en": "to drink",
+      "de": "trinken"
+    }
+  },
+  {
+    "word": "看",
+    "reading": "kàn",
+    "priority": "high",
+    "category": "verb_action",
+    "gloss": {
+      "en": "to see / look",
+      "de": "sehen"
+    }
+  },
+  {
+    "word": "听",
+    "reading": "tīng",
+    "priority": "high",
+    "category": "verb_action",
+    "gloss": {
+      "en": "to hear / listen",
+      "de": "hören"
+    }
+  },
+  {
+    "word": "什么",
+    "reading": "shén me",
+    "priority": "critical",
+    "category": "question",
+    "gloss": {
+      "en": "what",
+      "de": "was"
+    }
+  },
+  {
+    "word": "谁",
+    "reading": "shéi",
+    "priority": "critical",
+    "category": "question",
+    "gloss": {
+      "en": "who",
+      "de": "wer"
+    }
+  },
+  {
+    "word": "怎么",
+    "reading": "zěn me",
+    "priority": "critical",
+    "category": "question",
+    "gloss": {
+      "en": "how",
+      "de": "wie"
+    }
+  },
+  {
+    "word": "哪里",
+    "reading": "nǎ lǐ",
+    "priority": "critical",
+    "category": "question",
+    "gloss": {
+      "en": "where",
+      "de": "wo"
+    }
+  },
+  {
+    "word": "什么时候",
+    "reading": "shén me shí hou",
+    "priority": "high",
+    "category": "question",
+    "gloss": {
+      "en": "when",
+      "de": "wann"
+    }
+  },
+  {
+    "word": "为什么",
+    "reading": "wèi shén me",
+    "priority": "high",
+    "category": "question",
+    "gloss": {
+      "en": "why",
+      "de": "warum"
+    }
+  },
+  {
+    "word": "这里",
+    "reading": "zhè lǐ",
+    "priority": "high",
+    "category": "spatial",
+    "gloss": {
+      "en": "here",
+      "de": "hier"
+    }
+  },
+  {
+    "word": "那里",
+    "reading": "nà lǐ",
+    "priority": "high",
+    "category": "spatial",
+    "gloss": {
+      "en": "there",
+      "de": "dort"
+    }
+  },
+  {
+    "word": "上面",
+    "reading": "shàng miàn",
+    "priority": "medium",
+    "category": "spatial",
+    "gloss": {
+      "en": "up / above",
+      "de": "oben"
+    }
+  },
+  {
+    "word": "下面",
+    "reading": "xià miàn",
+    "priority": "medium",
+    "category": "spatial",
+    "gloss": {
+      "en": "down / below",
+      "de": "unten"
+    }
+  },
+  {
+    "word": "现在",
+    "reading": "xiàn zài",
+    "priority": "critical",
+    "category": "time",
+    "gloss": {
+      "en": "now",
+      "de": "jetzt"
+    }
+  },
+  {
+    "word": "今天",
+    "reading": "jīn tiān",
+    "priority": "high",
+    "category": "time",
+    "gloss": {
+      "en": "today",
+      "de": "heute"
+    }
+  },
+  {
+    "word": "明天",
+    "reading": "míng tiān",
+    "priority": "high",
+    "category": "time",
+    "gloss": {
+      "en": "tomorrow",
+      "de": "morgen"
+    }
+  },
+  {
+    "word": "昨天",
+    "reading": "zuó tiān",
+    "priority": "medium",
+    "category": "time",
+    "gloss": {
+      "en": "yesterday",
+      "de": "gestern"
+    }
+  },
+  {
+    "word": "是的",
+    "reading": "shì de",
+    "priority": "critical",
+    "category": "response",
+    "gloss": {
+      "en": "yes",
+      "de": "ja"
+    }
+  },
+  {
+    "word": "不",
+    "reading": "bù",
+    "priority": "critical",
+    "category": "response",
+    "gloss": {
+      "en": "no / not",
+      "de": "nein"
+    }
+  },
+  {
+    "word": "也许",
+    "reading": "yě xǔ",
+    "priority": "medium",
+    "category": "response",
+    "gloss": {
+      "en": "maybe",
+      "de": "vielleicht"
+    }
+  },
+  {
+    "word": "好",
+    "reading": "hǎo",
+    "priority": "critical",
+    "category": "emotion",
+    "gloss": {
+      "en": "good / well",
+      "de": "gut"
+    }
+  },
+  {
+    "word": "不好",
+    "reading": "bù hǎo",
+    "priority": "high",
+    "category": "emotion",
+    "gloss": {
+      "en": "bad",
+      "de": "schlecht"
+    }
+  },
+  {
+    "word": "开心",
+    "reading": "kāi xīn",
+    "priority": "high",
+    "category": "emotion",
+    "gloss": {
+      "en": "happy",
+      "de": "glücklich"
+    }
+  },
+  {
+    "word": "难过",
+    "reading": "nán guò",
+    "priority": "high",
+    "category": "emotion",
+    "gloss": {
+      "en": "sad",
+      "de": "traurig"
+    }
+  },
+  {
+    "word": "累",
+    "reading": "lèi",
+    "priority": "medium",
+    "category": "emotion",
+    "gloss": {
+      "en": "tired",
+      "de": "müde"
+    }
+  },
+  {
+    "word": "大",
+    "reading": "dà",
+    "priority": "high",
+    "category": "adjective",
+    "gloss": {
+      "en": "big",
+      "de": "groß"
+    }
+  },
+  {
+    "word": "小",
+    "reading": "xiǎo",
+    "priority": "high",
+    "category": "adjective",
+    "gloss": {
+      "en": "small",
+      "de": "klein"
+    }
+  },
+  {
+    "word": "新",
+    "reading": "xīn",
+    "priority": "medium",
+    "category": "adjective",
+    "gloss": {
+      "en": "new",
+      "de": "neu"
+    }
+  },
+  {
+    "word": "旧",
+    "reading": "jiù",
+    "priority": "medium",
+    "category": "adjective",
+    "gloss": {
+      "en": "old",
+      "de": "alt"
+    }
+  },
+  {
+    "word": "快",
+    "reading": "kuài",
+    "priority": "medium",
+    "category": "adjective",
+    "gloss": {
+      "en": "fast",
+      "de": "schnell"
+    }
+  },
+  {
+    "word": "慢",
+    "reading": "màn",
+    "priority": "high",
+    "category": "adjective",
+    "gloss": {
+      "en": "slow",
+      "de": "langsam"
+    }
+  },
+  {
+    "word": "热",
+    "reading": "rè",
+    "priority": "medium",
+    "category": "adjective",
+    "gloss": {
+      "en": "hot",
+      "de": "heiß"
+    }
+  },
+  {
+    "word": "冷",
+    "reading": "lěng",
+    "priority": "medium",
+    "category": "adjective",
+    "gloss": {
+      "en": "cold",
+      "de": "kalt"
+    }
+  },
+  {
+    "word": "桌子",
+    "reading": "zhuō zi",
+    "priority": "high",
+    "category": "noun_household",
+    "gloss": {
+      "en": "table",
+      "de": "Tisch"
+    }
+  },
+  {
+    "word": "椅子",
+    "reading": "yǐ zi",
+    "priority": "high",
+    "category": "noun_household",
+    "gloss": {
+      "en": "chair",
+      "de": "Stuhl"
+    }
+  },
+  {
+    "word": "门",
+    "reading": "mén",
+    "priority": "medium",
+    "category": "noun_household",
+    "gloss": {
+      "en": "door",
+      "de": "Tür"
+    }
+  },
+  {
+    "word": "窗户",
+    "reading": "chuāng hu",
+    "priority": "medium",
+    "category": "noun_household",
+    "gloss": {
+      "en": "window",
+      "de": "Fenster"
+    }
+  },
+  {
+    "word": "水",
+    "reading": "shuǐ",
+    "priority": "high",
+    "category": "noun_substance",
+    "gloss": {
+      "en": "water",
+      "de": "Wasser"
+    }
+  },
+  {
+    "word": "饭",
+    "reading": "fàn",
+    "priority": "high",
+    "category": "noun_substance",
+    "gloss": {
+      "en": "food / meal",
+      "de": "Essen"
+    }
+  },
+  {
+    "word": "音乐",
+    "reading": "yīn yuè",
+    "priority": "high",
+    "category": "tutor_activity",
+    "gloss": {
+      "en": "music",
+      "de": "Musik"
+    }
+  },
+  {
+    "word": "报纸",
+    "reading": "bào zhǐ",
+    "priority": "high",
+    "category": "tutor_activity",
+    "gloss": {
+      "en": "newspaper",
+      "de": "Zeitung"
+    }
+  },
+  {
+    "word": "电视",
+    "reading": "diàn shì",
+    "priority": "high",
+    "category": "tutor_activity",
+    "gloss": {
+      "en": "television",
+      "de": "Fernsehen"
+    }
+  },
+  {
+    "word": "妈妈",
+    "reading": "mā ma",
+    "priority": "medium",
+    "category": "family",
+    "gloss": {
+      "en": "mother",
+      "de": "Mutter"
+    }
+  },
+  {
+    "word": "爸爸",
+    "reading": "bà ba",
+    "priority": "medium",
+    "category": "family",
+    "gloss": {
+      "en": "father",
+      "de": "Vater"
+    }
+  },
+  {
+    "word": "哥哥",
+    "reading": "gē ge",
+    "priority": "medium",
+    "category": "family",
+    "gloss": {
+      "en": "brother (older)",
+      "de": "Bruder"
+    }
+  },
+  {
+    "word": "姐姐",
+    "reading": "jiě jie",
+    "priority": "medium",
+    "category": "family",
+    "gloss": {
+      "en": "sister (older)",
+      "de": "Schwester"
+    }
+  },
+  {
+    "word": "和",
+    "reading": "hé",
+    "priority": "critical",
+    "category": "connector",
+    "gloss": {
+      "en": "and",
+      "de": "und"
+    }
+  },
+  {
+    "word": "但是",
+    "reading": "dàn shì",
+    "priority": "high",
+    "category": "connector",
+    "gloss": {
+      "en": "but",
+      "de": "aber"
+    }
+  },
+  {
+    "word": "因为",
+    "reading": "yīn wèi",
+    "priority": "high",
+    "category": "connector",
+    "gloss": {
+      "en": "because",
+      "de": "weil"
+    }
+  },
+  {
+    "word": "或者",
+    "reading": "huò zhě",
+    "priority": "medium",
+    "category": "connector",
+    "gloss": {
+      "en": "or",
+      "de": "oder"
+    }
+  },
+  {
+    "word": "很",
+    "reading": "hěn",
+    "priority": "high",
+    "category": "modifier",
+    "gloss": {
+      "en": "very",
+      "de": "sehr"
+    }
+  },
+  {
+    "word": "也",
+    "reading": "yě",
+    "priority": "medium",
+    "category": "modifier",
+    "gloss": {
+      "en": "also",
+      "de": "auch"
+    }
+  },
+  {
+    "word": "这",
+    "reading": "zhè",
+    "priority": "critical",
+    "category": "article",
+    "gloss": {
+      "en": "this (the)",
+      "de": "der/dieser"
+    }
+  },
+  {
+    "word": "那",
+    "reading": "nà",
+    "priority": "critical",
+    "category": "article",
+    "gloss": {
+      "en": "that (the)",
+      "de": "die/jener"
+    }
+  },
+  {
+    "word": "一个",
+    "reading": "yí ge",
+    "priority": "high",
+    "category": "article",
+    "gloss": {
+      "en": "a / one",
+      "de": "ein"
+    }
+  },
+  {
+    "word": "一些",
+    "reading": "yì xiē",
+    "priority": "high",
+    "category": "article",
+    "gloss": {
+      "en": "some",
+      "de": "eine/einige"
+    }
+  },
+  {
+    "word": "请",
+    "reading": "qǐng",
+    "priority": "high",
+    "category": "politeness",
+    "gloss": {
+      "en": "please",
+      "de": "bitte"
+    }
+  },
+  {
+    "word": "谢谢",
+    "reading": "xiè xie",
+    "priority": "high",
+    "category": "politeness",
+    "gloss": {
+      "en": "thank you",
+      "de": "danke"
+    }
+  },
+  {
+    "word": "你好",
+    "reading": "nǐ hǎo",
+    "priority": "high",
+    "category": "greeting",
+    "gloss": {
+      "en": "hello",
+      "de": "hallo"
+    }
+  },
+  {
+    "word": "再见",
+    "reading": "zài jiàn",
+    "priority": "high",
+    "category": "greeting",
+    "gloss": {
+      "en": "bye",
+      "de": "tschüss"
+    }
+  }
+]

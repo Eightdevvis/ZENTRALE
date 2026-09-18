@@ -1,7 +1,10 @@
 # tutor/langs/zh/ — Chinesisch (Mandarin), Persona: Ling Ling.
 #
-# Die EINZIGE LIVE-Sprache. Alles, was diese Sprache ausmacht, liegt in diesem
-# Ordner — Code muss dafür nirgends angefasst werden.
+# Eine der LIVE-Sprachen (mit es, de). Alles, was diese Sprache ausmacht, liegt
+# in diesem Ordner — Code muss dafür nirgends angefasst werden. Seit 2026-09-18
+# auf Lucías vollem Bauplan (memory/tutor/bauplan.md): core_vocab (76 Kern-
+# wörter mit Pinyin + Glosse), core_hint, status_labels, alle 28 phrases,
+# tool_texts komplett chinesisch, expect.json leer (Register trägt der Prompt).
 #
 #   prompt.md        System-Prompt, AUF CHINESISCH hand-getunt gegen echtes
 #                    qwen-plus (Log: memory/tutor/tutor_persona_tuning.md). Das ist der
@@ -15,13 +18,11 @@
 #   seeds/news.json  leichte China-Themen (Content-Lücke: kein echter Feed)
 #   seeds/tv.json    Mediathek-Katalog (nur Titel/Meta, kein Video)
 #
-# ── Ehrliche Grenze (vorbestehend, NICHT beim Umzug entstanden) ─────────
-# In tool_texts.json sind vier Tools noch DEUTSCH beschriftet
-# (get_confirmed_vocab, get_testing_vocab, increment_correct_use, introduce_new)
-# — die stammen aus der Zeit vor dem Tuning. Nach der Tuning-Lehre müssten sie
-# chinesisch sein wie der Rest. Beim Umzug 2026-07-16 bewusst WORTGLEICH
-# übernommen statt nebenbei übersetzt: eine Prompt-Änderung ohne Gegentest an
-# echtem qwen ist Glückssache. Offener Punkt im Tracker.
+# ── Offen ───────────────────────────────────────────────────────────────
+# Die 2026-09-18 ergänzten chinesischen Texte (introduce_new, get_due_reviews,
+# status_labels, die 16 nachgetragenen phrases, der Haken-Absatz im Prompt)
+# sind noch nicht gegen echtes qwen-plus gegengetestet — beim nächsten
+# Live-Test mit Ling Ling anschauen (memory/tutor/tutor_persona_tuning.md).
 
 from ..base import profile, load_text, load_json
 
@@ -48,6 +49,20 @@ PROFILE = profile(
     vocab_hint    = load_text(__file__, "vocab_hint.md").strip(),
     expect_ladder = load_json(__file__, "expect.json"),
     tool_texts    = load_json(__file__, "tool_texts.json", {}),
+
+    # Kern-Syllabus (76 Wörter, dieselben Bedeutungen wie bei Lucía) + Hinweis.
+    core_vocab = load_json(__file__, "core_vocab.json", []),
+    core_hint  = ("（基础词汇：{got}/{total} 已扎实。还没教、按顺序：{words}。合适的时候优先带这些，"
+                  "别硬塞，别一下子全倒出来。）"),
+
+    # Status-Beschriftung fürs Modell ({词: 状态}) — beschreibend, keine Drill-Verben.
+    status_labels = {
+        "new":        "新词",
+        "understood": "听得懂",
+        "learning":   "开始会用",
+        "learned":    "用得不错",
+        "intuitive":  "脱口而出",
+    },
 
     # Situations-Meldungen (Öffnen/Stille) — standen vorher als chinesische
     # Literale hart in session.py. Wortgleich hierher gezogen, damit Ling Ling
@@ -80,6 +95,22 @@ PROFILE = profile(
     # Modell ins Deutsche (dieselbe Logik wie beim Prompt). Wortgleich aus der
     # alten tools.py übernommen.
     phrases = {
+        "vocab_none":            "还没有已确认的词。",
+        "vocab_confirmed_header": "已确认的词（80% 池）：",
+        "vocab_testing_empty":   "testing_vocab 为空（count=0）——调用 introduce_new！",
+        "vocab_testing_header":  "在测的词（20% 池，count={count}）：",
+        "vocab_confirmed_now":   "✓「{word}」现在已确认（正确使用 {uses} 次）",
+        "vocab_progress":        "✓「{word}」correct_use → {uses}/{threshold}",
+        "vocab_notfound":        "[词表里没有「{word}」]",
+        "vocab_dup":             "[「{word}」已在词表里]",
+        "vocab_added":           "✓ 新词已加入：「{word}」（{reading}）",
+        "known_noword":          "[没有词]",
+        "known_marked":          "✓「{word}」已标为会了",
+        "known_added":           "✓「{word}」已作为会了加入",
+        "stats":                 "词汇总数：{total} | 已确认：{confirmed} | 在测：{testing}",
+        "struct_nopattern":      "[没有句型]",
+        "srs_none":              "（现在没有该复习的——正常聊就好）",
+        "srs_due":               "（要是自然接得上，就悄悄带一个进去——别有压力，别提问，别全说）该复习：{words}",
         "news_none":           "（现在没有话题，随便聊聊就好）",
         "news_wrap":           "（可以随口提一句，别像播新闻）中国最近常聊的：{topic}",
         "tv_wrap":             "（打开了电视，随口说一句就好）在看：{title}（{level}，{note}）",

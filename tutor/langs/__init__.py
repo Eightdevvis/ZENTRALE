@@ -19,7 +19,7 @@
 # tutor/data/<code>/ und gitignored. Hier liegt nur, was zur SPRACHE gehört und
 # mit dem Repo ausgeliefert wird (Prompt, Beschriftung, Seeds).
 #
-# ── LIVE: zh (Ling Ling). Skizzen: fr, ru, ar, es ───────────────────────
+# ── LIVE: es (Lucía), zh (Ling Ling), de (Lena). Skizzen: fr, ru, ar ────────
 
 import os
 import pkgutil
@@ -53,7 +53,7 @@ _discover()
 
 
 def get(lang: str = None) -> dict:
-    """Profil einer Sprache. Unbekannt/None → zh (die einzige LIVE-Sprache);
+    """Profil einer Sprache. Unbekannt/None → zh (Fallback; die Sprache kommt normal aus dem Spielstand);
     fehlt auch die, das erste Paket, das sich finden ließ."""
     code = (lang or "zh").strip().lower()
     if code in PROFILES:

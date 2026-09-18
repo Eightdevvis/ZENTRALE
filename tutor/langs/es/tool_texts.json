@@ -1,16 +1,4 @@
 {
-	"get_confirmed_vocab": {
-		"description": "Devuelve todas las palabras que ella ya domina (el 80 %). Llámalo al empezar la sesión para saber sobre qué puedes apoyarte."
-	},
-	"get_testing_vocab": {
-		"description": "Devuelve las palabras que está aprendiendo (aún sin afianzar). Llámalo al empezar la sesión. Si son menos de 10: usa introduce_new."
-	},
-	"increment_correct_use": {
-		"description": "Sube el contador de una palabra que ella ha usado bien. Llámalo cuando la haya usado de forma correcta y con sentido en una frase.",
-		"params": {
-			"word": "La palabra en español"
-		}
-	},
 	"introduce_new": {
 		"description": "Añade una palabra nueva al grupo de aprendizaje. Úsalo solo si get_testing_vocab devuelve menos de 10 palabras.",
 		"params": {
@@ -58,13 +46,6 @@
 	"get_local_news": {
 		"description": "Úsalo cuando te apetezca comentar de pasada algo de España (el tiempo, la comida, las fiestas, de qué habla la gente). Devuelve un tema; suéltalo con naturalidad en una frase, no como si leyeras un telediario, y no te quedes clavada en él. Eres una IA: es cómo son las cosas en España, no algo que hayas vivido tú."
 	},
-	"mark_known": {
-		"description": "Al principio, ve viendo qué palabras ya sabe Sasha: las que entiende o dice, márcalas con esto (como «ya la domina»). Es lo contrario de show_thought, que enseña una palabra nueva.",
-		"params": {
-			"word": "La palabra que ella ya sabe (en español)",
-			"reading": "Ayuda de pronunciación (solo si hace falta)"
-		}
-	},
 	"show_thought": {
 		"description": "Para cada palabra que ella todavía no conoce, usa esto siempre: muéstrale en tu mente la palabra y su significado (una imagen o la traducción), para que lo pille de un vistazo — mejor que explicarlo con muchas palabras. (Esto también añade la palabra a su lista de vocabulario, no hace falta apuntarla aparte.)",
 		"params": {
@@ -72,5 +53,8 @@
 			"meaning": "El significado en la lengua materna de Sasha / la traducción",
 			"reading": "Ayuda de pronunciación (solo si hace falta)"
 		}
+	},
+	"get_due_reviews": {
+		"description": "Llámalo al empezar la sesión: devuelve las palabras que toca repasar (memoria a largo plazo). Cuela UNA de ellas en la charla si encaja de forma natural — no preguntes, no las sueltes todas."
 	}
 }
