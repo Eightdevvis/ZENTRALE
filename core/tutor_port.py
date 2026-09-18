@@ -270,6 +270,7 @@ def config(changes: dict | None = None, persist: bool = False) -> dict:
         "lang_name":      prof["name"],
         "persona_name":   prof.get("persona_name", prof["name"]),
         "country":        prof.get("country", ""),
+        "avatar":         prof.get("avatar") or "lucia",
         "provider":       pname,
         "model":          model,
         "trains_on_data": tutor_providers.trains_on_data(pname),

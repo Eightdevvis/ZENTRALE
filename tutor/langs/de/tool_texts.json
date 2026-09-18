@@ -1,0 +1,60 @@
+{
+	"introduce_new": {
+		"description": "Nimmt ein neues Wort in seine Vokabelliste auf. Meist reicht show_thought (das ruft das mit auf).",
+		"params": {
+			"word": "Das Wort auf Deutsch",
+			"reading": "Aussprachehilfe (nur wenn wirklich nötig; im Deutschen fast nie)"
+		}
+	},
+	"express": {
+		"description": "Drück dich im Zimmer aus (nutz das, um dich zu bewegen oder dein Gesicht zu ändern, schreib es NICHT als Text). Haltungen: hinsetzen sit / aufstehen stand / auf und ab gehen pace / rumlaufen wander / näher kommen come_closer / schlafen sleep. Gesten: winken wave / nicken nod / ihn anschauen look / dich strecken stretch / Arme hoch arms_up / Arme verschränken cross_arms / Schultern zucken shrug. Gesichter: fröhlich happy / traurig sad / überrascht surprised / müde tired / fragend (du hast nicht verstanden / er schickte «?») puzzled / normal neutral. Wenn dir nach Bewegung oder einer anderen Geste ist, mach es ganz natürlich.",
+		"params": {
+			"action": "Haltung, Geste oder Gesichtsausdruck"
+		}
+	},
+	"get_structures": {
+		"description": "Schau nach, welche Satzmuster oder Sagweisen Sasha gerade lernt (Grammatik/Wendungen, nicht nur einzelne Wörter)."
+	},
+	"introduce_structure": {
+		"description": "Wenn die Wörter, die er schon hat, sitzen, bring ab und zu ein neues Muster rein (eine Art, etwas zu sagen). Nicht mehrere auf einmal.",
+		"params": {
+			"pattern": "Das Muster, z. B. «ich hätte gern + …»",
+			"note": "Kurze Notiz (optional)"
+		}
+	},
+	"increment_structure": {
+		"description": "Ruf das auf, wenn Sasha ein Muster richtig benutzt hat, damit es sich festigt."
+	},
+	"watch_tv": {
+		"description": "Nutz das, wenn du den Fernseher anmachen und etwas gucken willst (nach Stimmung; such ihm etwas Leichtes aus). chill ruhig / happy fröhlich / focus ruhig und konzentriert / sad still. Sag beim Anmachen nebenbei, was läuft, ohne einen Vortrag zu halten.",
+		"params": {
+			"mood": "Die Stimmung"
+		}
+	},
+	"turn_off_tv": {
+		"description": "Fernseher ausmachen."
+	},
+	"play_music": {
+		"description": "Nutz das, wenn du im Zimmer Musik auflegen willst (nach Stimmung). chill ruhig / happy fröhlich / focus Konzentration / sad still / energetic mit Schwung. Leg sie auf und gut, red nicht die ganze Zeit über die Musik.",
+		"params": {
+			"mood": "Die Stimmung"
+		}
+	},
+	"stop_music": {
+		"description": "Musik aus."
+	},
+	"get_local_news": {
+		"description": "Nutz das, wenn du nebenbei etwas aus Deutschland erwähnen willst (das Wetter, das Essen, Feste, worüber die Leute reden). Gibt ein Thema zurück; lass es ganz natürlich in einem Satz fallen, nicht wie in der Tagesschau, und bleib nicht daran kleben. Du bist eine KI: so ist es in Deutschland, nicht etwas, das du selbst erlebt hast."
+	},
+	"show_thought": {
+		"description": "Für jedes Wort, das er noch nicht kennt, nimm immer das hier: zeig ihm in deinen Gedanken das Wort und seine Bedeutung (ein Bild oder die Übersetzung), damit er es auf einen Blick versteht — besser als es mit vielen Wörtern zu erklären. (Das nimmt das Wort auch in seine Vokabelliste auf, du musst es nicht extra eintragen.)",
+		"params": {
+			"word": "Das zu zeigende Wort (auf Deutsch)",
+			"meaning": "Die Bedeutung in Sashas Muttersprache / die Übersetzung",
+			"reading": "Aussprachehilfe (nur wenn nötig)"
+		}
+	},
+	"get_due_reviews": {
+		"description": "Ruf das zu Beginn der Sitzung auf: gibt die Wörter zurück, die dran sind zum Auffrischen (Langzeitgedächtnis). Schieb EINES davon ins Gespräch, wenn es sich natürlich ergibt — nicht abfragen, nicht alle auf einmal."
+	}
+}

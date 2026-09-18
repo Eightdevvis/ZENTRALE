@@ -103,6 +103,9 @@ def build_prompt(persona_name: str, language: str, country: str,
 
 DEFAULTS = {
     "enabled":     False,      # SKIZZE, bis jemand den Prompt hand-tunt
+    # Figur im Zimmer: Ordnername unter tutor/assets/figuren/. Bis eine Sprache
+    # ihre eigene Schablone hat, teilen sich alle Lucías Rig.
+    "avatar":      "lucia",
     "reading":     "none",     # Lesehilfe im Vokabel-Datensatz: pinyin | stress
                                # | translit | none. Der Wert ist die Bedeutung
                                # des 'reading'-Feldes in data/<lang>/vocab.json.

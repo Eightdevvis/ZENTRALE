@@ -674,6 +674,21 @@ class Persona:
         # Gemalte Teile, falls vorhanden (tutor/assets/figuren/lucia/). Liegt da nichts,
         # bleibt es bei der Polygon-Figur — siehe draw().
         self.rig = _sprites.lade_rig('lucia') if _sprites is not None else None
+        self.rig_name = 'lucia'
+
+    def figur(self, name):
+        """Figur wechseln (Rig-Ordner unter tutor/assets/figuren/) — bei Stand-/
+        Sprachwechsel. Unbekannt oder gleich → nichts tun."""
+        name = (name or 'lucia').strip() or 'lucia'
+        if name == self.rig_name or _sprites is None:
+            return
+        hier = os.path.dirname(os.path.abspath(__file__))
+        if not os.path.isdir(os.path.join(hier, 'assets', 'figuren', name)):
+            name = 'lucia'                    # keine eigene Figur → Lucías Rig
+        try:
+            self.rig = _sprites.lade_rig(name); self.rig_name = name
+        except Exception:
+            pass
         # layout (in layout() gesetzt)
         self.floor_y = 0.0
         self.couch_x = 0.0
@@ -1496,7 +1511,7 @@ def _draw_reveal(screen, fonts, w, h, asv):
     head = fonts['big'].render(_sym('▣  Kiste!'), True, ASSESS_GOLD)
     screen.blit(head, (w // 2 - head.get_width() // 2, by + 14))
     if rv.get('kind') == 'part':
-        sub = fonts['log'].render('ein neues Teil von Lucía', True, HUD_FG)
+        sub = fonts['log'].render(f"ein neues Teil von {asv.get('persona') or 'Lucía'}", True, HUD_FG)
     else:
         sub = fonts['log'].render('+%d Münzen' % int(rv.get('amount', 0)), True, COIN_HI)
     screen.blit(sub, (w // 2 - sub.get_width() // 2, by + 54))
@@ -1686,7 +1701,7 @@ def _draw_geschenk(screen, fonts, w, h, asv):
         _draw_konfetti(screen, g.get('konfetti') or [])
         if g.get('kind') == 'part' and g.get('part'):
             _draw_teil_mittig(screen, cx, cy, g['part'], skala * gr / 150.0)
-            text = 'Ein neues Teil von Lucía'
+            text = f"Ein neues Teil von {asv.get('persona') or 'Lucía'}"
         else:
             muenze = fonts['word'].render('+%d' % int(g.get('amount', 0)), True, COIN_HI)
             mitte(muenze, cy - muenze.get_height() // 2)
@@ -2041,7 +2056,7 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
         pygame.draw.circle(screen, ASSESS_GOLD, (bx + bw, by + bh // 2), 4)
         screen.blit(fonts['hud'].render(_sym(f'{got} / {total} · {int(round(100*ratio))}%'), True, HUD_FG),
                     (bx, by - fonts['hud'].get_height() - 6))
-        gl = fonts['hud'].render(_sym('alle Wörter → Lucía'), True, ASSESS_GOLD)
+        gl = fonts['hud'].render(_sym(f"alle Wörter → {asv.get('persona') or 'Lucía'}"), True, ASSESS_GOLD)
         screen.blit(gl, (bx + bw - gl.get_width(), by - fonts['hud'].get_height() - 6))
 
     if phase == 'welcome':
@@ -2062,13 +2077,14 @@ def draw_assessment(screen, w, h, fonts, asv, speaking, caret_t):
     if np and np.get('t', 1) < 1.0:
         anim = (np['name'], np['t'])
     _draw_lucia(screen, fig_x, fig_y, fig_s, show_parts, anim)
-    cap = 'Lucía · komplett' if phase == 'unlock' else f'Lucía · {len(parts)}/{parts_total} Teile'
+    pn = asv.get('persona') or 'Lucía'
+    cap = f'{pn} · komplett' if phase == 'unlock' else f'{pn} · {len(parts)}/{parts_total} Teile'
     capr = fonts['hud'].render(cap, True, HUD_DIM)
     screen.blit(capr, (fig_x - capr.get_width() // 2, fig_y + int(96 * fig_s)))
 
     if phase == 'unlock':
         ctr(fonts['word'].render('¡Hola!', True, ASSESS_GOLD), cy - 96)
-        ctr(fonts['big'].render('Lucía ist da.', True, ASSESS_INK), cy - 18)
+        ctr(fonts['big'].render(f'{pn} ist da.', True, ASSESS_INK), cy - 18)
         ctr(fonts['log'].render('Du kannst genug — ab jetzt redet ihr wirklich, auf Spanisch.',
                                 True, HUD_DIM), cy + 26)
         _hint_row(screen, fonts['hud'], w, cy + 78, [('Enter', 'zu Lucía')])
@@ -2820,6 +2836,7 @@ def main():
                     S['persona'] = cf.get('persona_name') or S['persona']
                     S['log'] = []; S['last'] = ''; S['buf'] = ''; S['input'] = ''
                     S['scroll'] = 0; S['thought'] = None
+                persona.figur(cf.get('avatar'))
             # Der Stand bestimmt, WAS gelernt ist: Queue und Spielstand neu holen.
             if not asv_init():
                 # Kein Gate mehr (z.B. frisch gewaehlter, schon fertiger Stand)
@@ -3123,6 +3140,7 @@ def main():
                 if cf.get('langs'):
                     # nur fertige Sprachen sind wählbar (Skizzen raus)
                     S['langs'] = [l for l in cf['langs'] if l.get('enabled')]
+            persona.figur(cf.get('avatar'))
         st = be.status()
         with S['lock']:
             S['available'] = bool(st and st.get('available'))

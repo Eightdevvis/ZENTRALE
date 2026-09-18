@@ -1,0 +1,762 @@
+[
+  {
+    "word": "ich",
+    "reading": "",
+    "priority": "critical",
+    "category": "pronoun",
+    "gloss": {
+      "en": "I",
+      "de": "ich (die Person, die spricht)"
+    }
+  },
+  {
+    "word": "du",
+    "reading": "",
+    "priority": "critical",
+    "category": "pronoun",
+    "gloss": {
+      "en": "you",
+      "de": "du (die Person, mit der man spricht)"
+    }
+  },
+  {
+    "word": "er",
+    "reading": "",
+    "priority": "critical",
+    "category": "pronoun",
+    "gloss": {
+      "en": "he",
+      "de": "er (ein Mann)"
+    }
+  },
+  {
+    "word": "sie",
+    "reading": "",
+    "priority": "critical",
+    "category": "pronoun",
+    "gloss": {
+      "en": "she",
+      "de": "sie (eine Frau)"
+    }
+  },
+  {
+    "word": "das",
+    "reading": "",
+    "priority": "medium",
+    "category": "pronoun",
+    "gloss": {
+      "en": "that",
+      "de": "das (dieses Ding da)"
+    }
+  },
+  {
+    "word": "wir",
+    "reading": "",
+    "priority": "medium",
+    "category": "pronoun",
+    "gloss": {
+      "en": "we",
+      "de": "wir (ich und andere)"
+    }
+  },
+  {
+    "word": "sein",
+    "reading": "",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to be (is / am / are)",
+      "de": "sein — ist, bin, bist"
+    }
+  },
+  {
+    "word": "sich befinden",
+    "reading": "",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to be (located / state)",
+      "de": "irgendwo sein, gerade so sein"
+    }
+  },
+  {
+    "word": "haben",
+    "reading": "",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to have",
+      "de": "haben, besitzen"
+    }
+  },
+  {
+    "word": "gehen",
+    "reading": "",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to go",
+      "de": "gehen, weggehen"
+    }
+  },
+  {
+    "word": "machen",
+    "reading": "",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to do / make",
+      "de": "machen, tun"
+    }
+  },
+  {
+    "word": "sagen",
+    "reading": "",
+    "priority": "high",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to say",
+      "de": "sagen, sprechen"
+    }
+  },
+  {
+    "word": "verstehen",
+    "reading": "",
+    "priority": "critical",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to understand",
+      "de": "verstehen, kapieren"
+    }
+  },
+  {
+    "word": "wissen",
+    "reading": "",
+    "priority": "high",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to know",
+      "de": "wissen, Bescheid wissen"
+    }
+  },
+  {
+    "word": "wollen",
+    "reading": "",
+    "priority": "high",
+    "category": "verb_core",
+    "gloss": {
+      "en": "to want / to like",
+      "de": "wollen, gern haben"
+    }
+  },
+  {
+    "word": "essen",
+    "reading": "",
+    "priority": "high",
+    "category": "verb_action",
+    "gloss": {
+      "en": "to eat",
+      "de": "essen"
+    }
+  },
+  {
+    "word": "trinken",
+    "reading": "",
+    "priority": "high",
+    "category": "verb_action",
+    "gloss": {
+      "en": "to drink",
+      "de": "trinken"
+    }
+  },
+  {
+    "word": "sehen",
+    "reading": "",
+    "priority": "high",
+    "category": "verb_action",
+    "gloss": {
+      "en": "to see",
+      "de": "sehen, schauen"
+    }
+  },
+  {
+    "word": "hören",
+    "reading": "",
+    "priority": "high",
+    "category": "verb_action",
+    "gloss": {
+      "en": "to hear",
+      "de": "hören, zuhören"
+    }
+  },
+  {
+    "word": "was",
+    "reading": "",
+    "priority": "critical",
+    "category": "question",
+    "gloss": {
+      "en": "what",
+      "de": "was? (Frage nach einer Sache)"
+    }
+  },
+  {
+    "word": "wer",
+    "reading": "",
+    "priority": "critical",
+    "category": "question",
+    "gloss": {
+      "en": "who",
+      "de": "wer? (Frage nach einer Person)"
+    }
+  },
+  {
+    "word": "wie",
+    "reading": "",
+    "priority": "critical",
+    "category": "question",
+    "gloss": {
+      "en": "how",
+      "de": "wie? (Frage nach der Art)"
+    }
+  },
+  {
+    "word": "wo",
+    "reading": "",
+    "priority": "critical",
+    "category": "question",
+    "gloss": {
+      "en": "where",
+      "de": "wo? (Frage nach dem Ort)"
+    }
+  },
+  {
+    "word": "wann",
+    "reading": "",
+    "priority": "high",
+    "category": "question",
+    "gloss": {
+      "en": "when",
+      "de": "wann? (Frage nach der Zeit)"
+    }
+  },
+  {
+    "word": "warum",
+    "reading": "",
+    "priority": "high",
+    "category": "question",
+    "gloss": {
+      "en": "why",
+      "de": "warum? (Frage nach dem Grund)"
+    }
+  },
+  {
+    "word": "hier",
+    "reading": "",
+    "priority": "high",
+    "category": "spatial",
+    "gloss": {
+      "en": "here",
+      "de": "hier, an diesem Ort"
+    }
+  },
+  {
+    "word": "dort",
+    "reading": "",
+    "priority": "high",
+    "category": "spatial",
+    "gloss": {
+      "en": "there",
+      "de": "dort, an jenem Ort"
+    }
+  },
+  {
+    "word": "oben",
+    "reading": "",
+    "priority": "medium",
+    "category": "spatial",
+    "gloss": {
+      "en": "up / above",
+      "de": "oben, weiter oben"
+    }
+  },
+  {
+    "word": "unten",
+    "reading": "",
+    "priority": "medium",
+    "category": "spatial",
+    "gloss": {
+      "en": "down / below",
+      "de": "unten, weiter unten"
+    }
+  },
+  {
+    "word": "jetzt",
+    "reading": "",
+    "priority": "critical",
+    "category": "time",
+    "gloss": {
+      "en": "now",
+      "de": "jetzt, in diesem Moment"
+    }
+  },
+  {
+    "word": "heute",
+    "reading": "",
+    "priority": "high",
+    "category": "time",
+    "gloss": {
+      "en": "today",
+      "de": "heute, dieser Tag"
+    }
+  },
+  {
+    "word": "morgen",
+    "reading": "",
+    "priority": "high",
+    "category": "time",
+    "gloss": {
+      "en": "tomorrow",
+      "de": "morgen, der nächste Tag"
+    }
+  },
+  {
+    "word": "gestern",
+    "reading": "",
+    "priority": "medium",
+    "category": "time",
+    "gloss": {
+      "en": "yesterday",
+      "de": "gestern, der Tag davor"
+    }
+  },
+  {
+    "word": "ja",
+    "reading": "",
+    "priority": "critical",
+    "category": "response",
+    "gloss": {
+      "en": "yes",
+      "de": "ja"
+    }
+  },
+  {
+    "word": "nein",
+    "reading": "",
+    "priority": "critical",
+    "category": "response",
+    "gloss": {
+      "en": "no / not",
+      "de": "nein, nicht"
+    }
+  },
+  {
+    "word": "vielleicht",
+    "reading": "",
+    "priority": "medium",
+    "category": "response",
+    "gloss": {
+      "en": "maybe",
+      "de": "vielleicht, kann sein"
+    }
+  },
+  {
+    "word": "gut",
+    "reading": "",
+    "priority": "critical",
+    "category": "emotion",
+    "gloss": {
+      "en": "good / well",
+      "de": "gut, in Ordnung"
+    }
+  },
+  {
+    "word": "schlecht",
+    "reading": "",
+    "priority": "high",
+    "category": "emotion",
+    "gloss": {
+      "en": "bad",
+      "de": "schlecht, nicht gut"
+    }
+  },
+  {
+    "word": "glücklich",
+    "reading": "",
+    "priority": "high",
+    "category": "emotion",
+    "gloss": {
+      "en": "happy",
+      "de": "glücklich, froh"
+    }
+  },
+  {
+    "word": "traurig",
+    "reading": "",
+    "priority": "high",
+    "category": "emotion",
+    "gloss": {
+      "en": "sad",
+      "de": "traurig"
+    }
+  },
+  {
+    "word": "müde",
+    "reading": "",
+    "priority": "medium",
+    "category": "emotion",
+    "gloss": {
+      "en": "tired",
+      "de": "müde, kaputt"
+    }
+  },
+  {
+    "word": "groß",
+    "reading": "",
+    "priority": "high",
+    "category": "adjective",
+    "gloss": {
+      "en": "big",
+      "de": "groß"
+    }
+  },
+  {
+    "word": "klein",
+    "reading": "",
+    "priority": "high",
+    "category": "adjective",
+    "gloss": {
+      "en": "small",
+      "de": "klein"
+    }
+  },
+  {
+    "word": "neu",
+    "reading": "",
+    "priority": "medium",
+    "category": "adjective",
+    "gloss": {
+      "en": "new",
+      "de": "neu"
+    }
+  },
+  {
+    "word": "alt",
+    "reading": "",
+    "priority": "medium",
+    "category": "adjective",
+    "gloss": {
+      "en": "old",
+      "de": "alt"
+    }
+  },
+  {
+    "word": "schnell",
+    "reading": "",
+    "priority": "medium",
+    "category": "adjective",
+    "gloss": {
+      "en": "fast",
+      "de": "schnell"
+    }
+  },
+  {
+    "word": "langsam",
+    "reading": "",
+    "priority": "high",
+    "category": "adjective",
+    "gloss": {
+      "en": "slow",
+      "de": "langsam"
+    }
+  },
+  {
+    "word": "heiß",
+    "reading": "",
+    "priority": "medium",
+    "category": "adjective",
+    "gloss": {
+      "en": "hot",
+      "de": "heiß, sehr warm"
+    }
+  },
+  {
+    "word": "kalt",
+    "reading": "",
+    "priority": "medium",
+    "category": "adjective",
+    "gloss": {
+      "en": "cold",
+      "de": "kalt"
+    }
+  },
+  {
+    "word": "Tisch",
+    "reading": "",
+    "priority": "high",
+    "category": "noun_household",
+    "gloss": {
+      "en": "table",
+      "de": "Tisch (Möbel zum Essen/Arbeiten)"
+    }
+  },
+  {
+    "word": "Stuhl",
+    "reading": "",
+    "priority": "high",
+    "category": "noun_household",
+    "gloss": {
+      "en": "chair",
+      "de": "Stuhl (zum Sitzen)"
+    }
+  },
+  {
+    "word": "Tür",
+    "reading": "",
+    "priority": "medium",
+    "category": "noun_household",
+    "gloss": {
+      "en": "door",
+      "de": "Tür (zum Reingehen)"
+    }
+  },
+  {
+    "word": "Fenster",
+    "reading": "",
+    "priority": "medium",
+    "category": "noun_household",
+    "gloss": {
+      "en": "window",
+      "de": "Fenster (zum Rausschauen)"
+    }
+  },
+  {
+    "word": "Wasser",
+    "reading": "",
+    "priority": "high",
+    "category": "noun_substance",
+    "gloss": {
+      "en": "water",
+      "de": "Wasser (zum Trinken)"
+    }
+  },
+  {
+    "word": "Essen",
+    "reading": "",
+    "priority": "high",
+    "category": "noun_substance",
+    "gloss": {
+      "en": "food / meal",
+      "de": "Essen, Mahlzeit"
+    }
+  },
+  {
+    "word": "Musik",
+    "reading": "",
+    "priority": "high",
+    "category": "tutor_activity",
+    "gloss": {
+      "en": "music",
+      "de": "Musik"
+    }
+  },
+  {
+    "word": "Zeitung",
+    "reading": "",
+    "priority": "high",
+    "category": "tutor_activity",
+    "gloss": {
+      "en": "newspaper",
+      "de": "Zeitung (Nachrichten auf Papier)"
+    }
+  },
+  {
+    "word": "Fernsehen",
+    "reading": "",
+    "priority": "high",
+    "category": "tutor_activity",
+    "gloss": {
+      "en": "television",
+      "de": "Fernsehen, Fernseher"
+    }
+  },
+  {
+    "word": "Mutter",
+    "reading": "",
+    "priority": "medium",
+    "category": "family",
+    "gloss": {
+      "en": "mother",
+      "de": "Mutter, Mama"
+    }
+  },
+  {
+    "word": "Vater",
+    "reading": "",
+    "priority": "medium",
+    "category": "family",
+    "gloss": {
+      "en": "father",
+      "de": "Vater, Papa"
+    }
+  },
+  {
+    "word": "Bruder",
+    "reading": "",
+    "priority": "medium",
+    "category": "family",
+    "gloss": {
+      "en": "brother",
+      "de": "Bruder"
+    }
+  },
+  {
+    "word": "Schwester",
+    "reading": "",
+    "priority": "medium",
+    "category": "family",
+    "gloss": {
+      "en": "sister",
+      "de": "Schwester"
+    }
+  },
+  {
+    "word": "und",
+    "reading": "",
+    "priority": "critical",
+    "category": "connector",
+    "gloss": {
+      "en": "and",
+      "de": "und"
+    }
+  },
+  {
+    "word": "aber",
+    "reading": "",
+    "priority": "high",
+    "category": "connector",
+    "gloss": {
+      "en": "but",
+      "de": "aber, jedoch"
+    }
+  },
+  {
+    "word": "weil",
+    "reading": "",
+    "priority": "high",
+    "category": "connector",
+    "gloss": {
+      "en": "because",
+      "de": "weil, aus dem Grund"
+    }
+  },
+  {
+    "word": "oder",
+    "reading": "",
+    "priority": "medium",
+    "category": "connector",
+    "gloss": {
+      "en": "or",
+      "de": "oder"
+    }
+  },
+  {
+    "word": "sehr",
+    "reading": "",
+    "priority": "high",
+    "category": "modifier",
+    "gloss": {
+      "en": "very",
+      "de": "sehr"
+    }
+  },
+  {
+    "word": "auch",
+    "reading": "",
+    "priority": "medium",
+    "category": "modifier",
+    "gloss": {
+      "en": "also",
+      "de": "auch, ebenfalls"
+    }
+  },
+  {
+    "word": "der",
+    "reading": "",
+    "priority": "critical",
+    "category": "article",
+    "gloss": {
+      "en": "the (m.)",
+      "de": "der (Artikel, männlich)"
+    }
+  },
+  {
+    "word": "die",
+    "reading": "",
+    "priority": "critical",
+    "category": "article",
+    "gloss": {
+      "en": "the (f.)",
+      "de": "die (Artikel, weiblich)"
+    }
+  },
+  {
+    "word": "ein",
+    "reading": "",
+    "priority": "high",
+    "category": "article",
+    "gloss": {
+      "en": "a (m.)",
+      "de": "ein (unbestimmt, männlich)"
+    }
+  },
+  {
+    "word": "eine",
+    "reading": "",
+    "priority": "high",
+    "category": "article",
+    "gloss": {
+      "en": "a (f.)",
+      "de": "eine (unbestimmt, weiblich)"
+    }
+  },
+  {
+    "word": "bitte",
+    "reading": "",
+    "priority": "high",
+    "category": "politeness",
+    "gloss": {
+      "en": "please",
+      "de": "bitte (höflich fragen)"
+    }
+  },
+  {
+    "word": "danke",
+    "reading": "",
+    "priority": "high",
+    "category": "politeness",
+    "gloss": {
+      "en": "thank you",
+      "de": "danke"
+    }
+  },
+  {
+    "word": "hallo",
+    "reading": "",
+    "priority": "high",
+    "category": "greeting",
+    "gloss": {
+      "en": "hello",
+      "de": "hallo (Gruß)"
+    }
+  },
+  {
+    "word": "tschüss",
+    "reading": "",
+    "priority": "high",
+    "category": "greeting",
+    "gloss": {
+      "en": "bye",
+      "de": "tschüss (Abschied)"
+    }
+  }
+]

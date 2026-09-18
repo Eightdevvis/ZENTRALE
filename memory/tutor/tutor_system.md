@@ -240,7 +240,11 @@ mit eigenem Charakter, eigenem Land und eigenem AI-Anbieter (Provider/Modell
 entkoppelt). **Eine Sprache = ein Ordner** `tutor/langs/<code>/` mit allem, was
 sie ausmacht (Profil, Prompt, Tool-Beschriftung, Register-Leiter, Seeds); die
 Registry `tutor/langs/__init__.py` findet die Pakete selbst.
-**LIVE: `zh` → Ling Ling (China, qwen), `es` → Lucía (Spanien, qwen).** Skizzen
+**LIVE: `zh` → Ling Ling (China, qwen), `es` → Lucía (Spanien, qwen), `de` → Lena
+(Deutschland, qwen; seit 2026-09-18 — Lucías Konstrukt 1:1 übersetzt, vor allem zum
+Testen in einer Sprache, die Sasha kann).** Alle drei sind vollständig nach
+`bauplan.md` (Drift-Test). Figur: Profil-Feld `avatar` (Default `lucia`), bis eine
+Persona ihre eigene Schablone hat. Skizzen
 (`enabled=False`): `fr` Jacqueline, `ru` Ludmila, `ar` Amira. (Provider zeigt bewusst
 auf `qwen` statt der Skizzen-Wahl `mistral`: qwen läuft heute [Key da, no-train, solide
 bei es], umstellbar über `tutor/data/tutor_config.json`.)

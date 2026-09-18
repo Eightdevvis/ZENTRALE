@@ -1,0 +1,10 @@
+[
+  {"title": "Die Sendung mit der Maus", "mood": "chill", "level": "leicht", "note": "langsam, klar gesprochen, kurze Geschichten — ideal zum Anfangen"},
+  {"title": "Ein Backvideo mit Oma-Rezepten", "mood": "chill", "level": "leicht", "note": "sieht schön aus, man muss kaum etwas verstehen"},
+  {"title": "Eine Naturdoku aus dem Schwarzwald", "mood": "chill", "level": "leicht", "note": "ruhige Bilder, die Stimme spricht langsam"},
+  {"title": "Ein Pixar-Film auf Deutsch", "mood": "happy", "level": "mittel", "note": "Geschichte, die du schon kennst, leicht zu folgen"},
+  {"title": "Eine Kochshow im Fernsehen", "mood": "happy", "level": "mittel", "note": "Gerichte aus jeder Ecke, wird klar erklärt"},
+  {"title": "Löwenzahn", "mood": "happy", "level": "leicht", "note": "für Kinder, einfache Wörter, viel gezeigt"},
+  {"title": "Ein Live-Stream von einem See mit Musik", "mood": "focus", "level": "leicht", "note": "fast ohne Dialog, gut zum ruhigen Lernen"},
+  {"title": "Ein Video mit ruhiger Musik", "mood": "sad", "level": "leicht", "note": "sanfte Bilder und Musik, kein Lärm"}
+]
