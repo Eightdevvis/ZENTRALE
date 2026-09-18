@@ -79,3 +79,31 @@ def test_kernwort_nimmt_glosse_aus_den_daten_nicht_vom_modell(welt, monkeypatch)
     tools.show_thought("面", "Nudeln", "miàn", lang="zh")      # emergent → Modell-Bedeutung
     assert session.room_state()["thought_meaning"] == "Nudeln"
     session.deactivate()
+
+
+def test_tooltext_nennt_die_muttersprache_konkret(monkeypatch):
+    """Das Modell muss wissen, in WELCHER Sprache es die Bedeutung schreibt —
+    »Muttersprache« allein liest qwen als Englisch."""
+    from tutor import config
+    monkeypatch.setattr(config, "_overrides", {"native": "de"})
+    for lang, erwartet in (("es", "alemán"), ("zh", "德语"), ("de", "Deutsch")):
+        st = next(t for t in tools.tools_for(lang) if t["function"]["name"] == "show_thought")
+        beschr = st["function"]["parameters"]["properties"]["meaning"]["description"]
+        assert erwartet in beschr and "{native}" not in beschr, (lang, beschr)
+    monkeypatch.setattr(config, "_overrides", {"native": "en"})
+    st = next(t for t in tools.tools_for("es") if t["function"]["name"] == "show_thought")
+    assert "inglés" in st["function"]["parameters"]["properties"]["meaning"]["description"]
+
+
+def test_emergentes_wort_speichert_bedeutung_einmal(welt):
+    """Nichts doppelt erfinden lassen: die Bedeutung eines emergenten Worts wird
+    beim Einführen gespeichert und bleibt."""
+    sid = staende.anlegen(welt, "LL", lang="zh"); staende.waehlen(welt, sid)
+    session.activate()
+    tools.show_thought("面", "Nudeln", "miàn", lang="zh")
+    e = {x["word"]: x for x in tools._load_raw("zh")}["面"]
+    assert e.get("meaning") == "Nudeln" and e.get("reading") == "miàn"
+    tools.show_thought("面", "Pasta", "", lang="zh")          # nochmal, anders → bleibt bei der ersten
+    assert {x["word"]: x for x in tools._load_raw("zh")}["面"]["meaning"] == "Nudeln"
+    assert session.room_state()["thought_meaning"] == "Nudeln"
+    session.deactivate()

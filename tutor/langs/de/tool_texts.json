@@ -50,7 +50,7 @@
 		"description": "Für jedes Wort, das er noch nicht kennt, nimm immer das hier: zeig ihm in deinen Gedanken das Wort und seine Bedeutung (ein Bild oder die Übersetzung), damit er es auf einen Blick versteht — besser als es mit vielen Wörtern zu erklären. (Das nimmt das Wort auch in seine Vokabelliste auf, du musst es nicht extra eintragen.)",
 		"params": {
 			"word": "Das zu zeigende Wort (auf Deutsch)",
-			"meaning": "Die Bedeutung in Sashas Muttersprache / die Übersetzung",
+			"meaning": "Die Bedeutung / Übersetzung auf {native} (in keiner anderen Sprache)",
 			"reading": "Aussprachehilfe (nur wenn nötig)"
 		}
 	},

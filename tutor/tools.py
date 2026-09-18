@@ -313,8 +313,10 @@ def note_spoken(text: str, lang: str = None) -> list:
     return hits
 
 
-def introduce_new(word: str, reading: str = "", lang: str = None) -> str:
-    """Neues Wort in die Liste (spoken=0/listened=0). Dedupt selbst; Junk (Namen) raus."""
+def introduce_new(word: str, reading: str = "", lang: str = None, meaning: str = "") -> str:
+    """Neues Wort in die Liste (spoken=0/listened=0). Dedupt selbst; Junk (Namen) raus.
+    meaning = Bedeutung in der Muttersprache (bei emergenten Wörtern vom Modell,
+    bei Kernwörtern die Glosse aus den Daten) — wird beim Wort gespeichert."""
     word = (word or '').strip()
     if not word or _is_junk(word, lang):
         return _phrase("vocab_notfound", lang, word=word)
@@ -327,6 +329,8 @@ def introduce_new(word: str, reading: str = "", lang: str = None) -> str:
         if any(e['word'] == word for e in entries):
             return _phrase("vocab_dup", lang, word=word)
         new_e = {'word': word, 'reading': reading or '', 'spoken': 0, 'listened': 0}
+        if (meaning or '').strip():
+            new_e['meaning'] = meaning.strip()
         entries.append(new_e)
         _write_raw(entries, lang)
     _dbg_vocab('new', word, new_e, lang)     # neu reingekommen → Devtools
@@ -1052,13 +1056,22 @@ def show_thought(word: str, meaning: str = "", reading: str = "",
     if kern is not None:
         meaning = glosse(kern) or meaning
         reading = reading or kern.get("reading", "")
+    else:
+        # Emergentes Wort, das schon in der Liste steht: die gespeicherte Bedeutung
+        # gilt — nichts doppelt erfinden lassen (Sasha 2026-09-18: »die Einladung
+        # zur Inkonsistenz«).
+        with _lock:
+            alt = next((e for e in _load_raw(lang) if e.get("word") == word), None)
+        if alt is not None:
+            meaning = alt.get("meaning") or meaning
+            reading = reading or alt.get("reading", "")
     try:
         from . import session as tutor_session
         tutor_session.set_thought(word, meaning)
     except Exception:
         pass
     if word:
-        introduce_new(word, reading, lang)
+        introduce_new(word, reading, lang, meaning=meaning)
     return "ok"
 
 
@@ -1112,7 +1125,7 @@ _DEFAULT_TEXTS = {
     "get_due_reviews":      {"description": "Zu Session-Beginn aufrufen: fällige Wörter aus dem Langzeit-Gedächtnis. Bau EINES davon beiläufig ins Gespräch ein, wenn's von selbst passt — NICHT abfragen, nicht alle."},
     "show_thought":         {"description": "Für jedes Wort, das sie noch nicht kennt: zeig es ihr in Gedanken (Bild oder Übersetzung), statt es mit vielen Worten zu erklären. Legt das Wort automatisch mit in die Vokabelliste.",
                              "params": {"word": "Das zu zeigende Wort",
-                                        "meaning": "Deutsche Bedeutung/Übersetzung",
+                                        "meaning": "Die Bedeutung/Übersetzung auf {native} (in keiner anderen Sprache)",
                                         "reading": "Lesehilfe (falls die Sprache eine braucht)"}},
 }
 
@@ -1124,11 +1137,20 @@ def tools_for(lang: str = None) -> list:
     Beschreibungen und ein 'pinyin'-Feld — jede andere Sprache bekam damit
     Anweisungen auf Chinesisch."""
     texts = dict(_DEFAULT_TEXTS)
-    for name, t in (_prof(lang).get("tool_texts") or {}).items():
+    prof = _prof(lang)
+    for name, t in (prof.get("tool_texts") or {}).items():
         if isinstance(t, dict):
             merged = dict(texts.get(name) or {})
             merged.update(t)
             texts[name] = merged
+    # Muttersprache beim Namen nennen: »die Bedeutung in {native}« → »… auf
+    # Deutsch«/»en alemán«/»用德语«. Ohne konkreten Namen rät das Modell
+    # (2026-09-18: Bedeutungen auf Englisch, obwohl native=de).
+    nat = native()
+    nat_name = (prof.get("native_names") or {}).get(nat) or nat
+
+    def _fuellen(text):
+        return text.replace("{native}", nat_name) if isinstance(text, str) else text
 
     out = []
     for name, params, required in _TOOL_SPECS:
@@ -1141,9 +1163,9 @@ def tools_for(lang: str = None) -> list:
             if enum:
                 prop["enum"] = enum
             if ptexts.get(pname):
-                prop["description"] = ptexts[pname]
+                prop["description"] = _fuellen(ptexts[pname])
             props[pname] = prop
-        fn = {"name": name, "description": t.get("description", ""),
+        fn = {"name": name, "description": _fuellen(t.get("description", "")),
               "parameters": {"type": "object", "properties": props}}
         if required:
             fn["parameters"]["required"] = required
