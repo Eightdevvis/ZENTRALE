@@ -87,6 +87,7 @@ Diese Tabelle liest der Drift-Test: jeder Pfad muss existieren.
 | `deploy/aussenposten.txt` | Was der Pi bekommt (Positivliste, u.a. `tutor/room.py`) |
 | `tests/test_tutor_staende.py` | Spielstände, Bluten, Level, Glosse |
 | `tests/test_tutor_skills.py` | Skill-Auslöser |
+| `tests/test_tutor_wortregel.py` | Nur Wörter der Zielsprache in die Vokabelliste (Grenze gegen das Modell) |
 | `tests/test_tutor_isolation.py` | Stände bluten nicht: Vokabeln, Gedächtnis, SRS, Spiel, Session-Guard, Löschen |
 | `tests/test_tutor_room_flows.py` | Zimmer headless gegen Fake-Backend: Zwischenmenü, Hauptmenü-Stop, Schließen-Dialog, Stand-Wechsel, Stimme folgt Stand |
 | `tests/test_tutor_bauplan.py` | Dieser Bauplan gegen den Code |

@@ -35,6 +35,7 @@ PROFILE = profile(
 
     # Lesehilfe: das 'reading'-Feld in tutor/data/zh/vocab.json IST Pinyin.
     reading        = "pinyin",
+    word_pattern   = r"[\u4e00-\u9fff]",    # ein chinesisches Wort hat Han-Zeichen
     reading_label  = "拼音",
     script         = "ltr",
     stt_lang       = "zh",
@@ -104,6 +105,7 @@ PROFILE = profile(
         "vocab_notfound":        "[词表里没有「{word}」]",
         "vocab_dup":             "[「{word}」已在词表里]",
         "vocab_added":           "✓ 新词已加入：「{word}」（{reading}）",
+        "vocab_invalid":         "[「{word}」不是中文词——只展示中文词，翻译放在 meaning 里]",
         "known_noword":          "[没有词]",
         "known_marked":          "✓「{word}」已标为会了",
         "known_added":           "✓「{word}」已作为会了加入",

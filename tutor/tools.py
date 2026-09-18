@@ -38,6 +38,7 @@
 import json
 import os
 import random
+import re
 
 from . import staende   # Spielstaende: welcher Lernstand gerade laeuft
 from threading import Lock
@@ -140,6 +141,7 @@ _DEFAULT_PHRASES = {
     "vocab_notfound":        "[Wort '{word}' nicht in der Vokabelliste gefunden]",
     "vocab_dup":             "['{word}' bereits in der Vokabelliste vorhanden]",
     "vocab_added":           "✓ Neues Wort hinzugefügt: '{word}' ({reading})",
+    "vocab_invalid":         "['{word}' ist kein Wort der Zielsprache — nur Wörter der Zielsprache zeigen, die Bedeutung gehört in 'meaning']",
     "known_noword":          "[kein Wort]",
     "known_marked":          "✓ '{word}' als bekannt markiert",
     "known_added":           "✓ '{word}' als bekannt hinzugefügt",
@@ -200,10 +202,18 @@ def _load_raw(lang: str = None) -> list:
         return []
     if not isinstance(raw, list):
         return []
+    sauber = []
     for e in raw:
-        if isinstance(e, dict):
-            _migrate_entry(e)
-    return raw
+        if not isinstance(e, dict):
+            continue
+        _migrate_entry(e)
+        # Fremdwoerter, die vor der Wortregel reingerutscht sind (»maybe« im
+        # zh-Stand), fallen beim Laden raus — sonst stuenden sie fuer immer im
+        # Prompt-Vokabelblock.
+        if not wort_gueltig(e.get('word'), lang)[0]:
+            continue
+        sauber.append(e)
+    return sauber
 
 
 def _write_raw(entries: list, lang: str = None):
@@ -221,6 +231,32 @@ def _reading(e: dict) -> str:
 def _fmt(e: dict) -> str:
     r = _reading(e)
     return f"{e['word']} ({r})" if r else str(e.get('word', ''))
+
+
+def wort_gueltig(word: str, lang: str = None):
+    """Gehoert dieses Wort in die Vokabelliste der Sprache? → (ok, grund).
+
+    Die Grenze gegen das Modell: es darf kein Wort einer anderen Sprache
+    anlegen. Zwei Pruefungen: (1) die Wortregel des Pakets (Schrift — zh muss
+    Han-Zeichen haben, lateinische Sprachen Buchstaben); (2) das Wort ist nicht
+    schlicht eine Glosse eines Kernworts (»maybe«, »vielleicht«) — dann hat das
+    Modell Wort und Bedeutung vertauscht."""
+    w = (word or '').strip()
+    if not w:
+        return False, 'leer'
+    try:
+        muster = _prof(lang).get('word_pattern') or r'[A-Za-z\u00C0-\u024F]'
+    except Exception:
+        muster = r'[A-Za-z\u00C0-\u024F]'
+    if not re.search(muster, w):
+        return False, 'schrift'
+    lw = w.lower()
+    for c in _core_list(lang):
+        g = c.get('gloss') if isinstance(c.get('gloss'), dict) else {}
+        werte = [str(v).lower() for v in g.values()] + [str(c.get('de') or '').lower()]
+        if lw in werte and lw != str(c.get('word') or '').lower():
+            return False, 'glosse'
+    return True, ''
 
 
 def _is_junk(word: str, lang: str = None) -> bool:
@@ -282,6 +318,10 @@ def introduce_new(word: str, reading: str = "", lang: str = None) -> str:
     word = (word or '').strip()
     if not word or _is_junk(word, lang):
         return _phrase("vocab_notfound", lang, word=word)
+    ok, grund = wort_gueltig(word, lang)
+    if not ok:
+        debug.emit('vocab', action='abgelehnt', word=word, lang=_lang(lang), grund=grund)
+        return _phrase("vocab_invalid", lang, word=word)
     with _lock:
         entries = _load_raw(lang)
         if any(e['word'] == word for e in entries):
@@ -997,6 +1037,13 @@ def show_thought(word: str, meaning: str = "", reading: str = "",
     (introduce_new dedupt selbst). So wächst der Umfang genau mit dem, was die
     Persona real zeigt — der verlässliche Anker fürs Tracking (Sashas Vorgabe)."""
     word = (word or "").strip()
+    ok, grund = wort_gueltig(word, lang)
+    if not ok:
+        # Kein Gedanke, kein Eintrag — das Modell hat kein Wort der Zielsprache
+        # geliefert (z.B. die Glosse statt des Worts). Rueckmeldung in der
+        # Zielsprache, damit es sich korrigiert.
+        debug.emit('vocab', action='abgelehnt', word=word, lang=_lang(lang), grund=grund)
+        return _phrase("vocab_invalid", lang, word=word)
     try:
         from . import session as tutor_session
         tutor_session.set_thought(word, meaning)

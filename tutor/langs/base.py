@@ -106,6 +106,12 @@ DEFAULTS = {
     # Figur im Zimmer: Ordnername unter tutor/assets/figuren/. Bis eine Sprache
     # ihre eigene Schablone hat, teilen sich alle Lucías Rig.
     "avatar":      "lucia",
+    # Wortregel: welches Wort gehoert ueberhaupt in die Vokabelliste dieser
+    # Sprache. Regex, mindestens ein Treffer im Wort. Grenze gegen das Modell:
+    # qwen rief 2026-09-18 als Ling Ling show_thought(word="maybe") und das
+    # englische Wort lag danach als Vokabel im chinesischen Stand. Default:
+    # lateinische Buchstaben (es/de/fr); zh setzt CJK.
+    "word_pattern": r"[A-Za-z\u00C0-\u024F]",
     "reading":     "none",     # Lesehilfe im Vokabel-Datensatz: pinyin | stress
                                # | translit | none. Der Wert ist die Bedeutung
                                # des 'reading'-Feldes in data/<lang>/vocab.json.

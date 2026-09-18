@@ -92,6 +92,7 @@ PROFILE = profile(
         "vocab_notfound":         "[das Wort «{word}» steht nicht in der Liste]",
         "vocab_dup":              "[«{word}» steht schon in der Liste]",
         "vocab_added":            "✓ neues Wort aufgenommen: «{word}»",
+        "vocab_invalid":          "[«{word}» ist kein deutsches Wort — zeig nur deutsche Wörter; die Übersetzung gehört in «meaning»]",
         "known_noword":           "[kein Wort]",
         "known_marked":           "✓ «{word}» als bekannt markiert",
         "known_added":            "✓ «{word}» als bekannt aufgenommen",

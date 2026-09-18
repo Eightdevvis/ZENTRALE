@@ -113,6 +113,7 @@ PROFILE = profile(
         "vocab_notfound":         "[la palabra «{word}» no está en la lista]",
         "vocab_dup":              "[«{word}» ya está en la lista]",
         "vocab_added":            "✓ palabra nueva añadida: «{word}»",
+        "vocab_invalid":          "[«{word}» no es una palabra en español — muestra solo palabras en español; la traducción va en «meaning»]",
         "known_noword":           "[ninguna palabra]",
         "known_marked":           "✓ «{word}» marcada como que ya la sabe",
         "known_added":            "✓ «{word}» añadida como que ya la sabe",
