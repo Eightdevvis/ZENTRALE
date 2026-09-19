@@ -244,3 +244,13 @@ def test_vorhandenen_stand_waehlen_wechselt_sprache(be):
     S = fahre(script, be.url, frames=100)
     assert be.calls("/api/tutor/staende/waehlen")[-1][1] == {"id": "de-1"}
     assert S.get("lang") == "de" and S.get("persona") == "Lena"
+
+
+def test_muttersprache_in_den_einstellungen_wechseln(be):
+    """Esc → Einstellungen → Muttersprache → → schickt native ans Backend."""
+    script = {10: [key(pygame.K_ESCAPE)],
+              14: [key(pygame.K_DOWN), key(pygame.K_DOWN), key(pygame.K_RETURN)],       # Einstellungen
+              30: [key(pygame.K_DOWN)] * 4 + [key(pygame.K_RIGHT)]}                     # Muttersprache →
+    fahre(script, be.url, frames=60)
+    cfg = [b for p, b in be.posts if p == "/api/tutor/config"]
+    assert cfg and cfg[-1].get("native") == "de", cfg           # en → de (Liste des Fake-Backends)

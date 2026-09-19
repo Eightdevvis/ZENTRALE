@@ -1483,6 +1483,11 @@ def api_transcribe():
     audio_bytes = request.files['audio'].read()
     lang        = (request.form.get('lang') or '').strip() or None
     text        = audio.transcribe(audio_bytes, lang=lang)
+    # audio.transcribe liefert Fehler als '[STT …]'-Text zurueck. Der darf NIE
+    # als Aussage beim Tutor landen (2026-09-19: Ling Ling antwortete auf
+    # '[STT nicht erreichbar: …]') — hier wird daraus ein echter Fehler.
+    if text.startswith("[STT"):
+        return jsonify({"error": text.strip("[]"), "text": ""}), 503
     return jsonify({"text": text})
 
 

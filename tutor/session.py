@@ -621,7 +621,7 @@ def respond_stream(user_text: str = None, nudge: bool = False,
         stream = tutor_openai_compat.chat_stream(
             messages=history, model=model, system=system,
             tools=tools.tools_for(lang), tool_executor=tools.execute_tool,
-            _provider=provider)
+            _provider=provider, max_tokens=prof.get("max_tokens"))
     else:  # 'ollama' → lokaler Default über core/ai.py
         stream = ai.chat_stream(
             messages=history, system=system,

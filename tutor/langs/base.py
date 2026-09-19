@@ -112,6 +112,11 @@ DEFAULTS = {
     # englische Wort lag danach als Vokabel im chinesischen Stand. Default:
     # lateinische Buchstaben (es/de/fr); zh setzt CJK.
     "word_pattern": r"[A-Za-z\u00C0-\u024F]",
+    # Laengenbremse fuer die Cloud-Antwort (max_tokens). Nicht sprachneutral:
+    # ein Token Chinesisch ist ~ein Zeichen, ein Token Spanisch ~ein halbes
+    # Wort — dieselbe Zahl heisst bei zh ein Absatz. Pakete setzen ihren Wert
+    # (Ling Ling laberte 2026-09-19 »viel mehr« als Lucia bei gleicher Zahl).
+    "max_tokens":   140,
     "reading":     "none",     # Lesehilfe im Vokabel-Datensatz: pinyin | stress
                                # | translit | none. Der Wert ist die Bedeutung
                                # des 'reading'-Feldes in data/<lang>/vocab.json.

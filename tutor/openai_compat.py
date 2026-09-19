@@ -64,7 +64,7 @@ def _prepare_messages(messages: list, system: str) -> list:
 
 def chat_stream(messages: list, model: str = None, system: str = None,
                 tools: list = None, tool_executor=None, via_mic: bool = False,
-                *, _provider: dict = None):
+                *, _provider: dict = None, max_tokens: int = None):
     """
     Streamt Tutor-Antworten von einem OpenAI-kompatiblen Provider.
     yieldet Plain-Text-Tokens (Strings).
@@ -87,7 +87,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
             tools=tools or None,          # tools_for(lang) ist schon OpenAI-Schema
             stream=True,
             temperature=TUTOR_TEMPERATURE,   # niedrig = reproduzierbar kurz
-            max_tokens=TUTOR_MAX_TOKENS,     # Cap gegen Monolog-Ausreißer
+            max_tokens=int(max_tokens or TUTOR_MAX_TOKENS),   # Cap gegen Monolog-Ausreißer (je Sprache)
         )
 
         text_parts = []

@@ -75,7 +75,7 @@ def transcribe(audio_bytes: bytes, filename: str = "audio.wav",
             result = _json.loads(resp.read().decode("utf-8"))
             text   = result.get("text", "").strip()
             conf   = result.get("confidence", 0)
-            state.push_log(f"STT ←  '{text}' (Konfidenz: {conf:.0%})")
+            state.push_log(f"STT ←  '{' / '.join(text.splitlines())[:80]}' (Konfidenz: {conf:.0%})")
             return text
     except urllib.error.URLError as e:
         msg = f"[STT nicht erreichbar: {e.reason}]"
@@ -107,7 +107,8 @@ def synthesize(text: str, lang: str = None,
         lang = DEFAULT_LANG
 
     url = f"{TTS_URL}/speak"
-    state.push_log(f"TTS →  POST {url} '{text[:40]}' (lang={lang})")
+    kurz = " / ".join(t.strip() for t in text.splitlines() if t.strip())[:60]
+    state.push_log(f"TTS →  POST {url} '{kurz}' (lang={lang})")
 
     payload = _json.dumps({
         "text":    text,

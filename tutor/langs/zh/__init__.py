@@ -36,6 +36,7 @@ PROFILE = profile(
     # Lesehilfe: das 'reading'-Feld in tutor/data/zh/vocab.json IST Pinyin.
     reading        = "pinyin",
     word_pattern   = r"[\u4e00-\u9fff]",    # ein chinesisches Wort hat Han-Zeichen
+    max_tokens     = 70,                     # ~1 Token/Zeichen: 70 = zwei kurze Saetze
     reading_label  = "拼音",
     script         = "ltr",
     stt_lang       = "zh",

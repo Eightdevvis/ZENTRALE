@@ -1256,6 +1256,11 @@ _STT_HALLU_RE = re.compile(
     r'gracias por ver|copyright|©|www\.|\.com\b|\.org\b|♪|\bMBC\b|'
     r'zdf|ard\b|kanal|channel', re.IGNORECASE)
 _TOOLLINE_RE = re.compile(r'^\s*(?:' + '|'.join(_TOOL_NAMES) + r')\b.*$', re.IGNORECASE)
+# Tool-Parameter, die das Modell als Textzeilen ausspuckt (»meaning: you«,
+# »reading: nǐ«) statt als Tool-Call — 2026-09-19 standen sie in Ling Lings
+# Leiste und wurden vorgelesen. Auch Tool-JSON mitten in einer Zeile.
+_TOOLPARAM_RE = re.compile(r'^\s*(?:word|meaning|reading|action|mood|pattern|note)\s*[:：].*$', re.IGNORECASE)
+_TOOLJSON_RE  = re.compile(r'(?:' + '|'.join(_TOOL_NAMES) + r')\s*\{[^}]*\}', re.IGNORECASE)
 
 
 def _clean_speech(text):
@@ -1265,11 +1270,12 @@ def _clean_speech(text):
     if not text:
         return text
     text = _PAREN_RE.sub('', text)
+    text = _TOOLJSON_RE.sub('', text)
     lines = []
     for ln in text.split('\n'):
         ln = ln.strip()
-        if ln and not _TOOLLINE_RE.match(ln):   # leere + reine Tool-Zeilen raus
-            lines.append(ln)
+        if ln and not _TOOLLINE_RE.match(ln) and not _TOOLPARAM_RE.match(ln):
+            lines.append(ln)                     # leere, Tool- und Parameter-Zeilen raus
     return '\n'.join(lines).strip()
 
 
@@ -3526,6 +3532,11 @@ def main():
             if err:
                 S['msg'] = 'STT: ' + err     # sichtbar machen statt still scheitern
         t = (txt or '').strip()
+        if t.startswith('[') and t.endswith(']'):
+            # Fehler-/Statusmeldung des Backends, keine Aussage — nie senden.
+            with S['lock']:
+                S['msg'] = 'STT: ' + t.strip('[]')[:50]
+            return
         if t and _STT_HALLU_RE.search(t):
             with S['lock']:
                 S['msg'] = 'STT verworfen: ' + t[:40]
