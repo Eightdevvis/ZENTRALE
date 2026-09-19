@@ -152,6 +152,14 @@ def set_sensor(name: str, value: bool):
         _sensors[name] = value
 
 
+def einzeilig(line) -> str:
+    """Log-Text auf EINE Zeile bringen: Umbrueche → » / «, Steuer-/Escape-
+    Zeichen raus, Whitespace eingedampft. Fuer alles, was ins stdout-Panel geht."""
+    text = " / ".join(t.strip() for t in str(line).splitlines() if t.strip())
+    text = "".join(" " if ch.isspace() else ch for ch in text if ch.isspace() or ch.isprintable())
+    return " ".join(text.split())
+
+
 def push_log(line: str):
     """
     Fügt eine neue Log-Zeile an. Sichtbar an zwei Stellen:
@@ -164,6 +172,11 @@ def push_log(line: str):
          damit Zeilen nicht durch start_local.sh-Buffering verschluckt
          werden.
     """
+    # EINE Zeile, immer: mehrzeiliger Text (TTS-Texte, Tracebacks, JSON) zerriss
+    # das stdout-Panel der TUI (Sasha 2026-09-19). Zeilenumbrueche werden zu
+    # » / «, Steuerzeichen raus, Whitespace eingedampft — hier, am einzigen
+    # Eingang, statt an jeder Schreibstelle.
+    line = einzeilig(line)
     stamp = datetime.now().strftime("%H:%M:%S")
     with _lock:
         _logs.append({"text": line, "time": stamp})
@@ -181,6 +194,7 @@ def push_internet_log(line: str):
 
     KEIN print()-Side-Effect: das hat push_log() schon gemacht.
     """
+    line = einzeilig(line)
     stamp = datetime.now().strftime("%H:%M:%S")
     with _lock:
         _internet_logs.append({"text": line, "time": stamp})

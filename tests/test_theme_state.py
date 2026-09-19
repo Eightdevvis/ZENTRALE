@@ -188,3 +188,18 @@ def test_schreibt_atomar(st):
     st.set("night")
     assert not os.path.exists(st.path + ".tmp")
     assert open(st.path).read() == "night\n"
+
+
+def test_push_log_ist_immer_einzeilig():
+    """Mehrzeiliger Text (TTS, Tracebacks, JSON) zerriss das stdout-Panel der
+    TUI — push_log normalisiert am einzigen Eingang."""
+    import io, contextlib
+    import state
+    state._logs.clear()
+    with contextlib.redirect_stdout(io.StringIO()):
+        state.push_log("TTS → '笑着\n坐这儿吧～\r\nmeaning: you'  (lang=zh)")
+        state.push_log("a\t\tb\x1b[31mc\x00d")
+    zeilen = [l["text"] for l in state._logs]
+    assert zeilen[0] == "TTS → '笑着 / 坐这儿吧～ / meaning: you' (lang=zh)"
+    assert "\n" not in zeilen[1] and "\x1b" not in zeilen[1] and "\x00" not in zeilen[1]
+    assert zeilen[1] == "a b[31mcd"
