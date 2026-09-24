@@ -2,8 +2,9 @@
 
 **Stand 2026-09-18:** ZENTRALE ist ein event-getriebener Assistent für
 Sashas Wohnung: der **PC** ist der Kern (Flask + Event-Loop, Whisper, TTS,
-Ollama; daheim an, nachts/unterwegs Suspend, Wecken über den Pi —
-`memory/betrieb/wachplan.md`), der **Pi** an der Wand ist Aussenposten (Sensor-Bridge
+Ollama; läuft seit 2026-09-24 dauerhaft —
+`memory/betrieb/wachplan.md`, Umbau zum Gehirn ohne Bildschirm:
+`memory/system/heimnetz.md`), der **Pi** an der Wand ist Aussenposten (Sensor-Bridge
 mit PIR, Kiosk mit dem **Persona-Zimmer** des Sprach-Tutors als Wandbild,
 TUI dahinter), der **Laptop** hängt per SSH-Tunnel dran. Die Front, an der
 gearbeitet wird, ist die **TUI**; die Browser-Fronten sind aufgegeben.

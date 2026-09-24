@@ -7,6 +7,7 @@ und wie die Fronten daran hängen.
 |---|---|
 | **Einstieg.** Gesamt-Architektur: Threads, Datenfluss, Modul-Übersicht | [architektur.md](architektur.md) |
 | Wer läuft wo — PC ↔ Pi ↔ Laptop, Sync der `data/*.json` | [topologie.md](topologie.md) |
+| **Heimnetz (Plan)** — PC als Gehirn ohne Bildschirm, eigener Router, VPN, Sunshine; Übergang bis Glasfaser | [heimnetz.md](heimnetz.md) |
 | Sensoren → Events → Brain → Actions | [event_system.md](event_system.md) |
 | **Der Takt** — wann sie unaufgefordert spricht (Termin-Ping, Schweigeregeln) | [takt.md](takt.md) |
 | **Anwesenheit & Ring** — ist Sasha da, schaut er hin; die Mitte der TUI | [anwesenheit_und_ring.md](anwesenheit_und_ring.md) |

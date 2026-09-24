@@ -10,8 +10,9 @@ Handy-Hotspot dran: `find-pc` (ARP nach MAC) → SSH-Tunnel → TUI gegen das
 PC-Backend; `data/*.json` gleichen sich per Boot-Sync (einmalig, kein
 Daemon) und Push-on-write (newest-wins) ab. Datenrichtung: PC → Pi/Laptop
 nur HTTP-Pull, Pi → PC nur `POST /api/sensor/<name>` + Telemetrie.
-Wachplan (daheim an, Suspend, WoL vom Pi): `../betrieb/wachplan.md`. Ein
-Router kommt später und ändert die Adressen (dort beschrieben).
+Der PC läuft dauerhaft (`../betrieb/wachplan.md`). **Zielbild** mit eigenem
+Router, VPN für Laptop/Mini-PC von draußen und PC ohne Bildschirm:
+`heimnetz.md` — diese Datei hier beschreibt den Ist-Zustand.
 
 Warum aufgeteilt: Pi-RAM ist zu knapp für Ollama (~5–9 GB je Modell),
 Whisper (~500 MB) und TTS gleichzeitig. Der Pi war ursprünglich als Core
