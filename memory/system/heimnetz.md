@@ -16,7 +16,7 @@ man davor. Ein Monitor bleibt jederzeit ansteckbar.
 ```
                     Internet (Glasfaser, eigene öffentliche IPv4)
                          │
-                   Glasfaser-Modem (ONT, vom Anbieter)
+                   Glasfaser-Modem (ONT, selbst gekauft)
                          │
 ┌────────────────── eigener Router ─────────────────────────────┐
 │  Firewall: von außen NUR der VPN-Port offen                   │
@@ -64,9 +64,10 @@ die umgeschriebenen SSH-Config-Blöcke fallen weg.
 
 - **Sunshine** (PC) → **Moonlight** (Laptop, Mini-PC). Das Bild wird über die
   Grafikkarte kodiert und ist flüssig.
-- **Ohne Monitor braucht es einen HDMI- oder DP-Dummy-Stecker**, sonst hat die
-  Karte keinen Ausgang, den Sunshine aufnehmen kann. Soll ein echter Monitor
-  dran: Stecker ziehen, Monitor anstecken.
+- **Normalbetrieb ohne Monitor → HDMI-Dummy-Stecker bleibt dauerhaft drin**,
+  sonst hat die Karte keinen Ausgang, den Sunshine aufnehmen kann. Soll
+  gelegentlich ein echter Monitor dran: Dummy ziehen und Monitor an HDMI, oder
+  Monitor an einen freien DisplayPort (beide gleichzeitig geht auch).
 - **Autologin**, weil Sunshine eine laufende Sitzung braucht. Vertretbar,
   weil die Platte per LUKS verschlüsselt ist.
 - **Zweite Spur: RDP**, eingebaut in KDE/GNOME, robust, weniger flüssig.
@@ -107,10 +108,13 @@ Kandidaten (vor dem Kauf aktuelle OpenWrt-Unterstützung prüfen):
 
 **Voraussetzung auf der Anbieter-Seite:** In Deutschland gilt Routerfreiheit.
 Bei der Bestellung den Miet-Router abwählen, dafür bekommst du die
-**Zugangsdaten** (und ggf. eine VLAN-ID). Bei Telekom-Glasfaser setzt meist ein
-Techniker das Glasfaser-Modem (ONT). Der Router hängt per LAN-Kabel dahinter,
-braucht also kein eingebautes Glasfaser-Modem. Vor der Bestellung beim
-Anbieter bestätigen lassen.
+**Zugangsdaten** (O2 im Telekom-Netz: PPPoE mit **VLAN 7**, Zugangsdaten unter
+»Vertrag verwalten«). **Das Glasfaser-Modem (ONT) kauft man bei O2 im
+Telekom-Ausbaugebiet selbst** (Stand 2026, »Glasfaser-Modem 2«, ca. 50 €); der
+Techniker bringt keins mit. Seine Modem-ID wird bei O2 hinterlegt
+(Einrichtungslink). Der Router hängt per LAN-Kabel dahinter und braucht also
+kein eingebautes Glasfaser-Modem — OpenWrt am Telekom-ONT ist ein gut
+dokumentierter Aufbau.
 
 ### Sicherheits-Grundregeln
 
@@ -137,13 +141,14 @@ Anbieter bestätigen lassen.
 - Dummy-Stecker (HDMI oder DP, je nachdem, welcher Ausgang an der Grafikkarte frei ist)
 - USB-Stick ≥ 8 GB (OS-Installation), externe Platte (Backup vor dem OS-Wechsel)
 - USB-Kabel fürs Handy (Tethering, lädt dabei)
+- bis Februar: Glasfaser-Modem 2 (ONT, ca. 50 €; bei O2 im Telekom-Netz selbst zu besorgen)
 
 ### Was vor dem Router hängt, je nach Phase
 | Phase | Uplink | Von draußen rein? |
 |---|---|---|
 | A — jetzt | Handy-Hotspot / USB-Tethering. **Datenvolumen im Blick**, große Downloads (OS, Modelle) möglichst woanders | nein (Mobilfunk = keine eigene IPv4) |
 | B — falls Zwischenanschluss | VDSL: **separates VDSL-Modem** vor dem Router (der OpenWrt-Router hat keins). LTE/5G-Box: davor hängen | VDSL ja, LTE/5G nein |
-| C — Glasfaser | Glasfaser-Modem (ONT) vom Techniker → WAN-Port | ja |
+| C — Glasfaser | Glasfaser-Modem (ONT, selbst gekauft) → WAN-Port | ja |
 
 Das Heimnetz hinter dem Router bleibt in allen Phasen dasselbe.
 
@@ -200,8 +205,8 @@ Leitung, über die der Router ins Internet geht.
 - [ ] RDP als zweite Spur
 
 ### Phase 6 — Glasfaser-Tag (soll nur noch Anstecken sein)
-- [ ] Techniker setzt das Glasfaser-Modem, Router-WAN per Kabel dran
-- [ ] Zugangsdaten (+ ggf. VLAN-ID) im Router eintragen, Uplink vom Handy auf Glasfaser umstellen
+- [ ] Glasfaser-Modem (ONT) an die Glasfaser-Dose, Modem-ID über den O2-Einrichtungslink hinterlegen, Router-WAN per Kabel dran
+- [ ] Zugangsdaten (PPPoE, VLAN 7) im Router eintragen, Uplink vom Handy auf Glasfaser umstellen
 - [ ] prüfen: bekommt der Router eine **echte öffentliche IPv4**? (die WAN-Adresse
       im Router muss dieselbe sein, die eine „Wie ist meine IP"-Seite zeigt)
 - [ ] **DynDNS** einrichten: die IPv4 ist dynamisch, also braucht das VPN einen
