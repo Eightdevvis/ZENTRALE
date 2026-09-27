@@ -1,6 +1,8 @@
 # Heimnetz: PC als Gehirn, alles andere Knoten
 
-**Stand 2026-09-24 — Plan, noch nicht gebaut.** Der heutige Ist-Zustand
+**Stand 2026-09-27 — Plan, noch nicht gebaut.** Tarif steht: **O2 Home M 150
+Flex** über Telekom-Glasfaser (150/75 Mbit, eigene IPv4, monatlich kündbar,
+ohne Router); Glasfaser voraussichtlich **ab Februar 2027**. Der heutige Ist-Zustand
 (dummer Switch, Handy-Hotspot, `find-pc`) steht in `topologie.md`. Diese Datei
 ist das **Zielbild** und der **Weg dahin**. Wenn etwas davon gebaut ist:
 dort abhaken und `topologie.md` nachziehen.
@@ -129,6 +131,22 @@ Anbieter bestätigen lassen.
 
 ## Übergangsplan: alles bauen, bevor das Internet da ist
 
+### Einkaufsliste
+- Router mit OpenWrt (Internet per WLAN-Repeater **und** USB-Tethering vom Handy)
+- LAN-Kabel (Cat 6); der alte Switch hinter den Router, falls die Ports nicht reichen
+- Dummy-Stecker (HDMI oder DP, je nachdem, welcher Ausgang an der Grafikkarte frei ist)
+- USB-Stick ≥ 8 GB (OS-Installation), externe Platte (Backup vor dem OS-Wechsel)
+- USB-Kabel fürs Handy (Tethering, lädt dabei)
+
+### Was vor dem Router hängt, je nach Phase
+| Phase | Uplink | Von draußen rein? |
+|---|---|---|
+| A — jetzt | Handy-Hotspot / USB-Tethering. **Datenvolumen im Blick**, große Downloads (OS, Modelle) möglichst woanders | nein (Mobilfunk = keine eigene IPv4) |
+| B — falls Zwischenanschluss | VDSL: **separates VDSL-Modem** vor dem Router (der OpenWrt-Router hat keins). LTE/5G-Box: davor hängen | VDSL ja, LTE/5G nein |
+| C — Glasfaser | Glasfaser-Modem (ONT) vom Techniker → WAN-Port | ja |
+
+Das Heimnetz hinter dem Router bleibt in allen Phasen dasselbe.
+
 Idee: **Der Router bekommt sein Internet übergangsweise vom Handy-Hotspot**
 (WLAN als Uplink oder USB-Tethering, das kann OpenWrt). Das ganze Netz
 dahinter ist dann schon das endgültige. Am Glasfaser-Tag wechselt nur die
@@ -138,7 +156,8 @@ Leitung, über die der Router ins Internet geht.
 - [ ] Router-Modell wählen und kaufen
 - [ ] Dummy-Stecker für die Grafikkarte kaufen (passend zum Ausgang: HDMI oder DP)
 - [ ] PC-OS festlegen (Empfehlung oben)
-- [ ] Glasfaser-Tarif: congstar oder O2 Flex (beide mit eigener IPv4), Miet-Router abwählen
+- [x] Glasfaser-Tarif: O2 Home M 150 Flex (2026-09-27), Miet-Router abwählen
+- [ ] prüfen: fällt beim Flex der Erschließungspreis (599,99 €) an? (entfällt laut dslweb nur bei 24 Monaten)
 
 ### Phase 1 — Router aufsetzen (ohne Internet möglich)
 - [ ] OpenWrt aktuell machen, Router-Passwort, Oberfläche nur von innen
@@ -199,5 +218,4 @@ Leitung, über die der Router ins Internet geht.
 
 - Router-Modell (Empfehlung: OpenWrt, z.B. Flint 2)
 - OS-Wechsel am PC ja/nein (Empfehlung: Kubuntu LTS)
-- Tarif: congstar 50 oder O2 Flex
 - Wann VLANs kommen
