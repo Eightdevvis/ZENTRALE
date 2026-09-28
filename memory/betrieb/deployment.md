@@ -92,9 +92,9 @@ auf 5000/5050/5051.
 
 ## Wake-on-LAN (Pi weckt PC)
 
-Seit 2026-09-24 läuft der PC dauerhaft (`wachplan.md`) — WoL ist nur noch
-Reserve, falls er doch mal schläft (SSH weckt ihn nicht, nur dieses
-Magic-Packet vom Pi). Das Paket weckt aus Suspend wie aus S5 (soft-off).
+Der PC schläft nach festen Zeiten und wenn der Pi aus ist (`wachplan.md`).
+Geweckt wird er per Magic-Packet: vom Pi (hier beschrieben) und künftig vom
+Router, auch von draußen über VPN. SSH weckt ihn nicht. Das Paket weckt aus Suspend wie aus S5 (soft-off).
 
 **PC-Seite (einmalig):**
 

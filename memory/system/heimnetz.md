@@ -9,7 +9,8 @@ dort abhaken und `topologie.md` nachziehen.
 
 ## Zielbild
 
-Der PC hängt ohne eigenen Bildschirm im Heimnetz und läuft dauerhaft
+Der PC hängt ohne eigenen Bildschirm im Heimnetz. Er schläft nach festen
+Zeiten und wenn der Pi aus ist; der Router weckt ihn, auch von draußen
 (`../betrieb/wachplan.md`). Man bedient ihn von den Knoten aus so, als säße
 man davor. Ein Monitor bleibt jederzeit ansteckbar.
 

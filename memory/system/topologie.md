@@ -10,7 +10,7 @@ Handy-Hotspot dran: `find-pc` (ARP nach MAC) → SSH-Tunnel → TUI gegen das
 PC-Backend; `data/*.json` gleichen sich per Boot-Sync (einmalig, kein
 Daemon) und Push-on-write (newest-wins) ab. Datenrichtung: PC → Pi/Laptop
 nur HTTP-Pull, Pi → PC nur `POST /api/sensor/<name>` + Telemetrie.
-Der PC läuft dauerhaft (`../betrieb/wachplan.md`). **Zielbild** mit eigenem
+Wann der PC wach ist: `../betrieb/wachplan.md`. **Zielbild** mit eigenem
 Router, VPN für Laptop/Mini-PC von draußen und PC ohne Bildschirm:
 `heimnetz.md` — diese Datei hier beschreibt den Ist-Zustand.
 

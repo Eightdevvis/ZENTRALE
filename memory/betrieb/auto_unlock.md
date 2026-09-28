@@ -3,9 +3,10 @@
 **Stand 2026-09-18:** Funktioniert und ist eingerichtet (angewendet
 2026-06-01; dass der ssh-Unlock ins Initramfs klappt, ist seit 2026-06-26
 belegt — siehe Historie). Gebraucht wird er nur noch nach **echtem Aus**
-(Stromausfall, Reboot, bewusst abgeschaltet). Seit 2026-09-24 läuft der PC
-dauerhaft ohne eigenen Bildschirm (`wachplan.md`, `../system/heimnetz.md`) —
-damit ist dieser Unlock der wichtigste Rettungsweg nach einem Stromausfall. Auf dem Pi liegt der Wrapper `zentrale-unlock`
+(Stromausfall, Reboot, bewusst abgeschaltet). Nach Suspend gibt es keinen LUKS-Prompt
+(Wachplan: `wachplan.md`). Weil der PC künftig ohne eigenen Bildschirm läuft
+(`../system/heimnetz.md`), ist dieser Unlock der wichtigste Rettungsweg nach
+einem Stromausfall. Auf dem Pi liegt der Wrapper `zentrale-unlock`
 (`deploy/zentrale-unlock`), der beim Pi-Start automatisch in einem xterm
 aufgeht, auf das Initramfs-Fenster wartet und dann genau einmal entsperrt.
 Der lokale LUKS-Prompt am PC funktioniert daneben immer weiter; der Boot ist
