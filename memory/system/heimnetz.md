@@ -222,9 +222,10 @@ Leitung, über die der Router ins Internet geht.
 
 ## Glasfaser — geparkt (Stand 2026-09-28)
 
-Sasha klärt das bis Jahresende. **Frist:** Der Hausanschluss ist nur **während
-der Bauphase** kostenlos, danach kostet er 600–800 €. Also im Blick behalten,
-wann in der Straße gebaut wird.
+Sasha klärt das bis Jahresende. **Was der Hausanschluss kostet:** während der
+Bauphase **0 € nur mit 24-Monats-Vertrag**, mit Flex **599,99 €**; nach der
+Bauphase mindestens **799 €**. »Kostenlos« heißt also: kostenlos gegen zwei
+Jahre Bindung. Im Blick behalten, wann die Bauphase in der Straße endet.
 
 - **Favorit bisher:** O2 Home M 150 (Telekom-Netz, 150/75 Mbit, eigene IPv4,
   PPPoE/VLAN 7). Datenblatt: normal = minimal = 150/75.
