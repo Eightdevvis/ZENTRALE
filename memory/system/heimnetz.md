@@ -1,8 +1,9 @@
 # Heimnetz: PC als Gehirn, alles andere Knoten
 
-**Stand 2026-09-27 — Plan, noch nicht gebaut.** Tarif steht: **O2 Home M 150
-Flex** über Telekom-Glasfaser (150/75 Mbit, eigene IPv4, monatlich kündbar,
-ohne Router); Glasfaser voraussichtlich **ab Februar 2027**. Der heutige Ist-Zustand
+**Stand 2026-09-28 — Plan, noch nicht gebaut.** Zuerst wird das **Heimnetz**
+aufgestellt; der Glasfaser-Vertrag ist **geparkt** bis später im Jahr (siehe
+»Glasfaser — geparkt« unten). Glasfaser (Telekom-Netz) kommt voraussichtlich
+**ab Februar 2027**. Der heutige Ist-Zustand
 (dummer Switch, Handy-Hotspot, `find-pc`) steht in `topologie.md`. Diese Datei
 ist das **Zielbild** und der **Weg dahin**. Wenn etwas davon gebaut ist:
 dort abhaken und `topologie.md` nachziehen.
@@ -162,8 +163,7 @@ Leitung, über die der Router ins Internet geht.
 - [ ] Router-Modell wählen und kaufen
 - [ ] Dummy-Stecker für die Grafikkarte kaufen (passend zum Ausgang: HDMI oder DP)
 - [ ] PC-OS festlegen (Empfehlung oben)
-- [x] Glasfaser-Tarif: O2 Home M 150 Flex (2026-09-27), Miet-Router abwählen
-- [ ] prüfen: fällt beim Flex der Erschließungspreis (599,99 €) an? (entfällt laut dslweb nur bei 24 Monaten)
+- [ ] Glasfaser-Vertrag — geparkt, siehe unten
 
 ### Phase 1 — Router aufsetzen (ohne Internet möglich)
 - [ ] OpenWrt aktuell machen, Router-Passwort, Oberfläche nur von innen
@@ -219,6 +219,31 @@ Leitung, über die der Router ins Internet geht.
 - [ ] Medienknoten (Lautsprecher-Pi)
 - [ ] VLANs trennen
 - [ ] Handy als Knoten (siehe Handy-Plan)
+
+## Glasfaser — geparkt (Stand 2026-09-28)
+
+Sasha klärt das bis Jahresende. **Frist:** Der Hausanschluss ist nur **während
+der Bauphase** kostenlos, danach kostet er 600–800 €. Also im Blick behalten,
+wann in der Straße gebaut wird.
+
+- **Favorit bisher:** O2 Home M 150 (Telekom-Netz, 150/75 Mbit, eigene IPv4,
+  PPPoE/VLAN 7). Datenblatt: normal = minimal = 150/75.
+- **Flex-Angebot für die Adresse (2026-09-28):** 25 €/Monat im 1. Jahr, dann
+  39,99 €; **+4,99 € Zusatzoption, nicht abwählbar** (was genau, noch
+  unklar); **Erschließungspreis 599,99 €** + Anschluss 9,99 € → einmalig
+  609,98 €, über 2 Jahre ca. 1.390 €.
+- **Die 600 € vermeiden:**
+  - **A — O2 mit 24 Monaten:** Erschließung entfällt laut mehreren Quellen,
+    nur 9,99 € Anschluss. Die Laufzeit beginnt erst mit der Schaltung.
+  - **B — Hausanschluss »ohne Produkt« direkt bei der Telekom** während des
+    Ausbaus (auf telekom.de/glasfaser die Adresse prüfen), danach Flex ohne
+    Erschließung. **Unbestätigt**, ob O2 dann wirklich nichts berechnet; die
+    Option gibt es womöglich nur an geförderten Adressen. Bei Miete muss der
+    Eigentümer beauftragen.
+- Das Glasfaser-Modem (ONT, ca. 42–55 €) kauft man bei O2 selbst.
+- Vergleichsstand der Anbieter: congstar 50 (30 €, 16 Mbit Upload, monatlich
+  kündbar, eigene IPv4), easybell ab 39,95 €, Telekom Glasfaser 150 45,95 €
+  mit 24 Monaten, 1&1 ungeeignet (DS-Lite).
 
 ## Offene Entscheidungen
 
