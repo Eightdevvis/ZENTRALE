@@ -137,13 +137,42 @@ dokumentierter Aufbau.
 
 ## Übergangsplan: alles bauen, bevor das Internet da ist
 
-### Einkaufsliste
-- Router mit OpenWrt (Internet per WLAN-Repeater **und** USB-Tethering vom Handy)
+### Jetzt: Schritt 1 (Stand 2026-09-28)
+
+**A — bestellen**
+- [ ] Router **GL.iNet Flint 2 (GL-MT6000)**, ~139 €
+- [ ] **HDMI-Dummy 4K** (4K@60, 1440p/1080p@120), ~12 €; er steckt im
+      Normalbetrieb **dauerhaft** im HDMI-Ausgang der 4070
+- [ ] ein paar **Cat-6-Kabel**, ~15 €
+- [ ] USB-Kabel fürs Handy-Tethering, falls keins da ist
+
+**B — bis der Router kommt (ohne neue Hardware)**
+- [ ] **Bestandsaufnahme:** Von jedem Gerät, das ans Heimnetz kommt (PC, Pi,
+      Laptop, Mini-PC), die **MAC-Adresse der LAN-Karte** notieren. Die braucht
+      der Router für die festen Adressen (DHCP-Reservierung).
+- [ ] **Grafikkarte:** nachsehen, welche Ausgänge frei sind (erwartet: 1× HDMI,
+      3× DP) und woran der Monitor gerade hängt.
+- [ ] **Wake-on-LAN am PC:** prüfen, dass die LAN-Karte weiterhin auf
+      Magic-Packet steht (`../betrieb/wachplan.md`).
+- [ ] **Datenvolumen** vom Handy-Tarif nachsehen, weil bis Februar alles über
+      den Hotspot läuft.
+- [ ] **O2 anrufen:** 24-Monats-Angebot M 150 für die Adresse (Erschließung?
+      Was ist die Zusatzoption?), dabei auch »Hausanschluss ohne Produkt« bei
+      der Telekom fragen (siehe »Glasfaser — geparkt«).
+
+**C — wenn der Router da ist** → Phase 1 unten.
+
+### Einkaufsliste (gesamt)
+- Router mit OpenWrt: **GL.iNet Flint 2** (Internet per WLAN-Repeater **und**
+  USB-Tethering vom Handy; 2× 2,5G + 4× 1G, USB; WireGuard ~900 Mbit/s)
 - LAN-Kabel (Cat 6); der alte Switch hinter den Router, falls die Ports nicht reichen
-- Dummy-Stecker (HDMI oder DP, je nachdem, welcher Ausgang an der Grafikkarte frei ist)
+- **HDMI-Dummy 4K** (DP-Dummies können 4K oft nur mit 17–30 Hz)
 - USB-Stick ≥ 8 GB (OS-Installation), externe Platte (Backup vor dem OS-Wechsel)
 - USB-Kabel fürs Handy (Tethering, lädt dabei)
-- bis Februar: Glasfaser-Modem 2 (ONT, ca. 50 €; bei O2 im Telekom-Netz selbst zu besorgen)
+- bis Februar: **Glasfaser-Modem 2 / 2b** (ONT, 42–55 €; bei O2 im Telekom-Netz selbst zu besorgen)
+- **Kosten grob:** einmalig ~220 € (ohne Stick/Platte); laufend Tarif
+  (~25–46 €) + PC-Strom. Der Strom sinkt stark, weil der PC nach Plan schläft
+  (`../betrieb/wachplan.md`).
 
 ### Was vor dem Router hängt, je nach Phase
 | Phase | Uplink | Von draußen rein? |
@@ -250,6 +279,63 @@ Jahre Bindung. Im Blick behalten, wann die Bauphase in der Straße endet.
 
 ## Offene Entscheidungen
 
-- Router-Modell (Empfehlung: OpenWrt, z.B. Flint 2)
 - OS-Wechsel am PC ja/nein (Empfehlung: Kubuntu LTS)
+- Glasfaser-Vertrag (geparkt, oben)
 - Wann VLANs kommen
+
+(Entschieden: Router = GL.iNet Flint 2 mit OpenWrt; Dummy = HDMI 4K;
+Reiserouter = nein, der Mini-PC macht WireGuard selbst.)
+
+## Quellen (recherchiert 2026-09-24 bis 09-28)
+
+**Router & OpenWrt**
+- [Geizhals: GL.iNet Flint 2](https://geizhals.de/gl-inet-flint-2-gl-mt6000-a3168078.html)
+- [GL.iNet: Flint 2 Produktseite](https://www.gl-inet.com/en-us/products/gl-mt6000)
+- [wu-ftpd.org: Best OpenWrt Routers (Sept. 2026)](https://www.wu-ftpd.org/best-openwrt-routers/)
+- [rottenwifi: Best OpenWrt Routers 2026](https://rottenwifi.com/best-router-for-openwrt/)
+- [smarthomereview: Best WireGuard Router 2026](https://smarthomereview.org/best-wireguard-router/)
+- [teltarif: VPN-Router im Angebot](https://www.teltarif.de/router-reise-vpn-sicherheit-openwrt/news/105089.html)
+
+**Glasfaser-Technik (ONT, PPPoE, VLAN 7, OpenWrt am Telekom-FTTH)**
+- [GitHub: Telekom FTTH mit OpenWrt](https://gist.github.com/madduci/8b8637b922e433d617261373220be44c)
+- [OpenWrt Forum: OpenWrt mit Glasfaser-Modem 2](https://forum.openwrt.org/t/openwrt-with-glasfasermodem2-telekom-glasfaser/240711)
+- [Telekom hilft: OpenWrt-Router am FTTH-Anschluss](https://telekomhilft.telekom.de/conversations/festnetz-internet/wie-openwrt-router-am-ftth-anschluss-betreiben/66871c914ae73561dac32297)
+- [glasfaserforum: Speedport mit O2 Glasfaser (VLAN 7)](https://www.glasfaserforum.de/forum/thread/2890-funktioniert-telekom-speedport-smart-4-mit-o2-glasfaser-vertrag-ftth-telekomnetz/)
+- [O2 Community: ONT nötig im Telekom-Ausbaugebiet](https://hilfe.o2online.de/dsl-kabel-glasfaser-router-software-internet-telefonie-34/glasfaser-bei-o2-bestellt-telekom-ausbaugebiet-neues-glasfaser-modem-ont-noetig-647402)
+- [O2 Community: Einrichtungslink, Modem 2 + FritzBox](https://hilfe.o2online.de/dsl-kabel-glasfaser-router-software-internet-telefonie-34/einrichtungslink-o2-glasfaser-ueber-telekom-infrastruktur-modem-2-und-fritz-box-7580-625701)
+- [Geizhals: Telekom Glasfaser Modem 2b](https://geizhals.de/telekom-glasfaser-modem-2b-40824527-a3766098.html)
+- [Geizhals: Telekom Glasfaser Modem 2](https://geizhals.de/telekom-glasfaser-modem-2-40823382-a2601735.html)
+
+**Tarife & IPv4**
+- [o2 Produktinformationsblatt M 100/150 Flex](https://static2.o9.de/resource/blob/1838600/5bf68aa4e7df62ef2f9feb95b2e2a0b2/o2-home-m-150-flex_20260610-download-data.pdf)
+- [o2: Home M 150 Glasfaser](https://www.o2online.de/e-shop/tarif/o2-home-m-150mbits-glasfaser)
+- [o2: Home Flex ohne Laufzeit](https://www.o2online.de/internet-festnetz/ohne-vertragslaufzeit/)
+- [mytopdeals: o2 Home Flex Aktion](https://www.mytopdeals.net/allgemein/o2-home-flex/)
+- [O2 Community: öffentliche IPv4 bei Glasfaser über Telekom](https://hilfe.o2online.de/dsl-kabel-glasfaser-router-software-internet-telefonie-34/oeffentliche-ipv4-bei-o2-home-glasfaser-ueber-telekom-665627)
+- [O2 Community: Dual Stack oder DS-Lite](https://hilfe.o2online.de/dsl-kabel-glasfaser-router-software-internet-telefonie-34/o2-glasfaser-ftth-telekom-reseller-dual-stack-od-ds-lite-606997)
+- [congstar-Forum: Public IP bei Glasfaser](https://forum.congstar.de/thread/71257-public-ip-bei-glasfaser-verf%C3%BCgbar-kaufbar/)
+- [stadt-bremerhaven: congstar Glasfaser](https://stadt-bremerhaven.de/congstar-startet-mit-glasfaser-fuer-zuhause-das-sind-die-details/)
+- [teltarif: easybell Glasfaser](https://www.teltarif.de/easybell-glasfaser-tarife-ftth/news/95497.html)
+- [ComputerBase: 1&1 Glasfaser DS-Lite](https://www.computerbase.de/forum/threads/1-1-glasfaser-ds-lite-fragen.2260516/)
+- [Vodafone Community: DS-Lite / IPv4](https://forum.vodafone.de/t5/Ger%C3%A4te/IPv4-IPv6-und-DS-Lite/td-p/3058741)
+- [teltarif: Telekom-Glasfaser-Aktion](https://www.teltarif.de/telekom-glasfaser-internet-cashback/news/103845.html)
+- [Telekom: Glasfaser 150](https://www.telekom.de/festnetz/tarife-und-optionen/internet/glasfaser-150)
+- [inside-digital: Tarife im Telekom-Netz im Vergleich](https://www.inside-digital.de/kaufberatungen/deutsche-telekom-glasfaser-tarife-im-vergleich)
+
+**Hausanschluss & Erschließung**
+- [dslweb: o2 Glasfaser Kosten](https://www.dslweb.de/o2-glasfaser-kosten.php)
+- [glasfaser-anschluss.de: o2 Home M Glasfaser](https://glasfaser-anschluss.de/o2-home-m-glasfaser-tarif)
+- [Verbraucherzentrale: Glasfaseranschluss Abläufe](https://www.verbraucherzentrale.de/wissen/digitale-welt/fernsehen/glasfaseranschluss-das-muessen-sie-zu-ablaeufen-und-vertraegen-wissen-84389)
+- [Telekom hilft: Hausanschluss ohne Tarif](https://telekomhilft.telekom.de/conversations/festnetz-internet/glasfaser-hausanschluss-ohne-tarif/67e2e35b8669ae2e987ef768)
+- [Finanztip: Glasfaser-Anschluss Kosten](https://www.finanztip.de/internetanbieter/glasfaser/)
+- [dealdoktor: Telekom Glasfaser kostenlos ins Haus](https://www.dealdoktor.de/magazin/kostenlos-glasfaser-telekom/)
+- [kostenlupe: Glasfaseranschluss Kosten 2026](https://www.kostenlupe.de/artikel/glasfaseranschluss-kosten)
+
+**Telekom erreichen**
+- [Telekom: Kontakt Glasfaser](https://www.telekom.de/hilfe/internet-telefonie/glasfaser/kontakt?samChecked=true)
+- [Telekom hilft: Hotline ohne Nummer](https://telekomhilft.telekom.de/conversations/festnetz-internet/die-service-hotline-ist-ohne-festnetznummer-nicht-erreichbar/6687e1dd4ae73561da1ea26a)
+  — Bestell-Hotline Glasfaser 0800 2266100; bei der Telefon-KI »keine« sagen.
+
+**Dummy-Stecker**
+- [Amazon: FUERAN HDMI Dummy 4K](https://www.amazon.com/FUERAN-Plug-Virtual-Emulator-3840x2160-60-3840x2160/dp/B0C174243H)
+- [Amazon: FUERAN HDMI Dummy 4K HDR](https://amazon.com/FUERAN-Plug%EF%BC%8CVirtual-3840x2160-HDMI-Compatible-Acceleration/dp/B0732S6KG4)
