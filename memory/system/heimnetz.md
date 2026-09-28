@@ -239,6 +239,10 @@ Jahre Bindung. Im Blick behalten, wann die Bauphase in der Straße endet.
   Produkt« während des Ausbaus (telekom.de/glasfaser, Adresse prüfen), danach
   Flex ohne Erschließung. Nur in Ratgebern/Community belegt, Sasha rechnet
   kaum damit, fragen kostet aber nichts.
+- **Telekom direkt (Sasha angefragt, 2026-09-28):** günstigste Option 46 €/Monat,
+  24 Monate → ~1.100 € über 2 Jahre. Zum Vergleich O2 Flex ~1.500 € (inkl.
+  Erschließung + Zusatzoption), O2 mit 24 Monaten hochgerechnet ~910 € — dafür
+  noch das echte 24-Monats-Angebot für die Adresse holen.
 - Das Glasfaser-Modem (ONT, ca. 42–55 €) kauft man bei O2 selbst.
 - Vergleichsstand der Anbieter: congstar 50 (30 €, 16 Mbit Upload, monatlich
   kündbar, eigene IPv4), easybell ab 39,95 €, Telekom Glasfaser 150 45,95 €
