@@ -233,14 +233,11 @@ Jahre Bindung. Im Blick behalten, wann die Bauphase in der Straße endet.
   39,99 €; **+4,99 € Zusatzoption, nicht abwählbar** (was genau, noch
   unklar); **Erschließungspreis 599,99 €** + Anschluss 9,99 € → einmalig
   609,98 €, über 2 Jahre ca. 1.390 €.
-- **Die 600 € vermeiden:**
-  - **A — O2 mit 24 Monaten:** Erschließung entfällt laut mehreren Quellen,
-    nur 9,99 € Anschluss. Die Laufzeit beginnt erst mit der Schaltung.
-  - **B — Hausanschluss »ohne Produkt« direkt bei der Telekom** während des
-    Ausbaus (auf telekom.de/glasfaser die Adresse prüfen), danach Flex ohne
-    Erschließung. **Unbestätigt**, ob O2 dann wirklich nichts berechnet; die
-    Option gibt es womöglich nur an geförderten Adressen. Bei Miete muss der
-    Eigentümer beauftragen.
+- **Die Wahl:** **24 Monate** → Erschließung entfällt (laut mehreren Quellen),
+  nur 9,99 € Anschluss; die Laufzeit beginnt erst mit der Schaltung. **Oder
+  Flex** → 599,99 € Erschließung. (Einen Telekom-Hausanschluss »ohne Produkt«
+  gibt es nur in Ratgeber-Behauptungen; laut Sasha realistisch nicht zu
+  bekommen — gestrichen.)
 - Das Glasfaser-Modem (ONT, ca. 42–55 €) kauft man bei O2 selbst.
 - Vergleichsstand der Anbieter: congstar 50 (30 €, 16 Mbit Upload, monatlich
   kündbar, eigene IPv4), easybell ab 39,95 €, Telekom Glasfaser 150 45,95 €
