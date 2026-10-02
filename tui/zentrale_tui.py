@@ -1201,20 +1201,21 @@ TUI_COMMANDS = [
     ("/quit",  "ZENTRALE-TUI wirklich beenden  ('q' legt das Fenster nur weg)"),
 ]
 TUI_KEYS = [
-    ("q",   "Fenster weglegen (wie Cmd+z); ohne Systemeinheit: beenden"),
-    ("t",   "Theme wechseln (auto/hell/dunkel)"),
-    ("g",   "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
-    ("n",   "Notizen (Mitte): freie notiz aus blöcken · ↑↓ block · t/l/f text/liste/float · e bearbeiten · d weg (fragt bei inhalt) · r titel · n übersicht · esc speichern & zu"),
-    ("m",   "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Overlay (Handel→Politik→aus) · ,/. Zeit ←→ · ; jetzt · w=Fenster"),
-    ("c",   "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · v Woche/Monat"),
-    ("p",   "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
-    ("a",   "KI-Chat (Mitte): tippen + enter fragt die lokale KI (PC-Hirn via tunnel) · ↑↓ scrollen · esc zu"),
-    ("u",   "Persona-Zimmer (eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · ohne DISPLAY → text-panel · /tutor = text-panel"),
-    ("f",   "Fokus (Mitte): oben projekte, drunter alle listen · enter reindiven · a/s neu · space abhaken · r name · d weg · p projekt · f setzt den knoten als alleinigen fokus (rendert dann allein in der FOCUS-box) · m/> verschieben"),
-    ("k",   "Klavier (Mitte): die Tastatur IST die Klaviatur — y x c v b n m , . - weiß, s d g h j l ö schwarz · ←→ oktave · space nimmt eine melodie auf (fragt beim stoppen nach dem namen) · ↑↓ melodie wählen · enter abspielen · r umbenennen · D löschen · k/esc zu"),
-    ("s",   "stdout-Laufschrift an/aus: im schmalen Pane laufen zu lange Log-Zeilen einmal durch (rotierend, mit Pause am Anfang), statt hinten abgeschnitten zu werden. Zeilen, die ganz passen, stehen still. Bleibt gemerkt"),
+    ("←→",    "Startseite: das Rad drehen — vorn steht die App, die enter öffnet"),
+    ("enter", "Startseite: die App vorn im Rad öffnen"),
+    ("esc",   "zurück, Stufe für Stufe bis zur Startseite"),
+    # Die Apps im Rad — seit 02.10.2026 nicht mehr per Buchstabe,
+    # sondern übers Rad (Sasha). Links steht deshalb der Name im Rad.
+    ("graph", "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
+    ("notizen", "Notizen (Mitte): freie notiz aus blöcken · ↑↓ block · t/l/f text/liste/float · e bearbeiten · d weg (fragt bei inhalt) · r titel · n übersicht · esc speichern & zu"),
+    ("karte", "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Overlay (Handel→Politik→aus) · ,/. Zeit ←→ · ; jetzt · w=Fenster"),
+    ("kalender", "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · v Woche/Monat"),
+    ("post", "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
+    ("space", "KI-Chat (Mitte): tippen + enter fragt die lokale KI (PC-Hirn via tunnel) · ↑↓ scrollen · esc zu"),
+    ("tutor", "Persona-Zimmer (eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · ohne DISPLAY → text-panel · /tutor = text-panel"),
+    ("fokus", "Fokus (Mitte): oben projekte, drunter alle listen · enter reindiven · a/s neu · space abhaken · r name · d weg · p projekt · f setzt den knoten als alleinigen fokus (rendert dann allein in der FOCUS-box) · m/> verschieben"),
+    ("klavier", "Klavier (Mitte): die Tastatur IST die Klaviatur — y x c v b n m , . - weiß, s d g h j l ö schwarz · ←→ oktave · space nimmt eine melodie auf (fragt beim stoppen nach dem namen) · ↑↓ melodie wählen · enter abspielen · r umbenennen · D löschen · k/esc zu"),
     ("/",   "Befehlszeile öffnen"),
-    ("Esc", "Befehl bzw. Hilfe schließen"),
 ]
 
 # Kontext-Shortcuts: welche Tasten zeigt '/' im jeweils fokussierten Fenster.
@@ -1224,10 +1225,9 @@ TUI_KEYS = [
 # current_ctx(); Reihenfolge spiegelt die alten Fußzeilen.
 CTX_KEYS = {
     "home": [
-        ("f", "fokus"), ("n", "notizen"), ("g", "graph"), ("m", "karte"),
-        ("c", "kalender"), ("p", "post / mail"), ("a", "ki-chat"),
-        ("u", "tutor"), ("k", "klavier"), ("s", "stdout-lauf"),
-        ("t", "theme"), ("q", "weglegen"),
+        ("←→", "rad drehen"), ("enter", "app öffnen"), ("space", "ki-chat"),
+        ("esc", "zurück zur startseite"),
+        ("/theme", "theme"), ("/lauf", "stdout-lauf"), ("/quit", "beenden"),
     ],
     "note:edit": [
         ("↑↓", "block wählen"), ("t/l/f", "neu: text/liste/float"),
@@ -1504,6 +1504,77 @@ def ring_zeilen(h, breite, lage="unbekannt", aktiv=False, phase=0.0):
             if ab < bogen:
                 zeichen, stil = "●", "ring_hell"
         aus.append((dy, dx, zeichen, stil))
+    return aus
+
+
+# ── Das Rad (Startseite) ─────────────────────────────────────────────────────
+# Sasha, 02.10.2026: statt KI fett in der Mitte und Tasten-Leiste unten ein
+# Durchklicker — ←/→ dreht ein Rad, vorne steht EINE App, enter geht rein.
+# Die Apps sitzen auf einem liegenden Ring, den man leicht von oben sieht:
+# vorne = unten, gross und hell; hinten = oben, klein und blass. Gedreht
+# wird über `pos` (Kommazahl), damit der Übergang gleitet statt springt.
+RAD_APPS = [
+    ("k", "klavier"), ("p", "post"), ("c", "kalender"), ("f", "fokus"),
+    ("n", "notizen"), ("g", "graph"), ("m", "karte"), ("u", "tutor"),
+]
+RAD = {"sel": 0, "pos": 0.0}     # sel = Ziel (Taste), pos = wo das Rad gerade steht
+
+
+def rad_schritt(pos, sel):
+    """Ein Frame Drehung: pos gleitet auf sel zu und rastet am Ende ein."""
+    d = sel - pos
+    return float(sel) if abs(d) < 0.02 else pos + d * 0.3
+
+
+def rad_index(sel, n=None):
+    """Welche App steht bei Auswahl `sel` vorn? `sel` zählt frei weiter
+    (auch negativ), damit das Rad beim Umlauf nicht zurückspult."""
+    return sel % (n or len(RAD_APPS))
+
+
+def rad_zeilen(labels, pos, breite, hoehe):
+    """Das Rad als Plot-Anweisungen, hinten zuerst. -> [(dy, dx, text, stil)]
+
+    (0,0) ist die Radmitte, `dx` ist der linke Rand des Texts. Stile:
+    spur (Laufbahn), fern / nah (Apps nach Tiefe), vorn + rahmen (die
+    gewählte App, sobald das Rad steht).
+    """
+    import math
+    n = len(labels)
+    rx = min(breite // 2 - 10, 38)
+    ry = max(1, min(3, (hoehe - 4) // 4))
+    if n == 0 or rx < 12:
+        return []
+    aus = []
+    # Laufbahn: eine Ellipse aus Punkten, hinter allem.
+    gesehen = set()
+    for i in range(int(4 * math.pi * rx)):
+        w = 2 * math.pi * i / int(4 * math.pi * rx)
+        zelle = (int(round(math.cos(w) * ry)), int(round(math.sin(w) * rx)))
+        if zelle not in gesehen:
+            gesehen.add(zelle)
+            aus.append((zelle[0], zelle[1], "·", "spur"))
+    # Apps nach Tiefe sortiert: hinten zuerst, vorn malt drüber.
+    steht = abs(pos - round(pos)) < 0.08
+    apps = []
+    for i, name in enumerate(labels):
+        w = ((i - pos) / n) * 2 * math.pi
+        tiefe = math.cos(w)                      # 1 = vorn, -1 = hinten
+        apps.append((tiefe, i, name, w))
+    apps.sort()
+    for tiefe, i, name, w in apps:
+        dy = int(round(tiefe * ry))
+        mitte = int(round(math.sin(w) * rx))
+        if tiefe > 0.97 and steht:
+            text = " ".join(name.upper())
+            x = mitte - len(text) // 2
+            aus.append((dy - 1, x - 2, "╭" + "─" * (len(text) + 2) + "╮", "rahmen"))
+            aus.append((dy, x - 2, "│ " + " " * len(text) + " │", "rahmen"))
+            aus.append((dy, x, text, "vorn"))
+            aus.append((dy + 1, x - 2, "╰" + "─" * (len(text) + 2) + "╯", "rahmen"))
+        elif tiefe > -0.8:                       # ganz hinten verschwindet sie
+            aus.append((dy, mitte - len(name) // 2, name,
+                        "nah" if tiefe > 0.2 else "fern"))
     return aus
 
 
@@ -7195,7 +7266,8 @@ def run_ui(stdscr, store):
         # Läuft gerade eine stdout-Zeile durch, reicht ein Mittelding
         # (LAUF_TICK_MS ≈ halber Zeichen-Schritt) — ein Bruchteil der 30 fps.
         fast = ((M["active"] and M.get("anim")) or (AI["active"] and AI["streaming"])
-                or (TUTOR["active"] and TUTOR["streaming"]) or PIANO["active"])
+                or (TUTOR["active"] and TUTOR["streaming"]) or PIANO["active"]
+                or RAD["pos"] != RAD["sel"])
         stdscr.timeout(33 if fast else (LAUF_TICK_MS if LAUF["laeuft"] else 250))
         ch = stdscr.getch()
 
@@ -8584,17 +8656,25 @@ def run_ui(stdscr, store):
                 AI["scroll"] = max(0, AI["scroll"] - 5)
             elif 32 <= ch <= 126 and not AI["streaming"] and len(AI["input"]) < 1000:
                 AI["input"] += chr(ch)
-        else:                                  # Normal-Modus: Shortcuts aktiv
-            if ch in (ord("q"), ord("Q")):
-                break
-            elif ch in (ord("t"), ord("T")):   # Theme zyklieren
-                cycle_theme()
-            elif ch in (ord("g"), ord("G")):   # Graph-Werkzeug öffnen
+        else:                                  # Startseite: das Rad
+            # Seit 02.10.2026 keine Buchstaben-Shortcuts mehr (Sasha): ←/→
+            # dreht, enter öffnet die App vorn, space die KI. Theme, Laufschrift
+            # und Beenden gehen über die Befehlszeile (/theme, /lauf, /quit),
+            # Weglegen über Cmd+z. `taste` übersetzt die Wahl in den alten
+            # Buchstaben, damit die Öffnen-Zweige unten unverändert bleiben.
+            taste = None
+            if ch == curses.KEY_LEFT:
+                RAD["sel"] -= 1
+            elif ch == curses.KEY_RIGHT:
+                RAD["sel"] += 1
+            elif ch == ord(" "):
+                taste = "a"
+            elif ch in (10, 13, curses.KEY_ENTER):
+                taste = RAD_APPS[rad_index(RAD["sel"])][0]
+            ch = ord(taste) if taste else -1
+            if ch in (ord("g"), ord("G")):     # Graph-Werkzeug öffnen
                 G["active"] = True; G["view"] = "list"; G["msg"] = ""
                 G["shown"] = set(); G["gscroll"] = 0; g_load()  # übersicht, heute rechts
-            elif ch in (ord("l"), ord("L")):   # Fokus-Werkzeug öffnen — stiller Alt-Alias zu 'f' (nicht mehr in der Legende)
-                L["active"] = True; L["view"] = "forest"; L["fsel"] = 0
-                L["adding"] = False; L["confirm"] = False; L["msg"] = ""; l_load()
             elif ch in (ord("m"), ord("M")):   # Karte öffnen
                 M["active"] = True; M["data"] = None
             elif ch in (ord("c"), ord("C")):   # Kalender öffnen
@@ -8630,10 +8710,6 @@ def run_ui(stdscr, store):
                 NOTE["active"] = True; n_open()
             elif ch in (ord("k"), ord("K")):   # Klavier öffnen (wie im Browser: k)
                 p_open()
-            elif ch in (ord("s"), ord("S")):   # stdout-Laufschrift an/aus
-                LAUF["an"] = not LAUF["an"]
-                lauf_schreiben(LAUF["an"])
-                cmd_msg = "stdout-lauf " + ("an" if LAUF["an"] else "aus")
             elif ch in (ord("f"), ord("F")):   # Fokus-Werkzeug öffnen (primäre Taste)
                 L["active"] = True; L["view"] = "forest"; L["fsel"] = 0
                 L["adding"] = False; L["confirm"] = False; L["msg"] = ""; l_load()
@@ -8840,38 +8916,23 @@ def run_ui(stdscr, store):
             draw_box(top, mx, body_h, midw, "klavier")
             draw_piano_tool(top, mx, body_h, midw)
         else:
-            # ── ZENTRALE selbst ───────────────────────────────────────
-            # Hier stand bis zum 20.08.2026 eine Liste der Tastenbefehle.
-            # Die ist in die Fussleiste gewandert (Sashas Umbau): eine
-            # Merkhilfe gehoert an den Rand, die Mitte gehoert IHR.
-            #
-            # Der Ring zeigt, was sie ueber die Lage weiss — ob Sasha da
-            # ist und ob sie seine Aufmerksamkeit hat. Gezeichnet wird er
-            # von ring_zeilen(), einer reinen Funktion (siehe dort).
-            draw_box(top, mx, body_h, midw, "zentrale · ai")
-            lage_jetzt = LAGE.get("wert") or "unbekannt"
-            cyc = top + body_h // 2 - 1
+            # ── Startseite: das Rad ───────────────────────────────────
+            # Bis 02.10.2026 stand hier der KI-Ring (ring_zeilen) mit der
+            # Tasten-Leiste unten. Jetzt ein Rad zum Durchdrehen, bewusst
+            # UNTER der Mitte: der Platz darüber ist für das, was ZENTRALE
+            # künftig von sich aus zeigt (kommt Stück für Stück).
+            draw_box(top, mx, body_h, midw, "zentrale")
+            RAD["pos"] = rad_schritt(RAD["pos"], RAD["sel"])
+            cyc = top + (body_h * 5) // 8
             ccx = mx + midw // 2
-            ring_stil = {"ring":       C["acc"] | C["bright"],
-                         "ring_hell":  C["bright"],
-                         "ring_matt":  C["acc"],
-                         "ring_still": C["faint"]}
-            for dy, dx, ch, st in ring_zeilen(
-                    body_h - 2, midw, lage_jetzt,
-                    aktiv=AI["streaming"], phase=(time.time() * 0.6) % 1.0):
+            rad_stil = {"spur": C["faint"], "fern": C["faint"],
+                        "nah": C["dim"], "rahmen": C["acc"],
+                        "vorn": C["bright"] | curses.A_BOLD}
+            for dy, dx, txt, st in rad_zeilen([a[1] for a in RAD_APPS],
+                                              RAD["pos"], midw, body_h - 2):
                 y, x = cyc + dy, ccx + dx
-                if top < y < top + body_h - 1 and mx < x < mx + midw - 1:
-                    safe_addstr(y, x, ch, ring_stil.get(st, C["faint"]))
-            # Kein Name mehr IM Ring: der Kasten heisst schon "zentrale ·
-            # ai", und der Ring soll fuer sich stehen. Nur die Lage steht
-            # darunter — und zwar UNTER dem Ring, nicht mittendrin, sonst
-            # sprengt sie den kleinen Ring.
-            unten = LAGE_TEXT.get(lage_jetzt, "")
-            if unten:
-                rand = max((z[0] for z in ring_zeilen(body_h - 2, midw,
-                                                      lage_jetzt)), default=0)
-                addclip(cyc + rand + 2, ccx - len(unten) // 2, unten,
-                        midw - 2, C["faint"])
+                if top < y < top + body_h - 1 and mx < x and x + len(txt) < mx + midw:
+                    safe_addstr(y, x, txt, rad_stil.get(st, C["faint"]))
 
         # ── RECHTS: lifestyle / outbound ──────────────────────────────────
         # lifestyle = ÜBERLAGERUNG aller Graphen in EINEM Gitter. X = Datum
@@ -9002,35 +9063,12 @@ def run_ui(stdscr, store):
                 safe_addstr(input_row, 3, "/ für befehle", C["faint"])
 
         # ── Footer (Tasten + Theme + Backend) ─────────────────────────────
-        tm_txt = ("auto(%s)" % cur_theme if theme_mode_now() == "auto"
-                  else cur_theme)
-        # Die Befehle standen frueher in der MITTE (und hier nur eine
-        # Auswahl davon, die auseinanderlief). Seit dem 20.08.2026 stehen
-        # sie hier, und zwar vollstaendig aus CTX_KEYS["home"] — der Liste,
-        # die '/' ohnehin schon zeigt. Eine Quelle, kein zweites Pflegen.
-        # Die veraenderlichen Stellen (Theme, Laufschrift) tragen ihren
-        # Zustand gleich mit; addclip schneidet ab, wenn das Fenster schmal
-        # ist, und die wichtigsten Tasten stehen deshalb vorn.
-        zustand = {"t": tm_txt, "s": "an" if LAUF["an"] else "aus"}
-        # 'q beenden' nach VORN. Die Leiste wird bei schmalem Fenster hinten
-        # abgeschnitten, und ausgerechnet das Beenden fiel dabei als erstes
-        # weg — die eine Taste, die man sucht, wenn man nicht mehr weiter
-        # weiss. Die '/'-Uebersicht behaelt ihre gewachsene Reihenfolge.
-        reihenfolge = ([t for t in CTX_KEYS["home"] if t[0] == "q"]
-                       + [t for t in CTX_KEYS["home"] if t[0] != "q"])
-        # Kurzformen NUR fuer die Leiste: die '/'-Uebersicht hat Platz fuer
-        # "post / mail", eine Zeile mit zwoelf Eintraegen nicht. Bei 140
-        # Spalten passte die volle Fassung nicht, und was hinten abfiel, war
-        # ausgerechnet der Theme-Zustand.
-        kurz = {"p": "post", "s": "lauf", "a": "ki"}
-        teile = []
-        for taste, was in reihenfolge:
-            wert = zustand.get(taste)
-            teile.append("%s %s%s" % (taste, kurz.get(taste, was),
-                                      (": " + wert) if wert else ""))
-        # Kein "/ befehle" mehr am Ende: das steht schon in der Zeile
-        # darueber ("› / für befehle") und kostete hier zwoelf Zeichen.
-        addclip(footer_row, 0, " " + " · ".join(teile), W - 1, C["faint"])
+        # Seit 02.10.2026 keine App-Buchstaben mehr (die Apps stehen im
+        # Rad): nur noch die vier Tasten, die überall gelten. Eine KI-Antwort,
+        # die im Hintergrund fertig wurde, meldet sich hier mit ●.
+        ki = "space ki" + (" ●" if AI.get("neu") else "")
+        addclip(footer_row, 0, " ←→ drehen · enter öffnen · %s · esc zurück" % ki,
+                W - 1, C["faint"])
 
         # ── Graph-Reminder-Nag (zuletzt → liegt über allem) ───────────────
         if nag_active and nag_items:

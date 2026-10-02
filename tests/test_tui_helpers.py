@@ -213,7 +213,7 @@ def test_overlay_bare_slash_without_ctx_is_just_commands():
 
 def test_overlay_help_still_lists_global_keys():
     _title, rows = overlay_rows("/help", False, ("liste", [("x", "y")]))
-    assert any(r[:2] == ("key", "q") for r in rows)   # volle Hilfe inkl. globaler Tasten (q = weglegen)
+    assert any(r[:2] == ("key", "space") for r in rows)   # volle Hilfe inkl. globaler Tasten (space = ki)
     assert _title == "hilfe"
 
 

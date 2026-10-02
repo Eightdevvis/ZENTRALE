@@ -6,8 +6,9 @@ Schwelle 10 min) und ob die Sitzung gesperrt ist (logind `LockedHint`);
 `melden.sichtbar()` sagt, ob ZENTRALEs Fenster vor ihm steht. Daraus eine
 von vier Lagen (`offen`, `woanders`, `weg`, `unbekannt`), die als **ein
 Satz** am Takt-Auftrag hängt (`takt.md`) — nie im Prompt jedes Turns. Die
-TUI zeigt in der Mitte einen gerechneten ASCII-Ring (`● ◦ ·` je Lage, heller
-Bogen nur beim Denken), die Befehle stehen in der Fußleiste. Sensorik
+TUI zeigte bis 02.10.2026 in der Mitte einen gerechneten ASCII-Ring (`● ◦ ·`
+je Lage); seitdem steht dort das App-Rad (`dashboard.md`), der Ring-Code
+(`ring_zeilen`) lebt ungenutzt weiter, die Lage wird weiter bestimmt. Sensorik
 (PIR am Pi, `../betrieb/hardware.md`) speist heute das **Zimmer**
 (`presence_age` in `room_state`), nicht `da()` — ⚠ prüfen: ob PIR-Treffer
 in `anwesenheit.da()` einfließen sollen, ist nicht entschieden.
@@ -113,15 +114,9 @@ Tastenliste) gehört an den Rand; **die Mitte gehört ihr.**
 
 ## Die Fußleiste
 
-Trägt alle Befehle, aus **einer** Quelle (`CTX_KEYS["home"]` — die Liste,
-die `/` ohnehin zeigt). Zwei Eigenheiten, beide aus einem gemessenen Problem:
-
-- **`q beenden` steht vorn.** Die Leiste wird bei schmalem Fenster hinten
-  abgeschnitten; stand das Beenden am Ende, fiel ausgerechnet die Taste weg,
-  die man sucht, wenn man nicht weiterweiß.
-- **Kurzformen nur hier** (`post`, `lauf`, `ki`). Bei 140 Spalten passte die
-  volle Fassung nicht, und was hinten abfiel, war der Theme-Zustand. Die
-  `/`-Übersicht behält die ausführlichen Namen.
+Bis 02.10.2026 trug sie alle Buchstaben-Befehle aus `CTX_KEYS["home"]`. Mit
+dem Rad sind die weg; sie zeigt nur noch `←→ drehen · enter öffnen · space
+ki · esc zurück` (● hinter `ki`, wenn eine Antwort im Hintergrund fertig ist).
 
 ## Historie
 
@@ -129,3 +124,5 @@ die `/` ohnehin zeigt). Zwei Eigenheiten, beide aus einem gemessenen Problem:
   der Mitte, Befehle in die Fußleiste; Falle `light-locker` als
   Dauer-Daemon erkannt.
 - **2026-09-14** — PIR am Pi; Treffer gehen ans Zimmer, nicht an `da()`.
+- **02.10.2026** — Ring und Buchstaben-Leiste von der Startseite genommen,
+  dort steht jetzt das App-Rad (`dashboard.md`).

@@ -115,7 +115,7 @@ def _run(rows, cols):
     threading.Thread(target=drain, daemon=True).start()
     try:
         time.sleep(2.5)                      # erster Frame
-        os.write(master, b"a")               # KI-Chat auf
+        os.write(master, b" ")               # KI-Chat auf (space, seit dem Rad)
         time.sleep(0.6)
         os.write(master, b"hallo\r")         # Frage senden → Stream läuft
         time.sleep(2.5)

@@ -4,13 +4,20 @@
 (`tui/zentrale_tui.py`, stdlib-only, Thin Client gegen `/api/*`); die
 Browser-Front `monolith.html` (eine Datei für monolith + laptop, KI-Blöcke
 per `ki_aus` weggelassen) ist praktisch aufgegeben, der Code lebt. Das
-**Theme** (`t` in der TUI → `~/.config/zentrale/theme`, Wunsch) löst allein
+**Theme** (`/theme` in der TUI → `~/.config/zentrale/theme`, Wunsch) löst allein
 `zentrale-themed` nach 05/21 Uhr auf (`theme.now`, Ergebnis); Terminal,
 Browser, Desktop, bat, nvim, tmux und das Tutor-Zimmer lesen nur — und aus
 einem Testlauf oder Worktree darf nie ein Push entstehen (Riegel im venv,
-`start_tui.sh` hängt ihn ein). Werkzeuge in der TUI-Mitte: Graph `g`,
-Kalender `c`, Fokus `f`, Post `p`, Karte `m`, Klavier `k`, Notizen `n`,
-Tutor `u` (öffnet das Zimmer). Auf dem Pi ist das Wandbild das Zimmer, nicht
+`start_tui.sh` hängt ihn ein). **Startseite = App-Rad** (seit 02.10.2026,
+`RAD_APPS`/`rad_zeilen`): ←/→ dreht einen liegenden Ring, leicht von oben
+gesehen (vorn = unten, groß + Rahmen; hinten = oben, blass), enter öffnet
+die App vorn, space den KI-Chat, esc führt Stufe für Stufe zurück. Das Rad
+sitzt bei 5/8 der Höhe — **der Platz darüber ist reserviert** für Dinge, die
+ZENTRALE künftig von sich aus zeigt. Keine Buchstaben-Shortcuts mehr auf der
+Startseite; Theme/Laufschrift/Beenden über `/theme`, `/lauf`, `/quit`,
+weglegen über Cmd+z. Apps im Rad: Klavier, Post, Kalender, Fokus, Notizen,
+Graph, Karte, Tutor (öffnet das Zimmer). Die Tasten-Angaben bei den
+Werkzeugen unten (`g`, `c` …) sind seitdem nur noch Namen. Auf dem Pi ist das Wandbild das Zimmer, nicht
 diese Front (`../betrieb/deployment.md`). Der Rest dieser Datei ist die
 ausführliche Mechanik + das Warum; Datumsangaben im Text sind Marken, die
 Historie steht unten.

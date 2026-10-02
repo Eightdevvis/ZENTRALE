@@ -1,16 +1,18 @@
 """
-Die Mitte gehoert ZENTRALE selbst.
+Die Startseite ist ein Rad.
 
-Sasha, 20.08.2026: *„die ganzen befehle die in der mitte stehen rutschen
-einfach in die leiste unten. in der mitte bleibt stehen zentrale ai. sie
-zeigt sich als einen mit ascii gezeichneten ring."*
+Sasha, 02.10.2026: *„statt fett in der mitte ki zu haben und unten shortcuts
+mit denen man in die apps kommt soll mittig so eine ansicht sein, durch die
+man durchroutieren kann. [...] ki aktiviert man nur noch mit leertaste
+direkt. die anderen shortcuts fallen alle weg. zurück zu home kommt man
+durch esc. mach das wheel nich ganz mittig, leicht unten."*
 
 Geprueft wird an der ECHTEN TUI im Pseudo-Terminal — was wirklich ueber den
 Schirm geht. Ein Zeichen-Zweig laesst sich nicht sinnvoll stueckweise
 testen: er faellt erst zur Laufzeit um, und dann steht der Kasten leer da,
 ohne dass irgendein Test etwas gemerkt haette.
 
-Die reine Ring-Mathematik steht in test_tui_helpers.py.
+Die reine Rad-Mathematik steht weiter unten, ohne Terminal.
 """
 
 import json
@@ -63,9 +65,9 @@ def _strip_ansi(s):
     return re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]|\x1b[()][B0]|\x1b[=>]", "", s)
 
 
-@pytest.fixture(scope="module")
-def schirm():
-    """Die TUI kurz laufen lassen -> alles, was ueber den Schirm ging."""
+def _lauf(tasten=b""):
+    """Die TUI kurz laufen lassen, nach 2 s `tasten` schicken
+    -> alles, was ueber den Schirm ging."""
     import fcntl
     import pty
     import select
@@ -104,7 +106,10 @@ def schirm():
 
     threading.Thread(target=drain, daemon=True).start()
     try:
-        time.sleep(4.0)
+        time.sleep(2.5)
+        if tasten:
+            os.write(master, tasten)
+        time.sleep(1.5)
         text = _strip_ansi(bytes(buf).decode("utf-8", "replace"))
     finally:
         stop.set()
@@ -123,81 +128,107 @@ def schirm():
     return text
 
 
-def test_in_der_mitte_steht_sie_selbst(schirm):
-    assert "ZENTRALE · AI" in schirm      # Kasten-Titel (draw_box schreibt gross)
+@pytest.fixture(scope="module")
+def schirm():
+    return _lauf()
 
 
-def test_kein_name_im_ring(schirm):
-    """Sasha, 20.08.2026: der Name mittendrin kann weg. Der Kasten heisst
-    schon so, und der kleine Ring soll fuer sich stehen."""
-    assert "zentrale ai" not in schirm
-
-
-def test_der_ring_wird_gezeichnet(schirm):
-    """WELCHES Zeichen es ist, haengt von der Lage ab — und die haengt an
-    der Maschine, auf der der Test laeuft. Gezaehlt wird deshalb ueber alle
-    Ring-Zeichen; ein Test, der eine bestimmte Lage erzwingen will, wuerde
-    auf dem naechsten Rechner grundlos rot."""
+def _modul():
     import importlib.util
     spec = importlib.util.spec_from_file_location(
-        "_tui", os.path.join(ROOT, "tui", "zentrale_tui.py"))
+        "_tui_rad", os.path.join(ROOT, "tui", "zentrale_tui.py"))
     modul = importlib.util.module_from_spec(spec)
     try:
         spec.loader.exec_module(modul)
     except SystemExit:
         pass
-    treffer = sum(schirm.count(g) for g in set(modul.RING_GLYPHEN.values()))
-    assert treffer > 15
+    return modul
 
 
-def test_der_ring_bleibt_ein_zeichen_kein_rahmen():
-    """Ein Drittel dessen, was passen wuerde. Der Kasten hat schon einen
-    Rahmen; ein zweiter, der ihn fast ausfuellt, ist keiner mehr."""
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        "_tui2", os.path.join(ROOT, "tui", "zentrale_tui.py"))
-    modul = importlib.util.module_from_spec(spec)
-    try:
-        spec.loader.exec_module(modul)
-    except SystemExit:
-        pass
-    h, w = 34, 69
-    punkte = modul.ring_punkte(h, w)
-    hoehe = max(p[0] for p in punkte) - min(p[0] for p in punkte)
-    assert hoehe < (h - 2) // 2
+def test_der_kasten_heisst_zentrale(schirm):
+    assert "ZENTRALE" in schirm
+    assert "ZENTRALE · AI" not in schirm     # der KI-Kasten ist weg
 
 
-def test_die_befehle_stehen_nicht_mehr_in_der_mitte(schirm):
-    """Was frueher mittig stand ('KASSETTE · TUI' und die Einladungsliste)."""
-    assert "KASSETTE" not in schirm
-    assert "g · graph-werkzeug" not in schirm
+def test_vorn_steht_die_erste_app(schirm):
+    assert "K L A V I E R" in schirm
 
 
-def test_die_befehle_stehen_jetzt_unten(schirm):
-    """Und zwar VOLLSTAENDIG. Die alte Fussleiste trug nur eine Auswahl —
-    fokus, notizen, post und klavier fehlten dort."""
-    for was in ("fokus", "notizen", "graph", "karte", "kalender",
-                "post", "ki", "tutor", "klavier", "weglegen"):
+def test_die_nachbarn_stehen_daneben(schirm):
+    for was in ("post", "tutor"):
         assert was in schirm, was
 
 
-def test_weglegen_steht_vorn(schirm):
-    """Die Leiste wird bei schmalem Fenster hinten abgeschnitten. Stand 'q
-    beenden' (heute: weglegen) am Ende, fiel ausgerechnet die Taste weg, die man sucht, wenn
-    man nicht mehr weiterweiss."""
-    zeile = next(z for z in schirm.splitlines() if "fokus" in z and "graph" in z)
-    assert zeile.index("weglegen") < zeile.index("fokus")
+def test_keine_buchstaben_leiste_mehr(schirm):
+    assert "weglegen" not in schirm
+    assert "q weglegen" not in schirm
+    assert "space ki" in schirm
 
 
-def test_die_leiste_traegt_ihren_zustand_mit(schirm):
-    """Theme und Laufschrift sind keine Tasten-Namen, sondern Anzeigen —
-    wer sie umschaltet, will sehen, was jetzt gilt."""
-    assert re.search(r"theme[^·]*:", schirm)
-    assert re.search(r"lauf[^·]*:", schirm)
+def test_pfeil_rechts_dreht_weiter():
+    """Pfeil rechts -> post steht vorn."""
+    assert "P O S T" in _lauf(b"\x1bOC")
 
 
-def test_die_leiste_passt_in_ein_schmales_fenster(schirm):
-    """140 Spalten sind nicht viel — im Scratchpad-Fenster ist es enger.
-    Passt sie nicht, faellt hinten etwas ab, und man merkt es nicht."""
-    zeile = next(z for z in schirm.splitlines() if "fokus" in z and "graph" in z)
-    assert "theme:" in zeile, "der Theme-Zustand fiel hinten ab"
+def test_pfeil_links_dreht_rueckwaerts_ueber_den_anfang():
+    """Vom klavier nach links landet man hinten beim tutor, nicht am Rand."""
+    assert "T U T O R" in _lauf(b"\x1bOD")
+
+
+# ── reine Rad-Mathematik ────────────────────────────────────────────────
+
+NAMEN = ["klavier", "post", "kalender", "fokus"]
+
+
+def _vorn(zeilen):
+    return [t for _dy, _dx, t, st in zeilen if st == "vorn"]
+
+
+def test_rad_zeigt_vorn_die_gewaehlte():
+    m = _modul()
+    assert _vorn(m.rad_zeilen(NAMEN, 0, 70, 30)) == ["K L A V I E R"]
+    assert _vorn(m.rad_zeilen(NAMEN, 1, 70, 30)) == ["P O S T"]
+    assert _vorn(m.rad_zeilen(NAMEN, 5, 70, 30)) == ["P O S T"]   # zweite runde
+    assert _vorn(m.rad_zeilen(NAMEN, -1, 70, 30)) == ["F O K U S"]
+
+
+def test_im_drehen_kein_rahmen():
+    """Zwischen zwei Apps steht keine vorn — sonst springt der Rahmen."""
+    zeilen = _modul().rad_zeilen(NAMEN, 0.5, 70, 30)
+    assert not [z for z in zeilen if z[3] in ("vorn", "rahmen")]
+
+
+def test_vorn_ist_unten_hinten_ist_oben():
+    """Das Rad liegt und wird leicht von oben gesehen."""
+    zeilen = _modul().rad_zeilen(["a", "b", "c", "d", "e", "f", "g", "h"],
+                                 0, 70, 30)
+    vorn = next(z for z in zeilen if z[3] == "vorn")
+    fern = [z for z in zeilen if z[3] == "fern"]
+    assert fern and all(f[0] < vorn[0] for f in fern)
+
+
+def test_rad_bleibt_in_der_breite():
+    for breite in (40, 60, 71, 120):
+        for dy, dx, t, _st in _modul().rad_zeilen(NAMEN, 0, breite, 30):
+            assert -breite // 2 < dx and dx + len(t) <= breite // 2, (breite, t)
+
+
+def test_zu_schmal_kein_rad():
+    assert _modul().rad_zeilen(NAMEN, 0, 20, 30) == []
+
+
+def test_rad_gleitet_und_rastet_ein():
+    m = _modul()
+    pos = 0.0
+    for _ in range(40):
+        pos = m.rad_schritt(pos, 1)
+    assert pos == 1.0
+
+
+def test_der_ring_bleibt_ein_zeichen_kein_rahmen():
+    """Ring-Helfer (heute nicht auf der Startseite) bleiben heil."""
+    m = _modul()
+    h, w = 34, 69
+    punkte = m.ring_punkte(h, w)
+    hoehe = max(p[0] for p in punkte) - min(p[0] for p in punkte)
+    assert hoehe < (h - 2) // 2
