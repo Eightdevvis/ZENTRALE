@@ -77,6 +77,15 @@ def _theme_tmp_aufraeumen():
     shutil.rmtree(_THEME_TMP, ignore_errors=True)
 
 
+# 5b. TUI-Lebenslauf und Crash-Log umlenken (Zwilling im venv-Riegel).
+#
+# Jede Test-TUI raeumt beim Start ihr Crash-Log weg — ohne Umlenkung das
+# ECHTE /tmp/zentrale-tui-crash.log der laufenden ZENTRALE.
+os.environ.setdefault("ZENTRALE_TUI_LOG", os.path.join(_THEME_TMP, "tui.log"))
+os.environ.setdefault("ZENTRALE_TUI_CRASH_LOG",
+                      os.path.join(_THEME_TMP, "tui-crash.log"))
+
+
 # 6. Kein Testlauf darf Geld ausgeben.
 #
 # Gelernt am 2026-09-04: `test_ki_endpoint_locked_in_tui_kassette` prüfte, dass

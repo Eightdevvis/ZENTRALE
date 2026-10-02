@@ -55,7 +55,8 @@ Getestet in tests/test_keine_seiteneffekte.py.
 #: also gewinnt, wer zuerst da ist, und einzelne Tests duerfen weiterhin per
 #: monkeypatch auf ihr eigenes tmp_path biegen.
 _UMLENKUNG = ("ZENTRALE_THEME_FILE", "ZENTRALE_THEME_NOW",
-              "XDG_CACHE_HOME", "ZENTRALE_USAGE_FILE", "ZENTRALE_NOTIFY")
+              "XDG_CACHE_HOME", "ZENTRALE_USAGE_FILE", "ZENTRALE_NOTIFY",
+              "ZENTRALE_TUI_LOG", "ZENTRALE_TUI_CRASH_LOG")
 
 
 def _ist_testlauf(kommandozeile, umgebung):
@@ -117,6 +118,11 @@ def anwenden(umgebung, kommandozeile, tempdir, pid, cwd=""):
     umgebung.setdefault("ZENTRALE_THEME_NOW", ziel + "/theme.now")
     umgebung.setdefault("XDG_CACHE_HOME", ziel + "/cache")
     umgebung.setdefault("ZENTRALE_USAGE_FILE", ziel + "/ai_usage.json")
+    # Lebenslauf + Crash-Log der TUI: jede Test-TUI raeumte beim Start das
+    # ECHTE /tmp/zentrale-tui-crash.log weg — ein Absturz der laufenden
+    # ZENTRALE war damit spurlos (02.10.2026).
+    umgebung.setdefault("ZENTRALE_TUI_LOG", ziel + "/tui.log")
+    umgebung.setdefault("ZENTRALE_TUI_CRASH_LOG", ziel + "/tui-crash.log")
     # Kein Testlauf meldet sich auf Sashas Desktop.
     #
     # Die Umlenkungen darueber schuetzen DATEIEN. Eine Benachrichtigung ist
@@ -160,10 +166,62 @@ def anwenden(umgebung, kommandozeile, tempdir, pid, cwd=""):
     return ziel
 
 
+def _ist_nachfahre(pid, ahn, eltern_von):
+    """Stammt `pid` von `ahn` ab? `eltern_von(pid)` -> ppid oder None."""
+    for _ in range(64):
+        if pid == ahn:
+            return True
+        if not pid or pid == 1:
+            return False
+        pid = eltern_von(pid)
+    return False
+
+
+def _ppid(pid):
+    try:
+        with open("/proc/%d/stat" % pid) as fh:
+            return int(fh.read().rsplit(")", 1)[1].split()[1])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def kill_riegel(os_modul, eigene_pid, eltern_von=_ppid):
+    """In Testlaeufen darf ein Signal nur eigene Nachfahren treffen.
+
+    Am 02.10.2026 hat ein Updater-Test Sashas LAUFENDE ZENTRALE per SIGTERM
+    geschlossen: der Updater beendet nach einem Update "die TUI" — und fand
+    jede tui/zentrale_tui.py der Maschine. Der Fehler im Updater ist behoben;
+    dieser Riegel faengt dieselbe Klasse fuer jeden Stand ab, auch fuer alte
+    Worktrees. Ein Testlauf hat ausser seinen eigenen Kindern niemanden
+    abzuschiessen. Signal 0 (nur "lebt er?") bleibt frei.
+    """
+    echt_kill, echt_killpg = os_modul.kill, os_modul.killpg
+
+    def kill(pid, sig):
+        if sig and pid > 0 and not _ist_nachfahre(pid, eigene_pid, eltern_von):
+            raise PermissionError(
+                "zentrale_testguard: Testlauf darf pid %d nicht signalisieren "
+                "(kein eigener Kindprozess)" % pid)
+        return echt_kill(pid, sig)
+
+    def killpg(pgid, sig):
+        if sig and not _ist_nachfahre(pgid, eigene_pid, eltern_von):
+            raise PermissionError(
+                "zentrale_testguard: Testlauf darf Gruppe %d nicht signalisieren"
+                % pgid)
+        return echt_killpg(pgid, sig)
+
+    os_modul.kill, os_modul.killpg = kill, killpg
+
+
 try:
     import os
     import sys
     import tempfile
+
+    if _ist_testlauf(getattr(sys, "orig_argv", None) or sys.argv, os.environ) \
+            or os.environ.get("ZENTRALE_TESTLAUF"):
+        kill_riegel(os, os.getpid())
 
     # os.environ, nicht eine Kopie: die Fuzz-TUI wird in tests/_tui_fuzz.py mit
     # env=dict(os.environ, …) gestartet und erbt die Umlenkung nur so.

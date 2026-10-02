@@ -1270,6 +1270,131 @@ def weglegen_statt_beenden():
         return False
 
 
+# ── Lebenslauf: warum ging sie zu? ───────────────────────────────────────────
+#
+# 02.10.2026: ZENTRALE ging mitten in der Arbeit einfach zu, ohne jede Spur.
+# Das Terminal schliesst sich mit der TUI (Meldungen weg), das Crash-Log lag in
+# /tmp und wurde von jeder Test-TUI beim Start geloescht, und ein SIGTERM
+# hinterliess gar nichts. Herausgekommen ist es nur ueber die Luecke in den
+# Backend-Abfragen und einen Updater-Test, der jede TUI der Maschine killte.
+#
+# Deshalb jetzt EINE Datei, die nie geloescht wird und jeden Start und jedes
+# Ende mit Grund festhaelt — bei einem Signal samt den Prozessen, die kurz
+# vorher gestartet wurden (der Absender ist fast immer darunter).
+LEBENSLAUF = (os.environ.get("ZENTRALE_TUI_LOG")
+              or os.path.expanduser("~/.local/state/zentrale/tui.log"))
+LEBENSLAUF_MAX = 512 * 1024
+
+
+def lebenslauf(text, pfad=None):
+    """Eine Zeile (oder ein Block) ins Lebenslauf-Log. Wirft nie."""
+    pfad = pfad or LEBENSLAUF
+    try:
+        os.makedirs(os.path.dirname(pfad), exist_ok=True)
+        try:
+            if os.path.getsize(pfad) > LEBENSLAUF_MAX:
+                os.replace(pfad, pfad + ".1")
+        except OSError:
+            pass
+        with open(pfad, "a", encoding="utf-8") as f:
+            f.write("%s  pid %d  %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"),
+                                          os.getpid(), text.rstrip("\n")))
+    except OSError:
+        pass
+
+
+def frische_prozesse(sekunden=30, proc="/proc"):
+    """Prozesse, die in den letzten `sekunden` gestartet wurden -> [(pid, cmd)].
+
+    Ein Signal verraet in Python seinen Absender nicht. Wer gerade eben
+    gestartet wurde, ist aber fast immer der Taeter (ein Testlauf, ein
+    Updater, ein Skript) — die Liste macht ihn im Log sichtbar."""
+    aus = []
+    try:
+        hz = os.sysconf("SC_CLK_TCK")
+        with open(os.path.join(proc, "uptime")) as f:
+            jetzt = float(f.read().split()[0])
+        for name in os.listdir(proc):
+            if not name.isdigit() or int(name) == os.getpid():
+                continue
+            try:
+                with open(os.path.join(proc, name, "stat")) as f:
+                    start = int(f.read().rsplit(")", 1)[1].split()[19]) / hz
+                if jetzt - start > sekunden:
+                    continue
+                with open(os.path.join(proc, name, "cmdline"), "rb") as f:
+                    cmd = f.read().replace(b"\0", b" ").decode("utf-8", "replace").strip()
+                if cmd:
+                    aus.append((int(name), cmd[:200]))
+            except (OSError, ValueError, IndexError):
+                continue
+    except (OSError, ValueError):
+        pass
+    return sorted(aus)
+
+
+class Signalende(BaseException):
+    """SIGTERM/SIGHUP: sauber raus (curses aufraeumen), mit Grund im Log."""
+    def __init__(self, signum):
+        super().__init__(signum)
+        self.signum = signum
+
+
+def _signal_handler(signum, _frame):
+    import signal as _s
+    name = _s.Signals(signum).name
+    frisch = frische_prozesse()
+    lebenslauf("SIGNAL %s — kurz vorher gestartet:%s" % (
+        name, "".join("\n      %d  %s" % p for p in frisch) or " (nichts)"))
+    raise Signalende(signum)
+
+
+# ── Hot Reload: neuer Code ohne Fenster-Neustart ─────────────────────────────
+#
+# Sasha, 02.10.2026: „ein hot reload gibt es bei zentrale gar nich wäre aber
+# auch mal schlau". Die TUI beobachtet ihre eigenen Quelldateien (tui/*.py);
+# ändern sie sich (Merge nach main, Edit), ersetzt sie sich per exec durch
+# sich selbst — gleiches Terminal, gleiche pid, das Fenster bleibt stehen.
+# Vorher wird der neue Code kompiliert: ist er kaputt, bleibt der alte laufen
+# und unten steht, wo es hakt. Nie mitten im Tippen. Das Backend lädt NICHT
+# mit (dafür bleibt /reboot).
+RELOAD = {"an": False}
+TUI_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def code_dateien(ordner=TUI_DIR):
+    try:
+        return sorted(os.path.join(ordner, n) for n in os.listdir(ordner)
+                      if n.endswith(".py"))
+    except OSError:
+        return []
+
+
+def code_stand(dateien):
+    """Fingerabdruck des Codes: (pfad, mtime_ns, größe) je Datei."""
+    stand = []
+    for p in dateien:
+        try:
+            st = os.stat(p)
+            stand.append((p, st.st_mtime_ns, st.st_size))
+        except OSError:
+            stand.append((p, None, None))
+    return tuple(stand)
+
+
+def code_fehler(dateien):
+    """None, wenn alles kompiliert — sonst 'datei:zeile: meldung'."""
+    for p in dateien:
+        try:
+            with open(p, encoding="utf-8") as f:
+                compile(f.read(), p, "exec")
+        except SyntaxError as e:
+            return "%s:%s: %s" % (os.path.basename(p), e.lineno, e.msg)
+        except (OSError, ValueError) as e:
+            return "%s: %s" % (os.path.basename(p), e)
+    return None
+
+
 # ── Befehlszeile: pure Logik (curses-frei, daher unit-testbar) ───────────────
 TUI_COMMANDS = [
     ("/help",  "alle Befehle und Tasten zeigen"),
@@ -1278,6 +1403,7 @@ TUI_COMMANDS = [
     ("/local", "Lokale KI drosseln: on | off  (Ollama-Leitung)"),
     ("/tutor", "Sprach-Tutor TEXT-panel (Mitte, Cloud/Qwen); 'u' öffnet das Zimmer-Fenster"),
     ("/lauf",  "stdout-Laufschrift: an | aus  (auch 's')"),
+    ("/reload", "nur die TUI mit neuem Code laden (passiert bei Code-Änderung auch von selbst)"),
     ("/reboot", "ZENTRALE neu starten: Backend + Fenster, neuer Code"),
     ("/quit",  "ZENTRALE-TUI wirklich beenden  ('q' legt das Fenster nur weg)"),
 ]
@@ -1435,6 +1561,8 @@ def parse_command(buf, theme_mode):
         return "LOCAL_TOGGLE", theme_mode, ""
     if name in ("tutor", "sprache"):             # Sprach-Tutor-Panel öffnen (Mitte)
         return "TUTOR_OPEN", theme_mode, ""
+    if name in ("reload", "neuladen"):           # nur die TUI, neuer Code, Fenster bleibt
+        return "RELOAD", theme_mode, ""
     if name in ("reboot", "neustart", "restart"):  # ganze ZENTRALE neu (Aufrufer beendet)
         return "REBOOT", theme_mode, ""
     if name in ("lauf", "laufschrift"):          # stdout-Laufschrift (Schalter macht der Aufrufer)
@@ -1599,7 +1727,15 @@ RAD_APPS = [
     ("k", "klavier"), ("p", "post"), ("c", "kalender"), ("f", "fokus"),
     ("n", "notizen"), ("g", "graph"), ("m", "karte"), ("u", "tutor"),
 ]
-RAD = {"sel": 0, "pos": 0.0}     # sel = Ziel (Taste), pos = wo das Rad gerade steht
+def _rad_start():
+    """Nach einem Hot Reload steht das Rad, wo es war."""
+    try:
+        return int(os.environ.get("ZENTRALE_TUI_RAD", "0"))
+    except ValueError:
+        return 0
+
+
+RAD = {"sel": _rad_start(), "pos": float(_rad_start())}   # sel = Ziel, pos = wo das Rad gerade steht
 
 
 def rad_schritt(pos, sel):
@@ -7382,7 +7518,32 @@ def run_ui(stdscr, store):
             return "note:list" if NOTE["view"] == "list" else "note:edit"
         return "home"
 
+    # Hot Reload (siehe RELOAD): Stand der eigenen Quellen beim Start merken.
+    code_alt = code_stand(code_dateien())
+    code_kandidat = None
+    code_check_t = 0.0
+
     while True:
+        # Neuer Code in tui/? Erst wenn er eine Sekunde ruht (ein Merge
+        # schreibt mehrere Dateien) und kompiliert — und nie mitten im
+        # Tippen, in der Befehlszeile oder während eine Antwort einläuft.
+        if time.monotonic() - code_check_t >= 1.0:
+            code_check_t = time.monotonic()
+            code_neu = code_stand(code_dateien())
+            if code_neu != code_alt:
+                if code_neu != code_kandidat:
+                    code_kandidat = code_neu
+                elif not (in_text_entry() or cmd_mode or AI["streaming"]
+                          or TUTOR["streaming"]):
+                    fehler = code_fehler(code_dateien())
+                    if fehler:
+                        cmd_msg = "neuer code kaputt, bleibe beim alten: " + fehler
+                        lebenslauf("HOT RELOAD verworfen: " + fehler)
+                        code_alt = code_neu      # erst die nächste Änderung zählt
+                    else:
+                        RELOAD["an"] = True
+                        break
+
         # Während einer Länder-Kamerafahrt ODER eines laufenden KI-Streams
         # schneller ticken (~30 fps) für weiche Bewegung / live nachlaufende
         # Token; sonst die ruhige 250-ms-Kadenz (spart CPU/Backend-Last).
@@ -7422,6 +7583,13 @@ def run_ui(stdscr, store):
                     break
                 if res == "HELP":
                     help_latched = True
+                if res == "RELOAD":
+                    fehler = code_fehler(code_dateien())
+                    if fehler:
+                        cmd_msg = "neuer code kaputt, bleibe beim alten: " + fehler
+                    else:
+                        RELOAD["an"] = True
+                        break
                 if res == "REBOOT":
                     # Nur das Signal setzen und raus — neu aufgebaut wird von
                     # start_tui.sh (siehe NEUSTART_CODE). Ohne Skript drumherum
@@ -9265,7 +9433,16 @@ def main():
     locale.setlocale(locale.LC_ALL, "")
 
     import curses
+    import signal
     import traceback
+    # SIGTERM (jemand beendet uns) und SIGHUP (Fenster zu) nicht mehr stumm
+    # sterben lassen: Grund ins Lebenslauf-Log, dann sauber raus.
+    for _sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(_sig, _signal_handler)
+    lebenslauf("START  %s  backend %s  eltern %d%s" % (
+        "neu geladen" if os.environ.get("ZENTRALE_TUI_RELOADED") else "frisch",
+        BASE_URL, os.getppid(),
+        "  (unter start_tui.sh)" if neustart_moeglich() else ""))
     store = Store()
     poller = threading.Thread(target=store.run, daemon=True)
     poller.start()
@@ -9285,16 +9462,29 @@ def main():
         while True:
             try:
                 curses.wrapper(run_ui, store)
+                if RELOAD["an"]:
+                    break             # Hot Reload: unten per exec ersetzen
                 if weglegen_statt_beenden():
+                    lebenslauf("weggelegt (läuft versteckt weiter)")
                     continue          # 'q' unter der Systemeinheit: Fenster weg, TUI bleibt warm
+                lebenslauf("ENDE  " + ("/reboot" if NEUSTART["an"] else
+                                       "/quit" if ENDE["echt"] else "sauber"))
                 break                 # sauberer Quit (Befehl /quit, oder 'q' ohne Systemeinheit)
             except KeyboardInterrupt:
                 # Ctrl-C = gewollter Quit (wie /quit). Sauberer Exit (rc 0), damit
                 # das Start-Skript still aufräumt statt "kein sauberer Quit" samt
                 # Crash-/Backend-Log auszuspucken.
+                lebenslauf("ENDE  ctrl-c (SIGINT)")
                 break
+            except Signalende as e:
+                lebenslauf("ENDE  durch Signal %d (Grund steht eine Zeile drüber)" % e.signum)
+                store.stop()
+                sys.exit(128 + e.signum)
             except Exception:
                 tb = traceback.format_exc()
+                # Jeder abgefangene Fehler landet im Lebenslauf — auch die, die
+                # die TUI überlebt. Häufen sie sich, steht hier warum.
+                lebenslauf("FEHLER (abgefangen, TUI lebt weiter)\n" + tb)
                 if frame_err_log:
                     try:
                         with open(frame_err_log, "a", encoding="utf-8") as f:
@@ -9312,6 +9502,7 @@ def main():
         # zurückgesetzt; Traceback in eine Datei UND nach stderr. Exit-Code 1
         # signalisiert dem Start-Skript "kein sauberer Quit" (siehe start_tui.sh).
         tb = traceback.format_exc()
+        lebenslauf("ABSTURZ  (zu viele Fehler in 10 s)\n" + tb)
         try:
             with open(CRASH_LOG, "w", encoding="utf-8") as f:
                 f.write("ZENTRALE-TUI Crash (Backend: %s)\n\n%s" % (BASE_URL, tb))
@@ -9323,6 +9514,16 @@ def main():
         sys.exit(1)
     finally:
         store.stop()
+
+    # Hot Reload: denselben Prozess mit dem neuen Code ersetzen. Terminal und
+    # pid bleiben, start_tui.sh merkt nichts. Wo das Rad stand, reist mit.
+    if RELOAD["an"]:
+        lebenslauf("HOT RELOAD  neuer Code in tui/")
+        os.environ["ZENTRALE_TUI_RELOADED"] = "1"
+        os.environ["ZENTRALE_TUI_RAD"] = str(RAD["sel"])
+        sys.stdout.flush()
+        atexit._run_exitfuncs()       # exec überspringt atexit (z.B. Tasten-Wiederholung zurück)
+        os.execv(sys.executable, [sys.executable] + sys.argv)
 
     # /reboot: kein Fehler, sondern eine Bitte an das Start-Skript — es killt
     # sein Backend (bzw. startet den Kern-Dienst neu) und ruft die TUI erneut auf.

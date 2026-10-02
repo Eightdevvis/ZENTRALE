@@ -17,7 +17,24 @@ ZENTRALE künftig von sich aus zeigt. Keine Buchstaben-Shortcuts mehr auf der
 Startseite; Theme/Laufschrift/Beenden über `/theme`, `/lauf`, `/quit`,
 weglegen über Cmd+z. Apps im Rad: Klavier, Post, Kalender, Fokus, Notizen,
 Graph, Karte, Tutor (öffnet das Zimmer). Die Tasten-Angaben bei den
-Werkzeugen unten (`g`, `c` …) sind seitdem nur noch Namen. Auf dem Pi ist das Wandbild das Zimmer, nicht
+Werkzeugen unten (`g`, `c` …) sind seitdem nur noch Namen.
+
+**Lebenslauf-Log** (seit 02.10.2026): `~/.local/state/zentrale/tui.log`
+(`ZENTRALE_TUI_LOG`, rotiert bei 512 KB nach `.1`, wird NIE gelöscht). Jeder
+Start, jedes Ende mit Grund (`/quit`, `/reboot`, ctrl-c, weggelegt), jeder
+abgefangene Fehler mit Traceback, und bei **SIGTERM/SIGHUP** die Prozesse, die
+in den 30 s davor gestartet wurden — der Absender steht fast immer darin.
+**Erster Blick, wenn ZENTRALE „einfach zu" ist.** Anlass: ein Updater-Test hat
+die echte TUI per SIGTERM geschlossen, spurlos (Terminal weg, Crash-Log in
+/tmp von jeder Test-TUI gelöscht). Tests lenken das Log um (conftest + venv-
+Riegel), und der venv-Riegel verbietet Testläufen Signale an fremde Prozesse.
+
+**Hot Reload** (seit 02.10.2026): die TUI beobachtet `tui/*.py`. Ändert sich
+etwas (Merge nach main, Edit) und ruht 1 s, wird kompiliert und die TUI per
+`exec` durch sich selbst ersetzt — gleiches Fenster, gleiche pid, das Rad
+bleibt stehen. Kaputter Code wird NICHT geladen (Meldung unten + Log). Nie
+beim Tippen, in der Befehlszeile, im Klavier oder während eine Antwort
+einläuft. Von Hand: `/reload`. Das Backend lädt nicht mit — dafür `/reboot`. Auf dem Pi ist das Wandbild das Zimmer, nicht
 diese Front (`../betrieb/deployment.md`). Der Rest dieser Datei ist die
 ausführliche Mechanik + das Warum; Datumsangaben im Text sind Marken, die
 Historie steht unten.

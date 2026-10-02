@@ -360,3 +360,61 @@ def test_venv_riegel_greift_in_einem_echten_subprozess(tmp_path):
     assert r.returncode == 0, (
         "Der venv-Riegel greift bei `python -m pytest` nicht:\n%s%s"
         % (r.stdout[-2000:], r.stderr[-500:]))
+
+
+# ── Kill-Riegel: ein Testlauf schiesst niemanden ab ausser seinen Kindern ──
+#
+# 02.10.2026: ein Updater-Test hat Sashas LAUFENDE ZENTRALE per SIGTERM
+# geschlossen (der Updater fand jede tui/zentrale_tui.py der Maschine).
+
+def _riegel_modul():
+    sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    import zentrale_testguard
+    return zentrale_testguard
+
+
+class _FakeOs:
+    def __init__(self):
+        self.gesendet = []
+        self.kill = lambda pid, sig: self.gesendet.append((pid, sig))
+        self.killpg = lambda pg, sig: self.gesendet.append(("pg", pg, sig))
+
+
+def test_kill_riegel_laesst_eigene_kinder_zu():
+    g = _riegel_modul()
+    fake = _FakeOs()
+    eltern = {300: 200, 200: 100}          # 300 -> 200 -> 100 (wir)
+    g.kill_riegel(fake, 100, eltern.get)
+    fake.kill(300, 15)
+    fake.killpg(200, 15)
+    assert fake.gesendet == [(300, 15), ("pg", 200, 15)]
+
+
+def test_kill_riegel_verweigert_fremde_prozesse():
+    g = _riegel_modul()
+    fake = _FakeOs()
+    eltern = {500: 1, 300: 100}
+    g.kill_riegel(fake, 100, eltern.get)
+    with pytest.raises(PermissionError):
+        fake.kill(500, 15)                 # fremd: z.B. Sashas echte TUI
+    with pytest.raises(PermissionError):
+        fake.killpg(500, 15)
+    fake.kill(500, 0)                      # "lebt er?" bleibt erlaubt
+    assert fake.gesendet == [(500, 0)]
+
+
+@pytest.mark.skipif(not _riegel_installiert(),
+                    reason="venv ohne Riegel — scripts/zentrale-venv-guard läuft nicht")
+def test_kill_riegel_greift_in_diesem_testlauf():
+    """Der echte Lauf: dieses pytest darf seinen eigenen Elternprozess nicht
+    signalisieren (SIGCONT wäre harmlos — es kommt gar nicht erst raus)."""
+    import signal
+    with pytest.raises(PermissionError, match="zentrale_testguard"):
+        os.kill(os.getppid(), signal.SIGCONT)
+
+
+def test_tui_logs_sind_im_testlauf_umgelenkt():
+    for var in ("ZENTRALE_TUI_LOG", "ZENTRALE_TUI_CRASH_LOG"):
+        p = os.environ.get(var, "")
+        assert p and not p.startswith("/tmp/zentrale-tui-crash"), var
+        assert ".local/state" not in p, var
