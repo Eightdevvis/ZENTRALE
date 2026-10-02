@@ -331,6 +331,87 @@ def bar(pct, length=10):
     return "█" * n + "░" * (length - n)
 
 
+def liste_zaehlen(items):
+    """(erledigt, gesamt) über die BLÄTTER einer Eintragsliste. Ordner zählen
+    nicht selbst mit — sie sind nur Gruppierung."""
+    d = t = 0
+    for it in items or []:
+        if not isinstance(it, dict):
+            continue
+        kids = it.get("items")
+        if isinstance(kids, list) and kids:
+            cd, ct = liste_zaehlen(kids)
+            d += cd
+            t += ct
+        else:
+            t += 1
+            if it.get("done"):
+                d += 1
+    return d, t
+
+
+def liste_erledigt(it):
+    """Effektiver Erledigt-Status (Spiegel von core.lists.is_done): Blatt =
+    eigenes 'done'; Ordner = erledigt, wenn ALLE Kinder erledigt sind."""
+    kids = it.get("items")
+    if isinstance(kids, list) and kids:
+        return all(liste_erledigt(c) for c in kids if isinstance(c, dict))
+    return bool(it.get("done"))
+
+
+def liste_hat_fokus(it):
+    """Trägt der Eintrag selbst oder irgendwas darunter den Fokus?"""
+    if it.get("focus"):
+        return True
+    return any(liste_hat_fokus(c) for c in (it.get("items") or [])
+               if isinstance(c, dict))
+
+
+def liste_ordnen(items, erledigte=False):
+    """Anzeige-Reihenfolge einer Ebene im Listen-Werkzeug.
+
+    erledigte=False: nur OFFENE Einträge — der Fokus (oder ein Ordner, in dem
+    er steckt) klebt oben, der Rest nach Erfülltheit absteigend (was kaum noch
+    Saft braucht, steht oben); Gleichstand behält die gespeicherte Reihenfolge.
+    erledigte=True: nur die abgeschlossenen (Inhalt der Bernsteinleiste)."""
+    rows = [it for it in (items or []) if isinstance(it, dict)]
+    if erledigte:
+        return [it for it in rows if liste_erledigt(it)]
+
+    def quote(it):
+        d, t = liste_zaehlen([it])
+        return d / t if t else 0.0
+
+    offen = [it for it in rows if not liste_erledigt(it)]
+    return sorted(offen, key=lambda it: (not liste_hat_fokus(it), -quote(it)))
+
+
+def bernstein_steine(done, total, breite):
+    """Spalten der Bernsteinleiste: je Spalte 'L' (leuchtender Stein), 'U'
+    (leerer Stein) oder ' ' (Fuge). Ein Stein = ein Punkt; die Steinbreite
+    rechnet sich aus Breite/Anzahl. Passen nicht alle Punkte als eigene Spalte
+    rein, steht jede Spalte anteilig für mehrere (dann ohne Fugen)."""
+    try:
+        total, done, breite = int(total), int(done), int(breite)
+    except (TypeError, ValueError):
+        return []
+    if total <= 0 or breite <= 0:
+        return []
+    done = max(0, min(done, total))
+    if total > breite:                          # zu viele Punkte → skalieren
+        lit = done * breite // total
+        return ["L"] * lit + ["U"] * (breite - lit)
+    fuge = breite // total >= 2                 # 1 Spalte Fuge, wenn Platz ist
+    out = []
+    for i in range(total):                      # Steine über die VOLLE Breite verteilen
+        zelle = (i + 1) * breite // total - i * breite // total
+        last = i == total - 1
+        stein = zelle if (not fuge or last) else zelle - 1
+        out += ["L" if i < done else "U"] * stein
+        out += [" "] * (zelle - stein)
+    return out
+
+
 def blockspark(vals):
     """ASCII-Sparkline ▁▂▃▄▅▆▇█ aus Zahlenwerten (wie viz.js blockSpark).
     Robust: filtert alles raus, was keine endliche Zahl ist."""
@@ -1267,6 +1348,7 @@ CTX_KEYS = {
     ],
     "list:view": [
         ("enter", "rein / hak"), ("space", "hak"), ("a/s", "neu"),
+        ("↑ bis oben", "bernstein: enter = abgeschlossene"),
         ("r", "name"), ("p", "projekt"), ("f", "fokus"), (">", "einordnen"),
         ("m", "raus"), ("d", "weg"), ("esc", "zurück"),
     ],
@@ -1796,7 +1878,7 @@ def run_ui(stdscr, store):
     # Rahmen ein klar sichtbares Grau (245). Grün NIE bold (= sonst Neon),
     # gedämpftes Salbeigrün (108) statt grellem Standard-Grün.
     ROLES = ["acc", "warn", "net", "graph", "event", "audio", "hook", "span",
-             "num", "amber", "cyc", "dim", "faint", "bright", "ink", "band"]
+             "num", "amber", "amberhi", "amberdk", "cyc", "dim", "faint", "bright", "ink", "band"]
     THEMES = {
         "night": {
             "bg8": curses.COLOR_BLACK, "bg256": 16,
@@ -1811,6 +1893,9 @@ def run_ui(stdscr, store):
             "span":  (curses.COLOR_YELLOW,  216, 0),    # Mehrtages-Klammer: weiches Orange
             "num":   (curses.COLOR_YELLOW,  222, 0),
             "amber": (curses.COLOR_YELLOW,  214, curses.A_BOLD),  # Fokus-Leiste: Bernstein
+            # Bernsteinleiste (Listen-Werkzeug): Glanzpixel + Schatten/leere Fassung
+            "amberhi": (curses.COLOR_YELLOW, 222, curses.A_BOLD),
+            "amberdk": (curses.COLOR_YELLOW, 136, 0),
             # Zyklus/PMS (aus dem »periode«-Graphen): weiches Altrosa, bewusst
             # NICHT bold — die Vorhersage soll dastehen, nicht rufen.
             "cyc":   (curses.COLOR_MAGENTA, 175, 0),
@@ -1848,6 +1933,9 @@ def run_ui(stdscr, store):
             "span":  (curses.COLOR_RED,     166, 0),    # Mehrtages-Klammer: kräftiges Orange (auf Weiss lesbar)
             "num":   (curses.COLOR_BLUE,    26,  0),
             "amber": (curses.COLOR_YELLOW,  172, curses.A_BOLD),  # Fokus-Leiste: Bernstein (auf weiß lesbar)
+            # Bernsteinleiste: Glanz heller, Schatten/Fassung dunkler (≥4,5:1 auf weiß)
+            "amberhi": (curses.COLOR_YELLOW, 214, curses.A_BOLD),
+            "amberdk": (curses.COLOR_YELLOW, 130, 0),
             # Zyklus/PMS: dasselbe Altrosa, auf Weiß dunkler gesetzt (lesbar).
             "cyc":   (curses.COLOR_MAGENTA, 132, 0),
             "dim":   (curses.COLOR_BLACK,   16,  0),    # schwarzer Text auf weiß
@@ -2159,10 +2247,14 @@ def run_ui(stdscr, store):
     #          "new" (Liste anlegen/umbenennen) | "place"/"move"/"move_new"
     #   proots : Projekt-Roots als Deskriptoren [{lid,iid}] (iid None = Liste)
     #   fsel   : Cursor-Index in der Forest-Wurzel (proots + Nicht-Projekt-Listen)
+    #   isel   : in "view" Index in liste_ordnen(…) der offenen Ebene; -1 =
+    #            die Bernsteinleiste oben (enter → abgeschlossene zeigen)
+    #   showdone: in "view" nur die abgeschlossenen Einträge der Ebene zeigen
     L = {"active": False, "view": "forest", "lists": [], "sel": 0,
          "proots": [], "fsel": 0,      # Forest-Wurzel: Projekt-Roots + Cursor
          "fedit": None,                # Deskriptor beim Inline-Umbenennen (forest)
          "def": None, "isel": 0, "path": [], "adding": False, "input": "",
+         "showdone": False,
          "msg": "",
          "confirm": False,             # Lösch-Nachfrage für ganze Liste
          "addparent": None,            # Eltern-id beim Anhängen (None = top)
@@ -3469,7 +3561,7 @@ def run_ui(stdscr, store):
             L["path"] = []
         else:
             L["path"] = l_path_to(lst.get("items"), desc["iid"]) or []
-        L["isel"] = 0
+        L["isel"] = 0; L["showdone"] = False
         L["adding"] = False; L["input"] = ""; L["msg"] = ""
         L["view"] = "view"
 
@@ -3502,31 +3594,12 @@ def run_ui(stdscr, store):
         return out
 
     def l_count(items):
-        """(erledigt, gesamt) über die BLÄTTER zählen (echte abhakbare Punkte).
-        Ordner zählen nicht selbst mit — sie sind nur Gruppierung; ihr Status
-        ist abgeleitet (l_done)."""
-        d = t = 0
-        for it in items or []:
-            if not isinstance(it, dict):
-                continue
-            kids = it.get("items")
-            if isinstance(kids, list) and kids:      # Ordner → nur seine Blätter
-                cd, ct = l_count(kids)
-                d += cd
-                t += ct
-            else:                                     # Blatt
-                t += 1
-                if it.get("done"):
-                    d += 1
-        return d, t
+        """(erledigt, gesamt) über die BLÄTTER (siehe liste_zaehlen)."""
+        return liste_zaehlen(items)
 
     def l_done(it):
-        """Effektiver Erledigt-Status (Spiegel von core.lists.is_done): Blatt =
-        eigenes 'done'; Ordner = erledigt, wenn ALLE Kinder erledigt sind."""
-        kids = it.get("items")
-        if isinstance(kids, list) and kids:
-            return all(l_done(c) for c in kids if isinstance(c, dict))
-        return bool(it.get("done"))
+        """Effektiver Erledigt-Status (siehe liste_erledigt)."""
+        return liste_erledigt(it)
 
     def l_container():
         """Die gerade offene Ebene auflösen: (direkte Kinder, container-id,
@@ -3552,11 +3625,20 @@ def run_ui(stdscr, store):
             L["path"] = valid
         return (node.get("items") or []), pid, crumbs
 
-    def l_index_in_container(iid):
-        """Index des Eintrags mit iid unter den DIREKTEN Kindern der offenen
-        Ebene (0, wenn nicht da)."""
+    def l_vitems():
+        """Die offene Ebene so, wie sie angezeigt wird (liste_ordnen): offen
+        und sortiert — oder nur das Abgeschlossene (showdone)."""
         items, _pid, _cr = l_container()
-        for i, it in enumerate(items):
+        return liste_ordnen(items, L["showdone"])
+
+    def l_toggle_msg(it):
+        """Rückmeldung nach dem Abhaken: abgehakt wandert's in den Bernstein."""
+        return "wieder offen" if it.get("done") else "◆ in den bernstein"
+
+    def l_index_in_container(iid):
+        """Index des Eintrags mit iid in der ANGEZEIGTEN Ebene (l_vitems; 0,
+        wenn nicht da — z.B. gerade abgehakt und damit im Bernstein)."""
+        for i, it in enumerate(l_vitems()):
             if isinstance(it, dict) and it.get("id") == iid:
                 return i
         return 0
@@ -3611,9 +3693,10 @@ def run_ui(stdscr, store):
         if cur is None:                       # Liste verschwunden → zurück zur Wurzel
             L["view"] = "forest"; L["path"] = []
             return
-        items, _pid, _cr = l_container()      # validiert/kürzt den Drill-Pfad
-        if L["isel"] >= len(items):
-            L["isel"] = max(0, len(items) - 1)
+        l_container()                         # validiert/kürzt den Drill-Pfad
+        n = len(l_vitems())
+        if L["isel"] >= n:                    # -1 = Bernsteinleiste, wenn leer
+            L["isel"] = n - 1
 
     def safe_addstr(y, x, text, attr=0):
         h, w = stdscr.getmaxyx()
@@ -4389,6 +4472,35 @@ def run_ui(stdscr, store):
         if iw < 8:
             return
 
+        def draw_bernstein(y, bx, x, w, done, total):
+            """Bernsteinleiste (2 Zeilen): ein Stein je Punkt der Ebene, jeder
+            abgehakte leuchtet. Rechts der Zähler; ausgewählt (isel -1) zeigt
+            ein › links und der Zähler steht invers."""
+            sel = (L["isel"] == -1)
+            cnt = " %d/%d" % (done, total)
+            sw = max(1, w - 2 - len(cnt))             # Platz für die Steine
+            cols = bernstein_steine(done, total, sw)
+            safe_addstr(y, x, "▐", C["amberdk"])
+            safe_addstr(y + 1, x, "▐", C["amberdk"])
+            for i, c in enumerate(cols):
+                if c == "L":                          # leuchtender Stein, pixelig schattiert:
+                    anf = i == 0 or cols[i - 1] != "L"            # Glanz oben links,
+                    end = i == len(cols) - 1 or cols[i + 1] != "L"  # Schatten unten rechts
+                    breit = not (anf and end)
+                    safe_addstr(y, x + 1 + i, "█",
+                                C["amberhi"] if (anf and breit) else C["amber"])
+                    safe_addstr(y + 1, x + 1 + i, "█",
+                                C["amberdk"] if (end and breit) else C["amber"])
+                elif c == "U":                        # leere Fassung
+                    safe_addstr(y, x + 1 + i, "░", C["amberdk"])
+                    safe_addstr(y + 1, x + 1 + i, "░", C["amberdk"])
+            safe_addstr(y, x + 1 + sw, "▌", C["amberdk"])
+            safe_addstr(y + 1, x + 1 + sw, "▌", C["amberdk"])
+            safe_addstr(y, x + 2 + sw, cnt,
+                        (C["amber"] | curses.A_REVERSE) if sel else C["amber"])
+            if sel:
+                safe_addstr(y, bx + 1, "›", C["bright"])
+
         def rows_render(nodes, sel_idx, y0, y_max, mark_focus=True):
             """Flache proj_render-Knoten (2 Zeilen je Eintrag) mit Cursor-Fenster
             zeichnen. Liefert (nächste_y, wieviele_unten_abgeschnitten)."""
@@ -4412,21 +4524,31 @@ def run_ui(stdscr, store):
             items, _pid, crumbs = l_container()   # NUR die offene Ebene (Ordner-Sicht)
             done, total = l_count(items)
             head = " / ".join(crumbs)             # Breadcrumb: liste / ordner / …
-            addclip(by + 1, ix, "%s  (%d/%d)" % (head, done, total), iw, C["bright"])
+            if L["showdone"]:
+                head += " · abgeschlossen"
+            addclip(by + 1, ix, head, iw - 8, C["bright"])
             safe_addstr(by + 1, bx + bw - 9, "[a neu]", C["acc"])
-            safe_addstr(by + 2, ix, "─" * iw, C["faint"])
+            y0 = by + 3
+            if total:
+                draw_bernstein(by + 2, bx, ix, iw, done, total)
+                y0 = by + 5
+            safe_addstr(y0 - 1, ix, "─" * iw, C["faint"])
             input_row = by + bh - 3
             list_bottom = (input_row - 1) if L["adding"] else bottom
-            y0 = by + 3
-            if not items:
-                addclip(y0, ix, "noch leer — 'a' hängt was an", iw, C["faint"])
+            vis = l_vitems()
+            if not vis:
+                if L["showdone"]:
+                    leer = "noch nichts abgeschlossen — esc zurück"
+                elif total:
+                    leer = "alles erledigt ◆ — enter auf den bernstein zeigt's"
+                else:
+                    leer = "noch leer — 'a' hängt was an"
+                addclip(y0, ix, leer, iw, C["faint"])
             else:
                 # Jeden Eintrag im FOCUS-Look: Titel + Leiste (proj_render).
                 # Blatt = eigene done/1-Leiste, Ordner = Blätter-Fortschritt.
                 nodes = []
-                for it in items:
-                    if not isinstance(it, dict):
-                        continue
+                for it in vis:
                     kids = it.get("items")
                     folder = isinstance(kids, list) and bool(kids)
                     d, t = l_count(kids) if folder else (1 if it.get("done") else 0, 1)
@@ -4446,6 +4568,9 @@ def run_ui(stdscr, store):
                 addclip(bottom, ix, (tip + " · esc abbrechen  " + L["msg"]).strip(), iw, C["faint"])
             elif L["msg"]:                     # Shortcuts liegen unter '/'; nur Feedback
                 addclip(bottom, ix, L["msg"], iw, C["faint"])
+            elif L["isel"] == -1 and total:    # auf dem Bernstein: sagen, was enter tut
+                addclip(bottom, ix, "enter: zurück zu den offenen" if L["showdone"]
+                        else "enter: abgeschlossene zeigen", iw, C["amber"])
 
         elif L["view"] == "place":         # Knoten (Liste/Eintrag) Forest-weit einordnen
             if L["place_kind"] == "list":
@@ -7718,9 +7843,19 @@ def run_ui(stdscr, store):
                         L["input"] += chr(ch)
                 else:
                     items, pid, _cr = l_container()      # nur die offene Ebene
-                    cur = items[L["isel"]] if 0 <= L["isel"] < len(items) else None
+                    vis = l_vitems()                     # so, wie sie angezeigt wird
+                    cur = vis[L["isel"]] if 0 <= L["isel"] < len(vis) else None
+                    has_bar = l_count(items)[1] > 0      # Bernsteinleiste da?
                     if ch in (27, ord("l"), ord("L")):         # Esc/l → Ebene zurück, sonst Wurzel
-                        if L["path"]:
+                        # In der Abgeschlossen-Sicht erst raus aus ihr — außer
+                        # wir stecken in einem selbst erledigten Ordner (dorthin
+                        # kam man aus der Abgeschlossen-Sicht): dann eine Ebene
+                        # hoch und dort abgeschlossen bleiben.
+                        node = (l_find_item(L["def"].get("items"), L["path"][-1])
+                                if L["path"] else None)
+                        if L["showdone"] and not (node and l_done(node)):
+                            L["showdone"] = False; L["isel"] = -1; L["msg"] = ""
+                        elif L["path"]:
                             back = L["path"][-1]
                             L["path"] = L["path"][:-1]
                             L["isel"] = l_index_in_container(back)
@@ -7729,10 +7864,14 @@ def run_ui(stdscr, store):
                             L["view"] = "forest"; L["msg"] = ""; l_load()
                     elif ch in (ord("q"), ord("Q")):           # q → ganze TUI beenden
                         break
-                    elif ch in (curses.KEY_UP, ord("k")):
-                        L["isel"] = max(0, L["isel"] - 1)
+                    elif ch in (curses.KEY_UP, ord("k")):      # über den ersten → Bernsteinleiste
+                        L["isel"] = max(-1 if has_bar else 0, L["isel"] - 1)
                     elif ch in (curses.KEY_DOWN, ord("j")):
-                        L["isel"] = min(max(0, len(items) - 1), L["isel"] + 1)
+                        L["isel"] = min(len(vis) - 1, L["isel"] + 1)
+                    elif ch in (10, 13, curses.KEY_ENTER) and L["isel"] == -1:
+                        # Enter auf dem Bernstein: Abgeschlossenes zeigen / zurück
+                        L["showdone"] = not L["showdone"]; L["msg"] = ""
+                        L["isel"] = 0 if l_vitems() else -1
                     elif ch in (10, 13, curses.KEY_ENTER):     # Enter: Ordner rein, sonst abhaken
                         kids = cur.get("items") if cur else None
                         if cur and isinstance(kids, list) and kids:
@@ -7742,6 +7881,7 @@ def run_ui(stdscr, store):
                                 api_call("/api/lists/%s/items/%d/toggle" % (lid, cur["id"]),
                                          method="POST")
                                 l_load(); l_sync_def()
+                                L["msg"] = l_toggle_msg(cur)
                             except Exception:
                                 L["msg"] = "umschalten fehlgeschlagen"
                     elif ch == ord(" "):                       # space: Blatt abhaken
@@ -7753,9 +7893,11 @@ def run_ui(stdscr, store):
                                 api_call("/api/lists/%s/items/%d/toggle" % (lid, cur["id"]),
                                          method="POST")
                                 l_load(); l_sync_def()
+                                L["msg"] = l_toggle_msg(cur)
                             except Exception:
                                 L["msg"] = "umschalten fehlgeschlagen"
                     elif ch in (ord("a"), ord("A")):           # neuer Eintrag in DIESER Ebene
+                        L["showdone"] = False                  # Neues ist offen → offene Sicht
                         L["adding"] = True; L["imode"] = "add"
                         L["addparent"] = pid; L["edit_iid"] = None
                         L["input"] = ""; L["msg"] = ""
@@ -7800,6 +7942,7 @@ def run_ui(stdscr, store):
                         if cur and lid:
                             l_focus_toggle({"lid": lid, "iid": cur["id"]})
                             l_sync_def()
+                            L["isel"] = l_index_in_container(cur["id"])  # klebt jetzt oben
             elif L["view"] == "place":         # Knoten (Liste/Eintrag) Forest-weit einordnen
                 tg = l_forest_targets(L["place_kind"], L["place_lid"], L["place_iid"])
                 back = "view" if L["place_kind"] == "item" else "forest"

@@ -692,7 +692,20 @@ aufgeklapptem Baum**: jeder Eintrag kann eigene
 Unterpunkte tragen; ein Eintrag MIT Kindern ist eine anklickbare Ordner-Zeile
 (Marker `▸`, Anzeige `(erledigt/gesamt)`), KEIN eingerückter Teilbaum. `L["path"]`
 ist der Drill-Pfad (Eintrags-ids) in der offenen Liste, `l_container()` löst die
-gerade offene Ebene + Breadcrumb auf, `isel` zählt nur die DIREKTEN Kinder. ↑/↓
+gerade offene Ebene + Breadcrumb auf, `isel` zählt nur die DIREKTEN Kinder —
+und zwar in der **Anzeige-Reihenfolge** `l_vitems()` = `liste_ordnen(…)`:
+**Abgeschlossenes ist ausgeblendet**, der **Fokus** (oder ein Ordner, in dem er
+steckt) **klebt oben**, der Rest sortiert sich nach **Erfülltheit absteigend**
+(was kaum noch Saft braucht, steht oben; Gleichstand = gespeicherte Reihenfolge).
+Ganz oben über der Ebene steht die **Bernsteinleiste** (`draw_bernstein`, 2 Zeilen,
+Farbrollen `amber`/`amberhi`/`amberdk`): ein Stein je Blatt der Ebene, jeder
+abgehakte leuchtet (pixelig schattiert: Glanz oben links, Schatten unten rechts),
+rechts `erledigt/gesamt`. Die Steinbreite rechnet `bernstein_steine` aus
+Breite/Anzahl (bei mehr Punkten als Spalten skaliert sie ohne Fugen). `↑` über
+den ersten Eintrag hinaus wählt die Leiste (`isel = -1`), **Enter** darauf schaltet
+`L["showdone"]` → nur die **abgeschlossenen** Einträge der Ebene; Enter/`Esc`
+wieder zurück (aus einem erledigten Ordner, in den man von dort reinging, geht
+`Esc` erst eine Ebene hoch). ↑/↓
 wählen, **Enter** geht in einen Ordner REIN (bzw. hakt ein Blatt ab), **`space`**
 hakt ein **Blatt** ab/auf (`…/items/<iid>/toggle`), `a` hängt einen Eintrag in die
 GERADE OFFENE Ebene an (`L["addparent"]` = Container-id), **`s` hängt einen
