@@ -47,6 +47,11 @@ import urllib.parse
 
 BASE_URL = (os.environ.get("ZENTRALE_URL") or "http://localhost:5000").rstrip("/")
 
+try:                                    # Pixel-Baustein (tui/pixel.py)
+    from tui import pixel
+except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
+    import pixel
+
 
 def _theme_modul():
     """core/theme.py importieren (Pfad einhängen, falls nötig)."""
@@ -2127,6 +2132,36 @@ def run_ui(stdscr, store):
         },
     }
     C = {}
+    # Farbpaare des Pixel-Baustein: (fg, bg) → curses-Attribut, vergeben von
+    # PIX["base"] bis PIX["top"]; läuft das Budget voll, wird es zu Beginn des
+    # nächsten Bildes geleert (nie mitten im Bild — Paare sind Referenzen).
+    PIX = {"pairs": {}, "base": 0, "top": 0, "voll": False}
+    PIX_MODUS = (os.environ.get("ZENTRALE_PIXEL") or "mix").strip().lower()
+
+    def pix_farbe(rgb):
+        """RGB → curses-Farbnummer: 24 Bit, wenn das Terminal es kann (auf
+        16er-Stufen gerundet, damit die Paare reichen), sonst die nächste der 256."""
+        if C.get("pix_true"):
+            r, g, b = (min(255, round(v / 16) * 16) for v in rgb)
+            n = (r << 16) | (g << 8) | b
+            return n if n >= 8 else 8          # 0–7 wären Palettenfarben
+        return pixel.rgb_256(rgb)
+
+    def pix_attr(fg, bg):
+        key = (pix_farbe(fg), pix_farbe(bg))
+        attr = PIX["pairs"].get(key)
+        if attr is None:
+            n = PIX["top"] - len(PIX["pairs"])
+            if n <= PIX["base"]:
+                PIX["voll"] = True
+                return C.get("amber", 0)
+            try:
+                curses.init_pair(n, key[0], key[1])
+                attr = curses.color_pair(n)
+            except curses.error:
+                return C.get("amber", 0)
+            PIX["pairs"][key] = attr
+        return attr
 
     def apply_theme(tname):
         if not has_color:
@@ -2263,6 +2298,13 @@ def run_ui(stdscr, store):
                 curses.init_pair(pp, col, bg)
                 C["keyglow"].append(curses.color_pair(pp) | curses.A_BOLD)
                 pp += 1
+        # Pixel-Baustein: Theme-Hintergrund als RGB + freie Farbpaare ab pp.
+        # Paare über 255 passen nicht ins curses-Attribut → Budget bis 255.
+        C["pix_bg"] = pixel.xterm_rgb(th["bg256"]) if c256 else None
+        C["pix_true"] = curses.COLORS >= (1 << 24)
+        PIX["base"] = pp
+        PIX["top"] = min(255, curses.COLOR_PAIRS - 1)
+        PIX["pairs"].clear()
         # leere Zellen (erase) bekommen den Theme-Hintergrund
         stdscr.bkgd(" ", C["ink"])
 
@@ -4646,6 +4688,24 @@ def run_ui(stdscr, store):
             ein › links und der Zähler steht invers."""
             sel = (L["isel"] == -1)
             cnt = " %d/%d" % (done, total)
+            if C.get("pix_bg") is not None and PIX_MODUS != "off":
+                # Pixel-Baustein: Sashas Treppenschliff-Stein, Mix aus Halb-
+                # block/Viertel/Sextant; der zuletzt abgehakte glimmt im Takt.
+                sw = max(1, w - len(cnt) - 1)
+                if PIX["voll"]:
+                    PIX["pairs"].clear(); PIX["voll"] = False
+                glimm = int(time.time() * 4) % 8
+                rows = pixel.bernstein_zellen(done, total, sw, C["pix_bg"], glimm,
+                                              "half" if PIX_MODUS == "half" else "mix")
+                for r, line in enumerate(rows):
+                    for i, (ch, fg, bgc) in enumerate(line):
+                        safe_addstr(y + r, x + i, ch, pix_attr(fg, bgc))
+                safe_addstr(y, x + sw + 1, cnt,
+                            (C["amber"] | curses.A_REVERSE) if sel else C["amber"])
+                if sel:
+                    safe_addstr(y, bx + 1, "›", C["bright"])
+                return
+            # Rückfall ohne 256 Farben: schlichte Stein-Spalten
             sw = max(1, w - 2 - len(cnt))             # Platz für die Steine
             cols = bernstein_steine(done, total, sw)
             safe_addstr(y, x, "▐", C["amberdk"])

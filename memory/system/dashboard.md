@@ -714,11 +714,20 @@ und zwar in der **Anzeige-Reihenfolge** `l_vitems()` = `liste_ordnen(…)`:
 **Abgeschlossenes ist ausgeblendet**, der **Fokus** (oder ein Ordner, in dem er
 steckt) **klebt oben**, der Rest sortiert sich nach **Erfülltheit absteigend**
 (was kaum noch Saft braucht, steht oben; Gleichstand = gespeicherte Reihenfolge).
-Ganz oben über der Ebene steht die **Bernsteinleiste** (`draw_bernstein`, 2 Zeilen,
-Farbrollen `amber`/`amberhi`/`amberdk`): ein Stein je Blatt der Ebene, jeder
-abgehakte leuchtet (pixelig schattiert: Glanz oben links, Schatten unten rechts),
-rechts `erledigt/gesamt`. Die Steinbreite rechnet `bernstein_steine` aus
-Breite/Anzahl (bei mehr Punkten als Spalten skaliert sie ohne Fugen). `↑` über
+Ganz oben über der Ebene steht die **Bernsteinleiste** (`draw_bernstein`, 2 Zeilen):
+ein Stein je Blatt der Ebene, jeder abgehakte leuchtet, die offenen sind derselbe
+Stein fast durchsichtig, der zuletzt abgehakte glimmt im Takt nach; rechts
+`erledigt/gesamt`. Gemalt wird sie vom **Pixel-Baustein `tui/pixel.py`** (curses-frei,
+`tests/test_tui_pixel.py`): Sashas Stein im **Treppenschliff** (Vorlage war ein
+16×16-PNG) als Bauregel `gem(w, h, ay)`, fein gemalt mit 2×6 Pixeln je Zeichenfeld
+und je Feld aufs treueste Zeichen gerechnet (**Mix**: Halbblock ▀, Viertel ▚ oder
+Sextant 🬗 — VTE zeichnet alle selbst; zwei Farben je Feld). Steinbreite 4/3/2
+Zeichen je nach Anzahl, sonst durchgehende Füllung. Farben: 24 Bit, wenn curses es
+kann (`TERM=tmux-direct`), sonst die nächste der 256; eigene Farbpaare ab dem
+Theme-Ende bis 255 (`PIX`, `pix_attr`). `ZENTRALE_PIXEL=half` = nur Halbblöcke (für
+Terminals ohne Sextanten, z.B. E-Ink-App), `=off` bzw. <256 Farben = schlichte
+Rückfall-Leiste (`bernstein_steine`, Farbrollen `amber`/`amberhi`/`amberdk`).
+Entwürfe dazu entstanden in einer Vorschau-Seite, die dieselbe Umrechnung zeigt. `↑` über
 den ersten Eintrag hinaus wählt die Leiste (`isel = -1`), **Enter** darauf schaltet
 `L["showdone"]` → nur die **abgeschlossenen** Einträge der Ebene; Enter/`Esc`
 wieder zurück (aus einem erledigten Ordner, in den man von dort reinging, geht
