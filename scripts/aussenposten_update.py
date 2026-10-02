@@ -267,7 +267,7 @@ def _argv_liste():
     return raus
 
 
-def _python_prozesse(skript):
+def _python_prozesse(skript, ziel=None):
     """PIDs, die `skript` WIRKLICH ausfuehren — nicht die, die es nur erwaehnen.
 
     Der Unterschied ist teuer gewesen: der Kiosk startet die TUI aus einer
@@ -279,17 +279,34 @@ def _python_prozesse(skript):
     Deshalb wird hier das argv zerlegt: das erste Wort muss ein Python sein
     und das Skript ein eigenes Argument. Ein Wrapper, der es nur im Text
     seiner Kommandozeile stehen hat, faellt damit raus.
+
+    `ziel` (optional): nur Laeufe, deren Skript in DIESEM Ordner liegt —
+    relativ aufgerufen zaehlt das Arbeitsverzeichnis des Prozesses. Ohne das
+    traf ein Update in einem Testordner jede TUI der Maschine: am 02.10.2026
+    hat ein Testlauf so Sashas laufende ZENTRALE per SIGTERM geschlossen.
     """
     treffer = []
+    basis = os.path.realpath(ziel) + os.sep if ziel else None
     for pid, argv in _argv_liste():
         if not os.path.basename(argv[0]).startswith("python"):
             continue
-        if any(a == skript or a.endswith("/" + skript) for a in argv[1:]):
+        for a in argv[1:]:
+            if not (a == skript or a.endswith("/" + skript)):
+                continue
+            if basis:
+                try:
+                    voll = os.path.realpath(os.path.join(
+                        os.readlink("/proc/%d/cwd" % pid), a))
+                except OSError:
+                    continue
+                if not voll.startswith(basis):
+                    continue
             treffer.append((pid, " ".join(argv)))
+            break
     return treffer
 
 
-def front_neustarten(logdatei):
+def front_neustarten(logdatei, ziel):
     """Die laufende TUI beenden, damit sie mit dem neuen Code wiederkommt.
 
     Ohne das bringt ein Update auf einem Wand-Knoten gar nichts: die alte
@@ -307,7 +324,9 @@ def front_neustarten(logdatei):
     bei jedem Oeffnen neu.
     """
     import signal
-    laeuft = _python_prozesse("tui/zentrale_tui.py")
+    # Nur die TUI DIESES Knotens (aus `ziel`), nie eine fremde TUI derselben
+    # Maschine — siehe _python_prozesse.
+    laeuft = _python_prozesse("tui/zentrale_tui.py", ziel)
     if not laeuft:
         log("keine TUI aktiv — nichts neu zu starten", logdatei)
         return
@@ -318,7 +337,7 @@ def front_neustarten(logdatei):
                 "neuen Stand zurueck" % pid, logdatei)
         except OSError as exc:
             log("TUI (pid %d) liess sich nicht beenden: %s" % (pid, exc), logdatei)
-    if _python_prozesse("tutor/room.py"):
+    if _python_prozesse("tutor/room.py", ziel):
         log("Persona-Zimmer laeuft und bleibt offen (koennte ein Gespraech "
             "sein) — es startet beim naechsten Oeffnen mit neuem Code", logdatei)
 
@@ -441,7 +460,7 @@ def main():
 
     abhaengigkeiten_angleichen(ziel, logdatei, req_vorher)
     if not a.kein_neustart:
-        front_neustarten(logdatei)
+        front_neustarten(logdatei, ziel)
     return 0
 
 

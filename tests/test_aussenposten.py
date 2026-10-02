@@ -357,7 +357,7 @@ def test_front_neustart_beendet_die_tui(tmp_path):
     schlaefer = sp.Popen([sys.executable, str(skript / "zentrale_tui.py")])
     log = tmp_path / "log.txt"
     try:
-        updater.front_neustarten(str(log))
+        updater.front_neustarten(str(log), str(tmp_path))
         for _ in range(50):
             if schlaefer.poll() is not None:
                 break
@@ -370,9 +370,30 @@ def test_front_neustart_beendet_die_tui(tmp_path):
         schlaefer.wait()
 
 
+def test_fremde_tui_bleibt_heil(tmp_path):
+    """Ein Update in Ordner A beendet nie die TUI aus Ordner B. Ohne das hat
+    am 02.10.2026 ein Testlauf Sashas echte ZENTRALE geschlossen."""
+    import subprocess as sp
+    fremd = tmp_path / "fremd" / "tui"
+    fremd.mkdir(parents=True)
+    (fremd / "zentrale_tui.py").write_text("import time; time.sleep(30)\n")
+    (tmp_path / "knoten").mkdir()
+    p = sp.Popen([sys.executable, "tui/zentrale_tui.py"], cwd=str(fremd.parent))
+    try:
+        updater.front_neustarten(str(tmp_path / "log.txt"), str(tmp_path / "knoten"))
+        import time as _t
+        _t.sleep(0.3)
+        assert p.poll() is None, "fremde TUI wurde beendet"
+        gefunden = {pid for pid, _ in updater._python_prozesse(
+            "tui/zentrale_tui.py", str(fremd.parent))}
+        assert p.pid in gefunden, "relativ gestartete TUI im eigenen Ordner muss gefunden werden"
+    finally:
+        p.kill(); p.wait()
+
+
 def test_kein_neustart_wenn_keine_tui_laeuft(tmp_path):
     log = tmp_path / "log.txt"
-    updater.front_neustarten(str(log))
+    updater.front_neustarten(str(log), str(tmp_path))
     assert "keine TUI aktiv" in log.read_text()
 
 
