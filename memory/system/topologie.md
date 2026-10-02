@@ -227,7 +227,22 @@ Dateien, weil `git ls-files` mid-commit leer kam): **ein laufender Daemon ist
 raus.** Stattdessen läuft **genau einmal beim ZENTRALE-Start**, *bevor* das
 Backend hochfährt → kein Race.
 
-`zentrale-sync-boot` macht: `find-pc`, dann `zentrale-sync pull --update` +
+**PC-Status — eine Quelle (seit 02.10.2026):** `core/pc_status.py` /
+`zentrale-pc-status` (Symlink in `~/.local/bin`, Exit 0 = verbunden, 1 =
+getrennt, `--frisch`, `--json`). Stand liegt in
+`$XDG_RUNTIME_DIR/zentrale/peer.json`. Prüfung: 1 s TCP auf Port 22 der
+letzten Adresse aus dem `find-pc`-Block; der teure Finder (eine Runde, 6 s
+Deckel) nur bei Netzwechsel oder alle 5 min. Die TUI hält den Stand warm
+(alle 15 s) und zeigt `PC ✓/✗` oben rechts. `zentrale-sync`,
+`zentrale-sync-boot` und `zentrale-push-data` fragen zuerst den Status und
+steigen sofort aus, wenn der PC nicht da ist; ssh/rsync haben jetzt
+`ConnectTimeout`. Anlass: ein Pull hing über zwei Minuten an einem PC, der
+nicht da war, und der Start wartete bis zu ~12 s. ⚠ Die Skripte in
+`~/.local/bin` (zentrale-sync*, push-data, find-pc) liegen NICHT in git —
+der Umbau ist nur auf dem Laptop; PC/Pi fallen ohne `zentrale-pc-status`
+auf den alten Weg zurück.
+
+`zentrale-sync-boot` macht: Status prüfen (früher `find-pc` + ssh), dann `zentrale-sync pull --update` +
 `push --update` (newest-wins per mtime; da immer nur eine Maschine zur Zeit
 schreibt, clasht nichts). Best-effort: PC weg/aus → still überspringen, Start
 läuft normal. **Nur nicht-git-getrackte Dateien**; `zentrale-sync` pull hat
@@ -350,3 +365,5 @@ Event.
 - **2026-09-04** — Aussenposten holen ihr Paket per HTTP statt git-Pull.
 - **2026-09-14** — Kiosk-Default `room` (Zimmer), PIR an der Bridge,
   Wachplan.
+- **2026-10-02** — PC-Status als eine Quelle (`zentrale-pc-status`), Sync-
+  Skripte steigen sofort aus statt zu suchen.

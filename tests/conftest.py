@@ -84,6 +84,8 @@ def _theme_tmp_aufraeumen():
 os.environ.setdefault("ZENTRALE_TUI_LOG", os.path.join(_THEME_TMP, "tui.log"))
 os.environ.setdefault("ZENTRALE_TUI_CRASH_LOG",
                       os.path.join(_THEME_TMP, "tui-crash.log"))
+# PC-Status (core/pc_status.py) nie in die echte Datei der Maschine schreiben.
+os.environ.setdefault("ZENTRALE_PEER_STATUS", os.path.join(_THEME_TMP, "peer.json"))
 
 
 # 6. Kein Testlauf darf Geld ausgeben.

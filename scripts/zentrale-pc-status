@@ -1,0 +1,15 @@
+#!/usr/bin/env python3
+"""zentrale-pc-status — ist der PC (bzw. auf dem PC: der Laptop) gerade da?
+
+Eine Quelle für alle: Exit 0 = verbunden, 1 = getrennt. Liest den Stand,
+den die TUI warm hält, und prüft nur selbst, wenn er älter als 30 s ist.
+--frisch prüft sofort, --json gibt alles aus. Logik: core/pc_status.py.
+"""
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+    os.path.realpath(__file__))), "core"))
+import pc_status  # noqa: E402
+
+sys.exit(pc_status.main(sys.argv[1:]))

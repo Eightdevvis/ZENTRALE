@@ -68,6 +68,38 @@ def _load_theme_state():
     """
     return _theme_modul().ThemeState()
 
+# ── Ist der PC da? (core/pc_status.py — EINE Quelle für alle) ──────────────
+# Die TUI hält den Stand warm (alle 15 s, billig: 1 s TCP auf die letzte
+# Adresse) und zeigt ihn oben. Skripte und Claude fragen dieselbe Datei über
+# `zentrale-pc-status`, statt jeder für sich minutenlang zu suchen.
+PEER = {"d": None}
+
+
+def peer_wach(stop=None, takt=15.0):
+    _theme_modul()                       # hängt core/ in sys.path
+    try:
+        import pc_status
+    except Exception:
+        return
+    while not (stop and stop.is_set()):
+        try:
+            PEER["d"] = pc_status.pruefen()
+        except Exception:
+            pass
+        if stop:
+            stop.wait(takt)
+        else:
+            time.sleep(takt)
+
+
+def peer_anzeige(d):
+    """('PC ✓', gut?) bzw. ('PC ✗', False); None, solange nichts bekannt ist."""
+    if not d:
+        return None
+    name = "PC" if d.get("peer", "pc") == "pc" else "LAPTOP"
+    return (name + (" ✓" if d.get("verbunden") else " ✗"), bool(d.get("verbunden")))
+
+
 # Dateien öffnet man in einem normalen Terminal via `xdg-open <datei>` — die TUI
 # selbst macht das nicht (reine Anzeige).
 
@@ -9086,6 +9118,10 @@ def run_ui(stdscr, store):
         safe_addstr(0, W - len(right) - 1 + 4 + len(net_txt), "   UP %s   %s" % (up, clock), C["dim"])
         if not connected:
             safe_addstr(0, 26, "[backend ?]", C["warn"] | curses.A_BLINK)
+        pa = peer_anzeige(PEER["d"])
+        if pa:
+            safe_addstr(0, W - len(right) - 1 - len(pa[0]) - 3, pa[0],
+                        C["acc"] if pa[1] else C["dim"])
         safe_addstr(1, 0, "─" * W, C["faint"])
 
         # ── Spalten-Geometrie ─────────────────────────────────────────────
@@ -9446,6 +9482,8 @@ def main():
     store = Store()
     poller = threading.Thread(target=store.run, daemon=True)
     poller.start()
+    if not os.environ.get("ZENTRALE_TESTLAUF"):  # Tests prüfen nie den echten PC
+        threading.Thread(target=peer_wach, daemon=True).start()
 
     # ── Sicherheitsnetz: die TUI darf NIEMALS an einer einzelnen Exception
     # sterben. ──────────────────────────────────────────────────────────────

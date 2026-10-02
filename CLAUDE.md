@@ -65,10 +65,14 @@ in einer **eigenen Datei**: `data/features.json`.
   Daten-Änderung (`core/datasync.py` ← lists/graphs/kalender, `ZENTRALE_AUTOPUSH=1`)
   im Hintergrund `zentrale-push-data` an → der Peer hat sofort den frischen
   Stand, die Divergenz-Zeitfenster sind winzig. Zusätzlich gleicht
-  `zentrale-sync-boot` beim Start einmal ab. **Praxis für mich:** vor dem
-  Editieren des Trackers `zentrale-pull` (Sashas Stand holen), danach genügt in
-  der Regel der Auto-Push; ein manuelles `zentrale-push` schadet nie. NIE mit
-  `ZENTRALE_SYNC_FORCE` über frische Peer-Änderungen bügeln.
+  `zentrale-sync-boot` beim Start einmal ab. **Praxis für mich:** ZUERST
+  `zentrale-pc-status` fragen (eine Quelle, antwortet sofort, Exit 0/1 —
+  `core/pc_status.py`). **PC getrennt → nicht suchen, nicht pullen, einfach
+  lokal pflegen** (über `core/lists.py`); der Boot-Abgleich bzw. Auto-Push
+  gleicht später newest-wins ab. **PC verbunden →** vor dem Editieren
+  `zentrale-pull`, danach genügt der Auto-Push. NIE mit `ZENTRALE_SYNC_FORCE`
+  über frische Peer-Änderungen bügeln. (Am 02.10.2026 hing ein blindes
+  `zentrale-pull` über zwei Minuten an einem PC, der gar nicht da war.)
 - **Struktur:** `zentrale` → jedes Kind ist ein **Feature**; die Unterpunkte
   eines Features sind, **was dafür noch offen ist** (Status). Erledigtes wird
   abgehakt (`done: true`); der Status eines Feature-Ordners leitet sich aus
