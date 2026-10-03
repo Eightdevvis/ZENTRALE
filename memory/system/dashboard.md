@@ -9,18 +9,22 @@ per `ki_aus` weggelassen) ist praktisch aufgegeben, der Code lebt. Das
 Browser, Desktop, bat, nvim, tmux und das Tutor-Zimmer lesen nur — und aus
 einem Testlauf oder Worktree darf nie ein Push entstehen (Riegel im venv,
 `start_tui.sh` hängt ihn ein). **Startseite = Galaxie** (seit 03.10.2026, `META`/`TRAD`/`TECH_APPS`,
-`meta_taste`, `galaxie_systeme`): das 3-Spalten-Dashboard ist aus. EINE
+`meta_taste`, `galaxie_lage`): das 3-Spalten-Dashboard ist aus. EINE
 Fläche: das App-Rad und das **Technik-Rad** (`system` = external +
 telemetrie, `stdout` = ganzes Log, `netz` = outbound + laufzeit) sind zwei
-**Sonnensysteme**, die auf einer gepunkteten Galaxie-Bahn kreisen. Vorn =
-unten, gross, mit seinen Apps; hinten = oben, klein, nur Bahn + Sonne
-(`✦ name`). ←/→ dreht die Galaxie, enter geht ins vordere System (`● name`,
-←/→ dreht jetzt dessen Apps, enter öffnet), esc wieder raus. Oben rechts
-`up · net`, unten die letzten Log-Zeilen (ab 24 Zeilen Body). Offene Apps und
-Technik-Ansichten (`TECH`) haben die **ganze Breite**. Lifestyle- und
-focus-Box gibt es dort nicht mehr. **Backup:** `/dashboard an` holt das alte
-3-Spalten-Layout zurück, `/dashboard aus` die Galaxie; der Wunsch liegt in
-`~/.config/zentrale/dashboard` (`ZENTRALE_DASHBOARD_FILE`, Tests lenken um).
+**Sonnensysteme** auf einer riesigen Galaxie-Bahn — so gross, dass man im
+Ausschnitt nur einen flachen, kaum gepunkteten Bogen sieht und beide
+**nebeneinander** liegen (App-Rad 55 % der Breite, Technik 36 %). ←/→
+wechselt (links = apps, rechts = technik); die Kamera gleitet dabei so weit
+zum gewählten, wie Platz übrig ist — es fällt nie eins aus dem Bild. Die
+Sonne des gewählten Systems steht gross (`✦ APPS`), drin `● APPS`. enter
+geht hinein (←/→ dreht dann dessen Apps, enter öffnet), esc wieder raus.
+Oben rechts `up · net`, unten die letzten Log-Zeilen (ab 24 Zeilen Body).
+Offene Apps und Technik-Ansichten (`TECH`) haben die **ganze Breite**.
+Lifestyle- und focus-Box gibt es dort nicht mehr. **Backup:** `/dashboard an`
+holt das alte 3-Spalten-Layout zurück, `/dashboard aus` die Galaxie; der
+Wunsch liegt in `~/.config/zentrale/dashboard` (`ZENTRALE_DASHBOARD_FILE`,
+Tests lenken um).
 Die Bausteine `draw_external`/`draw_telemetrie`/`draw_stdout`/`draw_outbound`/
 `draw_rad` teilen sich beide Layouts. Im alten Layout gilt weiter:
 **Startseite = App-Rad** (seit 02.10.2026,

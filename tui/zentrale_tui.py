@@ -1806,11 +1806,11 @@ RAD = {"sel": _rad_start(), "pos": float(_rad_start()),  # sel = Ziel, pos = wo 
 # ── Die Galaxie (Startseite seit 03.10.2026) ─────────────────────────────────
 # Sasha: das 3-Spalten-Dashboard braucht es nicht mehr. Die Startseite ist
 # EINE Fläche, eine Galaxie: das App-Rad und das Technik-Rad (was vorher in
-# den Seitenspalten stand) sind zwei Sonnensysteme, die zusammen auf einer
-# grossen Bahn kreisen. ←/→ dreht die Galaxie, bis das gewünschte System
-# vorn steht (gross, unten); das andere steht hinten (klein, oben, blass).
-# enter geht ins vordere System (dann dreht ←/→ dessen Apps, enter öffnet),
-# esc wieder raus. Die alte Ansicht bleibt als Backup: /dashboard an.
+# den Seitenspalten stand) sind zwei Sonnensysteme auf einer RIESIGEN Bahn —
+# so gross, dass man im Ausschnitt nur einen flachen Bogen sieht und die
+# beiden praktisch nebeneinander liegen. ←/→ wechselt zwischen ihnen, der
+# Ausschnitt gleitet dabei ein Stück zum gewählten. enter geht ins gewählte
+# System (dann dreht ←/→ dessen Apps, enter öffnet), esc wieder raus. Die alte Ansicht bleibt als Backup: /dashboard an.
 TECH_APPS = [("system", "external + telemetrie"), ("stdout", "das ganze log"),
              ("netz", "outbound + laufzeit")]
 
@@ -1822,12 +1822,12 @@ def _meta_start():
                             os.environ.get("ZENTRALE_TUI_META", "0,0,0").split(","))
     except ValueError:
         return 0, False, 0
-    return fokus, bool(drin), sel
+    return (1 if fokus == 1 else 0), bool(drin), sel
 
 
 _M0 = _meta_start()
 META = {"gsel": _M0[0], "gpos": float(_M0[0]),   # Galaxie: Ziel + wo sie gerade steht
-        "fokus": _M0[0] % 2,    # welches System vorn steht: 0 = Apps, 1 = Technik
+        "fokus": _M0[0],        # welches System gewählt ist: 0 = Apps, 1 = Technik
         "drin": _M0[1]}         # True = ←/→ dreht das System statt die Galaxie
 TRAD = {"sel": _M0[2], "pos": float(_M0[2])}   # Technik-Rad, wie RAD
 
@@ -1837,9 +1837,8 @@ def meta_taste(meta, rad, trad, taste):
     Zustands-Dicts. taste: "links" | "rechts" | "enter" | "esc".
     -> None | ("app", buchstabe) | ("technik", name)"""
     if not meta["drin"]:
-        if taste in ("links", "rechts"):
-            meta["gsel"] = meta.get("gsel", meta["fokus"]) + (1 if taste == "rechts" else -1)
-            meta["fokus"] = meta["gsel"] % 2
+        if taste in ("links", "rechts"):     # nebeneinander: links = apps, rechts = technik
+            meta["gsel"] = meta["fokus"] = 1 if taste == "rechts" else 0
         elif taste == "enter":
             meta["drin"] = True
         return None
@@ -1857,17 +1856,23 @@ def meta_taste(meta, rad, trad, taste):
     return None
 
 
-def galaxie_systeme(gpos, n=2):
-    """Wo stehen die n Sonnensysteme bei Galaxie-Stellung `gpos`? PURE.
-    -> [(i, tiefe, quer, groesse)], hinten zuerst. tiefe 1 = vorn (unten),
-    -1 = hinten (oben); quer -1..1 = Auslenkung zur Seite; groesse 0.4..1."""
-    import math
-    aus = []
-    for i in range(n):
-        w = ((i - gpos) / n) * 2 * math.pi
-        tiefe = math.cos(w)
-        aus.append((i, tiefe, math.sin(w), 0.4 + 0.6 * (tiefe + 1) / 2))
-    aus.sort(key=lambda t: t[1])
+def galaxie_lage(gpos, breiten):
+    """Wo liegen die Sonnensysteme im Ausschnitt bei Kamera-Stellung `gpos`
+    (0 = erstes gewählt … n-1 = letztes)? PURE.
+    `breiten` = Anteil der Bildbreite je System (Summe ≤ 1).
+    -> [(i, quer, naehe)]: quer = Mitte des Systems, -1 (linker Rand) … 1
+    (rechter Rand); naehe 1 = gewählt, 0 = ein System oder weiter weg.
+    Die Systeme liegen dicht nebeneinander; die Kamera gleitet zum
+    gewählten, aber nur so weit wie Platz übrig ist — es fällt nie eins
+    aus dem Bild."""
+    n = len(breiten)
+    gesamt = 2 * sum(breiten)                 # in quer-Einheiten (Bild = 2)
+    rest = max(0.0, 2 - gesamt) / 2
+    t = 0.0 if n < 2 else (gpos - (n - 1) / 2) / ((n - 1) / 2)   # -1 … 1
+    x, aus = -gesamt / 2, []
+    for i, b in enumerate(breiten):
+        aus.append((i, x + b - t * rest, max(0.0, 1 - abs(i - gpos))))
+        x += 2 * b
     return aus
 
 
@@ -9643,60 +9648,46 @@ def run_ui(stdscr, store):
             laeuft_jetzt = draw_tech(top, mx, body_h, midw, state, metrics, nets) or laeuft_jetzt
         elif not DASH["an"]:
             # ── Startseite: die Galaxie (seit 03.10.2026) ─────────────
-            # EINE Fläche. Zwei Sonnensysteme (Apps, Technik) kreisen auf
-            # einer grossen Bahn; vorn = unten + gross, hinten = oben + klein.
-            # ✦ = Sonne des Systems, ● = man ist drin.
-            import math
+            # EINE Fläche. Zwei Sonnensysteme (Apps, Technik) auf einer
+            # riesigen Bahn — im Ausschnitt nur ein flacher Bogen, die
+            # beiden liegen praktisch nebeneinander. ✦ = Sonne des Systems,
+            # GROSS = gewählt, ● = man ist drin.
             draw_box(top, 0, body_h, W, "zentrale")
             META["gpos"] = rad_schritt(META["gpos"], META["gsel"])
             gcx = W // 2
-            gcy = top + body_h // 2 - 1
-            gry = max(2, (body_h - 6) // 4)
-            grx = max(10, min(W // 2 - 8, int(W * 0.32)))
+            gcy = top + (body_h * 9) // 16
+            bogen = max(1, body_h // 12)              # so viel sackt der Bogen zum Rand ab
             innen = lambda yy, xx: top < yy < top + body_h - 1 and 0 < xx < W - 1  # noqa: E731
             systeme = [("apps", [a[1] for a in RAD_APPS], RAD),
                        ("technik", [a[0] for a in TECH_APPS], TRAD)]
-            voll_b, voll_h = min(W - 4, 90), max(6, body_h // 2)
-            steht = abs(META["gpos"] - round(META["gpos"])) < 0.02
-            lage = []                                 # (i, tiefe, gr, cy, cx, rx, ry)
-            for i, tiefe, quer, gr in galaxie_systeme(META["gpos"], len(systeme)):
-                cy = gcy + int(round(tiefe * gry))
-                cx = gcx + int(round(quer * grx))
-                if gr > 0.8:                          # Ausmass wie in rad_zeilen
-                    rx = min(int(voll_b * gr) // 2 - 10, 38)
-                    ry = max(1, min(3, (int(voll_h * gr) - 4) // 4))
-                else:
-                    rx, ry = max(len(systeme[i][0]) // 2 + 4, int(16 * gr)), 1
-                lage.append((i, tiefe, gr, cy, cx, rx, ry))
-            # die Galaxie-Bahn: locker gepunktet, hinter allem — und dort
-            # ausgespart, wo ein Sonnensystem sitzt (sonst kreuzt sie es).
-            schritte = max(1, int(2 * math.pi * grx))
-            for k in range(0, schritte, 3):
-                w = 2 * math.pi * k / schritte
-                yy = gcy + int(round(math.cos(w) * gry))
-                xx = gcx + int(round(math.sin(w) * grx))
-                if innen(yy, xx) and not any(abs(yy - l[3]) <= l[6] + 1
-                                             and abs(xx - l[4]) <= l[5] + 6 for l in lage):
-                    safe_addstr(yy, xx, "∙", C["faint"])
-            for i, tiefe, gr, cy, cx, srx, _sry in lage:
+            breiten = (0.55, 0.36)                    # das App-Rad trägt 9 Apps, Technik 3
+            rad_h = max(6, body_h // 2)
+            lage = []                                 # (i, naehe, cy, cx, rx, ry, rad_b)
+            for i, quer, naehe in galaxie_lage(META["gpos"], breiten):
+                rad_b = int(W * breiten[i])
+                lage.append((i, naehe, gcy - int(round(quer * quer * bogen)),
+                             gcx + int(round(quer * W / 2)),
+                             min(rad_b // 2 - 10, 38), max(1, min(3, (rad_h - 4) // 4)),
+                             rad_b))
+            # der Bogen der Galaxie: kaum zu sehen, weit gepunktet, und dort
+            # ausgespart, wo ein Sonnensystem liegt
+            for xx in range(2, W - 2, 5):
+                q = (xx - gcx) / (W / 2)
+                yy = gcy - int(round(q * q * bogen))
+                if innen(yy, xx) and not any(abs(yy - l[2]) <= l[5] + 1
+                                             and abs(xx - l[3]) <= l[4] + 8 for l in lage):
+                    safe_addstr(yy, xx, "·", C["faint"])
+            for i, naehe, cy, cx, _rx, _ry, rad_b in lage:
                 name, labels, rad = systeme[i]
-                vorn = tiefe > 0.97 and steht
-                if gr > 0.8:                          # nah genug: mit seinen Apps
-                    draw_rad(top, body_h, 0, W, labels, rad, symbole_an=(i == 0),
-                             gedimmt=not (vorn and META["drin"]), mitte=(cy, cx),
-                             mass=(int(voll_b * gr), int(voll_h * gr)))
-                    sonne_attr = (C["acc"] | curses.A_BOLD) if vorn else C["dim"]
-                else:                                 # fern: nur Bahn + Sonne
-                    if i == 0:
-                        RAD["schnell"] = False        # kein Symbol klappt hier hinten
-                    for k in range(int(4 * math.pi * srx)):
-                        w = 2 * math.pi * k / int(4 * math.pi * srx)
-                        yy = cy + int(round(math.cos(w)))
-                        xx = cx + int(round(math.sin(w) * srx))
-                        if innen(yy, xx):
-                            safe_addstr(yy, xx, "·", C["faint"])
-                    sonne_attr = C["faint"]
-                sonne = ("● " if vorn and META["drin"] else "✦ ") + name
+                gewaehlt = META["fokus"] == i and naehe > 0.98
+                draw_rad(top, body_h, 0, W, labels, rad, symbole_an=(i == 0),
+                         gedimmt=not (gewaehlt and META["drin"]), mitte=(cy, cx),
+                         mass=(rad_b, rad_h))
+                if gewaehlt:
+                    sonne = ("● " if META["drin"] else "✦ ") + name.upper()
+                    sonne_attr = C["acc"] | curses.A_BOLD
+                else:
+                    sonne, sonne_attr = "✦ " + name, C["faint"]
                 sx = cx - len(sonne) // 2
                 if innen(cy, sx) and innen(cy, sx + len(sonne)):
                     safe_addstr(cy, sx, sonne, sonne_attr)

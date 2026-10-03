@@ -277,26 +277,31 @@ def test_klappen_auf_schnell_und_zu_noch_schneller():
 # ── Die Galaxie (seit 03.10.2026) ──────────────────────────────────────
 # Sasha: *„das ganze eine galaxie [...] das technikwheel ein sonnensystem,
 # genauso wie das andere rad auch [...] beide die in der galaxie zusammen
-# rotieren"* — EINE Fläche, ←/→ dreht die Galaxie, enter rein, esc raus.
+# rotieren"* — EINE Fläche; die Bahn so riesig, *„dass man es eigentlich
+# gar nich richtig sieht"*: die beiden liegen nebeneinander, ←/→ wechselt.
 
 def test_startseite_ist_eine_galaxie(schirm):
-    assert "✦ apps" in schirm and "✦ technik" in schirm
-    assert "K L A V I E R" in schirm         # apps steht vorn, mit seinen Apps
+    assert "✦ APPS" in schirm and "✦ technik" in schirm   # apps gewählt
+    assert "K L A V I E R" in schirm and "S Y S T E M" in schirm  # beide sichtbar
     assert "LIFESTYLE" not in schirm         # die Seitenspalten sind weg
     assert "galaxie drehen" in schirm
 
 
-def test_pfeil_rechts_dreht_technik_nach_vorn():
-    assert "S Y S T E M" in _lauf(b"\x1bOC")
+def test_pfeil_rechts_waehlt_technik():
+    assert "✦ TECHNIK" in _lauf(b"\x1bOC")
 
 
-def test_galaxie_bahn_vorn_unten_hinten_oben():
+def test_galaxie_beide_im_bild_kamera_gleitet():
     m = _modul()
-    hinten, vorn = m.galaxie_systeme(0)
-    assert vorn[0] == 0 and vorn[1] == 1.0 and vorn[3] == 1.0
-    assert hinten[0] == 1 and hinten[1] == -1.0 and abs(hinten[3] - 0.4) < 1e-9
-    halb = m.galaxie_systeme(0.5)            # mitten im Drehen: beide seitlich
-    assert all(abs(t[1]) < 1e-9 and abs(abs(t[2]) - 1) < 1e-9 for t in halb)
+    breiten = (0.55, 0.36)
+    for gpos in (0, 0.5, 1):
+        for i, quer, _n in m.galaxie_lage(gpos, breiten):
+            assert -1 <= quer - breiten[i] and quer + breiten[i] <= 1, (gpos, i)
+    links = dict((i, q) for i, q, _ in m.galaxie_lage(0, breiten))
+    rechts = dict((i, q) for i, q, _ in m.galaxie_lage(1, breiten))
+    assert links[0] < links[1] and rechts[0] < rechts[1]   # bleiben nebeneinander
+    assert rechts[1] < links[1]                             # kamera fährt zur technik
+    assert [n for _, _, n in m.galaxie_lage(0, breiten)] == [1.0, 0.0]
 
 
 def test_technik_rad_oeffnet_die_systemansicht():
