@@ -9635,6 +9635,13 @@ def run_ui(stdscr, store):
 
         H, W = stdscr.getmaxyx()
         stdscr.erase()
+        # Pixel-Farbpaare: zu Beginn des Bildes leeren, sobald das Budget halb
+        # verbraucht ist — ein Bild braucht höchstens ~70 je Symbol, so läuft es
+        # nie MITTEN im Bild über. Vorher wurde nur in der Bernsteinleiste
+        # geleert; seit alle Apps animierte Symbole haben, lief es auf der
+        # Startseite voll und alles Neue fiel auf Bernstein-Orange zurück.
+        if PIX["voll"] or len(PIX["pairs"]) > (PIX["top"] - PIX["base"]) // 2:
+            PIX["pairs"].clear(); PIX["voll"] = False
 
         if terminal_too_small(H, W):
             safe_addstr(0, 0, "Terminal zu klein (min 60x14).", C["warn"])
