@@ -366,44 +366,49 @@ def test_galaxie_dreht_schwer_und_rollt_weich_aus():
 # symbole dann irgendwann voll rausfliegen (resetted sich dann wenn man das
 # wheel kurz in ruhe lässt)"*
 
-def _simuliere(m, druecke_pro_s, sekunden, schwung=0.0, flug=0.0, fps=30):
-    dt = 1 / fps
-    seit = 0.0
-    naechster = 0.0
-    t = 0.0
+def _schwung(m, druecke_pro_s, sekunden, fps=30):
+    """Höchster Schwung bei so vielen Drücken pro Sekunde."""
+    dt, t, naechster, schwung, hoch = 1 / fps, 0.0, 0.0, 0.0, 0.0
     while t < sekunden:
-        if druecke_pro_s and t >= naechster:
+        if t >= naechster:
             schwung += 1
-            seit = 0.0
             naechster += 1 / druecke_pro_s
-        schwung, flug = m.schleuder_schritt(schwung, flug, seit, dt)
-        seit += dt
+        schwung = m.schwung_schritt(schwung, dt)
+        hoch = max(hoch, schwung)
         t += dt
-    return schwung, flug
+    return hoch
 
 
 def test_normales_tippen_schleudert_nie():
     m = _modul()
-    assert _simuliere(m, 5, 10)[1] == 0.0
+    assert _schwung(m, 5, 10) < m.SCHLEUDER_AB
 
 
-def test_gehaltene_taste_schleudert_raus():
+def test_gehaltene_taste_reisst_nach_rund_einer_sekunde_ab():
     m = _modul()
-    schwung, flug = _simuliere(m, 30, 2.5)
-    assert flug > 3                                        # weit draussen
+    assert _schwung(m, 30, 0.5) < m.SCHLEUDER_AB
+    assert _schwung(m, 30, 2.0) > m.SCHLEUDER_AB
 
 
-def test_kurz_in_ruhe_lassen_holt_sie_zurueck():
+def test_wurf_alle_auf_einmal_und_geradeaus():
+    """Alle Apps reissen im selben Moment ab und fliegen auf einer GERADEN
+    weg — kein grösserer Kreis."""
     m = _modul()
-    schwung, flug = _simuliere(m, 30, 2.5)
-    assert _simuliere(m, 0, 2.5, schwung, flug)[1] == 0.0
+    teile = m.schleuder_wurf(NAMEN, 0, 1, 70, 30)
+    assert [t[0] for t in teile] == NAMEN                  # alle zugleich
+    for name, y, x, vy, vx in teile:
+        assert (vx, vy) != (0, 0)
+        p0, p1, p2 = [(y + vy * t, x + vx * t) for t in (0.0, 0.5, 1.0)]
+        kreuz = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0])
+        assert abs(kreuz) < 1e-9, name                      # kollinear = gerade
+    vorn = teile[0]                                         # klavier steht vorn (unten)
+    assert vorn[4] < 0 and abs(vorn[3]) < 1e-9              # dreht nach links → fliegt links weg
+    assert m.schleuder_wurf(NAMEN, 0, -1, 70, 30)[0][4] > 0  # andersrum → rechts
 
 
-def test_im_flug_faellt_der_rahmen_und_alles_rueckt_nach_aussen():
+def test_wurf_zeilen_entfernen_sich_mit_der_zeit():
     m = _modul()
-    ruhig = m.rad_zeilen(NAMEN, 0, 70, 30)
-    weg = m.schleuder_zeilen(ruhig, 2.0)
-    assert m.schleuder_zeilen(ruhig, 0) == ruhig
-    assert not [z for z in weg if z[3] == "rahmen"]
-    breite = lambda zs: max(abs(dx + len(t) / 2) for _dy, dx, t, st in zs if st != "spur")  # noqa: E731
-    assert breite(weg) > 2 * breite(ruhig)
+    teile = m.schleuder_wurf(NAMEN, 0, 1, 70, 30)
+    nah, fern = m.wurf_zeilen(teile, 0.0), m.wurf_zeilen(teile, 1.0)
+    weite = lambda zs: max(abs(dx) for _dy, dx, _t, _st in zs)  # noqa: E731
+    assert weite(fern) > weite(nah) + 30

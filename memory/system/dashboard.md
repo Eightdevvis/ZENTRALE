@@ -27,12 +27,13 @@ aktuellen Stellung. Die
 Sonne des gewählten Systems steht gross (`✦ APPS`); sie wird VOR dem Rad
 gezeichnet, damit ein aufgeklapptes Pixel-Symbol über ihr liegt. Pixel-
 Symbole gibt es nur im nahen Rad, das ferne bleibt blass und schlicht.
-**Schleuder-Gag** (`rad_anstoss`, `schleuder_schritt`, `schleuder_zeilen`):
-jeder Pfeildruck gibt dem Rad Schwung (verfliegt mit 0,6 s); normales Tippen
-bleibt drunter, hält man die Taste ~1 s (Tastenwiederholung), lösen sich die
-Apps und fliegen beschleunigt aus dem Bild — jede mit eigenem Tempo/Winkel
-aus ihrem Namen. 1 s in Ruhe → sie fliegen zurück aufs Rad. Gilt in beiden
-Rädern und im alten Dashboard.
+**Schleuder-Gag** (`rad_anstoss`, `schwung_schritt`, `schleuder_wurf`,
+`wurf_zeilen`): jeder Pfeildruck gibt dem Rad Schwung (verfliegt mit 0,6 s);
+normales Tippen bleibt drunter, hält man die Taste ~1 s (Tastenwiederholung),
+reissen ALLE Apps im selben Moment ab und fliegen auf einer **geraden** Linie
+davon — tangential, in Drehrichtung, wie ein Stein aus der Schleuder
+(`SCHLEUDER_TEMPO` Spalten/s). Das leere Rad dreht weiter. 1 s in Ruhe →
+alle sitzen wieder drauf. Gilt in beiden Rädern und im alten Dashboard.
 Oben rechts `up · net`, unten die letzten Log-Zeilen (ab 24 Zeilen Body).
 Offene Apps und Technik-Ansichten (`TECH`) haben die **ganze Breite**.
 Lifestyle- und focus-Box gibt es dort nicht mehr. **Backup:** `/dashboard an`

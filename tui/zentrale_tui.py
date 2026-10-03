@@ -1846,10 +1846,10 @@ def meta_taste(meta, rad, trad, taste):
     ziel = rad if meta["fokus"] == 0 else trad
     if taste == "links":
         ziel["sel"] -= 1
-        rad_anstoss(ziel)
+        rad_anstoss(ziel, -1)
     elif taste == "rechts":
         ziel["sel"] += 1
-        rad_anstoss(ziel)
+        rad_anstoss(ziel, 1)
     elif taste == "enter":
         if meta["fokus"] == 0:
             return ("app", RAD_APPS[rad_index(rad["sel"])][0])
@@ -1859,55 +1859,62 @@ def meta_taste(meta, rad, trad, taste):
 
 # ── Der Schleuder-Gag (Sasha, 03.10.2026) ────────────────────────────────────
 # Hält man die Pfeiltaste zu lange, dreht das Rad so schnell, dass die Apps
-# rausfliegen. Kurz in Ruhe lassen → sie fliegen zurück. Jeder Druck gibt
-# Schwung, Schwung verfliegt; normales Tippen kommt nie über die Schwelle,
-# eine Tastenwiederholung (~25-30/s) nach rund einer Sekunde schon.
+# abreissen: ALLE im selben Moment, und jede fliegt GERADEAUS weiter, in die
+# Richtung, in die sie sich gerade gedreht hat (tangential, wie ein Stein
+# aus der Schleuder). Das leere Rad dreht weiter. Kurz in Ruhe lassen → alle
+# sitzen wieder drauf. Jeder Druck gibt Schwung, Schwung verfliegt; normales
+# Tippen kommt nie über die Schwelle, eine Tastenwiederholung (~25-30/s)
+# nach rund einer Sekunde schon.
 SCHWUNG_ZERFALL = 0.6        # Sekunden (e-Faltung)
-SCHLEUDER_AB = 12.0          # ab so viel Schwung lösen sich die Apps
-SCHLEUDER_RUHE = 1.0         # so lange nichts gedrückt → sie kommen zurück
-SCHLEUDER_MAX = 12.0         # weiter raus muss nichts fliegen
+SCHLEUDER_AB = 12.0          # ab so viel Schwung reissen die Apps ab
+SCHLEUDER_RUHE = 1.0         # so lange nichts gedrückt → sie sind zurück
+SCHLEUDER_TEMPO = 70.0       # Spalten pro Sekunde im Flug
 
 
-def rad_anstoss(rad, jetzt=None):
-    """Ein Pfeildruck am Rad: Schwung +1, Zeitpunkt merken."""
+def rad_anstoss(rad, richtung=1, jetzt=None):
+    """Ein Pfeildruck am Rad: Schwung +1, Drehrichtung und Zeitpunkt merken."""
     rad["schwung"] = rad.get("schwung", 0.0) + 1.0
+    rad["richtung"] = 1 if richtung >= 0 else -1
     rad["letzt"] = time.monotonic() if jetzt is None else jetzt
 
 
-def schleuder_schritt(schwung, flug, seit_letzt, dt):
-    """Ein Frame Schleuder-Physik. PURE. -> (schwung, flug)
-    flug 0 = alle Apps auf dem Rad; je grösser, desto weiter draussen."""
+def schwung_schritt(schwung, dt):
+    """Schwung verfliegt. PURE."""
     import math
-    schwung *= math.exp(-max(0.0, dt) / SCHWUNG_ZERFALL)
-    if schwung > SCHLEUDER_AB:
-        flug = min(SCHLEUDER_MAX, flug + dt * (0.8 + flug * 1.5))   # es beschleunigt
-    elif seit_letzt > SCHLEUDER_RUHE and flug > 0:
-        flug = max(0.0, flug - dt * max(1.5, flug * 3))              # zurück aufs Rad
-    return schwung, flug
+    return schwung * math.exp(-max(0.0, dt) / SCHWUNG_ZERFALL)
 
 
-def schleuder_zeilen(zeilen, flug):
-    """Die Plot-Anweisungen eines Rads im Flug verschieben. PURE.
-    Jede App fliegt mit eigenem Tempo und leicht eigenem Winkel nach aussen
-    (aus ihrem Namen abgeleitet, also jedes Mal gleich). Die Laufbahn bleibt,
-    der Rahmen um die vordere App fällt ab."""
-    if flug <= 0:
-        return zeilen
+def schleuder_wurf(labels, pos, richtung, breite, hoehe, tempo=SCHLEUDER_TEMPO):
+    """Der Moment des Abreissens. PURE. Gleiche Ellipse wie rad_zeilen.
+    -> [(name, dy, dx_mitte, vy, vx)]: Startpunkt jeder App relativ zur
+    Radmitte und ihre gerade Flugrichtung (Zellen pro Sekunde) — die
+    Tangente der Drehung. Zeilen sind etwa doppelt so hoch wie Spalten
+    breit, darum zählt die Senkrechte im Bild doppelt."""
+    import math
+    n = len(labels)
+    rx = min(breite // 2 - 10, 38)
+    ry = max(1, min(3, (hoehe - 4) // 4))
+    if n == 0 or rx < 12:
+        return []
     aus = []
-    for dy, dx, txt, st in zeilen:
-        if st == "spur":
-            aus.append((dy, dx, txt, st))
-            continue
-        if st == "rahmen":
-            continue
-        h = sum(map(ord, "".join(txt.split()).lower()))
-        f = flug * (0.7 + (h % 7) / 10)
-        mitte = dx + len(txt) / 2
-        seite = 1 if mitte >= 0 else -1
-        ny = dy * (1 + f) + ((h % 3) - 1) * f * 1.5
-        nm = mitte * (1 + f) + seite * f * 4
-        aus.append((int(round(ny)), int(round(nm - len(txt) / 2)), txt,
-                    "nah" if st == "vorn" else st))
+    for i, name in enumerate(labels):
+        w = ((i - pos) / n) * 2 * math.pi
+        # pos wächst → w schrumpft: Bewegung = -richtung · d(Ort)/dw
+        tx = -richtung * math.cos(w) * rx
+        ty = -richtung * -math.sin(w) * ry
+        laenge = math.hypot(tx, 2 * ty) or 1.0
+        aus.append((name, math.cos(w) * ry, math.sin(w) * rx,
+                    tempo * ty / laenge, tempo * tx / laenge))
+    return aus
+
+
+def wurf_zeilen(teile, t):
+    """Wo sind die abgerissenen Apps `t` Sekunden nach dem Wurf? PURE.
+    Gerade Linie, kein Bogen. -> [(dy, dx, name, "nah")] wie rad_zeilen."""
+    aus = []
+    for name, y, x, vy, vx in teile:
+        ny, nx = y + vy * t, x + vx * t
+        aus.append((int(round(ny)), int(round(nx - len(name) / 2)), name, "nah"))
     return aus
 
 
@@ -4286,10 +4293,15 @@ def run_ui(stdscr, store):
         jetzt_s = time.monotonic()
         dt_s = min(0.1, jetzt_s - rad.get("t_schl", jetzt_s))
         rad["t_schl"] = jetzt_s
-        rad["schwung"], rad["flug"] = schleuder_schritt(
-            rad.get("schwung", 0.0), rad.get("flug", 0.0),
-            jetzt_s - rad.get("letzt", 0.0), dt_s)
-        if rad["flug"] > 0:
+        rad["schwung"] = schwung_schritt(rad.get("schwung", 0.0), dt_s)
+        rb, rh = mass or (bw, h - 2)
+        if rad.get("wurf") is None and rad["schwung"] > SCHLEUDER_AB:
+            rad["wurf"] = (jetzt_s, schleuder_wurf(labels, rad["pos"],   # abgerissen!
+                                                   rad.get("richtung", 1), rb, rh))
+        elif rad.get("wurf") and jetzt_s - rad.get("letzt", 0.0) > SCHLEUDER_RUHE:
+            rad["wurf"] = None                    # in Ruhe gelassen → alle wieder drauf
+            rad["schwung"] = 0.0
+        if rad.get("wurf"):
             symbole_an = False                    # im Flug kein aufklappendes Symbol
         rad_stil = {"spur": C["faint"], "fern": C["faint"],
                     "nah": C["faint"] if gedimmt else C["dim"],
@@ -4344,9 +4356,10 @@ def run_ui(stdscr, store):
                     safe_addstr(r0 + pixel.EL_LABEL_ZEILE, c0 + c, ch,
                                 pix_attr(fg, bg) | curses.A_BOLD)
 
-        rb, rh = mass or (bw, h - 2)
-        zeilen = schleuder_zeilen(rad_zeilen(labels, rad["pos"], rb, rh, symbole),
-                                  rad["flug"])
+        zeilen = rad_zeilen(labels, rad["pos"], rb, rh, symbole)
+        if rad.get("wurf"):                       # leeres Rad + geradeaus fliegende Apps
+            t0, teile = rad["wurf"]
+            zeilen = [z for z in zeilen if z[3] == "spur"] + wurf_zeilen(teile, jetzt_s - t0)
         if not zeilen and labels and mitte is None:
             # Liste statt Ellipse: die gewählte mittig, Nachbarn drumherum.
             vorn = rad_index(rad["sel"], len(labels))
@@ -8087,7 +8100,7 @@ def run_ui(stdscr, store):
                 or (TUTOR["active"] and TUTOR["streaming"]) or PIANO["active"]
                 or RAD["pos"] != RAD["sel"] or RAD["schnell"]
                 or TRAD["pos"] != TRAD["sel"] or META["gpos"] != META["gsel"]
-                or RAD.get("flug") or TRAD.get("flug"))
+                or RAD.get("wurf") or TRAD.get("wurf"))
         stdscr.timeout(33 if fast else (LAUF_TICK_MS if LAUF["laeuft"] else 250))
         ch = stdscr.getch()
 
@@ -9535,9 +9548,9 @@ def run_ui(stdscr, store):
                     elif wahl:
                         TECH["active"] = True; TECH["view"] = wahl[1]
             elif ch == curses.KEY_LEFT:
-                RAD["sel"] -= 1; rad_anstoss(RAD)
+                RAD["sel"] -= 1; rad_anstoss(RAD, -1)
             elif ch == curses.KEY_RIGHT:
-                RAD["sel"] += 1; rad_anstoss(RAD)
+                RAD["sel"] += 1; rad_anstoss(RAD, 1)
             elif ch == ord(" "):
                 taste = "a"
             elif ch in (10, 13, curses.KEY_ENTER):
