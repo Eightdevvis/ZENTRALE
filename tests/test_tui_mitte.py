@@ -274,20 +274,29 @@ def test_klappen_auf_schnell_und_zu_noch_schneller():
     assert o == 0.0
 
 
-# ── Das Meta-Rad (seit 03.10.2026) ─────────────────────────────────────
-# Sasha: *„ein app app wheel das die zwei sub wheels featured"* — links die
-# Apps, rechts die Technik; ←/→ wählt das Rad, enter rein, esc raus.
+# ── Die Galaxie (seit 03.10.2026) ──────────────────────────────────────
+# Sasha: *„das ganze eine galaxie [...] das technikwheel ein sonnensystem,
+# genauso wie das andere rad auch [...] beide die in der galaxie zusammen
+# rotieren"* — EINE Fläche, ←/→ dreht die Galaxie, enter rein, esc raus.
 
-def test_startseite_zeigt_beide_raeder(schirm):
-    assert "▸ APPS" in schirm
-    assert "TECHNIK" in schirm
-    assert "S Y S T E M" in schirm           # vorn im Technik-Rad
-    assert "LIFESTYLE" not in schirm        # die Seitenspalten sind weg
-    assert "rad wählen" in schirm
+def test_startseite_ist_eine_galaxie(schirm):
+    assert "✦ apps" in schirm and "✦ technik" in schirm
+    assert "K L A V I E R" in schirm         # apps steht vorn, mit seinen Apps
+    assert "LIFESTYLE" not in schirm         # die Seitenspalten sind weg
+    assert "galaxie drehen" in schirm
 
 
-def test_pfeil_rechts_waehlt_das_technik_rad():
-    assert "▸ TECHNIK" in _lauf(b"\x1bOC")
+def test_pfeil_rechts_dreht_technik_nach_vorn():
+    assert "S Y S T E M" in _lauf(b"\x1bOC")
+
+
+def test_galaxie_bahn_vorn_unten_hinten_oben():
+    m = _modul()
+    hinten, vorn = m.galaxie_systeme(0)
+    assert vorn[0] == 0 and vorn[1] == 1.0 and vorn[3] == 1.0
+    assert hinten[0] == 1 and hinten[1] == -1.0 and abs(hinten[3] - 0.4) < 1e-9
+    halb = m.galaxie_systeme(0.5)            # mitten im Drehen: beide seitlich
+    assert all(abs(t[1]) < 1e-9 and abs(abs(t[2]) - 1) < 1e-9 for t in halb)
 
 
 def test_technik_rad_oeffnet_die_systemansicht():
@@ -305,9 +314,9 @@ def test_dashboard_an_holt_die_alten_spalten_zurueck(tmp_path, monkeypatch):
 
 def test_meta_taste_waehlt_dreht_und_oeffnet():
     m = _modul()
-    meta, rad, trad = {"fokus": 0, "drin": False}, {"sel": 0}, {"sel": 0}
+    meta, rad, trad = {"gsel": 0, "fokus": 0, "drin": False}, {"sel": 0}, {"sel": 0}
     assert m.meta_taste(meta, rad, trad, "rechts") is None
-    assert meta["fokus"] == 1 and rad["sel"] == 0       # nur gewählt, nicht gedreht
+    assert meta["fokus"] == 1 and rad["sel"] == 0       # galaxie gedreht, das system nicht
     m.meta_taste(meta, rad, trad, "enter")
     assert meta["drin"]
     m.meta_taste(meta, rad, trad, "rechts")

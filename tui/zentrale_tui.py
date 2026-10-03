@@ -1456,9 +1456,9 @@ TUI_COMMANDS = [
     ("/quit",  "ZENTRALE-TUI wirklich beenden  ('q' legt das Fenster nur weg)"),
 ]
 TUI_KEYS = [
-    ("←→",    "Startseite: Rad wählen (apps | technik); drin: das Rad drehen"),
-    ("enter", "Startseite: ins gewählte Rad hinein; drin: die App vorn öffnen"),
-    ("esc",   "zurück, Stufe für Stufe — aus der App ins Rad, aus dem Rad raus"),
+    ("←→",    "Startseite: die Galaxie drehen (apps | technik); im System: dessen Apps drehen"),
+    ("enter", "Startseite: ins vordere Sonnensystem; drin: die App vorn öffnen"),
+    ("esc",   "zurück, Stufe für Stufe — aus der App ins System, aus dem System raus"),
     # Die Apps im Rad — seit 02.10.2026 nicht mehr per Buchstabe,
     # sondern übers Rad (Sasha). Links steht deshalb der Name im Rad.
     ("graph", "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
@@ -1480,13 +1480,13 @@ TUI_KEYS = [
 # current_ctx(); Reihenfolge spiegelt die alten Fußzeilen.
 CTX_KEYS = {
     "home": [
-        ("←→", "rad wählen / drin: drehen"), ("enter", "rein / app öffnen"),
-        ("space", "ki-chat"), ("esc", "raus aus dem rad"),
+        ("←→", "galaxie / drin: system drehen"), ("enter", "rein / app öffnen"),
+        ("space", "ki-chat"), ("esc", "raus aus dem system"),
         ("/dashboard", "altes dashboard"), ("/theme", "theme"),
         ("/lauf", "stdout-lauf"), ("/quit", "beenden"),
     ],
     "technik": [
-        ("esc", "zurück zum technik-rad"),
+        ("esc", "zurück ins technik-system"),
     ],
     "note:edit": [
         ("↑↓", "block wählen"), ("t/l/f", "neu: text/liste/float"),
@@ -1803,29 +1803,32 @@ RAD = {"sel": _rad_start(), "pos": float(_rad_start()),  # sel = Ziel, pos = wo 
        "offen": {}, "offen_seit": {},     # je Symbol-App: 0 zu … 1 offen, seit wann ganz offen
        "takt": 0.0, "schnell": False}     # letzter Frame; klappt gerade etwas (→ schneller Takt)
 
-# ── Das Meta-Rad (Startseite seit 03.10.2026) ────────────────────────────────
-# Sasha: das 3-Spalten-Dashboard braucht es nicht mehr. Die Startseite trägt
-# zwei Räder nebeneinander — links das App-Rad, rechts ein kleineres
-# Technik-Rad mit dem, was vorher in den Seitenspalten stand. ←/→ wählt das
-# Rad, enter geht hinein (dann dreht ←/→ das Rad, enter öffnet), esc wieder
-# raus. Die alte Ansicht bleibt als Backup: /dashboard an.
+# ── Die Galaxie (Startseite seit 03.10.2026) ─────────────────────────────────
+# Sasha: das 3-Spalten-Dashboard braucht es nicht mehr. Die Startseite ist
+# EINE Fläche, eine Galaxie: das App-Rad und das Technik-Rad (was vorher in
+# den Seitenspalten stand) sind zwei Sonnensysteme, die zusammen auf einer
+# grossen Bahn kreisen. ←/→ dreht die Galaxie, bis das gewünschte System
+# vorn steht (gross, unten); das andere steht hinten (klein, oben, blass).
+# enter geht ins vordere System (dann dreht ←/→ dessen Apps, enter öffnet),
+# esc wieder raus. Die alte Ansicht bleibt als Backup: /dashboard an.
 TECH_APPS = [("system", "external + telemetrie"), ("stdout", "das ganze log"),
              ("netz", "outbound + laufzeit")]
 
 
 def _meta_start():
-    """Nach einem Hot Reload: welches Rad, drin oder nicht, Technik-Stellung."""
+    """Nach einem Hot Reload: Galaxie-Stellung, drin oder nicht, Technik-Stellung."""
     try:
         fokus, drin, sel = (int(t) for t in
                             os.environ.get("ZENTRALE_TUI_META", "0,0,0").split(","))
     except ValueError:
         return 0, False, 0
-    return (1 if fokus == 1 else 0), bool(drin), sel
+    return fokus, bool(drin), sel
 
 
 _M0 = _meta_start()
-META = {"fokus": _M0[0],        # 0 = App-Rad, 1 = Technik-Rad
-        "drin": _M0[1]}         # True = ←/→ dreht das Rad statt das Rad zu wählen
+META = {"gsel": _M0[0], "gpos": float(_M0[0]),   # Galaxie: Ziel + wo sie gerade steht
+        "fokus": _M0[0] % 2,    # welches System vorn steht: 0 = Apps, 1 = Technik
+        "drin": _M0[1]}         # True = ←/→ dreht das System statt die Galaxie
 TRAD = {"sel": _M0[2], "pos": float(_M0[2])}   # Technik-Rad, wie RAD
 
 
@@ -1834,10 +1837,9 @@ def meta_taste(meta, rad, trad, taste):
     Zustands-Dicts. taste: "links" | "rechts" | "enter" | "esc".
     -> None | ("app", buchstabe) | ("technik", name)"""
     if not meta["drin"]:
-        if taste == "links":
-            meta["fokus"] = 0
-        elif taste == "rechts":
-            meta["fokus"] = 1
+        if taste in ("links", "rechts"):
+            meta["gsel"] = meta.get("gsel", meta["fokus"]) + (1 if taste == "rechts" else -1)
+            meta["fokus"] = meta["gsel"] % 2
         elif taste == "enter":
             meta["drin"] = True
         return None
@@ -1853,6 +1855,20 @@ def meta_taste(meta, rad, trad, taste):
             return ("app", RAD_APPS[rad_index(rad["sel"])][0])
         return ("technik", TECH_APPS[rad_index(trad["sel"], len(TECH_APPS))][0])
     return None
+
+
+def galaxie_systeme(gpos, n=2):
+    """Wo stehen die n Sonnensysteme bei Galaxie-Stellung `gpos`? PURE.
+    -> [(i, tiefe, quer, groesse)], hinten zuerst. tiefe 1 = vorn (unten),
+    -1 = hinten (oben); quer -1..1 = Auslenkung zur Seite; groesse 0.4..1."""
+    import math
+    aus = []
+    for i in range(n):
+        w = ((i - gpos) / n) * 2 * math.pi
+        tiefe = math.cos(w)
+        aus.append((i, tiefe, math.sin(w), 0.4 + 0.6 * (tiefe + 1) / 2))
+    aus.sort(key=lambda t: t[1])
+    return aus
 
 
 def dashboard_datei():
@@ -4180,13 +4196,15 @@ def run_ui(stdscr, store):
         else:
             safe_addstr(y + 1, x + 2, "// offline ✓", C["acc"] | curses.A_DIM)
 
-    def draw_rad(y0, h, bx, bw, labels, rad, symbole_an=False, gedimmt=False):
+    def draw_rad(y0, h, bx, bw, labels, rad, symbole_an=False, gedimmt=False,
+                 mitte=None, mass=None):
         """Ein Rad in den Kasten (y0, bx, h, bw) zeichnen, Mitte bei 5/8 der
         Höhe. `rad` = {"sel", "pos"}; symbole_an nur fürs App-Rad (RAD).
+        Galaxie: `mitte` (y, x) setzt den Mittelpunkt frei, `mass` (breite,
+        hoehe) die Grösse; der Kasten bleibt die Grenze.
         Zu schmal für die Ellipse → eine schlichte Liste, vorn mit ▸."""
         rad["pos"] = rad_schritt(rad["pos"], rad["sel"])
-        cyc = y0 + (h * 5) // 8
-        ccx = bx + bw // 2
+        cyc, ccx = mitte or (y0 + (h * 5) // 8, bx + bw // 2)
         rad_stil = {"spur": C["faint"], "fern": C["faint"],
                     "nah": C["faint"] if gedimmt else C["dim"],
                     "rahmen": C["faint"] if gedimmt else C["acc"],
@@ -4237,8 +4255,9 @@ def run_ui(stdscr, store):
                     safe_addstr(r0 + pixel.EL_LABEL_ZEILE, c0 + c, ch,
                                 pix_attr(fg, bg) | curses.A_BOLD)
 
-        zeilen = rad_zeilen(labels, rad["pos"], bw, h - 2, symbole)
-        if not zeilen and labels:
+        rb, rh = mass or (bw, h - 2)
+        zeilen = rad_zeilen(labels, rad["pos"], rb, rh, symbole)
+        if not zeilen and labels and mitte is None:
             # Liste statt Ellipse: die gewählte mittig, Nachbarn drumherum.
             vorn = rad_index(rad["sel"], len(labels))
             platz = max(1, h - 2)
@@ -7977,7 +7996,7 @@ def run_ui(stdscr, store):
         fast = ((M["active"] and M.get("anim")) or (AI["active"] and AI["streaming"])
                 or (TUTOR["active"] and TUTOR["streaming"]) or PIANO["active"]
                 or RAD["pos"] != RAD["sel"] or RAD["schnell"]
-                or TRAD["pos"] != TRAD["sel"])
+                or TRAD["pos"] != TRAD["sel"] or META["gpos"] != META["gsel"])
         stdscr.timeout(33 if fast else (LAUF_TICK_MS if LAUF["laeuft"] else 250))
         ch = stdscr.getch()
 
@@ -9623,30 +9642,70 @@ def run_ui(stdscr, store):
             draw_box(top, mx, body_h, midw, "technik · " + TECH["view"])
             laeuft_jetzt = draw_tech(top, mx, body_h, midw, state, metrics, nets) or laeuft_jetzt
         elif not DASH["an"]:
-            # ── Startseite: das Meta-Rad (seit 03.10.2026) ────────────
-            # Links das App-Rad, rechts das kleinere Technik-Rad, darunter
-            # Laufzeit + stdout. ▸ = dieses Rad ist gewählt, ● = man ist drin.
-            appw = max(30, int(W * 0.62))
-            tw = W - appw
-            for i, (name, bx, bw) in enumerate((("apps", 0, appw), ("technik", appw, tw))):
-                gewaehlt = META["fokus"] == i
-                marke = ("● " if META["drin"] else "▸ ") if gewaehlt else ""
-                if i == 0:
-                    draw_box(top, bx, body_h, bw, marke + name,
-                             C["acc"] if gewaehlt else C["faint"])
-                    draw_rad(top, body_h, bx, bw, [a[1] for a in RAD_APPS], RAD,
-                             symbole_an=True, gedimmt=not gewaehlt)
-                    continue
-                th = max(8, min(body_h, body_h // 2))
-                draw_box(top, bx, th, bw, marke + name, C["acc"] if gewaehlt else C["faint"])
-                draw_rad(top, th, bx, bw, [a[0] for a in TECH_APPS], TRAD,
-                         gedimmt=not gewaehlt)
-                if th < body_h:
-                    lz = "up %s · net %s" % (up, "traffic !" if nets else "offline ✓")
-                    addclip(top + th, bx + 2, lz, bw - 4, C["warn"] if nets else C["dim"])
-                if body_h - th - 1 >= 3:
-                    laeuft_jetzt = draw_stdout(top + th + 1, bx, body_h - th - 1, bw,
-                                               state.get("logs", []) or []) or laeuft_jetzt
+            # ── Startseite: die Galaxie (seit 03.10.2026) ─────────────
+            # EINE Fläche. Zwei Sonnensysteme (Apps, Technik) kreisen auf
+            # einer grossen Bahn; vorn = unten + gross, hinten = oben + klein.
+            # ✦ = Sonne des Systems, ● = man ist drin.
+            import math
+            draw_box(top, 0, body_h, W, "zentrale")
+            META["gpos"] = rad_schritt(META["gpos"], META["gsel"])
+            gcx = W // 2
+            gcy = top + body_h // 2 - 1
+            gry = max(2, (body_h - 6) // 4)
+            grx = max(10, min(W // 2 - 8, int(W * 0.32)))
+            innen = lambda yy, xx: top < yy < top + body_h - 1 and 0 < xx < W - 1  # noqa: E731
+            systeme = [("apps", [a[1] for a in RAD_APPS], RAD),
+                       ("technik", [a[0] for a in TECH_APPS], TRAD)]
+            voll_b, voll_h = min(W - 4, 90), max(6, body_h // 2)
+            steht = abs(META["gpos"] - round(META["gpos"])) < 0.02
+            lage = []                                 # (i, tiefe, gr, cy, cx, rx, ry)
+            for i, tiefe, quer, gr in galaxie_systeme(META["gpos"], len(systeme)):
+                cy = gcy + int(round(tiefe * gry))
+                cx = gcx + int(round(quer * grx))
+                if gr > 0.8:                          # Ausmass wie in rad_zeilen
+                    rx = min(int(voll_b * gr) // 2 - 10, 38)
+                    ry = max(1, min(3, (int(voll_h * gr) - 4) // 4))
+                else:
+                    rx, ry = max(len(systeme[i][0]) // 2 + 4, int(16 * gr)), 1
+                lage.append((i, tiefe, gr, cy, cx, rx, ry))
+            # die Galaxie-Bahn: locker gepunktet, hinter allem — und dort
+            # ausgespart, wo ein Sonnensystem sitzt (sonst kreuzt sie es).
+            schritte = max(1, int(2 * math.pi * grx))
+            for k in range(0, schritte, 3):
+                w = 2 * math.pi * k / schritte
+                yy = gcy + int(round(math.cos(w) * gry))
+                xx = gcx + int(round(math.sin(w) * grx))
+                if innen(yy, xx) and not any(abs(yy - l[3]) <= l[6] + 1
+                                             and abs(xx - l[4]) <= l[5] + 6 for l in lage):
+                    safe_addstr(yy, xx, "∙", C["faint"])
+            for i, tiefe, gr, cy, cx, srx, _sry in lage:
+                name, labels, rad = systeme[i]
+                vorn = tiefe > 0.97 and steht
+                if gr > 0.8:                          # nah genug: mit seinen Apps
+                    draw_rad(top, body_h, 0, W, labels, rad, symbole_an=(i == 0),
+                             gedimmt=not (vorn and META["drin"]), mitte=(cy, cx),
+                             mass=(int(voll_b * gr), int(voll_h * gr)))
+                    sonne_attr = (C["acc"] | curses.A_BOLD) if vorn else C["dim"]
+                else:                                 # fern: nur Bahn + Sonne
+                    if i == 0:
+                        RAD["schnell"] = False        # kein Symbol klappt hier hinten
+                    for k in range(int(4 * math.pi * srx)):
+                        w = 2 * math.pi * k / int(4 * math.pi * srx)
+                        yy = cy + int(round(math.cos(w)))
+                        xx = cx + int(round(math.sin(w) * srx))
+                        if innen(yy, xx):
+                            safe_addstr(yy, xx, "·", C["faint"])
+                    sonne_attr = C["faint"]
+                sonne = ("● " if vorn and META["drin"] else "✦ ") + name
+                sx = cx - len(sonne) // 2
+                if innen(cy, sx) and innen(cy, sx + len(sonne)):
+                    safe_addstr(cy, sx, sonne, sonne_attr)
+            lz = "up %s · net %s" % (up, "traffic !" if nets else "offline ✓")
+            addclip(top + 1, max(2, W - len(lz) - 3), lz, W - 4,
+                    C["warn"] if nets else C["faint"])
+            if body_h >= 24:                          # unten die letzten Log-Zeilen
+                laeuft_jetzt = draw_stdout(top + body_h - 5, 0, 5, W,
+                                           state.get("logs", []) or [], None) or laeuft_jetzt
         else:
             # ── Startseite: das Rad ───────────────────────────────────
             # Bis 02.10.2026 stand hier der KI-Ring (ring_zeilen) mit der
@@ -9797,9 +9856,9 @@ def run_ui(stdscr, store):
         if DASH["an"] or current_ctx() != "home":
             fuss = " ←→ drehen · enter öffnen · %s · esc zurück" % ki
         elif META["drin"]:
-            fuss = " ←→ drehen · enter öffnen · esc raus aus dem rad · %s" % ki
+            fuss = " ←→ drehen · enter öffnen · esc raus aus dem system · %s" % ki
         else:
-            fuss = " ←→ rad wählen · enter rein · %s" % ki
+            fuss = " ←→ galaxie drehen · enter ins system · %s" % ki
         addclip(footer_row, 0, fuss, W - 1, C["faint"])
 
         # ── Graph-Reminder-Nag (zuletzt → liegt über allem) ───────────────
@@ -9945,7 +10004,7 @@ def main():
         os.environ["ZENTRALE_TUI_RELOADED"] = "1"
         os.environ["ZENTRALE_TUI_RAD"] = str(RAD["sel"])
         os.environ["ZENTRALE_TUI_META"] = "%d,%d,%d" % (
-            META["fokus"], int(META["drin"]), TRAD["sel"])
+            META["gsel"], int(META["drin"]), TRAD["sel"])
         sys.stdout.flush()
         atexit._run_exitfuncs()       # exec überspringt atexit (z.B. Tasten-Wiederholung zurück)
         os.execv(sys.executable, [sys.executable] + sys.argv)

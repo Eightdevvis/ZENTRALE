@@ -74,6 +74,11 @@ def _lauf(wunsch, tmp_path, sekunden=6.0):
 
     pfad = tmp_path / "stdout_lauf"
     pfad.write_text(wunsch + "\n", encoding="utf-8")
+    # Die schmale stdout-Spalte gibt es seit 03.10.2026 nur noch im alten
+    # Dashboard (/dashboard an) — in der Galaxie ist die Leiste so breit,
+    # dass diese Zeile gar nicht laufen muss.
+    dash = tmp_path / "dashboard"
+    dash.write_text("an\n", encoding="utf-8")
 
     srv = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -84,6 +89,7 @@ def _lauf(wunsch, tmp_path, sekunden=6.0):
     env = dict(os.environ, TERM="xterm-256color", ZENTRALE_URL=url,
                ZENTRALE_NO_AUDIO="1",
                ZENTRALE_LAUF_FILE=str(pfad),
+               ZENTRALE_DASHBOARD_FILE=str(dash),
                ZENTRALE_LAUF_TAKT="0.03")    # im Test rennt die Schrift
     env.pop("DISPLAY", None)
     env.pop("WAYLAND_DISPLAY", None)
