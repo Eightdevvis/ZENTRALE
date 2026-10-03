@@ -1790,8 +1790,9 @@ RAD_APPS = [
     ("e", "elektronik"),
 ]
 # Apps mit Pixel-Symbol (tui/pixel.py): im Rad eine Pille, vorn klappt das
-# Symbol auf. Seit 03.10.2026: elektronik (Sasha).
-RAD_SYMBOLE = ("elektronik",)
+# Symbol auf. Seit 03.10.2026: elektronik (Sasha), am selben Abend alle
+# anderen auch (pixel.MOTIVE: Brief, Globus, Kalenderblatt, Klaviatur …).
+RAD_SYMBOLE = tuple(a[1] for a in RAD_APPS)
 def _rad_start():
     """Nach einem Hot Reload steht das Rad, wo es war."""
     try:
@@ -4340,7 +4341,7 @@ def run_ui(stdscr, store):
             t_ms = 0
             if offen >= 1:
                 t_ms = int((jetzt - RAD["offen_seit"].get(name, jetzt)) * 1000) // 60 * 60
-            zeilen, schrift = pixel.elektronik_zellen(offen, t_ms, farben, pmodus)
+            zeilen, schrift = pixel.symbol_zellen(name, offen, t_ms, farben, pmodus)
             r0, c0 = y - pixel.EL_LABEL_ZEILE, x - pixel.EL_W // 2
             for r, line in enumerate(zeilen):
                 yy = r0 + r
@@ -4380,7 +4381,7 @@ def run_ui(stdscr, store):
                 continue
             if st in ("pille", "pille_fern"):            # getönter Grund, halbe Kappen
                 if y0 < y < y0 + h - 1 and bx < x - 1 and x + len(txt) + 1 < bx + bw:
-                    grund, schrift = pixel.elektronik_pille(st == "pille_fern", farben)
+                    grund, schrift = pixel.symbol_pille(txt.strip(), st == "pille_fern", farben)
                     safe_addstr(y, x - 1, "▐", pix_attr(grund, pix_bg))
                     safe_addstr(y, x, txt, pix_attr(schrift, grund)
                                 | (curses.A_BOLD if st == "pille" else 0))

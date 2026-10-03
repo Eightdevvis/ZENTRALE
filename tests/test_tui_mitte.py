@@ -151,7 +151,8 @@ def test_der_kasten_heisst_zentrale(schirm):
 
 
 def test_vorn_steht_die_erste_app(schirm):
-    assert "K L A V I E R" in schirm
+    # mit Farben klappt vorn das Pixel-Symbol auf (Schriftzug KLAVIER)
+    assert "KLAVIER" in schirm or "K L A V I E R" in schirm
 
 
 def test_die_nachbarn_stehen_daneben(schirm):
@@ -167,7 +168,8 @@ def test_keine_buchstaben_leiste_mehr(schirm):
 
 def test_pfeil_rechts_dreht_weiter():
     """Pfeil rechts dreht direkt das gewählte App-Rad -> post steht vorn."""
-    assert "P O S T" in _lauf(b"\x1bOC")
+    schirm = _lauf(b"\x1bOC")
+    assert "POST" in schirm or "P O S T" in schirm
 
 
 def test_pfeil_links_dreht_rueckwaerts_ueber_den_anfang():
@@ -281,7 +283,8 @@ def test_klappen_auf_schnell_und_zu_noch_schneller():
 # gar nich richtig sieht"*: die beiden liegen nebeneinander, ←/→ wechselt.
 
 def test_startseite_ist_eine_galaxie(schirm):
-    assert "✦ APPS" in schirm and "K L A V I E R" in schirm   # apps gewählt, mittig
+    assert "✦ APPS" in schirm                                 # apps gewählt, mittig
+    assert "KLAVIER" in schirm or "K L A V I E R" in schirm
     assert "netz" in schirm                  # technik liegt angeschnitten am Rand
     assert "LIFESTYLE" not in schirm         # die Seitenspalten sind weg
     assert "alt+←→ rad wechseln" in schirm
@@ -412,3 +415,47 @@ def test_wurf_zeilen_entfernen_sich_mit_der_zeit():
     nah, fern = m.wurf_zeilen(teile, 0.0), m.wurf_zeilen(teile, 1.0)
     weite = lambda zs: max(abs(dx) for _dy, dx, _t, _st in zs)  # noqa: E731
     assert weite(fern) > weite(nah) + 30
+
+
+
+# ── Pixel-Symbole für alle Apps (03.10.2026) ────────────────────────────
+# Sasha: *„im gleichen pixel art style ein neues symbol für die anderen apps
+# auch. überasch einfach mal, für post [...] nen brief, für karte nen globus"*
+
+def _pixel():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "_tui_pixel", os.path.join(ROOT, "tui", "pixel.py"))
+    modul = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modul)
+    return modul
+
+
+def test_jede_app_im_rad_hat_ein_symbol():
+    m, px = _modul(), _pixel()
+    for _taste, name in m.RAD_APPS:
+        assert name in m.RAD_SYMBOLE
+        assert name == "elektronik" or name in px.MOTIVE, name
+
+
+def test_symbole_in_allen_stufen_und_farben():
+    px = _pixel()
+    for name in list(px.MOTIVE) + ["elektronik"]:
+        for farben in ("nacht", "tag"):
+            for offen in (0.0, 0.02, 0.3, 0.7, 1.0):
+                zeilen, schrift = px.symbol_zellen(name, offen, 1200, farben, "mix")
+                assert len(zeilen) == px.EL_H and all(len(z) == px.EL_W for z in zeilen)
+                if offen < .5:
+                    assert not schrift                  # zu: noch kein Schriftzug
+            text = "".join(ch for _c, ch, _f, _b in schrift)
+            assert text == name.upper(), (name, text)   # offen: Name auf der Platte
+            grund, farbe = px.symbol_pille(name, False, farben)
+            assert grund != farbe
+
+
+def test_ruhe_animation_bewegt_sich():
+    """Offen lebt jedes Symbol ein bisschen (Globus dreht, Taste leuchtet …)."""
+    px = _pixel()
+    for name in px.MOTIVE:
+        bilder = {str(px.symbol_pixel(name, 1.0, t, "nacht")) for t in range(0, 3000, 150)}
+        assert len(bilder) > 1, name

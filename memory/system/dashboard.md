@@ -63,8 +63,18 @@ Vorschau-Seite mit Sasha entworfen, bitgleich übertragen) liegt in
 `tui/pixel.py` (`elektronik_pixel`/`elektronik_zellen`): durchscheinend blaues
 Feld ohne Rand, hinter `ELEKTRONIK` dunkel, nach oben/unten gerastert in sich
 verjüngende Pixelzacken; offen glitzert es und eine Abtastlinie läuft hoch.
-Ohne 256 Farben (bzw. `ZENTRALE_PIXEL=off`) steht Elektronik wie die anderen
-Apps als Schriftzug im Rahmen.
+**Seit dem Abend des 03.10.2026 hat JEDE App ein Pixel-Symbol** in derselben
+Mechanik (`pixel.MOTIVE`, `symbol_pixel`/`symbol_zellen`/`symbol_pille`,
+Farben in `SYM_FARBEN`, `RAD_SYMBOLE` = alle Apps): post = Brief mit Lasche und
+Wachssiegel (Siegel glänzt), karte = Globus (dreht sich), kalender = Blatt mit
+Ringen und roter Kopfleiste (heute blinkt), klavier = Klaviatur (eine Taste
+nach der anderen leuchtet), notizen = Block mit Bleistift (eine Zeile wird
+geschrieben), graph = steigende Balken (wippen), fokus = Zielscheibe (Ring
+pulst), tutor = Sprechblase (drei Punkte tippen). Ein Motiv ist eine Funktion
+auf dem offenen 32×54-Feinraster; aufklappen, Details wachsen lassen und die
+abgedunkelte Platte hinter dem Schriftzug macht `symbol_pixel` für alle gleich.
+Ohne 256 Farben (bzw. `ZENTRALE_PIXEL=off`) stehen die Apps als Schriftzug
+im Rahmen.
 
 **Lebenslauf-Log** (seit 02.10.2026): `~/.local/state/zentrale/tui.log`
 (`ZENTRALE_TUI_LOG`, rotiert bei 512 KB nach `.1`, wird NIE gelöscht). Jeder

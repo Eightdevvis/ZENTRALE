@@ -428,3 +428,278 @@ def elektronik_pille(fern=False, farben="nacht"):
     if fern:
         return mix(F["pill"], F["bg"], .45), mix(F["pillTxt"], F["bg"], .4)
     return F["pill"], F["pillTxt"]
+
+
+# ── Die anderen Apps: Symbole im selben Stil (Sasha, 03.10.2026) ────────────
+# "Überrasch einfach mal" — für post ein Brief, für karte ein Globus. Jedes
+# Symbol nutzt dieselbe Mechanik wie Elektronik: 16×9 Zellen, zu = helle
+# Linie, dann klappen Ober- und Unterhälfte auf (`s`), dann wachsen die
+# Details (`g`); offen läuft eine kleine Ruhe-Animation (`t` ms). Hinter dem
+# Schriftzug liegt eine abgedunkelte Platte, damit er immer lesbar bleibt.
+# Ein Motiv ist eine Funktion (P, x, y, g, t) → (farbe, deckkraft) | None
+# auf dem vollen, offenen 32×54-Feinraster; ry ≈ 1,5·rx ergibt einen Kreis.
+_W, _H, _MX, _MY = EL_W * FX, EL_H * FY, 16, 27
+
+
+def _pal(core, edge, glow, akzent, dunkel):
+    return {k: _hex(v) for k, v in (("core", core), ("edge", edge), ("glow", glow),
+                                     ("akzent", akzent), ("dunkel", dunkel))}
+
+
+SYM_FARBEN = {
+    "post":     _pal("#f3dcaa", "#fff4d6", "#c8913f", "#e0442e", "#7a4a1c"),
+    "karte":    _pal("#1f6fe0", "#9fdcff", "#3aa0ff", "#4cc36a", "#0b2f6b"),
+    "kalender": _pal("#eef1f6", "#ffffff", "#9aa6b8", "#ef4a52", "#3a4252"),
+    "klavier":  _pal("#ece7dc", "#ffffff", "#b583ff", "#d06cff", "#17151c"),
+    "notizen":  _pal("#ffd84a", "#fff3b0", "#5b8def", "#ff7a59", "#8a6a12"),
+    "graph":    _pal("#22d3b4", "#b6fff0", "#14a08a", "#ffd166", "#0d4f45"),
+    "fokus":    _pal("#ff8a3d", "#ffe0c2", "#ffb27a", "#ff3d5a", "#5a2410"),
+    "tutor":    _pal("#ff6fb5", "#ffd1e8", "#ff9fcf", "#ffffff", "#5c1238"),
+}
+_GRUND = {"nacht": (_hex("#000000"), _hex("#ffffff")),     # (hintergrund, schrift)
+          "tag": (_hex("#ffffff"), _hex("#001a40"))}
+
+
+def _in_ellipse(x, y, cx, cy, rx, ry):
+    return ((x + .5 - cx) / rx) ** 2 + ((y + .5 - cy) / ry) ** 2
+
+
+def _strich(x, y, ax, ay, bx, by, dicke=.75):
+    """Liegt (x, y) auf der Strecke a–b (Feinpixel, y gestaucht wie im Bild)?"""
+    px, py = x + .5, (y + .5) * AY
+    ax, ay, bx, by = ax, ay * AY, bx, by * AY
+    vx, vy = bx - ax, by - ay
+    l2 = vx * vx + vy * vy or 1.0
+    u = max(0.0, min(1.0, ((px - ax) * vx + (py - ay) * vy) / l2))
+    return math.hypot(px - ax - u * vx, py - ay - u * vy) <= dicke
+
+
+def _m_post(P, x, y, g, t):
+    """Ein Brief: Papier, Lasche als V, unten zwei feine Falze, Wachssiegel."""
+    x0, x1, y0, y1 = 3, 29, 11, 45
+    if not (x0 <= x < x1 and y0 <= y < y1):
+        return None
+    if x in (x0, x1 - 1) or y in (y0, y1 - 1):
+        return P["glow"], .95                                      # Kante
+    spitze = 11 + 19 * g                                           # die Lasche klappt runter
+    if _strich(x, y, x0, y0, _MX, spitze, .8) or _strich(x, y, x1 - 1, y0, _MX, spitze, .8):
+        return P["glow"], .9
+    if _strich(x, y, x0, y1 - 1, 12, 33, .45) or _strich(x, y, x1 - 1, y1 - 1, 20, 33, .45):
+        return P["glow"], .55                                      # untere Falze
+    if g > .6 and _in_ellipse(x, y, _MX, 38, 3.2, 4.6) <= 1:       # Siegel
+        glanz = (t // 120) % 14 == 0 and _in_ellipse(x, y, _MX - 1, 36.5, 1.2, 1.6) <= 1
+        return (P["edge"] if glanz else P["akzent"]), 1.0
+    licht = .06 * (1 - (y - y0) / (y1 - y0))
+    return mix(P["core"], P["edge"], licht + (.12 if y < spitze and abs(x + .5 - _MX) * 1.7 < spitze - y else 0)), .92
+
+
+def _m_karte(P, x, y, g, t):
+    """Ein Globus, der sich langsam dreht: Ozean, Kontinente, Gradnetz."""
+    rx, ry = 13.0, 19.5
+    e = _in_ellipse(x, y, _MX, _MY, rx, ry)
+    if e > 1:
+        return None
+    if e > .86:
+        return P["edge"], .9                                       # Atmosphäre / Rand
+    nx = (x + .5 - _MX) / rx
+    ny = (y + .5 - _MY) / ry
+    lat = math.asin(max(-1.0, min(1.0, ny)))
+    breite = math.sqrt(max(1e-6, 1 - ny * ny))
+    lon = math.asin(max(-1.0, min(1.0, nx / breite))) + t / 3000.0  # Drehung
+    land = (math.sin(2 * lon + .7) * math.cos(2.2 * lat) + .55 * math.sin(5 * lon - 1.3 + 3 * lat)
+            + .35 * math.cos(3 * lon + 4 * lat))
+    licht = .55 + .45 * (1 - math.hypot(nx + .35, ny + .35) / 1.6)  # Licht von links oben
+    if g > 0 and land > 1.05 - .55 * g:
+        return mix(P["dunkel"], P["akzent"], licht), .95
+    netz = abs(((lon * 6 / math.pi) % 1) - .5) > .46 or abs(lat) < .045 or abs(abs(lat) - .55) < .03
+    if netz and g > .3:
+        return mix(P["core"], P["glow"], .8), .9
+    return mix(P["dunkel"], P["core"], licht), .9
+
+
+def _m_kalender(P, x, y, g, t):
+    """Ein Kalenderblatt: Ringe, rote Kopfleiste, Raster, ein Tag blinkt."""
+    x0, x1, y0, y1 = 4, 28, 9, 47
+    for rx_ in (9, 22):                                            # Ringe oben
+        if rx_ <= x < rx_ + 2 and 5 <= y < 12:
+            return P["dunkel"], 1.0
+    if not (x0 <= x < x1 and y0 <= y < y1):
+        return None
+    if y < 16:
+        return P["akzent"], .95                                    # Kopfleiste
+    if x in (x0, x1 - 1) or y == y1 - 1:
+        return P["glow"], .9
+    sp, ze = (x - x0 - 1) // 5, (y - 17) // 7                      # 5 Spalten, 4 Zeilen
+    linie = (x - x0 - 1) % 5 == 4 or (y - 17) % 7 == 6
+    if linie and g > .2:
+        return P["glow"], .55 + .35 * g
+    if (sp, ze) == (3, 3) and (t // 500) % 2 == 0 and g > .5:      # heute
+        return P["akzent"], .85
+    return P["core"], .92
+
+
+def _m_klavier(P, x, y, g, t):
+    """Klaviatur: sieben weisse Tasten, fünf schwarze; eine Taste leuchtet
+    nach der anderen auf."""
+    x0, y0, y1 = 2, 12, 43
+    if not (x0 <= x < x0 + 28 and y0 <= y < y1):
+        return None
+    taste, innen = (x - x0) // 4, (x - x0) % 4
+    lang = y0 + int(18 * g)                                        # schwarze wachsen runter
+    for k in (0, 1, 3, 4, 5):                                      # zwischen C-D, D-E, F-G, G-A, A-H
+        mitte = x0 + 4 * (k + 1)
+        if mitte - 1 <= x < mitte + 1 and y < lang:
+            return P["dunkel"], 1.0
+    if innen == 3 or y == y1 - 1:
+        return P["dunkel"], .9                                     # Fugen
+    if taste == (t // 260) % 7:
+        return mix(P["core"], P["akzent"], .65), 1.0               # gespielt
+    return mix(P["core"], P["edge"], .3 * (1 - (y - y0) / (y1 - y0))), .95
+
+
+def _m_notizen(P, x, y, g, t):
+    """Ein Notizblock mit Linien, Rand und einer Zeile, die gerade entsteht;
+    rechts unten lehnt ein Bleistift."""
+    if _strich(x, y, 21, 49, 30, 31, 1.1):                         # Bleistift
+        if _strich(x, y, 21, 49, 22.6, 45.8, 1.1):
+            return P["dunkel"], 1.0
+        if _strich(x, y, 28.6, 33.8, 30, 31, 1.1):
+            return P["akzent"], 1.0
+        return mix(P["akzent"], P["core"], .5), 1.0
+    x0, x1, y0, y1 = 5, 25, 7, 49
+    if not (x0 <= x < x1 and y0 <= y < y1):
+        return None
+    if y < 11:
+        return (P["core"] if (x - x0) % 4 == 2 and y in (8, 9) else P["dunkel"]), 1.0
+    if x == x0 + 3:
+        return P["akzent"], .7                                     # Rand
+    zeile = (y - 13) % 5 == 4
+    if zeile and g > .2:
+        if y == 37 and x0 + 5 <= x < x0 + 5 + int((t % 2400) / 2400 * 14):
+            return P["dunkel"], .95                                # wird geschrieben
+        return P["glow"], .45 + .3 * g
+    return P["core"], .92
+
+
+def _m_graph(P, x, y, g, t):
+    """Ein Balkendiagramm, das steigt; die Balken wippen leise."""
+    if x == 4 and 8 <= y < 47 or y == 46 and 4 <= x < 29:
+        return P["glow"], .9                                       # Achsen
+    for i, (bx, h) in enumerate(((7, 12), (12, 18), (17, 26), (22, 34))):
+        if bx <= x < bx + 3:
+            hoch = int(h * g + math.sin(t / 400 + i * 1.3) * (1.4 if g >= 1 else 0))
+            top = 46 - hoch
+            if top <= y < 46:
+                return (P["edge"] if y == top else mix(P["glow"], P["core"], (46 - y) / 34)), .95
+    return None
+
+
+def _m_fokus(P, x, y, g, t):
+    """Eine Zielscheibe; ein Ring pulst von innen nach aussen."""
+    rx = math.sqrt(_in_ellipse(x, y, _MX, _MY, 1, 1.5))           # Abstand in rx-Einheiten
+    if rx > 13:
+        return None
+    puls = (t % 1600) / 1600 * 13
+    if g >= 1 and abs(rx - puls) < .6:
+        return P["edge"], .85
+    band = int(rx / 2.6)                                           # 0 = Mitte … 4 = aussen
+    if band > int(g * 5):
+        return None                                                # Ringe wachsen von innen
+    if band == 0:
+        return P["akzent"], 1.0
+    return (P["core"] if band % 2 == 0 else P["dunkel"]), (.95 if band % 2 == 0 else .7)
+
+
+def _m_tutor(P, x, y, g, t):
+    """Eine Sprechblase, in der drei Punkte tippen."""
+    if _strich(x, y, 9, 37, 6, 47, 1.3) or _strich(x, y, 9, 37, 12, 39, 1.3):
+        return P["core"], .95                                      # Zipfel
+    x0, x1, y0, y1 = 3, 29, 8, 39
+    if not (x0 <= x < x1 and y0 <= y < y1):
+        return None
+    ecke = (min(x - x0, x1 - 1 - x), min(y - y0, y1 - 1 - y))
+    if ecke[0] + ecke[1] * AY < 2:
+        return None                                                # runde Ecken
+    if ecke[0] == 0 or ecke[1] == 0:
+        return P["edge"], .95
+    for i, px in enumerate((10, 16, 22)):
+        hub = 1 if g >= 1 and (t // 220) % 3 == i else 0
+        if g > .5 and _in_ellipse(x, y, px, 34 - hub, 2.2, 3.3) <= 1:
+            return P["akzent"], 1.0
+    return mix(P["core"], P["edge"], .15 * (1 - (y - y0) / (y1 - y0))), .9
+
+
+MOTIVE = {"post": _m_post, "karte": _m_karte, "kalender": _m_kalender,
+          "klavier": _m_klavier, "notizen": _m_notizen, "graph": _m_graph,
+          "fokus": _m_fokus, "tutor": _m_tutor}
+
+
+def symbol_pixel(name, offen, t_ms, farben="nacht"):
+    """Symbol einer App als Feinpixel-Raster (wie elektronik_pixel)."""
+    if name == "elektronik":
+        return elektronik_pixel(offen, t_ms, farben)
+    P, motiv = SYM_FARBEN[name], MOTIVE[name]
+    bg, _ = _GRUND[farben]
+    s = _ease(min(1.0, offen / .62))                               # Klappen
+    g = _ease(max(0.0, (offen - .55) / .45))                       # Details
+    t = t_ms if offen >= 1 else 0
+    px = [[None] * _W for _ in range(_H)]
+    if s < .04:                                                    # zu: helle Linie
+        half = _jsround(12 * min(1.0, offen / .04 + .35))
+        for x in range(_MX - half, _MX + half):
+            px[26][x] = mix(bg, P["edge"], .9)
+            px[27][x] = mix(bg, P["glow"], .5)
+        return px
+    for y in range(_H):
+        src = _jsround(_MY + (y + .5 - _MY) / s - .5)              # zur Mitte gestaucht
+        if not 0 <= src < _H:
+            continue
+        for x in range(_W):
+            r = motiv(P, x, src, g, t)
+            if r:
+                px[y][x] = mix(bg, r[0], r[1] * (.45 + .55 * s))
+    if offen > .92:                                                # Platte hinter der Schrift
+        n = len(name)
+        x0 = (EL_W - n) // 2 * FX - 2
+        for y in range(EL_LABEL_ZEILE * FY, (EL_LABEL_ZEILE + 1) * FY):
+            for x in range(max(0, x0), min(_W, x0 + n * FX + 4)):
+                px[y][x] = mix(px[y][x] or bg, bg, .62)
+    return px
+
+
+@lru_cache(maxsize=64)
+def symbol_zellen(name, offen, t_ms, farben="nacht", modus="mix"):
+    """Wie elektronik_zellen, für jede App mit Symbol."""
+    if name == "elektronik":
+        return elektronik_zellen(offen, t_ms, farben, modus)
+    bg, schrift_farbe = _GRUND[farben]
+    px = symbol_pixel(name, offen, t_ms, farben)
+    zeilen = []
+    for r in range(EL_H):
+        line = []
+        for c in range(EL_W):
+            fine = [px[r * FY + y][c * FX + x] for y in range(FY) for x in range(FX)]
+            line.append(None if all(p is None for p in fine)
+                        else zelle([p or bg for p in fine], modus))
+        zeilen.append(line)
+    schrift = []
+    if offen > .92:
+        text = name.upper()
+        c0 = (EL_W - len(text)) // 2
+        for i, ch in enumerate(text):
+            z = zeilen[EL_LABEL_ZEILE][c0 + i]
+            schrift.append((c0 + i, ch, schrift_farbe, z[2] if z else bg))
+    return zeilen, schrift
+
+
+def symbol_pille(name, fern=False, farben="nacht"):
+    """Farben der Pille einer App im Rad: (grund, text)."""
+    if name == "elektronik":
+        return elektronik_pille(fern, farben)
+    P = SYM_FARBEN[name]
+    bg, schrift = _GRUND[farben]
+    grund = mix(P["dunkel"] if farben == "nacht" else P["core"], bg, .25 if farben == "nacht" else .45)
+    text = mix(P["edge"] if farben == "nacht" else P["dunkel"], schrift, .2)
+    if fern:
+        return mix(grund, bg, .45), mix(text, bg, .4)
+    return grund, text
