@@ -1456,9 +1456,10 @@ TUI_COMMANDS = [
     ("/quit",  "ZENTRALE-TUI wirklich beenden  ('q' legt das Fenster nur weg)"),
 ]
 TUI_KEYS = [
-    ("←→",    "Startseite: die Galaxie drehen (apps | technik); im System: dessen Apps drehen"),
-    ("enter", "Startseite: ins vordere Sonnensystem; drin: die App vorn öffnen"),
-    ("esc",   "zurück, Stufe für Stufe — aus der App ins System, aus dem System raus"),
+    ("←→",    "Startseite: das gewählte Rad drehen — vorn steht die App, die enter öffnet"),
+    ("alt+←→", "Startseite: das Rad wechseln (apps | technik), die Galaxie dreht mit"),
+    ("enter", "Startseite: die App vorn im gewählten Rad öffnen"),
+    ("esc",   "zurück, Stufe für Stufe bis zur Startseite"),
     # Die Apps im Rad — seit 02.10.2026 nicht mehr per Buchstabe,
     # sondern übers Rad (Sasha). Links steht deshalb der Name im Rad.
     ("graph", "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
@@ -1480,8 +1481,8 @@ TUI_KEYS = [
 # current_ctx(); Reihenfolge spiegelt die alten Fußzeilen.
 CTX_KEYS = {
     "home": [
-        ("←→", "galaxie / drin: system drehen"), ("enter", "rein / app öffnen"),
-        ("space", "ki-chat"), ("esc", "raus aus dem system"),
+        ("←→", "rad drehen"), ("alt+←→", "rad wechseln"),
+        ("enter", "app öffnen"), ("space", "ki-chat"),
         ("/dashboard", "altes dashboard"), ("/theme", "theme"),
         ("/lauf", "stdout-lauf"), ("/quit", "beenden"),
     ],
@@ -1829,27 +1830,24 @@ _M0 = _meta_start()
 META = {"gsel": _M0[0], "gpos": float(_M0[0]),   # Galaxie: Ziel + wo sie gerade steht
         "fahrt": None,          # laufende Drehung: (von, nach, startzeit) oder None
         "fokus": _M0[0],        # welches System gewählt ist: 0 = Apps, 1 = Technik
-        "drin": _M0[1]}         # True = ←/→ dreht das System statt die Galaxie
+        }
 TRAD = {"sel": _M0[2], "pos": float(_M0[2])}   # Technik-Rad, wie RAD
 
 
 def meta_taste(meta, rad, trad, taste):
-    """Eine Taste auf der Startseite des Meta-Rads. PURE bis auf die drei
-    Zustands-Dicts. taste: "links" | "rechts" | "enter" | "esc".
+    """Eine Taste auf der Galaxie-Startseite. PURE bis auf die drei
+    Zustands-Dicts. Sasha: ←/→ dreht direkt das gewählte Rad, alt+←/→
+    wechselt das Rad, enter öffnet die App vorn.
+    taste: "links" | "rechts" | "alt_links" | "alt_rechts" | "enter".
     -> None | ("app", buchstabe) | ("technik", name)"""
-    if not meta["drin"]:
-        if taste in ("links", "rechts"):     # nebeneinander: links = apps, rechts = technik
-            meta["gsel"] = meta["fokus"] = 1 if taste == "rechts" else 0
-        elif taste == "enter":
-            meta["drin"] = True
+    if taste in ("alt_links", "alt_rechts"):   # nebeneinander: links = apps, rechts = technik
+        meta["gsel"] = meta["fokus"] = 1 if taste == "alt_rechts" else 0
         return None
     ziel = rad if meta["fokus"] == 0 else trad
     if taste == "links":
         ziel["sel"] -= 1
     elif taste == "rechts":
         ziel["sel"] += 1
-    elif taste == "esc":
-        meta["drin"] = False
     elif taste == "enter":
         if meta["fokus"] == 0:
             return ("app", RAD_APPS[rad_index(rad["sel"])][0])
@@ -4277,7 +4275,8 @@ def run_ui(stdscr, store):
                     if z and bx < xx < bx + bw - 1:
                         safe_addstr(yy, xx, z[0], pix_attr(z[1], z[2]))
             for c, ch, fg, bg in schrift:
-                if y0 < r0 + pixel.EL_LABEL_ZEILE < y0 + h - 1:
+                if (y0 < r0 + pixel.EL_LABEL_ZEILE < y0 + h - 1
+                        and bx < c0 + c < bx + bw - 1):       # nie über den Rahmen
                     safe_addstr(r0 + pixel.EL_LABEL_ZEILE, c0 + c, ch,
                                 pix_attr(fg, bg) | curses.A_BOLD)
 
@@ -9455,10 +9454,12 @@ def run_ui(stdscr, store):
             # Buchstaben, damit die Öffnen-Zweige unten unverändert bleiben.
             taste = None
             if not DASH["an"]:
-                # Meta-Rad (seit 03.10.2026): erst das Rad wählen, dann rein.
+                # Galaxie (seit 03.10.2026): ←/→ dreht das gewählte Rad,
+                # alt+←/→ wechselt das Rad (dieselbe Alt-Erkennung wie die Karte).
                 was = {curses.KEY_LEFT: "links", curses.KEY_RIGHT: "rechts",
-                       10: "enter", 13: "enter", curses.KEY_ENTER: "enter",
-                       27: "esc"}.get(ch)
+                       10: "enter", 13: "enter", curses.KEY_ENTER: "enter"}.get(ch)
+                if was is None:
+                    was = {"left": "alt_links", "right": "alt_rechts"}.get(m_alt_arrow(ch))
                 if ch == ord(" "):
                     taste = "a"
                 elif was:
@@ -9708,17 +9709,20 @@ def run_ui(stdscr, store):
             for i, naehe, cy, cx, _rx, _ry, rad_b in lage:
                 name, labels, rad = systeme[i]
                 gewaehlt = META["fokus"] == i and naehe > 0.98
-                draw_rad(top, body_h, 0, W, labels, rad, symbole_an=(i == 0),
-                         gedimmt=not (gewaehlt and META["drin"]), mitte=(cy, cx),
-                         mass=(rad_b, rad_h), blass=naehe < 0.5)
+                # Sonne ZUERST: ein aufgeklapptes Pixel-Symbol (elektronik)
+                # ragt bis in die Mitte und muss über ihr liegen, nicht drunter.
                 if gewaehlt:
-                    sonne = ("● " if META["drin"] else "✦ ") + name.upper()
-                    sonne_attr = C["acc"] | curses.A_BOLD
+                    sonne, sonne_attr = "✦ " + name.upper(), C["acc"] | curses.A_BOLD
                 else:
                     sonne, sonne_attr = "✦ " + name, C["faint"]
                 sx = cx - len(sonne) // 2
                 if innen(cy, sx) and innen(cy, sx + len(sonne)):
                     safe_addstr(cy, sx, sonne, sonne_attr)
+                # Pixel-Symbole nur im nahen Rad — weit draussen und blass
+                # wäre ein leuchtend blaues Feld genau falsch.
+                draw_rad(top, body_h, 0, W, labels, rad, symbole_an=(i == 0 and naehe >= 0.5),
+                         gedimmt=not gewaehlt, mitte=(cy, cx),
+                         mass=(rad_b, rad_h), blass=naehe < 0.5)
             lz = "up %s · net %s" % (up, "traffic !" if nets else "offline ✓")
             addclip(top + 1, max(2, W - len(lz) - 3), lz, W - 4,
                     C["warn"] if nets else C["faint"])
@@ -9874,10 +9878,8 @@ def run_ui(stdscr, store):
         ki = "space ki" + (" ●" if AI.get("neu") else "")
         if DASH["an"] or current_ctx() != "home":
             fuss = " ←→ drehen · enter öffnen · %s · esc zurück" % ki
-        elif META["drin"]:
-            fuss = " ←→ drehen · enter öffnen · esc raus aus dem system · %s" % ki
         else:
-            fuss = " ←→ galaxie drehen · enter ins system · %s" % ki
+            fuss = " ←→ drehen · alt+←→ rad wechseln · enter öffnen · %s" % ki
         addclip(footer_row, 0, fuss, W - 1, C["faint"])
 
         # ── Graph-Reminder-Nag (zuletzt → liegt über allem) ───────────────
@@ -10023,7 +10025,7 @@ def main():
         os.environ["ZENTRALE_TUI_RELOADED"] = "1"
         os.environ["ZENTRALE_TUI_RAD"] = str(RAD["sel"])
         os.environ["ZENTRALE_TUI_META"] = "%d,%d,%d" % (
-            META["gsel"], int(META["drin"]), TRAD["sel"])
+            META["gsel"], 0, TRAD["sel"])
         sys.stdout.flush()
         atexit._run_exitfuncs()       # exec überspringt atexit (z.B. Tasten-Wiederholung zurück)
         os.execv(sys.executable, [sys.executable] + sys.argv)

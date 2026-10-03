@@ -14,16 +14,19 @@ Fläche: das App-Rad und das **Technik-Rad** (`system` = external +
 telemetrie, `stdout` = ganzes Log, `netz` = outbound + laufzeit) sind zwei
 **Sonnensysteme** auf einer riesigen Galaxie-Bahn — so gross, dass man im
 Ausschnitt nur einen flachen, kaum gepunkteten Bogen sieht und beide
-**nebeneinander** liegen (App-Rad 55 % der Breite, Technik 36 %). ←/→
-wechselt (links = apps, rechts = technik); die Kamera gleitet aufs gewählte,
+**nebeneinander** liegen (App-Rad 55 % der Breite, Technik 36 %).
+**alt+←/→** wechselt das Rad (links = apps, rechts = technik; Erkennung wie
+die Karte, `m_alt_arrow`), **←/→ dreht direkt** das gewählte Rad, **enter**
+öffnet dessen App vorn — keine Rein/Raus-Stufe mehr. Die Kamera gleitet aufs gewählte,
 das dann **mittig** steht. Das andere liegt weiter draussen, am Rand
 angeschnitten und blass (`draw_rad(..., blass=True)`). Der Wechsel ist
 **schwer** wie eine Giga-Galaxie: zeitbasiert `GALAXIE_DAUER` = 1,6 s mit
 Sinus-Ease-in-out (`galaxie_schritt`, `META["fahrt"]`), träge Anfahrt, weiches
 Ausrollen; ein Richtungswechsel mitten drin startet ruckfrei von der
 aktuellen Stellung. Die
-Sonne des gewählten Systems steht gross (`✦ APPS`), drin `● APPS`. enter
-geht hinein (←/→ dreht dann dessen Apps, enter öffnet), esc wieder raus.
+Sonne des gewählten Systems steht gross (`✦ APPS`); sie wird VOR dem Rad
+gezeichnet, damit ein aufgeklapptes Pixel-Symbol über ihr liegt. Pixel-
+Symbole gibt es nur im nahen Rad, das ferne bleibt blass und schlicht.
 Oben rechts `up · net`, unten die letzten Log-Zeilen (ab 24 Zeilen Body).
 Offene Apps und Technik-Ansichten (`TECH`) haben die **ganze Breite**.
 Lifestyle- und focus-Box gibt es dort nicht mehr. **Backup:** `/dashboard an`

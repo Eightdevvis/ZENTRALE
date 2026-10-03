@@ -166,15 +166,15 @@ def test_keine_buchstaben_leiste_mehr(schirm):
 
 
 def test_pfeil_rechts_dreht_weiter():
-    """Erst rein ins App-Rad (enter), dann Pfeil rechts -> post steht vorn."""
-    assert "P O S T" in _lauf(b"\r\x1bOC")
+    """Pfeil rechts dreht direkt das gewählte App-Rad -> post steht vorn."""
+    assert "P O S T" in _lauf(b"\x1bOC")
 
 
 def test_pfeil_links_dreht_rueckwaerts_ueber_den_anfang():
     """Vom klavier nach links landet man hinten bei der letzten App
     (seit 03.10.2026 elektronik), nicht am Rand. Mit Farben klappt dort das
     Pixel-Symbol auf (Schriftzug ELEKTRONIK), ohne den gewohnten Rahmen."""
-    schirm = _lauf(b"\r\x1bOD")
+    schirm = _lauf(b"\x1bOD")
     assert "ELEKTRONIK" in schirm or "E L E K T R O N I K" in schirm
 
 
@@ -284,11 +284,15 @@ def test_startseite_ist_eine_galaxie(schirm):
     assert "✦ APPS" in schirm and "K L A V I E R" in schirm   # apps gewählt, mittig
     assert "netz" in schirm                  # technik liegt angeschnitten am Rand
     assert "LIFESTYLE" not in schirm         # die Seitenspalten sind weg
-    assert "galaxie drehen" in schirm
+    assert "alt+←→ rad wechseln" in schirm
 
 
-def test_pfeil_rechts_waehlt_technik():
-    assert "✦ TECHNIK" in _lauf(b"\x1bOC")
+def test_alt_pfeil_rechts_waehlt_technik():
+    assert "✦ TECHNIK" in _lauf(b"\x1b[1;3C")
+
+
+def test_pfeil_allein_wechselt_das_rad_nicht():
+    assert "✦ TECHNIK" not in _lauf(b"\x1bOC")
 
 
 def test_galaxie_gewaehltes_mittig_anderes_draussen():
@@ -308,7 +312,7 @@ def test_galaxie_gewaehltes_mittig_anderes_draussen():
 
 
 def test_technik_rad_oeffnet_die_systemansicht():
-    schirm = _lauf(b"\x1bOC\r\r")
+    schirm = _lauf(b"\x1b[1;3C\r")
     assert "TECHNIK · SYSTEM" in schirm
     assert "EXTERNAL" in schirm and "TELEMETRIE" in schirm
 
@@ -322,19 +326,16 @@ def test_dashboard_an_holt_die_alten_spalten_zurueck(tmp_path, monkeypatch):
 
 def test_meta_taste_waehlt_dreht_und_oeffnet():
     m = _modul()
-    meta, rad, trad = {"gsel": 0, "fokus": 0, "drin": False}, {"sel": 0}, {"sel": 0}
-    assert m.meta_taste(meta, rad, trad, "rechts") is None
-    assert meta["fokus"] == 1 and rad["sel"] == 0       # galaxie gedreht, das system nicht
-    m.meta_taste(meta, rad, trad, "enter")
-    assert meta["drin"]
+    meta, rad, trad = {"gsel": 0, "fokus": 0}, {"sel": 0}, {"sel": 0}
     m.meta_taste(meta, rad, trad, "rechts")
-    assert trad["sel"] == 1 and rad["sel"] == 0         # dreht nur das gewählte Rad
+    assert rad["sel"] == 1 and meta["fokus"] == 0       # pfeil dreht direkt
+    assert m.meta_taste(meta, rad, trad, "alt_rechts") is None
+    assert meta["fokus"] == 1 and meta["gsel"] == 1     # alt+pfeil wechselt das rad
+    m.meta_taste(meta, rad, trad, "rechts")
+    assert trad["sel"] == 1 and rad["sel"] == 1         # dreht nur das gewählte
     assert m.meta_taste(meta, rad, trad, "enter") == ("technik", m.TECH_APPS[1][0])
-    m.meta_taste(meta, rad, trad, "esc")
-    assert not meta["drin"]
-    m.meta_taste(meta, rad, trad, "links")
-    m.meta_taste(meta, rad, trad, "enter")
-    assert m.meta_taste(meta, rad, trad, "enter") == ("app", m.RAD_APPS[0][0])
+    m.meta_taste(meta, rad, trad, "alt_links")
+    assert m.meta_taste(meta, rad, trad, "enter") == ("app", m.RAD_APPS[1][0])
 
 
 def test_dashboard_befehl():
