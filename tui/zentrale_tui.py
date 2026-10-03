@@ -1846,13 +1846,69 @@ def meta_taste(meta, rad, trad, taste):
     ziel = rad if meta["fokus"] == 0 else trad
     if taste == "links":
         ziel["sel"] -= 1
+        rad_anstoss(ziel)
     elif taste == "rechts":
         ziel["sel"] += 1
+        rad_anstoss(ziel)
     elif taste == "enter":
         if meta["fokus"] == 0:
             return ("app", RAD_APPS[rad_index(rad["sel"])][0])
         return ("technik", TECH_APPS[rad_index(trad["sel"], len(TECH_APPS))][0])
     return None
+
+
+# ── Der Schleuder-Gag (Sasha, 03.10.2026) ────────────────────────────────────
+# Hält man die Pfeiltaste zu lange, dreht das Rad so schnell, dass die Apps
+# rausfliegen. Kurz in Ruhe lassen → sie fliegen zurück. Jeder Druck gibt
+# Schwung, Schwung verfliegt; normales Tippen kommt nie über die Schwelle,
+# eine Tastenwiederholung (~25-30/s) nach rund einer Sekunde schon.
+SCHWUNG_ZERFALL = 0.6        # Sekunden (e-Faltung)
+SCHLEUDER_AB = 12.0          # ab so viel Schwung lösen sich die Apps
+SCHLEUDER_RUHE = 1.0         # so lange nichts gedrückt → sie kommen zurück
+SCHLEUDER_MAX = 12.0         # weiter raus muss nichts fliegen
+
+
+def rad_anstoss(rad, jetzt=None):
+    """Ein Pfeildruck am Rad: Schwung +1, Zeitpunkt merken."""
+    rad["schwung"] = rad.get("schwung", 0.0) + 1.0
+    rad["letzt"] = time.monotonic() if jetzt is None else jetzt
+
+
+def schleuder_schritt(schwung, flug, seit_letzt, dt):
+    """Ein Frame Schleuder-Physik. PURE. -> (schwung, flug)
+    flug 0 = alle Apps auf dem Rad; je grösser, desto weiter draussen."""
+    import math
+    schwung *= math.exp(-max(0.0, dt) / SCHWUNG_ZERFALL)
+    if schwung > SCHLEUDER_AB:
+        flug = min(SCHLEUDER_MAX, flug + dt * (0.8 + flug * 1.5))   # es beschleunigt
+    elif seit_letzt > SCHLEUDER_RUHE and flug > 0:
+        flug = max(0.0, flug - dt * max(1.5, flug * 3))              # zurück aufs Rad
+    return schwung, flug
+
+
+def schleuder_zeilen(zeilen, flug):
+    """Die Plot-Anweisungen eines Rads im Flug verschieben. PURE.
+    Jede App fliegt mit eigenem Tempo und leicht eigenem Winkel nach aussen
+    (aus ihrem Namen abgeleitet, also jedes Mal gleich). Die Laufbahn bleibt,
+    der Rahmen um die vordere App fällt ab."""
+    if flug <= 0:
+        return zeilen
+    aus = []
+    for dy, dx, txt, st in zeilen:
+        if st == "spur":
+            aus.append((dy, dx, txt, st))
+            continue
+        if st == "rahmen":
+            continue
+        h = sum(map(ord, "".join(txt.split()).lower()))
+        f = flug * (0.7 + (h % 7) / 10)
+        mitte = dx + len(txt) / 2
+        seite = 1 if mitte >= 0 else -1
+        ny = dy * (1 + f) + ((h % 3) - 1) * f * 1.5
+        nm = mitte * (1 + f) + seite * f * 4
+        aus.append((int(round(ny)), int(round(nm - len(txt) / 2)), txt,
+                    "nah" if st == "vorn" else st))
+    return aus
 
 
 # Eine Giga-Galaxie dreht schwer (Sasha): langsam anlaufen, sanft ausrollen.
@@ -4227,6 +4283,14 @@ def run_ui(stdscr, store):
         Zu schmal für die Ellipse → eine schlichte Liste, vorn mit ▸."""
         rad["pos"] = rad_schritt(rad["pos"], rad["sel"])
         cyc, ccx = mitte or (y0 + (h * 5) // 8, bx + bw // 2)
+        jetzt_s = time.monotonic()
+        dt_s = min(0.1, jetzt_s - rad.get("t_schl", jetzt_s))
+        rad["t_schl"] = jetzt_s
+        rad["schwung"], rad["flug"] = schleuder_schritt(
+            rad.get("schwung", 0.0), rad.get("flug", 0.0),
+            jetzt_s - rad.get("letzt", 0.0), dt_s)
+        if rad["flug"] > 0:
+            symbole_an = False                    # im Flug kein aufklappendes Symbol
         rad_stil = {"spur": C["faint"], "fern": C["faint"],
                     "nah": C["faint"] if gedimmt else C["dim"],
                     "rahmen": C["faint"] if gedimmt else C["acc"],
@@ -4281,7 +4345,8 @@ def run_ui(stdscr, store):
                                 pix_attr(fg, bg) | curses.A_BOLD)
 
         rb, rh = mass or (bw, h - 2)
-        zeilen = rad_zeilen(labels, rad["pos"], rb, rh, symbole)
+        zeilen = schleuder_zeilen(rad_zeilen(labels, rad["pos"], rb, rh, symbole),
+                                  rad["flug"])
         if not zeilen and labels and mitte is None:
             # Liste statt Ellipse: die gewählte mittig, Nachbarn drumherum.
             vorn = rad_index(rad["sel"], len(labels))
@@ -8021,7 +8086,8 @@ def run_ui(stdscr, store):
         fast = ((M["active"] and M.get("anim")) or (AI["active"] and AI["streaming"])
                 or (TUTOR["active"] and TUTOR["streaming"]) or PIANO["active"]
                 or RAD["pos"] != RAD["sel"] or RAD["schnell"]
-                or TRAD["pos"] != TRAD["sel"] or META["gpos"] != META["gsel"])
+                or TRAD["pos"] != TRAD["sel"] or META["gpos"] != META["gsel"]
+                or RAD.get("flug") or TRAD.get("flug"))
         stdscr.timeout(33 if fast else (LAUF_TICK_MS if LAUF["laeuft"] else 250))
         ch = stdscr.getch()
 
@@ -9469,9 +9535,9 @@ def run_ui(stdscr, store):
                     elif wahl:
                         TECH["active"] = True; TECH["view"] = wahl[1]
             elif ch == curses.KEY_LEFT:
-                RAD["sel"] -= 1
+                RAD["sel"] -= 1; rad_anstoss(RAD)
             elif ch == curses.KEY_RIGHT:
-                RAD["sel"] += 1
+                RAD["sel"] += 1; rad_anstoss(RAD)
             elif ch == ord(" "):
                 taste = "a"
             elif ch in (10, 13, curses.KEY_ENTER):

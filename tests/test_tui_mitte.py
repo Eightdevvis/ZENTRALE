@@ -359,3 +359,51 @@ def test_galaxie_dreht_schwer_und_rollt_weich_aus():
     assert anfang < 0.03 and mitte > 3 * anfang            # langsam los, dann zügig
     werte = [m.galaxie_schritt(1, 0, d * k / 20) for k in range(21)]
     assert werte == sorted(werte, reverse=True)            # nie zurückzucken
+
+
+# ── Schleuder-Gag ───────────────────────────────────────────────────────
+# Sasha: *„wenn man die pfeiltaste zulange gedrückt hält [...] dass die app
+# symbole dann irgendwann voll rausfliegen (resetted sich dann wenn man das
+# wheel kurz in ruhe lässt)"*
+
+def _simuliere(m, druecke_pro_s, sekunden, schwung=0.0, flug=0.0, fps=30):
+    dt = 1 / fps
+    seit = 0.0
+    naechster = 0.0
+    t = 0.0
+    while t < sekunden:
+        if druecke_pro_s and t >= naechster:
+            schwung += 1
+            seit = 0.0
+            naechster += 1 / druecke_pro_s
+        schwung, flug = m.schleuder_schritt(schwung, flug, seit, dt)
+        seit += dt
+        t += dt
+    return schwung, flug
+
+
+def test_normales_tippen_schleudert_nie():
+    m = _modul()
+    assert _simuliere(m, 5, 10)[1] == 0.0
+
+
+def test_gehaltene_taste_schleudert_raus():
+    m = _modul()
+    schwung, flug = _simuliere(m, 30, 2.5)
+    assert flug > 3                                        # weit draussen
+
+
+def test_kurz_in_ruhe_lassen_holt_sie_zurueck():
+    m = _modul()
+    schwung, flug = _simuliere(m, 30, 2.5)
+    assert _simuliere(m, 0, 2.5, schwung, flug)[1] == 0.0
+
+
+def test_im_flug_faellt_der_rahmen_und_alles_rueckt_nach_aussen():
+    m = _modul()
+    ruhig = m.rad_zeilen(NAMEN, 0, 70, 30)
+    weg = m.schleuder_zeilen(ruhig, 2.0)
+    assert m.schleuder_zeilen(ruhig, 0) == ruhig
+    assert not [z for z in weg if z[3] == "rahmen"]
+    breite = lambda zs: max(abs(dx + len(t) / 2) for _dy, dx, t, st in zs if st != "spur")  # noqa: E731
+    assert breite(weg) > 2 * breite(ruhig)
