@@ -15,8 +15,9 @@ telemetrie, `stdout` = ganzes Log, `netz` = outbound + laufzeit) sind zwei
 **Sonnensysteme** auf einer riesigen Galaxie-Bahn — so gross, dass man im
 Ausschnitt nur einen flachen, kaum gepunkteten Bogen sieht und beide
 **nebeneinander** liegen (App-Rad 55 % der Breite, Technik 36 %). ←/→
-wechselt (links = apps, rechts = technik); die Kamera gleitet dabei so weit
-zum gewählten, wie Platz übrig ist — es fällt nie eins aus dem Bild. Die
+wechselt (links = apps, rechts = technik); die Kamera gleitet aufs gewählte,
+das dann **mittig** steht. Das andere liegt weiter draussen, am Rand
+angeschnitten und blass (`draw_rad(..., blass=True)`). Die
 Sonne des gewählten Systems steht gross (`✦ APPS`), drin `● APPS`. enter
 geht hinein (←/→ dreht dann dessen Apps, enter öffnet), esc wieder raus.
 Oben rechts `up · net`, unten die letzten Log-Zeilen (ab 24 Zeilen Body).

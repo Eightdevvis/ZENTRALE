@@ -281,8 +281,8 @@ def test_klappen_auf_schnell_und_zu_noch_schneller():
 # gar nich richtig sieht"*: die beiden liegen nebeneinander, ←/→ wechselt.
 
 def test_startseite_ist_eine_galaxie(schirm):
-    assert "✦ APPS" in schirm and "✦ technik" in schirm   # apps gewählt
-    assert "K L A V I E R" in schirm and "S Y S T E M" in schirm  # beide sichtbar
+    assert "✦ APPS" in schirm and "K L A V I E R" in schirm   # apps gewählt, mittig
+    assert "netz" in schirm                  # technik liegt angeschnitten am Rand
     assert "LIFESTYLE" not in schirm         # die Seitenspalten sind weg
     assert "galaxie drehen" in schirm
 
@@ -291,17 +291,20 @@ def test_pfeil_rechts_waehlt_technik():
     assert "✦ TECHNIK" in _lauf(b"\x1bOC")
 
 
-def test_galaxie_beide_im_bild_kamera_gleitet():
+def test_galaxie_gewaehltes_mittig_anderes_draussen():
+    """Sasha: das nicht gewählte Rad etwas weiter weg, darf abgeschnitten
+    sein — das gewählte steht mittig."""
     m = _modul()
     breiten = (0.55, 0.36)
-    for gpos in (0, 0.5, 1):
-        for i, quer, _n in m.galaxie_lage(gpos, breiten):
-            assert -1 <= quer - breiten[i] and quer + breiten[i] <= 1, (gpos, i)
-    links = dict((i, q) for i, q, _ in m.galaxie_lage(0, breiten))
-    rechts = dict((i, q) for i, q, _ in m.galaxie_lage(1, breiten))
-    assert links[0] < links[1] and rechts[0] < rechts[1]   # bleiben nebeneinander
-    assert rechts[1] < links[1]                             # kamera fährt zur technik
-    assert [n for _, _, n in m.galaxie_lage(0, breiten)] == [1.0, 0.0]
+    for gpos in (0, 1):
+        lage = {i: (q, n) for i, q, n in m.galaxie_lage(gpos, breiten)}
+        assert lage[gpos] == (0.0, 1.0)                     # gewählt: Mitte
+        q, n = lage[1 - gpos]
+        assert n == 0.0
+        assert abs(q) + breiten[1 - gpos] > 1               # ragt aus dem Bild
+        assert abs(q) - breiten[1 - gpos] < 1               # … aber nicht ganz
+    halb = [q for _, q, _ in m.galaxie_lage(0.5, breiten)]
+    assert halb[0] < 0 < halb[1]                            # im Gleiten dazwischen
 
 
 def test_technik_rad_oeffnet_die_systemansicht():

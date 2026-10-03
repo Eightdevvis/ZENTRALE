@@ -1856,24 +1856,26 @@ def meta_taste(meta, rad, trad, taste):
     return None
 
 
-def galaxie_lage(gpos, breiten):
+def galaxie_lage(gpos, breiten, luecke=0.1):
     """Wo liegen die Sonnensysteme im Ausschnitt bei Kamera-Stellung `gpos`
     (0 = erstes gewählt … n-1 = letztes)? PURE.
-    `breiten` = Anteil der Bildbreite je System (Summe ≤ 1).
+    `breiten` = Anteil der Bildbreite je System, `luecke` = Abstand zwischen
+    zwei Systemen (ebenfalls Bildanteil).
     -> [(i, quer, naehe)]: quer = Mitte des Systems, -1 (linker Rand) … 1
-    (rechter Rand); naehe 1 = gewählt, 0 = ein System oder weiter weg.
-    Die Systeme liegen dicht nebeneinander; die Kamera gleitet zum
-    gewählten, aber nur so weit wie Platz übrig ist — es fällt nie eins
-    aus dem Bild."""
-    n = len(breiten)
-    gesamt = 2 * sum(breiten)                 # in quer-Einheiten (Bild = 2)
-    rest = max(0.0, 2 - gesamt) / 2
-    t = 0.0 if n < 2 else (gpos - (n - 1) / 2) / ((n - 1) / 2)   # -1 … 1
-    x, aus = -gesamt / 2, []
+    (rechter Rand), darf darüber hinaus gehen; naehe 1 = gewählt, 0 = ein
+    System oder weiter weg.
+    Die Kamera steht auf dem gewählten System (Mitte); die anderen liegen
+    weiter draussen und dürfen am Rand abgeschnitten sein (Sasha)."""
+    mitten, x = [], 0.0
     for i, b in enumerate(breiten):
-        aus.append((i, x + b - t * rest, max(0.0, 1 - abs(i - gpos))))
-        x += 2 * b
-    return aus
+        if i:
+            x += breiten[i - 1] + luecke + b
+        mitten.append(x)
+    n = len(mitten)
+    g = max(0.0, min(float(n - 1), gpos))
+    k = min(int(g), n - 2) if n > 1 else 0
+    kamera = mitten[k] + (g - k) * ((mitten[k + 1] - mitten[k]) if n > 1 else 0.0)
+    return [(i, m - kamera, max(0.0, 1 - abs(i - gpos))) for i, m in enumerate(mitten)]
 
 
 def dashboard_datei():
@@ -4202,7 +4204,7 @@ def run_ui(stdscr, store):
             safe_addstr(y + 1, x + 2, "// offline ✓", C["acc"] | curses.A_DIM)
 
     def draw_rad(y0, h, bx, bw, labels, rad, symbole_an=False, gedimmt=False,
-                 mitte=None, mass=None):
+                 mitte=None, mass=None, blass=False):
         """Ein Rad in den Kasten (y0, bx, h, bw) zeichnen, Mitte bei 5/8 der
         Höhe. `rad` = {"sel", "pos"}; symbole_an nur fürs App-Rad (RAD).
         Galaxie: `mitte` (y, x) setzt den Mittelpunkt frei, `mass` (breite,
@@ -4214,6 +4216,8 @@ def run_ui(stdscr, store):
                     "nah": C["faint"] if gedimmt else C["dim"],
                     "rahmen": C["faint"] if gedimmt else C["acc"],
                     "vorn": C["dim"] if gedimmt else C["bright"] | curses.A_BOLD}
+        if blass:                                 # weit weg: alles nur noch ein Hauch
+            rad_stil = dict.fromkeys(rad_stil, C["faint"])
         # Pixel-Symbole (tui/pixel.py): hinten eine Pille, vorn klappt das
         # Symbol auf (0,23 s), beim Wegdrehen wieder zu (0,17 s). Ohne 256
         # Farben bleibt es beim gewohnten Rahmen-Schriftzug.
@@ -9682,7 +9686,7 @@ def run_ui(stdscr, store):
                 gewaehlt = META["fokus"] == i and naehe > 0.98
                 draw_rad(top, body_h, 0, W, labels, rad, symbole_an=(i == 0),
                          gedimmt=not (gewaehlt and META["drin"]), mitte=(cy, cx),
-                         mass=(rad_b, rad_h))
+                         mass=(rad_b, rad_h), blass=naehe < 0.5)
                 if gewaehlt:
                     sonne = ("● " if META["drin"] else "✦ ") + name.upper()
                     sonne_attr = C["acc"] | curses.A_BOLD
