@@ -1827,6 +1827,7 @@ def _meta_start():
 
 _M0 = _meta_start()
 META = {"gsel": _M0[0], "gpos": float(_M0[0]),   # Galaxie: Ziel + wo sie gerade steht
+        "fahrt": None,          # laufende Drehung: (von, nach, startzeit) oder None
         "fokus": _M0[0],        # welches System gewählt ist: 0 = Apps, 1 = Technik
         "drin": _M0[1]}         # True = ←/→ dreht das System statt die Galaxie
 TRAD = {"sel": _M0[2], "pos": float(_M0[2])}   # Technik-Rad, wie RAD
@@ -1854,6 +1855,22 @@ def meta_taste(meta, rad, trad, taste):
             return ("app", RAD_APPS[rad_index(rad["sel"])][0])
         return ("technik", TECH_APPS[rad_index(trad["sel"], len(TECH_APPS))][0])
     return None
+
+
+# Eine Giga-Galaxie dreht schwer (Sasha): langsam anlaufen, sanft ausrollen.
+GALAXIE_DAUER = 1.6          # Sekunden für einen Wechsel
+
+
+def galaxie_schritt(von, nach, t, dauer=GALAXIE_DAUER):
+    """Stellung der Galaxie `t` Sekunden nach Fahrtbeginn. PURE.
+    Ease-in-out (Sinus): träge los, gleichmäßig, weich aus — kein Ruck an
+    den Enden. Nach `dauer` steht sie exakt auf `nach`."""
+    import math
+    if dauer <= 0 or t >= dauer:
+        return float(nach)
+    if t <= 0:
+        return float(von)
+    return von + (nach - von) * (1 - math.cos(math.pi * t / dauer)) / 2
 
 
 def galaxie_lage(gpos, breiten, luecke=0.1):
@@ -9657,7 +9674,14 @@ def run_ui(stdscr, store):
             # beiden liegen praktisch nebeneinander. ✦ = Sonne des Systems,
             # GROSS = gewählt, ● = man ist drin.
             draw_box(top, 0, body_h, W, "zentrale")
-            META["gpos"] = rad_schritt(META["gpos"], META["gsel"])
+            jetzt_g = time.monotonic()
+            fahrt = META["fahrt"]
+            if META["gpos"] != META["gsel"] and (fahrt is None or fahrt[1] != META["gsel"]):
+                fahrt = META["fahrt"] = (META["gpos"], META["gsel"], jetzt_g)  # neu / umgelenkt
+            if fahrt:
+                META["gpos"] = galaxie_schritt(fahrt[0], fahrt[1], jetzt_g - fahrt[2])
+                if META["gpos"] == fahrt[1]:
+                    META["fahrt"] = None
             gcx = W // 2
             gcy = top + (body_h * 9) // 16
             bogen = max(1, body_h // 12)              # so viel sackt der Bogen zum Rand ab

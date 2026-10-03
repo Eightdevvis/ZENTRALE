@@ -17,7 +17,11 @@ Ausschnitt nur einen flachen, kaum gepunkteten Bogen sieht und beide
 **nebeneinander** liegen (App-Rad 55 % der Breite, Technik 36 %). ←/→
 wechselt (links = apps, rechts = technik); die Kamera gleitet aufs gewählte,
 das dann **mittig** steht. Das andere liegt weiter draussen, am Rand
-angeschnitten und blass (`draw_rad(..., blass=True)`). Die
+angeschnitten und blass (`draw_rad(..., blass=True)`). Der Wechsel ist
+**schwer** wie eine Giga-Galaxie: zeitbasiert `GALAXIE_DAUER` = 1,6 s mit
+Sinus-Ease-in-out (`galaxie_schritt`, `META["fahrt"]`), träge Anfahrt, weiches
+Ausrollen; ein Richtungswechsel mitten drin startet ruckfrei von der
+aktuellen Stellung. Die
 Sonne des gewählten Systems steht gross (`✦ APPS`), drin `● APPS`. enter
 geht hinein (←/→ dreht dann dessen Apps, enter öffnet), esc wieder raus.
 Oben rechts `up · net`, unten die letzten Log-Zeilen (ab 24 Zeilen Body).

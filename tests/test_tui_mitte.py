@@ -342,3 +342,19 @@ def test_dashboard_befehl():
     assert m.parse_command("/dashboard an", "auto")[0] == "DASH_ON"
     assert m.parse_command("/dashboard aus", "auto")[0] == "DASH_OFF"
     assert m.parse_command("/dashboard", "auto")[0] == "DASH_TOGGLE"
+
+
+def test_galaxie_dreht_schwer_und_rollt_weich_aus():
+    """Sasha: *„smoother und schwerfälliger, schließlich ist das ne giga
+    galaxie die dreht"* — träge Anfahrt, weiches Ende, exakt am Ziel."""
+    m = _modul()
+    d = m.GALAXIE_DAUER
+    assert d >= 1.2                                        # schwer, kein Zucken
+    assert m.galaxie_schritt(0, 1, 0) == 0.0
+    assert m.galaxie_schritt(0, 1, d) == 1.0
+    assert abs(m.galaxie_schritt(0, 1, d / 2) - 0.5) < 1e-9
+    anfang = m.galaxie_schritt(0, 1, d * 0.1)
+    mitte = m.galaxie_schritt(0, 1, d * 0.55) - m.galaxie_schritt(0, 1, d * 0.45)
+    assert anfang < 0.03 and mitte > 3 * anfang            # langsam los, dann zügig
+    werte = [m.galaxie_schritt(1, 0, d * k / 20) for k in range(21)]
+    assert werte == sorted(werte, reverse=True)            # nie zurückzucken
