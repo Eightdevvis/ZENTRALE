@@ -65,7 +65,11 @@ in einer **eigenen Datei**: `data/features.json`.
   Daten-Änderung (`core/datasync.py` ← lists/graphs/kalender, `ZENTRALE_AUTOPUSH=1`)
   im Hintergrund `zentrale-push-data` an → der Peer hat sofort den frischen
   Stand, die Divergenz-Zeitfenster sind winzig. Zusätzlich gleicht
-  `zentrale-sync-boot` beim Start einmal ab. **Praxis für mich:** ZUERST
+  `zentrale-sync-boot` beim Start einmal ab. **Pflegen geht IMMER, auch
+  ohne PC** — der Laptop ist oft unterwegs, wo der PC nicht erreichbar ist;
+  das ist der Normalfall, kein Hindernis und kein Grund, den Tracker
+  aufzuschieben oder Sasha zu fragen. Jede fertige Feature-Arbeit endet mit
+  dem Tracker-Update, im selben Zug wie Merge + Push. **Praxis für mich:** ZUERST
   `zentrale-pc-status` fragen (eine Quelle, antwortet sofort, Exit 0/1 —
   `core/pc_status.py`). **PC getrennt → nicht suchen, nicht pullen, einfach
   lokal pflegen** (über `core/lists.py`); der Boot-Abgleich bzw. Auto-Push
