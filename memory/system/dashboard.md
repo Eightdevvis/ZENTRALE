@@ -16,8 +16,21 @@ sitzt bei 5/8 der Höhe — **der Platz darüber ist reserviert** für Dinge, di
 ZENTRALE künftig von sich aus zeigt. Keine Buchstaben-Shortcuts mehr auf der
 Startseite; Theme/Laufschrift/Beenden über `/theme`, `/lauf`, `/quit`,
 weglegen über Cmd+z. Apps im Rad: Klavier, Post, Kalender, Fokus, Notizen,
-Graph, Karte, Tutor (öffnet das Zimmer). Die Tasten-Angaben bei den
+Graph, Karte, Tutor (öffnet das Zimmer), **Elektronik** (seit 03.10.2026;
+Bereich `ELEK`, noch leer, esc zurück). Die Tasten-Angaben bei den
 Werkzeugen unten (`g`, `c` …) sind seitdem nur noch Namen.
+**Pixel-Symbole im Rad** (`RAD_SYMBOLE`, `rad_zeilen(..., symbole)`): eine
+Symbol-App ist hinten eine getönte **Pille** (`▐ name ▌`); steht sie vorn,
+**klappt ihr Symbol auf** (0,23 s: Linie → Ober-/Unterhälfte klappen auf →
+Zacken wachsen), beim Wegdrehen klappt es wandernd wieder zu (0,17 s).
+Zustand je App in `RAD["offen"]`, `rad_offen_schritt`; solange etwas klappt,
+tickt die Schleife schnell (`RAD["schnell"]`). Das Elektronik-Symbol (in einer
+Vorschau-Seite mit Sasha entworfen, bitgleich übertragen) liegt in
+`tui/pixel.py` (`elektronik_pixel`/`elektronik_zellen`): durchscheinend blaues
+Feld ohne Rand, hinter `ELEKTRONIK` dunkel, nach oben/unten gerastert in sich
+verjüngende Pixelzacken; offen glitzert es und eine Abtastlinie läuft hoch.
+Ohne 256 Farben (bzw. `ZENTRALE_PIXEL=off`) steht Elektronik wie die anderen
+Apps als Schriftzug im Rahmen.
 
 **Lebenslauf-Log** (seit 02.10.2026): `~/.local/state/zentrale/tui.log`
 (`ZENTRALE_TUI_LOG`, rotiert bei 512 KB nach `.1`, wird NIE gelöscht). Jeder

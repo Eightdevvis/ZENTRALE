@@ -263,3 +263,168 @@ def bernstein_zellen(done, total, breite, bg, glimm=0, modus="mix"):
             for y in range(H):
                 px[y][x] = spalte[y] if x < lit else _leer(spalte[y], bg)
     return zellen(px, bg, modus)
+
+
+# ── Elektronik: Symbol fürs App-Rad ─────────────────────────────────────────
+# Entworfen in der Vorschau-Seite (Sasha, 03.10.2026) und 1:1 von dort
+# übertragen — auch der Zufall (`_rnd`) ist bitgleich, damit genau die
+# abgenickten Zacken stehen. Ein durchscheinend blaues Feld ohne Rand, das
+# hinter dem Schriftzug dunkel ist und nach oben/unten gerastert in sich
+# verjüngende Pixelzacken ausläuft. `offen` 0 = zu (Pille), 1 = offen:
+# erst eine helle Linie, dann klappen Ober- und Unterhälfte auf, dann
+# wachsen die Zacken. Offen glitzert es, eine Abtastlinie läuft hoch.
+EL_W, EL_H = 16, 9                       # Zellen
+EL_LABEL_ZEILE = 4                       # Zeile der Schriftplatte = Zeile der Pille
+_CX0, _CX1, _CY0, _CY1, _YC, _PLATE = 4, 28, 12, 42, 27, (24, 30)
+EL_FARBEN = {
+    "nacht": {"bg": _hex("#000000"), "core": _hex("#2f7dff"), "edge": _hex("#9be6ff"),
+              "glow": _hex("#47b8ff"), "pill": _hex("#123a6b"), "pillTxt": _hex("#bfe9ff"),
+              "label": _hex("#ffffff")},
+    "tag":   {"bg": _hex("#ffffff"), "core": _hex("#2f7dff"), "edge": _hex("#0b4fb3"),
+              "glow": _hex("#3d8ef0"), "pill": _hex("#d3e6ff"), "pillTxt": _hex("#0b3d8a"),
+              "label": _hex("#001a40")},
+}
+_BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
+
+
+def _rnd(*k):
+    """Deterministischer Zufall 0..1 — bitgleich zur Vorschau (JS)."""
+    h = 2166136261
+    for v in k:
+        h = (h ^ ((int(v) * 2654435761) % 4294967296)) & 0xFFFFFFFF
+        h = (h * 16777619) & 0xFFFFFFFF
+    return h / 4294967296
+
+
+def _ease(t):
+    return 0.0 if t <= 0 else 1.0 if t >= 1 else 1 - (1 - t) ** 3
+
+
+def _jsround(v):
+    """Math.round aus JS (x.5 rundet immer nach oben, auch negativ)."""
+    return math.floor(v + .5)
+
+
+@lru_cache(maxsize=4)
+def _spikes(d):
+    """Zacken-Bauplan einer Seite (d -1 oben, 1 unten): ([(x0, w, L, lean)], reach)."""
+    lst, reach = [], [0] * (EL_W * FX)
+    x, i = _CX0 + int(_rnd(d, 61) * 2), 0
+    while x < _CX1:
+        w = min(_CX1 - x, 2 + int(_rnd(i, d, 63) * 3))          # 2–4 breit
+        L = (4, 6, 7, 9)[int(_rnd(i, d, 65) * 4)]
+        lean = int(_rnd(i, d, 67) * 3) - 1                      # -1 links, 0 mittig, 1 rechts
+        lst.append((x, w, L, lean))
+        for c in range(x, x + w):
+            reach[c] = L
+        x += w + 1 + int(_rnd(i, d, 69) * 2)                    # 1–2 Luft
+        i += 1
+    return tuple(lst), tuple(reach)
+
+
+def _el_flach(F, x, y):
+    """Flaches Bild des Kerns (ohne Rand): (farbe, deckkraft)."""
+    if _PLATE[0] <= y < _PLATE[1] and _CX0 + 2 <= x < _CX1 - 2:
+        return F["core"], .42                                   # Schriftplatte
+    if (y == _PLATE[0] - 3 or y == _PLATE[1] + 2) and _CX0 + 4 <= x < _CX1 - 4:
+        return F["glow"], .45                                   # Leiterbahnen
+    v = abs(y + .5 - _YC) / ((_CY1 - _CY0) / 2)
+    d = -1 if y + .5 < _YC else 1
+    r = _spikes(d)[1][x]
+    reach = (r - 3) / 6 if r else -.2                           # Fade folgt den Zacken
+    jag = (int(_rnd(x >> 1, d, 47) * 3) - 1) * .08
+    k = max(0.0, min(1.0, (v + (reach - .5) * .55 + jag - .2) / .75)) ** 1.3
+    kq = min(1.0, math.floor(k * 3 + _BAYER[(y >> 1) & 3][x & 3] / 16) / 3)   # gerastert
+    return mix(F["core"], F["glow"], kq), .30 + .58 * kq
+
+
+def elektronik_pixel(offen, t_ms, farben="nacht"):
+    """Das Symbol als Feinpixel-Raster (EL_H*6 × EL_W*2), RGB | None."""
+    F = EL_FARBEN[farben]
+    W, H = EL_W * FX, EL_H * FY
+    a = [[0.0] * W for _ in range(H)]
+    col = [[None] * W for _ in range(H)]
+
+    def put(x, y, c, al):
+        if 0 <= x < W and 0 <= y < H and al >= a[y][x]:
+            a[y][x], col[y][x] = al, c
+
+    s = _ease(min(1.0, offen / .62))                            # Klappen
+    grow = _ease(max(0.0, (offen - .55) / .45))                 # Zacken
+    idle = offen >= 1
+    if s < .04:                                                 # zu: helle Linie
+        half = _jsround(((_CX1 - _CX0) / 2) * min(1.0, offen / .04 + .35))
+        for x in range(16 - half, 16 + half):
+            put(x, 26, F["edge"], .9)
+            put(x, 27, F["glow"], .5)
+    else:
+        top = _jsround(_YC - (_YC - _CY0) * s)
+        bot = _jsround(_YC + (_CY1 - _YC) * s)
+        shade = .45 + .55 * s
+        for y in range(top, bot):                               # Klappen: zur Mitte gestaucht
+            src = _jsround(_YC + (y + .5 - _YC) / s - .5)
+            yy = max(_CY0, min(_CY1 - 1, src))
+            for x in range(_CX0, _CX1):
+                c, al = _el_flach(F, x, yy)
+                put(x, y, c, al * shade)
+        for d in (-1, 1):                                       # Zacken, sich verjüngend
+            for n, (x0, w, L, lean) in enumerate(_spikes(d)[0]):
+                ln = _jsround(L * grow)
+                for k in range(1, ln + 1):
+                    wk = max(1, _jsround(w * (1 - (k - 1) / (L + 1))))
+                    off = 0 if lean < 0 else (w - wk if lean > 0 else (w - wk) // 2)
+                    y = top - k if d < 0 else bot - 1 + k
+                    if k > 2 and _rnd(n, k, d, 13) < .04 * k:
+                        continue                                # selten ein Loch
+                    al = max(.62, .95 * (1 - k / (L + 6)))
+                    for c in range(wk):
+                        a2 = al
+                        if idle and _rnd(x0 + off + c, y, t_ms // 180) < .08:
+                            a2 = 1                              # Glitzern
+                        put(x0 + off + c, y, F["edge"] if k == ln and al > .5 else F["glow"], a2)
+        for x in range(_CX0, _CX1):                             # losgelöste Pixel
+            for d in (-1, 1):
+                if _rnd(x, d, 17) < .28 and grow > .85:
+                    y = (top - 10 - int(_rnd(x, 19) * 2)) if d < 0 else (bot + 9 + int(_rnd(x, 21) * 2))
+                    put(x, y, F["glow"], (.6 + .35 * _rnd(x, y, t_ms // 240)) if idle else .65)
+        if idle:                                                # Abtastlinie
+            sy = _CY1 - 1 - int((t_ms % 2400) / 2400 * (_CY1 - _CY0 + 8))
+            if _CY0 < sy < _CY1 - 1 and (sy < _PLATE[0] or sy >= _PLATE[1]):
+                for x in range(_CX0 + 1, _CX1 - 1):
+                    put(x, sy, F["edge"], .7)
+    return [[mix(F["bg"], col[y][x], a[y][x]) if a[y][x] > 0 else None for x in range(W)]
+            for y in range(H)]
+
+
+@lru_cache(maxsize=32)
+def elektronik_zellen(offen, t_ms, farben="nacht", modus="mix"):
+    """Symbol als Zellen: (zeilen, schrift). zeilen[r][c] = (zeichen, fg, bg)
+    oder None (leer — dort bleibt sichtbar, was darunter liegt); schrift =
+    [(spalte, zeichen, fg, bg)] für `ELEKTRONIK` auf der Platte, sobald offen."""
+    F = EL_FARBEN[farben]
+    px = elektronik_pixel(offen, t_ms, farben)
+    zeilen = []
+    for r in range(EL_H):
+        line = []
+        for c in range(EL_W):
+            fine = [px[r * FY + y][c * FX + x] for y in range(FY) for x in range(FX)]
+            line.append(None if all(p is None for p in fine)
+                        else zelle([p or F["bg"] for p in fine], modus))
+        zeilen.append(line)
+    schrift = []
+    if offen > .92:
+        text = "ELEKTRONIK"
+        c0 = (EL_W - len(text)) // 2
+        for i, ch in enumerate(text):
+            z = zeilen[EL_LABEL_ZEILE][c0 + i]
+            unter = z[2] if z else F["bg"]
+            schrift.append((c0 + i, ch, F["label"], unter))
+    return zeilen, schrift
+
+
+def elektronik_pille(fern=False, farben="nacht"):
+    """Farben der Pille im Rad: (grund, text) — weiter hinten blasser."""
+    F = EL_FARBEN[farben]
+    if fern:
+        return mix(F["pill"], F["bg"], .45), mix(F["pillTxt"], F["bg"], .4)
+    return F["pill"], F["pillTxt"]

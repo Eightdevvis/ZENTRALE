@@ -86,3 +86,32 @@ def test_farbpaare_reichen_fuer_eine_leiste_in_256_farben():
 def test_xterm_hin_und_zurueck():
     for n in (16, 21, 196, 214, 231, 232, 255):
         assert rgb_256(xterm_rgb(n)) == n
+
+
+# ── Elektronik-Symbol ──────────────────────────────────────────────────────
+def test_elektronik_hat_feste_groesse_und_schrift_wenn_offen():
+    zeilen, schrift = pixel.elektronik_zellen(1.0, 3000, "nacht")
+    assert len(zeilen) == pixel.EL_H and all(len(z) == pixel.EL_W for z in zeilen)
+    assert "".join(ch for _c, ch, _fg, _bg in schrift) == "ELEKTRONIK"
+    platte = zeilen[pixel.EL_LABEL_ZEILE]
+    for c, _ch, _fg, bg in schrift:                 # Schrift sitzt auf der Plattenfarbe
+        assert platte[c] is not None and platte[c][2] == bg
+
+
+def test_elektronik_zu_ist_nur_eine_linie_und_ohne_schrift():
+    zeilen, schrift = pixel.elektronik_zellen(0.0, 0, "nacht")
+    belegt = [r for r, z in enumerate(zeilen) if any(z)]
+    assert belegt == [pixel.EL_LABEL_ZEILE] and schrift == []
+
+
+def test_elektronik_klappt_von_der_mitte_auf():
+    def hoehe(o):
+        px = pixel.elektronik_pixel(o, 0, "nacht")
+        ys = [y for y, r in enumerate(px) if any(r)]
+        return ys[-1] - ys[0]
+    assert hoehe(0.1) < hoehe(0.4) < hoehe(0.7) <= hoehe(1.0)
+
+
+def test_elektronik_leere_zellen_bleiben_leer():
+    zeilen, _ = pixel.elektronik_zellen(1.0, 3000, "tag")
+    assert any(z is None for line in zeilen for z in line)     # Rad bleibt dort sichtbar

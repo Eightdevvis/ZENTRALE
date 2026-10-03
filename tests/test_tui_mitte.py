@@ -171,8 +171,11 @@ def test_pfeil_rechts_dreht_weiter():
 
 
 def test_pfeil_links_dreht_rueckwaerts_ueber_den_anfang():
-    """Vom klavier nach links landet man hinten beim tutor, nicht am Rand."""
-    assert "T U T O R" in _lauf(b"\x1bOD")
+    """Vom klavier nach links landet man hinten bei der letzten App
+    (seit 03.10.2026 elektronik), nicht am Rand. Mit Farben klappt dort das
+    Pixel-Symbol auf (Schriftzug ELEKTRONIK), ohne den gewohnten Rahmen."""
+    schirm = _lauf(b"\x1bOD")
+    assert "ELEKTRONIK" in schirm or "E L E K T R O N I K" in schirm
 
 
 # ── reine Rad-Mathematik ────────────────────────────────────────────────
@@ -232,3 +235,40 @@ def test_der_ring_bleibt_ein_zeichen_kein_rahmen():
     punkte = m.ring_punkte(h, w)
     hoehe = max(p[0] for p in punkte) - min(p[0] for p in punkte)
     assert hoehe < (h - 2) // 2
+
+
+# ── Pixel-Symbole im Rad (elektronik) ───────────────────────────────────
+
+def test_symbol_app_ist_hinten_eine_pille_und_vorn_ein_symbol():
+    m = _modul()
+    namen = ["klavier", "post", "kalender", "elektronik"]
+    zeilen = m.rad_zeilen(namen, 0, 70, 30, {"elektronik": 0.0})
+    pillen = [z for z in zeilen if z[3] in ("pille", "pille_fern")]
+    assert pillen and pillen[0][2] == " elektronik "
+    vorn = m.rad_zeilen(namen, 3, 70, 30, {"elektronik": 0.0})
+    assert [z for z in vorn if z[3] == "symbol:elektronik"]
+    assert not [z for z in vorn if z[3] in ("vorn", "rahmen")]
+
+
+def test_symbol_bleibt_beim_wegdrehen_bis_es_zu_ist():
+    m = _modul()
+    namen = ["klavier", "post", "kalender", "elektronik"]
+    zeilen = m.rad_zeilen(namen, 3.4, 70, 30, {"elektronik": 0.5})
+    assert [z for z in zeilen if z[3] == "symbol:elektronik"]
+
+
+def test_ohne_symbole_bleibt_alles_wie_es_war():
+    m = _modul()
+    alt = m.rad_zeilen(NAMEN, 0, 70, 30)
+    assert alt == m.rad_zeilen(NAMEN, 0, 70, 30, None)
+
+
+def test_klappen_auf_schnell_und_zu_noch_schneller():
+    m = _modul()
+    o = 0.0
+    for _ in range(8):                 # 8 Frames à 33 ms ≈ 0,26 s
+        o = m.rad_offen_schritt(o, True, 0.033)
+    assert o == 1.0
+    for _ in range(6):                 # ≈ 0,2 s
+        o = m.rad_offen_schritt(o, False, 0.033)
+    assert o == 0.0

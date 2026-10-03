@@ -1493,6 +1493,9 @@ CTX_KEYS = {
         ("tippen", "frage"), ("enter", "senden"),
         ("↑↓", "scrollen"), ("esc", "zu"),
     ],
+    "elektronik": [
+        ("esc", "zurück zum rad"),
+    ],
     "tutor": [
         ("enter", "start / reden"), ("/lang", "sprache"),
         ("/provider", "anbieter"), ("/model", "modell"),
@@ -1763,7 +1766,11 @@ def ring_zeilen(h, breite, lage="unbekannt", aktiv=False, phase=0.0):
 RAD_APPS = [
     ("k", "klavier"), ("p", "post"), ("c", "kalender"), ("f", "fokus"),
     ("n", "notizen"), ("g", "graph"), ("m", "karte"), ("u", "tutor"),
+    ("e", "elektronik"),
 ]
+# Apps mit Pixel-Symbol (tui/pixel.py): im Rad eine Pille, vorn klappt das
+# Symbol auf. Seit 03.10.2026: elektronik (Sasha).
+RAD_SYMBOLE = ("elektronik",)
 def _rad_start():
     """Nach einem Hot Reload steht das Rad, wo es war."""
     try:
@@ -1772,7 +1779,25 @@ def _rad_start():
         return 0
 
 
-RAD = {"sel": _rad_start(), "pos": float(_rad_start())}   # sel = Ziel, pos = wo das Rad gerade steht
+RAD = {"sel": _rad_start(), "pos": float(_rad_start()),  # sel = Ziel, pos = wo das Rad gerade steht
+       "offen": {}, "offen_seit": {},     # je Symbol-App: 0 zu … 1 offen, seit wann ganz offen
+       "takt": 0.0, "schnell": False}     # letzter Frame; klappt gerade etwas (→ schneller Takt)
+
+
+def rad_symbol_vorn():
+    """Name der Symbol-App, die gerade vorn STEHT (Rad in Ruhe) — sonst None."""
+    pos = RAD["pos"]
+    if abs(pos - round(pos)) >= 0.08:
+        return None
+    name = RAD_APPS[rad_index(int(round(pos)))][1]
+    return name if name in RAD_SYMBOLE else None
+
+
+def rad_offen_schritt(offen, vorn, dt):
+    """Ein Frame Klappen: vorn in 0,23 s auf, sonst in 0,17 s zu."""
+    if vorn:
+        return min(1.0, offen + dt / 0.23)
+    return max(0.0, offen - dt / 0.17)
 
 
 def rad_schritt(pos, sel):
@@ -1787,12 +1812,16 @@ def rad_index(sel, n=None):
     return sel % (n or len(RAD_APPS))
 
 
-def rad_zeilen(labels, pos, breite, hoehe):
+def rad_zeilen(labels, pos, breite, hoehe, symbole=None):
     """Das Rad als Plot-Anweisungen, hinten zuerst. -> [(dy, dx, text, stil)]
 
     (0,0) ist die Radmitte, `dx` ist der linke Rand des Texts. Stile:
     spur (Laufbahn), fern / nah (Apps nach Tiefe), vorn + rahmen (die
     gewählte App, sobald das Rad steht).
+
+    `symbole` {name: offen} — Apps mit Pixel-Symbol: hinten als Pille
+    (Stil pille / pille_fern, Text mit je einem Leerzeichen Polster), vorn
+    bzw. solange noch offen als `symbol:<name>` (dx = Mitte, Text leer).
     """
     import math
     n = len(labels)
@@ -1820,6 +1849,13 @@ def rad_zeilen(labels, pos, breite, hoehe):
     for tiefe, i, name, w in apps:
         dy = int(round(tiefe * ry))
         mitte = int(round(math.sin(w) * rx))
+        if symbole is not None and name in symbole:
+            if (tiefe > 0.97 and steht) or symbole[name] > 0:
+                aus.append((dy, mitte, "", "symbol:" + name))
+            elif tiefe > -0.8:
+                aus.append((dy, mitte - len(name) // 2 - 1, " " + name + " ",
+                            "pille" if tiefe > 0.2 else "pille_fern"))
+            continue
         if tiefe > 0.97 and steht:
             text = " ".join(name.upper())
             x = mitte - len(text) // 2
@@ -2518,6 +2554,10 @@ def run_ui(stdscr, store):
     #   play   : laufende Wiedergabe (tone.Playback) oder None
     #   synth  : offener Ton-Ausgang (tone.Synth) oder None = noch nicht auf
     #   sound  : macht dieser Knoten Ton? (False = stumm, Grund steht in msg)
+    # ── Elektronik (Mitte, aus dem Rad) — Sasha 03.10.2026: neuer Bereich,
+    # bleibt erst mal leer; der Auftritt ist das Pixel-Symbol im Rad.
+    ELEK = {"active": False}
+
     PIANO = {"active": False, "oct": 4, "lit": {}, "seq": [], "rec": None,
              "naming": None, "mel": [], "sel": 0, "play": None,
              "synth": None, "sound": False, "confirm": False,
@@ -7601,6 +7641,8 @@ def run_ui(stdscr, store):
             return "tutor"
         if PIANO["active"]:
             return "piano"
+        if ELEK["active"]:
+            return "elektronik"
         if NOTE["active"]:
             # Ebene 2 / Titel-Eingabe sind Freitext → '/' ist dort ein Zeichen,
             # das Overlay geht gar nicht erst auf (siehe in_text_entry). Bleibt
@@ -7645,7 +7687,7 @@ def run_ui(stdscr, store):
         # (LAUF_TICK_MS ≈ halber Zeichen-Schritt) — ein Bruchteil der 30 fps.
         fast = ((M["active"] and M.get("anim")) or (AI["active"] and AI["streaming"])
                 or (TUTOR["active"] and TUTOR["streaming"]) or PIANO["active"]
-                or RAD["pos"] != RAD["sel"])
+                or RAD["pos"] != RAD["sel"] or RAD["schnell"])
         stdscr.timeout(33 if fast else (LAUF_TICK_MS if LAUF["laeuft"] else 250))
         ch = stdscr.getch()
 
@@ -8911,6 +8953,9 @@ def run_ui(stdscr, store):
                             NOTE["esel"] = min(NOTE["esel"], len(terms)); n_loadbuf(blk); n_save()
                     elif 32 <= ch <= 126:
                         NOTE["buf"] += chr(ch)
+        elif ELEK["active"]:                   # Elektronik-Bereich hat den Fokus
+            if ch == 27:
+                ELEK["active"] = False
         elif PIANO["active"]:                  # Klavier hat den Fokus
             # Reihenfolge zählt: erst die Freitext-Zustände (Namen tippen),
             # dann Steuertasten, ZULETZT die Klaviatur — sonst würde 'd'
@@ -9113,6 +9158,8 @@ def run_ui(stdscr, store):
                 NOTE["active"] = True; n_open()
             elif ch in (ord("k"), ord("K")):   # Klavier öffnen (wie im Browser: k)
                 p_open()
+            elif ch in (ord("e"), ord("E")):   # Elektronik-Bereich (noch leer)
+                ELEK["active"] = True
             elif ch in (ord("f"), ord("F")):   # Fokus-Werkzeug öffnen (primäre Taste)
                 L["active"] = True; L["view"] = "forest"; L["fsel"] = 0
                 L["adding"] = False; L["confirm"] = False; L["msg"] = ""; l_load()
@@ -9322,6 +9369,12 @@ def run_ui(stdscr, store):
         elif PIANO["active"]:
             draw_box(top, mx, body_h, midw, "klavier")
             draw_piano_tool(top, mx, body_h, midw)
+        elif ELEK["active"]:
+            draw_box(top, mx, body_h, midw, "elektronik")
+            leer = "hier entsteht der elektronik-bereich"
+            addclip(top + body_h // 2, mx + max(2, (midw - len(leer)) // 2), leer,
+                    midw - 4, C["faint"])
+            addclip(top + body_h - 2, mx + 2, "esc zurück zum rad", midw - 4, C["faint"])
         else:
             # ── Startseite: das Rad ───────────────────────────────────
             # Bis 02.10.2026 stand hier der KI-Ring (ring_zeilen) mit der
@@ -9335,9 +9388,65 @@ def run_ui(stdscr, store):
             rad_stil = {"spur": C["faint"], "fern": C["faint"],
                         "nah": C["dim"], "rahmen": C["acc"],
                         "vorn": C["bright"] | curses.A_BOLD}
+            # Pixel-Symbole (tui/pixel.py): hinten eine Pille, vorn klappt das
+            # Symbol auf (0,23 s), beim Wegdrehen wieder zu (0,17 s). Ohne 256
+            # Farben bleibt es beim gewohnten Rahmen-Schriftzug.
+            jetzt = time.monotonic()
+            dt = min(0.1, jetzt - RAD["takt"]) if RAD["takt"] else 0.0
+            RAD["takt"] = jetzt
+            symbole = None
+            pix_bg = C.get("pix_bg")
+            if pix_bg is not None and PIX_MODUS != "off":
+                vorn = rad_symbol_vorn()
+                symbole = {}
+                for name in RAD_SYMBOLE:
+                    alt = RAD["offen"].get(name, 0.0)
+                    neu = rad_offen_schritt(alt, vorn == name, dt)
+                    if neu >= 1 and alt < 1:
+                        RAD["offen_seit"][name] = jetzt
+                    RAD["offen"][name] = symbole[name] = neu
+                RAD["schnell"] = any(0 < v < 1 for v in symbole.values()) or (
+                    vorn is not None and symbole.get(vorn, 0) < 1)
+            else:
+                RAD["schnell"] = False
+            farben = "nacht" if pix_bg is not None and sum(pix_bg) < 384 else "tag"
+            pmodus = "half" if PIX_MODUS == "half" else "mix"
+
+            def zeichne_symbol(name, y, x):
+                """Pixel-Symbol, Schriftplatte auf Zeile y, mittig um x."""
+                offen = round(symbole.get(name, 0.0), 2)
+                t_ms = 0
+                if offen >= 1:
+                    t_ms = int((jetzt - RAD["offen_seit"].get(name, jetzt)) * 1000) // 60 * 60
+                zeilen, schrift = pixel.elektronik_zellen(offen, t_ms, farben, pmodus)
+                r0, c0 = y - pixel.EL_LABEL_ZEILE, x - pixel.EL_W // 2
+                for r, line in enumerate(zeilen):
+                    yy = r0 + r
+                    if not (top < yy < top + body_h - 1):
+                        continue
+                    for c, z in enumerate(line):
+                        xx = c0 + c
+                        if z and mx < xx < mx + midw - 1:
+                            safe_addstr(yy, xx, z[0], pix_attr(z[1], z[2]))
+                for c, ch, fg, bg in schrift:
+                    if top < r0 + pixel.EL_LABEL_ZEILE < top + body_h - 1:
+                        safe_addstr(r0 + pixel.EL_LABEL_ZEILE, c0 + c, ch,
+                                    pix_attr(fg, bg) | curses.A_BOLD)
+
             for dy, dx, txt, st in rad_zeilen([a[1] for a in RAD_APPS],
-                                              RAD["pos"], midw, body_h - 2):
+                                              RAD["pos"], midw, body_h - 2, symbole):
                 y, x = cyc + dy, ccx + dx
+                if st.startswith("symbol:"):
+                    zeichne_symbol(st[7:], y, x)
+                    continue
+                if st in ("pille", "pille_fern"):            # getönter Grund, halbe Kappen
+                    if top < y < top + body_h - 1 and mx < x - 1 and x + len(txt) + 1 < mx + midw:
+                        grund, schrift = pixel.elektronik_pille(st == "pille_fern", farben)
+                        safe_addstr(y, x - 1, "▐", pix_attr(grund, pix_bg))
+                        safe_addstr(y, x, txt, pix_attr(schrift, grund)
+                                    | (curses.A_BOLD if st == "pille" else 0))
+                        safe_addstr(y, x + len(txt), "▌", pix_attr(grund, pix_bg))
+                    continue
                 if top < y < top + body_h - 1 and mx < x and x + len(txt) < mx + midw:
                     safe_addstr(y, x, txt, rad_stil.get(st, C["faint"]))
 
