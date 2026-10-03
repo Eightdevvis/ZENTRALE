@@ -166,15 +166,15 @@ def test_keine_buchstaben_leiste_mehr(schirm):
 
 
 def test_pfeil_rechts_dreht_weiter():
-    """Pfeil rechts -> post steht vorn."""
-    assert "P O S T" in _lauf(b"\x1bOC")
+    """Erst rein ins App-Rad (enter), dann Pfeil rechts -> post steht vorn."""
+    assert "P O S T" in _lauf(b"\r\x1bOC")
 
 
 def test_pfeil_links_dreht_rueckwaerts_ueber_den_anfang():
     """Vom klavier nach links landet man hinten bei der letzten App
     (seit 03.10.2026 elektronik), nicht am Rand. Mit Farben klappt dort das
     Pixel-Symbol auf (Schriftzug ELEKTRONIK), ohne den gewohnten Rahmen."""
-    schirm = _lauf(b"\x1bOD")
+    schirm = _lauf(b"\r\x1bOD")
     assert "ELEKTRONIK" in schirm or "E L E K T R O N I K" in schirm
 
 
@@ -272,3 +272,56 @@ def test_klappen_auf_schnell_und_zu_noch_schneller():
     for _ in range(6):                 # ≈ 0,2 s
         o = m.rad_offen_schritt(o, False, 0.033)
     assert o == 0.0
+
+
+# ── Das Meta-Rad (seit 03.10.2026) ─────────────────────────────────────
+# Sasha: *„ein app app wheel das die zwei sub wheels featured"* — links die
+# Apps, rechts die Technik; ←/→ wählt das Rad, enter rein, esc raus.
+
+def test_startseite_zeigt_beide_raeder(schirm):
+    assert "▸ APPS" in schirm
+    assert "TECHNIK" in schirm
+    assert "S Y S T E M" in schirm           # vorn im Technik-Rad
+    assert "LIFESTYLE" not in schirm        # die Seitenspalten sind weg
+    assert "rad wählen" in schirm
+
+
+def test_pfeil_rechts_waehlt_das_technik_rad():
+    assert "▸ TECHNIK" in _lauf(b"\x1bOC")
+
+
+def test_technik_rad_oeffnet_die_systemansicht():
+    schirm = _lauf(b"\x1bOC\r\r")
+    assert "TECHNIK · SYSTEM" in schirm
+    assert "EXTERNAL" in schirm and "TELEMETRIE" in schirm
+
+
+def test_dashboard_an_holt_die_alten_spalten_zurueck(tmp_path, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_DASHBOARD_FILE", str(tmp_path / "dashboard"))
+    schirm = _lauf(b"/dashboard an\r")
+    assert "LIFESTYLE" in schirm and "OUTBOUND" in schirm
+    assert (tmp_path / "dashboard").read_text().strip() == "an"
+
+
+def test_meta_taste_waehlt_dreht_und_oeffnet():
+    m = _modul()
+    meta, rad, trad = {"fokus": 0, "drin": False}, {"sel": 0}, {"sel": 0}
+    assert m.meta_taste(meta, rad, trad, "rechts") is None
+    assert meta["fokus"] == 1 and rad["sel"] == 0       # nur gewählt, nicht gedreht
+    m.meta_taste(meta, rad, trad, "enter")
+    assert meta["drin"]
+    m.meta_taste(meta, rad, trad, "rechts")
+    assert trad["sel"] == 1 and rad["sel"] == 0         # dreht nur das gewählte Rad
+    assert m.meta_taste(meta, rad, trad, "enter") == ("technik", m.TECH_APPS[1][0])
+    m.meta_taste(meta, rad, trad, "esc")
+    assert not meta["drin"]
+    m.meta_taste(meta, rad, trad, "links")
+    m.meta_taste(meta, rad, trad, "enter")
+    assert m.meta_taste(meta, rad, trad, "enter") == ("app", m.RAD_APPS[0][0])
+
+
+def test_dashboard_befehl():
+    m = _modul()
+    assert m.parse_command("/dashboard an", "auto")[0] == "DASH_ON"
+    assert m.parse_command("/dashboard aus", "auto")[0] == "DASH_OFF"
+    assert m.parse_command("/dashboard", "auto")[0] == "DASH_TOGGLE"

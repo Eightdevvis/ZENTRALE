@@ -755,8 +755,19 @@ def lauf_datei():
 
 def lauf_lesen(default=True):
     """Ein Wort aus der Datei → an/aus. Fehlt sie, gilt `default` (an)."""
+    return schalter_lesen(lauf_datei(), default)
+
+
+def lauf_schreiben(an):
+    """Wunsch merken (siehe schalter_schreiben)."""
+    return schalter_schreiben(lauf_datei(), an)
+
+
+def schalter_lesen(pfad, default):
+    """Ein Wort aus `pfad` → an/aus. Fehlt die Datei oder ist sie Müll,
+    gilt `default`."""
     try:
-        with open(lauf_datei(), encoding="utf-8") as f:
+        with open(pfad, encoding="utf-8") as f:
             wort = f.read().strip().lower()
     except OSError:
         return default
@@ -767,10 +778,9 @@ def lauf_lesen(default=True):
     return default
 
 
-def lauf_schreiben(an):
+def schalter_schreiben(pfad, an):
     """Wunsch merken. Nutzt denselben Riegel wie das Theme: eine Arbeitskopie
     (Worktree) fasst Sashas laufende Konfiguration NICHT an."""
-    pfad = lauf_datei()
     try:
         darf, _grund = _theme_modul().darf_schreiben(pfad)
     except Exception:                      # noqa: BLE001 — Merken ist Kür
@@ -1440,14 +1450,15 @@ TUI_COMMANDS = [
     ("/local", "Lokale KI drosseln: on | off  (Ollama-Leitung)"),
     ("/tutor", "Sprach-Tutor TEXT-panel (Mitte, Cloud/Qwen); 'u' öffnet das Zimmer-Fenster"),
     ("/lauf",  "stdout-Laufschrift: an | aus  (auch 's')"),
+    ("/dashboard", "altes 3-Spalten-Dashboard: an | aus  (aus = Meta-Rad)"),
     ("/reload", "nur die TUI mit neuem Code laden (passiert bei Code-Änderung auch von selbst)"),
     ("/reboot", "ZENTRALE neu starten: Backend + Fenster, neuer Code"),
     ("/quit",  "ZENTRALE-TUI wirklich beenden  ('q' legt das Fenster nur weg)"),
 ]
 TUI_KEYS = [
-    ("←→",    "Startseite: das Rad drehen — vorn steht die App, die enter öffnet"),
-    ("enter", "Startseite: die App vorn im Rad öffnen"),
-    ("esc",   "zurück, Stufe für Stufe bis zur Startseite"),
+    ("←→",    "Startseite: Rad wählen (apps | technik); drin: das Rad drehen"),
+    ("enter", "Startseite: ins gewählte Rad hinein; drin: die App vorn öffnen"),
+    ("esc",   "zurück, Stufe für Stufe — aus der App ins Rad, aus dem Rad raus"),
     # Die Apps im Rad — seit 02.10.2026 nicht mehr per Buchstabe,
     # sondern übers Rad (Sasha). Links steht deshalb der Name im Rad.
     ("graph", "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
@@ -1469,9 +1480,13 @@ TUI_KEYS = [
 # current_ctx(); Reihenfolge spiegelt die alten Fußzeilen.
 CTX_KEYS = {
     "home": [
-        ("←→", "rad drehen"), ("enter", "app öffnen"), ("space", "ki-chat"),
-        ("esc", "zurück zur startseite"),
-        ("/theme", "theme"), ("/lauf", "stdout-lauf"), ("/quit", "beenden"),
+        ("←→", "rad wählen / drin: drehen"), ("enter", "rein / app öffnen"),
+        ("space", "ki-chat"), ("esc", "raus aus dem rad"),
+        ("/dashboard", "altes dashboard"), ("/theme", "theme"),
+        ("/lauf", "stdout-lauf"), ("/quit", "beenden"),
+    ],
+    "technik": [
+        ("esc", "zurück zum technik-rad"),
     ],
     "note:edit": [
         ("↑↓", "block wählen"), ("t/l/f", "neu: text/liste/float"),
@@ -1565,6 +1580,7 @@ CTX_TITLES = {
     "mail:cats": "post", "mail:list": "post · liste", "mail:read": "post · lesen",
     "ai": "ki-chat", "tutor": "tutor",
     "note:edit": "notiz", "note:list": "notizen", "piano": "klavier",
+    "technik": "technik",
 }
 
 
@@ -1609,6 +1625,10 @@ def parse_command(buf, theme_mode):
         if arg in ("on", "an"):   return "LAUF_ON", theme_mode, ""
         if arg in ("off", "aus"): return "LAUF_OFF", theme_mode, ""
         return "LAUF_TOGGLE", theme_mode, ""
+    if name in ("dashboard", "dash"):            # altes 3-Spalten-Layout (Schalter macht der Aufrufer)
+        if arg in ("on", "an"):   return "DASH_ON", theme_mode, ""
+        if arg in ("off", "aus"): return "DASH_OFF", theme_mode, ""
+        return "DASH_TOGGLE", theme_mode, ""
     return None, theme_mode, "unbekannter befehl: /" + name
 
 
@@ -1782,6 +1802,63 @@ def _rad_start():
 RAD = {"sel": _rad_start(), "pos": float(_rad_start()),  # sel = Ziel, pos = wo das Rad gerade steht
        "offen": {}, "offen_seit": {},     # je Symbol-App: 0 zu … 1 offen, seit wann ganz offen
        "takt": 0.0, "schnell": False}     # letzter Frame; klappt gerade etwas (→ schneller Takt)
+
+# ── Das Meta-Rad (Startseite seit 03.10.2026) ────────────────────────────────
+# Sasha: das 3-Spalten-Dashboard braucht es nicht mehr. Die Startseite trägt
+# zwei Räder nebeneinander — links das App-Rad, rechts ein kleineres
+# Technik-Rad mit dem, was vorher in den Seitenspalten stand. ←/→ wählt das
+# Rad, enter geht hinein (dann dreht ←/→ das Rad, enter öffnet), esc wieder
+# raus. Die alte Ansicht bleibt als Backup: /dashboard an.
+TECH_APPS = [("system", "external + telemetrie"), ("stdout", "das ganze log"),
+             ("netz", "outbound + laufzeit")]
+
+
+def _meta_start():
+    """Nach einem Hot Reload: welches Rad, drin oder nicht, Technik-Stellung."""
+    try:
+        fokus, drin, sel = (int(t) for t in
+                            os.environ.get("ZENTRALE_TUI_META", "0,0,0").split(","))
+    except ValueError:
+        return 0, False, 0
+    return (1 if fokus == 1 else 0), bool(drin), sel
+
+
+_M0 = _meta_start()
+META = {"fokus": _M0[0],        # 0 = App-Rad, 1 = Technik-Rad
+        "drin": _M0[1]}         # True = ←/→ dreht das Rad statt das Rad zu wählen
+TRAD = {"sel": _M0[2], "pos": float(_M0[2])}   # Technik-Rad, wie RAD
+
+
+def meta_taste(meta, rad, trad, taste):
+    """Eine Taste auf der Startseite des Meta-Rads. PURE bis auf die drei
+    Zustands-Dicts. taste: "links" | "rechts" | "enter" | "esc".
+    -> None | ("app", buchstabe) | ("technik", name)"""
+    if not meta["drin"]:
+        if taste == "links":
+            meta["fokus"] = 0
+        elif taste == "rechts":
+            meta["fokus"] = 1
+        elif taste == "enter":
+            meta["drin"] = True
+        return None
+    ziel = rad if meta["fokus"] == 0 else trad
+    if taste == "links":
+        ziel["sel"] -= 1
+    elif taste == "rechts":
+        ziel["sel"] += 1
+    elif taste == "esc":
+        meta["drin"] = False
+    elif taste == "enter":
+        if meta["fokus"] == 0:
+            return ("app", RAD_APPS[rad_index(rad["sel"])][0])
+        return ("technik", TECH_APPS[rad_index(trad["sel"], len(TECH_APPS))][0])
+    return None
+
+
+def dashboard_datei():
+    """Pfad des Dashboard-Wunsches. ZENTRALE_DASHBOARD_FILE sticht (Tests)."""
+    return (os.environ.get("ZENTRALE_DASHBOARD_FILE")
+            or os.path.expanduser("~/.config/zentrale/dashboard"))
 
 
 def rad_symbol_vorn():
@@ -2058,8 +2135,8 @@ def render_overlay_body(scr, rows, ov_x, ov_y, ov_w, attrs):
         # 1) deckend blanken  2) Inhalt drauf
         scr.fill(yy, inner_x, inner_w, " ", attrs["faint"])
         if r[0] == "cmd":
-            scr.put(yy, ov_x + 2, r[1], 9, attrs["acc"])
-            scr.put(yy, ov_x + 12, r[2], ov_w - 14, attrs["dim"])
+            scr.put(yy, ov_x + 2, r[1], 11, attrs["acc"])     # /dashboard passt
+            scr.put(yy, ov_x + 14, r[2], ov_w - 16, attrs["dim"])
         elif r[0] == "key":
             scr.put(yy, ov_x + 2, r[1], 7, attrs["num"])
             scr.put(yy, ov_x + 10, r[2], ov_w - 12, attrs["dim"])
@@ -2557,6 +2634,11 @@ def run_ui(stdscr, store):
     # ── Elektronik (Mitte, aus dem Rad) — Sasha 03.10.2026: neuer Bereich,
     # bleibt erst mal leer; der Auftritt ist das Pixel-Symbol im Rad.
     ELEK = {"active": False}
+    # ── Technik (Vollbild, aus dem Technik-Rad) — Sasha 03.10.2026: was früher
+    # in den Seitenspalten klebte. view = system | stdout | netz.
+    TECH = {"active": False, "view": "system"}
+    # Altes 3-Spalten-Dashboard als Backup (/dashboard an). Aus = Meta-Rad.
+    DASH = {"an": schalter_lesen(dashboard_datei(), False)}
 
     PIANO = {"active": False, "oct": 4, "lit": {}, "seq": [], "rec": None,
              "naming": None, "mel": [], "sel": 0, "play": None,
@@ -4002,6 +4084,211 @@ def run_ui(stdscr, store):
         safe_addstr(y + h - 1, x, "└" + "─" * (w - 2) + "┘", C["faint"])
         if title:
             safe_addstr(y, x + 2, " " + title.upper() + " ", title_attr or C["acc"])
+
+    # ── Technik-Bausteine: früher fest in der linken Spalte, seit 03.10.2026
+    # auch in der Technik-Ansicht und auf der Startseite des Meta-Rads. ──
+    def draw_external(y, x, w, bk):
+        """EXTERNAL: erreichbare AI-Backends (local/cloud), 4 Zeilen hoch.
+        Titel grün wenn irgendein Backend da ist, sonst Warn-Farbe."""
+        draw_box(y, x, 4, w, "external", C["acc"] if bk.get("any") else C["warn"])
+        if bk.get("local"):
+            ltxt, lattr = "✓ ollama", C["bright"]
+        elif bk.get("local_enabled") is False:      # manuell gedrosselt
+            ltxt, lattr = "✗ gedrosselt", C["warn"]
+        else:
+            ltxt, lattr = "✗", C["faint"]
+        safe_addstr(y + 1, x + 2, "LOKAL", C["acc"])
+        safe_addstr(y + 1, x + 9, ltxt, lattr)
+        if bk.get("cloud"):
+            ctxt, cattr = "✓ " + (bk.get("cloud_provider") or ""), C["bright"]
+        elif bk.get("cloud_enabled") is False:      # manuell gedrosselt
+            ctxt, cattr = "✗ gedrosselt", C["warn"]
+        else:
+            ctxt, cattr = "✗", C["faint"]
+        safe_addstr(y + 2, x + 2, "CLOUD", C["acc"])
+        safe_addstr(y + 2, x + 9, ctxt, cattr)
+
+    def draw_telemetrie(y, x, w, metrics):
+        """TELEMETRIE: eine Balken-Zeile je TELE_ROWS-Eintrag. -> Höhe."""
+        h = len(TELE_ROWS) + 2
+        draw_box(y, x, h, w, "telemetrie")
+        hlbl = host_label(metrics)   # Host des Backends (PC/LAP/PI), nicht hart
+        for i, (lbl, key, _u) in enumerate(TELE_ROWS):
+            tv = tele_value(metrics, key)
+            safe_addstr(y + 1 + i, x + 2, hlbl + "·" + lbl, C["acc"])
+            if tv:
+                pct, text = tv
+                n = round(max(0.0, min(100.0, pct)) / 100.0 * 10)
+                safe_addstr(y + 1 + i, x + 11, "█" * n, C["acc"])
+                safe_addstr(y + 1 + i, x + 11 + n, "░" * (10 - n), C["faint"])
+                safe_addstr(y + 1 + i, x + w - len(text) - 2, text, C["bright"])
+            else:
+                safe_addstr(y + 1 + i, x + 11, "n/a", C["faint"])
+        return h
+
+    def draw_stdout(y, x, h, w, logs, titel="stdout"):
+        """Die letzten Log-Zeilen in einem Kasten (titel=None: der Kasten
+        steht schon). -> True, wenn gerade eine Zeile als Laufschrift läuft."""
+        if titel:
+            draw_box(y, x, h, w, titel)
+        if not isinstance(logs, list):
+            logs = []
+        laeuft = False
+        schritt = lauf_schritt(time.monotonic())
+        for i, e in enumerate(logs[-max(0, h - 2):] if h > 2 else []):
+            if not isinstance(e, dict):
+                continue
+            yy = y + 1 + i
+            t = (e.get("time") or "")[:8]
+            safe_addstr(yy, x + 2, t, C["faint"])
+            px = x + 2 + len(t) + 1
+            # Nachricht auf die Box-Innenbreite kürzen, damit nichts in den
+            # Nachbarkasten überläuft (x+w-1 ist der rechte Rahmen).
+            avail = (x + w - 1) - px
+            voll = e.get("text") or ""
+            if LAUF["an"] and avail > 6 and len(voll) > avail:
+                # Passt nicht → laufen lassen statt abschneiden. Die Uhrzeit
+                # links bleibt stehen, nur die Nachricht rotiert. Unter ~7
+                # Zeichen Platz ist eine Laufschrift nicht mehr lesbar,
+                # dann bleibt es beim ehrlichen Schnitt.
+                txt = lauf_ausschnitt(voll, avail, schritt)
+                laeuft = True
+            else:
+                txt = voll[:max(0, avail)]
+            # Das Präfix (EVENT IN, TOOL …) färbt sich nur, wenn die Zeile
+            # gerade an ihrem Anfang steht — mitten in der Runde gibt es
+            # keinen Kopf mehr, und einer ohne Zeilenanfang wäre gelogen.
+            head, grp = log_prefix(txt)
+            if head and grp:
+                safe_addstr(yy, px, head, C.get(grp, C["dim"]))
+                safe_addstr(yy, px + len(head), txt[len(head):], C["dim"])
+            else:
+                safe_addstr(yy, px, txt, C["dim"])
+        return laeuft
+
+    def draw_outbound(y, x, h, w, nets):
+        """Ausgehender Traffic (Inhalt; der Kasten steht schon)."""
+        if nets:
+            for i, e in enumerate(nets[-max(0, h - 2):]):
+                if not isinstance(e, dict):
+                    continue
+                yy = y + 1 + i
+                t = (e.get("time") or "")[:8]
+                safe_addstr(yy, x + 2, t, C["faint"])
+                px = x + 2 + len(t) + 1
+                addclip(yy, px, e.get("text") or "", (x + w - 1) - px, C["warn"])
+        else:
+            safe_addstr(y + 1, x + 2, "// offline ✓", C["acc"] | curses.A_DIM)
+
+    def draw_rad(y0, h, bx, bw, labels, rad, symbole_an=False, gedimmt=False):
+        """Ein Rad in den Kasten (y0, bx, h, bw) zeichnen, Mitte bei 5/8 der
+        Höhe. `rad` = {"sel", "pos"}; symbole_an nur fürs App-Rad (RAD).
+        Zu schmal für die Ellipse → eine schlichte Liste, vorn mit ▸."""
+        rad["pos"] = rad_schritt(rad["pos"], rad["sel"])
+        cyc = y0 + (h * 5) // 8
+        ccx = bx + bw // 2
+        rad_stil = {"spur": C["faint"], "fern": C["faint"],
+                    "nah": C["faint"] if gedimmt else C["dim"],
+                    "rahmen": C["faint"] if gedimmt else C["acc"],
+                    "vorn": C["dim"] if gedimmt else C["bright"] | curses.A_BOLD}
+        # Pixel-Symbole (tui/pixel.py): hinten eine Pille, vorn klappt das
+        # Symbol auf (0,23 s), beim Wegdrehen wieder zu (0,17 s). Ohne 256
+        # Farben bleibt es beim gewohnten Rahmen-Schriftzug.
+        jetzt = time.monotonic()
+        symbole = None
+        pix_bg = C.get("pix_bg")
+        if symbole_an:
+            dt = min(0.1, jetzt - RAD["takt"]) if RAD["takt"] else 0.0
+            RAD["takt"] = jetzt
+            if pix_bg is not None and PIX_MODUS != "off":
+                vorn = rad_symbol_vorn()
+                symbole = {}
+                for name in RAD_SYMBOLE:
+                    alt = RAD["offen"].get(name, 0.0)
+                    neu = rad_offen_schritt(alt, vorn == name, dt)
+                    if neu >= 1 and alt < 1:
+                        RAD["offen_seit"][name] = jetzt
+                    RAD["offen"][name] = symbole[name] = neu
+                RAD["schnell"] = any(0 < v < 1 for v in symbole.values()) or (
+                    vorn is not None and symbole.get(vorn, 0) < 1)
+            else:
+                RAD["schnell"] = False
+        farben = "nacht" if pix_bg is not None and sum(pix_bg) < 384 else "tag"
+        pmodus = "half" if PIX_MODUS == "half" else "mix"
+
+        def zeichne_symbol(name, y, x):
+            """Pixel-Symbol, Schriftplatte auf Zeile y, mittig um x."""
+            offen = round(symbole.get(name, 0.0), 2)
+            t_ms = 0
+            if offen >= 1:
+                t_ms = int((jetzt - RAD["offen_seit"].get(name, jetzt)) * 1000) // 60 * 60
+            zeilen, schrift = pixel.elektronik_zellen(offen, t_ms, farben, pmodus)
+            r0, c0 = y - pixel.EL_LABEL_ZEILE, x - pixel.EL_W // 2
+            for r, line in enumerate(zeilen):
+                yy = r0 + r
+                if not (y0 < yy < y0 + h - 1):
+                    continue
+                for c, z in enumerate(line):
+                    xx = c0 + c
+                    if z and bx < xx < bx + bw - 1:
+                        safe_addstr(yy, xx, z[0], pix_attr(z[1], z[2]))
+            for c, ch, fg, bg in schrift:
+                if y0 < r0 + pixel.EL_LABEL_ZEILE < y0 + h - 1:
+                    safe_addstr(r0 + pixel.EL_LABEL_ZEILE, c0 + c, ch,
+                                pix_attr(fg, bg) | curses.A_BOLD)
+
+        zeilen = rad_zeilen(labels, rad["pos"], bw, h - 2, symbole)
+        if not zeilen and labels:
+            # Liste statt Ellipse: die gewählte mittig, Nachbarn drumherum.
+            vorn = rad_index(rad["sel"], len(labels))
+            platz = max(1, h - 2)
+            lo, hi = -((len(labels) - 1) // 2), len(labels) // 2   # jede App einmal
+            for k in range(max(lo, -(platz // 2)), min(hi, platz - platz // 2 - 1) + 1):
+                name = labels[(vorn + k) % len(labels)]
+                yy = y0 + 1 + platz // 2 + k
+                if k == 0:
+                    addclip(yy, bx + 2, "▸ " + name.upper(), bw - 4, rad_stil["vorn"])
+                else:
+                    addclip(yy, bx + 4, name, bw - 6, C["faint"])
+            return
+        for dy, dx, txt, st in zeilen:
+            y, x = cyc + dy, ccx + dx
+            if st.startswith("symbol:"):
+                zeichne_symbol(st[7:], y, x)
+                continue
+            if st in ("pille", "pille_fern"):            # getönter Grund, halbe Kappen
+                if y0 < y < y0 + h - 1 and bx < x - 1 and x + len(txt) + 1 < bx + bw:
+                    grund, schrift = pixel.elektronik_pille(st == "pille_fern", farben)
+                    safe_addstr(y, x - 1, "▐", pix_attr(grund, pix_bg))
+                    safe_addstr(y, x, txt, pix_attr(schrift, grund)
+                                | (curses.A_BOLD if st == "pille" else 0))
+                    safe_addstr(y, x + len(txt), "▌", pix_attr(grund, pix_bg))
+                continue
+            if y0 < y < y0 + h - 1 and bx < x and x + len(txt) < bx + bw:
+                safe_addstr(y, x, txt, rad_stil.get(st, C["faint"]))
+
+    def draw_tech(top, x, h, w, state, metrics, nets):
+        """Technik-Ansicht (Vollbild, Kasten steht schon). -> läuft stdout?"""
+        if TECH["view"] == "stdout":
+            return draw_stdout(top, x, h, w, state.get("logs", []) or [], None)
+        if TECH["view"] == "netz":
+            up = fmt_uptime(state.get("uptime_s"))
+            addclip(top + 1, x + 2, "laufzeit  " + up, w - 4, C["bright"])
+            addclip(top + 2, x + 2, "net       " + ("TRAFFIC !" if nets else "OFFLINE ✓"),
+                    w - 4, C["warn"] if nets else C["acc"])
+            if h > 6:
+                draw_box(top + 3, x + 1, h - 4, w - 2, "outbound", C["warn"])
+                draw_outbound(top + 3, x + 1, h - 4, w - 2, nets)
+            return False
+        # system: external + telemetrie nebeneinander, wenn Platz ist
+        bk = store.backends_snapshot()
+        kw = max(24, min(44, (w - 6) // 2))
+        draw_external(top + 1, x + 2, kw, bk)
+        if w - 6 >= 2 * kw:
+            draw_telemetrie(top + 1, x + 4 + kw, kw, metrics)
+        else:
+            draw_telemetrie(top + 5, x + 2, kw, metrics)
+        return False
 
     def _tlabel(tid):
         for t2, lbl, _h in GRAPH_TYPES:
@@ -7643,6 +7930,8 @@ def run_ui(stdscr, store):
             return "piano"
         if ELEK["active"]:
             return "elektronik"
+        if TECH["active"]:
+            return "technik"
         if NOTE["active"]:
             # Ebene 2 / Titel-Eingabe sind Freitext → '/' ist dort ein Zeichen,
             # das Overlay geht gar nicht erst auf (siehe in_text_entry). Bleibt
@@ -7687,7 +7976,8 @@ def run_ui(stdscr, store):
         # (LAUF_TICK_MS ≈ halber Zeichen-Schritt) — ein Bruchteil der 30 fps.
         fast = ((M["active"] and M.get("anim")) or (AI["active"] and AI["streaming"])
                 or (TUTOR["active"] and TUTOR["streaming"]) or PIANO["active"]
-                or RAD["pos"] != RAD["sel"] or RAD["schnell"])
+                or RAD["pos"] != RAD["sel"] or RAD["schnell"]
+                or TRAD["pos"] != TRAD["sel"])
         stdscr.timeout(33 if fast else (LAUF_TICK_MS if LAUF["laeuft"] else 250))
         ch = stdscr.getch()
 
@@ -7763,6 +8053,11 @@ def run_ui(stdscr, store):
                     LAUF["an"] = (not LAUF["an"]) if res == "LAUF_TOGGLE" else (res == "LAUF_ON")
                     lauf_schreiben(LAUF["an"])
                     cmd_msg = "stdout-lauf " + ("an" if LAUF["an"] else "aus")
+                if res in ("DASH_ON", "DASH_OFF", "DASH_TOGGLE"):
+                    DASH["an"] = (not DASH["an"]) if res == "DASH_TOGGLE" else (res == "DASH_ON")
+                    schalter_schreiben(dashboard_datei(), DASH["an"])
+                    TECH["active"] = False     # gibt es im alten Layout nicht
+                    cmd_msg = "dashboard " + ("an (3 spalten)" if DASH["an"] else "aus (meta-rad)")
                 if res == "TUTOR_OPEN":
                     # Panel öffnen wie Taste 'u': Status holen + falls Backend da
                     # und keine Session, die Persona SOFORT loslegen lassen.
@@ -8956,6 +9251,9 @@ def run_ui(stdscr, store):
         elif ELEK["active"]:                   # Elektronik-Bereich hat den Fokus
             if ch == 27:
                 ELEK["active"] = False
+        elif TECH["active"]:                   # Technik-Ansicht hat den Fokus
+            if ch == 27:
+                TECH["active"] = False
         elif PIANO["active"]:                  # Klavier hat den Fokus
             # Reihenfolge zählt: erst die Freitext-Zustände (Namen tippen),
             # dann Steuertasten, ZULETZT die Klaviatur — sonst würde 'd'
@@ -9111,7 +9409,20 @@ def run_ui(stdscr, store):
             # Weglegen über Cmd+z. `taste` übersetzt die Wahl in den alten
             # Buchstaben, damit die Öffnen-Zweige unten unverändert bleiben.
             taste = None
-            if ch == curses.KEY_LEFT:
+            if not DASH["an"]:
+                # Meta-Rad (seit 03.10.2026): erst das Rad wählen, dann rein.
+                was = {curses.KEY_LEFT: "links", curses.KEY_RIGHT: "rechts",
+                       10: "enter", 13: "enter", curses.KEY_ENTER: "enter",
+                       27: "esc"}.get(ch)
+                if ch == ord(" "):
+                    taste = "a"
+                elif was:
+                    wahl = meta_taste(META, RAD, TRAD, was)
+                    if wahl and wahl[0] == "app":
+                        taste = wahl[1]
+                    elif wahl:
+                        TECH["active"] = True; TECH["view"] = wahl[1]
+            elif ch == curses.KEY_LEFT:
                 RAD["sel"] -= 1
             elif ch == curses.KEY_RIGHT:
                 RAD["sel"] += 1
@@ -9219,10 +9530,14 @@ def run_ui(stdscr, store):
             net_txt, net_attr = "OFFLINE ✓", C["acc"]
         clock = time.strftime("%H:%M:%S")
         up = fmt_uptime(state.get("uptime_s"))
-        right = "NET %s   UP %s   %s" % (net_txt, up, clock)
-        safe_addstr(0, W - len(right) - 1, "NET ", C["dim"])
-        safe_addstr(0, W - len(right) - 1 + 4, net_txt, net_attr)
-        safe_addstr(0, W - len(right) - 1 + 4 + len(net_txt), "   UP %s   %s" % (up, clock), C["dim"])
+        if DASH["an"]:
+            right = "NET %s   UP %s   %s" % (net_txt, up, clock)
+            safe_addstr(0, W - len(right) - 1, "NET ", C["dim"])
+            safe_addstr(0, W - len(right) - 1 + 4, net_txt, net_attr)
+            safe_addstr(0, W - len(right) - 1 + 4 + len(net_txt), "   UP %s   %s" % (up, clock), C["dim"])
+        else:                             # Meta-Rad: NET/UP stehen beim Technik-Rad
+            right = clock
+            safe_addstr(0, W - len(right) - 1, clock, C["dim"])
         if not connected:
             safe_addstr(0, 26, "[backend ?]", C["warn"] | curses.A_BLINK)
         pa = peer_anzeige(PEER["d"])
@@ -9241,7 +9556,11 @@ def run_ui(stdscr, store):
         # Im Antwort-Editor wird die MITTE breit gemacht (zwei quadratische
         # Kästen brauchen Platz) — die Seiten schrumpfen auf ein Minimum, bis
         # der Editor wieder zu ist.
-        if MAIL["active"] and MAIL["replying"]:
+        if not DASH["an"]:
+            # Meta-Rad: keine Seitenspalten mehr — eine offene App hat die
+            # ganze Breite, die Startseite teilt sich selbst auf.
+            leftw = rightw = 0
+        elif MAIL["active"] and MAIL["replying"]:
             leftw = max(16, int(W * 0.16))
             rightw = max(16, int(W * 0.16))
         else:
@@ -9250,94 +9569,19 @@ def run_ui(stdscr, store):
         midw = W - leftw - rightw
         lx, mx, rx = 0, leftw, leftw + midw
 
-        # ── LINKS: telemetrie / stdout ─────────────────────────────────
+        # ── LINKS: telemetrie / stdout (nur altes Dashboard) ───────────
         # (Sensoren-Panel entfernt 2026-06: kein echter Sensor angeschlossen.
         #  /api/state.sensors wird weiter gepollt, nur nicht mehr gezeichnet —
         #  Box zum Wiederanzeigen aus der git-History zurückholen.)
-        # EXTERNAL: erreichbare AI-Backends (local/cloud) – wie im Browser oben
-        # links. Front-agnostisch dieselbe Quelle (/api/ai/backends). Titel grün
-        # wenn irgendein Backend da ist, sonst Warn-Farbe.
-        bk = store.backends_snapshot()
-        ext_h = 4
-        draw_box(top, lx, ext_h, leftw, "external",
-                 C["acc"] if bk.get("any") else C["warn"])
-        if bk.get("local"):
-            ltxt, lattr = "✓ ollama", C["bright"]
-        elif bk.get("local_enabled") is False:      # manuell gedrosselt
-            ltxt, lattr = "✗ gedrosselt", C["warn"]
-        else:
-            ltxt, lattr = "✗", C["faint"]
-        safe_addstr(top + 1, lx + 2, "LOKAL", C["acc"])
-        safe_addstr(top + 1, lx + 9, ltxt, lattr)
-        if bk.get("cloud"):
-            ctxt, cattr = "✓ " + (bk.get("cloud_provider") or ""), C["bright"]
-        elif bk.get("cloud_enabled") is False:      # manuell gedrosselt
-            ctxt, cattr = "✗ gedrosselt", C["warn"]
-        else:
-            ctxt, cattr = "✗", C["faint"]
-        safe_addstr(top + 2, lx + 2, "CLOUD", C["acc"])
-        safe_addstr(top + 2, lx + 9, ctxt, cattr)
-
-        tele_h = len(TELE_ROWS) + 2
-        ty = top + ext_h
-        std_h = body_h - ext_h - tele_h
-        draw_box(ty, lx, tele_h, leftw, "telemetrie")
-        hlbl = host_label(metrics)   # Host des Backends (PC/LAP/PI), nicht hart
-        for i, (lbl, key, _u) in enumerate(TELE_ROWS):
-            tv = tele_value(metrics, key)
-            safe_addstr(ty + 1 + i, lx + 2, hlbl + "·" + lbl, C["acc"])
-            if tv:
-                pct, text = tv
-                n = round(max(0.0, min(100.0, pct)) / 100.0 * 10)
-                safe_addstr(ty + 1 + i, lx + 11, "█" * n, C["acc"])
-                safe_addstr(ty + 1 + i, lx + 11 + n, "░" * (10 - n), C["faint"])
-                safe_addstr(ty + 1 + i, lx + leftw - len(text) - 2, text, C["bright"])
-            else:
-                safe_addstr(ty + 1 + i, lx + 11, "n/a", C["faint"])
-
-        sy = ty + tele_h
         laeuft_jetzt = False
-        if std_h >= 3:
-            draw_box(sy, lx, std_h, leftw, "stdout")
-            logs = state.get("logs", []) or []
-            if not isinstance(logs, list):
-                logs = []
-            inner = std_h - 2
-            shown = logs[-inner:]
-            schritt = lauf_schritt(time.monotonic())
-            for i, e in enumerate(shown):
-                if not isinstance(e, dict):
-                    continue
-                yy = sy + 1 + i
-                t = (e.get("time") or "")[:8]
-                safe_addstr(yy, lx + 2, t, C["faint"])
-                px = lx + 2 + len(t) + 1
-                # Nachricht auf die Box-Innenbreite kürzen, damit nichts in die
-                # Mittelspalte überläuft (lx+leftw-1 ist der rechte Rahmen).
-                avail = (lx + leftw - 1) - px
-                voll = e.get("text") or ""
-                if LAUF["an"] and avail > 6 and len(voll) > avail:
-                    # Passt nicht → laufen lassen statt abschneiden. Die Uhrzeit
-                    # links bleibt stehen, nur die Nachricht rotiert. Unter ~7
-                    # Zeichen Platz ist eine Laufschrift nicht mehr lesbar,
-                    # dann bleibt es beim ehrlichen Schnitt.
-                    txt = lauf_ausschnitt(voll, avail, schritt)
-                    laeuft_jetzt = True
-                else:
-                    txt = voll[:max(0, avail)]
-                # Das Präfix (EVENT IN, TOOL …) färbt sich nur, wenn die Zeile
-                # gerade an ihrem Anfang steht — mitten in der Runde gibt es
-                # keinen Kopf mehr, und einer ohne Zeilenanfang wäre gelogen.
-                head, grp = log_prefix(txt)
-                if head and grp:
-                    safe_addstr(yy, px, head, C.get(grp, C["dim"]))
-                    safe_addstr(yy, px + len(head), txt[len(head):], C["dim"])
-                else:
-                    safe_addstr(yy, px, txt, C["dim"])
-
-        # Zappelt gerade wirklich etwas? Nur dann tickt die Schleife schneller
-        # (siehe oben) — ein breites Fenster bleibt bei den ruhigen 250 ms.
-        LAUF["laeuft"] = laeuft_jetzt
+        if DASH["an"]:
+            ext_h = 4
+            draw_external(top, lx, leftw, store.backends_snapshot())
+            tele_h = draw_telemetrie(top + ext_h, lx, leftw, metrics)
+            std_h = body_h - ext_h - tele_h
+            if std_h >= 3:
+                laeuft_jetzt = draw_stdout(top + ext_h + tele_h, lx, std_h, leftw,
+                                           state.get("logs", []) or [])
 
         # ── MITTE: Graph-Werkzeug / Karte (oder Einladung, sie zu öffnen) ──
         if G["active"]:
@@ -9375,6 +9619,34 @@ def run_ui(stdscr, store):
             addclip(top + body_h // 2, mx + max(2, (midw - len(leer)) // 2), leer,
                     midw - 4, C["faint"])
             addclip(top + body_h - 2, mx + 2, "esc zurück zum rad", midw - 4, C["faint"])
+        elif TECH["active"]:
+            draw_box(top, mx, body_h, midw, "technik · " + TECH["view"])
+            laeuft_jetzt = draw_tech(top, mx, body_h, midw, state, metrics, nets) or laeuft_jetzt
+        elif not DASH["an"]:
+            # ── Startseite: das Meta-Rad (seit 03.10.2026) ────────────
+            # Links das App-Rad, rechts das kleinere Technik-Rad, darunter
+            # Laufzeit + stdout. ▸ = dieses Rad ist gewählt, ● = man ist drin.
+            appw = max(30, int(W * 0.62))
+            tw = W - appw
+            for i, (name, bx, bw) in enumerate((("apps", 0, appw), ("technik", appw, tw))):
+                gewaehlt = META["fokus"] == i
+                marke = ("● " if META["drin"] else "▸ ") if gewaehlt else ""
+                if i == 0:
+                    draw_box(top, bx, body_h, bw, marke + name,
+                             C["acc"] if gewaehlt else C["faint"])
+                    draw_rad(top, body_h, bx, bw, [a[1] for a in RAD_APPS], RAD,
+                             symbole_an=True, gedimmt=not gewaehlt)
+                    continue
+                th = max(8, min(body_h, body_h // 2))
+                draw_box(top, bx, th, bw, marke + name, C["acc"] if gewaehlt else C["faint"])
+                draw_rad(top, th, bx, bw, [a[0] for a in TECH_APPS], TRAD,
+                         gedimmt=not gewaehlt)
+                if th < body_h:
+                    lz = "up %s · net %s" % (up, "traffic !" if nets else "offline ✓")
+                    addclip(top + th, bx + 2, lz, bw - 4, C["warn"] if nets else C["dim"])
+                if body_h - th - 1 >= 3:
+                    laeuft_jetzt = draw_stdout(top + th + 1, bx, body_h - th - 1, bw,
+                                               state.get("logs", []) or []) or laeuft_jetzt
         else:
             # ── Startseite: das Rad ───────────────────────────────────
             # Bis 02.10.2026 stand hier der KI-Ring (ring_zeilen) mit der
@@ -9382,155 +9654,94 @@ def run_ui(stdscr, store):
             # UNTER der Mitte: der Platz darüber ist für das, was ZENTRALE
             # künftig von sich aus zeigt (kommt Stück für Stück).
             draw_box(top, mx, body_h, midw, "zentrale")
-            RAD["pos"] = rad_schritt(RAD["pos"], RAD["sel"])
-            cyc = top + (body_h * 5) // 8
-            ccx = mx + midw // 2
-            rad_stil = {"spur": C["faint"], "fern": C["faint"],
-                        "nah": C["dim"], "rahmen": C["acc"],
-                        "vorn": C["bright"] | curses.A_BOLD}
-            # Pixel-Symbole (tui/pixel.py): hinten eine Pille, vorn klappt das
-            # Symbol auf (0,23 s), beim Wegdrehen wieder zu (0,17 s). Ohne 256
-            # Farben bleibt es beim gewohnten Rahmen-Schriftzug.
-            jetzt = time.monotonic()
-            dt = min(0.1, jetzt - RAD["takt"]) if RAD["takt"] else 0.0
-            RAD["takt"] = jetzt
-            symbole = None
-            pix_bg = C.get("pix_bg")
-            if pix_bg is not None and PIX_MODUS != "off":
-                vorn = rad_symbol_vorn()
-                symbole = {}
-                for name in RAD_SYMBOLE:
-                    alt = RAD["offen"].get(name, 0.0)
-                    neu = rad_offen_schritt(alt, vorn == name, dt)
-                    if neu >= 1 and alt < 1:
-                        RAD["offen_seit"][name] = jetzt
-                    RAD["offen"][name] = symbole[name] = neu
-                RAD["schnell"] = any(0 < v < 1 for v in symbole.values()) or (
-                    vorn is not None and symbole.get(vorn, 0) < 1)
+            draw_rad(top, body_h, mx, midw, [a[1] for a in RAD_APPS], RAD, symbole_an=True)
+
+        # Zappelt gerade wirklich etwas? Nur dann tickt die Schleife schneller
+        # (siehe oben) — ein breites Fenster bleibt bei den ruhigen 250 ms.
+        LAUF["laeuft"] = laeuft_jetzt
+
+        if DASH["an"]:
+            # ── RECHTS: lifestyle / outbound ──────────────────────────────────
+            # lifestyle = ÜBERLAGERUNG aller Graphen in EINEM Gitter. X = Datum
+            # (Zeitstrahl), Y bewusst MEHRDEUTIG — jeder Graph nutzt seine eigene
+            # Achse + Darstellung, alles übereinandergelegt zum Vergleich:
+            #   period → zusammenhängende Bande (Zellen-Hintergrund) über die Spanne
+            #   time   → Symbol auf der 24h-Skala (Zeitpunkt, keine Linie); je
+            #            Graph EIN eigenes aus TIME_SYMBOLS (★ als Default/erstes)
+            #   scale  → wachsende Kreise ◦○◉●⬤ auf eigener Zeile (Größe = 1–5)
+            #   number → Punkt auf der eigenen min/max-Spanne (sichtbare Werte)
+            # Eigener Marker + Farbe je Graph (+ Legende). Quelle:
+            # store.graphs_snapshot (langsames Hintergrund-Polling).
+            if gs_cache:
+                # bewusst kompakt: höchstens ~11 Zeilen, Rest geht an outbound.
+                life_h = max(7, min(11, body_h - 4))
             else:
-                RAD["schnell"] = False
-            farben = "nacht" if pix_bg is not None and sum(pix_bg) < 384 else "tag"
-            pmodus = "half" if PIX_MODUS == "half" else "mix"
+                life_h = 4
+            out_h = body_h - life_h
+            # PROJECTS schiebt sich zwischen lifestyle und outbound — aber nur wenn
+            # es überhaupt geflaggte Projekte gibt UND outbound danach mind. 5 Zeilen
+            # behält (sonst lieber ganz weglassen, Tripwire hat Vorrang). Höhe ist
+            # VARIABEL (verschachtelt): ein Knoten ohne Unterprojekte braucht 2 Zeilen
+            # (Titel+Leiste), einer MIT Unterprojekten einen Rahmen (oben+unten) um
+            # seine rekursiv gemessenen Kinder.
+            def proj_measure(node, w):
+                kids = node.get("children") or []
+                if not kids:
+                    return 2
+                return 2 + sum(proj_measure(c, w - 2) for c in kids)
+            proj_h = 0
+            if proj_cache and out_h >= 9:
+                need = 2 + sum(proj_measure(p, rightw - 4) for p in proj_cache
+                               if isinstance(p, dict))
+                proj_h = min(need, out_h - 5)
+            out_h -= proj_h
+            draw_box(top, rx, life_h, rightw, "lifestyle")
+            # Inhalt der lifestyle-Box: kompakte Überlagerung aller Graphen
+            # (geteilte Routine, auch groß im Graph-Werkzeug — siehe draw_overlay).
+            draw_overlay(top, rx, life_h, rightw, gs_cache, gv_cache, labeled=False,
+                         cyc=cyc_cache)
 
-            def zeichne_symbol(name, y, x):
-                """Pixel-Symbol, Schriftplatte auf Zeile y, mittig um x."""
-                offen = round(symbole.get(name, 0.0), 2)
-                t_ms = 0
-                if offen >= 1:
-                    t_ms = int((jetzt - RAD["offen_seit"].get(name, jetzt)) * 1000) // 60 * 60
-                zeilen, schrift = pixel.elektronik_zellen(offen, t_ms, farben, pmodus)
-                r0, c0 = y - pixel.EL_LABEL_ZEILE, x - pixel.EL_W // 2
-                for r, line in enumerate(zeilen):
-                    yy = r0 + r
-                    if not (top < yy < top + body_h - 1):
+            # ── PROJECTS (zwischen lifestyle und outbound) ────────────────────
+            # VERSCHACHTELT (Quelle: store.projects_snapshot ← /api/projects, Baum).
+            # Knoten OHNE Unterprojekte: Titel + Erfüllungsleiste (2 Zeilen). Knoten
+            # MIT Unterprojekten: dünner Rahmen (Titel im oberen Rand) um die rekursiv
+            # gezeichneten Kinder, KEINE eigene Leiste. Reine Anzeige; markiert wird im
+            # Listen-Werkzeug ('p' auf Liste bzw. Eintrag). Bei Platzmangel wird
+            # einfach ab dem Punkt aufgehört (kein Überlauf, kein Crash).
+            if proj_h:
+                draw_box(top + life_h, rx, proj_h, rightw, "focus")
+                y_max = top + life_h + proj_h - 2          # letzte innere Zeile
+                x0, w0 = rx + 2, max(4, rightw - 4)
+
+                # Dieselbe Routine wie die Projektansicht (Mitte) → BYTE-GLEICHE
+                # Darstellung. Ohne Cursor/Fokus-Marke; proj_cache ist ohnehin nur
+                # der eine fokussierte Knoten (oder leer → Box wird gar nicht erst
+                # gezeichnet, da proj_h dann 0 ist).
+                y, rendered = top + life_h + 1, 0
+                for p in proj_cache:
+                    if y > y_max or not isinstance(p, dict):
+                        break
+                    y = proj_render(p, x0, y, w0, y_max)
+                    rendered += 1
+                if rendered < len(proj_cache):         # Rest passt nicht → ehrlich anzeigen
+                    safe_addstr(top + life_h + proj_h - 1, rx + rightw - 6,
+                                "+%d" % (len(proj_cache) - rendered), C["faint"])
+
+            oy = top + life_h + proj_h
+            draw_box(oy, rx, out_h, rightw, "outbound", C["warn"])
+            if nets:
+                inner = out_h - 2
+                for i, e in enumerate(nets[-inner:]):
+                    if not isinstance(e, dict):
                         continue
-                    for c, z in enumerate(line):
-                        xx = c0 + c
-                        if z and mx < xx < mx + midw - 1:
-                            safe_addstr(yy, xx, z[0], pix_attr(z[1], z[2]))
-                for c, ch, fg, bg in schrift:
-                    if top < r0 + pixel.EL_LABEL_ZEILE < top + body_h - 1:
-                        safe_addstr(r0 + pixel.EL_LABEL_ZEILE, c0 + c, ch,
-                                    pix_attr(fg, bg) | curses.A_BOLD)
-
-            for dy, dx, txt, st in rad_zeilen([a[1] for a in RAD_APPS],
-                                              RAD["pos"], midw, body_h - 2, symbole):
-                y, x = cyc + dy, ccx + dx
-                if st.startswith("symbol:"):
-                    zeichne_symbol(st[7:], y, x)
-                    continue
-                if st in ("pille", "pille_fern"):            # getönter Grund, halbe Kappen
-                    if top < y < top + body_h - 1 and mx < x - 1 and x + len(txt) + 1 < mx + midw:
-                        grund, schrift = pixel.elektronik_pille(st == "pille_fern", farben)
-                        safe_addstr(y, x - 1, "▐", pix_attr(grund, pix_bg))
-                        safe_addstr(y, x, txt, pix_attr(schrift, grund)
-                                    | (curses.A_BOLD if st == "pille" else 0))
-                        safe_addstr(y, x + len(txt), "▌", pix_attr(grund, pix_bg))
-                    continue
-                if top < y < top + body_h - 1 and mx < x and x + len(txt) < mx + midw:
-                    safe_addstr(y, x, txt, rad_stil.get(st, C["faint"]))
-
-        # ── RECHTS: lifestyle / outbound ──────────────────────────────────
-        # lifestyle = ÜBERLAGERUNG aller Graphen in EINEM Gitter. X = Datum
-        # (Zeitstrahl), Y bewusst MEHRDEUTIG — jeder Graph nutzt seine eigene
-        # Achse + Darstellung, alles übereinandergelegt zum Vergleich:
-        #   period → zusammenhängende Bande (Zellen-Hintergrund) über die Spanne
-        #   time   → Symbol auf der 24h-Skala (Zeitpunkt, keine Linie); je
-        #            Graph EIN eigenes aus TIME_SYMBOLS (★ als Default/erstes)
-        #   scale  → wachsende Kreise ◦○◉●⬤ auf eigener Zeile (Größe = 1–5)
-        #   number → Punkt auf der eigenen min/max-Spanne (sichtbare Werte)
-        # Eigener Marker + Farbe je Graph (+ Legende). Quelle:
-        # store.graphs_snapshot (langsames Hintergrund-Polling).
-        if gs_cache:
-            # bewusst kompakt: höchstens ~11 Zeilen, Rest geht an outbound.
-            life_h = max(7, min(11, body_h - 4))
-        else:
-            life_h = 4
-        out_h = body_h - life_h
-        # PROJECTS schiebt sich zwischen lifestyle und outbound — aber nur wenn
-        # es überhaupt geflaggte Projekte gibt UND outbound danach mind. 5 Zeilen
-        # behält (sonst lieber ganz weglassen, Tripwire hat Vorrang). Höhe ist
-        # VARIABEL (verschachtelt): ein Knoten ohne Unterprojekte braucht 2 Zeilen
-        # (Titel+Leiste), einer MIT Unterprojekten einen Rahmen (oben+unten) um
-        # seine rekursiv gemessenen Kinder.
-        def proj_measure(node, w):
-            kids = node.get("children") or []
-            if not kids:
-                return 2
-            return 2 + sum(proj_measure(c, w - 2) for c in kids)
-        proj_h = 0
-        if proj_cache and out_h >= 9:
-            need = 2 + sum(proj_measure(p, rightw - 4) for p in proj_cache
-                           if isinstance(p, dict))
-            proj_h = min(need, out_h - 5)
-        out_h -= proj_h
-        draw_box(top, rx, life_h, rightw, "lifestyle")
-        # Inhalt der lifestyle-Box: kompakte Überlagerung aller Graphen
-        # (geteilte Routine, auch groß im Graph-Werkzeug — siehe draw_overlay).
-        draw_overlay(top, rx, life_h, rightw, gs_cache, gv_cache, labeled=False,
-                     cyc=cyc_cache)
-
-        # ── PROJECTS (zwischen lifestyle und outbound) ────────────────────
-        # VERSCHACHTELT (Quelle: store.projects_snapshot ← /api/projects, Baum).
-        # Knoten OHNE Unterprojekte: Titel + Erfüllungsleiste (2 Zeilen). Knoten
-        # MIT Unterprojekten: dünner Rahmen (Titel im oberen Rand) um die rekursiv
-        # gezeichneten Kinder, KEINE eigene Leiste. Reine Anzeige; markiert wird im
-        # Listen-Werkzeug ('p' auf Liste bzw. Eintrag). Bei Platzmangel wird
-        # einfach ab dem Punkt aufgehört (kein Überlauf, kein Crash).
-        if proj_h:
-            draw_box(top + life_h, rx, proj_h, rightw, "focus")
-            y_max = top + life_h + proj_h - 2          # letzte innere Zeile
-            x0, w0 = rx + 2, max(4, rightw - 4)
-
-            # Dieselbe Routine wie die Projektansicht (Mitte) → BYTE-GLEICHE
-            # Darstellung. Ohne Cursor/Fokus-Marke; proj_cache ist ohnehin nur
-            # der eine fokussierte Knoten (oder leer → Box wird gar nicht erst
-            # gezeichnet, da proj_h dann 0 ist).
-            y, rendered = top + life_h + 1, 0
-            for p in proj_cache:
-                if y > y_max or not isinstance(p, dict):
-                    break
-                y = proj_render(p, x0, y, w0, y_max)
-                rendered += 1
-            if rendered < len(proj_cache):         # Rest passt nicht → ehrlich anzeigen
-                safe_addstr(top + life_h + proj_h - 1, rx + rightw - 6,
-                            "+%d" % (len(proj_cache) - rendered), C["faint"])
-
-        oy = top + life_h + proj_h
-        draw_box(oy, rx, out_h, rightw, "outbound", C["warn"])
-        if nets:
-            inner = out_h - 2
-            for i, e in enumerate(nets[-inner:]):
-                if not isinstance(e, dict):
-                    continue
-                yy = oy + 1 + i
-                t = (e.get("time") or "")[:8]
-                safe_addstr(yy, rx + 2, t, C["faint"])
-                px = rx + 2 + len(t) + 1
-                avail = (rx + rightw - 1) - px
-                addclip(yy, px, e.get("text") or "", avail, C["warn"])
-        else:
-            safe_addstr(oy + 1, rx + 2, "// offline ✓", C["acc"] | curses.A_DIM)
+                    yy = oy + 1 + i
+                    t = (e.get("time") or "")[:8]
+                    safe_addstr(yy, rx + 2, t, C["faint"])
+                    px = rx + 2 + len(t) + 1
+                    avail = (rx + rightw - 1) - px
+                    addclip(yy, px, e.get("text") or "", avail, C["warn"])
+            else:
+                safe_addstr(oy + 1, rx + 2, "// offline ✓", C["acc"] | curses.A_DIM)
 
         # ── Befehls-Overlay (klappt über den Body nach oben auf) ──────────
         if cmd_mode or help_latched:
@@ -9583,8 +9794,13 @@ def run_ui(stdscr, store):
         # Rad): nur noch die vier Tasten, die überall gelten. Eine KI-Antwort,
         # die im Hintergrund fertig wurde, meldet sich hier mit ●.
         ki = "space ki" + (" ●" if AI.get("neu") else "")
-        addclip(footer_row, 0, " ←→ drehen · enter öffnen · %s · esc zurück" % ki,
-                W - 1, C["faint"])
+        if DASH["an"] or current_ctx() != "home":
+            fuss = " ←→ drehen · enter öffnen · %s · esc zurück" % ki
+        elif META["drin"]:
+            fuss = " ←→ drehen · enter öffnen · esc raus aus dem rad · %s" % ki
+        else:
+            fuss = " ←→ rad wählen · enter rein · %s" % ki
+        addclip(footer_row, 0, fuss, W - 1, C["faint"])
 
         # ── Graph-Reminder-Nag (zuletzt → liegt über allem) ───────────────
         if nag_active and nag_items:
@@ -9728,6 +9944,8 @@ def main():
         lebenslauf("HOT RELOAD  neuer Code in tui/")
         os.environ["ZENTRALE_TUI_RELOADED"] = "1"
         os.environ["ZENTRALE_TUI_RAD"] = str(RAD["sel"])
+        os.environ["ZENTRALE_TUI_META"] = "%d,%d,%d" % (
+            META["fokus"], int(META["drin"]), TRAD["sel"])
         sys.stdout.flush()
         atexit._run_exitfuncs()       # exec überspringt atexit (z.B. Tasten-Wiederholung zurück)
         os.execv(sys.executable, [sys.executable] + sys.argv)

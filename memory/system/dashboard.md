@@ -8,7 +8,19 @@ per `ki_aus` weggelassen) ist praktisch aufgegeben, der Code lebt. Das
 `zentrale-themed` nach 05/21 Uhr auf (`theme.now`, Ergebnis); Terminal,
 Browser, Desktop, bat, nvim, tmux und das Tutor-Zimmer lesen nur — und aus
 einem Testlauf oder Worktree darf nie ein Push entstehen (Riegel im venv,
-`start_tui.sh` hängt ihn ein). **Startseite = App-Rad** (seit 02.10.2026,
+`start_tui.sh` hängt ihn ein). **Startseite = Meta-Rad** (seit 03.10.2026, `META`/`TRAD`/`TECH_APPS`,
+`meta_taste`): das 3-Spalten-Dashboard ist aus. Links das App-Rad, rechts ein
+kleineres **Technik-Rad** (`system` = external + telemetrie, `stdout` = ganzes
+Log, `netz` = outbound + laufzeit), darunter `up · net` und eine stdout-Box.
+←/→ wählt das Rad (Titel `▸`), enter geht hinein (Titel `●`, ←/→ dreht jetzt,
+enter öffnet), esc wieder raus. Offene Apps und Technik-Ansichten (`TECH`)
+haben die **ganze Breite**. Lifestyle- und focus-Box gibt es dort nicht mehr
+(Graph bzw. Fokus-App zeigen sie groß). **Backup:** `/dashboard an` holt das
+alte 3-Spalten-Layout zurück, `/dashboard aus` das Meta-Rad; der Wunsch liegt
+in `~/.config/zentrale/dashboard` (`ZENTRALE_DASHBOARD_FILE`, Tests lenken um).
+Die Bausteine `draw_external`/`draw_telemetrie`/`draw_stdout`/`draw_outbound`/
+`draw_rad` teilen sich beide Layouts. Im alten Layout gilt weiter:
+**Startseite = App-Rad** (seit 02.10.2026,
 `RAD_APPS`/`rad_zeilen`): ←/→ dreht einen liegenden Ring, leicht von oben
 gesehen (vorn = unten, groß + Rahmen; hinten = oben, blass), enter öffnet
 die App vorn, space den KI-Chat, esc führt Stufe für Stufe zurück. Das Rad
