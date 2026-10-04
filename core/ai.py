@@ -1,6 +1,16 @@
 # core/ai.py
 #
-# Ollama-Client für ZENTRALE – mit Tool-Use und persistenter Memory.
+# Lokale KI-Schiene (Ollama) – und der Werkzeugkasten, den alle Chat-Pfade teilen.
+#
+# ── Wer welchen Turn bedient ──────────────────────────────────────────
+# Das entscheidet NICHT diese Datei, sondern ai_backends.chat_available()
+# (gefragt von /api/chat in ui/app.py):
+#   local → chat_stream() hier, gegen Ollama (Prompt-Schiene `klein`)
+#   cloud → core/cloud.py (Anthropic) bzw. core/cloud_openai.py
+#           (OpenAI-kompatibel), Prompt-Schiene `gross`
+# Die Cloud-Module leihen sich von hier Prompt-Bausteine, das Erlaubnis-Gate
+# und die Tool-Ausführung (_execute_tool): Werkzeuge laufen immer lokal,
+# egal wer denkt.
 #
 # ── Wie Tool-Use funktioniert ─────────────────────────────────────────
 # Statt immer Text zu antworten kann das Modell "Tools aufrufen":
@@ -14,10 +24,16 @@
 # Das aktive Modell ist konfigurierbar (siehe OLLAMA_MODEL unten);
 # jedes Tool-Use-fähige Ollama-Modell sollte funktionieren.
 #
-# ── Wie Memory-Injection funktioniert ────────────────────────────────
-# Vor jedem Request wird graph.context_for_query() aufgerufen und
-# an den System-Prompt angehängt. Die KI "sieht" das aktivierte
-# Wissen aus dem Konzept-Graphen und kann darauf Bezug nehmen.
+# ── Gedächtnis ───────────────────────────────────────────────────────
+# Der Konzept-Graph (core/graph.py) ist seit 18.08.2026 in beide Richtungen
+# per Default aus: nicht mehr in den Prompt GELESEN (graph.context_for_query
+# nur mit ZENTRALE_GRAPH_KONTEXT=1, siehe GRAPH_KONTEXT unten) und nicht mehr
+# BESCHRIEBEN (Tripel-Extraktion nur mit ZENTRALE_GRAPH_EXTRAKTION=1, siehe
+# core/consolidation.py). Pro Turn landet nur noch der Rohtext im Transkript
+# (core/transkript.py); der Identity-Seed (_ensure_seed_once) läuft weiter. An seine Stelle trat das Datei-Gedächtnis
+# (core/gedaechtnis.py) — bisher NUR auf dem Cloud-Pfad: Kopf-Block im
+# gecachten System-Prompt (cloud._static_system) plus die Notiz-Werkzeuge
+# aus core/profil/gross.py. Die lokale Schiene sieht davon heute nichts.
 #
 # ── Konfiguration ────────────────────────────────────────────────────
 #   OLLAMA_URL   – default: http://localhost:11434
@@ -1062,7 +1078,9 @@ def _consolidation_worker():
 
 def _async_save_turn(user_msg: str, ai_msg: str, store: str | None = None):
     """
-    Turn für die spätere Graph-Konsolidierung vormerken (Phase G).
+    Turn für die spätere Konsolidierung vormerken (Phase G). Heute schreibt
+    die nur das Transkript; die Graph-Extraktion ist per Default aus
+    (consolidation.GRAPH_EXTRAKTION, seit 18.08.2026).
 
     store: Ziel-Graph (None = Core-Graph). Der Cloud-Pfad reicht seinen
     eigenen durch, damit Cloud-Turns nie im lokalen Graphen landen.
@@ -1170,8 +1188,9 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     stellt (Capabilities + Limits als Knoten verankern).
 
     Ablauf pro Runde:
-      1. Streaming-Call an Ollama (mit Tools und Memory im System-Prompt)
-      2. Tokens werden sofort an den Browser weitergereicht (yield)
+      1. Streaming-Call an Ollama (mit Tools im System-Prompt)
+      2. Tokens werden sofort an den Aufrufer weitergereicht (yield →
+         /api/chat → SSE an die TUI)
       3. Im letzten Chunk (done=true) prüfen: hat das Modell Tool-Calls angefragt?
       4. Falls ja: Tools ausführen, Ergebnisse anhängen, zurück zu 1
       5. Falls nein: fertig
@@ -1204,12 +1223,9 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     # Tutor-Modus (Tutor hat eigenen System-Prompt der schon vollständig
     # ist und andere Tool-Sets nutzt).
     if tools is None:
-        # Phase G: Memory-Kontext kommt jetzt vollständig aus dem
-        # Konzept-Graphen. Aktivierungs-Spread ausgehend von Query-
-        # Entry-Points + Sasha-Anker + heutiger Time-Node ersetzt
-        # die alten getrennten Schichten (User-Profil, STM-Summary,
-        # LTM-Top-K). Der Graph weiß welche Konzepte mit der aktuellen
-        # Frage assoziiert sind und liefert sie alle mit Beziehungen.
+        # Graph-Kontext: per Default AUS (GRAPH_KONTEXT, seit 18.08.2026),
+        # mem_ctx bleibt dann leer. Mit ZENTRALE_GRAPH_KONTEXT=1 kommt der
+        # Aktivierungs-Spread aus dem Konzept-Graphen zurück in den Prompt.
         mem_ctx    = graph.context_for_query(user_query) if GRAPH_KONTEXT else ""
         # ── Statischer Kopf (byte-identisch über alle Turns, cachebar) ──
         # Kommt von der Schiene: hier läuft Ollama, also `klein` — mit

@@ -10,6 +10,9 @@
   Mails senden"), spreadet die Aktivierung zu den relevanten Knoten und sie landen
   im „## Aktiviertes Wissen"-Block. Meta-Regel 4 (→ `core-ki_meta-regeln.md`)
   bezieht sich direkt auf diese beiden Listen.
+- **Stand:** der Graph-Kontext ist seit 18.08.2026 per Default **aus**
+  (`ai.GRAPH_KONTEXT`, an mit `ZENTRALE_GRAPH_KONTEXT=1`). Geseedet wird
+  weiter, in den Prompt kommt davon dann aber nichts.
 
 Deutsche Labels, wörtlich aus dem Code kopiert.
 

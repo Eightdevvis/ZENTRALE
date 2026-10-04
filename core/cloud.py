@@ -11,6 +11,7 @@
 #   {"reflect": …}     Denk-Tokens live ins HUD
 #   {"ascii": …, "name": …}  Inline-Bild aus einem [[bild: …]]-Marker
 #   {"permission": …}  JA/NEIN-Dialog, BLOCKIERT bis zum Klick
+#   {"werkzeug": …}    Tool-Call start|fertig|fehler (nur Cloud, lokal nicht)
 #   {"cinema": True}   Sendungs-Modus vor dem News-Briefing
 #   "…"                der eigentliche Antworttext
 #
@@ -37,9 +38,11 @@
 #
 # ── Konfiguration ───────────────────────────────────────────────────────
 #   ANTHROPIC_API_KEY        Pflicht (kommt via ai_config aus data/ai_config.json)
-#   Modell + Denk-Tiefe kommen aus ai_backends (chat_model/chat_effort),
-#   umstellbar per data/ai_config.json oder ZENTRALE_CLOUD_MODEL /
-#   ZENTRALE_CHAT_EFFORT.
+#   Modell + Denk-Tiefe kommen aus ai_backends (chat_model/chat_effort).
+#   Modell: data/ai_config.json 'chat_models' → Code-Default claude-sonnet-5
+#   (providers.py); ZENTRALE_CLOUD_MODEL greift hier NICHT, weil _model()
+#   chat_model("claude") mit Provider fragt. Denk-Tiefe: ZENTRALE_CHAT_EFFORT
+#   oder data/ai_config.json 'chat_effort', Default 'low'.
 #   ZENTRALE_CLOUD_MAX_TOKENS Default 16000
 
 import os
@@ -55,7 +58,7 @@ _DATA_DIR   = os.path.join(os.path.dirname(__file__), '..', 'data')
 CLOUD_GRAPH = os.path.abspath(os.path.join(_DATA_DIR, 'ai_graph_cloud.json'))
 
 # Modell und Denk-Tiefe kommen aus ai_backends (pro Anbieter gespeichert,
-# per Config und Env umstellbar) — NICHT mehr aus eigenen Env-Vars hier. Sonst
+# per Config umstellbar) — NICHT mehr aus eigenen Env-Vars hier. Sonst
 # gäbe es zwei Wahrheiten darüber, welches Modell gerade läuft, und die
 # Kostenrechnung würde eine davon nicht sehen.
 def _model() -> str:
@@ -70,9 +73,11 @@ def _effort() -> str:
 
 # Adaptives Denken (und der effort-Regler dazu) gibt es nicht auf jedem
 # Modell. Haiku 4.5 quittiert es mit `400 adaptive thinking is not supported
-# on this model` — und Haiku ist ausgerechnet die BUDGET-RÜCKFALLEBENE. Ist
-# das Monatsbudget alle und der Chat schaltet auf das billige Modell, wäre
-# er ohne diese Weiche schlicht kaputt statt billig.
+# on this model` — und Haiku ist das naheliegende Billigmodell
+# (providers.cheap_model). Stellt jemand den Chat darauf um (chat_models in
+# data/ai_config.json), wäre er ohne diese Weiche schlicht kaputt statt
+# billig. (Der Budget-Rückfall in ai_backends wechselt heute den ANBIETER,
+# nicht das Modell; cheap_model nutzt nur der Cloud-Extraktor.)
 #
 # Bewusst als Positiv-Liste: ein unbekanntes Modell kriegt kein Denken
 # geschickt und funktioniert damit auf jeden Fall. Andersherum (Negativ-
@@ -108,7 +113,8 @@ _MAX_ROUNDS = 8   # Sicherheitsnetz gegen Endlos-Tool-Schleifen
 # "5m" für den Rückweg, falls sich das je als Fehlrechnung erweist.
 _CACHE_TTL = os.environ.get("ZENTRALE_CACHE_TTL", "1h")
 
-# Zeichenbudget für den Graph-Kontext. Er ändert sich mit jeder Frage, geht
+# Zeichenbudget für den Graph-Kontext — greift nur mit ZENTRALE_GRAPH_KONTEXT=1
+# (ai.GRAPH_KONTEXT, seit 18.08.2026 per Default aus). Er ändert sich mit jeder Frage, geht
 # also bei JEDEM Turn ungecacht raus — und `max_nodes` deckelt nur die Anzahl,
 # über die Länge sagt eine Knotenzahl nichts.
 _CTX_CHARS = int(os.environ.get("ZENTRALE_CLOUD_CTX_CHARS", "2500"))

@@ -22,11 +22,16 @@
 # Lautsprecher bedienen. Fehlt beides, bleibt das Klavier still und
 # funktioniert weiter (Noten, Aufnahme, Melodien); die TUI startet unverändert.
 #
-# Das lokale Backend läuft ohne lokale KI (ZENTRALE_LOKALE_KI=aus, siehe
-# ai_backends.lokale_ki_aus()). Die TUI fragt KEINE KI-Endpoints ab.
+# KI: die TUI ist die Hauptfront des Assistenten (Taste 'a'), rechnet aber
+# selbst nichts — sie spricht nur HTTP: /api/chat (SSE-Stream),
+# /api/chat/history, /api/permission_answer (Erlaubnis-Gate), /api/ai/status
+# (wer denkt, Kosten). Welcher Kern antwortet, entscheidet das Backend
+# (ai_backends.chat_available()). Das lokale Backend von start_tui.sh läuft
+# ohne lokale KI (ZENTRALE_LOKALE_KI=aus, ai_backends.lokale_ki_aus()) — es
+# spricht nie ein Ollama an, eine Cloud-KI darf es aber nutzen.
 #
 # Start: scripts/start_tui.sh bzw. der Symlink `zentrale-tui` fährt das
-# Backend (ki-frei) hoch und startet dann diese TUI im Vordergrund.
+# Backend (ohne lokale KI) hoch und startet dann diese TUI im Vordergrund.
 # Standalone gegen ein laufendes Backend:  venv/bin/python tui/zentrale_tui.py
 # Selbsttest ohne Terminal:                venv/bin/python tui/zentrale_tui.py --selftest
 # ════════════════════════════════════════════════════════════════════════
@@ -2883,11 +2888,13 @@ def run_ui(stdscr, store):
             "reply_confirm": False}  # Verlassen-Leiste (senden/verwerfen/weiter)
 
     # ── KI-Chat (füllt die MITTE-Box, Taste 'a') ───────────────────────
-    # THIN-CLIENT: die TUI ist selbst ki-frei (ai_backends.lokale_ki_aus()), die
-    # KI lebt am PC. Wir sprechen NUR über HTTP mit <BASE_URL>/api/chat — daheim
-    # via `zentrale-remote` zeigt BASE_URL auf den SSH-Tunnel → PC-Backend →
-    # Ollama/Qwen. Ohne Tunnel (lokales tui-Backend) antwortet /api/chat mit 503
-    # (ki_aus bzw. „gedrosselt"); das fangen wir ab und sagen es in der Statuszeile.
+    # THIN-CLIENT: die TUI rechnet selbst keine KI. Wir sprechen NUR über HTTP
+    # mit <BASE_URL>/api/chat; welcher Kern denkt, entscheidet das Backend
+    # (ai_backends.chat_available(): Cloud oder Ollama). Daheim via
+    # `zentrale-remote` zeigt BASE_URL auf den SSH-Tunnel → PC-Backend. Das
+    # lokale tui-Backend (ZENTRALE_LOKALE_KI=aus) nutzt nur die Cloud; ist auch
+    # die nicht da (offline, gedrosselt), antwortet /api/chat mit 503 — das
+    # fangen wir ab und sagen es in der Statuszeile.
     # Der Stream (SSE) läuft in EINEM Hintergrund-Thread und füllt AI["answer"]
     # live; die Zeichenschleife rendert nur — nie IO im Render/Input-Thread.
     #   active   : Panel hat den Fokus
@@ -3064,8 +3071,8 @@ def run_ui(stdscr, store):
             AI["perm"] = None
 
     def ai_load_history():
-        """Chat-Verlauf + Backend-Status vom Backend holen (gemeinsam mit dem
-        Browser). Läuft im Hintergrund beim ersten Öffnen; scheitert still
+        """Chat-Verlauf + Backend-Status vom Backend holen (der Verlauf lebt im
+        Backend, state.py). Läuft im Hintergrund beim ersten Öffnen; scheitert still
         (dann leerer Verlauf)."""
         # Welcher Kern antwortet gerade? Steht im Kasten-Titel, damit beim
         # Testen ohne Rätselraten sichtbar ist, ob lokal oder Cloud gedacht

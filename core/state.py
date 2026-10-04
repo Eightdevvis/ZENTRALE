@@ -4,7 +4,7 @@
 #
 # ZENTRALE läuft als ein Python-Prozess mit zwei gleichzeitigen Threads:
 #   Thread 1 – Event-Loop (main.py): liest Sensoren, feuert Events
-#   Thread 2 – Flask (app.py):       beantwortet HTTP-Anfragen des Browsers
+#   Thread 2 – Flask (app.py):       beantwortet HTTP-Anfragen der TUI
 #
 # Beide Threads müssen auf dieselben Daten zugreifen (Logs, Events, etc.).
 # Ohne Synchronisierung könnte Thread 1 gerade schreiben während Thread 2
@@ -164,7 +164,7 @@ def push_log(line: str):
     """
     Fügt eine neue Log-Zeile an. Sichtbar an zwei Stellen:
 
-      1. Dashboard-Terminal (cyberpunk-Panel in der Browser-UI),
+      1. Log-Panel der TUI (früher: Terminal-Panel der Browser-UI),
          pollt /api/state und rendert _logs.
       2. stdout des start_local-Terminals - praktisch wenn man in der
          Shell live mitlesen will und das Browser-Fenster nicht offen
@@ -261,7 +261,7 @@ def request_permission(options=None, timeout_default="nein"):
     """
     Macht das Erlaubnis-Event scharf für eine neue Frage.
 
-    Aufrufer: ai.chat_stream, direkt bevor es das permission-Event yieldet
+    Aufrufer: ai.chat_stream bzw. cloud.run_tool, direkt bevor das permission-Event yieldet
     und in wait_permission() blockiert. Setzt einen evtl. alten Antwort-
     Rest zurück (clear), damit eine verspätete Antwort der letzten Frage
     nicht fälschlich diese hier beantwortet.
@@ -350,7 +350,7 @@ def get_snapshot() -> dict:
     """
     Gibt einen aktuellen Schnappschuss des gesamten States zurück.
 
-    Wird von Flask alle 1s an den Browser geliefert (/api/state).
+    Wird von Flask an die TUI geliefert (/api/state, Poll alle 1 s).
     Auch hier: alles kopieren (list/dict) damit der Lock
     nur kurz gehalten werden muss und niemand auf einem
     "lebenden" Objekt weiterarbeitet.
