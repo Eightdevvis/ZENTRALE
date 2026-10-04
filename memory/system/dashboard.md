@@ -23,8 +23,9 @@ klappt ZENTRALE zu** wie $mod+z (`fenster_zuklappen` → `zentrale-fenster
 --weglegen`, im Hintergrund, die TUI läuft weiter, Rad bleibt stehen); nur
 unter der Systemeinheit, im gewöhnlichen Terminal tut Esc dort nichts. In
 einer App führt Esc wie immer erst zurück zur Startseite. Die rechte ⌥ der
-Mac-Tastatur ist `ISO_Level3_Shift` ohne Modifier — alt+←/→ geht deshalb nur
-mit der linken ⌥. Die Kamera gleitet aufs gewählte,
+Mac-Tastatur war `ISO_Level3_Shift` ohne Modifier (tot); seit 04.10.2026 ist
+sie per XKB-Option `lv3:ralt_alt` (XFCE-Kanal `keyboard-layout`) ein echtes
+Alt — alt+←/→ geht mit beiden ⌥. Die Kamera gleitet aufs gewählte,
 das dann **mittig** steht. Das andere liegt weiter draussen, am Rand
 angeschnitten und blass (`draw_rad(..., blass=True)`). Der Wechsel ist
 **schwer** wie eine Giga-Galaxie: zeitbasiert `GALAXIE_DAUER` = 1,6 s mit
