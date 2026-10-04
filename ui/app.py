@@ -70,10 +70,12 @@ _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data
 
 # ── Gate für KI-Endpoints ─────────────────────────────────────────────
 #
-# Auf einem Knoten ohne lokale KI (ai_backends.lokale_ki_aus()) und ohne
-# Ersatz über die Cloud werden diese Endpoints hart mit 503 abgeriegelt —
-# Defense-in-Depth, damit eine versehentliche Anfrage NIE die PC-KI anspricht.
-def _ki_aus():
+# 503-Antwort, wenn auf diesem Knoten kein KI-Backend bereitsteht (weder
+# lokal noch über die Cloud). Benutzt von /api/permission_answer (kein
+# Chat-Backend) und /api/speak + /api/transcribe (keine lokale KI und kein
+# Tutor-Backend) — Defense-in-Depth, damit eine versehentliche Anfrage NIE die
+# PC-KI anspricht.
+def _ki_nicht_verfuegbar():
     return jsonify({"error": "KI auf diesem Knoten deaktiviert"}), 503
 
 
@@ -1105,19 +1107,6 @@ def api_calendar_delete_routine():
     return jsonify({"deleted": n})
 
 
-@app.route('/api/debug', methods=['POST'])
-def api_debug():
-    """
-    Temporärer Debug-Endpoint (2026-06-01): Frontend kann beliebige JSON
-    hierhin POSTen, landet zeilenweise in /tmp/zentrale_debug.log. Wird
-    nur fürs Mic-Debugging gebraucht und sollte danach wieder raus.
-    """
-    payload = request.get_json(silent=True) or {}
-    with open('/tmp/zentrale_debug.log', 'a', encoding='utf-8') as f:
-        f.write(json.dumps({"t": datetime.now().isoformat(), **payload}, ensure_ascii=False) + "\n")
-    return jsonify({"ok": True})
-
-
 @app.route('/api/log', methods=['POST'])
 def api_log():
     """
@@ -1339,7 +1328,7 @@ def api_permission_answer():
     # blockiert ein Erlaubnis-Dialog den Stream für immer, weil niemand die
     # Antwort loswerden kann.
     if ai_backends.chat_available() is None:
-        return _ki_aus()
+        return _ki_nicht_verfuegbar()
     body    = request.get_json(silent=True) or {}
     answer  = (body.get('answer') or '').strip()
     # Gegen die aktuell angebotenen Knopf-Labels validieren (case-insensitiv,
@@ -1431,7 +1420,7 @@ def api_speak():
     # Stimme keinen Ton, obwohl der Tutor laeuft (verifiziert: /api/speak gab 503
     # 'KI deaktiviert', obwohl der Cloud-Tutor verfuegbar war).
     if ai_backends.lokale_ki_aus() and not tutor_port.available():
-        return _ki_aus()
+        return _ki_nicht_verfuegbar()
     body    = request.get_json() or {}
     text    = (body.get('text') or '').strip()
     lang    = (body.get('lang') or '').strip() or None
@@ -1465,7 +1454,7 @@ def api_transcribe():
     # blocken, wenn AUCH der Tutor kein Backend hat — sonst kann das Persona-
     # Zimmer nicht zuhoeren, obwohl der Tutor laeuft (wie bei /api/speak).
     if ai_backends.lokale_ki_aus() and not tutor_port.available():
-        return _ki_aus()
+        return _ki_nicht_verfuegbar()
     if 'audio' not in request.files:
         return jsonify({"error": "kein 'audio'-Feld"}), 400
 
@@ -1946,18 +1935,6 @@ def _folder_refresh_async(cat):
 
     threading.Thread(target=_run, daemon=True, name="mail-folder").start()
     return True
-
-
-def _folder_cache_drop(*cats):
-    """Cache einzelner Kategorien verwerfen (nach Umsortieren/Poll) → das nächste
-    Öffnen holt garantiert frisch."""
-    changed = False
-    with _mail_folders_lock:
-        for c in cats:
-            if c and _mail_folders.pop(c, None) is not None:
-                changed = True
-    if changed:
-        _mail_folders_save()
 
 
 def _folder_cache_remove_uid(cat, uid):

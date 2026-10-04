@@ -69,7 +69,6 @@ Maschine ein, die man gerade reparieren will.
 | `/api/categories`     | GET     | Verfügbare Kategorien                 |
 | `/api/data/<id>`      | GET     | Geloggte Einträge einer Kategorie     |
 | `/api/log`            | POST    | Neuen Eintrag speichern               |
-| `/api/debug`          | POST    | Debug-Log-Zeile ins Terminal (temporäre Dev-Hilfe) |
 
 ## Lifestyle-Graphen (`core/graphs.py`)
 

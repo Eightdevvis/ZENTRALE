@@ -1117,50 +1117,6 @@ def _ensure_seed_once(store: str | None = None):
     _seed_done.add(store)
 
 
-def chat(messages: list, model: str = None, system: str = None) -> str:
-    """
-    Nicht-streaming Chat-Call (Fallback / interne Nutzung).
-    Gibt die komplette Antwort als String zurück.
-    """
-    _ensure_seed_once()
-    model      = model or OLLAMA_MODEL
-    # Phase C: Memory-Injection ist jetzt query-aware. Wir nehmen die
-    # letzte User-Message als semantische Anfrage und kriegen nur die
-    # k relevantesten Einträge in den Prompt - statt wie früher die
-    # komplette Memory zu dumpen (skaliert nicht).
-    user_query = _last_user_query(messages)
-    # Phase G: ein einziger Memory-Kontext aus dem Konzept-Graph statt
-    # drei separaten Schichten. Aktivierungs-Spread holt was relevant
-    # ist, inklusive Zeit-Anker und Sasha-Profil über die Graph-Topologie.
-    mem_ctx = graph.context_for_query(user_query) if GRAPH_KONTEXT else ""
-    # Statisches zuerst, Wechselndes ans Ende (siehe _PROMPT_ORDER-Notiz oben).
-    sys_prompt = (system or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
-    if mem_ctx:
-        sys_prompt += "\n\n" + mem_ctx
-    sys_prompt += "\n\n" + _now_prompt()
-
-    payload = {
-        "model":      model,
-        **_think_opts(),
-        "messages":   [{"role": "system", "content": sys_prompt}, *messages],
-        "tools":      TOOLS,
-        "stream":     False,
-        "keep_alive": OLLAMA_KEEP_ALIVE,
-        # Gleiches num_ctx wie im Streaming-Pfad - sonst haette der
-        # Fallback-Call ein anderes Kontextverhalten als der echte Chat.
-        "options":    {"num_ctx": OLLAMA_NUM_CTX, **QWEN_SAMPLING},
-    }
-    try:
-        result   = net.post(f"{OLLAMA_URL}/api/chat", payload)
-        content  = result["message"]["content"]
-        # Phase D: Auto-Save in den Hintergrund schieben. Eigene Aussage
-        # mitspeichern ist der Kern-Schutz gegen Selbst-Widersprüche.
-        _async_save_turn(user_query, content)
-        return content
-    except Exception as e:
-        return f"[AI Fehler: {e}]"
-
-
 def chat_stream(messages: list, model: str = None, system: str = None,
                 tools: list = None, tool_executor=None, via_mic: bool = False):
     """

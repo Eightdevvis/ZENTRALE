@@ -178,11 +178,6 @@ def status(fresh: bool = False) -> dict:
     return st
 
 
-def any_ai() -> bool:
-    """Ist überhaupt irgendein AI-Backend da? (sonst: kein AI-Render)"""
-    return status()["any"]
-
-
 def cloud_ok() -> bool:
     return status()[CLOUD]
 

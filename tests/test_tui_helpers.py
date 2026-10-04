@@ -17,7 +17,6 @@ from tui.zentrale_tui import (
     graph_series, graph_last, tele_value, parse_command, log_prefix,
     blockspark, bar, overlay_rows, terminal_too_small,
     md_zeilen, md_inline,
-    ring_punkte, ring_zeilen, RING_GLYPHEN,
     lauf_ausschnitt, lauf_schritt, LAUF_TRENNER, LAUF_HALT, LAUF_TAKT,
 )
 
@@ -443,89 +442,3 @@ def test_md_zeilen_wirft_nie(fuzz_werte=None):
         for breite in (0, 1, 6, 40, 10**6, -5, None, "x"):
             md_zeilen(wert, breite)
             md_inline(wert)
-
-
-# ── Der Ring: ZENTRALE zeigt sich selbst ──────────────────────────────
-#
-# Gerechnet statt gemalt (siehe die Notiz an der Funktion). Getestet wird
-# deshalb die Geometrie: dass es wirklich ein Ring ist, dass er in seinen
-# Kasten passt, und dass er bei keiner Fenstergroesse umfaellt.
-
-def _gitter(h, w, **kw):
-    feld = [[" "] * w for _ in range(h)]
-    for dy, dx, ch, _st in ring_zeilen(h, w, **kw):
-        feld[h // 2 + dy][w // 2 + dx] = ch
-    return feld
-
-
-def test_der_ring_ist_geschlossen():
-    """Eine Luecke faellt an der auffaelligsten Stelle auf. Genau das ist
-    beim ersten Versuch passiert: bei einer Probe pro Zelle war die
-    Schrittzahl ungerade, der Winkel fuer 'ganz unten' wurde nie getroffen,
-    und unten im Ring klaffte ein Loch.
-
-    Gemessen wird der ZUSAMMENHANG der Zellen, nicht der Winkelabstand: bei
-    einem kleinen Ring sind die Winkelspruenge zwischen zwei benachbarten
-    Zellen naturgemaess gross, ohne dass etwas fehlt. Eine feste
-    Winkel-Grenze haette also genau die kleinen Ringe fuer kaputt erklaert
-    — und klein sind sie seit dem 20.08.2026 alle."""
-    for h, w in ((16, 52), (20, 60), (12, 40), (30, 100), (14, 41), (34, 69)):
-        punkte = ring_punkte(h, w)
-        if not punkte:
-            continue
-        folge = [(p[0], p[1]) for p in punkte]
-        ring = folge + [folge[0]]         # der Kreis schliesst sich
-        for (y1, x1), (y2, x2) in zip(ring, ring[1:]):
-            assert max(abs(y1 - y2), abs(x1 - x2)) <= 2, (h, w, (y1, x1), (y2, x2))
-
-
-def test_der_ring_ist_rund_und_kein_ei():
-    """Terminalzellen sind etwa doppelt so hoch wie breit. Ohne die
-    Korrektur waere es kein Ring, sondern ein liegendes Ei."""
-    punkte = ring_punkte(24, 80)
-    breite = max(p[1] for p in punkte) - min(p[1] for p in punkte)
-    hoehe = max(p[0] for p in punkte) - min(p[0] for p in punkte)
-    assert 1.7 < breite / hoehe < 2.3
-
-
-def test_der_ring_bleibt_im_kasten():
-    for h, w in ((10, 30), (16, 52), (40, 140)):
-        for dy, dx, _ch, _st in ring_zeilen(h, w, "offen"):
-            assert abs(dy) <= h // 2 - 1, (h, w, dy)
-            assert abs(dx) <= w // 2 - 1, (h, w, dx)
-
-
-def test_in_einem_winzigen_kasten_zeichnet_er_nichts():
-    """Lieber leer als ein Klumpen aus drei Zeichen."""
-    for h, w in ((4, 10), (2, 60), (6, 6), (0, 0)):
-        assert ring_zeilen(h, w, "offen") == []
-
-
-def test_jede_lage_hat_ihr_eigenes_zeichen():
-    """Die Lage soll man SEHEN, ohne den Text darunter zu lesen."""
-    gezeichnet = {lage: {ch for _y, _x, ch, _s in ring_zeilen(20, 60, lage)}
-                  for lage in ("offen", "woanders", "weg")}
-    assert gezeichnet["offen"] != gezeichnet["woanders"]
-    assert gezeichnet["woanders"] != gezeichnet["weg"]
-
-
-def test_beim_denken_wandert_eine_helle_stelle():
-    """Und zwar nur beim Denken: ein dauernd kreisender Ring zieht im
-    Augenwinkel, und das waere das Gegenteil von 'stoert nicht'."""
-    def helle(phase):
-        return {(y, x) for y, x, _ch, st in
-                ring_zeilen(20, 60, "woanders", aktiv=True, phase=phase)
-                if st == "ring_hell"}
-    assert helle(0.0) and helle(0.5)
-    assert helle(0.0) != helle(0.5)
-    assert not any(st == "ring_hell" for _y, _x, _ch, st in
-                   ring_zeilen(20, 60, "woanders", aktiv=False))
-
-
-def test_ring_wirft_nie():
-    """Dieselbe Eigenschaft wie bei den uebrigen Helfern."""
-    for h in (-3, 0, 1, 5, 21, 400):
-        for w in (-3, 0, 1, 7, 53, 999):
-            for lage in ("offen", "weg", "quatsch", "", None):
-                ring_zeilen(h, w, lage, aktiv=True, phase=0.37)
-                ring_punkte(h, w)

@@ -230,15 +230,6 @@ def test_rad_gleitet_und_rastet_ein():
     assert pos == 1.0
 
 
-def test_der_ring_bleibt_ein_zeichen_kein_rahmen():
-    """Ring-Helfer (heute nicht auf der Startseite) bleiben heil."""
-    m = _modul()
-    h, w = 34, 69
-    punkte = m.ring_punkte(h, w)
-    hoehe = max(p[0] for p in punkte) - min(p[0] for p in punkte)
-    assert hoehe < (h - 2) // 2
-
-
 # ── Pixel-Symbole im Rad (elektronik) ───────────────────────────────────
 
 def test_symbol_app_ist_hinten_eine_pille_und_vorn_ein_symbol():

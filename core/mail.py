@@ -543,14 +543,6 @@ def delete_mail(cat, uid, account_name=None):
     return False
 
 
-def reassign_sender(sender, category):
-    """Den ABSENDER einer Kategorie zuordnen (Keymap-Eintrag). Verschiebt NICHT
-    die einzelne Mail — ab jetzt landen KÜNFTIGE Mails dieses Absenders
-    automatisch in der neuen Kategorie (Sashas Modell: Absender → Hand → Kat.).
-    Liefert (normalisierte_adresse, kategorie)."""
-    return mail_rules.assign(sender, category)
-
-
 def _sortable_folders():
     """Alle Ordner, die als QUELLE eines Umsortierens in Frage kommen: die INBOX
     plus jeder move-Kategorie-Ordner (inkl. Review). Der Papierkorb ist bewusst
@@ -1363,13 +1355,6 @@ def _ensure_folder(imap, name):
         except Exception:
             pass
     return name
-
-
-def _target_folder(imap, action_spec):
-    if action_spec.get("action") == "trash":
-        return _find_trash(imap)
-    folder = action_spec.get("folder") or f"{FOLDER_PREFIX}/Review"
-    return _ensure_folder(imap, folder)
 
 
 class _FolderCache:
