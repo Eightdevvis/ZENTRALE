@@ -20,12 +20,11 @@ from datetime import datetime, date, timedelta
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
 # ZWEI Registries, bewusst getrennt (gemerged gelesen):
 #   _REGISTRY  = Sashas private Listen — pflegt NUR Sasha (TUI).
-#   _FEATURES  = der ZENTRALE-Feature-Tracker (Liste »zentrale«) — pflegt Claude.
+#   _FEATURES  = der ZENTRALE-Feature-Tracker (Liste »zentrale«) — pflegt Sasha
+#                (bis 2026-10-04 Claude; siehe CLAUDE.md).
 # Beim Lesen werden beide zusammengeführt (TUI + PROJECTS-Box sehen alles),
 # beim Schreiben landet jede Liste wieder in IHRER Datei — und es wird nur die
-# Datei angefasst, die sich wirklich geändert hat. ACHTUNG: das ist KEIN sauberer
-# Besitz-Schnitt — features.json schreiben beide (Claude den Inhalt, Sasha das
-# Projekt-Flag/Abhaken in der TUI). Beide Dateien sind NICHT in git (siehe
+# Datei angefasst, die sich wirklich geändert hat. Beide Dateien sind NICHT in git (siehe
 # .gitignore / memory/betrieb/datei_zugriffe.md); der Abgleich Laptop↔PC läuft über den
 # rsync-Sync (zentrale-push/-pull, newest-wins) + Push-on-write (datasync.py →
 # _save_file unten stößt zentrale-push-data an). Details: CLAUDE.md / memory/system/topologie.md.

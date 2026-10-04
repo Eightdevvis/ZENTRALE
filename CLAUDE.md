@@ -39,65 +39,23 @@ Alles andere (versehentlich mal einen WIP-Commit gepusht o.ä.) ist bei
 einem privaten Solo-Repo folgenlos und leicht per weiterem Commit zu
 glätten — kein Grund zur Zurückhaltung.
 
-## Feature-Tracking — die »zentrale«-Liste (pflegt CLAUDE, grundsätzlich)
+## Feature-Tracking — die »zentrale«-Liste (pflegt SASHA, seit 2026-10-04)
 
-Die **Feature-Verwaltung des ZENTRALE-Projekts** ist die Liste **`zentrale`**
-(id `l_zentrale`, `project: true` → erscheint in der PROJECTS-Box). Sie ist die
-**einzige** Liste, die **ich (Claude) pflege**, und liegt **strukturell isoliert**
-in einer **eigenen Datei**: `data/features.json`.
+Die Feature-Verwaltung des ZENTRALE-Projekts ist die Liste **`zentrale`**
+(id `l_zentrale`, in `data/features.json`, gelesen/geschrieben über
+`core/lists.py`). **Sasha pflegt sie allein.** Dass ich dort mitgeschrieben
+habe, hat ihn nachhaltig verwirrt.
 
-- **Zwei-Dateien-Modell (`core/lists.py`):** `data/lists.json` = Sashas private
-  Listen, `data/features.json` = der `zentrale`-Tracker (Inhalt pflege ich).
-  `_load()` merged beide (TUI + Box sehen alles); `_save()` schreibt jede Liste
-  in IHRE Datei und fasst nur die wirklich geänderte an. **Wichtig — kein
-  sauberer Besitz-Schnitt:** `features.json` schreiben **beide** — ich den
-  Inhalt (Features/Status/done), Sasha aber auch, sobald er ein Feature in der
-  TUI als Projekt **flaggt** oder abhakt (`l_zentrale` lebt in dieser Datei).
-  Die früher hier behauptete „features.json=Claude, lists.json=Sasha → kein
-  Clash"-Logik war **falsch** und hat genau zum Flag-Verlust geführt.
-- **Sync (`data/*.json`, nicht in git, siehe `memory/system/topologie.md`):** läuft über
-  rsync per SSH, **beide Richtungen vom jeweiligen Knoten aus** (Laptop→`pc`
-  via `find-pc`, PC→`0RAMMachine` via `find-0RAMMachine`). Zwei Schutzschichten
-  gegen Überschreiben: (1) **`zentrale-push`/`zentrale-pull` sind jetzt
-  newest-wins** (`--update` per Default — eine ältere Datei kann eine neuere
-  nicht mehr blind überschreiben; `ZENTRALE_SYNC_FORCE=1` für den bewussten
-  Holzhammer). (2) **Push-on-write:** das Backend stößt nach JEDER echten
-  Daten-Änderung (`core/datasync.py` ← lists/graphs/kalender, `ZENTRALE_AUTOPUSH=1`)
-  im Hintergrund `zentrale-push-data` an → der Peer hat sofort den frischen
-  Stand, die Divergenz-Zeitfenster sind winzig. Zusätzlich gleicht
-  `zentrale-sync-boot` beim Start einmal ab. **Pflegen geht IMMER, auch
-  ohne PC** — der Laptop ist oft unterwegs, wo der PC nicht erreichbar ist;
-  das ist der Normalfall, kein Hindernis und kein Grund, den Tracker
-  aufzuschieben oder Sasha zu fragen. Jede fertige Feature-Arbeit endet mit
-  dem Tracker-Update, im selben Zug wie Merge + Push. **Praxis für mich:** ZUERST
-  `zentrale-pc-status` fragen (eine Quelle, antwortet sofort, Exit 0/1 —
-  `core/pc_status.py`). **PC getrennt → nicht suchen, nicht pullen, einfach
-  lokal pflegen** (über `core/lists.py`); der Boot-Abgleich bzw. Auto-Push
-  gleicht später newest-wins ab. **PC verbunden →** vor dem Editieren
-  `zentrale-pull`, danach genügt der Auto-Push. NIE mit `ZENTRALE_SYNC_FORCE`
-  über frische Peer-Änderungen bügeln. (Am 02.10.2026 hing ein blindes
-  `zentrale-pull` über zwei Minuten an einem PC, der gar nicht da war.)
-- **Struktur:** `zentrale` → jedes Kind ist ein **Feature**; die Unterpunkte
-  eines Features sind, **was dafür noch offen ist** (Status). Erledigtes wird
-  abgehakt (`done: true`); der Status eines Feature-Ordners leitet sich aus
-  seinen Blättern ab (`is_done`), die Leiste in der Box zeigt erledigte/alle.
-- **Meine Pflicht:** Bei jeder Feature-Arbeit diesen Baum aktualisieren —
-  neues Feature als Kind von `zentrale` anlegen, offene Punkte als Unterpunkte
-  führen, Erledigtes abhaken, abgeschlossene Punkte sauber halten. Im Stil von
-  Sasha: **kurz und kleingeschrieben**, kein Roman — **aber jeder Punkt muss
-  beim Drüberlesen für sich verständlich sein**. Sag konkret, WAS offen bzw.
-  erledigt ist; kein Insider-Kürzel, kein nichtssagendes Schlagwort
-  (»verschachtelt« → »unterprojekte rekursiv verschachtelt anzeigen«). Faustregel:
-  Sasha liest die Zeile in drei Monaten ohne Kontext und weiß sofort, was gemeint
-  ist. Lieber ein paar Wörter mehr als ein kryptisches Stichwort.
-- **Wie aktualisieren (sauber):** über `core/lists.py` (kümmert sich um
-  `next_item`/eindeutige ids, Routing in die richtige Datei) — z.B.
-  `add_item("l_zentrale", "<text>", parent_iid=…)`, `toggle_item`,
-  `rename_item`, `delete_item`, `set_item_project` (ein Feature als Projekt
-  flaggen → erscheint im gerahmten `zentrale`-Kasten der Box). Den `zentrale`-
-  Knoten **per Name/`l_zentrale`** finden, nicht hart auf Eintrags-ids verlassen.
-- **Grenze:** **Alle anderen Listen gehören Sasha** (privat, in `lists.json`).
-  Da NICHT reinschreiben, nichts abhaken, nichts umbauen — nur `l_zentrale`.
+- **Ich schreibe nicht hinein:** nichts anlegen, abhaken, umbenennen, löschen —
+  auch nicht nach Feature-Arbeit. Lesen ist erlaubt (z. B. um offene Punkte
+  zu nennen).
+- **Nach Feature-Arbeit:** im Chat sagen, welcher Tracker-Punkt jetzt erledigt
+  wäre (mit id) — Sasha hakt selbst ab.
+- **Ausnahme:** nur wenn Sasha es in einer Session ausdrücklich erlaubt (wie
+  beim gemeinsamen Aufräumen am 04.10.2026), und nur für diese Session.
+- **Alle anderen Listen** (`data/lists.json`) gehören ohnehin Sasha.
+- Technik zum Zwei-Dateien-Modell und zum Sync (`data/*.json` ungetrackt,
+  newest-wins, Push-on-write): `memory/system/topologie.md`.
 
 ## Wo die Doku liegt
 
