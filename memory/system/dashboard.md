@@ -83,9 +83,12 @@ rot, klavier violett), Schrift hell/dunkel nach Lesbarkeit. Jede Pillenfarbe
 rastet über `pixel.bunt` auf die nächste BUNTE Würfelfarbe der 256er-Palette
 mit ähnlichem Farbton ein — sonst fielen weggedrehte, abgedunkelte Pillen auf
 die Graurampe. **KI-Chat (Leertaste): ein grosses Pixel-Auge** (`pixel.auge_*`,
-38×14 Zellen) — Lider gehen beim Öffnen auf, es blinzelt alle 4–6 s und schaut
-sich um; solange die KI denkt, schaut es geradeaus, die Pupille wird klein,
-die Iris pulst, ein Funkenring kreist. Leerer Chat: mittig mit Hinweis drunter;
+38×14 Zellen), „unendlich weise und entspannt": grosse Iris mit grosser
+Pupille, ein schweres Oberlid hängt halb darüber (`_LID_TIEF`), Falten darüber
+und Tränensäcke darunter; durchscheinend, zu den Winkeln gerastert in den
+Hintergrund aufgelöst, beim Öffnen taucht es von hinten auf. Es blinzelt
+langsam alle 5–8 s und schaut gelassen umher; solange die KI denkt, schaut es
+geradeaus, die Pupille wird klein, die Iris pulst, ein Funkenring kreist. Leerer Chat: mittig mit Hinweis drunter;
 mit Verlauf: oben, Verlauf darunter. Zwischengespeichert nach sichtbarem
 Zustand (`auge_zustand`), nicht nach Uhrzeit — ~5–7 ms je Bild. Ein Motiv ist eine Funktion
 auf dem offenen 32×54-Feinraster; aufklappen, Details wachsen lassen und die

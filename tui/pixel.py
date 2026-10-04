@@ -759,49 +759,56 @@ _AW, _AH = AUGE_W * FX, AUGE_H * FY                  # 76 × 84 Feinpixel
 _AK = (_AW / 2 - 1.5) / 24.5                         # Massstab gegen den 52er-Entwurf
 _ACX, _ACY, _ARX, _ARY = _AW / 2, _AH / 2 + 2, _AW / 2 - 1.5, 17.0 * _AK
 AUGE_FARBEN = {
-    "nacht": {"bg": _hex("#000000"), "weiss": _hex("#dfe9f2"), "schatten": _hex("#7d93a8"),
-              "iris": _hex("#25c99a"), "irishell": _hex("#a6ffe0"), "irisrand": _hex("#0b4a3a"),
-              "pupille": _hex("#03100c"), "rand": _hex("#9fe8d2"), "wimper": _hex("#4fd8b0")},
-    "tag":   {"bg": _hex("#ffffff"), "weiss": _hex("#f4f8fb"), "schatten": _hex("#9fb2c4"),
+    "nacht": {"bg": _hex("#000000"), "weiss": _hex("#cfdde6"), "schatten": _hex("#5d7385"),
+              "iris": _hex("#1fb88c"), "irishell": _hex("#9df5d6"), "irisrand": _hex("#0a3f31"),
+              "pupille": _hex("#020a08"), "rand": _hex("#7fcfb8"), "lid": _hex("#2f5c52"),
+              "falte": _hex("#5fae98")},
+    "tag":   {"bg": _hex("#ffffff"), "weiss": _hex("#eef4f7"), "schatten": _hex("#9fb2c4"),
               "iris": _hex("#14a37a"), "irishell": _hex("#6fe8bf"), "irisrand": _hex("#073b2d"),
-              "pupille": _hex("#02100b"), "rand": _hex("#0b5c46"), "wimper": _hex("#0e7a5c")},
+              "pupille": _hex("#02100b"), "rand": _hex("#0b5c46"), "lid": _hex("#b9d6cd"),
+              "falte": _hex("#4f8f7c")},
 }
+# Sasha, 04.10.2026: „unendlich weise und entspannt" — grosse Iris mit grosser
+# Pupille, ein schweres Oberlid halb darüber, Falten über und unter dem Auge;
+# und durchscheinend, „als ob es grad von hinten nach raus fadet".
+_LID_TIEF = .62          # so weit hängt das Oberlid in die Mandel (0 = gar nicht)
 
 
 def _blick(t_ms):
-    """Wohin schaut das Auge? Alle 1,8 s ein neues Ziel, weich angefahren.
-    -> (dx, dy) in Feinpixeln."""
-    seg, rest = divmod(t_ms, 1800)
+    """Wohin schaut das Auge? Gelassen: alle 3,2 s ein neues Ziel, kleine
+    Wege, langsam angefahren. -> (dx, dy) in Feinpixeln."""
+    seg, rest = divmod(t_ms, 3200)
     def ziel(k):
-        if _rnd(k, 5) < .35:
+        if _rnd(k, 5) < .45:
             return 0.0, 0.0                                         # geradeaus
-        return (_rnd(k, 7) * 2 - 1) * 9 * _AK, (_rnd(k, 11) * 2 - 1) * 3.5 * _AK
+        return (_rnd(k, 7) * 2 - 1) * 5 * _AK, (_rnd(k, 11) * 2 - 1) * 1.5 * _AK
     a, b = ziel(seg - 1), ziel(seg)
-    u = _ease(min(1.0, rest / 450))                                 # 0,45 s Blickwechsel
+    u = _ease(min(1.0, rest / 900))                                 # 0,9 s Blickwechsel
     return a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u
 
 
 def _lid(t_ms):
-    """Lidöffnung 0..1 durch Blinzeln: alle ~4–6 s für 180 ms zu und wieder auf."""
-    periode = 4300 + int(_rnd(t_ms // 4300, 3) * 1700)
+    """Lidöffnung 0..1 durch Blinzeln: alle ~5–8 s, langsam (360 ms)."""
+    periode = 5200 + int(_rnd(t_ms // 5200, 3) * 2800)
     p = t_ms % periode
-    if p < 180:
-        return abs(1 - p / 90)                                      # 1 → 0 → 1
+    if p < 360:
+        return abs(1 - p / 180)                                     # 1 → 0 → 1
     return 1.0
 
 
 def auge_zustand(offen, t_ms, denkt=False):
     """Uhrzeit → sichtbarer Zustand, grob gerastert, damit ein ruhig
     schauendes Auge aus dem Zwischenspeicher kommt statt neu gerechnet
-    zu werden. -> (lid, blick_x, blick_y, puls, ring)"""
+    zu werden. -> (lid, blick_x, blick_y, puls, ring, auftauchen)"""
     o = _ease(max(0.0, min(1.0, offen))) * (_lid(t_ms) if offen >= 1 else 1.0)
     bx, by = _blick(t_ms) if offen >= 1 else (0.0, 0.0)
-    puls = .5 + .5 * math.sin(t_ms / 160) if denkt else 0.0
+    puls = .5 + .5 * math.sin(t_ms / 220) if denkt else 0.0
     ring = (t_ms // 250) % 12 if denkt else 0
     if denkt:
         bx = by = 0.0                                               # denkend schaut es geradeaus
+    da = min(1.0, max(0.0, offen) * 1.4)                            # taucht aus dem Hintergrund auf
     return (round(o * 20) / 20, round(bx * 2) / 2, round(by * 2) / 2,
-            round(puls * 4) / 4, ring)
+            round(puls * 4) / 4, ring, round(da * 10) / 10)
 
 
 def auge_pixel(offen, t_ms, denkt=False, farben="nacht"):
@@ -811,11 +818,22 @@ def auge_pixel(offen, t_ms, denkt=False, farben="nacht"):
 
 def _auge_pixel(zustand, denkt, farben):
     F = AUGE_FARBEN[farben]
-    o, bx, by, puls, ring = zustand
+    o, bx, by, puls, ring, da = zustand
     t_ms = ring * 250
-    ir_x = 8.6 * _AK                                                # Iris-Radius (x)
-    pu_x = ((2.0 + .4 * puls) if denkt else 3.3) * _AK              # Pupille
+    ir_x = 13.0 * _AK                                               # grosse Iris (x)
+    pu_x = ((3.2 + .5 * puls) if denkt else 5.6) * _AK              # grosse, ruhige Pupille
     px = [[None] * _AW for _ in range(_AH)]
+
+    def setze(x, y, c, a):
+        """Durchscheinend: Deckkraft mal Auftauchen mal Randschwund; was
+        darunter fällt, löst sich gerastert in den Hintergrund auf."""
+        dx = abs(x + .5 - _ACX) / _ARX
+        schwund = 1 - max(0.0, min(1.0, (dx - .5) / .55)) ** 1.4
+        a *= da * schwund
+        if a < .5 and a * 16 < _BAYER[y & 3][x & 3] + 1:
+            return                                                  # aufgelöst
+        px[y][x] = mix(F["bg"], c, max(.25, a))
+
     for y in range(_AH):
         for x in range(_AW):
             dx = (x + .5 - _ACX) / _ARX
@@ -823,41 +841,59 @@ def _auge_pixel(zustand, denkt, farben):
                 continue
             halb = _ARY * (1 - dx * dx) ** .85                      # Mandelform
             dy = y + .5 - _ACY
-            if abs(dy) > halb * o + .6:
-                # Wimpern über dem Oberlid
-                if (o > .6 and dy < 0 and abs(dy) < halb * o + 4.5 * _AK
-                        and int(x) % 8 == 4 and abs(dx) < .75):
-                    px[y][x] = mix(F["bg"], F["wimper"], .8)
+            # Falten: zwei Bögen über dem Auge, zwei Tränensäcke darunter
+            for faktor, breite, a in ((1.28, .78, .55), (1.55, .62, .35)):
+                if abs(dx) < breite and abs(-dy - halb * faktor) < .55:
+                    setze(x, y, F["falte"], a)
+            for faktor, breite, a in ((1.22, .6, .45), (1.42, .42, .3)):
+                if abs(dx) < breite and abs(dy - halb * faktor) < .5:
+                    setze(x, y, F["falte"], a)
+            if abs(dy) > halb + .6:
                 continue
-            if abs(dy) > halb * o - .9:                             # Lidrand
-                px[y][x] = F["rand"]
+            # Oberlid: hängt in die Mandel; beim Blinzeln geht es ganz runter
+            # in Ruhe deckt es _LID_TIEF der oberen Hälfte; zu trifft es das
+            # Unterlid bei 0,45 der unteren Hälfte
+            lidkante = -halb * (1 - _LID_TIEF) + (1 - o) * halb * (1.45 - _LID_TIEF)
+            unten = halb - (1 - o) * halb * .55
+            if dy < lidkante:
+                rand = abs(dy) > halb - .9
+                setze(x, y, F["rand"] if rand else F["lid"], .8 if rand else .62)
                 continue
-            # Iris (Kreis: ry = 1,5·rx)
+            if dy < lidkante + 1.1:
+                setze(x, y, F["rand"], .85)                         # Lidkante
+                continue
+            if dy > unten:
+                continue
+            if dy > unten - .9:
+                setze(x, y, F["rand"], .7)                          # Unterlid
+                continue
             ix, iy = (x + .5 - _ACX - bx), (y + .5 - _ACY - by) / 1.5
             r = math.hypot(ix, iy)
             if r < ir_x:
                 if r < pu_x:
-                    c = F["pupille"]
-                    if math.hypot(ix + 1.4 * _AK, iy + 1.3 * _AK) < 1.1 * _AK:
+                    c, a = F["pupille"], .95
+                    if math.hypot(ix + 2.2 * _AK, iy + 1.2 * _AK) < 1.3 * _AK:
                         c = F["irishell"]                           # Lichtpunkt
-                elif r > ir_x - 1.1 * _AK:
-                    c = F["irisrand"]
+                elif r > ir_x - 1.2 * _AK:
+                    c, a = F["irisrand"], .9
                 else:
                     k = (r - pu_x) / (ir_x - pu_x)
-                    strahl = .15 * math.sin(math.atan2(iy, ix) * 9)     # Irisfasern
+                    strahl = .14 * math.sin(math.atan2(iy, ix) * 11)    # Irisfasern
                     k = min(1.0, max(0.0, k + strahl - .25 * puls))
                     kq = math.floor(k * 3 + _BAYER[y & 3][x & 3] / 16) / 3
-                    c = mix(F["irishell"], F["iris"], kq)
-                px[y][x] = c
+                    c, a = mix(F["irishell"], F["iris"], kq), .88
+                # unter dem Lid liegt Schatten auf der Iris
+                schatten_lid = max(0.0, 1 - (dy - lidkante) / (3 * _AK))
+                setze(x, y, mix(c, F["pupille"], .45 * schatten_lid), a)
                 continue
-            if denkt and abs(r - (ir_x + 2.2 * _AK)) < .7 * _AK:     # Funkenring
+            if denkt and abs(r - (ir_x + 1.8 * _AK)) < .6 * _AK:     # Funkenring
                 w = math.atan2(iy, ix)
                 if (math.floor((w + t_ms / 300) * 6 / math.pi)) % 3 == 0:
-                    px[y][x] = F["irishell"]
+                    setze(x, y, F["irishell"], .9)
                     continue
-            schatten = max(0.0, min(1.0, (abs(dx) - .55) / .45)) * .6 + \
-                max(0.0, -dy / halb) * .25 if halb else 0
-            px[y][x] = mix(F["weiss"], F["schatten"], schatten)
+            schatten = max(0.0, min(1.0, (abs(dx) - .45) / .55)) * .6 + \
+                max(0.0, 1 - (dy - lidkante) / (4 * _AK)) * .4
+            setze(x, y, mix(F["weiss"], F["schatten"], schatten), .55)  # durchscheinendes Weiss
     return px
 
 
