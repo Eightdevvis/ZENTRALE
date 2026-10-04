@@ -19,7 +19,7 @@
 #             nur in Software -> ein CPU-Kern dauerhaft am Anschlag (gemessen
 #             firefox-esr ~120 %CPU), sichtbar ruckelige Framerate. Die TUI
 #             malt nur geaenderte Terminal-Zellen -> Last quasi null. ACHTUNG:
-#             tui-Kassette ist KI-frei (kein Chat/Kino/Reflexion auf der Wand).
+#             die TUI ist KI-frei (kein Chat/Kino/Reflexion auf der Wand).
 #   browser — der alte selbstheilende Firefox-Kiosk (volle KI-Optik / PC-Test).
 #
 # Hintergrund: vorher sah man zwischen lightdm-Login und Firefox-Start

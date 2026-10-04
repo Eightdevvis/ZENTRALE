@@ -5,7 +5,7 @@
 # Nachschlagen direkt in der UI (aktuell: `?`-Such-Modal im nativen Karten-
 # fenster, scripts/map_window.py). Bewusst front-agnostisch hier in core/, damit
 # später auch TUI/Laptop dasselbe Glossar + dieselbe Suche nutzen können
-# (Kassetten-Prinzip: Inhalt/Logik einmal, jede Front rendert nur).
+# (Renderer-Prinzip: Inhalt/Logik einmal, jede Front rendert nur).
 #
 # Pflege: bei neuen Features hier einen Eintrag ergänzen (term, keys, text).
 # `keys` sind zusätzliche Suchbegriffe/Synonyme; `text` bleibt kurz (1–3 Sätze).

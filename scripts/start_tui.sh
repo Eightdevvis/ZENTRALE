@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# start_tui.sh — ZENTRALE als Terminal-Kassette (KEIN Browser).
+# start_tui.sh — ZENTRALE im Terminal (KEIN Browser).
 #
-# Fährt das Backend ki-frei hoch (ZENTRALE_KASSETTE=tui → kein Ollama-Warmup,
-# kein News-Fetcher, KI-Endpoints abgeriegelt; siehe core/kassette.py) und
+# Fährt das Backend ohne lokale KI hoch (ZENTRALE_LOKALE_KI=aus → kein
+# Ollama-Warmup, kein News-Fetcher; siehe ai_backends.lokale_ki_aus()) und
 # startet dann die curses-TUI (tui/zentrale_tui.py) im VOLLBILD des aktuellen
 # Terminals. Kein tmux, kein Split, kein angeklebtes zweites Terminal —
 # einfach das Dashboard in dem Terminal, in dem der Befehl abgesetzt wurde.
@@ -63,7 +63,7 @@ if ! compgen -G "venv/lib/python*/site-packages/zentrale_testguard.pth" >/dev/nu
   scripts/zentrale-venv-guard >/dev/null 2>&1 || true
 fi
 
-export ZENTRALE_KASSETTE=tui
+export ZENTRALE_LOKALE_KI=aus
 # Die TUI darf nur dann einen Neustart ANBIETEN (/reboot), wenn jemand da ist,
 # der wieder aufbaut — genau dieses Skript. Ohne die Variable sagt der Befehl,
 # dass er hier nicht geht, statt das Fenster kommentarlos zu schliessen.
@@ -171,11 +171,11 @@ fi
 if [[ "$ATTACHED" != "1" ]] && lebt; then
   # ZENTRALE_TUI_FRESH=1: bewusst frisch starten (Entwicklung — die TUI soll
   # gegen NEUEN Backend-Code laufen, nicht gegen den seit Stunden laufenden).
-  # Erkennung wie bisher: ZENTRALE_KASSETTE=tui im Prozess-Environ, damit wir
-  # NIE ein fremdes/monolith-Backend treffen.
+  # Erkennung: ZENTRALE_LOKALE_KI=aus im Prozess-Environ, damit wir NIE ein
+  # fremdes Backend mit lokaler KI treffen.
   reclaimed=0
   for pid in $(pgrep -f 'core/main\.py' 2>/dev/null); do
-    if tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -qx 'ZENTRALE_KASSETTE=tui'; then
+    if tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -qx 'ZENTRALE_LOKALE_KI=aus'; then
       kill "$pid" 2>/dev/null && reclaimed=1
     fi
   done

@@ -10,8 +10,8 @@
      GET /api/ai/status    (30 s) → Ollama erreichbar? + Modell-Name   [nur KI-Front]
      GET /api/chat/history (2.5 s)→ Konversation (für Minilog)          [nur KI-Front]
 
-   KI-frei (window.KI_AUS === true, gesetzt vom Template aus kassette.ki_aus()):
-   die beiden KI-Polls werden in start() übersprungen — laptop/tui fragen weder
+   KI-frei (window.KI_AUS === true, gesetzt vom Template aus ai_backends.lokale_ki_aus()):
+   die beiden KI-Polls werden in start() übersprungen — ohne lokale KI fragt sie weder
    Ollama-Status noch Chat-History ab. state/telemetry laufen immer.
 
    Die KI-Zustände (denkt/antwortet) werden NICHT gepollt, sondern vom

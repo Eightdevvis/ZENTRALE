@@ -2,10 +2,10 @@
 # tui/zentrale_tui.py
 #
 # ════════════════════════════════════════════════════════════════════════
-# ZENTRALE — Terminal-Kassette (TUI)
+# ZENTRALE — TUI (Terminal)
 # ------------------------------------------------------------------------
 # "ZENTRALE in klein" OHNE Browser. Rendert das Dashboard direkt im Terminal
-# (curses), gegen dasselbe Flask-Backend wie die anderen Kassetten:
+# (curses), gegen dasselbe Flask-Backend wie früher die Browser-Fronten:
 #
 #     GET /api/state      (1 s)  -> sensoren, stdout-logs, outbound, uptime
 #     GET /api/telemetry  (2 s)  -> CPU/RAM/TEMP der lokalen Maschine
@@ -22,8 +22,8 @@
 # Lautsprecher bedienen. Fehlt beides, bleibt das Klavier still und
 # funktioniert weiter (Noten, Aufnahme, Melodien); die TUI startet unverändert.
 #
-# Die KI ist in dieser Kassette aus (das Backend läuft im ki-freien Modus,
-# siehe core/kassette.py). Die TUI fragt KEINE KI-Endpoints ab.
+# Das lokale Backend läuft ohne lokale KI (ZENTRALE_LOKALE_KI=aus, siehe
+# ai_backends.lokale_ki_aus()). Die TUI fragt KEINE KI-Endpoints ab.
 #
 # Start: scripts/start_tui.sh bzw. der Symlink `zentrale-tui` fährt das
 # Backend (ki-frei) hoch und startet dann diese TUI im Vordergrund.
@@ -121,12 +121,12 @@ SENSOR_ORDER = ["button", "light", "motion", "door"]
 # (lokaler Host). Nicht verfügbare Werte (v=None) werden übersprungen.
 TELE_ROWS = [("CPU", "cpu", "%"), ("RAM", "ram", "%"), ("TEMP", "temp", "°C")]
 
-# stdout-Token -> Farbgruppe (wie die Web-Kassetten)
+# stdout-Token -> Farbgruppe (wie die Browser-Front)
 LOG_PREFIX_COLOR = {
     "NET": "net", "GRAPH": "graph", "EVENT": "event", "STT": "audio",
     "TTS": "audio", "WEBHOOK": "hook", "CONSOLIDATE": "graph",
     "STATE": "dim", "CLOCK": "num", "GESTURE": "acc", "LOGGED": "event",
-    "KASSETTE": "acc", "EVENT IN": "event", "EVENT OUT": "event",
+    "LOKALE KI": "acc", "EVENT IN": "event", "EVENT OUT": "event",
 }
 
 
@@ -1199,7 +1199,7 @@ def selftest():
     state, metrics, _ = store.snapshot()
     print("  backend erreichbar :", ok)
     if not ok:
-        print("  (Backend nicht erreichbar — läuft `zentrale-laptop`/`zentrale-tui`?)")
+        print("  (Backend nicht erreichbar — läuft `zentrale`?)")
         return 1
     sn = state.get("sensors", {})
     print("  sensoren           :", {k: bool(sn.get(k)) for k in SENSOR_ORDER})
@@ -2278,7 +2278,7 @@ def run_ui(stdscr, store):
         curses.start_color()
         curses.use_default_colors()
 
-    # ── Themes (wie die Web-Kassetten: hell/dunkel) ────────────────────
+    # ── Themes (hell/dunkel) ────────────────────
     # Pro Rolle: (8-Farben-fg, 256-Farben-fg, extra-Attribut). bg pro Theme.
     # Light-Mode: KEIN Gelb auf Weiß (unlesbar) → warn/num = rot/blau.
     # Dark-Mode: ULTRA HIGH CONTRAST — hartes Schwarz, reinweißer Text (231),
@@ -2883,9 +2883,9 @@ def run_ui(stdscr, store):
             "reply_confirm": False}  # Verlassen-Leiste (senden/verwerfen/weiter)
 
     # ── KI-Chat (füllt die MITTE-Box, Taste 'a') ───────────────────────
-    # THIN-CLIENT: die TUI-Kassette ist selbst ki-frei (kassette.ki_aus()), die
+    # THIN-CLIENT: die TUI ist selbst ki-frei (ai_backends.lokale_ki_aus()), die
     # KI lebt am PC. Wir sprechen NUR über HTTP mit <BASE_URL>/api/chat — daheim
-    # via `zentrale-remote` zeigt BASE_URL auf den SSH-Tunnel → PC-Monolith →
+    # via `zentrale-remote` zeigt BASE_URL auf den SSH-Tunnel → PC-Backend →
     # Ollama/Qwen. Ohne Tunnel (lokales tui-Backend) antwortet /api/chat mit 503
     # (ki_aus bzw. „gedrosselt"); das fangen wir ab und sagen es in der Statuszeile.
     # Der Stream (SSE) läuft in EINEM Hintergrund-Thread und füllt AI["answer"]
@@ -9676,7 +9676,7 @@ def run_ui(stdscr, store):
         # ── Header ──────────────────────────────────────────────────────
         safe_addstr(0, 1, "ZEN", C["bright"] | curses.A_REVERSE)
         safe_addstr(0, 4, "TRALE", C["acc"])
-        safe_addstr(0, 11, "tui · kassette", C["dim"])
+        safe_addstr(0, 11, "tui", C["dim"])
 
         nets = state.get("internet_logs", []) or []
         if not isinstance(nets, list):

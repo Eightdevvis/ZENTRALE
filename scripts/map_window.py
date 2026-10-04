@@ -7,7 +7,7 @@
 # geht: echte antialiased Vektorgrafik, gefüllte Farbflächen, Meer-Verlauf,
 # Land-Schlagschatten, Küsten-Glow, Vignette, zoom-adaptive Länder-Labels.
 #
-# Architektur bleibt das Kassetten-Prinzip: das Fenster ist ein DUMMER Renderer.
+# Architektur bleibt das Renderer-Prinzip: das Fenster ist ein DUMMER Renderer.
 # Alle Geo-Mathematik (Mercator-Projektion, vorprojizierte Geometrie + Label-
 # Anker) lebt in core/map/ und wird 1:1 wiederverwendet. Dieses File zeichnet
 # nur, es rechnet keine Geographie.

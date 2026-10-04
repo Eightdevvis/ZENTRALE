@@ -4,7 +4,7 @@
 #
 # Hier liegt ALLE Karten-Logik EINMAL, ohne curses/HTML/SVG — die Fronten
 # (TUI, Laptop, Monolith) holen sich fertig aufbereitete Features über den
-# /api/map-Kontrakt und zeichnen nur (Kassetten-Prinzip, siehe
+# /api/map-Kontrakt und zeichnen nur (Renderer-Prinzip, siehe
 # claude_hinweise.md). Bewusst pure Python-stdlib (nur json + math) — keine
 # shapely/geopandas/numpy, passt zur Offline-/Lean-Philosophie.
 #

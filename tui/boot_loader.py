@@ -4,9 +4,7 @@
 # ════════════════════════════════════════════════════════════════════════
 # ZENTRALE — Blumenwind-Ladeanimation für den DIREKT-Start
 # ------------------------------------------------------------------------
-# `zentrale-tui` / `zentrale-laptop` überspringen das Kassetten-Menü (und
-# damit den Regenbogen-Ladebalken aus tui/select_kassette.py). Trotzdem läuft
-# vor dem Start EIN Ding im Hintergrund: der Boot-Abgleich mit dem PC
+# Beim Start läuft vor der TUI EIN Ding im Hintergrund: der Boot-Abgleich mit dem PC
 # (zentrale-sync-boot). Bisher stand dort nur eine stumme Textzeile.
 #
 # Dieses Modul legt DA eine eigene Animation drunter: ein FELD über mehrere
@@ -32,7 +30,7 @@
 #    hinten, kleine Blüten in der Mitte, kräftige Blüten vorn) laufen
 #    unterschiedlich schnell → Parallax/Tiefe.
 #
-# BEWUSST nur stdlib (ANSI + math, kein curses) — wie select_kassette.py. Es
+# BEWUSST nur stdlib (ANSI + math, kein curses). Es
 # gibt für sowas fertige Terminal-Engines (asciimatics-Partikelsystem,
 # terminaltexteffects), aber für zwei Sekunden Bootbild lohnt keine Dependency
 # in einem Offline-Setup. Die Render-Funktionen (flower_field, status_line)
@@ -234,7 +232,7 @@ def _start_sync():
     """zentrale-sync-boot im Hintergrund starten (Ausgabe ins Log).
 
     Gibt das Popen-Objekt oder None (Tool fehlt / abgeschaltet). Best-effort,
-    wirft nie — genau wie der Boot-Sync in select_kassette.py.
+    wirft nie.
     """
     if os.environ.get("ZENTRALE_NO_BOOT_SYNC") == "1":
         return None

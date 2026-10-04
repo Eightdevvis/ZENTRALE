@@ -5,7 +5,7 @@
 # ── Idee (geräte- + modulweise) ─────────────────────────────────────────
 #   1. GERÄT fragt: welche Backends sind da?  →  local (Ollama) / cloud (Online)
 #      PC: meist beide. Laptop: mal local (PC via SSH), mal cloud, mal nichts.
-#   2. Kein Backend da  → kein AI-Render (datengetrieben, nicht mehr kassetten-hart).
+#   2. Kein Backend da  → kein AI-Render (datengetrieben, nicht hart verdrahtet).
 #   3. MODUL fragt: „mein Backend da?" → nein: Modul deaktiviert („backend not here").
 #
 # ── Multi-Backend (vorbereitet) ─────────────────────────────────────────
@@ -263,24 +263,34 @@ def chat_cloud_module():
 
 def chat_available() -> str | None:
     """
-    Welches Backend den Chat JETZT bedienen darf — inklusive Kassetten-Regel.
+    Welches Backend den Chat JETZT bedienen darf — inklusive Lokal-Regel.
     None heißt: kein Chat. DIE Frage, die alle Chat-Endpoints stellen sollten,
     damit sie nicht auseinanderlaufen.
 
-    Die Regel: eine ki-freie Kassette (laptop/tui) bringt **keine eigene KI**
-    mit — deshalb ist LOCAL dort aus. Eine CLOUD-KI ist aber nicht die KI
-    dieser Kassette, sondern eine externe Leitung; die darf sie nutzen. Genau
-    das ist der Unterwegs-Fall: Laptop ohne Ollama, Chat trotzdem da.
-
-    Vorher war das kassetten-HART (`ki_aus()` → 503, egal was erreichbar ist).
-    Derselbe Umbau, den der Tutor 2026-07-16 schon bekommen hat: nicht fragen
-    "welche Kassette", sondern "was ist erreichbar".
+    Die Regel: ein Knoten ohne lokale KI (lokale_ki_aus(), z. B. der Laptop)
+    spricht nie ein Ollama an — deshalb ist LOCAL dort aus. Eine CLOUD-KI ist
+    aber eine externe Leitung; die darf er nutzen. Genau das ist der
+    Unterwegs-Fall: Laptop ohne Ollama, Chat trotzdem da.
     """
-    import kassette
     b = pick("chat")
-    if b == LOCAL and kassette.ki_aus():
+    if b == LOCAL and lokale_ki_aus():
         return None
     return b
+
+
+def lokale_ki_aus() -> bool:
+    """
+    True, wenn dieser Knoten KEINE eigene KI hochfährt: kein Ollama-Warmup,
+    kein News-Fetcher, LOCAL nie angesprochen. Gesetzt über
+    ZENTRALE_LOKALE_KI=aus (der Laptop-Kern-Dienst tut das). Alles andere —
+    auch eine leere oder vertippte Variable — heißt „an": eine falsch gesetzte
+    Env-Var darf nie versehentlich die PC-KI abschalten.
+
+    Ersetzt die alten Kassetten (core/kassette.py, monolith|laptop|tui), die
+    nur noch genau diese eine Frage beantwortet haben.
+    """
+    raw = (os.environ.get("ZENTRALE_LOKALE_KI") or "").strip().lower()
+    return raw in ("aus", "0", "off", "false")
 
 
 # ── Wer denkt, womit, wie tief ─────────────────────────────────────────

@@ -35,10 +35,10 @@ Restart=on-failure
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
 
-# Die Kassette bestimmt, was hochgefahren wird. `tui` heisst: kein
-# Ollama-Warmup, kein News-Fetcher — die KI kommt hier ueber die Cloud
-# (ai_backends.chat_available entscheidet kapazitaetsbasiert, nicht hart).
-Environment=ZENTRALE_KASSETTE=tui
+# Keine lokale KI auf diesem Knoten: kein Ollama-Warmup, kein News-Fetcher —
+# die KI kommt hier ueber die Cloud (ai_backends.chat_available entscheidet
+# kapazitaetsbasiert, nicht hart).
+Environment=ZENTRALE_LOKALE_KI=aus
 
 # Push-on-write: nach jeder echten Datenaenderung schiebt das Backend im
 # Hintergrund `zentrale-push-data` an, damit der andere Knoten sofort den

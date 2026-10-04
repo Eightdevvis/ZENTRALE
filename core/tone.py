@@ -1,5 +1,5 @@
 # core/tone.py
-# Ton-Erzeugung für das Klavier-Werkzeug der TUI-Kassette.
+# Ton-Erzeugung für das Klavier-Werkzeug der TUI.
 #
 # Der Browser macht seinen Ton mit der WebAudio-API (Oszillator + Hüllkurve,
 # siehe ui/templates/monolith.html). Die TUI hat kein WebAudio — sie rechnet

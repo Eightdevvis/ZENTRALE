@@ -721,7 +721,7 @@
     <div id="rem-overlay"><div class="dc-panel" id="rem-panel"></div></div>
   </div>
 
-  <!-- Kassetten-Flag: in laptop/tui ist die KI aus. Muss VOR engine.js stehen,
+  <!-- KI-Flag: ohne lokale KI sind die KI-Teile aus. Muss VOR engine.js stehen,
        weil engine.js es in start() liest, um die KI-Polls zu überspringen. Die
        Inline-Scripts unten gaten ihre KI-Teile ebenfalls über window.KI_AUS. -->
   <script>window.KI_AUS = {{ ki_aus|tojson }};</script>
@@ -1142,7 +1142,7 @@
     // Blätterbare Woche (Mo-So-Liste) ODER Monat (Gitter), umschaltbar. Wie
     // die Karte ein reiner Zeichner: alle Datums-/Layer-Logik liegt im Backend
     // (core/kalender.py → /api/calendar), die Front klassifiziert nur view +
-    // blättert über ref. Teilt sich den Endpoint mit TUI und Laptop-Kassette.
+    // blättert über ref. Teilt sich den Endpoint mit der TUI.
     (function () {
       var panel = document.getElementById('calendar-panel');
       if (!panel) return;
@@ -1641,7 +1641,7 @@
     // GETEILT: oben die Projekte (/api/projects), drunter alle anderen Listen.
     // Klick auf eine Zeile = reindiven (Liste/Ordner) bzw. abhaken (Blatt);
     // die kleinen Icons rechts: ◆ Fokus · ★ Projekt · ＋ Unterpunkt · ✎ name ·
-    // ✕ löschen. NICHT KI-gegatet — in jeder Kassette nutzbar.
+    // ✕ löschen. NICHT KI-gegatet — immer nutzbar.
     (function () {
       var panel = document.getElementById('lists-panel');
       if (!panel) return;

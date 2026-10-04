@@ -158,7 +158,7 @@ class _AdvHandler(BaseHTTPRequestHandler):
         if p == "/api/state":
             return {"events": [{"event": "BOOT", "time": "07:00:01"}],
                     "sensors": {"button": False, "light": True, "motion": False, "door": False},
-                    "logs": [{"text": "KASSETTE tui", "time": "07:00:01"}],
+                    "logs": [{"text": "LOKALE KI: aus", "time": "07:00:01"}],
                     "internet_logs": [], "uptime_s": 12345, "alarms": [], "time": "11. Juni 2026"}
         if p == "/api/telemetry":
             return {"pc": {"cpu": {"v": 23}, "ram": {"v": 41}, "temp": {"v": 52}}}

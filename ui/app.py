@@ -45,7 +45,6 @@ import ai_backends     # type: ignore  – AI-Backend-Verfügbarkeit (local/clou
 import providers      # type: ignore  – Cloud-Registry des Kerns (base_url/kind)
 import consolidation # type: ignore  – Phase E: STM → LTM Konsolidierung
 import telemetry    # type: ignore  – PC-Host-Telemetrie (CPU/GPU/VRAM/Temp/RAM)
-import kassette     # type: ignore  – welche Kassette läuft (monolith | laptop)
 import aussenposten # type: ignore  – Paket-Schnuerer für Knoten ohne Backend
 import mail         # type: ignore  – Mail-Triage (read-only Panel + Live-Poll)
 import mail_secrets # type: ignore  – verschlüsselter Zugangsdaten-Speicher
@@ -69,20 +68,18 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
 
 
-# ── Kassetten-Gate für KI-Endpoints ───────────────────────────────────
+# ── Gate für KI-Endpoints ─────────────────────────────────────────────
 #
-# In den KI-freien Kassetten (laptop, tui) ist die KI komplett raus (siehe
-# core/kassette.py): kein Chat, kein TTS/STT, keine Permission-Antworten.
-# Diese Endpoints werden hart mit 503 abgeriegelt, falls doch jemand sie
-# aufruft. Die KI-freien Fronten kennen sie ohnehin nicht – das hier ist
+# Auf einem Knoten ohne lokale KI (ai_backends.lokale_ki_aus()) und ohne
+# Ersatz über die Cloud werden diese Endpoints hart mit 503 abgeriegelt —
 # Defense-in-Depth, damit eine versehentliche Anfrage NIE die PC-KI anspricht.
 def _ki_aus():
-    return jsonify({"error": "KI in dieser Kassette deaktiviert"}), 503
+    return jsonify({"error": "KI auf diesem Knoten deaktiviert"}), 503
 
 
-# Tutor-spezifisch: NICHT kassetten-hart, sondern kapazitaetsbasiert. Der Tutor
+# Tutor-spezifisch: NICHT hart, sondern kapazitaetsbasiert. Der Tutor
 # laeuft, sobald das Backend seines Providers da ist (lokal ODER cloud) – auch
-# auf laptop/tui. Fehlt es, sagen wir das ehrlich ("backend not here").
+# auf dem Laptop. Fehlt es, sagen wir das ehrlich ("backend not here").
 def _tutor_unavail():
     return jsonify({"error": "backend not here",
                     "detail": tutor_port.unavailable_reason()
@@ -95,21 +92,16 @@ def _tutor_unavail():
 @app.route('/monolith')   # Alias: alte Kiosk-/Bookmark-/Deeplink-URL bleibt gueltig
 def index():
     """
-    Liefert das EINE Dashboard-Template (monolith.html) für alle Browser-Fronten.
-    Der Unterschied zwischen den Kassetten (core/kassette.py) ist allein der
-    ki_aus-Flag, den wir hier ans Template durchreichen:
-      - monolith (Default): voll, mit KI-Kern (Chat, Audio, News).
-      - laptop / tui:       ki_aus=True → die KI-Blöcke werden nicht gerendert,
-                            stattdessen erscheint unten die Shortcut-Übersicht.
-    Die Wahl kommt aus ZENTRALE_KASSETTE, gesetzt vom Start-Befehl. /monolith
-    bleibt als Alias bestehen, damit der Pi-Kiosk und alte Bookmarks nicht brechen.
+    Liefert das Browser-Dashboard (monolith.html). GEPARKT seit 2026-10-04:
+    die TUI ist die einzige Front, der Browser bleibt nur im Code, falls man
+    ihn wieder einbinden will. ki_aus blendet die KI-Blöcke aus, wenn dieser
+    Knoten keine lokale KI hat. /monolith bleibt als Alias für alte Bookmarks.
 
     Statische Assets (engine.js = Daten-Adapter, viz.js, ascii.js, fonts/) liegen
     in ui/static/ und werden von Flask automatisch unter /static/<file> bedient.
     """
-    resp = render_template(kassette.template(),
-                           ki_aus=kassette.ki_aus(),
-                           kassette=kassette.name())
+    resp = render_template('monolith.html',
+                           ki_aus=ai_backends.lokale_ki_aus())
     from flask import make_response
     r = make_response(resp)
     # Cache deaktivieren: der Browser soll immer die aktuelle Version laden,
@@ -218,7 +210,7 @@ def api_sensor_trigger(name):
 # core/aussenposten.py. Gegenstueck auf dem Knoten:
 # scripts/aussenposten_update.py (stdlib-only, laeuft ohne venv).
 #
-# Absichtlich OHNE Kassetten-/KI-Gate: ein Knoten muss sich auch dann
+# Absichtlich OHNE KI-Gate: ein Knoten muss sich auch dann
 # aktualisieren koennen, wenn die KI gedrosselt ist — sonst friert genau die
 # Maschine ein, die man gerade reparieren will.
 
@@ -371,7 +363,7 @@ def api_cycle():
     Liefert die predict()-Form (+ `summary`, der fertige Einzeiler) oder
     {} wenn es keinen »periode«-Graphen bzw. noch keine Werte gibt — die
     Fronten zeichnen dann einfach nichts. NICHT KI-gegatet: reine Anzeige,
-    also in allen Kassetten offen.
+    also überall offen.
     """
     p = cycle.predict()
     if not p:
@@ -385,7 +377,7 @@ def api_cycle():
 # Auf der Computertastatur gespielte und aufgezeichnete Melodien. Wie die
 # Listen liegen Definition UND Inhalt inline in data/melodies.json
 # (core/melodies.py). Direkte Nutzeraktion, also NICHT KI-gegatet — die
-# Routen stehen in allen Kassetten offen (laptop rendert dasselbe Template).
+# Routen stehen überall offen.
 
 @app.route('/api/melodies')
 def api_melodies():
@@ -451,7 +443,7 @@ def api_projects():
     Quelle für die PROJECTS-Box in ALLEN Fronten — die Fortschrittslogik bleibt
     an einer Stelle (core/lists), die Fronten rendern nur. Ein Knoten ohne
     children → normal (Titel+Leiste), mit children → gerahmter Kasten.
-    NICHT KI-gegatet (gibt es in allen Kassetten).
+    NICHT KI-gegatet (gibt es überall).
     """
     return jsonify(lists.projects_tree())
 
@@ -463,7 +455,7 @@ def api_projects_focused():
     Fortschritt) — oder null. QUELLE DER FOCUS-BOX in allen Fronten: die zeigt
     NUR noch dieses eine Projekt (oder nichts). Die volle Projekt-Übersicht gibt
     es ausschließlich über /api/projects (die neue Projektansicht der TUI).
-    NICHT KI-gegatet (gibt es in allen Kassetten).
+    NICHT KI-gegatet (gibt es überall).
     """
     return jsonify(lists.focused_subtree())
 
@@ -740,7 +732,7 @@ def api_map_base():
 
     Query: cx,cy (lon/lat Mittelpunkt), zoom (≥0), cols,rows (Zielraster),
            aspect (Zellbreite/Höhe; TUI ≈ 0.5, SVG = 1.0).
-    NICHT KI-gegatet — die Karte gibt es in ALLEN Kassetten (auch tui/laptop).
+    NICHT KI-gegatet — die Karte gibt es ÜBERALL.
     """
     a = request.args
     try:
@@ -763,7 +755,7 @@ def api_map_braille():
     Subpixel pro Zelle. Geo-/Rasterlogik komplett in core/map/render.py.
 
     Query: cx,cy (lon/lat), zoom (≥0), cols,rows (Zeichenraster der TUI-Box).
-    NICHT KI-gegatet (Karte gibt es in allen Kassetten).
+    NICHT KI-gegatet (Karte gibt es überall).
     """
     a = request.args
     try:
@@ -786,7 +778,7 @@ def api_map_countries():
 
     Query: cx,cy,zoom,cols,rows,aspect wie /api/map/base; zusätzlich
            focus = Name des fokussierten Landes (für dessen Umriss).
-    NICHT KI-gegatet (Karte gibt es in allen Kassetten).
+    NICHT KI-gegatet (Karte gibt es überall).
     """
     a = request.args
     try:
@@ -808,7 +800,7 @@ def api_map_layers():
     Registry der thematischen Overlay-Layer (Achse 2): welche Layer es gibt,
     je mit ihren Sub-Layern, Quelle (Provenienz) und ob sie eine Zeitachse
     haben (Achse 3). Die Front baut daraus ihr Layer-Menü.
-    NICHT KI-gegatet (Karte gibt es in allen Kassetten).
+    NICHT KI-gegatet (Karte gibt es überall).
     """
     return jsonify({"layers": map_layers.registry()})
 
@@ -848,11 +840,11 @@ def api_map_layer(layer_id):
 @app.route('/api/calendar')
 def api_calendar():
     """
-    Kalender-Daten für die Mitte/Canvas JEDER Kassette: laufende Woche ODER
+    Kalender-Daten für die Mitte/Canvas: laufende Woche ODER
     Monat um `ref`, fertig nach Tag gruppiert. Front-agnostisch — TUI, monolith
     und laptop rufen denselben Endpoint und zeichnen nur (wie /api/map/*). NICHT
     KI-gegatet: der Kalender ist hier reine Anzeige, kein KI-Tool-Pfad, läuft
-    also auch in der ki-freien Kassette. Die Datums-Arithmetik (Woche Mo-So /
+    also auch ohne lokale KI. Die Datums-Arithmetik (Woche Mo-So /
     Monatsgitter) macht Python in core/kalender.py, die Front klassifiziert nur
     `view` und blättert über `ref` — dieselbe Linie wie resolve_range.
 
@@ -1222,7 +1214,7 @@ def api_chat():
     """
     # Welcher Kern denkt diesen Turn — lokal (Ollama) oder Cloud?
     # chat_available() berücksichtigt beide Drosseln, die Erreichbarkeit,
-    # Sashas Vorwahl (chat_backend) UND die Kassetten-Regel. Kein Backend →
+    # Sashas Vorwahl (chat_backend) UND die Lokal-Regel. Kein Backend →
     # hart abriegeln, damit eine gesetzte Drossel wirklich drosselt.
     backend = ai_backends.chat_available()
     if backend is None:
@@ -1393,7 +1385,6 @@ def api_ai_status():
             "provider":  prov,
             "effort":    ai_backends.chat_effort(),
             "kosten":    kosten,
-            "kassette":  kassette.name(),
         })
     if backend == ai_backends.LOCAL:
         return jsonify({
@@ -1402,11 +1393,9 @@ def api_ai_status():
             "url":       ai.OLLAMA_URL,
             "model":     ai.OLLAMA_MODEL,
             "kosten":    kosten,     # lokal kostet nichts, der Monat aber schon
-            "kassette":  kassette.name(),
         })
     return jsonify({"available": False, "backend": None, "url": None,
-                    "model": "—", "kosten": kosten,
-                    "kassette": kassette.name()})
+                    "model": "—", "kosten": kosten})
 
 
 # ── Voice-Pipeline (sprachneutral) ─────────────────────────────────────
@@ -1437,11 +1426,11 @@ def api_speak():
     Response: audio/wav, oder 503 wenn das Modell fuer die Sprache fehlt.
     """
     # TTS ist LOKALE Synthese (sherpa/Piper) und der Sprach-Tutor laeuft
-    # kapazitaetsbasiert ueber die Cloud – unabhaengig von der lokalen KI-Kassette.
+    # kapazitaetsbasiert ueber die Cloud – unabhaengig von der lokalen KI.
     # Nur blocken, wenn AUCH der Tutor kein Backend hat; sonst kriegt die Persona-
     # Stimme keinen Ton, obwohl der Tutor laeuft (verifiziert: /api/speak gab 503
-    # 'KI in dieser Kassette deaktiviert', obwohl der Cloud-Tutor verfuegbar war).
-    if kassette.ki_aus() and not tutor_port.available():
+    # 'KI deaktiviert', obwohl der Cloud-Tutor verfuegbar war).
+    if ai_backends.lokale_ki_aus() and not tutor_port.available():
         return _ki_aus()
     body    = request.get_json() or {}
     text    = (body.get('text') or '').strip()
@@ -1475,7 +1464,7 @@ def api_transcribe():
     # STT ist lokale Erkennung; der Sprach-Tutor laeuft kapazitaetsbasiert. Nur
     # blocken, wenn AUCH der Tutor kein Backend hat — sonst kann das Persona-
     # Zimmer nicht zuhoeren, obwohl der Tutor laeuft (wie bei /api/speak).
-    if kassette.ki_aus() and not tutor_port.available():
+    if ai_backends.lokale_ki_aus() and not tutor_port.available():
         return _ki_aus()
     if 'audio' not in request.files:
         return jsonify({"error": "kein 'audio'-Feld"}), 400

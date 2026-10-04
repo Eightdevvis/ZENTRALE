@@ -2,7 +2,7 @@
 #
 # Registry analog zu core/graphs.py: jeder Overlay ist ein reiner Daten-Provider
 # auf demselben Geo-Substrat (Projektion/Viewport aus core/map/). Die Fronten
-# holen Features über /api/map/layer/<id> und zeichnen nur (Kassetten-Prinzip).
+# holen Features über /api/map/layer/<id> und zeichnen nur (Renderer-Prinzip).
 #
 # Architektur-Detail (siehe memory/maps/maps_system.md, memory/maps/maps_quellen.md):
 # ein Overlay kann ein KOMPOSIT aus mehreren Sub-Layern sein, jeder Sub-Layer

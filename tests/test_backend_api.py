@@ -8,7 +8,7 @@ testet die HTTP-Schicht deterministisch und in Millisekunden.
 
 Geprüft wird das, was beim Start real kaputt war / kaputt gehen könnte:
   - /api/state antwortet überhaupt und liefert die erwartete JSON-Shape,
-  - die KI-Endpoints sind in der tui-Kassette hart abgeriegelt (503),
+  - die KI-Endpoints sind ohne lokale KI hart abgeriegelt (503),
   - ein unbekannter Sensor-Webhook wird abgewiesen (kein Querschuss aus dem LAN).
 """
 import threading
@@ -35,26 +35,26 @@ def test_api_state_shape(client):
     assert isinstance(data["uptime_s"], int)
 
 
-def test_ki_endpoint_locked_in_tui_kassette(client):
-    # In der tui-Kassette (conftest setzt ZENTRALE_KASSETTE=tui) und ohne
+def test_ki_endpoint_locked_ohne_lokale_ki(client):
+    # Ohne lokale KI (conftest setzt ZENTRALE_LOKALE_KI=aus) und ohne
     # erreichbares Backend bleibt der Chat zu.
     #
     # "Ohne erreichbares Backend" ist seit 2026-09-04 GARANTIERT statt
     # gehofft: conftest legt den Erreichbarkeits-Check von ai_backends in
     # jedem Test auf False. Vorher hing dieser Test an der Umgebung — lag ein
     # Cloud-Key vor und stand das Netz, schickte er einen echten Claude-Call
-    # los (~0,07 €) und fiel dann um, weil eine Cloud-Leitung in einer
-    # ki-freien Kassette ERLAUBT ist (ai_backends.chat_available: lokal ist
-    # dort aus, Cloud ist eine externe Leitung). Geprueft wird hier also die
-    # Drossel bei totem Backend, nicht die Kassettenregel an sich.
+    # los (~0,07 €) und fiel dann um, weil eine Cloud-Leitung ohne lokale KI
+    # ERLAUBT ist (ai_backends.chat_available: lokal ist aus, Cloud ist eine
+    # externe Leitung). Geprueft wird hier also die Drossel bei totem
+    # Backend, nicht die Lokal-Regel an sich.
     r = client.post("/api/chat", json={"message": "hallo"})
     assert r.status_code == 503
 
 
-def test_tui_kassette_spricht_nie_das_lokale_ollama_an(client, monkeypatch):
-    # Das ist die eigentliche Absicht der ki-freien Kassette: sie bringt KEINE
-    # eigene KI mit. Auch wenn Ollama erreichbar waere (tui-Kassette daheim auf
-    # dem PC), darf der Chat es nicht benutzen.
+def test_ohne_lokale_ki_nie_das_lokale_ollama(client, monkeypatch):
+    # Das ist die eigentliche Absicht von ZENTRALE_LOKALE_KI=aus: der Knoten
+    # bringt KEINE eigene KI mit. Auch wenn Ollama erreichbar waere, darf der
+    # Chat es nicht benutzen.
     import ai_backends
     monkeypatch.setattr(ai_backends, "status",
                         lambda *a, **k: {"local": True, "cloud": False,
@@ -63,7 +63,7 @@ def test_tui_kassette_spricht_nie_das_lokale_ollama_an(client, monkeypatch):
     assert client.post("/api/chat", json={"message": "hallo"}).status_code == 503
 
 
-def test_tui_kassette_darf_ueber_die_cloud_chatten(client, monkeypatch):
+def test_ohne_lokale_ki_darf_ueber_die_cloud_chatten(client, monkeypatch):
     # Unterwegs: kein Ollama, aber ein Cloud-Provider. Dann ist der Chat offen -
     # und mit ihm die Erlaubnis-Antwort, sonst haengt ein Gate-Dialog fuer immer.
     import ai_backends
@@ -295,9 +295,9 @@ def test_delete_removes_uid_from_folder_cache(client, monkeypatch, tmp_path):
 
 
 def test_api_calendar_week_shape(client):
-    # /api/calendar ist die geteilte Quelle für die Kalender-Mitte ALLER
-    # Kassetten (TUI, Monolith, Laptop) — nicht KI-gegatet, läuft also auch in
-    # der ki-freien tui-Kassette. Default ist die laufende Woche.
+    # /api/calendar ist die geteilte Quelle für die Kalender-Mitte —
+    # nicht KI-gegatet, läuft also auch
+    # ohne lokale KI. Default ist die laufende Woche.
     r = client.get("/api/calendar")
     assert r.status_code == 200
     d = r.get_json()
@@ -350,7 +350,7 @@ def test_api_calendar_bad_ref(client):
 def test_api_calendar_add_and_delete(client, tmp_path, monkeypatch):
     # Direktes Anlegen/Löschen aus der Kalender-Mitte (TUI/Browser). Auf eine
     # TEMP-Datei umgebogen, damit der echte data/ai_calendar.json unberührt
-    # bleibt. NICHT KI-gegatet → muss auch in der tui-Kassette durchgehen.
+    # bleibt. NICHT KI-gegatet → muss auch ohne lokale KI durchgehen.
     import kalender
     monkeypatch.setattr(kalender, "CAL_PATH", tmp_path / "cal.json")
     kalender.ensure_init()
@@ -550,13 +550,13 @@ def test_api_calendar_delete_routine(client, tmp_path, monkeypatch):
 
 
 # ── Eine Front, KI per Flag ─────────────────────────────────────────────────
-# Seit der Template-Vereinigung gibt es nur EIN Browser-Template (monolith.html);
-# laptop/tui rendern es mit ki_aus=True (KI-Blöcke weg). Die folgenden Tests
+# Es gibt nur EIN Browser-Template (monolith.html, geparkt); ohne lokale KI
+# rendert es mit ki_aus=True (KI-Blöcke weg). Die folgenden Tests
 # sichern genau diese Gate-Grenze ab — sie war vorher gar nicht getestet
 # (die Route '/' lief in keinem Test).
 
-def test_index_ki_frei_in_tui_kassette(client):
-    # conftest fährt ZENTRALE_KASSETTE=tui → ki_aus=True.
+def test_index_ki_frei_ohne_lokale_ki(client):
+    # conftest fährt ZENTRALE_LOKALE_KI=aus → ki_aus=True.
     r = client.get("/")
     assert r.status_code == 200
     html = r.get_data(as_text=True)
@@ -573,10 +573,10 @@ def test_index_ki_frei_in_tui_kassette(client):
         assert tab in html, f"Werkzeug fehlt in der KI-freien Front: {tab}"
 
 
-def test_index_ki_front_in_monolith_kassette(client, monkeypatch):
-    # Monolith-Kassette → ki_aus=False; kassette.name() liest die Env zur
+def test_index_ki_front_mit_lokaler_ki(client, monkeypatch):
+    # Lokale KI an → ki_aus=False; lokale_ki_aus() liest die Env zur
     # Laufzeit (kein Cache), also reicht setenv vor dem Request.
-    monkeypatch.setenv("ZENTRALE_KASSETTE", "monolith")
+    monkeypatch.setenv("ZENTRALE_LOKALE_KI", "an")
     r = client.get("/")
     assert r.status_code == 200
     html = r.get_data(as_text=True)
@@ -600,7 +600,7 @@ def test_mail_endpoint_no_500_without_key(client):
 def test_api_melodies_crud(client, tmp_path, monkeypatch):
     # Klavier-Werkzeug: aufnehmen → umbenennen → löschen. Auf eine TEMP-Registry
     # umgebogen, damit data/melodies.json unberührt bleibt. NICHT KI-gegatet →
-    # muss auch in der tui-Kassette durchgehen (laptop rendert dasselbe Template).
+    # muss auch ohne lokale KI durchgehen.
     import melodies
     monkeypatch.setattr(melodies, "_DATA_DIR", str(tmp_path))
     monkeypatch.setattr(melodies, "_REGISTRY", str(tmp_path / "melodies.json"))

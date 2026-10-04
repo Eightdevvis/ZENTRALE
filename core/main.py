@@ -15,7 +15,7 @@ from events import (
 )
 import state
 import kalender
-import kassette
+import ai_backends
 
 
 # Mapping: Sensor-Name aus dem Webhook -> intern verwendeter Event-Name.
@@ -45,15 +45,14 @@ def main():
     ui_thread = threading.Thread(target=start_ui, daemon=True)
     ui_thread.start()
 
-    # ── KI nur in der Monolith-Kassette hochfahren ─────────────────────
-    # Die KI-freien Kassetten (laptop, tui) booten KEINE KI: kein Warmup,
-    # kein News-Fetcher -> Ollama wird NIE angesprochen (auch nicht die PC-
-    # Instanz). Welche Kassette läuft, kommt aus ZENTRALE_KASSETTE
-    # (core/kassette.py), gesetzt vom Start-Befehl.
-    if kassette.ki_aus():
-        log(f"KASSETTE: {kassette.name()} — KI deaktiviert (kein Warmup, kein News-Fetcher)")
+    # ── Lokale KI nur dort hochfahren, wo sie hingehört ────────────────
+    # Ein Knoten ohne lokale KI (ZENTRALE_LOKALE_KI=aus, der Laptop) bootet
+    # KEINE KI: kein Warmup, kein News-Fetcher -> Ollama wird NIE angesprochen
+    # (auch nicht die PC-Instanz). Siehe ai_backends.lokale_ki_aus().
+    if ai_backends.lokale_ki_aus():
+        log("LOKALE KI: aus (kein Warmup, kein News-Fetcher)")
     else:
-        log(f"KASSETTE: {kassette.name()} — KI aktiv")
+        log("LOKALE KI: an")
 
         # KI-Modelle im Hintergrund ins Ollama-RAM ziehen, damit der erste
         # echte User-Chat nicht den Cold-Load von qwen2.5:14b (~9 GB) zahlen
@@ -69,7 +68,7 @@ def main():
         import news
         news.start_fetcher()
 
-    # Mail-Triage: KASSETTEN-UNABHÄNGIG (kein KI-Bedarf), aber hart gegated
+    # Mail-Triage: UNABHÄNGIG von der lokalen KI (kein KI-Bedarf), aber hart gegated
     # über ZENTRALE_MAIL=on — default AUS, damit nichts ungewollt IMAP-Konten
     # kontaktiert. Default-Modus ist zudem DRY-RUN (MAIL_DRY_RUN). Pollt die
     # INBOXen, klassifiziert per Sender-Keymap und sortiert (core/mail.py).

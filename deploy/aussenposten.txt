@@ -20,7 +20,6 @@
 # PC-Backend an. Braucht keinen venv.
 tui/zentrale_tui.py
 tui/boot_loader.py
-tui/select_kassette.py
 
 # ── Sensorik: der einzige Push-Weg vom Knoten zum PC ─────────────────────
 # Liest GPIO/Tastatur, POSTet /api/sensor/<name> und alle ~30 s Telemetrie.

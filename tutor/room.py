@@ -8,7 +8,7 @@
 # X11-Fenster, das aus der TUI heraus aufklappt (Taste/Command im Tutor-Panel),
 # echte antialiased Vektorgrafik statt curses.
 #
-# Architektur = Kassetten-Prinzip: dieses File ZEICHNET nur + spricht die
+# Architektur = Renderer-Prinzip: dieses File ZEICHNET nur + spricht die
 # Tutor-API. Keine KI-Logik hier — Session/Sprache/Persona/Memory leben im
 # Backend (tutor/session.py, /api/tutor/*). Die Antworten kommen als SSE-
 # Token-Stream (wie im Browser/TUI), landen in einer Sprechblase.

@@ -9,9 +9,10 @@ Zwei Dinge, die jeder Test braucht:
    damit `import state`, `from ui.app import app`, `import tui.zentrale_tui` etc.
    ohne ein installiertes Paket auflösen.
 
-2. Kassette: Wir fahren die Tests IMMER ki-frei (ZENTRALE_KASSETTE=tui). So
-   spricht nichts Ollama an, kein News-Fetcher, keine Mail — und wir können
-   prüfen, dass die KI-Endpoints in dieser Kassette hart abgeriegelt sind.
+2. Lokale KI: Wir fahren die Tests IMMER ohne lokale KI
+   (ZENTRALE_LOKALE_KI=aus). So spricht nichts Ollama an, kein News-Fetcher,
+   keine Mail — und wir können prüfen, dass die KI-Endpoints hart abgeriegelt
+   sind.
 """
 import atexit
 import os
@@ -25,7 +26,7 @@ for p in (CORE, ROOT):
         sys.path.insert(0, p)
 
 # Ki-frei + Mail aus, BEVOR irgendein Modul die Env liest.
-os.environ.setdefault("ZENTRALE_KASSETTE", "tui")
+os.environ.setdefault("ZENTRALE_LOKALE_KI", "aus")
 os.environ.setdefault("ZENTRALE_MAIL", "off")
 
 # 3. Kein Testlauf meldet sich auf Sashas Desktop.
@@ -97,8 +98,8 @@ os.environ.pop("ZENTRALE_TUI_SUPERVISED", None)
 
 # 6. Kein Testlauf darf Geld ausgeben.
 #
-# Gelernt am 2026-09-04: `test_ki_endpoint_locked_in_tui_kassette` prüfte, dass
-# der Chat in der ki-freien Kassette zu bleibt — und ging davon aus, dass in der
+# Gelernt am 2026-09-04: `test_ki_endpoint_locked_ohne_lokale_ki` prüfte, dass
+# der Chat ohne lokale KI zu bleibt — und ging davon aus, dass in der
 # Testumgebung ohnehin kein Backend erreichbar ist. Sobald ein DASHSCOPE-/
 # Anthropic-Key da war und das Netz stand, stimmte diese Annahme nicht mehr:
 # der Test schickte einen ECHTEN Claude-Call los (~0,07 € pro Lauf) und fiel
