@@ -66,7 +66,13 @@ nicht. Warum welcher Schnitt fällt, steht ausführlich im Kopfkommentar von
 
 `core-ki_selbstbild.md` fällt bewusst aus der Reihe: das Selbstbild steht nicht
 im Prompt, sondern als Knoten im Graphen und kommt nur dann in den Kontext,
-wenn die Frage thematisch dorthin greift.
+wenn die Frage thematisch dorthin greift — und auch das nur mit eingeschaltetem
+Graph-Kontext (`ZENTRALE_GRAPH_KONTEXT=1`; per Default aus seit 18.08.2026).
+Ebenso der Graph-Extraktor (`memory-extraktor.md`): per Default aus.
+
+Letzter Abgleich der Lesefassungen mit dem Code: 2026-10-04 (nachgezogen:
+„Kein Dienstbotentum" im System-Prompt, Jetzt-Block ohne Uhrzeit,
+Zeit-Regel 5 a–f im Extraktor).
 
 ### Hintergrund-KI — läuft ohne Sasha im Bild
 

@@ -11,8 +11,13 @@
 # über state.py (shared in-memory state, thread-safe via Lock).
 #
 # ── Architektur ───────────────────────────────────────────────────────
-#   Browser  ──GET /api/state──▶  app.py  ──liest──▶  state.py
-#   Browser  ──POST /api/chat──▶  app.py  ──ruft──▶   ai.py  ──▶  Ollama
+#   TUI  ──GET /api/state──▶  app.py  ──liest──▶  state.py
+#   TUI  ──POST /api/chat──▶  app.py  ──ai_backends.chat_available()──┐
+#        cloud → core/cloud.py (Anthropic) | core/cloud_openai.py  ◀─┤
+#        local → core/ai.py ──▶ Ollama                             ◀─┘
+#   Die TUI (tui/zentrale_tui.py) ist die Hauptfront; die Browser-Fronten
+#   sind geparkt. Welcher Kern denkt, steht in data/ai_config.json
+#   ('chat_backend', Code-Default 'auto' = lokal zuerst).
 # ──────────────────────────────────────────────────────────────────────
 
 import sys
@@ -75,10 +80,12 @@ _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data
 
 # ── Gate für KI-Endpoints ─────────────────────────────────────────────
 #
-# Auf einem Knoten ohne lokale KI (ai_backends.lokale_ki_aus()) und ohne
-# Ersatz über die Cloud werden diese Endpoints hart mit 503 abgeriegelt —
-# Defense-in-Depth, damit eine versehentliche Anfrage NIE die PC-KI anspricht.
-def _ki_aus():
+# 503-Antwort, wenn auf diesem Knoten kein KI-Backend bereitsteht (weder
+# lokal noch über die Cloud). Benutzt von /api/permission_answer (kein
+# Chat-Backend) und /api/speak + /api/transcribe (keine lokale KI und kein
+# Tutor-Backend) — Defense-in-Depth, damit eine versehentliche Anfrage NIE die
+# PC-KI anspricht.
+def _ki_nicht_verfuegbar():
     return jsonify({"error": "KI auf diesem Knoten deaktiviert"}), 503
 
 
@@ -1110,19 +1117,6 @@ def api_calendar_delete_routine():
     return jsonify({"deleted": n})
 
 
-@app.route('/api/debug', methods=['POST'])
-def api_debug():
-    """
-    Temporärer Debug-Endpoint (2026-06-01): Frontend kann beliebige JSON
-    hierhin POSTen, landet zeilenweise in /tmp/zentrale_debug.log. Wird
-    nur fürs Mic-Debugging gebraucht und sollte danach wieder raus.
-    """
-    payload = request.get_json(silent=True) or {}
-    with open('/tmp/zentrale_debug.log', 'a', encoding='utf-8') as f:
-        f.write(json.dumps({"t": datetime.now().isoformat(), **payload}, ensure_ascii=False) + "\n")
-    return jsonify({"ok": True})
-
-
 @app.route('/api/log', methods=['POST'])
 def api_log():
     """
@@ -1204,15 +1198,18 @@ def api_chat():
 
     Antwortet als SSE (Server-Sent Events) – ein HTTP-Standard für Push-Streams.
     SSE-Format: jede Nachricht ist eine Zeile "data: <inhalt>\\n\\n"
-    Der Browser liest den Stream mit der Fetch ReadableStream API.
+    Gelesen wird der Stream von der TUI (tui/zentrale_tui.py, ai_stream).
 
     Ablauf:
       1. User-Nachricht in state.py speichern
       2. Chat-History holen (inkl. neuer Nachricht)
-      3. Generator starten – ai.chat_stream() liefert Token für Token
-      4. Jeden Token als SSE-Event an den Browser schicken
+      3. Generator starten – je nach chat_available() liefert ai.chat_stream()
+         (local) oder das Modul aus ai_backends.chat_cloud_module() (cloud)
+         Token für Token
+      4. Jeden Token als SSE-Event an den Client schicken; daneben die
+         Nicht-Text-Events ascii, permission, werkzeug, reflect, cinema
       5. Nach dem letzten Token: komplette Antwort in state.py speichern
-         + "done"-Event schicken damit der Browser weiß dass es vorbei ist
+         + "done"-Event schicken, damit der Client weiß, dass es vorbei ist
 
     stream_with_context() ist Flask-spezifisch: es stellt sicher dass der
     Flask-Request-Context (für g, session etc.) im Generator noch verfügbar ist.
@@ -1269,11 +1266,6 @@ def api_chat():
             if isinstance(token, dict) and 'permission' in token:
                 yield f"data: {json.dumps({'permission': token['permission']})}\n\n"
                 continue
-            # reflect-Event: ein Stück des Denk-/Reflexions-Stroms (Ollama
-            # `thinking`-Feld). Geht als eigenes SSE 'reflect'-Event raus, das
-            # das Frontend im ki-kern live mitlaufen lässt ("ich schau kurz
-            # nach…"). KEIN Antworttext → nicht in collected (nicht gespeichert,
-            # nicht gesprochen). Siehe ai.chat_stream / adaptives Thinking.
             # werkzeug-Event: ein Tool-Call beginnt oder ist fertig. Geht als
             # eigenes SSE 'werkzeug'-Event raus, damit im Chat sichtbar wird,
             # WAS sie tut — nicht nur, was sie hinterher darueber sagt. Kein
@@ -1281,6 +1273,11 @@ def api_chat():
             if isinstance(token, dict) and 'werkzeug' in token:
                 yield f"data: {json.dumps({'werkzeug': token['werkzeug']})}\n\n"
                 continue
+            # reflect-Event: ein Stück des Denk-Stroms (Ollama `thinking`-Feld
+            # bzw. Denk-Tokens der Cloud). Geht als eigenes SSE 'reflect'-Event
+            # raus, das die TUI dim mitlaufen lässt ("ich schau kurz nach…").
+            # KEIN Antworttext → nicht in collected (nicht gespeichert, nicht
+            # gesprochen). Siehe ai.chat_stream / adaptives Thinking.
             if isinstance(token, dict) and 'reflect' in token:
                 yield f"data: {json.dumps({'reflect': token['reflect']})}\n\n"
                 continue
@@ -1298,7 +1295,7 @@ def api_chat():
         # Komplette Antwort in state speichern (für History beim nächsten Öffnen)
         state.push_chat_message("assistant", "".join(collected))
 
-        # Abschluss-Signal für den Browser
+        # Abschluss-Signal für den Client
         yield f"data: {json.dumps({'done': True})}\n\n"
 
     return Response(
@@ -1344,7 +1341,7 @@ def api_permission_answer():
     # blockiert ein Erlaubnis-Dialog den Stream für immer, weil niemand die
     # Antwort loswerden kann.
     if ai_backends.chat_available() is None:
-        return _ki_aus()
+        return _ki_nicht_verfuegbar()
     body    = request.get_json(silent=True) or {}
     answer  = (body.get('answer') or '').strip()
     # Gegen die aktuell angebotenen Knopf-Labels validieren (case-insensitiv,
@@ -1436,7 +1433,7 @@ def api_speak():
     # Stimme keinen Ton, obwohl der Tutor laeuft (verifiziert: /api/speak gab 503
     # 'KI deaktiviert', obwohl der Cloud-Tutor verfuegbar war).
     if ai_backends.lokale_ki_aus() and not tutor_port.available():
-        return _ki_aus()
+        return _ki_nicht_verfuegbar()
     body    = request.get_json() or {}
     text    = (body.get('text') or '').strip()
     lang    = (body.get('lang') or '').strip() or None
@@ -1470,7 +1467,7 @@ def api_transcribe():
     # blocken, wenn AUCH der Tutor kein Backend hat — sonst kann das Persona-
     # Zimmer nicht zuhoeren, obwohl der Tutor laeuft (wie bei /api/speak).
     if ai_backends.lokale_ki_aus() and not tutor_port.available():
-        return _ki_aus()
+        return _ki_nicht_verfuegbar()
     if 'audio' not in request.files:
         return jsonify({"error": "kein 'audio'-Feld"}), 400
 
@@ -1951,18 +1948,6 @@ def _folder_refresh_async(cat):
 
     threading.Thread(target=_run, daemon=True, name="mail-folder").start()
     return True
-
-
-def _folder_cache_drop(*cats):
-    """Cache einzelner Kategorien verwerfen (nach Umsortieren/Poll) → das nächste
-    Öffnen holt garantiert frisch."""
-    changed = False
-    with _mail_folders_lock:
-        for c in cats:
-            if c and _mail_folders.pop(c, None) is not None:
-                changed = True
-    if changed:
-        _mail_folders_save()
 
 
 def _folder_cache_remove_uid(cat, uid):

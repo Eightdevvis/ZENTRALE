@@ -7,7 +7,7 @@
 # ── Warum es das gibt ───────────────────────────────────────────────────
 # Der Ziel-Pfad des Kerns ist Anthropic (core/cloud.py). Aber die ganze
 # Verkabelung drumherum — Backend-Routing, getrennter Cloud-Graph,
-# Event-Protokoll, Erlaubnis-Gate, Tool-Loop, SSE bis in den Browser — ist
+# Event-Protokoll, Erlaubnis-Gate, Tool-Loop, SSE bis in die TUI — ist
 # providerunabhängig und lässt sich mit dem Qwen-Key testen, der schon da ist.
 # Ein zweiter Provider ist ausserdem der ehrlichere Test der Struktur als ein
 # zweiter Mock: erst wenn ein FREMDES Modell durch dieselbe Naht passt, ist
@@ -31,7 +31,9 @@
 # zwischen zwei Anbietern.
 #
 # ── Konfiguration ───────────────────────────────────────────────────────
-#   ZENTRALE_CLOUD_OPENAI_MODEL       Default: default_model des Providers
+#   Modell: ai_backends.chat_model(<provider>) → data/ai_config.json
+#           'chat_models' → default_model des Providers. ZENTRALE_CLOUD_MODEL
+#           greift hier NICHT (chat_model liest die Env nur ohne Provider).
 #   ZENTRALE_CLOUD_OPENAI_MAX_TOKENS  Default 2000
 #   ZENTRALE_CLOUD_OPENAI_TEMP        Default 0.4 (hier ERLAUBT, anders als
 #                                     bei Anthropic ab Opus 4.7)

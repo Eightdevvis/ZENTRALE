@@ -69,7 +69,6 @@ Maschine ein, die man gerade reparieren will.
 | `/api/categories`     | GET     | Verfügbare Kategorien                 |
 | `/api/data/<id>`      | GET     | Geloggte Einträge einer Kategorie     |
 | `/api/log`            | POST    | Neuen Eintrag speichern               |
-| `/api/debug`          | POST    | Debug-Log-Zeile ins Terminal (temporäre Dev-Hilfe) |
 
 ## Lifestyle-Graphen (`core/graphs.py`)
 
@@ -202,15 +201,15 @@ Datenmodell + Bedienung: `memory/werkzeuge/notizen_system.md`.
 
 | Endpoint              | Methode | Beschreibung                          |
 |-----------------------|---------|---------------------------------------|
-| `/api/chat`           | POST    | Chat-Nachricht senden (SSE-Stream). JSON-Body: `{message: str, via_mic?: bool}`. `via_mic=true` triggert `_MIC_INPUT_HINT` im System-Prompt (Whisper-Fehler-Awareness, siehe `memory/ki/ki_system.md`). SSE-Events: `token` (Antworttext), `reflect` (Denk-/Reflexions-Strom bei adaptivem Thinking → HUD-Kern, NICHT gespeichert/gesprochen), `ascii` (Inline-Bild), `permission` (Knopf-Rückfrage), `cinema` (News-Sendung), `done`. |
-| `/api/chat/history`   | GET     | Chat-History                          |
+| `/api/chat`           | POST    | Chat-Nachricht senden (SSE-Stream). JSON-Body: `{message: str, via_mic?: bool}`. `via_mic=true` triggert `_MIC_INPUT_HINT` im System-Prompt (Whisper-Fehler-Awareness, siehe `memory/ki/ki_system.md`). Wer denkt, entscheidet `ai_backends.chat_available()` (cloud: `core/cloud.py`/`core/cloud_openai.py`, local: `core/ai.py`); keins da → 503. SSE-Events: `token` (Antworttext), `reflect` (Denk-Strom → dim in der TUI, NICHT gespeichert/gesprochen), `werkzeug` (Tool-Call, `{phase: start\|fertig\|fehler, name, …}`; nur der Cloud-Pfad liefert es), `ascii` (Inline-Bild), `permission` (Knopf-Rückfrage), `cinema` (News-Sendung), `done`. |
+| `/api/chat/history`   | GET     | Chat-History (aus `state.py`); `[]`, wenn gerade kein Chat-Backend da ist |
 | `/api/chat/clear`     | POST    | Chat-History leeren                   |
 
 ## KI-Status & Erlaubnis
 
 | Endpoint                 | Methode | Beschreibung                          |
 |--------------------------|---------|---------------------------------------|
-| `/api/ai/status`         | GET     | Ollama-Verfügbarkeit + Modell-Name    |
+| `/api/ai/status`         | GET     | Kann ich chatten, und über welchen Kern: `{available, backend: cloud\|local\|null, url, model, provider?, effort?, kosten}`. Die TUI schreibt es in den Titel des KI-Kastens. |
 | `/api/ai/backends`       | GET/POST| Welche Backends erreichbar sind (local/cloud) — speist die EXTERNAL-Box und das kapazitätsbasierte Modul-Gating. POST `{cloud_enabled?, local_enabled?}` legt die Kill-Switches um (persistiert in `data/ai_config.json`). Siehe `memory/ki/ki_system.md`. |
 | `/api/permission_answer` | POST    | Antwort auf eine `ask_choice`-/Internet-Erlaubnis-Frage (JSON `{answer}`). Entsperrt den wartenden Chat-Stream. Siehe `memory/ki/ki_system.md` → Permission-Gate. |
 | `/api/ai/debug/stream`   | GET     | Devtools-Stream (SSE) für `scripts/ai_devtools.py`: der VOLLE Request (System-Prompt, alle Messages, Tool-Namen, Cache-Breakpoints), die Roh-Antwort, jeder Tool-Call, was der Extraktor in den Graphen schrieb. Verbinden schaltet den Bus (`core/kidebug.py`) an. ⚠ Enthält den kompletten Prompt inkl. Graph-Kontext. |

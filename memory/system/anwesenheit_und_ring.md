@@ -7,13 +7,14 @@ Schwelle 10 min) und ob die Sitzung gesperrt ist (logind `LockedHint`);
 von vier Lagen (`offen`, `woanders`, `weg`, `unbekannt`), die als **ein
 Satz** am Takt-Auftrag hängt (`takt.md`) — nie im Prompt jedes Turns. Die
 TUI zeigte bis 02.10.2026 in der Mitte einen gerechneten ASCII-Ring (`● ◦ ·`
-je Lage); seitdem steht dort das App-Rad (`dashboard.md`), der Ring-Code
-(`ring_zeilen`) lebt ungenutzt weiter, die Lage wird weiter bestimmt. Sensorik
+je Lage); seitdem steht dort das App-Rad (`dashboard.md`); der Ring-Code ist seit
+04.10.2026 archiviert (`../archive/tui_ki_ring.md`), die Lage wird weiter
+bestimmt (für den Takt). Sensorik
 (PIR am Pi, `../betrieb/hardware.md`) speist heute das **Zimmer**
 (`presence_age` in `room_state`), nicht `da()` — ⚠ prüfen: ob PIR-Treffer
 in `anwesenheit.da()` einfließen sollen, ist nicht entschieden.
 
-`core/anwesenheit.py` · `tui/zentrale_tui.py` (`ring_zeilen`) · `ui/app.py`
+`core/anwesenheit.py` · `../archive/tui_ki_ring.md` (Ring, archiviert) · `ui/app.py`
 
 ## Warum
 
@@ -94,7 +95,8 @@ mit ascii gezeichneten ring."*
 Eine Merkhilfe (vorher stand in der Mitte ein Front-Label und die
 Tastenliste) gehört an den Rand; **die Mitte gehört ihr.**
 
-- **Gerechnet, nicht gemalt** (`ring_punkte`/`ring_zeilen`, reine Funktionen).
+- **Gerechnet, nicht gemalt** (`ring_punkte`/`ring_zeilen`, reine Funktionen —
+  archiviert in `../archive/tui_ki_ring.md`).
   Ein festes ASCII-Bild passt genau in eine Fenstergröße; dieser Ring wächst
   mit dem Kasten. Und weil er aus Winkeln entsteht, ist die wandernde Helle
   beim Denken nur ein Offset — kein zweites Bild, das man synchron halten muss.

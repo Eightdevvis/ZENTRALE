@@ -1,12 +1,17 @@
 # core/consolidation.py
 #
-# Konzept-Graph-Extraktion pro Chat-Turn (Phase G).
+# Was nach einem Chat-Turn liegen bleibt: Transkript + (optional) Graph.
 #
-# Nach jedem User+AI-Turn ruft ai._async_save_turn diese Datei (im
-# Daemon-Thread) auf. Ein LLM-Extraktor zieht aus dem Turn strukturierte
-# Konzepte (Knoten) und Beziehungen (Edges) und merged sie in den
-# persistierten Graphen (graph.add_turn_extraction). Memory wird so
-# sofort assoziativ aufgebaut, ohne separate /sleep-Konsolidierung.
+# ai._async_save_turn reiht jeden Turn ein; der Worker in ai.py
+# (_consolidation_worker) ruft extract_turn_into_graph gebündelt in der
+# nächsten Gesprächspause. Dort passiert heute (Stand 10/2026):
+#   1. IMMER: Rohtext ins Transkript (core/transkript.py).
+#   2. NUR mit ZENTRALE_GRAPH_EXTRAKTION=1 (Default AUS seit 18.08.2026,
+#      siehe GRAPH_EXTRAKTION unten): ein LLM-Extraktor zieht Konzepte und
+#      Beziehungen aus dem Turn und merged sie in den Graphen
+#      (graph.add_turn_extraction).
+#
+# Die Datei heißt noch nach Phase G, als (2) der Kern war.
 #
 # Die alte STM→LTM-Pipeline (Phase D/E, ai_stm.json/ai_ltm.json,
 # /sleep-Command, INACTIVITY_THRESHOLD) ist mit dem Wechsel auf den
@@ -52,8 +57,8 @@ SUPPORTS_THINK    = OLLAMA_MODEL.startswith("qwen3")
 # "Fahrradfahren [project]", derselbe Fakt doppelt in zwei Formen.
 #
 # Das ROHMATERIAL wird weiter geschrieben (transkript.schreiben, gleich
-# unten) — es ist die Grundlage des Datei-Gedaechtnisses und jeder
-# spaeteren Auswertung. Verloren geht also nichts; es wird nur nicht mehr
+# unten) — als Archiv fuer spaetere Auswertung; gelesen wird es heute von
+# keinem Modul (das Datei-Gedaechtnis schreibt die KI per Werkzeug). Verloren geht also nichts; es wird nur nicht mehr
 # jeder Satz in Tripel zerhackt.
 #
 # ZENTRALE_GRAPH_EXTRAKTION=1 schaltet sie zurueck, wenn der Graph eines

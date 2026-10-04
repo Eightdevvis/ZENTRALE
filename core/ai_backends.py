@@ -8,11 +8,12 @@
 #   2. Kein Backend da  → kein AI-Render (datengetrieben, nicht hart verdrahtet).
 #   3. MODUL fragt: „mein Backend da?" → nein: Modul deaktiviert („backend not here").
 #
-# ── Multi-Backend (vorbereitet) ─────────────────────────────────────────
+# ── Multi-Backend ──────────────────────────────────────────────────────
 # Ein Modul kann MEHRERE Backends akzeptieren (MODULE_BACKENDS) – es ist
-# verfügbar, sobald IRGENDEINES davon da ist. Aktuell nutzt das nur der Tutor
-# (local ODER cloud); die Struktur ist aber allgemein, damit weitere Module
-# später einfach „kann beides" werden können.
+# verfügbar, sobald IRGENDEINES davon da ist. Heute: chat und tutor (local
+# ODER cloud), news nur local. Für den Chat entscheidet zusätzlich die
+# Vorwahl chat_backend() (Code-Default 'auto' = lokal zuerst; data/ai_config.json
+# kann 'cloud' setzen) — und chat_available() ist DIE Frage aller Chat-Endpoints.
 #
 # ── cloud = da, wenn Internet an ───────────────────────────────────────
 # Cloud gilt als verfügbar, wenn ein Cloud-Provider konfiguriert ist (Key in
@@ -176,11 +177,6 @@ def status(fresh: bool = False) -> dict:
 
     _cache["t"], _cache["val"] = now, st
     return st
-
-
-def any_ai() -> bool:
-    """Ist überhaupt irgendein AI-Backend da? (sonst: kein AI-Render)"""
-    return status()["any"]
 
 
 def cloud_ok() -> bool:

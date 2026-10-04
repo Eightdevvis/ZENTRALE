@@ -4,6 +4,9 @@
 - **Live-Sprache:** de
 - **Schiene:** keine — **derselbe** Prompt für lokal und Cloud. Der Extraktor
   redet nie mit Sasha, er sortiert; da braucht es keine zwei Fassungen.
+- **Stand:** per Default **aus** seit 18.08.2026 — läuft nur mit
+  `ZENTRALE_GRAPH_EXTRAKTION=1` (`consolidation.GRAPH_EXTRAKTION`). Ohne das
+  wird nach dem Turn nur das Transkript geschrieben.
 - **Rolle:** Läuft **nicht** sofort nach dem Turn, sondern gebündelt: ein
   Hintergrund-Worker sammelt die Turns und leert die Queue erst nach einer
   Gesprächspause (`CONSOLIDATION_IDLE_S`) — **alle gesammelten Turns in EINEM
@@ -45,12 +48,56 @@ Deutscher Prompt, vollständig und wörtlich aus dem Code kopiert.
 >    "fühlt", "erwähnt-am", "kennt", "kommuniziert-mit", "macht", "war-am". Wenn
 >    keins davon passt: Edge weglassen, lieber gar nichts als ein erfundenes Verb
 >    wie "wohlbehalten", "definiert", "aktuelles-Datum", "kennet".
-> 5. ZEIT: bei Aussagen wie "ich war heute müde" extrahiere das heutige Datum als
->    Knoten im ISO-Format ("2026-05-15"). Edges: {Sasha→müde, rel=zustand},
->    {müde→2026-05-15, rel=geschah-am}. NIE "heute"/"gestern"/"morgen" als Knoten
->    - immer absolutes Datum. Datums-Knoten sind NIE Subjekt eines Edges - immer
->    am Pfeil-Ziel-Ende (X ─[erwähnt-am]─► 2026-05-15, niemals 2026-05-15 ─[X]─►
->    Y).
+> 5. ZEIT - die häufigste Fehlerquelle. Trenne strikt, WANN etwas passiert ist,
+>    von WANN darüber geredet wird. Das heutige Datum steht oben im Body; rechne
+>    relative Angaben dagegen um und schreib sie absolut ("2026-05-15"). NIE
+>    "heute"/"gestern"/"morgen" als Knoten. Datums-Knoten sind NIE Subjekt eines
+>    Edges - immer am Pfeil-Ziel-Ende (X ─[erwähnt-am]─► 2026-05-15, niemals
+>    2026-05-15 ─[X]─► Y).
+>
+>    a) `geschah-am` NUR mit einem Datum, das im Turn wirklich dasteht oder
+>       eindeutig ableitbar ist: "heute", "gestern", "am Dienstag", "am 12.8.".
+>       Beispiel "ich war heute müde": {Sasha→müde, rel=zustand},
+>       {müde→2026-05-15, rel=geschah-am}.
+>
+>    b) UNGEFÄHRE VERGANGENHEIT WIRD GRÖBER, NICHT FALSCH — aber nur so grob
+>       wie nötig. Nimm IMMER die feinste Stufe, die noch WAHR ist:
+>
+>         Tag     "2026-08-17"  wenn der Tag dasteht oder eindeutig folgt
+>         Woche   "2026-W34"    "vor ein paar Tagen", "letztens", "diese
+>                               Woche", "Anfang der Woche", "am Wochenende"
+>         Monat   "2026-08"     "vor ein paar Wochen", "Anfang August",
+>                               "letzten Monat"
+>         Jahr    "2026"        wenn nicht mal der Monat klar ist
+>
+>       Die heutige Kalenderwoche steht oben im Body; "vor ein paar Tagen"
+>       ist je nach Wochentag diese oder die vorige. Beispiel:
+>       {Schüttelfrost→2026-W33, rel=geschah-am}.
+>
+>       NIEMALS ein Tages-Datum auf Verdacht — das ist der schlimmste Fehler
+>       überhaupt, denn das heutige wäre der Tag des Erzählens, nicht der des
+>       Geschehens. Passt nicht mal ein Jahr: gar keine Zeitkante.
+>
+>    c) GEGENWART IST DAGEGEN EINFACH. "ich hab grad Fieber", "mir ist heute
+>       schlecht", "ich bin gerade in Berlin" beschreiben JETZT → heutiges
+>       Datum, ganz normal als Tages-Knoten. Sei hier nicht übervorsichtig:
+>       Regel (b) gilt für UNBESTIMMTE Vergangenheit, nicht für Aussagen im
+>       Präsens. Was der Turn klar sagt, wird klar datiert.
+>
+>    d) NICHT-EREIGNISSE bekommen NIEMALS ein geschah-am: Fragen ("kann ich
+>       heute wieder Sport machen?"), Vorhaben und Pläne ("ich will nachher
+>       laufen"), Hypothetisches ("wenn ich morgen fit bin"), Verneintes
+>       ("ich war nicht joggen"). Nach etwas zu FRAGEN heißt nicht, es getan
+>       zu haben. Im Zweifel: keine Zeitkante.
+>
+>    e) Ein datierter Zustand gilt GENAU an diesem Tag und sagt NICHTS über
+>       andere Tage. "Fieber geschah-am 2026-08-09" heißt nicht, dass das
+>       Fieber davor oder danach bestand.
+>
+>    f) `erwähnt-am` ist das Gegenstück und datiert das REDEN: wenn du weißt,
+>       dass etwas Thema war, aber nicht wann es passierte, nimm erwähnt-am
+>       aufs heutige Datum - nie geschah-am.
+>
 > 6. AI-LÜGEN UND HALLUZINATIONEN NICHT EXTRAHIEREN:
 >    - a) "Ich speichere/notiere/merke das" → wenn KEIN echter Tool-Call im Turn
 >      war, ist es eine Lüge. Nicht als Fakt extrahieren.

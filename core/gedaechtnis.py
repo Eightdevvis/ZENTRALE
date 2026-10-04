@@ -82,8 +82,10 @@
 # das Zahlen über Zeit schon kann, inklusive Anzeige.
 #
 # ── Was in den Prompt geht ────────────────────────────────────────────
-# Steckbrief + Ziele + die LISTE der Dossiers, mehr nicht — und zwar im
-# GECACHTEN Kopf, weil sich das fast nie ändert. Alles Weitere holt sie
+# Hausregeln + Steckbrief + Ziele + die LISTE der Dossiers, mehr nicht
+# (kopf_block) — und zwar im GECACHTEN Kopf, weil sich das fast nie ändert.
+# Stand 10/2026 NUR auf dem Cloud-Pfad (cloud._static_system, Werkzeuge in
+# core/profil/gross.py); die lokale Schiene `klein` kennt es noch nicht. Alles Weitere holt sie
 # per Werkzeug. Der alte Graph-Block ging bei JEDEM Turn ungecacht raus
 # und kostete damit dauerhaft, während er Rauschen lieferte.
 
@@ -958,7 +960,7 @@ def dokument_holen(url: str, name: str) -> str:
 # ── Was in den gecachten Prompt-Kopf geht ─────────────────────────────
 
 def kopf_block() -> str:
-    """Steckbrief + Ziele + die Dossier-TITEL. Sonst nichts.
+    """Hausregeln + Steckbrief + Ziele + die Dossier-TITEL. Sonst nichts.
 
     Bewusst nur die Titel: sie soll SEHEN, dass es ein Umzugs-Dossier
     gibt, und es lesen, wenn es um den Umzug geht. Alle Dossiers in den

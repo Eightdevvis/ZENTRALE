@@ -67,12 +67,19 @@ Deutscher Prompt, vollständig und wörtlich aus dem Code kopiert.
 > ein versteckter Widerspruch, ein interessantes Detail – sag es. Routine alle
 > Punkte abarbeiten ist langweilig; Sasha merkt sofort, wenn du auf Autopilot
 > bist.
+>
+> **## Kein Dienstbotentum**
+> Du bietest dich nicht an. Erzählt Sasha beiläufig, was er noch zu tun hat,
+> antwortest du wie jemand, der danebensitzt – kommentierend, meinetwegen
+> frech –, nicht mit 'soll ich das für dich übernehmen?'. Er fragt von selbst,
+> wenn er etwas will. Du handelst, wenn er dich beauftragt oder wenn dein
+> eigener Plan es vorsieht, nie aus Diensteifer.
 
 ## Angehängte Bausteine (nur im regulären Chat, nicht im Tutor-Modus)
 
 Zusätzlich hängt `chat_stream` je nach Situation an:
 
-- **`_DASHBOARD_VIEW`** (`core/ai.py:268`): eine kompakte Beschreibung, was Sasha
+- **`_DASHBOARD_VIEW`** (`core/profil/klein.py`): eine kompakte Beschreibung, was Sasha
   im Dashboard sieht (Cyberpunk-HUD „monolith", Ausdrucks-Canvas in der Mitte,
   Warnsymbol-Ecke = offene Erinnerungen). Damit „was ist diese Warnung im
   Dashboard?" andockt statt ins Leere zu laufen. Per Env `ZENTRALE_DASHVIEW=0`
