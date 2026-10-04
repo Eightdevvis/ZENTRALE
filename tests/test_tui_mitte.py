@@ -477,7 +477,7 @@ def test_auge_hat_seine_groesse_und_lebt():
     assert {z[0] for z in zustaende} > {1.0}                 # es blinzelt
     assert len({(z[1], z[2]) for z in zustaende}) > 2         # es schaut sich um
     assert px.auge_zustand(0.0, 0)[0] == 0.0                  # beim Öffnen zu …
-    assert px.auge_zustand(1.0, 300)[0] == 1.0                # … dann auf
+    assert px.auge_zustand(1.0, 1000)[0] == 1.0               # … dann auf
 
 
 def test_auge_denkt():
