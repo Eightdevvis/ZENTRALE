@@ -413,19 +413,21 @@ def liste_ordnen(items, erledigte=False):
     """Anzeige-Reihenfolge einer Ebene im Listen-Werkzeug.
 
     erledigte=False: nur OFFENE Einträge — der Fokus (oder ein Ordner, in dem
-    er steckt) klebt oben, der Rest nach Erfülltheit absteigend (was kaum noch
-    Saft braucht, steht oben); Gleichstand behält die gespeicherte Reihenfolge.
+    er steckt) klebt oben, der Rest nach Anzahl OFFENER Punkte aufsteigend
+    (was kaum noch Saft braucht, steht oben — 31/37 vor 1/2), bei gleich
+    vielen offenen das mit mehr Erledigtem zuerst; danach bleibt die
+    gespeicherte Reihenfolge.
     erledigte=True: nur die abgeschlossenen (Inhalt der Bernsteinleiste)."""
     rows = [it for it in (items or []) if isinstance(it, dict)]
     if erledigte:
         return [it for it in rows if liste_erledigt(it)]
 
-    def quote(it):
+    def rest(it):
         d, t = liste_zaehlen([it])
-        return d / t if t else 0.0
+        return t - d, -d
 
     offen = [it for it in rows if not liste_erledigt(it)]
-    return sorted(offen, key=lambda it: (not liste_hat_fokus(it), -quote(it)))
+    return sorted(offen, key=lambda it: (not liste_hat_fokus(it), rest(it)))
 
 
 def bernstein_steine(done, total, breite):

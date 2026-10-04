@@ -1,7 +1,7 @@
 """Listen-Werkzeug: Bernsteinleiste + Anzeige-Reihenfolge einer Ebene.
 
 Abgeschlossenes verschwindet aus der normalen Sicht (es steckt im Bernstein),
-der Fokus klebt oben, der Rest sortiert sich nach Erfülltheit absteigend."""
+der Fokus klebt oben, der Rest sortiert sich nach wenigsten offenen Punkten."""
 from tui.zentrale_tui import bernstein_steine, liste_ordnen
 
 
@@ -23,12 +23,18 @@ def test_erledigtes_verschwindet_aus_der_normalen_sicht():
     assert _ids(liste_ordnen(items, erledigte=True)) == [1, 3]
 
 
-def test_mehr_erfuellt_steht_weiter_oben_gleichstand_bleibt_stabil():
-    a = _ordner(1, [_blatt(10, True), _blatt(11), _blatt(12), _blatt(13)])  # 1/4
-    b = _ordner(2, [_blatt(20, True), _blatt(21, True), _blatt(22)])        # 2/3
-    c = _blatt(3)                                                            # 0/1
-    d = _blatt(4)                                                            # 0/1
-    assert _ids(liste_ordnen([c, a, d, b])) == [2, 1, 3, 4]
+def test_wenig_offen_steht_weiter_oben_gleichstand_bleibt_stabil():
+    a = _ordner(1, [_blatt(10, True), _blatt(11), _blatt(12), _blatt(13)])  # 1/4 (3 offen)
+    b = _ordner(2, [_blatt(20, True), _blatt(21, True), _blatt(22)])        # 2/3 (1 offen)
+    c = _blatt(3)                                                            # 0/1 (1 offen)
+    d = _blatt(4)                                                            # 0/1 (1 offen)
+    assert _ids(liste_ordnen([c, a, d, b])) == [2, 3, 4, 1]
+
+
+def test_offene_zaehlen_nicht_prozent():
+    gross = _ordner(1, [_blatt(100 + i, i < 31) for i in range(37)])        # 31/37 (6 offen)
+    klein = _ordner(2, [_blatt(20, True), _blatt(21)])                       # 1/2 (1 offen)
+    assert _ids(liste_ordnen([gross, klein])) == [2, 1]
 
 
 def test_fokus_klebt_oben_auch_wenn_er_tief_steckt():
