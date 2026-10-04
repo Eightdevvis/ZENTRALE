@@ -4,7 +4,7 @@
 clustert per bge-m3 zu Themen-Bausteinen (LLM labelt nur), hält sie mit
 Wichtigkeit/Decay/`gesehen` im eigenen Store (kein Graph) und baut daraus
 über `read_news`/`lies_news` eine gesprochene Sendung (Cinema-Modus im
-Browser). Der Fetcher läuft nur in der monolith-Kassette. **Die Moderation
+Browser). Der Fetcher läuft nur mit lokaler KI (nicht bei `ZENTRALE_LOKALE_KI=aus`). **Die Moderation
 spricht bis heute direkt mit Ollama** (`core/news.py`, `num_ctx`,
 `NEWS_TEMPERATURE` 0.7 — nicht über `ai_backends`/Cloud); der 2026-06-08
 **geparkte** Fabulations-Fix (generate-then-verify pro Sektion, Zitate

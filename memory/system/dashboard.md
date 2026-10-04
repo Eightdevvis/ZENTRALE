@@ -2,8 +2,9 @@
 
 **Stand 2026-09-18:** Gearbeitet wird nur noch an der **TUI**
 (`tui/zentrale_tui.py`, stdlib-only, Thin Client gegen `/api/*`); die
-Browser-Front `monolith.html` (eine Datei für monolith + laptop, KI-Blöcke
-per `ki_aus` weggelassen) ist praktisch aufgegeben, der Code lebt. Das
+Browser-Front `monolith.html` (KI-Blöcke per `ki_aus` weggelassen) ist
+**geparkt** (seit 2026-10-04): bleibt im Code für eine spätere
+Wiedereinbindung, wird nicht benutzt. Das
 **Theme** (`/theme` in der TUI → `~/.config/zentrale/theme`, Wunsch) löst allein
 `zentrale-themed` nach 05/21 Uhr auf (`theme.now`, Ergebnis); Terminal,
 Browser, Desktop, bat, nvim, tmux und das Tutor-Zimmer lesen nur — und aus
@@ -103,86 +104,47 @@ diese Front (`../betrieb/deployment.md`). Der Rest dieser Datei ist die
 ausführliche Mechanik + das Warum; Datumsangaben im Text sind Marken, die
 Historie steht unten.
 
-> **EIN Browser-Template, mehrere Kassetten.** `ui/templates/monolith.html`
-> ist die **einzige** Browser-Front (seit 2026-06). Die frühere separate
-> `laptop.html` ist **weg**: monolith und laptop liefen auseinander (laptop
-> verlor Karte/Graphen, Mail/Listen kamen nie an). `/` rendert für **alle**
-> Browser-Kassetten dasselbe Template; der Unterschied ist allein der Flag
-> `ki_aus` (aus `core/kassette.py`), den `app.py` ans Template durchreicht —
-> bei laptop/tui werden die KI-Blöcke per `{% if not ki_aus %}` weggelassen
-> (Chat/Audio/Tutor/News/OLLAMA-Status), und unten erscheint statt der Chat-
-> Zeile eine **Shortcut-Übersicht**. Alles Nicht-KI (Karte, Graphen, Kalender,
-> Listen, Post/Mail, Telemetrie, Logs) ist damit in allen Fronten gleich.
-> Das alte `index.html` (AI-Orb, `#view-main`-Grid) ist ebenfalls **weg**.
-> Was Sasha real sieht steht unter „## Monolith-Dashboard". Die
-> Kassetten-Logik steht als Rückbau im `zentrale`-Tracker (`INDEX.md`).
+> **Browser geparkt (seit 2026-10-04).** `ui/templates/monolith.html` ist
+> die einzige Browser-Front (seit 2026-06; `laptop.html` und das alte
+> `index.html` mit AI-Orb sind weg). `/` (+ `/monolith`-Alias) rendert sie
+> noch, benutzt wird sie nicht — die TUI ist die einzige Front. `app.py`
+> reicht `ki_aus = ai_backends.lokale_ki_aus()` ans Template; dann fallen die
+> KI-Blöcke per `{% if not ki_aus %}` / `if (!window.KI_AUS)` weg
+> (Chat/Audio/Tutor/News/OLLAMA-Status), unten steht statt der Chat-Zeile
+> die Tastenkürzel-Box. Was das Template zeigt: „## Monolith-Dashboard".
 
-## Kassetten (monolith | laptop | tui)
+## Lokale KI an/aus (`ZENTRALE_LOKALE_KI`)
 
-Eine Codebase, ein Backend, **mehrere Fronten** — bewusst getrennte Fronten
-statt eines Modus-Schalters im Monolith (damit sie sich unabhängig entwickeln,
-ohne „Zusammendatschen"):
+Die Kassetten (monolith | laptop | tui, `core/kassette.py`) sind seit
+2026-10-04 **weg** (Rückbau aus dem `zentrale`-Tracker erledigt). Übrig ist
+EIN Schalter:
 
-- **`core/kassette.py`** ist die einzige Wahrheit: liest die Env-Var
-  `ZENTRALE_KASSETTE` (Default `monolith`; unbekannte Werte → `monolith`).
-  `name()`, `is_laptop()`, `is_tui()`, `ki_aus()`, `template()`.
-  `ki_aus()` ist `True` für **laptop und tui** (alles außer monolith).
-- **`core/main.py`** fährt den KI-Auto-Bootup (Ollama-Warmup + News-Fetcher)
-  **nur wenn `ki_aus()` False** ist (also nur monolith) hoch. Sonst: nichts
-  davon → Ollama wird nie angesprochen.
-- **`ui/app.py`** rendert `kassette.template()` auf `/` (+ `/monolith`-Alias).
-  Wenn `ki_aus()`: KI-Endpoints abgeriegelt — `/api/chat`,
-  `/api/permission_answer`, `/api/speak`, `/api/transcribe` → **503**;
-  `/api/ai/status` → `{available:false, kassette:<name>}`; `/api/chat/history` → `[]`.
-- Gestartet wird die Wahl über den Start-Befehl: `zentrale` zeigt ein
-  **Kassetten-Menü** (`tui/select_kassette.py`, ↑/↓ + Enter, animierter Stern,
-  Regenbogen-Ladebalken) und exec't in die gewählte Kassette; `zentrale-laptop`
-  → laptop, `zentrale-tui` → tui überspringen das Menü direkt (setzen die
-  Env-Var). Siehe `memory/betrieb/starten.md`.
+- **`ai_backends.lokale_ki_aus()`** liest `ZENTRALE_LOKALE_KI`. Nur
+  `aus`/`0`/`off`/`false` schalten ab; alles andere (auch leer/vertippt) =
+  an (PC-Default). Der Laptop setzt `aus` in
+  `deploy/zentrale-kern.service` und `scripts/start_tui.sh`.
+- **`core/main.py`**: bei `lokale_ki_aus()` kein Ollama-Warmup, kein
+  News-Fetcher; LOCAL wird nie angesprochen. Startzeile im Log:
+  `LOKALE KI: an` / `LOKALE KI: aus`.
+- **`ui/app.py`**: Chat-Endpoints fragen `chat_available()` — Cloud-Chat
+  bleibt auch ohne lokale KI erlaubt; ohne jedes Backend → **503**.
+  `/api/speak`/`/api/transcribe` → 503, wenn lokale KI aus und kein Tutor.
+  `/api/ai/status` hat kein `kassette`-Feld mehr.
+- Start: `zentrale`/`zentrale-tui` → TUI direkt (`memory/betrieb/starten.md`).
 
-Die drei Fronten:
+> **Sensoren-Panel entfernt (2026-06):** die Sensoren-Anzeige ist raus —
+> kein echter Sensor angeschlossen. Das **Backend bleibt verkabelt**
+> (Event-Loop, `/api/sensor/<name>`-Webhook, `sensors` in `/api/state`);
+> zum Wiederanzeigen Box + Handler aus der Historie zurückholen (das tote
+> `.srow`-CSS steht im Template noch bereit).
 
-| Kassette | Front | KI | Datei |
-|----------|-------|----|-------|
-| monolith | Browser, voll | an | `ui/templates/monolith.html` |
-| laptop   | Browser, lean | aus | `ui/templates/monolith.html` (`ki_aus`-gegated) |
-| tui      | **Terminal (curses)** | aus | `tui/zentrale_tui.py` |
-
-### Laptop-Kassette (KI-frei, gleiches Template)
-
-**Keine eigene Datei mehr** — laptop rendert `monolith.html`, nur mit
-`ki_aus=True`. Was dadurch wegfällt (per `{% if not ki_aus %}` im Template +
-`if (!window.KI_AUS)` im JS): OLLAMA-Header-Status, AI-State/Minilog, die
-Chat-Konsole (Input/Mic/Permission), Cinema-Mode, Tutor — und `engine.js`
-überspringt die KI-Polls (`/api/ai/status`, `/api/chat/history`), pollt also
-nur `/api/state` (1 s) + `/api/telemetry` (2 s). **Bleibt** für alle Fronten:
-das Mittel-Exhibit mit ASCII-Animationen + Tabs (das ist Visualizer, keine KI),
-Karte/Graphen/Kalender/Listen/Post/Klavier, Telemetrie, Logs, Data-Collection
-(Alt+K).
-Statt der Chat-Zeile steht unten die **Tastenkürzel-Box** (Quelle:
-`memory/system/tastatur.md`).
-
-> **Sensoren-Panel entfernt (2026-06):** in ALLEN Kassetten ist die Sensoren-
-> Anzeige raus — kein echter Sensor angeschlossen. Das **Backend bleibt
-> verkabelt** (Event-Loop, `/api/sensor/<name>`-Webhook, `sensors` in
-> `/api/state`); zum Wiederanzeigen Box + Handler aus der git-History
-> zurückholen (das tote `.srow`-CSS steht im Template noch bereit).
-
-- **Mitte:** dieselben Werkzeug-Tabs wie im Monolith — **Graph**, **Kalender**,
-  **Fokus** (Listen·Fokus, auch per Taste `f`), **Post** (Mail), **Karte**
-  (Globus/Welt), **Klavier** (auch per Taste `k`) — plus die Animationen.
-  In der **TUI** dieselben Werkzeuge über Tasten (`g`/`c`/`l`/`p`/`m`/`k`),
-  das Klavier inklusive (Ton rechnet `core/tone.py` selbst, siehe unten).
-- **Minimale Boot-Dependencies:** nur `flask` + `python-dateutil` (kein
-  Whisper/TTS/sherpa/piper nötig — die Kassette ist KI-frei). Siehe `memory/betrieb/starten.md`.
-
-### Terminal-Kassette (`tui/zentrale_tui.py`)
+### TUI (`tui/zentrale_tui.py`)
 
 KEIN Browser — rendert direkt im Terminal (curses). Motivation: ein Browser-Tab
 frisst auf einer RAM-schwachen Maschine 300–600 MB+, das Backend selbst nur
 ~32 MB. Die TUI ist ein **eigenständiger Client** (kein Flask-Template): sie
 pollt dasselbe `/api/state` (1 s) + `/api/telemetry` (2 s) über HTTP und zeichnet
-ein 3-Spalten-Layout analog zur Laptop-Kassette (telemetrie/stdout |
+ein 3-Spalten-Layout analog zum Browser-Template (telemetrie/stdout |
 mitte-skelett | lifestyle/outbound; Sensoren-Panel entfernt, s.o.). Header mit
 NET/UP/Uhr. Tasten: `q` legt das Fenster weg (Systemeinheit; sonst beendet
 es, siehe `memory/betrieb/systemeinheit.md`), `/quit` beendet,
@@ -965,11 +927,10 @@ nicht zum Durchzappen).
 > → die `lifestyle`-Box rechts zeigt jeden angelegten Graphen automatisch
 > als Sparkline (Quelle: `/api/graphs`, Feld `value`).
 >
-> **Geteilte Logik, pro Kassette verbaut:** `core/graphs.py` + die
-> `/api/graphs`-Endpoints existieren für ALLE Kassetten; nur die UI ist
-> kassetten-spezifisch verkabelt — Monolith hier (Browser-Panel), TUI in
-> der curses-Mitte (Taste `g`, siehe „Terminal-Kassette"). `laptop.html`
-> ist (noch) nicht verkabelt. Das **Anlege-Formular im Monolith** bietet nur
+> **Geteilte Logik, pro Front verbaut:** `core/graphs.py` + die
+> `/api/graphs`-Endpoints existieren für jede Front; nur die UI ist
+> front-spezifisch verkabelt — Monolith hier (Browser-Panel, geparkt), TUI
+> in der curses-Mitte (Taste `g`, siehe „TUI"). Das **Anlege-Formular im Monolith** bietet nur
 > `number`/`scale`; die Uhrzeit-Typen `time`/`period` (Y-Achse = Uhrzeit)
 > legt man in der TUI an (Backend kennt alle vier). Ein so angelegter
 > `time`/`period`-Graph erscheint in der Monolith-`lifestyle`-Box als
@@ -1020,8 +981,8 @@ nicht zum Durchzappen).
 >   gespeicherten Melodien: Klick = abspielen (Tasten leuchten mit, die Noten
 >   stehen im System), nochmal Klick = stopp, `✎` umbenennen, `✕` löschen.
 >   `Enter` spielt die zuletzt aufgenommene. Details: [memory/system/api_endpoints.md](./api_endpoints.md).
-> - **Kassetten:** monolith + laptop (dasselbe Template, nicht KI-gegatet) **und
->   die TUI** (Taste `k`, s.u.). Alle drei arbeiten auf derselben Melodien-
+> - **Fronten:** Browser-Template (nicht KI-gegatet) **und die TUI**
+>   (Taste `k`, s.u.). Beide arbeiten auf derselben Melodien-
 >   Registry (`core/melodies.py` → `data/melodies.json`), im Browser
 >   Aufgenommenes lässt sich also im Terminal abspielen und umgekehrt.
 
@@ -1167,8 +1128,8 @@ AUTO/HELL/DUNKEL). Darunter `.body` als 3 Spalten:
 +------------+----------------------+------------+
 ```
 
-> **Sensoren-Panel entfernt (2026-06)** — in allen Kassetten, inkl. Monolith
-> (Details + Backend-bleibt-verkabelt: siehe „## Kassetten"). Auch der
+> **Sensoren-Panel entfernt (2026-06)** — in allen Fronten, inkl. Monolith
+> (Details + Backend-bleibt-verkabelt: siehe „## Lokale KI an/aus"). Auch der
 > `_DASHBOARD_VIEW`-Prompt in `core/ai.py` nennt die Sensoren nicht mehr.
 
 - **LINKS:** `telemetrie` (PC·CPU-Meter), `stdout` (`#term`, voller Log-Stream
@@ -1336,7 +1297,7 @@ Daten landen automatisch in `data/<id>.json`.
 ## Historie
 
 - **2026-05** — `index.html` mit AI-Orb (Hooks in `ui_hooks.md`, tot).
-- **2026-06** — Monolith-Dashboard unter `/`; Kassetten monolith/laptop/tui;
+- **2026-06** — Monolith-Dashboard unter `/`; Kassetten monolith/laptop/tui (bis 2026-10-04);
   Sensoren-Panel raus; Graph-Werkzeug, Kalender, Klavier, Listen als
   Exhibits. **06-08** `/` = monolith.
 - **2026-07-17** — `vocab` aus `/api/state`, Tutor-Status nur bei Bedarf.
@@ -1355,3 +1316,5 @@ Daten landen automatisch in `data/<id>.json`.
   → `start_tui.sh` hängt ihn ein. stdout-Laufschrift `s`.
 - **2026-08-20** — Ring in der Mitte, Befehle in der Fußleiste
   (`anwesenheit_und_ring.md`).
+- **2026-10-04** — Kassetten entfernt: ein Schalter ZENTRALE_LOKALE_KI, TUI
+  einzige Front, Browser geparkt.

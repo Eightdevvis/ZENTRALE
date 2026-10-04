@@ -17,12 +17,14 @@ und wie die Fronten daran hängen.
 | Tastatur-Belegung in jedem Modus | [tastatur.md](tastatur.md) |
 | ⚠ **Veraltet** — beschreibt das gelöschte `index.html`, kein Hook stimmt noch. Nimm `dashboard.md`. | [ui_hooks.md](ui_hooks.md) |
 
-## Stand der Fronten (2026-08-15)
+## Stand der Fronten (2026-10-04)
 
-Gearbeitet wird nur noch an der **TUI** (`zentrale-tui`). Die Browser-Fronten
-(monolith / laptop) sind praktisch aufgegeben. Die **Kassetten-Logik**
-(`core/kassette.py`, `ki_aus()`) ist damit überflüssig geworden und steht als
-Rückbau im `zentrale`-Tracker — der Code lebt vorerst weiter.
+Die **TUI** ist die einzige Front (`zentrale` / `zentrale-tui`). Das
+Browser-Dashboard (`monolith.html`) ist geparkt: bleibt im Code, wird nicht
+benutzt. Die **Kassetten** (`core/kassette.py`) sind entfernt (Rückbau aus
+dem `zentrale`-Tracker erledigt, 2026-10-04); übrig ist ein Schalter
+`ZENTRALE_LOKALE_KI` (`ai_backends.lokale_ki_aus()`, siehe
+[dashboard.md](dashboard.md)).
 
 Die TUI ist ein **Thin Client**: kein eigenes Modell, kein eigenes Gedächtnis.
 Sie spricht ausschließlich HTTP mit `/api/chat` und rendert den Event-Strom;

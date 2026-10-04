@@ -457,15 +457,15 @@ Frage): 4/4 Tool gerufen, 0/4 Rückfrage, Wochentag korrekt.
 `feedback_data_vs_model` gilt weiter — nur war die richtige Daten-Auswahl
 hier „gar nichts kleben, sauber greppen", nicht „mehr kleben".
 
-## Sichtbare Anzeige (Mitte/Canvas jeder Kassette, 2026-06)
+## Sichtbare Anzeige (Mitte/Canvas jeder Front, 2026-06)
 
 Neben dem KI-Tool `read_calendar` ist der Kalender jetzt **sichtbar** in der
 Mitte jeder Front — blätterbar und zwischen **Woche** und **Monat**
 umschaltbar. Geteilte, front-agnostische Quelle (wie die Maps):
 
 - **Endpoint** `GET /api/calendar?view=week|month&ref=YYYY-MM-DD` (in `ui/app.py`).
-  **Nicht** KI-gegatet — reine Anzeige, kein KI-Pfad, läuft auch in der ki-freien
-  Kassette. Liefert `{view, ref, today, label, start, end, days, alarms, cycle}`
+  **Nicht** KI-gegatet — reine Anzeige, kein KI-Pfad, läuft auch ohne lokale
+  KI. Liefert `{view, ref, today, label, start, end, days, alarms, cycle}`
   (+ `month/first/last` bei Monat). Details: `memory/system/api_endpoints.md`.
 - **`cycle`** (`{iso: 'pms'|'next'}`) ist **kein Layer** und nichts
   Gespeichertes: der Zyklus-Rechner (`core/cycle.py`) leitet die Tage aus dem
@@ -486,10 +486,9 @@ umschaltbar. Geteilte, front-agnostische Quelle (wie die Maps):
     Karten-Pfad (Fehler-Marker statt Dauer-Refetch; `_for`-Tag gegen Refetch je
     Frame). Im Fuzz (`tests/_tui_fuzz.py`) mit eigenen `c/v`-Keys + Adversarial-
     `/api/calendar` abgedeckt.
-  - *Browser* (`ui/templates/monolith.html`, alle Kassetten): Exhibit-Tab
+  - *Browser* (`ui/templates/monolith.html`, geparkt): Exhibit-Tab
     „Kalender" (eigenes `#calendar-panel` wie das Graph-Werkzeug, NICHT im
-    Auto-Direktor). In der KI-freien Kassette (laptop) identisch — dasselbe
-    Template, nur ohne KI-Blöcke.
+    Auto-Direktor). Ohne lokale KI identisch, nur ohne KI-Blöcke.
 
 Bewusst getrennt vom Alarm-Kanal: die Anzeige zeigt die Termin-Arbeitsdaten,
 die ⚠-Warnungen bleiben randständig (Header-Zähler `⚠N` aus `alarms`), genau wie

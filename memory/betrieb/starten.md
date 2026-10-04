@@ -4,7 +4,7 @@
 TTS) laufen auf dem **PC** — im Alltag als Dienst (`zentrale-pc.service`
 System-Dienst, oder `zentrale-kern.service` als Benutzer-Dienst, siehe
 `systemeinheit.md`; **genau einer pro Rechner**). Für Entwicklung startet
-`zentrale` ein Kassetten-Menü (monolith / laptop / tui). Der Pi startet
+`zentrale` direkt die TUI. Der Pi startet
 nichts davon: er ist Aussenposten (Sensor-Bridge + Kiosk, Modus `room` = das
 Persona-Zimmer), siehe `memory/betrieb/deployment.md`. Env-Vars und
 Reihenfolge des Hochfahrens: unten.
@@ -17,35 +17,18 @@ Abschnitt „PC-systemd-Services". Vorteil: PC anschalten reicht – nichts
 zu tippen. Nachteil: keine Tastatur-Sensor-Sim (sudo waere noetig).
 Alternative als Benutzer-Dienst mit i3-Scratchpad: `systemeinheit.md`.
 
-## Variante A — Ein-Befehl-Start: Kassetten-Menü (interaktiv, Dev)
+## Variante A — `zentrale` / `zentrale-tui` (TUI, Dev)
 
-```bash
-zentrale
-```
+`zentrale` startet die TUI direkt (kein Menü mehr), `zentrale-tui` ebenso —
+beide über den Wrapper `zentrale-launch`, der den Boot-Sync hinter dem
+Blumenwind-Loader (`tui/boot_loader.py`) einhängt. Die TUI ist die einzige
+Front; das Browser-Dashboard ist geparkt (`memory/system/dashboard.md`).
+Details: Variante A-TUI.
 
-(Symlink in `~/.local/bin/zentrale` → `scripts/select_kassette.sh`. Funktioniert
-von jedem Verzeichnis aus. Falls der Symlink mal fehlt:
-`ln -s "$PWD/scripts/select_kassette.sh" ~/.local/bin/zentrale` aus dem
-Projekt-Root.)
-
-`zentrale` zeigt ein **Kassetten-Menü** („Welche Kassette wählen?",
-`tui/select_kassette.py`): mit ↑/↓ wählen (ein animierter Stern ✶ funkelt auf der
-aktuellen Zeile), Enter startet — danach läuft ein Regenbogen-Ladebalken und das
-Menü exec't in das passende Start-Skript:
-
-| Auswahl    | startet            | KI   |
-|------------|--------------------|------|
-| monolith   | `start_local.sh`   | an   |
-| laptop     | `start_laptop.sh`  | aus  |
-| tui        | `start_tui.sh`     | aus  |
-
-Das Menü selbst ist reine stdlib (termios + ANSI, kein curses); Render-/Logik
-sind ohne TTY testbar (`venv/bin/python tui/select_kassette.py --selftest`).
-Direkt ohne Menü: `zentrale-laptop` / `zentrale-tui` (s.u.).
-
-**monolith** (die Vollvariante) startet alle drei Services parallel in einem
-Terminal, jede Zeile mit farbigem `[main]`/`[whisper]`/`[tts]`-Prefix. Kein
-`sudo`, dafür keine Tastatur-Sensor-Simulation – Sensoren manuell triggern via:
+**`start_local.sh`** (Vollstart ohne Dienst) startet alle drei Services
+parallel in einem Terminal, jede Zeile mit farbigem
+`[main]`/`[whisper]`/`[tts]`-Prefix. Kein `sudo`, dafür keine
+Tastatur-Sensor-Simulation – Sensoren manuell triggern via:
 
 ```bash
 curl -X POST http://localhost:5000/api/sensor/button
@@ -59,43 +42,7 @@ unter `sudo`, dann geht auch die `b`/`l`/`m`-Tasten-Sim.
 
 `Ctrl+C` beendet alle drei sauber.
 
-## Variante A-Laptop — Laptop-Kassette (KI-frei, „ZENTRALE in klein")
-
-Für eine RAM-schwache Laptop-Maschine. Eigener Start-Befehl; dieselbe
-Browser-Front wie monolith, nur KI-frei gegated (siehe `memory/system/dashboard.md` →
-„Kassetten"):
-
-```bash
-zentrale-laptop
-```
-
-(Symlink `~/.local/bin/zentrale-laptop` → `scripts/start_laptop.sh`. Falls er
-fehlt: `ln -s "$PWD/scripts/start_laptop.sh" ~/.local/bin/zentrale-laptop` aus
-dem Projekt-Root.)
-
-Unterschiede zum normalen `zentrale`:
-
-- Setzt `ZENTRALE_KASSETTE=laptop` → `main.py` lässt Ollama-Warmup + News-
-  Fetcher weg (kein Auto-Bootup), `app.py` riegelt die KI-Endpoints ab.
-  **Ollama wird nie angesprochen.**
-- Startet **nur** `core/main.py` (Event-Loop + Flask) — **kein** Whisper,
-  **kein** TTS. Spart RAM.
-- Flask liefert `laptop.html` statt `monolith.html`.
-
-**Minimal-Dependencies** (das KI-freie Backend braucht nicht den vollen
-Stack): es reichen `flask` + `python-dateutil`:
-
-```bash
-venv/bin/pip install flask python-dateutil
-```
-
-(`keyboard` nur für `--with-keyboard`/Tasten-Sim; Whisper/TTS/sherpa/piper
-werden hier nicht gebraucht.)
-
-`--with-keyboard` geht auch hier (main.py via `sudo -E`, damit die Kassetten-
-Env-Var root erreicht). Dashboard auf `http://localhost:5000`.
-
-## Variante A-TUI — Terminal-Kassette (kein Browser)
+## Variante A-TUI — TUI (kein Browser)
 
 Die leanste Front: ZENTRALE direkt im Terminal (curses), gegen dasselbe
 Backend. Motivation: ein Browser-Tab kostet auf einer RAM-schwachen Maschine
@@ -105,10 +52,11 @@ Backend. Motivation: ein Browser-Tab kostet auf einer RAM-schwachen Maschine
 zentrale-tui
 ```
 
-(Symlink `~/.local/bin/zentrale-tui` → `scripts/start_tui.sh`. Falls er fehlt:
-`ln -s "$PWD/scripts/start_tui.sh" ~/.local/bin/zentrale-tui`.)
+(Symlinks `~/.local/bin/zentrale` und `zentrale-tui` → `zentrale-launch`
+(nicht in git), der den Boot-Sync macht und dann `scripts/start_tui.sh` startet.)
 
-Was passiert: `ZENTRALE_KASSETTE=tui` → Backend ki-frei (wie laptop). Antwortet
+Was passiert: `ZENTRALE_LOKALE_KI=aus` → Backend ohne lokale KI (kein
+Ollama-Warmup, kein News-Fetcher; Cloud-Chat bleibt erlaubt). Antwortet
 auf `:5000` schon ein gesundes Backend (Dienst), **hängt sich das Skript dran
 und fasst es nicht an** (`ZENTRALE_TUI_FRESH=1` erzwingt ein eigenes, frisches
 Backend — Entwicklung; Begründung in `systemeinheit.md`). Sonst startet es
@@ -165,7 +113,7 @@ einer anderen Maschine), gibt es niemanden, der wieder aufbaut — dann wäre
 `ZENTRALE_TUI_SUPERVISED=1`; fehlt die Variable, sagt der Befehl schlicht, dass
 er hier nicht geht, statt das Fenster zuzumachen.
 
-Whisper und TTS fasst `/reboot` nicht an — in der TUI-Kassette laufen sie
+Whisper und TTS fasst `/reboot` nicht an — unter `start_tui.sh` laufen sie
 ohnehin nicht.
 
 ### Diagnose: wenn `zentrale-tui` sofort wieder „weg" ist
@@ -281,8 +229,11 @@ Modi, Logs, IP-Wechsel — steht in `memory/betrieb/deployment.md` und
 - **bis 2026-07-25** — `zentrale-tui` bootete in einer eigenen tmux-Session
   mit angeklebter bash-Pane unten (eigener Socket, Prefix-Härtung, gemerkte
   Pane-Höhe). Komplett entfernt — die TUI läuft schlicht im Vollbild.
+- **2026-10-04** — Kassetten entfernt: ein Schalter ZENTRALE_LOKALE_KI, TUI
+  einzige Front, Browser geparkt; `zentrale` startet die TUI direkt,
+  `zentrale-laptop` weg.
 - **2026-06** — Kassetten-Menü (`zentrale` → monolith/laptop/tui) statt
-  eines festen Start-Skripts.
+  eines festen Start-Skripts (bis 2026-10-04).
 - **2026-08-19/20** — Backend wurde Dienst (`systemeinheit.md`); seither
   „hängt sich `start_tui.sh` an statt zu killen", und `/reboot` entstand,
   weil „Fenster zu, Fenster auf" keinen neuen Backend-Code mehr lädt.

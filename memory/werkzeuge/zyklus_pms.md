@@ -49,7 +49,7 @@ Gibt es ihn nicht oder hat er noch keine Werte, liefert alles sauber »nichts«
 Grobe Schätzung auf Mittelwert-Basis, **kein medizinisches Werkzeug** — steht
 auch so im `title` der Browser-Zeile.
 
-## Wo es auftaucht (alle Kassetten)
+## Wo es auftaucht (alle Fronten)
 
 **Graph-Werkzeug** — eine leise Zeile, kein Kasten. Der Text kommt fertig aus
 `cycle.summary()` und sagt je nach Phase das Wichtigste zuerst (und wiederholt

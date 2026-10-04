@@ -4,8 +4,9 @@
 (Event-Loop `core/main.py`, Flask `ui/app.py`), verbunden **nur** über
 `state.py`. Dazu zwei Sidecars (Whisper 5050, TTS 5051) und Ollama. Fronten:
 die **TUI** (`tui/zentrale_tui.py`, Thin Client per HTTP) ist die, an der
-gearbeitet wird; `monolith.html` ist die eine Browser-Front (praktisch
-aufgegeben, Kassetten-Logik steht als Rückbau im Tracker). Der Tutor ist ein
+gearbeitet wird und die einzige Front; `monolith.html` (Browser) ist geparkt.
+Die Kassetten sind entfernt (2026-10-04, Tracker erledigt); lokale KI an/aus
+schaltet allein `ZENTRALE_LOKALE_KI` (`ai_backends.lokale_ki_aus()`). Der Tutor ist ein
 eigenes Projekt in `tutor/`, angebunden allein über `core/tutor_port.py`;
 seine Struktur steht mit Drift-Test in `memory/tutor/bauplan.md`. „Lokal &
 offline" gilt nur noch als Default: die gegatete Internet-Pipe (2026-06) und
@@ -106,7 +107,6 @@ ZENTRALE/
 │   ├── kalender.py          # Kalender-Layer (Termine, Routinen, Konflikt-Alarm)
 │   ├── lists.py             # Dynamische Listen-Registry (To-Do/Checklisten, Listen-Werkzeug)
 │   ├── glossary.py          # Kuratiertes Mini-Glossar (front-agnostisch, `?`-Suche)
-│   ├── kassette.py          # Welche "Kassette" läuft (monolith|laptop|tui) + KI-Gate
 │   ├── mail.py              # Mail-Triage: IMAP rein, sortieren, zurückschreiben
 │   ├── mail_rules.py        # Triage-Keymap (Sender → Ordner/Aktion)
 │   ├── mail_secrets.py      # Verschlüsselter Zugangsdaten-Speicher (Mail-Konten)
@@ -131,15 +131,14 @@ ZENTRALE/
 │   ├── app.py               # Flask Backend + REST API (reiner Adapter auf core/)
 │   ├── static/              # engine.js, viz.js, ascii.js, fonts/ (Monolith-Assets)
 │   └── templates/
-│       └── monolith.html    # DIE EINE Browser-Front (alle Kassetten); KI-Blöcke
-│                            # werden per ki_aus-Flag weggelassen (laptop/tui)
+│       └── monolith.html    # Browser-Front, GEPARKT (nicht benutzt); KI-Blöcke
+│                            # per ki_aus-Flag (= lokale_ki_aus()) weggelassen
 ├── tutor/                   # ★ EIGENES PROJEKT, wohnt hier mit. Rausziehbar am Stück.
 │                            # Baum, Artefakte, Routen, Sprachpakete: memory/tutor/bauplan.md
 │                            # (mit Drift-Test tests/test_tutor_bauplan.py) — hier bewusst nicht kopiert.
-├── tui/                     # Terminal-Kassette (curses), redet NUR via HTTP mit ui/app.py
+├── tui/                     # Die TUI (curses), einzige Front, redet NUR via HTTP mit ui/app.py
 │   ├── zentrale_tui.py      # Die TUI (Sensoren, Karte, Kalender, Listen, Graphen, Mail)
-│   ├── boot_loader.py       # Ladebalken beim Start
-│   └── select_kassette.py   # Kassetten-Auswahl beim Start
+│   └── boot_loader.py       # Blumenwind-Loader beim Start (Boot-Sync dahinter)
 ├── services/
 │   ├── whisper_service.py   # STT (Port 5050)
 │   ├── tts_service.py       # TTS (Port 5051)
@@ -192,10 +191,10 @@ an – es gibt (bewusst) keine zentrale Plugin-Registry:
    `PERMISSION_REQUIRED_TOOLS`). Damit kann die KI den Baustein nutzen.
 2. **Front:** eine REST-Route in `ui/app.py`, die 1:1 an die Baustein-Funktion
    delegiert. `ui/app.py` ist reiner Adapter (keine Business-Logik), die TUI
-   spricht nur über HTTP, beide Browser-Fronts teilen dieselbe API.
+   spricht nur über HTTP, das (geparkte) Browser-Template teilt dieselbe API.
 
 Optionaler Bootstrap (Hintergrund-Fetcher wie `news`/`mail`) wird in `main.py`
-kassetten-abhängig gestartet. Folge: ein neuer Baustein berührt 2–3 zentrale
+abhängig von `lokale_ki_aus()` gestartet. Folge: ein neuer Baustein berührt 2–3 zentrale
 Stellen – sauber genug für „plug-and-play per Konvention", aber keine
 Selbst-Registrierung. Wer echtes Hot-Plug will, müsste `TOOLS`/`_dispatch_tool`
 und das Event-Routing (`brain.py`/`actions.py`, heute `if-elif`) auf eine
@@ -212,8 +211,10 @@ Registry/Dispatch-Tabelle heben.
 - **2026-05** — PC↔Pi-Migration: der Prozess läuft auf dem PC, der Pi
   liefert Sensoren per Webhook (`topologie.md`).
 - **2026-06** — Monolith-Dashboard als die eine Browser-Front; Kassetten
-  (monolith/laptop/tui); Internet-Pipe mit Gate.
+  (monolith/laptop/tui, bis 2026-10-04); Internet-Pipe mit Gate.
 - **2026-07-16** — Tutor als eigenes Projekt herausgelöst (`tutor/`,
   einzige Naht `core/tutor_port.py`).
 - **2026-08** — Cloud-Kern als Opt-in; Arbeit nur noch an der TUI, Browser-
   Fronten aufgegeben (`INDEX.md`, Stand der Fronten).
+- **2026-10-04** — Kassetten entfernt: ein Schalter ZENTRALE_LOKALE_KI, TUI
+  einzige Front, Browser geparkt.

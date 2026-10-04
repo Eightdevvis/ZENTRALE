@@ -53,7 +53,7 @@ Die `version` ist ein **Hash ueber den Paket-Inhalt**, keine hochgezaehlte
 Nummer: aendert sich eine der enthaltenen Dateien, aendert sie sich; sonst
 nicht. Es gibt nichts zu bumpen und nichts zu vergessen.
 
-**Bewusst ohne Kassetten-/KI-Gate:** ein Knoten muss sich auch dann
+**Bewusst ohne KI-Gate:** ein Knoten muss sich auch dann
 aktualisieren koennen, wenn die KI gedrosselt ist — sonst friert genau die
 Maschine ein, die man gerade reparieren will.
 
@@ -106,7 +106,7 @@ Auf der Computertastatur gespielte und aufgezeichnete Melodien
 gespielt: `n` = MIDI-Note (21–108), `t` = Startzeit ab Aufnahmebeginn in ms,
 `d` = Klingdauer in ms. **Kein Takt/Tempo** — nicht quantisiert, damit das
 Gespielte nicht verfälscht wird. Nicht KI-gegatet (direkte Nutzeraktion), also
-in allen Kassetten offen. Fronten: Canvas-Exhibit „Klavier" (monolith/laptop,
+auch ohne lokale KI offen. Fronten: Canvas-Exhibit „Klavier" (Browser, geparkt,
 Taste `k`) **und das TUI-Klavier** (dieselbe Taste) — beide lesen und schreiben
 dieselbe Registry, im Browser Aufgenommenes spielt also auch das Terminal ab.
 
@@ -122,7 +122,7 @@ dieselbe Registry, im Browser Aufgenommenes spielt also auch das Terminal ab.
 Zur Laufzeit angelegte, abhakbare Listen — Pendant zum Lifestyle-Graph-Werkzeug
 (`/api/graphs`), aber für „random stuff" statt Zeitreihen. Definition UND
 Einträge liegen inline (`core/lists.py`); kein `/api/log`-Sharing. Front:
-TUI-Mitte Taste `l` (`memory/system/dashboard.md` → Terminal-Kassette).
+TUI-Mitte Taste `l` (`memory/system/dashboard.md` → TUI).
 
 **Zwei-Dateien-Speicher (isoliert):** Sashas private Listen liegen in
 `data/lists.json`, der **`zentrale`-Feature-Tracker** (Liste `l_zentrale`, von
@@ -229,7 +229,7 @@ Datenmodell + Bedienung: `memory/werkzeuge/notizen_system.md`.
 
 Front-agnostisch: jede Front schickt ihren Viewport (`cx,cy,zoom`) + ihr
 Zielraster (`cols,rows,aspect`); die Engine in `core/map/` projiziert fertig.
-**Nicht** KI-gegatet (Karte gibt es in allen Kassetten). Architektur +
+**Nicht** KI-gegatet (Karte gibt es auch ohne lokale KI). Architektur +
 drei Achsen: `memory/maps/maps_system.md`; Quellen/Lizenzen: `memory/maps/maps_quellen.md`.
 
 | Endpoint                 | Methode | Beschreibung                          |
@@ -248,11 +248,10 @@ lokal gecacht, nicht committet; Refresh per `python -m map.layers.portwatch`.
 ## Kalender (Anzeige)
 
 Front-agnostisch wie die Maps: die geteilte Quelle für die Kalender-Mitte
-**aller** Kassetten (TUI-Modus `c`, Browser-Tab „Kalender" — auch in der
-KI-freien laptop-Kassette, gleiches Template).
+jeder Front (TUI-Modus `c`, Browser-Tab „Kalender" im geparkten Template).
 **Nicht** KI-gegatet — reine Anzeige, kein KI-Tool-Pfad (die KI greift den
 Kalender weiter über `read_calendar`, nicht über diesen Endpoint), läuft also
-auch in der ki-freien Kassette. Datums-Arithmetik macht Python
+auch ohne lokale KI. Datums-Arithmetik macht Python
 (`core/kalender.py`), die Front klassifiziert nur `view` + blättert über `ref`.
 
 | Endpoint                | Methode | Beschreibung                          |

@@ -91,7 +91,7 @@ Sasha: *„die ganzen befehle die in der mitte stehen rutschen einfach in die
 leiste unten. in der mitte bleibt stehen zentrale ai. sie zeigt sich als einen
 mit ascii gezeichneten ring."*
 
-Eine Merkhilfe (vorher stand in der Mitte `KASSETTE · TUI` und die
+Eine Merkhilfe (vorher stand in der Mitte ein Front-Label und die
 Tastenliste) gehört an den Rand; **die Mitte gehört ihr.**
 
 - **Gerechnet, nicht gemalt** (`ring_punkte`/`ring_zeilen`, reine Funktionen).

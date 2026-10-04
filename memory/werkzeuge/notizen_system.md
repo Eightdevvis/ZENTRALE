@@ -74,7 +74,7 @@ frische). **`n` in der Notiz → Übersicht** aller Notizen (also „zweimal n")
 Gespeichert wird bei jeder strukturellen Änderung (block anlegen/löschen,
 haken) und beim Verlassen von Ebene 2 bzw. dem Schließen (`n_save` → PUT).
 
-## Kassetten / offen
+## Fronten / offen
 
 TUI + Backend fertig. **Offen:** Browser-Front (`monolith.html`) und
 verschachtelte Unterpunkte in der listenbox (aktuell flach). Feature-Tracking

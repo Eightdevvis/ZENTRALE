@@ -236,7 +236,7 @@ Session/Sprache/Persona/Memory liegen im Backend.
   - **Damit die Stimme wirklich kommt, muss laufen:** der `tts_service`
     (Port 5051; hard-importiert `soundfile`, zh braucht `sherpa-onnx`), Modelle
     via `services/download_tts_model.py`. `/api/speak` blockt nur, wenn AUCH der
-    Tutor kein Backend hat (`kassette.ki_aus() and not tutor_port.available()`)
+    Tutor kein Backend hat (`ai_backends.lokale_ki_aus() and not tutor_port.available()`)
     — sonst spricht die Cloud-Persona trotz „lokale KI aus".
 - **Mikro:** immer offen, VAD → Segment → `/api/transcribe` (Sprache aus dem
   Profil); Whisper-Untertitel-Floskeln gehen nicht als Sashas Worte durch
@@ -411,7 +411,7 @@ für den Claude-Pfad). `DASHSCOPE_API_KEY` liegt in `data/ai_config.json` —
 **einzige Key-Quelle**; ein `keys`-Block in der Legacy-Datei wird ignoriert
 und beim Start angemahnt.
 
-**Verfügbarkeit (kapazitätsbasiert, nicht kassetten-hart):** Fronten fragen
+**Verfügbarkeit (kapazitätsbasiert, nicht hart an „lokale KI aus"):** Fronten fragen
 IMMER `tutor_port.available()`, nie `tutor.session` direkt. Der Port prüft
 zwei Dinge getrennt: **Darf er?** — `tutor_port.allowed()` fragt die
 ZENTRALE-Drossel (`ai_backends.cloud_enabled()`/`local_enabled()`, je nach

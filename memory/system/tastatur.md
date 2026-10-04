@@ -61,7 +61,7 @@ in die Lücken E–F und H–C (keine schwarze Taste) und bleiben deshalb frei.
 
 Siehe `memory/system/dashboard.md` → „Klavier".
 
-### Im Klavier der TUI (Taste `k`, Terminal-Kassette)
+### Im Klavier der TUI (Taste `k`)
 
 Gleiche Klaviatur, gleiche Melodien (dieselbe Registry `data/melodies.json`).
 Drei Unterschiede, die aus dem Terminal kommen:
@@ -97,7 +97,7 @@ Drei Unterschiede, die aus dem Terminal kommen:
 > den Sensor-Trigger `m`). Ein Presence-Auto-Start existiert nicht — siehe
 > `memory/tutor/tutor_system.md`.
 
-## In der TUI (Terminal-Kassette)
+## In der TUI
 
 Die Belegung steht **nicht hier**, sondern als einzige Wahrheit im Code:
 `TUI_KEYS` (volle Hilfe, `/help`) und `CTX_KEYS` (die Tasten des gerade

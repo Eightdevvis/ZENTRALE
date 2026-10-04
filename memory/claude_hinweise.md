@@ -146,7 +146,7 @@ hängen), weicht diese Trennung bewusst auf – im Zweifel sein lassen.
   (`memory/system/dashboard.md` → Riegel); `scripts/zentrale-systemeinheit` weigert
   sich aus einem Worktree.
 
-### Kassetten-Prinzip: geteilte Logik, pro Front gerendert
+### Renderer-Prinzip: geteilte Logik, pro Front gerendert
 
 Generelles Bau-Prinzip für **jedes** neue Feature:
 
@@ -217,7 +217,7 @@ verletzt dieses Prinzip — Logik gehört nach `core/`, nicht in die Front.
 ## Historie
 
 - **2026-05** — erste Fassung: Threads, Event-Pipeline, Ollama, Legacy-LTM.
-- **2026-07** — Cloud→Lokal-Trennung (Tutor-Sandbox), Kassetten-Prinzip mit
+- **2026-07** — Cloud→Lokal-Trennung (Tutor-Sandbox), Renderer-Prinzip (damals „Kassetten-Prinzip") mit
   der „alle Fronten"-Regel.
 - **2026-08** — Cloud-Kern, Datei-Gedächtnis, nur noch TUI.
 - **2026-09-18** — auf `memory/doku_regeln.md` gebracht; veraltete Sätze (Audio

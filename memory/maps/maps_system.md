@@ -177,12 +177,12 @@ später zur Navi-Map zusammenführen (Migrationsrisiko). Und auch **nicht**:
 alles von Anfang an in einen Mega-Merge zwingen. Der Mittelweg — ein Substrat,
 viele Overlays — ist genau das, was das Endziel ("übereinanderliegen") braucht.
 
-## Architektur (folgt dem Kassetten-Prinzip)
+## Architektur (folgt dem Renderer-Prinzip)
 
 Die Map ist ein Lehrbuchfall für das Haus-Prinzip „geteilte Logik, pro Front
-gerendert" (siehe `claude_hinweise.md` → „Kassetten-Prinzip"). Vorbild im
+gerendert" (siehe `claude_hinweise.md` → „Renderer-Prinzip"). Vorbild im
 Kleinen ist das **Graph-Werkzeug**: Logik in `core/graphs.py` + Registry +
-`/api/graphs`, dreifach gerendert (Monolith-SVG, TUI-curses, Laptop offen).
+`/api/graphs`, gerendert als TUI-curses (und Monolith-SVG im geparkten Browser).
 
 ```
 core/map/                 ← ALLE Geo-Logik, front-agnostisch
@@ -297,8 +297,8 @@ Sasha begleitet jeden Schritt und gibt die Details vor.
   liegt schon bereit als Grenzen-Quelle für den **politischen** Layer (Schritt 2).
 
 **API (`ui/app.py`):** `GET /api/map/base?cx&cy&zoom&cols&rows&aspect` →
-`map_base_features(...)`. **Nicht** KI-gegatet (Karte gibt es in allen
-Kassetten). `aspect` = Zellbreite/Höhe: TUI schickt `0.5` (Zeichen ~doppelt so
+`map_base_features(...)`. **Nicht** KI-gegatet (Karte gibt es auch ohne
+lokale KI). `aspect` = Zellbreite/Höhe: TUI schickt `0.5` (Zeichen ~doppelt so
 hoch wie breit), ein Browser-Front später `1.0`.
 
 **TUI-Renderer (`tui/zentrale_tui.py`, Taste `m`):** füllt die MITTE-Box mit

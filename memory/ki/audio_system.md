@@ -262,7 +262,7 @@ audio.py  ──HTTP──▶  tts_service.py  (Port 5051)
 
 Am **PC** laufen Whisper/TTS als systemd-Units (immer da). Am **Laptop**
 (`0RAMMachine`, kaum RAM) dürfen die Modelle **nicht ab Boot** mitlaufen — und
-`zentrale-tui`/`start_tui.sh` startet sie bewusst **nicht** (KI-freie Kassette).
+`zentrale-tui`/`start_tui.sh` startet sie bewusst **nicht** (`ZENTRALE_LOKALE_KI=aus`).
 Damit das Persona-Zimmer trotzdem Stimme/Mikro hat, öffnet die TUI (`tutor_window`)
 es über den Wrapper **`scripts/open_tutor_room.py`** statt `room.py` direkt:
 

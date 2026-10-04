@@ -461,7 +461,7 @@ nie über der höchsten UID liegt.)
 
 ## Trigger + Transparenz
 
-`start_fetcher` (aus `main.py`, **kassetten-unabhängig**) ist hart gegated über
+`start_fetcher` (aus `main.py`, **unabhängig von `lokale_ki_aus()`**) ist hart gegated über
 `ZENTRALE_MAIL=on` — **default AUS**, damit nichts ungewollt IMAP kontaktiert.
 Intervall `MAIL_INTERVAL_MIN` (Default 10). IMAP läuft **nicht** durch
 `net.py` (das ist HTTP) → jeder Lauf loggt explizit via

@@ -13,8 +13,8 @@ modellgetrieben). **Das Gedächtnis ist das Datei-Gedächtnis**
 (`gedaechtnis_dateien.md`); der Konzept-Graph ist seit 2026-08-18
 abgeschaltet (`ZENTRALE_GRAPH_KONTEXT`/`_EXTRAKTION` holen ihn zurück), sein
 Abschnitt unten beschreibt, wie er arbeitet, wenn er an ist. Der Chat ist
-nicht kassetten-hart gegatet (`chat_available()`: ki-freie Kassette darf
-Cloud, nie lokal). Tool-Calls und Denken stehen im Chat, das Devtools-Terminal
+nicht hart gegatet (`chat_available()`: ohne lokale KI —
+`ZENTRALE_LOKALE_KI=aus` — Cloud ja, lokal nie). Tool-Calls und Denken stehen im Chat, das Devtools-Terminal
 zeigt den vollen Request. Kosten in `data/ai_usage.json`. ⚠ prüfen: der
 Abschnitt „Modell-Parameter" nennt `claude-opus-5`, `cloud_bericht.md` (21.08.)
 Sonnet 5 + Haiku 4.5 für die Verdichtung, der Code-Default ist Sonnet — was
@@ -831,15 +831,16 @@ Vorwahl `chat_backend()` (`auto` | `local` | `cloud`, in
 - Erreichbar heißt nicht bedienbar: ein Provider ohne `kind` in der Registry
   zählt für den Chat nicht, auch wenn ein Key gesetzt ist.
 
-### Kassetten-Regel (seit 2026-08-15)
+### Lokal-Regel (seit 2026-08-15, Schalter seit 2026-10-04)
 
-Der Chat ist **nicht mehr kassetten-hart** gegatet. `ai_backends.chat_available()`
+Der Chat ist **nicht hart** gegatet. `ai_backends.chat_available()`
 ist die eine Frage, die alle Chat-Endpoints stellen:
 
-- Eine ki-freie Kassette (**laptop/tui**) bringt **keine eigene KI** mit →
+- Ein Knoten ohne lokale KI (`ai_backends.lokale_ki_aus()`, Env
+  `ZENTRALE_LOKALE_KI=aus`, z. B. der Laptop) bringt **keine eigene KI** mit →
   `local` bleibt dort aus, auch wenn Ollama erreichbar wäre.
-- Eine **Cloud**-KI ist nicht die KI dieser Kassette, sondern eine externe
-  Leitung → die darf sie nutzen. Das ist der Unterwegs-Fall: Laptop ohne
+- Eine **Cloud**-KI ist nicht die KI dieses Knotens, sondern eine externe
+  Leitung → die darf er nutzen. Das ist der Unterwegs-Fall: Laptop ohne
   Ollama, Chat trotzdem da.
 
 Vier Endpoints hängen daran: `/api/chat`, `/api/chat/history`,
@@ -1082,7 +1083,7 @@ Festwert. Details: `memory/ki/audio_system.md` und `memory/system/api_endpoints.
   (`../betrieb/datei_zugriffe.md`).
 - **2026-08-10** — Entscheidung für die Cloud (`cloud_umstieg_plan.md`).
 - **2026-08-15** — `core/cloud.py`, `chat_backend: cloud`, Kassetten-Regel
-  (Cloud auch in ki-freien Kassetten), TUI als Thin Client.
+  (Cloud auch in ki-freien Kassetten; heute Lokal-Regel), TUI als Thin Client.
 - **2026-08-17/18** — Zeit in vier Auflösungen, Kalender-Spiegel gelöscht,
   Imprint in den Cache; **Datei-Gedächtnis statt Graph**; zwei
   Prompt-Schienen `profil/klein|gross`; Devtools zeigen den vollen Request.
