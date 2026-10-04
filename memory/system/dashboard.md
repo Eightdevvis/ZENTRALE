@@ -99,7 +99,20 @@ etwas (Merge nach main, Edit) und ruht 1 s, wird kompiliert und die TUI per
 `exec` durch sich selbst ersetzt — gleiches Fenster, gleiche pid, das Rad
 bleibt stehen. Kaputter Code wird NICHT geladen (Meldung unten + Log). Nie
 beim Tippen, in der Befehlszeile, im Klavier oder während eine Antwort
-einläuft. Von Hand: `/reload`. Das Backend lädt nicht mit — dafür `/reboot`. Auf dem Pi ist das Wandbild das Zimmer, nicht
+einläuft. Von Hand: `/reload`.
+
+**Backend-Hot-Reload** (seit 04.10.2026, `core/hot_reload.py`): das Backend
+beobachtet `core/`, `ui/`, `tutor/` (`*.py`, ohne `test_*`). Ruht neuer Code
+eine Prüfung lang (~2 s) und kompiliert, ersetzt sich der Prozess per `exec`
+durch sich selbst — gleiche pid, systemd merkt nichts, :5000 ist nach ein,
+zwei Sekunden wieder da. Nie während eines laufenden Requests (Chat-Stream
+samt Erlaubnis-Frage) oder einer aktiven Tutor-Session — dann steht
+`HOT RELOAD wartet: …` im Log. Kaputter Code → `HOT RELOAD verworfen`, der
+alte läuft weiter. Falle: werkzeug macht den Lausch-Socket vererbbar, deshalb
+schließt `neu_starten()` vor dem `exec` alle fds ab 3. Abschalten:
+`ZENTRALE_HOT_RELOAD=aus`. Der harte Fall bleibt `/reboot`.
+
+Auf dem Pi ist das Wandbild das Zimmer, nicht
 diese Front (`../betrieb/deployment.md`). Der Rest dieser Datei ist die
 ausführliche Mechanik + das Warum; Datumsangaben im Text sind Marken, die
 Historie steht unten.

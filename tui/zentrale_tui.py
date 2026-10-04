@@ -1424,8 +1424,9 @@ def _signal_handler(signum, _frame):
 # ändern sie sich (Merge nach main, Edit), ersetzt sie sich per exec durch
 # sich selbst — gleiches Terminal, gleiche pid, das Fenster bleibt stehen.
 # Vorher wird der neue Code kompiliert: ist er kaputt, bleibt der alte laufen
-# und unten steht, wo es hakt. Nie mitten im Tippen. Das Backend lädt NICHT
-# mit (dafür bleibt /reboot).
+# und unten steht, wo es hakt. Nie mitten im Tippen. Das Backend hat seit
+# 04.10.2026 seinen eigenen Hot Reload (core/hot_reload.py); /reboot bleibt
+# für den harten Fall.
 RELOAD = {"an": False}
 TUI_DIR = os.path.dirname(os.path.abspath(__file__))
 

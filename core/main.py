@@ -91,6 +91,11 @@ def main():
     log("ZENTRALE SYSTEM STARTED")
     log("UI erreichbar unter http://localhost:5000")
 
+    # Hot Reload: neuer Backend-Code → Prozess ersetzt sich selbst
+    # (core/hot_reload.py). Stand beim Start merken.
+    import hot_reload
+    waechter = hot_reload.Waechter(log) if hot_reload.an() else None
+
     _alarm_tick = 0
     while True:
         # 1️⃣ Sensoren abfragen + State updaten
@@ -147,6 +152,11 @@ def main():
                 state.set_alarms(kalender.open_alarms())
             except Exception as e:
                 log(f"Alarm-Recompute fehlgeschlagen: {e}")
+
+        # 3c️⃣ Hot Reload prüfen — nach dem Event-Loop, also nie mitten in
+        # einem Event.
+        if waechter and waechter.tick():
+            hot_reload.neu_starten(log)
 
         # 4️⃣ Kleine Pause um CPU zu schonen
         time.sleep(1)

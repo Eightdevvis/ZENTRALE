@@ -57,6 +57,11 @@ from map import country_outlines as map_country_outlines  # type: ignore  – L�
 
 app = Flask(__name__)
 
+# Hot Reload: laufende Requests zählen, damit das Backend sich nie mitten in
+# einer Antwort neu startet (core/hot_reload.py).
+import hot_reload   # type: ignore
+hot_reload.requests_zaehlen(app)
+
 # Templates bei Änderung neu einlesen, ohne den ganzen Server neu zu starten.
 # debug bleibt aus (use_reloader würde im Thread Probleme machen) – das hier
 # betrifft NUR das Jinja-Template-Caching. Spart bei UI-Arbeit den Neustart;
