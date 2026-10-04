@@ -7693,7 +7693,40 @@ def run_ui(stdscr, store):
         if answer is not None:
             lines += ai_wrap("ai", answer + ("▌" if streaming else ""), inw)
 
-        if not lines:
+        # Das Auge (Sasha, 04.10.2026): gross, in der Mitte, im Stil der
+        # App-Symbole. Leerer Chat → mittig mit dem Hinweis darunter; läuft
+        # ein Gespräch → oben, der Verlauf rückt darunter. Zu niedrig → weg.
+        if C.get("pix_bg") is not None and PIX_MODUS != "off" and bw >= pixel.AUGE_W + 4:
+            jetzt = time.monotonic()
+            if AI.get("auge_t0") is None:
+                AI["auge_t0"] = jetzt                  # gerade geöffnet: Lider gehen auf
+            seit = jetzt - AI["auge_t0"]
+            farben = "nacht" if sum(C["pix_bg"]) < 384 else "tag"
+            auge = pixel.auge_zellen(round(min(1.0, seit / .45), 2), int(seit * 1000),
+                                     streaming, farben,
+                                     "half" if PIX_MODUS == "half" else "mix")
+            ey = None
+            if not lines and avail >= pixel.AUGE_H + 3:
+                ey = body_top + max(0, (avail - pixel.AUGE_H - 2) // 2)
+            elif lines and avail >= pixel.AUGE_H + 6:
+                ey = body_top
+                body_top += pixel.AUGE_H + 1
+                avail = max(1, body_bot - body_top + 1)
+            if ey is not None:
+                ex = bx + (bw - pixel.AUGE_W) // 2
+                for r, line in enumerate(auge):
+                    for c, z in enumerate(line):
+                        if z:
+                            safe_addstr(ey + r, ex + c, z[0], pix_attr(z[1], z[2]))
+                if not lines:
+                    hinweis = "frag die lokale ki — tippen + enter"
+                    addclip(ey + pixel.AUGE_H + 1, bx + max(2, (bw - len(hinweis)) // 2),
+                            hinweis, inw, C["faint"])
+                    lines = None                       # Hinweis steht schon
+
+        if lines is None:
+            pass
+        elif not lines:
             addclip(body_top + avail // 2, inx,
                     "frag die lokale ki — tippen + enter", inw, C["faint"])
         else:
@@ -7939,7 +7972,8 @@ def run_ui(stdscr, store):
                 or RAD["pos"] != RAD["sel"] or RAD["schnell"]
                 or TRAD["pos"] != TRAD["sel"] or META["gpos"] != META["gsel"]
                 or RAD.get("wurf") or TRAD.get("wurf"))
-        stdscr.timeout(33 if fast else (LAUF_TICK_MS if LAUF["laeuft"] else 250))
+        stdscr.timeout(33 if fast else 60 if AI["active"]      # das Auge lebt
+                       else (LAUF_TICK_MS if LAUF["laeuft"] else 250))
         ch = stdscr.getch()
 
         if nag_active:
@@ -9557,6 +9591,9 @@ def run_ui(stdscr, store):
             if std_h >= 3:
                 laeuft_jetzt = draw_stdout(top + ext_h + tele_h, lx, std_h, leftw,
                                            state.get("logs", []) or [])
+
+        if not AI["active"]:
+            AI["auge_t0"] = None                       # nächstes Öffnen: Lider gehen neu auf
 
         # ── MITTE: Graph-Werkzeug / Karte (oder Einladung, sie zu öffnen) ──
         if G["active"]:

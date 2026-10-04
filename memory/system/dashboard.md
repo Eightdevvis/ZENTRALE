@@ -78,7 +78,16 @@ Ringen und roter Kopfleiste (heute blinkt), klavier = Klaviatur (eine Taste
 nach der anderen leuchtet), notizen = Block mit Bleistift (eine Zeile wird
 geschrieben), graph = steigende Balken (wippen), fokus = Zielscheibe (Ring
 pulst), tutor = Sprechblase (drei Punkte tippen). Die Pillen hinten leuchten in
-der Hauptfarbe ihrer App (`symbol_pille`, Schrift hell/dunkel nach Lesbarkeit). Ein Motiv ist eine Funktion
+einer kräftigen Farbe ihrer App (`symbol_pille`, `PILLE`: karte grün, kalender
+rot, klavier violett), Schrift hell/dunkel nach Lesbarkeit. Jede Pillenfarbe
+rastet über `pixel.bunt` auf die nächste BUNTE Würfelfarbe der 256er-Palette
+mit ähnlichem Farbton ein — sonst fielen weggedrehte, abgedunkelte Pillen auf
+die Graurampe. **KI-Chat (Leertaste): ein grosses Pixel-Auge** (`pixel.auge_*`,
+38×14 Zellen) — Lider gehen beim Öffnen auf, es blinzelt alle 4–6 s und schaut
+sich um; solange die KI denkt, schaut es geradeaus, die Pupille wird klein,
+die Iris pulst, ein Funkenring kreist. Leerer Chat: mittig mit Hinweis drunter;
+mit Verlauf: oben, Verlauf darunter. Zwischengespeichert nach sichtbarem
+Zustand (`auge_zustand`), nicht nach Uhrzeit — ~5–7 ms je Bild. Ein Motiv ist eine Funktion
 auf dem offenen 32×54-Feinraster; aufklappen, Details wachsen lassen und die
 abgedunkelte Platte hinter dem Schriftzug macht `symbol_pixel` für alle gleich.
 Ohne 256 Farben (bzw. `ZENTRALE_PIXEL=off`) stehen die Apps als Schriftzug

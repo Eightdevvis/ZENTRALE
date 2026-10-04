@@ -450,3 +450,45 @@ def test_ruhe_animation_bewegt_sich():
     for name in px.MOTIVE:
         bilder = {str(px.symbol_pixel(name, 1.0, t, "nacht")) for t in range(0, 3000, 150)}
         assert len(bilder) > 1, name
+
+
+def test_pillen_bleiben_farbig_und_karte_ist_gruen():
+    """Sasha, 04.10.2026: weggedrehte Pillen wurden grau; die Karte soll grün."""
+    px = _pixel()
+    grau = {16, 59, 102, 145, 188, 231} | set(range(232, 256))
+    for name in list(px.MOTIVE) + ["elektronik"]:
+        for farben in ("nacht", "tag"):
+            for fern in (False, True):
+                grund, _ = px.symbol_pille(name, fern, farben)
+                assert px.rgb_256(grund) not in grau, (name, farben, fern)
+    r, g, b = px.symbol_pille("karte", False, "nacht")[0]
+    assert g > r and g > b
+
+
+# ── Das Auge der KI ─────────────────────────────────────────────────────
+# Sasha: *„wenn man dann leertaste die ki aufmacht mach ein großes
+# animiertes auge in die mitte im stil der app icons"*
+
+def test_auge_hat_seine_groesse_und_lebt():
+    px = _pixel()
+    zeilen = px.auge_zellen(1.0, 300, False, "nacht", "mix")
+    assert len(zeilen) == px.AUGE_H and all(len(z) == px.AUGE_W for z in zeilen)
+    zustaende = {px.auge_zustand(1.0, t) for t in range(0, 12000, 60)}
+    assert {z[0] for z in zustaende} > {1.0}                 # es blinzelt
+    assert len({(z[1], z[2]) for z in zustaende}) > 2         # es schaut sich um
+    assert px.auge_zustand(0.0, 0)[0] == 0.0                  # beim Öffnen zu …
+    assert px.auge_zustand(1.0, 300)[0] == 1.0                # … dann auf
+
+
+def test_auge_denkt():
+    px = _pixel()
+    ruhig = px.auge_pixel(1.0, 900, False, "nacht")
+    denkt = px.auge_pixel(1.0, 900, True, "nacht")
+    assert ruhig != denkt
+    assert len({px.auge_zustand(1.0, t, True)[3:] for t in range(0, 3000, 50)}) > 3
+
+
+def test_ki_chat_zeigt_das_auge():
+    schirm = _lauf(b" ")
+    assert "frag die lokale ki" in schirm
+    assert any(chr(c) in schirm for c in range(0x1FB00, 0x1FB3C))   # Sextanten = Pixelbild

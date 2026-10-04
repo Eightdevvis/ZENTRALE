@@ -697,18 +697,185 @@ def _hell(c):
     return .299 * c[0] + .587 * c[1] + .114 * c[2]
 
 
+# Pillenfarbe je App: die kräftigste Farbe des Motivs, nicht zwingend die
+# Grundfläche (Kalender und Klavier sind innen fast weiss → rot bzw. violett;
+# Karte grün wie die Kontinente — Sasha, 04.10.2026).
+PILLE = {"post": "core", "karte": "akzent", "kalender": "akzent",
+         "klavier": "glow", "notizen": "core", "graph": "core",
+         "fokus": "core", "tutor": "core"}
+
+
+def bunt(c):
+    """Die nächste BUNTE Farbe des 6×6×6-Würfels der 256er-Palette, als RGB.
+    Blasse oder dunkle Töne fielen sonst auf die Graurampe — weggedrehte
+    Pillen wurden grau (Sasha, 04.10.2026). Exakt eine Würfelfarbe, damit die
+    TUI sie unverändert trifft, auch im 256er-Modus."""
+    def ton(v):                                             # Farbton als Richtung
+        m = sum(v) / 3
+        x = [k - m for k in v]
+        n = math.sqrt(sum(k * k for k in x)) or 1.0
+        return [k * 100 / n for k in x]
+    t0 = ton(c)
+    best = None
+    for r in _CUBE:
+        for g in _CUBE:
+            for b in _CUBE:
+                if max(r, g, b) - min(r, g, b) < 40:
+                    continue                                    # zu grau
+                t1 = ton((r, g, b))                             # Farbton zählt mit
+                d = _d2(c, (r, g, b)) + 2.5 * sum((p - q) ** 2 for p, q in zip(t0, t1))
+                if best is None or d < best[0]:
+                    best = (d, (r, g, b))
+    return best[1]
+
+
 def symbol_pille(name, fern=False, farben="nacht"):
     """Farben der Pille einer App im Rad: (grund, text) — kräftig in der
-    Farbe der App (Sasha: die Pillen dürfen alle farbig sein). Die Schrift
-    nimmt hell oder dunkel, je nachdem, was auf dem Grund lesbar ist."""
+    Farbe der App (Sasha: die Pillen dürfen alle farbig sein), auch weiter
+    hinten nie grau. Die Schrift nimmt hell oder dunkel, je nachdem, was
+    auf dem Grund lesbar ist."""
     if name == "elektronik":
-        return elektronik_pille(fern, farben)
+        grund, text = elektronik_pille(fern, farben)
+        return bunt(grund), text
     P = SYM_FARBEN[name]
     bg, _ = _GRUND[farben]
-    grund = mix(P["core"], bg, .2 if farben == "nacht" else .1)
-    if farben == "tag" and _hell(grund) > 225:                 # fast weiss auf weiss
-        grund = mix(P["core"], P["glow"], .6)
+    grund = mix(P[PILLE[name]], bg, .2 if farben == "nacht" else .1)
+    if fern:
+        grund = mix(grund, bg, .35)
+    grund = bunt(grund)
     text = P["dunkel"] if _hell(grund) > 150 else mix(P["edge"], _hex("#ffffff"), .5)
     if fern:
-        return mix(grund, bg, .45), mix(text, bg, .4)
+        text = mix(text, grund, .35)
     return grund, text
+
+
+# ── Das Auge der KI (Sasha, 04.10.2026) ─────────────────────────────────────
+# Leertaste öffnet den KI-Chat; in der Mitte schaut ein grosses Auge im Stil
+# der App-Symbole. `offen` 0→1: die Lider gehen auf. Offen blinzelt es ab und
+# zu und schaut sich langsam um; solange die KI denkt (`denkt`), zieht sich die
+# Pupille zusammen, die Iris pulst und ein Funkenring kreist.
+AUGE_W, AUGE_H = 38, 14                              # Zellen ("gross", Sasha)
+_AW, _AH = AUGE_W * FX, AUGE_H * FY                  # 76 × 84 Feinpixel
+_AK = (_AW / 2 - 1.5) / 24.5                         # Massstab gegen den 52er-Entwurf
+_ACX, _ACY, _ARX, _ARY = _AW / 2, _AH / 2 + 2, _AW / 2 - 1.5, 17.0 * _AK
+AUGE_FARBEN = {
+    "nacht": {"bg": _hex("#000000"), "weiss": _hex("#dfe9f2"), "schatten": _hex("#7d93a8"),
+              "iris": _hex("#25c99a"), "irishell": _hex("#a6ffe0"), "irisrand": _hex("#0b4a3a"),
+              "pupille": _hex("#03100c"), "rand": _hex("#9fe8d2"), "wimper": _hex("#4fd8b0")},
+    "tag":   {"bg": _hex("#ffffff"), "weiss": _hex("#f4f8fb"), "schatten": _hex("#9fb2c4"),
+              "iris": _hex("#14a37a"), "irishell": _hex("#6fe8bf"), "irisrand": _hex("#073b2d"),
+              "pupille": _hex("#02100b"), "rand": _hex("#0b5c46"), "wimper": _hex("#0e7a5c")},
+}
+
+
+def _blick(t_ms):
+    """Wohin schaut das Auge? Alle 1,8 s ein neues Ziel, weich angefahren.
+    -> (dx, dy) in Feinpixeln."""
+    seg, rest = divmod(t_ms, 1800)
+    def ziel(k):
+        if _rnd(k, 5) < .35:
+            return 0.0, 0.0                                         # geradeaus
+        return (_rnd(k, 7) * 2 - 1) * 9 * _AK, (_rnd(k, 11) * 2 - 1) * 3.5 * _AK
+    a, b = ziel(seg - 1), ziel(seg)
+    u = _ease(min(1.0, rest / 450))                                 # 0,45 s Blickwechsel
+    return a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u
+
+
+def _lid(t_ms):
+    """Lidöffnung 0..1 durch Blinzeln: alle ~4–6 s für 180 ms zu und wieder auf."""
+    periode = 4300 + int(_rnd(t_ms // 4300, 3) * 1700)
+    p = t_ms % periode
+    if p < 180:
+        return abs(1 - p / 90)                                      # 1 → 0 → 1
+    return 1.0
+
+
+def auge_zustand(offen, t_ms, denkt=False):
+    """Uhrzeit → sichtbarer Zustand, grob gerastert, damit ein ruhig
+    schauendes Auge aus dem Zwischenspeicher kommt statt neu gerechnet
+    zu werden. -> (lid, blick_x, blick_y, puls, ring)"""
+    o = _ease(max(0.0, min(1.0, offen))) * (_lid(t_ms) if offen >= 1 else 1.0)
+    bx, by = _blick(t_ms) if offen >= 1 else (0.0, 0.0)
+    puls = .5 + .5 * math.sin(t_ms / 160) if denkt else 0.0
+    ring = (t_ms // 250) % 12 if denkt else 0
+    if denkt:
+        bx = by = 0.0                                               # denkend schaut es geradeaus
+    return (round(o * 20) / 20, round(bx * 2) / 2, round(by * 2) / 2,
+            round(puls * 4) / 4, ring)
+
+
+def auge_pixel(offen, t_ms, denkt=False, farben="nacht"):
+    """Das Auge als Feinpixel-Raster (_AH × _AW), RGB | None."""
+    return _auge_pixel(auge_zustand(offen, t_ms, denkt), denkt, farben)
+
+
+def _auge_pixel(zustand, denkt, farben):
+    F = AUGE_FARBEN[farben]
+    o, bx, by, puls, ring = zustand
+    t_ms = ring * 250
+    ir_x = 8.6 * _AK                                                # Iris-Radius (x)
+    pu_x = ((2.0 + .4 * puls) if denkt else 3.3) * _AK              # Pupille
+    px = [[None] * _AW for _ in range(_AH)]
+    for y in range(_AH):
+        for x in range(_AW):
+            dx = (x + .5 - _ACX) / _ARX
+            if abs(dx) >= 1:
+                continue
+            halb = _ARY * (1 - dx * dx) ** .85                      # Mandelform
+            dy = y + .5 - _ACY
+            if abs(dy) > halb * o + .6:
+                # Wimpern über dem Oberlid
+                if (o > .6 and dy < 0 and abs(dy) < halb * o + 4.5 * _AK
+                        and int(x) % 8 == 4 and abs(dx) < .75):
+                    px[y][x] = mix(F["bg"], F["wimper"], .8)
+                continue
+            if abs(dy) > halb * o - .9:                             # Lidrand
+                px[y][x] = F["rand"]
+                continue
+            # Iris (Kreis: ry = 1,5·rx)
+            ix, iy = (x + .5 - _ACX - bx), (y + .5 - _ACY - by) / 1.5
+            r = math.hypot(ix, iy)
+            if r < ir_x:
+                if r < pu_x:
+                    c = F["pupille"]
+                    if math.hypot(ix + 1.4 * _AK, iy + 1.3 * _AK) < 1.1 * _AK:
+                        c = F["irishell"]                           # Lichtpunkt
+                elif r > ir_x - 1.1 * _AK:
+                    c = F["irisrand"]
+                else:
+                    k = (r - pu_x) / (ir_x - pu_x)
+                    strahl = .15 * math.sin(math.atan2(iy, ix) * 9)     # Irisfasern
+                    k = min(1.0, max(0.0, k + strahl - .25 * puls))
+                    kq = math.floor(k * 3 + _BAYER[y & 3][x & 3] / 16) / 3
+                    c = mix(F["irishell"], F["iris"], kq)
+                px[y][x] = c
+                continue
+            if denkt and abs(r - (ir_x + 2.2 * _AK)) < .7 * _AK:     # Funkenring
+                w = math.atan2(iy, ix)
+                if (math.floor((w + t_ms / 300) * 6 / math.pi)) % 3 == 0:
+                    px[y][x] = F["irishell"]
+                    continue
+            schatten = max(0.0, min(1.0, (abs(dx) - .55) / .45)) * .6 + \
+                max(0.0, -dy / halb) * .25 if halb else 0
+            px[y][x] = mix(F["weiss"], F["schatten"], schatten)
+    return px
+
+
+def auge_zellen(offen, t_ms, denkt=False, farben="nacht", modus="mix"):
+    """Das Auge als Zellen: zeilen[r][c] = (zeichen, fg, bg) oder None."""
+    return _auge_zellen(auge_zustand(offen, t_ms, denkt), denkt, farben, modus)
+
+
+@lru_cache(maxsize=256)
+def _auge_zellen(zustand, denkt, farben, modus):
+    F = AUGE_FARBEN[farben]
+    px = _auge_pixel(zustand, denkt, farben)
+    zeilen = []
+    for r in range(AUGE_H):
+        line = []
+        for c in range(AUGE_W):
+            fine = [px[r * FY + y][c * FX + x] for y in range(FY) for x in range(FX)]
+            line.append(None if all(p is None for p in fine)
+                        else zelle([p or F["bg"] for p in fine], modus))
+        zeilen.append(line)
+    return zeilen
