@@ -632,7 +632,9 @@ Vier **Graph-Typen** (`GRAPH_TYPES`, Validierung in `core/graphs.py`):
   Eingabe von→bis (`pstage`/`input2`), gespeichert als `value`=Start-Minute +
   `end`=End-Minute. `end < value` = über Mitternacht.
 
-`time`/`period` werden als **24h-Gitter** gezeichnet (`draw_time_plot`):
+`time`/`period` wurden als **24h-Gitter** gezeichnet (`draw_time_plot`, seit
+04.10.2026 archiviert in `../archive/tui_zeit_plot.md`; heute zeichnet
+`draw_overlay` sie mit):
 X = letzte Einträge (Datum), Y = Uhrzeit (00:00 **unten** … 24:00 **oben**,
 Stunden-Marken), `time` → Punkt `●`, `period` → Balken `█` (über Mitternacht in
 zwei Segmente gesplittet via `fill()`, da die Achse an Mitternacht verankert

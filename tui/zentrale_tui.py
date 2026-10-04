@@ -1700,108 +1700,6 @@ def md_inline(text):
     return text
 
 
-# ── Der Ring: ZENTRALE zeigt sich selbst ─────────────────────────────────
-#
-# Sasha, 20.08.2026: die Befehle wandern aus der Mitte in die Fussleiste, und
-# in der Mitte bleibt SIE stehen — "sie zeigt sich als einen mit ascii
-# gezeichneten ring".
-#
-# Der Ring zeigt, was sie ueber die Lage weiss (core/anwesenheit.py):
-#
-#   offen     Sasha hat ZENTRALE offen. Sie hat seine Aufmerksamkeit —
-#             heller, geschlossener Ring.
-#   woanders  Er ist da, aber bei etwas anderem. Sie schaut zu, ohne zu
-#             stoeren — matter Ring.
-#   weg       Niemand an der Maschine. Sie ruht — nur noch eine Andeutung.
-#
-# Gerechnet statt gemalt: ein festes ASCII-Bild passt genau in EINE
-# Fenstergroesse. Der Ring hier waechst mit dem Kasten mit, und weil er aus
-# Winkeln entsteht, ist die wandernde Helle beim Denken nur ein Offset —
-# kein zweites Bild, das man synchron halten muesste.
-#
-# Terminalzellen sind etwa doppelt so hoch wie breit. Ohne die Korrektur
-# (rx = 2*ry) waere es kein Ring, sondern ein liegendes Ei.
-
-# Was unter dem Ring steht. Kurz und in Sashas Ton — der Kasten soll den
-# Zustand zeigen, nicht ihn erklaeren.
-LAGE_TEXT = {
-    "offen":     "du bist da",
-    "woanders":  "du bist da, arbeitest woanders",
-    "weg":       "niemand an der maschine",
-    "unbekannt": "",
-}
-
-RING_GLYPHEN = {
-    "offen":     "●",
-    "woanders":  "◦",
-    "weg":       "·",
-    "unbekannt": "·",
-}
-
-
-def ring_punkte(h, breite):
-    """Die Zellen des Rings, nach Winkel sortiert. -> [(dy, dx, winkel)]
-
-    (0,0) ist die Mitte. Doppelt belegte Zellen fallen raus — sonst
-    ueberschreibt der Bogen sich selbst und die wandernde Helle stockt an
-    genau den Stellen, wo zwei Winkel dieselbe Zelle treffen.
-    """
-    import math
-    # Ein Drittel dessen, was in den Kasten passen wuerde (Sasha,
-    # 20.08.2026: "der ring ist viel zu groß. mach ihn etwa ein drittel so
-    # groß"). Er soll ein Zeichen sein, kein Rahmen — der Kasten hat schon
-    # einen.
-    ry = min((h - 2) // 2, (breite - 2) // 4) // 3
-    if ry < 2:
-        return []
-    rx = ry * 2
-    gesehen, punkte = set(), []
-    # Doppelt so fein abgetastet, wie der Umfang Zellen hat. Bei genau einer
-    # Probe pro Zelle bleiben Loecher: die Schrittzahl war ungerade, der
-    # Winkel fuer "ganz unten" wurde nie getroffen, und im Ring klaffte eine
-    # Luecke an der auffaelligsten Stelle.
-    schritte = max(64, int(4 * math.pi * rx))
-    for i in range(schritte):
-        winkel = 2 * math.pi * i / schritte
-        dy = int(round(-math.cos(winkel) * ry))     # oben = 0 rad
-        dx = int(round(math.sin(winkel) * rx))
-        if (dy, dx) in gesehen:
-            continue
-        gesehen.add((dy, dx))
-        punkte.append((dy, dx, winkel))
-    return punkte
-
-
-def ring_zeilen(h, breite, lage="unbekannt", aktiv=False, phase=0.0):
-    """Der Ring als Plot-Anweisungen. -> [(dy, dx, zeichen, stil)]
-
-    `aktiv` = sie denkt oder spricht gerade: ein heller Bogen wandert mit
-    `phase` (0..1) um den Ring. Ruht sie, steht er still — eine dauernd
-    kreisende Animation wuerde im Augenwinkel ziehen, und das waere genau
-    das Gegenteil von "stoert nicht".
-    """
-    import math
-    punkte = ring_punkte(h, breite)
-    if not punkte:
-        return []
-    grund = RING_GLYPHEN.get(lage, RING_GLYPHEN["unbekannt"])
-    stil_grund = {"offen": "ring", "woanders": "ring_matt",
-                  "weg": "ring_still", "unbekannt": "ring_still"}.get(
-                      lage, "ring_still")
-
-    aus = []
-    kopf = (phase % 1.0) * 2 * math.pi
-    bogen = math.pi / 5          # wie lang die helle Stelle ist
-    for dy, dx, winkel in punkte:
-        zeichen, stil = grund, stil_grund
-        if aktiv:
-            ab = abs((winkel - kopf + math.pi) % (2 * math.pi) - math.pi)
-            if ab < bogen:
-                zeichen, stil = "●", "ring_hell"
-        aus.append((dy, dx, zeichen, stil))
-    return aus
-
-
 # ── Das Rad (Startseite) ─────────────────────────────────────────────────────
 # Sasha, 02.10.2026: statt KI fett in der Mitte und Tasten-Leiste unten ein
 # Durchklicker — ←/→ dreht ein Rad, vorne steht EINE App, enter geht rein.
@@ -2909,30 +2807,6 @@ def run_ui(stdscr, store):
     #   loaded   : History schon einmal vom Backend geholt?
     #   backend  : "local" | "cloud" | None — wer gerade denkt (Kasten-Titel)
     #   model    : Modell-Name dazu, provider: bei cloud der Anbieter
-    # Was ZENTRALE ueber die Lage weiss — fuer den Ring in der Mitte.
-    # Bewusst LOKAL bestimmt und nicht vom Backend geholt: die Frage ist,
-    # ob jemand an DIESER Maschine sitzt und ob DIESES Fenster offen ist.
-    # Auf dem Laptop haengt die TUI am PC-Backend; dessen Anwesenheit hilft
-    # hier niemandem.
-    LAGE = {"wert": "unbekannt"}
-
-    def lage_poll():
-        """Alle paar Sekunden nachsehen, ob Sasha da ist. Wirft nie."""
-        try:
-            core_dir = os.path.join(os.path.dirname(os.path.dirname(
-                os.path.abspath(__file__))), "core")
-            if core_dir not in sys.path:
-                sys.path.insert(0, core_dir)
-            import anwesenheit
-        except Exception:
-            return                      # ohne das Modul bleibt es unbekannt
-        while True:
-            try:
-                LAGE["wert"] = anwesenheit.lage()
-            except Exception:
-                LAGE["wert"] = "unbekannt"
-            time.sleep(5)
-
     AI = {"active": False, "input": "", "log": [], "answer": None,
           "reflect": "", "denken": "", "streaming": False, "scroll": 0,
           "perm": None, "msg": "", "loaded": False,
@@ -3089,18 +2963,7 @@ def run_ui(stdscr, store):
                     AI["budget"] = k.get("budget") or {}
         except (urllib.error.URLError, OSError, ValueError):
             pass
-        try:
-            h = api_call("/api/chat/history")
-        except (urllib.error.URLError, OSError, ValueError):
-            h = None
-        log = []
-        for m in (h if isinstance(h, list) else []):
-            if not isinstance(m, dict):
-                continue
-            txt = (m.get("content") or "").strip()
-            if not txt:
-                continue
-            log.append(("user" if m.get("role") == "user" else "ai", txt))
+        log = ai_verlauf_holen() or []
         with AI_LOCK:
             # nur übernehmen, wenn zwischenzeitlich nichts Eigenes dazukam
             if not AI["log"]:
@@ -3566,7 +3429,6 @@ def run_ui(stdscr, store):
 
     threading.Thread(target=_mail_worker, daemon=True, name="mail-io").start()
     threading.Thread(target=ai_poll, daemon=True, name="ai-poll").start()
-    threading.Thread(target=lage_poll, daemon=True, name="lage").start()
 
     def m_fetch(cols, rows):
         """Karte fürs aktuelle Viewport+Raster synchron holen (localhost, wenige
@@ -4444,49 +4306,6 @@ def run_ui(stdscr, store):
             if t2 == tid:
                 return lbl
         return tid
-
-    def draw_time_plot(py, bx, bw, ph, rows, is_period):
-        """24h-Gitter: X = letzte Einträge (Datum), Y = Uhrzeit (00:00 unten,
-        24:00 oben). time → Punkt ●; period → Balken █ (über Mitternacht
-        gesplittet, da die Achse an Mitternacht verankert ist)."""
-        if ph < 3:
-            return
-        ix = bx + 2
-        plot_x = ix + 3                       # 3 Spalten für die Stunden-Labels
-        plot_w = (bx + bw - 2) - plot_x
-        if plot_w < 2:
-            return
-
-        def row_of(m):                        # 0 → unterste Zeile, 1440 → oberste
-            m = max(0, min(1440, m))
-            return py + (ph - 1) - int(round(m / 1440.0 * (ph - 1)))
-
-        for r in range(ph):                   # Y-Achse
-            safe_addstr(py + r, plot_x - 1, "│", C["faint"])
-        for hh in (0, 6, 12, 18, 24):         # Stunden-Marken
-            safe_addstr(row_of(hh * 60), ix, "%02d" % (hh % 24), C["faint"])
-
-        def fill(cx, m1, m2):                 # Balken zwischen zwei Minuten (kein Wrap)
-            a, b = sorted((row_of(m1), row_of(m2)))
-            for r in range(a, b + 1):
-                safe_addstr(r, cx, "█", C["graph"])
-
-        for ci, e in enumerate(rows[-plot_w:]):
-            cx = plot_x + ci
-            s = e.get("value")
-            if s is None:
-                continue
-            if is_period:
-                en = e.get("end")
-                if en is None:
-                    continue
-                if en >= s:
-                    fill(cx, s, en)
-                else:                         # Wrap über Mitternacht
-                    fill(cx, s, 1440)
-                    fill(cx, 0, en)
-            else:
-                safe_addstr(row_of(s), cx, "●", C["graph"])
 
     # Farb-Palette der Überlagerung, je Graph eine (durchgezykelt).
     LIFE_COL = ["graph", "acc", "warn", "net", "event", "audio", "hook", "num"]
@@ -7491,17 +7310,6 @@ def run_ui(stdscr, store):
         _mail_submit(("read", it.get("account"), it.get("uid")), "hake ab…",
                      _do_mark_read)
 
-    def _mail_line(it):
-        """Absender + Betreff kompakt für eine Mail-Zeile. Eingang-Items tragen
-        ein Gelesen-Flag (●=ungelesen/○=gelesen) + die vermutete Zielkategorie."""
-        who = (it.get("from") or "?").strip()
-        subj = (it.get("subject") or "").strip() or "(kein Betreff)"
-        if "seen" in it:                        # Eingang-Item
-            mark = "○" if it.get("seen") else "●"
-            tail = ("  → " + it["category"]) if it.get("category") else "  → ?"
-            return "%s %s — %s%s" % (mark, who, subj, tail)
-        return "%s — %s" % (who, subj)
-
     def draw_mail(by, bx, bh, bw):
         """Inhalt der MITTE-Box, wenn das Post/Mail-Panel Fokus hat. Zwei Ebenen:
         Ebene 'cats' = nur die Kategorien (zum Auswählen); Ebene 'mails' = die
@@ -9849,7 +9657,8 @@ def run_ui(stdscr, store):
                                            state.get("logs", []) or [], None) or laeuft_jetzt
         else:
             # ── Startseite: das Rad ───────────────────────────────────
-            # Bis 02.10.2026 stand hier der KI-Ring (ring_zeilen) mit der
+            # Bis 02.10.2026 stand hier der KI-Ring (ring_zeilen, archiviert:
+            # memory/archive/tui_ki_ring.md) mit der
             # Tasten-Leiste unten. Jetzt ein Rad zum Durchdrehen, bewusst
             # UNTER der Mitte: der Platz darüber ist für das, was ZENTRALE
             # künftig von sich aus zeigt (kommt Stück für Stück).
