@@ -3250,7 +3250,7 @@ def run_ui(stdscr, store):
     # Angekabelt an das Backend über <BASE_URL>/api/tutor/*. Anders als der Chat
     # läuft der Tutor meist über die CLOUD (Default zh→qwen): die Session ist
     # ZUSTANDSBEHAFTET (start/stop), der Stream liefert nur token/done (keine
-    # Erlaubnis-Fragen). Das Backend entscheidet per tutor_session.available()
+    # Erlaubnis-Fragen). Das Backend entscheidet per tutor.session.available()
     # anhand des AUFGELÖSTEN Providers, ob es überhaupt geht (ollama vs cloud);
     # ist es weg (cloud gedrosselt / offline), zeigt das Panel einen toten Smiley
     # statt einen /start ins Leere zu schicken. Slash-Befehle (/lang /provider

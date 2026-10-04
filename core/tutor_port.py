@@ -17,7 +17,7 @@
 #     läuft normal weiter. Der Import ist lazy + geschützt.
 #   • Die POLICY sitzt hier, nicht im Tutor: der Cloud-/Lokal-Kill-Switch
 #     (ai_backends) ist ZENTRALE-intern. Der Tutor beantwortet nur „ist mein
-#     Backend erreichbar?" (tutor_session.available()); ob er DARF, entscheidet
+#     Backend erreichbar?" (tutor.session.available()); ob er DARF, entscheidet
 #     der Kern hier. Deshalb kennt tutor/ die Drossel nicht mehr.
 #
 # ── Kontrakt zum Tutor (klein halten!) ──────────────────────────────────

@@ -42,7 +42,7 @@ _DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 
 # History wird auf Disk gehalten, damit die Persona dich zwischen Sessions
 # nicht vergisst. Storage-Cap großzügig; gesendet wird eh nur ein Fenster
-# (tutor_session._history_window).
+# (tutor.session._history_window).
 _HIST_MAX = 200
 
 _hist_lock = Lock()   # serialisiert History-Writes über Personas hinweg

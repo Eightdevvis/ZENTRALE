@@ -13,7 +13,7 @@
 #
 # ── trains_on_data (HART, siehe memory/tutor/tutor_system.md) ──────────────────
 #   True  → Anbieter trainiert/nutzt offiziell die Nutzdaten. NICHT verboten,
-#           aber MUSS während der Nutzung laut geflaggt werden (tutor_session
+#           aber MUSS während der Nutzung laut geflaggt werden (tutor.session
 #           setzt eine prominente Warnung; /api/tutor/status liefert sie).
 #   False → trainiert laut offizieller Policy NICHT auf API-Daten (verifiziert,
 #           Stand 2026-06, Quellen in der Recherche/Memory).
