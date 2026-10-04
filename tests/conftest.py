@@ -89,6 +89,10 @@ os.environ.setdefault("ZENTRALE_PEER_STATUS", os.path.join(_THEME_TMP, "peer.jso
 # Dashboard-Wunsch (/dashboard an|aus): Tests sehen immer das Meta-Rad,
 # egal was Sasha gerade eingestellt hat, und schreiben nie seine Datei.
 os.environ.setdefault("ZENTRALE_DASHBOARD_FILE", os.path.join(_THEME_TMP, "dashboard"))
+# Kein Testlauf gilt als "unter der Systemeinheit" (start_tui.sh), auch wenn
+# pytest aus einer ZENTRALE heraus gestartet wurde — sonst könnte Esc auf der
+# Startseite einer Test-TUI Sashas echtes Fenster wegklappen.
+os.environ.pop("ZENTRALE_TUI_SUPERVISED", None)
 
 
 # 6. Kein Testlauf darf Geld ausgeben.

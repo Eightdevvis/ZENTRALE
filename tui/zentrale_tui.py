@@ -1317,6 +1317,25 @@ def weglegen_statt_beenden():
         return False
 
 
+def fenster_zuklappen():
+    """Esc auf der Startseite (Sasha, 04.10.2026): ZENTRALE zuklappen wie
+    $mod+z — das Fenster geht ins Scratchpad, die TUI läuft weiter, Rad und
+    Galaxie bleiben stehen. Nur unter der Systemeinheit (start_tui.sh); in
+    einem gewöhnlichen Terminal tut Esc nichts, statt zu beenden. Läuft im
+    Hintergrund, damit die Oberfläche nicht auf i3 wartet."""
+    if not neustart_moeglich():
+        return False
+
+    def los():
+        try:
+            subprocess.run(["zentrale-fenster", "--weglegen"], timeout=5,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    threading.Thread(target=los, daemon=True).start()
+    return True
+
+
 # ── Lebenslauf: warum ging sie zu? ───────────────────────────────────────────
 #
 # 02.10.2026: ZENTRALE ging mitten in der Arbeit einfach zu, ohne jede Spur.
@@ -1459,7 +1478,7 @@ TUI_KEYS = [
     ("←→",    "Startseite: das gewählte Rad drehen — vorn steht die App, die enter öffnet"),
     ("alt+←→", "Startseite: das Rad wechseln (apps | technik), die Galaxie dreht mit"),
     ("enter", "Startseite: die App vorn im gewählten Rad öffnen"),
-    ("esc",   "zurück, Stufe für Stufe bis zur Startseite"),
+    ("esc",   "zurück, Stufe für Stufe bis zur Startseite; dort klappt esc ZENTRALE zu (wie $mod+z)"),
     # Die Apps im Rad — seit 02.10.2026 nicht mehr per Buchstabe,
     # sondern übers Rad (Sasha). Links steht deshalb der Name im Rad.
     ("graph", "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
@@ -1482,7 +1501,7 @@ TUI_KEYS = [
 CTX_KEYS = {
     "home": [
         ("←→", "rad drehen"), ("alt+←→", "rad wechseln"),
-        ("enter", "app öffnen"), ("space", "ki-chat"),
+        ("enter", "app öffnen"), ("space", "ki-chat"), ("esc", "zentrale zuklappen"),
         ("/dashboard", "altes dashboard"), ("/theme", "theme"),
         ("/lauf", "stdout-lauf"), ("/quit", "beenden"),
     ],
@@ -9539,7 +9558,10 @@ def run_ui(stdscr, store):
                 was = {curses.KEY_LEFT: "links", curses.KEY_RIGHT: "rechts",
                        10: "enter", 13: "enter", curses.KEY_ENTER: "enter"}.get(ch)
                 if was is None:
-                    was = {"left": "alt_links", "right": "alt_rechts"}.get(m_alt_arrow(ch))
+                    alt = m_alt_arrow(ch)
+                    if alt == "esc":                   # Esc allein: ZENTRALE zuklappen
+                        fenster_zuklappen()
+                    was = {"left": "alt_links", "right": "alt_rechts"}.get(alt)
                 if ch == ord(" "):
                     taste = "a"
                 elif was:
@@ -9548,6 +9570,8 @@ def run_ui(stdscr, store):
                         taste = wahl[1]
                     elif wahl:
                         TECH["active"] = True; TECH["view"] = wahl[1]
+            elif ch == 27:                         # altes Dashboard: Esc klappt auch zu
+                fenster_zuklappen()
             elif ch == curses.KEY_LEFT:
                 RAD["sel"] -= 1; rad_anstoss(RAD, -1)
             elif ch == curses.KEY_RIGHT:
@@ -9966,7 +9990,7 @@ def run_ui(stdscr, store):
         if DASH["an"] or current_ctx() != "home":
             fuss = " ←→ drehen · enter öffnen · %s · esc zurück" % ki
         else:
-            fuss = " ←→ drehen · alt+←→ rad wechseln · enter öffnen · %s" % ki
+            fuss = " ←→ drehen · alt+←→ rad wechseln · enter öffnen · %s · esc zu" % ki
         addclip(footer_row, 0, fuss, W - 1, C["faint"])
 
         # ── Graph-Reminder-Nag (zuletzt → liegt über allem) ───────────────

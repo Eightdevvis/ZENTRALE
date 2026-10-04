@@ -17,7 +17,13 @@ Ausschnitt nur einen flachen, kaum gepunkteten Bogen sieht und beide
 **nebeneinander** liegen (App-Rad 55 % der Breite, Technik 36 %).
 **alt+←/→** wechselt das Rad (links = apps, rechts = technik; Erkennung wie
 die Karte, `m_alt_arrow`), **←/→ dreht direkt** das gewählte Rad, **enter**
-öffnet dessen App vorn — keine Rein/Raus-Stufe mehr. Die Kamera gleitet aufs gewählte,
+öffnet dessen App vorn — keine Rein/Raus-Stufe mehr. **Esc auf der Startseite
+klappt ZENTRALE zu** wie $mod+z (`fenster_zuklappen` → `zentrale-fenster
+--weglegen`, im Hintergrund, die TUI läuft weiter, Rad bleibt stehen); nur
+unter der Systemeinheit, im gewöhnlichen Terminal tut Esc dort nichts. In
+einer App führt Esc wie immer erst zurück zur Startseite. Die rechte ⌥ der
+Mac-Tastatur ist `ISO_Level3_Shift` ohne Modifier — alt+←/→ geht deshalb nur
+mit der linken ⌥. Die Kamera gleitet aufs gewählte,
 das dann **mittig** steht. Das andere liegt weiter draussen, am Rand
 angeschnitten und blass (`draw_rad(..., blass=True)`). Der Wechsel ist
 **schwer** wie eine Giga-Galaxie: zeitbasiert `GALAXIE_DAUER` = 1,6 s mit
@@ -70,7 +76,8 @@ Wachssiegel (Siegel glänzt), karte = Globus (dreht sich), kalender = Blatt mit
 Ringen und roter Kopfleiste (heute blinkt), klavier = Klaviatur (eine Taste
 nach der anderen leuchtet), notizen = Block mit Bleistift (eine Zeile wird
 geschrieben), graph = steigende Balken (wippen), fokus = Zielscheibe (Ring
-pulst), tutor = Sprechblase (drei Punkte tippen). Ein Motiv ist eine Funktion
+pulst), tutor = Sprechblase (drei Punkte tippen). Die Pillen hinten leuchten in
+der Hauptfarbe ihrer App (`symbol_pille`, Schrift hell/dunkel nach Lesbarkeit). Ein Motiv ist eine Funktion
 auf dem offenen 32×54-Feinraster; aufklappen, Details wachsen lassen und die
 abgedunkelte Platte hinter dem Schriftzug macht `symbol_pixel` für alle gleich.
 Ohne 256 Farben (bzw. `ZENTRALE_PIXEL=off`) stehen die Apps als Schriftzug

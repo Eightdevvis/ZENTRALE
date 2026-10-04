@@ -81,3 +81,31 @@ def test_fehlender_umschalter_beendet(monkeypatch):
 def test_slash_quit_ist_das_echte_ende():
     action, _mode, _msg = z.parse_command("/quit", "auto")
     assert action == "QUIT"
+
+
+# ── Esc auf der Startseite klappt zu (Sasha, 04.10.2026) ────────────────
+# *„wenn zentrale offen is komm ich ja mit prefix+z wieder raus, aber ich
+# möchte dass esc denselben effekt hat zentrale wieder zuzuklappen"*
+
+def _warte(gerufen):
+    import time
+    for _ in range(50):
+        if gerufen:
+            return
+        time.sleep(0.02)
+
+
+def test_esc_klappt_zu_wie_mod_z(monkeypatch):
+    gerufen = _fenster_antwortet(monkeypatch, 0)
+    assert z.fenster_zuklappen() is True
+    _warte(gerufen)
+    assert gerufen and gerufen[0][:2] == ["zentrale-fenster", "--weglegen"]
+
+
+def test_esc_ohne_systemeinheit_tut_nichts(monkeypatch):
+    """Im gewöhnlichen Terminal beendet Esc NICHT — es passiert einfach nichts."""
+    gerufen = _fenster_antwortet(monkeypatch, 0)
+    monkeypatch.delenv("ZENTRALE_TUI_SUPERVISED")
+    assert z.fenster_zuklappen() is False
+    _warte(gerufen)
+    assert gerufen == []

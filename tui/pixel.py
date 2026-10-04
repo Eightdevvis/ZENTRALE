@@ -692,14 +692,23 @@ def symbol_zellen(name, offen, t_ms, farben="nacht", modus="mix"):
     return zeilen, schrift
 
 
+def _hell(c):
+    """Wahrgenommene Helligkeit 0..255."""
+    return .299 * c[0] + .587 * c[1] + .114 * c[2]
+
+
 def symbol_pille(name, fern=False, farben="nacht"):
-    """Farben der Pille einer App im Rad: (grund, text)."""
+    """Farben der Pille einer App im Rad: (grund, text) — kräftig in der
+    Farbe der App (Sasha: die Pillen dürfen alle farbig sein). Die Schrift
+    nimmt hell oder dunkel, je nachdem, was auf dem Grund lesbar ist."""
     if name == "elektronik":
         return elektronik_pille(fern, farben)
     P = SYM_FARBEN[name]
-    bg, schrift = _GRUND[farben]
-    grund = mix(P["dunkel"] if farben == "nacht" else P["core"], bg, .25 if farben == "nacht" else .45)
-    text = mix(P["edge"] if farben == "nacht" else P["dunkel"], schrift, .2)
+    bg, _ = _GRUND[farben]
+    grund = mix(P["core"], bg, .2 if farben == "nacht" else .1)
+    if farben == "tag" and _hell(grund) > 225:                 # fast weiss auf weiss
+        grund = mix(P["core"], P["glow"], .6)
+    text = P["dunkel"] if _hell(grund) > 150 else mix(P["edge"], _hex("#ffffff"), .5)
     if fern:
         return mix(grund, bg, .45), mix(text, bg, .4)
     return grund, text

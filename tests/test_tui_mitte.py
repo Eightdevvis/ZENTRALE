@@ -65,7 +65,7 @@ def _strip_ansi(s):
     return re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]|\x1b[()][B0]|\x1b[=>]", "", s)
 
 
-def _lauf(tasten=b""):
+def _lauf(tasten=b"", nach=1.5):
     """Die TUI kurz laufen lassen, nach 2 s `tasten` schicken
     -> alles, was ueber den Schirm ging."""
     import fcntl
@@ -109,7 +109,7 @@ def _lauf(tasten=b""):
         time.sleep(2.5)
         if tasten:
             os.write(master, tasten)
-        time.sleep(1.5)
+        time.sleep(nach)
         text = _strip_ansi(bytes(buf).decode("utf-8", "replace"))
     finally:
         stop.set()
@@ -291,7 +291,7 @@ def test_startseite_ist_eine_galaxie(schirm):
 
 
 def test_alt_pfeil_rechts_waehlt_technik():
-    assert "✦ TECHNIK" in _lauf(b"\x1b[1;3C")
+    assert "✦ TECHNIK" in _lauf(b"\x1b[1;3C", nach=2.5)   # die Galaxie dreht 1,6 s
 
 
 def test_pfeil_allein_wechselt_das_rad_nicht():
