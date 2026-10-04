@@ -26,24 +26,32 @@ Deutscher Prompt, wörtlich aus dem Code kopiert:
 
 ## 2. Jetzt-Block (`_now_prompt()`)
 
-- **Quelle:** `core/ai.py:138` (`_now_prompt`)
-- **Rolle:** Wird bei **jedem** Turn frisch gebaut und **ganz vorne** in den
-  System-Prompt gehängt. Schließt die Zeit-Blindheit: das aktuelle Datum/die
-  Uhrzeit werden hart reingeschrieben (nicht halluzinierbar), plus der Hinweis,
-  dass der Kalender ausschließlich über das `read_calendar`-Tool abzufragen ist.
+- **Quelle:** `core/ai.py` (`_now_prompt`; gilt für beide Schienen)
+- **Rolle:** Wird bei **jedem** Turn frisch gebaut und steht im **wechselnden**
+  Teil hinten — lokal am Ende des System-Prompts, in der Cloud an der neuesten
+  User-Nachricht (Prompt-Cache, siehe `_PROMPT_ORDER` in `core/ai.py`).
+  Schließt die Zeit-Blindheit: das heutige Datum wird hart reingeschrieben.
+  Die **Uhrzeit steht seit 18.08.2026 bewusst nicht mehr drin** — sie holt sie
+  per `read_time`. Heute/morgen stehen im Imprint-Block „Was ansteht", alles
+  andere über `read_calendar`.
 
-Der Text ist **dynamisch** (Datum/Uhrzeit werden eingesetzt). Beispiel-Ausgabe
-für Montag, 8. Juni 2026, 14:05:
+Der Text ist **dynamisch** (Datum wird eingesetzt). Beispiel-Ausgabe für
+Montag, 8. Juni 2026:
 
 > **## Jetzt**
-> Heute ist Montag, der 8. Juni 2026. Aktuelle Uhrzeit: 14:05. Dieser Block ist
-> die einzige verlässliche Zeitquelle - aktivierte Datums-Knoten aus dem
-> Konzept-Graph sind Erinnerungen an frühere Tage, NICHT der aktuelle Tag.
+> Heute ist Montag, der 8. Juni 2026. Dieser Block ist die einzige verlässliche
+> Zeitquelle - Daten, die in Notizen oder im Tagebuch stehen, sind Erinnerungen
+> an frühere Tage, NICHT der aktuelle Tag.
 >
-> Kalender/Termine: du hast keine Termine im Kopf. Für JEDE Frage nach Plänen,
-> Terminen oder Daten (heute, diese/nächste Woche, Monat, Vergangenheit,
-> beliebiger Zeitraum) rufst du zuerst read_calendar - nie raten, nie ohne Tool
-> zurückfragen.
+> Die UHRZEIT steht hier bewusst nicht: du weißt nicht, wie spät es ist.
+> Brauchst du sie wirklich - weil Sasha danach fragt oder weil es für eine
+> Entscheidung zählt - ruf read_time. Rate nie, und rechne nichts aus dem Kopf
+> aus.
+>
+> Kalender/Termine: was heute und morgen ansteht, steht im Block 'Was ansteht'
+> - daraus darfst du direkt antworten. Alles andere (jeder weitere Zeitraum,
+> ein bestimmtes Datum, die Vergangenheit) hast du NICHT im Kopf: dafür
+> read_calendar rufen, nie raten, nie ohne Tool zurückfragen.
 
 Wochentag (`_WEEKDAYS_DE`) und Monat (`_MONTHS_DE`) sind ausgeschriebene deutsche
 Namen; die restlichen Sätze sind konstant.

@@ -1,6 +1,7 @@
 # KI-System
 
-**Stand 2026-09-18:** Der Kern-Chat denkt über `ai_backends.pick("chat")` —
+**Stand 2026-10-04:** Front ist die TUI (`tui/zentrale_tui.py`, Thin Client
+über `/api/chat` als SSE). Der Kern-Chat denkt über `ai_backends.pick("chat")` —
 Vorwahl `chat_backend` in `data/ai_config.json` (`auto|local|cloud`; seit
 2026-08-15 bewusst **`cloud`**, daheim wie unterwegs). Cloud = `core/cloud.py`
 (Anthropic, Drop-in für `ai.chat_stream()`, Code-Default `claude-sonnet-5`,
@@ -15,20 +16,26 @@ abgeschaltet (`ZENTRALE_GRAPH_KONTEXT`/`_EXTRAKTION` holen ihn zurück), sein
 Abschnitt unten beschreibt, wie er arbeitet, wenn er an ist. Der Chat ist
 nicht hart gegatet (`chat_available()`: ohne lokale KI —
 `ZENTRALE_LOKALE_KI=aus` — Cloud ja, lokal nie). Tool-Calls und Denken stehen im Chat, das Devtools-Terminal
-zeigt den vollen Request. Kosten in `data/ai_usage.json`. ⚠ prüfen: der
-Abschnitt „Modell-Parameter" nennt `claude-opus-5`, `cloud_bericht.md` (21.08.)
-Sonnet 5 + Haiku 4.5 für die Verdichtung, der Code-Default ist Sonnet — was
-gilt, steht in `data/ai_config.json` (Daten, nicht im Repo).
+zeigt den vollen Request. Kosten in `data/ai_usage.json`. **Modell:**
+Code-Default ist `claude-sonnet-5` (`providers.py` `default_model`, Rückfall
+in `cloud._model()`), Denk-Tiefe `low` (`ai_backends.chat_effort`). Beides
+überschreibt `data/ai_config.json` (`chat_models` pro Anbieter,
+`chat_effort`) — Daten, nicht im Repo, also pro Knoten nachsehen.
+`claude-haiku-4-5` (`cheap_model`) nutzt nur der Cloud-Graph-Extraktor, der
+mit dem Graphen aus ist.
 
 ## Architektur
 
 ```
-Browser ──POST /api/chat──▶ ui/app.py ──▶ core/ai.py ──▶ Ollama (qwen3.5:9b)
-                                             │
-                                             ├─▶ graph.py        (Konzept-Graph, primary memory)
-                                             ├─▶ embeddings.py   (bge-m3, Alias-Resolution + Entry-Points)
-                                             ├─▶ consolidation.py (async Fakt-Extraktion in den Graphen)
-                                             └─▶ context.py      (Datei-Whitelist)
+TUI ──POST /api/chat──▶ ui/app.py ──ai_backends.chat_available()──┐
+                                                                   │
+   cloud ◀─ core/cloud.py (Anthropic) | core/cloud_openai.py ◀─────┤
+            Schiene profil/gross, Kopf mit gedaechtnis.kopf_block  │
+   local ◀─ core/ai.py ──▶ Ollama (qwen3.5:9b), Schiene profil/klein ◀┘
+
+beide Pfade ─▶ ai._execute_tool    (Werkzeuge immer lokal, Erlaubnis-Gate)
+           ─▶ consolidation.py     (nach dem Turn: Transkript; Graph-Extraktion aus)
+           ─▶ graph.py             (nur Identity-Seed; Kontext aus, GRAPH_KONTEXT)
 ```
 
 `ai.py` ist der einzige Ollama-Client für Chat-Calls. `embeddings.py` und
@@ -524,7 +531,7 @@ dieselbe „darf NIE werfen"-Eigenschaft wie die übrigen TUI-Helfer.
 - Sashas eigene Eingaben laufen **nicht** durch den Renderer: was er tippt,
   soll dastehen, wie er es getippt hat.
 
-Das Browser-Dashboard rendert weiterhin nichts; dort ist gar kein
+Das (geparkte) Browser-Dashboard rendert nichts; dort ist gar kein
 Markdown-Renderer eingebunden.
 
 ## System-Prompt-Komposition
@@ -535,6 +542,13 @@ für diesen Schnitt, ein Handgriff — Prompt-Cache (ein Treffer braucht ein
 byte-identisches Präfix, und der Jetzt-Block enthält die Uhrzeit) und Recency
 (was zuletzt steht, sitzt am dichtesten an der User-Message).
 
+Die Liste beschreibt den **lokalen** Pfad (`ai.chat_stream`, Schiene `klein`;
+zwischen 2 und 3 stehen dort noch Antwort-Suffix, Bild-Marker, Dashboard-Block
+und `kalender.imprint_for_prompt()`). Der Cloud-Pfad baut seinen Kopf in
+`cloud._static_system` (Schiene `gross` + `gedaechtnis.kopf_block()` +
+Imprint) und hängt das Wechselnde (4–6) hinten an die neueste User-Nachricht,
+siehe „Prompt-Cache: statisch vorn, Wechselndes ganz hinten".
+
 1. **`_SYSTEM_PROMPT`** – Persona (entspannt, direkt, deutsch).
 2. **`_CAPABILITIES_PROMPT`** – Meta-Regeln: nicht lügen über Memory;
    nicht erfinden über Sasha; **Subjekt-Grenze** (Sashas Gefühle/Zustände
@@ -542,7 +556,9 @@ byte-identisches Präfix, und der Jetzt-Block enthält die Uhrzeit) und Recency
    nicht erfinden über eigene Fähigkeiten (was unter „Das kannst DU NICHT"
    steht, nie behaupten zu können); lateinische Schrift; reale Wörter.
    Bei jedem Turn injiziert.
-3. **`graph.context_for_query(user_query)`** – aktiviertes Wissen aus
+3. **`graph.context_for_query(user_query)`** – **per Default AUS seit
+   2026-08-18** (nur mit `ZENTRALE_GRAPH_KONTEXT=1`, `ai.GRAPH_KONTEXT`); der
+   Block fehlt dann ganz. Wenn an: aktiviertes Wissen aus
    dem Graphen (Spread-Aktivierung von Entry-Points aus). Kann leer
    sein → KI sagt dann "noch nichts gespeichert" statt zu raten
    (Anti-Konfabulation). **Seit 2026-06-06 nach SUBJEKT getrennt
@@ -566,7 +582,13 @@ byte-identisches Präfix, und der Jetzt-Block enthält die Uhrzeit) und Recency
    der KI: Transkription kann Wörter verfälschen, bei semantischen
    Brüchen lieber nachfragen statt wörtlich antworten. Standard-Chat
    (Tastatur) sieht den Block nicht – Token-Ersparnis. Trigger-Pfad:
-   Browser → `/api/chat` mit `via_mic: true` → `chat_stream(via_mic=True)`.
+   Client → `/api/chat` mit `via_mic: true` → `chat_stream(via_mic=True)`.
+
+> **Solange der Graph-Kontext aus ist, gilt der folgende Absatz nicht:** die
+> Seed-Knoten werden zwar angelegt, kommen aber nicht in den Prompt. ⚠ prüfen:
+> die Meta-Regeln 2 und 4 in `core/profil/klein.py` verweisen weiter auf den
+> „## Aktiviertes Wissen"-Block, den es lokal dann nicht gibt (`gross` hat
+> eigene Regeln, siehe dort).
 
 Konkrete Capabilities/Limits leben als Graph-Knoten (`graph.ensure_seed()`)
 und kommen via Aktivierungs-Spread in den Wissens-Block, statt fest
@@ -583,7 +605,8 @@ Docs) sich als eigene Fähigkeit ausgibt.
 
 Zweiter Denk-Pfad für den Kern, **Drop-in für `ai.chat_stream()`**: gleiche
 Signatur, gleiches Event-Protokoll (`reflect` / `ascii` / `permission` /
-`cinema` / Text), gleiches Erlaubnis-Gate. Grund für den Umstieg: das Projekt
+`cinema` / Text; dazu `werkzeug`, das nur der Cloud-Pfad liefert), gleiches
+Erlaubnis-Gate. Grund für den Umstieg: das Projekt
 hing nie an der Architektur, sondern daran, dass ein 9B nicht klug genug war
 und immer mehr Prompt-Absicherung brauchte.
 
@@ -764,7 +787,7 @@ jederzeit und ohne Backend.
 
 Der OpenAI-Pfad existiert vor allem, weil er die Struktur **prüfbar** macht,
 ohne dass ein Anthropic-Key da sein muss: Routing, getrennter Cloud-Graph,
-Gate, SSE bis in den Browser sind providerunabhängig. Ein zweiter echter
+Gate, SSE bis in die TUI sind providerunabhängig. Ein zweiter echter
 Provider ist der ehrlichere Test der Naht als ein zweiter Mock — erst wenn ein
 fremdes Modell durch dieselbe Naht passt, ist es wirklich eine.
 
@@ -854,12 +877,22 @@ nur HTTP gegen `/api/chat`) und schreibt das in ihren Kasten-Titel:
 „ki-chat · cloud (qwen)". Beim Testen soll ohne Rätselraten sichtbar sein,
 wer denkt.
 
-### Modell-Parameter (Stand 2026-08)
+### Modell-Parameter (Stand 2026-10-04, aus dem Code)
 
-`claude-opus-5` (`ZENTRALE_CLOUD_MODEL`), `effort: medium`
-(`ZENTRALE_CLOUD_EFFORT`), `max_tokens 16000` (`ZENTRALE_CLOUD_MAX_TOKENS`),
-`thinking: adaptive` mit `display: summarized` → die Denk-Tokens werden live
-als `reflect`-Event ins HUD gespiegelt, genau wie Ollamas `thinking`-Feld.
+- **Modell:** `cloud._model()` = `ai_backends.chat_model("claude")` →
+  `data/ai_config.json` `chat_models.claude` → Code-Default `claude-sonnet-5`
+  (`providers.py`). `ZENTRALE_CLOUD_MODEL` greift im Chat **nicht**:
+  `chat_model()` liest die Env nur, wenn ohne Anbieter gefragt wird, und alle
+  Aufrufer nennen einen. Umstellen also per Config (`set_chat_model`).
+- **Denk-Tiefe:** `ai_backends.chat_effort()`, Default `low` —
+  `ZENTRALE_CHAT_EFFORT` oder `chat_effort` in der Config.
+- `max_tokens 16000` (`ZENTRALE_CLOUD_MAX_TOKENS`).
+- `thinking: adaptive` mit `display: summarized`, nur für Modelle in
+  `cloud._DENKT_ADAPTIV` → die Denk-Tokens werden live als `reflect`-Event in
+  die TUI gespiegelt, genau wie Ollamas `thinking`-Feld.
+
+(Bis 08/2026 stand hier `claude-opus-5` / `effort: medium` /
+`ZENTRALE_CLOUD_EFFORT` — die Env-Variable gibt es nicht mehr.)
 
 **Fallen der aktuellen API** (gelten auch für `tutor/cloud.py`):
 - `temperature` / `top_p` / `top_k` → **400**. Kürze/Reproduzierbarkeit

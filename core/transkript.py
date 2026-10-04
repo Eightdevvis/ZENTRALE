@@ -15,6 +15,10 @@
 # und der Graph merkt sich pro Knoten nur die IDs der Zeilen, aus denen er
 # stammt (`quellen`).
 #
+# Seit 18.08.2026 ist die Tripel-Extraktion per Default aus
+# (consolidation.GRAPH_EXTRAKTION) — dann ist diese Datei das EINZIGE, was
+# pro Turn geschrieben wird.
+#
 # ── Was das ausdrücklich NICHT ist ──────────────────────────────────────
 # Kein zweiter Suchindex. Hier wird nie gesucht, nie embedded, nie etwas in
 # den Prompt geladen. Die Datei ist ein Archiv, auf das der Graph zeigt —

@@ -863,7 +863,8 @@ Browser-Fronten: [memory/werkzeuge/kalender_system.md](../werkzeuge/kalender_sys
 - Ein Hintergrund-Thread pollt, der curses-Loop liest den Snapshot (thread-safe
   über Lock). Bei Backend-Ausfall: Header zeigt `[backend ?]`, kein Crash.
 - `--selftest` gibt einen Text-Snapshot ohne curses aus (Verifikation ohne TTY).
-- Backend läuft im `tui`-Mode (KI aus, wie laptop). Start: `zentrale-tui`
+- Backend läuft ohne lokale KI (`ZENTRALE_LOKALE_KI=aus`: kein Ollama, Cloud-Chat
+  bleibt erlaubt, siehe `../ki/ki_system.md` → Lokal-Regel). Start: `zentrale-tui`
   fährt Backend (stdout → Logdatei, nicht ins Terminal) + TUI hoch. Siehe
   `memory/betrieb/starten.md`. Env `ZENTRALE_URL` überschreibt das Backend-Ziel (Default
   `http://localhost:5000`).
@@ -880,12 +881,15 @@ Browser-Fronten: [memory/werkzeuge/kalender_system.md](../werkzeuge/kalender_sys
 
 ## Polling-Modell
 
-Drei separate Polling-Loops im Frontend, jeder mit eigener Frequenz:
+Polling-Loops der **Browser-Front** (`ui/static/engine.js`, geparkt), jeder
+mit eigener Frequenz. Die TUI pollt `/api/state` (1 s) + `/api/telemetry`
+(2 s); `/api/ai/status` und `/api/chat/history` holt sie erst, wenn der
+KI-Chat geöffnet wird (`ai_load_history`).
 
 | Endpoint              | Intervall | Was es liefert                                  |
 |-----------------------|-----------|-------------------------------------------------|
 | `GET /api/state`      | 1 s       | Events, Sensoren, Logs (Haupt-State). (Ein Feld `vocab` gab es bis 2026-07-17: es las die längst gelöschte `vocab_mandarin.json` und griff über den Port hinweg in Tutor-Daten — samt `set_vocab`/`_vocab`-Kette in `state.py` entfernt.) |
-| `GET /api/ai/status`  | 30 s      | Ollama erreichbar? + Modell-Name                |
+| `GET /api/ai/status`  | 30 s      | Chat-Kern (`backend` cloud/local/null) + Modell-Name — nur in der KI-Front |
 
 > Das frühere 3 s-**Dauer**-Polling gegen `/api/tutor/status` ist raus — nicht
 > weil der Tutor pausiert (er läuft), sondern weil es nichts kostet, den Status
@@ -899,7 +903,7 @@ ein Single-User-Dashboard und ist deutlich simpler.
 Streaming wird **nur** dort benutzt, wo es wirklich nötig ist:
 
 - `POST /api/chat` – Server-Sent Events (SSE), damit Tokens live
-  erscheinen.
+  erscheinen. Event-Liste: `api_endpoints.md` → Chat.
 
 ## Monolith-Dashboard (Route `/`, source of truth)
 
