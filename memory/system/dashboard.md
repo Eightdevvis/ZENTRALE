@@ -22,10 +22,13 @@ die Karte, `m_alt_arrow`), **←/→ dreht direkt** das gewählte Rad, **enter**
 klappt ZENTRALE zu** wie $mod+z (`fenster_zuklappen` → `zentrale-fenster
 --weglegen`, im Hintergrund, die TUI läuft weiter, Rad bleibt stehen); nur
 unter der Systemeinheit, im gewöhnlichen Terminal tut Esc dort nichts. In
-einer App führt Esc wie immer erst zurück zur Startseite. Alt+←/→ geht nur mit der
-LINKEN ⌥: die rechte ist auf dem Mac-Layout die Level-3-Taste (rechte ⌥+L = @)
-und darf nicht zu Alt umgebaut werden — am 04.10.2026 versucht, @ war weg,
-zurückgenommen. Die Kamera gleitet aufs gewählte,
+einer App führt Esc wie immer erst zurück zur Startseite. Die rechte ⌥ ist auf dem
+Mac-Layout die Level-3-Taste (⌥+L = @) und darf nicht zu Alt umgebaut werden
+(am 04.10.2026 versucht, @ war weg). Level 3 kommt im Terminal nie an — darum
+fängt i3 „Mod5+←/→" ab (`deploy/i3/zentrale.conf`) und ruft
+`scripts/zentrale-ralt-pfeil`: im ZENTRALE-Fenster (window_role) schickt es
+Alt+Pfeil, überall sonst den normalen Pfeil wie bisher. So geht alt+←/→ mit
+beiden ⌥, und @ bleibt. Die Kamera gleitet aufs gewählte,
 das dann **mittig** steht. Das andere liegt weiter draussen, am Rand
 angeschnitten und blass (`draw_rad(..., blass=True)`). Der Wechsel ist
 **schwer** wie eine Giga-Galaxie: zeitbasiert `GALAXIE_DAUER` = 1,6 s mit

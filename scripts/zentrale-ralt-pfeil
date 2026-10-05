@@ -1,0 +1,20 @@
+#!/bin/sh
+# Rechte ⌥ + ←/→ als Alt+Pfeil — aber NUR im ZENTRALE-Fenster.
+#
+# Sasha, 05.10.2026: alt+←/→ wechselt in ZENTRALE das Rad, ging aber nur mit
+# der LINKEN ⌥. Die rechte ist auf dem Mac-Layout die Level-3-Taste (⌥+L = @)
+# und darf das bleiben — sie zu Alt umzubauen hat das @ gekillt (04.10.).
+# Level 3 meldet sich bei keinem Programm: XKB schluckt die Taste und wählt nur
+# ein anderes Zeichen; ein Pfeil hat auf Ebene 3 keins, im Terminal kommt ein
+# nacktes → an. i3 sieht die Taste aber noch (als Mod5) und ruft uns hier.
+#
+# Im ZENTRALE-Fenster → Alt+Pfeil. Überall sonst → der normale Pfeil, also
+# genau das, was die Taste vorher auch schon tat (kein Browser-Zurück o. ä.).
+richtung="$1"
+case "$richtung" in Left|Right|Up|Down) ;; *) exit 2 ;; esac
+rolle=$(xprop -id "$(xdotool getactivewindow 2>/dev/null)" WM_WINDOW_ROLE 2>/dev/null \
+        | sed -n 's/.*= "\(.*\)"$/\1/p')
+if [ "$rolle" = "${ZENTRALE_FENSTER_ROLLE:-zentrale}" ]; then
+    exec xdotool key --clearmodifiers "alt+$richtung"
+fi
+exec xdotool key --clearmodifiers "$richtung"
