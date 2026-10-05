@@ -196,7 +196,8 @@ def test_kaputte_argumente_kippen_nicht(fake):
 
 
 def test_runden_grenze_haelt(fake):
-    fake([_tool("read_calendar", "{}")] * cloud_openai._MAX_ROUNDS)
+    import ai_backends
+    fake([_tool("read_calendar", "{}")] * ai_backends.STANDARD_RUNDEN)
     events = _lauf(cloud_openai.chat_stream(_msgs(), tool_executor=lambda n, a: "x"))
     assert any(isinstance(e, dict) and "fehler" in e and "Tool-Tiefe" in e["fehler"] for e in events)
 

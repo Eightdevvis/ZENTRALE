@@ -40,8 +40,7 @@
 #   ANTHROPIC_API_KEY        Pflicht (kommt via ai_config aus data/ai_config.json)
 #   Modell + Denk-Tiefe kommen aus ai_backends (chat_model/chat_effort).
 #   Modell: data/ai_config.json 'chat_models' → Code-Default claude-sonnet-5
-#   (providers.py); ZENTRALE_CLOUD_MODEL greift hier NICHT, weil _model()
-#   chat_model("claude") mit Provider fragt. Denk-Tiefe: ZENTRALE_CHAT_EFFORT
+#   (providers.py). Denk-Tiefe: ZENTRALE_CHAT_EFFORT
 #   oder data/ai_config.json 'chat_effort', Default 'low'.
 #   ZENTRALE_CLOUD_MAX_TOKENS Default 16000
 
@@ -103,8 +102,6 @@ def _denk_opts(mdl: str) -> dict:
 # mitten im Satz ab, nachdem das Denken das Budget aufgefressen hat. 16k ist
 # reichlich für Dashboard-Antworten; es kostet nichts, was nicht erzeugt wird.
 _MAX_TOKENS = int(os.environ.get("ZENTRALE_CLOUD_MAX_TOKENS", "16000"))
-
-_MAX_ROUNDS = 8   # Sicherheitsnetz gegen Endlos-Tool-Schleifen
 
 # Lebensdauer eines Cache-Eintrags. Default sind bei Anthropic 5 Minuten — wer
 # zwischen zwei Nachrichten nachdenkt, liest oder telefoniert, hat den Cache
@@ -470,11 +467,8 @@ class _AnthropicAdapter:
     """Anthropic-Dialekt für die gemeinsame Werkzeug-Schleife: tool_use-
     Blöcke, alle tool_results in EINER user-Message, wandernder Breakpoint."""
 
-    grenze = _MAX_ROUNDS
-    richtigstellung = False
-
     def __init__(self, client, mdl, sys_blocks, msgs, tools):
-        self.client, self.mdl = client, mdl
+        self.client, self.modell = client, mdl
         self.sys_blocks, self.msgs, self.tools = sys_blocks, msgs, tools
         # Dritter Breakpoint, der zwischen den Tool-Runden mitwandert: ohne ihn
         # zahlt Runde 3 die Ergebnisse von Runde 2 noch einmal voll. Der alte
@@ -485,16 +479,16 @@ class _AnthropicAdapter:
         round_text = []
         # Devtools: den vollstaendigen Request mitschneiden, BEVOR er rausgeht
         # (siehe core/kidebug.py — aus, solange niemand zuschaut).
-        kidebug.request(modell=self.mdl, schiene=_profil().NAME,
+        kidebug.request(modell=self.modell, schiene=_profil().NAME,
                         system=self.sys_blocks, messages=self.msgs,
                         tools=self.tools)
         with self.client.messages.stream(
-            model=self.mdl,
+            model=self.modell,
             max_tokens=_MAX_TOKENS,
             system=self.sys_blocks,
             tools=self.tools,
             messages=self.msgs,
-            **_denk_opts(self.mdl),
+            **_denk_opts(self.modell),
         ) as stream:
             for event in stream:
                 if event.type != "content_block_delta":
@@ -508,8 +502,8 @@ class _AnthropicAdapter:
                     round_text.append(d.text)
             final = stream.get_final_message()
 
-        _log_usage(final, self.mdl)
-        _debug_out(final, self.mdl)
+        _log_usage(final, self.modell)
+        _debug_out(final, self.modell)
 
         if final.stop_reason == "refusal":
             # Sicherheits-Klassifikator hat abgelehnt. Kein Fehler im Sinne der

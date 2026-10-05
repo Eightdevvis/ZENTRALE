@@ -32,8 +32,7 @@
 #
 # ── Konfiguration ───────────────────────────────────────────────────────
 #   Modell: ai_backends.chat_model(<provider>) → data/ai_config.json
-#           'chat_models' → default_model des Providers. ZENTRALE_CLOUD_MODEL
-#           greift hier NICHT (chat_model liest die Env nur ohne Provider).
+#           'chat_models' → default_model des Providers.
 #   ZENTRALE_CLOUD_OPENAI_MAX_TOKENS  Default 2000
 #   ZENTRALE_CLOUD_OPENAI_TEMP        Default 0.4 (hier ERLAUBT, anders als
 #                                     bei Anthropic ab Opus 4.7)
@@ -50,7 +49,6 @@ import werkzeug_schleife  # die EINE Tool-Schleife; hier steht nur der OpenAI-Ad
 
 _MAX_TOKENS = int(os.environ.get("ZENTRALE_CLOUD_OPENAI_MAX_TOKENS", "2000"))
 _TEMP       = float(os.environ.get("ZENTRALE_CLOUD_OPENAI_TEMP", "0.4"))
-_MAX_ROUNDS = 8
 
 _clients = {}   # base_url → Client (lazy, gecacht)
 
@@ -200,11 +198,8 @@ class _OpenAIAdapter:
     """OpenAI-kompatibler Dialekt für die gemeinsame Werkzeug-Schleife:
     Tool-Calls kommen stückweise im Stream, Ergebnisse als role=tool."""
 
-    grenze = _MAX_ROUNDS
-    richtigstellung = False
-
     def __init__(self, client, mdl, msgs, tools):
-        self.client, self.mdl, self.msgs, self.tools = client, mdl, msgs, tools
+        self.client, self.modell, self.msgs, self.tools = client, mdl, msgs, tools
 
     def runde(self):
         round_text = []
@@ -213,11 +208,11 @@ class _OpenAIAdapter:
         # Devtools: den vollstaendigen Request mitschneiden, bevor er rausgeht.
         # Dieser Dialekt hat den System-Prompt als erste Message; kidebug
         # nimmt beide Formen an.
-        kidebug.request(modell=self.mdl, schiene=cloud._profil().NAME,
+        kidebug.request(modell=self.modell, schiene=cloud._profil().NAME,
                         system=self.msgs[0]["content"], messages=self.msgs[1:],
                         tools=self.tools)
         stream = self.client.chat.completions.create(
-            model=self.mdl,
+            model=self.modell,
             messages=self.msgs,
             tools=self.tools or None,   # ai.TOOLS ist schon OpenAI-Schema
             stream=True,
@@ -261,8 +256,8 @@ class _OpenAIAdapter:
                     if tc.function.arguments:
                         slot["args"] += tc.function.arguments
 
-        _log_usage(verbrauch, self.mdl)
-        kidebug.emit("ai.out", modell=self.mdl,
+        _log_usage(verbrauch, self.modell)
+        kidebug.emit("ai.out", modell=self.modell,
                      stop_reason="tool_calls" if tool_calls else "end_turn",
                      bloecke=["".join(round_text)],
                      verbrauch={

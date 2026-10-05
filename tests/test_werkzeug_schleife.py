@@ -12,6 +12,7 @@ in den Verlauf schreibt.
 import pytest
 
 import ai
+import ai_backends
 import state
 import werkzeug_schleife
 
@@ -123,11 +124,30 @@ def test_lokal_think_aus_nach_dem_ersten_tool(ollama, monkeypatch):
 
 
 def test_lokal_rundengrenze_ist_ein_fehler_event(ollama):
-    ollama([_tool("read_calendar", {})] * ai._OllamaAdapter.grenze)
+    ollama([_tool("read_calendar", {})] * ai_backends.STANDARD_RUNDEN)
     events = list(ai.chat_stream(_msgs(), tool_executor=lambda n, a: "x"))
     assert _texte(events) == []
     fehler = _art(events, "fehler")
     assert len(fehler) == 1 and "Tool-Tiefe" in fehler[0]
+
+
+def test_grenze_haengt_am_modell_nicht_am_weg(ollama, monkeypatch):
+    """Sasha, 05.10.2026: eine Regel für alle, Standard 8; ein kleines Modell
+    bekommt per Config weniger."""
+    import ai_config
+    monkeypatch.setattr(ai_config, "setting",
+                        lambda n, d=None: {"qwen3.5:9b": 5, "kaputt": "x"}
+                        if n == "runden_grenzen" else d)
+    assert ai_backends.runden_grenze("qwen3.5:9b") == 5
+    assert ai_backends.runden_grenze("claude-sonnet-5") == 8
+    assert ai_backends.runden_grenze("kaputt") == 8
+    assert ai_backends.runden_grenze(None) == 8
+
+    gesendet = ollama([_tool("read_calendar", {})] * 5)
+    events = list(ai.chat_stream(_msgs(), model="qwen3.5:9b",
+                                 tool_executor=lambda n, a: "x"))
+    assert len(gesendet) == 5
+    assert "5 Runden" in _art(events, "fehler")[0]
 
 
 def test_lokal_ollama_weg_ist_ein_fehler_event(monkeypatch):
@@ -153,7 +173,7 @@ def test_lokal_tutor_bleibt_ohne_gate_und_roh(ollama, ruhig):
     assert ruhig == []                                      # nichts gespeichert
 
 
-def test_ablehnung_lokal_mit_richtigstellung(ollama, monkeypatch):
+def test_ablehnung_mit_richtigstellung(ollama, monkeypatch):
     monkeypatch.setattr(state, "request_permission", lambda **k: None)
     monkeypatch.setattr(state, "wait_permission", lambda: "nein")
     gesendet = ollama([_tool("add_calendar_entry", {"label": "x"}),
@@ -166,7 +186,7 @@ def test_ablehnung_lokal_mit_richtigstellung(ollama, monkeypatch):
 # ── Die Schleife selbst ───────────────────────────────────────────────
 
 class _Adapter:
-    grenze = 3
+    modell = "test"
 
     def __init__(self, runden):
         self.runden = list(runden)

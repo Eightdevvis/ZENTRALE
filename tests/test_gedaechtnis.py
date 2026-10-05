@@ -411,8 +411,7 @@ def test_ablehnung_verlangt_die_richtigstellung():
     try:
         gen = werkzeug_schleife.run_tool(
             "add_calendar_entry", {"label": "x"}, tutor_mode=False,
-            active_exec=lambda n, a: "ok", user_query="",
-            richtigstellung=ai._OllamaAdapter.richtigstellung)
+            active_exec=lambda n, a: "ok", user_query="")
         try:
             while True:
                 gen.send(None)

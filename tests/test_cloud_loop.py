@@ -12,6 +12,7 @@ es scripts/cloud_smoke.py.
 import pytest
 
 import ai
+import ai_backends
 import cloud
 
 
@@ -360,7 +361,7 @@ def test_mehrere_tools_in_einer_message(fake):
 def test_runden_grenze_haelt(fake):
     """Ein Modell, das ewig Tools ruft, darf nicht ewig Geld verbrennen."""
     fake([{"content": [_tool_block("read_calendar", {})],
-           "stop_reason": "tool_use"}] * cloud._MAX_ROUNDS)
+           "stop_reason": "tool_use"}] * ai_backends.STANDARD_RUNDEN)
     events = _lauf(cloud.chat_stream(_msgs(), tool_executor=lambda n, a: "x"))
     # Als fehler-Event, nicht als Antworttext — sonst stuende es im Verlauf.
     assert any(isinstance(e, dict) and "fehler" in e and "Tool-Tiefe" in e["fehler"] for e in events)

@@ -18,10 +18,8 @@
 #   assistent_anhaengen(r)     den Zug des Modells in SEINEM Format anhängen
 #   ergebnisse_anhaengen(liste) [(call_id, text, is_error)] in seinem Format
 #
-# dazu zwei Attribute:
-#   grenze           max. Runden (lokal 5, Cloud 8 — offen, siehe Todo)
-#   richtigstellung  Ablehnungstext mit Richtigstellungs-Satz (bisher nur
-#                    lokal — offen, siehe Todo)
+# dazu das Attribut `modell`: danach richtet sich die Rundengrenze
+# (ai_backends.runden_grenze — pro Modell, Standard 8).
 #
 # Wie der Prompt gebaut wird, bleibt ganz beim Weg: Schiene, Cache und
 # Graph-Store sind gewollt verschieden.
@@ -35,6 +33,7 @@
 
 from dataclasses import dataclass, field
 
+import ai_backends
 import kidebug
 
 
@@ -66,7 +65,8 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
     Antwort roh statt mit Bild-Markern.
     fehler_name: wer gescheitert ist, für die Meldung ("Cloud", "Ollama").
     """
-    for _ in range(adapter.grenze):
+    grenze = ai_backends.runden_grenze(adapter.modell)
+    for _ in range(grenze):
         try:
             runde = yield from adapter.runde()
         except Abbruch as e:
@@ -86,15 +86,14 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
         for call_id, name, args in runde.calls:
             ausgang = yield from run_tool(
                 name, args, tutor_mode=tutor_mode, active_exec=active_exec,
-                user_query=user_query, store=store,
-                richtigstellung=getattr(adapter, "richtigstellung", False))
+                user_query=user_query, store=store)
             if ausgang[0] == "stop":
                 return
             _, text, ist_fehler = ausgang
             ergebnisse.append((call_id, text, ist_fehler))
         adapter.ergebnisse_anhaengen(ergebnisse)
 
-    yield fehler(f"Maximale Tool-Tiefe erreicht ({adapter.grenze} Runden) — "
+    yield fehler(f"Maximale Tool-Tiefe erreicht ({grenze} Runden) — "
                  f"sie hat nicht zu Ende geantwortet.")
 
 
@@ -112,7 +111,7 @@ def antwort(text: str, *, tutor_mode: bool, user_query, store=None):
 # ── Ein Tool-Call ──────────────────────────────────────────────────────
 
 def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
-             user_query, store=None, richtigstellung: bool = False):
+             user_query, store=None):
     """
     Behandelt EINEN Tool-Call: terminale Tools, Knopf-Dialog, Erlaubnis-Gate,
     Ausführung. Generator — yieldet die Events, mit `yield from` aufrufen.
@@ -170,15 +169,16 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
     if not tutor_mode and ai.braucht_erlaubnis(name):
         erlaubt = yield from _ask_permission(name, args)
         if not erlaubt:
-            text = (f"Sasha hat die Aktion '{name}' abgelehnt - NICHT "
+            # Der zweite Satz galt bis 10/2026 nur lokal. Der Fall ist aber
+            # überall derselbe: sie notiert "Zahnarzt eingetragen" und ruft im
+            # selben Zug das Eintragen, das Sasha dann ablehnt.
+            return ("result",
+                    f"Sasha hat die Aktion '{name}' abgelehnt - NICHT "
                     f"ausführen, nichts eintragen. Kurz bestätigen dass du "
-                    f"es lässt.")
-            if richtigstellung:
-                text += (" Und falls du in derselben Runde schon irgendwo "
-                         "notiert hast, dass es passiert sei: schreib die "
-                         "Richtigstellung hinterher, sonst steht eine "
-                         "Unwahrheit im Gedächtnis.")
-            return ("result", text, False)
+                    f"es lässt. Und falls du in derselben Runde schon "
+                    f"irgendwo notiert hast, dass es passiert sei: schreib "
+                    f"die Richtigstellung hinterher, sonst steht eine "
+                    f"Unwahrheit im Gedächtnis.", False)
 
     # Ein krachendes Tool darf den Turn nicht abreißen: die Runde ist bezahlt.
     # Das Modell soll den Fehler SEHEN und reagieren können, statt zu

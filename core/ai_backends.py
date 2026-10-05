@@ -326,15 +326,11 @@ def chat_model(provider: str | None = None) -> str:
     hin und zurück nicht jedes Mal die Modellwahl vergisst — und damit nie
     ein Anthropic-Modellname an Grok geschickt wird.
 
-    Reihenfolge: Env → gespeicherte Wahl → default_model des Anbieters.
+    Reihenfolge: gespeicherte Wahl → default_model des Anbieters.
+    (Bis 10/2026 gab es davor noch die Env ZENTRALE_CLOUD_MODEL. Sie griff
+    nur ohne provider-Argument, und alle Chat-Aufrufer geben eins mit — sie
+    war also tot und ist raus.)
     """
-    # Env meint immer „das Modell, das JETZT läuft" — also nur, wenn nach dem
-    # aktuellen Anbieter gefragt wird (provider=None). Sonst käme beim Blick
-    # auf einen anderen Anbieter dessen Modell falsch heraus.
-    if provider is None:
-        env = os.environ.get("ZENTRALE_CLOUD_MODEL")
-        if env:
-            return env
     name = provider or cloud_provider() or ""
     gespeichert = ai_config.setting("chat_models", None) or {}
     if isinstance(gespeichert, dict) and gespeichert.get(name):
@@ -352,6 +348,27 @@ def set_chat_model(model: str, provider: str | None = None) -> str:
     ai_config.set_override("chat_models", gespeichert, persist=True)
     _cache["val"] = None
     return gespeichert[name]
+
+
+# ── Rundengrenze: pro MODELL, nicht pro Weg ───────────────────────────
+# Wie oft ein Modell in einem Zug hintereinander Werkzeuge rufen darf, bevor
+# die Schleife abbricht (core/werkzeug_schleife.py). Sasha, 05.10.2026: eine
+# Regel für alle, Standard 8; ein kleines Modell, das gern im Kreis dreht,
+# bekommt in data/ai_config.json weniger:
+#     "runden_grenzen": {"qwen3.5:9b": 5}
+# Vorher hing die Zahl am Weg (lokal 5, Cloud 8) — ein starkes lokales
+# Modell wäre damit genauso gebremst worden wie das 9B.
+STANDARD_RUNDEN = 8
+
+
+def runden_grenze(modell: str | None) -> int:
+    grenzen = ai_config.setting("runden_grenzen", None)
+    if isinstance(grenzen, dict) and modell in grenzen:
+        try:
+            return max(1, int(grenzen[modell]))
+        except (TypeError, ValueError):
+            pass
+    return STANDARD_RUNDEN
 
 
 EFFORT_STUFEN = ("low", "medium", "high", "xhigh", "max")

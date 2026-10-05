@@ -1237,15 +1237,8 @@ class _OllamaAdapter:
     werkzeug_schleife.py): tool_calls irgendwo im Stream, Ergebnisse als
     role=tool ohne Call-Id."""
 
-    # Sicherheitsnetz gegen Endlosschleifen. Kleiner als in der Cloud: ein
-    # 9B dreht eher im Kreis. (Offen, ob alle Wege gleich viel bekommen.)
-    grenze = 5
-    # Ablehnungstext mit Richtigstellungs-Satz — bisher nur hier. (Offen, ob
-    # er für alle Wege gilt.)
-    richtigstellung = True
-
     def __init__(self, model, msgs, tools, want_think):
-        self.model, self.msgs, self.tools = model, msgs, tools
+        self.modell, self.msgs, self.tools = model, msgs, tools
         self.want_think = want_think
         # WICHTIG gegen den qwen3.5-Template-Bug (#10976): nach dem ERSTEN
         # Tool-Call think=AUS, weil die Synthese-Runde mit think die ganze
@@ -1258,7 +1251,7 @@ class _OllamaAdapter:
         think_now = self.want_think and not self.tool_used
         think_opts = {"think": think_now} if SUPPORTS_THINK else {}
         payload = {
-            "model":      self.model,
+            "model":      self.modell,
             **think_opts,
             "messages":   self.msgs,
             "tools":      self.tools,

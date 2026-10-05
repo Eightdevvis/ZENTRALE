@@ -681,9 +681,9 @@ die nur ihren Dialekt kennen:
 
 | Adapter | Datei | Eigenheit |
 |---|---|---|
-| `_OllamaAdapter` | `core/ai.py` | think aus nach dem ersten Tool (qwen-Template-Bug), Grenze 5 |
-| `_AnthropicAdapter` | `core/cloud.py` | `tool_result`-Blöcke in EINER user-Message, wandernder Cache-Breakpoint, Grenze 8 |
-| `_OpenAIAdapter` | `core/cloud_openai.py` | Tool-Calls stückweise aus dem Stream, `role: "tool"`, Grenze 8 |
+| `_OllamaAdapter` | `core/ai.py` | think aus nach dem ersten Tool (qwen-Template-Bug) |
+| `_AnthropicAdapter` | `core/cloud.py` | `tool_result`-Blöcke in EINER user-Message, wandernder Cache-Breakpoint |
+| `_OpenAIAdapter` | `core/cloud_openai.py` | Tool-Calls stückweise aus dem Stream, `role: "tool"` |
 
 Jeder Adapter hat `runde()` (ein Modell-Aufruf → `Runde(text, calls)`),
 `assistent_anhaengen()` und `ergebnisse_anhaengen()`. Den Prompt baut weiter
@@ -696,10 +696,14 @@ die Rundengrenze kommen als `{"fehler": …}`. `ui/app.py` reicht das als SSE
 Vorher stand `[Cloud-Fehler: …]` als KI-Antwort im Verlauf, und der Takt
 konnte es sogar als „Initiative“ melden.
 
-⚠ Offen (Stand 05.10.2026): ob alle Wege dieselbe Rundengrenze bekommen und
-ob der Ablehnungstext mit „Richtigstellung hinterher“ (bisher nur lokal,
-`richtigstellung = True`) für alle gilt. Der Tutor hat in `tutor/cloud.py`
-und `tutor/openai_compat.py` weiterhin eigene Schleifen.
+**Eine Regel für alle (Sasha, 05.10.2026):** Die Rundengrenze hängt am
+Modell, nicht am Weg (`ai_backends.runden_grenze`, Standard 8, pro Modell in
+`runden_grenzen` der Config kleiner). Der Ablehnungstext verlangt überall die
+Richtigstellung, falls sie im selben Zug schon notiert hat, es sei passiert —
+vorher bekam nur der lokale Weg diesen Satz.
+
+Der Tutor hat in `tutor/cloud.py` und `tutor/openai_compat.py` weiterhin
+eigene Schleifen.
 
 ### Prompt-Cache: statisch vorn, Wechselndes ganz hinten
 
@@ -907,9 +911,11 @@ wer denkt.
 
 - **Modell:** `cloud._model()` = `ai_backends.chat_model("claude")` →
   `data/ai_config.json` `chat_models.claude` → Code-Default `claude-sonnet-5`
-  (`providers.py`). `ZENTRALE_CLOUD_MODEL` greift im Chat **nicht**:
-  `chat_model()` liest die Env nur, wenn ohne Anbieter gefragt wird, und alle
-  Aufrufer nennen einen. Umstellen also per Config (`set_chat_model`).
+  (`providers.py`). Umstellen per Config (`set_chat_model`); eine Env
+  dafür gibt es nicht (das frühere `ZENTRALE_CLOUD_MODEL` griff nie und ist
+  seit 10/2026 raus).
+- **Rundengrenze:** `ai_backends.runden_grenze(modell)` — `runden_grenzen`
+  in der Config (`{"qwen3.5:9b": 5}`), sonst 8. Gilt für alle Wege.
 - **Denk-Tiefe:** `ai_backends.chat_effort()`, Default `low` —
   `ZENTRALE_CHAT_EFFORT` oder `chat_effort` in der Config.
 - `max_tokens 16000` (`ZENTRALE_CLOUD_MAX_TOKENS`).
