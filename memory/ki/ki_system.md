@@ -605,8 +605,7 @@ Docs) sich als eigene Fähigkeit ausgibt.
 
 Zweiter Denk-Pfad für den Kern, **Drop-in für `ai.chat_stream()`**: gleiche
 Signatur, gleiches Event-Protokoll (`reflect` / `ascii` / `permission` /
-`cinema` / Text; dazu `werkzeug`, das nur der Cloud-Pfad liefert), gleiches
-Erlaubnis-Gate. Grund für den Umstieg: das Projekt
+`cinema` / `werkzeug` / `fehler` / Text), gleiches Erlaubnis-Gate. Grund für den Umstieg: das Projekt
 hing nie an der Architektur, sondern daran, dass ein 9B nicht klug genug war
 und immer mehr Prompt-Absicherung brauchte.
 
@@ -668,12 +667,39 @@ Der Kern spricht **zwei** Cloud-Dialekte. Welchen, sagt `kind` in
 | `openai_compat` | `core/cloud_openai.py` | qwen (DashScope), openai, mistral |
 
 Beide sind Drop-ins für `ai.chat_stream()` mit identischem Event-Protokoll.
-Die **Bedeutung** eines Tool-Calls — was terminal ist (`read_news`, in `klein`
-zusätzlich `antwort`), was durchs Gate muss — steht genau einmal, in
-`cloud.run_tool()`; die beiden Loops unterscheiden sich nur darin, wie sie das
-Ergebnis verpacken (`tool_result`-Block vs. `role: "tool"`-Message). Auch der
-statische System-Prompt kommt aus derselben Funktion
+Der statische System-Prompt kommt aus derselben Funktion
 (`cloud._static_system()`), die ihn bei der aktiven Schiene holt.
+
+### Eine Werkzeug-Schleife – `core/werkzeug_schleife.py` (seit 10/2026)
+
+Bis Oktober 2026 stand die Tool-Schleife **dreimal** da (lokal, Anthropic,
+OpenAI). Die lokale Kopie war auseinandergelaufen: keine `werkzeug`-Events,
+ein krachendes Tool riss den Zug ab, eigener Ablehnungstext. Jetzt gibt es
+eine Schleife (`laufen`), die Runden, Gate, terminale Tools (`antwort`,
+`read_news`, `ask_choice`), Antwort und Fehler besitzt, und **drei Adapter**,
+die nur ihren Dialekt kennen:
+
+| Adapter | Datei | Eigenheit |
+|---|---|---|
+| `_OllamaAdapter` | `core/ai.py` | think aus nach dem ersten Tool (qwen-Template-Bug), Grenze 5 |
+| `_AnthropicAdapter` | `core/cloud.py` | `tool_result`-Blöcke in EINER user-Message, wandernder Cache-Breakpoint, Grenze 8 |
+| `_OpenAIAdapter` | `core/cloud_openai.py` | Tool-Calls stückweise aus dem Stream, `role: "tool"`, Grenze 8 |
+
+Jeder Adapter hat `runde()` (ein Modell-Aufruf → `Runde(text, calls)`),
+`assistent_anhaengen()` und `ergebnisse_anhaengen()`. Den Prompt baut weiter
+jeder Weg selbst. Was ein Tool-Call **bedeutet**, steht genau einmal, in
+`werkzeug_schleife.run_tool()`.
+
+**Fehler sind keine Antwort.** API-Fehler, Cloud-Ablehnung (`refusal`) und
+die Rundengrenze kommen als `{"fehler": …}`. `ui/app.py` reicht das als SSE
+`fehler` an die TUI (Statuszeile) und schreibt es NICHT in `_chat_history`.
+Vorher stand `[Cloud-Fehler: …]` als KI-Antwort im Verlauf, und der Takt
+konnte es sogar als „Initiative“ melden.
+
+⚠ Offen (Stand 05.10.2026): ob alle Wege dieselbe Rundengrenze bekommen und
+ob der Ablehnungstext mit „Richtigstellung hinterher“ (bisher nur lokal,
+`richtigstellung = True`) für alle gilt. Der Tutor hat in `tutor/cloud.py`
+und `tutor/openai_compat.py` weiterhin eigene Schleifen.
 
 ### Prompt-Cache: statisch vorn, Wechselndes ganz hinten
 
@@ -986,10 +1012,10 @@ nur „steht drin" bzw. „jetzt steht's wirklich drin". Von außen sah das aus 
 eine Lüge beim ersten Mal. Ein sichtbares `write_note(name=ideen, text=…)` hätte
 die Frage in einer Zeile beantwortet.
 
-- **Emittiert** wird in `cloud.run_tool` — der einzigen Stelle, durch die
-  **beide** Cloud-Dialekte gehen. Drei Phasen: `start` (Name + Argumente),
-  `fertig` (Ergebnis), `fehler`. Zweimal gepflegt hieße, dass die Anzeige auf
-  einer Schiene irgendwann fehlt.
+- **Emittiert** wird in `werkzeug_schleife.run_tool` — der einzigen Stelle,
+  durch die **alle drei** Wege gehen (lokal erst seit 10/2026). Drei Phasen:
+  `start` (Name + Argumente), `fertig` (Ergebnis), `fehler`. Mehrfach
+  gepflegt hieße, dass die Anzeige auf einer Schiene irgendwann fehlt.
 - **Durchgereicht** als eigenes SSE-Event `werkzeug` (`ui/app.py`), kein
   Antworttext — es landet also nicht im gespeicherten Verlauf.
 - **Gezeigt** in der TUI als eigene Zeilen im Chat: `⚙ write_note(name=ideen,

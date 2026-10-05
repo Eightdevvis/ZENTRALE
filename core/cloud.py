@@ -50,6 +50,7 @@ import os
 import ai        # Prompt-Blöcke, TOOLS, Gate, Tool-Ausführung — alles wiederverwendet
 import graph
 import kidebug   # Devtools-Bus: was WIRKLICH rausgeht (scripts/ai_devtools.py)
+import werkzeug_schleife  # die EINE Tool-Schleife; hier steht nur der Anthropic-Adapter
 
 # ── Der getrennte Cloud-Graph ──────────────────────────────────────────
 # Absoluter Pfad, damit derselbe String immer denselben _Store trifft (graph.py
@@ -458,193 +459,95 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     _append_volatile(anthro_msgs, _volatile_text(mem_ctx, via_mic, tutor_mode))
     anthro_tools = _to_anthropic_tools(active_tools)
 
-    client = _get_client()
-    mdl    = model or _model()
+    adapter = _AnthropicAdapter(_get_client(), model or _model(),
+                                sys_blocks, anthro_msgs, anthro_tools)
+    yield from werkzeug_schleife.laufen(
+        adapter, tutor_mode=tutor_mode, active_exec=active_exec,
+        user_query=user_query, store=store)
 
-    # Dritter Breakpoint, der zwischen den Tool-Runden mitwandert: ohne ihn
-    # zahlt Runde 3 die Ergebnisse von Runde 2 noch einmal voll. Der alte wird
-    # vor dem Setzen des neuen entfernt — es sind maximal 4 erlaubt.
-    runden_bp = None
 
-    for _ in range(_MAX_ROUNDS):
+class _AnthropicAdapter:
+    """Anthropic-Dialekt für die gemeinsame Werkzeug-Schleife: tool_use-
+    Blöcke, alle tool_results in EINER user-Message, wandernder Breakpoint."""
+
+    grenze = _MAX_ROUNDS
+    richtigstellung = False
+
+    def __init__(self, client, mdl, sys_blocks, msgs, tools):
+        self.client, self.mdl = client, mdl
+        self.sys_blocks, self.msgs, self.tools = sys_blocks, msgs, tools
+        # Dritter Breakpoint, der zwischen den Tool-Runden mitwandert: ohne ihn
+        # zahlt Runde 3 die Ergebnisse von Runde 2 noch einmal voll. Der alte
+        # wird vor dem Setzen des neuen entfernt — es sind maximal 4 erlaubt.
+        self.runden_bp = None
+
+    def runde(self):
         round_text = []
         # Devtools: den vollstaendigen Request mitschneiden, BEVOR er rausgeht
         # (siehe core/kidebug.py — aus, solange niemand zuschaut).
-        kidebug.request(modell=mdl, schiene=_profil().NAME,
-                        system=sys_blocks, messages=anthro_msgs,
-                        tools=anthro_tools)
-        try:
-            with client.messages.stream(
-                model=mdl,
-                max_tokens=_MAX_TOKENS,
-                system=sys_blocks,
-                tools=anthro_tools,
-                messages=anthro_msgs,
-                **_denk_opts(mdl),
-            ) as stream:
-                for event in stream:
-                    if event.type != "content_block_delta":
-                        continue
-                    d = event.delta
-                    if d.type == "thinking_delta":
-                        # Innerer Monolog → HUD. Landet NICHT in round_text,
-                        # also weder in der History noch im TTS.
-                        yield {"reflect": d.thinking}
-                    elif d.type == "text_delta":
-                        round_text.append(d.text)
-                final = stream.get_final_message()
-        except Exception as e:
-            yield f"[Cloud-Fehler: {e}]"
-            return
+        kidebug.request(modell=self.mdl, schiene=_profil().NAME,
+                        system=self.sys_blocks, messages=self.msgs,
+                        tools=self.tools)
+        with self.client.messages.stream(
+            model=self.mdl,
+            max_tokens=_MAX_TOKENS,
+            system=self.sys_blocks,
+            tools=self.tools,
+            messages=self.msgs,
+            **_denk_opts(self.mdl),
+        ) as stream:
+            for event in stream:
+                if event.type != "content_block_delta":
+                    continue
+                d = event.delta
+                if d.type == "thinking_delta":
+                    # Innerer Monolog → HUD. Landet NICHT im Text,
+                    # also weder in der History noch im TTS.
+                    yield {"reflect": d.thinking}
+                elif d.type == "text_delta":
+                    round_text.append(d.text)
+            final = stream.get_final_message()
 
-        _log_usage(final, mdl)
-        _debug_out(final, mdl)
+        _log_usage(final, self.mdl)
+        _debug_out(final, self.mdl)
 
         if final.stop_reason == "refusal":
             # Sicherheits-Klassifikator hat abgelehnt. Kein Fehler im Sinne der
             # API (HTTP 200), aber content ist leer oder abgeschnitten.
-            yield "[Die Cloud-KI hat diese Anfrage abgelehnt.]"
-            return
-
-        tool_blocks = [b for b in final.content
-                       if getattr(b, "type", None) == "tool_use"]
+            raise werkzeug_schleife.Abbruch(
+                "Die Cloud-KI hat diese Anfrage abgelehnt.")
 
         # Fertig, wenn das Modell keine Tools mehr will — ODER wenn es
         # stop_reason=tool_use meldet, aber gar keinen tool_use-Block liefert.
         # Der zweite Fall sieht nach Haarspalterei aus, ist aber der Unterschied
         # zwischen "Antwort" und einer user-Message mit LEEREM content, die die
         # API mit 400 ablehnt — und einer Runde, die nichts tut außer zu kosten.
-        if final.stop_reason != "tool_use" or not tool_blocks:
-            answer = "".join(round_text) or _text_of(final.content)
-            if tutor_mode:
-                if answer:
-                    yield answer
-            else:
-                yield from ai._answer_with_images(answer, user_query, store=store)
-            return
+        calls = []
+        if final.stop_reason == "tool_use":
+            calls = [(b.id, b.name, dict(b.input or {})) for b in final.content
+                     if getattr(b, "type", None) == "tool_use"]
+        text = "".join(round_text) or _text_of(final.content)
+        return werkzeug_schleife.Runde(text, calls, roh=final)
 
-        # ── Tool-Runde ────────────────────────────────────────────────
+    def assistent_anhaengen(self, runde):
         # Assistant-Turn (inkl. tool_use-Blöcken) unverändert als Kontext
         # zurückhängen. final.content enthält auch die thinking-Blöcke; die
         # müssen beim selben Modell UNVERÄNDERT mitgeschickt werden.
-        anthro_msgs.append({"role": "assistant", "content": final.content})
+        self.msgs.append({"role": "assistant", "content": runde.roh.content})
 
-        results = []
-        beendet = False
-        for block in tool_blocks:
-            ausgang = yield from run_tool(
-                block.name, dict(block.input or {}),
-                tutor_mode=tutor_mode, active_exec=active_exec,
-                user_query=user_query, store=store)
-            if ausgang[0] == "stop":
-                beendet = True
-                break
-            _, text, fehler = ausgang
-            results.append(_tool_result(block.id, text, is_error=fehler))
-        if beendet:
-            return
-
+    def ergebnisse_anhaengen(self, ergebnisse):
         # ALLE tool_results in EINER user-Message zurück. Auf mehrere
         # Nachrichten aufzuteilen bringt dem Modell bei, keine parallelen
         # Tool-Calls mehr zu machen.
-        anthro_msgs.append({"role": "user", "content": results})
-
+        results = [_tool_result(cid, text, is_error=f)
+                   for cid, text, f in ergebnisse]
+        self.msgs.append({"role": "user", "content": results})
         # Breakpoint ans Ende der Runde nachziehen (alten abräumen).
-        if runden_bp is not None:
-            runden_bp.pop("cache_control", None)
+        if self.runden_bp is not None:
+            self.runden_bp.pop("cache_control", None)
         if results:
             results[-1]["cache_control"] = _cc()
-            runden_bp = results[-1]
-
-    yield "\n[Maximale Tool-Tiefe erreicht]"
-
-
-# ── Ein Tool-Call, dialekt-unabhängig ──────────────────────────────────
-
-def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
-             user_query, store):
-    """
-    Behandelt EINEN Tool-Call: terminale Tools, Knopf-Dialog, Erlaubnis-Gate,
-    Ausführung. Generator — yieldet die Events, mit `yield from` aufrufen.
-
-    Rückgabe:
-      ("stop",)                  Turn ist zu Ende (terminales Tool hat die
-                                 Antwort schon geyieldet)
-      ("result", text, is_error) Ergebnis, das als tool_result zurück soll
-
-    Warum hier und nicht im Loop: es gibt ZWEI Cloud-Dialekte (Anthropic mit
-    tool_use-Blöcken, OpenAI-kompatibel mit tool_calls). Was ein Tool-Call
-    BEDEUTET — was terminal ist, was bestätigt werden muss — ist in beiden
-    dasselbe und darf nicht zweimal gepflegt werden. Nur das Verpacken des
-    Ergebnisses unterscheidet sich, und das macht der jeweilige Loop.
-    """
-    # Auf das Vokabular des Kerns bringen — welche Schiene ihr Tool wie nennt,
-    # ist ihre Sache (siehe core/profil/). Der ausfuehrende Name bleibt der
-    # kanonische, auch fuer den Gate-Text.
-    import profil
-    name = profil.kanonisch(name)
-
-    # ── Sichtbar machen, was sie tut ──────────────────────────────────
-    # Sasha, 20.08.2026: "machen wir im normalen chat einfach die tool calls
-    # usw details was sie macht wie tool call, thinking, usw einfach alle
-    # transparent und sichtbar, so wie man es bei dir claude sieht! das wird
-    # schon helfen. weil keine ahnung was sie hier fabriziert hat."
-    #
-    # Der Anlass war ein Turn, in dem sie zweimal schrieb und beide Male nur
-    # "steht drin" sagte — von aussen sah das aus wie eine Luege beim ersten
-    # Mal. Wer sieht, WELCHES Werkzeug mit WELCHEN Argumenten lief, muss das
-    # nicht mehr raten.
-    #
-    # Hier und nicht im Loop: `run_tool` ist die einzige Stelle, durch die
-    # BEIDE Cloud-Dialekte gehen. Zweimal gepflegt hiesse, dass die Anzeige
-    # auf einer Schiene irgendwann fehlt.
-    yield {"werkzeug": {"phase": "start", "name": name, "args": args}}
-
-    # antwort-Tool ist TERMINAL: der Text IST die finale Antwort.
-    if not tutor_mode and name == "antwort":
-        answer = str(args.get("text", "")).strip()
-        yield from ai._answer_with_images(answer, user_query, store=store)
-        return ("stop",)
-
-    # read_news ist TERMINAL: das Briefing ist schon moderiert und wird
-    # direkt gestreamt, statt es nacherzählen zu lassen.
-    if not tutor_mode and name == "read_news":
-        yield {"cinema": True}
-        show = active_exec(name, args)
-        if show.startswith("Sendung (Stand") and "\n\n" in show:
-            show = show.split("\n\n", 1)[1]
-        yield show
-        return ("stop",)
-
-    # ask_choice: die KI baut selbst einen Knopf-Dialog.
-    if not tutor_mode and name == "ask_choice":
-        wahl = yield from _ask_buttons(args)
-        return ("result", f"Sasha hat gewählt: {wahl}.", False)
-
-    # Erlaubnis-Gate: Python-seitig, NICHT modellgetrieben. Fremde Tool-Sets
-    # (Tutor) gaten wir nicht.
-    if not tutor_mode and ai.braucht_erlaubnis(name):
-        erlaubt = yield from _ask_permission(name, args)
-        if not erlaubt:
-            return ("result",
-                    f"Sasha hat die Aktion '{name}' abgelehnt - NICHT "
-                    f"ausführen, nichts eintragen. Kurz bestätigen dass du "
-                    f"es lässt.", False)
-
-    # Ein krachendes Tool darf den Turn nicht abreißen: die Runde ist bezahlt.
-    # Das Modell soll den Fehler SEHEN und reagieren können, statt zu
-    # behaupten, es hätte funktioniert. (Der lokale Ollama-Pfad wirft hier
-    # weiter — sein Tool-Protokoll kennt keine Fehler-Markierung.)
-    try:
-        ergebnis = active_exec(name, args)
-        kidebug.emit("ai.tool", name=name, args=args, ergebnis=str(ergebnis))
-        yield {"werkzeug": {"phase": "fertig", "name": name,
-                            "text": str(ergebnis)}}
-        return ("result", ergebnis, False)
-    except Exception as e:
-        kidebug.emit("ai.tool", name=name, args=args, fehler=str(e))
-        yield {"werkzeug": {"phase": "fehler", "name": name, "text": str(e)}}
-        return ("result", f"Tool '{name}' ist fehlgeschlagen: {e}", True)
+            self.runden_bp = results[-1]
 
 
 # ── Helfer ─────────────────────────────────────────────────────────────
@@ -655,36 +558,6 @@ def _tool_result(tool_use_id: str, content, is_error: bool = False) -> dict:
     if is_error:
         r["is_error"] = True
     return r
-
-
-def _ask_buttons(args: dict):
-    """frage_knopf: Knopf-Dialog auslösen, blockieren, Wahl zurückgeben.
-    Generator (yieldet das permission-Event) — mit `yield from` aufrufen."""
-    import state
-    frage = str(args.get("frage", "")).strip() or "Wie soll ich weitermachen?"
-    opts  = [str(o).strip() for o in (args.get("optionen") or []) if str(o).strip()]
-    if len(opts) < 2:
-        opts = ["ja", "nein"]
-    opts = opts[:4]                       # Leiste fasst max 4 Knöpfe sauber
-    state.push_log(f"AI →  FRAGE {opts}: {frage[:140]}")
-    state.request_permission(options=opts, timeout_default="(keine Antwort)")
-    yield {"permission": {"frage": frage, "optionen": opts}}
-    wahl = state.wait_permission()        # BLOCKIERT bis Klick/Timeout
-    state.push_log(f"AI ←  WAHL: {wahl}")
-    return wahl
-
-
-def _ask_permission(name: str, args: dict):
-    """Erlaubnis-Gate: JA/NEIN-Dialog vor einem schreibenden Tool.
-    Generator — mit `yield from` aufrufen. True = ausführen."""
-    import state
-    frage = ai._permission_question(name, args)
-    state.push_log(f"AI →  ERLAUBNIS? {frage[:160]}")
-    state.request_permission()
-    yield {"permission": {"frage": frage}}
-    antwort = state.wait_permission()     # BLOCKIERT bis Klick/Timeout
-    state.push_log(f"AI ←  ERLAUBNIS: {antwort}")
-    return antwort == "ja"
 
 
 def _debug_out(final, model: str) -> None:

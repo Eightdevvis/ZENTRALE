@@ -261,7 +261,7 @@ def request_permission(options=None, timeout_default="nein"):
     """
     Macht das Erlaubnis-Event scharf für eine neue Frage.
 
-    Aufrufer: ai.chat_stream bzw. cloud.run_tool, direkt bevor das permission-Event yieldet
+    Aufrufer: werkzeug_schleife.run_tool (alle drei Wege), direkt bevor das permission-Event yieldet
     und in wait_permission() blockiert. Setzt einen evtl. alten Antwort-
     Rest zurück (clear), damit eine verspätete Antwort der letzten Frage
     nicht fälschlich diese hier beantwortet.

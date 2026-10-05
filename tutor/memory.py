@@ -198,7 +198,8 @@ def _distill(backend: str, provider: str | None, model: str | None, user_msg: st
             import ai
             for tok in ai.chat_stream(msgs, system=_DISTILL_SYS,
                                       tools=None, tool_executor=None):
-                parts.append(tok)
+                if isinstance(tok, str):   # Events (reflect, fehler …) sind kein Text
+                    parts.append(tok)
     except Exception:
         return ""
     return "".join(parts)

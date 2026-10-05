@@ -198,7 +198,7 @@ def test_kaputte_argumente_kippen_nicht(fake):
 def test_runden_grenze_haelt(fake):
     fake([_tool("read_calendar", "{}")] * cloud_openai._MAX_ROUNDS)
     events = _lauf(cloud_openai.chat_stream(_msgs(), tool_executor=lambda n, a: "x"))
-    assert any(isinstance(e, str) and "Tool-Tiefe" in e for e in events)
+    assert any(isinstance(e, dict) and "fehler" in e and "Tool-Tiefe" in e["fehler"] for e in events)
 
 
 def test_krachendes_tool_reisst_den_turn_nicht_ab(fake):
@@ -261,14 +261,14 @@ def test_api_fehler_wird_gemeldet(fake, monkeypatch):
     c = fake([_text("egal")])
     c.chat.completions = Kaputt()
     events = _lauf(cloud_openai.chat_stream(_msgs()))
-    assert len(events) == 1 and "kein Netz" in events[0]
+    assert len(events) == 1 and "kein Netz" in events[0]["fehler"]
 
 
 def test_falscher_dialekt_wird_abgelehnt(monkeypatch):
     monkeypatch.setattr(cloud_openai, "_provider",
                         lambda name=None: {"kind": "anthropic"})
     events = _lauf(cloud_openai.chat_stream(_msgs()))
-    assert len(events) == 1 and "kein OpenAI-kompatibler" in events[0]
+    assert len(events) == 1 and "kein OpenAI-kompatibler" in events[0]["fehler"]
 
 
 # ── Gleichheit der beiden Dialekte ─────────────────────────────────────
@@ -286,5 +286,5 @@ def test_beide_pfade_teilen_die_tool_bedeutung():
     """Was terminal ist und was bestaetigt werden muss, steht genau einmal."""
     import inspect
     quelle = inspect.getsource(cloud_openai)
-    assert "cloud.run_tool" in quelle
+    assert "werkzeug_schleife.laufen" in quelle
     assert "PERMISSION_REQUIRED_TOOLS" not in quelle

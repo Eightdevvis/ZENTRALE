@@ -42,10 +42,11 @@ import json as _json
 import os
 
 import ai
-import cloud      # geteilt: Graph-Pfad, System-Bloecke, run_tool, Gate
+import cloud      # geteilt: Graph-Pfad, System-Bloecke
 import graph
 import kidebug    # Devtools-Bus (scripts/ai_devtools.py)
 import providers
+import werkzeug_schleife  # die EINE Tool-Schleife; hier steht nur der OpenAI-Adapter
 
 _MAX_TOKENS = int(os.environ.get("ZENTRALE_CLOUD_OPENAI_MAX_TOKENS", "2000"))
 _TEMP       = float(os.environ.get("ZENTRALE_CLOUD_OPENAI_TEMP", "0.4"))
@@ -146,14 +147,15 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     """
     Drop-in fuer ai.chat_stream() gegen einen OpenAI-kompatiblen Provider.
 
-    Gleiche Signatur und gleiches Event-Protokoll wie core/cloud.py; die
-    Bedeutung eines Tool-Calls (terminal? bestaetigungspflichtig?) kommt aus
-    cloud.run_tool, damit beide Dialekte nicht auseinanderlaufen.
+    Gleiche Signatur und gleiches Event-Protokoll wie core/cloud.py. Runden,
+    Gate und terminale Tools kommen aus core/werkzeug_schleife.py; hier
+    steht nur der Prompt und der Dialekt (_OpenAIAdapter).
     """
     prov = _provider(provider)
     if prov.get("kind") != "openai_compat":
-        yield f"[Cloud-Fehler: Provider '{provider or providers.configured()}' " \
-              f"ist kein OpenAI-kompatibler Endpoint]"
+        yield werkzeug_schleife.fehler(
+            f"Cloud-Fehler: Provider '{provider or providers.configured()}' "
+            f"ist kein OpenAI-kompatibler Endpoint")
         return
 
     tutor_mode   = tools is not None
@@ -188,68 +190,79 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         mdl = ai_backends.chat_model(provider or providers.configured()) \
             or prov.get("default_model")
 
-    for _ in range(_MAX_ROUNDS):
+    adapter = _OpenAIAdapter(client, mdl, msgs, active_tools)
+    yield from werkzeug_schleife.laufen(
+        adapter, tutor_mode=tutor_mode, active_exec=active_exec,
+        user_query=user_query, store=store)
+
+
+class _OpenAIAdapter:
+    """OpenAI-kompatibler Dialekt für die gemeinsame Werkzeug-Schleife:
+    Tool-Calls kommen stückweise im Stream, Ergebnisse als role=tool."""
+
+    grenze = _MAX_ROUNDS
+    richtigstellung = False
+
+    def __init__(self, client, mdl, msgs, tools):
+        self.client, self.mdl, self.msgs, self.tools = client, mdl, msgs, tools
+
+    def runde(self):
         round_text = []
         tool_calls = {}       # index → {id, name, args}
         verbrauch = None
         # Devtools: den vollstaendigen Request mitschneiden, bevor er rausgeht.
         # Dieser Dialekt hat den System-Prompt als erste Message; kidebug
         # nimmt beide Formen an.
-        kidebug.request(modell=mdl, schiene=cloud._profil().NAME,
-                        system=msgs[0]["content"], messages=msgs[1:],
-                        tools=active_tools)
-        try:
-            stream = client.chat.completions.create(
-                model=mdl,
-                messages=msgs,
-                tools=active_tools or None,   # ai.TOOLS ist schon OpenAI-Schema
-                stream=True,
-                temperature=_TEMP,
-                max_tokens=_MAX_TOKENS,
-                # Verbrauch am Stream-Ende mitschicken lassen — sonst wüssten
-                # wir bei jedem Nicht-Anthropic-Anbieter nicht, was der Turn
-                # gekostet hat. Anbieter, die das Feld nicht kennen, ignorieren
-                # es; deshalb steht es in stream_options und nicht als Pflicht.
-                stream_options={"include_usage": True},
-            )
-            for chunk in stream:
-                # Der Usage-Chunk kommt am Ende und hat KEINE choices - er
-                # darf nicht als leerer Delta durchrutschen.
-                if getattr(chunk, "usage", None):
-                    verbrauch = chunk.usage
-                if not chunk.choices:
-                    continue
-                delta = chunk.choices[0].delta
+        kidebug.request(modell=self.mdl, schiene=cloud._profil().NAME,
+                        system=self.msgs[0]["content"], messages=self.msgs[1:],
+                        tools=self.tools)
+        stream = self.client.chat.completions.create(
+            model=self.mdl,
+            messages=self.msgs,
+            tools=self.tools or None,   # ai.TOOLS ist schon OpenAI-Schema
+            stream=True,
+            temperature=_TEMP,
+            max_tokens=_MAX_TOKENS,
+            # Verbrauch am Stream-Ende mitschicken lassen — sonst wüssten
+            # wir bei jedem Nicht-Anthropic-Anbieter nicht, was der Turn
+            # gekostet hat. Anbieter, die das Feld nicht kennen, ignorieren
+            # es; deshalb steht es in stream_options und nicht als Pflicht.
+            stream_options={"include_usage": True},
+        )
+        for chunk in stream:
+            # Der Usage-Chunk kommt am Ende und hat KEINE choices - er
+            # darf nicht als leerer Delta durchrutschen.
+            if getattr(chunk, "usage", None):
+                verbrauch = chunk.usage
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
 
-                # Manche qwen-Varianten liefern den Denk-Strom getrennt.
-                # Wenn ja: ins HUD spiegeln, wie Ollamas thinking-Feld.
-                denk = getattr(delta, "reasoning_content", None)
-                if denk:
-                    yield {"reflect": denk}
+            # Manche qwen-Varianten liefern den Denk-Strom getrennt.
+            # Wenn ja: ins HUD spiegeln, wie Ollamas thinking-Feld.
+            denk = getattr(delta, "reasoning_content", None)
+            if denk:
+                yield {"reflect": denk}
 
-                if getattr(delta, "content", None):
-                    # NICHT sofort yielden: Text aus einer Runde, die mit
-                    # einem Tool-Call endet, ist Geschwaetz ("Ich schau kurz
-                    # nach…") und wuerde vorgelesen. Gleiche Entscheidung wie
-                    # im lokalen Pfad und in core/cloud.py.
-                    round_text.append(delta.content)
+            if getattr(delta, "content", None):
+                # Gepuffert, nicht sofort raus: Text aus einer Runde, die
+                # mit einem Tool-Call endet, ist Geschwaetz ("Ich schau kurz
+                # nach…") und wuerde vorgelesen.
+                round_text.append(delta.content)
 
-                for tc in (getattr(delta, "tool_calls", None) or []):
-                    slot = tool_calls.setdefault(
-                        tc.index, {"id": None, "name": "", "args": ""})
-                    if tc.id:
-                        slot["id"] = tc.id
-                    if tc.function:
-                        if tc.function.name:
-                            slot["name"] = tc.function.name
-                        if tc.function.arguments:
-                            slot["args"] += tc.function.arguments
-        except Exception as e:
-            yield f"[Cloud-Fehler: {e}]"
-            return
+            for tc in (getattr(delta, "tool_calls", None) or []):
+                slot = tool_calls.setdefault(
+                    tc.index, {"id": None, "name": "", "args": ""})
+                if tc.id:
+                    slot["id"] = tc.id
+                if tc.function:
+                    if tc.function.name:
+                        slot["name"] = tc.function.name
+                    if tc.function.arguments:
+                        slot["args"] += tc.function.arguments
 
-        _log_usage(verbrauch, mdl)
-        kidebug.emit("ai.out", modell=mdl,
+        _log_usage(verbrauch, self.mdl)
+        kidebug.emit("ai.out", modell=self.mdl,
                      stop_reason="tool_calls" if tool_calls else "end_turn",
                      bloecke=["".join(round_text)],
                      verbrauch={
@@ -257,43 +270,32 @@ def chat_stream(messages: list, model: str = None, system: str = None,
                          "out": getattr(verbrauch, "completion_tokens", 0),
                      } if verbrauch else None)
 
-        if not tool_calls:
-            answer = "".join(round_text)
-            if tutor_mode:
-                if answer:
-                    yield answer
-            else:
-                yield from ai._answer_with_images(answer, user_query, store=store)
-            return
-
-        # Assistant-Turn (mit tool_calls) als Kontext anhaengen.
-        msgs.append({
-            "role":    "assistant",
-            "content": "".join(round_text) or None,
-            "tool_calls": [{
-                "id":   s["id"],
-                "type": "function",
-                "function": {"name": s["name"], "arguments": s["args"] or "{}"},
-            } for s in tool_calls.values()],
-        })
-
-        beendet = False
+        calls = []
         for s in tool_calls.values():
             try:
                 args = _json.loads(s["args"] or "{}")
             except Exception:
                 args = {}
-            ausgang = yield from cloud.run_tool(
-                s["name"], args, tutor_mode=tutor_mode, active_exec=active_exec,
-                user_query=user_query, store=store)
-            if ausgang[0] == "stop":
-                beendet = True
-                break
-            # Dieser Dialekt kennt keine Fehler-Markierung — der Fehlertext
-            # geht als normales Ergebnis zurueck, das Modell sieht ihn trotzdem.
-            msgs.append({"role": "tool", "tool_call_id": s["id"],
-                         "content": str(ausgang[1])})
-        if beendet:
-            return
+            calls.append((s["id"], s["name"], args))
+        return werkzeug_schleife.Runde("".join(round_text), calls,
+                                       roh=list(tool_calls.values()))
 
-    yield "\n[Maximale Tool-Tiefe erreicht]"
+    def assistent_anhaengen(self, runde):
+        # Assistant-Turn (mit tool_calls) als Kontext anhaengen — die
+        # Argumente als ROHER String, so wie das Modell sie geliefert hat.
+        self.msgs.append({
+            "role":    "assistant",
+            "content": runde.text or None,
+            "tool_calls": [{
+                "id":   s["id"],
+                "type": "function",
+                "function": {"name": s["name"], "arguments": s["args"] or "{}"},
+            } for s in runde.roh],
+        })
+
+    def ergebnisse_anhaengen(self, ergebnisse):
+        # Dieser Dialekt kennt keine Fehler-Markierung — der Fehlertext
+        # geht als normales Ergebnis zurueck, das Modell sieht ihn trotzdem.
+        for cid, text, _ in ergebnisse:
+            self.msgs.append({"role": "tool", "tool_call_id": cid,
+                              "content": str(text)})

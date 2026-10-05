@@ -621,7 +621,7 @@ TOOLS = [
     # Tool-Kanal statt nur als Freitext. Im Kalender-Bench hob das die
     # Korrektheit von qwen3.5:9b (+~6 pp, gestapelt mit Sampling auf 82 %).
     # Mechanismus ist primaer die FRAMING-Wirkung: "liefere immer eine Antwort"
-    # killt die "ich pruefe..."-und-Stopp-Aussetzer. chat_stream behandelt einen
+    # killt die "ich pruefe..."-und-Stopp-Aussetzer. werkzeug_schleife.run_tool behandelt einen
     # antwort-Call terminal (Text = finale Antwort). Das Modell darf weiterhin
     # frei antworten - dann greift der Suffix-Effekt, nicht der Tool-Pfad.
     {
@@ -651,7 +651,7 @@ TOOLS = [
     # Button-Leiste + den blockierenden state.wait_permission-Mechanismus mit
     # dem automatischen Schreib-Tool-Gate - nur der Auslöser ist hier das
     # Modell selbst, nicht ein abgefangener Schreib-Call. Ohne 'optionen' =
-    # Ja/Nein. chat_stream behandelt den Call gesondert (siehe dort).
+    # Ja/Nein. werkzeug_schleife.run_tool behandelt den Call gesondert.
     {
         "type": "function",
         "function": {

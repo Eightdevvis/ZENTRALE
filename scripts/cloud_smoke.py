@@ -57,6 +57,14 @@ def _sammle(stream):
     return "".join(text), "".join(reflect), sonst
 
 
+def _fehler(sonst):
+    """Erstes fehler-Event (Backend-Fehler, Ablehnung, Rundengrenze) oder ''."""
+    for ev in sonst:
+        if isinstance(ev, dict) and "fehler" in ev:
+            return ev["fehler"]
+    return ""
+
+
 def _usage_zeile(protokoll):
     for zeile in reversed(protokoll):
         if "CLOUD ←" in zeile:
@@ -132,9 +140,9 @@ def main():
     # ── Stufe 1 ───────────────────────────────────────────────────────
     if 1 in stufen:
         print("\n[1] Erreichbarkeit …")
-        text, reflect, _ = _sammle(ruf([{"role": "user", "content": frage}]))
-        if text.startswith("[Cloud-Fehler"):
-            _abbruch(text)
+        text, reflect, sonst = _sammle(ruf([{"role": "user", "content": frage}]))
+        if _fehler(sonst):
+            _abbruch(_fehler(sonst))
         if not text.strip():
             _abbruch("Leere Antwort. Bei Anthropic meist: das Denken hat das "
                      "max_tokens-Budget aufgebraucht.")
@@ -168,8 +176,8 @@ def main():
         print(f"\n[3] Tool-Loop … ({'read_calendar' if args.kalender else 'list_files'})")
         vorher = len(protokoll)
         text, _, sonst = _sammle(ruf([{"role": "user", "content": wunsch}]))
-        if text.startswith("[Cloud-Fehler"):
-            _abbruch(text)
+        if _fehler(sonst):
+            _abbruch(_fehler(sonst))
         tool_zeilen = [z for z in protokoll[vorher:] if "TOOL" in z]
         print(f"  Antwort:  {text.strip()[:220]}")
         if tool_zeilen:

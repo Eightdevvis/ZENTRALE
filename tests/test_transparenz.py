@@ -85,13 +85,13 @@ def test_wirft_bei_muell_nicht():
 # ── Was das Backend hergibt ───────────────────────────────────────────
 
 def test_der_cloud_pfad_meldet_start_und_ergebnis():
-    """`run_tool` ist die einzige Stelle, durch die BEIDE Cloud-Dialekte
-    gehen. Zweimal gepflegt hiesse, dass die Anzeige auf einer Schiene
+    """`run_tool` ist die einzige Stelle, durch die ALLE drei Wege gehen.
+    Mehrfach gepflegt hiesse, dass die Anzeige auf einer Schiene
     irgendwann fehlt."""
-    import cloud
+    import werkzeug_schleife
 
     ereignisse = []
-    gen = cloud.run_tool("read_note", {"name": "ideen"},
+    gen = werkzeug_schleife.run_tool("read_note", {"name": "ideen"},
                          tutor_mode=False,
                          active_exec=lambda n, a: "Inhalt der Ideen.",
                          user_query="", store=None)
@@ -112,13 +112,13 @@ def test_der_cloud_pfad_meldet_start_und_ergebnis():
 
 def test_ein_krachendes_werkzeug_meldet_den_fehler():
     """Sonst sieht man nur, dass sie hinterher etwas anderes sagt."""
-    import cloud
+    import werkzeug_schleife
 
     def kaputt(name, args):
         raise RuntimeError("Platte voll")
 
     ereignisse = []
-    gen = cloud.run_tool("read_note", {"name": "x"}, tutor_mode=False,
+    gen = werkzeug_schleife.run_tool("read_note", {"name": "x"}, tutor_mode=False,
                          active_exec=kaputt, user_query="", store=None)
     try:
         while True:

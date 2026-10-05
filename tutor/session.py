@@ -629,6 +629,13 @@ def respond_stream(user_text: str = None, nudge: bool = False,
 
     full_response = []
     for token in stream:
+        # Der lokale Weg laeuft seit 10/2026 durch die gemeinsame Werkzeug-
+        # Schleife und meldet dort auch werkzeug-, reflect- und fehler-Events.
+        # Das Zimmer will nur Text: Events loggen bzw. ueberspringen.
+        if isinstance(token, dict):
+            if "fehler" in token:
+                print(f"[tutor.session] {token['fehler']}", flush=True)
+            continue
         full_response.append(token)
         yield token
 

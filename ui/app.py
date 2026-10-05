@@ -1239,6 +1239,7 @@ def api_chat():
     def generate():
         # Tokens sammeln um am Ende die komplette Antwort zu speichern
         collected = []
+        fehler_kam = False
 
         # Beide Pfade haben dieselbe Signatur und dasselbe Event-Protokoll —
         # die Schleife darunter merkt keinen Unterschied.
@@ -1287,13 +1288,27 @@ def api_chat():
             if isinstance(token, dict) and 'cinema' in token:
                 yield f"data: {json.dumps({'cinema': True})}\n\n"
                 continue
+            # fehler-Event: Backend-Fehler, Ablehnung oder Rundengrenze (siehe
+            # core/werkzeug_schleife.py). Geht DIREKT an Sasha (TUI-Statuszeile)
+            # und NICHT in collected: frueher stand "[Cloud-Fehler: …]" danach
+            # im Verlauf, und die KI las es im naechsten Zug als ihre eigene
+            # Aussage.
+            if isinstance(token, dict) and 'fehler' in token:
+                fehler_kam = True
+                state.push_log(f"AI ✗  {token['fehler']}")
+                yield f"data: {json.dumps({'fehler': token['fehler']})}\n\n"
+                continue
             collected.append(token)
             # SSE-Format: "data: " + JSON + zwei Newlines
             # JSON.dumps schützt vor Sonderzeichen (Newlines im Token, etc.)
             yield f"data: {json.dumps({'token': token})}\n\n"
 
-        # Komplette Antwort in state speichern (für History beim nächsten Öffnen)
-        state.push_chat_message("assistant", "".join(collected))
+        # Komplette Antwort in state speichern (für History beim nächsten Öffnen).
+        # Ist der Zug an einem Fehler gescheitert, ohne dass Text kam, bleibt
+        # die Frage unbeantwortet stehen — eine leere KI-Antwort waere eine
+        # Behauptung ("ich habe nichts gesagt"), die nicht stimmt.
+        if collected or not fehler_kam:
+            state.push_chat_message("assistant", "".join(collected))
 
         # Abschluss-Signal für den Client
         yield f"data: {json.dumps({'done': True})}\n\n"
@@ -2347,6 +2362,11 @@ def _takt_sprechen(anstoss):
         # es sitzt ja niemand vor einem Stream —, also wird er ignoriert
         # statt 180 Sekunden ins Leere zu warten.
         if isinstance(token, dict):
+            # Ein Fehler wird nicht zur Takt-Meldung (frueher landete
+            # "[Cloud-Fehler: …]" als ihre Initiative im Chat), aber er
+            # soll auch nicht spurlos verschwinden.
+            if 'fehler' in token:
+                state.push_log(f"TAKT ✗  {token['fehler']}")
             continue
         stuecke.append(token)
 

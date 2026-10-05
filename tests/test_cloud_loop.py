@@ -362,7 +362,9 @@ def test_runden_grenze_haelt(fake):
     fake([{"content": [_tool_block("read_calendar", {})],
            "stop_reason": "tool_use"}] * cloud._MAX_ROUNDS)
     events = _lauf(cloud.chat_stream(_msgs(), tool_executor=lambda n, a: "x"))
-    assert any(isinstance(e, str) and "Tool-Tiefe" in e for e in events)
+    # Als fehler-Event, nicht als Antworttext — sonst stuende es im Verlauf.
+    assert any(isinstance(e, dict) and "fehler" in e and "Tool-Tiefe" in e["fehler"] for e in events)
+    assert not any(isinstance(e, str) and "Tool-Tiefe" in e for e in events)
 
 
 # ── Erlaubnis-Gate ─────────────────────────────────────────────────────
@@ -522,7 +524,7 @@ def test_leere_antwort_bricht_nicht(fake):
 def test_refusal_wird_sauber_gemeldet(fake):
     fake([{"content": [], "stop_reason": "refusal"}])
     events = _lauf(cloud.chat_stream(_msgs()))
-    assert any(isinstance(e, str) and "abgelehnt" in e for e in events)
+    assert any(isinstance(e, dict) and "fehler" in e and "abgelehnt" in e["fehler"] for e in events)
 
 
 def test_api_fehler_reisst_den_stream_nicht_ab(fake, monkeypatch):
@@ -536,7 +538,7 @@ def test_api_fehler_reisst_den_stream_nicht_ab(fake, monkeypatch):
     monkeypatch.setattr(cloud, "_get_client", lambda: C())
     events = _lauf(cloud.chat_stream(_msgs()))
     assert len(events) == 1
-    assert "Cloud-Fehler" in events[0] and "kein Netz" in events[0]
+    assert "Cloud-Fehler" in events[0]["fehler"] and "kein Netz" in events[0]["fehler"]
 
 
 # ── Cloud an, Ollama aus ───────────────────────────────────────────────

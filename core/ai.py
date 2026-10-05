@@ -57,6 +57,7 @@ import web                   # Internet-Pipe: Web-Suche + Webseite holen (gegate
 import news                  # Persönliche Tagesschau: News-Briefing (read_news)
 import mail                  # Mail-Triage: Überblick + Review-Stapel (read_mail)
 import profil                # Prompt-Schienen: welcher Prompt für welches Modell
+import werkzeug_schleife      # die EINE Tool-Schleife (lokal, Anthropic, OpenAI)
 
 OLLAMA_URL   = os.environ.get("OLLAMA_URL",   "http://localhost:11434")
 # Default-Modell seit 2026-06-06: qwen3.5:9b. Reasoning-Bench (scripts/
@@ -428,7 +429,7 @@ def _answer_with_images(answer: str, user_query: str, store: str | None = None):
 # muss (bewusst NICHT modellgetrieben: ein 9b ruft sowas nicht zuverlässig
 # von selbst). Aktuell die Kalender-Schreiber - sie verändern persistente
 # Daten. Lesen/Auskunft (read_calendar, read_file, …) bleibt ungated.
-# Die eigentliche Abfang-Logik sitzt in chat_stream (siehe dort).
+# Die eigentliche Abfang-Logik sitzt in werkzeug_schleife.run_tool.
 #
 # KANONISCHE Namen (siehe profil.kanonisch): welche Schiene das Tool wie nennt,
 # ist ihre Sache — hier steht der Name, den der Kern kennt. Geprüft wird immer
@@ -1143,13 +1144,9 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     Beim ersten Aufruf wird der KI-Identity-Seed im Graphen sicherge-
     stellt (Capabilities + Limits als Knoten verankern).
 
-    Ablauf pro Runde:
-      1. Streaming-Call an Ollama (mit Tools im System-Prompt)
-      2. Tokens werden sofort an den Aufrufer weitergereicht (yield →
-         /api/chat → SSE an die TUI)
-      3. Im letzten Chunk (done=true) prüfen: hat das Modell Tool-Calls angefragt?
-      4. Falls ja: Tools ausführen, Ergebnisse anhängen, zurück zu 1
-      5. Falls nein: fertig
+    Hier wird nur der Prompt gebaut. Die Runden (Modell fragen → Tools →
+    zurück) dreht core/werkzeug_schleife.py, dieselbe Schleife wie für die
+    Cloud; der Ollama-Dialekt steckt in _OllamaAdapter unten.
 
     tools/tool_executor: Optional. Wenn nicht angegeben werden die Standard-Tools
     (TOOLS + _execute_tool) verwendet. Die Tutor-Session übergibt hier
@@ -1162,9 +1159,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     woertlich antworten kann. Wird nur im regulaeren Chat-Modus angewendet
     (nicht im Tutor-Modus).
 
-    Tool-Ausführungen sind still – der User sieht nur den finalen Text.
-    Tool-Calls erscheinen aber im Terminal über net.py Logging.
-    max_rounds verhindert Endlosschleifen.
+    Tool-Calls erscheinen als werkzeug-Events im Chat; Fehler und die
+    Rundengrenze als {"fehler": …}, nicht als Antworttext.
     """
     _ensure_seed_once()
     model         = model or OLLAMA_MODEL
@@ -1222,29 +1218,50 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         *messages,
     ]
 
-    max_rounds = 5  # Sicherheitsnetz gegen Endlosschleifen
-
     # Adaptive Denk-Tiefe (ADAPTIVE_THINK, oben dokumentiert): _should_think()
     # schaut auf die letzte User-Message und entscheidet, ob dieser Turn mit
     # Reflexion läuft. Frage/Verifikation → AN (hebt ehrliche Abstinenz, der
     # think-Stream wird sichtbar ins HUD gespiegelt), reiner Schreib-/Aktions-
     # Befehl → AUS (sonst zerdenkt das 9b die Aktion, gemessen Episode 0 %).
-    # WICHTIG gegen den qwen3.5-Template-Bug (#10976): nach dem ERSTEN Tool-Call
-    # think=AUS, weil die Synthese-Runde mit think die ganze Antwort ins
-    # `thinking`-Feld kippt (content leer). Reine Verständnis-Turns (kein Tool,
-    # z.B. „was zeigt der Graph?") reflektieren voll → Boost bleibt, keine leere
-    # Antwort. Kill-Switch ZENTRALE_THINK=0 → want_think False → wie früher.
+    # Kill-Switch ZENTRALE_THINK=0 → want_think False → wie früher.
     want_think = ADAPTIVE_THINK and _should_think(messages)
-    tool_used  = False  # nach dem ersten Tool-Call think aus (Template-Bug)
-    for _ in range(max_rounds):
+
+    adapter = _OllamaAdapter(model, working_messages, active_tools, want_think)
+    yield from werkzeug_schleife.laufen(
+        adapter, tutor_mode=tools is not None, active_exec=active_exec,
+        user_query=user_query, fehler_name="Ollama")
+
+
+class _OllamaAdapter:
+    """Ollama-Dialekt für die gemeinsame Werkzeug-Schleife (core/
+    werkzeug_schleife.py): tool_calls irgendwo im Stream, Ergebnisse als
+    role=tool ohne Call-Id."""
+
+    # Sicherheitsnetz gegen Endlosschleifen. Kleiner als in der Cloud: ein
+    # 9B dreht eher im Kreis. (Offen, ob alle Wege gleich viel bekommen.)
+    grenze = 5
+    # Ablehnungstext mit Richtigstellungs-Satz — bisher nur hier. (Offen, ob
+    # er für alle Wege gilt.)
+    richtigstellung = True
+
+    def __init__(self, model, msgs, tools, want_think):
+        self.model, self.msgs, self.tools = model, msgs, tools
+        self.want_think = want_think
+        # WICHTIG gegen den qwen3.5-Template-Bug (#10976): nach dem ERSTEN
+        # Tool-Call think=AUS, weil die Synthese-Runde mit think die ganze
+        # Antwort ins `thinking`-Feld kippt (content leer). Reine
+        # Verständnis-Turns (kein Tool) reflektieren voll.
+        self.tool_used = False
+
+    def runde(self):
         # Nur denken, solange kein Tool gelaufen ist; danach Synthese ohne think.
-        think_now = want_think and not tool_used
+        think_now = self.want_think and not self.tool_used
         think_opts = {"think": think_now} if SUPPORTS_THINK else {}
         payload = {
-            "model":      model,
+            "model":      self.model,
             **think_opts,
-            "messages":   working_messages,
-            "tools":      active_tools,
+            "messages":   self.msgs,
+            "tools":      self.tools,
             "stream":     True,
             "keep_alive": OLLAMA_KEEP_ALIVE,
             # num_ctx explizit setzen, sonst clampt Ollama auf seinen
@@ -1259,10 +1276,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         for chunk in net.stream_post(f"{OLLAMA_URL}/api/chat", payload):
             msg   = chunk.get("message", {})
             # Reflexions-Stream: Ollama liefert die Denk-Tokens getrennt im
-            # `thinking`-Feld. Live als {"reflect": ...}-Event rausgeben, damit
-            # das HUD sie im ki-kern mitlaufen lässt ("ich schau kurz nach…").
-            # NICHT in round_content → landet weder in der History noch im TTS;
-            # es ist innerer Monolog, keine Antwort.
+            # `thinking`-Feld. Live als {"reflect": ...}-Event rausgeben.
+            # NICHT in round_content → landet weder in der History noch im TTS.
             reflect_tok = msg.get("thinking")
             if reflect_tok:
                 yield {"reflect": reflect_tok}
@@ -1271,13 +1286,9 @@ def chat_stream(messages: list, model: str = None, system: str = None,
                 # NICHT sofort yielden. Content aus einer Runde, die mit einem
                 # Tool-Call endet, ist Modell-Geschwätz ("Ich prüfe den
                 # Kalender...") und darf den User NIE erreichen - er würde es
-                # sehen UND per TTS vorgelesen bekommen (das Frontend spricht
-                # Sätze noch während des Streams). Wir puffern die ganze Runde
-                # und geben sie erst am Rundenende aus, falls KEIN Tool-Call
-                # kam. Tradeoff: kein Token-für-Token-Streaming mehr, die
-                # Antwort erscheint am Stück. Bei den (per System-Prompt
-                # erzwungen) kurzen Antworten minimal, und für Voice sogar
-                # sauberer (kein gesprochener Fehlstart).
+                # sehen UND per TTS vorgelesen bekommen. Die Schleife gibt den
+                # Text erst aus, wenn KEIN Tool-Call kam. Tradeoff: kein
+                # Token-für-Token-Streaming, die Antwort erscheint am Stück.
                 round_content.append(token)
 
             # WICHTIG: Ollama (mind. ab 0.17.x mit qwen2.5) liefert die
@@ -1294,33 +1305,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
             if chunk.get("done"):
                 break
 
-        if not tool_calls:
-            # Kein Tool-Call → das Modell ist fertig. JETZT die gepufferte
-            # Antwort am Stück ausgeben (echte Antwort, kein Tool-Geschwätz).
-            answer = "".join(round_content)
-            # Regulaerer Chat: Bild-Marker rausziehen + Bilder feuern + Auto-
-            # Save (alles in _answer_with_images). Tutor: roh durchreichen.
-            if tools is None:
-                yield from _answer_with_images(answer, user_query)
-            elif answer:
-                yield answer
-            return
-        # sonst: round_content war das Tool-Runden-Geschwätz → an Ollama als
-        # Assistant-Turn zurück (Kontext), aber NICHT an den User geyieldet.
-        tool_used = True  # ab jetzt Synthese ohne think (Template-Bug, s.o.)
-
-        # Reihenfolge wichtig: erst assistant-Nachricht (mit tool_calls),
-        # dann für jeden Call eine "tool"-Antwortnachricht.
-        working_messages.append({
-            "role":       "assistant",
-            "content":    "".join(round_content),
-            "tool_calls": tool_calls,
-        })
+        calls = []
         for tc in tool_calls:
-            # Auf das kanonische Vokabular bringen: das Modell nennt das Tool
-            # so, wie seine Schiene es nennt (siehe core/profil/). Ab hier
-            # spricht der Kern nur noch EINE Sprache.
-            fn_name = profil.kanonisch(tc["function"]["name"])
             fn_args = tc["function"]["arguments"]
             # Ollama liefert arguments manchmal als String, manchmal als Dict
             if isinstance(fn_args, str):
@@ -1328,91 +1314,22 @@ def chat_stream(messages: list, model: str = None, system: str = None,
                     fn_args = _json.loads(fn_args)
                 except Exception:
                     fn_args = {}
-            # antwort-Tool ist TERMINAL: der text ist die finale Antwort an den
-            # User. Kein _dispatch (es ist kein Daten-Tool), kein weiterer Turn.
-            # Nur im regulaeren Chat (tools is None) - der Tutor kennt es nicht.
-            # antwort-Tool ist TERMINAL: der text ist die finale Antwort. Bild-
-            # Marker im Text werden hier genauso rausgezogen wie im Freitext-Pfad.
-            if tools is None and fn_name == "antwort":
-                answer = str(fn_args.get("text", "")).strip()
-                yield from _answer_with_images(answer, user_query)
-                return
-            # frage_knopf-Tool: die KI löst SELBST einen Knopf-Dialog aus (knappe
-            # diskrete Entscheidung mitten im Zug). Gleiche Mechanik wie das
-            # Auto-Gate unten - nur baut hier die KI Frage + Optionen, statt dass
-            # wir einen Schreib-Call abfangen. Default Ja/Nein, max 4 Labels. Das
-            # gewählte Label kommt als tool-Result zurück, die KI macht weiter.
-            if tools is None and fn_name == "ask_choice":
-                import state as _state
-                frage = str(fn_args.get("frage", "")).strip() or "Wie soll ich weitermachen?"
-                opts  = [str(o).strip() for o in (fn_args.get("optionen") or []) if str(o).strip()]
-                if len(opts) < 2:        # zu wenige/keine → sinnvoller Default
-                    opts = ["ja", "nein"]
-                opts = opts[:4]          # Leiste fasst max 4 Knöpfe sauber
-                _state.push_log(f"AI →  FRAGE {opts}: {frage[:140]}")
-                _state.request_permission(options=opts, timeout_default="(keine Antwort)")
-                yield {"permission": {"frage": frage, "optionen": opts}}
-                wahl = _state.wait_permission()   # BLOCKIERT bis Klick/Timeout
-                _state.push_log(f"AI ←  WAHL: {wahl}")
-                working_messages.append({
-                    "role":    "tool",
-                    "content": f"Sasha hat gewählt: {wahl}.",
-                })
-                continue
-            # Erlaubnis-Gate: bestätigungspflichtige Tools (PERMISSION_REQUIRED_
-            # TOOLS) werden VOR der Ausführung abgefangen. Die KI hat ihr Tool
-            # ganz normal gerufen - wir schieben den Dialog automatisch davor:
-            # permission-Event yielden (app.py macht ein SSE 'permission' daraus
-            # → Frontend tauscht die Konsole gegen JA/NEIN-Knöpfe), dann in
-            # state.wait_permission() blockieren bis der Klick per POST
-            # /api/permission_answer (anderer Thread) reinkommt. Nur bei „ja"
-            # fällt der Code durch zur Ausführung; bei „nein"/Timeout hängen wir
-            # einen abschlägigen tool-Result an, damit die KI weiß dass sie es
-            # lassen soll, und überspringen die Ausführung. Nur im regulären
-            # Chat (tools is None) - fremde Tool-Sets (Tutor) gaten wir nicht.
-            if tools is None and braucht_erlaubnis(fn_name):
-                import state as _state
-                frage = _permission_question(fn_name, fn_args)
-                _state.push_log(f"AI →  ERLAUBNIS? {frage[:160]}")
-                _state.request_permission()          # Event scharf machen
-                yield {"permission": {"frage": frage}}
-                answer = _state.wait_permission()     # BLOCKIERT bis Klick/Timeout
-                _state.push_log(f"AI ←  ERLAUBNIS: {answer}")
-                if answer != "ja":
-                    working_messages.append({
-                        "role":    "tool",
-                        "content": (f"Sasha hat die Aktion '{fn_name}' abgelehnt "
-                                    f"- NICHT ausführen, nichts eintragen. Kurz "
-                                    f"bestätigen dass du es lässt. Und falls du "
-                                    f"in derselben Runde schon irgendwo notiert "
-                                    f"hast, dass es passiert sei: schreib die "
-                                    f"Richtigstellung hinterher, sonst steht "
-                                    f"eine Unwahrheit im Gedächtnis."),
-                    })
-                    continue
-                # „ja" → unten ganz normal ausführen (kein continue)
-            # News-Sendung: lies_news ist TERMINAL (wie antwort). Das Briefing aus
-            # news.lies() IST die fertige, schon moderierte Sendung - wir streamen
-            # sie DIREKT als Antwort, statt das Modell sie in einem zweiten
-            # (langsamen) Durchlauf nacherzählen zu lassen. Spart die zweite
-            # Denk-Runde, verhindert Umschreiben/Konfabulation, und der gesprochene
-            # Text ist exakt das, was baue_sendung geschrieben hat. Davor das
-            # cinema-Signal fürs Frontend (Sendungs-/Untertitel-Modus).
-            # KEIN _async_save_turn: Welt-News gehören NICHT in den Konzept-Graphen
-            # (der speichert nur Sashas Realität).
-            if tools is None and fn_name == "read_news":
-                yield {"cinema": True}
-                show = active_exec(fn_name, fn_args)
-                # Meta-Kopf ("Sendung (Stand …):") wegschneiden - der gesprochene
-                # Broadcast soll mit dem Moderationstext beginnen, nicht mit Meta.
-                if show.startswith("Sendung (Stand") and "\n\n" in show:
-                    show = show.split("\n\n", 1)[1]
-                yield show
-                return
-            tool_result = active_exec(fn_name, fn_args)
-            working_messages.append({
-                "role":    "tool",
-                "content": tool_result,
-            })
+            calls.append((None, tc["function"]["name"], fn_args))
+        return werkzeug_schleife.Runde("".join(round_content), calls,
+                                       roh=tool_calls)
 
-    yield "\n[Maximale Tool-Tiefe erreicht]"
+    def assistent_anhaengen(self, runde):
+        # round_content war Tool-Runden-Geschwätz → an Ollama als Assistant-
+        # Turn zurück (Kontext), aber NICHT an den User geyieldet. Reihenfolge
+        # wichtig: erst assistant-Nachricht (mit tool_calls), dann für jeden
+        # Call eine "tool"-Antwortnachricht.
+        self.tool_used = True  # ab jetzt Synthese ohne think (Template-Bug, s.o.)
+        self.msgs.append({
+            "role":       "assistant",
+            "content":    runde.text,
+            "tool_calls": runde.roh,
+        })
+
+    def ergebnisse_anhaengen(self, ergebnisse):
+        for _, text, _ in ergebnisse:
+            self.msgs.append({"role": "tool", "content": text})

@@ -402,9 +402,26 @@ def test_ablehnung_verlangt_die_richtigstellung():
     """Das Sicherheitsnetz: hat sie es doch schon notiert, muss sie es
     hinterher geradeziehen."""
     import ai
-    quelle = open(ai.__file__, encoding="utf-8").read()
-    assert "Richtigstellung" in quelle
-    assert "Unwahrheit im Gedächtnis" in quelle
+    import state
+    import werkzeug_schleife
+    alt = (state.push_log, state.request_permission, state.wait_permission)
+    state.push_log = lambda *a, **k: None
+    state.request_permission = lambda **k: None
+    state.wait_permission = lambda: "nein"
+    try:
+        gen = werkzeug_schleife.run_tool(
+            "add_calendar_entry", {"label": "x"}, tutor_mode=False,
+            active_exec=lambda n, a: "ok", user_query="",
+            richtigstellung=ai._OllamaAdapter.richtigstellung)
+        try:
+            while True:
+                gen.send(None)
+        except StopIteration as ende:
+            text = ende.value[1]
+    finally:
+        state.push_log, state.request_permission, state.wait_permission = alt
+    assert "Richtigstellung" in text
+    assert "Unwahrheit im Gedächtnis" in text
 
 
 # ── Hausregeln: sie darf ihr Verhalten anpassen, nicht ihren Prompt ───

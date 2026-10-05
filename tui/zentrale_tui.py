@@ -2883,6 +2883,12 @@ def run_ui(stdscr, store):
                     elif "permission" in evt:
                         denken_ablegen()
                         AI["perm"] = evt["permission"]
+                    elif "fehler" in evt:
+                        # Backend-Fehler, Ablehnung, Rundengrenze: in die
+                        # Statuszeile, NICHT in den Verlauf — das hat nicht
+                        # sie gesagt (core/werkzeug_schleife.py).
+                        denken_ablegen()
+                        AI["msg"] = "fehler: " + str(evt["fehler"])
                     elif "done" in evt:
                         break
                     # ascii/cinema: im Terminal ohne Bild/Sound → ignorieren
