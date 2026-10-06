@@ -1,0 +1,16 @@
+{
+  "_hinweis": "Kopiere diese Datei nach data/ai_config.json. Das ist ZENTRALEs eigene AI-Config: die Kill-Switches + der API-KEY-STORE der Maschine. Via .gitignore (data/*.json) NICHT im Repo.",
+  "_kill_switches": "cloud_enabled/local_enabled drosseln die KI-Leitungen ZENTRALE-weit (Datenschutz/Kosten). Aus -> das Backend gilt als nicht da, egal ob Key/Ollama/Internet laufen. Umlegbar live per /cloud on|off bzw. POST /api/ai/backends. Gilt auch fuer den Tutor - der weiss davon nichts, core/tutor_port.py wendet es an.",
+  "_keys": "Nicht-leere Keys wandern beim Import in os.environ, damit die SDKs (openai/anthropic) sie wie gewohnt finden. HIER ist die einzige Stelle fuer Secrets - nicht in tutor/data/. Frueher lagen sie in data/tutor_config.json; die wird als Legacy noch gelesen, damit alte Knoten weiterlaufen.",
+  "cloud_enabled": true,
+  "local_enabled": true,
+  "keys": {
+    "DASHSCOPE_API_KEY": "sk-...",
+    "OPENAI_API_KEY": "",
+    "MISTRAL_API_KEY": "",
+    "DEEPSEEK_API_KEY": "",
+    "GROQ_API_KEY": "",
+    "GEMINI_API_KEY": "",
+    "ANTHROPIC_API_KEY": ""
+  }
+}
