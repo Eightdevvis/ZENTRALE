@@ -52,7 +52,7 @@ class Sprachtutor:
                                 "provider": "", "model": "", "lang": "", "lang_name": "",
                                 "persona_name": "", "country": "", "reason": "",
                                 "privacy": None, "msg": "", "loaded": False, "proc": None}
-        self.TUTOR_LOCK = z.TUTOR_LOCK = threading.Lock()
+        self.TUTOR_LOCK = threading.Lock()
 
     def tutor_refresh(self):
         """Status + Config vom Backend holen (Hintergrund): avail/session/privacy

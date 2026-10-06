@@ -201,7 +201,7 @@ class Chat:
                           # zwei Felder spraeche sie in einen leeren Raum: der Verlauf wurde
                           # frueher EINMAL beim Oeffnen geholt.
                           "neu": False, "n": 0}
-        self.AI_LOCK = z.AI_LOCK = threading.Lock()
+        self.AI_LOCK = threading.Lock()
 
     def start(self):
         """Hintergrund-Threads anwerfen (run_ui ruft das nach dem Aufbau)."""
