@@ -11,10 +11,20 @@ from flask import Blueprint, jsonify, request
 
 import cycle        # type: ignore  – Zyklus/PMS-Vorhersage aus dem »periode«-Graphen
 import kalender     # type: ignore  – Kalender-Layer (Woche/Monat, data/ai_calendar.json)
+import kalender_sicherung  # type: ignore  – Schutzsperren (Massenlöschung, Rückfall)
 import lists        # type: ignore  – dynamische Listen-Registry (Todo/Sammel-Listen)
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
 
 bp = Blueprint('kalender', __name__)
+
+
+@bp.errorhandler(kalender_sicherung.KalenderGesperrt)
+def _gesperrt(e):
+    """Eine Schutzsperre des Kalenders (Massenlöschung, Rückfall auf den alten
+    Speicher) ist kein Absturz, sondern eine Ansage: 409 mit dem Grund, damit
+    die TUI ihn zeigen kann. Vorher kam ein nackter 500er."""
+    state.push_log(f"KALENDER ✗  gesperrt: {e}")
+    return jsonify({"error": str(e), "gesperrt": True}), 409
 
 
 @bp.route('/api/calendar')

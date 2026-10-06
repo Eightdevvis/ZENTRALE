@@ -662,3 +662,21 @@ def test_api_cycle_rechnet_aus_den_graph_werten(client, tmp_path, monkeypatch):
     assert cal["cycle"]["2026-07-27"] == "pms"
     # Woche ohne Zyklus-Tage bleibt leer (kein Dauer-Einfärben).
     assert client.get("/api/calendar?view=week&ref=2026-09-14").get_json()["cycle"] == {}
+
+
+def test_kalender_sperre_ist_409_mit_grund_statt_500(client, monkeypatch):
+    """Die Schutzsperren des Kalenders (Massenlöschung, Rückfall auf den alten
+    Speicher) sind Ansagen, keine Abstürze: die Route antwortet 409 mit dem
+    Grund, damit die TUI ihn zeigen kann."""
+    import kalender
+    import kalender_sicherung
+
+    def gesperrt(*a, **k):
+        raise kalender_sicherung.KalenderGesperrt("zu viele Löschungen auf einmal")
+
+    monkeypatch.setattr(kalender, "delete_entry", gesperrt)
+    r = client.delete("/api/calendar/entry",
+                      json={"layer": "termine", "day": "2026-10-07", "label": "x"})
+    assert r.status_code == 409
+    j = r.get_json()
+    assert j["gesperrt"] is True and "Löschungen" in j["error"]
