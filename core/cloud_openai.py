@@ -54,9 +54,23 @@ _TEMP       = float(os.environ.get("ZENTRALE_CLOUD_OPENAI_TEMP", "0.4"))
 _clients = {}   # base_url → Client (lazy, gecacht)
 
 
+def _aktueller_anbieter() -> str | None:
+    """Der Anbieter, der JETZT dran ist — dieselbe Quelle, nach der kern den
+    Weg wählt (ai_backends.status → cloud_provider: Budget-Rückfall, Vorwahl
+    chat_provider, sonst Präferenz).
+
+    Bis 2026-10-07 stand hier providers.configured(): die Präferenzliste OHNE
+    Vorwahl und OHNE Budget-Rückfall. Folge: war das Budget alle und Qwen als
+    billigster Anbieter dran, wählte kern richtig diesen Weg — und hier kam
+    trotzdem Claude heraus, also „kein OpenAI-kompatibler Endpoint". Der
+    Rückfall, der den Chat am Leben halten sollte, legte ihn still."""
+    import ai_backends
+    return ai_backends.status().get("cloud_provider")
+
+
 def _provider(name: str | None = None) -> dict:
-    """Provider-Eintrag — Default: der konfigurierte Cloud-Provider."""
-    return providers.get(name or providers.configured() or "")
+    """Provider-Eintrag — Default: der Anbieter, der jetzt dran ist."""
+    return providers.get(name or _aktueller_anbieter() or "")
 
 
 def _get_client(prov: dict):
@@ -153,7 +167,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     prov = _provider(provider)
     if prov.get("kind") != "openai_compat":
         yield werkzeug_schleife.fehler(
-            f"Cloud-Fehler: Provider '{provider or providers.configured()}' "
+            f"Cloud-Fehler: Provider '{provider or _aktueller_anbieter()}' "
             f"ist kein OpenAI-kompatibler Endpoint")
         return
 
@@ -186,7 +200,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         mdl = model
     else:
         import ai_backends
-        mdl = ai_backends.chat_model(provider or providers.configured()) \
+        mdl = ai_backends.chat_model(provider or _aktueller_anbieter()) \
             or prov.get("default_model")
 
     adapter = _OpenAIAdapter(client, mdl, msgs, active_tools)

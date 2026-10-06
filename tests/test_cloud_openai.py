@@ -291,3 +291,26 @@ def test_beide_pfade_teilen_die_tool_bedeutung():
     quelle = inspect.getsource(cloud_openai)
     assert "werkzeug_schleife.laufen" in quelle
     assert "PERMISSION_REQUIRED_TOOLS" not in quelle
+
+
+# ── Eine Quelle für den Anbieter (2026-10-07) ─────────────────────────
+
+def test_budget_rueckfall_redet_mit_dem_anbieter_den_kern_waehlt(monkeypatch):
+    """Budget alle, Claude bevorzugt, Qwen als billigster Rückfall: kern
+    wählt den OpenAI-Weg — und der muss dann auch mit QWEN reden. Vorher
+    nahm er providers.configured() (= Claude) und brach ab."""
+    import ai_backends
+    import kern
+    import providers
+    monkeypatch.setattr(ai_backends, "status", lambda *a, **k: {
+        "local": False, "cloud": True, "cloud_provider": "qwen", "any": True})
+    monkeypatch.setattr(providers, "configured", lambda: "claude")
+    assert kern.cloud_modul() is cloud_openai
+    assert cloud_openai._provider() is providers.get("qwen")
+
+    c = FakeClient([_text("Weiter auf Qwen.")])
+    monkeypatch.setattr(cloud_openai, "_get_client", lambda prov: c)
+    events = _lauf(cloud_openai.chat_stream(_msgs()))
+    assert events == ["Weiter auf Qwen."]
+    assert c.calls[0]["model"] == ai_backends.chat_model("qwen")
+
