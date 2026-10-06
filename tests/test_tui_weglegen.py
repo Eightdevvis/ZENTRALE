@@ -16,6 +16,7 @@ import subprocess
 import pytest
 
 from tui import zentrale_tui as z
+from tui.ansichten import befehle
 
 
 @pytest.fixture(autouse=True)
@@ -79,7 +80,7 @@ def test_fehlender_umschalter_beendet(monkeypatch):
 
 
 def test_slash_quit_ist_das_echte_ende():
-    action, _mode, _msg = z.parse_command("/quit", "auto")
+    action, _mode, _msg = befehle.parse_command("/quit", "auto")
     assert action == "QUIT"
 
 

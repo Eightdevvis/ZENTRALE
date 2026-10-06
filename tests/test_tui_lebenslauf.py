@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _tui_fuzz import PYBIN, ROOT, _set_winsize, pty_supported  # noqa: E402
 
 from tui import zentrale_tui as z  # noqa: E402
+from tui.ansichten import befehle  # noqa: E402
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -205,5 +206,5 @@ def test_frische_prozesse_findet_einen_frischen():
 
 
 def test_reload_befehl():
-    action, _m, _msg = z.parse_command("/reload", "auto")
+    action, _m, _msg = befehle.parse_command("/reload", "auto")
     assert action == "RELOAD"

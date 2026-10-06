@@ -133,23 +133,16 @@ def schirm():
     return _lauf()
 
 
+def _befehle():
+    from tui.ansichten import befehle
+    return befehle
+
+
 def _rad():
     """Geometrie von Rad und Galaxie — seit 06.10.2026 in tui/ansichten/startseite.py
     (memory/system/tui_bauplan.md)."""
     from tui.ansichten import startseite
     return startseite
-
-
-def _modul():
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        "_tui_rad", os.path.join(ROOT, "tui", "zentrale_tui.py"))
-    modul = importlib.util.module_from_spec(spec)
-    try:
-        spec.loader.exec_module(modul)
-    except SystemExit:
-        pass
-    return modul
 
 
 def test_der_kasten_heisst_zentrale(schirm):
@@ -340,10 +333,10 @@ def test_meta_taste_waehlt_dreht_und_oeffnet():
 
 
 def test_dashboard_befehl():
-    m = _modul()
-    assert m.parse_command("/dashboard an", "auto")[0] == "DASH_ON"
-    assert m.parse_command("/dashboard aus", "auto")[0] == "DASH_OFF"
-    assert m.parse_command("/dashboard", "auto")[0] == "DASH_TOGGLE"
+    befehle = _befehle()
+    assert befehle.parse_command("/dashboard an", "auto")[0] == "DASH_ON"
+    assert befehle.parse_command("/dashboard aus", "auto")[0] == "DASH_OFF"
+    assert befehle.parse_command("/dashboard", "auto")[0] == "DASH_TOGGLE"
 
 
 def test_galaxie_dreht_schwer_und_rollt_weich_aus():
