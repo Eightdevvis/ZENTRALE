@@ -110,6 +110,8 @@ ZENTRALE/
 │   ├── embeddings.py        # bge-m3 via Ollama (Alias-Resolution, Entry-Points)
 │   ├── context.py           # Whitelist-Dateizugriff (Cap 8000 Zeichen)
 │   ├── kalender.py          # Kalender-Layer (Termine, Routinen, Konflikt-Alarm)
+│   ├── kalender_*.py        # darunter: Speicher json/.ics, Abbildung, Sicherung, Migration
+│   │                        # (memory/werkzeuge/kalender_ics_bauplan.md)
 │   ├── lists.py             # Dynamische Listen-Registry (To-Do/Checklisten, Listen-Werkzeug)
 │   ├── glossary.py          # Kuratiertes Mini-Glossar (front-agnostisch, `?`-Suche)
 │   ├── mail.py              # Mail-Triage: IMAP rein, sortieren, zurückschreiben
