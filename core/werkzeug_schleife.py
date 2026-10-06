@@ -166,7 +166,7 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
 
     # Erlaubnis-Gate: Python-seitig, NICHT modellgetrieben. Fremde Tool-Sets
     # (Tutor) gaten wir nicht.
-    if not tutor_mode and erlaubnis.braucht_erlaubnis(name):
+    if not tutor_mode and erlaubnis.braucht_erlaubnis(name, args):
         erlaubt = yield from _ask_permission(name, args)
         if not erlaubt:
             # Der zweite Satz galt bis 10/2026 nur lokal. Der Fall ist aber

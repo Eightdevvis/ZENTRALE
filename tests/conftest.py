@@ -17,6 +17,7 @@ Zwei Dinge, die jeder Test braucht:
 import atexit
 import os
 import sys
+import shutil
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

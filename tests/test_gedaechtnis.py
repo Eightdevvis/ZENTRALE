@@ -609,3 +609,56 @@ def test_konsistenz_findet_beide_waisen():
     befund = " ".join(gedaechtnis.konsistenz())
     assert "kueche" in befund          # Eintrag zeigt ins Leere
     assert "verwaist" in befund        # Dossier ohne Kopf
+
+
+# ── Kernakten nur mit Bestätigung (Sasha, 2026-10-06) ──────────────────
+
+@pytest.mark.parametrize("name,akte", [
+    ("hausregeln", "Hausregeln"), ("regeln", "Hausregeln"), ("Hausregeln", "Hausregeln"),
+    ("sasha", "Steckbrief"), ("ziele", "Ziele"),
+    ("ideen", None), ("tagebuch", None), ("", None), (None, None),
+])
+def test_schreibt_kernakte_erkennt_genau_die_drei(name, akte):
+    assert gedaechtnis.schreibt_kernakte(name) == akte
+
+
+def test_write_note_auf_kernakte_braucht_erlaubnis():
+    import erlaubnis
+    assert erlaubnis.braucht_erlaubnis("write_note", {"name": "hausregeln", "text": "x"})
+    assert erlaubnis.braucht_erlaubnis("write_note", {"name": "sasha", "text": "x"})
+    assert erlaubnis.braucht_erlaubnis("write_note", {"name": "ziele", "text": "x"})
+    # Mitschreiben bleibt frei — eine KI, die vor jeder Notiz fragt, ist
+    # kein Sekretär, sondern eine Zumutung.
+    assert not erlaubnis.braucht_erlaubnis("write_note", {"name": "ideen", "text": "x"})
+    assert not erlaubnis.braucht_erlaubnis("write_note", {"name": "tagebuch", "text": "x"})
+    assert not erlaubnis.braucht_erlaubnis("write_note")
+
+
+def test_die_frage_zeigt_akte_und_text():
+    import erlaubnis
+    frage = erlaubnis.frage("write_note", {"name": "regeln", "text": "Nicht duzen."})
+    assert "Hausregeln" in frage and "Nicht duzen." in frage
+
+
+@pytest.mark.parametrize("antwort,steht_drin", [("nein", False), ("ja", True)])
+def test_hausregel_landet_nur_nach_ja(monkeypatch, antwort, steht_drin):
+    """Der ganze Weg: Modell ruft write_note('hausregeln'), Sasha drückt."""
+    import ki_werkzeuge
+    import state
+    import werkzeug_schleife
+    monkeypatch.setattr(state, "push_log", lambda *a, **k: None)
+    monkeypatch.setattr(state, "request_permission", lambda **k: None)
+    monkeypatch.setattr(state, "wait_permission", lambda: antwort)
+    gen = werkzeug_schleife.run_tool(
+        "write_note", {"name": "hausregeln", "text": "Keine Emojis."},
+        tutor_mode=False, active_exec=ki_werkzeuge.ausfuehren, user_query="")
+    events = []
+    try:
+        while True:
+            events.append(gen.send(None))
+    except StopIteration as ende:
+        ausgang = ende.value
+    assert any(isinstance(e, dict) and "permission" in e for e in events)
+    assert ("Keine Emojis." in gedaechtnis.hausregeln()) is steht_drin
+    if not steht_drin:
+        assert "abgelehnt" in ausgang[1]

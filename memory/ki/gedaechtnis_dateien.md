@@ -93,7 +93,13 @@ Seitdem gilt:
   immer. Zwei Dateien unter demselben Namen stehen zu lassen wäre genau die
   stille Divergenz, gegen die das Kopf-im-Dossier-Modell gebaut ist.
 - **Der Steckbrief bleibt Sashas** (Entscheidung vom 18.08.2026). Die KI
-  schreibt dort nicht hinein; was sie über ihn erfährt, geht in eine Notiz.
+  soll dort nicht hineinschreiben; was sie über ihn erfährt, geht in eine
+  Notiz. Technisch konnte `write_note("sasha")` es trotzdem — seit
+  2026-10-06 geht das (wie bei Hausregeln und Ziele) nur noch über den
+  Ja/Nein-Knopf: Sasha, *„hausregeln und steckbrief mit meiner bestätigung ja
+  nur"*. Die Hausregeln stehen mit Vorrang ganz oben im Kopf; ohne Bestätigung
+  konnte das Modell sich selbst Vorrang-Regeln geben
+  (`gedaechtnis.schreibt_kernakte`, `erlaubnis.braucht_erlaubnis(name, args)`).
 
 ### Der Nachprüf-Schritt steht im Werkzeug-Ergebnis
 

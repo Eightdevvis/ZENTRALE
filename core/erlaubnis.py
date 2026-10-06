@@ -8,6 +8,7 @@
 # Weg importieren — einer der Knoten im Import-Kreis. Aufbau des KI-Kerns:
 # memory/ki/kern_aufbau.md.
 
+import gedaechtnis
 import kalender
 import profil
 
@@ -50,13 +51,23 @@ PERMISSION_REQUIRED_TOOLS = {
 }
 
 
-def braucht_erlaubnis(name: str) -> bool:
+def braucht_erlaubnis(name: str, args: dict | None = None) -> bool:
     """Muss dieser Tool-Call vor der Ausführung bestätigt werden?
 
     Ueber diese Funktion gehen, nicht direkt gegen die Menge pruefen: der Name
     kommt vom Modell und traegt die Schreibweise seiner Schiene.
+
+    write_note ist im Normalfall frei (mitschreiben ohne Rückfrage), aber
+    NICHT, wenn es eine Kernakte trifft — Hausregeln, Steckbrief, Ziele
+    (Sasha, 2026-10-06; gedaechtnis.schreibt_kernakte). Dafür braucht es die
+    Argumente.
     """
-    return profil.kanonisch(name) in PERMISSION_REQUIRED_TOOLS
+    kanon = profil.kanonisch(name)
+    if kanon in PERMISSION_REQUIRED_TOOLS:
+        return True
+    if kanon == "write_note" and args:
+        return gedaechtnis.schreibt_kernakte(args.get("name")) is not None
+    return False
 
 
 def frage(name: str, args: dict) -> str:
@@ -68,6 +79,12 @@ def frage(name: str, args: dict) -> str:
     """
     name = profil.kanonisch(name)
     label = (args.get("label") or "").strip() or "diesen Eintrag"
+    if name == "write_note":
+        akte = gedaechtnis.schreibt_kernakte(args.get("name")) or "die Notiz"
+        text = " ".join(str(args.get("text") or "").split())
+        if len(text) > 200:
+            text = text[:199] + "…"
+        return f'Soll ich in {akte} schreiben: "{text}"?'
     if name == "fetch_document":
         return (f'Soll ich {args.get("url", "das")} holen und als '
                 f'"{args.get("name", "Dokument")}" ablegen?')

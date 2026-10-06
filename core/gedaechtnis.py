@@ -198,6 +198,34 @@ def hausregeln() -> str:
     return _lesen(_pfad("", HAUSREGELN)).strip()
 
 
+# Welche Kernakte ein write_note-Name trifft — für das Erlaubnis-Gate.
+_KERNAKTEN = {HAUSREGELN: "Hausregeln", STECKBRIEF: "Steckbrief", ZIELE: "Ziele"}
+
+
+def schreibt_kernakte(name) -> str | None:
+    """Trifft ein write_note mit diesem Namen eine der drei Kernakten
+    (Hausregeln, Steckbrief, Ziele)? → ihr Name, sonst None.
+
+    Sasha, 2026-10-06: Hausregeln und Steckbrief nur noch mit seiner
+    Bestätigung. Die Hausregeln stehen bei jedem Zug ganz oben im Kopf, mit
+    Vorrang vor jeder allgemeinen Anweisung — ohne Bestätigung konnte das
+    Modell sich selbst Vorrang-Regeln setzen. Der Steckbrief ist laut
+    Entscheidung vom 18.08.2026 Sashas.
+
+    Benutzt dieselbe Zuordnung wie das Schreiben selbst (_finden bzw. der
+    Sonderweg 'regeln' → Hausregeln), damit Gate und Schreiben nie
+    auseinanderlaufen."""
+    roh = (name or "").strip().lower()
+    if roh in ("hausregeln", "regeln"):
+        return _KERNAKTEN[HAUSREGELN]
+    if not roh or roh in ("tagebuch", "diary"):
+        return None
+    bereich, schluessel = _finden(name)
+    if bereich == "" and schluessel in _KERNAKTEN:
+        return _KERNAKTEN[schluessel]
+    return None
+
+
 def regel_notieren(text: str) -> str:
     """Eine Hausregel anhaengen, mit Datum.
 
