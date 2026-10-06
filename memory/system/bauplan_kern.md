@@ -171,8 +171,8 @@ Sasha, 05.10.2026: einfrieren, dann zerlegen (Punkt 3).
 
 | Wo | Zeilen höchstens |
 |---|---|
-| `tui/zentrale_tui.py` | 8553 |
-| `tui/zentrale_tui.py::run_ui` | 6442 |
+| `tui/zentrale_tui.py` | 7672 |
+| `tui/zentrale_tui.py::run_ui` | 5561 |
 | `tui/zentrale_tui.py::run_ui.draw_overlay` | 499 |
 | `tui/zentrale_tui.py::run_ui.draw_calendar` | 432 |
 | `tui/zentrale_tui.py::run_ui.draw_list_tool` | 259 |
