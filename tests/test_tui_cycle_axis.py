@@ -11,7 +11,7 @@ gerade im Bild ist.
 Die Vorhersage selbst kommt aus core/cycle.py (tests/test_cycle.py); hier
 zählt nur, was die TUI daraus für ihre x-Achse macht.
 """
-from tui.zentrale_tui import cycle_axis
+from tui.ansichten.graphen import cycle_axis
 
 
 def _pred(next_start, pms_from, pms_to):

@@ -13,13 +13,14 @@ import random
 import pytest
 
 from tui.zentrale_tui import (
-    _num, fmt_uptime, fmt_clock, parse_clock, period_duration,
+    _num, fmt_uptime, fmt_clock, parse_clock,
     graph_series, graph_last, tele_value, parse_command, log_prefix,
     blockspark, bar, overlay_rows, terminal_too_small,
     lauf_ausschnitt, lauf_schritt, LAUF_TRENNER, LAUF_HALT, LAUF_TAKT,
 )
 # Seit 06.10.2026 wohnen Chat und Text in eigenen Modulen (tui/ansichten/).
 from tui.ansichten.chat import fmt_euro
+from tui.ansichten.graphen import period_duration
 from tui.ansichten.text import md_zeilen, md_inline
 
 # ── Gemeiner Werte-Pool (für die Fuzz-Eigenschaft) ──────────────────────────
