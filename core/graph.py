@@ -28,6 +28,7 @@
 # Detail-Plan: memory/ki/ki_memory_plan.md (Phase-G-Abschnitt kommt nach).
 
 import json
+import dateien
 import os
 import re
 from datetime import datetime, date, timedelta
@@ -453,11 +454,7 @@ def _stamp_embedder(st: _Store, data: dict) -> dict:
 
 def _write_atomic(st: _Store, data: dict):
     """Atomic write: tmp + rename, gegen halbgeschriebene Files."""
-    os.makedirs(os.path.dirname(st.path), exist_ok=True)
-    tmp = st.path + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    os.replace(tmp, st.path)
+    dateien.json_schreiben(st.path, data)
     # Cache nach Write aktualisieren: wir haben gerade frische Daten in
     # der Hand, also einlagern statt nächsten Read auf Disk zu schicken.
     # Neuer Cache-Key kommt aus der frisch geschriebenen Datei.

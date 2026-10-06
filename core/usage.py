@@ -26,6 +26,7 @@
 # Alte Tage werden gekappt (KEEP_TAGE), sonst wächst die Datei ewig.
 
 import json
+import dateien
 import os
 from datetime import date
 from threading import Lock
@@ -65,11 +66,7 @@ def _laden() -> dict:
 
 
 def _schreiben(d: dict):
-    os.makedirs(os.path.dirname(_FILE), exist_ok=True)
-    tmp = _FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(d, f, indent=2, ensure_ascii=False)
-    os.replace(tmp, _FILE)
+    dateien.json_schreiben(_FILE, d)
 
 
 def _bump(topf: dict, schluessel: str, euro: float, calls: int = 1):

@@ -14,6 +14,7 @@ import os
 import re
 import copy
 import json
+import dateien
 import unicodedata
 from datetime import datetime, date, timedelta
 
@@ -42,8 +43,7 @@ def _load_file(path):
 
 def _save_file(path, lists):
     os.makedirs(_DATA_DIR, exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(lists, f, indent=2, ensure_ascii=False)
+    dateien.json_schreiben(path, lists)
     # Echte Änderung geschrieben → Peer-Push anstoßen (no-op ohne AUTOPUSH).
     try:
         from datasync import notify_change

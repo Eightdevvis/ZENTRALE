@@ -33,6 +33,7 @@
 from __future__ import annotations
 
 import json
+import dateien
 import os
 import threading
 from datetime import date, datetime
@@ -81,8 +82,7 @@ def zustand(tag: date | None = None) -> dict:
 def _schreiben(z: dict, tag: date | None = None) -> None:
     tag = tag or date.today()
     try:
-        with open(_pfad(tag), 'w', encoding='utf-8') as f:
-            json.dump(z, f, ensure_ascii=False, indent=1)
+        dateien.json_schreiben(_pfad(tag), z, indent=1)
     except Exception:
         pass          # ein kaputter Tageszustand darf den Chat nicht stoppen
 
@@ -171,8 +171,8 @@ def aufraeumen(behalten: int = 7) -> int:
     """
     if not os.path.isdir(_DATA_DIR):
         return 0
-    dateien = sorted(f for f in os.listdir(_DATA_DIR) if f.endswith(".json"))
-    weg = dateien[:-behalten] if behalten else dateien
+    namen = sorted(f for f in os.listdir(_DATA_DIR) if f.endswith(".json"))
+    weg = namen[:-behalten] if behalten else namen
     for f in weg:
         try:
             os.remove(os.path.join(_DATA_DIR, f))

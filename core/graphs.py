@@ -14,6 +14,7 @@
 import os
 import re
 import json
+import dateien
 import unicodedata
 from datetime import datetime
 
@@ -39,8 +40,7 @@ def _load():
 
 def _save(graphs):
     os.makedirs(_DATA_DIR, exist_ok=True)
-    with open(_REGISTRY, 'w', encoding='utf-8') as f:
-        json.dump(graphs, f, indent=2, ensure_ascii=False)
+    dateien.json_schreiben(_REGISTRY, graphs)
     # Echte Änderung geschrieben → Peer-Push anstoßen (no-op ohne AUTOPUSH).
     try:
         from datasync import notify_change
@@ -202,8 +202,7 @@ def log_value(gid, day, value, end=None):
     entry['logged_at'] = datetime.now().isoformat()
     rows.append(entry)
     os.makedirs(_DATA_DIR, exist_ok=True)
-    with open(_values_path(gid), 'w', encoding='utf-8') as f:
-        json.dump(rows, f, indent=2, ensure_ascii=False)
+    dateien.json_schreiben(_values_path(gid), rows)
     return entry
 
 

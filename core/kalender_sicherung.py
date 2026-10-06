@@ -40,44 +40,10 @@ class KalenderGesperrt(Exception):
 
 # ── Atomar schreiben ────────────────────────────────────────────────────
 
-def atomar_schreiben(pfad: Path, inhalt) -> None:
-    """Schreibt `inhalt` (str oder bytes) so, dass `pfad` danach entweder
-    die alte oder die neue Fassung enthält — nie eine halbe.
-
-    Weg: temporäre Datei im SELBEN Ordner (sonst ist os.replace kein
-    atomares Umbenennen, sondern ein Kopieren über Dateisysteme), fsync,
-    dann os.replace. Der Name der temporären Datei endet bewusst NICHT auf
-    .ics/.json — vdirsyncer und der Sync-Fail-safe sehen sie so nie als
-    Termin oder Datendatei, falls ein Absturz sie liegen lässt.
-    """
-    pfad = Path(pfad)
-    pfad.parent.mkdir(parents=True, exist_ok=True)
-    daten = inhalt.encode("utf-8") if isinstance(inhalt, str) else bytes(inhalt)
-    tmp = pfad.parent / f".{pfad.name}.{os.getpid()}.{time.monotonic_ns()}.tmp"
-    try:
-        with open(tmp, "wb") as f:
-            f.write(daten)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, pfad)
-    finally:
-        if tmp.exists():
-            try:
-                tmp.unlink()
-            except OSError:
-                pass
-    # Auch den Ordner-Eintrag auf Platte bringen; sonst kann nach einem
-    # Stromausfall das Umbenennen fehlen. Best effort — nicht jedes
-    # Dateisystem erlaubt fsync auf Ordner.
-    try:
-        fd = os.open(pfad.parent, os.O_RDONLY)
-        try:
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-    except OSError:
-        pass
-
+# Zog am 2026-10-07 nach core/dateien.py (Fundament), weil Listen, Notizen,
+# Messreihen und der Key-Speicher denselben Schutz brauchen. Der Name bleibt
+# hier, damit kalender_json/_ics/_migration unverändert weiterlaufen.
+from dateien import atomar_schreiben  # noqa: E402,F401
 
 # ── Sperre zwischen Prozessen ───────────────────────────────────────────
 

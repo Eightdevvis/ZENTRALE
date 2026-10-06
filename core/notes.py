@@ -17,6 +17,7 @@
 import os
 import re
 import json
+import dateien
 import unicodedata
 from datetime import datetime
 
@@ -36,8 +37,7 @@ def _load():
 
 def _save(notes):
     os.makedirs(_DATA_DIR, exist_ok=True)
-    with open(_REGISTRY, 'w', encoding='utf-8') as f:
-        json.dump(notes, f, indent=2, ensure_ascii=False)
+    dateien.json_schreiben(_REGISTRY, notes)
     # Echte Änderung geschrieben → Peer-Push anstoßen (no-op ohne AUTOPUSH).
     try:
         from datasync import notify_change

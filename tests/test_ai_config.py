@@ -26,7 +26,8 @@ def test_absturz_beim_schreiben_laesst_die_alte_datei_heil(monkeypatch, tmp_path
     def kaputt(*a, **k):
         raise OSError("Strom weg")
 
-    monkeypatch.setattr(ai_config.json, "dump", kaputt)
+    import dateien
+    monkeypatch.setattr(dateien.os, "fsync", kaputt)
     ai_config._save()
     assert json.loads(ziel.read_text(encoding="utf-8")) == {"keys": {"X": "alt"}}
     assert os.listdir(tmp_path) == ["ai_config.json"]

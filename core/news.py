@@ -48,6 +48,7 @@ import os
 import re
 import html as _html
 import json as _json
+import dateien
 import time
 import threading
 from datetime import datetime, timedelta
@@ -443,8 +444,7 @@ def _load_store() -> dict:
 
 def _save_store(store: dict):
     os.makedirs(_DATA, exist_ok=True)
-    with open(_STORE_PATH, "w", encoding="utf-8") as f:
-        _json.dump(store, f, ensure_ascii=False, indent=2)
+    dateien.json_schreiben(_STORE_PATH, store)
 
 def _merge_voices(story: dict, neue: list) -> bool:
     """Neue Stimmen (nach Titel) in einen Stein einpflegen. True wenn sich
@@ -638,8 +638,7 @@ def baue_sendung(store: dict) -> dict:
         digest = {"erstellt": _now(), "text": _narriere(stories),
                   "story_ids": [s["id"] for s in stories]}
     os.makedirs(_DATA, exist_ok=True)
-    with open(_DIGEST_PATH, "w", encoding="utf-8") as f:
-        _json.dump(digest, f, ensure_ascii=False, indent=2)
+    dateien.json_schreiben(_DIGEST_PATH, digest)
     return digest
 
 

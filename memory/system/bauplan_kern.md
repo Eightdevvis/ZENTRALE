@@ -56,6 +56,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `events` | 1 | Event-Konstanten |
 | `net` | 1 | HTTP-Wrapper mit Terminal-Logging |
 | `datasync` | 1 | Push-on-write zum Peer nach echter Daten-Änderung |
+| `dateien` | 1 | Atomar schreiben (alte oder neue Fassung, nie eine halbe) — für alle Datendateien |
 | `ai_config` | 1 | Kill-Switches und API-Keys aus `data/ai_config.json`, `setting()`-Rangfolge |
 | `providers` | 1 | Anbieter-Liste des Kerns (URL, Key, Dialekt, Modelle) |
 | `prices` | 1 | Preistabelle der Cloud-Modelle, keine Logik |

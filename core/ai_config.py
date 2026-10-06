@@ -129,20 +129,11 @@ def set_override(name: str, value, persist: bool = False):
 def _save():
     """Schreibt die Core-AI-Config zurück nach data/ai_config.json.
     Die Legacy-Datei wird NIE geschrieben — der Tutor besitzt sie."""
-    # Atomar (Zwischendatei + os.replace): in dieser Datei liegen die
-    # API-Keys. Ein Absturz mitten im Schreiben hinterließ vorher eine
-    # halbe oder leere Datei — und damit eine Maschine ohne Keys.
-    tmp = f"{_CONFIG_PATH}.{os.getpid()}.tmp"
+    # Atomar (core/dateien.py): in dieser Datei liegen die API-Keys. Ein
+    # Absturz mitten im Schreiben hinterließ vorher eine halbe oder leere
+    # Datei — und damit eine Maschine ohne Keys.
     try:
-        os.makedirs(_DIR, exist_ok=True)
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(_config, f, indent=2, ensure_ascii=False)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, _CONFIG_PATH)
+        import dateien
+        dateien.json_schreiben(_CONFIG_PATH, _config)
     except Exception as e:
-        try:
-            os.remove(tmp)
-        except OSError:
-            pass
         print(f"[ai_config] Speichern fehlgeschlagen: {e}")
