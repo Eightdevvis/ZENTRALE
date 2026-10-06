@@ -20,6 +20,11 @@
 # PC-Backend an. Braucht keinen venv.
 tui/zentrale_tui.py
 tui/boot_loader.py
+# Was zentrale_tui.py importiert, muss mit: die Pixel-Symbole und (seit
+# 06.10.2026) die Ansichten als eigenes Paket — sonst startet die TUI auf
+# dem Knoten gar nicht (tests/test_tui_ansichten.py prüft das).
+tui/pixel.py
+tui/ansichten/
 
 # ── Sensorik: der einzige Push-Weg vom Knoten zum PC ─────────────────────
 # Liest GPIO/Tastatur, POSTet /api/sensor/<name> und alle ~30 s Telemetrie.
