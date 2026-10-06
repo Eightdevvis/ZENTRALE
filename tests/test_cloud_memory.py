@@ -312,7 +312,8 @@ def test_der_cloud_extraktor_kennt_beide_dialekte(monkeypatch):
     modul = type(sys)("anthropic")
     modul.Anthropic = FakeAnthropic
     monkeypatch.setitem(sys.modules, "anthropic", modul)
-    monkeypatch.setattr(providers, "configured", lambda: "claude")
+    import ai_backends
+    monkeypatch.setattr(ai_backends, "cloud_provider", lambda: "claude")
 
     nodes, edges = consolidation._call_graph_extractor_cloud(
         "ich hab ein fahrrad", "aha", "2026-08-16")
@@ -447,4 +448,38 @@ def test_anderes_cloud_modell_mischt_keine_vektoren(monkeypatch, tmp_path):
     assert gerufen == []
     monkeypatch.setattr(embeddings, "model_name", lambda b=None: "text-embedding-v3")
     assert graph._emb_query("Kaffee", d) == [1.0]
+
+
+def test_extraktor_redet_mit_dem_gewaehlten_anbieter(monkeypatch):
+    """Sasha hat Qwen gewählt (oder das Budget ist alle): dann dürfen auch
+    die Gespräche zur Graph-Extraktion nicht an Claude gehen. Vorher nahm der
+    Extraktor providers.configured() — die Präferenz ohne Vorwahl."""
+    import sys
+    import ai_backends
+    import consolidation
+    import providers
+
+    gerufen = {}
+
+    class FakeResp:
+        choices = [type("C", (), {"message": type("M", (), {
+            "content": '{"nodes": [{"name": "Brummer"}], "edges": []}'})()})()]
+        usage = None
+
+    class FakeOpenAI:
+        def __init__(self, base_url=None, api_key=None):
+            gerufen["base_url"] = base_url
+            self.chat = type("Ch", (), {"completions": type("Co", (), {
+                "create": lambda _s, **kw: gerufen.update(kw) or FakeResp()})()})()
+
+    modul = type(sys)("openai")
+    modul.OpenAI = FakeOpenAI
+    monkeypatch.setitem(sys.modules, "openai", modul)
+    monkeypatch.setattr(providers, "configured", lambda: "claude")
+    monkeypatch.setattr(ai_backends, "cloud_provider", lambda: "qwen")
+
+    nodes, _ = consolidation._call_graph_extractor_cloud("x", "y", "2026-10-07")
+    assert [n["name"] for n in nodes] == ["Brummer"]
+    assert gerufen["base_url"] == providers.get("qwen")["base_url"]
+    assert gerufen["model"] == providers.cheap_model("qwen")
 

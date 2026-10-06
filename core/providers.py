@@ -149,9 +149,9 @@ def cheap_model(name: str) -> str | None:
 PREFERENCE = ("claude", "qwen", "openai", "grok", "gemini",
               "deepseek", "groq", "mistral")
 
-# Harte Vorwahl per Env, falls mal gezielt ein anderer dran soll (Vergleich,
-# Kostenbremse). Unbekannter/keyloser Name → wird ignoriert, normale Reihenfolge.
-PREFERENCE_ENV = "ZENTRALE_CLOUD_PROVIDER"
+# Eine gezielte Vorwahl ist `chat_provider` (ai_backends, per Config oder
+# ZENTRALE_CHAT_PROVIDER). Bis 2026-10-07 gab es hier eine zweite
+# (ZENTRALE_CLOUD_PROVIDER) — zwei Schalter für dieselbe Frage.
 
 
 def preference() -> list[str]:
@@ -163,17 +163,15 @@ def preference() -> list[str]:
 
 def configured() -> str | None:
     """Name des bevorzugten Cloud-Providers, dessen Key in der Env liegt — oder
-    None. Keys kommen über ai_config aus data/ai_config.json (bzw. dem
-    Legacy-Fallback)."""
+    None. Reine Vorrang-Liste: OHNE Vorwahl und OHNE Budget-Rückfall — wer
+    wissen will, wer JETZT redet, fragt ai_backends.cloud_provider().
+    Keys kommen über ai_config NUR aus data/ai_config.json."""
     import os
 
     def has_key(name: str) -> bool:
         env = (PROVIDERS.get(name) or {}).get("key_env")
         return bool(env and os.environ.get(env))
 
-    forced = (os.environ.get(PREFERENCE_ENV) or "").strip()
-    if forced and has_key(forced):
-        return forced
 
     for name in preference():
         if has_key(name):

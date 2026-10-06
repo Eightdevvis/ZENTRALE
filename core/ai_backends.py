@@ -415,7 +415,9 @@ def budget_lage() -> dict:
     try:
         import usage
         ausgegeben = usage.monat_euro()
-    except Exception:
+    except Exception as e:
+        # 0 € heißt hier: der Budget-Rückfall greift nie. Wenigstens laut.
+        print(f"[budget] Monatssumme nicht lesbar, rechne mit 0 €: {e}")
         ausgegeben = 0.0
     if not limit or limit <= 0:
         return {"status": "ok", "ausgegeben": ausgegeben,

@@ -43,8 +43,9 @@ def _kalender_beweis(tag: str, label: str) -> str:
         from datetime import date as _date
         tage = kalender.entries_in_range(_date.fromisoformat(tag),
                                          _date.fromisoformat(tag))
-    except Exception:
-        return "OK, eingetragen."
+    except Exception as e:
+        return ("[Eingetragen gemeldet, aber Nachlesen ging schief (%s) — "
+                "sag Sasha, dass es nicht bestätigt ist.]" % e)
     eintraege = tage.get(tag) or []
     treffer = [e for e in eintraege
                if (label or "").lower() in (e.get("label") or "").lower()]

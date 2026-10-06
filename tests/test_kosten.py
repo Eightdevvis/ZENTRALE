@@ -33,8 +33,7 @@ def keine_env(monkeypatch):
     for p in providers.PROVIDERS.values():
         monkeypatch.delenv(p["key_env"], raising=False)
     for v in ("ZENTRALE_CHAT_PROVIDER",
-              "ZENTRALE_CHAT_EFFORT", "ZENTRALE_CHAT_BACKEND",
-              "ZENTRALE_CLOUD_PROVIDER"):
+              "ZENTRALE_CHAT_EFFORT", "ZENTRALE_CHAT_BACKEND"):
         monkeypatch.delenv(v, raising=False)
 
 

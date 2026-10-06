@@ -361,10 +361,14 @@ def _call_graph_extractor_cloud(user_msg: str, ai_msg: str,
     Umschalten auf das Modell gestorben, um das es geht.
     """
     import os as _os
+    import ai_backends
     import providers
 
     body = _extractor_body(user_msg, ai_msg, today)
-    name = providers.configured() or ""
+    # Derselbe Anbieter wie der Chat (Vorwahl, Budget-Rückfall) — bis
+    # 2026-10-07 stand hier providers.configured(): hatte Sasha Qwen gewählt
+    # oder war das Budget alle, gingen die Gespräche trotzdem an Claude.
+    name = ai_backends.cloud_provider() or ""
     prov = providers.get(name)
     mdl  = _os.environ.get("ZENTRALE_CONSOL_CLOUD_MODEL") \
         or providers.cheap_model(name)
@@ -434,8 +438,9 @@ def _buchen(model: str, verbrauch) -> None:
                    or getattr(verbrauch, "completion_tokens", 0) or 0)
         eur = usage.buchen(model, input_tokens=rein, output_tokens=raus)
         state.push_log(f"GRAPH ← {model} in={rein} out={raus} ≈{eur:.4f}€")
-    except Exception:
-        pass
+    except Exception as e:
+        # Nicht still: eine verlorene Buchung macht den Budget-Deckel blind.
+        print(f"[usage] Buchung fehlgeschlagen ({model}): {e}")
 
 
 def _call_graph_extractor(user_msg: str, ai_msg: str, today: str) -> tuple[list[dict], list[dict]]:

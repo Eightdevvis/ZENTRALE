@@ -196,10 +196,11 @@ def _cloud_provider() -> dict:
 
     if CLOUD_EMBED_PROVIDER:
         return eintrag(CLOUD_EMBED_PROVIDER)
-    # Erst der Chat-Provider (dann laufen Reden und Erinnern über denselben
-    # Anbieter, was die Datenspur schmal hält), sonst der nächstbeste mit Key.
-    return (eintrag(providers.configured() or "")
-            or next((p for p in map(eintrag, providers.preference()) if p), {}))
+    # Fester Vorrang, NICHT der Chat-Anbieter: das Embed-Modell muss stabil
+    # bleiben, sonst passt es nicht mehr zum Stempel in der Graph-Datei und
+    # graph._modell_passt() sperrt die Vektorsuche — bloß weil Sasha zum
+    # Reden einen anderen Anbieter gewählt hat (Stand 2026-10-07).
+    return next((p for p in map(eintrag, providers.preference()) if p), {})
 
 
 def cloud_embed_model() -> str:

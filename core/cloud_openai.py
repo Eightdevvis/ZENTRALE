@@ -132,8 +132,9 @@ def _log_usage(verbrauch, model: str):
         state.push_log(
             f"CLOUD ← {model} in={rein} cache_read={gecacht} out={raus} "
             f"≈{eur:.4f}€ (heute {usage.heute_euro():.2f}€)")
-    except Exception:
-        pass
+    except Exception as e:
+        # Nicht still: eine verlorene Buchung macht den Budget-Deckel blind.
+        print(f"[usage] Buchung fehlgeschlagen ({model}): {e}")
 
 
 def _prepare_messages(messages: list, system_text: str,

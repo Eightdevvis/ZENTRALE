@@ -604,5 +604,6 @@ def _log_usage(final, model: str):
             f"CLOUD ← {model} in={u.input_tokens} cache_read={rd} "
             f"cache_write={wr} out={u.output_tokens} "
             f"≈{eur:.4f}€ (heute {usage.heute_euro():.2f}€)")
-    except Exception:
-        pass
+    except Exception as e:
+        # Nicht still: eine verlorene Buchung macht den Budget-Deckel blind.
+        print(f"[usage] Buchung fehlgeschlagen ({model}): {e}")

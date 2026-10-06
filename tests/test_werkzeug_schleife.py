@@ -260,3 +260,19 @@ def test_fehler_landet_nicht_im_verlauf(monkeypatch):
     verlauf = state.get_chat_history()
     assert [m["role"] for m in verlauf] == ["user"]
     state.clear_chat_history()
+
+
+def test_kalender_beweis_meldet_keinen_erfolg_wenn_nachlesen_scheitert(monkeypatch):
+    """Ging das Nachlesen schief, stand früher „OK, eingetragen." da — ein
+    Erfolg, den niemand geprüft hatte."""
+    import kalender
+    import ki_werkzeuge
+
+    def kaputt(*a, **k):
+        raise OSError("Platte weg")
+
+    monkeypatch.setattr(kalender, "entries_in_range", kaputt)
+    satz = ki_werkzeuge._kalender_beweis("2026-10-07", "Zahnarzt")
+    assert "OK, eingetragen" not in satz
+    assert "nicht bestätigt" in satz
+
