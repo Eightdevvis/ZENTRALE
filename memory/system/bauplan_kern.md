@@ -105,6 +105,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `ki_antwort` | 3 | Fertige Antwort: Bild-Marker ziehen, Zug zum Merken vormerken |
 | `ki_prompt` | 3 | Prompt-Bausteine für jeden Weg: Jetzt-Block, Imprint, Alarme, Denk-Heuristik, Schalter |
 | `ki_werkzeuge` | 3 | Was ein KI-Werkzeug tut: ausfuehren(name, args) → Kalender, Notizen, Netz, Mail, Messreihen |
+| `kern` | 3 | Der eine Einstieg: kern.chat(verlauf) wählt den Weg (lokal/Anthropic/OpenAI) und fährt ihn |
 | `main` | 4 | Event-Loop |
 | `brain` | 4 | Input → neue Events |
 | `actions` | 4 | Events → Nebenwirkungen |
@@ -169,22 +170,20 @@ das Problem statt es einzutragen.
 
 ### Altlast: Kreis-Kanten
 
-Ein Import-Kreis heißt: A braucht B, B braucht A — auch über Umwege. Diese
-15 Kanten verbinden sechs Module des KI-Kerns zu einem Knoten. Ursache:
-`ai.py` war ab Mai 2026 die einzige KI-Datei und wurde zum Ersatzteillager;
-jeder neue Teil wurde daneben gebaut und bediente sich dort. Aufgelöst wird
-das in Punkt 2 (KI-Kern entflechten).
+Ein Import-Kreis heißt: A braucht B, B braucht A — auch über Umwege.
+
+**Keine mehr.** Am 2026-10-05 verbanden 15 Kanten sechs Module des KI-Kerns
+zu einem Knoten (`ai`, `ai_backends`, `cloud`, `cloud_openai`,
+`consolidation`, `werkzeug_schleife`). Ursache: `ai.py` war ab Mai 2026 die
+einzige KI-Datei und wurde zum Ersatzteillager; jeder neue Teil wurde
+daneben gebaut und bediente sich dort. Am 2026-10-06 in fünf Schritten
+aufgelöst (`memory/ki/kern_aufbau.md`, K1–K5): Ollama-Anbindung, Merken,
+Erlaubnis, Antwort, Prompt-Bausteine und Werkzeuge bekamen je ein eigenes
+Modul, und `kern.chat` wurde der eine Einstieg. Die Tabelle bleibt für den
+Test stehen; ein neuer Kreis wird rot und darf hier NICHT eingetragen werden.
 
 | Kante | Wofür |
 |---|---|
-| `ai_backends → cloud` | liefert das Modul für den Anthropic-Chat |
-| `ai_backends → cloud_openai` | liefert das Modul für den OpenAI-Chat |
-| `cloud → ai_backends` | Modell und Effort |
-| `cloud → werkzeug_schleife` | die Schleife |
-| `cloud_openai → ai_backends` | Modell |
-| `cloud_openai → cloud` | statischer Prompt, wechselnder Block, Cloud-Graph |
-| `cloud_openai → werkzeug_schleife` | die Schleife |
-| `werkzeug_schleife → ai_backends` | Rundengrenze |
 
 ### Altlast: Türen
 

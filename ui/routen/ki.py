@@ -12,6 +12,7 @@ from flask import Blueprint, Response, jsonify, request, stream_with_context
 
 import ai           # type: ignore
 import ai_backends     # type: ignore  – AI-Backend-Verfügbarkeit (local/cloud, EXTERNAL-Box)
+import kern            # type: ignore  – der eine Einstieg in den Chat (core/kern.py)
 import providers      # type: ignore  – Cloud-Registry des Kerns (base_url/kind)
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
 
@@ -34,8 +35,8 @@ def api_chat():
     Ablauf:
       1. User-Nachricht in state.py speichern
       2. Chat-History holen (inkl. neuer Nachricht)
-      3. Generator starten – je nach chat_available() liefert ai.chat_stream()
-         (local) oder das Modul aus ai_backends.chat_cloud_module() (cloud)
+      3. Generator starten – kern.chat() wählt den Weg (lokal: ai.chat_stream,
+         cloud: core/cloud.py bzw. core/cloud_openai.py)
          Token für Token
       4. Jeden Token als SSE-Event an den Client schicken; daneben die
          Nicht-Text-Events ascii, permission, werkzeug, reflect, cinema
@@ -72,14 +73,10 @@ def api_chat():
         collected = []
         fehler_kam = False
 
-        # Beide Pfade haben dieselbe Signatur und dasselbe Event-Protokoll —
-        # die Schleife darunter merkt keinen Unterschied.
-        if backend == ai_backends.CLOUD:
-            modul = ai_backends.chat_cloud_module()
-            stream = modul.chat_stream(history, via_mic=via_mic)
-            state.push_log(f"AI →  KERN: Cloud ({ai_backends.cloud_provider()})")
-        else:
-            stream = ai.chat_stream(history, via_mic=via_mic)
+        # Welcher Weg (lokal, Anthropic, OpenAI-kompatibel) — das entscheidet
+        # kern.chat, die eine Stelle dafür. Alle Wege liefern dasselbe
+        # Event-Protokoll; die Schleife hier merkt keinen Unterschied.
+        stream = kern.chat(history, via_mic=via_mic, backend=backend)
 
         for token in stream:
             # zeige_ascii liefert ein Dict statt eines Text-Tokens: ein

@@ -337,13 +337,14 @@ def test_modul_wahl_folgt_dem_dialekt(monkeypatch):
     import cloud_openai
     monkeypatch.setattr(ai_backends, "status",
                         lambda *a, **k: _status(False, True, provider="claude"))
-    assert ai_backends.chat_cloud_module() is cloud
+    import kern
+    assert kern.cloud_modul() is cloud
     monkeypatch.setattr(ai_backends, "status",
                         lambda *a, **k: _status(False, True, provider="qwen"))
-    assert ai_backends.chat_cloud_module() is cloud_openai
+    assert kern.cloud_modul() is cloud_openai
     monkeypatch.setattr(ai_backends, "status",
                         lambda *a, **k: _status(False, True, provider="gibtsnicht"))
-    assert ai_backends.chat_cloud_module() is None
+    assert kern.cloud_modul() is None
 
 
 def test_env_uebersteuert_die_config(monkeypatch):

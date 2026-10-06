@@ -16,7 +16,7 @@ import os
 import threading
 import time
 
-import ai           # type: ignore
+import kern         # der eine Einstieg in den Chat (core/kern.py)
 import ai_backends  # type: ignore
 import anwesenheit  # ist Sasha da? schaut er ZENTRALE an?
 import melden       # Desktop-Benachrichtigung (notify-send)
@@ -73,10 +73,7 @@ def sprechen(anstoss):
                     "dort ab.")
     history = state.get_chat_history() + [
         {"role": "user", "content": auftrag}]
-    if backend == ai_backends.CLOUD:
-        stream = ai_backends.chat_cloud_module().chat_stream(history)
-    else:
-        stream = ai.chat_stream(history)
+    stream = kern.chat(history, backend=backend)
 
     stuecke = []
     for token in stream:

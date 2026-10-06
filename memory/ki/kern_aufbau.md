@@ -43,6 +43,11 @@ Richtung — von oben (wer einen Chat startet) nach unten (was er dafür braucht
 
 ## Bauabschnitte (je ein Commit, volle Testsuite dazwischen)
 
+**Stand 2026-10-06 nachts: K1–K5 erledigt, 0 Import-Kreise.** `ai.py` ist von
+1.328 auf rund 320 Zeilen geschrumpft (der Ollama-Weg plus Durchreiche).
+Geprüft mit der vollen Testsuite und zwei echten Chat-Zügen durch den
+laufenden Server gegen die Cloud (einer mit Werkzeug-Aufruf `read_time`).
+
 | # | Was | Löst |
 |---|---|---|
 | K1 | `core/ollama.py`: Ollama-Adresse, Modell, Kontext, Sampling, Denk-Schalter, Erreichbarkeit, Warmup — einmal | `ai_backends → ai`, die kopierten Werte in `consolidation` |

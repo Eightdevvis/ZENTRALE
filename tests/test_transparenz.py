@@ -141,6 +141,7 @@ def test_das_backend_reicht_das_ereignis_durch(monkeypatch):
     ein Werkzeug-Ereignis geht als eigenes SSE-Event raus und NICHT in den
     gespeicherten Antworttext."""
     import ai_backends
+    import kern
     import state
     from ui.app import app
 
@@ -152,7 +153,7 @@ def test_das_backend_reicht_das_ereignis_durch(monkeypatch):
             yield "Steht drin."
 
     monkeypatch.setattr(ai_backends, "chat_available", lambda: ai_backends.CLOUD)
-    monkeypatch.setattr(ai_backends, "chat_cloud_module", lambda: Modul)
+    monkeypatch.setattr(kern, "cloud_modul", lambda: Modul)
     monkeypatch.setattr(ai_backends, "cloud_provider", lambda: "test")
     state.clear_chat_history()
     try:

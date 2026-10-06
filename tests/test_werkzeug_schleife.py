@@ -238,6 +238,7 @@ def test_ergebnisse_kommen_mit_call_id_zurueck():
 
 def test_fehler_landet_nicht_im_verlauf(monkeypatch):
     import ai_backends
+    import kern
     from ui.app import app
 
     class Modul:
@@ -246,7 +247,7 @@ def test_fehler_landet_nicht_im_verlauf(monkeypatch):
             yield {"fehler": "Cloud-Fehler: kein Netz"}
 
     monkeypatch.setattr(ai_backends, "chat_available", lambda: ai_backends.CLOUD)
-    monkeypatch.setattr(ai_backends, "chat_cloud_module", lambda: Modul)
+    monkeypatch.setattr(kern, "cloud_modul", lambda: Modul)
     monkeypatch.setattr(ai_backends, "cloud_provider", lambda: "test")
     state.clear_chat_history()
 

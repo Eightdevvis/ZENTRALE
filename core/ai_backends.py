@@ -241,22 +241,6 @@ def chat_cloud_kind() -> str | None:
     return cloud_kind_for(status().get("cloud_provider"))
 
 
-def chat_cloud_module():
-    """
-    Das Modul, das den Cloud-Chat bedient — nach Dialekt des Providers.
-    Lazy importiert: beide Module ziehen ai/graph nach und sollen nicht schon
-    beim Import von ai_backends geladen werden.
-    """
-    kind = chat_cloud_kind()
-    if kind == "anthropic":
-        import cloud
-        return cloud
-    if kind == "openai_compat":
-        import cloud_openai
-        return cloud_openai
-    return None
-
-
 def chat_available() -> str | None:
     """
     Welches Backend den Chat JETZT bedienen darf — inklusive Lokal-Regel.
