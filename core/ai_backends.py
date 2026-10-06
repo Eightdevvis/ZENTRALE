@@ -287,8 +287,7 @@ def lokale_ki_aus() -> bool:
 
 def chat_provider() -> str:
     """Ausdrücklich gewählter Cloud-Anbieter, oder 'auto'."""
-    v = os.environ.get("ZENTRALE_CHAT_PROVIDER") or \
-        ai_config.setting("chat_provider", "auto")
+    v = ai_config.setting("chat_provider", "auto")
     v = str(v).strip().lower()
     return v if v == "auto" or v in providers.PROVIDERS else "auto"
 
@@ -367,8 +366,7 @@ def chat_effort() -> str:
     auf 'high' erzeugt schnell das Dreifache an Denk-Token. Fürs Plaudern ist
     das rausgeworfenes Geld.
     """
-    v = os.environ.get("ZENTRALE_CHAT_EFFORT") or \
-        ai_config.setting("chat_effort", "low")
+    v = ai_config.setting("chat_effort", "low")
     v = str(v).strip().lower()
     return v if v in EFFORT_STUFEN else "low"
 
@@ -440,7 +438,7 @@ def chat_backend() -> str:
     Persistiert in data/ai_config.json (key 'chat_backend'), per Env
     ZENTRALE_CHAT_BACKEND übersteuerbar.
     """
-    v = os.environ.get("ZENTRALE_CHAT_BACKEND") or ai_config.setting("chat_backend", "auto")
+    v = ai_config.setting("chat_backend", "auto")
     v = str(v).strip().lower()
     return v if v in (LOCAL, CLOUD, "auto") else "auto"
 

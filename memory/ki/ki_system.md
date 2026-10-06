@@ -767,7 +767,7 @@ jedes Modell für sich:
 | `profil/__init__.py` | Registry, Auswahl, Alias-Tabelle |
 
 * **Auswahl:** lokal → `klein`, cloud → `gross`. Übersteuerbar per
-  `ZENTRALE_PROMPT_PROFIL` oder `chat_profil` in `data/ai_config.json`.
+  `chat_profil` in `data/ai_config.json` bzw. `ZENTRALE_CHAT_PROFIL`.
   Zurücktauschen ist eine Zeile — das ist der Sinn der Sache.
 * **`klein` ist Kanon.** `ai.py` re-exportiert die Namen (`ai._SYSTEM_PROMPT`,
   `ai.TOOLS` …), deshalb laufen der lokale Pfad, die vier `scripts/bench_*.py`

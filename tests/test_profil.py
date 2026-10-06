@@ -261,7 +261,7 @@ def test_kanonisch_ist_idempotent_und_tolerant():
 # ── Auswahl ────────────────────────────────────────────────────────────
 
 def test_cloud_faehrt_gross_lokal_faehrt_klein(monkeypatch):
-    monkeypatch.delenv("ZENTRALE_PROMPT_PROFIL", raising=False)
+    monkeypatch.delenv("ZENTRALE_CHAT_PROFIL", raising=False)
     monkeypatch.setattr(profil, "_aus_config", lambda: None)
     assert profil.fuer_backend("cloud") is gross
     assert profil.fuer_backend("local") is klein
@@ -269,14 +269,14 @@ def test_cloud_faehrt_gross_lokal_faehrt_klein(monkeypatch):
 
 def test_env_taucht_die_schiene_zurueck(monkeypatch):
     """»Die andere kann man schnell wieder reintauschen« — eine Zeile."""
-    monkeypatch.setenv("ZENTRALE_PROMPT_PROFIL", "klein")
+    monkeypatch.setenv("ZENTRALE_CHAT_PROFIL", "klein")
     assert profil.fuer_backend("cloud") is klein
 
 
 def test_unbekannte_schiene_faellt_auf_klein_zurueck(monkeypatch):
     """Klein ist die vorsichtigere: sie hat die Krücken drin. Ein Tippfehler
     in der Config macht die KI dann höchstens geschwätzig, nicht kaputt."""
-    monkeypatch.setenv("ZENTRALE_PROMPT_PROFIL", "kruemelmonster")
+    monkeypatch.setenv("ZENTRALE_CHAT_PROFIL", "kruemelmonster")
     assert profil.fuer_backend("cloud") is klein
 
 

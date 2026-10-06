@@ -89,7 +89,12 @@ def setting(name: str, default=None):
     """Wert für eine Core-AI-Einstellung.
     Precedence: Runtime-Override > Env (ZENTRALE_<NAME>) > ai_config.json >
     tutor_config.json (Legacy) > default.
-    Einstellungen: cloud_enabled, local_enabled."""
+
+    EIN Name pro Einstellung: die Env-Variable heißt immer ZENTRALE_ + der
+    Config-Schlüssel in Großbuchstaben (chat_backend ↔ ZENTRALE_CHAT_BACKEND).
+    Wer die Env selbst liest statt hierher zu fragen, hebelt die Rangfolge
+    aus — dann greift Live-Umschalten nicht mehr, sobald die Env gesetzt ist
+    (so war es bis 2026-10-07 bei chat_provider/_effort/_backend)."""
     if name in _overrides:
         return _overrides[name]
     env = os.environ.get("ZENTRALE_" + name.upper())

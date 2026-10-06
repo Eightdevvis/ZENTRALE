@@ -32,8 +32,6 @@
 # scripts/bench_*.py, die den Tool-Loop eigenstaendig nachbauen und die
 # deutschen Namen hart matchen, unveraendert weiter.
 
-import os
-
 from . import klein
 from . import gross
 
@@ -70,11 +68,11 @@ def hol(name: str):
 def fuer_backend(backend: str):
     """Welche Schiene gehoert zu diesem Backend?
 
-    lokal → klein, cloud → gross. Uebersteuerbar per ZENTRALE_PROMPT_PROFIL
-    bzw. `chat_profil` in data/ai_config.json — zuruecktauschen ist eine
+    lokal → klein, cloud → gross. Uebersteuerbar per `chat_profil` in
+    data/ai_config.json bzw. ZENTRALE_CHAT_PROFIL — zuruecktauschen ist eine
     Zeile, das ist der Sinn der Sache.
     """
-    wahl = os.environ.get("ZENTRALE_PROMPT_PROFIL") or _aus_config()
+    wahl = _aus_config()
     if wahl:
         return hol(wahl)
     return gross if backend == "cloud" else klein

@@ -360,3 +360,18 @@ def test_unsinn_in_der_vorwahl_faellt_auf_auto(monkeypatch):
 def test_set_chat_backend_lehnt_unsinn_ab():
     with pytest.raises(ValueError):
         ai_backends.set_chat_backend("halbcloud")
+
+
+def test_live_umschalten_schlaegt_die_env(monkeypatch):
+    """Ein Name, eine Rangfolge (ai_config.setting): Laufzeit > Env > Datei.
+    Bis 2026-10-07 lasen chat_backend/_provider/_effort die Env selbst —
+    mit gesetzter Env lief jedes Live-Umschalten ins Leere."""
+    import ai_config
+    monkeypatch.setenv("ZENTRALE_CHAT_BACKEND", "cloud")
+    monkeypatch.setenv("ZENTRALE_CHAT_EFFORT", "high")
+    monkeypatch.setattr(ai_config, "_overrides", {})
+    monkeypatch.setattr(ai_config, "_save", lambda: None)
+    ai_backends.set_chat_backend("local", persist=False)
+    ai_backends.set_chat_effort("low", persist=False)
+    assert ai_backends.chat_backend() == ai_backends.LOCAL
+    assert ai_backends.chat_effort() == "low"
