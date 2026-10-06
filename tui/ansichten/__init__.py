@@ -10,4 +10,5 @@
 # `ansichten` importieren muss — als Skript (tui/ im Pfad) wie als Paket
 # (tui.ansichten, in den Tests) gleich.
 
-from . import basis, farben, kontext  # noqa: F401
+from . import basis, farben, kontext, text  # noqa: F401
+from . import chat  # noqa: F401

@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "core"))
 
 import pytest
 
-from tui.zentrale_tui import werkzeug_zeile
+from tui.ansichten.chat import werkzeug_zeile
 
 
 # ── Was im Chat steht ─────────────────────────────────────────────────

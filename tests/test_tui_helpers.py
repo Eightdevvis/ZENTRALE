@@ -13,12 +13,14 @@ import random
 import pytest
 
 from tui.zentrale_tui import (
-    _num, fmt_uptime, fmt_clock, fmt_euro, parse_clock, period_duration,
+    _num, fmt_uptime, fmt_clock, parse_clock, period_duration,
     graph_series, graph_last, tele_value, parse_command, log_prefix,
     blockspark, bar, overlay_rows, terminal_too_small,
-    md_zeilen, md_inline,
     lauf_ausschnitt, lauf_schritt, LAUF_TRENNER, LAUF_HALT, LAUF_TAKT,
 )
+# Seit 06.10.2026 wohnen Chat und Text in eigenen Modulen (tui/ansichten/).
+from tui.ansichten.chat import fmt_euro
+from tui.ansichten.text import md_zeilen, md_inline
 
 # ── Gemeiner Werte-Pool (für die Fuzz-Eigenschaft) ──────────────────────────
 NASTY = [None, True, False, 0, 1, -1, 1440, 1441, 99999999, -99999999,
@@ -346,7 +348,7 @@ def test_stream_timeout_ueberlebt_die_erlaubnis_frage():
     """
     import re
     import state
-    import tui.zentrale_tui as tuimod
+    import tui.ansichten.chat as tuimod     # der Chat-Stream lebt seit 06.10.2026 dort
     quelle = open(tuimod.__file__, encoding="utf-8").read()
     treffer = re.search(r"urlopen\(req, timeout=(\d+)\)", quelle)
     assert treffer, "SSE-Aufruf nicht gefunden"
