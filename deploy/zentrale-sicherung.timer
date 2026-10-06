@@ -1,0 +1,12 @@
+# Einmal am Tag sichern; war der Rechner zur Zeit aus, beim nächsten Start
+# nachholen (Persistent). systemd-USER-Einheit.
+[Unit]
+Description=ZENTRALE: tägliche Datensicherung
+
+[Timer]
+OnCalendar=*-*-* 03:30
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

@@ -21,6 +21,7 @@ hier ist „Maschine", nicht „Feature".
 |---|---|
 | Bedrohungsmodell, LUKS, Evil-Maid, was verschlüsselt ist | [sicherheit.md](sicherheit.md) |
 | Welche Dateien die KI lesen darf (Whitelist) und was nie in git gehört | [datei_zugriffe.md](datei_zugriffe.md) |
+| **Datensicherung** ins private Daten-Repo: Positivliste, Schlüssel-Scanner, ein Branch pro Rechner, täglicher Timer | [datensicherung.md](datensicherung.md) |
 
 **Zwei Dinge, die hart tabu bleiben:** `push --force` / History umschreiben,
 und Secrets committen. `data/*.json`, Keys und Passphrasen bleiben gitignored.

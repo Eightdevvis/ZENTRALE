@@ -1,0 +1,12 @@
+# Datensicherung ins private Daten-Repo (scripts/daten_sichern.py).
+# systemd-USER-Einheit, gehört zu zentrale-sicherung.timer.
+# Was gesichert wird und warum: memory/betrieb/datensicherung.md
+[Unit]
+Description=ZENTRALE: Daten ins private Daten-Repo sichern
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/codicus/ZENTRALE/venv/bin/python %h/codicus/ZENTRALE/scripts/daten_sichern.py
+Nice=10
