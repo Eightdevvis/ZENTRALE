@@ -52,6 +52,7 @@ X_PAUSE = "X-ZENTRALE-PAUSE"
 X_ABSAGE = "X-ZENTRALE-ABSAGE-NOETIG"
 X_OHNE_ANFANG = "X-ZENTRALE-OHNE-ANFANG"
 X_RRULE_ROH = "X-ZENTRALE-RRULE-ROH"
+X_ZEIT_ROH = "X-ZENTRALE-ZEIT-ROH"
 
 # Was ZENTRALE an einem Ereignis selbst verwaltet. Alles ANDERE an einer
 # vorhandenen Datei (DESCRIPTION, VALARM, Google-Eigenheiten, ...) wird beim
@@ -116,6 +117,20 @@ def _hhmm(s) -> time | None:
     if h > 23 or m > 59:
         return None
     return time(h, m)
+
+
+def _zeit_locker(s) -> time | None:
+    """Wie _hhmm, versteht aber auch "10", "9:30", "8" — so stehen Uhrzeiten
+    in Sashas echten Daten. Was das genau hieß, bewahrt X-ZENTRALE-ZEIT-ROH."""
+    if not isinstance(s, str):
+        return None
+    m = re.fullmatch(r"(\d{1,2})(?::(\d{2}))?", s.strip()) if s == s.strip() else None
+    if not m:
+        return None
+    h, mi = int(m.group(1)), int(m.group(2) or 0)
+    if h > 23 or mi > 59:
+        return None
+    return time(h, mi)
 
 
 def _fmt(t) -> str:
@@ -230,35 +245,55 @@ def termin_kalender(tag: str, e: dict, uid: str, pos=None,
         raise NichtAbbildbar(f"Termin-Tag {tag!r} oder Eintrag unbrauchbar")
     jetzt = _jetzt(jetzt)
     rest = dict(e)
+    roh = {}
     if "bis" in e:
-        komps, mit_tz = _spanne(d, e, rest, uid, pos, jetzt)
+        komps, mit_tz = _spanne(d, e, rest, roh, uid, pos, jetzt)
     else:
-        komps, mit_tz = _einzel(d, e, rest, uid, pos, jetzt)
+        komps, mit_tz = _einzel(d, e, rest, roh, uid, pos, jetzt)
+    _roh_anhaengen(komps[0], roh)
     _extras_anhaengen(komps[0], rest)
     kal = _kalender(komps, mit_tz)
     _gegenprobe_termin(kal, tag, e)
     return kal
 
 
-def _einzel(d, e, rest, uid, pos, jetzt):
+def _roh_anhaengen(ev: Event, roh: dict) -> None:
+    """Uhrzeiten, die nicht in der Form HH:MM standen ("10", "9:30"), gehen
+    als 10:00 / 09:30 in DTSTART — Google und das Handy zeigen dann die
+    richtige Stunde statt eines Ganztags-Termins. Der Originaltext bleibt
+    hier stehen und gilt beim Lesen wieder, SOLANGE die Uhrzeit unverändert
+    ist. Verschiebt Sasha den Termin am Handy, gilt die neue Zeit."""
+    if roh:
+        ev.add(X_ZEIT_ROH, _xkodieren(roh))
+
+
+def _ende_abbilden(ev, d, t, e, rest, roh, feld="ende"):
+    """DTEND aus `ende`, wenn es nach dem Beginn liegt. "24:00" = Mitternacht
+    (DTEND am nächsten Tag 00:00, zurückgelesen wieder "24:00" — dieselbe
+    Zahl, mit der _interval in kalender.py rechnet)."""
+    en = e.get(feld)
+    if en == "24:00":
+        ev.add("DTEND", _ts(d + timedelta(days=1), time(0)))
+        rest.pop(feld, None)
+        return
+    te = _zeit_locker(en)
+    if te and te > t:
+        ev.add("DTEND", _ts(d, te))
+        rest.pop(feld, None)
+        if en != _fmt(te):
+            roh[feld] = [en, _fmt(te)]
+
+
+def _einzel(d, e, rest, roh, uid, pos, jetzt):
     ev = _basis(uid, ART_TERMIN, pos, jetzt)
     _kopf(ev, e, rest)
-    t = _hhmm(e.get("time"))
+    t = _zeit_locker(e.get("time"))
     if t:
         ev.add("DTSTART", _ts(d, t))
         rest.pop("time", None)
-        en = e.get("ende")
-        if en == "24:00":
-            # Bis Mitternacht: DTEND am nächsten Tag 00:00. Zurück gelesen
-            # wird daraus wieder "24:00" (dieselbe Zahl, mit der _interval
-            # in kalender.py rechnet).
-            ev.add("DTEND", _ts(d + timedelta(days=1), time(0)))
-            rest.pop("ende", None)
-        else:
-            te = _hhmm(en)
-            if te and te > t:
-                ev.add("DTEND", _ts(d, te))
-                rest.pop("ende", None)
+        if e["time"] != _fmt(t):
+            roh["time"] = [e["time"], _fmt(t)]
+        _ende_abbilden(ev, d, t, e, rest, roh)
         return [ev], True
     ev.add("DTSTART", d)
     ev.add("DTEND", d + timedelta(days=1))
@@ -267,20 +302,20 @@ def _einzel(d, e, rest, uid, pos, jetzt):
 
 def _tagesfelder(d: date, bis: date, werte: dict, rest_werte: dict) -> dict:
     """Aus `times`/`enden` die Tage holen, die sich abbilden lassen: gültiges
-    Datum in der Spanne, Wert in exakter HH:MM-Form. Der Rest bleibt in
-    `rest_werte` und wandert in die Extras."""
+    Datum in der Spanne, lesbare Uhrzeit. -> {tag: (time, originaltext)}.
+    Der Rest bleibt in `rest_werte` und wandert in die Extras."""
     gut = {}
     for k, v in werte.items():
         kd = _datum(k)
-        tv = _hhmm(v)
+        tv = _zeit_locker(v)
         if kd and d <= kd <= bis and tv:
-            gut[kd] = tv
+            gut[kd] = (tv, v)
         else:
             rest_werte[k] = v
     return gut
 
 
-def _spanne(d, e, rest, uid, pos, jetzt):
+def _spanne(d, e, rest, roh, uid, pos, jetzt):
     bis = _datum(e.get("bis"))
     if bis is None or bis < d:
         # kalender.py liest so etwas als eintägige Spanne — das lässt sich
@@ -300,22 +335,28 @@ def _spanne(d, e, rest, uid, pos, jetzt):
     _kopf(ev, e, rest)
     komps, mit_tz = [ev], False
 
+    def merken(feld, tag, paar):
+        t, original = paar
+        if original != _fmt(t):
+            roh[f"{feld}/{tag.isoformat()}"] = [original, _fmt(t)]
+
     enden_abgebildet = {}
     if not hz:
         # Form A: ein ganztägiger Block. Enden ohne Beginn kann iCalendar
         # nicht ausdrücken -> Extras.
-        rest_enden.update({k.isoformat(): _fmt(v) for k, v in he.items()})
-        he = {}
+        rest_enden.update({k.isoformat(): orig for k, (_t, orig) in he.items()})
         ev.add("DTSTART", d)
         ev.add("DTEND", bis + timedelta(days=1))
     elif d != bis and set(hz) == {d} and set(he) <= {bis}:
         # Form B: ein Termin über mehrere Tage mit Beginn am ersten und
         # (optional) Ende am letzten Tag — "Fr 18:00 bis So 14:00".
         mit_tz = True
-        ev.add("DTSTART", _ts(d, hz[d]))
+        ev.add("DTSTART", _ts(d, hz[d][0]))
+        merken("times", d, hz[d])
         enden_abgebildet = he
         if bis in he:
-            ev.add("DTEND", _ts(bis, he[bis]))
+            ev.add("DTEND", _ts(bis, he[bis][0]))
+            merken("enden", bis, he[bis])
         else:
             ev.add("DTEND", _ts(bis + timedelta(days=1), time(0)))
     else:
@@ -323,11 +364,11 @@ def _spanne(d, e, rest, uid, pos, jetzt):
         # Ein Ende braucht hier einen Beginn am selben Tag, der davor liegt.
         mit_tz = True
         he_ok = {}
-        for k, v in he.items():
-            if k in hz and v > hz[k]:
-                he_ok[k] = v
+        for k, (v, orig) in he.items():
+            if k in hz and v > hz[k][0]:
+                he_ok[k] = (v, orig)
             else:
-                rest_enden[k.isoformat()] = _fmt(v)
+                rest_enden[k.isoformat()] = orig
         enden_abgebildet = he_ok
         tage = (bis - d).days + 1
         ev.add("DTSTART", d)
@@ -336,9 +377,11 @@ def _spanne(d, e, rest, uid, pos, jetzt):
         for tag in sorted(hz):
             ab = _basis(uid, None, None, jetzt)
             ab.add("RECURRENCE-ID", tag)
-            ab.add("DTSTART", _ts(tag, hz[tag]))
+            ab.add("DTSTART", _ts(tag, hz[tag][0]))
+            merken("times", tag, hz[tag])
             if tag in he_ok:
-                ab.add("DTEND", _ts(tag, he_ok[tag]))
+                ab.add("DTEND", _ts(tag, he_ok[tag][0]))
+                merken("enden", tag, he_ok[tag])
             # Titel und Ort mitgeben: Google zeigt eine Abweichung als
             # eigenes Ereignis, ohne SUMMARY stünde dort ein leerer Termin.
             if ev.get("SUMMARY") is not None:
@@ -429,22 +472,18 @@ def routine_kalender(r: dict, uid: str, pos=None, pausen: list | None = None,
         start_d = anker_ausrichten(r, anker or date.today())
         ev.add(X_OHNE_ANFANG, "TRUE")
 
-    t = _hhmm(r.get("time"))
+    roh = {}
+    t = _zeit_locker(r.get("time"))
     if t:
         rest.pop("time", None)
+        if r["time"] != _fmt(t):
+            roh["time"] = [r["time"], _fmt(t)]
         ev.add("DTSTART", _ts(start_d, t))
-        en = r.get("ende")
-        if en == "24:00":
-            ev.add("DTEND", _ts(start_d + timedelta(days=1), time(0)))
-            rest.pop("ende", None)
-        else:
-            te = _hhmm(en)
-            if te and te > t:
-                ev.add("DTEND", _ts(start_d, te))
-                rest.pop("ende", None)
+        _ende_abbilden(ev, start_d, t, r, rest, roh)
     else:
         ev.add("DTSTART", start_d)
         ev.add("DTEND", start_d + timedelta(days=1))
+    _roh_anhaengen(ev, roh)
 
     # UNTIL muss zum Typ von DTSTART passen (RFC 5545): mit Zone -> UTC,
     # ganztags -> Datum.
@@ -690,6 +729,25 @@ def _kopf_lesen(ev, daten: dict) -> None:
         daten["absage_noetig"] = True
 
 
+def _roh_anwenden(ev, daten: dict) -> None:
+    """Originaltexte von Uhrzeiten zurücksetzen — aber nur, wo die Uhrzeit
+    noch genau die ist, die ZENTRALE daraus gemacht hatte (siehe
+    _roh_anhaengen)."""
+    roh = _xdekodieren(ev.get(X_ZEIT_ROH))
+    if not isinstance(roh, dict):
+        return
+    for pfad, paar in roh.items():
+        if not (isinstance(paar, list) and len(paar) == 2):
+            continue
+        original, geschrieben = paar
+        feld, _, tag = str(pfad).partition("/")
+        if not tag:
+            if daten.get(feld) == geschrieben:
+                daten[feld] = original
+        elif isinstance(daten.get(feld), dict) and daten[feld].get(tag) == geschrieben:
+            daten[feld][tag] = original
+
+
 def _luecken_fuellen(daten: dict, extras: dict, tagesfelder=()) -> dict:
     """Extras füllen nur Lücken: was die Properties sagen, gewinnt. So
     überschreibt ein alter Rohwert nie eine Änderung, die am Handy
@@ -714,6 +772,7 @@ def _termin_lesen(ev, start, ende, extras):
                 daten["ende"] = _fmt(ende)
             elif ende == datetime.combine(start.date() + timedelta(days=1), time(0)):
                 daten["ende"] = "24:00"
+    _roh_anwenden(ev, daten)
     return _luecken_fuellen(daten, extras)
 
 
@@ -773,6 +832,7 @@ def _spanne_lesen(ev, abw, start, ende, rr, extras):
         daten["times"] = times
     if enden:
         daten["enden"] = enden
+    _roh_anwenden(ev, daten)
     return _luecken_fuellen(daten, extras, tagesfelder=("times", "enden"))
 
 
@@ -791,6 +851,7 @@ def _routine_lesen(ev, abw, start, ende, rr, extras):
                 daten["ende"] = _fmt(ende)
             elif ende == datetime.combine(start.date() + timedelta(days=1), time(0)):
                 daten["ende"] = "24:00"
+    _roh_anwenden(ev, daten)
     if str(ev.get(X_OHNE_ANFANG) or "").upper() != "TRUE":
         daten["seit"] = (start.date() if isinstance(start, datetime) else start).isoformat()
 

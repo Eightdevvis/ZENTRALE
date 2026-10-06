@@ -80,6 +80,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `kalender_ics` | 2 | Der .ics-Speicher: vdir lesen (Cache), nur Unterschiede schreiben, Nebendaten |
 | `kalender_sicherung` | 2 | Atomar schreiben, Datei-Sperre, Verlauf, Grabsteine, Snapshots, Massenlösch-Sperre |
 | `kalender_spiegel` | 2 | git-Spiegel der Kalenderdaten außerhalb von `data/` |
+| `kalender_migration` | 2 | Umzug JSON → .ics: prüfen (alle Lesefunktionen über beide Speicher, Feld-Inventar), ausführen, Rückweg |
 | `lists` | 2 | Listen-Registry (To-Do, Checklisten) |
 | `notes` | 2 | Notiz-Registry des TUI-Notiz-Werkzeugs |
 | `melodies` | 2 | Melodie-Registry des Klaviers |
