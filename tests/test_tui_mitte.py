@@ -133,6 +133,13 @@ def schirm():
     return _lauf()
 
 
+def _rad():
+    """Geometrie von Rad und Galaxie — seit 06.10.2026 in tui/ansichten/startseite.py
+    (memory/system/tui_bauplan.md)."""
+    from tui.ansichten import startseite
+    return startseite
+
+
 def _modul():
     import importlib.util
     spec = importlib.util.spec_from_file_location(
@@ -190,7 +197,7 @@ def _vorn(zeilen):
 
 
 def test_rad_zeigt_vorn_die_gewaehlte():
-    m = _modul()
+    m = _rad()
     assert _vorn(m.rad_zeilen(NAMEN, 0, 70, 30)) == ["K L A V I E R"]
     assert _vorn(m.rad_zeilen(NAMEN, 1, 70, 30)) == ["P O S T"]
     assert _vorn(m.rad_zeilen(NAMEN, 5, 70, 30)) == ["P O S T"]   # zweite runde
@@ -199,13 +206,13 @@ def test_rad_zeigt_vorn_die_gewaehlte():
 
 def test_im_drehen_kein_rahmen():
     """Zwischen zwei Apps steht keine vorn — sonst springt der Rahmen."""
-    zeilen = _modul().rad_zeilen(NAMEN, 0.5, 70, 30)
+    zeilen = _rad().rad_zeilen(NAMEN, 0.5, 70, 30)
     assert not [z for z in zeilen if z[3] in ("vorn", "rahmen")]
 
 
 def test_vorn_ist_unten_hinten_ist_oben():
     """Das Rad liegt und wird leicht von oben gesehen."""
-    zeilen = _modul().rad_zeilen(["a", "b", "c", "d", "e", "f", "g", "h"],
+    zeilen = _rad().rad_zeilen(["a", "b", "c", "d", "e", "f", "g", "h"],
                                  0, 70, 30)
     vorn = next(z for z in zeilen if z[3] == "vorn")
     fern = [z for z in zeilen if z[3] == "fern"]
@@ -214,16 +221,16 @@ def test_vorn_ist_unten_hinten_ist_oben():
 
 def test_rad_bleibt_in_der_breite():
     for breite in (40, 60, 71, 120):
-        for dy, dx, t, _st in _modul().rad_zeilen(NAMEN, 0, breite, 30):
+        for dy, dx, t, _st in _rad().rad_zeilen(NAMEN, 0, breite, 30):
             assert -breite // 2 < dx and dx + len(t) <= breite // 2, (breite, t)
 
 
 def test_zu_schmal_kein_rad():
-    assert _modul().rad_zeilen(NAMEN, 0, 20, 30) == []
+    assert _rad().rad_zeilen(NAMEN, 0, 20, 30) == []
 
 
 def test_rad_gleitet_und_rastet_ein():
-    m = _modul()
+    m = _rad()
     pos = 0.0
     for _ in range(40):
         pos = m.rad_schritt(pos, 1)
@@ -233,7 +240,7 @@ def test_rad_gleitet_und_rastet_ein():
 # ── Pixel-Symbole im Rad (elektronik) ───────────────────────────────────
 
 def test_symbol_app_ist_hinten_eine_pille_und_vorn_ein_symbol():
-    m = _modul()
+    m = _rad()
     namen = ["klavier", "post", "kalender", "elektronik"]
     zeilen = m.rad_zeilen(namen, 0, 70, 30, {"elektronik": 0.0})
     pillen = [z for z in zeilen if z[3] in ("pille", "pille_fern")]
@@ -244,20 +251,20 @@ def test_symbol_app_ist_hinten_eine_pille_und_vorn_ein_symbol():
 
 
 def test_symbol_bleibt_beim_wegdrehen_bis_es_zu_ist():
-    m = _modul()
+    m = _rad()
     namen = ["klavier", "post", "kalender", "elektronik"]
     zeilen = m.rad_zeilen(namen, 3.4, 70, 30, {"elektronik": 0.5})
     assert [z for z in zeilen if z[3] == "symbol:elektronik"]
 
 
 def test_ohne_symbole_bleibt_alles_wie_es_war():
-    m = _modul()
+    m = _rad()
     alt = m.rad_zeilen(NAMEN, 0, 70, 30)
     assert alt == m.rad_zeilen(NAMEN, 0, 70, 30, None)
 
 
 def test_klappen_auf_schnell_und_zu_noch_schneller():
-    m = _modul()
+    m = _rad()
     o = 0.0
     for _ in range(8):                 # 8 Frames à 33 ms ≈ 0,26 s
         o = m.rad_offen_schritt(o, True, 0.033)
@@ -292,7 +299,7 @@ def test_pfeil_allein_wechselt_das_rad_nicht():
 def test_galaxie_gewaehltes_mittig_anderes_draussen():
     """Sasha: das nicht gewählte Rad etwas weiter weg, darf abgeschnitten
     sein — das gewählte steht mittig."""
-    m = _modul()
+    m = _rad()
     breiten = (0.55, 0.36)
     for gpos in (0, 1):
         lage = {i: (q, n) for i, q, n in m.galaxie_lage(gpos, breiten)}
@@ -319,7 +326,7 @@ def test_dashboard_an_holt_die_alten_spalten_zurueck(tmp_path, monkeypatch):
 
 
 def test_meta_taste_waehlt_dreht_und_oeffnet():
-    m = _modul()
+    m = _rad()
     meta, rad, trad = {"gsel": 0, "fokus": 0}, {"sel": 0}, {"sel": 0}
     m.meta_taste(meta, rad, trad, "rechts")
     assert rad["sel"] == 1 and meta["fokus"] == 0       # pfeil dreht direkt
@@ -342,7 +349,7 @@ def test_dashboard_befehl():
 def test_galaxie_dreht_schwer_und_rollt_weich_aus():
     """Sasha: *„smoother und schwerfälliger, schließlich ist das ne giga
     galaxie die dreht"* — träge Anfahrt, weiches Ende, exakt am Ziel."""
-    m = _modul()
+    m = _rad()
     d = m.GALAXIE_DAUER
     assert d >= 1.2                                        # schwer, kein Zucken
     assert m.galaxie_schritt(0, 1, 0) == 0.0
@@ -374,12 +381,12 @@ def _schwung(m, druecke_pro_s, sekunden, fps=30):
 
 
 def test_normales_tippen_schleudert_nie():
-    m = _modul()
+    m = _rad()
     assert _schwung(m, 5, 10) < m.SCHLEUDER_AB
 
 
 def test_gehaltene_taste_reisst_nach_rund_einer_sekunde_ab():
-    m = _modul()
+    m = _rad()
     assert _schwung(m, 30, 0.5) < m.SCHLEUDER_AB
     assert _schwung(m, 30, 2.0) > m.SCHLEUDER_AB
 
@@ -387,7 +394,7 @@ def test_gehaltene_taste_reisst_nach_rund_einer_sekunde_ab():
 def test_wurf_alle_auf_einmal_und_geradeaus():
     """Alle Apps reissen im selben Moment ab und fliegen auf einer GERADEN
     weg — kein grösserer Kreis."""
-    m = _modul()
+    m = _rad()
     teile = m.schleuder_wurf(NAMEN, 0, 1, 70, 30)
     assert [t[0] for t in teile] == NAMEN                  # alle zugleich
     for name, y, x, vy, vx in teile:
@@ -401,7 +408,7 @@ def test_wurf_alle_auf_einmal_und_geradeaus():
 
 
 def test_wurf_zeilen_entfernen_sich_mit_der_zeit():
-    m = _modul()
+    m = _rad()
     teile = m.schleuder_wurf(NAMEN, 0, 1, 70, 30)
     nah, fern = m.wurf_zeilen(teile, 0.0), m.wurf_zeilen(teile, 1.0)
     weite = lambda zs: max(abs(dx) for _dy, dx, _t, _st in zs)  # noqa: E731
@@ -423,7 +430,7 @@ def _pixel():
 
 
 def test_jede_app_im_rad_hat_ein_symbol():
-    m, px = _modul(), _pixel()
+    m, px = _rad(), _pixel()
     for _taste, name in m.RAD_APPS:
         assert name in m.RAD_SYMBOLE
         assert name == "elektronik" or name in px.MOTIVE, name
