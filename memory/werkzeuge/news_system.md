@@ -199,7 +199,7 @@ Liest die KI eine Sendung vor, schaltet das Dashboard in einen
 der den **gerade gesprochenen Satz** zeigt (statt der ganzen Textwand).
 
 - **Trigger:** `ai.chat_stream` yieldet `{"cinema": True}`, sobald `lies_news`
-  läuft (vor der Ausführung). `app.py` reicht es als SSE-Event `cinema` durch.
+  läuft (vor der Ausführung). `ui/routen/ki.py` reicht es als SSE-Event `cinema` durch.
   Das Frontend ruft `enterCinema()`.
 - **Untertitel-Sync (geschenkt durch die Satz-TTS):** Die Sprachausgabe läuft
   eh Satz für Satz (`enqueueSpeak`/`drainSpeakQueue`, wartet auf `audio.onended`).

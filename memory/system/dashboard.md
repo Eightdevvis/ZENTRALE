@@ -155,7 +155,7 @@ EIN Schalter:
 - **`core/main.py`**: bei `lokale_ki_aus()` kein Ollama-Warmup, kein
   News-Fetcher; LOCAL wird nie angesprochen. Startzeile im Log:
   `LOKALE KI: an` / `LOKALE KI: aus`.
-- **`ui/app.py`**: Chat-Endpoints fragen `chat_available()` — Cloud-Chat
+- **`ui/routen/ki.py`**: Chat-Endpoints fragen `chat_available()` — Cloud-Chat
   bleibt auch ohne lokale KI erlaubt; ohne jedes Backend → **503**.
   `/api/speak`/`/api/transcribe` → 503, wenn lokale KI aus und kein Tutor.
   `/api/ai/status` hat kein `kassette`-Feld mehr.
@@ -1220,7 +1220,7 @@ Denkt die KI vor einer Antwort (adaptives Thinking, `core/ai.py`
 nach…" statt totem Warten (so wird die ~3× Latenz UX-Gewinn statt -Verlust).
 
 - **Transport:** Ollama liefert die Denk-Tokens getrennt im `thinking`-Feld.
-  `chat_stream` yieldet sie als `{"reflect": …}`; `app.py` reicht sie als SSE-
+  `chat_stream` yieldet sie als `{"reflect": …}`; `ui/routen/ki.py` reicht sie als SSE-
   Event `data.reflect` durch (NICHT in `collected` → nicht gespeichert, nicht
   gesprochen). Der Chat-IIFE-Leser feuert daraus `zentrale:reflect` `{text}`;
   der Exhibit-Direktor hört darauf (wie bei `zentrale:ascii`).

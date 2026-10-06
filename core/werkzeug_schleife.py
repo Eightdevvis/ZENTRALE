@@ -28,7 +28,7 @@
 # Fehler und die Rundengrenze gehen als eigenes Event {"fehler": text}
 # raus, NICHT als Antworttext. Vorher stand "[Cloud-Fehler: …]" danach im
 # Verlauf, als hätte die KI das gesagt — und die nächste Runde las es als
-# ihre eigene Aussage. app.py reicht das Event als SSE 'fehler' an die TUI
+# ihre eigene Aussage. ui/routen/ki.py reicht das Event als SSE 'fehler' an die TUI
 # (Statuszeile) und speichert es nicht.
 
 from dataclasses import dataclass, field

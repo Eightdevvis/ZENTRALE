@@ -46,7 +46,7 @@ def marker_ziehen(text: str):
 def mit_bildern(answer: str, user_query: str, store: str | None = None):
     """
     Verarbeitet eine FINALE Antwort (regulaerer Chat): zieht Bild-Marker raus,
-    feuert pro Treffer ein Inline-Bild-Event ({"ascii","name"}) - app.py macht
+    feuert pro Treffer ein Inline-Bild-Event ({"ascii","name"}) - ui/routen/ki.py macht
     daraus ein SSE 'ascii'-Event - und yieldet zum Schluss den bereinigten
     Text. Speichert den bereinigten Text (ohne Marker) in den Graphen.
     Generator: in der Werkzeug-Schleife via `yield from` nutzen. Nur fuer tools is None

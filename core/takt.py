@@ -18,7 +18,7 @@
 # Kein Modell-Aufruf, kein Netz, keine Nebenwirkung. Diese Datei sagt nur,
 # OB und WOMIT angestossen werden soll — damit sie vollstaendig testbar
 # bleibt und ein Fehler in der Anstoss-Logik nicht erst auffaellt, wenn er
-# Geld gekostet hat. Der Treiber (ui/app.py) fragt und fuehrt aus.
+# Geld gekostet hat. Der Treiber (core/takt_treiber.py) fragt und fuehrt aus.
 #
 # ── Die eigentliche Gefahr ────────────────────────────────────────────
 # Nicht, dass ein Anstoss ausbleibt — dass zu viele kommen. Ein Assistent,

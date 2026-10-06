@@ -3,14 +3,16 @@
 # Lokale KI-Schiene (Ollama) – und der Werkzeugkasten, den alle Chat-Pfade teilen.
 #
 # ── Wer welchen Turn bedient ──────────────────────────────────────────
-# Das entscheidet NICHT diese Datei, sondern ai_backends.chat_available()
-# (gefragt von /api/chat in ui/app.py):
+# Das entscheidet NICHT diese Datei, sondern core/kern.py: kern.chat() fragt
+# ai_backends.chat_available(), WER denken darf, und fährt dann den Weg
+# (seit 2026-10-06; vorher stand die Weiche in der Chat-Route):
 #   local → chat_stream() hier, gegen Ollama (Prompt-Schiene `klein`)
-#   cloud → core/cloud.py (Anthropic) bzw. core/cloud_openai.py
-#           (OpenAI-kompatibel), Prompt-Schiene `gross`
-# Die Cloud-Module leihen sich von hier Prompt-Bausteine, das Erlaubnis-Gate
-# und die Tool-Ausführung (_execute_tool): Werkzeuge laufen immer lokal,
-# egal wer denkt.
+#   cloud → kern.cloud_modul(): core/cloud.py (Anthropic) bzw.
+#           core/cloud_openai.py (OpenAI-kompatibel), Prompt-Schiene `gross`
+# Prompt-Bausteine, Erlaubnis-Gate und Tool-Ausführung liegen nicht mehr
+# hier, sondern in core/ki_prompt.py, core/erlaubnis.py und
+# core/ki_werkzeuge.py (unten nur noch als Durchreiche): Werkzeuge laufen
+# immer lokal, egal wer denkt.
 #
 # ── Wie Tool-Use funktioniert ─────────────────────────────────────────
 # Statt immer Text zu antworten kann das Modell "Tools aufrufen":
@@ -21,7 +23,7 @@
 # das Modell antwortet dann mit dem eigentlichen Text. Das läuft
 # transparent in einer Schleife bis das Modell fertig ist.
 #
-# Das aktive Modell ist konfigurierbar (siehe OLLAMA_MODEL unten);
+# Das aktive Modell ist konfigurierbar (OLLAMA_MODEL, steht in core/ollama.py);
 # jedes Tool-Use-fähige Ollama-Modell sollte funktionieren.
 #
 # ── Gedächtnis ───────────────────────────────────────────────────────
@@ -30,14 +32,14 @@
 # nur mit ZENTRALE_GRAPH_KONTEXT=1, siehe GRAPH_KONTEXT unten) und nicht mehr
 # BESCHRIEBEN (Tripel-Extraktion nur mit ZENTRALE_GRAPH_EXTRAKTION=1, siehe
 # core/consolidation.py). Pro Turn landet nur noch der Rohtext im Transkript
-# (core/transkript.py); der Identity-Seed (_ensure_seed_once) läuft weiter. An seine Stelle trat das Datei-Gedächtnis
+# (core/transkript.py); der Identity-Seed (graph.einmal_seeden) läuft weiter. An seine Stelle trat das Datei-Gedächtnis
 # (core/gedaechtnis.py) — bisher NUR auf dem Cloud-Pfad: Kopf-Block im
 # gecachten System-Prompt (cloud._static_system) plus die Notiz-Werkzeuge
 # aus core/profil/gross.py. Die lokale Schiene sieht davon heute nichts.
 #
 # ── Konfiguration ────────────────────────────────────────────────────
-#   OLLAMA_URL   – default: http://localhost:11434
-#   OLLAMA_MODEL – default: qwen3.5:9b
+#   OLLAMA_URL, OLLAMA_MODEL, OLLAMA_NUM_CTX usw. – seit 2026-10-06 in
+#   core/ollama.py (Defaults und Begründungen dort).
 
 import os
 import json as _json   # Tool-Argumente, die Ollama als String liefert
@@ -188,7 +190,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         imprint = ki_prompt._imprint_prompt()
         if imprint:
             sys_prompt += "\n\n" + imprint
-        # ── Ab hier wechselt es pro Turn (siehe _PROMPT_ORDER-Notiz oben) ──
+        # ── Ab hier wechselt es pro Turn (siehe _PROMPT_ORDER-Notiz in core/ki_prompt.py) ──
         if mem_ctx:
             sys_prompt += "\n\n" + mem_ctx
         # Jetzt-Block direkt HINTER den Graph-Kontext: er widerspricht genau
@@ -257,7 +259,7 @@ class _OllamaAdapter:
             "keep_alive": OLLAMA_KEEP_ALIVE,
             # num_ctx explizit setzen, sonst clampt Ollama auf seinen
             # Mini-Default und schneidet die Sprach-Regel aus dem Fenster
-            # (siehe OLLAMA_NUM_CTX-Doku oben - Ursache fuers Chinesisch).
+            # (siehe OLLAMA_NUM_CTX-Doku in core/ollama.py - Ursache fuers Chinesisch).
             "options":    {"num_ctx": OLLAMA_NUM_CTX, **QWEN_SAMPLING},
         }
 

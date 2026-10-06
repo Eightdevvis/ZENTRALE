@@ -1347,7 +1347,7 @@ def migrate_internet_access(store: str | None = None):
         obsolete = set(_OBSOLETE_INTERNET_LIMITS)
 
         # No-op-Guard: nur schreiben, wenn wirklich etwas zu tun ist. Sonst
-        # liefe die Funktion bei JEDEM Boot (sie hängt in _ensure_seed_once)
+        # liefe die Funktion bei JEDEM Boot (sie hängt in einmal_seeden)
         # und würde unnötig schreiben bzw. Edge-Gewichte hochzählen.
         def _edge_exists(cap):
             return any(e["from"] == "KI" and e["to"] == cap and e["rel"] == "kann"

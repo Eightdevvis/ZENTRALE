@@ -24,7 +24,7 @@ abgeglichen 2026-09-18.
 
 | Endpoint                  | Methode | Beschreibung                          |
 |---------------------------|---------|---------------------------------------|
-| `/api/sensor/<name>`      | POST    | Externes Sensor-Signal entgegennehmen und in die Event-Queue legen. Erlaubte `<name>`: `button`, `light`, `motion`, `door` (Whitelist `_ALLOWED_SENSORS` in `ui/app.py`). Body wird aktuell ignoriert. |
+| `/api/sensor/<name>`      | POST    | Externes Sensor-Signal entgegennehmen und in die Event-Queue legen. Erlaubte `<name>`: `button`, `light`, `motion`, `door` (Whitelist `_ALLOWED_SENSORS` in `ui/routen/zustand.py`). Body wird aktuell ignoriert. |
 
 Verwendet von `scripts/pi_sensor_bridge.py` (Pi → PC) und kann von
 beliebigen LAN-Clients aufgerufen werden (Mikrocontroller, anderer Pi,

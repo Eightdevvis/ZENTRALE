@@ -1,7 +1,8 @@
 # ui/routen/ki.py
 #
 # KI-Chat: der SSE-Stream /api/chat, Verlauf, Erlaubnis-Antwort, Status und
-# Backend-Wahl, Devtools-Stream. Wer denkt, entscheidet core/ai_backends.py.
+# Backend-Wahl, Devtools-Stream. Wer denken darf, sagt core/ai_backends.py;
+# welchen Weg der Zug nimmt und ihn fahren, macht core/kern.py (kern.chat).
 #
 # Teil der Routen-Schicht (Schicht 5, memory/system/bauplan_kern.md):
 # dünne Adapter von HTTP auf core/. Herausgelöst aus ui/app.py am
@@ -178,7 +179,7 @@ def api_permission_answer():
     Klick auf die JA/NEIN-Knöpfe, liefert die Wahl und entsperrt damit den
     wartenden Generator - der streamt dann den Rest der Antwort auf der
     bereits offenen SSE-Verbindung weiter. Funktioniert nur weil Flask
-    multi-threaded läuft (siehe app.run(threaded=True) ganz unten).
+    multi-threaded läuft (siehe app.run(threaded=True) in ui/app.py).
     """
     # Muss überall dort offen sein, wo auch gechattet werden kann — sonst
     # blockiert ein Erlaubnis-Dialog den Stream für immer, weil niemand die

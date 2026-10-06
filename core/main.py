@@ -21,7 +21,7 @@ import ai_backends
 # Mapping: Sensor-Name aus dem Webhook -> intern verwendeter Event-Name.
 # Lokal definiert (nicht in events.py), weil es eine Adapter-Schicht ist:
 # physikalischer Eingang -> logisches Ereignis. Die Webhook-Whitelist in
-# ui/app.py muss synchron bleiben.
+# ui/routen/zustand.py (_ALLOWED_SENSORS) muss synchron bleiben.
 _SENSOR_TO_EVENT = {
     "button": BUTTON_PRESS,
     "light":  LIGHT_SENSOR_TRIGGER,

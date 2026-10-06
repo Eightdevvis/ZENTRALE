@@ -282,7 +282,7 @@ def request_permission(options=None, timeout_default="nein"):
 
 
 def get_permission_options() -> list:
-    """Aktuell angebotene Knopf-Labels (für die Antwort-Validierung in app.py)."""
+    """Aktuell angebotene Knopf-Labels (für die Antwort-Validierung in ui/routen/ki.py)."""
     with _lock:
         return list(_perm_options)
 
@@ -291,7 +291,7 @@ def answer_permission(answer: str):
     """
     Liefert das gewählte Knopf-Label und weckt den wartenden chat_stream.
 
-    Aufrufer: ui/app.py POST /api/permission_answer (anderer Thread).
+    Aufrufer: ui/routen/ki.py POST /api/permission_answer (anderer Thread).
     answer: eines der Labels aus get_permission_options() (im Flask-Handler
     schon gegen die angebotenen Optionen validiert).
     """
@@ -321,7 +321,7 @@ def wait_permission(timeout: float = 180.0) -> str:
 def queue_sensor(name: str):
     """
     Reiht einen extern eingegangenen Sensor-Trigger in die Queue.
-    Aufrufer: ui/app.py POST /api/sensor/<name>.
+    Aufrufer: ui/routen/zustand.py POST /api/sensor/<name>.
 
     name: Sensor-Bezeichner wie "button", "light", "motion", "door".
           Validierung passiert im Flask-Handler – hier landet nur, was

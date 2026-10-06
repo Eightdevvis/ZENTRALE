@@ -27,13 +27,15 @@ mit dem Graphen aus ist.
 ## Architektur
 
 ```
-TUI ──POST /api/chat──▶ ui/app.py ──ai_backends.chat_available()──┐
-                                                                   │
-   cloud ◀─ core/cloud.py (Anthropic) | core/cloud_openai.py ◀─────┤
+TUI ──POST /api/chat──▶ ui/routen/ki.py ──kern.chat()──────────────┐
+                         (ai_backends.chat_available(): WER darf)  │
+   cloud ◀─ kern.cloud_modul(): core/cloud.py (Anthropic)       ◀──┤
+            | core/cloud_openai.py (OpenAI-kompatibel)             │
             Schiene profil/gross, Kopf mit gedaechtnis.kopf_block  │
    local ◀─ core/ai.py ──▶ Ollama (qwen3.5:9b), Schiene profil/klein ◀┘
 
-beide Pfade ─▶ ai._execute_tool    (Werkzeuge immer lokal, Erlaubnis-Gate)
+alle Wege ─▶ werkzeug_schleife     (die EINE Tool-Schleife, run_tool)
+          ─▶ ki_werkzeuge.ausfuehren (Werkzeuge immer lokal, Erlaubnis-Gate)
            ─▶ consolidation.py     (nach dem Turn: Transkript; Graph-Extraktion aus)
            ─▶ graph.py             (nur Identity-Seed; Kontext aus, GRAPH_KONTEXT)
 ```
@@ -246,8 +248,8 @@ Läuft nach jedem Chat-Turn als Daemon-Thread:
    Graphen merged (Alias-Resolution greift hier).
 4. Trivialer Smalltalk wird übersprungen (Skip-Regel im Extraktor-Prompt).
 
-Trigger: nach jedem vollständigen Chat-Turn (`_async_save_turn` in
-`ai.py`). Das alte STM/LTM-Konsolidierungs-Pattern (Trigger `/sleep` oder
+Trigger: nach jedem vollständigen Chat-Turn (`consolidation.zug_vormerken`,
+bis 2026-10-06 `ai._async_save_turn`). Das alte STM/LTM-Konsolidierungs-Pattern (Trigger `/sleep` oder
 Inaktivität) ist nicht mehr aktiv – Graph wächst inkrementell.
 
 **One-shot Cleanup für Altbestand:** `scripts/graph_cleanup.py` läuft
@@ -366,7 +368,7 @@ Marker wird getippt, nicht angekündigt).
 - **Pipeline:** `_extract_ascii_markers` (Regex, tolerant: `[[bild:]]`,
   `[[ascii:]]`, `[[zeige_ascii:]]`) zieht im regulären Chat die Marker aus
   der finalen Antwort, `ascii_lib.pick` matcht, `chat_stream` yieldet pro
-  Treffer ein **Inline-Event** (`dict {"ascii","name"}`); `app.py` macht
+  Treffer ein **Inline-Event** (`dict {"ascii","name"}`); `ui/routen/ki.py` macht
   daraus ein SSE-Event `ascii`. Der bereinigte Text (ohne Marker) wird
   gesprochen/gespeichert. Tutor-Modus kennt die Marker NICHT. Frontend:
   siehe „ASCII-Kern / Bild-Marker" in [memory/system/dashboard.md](../system/dashboard.md).
@@ -427,7 +429,7 @@ zugreifen«, »Web-Suche durchführen«, »Echtzeit-News/Wetter abrufen«) wurde
 zu Fähigkeiten (»im Internet suchen«, »Webseiten abrufen«). Code:
 `graph._SEED_CAPABILITIES`/`_SEED_LIMITS` (frische Installs) +
 `graph.migrate_internet_access()` (zieht bereits geseedete Graphen nach,
-idempotent, hängt in `ai._ensure_seed_once` → self-healing bei jedem Boot).
+idempotent, hängt in `graph.einmal_seeden` → self-healing bei jedem Boot).
 
 ### Knopf-Dialog: Auto-Gate + `frage_knopf`
 
@@ -469,7 +471,7 @@ Rückfrage-Werkzeug, das die KI gezielt einsetzt.
    `state.request_permission(options, timeout_default)`, yielden ein
    **permission-Event** (`{"permission": {"frage", "optionen"}}`) und
    **blockieren** in `state.wait_permission()`.
-2. `app.py` macht ein SSE `permission` daraus; das Frontend zeigt die Frage als
+2. `ui/routen/ki.py` macht ein SSE `permission` daraus; das Frontend zeigt die Frage als
    KI-Zeile (+ TTS) und baut die Knopf-Leiste dynamisch aus `optionen` (fehlt →
    JA/NEIN). Der SSE-Reader läuft **nicht** zu Ende – die Verbindung bleibt offen.
 3. Klick → `POST /api/permission_answer {answer}` (eigener Thread), gegen die
@@ -536,7 +538,7 @@ Markdown-Renderer eingebunden.
 
 ## System-Prompt-Komposition
 
-Reihenfolge im System-Prompt (siehe `_PROMPT_ORDER` in `core/ai.py`):
+Reihenfolge im System-Prompt (siehe `_PROMPT_ORDER` in `core/ki_prompt.py`):
 **erst alles Statische, dann alles, was sich pro Turn ändert.** Zwei Gründe
 für diesen Schnitt, ein Handgriff — Prompt-Cache (ein Treffer braucht ein
 byte-identisches Präfix, und der Jetzt-Block enthält die Uhrzeit) und Recency
@@ -631,8 +633,8 @@ Der Cloud-Pfad hat einen **eigenen Graphen**: `data/ai_graph_cloud.json`
 (`cloud.CLOUD_GRAPH`). Würde er `graph.context_for_query()` ohne `store`
 rufen, ginge Sashas kompletter Konzept-Graph mit jedem Turn an die API.
 Getragen wird das vom Multi-Store in `core/graph.py` (`store`-Parameter, war
-schon da) plus `store`-Durchreichung in `ai._answer_with_images` →
-`ai._async_save_turn` → `consolidation.extract_turn_into_graph`. Der Extraktor
+schon da) plus `store`-Durchreichung in `ki_antwort.mit_bildern` →
+`consolidation.zug_vormerken` → `consolidation.extract_turn_into_graph`. Der Extraktor
 selbst läuft weiterhin lokal — er schreibt nur in DEN Graphen, aus dem der
 Turn kam. Das lokale Modell darf den Cloud-Graphen später lesen und einen
 zweiten Layer darauf bauen; es schreibt nie hinein.
@@ -692,7 +694,7 @@ jeder Weg selbst. Was ein Tool-Call **bedeutet**, steht genau einmal, in
 `werkzeug_schleife.run_tool()`.
 
 **Fehler sind keine Antwort.** API-Fehler, Cloud-Ablehnung (`refusal`) und
-die Rundengrenze kommen als `{"fehler": …}`. `ui/app.py` reicht das als SSE
+die Rundengrenze kommen als `{"fehler": …}`. `ui/routen/ki.py` reicht das als SSE
 `fehler` an die TUI (Statuszeile) und schreibt es NICHT in `_chat_history`.
 Vorher stand `[Cloud-Fehler: …]` als KI-Antwort im Verlauf, und der Takt
 konnte es sogar als „Initiative“ melden.
@@ -1023,7 +1025,7 @@ die Frage in einer Zeile beantwortet.
   durch die **alle drei** Wege gehen (lokal erst seit 10/2026). Drei Phasen:
   `start` (Name + Argumente), `fertig` (Ergebnis), `fehler`. Mehrfach
   gepflegt hieße, dass die Anzeige auf einer Schiene irgendwann fehlt.
-- **Durchgereicht** als eigenes SSE-Event `werkzeug` (`ui/app.py`), kein
+- **Durchgereicht** als eigenes SSE-Event `werkzeug` (`ui/routen/ki.py`), kein
   Antworttext — es landet also nicht im gespeicherten Verlauf.
 - **Gezeigt** in der TUI als eigene Zeilen im Chat: `⚙ write_note(name=ideen,
   …)` und darunter `↳ Notiert in kataloge/ideen.` Zurückgenommen in der Farbe,

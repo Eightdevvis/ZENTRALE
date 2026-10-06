@@ -7,7 +7,7 @@
 #
 # Quelle: core/host_metrics.py (dependency-frei, /proc + /sys + nvidia-smi).
 # Die Pi-Telemetrie kommt NICHT von hier, sondern wird vom Pi an
-# /api/telemetry/pi gePOSTet und in state.py gehalten (siehe ui/app.py).
+# /api/telemetry/pi gePOSTet und in state.py gehalten (siehe ui/routen/zustand.py).
 #
 # Shape (so wie das Frontend-Design die Meter erwartet: je Metrik ein .v):
 #   { "cpu":  {"v": %},

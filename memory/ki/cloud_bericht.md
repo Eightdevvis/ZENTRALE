@@ -32,7 +32,8 @@ genau eine Sache: **wer entscheidet, welches Werkzeug läuft.** Ausgeführt wird
 weiter lokal; Whisper, TTS, Kalender, Mail bleiben unberührt. Dazu ein zweiter
 Dialekt (`core/cloud_openai.py`) für qwen/openai/mistral. Die *Bedeutung* eines
 Tool-Calls — was terminal ist, was durchs Gate muss — steht genau einmal, in
-`cloud.run_tool()`; die beiden Loops unterscheiden sich nur in der Verpackung.
+`werkzeug_schleife.run_tool()` (anfangs `cloud.run_tool()`); seit 10/2026
+fahren alle Wege dieselbe Schleife und unterscheiden sich nur im Adapter.
 
 **Isolation.** Der Cloud-Pfad hat einen eigenen Graphen. Lokal sieht alles von
 Cloud, Cloud nichts von lokal. Live bestätigt: 23 neue Knoten cloud-seitig, der

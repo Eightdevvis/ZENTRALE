@@ -164,7 +164,7 @@ weg. Der real gelandete simpelste Gewinn bleibt die **Daten-Präsentation**
 Hypothese: bei User-Widerspruch („haben wir doch gelöscht", „wieso noch") die
 ASSISTANT-Vorantworten aus dem Kontext nehmen, damit das 9b nicht seine
 Falschaussage verteidigt, sondern frisch herleitet (Recency statt tool_choice,
-das auf Ollama eh tot ist). Als `ai._reground` gebaut, in `chat_stream` + Bench
+das auf Ollama eh tot ist). Als `ai._reground` gebaut (seit 2026-10 entfernt), in `chat_stream` + Bench
 verdrahtet, **A/B gemessen** (N=20, Gate nur in T3 aktiv):
 
 | Metrik | Gate AN | Gate AUS |

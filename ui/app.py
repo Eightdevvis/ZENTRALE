@@ -20,9 +20,12 @@
 #
 # ── Architektur ───────────────────────────────────────────────────────
 #   TUI  ──GET /api/state──▶  routen/zustand.py  ──liest──▶  state.py
-#   TUI  ──POST /api/chat──▶  routen/ki.py  ──ai_backends.chat_available()──┐
-#        cloud → core/cloud.py (Anthropic) | core/cloud_openai.py       ◀──┤
-#        local → core/ai.py ──▶ Ollama                                  ◀──┘
+#   TUI  ──POST /api/chat──▶  routen/ki.py  ──kern.chat()──┐  (core/kern.py)
+#        cloud → kern.cloud_modul(): core/cloud.py |       ◀──┤
+#                core/cloud_openai.py                         │
+#        local → core/ai.py ──▶ Ollama                     ◀──┘
+#   (ai_backends.chat_available() sagt nur, WER denken darf; den Weg
+#   wählt und fährt kern.chat.)
 #   Die TUI (tui/zentrale_tui.py) ist die einzige Front; die Browser-Front
 #   ist archiviert (memory/archive/browser_front.md). Welcher Kern denkt,
 #   steht in data/ai_config.json ('chat_backend', Code-Default 'auto').
