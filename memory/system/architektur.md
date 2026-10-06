@@ -12,9 +12,13 @@ seine Struktur steht mit Drift-Test in `memory/tutor/bauplan.md`. „Lokal &
 offline" gilt nur noch als Default: die gegatete Internet-Pipe (2026-06) und
 der Cloud-Kern als Opt-in (2026-08, `memory/ki/ki_system.md`) brechen es
 bewusst. Bausteine docken per Konvention an (KI-Tool in `ai.py` + Route in
-`app.py`), keine Plugin-Registry. Für den Kern gibt es **keinen** Bauplan mit
-Drift-Test — die Modul-Liste unten ist Handarbeit (offener Auftrag nach
-`memory/doku_regeln.md`, Regel 6).
+`app.py`), keine Plugin-Registry. **Seit 2026-10-05 hat der Kern einen
+Bauplan mit Drift-Test:** [bauplan_kern.md](bauplan_kern.md) legt für jedes
+Modul eine Schicht fest (Fundament → Dienste → KI-Kern → Ablauf → Routen),
+Abhängigkeiten zeigen nur nach unten, und `tests/test_kern_bauplan.py` wird
+rot bei Verstößen, neuen Import-Kreisen, umgangenen Türen und wachsenden
+Riesen. Die Verzeichnis-Liste unten ist weiter Handarbeit; die Schicht steht
+dort.
 
 ## Zwei Threads, ein Prozess
 

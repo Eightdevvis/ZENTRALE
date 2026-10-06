@@ -6,6 +6,7 @@ und wie die Fronten daran hängen.
 | Was du wissen willst | Datei |
 |---|---|
 | **Einstieg.** Gesamt-Architektur: Threads, Datenfluss, Modul-Übersicht | [architektur.md](architektur.md) |
+| **Bauplan des Kerns** — Schichten, wer wen importieren darf, Türen, Altlasten (mit Prüftest) | [bauplan_kern.md](bauplan_kern.md) |
 | Wer läuft wo — PC ↔ Pi ↔ Laptop, Sync der `data/*.json` | [topologie.md](topologie.md) |
 | **Heimnetz (Plan)** — PC als Gehirn ohne Bildschirm, eigener Router, VPN, Sunshine; Übergang bis Glasfaser | [heimnetz.md](heimnetz.md) |
 | Sensoren → Events → Brain → Actions | [event_system.md](event_system.md) |
