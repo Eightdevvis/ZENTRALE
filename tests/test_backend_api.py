@@ -105,8 +105,9 @@ def test_refresh_counts_serves_fresh_cache(client, monkeypatch):
     # warten. Innerhalb der TTL → Cache behalten, folder_counts NICHT anfassen.
     import time as _t
 
-    from ui.routen import mail as A
-    monkeypatch.setattr(A.mail_secrets, "available", lambda: True)
+    import mail_puffer as A
+    import mail_secrets
+    monkeypatch.setattr(mail_secrets, "available", lambda: True)
     called = []
     monkeypatch.setattr(A.mail, "folder_counts",
                         lambda: called.append(1) or {"x": 1})
@@ -124,8 +125,9 @@ def test_refresh_counts_force_bypasses_ttl(client, monkeypatch):
     # die TTL umgehen und wirklich neu zählen.
     import time as _t
 
-    from ui.routen import mail as A
-    monkeypatch.setattr(A.mail_secrets, "available", lambda: True)
+    import mail_puffer as A
+    import mail_secrets
+    monkeypatch.setattr(mail_secrets, "available", lambda: True)
     done = threading.Event()
     monkeypatch.setattr(A.mail, "folder_counts",
                         lambda: (done.set(), {"x": 2})[1])
@@ -155,7 +157,8 @@ def test_mail_counts_persist_survives_restart(tmp_path, monkeypatch):
     # Die echten Live-Zahlen müssen einen Backend-Neustart überleben — sonst
     # zeigt das Panel wieder den mageren Schnappschuss (»171«) und muss neu
     # zählen. Save→Cache leeren→Load-Roundtrip auf einer TEMP-Datei.
-    from ui.routen import mail as A
+    import mail_puffer as A
+    import mail_secrets
     monkeypatch.setattr(A, "_MAIL_COUNTS_FILE", str(tmp_path / "mc.json"))
     monkeypatch.setitem(A._mail_live, "counts", {"zahlen": 1234})
     monkeypatch.setitem(A._mail_live, "ts", 111.0)
@@ -182,8 +185,9 @@ def test_refresh_counts_empty_sweep_keeps_old(client, monkeypatch):
     # Ein gedrosselter Sweep (Outlook throttlet → leeres Ergebnis) darf die
     # guten persistierten Zahlen NICHT plattmachen; sonst kommt nach Neustart
     # wieder die »171«. Leeres folder_counts() ⇒ Cache bleibt, kein Save.
-    from ui.routen import mail as A
-    monkeypatch.setattr(A.mail_secrets, "available", lambda: True)
+    import mail_puffer as A
+    import mail_secrets
+    monkeypatch.setattr(mail_secrets, "available", lambda: True)
     saved = []
     monkeypatch.setattr(A, "_mail_counts_save", lambda: saved.append(1))
     monkeypatch.setattr(A.mail, "category_overview", lambda: [{"name": "zahlen"}])
@@ -204,9 +208,10 @@ def test_refresh_counts_partial_merge_and_prune(client, monkeypatch):
     # Ein lückenhafter Sweep (ein Ordner antwortet nicht) merged frisch ÜBER alt:
     # der fehlende Ordner behält seinen letzten echten Wert. Gelöschte Kategorien
     # (nicht mehr in der Übersicht) werden dabei ausgekehrt.
-    from ui.routen import mail as A
+    import mail_puffer as A
+    import mail_secrets
     saved = []
-    monkeypatch.setattr(A.mail_secrets, "available", lambda: True)
+    monkeypatch.setattr(mail_secrets, "available", lambda: True)
     monkeypatch.setattr(A, "_mail_counts_save",
                         lambda: saved.append(dict(A._mail_live["counts"])))
     monkeypatch.setattr(A.mail, "category_overview",
@@ -227,10 +232,11 @@ def test_folder_cold_fetch_then_serves_cache(client, monkeypatch, tmp_path):
     # Erstes Öffnen holt LIVE (kalter Cache), zweites Öffnen liefert SOFORT aus
     # dem Cache — ohne erneuten IMAP-Fetch. Genau das killt das „lädt ordner…"
     # bei jedem Wieder-Aufmachen.
-    from ui.routen import mail as A
+    import mail_puffer as A
+    import mail_secrets
     monkeypatch.setattr(A, "_MAIL_FOLDERS_FILE", str(tmp_path / "f.json"))
     A._mail_folders.clear()
-    monkeypatch.setattr(A.mail_secrets, "available", lambda: True)
+    monkeypatch.setattr(mail_secrets, "available", lambda: True)
     calls = []
     monkeypatch.setattr(A.mail, "folder_mails",
                         lambda cat, limit=200: (calls.append(cat),
@@ -245,10 +251,11 @@ def test_folder_cold_fetch_then_serves_cache(client, monkeypatch, tmp_path):
 
 def test_folder_force_bypasses_cache(client, monkeypatch, tmp_path):
     # ?force=1 (nach Umsortieren/Löschen) ignoriert den Cache und holt frisch.
-    from ui.routen import mail as A
+    import mail_puffer as A
+    import mail_secrets
     monkeypatch.setattr(A, "_MAIL_FOLDERS_FILE", str(tmp_path / "f.json"))
     A._mail_folders.clear()
-    monkeypatch.setattr(A.mail_secrets, "available", lambda: True)
+    monkeypatch.setattr(mail_secrets, "available", lambda: True)
     calls = []
     monkeypatch.setattr(A.mail, "folder_mails",
                         lambda cat, limit=200: (calls.append(cat), [])[1])
@@ -261,7 +268,8 @@ def test_assign_clears_folder_cache(client, monkeypatch, tmp_path):
     # Umsortieren ist jetzt KEYMAP-getrieben und kann aus MEHREREN Ordnern gezogen
     # haben (INBOX + jeder move-Ordner). Statt einzelne Herkünfte zu raten wird der
     # ganze Ordner-Cache verworfen — das nächste Öffnen holt garantiert frisch.
-    from ui.routen import mail as A
+    import mail_puffer as A
+    import mail_secrets
     monkeypatch.setattr(A, "_MAIL_FOLDERS_FILE", str(tmp_path / "f.json"))
     A._mail_folders.clear()
     A._mail_folders["Uni"] = {"mails": [{"uid": 1}], "ts": 1e9}
@@ -280,12 +288,13 @@ def test_assign_clears_folder_cache(client, monkeypatch, tmp_path):
 def test_delete_removes_uid_from_folder_cache(client, monkeypatch, tmp_path):
     # Löschen nimmt die Mail SOFORT aus dem Cache — kein Wiederauftauchen beim
     # nächsten (gecachten) Öffnen.
-    from ui.routen import mail as A
+    import mail_puffer as A
+    import mail_secrets
     monkeypatch.setattr(A, "_MAIL_FOLDERS_FILE", str(tmp_path / "f.json"))
     A._mail_folders.clear()
     A._mail_folders["Uni"] = {"mails": [{"uid": 5, "account": "o"},
                                         {"uid": 6, "account": "o"}], "ts": 1e9}
-    monkeypatch.setattr(A.mail_secrets, "available", lambda: True)
+    monkeypatch.setattr(mail_secrets, "available", lambda: True)
     monkeypatch.setattr(A.mail, "delete_mail",
                         lambda cat, uid, account_name=None: True)
     r = client.post("/api/mail/delete",

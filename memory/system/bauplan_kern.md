@@ -81,6 +81,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `mail_rules` | 2 | Triage-Keymap (Sender → Ordner/Aktion) |
 | `mail_oauth` | 2 | OAuth2 für Outlook.com-IMAP |
 | `mail_secrets` | 2 | Verschlüsselter Speicher der Mail-Zugangsdaten |
+| `mail_puffer` | 2 | Puffer des Mail-Panels (Live-Zählung, Ordner-Inhalte) und seine Hintergrund-Jobs |
 | `news` | 2 | Persönliche Tagesschau: RSS und Briefing |
 | `web` | 2 | Gegatete Internet-Pipe (Suche, Seite holen) |
 | `embeddings` | 2 | Vektoren lokal (bge-m3) oder in der Cloud |
