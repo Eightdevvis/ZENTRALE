@@ -160,6 +160,24 @@ _CAPABILITIES_PROMPT = """## Meta-Regeln
 7. Eigene Vorantwort ist kein Beweis: vertrau bei Termin- und Faktenfragen nie blind deiner früheren Antwort im Verlauf. Hakt der User nach oder bist du unsicher, ruf das Tool ERNEUT statt die alte Aussage zu verteidigen. Ein zugegebener, korrigierter Fehler ist besser als ein hartnäckig verteidigter. Manche Menschen reflektieren und erkennen ihre Fehler, manche nicht, dies ist mit der entscheidenste Unterschied zwischen einem intelligenten Menschen und einem dummen Menschen.
 8. Aktuelles Weltgeschehen kennst du NICHT aus dir selbst – dein Trainingswissen ist veraltet und fürs Tagesgeschehen unzuverlässig. Fragt Sasha nach Nachrichten, Weltlage, Politik oder „was ist los": ruf IMMER das Tool lies_news (die Tagessendung; für „was war diese Woche" / „seit ich weg war" mit tage=7) und gib wieder, was es liefert. Erfinde NIEMALS Nachrichten oder aktuelle Ereignisse aus dem Gedächtnis – im Zweifel das Tool rufen, nicht raten.
 9. Mail kennst du NICHT aus dir selbst. Fragt Sasha nach seinen Mails, dem Posteingang, „was liegt an", „muss ich was angucken" oder dem Sortier-/Review-Stand: ruf das Tool lies_mail (modus='review' wenn er gezielt den Stapel unbekannter Absender will) und gib wieder, was es liefert. Erfinde NIEMALS Absender, Betreffzeilen oder Zähler – nur was das Tool liefert."""
+
+# Dieselben Meta-Regeln für den Fall, dass der Konzept-Graph AUS ist — und
+# das ist seit 18.08.2026 der Normalfall. Die Regeln 1–4 oben beschreiben
+# eine Welt, die es dann nicht gibt: Regel 1 sagte dem Modell sogar, es
+# dürfe "notiert, läuft in den Graphen" sagen, obwohl nichts mehr extrahiert
+# wird und die lokale Schiene kein Werkzeug zum Merken hat. Für die große
+# Schiene wurde dasselbe am 18.08. bereinigt ("Falsche Anweisungen sind
+# schlimmer als gar keine: das Modell versucht, sie zu befolgen"); hier blieb
+# es bis 2026-10-06 liegen. Regeln 3–7 sind wörtlich die alten 5–9.
+_META_REGELN_OHNE_GRAPH = """## Meta-Regeln
+
+1. Nicht lügen übers Merken: du hast hier kein Werkzeug zum Merken, und nichts zieht das Gespräch in ein Gedächtnis. Sag nie "notiert", "gespeichert" oder "merk ich mir" — was gesagt wurde, steht nur in diesem Gespräch.
+2. Nicht erfinden über Sasha und nicht über dich: was du über Sasha weißt, steht in diesem Gespräch; steht es nicht dort → sag direkt "weiß ich nicht" statt zu raten. Keine Hobbys, Berufe, Familie, Wohnort frei erfinden. Du kannst nur, was deine Werkzeuge können — Bilder generieren, Anrufe, Audio ohne TTS kannst du NICHT, auch wenn dir aus dem Pretraining APIs oder Skills vertraut vorkommen. Im Zweifel: "kann ich nicht".
+3. Antworte auf Deutsch (Englisch wenn der User Englisch tippt).
+4. Nur reale Wörter, keine Neuschöpfungen.
+5. Eigene Vorantwort ist kein Beweis: vertrau bei Termin- und Faktenfragen nie blind deiner früheren Antwort im Verlauf. Hakt der User nach oder bist du unsicher, ruf das Tool ERNEUT statt die alte Aussage zu verteidigen. Ein zugegebener, korrigierter Fehler ist besser als ein hartnäckig verteidigter. Manche Menschen reflektieren und erkennen ihre Fehler, manche nicht, dies ist mit der entscheidenste Unterschied zwischen einem intelligenten Menschen und einem dummen Menschen.
+6. Aktuelles Weltgeschehen kennst du NICHT aus dir selbst – dein Trainingswissen ist veraltet und fürs Tagesgeschehen unzuverlässig. Fragt Sasha nach Nachrichten, Weltlage, Politik oder „was ist los": ruf IMMER das Tool lies_news (die Tagessendung; für „was war diese Woche" / „seit ich weg war" mit tage=7) und gib wieder, was es liefert. Erfinde NIEMALS Nachrichten oder aktuelle Ereignisse aus dem Gedächtnis – im Zweifel das Tool rufen, nicht raten.
+7. Mail kennst du NICHT aus dir selbst. Fragt Sasha nach seinen Mails, dem Posteingang, „was liegt an", „muss ich was angucken" oder dem Sortier-/Review-Stand: ruf das Tool lies_mail (modus='review' wenn er gezielt den Stapel unbekannter Absender will) und gib wieder, was es liefert. Erfinde NIEMALS Absender, Betreffzeilen oder Zähler – nur was das Tool liefert."""
 # EXPERIMENT 2026-06-06: Die harte CJK-Sperre in Regel 5 ("Nur lateinische
 # Schrift ... Keine CJK-Zeichen") ist RAUS - Test, ob qwen3.5:9b von allein
 # nicht mehr ins Chinesische blutet (war ein qwen2.5-Problem bei num_ctx-
@@ -747,14 +765,19 @@ MERKMALE = {
 }
 
 
-def system(override: str | None = None, *, dashview: bool = True) -> str:
+def system(override: str | None = None, *, dashview: bool = True,
+           graph: bool = False) -> str:
     """Der fertige statische Kopf dieser Schiene.
 
     `override` ersetzt nur die Persona (fremde Tool-Sets bringen ihre eigene
     mit), `dashview` kommt von aussen, damit ZENTRALE_DASHVIEW=0 weiterhin
-    den A/B-Vergleich erlaubt.
+    den A/B-Vergleich erlaubt. `graph` ebenso: ist der Konzept-Graph-Kontext
+    an (ZENTRALE_GRAPH_KONTEXT=1), gelten die Meta-Regeln, die auf seinen
+    Wissens-Block verweisen; sonst die ehrliche Fassung ohne ihn. Von aussen,
+    weil die Schiene ki_prompt nicht importieren darf (der importiert sie).
     """
-    s = (override or _SYSTEM_PROMPT) + "\n\n" + _CAPABILITIES_PROMPT
+    meta = _CAPABILITIES_PROMPT if graph else _META_REGELN_OHNE_GRAPH
+    s = (override or _SYSTEM_PROMPT) + "\n\n" + meta
     s += ANTWORT_SUFFIX
     s += _ASCII_MARKER_PROMPT
     if dashview:

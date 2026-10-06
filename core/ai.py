@@ -180,7 +180,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         # Kommt von der Schiene: hier läuft Ollama, also `klein` — mit
         # Antwort-Suffix und Bild-Markern, die ein 9B braucht. Der Cloud-Pfad
         # holt sich denselben Kopf von seiner eigenen Schiene.
-        sys_prompt = profil.klein.system(system, dashview=ki_prompt._DASHVIEW)
+        sys_prompt = profil.klein.system(system, dashview=ki_prompt._DASHVIEW,
+                                         graph=ki_prompt.GRAPH_KONTEXT)
         # Der Imprint (heute/morgen) gehört noch zum stabilen Teil: er ändert
         # sich mit dem Tag und mit echten Kalender-Änderungen, nicht mit dem
         # Turn. Im wechselnden Teil würde er bei jedem Turn ungecacht bezahlt.

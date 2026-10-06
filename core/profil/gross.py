@@ -517,12 +517,15 @@ MERKMALE = {
 }
 
 
-def system(override: str | None = None, *, dashview: bool = True) -> str:
+def system(override: str | None = None, *, dashview: bool = True,
+           graph: bool = False) -> str:
     """Der fertige statische Kopf dieser Schiene.
 
-    `dashview` wird angenommen und ignoriert: es gibt hier keine
-    Dashboard-Sicht. Der Parameter bleibt, damit beide Schienen dieselbe
-    Signatur haben und der Kern nicht wissen muss, auf welcher er faehrt.
+    `dashview` und `graph` werden angenommen und ignoriert: es gibt hier
+    keine Dashboard-Sicht, und die Meta-Regeln dieser Schiene verweisen seit
+    18.08.2026 nicht mehr auf den Graph-Block. Die Parameter bleiben, damit
+    beide Schienen dieselbe Signatur haben und der Kern nicht wissen muss,
+    auf welcher er faehrt.
     """
     return "\n\n".join([(override or _SYSTEM_PROMPT),
                          _ANTWORTVERHALTEN, _CAPABILITIES_PROMPT])

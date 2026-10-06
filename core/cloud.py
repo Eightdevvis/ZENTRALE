@@ -251,7 +251,8 @@ def _static_system(system: str | None, tutor_mode: bool) -> str:
 
     # Die Schiene entscheidet, was hier drinsteht — nicht dieser Modul.
     # Hier draussen faehrt ein Frontier-Modell, also `gross`.
-    teile = [_profil().system(system, dashview=ki_prompt._DASHVIEW)]
+    teile = [_profil().system(system, dashview=ki_prompt._DASHVIEW,
+                              graph=ki_prompt.GRAPH_KONTEXT)]
     # Das Datei-Gedaechtnis: Steckbrief, Ziele, Dossier-TITEL. Gehoert in
     # den gecachten Teil — es aendert sich fast nie, und genau darin liegt
     # der Unterschied zum alten Graph-Block, der bei jedem Turn neu und

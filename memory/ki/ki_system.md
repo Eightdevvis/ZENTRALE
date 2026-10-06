@@ -585,10 +585,11 @@ siehe „Prompt-Cache: statisch vorn, Wechselndes ganz hinten".
    Client → `/api/chat` mit `via_mic: true` → `chat_stream(via_mic=True)`.
 
 > **Solange der Graph-Kontext aus ist, gilt der folgende Absatz nicht:** die
-> Seed-Knoten werden zwar angelegt, kommen aber nicht in den Prompt. ⚠ prüfen:
-> die Meta-Regeln 2 und 4 in `core/profil/klein.py` verweisen weiter auf den
-> „## Aktiviertes Wissen"-Block, den es lokal dann nicht gibt (`gross` hat
-> eigene Regeln, siehe dort).
+> Seed-Knoten werden zwar angelegt, kommen aber nicht in den Prompt. Seit
+> 2026-10-06 bekommt die `klein`-Schiene dann auch die passende Fassung der
+> Meta-Regeln (`_META_REGELN_OHNE_GRAPH`, gewählt über `klein.system(graph=…)`
+> aus `ki_prompt.GRAPH_KONTEXT`): ohne Verweis auf den Wissens-Block und ohne
+> die frühere Erlaubnis, „notiert, läuft in den Graphen" zu sagen.
 
 Konkrete Capabilities/Limits leben als Graph-Knoten (`graph.ensure_seed()`)
 und kommen via Aktivierungs-Spread in den Wissens-Block, statt fest
