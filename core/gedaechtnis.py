@@ -783,7 +783,13 @@ def tagebuch_lesen(tag=None) -> str:
 
 
 def suchen(begriff: str, max_treffer: int = MAX_TREFFER) -> str:
-    """Volltextsuche über Tagebuch UND Dossiers.
+    """Volltextsuche über die Kernakten (Hausregeln, Steckbrief, Ziele),
+    das Tagebuch und alle Bereiche (Notizen, Dossiers, Kataloge, Quellen,
+    Vorlagen).
+
+    Die Kernakten fehlten bis 2026-10-06: sie liegen eine Ebene über den
+    Bereichen, und die Schleife lief nur über die Unterordner. „Wo steht,
+    dass ich Geige spiele?" fand also nie den Steckbrief.
 
     Stumpfer Substring-Vergleich, absichtlich: er braucht keinen Embedder,
     keine Datenbank und kein Netz, und er findet Eigennamen zuverlässiger
@@ -795,7 +801,15 @@ def suchen(begriff: str, max_treffer: int = MAX_TREFFER) -> str:
         return "[Fehler: Suchbegriff zu kurz]"
     nadel = begriff.casefold()
     treffer = []
+    for schluessel in _OBEN:
+        for zeile in _lesen(_pfad("", schluessel)).splitlines():
+            if nadel in zeile.casefold() and not zeile.startswith("# "):
+                treffer.append(f"[{_KERNAKTEN[schluessel]}] {zeile.strip()}")
+                if len(treffer) >= max_treffer:
+                    break
     for bereich in ("tagebuch",) + BEREICHE:
+        if len(treffer) >= max_treffer:
+            break
         ordner = os.path.join(_wurzel(), bereich)
         if not os.path.isdir(ordner):
             continue
@@ -810,8 +824,9 @@ def suchen(begriff: str, max_treffer: int = MAX_TREFFER) -> str:
             if len(treffer) >= max_treffer:
                 break
     if not treffer:
-        return (f"Nichts zu {begriff!r} gefunden (Tagebuch, Dossiers, "
-            f"Kataloge und Quellen durchsucht).")
+        return (f"Nichts zu {begriff!r} gefunden (Hausregeln, Steckbrief, "
+            f"Ziele, Tagebuch, Notizen, Dossiers, Kataloge, Quellen und "
+            f"Vorlagen durchsucht).")
     return f"{len(treffer)} Treffer zu {begriff!r}:\n" + "\n".join(treffer)
 
 

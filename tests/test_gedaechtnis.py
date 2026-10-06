@@ -662,3 +662,19 @@ def test_hausregel_landet_nur_nach_ja(monkeypatch, antwort, steht_drin):
     assert ("Keine Emojis." in gedaechtnis.hausregeln()) is steht_drin
     if not steht_drin:
         assert "abgelehnt" in ausgang[1]
+
+
+def test_suche_findet_auch_steckbrief_ziele_und_hausregeln():
+    """Bis 2026-10-06 lief die Suche nur über die Unterordner — was im
+    Steckbrief stand, war per search_memory unauffindbar."""
+    import os
+    os.makedirs(gedaechtnis._wurzel(), exist_ok=True)
+    with open(gedaechtnis._pfad("", gedaechtnis.STECKBRIEF), "w", encoding="utf-8") as f:
+        f.write("# Sasha\n\nSpielt Geige seit Juni.\n")
+    with open(gedaechtnis._pfad("", gedaechtnis.ZIELE), "w", encoding="utf-8") as f:
+        f.write("# Ziele\n\nGeige jeden Tag eine halbe Stunde.\n")
+    gedaechtnis.regel_notieren("Bei Geige nicht korrigieren, nur zuhören.")
+    ergebnis = gedaechtnis.suchen("geige")
+    assert "[Steckbrief] Spielt Geige seit Juni." in ergebnis
+    assert "[Ziele]" in ergebnis and "[Hausregeln]" in ergebnis
+

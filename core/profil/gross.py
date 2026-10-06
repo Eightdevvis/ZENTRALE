@@ -360,7 +360,7 @@ _GEDAECHTNIS = [
         "function": {
             "name": "search_memory",
             "description": (
-                "Volltextsuche ueber Tagebuch und Dossiers. Fuer alles, was "
+                "Volltextsuche ueber das ganze Gedaechtnis. Fuer alles, was "
                 "laenger her ist als das Gespraech: 'wie war Spanien', 'was "
                 "hatte ich zum Umzug gesagt'. Stumpfe Wortsuche — nimm den "
                 "Begriff, den SASHA benutzt haette, nicht eine Umschreibung."
