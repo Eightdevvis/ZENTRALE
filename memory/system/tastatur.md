@@ -1,7 +1,7 @@
 # Tastatur-Belegung
 
-**Stand 2026-09-18:** Für die **TUI** steht die Belegung nur im Code
-(`TUI_KEYS`/`CTX_KEYS` in `tui/zentrale_tui.py`, `/help` bzw. `/`), hier
+**Stand 2026-10-06:** Für die **TUI** steht die Belegung nur im Code
+(`TUI_KEYS`/`CTX_KEYS` in `tui/ansichten/befehle.py`, `/help` bzw. `/`), hier
 nur die Tasten, die nichts öffnen. Für das **Zimmer** (`tutor/room.py`:
 Esc-Menü, Alt+Z zur TUI, Alt+P Ruhe, Drill-Pfeiltasten) gilt dasselbe —
 siehe `../tutor/tutor_system.md`; Alt+L (Sprachwechsel im Zimmer) gibt es
@@ -101,7 +101,8 @@ Drei Unterschiede, die aus dem Terminal kommen:
 
 Die Belegung steht **nicht hier**, sondern als einzige Wahrheit im Code:
 `TUI_KEYS` (volle Hilfe, `/help`) und `CTX_KEYS` (die Tasten des gerade
-fokussierten Fensters, nacktes `/`) in `tui/zentrale_tui.py`. Eine zweite
+fokussierten Fensters, nacktes `/`) in `tui/ansichten/befehle.py` (bis
+06.10.2026 in `tui/zentrale_tui.py`). Eine zweite
 Liste in der Doku wäre nach dem ersten neuen Werkzeug falsch.
 
 Eine Taste, die man sonst nirgends sieht, weil sie nichts öffnet:

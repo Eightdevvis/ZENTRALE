@@ -12,7 +12,8 @@ import random
 
 import pytest
 
-from tui.zentrale_tui import parse_command, overlay_rows, terminal_too_small
+from tui.zentrale_tui import terminal_too_small
+from tui.ansichten.befehle import parse_command, overlay_rows
 # Seit 06.10.2026 wohnen die Helfer bei ihren Ansichten (tui/ansichten/,
 # memory/system/tui_bauplan.md) — getestet wird jeweils dort, wo sie leben.
 from tui.ansichten.basis import _num, fmt_clock, parse_clock

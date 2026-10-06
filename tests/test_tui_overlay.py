@@ -9,7 +9,7 @@ putzt jetzt jede Zeile zuerst über die volle Innenbreite.
 Getestet wird die ECHTE Render-Funktion gegen einen Fake-Screen, der jede Zelle
 mitschreibt — so ist das ein Bild-Test, kein Logik-Abklatsch.
 """
-from tui.zentrale_tui import overlay_rows, render_overlay_body
+from tui.ansichten.befehle import overlay_rows, render_overlay_body
 
 # Simuliert bereits gezeichneten stdout-Text unter dem Overlay. Bewusst ein
 # Zeichen, das in KEINEM Hilfetext vorkommen kann: mit 'X' schlug der Test
