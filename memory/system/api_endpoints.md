@@ -1,6 +1,8 @@
 # REST API Endpoints
 
-**Stand 2026-09-18:** Alle Endpoints bedient `ui/app.py` (reiner Adapter auf
+**Stand 2026-10-06:** Alle Endpoints bedient die Routen-Schicht — `ui/app.py`
+hängt die Bereiche aus `ui/routen/` ein, je ein Modul pro Bereich (siehe
+`memory/system/bauplan_kern.md`, Abschnitt *Routen*) — reiner Adapter auf
 `core/`), Streaming per SSE. Die Fronten (TUI, Zimmer, Browser) sind reine
 HTTP-Clients. Direkte Nutzeraktionen (Kalender schreiben, Listen, Graphen,
 Melodien, Karte, Notizen, Aussenposten-Paket) sind **nicht** KI-gegatet;
@@ -8,7 +10,7 @@ Chat und Tutor hängen an Kill-Switches (`/api/ai/backends`). Die
 `/api/tutor/*`-Routen stehen mit Drift-Test in `memory/tutor/bauplan.md`
 (hier nur die Status-Felder). Mail-Endpoints: Details in
 `memory/werkzeuge/mail_system.md`, Notizen in `memory/werkzeuge/notizen_system.md`.
-Diese Liste hat **keinen** Drift-Test; zuletzt gegen `ui/app.py`
+Diese Liste hat **keinen** Drift-Test; zuletzt gegen `ui/routen/`
 abgeglichen 2026-09-18.
 
 ## Dashboard / State
@@ -308,14 +310,14 @@ Details: `memory/werkzeuge/mail_system.md` (Panel/Drill-down/Hybrid, Passphrase-
 
 ## Tutor (Addon, optional)
 
-Der Tutor ist ein **Addon**: `ui/app.py` fasst ihn nur über `core/tutor_port.py`
+Der Tutor ist ein **Addon**: die Routen (`ui/routen/tutor.py`) fassen ihn nur über `core/tutor_port.py`
 an. Fehlt `tutor/` ganz, läuft ZENTRALE normal weiter und die Routen antworten
 `503 {error:"backend not here", detail:"<Grund>"}`. Voice läuft NICHT hier,
 sondern über die sprachneutralen Core-Endpoints `/api/speak` + `/api/transcribe`
 mit `lang`-Parameter.
 
 **Die Routen-Tabelle steht in `memory/tutor/bauplan.md` (Abschnitt 3)** und
-wird dort von `tests/test_tutor_bauplan.py` gegen `ui/app.py` geprüft — hier
+wird dort von `tests/test_tutor_bauplan.py` gegen `ui/routen/` geprüft — hier
 bewusst keine Kopie. Was hier bleibt, ist die Bedeutung der Status-Felder:
 
 **`/api/tutor/status` — die Felder, auf die die Fronten bauen:**

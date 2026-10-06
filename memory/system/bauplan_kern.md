@@ -24,7 +24,7 @@ der Tutor hat seinen eigenen Bauplan in
    tui/zentrale_tui.py · tutor/room.py
                      │ HTTP
  ┌───────────────────▼──────────────────────────────────────────────┐
- │ 5  Routen         ui/app.py — darf alles darunter                │
+ │ 5  Routen         ui/app.py + ui/routen/ — darf alles darunter   │
  ├──────────────────────────────────────────────────────────────────┤
  │ 4  Ablauf         Event-Loop, Hot Reload, die Tür zum Tutor      │
  ├──────────────────────────────────────────────────────────────────┤
@@ -107,8 +107,38 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `hot_reload` | 4 | Hot Reload fürs Backend |
 | `tutor_port` | 4 | Die einzige Tür vom Kern zum Tutor |
 
-`ui/app.py` ist Schicht 5 und darf alles darunter. Es steht nicht in der
-Tabelle, weil es nicht in `core/` liegt.
+Schicht 5 liegt außerhalb von `core/` und steht deshalb nicht in der
+Tabelle, sondern im nächsten Abschnitt.
+
+## Routen (Schicht 5)
+
+Seit 2026-10-06 hat jede Gruppe von HTTP-Routen ein eigenes Modul. Vorher
+standen alle 89 Routen in `ui/app.py` (2.400 Zeilen), und jede Änderung,
+egal woran, ging durch dieselbe Datei.
+
+- `ui/app.py` legt nur die App an, hängt die Bereiche ein (`routen.einhaengen`)
+  und startet. **Hier steht keine Route** — der Test prüft das.
+- `ui/routen/<bereich>.py` hält die Routen eines Bereichs als Flask-Blueprint
+  `bp`. Jedes Modul steht in `ui/routen/__init__.py` unter `BEREICHE` — der
+  Test prüft auch das, sonst gäbe es Routen, die nie eingehängt werden.
+- `ui/routen/gemeinsam.py` hält, was mehrere Bereiche brauchen (Pfad zu
+  `data/`, die 503-Antworten für „keine KI" und „kein Tutor-Backend").
+- Routen sind **dünne Adapter**: Anfrage lesen, Kern fragen, Antwort formen.
+  Zustand, Caches und Hintergrund-Threads gehören in den Kern.
+
+| Bereich | Was |
+|---|---|
+| `zustand` | State-Polling, Sensor-Webhook, Telemetrie, Aussenposten-Pakete |
+| `erfassung` | Data-Collection, `/api/log`, Lifestyle-Graphen, Zyklus |
+| `klavier` | Melodien |
+| `listen` | Listen, Einträge, Projekte |
+| `notizen` | Block-Notizen |
+| `karte` | Weltkarte |
+| `kalender` | Kalender |
+| `ki` | Chat-Stream, Verlauf, Erlaubnis, Status, Backend-Wahl, Devtools |
+| `stimme` | Sprechen und Zuhören |
+| `tutor` | alles unter `/api/tutor/` |
+| `mail` | Mail-Triage |
 
 ## Türen
 
@@ -117,7 +147,7 @@ Kern. Was sie aus dem Kern importieren dürfen, steht hier und **nur** hier:
 
 | Bereich | Darf aus dem Kern | Warum |
 |---|---|---|
-| `tui/` | `theme`, `tone`, `pc_status` | Reine Helfer ohne Kern-Abhängigkeit. Alles andere holt die TUI per HTTP von `ui/app.py`. |
+| `tui/` | `theme`, `tone`, `pc_status` | Reine Helfer ohne Kern-Abhängigkeit. Alles andere holt die TUI per HTTP von den Routen (`ui/routen/`). |
 | `tutor/` | `ai`, `ai_backends`, `state` | Der Tutor ist ein eigenes Programm, nutzt aber die Modell-Anbindung und das Log des Kerns. Wird mit der „Straße“ zu einem einzigen Einstieg. |
 
 Umgekehrt erreichen Kern und Routen den Tutor **nur** über
@@ -158,9 +188,11 @@ das in Punkt 2 (KI-Kern entflechten).
 
 ### Altlast: Türen
 
+Keine mehr — die letzte (`ui/app.py → tutor.debug`) ist am 2026-10-06 über
+`tutor_port.debug_bus()` gelöst. Die Tabelle bleibt für den Test stehen.
+
 | Weg | Wofür |
 |---|---|
-| `ui/app.py → tutor` | die Devtools-Route holt sich `tutor.debug` direkt statt über `tutor_port` |
 
 ### Altlast: Riesen
 
@@ -178,7 +210,6 @@ Sasha, 05.10.2026: einfrieren, dann zerlegen (Punkt 3).
 | `tui/zentrale_tui.py::run_ui.draw_list_tool` | 259 |
 | `tutor/room.py` | 4034 |
 | `tutor/room.py::main` | 1829 |
-| `ui/app.py` | 2374 |
 | `core/mail.py` | 1924 |
 | `core/kalender.py` | 1560 |
 
@@ -190,7 +221,7 @@ Sasha, 05.10.2026: einfrieren, dann zerlegen (Punkt 3).
   oder es als Argument hereingeben.
 - **„Neuer Import-Kreis"** — was beide brauchen, in ein eigenes, tieferes
   Modul ziehen. Nicht als Altlast eintragen.
-- **„Tür umgangen"** — TUI: über eine Route in `ui/app.py` gehen. Kern zum
+- **„Tür umgangen"** — TUI: über eine Route in `ui/routen/` gehen. Kern zum
   Tutor: über `tutor_port`.
 - **„Riese gewachsen"** — das Neue in eine eigene Funktion oder Datei legen.
   In der TUI heißt das: ein eigenes Modul neben `zentrale_tui.py`.

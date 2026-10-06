@@ -133,11 +133,12 @@ ZENTRALE/
 │       ├── render.py        # ASCII/Braille-Rasterung
 │       └── layers/          # Overlay-Registry: trade.py, portwatch.py, density.py
 ├── ui/
-│   └── app.py               # Flask Backend + REST API (reiner Adapter auf core/)
+│   ├── app.py               # Flask-App anlegen, Bereiche einhängen, Takt, Start
+│   └── routen/              # REST-Routen, ein Modul pro Bereich (reiner Adapter auf core/)
 ├── tutor/                   # ★ EIGENES PROJEKT, wohnt hier mit. Rausziehbar am Stück.
 │                            # Baum, Artefakte, Routen, Sprachpakete: memory/tutor/bauplan.md
 │                            # (mit Drift-Test tests/test_tutor_bauplan.py) — hier bewusst nicht kopiert.
-├── tui/                     # Die TUI (curses), einzige Front, redet NUR via HTTP mit ui/app.py
+├── tui/                     # Die TUI (curses), einzige Front, redet NUR via HTTP mit den Routen
 │   ├── zentrale_tui.py      # Die TUI (Sensoren, Karte, Kalender, Listen, Graphen, Mail)
 │   └── boot_loader.py       # Blumenwind-Loader beim Start (Boot-Sync dahinter)
 ├── services/
@@ -190,8 +191,10 @@ an – es gibt (bewusst) keine zentrale Plugin-Registry:
 1. **KI-Tool:** Tool-Definition in `ai.py` → `TOOLS` eintragen **und** den
    Aufruf in `_dispatch_tool()` ergänzen (Schreib-Tools zusätzlich in
    `PERMISSION_REQUIRED_TOOLS`). Damit kann die KI den Baustein nutzen.
-2. **Front:** eine REST-Route in `ui/app.py`, die 1:1 an die Baustein-Funktion
-   delegiert. `ui/app.py` ist reiner Adapter (keine Business-Logik), die TUI
+2. **Front:** eine REST-Route im passenden Bereich unter `ui/routen/` (oder
+   einem neuen Bereich, eingetragen in `ui/routen/__init__.py`), die 1:1 an die
+   Baustein-Funktion delegiert. Routen sind reine Adapter (keine Business-Logik,
+   kein Zustand); bis 2026-10-06 standen alle in `ui/app.py`. Die TUI
    spricht nur über HTTP, die frühere Browser-Front (archiviert) nutzte dieselbe API.
 
 Optionaler Bootstrap (Hintergrund-Fetcher wie `news`/`mail`) wird in `main.py`

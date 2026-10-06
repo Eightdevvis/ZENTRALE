@@ -463,7 +463,7 @@ Neben dem KI-Tool `read_calendar` ist der Kalender jetzt **sichtbar** in der
 Mitte jeder Front — blätterbar und zwischen **Woche** und **Monat**
 umschaltbar. Geteilte, front-agnostische Quelle (wie die Maps):
 
-- **Endpoint** `GET /api/calendar?view=week|month&ref=YYYY-MM-DD` (in `ui/app.py`).
+- **Endpoint** `GET /api/calendar?view=week|month&ref=YYYY-MM-DD` (in `ui/routen/kalender.py`).
   **Nicht** KI-gegatet — reine Anzeige, kein KI-Pfad, läuft auch ohne lokale
   KI. Liefert `{view, ref, today, label, start, end, days, alarms, cycle}`
   (+ `month/first/last` bei Monat). Details: `memory/system/api_endpoints.md`.
@@ -601,7 +601,7 @@ wandern NICHT roh in die Kopien.
 
 Die Anzeige ist nicht read-only — aus der Mitte lassen sich Einmal-Termine
 **anlegen, ändern, löschen** und **einzelne Routine-Vorkommen ab-/anschalten**,
-in allen drei Fronten. Schreib-Endpoints (`ui/app.py`, alle direkt auf
+in allen drei Fronten. Schreib-Endpoints (`ui/routen/kalender.py`, alle direkt auf
 `core/kalender.py`): `POST /api/calendar/entry` (anlegen → `add_entry`),
 `PUT …/entry` (ändern = delete+add), `DELETE …/entry` (löschen → `delete_entry`),
 `POST /api/calendar/routine/skip` (Vorkommen de-/aktivieren → `set_routine_skip`),

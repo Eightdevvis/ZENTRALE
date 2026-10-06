@@ -132,9 +132,35 @@ def test_ein_krachendes_werkzeug_meldet_den_fehler():
     assert fehler and "Platte voll" in fehler[0]["text"]
 
 
-def test_das_backend_reicht_das_ereignis_durch():
+def test_das_backend_reicht_das_ereignis_durch(monkeypatch):
     """Der Stream-Endpunkt muss das Ereignis kennen — sonst faellt es
-    zwischen Modell und Anzeige lautlos auf den Boden."""
-    quelle = open(os.path.join(os.path.dirname(__file__), "..", "ui", "app.py"),
-                  encoding="utf-8").read()
-    assert "'werkzeug' in token" in quelle
+    zwischen Modell und Anzeige lautlos auf den Boden.
+
+    Bis 2026-10-06 suchte dieser Test nur den Text "'werkzeug' in token" in
+    ui/app.py. Seit die Routen nach Bereich liegen, prueft er das Verhalten:
+    ein Werkzeug-Ereignis geht als eigenes SSE-Event raus und NICHT in den
+    gespeicherten Antworttext."""
+    import ai_backends
+    import state
+    from ui.app import app
+
+    class Modul:
+        @staticmethod
+        def chat_stream(history, **k):
+            yield {"werkzeug": {"phase": "start", "name": "read_note",
+                                "args": {"name": "ideen"}}}
+            yield "Steht drin."
+
+    monkeypatch.setattr(ai_backends, "chat_available", lambda: ai_backends.CLOUD)
+    monkeypatch.setattr(ai_backends, "chat_cloud_module", lambda: Modul)
+    monkeypatch.setattr(ai_backends, "cloud_provider", lambda: "test")
+    state.clear_chat_history()
+    try:
+        app.config.update(TESTING=True)
+        body = app.test_client().post("/api/chat", json={"message": "x"}) \
+                                .get_data(as_text=True)
+        assert '"werkzeug": {"phase": "start", "name": "read_note"' in body
+        assert state.get_chat_history()[-1] == {"role": "assistant",
+                                                "content": "Steht drin."}
+    finally:
+        state.clear_chat_history()

@@ -296,7 +296,7 @@ Sasha begleitet jeden Schritt und gibt die Details vor.
   Offline-Referenz, kein generierter Inhalt). `ne_110m_admin_0_countries.geojson`
   liegt schon bereit als Grenzen-Quelle für den **politischen** Layer (Schritt 2).
 
-**API (`ui/app.py`):** `GET /api/map/base?cx&cy&zoom&cols&rows&aspect` →
+**API (`ui/routen/karte.py`):** `GET /api/map/base?cx&cy&zoom&cols&rows&aspect` →
 `map_base_features(...)`. **Nicht** KI-gegatet (Karte gibt es auch ohne
 lokale KI). `aspect` = Zellbreite/Höhe: TUI schickt `0.5` (Zeichen ~doppelt so
 hoch wie breit), ein Browser-Front später `1.0`.

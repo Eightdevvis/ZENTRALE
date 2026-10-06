@@ -66,9 +66,16 @@ def test_jedes_tutor_modul_steht_im_bauplan():
 # ── 3. Routen ────────────────────────────────────────────────────────────
 
 def _routen_im_code():
-    with open(os.path.join(ROOT, "ui", "app.py"), encoding="utf-8") as f:
-        src = f.read()
-    return set(re.findall(r"@app\.route\('(/api/(?:tutor[^']*|speak|transcribe))'", src))
+    """Seit 2026-10-06 liegen die Routen nach Bereich in ui/routen/ (app.py
+    hängt sie nur ein) — gesucht wird deshalb im ganzen Paket."""
+    dateien = [os.path.join(ROOT, "ui", "app.py")] + sorted(
+        os.path.join(ROOT, "ui", "routen", f)
+        for f in os.listdir(os.path.join(ROOT, "ui", "routen")) if f.endswith(".py"))
+    src = ""
+    for pfad in dateien:
+        with open(pfad, encoding="utf-8") as f:
+            src += f.read()
+    return set(re.findall(r"@(?:app|bp)\.route\('(/api/(?:tutor[^']*|speak|transcribe))'", src))
 
 
 def test_routen_stimmen_in_beide_richtungen():

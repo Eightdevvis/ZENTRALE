@@ -27,6 +27,7 @@
 #                   _resolve
 #   tutor.config  : setting, set_override
 #   tutor.providers / tutor.langs : die Registries (nur fürs UI-Listing)
+#   tutor.debug   : der Ereignisbus fürs Devtools-Terminal (debug_bus())
 # Das ist die GANZE Schnittstelle zwischen ZENTRALE und tutor/. Wächst sie,
 # wächst die Kopplung — also nicht wachsen lassen. Umgekehrt braucht tutor/ vom
 # Kern nur ai.chat_stream/is_available (+ optional ai_backends, state.push_log);
@@ -213,7 +214,7 @@ def assessment_answer(word: str, result: str) -> dict:
 def debug_snapshot() -> dict:
     """Momentaufnahme fürs Devtools-Terminal: komplette User-Vokabel + Assessment-
     Routing (braucht der User noch das Drill?). Live-Events kommen über den
-    Ereignisbus tutor/debug.py (SSE-Endpunkt in ui/app.py)."""
+    Ereignisbus tutor/debug.py (SSE-Endpunkt in ui/routen/tutor.py, über debug_bus())."""
     ts = _ts()
     if ts is None:
         return {"present": False}
@@ -223,6 +224,21 @@ def debug_snapshot() -> dict:
         return tools.debug_snapshot(lang)
     except Exception as e:
         return {"error": str(e)}
+
+
+def debug_bus():
+    """Der Ereignisbus des Tutors (tutor/debug.py: history, subscribe,
+    unsubscribe, _ts) — oder None, wenn der Tutor fehlt.
+
+    Bis 2026-10-06 holte sich die SSE-Route ihn per `from tutor import debug`
+    selbst, als einzige Stelle am Port vorbei (Altlast im Kern-Bauplan)."""
+    if _ts() is None:
+        return None
+    try:
+        from tutor import debug
+        return debug
+    except Exception:
+        return None
 
 
 # ── Status + Config (fertig geformt fürs UI) ────────────────────────────

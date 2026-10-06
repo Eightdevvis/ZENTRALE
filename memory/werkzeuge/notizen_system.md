@@ -47,7 +47,7 @@ Breite** zeilenweise gepackt → wächst nach unten, nie Überlappung; determini
 `l_done ↔ core.lists.is_done`), weil die TUI ein reiner HTTP-Client ist und auf
 dem Laptop gegen das PC-Backend laufen kann — sie importiert `core` nicht.
 
-## REST — `ui/app.py` (dünner Adapter über `core/notes`)
+## REST — `ui/routen/notizen.py` (dünner Adapter über `core/notes`)
 
 `GET /api/notes` · `POST /api/notes` · `GET /api/notes/<id>` ·
 `PUT /api/notes/<id>` (title+blocks) · `DELETE /api/notes/<id>`.

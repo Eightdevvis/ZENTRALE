@@ -313,7 +313,7 @@ def test_niemand_geht_an_den_tueren_vorbei():
         "Tür umgangen:\n  " + "\n  ".join(f"{a} → {b}" for a, b in neu) +
         "\nDer Kern erreicht den Tutor nur über core/tutor_port.py; TUI und "
         "Tutor dürfen aus dem Kern nur, was im Bauplan unter 'Türen' steht. "
-        "Die TUI redet sonst per HTTP mit ui/app.py.")
+        "Die TUI redet sonst per HTTP mit den Routen in ui/routen/.")
 
 
 def test_erledigte_tuer_altlasten_sind_ausgetragen():
@@ -358,3 +358,32 @@ def test_geschrumpfte_riesen_senken_ihre_grenze():
         "Riesen-Grenze):\n  " +
         "\n  ".join(f"{k}: {'streichen' if ist is None else f'auf {ist}'} "
                     f"(steht {g})" for k, (ist, g) in sorted(kleiner.items())))
+
+
+# ── 6. Routen-Schicht ──────────────────────────────────────────────────
+
+def test_app_py_haelt_keine_routen():
+    """Bis 2026-10-06 standen alle 89 Routen in ui/app.py. Damit das nicht
+    zurückwächst: app.py legt die App an und hängt die Bereiche ein, mehr
+    nicht."""
+    with open(os.path.join(ROOT, "ui", "app.py"), encoding="utf-8") as f:
+        quelle = f.read()
+    assert "@app.route(" not in quelle, (
+        "In ui/app.py steht wieder eine Route. Sie gehört in ihren Bereich "
+        "unter ui/routen/ (oder einen neuen Bereich, eingetragen in "
+        "ui/routen/__init__.py).")
+
+
+def test_jeder_routen_bereich_ist_eingehaengt():
+    ordner = os.path.join(ROOT, "ui", "routen")
+    module = {f[:-3] for f in os.listdir(ordner)
+              if f.endswith(".py") and f not in ("__init__.py", "gemeinsam.py")}
+    with open(os.path.join(ordner, "__init__.py"), encoding="utf-8") as f:
+        init = f.read()
+    m = re.search(r"BEREICHE = \(([^)]*)\)", init)
+    assert m, "ui/routen/__init__.py hat kein BEREICHE-Tupel"
+    eingehaengt = {n.strip() for n in m.group(1).split(",") if n.strip()}
+    fehlt = sorted(module - eingehaengt)
+    assert not fehlt, (
+        f"Diese Routen-Module werden nie eingehängt: {fehlt}. Trag sie in "
+        f"ui/routen/__init__.py unter BEREICHE (und im Import) ein.")

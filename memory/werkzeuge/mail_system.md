@@ -563,7 +563,7 @@ im News-System).
     (LIVE STATUS je move-Ordner), `folder_mails(cat)` (LIVE Header eines
     Ordners; trash→`in_category()`-Schnappschuss).
 
-### Dashboard-Routen (`ui/app.py`)
+### Dashboard-Routen (`ui/routen/mail.py`)
 - `GET /api/mail` → `{categories, recent, live_counts, counts_age_s,
   counts_refreshing, can_poll, polling}` — read-only, key-frei. `categories` =
   lokale Schnappschuss-Zähler, `live_counts` = echte Ordnergröße aus dem Cache.

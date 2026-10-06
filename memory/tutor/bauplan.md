@@ -9,7 +9,7 @@ Historie) und `naturalisierung.md` (Ausbau).
 **Es driftet nicht, weil ein Test es erzwingt:** `tests/test_tutor_bauplan.py`
 liest die Artefakt-Tabellen dieser Datei und prüft, dass jeder Pfad existiert,
 jedes aktive Sprachpaket vollständig ist und jede Route hier auch in
-`ui/app.py` steht (und umgekehrt). **Pflegeregel:** Struktur ändern → Bauplan im
+`ui/routen/` steht (und umgekehrt). **Pflegeregel:** Struktur ändern → Bauplan im
 selben Commit ändern, sonst wird der Test rot.
 
 ## 1. Die Struktur darüber
@@ -28,7 +28,7 @@ selben Commit ändern, sonst wird der Test rot.
  │  providers/cloud/openai_compat (Modell-Anbindung)  debug (Devtool-Bus)  │
  └───────────────┬──────────────────────────────────────────┬─────────────┘
                  │ einzige Naht                              │ HTTP (/api/tutor/*, /api/speak, /api/transcribe)
-        core/tutor_port.py ──► ui/app.py                     │
+        core/tutor_port.py ──► ui/routen/tutor.py            │
         (Kern: Kill-Switch, Keys,                    ┌───────▼────────────────────────┐
          cloud/local-Wahl)                           │  FRONT — tutor/room.py (Zimmer) │
                                                      │  hört, spricht, zeigt; rechnet  │
@@ -63,7 +63,7 @@ Diese Tabelle liest der Drift-Test: jeder Pfad muss existieren.
 | `tutor/providers.py` | Provider-Registry (qwen, …), trains_on_data, Jurisdiktion |
 | `tutor/cloud.py` | Anthropic-Pfad (Tool-Loop, Streaming) |
 | `tutor/openai_compat.py` | OpenAI-kompatible Cloud (DashScope/qwen u.a.) |
-| `tutor/debug.py` | Devtool-Ereignisbus (`emit`, SSE über `ui/app.py`) |
+| `tutor/debug.py` | Devtool-Ereignisbus (`emit`, SSE über `ui/routen/tutor.py`, geholt per `tutor_port.debug_bus()`) |
 | `tutor/room.py` | Das Zimmer: pygame-Fenster, Mikro-Schleife (VAD → Whisper), Stimme, Persona-Figur, Esc-Menü, Hauptmenü (Stände), Drill als Spiel |
 | `tutor/sprites.py` | Lädt die Figur (Rig + gemalte Teile) |
 | `tutor/gelenke.py` | Drehpunkte/Posen der Figur |
@@ -77,7 +77,8 @@ Diese Tabelle liest der Drift-Test: jeder Pfad muss existieren.
 | `tutor/assets/PermanentMarker-Regular.ttf` | Handschrift für die Karteikarte |
 | `tutor/data/tutor_config.json.example` | Vorlage der Einstellungen (echte Datei gitignored) |
 | `core/tutor_port.py` | Die einzige Naht zum Kern: Verfügbarkeit, Kill-Switch, Stände, Config, Devtool-Snapshot |
-| `ui/app.py` | Flask-Routen `/api/tutor/*`, `/api/speak`, `/api/transcribe` |
+| `ui/routen/tutor.py` | Flask-Routen `/api/tutor/*` |
+| `ui/routen/stimme.py` | Flask-Routen `/api/speak`, `/api/transcribe` |
 | `services/whisper_service.py` | STT (faster-whisper, Sprache per Aufruf) |
 | `services/tts_service.py` | Stimme: eine Engine je Sprache (`zh` sherpa, `es` Piper, `de` Piper) |
 | `services/download_tts_model.py` | Modelle je Sprache holen |
@@ -100,7 +101,7 @@ Laufzeit-Daten (gitignored, nicht im Test): `tutor/data/aktiver_stand`,
 game, progress, structures, fsrs, persona_mem, persona_hist, news, tv}.json`,
 `tutor/data/tutor_config.json`, `tutor/data/vocab_images/`, `tutor/data/persona_music/`.
 
-## 3. Routen (`ui/app.py`)
+## 3. Routen (`ui/routen/tutor.py`, `ui/routen/stimme.py`)
 
 Der Drift-Test vergleicht diese Liste mit den `@app.route('/api/tutor…')` im
 Code — in beide Richtungen.

@@ -29,7 +29,7 @@ Simulation gegen echten GPIO-Trigger tauschen ohne `brain.py` anzufassen).
 ### Externer Sensor-Webhook
 - Zweite Quelle für Sensor-Events neben `sensors.py`: HTTP-POST an
   `/api/sensor/<name>` (siehe `memory/system/api_endpoints.md` und `memory/system/topologie.md`).
-- `ui/app.py` legt den Trigger in `state.queue_sensor()`.
+- Die Route (`ui/routen/zustand.py`) legt den Trigger in `state.queue_sensor()`.
 - `main.py` drainet die Queue pro Tick und mappt sie auf den
   jeweiligen internen Event (`_SENSOR_TO_EVENT`).
 - Verwendet von `scripts/pi_sensor_bridge.py` (Pi → PC): PIR per gpiozero

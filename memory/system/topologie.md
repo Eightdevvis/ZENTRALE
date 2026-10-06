@@ -75,7 +75,7 @@ genutzt (AI-Antworten), das ist immer noch Pull (Browser hält den
 Stream offen).
 
 **Pi → PC** läuft ausschließlich über den Sensor-Webhook
-`POST /api/sensor/<name>`. Erlaubte Namen: siehe `ui/app.py`
+`POST /api/sensor/<name>`. Erlaubte Namen: siehe `ui/routen/zustand.py`
 (`_ALLOWED_SENSORS`). Der Endpoint legt den Trigger in
 `state.queue_sensor()`; `core/main.py` drainet die Queue pro Tick und
 mapped sie auf die internen Events (`_SENSOR_TO_EVENT` in `main.py`).

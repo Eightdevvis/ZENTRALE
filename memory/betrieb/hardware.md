@@ -46,7 +46,7 @@ angeschlossen ist, ist aus Code/Commits nicht erkennbar.
   **GPIO4**. gpiozero zählt BCM. Modus und Nummer müssen zusammenpassen,
   sonst liest man den falschen Pin.
 - Anbindung eines weiteren Sensors = drei Stellen (siehe
-  `memory/system/topologie.md`): `_ALLOWED_SENSORS` (`ui/app.py`) +
+  `memory/system/topologie.md`): `_ALLOWED_SENSORS` (`ui/routen/zustand.py`) +
   `_SENSOR_TO_EVENT` (`core/main.py`) und die Lese-Logik in
   `pi_sensor_bridge.py`. Ein `_poll_gpio()`-Skelett für weitere
   Sensoren (Reed-Kontakt an der Tür, Buttons) liegt dort, ist aber nicht
