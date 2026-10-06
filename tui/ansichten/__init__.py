@@ -11,4 +11,4 @@
 # (tui.ansichten, in den Tests) gleich.
 
 from . import basis, farben, kontext, text  # noqa: F401
-from . import chat, sprachtutor, post  # noqa: F401
+from . import chat, sprachtutor, post, kalender  # noqa: F401
