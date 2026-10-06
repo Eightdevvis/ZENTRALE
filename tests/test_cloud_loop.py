@@ -12,7 +12,9 @@ es scripts/cloud_smoke.py.
 import pytest
 
 import ai
+import consolidation
 import ai_backends
+import ascii_lib
 import cloud
 
 
@@ -121,7 +123,7 @@ def kein_echter_graph(monkeypatch):
     monkeypatch.setattr(cloud.graph, "context_for_query",
                         lambda *a, **k: "## Erinnerung\n(test)")
     monkeypatch.setattr(ai, "_ensure_seed_once", lambda *a, **k: None)
-    monkeypatch.setattr(ai, "_async_save_turn",
+    monkeypatch.setattr(consolidation, "zug_vormerken",
                         lambda u, a, store=None: gespeichert.append((u, a, store)))
     monkeypatch.setattr(cloud.ai, "_ensure_seed_once", lambda *a, **k: None)
     return gespeichert
@@ -463,7 +465,7 @@ def test_lies_news_feuert_cinema_und_ist_terminal(fake):
 # ── Bild-Marker ────────────────────────────────────────────────────────
 
 def test_bild_marker_wird_eigenes_event(fake, monkeypatch):
-    monkeypatch.setattr(ai.ascii_lib, "pick", lambda n: ("winken", "o/"))
+    monkeypatch.setattr(ascii_lib, "pick", lambda n: ("winken", "o/"))
     fake([{"text": ["Hi [[bild: winken]] du."], "stop_reason": "end_turn"}])
     events = _lauf(cloud.chat_stream(_msgs()))
     assert {"ascii": "o/", "name": "winken"} in events

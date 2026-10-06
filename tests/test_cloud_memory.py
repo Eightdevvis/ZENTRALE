@@ -360,26 +360,13 @@ def test_worker_buendelt_getrennt_nach_graph(monkeypatch):
     """Die Isolations-Invariante darf das Buendeln nicht verwaessern: Turns
     aus dem lokalen und dem Cloud-Graphen duerfen NIE in einem Call landen —
     das waere genau der Abfluss, den der getrennte Store verhindert."""
-    import ai
     import consolidation
-    calls = []
-    monkeypatch.setattr(consolidation, "extract_turn_into_graph",
-                        lambda turns, _a, store=None: calls.append((store, turns)))
-    monkeypatch.setattr(ai, "_consol_pending",
-                        [("a", "1", None), ("b", "2", "/tmp/wolke.json"),
-                         ("c", "3", None)])
-    monkeypatch.setattr(ai, "CONSOLIDATION_IDLE_S", 0)
-
-    # Den Rumpf des Workers einmal von Hand fahren (er laeuft sonst ewig).
-    buendel = {}
-    for u, a, s in ai._consol_pending:
-        buendel.setdefault(s, []).append((u, a))
-    for store, turns in buendel.items():
-        consolidation.extract_turn_into_graph(turns, None, store=store)
-
-    ziele = dict(calls)
-    assert ziele[None] == [("a", "1"), ("c", "3")]
-    assert ziele["/tmp/wolke.json"] == [("b", "2")]
+    # Die ECHTE Gruppierung des Workers (bis 2026-10-06 baute dieser Test den
+    # Rumpf von Hand nach und hätte eine Änderung dort nie bemerkt).
+    buendel = consolidation._buendel_schnueren(
+        [("a", "1", None), ("b", "2", "/tmp/wolke.json"), ("c", "3", None)])
+    assert buendel[None] == [("a", "1"), ("c", "3")]
+    assert buendel["/tmp/wolke.json"] == [("b", "2")]
 
 
 # ── Verdrahtung ────────────────────────────────────────────────────────

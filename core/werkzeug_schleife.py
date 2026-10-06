@@ -34,6 +34,8 @@
 from dataclasses import dataclass, field
 
 import ai_backends
+import erlaubnis
+import ki_antwort
 import kidebug
 
 
@@ -99,13 +101,12 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
 
 def antwort(text: str, *, tutor_mode: bool, user_query, store=None):
     """Die finale Antwort ausgeben. Regulärer Chat: Bild-Marker rausziehen,
-    Bilder feuern, Auto-Save (ai._answer_with_images). Tutor: roh."""
+    Bilder feuern, Auto-Save (ki_antwort.mit_bildern). Tutor: roh."""
     if tutor_mode:
         if text:
             yield text
         return
-    import ai
-    yield from ai._answer_with_images(text, user_query, store=store)
+    yield from ki_antwort.mit_bildern(text, user_query, store=store)
 
 
 # ── Ein Tool-Call ──────────────────────────────────────────────────────
@@ -121,7 +122,6 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
                                  Antwort schon geyieldet)
       ("result", text, is_error) Ergebnis, das als Tool-Ergebnis zurück soll
     """
-    import ai
     import profil
     # Auf das Vokabular des Kerns bringen — welche Schiene ihr Tool wie nennt,
     # ist ihre Sache (siehe core/profil/). Der ausfuehrende Name bleibt der
@@ -143,7 +143,7 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
     # antwort-Tool ist TERMINAL: der Text IST die finale Antwort.
     if not tutor_mode and name == "antwort":
         text = str(args.get("text", "")).strip()
-        yield from ai._answer_with_images(text, user_query, store=store)
+        yield from ki_antwort.mit_bildern(text, user_query, store=store)
         return ("stop",)
 
     # read_news ist TERMINAL: das Briefing ist schon moderiert und wird
@@ -166,7 +166,7 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
 
     # Erlaubnis-Gate: Python-seitig, NICHT modellgetrieben. Fremde Tool-Sets
     # (Tutor) gaten wir nicht.
-    if not tutor_mode and ai.braucht_erlaubnis(name):
+    if not tutor_mode and erlaubnis.braucht_erlaubnis(name):
         erlaubt = yield from _ask_permission(name, args)
         if not erlaubt:
             # Der zweite Satz galt bis 10/2026 nur lokal. Der Fall ist aber
@@ -215,9 +215,8 @@ def _ask_buttons(args: dict):
 def _ask_permission(name: str, args: dict):
     """Erlaubnis-Gate: JA/NEIN-Dialog vor einem schreibenden Tool.
     Generator — mit `yield from` aufrufen. True = ausführen."""
-    import ai
     import state
-    frage = ai._permission_question(name, args)
+    frage = erlaubnis.frage(name, args)
     state.push_log(f"AI →  ERLAUBNIS? {frage[:160]}")
     state.request_permission()
     yield {"permission": {"frage": frage}}

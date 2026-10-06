@@ -41,7 +41,6 @@
 
 import os
 import re
-import time
 import json as _json
 import threading  # Phase D: Auto-Save läuft in Daemon-Threads
 import datetime as _dt
@@ -50,9 +49,7 @@ from datetime import datetime  # für den Jetzt-Block (Fix Zeit-Blindheit)
 import net           # HTTP-Wrapper mit Terminal-Logging
 import context       # Whitelist-basierter Dateizugriff
 import graph         # Phase G: Konzept-Graph Memory (assoziativ, primary)
-import consolidation # Phase G: Graph-Extraktor
 import kalender              # Kalender-Layer (Termine, Routinen, erlebt)
-import ascii_lib             # ASCII-Bibliothek (KI "spricht" visuell, siehe zeige_ascii)
 import web                   # Internet-Pipe: Web-Suche + Webseite holen (gegatet)
 import news                  # Persönliche Tagesschau: News-Briefing (read_news)
 import mail                  # Mail-Triage: Überblick + Review-Stapel (read_mail)
@@ -316,187 +313,15 @@ from profil.klein import (           # noqa: E402  (nach den anderen Imports)
 )
 
 
-# ── ASCII-Bilder als Inline-Marker: das Auslesen ───────────────────────
-# Der PROMPT-Teil (die Anweisung, Marker zu tippen) gehoert zur Schiene und
-# steht in profil/. Das Herausziehen aus dem Antworttext gehoert zum Kern und
-# steht hier — es ist fuer jedes Modell dasselbe.
-
-# Erkennt [[bild: name]] und tolerant auch [[ascii: name]] / [[zeige_ascii:
-# name]] (die Mimikry-Variante). name = alles bis zur schliessenden Klammer,
-# eine Zeile.
-_ASCII_MARKER_RE = re.compile(
-    r"\[\[\s*(?:bild|ascii|zeige_ascii)\s*:\s*([^\]\n]+?)\s*\]\]",
-    re.IGNORECASE,
-)
-
-
-def _extract_ascii_markers(text: str):
-    """
-    Zieht Bild-Marker aus dem Antworttext. Gibt (clean_text, [stichwort, ...])
-    zurueck. Der Marker wird aus dem Text ENTFERNT - er soll nicht angezeigt
-    oder gesprochen werden; das Bild laeuft als eigenes SSE-Event in den Kern.
-    """
-    names = [m.group(1).strip() for m in _ASCII_MARKER_RE.finditer(text)]
-    if not names:
-        return text, []
-    clean = _ASCII_MARKER_RE.sub("", text)
-    clean = re.sub(r"[ \t]{2,}", " ", clean)          # Doppel-Spaces glaetten
-    clean = re.sub(r"\n{3,}", "\n\n", clean).strip()  # Leerzeilen kappen
-    return clean, names
-
-
-def _answer_with_images(answer: str, user_query: str, store: str | None = None):
-    """
-    Verarbeitet eine FINALE Antwort (regulaerer Chat): zieht Bild-Marker raus,
-    feuert pro Treffer ein Inline-Bild-Event ({"ascii","name"}) - app.py macht
-    daraus ein SSE 'ascii'-Event - und yieldet zum Schluss den bereinigten
-    Text. Speichert den bereinigten Text (ohne Marker) in den Graphen.
-    Generator: in chat_stream via `yield from` nutzen. Nur fuer tools is None
-    aufrufen (Tutor kennt keine Marker).
-
-    store: in WELCHEN Graphen der Turn gespeichert wird. None = Core-Graph
-    (data/ai_graph.json, lokales Modell). Der Cloud-Pfad (core/cloud.py) reicht
-    hier seinen eigenen Graphen durch - die Isolations-Invariante lautet
-    "lokal sieht alles von cloud, cloud sieht nichts von lokal", und die
-    steht und faellt damit, dass Cloud-Turns NICHT im Core-Graphen landen.
-    """
-    import state as _state
-    clean, names = _extract_ascii_markers(answer)
-    for nm in names:
-        hit = ascii_lib.pick(nm)
-        if hit:
-            _state.push_log(f"AI →  BILD [[bild: {nm}]] → zeigt '{hit[0]}'")
-            yield {"ascii": hit[1], "name": hit[0]}
-        else:
-            _state.push_log(f"AI →  BILD [[bild: {nm}]] → kein Treffer")
-    if clean:
-        yield clean
-    _async_save_turn(user_query, clean, store=store)
-
-
-# ── Bestätigungspflichtige Tools (Erlaubnis-Gate) ──────────────────────
-# Tools deren Call das Backend VOR der Ausführung abfängt: es zeigt Sasha
-# einen JA/NEIN-Dialog (Knöpfe im Dashboard) und führt das Tool nur bei
-# „ja" aus. Die KI ruft ihr Tool ganz normal - das Gate kommt automatisch
-# davor, ohne dass das Modell etwas davon wissen oder selbst nachfragen
-# muss (bewusst NICHT modellgetrieben: ein 9b ruft sowas nicht zuverlässig
-# von selbst). Aktuell die Kalender-Schreiber - sie verändern persistente
-# Daten. Lesen/Auskunft (read_calendar, read_file, …) bleibt ungated.
-# Die eigentliche Abfang-Logik sitzt in werkzeug_schleife.run_tool.
-#
-# KANONISCHE Namen (siehe profil.kanonisch): welche Schiene das Tool wie nennt,
-# ist ihre Sache — hier steht der Name, den der Kern kennt. Geprüft wird immer
-# gegen den normalisierten Namen, sonst rutschte ein Tool unter einem Alias am
-# Gate vorbei. Das wäre der stillste denkbare Fehler.
-PERMISSION_REQUIRED_TOOLS = {
-    "add_calendar_entry",
-    "add_calendar_routine",
-    "add_calendar_pause",
-    "delete_calendar_entry",   # Löschen ist destruktiv → immer bestätigen
-    "edit_calendar_routine",   # ändert/löscht dauerhaft → immer bestätigen
-    # Dossier komplett neu schreiben ist ebenfalls destruktiv. ANHÄNGEN
-    # (write_note) ist es nicht und bleibt bewusst ungegatet: eine KI, die
-    # vor jeder Notiz fragt, ist kein Sekretär, sondern eine Zumutung.
-    "rewrite_note",
-    # Holt etwas aus dem Netz UND legt es ab — beide Haelften wollen
-    # bestaetigt sein: die Internet-Pipe wie bei fetch_url, und das
-    # Schreiben, weil sonst ungefragt Dateien im Gedaechtnis landen.
-    "fetch_document",
-    # Neue Messkurve: ohne Gate wuerde aus jedem Tippfehler eine weitere
-    # halbtote Reihe in Sashas Uebersicht.
-    "create_series",
-    # Internet-Pipe: jeder Call nach draußen wird bestätigt. ZENTRALE ist
-    # sonst offline - was das LAN verlässt, gibt Sasha bewusst frei.
-    "web_search",
-    "fetch_url",
-}
-
-
-def braucht_erlaubnis(name: str) -> bool:
-    """Muss dieser Tool-Call vor der Ausführung bestätigt werden?
-
-    Ueber diese Funktion gehen, nicht direkt gegen die Menge pruefen: der Name
-    kommt vom Modell und traegt die Schreibweise seiner Schiene.
-    """
-    return profil.kanonisch(name) in PERMISSION_REQUIRED_TOOLS
-
-
-def _permission_question(name: str, args: dict) -> str:
-    """
-    Baut die menschenlesbare Ja/Nein-Frage für ein gegatetes Tool aus den
-    Call-Argumenten (wird Sasha im Dialog gezeigt + vorgelesen). Pro Tool
-    eine eigene Vorlage; generischer Fallback falls mal ein Tool ohne
-    Vorlage in PERMISSION_REQUIRED_TOOLS landet.
-    """
-    name = profil.kanonisch(name)
-    label = (args.get("label") or "").strip() or "diesen Eintrag"
-    if name == "fetch_document":
-        return (f'Soll ich {args.get("url", "das")} holen und als '
-                f'"{args.get("name", "Dokument")}" ablegen?')
-    if name == "create_series":
-        return f'Soll ich eine neue Messkurve "{args.get("name", "?")}" anlegen?'
-    if name == "rewrite_note":
-        wie = (args.get("name") or "das Dossier").strip()
-        return (f'Soll ich das Dossier "{wie}" komplett neu schreiben? '
-                f'(Die bisherige Fassung bleibt als .bak liegen.)')
-    if name == "add_calendar_entry":
-        wann = " ".join(p for p in (
-            (args.get("day") or "").strip(),
-            (args.get("time") or "").strip(),
-        ) if p)
-        wann_txt = f' am {wann}' if wann else ''
-        frage = f'Soll ich "{label}"{wann_txt} eintragen?'
-        # Vorab-Konflikt-Check am GEPLANTEN (noch nicht geschriebenen) Termin:
-        # fällt er in eine Reise oder kollidiert er mit einem bestehenden Termin,
-        # ziehen wir die fertige ⚠-Zeile schon JETZT in die JA/NEIN-Frage - so
-        # entscheidet Sasha informiert, statt erst nach dem Eintragen gewarnt zu
-        # werden. Python rechnet (conflicts_for_proposed), das Modell ist außen
-        # vor: die Zeile wird dem Menschen direkt im Dialog gezeigt.
-        warns = kalender.conflicts_for_proposed(
-            args.get("layer", "termine"),
-            args.get("day", ""),
-            label,
-            args.get("time"),
-        )
-        if warns:
-            frage += " " + " ".join(warns)
-        return frage
-    if name == "add_calendar_routine":
-        rrule = (args.get("rrule") or "").strip()
-        rrule_txt = f' ({rrule})' if rrule else ''
-        return f'Soll ich die Routine "{label}"{rrule_txt} eintragen?'
-    if name == "add_calendar_pause":
-        von = (args.get("von") or "").strip()
-        bis = (args.get("bis") or "").strip()
-        spanne = f' von {von} bis {bis}' if von and bis else ''
-        return f'Soll ich "{label}"{spanne} pausieren?'
-    if name == "edit_calendar_routine":
-        if (args.get("aktion") or "").strip() == "loeschen":
-            return f'Soll ich die Routine "{label}" wirklich dauerhaft löschen?'
-        # Die Frage nennt, WAS sich aendert. "Soll ich die Routine aendern?"
-        # waere nicht zustimmungsfaehig — Sasha drueckt ja auf einen Knopf,
-        # ohne den Werkzeug-Aufruf zu sehen.
-        teile = []
-        for feld, wort in (("time", "Beginn"), ("ende", "Ende"),
-                           ("ort", "Ort"), ("rrule", "Wiederholung"),
-                           ("neuer_titel", "Titel")):
-            wert = (args.get(feld) or "").strip()
-            if wert:
-                teile.append(f"{wort} {wert}")
-        was = ", ".join(teile) if teile else "etwas"
-        return f'Soll ich die Routine "{label}" ändern auf {was}?'
-    if name == "delete_calendar_entry":
-        day = (args.get("day") or "").strip()
-        wann_txt = f' am {day}' if day else ''
-        return f'Soll ich "{label}"{wann_txt} wirklich löschen?'
-    if name == "web_search":
-        q = (args.get("query") or "").strip()
-        return f'Soll ich im Internet nach "{q}" suchen?' if q else "Soll ich im Internet suchen?"
-    if name == "fetch_url":
-        u = (args.get("url") or "").strip()
-        return f'Soll ich die Seite {u} aus dem Internet laden?' if u else "Soll ich eine Webseite laden?"
-    # Fallback für künftige Gate-Tools ohne eigene Vorlage
-    return f'Soll ich die Aktion "{name}" wirklich ausführen?'
+# ── Erlaubnis-Gate und Antwort-Nachbereitung ───────────────────────────
+# Seit 2026-10-06 in core/erlaubnis.py und core/ki_antwort.py; das Merken
+# nach dem Zug in core/consolidation.py (zug_vormerken). Die Gate-Namen
+# bleiben hier als Durchreiche für Bench-Skripte und Tests, die sie LESEN.
+# Wer etwas ERSETZEN will (monkeypatch), muss das Original treffen.
+from erlaubnis import PERMISSION_REQUIRED_TOOLS, braucht_erlaubnis   # noqa: E402,F401
+from erlaubnis import frage as _permission_question                  # noqa: E402,F401
+from ki_antwort import marker_ziehen as _extract_ascii_markers       # noqa: E402,F401
+from ki_antwort import mit_bildern as _answer_with_images            # noqa: E402,F401
 
 
 def _kalender_beweis(tag: str, label: str) -> str:
@@ -613,7 +438,7 @@ def _dispatch_tool(name: str, args: dict) -> str:
         return kalender.render_range_for_tool(start, end, layers=layers, suche=suche)
     elif name == "add_calendar_entry":
         # Konflikt-Warnung passiert VOR dem Schreiben im Erlaubnis-Dialog
-        # (_permission_question → conflicts_for_proposed), damit Sasha informiert
+        # (erlaubnis.frage → conflicts_for_proposed), damit Sasha informiert
         # JA/NEIN klickt. Hier nach dem Schreiben nur noch schlicht quittieren -
         # kein erneuter Hinweis (sonst Doppel-Warnung).
         ok = kalender.add_entry(
@@ -846,120 +671,6 @@ def _last_user_query(messages: list) -> str | None:
             content = msg.get("content", "")
             return content if content.strip() else None
     return None
-
-
-# ╔══════════════════════════════════════════════════════════════════════╗
-# ║  Asynchroner Auto-Save in den Konzept-Graphen (Phase G)              ║
-# ╚══════════════════════════════════════════════════════════════════════╝
-#
-# Nach jedem vollständigen Chat-Turn (User-Message + AI-Antwort
-# komplett gestreamt) feuert ein Hintergrund-Task, der den Turn durch
-# den Graph-Extraktor schickt und Konzepte+Edges in den Graphen
-# merged. Läuft als Daemon-Thread, NICHT in der Request-Antwort-Latenz
-# - der User sieht die Antwort sofort, das Memory-Update tropft
-# Sekunden später hinterher.
-
-# ── Konsolidierung: gebündelt in der Gesprächspause ───────────────────
-# Die Graph-Extraktion ist ein voller qwen-Lauf (teuer – gemessen ~70 s
-# mit CPU-Anteil). Lief sie – wie früher – sofort als eigener Thread nach
-# JEDEM Turn, teilte sie sich die EINE qwen-Instanz mit der nächsten
-# User-Frage. Ollama bedient ein Modell seriell → die Frage hing, bis die
-# Konsolidierung durch war (Engpass nach dem num_ctx-Fix sichtbar
-# geworden). Lösung: EIN Worker-Thread sammelt die Turns und konsolidiert
-# erst, wenn CONSOLIDATION_IDLE_S lang KEIN neuer Turn mehr kam (=
-# Gesprächspause). Jeder Turn schiebt die Frist nach hinten → während
-# aktivem Hin-und-Her läuft nie eine Konsolidierung, die den Chat
-# blockieren könnte.
-#
-# Wichtig: Der laufende Gesprächsverlauf (state._chat_history, ~50
-# Nachrichten) geht bei JEDER Frage sofort mit. Das Verschieben betrifft
-# nur den Langzeit-Graphen (übergreifendes Erinnern), nicht das Folgen
-# des aktuellen Gesprächs.
-CONSOLIDATION_IDLE_S = float(os.environ.get("CONSOLIDATION_IDLE_S", "45"))
-
-_consol_pending = []                      # [(user_msg, ai_msg), ...] noch offen
-_consol_cv      = threading.Condition()   # schützt _consol_pending + _consol_last_ts
-_consol_last_ts = 0.0                      # monotone Zeit des letzten Turns
-_consol_started = False                    # Worker schon gestartet?
-
-
-def _consolidation_worker():
-    """Einzel-Worker: wartet auf Turns, konsolidiert sie aber erst nach
-    CONSOLIDATION_IDLE_S Ruhe und immer nur EINEN zur Zeit – nie parallel,
-    nie während der User aktiv tippt (jeder neue Turn verschiebt die
-    Frist). Daemon-Thread, läuft die ganze App-Laufzeit."""
-    global _consol_last_ts
-    while True:
-        with _consol_cv:
-            # 1. Schlafen, bis überhaupt etwas in der Queue liegt.
-            while not _consol_pending:
-                _consol_cv.wait()
-            # 2. Warten bis seit dem letzten Turn IDLE_S vergangen sind.
-            #    Ein neuer Turn aktualisiert _consol_last_ts + weckt uns →
-            #    Frist verschiebt sich nach hinten (Debounce/Preemption).
-            while True:
-                rest = CONSOLIDATION_IDLE_S - (time.monotonic() - _consol_last_ts)
-                if rest <= 0:
-                    break
-                _consol_cv.wait(timeout=rest)
-            # 3. ALLE wartenden Turns entnehmen, nach Ziel-Graph gruppiert.
-            #    Frueher genau einer pro Durchgang. Ein Call pro Turn heisst
-            #    aber: die Extraktor-Anweisungen (rund 2.000 Zeichen) gehen
-            #    fuenfmal statt einmal raus. Und der Extraktor sieht jeden
-            #    Turn fuer sich, statt den Zusammenhang ueber das Gespraech.
-            #    Gruppiert wird nach store, weil die Isolations-Invariante
-            #    (lokal/cloud) unter keinen Umstaenden verwaessert werden darf.
-            buendel = {}
-            for u, a, s in _consol_pending:
-                buendel.setdefault(s, []).append((u, a))
-            _consol_pending.clear()
-        # LLM-Extraktion AUSSERHALB des Locks (langer Call – darf das
-        # Einreihen weiterer Turns nicht blockieren).
-        # store reist mit den Turns mit: der Extraktor laeuft zwar bevorzugt
-        # lokal (Ollama), schreibt aber in DEN Graphen, aus dem sie kamen.
-        for store, turns in buendel.items():
-            try:
-                consolidation.extract_turn_into_graph(turns, None, store=store)
-            except Exception as e:
-                try:
-                    import state
-                    state.push_log(f"[auto-save] FEHLER: {e}")
-                except Exception:
-                    pass
-
-
-def _async_save_turn(user_msg: str, ai_msg: str, store: str | None = None):
-    """
-    Turn für die spätere Konsolidierung vormerken (Phase G). Heute schreibt
-    die nur das Transkript; die Graph-Extraktion ist per Default aus
-    (consolidation.GRAPH_EXTRAKTION, seit 18.08.2026).
-
-    store: Ziel-Graph (None = Core-Graph). Der Cloud-Pfad reicht seinen
-    eigenen durch, damit Cloud-Turns nie im lokalen Graphen landen.
-
-    Reiht den Turn in die Queue und stupst den Worker an; die eigentliche
-    LLM-Extraktion läuft gebündelt erst in der nächsten Gesprächspause
-    (siehe _consolidation_worker + Block oben). Kehrt sofort zurück –
-    blockiert weder den Chat noch belegt es qwen.
-
-    Der Extraktor produziert strukturierte Konzepte+Edges, die via
-    graph.add_turn_extraction in den Graphen gemerged werden (Alias-
-    Resolution + Sanity-Filter). Recent-Context kommt über die Aktivierung
-    des heutigen Time-Knotens, daher keine separate STM-Schicht.
-    """
-    global _consol_last_ts, _consol_started
-    if not user_msg or not user_msg.strip():
-        return
-
-    with _consol_cv:
-        # Worker lazy starten (kein Import-Seiteneffekt beim Modul-Laden).
-        if not _consol_started:
-            _consol_started = True
-            threading.Thread(target=_consolidation_worker, daemon=True,
-                             name='ai-consolidation').start()
-        _consol_pending.append((user_msg, ai_msg, store))
-        _consol_last_ts = time.monotonic()   # Debounce-Frist neu setzen
-        _consol_cv.notify()
 
 
 _seed_done = set()   # Pfade (bzw. None fuer den Core-Graph), die schon geseedet sind

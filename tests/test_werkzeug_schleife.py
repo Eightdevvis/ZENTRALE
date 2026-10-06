@@ -12,6 +12,7 @@ in den Verlauf schreibt.
 import pytest
 
 import ai
+import consolidation
 import ai_backends
 import state
 import werkzeug_schleife
@@ -56,7 +57,7 @@ def ruhig(monkeypatch):
     monkeypatch.setattr(ai, "_imprint_prompt", lambda: "")
     monkeypatch.setattr(ai, "_alarm_prompt", lambda: "")
     monkeypatch.setattr(ai, "_should_think", lambda m: False)
-    monkeypatch.setattr(ai, "_async_save_turn",
+    monkeypatch.setattr(consolidation, "zug_vormerken",
                         lambda u, a, store=None: gespeichert.append((u, a)))
     monkeypatch.setattr(state, "push_log", lambda *a, **k: None)
     return gespeichert
@@ -214,7 +215,7 @@ def test_abbruch_geht_woertlich_raus():
 
 
 def test_terminales_tool_beendet_den_zug(monkeypatch):
-    monkeypatch.setattr(ai, "_async_save_turn", lambda *a, **k: None)
+    monkeypatch.setattr(consolidation, "zug_vormerken", lambda *a, **k: None)
     a = _Adapter([werkzeug_schleife.Runde("", [("c1", "antwort", {"text": "Fertig."})]),
                   werkzeug_schleife.Runde("nie", [])])
     events = list(werkzeug_schleife.laufen(

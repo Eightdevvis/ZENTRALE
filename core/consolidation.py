@@ -2,7 +2,7 @@
 #
 # Was nach einem Chat-Turn liegen bleibt: Transkript + (optional) Graph.
 #
-# ai._async_save_turn reiht jeden Turn ein; der Worker in ai.py
+# zug_vormerken (unten) reiht jeden Turn ein; der Worker
 # (_consolidation_worker) ruft extract_turn_into_graph gebündelt in der
 # nächsten Gesprächspause. Dort passiert heute (Stand 10/2026):
 #   1. IMMER: Rohtext ins Transkript (core/transkript.py).
@@ -496,7 +496,7 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
                             store: str | None = None):
     """
     Hauptweg um einen Turn in den Graphen zu kippen. Wird async von
-    ai._async_save_turn aufgerufen. Macht den LLM-Extraktor-Call und
+    zug_vormerken gesammelt. Macht den LLM-Extraktor-Call und
     füttert das Ergebnis in graph.add_turn_extraction.
 
     Pre-Filter: Triviale Turns (zu kurz, kein echter Inhalt) werden
@@ -582,3 +582,134 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
     # der gelöschten `kalender.auto_capture`. Kurzfassung: ein Schreibweg
     # am Erlaubnis-Gate vorbei, in eine Ebene, die nur die KI lesen konnte.
     # Die Konsolidierung schreibt ab jetzt ausschließlich in den Graphen.
+
+
+# ── Merken nach dem Zug: Warteschlange + Worker ─────────────────────────
+# Bis 2026-10-06 in core/ai.py; die Warteschlange gehört zur Konsolidierung,
+# die sie abarbeitet. Aufrufer: core/ki_antwort.py (zug_vormerken).
+
+import threading  # noqa: E402
+import time       # noqa: E402
+
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  Asynchroner Auto-Save in den Konzept-Graphen (Phase G)              ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+#
+# Nach jedem vollständigen Chat-Turn (User-Message + AI-Antwort
+# komplett gestreamt) feuert ein Hintergrund-Task, der den Turn durch
+# den Graph-Extraktor schickt und Konzepte+Edges in den Graphen
+# merged. Läuft als Daemon-Thread, NICHT in der Request-Antwort-Latenz
+# - der User sieht die Antwort sofort, das Memory-Update tropft
+# Sekunden später hinterher.
+
+# ── Konsolidierung: gebündelt in der Gesprächspause ───────────────────
+# Die Graph-Extraktion ist ein voller qwen-Lauf (teuer – gemessen ~70 s
+# mit CPU-Anteil). Lief sie – wie früher – sofort als eigener Thread nach
+# JEDEM Turn, teilte sie sich die EINE qwen-Instanz mit der nächsten
+# User-Frage. Ollama bedient ein Modell seriell → die Frage hing, bis die
+# Konsolidierung durch war (Engpass nach dem num_ctx-Fix sichtbar
+# geworden). Lösung: EIN Worker-Thread sammelt die Turns und konsolidiert
+# erst, wenn CONSOLIDATION_IDLE_S lang KEIN neuer Turn mehr kam (=
+# Gesprächspause). Jeder Turn schiebt die Frist nach hinten → während
+# aktivem Hin-und-Her läuft nie eine Konsolidierung, die den Chat
+# blockieren könnte.
+#
+# Wichtig: Der laufende Gesprächsverlauf (state._chat_history, ~50
+# Nachrichten) geht bei JEDER Frage sofort mit. Das Verschieben betrifft
+# nur den Langzeit-Graphen (übergreifendes Erinnern), nicht das Folgen
+# des aktuellen Gesprächs.
+CONSOLIDATION_IDLE_S = float(os.environ.get("CONSOLIDATION_IDLE_S", "45"))
+
+_consol_pending = []                      # [(user_msg, ai_msg), ...] noch offen
+_consol_cv      = threading.Condition()   # schützt _consol_pending + _consol_last_ts
+_consol_last_ts = 0.0                      # monotone Zeit des letzten Turns
+_consol_started = False                    # Worker schon gestartet?
+
+
+def _consolidation_worker():
+    """Einzel-Worker: wartet auf Turns, konsolidiert sie aber erst nach
+    CONSOLIDATION_IDLE_S Ruhe und immer nur EINEN zur Zeit – nie parallel,
+    nie während der User aktiv tippt (jeder neue Turn verschiebt die
+    Frist). Daemon-Thread, läuft die ganze App-Laufzeit."""
+    global _consol_last_ts
+    while True:
+        with _consol_cv:
+            # 1. Schlafen, bis überhaupt etwas in der Queue liegt.
+            while not _consol_pending:
+                _consol_cv.wait()
+            # 2. Warten bis seit dem letzten Turn IDLE_S vergangen sind.
+            #    Ein neuer Turn aktualisiert _consol_last_ts + weckt uns →
+            #    Frist verschiebt sich nach hinten (Debounce/Preemption).
+            while True:
+                rest = CONSOLIDATION_IDLE_S - (time.monotonic() - _consol_last_ts)
+                if rest <= 0:
+                    break
+                _consol_cv.wait(timeout=rest)
+            # 3. ALLE wartenden Turns entnehmen, nach Ziel-Graph gruppiert.
+            #    Frueher genau einer pro Durchgang. Ein Call pro Turn heisst
+            #    aber: die Extraktor-Anweisungen (rund 2.000 Zeichen) gehen
+            #    fuenfmal statt einmal raus. Und der Extraktor sieht jeden
+            #    Turn fuer sich, statt den Zusammenhang ueber das Gespraech.
+            #    Gruppiert wird nach store, weil die Isolations-Invariante
+            #    (lokal/cloud) unter keinen Umstaenden verwaessert werden darf.
+            buendel = _buendel_schnueren(_consol_pending)
+            _consol_pending.clear()
+        # LLM-Extraktion AUSSERHALB des Locks (langer Call – darf das
+        # Einreihen weiterer Turns nicht blockieren).
+        # store reist mit den Turns mit: der Extraktor laeuft zwar bevorzugt
+        # lokal (Ollama), schreibt aber in DEN Graphen, aus dem sie kamen.
+        for store, turns in buendel.items():
+            try:
+                extract_turn_into_graph(turns, None, store=store)
+            except Exception as e:
+                try:
+                    import state
+                    state.push_log(f"[auto-save] FEHLER: {e}")
+                except Exception:
+                    pass
+
+
+def zug_vormerken(user_msg: str, ai_msg: str, store: str | None = None):
+    """
+    Turn für die spätere Konsolidierung vormerken (Phase G). Heute schreibt
+    die nur das Transkript; die Graph-Extraktion ist per Default aus
+    (GRAPH_EXTRAKTION, seit 18.08.2026).
+
+    store: Ziel-Graph (None = Core-Graph). Der Cloud-Pfad reicht seinen
+    eigenen durch, damit Cloud-Turns nie im lokalen Graphen landen.
+
+    Reiht den Turn in die Queue und stupst den Worker an; die eigentliche
+    LLM-Extraktion läuft gebündelt erst in der nächsten Gesprächspause
+    (siehe _consolidation_worker + Block oben). Kehrt sofort zurück –
+    blockiert weder den Chat noch belegt es qwen.
+
+    Der Extraktor produziert strukturierte Konzepte+Edges, die via
+    graph.add_turn_extraction in den Graphen gemerged werden (Alias-
+    Resolution + Sanity-Filter). Recent-Context kommt über die Aktivierung
+    des heutigen Time-Knotens, daher keine separate STM-Schicht.
+    """
+    global _consol_last_ts, _consol_started
+    if not user_msg or not user_msg.strip():
+        return
+
+    with _consol_cv:
+        # Worker lazy starten (kein Import-Seiteneffekt beim Modul-Laden).
+        if not _consol_started:
+            _consol_started = True
+            threading.Thread(target=_consolidation_worker, daemon=True,
+                             name='ai-consolidation').start()
+        _consol_pending.append((user_msg, ai_msg, store))
+        _consol_last_ts = time.monotonic()   # Debounce-Frist neu setzen
+        _consol_cv.notify()
+
+def _buendel_schnueren(pending):
+    """Wartende Turns nach Ziel-Graph gruppieren: {store: [(user, ai), ...]}.
+
+    Eigene Funktion, damit der Test die ECHTE Gruppierung prüft — vorher
+    baute er den Rumpf des Workers von Hand nach und hätte eine Änderung hier
+    nie bemerkt. Gruppiert wird nach store, weil die Isolations-Invariante
+    (lokal/cloud) unter keinen Umständen verwässert werden darf."""
+    buendel = {}
+    for u, a, s in pending:
+        buendel.setdefault(s, []).append((u, a))
+    return buendel

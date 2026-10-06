@@ -131,10 +131,10 @@ def szenario():
 
 def turn(frage, modell=None, erlaubnis="nein"):
     """Eine Frage durchs echte Backend. → (text, tools, gate_fragen)."""
-    import ai, cloud, state
+    import ai, cloud, consolidation, state
 
     tools, gefragt = [], []
-    echt_tool, echt_save = ai._execute_tool, ai._async_save_turn
+    echt_tool, echt_save = ai._execute_tool, consolidation.zug_vormerken
 
     def mit(name, args):
         tools.append(name)
@@ -144,7 +144,7 @@ def turn(frage, modell=None, erlaubnis="nein"):
         gefragt.append(kw.get("frage") or str(kw))
 
     ai._execute_tool = mit
-    ai._async_save_turn = lambda *a, **k: None      # spart pro Frage einen Call
+    consolidation.zug_vormerken = lambda *a, **k: None      # spart pro Frage einen Call
     state.request_permission = frage_merken
     state.wait_permission = lambda *a, **k: erlaubnis
     try:
@@ -156,7 +156,7 @@ def turn(frage, modell=None, erlaubnis="nein"):
         return text.strip(), tools, gefragt
     finally:
         ai._execute_tool = echt_tool
-        ai._async_save_turn = echt_save
+        consolidation.zug_vormerken = echt_save
 
 
 # ── Prüfhelfer ─────────────────────────────────────────────────────────

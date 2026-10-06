@@ -10,6 +10,7 @@ Geschwätzes. Wo sie auseinanderlaufen, ist die gemeinsame Naht keine.
 import pytest
 
 import ai
+import consolidation
 import cloud
 import cloud_openai
 
@@ -85,7 +86,7 @@ def kein_echter_graph(monkeypatch):
     monkeypatch.setattr(cloud_openai.graph, "context_for_query",
                         lambda *a, **k: "## Erinnerung\n(test)")
     monkeypatch.setattr(ai, "_ensure_seed_once", lambda *a, **k: None)
-    monkeypatch.setattr(ai, "_async_save_turn",
+    monkeypatch.setattr(consolidation, "zug_vormerken",
                         lambda u, a, store=None: gespeichert.append((u, a, store)))
     return gespeichert
 

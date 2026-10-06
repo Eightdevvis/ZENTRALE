@@ -101,6 +101,8 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `werkzeug_schleife` | 3 | Die eine Tool-Schleife aller Wege |
 | `profil` | 3 | Prompt-Schienen klein und gross |
 | `consolidation` | 3 | Nach dem Zug: Transkript (und Graph-Extraktion, wenn an) |
+| `erlaubnis` | 3 | Das Erlaubnis-Gate: welche Werkzeuge bestätigt werden müssen, und die Frage dazu |
+| `ki_antwort` | 3 | Fertige Antwort: Bild-Marker ziehen, Zug zum Merken vormerken |
 | `main` | 4 | Event-Loop |
 | `brain` | 4 | Input → neue Events |
 | `actions` | 4 | Events → Nebenwirkungen |
@@ -183,7 +185,6 @@ das in Punkt 2 (KI-Kern entflechten).
 | `cloud_openai → ai_backends` | Modell |
 | `cloud_openai → cloud` | statischer Prompt, wechselnder Block, Cloud-Graph |
 | `cloud_openai → werkzeug_schleife` | die Schleife |
-| `werkzeug_schleife → ai` | Erlaubnis-Liste, Antwort mit Bild-Markern |
 | `werkzeug_schleife → ai_backends` | Rundengrenze |
 
 ### Altlast: Türen
