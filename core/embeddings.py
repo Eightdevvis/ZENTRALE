@@ -158,11 +158,12 @@ def _embed_raw(text: str) -> list[float] | None:
 # Isolations-Invariante: der Cloud-Embedder ist NUR für den Cloud-Graphen.
 # Den lokalen Graphen embedden hieße, Sashas Konzeptnamen an einen Anbieter
 # zu schicken — genau das, was der getrennte Graph verhindern soll.
+# Beide übersteuern hart. Ohne sie gilt: Anbieter nach Vorrang (s. unten),
+# Modell = dessen `embed_model` aus providers.py.
 CLOUD_EMBED_PROVIDER = os.environ.get("ZENTRALE_CLOUD_EMBED_PROVIDER", "")
-CLOUD_EMBED_MODEL    = os.environ.get("ZENTRALE_CLOUD_EMBED_MODEL",
-                                      "text-embedding-v3")
+CLOUD_EMBED_MODEL    = os.environ.get("ZENTRALE_CLOUD_EMBED_MODEL", "")
 
-_cloud_client = None
+_cloud_client = None       # (base_url, client) — neu, sobald der Endpunkt wechselt
 
 
 def _cloud_provider() -> dict:
@@ -188,6 +189,8 @@ def _cloud_provider() -> dict:
         p = providers.get(name or "")
         if p.get("kind") != "openai_compat":
             return {}
+        if not (p.get("embed_model") or CLOUD_EMBED_MODEL):
+            return {}        # redet OpenAI, embeddet aber nicht (xAI, Groq …)
         key = p.get("key_env")
         return p if key and os.environ.get(key) else {}
 
@@ -197,6 +200,12 @@ def _cloud_provider() -> dict:
     # Anbieter, was die Datenspur schmal hält), sonst der nächstbeste mit Key.
     return (eintrag(providers.configured() or "")
             or next((p for p in map(eintrag, providers.preference()) if p), {}))
+
+
+def cloud_embed_model() -> str:
+    """Das Cloud-Embeddings-Modell, das JETZT benutzt würde: Env hart, sonst
+    das `embed_model` des gewählten Anbieters, sonst leer (kein Embedder)."""
+    return CLOUD_EMBED_MODEL or _cloud_provider().get("embed_model") or ""
 
 
 def cloud_available() -> bool:
@@ -216,15 +225,16 @@ def _cloud_embed(text: str) -> list[float] | None:
     Fehler → None, genau wie beim lokalen Pfad (Caller läuft weiter)."""
     global _cloud_client
     p = _cloud_provider()
-    if not p:
+    modell = cloud_embed_model()
+    if not p or not modell:
         return None
     try:
-        if _cloud_client is None:
+        if _cloud_client is None or _cloud_client[0] != p.get("base_url"):
             from openai import OpenAI  # type: ignore
-            _cloud_client = OpenAI(
+            _cloud_client = (p.get("base_url"), OpenAI(
                 base_url=p.get("base_url"),
-                api_key=os.environ.get(p.get("key_env") or "", "") or "missing-key")
-        r = _cloud_client.embeddings.create(model=CLOUD_EMBED_MODEL, input=text)
+                api_key=os.environ.get(p.get("key_env") or "", "") or "missing-key"))
+        r = _cloud_client[1].embeddings.create(model=modell, input=text)
         return list(r.data[0].embedding)
     except Exception as e:
         try:
@@ -238,7 +248,7 @@ def _cloud_embed(text: str) -> list[float] | None:
 def model_name(backend: str | None = None) -> str:
     """Wie der Embedder heißt, mit dem gerade gearbeitet wird — landet als
     Herkunfts-Stempel in der Graph-Datei."""
-    return CLOUD_EMBED_MODEL if backend == "cloud" else EMBED_MODEL
+    return cloud_embed_model() if backend == "cloud" else EMBED_MODEL
 
 
 def embed_document(text: str, backend: str | None = None) -> list[float] | None:

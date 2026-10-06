@@ -51,7 +51,7 @@ def test_neuer_store_bekommt_den_angemeldeten_embedder(tmp_path):
     graph.register_store(p, "cloud")
     d = graph.dump(p)
     assert d["embedder"] == "cloud"
-    assert d["embed_model"] == embeddings.CLOUD_EMBED_MODEL
+    assert d["embed_model"] == embeddings.model_name("cloud")
 
 
 def test_ohne_anmeldung_bleibt_es_lokal(tmp_path):
@@ -82,7 +82,7 @@ def test_embedder_landet_wirklich_in_der_datei(tmp_path, kein_echter_embedder):
     graph.add_turn_extraction([{"name": "Kaffee", "type": "concept"}], [], store=p)
     roh = json.loads(open(p, encoding="utf-8").read())
     assert roh["embedder"] == "cloud"
-    assert roh["embed_model"] == embeddings.CLOUD_EMBED_MODEL
+    assert roh["embed_model"] == embeddings.model_name("cloud")
 
 
 def test_cloud_store_embedded_ueber_die_cloud(tmp_path, kein_echter_embedder):
@@ -402,3 +402,49 @@ def test_anthropic_taugt_nicht_als_embedder(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     assert providers.get("claude")["kind"] == "anthropic"
     assert embeddings.cloud_available() is False
+
+
+# ── Embed-Modell pro Anbieter (2026-10-07) ────────────────────────────
+
+def test_embed_modell_kommt_vom_anbieter(monkeypatch):
+    """Wer embeddet, bringt sein eigenes Modell mit — ein globaler Name
+    (früher immer text-embedding-v3, Qwens Modell) ginge bei OpenAI ins
+    Leere."""
+    monkeypatch.setattr(embeddings, "CLOUD_EMBED_MODEL", "")
+    monkeypatch.setattr(embeddings, "CLOUD_EMBED_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    assert embeddings.cloud_embed_model() == "text-embedding-3-small"
+    monkeypatch.setattr(embeddings, "CLOUD_EMBED_PROVIDER", "qwen")
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "sk-test")
+    assert embeddings.cloud_embed_model() == "text-embedding-v3"
+
+
+def test_openai_dialekt_ohne_embeddings_taugt_nicht(monkeypatch):
+    """xAI spricht OpenAI-kompatibel, hat aber keinen Embeddings-Endpunkt."""
+    monkeypatch.setattr(embeddings, "CLOUD_EMBED_MODEL", "")
+    monkeypatch.setattr(embeddings, "CLOUD_EMBED_PROVIDER", "grok")
+    monkeypatch.setenv("XAI_API_KEY", "sk-test")
+    assert embeddings.cloud_available() is False
+    assert embeddings.cloud_embed_model() == ""
+
+
+def test_anderes_cloud_modell_mischt_keine_vektoren(monkeypatch, tmp_path):
+    """Datei mit text-embedding-v3 gebaut, jetzt würde ein anderes Modell
+    embedden: lieber kein Vektor als Rauschen gegen die alten."""
+    import json
+    p = tmp_path / "wolke.json"
+    p.write_text(json.dumps({"schema_version": 1, "nodes": {}, "edges": [],
+                             "embedder": "cloud",
+                             "embed_model": "text-embedding-v3"}),
+                 encoding="utf-8")
+    gerufen = []
+    monkeypatch.setattr(embeddings, "embed_query",
+                        lambda *a, **k: gerufen.append(a) or [1.0])
+    monkeypatch.setattr(embeddings, "model_name",
+                        lambda b=None: "text-embedding-3-small")
+    d = graph.dump(str(p))
+    assert graph._emb_query("Kaffee", d) is None
+    assert gerufen == []
+    monkeypatch.setattr(embeddings, "model_name", lambda b=None: "text-embedding-v3")
+    assert graph._emb_query("Kaffee", d) == [1.0]
+

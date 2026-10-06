@@ -16,10 +16,14 @@
 # Preis: die paar Welt-Fakten unten (base_url/key_env) stehen an zwei Stellen.
 # Ändert ein Anbieter seinen Endpunkt, beide prüfen.
 #
-# Der Kern selbst REDET aktuell mit keiner Cloud (chat/news laufen local-only,
-# siehe MODULE_BACKENDS in ai_backends.py). Diese Tabelle beantwortet nur die
-# Erreichbarkeits-Frage. Wächst der Kern mal einen echten Cloud-Pfad, kommt der
-# Client hierher — nicht in den Tutor zurück.
+# Der Kern redet seit 2026-09 selbst mit der Cloud: kern.chat() wählt nach
+# `kind` den Dialekt (cloud.py / cloud_openai.py), und beide holen sich Endpunkt,
+# Key und Modell aus dieser Tabelle.
+#
+# embed_model: das Embeddings-Modell DIESES Anbieters. Ohne Eintrag taugt er
+# nicht als Embedder (Anthropic, xAI, Groq, DeepSeek haben keinen
+# /v1/embeddings-Endpunkt). Ein globaler Modellname wäre falsch: welcher
+# Anbieter embeddet, hängt davon ab, wessen Key gerade dasteht.
 
 # kind sagt, WELCHES Kern-Modul den Provider bedienen kann:
 #   'anthropic'      → core/cloud.py        (tool_use-Blöcke, cache_control)
@@ -54,6 +58,7 @@ PROVIDERS = {
         "kind":          "openai_compat",
         "default_model": "qwen-plus",
         "cheap_model":   "qwen-turbo",
+        "embed_model":   "text-embedding-v3",
         "jurisdiction":  "SG",
         "note":          "Alibaba Qwen (intl/Singapur), no-train verifiziert. "
                          "Billig — die Rückfallebene, wenn das Budget alle ist.",
@@ -64,6 +69,7 @@ PROVIDERS = {
         "kind":          "openai_compat",
         "default_model": "gpt-4o",
         "cheap_model":   "gpt-4o-mini",
+        "embed_model":   "text-embedding-3-small",
         "jurisdiction":  "US",
     },
     "grok": {
@@ -105,6 +111,7 @@ PROVIDERS = {
         "key_env":       "MISTRAL_API_KEY",
         "kind":          "openai_compat",
         "default_model": "mistral-large-latest",
+        "embed_model":   "mistral-embed",
         "jurisdiction":  "EU",
     },
 }

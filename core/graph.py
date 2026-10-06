@@ -394,12 +394,42 @@ def _load_raw(st: _Store, for_write: bool = False) -> dict:
 def _emb_doc(name: str, data: dict):
     """Dokument-Embedding MIT dem Embedder dieses Graphen. Nie ohne — sonst
     landet ein Vektor aus dem falschen Raum in der Datei."""
+    if not _modell_passt(data):
+        return None
     return embeddings.embed_document(name, backend=data.get("embedder"))
 
 
 def _emb_query(text: str, data: dict):
     """Query-Embedding mit dem Embedder dieses Graphen."""
+    if not _modell_passt(data):
+        return None
     return embeddings.embed_query(text, backend=data.get("embedder"))
+
+
+_modell_gewarnt: set = set()
+
+
+def _modell_passt(data: dict) -> bool:
+    """Liefert der Embedder JETZT Vektoren im selben Raum wie die Datei?
+
+    Der Stempel `embedder` trennt lokal von Cloud. Aber auch INNERHALB der
+    Cloud kann das Modell wechseln — anderer Anbieter, anderer Key, andere
+    Env. Dann wären neue und alte Vektoren Rauschen gegeneinander, still.
+    Lieber gar kein Vektor (der Graph sucht dann über Namen weiter) als ein
+    falscher. Warnt einmal pro Paar ins Log."""
+    stempel = data.get("embed_model")
+    jetzt = embeddings.model_name(data.get("embedder"))
+    if not stempel or not jetzt or stempel == jetzt:
+        return True
+    if (stempel, jetzt) not in _modell_gewarnt:
+        _modell_gewarnt.add((stempel, jetzt))
+        try:
+            import state
+            state.push_log(f"[graph] Embedder passt nicht: Datei {stempel}, "
+                           f"jetzt {jetzt} — keine neuen Vektoren")
+        except Exception:
+            pass
+    return False
 
 
 def _stamp_embedder(st: _Store, data: dict) -> dict:
