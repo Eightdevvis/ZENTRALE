@@ -1,0 +1,9 @@
+Testfutter Kalender-Umbau (02.-05.10.2026, Session KALENDER).
+vdir/termine, vdir/routinen: eine .ics pro Termin. Grenzfaelle:
+- einheit: ganztags (DTSTART;VALUE=DATE)
+- berlin: ein Termin ueber drei Tage, Fr 18:00 -> So 14:00
+- messe: Spanne mit eigener Zeit pro Tag = DAILY;COUNT=3 + zwei Overrides (RECURRENCE-ID) in DERSELBEN Datei
+- geige/parkour: woechentliche Routinen (RRULE)
+Erwartung (von khal 0.14.1 so angezeigt): Messe 07. 10-18, 08. 09-17, 09. 10-14; Berlin 18:00-> / <-> / ->14:00.
+calcurse 4.8.1 verliert die Overrides beim Import (Messe am 08./09. doppelt).
+Floating time (ohne TZID) ist Absicht fuer die Tests; echte Daten sollten TZID=Europe/Berlin tragen.
