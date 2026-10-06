@@ -13,7 +13,7 @@ import random
 
 import pytest
 
-from tui.zentrale_tui import (
+from tui.ansichten.klavier import (
     PIANO_WHITE, PIANO_BLACK, PIANO_KEYMAP, PIANO_NAMES, PIANO_OCT_MIN,
     PIANO_OCT_MAX, PIANO_STAFF_ROWS, PIANO_TOP_DIA, PIANO_BOT_DIA,
     PIANO_CHORD_MS, PIANO_HOLLOW_MS, PIANO_BEAT_DEFAULT, PIANO_REST_GLYPH,
