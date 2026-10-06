@@ -7,6 +7,7 @@ hier ist ein Ding, das man aufmacht und benutzt — im Unterschied zu
 | Werkzeug | Was es macht | Datei |
 |---|---|---|
 | **Kalender** | Layer-Modell (termine / routinen / pausen / erlebt), Konflikte, Alarme | [kalender_system.md](kalender_system.md) |
+| **Kalender → iCalendar** | Umstieg auf .ics (vdir), Abbildung, Absicherung, Migration | [kalender_ics_bauplan.md](kalender_ics_bauplan.md) |
 | **Mail** | IMAP-Triage per Sender-Keymap; der Ordner IST der Status, kein Flag | [mail_system.md](mail_system.md) |
 | **News** | persönliche Tagesschau aus Bausteinen, KI-moderiertes Briefing | [news_system.md](news_system.md) |
 | **Notizen** | freie Notiz aus gestapelten Blöcken (text / liste / float) | [notizen_system.md](notizen_system.md) |
