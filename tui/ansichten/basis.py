@@ -59,3 +59,56 @@ def api_call(path, method="GET", body=None, timeout=3.0):
     with urllib.request.urlopen(req, timeout=timeout) as r:
         raw = r.read().decode("utf-8")
         return json.loads(raw) if raw else None
+
+
+# ── Uhrzeiten: Minuten seit Mitternacht ↔ 'HH:MM' ─────────────────────
+# Kalender und Graph-Werkzeug lesen beide Uhrzeiten ein; die Werte kommen
+# über JSON und dürfen Müll sein, ohne dass etwas abstürzt.
+
+def parse_clock(s):
+    """'23:15' | '2315' | '7' | '24:00' → Minuten seit Mitternacht (0–1440) oder None."""
+    if not isinstance(s, str):   # nur Strings parsen, alles andere → None (kein Crash)
+        return None
+    s = s.strip().replace(".", ":")
+    if not s:
+        return None
+    if ":" in s:
+        a, _, b = s.partition(":")
+        if not a.isdigit() or (b and not b.isdigit()):
+            return None
+        h, m = int(a), int(b) if b else 0
+    elif s.isdigit():
+        if len(s) <= 2:
+            h, m = int(s), 0
+        else:
+            s = s.zfill(4)
+            h, m = int(s[:-2]), int(s[-2:])
+    else:
+        return None
+    if h == 24 and m == 0:
+        return 1440
+    if h > 23 or m > 59:
+        return None
+    return h * 60 + m
+
+
+def _num(x):
+    """x als ENDLICHE Zahl zurück, sonst None. Bool/Text/Liste/None/NaN/Inf →
+    None. Alle Werte kommen über JSON rein, da kann Müll dabei sein — diese
+    Schleuse hält ihn von den Rechenpfaden (int()/round()/float()) fern."""
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        return None
+    if x != x or x in (float("inf"), float("-inf")):   # NaN (x!=x) oder Inf
+        return None
+    return x
+
+
+def fmt_clock(m):
+    """Minuten → 'HH:MM' (24:00 für 1440). Müll → '—' statt Crash."""
+    m = _num(m)
+    if m is None:
+        return "—"
+    m = int(round(m))
+    if m >= 1440:
+        return "24:00"
+    return "%02d:%02d" % (m // 60, m % 60)
