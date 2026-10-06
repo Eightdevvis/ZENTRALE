@@ -13,6 +13,12 @@ import urllib.request
 
 BASE_URL = (os.environ.get("ZENTRALE_URL") or "http://localhost:5000").rstrip("/")
 
+# Die Projekt-Wurzel (…/ZENTRALE): für scripts/ (Karten-Fenster, Zimmer) und
+# core/ (Ton). Achtung: von hier aus sind es DREI Ebenen (tui/ansichten/
+# basis.py), von zentrale_tui.py aus zwei. Ansichten nehmen deshalb nie ihr
+# eigenes __file__, sondern PROJEKT (tests/test_tui_ansichten.py prüft das).
+PROJEKT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # Was eine Ansicht aus taste(ch) zurückgibt, wenn die ganze TUI enden soll
 # ('q' in einem Werkzeug). Früher stand dort ein `break` direkt in der
 # Hauptschleife; als Methode kann der Zweig die Schleife nicht mehr selbst

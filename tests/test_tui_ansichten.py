@@ -120,3 +120,21 @@ def test_draw_box_zeichnet_rahmen_und_titel():
     assert s.raus[0] == (0, 0, "┌────┐", 1)
     assert s.raus[-1] == (0, 2, " AB ", 2)
     assert (2, 0, "└────┘", 1) in s.raus
+
+
+def test_projekt_wurzel_stimmt():
+    from tui.ansichten import basis
+    assert basis.PROJEKT == ROOT
+    assert zt.PROJEKT == ROOT
+
+
+def test_ansichten_rechnen_pfade_nie_vom_eigenen_file():
+    """Eine Closure, die aus run_ui in tui/ansichten/ umzieht, liegt eine
+    Ebene tiefer: dirname(dirname(__file__)) zeigt dann auf tui/ statt aufs
+    Projekt, und das Karten-Fenster oder der Ton fänden ihre Skripte nicht
+    mehr. Deshalb gibt es genau EINE Stelle, die rechnet: basis.PROJEKT."""
+    ordner = os.path.join(TUI, "ansichten")
+    schuldig = [n for n in sorted(os.listdir(ordner))
+                if n.endswith(".py") and n != "basis.py"
+                and "__file__" in open(os.path.join(ordner, n), encoding="utf-8").read()]
+    assert not schuldig, "eigene Pfad-Rechnung statt basis.PROJEKT: %s" % schuldig
