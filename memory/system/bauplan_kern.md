@@ -71,7 +71,15 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `theme` | 1 | Tag/Nacht-Modus, die Datei als einzige Wahrheit |
 | `tone` | 1 | Ton-Erzeuger fürs TUI-Klavier |
 | `pc_status` | 1 | Ist der andere Knoten gerade da? |
-| `kalender` | 2 | Termine, Routinen, Konflikt-Alarm |
+| `kalender` | 2 | Termine, Routinen, Konflikt-Alarm — die Fassade, Speicher austauschbar |
+| `kalender_zeitraum` | 2 | Relative Zeiträume („diese_woche") in Daten übersetzen |
+| `kalender_regel` | 2 | Wann eine Routine stattfindet (RRULE → Tage), eine Stelle für Fassade und .ics |
+| `kalender_speicher` | 2 | Wählt den Kalender-Speicher (`kalender_speicher`: json/ics), alle Kalender-Pfade |
+| `kalender_json` | 2 | Der alte Speicher `data/ai_calendar.json`, atomar, mit Rückfall-Sperre |
+| `kalender_ics_abbildung` | 2 | Ein Termin/eine Routine ↔ VEVENT, verlustfrei oder gar nicht |
+| `kalender_ics` | 2 | Der .ics-Speicher: vdir lesen (Cache), nur Unterschiede schreiben, Nebendaten |
+| `kalender_sicherung` | 2 | Atomar schreiben, Datei-Sperre, Verlauf, Grabsteine, Snapshots, Massenlösch-Sperre |
+| `kalender_spiegel` | 2 | git-Spiegel der Kalenderdaten außerhalb von `data/` |
 | `lists` | 2 | Listen-Registry (To-Do, Checklisten) |
 | `notes` | 2 | Notiz-Registry des TUI-Notiz-Werkzeugs |
 | `melodies` | 2 | Melodie-Registry des Klaviers |
@@ -210,7 +218,6 @@ Sasha, 05.10.2026: einfrieren, dann zerlegen (Punkt 3).
 | `tutor/room.py` | 4034 |
 | `tutor/room.py::main` | 1829 |
 | `core/mail.py` | 1924 |
-| `core/kalender.py` | 1560 |
 
 ## Wenn der Test rot wird
 

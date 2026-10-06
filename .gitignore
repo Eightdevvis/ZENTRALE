@@ -29,6 +29,15 @@ data/*.bak*
 # Verschlüsselter Mail-Zugangsdaten-Blob (Ciphertext, aber default-safe nie
 # ins Repo). Entschlüsselt nur mit ZENTRALE_MAIL_KEY. Siehe core/mail_secrets.py.
 data/*.enc
+# Der Kalender als iCalendar (memory/werkzeuge/kalender_ics_bauplan.md): der
+# vdir-Ordner, Verlauf, Snapshots und die umbenannte Alt-Datei. Alles davon ist
+# Sashas Terminkalender und gehoert nie ins Code-Repo — die Geschichte haelt
+# der eigene git-Spiegel ausserhalb von data/ (core/kalender_spiegel.py).
+data/kalender/
+data/kalender_verlauf/
+data/kalender_snapshots/
+data/kalender_*.json
+data/ai_calendar.json.*
 
 # Laufzeit-Daten des Tutors (eigenes Projekt, siehe tutor/ + memory/tutor_system.md):
 # der LERNSTAND pro Sprache (tutor/data/<lang>/: vocab, structures, persona_mem,

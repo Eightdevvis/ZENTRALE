@@ -23,6 +23,9 @@ import pytest
 import ai
 import kalender
 
+# Läuft gegen BEIDE Kalender-Speicher (alte JSON und .ics), tests/conftest.py Punkt 8.
+pytestmark = pytest.mark.kalender_beide
+
 
 @pytest.fixture
 def cal(tmp_path, monkeypatch):
@@ -98,7 +101,13 @@ def test_aenderung_steht_in_der_datei(cal):
     """Der Kalender wird bei jedem Lesen aus der Datei geholt; eine
     Aenderung, die nur im Speicher haengt, waere naechste Woche weg."""
     cal.routine_aendern("geige", time="18:00")
-    assert '"18:00"' in cal.CAL_PATH.read_text(encoding="utf-8")
+    if cal._speicher().art == "json":
+        assert '"18:00"' in cal.CAL_PATH.read_text(encoding="utf-8")
+    else:
+        # .ics: die Uhrzeit steht im DTSTART der Routinen-Datei.
+        texte = [p.read_text(encoding="utf-8")
+                 for p in cal.CAL_PATH.parent.joinpath("kalender").rglob("*.ics")]
+        assert any("T180000" in t and "Geigenstunde" in t for t in texte)
 
 
 # ── Ehrlichkeit statt Erfolgsmeldung ──────────────────────────────────

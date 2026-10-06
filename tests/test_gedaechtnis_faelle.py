@@ -31,6 +31,9 @@ import ai
 import graph
 import kalender
 
+# Läuft gegen BEIDE Kalender-Speicher (alte JSON und .ics), tests/conftest.py Punkt 8.
+pytestmark = pytest.mark.kalender_beide
+
 HEUTE = date.today()
 MORGEN = HEUTE + timedelta(days=1)
 DIESER_MONAT = HEUTE.strftime("%Y-%m")

@@ -27,6 +27,9 @@ import pytest
 import gedaechtnis
 import kalender
 
+# Läuft gegen BEIDE Kalender-Speicher (alte JSON und .ics), tests/conftest.py Punkt 8.
+pytestmark = pytest.mark.kalender_beide
+
 
 EINTRAG = "## Fraktal-Rendering\n- thema: fraktale, shader\n- status: idee"
 

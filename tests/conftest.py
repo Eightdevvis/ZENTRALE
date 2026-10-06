@@ -147,3 +147,56 @@ def _keine_echten_cloud_calls(request, monkeypatch):
     yield
     ai_backends._cache["val"] = None
     ai_backends._cache["t"] = 0.0
+
+
+# 7. Der Kalender eines Testlaufs liegt nie in Sashas data/.
+#
+# Bis 2026-10-06 bogen die Kalender-Tests CAL_PATH einzeln um; wer es vergaß,
+# las (und schrieb!) die echte data/ai_calendar.json — aus dem Haupt-Checkout
+# heraus Sashas echten Kalender. Seit es neben der JSON einen .ics-Ordner,
+# Verlauf, Snapshots und Grabsteine gibt, die alle neben CAL_PATH liegen
+# (core/kalender_speicher.py), wäre ein Versehen noch teurer: ein Test im
+# .ics-Modus legte data/kalender/ an. Deshalb biegt diese Fixture JEDEN Test
+# auf ein Wegwerf-Verzeichnis; Tests, die selbst umbiegen, gewinnen.
+#
+# Der git-Spiegel (core/kalender_spiegel.py) schreibt im Betrieb nach
+# ~/.local/share/zentrale/kalender-git — in Tests nie. Wer ihn prüft, setzt
+# die Einstellung selbst auf einen tmp-Pfad.
+os.environ.setdefault("ZENTRALE_KALENDER_GIT_SPIEGEL", "aus")
+
+
+@pytest.fixture(autouse=True)
+def _kalender_nie_in_echten_daten(tmp_path_factory, monkeypatch):
+    import kalender
+    ordner = tmp_path_factory.mktemp("kalender_default")
+    monkeypatch.setattr(kalender, "CAL_PATH", ordner / "ai_calendar.json")
+    monkeypatch.setattr(kalender, "ICS_DIR", None)
+    yield
+
+
+# 8. Kalender-Tests laufen gegen BEIDE Speicher.
+#
+# Der Umstieg auf .ics (memory/werkzeuge/kalender_ics_bauplan.md) verspricht:
+# die öffentlichen Kalender-Funktionen verhalten sich gleich, egal ob die
+# alte JSON oder der .ics-Ordner dahinter liegt. Das beweist am besten die
+# Suite, die es schon gibt: jeder Test mit der Marke `kalender_beide` läuft
+# zweimal, einmal pro Speicher (Env ZENTRALE_KALENDER_SPEICHER, die
+# ai_config.setting zuerst liest).
+def pytest_generate_tests(metafunc):
+    if metafunc.definition.get_closest_marker("kalender_beide"):
+        # VORN einreihen: Fixtures wie `cal` schreiben schon beim Aufbau in
+        # den Kalender — der Speicher muss vorher feststehen.
+        if "_kalender_speicher_art" not in metafunc.fixturenames:
+            metafunc.fixturenames.insert(0, "_kalender_speicher_art")
+        metafunc.parametrize("_kalender_speicher_art", ["json", "ics"],
+                             ids=["json", "ics"], indirect=True)
+
+
+@pytest.fixture
+def _kalender_speicher_art(request, monkeypatch):
+    art = request.param
+    monkeypatch.setenv("ZENTRALE_KALENDER_SPEICHER", art)
+    import kalender_ics
+    kalender_ics.cache_leeren()
+    yield art
+    kalender_ics.cache_leeren()
