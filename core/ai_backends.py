@@ -27,7 +27,7 @@ import time
 import socket
 from urllib.parse import urlparse
 
-import ai                # is_available() pingt Ollama /api/tags
+import ollama            # is_available() pingt Ollama /api/tags (nicht der ganze KI-Kern)
 import ai_config         # Kill-Switches + Key-Injection in os.environ (Import-Effekt)
 import providers         # Cloud-Registry des Kerns: key_env / base_url
 
@@ -48,7 +48,7 @@ _cache = {"t": 0.0, "val": None}
 
 def local_ok() -> bool:
     """Lokales Ollama erreichbar?"""
-    return ai.is_available()
+    return ollama.is_available()
 
 
 def cloud_provider() -> str:

@@ -93,6 +93,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `anwesenheit` | 2 | Ist Sasha da, schaut er hin? |
 | `takt` | 2 | Wann ZENTRALE von sich aus spricht |
 | `map` | 2 | Geo-Layer-System der Weltkarte |
+| `ollama` | 2 | Anbindung an Ollama: Adresse, Modell, Kontext, Sampling, Erreichbarkeit, Warmup — einmal |
 | `ai` | 3 | Ollama-Weg, Tool-Liste und -Ausführung, Erlaubnis-Abfrage, Prompt-Bausteine |
 | `ai_backends` | 3 | Wer denkt: lokal oder Cloud, Anbieter, Modell, Effort, Rundengrenze |
 | `cloud` | 3 | Anthropic-Weg |
@@ -172,9 +173,7 @@ das in Punkt 2 (KI-Kern entflechten).
 
 | Kante | Wofür |
 |---|---|
-| `ai → consolidation` | gibt jeden Gesprächszug zum Speichern weiter |
 | `ai → werkzeug_schleife` | der lokale Weg fährt durch die gemeinsame Schleife |
-| `ai_backends → ai` | fragt, ob Ollama läuft |
 | `ai_backends → cloud` | liefert das Modul für den Anthropic-Chat |
 | `ai_backends → cloud_openai` | liefert das Modul für den OpenAI-Chat |
 | `cloud → ai` | Tool-Liste, Tool-Ausführung, Prompt-Bausteine, Zeit- und Alarm-Block |
@@ -184,7 +183,6 @@ das in Punkt 2 (KI-Kern entflechten).
 | `cloud_openai → ai_backends` | Modell |
 | `cloud_openai → cloud` | statischer Prompt, wechselnder Block, Cloud-Graph |
 | `cloud_openai → werkzeug_schleife` | die Schleife |
-| `consolidation → ai` | ob Ollama läuft, Graph-Zugriff |
 | `werkzeug_schleife → ai` | Erlaubnis-Liste, Antwort mit Bild-Markern |
 | `werkzeug_schleife → ai_backends` | Rundengrenze |
 

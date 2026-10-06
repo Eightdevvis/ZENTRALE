@@ -7,6 +7,7 @@ Messungen dazu existiert.
 | Was du wissen willst | Datei |
 |---|---|
 | **Einstieg.** Wie der Chat läuft: lokal (Ollama) und Cloud, Tools, Erlaubnis-Gate, System-Prompt-Reihenfolge, Prompt-Cache, Backend-Wahl | [ki_system.md](ki_system.md) |
+| **Aufbau des KI-Kerns** — welches Modul wofür, wie die Abhängigkeiten laufen, die Umbau-Abschnitte K1–K5 | [kern_aufbau.md](kern_aufbau.md) |
 | **Das Gedächtnis.** Steckbrief, Ziele, Dossiers, Tagebuch, Messreihen — und warum der Konzept-Graph abgelöst wurde | [gedaechtnis_dateien.md](gedaechtnis_dateien.md) |
 | Wie die KI hört und spricht: Whisper-STT + TTS als eigene Services, sprachneutral | [audio_system.md](audio_system.md) |
 | **Zwischenstand Cloud.** Was der Umstieg gebracht hat, woran es hakte, was dagegen lief, was offen ist | [cloud_bericht.md](cloud_bericht.md) |

@@ -30,23 +30,16 @@ import kidebug               # Devtools-Bus (scripts/ai_devtools.py)
 import transkript            # Rohmaterial unter dem Graphen (append-only)
 
 # ── Konfiguration ──────────────────────────────────────────────────────
-OLLAMA_URL        = os.environ.get("OLLAMA_URL",        "http://localhost:11434")
-OLLAMA_MODEL      = os.environ.get("OLLAMA_MODEL",      "qwen3.5:9b")
-# Modell warmhalten - dieser Extraktor läuft async nach jedem Turn,
-# wenn das Modell zwischendurch unloadet wird kostet jeder Lauf den
-# Reload. Default 30m, per Env überschreibbar.
-OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
-# KRITISCH: identisch zu ai.py.OLLAMA_NUM_CTX. Ollama haelt pro
-# (Modell, Kontextgroesse) eine eigene Instanz. Riefe dieser Extraktor
-# qwen ohne num_ctx (= Ollama-Default ~4096), waehrend der Chat
-# num_ctx=8192 nutzt, wuerde Ollama qwen bei JEDEM Turn neu laden
-# (Chat@8192 → Konsolidierung@default → naechster Chat@8192 = 2 Reloads
-# pro Frage, ~17 s je Reload). Gleicher Wert = eine Instanz, kein Reload.
-OLLAMA_NUM_CTX    = int(os.environ.get("OLLAMA_NUM_CTX", "8192"))
-# qwen3/qwen3.5 denken per Default vor jeder Antwort -> dieser JSON-Extraktor
-# wuerde pro Turn minutenlang "nachdenken" statt nur Fakten zu liefern.
-# Thinking aus. Nur fuer qwen3* gueltig (qwen2.5 -> Ollama 400), daher kond.
-SUPPORTS_THINK    = OLLAMA_MODEL.startswith("qwen3")
+# Ollama-Adresse, Modell, Warmhalten, Kontextfenster und Denk-Schalter kommen
+# aus core/ollama.py — DIESELBEN Werte wie im Chat. Bis 2026-10-06 standen sie
+# hier als Kopie mit dem Vermerk „KRITISCH: identisch zu ai.py": Ollama hält
+# pro (Modell, Kontextgröße) eine eigene Instanz, und ein Extraktor mit
+# anderem num_ctx hätte qwen bei JEDEM Turn neu geladen (~17 s je Reload).
+# Jetzt kann es nicht mehr auseinanderlaufen, weil es nur noch eine Stelle
+# gibt. Denken bleibt für den JSON-Extraktor aus (SUPPORTS_THINK → think=False).
+from ollama import (OLLAMA_URL, OLLAMA_MODEL, OLLAMA_KEEP_ALIVE,  # noqa: E402
+                    OLLAMA_NUM_CTX, SUPPORTS_THINK)
+import ollama                                                     # noqa: E402
 
 # Die Tripel-Extraktion in den Konzept-Graphen. DEFAULT AUS seit 18.08.2026.
 #
@@ -338,8 +331,7 @@ def _local_da() -> bool:
     """Ist Ollama gerade erreichbar? Entscheidet, ob der Cloud-Extraktor
     überhaupt in Frage kommt."""
     try:
-        import ai
-        return bool(ai.is_available())
+        return bool(ollama.is_available())
     except Exception:
         return False
 
