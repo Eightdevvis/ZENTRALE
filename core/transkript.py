@@ -42,8 +42,12 @@ import os
 from datetime import datetime
 from threading import Lock
 
-_DIR  = os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
-                                     'data', 'ai_transcripts'))
+# ZENTRALE_TRANSKRIPT_DIR ist eine reine TEST-Umlenkung (tests/conftest.py),
+# wie ZENTRALE_USAGE_FILE. Ohne sie schrieb jeder Testlauf seine Probesätze
+# („ich mag kaffee") in Sashas echtes Transkript — am 2026-10-06 waren 165
+# von 236 Zeilen dort Testmüll, seit August.
+_DIR  = os.environ.get("ZENTRALE_TRANSKRIPT_DIR") or os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '..', 'data', 'ai_transcripts'))
 _lock = Lock()
 
 # So viele Quell-IDs behält ein Knoten. Ein oft erwähntes Konzept sammelt

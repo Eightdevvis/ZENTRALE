@@ -93,8 +93,10 @@ import os
 import re
 from datetime import date, datetime
 
-_DIR       = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
-                          "data", "gedaechtnis")
+# ZENTRALE_GEDAECHTNIS_DIR ist eine reine TEST-Umlenkung (tests/conftest.py),
+# damit kein Testlauf in Sashas echtes Gedächtnis greift.
+_DIR       = os.environ.get("ZENTRALE_GEDAECHTNIS_DIR") or os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "data", "gedaechtnis")
 STECKBRIEF = "sasha"
 ZIELE      = "ziele"
 HAUSREGELN = "hausregeln"

@@ -418,3 +418,17 @@ def test_tui_logs_sind_im_testlauf_umgelenkt():
         p = os.environ.get(var, "")
         assert p and not p.startswith("/tmp/zentrale-tui-crash"), var
         assert ".local/state" not in p, var
+
+
+def test_transkript_und_gedaechtnis_zeigen_nie_ins_echte_data():
+    """Der Riegel gegen das Leck vom 2026-10-06: die Konsolidierungs-Tests
+    schrieben ins echte Transkript, weil der Pfad fest verdrahtet war. Zeigt
+    einer dieser Pfade während der Tests wieder ins Repo-data/, ist der
+    Riegel in tests/conftest.py weg — dann hier rot, bevor Daten leiden."""
+    import gedaechtnis
+    import transkript
+    echt = os.path.realpath(os.path.join(ROOT, "data"))
+    for name, pfad in (("transkript", transkript._DIR), ("gedaechtnis", gedaechtnis._DIR)):
+        assert not os.path.realpath(pfad).startswith(echt), \
+            f"{name}._DIR zeigt im Test ins echte data/: {pfad}"
+

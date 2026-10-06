@@ -51,6 +51,19 @@ _USAGE_TMP = os.path.join(tempfile.gettempdir(),
 os.environ.setdefault("ZENTRALE_USAGE_FILE", _USAGE_TMP)
 atexit.register(lambda: os.path.exists(_USAGE_TMP) and os.remove(_USAGE_TMP))
 
+# 4b. Transkript und Gedächtnis in ein Wegwerf-Verzeichnis umlenken.
+#
+# Die Konsolidierungs-Tests fahren den echten Weg bis transkript.schreiben —
+# und der schrieb fest nach data/ai_transcripts/. Gefunden am 2026-10-06:
+# 165 von 236 Zeilen in Sashas echtem Transkript waren Probesätze wie „ich
+# mag kaffee" / „es heisst brummer", seit August, bei jedem Testlauf neu.
+# Ein Transkript, das zu zwei Dritteln aus Tests besteht, ist kein
+# Rohmaterial mehr, sondern eine Lüge über das, was gesagt wurde.
+_DATEN_TMP = tempfile.mkdtemp(prefix="zentrale_daten_test_")
+os.environ.setdefault("ZENTRALE_TRANSKRIPT_DIR", os.path.join(_DATEN_TMP, "ai_transcripts"))
+os.environ.setdefault("ZENTRALE_GEDAECHTNIS_DIR", os.path.join(_DATEN_TMP, "gedaechtnis"))
+atexit.register(lambda: shutil.rmtree(_DATEN_TMP, ignore_errors=True))
+
 # 5. Theme-Dateien in ein Wegwerf-Verzeichnis umlenken.
 #
 # Dieselbe Klasse Fehler wie Punkt 3, nur teurer, weil man sie SIEHT: der

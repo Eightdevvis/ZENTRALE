@@ -36,3 +36,17 @@ Durchgehen also auf beiden Rechnern entscheiden.
 18.08.2026 aus, aber der Seed beim ersten Chat schreibt noch hinein, und mit
 `ZENTRALE_GRAPH_KONTEXT=1` wäre er sofort wieder da. Gehören zur Entscheidung
 „Graph ganz rückbauen oder behalten“.
+
+## Offen: Testmüll im Transkript (gefunden 2026-10-06)
+
+Die Konsolidierungs-Tests schrieben seit August bei jedem Lauf Probesätze
+(„ich mag kaffee" → „ok", „es heisst brummer" → „schoen") in das **echte**
+Transkript `data/ai_transcripts/`. Ursache behoben (Test-Umlenkung in
+`tests/conftest.py`, Wächter in `tests/test_keine_seiteneffekte.py`).
+
+Stand am 06.10. auf dem Laptop: **165 von 236 Zeilen sind Testmüll** (in allen
+sechs Monatsdateien, lokal und Cloud). `scripts/transkript_testmuell.py` zeigt
+sie an und nimmt sie nur auf ausdrücklichen Wunsch heraus (vorher Sicherung je
+Datei). Erkannt wird eine Zeile nur, wenn Frage UND Antwort wörtlich in den
+Testdateien stehen. Auf dem PC liegt vermutlich ähnlicher Müll — dort genauso
+prüfen, sonst bringt der Sync ihn zurück.
