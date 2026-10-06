@@ -40,10 +40,11 @@
 import json as _json
 import os
 
-import ai
 import cloud      # geteilt: Graph-Pfad, System-Bloecke
 import graph
 import kidebug    # Devtools-Bus (scripts/ai_devtools.py)
+import ki_prompt
+import ki_werkzeuge
 import providers
 import werkzeug_schleife  # die EINE Tool-Schleife; hier steht nur der OpenAI-Adapter
 
@@ -160,19 +161,19 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     # Tool-Set von der Schiene, nicht aus ai.TOOLS: dort haengt das
     # Set fuer KLEINE Modelle (siehe core/profil/).
     active_tools = tools if tools is not None else cloud.cloud_tools()
-    active_exec  = tool_executor if tool_executor is not None else ai._execute_tool
+    active_exec  = tool_executor if tool_executor is not None else ki_werkzeuge.ausfuehren
     store        = None if tutor_mode else cloud.CLOUD_GRAPH
 
-    user_query = ai._last_user_query(messages)
+    user_query = ki_prompt._last_user_query(messages)
 
     if tutor_mode:
         mem_ctx = ""
     else:
         cloud.prepare_store()      # Embedder anmelden (derselbe Cloud-Graph)
-        ai._ensure_seed_once(store=store)
+        graph.einmal_seeden(store=store)
         mem_ctx = (graph.context_for_query(user_query, store=store,
                                            max_chars=cloud._CTX_CHARS)
-                   if ai.GRAPH_KONTEXT else "")
+                   if ki_prompt.GRAPH_KONTEXT else "")
 
     msgs   = _prepare_messages(
         messages,

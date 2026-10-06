@@ -124,17 +124,17 @@ def turn(frage, modell=None):
     "nichts Neues" sehen. Genau das hat am 17.08. einen Fehlschlag
     vorgetäuscht, den es nicht gab.
     """
-    import ai, cloud, consolidation, state
+    import cloud, consolidation, ki_werkzeuge, state
 
     gerufen = []
-    echt = ai._execute_tool
+    echt = ki_werkzeuge.ausfuehren
     echt_save = consolidation.zug_vormerken
 
     def mitschreiben(name, args):
         gerufen.append(name)
         return echt(name, args)
 
-    ai._execute_tool = mitschreiben
+    ki_werkzeuge.ausfuehren = mitschreiben
     consolidation.zug_vormerken = lambda *a, **k: None
     state.wait_permission = lambda: "nein"      # nichts schreiben lassen
     state.request_permission = lambda **k: None
@@ -146,7 +146,7 @@ def turn(frage, modell=None):
                 text += ev
         return text.strip(), gerufen
     finally:
-        ai._execute_tool = echt
+        ki_werkzeuge.ausfuehren = echt
         consolidation.zug_vormerken = echt_save
 
 

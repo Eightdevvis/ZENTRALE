@@ -17,7 +17,7 @@
 #
 # ── Was hier NICHT passiert ─────────────────────────────────────────────
 # Tool-Ausführung. Der Modellwechsel betrifft, WER DENKT, nicht wer ausführt:
-# _dispatch_tool/_execute_tool in ai.py bleiben unangetastet und laufen
+# ki_werkzeuge (früher _dispatch_tool/_execute_tool in ai.py) bleibt unangetastet und läuft
 # weiterhin lokal. Diese Datei übersetzt nur zwischen zwei Tool-Dialekten —
 # aus geparsten Ollama-Textblöcken werden native tool_use-Blöcke und zurück.
 #
@@ -46,7 +46,8 @@
 
 import os
 
-import ai        # Prompt-Blöcke, TOOLS, Gate, Tool-Ausführung — alles wiederverwendet
+import ki_prompt     # Prompt-Bausteine (Jetzt, Imprint, Alarme, Schalter)
+import ki_werkzeuge  # Tool-Ausführung — lokal, egal wer denkt
 import graph
 import kidebug   # Devtools-Bus: was WIRKLICH rausgeht (scripts/ai_devtools.py)
 import werkzeug_schleife  # die EINE Tool-Schleife; hier steht nur der Anthropic-Adapter
@@ -112,7 +113,7 @@ _MAX_TOKENS = int(os.environ.get("ZENTRALE_CLOUD_MAX_TOKENS", "16000"))
 _CACHE_TTL = os.environ.get("ZENTRALE_CACHE_TTL", "1h")
 
 # Zeichenbudget für den Graph-Kontext — greift nur mit ZENTRALE_GRAPH_KONTEXT=1
-# (ai.GRAPH_KONTEXT, seit 18.08.2026 per Default aus). Er ändert sich mit jeder Frage, geht
+# (ki_prompt.GRAPH_KONTEXT, seit 18.08.2026 per Default aus). Er ändert sich mit jeder Frage, geht
 # also bei JEDEM Turn ungecacht raus — und `max_nodes` deckelt nur die Anzahl,
 # über die Länge sagt eine Knotenzahl nichts.
 _CTX_CHARS = int(os.environ.get("ZENTRALE_CLOUD_CTX_CHARS", "2500"))
@@ -246,11 +247,11 @@ def _static_system(system: str | None, tutor_mode: bool) -> str:
     if tutor_mode:
         # Fremdes Tool-Set (Tutor): eigener vollständiger Prompt, kein Memory,
         # keine Bild-Marker. Faktisch eine eigene, dritte Schiene.
-        return system or ai._SYSTEM_PROMPT
+        return system or ki_prompt._SYSTEM_PROMPT
 
     # Die Schiene entscheidet, was hier drinsteht — nicht dieser Modul.
     # Hier draussen faehrt ein Frontier-Modell, also `gross`.
-    teile = [_profil().system(system, dashview=ai._DASHVIEW)]
+    teile = [_profil().system(system, dashview=ki_prompt._DASHVIEW)]
     # Das Datei-Gedaechtnis: Steckbrief, Ziele, Dossier-TITEL. Gehoert in
     # den gecachten Teil — es aendert sich fast nie, und genau darin liegt
     # der Unterschied zum alten Graph-Block, der bei jedem Turn neu und
@@ -262,7 +263,7 @@ def _static_system(system: str | None, tutor_mode: bool) -> str:
         kopf = ""
     if kopf:
         teile.append(kopf)
-    imprint = ai._imprint_prompt()
+    imprint = ki_prompt._imprint_prompt()
     if imprint:
         teile.append(imprint)
     return "\n\n".join(teile)
@@ -282,7 +283,7 @@ def cloud_tools() -> list:
 def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
     """
     Das Wechselnde: Jetzt-Block, Alarme, Mic-Hinweis. Der Graph-Kontext
-    stand bis 18.08.2026 hier und ist aus (ai.GRAPH_KONTEXT); Imprint und
+    stand bis 18.08.2026 hier und ist aus (ki_prompt.GRAPH_KONTEXT); Imprint und
     Gedaechtnis-Kopf gehoeren NICHT hierher, sondern in _static_system.
 
     Das steht NICHT mehr im System-Prompt. Dort saß es vor dem gesamten
@@ -292,21 +293,21 @@ def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
 
     Jetzt hängt es als letzter Block an der neuesten User-Nachricht, also
     hinter allem Cachebaren. Es bleibt ungecacht — aber nur es.
-    Reihenfolge wie im lokalen Pfad (siehe _PROMPT_ORDER in ai.py).
+    Reihenfolge wie im lokalen Pfad (siehe _PROMPT_ORDER in ki_prompt.py).
     """
     parts = []
     if mem_ctx:
         parts.append(mem_ctx)
-    parts.append(ai._now_prompt())
+    parts.append(ki_prompt._now_prompt())
     if not tutor_mode:
         # Der Imprint steht NICHT hier, sondern im gecachten Kopf
         # (_static_system). Er ändert sich mit dem Tag, nicht mit dem Turn —
         # hier unten würde er bei jedem Turn ungecacht mitbezahlt.
-        alarm = ai._alarm_prompt()
+        alarm = ki_prompt._alarm_prompt()
         if alarm:
             parts.append(alarm)
         if via_mic:
-            parts.append(ai._MIC_INPUT_HINT)
+            parts.append(ki_prompt._MIC_INPUT_HINT)
     return "\n\n".join(parts)
 
 
@@ -414,7 +415,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     Drop-in für ai.chat_stream() gegen die Anthropic-API.
 
     Gleiche Signatur, gleiches Event-Protokoll (siehe Kopf dieser Datei).
-    tools/tool_executor: None → Kern-Tools (ai.TOOLS + ai._execute_tool).
+    tools/tool_executor: None → Kern-Tools (Schiene + ki_werkzeuge.ausfuehren).
     Ein fremdes Tool-Set (Tutor) schaltet Memory, Bild-Marker und Gate ab —
     exakt wie im lokalen Pfad.
 
@@ -433,20 +434,20 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     # Tool-Set von der Schiene, nicht aus ai.TOOLS: dort haengt das
     # Set fuer KLEINE Modelle (siehe core/profil/).
     active_tools = tools if tools is not None else cloud_tools()
-    active_exec  = tool_executor if tool_executor is not None else ai._execute_tool
+    active_exec  = tool_executor if tool_executor is not None else ki_werkzeuge.ausfuehren
     store        = None if tutor_mode else CLOUD_GRAPH
 
-    user_query = ai._last_user_query(messages)
+    user_query = ki_prompt._last_user_query(messages)
 
     if tutor_mode:
         mem_ctx = ""
     else:
         # Embedder anmelden, Identity-Seed sicherstellen, dann Kontext von dort.
         prepare_store()
-        ai._ensure_seed_once(store=store)
+        graph.einmal_seeden(store=store)
         mem_ctx = (graph.context_for_query(user_query, store=store,
                                            max_chars=_CTX_CHARS)
-                   if ai.GRAPH_KONTEXT else "")
+                   if ki_prompt.GRAPH_KONTEXT else "")
 
     # Statischer Kopf ins system-Feld (gecacht), Wechselndes ans Ende der
     # neuesten User-Nachricht (ungecacht, aber hinter allem Cachebaren).

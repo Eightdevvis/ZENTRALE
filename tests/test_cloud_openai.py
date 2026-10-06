@@ -13,6 +13,7 @@ import ai
 import consolidation
 import cloud
 import cloud_openai
+import graph
 
 
 # ── Fake-OpenAI ────────────────────────────────────────────────────────
@@ -85,7 +86,7 @@ def kein_echter_graph(monkeypatch):
     gespeichert = []
     monkeypatch.setattr(cloud_openai.graph, "context_for_query",
                         lambda *a, **k: "## Erinnerung\n(test)")
-    monkeypatch.setattr(ai, "_ensure_seed_once", lambda *a, **k: None)
+    monkeypatch.setattr(graph, "einmal_seeden", lambda *a, **k: None)
     monkeypatch.setattr(consolidation, "zug_vormerken",
                         lambda u, a, store=None: gespeichert.append((u, a, store)))
     return gespeichert

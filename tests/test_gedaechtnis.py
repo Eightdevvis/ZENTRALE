@@ -378,7 +378,8 @@ def test_neue_kurve_ist_gegatet():
 
 
 def test_log_series_legt_nichts_von_selbst_an():
-    antwort = ai._log_series({"series": "gibtsnicht", "value": 3})
+    import ki_werkzeuge
+    antwort = ki_werkzeuge._log_series({"series": "gibtsnicht", "value": 3})
     assert "Keine Messreihe" in antwort
 
 

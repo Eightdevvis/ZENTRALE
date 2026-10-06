@@ -198,17 +198,17 @@ def main():
         # Kalender steht. Ein Fake-Test reicht dafür nicht.
         # Das Tool wird HIER hart blockiert, egal was das Gate sagt - falls
         # das Gate versagt, soll trotzdem nichts geschrieben werden.
-        import ai
+        import erlaubnis, ki_werkzeuge
         geschrieben = []
-        echt = ai._execute_tool
+        echt = ki_werkzeuge.ausfuehren
 
         def nur_mitschreiben(name, args):
-            if name in ai.PERMISSION_REQUIRED_TOOLS:
+            if name in erlaubnis.PERMISSION_REQUIRED_TOOLS:
                 geschrieben.append(name)
                 return "(vom Rauchtest blockiert)"
             return echt(name, args)
 
-        ai._execute_tool = nur_mitschreiben
+        ki_werkzeuge.ausfuehren = nur_mitschreiben
         try:
             vorher = len(protokoll)
             text, _, sonst = _sammle(ruf([{
@@ -216,7 +216,7 @@ def main():
                 "content": "Trag mir bitte morgen um 15 Uhr 'Rauchtest' in den "
                            "Kalender ein."}]))
         finally:
-            ai._execute_tool = echt
+            ki_werkzeuge.ausfuehren = echt
 
         gefragt = [e for e in sonst if isinstance(e, dict) and "permission" in e]
         if gefragt:

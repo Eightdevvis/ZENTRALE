@@ -16,6 +16,9 @@ import consolidation
 import ai_backends
 import ascii_lib
 import cloud
+import ki_werkzeuge
+import ki_prompt
+import graph
 
 
 # ── Fake-Anthropic ─────────────────────────────────────────────────────
@@ -122,10 +125,9 @@ def kein_echter_graph(monkeypatch):
     gespeichert = []
     monkeypatch.setattr(cloud.graph, "context_for_query",
                         lambda *a, **k: "## Erinnerung\n(test)")
-    monkeypatch.setattr(ai, "_ensure_seed_once", lambda *a, **k: None)
+    monkeypatch.setattr(graph, "einmal_seeden", lambda *a, **k: None)
     monkeypatch.setattr(consolidation, "zug_vormerken",
                         lambda u, a, store=None: gespeichert.append((u, a, store)))
-    monkeypatch.setattr(cloud.ai, "_ensure_seed_once", lambda *a, **k: None)
     return gespeichert
 
 
@@ -212,7 +214,7 @@ def test_wechselndes_haengt_hinten_an_der_letzten_user_nachricht(fake, monkeypat
     Der Graph-Kontext ist inzwischen per Default aus (Datei-Gedaechtnis).
     Hier wird er absichtlich eingeschaltet: geprueft wird die PLATZIERUNG
     des Wechselnden, und der Graph ist davon das anschaulichste Beispiel."""
-    monkeypatch.setattr(cloud.ai, "GRAPH_KONTEXT", True)
+    monkeypatch.setattr(ki_prompt, "GRAPH_KONTEXT", True)
     c = fake([{"text": ["ok"], "stop_reason": "end_turn"}])
     _lauf(cloud.chat_stream(_msgs()))
     kw = c.calls[0]
@@ -565,7 +567,7 @@ def test_cloud_laeuft_auch_ohne_ollama(fake, tmp_path, monkeypatch):
     monkeypatch.setattr(cloud.graph, "context_for_query", graph.context_for_query)
 
     # Seed gegen den echten Graphen laufen lassen, ebenfalls ohne Embedder.
-    monkeypatch.setattr(ai, "_ensure_seed_once",
+    monkeypatch.setattr(graph, "einmal_seeden",
                         lambda store=None: graph.ensure_seed(store=store))
 
     fake([{"text": ["Ich hab dazu nichts gespeichert."], "stop_reason": "end_turn"}])
@@ -637,7 +639,7 @@ def test_rauchtest_laeuft_alle_stufen_durch(fake, monkeypatch, capsys):
          "stop_reason": "tool_use"},
         {"text": ["Nichts los."], "stop_reason": "end_turn"},
     ])
-    monkeypatch.setattr(ai, "_execute_tool", lambda n, a: "keine Termine")
+    monkeypatch.setattr(ki_werkzeuge, "ausfuehren", lambda n, a: "keine Termine")
 
     sicherung = (state.push_log, state.wait_permission, state.request_permission)
     try:

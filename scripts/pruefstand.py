@@ -131,10 +131,10 @@ def szenario():
 
 def turn(frage, modell=None, erlaubnis="nein"):
     """Eine Frage durchs echte Backend. → (text, tools, gate_fragen)."""
-    import ai, cloud, consolidation, state
+    import cloud, consolidation, ki_werkzeuge, state
 
     tools, gefragt = [], []
-    echt_tool, echt_save = ai._execute_tool, consolidation.zug_vormerken
+    echt_tool, echt_save = ki_werkzeuge.ausfuehren, consolidation.zug_vormerken
 
     def mit(name, args):
         tools.append(name)
@@ -143,7 +143,7 @@ def turn(frage, modell=None, erlaubnis="nein"):
     def frage_merken(**kw):
         gefragt.append(kw.get("frage") or str(kw))
 
-    ai._execute_tool = mit
+    ki_werkzeuge.ausfuehren = mit
     consolidation.zug_vormerken = lambda *a, **k: None      # spart pro Frage einen Call
     state.request_permission = frage_merken
     state.wait_permission = lambda *a, **k: erlaubnis
@@ -155,7 +155,7 @@ def turn(frage, modell=None, erlaubnis="nein"):
                 text += ev
         return text.strip(), tools, gefragt
     finally:
-        ai._execute_tool = echt_tool
+        ki_werkzeuge.ausfuehren = echt_tool
         consolidation.zug_vormerken = echt_save
 
 

@@ -103,6 +103,8 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `consolidation` | 3 | Nach dem Zug: Transkript (und Graph-Extraktion, wenn an) |
 | `erlaubnis` | 3 | Das Erlaubnis-Gate: welche Werkzeuge bestätigt werden müssen, und die Frage dazu |
 | `ki_antwort` | 3 | Fertige Antwort: Bild-Marker ziehen, Zug zum Merken vormerken |
+| `ki_prompt` | 3 | Prompt-Bausteine für jeden Weg: Jetzt-Block, Imprint, Alarme, Denk-Heuristik, Schalter |
+| `ki_werkzeuge` | 3 | Was ein KI-Werkzeug tut: ausfuehren(name, args) → Kalender, Notizen, Netz, Mail, Messreihen |
 | `main` | 4 | Event-Loop |
 | `brain` | 4 | Input → neue Events |
 | `actions` | 4 | Events → Nebenwirkungen |
@@ -175,13 +177,10 @@ das in Punkt 2 (KI-Kern entflechten).
 
 | Kante | Wofür |
 |---|---|
-| `ai → werkzeug_schleife` | der lokale Weg fährt durch die gemeinsame Schleife |
 | `ai_backends → cloud` | liefert das Modul für den Anthropic-Chat |
 | `ai_backends → cloud_openai` | liefert das Modul für den OpenAI-Chat |
-| `cloud → ai` | Tool-Liste, Tool-Ausführung, Prompt-Bausteine, Zeit- und Alarm-Block |
 | `cloud → ai_backends` | Modell und Effort |
 | `cloud → werkzeug_schleife` | die Schleife |
-| `cloud_openai → ai` | Tool-Liste, Tool-Ausführung, Graph-Schalter |
 | `cloud_openai → ai_backends` | Modell |
 | `cloud_openai → cloud` | statischer Prompt, wechselnder Block, Cloud-Graph |
 | `cloud_openai → werkzeug_schleife` | die Schleife |

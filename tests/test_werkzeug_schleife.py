@@ -13,6 +13,8 @@ import pytest
 
 import ai
 import consolidation
+import graph
+import ki_prompt
 import ai_backends
 import state
 import werkzeug_schleife
@@ -53,10 +55,10 @@ def ollama(monkeypatch):
 def ruhig(monkeypatch):
     """Alles abklemmen, was beim Prompt-Bau oder Speichern echte Daten anfasst."""
     gespeichert = []
-    monkeypatch.setattr(ai, "_ensure_seed_once", lambda *a, **k: None)
-    monkeypatch.setattr(ai, "_imprint_prompt", lambda: "")
-    monkeypatch.setattr(ai, "_alarm_prompt", lambda: "")
-    monkeypatch.setattr(ai, "_should_think", lambda m: False)
+    monkeypatch.setattr(graph, "einmal_seeden", lambda *a, **k: None)
+    monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda: "")
+    monkeypatch.setattr(ki_prompt, "_alarm_prompt", lambda: "")
+    monkeypatch.setattr(ki_prompt, "_should_think", lambda m: False)
     monkeypatch.setattr(consolidation, "zug_vormerken",
                         lambda u, a, store=None: gespeichert.append((u, a)))
     monkeypatch.setattr(state, "push_log", lambda *a, **k: None)
@@ -115,7 +117,7 @@ def test_lokal_krachendes_tool_reisst_den_zug_nicht_ab(ollama):
 def test_lokal_think_aus_nach_dem_ersten_tool(ollama, monkeypatch):
     """qwen3.5-Template-Bug: die Synthese-Runde mit think kippt die Antwort
     ins thinking-Feld. Das muss der Adapter weiter abfangen."""
-    monkeypatch.setattr(ai, "_should_think", lambda m: True)
+    monkeypatch.setattr(ki_prompt, "_should_think", lambda m: True)
     monkeypatch.setattr(ai, "ADAPTIVE_THINK", True)
     monkeypatch.setattr(ai, "SUPPORTS_THINK", True)
     gesendet = ollama([_tool("read_calendar", {}), _text("ok")])

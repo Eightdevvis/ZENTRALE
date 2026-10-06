@@ -1382,3 +1382,32 @@ def dump(store: str | None = None) -> dict:
     st = _get_store(store)
     with st.lock:
         return _load_raw(st)
+
+
+# ── Einmal pro Store seeden ────────────────────────────────────────────
+# Bis 2026-10-06 als ai._ensure_seed_once in core/ai.py; beide Cloud-Wege
+# importierten dafür den lokalen Weg. Es geht nur den Graphen an.
+
+_seed_done = set()   # Pfade (bzw. None fuer den Core-Graph), die schon geseedet sind
+
+def einmal_seeden(store: str | None = None):
+    """Lazy idempotent seed des Identity-Graphen. Bei erstem Chat ausgeführt.
+
+    Pro Store einmal: der Cloud-Pfad hat einen EIGENEN Graphen und braucht
+    denselben Identity-Seed, sonst weiss die Cloud-KI nicht, was sie kann und
+    was nicht (die kann/kann-nicht-Kanten sind ihr Selbstbild)."""
+    if store in _seed_done:
+        return
+    try:
+        ensure_seed(store=store)
+        # Internet-Pipe (2026-06-07): bereits geseedete Graphen nachziehen -
+        # Internet-Limits zu Fähigkeiten machen. Idempotent + no-op wenn schon
+        # migriert (siehe migrate_internet_access).
+        migrate_internet_access(store=store)
+    except Exception as e:
+        try:
+            import state
+            state.push_log(f"[seed] FEHLER: {e}")
+        except Exception:
+            pass
+    _seed_done.add(store)
