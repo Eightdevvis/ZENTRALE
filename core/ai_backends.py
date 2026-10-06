@@ -93,11 +93,10 @@ def _billigster_erreichbarer() -> str | None:
     Budget-Rückfall."""
     import prices
     kandidaten = _erreichbare_provider()
-    if not kandidaten:
-        return None
-    return min(kandidaten,
-               key=lambda n: (prices.fuer(chat_model(n))["out"],
-                              prices.fuer(chat_model(n))["in"]))
+    # Die Preisregel lebt EINMAL in prices.billigstes — hier nur die
+    # Übersetzung Provider → Modell → zurück zum Provider.
+    billig = prices.billigstes([chat_model(n) for n in kandidaten])
+    return next((n for n in kandidaten if chat_model(n) == billig), None)
 
 
 def cloud_enabled() -> bool:
