@@ -33,19 +33,26 @@
 
 import os
 import copy
-import json
 import hashlib
 import threading
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from dateutil.rrule import rrulestr
-
 import state  # Logging in den UI-Terminal-Stream
+import kalender_regel
+import kalender_speicher
+from kalender_ics import ohne_interna
 
 # ── Pfad & Locking ─────────────────────────────────────────────────────
+# CAL_PATH ist der Ort der ALTEN JSON. Alle anderen Kalender-Pfade (vdir,
+# Nebendaten, Verlauf, Snapshots) leiten sich aus seinem Ordner ab
+# (kalender_speicher.pfade) — so biegt ein Test, der CAL_PATH umlenkt, beide
+# Speicher zugleich in sein Wegwerf-Verzeichnis.
 CAL_PATH = Path(__file__).resolve().parent.parent / "data" / "ai_calendar.json"
+ICS_DIR: Path | None = None       # None = data/kalender/ neben CAL_PATH
 _lock    = threading.Lock()
+_ERZWUNGEN = None                 # mit_speicher(): fester Speicher für Skripte/Tests
 
 # ── Default-Layer beim ersten Boot ────────────────────────────────────
 # Farben sind als Hinweis für späteres UI gedacht (Konzept-Browser,
@@ -83,22 +90,50 @@ _MONTHS_FULL_DE    = ["Januar", "Februar", "März", "April", "Mai", "Juni",
 
 
 # ── Persistenz ─────────────────────────────────────────────────────────
+# Seit 2026-10-06 austauschbar: die alte JSON (core/kalender_json.py) oder
+# der .ics-Ordner (core/kalender_ics.py), gewählt über die Einstellung
+# `kalender_speicher` (memory/werkzeuge/kalender_ics_bauplan.md). Alles
+# darüber — Kollisionen, Alarme, Imprint — arbeitet unverändert auf dem
+# Daten-Dict und weiß nicht, woher es kommt.
+def _speicher():
+    return _ERZWUNGEN or kalender_speicher.speicher_fuer(CAL_PATH, ICS_DIR)
+
+
+@contextmanager
+def mit_speicher(speicher):
+    """Für Skripte und Tests (Migration, Vergleich json↔ics): alle
+    Kalender-Funktionen laufen in diesem Block gegen `speicher`. Nicht für
+    den laufenden Betrieb — der Schalter ist prozessweit."""
+    global _ERZWUNGEN
+    vorher, _ERZWUNGEN = _ERZWUNGEN, speicher
+    try:
+        yield speicher
+    finally:
+        _ERZWUNGEN = vorher
+
+
+def _default_layers() -> dict:
+    # TIEF kopieren. `dict(v)` kopierte nur die Layer-Hülle — `entries`
+    # und `routines` blieben DIESELBEN Objekte wie in _DEFAULT_LAYERS.
+    # Ein Eintrag, der vor der ersten gespeicherten Datei geschrieben
+    # wurde, landete damit in der Vorlage und tauchte danach in jedem
+    # "frischen" Kalender dieses Prozesses wieder auf.
+    # Ebenen, die ein Speicher nicht mehr führt (`erlebt` in .ics), fehlen.
+    weg = _speicher().ohne_layer
+    return {k: copy.deepcopy(v) for k, v in _DEFAULT_LAYERS.items() if k not in weg}
+
+
 def _load_raw() -> dict:
-    if not CAL_PATH.exists():
-        # TIEF kopieren. `dict(v)` kopierte nur die Layer-Hülle — `entries`
-        # und `routines` blieben DIESELBEN Objekte wie in _DEFAULT_LAYERS.
-        # Ein Eintrag, der vor der ersten gespeicherten Datei geschrieben
-        # wurde, landete damit in der Vorlage und tauchte danach in jedem
-        # "frischen" Kalender dieses Prozesses wieder auf.
-        return {"version": 1, "layers": copy.deepcopy(_DEFAULT_LAYERS)}
-    with CAL_PATH.open() as f:
-        return json.load(f)
+    data = _speicher().laden()
+    if data is None:
+        return {"version": 1, "layers": _default_layers()}
+    return data
 
 
 def _save_raw(data: dict) -> None:
-    CAL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with CAL_PATH.open("w") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    # Wirft KalenderGesperrt (Massenlösch-Sperre, Rückfall-Sperre): dann ist
+    # nichts geschrieben, und der Aufrufer soll es merken — kein except hier.
+    _speicher().speichern(data)
     # Echte Änderung geschrieben → Peer-Push anstoßen (no-op ohne AUTOPUSH).
     try:
         from datasync import notify_change
@@ -125,15 +160,15 @@ def ensure_init() -> None:
     benutzerdefinierte Layer bleiben unberührt.
     """
     with _lock:
-        if not CAL_PATH.exists():
-            _save_raw({"version": 1, "layers": {k: dict(v) for k, v in _DEFAULT_LAYERS.items()}})
+        data = _speicher().laden()
+        if data is None:
+            _save_raw({"version": 1, "layers": _default_layers()})
             return
-        data = _load_raw()
         layers = data.setdefault("layers", {})
         changed = False
-        for name, default in _DEFAULT_LAYERS.items():
+        for name, default in _default_layers().items():
             if name not in layers:
-                layers[name] = dict(default)
+                layers[name] = default
                 changed = True
         if changed:
             _save_raw(data)
@@ -285,7 +320,7 @@ def routine_finden(label: str, layer: str | None = None) -> list:
         lyr = layers.get(lname) or {}
         for i, r in enumerate(lyr.get("routines") or []):
             if needle in (r.get("label") or "").lower():
-                aus.append((lname, i, r))
+                aus.append((lname, i, ohne_interna(r)))
     return aus
 
 
@@ -309,13 +344,9 @@ def routine_aendern(label: str, layer: str | None = None,
     """
     if neues_label:
         felder["label"] = neues_label
-    if felder.get("rrule"):
-        try:
-            rrulestr(f"DTSTART:{date.today().strftime('%Y%m%dT000000')}\n"
-                     f"RRULE:{felder['rrule']}")
-        except Exception as e:
-            state.push_log(f"[calendar] ungueltige rrule {felder['rrule']!r}: {e}")
-            return 0
+    if felder.get("rrule") and not kalender_regel.regel_gueltig(felder["rrule"]):
+        state.push_log(f"[calendar] ungueltige rrule {felder['rrule']!r}")
+        return 0
     treffer = routine_finden(label, layer)
     if not treffer:
         return 0
@@ -414,21 +445,10 @@ def _routine_hits_day(r: dict, d: date) -> bool:
     die an dem Tag gar nicht stattfindet → es passiert sichtbar nichts).
     Expandiert die rrule für den einen Tag (gleiche Logik wie entries_in_range).
     Defensiv: ungültige/fehlende rrule → False."""
-    rule_str = r.get("rrule")
-    if not rule_str:
+    if not r.get("rrule"):
         return False
     try:
-        rule = rrulestr(
-            f"DTSTART:{datetime.combine(d, datetime.min.time()).strftime('%Y%m%dT%H%M%S')}\n"
-            f"RRULE:{rule_str}"
-        )
-        until = datetime.combine(d, datetime.max.time())
-        for occ in rule:
-            if occ > until:
-                break
-            if occ.date() == d:
-                return True
-        return False
+        return bool(kalender_regel.vorkommen(r, d, d))
     except Exception:
         return False
 
@@ -552,14 +572,8 @@ def add_routine(layer: str, label: str, rrule_str: str,
     Validierung läuft via dateutil; ungültige Regeln werden abgewiesen
     und geloggt, damit nichts kaputtes persistiert wird.
     """
-    try:
-        # Dummy DTSTART zum Parsen – wird beim Lesen pro Range neu gesetzt.
-        rrulestr(
-            f"DTSTART:{date.today().strftime('%Y%m%dT000000')}\n"
-            f"RRULE:{rrule_str}"
-        )
-    except Exception as e:
-        state.push_log(f"[calendar] ungültige rrule {rrule_str!r}: {e}")
+    if not kalender_regel.regel_gueltig(rrule_str):
+        state.push_log(f"[calendar] ungültige rrule {rrule_str!r}")
         return False
 
     with _lock:
@@ -627,30 +641,20 @@ def add_pause(label: str, von: str, bis: str, grund: str | None = None) -> bool:
 
 
 # ── Auto-Capture aus dem Graph: ERSATZLOS GESTRICHEN (17.08.2026) ──────
-#
-# Hier stand `auto_capture(concept, day_iso)`: der Graph-Extraktor spiegelte
-# jede `geschah-am`-Kante als Eintrag in den `erlebt`-Layer. Absicht war ein
-# „war da was?"-Skelett, „ohne dass die KI dafür explizit Tool-Calls machen
-# muss". Genau das war der Fehler — es war ein SCHREIBWEG AM GATE VORBEI:
-#
-#  * Jeder Kalender-Schreib-Tool-Call (`add_calendar_entry` & Co.) steht in
-#    `ai.PERMISSION_REQUIRED_TOOLS` und muss von Sasha bestätigt werden.
-#    Auto-Capture war kein Tool-Call, sondern ein Nebeneffekt der
-#    Konsolidierung im Hintergrund-Thread — nie gefragt, nie gesehen.
-#  * Der `erlebt`-Layer ist `default_visible: False`. Sashas Ansichten
-#    (`week_view`/`day_view`) filtern ihn weg, `entries_in_range` — der
-#    Tool-Pfad der KI — nicht. Geschrieben wurde also ungefragt in eine
-#    Ebene, die NUR die KI lesen konnte.
-#  * Damit wurde aus einem Extraktions-Irrtum eine Kalender-Tatsache: aus
-#    der FRAGE „kann ich heute wieder Sport machen?" wurde ein erlebter
-#    Sport-Termin, den der nächste Turn als Beleg zurücklas.
-#
-# Was den Kalender füllt, sind jetzt wieder nur Sasha und bestätigte
-# Tool-Calls. Was die KI ohne Tool-Runde über den Tag wissen soll, liefert
-# `imprint_for_prompt()` weiter unten — lesend statt schreibend.
+# `auto_capture` spiegelte geschah-am-Kanten des Graphen ungefragt in den
+# unsichtbaren `erlebt`-Layer — ein Schreibweg am Erlaubnis-Gate vorbei, den
+# nur die KI lesen konnte. Den Kalender füllen nur Sasha und bestätigte
+# Tool-Calls; lesend hilft `imprint_for_prompt()`. Ganze Begründung:
+# memory/werkzeuge/kalender_system.md ("Auto-Capture vom Graph").
 
 
 # ── Lese-API ───────────────────────────────────────────────────────────
+def _aussen(e: dict) -> dict:
+    """Ein Eintrag ohne die internen Felder des .ics-Speichers (`_ics`: UID,
+    Position). Die gehören nie in eine Antwort an Fronten oder KI."""
+    return {k: v for k, v in e.items() if not k.startswith("_ics")}
+
+
 def entries_in_range(start: date, end: date,
                      layers: list[str] | None = None) -> dict:
     """
@@ -700,41 +704,41 @@ def entries_in_range(start: date, end: date,
                     if d1 < d0:
                         d1 = d0
                     times = e.get("times") if isinstance(e.get("times"), dict) else {}
+                    # `enden`: Ende pro Tag — gibt es nur bei Spannen, die von
+                    # außen kommen (.ics: "Fr 18:00 bis So 14:00", Messe mit
+                    # eigener Zeit je Tag). Die alte JSON kennt das Feld nicht.
+                    enden = e.get("enden") if isinstance(e.get("enden"), dict) else {}
                     cur = max(d0, start)
                     last = min(d1, end)
                     while cur <= last:
                         ci = cur.isoformat()
-                        copy = {k: v for k, v in e.items()
-                                if k not in ("bis", "times")}
-                        copy.update({
+                        kopie = {k: v for k, v in _aussen(e).items()
+                                 if k not in ("bis", "times", "enden")}
+                        kopie.update({
                             "layer": layer_name, "spanning": True,
                             "von": day_iso, "bis": bis_s,
                             "span_first": (cur == d0), "span_last": (cur == d1),
                         })
                         t = times.get(ci)
                         if t:
-                            copy["time"] = t          # Uhrzeit nur für diesen Tag
+                            kopie["time"] = t          # Uhrzeit nur für diesen Tag
                         else:
-                            copy.pop("time", None)     # sonst ganztägig
-                        out.setdefault(ci, []).append(copy)
+                            kopie.pop("time", None)     # sonst ganztägig
+                        if enden.get(ci):
+                            kopie["ende"] = enden[ci]
+                        out.setdefault(ci, []).append(kopie)
                         cur += timedelta(days=1)
                 elif start <= d0 <= end:
                     out.setdefault(day_iso, []).append({
                         "layer": layer_name,
-                        **e,
+                        **_aussen(e),
                     })
 
         # 2. Routinen expandieren
         for r in layer.get("routines", []):
             try:
-                rule = rrulestr(
-                    f"DTSTART:{datetime.combine(start, datetime.min.time()).strftime('%Y%m%dT%H%M%S')}\n"
-                    f"RRULE:{r['rrule']}"
-                )
-                until = datetime.combine(end, datetime.max.time())
-                for occ in rule:
-                    if occ > until:
-                        break
+                abweichungen = r.get("abweichungen") if isinstance(r.get("abweichungen"), dict) else {}
+                for occ in kalender_regel.vorkommen(r, start, end):
                     day_iso = occ.date().isoformat()
                     # recurring=True markiert diesen Eintrag als Routine (aus einer
                     # rrule expandiert), im Gegensatz zu Einmal-Einträgen. Der
@@ -767,6 +771,22 @@ def entries_in_range(start: date, end: date,
                     # open_alarms/_absage_alarms/conflicts_for_proposed).
                     if day_iso in (r.get("aus") or []):
                         entry["deaktiviert"] = True
+                    # Ein einzelnes Vorkommen, das außerhalb verschoben wurde
+                    # (am Handy: "nur dieser Termin"; .ics RECURRENCE-ID).
+                    ab = abweichungen.get(day_iso)
+                    if isinstance(ab, dict):
+                        if ab.get("entfaellt"):
+                            entry["deaktiviert"] = True
+                        else:
+                            day_iso = ab.get("tag") or day_iso
+                            try:
+                                if not (start <= date.fromisoformat(day_iso) <= end):
+                                    continue
+                            except (TypeError, ValueError):
+                                continue
+                            for k in ("time", "ende", "label", "ort"):
+                                if ab.get(k):
+                                    entry[k] = ab[k]
                     out.setdefault(day_iso, []).append(entry)
             except Exception as e:
                 state.push_log(
@@ -849,95 +869,12 @@ def month_view(reference: date | None = None,
     }
 
 
-# ── Range-Auflösung & Tool-Renderer ────────────────────────────────────
-#
-# Designentscheidung (2026-06): der Kalender wird NICHT mehr in den Prompt
-# geklebt. Die KI greift ihn ausschließlich über das read_calendar-Tool ab
-# - für JEDEN Zeitraum (Woche, Monat, Quartal, Vergangenheit). Grund: Glue
-# skaliert nicht ("was steht in 3 Monaten an?" lässt sich nicht mitkleben)
-# und erzeugt einen faulen Halb-Weg, auf dem das 14B-Modell aus dem
-# geklebten Block antwortet statt das Tool zu rufen → unnötige Rückfragen.
-#
-# Die Datums-Arithmetik macht hier Python, NICHT das Modell. Ein 14B kann
-# eine Frage gut in einen Bucket KLASSIFIZIEREN ("den Monat" → dieser_monat),
-# aber schlecht ISO-Grenzen RECHNEN. Also: Modell wählt den Bucket, resolve_range
-# liefert die exakten Daten. Beliebige Sonderfälle ("ab dem 15." / weit in der
-# Zukunft) gehen weiter über explizite start/end-Daten.
-
-# Erlaubte Buckets für das `zeitraum`-Arg von read_calendar. Reihenfolge =
-# Reihenfolge im Tool-Enum. Werte sind bewusst sprechend, damit das Modell
-# sie aus der User-Frage ableiten kann.
-RANGE_BUCKETS = [
-    "heute", "morgen", "gestern",
-    "diese_woche", "naechste_woche", "diese_und_naechste_woche", "letzte_woche",
-    "dieser_monat", "naechster_monat", "letzter_monat",
-    "naechste_7_tage", "naechste_30_tage", "naechste_90_tage",
-    "letzte_7_tage", "letzte_30_tage",
-]
-
-
-def _month_last_day(d: date) -> date:
-    """Letzter Tag des Monats, in dem `d` liegt (über 1. des Folgemonats - 1)."""
-    if d.month == 12:
-        first_next = date(d.year + 1, 1, 1)
-    else:
-        first_next = date(d.year, d.month + 1, 1)
-    return first_next - timedelta(days=1)
-
-
-def resolve_range(zeitraum: str, reference: date | None = None
-                  ) -> tuple[date, date] | None:
-    """
-    Übersetzt einen relativen Bucket-Namen in ein konkretes (start, end)-Paar
-    (beide inklusive). Gibt None zurück wenn der Bucket unbekannt ist - dann
-    soll der Aufrufer auf explizite start/end-Daten zurückfallen.
-
-    "Aktuelle"-Buckets (diese_woche, dieser_monat) starten bei HEUTE, nicht
-    am Perioden-Anfang: wer "was steht diese Woche an?" fragt, will keine
-    bereits vergangenen Tage. Vergangenes holt man gezielt über start/end.
-    """
-    today = reference or date.today()
-    if zeitraum == "heute":
-        return today, today
-    if zeitraum == "morgen":
-        t = today + timedelta(days=1)
-        return t, t
-    if zeitraum == "gestern":
-        t = today - timedelta(days=1)
-        return t, t
-    if zeitraum == "diese_woche":
-        sunday = today + timedelta(days=6 - today.weekday())
-        return today, sunday
-    if zeitraum == "naechste_woche":
-        next_monday = today + timedelta(days=7 - today.weekday())
-        return next_monday, next_monday + timedelta(days=6)
-    if zeitraum == "diese_und_naechste_woche":
-        # heute bis Sonntag der NÄCHSTEN Woche - die häufigste Frage
-        # ("steht diese oder nächste Woche was an?") in einem Call.
-        return today, today + timedelta(days=13 - today.weekday())
-    if zeitraum == "letzte_woche":
-        prev_monday = today - timedelta(days=today.weekday() + 7)
-        return prev_monday, prev_monday + timedelta(days=6)
-    if zeitraum == "dieser_monat":
-        return today, _month_last_day(today)
-    if zeitraum == "naechster_monat":
-        first_next = _month_last_day(today) + timedelta(days=1)
-        return first_next, _month_last_day(first_next)
-    if zeitraum == "letzter_monat":
-        last_prev  = date(today.year, today.month, 1) - timedelta(days=1)
-        first_prev = date(last_prev.year, last_prev.month, 1)
-        return first_prev, last_prev
-    if zeitraum == "naechste_7_tage":
-        return today, today + timedelta(days=6)
-    if zeitraum == "naechste_30_tage":
-        return today, today + timedelta(days=29)
-    if zeitraum == "naechste_90_tage":
-        return today, today + timedelta(days=89)
-    if zeitraum == "letzte_7_tage":
-        return today - timedelta(days=6), today
-    if zeitraum == "letzte_30_tage":
-        return today - timedelta(days=29), today
-    return None
+# ── Range-Auflösung ────────────────────────────────────────────────────
+# Datums-Arithmetik für relative Zeiträume steht in core/kalender_zeitraum.py
+# (reine Rechnung, keine Daten). Hier nur durchgereicht, weil ai.py und die
+# Prompt-Profile sie als kalender.RANGE_BUCKETS / kalender.resolve_range
+# kennen.
+from kalender_zeitraum import RANGE_BUCKETS, resolve_range, _month_last_day  # noqa: E402,F401
 
 
 def _to_minutes(hhmm: str) -> int | None:

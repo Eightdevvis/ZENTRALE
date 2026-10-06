@@ -32,6 +32,12 @@ requests
 # Recurrence-Rules (iCal RRULE) für Routinen im Kalender-System
 python-dateutil
 
+# iCalendar lesen/schreiben (.ics) — der Kalender-Speicher im vdir-Format
+# (core/kalender_ics.py, memory/werkzeuge/kalender_ics_bauplan.md). Getestet
+# mit 7.3.0. vdirsyncer (Sync mit Google/CalDAV) ist KEINE Abhängigkeit des
+# Projekts: per pipx installiert, eigenes Programm.
+icalendar>=7.3
+
 # Natives Karten-Fenster (Maps-System): scripts/map_window.py rendert die Karte
 # als zweites X11-Fenster mit echter antialiased Vektorgrafik (aus der TUI per
 # 'w' aufklappbar). Nur dafür nötig — TUI/Backend laufen ohne. ~15 MB Wheel.

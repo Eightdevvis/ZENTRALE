@@ -22,6 +22,9 @@ import pytest
 import kalender
 import takt
 
+# Läuft gegen BEIDE Kalender-Speicher (alte JSON und .ics), tests/conftest.py Punkt 8.
+pytestmark = pytest.mark.kalender_beide
+
 
 @pytest.fixture
 def welt(tmp_path, monkeypatch):

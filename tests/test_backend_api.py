@@ -294,6 +294,7 @@ def test_delete_removes_uid_from_folder_cache(client, monkeypatch, tmp_path):
     assert [m["uid"] for m in A._mail_folders["Uni"]["mails"]] == [6]
 
 
+@pytest.mark.kalender_beide
 def test_api_calendar_week_shape(client):
     # /api/calendar ist die geteilte Quelle für die Kalender-Mitte —
     # nicht KI-gegatet, läuft also auch
@@ -311,6 +312,7 @@ def test_api_calendar_week_shape(client):
     assert (date.fromisoformat(d["end"]) - date.fromisoformat(d["start"])).days == 6
 
 
+@pytest.mark.kalender_beide
 def test_api_calendar_week_weekplan(client):
     # Die Woche ist IMMER die feste Mo-So-Kalenderwoche (Anzeige startet montags,
     # egal welcher Wochentag `ref` ist). Nur die »week«-Listen-Items rollen
@@ -325,6 +327,7 @@ def test_api_calendar_week_weekplan(client):
     assert "weekplan" in d and isinstance(d["weekplan"], dict)
 
 
+@pytest.mark.kalender_beide
 def test_api_calendar_month_grid(client):
     # Monatsansicht: volle Mo-So-Wochenzeilen, first/last grenzen den echten
     # Monat im Gitter ab. ref fixiert, damit der Test datumsunabhängig ist.
@@ -341,12 +344,14 @@ def test_api_calendar_month_grid(client):
     assert (end - start).days % 7 == 6
 
 
+@pytest.mark.kalender_beide
 def test_api_calendar_bad_ref(client):
     # Müll-Datum → 400, nicht 500 (Front darf nie einen Server-Crash auslösen).
     r = client.get("/api/calendar?ref=kaputt")
     assert r.status_code == 400
 
 
+@pytest.mark.kalender_beide
 def test_api_calendar_add_and_delete(client, tmp_path, monkeypatch):
     # Direktes Anlegen/Löschen aus der Kalender-Mitte (TUI/Browser). Auf eine
     # TEMP-Datei umgebogen, damit der echte data/ai_calendar.json unberührt
@@ -369,6 +374,7 @@ def test_api_calendar_add_and_delete(client, tmp_path, monkeypatch):
     assert not r.get_json()["days"].get("2026-06-20")
 
 
+@pytest.mark.kalender_beide
 def test_api_calendar_add_validation(client):
     # Pflichtfelder/Format: 400 VOR jedem Schreibzugriff (keine Mutation, daher
     # kein TEMP-Datei-Setup nötig — diese Fälle schreiben nie).
@@ -380,6 +386,7 @@ def test_api_calendar_add_validation(client):
     assert client.post("/api/calendar/routine/skip", json={"label": "", "day": "2026-06-20"}).status_code == 400
 
 
+@pytest.mark.kalender_beide
 def test_api_calendar_edit_entry(client, tmp_path, monkeypatch):
     # Bestehenden Einmal-Termin ändern (PUT = delete alt + add neu).
     import kalender
@@ -396,6 +403,7 @@ def test_api_calendar_edit_entry(client, tmp_path, monkeypatch):
     assert any(e.get("label") == "Hausarzt" and e.get("ort") == "Praxis" for e in new)
 
 
+@pytest.mark.kalender_beide
 def test_api_calendar_span_add_expands(client, tmp_path, monkeypatch):
     # Mehrtägiger (ganztägiger) Termin: `bis` gesetzt → erscheint an JEDEM Tag
     # der Spanne mit Spann-Markern (span_first/last), ohne pauschale Uhrzeit.
@@ -418,6 +426,7 @@ def test_api_calendar_span_add_expands(client, tmp_path, monkeypatch):
     assert not any(x.get("label") == "Urlaub" for x in days.get("2026-06-26", []))
 
 
+@pytest.mark.kalender_beide
 def test_api_calendar_span_delete(client, tmp_path, monkeypatch):
     # Löschen über den Start-Tag (von) entfernt die GANZE Spanne.
     import kalender
@@ -431,6 +440,7 @@ def test_api_calendar_span_delete(client, tmp_path, monkeypatch):
     assert not any(x.get("label") == "Messe" for es in days.values() for x in es)
 
 
+@pytest.mark.kalender_beide
 def test_api_calendar_span_per_day_time(client, tmp_path, monkeypatch):
     # Optionale Uhrzeit NUR für einen Tag der Spanne (der Rest bleibt ganztägig).
     import kalender
@@ -454,6 +464,7 @@ def test_api_calendar_span_per_day_time(client, tmp_path, monkeypatch):
     assert d24.get("time") is None
 
 
+@pytest.mark.kalender_beide
 def test_api_calendar_span_bad(client, tmp_path, monkeypatch):
     # bis < von → 400; kaputtes bis-Datum → 400.
     import kalender
@@ -465,6 +476,7 @@ def test_api_calendar_span_bad(client, tmp_path, monkeypatch):
                        json={"day": "2026-06-22", "bis": "kaputt", "label": "X"}).status_code == 400
 
 
+@pytest.mark.kalender_beide
 def test_api_calendar_routine_skip(client, tmp_path, monkeypatch):
     # Einzelnes Routine-Vorkommen deaktivieren/aktivieren — reversibel, ohne die
     # Routine zu zerstören. Andere Vorkommen bleiben aktiv.
@@ -494,6 +506,7 @@ def test_api_calendar_routine_skip(client, tmp_path, monkeypatch):
     assert not geige.get("deaktiviert")
 
 
+@pytest.mark.kalender_beide
 def test_api_calendar_routine_skip_same_label_diff_weekday(client, tmp_path, monkeypatch):
     # Regression: ZWEI gleichnamige Routinen an verschiedenen Wochentagen
     # (z.B. zwei 'Parkour' Mi+Fr). Deaktivieren des Fr-Vorkommens darf NUR die
@@ -515,6 +528,7 @@ def test_api_calendar_routine_skip_same_label_diff_weekday(client, tmp_path, mon
     assert not wed.get("deaktiviert")                         # Mi unberührt
 
 
+@pytest.mark.kalender_beide
 def test_api_calendar_add_routine(client, tmp_path, monkeypatch):
     # Neue wöchentliche Routine aus der UI (byday → FREQ=WEEKLY;BYDAY=…).
     import kalender
@@ -532,6 +546,7 @@ def test_api_calendar_add_routine(client, tmp_path, monkeypatch):
     assert client.post("/api/calendar/routine", json={"label": "X", "byday": "XX"}).status_code == 400
 
 
+@pytest.mark.kalender_beide
 def test_api_calendar_delete_routine(client, tmp_path, monkeypatch):
     # Ganze Routine löschen — alle Vorkommen weg, andere Routinen bleiben.
     import kalender
