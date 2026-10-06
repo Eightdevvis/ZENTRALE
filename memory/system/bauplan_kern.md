@@ -178,7 +178,7 @@ Sasha, 05.10.2026: einfrieren, dann zerlegen (Punkt 3).
 | `tui/zentrale_tui.py::run_ui.draw_list_tool` | 259 |
 | `tutor/room.py` | 4034 |
 | `tutor/room.py::main` | 1829 |
-| `ui/app.py` | 2434 |
+| `ui/app.py` | 2374 |
 | `core/mail.py` | 1924 |
 | `core/kalender.py` | 1560 |
 

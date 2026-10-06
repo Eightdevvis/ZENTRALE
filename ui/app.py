@@ -28,7 +28,7 @@ import json
 # und ai importieren können (die liegen in core/, nicht in ui/).
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'core'))
 
-from flask import Flask, jsonify, render_template, request, Response, stream_with_context, send_from_directory
+from flask import Flask, jsonify, request, Response, stream_with_context
 from datetime import datetime, date
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
 import categories   # type: ignore
@@ -96,30 +96,6 @@ def _tutor_unavail():
     return jsonify({"error": "backend not here",
                     "detail": tutor_port.unavailable_reason()
                               or "Tutor-Backend nicht erreichbar."}), 503
-
-
-# ── Dashboard ─────────────────────────────────────────────────────────
-
-@app.route('/')
-@app.route('/monolith')   # Alias: alte Kiosk-/Bookmark-/Deeplink-URL bleibt gueltig
-def index():
-    """
-    Liefert das Browser-Dashboard (monolith.html). GEPARKT seit 2026-10-04:
-    die TUI ist die einzige Front, der Browser bleibt nur im Code, falls man
-    ihn wieder einbinden will. ki_aus blendet die KI-Blöcke aus, wenn dieser
-    Knoten keine lokale KI hat. /monolith bleibt als Alias für alte Bookmarks.
-
-    Statische Assets (engine.js = Daten-Adapter, viz.js, ascii.js, fonts/) liegen
-    in ui/static/ und werden von Flask automatisch unter /static/<file> bedient.
-    """
-    resp = render_template('monolith.html',
-                           ki_aus=ai_backends.lokale_ki_aus())
-    from flask import make_response
-    r = make_response(resp)
-    # Cache deaktivieren: der Browser soll immer die aktuelle Version laden,
-    # nicht eine gecachte – wichtig bei Entwicklung und Pi-Restart.
-    r.headers['Cache-Control'] = 'no-store'
-    return r
 
 
 # ── State-Polling ──────────────────────────────────────────────────────
@@ -1151,42 +1127,6 @@ def api_log():
 
     state.push_log(f"LOGGED: {category_id} → {data}")
     return jsonify({"ok": True})
-
-
-# ── Fotos (Quelle für den ASCII-Bild-Filter) ──────────────────────────
-#
-# Bilder werden LOKAL vom Backend serviert (gleicher Origin wie das
-# Dashboard), nicht direkt vom Netz geladen. Grund: nur same-origin-Bilder
-# darf der Browser-Canvas per getImageData() auslesen - sonst ist der
-# Canvas "tainted" und der ASCII-Filter (canvasToAscii) bekommt keine
-# Pixel. Ordner per Env überschreibbar; Default data/photos/.
-# (Das ist zugleich der erste echte Baustein von "Fotos zeigen".)
-
-_PHOTO_DIR = os.environ.get(
-    "ZENTRALE_PHOTO_DIR",
-    os.path.join(_DATA_DIR, "photos"),
-)
-_PHOTO_EXTS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp")
-
-
-@app.route('/api/photos')
-def api_photos():
-    """Liste der verfügbaren Bild-Dateinamen (sortiert). Leere Liste wenn kein Ordner."""
-    if not os.path.isdir(_PHOTO_DIR):
-        return jsonify([])
-    names = [f for f in sorted(os.listdir(_PHOTO_DIR))
-             if f.lower().endswith(_PHOTO_EXTS)]
-    return jsonify(names)
-
-
-@app.route('/api/photos/<path:name>')
-def api_photo_file(name):
-    """
-    Liefert eine einzelne Bild-Datei aus _PHOTO_DIR aus.
-    send_from_directory schützt gegen Path-Traversal (../) - der Name darf
-    den Ordner nicht verlassen.
-    """
-    return send_from_directory(_PHOTO_DIR, name)
 
 
 # ── AI / Chat ──────────────────────────────────────────────────────────

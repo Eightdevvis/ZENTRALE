@@ -141,7 +141,7 @@ die Sprachausgabe. Zustand liegt in `localStorage` (`zentraleChatMuted`),
 `stopSpeaking()` die laufende Wiedergabe sofort ab und leert die Queue.
 `goToMain()` (Chat verlassen) ruft ebenfalls `stopSpeaking()`. Der
 state-aware Footer-Hinweis `#chat-mute-hint` zeigt, was Alt+S als
-nächstes tut. Tasten: `memory/system/tastatur.md` (die DOM-Hooks in `ui_hooks.md` sind veraltet).
+nächstes tut. Tasten: `memory/system/tastatur.md` (die alten DOM-Hooks liegen im Archiv: `memory/archive/ui_hooks.md`).
 
 **Lautstärke per `Alt+S` halten + `↑`/`↓`** (Schritt 10%): `chatVolume`
 (0..1) liegt in `localStorage` (`zentraleChatVolume`) und wird auf jedes
@@ -153,7 +153,7 @@ markiert beim keydown nur den Chord und feuert das Mute erst beim **keyup**
 Halten + Pfeil = Lautstärke.
 
 > **Main-Mode (panel-ai) ist davon getrennt** – dort ist die Voice noch
-> nicht verdrahtet (siehe `memory/system/ui_hooks.md` → Voice-Pipeline).
+> nicht verdrahtet (siehe `memory/archive/ui_hooks.md` → Voice-Pipeline, archiviert).
 
 ## Pipeline
 

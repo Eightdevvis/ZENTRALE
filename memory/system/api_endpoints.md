@@ -15,8 +15,7 @@ abgeglichen 2026-09-18.
 
 | Endpoint              | Methode | Beschreibung                          |
 |-----------------------|---------|---------------------------------------|
-| `/`                   | GET     | Monolith-Dashboard (monolith.html) – die einzige UI |
-| `/monolith`           | GET     | Alias auf `/` (Kiosk/Bookmark-Kompat), liefert dieselbe monolith.html |
+| `/`                   | —       | Entfernt 2026-10-06: die Browser-Front ist archiviert (`memory/archive/browser_front.md`). |
 | `/api/state`          | GET     | Aktueller State (Events, Sensoren, Logs, Alarme, Uptime) – wird vom Frontend jede Sekunde gepollt. (Ein Feld `vocab` gab es bis 2026-07-17 — toter Tutor-Tentakel, entfernt.) |
 
 ## Sensor-Webhook
@@ -221,8 +220,6 @@ Datenmodell + Bedienung: `memory/werkzeuge/notizen_system.md`.
 
 | Endpoint              | Methode | Beschreibung                          |
 |-----------------------|---------|---------------------------------------|
-| `/api/photos`         | GET     | Liste der Bild-Dateinamen aus `data/photos/` (Quelle für den Canvas-Bild→ASCII-Filter im Monolith). |
-| `/api/photos/<name>`  | GET     | Einzelnes Bild (same-origin, damit der Canvas `getImageData` darf). Path-Traversal-geschützt. |
 
 ## Maps (Karten-System)
 

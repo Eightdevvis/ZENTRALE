@@ -4,7 +4,8 @@
 (Event-Loop `core/main.py`, Flask `ui/app.py`), verbunden **nur** über
 `state.py`. Dazu zwei Sidecars (Whisper 5050, TTS 5051) und Ollama. Fronten:
 die **TUI** (`tui/zentrale_tui.py`, Thin Client per HTTP) ist die, an der
-gearbeitet wird und die einzige Front; `monolith.html` (Browser) ist geparkt.
+gearbeitet wird und die einzige Front; die Browser-Front (`monolith.html`) ist
+seit 2026-10-06 archiviert (`memory/archive/browser_front.md`).
 Die Kassetten sind entfernt (2026-10-04, Tracker erledigt); lokale KI an/aus
 schaltet allein `ZENTRALE_LOKALE_KI` (`ai_backends.lokale_ki_aus()`). Der Tutor ist ein
 eigenes Projekt in `tutor/`, angebunden allein über `core/tutor_port.py`;
@@ -60,7 +61,7 @@ state.py     brain.py      actions.py     event-queue
  app.py  (Flask, liest state.py auf /api/state)
    │
    ▼
-monolith.html  (Browser pollt /api/state jede Sekunde)
+TUI  (pollt /api/state; früher der Browser, heute archiviert)
    │
    ▼
  ai.py ── graph.py / consolidation.py / embeddings.py
@@ -132,11 +133,7 @@ ZENTRALE/
 │       ├── render.py        # ASCII/Braille-Rasterung
 │       └── layers/          # Overlay-Registry: trade.py, portwatch.py, density.py
 ├── ui/
-│   ├── app.py               # Flask Backend + REST API (reiner Adapter auf core/)
-│   ├── static/              # engine.js, viz.js, ascii.js, fonts/ (Monolith-Assets)
-│   └── templates/
-│       └── monolith.html    # Browser-Front, GEPARKT (nicht benutzt); KI-Blöcke
-│                            # per ki_aus-Flag (= lokale_ki_aus()) weggelassen
+│   └── app.py               # Flask Backend + REST API (reiner Adapter auf core/)
 ├── tutor/                   # ★ EIGENES PROJEKT, wohnt hier mit. Rausziehbar am Stück.
 │                            # Baum, Artefakte, Routen, Sprachpakete: memory/tutor/bauplan.md
 │                            # (mit Drift-Test tests/test_tutor_bauplan.py) — hier bewusst nicht kopiert.
@@ -195,7 +192,7 @@ an – es gibt (bewusst) keine zentrale Plugin-Registry:
    `PERMISSION_REQUIRED_TOOLS`). Damit kann die KI den Baustein nutzen.
 2. **Front:** eine REST-Route in `ui/app.py`, die 1:1 an die Baustein-Funktion
    delegiert. `ui/app.py` ist reiner Adapter (keine Business-Logik), die TUI
-   spricht nur über HTTP, das (geparkte) Browser-Template teilt dieselbe API.
+   spricht nur über HTTP, die frühere Browser-Front (archiviert) nutzte dieselbe API.
 
 Optionaler Bootstrap (Hintergrund-Fetcher wie `news`/`mail`) wird in `main.py`
 abhängig von `lokale_ki_aus()` gestartet. Folge: ein neuer Baustein berührt 2–3 zentrale
@@ -221,4 +218,4 @@ Registry/Dispatch-Tabelle heben.
 - **2026-08** — Cloud-Kern als Opt-in; Arbeit nur noch an der TUI, Browser-
   Fronten aufgegeben (`INDEX.md`, Stand der Fronten).
 - **2026-10-04** — Kassetten entfernt: ein Schalter ZENTRALE_LOKALE_KI, TUI
-  einzige Front, Browser geparkt.
+  einzige Front, Browser archiviert.

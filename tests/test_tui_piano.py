@@ -25,8 +25,9 @@ from tui.zentrale_tui import (
 
 # ── 1. Belegung ─────────────────────────────────────────────────────────────
 def test_klaviatur_ist_die_des_browsers():
-    """Dieselben Tasten wie ui/templates/monolith.html — sonst spielt sich das
-    Klavier in den zwei Fronten unterschiedlich."""
+    """Dieselben Tasten wie die frühere Browser-Front (heute im Archiv,
+    memory/archive/browser_front.md) — wer sie je wieder aufweckt, findet
+    dieselbe Belegung."""
     assert [k for k, _s in PIANO_WHITE] == list("yxcvbnm,.-")
     assert [k for k, _s, _w in PIANO_BLACK] == list("sdghjlö")
     assert [s for _k, s in PIANO_WHITE] == [0, 2, 4, 5, 7, 9, 11, 12, 14, 16]

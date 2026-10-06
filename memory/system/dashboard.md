@@ -133,7 +133,7 @@ diese Front (`../betrieb/deployment.md`). Der Rest dieser Datei ist die
 ausführliche Mechanik + das Warum; Datumsangaben im Text sind Marken, die
 Historie steht unten.
 
-> **Browser geparkt (seit 2026-10-04).** `ui/templates/monolith.html` ist
+> **Browser archiviert (seit 2026-10-06, vorher ab 2026-10-04 geparkt).** Die Front liegt in `memory/archive/browser_front.md`; was hier über sie steht, ist Geschichte. Damals galt: `ui/templates/monolith.html` ist
 > die einzige Browser-Front (seit 2026-06; `laptop.html` und das alte
 > `index.html` mit AI-Orb sind weg). `/` (+ `/monolith`-Alias) rendert sie
 > noch, benutzt wird sie nicht — die TUI ist die einzige Front. `app.py`
@@ -912,7 +912,7 @@ Browser-Fronten: [memory/werkzeuge/kalender_system.md](../werkzeuge/kalender_sys
 
 ## Polling-Modell
 
-Polling-Loops der **Browser-Front** (`ui/static/engine.js`, geparkt), jeder
+Polling-Loops der **Browser-Front** (`ui/static/engine.js`, heute archiviert), jeder
 mit eigener Frequenz. Die TUI pollt `/api/state` (1 s) + `/api/telemetry`
 (2 s); `/api/ai/status` und `/api/chat/history` holt sie erst, wenn der
 KI-Chat geöffnet wird (`ai_load_history`).

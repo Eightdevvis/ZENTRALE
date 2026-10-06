@@ -15,6 +15,27 @@ Dieses File ist für Claude (oder einen anderen LLM-Assistenten), der
 am Code mitarbeitet. Hier stehen die Architektur-Entscheidungen und
 Workflow-Regeln, die nicht aus dem Code allein hervorgehen.
 
+## Das Strukturziel (Sasha, 2026-10-06)
+
+> „ich will nich dass wir irgendwann an einen punkt kommen an dem der code
+> unwartbar wird und alles um die ohren fliegt!" — „nie irgendwas hinbauen
+> ohne plan wie die große architektur damit skalieren könnte."
+
+Die Memory ist modular gebaut, der Code muss es genauso sein. ZENTRALE wächst
+ständig; die Struktur muss mit dem Wachstum **besser** werden, nicht schlechter.
+
+- **Jede Aufgabe hat genau einen Ort.** Taucht dieselbe Logik zum zweiten Mal
+  auf, wird eine gemeinsame Stelle geschaffen, keine dritte Kopie.
+- **Teile sind austauschbar statt verknotet.** Anbieter, Modell, lokal oder
+  Cloud sind Werte, keine eigenen Code-Wege.
+- **Vor jedem Feature: anschauen, planen, dann bauen.** Wo sitzt es in den
+  Schichten? Wird dadurch eine Datei größer oder ein Knoten fester? Dann erst
+  die Struktur richten.
+- **Leitplanken sind Tests, keine Hoffnung.** Schichten, Türen und Altlasten
+  stehen in [system/bauplan_kern.md](system/bauplan_kern.md); der Test
+  `tests/test_kern_bauplan.py` macht Verstöße rot. Altlasten dürfen nur
+  schrumpfen.
+
 ## Was Claude unbedingt wissen muss
 
 ### Threading-Disziplin

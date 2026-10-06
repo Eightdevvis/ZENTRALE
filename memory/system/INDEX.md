@@ -16,13 +16,12 @@ und wie die Fronten daran hängen.
 | Die REST-Endpoints, die alle Fronten benutzen | [api_endpoints.md](api_endpoints.md) |
 | Dashboard & Frontend: Modi, Polling, KI-Kern, SSE-Events | [dashboard.md](dashboard.md) |
 | Tastatur-Belegung in jedem Modus | [tastatur.md](tastatur.md) |
-| ⚠ **Veraltet** — beschreibt das gelöschte `index.html`, kein Hook stimmt noch. Nimm `dashboard.md`. | [ui_hooks.md](ui_hooks.md) |
 
-## Stand der Fronten (2026-10-04)
+## Stand der Fronten (2026-10-06)
 
 Die **TUI** ist die einzige Front (`zentrale` / `zentrale-tui`). Das
-Browser-Dashboard (`monolith.html`) ist geparkt: bleibt im Code, wird nicht
-benutzt. Die **Kassetten** (`core/kassette.py`) sind entfernt (Rückbau aus
+Browser-Dashboard (`monolith.html`) ist archiviert
+([../archive/browser_front.md](../archive/browser_front.md)). Die **Kassetten** (`core/kassette.py`) sind entfernt (Rückbau aus
 dem `zentrale`-Tracker erledigt, 2026-10-04); übrig ist ein Schalter
 `ZENTRALE_LOKALE_KI` (`ai_backends.lokale_ki_aus()`, siehe
 [dashboard.md](dashboard.md)).

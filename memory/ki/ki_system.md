@@ -1111,7 +1111,7 @@ erwartete, gewollte Beleg „Paket hat das LAN verlassen", nicht mehr ein
 Alarm. (Nicht-gegateter Internet-Traffic hier wäre weiterhin verdächtig.)
 Implementation: `core/net.py` (`_is_internet`, plus Spiegel-Calls in
 `_log_out/_log_in/_log_err`), `core/state.py` (`_internet_logs`,
-`push_internet_log`), `ui/templates/monolith.html` (`#term-net`, Box »outbound · tripwire«; damals `index.html` mit `.terminal-row` +
+`push_internet_log`), die archivierte Browser-Front (`memory/archive/browser_front.md`, `#term-net`, Box »outbound · tripwire«; damals `index.html` mit `.terminal-row` +
 `.terminal-net` mit orangefarbenem Akzent).
 
 Tests: `scripts/test_net_internet.py` (48 Cases, untracked).

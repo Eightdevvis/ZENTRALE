@@ -2,7 +2,7 @@
 # Ton-Erzeugung für das Klavier-Werkzeug der TUI.
 #
 # Der Browser macht seinen Ton mit der WebAudio-API (Oszillator + Hüllkurve,
-# siehe ui/templates/monolith.html). Die TUI hat kein WebAudio — sie rechnet
+# siehe die archivierte Browser-Front, memory/archive/browser_front.md). Die TUI hat kein WebAudio — sie rechnet
 # die Wellenform selbst und schiebt sie über sounddevice an die Soundkarte.
 # Beides bleibt bewusst SYNTHETISCH: kein Sample, kein Download, keine
 # Bibliothek mit Klangdateien → läuft offline auf Pi und PC.

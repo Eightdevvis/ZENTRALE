@@ -29,7 +29,7 @@ import os
 
 import embeddings  # core/embeddings.py — bge-m3-Client (Doc/Query getrennt)
 
-# Ordner mit den ASCII-Dateien. Per Env überschreibbar (analog _PHOTO_DIR
+# Ordner mit den ASCII-Dateien. Per Env überschreibbar (analog dem früheren _PHOTO_DIR der Browser-Front
 # in ui/app.py). Default: <repo>/data/ascii/.
 ASCII_DIR = os.environ.get(
     "ZENTRALE_ASCII_DIR",

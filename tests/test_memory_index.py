@@ -23,8 +23,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MEM = os.path.join(ROOT, "memory")
 
 CODE_ENDUNGEN = (".md", ".py", ".html", ".js", ".sh", ".txt")
-NICHT_BETRETEN = (".git", ".claude", "venv", "node_modules", "__pycache__",
-                  "zentrale-new-design")
+NICHT_BETRETEN = (".git", ".claude", "venv", "node_modules", "__pycache__")
 VERWEIS = re.compile(r"memory/[A-Za-z0-9_/]+\.md")
 
 
