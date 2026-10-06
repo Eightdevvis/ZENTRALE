@@ -623,8 +623,10 @@ class IcsSpeicher:
             sich.atomar_schreiben(p, wert + "\n")
 
     def _neben_bauen(self, alt, data, layer_info, layer_roh, archiv, roh, ohne):
+        # Was die Migration hinterlegt (Marker, alte Ebenen-Reihenfolge für den
+        # Rückweg), bleibt bei jedem Speichern stehen.
         neu = {k: v for k, v in alt.items()
-               if k in ("migriert_am", "migriert_aus", "migriert_von")}
+               if k.startswith("migriert") or k.startswith("zurueck")}
         neu["format"] = NEBEN_FORMAT
         neu["oben"] = {k: ohne_interna(v) for k, v in data.items()
                        if not k.startswith(FELD) and k not in ("layers", "pausen")}
@@ -645,7 +647,10 @@ class IcsSpeicher:
     # ── Sicherung ───────────────────────────────────────────────────────
 
     def snapshot(self, heute: date | None = None):
-        """Tages-Snapshot von vdir + Nebendaten, danach alte wegrotieren."""
+        """Tages-Snapshot von vdir + Nebendaten, danach alte wegrotieren.
+        Ein noch leerer Kalender (erste Migration) braucht keinen."""
+        if not self.neben.exists() and not any(self.vdir.rglob("*.ics")):
+            return None
         p = sich.snapshot_machen(self.snapshots, self.vdir.parent,
                                  [self.vdir, self.neben], heute=heute)
         if p:
