@@ -11,6 +11,7 @@ Messungen dazu existiert.
 | **Das Gedächtnis.** Steckbrief, Ziele, Dossiers, Tagebuch, Messreihen — und warum der Konzept-Graph abgelöst wurde | [gedaechtnis_dateien.md](gedaechtnis_dateien.md) |
 | Wie die KI hört und spricht: Whisper-STT + TTS als eigene Services, sprachneutral | [audio_system.md](audio_system.md) |
 | **Zwischenstand Cloud.** Was der Umstieg gebracht hat, woran es hakte, was dagegen lief, was offen ist | [cloud_bericht.md](cloud_bericht.md) |
+| **Plan: Claude-Web-Funktionen übertragen** — Bestand, Ebenen (Gespräch, Gedächtnis, Skill, Werkzeug, Ausgabe), Fallen, Phasen, offene Entscheidungen (nichts gebaut) | [claude_web_plan.md](claude_web_plan.md) |
 | Warum überhaupt in die Cloud — das Entscheidungs-Dokument vom 10.08.2026 (historisch) | [cloud_umstieg_plan.md](cloud_umstieg_plan.md) |
 | Warum das Memory so aussieht, wie es aussieht — Historie der Phasen A–G, verworfene Ansätze | [ki_memory_plan.md](ki_memory_plan.md) |
 | Wohin die Persönlichkeit soll: vom System-Prompt zum eigenen Modell (Fine-Tuning-Plan) | [ki_personality_plan.md](ki_personality_plan.md) |
