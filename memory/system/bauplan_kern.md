@@ -171,8 +171,8 @@ Sasha, 05.10.2026: einfrieren, dann zerlegen (Punkt 3).
 
 | Wo | Zeilen höchstens |
 |---|---|
-| `tui/zentrale_tui.py` | 2979 |
-| `tui/zentrale_tui.py::run_ui` | 1500 |
+| `tui/zentrale_tui.py` | 2513 |
+| `tui/zentrale_tui.py::run_ui` | 1034 |
 | `tutor/room.py` | 4034 |
 | `tutor/room.py::main` | 1829 |
 | `ui/app.py` | 2434 |
