@@ -2,7 +2,7 @@
 
 Abgeschlossenes verschwindet aus der normalen Sicht (es steckt im Bernstein),
 der Fokus klebt oben, der Rest sortiert sich nach wenigsten offenen Punkten."""
-from tui.zentrale_tui import bernstein_steine, liste_ordnen
+from tui.ansichten.fokus import bernstein_steine, liste_ordnen
 
 
 def _blatt(i, done=False, focus=False):
