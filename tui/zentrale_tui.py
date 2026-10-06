@@ -50,12 +50,21 @@ import urllib.request
 import urllib.error
 import urllib.parse
 
-BASE_URL = (os.environ.get("ZENTRALE_URL") or "http://localhost:5000").rstrip("/")
-
 try:                                    # Pixel-Baustein (tui/pixel.py)
     from tui import pixel
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     import pixel
+
+try:                                    # die Ansichten (tui/ansichten/, memory/system/tui_bauplan.md)
+    from tui import ansichten
+except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
+    import ansichten
+
+# Backend-Adresse und HTTP-Zugriff wohnen in ansichten/basis.py — EINE Stelle
+# für die TUI und alle Ansichten.
+BASE_URL = ansichten.basis.BASE_URL
+api_call = ansichten.basis.api_call
+venv_python = ansichten.basis.venv_python
 
 
 def _theme_modul():
@@ -304,25 +313,6 @@ class Store:
 # zeigen nur den "zu klein"-Hinweis.
 MIN_LINES = 14
 MIN_COLS = 60
-
-
-# Die Zusatzfenster (Karte, Persona-Zimmer) brauchen pygame, also den Virtualenv
-# — die TUI selbst ist stdlib-only und laeuft auf dem Pi unter dem System-Python.
-# Der venv-Ordner heisst NICHT ueberall gleich: PC/Laptop 'venv', der Pi '.venv'
-# (scripts/deploy_pi.sh legt ihn so an, siehe memory/betrieb/deployment.md).
-# Frueher stand hier hart 'venv' → auf dem Pi fiel der Start still auf
-# sys.executable zurueck (System-Python OHNE pygame) und das Fenster ging gar
-# nicht auf. Darum beide Namen probieren.
-VENV_DIRS = ("venv", ".venv")
-
-
-def venv_python(root):
-    """Pfad zum Python des Projekt-Virtualenv, oder sys.executable als Fallback."""
-    for name in VENV_DIRS:
-        cand = os.path.join(root, name, "bin", "python")
-        if os.path.exists(cand):
-            return cand
-    return sys.executable
 
 
 def terminal_too_small(h, w):
@@ -609,21 +599,6 @@ def graph_last(g, rows):
         return "—"
     unit = (" " + str(g.get("unit"))) if g.get("unit") else ""
     return "%g%s" % (v, unit)
-
-
-def api_call(path, method="GET", body=None, timeout=3.0):
-    """
-    Schreibender/lesender API-Zugriff fürs Graph-Werkzeug (GET/POST/DELETE).
-    Anders als Store._get (Hintergrund-Polling) wird das hier synchron bei
-    Benutzeraktionen aufgerufen (anlegen/eintragen/löschen) – ein paar ms
-    Block im Key-Handler ist okay. Wirft bei Fehler (Caller fängt ab).
-    """
-    data = json.dumps(body).encode("utf-8") if body is not None else None
-    headers = {"Content-Type": "application/json"} if data is not None else {}
-    req = urllib.request.Request(BASE_URL + path, data=data, method=method, headers=headers)
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        raw = r.read().decode("utf-8")
-        return json.loads(raw) if raw else None
 
 
 def tele_value(metrics, key):
@@ -1437,11 +1412,14 @@ TUI_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def code_dateien(ordner=TUI_DIR):
-    try:
-        return sorted(os.path.join(ordner, n) for n in os.listdir(ordner)
-                      if n.endswith(".py"))
-    except OSError:
-        return []
+    """Alle .py unter tui/ — seit 06.10.2026 auch in Unterordnern: die
+    Ansichten liegen in tui/ansichten/, und ein Merge, der nur eine Ansicht
+    ändert, muss genauso neu laden wie einer an zentrale_tui.py."""
+    aus = []
+    for wurzel, unter, namen in os.walk(ordner):
+        unter[:] = [d for d in unter if d != "__pycache__"]
+        aus.extend(os.path.join(wurzel, n) for n in namen if n.endswith(".py"))
+    return sorted(aus)
 
 
 def code_stand(dateien):
@@ -2184,316 +2162,17 @@ def run_ui(stdscr, store):
         curses.start_color()
         curses.use_default_colors()
 
-    # ── Themes (hell/dunkel) ────────────────────
-    # Pro Rolle: (8-Farben-fg, 256-Farben-fg, extra-Attribut). bg pro Theme.
-    # Light-Mode: KEIN Gelb auf Weiß (unlesbar) → warn/num = rot/blau.
-    # Dark-Mode: ULTRA HIGH CONTRAST — hartes Schwarz, reinweißer Text (231),
-    # Rahmen ein klar sichtbares Grau (245). Grün NIE bold (= sonst Neon),
-    # gedämpftes Salbeigrün (108) statt grellem Standard-Grün.
-    ROLES = ["acc", "warn", "net", "graph", "event", "audio", "hook", "span",
-             "num", "amber", "amberhi", "amberdk", "cyc", "dim", "faint", "bright", "ink", "band"]
-    THEMES = {
-        "night": {
-            "bg8": curses.COLOR_BLACK, "bg256": 16,
-            #         8-Farbe              256   extra
-            "acc":   (curses.COLOR_GREEN,   108, 0),
-            "warn":  (curses.COLOR_YELLOW,  226, curses.A_BOLD),
-            "net":   (curses.COLOR_CYAN,    51,  curses.A_BOLD),
-            "graph": (curses.COLOR_MAGENTA, 213, curses.A_BOLD),
-            "event": (curses.COLOR_GREEN,   108, 0),
-            "audio": (curses.COLOR_GREEN,   108, 0),
-            "hook":  (curses.COLOR_YELLOW,  215, 0),
-            "span":  (curses.COLOR_YELLOW,  216, 0),    # Mehrtages-Klammer: weiches Orange
-            "num":   (curses.COLOR_YELLOW,  222, 0),
-            "amber": (curses.COLOR_YELLOW,  214, curses.A_BOLD),  # Fokus-Leiste: Bernstein
-            # Bernsteinleiste (Listen-Werkzeug): Glanzpixel + Schatten/leere Fassung
-            "amberhi": (curses.COLOR_YELLOW, 222, curses.A_BOLD),
-            "amberdk": (curses.COLOR_YELLOW, 136, 0),
-            # Zyklus/PMS (aus dem »periode«-Graphen): weiches Altrosa, bewusst
-            # NICHT bold — die Vorhersage soll dastehen, nicht rufen.
-            "cyc":   (curses.COLOR_MAGENTA, 175, 0),
-            "dim":   (curses.COLOR_WHITE,   231, 0),    # normaler Text: reinweiß = max Kontrast
-            "faint": (curses.COLOR_WHITE,   245, 0),    # Rahmen: sichtbares Grau (nicht gedimmt)
-            "bright":(curses.COLOR_WHITE,   231, curses.A_BOLD),
-            "ink":   (curses.COLOR_WHITE,   231, 0),
-            # Schlaf-Bande: gedämpftes Dunkelmagenta als ZELLEN-HINTERGRUND
-            "band_fg": 245, "band_bg": 53,
-            # Zyklus-Fenster im Graphen: dunkles Rosé als ZELLEN-HINTERGRUND —
-            # rötlich gegen das Magenta der Schlaf-Bande, damit die beiden
-            # Flächen nicht verwechselbar sind, wo sie sich kreuzen.
-            "cyc_bg": 52,
-            # Klavier: Fläche der schwarzen Taste. Auf schwarzem Grund NICHT 16
-            # (dann verschwände die Taste), sondern ein Hauch heller.
-            "key_bg": 236,
-            # Leuchtfarben der Keycaps: im Dunkeln echtes Neon (Cyan, Magenta,
-            # Grün, Gelb, Orange, Pink, Violett) — jede Taste kriegt eine, im
-            # Schimmer-Modus wandern sie durch. Bewusst grell: das ist der
-            # einzige Ort in der TUI, wo Neon erwünscht ist.
-            "key_neon": [51, 201, 46, 226, 208, 199, 129],
-            # Ombre der Sidebar-Liste: 256-Grau-Rampe, die nach unten in den
-            # (schwarzen) Hintergrund verblasst → „weiter unten = transparenter".
-            "ombre": [252, 246, 241, 237, 235],
-        },
-        "day": {
-            "bg8": curses.COLOR_WHITE, "bg256": 231,
-            "acc":   (curses.COLOR_GREEN,   65,  0),
-            "warn":  (curses.COLOR_RED,     124, curses.A_BOLD),
-            "net":   (curses.COLOR_BLUE,    26,  curses.A_BOLD),
-            "graph": (curses.COLOR_MAGENTA, 90,  curses.A_BOLD),
-            "event": (curses.COLOR_GREEN,   65,  0),
-            "audio": (curses.COLOR_GREEN,   65,  0),
-            "hook":  (curses.COLOR_RED,     130, 0),
-            "span":  (curses.COLOR_RED,     166, 0),    # Mehrtages-Klammer: kräftiges Orange (auf Weiss lesbar)
-            "num":   (curses.COLOR_BLUE,    26,  0),
-            "amber": (curses.COLOR_YELLOW,  172, curses.A_BOLD),  # Fokus-Leiste: Bernstein (auf weiß lesbar)
-            # Bernsteinleiste: Glanz heller, Schatten/Fassung dunkler (≥4,5:1 auf weiß)
-            "amberhi": (curses.COLOR_YELLOW, 214, curses.A_BOLD),
-            "amberdk": (curses.COLOR_YELLOW, 130, 0),
-            # Zyklus/PMS: dasselbe Altrosa, auf Weiß dunkler gesetzt (lesbar).
-            "cyc":   (curses.COLOR_MAGENTA, 132, 0),
-            "dim":   (curses.COLOR_BLACK,   16,  0),    # schwarzer Text auf weiß
-            "faint": (curses.COLOR_BLUE,    67,  0),    # Rahmen blau-grau (auf weiß sichtbar)
-            "bright":(curses.COLOR_BLACK,   16,  curses.A_BOLD),
-            "ink":   (curses.COLOR_BLACK,   16,  0),
-            # Schlaf-Bande: hell-magenta angehauchtes Grau als ZELLEN-HINTERGRUND
-            "band_fg": 240, "band_bg": 225,
-            # Zyklus-Fenster im Graphen: blasses Rosé als ZELLEN-HINTERGRUND —
-            # warm/rötlich, die Schlaf-Bande daneben violett: auch dort
-            # unterscheidbar, wo beide Flächen aneinanderstoßen.
-            "cyc_bg": 224,
-            # Klavier: schwarze Taste auf weißem Grund darf echtes Schwarz sein.
-            "key_bg": 16,
-            # KEIN "key_neon" auf Papier: Leuchttasten sind eine Nacht-Sache.
-            # Tagsüber bleibt die Keycap schlicht schwarz-weiß, 'L' hat hier
-            # nichts zu färben (die TUI sagt das auch, wenn man es drückt).
-            # Ombre der Sidebar-Liste: nach unten in den (weißen) Hintergrund
-            # verblassend → Grau wird heller.
-            "ombre": [238, 244, 248, 251, 253],
-        },
-    }
-    C = {}
-    # Farbpaare des Pixel-Baustein: (fg, bg) → curses-Attribut, vergeben von
-    # PIX["base"] bis PIX["top"]; läuft das Budget voll, wird es zu Beginn des
-    # nächsten Bildes geleert (nie mitten im Bild — Paare sind Referenzen).
-    PIX = {"pairs": {}, "base": 0, "top": 0, "voll": False}
-    PIX_MODUS = (os.environ.get("ZENTRALE_PIXEL") or "mix").strip().lower()
-
-    def pix_farbe(rgb):
-        """RGB → curses-Farbnummer: 24 Bit, wenn das Terminal es kann (auf
-        16er-Stufen gerundet, damit die Paare reichen), sonst die nächste der 256."""
-        if C.get("pix_true"):
-            r, g, b = (min(255, round(v / 16) * 16) for v in rgb)
-            n = (r << 16) | (g << 8) | b
-            return n if n >= 8 else 8          # 0–7 wären Palettenfarben
-        return pixel.rgb_256(rgb)
-
-    def pix_attr(fg, bg):
-        key = (pix_farbe(fg), pix_farbe(bg))
-        attr = PIX["pairs"].get(key)
-        if attr is None:
-            n = PIX["top"] - len(PIX["pairs"])
-            if n <= PIX["base"]:
-                PIX["voll"] = True
-                return C.get("amber", 0)
-            try:
-                curses.init_pair(n, key[0], key[1])
-                attr = curses.color_pair(n)
-            except curses.error:
-                return C.get("amber", 0)
-            PIX["pairs"][key] = attr
-        return attr
-
-    def apply_theme(tname):
-        if not has_color:
-            for r in ROLES:
-                C[r] = 0
-            C["bright"] = curses.A_BOLD
-            C["dim"] = curses.A_BOLD       # heller Text im Mono-Fallback
-            C["faint"] = curses.A_DIM
-            C["acc"] = curses.A_BOLD
-            # Ombre ohne Farbe: nur zwei Stufen (normal → gedimmt)
-            C["ombre"] = [0, 0, curses.A_DIM, curses.A_DIM, curses.A_DIM]
-            # Klaviertasten ohne Farbe: invertiert ist alles, was bleibt.
-            C["key_black"] = curses.A_REVERSE
-            C["key_press"] = curses.A_REVERSE | curses.A_BOLD
-            C["keyframe"], C["keyglow"] = [], []   # Beleuchtung braucht Farben
-            # Zyklus-Fenster ohne Farbe: keine Fläche, nur die Rückfall-Linie.
-            C["cycbg"] = curses.A_DIM
-            C["cyc_is_bg"] = False
-            return
-        c256 = curses.COLORS >= 256
-        th = THEMES[tname]
-        bg = th["bg256"] if c256 else th["bg8"]
-        for i, r in enumerate(ROLES, start=1):
-            if r == "band":
-                continue                       # eigener Hintergrund, siehe unten
-            c8, c2, extra = th[r]
-            fg = c2 if c256 else c8
-            # 8-Farben: reinweißer Text geht nur via A_BOLD (bright white)
-            if not c256 and fg == curses.COLOR_WHITE and r in ("dim", "ink", "bright"):
-                extra |= curses.A_BOLD
-            curses.init_pair(i, fg, bg)
-            C[r] = curses.color_pair(i) | extra
-        # Schlaf-Bande: GEFÄRBTER HINTERGRUND, kein Vordergrund. curses kennt
-        # keine Schichten — "hinter den Kurven" heißt: die Zelle bekommt eine
-        # bg-Farbe, Punkt/Kurve wird als Glyph DAVOR in dieselbe Zelle gesetzt.
-        # Echtes bg-Färben geht nur mit 256 Farben; sonst Schattenblock ▒.
-        bi = ROLES.index("band") + 1
-        pp = len(ROLES) + 1                # nächstes freies Farbpaar
-        if c256:
-            curses.init_pair(bi, th["band_fg"], th["band_bg"])
-            C["band"] = curses.color_pair(bi)
-            C["band_is_bg"] = True
-            # "Auf-Band"-Varianten: gleiche fg jeder Rolle, aber band-bg. Eine
-            # Kurve, die DURCH die Bande läuft, wird damit gezeichnet → ihr Glyph
-            # liegt sichtbar VOR dem Band, statt ein Loch (Theme-bg) zu stanzen.
-            for r in ROLES:
-                if r in ("band", "ink"):
-                    continue
-                _c8, c2, extra = th[r]
-                curses.init_pair(pp, c2, th["band_bg"])
-                C[r + "@band"] = curses.color_pair(pp) | extra
-                pp += 1
-            # Banden-KANTE als Vordergrund: band-bg-Farbe als fg auf Theme-bg.
-            # Damit lassen sich Halbblöcke ▀/▄ am oberen/unteren Rand der Schlaf-
-            # Bande in Bandfarbe zeichnen → sub-zellen-feine Ränder (sonst schnappt
-            # der Balken auf ganze Zeilen ≈ 2–3 h und wirkt grob/hackig).
-            curses.init_pair(pp, th["band_bg"], bg)
-            C["band_edge"] = curses.color_pair(pp)
-            pp += 1
-        else:
-            C["band"] = C["faint"]
-            C["band_is_bg"] = False
-        # Zyklus-Fenster (PMS-Woche + erwarteter Start) im Graphen: nach genau
-        # demselben Muster wie die Schlaf-Bande eine ZELLEN-HINTERGRUNDfarbe,
-        # damit es HINTER den Werten liegt statt als Linie davor. Dazu wieder
-        # "Auf-Fläche"-Varianten jeder Rolle, sonst stanzt jeder Punkt, der
-        # durchs Fenster läuft, ein Loch in die Tönung.
-        # Die Schlaf-Bande hat Vorrang: sie wird SPÄTER gemalt und überschreibt
-        # die Zyklus-Fläche (siehe draw_overlay).
-        if c256 and curses.COLOR_PAIRS >= pp + len(ROLES) + 10:
-            curses.init_pair(pp, th["cyc"][1], th["cyc_bg"])
-            C["cycbg"] = curses.color_pair(pp)
-            C["cyc_is_bg"] = True
-            pp += 1
-            for r in ROLES:
-                if r in ("band", "ink"):
-                    continue
-                _c8, c2, extra = th[r]
-                curses.init_pair(pp, c2, th["cyc_bg"])
-                C[r + "@cyc"] = curses.color_pair(pp) | extra
-                pp += 1
-            # Halbblock-Kante der Schlaf-Bande, wenn sie IN der Zyklus-Fläche
-            # liegt: Bandfarbe als fg auf Zyklus-bg — sonst risse die Kante
-            # ein Loch (Theme-bg) in die Tönung.
-            curses.init_pair(pp, th["band_bg"], th["cyc_bg"])
-            C["band_edge@cyc"] = curses.color_pair(pp)
-            pp += 1
-        else:
-            # 8 Farben (oder zu wenig Farbpaare): keine Fläche möglich →
-            # gepunktete Senkrechte im Vordergrund als Rückfallebene.
-            C["cycbg"] = C["cyc"]
-            C["cyc_is_bg"] = False
-        # Ombre-Rampe der Sidebar-Liste: eigene Grau-Paare (nur 256-Farben),
-        # sonst zweistufiger A_DIM-Fallback.
-        if c256:
-            C["ombre"] = []
-            for g in th.get("ombre", [245]):
-                curses.init_pair(pp, g, bg)
-                C["ombre"].append(curses.color_pair(pp))
-                pp += 1
-        else:
-            C["ombre"] = [C["dim"], C["dim"], C["faint"],
-                          C["faint"], C["faint"] | curses.A_DIM]
-        # Klaviertasten (Klavier-Werkzeug): die schwarze Taste kriegt einen
-        # eigenen HINTERGRUND statt A_REVERSE. Invertiert wäre ihr Buchstabe in
-        # Theme-Hintergrundfarbe gezeichnet und stanzte ein Loch in die Taste;
-        # so bleibt die Taste eine geschlossene Fläche mit heller Schrift darauf.
-        # Gedrückt wird die Fläche zur Akzentfarbe (Schrift dann dunkel).
-        if c256:
-            curses.init_pair(pp, 231, th.get("key_bg", 16))
-            C["key_black"] = curses.color_pair(pp)
-            pp += 1
-            curses.init_pair(pp, th.get("key_bg", 16), th["acc"][1])
-            C["key_press"] = curses.color_pair(pp)
-        else:
-            # 8 Farben: schwarze Fläche, weiße Schrift nur via A_BOLD.
-            curses.init_pair(pp, curses.COLOR_WHITE, curses.COLOR_BLACK)
-            C["key_black"] = curses.color_pair(pp) | curses.A_BOLD
-            pp += 1
-            curses.init_pair(pp, curses.COLOR_BLACK, th["acc"][0])
-            C["key_press"] = curses.color_pair(pp)
-        pp += 1
-        # Tastenbeleuchtung: je eine Farbe für den RAND der schwarzen Keycap
-        # (Neon auf der schwarzen Fläche) und dieselbe Farbe als Glühen für die
-        # Buchstaben der weißen Tasten (auf Theme-Grund). Ohne 256 Farben gibt
-        # es das nicht — dann bleiben die Listen leer und alles sieht aus wie
-        # vorher, statt in acht Farben zu raten.
-        C["keyframe"], C["keyglow"] = [], []
-        if c256:
-            for col in th.get("key_neon", []):
-                curses.init_pair(pp, col, th.get("key_bg", 16))
-                C["keyframe"].append(curses.color_pair(pp) | curses.A_BOLD)
-                pp += 1
-                curses.init_pair(pp, col, bg)
-                C["keyglow"].append(curses.color_pair(pp) | curses.A_BOLD)
-                pp += 1
-        # Pixel-Baustein: Theme-Hintergrund als RGB + freie Farbpaare ab pp.
-        # Paare über 255 passen nicht ins curses-Attribut → Budget bis 255.
-        C["pix_bg"] = pixel.xterm_rgb(th["bg256"]) if c256 else None
-        C["pix_true"] = curses.COLORS >= (1 << 24)
-        PIX["base"] = pp
-        PIX["top"] = min(255, curses.COLOR_PAIRS - 1)
-        PIX["pairs"].clear()
-        # leere Zellen (erase) bekommen den Theme-Hintergrund
-        stdscr.bkgd(" ", C["ink"])
-
-    # ── Theme-Modus: auto (nach Uhrzeit) | day | night. Taste 't' zykliert. ──
-    #
-    # EINE QUELLE DER WAHRHEIT: die Datei ~/.config/zentrale/theme. Die TUI hält
-    # KEINE eigene Modus-Variable mehr.
-    #
-    # Warum das wichtig ist (und warum es vorher glitchte): der Modus lag früher
-    # doppelt vor — als lokale Variable `theme_mode` UND als Datei —, abgeglichen
-    # über drei Hilfspuffer (zuletzt geschriebener Modus, zuletzt gesehene mtime,
-    # zuletzt gemeldete Farbe). Dieser Abgleich ist nicht atomar: zwischen „Taste
-    # ändert die Variable" und „Schleife schreibt die Datei" liegt ein Fenster, in
-    # dem ein Lesevorgang die Variable wieder überschrieb. Ergebnis war genau das
-    # beobachtete Bild — das Theme sprang kurz um und wieder zurück, und im
-    # Protokoll standen Fremd-Einträge mit exakt den Werten, die die TUI selbst
-    # eine Zeile vorher geschrieben hatte: sie las ihr eigenes Echo.
-    #
-    # Jetzt gibt es nichts mehr abzugleichen. Lesen heißt Datei lesen (per mtime
-    # gecacht, damit es billig bleibt), Umschalten heißt Datei schreiben. Der
-    # Cache ist keine zweite Wahrheit: er wird bei jeder fremden mtime verworfen
-    # und nie gegen die Datei behauptet. Damit ist eine Rückkopplung strukturell
-    # unmöglich, statt nur unwahrscheinlich gemacht.
-    # Die Logik selbst liegt in core/theme.py — dort ist sie testbar, statt in
-    # dieser 8000-Zeilen-Funktion vergraben zu sein (und sie kennt
-    # ZENTRALE_THEME_FILE, sodass Tests nie die echte Konfiguration anfassen).
+    # Tag/Nacht-Modus: die Datei ist die einzige Wahrheit (core/theme.py).
+    # Warum es keine eigene Modus-Variable mehr gibt, steht bei
+    # Kontext.theme_mode_now (tui/ansichten/kontext.py).
     _theme = _load_theme_state()
 
-    def theme_mode_now():
-        """Aktueller Modus — kommt immer aus der Datei."""
-        return _theme.mode()
-
-    def set_theme_mode(neu, quelle="tui"):
-        """Modus setzen = WUNSCH-Datei schreiben. Mehr ist hier nicht zu tun.
-
-        Das Auflösen und das Anstoßen der Applier macht `zentrale-themed`: der
-        Dienst hängt per inotify an der Datei und ist schneller da, als die
-        TUI ihren nächsten Bildaufbau schafft.
-        """
-        _theme.set(neu, quelle)
-
-    def cycle_theme():
-        """Taste 't' bzw. '/theme' ohne Argument: auto → day → night → auto."""
-        _theme.cycle()
-
-    def resolved_theme():
-        """Die geltende Farbe — kommt aus theme.now, also vom Dienst."""
-        return _theme.resolved()
-
+    # ── Der Kontext: was alle Ansichten teilen (Farben, Theme, Zeichnen) ──
+    z = ansichten.kontext.Kontext(stdscr, store, has_color, _theme)
+    C, PIX, PIX_MODUS, addclip = z.C, z.PIX, z.PIX_MODUS, z.addclip
+    apply_theme, cycle_theme, draw_box = z.apply_theme, z.cycle_theme, z.draw_box
+    pix_attr, resolved_theme, safe_addstr = z.pix_attr, z.resolved_theme, z.safe_addstr
+    set_theme_mode, theme_mode_now = z.set_theme_mode, z.theme_mode_now
     cur_theme = resolved_theme()
     apply_theme(cur_theme)
 
@@ -4029,60 +3708,6 @@ def run_ui(stdscr, store):
         if L["isel"] >= n:                    # -1 = Bernsteinleiste, wenn leer
             L["isel"] = n - 1
 
-    def safe_addstr(y, x, text, attr=0):
-        h, w = stdscr.getmaxyx()
-        if y < 0 or y >= h or x >= w:
-            return
-        # Zentrale Zeichen-Primitive → hier hart machen, dann ist der GANZE
-        # Render-Pfad immun: alles zu str zwingen und Null-Bytes ersetzen
-        # (curses.addstr wirft an \x00 ein ValueError, nicht curses.error).
-        if not isinstance(text, str):
-            text = str(text)
-        if "\x00" in text:
-            text = text.replace("\x00", " ")
-        if x < 0:
-            text = text[-x:]
-            x = 0
-        text = text[: max(0, w - x)]
-        try:
-            stdscr.addstr(y, x, text, attr)
-        except (curses.error, ValueError):
-            pass  # untere rechte Zelle wirft immer; ValueError = exotischer String
-
-    def addclip(y, x, text, maxw, attr=0, strike=False):
-        """Wie safe_addstr, aber kürzt vorher auf maxw — verhindert, dass
-        z.B. lange stdout-Zeilen aus ihrer Box in die Nachbarspalte laufen.
-        strike=True legt über jedes (schon gekürzte) Zeichen ein Combining-
-        Overlay U+0336 → durchgestrichen (für abgehakte Einträge)."""
-        if maxw <= 0:
-            return
-        if not isinstance(text, str):
-            text = str(text)
-        s = text[:maxw]
-        if strike and s:
-            # Combining-Zeichen sind Null-Breite (hängen am Vorzeichen) → die
-            # sichtbare Breite bleibt maxw. safe_addstr würde aber nach Codepoints
-            # kürzen und die Hälfte abschneiden; darum hier direkt setzen.
-            s = "".join(c + "̶" for c in s)
-            h, w = stdscr.getmaxyx()
-            if 0 <= y < h and 0 <= x < w:
-                try:
-                    stdscr.addstr(y, x, s, attr)
-                except (curses.error, ValueError):
-                    pass
-            return
-        safe_addstr(y, x, s, attr)
-
-    def draw_box(y, x, h, w, title, title_attr=0):
-        if h < 2 or w < 2:
-            return
-        safe_addstr(y, x, "┌" + "─" * (w - 2) + "┐", C["faint"])
-        for i in range(1, h - 1):
-            safe_addstr(y + i, x, "│", C["faint"])
-            safe_addstr(y + i, x + w - 1, "│", C["faint"])
-        safe_addstr(y + h - 1, x, "└" + "─" * (w - 2) + "┘", C["faint"])
-        if title:
-            safe_addstr(y, x + 2, " " + title.upper() + " ", title_attr or C["acc"])
 
     # ── Technik-Bausteine: früher fest in der linken Spalte, seit 03.10.2026
     # auch in der Technik-Ansicht und auf der Startseite des Meta-Rads. ──
