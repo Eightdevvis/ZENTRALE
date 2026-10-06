@@ -14,7 +14,7 @@ bestimmt (für den Takt). Sensorik
 (`presence_age` in `room_state`), nicht `da()` — ⚠ prüfen: ob PIR-Treffer
 in `anwesenheit.da()` einfließen sollen, ist nicht entschieden.
 
-`core/anwesenheit.py` · `../archive/tui_ki_ring.md` (Ring, archiviert) · `ui/app.py` (Takt-Treiber)
+`core/anwesenheit.py` · `../archive/tui_ki_ring.md` (Ring, archiviert) · `core/takt_treiber.py` (Takt-Treiber)
 
 ## Warum
 

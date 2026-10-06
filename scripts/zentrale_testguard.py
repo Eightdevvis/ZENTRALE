@@ -129,7 +129,7 @@ def anwenden(umgebung, kommandozeile, tempdir, pid, cwd=""):
     # keine Datei — sie geht an notify-send und damit sofort und sichtbar an
     # den Menschen, egal wohin HOME zeigt. Gekostet hat das Monate lang ein
     # Popup "Geige gleich. Los." bei JEDEM Lauf von tests/test_takt.py: der
-    # Treiber-Test faehrt absichtlich den ECHTEN ui/app.py:_takt_sprechen,
+    # Treiber-Test faehrt absichtlich den ECHTEN core/takt_treiber.py:sprechen,
     # faelscht nur den Modell-Stream — und dessen letzter Schritt meldet nach
     # draussen, wenn ZENTRALE nicht sichtbar vor Sasha steht.
     #

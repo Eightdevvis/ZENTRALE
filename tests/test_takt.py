@@ -150,7 +150,7 @@ def test_der_auftrag_ist_ein_auftrag_keine_fertige_nachricht(welt):
     assert "kein Countdown" in a["auftrag"]
 
 
-# ── Der Treiber (ui/app.py) ───────────────────────────────────────────
+# ── Der Treiber (core/takt_treiber.py) ───────────────────────────────────────────
 
 def test_der_auftrag_landet_nicht_im_verlauf(monkeypatch):
     """Der Auftrag ist eine Regieanweisung, keine Aeusserung von Sasha. Ihn
@@ -159,7 +159,7 @@ def test_der_auftrag_landet_nicht_im_verlauf(monkeypatch):
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "ui"))
     import ai
     import ai_backends
-    import app
+    import takt_treiber
     import state
 
     gesehen = {}
@@ -174,7 +174,7 @@ def test_der_auftrag_landet_nicht_im_verlauf(monkeypatch):
     monkeypatch.setattr(ai, "chat_stream", fake_stream)
     vorher = len(state.get_chat_history())
 
-    assert app._takt_sprechen({"marke": "x", "auftrag": "Erinnere ihn an X."})
+    assert takt_treiber.sprechen({"marke": "x", "auftrag": "Erinnere ihn an X."})
 
     verlauf = state.get_chat_history()
     assert gesehen["letzte"]["role"] == "user"
@@ -190,12 +190,12 @@ def test_ohne_erreichbares_backend_wird_geschwiegen(monkeypatch):
     einen Anlauf gegen ein Backend, das es nicht gibt."""
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "ui"))
     import ai_backends
-    import app
+    import takt_treiber
     import state
 
     monkeypatch.setattr(ai_backends, "chat_available", lambda: None)
     vorher = len(state.get_chat_history())
-    assert app._takt_sprechen({"marke": "x", "auftrag": "y"}) is False
+    assert takt_treiber.sprechen({"marke": "x", "auftrag": "y"}) is False
     assert len(state.get_chat_history()) == vorher
 
 
@@ -205,13 +205,13 @@ def test_eine_leere_antwort_wird_nicht_abgelegt(monkeypatch):
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "ui"))
     import ai
     import ai_backends
-    import app
+    import takt_treiber
     import state
 
     monkeypatch.setattr(ai_backends, "chat_available", lambda: "local")
     monkeypatch.setattr(ai, "chat_stream", lambda h, **k: iter(["  "]))
     vorher = len(state.get_chat_history())
-    assert app._takt_sprechen({"marke": "x", "auftrag": "y"}) is False
+    assert takt_treiber.sprechen({"marke": "x", "auftrag": "y"}) is False
     assert len(state.get_chat_history()) == vorher
 
 
@@ -224,7 +224,7 @@ def _treiber(monkeypatch, lage):
     import ai
     import ai_backends
     import anwesenheit
-    import app
+    import takt_treiber
     import melden
 
     gesehen, gemeldet = {}, []
@@ -238,7 +238,7 @@ def _treiber(monkeypatch, lage):
     monkeypatch.setattr(anwesenheit, "lage", lambda: lage)
     monkeypatch.setattr(melden, "desktop",
                         lambda text, **kw: gemeldet.append(text) or True)
-    app._takt_sprechen({"marke": "x", "auftrag": "Erinnere ihn an X."})
+    takt_treiber.sprechen({"marke": "x", "auftrag": "Erinnere ihn an X."})
     return gesehen["letzte"], gemeldet
 
 

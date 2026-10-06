@@ -106,6 +106,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `sensors` | 4 | Sensor-Simulation |
 | `hot_reload` | 4 | Hot Reload fürs Backend |
 | `tutor_port` | 4 | Die einzige Tür vom Kern zum Tutor |
+| `takt_treiber` | 4 | Der Takt-Thread: fragt `takt`, spricht über den KI-Kern, meldet |
 
 Schicht 5 liegt außerhalb von `core/` und steht deshalb nicht in der
 Tabelle, sondern im nächsten Abschnitt.

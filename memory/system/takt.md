@@ -3,14 +3,14 @@
 **Stand 2026-09-18:** `core/takt.py` entscheidet rein aus dem Kalender,
 **wann** ein Anstoß fällig ist (60 und 30 min vor einem Termin, 5 min
 Nachlauf, Nachtruhe 22–07, 20 min Mindestabstand, jeder Anstoß genau einmal
-in `data/takt/YYYY-MM-DD.json`); ein 60-s-Thread in `ui/app.py` merkt ihn,
+in `data/takt/YYYY-MM-DD.json`); ein 60-s-Thread in `core/takt_treiber.py` merkt ihn,
 lässt das Modell den Satz formulieren und legt ihn in den Verlauf; die TUI
 holt den Verlauf alle 20 s und zeigt ein ● am Kasten. Die Lage
 (`anwesenheit.py`) geht mit, die Meldung geht zusätzlich als
 Desktop-Benachrichtigung raus (`melden.py`). `ZENTRALE_TAKT=0` schaltet ab.
 Offen: Anwesenheitspings (Morgenritual, Check-in), das Schemen, Kostenblick.
 
-`core/takt.py` (Logik) · `ui/app.py` (Treiber) · `tui/zentrale_tui.py` (Zustellung)
+`core/takt.py` (Logik) · `core/takt_treiber.py` (Treiber) · `tui/zentrale_tui.py` (Zustellung)
 
 ## Warum
 
@@ -34,7 +34,7 @@ Modell. `faellig(jetzt)` liefert höchstens **einen** Anstoß oder `None`. Kein
 Modell-Aufruf hier: ein Fehler in der Anstoß-Logik soll im Test auffallen und
 nicht erst, wenn er Geld gekostet hat.
 
-**2. Der Treiber — `_takt_starten()` in `ui/app.py`.** Ein Daemon-Thread,
+**2. Der Treiber — `core/takt_treiber.py` (`starten()`, `sprechen()`).** Bis 2026-10-06 in `ui/app.py`; gestartet wird er weiter aus `start_ui()`. Ein Daemon-Thread,
 Tick alle 60 s: fragen → **erst merken, dann sprechen** → einmal durchs normale
 KI-Backend (also mit Gedächtnis, Kalender-Imprint und Werkzeugen) → Antwort per
 `state.push_chat_message("assistant", …)` in den Verlauf. Die Reihenfolge

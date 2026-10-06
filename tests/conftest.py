@@ -34,7 +34,7 @@ os.environ.setdefault("ZENTRALE_MAIL", "off")
 # Der Zwilling dieser Zeile steht in scripts/zentrale_testguard.py (der greift
 # auch aus einem alten Worktree, dessen conftest diese hier nicht kennt); die
 # Begründung steht dort ausführlich. Kurz: der Treiber-Test in test_takt.py
-# fährt absichtlich das echte ui/app.py:_takt_sprechen, und dessen letzter
+# fährt absichtlich das echte core/takt_treiber.py:sprechen, und dessen letzter
 # Schritt schickt eine echte Systembenachrichtigung raus — jahrelang jedes Mal
 # ein Popup "Geige gleich. Los." mitten in Sashas Sitzung.
 os.environ.setdefault("ZENTRALE_NOTIFY", "0")

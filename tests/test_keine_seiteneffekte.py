@@ -282,7 +282,7 @@ def test_kein_testlauf_meldet_sich_auf_dem_desktop():
 
     Gekostet hat das ein Popup "Geige gleich. Los." bei jedem Lauf von
     tests/test_takt.py — dessen Treiber-Test faehrt absichtlich das echte
-    ui/app.py:_takt_sprechen, und dessen letzter Schritt meldet nach draussen.
+    core/takt_treiber.py:sprechen, und dessen letzter Schritt meldet nach draussen.
     """
     sys.path.insert(0, os.path.join(ROOT, "core"))
     import melden
@@ -299,7 +299,7 @@ def test_der_takt_treiber_meldet_im_testlauf_nichts(monkeypatch):
     sys.path.insert(0, os.path.join(ROOT, "ui"))
     import ai
     import ai_backends
-    import app
+    import takt_treiber
     import melden
 
     # Nur nach DRAUSSEN darf nichts gehen: die Lage-Abfrage (i3-msg) laeuft
@@ -316,7 +316,7 @@ def test_der_takt_treiber_meldet_im_testlauf_nichts(monkeypatch):
     monkeypatch.setattr(ai, "chat_stream",
                         lambda h, **k: iter(["Geige gleich. ", "Los."]))
 
-    assert app._takt_sprechen({"marke": "x", "auftrag": "y"}) is True
+    assert takt_treiber.sprechen({"marke": "x", "auftrag": "y"}) is True
     assert geschickt == [], "eine echte Meldung hat den Testlauf verlassen"
 
 
