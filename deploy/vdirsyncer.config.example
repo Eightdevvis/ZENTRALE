@@ -1,0 +1,90 @@
+# vdirsyncer-Vorlage für den ZENTRALE-Kalender
+#
+# Was das ist: vdirsyncer gleicht den lokalen .ics-Ordner von ZENTRALE
+# (data/kalender/, eine Datei pro Termin, ein Unterordner pro Ebene) mit einem
+# Kalender-Server ab. Heute Google (Übergang), später ein eigener Server oder
+# Posteo — der Wechsel ist NUR diese Datei: den Google-Block durch den
+# CalDAV-Block unten ersetzen. ZENTRALE selbst merkt davon nichts.
+#
+# Bauplan, Begründungen und die Schritte zum Einrichten (in Worten):
+# memory/werkzeuge/kalender_ics_bauplan.md
+#
+# Kopie nach ~/.config/vdirsyncer/config, dann die <PLATZHALTER> ersetzen.
+# Diese Vorlage enthält bewusst KEINE Zugangsdaten — die echte Datei gehört
+# nicht ins Repo.
+#
+# Drei Regeln, die hier nicht verhandelbar sind:
+#  1. Nur EIN Knoten (der PC) lässt vdirsyncer laufen. Der Laptop bekommt den
+#     Kalender über den gewohnten data/-Abgleich. Zwei vdirsyncer auf einem
+#     gemeinsam abgeglichenen Ordner würden sich gegenseitig für Änderungen
+#     halten.
+#  2. status_path liegt AUSSERHALB von data/. Der Status beschreibt, was DIESER
+#     Knoten zuletzt gesehen hat; vom Sync auf einen anderen Knoten kopiert,
+#     wäre er falsch.
+#  3. vdirsyncer bricht ab, wenn eine Seite plötzlich ganz leer ist ("was
+#     completely emptied"). Diese Sicherung NIE abschalten und den Zwangs-
+#     Löschschalter von vdirsyncer nie benutzen, ohne vorher nachzusehen,
+#     warum eine Seite leer ist — meist ist es ein Fehler, kein Wunsch.
+#
+# Gestartet wird nicht vdirsyncer direkt, sondern scripts/kalender_sync.py:
+# es räumt vorher vom data/-Abgleich zurückgebrachte, längst gelöschte
+# Termine weg (sonst lädt vdirsyncer sie wieder hoch), macht den Tages-
+# Snapshot und spiegelt vorher und nachher ins git.
+
+[general]
+status_path = "~/.local/share/vdirsyncer/status/"
+
+
+# ── Paar: ZENTRALE-Ordner <-> Server ──────────────────────────────────────
+
+[pair zentrale]
+a = "zentrale_lokal"
+b = "zentrale_google"
+# Je Ebene ein Kalender: [Name, Ordner in data/kalender/, Kalender beim Server].
+# Die Server-Kalender legt man auf der Google-Weboberfläche an (z. B.
+# "ZENTRALE Termine", "ZENTRALE Routinen"); ihre IDs zeigt vdirsyncer beim
+# Entdecken an.
+# (Fortsetzungszeilen müssen eingerückt sein — die Datei ist INI-Format.)
+collections = [["termine",  "termine",  "<GOOGLE-KALENDER-ID-TERMINE>"],
+               ["routinen", "routinen", "<GOOGLE-KALENDER-ID-ROUTINEN>"]]
+# Farbe und Name der Kalender mit abgleichen (die Dateien `color` und
+# `displayname` schreibt ZENTRALE in jeden Ebenen-Ordner).
+metadata = ["color", "displayname"]
+# Bei einem echten Konflikt (beide Seiten haben denselben Termin geändert)
+# NICHT still eine Seite gewinnen lassen: vdirsyncer meldet ihn, man
+# entscheidet selbst. Der Verlauf in data/kalender_verlauf/ und der git-Spiegel
+# halten beide Fassungen fest.
+conflict_resolution = null
+
+
+[storage zentrale_lokal]
+type = "filesystem"
+path = "<PFAD-ZUM-REPO>/data/kalender/"
+fileext = ".ics"
+
+
+# ── Google (jetzt) ────────────────────────────────────────────────────────
+# OAuth: in der Google Cloud Console ein Projekt mit "Google Calendar API"
+# und einem OAuth-Client vom Typ "Desktop-App" anlegen; client_id und
+# client_secret hierher. Beim ersten Lauf öffnet vdirsyncer den Browser zur
+# Anmeldung und legt den Token in token_file ab (außerhalb von data/).
+# Ungetestet: ob Google die X-ZENTRALE-* Properties behält.
+
+[storage zentrale_google]
+type = "google_calendar"
+token_file = "~/.local/share/vdirsyncer/google_token"
+client_id = "<CLIENT-ID>"
+client_secret = "<CLIENT-SECRET>"
+
+
+# ── Später: eigener Server / Posteo (CalDAV) ──────────────────────────────
+# Zum Wechsel: diesen Block einkommentieren, im Paar oben `b` auf
+# "zentrale_caldav" stellen und die dritte Spalte von `collections` auf die
+# Kalender-Namen beim neuen Server. Das Passwort nicht hier hineinschreiben,
+# sondern von einem Passwort-Programm holen lassen.
+#
+# [storage zentrale_caldav]
+# type = "caldav"
+# url = "<CALDAV-URL, z. B. die Kalender-Adresse von Posteo oder dem eigenen Server>"
+# username = "<BENUTZER>"
+# password.fetch = ["command", "<PASSWORT-PROGRAMM>", "<ARGUMENTE>"]

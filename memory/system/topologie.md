@@ -290,6 +290,14 @@ Ping-Pong** (ein Watcher hätte genau die Schleife). Bewusst **nicht** gehängt:
 `graph.py` (KI-Konzeptgraph, würde während Chats stürmen) und die
 Hochfrequenz-Sensorlogs (`/api/log`) — die bleiben beim Boot-Sync.
 
+**Kalender als .ics (ab Sashas Umzug, siehe
+`memory/werkzeuge/kalender_ics_bauplan.md`):** `data/kalender/` (eine Datei pro
+Termin), `kalender_neben.json`, `kalender_verlauf/` und `kalender_snapshots/`
+liegen in `data/` und gehen über denselben Weg (Push-on-write hängt weiter in
+`kalender._save_raw`). Weil der Sync nie löscht, schreibt der Kalender beim
+Löschen Grabsteine; vdirsyncer läuft nur auf EINEM Knoten (PC), sein Status
+und der git-Spiegel des Kalenders liegen außerhalb von `data/`.
+
 Das ist die event-getriebene Rückkehr zur Live-Propagierung, aber **leichter
 als der frühere Daemon** (kein Polling/inotify-Reconcile, kein Race mit
 Commits — nur ein Stups pro echtem App-Write).

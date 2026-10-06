@@ -534,3 +534,49 @@ def test_kaputter_git_spiegel_verhindert_nie_das_schreiben(ics, tmp_path, monkey
 
 def test_spiegel_ist_in_tests_aus():
     assert kalender_speicher.git_spiegel_pfad() is None
+
+
+# ── Der vdirsyncer-Wrapper ─────────────────────────────────────────────
+
+def _falsches_vdirsyncer(tmp_path, monkeypatch, skript):
+    """Ein Ersatz-vdirsyncer im PATH: kein Netz, kein Google."""
+    b = tmp_path / "bin"
+    b.mkdir()
+    exe = b / "vdirsyncer"
+    exe.write_text(f"#!{sys.executable}\n" + skript)
+    exe.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{b}{os.pathsep}{os.environ['PATH']}")
+
+
+def test_wrapper_laeuft_nur_im_ics_modus(tmp_path, monkeypatch, capsys):
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+    import kalender_sync
+    monkeypatch.setenv("ZENTRALE_KALENDER_SPEICHER", "json")
+    assert kalender_sync.main([]) == 1
+    assert "nicht auf 'ics'" in capsys.readouterr().out
+
+
+def test_wrapper_raeumt_geister_und_meldet_schwund(ics, tmp_path, monkeypatch, capsys):
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+    import kalender_sync
+    ics.ensure_init()
+    ics.add_entry("termine", "2026-06-19", "Geist")
+    geist = _ics_dateien(tmp_path)[0]
+    kopie = geist.read_bytes()
+    ics.delete_entry("2026-06-19", "geist")
+    geist.write_bytes(kopie)                          # vom Sync zurückgebracht
+    for i in range(8):
+        ics.add_entry("termine", "2026-06-20", f"T{i}")
+    gesehen = tmp_path / "gesehen.txt"
+    vdir = tmp_path / "kalender" / "termine"
+    _falsches_vdirsyncer(tmp_path, monkeypatch, f"""
+import pathlib, sys
+v = pathlib.Path({str(vdir)!r})
+pathlib.Path({str(gesehen)!r}).write_text("\\n".join(sorted(p.name for p in v.glob("*.ics"))))
+for p in sorted(v.glob("*.ics"))[:7]:
+    p.unlink()
+sys.exit(3)
+""")
+    assert kalender_sync.main([]) == 3                # Exit-Code von vdirsyncer
+    assert geist.name not in gesehen.read_text()      # Geist vorher weg
+    assert "ACHTUNG: 7 Termine" in capsys.readouterr().out
