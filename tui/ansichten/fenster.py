@@ -64,6 +64,8 @@ def current_ctx(z):
             return None
         if K["listfocus"]:
             return "cal:sort" if K["lsort"] else "cal:list"
+        if K.get("stil"):
+            return "cal:ansicht"
         return "cal:week" if K["view"] == "week" else "cal:month"
     if MAIL["active"]:
         if MAIL["replying"] or MAIL.get("picking"):

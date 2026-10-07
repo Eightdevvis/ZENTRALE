@@ -36,7 +36,7 @@ TUI_KEYS = [
     ("graph", "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
     ("notizen", "Notizen (Mitte): freie notiz aus blöcken · ↑↓ block · t/l/f text/liste/float · e bearbeiten · d weg (fragt bei inhalt) · r titel · n übersicht · esc speichern & zu"),
     ("karte", "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Overlay (Handel→Politik→aus) · ,/. Zeit ←→ · ; jetzt · w=Fenster"),
-    ("kalender", "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · v Woche/Monat"),
+    ("kalender", "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · Tab Woche/Monat · v dreht durch die Ansichten Tagesliste/Monatsraster/Zeitachse (nur anschauen) und zurück"),
     ("post", "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
     ("space", "KI-Chat (Mitte): tippen + enter fragt die lokale KI (PC-Hirn via tunnel) · ↑↓ scrollen · esc zu"),
     ("tutor", "Persona-Zimmer (eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · ohne DISPLAY → text-panel · /tutor = text-panel"),
@@ -116,11 +116,16 @@ CTX_KEYS = {
     "cal:week": [
         ("↑↓", "wählen"), ("e", "bearbeiten"), ("a", "neu"),
         ("d", "löschen / aus"), ("x", "erledigte zeigen"),
-        ("l", "liste-fokus"), ("←→", "woche"), ("v", "monat"),
+        ("l", "liste-fokus"), ("←→", "woche"), ("tab", "monat"),
+        ("v", "ansicht a/b/c"),
     ],
     "cal:month": [
-        ("←→", "blättern"), ("v", "woche"), ("a", "neu"),
+        ("←→", "blättern"), ("tab", "woche"), ("v", "ansicht a/b/c"), ("a", "neu"),
         ("x", "erledigte zeigen"), ("0", "heute"), ("esc", "zu"),
+    ],
+    "cal:ansicht": [
+        ("←→", "blättern"), ("0", "heute"), ("x", "erledigte zeigen"),
+        ("v", "nächste ansicht"), ("esc", "zu"),
     ],
     "cal:list": [
         ("↑↓", "wählen"), ("space", "abhaken"), ("s", "sortieren"),
@@ -148,6 +153,7 @@ CTX_TITLES = {
     "home": "start", "graph": "graph", "list:forest": "fokus",
     "list:view": "liste", "list:pick": "einordnen", "map": "karte",
     "cal:week": "kalender · woche", "cal:month": "kalender · monat",
+    "cal:ansicht": "kalender · ansicht",
     "cal:list": "kalender · liste", "cal:sort": "kalender · sortieren",
     "mail:cats": "post", "mail:list": "post · liste", "mail:read": "post · lesen",
     "ai": "ki-chat", "tutor": "tutor",

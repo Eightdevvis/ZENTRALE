@@ -10,6 +10,9 @@ import time
 from datetime import date, timedelta
 
 from .basis import BEENDEN, api_call, parse_clock
+from .kalender_ansichten import (ANSICHT_NAMEN, DATENANSICHT, INV,
+                                 naechste_ansicht, tasten_hinweis, text_breite)
+from .kalender_ansichten import zeichne as stil_zeichnen
 
 
 KAL_WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
@@ -100,7 +103,10 @@ class Kalender:
                         "atype": "entry", "editing": None, "ract": None, "rconfirm": False,
                         "showhidden": False, "listfocus": False, "lsel": 0,
                         "linput": None, "lmode": "add", "ledit_iid": None, "lsort": False,
-                        "spantgt": None}
+                        "spantgt": None,
+                        # Ansicht A/B/C (kalender_ansichten.py) oder None = der
+                        # jetzige Kalender. Nur pro Sitzung, bewusst nicht gemerkt.
+                        "stil": None, "sdata": None}
 
     def k_fetch(self):
         """Kalender fürs aktuelle view+ref synchron holen (localhost, wenige ms).
@@ -141,6 +147,94 @@ class Kalender:
         K = self.K
         K["view"] = "month" if K["view"] == "week" else "week"
         K["data"] = None
+
+    # ── Ansichten A/B/C: v dreht jetziger → A → B → C → jetziger ──────────
+    # Sasha, 07.10.2026: A/B/C sind reine Anzeige (←→ blättern, 0 heute, esc
+    # zu); bearbeitet wird nur im jetzigen Kalender. Die Daten kommen über
+    # denselben /api/calendar wie immer — kein neuer Datenweg.
+    def k_stil_weiter(self):
+        K = self.K
+        K["stil"] = naechste_ansicht(K["stil"])
+        K["sdata"] = None; K["sel"] = 0; K["confirmdel"] = False
+        K["msg"] = ("ansicht: " + ANSICHT_NAMEN[K["stil"]]) if K["stil"] else ""
+
+    def k_stil_fetch(self):
+        K = self.K
+        dv = DATENANSICHT.get(K["stil"], "month")
+        try:
+            resp = api_call("/api/calendar?view=%s&ref=%s" % (dv, K["ref"]), timeout=2.0)
+            K["sdata"] = resp if isinstance(resp, dict) else {"failed": True}
+        except Exception:
+            K["sdata"] = {"failed": True}
+        K["sdata"]["_for"] = (K["stil"], K["ref"])
+
+    def k_stil_step(self, delta):
+        """Blättern in A/B/C: Monatsdaten (A, B) monatsweise, C wochenweise."""
+        K = self.K
+        r = date.fromisoformat(K["ref"])
+        if DATENANSICHT.get(K["stil"]) == "week":
+            r = r + timedelta(days=7 * delta)
+        else:
+            m = r.month - 1 + delta
+            r = date(r.year + m // 12, m % 12 + 1, 1)
+        K["ref"] = r.isoformat(); K["sdata"] = None
+
+    def _taste_stil(self, ch):
+        """Tasten, solange A/B/C zu sehen ist — nur Anzeige."""
+        K = self.K
+        if ch in (27, ord("c"), ord("C")):
+            K["active"] = False
+        elif ch in (ord("q"), ord("Q")):
+            return BEENDEN
+        elif ch in (ord("v"), ord("V")):
+            self.k_stil_weiter()
+        elif ch in (curses.KEY_LEFT, ord("h")):
+            self.k_stil_step(-1)
+        elif ch in (curses.KEY_RIGHT, ord("l")):
+            self.k_stil_step(1)
+        elif ch == ord("0"):
+            K["ref"] = date.today().isoformat(); K["sdata"] = None
+        elif ch in (ord("x"), ord("X")):
+            K["showhidden"] = not K["showhidden"]
+            K["msg"] = "erledigte: " + ("an" if K["showhidden"] else "aus")
+        elif ch in (ord("t"), ord("T")):
+            self.z.cycle_theme()
+        elif ch in (ord("a"), ord("A"), ord("e"), ord("E"), ord("d"), ord("D")):
+            K["msg"] = "bearbeiten im normalen kalender (v)"
+        return None
+
+    def _kal_stil(self, by, bx, bh, bw):
+        """A/B/C in die Mitte zeichnen: Zeilen aus kalender_ansichten.py,
+        Rollen auf die Palette; „_inv" heißt Fläche (Farbe umgekehrt)."""
+        C, K, z = self.z.C, self.K, self.z
+        ix, iw = bx + 2, bw - 4
+        bottom = by + bh - 2
+        if (not K["sdata"]) or K["sdata"].get("_for") != (K["stil"], K["ref"]):
+            self.k_stil_fetch()
+        d = K["sdata"]
+        if d.get("failed"):
+            z.addclip(by + 1, ix, "kalender: backend?", iw, C["faint"])
+            return
+        hoehe = bottom - (by + 1)
+        try:
+            zeilen = stil_zeichnen(K["stil"], d, iw, hoehe, erledigte=K["showhidden"])
+        except Exception as e:          # eine kaputte Ansicht darf die TUI nicht reißen
+            z.addclip(by + 1, ix, "ansicht %s: %s" % (K["stil"], e), iw, C["warn"])
+            return
+        for i, zeile in enumerate(zeilen[:hoehe]):
+            x = ix
+            for text, rolle in zeile:
+                if rolle.endswith(INV):
+                    attr = C.get(rolle[:-len(INV)], C["dim"]) | curses.A_REVERSE
+                else:
+                    attr = C.get(rolle, C["dim"])
+                if text.strip() or rolle.endswith(INV):
+                    z.addclip(by + 1 + i, x, text, ix + iw - x, attr)
+                x += text_breite(text)
+        hint = tasten_hinweis(K["stil"])
+        z.addclip(bottom, ix, hint, iw, C["faint"])
+        if K["msg"]:
+            z.addclip(bottom, ix + iw - len(K["msg"]), K["msg"], len(K["msg"]), C["faint"])
 
     def k_today(self):
         K = self.K
@@ -392,6 +486,8 @@ class Kalender:
         k_selectable, k_sidebar_items = self.k_selectable, self.k_sidebar_items
         k_sidebar_lid, k_step, k_today = self.k_sidebar_lid, self.k_step, self.k_today
         k_toggle = self.k_toggle
+        if K["stil"] and K["mode"] == "view" and not K["listfocus"]:
+            return self._taste_stil(ch)
         if K["mode"] == "add":             # gestaffeltes Eingabe-Formular
             cur_key = ("aday", "atime", "alabel")[K["astage"]]
             is_rt = (K["atype"] == "routine")
@@ -555,8 +651,10 @@ class Kalender:
                 elif ch in (ord("x"), ord("X")):           # erledigte ein/aus gilt auch hier
                     K["showhidden"] = not K["showhidden"]; K["lsel"] = 0
                     K["msg"] = "erledigte: " + ("an" if K["showhidden"] else "aus")
-                elif ch in (ord("v"), ord("V"), 9):        # Monat hat keine Sidebar → Fokus raus
+                elif ch == 9:                              # Tab: Monat hat keine Sidebar → Fokus raus
                     K["listfocus"] = False; k_toggle(); K["sel"] = 0; K["msg"] = ""
+                elif ch in (ord("v"), ord("V")):           # v → Ansicht A/B/C
+                    K["listfocus"] = False; self.k_stil_weiter()
         else:                              # View-Modus: blättern/auswählen
             if ch in (27, ord("c"), ord("C")):             # Esc/c → Kalender zu
                 K["active"] = False
@@ -575,8 +673,10 @@ class Kalender:
                 K["sel"] = max(0, K["sel"] - 1)
             elif ch in (curses.KEY_DOWN, ord("j")):
                 K["sel"] = K["sel"] + 1    # Klemmung passiert beim Zeichnen
-            elif ch in (ord("v"), ord("V"), 9):            # v/Tab → Woche↔Monat
+            elif ch == 9:                                  # Tab → Woche↔Monat
                 k_toggle(); K["sel"] = 0; K["msg"] = ""
+            elif ch in (ord("v"), ord("V")):               # v → Ansicht A/B/C (Sasha, 07.10.)
+                self.k_stil_weiter()
             elif ch == ord("0"):                           # 0 → zurück zu heute
                 k_today(); K["sel"] = 0; K["msg"] = ""
             elif ch in (ord("x"), ord("X")):               # x → erledigtes ein-/ausblenden
@@ -616,6 +716,9 @@ class Kalender:
         ix, iw = bx + 2, bw - 4
         bottom = by + bh - 2          # Status-/Hilfezeile unten in der Box
         if iw < 8:
+            return
+        if K["stil"] and K["mode"] == "view" and not K["listfocus"]:
+            self._kal_stil(by, bx, bh, bw)
             return
         if (not K["data"]) or K["data"].get("_for") != (K["view"], K["ref"]):
             k_fetch()

@@ -1,5 +1,16 @@
 # Kalender-Ansichten A/B/C — Vorschau
 
+**Stand 2026-10-07 (abends): eingehängt.** Im Kalender dreht `v`: der jetzige
+Kalender → A Tagesliste → B Monatsraster → C Zeitachse → zurück zum
+jetzigen (`naechste_ansicht`, None = jetziger). Woche↔Monat im jetzigen
+Kalender jetzt mit **Tab**. A/B/C sind reine Anzeige (Sasha): ←→ blättern
+(A/B monatsweise, C wochenweise), `0` heute, `x` erledigte, `esc` zu;
+`a/e/d` bearbeiten nur im jetzigen Kalender. Daten über denselben
+`/api/calendar` (`DATENANSICHT`), gewählte Ansicht gilt nur pro Sitzung.
+↑↓ in C gibt es nicht: die Achse passt sich selbst der Höhe an. Code:
+`Kalender._taste_stil` / `_kal_stil` in `tui/ansichten/kalender.py`; Test
+mit echter TUI: `tests/test_kalender_ansichten_tui.py`.
+
 **Stand 2026-10-06:** Die drei Entwürfe für den TUI-Kalender sind gebaut, aber
 **noch nicht eingehängt**: reine Funktionen in `tui/ansichten/kalender_ansichten.py`
 (Daten von `/api/calendar` rein → Zeilen aus (Text, Farbrolle) raus), Taste `v`

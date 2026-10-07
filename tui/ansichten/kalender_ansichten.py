@@ -64,23 +64,25 @@ MONATE = ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
 Zeile = list  # [(text, rolle), …]
 
 
-def naechste_ansicht(aktuell: str | None) -> str:
-    """Taste v: A → B → C → A. Unbekanntes (alter Zustand, Tippfehler) fängt
-    bei A an, statt zu crashen."""
+def naechste_ansicht(aktuell: str | None) -> str | None:
+    """Taste v (Sasha, 07.10.2026): der jetzige Kalender → A → B → C → zurück
+    zum jetzigen. None steht für den jetzigen Kalender (dort wird bearbeitet).
+    Unbekanntes (alter Zustand, Tippfehler) fängt bei A an, statt zu crashen."""
+    if aktuell is None:
+        return ANSICHTEN[0]
     if aktuell not in ANSICHTEN:
         return ANSICHTEN[0]
-    return ANSICHTEN[(ANSICHTEN.index(aktuell) + 1) % len(ANSICHTEN)]
+    i = ANSICHTEN.index(aktuell) + 1
+    return ANSICHTEN[i] if i < len(ANSICHTEN) else None
 
 
 def tasten_hinweis(ansicht: str) -> str:
-    """Fußzeile je Ansicht, wie in den Entwürfen — nur Text; welche Tasten
-    die TUI wirklich bindet, entscheidet das Einhängen."""
-    nxt = ANSICHT_NAMEN[naechste_ansicht(ansicht)]
-    return {
-        "A": "←→ tag · v %s · a neu · e bearbeiten · d löschen · esc zurück",
-        "B": "←→ monat · v %s · enter tag öffnen · a neu · esc zurück",
-        "C": "←→ woche · v %s · ↑↓ stunde · a neu · esc zurück",
-    }.get(ansicht, "v %s") % nxt
+    """Fußzeile je Ansicht — nur Tasten, die beim Einhängen wirklich gebunden
+    sind. A/B/C sind reine Anzeige: bearbeitet wird im jetzigen Kalender."""
+    nxt = naechste_ansicht(ansicht)
+    ziel = ANSICHT_NAMEN[nxt] if nxt else "bearbeiten"
+    blatt = "woche" if DATENANSICHT.get(ansicht) == "week" else "monat"
+    return "←→ %s · 0 heute · v %s · esc zurück" % (blatt, ziel)
 
 
 def zeichne(ansicht: str, daten, breite: int, hoehe: int,
