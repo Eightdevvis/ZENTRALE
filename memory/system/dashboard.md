@@ -1,7 +1,8 @@
 # Dashboard & Frontend
 
 **Stand 2026-09-18:** Gearbeitet wird nur noch an der **TUI**
-(`tui/zentrale_tui.py`, stdlib-only, Thin Client gegen `/api/*`); die
+(`tui/zentrale_tui.py` + `tui/ansichten/`, stdlib-only, Thin Client gegen
+`/api/*`; wie die Teile geschnitten sind: [tui_bauplan.md](tui_bauplan.md)); die
 Browser-Front `monolith.html` (KI-Blöcke per `ki_aus` weggelassen) ist
 **geparkt** (seit 2026-10-04): bleibt im Code für eine spätere
 Wiedereinbindung, wird nicht benutzt. Das
@@ -51,8 +52,9 @@ Lifestyle- und focus-Box gibt es dort nicht mehr. **Backup:** `/dashboard an`
 holt das alte 3-Spalten-Layout zurück, `/dashboard aus` die Galaxie; der
 Wunsch liegt in `~/.config/zentrale/dashboard` (`ZENTRALE_DASHBOARD_FILE`,
 Tests lenken um).
-Die Bausteine `draw_external`/`draw_telemetrie`/`draw_stdout`/`draw_outbound`/
-`draw_rad` teilen sich beide Layouts. Im alten Layout gilt weiter:
+Die Bausteine `draw_external`/`draw_telemetrie`/`draw_stdout`/`draw_outbound`
+(`tui/ansichten/technik.py`) und `draw_rad` (`tui/ansichten/startseite.py`)
+teilen sich beide Layouts. Im alten Layout gilt weiter:
 **Startseite = App-Rad** (seit 02.10.2026,
 `RAD_APPS`/`rad_zeilen`): ←/→ dreht einen liegenden Ring, leicht von oben
 gesehen (vorn = unten, groß + Rahmen; hinten = oben, blass), enter öffnet
@@ -167,7 +169,7 @@ EIN Schalter:
 > zum Wiederanzeigen Box + Handler aus der Historie zurückholen (das tote
 > `.srow`-CSS steht im Template noch bereit).
 
-### TUI (`tui/zentrale_tui.py`)
+### TUI (`tui/zentrale_tui.py` + `tui/ansichten/`)
 
 KEIN Browser — rendert direkt im Terminal (curses). Motivation: ein Browser-Tab
 frisst auf einer RAM-schwachen Maschine 300–600 MB+, das Backend selbst nur
@@ -771,7 +773,8 @@ und zwar in der **Anzeige-Reihenfolge** `l_vitems()` = `liste_ordnen(…)`:
 **Abgeschlossenes ist ausgeblendet**, der **Fokus** (oder ein Ordner, in dem er
 steckt) **klebt oben**, der Rest sortiert sich nach **Erfülltheit absteigend**
 (was kaum noch Saft braucht, steht oben; Gleichstand = gespeicherte Reihenfolge).
-Ganz oben über der Ebene steht die **Bernsteinleiste** (`draw_bernstein`, 2 Zeilen):
+Ganz oben über der Ebene steht die **Bernsteinleiste** (`Fokus._bernstein` in
+`tui/ansichten/fokus.py`, 2 Zeilen):
 ein Stein je Blatt der Ebene, jeder abgehakte leuchtet, die offenen sind derselbe
 Stein fast durchsichtig, der zuletzt abgehakte glimmt im Takt nach; rechts
 `erledigt/gesamt`. Gemalt wird sie vom **Pixel-Baustein `tui/pixel.py`** (curses-frei,

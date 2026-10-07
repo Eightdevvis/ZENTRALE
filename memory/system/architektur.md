@@ -3,7 +3,8 @@
 **Stand 2026-09-18:** Ein Python-Prozess auf dem PC mit zwei Threads
 (Event-Loop `core/main.py`, Flask `ui/app.py`), verbunden **nur** über
 `state.py`. Dazu zwei Sidecars (Whisper 5050, TTS 5051) und Ollama. Fronten:
-die **TUI** (`tui/zentrale_tui.py`, Thin Client per HTTP) ist die, an der
+die **TUI** (`tui/zentrale_tui.py` + Ansichten in `tui/ansichten/`, Bauplan
+[tui_bauplan.md](tui_bauplan.md); Thin Client per HTTP) ist die, an der
 gearbeitet wird und die einzige Front; die Browser-Front (`monolith.html`) ist
 seit 2026-10-06 archiviert (`memory/archive/browser_front.md`).
 Die Kassetten sind entfernt (2026-10-04, Tracker erledigt); lokale KI an/aus
@@ -141,7 +142,9 @@ ZENTRALE/
 │                            # Baum, Artefakte, Routen, Sprachpakete: memory/tutor/bauplan.md
 │                            # (mit Drift-Test tests/test_tutor_bauplan.py) — hier bewusst nicht kopiert.
 ├── tui/                     # Die TUI (curses), einzige Front, redet NUR via HTTP mit den Routen
-│   ├── zentrale_tui.py      # Die TUI (Sensoren, Karte, Kalender, Listen, Graphen, Mail)
+│   ├── zentrale_tui.py      # Einstieg: main, Store, Hot Reload, run_ui (Aufbau + Schleife)
+│   ├── ansichten/           # je Ansicht ein Modul (Chat, Kalender, Post, Karte …) — tui_bauplan.md
+│   ├── pixel.py             # Pixel-Symbole (Rad, Bernsteinleiste)
 │   └── boot_loader.py       # Blumenwind-Loader beim Start (Boot-Sync dahinter)
 ├── services/
 │   ├── whisper_service.py   # STT (Port 5050)

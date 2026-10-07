@@ -10,7 +10,7 @@ holt den Verlauf alle 20 s und zeigt ein ● am Kasten. Die Lage
 Desktop-Benachrichtigung raus (`melden.py`). `ZENTRALE_TAKT=0` schaltet ab.
 Offen: Anwesenheitspings (Morgenritual, Check-in), das Schemen, Kostenblick.
 
-`core/takt.py` (Logik) · `core/takt_treiber.py` (Treiber) · `tui/zentrale_tui.py` (Zustellung)
+`core/takt.py` (Logik) · `core/takt_treiber.py` (Treiber) · `tui/ansichten/chat.py` (Zustellung: `Chat.ai_poll`)
 
 ## Warum
 

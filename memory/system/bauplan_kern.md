@@ -227,6 +227,7 @@ Sasha, 05.10.2026: einfrieren, dann zerlegen (Punkt 3).
 - **„Tür umgangen"** — TUI: über eine Route in `ui/routen/` gehen. Kern zum
   Tutor: über `tutor_port`.
 - **„Riese gewachsen"** — das Neue in eine eigene Funktion oder Datei legen.
-  In der TUI heißt das: ein eigenes Modul neben `zentrale_tui.py`.
+  In der TUI heißt das: eine eigene Ansicht in `tui/ansichten/`
+  ([tui_bauplan.md](tui_bauplan.md)).
 - **„Gut gemacht — kleiner geworden"** — die Zahl oben senken oder die Zeile
   streichen. Das ist der Sinn der Sache.
