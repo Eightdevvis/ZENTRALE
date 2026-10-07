@@ -112,7 +112,8 @@ _GEDAECHTNIS = {
 # ein Bild-Anhang.
 _ABLAGE = {"dokumente": [
     {"id": "d1", "titel": "Packliste Radtour", "art": "markdown", "herkunft": "ki",
-     "fassung": 2, "geaendert": "2026-10-06T09:00:00+00:00", "gespraech_titel": "Fahrradschlauch"},
+     "fassung": 2, "geaendert": "2026-10-06T09:00:00+00:00", "gespraech_titel": "Fahrradschlauch",
+     "gespraech": "g1"},
     {"id": "d2", "titel": "skizze.png", "art": "bild", "herkunft": "anhang",
      "fassung": 1, "geaendert": "2026-10-04T09:00:00+00:00"}]}
 _DOK = {"kopf": {"id": "d1", "titel": "Packliste Radtour", "art": "markdown", "fassung": 2},
