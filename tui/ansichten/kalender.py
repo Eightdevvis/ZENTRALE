@@ -265,6 +265,7 @@ class Kalender:
                 z.addclip(bottom, ix + iw - len(K["msg"]), K["msg"], len(K["msg"]), C["faint"])
         if bed:
             bed.zeichne_popup(by, bx, bh, bw)
+            bed.zeichne_kasten(by, bx, bh, bw)
 
     def k_today(self):
         K = self.K

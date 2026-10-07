@@ -66,9 +66,36 @@ def test_regel_text():
     assert kw.regel_text("FREQ=MONTHLY;BYMONTHDAY=7") == "monatlich am 7."
 
 
-# ── a: Anlegen ─────────────────────────────────────────────────────────
+# ── Formular (Modal) ───────────────────────────────────────────────────
+def fuelle(f, **werte):
+    """Felder per Name setzen (Text oder Auswahl), dann Enter."""
+    for name, wert in werte.items():
+        feld = next(x for x in f.felder if x.name == name)
+        if feld.art == "wahl":
+            feld.wahl = feld.optionen.index(wert)
+        else:
+            feld.text = wert
+    return f.taste(10)
+
+
+def test_formular_tippen_tab_und_umlaute():
+    f = kw.formular_neu(TAG, HEUTE)
+    for b in "Gießen".encode("utf-8"):
+        f.taste(b)
+    assert f.feld.text == "Gießen"
+    f.taste(9)
+    assert f.feld.name == "datum"
+    f.taste(9)
+    f.taste(261)                                   # → in der Auswahl
+    assert f.feld.roh() == "ja"
+    assert "von" not in [x.name for x in f.sichtbar()]   # ganztägig: keine Uhrzeit
+    assert f.taste(27) == "abbruch"
+
+
 def test_anlegen_termin_mit_ende_prueft_kollision():
-    p = tippe(kw.dialog_anlegen(TAG), "14:00", "15:00", "Zahnarzt").plan()
+    f = kw.formular_neu(TAG, HEUTE)
+    assert fuelle(f, titel="Zahnarzt", von="14:00", bis="15:00") == "fertig"
+    p = f.plan()
     assert p["aufrufe"] == [("POST", "/api/calendar/entry", {
         "layer": "termine", "day": "2026-10-07", "label": "Zahnarzt",
         "time": "14:00", "ende": "15:00"})]
@@ -77,102 +104,132 @@ def test_anlegen_termin_mit_ende_prueft_kollision():
 
 
 def test_anlegen_mit_dauer_ueber_tage_wird_spanne():
-    p = tippe(kw.dialog_anlegen(date(2026, 10, 9)), "18:00", "+1d20h", "Berlin").plan()
-    (m, pfad, body), = p["aufrufe"]
+    f = kw.formular_neu(date(2026, 10, 9), HEUTE)
+    fuelle(f, titel="Berlin", von="18:00", bis="+1d20h")
+    (m, pfad, body), = f.plan()["aufrufe"]
     assert (m, pfad) == ("POST", "/api/calendar/spanne")
-    assert body == {"von": "2026-10-09", "bis": "2026-10-11", "label": "Berlin",
-                    "start_zeit": "18:00", "end_zeit": "14:00"}
+    assert body == {"layer": "termine", "von": "2026-10-09", "bis": "2026-10-11",
+                    "label": "Berlin", "start_zeit": "18:00", "end_zeit": "14:00"}
 
 
 def test_anlegen_ende_vor_start_ist_naechster_tag():
-    p = tippe(kw.dialog_anlegen(TAG), "22:00", "02:00", "Party").plan()
-    assert p["aufrufe"][0][2]["bis"] == "2026-10-08"
+    f = kw.formular_neu(TAG, HEUTE)
+    fuelle(f, titel="Party", von="22:00", bis="02:00")
+    assert f.plan()["aufrufe"][0][2]["bis"] == "2026-10-08"
 
 
 def test_anlegen_ganztags_mehrere_tage():
-    d = kw.dialog_anlegen(TAG)
-    tippe(d, "", "3", "Urlaub")
-    assert d.plan()["aufrufe"] == [("POST", "/api/calendar/spanne", {
-        "von": "2026-10-07", "bis": "2026-10-09", "label": "Urlaub"})]
+    f = kw.formular_neu(TAG, HEUTE)
+    fuelle(f, titel="Urlaub", ganz="ja", tage="3")
+    assert f.plan()["aufrufe"] == [("POST", "/api/calendar/spanne", {
+        "layer": "termine", "von": "2026-10-07", "bis": "2026-10-09", "label": "Urlaub"})]
 
 
-def test_umlaute_kommen_heil_an():
-    d = tippe(kw.dialog_anlegen(TAG), "", "", "Gießen bei Müller")
-    assert d.plan()["aufrufe"][0][2]["label"] == "Gießen bei Müller"
+def test_anlegen_mit_wiederholung_wird_routine_oder_spanne():
+    f = kw.formular_neu(TAG, HEUTE)
+    fuelle(f, titel="Geige", von="10:00", bis="11:00", wied="wöchentlich", wtage="di do")
+    (_, pfad, body), = f.plan()["aufrufe"]
+    assert pfad == "/api/calendar/routine"
+    assert (body["freq"], body["wochentage"], body["seit"], body["ende"]) == \
+        ("w", ["TU", "TH"], "2026-10-07", "11:00")
+    f = kw.formular_neu(TAG, HEUTE)
+    fuelle(f, titel="Messe", von="10:00", bis="18:00", wied="täglich", wbis="09.10.2026")
+    (_, pfad, body), = f.plan()["aufrufe"]
+    assert pfad == "/api/calendar/spanne" and body["tageszeit"] == ["10:00", "18:00"]
 
 
 def test_falsche_eingabe_bleibt_stehen():
-    d = kw.dialog_anlegen(TAG)
-    tippe(d, "abc")
-    assert d.schritt.name == "start" and "uhrzeit" in d.fehler
-    assert d.taste(27) == "abbruch"
+    f = kw.formular_neu(TAG, HEUTE)
+    assert fuelle(f, titel="X", von="abc") == "weiter"
+    assert f.feld.name == "von" and "uhrzeit" in f.fehler
+    assert fuelle(f, titel="") == "weiter" and f.feld.name == "titel"
 
 
 # ── e: Bearbeiten ──────────────────────────────────────────────────────
-GEIGE = {"label": "Geige", "layer": "routinen", "recurring": True,
+GEIGE = {"label": "Geige", "layer": "termine", "recurring": True,
          "time": "10:00", "ende": "11:00", "rrule": "FREQ=WEEKLY;BYDAY=WE"}
 MESSE = {"label": "Messe", "layer": "termine", "spanning": True,
          "von": "2026-10-06", "bis": "2026-10-08", "time": "10:00", "ende": "18:00"}
 ZAHN = {"label": "Zahnarzt", "layer": "termine", "time": "14:00", "ende": "15:00"}
 
 
-def test_einmal_startzeit_vorbelegt_und_gesendet():
-    d = kw.dialog_bearbeiten(ZAHN, TAG, HEUTE)
-    tippe(d, "1")
-    assert d.eingabe == "14:00"                       # calcurse zeigt den jetzigen Wert
-    tippe(d, "14:30")
-    (m, pfad, body), = d.plan()["aufrufe"]
+def test_einmal_vorbelegt_und_gesendet():
+    f = kw.formular_bearbeiten(ZAHN, TAG, HEUTE)
+    assert {x.name: x.roh() for x in f.felder}["von"] == "14:00"
+    fuelle(f, von="14:30")
+    (m, pfad, body), = f.plan()["aufrufe"]
     assert (m, pfad) == ("PUT", "/api/calendar/eintrag")
-    assert body["new"] == {"time": "14:30"} and body["time"] == "14:00"
+    assert body["time"] == "14:00" and body["new"]["time"] == "14:30"
+    assert body["new"]["ende"] == "15:00"
 
 
-def test_routine_nur_dieser_tag():
-    d = tippe(kw.dialog_bearbeiten(GEIGE, TAG, HEUTE), "d", "1", "12:00")
-    (m, pfad, body), = d.plan()["aufrufe"]
+def test_routine_fragt_erst_dieser_oder_alle():
+    d = kw.formular_bearbeiten(GEIGE, TAG, HEUTE)
+    assert isinstance(d, kw.Dialog)
+    d.taste(ord("d"))
+    f = d.plan()["weiter"]
+    fuelle(f, von="12:00", bis="13:00")
+    (_, pfad, body), = f.plan()["aufrufe"]
     assert pfad == "/api/calendar/routine/abweichung"
-    assert body["day"] == "2026-10-07" and body["new"] == {"time": "12:00"}
+    assert body["day"] == "2026-10-07" and body["new"]["time"] == "12:00"
 
 
-def test_routine_alle_wiederholung():
-    d = tippe(kw.dialog_bearbeiten(GEIGE, TAG, HEUTE), "a", "6", "w", "1", "di do", "")
-    (m, pfad, body), = d.plan()["aufrufe"]
+def test_routine_alle_wiederholung_aendern():
+    d = kw.formular_bearbeiten(GEIGE, TAG, HEUTE)
+    d.taste(ord("a"))
+    f = d.plan()["weiter"]
+    assert {x.name: x.roh() for x in f.felder}["wied"] == "wöchentlich"
+    fuelle(f, wtage="di do")
+    (m, pfad, body), = f.plan()["aufrufe"]
     assert (m, pfad) == ("PUT", "/api/calendar/routine")
-    assert body["new"]["wiederholung"] == {"freq": "w", "intervall": 1, "bis": None,
-                                           "wochentage": ["TU", "TH"]}
+    assert body["new"]["wiederholung"]["wochentage"] == ["TU", "TH"]
+    d = kw.formular_bearbeiten(GEIGE, TAG, HEUTE)
+    d.taste(ord("a"))
+    f = d.plan()["weiter"]
+    fuelle(f, titel="Violine")
+    assert "wiederholung" not in f.plan()["aufrufe"][0][2]["new"], "Regel unverändert"
 
 
 def test_spanne_einzelner_tag_und_alle():
-    d = tippe(kw.dialog_bearbeiten(MESSE, TAG, HEUTE), "d", "1", "09:00")
-    (_, pfad, body), = d.plan()["aufrufe"]
+    d = kw.formular_bearbeiten(MESSE, TAG, HEUTE)
+    d.taste(ord("d"))
+    f = d.plan()["weiter"]
+    fuelle(f, von="09:00")
+    (_, pfad, body), = f.plan()["aufrufe"]
     assert pfad == "/api/calendar/spanne/tag"
     assert (body["von"], body["day"], body["time"], body["ende"]) == \
         ("2026-10-06", "2026-10-07", "09:00", "18:00")
-    d = tippe(kw.dialog_bearbeiten(MESSE, TAG, HEUTE), "a", "5", "+7")
-    (m, pfad, body), = d.plan()["aufrufe"]
-    assert (m, pfad, body["new"]) == ("PUT", "/api/calendar/spanne", {"verschieben": 7})
+    d = kw.formular_bearbeiten(MESSE, TAG, HEUTE)
+    d.taste(ord("a"))
+    f = d.plan()["weiter"]
+    fuelle(f, erster="13.10.2026", letzter="15.10.2026")
+    (m, pfad, body), = f.plan()["aufrufe"]
+    assert (m, pfad) == ("PUT", "/api/calendar/spanne")
+    assert body["new"]["verschieben"] == 7 and "bis" not in body["new"]
 
 
 # ── r: Wiederholen ─────────────────────────────────────────────────────
 def test_taeglich_mit_ende_wird_spanne_und_original_weg():
-    d = tippe(kw.dialog_wiederholen(ZAHN, TAG, HEUTE), "t", "1", "09.10.2026")
-    neu, weg = d.plan()["aufrufe"]
-    assert neu == ("POST", "/api/calendar/spanne", {
-        "von": "2026-10-07", "bis": "2026-10-09", "label": "Zahnarzt",
-        "tageszeit": ["14:00", "15:00"]})
+    f = kw.formular_wiederholen(ZAHN, TAG, HEUTE)
+    assert f.feld.name == "wied"
+    fuelle(f, wied="täglich", wbis="09.10.2026")
+    neu, weg = f.plan()["aufrufe"]
+    assert neu[1] == "/api/calendar/spanne" and neu[2]["tageszeit"] == ["14:00", "15:00"]
     assert weg[0:2] == ("DELETE", "/api/calendar/eintrag")
 
 
 def test_woechentlich_wird_routine_ab_diesem_tag():
-    d = tippe(kw.dialog_wiederholen(ZAHN, TAG, HEUTE), "w", "2", "", "")
-    neu, weg = d.plan()["aufrufe"]
+    f = kw.formular_wiederholen(ZAHN, TAG, HEUTE)
+    fuelle(f, wied="wöchentlich", alle="2")
+    neu, weg = f.plan()["aufrufe"]
     assert neu[1] == "/api/calendar/routine"
     assert (neu[2]["freq"], neu[2]["intervall"], neu[2]["seit"]) == ("w", 2, "2026-10-07")
-    assert neu[2]["wochentage"] is None                 # = Wochentag des Tags
 
 
-def test_wiederholen_einer_routine_fragt_gleich_die_regel():
-    d = kw.dialog_wiederholen(GEIGE, TAG, HEUTE)
-    assert d.schritt.name == "freq"
+def test_wiederholen_einer_routine_geht_direkt_zur_regel():
+    f = kw.formular_wiederholen(GEIGE, TAG, HEUTE)
+    assert isinstance(f, kw.Formular) and f.feld.name == "wied"
+    assert kw.formular_wiederholen(MESSE, TAG, HEUTE) is None
 
 
 # ── d: Löschen ─────────────────────────────────────────────────────────

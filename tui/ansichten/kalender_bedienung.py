@@ -188,7 +188,7 @@ class Bedienung:
         elif ch in (curses.KEY_RIGHT, ord("l")):
             self.setze_tag(d + timedelta(days=1))
         elif ch in (ord("a"), ord("A"), 1):    # Strg-A wie calcurse
-            self._starte(kw.dialog_anlegen(d))
+            self._starte(kw.formular_neu(d, date.today()))
         elif ch in (10, 13, curses.KEY_ENTER):
             roh = self.gewaehlt()
             if roh:
@@ -198,11 +198,11 @@ class Bedienung:
             if not roh:
                 W["msg"] = "kein termin gewählt"
             elif ch in (ord("e"), ord("E")):
-                self._starte(kw.dialog_bearbeiten(roh, d, date.today()))
+                self._starte(kw.formular_bearbeiten(roh, d, date.today()))
             elif ch in (ord("d"), ord("D")):
                 self._starte(kw.dialog_loeschen(roh, d))
             elif ch == ord("r"):
-                dl = kw.dialog_wiederholen(roh, d, date.today())
+                dl = kw.formular_wiederholen(roh, d, date.today())
                 if dl is None:
                     W["msg"] = "eine spanne wiederholt sich nicht — e ändert sie"
                 else:
@@ -232,7 +232,7 @@ class Bedienung:
         elif ch in (10, 13, curses.KEY_ENTER):
             self.W["fokus"] = "termine"
         elif ch in (ord("a"), ord("A"), 1):
-            self._starte(kw.dialog_anlegen(d))
+            self._starte(kw.formular_neu(d, date.today()))
         else:
             return False
         return True
@@ -311,6 +311,9 @@ class Bedienung:
                     art="wahl", wahl={"j": True, "n": False})], lambda a: kw._plan())
                 W["nach_konflikt"] = plan
                 return
+        if plan.get("weiter") is not None:     # „nur dieser Tag?" → der Kasten
+            self._starte(plan["weiter"])
+            return
         for methode, pfad, body in plan.get("aufrufe", []):
             try:
                 api_call(pfad, method=methode, body=body, timeout=15.0)
@@ -333,27 +336,66 @@ class Bedienung:
         if plan.get("danach", {}).get("tag"):
             self.setze_tag(plan["danach"]["tag"])
 
-    # ── Zeichnen: Frage-Zeile und Ansehen-Fenster ──────────────────────
+    # ── Zeichnen: Kasten (Formular/Rückfrage) und Ansehen-Fenster ─────
     def zeile_unten(self):
-        """(text, rolle) für die unterste Zeile: Frage, Meldung oder None."""
+        """(text, rolle) für die unterste Zeile: nur noch Meldungen — Fragen
+        stehen im Kasten (Sasha, 07.10.2026: „ich will das modal")."""
         W = self.W
-        if W["dialog"] is not None:
-            return W["dialog"].zeile(), "kal"
-        if W["msg"]:
+        if W["msg"] and W["dialog"] is None:
             return W["msg"], "faint"
         return None
+
+    def _kasten(self, by, bx, bh, bw, w, h, titel):
+        z, C = self.z, self.z.C
+        w, h = min(bw - 2, w), min(bh - 2, h)
+        y, x = by + max(1, (bh - h) // 2), bx + (bw - w) // 2
+        for i in range(h):
+            z.safe_addstr(y + i, x, " " * w, C["dim"])
+        z.draw_box(y, x, h, w, " %s " % titel, C.get("kal", C["acc"]) | curses.A_BOLD)
+        return y, x, w, h
+
+    def zeichne_kasten(self, by, bx, bh, bw):
+        dl = self.W["dialog"]
+        if dl is None:
+            return
+        z, C = self.z, self.z.C
+        kal = C.get("kal", C["acc"])
+        if isinstance(dl, kw.Formular):
+            zeilen = dl.zeilen()
+            bl = max(len(b) for b, *_ in zeilen) + 2
+            w = max(56, bl + 40)
+            h = len(zeilen) + 6
+            y, x, w, h = self._kasten(by, bx, bh, bw, w, h, dl.titel)
+            for i, (besch, wert, aktiv, hilfe) in enumerate(zeilen):
+                yy = y + 2 + i
+                z.addclip(yy, x + 2, besch, bl, kal if aktiv else C["faint"])
+                feld_w = w - bl - 4
+                txt = wert + ("_" if aktiv and not wert.startswith("‹") else "")
+                attr = (C["bright"] | curses.A_REVERSE) if aktiv else C["dim"]
+                z.addclip(yy, x + 2 + bl, txt.ljust(feld_w)[:feld_w], feld_w, attr)
+            unten = y + h - 3
+            if dl.fehler:
+                z.addclip(unten, x + 2, "⚠ " + dl.fehler, w - 4, C["warn"])
+            else:
+                hilfe = next((hf for _b, _w, a, hf in zeilen if a and hf), "")
+                if hilfe:
+                    z.addclip(unten, x + 2, hilfe, w - 4, C["faint"])
+            z.addclip(y + h - 2, x + 2, "↑↓/tab feld · ←→ auswahl · enter speichern · esc abbrechen",
+                      w - 4, C["faint"])
+            return
+        # kurze Rückfrage
+        frage = dl.zeile()
+        w = max(44, min(bw - 4, len(frage) + 6))
+        y, x, w, h = self._kasten(by, bx, bh, bw, w, 5, dl.titel)
+        z.addclip(y + 2, x + 2, frage, w - 4, C["bright"])
 
     def zeichne_popup(self, by, bx, bh, bw):
         W, z, C = self.W, self.z, self.z.C
         if not W["popup"]:
             return
         zeilen = W["popup"]
-        w = min(bw - 4, max(30, max(len(s) for s in zeilen) + 4))
-        h = min(bh - 2, len(zeilen) + 3)
-        y, x = by + (bh - h) // 2, bx + (bw - w) // 2
-        for i in range(h):
-            z.safe_addstr(y + i, x, " " * w, C["dim"])
-        z.draw_box(y, x, h, w, " ansehen ", C.get("kal", C["acc"]))
+        w = max(30, max(len(s) for s in zeilen) + 4)
+        y, x, w, h = self._kasten(by, bx, bh, bw, w, len(zeilen) + 3, "ansehen")
         for i, s in enumerate(zeilen[:h - 3]):
             z.addclip(y + 1 + i, x + 2, s, w - 4, C["bright"] if i == 0 else C["dim"])
         z.addclip(y + h - 2, x + 2, "eine taste schließt", w - 4, C["faint"])

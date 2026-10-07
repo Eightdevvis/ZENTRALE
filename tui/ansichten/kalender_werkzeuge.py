@@ -185,7 +185,8 @@ class Schritt:
 
 
 class Dialog:
-    """Schritte nacheinander abfragen. `plan` (antworten → Plan) wird erst
+    """Kurze Rückfragen (löschen? j/n, nur dieser Tag?, gehe zu …) als
+    kleiner Kasten. Schritte nacheinander abfragen. `plan` (antworten → Plan) wird erst
     gerufen, wenn alle beantwortet sind. Esc bricht ab."""
 
     def __init__(self, titel, schritte, plan):
@@ -275,12 +276,12 @@ class Dialog:
         return self._plan(self.antworten)
 
 
-def _plan(aufrufe=(), meldung="", konflikt=None, danach=None):
+def _plan(aufrufe=(), meldung="", konflikt=None, danach=None, weiter=None):
     """aufrufe: [(methode, pfad, body)]; konflikt: Body für die Vorprüfung
     (/api/calendar/konflikte) — kommt etwas zurück, fragt die Ansicht erst
     nach; danach: {"tag": date} o.ä. für die Auswahl nach dem Speichern."""
     return {"aufrufe": list(aufrufe), "meldung": meldung,
-            "konflikt": konflikt, "danach": danach or {}}
+            "konflikt": konflikt, "danach": danach or {}, "weiter": weiter}
 
 
 def _l_zeit(leer_ok=True):
@@ -318,256 +319,427 @@ def _l_zahl(mini=1, leer=1):
     return lesen
 
 
-# ── a: Anlegen ─────────────────────────────────────────────────────────
-def dialog_anlegen(tag: date) -> Dialog:
-    """calcurse: Startzeit (leer = ganztägig) → Ende/Dauer → Titel.
-    Ergänzung: ganztägig über mehrere Tage (calcurse kann das nicht)."""
-    def l_ende(s):
-        s = s.strip()
-        if not s:
-            return True, None
-        if s.startswith("+"):
-            m = dauer(s)
-            return (True, ("dauer", m)) if m else (False, "dauer wie +45, +1:30, +2d20h")
-        z = zeit(s)
-        return (True, ("zeit", z)) if z else (False, "ende wie 18:00 oder +1h")
-
-    def plan(a):
-        titel, start = a["titel"], a.get("start")
-        if not start:
-            n = a.get("tage") or 1
-            if n == 1:
-                return _plan([("POST", "/api/calendar/entry",
-                               {"layer": "termine", "day": tag.isoformat(), "label": titel})],
-                             "angelegt: " + titel)
-            bis = tag + timedelta(days=n - 1)
-            return _plan([("POST", "/api/calendar/spanne",
-                           {"von": tag.isoformat(), "bis": bis.isoformat(), "label": titel})],
-                         "angelegt: %s bis %s" % (titel, datum_text(bis)))
-        s_dt = datetime.combine(tag, datetime.strptime(start, "%H:%M").time())
-        ende = a.get("ende")
-        if ende is None:
-            e_dt = None
-        elif ende[0] == "dauer":
-            e_dt = s_dt + timedelta(minutes=ende[1])
-        else:
-            e_dt = datetime.combine(tag, datetime.strptime(ende[1], "%H:%M").time())
-            if e_dt <= s_dt:              # calcurse: Ende vor Start = nächster Tag
-                e_dt += timedelta(days=1)
-        if e_dt is not None and e_dt.date() > tag:
-            return _plan([("POST", "/api/calendar/spanne",
-                           {"von": tag.isoformat(), "bis": e_dt.date().isoformat(),
-                            "label": titel, "start_zeit": start,
-                            "end_zeit": e_dt.strftime("%H:%M")})],
-                         "angelegt: %s bis %s %s" % (titel, WT_KURZ[e_dt.weekday()],
-                                                     e_dt.strftime("%H:%M")))
-        body = {"layer": "termine", "day": tag.isoformat(), "label": titel, "time": start}
-        if e_dt is not None:
-            body["ende"] = e_dt.strftime("%H:%M")
-        return _plan([("POST", "/api/calendar/entry", body)], "angelegt: " + titel,
-                     konflikt={k: body[k] for k in ("day", "label", "time", "ende") if k in body})
-
-    return Dialog("neuer termin · " + datum_text(tag), [
-        Schritt("start", "Startzeit [hh:mm], leer = ganztägig", lesen=_l_zeit()),
-        Schritt("ende", "Ende [hh:mm] oder Dauer [+1h, +2d20h], leer = ohne",
-                lesen=l_ende, wenn=lambda a: a.get("start")),
-        Schritt("tage", "Wie viele Tage? [1]", lesen=_l_zahl(),
-                wenn=lambda a: not a.get("start")),
-        Schritt("titel", "Titel", lesen=_l_titel),
-    ], plan)
+# ── Formular: der Kasten zum Anlegen und Bearbeiten ───────────────────
+# Sasha, 07.10.2026: „eigentlich sollte es ja ein modal geben wo man nen
+# termin einträgt". Alle Felder auf einmal wie „Termin erstellen" im
+# Google-Kalender; ↑↓/Tab wechselt das Feld, ←→ blättert in Auswahlfeldern,
+# Enter speichert, Esc bricht ab. Felder, die gerade keinen Sinn ergeben
+# (Uhrzeit bei ganztägig, Wochentage ohne wöchentlich), sind ausgeblendet.
+WIEDERHOLUNG = ("keine", "täglich", "wöchentlich", "monatlich", "jährlich")
+_FREQ_KURZ = {"täglich": "t", "wöchentlich": "w", "monatlich": "m", "jährlich": "j"}
+_KURZ_FREQ = {"DAILY": "täglich", "WEEKLY": "wöchentlich", "MONTHLY": "monatlich",
+              "YEARLY": "jährlich"}
 
 
-# ── e: Bearbeiten ──────────────────────────────────────────────────────
+class Feld:
+    """art: 'text' (tippen) oder 'wahl' (←→ zwischen `optionen`).
+    `lesen(text)` → (ok, wert|fehlertext); `zeigen(werte)` → sichtbar?"""
+
+    def __init__(self, name, beschriftung, art="text", wert="", optionen=(),
+                 lesen=None, zeigen=None, hilfe=""):
+        self.name, self.beschriftung, self.art = name, beschriftung, art
+        self.text = str(wert or "") if art == "text" else ""
+        self.optionen = tuple(optionen)
+        self.wahl = self.optionen.index(wert) if wert in self.optionen else 0
+        self.lesen = lesen or (lambda s: (True, s.strip()))
+        self.zeigen = zeigen or (lambda w: True)
+        self.hilfe = hilfe
+
+    def roh(self):
+        return self.optionen[self.wahl] if self.art == "wahl" else self.text
+
+
+class Formular:
+    """Mehrere Felder in einem Kasten. `plan(werte)` macht daraus die Aufrufe,
+    `pruefen(werte)` darf Feldübergreifendes ablehnen → (feld, fehler)|None."""
+
+    modal = True
+
+    def __init__(self, titel, felder, plan, pruefen=None, fokus=None):
+        self.titel, self.felder, self._plan = titel, felder, plan
+        self._pruefen = pruefen or (lambda w: None)
+        self.fehler, self.fehler_feld = "", None
+        self._u8 = b""
+        self.fertig = False
+        self.antworten: dict = {}
+        sicht = self.sichtbar()
+        self.i = next((k for k, f in enumerate(sicht) if f.name == fokus), 0)
+
+    def roh_werte(self) -> dict:
+        return {f.name: f.roh() for f in self.felder}
+
+    def sichtbar(self) -> list:
+        w = self.roh_werte()
+        return [f for f in self.felder if f.zeigen(w)]
+
+    @property
+    def feld(self):
+        s = self.sichtbar()
+        self.i = max(0, min(self.i, len(s) - 1))
+        return s[self.i]
+
+    def _speichern(self) -> bool:
+        werte = {}
+        for f in self.sichtbar():
+            ok, wert = f.lesen(f.roh())
+            if not ok:
+                self.fehler, self.fehler_feld = wert, f.name
+                self.i = self.sichtbar().index(f)
+                return False
+            werte[f.name] = wert
+        p = self._pruefen(werte)
+        if p:
+            name, self.fehler = p
+            self.fehler_feld = name
+            namen = [f.name for f in self.sichtbar()]
+            if name in namen:
+                self.i = namen.index(name)
+            return False
+        self.antworten = werte
+        self.fertig = True
+        return True
+
+    def taste(self, ch: int) -> str:
+        """→ 'weiter' | 'fertig' | 'abbruch'."""
+        if ch == 27:
+            return "abbruch"
+        f = self.feld
+        n = len(self.sichtbar())
+        if ch in (10, 13, 343, 19):              # Enter / KEY_ENTER / Strg-S
+            return "fertig" if self._speichern() else "weiter"
+        if ch in (9, 258):                       # Tab, ↓
+            self.i = (self.i + 1) % n
+        elif ch in (353, 259):                   # Shift-Tab, ↑
+            self.i = (self.i - 1) % n
+        elif f.art == "wahl" and ch in (260, 261, 32):     # ←, →, Leertaste
+            f.wahl = (f.wahl + (-1 if ch == 260 else 1)) % len(f.optionen)
+        elif f.art == "text":
+            if ch in (8, 127, 263):
+                f.text = f.text[:-1]
+                self._u8 = b""
+            elif ch == 21:
+                f.text = ""
+            elif 0x80 <= ch <= 0xFF:             # Umlaute: UTF-8 Byte für Byte
+                self._u8 += bytes([ch])
+                try:
+                    z = self._u8.decode("utf-8")
+                except UnicodeDecodeError:
+                    if len(self._u8) >= 4:
+                        self._u8 = b""
+                    return "weiter"
+                self._u8 = b""
+                f.text = (f.text + z)[:200]
+            elif 32 <= ch < 0x80:
+                f.text = (f.text + chr(ch))[:200]
+        if self.fehler_feld == f.name and ch not in (9, 258, 353, 259):
+            self.fehler, self.fehler_feld = "", None
+        return "weiter"
+
+    def zeilen(self) -> list:
+        """[(beschriftung, wert, aktiv, hilfe)] für den Kasten."""
+        aus = []
+        for k, f in enumerate(self.sichtbar()):
+            if f.art == "wahl":
+                wert = "‹ %s ›" % f.roh()
+            else:
+                wert = f.text
+            aus.append((f.beschriftung, wert, k == self.i, f.hilfe))
+        return aus
+
+    def plan(self) -> dict:
+        return self._plan(self.antworten)
+
+
+def _l_ende(s):
+    s = s.strip()
+    if not s:
+        return True, None
+    if s.startswith("+"):
+        m = dauer(s)
+        return (True, ("dauer", m)) if m else (False, "dauer wie +45, +1:30, +2d20h")
+    z = zeit(s)
+    return (True, ("zeit", z)) if z else (False, "ende wie 18:00 oder +1h")
+
+
+def _l_wtage(s):
+    w = wochentage(s)
+    return (True, w) if w is not None else (False, "tage wie di do oder mo-fr")
+
+
+def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
+                   wiederholung="keine", alle="1", wtage="", wbis="",
+                   mit_regel=True, mit_ganz=True, mit_datum=True, datum_name="Tag"):
+    ganz_an = lambda w: w.get("ganz") == "ja"
+    regel_an = lambda w: w.get("wied", "keine") != "keine"
+    felder = [Feld("titel", "Titel", wert=titel, lesen=_l_titel)]
+    if mit_datum:
+        felder.append(Feld("datum", datum_name, wert=datum_text(tag),
+                           lesen=_l_datum(heute), hilfe="TT.MM.JJJJ"))
+    if mit_ganz:
+        felder.append(Feld("ganz", "Ganztägig", art="wahl", wert="ja" if ganz else "nein",
+                           optionen=("nein", "ja")))
+    felder += [
+        Feld("von", "Von", wert=von, lesen=_l_zeit(leer_ok=False),
+             zeigen=lambda w: not ganz_an(w), hilfe="hh:mm"),
+        Feld("bis", "Bis", wert=bis, lesen=_l_ende, zeigen=lambda w: not ganz_an(w),
+             hilfe="hh:mm oder +1h, +2d20h"),
+    ]
+    if mit_ganz:
+        felder.append(Feld("tage", "Tage", wert="1", lesen=_l_zahl(),
+                           zeigen=lambda w: ganz_an(w) and not regel_an(w)))
+    if mit_regel:
+        felder += [
+            Feld("wied", "Wiederholung", art="wahl", wert=wiederholung, optionen=WIEDERHOLUNG),
+            Feld("alle", "Alle wie viele", wert=alle, lesen=_l_zahl(), zeigen=regel_an),
+            Feld("wtage", "An Tagen", wert=wtage, lesen=_l_wtage,
+                 zeigen=lambda w: w.get("wied") == "wöchentlich",
+                 hilfe="leer = %s; z.B. di do, mo-fr" % WT_KURZ[tag.weekday()]),
+            Feld("wbis", "Wiederholen bis", wert=wbis, lesen=_l_datum(heute),
+                 zeigen=regel_an, hilfe="leer = endlos"),
+        ]
+    felder.append(Feld("ort", "Ort", wert=ort))
+    return felder
+
+
+def _zeiten(tag, w):
+    """(start 'HH:MM'|None, ende_datetime|None) aus den Formularwerten."""
+    if w.get("ganz") == "ja" or not w.get("von"):
+        return None, None
+    s_dt = datetime.combine(tag, datetime.strptime(w["von"], "%H:%M").time())
+    b = w.get("bis")
+    if b is None:
+        return w["von"], None
+    if b[0] == "dauer":
+        return w["von"], s_dt + timedelta(minutes=b[1])
+    e_dt = datetime.combine(tag, datetime.strptime(b[1], "%H:%M").time())
+    if e_dt <= s_dt:                      # calcurse: Ende vor Start = nächster Tag
+        e_dt += timedelta(days=1)
+    return w["von"], e_dt
+
+
+def _neu_plan(w, tag, layer="termine"):
+    """Aufrufe für einen neuen Eintrag aus Formularwerten (ohne Altes zu
+    löschen). Täglich ohne Intervall mit Ende = Spanne (bleibt als Block
+    sichtbar, Tage einzeln änderbar); sonst Wiederholung = Routine."""
+    tag = w.get("datum") or tag
+    titel, ort = w["titel"], (w.get("ort") or None)
+    start, e_dt = _zeiten(tag, w)
+    ende = e_dt.strftime("%H:%M") if e_dt else None
+    wied = w.get("wied", "keine")
+    if wied != "keine":
+        alle = w.get("alle") or 1
+        if wied == "täglich" and alle == 1 and w.get("wbis") and (e_dt is None or e_dt.date() == tag):
+            body = {"layer": layer, "von": tag.isoformat(), "bis": w["wbis"].isoformat(),
+                    "label": titel}
+            if start:
+                body["tageszeit"] = [start, ende]
+            if ort:
+                body["ort"] = ort
+            return [("POST", "/api/calendar/spanne", body)], "täglich bis %s: %s" % (
+                datum_text(w["wbis"]), titel), None
+        body = {"layer": layer, "label": titel, "seit": tag.isoformat(),
+                "freq": _FREQ_KURZ[wied], "intervall": alle,
+                "bis": w["wbis"].isoformat() if w.get("wbis") else None,
+                "wochentage": w.get("wtage") or None, "time": start,
+                "ende": ende if (e_dt and e_dt.date() == tag) else None, "ort": ort}
+        return [("POST", "/api/calendar/routine", body)], "wiederholt sich: " + titel, None
+    if start is None:
+        n = w.get("tage") or 1
+        if n == 1:
+            body = {"layer": layer, "day": tag.isoformat(), "label": titel}
+            if ort:
+                body["ort"] = ort
+            return [("POST", "/api/calendar/entry", body)], "angelegt: " + titel, None
+        bis = tag + timedelta(days=n - 1)
+        body = {"layer": layer, "von": tag.isoformat(), "bis": bis.isoformat(), "label": titel}
+        if ort:
+            body["ort"] = ort
+        return [("POST", "/api/calendar/spanne", body)], "angelegt: %s bis %s" % (
+            titel, datum_text(bis)), None
+    if e_dt is not None and e_dt.date() > tag:
+        body = {"layer": layer, "von": tag.isoformat(), "bis": e_dt.date().isoformat(),
+                "label": titel, "start_zeit": start, "end_zeit": ende}
+        if ort:
+            body["ort"] = ort
+        return [("POST", "/api/calendar/spanne", body)], "angelegt: %s bis %s %s" % (
+            titel, WT_KURZ[e_dt.weekday()], ende), None
+    body = {"layer": layer, "day": tag.isoformat(), "label": titel, "time": start}
+    if ende:
+        body["ende"] = ende
+    if ort:
+        body["ort"] = ort
+    kon = {k: body[k] for k in ("day", "label", "time", "ende") if k in body} if ende else None
+    return [("POST", "/api/calendar/entry", body)], "angelegt: " + titel, kon
+
+
+def formular_neu(tag: date, heute: date) -> Formular:
+    """a: neuer Termin am gewählten Tag (calcurse: der Tag im Kalender)."""
+    def plan(w):
+        aufrufe, meldung, kon = _neu_plan(w, tag)
+        return _plan(aufrufe, meldung, konflikt=kon, danach={"tag": w.get("datum") or tag})
+    return Formular("neuer termin", _termin_felder(tag, heute), plan)
+
+
+def _regel_felder(rrule):
+    """Formularwerte aus einer RRULE (fürs Vorbelegen)."""
+    teile = dict(p.split("=", 1) for p in (rrule or "").split(";") if "=" in p)
+    wied = _KURZ_FREQ.get(teile.get("FREQ", ""), "keine")
+    wt = [WT_KURZ[WT_CODE.index(c[-2:])].lower() for c in teile.get("BYDAY", "").split(",")
+          if c[-2:] in WT_CODE]
+    bis = ""
+    if teile.get("UNTIL"):
+        try:
+            bis = datum_text(datetime.strptime(teile["UNTIL"][:8], "%Y%m%d").date())
+        except ValueError:
+            pass
+    return {"wiederholung": wied, "alle": teile.get("INTERVAL", "1"),
+            "wtage": " ".join(wt), "wbis": bis}
+
+
 def _wahl_umfang(roh):
     return Schritt("umfang", "„%s“ ändern: (d) nur dieser Tag  (a) alle" % roh.get("label", ""),
                    art="wahl", wahl={"d": "dieser", "a": "alle"})
 
 
-def dialog_bearbeiten(roh: dict, tag: date, heute: date) -> Dialog | None:
-    """calcurse „e": erst WAS (Startzeit/Ende/Titel/…), dann der neue Wert,
-    vorbelegt mit dem jetzigen. Bei Routinen/Spannen vorher „nur dieser Tag
-    oder alle?" wie im Handy-Kalender."""
+def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None):
+    """e (und r): derselbe Kasten, vorbelegt. Routinen und Spannen fragen
+    vorher „nur dieser Tag oder alle?" (Handy-Kalender) — dann ist das
+    Ergebnis ein kleiner Dialog, dessen Plan den Kasten als `weiter` bringt."""
     a_ = art(roh)
     label, layer = roh.get("label", ""), roh.get("layer") or "termine"
     t0, e0, ort0 = roh.get("time") or "", roh.get("ende") or "", roh.get("ort") or ""
     iso = tag.isoformat()
 
-    menue_einmal = {"1": "start", "2": "ende", "3": "titel", "4": "ort", "5": "datum"}
-    menue_dieser = menue_einmal
-    menue_routine = {"1": "start", "2": "ende", "3": "titel", "4": "ort", "6": "regel"}
-    menue_sp_tag = {"1": "start", "2": "ende"}
-    menue_sp_alle = {"3": "titel", "4": "ort", "5": "schieben", "6": "bis"}
-    namen = {"start": "Startzeit", "ende": "Ende", "titel": "Titel", "ort": "Ort",
-             "datum": "Verschieben", "regel": "Wiederholung", "schieben": "Verschieben",
-             "bis": "Letzter Tag"}
-
-    def menue_schritt(name, menue, wenn=None):
-        txt = "  ".join("(%s) %s" % (k, namen[v]) for k, v in menue.items())
-        return Schritt(name, "Ändern: " + txt, art="wahl", wahl=menue, wenn=wenn)
-
-    def feld(a):
-        return a.get("was") or a.get("was_d") or a.get("was_a")
-
-    werte = [
-        Schritt("start", "Startzeit [hh:mm], leer = ganztägig", vorgabe=t0,
-                lesen=_l_zeit(), wenn=lambda a: feld(a) == "start"),
-        Schritt("ende", "Ende [hh:mm], leer = ohne", vorgabe=e0,
-                lesen=_l_zeit(), wenn=lambda a: feld(a) == "ende"),
-        Schritt("titel", "Titel", vorgabe=label, lesen=_l_titel,
-                wenn=lambda a: feld(a) == "titel"),
-        Schritt("ort", "Ort, leer = keiner", vorgabe=ort0,
-                wenn=lambda a: feld(a) == "ort"),
-        Schritt("datum", "Neues Datum [TT.MM.JJJJ]", vorgabe=datum_text(tag),
-                lesen=_l_datum(heute), wenn=lambda a: feld(a) == "datum"),
-        Schritt("schieben", "Um wie viele Tage verschieben? [+3, -1]",
-                lesen=lambda s: (True, int(s)) if re.fullmatch(r"[+-]?\d+", s.strip())
-                else (False, "zahl wie +3 oder -1"),
-                wenn=lambda a: feld(a) == "schieben"),
-        Schritt("bis", "Letzter Tag [TT.MM.JJJJ]", vorgabe=roh.get("bis") and
-                datum_text(date.fromisoformat(roh["bis"])) or "",
-                lesen=_l_datum(heute), wenn=lambda a: feld(a) == "bis"),
-    ]
-
-    def neu_aus(a):
-        f = feld(a)
-        if f == "start":
-            return {"time": a["start"] or ""}
-        if f == "ende":
-            return {"ende": a["ende"] or ""}
-        if f == "titel":
-            return {"label": a["titel"]}
-        if f == "ort":
-            return {"ort": a["ort"] or ""}
-        if f == "datum":
-            return {"tag" if a_ == "routine" else "day": a["datum"].isoformat()}
-        return {}
-
     if a_ == "einmal":
-        def plan(a):
-            neu = neu_aus(a)
-            body = {"layer": layer, "day": iso, "label": label, "time": t0 or None, "new": neu}
-            k = None
-            t1, e1 = neu.get("time", t0), neu.get("ende", e0)
-            if t1 and e1:
-                k = {"day": neu.get("day", iso), "label": neu.get("label", label),
-                     "time": t1, "ende": e1}
-            return _plan([("PUT", "/api/calendar/eintrag", body)], "geändert: " + label,
-                         konflikt=k, danach={"tag": date.fromisoformat(neu.get("day", iso))})
-        return Dialog("bearbeiten", [menue_schritt("was", menue_einmal)] + werte, plan)
+        def plan(w):
+            if w.get("wied", "keine") != "keine":       # wird zur Wiederholung
+                aufrufe, meldung, _k = _neu_plan(w, tag, layer)
+                weg = ("DELETE", "/api/calendar/eintrag",
+                       {"layer": layer, "day": iso, "label": label, "time": t0 or None})
+                return _plan(aufrufe + [weg], meldung)
+            start, e_dt = _zeiten(w["datum"], w)
+            if e_dt and e_dt.date() > w["datum"]:       # über Mitternacht → Spanne
+                aufrufe, meldung, _k = _neu_plan(w, tag, layer)
+                weg = ("DELETE", "/api/calendar/eintrag",
+                       {"layer": layer, "day": iso, "label": label, "time": t0 or None})
+                return _plan(aufrufe + [weg], meldung, danach={"tag": w["datum"]})
+            neu = {"day": w["datum"].isoformat(), "label": w["titel"],
+                   "time": start or "", "ende": e_dt.strftime("%H:%M") if e_dt else "",
+                   "ort": w.get("ort") or ""}
+            kon = ({"day": neu["day"], "label": neu["label"], "time": neu["time"],
+                    "ende": neu["ende"]} if neu["time"] and neu["ende"] else None)
+            return _plan([("PUT", "/api/calendar/eintrag",
+                           {"layer": layer, "day": iso, "label": label,
+                            "time": t0 or None, "new": neu})],
+                         "geändert: " + w["titel"], konflikt=kon, danach={"tag": w["datum"]})
+        return Formular("termin ändern", _termin_felder(
+            tag, heute, titel=label, ganz=not t0, von=t0, bis=e0, ort=ort0), plan, fokus=fokus)
 
     if a_ == "routine":
-        regel = dialog_wiederholen_schritte(tag, wenn=lambda a: a.get("was_a") == "regel")
-
-        def plan(a):
-            if a["umfang"] == "dieser":
-                neu = neu_aus(a)
-                return _plan([("POST", "/api/calendar/routine/abweichung",
-                               {"layer": layer, "label": label, "day": iso,
-                                "time": t0 or None, "new": neu})],
-                             "nur %s geändert: %s" % (datum_text(tag), label))
-            if a.get("was_a") == "regel":
-                neu = {"wiederholung": _regel_aus(a, tag)}
-            else:
-                neu = neu_aus(a)
-            return _plan([("PUT", "/api/calendar/routine",
+        def nur_dieser(w):
+            start, e_dt = _zeiten(w["datum"], w)
+            neu = {"label": w["titel"], "ort": w.get("ort") or ""}
+            if w["datum"] != tag:
+                neu["tag"] = w["datum"].isoformat()
+            if start:
+                neu["time"] = start
+            if e_dt:
+                neu["ende"] = e_dt.strftime("%H:%M")
+            return _plan([("POST", "/api/calendar/routine/abweichung",
                            {"layer": layer, "label": label, "day": iso,
                             "time": t0 or None, "new": neu})],
-                         "alle geändert: " + label)
-        return Dialog("routine bearbeiten", [
-            _wahl_umfang(roh),
-            menue_schritt("was_d", menue_dieser, wenn=lambda a: a["umfang"] == "dieser"),
-            menue_schritt("was_a", menue_routine, wenn=lambda a: a["umfang"] == "alle"),
-        ] + werte + regel, plan)
+                         "nur %s geändert: %s" % (datum_text(tag), w["titel"]),
+                         danach={"tag": w["datum"]})
+
+        def alle(w):
+            start, e_dt = _zeiten(tag, w)
+            neu = {"label": w["titel"], "time": start or "",
+                   "ende": e_dt.strftime("%H:%M") if e_dt else "", "ort": w.get("ort") or ""}
+            r = _regel_felder(roh.get("rrule"))
+            wied = w.get("wied", "keine")
+            if wied != "keine":
+                neu_regel = {"freq": _FREQ_KURZ[wied], "intervall": w.get("alle") or 1,
+                             "bis": w["wbis"].isoformat() if w.get("wbis") else None,
+                             "wochentage": w.get("wtage") or None}
+                alt_regel = {"freq": _FREQ_KURZ.get(r["wiederholung"]),
+                             "intervall": int(r["alle"] or 1),
+                             "bis": datum(r["wbis"], heute).isoformat() if r["wbis"] else None,
+                             "wochentage": wochentage(r["wtage"]) or None}
+                if neu_regel != alt_regel:
+                    neu["wiederholung"] = neu_regel
+            aufrufe = [("PUT", "/api/calendar/routine",
+                        {"layer": layer, "label": label, "day": iso,
+                         "time": t0 or None, "new": neu})]
+            if wied == "keine":                         # Wiederholung aus = ganz löschen?
+                return _plan(meldung="Wiederholung „keine“: zum Löschen d benutzen")
+            return _plan(aufrufe, "alle geändert: " + w["titel"])
+
+        r = _regel_felder(roh.get("rrule"))
+        form_dieser = lambda: Formular("nur dieser tag · " + datum_text(tag), _termin_felder(
+            tag, heute, titel=label, von=t0, bis=e0, ort=ort0, mit_regel=False,
+            mit_ganz=False, datum_name="Verschieben auf"), nur_dieser, fokus=fokus)
+        form_alle = lambda: Formular("alle termine der serie", _termin_felder(
+            tag, heute, titel=label, von=t0, bis=e0, ort=ort0, mit_ganz=False,
+            mit_datum=False, wiederholung=r["wiederholung"], alle=r["alle"],
+            wtage=r["wtage"], wbis=r["wbis"]), alle, fokus=fokus)
+        if fokus == "wied":
+            return form_alle()
+        return Dialog("ändern", [_wahl_umfang(roh)], lambda a: _plan(
+            weiter=form_dieser() if a["umfang"] == "dieser" else form_alle()))
 
     # Spanne
-    von = roh.get("von") or iso
+    von_iso = roh.get("von") or iso
+    try:
+        von_d, bis_d = date.fromisoformat(von_iso), date.fromisoformat(roh.get("bis") or iso)
+    except ValueError:
+        von_d = bis_d = tag
 
-    def plan(a):
-        if a["umfang"] == "dieser":
-            f = feld(a)
-            t1 = a["start"] if f == "start" else (t0 or None)
-            e1 = a["ende"] if f == "ende" else (e0 or None)
-            return _plan([("POST", "/api/calendar/spanne/tag",
-                           {"layer": layer, "von": von, "label": label, "day": iso,
-                            "time": t1, "ende": e1})],
-                         "nur %s geändert: %s" % (datum_text(tag), label))
-        f, neu = feld(a), {}
-        if f == "titel":
-            neu["label"] = a["titel"]
-        elif f == "ort":
-            neu["ort"] = a["ort"] or ""
-        elif f == "schieben":
-            neu["verschieben"] = a["schieben"]
-        elif f == "bis":
-            neu["bis"] = a["bis"].isoformat()
+    def tag_plan(w):
+        start, e_dt = _zeiten(tag, w)
+        return _plan([("POST", "/api/calendar/spanne/tag",
+                       {"layer": layer, "von": von_iso, "label": label, "day": iso,
+                        "time": start, "ende": e_dt.strftime("%H:%M") if e_dt else None})],
+                     "nur %s geändert: %s" % (datum_text(tag), label))
+
+    def alle_plan(w):
+        schub = (w["erster"] - von_d).days
+        neu = {"label": w["titel"], "ort": w.get("ort") or ""}
+        if schub:
+            neu["verschieben"] = schub
+        if w["letzter"] != bis_d + timedelta(days=schub):
+            neu["bis"] = (w["letzter"] - timedelta(days=schub)).isoformat()
         return _plan([("PUT", "/api/calendar/spanne",
-                       {"layer": layer, "von": von, "label": label, "new": neu})],
-                     "alle tage geändert: " + label)
-    return Dialog("spanne bearbeiten", [
-        _wahl_umfang(roh),
-        menue_schritt("was_d", menue_sp_tag, wenn=lambda a: a["umfang"] == "dieser"),
-        menue_schritt("was_a", menue_sp_alle, wenn=lambda a: a["umfang"] == "alle"),
-    ] + werte, plan)
+                       {"layer": layer, "von": von_iso, "label": label, "new": neu})],
+                     "alle tage geändert: " + w["titel"], danach={"tag": w["erster"]})
 
-
-# ── r: Wiederholen ─────────────────────────────────────────────────────
-def dialog_wiederholen_schritte(tag: date, wenn=None):
-    """calcurse „r": Typ (t/w/m/j), alle wie viele, Ende (leer = endlos).
-    Ergänzung wie im Handy-Kalender: bei wöchentlich die Wochentage."""
-    w = wenn or (lambda a: True)
-    return [
-        Schritt("freq", "Wiederholen: (t)äglich (w)öchentlich (m)onatlich (j)ährlich",
-                art="wahl", wahl={"t": "t", "w": "w", "m": "m", "j": "j"}, wenn=w),
-        Schritt("intervall", "Alle wie viele? [1]", lesen=_l_zahl(), wenn=w),
-        Schritt("wtage", "An welchen Tagen? [%s] (z.B. di do, mo-fr)" % WT_KURZ[tag.weekday()],
-                lesen=lambda s: (True, wochentage(s)) if wochentage(s) is not None
-                else (False, "tage wie di do oder mo-fr"),
-                wenn=lambda a: w(a) and a.get("freq") == "w"),
-        Schritt("rbis", "Bis [TT.MM.JJJJ], leer = endlos", lesen=_l_datum(tag),
-                wenn=w),
-    ]
-
-
-def _regel_aus(a, tag):
-    return {"freq": a["freq"], "intervall": a.get("intervall") or 1,
-            "bis": a["rbis"].isoformat() if a.get("rbis") else None,
-            "wochentage": a.get("wtage") or None}
-
-
-def dialog_wiederholen(roh: dict, tag: date, heute: date) -> Dialog | None:
-    """Einen Einmal-Termin zur Wiederholung machen. Täglich mit Ende wird
-    eine Spanne (bleibt als zusammenhängender Block markiert, einzelne Tage
-    lassen sich anpassen); alles andere eine Routine ab diesem Tag."""
-    a_ = art(roh)
-    if a_ == "routine":
-        d = dialog_bearbeiten(roh, tag, heute)
-        d.antworten.update({"umfang": "alle", "was_a": "regel"})
-        d.i = -1
-        d.schritte = d.schritte[3:]            # gleich zur Regel
-        d._weiter()
-        return d
-    if a_ == "spanne":
+    def alle_pruefen(w):
+        if w["letzter"] < w["erster"]:
+            return "letzter", "letzter tag vor dem ersten"
         return None
-    label, layer = roh.get("label", ""), roh.get("layer") or "termine"
-    t0, e0 = roh.get("time") or None, roh.get("ende") or None
 
-    def plan(a):
-        weg = ("DELETE", "/api/calendar/eintrag",
-               {"layer": layer, "day": tag.isoformat(), "label": label, "time": t0})
-        r = _regel_aus(a, tag)
-        if r["freq"] == "t" and r["intervall"] == 1 and r["bis"]:
-            neu = {"von": tag.isoformat(), "bis": r["bis"], "label": label}
-            if t0:
-                neu["tageszeit"] = [t0, e0]
-            if roh.get("ort"):
-                neu["ort"] = roh["ort"]
-            return _plan([("POST", "/api/calendar/spanne", neu), weg],
-                         "jetzt täglich bis %s: %s" % (datum_text(a["rbis"]), label))
-        neu = {"label": label, "seit": tag.isoformat(), "time": t0, "ende": e0,
-               "ort": roh.get("ort"), **r}
-        return _plan([("POST", "/api/calendar/routine", neu), weg],
-                     "wiederholt sich jetzt: " + label)
-    return Dialog("wiederholen", dialog_wiederholen_schritte(tag), plan)
+    form_tag = lambda: Formular("nur dieser tag · " + datum_text(tag), [
+        Feld("ganz", "Ganztägig", art="wahl", wert="nein" if t0 else "ja", optionen=("nein", "ja")),
+        Feld("von", "Von", wert=t0, lesen=_l_zeit(leer_ok=False),
+             zeigen=lambda w: w.get("ganz") != "ja", hilfe="hh:mm"),
+        Feld("bis", "Bis", wert=e0, lesen=_l_ende,
+             zeigen=lambda w: w.get("ganz") != "ja", hilfe="hh:mm, leer = ohne"),
+    ], tag_plan)
+    form_alle = lambda: Formular("ganze spanne", [
+        Feld("titel", "Titel", wert=label, lesen=_l_titel),
+        Feld("erster", "Erster Tag", wert=datum_text(von_d), lesen=_l_datum(heute)),
+        Feld("letzter", "Letzter Tag", wert=datum_text(bis_d), lesen=_l_datum(heute)),
+        Feld("ort", "Ort", wert=ort0),
+    ], alle_plan, pruefen=alle_pruefen)
+    return Dialog("ändern", [_wahl_umfang(roh)], lambda a: _plan(
+        weiter=form_tag() if a["umfang"] == "dieser" else form_alle()))
+
+
+def formular_wiederholen(roh: dict, tag: date, heute: date):
+    """r (calcurse „repeat"): der Bearbeiten-Kasten, gleich auf
+    „Wiederholung"; eine Spanne wiederholt sich nicht (None)."""
+    if art(roh) == "spanne":
+        return None
+    return formular_bearbeiten(roh, tag, heute, fokus="wied")
 
 
 # ── d: Löschen ─────────────────────────────────────────────────────────

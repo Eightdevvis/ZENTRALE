@@ -145,8 +145,14 @@ def _tipp(text):
     return [c.encode() for c in text] + [b"\r"]
 
 
+def _formular(titel, von, bis):
+    """Im Kasten: Titel, Tab bis „Von" (Tag, Ganztägig überspringen), Bis, Enter."""
+    return ([b"a"] + [c.encode() for c in titel] + [b"\t", b"\t", b"\t"]
+            + [c.encode() for c in von] + [b"\t"] + [c.encode() for c in bis] + [b"\r"])
+
+
 def test_anlegen_wie_calcurse(tmp_path):
-    w, fehler = _lauf(tmp_path, [b"a"] + _tipp("14:00") + _tipp("15:00") + _tipp("Zahnarzt"))
+    w, fehler = _lauf(tmp_path, _formular("Zahnarzt", "14:00", "15:00"))
     assert fehler == "", fehler
     assert ("POST", "/api/calendar/entry") in [(m, p) for m, p, _b in w]
     body = [b for m, p, b in w if p == "/api/calendar/entry"][0]
@@ -157,8 +163,7 @@ def test_anlegen_wie_calcurse(tmp_path):
 def test_kollision_fragt_und_nein_speichert_nicht(tmp_path):
     KONFLIKTE[:] = ["⚠ Kollision: Geige und Zahnarzt überlappen sich"]
     try:
-        w, fehler = _lauf(tmp_path, [b"a"] + _tipp("10:00") + _tipp("11:00")
-                          + _tipp("Zahnarzt") + [b"n"])
+        w, fehler = _lauf(tmp_path, _formular("Zahnarzt", "10:00", "11:00") + [b"n"])
     finally:
         KONFLIKTE.clear()
     assert fehler == ""
