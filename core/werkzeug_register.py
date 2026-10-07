@@ -18,7 +18,8 @@
 # Funktion zu einem Namen gehört. Importierte das Register umgekehrt die
 # Funktionen aus ki_werkzeuge, wäre das ein Kreis. Also importiert hier
 # niemand den Kern darüber: das Register braucht nur Dienste (kalender für das
-# Schema und die Konflikt-Zeile, gedaechtnis für die Kernakten), und
+# Schema und die Konflikt-Zeile, gedaechtnis für die Kernakten, skills für
+# die Fragen zu Skills), und
 # ki_werkzeuge meldet jede Funktion mit @werkzeug_register.ausfuehrer("name")
 # an. Kein Waisenkind bleibt unbemerkt: der Test (tests/test_werkzeug_register.py)
 # prüft beide Richtungen.
@@ -42,6 +43,7 @@ from typing import Callable
 
 import gedaechtnis
 import kalender
+import skills
 
 
 SCHIENEN = ("klein", "gross")
@@ -220,6 +222,21 @@ def _frage_code(args: dict) -> str:
     return (f"Soll ich dieses {sprache}-Programm abgeschottet ausführen "
             f"(ohne Internet, ohne Zugriff auf deine Dateien)? "
             f"„{anfang}“{mehr}")
+
+
+def _frage_skill_neu(args: dict) -> str:
+    """Sasha sieht Name, wofür der Skill ist und den Anfang der Anleitung —
+    er soll entscheiden können, ohne den Werkzeug-Aufruf zu lesen."""
+    name = gedaechtnis.slug(args.get("name")) or "?"
+    wofuer = " ".join(str(args.get("beschreibung") or "").split())[:160]
+    return (f'Soll ich mir die Anleitung „{name}“ merken? Wofür: {wofuer or "-"}. '
+            f'„{skills.anfang(args.get("inhalt"))}“')
+
+
+def _frage_skill_aendern(args: dict) -> str:
+    name = gedaechtnis.slug(args.get("name")) or "?"
+    return (f'Soll ich die Anleitung „{name}“ neu schreiben? (Die bisherige '
+            f'Fassung bleibt als .bak liegen.) „{skills.anfang(args.get("inhalt"))}“')
 
 
 # ── Die Werkzeuge ──────────────────────────────────────────────────────
@@ -1016,6 +1033,70 @@ WERKZEUGE = [
                               "description": "Sekunden, 1-120. Standard 30."},
             },
             "required": ["code"],
+        },
+    ),
+    # ── Skills ──
+    # Phase 4 (2026-10-07): Anleitungen für eine Art Aufgabe (core/skills.py).
+    # Lesen ist frei; Anlegen und Umschreiben werden bestätigt — ein Skill ist
+    # eine Anweisung der KI an sich selbst, wie die Hausregeln.
+    Werkzeug(
+        name="load_skill",
+        klein=None,
+        gross=(
+            "Holt die Anleitung eines Skills aus der Skill-Liste im Kopf. "
+            "Passt die Aufgabe zu seiner Beschreibung: zuerst laden, dann "
+            "danach arbeiten."
+        ),
+        parameter={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name aus der Liste."},
+            },
+            "required": ["name"],
+        },
+    ),
+    Werkzeug(
+        name="propose_skill",
+        erlaubnis=True,
+        frage=_frage_skill_neu,
+        klein=None,
+        gross=(
+            "Schlaegt einen NEUEN Skill vor: eine Anleitung fuer eine Art "
+            "Aufgabe, die sich mit Sasha bewaehrt hat. Wird bestaetigt; "
+            "lehnt er ab, entsteht nichts. 'beschreibung' ist EINE Zeile: "
+            "wann er passt. Inhalt knapp, in Schritten."
+        ),
+        parameter={
+            "type": "object",
+            "properties": {
+                "name":         {"type": "string",
+                                 "description": "Kurz, z.B. 'wochenplan'."},
+                "beschreibung": {"type": "string",
+                                 "description": "Eine Zeile: wann benutzen."},
+                "inhalt":       {"type": "string",
+                                 "description": "Die Anleitung."},
+            },
+            "required": ["name", "beschreibung", "inhalt"],
+        },
+    ),
+    Werkzeug(
+        name="edit_skill",
+        erlaubnis=True,
+        frage=_frage_skill_aendern,
+        klein=None,
+        gross=(
+            "Schreibt die Anleitung eines bestehenden Skills neu; der Kopf "
+            "bleibt, die alte Fassung als .bak. Wird bestaetigt. Vorher mit "
+            "load_skill lesen."
+        ),
+        parameter={
+            "type": "object",
+            "properties": {
+                "name":   {"type": "string", "description": "Name aus der Liste."},
+                "inhalt": {"type": "string",
+                           "description": "Die vollstaendige neue Anleitung."},
+            },
+            "required": ["name", "inhalt"],
         },
     ),
     # Hinweis: ASCII-Bilder laufen NICHT über ein Werkzeug. Messung

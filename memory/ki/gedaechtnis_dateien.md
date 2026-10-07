@@ -66,6 +66,7 @@ die den Rohtext am Graphen halten.
 | **Quellen** | `quellen/*.md` (+ `quellen/dateien/`) | Abgelegte Dokumente, aus PDF/HTML extrahiert. |
 | **Tagebuch** | `tagebuch/YYYY-MM-DD.md` | Die KI. Was gesagt und getan wurde, in SEINEN Worten. |
 | **Messreihen** | `data/g_*.json` (Zyklus-Werkzeug) | Zahlen über Zeit — Schlaf, Stimmung, Spagat in cm. |
+| **Skills** | `skills/*.md` | Anleitungen für eine Art Aufgabe. Sasha (Datei) oder die KI — die nur nach seinem Ja (`propose_skill`). Siehe unten „Skills“. |
 
 ### Notiz, Dossier oder Katalog?
 
@@ -300,6 +301,57 @@ Sie stehen im Werkzeug-Register (`core/werkzeug_register.py`) nur mit
 einer `gross`-Beschreibung, also **nicht** in `klein.TOOLS`: der lokale Pfad ist gerade nicht testbar, und ein 9B bezahlt
 jedes zusätzliche Schema mit. Sobald lokal wieder läuft, bekommen sie dort
 eine `klein`-Beschreibung — ausgeführt werden sie ohnehin schon (`ki_werkzeuge`).
+
+## Skills (seit 2026-10-07)
+
+Phase 4 des [Claude-Web-Plans](claude_web_plan.md); Werkzeuge und Prompt:
+[ki_system.md](ki_system.md), Abschnitt „Skills". Hier steht, wie sie als
+Dateien liegen.
+
+**Was ein Skill ist:** eine Anleitung für eine bestimmte Art Aufgabe. Die
+Abgrenzung, an der es kippt: **Hausregeln gelten immer** („antworte kürzer"),
+ein **Skill nur für seine Aufgabe** („wenn er eine Woche planen will: …").
+Sasha, 07.10.2026: „ki soll sogar welche vorschlagen totally, damit sie später
+wenn sie gut aufgestellt ist sich von alleine weiterentwickeln kann."
+
+**Die Datei** `data/gedaechtnis/skills/<name>.md`, Kopf im Katalog-Schema
+(`gedaechtnis.kopf_lesen`), darunter die Anleitung:
+
+```
+## wochenplan
+- beschreibung: Sasha will wissen, was diese oder nächste Woche ansteht …
+- erstellt:     2026-10-07
+- herkunft:     sasha        (sasha | ki)
+- status:       aktiv        (aktiv | vorgeschlagen | aus)
+
+1. Kalender lesen …
+```
+
+- `beschreibung` ist EINE Zeile: wann er passt. Sie steht bei jedem Zug im
+  gecachten Kopf — deshalb höchstens 160 Zeichen.
+- **Abschalten statt löschen:** `status: aus`. Der Sync ist additiv; eine
+  gelöschte Datei käme vom anderen Rechner zurück. Eine Datei ohne gültigen
+  Kopf zählt als aus.
+- `vorgeschlagen` ist vorgesehen für Vorschläge, die nicht sofort aktiv
+  werden; heute legt `propose_skill` nach Sashas Ja direkt `aktiv` an.
+- `edit_skill` lässt die alte Fassung als `.bak` daneben (wie
+  `rewrite_note`); `.bak`-Dateien sind keine Skills.
+
+**Warum nicht in `BEREICHE`:** Skills liegen unter derselben Wurzel (gleiche
+Test-Umlenkung `ZENTRALE_GEDAECHTNIS_DIR`, gleicher Sync), aber
+`write_note`/`read_note`/`search_memory` erreichen sie bewusst nicht. Ein
+Skill ist eine Anweisung der KI an sich selbst; geschrieben wird er nur über
+die gegateten Werkzeuge. Zugriff von außen: `gedaechtnis.bereich_ordner()`.
+
+**Erstbefüllung:** Die ersten drei Skills (`wochenplan`, `recherche`, `kurz`)
+liegen im Repo unter `core/skill_vorlagen/`. Beim ersten Zugriff
+(`skills.ordner()`), wenn `skills/` noch **nicht existiert**, werden sie
+hineinkopiert — nur fehlende Dateien, nie eine überschrieben. Existiert der
+Ordner (auch leer), passiert nichts mehr. Die kopierten Dateien bekommen als
+Änderungszeit fest den 07.10.2026: sonst gewänne beim Sync (`rsync
+--update`, neueste gewinnt) die frische Vorlage eines Rechners, der später
+zum ersten Mal startet, gegen eine Änderung, die Sasha auf dem anderen schon
+gemacht hat.
 
 ## Grenzen, die absichtlich drin sind
 

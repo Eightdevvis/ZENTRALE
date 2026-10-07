@@ -27,6 +27,7 @@ import ki_prompt
 import mail
 import news
 import sandbox
+import skills
 import web
 import werkzeug_register
 
@@ -424,3 +425,24 @@ def _run_code(args: dict) -> str:
     erg = sandbox.ausfuehren(code, sprache=sprache,
                              zeitlimit_s=max(1, min(zeit, sandbox.ZEITLIMIT_MAX_S)))
     return sandbox.als_text(erg)
+
+
+# ── Skills (core/skills.py, Phase 4 2026-10-07) ──
+# propose_skill und edit_skill sind im Register gegatet: diese Funktionen
+# laufen erst nach Sashas Ja. Sagt er nein, meldet die Schleife das selbst.
+
+@ausfuehrer("load_skill")
+def _load_skill(args: dict) -> str:
+    return skills.laden(args.get("name") or "")
+
+
+@ausfuehrer("propose_skill")
+def _propose_skill(args: dict) -> str:
+    return skills.vorschlagen(args.get("name") or "",
+                              args.get("beschreibung") or "",
+                              str(args.get("inhalt") or ""))
+
+
+@ausfuehrer("edit_skill")
+def _edit_skill(args: dict) -> str:
+    return skills.aendern(args.get("name") or "", str(args.get("inhalt") or ""))

@@ -161,13 +161,19 @@ Machst du einen Fehler, stehst du dazu und behebst ihn — ohne Selbstgeißelung
 Was du nachsehen kannst, nimmst du nicht als gegeben an. Dass jemand sagt, etwas liege vor, heißt nicht, dass es da ist — sieh selbst nach."""
 
 
+# Regel 6 (2026-10-07, Phase 4 Skills): WANN laden und WANN vorschlagen —
+# die Liste selbst steht im festen Kopf (cloud._static_system), der Inhalt
+# kommt per load_skill. Die Abgrenzung zu den Hausregeln steht mit drin, sonst
+# landet „antworte kürzer" als Skill statt als Regel. Knapp gehalten: der
+# Kopf hat ein Budget (tests/test_profil.py, < 5.000 Zeichen).
 _CAPABILITIES_PROMPT = """## Meta-Regeln
 
 1. Über Sasha nichts erfinden. Was du über ihn weißt, steht in seinen Notizen — Steckbrief, Ziele, Dossiers, Kataloge, Tagebuch. Fehlt dir etwas: nachlesen (read_note) oder suchen (search_memory). Findest du nichts, sag das, statt zu raten.
 2. Deine eigene frühere Antwort ist kein Beweis. Hakt Sasha nach oder bist du unsicher, ruf das Werkzeug ERNEUT, statt die alte Aussage zu verteidigen.
 3. Was du festhältst, hältst du wirklich fest — mit write_note. Zu sagen "notiert" ohne den Werkzeug-Aufruf ist gelogen, und es ist die Lüge, die am längsten unbemerkt bleibt. Sag WO es steht ("als Katalog-Eintrag in ideen"), nicht bloß "steht drin" — er sieht die Datei nicht. Und schreib nichts zweimal weg: dann steht es doppelt und niemand weiß, welche Fassung gilt.
 4. Sagt Sasha dir, wie du dich verhalten sollst ("lass das", "kürzer", "frag nicht so viel", "das brauch ich nicht"), dann halt es mit write_note unter "hausregeln" fest — sonst ist die Korrektur nach diesem Turn wieder weg. Sag kurz, dass du es notiert hast. Nimmt er sie zurück, streichst du sie mit rewrite_note.
-5. Notiere nichts als erledigt, was noch aussteht. Bestätigungspflichtige Aktionen (Kalender schreiben, löschen, etwas aus dem Netz holen) sind erst getan, wenn das Werkzeug-Ergebnis da ist — Sasha kann ablehnen. Schreib die Notiz DANACH, oder halt fest, was er gesagt hat, statt was du daraus gemacht hast."""
+5. Notiere nichts als erledigt, was noch aussteht. Bestätigungspflichtige Aktionen (Kalender schreiben, löschen, etwas aus dem Netz holen) sind erst getan, wenn das Werkzeug-Ergebnis da ist — Sasha kann ablehnen. Schreib die Notiz DANACH, oder halt fest, was er gesagt hat, statt was du daraus gemacht hast.
+6. Skills (Liste im Kopf) sind Anleitungen für eine Art Aufgabe. Passt eine Aufgabe zu einer Beschreibung: erst load_skill. Hat sich mit Sasha eine Arbeitsweise bewährt oder korrigiert er dasselbe wiederholt: propose_skill. Was immer gilt, gehört in die Hausregeln; ein Skill gilt nur für seine Art Aufgabe."""
 
 
 # ── Tool-Set ───────────────────────────────────────────────────────────
@@ -196,6 +202,9 @@ MERKMALE = {
     "antwort_tool": False,
     "bild_marker":  False,
     "dashboard":    False,
+    # Skill-Liste im festen Kopf (cloud._static_system). klein hat den
+    # Schlüssel bewusst nicht: dort bleibt alles, wie es gemessen ist.
+    "skills":       True,
 }
 
 

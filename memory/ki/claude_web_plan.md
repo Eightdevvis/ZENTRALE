@@ -141,7 +141,7 @@ Prompt-Bau hängt dessen Anweisungen hinter den Gedächtnis-Kopf.
 | **1 Steuerung** ✔ 07.10. | Stoppen (bis in die Schleife), mehrzeilige Eingabe mit Cursor, Slash-Befehle im Chat (`/neu`, `/modell`, `/effort`), Kabel für die vorhandenen Setter (Route + TUI) | sofort spürbar, kleines Risiko, Setter liegen schon da | klein |
 | **2 Gespräche** ✔ 07.10. | `core/gespraeche.py` (Ordner pro Gespräch, Datei pro Rechner), Gesprächsliste in der TUI, neu/wechseln/umbenennen/archivieren, automatischer Titel, Wiederholen + letzte Nachricht bearbeiten, **Denken mitgespeichert und aufklappbar**, Gespräch „Erinnerungen" | das Fundament für alles Weitere; Verlauf überlebt Neustarts | mittel |
 | **3 Gedächtnis sichtbar** | Kernakten in der TUI ansehen/ändern, **`search_chats` über alle Gespräche** | Sasha orientiert sich nach Thema, nicht nach Datum — die Suche quer durch Gespräche ist dafür die Bedingung | klein |
-| **4 Skills** | Skill-Dateien, Liste im Prompt, `load_skill`, erste Skills; **`propose_skill`**: die KI schlägt Skills vor, angelegt wird erst nach Bestätigung (Gate) | billig, passt zur Kostenlogik; Grundlage dafür, dass sie sich später selbst weiterentwickelt | klein |
+| **4 Skills** ✔ 07.10. | Skill-Dateien, Liste im Prompt, `load_skill`, erste Skills; **`propose_skill`**: die KI schlägt Skills vor, angelegt wird erst nach Bestätigung (Gate) | billig, passt zur Kostenlogik; Grundlage dafür, dass sie sich später selbst weiterentwickelt | klein |
 | **5 Ablage + Anhänge** | `ablage`-Event + Ablage-Liste in der TUI; Datei anhängen per Pfad; Bilder an die Cloud | Artefakte in Terminal-Form | mittel |
 | **6 Projekte** | Projekt-Ordner, Zuordnung Gespräch→Projekt | erst wenn 2–4 stehen | mittel |
 | **7 Sandbox (Grundlage)** ✔ 07.10. | `run_code` in einem abgeschotteten Arbeitsordner (Python + Shell, Zeitlimit, kein `data/`, keine Keys, Gate); Ergebnis als Werkzeug-Ergebnis, Dateien in die Ablage | Sasha: die KI soll später wie ein Coder arbeiten — jetzt nur das Fundament, keine volle Coding-KI | klein |
@@ -235,6 +235,36 @@ Angenommen (Sasha war nicht erreichbar): Modell-Liste = Standard + billig
 aus `providers.py` + gespeichertes, ein freier Name geht per `/modell <name>`
 an den aktuellen Anbieter; Budget-Grenze 10.000 €; Eingabe bis 4.000
 Zeichen (vorher 1.000).
+
+### Phase 4 — Skills (2026-10-07)
+
+- **`core/skills.py`** (Schicht 2): Skills als `data/gedaechtnis/skills/<name>.md`
+  mit Kopf (`beschreibung`, `erstellt`, `herkunft` sasha|ki, `status`
+  aktiv|vorgeschlagen|aus) im Katalog-Schema des Gedächtnisses. Bewusst nicht
+  in `gedaechtnis.BEREICHE` (sonst schriebe `write_note` sie ungefragt).
+  Details: [gedaechtnis_dateien.md](gedaechtnis_dateien.md), „Skills".
+- **Prompt:** `skills.prompt_block()` — eine Zeile je aktivem Skill, nach Name
+  sortiert — im festen Kopf (`cloud._static_system`, nur wenn die Schiene
+  `MERKMALE["skills"]` hat: `gross`). Meta-Regel 6 in `profil/gross.py`: wann
+  laden, wann vorschlagen, Abgrenzung zu den Hausregeln.
+- **Werkzeuge** (nur `gross`, hinten an): `load_skill` (frei),
+  `propose_skill` und `edit_skill` (gegatet; `.bak` beim Ändern).
+  Schnappschuss neu gezogen: nur die drei Einträge, `klein` byte-gleich.
+  Eigener Text-Deckel (< 600 Zeichen) in `tests/test_profil.py`.
+- **Erste Skills** `wochenplan`, `recherche`, `kurz` in
+  `core/skill_vorlagen/`; kommen beim ersten Zugriff nach `skills/`, wenn der
+  Ordner noch fehlt, nie überschreibend, mit altem Datei-Datum (Sync).
+- **`GET /api/skills`** (`ui/routen/skills.py`).
+- Tests: `tests/test_skills.py`; Wächter in `test_keine_seiteneffekte.py`.
+
+Angenommen (Sasha war nicht erreichbar): Vorlagen unter
+`core/skill_vorlagen/` (nicht `memory/`, das ist Doku); `propose_skill`
+legt nach Ja sofort `aktiv` an (`vorgeschlagen` bleibt für später);
+`load_skill` gibt ausgeschaltete nicht heraus; Grenzen 160 Zeichen
+Beschreibung, 6.000 Inhalt. **Offen:** `/skills` im TUI-Chat — ging nicht
+ohne Änderung an `chat.py` (Phase 2 baut dort gerade), wird danach
+eingehängt; Skills ansehen/schalten in der TUI; die KI kann einen Skill
+nicht abschalten (nur Sasha in der Datei).
 
 ### Phase 7 — Sandbox, Grundlage (2026-10-07)
 

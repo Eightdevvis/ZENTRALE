@@ -33,6 +33,8 @@
 #   kataloge     kataloge/*.md  VIELE gleichförmige Einträge mit Attributen.
 #   quellen      quellen/*.md   Abgelegte Dokumente (aus PDF extrahiert).
 #   tagebuch     tagebuch/*.md  Was gesagt und getan wurde, chronologisch.
+#   skills       skills/*.md    Anleitungen je Art Aufgabe — eigenes Modul
+#                               core/skills.py, nicht in BEREICHE (s. unten).
 #
 # ── Dossier oder Katalog? Die Regel ───────────────────────────────────
 # Was man LESEN will, wird Prosa. Was man DURCHSEHEN will, wird Katalog.
@@ -264,6 +266,28 @@ def liste(bereich: str) -> list:
     if not os.path.isdir(ordner):
         return []
     return sorted(f[:-3] for f in os.listdir(ordner) if f.endswith(".md"))
+
+
+# ── Bereiche mit eigenem Modul (skills/) ──────────────────────────────
+#
+# 2026-10-07 (Phase 4, memory/ki/claude_web_plan.md): Skills liegen unter
+# derselben Wurzel (dieselbe Test-Umlenkung, derselbe Sync), stehen aber
+# bewusst NICHT in BEREICHE. Sonst erreichte write_note sie ungefragt, und
+# ein Skill ist eine Anleitung an die KI selbst — die schreibt sie nur über
+# die gegateten Werkzeuge (core/skills.py), wie bei den Hausregeln.
+
+SKILLS = "skills"
+
+
+def bereich_ordner(bereich: str) -> str:
+    """Der Ordner eines Bereichs unter der (umlenkbaren) Gedächtnis-Wurzel.
+    Legt nichts an — wer schreibt, legt den Ordner selbst an."""
+    return os.path.join(_DIR, bereich)
+
+
+def slug(name: str) -> str:
+    """Dateiname aus einem Titel, ohne Pfad-Ausbruch (siehe _slug)."""
+    return _slug(name)
 
 
 def _finden(name: str) -> tuple:

@@ -324,6 +324,7 @@ und nimmt beide Schreibweisen an (siehe „Zwei Schienen" weiter unten).
 | `ask_choice`  | `frage_knopf`| Sasha eine Frage mit Knöpfen stellen (s. unten) |
 | `antwort`     | nur `klein`  | Finale Antwort über den Tool-Kanal (Framing-Effekt, 9B-Krücke) |
 | `run_code`    | nur `gross`  | Python/Shell abgeschottet ausführen, jeder Lauf gegatet (s. „Sandbox") |
+| `load_skill` / `propose_skill` / `edit_skill` | nur `gross` | Skill-Anleitung holen; neuen vorschlagen bzw. bestehenden umschreiben (beide gegatet) (s. „Skills") |
 
 Gegen das Erlaubnis-Gate wird **nie** direkt geprüft, sondern über
 `erlaubnis.braucht_erlaubnis()` — die normalisiert erst. Ein Schreib-Tool, das unter
@@ -404,6 +405,39 @@ Rechner und kämen nach dem Aufräumen zurück. Jeder `run_code`-Lauf bekommt
 einen frischen Ordner; Ordner älter als 7 Tage löscht `aufraeumen()` vor
 jedem Lauf. Neue Dateien meldet das Ergebnis mit Name und Größe (Verweise
 werden nicht verfolgt). Das Modell sieht nie den echten Pfad, nur `/arbeit`.
+
+### Skills — `load_skill`, `propose_skill`, `edit_skill` (seit 2026-10-07)
+
+Phase 4 des [Claude-Web-Plans](claude_web_plan.md). Ein Skill ist eine
+**Anleitung für eine Art Aufgabe** („Woche planen", „recherchieren"), keine
+Regel: was immer gilt, sind Hausregeln. Modul `core/skills.py` (Schicht 2),
+Dateien `data/gedaechtnis/skills/<name>.md` — Aufbau und Erstbefüllung in
+[gedaechtnis_dateien.md](gedaechtnis_dateien.md), Abschnitt „Skills".
+
+**Im Prompt nur die Liste.** `skills.prompt_block()` steht im festen,
+gecachten Kopf (`cloud._static_system`, hinter dem Gedächtnis-Kopf, nur wenn
+die Schiene `MERKMALE["skills"]` hat — `gross` ja, `klein` nicht): eine Zeile
+`- name — beschreibung` je **aktivem** Skill, nach Name sortiert, ohne Datum
+oder Zähler. Sie ändert sich nur, wenn sich eine Skill-Datei ändert. Der
+Inhalt kommt per `load_skill` als Werkzeug-Ergebnis und wandert mit dem
+Verlauf, ohne den Cache-Anfang zu berühren. Wann laden, wann vorschlagen:
+Meta-Regel 6 in `profil/gross.py`.
+
+| Werkzeug | Was | Gate |
+|---|---|---|
+| `load_skill(name)` | Inhalt eines aktiven Skills; ausgeschaltete/vorgeschlagene geben nichts heraus | nein |
+| `propose_skill(name, beschreibung, inhalt)` | neuen Skill anlegen (`herkunft: ki`, `status: aktiv`); bestehender Name → Fehler | **ja** — Frage zeigt Name, Beschreibung, erste drei Zeilen |
+| `edit_skill(name, inhalt)` | Anleitung eines bestehenden ersetzen; Kopf bleibt, alte Fassung als `.bak` | **ja** |
+
+Sagt Sasha nein, läuft der Ausführer gar nicht: die Schleife meldet dem
+Modell „abgelehnt — nichts ausführen" (`werkzeug_schleife.run_tool`), es
+entsteht keine Datei. Ein vom Modell mitgeschickter Kopf wird bei
+`edit_skill` verworfen: Beschreibung, Herkunft und Status ändert nur Sasha in
+der Datei. Grenzen: Beschreibung ≤ 160 Zeichen (sie steht bei jedem Zug im
+Kopf), Inhalt ≤ 6.000. Text-Budget der drei Beschreibungen: eigener Deckel
+< 600 Zeichen in `tests/test_profil.py`. Anzeige: `GET /api/skills`
+([api_endpoints.md](../system/api_endpoints.md)); ein `/skills` im TUI-Chat
+fehlt noch.
 
 ### Visuelle Stimme – Bild-Marker `[[bild: name]]`
 
@@ -619,7 +653,7 @@ Die Liste beschreibt den **lokalen** Pfad (`ai.chat_stream`, Schiene `klein`;
 zwischen 2 und 3 stehen dort noch Antwort-Suffix, Bild-Marker, Dashboard-Block
 und `kalender.imprint_for_prompt()`). Der Cloud-Pfad baut seinen Kopf in
 `cloud._static_system` (Schiene `gross` + `gedaechtnis.kopf_block()` +
-Imprint) und hängt das Wechselnde (4–6) hinten an die neueste User-Nachricht,
+Skill-Liste + Imprint) und hängt das Wechselnde (4–6) hinten an die neueste User-Nachricht,
 siehe „Prompt-Cache: statisch vorn, Wechselndes ganz hinten".
 
 1. **`_SYSTEM_PROMPT`** – Persona (entspannt, direkt, deutsch).

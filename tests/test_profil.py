@@ -143,10 +143,12 @@ def test_der_schnitt_haelt():
     # 07.10.2026: run_code (Sandbox, Phase 7) ist kein Gedaechtnis-Werkzeug
     # und hat seinen eigenen Deckel unten — sonst frisst jedes neue
     # gross-Werkzeug das Budget der Gedaechtnis-Texte.
+    # 07.10.2026: die Skill-Werkzeuge (Phase 4) ebenso — eigener Deckel unten.
+    skill = {"load_skill", "propose_skill", "edit_skill"}
     eigen = {w.name for w in werkzeug_register.auf_schiene("gross")
-             if w.klein is None and w.name != "run_code"}
+             if w.klein is None and w.name != "run_code"} - skill
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
-                if t["function"]["name"] not in eigen | {"run_code"})
+                if t["function"]["name"] not in eigen | {"run_code"} | skill)
     # 18.08.2026 von 3.000 auf 3.300: edit_calendar_routine kam dazu. Es
     # kostet ~250 Zeichen und behebt eine Luecke, die sie nicht ueberspielen
     # konnte — Routinen liessen sich nur ANLEGEN, also stand die verschobene
@@ -177,6 +179,13 @@ def test_der_schnitt_haelt():
     besch_code = sum(len(t["function"]["description"]) for t in gross.TOOLS
                      if t["function"]["name"] == "run_code")
     assert 0 < besch_code < 500
+    # Skills (07.10.2026, Phase 4): drei Werkzeuge, zusammen ~500 Zeichen.
+    # Deckel 600: die Liste der Skills selbst steht im Kopf, die Werkzeuge
+    # sagen nur, WIE man lädt, vorschlägt und ändert — wer hier Erziehung
+    # nachschiebt („wann genau vorschlagen"), gehört in Meta-Regel 6.
+    besch_skill = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                      if t["function"]["name"] in skill)
+    assert 0 < besch_skill < 600
 
 
 def test_praefix_bleibt_ueber_der_cache_mindestgroesse():

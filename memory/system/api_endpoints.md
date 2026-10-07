@@ -234,6 +234,12 @@ Datenmodell + Bedienung: `memory/werkzeuge/notizen_system.md`.
 > `/api/memory` + `/api/memory/<id>` (Legacy-LTM) sind entfallen – Memory
 > läuft jetzt über den Konzept-Graphen (siehe `memory/ki/ki_system.md`).
 
+## Skills der KI (`ui/routen/skills.py`, seit 2026-10-07)
+
+| Endpoint      | Methode | Beschreibung |
+|---------------|---------|--------------|
+| `/api/skills` | GET     | Alle Skills (`core/skills.py`), nach Name: `{skills: [{name, beschreibung, status, herkunft, erstellt}]}` — auch ausgeschaltete und vorgeschlagene. Nur lesen; angelegt/geändert wird über die gegateten Werkzeuge oder in der Datei. Siehe `memory/ki/ki_system.md` → Skills. |
+
 ## Fotos (ASCII-Bild-Filter)
 
 | Endpoint              | Methode | Beschreibung                          |

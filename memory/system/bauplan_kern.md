@@ -106,6 +106,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `map` | 2 | Geo-Layer-System der Weltkarte |
 | `ollama` | 2 | Anbindung an Ollama: Adresse, Modell, Kontext, Sampling, Erreichbarkeit, Warmup — einmal |
 | `sandbox` | 2 | Code abgeschottet ausführen (bubblewrap): eigener Arbeitsordner, kein Netz, keine Dateien von Sasha, Zeit-/Speicher-/Ausgabe-Grenzen |
+| `skills` | 2 | Skills der KI: Anleitungen je Art Aufgabe als Dateien im Gedächtnis, Liste für den Prompt, laden/vorschlagen/ändern |
 | `ai` | 3 | Ollama-Weg, Tool-Liste und -Ausführung, Erlaubnis-Abfrage, Prompt-Bausteine |
 | `ai_backends` | 3 | Wer denkt: lokal oder Cloud, Anbieter, Modell, Effort, Rundengrenze |
 | `cloud` | 3 | Anthropic-Weg |
@@ -164,6 +165,7 @@ egal woran, ging durch dieselbe Datei.
 | `stimme` | Sprechen und Zuhören |
 | `tutor` | alles unter `/api/tutor/` |
 | `mail` | Mail-Triage |
+| `skills` | Skill-Liste der KI (nur lesen) |
 
 ## Türen
 

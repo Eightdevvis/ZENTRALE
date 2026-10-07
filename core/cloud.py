@@ -251,8 +251,9 @@ def _static_system(system: str | None, tutor_mode: bool) -> str:
 
     # Die Schiene entscheidet, was hier drinsteht — nicht dieser Modul.
     # Hier draussen faehrt ein Frontier-Modell, also `gross`.
-    teile = [_profil().system(system, dashview=ki_prompt._DASHVIEW,
-                              graph=ki_prompt.GRAPH_KONTEXT)]
+    schiene = _profil()
+    teile = [schiene.system(system, dashview=ki_prompt._DASHVIEW,
+                            graph=ki_prompt.GRAPH_KONTEXT)]
     # Das Datei-Gedaechtnis: Steckbrief, Ziele, Dossier-TITEL. Gehoert in
     # den gecachten Teil — es aendert sich fast nie, und genau darin liegt
     # der Unterschied zum alten Graph-Block, der bei jedem Turn neu und
@@ -264,6 +265,18 @@ def _static_system(system: str | None, tutor_mode: bool) -> str:
         kopf = ""
     if kopf:
         teile.append(kopf)
+    # Die Skill-LISTE (Phase 4, 2026-10-07): eine Zeile je aktivem Skill,
+    # sortiert — ändert sich nur, wenn sich ein Skill ändert. Der Inhalt kommt
+    # per load_skill als Werkzeug-Ergebnis. Nur auf einer Schiene, die
+    # load_skill anbietet (MERKMALE["skills"]); klein kennt es nicht.
+    if getattr(schiene, "MERKMALE", {}).get("skills"):
+        try:
+            import skills
+            liste = skills.prompt_block()
+        except Exception:
+            liste = ""
+        if liste:
+            teile.append(liste)
     imprint = ki_prompt._imprint_prompt()
     if imprint:
         teile.append(imprint)

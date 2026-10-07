@@ -259,7 +259,9 @@ def test_run_code_nur_auf_der_gross_schiene():
     klein = [w.name for w in werkzeug_register.auf_schiene("klein")]
     gross = [w.name for w in werkzeug_register.auf_schiene("gross")]
     assert "run_code" not in klein
-    assert gross[-1] == "run_code"          # hinten an: Prompt-Cache
+    # Hinten an (Prompt-Cache): direkt hinter dem, was vor ihm da war. Seit
+    # 07.10.2026 (Phase 4) kommen die Skill-Werkzeuge dahinter.
+    assert gross[gross.index("log_series") + 1] == "run_code"
 
 
 def test_werkzeug_ergebnis_fuers_modell(monkeypatch):

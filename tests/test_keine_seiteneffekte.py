@@ -484,3 +484,13 @@ def test_ein_chat_zug_legt_nichts_im_echten_data_an(monkeypatch):
     assert gespraeche.liste()
     nachher = sorted(os.listdir(echt)) if os.path.isdir(echt) else None
     assert nachher == vorher
+
+def test_skill_ordner_liegt_im_test_nicht_im_echten_data():
+    """Skills (Phase 4, 2026-10-07) liegen unter der Gedächtnis-Wurzel und
+    hängen an derselben Umlenkung. Geprüft gegen data/ dieses Checkouts UND
+    des Haupt-Checkouts (aus einem Worktree heraus sind das zwei)."""
+    import gedaechtnis
+    pfad = os.path.realpath(gedaechtnis.bereich_ordner(gedaechtnis.SKILLS))
+    haupt = ROOT.split(os.sep + ".claude" + os.sep + "worktrees" + os.sep)[0]
+    for echt in (os.path.join(ROOT, "data"), os.path.join(haupt, "data")):
+        assert not pfad.startswith(os.path.realpath(echt)), pfad

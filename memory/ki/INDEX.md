@@ -8,10 +8,10 @@ Messungen dazu existiert.
 |---|---|
 | **Einstieg.** Wie der Chat läuft: lokal (Ollama) und Cloud, Tools, Erlaubnis-Gate, System-Prompt-Reihenfolge, Prompt-Cache, Backend-Wahl | [ki_system.md](ki_system.md) |
 | **Aufbau des KI-Kerns** — welches Modul wofür, wie die Abhängigkeiten laufen, die Umbau-Abschnitte K1–K5 | [kern_aufbau.md](kern_aufbau.md) |
-| **Das Gedächtnis.** Steckbrief, Ziele, Dossiers, Tagebuch, Messreihen — und warum der Konzept-Graph abgelöst wurde | [gedaechtnis_dateien.md](gedaechtnis_dateien.md) |
+| **Das Gedächtnis.** Steckbrief, Ziele, Dossiers, Tagebuch, Messreihen, Skills — und warum der Konzept-Graph abgelöst wurde | [gedaechtnis_dateien.md](gedaechtnis_dateien.md) |
 | Wie die KI hört und spricht: Whisper-STT + TTS als eigene Services, sprachneutral | [audio_system.md](audio_system.md) |
 | **Zwischenstand Cloud.** Was der Umstieg gebracht hat, woran es hakte, was dagegen lief, was offen ist | [cloud_bericht.md](cloud_bericht.md) |
-| **Plan: Claude-Web-Funktionen übertragen** — Bestand, Ebenen (Gespräch, Gedächtnis, Skill, Werkzeug, Ausgabe), Fallen, Phasen, Entscheidungen; was gebaut ist (Phase 0: Werkzeug-Register, Phase 1: Stoppen, Eingabe, Slash-Befehle, Phase 2: Gespräche, Phase 7: Sandbox für `run_code`) | [claude_web_plan.md](claude_web_plan.md) |
+| **Plan: Claude-Web-Funktionen übertragen** — Bestand, Ebenen (Gespräch, Gedächtnis, Skill, Werkzeug, Ausgabe), Fallen, Phasen, Entscheidungen; was gebaut ist (Phase 0: Werkzeug-Register, Phase 1: Stoppen, Eingabe, Slash-Befehle, Phase 2: Gespräche, Phase 4: Skills, Phase 7: Sandbox für `run_code`) | [claude_web_plan.md](claude_web_plan.md) |
 | **Gespräche** — Speicherformat (Ordner pro Gespräch, Datei pro Rechner), Ereignisse (nachricht/verwerfen), warum so wegen des Syncs, Titel, Erinnerungen | [gespraeche.md](gespraeche.md) |
 | Warum überhaupt in die Cloud — das Entscheidungs-Dokument vom 10.08.2026 (historisch) | [cloud_umstieg_plan.md](cloud_umstieg_plan.md) |
 | Warum das Memory so aussieht, wie es aussieht — Historie der Phasen A–G, verworfene Ansätze | [ki_memory_plan.md](ki_memory_plan.md) |
