@@ -191,6 +191,35 @@ Jede Phase: eigener Worktree, Tests, Doku hier nachziehen, Leitplanken-Test
 6. **Denken mitspeichern**, zum Anschauen. Ob es langfristig gebraucht wird,
    wird später anhand der Nutzung entschieden.
 
+## 6b. Ausblick: ZENTRALE Code (nicht bauen — Richtung für die Architektur)
+
+Sasha, 07.10.2026: „ich denke wir sollten generell eine eigene zentrale code
+machen quasi. mit eigenem prompt und der umgebung die es ja schon gibt …
+claude code is ja auch total spezialisiert auf richtig coding, ganz anders als
+der normale chat" — und gleich danach: „erstmal sauber den assistant aufziehen
+… bevor wir die code ai großziehen. das is nur damit du so den grand scope im
+auge hast."
+
+Was das für alles heißt, was jetzt gebaut wird:
+
+- **Eine zweite Schiene, kein zweites Programm.** Code = eigenes Profil
+  (`core/profil/…`, eigener Prompt fürs Programmieren: lesen, planen,
+  ändern, testen) + eigener Werkzeugsatz im Register (Schiene `code` neben
+  `klein`/`gross`) + derselbe Kern: Gespräche, Gedächtnis, Ablage, Sandbox,
+  Erlaubnis-Gate, Anbieter-Wahl. Nichts davon darf heute so gebaut werden,
+  dass es nur für den Chat taugt.
+- **Oberfläche:** der Schalter Chat ↔ Code oben in der Seitenleiste (wie
+  Claude Web, Screenshot `claude_web_template/main.png`).
+- **Werkzeuge, die dann dazukommen:** Dateien in einem Projektordner lesen
+  und ändern (gegatet), Befehle in der Sandbox mit einer eigenen
+  Arbeitskopie des Projekts, Versionsverwaltung nur in dieser Arbeitskopie
+  (nie direkt auf Sashas Stand), Tests laufen lassen.
+- **Ersetzt `claude -p`** in den Skripten des skill-creator (Testläufe,
+  Beschreibung verbessern).
+- **Offene Fragen an Sasha (wenn es soweit ist):** Welche Ordner darf es
+  anfassen (nur `~/codicus`, `learning/` immer tabu)? Darf es committen und
+  pushen oder nur vorschlagen? Darf es ins Netz (Pakete installieren)?
+
 ## 7. Gebaut
 
 ### Phase 1 — Steuerung (2026-10-07)
