@@ -88,11 +88,19 @@ class Bedienung:
         return W["tag"]
 
     def setze_tag(self, d: date, idx: int = 0):
-        """Tag wählen; das 3-Tage-Fenster rückt mit, wenn er herausfällt."""
+        """Tag wählen; die Ansicht rückt mit, wenn er herausfällt: A das
+        3-Tage-Fenster, B der Monat, C die Woche."""
         W, K = self.W, self.K
         W["tag"], W["idx"] = d, idx
         ref = date.fromisoformat(K["ref"])
-        if d < ref:
+        stil = K.get("stil") or "A"
+        if stil == "B":
+            if (d.year, d.month) != (ref.year, ref.month):
+                K["ref"] = d.isoformat()
+        elif stil == "C":
+            if d - timedelta(days=d.weekday()) != ref - timedelta(days=ref.weekday()):
+                K["ref"] = d.isoformat()
+        elif d < ref:
             K["ref"] = d.isoformat()
         elif d > ref + timedelta(days=FENSTER_TAGE - 1):
             K["ref"] = (d - timedelta(days=FENSTER_TAGE - 1)).isoformat()
@@ -114,8 +122,10 @@ class Bedienung:
         W["tidx"] = max(0, min(W["tidx"], len(items) - 1)) if items else 0
         if self.termine():
             self.gewaehlt()
-        return {"fokus": W["fokus"], "tag": self.tag().isoformat(),
-                "idx": W["idx"], "tidx": W["tidx"]}
+        fokus = W["fokus"] if self.K.get("stil") in (None, "A") else "termine"
+        return {"fokus": fokus, "tag": self.tag().isoformat(),
+                "idx": W["idx"], "tidx": W["tidx"],
+                "roh": self.gewaehlt() if fokus == "termine" else None}
 
     # ── Tasten ─────────────────────────────────────────────────────────
     def taste(self, ch):
@@ -134,14 +144,19 @@ class Bedienung:
             return True
         if ch in (ord("q"), ord("Q")):
             return BEENDEN
-        if ch == 9:
+        stil = K.get("stil") or "A"
+        if stil == "A" and ch == 9:
             W["fokus"] = FOKUS[(FOKUS.index(W["fokus"]) + 1) % len(FOKUS)]
             return True
-        if ch == curses.KEY_BTAB:
+        if stil == "A" and ch == curses.KEY_BTAB:
             W["fokus"] = FOKUS[(FOKUS.index(W["fokus"]) - 1) % len(FOKUS)]
             return True
         if self._springen(ch):
             return True
+        if stil == "B":
+            return self._taste_monat(ch)
+        if stil == "C":
+            return self._taste_termine(ch)
         if W["fokus"] == "todo":
             return self._taste_todo(ch)
         if W["fokus"] == "kalender":
@@ -187,7 +202,30 @@ class Bedienung:
             self.setze_tag(d - timedelta(days=1))
         elif ch in (curses.KEY_RIGHT, ord("l")):
             self.setze_tag(d + timedelta(days=1))
-        elif ch in (ord("a"), ord("A"), 1):    # Strg-A wie calcurse
+        else:
+            return self._aktion(ch)
+        return True
+
+    def _taste_monat(self, ch) -> bool:
+        """B: Pfeile wie calcurses Kalenderkasten (←→ Tag, ↑↓ Woche), Tab
+        wählt den nächsten Termin des Tages (Shift-Tab den vorigen)."""
+        W, d = self.W, self.tag()
+        sprung = {curses.KEY_LEFT: -1, ord("h"): -1, curses.KEY_RIGHT: 1, ord("l"): 1,
+                  curses.KEY_UP: -7, ord("k"): -7, curses.KEY_DOWN: 7, ord("j"): 7}.get(ch)
+        if sprung is not None:
+            self.setze_tag(d + timedelta(days=sprung))
+        elif ch in (9, curses.KEY_BTAB):
+            n = len(self.termine())
+            if n:
+                W["idx"] = (W["idx"] + (1 if ch == 9 else -1)) % n
+        else:
+            return self._aktion(ch)
+        return True
+
+    def _aktion(self, ch) -> bool:
+        """a/e/d/r/c/p/Enter — in A, B und C genau gleich."""
+        W, d = self.W, self.tag()
+        if ch in (ord("a"), ord("A"), 1):      # Strg-A wie calcurse
             self._starte(kw.formular_neu(d, date.today()))
         elif ch in (10, 13, curses.KEY_ENTER):
             roh = self.gewaehlt()

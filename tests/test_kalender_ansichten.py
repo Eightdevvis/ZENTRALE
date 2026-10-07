@@ -312,3 +312,31 @@ def test_beispiel_aus_dem_entwurf_zeichnet_alles():
         d = kb.api_daten(ka.DATENANSICHT[an], ref=kb.REF, heute=kb.HEUTE)
         alles = "\n".join(text(z) for z in ka.zeichne(an, d, 136, 40))
         assert "Messe" in alles and "Wochenende" in alles
+
+
+# ── Auswahl in B und C (gleicher Termin wie in A, per Identität) ───────
+def _gewaehlt_in(zeilen, rolle):
+    return [text(z) for z in zeilen if any(r == rolle for _t, r in z)]
+
+
+def test_b_markiert_gewaehlten_tag_und_termin():
+    d = daten("month")
+    sel = next(e for e in d["days"]["2026-10-05"] if e["label"] == "Zahnarzt")
+    zeilen = ka.ansicht_b(d, 110, 40, auswahl={"tag": "2026-10-05", "roh": sel})
+    akz = ka.ROLLE["a_akzent"] + ka.INV
+    getroffen = [t for z in zeilen for t, r in z if r == akz]
+    assert any("Zahnarzt" in t for t in getroffen)
+    assert any(t.strip().startswith("5") for t in getroffen)        # Tageszahl
+
+
+def test_c_markiert_gewaehlten_block():
+    d = daten("week", ref="2026-10-05")
+    sel = next(e for e in d["days"]["2026-10-05"] if e["label"] == "Zahnarzt")
+    zeilen = ka.ansicht_c(d, 110, 40, auswahl={"tag": "2026-10-05", "roh": sel})
+    akz = ka.ROLLE["a_akzent"]
+    assert any(t.startswith("Zahn") for z in zeilen for t, r in z if r == akz + ka.INV)
+
+
+def test_ohne_auswahl_bleibt_alles_wie_vorher():
+    d = daten("month")
+    assert ka.ansicht_b(d, 110, 40) == ka.ansicht_b(d, 110, 40, auswahl=None)

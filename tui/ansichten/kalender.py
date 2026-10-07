@@ -193,7 +193,7 @@ class Kalender:
         """Tasten, solange A/B/C zu sehen ist. A ist bedienbar wie calcurse
         (kalender_bedienung.py); B/C sind bis Etappe 2 nur Anzeige."""
         K = self.K
-        if K["stil"] == "A":
+        if K["stil"] in ("A", "B", "C"):
             if ch in (ord("v"), ord("V")) and self.bedienung.W["dialog"] is None:
                 self.k_stil_weiter()
                 return None
@@ -227,7 +227,7 @@ class Kalender:
         C, K, z = self.z.C, self.K, self.z
         ix, iw = bx + 2, bw - 4
         bottom = by + bh - 2
-        bed = self.bedienung if K["stil"] == "A" else None
+        bed = self.bedienung if K["stil"] in ("A", "B", "C") else None
         if bed is not None:
             d = bed.daten()
         else:

@@ -159,12 +159,12 @@ def test_blaettern_in_jeder_ansicht_wirft_nicht(tmp_path):
     rechts, links, null = b"\x1bOC", b"\x1bOD", b"0"
     s, fehler = _lauf(tmp_path, [
         (b"v" + rechts + rechts + links + null, "A"),
-        (b"v" + rechts + links + b"x" + b"x", "B"),
+        (b"v" + rechts + links + b"m" + b"x" + b"x", "B"),
         (b"v" + rechts + rechts + links + null, "C"),
     ])
     assert fehler == "", "Blättern wirft:\n" + fehler
     refs = [r for _v, r in ABFRAGEN]
-    assert "2026-11-01" in refs, "A/B blättern monatsweise"
+    assert any(r.startswith("2026-11") for r in refs), "m blättert in B in den nächsten Monat"
 
 
 def test_tab_bleibt_woche_monat(tmp_path):

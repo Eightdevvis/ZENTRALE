@@ -86,10 +86,16 @@ def tasten_hinweis(ansicht: str) -> str:
     sind. A/B/C sind reine Anzeige: bearbeitet wird im jetzigen Kalender."""
     nxt = naechste_ansicht(ansicht)
     ziel = ANSICHT_NAMEN[nxt] if nxt else "bearbeiten"
-    if ansicht == "A":          # bedienbar wie calcurse (kalender_bedienung.py)
-        return ("↑↓ termin · ←→ tag · a neu · e ändern · d löschen · r wiederholen · "
-                "enter ansehen · c/p kopieren · g gehe zu · tab kasten · v %s" % ziel)
-    return "←→ %s · 0 heute · v %s · esc zurück" % (SCHRITT.get(ansicht, "monat"), ziel)
+    # Alle drei bedienbar wie calcurse (kalender_bedienung.py); gleich sind
+    # a/e/d/r/c/p/g/enter, nur das Bewegen unterscheidet sich.
+    gleich = "a neu · e ändern · d löschen · r wiederholen · enter ansehen · c/p kopieren · g gehe zu"
+    if ansicht == "A":
+        return "↑↓ termin · ←→ tag · %s · tab kasten · v %s" % (gleich, ziel)
+    if ansicht == "B":
+        return "←→ tag · ↑↓ woche · tab termin · %s · m/M monat · v %s" % (gleich, ziel)
+    if ansicht == "C":
+        return "↑↓ termin · ←→ tag · %s · w/W woche · v %s" % (gleich, ziel)
+    return "v %s" % ziel
 
 
 def zeichne(ansicht: str, daten, breite: int, hoehe: int,
@@ -98,9 +104,9 @@ def zeichne(ansicht: str, daten, breite: int, hoehe: int,
     `auswahl` (kalender_bedienung.Bedienung.auswahl) hebt Tag/Termin/Kasten
     hervor — bisher nur in A, B/C folgen in Etappe 2."""
     if ansicht == "B":
-        return ansicht_b(daten, breite, hoehe, erledigte=erledigte)
+        return ansicht_b(daten, breite, hoehe, erledigte=erledigte, auswahl=auswahl)
     if ansicht == "C":
-        return ansicht_c(daten, breite, hoehe, erledigte=erledigte)
+        return ansicht_c(daten, breite, hoehe, erledigte=erledigte, auswahl=auswahl)
     return ansicht_a(daten, breite, hoehe, erledigte=erledigte, auswahl=auswahl)
 
 
@@ -650,7 +656,17 @@ def _monat_grenzen(daten: dict, heute: date, start: date, ende: date) -> tuple:
     return erster, letzter
 
 
-def ansicht_b(daten, breite: int, hoehe: int, erledigte: bool = False) -> list:
+def _gewaehlt(auswahl) -> tuple:
+    """(gewählter Tag, gewählter API-Eintrag) aus der Auswahl der Bedienung.
+    Verglichen wird der Eintrag per Identität (t["roh"] is …) — so trifft
+    jede Ansicht genau den Termin, den die Bedienung meint, egal wie sie
+    ihre Termine anordnet."""
+    aw = auswahl or {}
+    return _datum(aw.get("tag")), aw.get("roh")
+
+
+def ansicht_b(daten, breite: int, hoehe: int, erledigte: bool = False,
+              auswahl: dict | None = None) -> list:
     """Ganzer Monat als Raster. In den Zellen Anfangszeit + Titel (das „bis"
     steht in A/C — in 14 Zeichen passt es nicht), Ganztägiges als Band,
     jede Spanne als EIN Balken über alle ihre Zellen einer Woche, Rahmen
@@ -683,11 +699,14 @@ def ansicht_b(daten, breite: int, hoehe: int, erledigte: bool = False) -> list:
         unten = "└┴┘" if wi == wochen - 1 else "├┼┤"
         lw.setze(y + r, 1, unten[0] + ("─" * cw + unten[1]) * 6 + "─" * cw + unten[2],
                  rahmen)
-        _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte)
+        _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte,
+                 _gewaehlt(auswahl))
     return lw.zeilen()
 
 
-def _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte):
+def _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte,
+             gewaehlt=(None, None)):
+    sel_tag, sel = gewaehlt
     sichtbar = [mo + timedelta(days=c) for c in range(7)
                 if erster <= mo + timedelta(days=c) <= letzter]
     if not sichtbar:
@@ -718,12 +737,16 @@ def _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte
             continue
         x0 = 2 + a.weekday() * (cw + 1)
         breite = (b.weekday() - a.weekday() + 1) * (cw + 1) - 1
+        ist = sel is not None and any(t["roh"] is sel for t in sp["tage"].values())
         lw.setze(y + 1 + bi, x0, _balken_text(sp, a, b, breite),
-                 ROLLE["spanne"] + INV)
+                 (_a_rolle("a_akzent") if ist else ROLLE["spanne"]) + INV)
     nb = min(len(bahnen_ende), platz)
     for d in sichtbar:
         x0 = 2 + d.weekday() * (cw + 1)
-        if d == heute:
+        if d == sel_tag:                     # gewählter Tag: Zahl in Akzentfläche
+            lw.setze(y, x0, kuerzen((" %d " if d == heute else "%d ") % d.day, cw),
+                     _a_rolle("a_akzent") + INV)
+        elif d == heute:
             lw.setze(y, x0, kuerzen(" %d " % d.day, cw), ROLLE["heute"] + INV)
         else:
             lw.setze(y, x0, kuerzen("%d" % d.day, cw),
@@ -732,8 +755,19 @@ def _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte
                 if not t["spanne"]]
         frei = platz - nb
         zeige = rest if len(rest) + versteckt[d] <= frei else rest[:max(0, frei - 1)]
+        # Ist der gewählte Termin weggekürzt, nimmt er den letzten Platz ein.
+        if d == sel_tag and sel is not None and zeige and \
+                not any(t["roh"] is sel for t in zeige):
+            gew = [t for t in rest if t["roh"] is sel]
+            if gew:
+                zeige = zeige[:-1] + gew
         for k, t in enumerate(zeige):
             yy = y + 1 + nb + k
+            if d == sel_tag and sel is not None and t["roh"] is sel:
+                txt = ((_hm(t["start"]) + " ") if t["start"] is not None and cw >= 9 else "") + t["label"]
+                txt = kuerzen(txt, cw)
+                lw.setze(yy, x0, txt + " " * (cw - text_breite(txt)), _a_rolle("a_akzent") + INV)
+                continue
             if t["start"] is None and t["ende"] is None:
                 # Ganztägig als Band: Fläche über die ganze Zellenbreite.
                 band = kuerzen(t["label"], cw)
@@ -852,11 +886,13 @@ def _c_label(t: dict, s: int, e: int, bw: int) -> str:
     return kuerzen(t["label"], bw)
 
 
-def ansicht_c(daten, breite: int, hoehe: int, erledigte: bool = False) -> list:
+def ansicht_c(daten, breite: int, hoehe: int, erledigte: bool = False,
+              auswahl: dict | None = None) -> list:
     """Eine Woche, Stunden nach unten, Tage nebeneinander. Termine sind
     Flächen so lang wie ihre Dauer; ein Spannentag ohne Uhrzeit ist eine
     volle Säule, so läuft die Spanne als Fläche über ihre Tage."""
     daten = daten if isinstance(daten, dict) else {}
+    sel_tag, sel = _gewaehlt(auswahl)
     innen = breite - 2
     g = 7 if innen >= 7 + 7 * 8 else (6 if innen >= 6 + 7 * 4 else 3)
     colw = (innen - g) // 7
@@ -883,7 +919,10 @@ def ansicht_c(daten, breite: int, hoehe: int, erledigte: bool = False) -> list:
         r = ROLLE["heute"] if d == heute else (
             ROLLE["c_wochenende"] if d.weekday() >= 5 else ROLLE["titel"])
         kopf = "%s %s" % (WT[d.weekday()], d.strftime("%d."))
-        lw.setze(1, x0 + i * colw, kopf if len(kopf) < colw else WT[d.weekday()][:colw - 1], r)
+        kopf = kopf if len(kopf) < colw else WT[d.weekday()][:colw - 1]
+        if d == sel_tag:                     # gewählter Tag: Kopf in Akzentfläche
+            r, kopf = _a_rolle("a_akzent") + INV, kopf + " " * (colw - 1 - text_breite(kopf))
+        lw.setze(1, x0 + i * colw, kopf, r)
     y0 = 2
     if any(ganz for _b, ganz in tage):
         lw.setze(y0, 1, kuerzen("ganzt.", g - 1), ROLLE["zeit"])
@@ -892,14 +931,18 @@ def ansicht_c(daten, breite: int, hoehe: int, erledigte: bool = False) -> list:
                 t = ganz[0]
                 txt = t["label"] + (" +%d" % (len(ganz) - 1) if len(ganz) > 1 else "")
                 band = kuerzen(txt, colw - 1)
-                lw.setze(y0, x0 + i * colw, band + " " * (colw - 1 - text_breite(band)),
-                         _rolle(t) + ("" if t["aus"] else INV))
+                rolle = _rolle(t) + ("" if t["aus"] else INV)
+                if sel is not None and any(x["roh"] is sel for x in ganz):
+                    t = next(x for x in ganz if x["roh"] is sel)
+                    band = kuerzen(t["label"], colw - 1)
+                    rolle = _a_rolle("a_akzent") + INV
+                lw.setze(y0, x0 + i * colw, band + " " * (colw - 1 - text_breite(band)), rolle)
         y0 += 1
-    _c_achse(lw, y0, hoehe - 1, x0, g, colw, tage, breite)
+    _c_achse(lw, y0, hoehe - 1, x0, g, colw, tage, breite, sel)
     return lw.zeilen()
 
 
-def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite):
+def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None):
     """Zeitachse von y0 bis vor y_ende zeichnen. Der Bereich ist 08–22 Uhr,
     erweitert um jede echte Uhrzeit der Woche; der Zeilen-Takt ist der
     feinste, mit dem der Bereich in die Höhe passt."""
@@ -950,6 +993,8 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite):
                 r = ROLLE["block_routine"] if t["routine"] else ROLLE["block_termin"]
             if t["aus"]:
                 r = ROLLE["aus"]
+            if sel is not None and t["roh"] is sel:   # gewählter Termin: Akzent
+                r = _a_rolle("a_akzent")
             lab_txt = _c_label(t, s, e, bw)
             lw.setze(y0 + k0, bx, lab_txt + " " * (bw - text_breite(lab_txt)), r + INV)
             for k in range(k0 + 1, k1 + 1):
