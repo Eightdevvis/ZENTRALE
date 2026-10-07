@@ -166,8 +166,7 @@ def test_a_todo_zeigt_offene_punkte_der_wochenliste():
     zeilen = [text(z) for z in ka.ansicht_a(d, 110, 40)]
     alles = "\n".join(zeilen)
     assert "TODO" in alles and "1. Steuer abgeben" in alles
-    assert "Blumen" not in alles                          # abgehakt: weg
-    assert "Blumen" in "\n".join(text(z) for z in ka.ansicht_a(d, 110, 40, erledigte=True))
+    assert "X. Blumen gießen" in alles                    # erledigt: X statt Nummer, wie calcurse
 
 
 def test_a_statusbalken_ist_eine_rote_flaeche():

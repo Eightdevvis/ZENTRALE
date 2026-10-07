@@ -13,6 +13,7 @@ from .basis import BEENDEN, api_call, parse_clock
 from .kalender_ansichten import (ANSICHT_NAMEN, DATENANSICHT, INV,
                                  naechste_ansicht, tasten_hinweis, text_breite)
 from .kalender_ansichten import zeichne as stil_zeichnen
+from .kalender_bedienung import Bedienung
 
 
 KAL_WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
@@ -181,9 +182,24 @@ class Kalender:
             r = date(r.year + m // 12, m % 12 + 1, 1)
         K["ref"] = r.isoformat(); K["sdata"] = None
 
+    @property
+    def bedienung(self):
+        b = getattr(self, "_bedienung", None)
+        if b is None:
+            b = self._bedienung = Bedienung(self)
+        return b
+
     def _taste_stil(self, ch):
-        """Tasten, solange A/B/C zu sehen ist — nur Anzeige."""
+        """Tasten, solange A/B/C zu sehen ist. A ist bedienbar wie calcurse
+        (kalender_bedienung.py); B/C sind bis Etappe 2 nur Anzeige."""
         K = self.K
+        if K["stil"] == "A":
+            if ch in (ord("v"), ord("V")) and self.bedienung.W["dialog"] is None:
+                self.k_stil_weiter()
+                return None
+            if self.bedienung.taste(ch) is BEENDEN:
+                return BEENDEN
+            return None
         if ch in (27, ord("c"), ord("C")):
             K["active"] = False
         elif ch in (ord("q"), ord("Q")):
@@ -211,15 +227,20 @@ class Kalender:
         C, K, z = self.z.C, self.K, self.z
         ix, iw = bx + 2, bw - 4
         bottom = by + bh - 2
-        if (not K["sdata"]) or K["sdata"].get("_for") != (K["stil"], K["ref"]):
-            self.k_stil_fetch()
-        d = K["sdata"]
+        bed = self.bedienung if K["stil"] == "A" else None
+        if bed is not None:
+            d = bed.daten()
+        else:
+            if (not K["sdata"]) or K["sdata"].get("_for") != (K["stil"], K["ref"]):
+                self.k_stil_fetch()
+            d = K["sdata"]
         if d.get("failed"):
             z.addclip(by + 1, ix, "kalender: backend?", iw, C["faint"])
             return
         hoehe = bottom - (by + 1)
         try:
-            zeilen = stil_zeichnen(K["stil"], d, iw, hoehe, erledigte=K["showhidden"])
+            zeilen = stil_zeichnen(K["stil"], d, iw, hoehe, erledigte=K["showhidden"],
+                                   auswahl=bed.auswahl() if bed else None)
         except Exception as e:          # eine kaputte Ansicht darf die TUI nicht reißen
             z.addclip(by + 1, ix, "ansicht %s: %s" % (K["stil"], e), iw, C["warn"])
             return
@@ -233,10 +254,17 @@ class Kalender:
                 if text.strip() or rolle.endswith(INV):
                     z.addclip(by + 1 + i, x, text, ix + iw - x, attr)
                 x += text_breite(text)
-        hint = tasten_hinweis(K["stil"])
-        z.addclip(bottom, ix, hint, iw, C["faint"])
-        if K["msg"]:
-            z.addclip(bottom, ix + iw - len(K["msg"]), K["msg"], len(K["msg"]), C["faint"])
+        unten = bed.zeile_unten() if bed else None
+        if unten:                          # Frage oder Meldung, wie calcurse unten
+            txt, rolle = unten
+            z.addclip(bottom, ix, txt, iw, C.get(rolle, C["faint"]) | (curses.A_BOLD if rolle == "kal" else 0))
+        else:
+            hint = tasten_hinweis(K["stil"])
+            z.addclip(bottom, ix, hint, iw, C["faint"])
+            if K["msg"]:
+                z.addclip(bottom, ix + iw - len(K["msg"]), K["msg"], len(K["msg"]), C["faint"])
+        if bed:
+            bed.zeichne_popup(by, bx, bh, bw)
 
     def k_today(self):
         K = self.K

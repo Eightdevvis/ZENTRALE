@@ -1,5 +1,17 @@
 # Kalender-Ansichten A/B/C — Vorschau
 
+**Stand 2026-10-07 (Etappe 1): A ist bedienbar wie calcurse** — Tasten aus
+calcurses eigener Tastendatei und Hilfe: ↑↓ Termin, ←→ Tag, t/T w/W m/M y/Y
+springen, g gehe zu, Tab Kasten (Termine → Kalender → TODO), Enter ansehen,
+a/e/d anlegen/ändern/löschen, r wiederholen (t/w/m/j, alle wie viele, bis),
+c/p kopieren/einfügen, im TODO-Kasten a/e/d, ! erledigt (X), +/- Reihenfolge.
+Fragen stehen unten wie bei calcurse. Ergänzungen: „nur dieser Tag oder
+alle?" bei Routinen/Spannen (Handy-Kalender), ganztägig über mehrere Tage,
+Wochentage bei wöchentlich, Kollisions-Rückfrage vor dem Speichern (j/n).
+Logik: `tui/ansichten/kalender_werkzeuge.py`, Tasten: `kalender_bedienung.py`,
+Backend: `core/kalender_bearbeiten.py` + Routen in `ui/routen/kalender.py`.
+B/C bleiben bis Etappe 2 Anzeige; danach fliegt der alte Kalender raus.
+
 **Stand 2026-10-07 (abends): eingehängt.** Im Kalender dreht `v`: der jetzige
 Kalender → A Tagesliste → B Monatsraster → C Zeitachse → zurück zum
 jetzigen (`naechste_ansicht`, None = jetziger). Woche↔Monat im jetzigen

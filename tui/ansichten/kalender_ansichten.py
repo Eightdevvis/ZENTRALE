@@ -56,6 +56,7 @@ ROLLE = {
     "c_wochenende": "amber",    # Zeitachse: Sa/So-Köpfe
     "a_akzent": "kal",          # A (calcurse): Titel, Datum, KW, Statuszeile
     "a_aktiv": "kal",           # A: Rahmen des aktiven Kastens
+    "zyklus": "cyc",            # Zyklus-Tönung (aus dem »periode«-Graphen)
 }
 # Zeitachse: nebeneinanderliegende Spannen müssen unterscheidbar sein
 # (Entwurf: Messe bernstein, Berlin grün) → reihum vergeben.
@@ -85,14 +86,22 @@ def tasten_hinweis(ansicht: str) -> str:
     sind. A/B/C sind reine Anzeige: bearbeitet wird im jetzigen Kalender."""
     nxt = naechste_ansicht(ansicht)
     ziel = ANSICHT_NAMEN[nxt] if nxt else "bearbeiten"
+    if ansicht == "A":          # bedienbar wie calcurse (kalender_bedienung.py)
+        return ("↑↓ termin · ←→ tag · a neu · e ändern · d löschen · r wiederholen · "
+                "enter ansehen · c/p kopieren · g gehe zu · tab kasten · v %s" % ziel)
     return "←→ %s · 0 heute · v %s · esc zurück" % (SCHRITT.get(ansicht, "monat"), ziel)
 
 
 def zeichne(ansicht: str, daten, breite: int, hoehe: int,
-            erledigte: bool = False) -> list:
-    """Einstieg für die TUI: zeichnet die gewählte Ansicht in breite×hoehe."""
-    f = {"A": ansicht_a, "B": ansicht_b, "C": ansicht_c}.get(ansicht, ansicht_a)
-    return f(daten, breite, hoehe, erledigte=erledigte)
+            erledigte: bool = False, auswahl: dict | None = None) -> list:
+    """Einstieg für die TUI: zeichnet die gewählte Ansicht in breite×hoehe.
+    `auswahl` (kalender_bedienung.Bedienung.auswahl) hebt Tag/Termin/Kasten
+    hervor — bisher nur in A, B/C folgen in Etappe 2."""
+    if ansicht == "B":
+        return ansicht_b(daten, breite, hoehe, erledigte=erledigte)
+    if ansicht == "C":
+        return ansicht_c(daten, breite, hoehe, erledigte=erledigte)
+    return ansicht_a(daten, breite, hoehe, erledigte=erledigte, auswahl=auswahl)
 
 
 # ── Text-Breite und Leinwand ───────────────────────────────────────────
@@ -434,7 +443,7 @@ def _a_naechster(daten, ab, ende, jetzt, erledigte):
 
 
 def ansicht_a(daten, breite: int, hoehe: int, erledigte: bool = False,
-              jetzt=None, tage: int = 3) -> list:
+              jetzt=None, tage: int = 3, auswahl: dict | None = None) -> list:
     """Wie calcurse: links „Termine" (aktiv) mit `tage` Tagen ab `ref`,
     gleich hoch verteilt; rechts „Kalender" und „TODO", unten der rote
     Statusbalken. Unter ~86 Spalten bleibt nur die Terminliste.
@@ -452,16 +461,18 @@ def ansicht_a(daten, breite: int, hoehe: int, erledigte: bool = False,
     jetzt = jetzt or datetime.now()
     if jetzt.date() != heute:          # Vorschau/Tests mit festem „heute"
         jetzt = datetime.combine(heute, jetzt.time())
+    aw = auswahl or {}
+    fokus = aw.get("fokus", "termine")
     h = hoehe - 1                                   # letzte Zeile: Statusbalken
     if breite >= 86:
         rw = min(40, max(35, (breite - 1) * 2 // 7))
         lbreite = breite - rw - 1
-        _a_liste(lw, 0, 0, lbreite, h, daten, ab, heute, erledigte, tage)
-        hm = _a_monat(lw, 0, lbreite + 1, rw, daten, ab, heute, erledigte)
+        _a_liste(lw, 0, 0, lbreite, h, daten, ab, heute, erledigte, tage, aw)
+        hm = _a_monat(lw, 0, lbreite + 1, rw, daten, ab, heute, erledigte, aw)
         if h - hm >= 5:
-            _a_todo(lw, hm, lbreite + 1, rw, h - hm, daten, erledigte)
+            _a_todo(lw, hm, lbreite + 1, rw, h - hm, daten, erledigte, aw)
     else:
-        _a_liste(lw, 0, 0, breite, h, daten, ab, heute, erledigte, tage)
+        _a_liste(lw, 0, 0, breite, h, daten, ab, heute, erledigte, tage, aw)
     _a_status(lw, hoehe - 1, breite, daten, ab, ende, jetzt, erledigte)
     return lw.zeilen()
 
@@ -481,10 +492,19 @@ def _a_status(lw, y, breite, daten, ab, ende, jetzt, erledigte):
     lw.setze(y, 0, text + " " * (breite - text_breite(text)), r)
 
 
-def _a_liste(lw, y, x, w, h, daten, ab, heute, erledigte, tage):
+def _a_zyklus(daten, d) -> bool:
+    c = daten.get("cycle")
+    return isinstance(c, dict) and bool(c.get(d.isoformat()))
+
+
+def _a_liste(lw, y, x, w, h, daten, ab, heute, erledigte, tage, aw=None):
     """`tage` Tage ab `ab`, jeder Block gleich hoch. Was in einen Block nicht
-    passt, wird abgeschnitten — wer mehr sehen will, blättert (←→)."""
-    yy = _paneel(lw, y, x, w, h, "Termine", aktiv=True)
+    passt, wird abgeschnitten — wer mehr sehen will, blättert (←→). Der
+    gewählte Termin (aw: tag + idx) steht invertiert, wie bei calcurse."""
+    aw = aw or {}
+    yy = _paneel(lw, y, x, w, h, "Termine", aktiv=aw.get("fokus", "termine") == "termine")
+    sel_tag, sel_idx = aw.get("tag"), aw.get("idx", 0)
+    zeigen = aw.get("fokus", "termine") == "termine" and sel_tag is not None
     cx, cw = x + 2, w - 4
     unten = y + h - 1                       # Zeile des unteren Rahmens
     if cw < 8 or unten - yy < 2:
@@ -501,39 +521,56 @@ def _a_liste(lw, y, x, w, h, daten, ab, heute, erledigte, tage):
         else:
             kopf, rk = "%s, %d. %s %d" % (WT_LANG[d.weekday()], d.day,
                                            MONATE[d.month - 1], d.year), _a_rolle("a_akzent")
+            if _a_zyklus(daten, d):
+                rk = ROLLE["zyklus"]
         kopf = kuerzen(kopf, cw)
         lw.setze(y0, cx + cw - text_breite(kopf), kopf, rk)
         zy = y0 + 1
         eintr = _tag_eintraege(daten, d.isoformat(), erledigte)
+        hier = zeigen and sel_tag == d.isoformat()
         if not eintr and zy < y_ende:
-            lw.setze(zy, cx + 2, "--", ROLLE["leer"])
+            lw.setze(zy, cx + 2, "--", ROLLE["leer"] + (INV if hier else ""))
+        # Scrollt der gewählte Termin aus dem Block, beginnt der Block später.
+        erst = 0
+        if hier and eintr:
+            platz = max(1, (y_ende - zy + 1) // 3)
+            erst = max(0, min(sel_idx, len(eintr) - 1) - platz + 1)
         for k, t in enumerate(eintr):
+            if k < erst:
+                continue
             zeit = _a_zeit(t)
             if zy + (2 if zeit else 1) > y_ende:
                 break
             r = _rolle(t)
+            inv = INV if (hier and k == sel_idx) else ""
             if zeit:
                 mark = "*" if t["routine"] else "-"
-                lw.setze(zy, cx + 1, "%s %s" % (mark, zeit),
-                         r if t["spanne"] else ROLLE["zeit"])
+                txt = "%s %s" % (mark, zeit)
+                lw.setze(zy, cx + 1, txt + (" " * (cw - 1 - text_breite(txt)) if inv else ""),
+                         (r if t["spanne"] else ROLLE["zeit"]) + inv)
                 zy += 1
             titel = ("✗ " if t["aus"] else "") + t["label"]
-            lw.setze(zy, cx + 3, kuerzen(titel, cw - 3), r)
+            titel = kuerzen(titel, cw - 3)
+            lw.setze(zy, cx + 1 if inv else cx + 3,
+                     ("  " + titel + " " * (cw - 3 - text_breite(titel))) if inv else titel,
+                     r + inv)
             zy += 2                          # Luft zwischen Terminen, wie calcurse
         if i < n - 1:
             lw.setze(y0 + bh - 1, cx - 1, "─" * (cw + 2), ROLLE["rahmen"])
 
 
-def _a_monat(lw, y, x, w, daten, ab, heute, erledigte) -> int:
+def _a_monat(lw, y, x, w, daten, ab, heute, erledigte, aw=None) -> int:
     """calcurse-Kalender: Monat mittig, Wochentage und Kalenderwochen in
     Akzentfarbe, heute als [ 7]. Spannen-Tage in Spannenfarbe, Tage mit
     Terminen hell. Liefert die Höhe."""
-    erster = ab.replace(day=1)
+    erster = (_datum((aw or {}).get("tag")) or ab).replace(day=1)
     letzter = (erster.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
     g0 = erster - timedelta(days=erster.weekday())
     wochen = ((letzter - g0).days // 7) + 1
     h = 3 + 2 + wochen + 1
-    yy = _paneel(lw, y, x, w, h, "Kalender")
+    aw = aw or {}
+    yy = _paneel(lw, y, x, w, h, "Kalender", aktiv=aw.get("fokus") == "kalender")
+    sel = _datum(aw.get("tag"))
     ak = _a_rolle("a_akzent")
     titel = "%s %d" % (MONATE[erster.month - 1], erster.year)
     lw.setze(yy, x + (w - text_breite(titel)) // 2, titel, ak)
@@ -550,44 +587,52 @@ def _a_monat(lw, y, x, w, daten, ab, heute, erledigte) -> int:
         for c in range(7):
             d = mo + timedelta(days=c)
             xx = x0 + 4 + c * 4
+            inv = INV if (sel is not None and d == sel) else ""
             if d == heute:
-                lw.setze(yy + 2 + wi, xx, "[%2d]" % d.day, ROLLE["heute"])
+                lw.setze(yy + 2 + wi, xx, "[%2d]" % d.day, ROLLE["heute"] + inv)
                 continue
             if d.month != erster.month:
                 r = ROLLE["rahmen"]
             elif d in span_tage:
                 r = ROLLE["spanne"]
+            elif _a_zyklus(daten, d):
+                r = ROLLE["zyklus"]
             elif _tag_eintraege(daten, d.isoformat(), erledigte):
                 r = ROLLE["termin"]
             else:
                 r = ROLLE["routine"]
-            lw.setze(yy + 2 + wi, xx + 1, "%2d" % d.day, r)
+            lw.setze(yy + 2 + wi, xx + 1, "%2d" % d.day, r + inv)
     return h
 
 
-def _a_todo(lw, y, x, w, h, daten, erledigte):
-    """Wo calcurse „TODO" hat: die offenen Punkte der Wochenliste, die
-    /api/calendar ohnehin als `weekplan` mitliefert — nummeriert wie dort.
-    Abgehakte nur mit `erledigte`."""
-    yy = _paneel(lw, y, x, w, h, "TODO")
+def _a_todo(lw, y, x, w, h, daten, erledigte, aw=None):
+    """Wo calcurse „TODO" hat: die Wochenliste, die /api/calendar ohnehin
+    als `weekplan` mitliefert — nummeriert, erledigte mit „X" statt Nummer
+    (wie calcurse). Die gewählte Aufgabe steht invertiert."""
+    aw = aw or {}
+    an = aw.get("fokus") == "todo"
+    yy = _paneel(lw, y, x, w, h, "TODO", aktiv=an)
     cx, cw = x + 2, w - 4
     unten = y + h - 1
     wp = daten.get("weekplan")
     items = wp.get("items") if isinstance(wp, dict) else None
-    items = [i for i in (items if isinstance(items, list) else [])
-             if isinstance(i, dict) and (erledigte or not i.get("done"))]
+    items = [i for i in (items if isinstance(items, list) else []) if isinstance(i, dict)]
     if not items and yy < unten:
-        lw.setze(yy, cx, "nichts offen", ROLLE["leer"])
+        lw.setze(yy, cx, "nichts zu tun · a legt an" if an else "nichts zu tun",
+                 ROLLE["leer"])
+    sel = aw.get("tidx", 0)
+    erst = max(0, sel - (unten - yy) + 1) if an else 0
     for k, it in enumerate(items):
+        if k < erst:
+            continue
         if yy >= unten:
             break
-        if yy == unten - 1 and k < len(items) - 1:
-            lw.setze(yy, cx, "… +%d" % (len(items) - k), ROLLE["leer"])
-            break
-        nr = "%d. " % (k + 1)
-        lw.setze(yy, cx, nr, _a_rolle("a_akzent"))
-        lw.setze(yy, cx + len(nr), kuerzen(str(it.get("text") or ""), cw - len(nr)),
-                 ROLLE["aus"] if it.get("done") else ROLLE["routine"])
+        inv = INV if (an and k == sel) else ""
+        nr = "X. " if it.get("done") else "%d. " % (k + 1)
+        txt = kuerzen(str(it.get("text") or ""), cw - len(nr))
+        lw.setze(yy, cx, nr, _a_rolle("a_akzent") + inv)
+        lw.setze(yy, cx + len(nr), txt + (" " * (cw - len(nr) - text_breite(txt)) if inv else ""),
+                 (ROLLE["aus"] if it.get("done") else ROLLE["routine"]) + inv)
         yy += 1
 
 

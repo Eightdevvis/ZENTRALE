@@ -194,6 +194,7 @@ class Dialog:
         self.i = -1
         self.eingabe = ""
         self.fehler = ""
+        self._u8 = b""          # angefangenes UTF-8-Zeichen (curses liefert Bytes)
         self._weiter()
 
     def _weiter(self):
@@ -240,9 +241,21 @@ class Dialog:
             return "fertig" if self.fertig else "weiter"
         if ch in (8, 127, 263):           # Backspace (263 = curses.KEY_BACKSPACE)
             self.eingabe = self.eingabe[:-1]
+            self._u8 = b""
         elif ch == 21:                    # Strg-U: Zeile leeren
             self.eingabe = ""
-        elif 32 <= ch < 0x110000 and ch not in range(256, 512):
+        elif 0x80 <= ch <= 0xFF:          # Umlaute: getch liefert UTF-8 Byte für Byte
+            self._u8 += bytes([ch])
+            try:
+                zeichen = self._u8.decode("utf-8")
+            except UnicodeDecodeError:
+                if len(self._u8) >= 4:
+                    self._u8 = b""
+                return "weiter"
+            self._u8 = b""
+            if len(self.eingabe) < 200:
+                self.eingabe += zeichen
+        elif 32 <= ch < 0x80:
             if len(self.eingabe) < 200:
                 self.eingabe += chr(ch)
         return "weiter"

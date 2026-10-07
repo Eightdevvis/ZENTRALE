@@ -22,8 +22,8 @@ def tippe(d, *eingaben):
             d.taste(ord(e))
         else:
             d.eingabe = ""
-            for ch in e:
-                d.taste(ord(ch))
+            for b in e.encode("utf-8"):      # wie curses: Byte für Byte
+                d.taste(b)
             d.taste(10)
     return d
 
@@ -94,6 +94,11 @@ def test_anlegen_ganztags_mehrere_tage():
     tippe(d, "", "3", "Urlaub")
     assert d.plan()["aufrufe"] == [("POST", "/api/calendar/spanne", {
         "von": "2026-10-07", "bis": "2026-10-09", "label": "Urlaub"})]
+
+
+def test_umlaute_kommen_heil_an():
+    d = tippe(kw.dialog_anlegen(TAG), "", "", "Gießen bei Müller")
+    assert d.plan()["aufrufe"][0][2]["label"] == "Gießen bei Müller"
 
 
 def test_falsche_eingabe_bleibt_stehen():

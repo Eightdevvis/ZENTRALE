@@ -43,6 +43,8 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/kalender.py` | `Kalender`: Woche/Monat, Formular, Routinen, Sidebar | `K` |
 | `ansichten/kalender_ansichten.py` | Entwürfe A/B/C als reine Funktionen (Daten rein → Zeilen raus, kein curses); im Kalender per `v` eingehängt (`_kal_stil`), siehe [kalender_ansichten_vorschau.md](../werkzeuge/kalender_ansichten_vorschau.md) | — |
 | `ansichten/kalender_beispiel.py` | Beispieltermine für Tests und `scripts/kalender_vorschau.py` | — |
+| `ansichten/kalender_werkzeuge.py` | Bearbeiten wie calcurse als reine Logik: Eingaben lesen (Zeit, Dauer, Datum, Wochentage), Dialoge Schritt für Schritt, daraus Backend-Aufrufe; Auswahl in derselben Reihenfolge wie die Ansicht | — |
+| `ansichten/kalender_bedienung.py` | `Bedienung`: Tasten von A (Auswahl Tag/Termin/Kasten, Dialoge ausführen, Kollisions-Rückfrage, Frage-Zeile, Ansehen-Fenster) | `K["w"]` |
 | `ansichten/graphen.py` | `Graphen`: Graph-Werkzeug, Überlagerung (auch lifestyle-Box) | `G` |
 | `ansichten/fokus.py` | `Fokus`: Listen-/Fokus-Werkzeug, Bernsteinleiste, `proj_render` | `L` |
 | `ansichten/notizen.py` | `Notizen`: Notiz-Werkzeug | `NOTE` |
