@@ -73,6 +73,8 @@ blockspark = ansichten.graphen.blockspark
 bar = ansichten.fokus.bar
 fmt_uptime, tele_value = ansichten.technik.fmt_uptime, ansichten.technik.tele_value
 TELE_ROWS = ansichten.technik.TELE_ROWS
+# Welches Fenster hat den Fokus (Freitext? welche Tastenhilfe?): ansichten/fenster.py
+in_text_entry, current_ctx = ansichten.fenster.in_text_entry, ansichten.fenster.current_ctx
 LAUF_TICK_MS = ansichten.technik.LAUF_TICK_MS   # Takt der Schleife, während eine Zeile läuft
 BEENDEN = ansichten.basis.BEENDEN       # 'q' aus einer Ansicht: Hauptschleife verlassen
 
@@ -694,6 +696,76 @@ def dashboard_datei():
 
 
 # ── curses-UI ───────────────────────────────────────────────────────────────
+def befehl_ausfuehren(res, bz, store, LAUF, DASH, TECH, sprachtutor):
+    """Einen Befehl der Befehlszeile ausführen (Ergebnis von parse_command).
+    -> True, wenn die Hauptschleife enden soll (/quit, /reload, /reboot).
+
+    Bis 06.10.2026 ein Zweig mitten in der Hauptschleife von run_ui. Hier
+    statt in ansichten/befehle.py, weil ein Befehl alles anfassen darf:
+    Hot Reload, Neustart, Backend-Schalter, Laufschrift, Dashboard, Tutor —
+    die Befehlszeile selbst kennt davon nichts."""
+    if res == "QUIT":
+        ENDE["echt"] = True       # wirklich beenden, nicht nur weglegen
+        return True
+    if res == "RELOAD":
+        fehler = code_fehler(code_dateien())
+        if fehler:
+            bz.cmd_msg = "neuer code kaputt, bleibe beim alten: " + fehler
+        else:
+            RELOAD["an"] = True
+            return True
+    if res == "REBOOT":
+        # Nur das Signal setzen und raus — neu aufgebaut wird von
+        # start_tui.sh (siehe NEUSTART_CODE). Ohne Skript drumherum
+        # waere das ein Beenden, kein Neustart: dann lieber sagen.
+        if neustart_moeglich():
+            NEUSTART["an"] = True
+            return True
+        bz.cmd_msg = ("neustart geht nur ueber zentrale-tui "
+                      "(dieses fenster wurde anders gestartet)")
+    if res in ("CLOUD_ON", "CLOUD_OFF", "CLOUD_TOGGLE"):
+        # Cloud-Kill-Switch umlegen (POST ans Backend, front-agnostisch
+        # dieselbe Quelle wie der Browser). Danach EXTERNAL sofort frisch.
+        try:
+            if res == "CLOUD_TOGGLE":
+                on = not store.backends_snapshot().get("cloud_enabled", True)
+            else:
+                on = (res == "CLOUD_ON")
+            st = api_call("/api/ai/backends", "POST", {"cloud_enabled": on})
+            store._poll_backends()
+            bz.cmd_msg = "cloud " + ("AN" if (st or {}).get("cloud_enabled") else "GEDROSSELT")
+        except (urllib.error.URLError, OSError, ValueError):
+            bz.cmd_msg = "cloud-schalter fehlgeschlagen"
+    if res in ("LOCAL_ON", "LOCAL_OFF", "LOCAL_TOGGLE"):
+        # Lokal-Kill-Switch umlegen (dieselbe Quelle wie /cloud, nur
+        # local_enabled). Danach EXTERNAL sofort frisch.
+        try:
+            if res == "LOCAL_TOGGLE":
+                on = not store.backends_snapshot().get("local_enabled", True)
+            else:
+                on = (res == "LOCAL_ON")
+            st = api_call("/api/ai/backends", "POST", {"local_enabled": on})
+            store._poll_backends()
+            bz.cmd_msg = "lokale ki " + ("AN" if (st or {}).get("local_enabled") else "GEDROSSELT")
+        except (urllib.error.URLError, OSError, ValueError):
+            bz.cmd_msg = "lokal-schalter fehlgeschlagen"
+    if res in ("LAUF_ON", "LAUF_OFF", "LAUF_TOGGLE"):
+        LAUF["an"] = (not LAUF["an"]) if res == "LAUF_TOGGLE" else (res == "LAUF_ON")
+        lauf_schreiben(LAUF["an"])
+        bz.cmd_msg = "stdout-lauf " + ("an" if LAUF["an"] else "aus")
+    if res in ("DASH_ON", "DASH_OFF", "DASH_TOGGLE"):
+        DASH["an"] = (not DASH["an"]) if res == "DASH_TOGGLE" else (res == "DASH_ON")
+        schalter_schreiben(dashboard_datei(), DASH["an"])
+        TECH["active"] = False     # gibt es im alten Layout nicht
+        bz.cmd_msg = "dashboard " + ("an (3 spalten)" if DASH["an"] else "aus (meta-rad)")
+    if res == "TUTOR_OPEN":
+        # Panel öffnen wie Taste 'u': Status holen + falls Backend da
+        # und keine Session, die Persona SOFORT loslegen lassen.
+        sprachtutor.oeffnen_panel()
+        bz.cmd_msg = "tutor"
+    return False
+
+
 def run_ui(stdscr, store):
     import curses
 
@@ -759,90 +831,12 @@ def run_ui(stdscr, store):
     z.LAUF = LAUF            # draw_stdout (ansichten/technik.py) liest den Wunsch
 
 
-
     # ── Elektronik (Mitte, aus dem Rad) — Sasha 03.10.2026: neuer Bereich,
     # bleibt erst mal leer; der Auftritt ist das Pixel-Symbol im Rad.
-    ELEK = {"active": False}
+    ELEK = z.ELEK = {"active": False}
     # Altes 3-Spalten-Dashboard als Backup (/dashboard an). Aus = Meta-Rad.
     DASH = {"an": schalter_lesen(dashboard_datei(), False)}
 
-
-    def in_text_entry():
-        """Tippt der Nutzer gerade einen Freitext (Name, Eintrag, Antwort)?
-        Dann bleibt '/' ein normales Zeichen und öffnet NICHT die Befehlszeile."""
-        if G["active"]:
-            return G["view"] in ("new", "view", "remind")   # Name/Wert/Reminder-Uhrzeit
-        if L["active"]:
-            return L["adding"] or L["view"] == "move_new"
-        if K["active"]:
-            # Termin/Routine anlegen+bearbeiten ODER Sidebar-Item neu/umbenennen
-            return K["mode"] == "add" or K["linput"] is not None
-        if MAIL["active"]:
-            return MAIL["replying"]
-        if NOTE["active"]:
-            # Ebene 2 (Block bearbeiten) oder Titel tippen → Freitext, '/' literal.
-            return NOTE["layer"] == 2 or NOTE["titling"]
-        if PIANO["active"]:
-            # Beim Namen-Tippen ist '/' ein Zeichen; sonst ist die ganze
-            # Tastatur Klaviatur — die Befehlszeile hat da nichts verloren.
-            return True
-        if AI["active"]:
-            # Ganzes Panel ist Prompt-Eingabe → '/' bleibt ein Zeichen, öffnet
-            # nicht die Befehlszeile. (Bei offener Erlaubnis-Frage ignoriert der
-            # AI-Zweig alles außer j/n/Zahl/esc.)
-            return True
-        if TUTOR["active"]:
-            # Ganze Zeile ist Eingabe (reden ODER '/befehl') → '/' bleibt ein
-            # Zeichen, die Tutor-Zeile parst Slash-Befehle selbst (Browser-Konsole).
-            return True
-        return False
-
-    def current_ctx():
-        """Kontext-Schlüssel des fokussierten Fensters für die '/'-Anzeige.
-        None = Tipp-Screen ohne eigene Shortcut-Liste."""
-        if G["active"]:
-            return "graph" if G["view"] == "list" else None
-        if L["active"]:
-            v = L["view"]
-            if v == "forest" and not L["adding"] and not L["confirm"]:
-                return "list:forest"
-            if v == "view" and not L["adding"]:
-                return "list:view"
-            if v in ("place", "move"):
-                return "list:pick"
-            return None
-        if M["active"]:
-            return "map"
-        if K["active"]:
-            if K["mode"] != "view":
-                return None
-            if K["listfocus"]:
-                return "cal:sort" if K["lsort"] else "cal:list"
-            return "cal:week" if K["view"] == "week" else "cal:month"
-        if MAIL["active"]:
-            if MAIL["replying"] or MAIL.get("picking"):
-                return None
-            if MAIL["level"] == "cats":
-                return "mail:cats"
-            return "mail:read" if MAIL["mode2"] == "read" else "mail:list"
-        if AI["active"]:
-            return "ai"
-        if TUTOR["active"]:
-            return "tutor"
-        if PIANO["active"]:
-            return "piano"
-        if ELEK["active"]:
-            return "elektronik"
-        if TECH["active"]:
-            return "technik"
-        if NOTE["active"]:
-            # Ebene 2 / Titel-Eingabe sind Freitext → '/' ist dort ein Zeichen,
-            # das Overlay geht gar nicht erst auf (siehe in_text_entry). Bleibt
-            # Ebene 1 (block-navigation) bzw. die Übersicht.
-            if NOTE["titling"] or NOTE["layer"] == 2:
-                return None
-            return "note:list" if NOTE["view"] == "list" else "note:edit"
-        return "home"
 
     chat = ansichten.chat.Chat(z)
     AI = chat.AI
@@ -892,7 +886,7 @@ def run_ui(stdscr, store):
             if code_neu != code_alt:
                 if code_neu != code_kandidat:
                     code_kandidat = code_neu
-                elif not (in_text_entry() or bz.cmd_mode or AI["streaming"]
+                elif not (in_text_entry(z) or bz.cmd_mode or AI["streaming"]
                           or TUTOR["streaming"]):
                     fehler = code_fehler(code_dateien())
                     if fehler:
@@ -926,70 +920,13 @@ def run_ui(stdscr, store):
                 bz.help_latched = False
         elif bz.cmd_mode:
             # Tippen, Esc, Backspace erledigt die Befehlszeile; bei Enter
-            # kommt das Ergebnis von parse_command zurück und wird HIER
-            # ausgeführt (dafür muss man Backend, Fenster und Neustart kennen).
+            # kommt das Ergebnis von parse_command zurück, befehl_ausfuehren
+            # setzt es um (Backend, Fenster, Neustart — siehe dort).
             res = bz.taste(ch)
             if res is not None:
-                if res == "QUIT":
-                    ENDE["echt"] = True       # wirklich beenden, nicht nur weglegen
+                if befehl_ausfuehren(res, bz, store, LAUF, DASH, TECH, sprachtutor):
                     break
-                if res == "RELOAD":
-                    fehler = code_fehler(code_dateien())
-                    if fehler:
-                        bz.cmd_msg = "neuer code kaputt, bleibe beim alten: " + fehler
-                    else:
-                        RELOAD["an"] = True
-                        break
-                if res == "REBOOT":
-                    # Nur das Signal setzen und raus — neu aufgebaut wird von
-                    # start_tui.sh (siehe NEUSTART_CODE). Ohne Skript drumherum
-                    # waere das ein Beenden, kein Neustart: dann lieber sagen.
-                    if neustart_moeglich():
-                        NEUSTART["an"] = True
-                        break
-                    bz.cmd_msg = ("neustart geht nur ueber zentrale-tui "
-                               "(dieses fenster wurde anders gestartet)")
-                if res in ("CLOUD_ON", "CLOUD_OFF", "CLOUD_TOGGLE"):
-                    # Cloud-Kill-Switch umlegen (POST ans Backend, front-agnostisch
-                    # dieselbe Quelle wie der Browser). Danach EXTERNAL sofort frisch.
-                    try:
-                        if res == "CLOUD_TOGGLE":
-                            on = not store.backends_snapshot().get("cloud_enabled", True)
-                        else:
-                            on = (res == "CLOUD_ON")
-                        st = api_call("/api/ai/backends", "POST", {"cloud_enabled": on})
-                        store._poll_backends()
-                        bz.cmd_msg = "cloud " + ("AN" if (st or {}).get("cloud_enabled") else "GEDROSSELT")
-                    except (urllib.error.URLError, OSError, ValueError):
-                        bz.cmd_msg = "cloud-schalter fehlgeschlagen"
-                if res in ("LOCAL_ON", "LOCAL_OFF", "LOCAL_TOGGLE"):
-                    # Lokal-Kill-Switch umlegen (dieselbe Quelle wie /cloud, nur
-                    # local_enabled). Danach EXTERNAL sofort frisch.
-                    try:
-                        if res == "LOCAL_TOGGLE":
-                            on = not store.backends_snapshot().get("local_enabled", True)
-                        else:
-                            on = (res == "LOCAL_ON")
-                        st = api_call("/api/ai/backends", "POST", {"local_enabled": on})
-                        store._poll_backends()
-                        bz.cmd_msg = "lokale ki " + ("AN" if (st or {}).get("local_enabled") else "GEDROSSELT")
-                    except (urllib.error.URLError, OSError, ValueError):
-                        bz.cmd_msg = "lokal-schalter fehlgeschlagen"
-                if res in ("LAUF_ON", "LAUF_OFF", "LAUF_TOGGLE"):
-                    LAUF["an"] = (not LAUF["an"]) if res == "LAUF_TOGGLE" else (res == "LAUF_ON")
-                    lauf_schreiben(LAUF["an"])
-                    bz.cmd_msg = "stdout-lauf " + ("an" if LAUF["an"] else "aus")
-                if res in ("DASH_ON", "DASH_OFF", "DASH_TOGGLE"):
-                    DASH["an"] = (not DASH["an"]) if res == "DASH_TOGGLE" else (res == "DASH_ON")
-                    schalter_schreiben(dashboard_datei(), DASH["an"])
-                    TECH["active"] = False     # gibt es im alten Layout nicht
-                    bz.cmd_msg = "dashboard " + ("an (3 spalten)" if DASH["an"] else "aus (meta-rad)")
-                if res == "TUTOR_OPEN":
-                    # Panel öffnen wie Taste 'u': Status holen + falls Backend da
-                    # und keine Session, die Persona SOFORT loslegen lassen.
-                    sprachtutor.oeffnen_panel()
-                    bz.cmd_msg = "tutor"
-        elif ch == ord("/") and not in_text_entry():
+        elif ch == ord("/") and not in_text_entry(z):
             # '/' greift JETZT in jedem Fenster (nicht nur Home): blendet die
             # Shortcuts des fokussierten Fensters ein. In Freitext-Feldern bleibt
             # '/' ein Zeichen (siehe in_text_entry), darum hier das Guard.
@@ -1114,7 +1051,7 @@ def run_ui(stdscr, store):
 
         # Graph-Reminder: ist heute was fällig (und noch nicht weggeklickt), das
         # Nag-Kästchen aufmachen — aber nicht mitten in Tipperei/Overlay/Dialog.
-        if (not erinnerung.nag_active and not in_text_entry() and not bz.cmd_mode
+        if (not erinnerung.nag_active and not in_text_entry(z) and not bz.cmd_mode
                 and not bz.help_latched):
             erinnerung.pruefen(store)
 
@@ -1271,7 +1208,7 @@ def run_ui(stdscr, store):
 
         # ── Befehls-Overlay (klappt über den Body nach oben auf) ──────────
         if bz.cmd_mode or bz.help_latched:
-            bz.zeichne_overlay(current_ctx(), top, bot, W)
+            bz.zeichne_overlay(current_ctx(z), top, bot, W)
 
         # ── Trennlinie + Befehlszeile (›) ─────────────────────────────────
         safe_addstr(sep_row, 0, "─" * W, C["faint"])
@@ -1293,7 +1230,7 @@ def run_ui(stdscr, store):
         # Rad): nur noch die vier Tasten, die überall gelten. Eine KI-Antwort,
         # die im Hintergrund fertig wurde, meldet sich hier mit ●.
         ki = "space ki" + (" ●" if AI.get("neu") else "")
-        if DASH["an"] or current_ctx() != "home":
+        if DASH["an"] or current_ctx(z) != "home":
             fuss = " ←→ drehen · enter öffnen · %s · esc zurück" % ki
         else:
             fuss = " ←→ drehen · alt+←→ rad wechseln · enter öffnen · %s · esc zu" % ki
