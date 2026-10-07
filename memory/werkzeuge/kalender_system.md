@@ -490,7 +490,7 @@ umschaltbar. Geteilte, front-agnostische Quelle (wie die Maps):
   `entries_in_range` (Routinen expandiert, `ausfall` bei Ferien). Monatsnamen:
   `_MONTHS_FULL_DE`. Datums-Arithmetik in Python, nie in der Front.
 - **Drei Fronten, ein Endpoint:**
-  - *TUI* (`tui/zentrale_tui.py`): Mittelbox-Modus `c` neben `g`/`m`. `←→`/`hl`
+  - *TUI* (`tui/ansichten/kalender.py`): Mittelbox-Modus `c` neben `g`/`m`. `←→`/`hl`
     blättern, `v`/Tab schaltet Woche↔Monat, `0` springt zu heute, `esc`/`c` zu.
     Woche = Tagesliste, Monat = Braille-freies Zeichen-Gitter. Defensiv wie der
     Karten-Pfad (Fehler-Marker statt Dauer-Refetch; `_for`-Tag gegen Refetch je
@@ -540,7 +540,7 @@ Anzeige-/Interaktions-Pfad:
   transparenter (sichtbar ab ~4 Items, verblasst in den Hintergrund). TUI: eigene
   256-Grau-Rampe pro Theme (`C["ombre"]`, verblasst Richtung bg; Mono/8-Farb-
   Fallback = A_DIM-Stufen). Browser: `opacity` pro Item (`1 − idx·0.14`, Boden 0.38).
-- **TUI** (`tui/zentrale_tui.py`): rechte Spalte ist EINE flache Liste über die
+- **TUI** (`tui/ansichten/kalender.py`): rechte Spalte ist EINE flache Liste über die
   volle Höhe (`k_sidebar_items()`/`k_sidebar_lid()`), Trenner `│`. **Taste `l`**
   (aus „nächste Periode" gelöst; nächste Periode nur noch `→`) schiebt den Fokus
   in die Sidebar (`K["listfocus"]`, ‹fokus›, erstes Item). Dort: `↑↓` wählen,
@@ -677,7 +677,7 @@ aufgeräumt, der Toggle blendet alles **ein**.
   (neben „＋ Termin"), Zustand `CS.showHidden`. `dayList()` filtert `deaktiviert`
   **und** `ausfall`, `planItems()` filtert `done` in der Sidebar (alle nur solange
   `!showHidden`). Toggle ruft nur `render()` (kein Reload).
-- **TUI** (`tui/zentrale_tui.py`): Taste **`x`** im Kalender (`K["showhidden"]`).
+- **TUI** (`tui/ansichten/kalender.py`): Taste **`x`** im Kalender (`K["showhidden"]`).
   **Wichtig:** `k_selectable()` UND der Wochen-Render überspringen versteckte
   deaktivierte Einträge an der **exakt gleichen** Stelle (vor `di += 1`), sonst
   zeigt der ›-Cursor auf den falschen Termin. `ausfall`-Einträge sind ohnehin nie

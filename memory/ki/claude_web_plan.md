@@ -119,10 +119,12 @@ Prompt-Bau hängt dessen Anweisungen hinter den Gedächtnis-Kopf.
 - **Code ausführen** heißt: das Modell startet Programme auf Sashas Rechner.
   Wenn überhaupt, nur in einer Sandbox ohne Netz und ohne `data/` — eigene
   Entscheidung, nicht Teil der ersten Phasen.
-- **Der Riese.** Das Chatfeld steckt heute in `tui/zentrale_tui.py`
-  (~10 000 Zeilen). Erst wenn die TUI-Zerlegung (#21) gemerged ist, bekommt
-  der Chat ein eigenes Modul — vorher würde jede Funktion den Riesen weiter
-  füttern, und der Leitplanken-Test sperrt das zu Recht.
+- **Der Riese.** Das Chatfeld steckte in `tui/zentrale_tui.py`
+  (~10 000 Zeilen). Die TUI-Zerlegung (#21, Branch
+  `worktree-agent-ac95c51a142500eaa-auf-main`) gibt dem Chat sein eigenes
+  Modul `tui/ansichten/chat.py` (Klasse `Chat`, siehe
+  `memory/system/tui_bauplan.md`); erst nach dem Merge dort weiterbauen —
+  vorher würde jede Funktion den Riesen weiter füttern.
 
 ## 5. Reihenfolge
 

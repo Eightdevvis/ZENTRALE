@@ -510,11 +510,11 @@ Die KI schreibt Markdown — der Prompt erlaubt ihr Listen ausdrücklich,
 Überschriften benutzt sie von selbst. Gezeichnet wurde bis 18.08.2026 der
 **Rohtext**: im KI-Kasten stand `**fett**` und `## Titel` als Zeichen.
 
-`tui/zentrale_tui.py::md_zeilen(text, breite)` liefert
+`tui/ansichten/text.py::md_zeilen(text, breite)` liefert
 `[(zeile, stil)]` mit `stil` aus `{"", "kopf", "code", "liste"}`. Der Stil
 ist absichtlich ein **Wort** und keine curses-Konstante: so bleibt die
 Funktion rein und ohne Terminal testbar, und über Farben entscheidet allein
-der Zeichner (`draw_ai`). Sie liegt auf Modulebene und fällt damit unter
+der Zeichner (`Chat.draw_ai` in `tui/ansichten/chat.py`). Sie liegt auf Modulebene und fällt damit unter
 dieselbe „darf NIE werfen"-Eigenschaft wie die übrigen TUI-Helfer.
 
 - Umgesetzt: Überschriften, Aufzählungen (mit **hängendem Einzug** — eine
