@@ -301,7 +301,7 @@ Sasha begleitet jeden Schritt und gibt die Details vor.
 lokale KI). `aspect` = Zellbreite/Höhe: TUI schickt `0.5` (Zeichen ~doppelt so
 hoch wie breit), ein Browser-Front später `1.0`.
 
-**TUI-Renderer (`tui/zentrale_tui.py`, Taste `m`):** füllt die MITTE-Box mit
+**TUI-Renderer (`tui/ansichten/karte.py`, Taste `m`):** füllt die MITTE-Box mit
 der Karte (analog zum Graph-Werkzeug `g`). Die TUI ist **reiner Zeichner** —
 sie hält nur den Viewport (`M = {cx, cy, zoom, data, grid}`), holt die Linien
 synchron über `/api/map/base` (bei Öffnen/Pan/Zoom/Resize) und rastert sie per
@@ -348,7 +348,8 @@ der Layer sauber „keine Daten" (graceful). Tests: `tests/test_map_political.py
 **OFFEN Schritt 2:** (a) **Front-Toggle** — es gibt in KEINER Front einen
 Layer-/Sub-Wähler (sogar `trade` hängt an einem hartcodierten Slot). TUI zeichnet
 Punkte/Linien generisch (neue `cat` rendern als `◆`); nötig für Sichtbarkeit ist
-nur die hartcodierte URL `tui/zentrale_tui.py:1579` (`/api/map/layer/trade`) →
+nur die hartcodierte URL in `tui/ansichten/karte.py` (`m_fetch_overlay`, `/api/map/layer/…`;
+⚠ prüfen: seit `OVERLAY_CYCLE` trade → political zykliert, ist der Slot nicht mehr nur `trade`) →
 parametrisieren + Sub-Toggle-UI. Native `scripts/map_window.py` braucht eigenen
 Zeichen-Code. (b) **Achse 3 (Zeitstrahl)** — `at` wird schon durchgereicht, aber
 ignoriert; UCDP (1989–) + VIINA (2022–) + CShapes 2.0 (1886–2019, historische
