@@ -43,6 +43,7 @@ import atexit
 import json
 import time
 import threading
+import types
 import queue
 from datetime import date, timedelta
 import subprocess
@@ -766,6 +767,347 @@ def befehl_ausfuehren(res, bz, store, LAUF, DASH, TECH, sprachtutor):
     return False
 
 
+def taste_verteilen(u, ch):
+    """Eine Taste an das Fenster mit dem Fokus (früher die erste Hälfte der
+    Hauptschleife von run_ui). -> BEENDEN, wenn die TUI enden soll."""
+    import curses
+    AI, DASH, ELEK, G, K, L, LAUF, M = u.AI, u.DASH, u.ELEK, u.G, u.K, u.L, u.LAUF, u.M
+    MAIL, NOTE, PIANO, TECH, TUTOR, bz = u.MAIL, u.NOTE, u.PIANO, u.TECH, u.TUTOR, u.bz
+    chat, erinnerung, fokus, graphen = u.chat, u.erinnerung, u.fokus, u.graphen
+    kalender, karte, klavier, notizen = u.kalender, u.karte, u.klavier, u.notizen
+    post, sprachtutor, store, z = u.post, u.sprachtutor, u.store, u.z
+    if erinnerung.nag_active:              # Reminder-Kästchen offen: jede Taste klickt weg
+        erinnerung.taste(ch)
+    elif bz.help_latched:
+        if ch != -1:                       # jede Taste schließt die Hilfe wieder
+            bz.help_latched = False
+    elif bz.cmd_mode:
+        # Tippen, Esc, Backspace erledigt die Befehlszeile; bei Enter
+        # kommt das Ergebnis von parse_command zurück, befehl_ausfuehren
+        # setzt es um (Backend, Fenster, Neustart — siehe dort).
+        res = bz.taste(ch)
+        if res is not None:
+            if befehl_ausfuehren(res, bz, store, LAUF, DASH, TECH, sprachtutor):
+                return BEENDEN
+    elif ch == ord("/") and not in_text_entry(z):
+        # '/' greift JETZT in jedem Fenster (nicht nur Home): blendet die
+        # Shortcuts des fokussierten Fensters ein. In Freitext-Feldern bleibt
+        # '/' ein Zeichen (siehe in_text_entry), darum hier das Guard.
+        bz.oeffnen()
+    elif G["active"]:                      # Graph-Werkzeug hat den Fokus
+        if graphen.taste(ch) == BEENDEN:
+            return BEENDEN
+    elif L["active"]:                      # Listen-Werkzeug hat den Fokus
+        if fokus.taste(ch) == BEENDEN:
+            return BEENDEN
+    elif M["active"]:                      # Karte hat den Fokus
+        if karte.taste(ch) == BEENDEN:
+            return BEENDEN
+    elif K["active"]:                      # Kalender hat den Fokus
+        if kalender.taste(ch) == BEENDEN:
+            return BEENDEN
+    elif MAIL["active"] and MAIL["replying"]:   # Antwort-Editor hat den Fokus
+        post.taste_antwort(ch)
+    elif MAIL["active"]:                   # Post/Mail-Panel hat den Fokus
+        if post.taste(ch) == BEENDEN:
+            return BEENDEN
+    elif NOTE["active"]:                   # Notiz-Werkzeug hat den Fokus
+        if notizen.taste(ch) == BEENDEN:
+            return BEENDEN
+    elif ELEK["active"]:                   # Elektronik-Bereich hat den Fokus
+        if ch == 27:
+            ELEK["active"] = False
+    elif TECH["active"]:                   # Technik-Ansicht hat den Fokus
+        if ch == 27:
+            TECH["active"] = False
+    elif PIANO["active"]:                  # Klavier hat den Fokus
+        klavier.taste(ch)
+    elif TUTOR["active"]:                  # Sprach-Tutor hat den Fokus
+        sprachtutor.taste(ch)
+    elif AI["active"]:                     # KI-Chat hat den Fokus
+        chat.taste(ch)
+    else:                                  # Startseite: das Rad
+        # Seit 02.10.2026 keine Buchstaben-Shortcuts mehr (Sasha): ←/→
+        # dreht, enter öffnet die App vorn, space die KI. Theme, Laufschrift
+        # und Beenden gehen über die Befehlszeile (/theme, /lauf, /quit),
+        # Weglegen über Cmd+z. `taste` übersetzt die Wahl in den alten
+        # Buchstaben, damit die Öffnen-Zweige unten unverändert bleiben.
+        taste = None
+        if not DASH["an"]:
+            # Galaxie (seit 03.10.2026): ←/→ dreht das gewählte Rad,
+            # alt+←/→ wechselt das Rad (dieselbe Alt-Erkennung wie die Karte).
+            was = {curses.KEY_LEFT: "links", curses.KEY_RIGHT: "rechts",
+                   10: "enter", 13: "enter", curses.KEY_ENTER: "enter"}.get(ch)
+            if was is None:
+                alt = karte.m_alt_arrow(ch)
+                if alt == "esc":                   # Esc allein: ZENTRALE zuklappen
+                    fenster_zuklappen()
+                was = {"left": "alt_links", "right": "alt_rechts"}.get(alt)
+            if ch == ord(" "):
+                taste = "a"
+            elif was:
+                wahl = meta_taste(META, RAD, TRAD, was)
+                if wahl and wahl[0] == "app":
+                    taste = wahl[1]
+                elif wahl:
+                    TECH["active"] = True; TECH["view"] = wahl[1]
+        elif ch == 27:                         # altes Dashboard: Esc klappt auch zu
+            fenster_zuklappen()
+        elif ch == curses.KEY_LEFT:
+            RAD["sel"] -= 1; rad_anstoss(RAD, -1)
+        elif ch == curses.KEY_RIGHT:
+            RAD["sel"] += 1; rad_anstoss(RAD, 1)
+        elif ch == ord(" "):
+            taste = "a"
+        elif ch in (10, 13, curses.KEY_ENTER):
+            taste = RAD_APPS[rad_index(RAD["sel"])][0]
+        ch = ord(taste) if taste else -1
+        if ch in (ord("g"), ord("G")):     # Graph-Werkzeug öffnen
+            graphen.oeffnen()
+        elif ch in (ord("m"), ord("M")):   # Karte öffnen
+            karte.oeffnen()
+        elif ch in (ord("c"), ord("C")):   # Kalender öffnen
+            kalender.oeffnen()
+        elif ch in (ord("p"), ord("P")):   # Post/Mail-Panel öffnen (Ebene Kategorien)
+            post.oeffnen()
+        elif ch in (ord("a"), ord("A")):   # KI-Chat öffnen (Thin-Client übers PC-Hirn)
+            chat.oeffnen()
+        elif ch in (ord("u"), ord("U")):   # 'u' öffnet DIREKT das Persona-Zimmer (natives Fenster)
+            if os.environ.get("ZENTRALE_ROOM_PARENT"):
+                # Die TUI wurde AUS dem Zimmer heraus geöffnet (Wand-Kiosk,
+                # room.py Alt+Z): das Zimmer liegt darunter und läuft weiter.
+                # 'u' heißt hier »zurück ins Zimmer« — TUI zu, kein zweites
+                # Zimmer, das sich mit dem ersten ums Mikro streitet.
+                return BEENDEN
+            sprachtutor.oeffnen()
+        elif ch in (ord("n"), ord("N")):   # Notiz-Werkzeug öffnen (direkt in eine Notiz)
+            notizen.oeffnen()
+        elif ch in (ord("k"), ord("K")):   # Klavier öffnen (wie im Browser: k)
+            klavier.oeffnen()
+        elif ch in (ord("e"), ord("E")):   # Elektronik-Bereich (noch leer)
+            ELEK["active"] = True
+        elif ch in (ord("f"), ord("F")):   # Fokus-Werkzeug öffnen (primäre Taste)
+            fokus.oeffnen()
+        # '/' wird global oben abgefangen (greift in JEDEM Fenster), darum
+        # hier kein eigener Zweig mehr.
+
+
+def bild_zeichnen(u):
+    """Ein Bild: Daten holen, Kopf, Spalten, Mitte, Befehlszeile, Fuß,
+    Reminder (früher die zweite Hälfte der Hauptschleife von run_ui)."""
+    import curses
+    AI, C, DASH, ELEK, G, K, L, LAUF = u.AI, u.C, u.DASH, u.ELEK, u.G, u.K, u.L, u.LAUF
+    M, MAIL, NOTE, PIANO, PIX, TECH = u.M, u.MAIL, u.NOTE, u.PIANO, u.PIX, u.TECH
+    TUTOR, addclip, bz, chat, dashboard = u.TUTOR, u.addclip, u.bz, u.chat, u.dashboard
+    draw_box, erinnerung, fokus, graphen = u.draw_box, u.erinnerung, u.fokus, u.graphen
+    kalender, karte, klavier, notizen = u.kalender, u.karte, u.klavier, u.notizen
+    post, safe_addstr, sprachtutor = u.post, u.safe_addstr, u.sprachtutor
+    startseite, stdscr, store, technik, z = u.startseite, u.stdscr, u.store, u.technik, u.z
+    # Weiche Kamerafahrt zum fokussierten Land (eine Ease-Stufe pro Frame).
+    if M["active"] and M.get("anim"):
+        karte.m_anim_step()
+
+    state, metrics, connected = store.snapshot()
+    gs_cache, gv_cache = store.graphs_snapshot()
+    cyc_cache = store.cycle_snapshot()      # Zyklus-Tönung der lifestyle-Box
+    # Nur der fokussierte Teilbaum ([node] oder []); der Store zieht bereits
+    # /api/projects/focused. Kein Fallback auf alle Projekte — die volle
+    # Übersicht gibt es allein in der Projektansicht (Taste 'f').
+    proj_cache = store.projects_snapshot()
+
+    # Graph-Reminder: ist heute was fällig (und noch nicht weggeklickt), das
+    # Nag-Kästchen aufmachen — aber nicht mitten in Tipperei/Overlay/Dialog.
+    if (not erinnerung.nag_active and not in_text_entry(z) and not bz.cmd_mode
+            and not bz.help_latched):
+        erinnerung.pruefen(store)
+
+    H, W = stdscr.getmaxyx()
+    stdscr.erase()
+    # Pixel-Farbpaare: zu Beginn des Bildes leeren, sobald das Budget halb
+    # verbraucht ist — ein Bild braucht höchstens ~70 je Symbol, so läuft es
+    # nie MITTEN im Bild über. Vorher wurde nur in der Bernsteinleiste
+    # geleert; seit alle Apps animierte Symbole haben, lief es auf der
+    # Startseite voll und alles Neue fiel auf Bernstein-Orange zurück.
+    if PIX["voll"] or len(PIX["pairs"]) > (PIX["top"] - PIX["base"]) // 2:
+        PIX["pairs"].clear(); PIX["voll"] = False
+
+    if terminal_too_small(H, W):
+        safe_addstr(0, 0, "Terminal zu klein (min 60x14).", C["warn"])
+        safe_addstr(1, 0, "q = quit", C["dim"])
+        stdscr.refresh()
+        return
+
+    # ── Header ──────────────────────────────────────────────────────
+    safe_addstr(0, 1, "ZEN", C["bright"] | curses.A_REVERSE)
+    safe_addstr(0, 4, "TRALE", C["acc"])
+    safe_addstr(0, 11, "tui", C["dim"])
+
+    nets = state.get("internet_logs", []) or []
+    if not isinstance(nets, list):
+        nets = []
+    if nets:
+        net_txt, net_attr = "TRAFFIC !", C["warn"]
+    else:
+        net_txt, net_attr = "OFFLINE ✓", C["acc"]
+    clock = time.strftime("%H:%M:%S")
+    up = fmt_uptime(state.get("uptime_s"))
+    if DASH["an"]:
+        right = "NET %s   UP %s   %s" % (net_txt, up, clock)
+        safe_addstr(0, W - len(right) - 1, "NET ", C["dim"])
+        safe_addstr(0, W - len(right) - 1 + 4, net_txt, net_attr)
+        safe_addstr(0, W - len(right) - 1 + 4 + len(net_txt), "   UP %s   %s" % (up, clock), C["dim"])
+    else:                             # Meta-Rad: NET/UP stehen beim Technik-Rad
+        right = clock
+        safe_addstr(0, W - len(right) - 1, clock, C["dim"])
+    if not connected:
+        safe_addstr(0, 26, "[backend ?]", C["warn"] | curses.A_BLINK)
+    pa = peer_anzeige(PEER["d"])
+    if pa:
+        safe_addstr(0, W - len(right) - 1 - len(pa[0]) - 3, pa[0],
+                    C["acc"] if pa[1] else C["dim"])
+    safe_addstr(1, 0, "─" * W, C["faint"])
+
+    # ── Spalten-Geometrie ─────────────────────────────────────────────
+    top = 2
+    footer_row = H - 1                # Tasten-Hinweise
+    input_row = H - 2                 # Befehlszeile (›)
+    sep_row = H - 3                   # Trennlinie + „Luft" nach unten
+    bot = H - 4                       # Body endet hier
+    body_h = bot - top + 1
+    # Im Antwort-Editor wird die MITTE breit gemacht (zwei quadratische
+    # Kästen brauchen Platz) — die Seiten schrumpfen auf ein Minimum, bis
+    # der Editor wieder zu ist.
+    if not DASH["an"]:
+        # Meta-Rad: keine Seitenspalten mehr — eine offene App hat die
+        # ganze Breite, die Startseite teilt sich selbst auf.
+        leftw = rightw = 0
+    elif MAIL["active"] and MAIL["replying"]:
+        leftw = max(16, int(W * 0.16))
+        rightw = max(16, int(W * 0.16))
+    else:
+        leftw = max(24, int(W * 0.28))
+        rightw = max(20, int(W * 0.22))
+    midw = W - leftw - rightw
+    lx, mx, rx = 0, leftw, leftw + midw
+
+    # ── LINKS: telemetrie / stdout (nur altes Dashboard) ───────────
+    # (Sensoren-Panel entfernt 2026-06: kein echter Sensor angeschlossen.
+    #  /api/state.sensors wird weiter gepollt, nur nicht mehr gezeichnet —
+    #  Box zum Wiederanzeigen aus der git-History zurückholen.)
+    laeuft_jetzt = False
+    if DASH["an"]:
+        ext_h = 4
+        technik.draw_external(top, lx, leftw, store.backends_snapshot())
+        tele_h = technik.draw_telemetrie(top + ext_h, lx, leftw, metrics)
+        std_h = body_h - ext_h - tele_h
+        if std_h >= 3:
+            laeuft_jetzt = technik.draw_stdout(top + ext_h + tele_h, lx, std_h, leftw,
+                                       state.get("logs", []) or [])
+
+    if not AI["active"]:
+        AI["auge_t0"] = None                       # nächstes Öffnen: Lider gehen neu auf
+
+    # ── MITTE: Graph-Werkzeug / Karte (oder Einladung, sie zu öffnen) ──
+    if G["active"]:
+        draw_box(top, mx, body_h, midw, "graph-werkzeug")
+        graphen.draw_graph_tool(top, mx, body_h, midw, gv_cache)
+    elif L["active"]:
+        draw_box(top, mx, body_h, midw, "fokus")
+        fokus.draw_list_tool(top, mx, body_h, midw)
+    elif M["active"]:
+        draw_box(top, mx, body_h, midw, "karte · welt")
+        karte.draw_map(top, mx, body_h, midw)
+    elif K["active"]:
+        draw_box(top, mx, body_h, midw, "kalender")
+        kalender.draw_calendar(top, mx, body_h, midw)
+    elif MAIL["active"] and MAIL["replying"]:
+        post.draw_reply(top, mx, body_h, midw)
+    elif MAIL["active"]:
+        draw_box(top, mx, body_h, midw, "post · mail")
+        post.draw_mail(top, mx, body_h, midw)
+    elif AI["active"]:
+        draw_box(top, mx, body_h, midw, chat.ai_titel())
+        chat.draw_ai(top, mx, body_h, midw)
+    elif TUTOR["active"]:
+        draw_box(top, mx, body_h, midw, "tutor")
+        sprachtutor.draw_tutor(top, mx, body_h, midw)
+    elif NOTE["active"]:
+        draw_box(top, mx, body_h, midw, "notiz" if NOTE["view"] == "edit" else "notizen")
+        notizen.draw_note_tool(top, mx, body_h, midw)
+    elif PIANO["active"]:
+        draw_box(top, mx, body_h, midw, "klavier")
+        klavier.draw_piano_tool(top, mx, body_h, midw)
+    elif ELEK["active"]:
+        draw_box(top, mx, body_h, midw, "elektronik")
+        leer = "hier entsteht der elektronik-bereich"
+        addclip(top + body_h // 2, mx + max(2, (midw - len(leer)) // 2), leer,
+                midw - 4, C["faint"])
+        addclip(top + body_h - 2, mx + 2, "esc zurück zum rad", midw - 4, C["faint"])
+    elif TECH["active"]:
+        draw_box(top, mx, body_h, midw, "technik · " + TECH["view"])
+        laeuft_jetzt = technik.draw_tech(top, mx, body_h, midw, state, metrics, nets) or laeuft_jetzt
+    elif not DASH["an"]:
+        # ── Startseite: die Galaxie (seit 03.10.2026) ─────────────
+        # EINE Fläche. Zwei Sonnensysteme (Apps, Technik) auf einer
+        # riesigen Bahn — im Ausschnitt nur ein flacher Bogen, die
+        # beiden liegen praktisch nebeneinander. ✦ = Sonne des Systems,
+        # GROSS = gewählt, ● = man ist drin.
+        laeuft_jetzt = (startseite.zeichne_galaxie(top, body_h, W, up, nets, state)
+                        or laeuft_jetzt)
+    else:
+        # ── Startseite: das Rad ───────────────────────────────────
+        # Bis 02.10.2026 stand hier der KI-Ring (ring_zeilen, archiviert:
+        # memory/archive/tui_ki_ring.md) mit der
+        # Tasten-Leiste unten. Jetzt ein Rad zum Durchdrehen, bewusst
+        # UNTER der Mitte: der Platz darüber ist für das, was ZENTRALE
+        # künftig von sich aus zeigt (kommt Stück für Stück).
+        draw_box(top, mx, body_h, midw, "zentrale")
+        startseite.draw_rad(top, body_h, mx, midw, [a[1] for a in RAD_APPS], RAD, symbole_an=True)
+
+    # Zappelt gerade wirklich etwas? Nur dann tickt die Schleife schneller
+    # (siehe oben) — ein breites Fenster bleibt bei den ruhigen 250 ms.
+    LAUF["laeuft"] = laeuft_jetzt
+
+    if DASH["an"]:
+        dashboard.zeichne_rechts(top, rx, body_h, rightw, gs_cache, gv_cache, cyc_cache,
+                                 proj_cache, nets)
+
+    # ── Befehls-Overlay (klappt über den Body nach oben auf) ──────────
+    if bz.cmd_mode or bz.help_latched:
+        bz.zeichne_overlay(current_ctx(z), top, bot, W)
+
+    # ── Trennlinie + Befehlszeile (›) ─────────────────────────────────
+    safe_addstr(sep_row, 0, "─" * W, C["faint"])
+    if K["active"] and K.get("linput") is not None:
+        # Eingabe lebt HIER unten (mehr Platz als die schmale Sidebar-Kopf-
+        # zeile): Sidebar neu/umbenennen ODER die Pro-Tag-Uhrzeit einer Spanne.
+        prompt = ({"add": "neuer eintrag: ", "rename": "umbenennen: ",
+                   "spantime": "zeit (leer=ganztags): "}
+                  .get(K["lmode"], "umbenennen: "))
+        safe_addstr(input_row, 1, "›", C["acc"])
+        shown = (prompt + K["linput"])[-(W - 6):]
+        addclip(input_row, 3, shown, W - 6, C["bright"])
+        safe_addstr(input_row, 3 + len(shown), "_", C["bright"])
+    else:
+        bz.zeichne_zeile(input_row, W)
+
+    # ── Footer (Tasten + Theme + Backend) ─────────────────────────────
+    # Seit 02.10.2026 keine App-Buchstaben mehr (die Apps stehen im
+    # Rad): nur noch die vier Tasten, die überall gelten. Eine KI-Antwort,
+    # die im Hintergrund fertig wurde, meldet sich hier mit ●.
+    ki = "space ki" + (" ●" if AI.get("neu") else "")
+    if DASH["an"] or current_ctx(z) != "home":
+        fuss = " ←→ drehen · enter öffnen · %s · esc zurück" % ki
+    else:
+        fuss = " ←→ drehen · alt+←→ rad wechseln · enter öffnen · %s · esc zu" % ki
+    addclip(footer_row, 0, fuss, W - 1, C["faint"])
+
+    # ── Graph-Reminder-Nag (zuletzt → liegt über allem) ───────────────
+    erinnerung.zeichnen(H, W)
+
+    stdscr.refresh()
+
+
 def run_ui(stdscr, store):
     import curses
 
@@ -815,11 +1157,8 @@ def run_ui(stdscr, store):
     # erreichbar. '/' öffnet sie, eine Live-Liste klappt nach oben auf und
     # filtert mit jedem Buchstaben, Enter führt aus, Esc bzw. Backspace über den
     # Slash hinaus schließt wieder. '/help' latcht die volle Hilfe (inkl. Tasten),
-    # die bei der nächsten Taste wieder wegklappt. Logik: parse_command /
-    # overlay_rows (Modulebene, curses-frei → testbar).
-    # Ihr Zustand (cmd_mode, cmd_buf, help_latched, cmd_msg) und ihr Zeichnen
-    # leben in ansichten/befehle.py; was ein Befehl bewirkt, steht unten in
-    # der Schleife.
+    # die bei der nächsten Taste wieder wegklappt. Zustand, Logik und Zeichnen:
+    # ansichten/befehle.py; was ein Befehl BEWIRKT: befehl_ausfuehren() oben.
     bz = ansichten.befehle.Befehlszeile(z)
 
     # ── stdout-Laufschrift (Taste 's' / '/lauf') ────────────────────────
@@ -830,51 +1169,57 @@ def run_ui(stdscr, store):
     LAUF = {"an": lauf_lesen(), "laeuft": False}
     z.LAUF = LAUF            # draw_stdout (ansichten/technik.py) liest den Wunsch
 
-
     # ── Elektronik (Mitte, aus dem Rad) — Sasha 03.10.2026: neuer Bereich,
     # bleibt erst mal leer; der Auftritt ist das Pixel-Symbol im Rad.
     ELEK = z.ELEK = {"active": False}
     # Altes 3-Spalten-Dashboard als Backup (/dashboard an). Aus = Meta-Rad.
     DASH = {"an": schalter_lesen(dashboard_datei(), False)}
 
-
+    # ── Die Ansichten (tui/ansichten/, memory/system/tui_bauplan.md) ────
+    # Jede bekommt den Kontext und legt ihr Zustands-Dict auch dort ab (z.AI,
+    # z.K …). Die Reihenfolge ist egal, bis auf zwei: Startseite und
+    # Dashboard bekommen Ansichten herein, die es dann schon geben muss.
     chat = ansichten.chat.Chat(z)
     AI = chat.AI
-    ai_titel, draw_ai = chat.ai_titel, chat.draw_ai
     chat.start()
     sprachtutor = ansichten.sprachtutor.Sprachtutor(z)
     TUTOR = sprachtutor.TUTOR
-    draw_tutor = sprachtutor.draw_tutor
     post = ansichten.post.Post(z)
-    MAIL, draw_mail = post.MAIL, post.draw_mail
-    draw_reply = post.draw_reply
+    MAIL = post.MAIL
     post.start()
     kalender = ansichten.kalender.Kalender(z)
-    K, draw_calendar = kalender.K, kalender.draw_calendar
+    K = kalender.K
     graphen = ansichten.graphen.Graphen(z)
-    G, draw_graph_tool = graphen.G, graphen.draw_graph_tool
+    G = graphen.G
     fokus = ansichten.fokus.Fokus(z)
-    L, draw_list_tool = fokus.L, fokus.draw_list_tool
+    L = fokus.L
     notizen = ansichten.notizen.Notizen(z)
-    NOTE, draw_note_tool = notizen.NOTE, notizen.draw_note_tool
+    NOTE = notizen.NOTE
     klavier = ansichten.klavier.Klavier(z)
-    PIANO, draw_piano_tool = klavier.PIANO, klavier.draw_piano_tool
+    PIANO = klavier.PIANO
     karte = ansichten.karte.Karte(z)
-    M, draw_map, m_alt_arrow = karte.M, karte.draw_map, karte.m_alt_arrow
-    m_anim_step = karte.m_anim_step
+    M = karte.M
     technik = ansichten.technik.Technik(z)
-    TECH, draw_external = technik.TECH, technik.draw_external
-    draw_stdout, draw_tech = technik.draw_stdout, technik.draw_tech
-    draw_telemetrie = technik.draw_telemetrie
+    TECH = technik.TECH
     startseite = ansichten.startseite.Startseite(z, RAD, META, TRAD, technik)
     dashboard = ansichten.dashboard.Dashboard(z, graphen, fokus)
     # Graph-Reminder („bitte eintragen", einmal pro Sitzung): ansichten/erinnerung.py
     erinnerung = ansichten.erinnerung.Erinnerung(z, graphen)
-    draw_rad = startseite.draw_rad
+
     # Hot Reload (siehe RELOAD): Stand der eigenen Quellen beim Start merken.
     code_alt = code_stand(code_dateien())
     code_kandidat = None
     code_check_t = 0.0
+
+    # Was die beiden Hälften der Schleife brauchen, ausdrücklich gebündelt:
+    # taste_verteilen(u, ch) und bild_zeichnen(u) lesen nur von hier.
+    u = types.SimpleNamespace(
+        AI=AI, C=C, DASH=DASH, ELEK=ELEK, G=G, K=K, L=L, LAUF=LAUF, M=M, MAIL=MAIL,
+        NOTE=NOTE, PIANO=PIANO, PIX=PIX, TECH=TECH, TUTOR=TUTOR, addclip=addclip, bz=bz,
+        chat=chat, dashboard=dashboard, draw_box=draw_box, erinnerung=erinnerung,
+        fokus=fokus, graphen=graphen, kalender=kalender, karte=karte, klavier=klavier,
+        notizen=notizen, post=post, safe_addstr=safe_addstr, sprachtutor=sprachtutor,
+        startseite=startseite, stdscr=stdscr, store=store, technik=technik, z=z)
 
     while True:
         # Neuer Code in tui/? Erst wenn er eine Sekunde ruht (ein Merge
@@ -913,120 +1258,8 @@ def run_ui(stdscr, store):
                        else (LAUF_TICK_MS if LAUF["laeuft"] else 250))
         ch = stdscr.getch()
 
-        if erinnerung.nag_active:              # Reminder-Kästchen offen: jede Taste klickt weg
-            erinnerung.taste(ch)
-        elif bz.help_latched:
-            if ch != -1:                       # jede Taste schließt die Hilfe wieder
-                bz.help_latched = False
-        elif bz.cmd_mode:
-            # Tippen, Esc, Backspace erledigt die Befehlszeile; bei Enter
-            # kommt das Ergebnis von parse_command zurück, befehl_ausfuehren
-            # setzt es um (Backend, Fenster, Neustart — siehe dort).
-            res = bz.taste(ch)
-            if res is not None:
-                if befehl_ausfuehren(res, bz, store, LAUF, DASH, TECH, sprachtutor):
-                    break
-        elif ch == ord("/") and not in_text_entry(z):
-            # '/' greift JETZT in jedem Fenster (nicht nur Home): blendet die
-            # Shortcuts des fokussierten Fensters ein. In Freitext-Feldern bleibt
-            # '/' ein Zeichen (siehe in_text_entry), darum hier das Guard.
-            bz.oeffnen()
-        elif G["active"]:                      # Graph-Werkzeug hat den Fokus
-            if graphen.taste(ch) == BEENDEN:
-                break
-        elif L["active"]:                      # Listen-Werkzeug hat den Fokus
-            if fokus.taste(ch) == BEENDEN:
-                break
-        elif M["active"]:                      # Karte hat den Fokus
-            if karte.taste(ch) == BEENDEN:
-                break
-        elif K["active"]:                      # Kalender hat den Fokus
-            if kalender.taste(ch) == BEENDEN:
-                break
-        elif MAIL["active"] and MAIL["replying"]:   # Antwort-Editor hat den Fokus
-            post.taste_antwort(ch)
-        elif MAIL["active"]:                   # Post/Mail-Panel hat den Fokus
-            if post.taste(ch) == BEENDEN:
-                break
-        elif NOTE["active"]:                   # Notiz-Werkzeug hat den Fokus
-            if notizen.taste(ch) == BEENDEN:
-                break
-        elif ELEK["active"]:                   # Elektronik-Bereich hat den Fokus
-            if ch == 27:
-                ELEK["active"] = False
-        elif TECH["active"]:                   # Technik-Ansicht hat den Fokus
-            if ch == 27:
-                TECH["active"] = False
-        elif PIANO["active"]:                  # Klavier hat den Fokus
-            klavier.taste(ch)
-        elif TUTOR["active"]:                  # Sprach-Tutor hat den Fokus
-            sprachtutor.taste(ch)
-        elif AI["active"]:                     # KI-Chat hat den Fokus
-            chat.taste(ch)
-        else:                                  # Startseite: das Rad
-            # Seit 02.10.2026 keine Buchstaben-Shortcuts mehr (Sasha): ←/→
-            # dreht, enter öffnet die App vorn, space die KI. Theme, Laufschrift
-            # und Beenden gehen über die Befehlszeile (/theme, /lauf, /quit),
-            # Weglegen über Cmd+z. `taste` übersetzt die Wahl in den alten
-            # Buchstaben, damit die Öffnen-Zweige unten unverändert bleiben.
-            taste = None
-            if not DASH["an"]:
-                # Galaxie (seit 03.10.2026): ←/→ dreht das gewählte Rad,
-                # alt+←/→ wechselt das Rad (dieselbe Alt-Erkennung wie die Karte).
-                was = {curses.KEY_LEFT: "links", curses.KEY_RIGHT: "rechts",
-                       10: "enter", 13: "enter", curses.KEY_ENTER: "enter"}.get(ch)
-                if was is None:
-                    alt = m_alt_arrow(ch)
-                    if alt == "esc":                   # Esc allein: ZENTRALE zuklappen
-                        fenster_zuklappen()
-                    was = {"left": "alt_links", "right": "alt_rechts"}.get(alt)
-                if ch == ord(" "):
-                    taste = "a"
-                elif was:
-                    wahl = meta_taste(META, RAD, TRAD, was)
-                    if wahl and wahl[0] == "app":
-                        taste = wahl[1]
-                    elif wahl:
-                        TECH["active"] = True; TECH["view"] = wahl[1]
-            elif ch == 27:                         # altes Dashboard: Esc klappt auch zu
-                fenster_zuklappen()
-            elif ch == curses.KEY_LEFT:
-                RAD["sel"] -= 1; rad_anstoss(RAD, -1)
-            elif ch == curses.KEY_RIGHT:
-                RAD["sel"] += 1; rad_anstoss(RAD, 1)
-            elif ch == ord(" "):
-                taste = "a"
-            elif ch in (10, 13, curses.KEY_ENTER):
-                taste = RAD_APPS[rad_index(RAD["sel"])][0]
-            ch = ord(taste) if taste else -1
-            if ch in (ord("g"), ord("G")):     # Graph-Werkzeug öffnen
-                graphen.oeffnen()
-            elif ch in (ord("m"), ord("M")):   # Karte öffnen
-                karte.oeffnen()
-            elif ch in (ord("c"), ord("C")):   # Kalender öffnen
-                kalender.oeffnen()
-            elif ch in (ord("p"), ord("P")):   # Post/Mail-Panel öffnen (Ebene Kategorien)
-                post.oeffnen()
-            elif ch in (ord("a"), ord("A")):   # KI-Chat öffnen (Thin-Client übers PC-Hirn)
-                chat.oeffnen()
-            elif ch in (ord("u"), ord("U")):   # 'u' öffnet DIREKT das Persona-Zimmer (natives Fenster)
-                if os.environ.get("ZENTRALE_ROOM_PARENT"):
-                    # Die TUI wurde AUS dem Zimmer heraus geöffnet (Wand-Kiosk,
-                    # room.py Alt+Z): das Zimmer liegt darunter und läuft weiter.
-                    # 'u' heißt hier »zurück ins Zimmer« — TUI zu, kein zweites
-                    # Zimmer, das sich mit dem ersten ums Mikro streitet.
-                    break
-                sprachtutor.oeffnen()
-            elif ch in (ord("n"), ord("N")):   # Notiz-Werkzeug öffnen (direkt in eine Notiz)
-                notizen.oeffnen()
-            elif ch in (ord("k"), ord("K")):   # Klavier öffnen (wie im Browser: k)
-                klavier.oeffnen()
-            elif ch in (ord("e"), ord("E")):   # Elektronik-Bereich (noch leer)
-                ELEK["active"] = True
-            elif ch in (ord("f"), ord("F")):   # Fokus-Werkzeug öffnen (primäre Taste)
-                fokus.oeffnen()
-            # '/' wird global oben abgefangen (greift in JEDEM Fenster), darum
-            # hier kein eigener Zweig mehr.
+        if taste_verteilen(u, ch) == BEENDEN:
+            break
         # KEY_RESIZE oder Timeout → einfach neu zeichnen
 
         # Farbe nachziehen: ein Wort aus theme.now. Damit ist hier ALLES
@@ -1037,209 +1270,7 @@ def run_ui(stdscr, store):
             cur_theme = want
             apply_theme(cur_theme)
 
-        # Weiche Kamerafahrt zum fokussierten Land (eine Ease-Stufe pro Frame).
-        if M["active"] and M.get("anim"):
-            m_anim_step()
-
-        state, metrics, connected = store.snapshot()
-        gs_cache, gv_cache = store.graphs_snapshot()
-        cyc_cache = store.cycle_snapshot()      # Zyklus-Tönung der lifestyle-Box
-        # Nur der fokussierte Teilbaum ([node] oder []); der Store zieht bereits
-        # /api/projects/focused. Kein Fallback auf alle Projekte — die volle
-        # Übersicht gibt es allein in der Projektansicht (Taste 'f').
-        proj_cache = store.projects_snapshot()
-
-        # Graph-Reminder: ist heute was fällig (und noch nicht weggeklickt), das
-        # Nag-Kästchen aufmachen — aber nicht mitten in Tipperei/Overlay/Dialog.
-        if (not erinnerung.nag_active and not in_text_entry(z) and not bz.cmd_mode
-                and not bz.help_latched):
-            erinnerung.pruefen(store)
-
-        H, W = stdscr.getmaxyx()
-        stdscr.erase()
-        # Pixel-Farbpaare: zu Beginn des Bildes leeren, sobald das Budget halb
-        # verbraucht ist — ein Bild braucht höchstens ~70 je Symbol, so läuft es
-        # nie MITTEN im Bild über. Vorher wurde nur in der Bernsteinleiste
-        # geleert; seit alle Apps animierte Symbole haben, lief es auf der
-        # Startseite voll und alles Neue fiel auf Bernstein-Orange zurück.
-        if PIX["voll"] or len(PIX["pairs"]) > (PIX["top"] - PIX["base"]) // 2:
-            PIX["pairs"].clear(); PIX["voll"] = False
-
-        if terminal_too_small(H, W):
-            safe_addstr(0, 0, "Terminal zu klein (min 60x14).", C["warn"])
-            safe_addstr(1, 0, "q = quit", C["dim"])
-            stdscr.refresh()
-            continue
-
-        # ── Header ──────────────────────────────────────────────────────
-        safe_addstr(0, 1, "ZEN", C["bright"] | curses.A_REVERSE)
-        safe_addstr(0, 4, "TRALE", C["acc"])
-        safe_addstr(0, 11, "tui", C["dim"])
-
-        nets = state.get("internet_logs", []) or []
-        if not isinstance(nets, list):
-            nets = []
-        if nets:
-            net_txt, net_attr = "TRAFFIC !", C["warn"]
-        else:
-            net_txt, net_attr = "OFFLINE ✓", C["acc"]
-        clock = time.strftime("%H:%M:%S")
-        up = fmt_uptime(state.get("uptime_s"))
-        if DASH["an"]:
-            right = "NET %s   UP %s   %s" % (net_txt, up, clock)
-            safe_addstr(0, W - len(right) - 1, "NET ", C["dim"])
-            safe_addstr(0, W - len(right) - 1 + 4, net_txt, net_attr)
-            safe_addstr(0, W - len(right) - 1 + 4 + len(net_txt), "   UP %s   %s" % (up, clock), C["dim"])
-        else:                             # Meta-Rad: NET/UP stehen beim Technik-Rad
-            right = clock
-            safe_addstr(0, W - len(right) - 1, clock, C["dim"])
-        if not connected:
-            safe_addstr(0, 26, "[backend ?]", C["warn"] | curses.A_BLINK)
-        pa = peer_anzeige(PEER["d"])
-        if pa:
-            safe_addstr(0, W - len(right) - 1 - len(pa[0]) - 3, pa[0],
-                        C["acc"] if pa[1] else C["dim"])
-        safe_addstr(1, 0, "─" * W, C["faint"])
-
-        # ── Spalten-Geometrie ─────────────────────────────────────────────
-        top = 2
-        footer_row = H - 1                # Tasten-Hinweise
-        input_row = H - 2                 # Befehlszeile (›)
-        sep_row = H - 3                   # Trennlinie + „Luft" nach unten
-        bot = H - 4                       # Body endet hier
-        body_h = bot - top + 1
-        # Im Antwort-Editor wird die MITTE breit gemacht (zwei quadratische
-        # Kästen brauchen Platz) — die Seiten schrumpfen auf ein Minimum, bis
-        # der Editor wieder zu ist.
-        if not DASH["an"]:
-            # Meta-Rad: keine Seitenspalten mehr — eine offene App hat die
-            # ganze Breite, die Startseite teilt sich selbst auf.
-            leftw = rightw = 0
-        elif MAIL["active"] and MAIL["replying"]:
-            leftw = max(16, int(W * 0.16))
-            rightw = max(16, int(W * 0.16))
-        else:
-            leftw = max(24, int(W * 0.28))
-            rightw = max(20, int(W * 0.22))
-        midw = W - leftw - rightw
-        lx, mx, rx = 0, leftw, leftw + midw
-
-        # ── LINKS: telemetrie / stdout (nur altes Dashboard) ───────────
-        # (Sensoren-Panel entfernt 2026-06: kein echter Sensor angeschlossen.
-        #  /api/state.sensors wird weiter gepollt, nur nicht mehr gezeichnet —
-        #  Box zum Wiederanzeigen aus der git-History zurückholen.)
-        laeuft_jetzt = False
-        if DASH["an"]:
-            ext_h = 4
-            draw_external(top, lx, leftw, store.backends_snapshot())
-            tele_h = draw_telemetrie(top + ext_h, lx, leftw, metrics)
-            std_h = body_h - ext_h - tele_h
-            if std_h >= 3:
-                laeuft_jetzt = draw_stdout(top + ext_h + tele_h, lx, std_h, leftw,
-                                           state.get("logs", []) or [])
-
-        if not AI["active"]:
-            AI["auge_t0"] = None                       # nächstes Öffnen: Lider gehen neu auf
-
-        # ── MITTE: Graph-Werkzeug / Karte (oder Einladung, sie zu öffnen) ──
-        if G["active"]:
-            draw_box(top, mx, body_h, midw, "graph-werkzeug")
-            draw_graph_tool(top, mx, body_h, midw, gv_cache)
-        elif L["active"]:
-            draw_box(top, mx, body_h, midw, "fokus")
-            draw_list_tool(top, mx, body_h, midw)
-        elif M["active"]:
-            draw_box(top, mx, body_h, midw, "karte · welt")
-            draw_map(top, mx, body_h, midw)
-        elif K["active"]:
-            draw_box(top, mx, body_h, midw, "kalender")
-            draw_calendar(top, mx, body_h, midw)
-        elif MAIL["active"] and MAIL["replying"]:
-            draw_reply(top, mx, body_h, midw)
-        elif MAIL["active"]:
-            draw_box(top, mx, body_h, midw, "post · mail")
-            draw_mail(top, mx, body_h, midw)
-        elif AI["active"]:
-            draw_box(top, mx, body_h, midw, ai_titel())
-            draw_ai(top, mx, body_h, midw)
-        elif TUTOR["active"]:
-            draw_box(top, mx, body_h, midw, "tutor")
-            draw_tutor(top, mx, body_h, midw)
-        elif NOTE["active"]:
-            draw_box(top, mx, body_h, midw, "notiz" if NOTE["view"] == "edit" else "notizen")
-            draw_note_tool(top, mx, body_h, midw)
-        elif PIANO["active"]:
-            draw_box(top, mx, body_h, midw, "klavier")
-            draw_piano_tool(top, mx, body_h, midw)
-        elif ELEK["active"]:
-            draw_box(top, mx, body_h, midw, "elektronik")
-            leer = "hier entsteht der elektronik-bereich"
-            addclip(top + body_h // 2, mx + max(2, (midw - len(leer)) // 2), leer,
-                    midw - 4, C["faint"])
-            addclip(top + body_h - 2, mx + 2, "esc zurück zum rad", midw - 4, C["faint"])
-        elif TECH["active"]:
-            draw_box(top, mx, body_h, midw, "technik · " + TECH["view"])
-            laeuft_jetzt = draw_tech(top, mx, body_h, midw, state, metrics, nets) or laeuft_jetzt
-        elif not DASH["an"]:
-            # ── Startseite: die Galaxie (seit 03.10.2026) ─────────────
-            # EINE Fläche. Zwei Sonnensysteme (Apps, Technik) auf einer
-            # riesigen Bahn — im Ausschnitt nur ein flacher Bogen, die
-            # beiden liegen praktisch nebeneinander. ✦ = Sonne des Systems,
-            # GROSS = gewählt, ● = man ist drin.
-            laeuft_jetzt = (startseite.zeichne_galaxie(top, body_h, W, up, nets, state)
-                            or laeuft_jetzt)
-        else:
-            # ── Startseite: das Rad ───────────────────────────────────
-            # Bis 02.10.2026 stand hier der KI-Ring (ring_zeilen, archiviert:
-            # memory/archive/tui_ki_ring.md) mit der
-            # Tasten-Leiste unten. Jetzt ein Rad zum Durchdrehen, bewusst
-            # UNTER der Mitte: der Platz darüber ist für das, was ZENTRALE
-            # künftig von sich aus zeigt (kommt Stück für Stück).
-            draw_box(top, mx, body_h, midw, "zentrale")
-            draw_rad(top, body_h, mx, midw, [a[1] for a in RAD_APPS], RAD, symbole_an=True)
-
-        # Zappelt gerade wirklich etwas? Nur dann tickt die Schleife schneller
-        # (siehe oben) — ein breites Fenster bleibt bei den ruhigen 250 ms.
-        LAUF["laeuft"] = laeuft_jetzt
-
-        if DASH["an"]:
-            dashboard.zeichne_rechts(top, rx, body_h, rightw, gs_cache, gv_cache, cyc_cache,
-                                     proj_cache, nets)
-
-        # ── Befehls-Overlay (klappt über den Body nach oben auf) ──────────
-        if bz.cmd_mode or bz.help_latched:
-            bz.zeichne_overlay(current_ctx(z), top, bot, W)
-
-        # ── Trennlinie + Befehlszeile (›) ─────────────────────────────────
-        safe_addstr(sep_row, 0, "─" * W, C["faint"])
-        if K["active"] and K.get("linput") is not None:
-            # Eingabe lebt HIER unten (mehr Platz als die schmale Sidebar-Kopf-
-            # zeile): Sidebar neu/umbenennen ODER die Pro-Tag-Uhrzeit einer Spanne.
-            prompt = ({"add": "neuer eintrag: ", "rename": "umbenennen: ",
-                       "spantime": "zeit (leer=ganztags): "}
-                      .get(K["lmode"], "umbenennen: "))
-            safe_addstr(input_row, 1, "›", C["acc"])
-            shown = (prompt + K["linput"])[-(W - 6):]
-            addclip(input_row, 3, shown, W - 6, C["bright"])
-            safe_addstr(input_row, 3 + len(shown), "_", C["bright"])
-        else:
-            bz.zeichne_zeile(input_row, W)
-
-        # ── Footer (Tasten + Theme + Backend) ─────────────────────────────
-        # Seit 02.10.2026 keine App-Buchstaben mehr (die Apps stehen im
-        # Rad): nur noch die vier Tasten, die überall gelten. Eine KI-Antwort,
-        # die im Hintergrund fertig wurde, meldet sich hier mit ●.
-        ki = "space ki" + (" ●" if AI.get("neu") else "")
-        if DASH["an"] or current_ctx(z) != "home":
-            fuss = " ←→ drehen · enter öffnen · %s · esc zurück" % ki
-        else:
-            fuss = " ←→ drehen · alt+←→ rad wechseln · enter öffnen · %s · esc zu" % ki
-        addclip(footer_row, 0, fuss, W - 1, C["faint"])
-
-        # ── Graph-Reminder-Nag (zuletzt → liegt über allem) ───────────────
-        erinnerung.zeichnen(H, W)
-
-        stdscr.refresh()
+        bild_zeichnen(u)
 
 
 # Default-Pfad bleibt fix (start_tui.sh liest genau diesen); per Env überstimmbar,
