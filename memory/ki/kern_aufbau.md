@@ -38,6 +38,8 @@ Richtung — von oben (wer einen Chat startet) nach unten (was er dafür braucht
            │                            Erlaubnis; profil + erlaubnis lesen auch hier
            ├── ki_prompt          Prompt-Bausteine: Jetzt-Block, Imprint, Alarme, Denk-Heuristik
            └── ai_backends        Einstellungen: wer darf denken, welches Modell, wie tief
+   ki_einstellungen  daneben, nur für die Routen: Einstellungen lesen und
+                     mit Klartext-Prüfung setzen (über ai_backends, seit 07.10.)
    ─────────────── darunter: Dienste und Fundament ───────────────
    consolidation  (nach dem Zug: Transkript, Graph wenn an)   ollama (Ollama-Anbindung)
    graph · gedaechtnis · kalender · mail · news · web …       state · net · providers …

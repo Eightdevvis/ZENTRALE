@@ -137,6 +137,17 @@ def _log_usage(verbrauch, model: str):
         print(f"[usage] Buchung fehlgeschlagen ({model}): {e}")
 
 
+def _nichts_gebucht(model: str):
+    """Gestoppt, bevor der Anbieter Zahlen geschickt hat: ehrlich sagen,
+    dass diese Runde ungebucht bleibt, statt zu schätzen."""
+    try:
+        import state
+        state.push_log(f"CLOUD ✗ {model} gestoppt, bevor der Anbieter "
+                       f"Zahlen geschickt hat — nichts gebucht")
+    except Exception:
+        pass
+
+
 def _prepare_messages(messages: list, system_text: str,
                       volatile: str = "") -> list:
     """Verlauf in OpenAI-Form. `volatile` (Graph, Jetzt, Alarme, Mic) haengt
@@ -157,7 +168,7 @@ def _prepare_messages(messages: list, system_text: str,
 
 def chat_stream(messages: list, model: str = None, system: str = None,
                 tools: list = None, tool_executor=None, via_mic: bool = False,
-                *, provider: str = None):
+                *, provider: str = None, abbruch=None):
     """
     Drop-in fuer ai.chat_stream() gegen einen OpenAI-kompatiblen Provider.
 
@@ -204,18 +215,19 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         mdl = ai_backends.chat_model(provider or _aktueller_anbieter()) \
             or prov.get("default_model")
 
-    adapter = _OpenAIAdapter(client, mdl, msgs, active_tools)
+    adapter = _OpenAIAdapter(client, mdl, msgs, active_tools, abbruch=abbruch)
     yield from werkzeug_schleife.laufen(
         adapter, tutor_mode=tutor_mode, active_exec=active_exec,
-        user_query=user_query, store=store)
+        user_query=user_query, store=store, abbruch=abbruch)
 
 
 class _OpenAIAdapter:
     """OpenAI-kompatibler Dialekt für die gemeinsame Werkzeug-Schleife:
     Tool-Calls kommen stückweise im Stream, Ergebnisse als role=tool."""
 
-    def __init__(self, client, mdl, msgs, tools):
+    def __init__(self, client, mdl, msgs, tools, abbruch=None):
         self.client, self.modell, self.msgs, self.tools = client, mdl, msgs, tools
+        self.abbruch = abbruch      # threading.Event: Sasha hat gestoppt
 
     def runde(self):
         round_text = []
@@ -241,6 +253,21 @@ class _OpenAIAdapter:
             stream_options={"include_usage": True},
         )
         for chunk in stream:
+            if werkzeug_schleife.gestoppt(self.abbruch):
+                # Strom schließen: der Anbieter merkt den Abriss und hört auf
+                # zu erzeugen. Der Verbrauch kommt in diesem Dialekt erst im
+                # letzten Stück — gebucht wird nur, was schon da ist.
+                schliessen = getattr(stream, "close", None)
+                if callable(schliessen):
+                    try:
+                        schliessen()
+                    except Exception:
+                        pass
+                if verbrauch is not None:
+                    _log_usage(verbrauch, self.modell)
+                else:
+                    _nichts_gebucht(self.modell)
+                raise werkzeug_schleife.Gestoppt("".join(round_text))
             # Der Usage-Chunk kommt am Ende und hat KEINE choices - er
             # darf nicht als leerer Delta durchrutschen.
             if getattr(chunk, "usage", None):

@@ -38,7 +38,7 @@ def cloud_modul():
     return CLOUD_WEGE.get(ai_backends.chat_cloud_kind())
 
 
-def chat(verlauf, *, via_mic=False, backend=None):
+def chat(verlauf, *, via_mic=False, backend=None, abbruch=None):
     """Einen Chat-Zug fahren. Generator mit dem Event-Protokoll der
     Werkzeug-Schleife (Text-Tokens, reflect, werkzeug, permission, ascii,
     cinema, fehler).
@@ -46,6 +46,11 @@ def chat(verlauf, *, via_mic=False, backend=None):
     backend: schon gefragtes ai_backends.chat_available() (die Chat-Route
     fragt vorher, um bei „gar kein Backend" mit 503 zu antworten); None →
     hier fragen. Gibt es keins, kommt ein fehler-Event statt eines Absturzes.
+
+    abbruch: threading.Event zum Stoppen (state.chat_zug_beginnen). Gesetzt
+    → die Schleife hört vor der nächsten Runde bzw. dem nächsten Werkzeug
+    auf, ein laufender Anbieter-Strom wird geschlossen, und es kommt ein
+    {"gestoppt": True}-Event. None → nicht stoppbar (Takt).
     """
     if backend is None:
         backend = ai_backends.chat_available()
@@ -61,6 +66,6 @@ def chat(verlauf, *, via_mic=False, backend=None):
                 f"'{ai_backends.cloud_provider()}' nicht.")
             return
         state.push_log(f"AI →  KERN: Cloud ({ai_backends.cloud_provider()})")
-        yield from modul.chat_stream(verlauf, via_mic=via_mic)
+        yield from modul.chat_stream(verlauf, via_mic=via_mic, abbruch=abbruch)
         return
-    yield from ai.chat_stream(verlauf, via_mic=via_mic)
+    yield from ai.chat_stream(verlauf, via_mic=via_mic, abbruch=abbruch)

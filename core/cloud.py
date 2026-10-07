@@ -411,7 +411,8 @@ def _text_of(blocks) -> str:
 # ── Der Hauptpfad ──────────────────────────────────────────────────────
 
 def chat_stream(messages: list, model: str = None, system: str = None,
-                tools: list = None, tool_executor=None, via_mic: bool = False):
+                tools: list = None, tool_executor=None, via_mic: bool = False,
+                *, abbruch=None):
     """
     Drop-in für ai.chat_stream() gegen die Anthropic-API.
 
@@ -459,18 +460,20 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     anthro_tools = _to_anthropic_tools(active_tools)
 
     adapter = _AnthropicAdapter(_get_client(), model or _model(),
-                                sys_blocks, anthro_msgs, anthro_tools)
+                                sys_blocks, anthro_msgs, anthro_tools,
+                                abbruch=abbruch)
     yield from werkzeug_schleife.laufen(
         adapter, tutor_mode=tutor_mode, active_exec=active_exec,
-        user_query=user_query, store=store)
+        user_query=user_query, store=store, abbruch=abbruch)
 
 
 class _AnthropicAdapter:
     """Anthropic-Dialekt für die gemeinsame Werkzeug-Schleife: tool_use-
     Blöcke, alle tool_results in EINER user-Message, wandernder Breakpoint."""
 
-    def __init__(self, client, mdl, sys_blocks, msgs, tools):
+    def __init__(self, client, mdl, sys_blocks, msgs, tools, abbruch=None):
         self.client, self.modell = client, mdl
+        self.abbruch = abbruch      # threading.Event: Sasha hat gestoppt
         self.sys_blocks, self.msgs, self.tools = sys_blocks, msgs, tools
         # Dritter Breakpoint, der zwischen den Tool-Runden mitwandert: ohne ihn
         # zahlt Runde 3 die Ergebnisse von Runde 2 noch einmal voll. Der alte
@@ -492,7 +495,28 @@ class _AnthropicAdapter:
             messages=self.msgs,
             **_denk_opts(self.modell),
         ) as stream:
+            # Verbrauch mitzählen, solange er reinkommt: wird mitten im
+            # Strom gestoppt, gibt es kein final.usage — die Eingabe ist
+            # aber schon bezahlt und gehört in die Buchung (Budget-Deckel).
+            # message_start trägt Eingabe + Cache, message_delta die
+            # bisherige Ausgabe (meist erst am Ende).
+            verbrauch = {}
             for event in stream:
+                if werkzeug_schleife.gestoppt(self.abbruch):
+                    # Raus aus dem with schließt die Verbindung: Anthropic
+                    # hört auf zu erzeugen, und wir hören auf zu zahlen.
+                    _gestoppt_buchen(verbrauch, self.modell)
+                    raise werkzeug_schleife.Gestoppt("".join(round_text))
+                if event.type == "message_start":
+                    verbrauch.update(_usage_dict(
+                        getattr(event.message, "usage", None)))
+                    continue
+                if event.type == "message_delta":
+                    out = getattr(getattr(event, "usage", None),
+                                  "output_tokens", None)
+                    if out is not None:
+                        verbrauch["output_tokens"] = out
+                    continue
                 if event.type != "content_block_delta":
                     continue
                 d = event.delta
@@ -575,6 +599,34 @@ def _debug_out(final, model: str) -> None:
             } if u else None)
     except Exception:
         pass
+
+
+def _usage_dict(u) -> dict:
+    """Usage-Objekt von Anthropic → schlichtes Dict (fehlende Felder 0)."""
+    if u is None:
+        return {}
+    return {k: int(getattr(u, k, 0) or 0) for k in
+            ("input_tokens", "output_tokens", "cache_read_input_tokens",
+             "cache_creation_input_tokens")}
+
+
+def _gestoppt_buchen(verbrauch: dict, model: str):
+    """Ein gestoppter Strom liefert kein final.usage. Buchen, was der
+    Anbieter bis dahin gemeldet hat — nicht schätzen, was er nicht gemeldet
+    hat (Sasha 07.10.: das Verbrauchte nicht verlieren)."""
+    if not verbrauch:
+        try:
+            import state
+            state.push_log(f"CLOUD ✗ {model} gestoppt, bevor der Anbieter "
+                           f"Zahlen geschickt hat — nichts gebucht")
+        except Exception:
+            pass
+        return
+    from types import SimpleNamespace
+    _log_usage(SimpleNamespace(usage=SimpleNamespace(**{
+        "input_tokens": 0, "output_tokens": 0,
+        "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
+        **verbrauch})), model)
 
 
 def _log_usage(final, model: str):

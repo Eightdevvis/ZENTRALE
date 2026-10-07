@@ -47,6 +47,26 @@ class Runde:
     roh: object = None                          # Adapter-privat (z.B. Anthropic-Message)
 
 
+class Gestoppt(Exception):
+    """Sasha hat gestoppt (Abbruch-Signal, state.chat_zug_stoppen). Ein
+    Adapter wirft das, sobald er es mitten im Strom merkt, NACHDEM er den
+    Strom geschlossen und das bis dahin Verbrauchte gebucht hat. `text` ist,
+    was das Modell in dieser Runde bis dahin geschrieben hatte."""
+
+    def __init__(self, text: str = ""):
+        super().__init__("gestoppt")
+        self.text = text or ""
+
+
+def gestoppt(abbruch) -> bool:
+    """Ist das Abbruch-Signal gesetzt? abbruch: threading.Event oder None
+    (None = dieser Zug ist nicht stoppbar, z. B. Tutor, Takt)."""
+    return abbruch is not None and abbruch.is_set()
+
+
+GESTOPPT = {"gestoppt": True}
+
+
 class Abbruch(Exception):
     """Ein Adapter bricht den Zug mit einer Meldung an Sasha ab (z.B. die
     Cloud hat die Anfrage abgelehnt). Der Text geht wörtlich ins fehler-Event."""
@@ -57,7 +77,7 @@ def fehler(text: str) -> dict:
 
 
 def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
-           fehler_name: str = "Cloud"):
+           fehler_name: str = "Cloud", abbruch=None):
     """
     Der ganze Zug. Generator — yieldet dieselben Events wie bisher
     chat_stream (Text-Tokens, reflect, werkzeug, permission, ascii, cinema)
@@ -66,11 +86,25 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
     tutor_mode: fremdes Tool-Set → kein Gate, keine terminalen Kern-Tools,
     Antwort roh statt mit Bild-Markern.
     fehler_name: wer gescheitert ist, für die Meldung ("Cloud", "Ollama").
+    abbruch: threading.Event (Stoppen, 2026-10-07) — geprüft vor jeder Runde
+    und vor jedem Werkzeug; mitten im Strom prüft es der Adapter selbst.
+    Gestoppt → {"gestoppt": True}, keine weitere Runde, nichts gemerkt.
     """
     grenze = ai_backends.runden_grenze(adapter.modell)
     for _ in range(grenze):
+        if gestoppt(abbruch):
+            yield dict(GESTOPPT)
+            return
         try:
             runde = yield from adapter.runde()
+        except Gestoppt as g:
+            # Was sie bis dahin geschrieben hatte, roh raus: es soll mit dem
+            # Vermerk im Verlauf stehen, aber nicht als fertige Antwort
+            # gemerkt werden (kein ki_antwort.mit_bildern).
+            if g.text.strip():
+                yield g.text
+            yield dict(GESTOPPT)
+            return
         except Abbruch as e:
             yield fehler(str(e))
             return
@@ -86,6 +120,9 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
         adapter.assistent_anhaengen(runde)
         ergebnisse = []
         for call_id, name, args in runde.calls:
+            if gestoppt(abbruch):
+                yield dict(GESTOPPT)
+                return
             ausgang = yield from run_tool(
                 name, args, tutor_mode=tutor_mode, active_exec=active_exec,
                 user_query=user_query, store=store)

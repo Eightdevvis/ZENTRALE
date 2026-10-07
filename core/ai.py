@@ -136,7 +136,8 @@ def warmup_async():
 
 
 def chat_stream(messages: list, model: str = None, system: str = None,
-                tools: list = None, tool_executor=None, via_mic: bool = False):
+                tools: list = None, tool_executor=None, via_mic: bool = False,
+                *, abbruch=None):
     """
     Streaming Chat mit Tool-Use Loop.
 
@@ -226,10 +227,11 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     # Kill-Switch ZENTRALE_THINK=0 → want_think False → wie früher.
     want_think = ADAPTIVE_THINK and ki_prompt._should_think(messages)
 
-    adapter = _OllamaAdapter(model, working_messages, active_tools, want_think)
+    adapter = _OllamaAdapter(model, working_messages, active_tools, want_think,
+                             abbruch=abbruch)
     yield from werkzeug_schleife.laufen(
         adapter, tutor_mode=tools is not None, active_exec=active_exec,
-        user_query=user_query, fehler_name="Ollama")
+        user_query=user_query, fehler_name="Ollama", abbruch=abbruch)
 
 
 class _OllamaAdapter:
@@ -237,8 +239,9 @@ class _OllamaAdapter:
     werkzeug_schleife.py): tool_calls irgendwo im Stream, Ergebnisse als
     role=tool ohne Call-Id."""
 
-    def __init__(self, model, msgs, tools, want_think):
+    def __init__(self, model, msgs, tools, want_think, abbruch=None):
         self.modell, self.msgs, self.tools = model, msgs, tools
+        self.abbruch = abbruch      # threading.Event: Sasha hat gestoppt
         self.want_think = want_think
         # WICHTIG gegen den qwen3.5-Template-Bug (#10976): nach dem ERSTEN
         # Tool-Call think=AUS, weil die Synthese-Runde mit think die ganze
@@ -266,7 +269,14 @@ class _OllamaAdapter:
         round_content = []  # Tokens dieser Runde sammeln
         tool_calls    = []
 
-        for chunk in net.stream_post(f"{OLLAMA_URL}/api/chat", payload):
+        strom = net.stream_post(f"{OLLAMA_URL}/api/chat", payload)
+        for chunk in strom:
+            if werkzeug_schleife.gestoppt(self.abbruch):
+                # Generator schließen → urlopen schließt die Verbindung, und
+                # Ollama bricht die Erzeugung ab, sobald der Client weg ist.
+                # Lokal kostet kein Geld, aber die GPU.
+                strom.close()
+                raise werkzeug_schleife.Gestoppt("".join(round_content))
             msg   = chunk.get("message", {})
             # Reflexions-Stream: Ollama liefert die Denk-Tokens getrennt im
             # `thinking`-Feld. Live als {"reflect": ...}-Event rausgeben.

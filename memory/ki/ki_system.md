@@ -728,6 +728,15 @@ Modell, nicht am Weg (`ai_backends.runden_grenze`, Standard 8, pro Modell in
 Richtigstellung, falls sie im selben Zug schon notiert hat, es sei passiert —
 vorher bekam nur der lokale Weg diesen Satz.
 
+**Stoppen (seit 2026-10-07).** `laufen(…, abbruch=)` nimmt ein
+`threading.Event` und prüft es vor jeder Runde und vor jedem Werkzeug; die
+Adapter prüfen es bei jedem Stück ihres Stroms, schließen ihn, buchen, was
+der Anbieter bis dahin gemeldet hat, und werfen `Gestoppt(text)`. Heraus
+kommt der halbe Text (roh, nicht gemerkt) und `{"gestoppt": True}`. Das
+Event legt `/api/chat` pro Zug an (`state.chat_zug_beginnen`),
+`/api/chat/stop` setzt es. Takt und Tutor übergeben keins und sind nicht
+stoppbar. Ausführlich: [claude_web_plan.md](claude_web_plan.md) Abschnitt 7.
+
 Der Tutor hat in `tutor/cloud.py` und `tutor/openai_compat.py` weiterhin
 eigene Schleifen.
 
@@ -900,7 +909,8 @@ zurück und hat unterwegs eben kein Gedächtnis.
 `ai_backends.pick("chat")` entscheidet pro Turn, wer denkt. Reihenfolge aus
 `MODULE_BACKENDS["chat"] = (LOCAL, CLOUD)`, **aber** mit ausdrücklicher
 Vorwahl `chat_backend()` (`auto` | `local` | `cloud`, in
-`data/ai_config.json`, per `ZENTRALE_CHAT_BACKEND` übersteuerbar):
+`data/ai_config.json`, per `ZENTRALE_CHAT_BACKEND` übersteuerbar, im
+TUI-Chat per `/lokal`, `/cloud`, `/auto`):
 
 - **Stand 2026-08-15: `cloud`.** Sasha fährt daheim wie unterwegs bewusst
   cloud-only. `auto` ist die Zielform für später: sobald lokal wieder
@@ -1150,10 +1160,14 @@ Tests: `scripts/test_net_internet.py` (48 Cases, untracked).
 
 - KI-Chat mit qwen3.5:9b (oder via `OLLAMA_MODEL`), tokenweise gestreamt.
 - KI hat Zugriff auf Whitelist-Dateien + Graph-Memory.
-- Slash-Commands im Chat:
-  - `/clear` – Chat-History leeren
-  - (`/memory` und `/forget N` sind mit dem Legacy-LTM-Pfad entfallen.)
-- ESC – zurück zum Haupt-Dashboard.
+- Slash-Befehle im TUI-Chat (seit 2026-10-07, `tui/ansichten/chat_befehle.py`):
+  `/neu` (Verlauf leeren, früher `/clear` — geht weiter), `/modell [name]`,
+  `/anbieter [name|auto]`, `/effort [stufe]`, `/budget [euro|aus]`,
+  `/lokal` `/cloud` `/auto`, `/hilfe`. `//` am Anfang = wörtlicher
+  Schrägstrich. Die Einstellungen laufen über `/api/ai/einstellungen`
+  (`core/ki_einstellungen.py`).
+  (`/memory` und `/forget N` sind mit dem Legacy-LTM-Pfad entfallen.)
+- ESC – stoppt eine laufende Antwort, sonst zurück zum Haupt-Dashboard.
 
 ## Voice-Pipeline (Core, sprachneutral)
 

@@ -301,6 +301,61 @@ def answer_permission(answer: str):
     _perm_event.set()   # weckt den .wait() in wait_permission()
 
 
+def _permission_wecken():
+    """Eine offene Erlaubnis-Frage ohne Klick beenden: wait_permission
+    liefert dann den timeout_default (beim Gate "nein"). Für das Stoppen."""
+    global _perm_answer
+    with _lock:
+        _perm_answer = None
+    _perm_event.set()
+
+
+# ── Laufende Chat-Züge (Stoppen) ──────────────────────────────────────
+# Sasha, 07.10.2026 (Claude-Web-Plan, Phase 1): Stoppen muss bis in die
+# Werkzeug-Schleife reichen — die Verbindung zu kappen reicht nicht, der
+# Kern liefe weiter und bezahlte. Jeder Zug von /api/chat bekommt deshalb
+# ein threading.Event unter einer Strom-Nummer; /api/chat/stop setzt es,
+# die Schleife und die Anbieter-Ströme prüfen es (core/werkzeug_schleife.py).
+# Es gibt nur einen Chat gleichzeitig, aber eine Nummer pro Zug verhindert,
+# dass ein verspätetes Stopp den NÄCHSTEN Zug abschießt.
+_zuege = {}            # strom_id -> threading.Event
+_zug_zaehler = [0]
+
+
+def chat_zug_beginnen():
+    """Neuen Zug anmelden. -> (strom_id, abbruch_event)"""
+    with _lock:
+        _zug_zaehler[0] += 1
+        strom_id = f"z{_zug_zaehler[0]}"
+        ev = threading.Event()
+        _zuege[strom_id] = ev
+    return strom_id, ev
+
+
+def chat_zug_beenden(strom_id: str):
+    """Zug abmelden (am Ende des Stroms, auch nach Fehlern)."""
+    with _lock:
+        _zuege.pop(strom_id, None)
+
+
+def chat_zug_stoppen(strom_id: str = None) -> bool:
+    """Abbruch-Signal setzen. strom_id None → jeder laufende Zug.
+    -> True, wenn ein laufender Zug getroffen wurde.
+
+    Wartet der Zug gerade auf eine Erlaubnis-Frage, wird sie mit „nein"
+    beendet — sonst hinge das Stoppen bis zum Timeout (180 s)."""
+    with _lock:
+        if strom_id is None:
+            treffer = list(_zuege.values())
+        else:
+            treffer = [_zuege[strom_id]] if strom_id in _zuege else []
+    for ev in treffer:
+        ev.set()
+    if treffer:
+        _permission_wecken()
+    return bool(treffer)
+
+
 def wait_permission(timeout: float = 180.0) -> str:
     """
     Blockiert bis answer_permission() kommt – oder bis der Timeout greift.

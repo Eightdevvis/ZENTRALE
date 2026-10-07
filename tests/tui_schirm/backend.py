@@ -37,6 +37,18 @@ _BODY = {"body": "Hallo,\n\nwie besprochen treffen wir uns am Freitag um 18 Uhr 
          "den Keller.\n\n" + "Eine lange Zeile ohne Umbruch " * 12 + "\n\nGruss\nAnna"}
 
 
+_EINSTELLUNGEN = {
+    "anbieter": "auto", "anbieter_aktiv": "claude", "modell": "claude-sonnet-5",
+    "effort": "low", "effort_stufen": ["low", "medium", "high", "xhigh", "max"],
+    "effort_wirkt": True, "budget": 20.0, "weg": "cloud",
+    "budget_lage": {"status": "ok", "ausgegeben": 3.12, "limit": 20.0, "anteil": 0.156},
+    "anbieter_liste": [
+        {"name": "claude", "schluessel": True, "spricht": True, "modell": "claude-sonnet-5",
+         "modelle": ["claude-sonnet-5", "claude-haiku-4-5"]},
+        {"name": "qwen", "schluessel": True, "spricht": True, "modell": "qwen-plus",
+         "modelle": ["qwen-plus", "qwen-turbo"]}]}
+
+
 def _synth(path):
     """Erfundene Mail-Daten: die echten gehen nie live (Seen-Flag), aber das
     Post-Panel soll im Vergleich auch mit Mails gezeichnet werden."""
@@ -45,6 +57,8 @@ def _synth(path):
             return [{"id": "g_x", "name": "schlaf", "remind_at": "20:00"},
                     {"id": "g_y", "name": "stimmung"}]
         return None
+    if path == "/api/ai/einstellungen":      # Chat-Befehle /modell, /effort
+        return _EINSTELLUNGEN
     if path.startswith(("/api/mail/folder?", "/api/mail/inbox?")) or path == "/api/mail/inbox":
         return _MAILS
     if path.startswith(("/api/mail/body?", "/api/mail/inbox-body?")):

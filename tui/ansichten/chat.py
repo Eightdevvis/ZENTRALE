@@ -21,8 +21,18 @@ try:                                    # Pixel-Baustein (tui/pixel.py)
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     import pixel
 
+from . import chat_befehle, eingabe
 from .basis import BASE_URL, api_call
 from .text import _md_umbruch, _wrap, md_zeilen
+
+# Alt+Enter als eigener Tastencode: curses liefert ESC + Enter als zwei
+# Tasten; Chat.taste setzt sie zu diesem einen zusammen. -1 ist „keine
+# Taste", -2 gibt es bei curses nicht.
+TASTE_ALT_ENTER = -2
+
+# Vermerk hinter einer gestoppten Antwort — derselbe wie im Backend
+# (ui/routen/ki.py), damit der Verlauf nach dem nächsten Poll gleich aussieht.
+VERMERK_ABGEBROCHEN = "(abgebrochen)"
 
 
 def echte_nachrichten(log):
@@ -74,6 +84,13 @@ def ai_wrap(role, text, w):
     # konnte nicht nachsehen, ob und was wirklich geschrieben wurde.
     pre = {"user": "du:", "ai": "ki:", "werkzeug": "⚙",
            "werkzeug_fehler": "⚙", "denken": "…"}.get(role, "")
+    if role == "hinweis":
+        # Antworten der TUI selbst (/hilfe): Zeilen wie geschrieben, nur
+        # hart umbrochen — Einrückung und Spalten bleiben stehen.
+        aus = []
+        for zeile in text.split("\n"):
+            aus += [(role, zeile[i:i + w]) for i in range(0, len(zeile), w)] or [(role, "")]
+        return aus
     if role.startswith("werkzeug") or role == "denken":
         eingerueckt = "  " + pre + " "
         aus = []
@@ -162,6 +179,64 @@ def werkzeug_zeile(w):
     return ("werkzeug_ergebnis", "↳ " + text)
 
 
+def auswahl(name, stand):
+    """Die Auswahl-Liste für /modell, /anbieter, /effort ohne Argument.
+    -> {"titel", "optionen": [(text, daten_zum_setzen)], "idx"}; idx steht
+    auf dem, was gerade gilt. Nur Anbieter mit Schlüssel."""
+    anbieter = [a for a in stand.get("anbieter_liste") or []
+                if a.get("schluessel") and a.get("spricht")]
+    aktiv = stand.get("anbieter_aktiv")
+    optionen, idx = [], 0
+    if name == "modell":
+        titel = "modell wählen"
+        for a in anbieter:
+            for m in a.get("modelle") or []:
+                if a["name"] == aktiv and m == stand.get("modell"):
+                    idx = len(optionen)
+                optionen.append(("%s · %s" % (a["name"], m),
+                                 {"anbieter": a["name"], "modell": m}))
+    elif name == "anbieter":
+        titel = "anbieter wählen"
+        for n in ["auto"] + [a["name"] for a in anbieter]:
+            if n == stand.get("anbieter"):
+                idx = len(optionen)
+            optionen.append((n, {"anbieter": n}))
+    else:                                   # effort
+        titel = "denk-tiefe wählen" + ("" if stand.get("effort_wirkt")
+                                       else " (wirkt nur bei claude)")
+        for st in stand.get("effort_stufen") or []:
+            if st == stand.get("effort"):
+                idx = len(optionen)
+            optionen.append((st, {"effort": st}))
+    return {"titel": titel, "optionen": optionen, "idx": idx}
+
+
+def budget_text(stand):
+    """/budget ohne Zahl: was gilt und was schon weg ist."""
+    lage = stand.get("budget_lage") or {}
+    weg = fmt_euro(lage.get("ausgegeben") or 0)
+    if not stand.get("budget"):
+        return "kein budget gesetzt · %s diesen monat · /budget 20 setzt eins" % weg
+    return "budget %s im monat · %s verbraucht" % (fmt_euro(stand["budget"]), weg)
+
+
+def stand_text(daten, stand):
+    """Statuszeile nach dem Setzen: was jetzt gilt."""
+    if "weg" in daten:
+        return {"local": "nur lokal", "cloud": "nur cloud",
+                "auto": "lokal, wenn da — sonst cloud"}.get(stand.get("weg"), "weg gesetzt")
+    if "budget" in daten:
+        return budget_text(stand)
+    if "effort" in daten:
+        return "denk-tiefe: %s%s" % (stand.get("effort"), "" if stand.get("effort_wirkt")
+                                     else " (wirkt nur bei claude)")
+    if "modell" in daten:
+        return "modell: %s · %s" % (stand.get("anbieter_aktiv") or "—", stand.get("modell") or "—")
+    if stand.get("anbieter") == "auto":
+        return "anbieter: auto (jetzt %s)" % (stand.get("anbieter_aktiv") or "keiner")
+    return "anbieter: %s" % (stand.get("anbieter") or "—")
+
+
 class Chat:
     """Der KI-Chat (Mitte, Leertaste auf der Startseite). Thin Client: die
     TUI rechnet keine KI, sie spricht nur HTTP mit /api/chat (SSE) und zeigt
@@ -200,7 +275,12 @@ class Chat:
                           # Der Takt kann von sich aus sprechen (core/takt.py). Ohne diese
                           # zwei Felder spraeche sie in einen leeren Raum: der Verlauf wurde
                           # frueher EINMAL beim Oeffnen geholt.
-                          "neu": False, "n": 0}
+                          "neu": False, "n": 0,
+                          # Eingabe mit Cursor (ansichten/eingabe.py), halbe
+                          # UTF-8-Zeichen, offene Auswahl (/modell …), Nummer
+                          # des laufenden Zugs (fürs Stoppen) — 2026-10-07.
+                          "cur": 0, "u8": b"", "wahl": None, "strom": None,
+                          "gestoppt": False}
         self.AI_LOCK = threading.Lock()
 
     def start(self):
@@ -215,7 +295,7 @@ class Chat:
         Stream weiterlaufen lässt."""
         AI, AI_LOCK = self.AI, self.AI_LOCK
         url = BASE_URL + "/api/chat"
-        data = json.dumps({"message": message}).encode("utf-8")
+        data = json.dumps({"message": message}, ensure_ascii=False).encode("utf-8")
         req = urllib.request.Request(
             url, data=data, method="POST",
             headers={"Content-Type": "application/json",
@@ -254,7 +334,13 @@ class Chat:
                 except ValueError:
                     continue
                 with AI_LOCK:
-                    if "token" in evt:
+                    if "strom" in evt:
+                        AI["strom"] = evt["strom"]   # damit Esc genau ihn stoppt
+                    elif "gestoppt" in evt:
+                        denken_ablegen()
+                        AI["gestoppt"] = True
+                        AI["msg"] = "gestoppt"
+                    elif "token" in evt:
                         denken_ablegen()
                         AI["answer"] = (AI["answer"] or "") + str(evt["token"])
                         AI["perm"] = None          # es fließt wieder Text
@@ -309,22 +395,47 @@ class Chat:
             with AI_LOCK:
                 denken_ablegen()
                 ans = (AI["answer"] or "").strip()
+                if ans and AI["gestoppt"]:
+                    ans += "\n\n" + VERMERK_ABGEBROCHEN
                 if ans:
                     AI["log"].append(("ai", ans))
                 AI["answer"] = None
+                AI["strom"] = None
+                if AI["msg"] == "stoppe …":   # war schon fertig, als Esc kam
+                    AI["msg"] = ""
                 AI["reflect"] = ""
                 AI["perm"] = None
                 AI["streaming"] = False
 
     def ai_submit(self):
-        """Aktuellen Prompt abschicken (Stream im Hintergrund starten)."""
-        AI, AI_LOCK, ai_stream = self.AI, self.AI_LOCK, self.ai_stream
-        msg = AI["input"].strip()
-        if not msg or AI["streaming"]:
+        """Eingabe abschicken: ein Slash-Befehl wird hier ausgeführt
+        (chat_befehle.py), alles andere geht als Frage an die KI."""
+        AI = self.AI
+        was = chat_befehle.lesen(AI["input"])
+        if was.art == "leer":
             return
+        if was.art == "unbekannt":
+            # Eingabe bleibt stehen: meist ein Tippfehler, den man korrigiert.
+            AI["msg"] = "unbekannter befehl /%s — /hilfe zeigt alle" % was.name
+            return
+        if was.art == "befehl":
+            AI["input"], AI["cur"] = "", 0
+            self.befehl(was.name, was.arg)
+            return
+        if AI["streaming"]:
+            AI["msg"] = "antwort läuft noch — esc stoppt sie"
+            return
+        self.senden(was.text)
+
+    def senden(self, msg):
+        """Eine Frage an die KI schicken (Stream im Hintergrund starten)."""
+        AI, AI_LOCK, ai_stream = self.AI, self.AI_LOCK, self.ai_stream
         with AI_LOCK:
             AI["log"].append(("user", msg))
             AI["input"] = ""
+            AI["cur"] = 0
+            AI["gestoppt"] = False
+            AI["strom"] = None
             AI["answer"] = ""
             AI["reflect"] = ""
             AI["perm"] = None
@@ -348,6 +459,19 @@ class Chat:
         Backend, state.py). Läuft im Hintergrund beim ersten Öffnen; scheitert still
         (dann leerer Verlauf)."""
         AI, AI_LOCK = self.AI, self.AI_LOCK
+        self.status_holen()
+        log = ai_verlauf_holen() or []
+        with AI_LOCK:
+            # nur übernehmen, wenn zwischenzeitlich nichts Eigenes dazukam
+            if not AI["log"]:
+                AI["log"] = log
+            AI["n"] = len(AI["log"])
+            AI["loaded"] = True
+
+    def status_holen(self):
+        """Backend-Status für den Kasten-Titel holen (/api/ai/status).
+        Auch nach jedem Slash-Befehl, damit der Titel sofort stimmt."""
+        AI, AI_LOCK = self.AI, self.AI_LOCK
         # Welcher Kern antwortet gerade? Steht im Kasten-Titel, damit beim
         # Testen ohne Rätselraten sichtbar ist, ob lokal oder Cloud gedacht
         # wird - unterwegs ohne Ollama ist das der ganze Unterschied.
@@ -363,13 +487,150 @@ class Chat:
                     AI["budget"] = k.get("budget") or {}
         except (urllib.error.URLError, OSError, ValueError):
             pass
-        log = ai_verlauf_holen() or []
-        with AI_LOCK:
-            # nur übernehmen, wenn zwischenzeitlich nichts Eigenes dazukam
-            if not AI["log"]:
-                AI["log"] = log
-            AI["n"] = len(AI["log"])
-            AI["loaded"] = True
+
+    # ── Steuerung: stoppen, neu, Einstellungen (Phase 1, 2026-10-07) ──────
+
+    def stoppen(self):
+        """Laufende Antwort stoppen (Esc). Das Backend bricht bis in die
+        Werkzeug-Schleife ab und schickt dann 'gestoppt'; der Strom endet
+        von selbst. Im Hintergrund, damit die Taste nie hängt."""
+        AI = self.AI
+        with self.AI_LOCK:
+            strom = AI.get("strom")
+            AI["msg"] = "stoppe …"
+
+        def los():
+            try:
+                api_call("/api/chat/stop", "POST",
+                         {"strom": strom} if strom else {})
+            except (urllib.error.URLError, OSError, ValueError):
+                with self.AI_LOCK:
+                    AI["msg"] = "stoppen ging nicht — keine verbindung"
+        threading.Thread(target=los, daemon=True).start()
+
+    def neues_gespraech(self):
+        """/neu. Heute: Verlauf leeren. In Phase 2 (Gespräche) wird daraus
+        „neues Gespräch anlegen" — dann ändert sich NUR diese Methode."""
+        AI = self.AI
+        if AI["streaming"]:
+            AI["msg"] = "antwort läuft noch — erst stoppen (esc)"
+            return
+        try:
+            api_call("/api/chat/clear", "POST", {})
+        except (urllib.error.URLError, OSError, ValueError):
+            AI["msg"] = "keine verbindung — verlauf nicht geleert"
+            return
+        with self.AI_LOCK:
+            AI["log"], AI["n"], AI["scroll"] = [], 0, 0
+            AI["msg"] = "neues gespräch"
+
+    def befehl(self, name, arg):
+        """Einen Slash-Befehl ausführen (chat_befehle.BEFEHLE)."""
+        AI = self.AI
+        if name == "hilfe":
+            with self.AI_LOCK:
+                AI["log"].append(("hinweis", chat_befehle.hilfe_text()))
+                AI["scroll"] = 0
+            return
+        if name == "neu":
+            self.neues_gespraech()
+            return
+        if name in ("lokal", "cloud", "auto"):
+            self.setzen({"weg": name})
+            return
+        if arg:
+            feld = {"modell": "modell", "anbieter": "anbieter",
+                    "effort": "effort", "budget": "budget"}[name]
+            self.setzen({feld: arg})
+            return
+        # Ohne Argument: zeigen bzw. zur Auswahl stellen.
+        stand = self.einstellungen_holen()
+        if stand is None:
+            return
+        if name == "budget":
+            AI["msg"] = budget_text(stand)
+            return
+        wahl = auswahl(name, stand)
+        if not wahl["optionen"]:
+            AI["msg"] = "kein anbieter mit schlüssel — nichts zu wählen"
+            return
+        AI["wahl"] = wahl
+
+    def einstellungen_holen(self):
+        """GET /api/ai/einstellungen, oder None (Hinweis steht dann da)."""
+        try:
+            stand = api_call("/api/ai/einstellungen")
+        except (urllib.error.URLError, OSError, ValueError):
+            self.AI["msg"] = "keine verbindung zum backend"
+            return None
+        return stand if isinstance(stand, dict) else None
+
+    def setzen(self, daten):
+        """POST /api/ai/einstellungen; Ergebnis oder Klartext-Fehler in die
+        Statuszeile, danach den Titel auffrischen."""
+        AI = self.AI
+        try:
+            stand = api_call("/api/ai/einstellungen", "POST", daten)
+        except urllib.error.HTTPError as e:
+            grund = ""
+            try:
+                grund = json.loads(e.read().decode("utf-8", "replace")).get("error") or ""
+            except Exception:
+                pass
+            AI["msg"] = grund or "fehler: HTTP %s" % e.code
+            return
+        except (urllib.error.URLError, OSError, ValueError):
+            AI["msg"] = "keine verbindung zum backend"
+            return
+        AI["msg"] = stand_text(daten, stand if isinstance(stand, dict) else {})
+        threading.Thread(target=self.status_holen, daemon=True).start()
+
+    def _taste_wahl(self, ch):
+        """Offene Auswahl (/modell, /anbieter, /effort): ↑↓ wählen, Enter
+        oder Ziffer nimmt, Esc bricht ab."""
+        AI = self.AI
+        wahl = AI["wahl"]
+        n = len(wahl["optionen"])
+        if ch == 27:
+            AI["wahl"] = None
+        elif ch == curses.KEY_UP:
+            wahl["idx"] = (wahl["idx"] - 1) % n
+        elif ch == curses.KEY_DOWN:
+            wahl["idx"] = (wahl["idx"] + 1) % n
+        elif ch in (10, 13, curses.KEY_ENTER) or (
+                isinstance(ch, int) and ord("1") <= ch <= ord("9")
+                and ch - ord("1") < n):
+            idx = wahl["idx"] if ch in (10, 13, curses.KEY_ENTER) else ch - ord("1")
+            AI["wahl"] = None
+            self.setzen(wahl["optionen"][idx][1])
+
+    def _esc_lesen(self):
+        """Nach einem ESC kurz (50 ms) schauen, was folgt — derselbe Weg
+        wie Alt+Pfeil in der Karte (karte.m_alt_arrow). -> "esc",
+        "alt_enter" oder None."""
+        stdscr = self.z.stdscr
+        folge = []
+        try:
+            stdscr.timeout(50)
+            erst = stdscr.getch()
+            if erst != -1:
+                folge.append(erst)
+                stdscr.nodelay(True)
+                for _ in range(7):
+                    nx = stdscr.getch()
+                    if nx == -1:
+                        break
+                    folge.append(nx)
+        finally:
+            stdscr.timeout(250)
+        return eingabe.esc_folge(folge)
+
+    def fusszeile(self):
+        """Die Tastenzeile ganz unten, solange der Chat den Fokus hat."""
+        if self.AI["streaming"]:
+            return " esc stoppt die antwort · bild↑↓ verlauf · tippen geht weiter"
+        return (" enter senden · alt+enter neue zeile · ↑↓ verlauf · "
+                "/hilfe befehle · esc zu")
 
     def ai_poll(self):
         """Regelmaessig nachsehen, ob die KI von sich aus etwas gesagt hat.
@@ -443,9 +704,15 @@ class Chat:
             threading.Thread(target=ai_load_history, daemon=True).start()
 
     def taste(self, ch):
-        """Eine Taste, während der Chat den Fokus hat (früher ein Zweig der
-        Hauptschleife in run_ui)."""
-        AI, ai_answer_perm, ai_submit = self.AI, self.ai_answer_perm, self.ai_submit
+        """Eine Taste, während der Chat den Fokus hat. Belegung und die
+        ↑↓-Regel: ansichten/eingabe.py (Kopf)."""
+        AI, ai_answer_perm = self.AI, self.ai_answer_perm
+        if ch == 27:
+            # Allein stehendes Esc oder Alt+Enter? Andere Alt-Tasten: nichts.
+            art = self._esc_lesen()
+            if art is None:
+                return
+            ch = TASTE_ALT_ENTER if art == "alt_enter" else 27
         if AI["perm"]:                     # offene Erlaubnis-Frage → j/n/Zahl
             opts = AI["perm"].get("optionen") or ["ja", "nein"]
             if ch in (ord("j"), ord("J")):
@@ -456,23 +723,62 @@ class Chat:
                 ai_answer_perm(opts[ch - ord("1")])
             elif ch == 27:                 # esc = ablehnen (letzte Option, meist nein)
                 ai_answer_perm(opts[-1])
-        elif ch == 27:                     # esc schließt das Panel (Stream läuft im BG weiter)
-            AI["active"] = False
-        elif ch in (10, 13, curses.KEY_ENTER):
-            ai_submit()
-        elif ch in (curses.KEY_BACKSPACE, 127, 8):
-            if not AI["streaming"]:
-                AI["input"] = AI["input"][:-1]
-        elif ch == curses.KEY_UP:
-            AI["scroll"] += 1
-        elif ch == curses.KEY_DOWN:
-            AI["scroll"] = max(0, AI["scroll"] - 1)
-        elif ch == curses.KEY_PPAGE:
-            AI["scroll"] += 5
-        elif ch == curses.KEY_NPAGE:
-            AI["scroll"] = max(0, AI["scroll"] - 5)
-        elif 32 <= ch <= 126 and not AI["streaming"] and len(AI["input"]) < 1000:
-            AI["input"] += chr(ch)
+            return
+        if AI["wahl"]:
+            self._taste_wahl(ch)
+            return
+        if ch == 27:
+            # Läuft eine Antwort, stoppt Esc sie (bis in die Schleife, das
+            # spart Geld); sonst schließt Esc das Fenster wie bisher.
+            if AI["streaming"]:
+                self.stoppen()
+            else:
+                AI["active"] = False
+            return
+        if ch in (10, 13, curses.KEY_ENTER):
+            self.ai_submit()
+            return
+        if ch in (curses.KEY_PPAGE, curses.KEY_NPAGE):
+            AI["scroll"] = max(0, AI["scroll"] + (5 if ch == curses.KEY_PPAGE else -5))
+            return
+        if ch in (curses.KEY_UP, curses.KEY_DOWN) and not eingabe.mehrzeilig(AI["input"]):
+            AI["scroll"] = max(0, AI["scroll"] + (1 if ch == curses.KEY_UP else -1))
+            return
+        self._taste_eingabe(ch)
+
+    # Tasten, die den Cursor bewegen oder an ihm löschen → Funktion in eingabe.
+    _BEARBEITEN = {
+        curses.KEY_LEFT: eingabe.links, curses.KEY_RIGHT: eingabe.rechts,
+        curses.KEY_HOME: eingabe.zeilenanfang, curses.KEY_FIND: eingabe.zeilenanfang,
+        1: eingabe.zeilenanfang,                     # Strg+A
+        curses.KEY_END: eingabe.zeilenende, curses.KEY_SELECT: eingabe.zeilenende,
+        5: eingabe.zeilenende,                       # Strg+E
+        curses.KEY_UP: eingabe.hoch, curses.KEY_DOWN: eingabe.runter,
+        curses.KEY_BACKSPACE: eingabe.zurueck, 127: eingabe.zurueck, 8: eingabe.zurueck,
+        curses.KEY_DC: eingabe.entfernen,
+    }
+
+    def _taste_eingabe(self, ch):
+        """Tippen und Bearbeiten im Eingabefeld (auch während eine Antwort
+        läuft — nur Abschicken wartet)."""
+        AI = self.AI
+        text, pos = AI["input"], min(AI["cur"], len(AI["input"]))
+        zeichen = None
+        if ch == TASTE_ALT_ENTER:
+            zeichen = "\n"
+        elif ch in self._BEARBEITEN:
+            text, pos = self._BEARBEITEN[ch](text, pos)
+        elif 32 <= ch <= 126:
+            zeichen = chr(ch)
+        elif ch == 9:
+            zeichen = " "
+        elif 128 <= ch <= 255:             # ein Byte eines Umlauts (UTF-8)
+            AI["u8"], zeichen = eingabe.utf8_byte(AI.get("u8", b""), ch)
+            if zeichen is not None and not eingabe.druckbar(zeichen):
+                zeichen = None
+        if zeichen is not None:
+            text, pos = eingabe.einfuegen(text, pos, zeichen)
+        AI["input"], AI["cur"] = text, pos
 
     def draw_ai(self, by, bx, bh, bw):
         """Inhalt der MITTE-Box, wenn der KI-Chat Fokus hat. Reiner Zeichner:
@@ -491,14 +797,18 @@ class Chat:
             streaming = AI["streaming"]
             perm = dict(AI["perm"]) if AI["perm"] else None
             inp = AI["input"]
+            cur = min(AI["cur"], len(inp))
             msg = AI["msg"]
             scroll = AI["scroll"]
+            wahl = AI["wahl"]
+            wahl = dict(wahl, optionen=list(wahl["optionen"])) if wahl else None
 
         # Fußzeilen zuerst: sie bestimmen, wie viel Platz der Verlauf noch hat.
         # Bei offener Erlaubnis-Frage brauchen Frage UND Knöpfe je nach Breite
         # mehrere Zeilen — früher wurden sie hart auf inw gekürzt, in einem
         # schmalen Fenster war die Frage damit unlesbar.
         foot = []
+        cursor = None                     # (fuß-zeile, spalte, zeichen)
         if perm:
             opts = perm.get("optionen") or ["ja", "nein"]
             label = "  ".join("%d) %s" % (i + 1, o) for i, o in enumerate(opts))
@@ -510,8 +820,11 @@ class Chat:
                 qlines = qlines[:room]
                 qlines[-1] = qlines[-1][:max(1, inw - 1)] + "…"
             foot = [(ln, C["warn"]) for ln in qlines + olines]
+        elif wahl:
+            foot = self._fuss_wahl(wahl, inw, bh)
         else:
-            # Info-Zeile: Denk-Strom > Fehler/Status > Scroll-Hinweis
+            # Info-Zeile: Denk-Strom > Fehler/Status > Scroll-Hinweis >
+            # was gerade geht (Stoppen, Befehle)
             if streaming and reflect:
                 foot.append((("denkt: " + reflect.replace("\n", " "))[-inw:],
                              C["faint"]))
@@ -519,17 +832,31 @@ class Chat:
                 foot.append((msg[:inw], C["warn"]))
             elif scroll > 0:
                 foot.append(("↑ verlauf (↓ nach unten)", C["faint"]))
+            elif streaming:
+                foot.append(("antwortet … esc stoppt", C["faint"]))
+            elif not inp:
+                foot.append(("enter senden · alt+enter neue zeile · /hilfe befehle"[:inw],
+                             C["faint"]))
             else:
                 foot.append(("", 0))               # Platz halten, Layout stabil
-            # Unterste Zeile: Stream-läuft > Eingabe
-            if streaming:
-                foot.append(("› …", C["dim"]))
-            else:
-                shown = "› " + inp
-                if len(shown) > inw - 1:
-                    shown = "› …" + inp[-(inw - 5):]
-                foot.append((shown + "_", C["bright"]))
-        foot = foot[-max(1, bh - 3):]
+            # Darunter das Eingabefeld: wächst bis eingabe.HOEHE Zeilen, dann
+            # scrollt es mit dem Cursor. Erste Zeile mit ›, die anderen
+            # eingerückt; den Cursor zeichnet der Fuß unten invers.
+            hoehe = max(1, min(eingabe.HOEHE, bh - 5))
+            zeilen, cy, cx, oben = eingabe.anzeige(inp, cur, inw - 2, hoehe)
+            eingabe_ab = len(foot)
+            attr = C["dim"] if streaming else C["bright"]
+            for i, z_ in enumerate(zeilen):
+                # › nur vor der echten ersten Zeile; ist sie hochgescrollt,
+                # zeigt ↑, dass oben noch Text steht.
+                vorn = "  " if i else ("↑ " if oben else "› ")
+                foot.append((vorn + z_, attr))
+            cursor = (eingabe_ab + cy, 2 + cx,
+                      zeilen[cy][cx] if cx < len(zeilen[cy]) else " ")
+        weg = max(0, len(foot) - max(1, bh - 3))
+        foot = foot[weg:]
+        if cursor is not None:
+            cursor = (cursor[0] - weg,) + cursor[1:]
         body_bot = by + bh - 2 - len(foot)
         avail = max(1, body_bot - body_top + 1)
 
@@ -567,7 +894,7 @@ class Chat:
                         if z:
                             safe_addstr(ey + r, ex + c, z[0], pix_attr(z[1], z[2]))
                 if not lines:
-                    hinweis = "frag die lokale ki — tippen + enter"
+                    hinweis = "frag die ki — tippen + enter · /hilfe"
                     addclip(ey + pixel.AUGE_H + 1, bx + max(2, (bw - len(hinweis)) // 2),
                             hinweis, inw, C["faint"])
                     lines = None                       # Hinweis steht schon
@@ -576,7 +903,7 @@ class Chat:
             pass
         elif not lines:
             addclip(body_top + avail // 2, inx,
-                    "frag die lokale ki — tippen + enter", inw, C["faint"])
+                    "frag die ki — tippen + enter · /hilfe", inw, C["faint"])
         else:
             total = len(lines)
             maxscroll = max(0, total - avail)     # scroll=0 → Boden (neueste)
@@ -608,6 +935,25 @@ class Chat:
 
         # Fuß unten in den Kasten setzen (wächst nach oben, nicht in den Rahmen)
         fy = by + bh - 1 - len(foot)
-        for txt, attr in foot:
+        for i, (txt, attr) in enumerate(foot):
             addclip(fy, inx, txt, inw, attr)
+            if cursor is not None and cursor[0] == i and cursor[1] < inw:
+                safe_addstr(fy, inx + cursor[1], cursor[2],
+                            C["bright"] | curses.A_REVERSE)
             fy += 1
+
+    def _fuss_wahl(self, wahl, inw, bh):
+        """Die offene Auswahl als Fußzeilen: Titel, ein Fenster der
+        Optionen um die gewählte herum, Hinweis."""
+        C = self.z.C
+        opts, idx = wahl["optionen"], wahl["idx"]
+        platz = max(1, min(len(opts), bh - 6))
+        oben = max(0, min(idx - platz // 2, len(opts) - platz))
+        zeilen = [(wahl["titel"][:inw], C["acc"])]
+        for i in range(oben, oben + platz):
+            zeichen = "›" if i == idx else " "
+            nr = "%d) " % (i + 1) if i < 9 else "   "
+            zeilen.append(("%s %s%s" % (zeichen, nr, opts[i][0]),
+                           C["bright"] if i == idx else C["dim"]))
+        zeilen.append(("↑↓ wählen · enter nehmen · esc abbrechen"[:inw], C["faint"]))
+        return zeilen

@@ -490,5 +490,5 @@ def test_auge_denkt():
 
 def test_ki_chat_zeigt_das_auge():
     schirm = _lauf(b" ")
-    assert "frag die lokale ki" in schirm
+    assert "frag die ki" in schirm
     assert any(chr(c) in schirm for c in range(0x1FB00, 0x1FB3C))   # Sextanten = Pixelbild

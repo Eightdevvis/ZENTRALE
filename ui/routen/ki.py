@@ -14,6 +14,7 @@ from flask import Blueprint, Response, jsonify, request, stream_with_context
 import ai           # type: ignore
 import ai_backends     # type: ignore  – AI-Backend-Verfügbarkeit (local/cloud, EXTERNAL-Box)
 import kern            # type: ignore  – der eine Einstieg in den Chat (core/kern.py)
+import ki_einstellungen  # type: ignore  – Einstellungen lesen/setzen mit Prüfung
 import providers      # type: ignore  – Cloud-Registry des Kerns (base_url/kind)
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
 
@@ -70,77 +71,24 @@ def api_chat():
     history = state.get_chat_history()
 
     def generate():
-        # Tokens sammeln um am Ende die komplette Antwort zu speichern
-        collected = []
-        fehler_kam = False
-
+        # Stoppen (2026-10-07): der Zug bekommt eine Nummer und ein Abbruch-
+        # Signal. Die Nummer geht als ERSTES Event an die TUI, damit ihr Esc
+        # genau diesen Zug trifft (POST /api/chat/stop). Angemeldet erst
+        # hier drin: nur dann läuft das Abmelden im finally sicher mit.
+        strom_id, abbruch = state.chat_zug_beginnen()
         # Welcher Weg (lokal, Anthropic, OpenAI-kompatibel) — das entscheidet
         # kern.chat, die eine Stelle dafür. Alle Wege liefern dasselbe
         # Event-Protokoll; die Schleife hier merkt keinen Unterschied.
-        stream = kern.chat(history, via_mic=via_mic, backend=backend)
-
-        for token in stream:
-            # zeige_ascii liefert ein Dict statt eines Text-Tokens: ein
-            # Inline-Bild-Event. Es geht als eigenes SSE-Event 'ascii' raus
-            # und NICHT in collected - es ist kein Antworttext, wird also
-            # weder gesprochen noch in der History gespeichert.
-            if isinstance(token, dict) and 'ascii' in token:
-                yield f"data: {json.dumps({'ascii': token['ascii'], 'name': token.get('name')})}\n\n"
-                continue
-            # permission-Event: ein bestätigungspflichtiges Tool wurde abgefangen
-            # und chat_stream blockiert jetzt (state.wait_permission). Frage als
-            # SSE 'permission'-Event raus - das Frontend tauscht daraufhin die
-            # Konsolen-Eingabe gegen JA/NEIN-Knöpfe und POSTet die Wahl an
-            # /api/permission_answer, was den Stream hier wieder entsperrt. Kein
-            # Antworttext → nicht in collected (nicht in die History-Schlussantwort).
-            if isinstance(token, dict) and 'permission' in token:
-                yield f"data: {json.dumps({'permission': token['permission']})}\n\n"
-                continue
-            # werkzeug-Event: ein Tool-Call beginnt oder ist fertig. Geht als
-            # eigenes SSE 'werkzeug'-Event raus, damit im Chat sichtbar wird,
-            # WAS sie tut — nicht nur, was sie hinterher darueber sagt. Kein
-            # Antworttext -> nicht in collected.
-            if isinstance(token, dict) and 'werkzeug' in token:
-                yield f"data: {json.dumps({'werkzeug': token['werkzeug']})}\n\n"
-                continue
-            # reflect-Event: ein Stück des Denk-Stroms (Ollama `thinking`-Feld
-            # bzw. Denk-Tokens der Cloud). Geht als eigenes SSE 'reflect'-Event
-            # raus, das die TUI dim mitlaufen lässt ("ich schau kurz nach…").
-            # KEIN Antworttext → nicht in collected (nicht gespeichert, nicht
-            # gesprochen). Siehe ai.chat_stream / adaptives Thinking.
-            if isinstance(token, dict) and 'reflect' in token:
-                yield f"data: {json.dumps({'reflect': token['reflect']})}\n\n"
-                continue
-            # cinema-Event: eine News-Sendung beginnt (lies_news lief). Reines
-            # UI-Signal (Sendungs-/Untertitel-Modus), kein Antworttext → nicht
-            # in collected.
-            if isinstance(token, dict) and 'cinema' in token:
-                yield f"data: {json.dumps({'cinema': True})}\n\n"
-                continue
-            # fehler-Event: Backend-Fehler, Ablehnung oder Rundengrenze (siehe
-            # core/werkzeug_schleife.py). Geht DIREKT an Sasha (TUI-Statuszeile)
-            # und NICHT in collected: frueher stand "[Cloud-Fehler: …]" danach
-            # im Verlauf, und die KI las es im naechsten Zug als ihre eigene
-            # Aussage.
-            if isinstance(token, dict) and 'fehler' in token:
-                fehler_kam = True
-                state.push_log(f"AI ✗  {token['fehler']}")
-                yield f"data: {json.dumps({'fehler': token['fehler']})}\n\n"
-                continue
-            collected.append(token)
-            # SSE-Format: "data: " + JSON + zwei Newlines
-            # JSON.dumps schützt vor Sonderzeichen (Newlines im Token, etc.)
-            yield f"data: {json.dumps({'token': token})}\n\n"
-
-        # Komplette Antwort in state speichern (für History beim nächsten Öffnen).
-        # Ist der Zug an einem Fehler gescheitert, ohne dass Text kam, bleibt
-        # die Frage unbeantwortet stehen — eine leere KI-Antwort waere eine
-        # Behauptung ("ich habe nichts gesagt"), die nicht stimmt.
-        if collected or not fehler_kam:
-            state.push_chat_message("assistant", "".join(collected))
-
-        # Abschluss-Signal für den Client
-        yield f"data: {json.dumps({'done': True})}\n\n"
+        stream = kern.chat(history, via_mic=via_mic, backend=backend,
+                           abbruch=abbruch)
+        try:
+            yield f"data: {json.dumps({'strom': strom_id})}\n\n"
+            yield from _sse_zug(stream)
+        finally:
+            # Auch wenn der Client wegbricht: Zug abmelden und den Kern-
+            # Generator schließen, statt ihn bis zum GC weiterlaufen zu lassen.
+            state.chat_zug_beenden(strom_id)
+            stream.close()
 
     return Response(
         stream_with_context(generate()),
@@ -152,6 +100,111 @@ def api_chat():
             'X-Accel-Buffering': 'no',
         },
     )
+
+
+# Vermerk hinter einer gestoppten Antwort im Verlauf. Steht dort auch für die
+# KI: im nächsten Zug sieht sie, dass ihr Satz nicht zu Ende kam.
+VERMERK_ABGEBROCHEN = "(abgebrochen)"
+
+
+def _sse_zug(stream):
+    """Die Events eines Kern-Zugs als SSE-Zeilen; am Ende die Antwort in den
+    Verlauf. Generator."""
+    # Tokens sammeln um am Ende die komplette Antwort zu speichern
+    collected = []
+    fehler_kam = False
+    gestoppt = False
+
+    for token in stream:
+        # zeige_ascii liefert ein Dict statt eines Text-Tokens: ein
+        # Inline-Bild-Event. Es geht als eigenes SSE-Event 'ascii' raus
+        # und NICHT in collected - es ist kein Antworttext, wird also
+        # weder gesprochen noch in der History gespeichert.
+        if isinstance(token, dict) and 'ascii' in token:
+            yield f"data: {json.dumps({'ascii': token['ascii'], 'name': token.get('name')})}\n\n"
+            continue
+        # permission-Event: ein bestätigungspflichtiges Tool wurde abgefangen
+        # und chat_stream blockiert jetzt (state.wait_permission). Frage als
+        # SSE 'permission'-Event raus - das Frontend tauscht daraufhin die
+        # Konsolen-Eingabe gegen JA/NEIN-Knöpfe und POSTet die Wahl an
+        # /api/permission_answer, was den Stream hier wieder entsperrt. Kein
+        # Antworttext → nicht in collected (nicht in die History-Schlussantwort).
+        if isinstance(token, dict) and 'permission' in token:
+            yield f"data: {json.dumps({'permission': token['permission']})}\n\n"
+            continue
+        # werkzeug-Event: ein Tool-Call beginnt oder ist fertig. Geht als
+        # eigenes SSE 'werkzeug'-Event raus, damit im Chat sichtbar wird,
+        # WAS sie tut — nicht nur, was sie hinterher darueber sagt. Kein
+        # Antworttext -> nicht in collected.
+        if isinstance(token, dict) and 'werkzeug' in token:
+            yield f"data: {json.dumps({'werkzeug': token['werkzeug']})}\n\n"
+            continue
+        # reflect-Event: ein Stück des Denk-Stroms (Ollama `thinking`-Feld
+        # bzw. Denk-Tokens der Cloud). Geht als eigenes SSE 'reflect'-Event
+        # raus, das die TUI dim mitlaufen lässt ("ich schau kurz nach…").
+        # KEIN Antworttext → nicht in collected (nicht gespeichert, nicht
+        # gesprochen). Siehe ai.chat_stream / adaptives Thinking.
+        if isinstance(token, dict) and 'reflect' in token:
+            yield f"data: {json.dumps({'reflect': token['reflect']})}\n\n"
+            continue
+        # cinema-Event: eine News-Sendung beginnt (lies_news lief). Reines
+        # UI-Signal (Sendungs-/Untertitel-Modus), kein Antworttext → nicht
+        # in collected.
+        if isinstance(token, dict) and 'cinema' in token:
+            yield f"data: {json.dumps({'cinema': True})}\n\n"
+            continue
+        # gestoppt-Event: Sasha hat gestoppt (/api/chat/stop). Die
+        # Schleife ist schon raus; hier nur merken, wie gespeichert wird.
+        if isinstance(token, dict) and 'gestoppt' in token:
+            gestoppt = True
+            state.push_log("AI ■  gestoppt")
+            yield f"data: {json.dumps({'gestoppt': True})}\n\n"
+            continue
+        # fehler-Event: Backend-Fehler, Ablehnung oder Rundengrenze (siehe
+        # core/werkzeug_schleife.py). Geht DIREKT an Sasha (TUI-Statuszeile)
+        # und NICHT in collected: frueher stand "[Cloud-Fehler: …]" danach
+        # im Verlauf, und die KI las es im naechsten Zug als ihre eigene
+        # Aussage.
+        if isinstance(token, dict) and 'fehler' in token:
+            fehler_kam = True
+            state.push_log(f"AI ✗  {token['fehler']}")
+            yield f"data: {json.dumps({'fehler': token['fehler']})}\n\n"
+            continue
+        collected.append(token)
+        # SSE-Format: "data: " + JSON + zwei Newlines
+        # JSON.dumps schützt vor Sonderzeichen (Newlines im Token, etc.)
+        yield f"data: {json.dumps({'token': token})}\n\n"
+
+    # Komplette Antwort in state speichern (für History beim nächsten Öffnen).
+    # Ist der Zug an einem Fehler gescheitert, ohne dass Text kam, bleibt
+    # die Frage unbeantwortet stehen — eine leere KI-Antwort waere eine
+    # Behauptung ("ich habe nichts gesagt"), die nicht stimmt.
+    # Gestoppt: was bis dahin da war, bleibt mit Vermerk stehen; ein
+    # gestoppter Zug ohne Text landet gar nicht im Verlauf.
+    text = "".join(collected)
+    if gestoppt:
+        if text.strip():
+            state.push_chat_message(
+                "assistant", text.rstrip() + "\n\n" + VERMERK_ABGEBROCHEN)
+    elif collected or not fehler_kam:
+        state.push_chat_message("assistant", text)
+
+    # Abschluss-Signal für den Client
+    yield f"data: {json.dumps({'done': True})}\n\n"
+
+
+@bp.route('/api/chat/stop', methods=['POST'])
+def api_chat_stop():
+    """Den laufenden Chat-Zug stoppen (TUI: Esc während einer Antwort).
+
+    Body {strom: <id aus dem ersten SSE-Event>} trifft genau diesen Zug;
+    ohne strom jeden laufenden. Antwort {gestoppt: bool} — False heißt, es
+    lief nichts (mehr), z. B. weil die Antwort gerade fertig wurde. Kein
+    Fehler: Stoppen ist dann schlicht erledigt."""
+    body = request.get_json(silent=True) or {}
+    strom = body.get('strom')
+    strom = str(strom) if strom else None
+    return jsonify({"ok": True, "gestoppt": state.chat_zug_stoppen(strom)})
 
 
 @bp.route('/api/chat/history')
@@ -261,6 +314,23 @@ def api_ai_backends():
             ai_backends.set_local_enabled(bool(body['local_enabled']))
         return jsonify(ai_backends.status(fresh=True))
     return jsonify(ai_backends.status())
+
+
+@bp.route('/api/ai/einstellungen', methods=['GET', 'POST'])
+def api_ai_einstellungen():
+    """Chat-Einstellungen lesen (GET) oder setzen (POST) — für die
+    Slash-Befehle im TUI-Chat (/modell, /anbieter, /effort, /budget,
+    /lokal, /cloud, /auto). POST nimmt beliebige der Felder
+    {anbieter, modell, effort, budget, weg}, prüft alle und setzt sie
+    dauerhaft (core/ki_einstellungen.py). Unsinn → 400 mit Klartext in
+    'error'; dann ist NICHTS gesetzt."""
+    if request.method == 'POST':
+        body = request.get_json(silent=True)
+        try:
+            return jsonify(ki_einstellungen.setzen(body))
+        except ki_einstellungen.Ungueltig as e:
+            return jsonify({"error": str(e)}), 400
+    return jsonify(ki_einstellungen.lesen())
 
 
 @bp.route('/api/ai/debug/stream')

@@ -1094,7 +1094,9 @@ def bild_zeichnen(u):
     # Rad): nur noch die vier Tasten, die überall gelten. Eine KI-Antwort,
     # die im Hintergrund fertig wurde, meldet sich hier mit ●.
     ki = "space ki" + (" ●" if AI.get("neu") else "")
-    if DASH["an"] or current_ctx(z) != "home":
+    if current_ctx(z) == "ai":
+        fuss = chat.fusszeile()       # im Chat: was die Tasten dort tun
+    elif DASH["an"] or current_ctx(z) != "home":
         fuss = " ←→ drehen · enter öffnen · %s · esc zurück" % ki
     else:
         fuss = " ←→ drehen · alt+←→ rad wechseln · enter öffnen · %s · esc zu" % ki

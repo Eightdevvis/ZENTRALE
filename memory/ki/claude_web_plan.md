@@ -1,7 +1,7 @@
 # Claude-Web im ZENTRALE-Assistenten — der Plan
 
 Stand 2026-10-07. **Geplant und von Sasha entschieden (Abschnitt 6).
-Phase 0 ist gebaut (Abschnitt 5), der Rest noch nicht.** Sasha hat am 06.10. gesagt: erst aufräumen, dann vor dem
+Phase 0 und 1 sind gebaut (Abschnitte 5 und 7), der Rest noch nicht.** Sasha hat am 06.10. gesagt: erst aufräumen, dann vor dem
 Übertragen anhalten und gemeinsam planen. Das ist am 07.10. geschehen.
 
 Grundregel aus [../claude_hinweise.md](../claude_hinweise.md) („Das
@@ -138,7 +138,7 @@ Prompt-Bau hängt dessen Anweisungen hinter den Gedächtnis-Kopf.
 | Phase | Was | Warum zuerst | Größe |
 |---|---|---|---|
 | ~~**0 Fundament**~~ | ~~TUI-Zerlegung~~ (erledigt 07.10.); ~~Werkzeug-Register~~ (erledigt 07.10., siehe unten) | Ohne ein Register wächst jedes neue Werkzeug an drei Stellen | mittel |
-| **1 Steuerung** | Stoppen (bis in die Schleife), mehrzeilige Eingabe mit Cursor, Slash-Befehle im Chat (`/neu`, `/modell`, `/effort`), Kabel für die vorhandenen Setter (Route + TUI) | sofort spürbar, kleines Risiko, Setter liegen schon da | klein |
+| **1 Steuerung** ✔ 07.10. | Stoppen (bis in die Schleife), mehrzeilige Eingabe mit Cursor, Slash-Befehle im Chat (`/neu`, `/modell`, `/effort`), Kabel für die vorhandenen Setter (Route + TUI) | sofort spürbar, kleines Risiko, Setter liegen schon da | klein |
 | **2 Gespräche** | `core/gespraeche.py` (Ordner pro Gespräch, Datei pro Rechner), Gesprächsliste in der TUI, neu/wechseln/umbenennen/archivieren, automatischer Titel, Wiederholen + letzte Nachricht bearbeiten, **Denken mitgespeichert und aufklappbar**, Gespräch „Erinnerungen" | das Fundament für alles Weitere; Verlauf überlebt Neustarts | mittel |
 | **3 Gedächtnis sichtbar** | Kernakten in der TUI ansehen/ändern, **`search_chats` über alle Gespräche** | Sasha orientiert sich nach Thema, nicht nach Datum — die Suche quer durch Gespräche ist dafür die Bedingung | klein |
 | **4 Skills** | Skill-Dateien, Liste im Prompt, `load_skill`, erste Skills; **`propose_skill`**: die KI schlägt Skills vor, angelegt wird erst nach Bestätigung (Gate) | billig, passt zur Kostenlogik; Grundlage dafür, dass sie sich später selbst weiterentwickelt | klein |
@@ -190,3 +190,48 @@ Jede Phase: eigener Worktree, Tests, Doku hier nachziehen, Leitplanken-Test
    Fundament; „Hauptsache der Assistent wird erstmal ordentlich."
 6. **Denken mitspeichern**, zum Anschauen. Ob es langfristig gebraucht wird,
    wird später anhand der Nutzung entschieden.
+
+## 7. Gebaut
+
+### Phase 1 — Steuerung (2026-10-07)
+
+- **Stoppen bis in die Schleife.** `/api/chat` meldet jeden Zug mit einer
+  Strom-Nummer an (`state.chat_zug_beginnen`, ein `threading.Event` je Zug)
+  und schickt sie als erstes SSE-Event `strom`. `POST /api/chat/stop
+  {strom?}` setzt das Signal (ohne Nummer: jeden laufenden Zug) und beendet
+  eine offene Erlaubnis-Frage mit „nein". `kern.chat(…, abbruch=)` reicht es
+  an den Weg; `werkzeug_schleife.laufen` prüft es vor jeder Runde und vor
+  jedem Werkzeug, die drei Adapter (Ollama, Anthropic, OpenAI) im Strom bei
+  jedem Stück: Strom schließen, Verbrauch buchen (Anthropic: Eingabe + Cache
+  aus `message_start`, Ausgabe nur, falls schon gemeldet; OpenAI meldet erst
+  am Ende → dann „nichts gebucht" im Log), `Gestoppt(text)` werfen. Die
+  Schleife gibt den halben Text roh aus und dann `{"gestoppt": True}` —
+  nichts wird gemerkt. Die Route speichert Text mit dem Vermerk
+  „(abgebrochen)", einen Zug ohne Text gar nicht. TUI: Esc während einer
+  Antwort stoppt („stoppe …" → „gestoppt"), sonst schließt Esc wie bisher.
+- **Eingabe** (`tui/ansichten/eingabe.py`, reine Funktionen): mehrzeilig
+  mit Cursor, ←→, Pos1/Ende (auch Strg+A/E), ⌫/Entf an der Cursorstelle,
+  Alt+Enter = neue Zeile (ESC + Enter, kurz gewartet wie bei Alt+Pfeil in
+  der Karte), Umlaute und alles Unicode (UTF-8-Bytes werden zusammengesetzt;
+  die Hauptschleife bleibt bei `getch`), wächst bis 5 Zeilen, dann scrollt
+  es. ↑↓ scrollen den Verlauf, solange kein Zeilenumbruch in der Eingabe
+  ist; sonst bewegen sie den Cursor (Verlauf dann mit Bild↑↓). Tippen geht
+  auch während einer Antwort, nur Abschicken wartet.
+- **Slash-Befehle im Chat** (`tui/ansichten/chat_befehle.py`): `/neu`,
+  `/modell [name]`, `/anbieter [name|auto]`, `/effort [stufe]`,
+  `/budget [euro|aus]`, `/lokal` `/cloud` `/auto`, `/hilfe`; `//` schickt
+  einen wörtlichen Schrägstrich. Unbekannter Befehl → Hinweis, nichts geht
+  an die KI. Ohne Argument öffnen `/modell`, `/anbieter`, `/effort` eine
+  Auswahl (↑↓, Enter oder Ziffer, Esc). `/neu` steckt in genau einer
+  Methode (`Chat.neues_gespraech`) — in Phase 2 wird nur sie umgebaut.
+- **Kabel für die Setter:** `GET/POST /api/ai/einstellungen` über
+  `core/ki_einstellungen.py` (prüft alles, dann setzt es alles; 400 mit
+  Klartext, z. B. „Für grok ist kein Schlüssel hinterlegt."). Ein Modell, das
+  nur bei einem anderen Anbieter mit Schlüssel in der Liste steht, nimmt
+  diesen Anbieter mit. Nach jedem Setzen holt die TUI `/api/ai/status` für
+  den Titel.
+
+Angenommen (Sasha war nicht erreichbar): Modell-Liste = Standard + billig
+aus `providers.py` + gespeichertes, ein freier Name geht per `/modell <name>`
+an den aktuellen Anbieter; Budget-Grenze 10.000 €; Eingabe bis 4.000
+Zeichen (vorher 1.000).

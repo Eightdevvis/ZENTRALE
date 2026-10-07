@@ -114,6 +114,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `erlaubnis` | 3 | Das Erlaubnis-Gate: die Tür, durch die die Schleife fragt (Regeln und Fragen stehen im Werkzeug-Register) |
 | `ki_antwort` | 3 | Fertige Antwort: Bild-Marker ziehen, Zug zum Merken vormerken |
 | `ki_prompt` | 3 | Prompt-Bausteine für jeden Weg: Jetzt-Block, Imprint, Alarme, Denk-Heuristik, Schalter |
+| `ki_einstellungen` | 3 | Chat-Einstellungen (Anbieter, Modell, Effort, Budget, Weg) lesen und mit Klartext-Prüfung setzen — für `/api/ai/einstellungen` |
 | `ki_werkzeuge` | 3 | Was ein KI-Werkzeug tut: ausfuehren(name, args) → Kalender, Notizen, Netz, Mail, Messreihen |
 | `werkzeug_register` | 3 | Ein Eintrag pro KI-Werkzeug: Schema, Beschreibung je Schiene, Erlaubnis-Regel + Frage; die Ausführer melden sich aus `ki_werkzeuge` an |
 | `kern` | 3 | Der eine Einstieg: kern.chat(verlauf) wählt den Weg (lokal/Anthropic/OpenAI) und fährt ihn |
@@ -154,7 +155,7 @@ egal woran, ging durch dieselbe Datei.
 | `notizen` | Block-Notizen |
 | `karte` | Weltkarte |
 | `kalender` | Kalender |
-| `ki` | Chat-Stream, Verlauf, Erlaubnis, Status, Backend-Wahl, Devtools |
+| `ki` | Chat-Stream, Stoppen, Verlauf, Erlaubnis, Status, Backend-Wahl, Einstellungen, Devtools |
 | `stimme` | Sprechen und Zuhören |
 | `tutor` | alles unter `/api/tutor/` |
 | `mail` | Mail-Triage |

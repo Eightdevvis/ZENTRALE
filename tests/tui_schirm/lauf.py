@@ -99,6 +99,18 @@ SZ = {
     "elektronik": rad(8) + [("cap", "a"), ("k", "/"), ("cap", "b")],
     "ki": [("k", "Space"), ("w", 2), ("cap", "a"), ("k", "/"), ("cap", "b"), ("l", "hallo welt"), ("cap", "c"),
            ("k", "Up"), ("k", "Up"), ("cap", "d")],
+    # Chat-Steuerung (Phase 1, 2026-10-07): Umlaute, Alt+Enter, Cursor,
+    # Slash-Befehle, Auswahl, unbekannter Befehl, Esc.
+    "ki_eingabe": [("k", "Space"), ("w", 2), ("l", "Grüße aus Köln"), ("k", "M-Enter"),
+                   ("l", "zweite Zeile mit ß"), ("cap", "a"), ("k", "Left"), ("k", "Left"),
+                   ("k", "BSpace"), ("k", "Home"), ("cap", "b"), ("k", "Up"), ("cap", "c"),
+                   ("k", "M-Enter"), ("k", "M-Enter"), ("k", "M-Enter"), ("k", "M-Enter"),
+                   ("k", "M-Enter"), ("l", "sieben"), ("cap", "d"), ("k", "Escape"), ("cap", "e")],
+    "ki_befehle": [("k", "Space"), ("w", 2), ("l", "/hilfe"), ("k", "Enter"), ("cap", "a"),
+                   ("l", "/modell"), ("k", "Enter"), ("w", 1), ("cap", "b"), ("k", "Down"),
+                   ("cap", "c"), ("k", "Escape"), ("cap", "d"), ("l", "/effort"), ("k", "Enter"),
+                   ("w", 1), ("cap", "e"), ("k", "Escape"), ("l", "/modl"), ("k", "Enter"),
+                   ("cap", "f"), ("k", "Escape"), ("cap", "g")],
     "tech_system": [("k", "M-Right"), ("k", "Enter"), ("cap", "a"), ("k", "/"), ("cap", "b")],
     "tech_stdout": [("k", "M-Right"), ("k", "Right"), ("k", "Enter"), ("cap", "a")],
     "tech_netz": [("k", "M-Right"), ("k", "Right"), ("k", "Right"), ("k", "Enter"), ("cap", "a")],
@@ -209,7 +221,9 @@ if __name__ == "__main__":
     namen = sys.argv[3:] or list(SZ)
     be = starte_backend()
     try:
-        lauf(os.path.abspath(code), os.path.abspath(aus), namen)
+        # Andere Größe zum Absturz-Prüfen (z. B. 80x24): ZTUI_GROESSE=80x24
+        b, h = (int(x) for x in os.environ.get("ZTUI_GROESSE", "150x46").split("x"))
+        lauf(os.path.abspath(code), os.path.abspath(aus), namen, b, h)
     finally:
         be.terminate()
         tmux("kill-server", check=False)

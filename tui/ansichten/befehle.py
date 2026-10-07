@@ -38,7 +38,7 @@ TUI_KEYS = [
     ("karte", "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Overlay (Handel→Politik→aus) · ,/. Zeit ←→ · ; jetzt · w=Fenster"),
     ("kalender", "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · Tab Woche/Monat · v dreht durch die Ansichten Tagesliste/Monatsraster/Zeitachse (nur anschauen) und zurück"),
     ("post", "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
-    ("space", "KI-Chat (Mitte): tippen + enter fragt die lokale KI (PC-Hirn via tunnel) · ↑↓ scrollen · esc zu"),
+    ("space", "KI-Chat (Mitte): tippen + enter fragt die KI · alt+enter neue zeile · ←→ pos1 ende entf: cursor · ↑↓ scrollen (in mehrzeiliger eingabe: zeile wechseln, dann bild↑↓) · esc stoppt eine laufende antwort, sonst zu · /hilfe im chat: /neu /modell /anbieter /effort /budget /lokal /cloud /auto"),
     ("tutor", "Persona-Zimmer (eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · ohne DISPLAY → text-panel · /tutor = text-panel"),
     ("fokus", "Fokus (Mitte): oben projekte, drunter alle listen · enter reindiven · a/s neu · space abhaken · r name · d weg · p projekt · f setzt den knoten als alleinigen fokus (rendert dann allein in der FOCUS-box) · m/> verschieben"),
     ("klavier", "Klavier (Mitte): die Tastatur IST die Klaviatur — y x c v b n m , . - weiß, s d g h j l ö schwarz · ←→ oktave · space nimmt eine melodie auf (fragt beim stoppen nach dem namen) · ↑↓ melodie wählen · enter abspielen · r umbenennen · D löschen · k/esc zu"),
@@ -77,8 +77,10 @@ CTX_KEYS = {
         ("L", "licht: neon/regenbogen/aus"), ("t", "theme"), ("k/esc", "zu"),
     ],
     "ai": [
-        ("tippen", "frage"), ("enter", "senden"),
-        ("↑↓", "scrollen"), ("esc", "zu"),
+        ("tippen", "frage"), ("enter", "senden"), ("alt+enter", "neue zeile"),
+        ("←→ pos1 ende", "cursor"), ("↑↓", "scrollen / zeile"),
+        ("bild↑↓", "scrollen"), ("esc", "stoppen / zu"),
+        ("/hilfe", "befehle im chat"),
     ],
     "elektronik": [
         ("esc", "zurück zum rad"),

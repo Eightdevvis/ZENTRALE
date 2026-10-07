@@ -31,6 +31,8 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/kontext.py` | `Kontext`: stdscr, store, Farben `C`, Pixel-Paare `PIX`, Theme, `safe_addstr`/`addclip`/`draw_box` | `C`, `PIX` |
 | `ansichten/text.py` | Umbruch, Markdown (Chat, Tutor, Post) | — |
 | `ansichten/chat.py` | `Chat`: KI-Chat, Stream, Erlaubnis-Frage, Verlauf-Poll, Auge | `AI` |
+| `ansichten/eingabe.py` | Eingabefeld des Chats als reine Funktionen: Cursor, Umlaute (UTF-8-Bytes), Alt+Enter, Umbruch/Scrollen der Anzeige | — |
+| `ansichten/chat_befehle.py` | Slash-Befehle im Chat lesen (`/neu`, `/modell` …), Hilfe-Text | — |
 | `ansichten/sprachtutor.py` | `Sprachtutor`: Text-Panel, Zimmer-Fenster | `TUTOR` |
 | `ansichten/post.py` | `Post`: Mail, Antwort-Editor, Mail-Worker | `MAIL` |
 | `ansichten/kalender.py` | `Kalender`: Woche/Monat, Formular, Routinen, Sidebar | `K` |
@@ -116,6 +118,29 @@ hineinbauen kann, ohne den Rest zu lesen.
 - `tests/test_tui_ansichten.py` (Hot Reload rekursiv, Aussenposten-Liste,
   keine Ansicht importiert `zentrale_tui`, `PROJEKT`, Zeichen-Primitive) und
   `tests/test_tui_teile.py` (Befehlszeile, Reminder) halten das Neue fest.
+
+## Chat: Eingabe, Stoppen, Befehle (seit 2026-10-07)
+
+Claude-Web-Plan Phase 1 ([../ki/claude_web_plan.md](../ki/claude_web_plan.md)
+Abschnitt 7). Was für die TUI gilt:
+
+- **Tasten im Chat:** Enter schickt, Alt+Enter = neue Zeile, ←→ Pos1 Ende
+  (Strg+A/E) ⌫ Entf am Cursor. **↑↓-Regel:** ohne Zeilenumbruch in der
+  Eingabe scrollen sie den Verlauf (wie vorher), mit Zeilenumbruch bewegen
+  sie den Cursor — der Verlauf geht dann mit Bild↑↓. Esc: läuft eine Antwort,
+  stoppt sie; offene Auswahl/Erlaubnis-Frage: abbrechen/ablehnen; sonst zu.
+- **Esc vs. Alt:** `Chat._esc_lesen` wartet nach ESC 50 ms auf Folgetasten
+  (wie `karte.m_alt_arrow`); allein → Esc, + Enter → Alt+Enter, sonst
+  nichts. Die Deutung ist `eingabe.esc_folge` (testbar).
+- **Umlaute:** die Hauptschleife bleibt bei `getch` (alle Ansichten rechnen
+  mit Ganzzahlen); der Chat setzt UTF-8-Bytes in `eingabe.utf8_byte`
+  zusammen, wie der Post-Antwort-Editor.
+- **Cursor** zeichnet `draw_ai` selbst (invers), `curs_set` bleibt 0.
+- Die Tastenzeile ganz unten liefert `Chat.fusszeile()`, solange der Chat
+  den Fokus hat.
+- Headless geprüft mit `tests/tui_schirm/lauf.py` (Szenarien `ki_eingabe`,
+  `ki_befehle`; Größe per `ZTUI_GROESSE=80x24`), das Abspiel-Backend liefert
+  dafür erfundene Einstellungen.
 
 ## Historie
 
