@@ -17,6 +17,10 @@ data/takt/
 # persoenlicher als der Graph selbst - der destilliert, das hier ist roh.
 # Eigene Zeile, weil .jsonl NICHT unter data/*.json faellt.
 data/ai_transcripts/
+# Die Chat-Gespraeche (core/gespraeche.py, seit 2026-10-07): Ordner mit
+# .jsonl pro Rechner und kopf.json in UNTERORDNERN — beides faellt nicht
+# unter data/*.json. Genauso privat wie das Transkript.
+data/gespraeche/
 # Das DATEI-GEDAECHTNIS (Steckbrief, Ziele, Dossiers, Tagebuch). Markdown,
 # faellt also NICHT unter data/*.json — deshalb eine eigene Zeile, und
 # deshalb steht sie hier als erstes: das ist der persoenlichste Inhalt im

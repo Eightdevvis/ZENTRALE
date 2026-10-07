@@ -155,15 +155,19 @@ def test_der_auftrag_ist_ein_auftrag_keine_fertige_nachricht(welt):
 
 # ── Der Treiber (core/takt_treiber.py) ───────────────────────────────────────────
 
-def test_der_auftrag_landet_nicht_im_verlauf(monkeypatch):
-    """Der Auftrag ist eine Regieanweisung, keine Aeusserung von Sasha. Ihn
-    mitzuspeichern hiesse, dass er morgen Saetze in seinem Verlauf liest,
-    die er nie geschrieben hat — und dass das Modell sie als seine liest."""
+def test_erinnerung_landet_im_eigenen_gespraech(monkeypatch):
+    """Seit 2026-10-07 (Claude-Web-Plan Phase 2): eine Erinnerung landet im
+    Gespräch „Erinnerungen", nicht in dem, an dem Sasha gerade sitzt.
+
+    Der Auftrag ist eine Regieanweisung, keine Aeusserung von Sasha. Er
+    steht dort VERSTECKT: die Anzeige zeigt ihn nicht (sonst laese Sasha
+    Saetze, die er nie geschrieben hat), und die KI sieht ihn als
+    automatischen Auftrag gekennzeichnet — nicht als Sashas Worte."""
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "ui"))
     import ai
     import ai_backends
+    import gespraeche
     import takt_treiber
-    import state
 
     gesehen = {}
 
@@ -173,19 +177,33 @@ def test_der_auftrag_landet_nicht_im_verlauf(monkeypatch):
         yield "Geige gleich. "
         yield "Los."
 
+    # Sasha sitzt gerade in einem anderen Gespräch.
+    thema = gespraeche.neu("Fahrrad")
+    gespraeche.anhaengen(thema, "user", "wie flicke ich einen schlauch?")
+    gespraeche.aktiv_setzen(thema)
+
     monkeypatch.setattr(ai_backends, "chat_available", lambda: "local")
     monkeypatch.setattr(ai, "chat_stream", fake_stream)
-    vorher = len(state.get_chat_history())
 
     assert takt_treiber.sprechen({"marke": "x", "auftrag": "Erinnere ihn an X."})
 
-    verlauf = state.get_chat_history()
     assert gesehen["letzte"]["role"] == "user"
     assert gesehen["letzte"]["content"].startswith("Erinnere ihn an X.")
-    assert len(verlauf) == vorher + 1
-    assert verlauf[-1]["role"] == "assistant"
-    assert verlauf[-1]["content"] == "Geige gleich. Los."
-    assert all("Erinnere ihn an X." not in m["content"] for m in verlauf)
+    # Das offene Gespräch bleibt unberührt, und es bleibt offen.
+    assert [n["text"] for n in gespraeche.nachrichten(thema)] == [
+        "wie flicke ich einen schlauch?"]
+    assert gespraeche.aktiv() == thema
+    # Sichtbar in „Erinnerungen": nur ihre Antwort.
+    sichtbar = gespraeche.nachrichten(gespraeche.ERINNERUNGEN)
+    assert [(n["rolle"], n["text"]) for n in sichtbar] == [("assistant", "Geige gleich. Los.")]
+    # Die KI sieht den Auftrag — gekennzeichnet.
+    ki = gespraeche.verlauf_fuer_ki(gespraeche.ERINNERUNGEN)
+    assert ki[0]["role"] == "user"
+    assert ki[0]["content"].startswith(gespraeche.AUFTRAG_VORSATZ + "Erinnere ihn an X.")
+    # Oben in der Liste, ungelesen.
+    oben = gespraeche.liste()[0]
+    assert oben["id"] == gespraeche.ERINNERUNGEN and oben["titel"] == "Erinnerungen"
+    assert oben["ungelesen"] is True
 
 
 def test_ohne_erreichbares_backend_wird_geschwiegen(monkeypatch):
@@ -193,29 +211,29 @@ def test_ohne_erreichbares_backend_wird_geschwiegen(monkeypatch):
     einen Anlauf gegen ein Backend, das es nicht gibt."""
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "ui"))
     import ai_backends
+    import gespraeche
     import takt_treiber
-    import state
 
     monkeypatch.setattr(ai_backends, "chat_available", lambda: None)
-    vorher = len(state.get_chat_history())
     assert takt_treiber.sprechen({"marke": "x", "auftrag": "y"}) is False
-    assert len(state.get_chat_history()) == vorher
+    assert not gespraeche.gibt_es(gespraeche.ERINNERUNGEN) or \
+        gespraeche.nachrichten(gespraeche.ERINNERUNGEN, versteckte=True) == []
 
 
 def test_eine_leere_antwort_wird_nicht_abgelegt(monkeypatch):
     """Ein stummer Turn (gemessen: das billige Modell nach einem Tool-Call)
-    wuerde sonst als leere Blase im Chat stehen."""
+    wuerde sonst als leere Blase im Chat stehen — und der Auftrag allein
+    auch nicht."""
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "ui"))
     import ai
     import ai_backends
+    import gespraeche
     import takt_treiber
-    import state
 
     monkeypatch.setattr(ai_backends, "chat_available", lambda: "local")
     monkeypatch.setattr(ai, "chat_stream", lambda h, **k: iter(["  "]))
-    vorher = len(state.get_chat_history())
     assert takt_treiber.sprechen({"marke": "x", "auftrag": "y"}) is False
-    assert len(state.get_chat_history()) == vorher
+    assert gespraeche.nachrichten(gespraeche.ERINNERUNGEN, versteckte=True) == []
 
 
 # ── In welche Lage hinein sie spricht ─────────────────────────────────

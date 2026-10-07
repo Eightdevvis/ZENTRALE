@@ -56,7 +56,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `events` | 1 | Event-Konstanten |
 | `net` | 1 | HTTP-Wrapper mit Terminal-Logging |
 | `datasync` | 1 | Push-on-write zum Peer nach echter Daten-Änderung |
-| `dateien` | 1 | Atomar schreiben (alte oder neue Fassung, nie eine halbe) — für alle Datendateien |
+| `dateien` | 1 | Atomar schreiben (alte oder neue Fassung, nie eine halbe) — für alle Datendateien; Rechnername für Dateien pro Rechner |
 | `ai_config` | 1 | Kill-Switches und API-Keys aus `data/ai_config.json`, `setting()`-Rangfolge |
 | `providers` | 1 | Anbieter-Liste des Kerns (URL, Key, Dialekt, Modelle) |
 | `prices` | 1 | Preistabelle der Cloud-Modelle, keine Logik |
@@ -97,6 +97,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `embeddings` | 2 | Vektoren lokal (bge-m3) oder in der Cloud |
 | `graph` | 2 | Konzept-Graph der KI (seit 18.08.2026 aus) |
 | `gedaechtnis` | 2 | Das Datei-Gedächtnis, das die KI liest und fortschreibt |
+| `gespraeche` | 2 | Chat-Gespräche auf der Platte: Ordner pro Gespräch, Datei pro Rechner, Ereignisse (nachricht/verwerfen), Liste, aktiv pro Rechner |
 | `ascii_lib` | 2 | ASCII-Bibliothek für Bild-Marker |
 | `audio` | 2 | HTTP-Client für Whisper und TTS |
 | `telemetry` | 2 | Telemetrie-Aggregat PC + Pi |
@@ -119,6 +120,8 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `ki_werkzeuge` | 3 | Was ein KI-Werkzeug tut: ausfuehren(name, args) → Kalender, Notizen, Netz, Mail, Messreihen |
 | `werkzeug_register` | 3 | Ein Eintrag pro KI-Werkzeug: Schema, Beschreibung je Schiene, Erlaubnis-Regel + Frage; die Ausführer melden sich aus `ki_werkzeuge` an |
 | `kern` | 3 | Der eine Einstieg: kern.chat(verlauf) wählt den Weg (lokal/Anthropic/OpenAI) und fährt ihn |
+| `billig` | 3 | Ein Einmal-Aufruf beim billigen Modell des aktiven Anbieters (beide Dialekte, Kosten gebucht) — Graph-Extraktor, Gesprächstitel |
+| `gespraech_titel` | 3 | Gesprächstitel: sofort aus den ersten Wörtern, nach der ersten Antwort vom billigen Modell |
 | `main` | 4 | Event-Loop |
 | `brain` | 4 | Input → neue Events |
 | `actions` | 4 | Events → Nebenwirkungen |
@@ -126,7 +129,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `sensors` | 4 | Sensor-Simulation |
 | `hot_reload` | 4 | Hot Reload fürs Backend |
 | `tutor_port` | 4 | Die einzige Tür vom Kern zum Tutor |
-| `takt_treiber` | 4 | Der Takt-Thread: fragt `takt`, spricht über den KI-Kern, meldet |
+| `takt_treiber` | 4 | Der Takt-Thread: fragt `takt`, spricht über den KI-Kern ins Gespräch „Erinnerungen“, meldet |
 
 Schicht 5 liegt außerhalb von `core/` und steht deshalb nicht in der
 Tabelle, sondern im nächsten Abschnitt.
@@ -156,7 +159,8 @@ egal woran, ging durch dieselbe Datei.
 | `notizen` | Block-Notizen |
 | `karte` | Weltkarte |
 | `kalender` | Kalender |
-| `ki` | Chat-Stream, Stoppen, Verlauf, Erlaubnis, Status, Backend-Wahl, Einstellungen, Devtools |
+| `ki` | Chat-Stream, Wiederholen, Stoppen, Verlauf, Erlaubnis, Status, Backend-Wahl, Einstellungen, Devtools |
+| `gespraeche` | Gesprächs-Liste, neu, öffnen, laden, umbenennen, archivieren |
 | `stimme` | Sprechen und Zuhören |
 | `tutor` | alles unter `/api/tutor/` |
 | `mail` | Mail-Triage |

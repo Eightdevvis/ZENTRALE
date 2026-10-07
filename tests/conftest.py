@@ -63,6 +63,10 @@ atexit.register(lambda: os.path.exists(_USAGE_TMP) and os.remove(_USAGE_TMP))
 _DATEN_TMP = tempfile.mkdtemp(prefix="zentrale_daten_test_")
 os.environ.setdefault("ZENTRALE_TRANSKRIPT_DIR", os.path.join(_DATEN_TMP, "ai_transcripts"))
 os.environ.setdefault("ZENTRALE_GEDAECHTNIS_DIR", os.path.join(_DATEN_TMP, "gedaechtnis"))
+# Gespräche (core/gespraeche.py, seit 2026-10-07): derselbe Riegel. Jeder
+# Test bekommt dazu unten noch einen eigenen Ordner, damit das „aktive
+# Gespräch" eines Tests nicht in den nächsten hineinreicht.
+os.environ.setdefault("ZENTRALE_GESPRAECHE_DIR", os.path.join(_DATEN_TMP, "gespraeche"))
 atexit.register(lambda: shutil.rmtree(_DATEN_TMP, ignore_errors=True))
 # Die Sandbox-Arbeitsordner (core/sandbox.py) liegen im Betrieb unter
 # ~/.cache/zentrale/sandbox — Testläufe legen ihre in den Wegwerf-Ordner.
@@ -191,6 +195,20 @@ def _kalender_nie_in_echten_daten(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(kalender, "CAL_PATH", ordner / "ai_calendar.json")
     monkeypatch.setattr(kalender, "ICS_DIR", None)
     yield
+
+
+# 7b. Jeder Test hat seine eigenen Gespräche.
+#
+# Die Chat-Routen schreiben seit 2026-10-07 in core/gespraeche.py; ohne
+# frischen Ordner sähe ein Test das aktive Gespräch und die Erinnerungen des
+# vorigen. Der Ordner liegt (wie oben per Env) nie in Sashas data/.
+@pytest.fixture(autouse=True)
+def _gespraeche_frisch(tmp_path_factory, monkeypatch):
+    import gespraeche
+    monkeypatch.setattr(gespraeche, "_DIR", str(tmp_path_factory.mktemp("gespraeche")))
+    gespraeche._cache.clear()
+    yield
+    gespraeche._cache.clear()
 
 
 # 8. Kalender-Tests laufen gegen BEIDE Speicher.

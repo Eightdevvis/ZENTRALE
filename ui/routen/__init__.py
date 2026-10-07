@@ -4,9 +4,9 @@
 # Flask-App an und hängt hier alle Bereiche ein — neue Routen gehören in
 # den passenden Bereich (oder einen neuen), nie zurück in app.py.
 
-from ui.routen import zustand, erfassung, klavier, listen, notizen, karte, kalender, ki, stimme, tutor, mail
+from ui.routen import zustand, erfassung, klavier, listen, notizen, karte, kalender, ki, gespraeche, stimme, tutor, mail
 
-BEREICHE = (zustand, erfassung, klavier, listen, notizen, karte, kalender, ki, stimme, tutor, mail,)
+BEREICHE = (zustand, erfassung, klavier, listen, notizen, karte, kalender, ki, gespraeche, stimme, tutor, mail,)
 
 
 def einhaengen(app):

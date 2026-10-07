@@ -1,8 +1,10 @@
 # ui/routen/ki.py
 #
-# KI-Chat: der SSE-Stream /api/chat, Verlauf, Erlaubnis-Antwort, Status und
-# Backend-Wahl, Devtools-Stream. Wer denken darf, sagt core/ai_backends.py;
-# welchen Weg der Zug nimmt und ihn fahren, macht core/kern.py (kern.chat).
+# KI-Chat: der SSE-Stream /api/chat (+ wiederholen), Verlauf, Erlaubnis-
+# Antwort, Status und Backend-Wahl, Devtools-Stream. Gesprächs-Verwaltung
+# (Liste, umbenennen, archivieren): ui/routen/gespraeche.py. Wer denken
+# darf, sagt core/ai_backends.py; welchen Weg der Zug nimmt und ihn fahren,
+# macht core/kern.py (kern.chat).
 #
 # Teil der Routen-Schicht (Schicht 5, memory/system/bauplan_kern.md):
 # dünne Adapter von HTTP auf core/. Herausgelöst aus ui/app.py am
@@ -13,6 +15,8 @@ from flask import Blueprint, Response, jsonify, request, stream_with_context
 
 import ai           # type: ignore
 import ai_backends     # type: ignore  – AI-Backend-Verfügbarkeit (local/cloud, EXTERNAL-Box)
+import gespraeche      # type: ignore  – Gespräche: Ordner pro Gespräch, Datei pro Rechner
+import gespraech_titel # type: ignore  – automatischer Titel (billiges Modell)
 import kern            # type: ignore  – der eine Einstieg in den Chat (core/kern.py)
 import ki_einstellungen  # type: ignore  – Einstellungen lesen/setzen mit Prüfung
 import providers      # type: ignore  – Cloud-Registry des Kerns (base_url/kind)
@@ -28,25 +32,20 @@ bp = Blueprint('ki', __name__)
 @bp.route('/api/chat', methods=['POST'])
 def api_chat():
     """
-    Nimmt eine Chat-Nachricht entgegen und streamt die AI-Antwort Token für Token.
+    Nimmt eine Chat-Nachricht entgegen und streamt die Antwort als SSE
+    (Server-Sent Events: jede Nachricht eine Zeile "data: <json>\\n\\n").
+    Gelesen wird der Stream von der TUI (tui/ansichten/chat.py, ai_stream).
 
-    Antwortet als SSE (Server-Sent Events) – ein HTTP-Standard für Push-Streams.
-    SSE-Format: jede Nachricht ist eine Zeile "data: <inhalt>\\n\\n"
-    Gelesen wird der Stream von der TUI (tui/zentrale_tui.py, ai_stream).
+    Body: {message, via_mic?, gespraech?, ersetzt?}
+      gespraech: in dieses Gespräch (sonst das aktive dieses Rechners; gibt
+                 es keins, wird eins angelegt). Unbekannt → 404.
+      ersetzt:   Nachricht-id einer eigenen Nachricht — „bearbeiten": sie und
+                 alles danach zählt nicht mehr, dann geht message normal raus.
 
-    Ablauf:
-      1. User-Nachricht in state.py speichern
-      2. Chat-History holen (inkl. neuer Nachricht)
-      3. Generator starten – kern.chat() wählt den Weg (lokal: ai.chat_stream,
-         cloud: core/cloud.py bzw. core/cloud_openai.py)
-         Token für Token
-      4. Jeden Token als SSE-Event an den Client schicken; daneben die
-         Nicht-Text-Events ascii, permission, werkzeug, reflect, cinema
-      5. Nach dem letzten Token: komplette Antwort in state.py speichern
-         + "done"-Event schicken, damit der Client weiß, dass es vorbei ist
-
-    stream_with_context() ist Flask-spezifisch: es stellt sicher dass der
-    Flask-Request-Context (für g, session etc.) im Generator noch verfügbar ist.
+    Seit 2026-10-07 (Claude-Web-Plan Phase 2) lebt der Verlauf in
+    core/gespraeche.py statt im RAM: die Nachricht wird dort angehängt, an
+    kern.chat geht das Fenster des Gesprächs, die Antwort (mit Denken)
+    landet wieder dort.
     """
     # Welcher Kern denkt diesen Turn — lokal (Ollama) oder Cloud?
     # chat_available() berücksichtigt beide Drosseln, die Erreichbarkeit,
@@ -55,20 +54,70 @@ def api_chat():
     backend = ai_backends.chat_available()
     if backend is None:
         return jsonify({"error": "kein KI-Backend für den Chat verfügbar"}), 503
-    body    = request.get_json()
+    body    = request.get_json(silent=True) or {}
     message = (body.get('message') or '').strip()
-    # via_mic-Flag aus dem Body. True bedeutet: diese Message kam aus
-    # Whisper-Transkription, nicht aus Tastatur. Wird an chat_stream()
-    # durchgereicht, das daraus einen Mic-Hint an den System-Prompt
-    # haengt - damit die KI bei Transkriptionsfehlern nachfragen kann
-    # statt woertlich zu antworten. Default False fuer alle Legacy-
-    # Clients die das Feld nicht mitschicken.
+    # via_mic: die Nachricht kam aus Whisper, nicht von der Tastatur — der
+    # Kern hängt dann einen Hinweis an, damit die KI bei Hörfehlern nachfragt.
     via_mic = bool(body.get('via_mic', False))
     if not message:
         return jsonify({"error": "no message"}), 400
 
-    state.push_chat_message("user", message)
-    history = state.get_chat_history()
+    gid, fehler = _gespraech_waehlen(body)
+    if fehler:
+        return fehler
+    ersetzt = body.get('ersetzt')
+    if ersetzt:
+        ziel = next((n for n in gespraeche.nachrichten(gid) if n["id"] == ersetzt),
+                    None) if gid else None
+        if ziel is None:
+            return jsonify({"error": "Diese Nachricht gibt es in dem Gespräch nicht."}), 404
+        if ziel["rolle"] != "user":
+            return jsonify({"error": "Bearbeiten geht nur mit einer eigenen Nachricht."}), 400
+    if gid is None:
+        gid = gespraeche.neu()
+    gespraeche.aktiv_setzen(gid)
+    if ersetzt:
+        gespraeche.verwerfen_ab(gid, ersetzt)
+    return _zug_starten(gid, message, backend, via_mic)
+
+
+@bp.route('/api/chat/wiederholen', methods=['POST'])
+def api_chat_wiederholen():
+    """Die letzte Antwort neu erzeugen: alles ab der letzten eigenen
+    Nachricht verwerfen und dieselbe Nachricht noch einmal schicken. SSE wie
+    /api/chat. Body {gespraech?}; ohne: das aktive."""
+    backend = ai_backends.chat_available()
+    if backend is None:
+        return jsonify({"error": "kein KI-Backend für den Chat verfügbar"}), 503
+    gid, fehler = _gespraech_waehlen(request.get_json(silent=True) or {})
+    if fehler:
+        return fehler
+    letzte = gespraeche.letzte_nutzer_nachricht(gid) if gid else None
+    if letzte is None:
+        return jsonify({"error": "In diesem Gespräch gibt es noch nichts zu wiederholen."}), 400
+    gespraeche.aktiv_setzen(gid)
+    gespraeche.verwerfen_ab(gid, letzte["id"])
+    return _zug_starten(gid, letzte["text"], backend, False)
+
+
+def _gespraech_waehlen(body):
+    """Gespräch aus dem Body oder das aktive. -> (gid|None, fehler-Antwort|None)"""
+    gid = body.get('gespraech')
+    if gid:
+        if not gespraeche.gibt_es(str(gid)):
+            return None, (jsonify({"error": "Dieses Gespräch gibt es nicht."}), 404)
+        return str(gid), None
+    return gespraeche.aktiv(), None
+
+
+def _zug_starten(gid, message, backend, via_mic):
+    """Nachricht anhängen und den Zug als SSE-Antwort fahren."""
+    erster = not any(n["rolle"] == "assistant" for n in gespraeche.nachrichten(gid))
+    frage = gespraeche.anhaengen(gid, "user", message)
+    # Sofort ein Titel aus den ersten Wörtern — die Liste zeigt nie ein
+    # namenloses Gespräch; das Modell darf ihn nach der Antwort verbessern.
+    gespraech_titel.erster_titel(gid, message)
+    history = gespraeche.verlauf_fuer_ki(gid)
 
     def generate():
         # Stoppen (2026-10-07): der Zug bekommt eine Nummer und ein Abbruch-
@@ -82,8 +131,11 @@ def api_chat():
         stream = kern.chat(history, via_mic=via_mic, backend=backend,
                            abbruch=abbruch)
         try:
-            yield f"data: {json.dumps({'strom': strom_id})}\n\n"
-            yield from _sse_zug(stream)
+            yield _sse({'strom': strom_id})
+            # Welches Gespräch, welche Nachricht — die TUI braucht die id
+            # eines eben angelegten Gesprächs (Liste, Titel, Bearbeiten).
+            yield _sse({'gespraech': gid, 'nachricht': frage['id']})
+            yield from _sse_zug(stream, gid, backend, message, erster)
         finally:
             # Auch wenn der Client wegbricht: Zug abmelden und den Kern-
             # Generator schließen, statt ihn bis zum GC weiterlaufen zu lassen.
@@ -102,95 +154,112 @@ def api_chat():
     )
 
 
-# Vermerk hinter einer gestoppten Antwort im Verlauf. Steht dort auch für die
-# KI: im nächsten Zug sieht sie, dass ihr Satz nicht zu Ende kam.
-VERMERK_ABGEBROCHEN = "(abgebrochen)"
+# Vermerk hinter einer gestoppten Antwort — steht seit 2026-10-07 in
+# core/gespraeche.py (gespeichert wird abgebrochen=True, der Vermerk kommt
+# beim Lesen dazu). Der Name bleibt für alte Leser.
+VERMERK_ABGEBROCHEN = gespraeche.VERMERK_ABGEBROCHEN
+
+# So lange wartet der erste Zug nach der Antwort höchstens auf den Titel vom
+# billigen Modell, um ihn noch im Strom zu melden. Die Antwort ist da schon
+# vollständig angekommen; kommt er später, holt ihn die Gesprächsliste.
+TITEL_WARTEN = 1.5
 
 
-def _sse_zug(stream):
-    """Die Events eines Kern-Zugs als SSE-Zeilen; am Ende die Antwort in den
-    Verlauf. Generator."""
-    # Tokens sammeln um am Ende die komplette Antwort zu speichern
+def _sse(obj):
+    return f"data: {json.dumps(obj)}\n\n"
+
+
+def _werkzeug_merken(werkzeuge, w):
+    """Kurze Zusammenfassung der Werkzeuge eines Zugs für den Verlauf."""
+    if w.get("phase") == "start":
+        args = ", ".join("%s=%s" % (k, " ".join(str(v).split())[:60])
+                         for k, v in (w.get("args") or {}).items())
+        werkzeuge.append({"name": str(w.get("name") or "?"), "args": args[:200]})
+    elif w.get("phase") == "fehler" and werkzeuge:
+        werkzeuge[-1]["fehler"] = True
+
+
+def _wer_antwortet(backend):
+    """(anbieter, modell) für den Verlauf — wer diese Antwort geschrieben hat."""
+    try:
+        if backend == ai_backends.CLOUD:
+            prov = ai_backends.cloud_provider()
+            return prov, ai_backends.chat_model(prov)
+        return "lokal", ai.OLLAMA_MODEL
+    except Exception:
+        return None, None
+
+
+def _sse_zug(stream, gid, backend, frage, erster):
+    """Die Events eines Kern-Zugs als SSE-Zeilen; am Ende die Antwort ins
+    Gespräch. Generator."""
     collected = []
+    denken = []
+    werkzeuge = []
     fehler_kam = False
     gestoppt = False
 
     for token in stream:
-        # zeige_ascii liefert ein Dict statt eines Text-Tokens: ein
-        # Inline-Bild-Event. Es geht als eigenes SSE-Event 'ascii' raus
-        # und NICHT in collected - es ist kein Antworttext, wird also
-        # weder gesprochen noch in der History gespeichert.
-        if isinstance(token, dict) and 'ascii' in token:
-            yield f"data: {json.dumps({'ascii': token['ascii'], 'name': token.get('name')})}\n\n"
-            continue
-        # permission-Event: ein bestätigungspflichtiges Tool wurde abgefangen
-        # und chat_stream blockiert jetzt (state.wait_permission). Frage als
-        # SSE 'permission'-Event raus - das Frontend tauscht daraufhin die
-        # Konsolen-Eingabe gegen JA/NEIN-Knöpfe und POSTet die Wahl an
-        # /api/permission_answer, was den Stream hier wieder entsperrt. Kein
-        # Antworttext → nicht in collected (nicht in die History-Schlussantwort).
-        if isinstance(token, dict) and 'permission' in token:
-            yield f"data: {json.dumps({'permission': token['permission']})}\n\n"
-            continue
-        # werkzeug-Event: ein Tool-Call beginnt oder ist fertig. Geht als
-        # eigenes SSE 'werkzeug'-Event raus, damit im Chat sichtbar wird,
-        # WAS sie tut — nicht nur, was sie hinterher darueber sagt. Kein
-        # Antworttext -> nicht in collected.
-        if isinstance(token, dict) and 'werkzeug' in token:
-            yield f"data: {json.dumps({'werkzeug': token['werkzeug']})}\n\n"
-            continue
-        # reflect-Event: ein Stück des Denk-Stroms (Ollama `thinking`-Feld
-        # bzw. Denk-Tokens der Cloud). Geht als eigenes SSE 'reflect'-Event
-        # raus, das die TUI dim mitlaufen lässt ("ich schau kurz nach…").
-        # KEIN Antworttext → nicht in collected (nicht gespeichert, nicht
-        # gesprochen). Siehe ai.chat_stream / adaptives Thinking.
-        if isinstance(token, dict) and 'reflect' in token:
-            yield f"data: {json.dumps({'reflect': token['reflect']})}\n\n"
-            continue
-        # cinema-Event: eine News-Sendung beginnt (lies_news lief). Reines
-        # UI-Signal (Sendungs-/Untertitel-Modus), kein Antworttext → nicht
-        # in collected.
-        if isinstance(token, dict) and 'cinema' in token:
-            yield f"data: {json.dumps({'cinema': True})}\n\n"
-            continue
-        # gestoppt-Event: Sasha hat gestoppt (/api/chat/stop). Die
-        # Schleife ist schon raus; hier nur merken, wie gespeichert wird.
-        if isinstance(token, dict) and 'gestoppt' in token:
-            gestoppt = True
-            state.push_log("AI ■  gestoppt")
-            yield f"data: {json.dumps({'gestoppt': True})}\n\n"
-            continue
-        # fehler-Event: Backend-Fehler, Ablehnung oder Rundengrenze (siehe
-        # core/werkzeug_schleife.py). Geht DIREKT an Sasha (TUI-Statuszeile)
-        # und NICHT in collected: frueher stand "[Cloud-Fehler: …]" danach
-        # im Verlauf, und die KI las es im naechsten Zug als ihre eigene
-        # Aussage.
-        if isinstance(token, dict) and 'fehler' in token:
-            fehler_kam = True
-            state.push_log(f"AI ✗  {token['fehler']}")
-            yield f"data: {json.dumps({'fehler': token['fehler']})}\n\n"
+        if isinstance(token, dict):
+            # ascii: Inline-Bild. permission: Erlaubnis-Frage, der Stream
+            # blockiert bis /api/permission_answer. werkzeug: ein Tool-Call
+            # beginnt/endet — sichtbar, WAS sie tut. cinema: News-Sendung
+            # beginnt. Alles kein Antworttext → nicht in collected.
+            if 'ascii' in token:
+                yield _sse({'ascii': token['ascii'], 'name': token.get('name')})
+            elif 'permission' in token:
+                yield _sse({'permission': token['permission']})
+            elif 'werkzeug' in token:
+                _werkzeug_merken(werkzeuge, token['werkzeug'])
+                yield _sse({'werkzeug': token['werkzeug']})
+            elif 'reflect' in token:
+                # Denk-Strom: live an die TUI und seit 2026-10-07 auch mit
+                # der Antwort gespeichert (Sashas Entscheidung 6).
+                denken.append(str(token['reflect']))
+                yield _sse({'reflect': token['reflect']})
+            elif 'cinema' in token:
+                yield _sse({'cinema': True})
+            elif 'gestoppt' in token:
+                # Sasha hat gestoppt (/api/chat/stop); die Schleife ist raus.
+                gestoppt = True
+                state.push_log("AI ■  gestoppt")
+                yield _sse({'gestoppt': True})
+            elif 'fehler' in token:
+                # Backend-Fehler, Ablehnung, Rundengrenze: DIREKT an Sasha,
+                # NICHT in den Verlauf — sonst läse die KI "[Cloud-Fehler: …]"
+                # im nächsten Zug als ihre eigene Aussage.
+                fehler_kam = True
+                state.push_log(f"AI ✗  {token['fehler']}")
+                yield _sse({'fehler': token['fehler']})
             continue
         collected.append(token)
-        # SSE-Format: "data: " + JSON + zwei Newlines
-        # JSON.dumps schützt vor Sonderzeichen (Newlines im Token, etc.)
-        yield f"data: {json.dumps({'token': token})}\n\n"
+        yield _sse({'token': token})
 
-    # Komplette Antwort in state speichern (für History beim nächsten Öffnen).
-    # Ist der Zug an einem Fehler gescheitert, ohne dass Text kam, bleibt
-    # die Frage unbeantwortet stehen — eine leere KI-Antwort waere eine
-    # Behauptung ("ich habe nichts gesagt"), die nicht stimmt.
-    # Gestoppt: was bis dahin da war, bleibt mit Vermerk stehen; ein
-    # gestoppter Zug ohne Text landet gar nicht im Verlauf.
+    # Ist der Zug an einem Fehler gescheitert, ohne dass Text kam, bleibt die
+    # Frage unbeantwortet stehen — eine leere Antwort wäre eine Behauptung
+    # ("ich habe nichts gesagt"), die nicht stimmt. Gestoppt: was da war,
+    # bleibt mit abgebrochen=True; ohne Text landet nichts im Verlauf.
     text = "".join(collected)
-    if gestoppt:
-        if text.strip():
-            state.push_chat_message(
-                "assistant", text.rstrip() + "\n\n" + VERMERK_ABGEBROCHEN)
-    elif collected or not fehler_kam:
-        state.push_chat_message("assistant", text)
+    speichern = bool(text.strip()) if gestoppt else bool(collected or not fehler_kam)
+    if speichern:
+        anbieter, modell = _wer_antwortet(backend)
+        gespraeche.anhaengen(
+            gid, "assistant", text.rstrip() if gestoppt else text,
+            denken="".join(denken), werkzeuge=werkzeuge, anbieter=anbieter,
+            modell=modell, abgebrochen=gestoppt)
+        # Sasha hat zugeschaut, also gelesen.
+        gespraeche.gelesen_setzen(gid)
+        if erster:
+            if gespraech_titel.braucht_modell(gid):
+                t = gespraech_titel.im_hintergrund(
+                    gid, frage, text, cloud=(backend == ai_backends.CLOUD))
+                t.join(TITEL_WARTEN)
+            titel = gespraeche.kopf(gid).get("titel")
+            if titel:
+                yield _sse({'titel': titel, 'gespraech': gid})
 
     # Abschluss-Signal für den Client
-    yield f"data: {json.dumps({'done': True})}\n\n"
+    yield _sse({'done': True})
 
 
 @bp.route('/api/chat/stop', methods=['POST'])
@@ -209,16 +278,37 @@ def api_chat_stop():
 
 @bp.route('/api/chat/history')
 def api_chat_history():
-    """Gibt die aktuelle Chat-History zurück (für initiales Laden der Chat-View)."""
-    if ai_backends.chat_available() is None:
-        return jsonify([])   # kein Chat möglich → nichts anzuzeigen
-    return jsonify(state.get_chat_history())
+    """Die Nachrichten eines Gesprächs für die Anzeige (?gespraech=<id>,
+    sonst das aktive dieses Rechners). Liste von {id, role, content, ts}
+    plus denken, werkzeuge, abgebrochen, anbieter, modell, wenn vorhanden.
+    Markiert das Gespräch als gelesen — wer das holt, zeigt es an.
+
+    Seit 2026-10-07 auch ohne KI-Backend: alte Gespräche lesen braucht
+    keins (vorher: [] ohne Backend)."""
+    gid = request.args.get('gespraech')
+    if gid and not gespraeche.gibt_es(gid):
+        return jsonify({"error": "Dieses Gespräch gibt es nicht."}), 404
+    gid = gid or gespraeche.aktiv()
+    if not gid:
+        return jsonify([])
+    raus = []
+    for n in gespraeche.nachrichten(gid):
+        m = {"id": n["id"], "role": n["rolle"], "ts": n["ts"],
+             "content": gespraeche.text_fuer_ki(n)}
+        for feld in ("denken", "werkzeuge", "abgebrochen", "anbieter", "modell"):
+            if n.get(feld):
+                m[feld] = n[feld]
+        raus.append(m)
+    gespraeche.gelesen_setzen(gid)
+    return jsonify(raus)
 
 
 @bp.route('/api/chat/clear', methods=['POST'])
 def api_chat_clear():
-    """Löscht die gesamte Chat-History (per /clear Befehl im Chat-Input)."""
-    state.clear_chat_history()
+    """Neues Gespräch (/neu im Chat). Seit 2026-10-07 wird nichts mehr
+    gelöscht: das alte bleibt in der Liste, das nächste Senden legt ein
+    neues an."""
+    gespraeche.aktiv_setzen(None)
     return jsonify({"ok": True})
 
 

@@ -4,8 +4,11 @@
 **wann** ein Anstoß fällig ist (60 und 30 min vor einem Termin, 5 min
 Nachlauf, Nachtruhe 22–07, 20 min Mindestabstand, jeder Anstoß genau einmal
 in `data/takt/YYYY-MM-DD.json`); ein 60-s-Thread in `core/takt_treiber.py` merkt ihn,
-lässt das Modell den Satz formulieren und legt ihn in den Verlauf; die TUI
-holt den Verlauf alle 20 s und zeigt ein ● am Kasten. Die Lage
+lässt das Modell den Satz formulieren und legt ihn ins Gespräch
+„Erinnerungen" (seit 2026-10-07, [../ki/gespraeche.md](../ki/gespraeche.md));
+die TUI holt die Gesprächsliste alle 20 s und zeigt ein ● am Kasten. Für
+Sasha heißt das Ganze „Erinnerungen" — das Wort „Takt" steht in nichts
+Sichtbarem (Log-Zeilen: `ERINNERUNG`). Die Lage
 (`anwesenheit.py`) geht mit, die Meldung geht zusätzlich als
 Desktop-Benachrichtigung raus (`melden.py`). `ZENTRALE_TAKT=0` schaltet ab.
 Offen: Anwesenheitspings (Morgenritual, Check-in), das Schemen, Kostenblick.
@@ -36,8 +39,10 @@ nicht erst, wenn er Geld gekostet hat.
 
 **2. Der Treiber — `core/takt_treiber.py` (`starten()`, `sprechen()`).** Bis 2026-10-06 in `ui/app.py`; gestartet wird er weiter aus `start_ui()`. Ein Daemon-Thread,
 Tick alle 60 s: fragen → **erst merken, dann sprechen** → einmal durchs normale
-KI-Backend (also mit Gedächtnis, Kalender-Imprint und Werkzeugen) → Antwort per
-`state.push_chat_message("assistant", …)` in den Verlauf. Die Reihenfolge
+KI-Backend (also mit Gedächtnis, Kalender-Imprint und Werkzeugen) → Auftrag
+(versteckt) und Antwort ins Gespräch `erinnerungen` (`core/gespraeche.py`);
+als Verlauf sieht das Modell dabei dieses Gespräch, nicht das, an dem Sasha
+gerade sitzt. Die Reihenfolge
 merken-vor-sprechen ist Absicht: ein Absturz mitten im Modell-Aufruf würde
 sonst denselben Anstoß beim nächsten Tick wiederholen. Abschaltbar mit
 `ZENTRALE_TAKT=0`.
@@ -51,11 +56,11 @@ dann ist die Nachricht ein Satz, kein Absatz. Siehe
 wenn ZENTRALE nicht ohnehin sichtbar vor Sasha steht. Ohne das endet ihre
 Initiative an der Fensterkante. Details in `memory/betrieb/systemeinheit.md`.
 
-**3. Die Zustellung — `ai_poll()` in der TUI.** Ein einmaliges Holen des
-Verlaufs beim Öffnen des KI-Kastens (so war es vorher) ließe eine
-unaufgeforderte Nachricht versanden. Deshalb sieht ein Thread alle 20 s nach und übernimmt den
-Backend-Verlauf, solange kein Stream läuft. Steht der Kasten zu und hatte die
-KI das letzte Wort, erscheint ein **●** vorne im Titel; das Öffnen löscht es.
+**3. Die Zustellung — `ai_poll()` in der TUI** (`tui/ansichten/chat_gespraeche.py`).
+Ein Thread holt alle 20 s die Gesprächsliste. Liegt in einem Gespräch, das
+gerade nicht vor Sasha liegt, eine ungelesene Antwort (meist „Erinnerungen"),
+erscheint ein **●** vorne im Kasten-Titel und auf der Startseite; Öffnen
+dieses Gesprächs markiert es gelesen.
 
 ## Was den Auftrag ausmacht
 
@@ -67,10 +72,13 @@ KI das letzte Wort, erscheint ein **●** vorne im Titel; das Öffnen löscht es
 Was gesagt wird, formuliert das Modell — es kennt den Verlauf und weiß, ob
 Sasha gerade mitten in etwas steckt. Der Code entscheidet nur das WANN.
 
-Der Auftrag geht als letzte User-Nachricht mit, wird aber **nicht** in den
-Verlauf geschrieben. Er ist eine Regieanweisung, keine Äußerung von Sasha —
-sonst läse er morgen Sätze, die er nie geschrieben hat, und das Modell läse sie
-als seine.
+Der Auftrag geht als letzte User-Nachricht mit. Er ist eine Regieanweisung,
+keine Äußerung von Sasha. Bis 2026-10-07 wurde er deshalb gar nicht
+gespeichert; seitdem steht er im Gespräch „Erinnerungen" **versteckt**: die
+TUI zeigt ihn nicht (Sasha liest keine Sätze, die er nie geschrieben hat), und
+die KI sieht ihn später mit dem Vorsatz „[Automatischer Auftrag von ZENTRALE,
+nicht von Sasha geschrieben]" — so weiß sie, worauf ihre Erinnerung
+antwortete, ohne ihn für Sashas Worte zu halten.
 
 ## Die Schweigeregeln (hart, nicht dem Modell überlassen)
 

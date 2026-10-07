@@ -453,3 +453,34 @@ def test_sandbox_arbeitsordner_liegt_im_test_nicht_im_echten_cache():
     basis = os.path.realpath(sandbox.basis_ordner())
     assert not basis.startswith(os.path.realpath(os.path.expanduser("~/.cache"))), basis
     assert not basis.startswith(os.path.realpath(ROOT)), basis
+
+def test_gespraeche_zeigen_nie_ins_echte_data():
+    """Gespräche (core/gespraeche.py, 2026-10-07) werden von den Chat-Tests
+    wirklich geschrieben. Zeigt der Ordner im Test ins echte data/, ist der
+    Riegel in tests/conftest.py weg."""
+    import gespraeche
+    echt = os.path.realpath(os.path.join(ROOT, "data"))
+    assert not os.path.realpath(gespraeche._DIR).startswith(echt), gespraeche._DIR
+    assert not os.environ["ZENTRALE_GESPRAECHE_DIR"].startswith(echt)
+
+
+def test_ein_chat_zug_legt_nichts_im_echten_data_an(monkeypatch):
+    """Ende zu Ende: ein /api/chat-Zug samt Erinnerung schreibt Gespräche —
+    und unter dem echten data/gespraeche entsteht dabei nichts."""
+    import ai_backends
+    import kern
+    import gespraeche
+    from ui.app import app
+    echt = os.path.join(ROOT, "data", "gespraeche")
+    vorher = sorted(os.listdir(echt)) if os.path.isdir(echt) else None
+    monkeypatch.setattr(ai_backends, "chat_available", lambda: ai_backends.CLOUD)
+    monkeypatch.setattr(ai_backends, "cloud_provider", lambda: "test")
+
+    class Modul:
+        chat_stream = staticmethod(lambda h, **k: iter(["hallo"]))
+    monkeypatch.setattr(kern, "cloud_modul", lambda: Modul)
+    app.config.update(TESTING=True)
+    app.test_client().post("/api/chat", json={"message": "x"}).get_data()
+    assert gespraeche.liste()
+    nachher = sorted(os.listdir(echt)) if os.path.isdir(echt) else None
+    assert nachher == vorher

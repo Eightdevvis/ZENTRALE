@@ -119,7 +119,7 @@ _CACHE_TTL = os.environ.get("ZENTRALE_CACHE_TTL", "1h")
 _CTX_CHARS = int(os.environ.get("ZENTRALE_CLOUD_CTX_CHARS", "2500"))
 
 # Obergrenze für EINE Verlauf-Nachricht. Die Zahl der Nachrichten ist längst
-# gedeckelt (state._chat_history, maxlen=50), ihre Länge nicht: eine komplette
+# gedeckelt (gespraeche.FENSTER = 50), ihre Länge nicht: eine komplette
 # News-Sendung reitet sonst fünfzig Turns lang mit.
 #
 # Bewusst NICHT das Fenster von vorne beschneiden. Vorne Nachrichten
@@ -336,7 +336,7 @@ def kappen(text: str, grenze: int = None) -> str:
     es ging, das Ende trägt oft das Fazit. Wer nur vorne abschneidet, behält
     die Überschrift einer News-Sendung und verliert, was daraus folgte.
 
-    state._chat_history bleibt unangetastet — die TUI zeigt weiter den
+    Das Gespräch (core/gespraeche.py) bleibt unangetastet — die TUI zeigt den
     vollen Text. Gekürzt wird nur, was an die API geht.
     """
     grenze = _MSG_CHARS if grenze is None else grenze

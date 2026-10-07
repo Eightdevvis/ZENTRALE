@@ -1,7 +1,7 @@
 # Claude-Web im ZENTRALE-Assistenten — der Plan
 
 Stand 2026-10-07. **Geplant und von Sasha entschieden (Abschnitt 6).
-Phase 0 und 1 sind gebaut (Abschnitte 5 und 7), der Rest noch nicht.** Sasha hat am 06.10. gesagt: erst aufräumen, dann vor dem
+Phase 0, 1 und 2 sind gebaut (Abschnitte 5 und 7), der Rest noch nicht.** Sasha hat am 06.10. gesagt: erst aufräumen, dann vor dem
 Übertragen anhalten und gemeinsam planen. Das ist am 07.10. geschehen.
 
 Grundregel aus [../claude_hinweise.md](../claude_hinweise.md) („Das
@@ -18,7 +18,7 @@ Ebenen stehen vor den Funktionen.
 | **Eingabe** | TUI-Chatfeld (`space`/`a`): eine Zeile, nur ASCII, max. 1000 Zeichen, kein Cursor, keine Slash-Befehle im Chat |
 | **Antwort** | SSE von `/api/chat`; Text kommt pro Runde am Stück (nicht Token für Token), Denken läuft live als „denkt: …" mit |
 | **Sichtbar** | Werkzeug-Aufrufe (`⚙ … ↳ …`), Denken als Log-Zeile, Markdown (Überschriften, Listen, Code), Modell + € heute im Titel, ⚠ ab 80 % Budget |
-| **Verlauf** | EIN Gespräch, nur im RAM (`state._chat_history`, 50 Einträge), weg nach Neustart. Das Transkript (`data/ai_transcripts/`) wird geschrieben, aber nie gelesen |
+| **Verlauf** | EIN Gespräch, nur im RAM (`state._chat_history`, 50 Einträge), weg nach Neustart. Das Transkript (`data/ai_transcripts/`) wird geschrieben, aber nie gelesen. *(Seit Phase 2: viele Gespräche auf der Platte, [gespraeche.md](gespraeche.md).)* |
 | **Gedächtnis** | Dateien in `data/gedaechtnis/`: Hausregeln/Steckbrief/Ziele stehen immer im Prompt (nur Cloud), dazu Titel aller Bereiche; Rest per `read_note`/`search_memory` |
 | **Werkzeuge** | Kalender, Dateien lesen, News, Mail-Zahlen, Websuche, Webseite holen, Auswahlknöpfe, Gedächtnis, Messreihen. Erlaubnis-Gate für alles Schreibende |
 | **Proaktiv** | Takt: Termin-Erinnerung 60/30 min vorher, landet im selben Gespräch |
@@ -139,7 +139,7 @@ Prompt-Bau hängt dessen Anweisungen hinter den Gedächtnis-Kopf.
 |---|---|---|---|
 | ~~**0 Fundament**~~ | ~~TUI-Zerlegung~~ (erledigt 07.10.); ~~Werkzeug-Register~~ (erledigt 07.10., siehe unten) | Ohne ein Register wächst jedes neue Werkzeug an drei Stellen | mittel |
 | **1 Steuerung** ✔ 07.10. | Stoppen (bis in die Schleife), mehrzeilige Eingabe mit Cursor, Slash-Befehle im Chat (`/neu`, `/modell`, `/effort`), Kabel für die vorhandenen Setter (Route + TUI) | sofort spürbar, kleines Risiko, Setter liegen schon da | klein |
-| **2 Gespräche** | `core/gespraeche.py` (Ordner pro Gespräch, Datei pro Rechner), Gesprächsliste in der TUI, neu/wechseln/umbenennen/archivieren, automatischer Titel, Wiederholen + letzte Nachricht bearbeiten, **Denken mitgespeichert und aufklappbar**, Gespräch „Erinnerungen" | das Fundament für alles Weitere; Verlauf überlebt Neustarts | mittel |
+| **2 Gespräche** ✔ 07.10. | `core/gespraeche.py` (Ordner pro Gespräch, Datei pro Rechner), Gesprächsliste in der TUI, neu/wechseln/umbenennen/archivieren, automatischer Titel, Wiederholen + letzte Nachricht bearbeiten, **Denken mitgespeichert und aufklappbar**, Gespräch „Erinnerungen" | das Fundament für alles Weitere; Verlauf überlebt Neustarts | mittel |
 | **3 Gedächtnis sichtbar** | Kernakten in der TUI ansehen/ändern, **`search_chats` über alle Gespräche** | Sasha orientiert sich nach Thema, nicht nach Datum — die Suche quer durch Gespräche ist dafür die Bedingung | klein |
 | **4 Skills** | Skill-Dateien, Liste im Prompt, `load_skill`, erste Skills; **`propose_skill`**: die KI schlägt Skills vor, angelegt wird erst nach Bestätigung (Gate) | billig, passt zur Kostenlogik; Grundlage dafür, dass sie sich später selbst weiterentwickelt | klein |
 | **5 Ablage + Anhänge** | `ablage`-Event + Ablage-Liste in der TUI; Datei anhängen per Pfad; Bilder an die Cloud | Artefakte in Terminal-Form | mittel |
@@ -258,3 +258,56 @@ kommt, wenn Phase 2 eine Gesprächs-id liefert — `lauf_id` ist dafür schon
 da); Aufbewahrung 7 Tage; Grenzen 30/120 s, 512 MB, 64 Prozesse, 50 MB je
 Datei, 20.000 Zeichen Ausgabe. Offen: Dateien in die Ablage (Phase 5),
 Stoppen eines laufenden Code-Laufs, Pi (bwrap dort nicht geprüft).
+
+### Phase 2 — Gespräche (2026-10-07)
+
+Ausführlich: [gespraeche.md](gespraeche.md). Kurz:
+
+- **Speicher** `core/gespraeche.py` (Schicht 2): Ordner pro Gespräch mit
+  `kopf.json` und einer `.jsonl` pro Rechner (nur anhängen). Ereignisse
+  `nachricht` / `verwerfen`; Lesen legt die Rechner-Dateien nach Zeit
+  zusammen. Nie löschen, nur archivieren. Aktives Gespräch + „gelesen" pro
+  Rechner in `_knoten/<knoten>.json`. `state._chat_history` ist **ganz
+  ersetzt** (kein Spiegel — zwei Wahrheiten wären die nächste Falle).
+- **Verlauf an die KI** aus dem Gespräch (Fenster 50 wie vorher). Denken
+  (alle `reflect` eines Zugs, ≤ 20 000 Zeichen) und eine Werkzeug-Liste
+  werden mit der Antwort gespeichert, dazu Anbieter und Modell; gestoppte
+  Antworten mit `abgebrochen: true`.
+- **Titel**: sofort die ersten Wörter, nach der ersten Antwort das billige
+  Modell (nur wenn der Zug über die Cloud lief). Der Einmal-Aufruf steht in
+  `core/billig.py` und wird jetzt auch vom Graph-Extraktor benutzt (vorher
+  dort allein).
+- **Erinnerungen** landen im festen Gespräch `erinnerungen` (oben, nicht
+  umbenennbar/archivierbar), der Auftrag versteckt. „Takt" steht in keinem
+  sichtbaren Text mehr (Log-Zeilen heißen jetzt `ERINNERUNG`).
+- **Routen**: `GET/POST /api/gespraeche`, `POST /api/gespraeche/aktiv`,
+  `GET /api/gespraeche/<id>`, `POST …/<id>/titel`, `POST …/<id>/archiv`,
+  `POST /api/chat/wiederholen`; `/api/chat` mit `gespraech` und `ersetzt`;
+  `/api/chat/clear` = neues Gespräch; `/api/chat/history` liefert ids,
+  Denken, Werkzeuge und geht auch ohne KI-Backend.
+- **TUI**: Gesprächsliste als Überlagerung im Chat-Kasten (Tab bei leerer
+  Eingabe oder `/liste`), Befehle `/neu /liste /titel /archiv /wiederholen
+  /bearbeiten /denken`, Denken eingeklappt als „▸ gedacht (1 234 Zeichen)",
+  Strg+D klappt alles auf/zu, Gesprächstitel im Kasten-Titel.
+
+Angenommen (Sasha war nicht erreichbar) — die Kleinentscheidungen:
+
+| Wahl | Alternative |
+|---|---|
+| Liste als **Überlagerung** im Chat-Kasten | Seitenleiste (auf 80×24 bliebe zu wenig Verlauf) |
+| Öffnen mit **Tab bei leerer Eingabe** (mit Text bleibt Tab ein Leerzeichen) und `/liste` | eigene Taste (z. B. Strg+L) |
+| In der Liste **`/` startet das Filtern**, weil r/a/n/z sonst zugleich Befehl und Suchbuchstabe wären | direkt tippen filtert, Befehle per Strg+Taste |
+| **`z`** zeigt das Archiv, dort holt **`a`** zurück | eigener Befehl `/archiv zeigen` |
+| `/archiv` = **dieses Gespräch archivieren**, dann neues | `/archiv` zeigt die archivierten |
+| Denken auf/zu mit **Strg+D** und `/denken`, für alle Antworten zugleich | einzeln pro Antwort (bräuchte einen Zeiger im Verlauf) |
+| Denken gekappt auf **20 000 Zeichen, das Ende bleibt** | den Anfang behalten / Mitte kappen |
+| Neues Gespräch wird erst **beim ersten Senden** angelegt; leere Gespräche fehlen in der Liste | sofort anlegen (leere Ordner im Sync) |
+| Titel sofort aus den **ersten 6 Wörtern**, dann vom Modell | nur das Modell (Liste zeigt bis dahin „neues gespräch") |
+| Titel vom Modell **nur, wenn der Zug über die Cloud lief** | immer (dann ginge ein lokales Gespräch für den Titel nach draußen) |
+| Route wartet höchstens **1,5 s** auf den Titel, sonst holt ihn die Liste | gar nicht warten (Titel erst nach ≤ 20 s) |
+| „Erinnerungen" **nicht umbenennbar, nicht archivierbar** | frei behandeln wie jedes Gespräch |
+| Ungelesen und offenes Gespräch **pro Rechner** | geteilt (dann schaltet der Laptop den PC um) |
+| Beim Öffnen des Chats **kein** automatischer Sprung zu „Erinnerungen", nur ein Hinweis „neues in einem anderen gespräch" | automatisch dorthin wechseln |
+| Auftrag einer Erinnerung **gespeichert, aber versteckt** und für die KI als automatischer Auftrag gekennzeichnet | gar nicht speichern (so war es vorher; dann fehlt der KI später, worauf sie antwortete) |
+| `/api/chat/history` und die Gesprächs-Routen gehen **ohne KI-Backend** | wie vorher `[]` ohne Backend |
+| `state._chat_history` **ganz entfernt** | als Spiegel behalten |

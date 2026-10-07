@@ -766,7 +766,7 @@ jeder Weg selbst. Was ein Tool-Call **bedeutet**, steht genau einmal, in
 
 **Fehler sind keine Antwort.** API-Fehler, Cloud-Ablehnung (`refusal`) und
 die Rundengrenze kommen als `{"fehler": …}`. `ui/routen/ki.py` reicht das als SSE
-`fehler` an die TUI (Statuszeile) und schreibt es NICHT in `_chat_history`.
+`fehler` an die TUI (Statuszeile) und schreibt es NICHT ins Gespräch (`core/gespraeche.py`).
 Vorher stand `[Cloud-Fehler: …]` als KI-Antwort im Verlauf, und der Takt
 konnte es sogar als „Initiative“ melden.
 
@@ -1209,13 +1209,23 @@ Tests: `scripts/test_net_internet.py` (48 Cases, untracked).
 - KI-Chat mit qwen3.5:9b (oder via `OLLAMA_MODEL`), tokenweise gestreamt.
 - KI hat Zugriff auf Whitelist-Dateien + Graph-Memory.
 - Slash-Befehle im TUI-Chat (seit 2026-10-07, `tui/ansichten/chat_befehle.py`):
-  `/neu` (Verlauf leeren, früher `/clear` — geht weiter), `/modell [name]`,
+  `/neu` (neues Gespräch, früher `/clear` — geht weiter), `/modell [name]`,
   `/anbieter [name|auto]`, `/effort [stufe]`, `/budget [euro|aus]`,
-  `/lokal` `/cloud` `/auto`, `/hilfe`. `//` am Anfang = wörtlicher
+  `/lokal` `/cloud` `/auto`, `/hilfe`; seit Phase 2 auch `/liste`,
+  `/titel [text]`, `/archiv`, `/wiederholen`, `/bearbeiten`, `/denken`. `//` am Anfang = wörtlicher
   Schrägstrich. Die Einstellungen laufen über `/api/ai/einstellungen`
   (`core/ki_einstellungen.py`).
   (`/memory` und `/forget N` sind mit dem Legacy-LTM-Pfad entfallen.)
 - ESC – stoppt eine laufende Antwort, sonst zurück zum Haupt-Dashboard.
+- **Gespräche** (seit 2026-10-07, Claude-Web-Plan Phase 2): der Verlauf
+  lebt nicht mehr im RAM (`state._chat_history` ist weg), sondern in
+  `core/gespraeche.py` — viele Gespräche, Ordner pro Gespräch, Datei pro
+  Rechner, synchron auf allen Knoten. An `kern.chat` gehen die letzten 50
+  Nachrichten des aktiven Gesprächs; die Antwort wird mit allem Denken des
+  Zugs, den Werkzeugen, Anbieter und Modell gespeichert. Kalender-
+  Erinnerungen landen im eigenen Gespräch „Erinnerungen". Titel: erst die
+  ersten Wörter, dann das billige Modell (`core/billig.py`). Alles Weitere:
+  [gespraeche.md](gespraeche.md).
 
 ## Voice-Pipeline (Core, sprachneutral)
 

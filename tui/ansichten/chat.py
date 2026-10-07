@@ -22,6 +22,8 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
     import pixel
 
 from . import chat_befehle, eingabe
+from .chat_gespraeche import GespraechsSteuerung, ai_verlauf_holen, verlauf_aus  # noqa: F401
+from .gespraechsliste import Gespraechsliste
 from .basis import BASE_URL, api_call
 from .text import _md_umbruch, _wrap, md_zeilen
 
@@ -46,22 +48,18 @@ def echte_nachrichten(log):
     return sum(1 for rolle, _t in log if rolle in ("user", "ai"))
 
 
-def ai_verlauf_holen():
-    """Den Verlauf vom Backend holen. -> [(rolle, text)] oder None."""
-    try:
-        h = api_call("/api/chat/history")
-    except (urllib.error.URLError, OSError, ValueError):
-        return None
-    if not isinstance(h, list):
-        return None
-    log = []
-    for m in h:
-        if not isinstance(m, dict):
-            continue
-        txt = (m.get("content") or "").strip()
-        if txt:
-            log.append(("user" if m.get("role") == "user" else "ai", txt))
-    return log
+def zahl(n):
+    """1234 → '1 234' (Tausender mit Leerzeichen, wie Sasha es liest)."""
+    return "{:,}".format(int(n)).replace(",", " ")
+
+
+def denken_wrap(text, offen, w):
+    """Denken als Verlaufs-Zeilen: eingeklappt EINE Zeile
+    „▸ gedacht (1 234 Zeichen)", aufgeklappt Kopf + Text (Strg+D, /denken)."""
+    kopf = "%s gedacht (%s Zeichen)" % ("▾" if offen else "▸", zahl(len(text)))
+    if not offen:
+        return [("denken", "  " + kopf[:max(1, w - 2)])]
+    return [("denken", "  " + kopf[:max(1, w - 2)])] + ai_wrap("denken", text, w)
 
 
 def ai_wrap(role, text, w):
@@ -237,7 +235,7 @@ def stand_text(daten, stand):
     return "anbieter: %s" % (stand.get("anbieter") or "—")
 
 
-class Chat:
+class Chat(GespraechsSteuerung):
     """Der KI-Chat (Mitte, Leertaste auf der Startseite). Thin Client: die
     TUI rechnet keine KI, sie spricht nur HTTP mit /api/chat (SSE) und zeigt
     den Verlauf. Zustand in self.AI (auch z.AI), geschützt durch AI_LOCK,
@@ -280,22 +278,39 @@ class Chat:
                           # UTF-8-Zeichen, offene Auswahl (/modell …), Nummer
                           # des laufenden Zugs (fürs Stoppen) — 2026-10-07.
                           "cur": 0, "u8": b"", "wahl": None, "strom": None,
-                          "gestoppt": False}
+                          "gestoppt": False,
+                          # Gespräche (Phase 2, 2026-10-07): welches offen ist
+                          # (gid None = das nächste Senden beginnt ein neues),
+                          # sein Titel, die offene Liste (gespraechsliste.py),
+                          # Denken auf/zu, bearbeitete Nachricht (/bearbeiten),
+                          # Nachrichten-Zahl beim letzten Laden (für den Poll).
+                          "gid": None, "titel": "", "liste": None,
+                          "denken_offen": False, "ersetzt": None, "n_server": 0,
+                          "gespraeche": []}
         self.AI_LOCK = threading.Lock()
+        self.liste = Gespraechsliste(self)
 
     def start(self):
         """Hintergrund-Threads anwerfen (run_ui ruft das nach dem Aufbau)."""
         ai_poll = self.ai_poll
         threading.Thread(target=ai_poll, daemon=True, name="ai-poll").start()
 
-    def ai_stream(self, message):
+    def ai_stream(self, message, ersetzt=None, wiederholen=False):
         """Öffnet den SSE-Stream /api/chat und füllt AI['answer'] Token für Token.
         Läuft im Hintergrund-Thread. Blockiert bei einer Erlaubnis-Frage still,
         bis der Input-Thread /api/permission_answer POSTet und der Server den
-        Stream weiterlaufen lässt."""
+        Stream weiterlaufen lässt.
+
+        ersetzt: Nachricht-id (/bearbeiten). wiederholen: statt einer neuen
+        Frage /api/chat/wiederholen (dieselbe SSE-Form)."""
         AI, AI_LOCK = self.AI, self.AI_LOCK
-        url = BASE_URL + "/api/chat"
-        data = json.dumps({"message": message}, ensure_ascii=False).encode("utf-8")
+        body = {"message": message}
+        if AI.get("gid"):
+            body["gespraech"] = AI["gid"]
+        if ersetzt:
+            body["ersetzt"] = ersetzt
+        url = BASE_URL + ("/api/chat/wiederholen" if wiederholen else "/api/chat")
+        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         req = urllib.request.Request(
             url, data=data, method="POST",
             headers={"Content-Type": "application/json",
@@ -336,6 +351,11 @@ class Chat:
                 with AI_LOCK:
                     if "strom" in evt:
                         AI["strom"] = evt["strom"]   # damit Esc genau ihn stoppt
+                    elif "titel" in evt:
+                        AI["titel"] = str(evt["titel"])
+                    elif "gespraech" in evt:
+                        # Ein eben angelegtes Gespräch: ab jetzt geht alles dorthin.
+                        AI["gid"] = evt["gespraech"]
                     elif "gestoppt" in evt:
                         denken_ablegen()
                         AI["gestoppt"] = True
@@ -350,7 +370,7 @@ class Chat:
                         # will, warum sie etwas getan hat, braucht das ganze
                         # Denken, nicht die letzten 400 Zeichen.
                         AI["reflect"] = (AI["reflect"] + str(evt["reflect"]))[-400:]
-                        AI["denken"] = (AI["denken"] + str(evt["reflect"]))[-8000:]
+                        AI["denken"] = (AI["denken"] + str(evt["reflect"]))[-20000:]
                     elif "werkzeug" in evt:
                         denken_ablegen()
                         AI["log"].append(werkzeug_zeile(evt["werkzeug"]))
@@ -425,13 +445,24 @@ class Chat:
         if AI["streaming"]:
             AI["msg"] = "antwort läuft noch — esc stoppt sie"
             return
-        self.senden(was.text)
+        if AI.get("ersetzt"):              # /bearbeiten: ab dort ersetzen
+            self.senden(was.text, ersetzt=AI["ersetzt"])
+        else:
+            self.senden(was.text)
 
-    def senden(self, msg):
-        """Eine Frage an die KI schicken (Stream im Hintergrund starten)."""
+    def senden(self, msg, ersetzt=None, wiederholen=False):
+        """Eine Frage an die KI schicken (Stream im Hintergrund starten).
+        ersetzt (/bearbeiten): ab der letzten eigenen Nachricht neu.
+        wiederholen: die Frage steht schon im Verlauf, nur die Antwort neu."""
         AI, AI_LOCK, ai_stream = self.AI, self.AI_LOCK, self.ai_stream
         with AI_LOCK:
-            AI["log"].append(("user", msg))
+            if ersetzt:
+                letzte = max((i for i, (r, _t) in enumerate(AI["log"]) if r == "user"),
+                             default=len(AI["log"]))
+                del AI["log"][letzte:]
+            if not wiederholen:
+                AI["log"].append(("user", msg))
+            AI["ersetzt"] = None
             AI["input"] = ""
             AI["cur"] = 0
             AI["gestoppt"] = False
@@ -442,7 +473,8 @@ class Chat:
             AI["msg"] = ""
             AI["scroll"] = 0
             AI["streaming"] = True
-        threading.Thread(target=ai_stream, args=(msg,), daemon=True).start()
+        threading.Thread(target=ai_stream, args=(msg, ersetzt, wiederholen),
+                         daemon=True).start()
 
     def ai_answer_perm(self, option):
         """Erlaubnis-Frage beantworten → entsperrt den wartenden Stream."""
@@ -453,20 +485,6 @@ class Chat:
             pass
         with AI_LOCK:
             AI["perm"] = None
-
-    def ai_load_history(self):
-        """Chat-Verlauf + Backend-Status vom Backend holen (der Verlauf lebt im
-        Backend, state.py). Läuft im Hintergrund beim ersten Öffnen; scheitert still
-        (dann leerer Verlauf)."""
-        AI, AI_LOCK = self.AI, self.AI_LOCK
-        self.status_holen()
-        log = ai_verlauf_holen() or []
-        with AI_LOCK:
-            # nur übernehmen, wenn zwischenzeitlich nichts Eigenes dazukam
-            if not AI["log"]:
-                AI["log"] = log
-            AI["n"] = len(AI["log"])
-            AI["loaded"] = True
 
     def status_holen(self):
         """Backend-Status für den Kasten-Titel holen (/api/ai/status).
@@ -508,22 +526,6 @@ class Chat:
                     AI["msg"] = "stoppen ging nicht — keine verbindung"
         threading.Thread(target=los, daemon=True).start()
 
-    def neues_gespraech(self):
-        """/neu. Heute: Verlauf leeren. In Phase 2 (Gespräche) wird daraus
-        „neues Gespräch anlegen" — dann ändert sich NUR diese Methode."""
-        AI = self.AI
-        if AI["streaming"]:
-            AI["msg"] = "antwort läuft noch — erst stoppen (esc)"
-            return
-        try:
-            api_call("/api/chat/clear", "POST", {})
-        except (urllib.error.URLError, OSError, ValueError):
-            AI["msg"] = "keine verbindung — verlauf nicht geleert"
-            return
-        with self.AI_LOCK:
-            AI["log"], AI["n"], AI["scroll"] = [], 0, 0
-            AI["msg"] = "neues gespräch"
-
     def befehl(self, name, arg):
         """Einen Slash-Befehl ausführen (chat_befehle.BEFEHLE)."""
         AI = self.AI
@@ -532,8 +534,16 @@ class Chat:
                 AI["log"].append(("hinweis", chat_befehle.hilfe_text()))
                 AI["scroll"] = 0
             return
-        if name == "neu":
-            self.neues_gespraech()
+        # Gespräche (Phase 2, 2026-10-07) — die Methoden stehen in
+        # chat_gespraeche.py.
+        einfach = {"neu": self.neues_gespraech, "liste": self.liste.oeffnen,
+                   "archiv": self.archivieren_aktuell, "wiederholen": self.wiederholen,
+                   "bearbeiten": self.bearbeiten, "denken": self.denken_umschalten}
+        if name in einfach:
+            einfach[name]()
+            return
+        if name == "titel":
+            self.befehl_titel(arg)
             return
         if name in ("lokal", "cloud", "auto"):
             self.setzen({"weg": name})
@@ -629,48 +639,15 @@ class Chat:
         """Die Tastenzeile ganz unten, solange der Chat den Fokus hat."""
         if self.AI["streaming"]:
             return " esc stoppt die antwort · bild↑↓ verlauf · tippen geht weiter"
-        return (" enter senden · alt+enter neue zeile · ↑↓ verlauf · "
-                "/hilfe befehle · esc zu")
+        if self.AI["liste"]:
+            return " gespräche: ↑↓ wählen · enter öffnen · esc zurück zum chat"
+        return (" enter senden · alt+enter neue zeile · ↑↓ verlauf · tab gespräche · "
+                "strg+d denken · /hilfe befehle · esc zu")
 
-    def ai_poll(self):
-        """Regelmaessig nachsehen, ob die KI von sich aus etwas gesagt hat.
-
-        Der Verlauf im Backend ist die Wahrheit — er enthaelt beide Seiten,
-        auch was der Takt-Thread dort ablegt. Deshalb wird er im Ruhezustand
-        einfach uebernommen statt Nachrichten einzeln zusammenzufuehren:
-        beim Zusammenfuehren muesste man mitzaehlen, was die TUI waehrend
-        eines Streams selbst schon angehaengt hat, und ein Zaehler, der
-        einmal verrutscht, verdoppelt von da an jede Nachricht.
-
-        Waehrend eines Streams wird nichts angefasst — dort waechst die
-        Antwort Token fuer Token und wuerde vom Uebernehmen zerrissen.
-        """
-        AI, AI_LOCK = self.AI, self.AI_LOCK
-        while True:
-            time.sleep(20)
-            try:
-                with AI_LOCK:
-                    if AI["streaming"] or not AI["loaded"]:
-                        continue
-                    alt_n = echte_nachrichten(AI["log"])
-                log = ai_verlauf_holen()
-                if log is None or len(log) <= alt_n:
-                    continue
-                with AI_LOCK:
-                    if AI["streaming"]:
-                        continue
-                    AI["log"] = log
-                    AI["n"] = len(log)
-                    # Ein Zeichen im Titel nur, wenn er nicht ohnehin
-                    # hinschaut und die KI das letzte Wort hatte.
-                    if not AI["active"] and log and log[-1][0] == "ai":
-                        AI["neu"] = True
-            except Exception:
-                pass          # ein Poll, der die TUI abschiesst, waere schlimmer
-
-    def ai_titel(self):
-        """Kasten-Titel mit dem Kern, der gerade denkt — und was er heute
-        gekostet hat.
+    def ai_titel(self, breite=None):
+        """Kasten-Titel: der Titel des offenen Gesprächs (seit 2026-10-07),
+        der Kern, der gerade denkt — und was er heute gekostet hat.
+        breite: so viele Zeichen höchstens (der Gesprächstitel wird gekürzt).
 
         »ki-chat« allein reicht nicht mehr: seit der Chat auch über die Cloud
         laufen kann, ist der Unterschied zwischen lokal und draußen genau das,
@@ -687,20 +664,33 @@ class Chat:
             # es sonst nie. Der Punkt steht VORNE — hinten haengt schon die
             # Kostenzeile und ein Zeichen dort geht unter.
             neu = "● " if AI.get("neu") else ""
+            gtitel = " ".join(str(AI.get("titel") or "").split())
         if b == "local":
-            return neu + f"ki-chat · lokal ({mdl})".lower()
-        if b != "cloud":
-            return neu + "ki-chat"
-        warn = " ⚠" if budget.get("status") in ("warn", "over") else ""
-        return neu + f"ki-chat · cloud ({prov or mdl}) · {fmt_euro(eur)} heute{warn}".lower()
+            rest = f" · lokal ({mdl})".lower()
+        elif b != "cloud":
+            rest = ""
+        else:
+            warn = " ⚠" if budget.get("status") in ("warn", "over") else ""
+            rest = f" · cloud ({prov or mdl}) · {fmt_euro(eur)} heute{warn}".lower()
+        kopf = neu + "ki-chat"
+        if gtitel:
+            # Der Gesprächstitel gibt nach, nicht Kosten oder Kern.
+            platz = (breite - len(kopf) - len(rest) - 3) if breite else 40
+            if platz >= 4:
+                kopf += " · " + (gtitel if len(gtitel) <= platz else gtitel[:platz - 1] + "…")
+        return (kopf + rest)[:breite] if breite else kopf + rest
 
     def oeffnen(self):
-        """Startseite → Chat (Leertaste): Fokus her, Verlauf beim ersten Mal
-        im Hintergrund holen."""
+        """Startseite → Chat (Leertaste): Fokus her, das offene Gespräch im
+        Hintergrund (neu) laden — es kann seit dem letzten Mal gewachsen sein
+        (anderer Rechner). Liegt etwas Ungelesenes in einem ANDEREN
+        Gespräch (meist „Erinnerungen"), sagt es die Statuszeile."""
         AI, ai_load_history = self.AI, self.ai_load_history
         AI["active"] = True; AI["scroll"] = 0; AI["msg"] = ""
-        AI["neu"] = False              # gesehen
-        if not AI["loaded"]:           # Verlauf einmal im Hintergrund nachladen
+        if any(e.get("ungelesen") and e.get("id") != AI.get("gid")
+               for e in AI.get("gespraeche") or []):
+            AI["msg"] = "neues in einem anderen gespräch — tab zeigt die liste"
+        if not AI["streaming"]:
             threading.Thread(target=ai_load_history, daemon=True).start()
 
     def taste(self, ch):
@@ -727,13 +717,26 @@ class Chat:
         if AI["wahl"]:
             self._taste_wahl(ch)
             return
+        if AI["liste"]:                    # Gesprächsliste (gespraechsliste.py)
+            self.liste.taste(ch)
+            return
         if ch == 27:
             # Läuft eine Antwort, stoppt Esc sie (bis in die Schleife, das
-            # spart Geld); sonst schließt Esc das Fenster wie bisher.
+            # spart Geld); wird gerade bearbeitet, bricht Esc das ab; sonst
+            # schließt Esc das Fenster wie bisher.
             if AI["streaming"]:
                 self.stoppen()
+            elif AI.get("ersetzt"):
+                AI["ersetzt"], AI["input"], AI["cur"] = None, "", 0
+                AI["msg"] = "bearbeiten abgebrochen"
             else:
                 AI["active"] = False
+            return
+        if ch == 9 and not AI["input"]:    # Tab bei leerer Eingabe: Gesprächsliste
+            self.liste.oeffnen()
+            return
+        if ch == 4:                        # Strg+D: Denken auf-/zuklappen
+            self.denken_umschalten()
             return
         if ch in (10, 13, curses.KEY_ENTER):
             self.ai_submit()
@@ -757,6 +760,12 @@ class Chat:
         curses.KEY_BACKSPACE: eingabe.zurueck, 127: eingabe.zurueck, 8: eingabe.zurueck,
         curses.KEY_DC: eingabe.entfernen,
     }
+
+    def denken_umschalten(self):
+        """Strg+D, /denken: alles Denken im Verlauf auf- oder zuklappen."""
+        AI = self.AI
+        AI["denken_offen"] = not AI["denken_offen"]
+        AI["msg"] = "denken aufgeklappt" if AI["denken_offen"] else "denken zugeklappt"
 
     def _taste_eingabe(self, ch):
         """Tippen und Bearbeiten im Eingabefeld (auch während eine Antwort
@@ -789,6 +798,9 @@ class Chat:
         inx = bx + 2
         inw = max(6, bw - 4)
         body_top = by + 1
+        if AI["liste"]:                    # Gesprächsliste liegt über dem Verlauf
+            self.liste.zeichnen(by, bx, bh, bw)
+            return
 
         with AI_LOCK:
             log = list(AI["log"])
@@ -802,6 +814,7 @@ class Chat:
             scroll = AI["scroll"]
             wahl = AI["wahl"]
             wahl = dict(wahl, optionen=list(wahl["optionen"])) if wahl else None
+            denken_offen = AI["denken_offen"]
 
         # Fußzeilen zuerst: sie bestimmen, wie viel Platz der Verlauf noch hat.
         # Bei offener Erlaubnis-Frage brauchen Frage UND Knöpfe je nach Breite
@@ -863,7 +876,10 @@ class Chat:
         # Zeilen bauen: Verlauf + laufende Antwort (jede Zeile trägt ihre Rolle)
         lines = []
         for role, text in log:
-            lines += ai_wrap(role, text, inw)
+            if role == "denken":           # eingeklappt eine Zeile (Strg+D)
+                lines += denken_wrap(text, denken_offen, inw)
+            else:
+                lines += ai_wrap(role, text, inw)
             lines.append(("gap", ""))
         if answer is not None:
             lines += ai_wrap("ai", answer + ("▌" if streaming else ""), inw)

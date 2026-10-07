@@ -202,10 +202,24 @@ Datenmodell + Bedienung: `memory/werkzeuge/notizen_system.md`.
 
 | Endpoint              | Methode | Beschreibung                          |
 |-----------------------|---------|---------------------------------------|
-| `/api/chat`           | POST    | Chat-Nachricht senden (SSE-Stream). JSON-Body: `{message: str, via_mic?: bool}`. `via_mic=true` triggert `_MIC_INPUT_HINT` im System-Prompt (Whisper-Fehler-Awareness, siehe `memory/ki/ki_system.md`). Wer denkt, entscheidet `ai_backends.chat_available()` (cloud: `core/cloud.py`/`core/cloud_openai.py`, local: `core/ai.py`); keins da → 503. SSE-Events: `token` (Antworttext), `reflect` (Denk-Strom → dim in der TUI, NICHT gespeichert/gesprochen), `werkzeug` (Tool-Call, `{phase: start\|fertig\|fehler, name, …}`; alle drei Wege seit 10/2026), `fehler` (Backend-Fehler, Cloud-Ablehnung, Rundengrenze → TUI-Statuszeile, NICHT im Verlauf), `ascii` (Inline-Bild), `permission` (Knopf-Rückfrage), `cinema` (News-Sendung), `strom` (erstes Event: Nummer des Zugs, fürs Stoppen), `gestoppt` (Zug wurde gestoppt; Text bis dahin steht mit „(abgebrochen)“ im Verlauf, ohne Text gar nicht), `done`. |
+| `/api/chat`           | POST    | Chat-Nachricht senden (SSE-Stream). JSON-Body: `{message: str, via_mic?: bool, gespraech?: id, ersetzt?: nachricht_id}` — seit 2026-10-07 in ein Gespräch (`core/gespraeche.py`, `memory/ki/gespraeche.md`): `gespraech` oder das aktive dieses Rechners (keins → neu angelegt); `ersetzt` = Bearbeiten (ab dieser eigenen Nachricht verwerfen, dann normal; unbekannt → 404, KI-Nachricht → 400). Unbekanntes Gespräch → 404. `via_mic=true` triggert `_MIC_INPUT_HINT` im System-Prompt (Whisper-Fehler-Awareness, siehe `memory/ki/ki_system.md`). Wer denkt, entscheidet `ai_backends.chat_available()` (cloud: `core/cloud.py`/`core/cloud_openai.py`, local: `core/ai.py`); keins da → 503. SSE-Events: `token` (Antworttext), `reflect` (Denk-Strom → dim in der TUI, seit 2026-10-07 mit der Antwort gespeichert, nie gesprochen), `werkzeug` (Tool-Call, `{phase: start\|fertig\|fehler, name, …}`; alle drei Wege seit 10/2026), `fehler` (Backend-Fehler, Cloud-Ablehnung, Rundengrenze → TUI-Statuszeile, NICHT im Verlauf), `ascii` (Inline-Bild), `permission` (Knopf-Rückfrage), `cinema` (News-Sendung), `strom` (erstes Event: Nummer des Zugs, fürs Stoppen), `gespraech` (zweites Event: `{gespraech, nachricht}` — Gesprächs- und Nachricht-id), `gestoppt` (Zug wurde gestoppt; Text bis dahin steht mit `abgebrochen: true` im Gespräch, ohne Text gar nicht), `titel` (`{titel, gespraech}`, nur im ersten Zug eines Gesprächs), `done`. |
+| `/api/chat/wiederholen` | POST  | Letzte Antwort neu erzeugen (seit 2026-10-07): ab der letzten eigenen Nachricht verwerfen, dieselbe neu schicken. Body `{gespraech?}`. SSE wie `/api/chat`. Nichts zu wiederholen → 400, unbekanntes Gespräch → 404, kein Backend → 503. |
 | `/api/chat/stop`      | POST    | Laufenden Zug stoppen, bis in die Werkzeug-Schleife (seit 2026-10-07). Body `{strom?}` (aus dem ersten SSE-Event; ohne → jeder laufende Zug). Beendet auch eine offene Erlaubnis-Frage mit „nein“. Antwort `{ok, gestoppt: bool}` — `false` heißt, es lief nichts mehr. |
-| `/api/chat/history`   | GET     | Chat-History (aus `state.py`); `[]`, wenn gerade kein Chat-Backend da ist |
-| `/api/chat/clear`     | POST    | Chat-History leeren (TUI: `/neu`)     |
+| `/api/chat/history`   | GET     | Nachrichten eines Gesprächs (`?gespraech=<id>`, sonst das aktive; keins → `[]`): `[{id, role, content, ts, denken?, werkzeuge?, abgebrochen?, anbieter?, modell?}]`, versteckte Aufträge fehlen. Markiert als gelesen. Geht seit 2026-10-07 auch ohne KI-Backend. Unbekannt → 404. |
+| `/api/chat/clear`     | POST    | Neues Gespräch (TUI: `/neu`): das aktive wird abgewählt, das nächste Senden legt eins an. Gelöscht wird nichts. |
+
+## Gespräche (seit 2026-10-07)
+
+`ui/routen/gespraeche.py`, Speicher `core/gespraeche.py`, Doku `memory/ki/gespraeche.md`. Kein KI-Backend nötig.
+
+| Endpoint | Methode | Beschreibung |
+|---|---|---|
+| `/api/gespraeche` | GET | `{aktiv, gespraeche: [{id, titel, erstellt, letzte, anzahl, archiviert, ungelesen}]}` — neueste Aktivität zuerst, „Erinnerungen“ oben, leere fehlen. `?archiv=1` → nur die archivierten. |
+| `/api/gespraeche` | POST | Neu anlegen und öffnen. Body `{titel?}` → 201 `{ok, id}`. |
+| `/api/gespraeche/aktiv` | POST | Öffnen (auf diesem Rechner). Body `{id}`; `null` → das nächste Senden beginnt ein neues. Unbekannt → 404. |
+| `/api/gespraeche/<id>` | GET | `{id, kopf, nachrichten}` mit Denken und Werkzeugen. Unbekannt → 404. |
+| `/api/gespraeche/<id>/titel` | POST | Umbenennen, Body `{titel}`. Leer → 400, `erinnerungen` → 400, unbekannt → 404. |
+| `/api/gespraeche/<id>/archiv` | POST | Archivieren `{an: true}` (Standard) oder zurückholen `{an: false}`. Nie löschen. War es das aktive, wird es abgewählt. `erinnerungen` → 400, unbekannt → 404. |
 
 ## KI-Status & Erlaubnis
 

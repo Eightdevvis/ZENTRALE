@@ -3,7 +3,7 @@
 # Slash-Befehle IM KI-Chat (/neu, /modell, /effort …) — nur das Lesen und
 # die Liste, ohne curses und ohne HTTP, damit testbar
 # (tests/test_chat_eingabe.py). Was ein Befehl tut, macht Chat.befehl in
-# chat.py über /api/ai/einstellungen bzw. /api/chat/clear.
+# chat.py über /api/ai/einstellungen bzw. chat_gespraeche.py (Gespräche).
 #
 # Nicht zu verwechseln mit der Befehlszeile der TUI (befehle.py, '/' in
 # jedem anderen Fenster): im Chat ist '/' ein Zeichen der Eingabe, und erst
@@ -18,7 +18,13 @@ from collections import namedtuple
 
 # (Befehl, was er tut) — die Reihenfolge ist die der Hilfe.
 BEFEHLE = [
-    ("/neu",      "neues gespräch: verlauf leeren"),
+    ("/neu",      "neues gespräch (das alte bleibt in der liste)"),
+    ("/liste",    "alle gespräche (auch: tab bei leerer eingabe)"),
+    ("/titel",    "titel zeigen · /titel <text> benennt um"),
+    ("/archiv",   "dieses gespräch ins archiv, dann ein neues"),
+    ("/wiederholen", "letzte antwort neu erzeugen"),
+    ("/bearbeiten", "letzte eigene nachricht ändern und neu schicken"),
+    ("/denken",   "gedachtes auf-/zuklappen (auch: strg+d)"),
     ("/modell",   "modell wählen · /modell <name> setzt direkt"),
     ("/anbieter", "anbieter wählen · /anbieter <name> oder auto"),
     ("/effort",   "denk-tiefe wählen (nur claude) · /effort low … max"),
@@ -31,7 +37,8 @@ BEFEHLE = [
 
 # Andere Schreibweisen, die dasselbe meinen. /clear stand früher in der Doku.
 ANDERE_NAMEN = {"help": "hilfe", "clear": "neu", "model": "modell",
-                "provider": "anbieter", "local": "lokal"}
+                "provider": "anbieter", "local": "lokal", "list": "liste",
+                "retry": "wiederholen", "edit": "bearbeiten"}
 
 NAMEN = {b[1:] for b, _ in BEFEHLE}
 

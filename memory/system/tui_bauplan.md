@@ -33,6 +33,8 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/chat.py` | `Chat`: KI-Chat, Stream, Erlaubnis-Frage, Verlauf-Poll, Auge | `AI` |
 | `ansichten/eingabe.py` | Eingabefeld des Chats als reine Funktionen: Cursor, Umlaute (UTF-8-Bytes), Alt+Enter, Umbruch/Scrollen der Anzeige | — |
 | `ansichten/chat_befehle.py` | Slash-Befehle im Chat lesen (`/neu`, `/modell` …), Hilfe-Text | — |
+| `ansichten/chat_gespraeche.py` | Mixin `GespraechsSteuerung` des Chats: neu, öffnen, umbenennen, archivieren, wiederholen, bearbeiten, Verlauf laden, Poll; `verlauf_aus` (History → Verlaufszeilen) | (in `AI`) |
+| `ansichten/gespraechsliste.py` | `Gespraechsliste`: Überlagerung im Chat-Kasten (Tab/`/liste`); reine Helfer `alter_text`, `filtern`, `listen_zeilen` | `AI["liste"]` |
 | `ansichten/sprachtutor.py` | `Sprachtutor`: Text-Panel, Zimmer-Fenster | `TUTOR` |
 | `ansichten/post.py` | `Post`: Mail, Antwort-Editor, Mail-Worker | `MAIL` |
 | `ansichten/kalender.py` | `Kalender`: Woche/Monat, Formular, Routinen, Sidebar | `K` |
@@ -141,6 +143,37 @@ Abschnitt 7). Was für die TUI gilt:
 - Headless geprüft mit `tests/tui_schirm/lauf.py` (Szenarien `ki_eingabe`,
   `ki_befehle`; Größe per `ZTUI_GROESSE=80x24`), das Abspiel-Backend liefert
   dafür erfundene Einstellungen.
+
+## Chat: Gespräche (seit 2026-10-07)
+
+Claude-Web-Plan Phase 2 ([../ki/gespraeche.md](../ki/gespraeche.md)). Was
+für die TUI gilt:
+
+- **Gesprächsliste** = Überlagerung im Chat-Kasten (nicht Seitenleiste: auf
+  80×24 bliebe zu wenig Verlauf). Öffnen: **Tab bei leerer Eingabe** (mit
+  Text bleibt Tab ein Leerzeichen) oder `/liste`. In der Liste: ↑↓ Bild↑↓
+  wählen, Enter öffnen, `n` neu, `r` umbenennen (Feld im Fuß), `a`
+  archivieren (im Archiv: zurückholen), `z` Archiv zeigen/zurück, `/` filtert
+  nach Titel (Enter fertig, Esc Suche weg), Esc/Tab schließt. Filtern startet
+  mit `/`, weil r/a/n/z sonst zugleich Befehl und Suchbuchstabe wären.
+  Zeile: Zeiger, ● ungelesen bzw. · offenes Gespräch, Titel, Alter rechts
+  („vor 2 Std.", „gestern", „28.08.").
+- **Befehle**: `/neu`, `/liste`, `/titel [text]`, `/archiv` (dieses ins
+  Archiv, dann neues), `/wiederholen`, `/bearbeiten` (letzte eigene Nachricht
+  in die Eingabe; Enter ersetzt ab dort, Esc bricht ab), `/denken`.
+- **Denken**: eingeklappt eine Zeile „▸ gedacht (1 234 Zeichen)" über der
+  Antwort, **Strg+D** (oder `/denken`) klappt alle auf/zu.
+- **Kasten-Titel** zeigt den Gesprächstitel (`Chat.ai_titel(breite)` kürzt
+  ihn zuerst, Kern und Kosten bleiben).
+- **●** im Kasten-Titel und auf der Startseite: etwas Ungelesenes in einem
+  Gespräch, das gerade nicht vor Sasha liegt (meist „Erinnerungen"). Beim
+  Öffnen des Chats steht dann ein Hinweis in der Statuszeile.
+- **Laden**: jedes Öffnen des Chats lädt das aktive Gespräch im Hintergrund
+  neu; der Poll (20 s) holt die Liste und lädt das offene Gespräch nach, wenn
+  dort etwas dazukam (anderer Rechner, Erinnerung).
+- Headless: Szenario `ki_gespraeche` in `tests/tui_schirm/lauf.py` (das
+  Abspiel-Backend liefert erfundene Gespräche); ohne Bildschirm:
+  `tests/test_gespraechsliste.py`.
 
 ## Historie
 

@@ -19,6 +19,7 @@ import time
 import kern         # der eine Einstieg in den Chat (core/kern.py)
 import ai_backends  # type: ignore
 import anwesenheit  # ist Sasha da? schaut er ZENTRALE an?
+import gespraeche   # das Gespräch „Erinnerungen“ (core/gespraeche.py)
 import melden       # Desktop-Benachrichtigung (notify-send)
 import state
 import takt         # das WANN — rein, ohne Netz
@@ -42,10 +43,13 @@ TAKT_TICK = 60          # Sekunden zwischen zwei Prüfungen
 def sprechen(anstoss):
     """Einen Anstoß durch das normale KI-Backend jagen und ablegen.
 
-    Der Auftrag geht als letzte User-Nachricht mit, wird aber NICHT in den
-    Verlauf geschrieben: er ist eine Regieanweisung, keine Äußerung von
-    Sasha. Im Verlauf landet nur, was sie sagt — sonst läse er morgen
-    Sätze, die er nie geschrieben hat.
+    Seit 2026-10-07 (Claude-Web-Plan Phase 2) landet das im eigenen
+    Gespräch „Erinnerungen", nicht mitten im Thema, an dem Sasha gerade
+    sitzt. Dort steht auch der Auftrag — VERSTECKT: die TUI zeigt ihn nicht
+    (er ist keine Äußerung von Sasha, er soll keine Sätze lesen, die er nie
+    geschrieben hat), und die KI sieht ihn später als „automatischer
+    Auftrag" gekennzeichnet (gespraeche.text_fuer_ki). So weiß sie im
+    nächsten Zug, worauf ihre Erinnerung antwortete.
     """
     # Dieselbe Frage, die auch die Chat-Endpoints stellen. Ohne sie wuerde
     # der Takt auf dem Laptop ohne Ollama und ohne Netz gegen ein Backend
@@ -71,7 +75,8 @@ def sprechen(anstoss):
                     "er dort nicht. Reicht das nicht, sag in dem Satz, dass "
                     "er in den Chat kommen soll, und leg das Ausfuehrliche "
                     "dort ab.")
-    history = state.get_chat_history() + [
+    gid = gespraeche.erinnerungen()
+    history = gespraeche.verlauf_fuer_ki(gid) + [
         {"role": "user", "content": auftrag}]
     stream = kern.chat(history, backend=backend)
 
@@ -85,14 +90,15 @@ def sprechen(anstoss):
             # "[Cloud-Fehler: …]" als ihre Initiative im Chat), aber er
             # soll auch nicht spurlos verschwinden.
             if 'fehler' in token:
-                state.push_log(f"TAKT ✗  {token['fehler']}")
+                state.push_log(f"ERINNERUNG ✗  {token['fehler']}")
             continue
         stuecke.append(token)
 
     text = "".join(stuecke).strip()
     if not text:
         return False
-    state.push_chat_message("assistant", text)
+    gespraeche.anhaengen(gid, "user", auftrag, versteckt=True)
+    gespraeche.anhaengen(gid, "assistant", text)
     state.push_event("KI meldet sich")
     # Auf den Desktop, wenn ZENTRALE nicht ohnehin vor ihm steht. Ohne das
     # endet ihre Initiative an der Fensterkante: eine Terminerinnerung, die
@@ -109,7 +115,7 @@ def sprechen(anstoss):
 
 def starten():
     if not TAKT_AN:
-        state.push_log("TAKT: aus (ZENTRALE_TAKT=0)")
+        state.push_log("ERINNERUNGEN: aus (ZENTRALE_TAKT=0)")
         return
 
     def _run():
@@ -125,9 +131,9 @@ def starten():
                 # nächsten Tick wiederholen — und Doppel-Mahnungen sind
                 # genau das, wogegen diese Schicht gebaut ist.
                 takt.merken(anstoss["marke"])
-                state.push_log(f"TAKT: {anstoss['marke']}")
+                state.push_log(f"ERINNERUNG: {anstoss['marke']}")
                 sprechen(anstoss)
             except Exception as e:
-                state.push_log(f"TAKT: {type(e).__name__}: {e}")
+                state.push_log(f"ERINNERUNG: {type(e).__name__}: {e}")
 
     threading.Thread(target=_run, daemon=True, name="takt").start()

@@ -24,7 +24,6 @@ import fcntl
 import json
 import os
 import re
-import socket
 import tarfile
 import time
 from contextlib import contextmanager
@@ -85,17 +84,10 @@ def dateisperre(pfad: Path, warten_s: float = 15.0):
 
 # ── Namen ───────────────────────────────────────────────────────────────
 
-def knoten() -> str:
-    """Name dieses Rechners, dateinamen-tauglich. Steht in jedem Verlaufs-
-    und Snapshot-Namen, damit PC und Laptop nie denselben Namen erzeugen."""
-    return sicherer_name(socket.gethostname() or "knoten")
-
-
-def sicherer_name(text: str) -> str:
-    """Alles außer Buchstaben, Ziffern, '@', '.', '-' wird '_'. Kein '~' —
-    das ist unser Trennzeichen in Verlaufs-Namen."""
-    s = re.sub(r"[^A-Za-z0-9@.\-]", "_", str(text))
-    return s.strip(".") or "_"
+# Seit 2026-10-07 in core/dateien.py: die Gespräche (core/gespraeche.py)
+# brauchen denselben Rechnernamen für ihre Datei pro Rechner. Hier bleiben
+# die alten Namen, damit kalender_ics & Co. unverändert weiterlaufen.
+from dateien import knoten, sicherer_name  # noqa: E402,F401
 
 
 def _zeitstempel(jetzt: datetime | None = None) -> str:

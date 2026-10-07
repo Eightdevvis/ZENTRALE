@@ -23,6 +23,7 @@ import kern
 import ki_einstellungen
 import providers
 import state
+import gespraeche
 import werkzeug_schleife
 
 
@@ -228,9 +229,8 @@ def client(monkeypatch):
     app.config.update(TESTING=True)
     monkeypatch.setattr(ai_backends, "chat_available", lambda: ai_backends.CLOUD)
     monkeypatch.setattr(ai_backends, "cloud_provider", lambda: "test")
-    state.clear_chat_history()
+    # Verlauf: jeder Test hat frische Gespräche (conftest)
     yield app.test_client()
-    state.clear_chat_history()
 
 
 def _modul(monkeypatch, gen):
@@ -255,14 +255,14 @@ def test_gestoppter_text_bleibt_mit_vermerk_im_verlauf(client, monkeypatch):
     _modul(monkeypatch, gen)
     body = client.post("/api/chat", json={"message": "x"}).get_data(as_text=True)
     assert '"gestoppt": true' in body
-    assert state.get_chat_history()[-1] == {
+    assert gespraeche.verlauf_fuer_ki(gespraeche.aktiv())[-1] == {
         "role": "assistant", "content": "Die Antwort fing so an\n\n(abgebrochen)"}
 
 
 def test_gestoppt_ohne_text_landet_nicht_im_verlauf(client, monkeypatch):
     _modul(monkeypatch, lambda h, **k: iter([{"gestoppt": True}]))
     client.post("/api/chat", json={"message": "x"}).get_data()
-    assert [m["role"] for m in state.get_chat_history()] == ["user"]
+    assert [m["role"] for m in gespraeche.verlauf_fuer_ki(gespraeche.aktiv())] == ["user"]
 
 
 def test_zug_ist_nach_dem_strom_abgemeldet(client, monkeypatch):

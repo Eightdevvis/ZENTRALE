@@ -298,6 +298,21 @@ liegen in `data/` und gehen über denselben Weg (Push-on-write hängt weiter in
 Löschen Grabsteine; vdirsyncer läuft nur auf EINEM Knoten (PC), sein Status
 und der git-Spiegel des Kalenders liegen außerhalb von `data/`.
 
+**Gespräche des KI-Chats (seit 2026-10-07, `core/gespraeche.py`,
+[../ki/gespraeche.md](../ki/gespraeche.md)):** `data/gespraeche/<id>/` mit
+`kopf.json` und **einer `.jsonl` pro Rechner** (`<hostname>.jsonl`, nur
+angehängt). Gebaut genau für diesen Sync: eine Rechner-Datei schreibt nur ihr
+Rechner, also überschreibt „neueste gewinnt" nie eine fremde Nachricht; beim
+Lesen werden die Dateien nach Zeitstempel zusammengelegt. Wiederholen und
+Bearbeiten hängen ein `verwerfen`-Ereignis an statt zu löschen; Gespräche
+werden archiviert, nie gelöscht (ein gelöschter Ordner käme zurück). Nur
+`kopf.json` (Titel, archiviert) schreiben beide Seiten — klein, eine verlorene
+Umbenennung ist harmlos. Welches Gespräch offen ist und was gelesen wurde,
+steht pro Rechner in `data/gespraeche/_knoten/<hostname>.json`. Push-on-write
+hängt in jedem Anhängen und jedem Kopf-Schreiben (zwei Stupser pro Chat-Zug;
+der Helfer fasst sie zusammen). Nicht im Code-Repo (ignoriert), gesichert über
+`scripts/daten_sichern.py`.
+
 Das ist die event-getriebene Rückkehr zur Live-Propagierung, aber **leichter
 als der frühere Daemon** (kein Polling/inotify-Reconcile, kein Race mit
 Commits — nur ein Stups pro echtem App-Write).

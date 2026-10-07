@@ -1024,7 +1024,7 @@ def bild_zeichnen(u):
         draw_box(top, mx, body_h, midw, "post · mail")
         post.draw_mail(top, mx, body_h, midw)
     elif AI["active"]:
-        draw_box(top, mx, body_h, midw, chat.ai_titel())
+        draw_box(top, mx, body_h, midw, chat.ai_titel(midw - 6))
         chat.draw_ai(top, mx, body_h, midw)
     elif TUTOR["active"]:
         draw_box(top, mx, body_h, midw, "tutor")

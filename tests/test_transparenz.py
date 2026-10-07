@@ -143,6 +143,7 @@ def test_das_backend_reicht_das_ereignis_durch(monkeypatch):
     import ai_backends
     import kern
     import state
+    import gespraeche
     from ui.app import app
 
     class Modul:
@@ -155,13 +156,9 @@ def test_das_backend_reicht_das_ereignis_durch(monkeypatch):
     monkeypatch.setattr(ai_backends, "chat_available", lambda: ai_backends.CLOUD)
     monkeypatch.setattr(kern, "cloud_modul", lambda: Modul)
     monkeypatch.setattr(ai_backends, "cloud_provider", lambda: "test")
-    state.clear_chat_history()
-    try:
-        app.config.update(TESTING=True)
-        body = app.test_client().post("/api/chat", json={"message": "x"}) \
-                                .get_data(as_text=True)
-        assert '"werkzeug": {"phase": "start", "name": "read_note"' in body
-        assert state.get_chat_history()[-1] == {"role": "assistant",
-                                                "content": "Steht drin."}
-    finally:
-        state.clear_chat_history()
+    app.config.update(TESTING=True)
+    body = app.test_client().post("/api/chat", json={"message": "x"}) \
+                            .get_data(as_text=True)
+    assert '"werkzeug": {"phase": "start", "name": "read_note"' in body
+    assert gespraeche.verlauf_fuer_ki(gespraeche.aktiv())[-1] == {
+        "role": "assistant", "content": "Steht drin."}

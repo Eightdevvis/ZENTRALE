@@ -51,12 +51,9 @@ _logs = deque(maxlen=100)
 # der ZENTRALE gerade tatsächlich eingehalten.
 _internet_logs = deque(maxlen=100)
 
-# Chat-History für die AI-Konversation.
-# maxlen=50 Nachrichten → älteste fliegen raus wenn voll.
-# Diese History wird 1:1 an Ollama geschickt – das Modell sieht
-# immer den gesamten (hier: max 50 Nachrichten langen) Verlauf.
-# WICHTIG: Wird NICHT auf Disk gespeichert – beim Neustart weg.
-_chat_history = deque(maxlen=50)
+# Der Chat-Verlauf stand bis 2026-10-07 hier (_chat_history, deque mit 50
+# Nachrichten, nur im RAM). Seit Claude-Web-Plan Phase 2 lebt er auf der
+# Platte: core/gespraeche.py (viele Gespräche, eine Datei pro Rechner).
 
 # ── Offene Kalender-Alarme (Alarm-Kanal) ──────────────────────────────
 # Strukturierte Alarme/Warnungen aus dem Kalender (Reise-KONFLIKT, Pflicht-
@@ -198,38 +195,6 @@ def push_internet_log(line: str):
     stamp = datetime.now().strftime("%H:%M:%S")
     with _lock:
         _internet_logs.append({"text": line, "time": stamp})
-
-
-def push_chat_message(role: str, content: str):
-    """
-    Fügt eine Nachricht zur Chat-History hinzu.
-
-    role:    "user" (Mensch) oder "assistant" (AI)
-    content: der Nachrichtentext
-
-    Die History wächst chronologisch (älteste zuerst) – genau so
-    wie Ollama sie erwartet: erst alle alten Nachrichten, dann die neue.
-    """
-    with _lock:
-        _chat_history.append({"role": role, "content": content})
-
-
-def get_chat_history() -> list:
-    """
-    Gibt eine Kopie der gesamten Chat-History zurück.
-
-    Wir geben eine Kopie (list()) zurück, nicht die deque selbst.
-    So kann der Aufrufer die Liste gefahrlos weiterverarbeiten,
-    auch wenn ein anderer Thread gleichzeitig etwas in die deque schreibt.
-    """
-    with _lock:
-        return list(_chat_history)
-
-
-def clear_chat_history():
-    """Löscht die gesamte Chat-History (z.B. bei /clear im Chat)."""
-    with _lock:
-        _chat_history.clear()
 
 
 # ── Erlaubnis-Rückfrage (KI ↔ Mensch, blockierend) ────────────────────

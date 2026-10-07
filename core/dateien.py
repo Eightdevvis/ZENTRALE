@@ -16,6 +16,8 @@
 
 import json
 import os
+import re
+import socket
 import time
 from pathlib import Path
 
@@ -58,3 +60,23 @@ def json_schreiben(pfad, daten, indent: int = 2) -> None:
     """JSON atomar schreiben, mit Umlauten im Klartext (ensure_ascii=False) —
     so, wie die Module es vorher mit json.dump getan haben."""
     atomar_schreiben(pfad, json.dumps(daten, indent=indent, ensure_ascii=False))
+
+
+# ── Rechnername ─────────────────────────────────────────────────────────
+# Wer auf mehreren Rechnern schreibt, braucht EINDEUTIGE Dateinamen pro
+# Rechner: der Sync (rsync, neueste Datei gewinnt) würde sonst eine Fassung
+# überschreiben. Bis 2026-10-07 stand das in kalender_sicherung; seit die
+# Gespräche (core/gespraeche.py) dasselbe brauchen, steht es hier einmal.
+
+def knoten() -> str:
+    """Name dieses Rechners, dateinamen-tauglich (wie scripts/daten_sichern.py:
+    socket.gethostname()). Steht in Verlaufs-, Snapshot- und Gesprächs-
+    Dateinamen, damit PC und Laptop nie denselben Namen erzeugen."""
+    return sicherer_name(socket.gethostname() or "knoten")
+
+
+def sicherer_name(text: str) -> str:
+    """Alles außer Buchstaben, Ziffern, '@', '.', '-' wird '_'. Kein '~' —
+    das ist das Trennzeichen in den Kalender-Verlaufs-Namen."""
+    s = re.sub(r"[^A-Za-z0-9@.\-]", "_", str(text))
+    return s.strip(".") or "_"

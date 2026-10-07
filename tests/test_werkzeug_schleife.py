@@ -17,6 +17,7 @@ import graph
 import ki_prompt
 import ai_backends
 import state
+import gespraeche
 import werkzeug_schleife
 
 
@@ -249,7 +250,6 @@ def test_fehler_landet_nicht_im_verlauf(monkeypatch):
     monkeypatch.setattr(ai_backends, "chat_available", lambda: ai_backends.CLOUD)
     monkeypatch.setattr(kern, "cloud_modul", lambda: Modul)
     monkeypatch.setattr(ai_backends, "cloud_provider", lambda: "test")
-    state.clear_chat_history()
 
     app.config.update(TESTING=True)
     r = app.test_client().post("/api/chat", json={"message": "hallo"})
@@ -257,9 +257,8 @@ def test_fehler_landet_nicht_im_verlauf(monkeypatch):
 
     assert '"fehler": "Cloud-Fehler: kein Netz"' in body
     assert '"token"' not in body
-    verlauf = state.get_chat_history()
+    verlauf = gespraeche.verlauf_fuer_ki(gespraeche.aktiv())
     assert [m["role"] for m in verlauf] == ["user"]
-    state.clear_chat_history()
 
 
 def test_kalender_beweis_meldet_keinen_erfolg_wenn_nachlesen_scheitert(monkeypatch):

@@ -361,86 +361,35 @@ def _call_graph_extractor_cloud(user_msg: str, ai_msg: str,
     Umschalten auf das Modell gestorben, um das es geht.
     """
     import os as _os
-    import ai_backends
-    import providers
+    import billig
 
     body = _extractor_body(user_msg, ai_msg, today)
     # Derselbe Anbieter wie der Chat (Vorwahl, Budget-Rückfall) — bis
     # 2026-10-07 stand hier providers.configured(): hatte Sasha Qwen gewählt
     # oder war das Budget alle, gingen die Gespräche trotzdem an Claude.
-    name = ai_backends.cloud_provider() or ""
-    prov = providers.get(name)
-    mdl  = _os.environ.get("ZENTRALE_CONSOL_CLOUD_MODEL") \
-        or providers.cheap_model(name)
-    art  = prov.get("kind")
-
+    # Der Aufruf selbst (beide Dialekte, billiges Modell, kein effort, Kosten
+    # buchen) steht seit 2026-10-07 in core/billig.py — der Gesprächstitel
+    # braucht dasselbe.
+    #
+    # KEIN output_config/effort: die kleinen Modelle (haiku) kennen den
+    # Parameter nicht und quittieren ihn mit einer 400 — live gemessen, und
+    # der Fehler war doppelt gemein, weil er nur den Hintergrund-Extraktor
+    # traf. Das Gespraech lief weiter, nur gemerkt hat sich die KI nichts.
+    # Vorgefüllter Assistant-Turn "{" (Anthropic): zwingt das Modell in
+    # JSON, ohne dass ein Vorwort ("Hier sind die Konzepte:") den Parser
+    # zerlegt.
     try:
-        if art == "anthropic":
-            import anthropic  # type: ignore
-            client = anthropic.Anthropic()
-            # Kein Streaming. KEIN output_config/effort: die kleinen Modelle
-            # (haiku) kennen den Parameter nicht und quittieren ihn mit einer
-            # 400 — live gemessen, und der Fehler war doppelt gemein, weil er
-            # nur den Hintergrund-Extraktor traf. Das Gespraech lief weiter,
-            # nur gemerkt hat sich die KI nichts.
-            antwort = client.messages.create(
-                model=mdl,
-                max_tokens=2000,
-                system=_GRAPH_EXTRACTOR_PROMPT,
-                messages=[{"role": "user", "content": body},
-                          # Vorgefüllter Assistant-Turn: zwingt das Modell in
-                          # JSON, ohne dass ein Vorwort ("Hier sind die
-                          # Konzepte:") den Parser zerlegt.
-                          {"role": "assistant", "content": "{"}],
-            )
-            text = "".join(b.text for b in antwort.content
-                           if getattr(b, "type", None) == "text")
-            content = "{" + text
-            _buchen(mdl, antwort.usage)
-
-        elif art == "openai_compat":
-            from openai import OpenAI  # type: ignore
-            client = OpenAI(base_url=prov.get("base_url"),
-                            api_key=_os.environ.get(prov.get("key_env") or "", ""))
-            resp = client.chat.completions.create(
-                model=mdl,
-                messages=[{"role": "system", "content": _GRAPH_EXTRACTOR_PROMPT},
-                          {"role": "user",   "content": body}],
-                response_format={"type": "json_object"},
-                stream=False,
-                timeout=90,
-            )
-            content = (resp.choices[0].message.content or "").strip()
-            _buchen(mdl, getattr(resp, "usage", None))
-
-        else:
-            return ([], [])
+        content, _mdl = billig.einmal(
+            _GRAPH_EXTRACTOR_PROMPT, body,
+            modell=_os.environ.get("ZENTRALE_CONSOL_CLOUD_MODEL") or None,
+            max_tokens=2000, vorfuellen="{", als_json=True, log="GRAPH")
+    except billig.KeinWeg:
+        return ([], [])
     except Exception as e:
         state.push_log(f"[konsolidierung-cloud] FEHLER: {e}")
         return ([], [])
 
     return _finalize_extraction(content)
-
-
-def _buchen(model: str, verbrauch) -> None:
-    """Den Extraktor-Call mitrechnen.
-
-    Er lief bisher an der Buchhaltung vorbei — und ist der einzige Posten, der
-    OHNE Sashas Zutun feuert. Was man nicht sieht, kann man nicht deckeln.
-    """
-    if verbrauch is None:
-        return
-    try:
-        import usage
-        rein = int(getattr(verbrauch, "input_tokens", 0)
-                   or getattr(verbrauch, "prompt_tokens", 0) or 0)
-        raus = int(getattr(verbrauch, "output_tokens", 0)
-                   or getattr(verbrauch, "completion_tokens", 0) or 0)
-        eur = usage.buchen(model, input_tokens=rein, output_tokens=raus)
-        state.push_log(f"GRAPH ← {model} in={rein} out={raus} ≈{eur:.4f}€")
-    except Exception as e:
-        # Nicht still: eine verlorene Buchung macht den Budget-Deckel blind.
-        print(f"[usage] Buchung fehlgeschlagen ({model}): {e}")
 
 
 def _call_graph_extractor(user_msg: str, ai_msg: str, today: str) -> tuple[list[dict], list[dict]]:
@@ -619,7 +568,7 @@ import time       # noqa: E402
 # aktivem Hin-und-Her läuft nie eine Konsolidierung, die den Chat
 # blockieren könnte.
 #
-# Wichtig: Der laufende Gesprächsverlauf (state._chat_history, ~50
+# Wichtig: Der laufende Gesprächsverlauf (core/gespraeche.py, Fenster 50
 # Nachrichten) geht bei JEDER Frage sofort mit. Das Verschieben betrifft
 # nur den Langzeit-Graphen (übergreifendes Erinnern), nicht das Folgen
 # des aktuellen Gesprächs.

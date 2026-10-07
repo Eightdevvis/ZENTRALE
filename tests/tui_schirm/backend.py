@@ -49,6 +49,26 @@ _EINSTELLUNGEN = {
          "modelle": ["qwen-plus", "qwen-turbo"]}]}
 
 
+# Erfundene Gespräche (Claude-Web-Plan Phase 2, 2026-10-07): Liste mit
+# Erinnerungen oben, ein offenes Gespräch mit Denken und Werkzeug.
+_GESPRAECHE = {"aktiv": "g1", "gespraeche": [
+    {"id": "erinnerungen", "titel": "Erinnerungen", "letzte": "2026-10-06T09:55:00+00:00",
+     "anzahl": 2, "ungelesen": True},
+    {"id": "g1", "titel": "Fahrradschlauch flicken unterwegs",
+     "letzte": "2026-10-06T08:00:00+00:00", "anzahl": 2},
+    {"id": "g2", "titel": "Steuererklärung Belege sortieren",
+     "letzte": "2026-10-03T08:00:00+00:00", "anzahl": 6}]}
+_ARCHIV = {"aktiv": "g1", "gespraeche": [
+    {"id": "g0", "titel": "Alter Umzugsplan", "letzte": "2026-08-01T08:00:00+00:00",
+     "anzahl": 4, "archiviert": True}]}
+_VERLAUF = [
+    {"id": "n1", "role": "user", "content": "wie flicke ich unterwegs einen schlauch?"},
+    {"id": "n2", "role": "assistant", "content": "Mit Flickzeug: Loch suchen, anrauen, "
+     "Kleber, warten, Flicken drauf.",
+     "denken": "Er fragt nach unterwegs — also ohne Wasserbad. " * 6,
+     "werkzeuge": [{"name": "read_note", "args": "name=fahrrad"}]}]
+
+
 def _synth(path):
     """Erfundene Mail-Daten: die echten gehen nie live (Seen-Flag), aber das
     Post-Panel soll im Vergleich auch mit Mails gezeichnet werden."""
@@ -59,6 +79,12 @@ def _synth(path):
         return None
     if path == "/api/ai/einstellungen":      # Chat-Befehle /modell, /effort
         return _EINSTELLUNGEN
+    if path == "/api/gespraeche":
+        return _GESPRAECHE
+    if path.startswith("/api/gespraeche?archiv"):
+        return _ARCHIV
+    if path.startswith("/api/chat/history"):
+        return _VERLAUF
     if path.startswith(("/api/mail/folder?", "/api/mail/inbox?")) or path == "/api/mail/inbox":
         return _MAILS
     if path.startswith(("/api/mail/body?", "/api/mail/inbox-body?")):
