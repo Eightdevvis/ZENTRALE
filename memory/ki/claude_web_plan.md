@@ -1,8 +1,8 @@
 # Claude-Web im ZENTRALE-Assistenten — der Plan
 
-Stand 2026-10-07. **Nur Plan, nichts davon ist gebaut.** Sasha hat am
-06.10. gesagt: erst aufräumen, dann vor dem Übertragen anhalten und gemeinsam
-planen. Das hier ist die Vorlage für dieses Gespräch.
+Stand 2026-10-07. **Geplant und von Sasha entschieden (Abschnitt 6),
+noch nichts gebaut.** Sasha hat am 06.10. gesagt: erst aufräumen, dann vor dem
+Übertragen anhalten und gemeinsam planen. Das ist am 07.10. geschehen.
 
 Grundregel aus [../claude_hinweise.md](../claude_hinweise.md) („Das
 Strukturziel"): nichts hinbauen ohne Plan, wie die Architektur damit skaliert.
@@ -117,41 +117,56 @@ Prompt-Bau hängt dessen Anweisungen hinter den Gedächtnis-Kopf.
   `klein` bekommt nur, was gegen ein echtes qwen gemessen ist
   ([bench_history.md](bench_history.md)).
 - **Code ausführen** heißt: das Modell startet Programme auf Sashas Rechner.
-  Wenn überhaupt, nur in einer Sandbox ohne Netz und ohne `data/` — eigene
-  Entscheidung, nicht Teil der ersten Phasen.
-- **Der Riese.** Das Chatfeld steckte in `tui/zentrale_tui.py`
-  (~10 000 Zeilen). Die TUI-Zerlegung (#21, Branch
-  `worktree-agent-ac95c51a142500eaa-auf-main`) gibt dem Chat sein eigenes
+  Nur in einer Sandbox: eigener Arbeitsordner, kein Zugriff auf `data/` und
+  Keys, Zeitlimit, Ausgabe gekappt, jeder Lauf über das Erlaubnis-Gate.
+- **Gespräche auf zwei Rechnern.** Sasha will EIN Gedächtnis, egal von wo
+  (Entscheidung 2). Der Sync kennt aber nur „neueste Datei gewinnt": schreiben
+  PC und Laptop in dieselbe Gesprächsdatei, verliert einer. Deshalb ist ein
+  Gespräch ein **Ordner** `data/gespraeche/<id>/` mit **einer Datei pro
+  Rechner** (`<knoten>.jsonl`, nur anhängen) plus `kopf.json` (Titel, Projekt,
+  archiviert; klein, neueste gewinnt ist dort harmlos). Beim Lesen werden die
+  Rechner-Dateien nach Zeitstempel zusammengelegt. So kann der Sync nie eine
+  Nachricht überschreiben.
+- **Der Riese** ist weg: seit 611d186 (07.10.) hat der Chat sein eigenes
   Modul `tui/ansichten/chat.py` (Klasse `Chat`, siehe
-  `memory/system/tui_bauplan.md`); erst nach dem Merge dort weiterbauen —
-  vorher würde jede Funktion den Riesen weiter füttern.
+  `memory/system/tui_bauplan.md`). Neue Chat-Funktionen gehören dorthin.
 
 ## 5. Reihenfolge
 
 | Phase | Was | Warum zuerst | Größe |
 |---|---|---|---|
-| **0 Fundament** | TUI-Zerlegung mergen → `tui/ansichten/chat.py`; **Werkzeug-Register** | Ohne eigenes Chat-Modul und ein Register wächst alles Neue in Riesen | mittel |
+| **0 Fundament** | ~~TUI-Zerlegung~~ (erledigt 07.10.); **Werkzeug-Register** | Ohne ein Register wächst jedes neue Werkzeug an drei Stellen | mittel |
 | **1 Steuerung** | Stoppen (bis in die Schleife), mehrzeilige Eingabe mit Cursor, Slash-Befehle im Chat (`/neu`, `/modell`, `/effort`), Kabel für die vorhandenen Setter (Route + TUI) | sofort spürbar, kleines Risiko, Setter liegen schon da | klein |
-| **2 Gespräche** | `core/gespraeche.py`, Gesprächsliste in der TUI, neu/wechseln/umbenennen/archivieren, automatischer Titel, Wiederholen + letzte Nachricht bearbeiten | das Fundament für alles Weitere; Verlauf überlebt Neustarts | mittel |
-| **3 Gedächtnis sichtbar** | Kernakten in der TUI ansehen/ändern, `search_chats` | das Gedächtnis gibt es schon, es ist nur unsichtbar | klein |
-| **4 Skills** | Skill-Dateien, Liste im Prompt, `load_skill`, erste Skills (z. B. „knapp", „Recherche", „Wochenplan") | billig, passt zur Kostenlogik | klein |
+| **2 Gespräche** | `core/gespraeche.py` (Ordner pro Gespräch, Datei pro Rechner), Gesprächsliste in der TUI, neu/wechseln/umbenennen/archivieren, automatischer Titel, Wiederholen + letzte Nachricht bearbeiten, **Denken mitgespeichert und aufklappbar**, Gespräch „Erinnerungen" | das Fundament für alles Weitere; Verlauf überlebt Neustarts | mittel |
+| **3 Gedächtnis sichtbar** | Kernakten in der TUI ansehen/ändern, **`search_chats` über alle Gespräche** | Sasha orientiert sich nach Thema, nicht nach Datum — die Suche quer durch Gespräche ist dafür die Bedingung | klein |
+| **4 Skills** | Skill-Dateien, Liste im Prompt, `load_skill`, erste Skills; **`propose_skill`**: die KI schlägt Skills vor, angelegt wird erst nach Bestätigung (Gate) | billig, passt zur Kostenlogik; Grundlage dafür, dass sie sich später selbst weiterentwickelt | klein |
 | **5 Ablage + Anhänge** | `ablage`-Event + Ablage-Liste in der TUI; Datei anhängen per Pfad; Bilder an die Cloud | Artefakte in Terminal-Form | mittel |
 | **6 Projekte** | Projekt-Ordner, Zuordnung Gespräch→Projekt | erst wenn 2–4 stehen | mittel |
-| später | echtes Token-Streaming, Konnektoren (MCP), Code-Sandbox, Ollama über denselben OpenAI-Weg (erst messen) | Sasha: Streaming egal; der Rest braucht Entscheidungen | — |
+| **7 Sandbox (Grundlage)** | `run_code` in einem abgeschotteten Arbeitsordner (Python + Shell, Zeitlimit, kein `data/`, keine Keys, Gate); Ergebnis als Werkzeug-Ergebnis, Dateien in die Ablage | Sasha: die KI soll später wie ein Coder arbeiten — jetzt nur das Fundament, keine volle Coding-KI | klein |
+| später | echtes Token-Streaming, Konnektoren (MCP), Coding-Werkzeuge über die Sandbox hinaus (Repo lesen/ändern), Ollama über denselben OpenAI-Weg (erst messen) | Sasha: Streaming egal; „erstmal wird der Assistent ordentlich" | — |
 
 Jede Phase: eigener Worktree, Tests, Doku hier nachziehen, Leitplanken-Test
 (`tests/test_kern_bauplan.py`) bekommt neue Module eingetragen.
 
-## 6. Entscheidungen für Sasha
+## 6. Entscheidungen (Sasha, 07.10.2026)
 
-1. **Gespräche:** eine Liste wie im Web (viele Gespräche), oder ein
-   „Tagesgespräch" pro Tag plus Archiv? (Empfehlung: viele, wie im Web.)
-2. **Wo liegen Gespräche?** `data/gespraeche/` — damit rsyncen sie zwischen
-   PC und Laptop und landen in der Datensicherung. Einverstanden?
-3. **Takt-Erinnerungen:** im selben Gespräch wie heute, oder ein eigenes
-   Gespräch „Takt"? (Empfehlung: eigenes, sonst stören sie jedes Thema.)
-4. **Skills:** wer schreibt sie — nur Sasha, oder darf die KI Skills
-   vorschlagen und (mit Bestätigung) anlegen?
-5. **Code ausführen:** gar nicht / später in Sandbox?
-6. **Denken speichern:** heute wird das Denken nie aufgehoben. Im Gespräch
-   mitspeichern (zum Nachlesen) oder nicht?
+1. **Viele Gespräche wie im Web**, kein Tagesgespräch. „Mein Kopf kann sich
+   thematisch viel besser orientieren als datiert — solang der Assistent eh
+   einfach crossgespräche suchen kann wie Claude Web." → `search_chats` ist
+   Pflicht, nicht Zugabe.
+2. **Gespräche synchron auf allen Rechnern** — als Folge davon, dass das
+   Gedächtnis überall gleich sein muss: „der Assistent ist konsistent, egal
+   von wo ich ihn anspreche." → Ordner pro Gespräch, Datei pro Rechner
+   (Abschnitt 4).
+3. **Erinnerungen bekommt der Assistent alle**: Kalender, Zeitplan, gestellte
+   Timer und Ähnliches. Das Wort „Takt" verwirrt Sasha und kommt aus allem
+   raus, was er sieht. Wo sie landen, hat Sasha offengelassen — angenommen:
+   ein eigenes Gespräch „Erinnerungen" oben in der Liste; der Assistent sieht
+   es aus jedem Gespräch über die Suche.
+4. **Die KI soll Skills vorschlagen**, damit sie sich später selbst
+   weiterentwickeln kann. Anlegen nach Bestätigung.
+5. **Code ausführen: ja**, als Grundlage — die Idee ist, dass der Assistent
+   später coden kann wie Claude Code oder mit ihm zusammen. Jetzt nur das
+   Fundament; „Hauptsache der Assistent wird erstmal ordentlich."
+6. **Denken mitspeichern**, zum Anschauen. Ob es langfristig gebraucht wird,
+   wird später anhand der Nutzung entschieden.
