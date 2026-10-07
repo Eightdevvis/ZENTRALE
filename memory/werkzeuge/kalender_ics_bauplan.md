@@ -12,6 +12,42 @@ echten Daten (06.10.2026) war fehlerfrei. Google-Sync per vdirsyncer ist
 vorbereitet (`deploy/vdirsyncer.config.example`, `scripts/kalender_sync.py`),
 aber nicht eingerichtet.
 
+## Stand Sync (07.10.2026) — eingerichtet und live
+
+- **Ein Kalender.** Die Ebene `routinen` ist nach `termine` gezogen
+  (`scripts/kalender_ebenen_vereinen.py`, Probe an Kopie, 715 Tage ohne
+  Abweichung). Neue Routinen landen in `termine`; sagt die KI „routinen",
+  leitet `ki_werkzeuge` um (Werkzeugtexte bewusst byte-gleich gelassen).
+- **Jeder Rechner synct selbst gegen Google** (Sasha: „sauber jeder synct
+  gegen die cloud"; später nimmt der PC als Server die Rolle von Google ein).
+  Damit ist die frühere Regel „vdirsyncer nur auf dem PC" überholt:
+  `data/kalender/` ist aus `zentrale-sync` (~/.local/bin, nicht in git)
+  herausgenommen — ein zweiter Weg daneben brächte Doppelte/Geister. ⚠ Auf
+  dem PC muss dieselbe Ausnahme in sein `zentrale-sync`, bevor er synct.
+- **Paar** `zentrale`: `data/kalender/termine` ↔ Google-Hauptkalender
+  `fyyres@gmail.com`; bewusst OHNE `metadata` (sonst hieße der
+  Google-Hauptkalender danach „Termine"). „Feiertage in Deutschland"
+  (`…@virtual`) bleibt draußen. Konfig `~/.config/vdirsyncer/config` (600,
+  enthält das Client-Geheimnis), Token in `~/.local/share/vdirsyncer/`.
+- **Absicherung zusätzlich** (`scripts/kalender_sync.py`, Sasha: „bitte
+  bitte lösch nix aus google calendar"): vor jedem Lauf Nur-Lese-Kopie von
+  Google (Paar `google_probe` → `~/.local/share/vdirsyncer/google_kopie`),
+  einmal am Tag als Archiv nach `~/.local/share/zentrale/google-sicherung/`
+  (14 Tage); fehlen lokal seit dem letzten Sync mehr Termine als die
+  Löschsperre, läuft vdirsyncer nicht (`ZENTRALE_KALENDER_SYNC_LOESCHEN_OK=1`
+  für Gewolltes).
+- **Automatisch:** `deploy/zentrale-kalender-sync.{service,timer}` (alle
+  3 min, 1 min nach Anmeldung), in `~/.config/systemd/user/` verlinkt.
+- **Erster Sync:** ZENTRALE 48 → 518 Dateien, Google 470 → 518, von den 470
+  alten Google-Terminen fehlt keiner (gegen das Archiv geprüft).
+- **Was Google mit unseren Feldern macht (gemessen):** Termine ohne Ende
+  bekommen 1 h Dauer (28 Stück) — Sasha: passt meistens, für Merker beim
+  Anlegen selbst eine Dauer angeben (`+2`). Mehrere gleichnamige
+  X-ZENTRALE-Felder schrumpft Google auf eins: von zwei Pausen einer Routine
+  blieb eine (Sommerferien-Beschriftung weg). Die Ausfalltage selbst stehen
+  als EXDATE drin und bleiben; Sasha: die Beschriftung ist nur Metadata.
+  Einzelne X-ZENTRALE-Felder (ART, ABSAGE-NOETIG, POS …) überleben.
+
 ## Warum
 
 Sasha, 2026-10-06: *„bisherige daten übertragen ohne verluste, und nach

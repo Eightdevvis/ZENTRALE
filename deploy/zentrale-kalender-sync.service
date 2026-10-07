@@ -1,0 +1,23 @@
+# ZENTRALE-Kalender <-> Google abgleichen (vdirsyncer über scripts/kalender_sync.py).
+#
+# Seit 07.10.2026: jeder Rechner synct seinen Kalender selbst mit Google
+# (data/kalender/ ist aus dem Direktabgleich Laptop<->PC herausgenommen).
+# Der Wrapper holt vorher eine Nur-Lese-Kopie von Google als Sicherung und
+# bricht ab, wenn lokal auffällig viele Termine fehlen — dann wird NICHTS
+# zu Google getragen. Ohne Netz scheitert er still und versucht es beim
+# nächsten Mal wieder.
+#
+# Einrichten: diese Datei und die .timer nach ~/.config/systemd/user/
+# verlinken, dann den Timer für den Benutzer aktivieren und starten.
+
+[Unit]
+Description=ZENTRALE Kalender mit Google abgleichen
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/sasha/codicus/ZENTRALE
+Environment=PATH=/home/sasha/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/sasha/codicus/ZENTRALE/venv/bin/python scripts/kalender_sync.py zentrale
+Nice=10
+TimeoutStartSec=600

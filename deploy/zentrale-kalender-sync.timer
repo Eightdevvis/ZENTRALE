@@ -1,0 +1,14 @@
+# Alle 3 Minuten den Kalender mit Google abgleichen (und 1 Minute nach dem
+# Anmelden). Ein oneshot-Dienst läuft nie doppelt: hängt ein Lauf, wartet
+# der nächste.
+
+[Unit]
+Description=ZENTRALE Kalender regelmäßig mit Google abgleichen
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=3min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
