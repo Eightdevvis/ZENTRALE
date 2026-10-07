@@ -209,8 +209,13 @@ def _anhaengen_roh(gid, ereignis, kn=None):
 
 
 def anhaengen(gid, rolle, text, *, denken=None, werkzeuge=None, anbieter=None,
-              modell=None, abgebrochen=False, versteckt=False, knoten=None) -> dict:
-    """Eine Nachricht anhängen. -> das Ereignis (mit id und ts)."""
+              modell=None, abgebrochen=False, versteckt=False, knoten=None,
+              anhaenge=None, dokumente=None) -> dict:
+    """Eine Nachricht anhängen. -> das Ereignis (mit id und ts).
+
+    anhaenge (Frage) / dokumente (Antwort): VERWEISE in die Ablage
+    ([{id, titel, art, …}], core/anhang.py, Phase 5) — nie der Inhalt, nie
+    ein Bild; das setzt anhang.verlauf_einsetzen erst beim Senden ein."""
     _pruefen(gid)
     if rolle not in ("user", "assistant"):
         raise ValueError(f"unbekannte Rolle: {rolle!r}")
@@ -231,6 +236,10 @@ def anhaengen(gid, rolle, text, *, denken=None, werkzeuge=None, anbieter=None,
         e["abgebrochen"] = True
     if versteckt:
         e["versteckt"] = True
+    if anhaenge:
+        e["anhaenge"] = [dict(a) for a in anhaenge]
+    if dokumente:
+        e["dokumente"] = [dict(d) for d in dokumente]
     return _anhaengen_roh(gid, e, knoten)
 
 
@@ -330,11 +339,18 @@ def text_fuer_ki(n) -> str:
 
 def verlauf_fuer_ki(gid, fenster=FENSTER) -> list:
     """[{role, content}] der letzten `fenster` Nachrichten — dieselbe Form
-    wie früher state.get_chat_history()."""
+    wie früher state.get_chat_history(). Verweise auf Anhänge und Dokumente
+    gehen als 'anhaenge'/'dokumente' mit (aufgelöst von anhang.verlauf_einsetzen)."""
     if not gid or not gibt_es(gid):
         return []
-    liste = nachrichten(gid, versteckte=True)[-fenster:]
-    return [{"role": n["rolle"], "content": text_fuer_ki(n)} for n in liste]
+    raus = []
+    for n in nachrichten(gid, versteckte=True)[-fenster:]:
+        m = {"role": n["rolle"], "content": text_fuer_ki(n)}
+        for feld in ("anhaenge", "dokumente"):
+            if n.get(feld):
+                m[feld] = [dict(x) for x in n[feld]]
+        raus.append(m)
+    return raus
 
 
 def letzte_nutzer_nachricht(gid):

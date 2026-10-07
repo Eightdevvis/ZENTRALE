@@ -313,6 +313,16 @@ hängt in jedem Anhängen und jedem Kopf-Schreiben (zwei Stupser pro Chat-Zug;
 der Helfer fasst sie zusammen). Nicht im Code-Repo (ignoriert), gesichert über
 `scripts/daten_sichern.py`.
 
+**Ablage (seit 2026-10-07, `core/ablage.py`, [../ki/ablage.md](../ki/ablage.md)):**
+`data/ablage/<id>/` mit `kopf.json` und **einer Datei pro Fassung**
+(`v<n>-<hostname><endung>`), nie überschrieben. Legen PC und Laptop
+gleichzeitig eine neue Fassung an, liegen nach dem Sync beide da (der
+Rechnername im Namen verhindert, dass „neueste gewinnt" eine verschluckt).
+Nie gelöscht, nur archiviert (Flag im Kopf, den beide schreiben dürfen).
+Anhänge (auch Bilder) liegen als Kopie hier und synchen mit — gewollt,
+Sasha will alles überall. Push-on-write nach jedem Schreiben; ignoriert,
+gesichert über `scripts/daten_sichern.py`.
+
 Das ist die event-getriebene Rückkehr zur Live-Propagierung, aber **leichter
 als der frühere Daemon** (kein Polling/inotify-Reconcile, kein Race mit
 Commits — nur ein Stups pro echtem App-Write).

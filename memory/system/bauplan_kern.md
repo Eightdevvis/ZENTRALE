@@ -72,6 +72,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `theme` | 1 | Tag/Nacht-Modus, die Datei als einzige Wahrheit |
 | `tone` | 1 | Ton-Erzeuger fürs TUI-Klavier |
 | `pc_status` | 1 | Ist der andere Knoten gerade da? |
+| `zug` | 1 | Der laufende Chat-Zug: Gesprächs-id für die Werkzeuge, Ereignisse von Werkzeugen an die TUI (z. B. `ablage`) |
 | `kalender` | 2 | Termine, Routinen, Konflikt-Alarm — die Fassade, Speicher austauschbar |
 | `kalender_zeitraum` | 2 | Relative Zeiträume („diese_woche") in Daten übersetzen |
 | `kalender_regel` | 2 | Wann eine Routine stattfindet (RRULE → Tage), eine Stelle für Fassade und .ics |
@@ -108,6 +109,8 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `ollama` | 2 | Anbindung an Ollama: Adresse, Modell, Kontext, Sampling, Erreichbarkeit, Warmup — einmal |
 | `sandbox` | 2 | Code abgeschottet ausführen (bubblewrap): eigener Arbeitsordner, kein Netz, keine Dateien von Sasha, Zeit-/Speicher-/Ausgabe-Grenzen |
 | `skills` | 2 | Skills der KI: Anleitungen je Art Aufgabe als Dateien im Gedächtnis, Liste für den Prompt, laden/vorschlagen/ändern |
+| `ablage` | 2 | Die Ablage: Dokumente der KI, Sandbox-Dateien, Anhänge — Ordner pro Dokument, jede Fassung eine neue Datei, nie löschen |
+| `anhang` | 2 | Anhänge im Chat: Sperrliste, Art erkennen (PDF → Text), in die Ablage; Verweise für den Verlauf der KI auflösen |
 | `ai` | 3 | Ollama-Weg, Tool-Liste und -Ausführung, Erlaubnis-Abfrage, Prompt-Bausteine |
 | `ai_backends` | 3 | Wer denkt: lokal oder Cloud, Anbieter, Modell, Effort, Rundengrenze |
 | `cloud` | 3 | Anthropic-Weg |
@@ -167,6 +170,7 @@ egal woran, ging durch dieselbe Datei.
 | `tutor` | alles unter `/api/tutor/` |
 | `mail` | Mail-Triage |
 | `skills` | Skills der KI (Liste, an/aus) und das Gedächtnis für Sasha: Kernakten, Bereiche, Kernakte ändern |
+| `ablage` | Ablage: Liste, Dokument lesen, archivieren; Anhänge annehmen |
 
 ## Türen
 

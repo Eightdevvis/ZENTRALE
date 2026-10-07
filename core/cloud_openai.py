@@ -155,15 +155,41 @@ def _prepare_messages(messages: list, system_text: str,
     cloud._volatile_text."""
     out = [{"role": "system", "content": system_text}]
     for m in (messages or []):
-        if m.get("role") in ("user", "assistant") and m.get("content"):
+        anhaenge = m.get("anhaenge") if m.get("role") == "user" else None
+        if anhaenge:
+            # Anhänge (Phase 5): Inhalt als Liste von Teilen — Text der
+            # Nachricht, dann je Anhang ein Text- oder image_url-Teil.
+            teile = [{"type": "text", "text": cloud.kappen(m.get("content") or "")}] \
+                if m.get("content") else []
+            out.append({"role": "user", "content": teile + _anhang_teile(anhaenge)})
+        elif m.get("role") in ("user", "assistant") and m.get("content"):
             out.append({"role": m["role"],
                         "content": cloud.kappen(m["content"])})
     if not any(m["role"] == "user" for m in out):
         out.append({"role": "user", "content": "(kein Text)"})
     if volatile and out[-1]["role"] == "user":
-        out[-1] = {"role": "user",
-                   "content": f"{out[-1]['content']}\n\n{volatile}"}
+        if isinstance(out[-1]["content"], list):
+            out[-1] = {"role": "user", "content": out[-1]["content"]
+                       + [{"type": "text", "text": volatile}]}
+        else:
+            out[-1] = {"role": "user",
+                       "content": f"{out[-1]['content']}\n\n{volatile}"}
     return out
+
+
+def _anhang_teile(anhaenge: list) -> list:
+    """Aufgelöste Anhänge → OpenAI-Teile: Bild als data:-URL (image_url),
+    Text als text-Teil mit Überschrift."""
+    teile = []
+    for a in anhaenge:
+        if a.get("art") == "bild" and a.get("daten"):
+            teile.append({"type": "text", "text": f"[Anhang: {a.get('titel')}]"})
+            teile.append({"type": "image_url", "image_url": {
+                "url": f"data:{a.get('mime') or 'image/png'};base64,{a['daten']}"}})
+        else:
+            teile.append({"type": "text",
+                          "text": f"[Anhang: {a.get('titel')}]\n{a.get('text') or ''}"})
+    return teile
 
 
 def chat_stream(messages: list, model: str = None, system: str = None,

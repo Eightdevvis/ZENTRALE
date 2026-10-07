@@ -34,6 +34,8 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/eingabe.py` | Eingabefeld des Chats als reine Funktionen: Cursor, Umlaute (UTF-8-Bytes), Alt+Enter, Umbruch/Scrollen der Anzeige | — |
 | `ansichten/chat_befehle.py` | Slash-Befehle im Chat lesen (`/neu`, `/modell` …), Hilfe-Text | — |
 | `ansichten/chat_gespraeche.py` | Mixin `GespraechsSteuerung` des Chats: neu, öffnen, umbenennen, archivieren, wiederholen, bearbeiten, Verlauf laden, Poll; `verlauf_aus` (History → Verlaufszeilen) | (in `AI`) |
+| `ansichten/ablage.py` | `Ablageliste`: Überlagerung im Chat-Kasten (`/ablage`), Liste + Lesen eines Dokuments; reine Helfer `listen_zeilen`, `lese_zeilen` | `AI["ablage"]` |
+| `ansichten/chat_ablage.py` | Mixin `AblageSteuerung` des Chats: `/anhang` (Datei lesen, an `/api/anhang`), „▤"-Zeilen, Enter auf das neueste Dokument | `AI["anhaenge"]` |
 | `ansichten/gespraechsliste.py` | `Gespraechsliste`: Überlagerung im Chat-Kasten (Tab/`/liste`); reine Helfer `alter_text`, `filtern`, `listen_zeilen` | `AI["liste"]` |
 | `ansichten/gedaechtnis.py` | `Gedaechtnis`: Überlagerung im Chat-Kasten (`/gedaechtnis`, `/skills`) — Kernakten, Bereiche, Skills; Kernakte im Editor ändern, Skill an/aus; reine Helfer `reiter`, `inhalt_zeilen`, `naechster_status`, `editor_befehl` | `AI["gedaechtnis"]` |
 | `ansichten/sprachtutor.py` | `Sprachtutor`: Text-Panel, Zimmer-Fenster | `TUTOR` |
@@ -206,6 +208,27 @@ Claude-Web-Plan Phase 3 ([../ki/gedaechtnis_dateien.md](../ki/gedaechtnis_dateie
   Abspiel-Backend liefert ein erfundenes Gedächtnis, der „Editor" ist ein
   Skript, das eine Zeile anhängt); ohne Bildschirm:
   `tests/test_gedaechtnis_ansicht.py`.
+## Chat: Ablage und Anhänge (seit 2026-10-07)
+
+Claude-Web-Plan Phase 5 ([../ki/ablage.md](../ki/ablage.md)). Was für die TUI gilt:
+
+- **`/ablage`** öffnet die Liste als Überlagerung im Chat-Kasten (wie die
+  Gesprächsliste): ↑↓ Bild↑↓, Enter lesen, `a` archivieren / zurückholen,
+  `z` Archiv, Esc zu. **Lesen** ebenfalls im Kasten, mit `md_zeilen` (Code und
+  CSV wörtlich): ↑↓ Bild↑↓ Leertaste Pos1 Ende, ←→ Fassungen, Esc eine Stufe
+  zurück. Kein externer Pager (curses verlassen + neu aufbauen, und auf dem
+  Pi-Kiosk liegt kein less hinter dem Bild).
+- **Im Verlauf**: SSE `ablage` → Zeile „▤ Titel — enter öffnet" (Log-Rolle
+  `ablage`, Text `id⇥titel`). Nur das neueste öffnet Enter bei leerer
+  Eingabe, ältere zeigen „— in /ablage".
+- **`/anhang <pfad>`**: die TUI liest die Datei selbst (Tunnel!), schickt sie
+  im Hintergrund an `/api/anhang`, merkt die id vor; die Statuszeile zeigt
+  wartende Anhänge, Senden nimmt sie mit („▤ anhang: name" unter der
+  Nachricht). Lehnt `/api/chat` ab (Bild ohne Cloud), bleiben sie vorgemerkt.
+- Chat-Haken in `chat.py`: Event `ablage`, Befehle, Tasten- und Zeichen-
+  Weiche, Enter-Sonderfall, Anhänge im Body — alles Weitere in den zwei Modulen.
+- Headless: Szenario `ki_ablage` in `tests/tui_schirm/lauf.py` (erfundene
+  Ablage im Abspiel-Backend); ohne Bildschirm: `tests/test_ablage_tui.py`.
 
 ## Historie
 

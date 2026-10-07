@@ -84,6 +84,32 @@ Programm kann im Arbeitsordner Verweise nach draußen anlegen — die zeigen
 nur ins Leere, solange niemand den Ordner außerhalb der Sandbox mit
 Verweis-Folgen liest (der Code tut es nicht).
 
+## Anhänge im Chat (seit 2026-10-07)
+
+`/anhang <pfad>` schickt eine Datei an die KI — bei der Cloud heißt das: zu
+einem Anbieter nach draußen. Sasha nennt den Pfad selbst, deshalb gilt hier
+nicht die Whitelist von `read_file`, sondern eine **Sperrliste**
+(`context.anhang_gesperrt`, geprüft im Backend am aufgelösten Pfad, Verweise
+gefolgt):
+- Secret-Dateinamen wie bei `read_file` (`ai_config.json`, `.env`, `*.key`,
+  `id_rsa`, `token`, `passwor` …) plus `credential` (`~/.claude/.credentials.json`);
+- jedes `data/` und `tutor/data/` von ZENTRALE (Keys, Mail-Zugänge,
+  Gedächtnis) — auch in anderen Checkouts (erkannt an `data/` neben `core/`);
+- `.git`/`.hg`/`.svn` und `learning` (Sashas Lernzone);
+- im Home: `.ssh`, `.gnupg`, `.aws`, `.azure`, `.kube`, `.docker`,
+  `.password-store`, Keyrings, Browser- und Mail-Profile, `gh`/`gcloud`/`rclone`-
+  Zugänge, `~/.local/share/zentrale` (Datensicherung);
+- `/proc`, `/sys`, `/dev`, `/root`, `/etc/shadow`, `/etc/gshadow`, `/etc/ssl/private`.
+
+Weiter: ≤ 10 MB, nur Text/Code/PDF/Bild (Binäres abgelehnt), Kopie in
+`data/ablage/` (synct). Im Gespräch steht nur ein Verweis. Restrisiko: eine
+Datei mit Geheimnis unter harmlosem Namen an harmlosem Ort — Sasha muss
+wissen, was er anhängt. Die KI selbst kann keine Anhänge auslösen.
+
+`save_from_sandbox` holt nur aus dem Arbeitsordner eines Laufs desselben
+Gesprächs und folgt keinem Verweis (`sandbox.datei_lesen`) — damit bleibt der
+Satz oben wahr, dass niemand Verweise aus dem Arbeitsordner draußen auflöst.
+
 ## LUKS – Wovor es schützt, wovor nicht
 
 LUKS schützt **nur Daten-at-rest** (PC aus, Disk verschlüsselt).

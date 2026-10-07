@@ -19,7 +19,9 @@
 
 import json as _json
 import datetime as _dt
+import os as _os
 
+import ablage
 import chat_suche
 import context
 import gedaechtnis
@@ -32,6 +34,7 @@ import sandbox
 import skills
 import web
 import werkzeug_register
+import zug
 
 
 def _kalender_beweis(tag: str, label: str) -> str:
@@ -424,9 +427,15 @@ def _run_code(args: dict) -> str:
         zeit = int(args.get("zeitlimit") or sandbox.ZEITLIMIT_STANDARD_S)
     except (TypeError, ValueError):
         zeit = sandbox.ZEITLIMIT_STANDARD_S
-    erg = sandbox.ausfuehren(code, sprache=sprache,
+    # Arbeitsordner nach dem Gespräch benannt (Phase 5, 2026-10-07).
+    lauf = sandbox.lauf_kennung(zug.gespraech())
+    erg = sandbox.ausfuehren(code, sprache=sprache, lauf_id=lauf,
                              zeitlimit_s=max(1, min(zeit, sandbox.ZEITLIMIT_MAX_S)))
-    return sandbox.als_text(erg)
+    text = sandbox.als_text(erg)
+    if erg.get("dateien_neu"):
+        text += (f"\nLauf: {lauf} — mit save_from_sandbox in Sashas Ablage "
+                 f"legen, wenn er eine Datei behalten soll.")
+    return text
 
 
 # ── Skills (core/skills.py, Phase 4 2026-10-07) ──
@@ -465,3 +474,96 @@ def _search_chats(args: dict) -> str:
 def _read_chat(args: dict) -> str:
     return chat_suche.lesen_text(args.get("id") or "", str(args.get("query") or ""),
                                  args.get("anzahl") or chat_suche.LESEN_STANDARD)
+
+
+# ── Ablage (core/ablage.py, Phase 5 2026-10-07) ──
+# Ungegatet (Begründung im Register). Jedes neue Dokument und jede neue
+# Fassung meldet sich über zug.melden bei der TUI: die Chat-Route schickt das
+# als SSE-Event 'ablage', die TUI zeigt eine Zeile „▤ Titel".
+
+def _ablage_melden(k: dict) -> None:
+    zug.melden({"ablage": ablage.kurz(k)})
+
+
+def _ablage_text(k: dict, was: str) -> str:
+    return (f'{was}: "{k.get("titel")}" (id {k["id"]}, Fassung {k.get("fassung")}). '
+            f"Sasha sieht es als Eintrag im Chat; wiederhole den Inhalt nicht.")
+
+
+@ausfuehrer("create_document")
+def _create_document(args: dict) -> str:
+    art = (args.get("art") or "markdown").strip().lower()
+    if art not in ("markdown", "text", "code", "csv"):
+        art = "markdown"
+    try:
+        k = ablage.anlegen(args.get("titel") or "", str(args.get("inhalt") or ""), art,
+                           herkunft="ki", gespraech=zug.gespraech(),
+                           sprache=args.get("sprache"))
+    except ablage.Fehler as e:
+        return f"[Nicht abgelegt: {e}]"
+    _ablage_melden(k)
+    return _ablage_text(k, "Abgelegt")
+
+
+@ausfuehrer("read_document")
+def _read_document(args: dict) -> str:
+    try:
+        d = ablage.lesen(str(args.get("id") or "").strip())
+    except ablage.Unbekannt:
+        return "[Kein Dokument mit dieser id in der Ablage.]"
+    k = d["kopf"]
+    if d["inhalt"] is None:
+        return f'"{k.get("titel")}" ist ein Bild ({d["bytes"]} Bytes) — lesen geht nur bei Text.'
+    return f'"{k.get("titel")}" ({k.get("art")}, Fassung {d["fassung"]}):\n' + d["inhalt"]
+
+
+@ausfuehrer("update_document")
+def _update_document(args: dict) -> str:
+    try:
+        k = ablage.neue_fassung(str(args.get("id") or "").strip(),
+                                str(args.get("inhalt") or ""))
+    except ablage.Unbekannt:
+        return "[Kein Dokument mit dieser id in der Ablage.]"
+    except ablage.Fehler as e:
+        return f"[Nicht geändert: {e}]"
+    _ablage_melden(k)
+    return _ablage_text(k, "Neue Fassung abgelegt")
+
+
+# Was aus einem Lauf höchstens in die Ablage darf (Text: 4 Bytes je Zeichen).
+_SANDBOX_MAX_BYTES = max(ablage.BILD_MAX_BYTES, ablage.TEXT_MAX_ZEICHEN * 4)
+
+
+@ausfuehrer("save_from_sandbox")
+def _save_from_sandbox(args: dict) -> str:
+    """Eine Datei aus einem run_code-Lauf in die Ablage. Nur aus Läufen
+    DIESES Gesprächs (die Kennung beginnt mit seiner id), nur aus dem
+    Arbeitsordner (sandbox.datei_lesen: kein Ausbruch, keine Verweise),
+    Text oder Bild, mit Größengrenze."""
+    lauf = str(args.get("lauf") or "").strip()
+    datei = str(args.get("datei") or "").strip()
+    gid = zug.gespraech()
+    if gid and not lauf.startswith(sandbox.lauf_vorsatz(gid)):
+        return "[Nicht abgelegt: dieser Lauf gehört nicht zu diesem Gespräch.]"
+    try:
+        roh = sandbox.datei_lesen(lauf, datei, _SANDBOX_MAX_BYTES)
+    except ValueError as e:
+        return f"[Nicht abgelegt: {e}]"
+    name = _os.path.basename(datei)
+    endung = _os.path.splitext(name)[1].lower()
+    titel = str(args.get("titel") or "").strip() or name
+    quelle = f"Sandbox-Lauf {lauf}: {datei}"
+    try:
+        if endung in ablage.BILD_ENDUNGEN:
+            k = ablage.anlegen(titel, roh, "bild", herkunft="sandbox", gespraech=gid,
+                               endung=endung, quelle=quelle)
+        elif b"\x00" in roh[:8192]:
+            return "[Nicht abgelegt: das ist weder Text noch ein Bild.]"
+        else:
+            art = {".md": "markdown", ".csv": "csv", ".txt": "text"}.get(endung, "code")
+            k = ablage.anlegen(titel, roh, art, herkunft="sandbox", gespraech=gid,
+                               endung=endung or ".txt", quelle=quelle)
+    except ablage.Fehler as e:
+        return f"[Nicht abgelegt: {e}]"
+    _ablage_melden(k)
+    return _ablage_text(k, "Abgelegt")

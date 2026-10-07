@@ -380,10 +380,16 @@ def _prepare_messages(messages: list) -> list:
         if role not in ("user", "assistant"):
             continue
         content = m.get("content")
-        if not content:
+        anhaenge = m.get("anhaenge") if role == "user" else None
+        if not content and not anhaenge:
             continue          # leere Turns lehnt die API ab
         if isinstance(content, str):
-            content = [{"type": "text", "text": kappen(content)}]
+            content = [{"type": "text", "text": kappen(content)}] if content else []
+        if anhaenge:
+            # Anhänge (Phase 5, core/anhang.py) VOR dem Text — so empfiehlt
+            # es Anthropic für Bilder. Der Anhang hat seinen eigenen Deckel;
+            # kappen() gilt nur für den Text der Nachricht.
+            content = _anhang_bloecke(anhaenge) + list(content)
         msgs.append({"role": role, "content": content})
     while msgs and msgs[0]["role"] != "user":
         msgs.pop(0)
@@ -391,6 +397,22 @@ def _prepare_messages(messages: list) -> list:
         msgs = [{"role": "user", "content": [{"type": "text",
                                               "text": "(kein Text)"}]}]
     return msgs
+
+
+def _anhang_bloecke(anhaenge: list) -> list:
+    """Aufgelöste Anhänge (anhang.verlauf_einsetzen) → Anthropic-Blöcke:
+    Bild als base64-image, Text als eigener text-Block mit Überschrift."""
+    bloecke = []
+    for a in anhaenge:
+        if a.get("art") == "bild" and a.get("daten"):
+            bloecke.append({"type": "text", "text": f"[Anhang: {a.get('titel')}]"})
+            bloecke.append({"type": "image", "source": {
+                "type": "base64", "media_type": a.get("mime") or "image/png",
+                "data": a["daten"]}})
+        else:
+            bloecke.append({"type": "text",
+                            "text": f"[Anhang: {a.get('titel')}]\n{a.get('text') or ''}"})
+    return bloecke
 
 
 def _append_volatile(msgs: list, volatile: str) -> None:

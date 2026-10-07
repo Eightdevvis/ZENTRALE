@@ -1,7 +1,7 @@
 # Claude-Web im ZENTRALE-Assistenten — der Plan
 
 Stand 2026-10-07. **Geplant und von Sasha entschieden (Abschnitt 6).
-Phase 0, 1, 2, 3, 4 und 7 sind gebaut (Abschnitte 5 und 7), der Rest noch nicht.** Sasha hat am 06.10. gesagt: erst aufräumen, dann vor dem
+Phase 0, 1, 2, 3, 4, 5 und 7 sind gebaut (Abschnitte 5 und 7), der Rest noch nicht.** Sasha hat am 06.10. gesagt: erst aufräumen, dann vor dem
 Übertragen anhalten und gemeinsam planen. Das ist am 07.10. geschehen.
 
 Grundregel aus [../claude_hinweise.md](../claude_hinweise.md) („Das
@@ -142,7 +142,7 @@ Prompt-Bau hängt dessen Anweisungen hinter den Gedächtnis-Kopf.
 | **2 Gespräche** ✔ 07.10. | `core/gespraeche.py` (Ordner pro Gespräch, Datei pro Rechner), Gesprächsliste in der TUI, neu/wechseln/umbenennen/archivieren, automatischer Titel, Wiederholen + letzte Nachricht bearbeiten, **Denken mitgespeichert und aufklappbar**, Gespräch „Erinnerungen" | das Fundament für alles Weitere; Verlauf überlebt Neustarts | mittel |
 | **3 Gedächtnis sichtbar** ✔ 07.10. | Kernakten in der TUI ansehen/ändern, **`search_chats` über alle Gespräche** | Sasha orientiert sich nach Thema, nicht nach Datum — die Suche quer durch Gespräche ist dafür die Bedingung | klein |
 | **4 Skills** ✔ 07.10. | Skill-Dateien, Liste im Prompt, `load_skill`, erste Skills; **`propose_skill`**: die KI schlägt Skills vor, angelegt wird erst nach Bestätigung (Gate) | billig, passt zur Kostenlogik; Grundlage dafür, dass sie sich später selbst weiterentwickelt | klein |
-| **5 Ablage + Anhänge** | `ablage`-Event + Ablage-Liste in der TUI; Datei anhängen per Pfad; Bilder an die Cloud | Artefakte in Terminal-Form | mittel |
+| **5 Ablage + Anhänge** ✔ 07.10. | `ablage`-Event + Ablage-Liste in der TUI; Datei anhängen per Pfad; Bilder an die Cloud | Artefakte in Terminal-Form | mittel |
 | **6 Projekte** | Projekt-Ordner, Zuordnung Gespräch→Projekt | erst wenn 2–4 stehen | mittel |
 | **7 Sandbox (Grundlage)** ✔ 07.10. | `run_code` in einem abgeschotteten Arbeitsordner (Python + Shell, Zeitlimit, kein `data/`, keine Keys, Gate); Ergebnis als Werkzeug-Ergebnis, Dateien in die Ablage | Sasha: die KI soll später wie ein Coder arbeiten — jetzt nur das Fundament, keine volle Coding-KI | klein |
 | später | echtes Token-Streaming, Konnektoren (MCP), Coding-Werkzeuge über die Sandbox hinaus (Repo lesen/ändern), Ollama über denselben OpenAI-Weg (erst messen) | Sasha: Streaming egal; „erstmal wird der Assistent ordentlich" | — |
@@ -372,6 +372,28 @@ Angenommen (Sasha war nicht erreichbar) — die Kleinentscheidungen:
   `test_gedaechtnis_ansicht.py`, `test_werkzeug_schleife_register.py`,
   Wächter in `test_keine_seiteneffekte.py`; headless `ki_gedaechtnis` bei
   80×24 und 136×30.
+### Phase 5 — Ablage + Anhänge (2026-10-07)
+
+Ausführlich: [ablage.md](ablage.md). Kurz:
+
+- **`core/ablage.py`** (Schicht 2): `data/ablage/<id>/kopf.json` + eine Datei
+  je Fassung (`v<n>-<rechner><endung>`), nie überschreiben, nie löschen, nur
+  archivieren; umlenkbar per `ablage_dir`; gitignored, in der Datensicherung.
+- **`core/zug.py`** (Schicht 1): der laufende Zug — Gesprächs-id für die
+  Werkzeuge, Ereignisse an die TUI. Die Route schickt sie als SSE `ablage`.
+- **Werkzeuge** (nur `gross`, hinten an, ungegatet): `create_document`,
+  `read_document`, `update_document`, `save_from_sandbox`. Schnappschuss neu
+  gezogen: nur die vier Einträge, `klein` byte-gleich. Text-Deckel < 650.
+- **Sandbox**: `run_code` benennt den Lauf `<gespräch>--…` (offener Punkt aus
+  Phase 7), `sandbox.datei_lesen` ohne Ausbruch/Verweise.
+- **`core/anhang.py`** (Schicht 2) + `POST /api/anhang`: Sperrliste
+  (`context.anhang_gesperrt`), PDF über `gedaechtnis.pdf_text` (herausgelöst
+  aus `fetch_document`), Kopie in die Ablage, im Gespräch nur der Verweis;
+  Bilder als Block an Anthropic (`image`) bzw. OpenAI (`image_url`), lokal 400.
+- **TUI**: `/ablage` (Liste + Lesen im Kasten), „▤ Titel — enter öffnet",
+  `/anhang <pfad>`.
+- Tests: `tests/test_ablage.py`, `tests/test_ablage_tui.py`, Wächter;
+  headless `ki_ablage` bei 80×24 und 136×30.
 
 Angenommen (Sasha war nicht erreichbar) — die Kleinentscheidungen:
 
@@ -396,3 +418,15 @@ Angenommen (Sasha war nicht erreichbar) — die Kleinentscheidungen:
 **Offen:** Platz im Rad/auf der Startseite (siehe oben); Bereiche nur als
 Titel (Inhalte liest die KI, Sasha noch nicht in der TUI); Erinnerungen in
 der Suche gehen mit — falls das stört, lassen sie sich ausnehmen.
+| Ablage-Werkzeuge **ungegatet** | gegatet wie `fetch_document` (ein Ja pro Dokument) |
+| Ordner pro Dokument, **Fassung mit Rechnername** im Dateinamen | `<name>.v2.md` flach (zwei Rechner → eine Fassung verloren) |
+| **`read_document`** zusätzlich | nur create/update (dann ändert die KI blind) |
+| `save_from_sandbox` **explizit**, nur Läufe **dieses Gesprächs** | alles automatisch in die Ablage (Zwischendateien) |
+| Ereignisse über **`core/zug.py`**, abgeholt in der Route | `run_tool` umbauen (Phase 3 baut dort parallel) |
+| **Alle Anhänge** (auch Text/PDF) als Kopie in die Ablage, im Gespräch nur Verweis | Text direkt in die Nachricht (TUI zeigt dann den ganzen Anhang) |
+| **TUI liest die Datei** und schickt Bytes | Backend liest den Pfad (unterwegs falscher Rechner) |
+| Anhänge gehen **bei jedem Zug** mit (gecacht), Text ≤ 30.000 Zeichen Cloud / 8.000 lokal | nur im Zug, in dem angehängt wurde |
+| Lesen **im Chat-Kasten** | `$PAGER`/less (curses verlassen; Pi-Kiosk ohne less) |
+| Enter bei leerer Eingabe öffnet das **neueste** Dokument | Zeiger im Verlauf, Enter auf der gewählten Zeile |
+| Zwischenablage **nicht gebaut** (gibt es in der TUI nicht) | xclip/wl-copy einbauen |
+| Grenzen: Text 200.000 Zeichen, Bild 5 MB, Datei 10 MB | — |

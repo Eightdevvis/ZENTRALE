@@ -465,6 +465,34 @@ Beschreibungen: eigener Deckel < 450 Zeichen in `tests/test_profil.py`.
 Zwei Werkzeuge statt eines mit Modus: jedes Schema bleibt klein und
 eindeutig, und das Modell muss keinen Modus-Parameter richtig setzen.
 
+### Ablage und Anhänge — `create_document` & Co. (seit 2026-10-07)
+
+Phase 5 des [Claude-Web-Plans](claude_web_plan.md), ausführlich in
+[ablage.md](ablage.md). Die KI legt Dokumente in `data/ablage/` ab
+(`core/ablage.py`), Sasha gibt ihr Dateien mit (`core/anhang.py`).
+
+| Werkzeug | Was | Gate |
+|---|---|---|
+| `create_document(titel, inhalt, art?, sprache?)` | neues Dokument (markdown/text/code/csv) | nein |
+| `read_document(id)` | Inhalt lesen | nein |
+| `update_document(id, inhalt)` | neue Fassung, alte bleibt | nein |
+| `save_from_sandbox(lauf, datei, titel?)` | Datei aus einem `run_code`-Lauf dieses Gesprächs | nein |
+
+Ungegatet, weil nur in den eigenen Ordner geschrieben, nie überschrieben,
+nie gelöscht wird und nichts nach draußen geht. Ein Werkzeug meldet ein neues
+Dokument über **`core/zug.py`** (der laufende Zug, Schicht 1): die Chat-Route
+öffnet ihn mit der Gesprächs-id, holt nach jedem `werkzeug`-Event die
+Meldungen ab und schickt sie als SSE `ablage`; so musste die Schleife nicht
+umgebaut werden. Über denselben Zug bekommt `run_code` die Gesprächs-id für
+seinen Arbeitsordner (`<gespräch>--<zeit>-<hex>`). Text-Budget der vier
+Beschreibungen: eigener Deckel < 650 Zeichen in `tests/test_profil.py`.
+
+**Anhänge** gehen als eigene Blöcke an die Cloud (Anthropic: `image`
+base64 + `text`; OpenAI-kompatibel: Inhalt als Liste mit `image_url`); im
+Gespräch steht nur ein Verweis, der Inhalt kommt beim Bauen des Verlaufs
+dazu (`anhang.verlauf_einsetzen`). Lokal: Text ja, Bilder nein (400 mit
+Hinweis auf `/cloud`).
+
 ### Visuelle Stimme – Bild-Marker `[[bild: name]]`
 
 Die KI zeigt Mimik/Gesten, *während* sie mit Worten antwortet: ein

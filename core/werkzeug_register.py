@@ -1139,6 +1139,81 @@ WERKZEUGE = [
             "required": ["id"],
         },
     ),
+    # ── Ablage ──
+    # Phase 5 (2026-10-07): Dokumente für Sasha (core/ablage.py), Claude-
+    # Webs Artefakte. UNGEGATET, Entscheidung 2026-10-07: es wird nur in den
+    # eigenen Ordner data/ablage/ geschrieben, nie überschrieben und nie
+    # gelöscht (jede Änderung eine neue Fassung), nichts geht nach draußen.
+    # Ein Ja/Nein vor jedem Dokument wäre wie bei write_note eine Zumutung —
+    # und das Dokument erscheint ohnehin sofort als Zeile im Chat.
+    Werkzeug(
+        name="create_document",
+        klein=None,
+        gross=(
+            "Legt ein Dokument in Sashas Ablage: Plan, Liste, Text, Code, "
+            "Tabelle — was er behalten, lesen oder weiterverwenden will. Er "
+            "sieht es sofort als Eintrag im Chat. Fuer Laengeres (ab ~15 "
+            "Zeilen) oder zum Mitnehmen; Kurzes gehoert in die Antwort."
+        ),
+        parameter={
+            "type": "object",
+            "properties": {
+                "titel":   {"type": "string", "description": "Kurzer Titel."},
+                "inhalt":  {"type": "string", "description": "Der ganze Inhalt."},
+                "art":     {"type": "string",
+                            "enum": ["markdown", "text", "code", "csv"],
+                            "description": "Standard: markdown."},
+                "sprache": {"type": "string",
+                            "description": "Nur bei code, z.B. 'python'."},
+            },
+            "required": ["titel", "inhalt"],
+        },
+    ),
+    Werkzeug(
+        name="read_document",
+        klein=None,
+        gross="Liest ein Dokument aus der Ablage (id steht im Verlauf).",
+        parameter={
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Dokument-id."},
+            },
+            "required": ["id"],
+        },
+    ),
+    Werkzeug(
+        name="update_document",
+        klein=None,
+        gross=(
+            "Neue Fassung eines Dokuments der Ablage; die alte bleibt. Vorher "
+            "mit read_document lesen, 'inhalt' ist der vollstaendige neue Text."
+        ),
+        parameter={
+            "type": "object",
+            "properties": {
+                "id":     {"type": "string", "description": "Dokument-id."},
+                "inhalt": {"type": "string", "description": "Der ganze neue Inhalt."},
+            },
+            "required": ["id", "inhalt"],
+        },
+    ),
+    Werkzeug(
+        name="save_from_sandbox",
+        klein=None,
+        gross=(
+            "Legt eine Datei aus einem run_code-Lauf in Sashas Ablage (Text "
+            "oder Bild). 'lauf' und 'datei' stehen im Ergebnis von run_code."
+        ),
+        parameter={
+            "type": "object",
+            "properties": {
+                "lauf":  {"type": "string", "description": "Lauf-Kennung."},
+                "datei": {"type": "string", "description": "Name in /arbeit."},
+                "titel": {"type": "string", "description": "Titel in der Ablage."},
+            },
+            "required": ["lauf", "datei"],
+        },
+    ),
     # Hinweis: ASCII-Bilder laufen NICHT über ein Werkzeug. Messung
     # (scripts/bench_ascii.py, Baseline N=200) zeigte: als Tool feuerte die KI
     # bei impliziten Prompts nur ~3 % - und tippte den Aufruf oft als Text-

@@ -121,6 +121,67 @@ def erlaubt(abs_pfad: str) -> str:
     return ("" if any(fnmatch.fnmatch(rel, p) for p in _WHITELIST_PATTERNS)
             else "nicht auf der Whitelist")
 
+# ── ANHÄNGE: was Sasha selbst in den Chat gibt (seit 2026-10-07) ─────────
+# `/anhang <pfad>` im Chat (core/anhang.py). Anders als read_file darf ein
+# Anhang von ÜBERALL kommen (~/Downloads, ein USB-Stick) — Sasha nennt ihn ja
+# selbst. Gesperrt bleibt, was nie zu einem Anbieter gehen darf, auch nicht
+# aus Versehen: die Secret-Sperre oben (nach Dateiname) und Orte, an denen
+# Schlüssel, Passwörter und Sashas Rohdaten liegen.
+_ANHANG_ORDNER = ('.git', '.hg', '.svn', 'learning')   # nach Segmentname
+_ANHANG_ORTE_HOME = (
+    '.ssh', '.gnupg', '.aws', '.azure', '.kube', '.docker', '.password-store',
+    '.config/gcloud', '.config/gh', '.config/rclone', '.local/share/keyrings',
+    '.mozilla', '.thunderbird', '.config/google-chrome', '.config/chromium',
+    '.config/BraveSoftware', '.local/share/zentrale',   # dort liegt die Datensicherung
+)
+_ANHANG_ORTE_SYSTEM = ('/proc', '/sys', '/dev', '/root', '/etc/shadow',
+                       '/etc/gshadow', '/etc/ssl/private')
+_ANHANG_MUSTER = ('credential',)            # z. B. ~/.claude/.credentials.json
+
+
+def _unter(pfad: str, ort: str) -> bool:
+    return pfad == ort or pfad.startswith(ort.rstrip(os.sep) + os.sep)
+
+
+def anhang_gesperrt(pfad: str) -> str:
+    """Darf diese Datei als Anhang zur KI? -> "" wenn ja, sonst der Grund
+    (Alltagssprache, Sasha liest ihn in der Statuszeile).
+
+    Gesperrt: Secret-Dateinamen (wie für read_file), jedes data/ und
+    tutor/data/ von ZENTRALE (Schlüssel, Mail-Zugänge, Gedächtnis), Lernzone
+    und Versionsverwaltung, Schlüssel- und Browser-Ordner im Home, System-
+    Innereien. Der Pfad wird vorher aufgelöst (Verweise, `..`)."""
+    roh = os.path.expanduser(str(pfad or "").strip())
+    if not roh:
+        return "kein Pfad"
+    voll = os.path.realpath(roh)
+    if _is_secret(voll) or any(m in os.path.basename(voll).lower()
+                               for m in _ANHANG_MUSTER):
+        return "das sieht nach einem Schlüssel oder Passwort aus"
+    teile = os.path.normpath(voll).split(os.sep)
+    if any(t in _ANHANG_ORDNER for t in teile):
+        return "der Ordner ist für die KI gesperrt"
+    # ZENTRALEs Daten — in diesem Checkout UND in jedem anderen (Worktrees,
+    # eine zweite Kopie): erkannt an data/ neben core/.
+    for i in range(len(teile) - 1, 0, -1):
+        if teile[i] == "data":
+            eltern = os.sep.join(teile[:i]) or os.sep
+            if os.path.isdir(os.path.join(eltern, "core")) or \
+                    os.path.basename(eltern) == "tutor":
+                return "Dateien aus ZENTRALEs data/ gehen nicht als Anhang"
+    for daten in (os.path.join(_ROOT, "data"), os.path.join(_ROOT, "tutor", "data")):
+        if _unter(voll, os.path.realpath(daten)):
+            return "Dateien aus ZENTRALEs data/ gehen nicht als Anhang"
+    home = os.path.realpath(os.path.expanduser("~"))
+    for ort in _ANHANG_ORTE_HOME:
+        if _unter(voll, os.path.join(home, ort)):
+            return "der Ordner enthält Schlüssel oder Zugangsdaten"
+    for ort in _ANHANG_ORTE_SYSTEM:
+        if _unter(voll, ort):
+            return "Systemdatei — geht nicht als Anhang"
+    return ""
+
+
 # Maximale Dateigröße die an die KI geschickt wird.
 # Größere Dateien werden abgeschnitten um den Context-Limit nicht zu sprengen.
 _MAX_CHARS = 8000

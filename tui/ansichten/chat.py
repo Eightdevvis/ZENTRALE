@@ -22,6 +22,8 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
     import pixel
 
 from . import chat_befehle, eingabe
+from .ablage import Ablageliste
+from .chat_ablage import AblageSteuerung, ablage_anzeige, anhang_eintrag
 from .chat_gespraeche import GespraechsSteuerung, ai_verlauf_holen, verlauf_aus  # noqa: F401
 from .gespraechsliste import Gespraechsliste
 from .gedaechtnis import Gedaechtnis
@@ -82,7 +84,8 @@ def ai_wrap(role, text, w):
     # und genau das war bisher unsichtbar: Sasha sah "steht drin" und
     # konnte nicht nachsehen, ob und was wirklich geschrieben wurde.
     pre = {"user": "du:", "ai": "ki:", "werkzeug": "⚙",
-           "werkzeug_fehler": "⚙", "denken": "…"}.get(role, "")
+           "werkzeug_fehler": "⚙", "denken": "…",
+           "ablage": "▤", "anhang": "▤"}.get(role, "")
     if role == "hinweis":
         # Antworten der TUI selbst (/hilfe): Zeilen wie geschrieben, nur
         # hart umbrochen — Einrückung und Spalten bleiben stehen.
@@ -90,7 +93,7 @@ def ai_wrap(role, text, w):
         for zeile in text.split("\n"):
             aus += [(role, zeile[i:i + w]) for i in range(0, len(zeile), w)] or [(role, "")]
         return aus
-    if role.startswith("werkzeug") or role == "denken":
+    if role.startswith("werkzeug") or role in ("denken", "ablage", "anhang"):
         eingerueckt = "  " + pre + " "
         aus = []
         for i, zeile in enumerate(_md_umbruch(text, w - len(eingerueckt),
@@ -236,7 +239,7 @@ def stand_text(daten, stand):
     return "anbieter: %s" % (stand.get("anbieter") or "—")
 
 
-class Chat(GespraechsSteuerung):
+class Chat(GespraechsSteuerung, AblageSteuerung):
     """Der KI-Chat (Mitte, Leertaste auf der Startseite). Thin Client: die
     TUI rechnet keine KI, sie spricht nur HTTP mit /api/chat (SSE) und zeigt
     den Verlauf. Zustand in self.AI (auch z.AI), geschützt durch AI_LOCK,
@@ -287,17 +290,21 @@ class Chat(GespraechsSteuerung):
                           # Nachrichten-Zahl beim letzten Laden (für den Poll).
                           "gid": None, "titel": "", "liste": None,
                           "denken_offen": False, "ersetzt": None, "n_server": 0,
-                          "gespraeche": []}
+                          "gespraeche": [],
+                          # Ablage (Phase 5, 2026-10-07): offene Liste/Lesen
+                          # (ablage.py), Anhänge für die nächste Nachricht.
+                          "ablage": None, "anhaenge": []}
         self.AI_LOCK = threading.Lock()
         self.liste = Gespraechsliste(self)
         self.gedaechtnis = Gedaechtnis(self)       # /gedaechtnis, /skills (Phase 3)
+        self.ablageliste = Ablageliste(self)
 
     def start(self):
         """Hintergrund-Threads anwerfen (run_ui ruft das nach dem Aufbau)."""
         ai_poll = self.ai_poll
         threading.Thread(target=ai_poll, daemon=True, name="ai-poll").start()
 
-    def ai_stream(self, message, ersetzt=None, wiederholen=False):
+    def ai_stream(self, message, ersetzt=None, wiederholen=False, anhaenge=None):
         """Öffnet den SSE-Stream /api/chat und füllt AI['answer'] Token für Token.
         Läuft im Hintergrund-Thread. Blockiert bei einer Erlaubnis-Frage still,
         bis der Input-Thread /api/permission_answer POSTet und der Server den
@@ -311,6 +318,8 @@ class Chat(GespraechsSteuerung):
             body["gespraech"] = AI["gid"]
         if ersetzt:
             body["ersetzt"] = ersetzt
+        if anhaenge:
+            body["anhaenge"] = [a["id"] for a in anhaenge]
         url = BASE_URL + ("/api/chat/wiederholen" if wiederholen else "/api/chat")
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         req = urllib.request.Request(
@@ -376,6 +385,8 @@ class Chat(GespraechsSteuerung):
                     elif "werkzeug" in evt:
                         denken_ablegen()
                         AI["log"].append(werkzeug_zeile(evt["werkzeug"]))
+                    elif "ablage" in evt:          # ein Dokument liegt in der Ablage
+                        self.ablage_event(evt["ablage"])
                     elif "permission" in evt:
                         denken_ablegen()
                         AI["perm"] = evt["permission"]
@@ -400,7 +411,9 @@ class Chat(GespraechsSteuerung):
                 pass
             with AI_LOCK:
                 AI["msg"] = ((grund or "kein ki-backend — tunnel? (/local on)")
-                             if e.code == 503 else "fehler: HTTP %s" % e.code)
+                             if e.code == 503 else grund or "fehler: HTTP %s" % e.code)
+                # Abgelehnt (z. B. Bild ohne Cloud): Anhänge warten weiter.
+                AI["anhaenge"] = list(anhaenge or []) + list(AI.get("anhaenge") or [])
         except (urllib.error.URLError, OSError):
             with AI_LOCK:
                 # Unterscheiden: gar nicht erst drangekommen vs. mittendrin
@@ -462,8 +475,11 @@ class Chat(GespraechsSteuerung):
                 letzte = max((i for i, (r, _t) in enumerate(AI["log"]) if r == "user"),
                              default=len(AI["log"]))
                 del AI["log"][letzte:]
+            # Wiederholen schickt die gespeicherten Anhänge selbst mit.
+            anhaenge = [] if wiederholen else self.anhaenge_nehmen()
             if not wiederholen:
                 AI["log"].append(("user", msg))
+                AI["log"] += [anhang_eintrag(a) for a in anhaenge]
             AI["ersetzt"] = None
             AI["input"] = ""
             AI["cur"] = 0
@@ -475,7 +491,7 @@ class Chat(GespraechsSteuerung):
             AI["msg"] = ""
             AI["scroll"] = 0
             AI["streaming"] = True
-        threading.Thread(target=ai_stream, args=(msg, ersetzt, wiederholen),
+        threading.Thread(target=ai_stream, args=(msg, ersetzt, wiederholen, anhaenge),
                          daemon=True).start()
 
     def ai_answer_perm(self, option):
@@ -549,6 +565,12 @@ class Chat(GespraechsSteuerung):
             return
         if name in ("gedaechtnis", "skills"):      # gedaechtnis.py (Phase 3)
             self.gedaechtnis.oeffnen("skills" if name == "skills" else None)
+            return
+        if name == "ablage":                # Phase 5: Liste; anhang: chat_ablage.py
+            self.ablageliste.oeffnen()
+            return
+        if name == "anhang":
+            self.anhang_dazu(arg)
             return
         if name in ("lokal", "cloud", "auto"):
             self.setzen({"weg": name})
@@ -648,6 +670,8 @@ class Chat(GespraechsSteuerung):
             return " gespräche: ↑↓ wählen · enter öffnen · esc zurück zum chat"
         if self.AI.get("gedaechtnis"):
             return " " + self.gedaechtnis.fusszeile()
+        if self.AI["ablage"]:
+            return " ablage: ↑↓ wählen/blättern · enter lesen · esc zurück"
         return (" enter senden · alt+enter neue zeile · ↑↓ verlauf · tab gespräche · "
                 "strg+d denken · /hilfe befehle · esc zu")
 
@@ -730,6 +754,9 @@ class Chat(GespraechsSteuerung):
         if AI.get("gedaechtnis"):          # Gedächtnis-Ansicht (gedaechtnis.py)
             self.gedaechtnis.taste(ch)
             return
+        if AI["ablage"]:                   # Ablage-Liste/Lesen (ablage.py)
+            self.ablageliste.taste(ch)
+            return
         if ch == 27:
             # Läuft eine Antwort, stoppt Esc sie (bis in die Schleife, das
             # spart Geld); wird gerade bearbeitet, bricht Esc das ab; sonst
@@ -749,6 +776,10 @@ class Chat(GespraechsSteuerung):
             self.denken_umschalten()
             return
         if ch in (10, 13, curses.KEY_ENTER):
+            # Leere Eingabe + ein Dokument im Verlauf: Enter liest es.
+            if not AI["input"].strip() and not AI["streaming"] \
+                    and self.dokument_oeffnen_letztes():
+                return
             self.ai_submit()
             return
         if ch in (curses.KEY_PPAGE, curses.KEY_NPAGE):
@@ -814,6 +845,9 @@ class Chat(GespraechsSteuerung):
         if AI.get("gedaechtnis"):          # Gedächtnis ebenso
             self.gedaechtnis.zeichnen(by, bx, bh, bw)
             return
+        if AI["ablage"]:                   # Ablage ebenso (ablage.py)
+            self.ablageliste.zeichnen(by, bx, bh, bw)
+            return
 
         with AI_LOCK:
             log = list(AI["log"])
@@ -828,6 +862,7 @@ class Chat(GespraechsSteuerung):
             wahl = AI["wahl"]
             wahl = dict(wahl, optionen=list(wahl["optionen"])) if wahl else None
             denken_offen = AI["denken_offen"]
+            anh_text = self.anhaenge_text()
 
         # Fußzeilen zuerst: sie bestimmen, wie viel Platz der Verlauf noch hat.
         # Bei offener Erlaubnis-Frage brauchen Frage UND Knöpfe je nach Breite
@@ -856,6 +891,8 @@ class Chat(GespraechsSteuerung):
                              C["faint"]))
             elif msg:
                 foot.append((msg[:inw], C["warn"]))
+            elif anh_text:                         # Anhänge warten (Phase 5)
+                foot.append((anh_text[:inw], C["acc"]))
             elif scroll > 0:
                 foot.append(("↑ verlauf (↓ nach unten)", C["faint"]))
             elif streaming:
@@ -888,9 +925,12 @@ class Chat(GespraechsSteuerung):
 
         # Zeilen bauen: Verlauf + laufende Antwort (jede Zeile trägt ihre Rolle)
         lines = []
-        for role, text in log:
+        letzte_ablage = max((i for i, (r, _t) in enumerate(log) if r == "ablage"), default=-1)
+        for i, (role, text) in enumerate(log):
             if role == "denken":           # eingeklappt eine Zeile (Strg+D)
                 lines += denken_wrap(text, denken_offen, inw)
+            elif role == "ablage":         # ▤ Titel — enter öffnet (nur das neueste)
+                lines += ai_wrap(role, ablage_anzeige(text, i == letzte_ablage), inw)
             else:
                 lines += ai_wrap(role, text, inw)
             lines.append(("gap", ""))
@@ -957,6 +997,8 @@ class Chat(GespraechsSteuerung):
                 "werkzeug_ergebnis": C["faint"],
                 "werkzeug_fehler":   C["warn"],
                 "denken":            C["faint"],
+                "ablage":            C["acc"],
+                "anhang":            C["dim"],
             }
             for kind, seg in lines[start:start + avail]:
                 addclip(y, inx, seg, inw, stile.get(kind, C["faint"]))

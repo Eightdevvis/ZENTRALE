@@ -524,3 +524,40 @@ def test_gedaechtnis_routen_und_suche_lassen_das_echte_data_in_ruhe():
     assert stand() == vorher
     for echt in (os.path.join(ROOT, "data"), os.path.join(haupt, "data")):
         assert not os.path.realpath(gedaechtnis._DIR).startswith(os.path.realpath(echt))
+def test_ablage_liegt_im_test_nicht_im_echten_data():
+    """Die Ablage (core/ablage.py, Phase 5, 2026-10-07) wird von den Tests
+    wirklich beschrieben. Geprüft gegen data/ dieses Checkouts UND des
+    Haupt-Checkouts (aus einem Worktree heraus sind das zwei)."""
+    import ablage
+    pfad = os.path.realpath(ablage.ordner())
+    haupt = ROOT.split(os.sep + ".claude" + os.sep + "worktrees" + os.sep)[0]
+    for echt in (os.path.join(ROOT, "data"), os.path.join(haupt, "data")):
+        assert not pfad.startswith(os.path.realpath(echt)), pfad
+    assert not os.environ["ZENTRALE_ABLAGE_DIR"].startswith(os.path.realpath(ROOT))
+
+
+def test_ein_dokument_im_chat_legt_nichts_im_echten_data_an(monkeypatch):
+    """Ende zu Ende: create_document in einem /api/chat-Zug — unter dem
+    echten data/ablage entsteht dabei nichts."""
+    import ablage
+    import ai_backends
+    import kern
+    import ki_werkzeuge
+    from ui.app import app
+    echt = os.path.join(ROOT, "data", "ablage")
+    vorher = sorted(os.listdir(echt)) if os.path.isdir(echt) else None
+    monkeypatch.setattr(ai_backends, "chat_available", lambda: ai_backends.CLOUD)
+    monkeypatch.setattr(ai_backends, "cloud_provider", lambda: "test")
+
+    def gen(h, **k):
+        ki_werkzeuge._verteilen("create_document", {"titel": "t", "inhalt": "x"})
+        yield "ok"
+
+    class Modul:
+        chat_stream = staticmethod(gen)
+    monkeypatch.setattr(kern, "cloud_modul", lambda: Modul)
+    app.config.update(TESTING=True)
+    app.test_client().post("/api/chat", json={"message": "x"}).get_data()
+    assert ablage.liste()
+    nachher = sorted(os.listdir(echt)) if os.path.isdir(echt) else None
+    assert nachher == vorher

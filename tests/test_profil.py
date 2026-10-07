@@ -147,10 +147,13 @@ def test_der_schnitt_haelt():
     skill = {"load_skill", "propose_skill", "edit_skill"}
     # 07.10.2026: die Gesprächs-Suche (Phase 3) ebenso — eigener Deckel unten.
     suche = {"search_chats", "read_chat"}
+    # 07.10.2026: die Ablage-Werkzeuge (Phase 5) ebenso — eigener Deckel unten.
+    ablage = {"create_document", "read_document", "update_document",
+              "save_from_sandbox"}
     eigen = {w.name for w in werkzeug_register.auf_schiene("gross")
-             if w.klein is None and w.name != "run_code"} - skill - suche
+             if w.klein is None and w.name != "run_code"} - skill - suche - ablage
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
-                if t["function"]["name"] not in eigen | {"run_code"} | skill | suche)
+                if t["function"]["name"] not in eigen | {"run_code"} | skill | suche | ablage)
     # 18.08.2026 von 3.000 auf 3.300: edit_calendar_routine kam dazu. Es
     # kostet ~250 Zeichen und behebt eine Luecke, die sie nicht ueberspielen
     # konnte — Routinen liessen sich nur ANLEGEN, also stand die verschobene
@@ -195,6 +198,14 @@ def test_der_schnitt_haelt():
     besch_suche = sum(len(t["function"]["description"]) for t in gross.TOOLS
                       if t["function"]["name"] in suche)
     assert 0 < besch_suche < 450
+    # Ablage (07.10.2026, Phase 5): vier Werkzeuge, zusammen ~560 Zeichen.
+    # Deckel 650: create_document muss sagen, WANN ein Dokument statt einer
+    # Antwort (sonst legt sie jede Einkaufsliste ab oder nie etwas); die
+    # anderen drei sind je ein Satz. Wer mehr will, schreibt es in die
+    # Meta-Regeln, nicht in jedes Schema.
+    besch_ablage = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                       if t["function"]["name"] in ablage)
+    assert 0 < besch_ablage < 650
 
 
 def test_praefix_bleibt_ueber_der_cache_mindestgroesse():

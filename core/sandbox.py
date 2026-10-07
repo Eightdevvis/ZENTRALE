@@ -44,6 +44,7 @@ import resource
 import secrets
 import shutil
 import signal
+import stat
 import subprocess
 import tempfile
 import threading
@@ -261,6 +262,65 @@ def _sicherer_name(name: str) -> str | None:
     return name
 
 
+def lauf_kennung(gespraech: str | None = None) -> str:
+    """Eine neue Lauf-Kennung. Mit Gespräch beginnt sie mit dessen id
+    (2026-10-07, Phase 5): so gehört ein Arbeitsordner sichtbar zu einem
+    Gespräch, und save_from_sandbox kann prüfen, dass eine Datei aus einem
+    Lauf DIESES Gesprächs kommt."""
+    stempel = time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(3)
+    return lauf_vorsatz(gespraech) + stempel if gespraech else stempel
+
+
+def lauf_vorsatz(gespraech: str) -> str:
+    """Womit die Läufe eines Gesprächs beginnen ("<id>--")."""
+    vorn = "".join(c if c.isalnum() or c == "-" else "_" for c in str(gespraech))
+    return vorn[:60].replace("--", "-") + "--"
+
+
+def datei_lesen(lauf_id: str, name: str, max_bytes: int) -> bytes:
+    """Eine Datei aus dem Arbeitsordner eines Laufs lesen — für die Ablage.
+
+    Nur innerhalb des Lauf-Ordners: kein absoluter Pfad, kein `..`, kein
+    Verweis (Symlink) — weder die Datei noch ein Ordner davor. Ein Programm
+    in der Sandbox kann einen Verweis auf /home/… anlegen; drinnen zeigt er
+    ins Leere, HIER draußen würde er aufgelöst. Wirft ValueError (Klartext)."""
+    lauf_id = str(lauf_id or "").strip()
+    if not lauf_id or _sicherer_name(lauf_id) != lauf_id or os.sep in lauf_id \
+            or lauf_id.startswith((".", "_")):
+        raise ValueError(f"Ungültige Lauf-Kennung {lauf_id!r}.")
+    rel = _sicherer_name(name)
+    if rel is None:
+        raise ValueError(f"Ungültiger Dateiname {name!r}.")
+    basis = os.path.realpath(basis_ordner())
+    arbeit = os.path.join(basis, lauf_id)
+    if os.path.islink(arbeit) or not os.path.isdir(arbeit):
+        raise ValueError(f"Den Lauf {lauf_id} gibt es nicht (mehr).")
+    ziel = os.path.join(arbeit, rel)
+    # Jeder Teil des Weges: kein Verweis.
+    weg = arbeit
+    for teil in rel.split(os.sep):
+        weg = os.path.join(weg, teil)
+        if os.path.islink(weg):
+            raise ValueError(f"{name} ist ein Verweis — wird nicht gelesen.")
+    if not os.path.realpath(ziel).startswith(arbeit + os.sep):
+        raise ValueError(f"{name} liegt nicht im Arbeitsordner.")
+    try:
+        fd = os.open(ziel, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except FileNotFoundError:
+        raise ValueError(f"{name} gibt es im Lauf {lauf_id} nicht.")
+    except OSError as e:
+        raise ValueError(f"{name} lässt sich nicht lesen: {e.strerror}")
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode):
+        os.close(fd)
+        raise ValueError(f"{name} ist keine normale Datei.")
+    with os.fdopen(fd, "rb") as f:
+        if st.st_size > max_bytes:
+            raise ValueError(f"{name} ist zu groß ({st.st_size} Bytes, "
+                             f"höchstens {max_bytes}).")
+        return f.read(max_bytes + 1)[:max_bytes]
+
+
 def aufraeumen(tage: int = AUFBEWAHREN_TAGE) -> int:
     """Arbeitsordner älter als `tage` löschen. Gibt die Anzahl zurück.
 
@@ -318,8 +378,7 @@ def ausfuehren(code: str, sprache: str = "python",
                                ZEITLIMIT_MAX_S))
 
     aufraeumen()
-    lauf_id = lauf_id or (time.strftime("%Y%m%d-%H%M%S-")
-                          + secrets.token_hex(3))
+    lauf_id = lauf_id or lauf_kennung()
     if _sicherer_name(lauf_id) != lauf_id or os.sep in lauf_id:
         return _ergebnis(fehler=f"Ungültige Lauf-Kennung {lauf_id!r}.")
     arbeit = os.path.join(basis_ordner(), lauf_id)

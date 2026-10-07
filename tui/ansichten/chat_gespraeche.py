@@ -13,6 +13,7 @@ import time
 import urllib.error
 
 from .basis import api_call
+from .chat_ablage import ablage_eintrag, anhang_eintrag
 
 
 def verlauf_aus(h):
@@ -27,6 +28,8 @@ def verlauf_aus(h):
         if m.get("role") == "user":
             if txt:
                 log.append(("user", txt))
+            # Anhänge und Dokumente als „▤"-Zeilen (Phase 5, 2026-10-07).
+            log += [anhang_eintrag(a) for a in m.get("anhaenge") or [] if isinstance(a, dict)]
             continue
         if (m.get("denken") or "").strip():
             log.append(("denken", m["denken"].strip()))
@@ -37,6 +40,7 @@ def verlauf_aus(h):
                     log.append(("werkzeug_fehler", "%s(%s) ✗" % (name, w.get("args") or "")))
                 else:
                     log.append(("werkzeug", "%s(%s)" % (name, w.get("args") or "")))
+        log += [ablage_eintrag(d) for d in m.get("dokumente") or [] if isinstance(d, dict)]
         if txt:
             log.append(("ai", txt))
     return log

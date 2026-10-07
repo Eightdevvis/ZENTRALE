@@ -133,6 +133,13 @@ SZ = {
                        ("k", "Left"), ("k", "Left"), ("l", "e"), ("w", 2), ("cap", "g"),
                        ("k", "Escape"), ("cap", "h"), ("l", "/skills"), ("k", "Enter"),
                        ("w", 1), ("cap", "i"), ("k", "Escape")],
+    # Ablage (Phase 5, 2026-10-07): Liste, lesen, blättern, Fassung, zurück,
+    # Anhang mit falschem Pfad.
+    "ki_ablage": [("k", "Space"), ("w", 2), ("l", "/ablage"), ("k", "Enter"), ("w", 1),
+                  ("cap", "a"), ("k", "Enter"), ("w", 1), ("cap", "b"), ("k", "NPage"),
+                  ("cap", "c"), ("k", "Left"), ("w", 1), ("cap", "d"), ("k", "Escape"),
+                  ("k", "Down"), ("cap", "e"), ("k", "Escape"), ("l", "/anhang /gibt/es/nicht.txt"),
+                  ("k", "Enter"), ("cap", "f")],
     "tech_system": [("k", "M-Right"), ("k", "Enter"), ("cap", "a"), ("k", "/"), ("cap", "b")],
     "tech_stdout": [("k", "M-Right"), ("k", "Right"), ("k", "Enter"), ("cap", "a")],
     "tech_netz": [("k", "M-Right"), ("k", "Right"), ("k", "Right"), ("k", "Enter"), ("cap", "a")],

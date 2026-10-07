@@ -93,6 +93,16 @@ _GEDAECHTNIS = {
          "erstellt": "2026-10-07"},
         {"name": "wochenplan", "beschreibung": "Wenn die Woche geplant wird.",
          "status": "vorgeschlagen", "herkunft": "ki", "erstellt": "2026-10-07"}]}
+# Erfundene Ablage (Phase 5, 2026-10-07): ein Dokument mit zwei Fassungen,
+# ein Bild-Anhang.
+_ABLAGE = {"dokumente": [
+    {"id": "d1", "titel": "Packliste Radtour", "art": "markdown", "herkunft": "ki",
+     "fassung": 2, "geaendert": "2026-10-06T09:00:00+00:00", "gespraech_titel": "Fahrradschlauch"},
+    {"id": "d2", "titel": "skizze.png", "art": "bild", "herkunft": "anhang",
+     "fassung": 1, "geaendert": "2026-10-04T09:00:00+00:00"}]}
+_DOK = {"kopf": {"id": "d1", "titel": "Packliste Radtour", "art": "markdown", "fassung": 2},
+        "fassung": 2, "bytes": 300, "pfad": "/x/v2-pc.md",
+        "inhalt": "# Packliste\n\n" + "\n".join("- Ding Nummer %d" % i for i in range(40))}
 
 
 def _synth(path):
@@ -111,6 +121,10 @@ def _synth(path):
         return _ARCHIV
     if path == "/api/gedaechtnis":
         return _GEDAECHTNIS
+    if path.startswith("/api/ablage/"):
+        return _DOK
+    if path.startswith("/api/ablage"):
+        return _ABLAGE if "archiv" not in path else {"dokumente": []}
     if path.startswith("/api/chat/history"):
         return _VERLAUF
     if path.startswith(("/api/mail/folder?", "/api/mail/inbox?")) or path == "/api/mail/inbox":

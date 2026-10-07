@@ -131,6 +131,11 @@ def _text_von_block(b) -> str:
             return f"[tool_result {b.get('tool_use_id','')}] {b.get('content','')}"
         if b.get("type") == "tool_use":
             return f"[tool_use {b.get('name','')}] {b.get('input','')}"
+        # Bild-Anhänge (2026-10-07): nie die base64-Bytes in den Puffer.
+        if b.get("type") == "image":
+            return f"[bild {(b.get('source') or {}).get('media_type', '')}]"
+        if b.get("type") == "image_url":
+            return "[bild]"
         return str(b)
     # SDK-Objekte (assistant-Turns kommen als solche zurück)
     typ = getattr(b, "type", None)

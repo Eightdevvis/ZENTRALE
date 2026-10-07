@@ -71,6 +71,9 @@ atexit.register(lambda: shutil.rmtree(_DATEN_TMP, ignore_errors=True))
 # Die Sandbox-Arbeitsordner (core/sandbox.py) liegen im Betrieb unter
 # ~/.cache/zentrale/sandbox — Testläufe legen ihre in den Wegwerf-Ordner.
 os.environ.setdefault("ZENTRALE_SANDBOX_DIR", os.path.join(_DATEN_TMP, "sandbox"))
+# Die Ablage (core/ablage.py, Phase 5): Dokumente und Anhänge. Dazu unten
+# pro Test ein eigener Ordner.
+os.environ.setdefault("ZENTRALE_ABLAGE_DIR", os.path.join(_DATEN_TMP, "ablage"))
 
 # 4c. KI-Einstellungen und Keys: nie die echten.
 #
@@ -209,6 +212,13 @@ def _gespraeche_frisch(tmp_path_factory, monkeypatch):
     gespraeche._cache.clear()
     yield
     gespraeche._cache.clear()
+
+
+# 7c. Jeder Test hat seine eigene Ablage (core/ablage.py, 2026-10-07).
+@pytest.fixture(autouse=True)
+def _ablage_frisch(tmp_path_factory, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_ABLAGE_DIR", str(tmp_path_factory.mktemp("ablage")))
+    yield
 
 
 # 8. Kalender-Tests laufen gegen BEIDE Speicher.

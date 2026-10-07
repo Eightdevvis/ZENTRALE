@@ -15,12 +15,14 @@ from flask import Blueprint, Response, jsonify, request, stream_with_context
 
 import ai           # type: ignore
 import ai_backends     # type: ignore  – AI-Backend-Verfügbarkeit (local/cloud, EXTERNAL-Box)
+import anhang          # type: ignore  – Anhänge: Verweise prüfen, in den Verlauf einsetzen
 import gespraeche      # type: ignore  – Gespräche: Ordner pro Gespräch, Datei pro Rechner
 import gespraech_titel # type: ignore  – automatischer Titel (billiges Modell)
 import kern            # type: ignore  – der eine Einstieg in den Chat (core/kern.py)
 import ki_einstellungen  # type: ignore  – Einstellungen lesen/setzen mit Prüfung
 import providers      # type: ignore  – Cloud-Registry des Kerns (base_url/kind)
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
+import zug           # type: ignore  – der laufende Zug: Gespräch + Ereignisse der Werkzeuge
 
 from ui.routen.gemeinsam import _ki_nicht_verfuegbar
 
@@ -36,11 +38,13 @@ def api_chat():
     (Server-Sent Events: jede Nachricht eine Zeile "data: <json>\\n\\n").
     Gelesen wird der Stream von der TUI (tui/ansichten/chat.py, ai_stream).
 
-    Body: {message, via_mic?, gespraech?, ersetzt?}
+    Body: {message, via_mic?, gespraech?, ersetzt?, anhaenge?}
       gespraech: in dieses Gespräch (sonst das aktive dieses Rechners; gibt
                  es keins, wird eins angelegt). Unbekannt → 404.
       ersetzt:   Nachricht-id einer eigenen Nachricht — „bearbeiten": sie und
                  alles danach zählt nicht mehr, dann geht message normal raus.
+                 Ihre Anhänge gehen mit, wenn keine neuen kommen.
+      anhaenge:  Ablage-ids (POST /api/anhang, Phase 5). Bild + lokale KI → 400.
 
     Seit 2026-10-07 (Claude-Web-Plan Phase 2) lebt der Verlauf in
     core/gespraeche.py statt im RAM: die Nachricht wird dort angehängt, an
@@ -61,6 +65,10 @@ def api_chat():
     via_mic = bool(body.get('via_mic', False))
     if not message:
         return jsonify({"error": "no message"}), 400
+    try:
+        verweise = anhang.verweise(body.get('anhaenge') or [])
+    except anhang.Abgelehnt as e:
+        return jsonify({"error": str(e)}), 400
 
     gid, fehler = _gespraech_waehlen(body)
     if fehler:
@@ -73,12 +81,15 @@ def api_chat():
             return jsonify({"error": "Diese Nachricht gibt es in dem Gespräch nicht."}), 404
         if ziel["rolle"] != "user":
             return jsonify({"error": "Bearbeiten geht nur mit einer eigenen Nachricht."}), 400
+        verweise = verweise or ziel.get("anhaenge") or []
+    if anhang.hat_bild(verweise) and backend != ai_backends.CLOUD:
+        return jsonify({"error": "Bilder gehen nur mit der Cloud-KI — /cloud schaltet um."}), 400
     if gid is None:
         gid = gespraeche.neu()
     gespraeche.aktiv_setzen(gid)
     if ersetzt:
         gespraeche.verwerfen_ab(gid, ersetzt)
-    return _zug_starten(gid, message, backend, via_mic)
+    return _zug_starten(gid, message, backend, via_mic, verweise)
 
 
 @bp.route('/api/chat/wiederholen', methods=['POST'])
@@ -95,9 +106,12 @@ def api_chat_wiederholen():
     letzte = gespraeche.letzte_nutzer_nachricht(gid) if gid else None
     if letzte is None:
         return jsonify({"error": "In diesem Gespräch gibt es noch nichts zu wiederholen."}), 400
+    verweise = letzte.get("anhaenge") or []
+    if anhang.hat_bild(verweise) and backend != ai_backends.CLOUD:
+        return jsonify({"error": "Bilder gehen nur mit der Cloud-KI — /cloud schaltet um."}), 400
     gespraeche.aktiv_setzen(gid)
     gespraeche.verwerfen_ab(gid, letzte["id"])
-    return _zug_starten(gid, letzte["text"], backend, False)
+    return _zug_starten(gid, letzte["text"], backend, False, verweise)
 
 
 def _gespraech_waehlen(body):
@@ -110,14 +124,17 @@ def _gespraech_waehlen(body):
     return gespraeche.aktiv(), None
 
 
-def _zug_starten(gid, message, backend, via_mic):
-    """Nachricht anhängen und den Zug als SSE-Antwort fahren."""
+def _zug_starten(gid, message, backend, via_mic, verweise=None):
+    """Nachricht anhängen und den Zug als SSE-Antwort fahren. verweise:
+    Anhänge ([{id, titel, art, fassung}]) — im Gespräch steht nur der
+    Verweis, den Inhalt setzt anhang.verlauf_einsetzen für die KI ein."""
     erster = not any(n["rolle"] == "assistant" for n in gespraeche.nachrichten(gid))
-    frage = gespraeche.anhaengen(gid, "user", message)
+    frage = gespraeche.anhaengen(gid, "user", message, anhaenge=verweise or None)
     # Sofort ein Titel aus den ersten Wörtern — die Liste zeigt nie ein
     # namenloses Gespräch; das Modell darf ihn nach der Antwort verbessern.
     gespraech_titel.erster_titel(gid, message)
-    history = gespraeche.verlauf_fuer_ki(gid)
+    history = anhang.verlauf_einsetzen(gespraeche.verlauf_fuer_ki(gid),
+                                       cloud=(backend == ai_backends.CLOUD))
 
     def generate():
         # Stoppen (2026-10-07): der Zug bekommt eine Nummer und ein Abbruch-
@@ -125,6 +142,9 @@ def _zug_starten(gid, message, backend, via_mic):
         # genau diesen Zug trifft (POST /api/chat/stop). Angemeldet erst
         # hier drin: nur dann läuft das Abmelden im finally sicher mit.
         strom_id, abbruch = state.chat_zug_beginnen()
+        # Der Zug für die Werkzeuge (core/zug.py, Phase 5): Gesprächs-id für
+        # run_code/Ablage, und was sie an die TUI melden (Event 'ablage').
+        marke = zug.beginnen(gid)
         # Welcher Weg (lokal, Anthropic, OpenAI-kompatibel) — das entscheidet
         # kern.chat, die eine Stelle dafür. Alle Wege liefern dasselbe
         # Event-Protokoll; die Schleife hier merkt keinen Unterschied.
@@ -141,6 +161,7 @@ def _zug_starten(gid, message, backend, via_mic):
             # Generator schließen, statt ihn bis zum GC weiterlaufen zu lassen.
             state.chat_zug_beenden(strom_id)
             stream.close()
+            zug.beenden(marke)
 
     return Response(
         stream_with_context(generate()),
@@ -196,6 +217,7 @@ def _sse_zug(stream, gid, backend, frage, erster):
     collected = []
     denken = []
     werkzeuge = []
+    dokumente = []
     fehler_kam = False
     gestoppt = False
 
@@ -212,6 +234,12 @@ def _sse_zug(stream, gid, backend, frage, erster):
             elif 'werkzeug' in token:
                 _werkzeug_merken(werkzeuge, token['werkzeug'])
                 yield _sse({'werkzeug': token['werkzeug']})
+                # Was das Werkzeug gemeldet hat (core/zug.py): ein Dokument
+                # in der Ablage → Event 'ablage', gemerkt mit der Antwort.
+                for ereignis in zug.abholen():
+                    if 'ablage' in ereignis:
+                        dokumente.append(ereignis['ablage'])
+                    yield _sse(ereignis)
             elif 'reflect' in token:
                 # Denk-Strom: live an die TUI und seit 2026-10-07 auch mit
                 # der Antwort gespeichert (Sashas Entscheidung 6).
@@ -246,7 +274,7 @@ def _sse_zug(stream, gid, backend, frage, erster):
         gespraeche.anhaengen(
             gid, "assistant", text.rstrip() if gestoppt else text,
             denken="".join(denken), werkzeuge=werkzeuge, anbieter=anbieter,
-            modell=modell, abgebrochen=gestoppt)
+            modell=modell, abgebrochen=gestoppt, dokumente=dokumente or None)
         # Sasha hat zugeschaut, also gelesen.
         gespraeche.gelesen_setzen(gid)
         if erster:
@@ -295,7 +323,8 @@ def api_chat_history():
     for n in gespraeche.nachrichten(gid):
         m = {"id": n["id"], "role": n["rolle"], "ts": n["ts"],
              "content": gespraeche.text_fuer_ki(n)}
-        for feld in ("denken", "werkzeuge", "abgebrochen", "anbieter", "modell"):
+        for feld in ("denken", "werkzeuge", "abgebrochen", "anbieter", "modell",
+                     "anhaenge", "dokumente"):
             if n.get(feld):
                 m[feld] = n[feld]
         raus.append(m)

@@ -21,6 +21,10 @@ data/ai_transcripts/
 # .jsonl pro Rechner und kopf.json in UNTERORDNERN — beides faellt nicht
 # unter data/*.json. Genauso privat wie das Transkript.
 data/gespraeche/
+# Die Ablage (core/ablage.py, seit 2026-10-07): Dokumente der KI und Kopien
+# von Anhaengen in UNTERORDNERN (.md, .py, .png …) — faellt nicht unter
+# data/*.json. Anhaenge sind Sashas Dateien, genauso privat.
+data/ablage/
 # Das DATEI-GEDAECHTNIS (Steckbrief, Ziele, Dossiers, Tagebuch). Markdown,
 # faellt also NICHT unter data/*.json — deshalb eine eigene Zeile, und
 # deshalb steht sie hier als erstes: das ist der persoenlichste Inhalt im

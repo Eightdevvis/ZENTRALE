@@ -914,6 +914,33 @@ _ENDUNGEN = {
 }
 
 
+def pdf_text(daten: bytes) -> tuple:
+    """PDF-Bytes → (text, fehler). Genau einer von beiden ist leer.
+
+    Per `pdftotext -layout` (poppler). Herausgelöst am 2026-10-07 aus
+    dokument_holen, damit Anhänge im Chat (core/anhang.py) denselben Weg
+    gehen — zwei PDF-Wege liefen sonst irgendwann auseinander."""
+    import shutil
+    import subprocess
+    import tempfile
+    if not shutil.which("pdftotext"):
+        return "", "pdftotext fehlt — ohne poppler-utils kein PDF"
+    with tempfile.TemporaryDirectory() as tmp:
+        roh = os.path.join(tmp, "doc.pdf")
+        with open(roh, "wb") as f:
+            f.write(daten)
+        try:
+            fertig = subprocess.run(["pdftotext", "-layout", roh, "-"],
+                                    capture_output=True, timeout=120)
+            text = fertig.stdout.decode("utf-8", "replace").strip()
+        except Exception as e:
+            return "", f"PDF-Umwandlung fehlgeschlagen: {e}"
+    if not text:
+        return "", ("Nichts Lesbares drin — vermutlich ein gescanntes PDF "
+                    "ohne Textebene.")
+    return text, ""
+
+
 def dokument_holen(url: str, name: str) -> str:
     """Etwas aus dem Netz holen, lesbar machen, an EINEN Ort legen.
 
@@ -940,9 +967,6 @@ def dokument_holen(url: str, name: str) -> str:
     """
     import re as _re
     import html as _html
-    import shutil
-    import subprocess
-    import tempfile
     import urllib.request
 
     schluessel = _slug(name)
@@ -1007,21 +1031,9 @@ def dokument_holen(url: str, name: str) -> str:
 
     # ── PDF ──────────────────────────────────────────────────────────
     if daten[:5] == b"%PDF-":
-        if not shutil.which("pdftotext"):
-            return "[pdftotext fehlt — ohne poppler-utils kein PDF]"
-        with tempfile.TemporaryDirectory() as tmp:
-            roh = os.path.join(tmp, "doc.pdf")
-            with open(roh, "wb") as f:
-                f.write(daten)
-            try:
-                fertig = subprocess.run(["pdftotext", "-layout", roh, "-"],
-                                        capture_output=True, timeout=120)
-                text = fertig.stdout.decode("utf-8", "replace").strip()
-            except Exception as e:
-                return f"[PDF-Umwandlung fehlgeschlagen: {e}]"
-        if not text:
-            return ("[Nichts Lesbares drin — vermutlich ein gescanntes PDF "
-                    "ohne Textebene.]")
+        text, fehler = pdf_text(daten)
+        if fehler:
+            return f"[{fehler}]"
         kopf += "> Aus dem PDF extrahiert.\n\n"
 
     # ── Text und HTML ────────────────────────────────────────────────

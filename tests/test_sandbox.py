@@ -268,7 +268,8 @@ def test_werkzeug_ergebnis_fuers_modell(monkeypatch):
     import ki_werkzeuge
     gesehen = {}
 
-    def falsch(code, sprache, zeitlimit_s):
+    def falsch(code, sprache, zeitlimit_s, lauf_id=None):
+        # lauf_id seit Phase 5 (2026-10-07): Arbeitsordner je Gespräch.
         gesehen.update(code=code, sprache=sprache, zeit=zeitlimit_s)
         return sandbox._ergebnis(ausgabe="42\n", rc=0, dauer_s=0.1,
                                  dateien_neu=[{"name": "a.txt", "bytes": 3}],
