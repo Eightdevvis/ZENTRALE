@@ -161,6 +161,10 @@ def uebersicht() -> dict:
         "heute":  round(float((d["tage"].get(heute) or {}).get("euro", 0.0)), 4),
         "monat":  round(float((d["monate"].get(heute[:7]) or {}).get("euro", 0.0)), 4),
         "calls_heute": int((d["tage"].get(heute) or {}).get("calls", 0)),
+        # Davon geschätzt (gestoppte Antworten ohne Zählung des Anbieters) —
+        # für die Kosten-Seite der TUI, 2026-10-07.
+        "geschaetzt_monat": round(float(((d.get("geschaetzt") or {}).get(heute[:7]) or {})
+                                        .get("euro", 0.0)), 4),
         "modelle": {m: round(v.get("euro", 0.0), 4)
                     for m, v in sorted(d["modelle"].items(),
                                        key=lambda kv: -kv[1].get("euro", 0.0))},

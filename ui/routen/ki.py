@@ -25,6 +25,7 @@ import kern            # type: ignore  – der eine Einstieg in den Chat (core/k
 import ki_einstellungen  # type: ignore  – Einstellungen lesen/setzen mit Prüfung
 import providers      # type: ignore  – Cloud-Registry des Kerns (base_url/kind)
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
+import werkzeug_register  # type: ignore  – was die KI kann (/api/ai/werkzeuge)
 import zug           # type: ignore  – der laufende Zug: Gespräch + Ereignisse der Werkzeuge
 
 from ui.routen.gemeinsam import _ki_nicht_verfuegbar
@@ -480,6 +481,31 @@ def api_ai_status():
         })
     return jsonify({"available": False, "backend": None, "url": None,
                     "model": "—", "kosten": kosten})
+
+
+@bp.route('/api/ai/kosten')
+def api_ai_kosten():
+    """Was die KI kostet — für „Customize → Usage" in der TUI (2026-10-07):
+    heute, Monat, Anrufe heute, je Modell, davon geschätzt, Budget-Lage."""
+    import usage as _usage
+    return jsonify(dict(_usage.uebersicht(), budget=ai_backends.budget_lage()))
+
+
+@bp.route('/api/ai/werkzeuge')
+def api_ai_werkzeuge():
+    """Was die KI kann — für „Customize → Capabilities" (2026-10-07): jedes
+    Werkzeug des Registers mit Alltagswort, erstem Satz der Beschreibung,
+    ob es vorher fragt (nie | immer | manchmal) und auf welcher Schiene."""
+    raus = []
+    for w in werkzeug_register.WERKZEUGE:
+        text = " ".join(str(w.gross or w.klein or "").split())
+        satz = text.split(". ")[0][:160]
+        fragt = ("manchmal" if callable(w.erlaubnis)
+                 else "immer" if w.erlaubnis else "nie")
+        raus.append({"name": w.name, "alltag": w.alltag or "", "beschreibung": satz,
+                     "fragt": fragt,
+                     "schienen": [s for s in werkzeug_register.SCHIENEN if w.beschreibung(s)]})
+    return jsonify({"werkzeuge": raus})
 
 
 @bp.route('/api/ai/backends', methods=['GET', 'POST'])
