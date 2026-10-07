@@ -268,6 +268,9 @@ def _normiere(e: dict, iso: str, aus: bool) -> dict:
         "key": (e.get("von"), e.get("bis"), label, e.get("layer")),
         "routine": bool(e.get("recurring")), "aus": aus,
         "ausfall": bool(e.get("ausfall")),
+        # Der API-Eintrag selbst: die Werkzeuge (kalender_werkzeuge.py) arbeiten
+        # mit DERSELBEN Liste in DERSELBEN Reihenfolge wie die Ansicht.
+        "roh": e,
     }
 
 

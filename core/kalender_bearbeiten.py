@@ -371,3 +371,79 @@ def spanne_aendern(layer: str, von: str, label: str, neu_label: str | None = Non
             lobj["entries"].setdefault(neu_von, []).append(e)
         kalender._save_raw(data)
         return True
+
+
+# ── Einmal-Termine GENAU treffen ───────────────────────────────────────
+# delete_entry (kalender.py) trifft den Titel auch als Teilstring — für die
+# KI gewollt („Fake-Termin" trifft „Fake-Termin: Test"), für eine Taste in
+# der Ansicht zu grob: „d" auf „Kino" würde „Kino mit Lea" am selben Tag
+# mitnehmen. Hier zählt nur der exakte Titel, bei Gleichnamigen die Uhrzeit.
+def _eintrag_ziel(lobj: dict, day: str, label: str, time: str | None):
+    needle = (label or "").strip().lower()
+    liste = lobj.get("entries", {}).get(day) or []
+    cands = [e for e in liste if isinstance(e, dict)
+             and (e.get("label") or "").strip().lower() == needle]
+    if time is not None and len(cands) > 1:
+        genau = [e for e in cands if (e.get("time") or "") == (time or "")]
+        cands = genau or cands
+    return (liste, cands[0]) if cands else (liste, None)
+
+
+def eintrag_loeschen(layer: str, day: str, label: str, time: str | None = None) -> bool:
+    """Genau EINEN Einmal-Termin (oder eine Spanne an ihrem Start-Tag) löschen."""
+    with kalender._lock:
+        data = kalender._load_raw()
+        lobj = data.get("layers", {}).get(layer or "termine")
+        if not lobj:
+            return False
+        liste, e = _eintrag_ziel(lobj, day, label, _hhmm(time) if time else None)
+        if e is None:
+            return False
+        liste.remove(e)
+        if not liste:
+            del lobj["entries"][day]
+        kalender._save_raw(data)
+        return True
+
+
+def eintrag_aendern(layer: str, day: str, label: str, time: str | None,
+                    neu: dict) -> bool:
+    """Einen Einmal-Termin ändern; alle anderen Felder bleiben. `neu`: day,
+    label, time, ende, ort (leerer String löscht time/ende/ort)."""
+    with kalender._lock:
+        data = kalender._load_raw()
+        lobj = data.get("layers", {}).get(layer or "termine")
+        if not lobj:
+            return False
+        liste, e = _eintrag_ziel(lobj, day, label, _hhmm(time) if time else None)
+        if e is None or e.get("bis"):
+            return False
+        if (neu.get("label") or "").strip():
+            e["label"] = neu["label"].strip()
+        for feld in ("time", "ende"):
+            if feld in neu:
+                if neu[feld]:
+                    if not _hhmm(neu[feld]):
+                        return False
+                    e[feld] = _hhmm(neu[feld])
+                else:
+                    e.pop(feld, None)
+        if not e.get("time"):
+            e.pop("ende", None)
+        if e.get("ende") and e["ende"] <= e["time"]:
+            e.pop("ende", None)
+        if "ort" in neu:
+            if (neu["ort"] or "").strip():
+                e["ort"] = neu["ort"].strip()
+            else:
+                e.pop("ort", None)
+        neu_tag = neu.get("day")
+        if neu_tag and neu_tag != day:
+            if _iso(neu_tag) is None:
+                return False
+            liste.remove(e)
+            if not liste:
+                del lobj["entries"][day]
+            lobj["entries"].setdefault(neu_tag, []).append(e)
+        kalender._save_raw(data)
+        return True

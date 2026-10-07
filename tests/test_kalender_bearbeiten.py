@@ -204,3 +204,28 @@ def test_routen_spanne(client):
     assert ("Buchmesse", "09:00", "17:00") in _labels("2026-10-08")
     assert client.put("/api/calendar/spanne", json={
         "von": "2026-10-07", "label": "Messe", "new": {"verschieben": "x"}}).status_code == 400
+
+
+# ── Einmal-Termine genau treffen ───────────────────────────────────────
+def test_loeschen_trifft_keinen_teilstring(cal):
+    kalender.add_entry("termine", "2026-10-14", "Kino", time="19:00")
+    kalender.add_entry("termine", "2026-10-14", "Kino mit Lea", time="21:00")
+    assert kb.eintrag_loeschen("termine", "2026-10-14", "Kino", "19:00")
+    assert [l for l, *_ in _labels("2026-10-14")] == ["Kino mit Lea"]
+
+
+def test_gleichnamige_per_uhrzeit(cal):
+    kalender.add_entry("termine", "2026-10-14", "Arzt", time="09:00")
+    kalender.add_entry("termine", "2026-10-14", "Arzt", time="15:00")
+    assert kb.eintrag_aendern("termine", "2026-10-14", "Arzt", "15:00", {"ende": "16:00"})
+    assert sorted(_labels("2026-10-14")) == [("Arzt", "09:00", None), ("Arzt", "15:00", "16:00")]
+
+
+def test_aendern_behaelt_andere_felder_und_verschiebt(cal):
+    kalender.add_entry("termine", "2026-10-14", "Zahnarzt", time="14:00",
+                       ende="15:00", ort="Praxis")
+    assert kb.eintrag_aendern("termine", "2026-10-14", "Zahnarzt", "14:00",
+                              {"day": "2026-10-16", "time": "10:00", "ende": "11:00"})
+    assert _labels("2026-10-14") == []
+    e = _tag("2026-10-16")[0]
+    assert (e["label"], e["time"], e["ende"], e["ort"]) == ("Zahnarzt", "10:00", "11:00", "Praxis")

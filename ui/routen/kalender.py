@@ -388,3 +388,25 @@ def api_calendar_konflikte():
     except Exception as e:
         return jsonify({"konflikte": [], "error": str(e)})
     return jsonify({"konflikte": k})
+
+
+@bp.route('/api/calendar/eintrag', methods=['DELETE'])
+def api_calendar_eintrag_loeschen():
+    """GENAU einen Einmal-Termin (bzw. eine Spanne an ihrem Start-Tag)
+    löschen — exakter Titel, bei Gleichnamigen die Uhrzeit. Body: {layer?,
+    day, label, time?}. Anders als DELETE /api/calendar/entry kein
+    Teilstring-Treffer."""
+    b = request.get_json(silent=True) or {}
+    return _antwort(kalender_bearbeiten.eintrag_loeschen(
+        b.get('layer') or 'termine', b.get('day') or '', b.get('label') or '',
+        b.get('time') or None), "termin nicht gefunden")
+
+
+@bp.route('/api/calendar/eintrag', methods=['PUT'])
+def api_calendar_eintrag_aendern():
+    """Einen Einmal-Termin ändern, andere Felder bleiben. Body: {layer?, day,
+    label, time?, new:{day?, label?, time?, ende?, ort?}}."""
+    b = request.get_json(silent=True) or {}
+    return _antwort(kalender_bearbeiten.eintrag_aendern(
+        b.get('layer') or 'termine', b.get('day') or '', b.get('label') or '',
+        b.get('time') or None, b.get('new') or {}), "termin nicht gefunden/abgelehnt")
