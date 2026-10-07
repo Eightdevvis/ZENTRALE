@@ -831,7 +831,9 @@ class Graphen:
                         draw_band_seg(cx, a, b, bool(e.get("_pred")))
         return band_cells
 
-    def _overlay_legende(self, series, scale_series, labeled, only_scale, otop, oleft, oh, ow, plot_x, base, plot_h, date_h, date_ticks, scroll, maxscroll, day_x0, day_x_end, leg_lines, max_leg, band_glyph):
+    def _overlay_legende(self, series, scale_series, labeled, only_scale, otop, oleft, oh, ow,
+                         plot_x, base, plot_h, date_h, date_ticks, scroll, maxscroll,
+                         day_x0, day_x_end, leg_lines, max_leg, band_glyph):
         """Legende der Überlagerung: groß Kopfzeile + Skala-Zeile + Datums-
         zeile, kompakt farbige Marker unter dem Plot."""
         C, addclip, safe_addstr = self.z.C, self.z.addclip, self.z.safe_addstr
@@ -904,7 +906,8 @@ class Graphen:
                     addclip(yy, cx + 2, nm, (ow - 4) - (cx - plot_x) - 2, C["dim"])
                     cx += 2 + len(nm) + 1
 
-    def _overlay_zahlen(self, num_series, cols, labeled, base, plot_h, plot_x, AX_W, day_center, latt, row_norm, predicted_days):
+    def _overlay_zahlen(self, num_series, cols, labeled, base, plot_h, plot_x, AX_W, day_center,
+                        latt, row_norm, predicted_days):
         """number-Graphen: dünne Linie auf eigener min/max-Spanne (+ groß:
         beschriftete y-achse je Graph im linken Gutter)."""
         C, safe_addstr = self.z.C, self.z.safe_addstr
@@ -951,7 +954,8 @@ class Graphen:
                 safe_addstr(base, axx, _axlbl(hi)[:AX_W - 1].rjust(AX_W - 1), C[col])
                 safe_addstr(base + plot_h - 1, axx, _axlbl(lo)[:AX_W - 1].rjust(AX_W - 1), C[col])
 
-    def _overlay_skala_zeit(self, series, scale_series, labeled, only_scale, base, plot_h, day_center, latt, row_scale, row_clock, predicted_days):
+    def _overlay_skala_zeit(self, series, scale_series, labeled, only_scale, base, plot_h,
+                            day_center, latt, row_scale, row_clock, predicted_days):
         """scale-Graphen als Kreise, time-Graphen als ihr Symbol auf der 24h-Skala."""
         safe_addstr = self.z.safe_addstr
         # 2. scale: Kreise ◦○◉●⬤. Drei Fälle:
