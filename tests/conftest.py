@@ -65,6 +65,22 @@ os.environ.setdefault("ZENTRALE_TRANSKRIPT_DIR", os.path.join(_DATEN_TMP, "ai_tr
 os.environ.setdefault("ZENTRALE_GEDAECHTNIS_DIR", os.path.join(_DATEN_TMP, "gedaechtnis"))
 atexit.register(lambda: shutil.rmtree(_DATEN_TMP, ignore_errors=True))
 
+# 4c. KI-Einstellungen und Keys: nie die echten.
+#
+# ai_config liest beim Import data/ai_config.json und legt die Keys daraus
+# in os.environ. In Tests hieß das: Sashas echtes Budget, Backend und
+# Kalender-Speicher entschieden mit, ob ein Test grün war (gefunden
+# 2026-10-07 nach dem Kalender-Umzug: „leere Einstellung → json" wurde rot,
+# weil die echte Datei „ics" sagte) — und echte API-Keys lagen in der
+# Testumgebung. Jetzt: leeres Wegwerf-Verzeichnis, und Keys aus der Shell
+# werden ausgeräumt. Ein Test, der einen Key braucht, setzt ihn selbst.
+_CFG_TMP = os.path.join(_DATEN_TMP, "ai_config")
+os.makedirs(_CFG_TMP, exist_ok=True)
+os.environ.setdefault("ZENTRALE_AI_CONFIG_DIR", _CFG_TMP)
+for _k in ("ANTHROPIC_API_KEY", "DASHSCOPE_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY",
+           "GEMINI_API_KEY", "DEEPSEEK_API_KEY", "GROQ_API_KEY", "MISTRAL_API_KEY"):
+    os.environ.pop(_k, None)
+
 # 5. Theme-Dateien in ein Wegwerf-Verzeichnis umlenken.
 #
 # Dieselbe Klasse Fehler wie Punkt 3, nur teurer, weil man sie SIEHT: der

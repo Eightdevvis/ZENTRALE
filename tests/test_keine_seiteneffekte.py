@@ -432,3 +432,15 @@ def test_transkript_und_gedaechtnis_zeigen_nie_ins_echte_data():
         assert not os.path.realpath(pfad).startswith(echt), \
             f"{name}._DIR zeigt im Test ins echte data/: {pfad}"
 
+
+
+def test_ki_einstellungen_und_keys_sind_nicht_die_echten():
+    """Tests sehen weder Sashas echte ai_config.json noch seine API-Keys
+    (2026-10-07: ein Kalender-Test hing an der echten Einstellung)."""
+    import ai_config
+    import providers
+    echt = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", "data"))
+    assert not os.path.realpath(ai_config._DIR).startswith(echt)
+    gesetzt = [p["key_env"] for p in providers.PROVIDERS.values()
+               if os.environ.get(p["key_env"])]
+    assert gesetzt == [], gesetzt

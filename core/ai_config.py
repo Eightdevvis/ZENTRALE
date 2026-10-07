@@ -39,7 +39,13 @@
 import os
 import json
 
-_DIR          = os.path.join(os.path.dirname(__file__), "..", "data")
+# Umlenkbar (ZENTRALE_AI_CONFIG_DIR) — für die Tests. Bis 2026-10-07 lasen
+# die Tests Sashas ECHTE Einstellungen (Budget, Backend, Kalender-Speicher)
+# und bekamen beim Import seine echten API-Keys in die Umgebung: ein Test
+# hing davon ab, was zufällig in der Datei stand, und ein unvorsichtiger
+# Test hätte bezahlte Anfragen schicken oder die Datei überschreiben können.
+_DIR          = os.environ.get("ZENTRALE_AI_CONFIG_DIR") or \
+                os.path.join(os.path.dirname(__file__), "..", "data")
 _CONFIG_PATH  = os.path.join(_DIR, "ai_config.json")
 _LEGACY_PATH  = os.path.join(_DIR, "tutor_config.json")   # Migrations-Fallback
 
