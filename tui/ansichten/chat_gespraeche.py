@@ -94,6 +94,9 @@ class GespraechsSteuerung:
         """Beim Öffnen des Chats: Status für den Titel, dann den Verlauf."""
         self.status_holen()
         self.verlauf_laden()
+        seite = getattr(self, "seite", None)
+        if seite is not None:               # Blatt-Zeichen in der Seitenleiste
+            seite.doku_holen()
 
     def _neu_markieren(self):
         """● im Titel: ungelesen ist etwas in einem Gespräch, das gerade

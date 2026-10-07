@@ -1,7 +1,7 @@
 # Claude-Web im ZENTRALE-Assistenten — der Plan
 
 Stand 2026-10-07. **Geplant und von Sasha entschieden (Abschnitt 6).
-Phase 0, 1, 2, 3, 4, 5, 6 und 7 sind gebaut (Abschnitte 5 und 7), der Rest noch nicht.** Sasha hat am 06.10. gesagt: erst aufräumen, dann vor dem
+Phase 0, 1, 2, 3, 4, 5, 6 und 7 sind gebaut (Abschnitte 5 und 7), dazu das Frontend nach Claude Web (Ende von Abschnitt 7), der Rest noch nicht.** Sasha hat am 06.10. gesagt: erst aufräumen, dann vor dem
 Übertragen anhalten und gemeinsam planen. Das ist am 07.10. geschehen.
 
 Grundregel aus [../claude_hinweise.md](../claude_hinweise.md) („Das
@@ -695,3 +695,27 @@ Ausführlich: [../system/tui_bauplan.md](../system/tui_bauplan.md),
 - **Fußleiste zeigt nur, was wirkt**: je Fenster/Überlagerung aus `CTX_KEYS`
   bzw. `tasten()` der Ansicht; `tests/test_fussleiste.py` drückt jede
   beworbene Taste in der echten TUI ohne Bildschirm.
+
+### Frontend nach dem Vorbild von Claude Web — TUI (2026-10-07)
+
+Sasha: „das frontend für unsere ki soll lowk auch einfach claude web grad
+kopieren … nur dass man halt mit maus UND tastatur navigieren könnte."
+Ausführlich: [../system/tui_bauplan.md](../system/tui_bauplan.md), „Chat wie
+Claude Web"; Pixelstil: [../system/pixelstil.md](../system/pixelstil.md).
+
+- Im Chat-Kasten: **Seitenleiste** (Search, New, Projects, Files, Customize,
+  Gespräche nach Today/Yesterday/Datum; Tab auf/zu), **Verlauf** wie Claude
+  (Schritte „Used … ›", Denken eingeklappt, copy · retry), **Eingabekasten**
+  mit „Reply", Anhang-Kärtchen, „+ attach", Modell · Effort, **rechts** ein
+  Dokument (▾ Fassungen, groß, zu) oder „Outputs" mit „Used in this session",
+  **Customize** (Skills, Memory, Usage, Capabilities, Permissions, Model).
+- **Maus** (Klick, Rad) nur im offenen Chat, Shift + Ziehen markiert weiter;
+  Fokuswechsel F6; Strg+O/P/T/U/N.
+- **Denk-Adern**: Spiralen mit eingerollten Windungen wachsen aus dem Kern,
+  solange sie denkt, pulsieren nach außen und ziehen sich beim ersten Text
+  zurück (`tui/ansichten/denkadern.py`).
+- Backend dazu: `/api/ai/kosten`, `/api/ai/werkzeuge` (nur lesen), Ergebnis
+  eines Werkzeugs gekürzt im Verlauf (`werkzeuge[].ergebnis`).
+- Nicht gebaut: 👍/👎 (das Backend kennt keine Bewertung), Zeitstempel beim
+  Darüberfahren (braucht Bewegungsmeldungen der Maus — kosten Akku), „Code"-
+  Schalter oben (nur als Platz gedacht, wie gewünscht).

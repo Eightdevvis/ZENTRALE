@@ -163,6 +163,30 @@ SZ = {
                          ("l", "zwei"), ("cap", "a"), ("k", "C-c"), ("cap", "b"),
                          ("paste", "x" * 16500), ("w", 2), ("cap", "c"), ("paste", "y" * 4000),
                          ("w", 2), ("cap", "d"), ("k", "Escape"), ("cap", "e")],
+    # Chat wie Claude Web (2026-10-07): Seitenleiste auf/zu, Verlauf mit
+    # Schritten (F6, ↑, Enter klappt auf), Outputs, Dokument rechts und groß,
+    # Customize mit allen Abschnitten. Größe per ZTUI_GROESSE.
+    "ki_web": [("k", "Space"), ("w", 2), ("cap", "a"), ("k", "Tab"), ("w", 1), ("cap", "b"),
+               ("k", "Down"), ("cap", "c"), ("k", "Tab"), ("cap", "d"), ("k", "F6"),
+               ("k", "Up"), ("k", "Up"), ("k", "Up"), ("k", "Enter"), ("cap", "e"),
+               ("k", "Up"), ("k", "Enter"), ("cap", "f"), ("k", "Escape"), ("k", "C-o"),
+               ("w", 1), ("cap", "g"), ("k", "C-o"), ("k", "Enter"), ("w", 1), ("cap", "h"),
+               ("l", "f"), ("cap", "i"), ("l", "f"), ("k", "Escape"), ("cap", "j")],
+    "ki_customize": [("k", "Space"), ("w", 2), ("l", "/customize"), ("k", "Enter"), ("w", 1),
+                     ("cap", "a"), ("k", "Enter"), ("cap", "b"), ("k", "Down"), ("cap", "c"),
+                     ("k", "Left"), ("k", "Down"), ("w", 1), ("k", "Right"), ("cap", "d"),
+                     ("k", "Tab"), ("cap", "e"), ("k", "Left"), ("k", "Down"), ("w", 1),
+                     ("cap", "f"), ("k", "Down"), ("w", 1), ("k", "Right"), ("cap", "g"),
+                     ("k", "Left"), ("k", "Down"), ("w", 1), ("k", "Right"), ("cap", "h"),
+                     ("k", "Left"), ("k", "Down"), ("w", 1), ("k", "Right"), ("cap", "i"),
+                     ("k", "Enter"), ("w", 1), ("cap", "j"), ("k", "Escape"), ("k", "Escape"),
+                     ("k", "Escape"), ("cap", "k")],
+    # Denk-Animation (2026-10-07): das Abspiel-Backend denkt ZTUI_DENK_S
+    # Sekunden (12); Mitschnitte nach ~3, 6 und 10 s, im Rückzug und danach. Die
+    # Uhr läuft hier echt (sonst stünde die Animation).
+    "ki_denken": [("k", "Space"), ("w", 2), ("l", "wie flicke ich unterwegs?"), ("k", "Enter"),
+                  ("w", 1), ("cap", "a"), ("w", 2.5), ("cap", "b"), ("w", 3), ("cap", "c"),
+                  ("w", 0.4), ("cap", "d"), ("w", 3), ("cap", "e")],
     "tech_system": [("k", "M-Right"), ("k", "Enter"), ("cap", "a"), ("k", "/"), ("cap", "b")],
     "tech_stdout": [("k", "M-Right"), ("k", "Right"), ("k", "Enter"), ("cap", "a")],
     "tech_netz": [("k", "M-Right"), ("k", "Right"), ("k", "Right"), ("k", "Enter"), ("cap", "a")],
@@ -206,7 +230,7 @@ def lauf(code, aus, namen, breite=150, hoehe=46):
         skript = os.path.join(st, "start.sh")
         env = {
             "ZENTRALE_URL": "http://127.0.0.1:%d" % PORT, "TERM": "xterm-256color",
-            "ZENTRALE_TESTLAUF": "1", "ZTUI_EINGEFROREN": FROZEN,
+            "ZENTRALE_TESTLAUF": "1",
             "PYTHONPATH": HIER, "ZENTRALE_NO_AUDIO": "1",
             "ZENTRALE_THEME_FILE": os.path.join(st, "theme"),
             "ZENTRALE_THEME_NOW": os.path.join(st, "theme.now"),
@@ -223,6 +247,8 @@ def lauf(code, aus, namen, breite=150, hoehe=46):
             # Gedächtnis-Ansicht: „Editor", der nur eine Zeile anhängt.
             "VISUAL": os.path.join(st, "editor.sh"),
         }
+        if not name.startswith("ki_denken"):   # Animation braucht die echte Uhr
+            env["ZTUI_EINGEFROREN"] = FROZEN
         with open(os.path.join(st, "editor.sh"), "w") as f:
             f.write('#!/bin/sh\necho "- neue zeile aus dem editor" >> "$1"\n')
         os.chmod(os.path.join(st, "editor.sh"), 0o755)

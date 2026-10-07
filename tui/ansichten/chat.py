@@ -21,16 +21,22 @@ try:                                    # Pixel-Baustein (tui/pixel.py)
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     import pixel
 
-from . import chat_befehle, eingabe, fussleiste
+from . import chat_befehle, eingabe, fussleiste, maus
+from . import verlauf as V
 from .ablage import Ablageliste
 from .chat_ablage import AblageSteuerung, ablage_anzeige, anhang_eintrag
 from .chat_erlaubnis import ErlaubnisSteuerung
+from .chat_bedienung import ChatBedienung
+from .chat_zeichnen import ChatZeichnen
+from .einstellungen import Einstellungen
+from .rechts import Rechts
+from .seitenleiste import Seitenleiste
 from .chat_gespraeche import GespraechsSteuerung, ai_verlauf_holen, verlauf_aus  # noqa: F401
 from .gespraechsliste import Gespraechsliste
 from .gedaechtnis import Gedaechtnis
 from .projekte import Projekte
 from .basis import BASE_URL, api_call
-from .text import _md_umbruch, _wrap, md_zeilen
+from .text import _md_umbruch, md_zeilen
 
 # Alt+Enter als eigener Tastencode: curses liefert ESC + Enter als zwei
 # Tasten; Chat.taste setzt sie zu diesem einen zusammen. -1 ist „keine
@@ -40,6 +46,10 @@ TASTE_ALT_ENTER = -2
 # Strg+C kommt als Zeichen 3 an, seit die TUI curses im raw-Modus fährt
 # (run_ui, 2026-10-07) — vorher löste es SIGINT aus und beendete die TUI.
 TASTE_STRG_C = 3
+
+# Strg-Tasten des Chats nach dem Vorbild von Claude Web (2026-10-07): curses
+# im raw-Modus liefert Strg+Buchstabe als 1 … 26.
+STRG = {"n": 14, "o": 15, "p": 16, "t": 20, "u": 21}
 
 # Ein Stoß: was beim Einfügen auf einmal im Tastaturpuffer liegt. Mehr als
 # das wird nicht in einem Rutsch gelesen (der Rest kommt im nächsten Takt).
@@ -269,7 +279,7 @@ def stand_text(daten, stand):
     return "anbieter: %s" % (stand.get("anbieter") or "—")
 
 
-class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
+class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
     """Der KI-Chat (Mitte, Leertaste auf der Startseite). Thin Client: die
     TUI rechnet keine KI, sie spricht nur HTTP mit /api/chat (SSE) und zeigt
     den Verlauf. Zustand in self.AI (auch z.AI), geschützt durch AI_LOCK,
@@ -328,11 +338,21 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
                           # während das Fenster zu war (●); Zeichen, die an der
                           # Eingabe-Grenze nicht mehr hineinpassten.
                           "fertig_ungesehen": False, "zu_viel": 0}
+        # Claude-Web-Ansicht (2026-10-07, chat_zeichnen.py): wer den Fokus hat
+        # (eingabe | verlauf | seite | rechts), was im Verlauf aufgeklappt und
+        # angewählt ist, wann das Warten auf die Antwort begann (Denk-Adern),
+        # Denk-Tiefe für die Leiste unter der Eingabe, Maus an/aus.
+        self.AI.update(fokus="eingabe", offen=set(), vwahl=None, denk_t0=None,
+                       denk_ende=None, denk_log_n=0, effort="", maus=maus.gewuenscht())
+        self.klicks, self.raeder, self._ziele = [], [], []
         self.AI_LOCK = threading.Lock()
         self.liste = Gespraechsliste(self)
         self.gedaechtnis = Gedaechtnis(self)       # /gedaechtnis, /skills (Phase 3)
         self.ablageliste = Ablageliste(self)
         self.projekte = Projekte(self)             # /projekt, /projekte (Phase 6)
+        self.seite = Seitenleiste(self)            # links (seitenleiste.py)
+        self.rechts = Rechts(self)                 # Dokument / Outputs (rechts.py)
+        self.einstellungen = Einstellungen(self)   # Customize (einstellungen.py)
 
     def start(self):
         """Hintergrund-Threads anwerfen (run_ui ruft das nach dem Aufbau)."""
@@ -521,6 +541,10 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
             if not wiederholen:
                 AI["log"].append(("user", msg))
                 AI["log"] += [anhang_eintrag(a) for a in anhaenge]
+            # Denk-Adern: ab jetzt wird gewartet; die Antwort beginnt hinter
+            # allem, was bis hier im Verlauf steht (chat_zeichnen._adern_lage).
+            AI["denk_t0"], AI["denk_ende"] = time.monotonic(), None
+            AI["denk_log_n"] = len(AI["log"])
             AI["ersetzt"] = None
             AI["input"] = ""
             AI["cur"] = 0
@@ -561,6 +585,7 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
                     AI["backend"] = st.get("backend")
                     AI["model"] = st.get("model") or ""
                     AI["provider"] = st.get("provider") or ""
+                    AI["effort"] = st.get("effort") or ""
                     AI["kosten_heute"] = k.get("heute") or 0.0
                     AI["budget"] = k.get("budget") or {}
         except (urllib.error.URLError, OSError, ValueError):
@@ -596,7 +621,9 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
             return
         # Gespräche (Phase 2, 2026-10-07) — die Methoden stehen in
         # chat_gespraeche.py.
-        einfach = {"neu": self.neues_gespraech, "liste": self.liste.oeffnen,
+        einfach = {"neu": self.neues_gespraech, "liste": lambda: self.seite.aufklappen(),
+                   "einstellungen": lambda: self.einstellungen.oeffnen(),
+                   "maus": self.maus_umschalten,
                    "archiv": self.archivieren_aktuell, "wiederholen": self.wiederholen,
                    "bearbeiten": self.bearbeiten, "denken": self.denken_umschalten}
         if name in einfach:
@@ -731,10 +758,17 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
                     + [("esc", "decline")] + stopp)
         if AI.get("wahl"):
             return self._tasten_wahl(AI["wahl"])
-        for feld, ueber in (("liste", "liste"), ("gedaechtnis", "gedaechtnis"),
-                            ("ablage", "ablageliste"), ("projekte", "projekte")):
-            if AI.get(feld):                   # Überlagerung offen: sie weiß es
-                return stopp + getattr(self, ueber).tasten()
+        ueber = self._ueberlagerung()
+        if ueber is not None:                  # Überlagerung offen: sie weiß es
+            return stopp + ueber.tasten()
+        fokus = AI.get("fokus") or "eingabe"
+        weiter = [("f6", "next pane")]
+        if fokus == "seite":
+            return stopp + self.seite.tasten() + weiter
+        if fokus == "rechts" and self.rechts.art():
+            return stopp + self.rechts.tasten() + weiter
+        if fokus == "verlauf":
+            return stopp + self._tasten_verlauf() + weiter
         if AI.get("ersetzt"):
             return stopp + [("enter", "send edit"), ("alt+enter", "new line"),
                             ("esc", "cancel edit")]
@@ -749,8 +783,10 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
         if mehrzeilig or AI["streaming"]:
             liste.append(("pgup pgdn", "scroll"))
         if not AI["input"]:
-            liste.append(("tab", "chats"))
-        liste += [("/help", "commands"), ("ctrl+d", "thinking")]
+            liste.append(("tab", "hide chats" if self._seite_sichtbar() else "chats"))
+        liste += [("/help", "commands"), ("ctrl+d", "thinking"), ("f6", "next pane"),
+                  ("ctrl+o", "outputs"), ("ctrl+p", "model"), ("ctrl+t", "effort"),
+                  ("ctrl+u", "attach"), ("ctrl+n", "new chat")]
         return liste
 
     def fusszeile(self):
@@ -810,9 +846,10 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
         AI, ai_load_history = self.AI, self.ai_load_history
         AI["active"] = True; AI["scroll"] = 0; AI["msg"] = ""
         AI["fertig_ungesehen"] = False
+        AI["fokus"] = "eingabe"
         if any(e.get("ungelesen") and e.get("id") != AI.get("gid")
                for e in AI.get("gespraeche") or []):
-            AI["msg"] = "neues in einem anderen gespräch — tab zeigt die liste"
+            AI["msg"] = "neues in einem anderen gespräch — tab zeigt die gespräche"
         if not AI["streaming"]:
             threading.Thread(target=ai_load_history, daemon=True).start()
 
@@ -846,20 +883,32 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
             elif ch == 27:                 # esc = ablehnen (letzte Option, meist nein)
                 ai_answer_perm(opts[-1])
             return
+        if ch == curses.KEY_MOUSE:         # Klick, Rad (maus.py)
+            self.maus_ereignis()
+            return
         if AI["wahl"]:
             self._taste_wahl(ch)
             return
-        if AI["liste"]:                    # Gesprächsliste (gespraechsliste.py)
-            self.liste.taste(ch)
+        # Überlagerungen über dem Inhalt (Einstellungen, Gedächtnis, Projekte,
+        # Ablage-Liste) nehmen alle Tasten.
+        ueber = self._ueberlagerung()
+        if ueber is not None:
+            ueber.taste(ch)
             return
-        if AI.get("gedaechtnis"):          # Gedächtnis-Ansicht (gedaechtnis.py)
-            self.gedaechtnis.taste(ch)
+        if ch == curses.KEY_F6:            # Fokus weiter: Leiste → Verlauf → Eingabe → rechts
+            self.fokus_weiter()
             return
-        if AI["ablage"]:                   # Ablage-Liste/Lesen (ablage.py)
-            self.ablageliste.taste(ch)
+        fokus = AI.get("fokus") or "eingabe"
+        if fokus == "seite":               # Seitenleiste (seitenleiste.py)
+            self.seite.taste(ch)
             return
-        if AI.get("projekte"):             # Projekt-Übersicht (projekte.py)
-            self.projekte.taste(ch)
+        if fokus == "rechts" and self.rechts.art():
+            self.rechts.taste(ch)
+            return
+        if fokus == "verlauf":
+            self._taste_verlauf(ch)
+            return
+        if self._taste_strg(ch):
             return
         if ch == 27:
             # Esc schließt das Fenster — auch während einer Antwort, die dann
@@ -873,8 +922,8 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
             else:
                 AI["active"] = False
             return
-        if ch == 9 and not AI["input"]:    # Tab bei leerer Eingabe: Gesprächsliste
-            self.liste.oeffnen()
+        if ch == 9 and not AI["input"]:    # Tab bei leerer Eingabe: Gespräche auf/zu
+            self.seite_umschalten()
             return
         if ch == 4:                        # Strg+D: Denken auf-/zuklappen
             self.denken_umschalten()
@@ -883,6 +932,8 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
             # Leere Eingabe + ein Dokument im Verlauf: Enter liest es.
             if not AI["input"].strip() and not AI["streaming"] \
                     and self.dokument_oeffnen_letztes():
+                if self.rechts.dokument_offen():
+                    AI["fokus"] = "rechts"
                 return
             # \ am Zeilenende + Enter = neue Zeile, wie in der Shell.
             vorher = AI["input"], AI["cur"]
@@ -996,227 +1047,6 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
         neu, pos = eingabe.einfuegen(text, pos, s)
         AI["zu_viel"] = AI.get("zu_viel", 0) + len(s) - (len(neu) - len(text))
         AI["input"], AI["cur"] = neu, pos
-
-    def draw_ai(self, by, bx, bh, bw):
-        """Inhalt der MITTE-Box, wenn der KI-Chat Fokus hat. Reiner Zeichner:
-        liest AI[...] (unter Lock) und rendert Verlauf + laufende Antwort +
-        Eingabezeile. Der Stream selbst läuft in ai_stream() im Hintergrund."""
-        AI, AI_LOCK, C, PIX_MODUS = self.AI, self.AI_LOCK, self.z.C, self.z.PIX_MODUS
-        addclip, pix_attr, safe_addstr = self.z.addclip, self.z.pix_attr, self.z.safe_addstr
-        inx = bx + 2
-        inw = max(6, bw - 4)
-        body_top = by + 1
-        if AI["liste"]:                    # Gesprächsliste liegt über dem Verlauf
-            self.liste.zeichnen(by, bx, bh, bw)
-            return
-        if AI.get("gedaechtnis"):          # Gedächtnis ebenso
-            self.gedaechtnis.zeichnen(by, bx, bh, bw)
-            return
-        if AI["ablage"]:                   # Ablage ebenso (ablage.py)
-            self.ablageliste.zeichnen(by, bx, bh, bw)
-            return
-        if AI.get("projekte"):             # Projekte ebenso
-            self.projekte.zeichnen(by, bx, bh, bw)
-            return
-
-        with AI_LOCK:
-            log = list(AI["log"])
-            answer = AI["answer"]
-            reflect = AI["reflect"]
-            streaming = AI["streaming"]
-            perm = dict(AI["perm"]) if AI["perm"] else None
-            inp = AI["input"]
-            cur = min(AI["cur"], len(inp))
-            msg = AI["msg"]
-            scroll = AI["scroll"]
-            wahl = AI["wahl"]
-            wahl = dict(wahl, optionen=list(wahl["optionen"])) if wahl else None
-            denken_offen = AI["denken_offen"]
-            zu_viel = AI.get("zu_viel", 0)
-            anh_text = self.anhaenge_text()
-
-        # Fußzeilen zuerst: sie bestimmen, wie viel Platz der Verlauf noch hat.
-        # Bei offener Erlaubnis-Frage brauchen Frage UND Knöpfe je nach Breite
-        # mehrere Zeilen — früher wurden sie hart auf inw gekürzt, in einem
-        # schmalen Fenster war die Frage damit unlesbar.
-        foot = []
-        cursor = None                     # (fuß-zeile, spalte, zeichen)
-        if perm:
-            opts = perm.get("optionen") or ["ja", "nein"]
-            label = "  ".join("%d) %s" % (i + 1, o) for i, o in enumerate(opts))
-            olines = _wrap("› " + label, inw) or ["›"]
-            frage = (perm.get("frage") or "darf ich?").replace("\n", " ")
-            qlines = _wrap("? " + frage, inw)
-            room = max(1, (bh - 3) - len(olines))   # mind. 1 Zeile Verlauf bleibt
-            if len(qlines) > room:                  # Knöpfe haben Vorrang
-                qlines = qlines[:room]
-                qlines[-1] = qlines[-1][:max(1, inw - 1)] + "…"
-            foot = [(ln, C["warn"]) for ln in qlines + olines]
-        elif wahl:
-            foot = self._fuss_wahl(wahl, inw, bh)
-        else:
-            # Info-Zeile: Grenze erreicht > Denk-Strom > Fehler/Status >
-            # Scroll-Hinweis > was gerade geht (Stoppen, Befehle). Der Zähler
-            # ab 80 % steht rechts daneben (2026-10-07).
-            grenze = eingabe.grenz_meldung(len(inp), zu_viel)
-            zaehler = eingabe.zaehler(len(inp))
-            if grenze:
-                foot += [(ln, C["warn"] | curses.A_BOLD) for ln in _wrap(grenze, inw)]
-            elif streaming and reflect:
-                foot.append((("denkt: " + reflect.replace("\n", " "))[-inw:],
-                             C["faint"]))
-            elif msg:
-                foot.append((msg[:inw], C["warn"]))
-            elif anh_text:                         # Anhänge warten (Phase 5)
-                foot.append((anh_text[:inw], C["acc"]))
-            elif scroll > 0:
-                foot.append(("↑ verlauf (↓ nach unten)", C["faint"]))
-            elif streaming:
-                foot.append(("antwortet … ctrl+c stoppt · esc schließt (läuft weiter)"[:inw],
-                             C["faint"]))
-            elif not inp:
-                foot.append(("enter send · alt+enter or \\ enter new line · /help"[:inw],
-                             C["faint"]))
-            else:
-                foot.append(("", 0))               # Platz halten, Layout stabil
-            if zaehler and not grenze:
-                links, attr0 = foot[-1]
-                platz = max(0, inw - len(zaehler) - 2)
-                foot[-1] = (links[:platz].ljust(platz) + "  " + zaehler,
-                            attr0 or C["faint"])
-            # Darunter das Eingabefeld: wächst bis eingabe.HOEHE Zeilen, dann
-            # scrollt es mit dem Cursor. Erste Zeile mit ›, die anderen
-            # eingerückt; den Cursor zeichnet der Fuß unten invers.
-            hoehe = max(1, min(eingabe.HOEHE, bh - 5))
-            zeilen, cy, cx, oben = eingabe.anzeige(inp, cur, inw - 2, hoehe)
-            eingabe_ab = len(foot)
-            attr = C["dim"] if streaming else C["bright"]
-            for i, z_ in enumerate(zeilen):
-                # › nur vor der echten ersten Zeile; ist sie hochgescrollt,
-                # zeigt ↑, dass oben noch Text steht.
-                vorn = "  " if i else ("↑ " if oben else "› ")
-                foot.append((vorn + z_, attr))
-            cursor = (eingabe_ab + cy, 2 + cx,
-                      zeilen[cy][cx] if cx < len(zeilen[cy]) else " ")
-        weg = max(0, len(foot) - max(1, bh - 3))
-        foot = foot[weg:]
-        if cursor is not None:
-            cursor = (cursor[0] - weg,) + cursor[1:]
-        body_bot = by + bh - 2 - len(foot)
-        avail = max(1, body_bot - body_top + 1)
-
-        # Zeilen bauen: Verlauf + laufende Antwort (jede Zeile trägt ihre Rolle)
-        lines = []
-        letzte_ablage = max((i for i, (r, _t) in enumerate(log) if r == "ablage"), default=-1)
-        for i, (role, text) in enumerate(log):
-            if role == "denken":           # eingeklappt eine Zeile (Strg+D)
-                lines += denken_wrap(text, denken_offen, inw)
-            elif role == "ablage":         # ▤ Titel — enter öffnet (nur das neueste)
-                lines += ai_wrap(role, ablage_anzeige(text, i == letzte_ablage), inw)
-            else:
-                lines += ai_wrap(role, text, inw)
-            lines.append(("gap", ""))
-        if answer is not None:
-            lines += ai_wrap("ai", answer + ("▌" if streaming else ""), inw)
-
-        # Das Auge (Sasha, 04.10.2026): gross, in der Mitte, im Stil der
-        # App-Symbole. Leerer Chat → mittig mit dem Hinweis darunter; läuft
-        # ein Gespräch → oben, der Verlauf rückt darunter. Zu niedrig → weg.
-        if C.get("pix_bg") is not None and PIX_MODUS != "off" and bw >= pixel.AUGE_W + 4:
-            jetzt = time.monotonic()
-            if AI.get("auge_t0") is None:
-                AI["auge_t0"] = jetzt                  # gerade geöffnet: Lider gehen auf
-            seit = jetzt - AI["auge_t0"]
-            farben = "nacht" if sum(C["pix_bg"]) < 384 else "tag"
-            auge = pixel.auge_zellen(round(min(1.0, seit / .45), 2), int(seit * 1000),
-                                     streaming, farben,
-                                     "half" if PIX_MODUS == "half" else "mix")
-            ey = None
-            if not lines and avail >= pixel.AUGE_H + 3:
-                ey = body_top + max(0, (avail - pixel.AUGE_H - 2) // 2)
-            elif lines and avail >= pixel.AUGE_H + 6:
-                ey = body_top
-                body_top += pixel.AUGE_H + 1
-                avail = max(1, body_bot - body_top + 1)
-            if ey is not None:
-                ex = bx + (bw - pixel.AUGE_W) // 2
-                for r, line in enumerate(auge):
-                    for c, z in enumerate(line):
-                        if z:
-                            safe_addstr(ey + r, ex + c, z[0], pix_attr(z[1], z[2]))
-                if not lines:
-                    hinweis = "frag die ki — tippen + enter · /help"
-                    addclip(ey + pixel.AUGE_H + 1, bx + max(2, (bw - len(hinweis)) // 2),
-                            hinweis, inw, C["faint"])
-                    lines = None                       # Hinweis steht schon
-
-        if lines is None:
-            pass
-        elif not lines:
-            addclip(body_top + avail // 2, inx,
-                    "frag die ki — tippen + enter · /help", inw, C["faint"])
-        else:
-            total = len(lines)
-            maxscroll = max(0, total - avail)     # scroll=0 → Boden (neueste)
-            sc = min(scroll, maxscroll)
-            start = max(0, total - avail - sc)
-            y = body_top
-            # Blockstile aus dem Markdown-Renderer auf Attribute abbilden.
-            # Ueberschrift hebt sich ab, Code steht zurueck (er ist Beleg,
-            # nicht Aussage), Listen lesen sich wie Fliesstext.
-            #
-            # Werkzeuge und Denken stehen ZURUECK: sie sollen nachlesbar
-            # sein, ohne das Gespraech zu uebertoenen. Ein Werkzeug-FEHLER
-            # tritt dagegen hervor — das ist der Fall, in dem sie hinterher
-            # behauptet, es habe geklappt.
-            stile = {
-                "user":              C["acc"],
-                "ai":                C["bright"],
-                "ai_kopf":           C["acc"],
-                "ai_code":           C["dim"],
-                "ai_liste":          C["bright"],
-                "werkzeug":          C["acc"],
-                "werkzeug_ergebnis": C["faint"],
-                "werkzeug_fehler":   C["warn"],
-                "denken":            C["faint"],
-                "ablage":            C["acc"],
-                "anhang":            C["dim"],
-            }
-            for kind, seg in lines[start:start + avail]:
-                addclip(y, inx, seg, inw, stile.get(kind, C["faint"]))
-                y += 1
-
-        # Fuß unten in den Kasten setzen (wächst nach oben, nicht in den Rahmen)
-        fy = by + bh - 1 - len(foot)
-        for i, (txt, attr) in enumerate(foot):
-            addclip(fy, inx, txt, inw, attr)
-            if cursor is not None and cursor[0] == i and cursor[1] < inw:
-                safe_addstr(fy, inx + cursor[1], cursor[2],
-                            C["bright"] | curses.A_REVERSE)
-            fy += 1
-
-    def _fuss_wahl(self, wahl, inw, bh):
-        """Die offene Auswahl als Fußzeilen: Titel, ein Fenster der
-        Optionen um die gewählte herum, Hinweis."""
-        C = self.z.C
-        opts, idx = wahl["optionen"], wahl["idx"]
-        platz = max(1, min(len(opts), bh - 6)) if opts else 0
-        oben = max(0, min(idx - platz // 2, len(opts) - platz))
-        titel = wahl["titel"]
-        if "filter" in wahl:                       # /modell: tippen filtert
-            titel += " · %d von %d" % (len(opts), len(wahl["alle"]))
-            if wahl["filter"]:
-                titel += " · filter: " + wahl["filter"]
-        zeilen = [(titel[:inw], C["acc"])]
-        if not opts:
-            zeilen.append(("  nichts passt", C["dim"]))
-        for i in range(oben, oben + platz):
-            zeichen = "›" if i == idx else " "
-            nr = "%d) " % (i + 1) if i < 9 and "filter" not in wahl else "   "
-            zeilen.append(("%s %s%s" % (zeichen, nr, opts[i][0]),
-                           C["bright"] if i == idx else C["dim"]))
-        zeilen.append((fussleiste.text(self._tasten_wahl(wahl))[:inw], C["faint"]))
-        return zeilen
 
     def _tasten_wahl(self, wahl):
         """Tasten der offenen Auswahl — Fußleiste und Hinweis darüber."""

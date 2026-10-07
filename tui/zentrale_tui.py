@@ -1256,12 +1256,20 @@ def run_ui(stdscr, store):
         # spürbar nach dem Tastendruck und die Tasten würden träge leuchten.
         # Läuft gerade eine stdout-Zeile durch, reicht ein Mittelding
         # (LAUF_TICK_MS ≈ halber Zeichen-Schritt) — ein Bruchteil der 30 fps.
+        # Maus nur im offenen Chat (ansichten/maus.py: warum das Markieren im
+        # Terminal so heil bleibt).
+        chat.maus_pflegen()
         fast = ((M["active"] and M.get("anim")) or (AI["active"] and AI["streaming"])
                 or (TUTOR["active"] and TUTOR["streaming"]) or PIANO["active"]
                 or RAD["pos"] != RAD["sel"] or RAD["schnell"]
                 or TRAD["pos"] != TRAD["sel"] or META["gpos"] != META["gsel"]
                 or RAD.get("wurf") or TRAD.get("wurf"))
-        stdscr.timeout(33 if fast else 60 if AI["active"]      # das Auge lebt
+        # Denk-Adern (2026-10-07): ihr Bild ändert sich höchstens 10× pro
+        # Sekunde (denkadern.BILDER_JE_S) — solange nur sie sich bewegen,
+        # reichen 100 ms statt 33 (gemessen: etwa ein Drittel der CPU).
+        adern = AI["active"] and chat.nur_adern()
+        stdscr.timeout(100 if adern and not (M["active"] or PIANO["active"] or TUTOR["active"])
+                       else 33 if fast else 60 if AI["active"]      # das Auge lebt
                        else (LAUF_TICK_MS if LAUF["laeuft"] else 250))
         ch = stdscr.getch()
 

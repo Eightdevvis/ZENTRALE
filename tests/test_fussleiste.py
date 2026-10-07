@@ -442,8 +442,34 @@ def _chat_bearbeiten(u):
     u.AI.update(ersetzt="m1", input="alte frage", cur=10)
 
 
-def _liste(u):
-    _chat(u); u.chat.liste.oeffnen()
+def _liste(u):                         # seit 2026-10-07 die Seitenleiste
+    _chat(u); u.chat.seite.aufklappen()
+
+
+def _seite_menue(u):
+    _liste(u); u.AI["liste"]["idx"] = 0; zt.taste_verteilen(u, curses.KEY_UP)
+    assert u.AI["seite_menu"] is not None
+
+
+def _verlauf(u):
+    _chat(u); zeichnen(u); u.AI["fokus"] = "verlauf"
+
+
+def _dokument(u):
+    _chat(u); u.chat.rechts.dokument_zeigen("d1")
+    assert u.AI["fokus"] == "rechts"
+
+
+def _outputs(u):
+    _chat(u)
+    u.AI["log"].append(("ablage", "d2\tSkizze"))
+    u.chat.rechts.outputs_umschalten(); zeichnen(u); u.AI["fokus"] = "rechts"
+
+
+def _einstellungen(abschnitt=None):
+    def aufbau(u):
+        _chat(u); u.chat.einstellungen.oeffnen(abschnitt)
+    return aufbau
 
 
 def _liste_suche(u):
@@ -506,6 +532,14 @@ UEBERLAGERUNGEN = {
     "ai:erlaubnis": _chat_erlaubnis, "ai:frage": _chat_frage,
     "ai:bearbeiten": _chat_bearbeiten, "ai:liste": _liste, "ai:liste:suche": _liste_suche,
     "ai:liste:umbenennen": _liste_umbenennen, "ai:liste:archiv": _liste_archiv,
+    "ai:seite:menue": _seite_menue, "ai:verlauf": _verlauf, "ai:dokument": _dokument,
+    "ai:outputs": _outputs, "ai:einstellungen": _einstellungen(),
+    "ai:einstellungen:skills": _einstellungen("skills"),
+    "ai:einstellungen:memory": _einstellungen("memory"),
+    "ai:einstellungen:usage": _einstellungen("usage"),
+    "ai:einstellungen:capabilities": _einstellungen("capabilities"),
+    "ai:einstellungen:permissions": _einstellungen("permissions"),
+    "ai:einstellungen:model": _einstellungen("model"),
     "ai:gedaechtnis": _gedaechtnis, "ai:skills": _skills, "ai:ablage": _ablage,
     "ai:ablage:lesen": _ablage_lesen, "ai:projekte": _projekte, "ai:projekt": _projekt,
     "ai:projekt:name": _projekt_name, "erinnerung": _erinnerung, "hilfe": _hilfe,

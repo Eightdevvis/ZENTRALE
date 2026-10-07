@@ -21,7 +21,7 @@ from collections import namedtuple
 # gehen weiter, stehen aber nirgends mehr (ANDERE_NAMEN).
 BEFEHLE = [
     ("/new",      "neues gespräch (das alte bleibt in der liste)"),
-    ("/chats",    "alle gespräche (auch: tab bei leerer eingabe)"),
+    ("/chats",    "gespräche links aufklappen (auch: tab bei leerer eingabe)"),
     ("/rename",   "titel zeigen · /rename <text> benennt um"),
     ("/archive",  "dieses gespräch ins archiv, dann ein neues"),
     ("/retry",    "letzte antwort neu erzeugen"),
@@ -34,6 +34,8 @@ BEFEHLE = [
     ("/project",  "projekt dieses gesprächs · /project <name> · new <name> · none"),
     ("/projects", "alle projekte — anweisungen, wissen, gespräche"),
     ("/permissions", "was die ki ohne fragen darf — ansehen, zurücknehmen"),
+    ("/customize", "einstellungen: skills, gedächtnis, kosten, was sie kann, modell"),
+    ("/mouse",    "maus im chat an/aus (shift + ziehen markiert immer)"),
     ("/model",    "alle modelle der anbieter (tippen filtert) · /model <name>"),
     ("/provider", "anbieter wählen · /provider <name> oder auto"),
     ("/effort",   "denk-tiefe wählen (nur claude) · /effort low … max"),
@@ -51,7 +53,7 @@ INNEN = {"new": "neu", "chats": "liste", "rename": "titel", "archive": "archiv",
          "memory": "gedaechtnis", "files": "ablage", "attach": "anhang",
          "project": "projekt", "projects": "projekte", "model": "modell",
          "provider": "anbieter", "local": "lokal", "help": "hilfe",
-         "permissions": "erlaubnis"}
+         "permissions": "erlaubnis", "customize": "einstellungen", "mouse": "maus"}
 
 # Stille Aliase: die deutschen Namen von vorher und alte Schreibweisen
 # (/clear stand früher in der Doku). In keiner Hilfe, keiner Fußleiste.
@@ -62,7 +64,8 @@ ANDERE_NAMEN = {"clear": "neu", "list": "liste", "gedächtnis": "gedaechtnis",
                 "gedaechtnis": "gedaechtnis", "ablage": "ablage", "anhang": "anhang",
                 "projekt": "projekt", "projekte": "projekte", "modell": "modell",
                 "anbieter": "anbieter", "lokal": "lokal", "hilfe": "hilfe",
-                "erlaubnis": "erlaubnis", "erlaubnisse": "erlaubnis"}
+                "erlaubnis": "erlaubnis", "erlaubnisse": "erlaubnis",
+                "settings": "einstellungen", "einstellungen": "einstellungen", "maus": "maus"}
 
 NAMEN = {INNEN.get(b[1:], b[1:]) for b, _ in BEFEHLE}
 

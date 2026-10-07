@@ -123,19 +123,28 @@ def _nutzer(text, breite):
 
 
 def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=None,
-                   antwort=None, adern=0, streaming=False):
+                   antwort=None, adern=0, streaming=False, adern_bei=None):
     """Der Verlauf als Zeilen aus Stücken (text, stil, ziel).
 
     offen: Ziele, die aufgeklappt sind ({("schritt", i), ("denken", i)});
     denken_alle: Strg+D — alles Denken offen; letzte_ai: Index der letzten
     Antwort (nur sie bekommt „retry"); antwort: die laufende Antwort (Text)
-    oder None; adern: so viele leere Zeilen für die Denk-Animation."""
+    oder None; adern: so viele leere Zeilen für die Denk-Animation, vor dem
+    Eintrag adern_bei (None: am Ende, vor der laufenden Antwort) — nach dem
+    Ende des Stroms zieht sie sich dort zurück, wo die Antwort beginnt."""
     breite = max(8, int(breite))
     zeilen = []
     gruppen = schritte(log)
     teil_von = {j for s in gruppen.values() for j in s["teile"][1:]}
     vorher = None
+    def adern_block():
+        if zeilen:
+            zeilen.append([])
+        zeilen.extend([("", "adern", None)] for _ in range(adern))
+
     for i, (rolle, text) in enumerate(log):
+        if adern and i == adern_bei:
+            adern_block()
         if i in teil_von:
             continue
         # Luft zwischen zwei Äußerungen; Schritte und Denken kleben an der Antwort
@@ -194,10 +203,8 @@ def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=
             for u in _umbruch(text, breite):
                 zeilen.append([(u, "leise", None)])
         vorher = rolle
-    if adern:
-        if zeilen:
-            zeilen.append([])
-        zeilen += [[("", "adern", None)] for _ in range(adern)]
+    if adern and (adern_bei is None or not 0 <= adern_bei < len(log)):
+        adern_block()
     if antwort is not None and antwort.strip():
         if zeilen and not adern:
             zeilen.append([])

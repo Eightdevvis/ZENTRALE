@@ -38,7 +38,7 @@ _NAMEN = {
     "shift+tab": [curses.KEY_BTAB], "⌫": [curses.KEY_BACKSPACE],
     "del": [curses.KEY_DC], "home": [curses.KEY_HOME], "end": [curses.KEY_END],
     "pgup": [curses.KEY_PPAGE], "pgdn": [curses.KEY_NPAGE],
-    "alt+enter": [27, 13],
+    "alt+enter": [27, 13], "f6": [curses.KEY_F6],
 }
 
 

@@ -72,7 +72,11 @@ _VERLAUF = [
     {"id": "n2", "role": "assistant", "content": "Mit Flickzeug: Loch suchen, anrauen, "
      "Kleber, warten, Flicken drauf.",
      "denken": "Er fragt nach unterwegs — also ohne Wasserbad. " * 6,
-     "werkzeuge": [{"name": "read_note", "args": "name=fahrrad"}]}]
+     "werkzeuge": [{"name": "read_note", "args": "name=fahrrad",
+                    "ergebnis": "Flickzeug liegt in der Satteltasche."},
+                   {"name": "web_search", "args": "query=schlauch flicken", "fehler": True,
+                    "ergebnis": "kein netz"}],
+     "dokumente": [{"id": "d1", "titel": "Packliste Radtour"}]}]
 
 
 # Erfundenes Gedächtnis (Claude-Web-Plan Phase 3, 2026-10-07): die echten
@@ -131,6 +135,26 @@ _PROJEKT_GEIGE = {
          "letzte": "2026-09-01T08:00:00+00:00"}]}
 
 
+# Customize (2026-10-07): Kosten, was die KI kann, Wege.
+_KOSTEN = {"heute": 0.12, "monat": 3.12, "calls_heute": 7, "geschaetzt_monat": 0.04,
+           "modelle": {"claude-sonnet-5": 2.9, "qwen-plus": 0.22},
+           "budget": {"status": "ok", "ausgegeben": 3.12, "limit": 20.0, "anteil": 0.156}}
+_WERKZEUGE = {"werkzeuge": [
+    {"name": "read_calendar", "alltag": "kalender lesen", "beschreibung": "Termine eines Tages lesen",
+     "fragt": "nie", "schienen": ["klein", "gross"]},
+    {"name": "add_calendar_entry", "alltag": "termine eintragen",
+     "beschreibung": "Einen Termin in den Kalender schreiben", "fragt": "immer",
+     "schienen": ["klein", "gross"]},
+    {"name": "read_note", "alltag": "notizen lesen", "beschreibung": "Eine Notiz aus dem Gedächtnis lesen",
+     "fragt": "nie", "schienen": ["klein", "gross"]},
+    {"name": "web_search", "alltag": "im internet suchen", "beschreibung": "Im Netz suchen",
+     "fragt": "manchmal", "schienen": ["gross"]},
+    {"name": "run_code", "alltag": "programme abgeschottet ausführen",
+     "beschreibung": "Python oder Shell in einem abgeschotteten Ordner", "fragt": "immer",
+     "schienen": ["gross"]}]}
+_WEGE = {"cloud_enabled": True, "local_enabled": False}
+
+
 def _synth(path):
     """Erfundene Mail-Daten: die echten gehen nie live (Seen-Flag), aber das
     Post-Panel soll im Vergleich auch mit Mails gezeichnet werden."""
@@ -143,6 +167,12 @@ def _synth(path):
         return _EINSTELLUNGEN
     if path == "/api/erlaubnis":
         return _ERLAUBNIS
+    if path == "/api/ai/kosten":
+        return _KOSTEN
+    if path == "/api/ai/werkzeuge":
+        return _WERKZEUGE
+    if path == "/api/ai/backends":
+        return _WEGE
     if path == "/api/gespraeche":
         return _GESPRAECHE
     if path.startswith("/api/gespraeche?archiv"):
@@ -216,8 +246,37 @@ class H(BaseHTTPRequestHandler):
         except (ValueError, OSError):
             pass
 
+    def _denken_strom(self):
+        """POST /api/chat für die Denk-Animation (2026-10-07): ZTUI_DENK_S
+        Sekunden lang Denk-Stücke, ein Werkzeug, dann die Antwort."""
+        import time as _time
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Connection", "close")
+        self.end_headers()
+
+        def ev(obj):
+            self.wfile.write(("data: %s\n\n" % json.dumps(obj)).encode())
+            self.wfile.flush()
+        try:
+            ev({"strom": "s1"})
+            ende = _time.monotonic() + float(os.environ.get("ZTUI_DENK_S", "12"))
+            while _time.monotonic() < ende:
+                ev({"reflect": "ich überlege, wie man unterwegs flickt … "})
+                _time.sleep(0.5)
+            ev({"werkzeug": {"phase": "start", "name": "read_note", "args": {"name": "fahrrad"}}})
+            ev({"werkzeug": {"phase": "fertig", "name": "read_note", "text": "Flickzeug: Satteltasche"}})
+            ev({"token": "Loch suchen, anrauen, Kleber, kurz warten, Flicken drauf."})
+            _time.sleep(0.3)
+            ev({"done": True})
+        except OSError:
+            pass
+
     def do_POST(self):
         self._drain()
+        if self.path == "/api/chat":
+            self._denken_strom()
+            return
         if self.path == "/api/projekte/zuordnen":     # /projekt (Phase 6)
             self._send({"gespraech": "g1", "projekt": "geige", "name": "Geige"})
             return

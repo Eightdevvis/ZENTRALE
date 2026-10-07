@@ -154,5 +154,7 @@ def test_frage_und_knoepfe_werden_umgebrochen_statt_abgeschnitten(rows, cols):
         fehlt_o = [w for w in opt.split() if w not in text]
         assert not fehlt_o, ("knopf %r unvollständig bei %dx%d: %s"
                              % (opt, rows, cols, fehlt_o))
-    # und der Verlauf darf dabei nicht verschwinden (Fuß frisst nur, was er braucht)
-    assert "du: hallo" in text, "verlauf weg bei %dx%d" % (rows, cols)
+    # und der Verlauf darf dabei nicht verschwinden (Fuß frisst nur, was er braucht).
+    # Seit 2026-10-07 (Claude-Web-Ansicht) ohne „du:" — die Nachricht steht
+    # rechts auf eigener Fläche.
+    assert "hallo" in text, "verlauf weg bei %dx%d" % (rows, cols)

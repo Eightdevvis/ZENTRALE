@@ -36,6 +36,16 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/chat_gespraeche.py` | Mixin `GespraechsSteuerung` des Chats: neu, öffnen, umbenennen, archivieren, wiederholen, bearbeiten, Verlauf laden, Poll; `verlauf_aus` (History → Verlaufszeilen) | (in `AI`) |
 | `ansichten/ablage.py` | `Ablageliste`: Überlagerung im Chat-Kasten (`/ablage`), Liste + Lesen eines Dokuments; reine Helfer `listen_zeilen`, `lese_zeilen` | `AI["ablage"]` |
 | `ansichten/chat_ablage.py` | Mixin `AblageSteuerung` des Chats: `/anhang` (Datei lesen, an `/api/anhang`), „▤"-Zeilen, Enter auf das neueste Dokument | `AI["anhaenge"]` |
+| `ansichten/chat_layout.py` | Aufteilung des Chat-Kastens wie Claude Web (Skizze im Kopf): `aufteilen` → Seitenleiste / Symbolspalte / Mitte / rechts, `spalte` (Textspalte mittig ≤ 92), `seite_auto` | — |
+| `ansichten/chat_zeichnen.py` | Mixin `ChatZeichnen`: `draw_ai` (Leiste, Kopf „Titel ▾ … ▤ n", Verlauf, Fuß, Eingabekasten, „+ attach … Modell · Effort"), Klickflächen, Denk-Adern im Verlauf, Auge im leeren Chat | `AI["fokus"]` … |
+| `ansichten/chat_bedienung.py` | Mixin `ChatBedienung`: Fokus (F6), Tab = Gespräche auf/zu, Ziele im Verlauf (auf/zu, copy, retry, Dokument), Strg-Tasten, Maus, Zwischenablage | — |
+| `ansichten/verlauf.py` | Verlauf als Zeilen aus Stücken (text, stil, ziel): Nutzer rechts abgesetzt, „Used memory ›", Denken eingeklappt, copy · retry; `benutzt` für „Used in this session" | — |
+| `ansichten/seitenleiste.py` | `Seitenleiste`: Menü (Search, New, Projects, Files, Customize) mit Pixel-Symbolen, Gespräche nach Today/Yesterday/Datum; zugeklappt eine Symbolspalte | `AI["seite"]`, `AI["seite_menu"]` |
+| `ansichten/rechts.py` | `Rechts`: Dokument neben dem Verlauf (▾ Fassungen, ⤢ groß, × zu) und „Outputs" (Kärtchen + „Used in this session") | `AI["rechts"]`, `AI["gross"]` |
+| `ansichten/einstellungen.py` | `Einstellungen` („Customize"): Skills, Memory, Usage, Capabilities, Permissions, Model | `AI["einstellungen"]` |
+| `ansichten/denkadern.py` | Denk-Animation als reine Funktion `adern_zellen(t, dauer, breite, hoehe, thema, ausklang)` | — |
+| `ansichten/symbole.py` | kleine Pixel-Symbole (3×1 Felder) der Seitenleiste | — |
+| `ansichten/maus.py` | Maske, `deuten`, `treffer`, `rad_treffer`; warum Markieren im Terminal heil bleibt | — |
 | `ansichten/gespraechsliste.py` | `Gespraechsliste`: Überlagerung im Chat-Kasten (Tab/`/liste`); reine Helfer `alter_text`, `filtern`, `listen_zeilen` | `AI["liste"]` |
 | `ansichten/gedaechtnis.py` | `Gedaechtnis`: Überlagerung im Chat-Kasten (`/gedaechtnis`, `/skills`) — Kernakten, Bereiche, Skills; Kernakte im Editor ändern, Skill an/aus; reine Helfer `reiter`, `inhalt_zeilen`, `naechster_status`, `editor_befehl` | `AI["gedaechtnis"]` |
 | `ansichten/projekte.py` | `Projekte`: `/projekt` (Auswahl, zuordnen, anlegen, lösen) und die Übersicht `/projekte` als Überlagerung im Chat-Kasten — Projekte, ein Projekt im Einzelnen (Anweisungen, Wissen, Gespräche), Anweisungen im Editor, Wissen per Pfad; reine Helfer `projekt_name`, `finden`, `wahl`, `liste_zeilen`, `detail_zeilen` | `AI["projekte"]`, `AI["projekt"]` |
@@ -158,8 +168,8 @@ Abschnitt 7). Was für die TUI gilt:
 Claude-Web-Plan Phase 2 ([../ki/gespraeche.md](../ki/gespraeche.md)). Was
 für die TUI gilt:
 
-- **Gesprächsliste** = Überlagerung im Chat-Kasten (nicht Seitenleiste: auf
-  80×24 bliebe zu wenig Verlauf). Öffnen: **Tab bei leerer Eingabe** (mit
+- **Gesprächsliste** = seit dem Claude-Web-Umbau die Seitenleiste (siehe
+  „Chat wie Claude Web"); bis dahin eine Überlagerung im Kasten. Öffnen: **Tab bei leerer Eingabe** (mit
   Text bleibt Tab ein Leerzeichen) oder `/liste`. In der Liste: ↑↓ Bild↑↓
   wählen, Enter öffnen, `n` neu, `r` umbenennen (Feld im Fuß), `a`
   archivieren (im Archiv: zurückholen), `z` Archiv zeigen/zurück, `/` filtert
@@ -315,6 +325,72 @@ die TUI gilt:
   für die Erlaubnis-Seite reserviert). Die deutschen gehen still weiter
   (`chat_befehle.ANDERE_NAMEN`), innen heißen die Befehle wie vorher
   (`chat_befehle.INNEN`). `/project new <name>`, `/project none`.
+
+## Chat wie Claude Web (seit 2026-10-07)
+
+Sasha: „das frontend für unsere ki soll lowk auch einfach claude web grad
+kopieren. natürlich in der tui und ihrem eigenen kantigeren stil … nur dass
+man halt mit maus UND tastatur navigieren könnte." Vorlagen:
+`claude_web_template/*.png` im Haupt-Checkout. Der Kasten bleibt („der kasten
+in der mitte is basically vollbild lass das so"), aufgeteilt wird sein
+Inneres (Skizze: `chat_layout.py`).
+
+- **Seitenleiste links** (`seitenleiste.py`): Search, New, Projects, Files
+  (= Ablage), Customize, darunter die Gespräche nach Today / Yesterday /
+  Datum, ● ungelesen, ▘ (Pixel-Blatt) bei Gesprächen mit Dokument,
+  Projektname davor. **Tab** (leere Eingabe) klappt auf und gibt ihr den
+  Fokus, Tab klappt zu; Esc gibt den Fokus an die Eingabe zurück. Von selbst
+  offen erst ab 127 Spalten (`seite_auto`), sonst eine Spalte Symbole. Die
+  Gespräche selbst (Suche, umbenennen, Archiv) macht weiter
+  `Gespraechsliste` mit `AI["liste"]` — nur nicht mehr als Überlagerung.
+- **Verlauf** (`verlauf.py`): Antworten ohne „ki:", Sashas Nachrichten rechts
+  auf eigener Fläche, Schritte „Used memory ›" (Enter/Klick: Name,
+  Argumente, Ergebnis gekürzt — das Backend speichert seit 07.10. 300
+  Zeichen des Ergebnisses), Denken „▸ thought · n chars" (Strg+D alles,
+  Enter/Klick eins), unter jeder Antwort „copy", unter der letzten auch
+  „retry". **👍/👎 bewusst nicht**: das Backend kennt keine Bewertung, ein
+  Knopf ohne Wirkung wäre gelogen. Kopieren: wl-copy/xclip/xsel, sonst liegt
+  der Text in `/tmp/zentrale-kopie.txt` und die Statuszeile sagt es.
+- **Eingabekasten**: Rahmen (Fokus = Akzentfarbe), Platzhalter „Reply",
+  Anhänge als `[▤ name]` darüber, darunter „+ attach" und rechts Modell ·
+  Effort (Klick oder Strg+P / Strg+T öffnet die vorhandene Auswahl).
+- **Rechts** (`rechts.py`): ein Dokument aus der Ablage (Enter/Klick auf
+  „▤ Titel ›", Kärtchen) steht neben dem Verlauf (ab 96 Spalten Platz rechts
+  der Seite), sonst ersetzt es ihn; `f` groß, `v` oder ▾ Fassung, Esc/× zu.
+  **Outputs** (Strg+O, „▤ n" oben rechts): Kärtchen der Dokumente dieses
+  Gesprächs + „Used in this session" aus den Schritten.
+- **Customize** (`einstellungen.py`, `/customize`, Menü links): Skills
+  (an/aus, Beschreibung, Herkunft, braucht), Memory (Kernakten im Editor wie
+  `/memory`), Usage (`/api/ai/kosten`), Capabilities (`/api/ai/werkzeuge`,
+  gruppiert; Schalter nur für Cloud/lokal), Permissions (zurücknehmen),
+  Model (öffnet `/model`, `/provider`, `/effort`; Weg dreht
+  auto → cloud → local).
+- **Fokus**: Seitenleiste → Verlauf → Eingabe → rechts mit **F6** (wie im
+  Browser zwischen Bereichen; Tab gehört den Gesprächen, Shift+Tab wäre
+  „Tab rückwärts"). Im Verlauf ↑↓ wählt Ziele, Enter löst aus.
+- **Strg-Tasten** im Eingabefeld: O Outputs, P Modell, T Effort, U Anhang,
+  N neues Gespräch (raw-Modus liefert sie als 15/16/20/21/14; Strg+B bleibt
+  frei, das ist tmux).
+- **Maus** (`maus.py`): Klick, Doppelklick (tut nichts, verhindert nur einen
+  doppelten Klick), Rad. Nur an, solange der Chat offen ist
+  (`Chat.maus_pflegen` in `run_ui`); **Shift + Ziehen markiert weiter** in
+  xfce4-terminal und tmux; keine Bewegungsmeldungen; `/mouse` schaltet aus,
+  `ZENTRALE_TUI_MAUS=aus` von Anfang an. Jede Fläche wird beim Zeichnen
+  angemeldet (`klickbar`), Klick und Bild sind also immer dasselbe.
+- **Denk-Adern** (`denkadern.py`, Stil: [pixelstil.md](pixelstil.md)): solange
+  auf Text gewartet wird, wachsen an der Stelle der kommenden Antwort
+  Spiralarme mit eingerollten Windungen aus einem Kern, Reichweite
+  `R_max·(1−e^(−dauer/9 s))`, eine Helligkeitswelle läuft nach außen; mit dem
+  ersten Text ziehen sie sich 0,9 s zurück. Bild höchstens 10×/s, die
+  Schleife tickt dann mit 100 ms statt 33 (`Chat.nur_adern`). Gemessen
+  (120×35, dieser Laptop): Chat offen 5 % CPU (vorher 29 % — das Auge lief
+  oben mit), Denken 9–14 % (vorher 37–51 %); 160×45: 12–19 % (vorher 38–50 %).
+- **Das Auge** steht nur noch im leeren Chat (Begrüßung); über einem
+  Gespräch nahm es 15 Zeilen und kostete die meiste CPU.
+- Headless: Szenarien `ki_web`, `ki_customize`, `ki_denken` (echte Uhr, das
+  Abspiel-Backend denkt `ZTUI_DENK_S` Sekunden) in `tests/tui_schirm/lauf.py`;
+  ohne Bildschirm `tests/test_chat_web.py`, `tests/test_chat_web_teile.py`,
+  `tests/test_denkadern.py`, neue Zustände in `tests/test_fussleiste.py`.
 
 ## Fußleiste (seit 2026-10-07)
 
