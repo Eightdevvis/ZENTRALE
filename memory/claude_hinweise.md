@@ -72,7 +72,8 @@ ständig; die Struktur muss mit dem Wachstum **besser** werden, nicht schlechter
 - `ai.py` ist der Chat-Client für **Ollama**; `core/cloud.py` /
   `core/cloud_openai.py` sind Drop-ins für die Cloud, `ai_backends.pick("chat")`
   wählt (Stand: `cloud`). Tools werden **immer lokal** ausgeführt
-  (`ai._dispatch_tool`), egal wer denkt.
+  (`ki_werkzeuge.ausfuehren`, Liste im Werkzeug-Register
+  `core/werkzeug_register.py`), egal wer denkt.
 - `net.py` wrapt alle HTTP-Calls (außer Audio – `audio.py` loggt selbst,
   weil multipart-Upload Sonderbehandlung braucht) und loggt sie.
 - **Gedächtnis:** Datei-Gedächtnis (`core/gedaechtnis.py`,

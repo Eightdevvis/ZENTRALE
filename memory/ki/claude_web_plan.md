@@ -1,7 +1,7 @@
 # Claude-Web im ZENTRALE-Assistenten — der Plan
 
-Stand 2026-10-07. **Geplant und von Sasha entschieden (Abschnitt 6),
-noch nichts gebaut.** Sasha hat am 06.10. gesagt: erst aufräumen, dann vor dem
+Stand 2026-10-07. **Geplant und von Sasha entschieden (Abschnitt 6).
+Phase 0 ist gebaut (Abschnitt 5), der Rest noch nicht.** Sasha hat am 06.10. gesagt: erst aufräumen, dann vor dem
 Übertragen anhalten und gemeinsam planen. Das ist am 07.10. geschehen.
 
 Grundregel aus [../claude_hinweise.md](../claude_hinweise.md) („Das
@@ -85,12 +85,14 @@ Ebenen stehen vor den Funktionen.
    Inhalt per `read_note`". Abgrenzung: **Profil** = wie die Schiene
    grundsätzlich denkt (klein/gross), **Skill** = Anleitung für eine Aufgabe,
    **Projekt** = Rahmen für ein Thema.
-5. **Werkzeug** — heute liegen Beschreibung (in `profil/klein.py` +
-   `gross.py`), Ausführung (`ki_werkzeuge._verteilen`) und Erlaubnis
-   (`erlaubnis.py`) an drei Stellen. Vorher aufräumen: **ein Register**,
-   ein Eintrag pro Werkzeug mit Schema, Ausführer, Erlaubnis-Regel, welche
-   Schienen es bekommen. Ein neues Werkzeug ist dann *eine* Stelle — dieselbe
-   Idee wie die Anbieter-Tabelle („eine Zeile, kein Umbau").
+5. **Werkzeug** — lag bis 07.10. an drei Stellen (Beschreibung in
+   `profil/klein.py` + `gross.py`, Ausführung in `ki_werkzeuge._verteilen`,
+   Erlaubnis in `erlaubnis.py`). Seit Phase 0: **ein Register**
+   (`core/werkzeug_register.py`), ein Eintrag pro Werkzeug mit Schema,
+   Beschreibung je Schiene, Erlaubnis-Regel + Frage; die Ausführer melden
+   sich aus `ki_werkzeuge` an. Ein neues Werkzeug ist ein Eintrag plus seine
+   Funktion — dieselbe Idee wie die Anbieter-Tabelle („eine Zeile, kein
+   Umbau"). Anleitung: [ki_system.md](ki_system.md), „Das Werkzeug-Register".
 6. **Ausgabe** — die Events sind der Vertrag zwischen Kern und TUI. Neu:
    `ablage` (ein Dokument entstand → TUI zeigt es in einer Liste, öffnet es
    im Pager/Editor), `titel` (Gespräch bekam einen Namen), `gestoppt`.
@@ -135,7 +137,7 @@ Prompt-Bau hängt dessen Anweisungen hinter den Gedächtnis-Kopf.
 
 | Phase | Was | Warum zuerst | Größe |
 |---|---|---|---|
-| **0 Fundament** | ~~TUI-Zerlegung~~ (erledigt 07.10.); **Werkzeug-Register** | Ohne ein Register wächst jedes neue Werkzeug an drei Stellen | mittel |
+| ~~**0 Fundament**~~ | ~~TUI-Zerlegung~~ (erledigt 07.10.); ~~Werkzeug-Register~~ (erledigt 07.10., siehe unten) | Ohne ein Register wächst jedes neue Werkzeug an drei Stellen | mittel |
 | **1 Steuerung** | Stoppen (bis in die Schleife), mehrzeilige Eingabe mit Cursor, Slash-Befehle im Chat (`/neu`, `/modell`, `/effort`), Kabel für die vorhandenen Setter (Route + TUI) | sofort spürbar, kleines Risiko, Setter liegen schon da | klein |
 | **2 Gespräche** | `core/gespraeche.py` (Ordner pro Gespräch, Datei pro Rechner), Gesprächsliste in der TUI, neu/wechseln/umbenennen/archivieren, automatischer Titel, Wiederholen + letzte Nachricht bearbeiten, **Denken mitgespeichert und aufklappbar**, Gespräch „Erinnerungen" | das Fundament für alles Weitere; Verlauf überlebt Neustarts | mittel |
 | **3 Gedächtnis sichtbar** | Kernakten in der TUI ansehen/ändern, **`search_chats` über alle Gespräche** | Sasha orientiert sich nach Thema, nicht nach Datum — die Suche quer durch Gespräche ist dafür die Bedingung | klein |
@@ -147,6 +149,24 @@ Prompt-Bau hängt dessen Anweisungen hinter den Gedächtnis-Kopf.
 
 Jede Phase: eigener Worktree, Tests, Doku hier nachziehen, Leitplanken-Test
 (`tests/test_kern_bauplan.py`) bekommt neue Module eingetragen.
+
+**Phase 0, Werkzeug-Register — erledigt 07.10.2026.** Gebaut:
+- `core/werkzeug_register.py` (Schicht 3): `WERKZEUGE`, ein `Werkzeug`-Eintrag
+  je Werkzeug (Name, `parameter`, `klein`/`gross`-Beschreibung, `klein_name`,
+  `erlaubnis` False/True/f(args), `frage`, `terminal`, `in_der_schleife`).
+  Lookups: `schema(schiene)`, `terminal`, `kanonisch`/`ALIASE`, `eintrag`,
+  `braucht_erlaubnis`, `frage`, `immer_bestaetigen`.
+- Die Ausführer melden sich aus `ki_werkzeuge.py` per `@ausfuehrer("name")` an
+  (kein Import-Kreis: `ki_werkzeuge` schlägt im Register nach).
+- `profil/klein.py`, `gross.py`, `profil.ALIASE`/`kanonisch`, `erlaubnis.py`
+  und `ki_werkzeuge._verteilen` sind Durchreichen; alle alten öffentlichen
+  Namen (`ai.TOOLS`, `ai._dispatch_tool`, `erlaubnis.PERMISSION_REQUIRED_TOOLS`
+  …) bleiben.
+- Beweis: `tests/test_werkzeug_schnappschuss.py` vergleicht die Listen beider
+  Schienen in beiden Dialekten byte-genau und Gate + Frage-Text für alle
+  Werkzeuge mit einem Schnappschuss von VOR dem Umbau;
+  `tests/test_werkzeug_register.py` prüft Waisen in beide Richtungen und dass
+  keine zweite Werkzeugliste mehr existiert.
 
 ## 6. Entscheidungen (Sasha, 07.10.2026)
 

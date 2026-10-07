@@ -13,12 +13,11 @@ jedes seine eigene Schiene — und diese Tests halten drei Dinge fest:
   3. Ein umbenanntes Tool rutscht nicht am Erlaubnis-Gate vorbei. Das wäre der
      stillste denkbare Fehler: die KI schreibt in den Kalender, ohne zu fragen.
 """
-import re
-
 import pytest
 
 import ai
 import profil
+import werkzeug_register
 from profil import gross, klein
 
 
@@ -141,7 +140,7 @@ def test_der_schnitt_haelt():
     # den jemand vergessen hat, sondern der Ersatz fuer den Graph-Block,
     # der frueher UNGECACHT bei jedem Turn mitreiste. Ein Schema im
     # gecachten Praefix kostet ein Zehntel davon.
-    eigen = {t["function"]["name"] for t in gross._GEDAECHTNIS}
+    eigen = {w.name for w in werkzeug_register.auf_schiene("gross") if w.klein is None}
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
                 if t["function"]["name"] not in eigen)
     # 18.08.2026 von 3.000 auf 3.300: edit_calendar_routine kam dazu. Es
@@ -197,7 +196,7 @@ def test_parameter_schemata_laufen_nicht_auseinander():
     # Werkzeuge, die NUR diese Schiene hat, koennen naturgemaess nicht mit
     # klein abgeglichen werden — sie haben dort kein Gegenstueck. Der
     # Vertrag gilt fuer das GETEILTE Set.
-    eigen = {t["function"]["name"] for t in gross._GEDAECHTNIS}
+    eigen = {w.name for w in werkzeug_register.auf_schiene("gross") if w.klein is None}
     for t in gross.TOOLS:
         fn = t["function"]
         if fn["name"] in eigen:
@@ -283,11 +282,11 @@ def test_unbekannte_schiene_faellt_auf_klein_zurueck(monkeypatch):
 # ── Kein Tool rutscht am Kern (oder am Gate) vorbei ────────────────────
 
 def _dispatchbare_namen() -> set:
-    """Die Namen, die _dispatch_tool tatsächlich kennt — aus dem Quelltext
-    gelesen, damit der Test nicht die Tools ausführt."""
-    import inspect
-    quelle = inspect.getsource(ai._dispatch_tool)
-    return set(re.findall(r'name == "([a-z_]+)"', quelle))
+    """Die Namen, für die der Kern tatsächlich einen Ausführer hat — seit
+    2026-10-07 aus dem Werkzeug-Register (vorher aus dem Quelltext der
+    if-Kette in _dispatch_tool gelesen)."""
+    import ki_werkzeuge  # noqa: F401  (meldet die Ausführer an)
+    return {w.name for w in werkzeug_register.WERKZEUGE if w.ausfuehrer}
 
 
 @pytest.mark.parametrize("p", [klein, gross], ids=["klein", "gross"])

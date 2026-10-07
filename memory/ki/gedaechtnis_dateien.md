@@ -296,10 +296,10 @@ danebensitzt. Gegatet ist nur der destruktive Weg — und selbst der legt eine
 `.bak` an, weil Aufräumen die Tätigkeit ist, bei der man am ehesten etwas
 verliert.
 
-Sie stehen in `core/profil/gross.py::_GEDAECHTNIS` und **nicht** in
-`klein.TOOLS`: der lokale Pfad ist gerade nicht testbar, und ein 9B bezahlt
-jedes zusätzliche Schema mit. Sobald lokal wieder läuft, wandern sie hinüber —
-`ai._dispatch_tool` kennt sie ohnehin unter denselben Namen.
+Sie stehen im Werkzeug-Register (`core/werkzeug_register.py`) nur mit
+einer `gross`-Beschreibung, also **nicht** in `klein.TOOLS`: der lokale Pfad ist gerade nicht testbar, und ein 9B bezahlt
+jedes zusätzliche Schema mit. Sobald lokal wieder läuft, bekommen sie dort
+eine `klein`-Beschreibung — ausgeführt werden sie ohnehin schon (`ki_werkzeuge`).
 
 ## Grenzen, die absichtlich drin sind
 

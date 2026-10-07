@@ -32,6 +32,13 @@
 # scripts/bench_*.py, die den Tool-Loop eigenstaendig nachbauen und die
 # deutschen Namen hart matchen, unveraendert weiter.
 
+#
+# Seit 2026-10-07 stehen die Namen im Werkzeug-Register
+# (core/werkzeug_register.py, Feld klein_name); ALIASE und kanonisch() hier
+# sind Durchreichen dorthin.
+
+import werkzeug_register
+
 from . import klein
 from . import gross
 
@@ -41,23 +48,8 @@ PROFILE = {
 }
 
 # Deutsche Alt-Namen → kanonische. Englische bleiben, wie sie sind.
-ALIASE = {
-    "lies_news":   "read_news",
-    "lies_mail":   "read_mail",
-    "web_suche":   "web_search",
-    "hole_url":    "fetch_url",
-    "frage_knopf": "ask_choice",
-}
-
-
-def kanonisch(name: str) -> str:
-    """Einen Tool-Namen auf das Vokabular des Kerns bringen.
-
-    Idempotent und tolerant: ein bereits kanonischer Name kommt unveraendert
-    zurueck, ein unbekannter ebenso (dann faellt er weiter unten als
-    "unbekanntes Tool" auf, nicht hier als KeyError).
-    """
-    return ALIASE.get(name, name)
+ALIASE = werkzeug_register.ALIASE
+kanonisch = werkzeug_register.kanonisch
 
 
 def hol(name: str):

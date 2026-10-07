@@ -92,7 +92,7 @@ WOHER = [
      "core/profil/gross.py  ->  _CAPABILITIES_PROMPT",
      "eigener Text, trifft NUR die Cloud"),
     ("Tool-Auswahl und -Beschreibungen der Cloud",
-     "core/profil/gross.py  ->  _WEG, _NAMEN, _BESCHREIBUNG",
+     "core/werkzeug_register.py  ->  Feld gross= je Werkzeug",
      "Parameter-Schemata bleiben geteilt — die sind Vertrag mit Python"),
     ("Spracheingabe-Hinweis",
      "core/profil/klein.py  ->  _MIC_INPUT_HINT",

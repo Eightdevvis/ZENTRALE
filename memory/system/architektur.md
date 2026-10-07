@@ -191,11 +191,12 @@ graphs, map …) sind **autonom gekapselt**: keine zirkulären Importe, alle
 Abhängigkeiten hierarchisch (Stern-Muster: `ai.py` → Features; `mail.py` →
 `mail_*`; `map/layers` → Sub-Layer). Geteilter Zustand läuft ausschließlich
 über `state.py`. Jeder Baustein dockt über genau **zwei Konventions-Stellen**
-an – es gibt (bewusst) keine zentrale Plugin-Registry:
+an:
 
-1. **KI-Tool:** Tool-Definition in `ai.py` → `TOOLS` eintragen **und** den
-   Aufruf in `_dispatch_tool()` ergänzen (Schreib-Tools zusätzlich in
-   `PERMISSION_REQUIRED_TOOLS`). Damit kann die KI den Baustein nutzen.
+1. **KI-Tool:** ein Eintrag im Werkzeug-Register (`core/werkzeug_register.py`:
+   Schema, Beschreibung je Schiene, Erlaubnis + Frage) und die Funktion in
+   `core/ki_werkzeuge.py` mit `@ausfuehrer("name")` (seit 2026-10-07; Anleitung
+   in [memory/ki/ki_system.md](../ki/ki_system.md), „Das Werkzeug-Register").
 2. **Front:** eine REST-Route im passenden Bereich unter `ui/routen/` (oder
    einem neuen Bereich, eingetragen in `ui/routen/__init__.py`), die 1:1 an die
    Baustein-Funktion delegiert. Routen sind reine Adapter (keine Business-Logik,
@@ -205,9 +206,9 @@ an – es gibt (bewusst) keine zentrale Plugin-Registry:
 Optionaler Bootstrap (Hintergrund-Fetcher wie `news`/`mail`) wird in `main.py`
 abhängig von `lokale_ki_aus()` gestartet. Folge: ein neuer Baustein berührt 2–3 zentrale
 Stellen – sauber genug für „plug-and-play per Konvention", aber keine
-Selbst-Registrierung. Wer echtes Hot-Plug will, müsste `TOOLS`/`_dispatch_tool`
-und das Event-Routing (`brain.py`/`actions.py`, heute `if-elif`) auf eine
-Registry/Dispatch-Tabelle heben.
+Selbst-Registrierung. Die KI-Werkzeuge haben seit 2026-10-07 ihre
+Registry; wer echtes Hot-Plug will, müsste noch das Event-Routing
+(`brain.py`/`actions.py`, heute `if-elif`) auf eine Dispatch-Tabelle heben.
 
 > **`graph.py` vs. `graphs.py`** – leicht zu verwechseln: `graph.py` ist der
 > **Konzept-Graph** des KI-Memorys (eine globale Wissensstruktur, primary

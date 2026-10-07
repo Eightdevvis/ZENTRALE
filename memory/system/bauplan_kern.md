@@ -111,10 +111,11 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `werkzeug_schleife` | 3 | Die eine Tool-Schleife aller Wege |
 | `profil` | 3 | Prompt-Schienen klein und gross |
 | `consolidation` | 3 | Nach dem Zug: Transkript (und Graph-Extraktion, wenn an) |
-| `erlaubnis` | 3 | Das Erlaubnis-Gate: welche Werkzeuge bestätigt werden müssen, und die Frage dazu |
+| `erlaubnis` | 3 | Das Erlaubnis-Gate: die Tür, durch die die Schleife fragt (Regeln und Fragen stehen im Werkzeug-Register) |
 | `ki_antwort` | 3 | Fertige Antwort: Bild-Marker ziehen, Zug zum Merken vormerken |
 | `ki_prompt` | 3 | Prompt-Bausteine für jeden Weg: Jetzt-Block, Imprint, Alarme, Denk-Heuristik, Schalter |
 | `ki_werkzeuge` | 3 | Was ein KI-Werkzeug tut: ausfuehren(name, args) → Kalender, Notizen, Netz, Mail, Messreihen |
+| `werkzeug_register` | 3 | Ein Eintrag pro KI-Werkzeug: Schema, Beschreibung je Schiene, Erlaubnis-Regel + Frage; die Ausführer melden sich aus `ki_werkzeuge` an |
 | `kern` | 3 | Der eine Einstieg: kern.chat(verlauf) wählt den Weg (lokal/Anthropic/OpenAI) und fährt ihn |
 | `main` | 4 | Event-Loop |
 | `brain` | 4 | Input → neue Events |

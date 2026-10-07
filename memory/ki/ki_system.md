@@ -9,7 +9,7 @@ adaptives Denken, Prompt-Cache statisch vorn) oder `core/cloud_openai.py`
 (zweiter Dialekt für qwen/openai/mistral); lokal = Ollama `qwen3.5:9b`
 (`think=false`, Prompt-Schiene `profil/klein`, Cloud nimmt `profil/gross`).
 **Tools laufen immer lokal**, nur die Entscheidung wandert. Schreib-Tools
-gehen durchs Erlaubnis-Gate (`PERMISSION_REQUIRED_TOOLS`, nicht
+gehen durchs Erlaubnis-Gate (Regel im Werkzeug-Register, nicht
 modellgetrieben). **Das Gedächtnis ist das Datei-Gedächtnis**
 (`gedaechtnis_dateien.md`); der Konzept-Graph ist seit 2026-08-18
 abgeschaltet (`ZENTRALE_GRAPH_KONTEXT`/`_EXTRAKTION` holen ihn zurück), sein
@@ -325,13 +325,37 @@ und nimmt beide Schreibweisen an (siehe „Zwei Schienen" weiter unten).
 | `antwort`     | nur `klein`  | Finale Antwort über den Tool-Kanal (Framing-Effekt, 9B-Krücke) |
 
 Gegen das Erlaubnis-Gate wird **nie** direkt geprüft, sondern über
-`ai.braucht_erlaubnis()` — die normalisiert erst. Ein Schreib-Tool, das unter
+`erlaubnis.braucht_erlaubnis()` — die normalisiert erst. Ein Schreib-Tool, das unter
 seinem Alias am Gate vorbeirutscht, würde ungefragt in den Kalender schreiben,
 und der Fehler wäre völlig lautlos.
 
 Tool-Calls werden streng ans Dashboard-Terminal geloggt
 (`AI → TOOL read_file(...)` / `AI ← TOOL read_file → ok`). Sichtbar
 machen ob die KI ein Tool wirklich gerufen hat oder es nur behauptet.
+
+### Das Werkzeug-Register — `core/werkzeug_register.py` (seit 2026-10-07)
+
+Ein Eintrag pro Werkzeug: kanonischer Name, Parameter-Schema (für beide
+Schienen gleich), Beschreibung je Schiene (`klein`/`gross`, `None` = dort
+nicht angeboten), alter `klein_name`, Erlaubnis-Regel (`False`/`True`/
+`f(args)`) mit Frage-Text, `terminal`. Die Reihenfolge der Einträge ist die
+Reihenfolge im Prompt. `profil/klein.py`, `profil/gross.py` (`TOOLS`,
+`TERMINAL`), `profil.ALIASE`/`kanonisch`, `erlaubnis` und
+`ki_werkzeuge._verteilen` holen sich alles von dort. Die Ausführer melden
+sich aus `ki_werkzeuge.py` mit `@ausfuehrer("name")` an — so herum, weil
+`ki_werkzeuge` im Register nachschlägt und ein Import in die andere Richtung
+ein Kreis wäre.
+
+**Ein neues Werkzeug anlegen:**
+1. Eintrag in `WERKZEUGE` in `core/werkzeug_register.py`, **hinten** an
+   (Umsortieren bricht den Anthropic-Cache). Neue Werkzeuge nur mit
+   `gross=` — `klein=None`, das qwen bekommt nur Gemessenes.
+2. Schreibt, löscht, geht ins Netz oder kostet Geld → `erlaubnis=True` (oder
+   eine Funktion der Argumente) **und** eine eigene `frage=`.
+3. Die Funktion in `core/ki_werkzeuge.py` mit `@ausfuehrer("name")`.
+4. Schnappschuss neu ziehen (`venv/bin/python tests/test_werkzeug_schnappschuss.py --neu`)
+   und den Diff ansehen: nur das neue Werkzeug darf dazukommen.
+   `tests/test_werkzeug_register.py` meldet Waisen in beide Richtungen.
 
 ### Visuelle Stimme – Bild-Marker `[[bild: name]]`
 
@@ -438,7 +462,7 @@ Das Dashboard kann die Konsolen-Eingabe gegen **2–4 Knöpfe** tauschen
 geteilter Mechanismus (blockierender `state.wait_permission`):
 
 **(A) Auto-Gate für sensible Tools** — bestätigungspflichtige Tools
-(`PERMISSION_REQUIRED_TOOLS` in `core/ai.py`: die Kalender-Schreiber
+(Feld `erlaubnis` im Werkzeug-Register, z. B. die Kalender-Schreiber
 `add_calendar_entry`, `add_calendar_routine`, `edit_calendar_routine`,
 `add_calendar_pause`, `delete_calendar_entry` **plus** die Internet-Pipe `web_suche`, `hole_url`) fängt das Backend **vor der
 Ausführung** ab und zeigt **JA / NEIN**. Nur bei „ja" läuft das Tool, bei
@@ -464,7 +488,7 @@ Rückfrage-Werkzeug, das die KI gezielt einsetzt.
 **Mechanik – blockierend, nahtlos (ein Zug):**
 
 1. **Gate (A):** Im Tool-Loop (`chat_stream`) greift VOR `active_exec` der
-   Check `fn_name in PERMISSION_REQUIRED_TOOLS`; `_permission_question(name,
+   Check `erlaubnis.braucht_erlaubnis(name, args)`; `erlaubnis.frage(name,
    args)` baut die Frage („Soll ich »Zahnarzt« am … eintragen?"), Optionen =
    Default Ja/Nein. **`frage_knopf` (B):** eigener Branch baut Frage + Optionen
    aus den Call-Args (sanitisiert: ≥2, max 4). Beide rufen
@@ -489,8 +513,7 @@ gibt den bei `request_permission` gesetzten `timeout_default` zurück: beim Gate
 `frage_knopf` ein neutrales `(keine Antwort)`. Log: `AI → ERLAUBNIS?`/`FRAGE …`
 bzw. `AI ← ERLAUBNIS:`/`WAHL: …`. Frontend-Details (perm-bar, N-Knopf-Nav):
 [memory/system/dashboard.md](../system/dashboard.md). Tutor-Modus: beides aus (fremdes Tool-Set). Neues
-Tool gaten = Name in `PERMISSION_REQUIRED_TOOLS` + ggf. Vorlage in
-`_permission_question`.
+Tool gaten = `erlaubnis=` + `frage=` in seinem Eintrag im Werkzeug-Register.
 
 `save_memory` ist mit dem Legacy-Pfad rausgeflogen – der Graph-Extraktor
 läuft eh nach jedem Turn automatisch. Kalender-Tools (`read_calendar`,
@@ -766,7 +789,11 @@ jedes Modell für sich:
 |---|---|
 | `profil/klein.py` | qwen3.5:9b und Verwandte. Wörtlich aus `ai.py` umgezogen, unverändert. |
 | `profil/gross.py` | Frontier-Modelle. Der zusammengestrichene Prompt. |
-| `profil/__init__.py` | Registry, Auswahl, Alias-Tabelle |
+| `profil/__init__.py` | Registry, Auswahl, Durchreiche der Alias-Tabelle |
+
+Die Werkzeug-Liste jeder Schiene kommt seit 2026-10-07 aus dem
+Werkzeug-Register (siehe „Das Werkzeug-Register" oben); die Schiene sagt nur
+noch `werkzeug_register.schema(NAME)`.
 
 * **Auswahl:** lokal → `klein`, cloud → `gross`. Übersteuerbar per
   `chat_profil` in `data/ai_config.json` bzw. `ZENTRALE_CHAT_PROFIL`.

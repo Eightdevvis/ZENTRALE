@@ -31,9 +31,11 @@ Richtung — von oben (wer einen Chat startet) nach unten (was er dafür braucht
      └── cloud_openai  Weg „OpenAI-kompatibel"
            │  alle drei benutzen:
            ├── werkzeug_schleife  die eine Tool-Schleife
-           │     ├── erlaubnis    welche Tools bestätigt werden müssen + die Frage dazu
+           │     ├── erlaubnis    fragt das Register: bestätigen? und die Frage dazu
            │     └── ki_antwort   Bild-Marker aus der Antwort ziehen, Zug zum Merken geben
            ├── ki_werkzeuge       was ein Tool TUT (Kalender, Notizen, Netz, Mail …)
+           │     └── werkzeug_register  ein Eintrag pro Werkzeug: Schema, Schienen,
+           │                            Erlaubnis; profil + erlaubnis lesen auch hier
            ├── ki_prompt          Prompt-Bausteine: Jetzt-Block, Imprint, Alarme, Denk-Heuristik
            └── ai_backends        Einstellungen: wer darf denken, welches Modell, wie tief
    ─────────────── darunter: Dienste und Fundament ───────────────
