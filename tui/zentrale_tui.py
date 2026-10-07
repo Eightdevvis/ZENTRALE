@@ -758,14 +758,6 @@ def run_ui(stdscr, store):
     LAUF = {"an": lauf_lesen(), "laeuft": False}
     z.LAUF = LAUF            # draw_stdout (ansichten/technik.py) liest den Wunsch
 
-    # ── Graph-Reminder-Nag ──────────────────────────────────────────────
-    # Poppt EINMAL pro Sitzung ein „bitte eintragen"-Kästchen, wenn ein Graph
-    # mit Tages-Reminder heute noch nicht geloggt ist (store.reminders ←
-    # /api/graphs/reminders). Eine Taste klickt es weg → bis Sitzungsende Ruhe
-    # für die gezeigten Graphen (nag_dismissed); neu fällige nagen weiter.
-    nag_active = False       # Kästchen steht gerade offen?
-    nag_items = []           # was es listet (ids für die Dismiss-Markierung)
-    nag_dismissed = set()    # in dieser Sitzung weggeklickte graph-ids
 
 
     # ── Elektronik (Mitte, aus dem Rad) — Sasha 03.10.2026: neuer Bereich,
@@ -867,10 +859,8 @@ def run_ui(stdscr, store):
     K, draw_calendar = kalender.K, kalender.draw_calendar
     graphen = ansichten.graphen.Graphen(z)
     G, draw_graph_tool = graphen.G, graphen.draw_graph_tool
-    draw_overlay, g_load = graphen.draw_overlay, graphen.g_load
     fokus = ansichten.fokus.Fokus(z)
     L, draw_list_tool = fokus.L, fokus.draw_list_tool
-    proj_render = fokus.proj_render
     notizen = ansichten.notizen.Notizen(z)
     NOTE, draw_note_tool = notizen.NOTE, notizen.draw_note_tool
     klavier = ansichten.klavier.Klavier(z)
@@ -883,6 +873,9 @@ def run_ui(stdscr, store):
     draw_stdout, draw_tech = technik.draw_stdout, technik.draw_tech
     draw_telemetrie = technik.draw_telemetrie
     startseite = ansichten.startseite.Startseite(z, RAD, META, TRAD, technik)
+    dashboard = ansichten.dashboard.Dashboard(z, graphen, fokus)
+    # Graph-Reminder („bitte eintragen", einmal pro Sitzung): ansichten/erinnerung.py
+    erinnerung = ansichten.erinnerung.Erinnerung(z, graphen)
     draw_rad = startseite.draw_rad
     # Hot Reload (siehe RELOAD): Stand der eigenen Quellen beim Start merken.
     code_alt = code_stand(code_dateien())
@@ -926,14 +919,8 @@ def run_ui(stdscr, store):
                        else (LAUF_TICK_MS if LAUF["laeuft"] else 250))
         ch = stdscr.getch()
 
-        if nag_active:
-            if ch != -1:                       # jede Taste klickt den Reminder weg (Sitzung)
-                for r in nag_items:
-                    nag_dismissed.add(r.get("id"))
-                nag_active = False
-                if ch in (ord("g"), ord("G")):  # g = gleich ins Graph-Werkzeug
-                    G["active"] = True; G["view"] = "list"; G["msg"] = ""
-                    G["gscroll"] = 0; g_load()
+        if erinnerung.nag_active:              # Reminder-Kästchen offen: jede Taste klickt weg
+            erinnerung.taste(ch)
         elif bz.help_latched:
             if ch != -1:                       # jede Taste schließt die Hilfe wieder
                 bz.help_latched = False
@@ -1127,12 +1114,9 @@ def run_ui(stdscr, store):
 
         # Graph-Reminder: ist heute was fällig (und noch nicht weggeklickt), das
         # Nag-Kästchen aufmachen — aber nicht mitten in Tipperei/Overlay/Dialog.
-        if not nag_active and not in_text_entry() and not bz.cmd_mode and not bz.help_latched:
-            due = [r for r in store.reminders_snapshot()
-                   if isinstance(r, dict) and r.get("id") not in nag_dismissed]
-            if due:
-                nag_active = True
-                nag_items = due
+        if (not erinnerung.nag_active and not in_text_entry() and not bz.cmd_mode
+                and not bz.help_latched):
+            erinnerung.pruefen(store)
 
         H, W = stdscr.getmaxyx()
         stdscr.erase()
@@ -1282,87 +1266,8 @@ def run_ui(stdscr, store):
         LAUF["laeuft"] = laeuft_jetzt
 
         if DASH["an"]:
-            # ── RECHTS: lifestyle / outbound ──────────────────────────────────
-            # lifestyle = ÜBERLAGERUNG aller Graphen in EINEM Gitter. X = Datum
-            # (Zeitstrahl), Y bewusst MEHRDEUTIG — jeder Graph nutzt seine eigene
-            # Achse + Darstellung, alles übereinandergelegt zum Vergleich:
-            #   period → zusammenhängende Bande (Zellen-Hintergrund) über die Spanne
-            #   time   → Symbol auf der 24h-Skala (Zeitpunkt, keine Linie); je
-            #            Graph EIN eigenes aus TIME_SYMBOLS (★ als Default/erstes)
-            #   scale  → wachsende Kreise ◦○◉●⬤ auf eigener Zeile (Größe = 1–5)
-            #   number → Punkt auf der eigenen min/max-Spanne (sichtbare Werte)
-            # Eigener Marker + Farbe je Graph (+ Legende). Quelle:
-            # store.graphs_snapshot (langsames Hintergrund-Polling).
-            if gs_cache:
-                # bewusst kompakt: höchstens ~11 Zeilen, Rest geht an outbound.
-                life_h = max(7, min(11, body_h - 4))
-            else:
-                life_h = 4
-            out_h = body_h - life_h
-            # PROJECTS schiebt sich zwischen lifestyle und outbound — aber nur wenn
-            # es überhaupt geflaggte Projekte gibt UND outbound danach mind. 5 Zeilen
-            # behält (sonst lieber ganz weglassen, Tripwire hat Vorrang). Höhe ist
-            # VARIABEL (verschachtelt): ein Knoten ohne Unterprojekte braucht 2 Zeilen
-            # (Titel+Leiste), einer MIT Unterprojekten einen Rahmen (oben+unten) um
-            # seine rekursiv gemessenen Kinder.
-            def proj_measure(node, w):
-                kids = node.get("children") or []
-                if not kids:
-                    return 2
-                return 2 + sum(proj_measure(c, w - 2) for c in kids)
-            proj_h = 0
-            if proj_cache and out_h >= 9:
-                need = 2 + sum(proj_measure(p, rightw - 4) for p in proj_cache
-                               if isinstance(p, dict))
-                proj_h = min(need, out_h - 5)
-            out_h -= proj_h
-            draw_box(top, rx, life_h, rightw, "lifestyle")
-            # Inhalt der lifestyle-Box: kompakte Überlagerung aller Graphen
-            # (geteilte Routine, auch groß im Graph-Werkzeug — siehe draw_overlay).
-            draw_overlay(top, rx, life_h, rightw, gs_cache, gv_cache, labeled=False,
-                         cyc=cyc_cache)
-
-            # ── PROJECTS (zwischen lifestyle und outbound) ────────────────────
-            # VERSCHACHTELT (Quelle: store.projects_snapshot ← /api/projects, Baum).
-            # Knoten OHNE Unterprojekte: Titel + Erfüllungsleiste (2 Zeilen). Knoten
-            # MIT Unterprojekten: dünner Rahmen (Titel im oberen Rand) um die rekursiv
-            # gezeichneten Kinder, KEINE eigene Leiste. Reine Anzeige; markiert wird im
-            # Listen-Werkzeug ('p' auf Liste bzw. Eintrag). Bei Platzmangel wird
-            # einfach ab dem Punkt aufgehört (kein Überlauf, kein Crash).
-            if proj_h:
-                draw_box(top + life_h, rx, proj_h, rightw, "focus")
-                y_max = top + life_h + proj_h - 2          # letzte innere Zeile
-                x0, w0 = rx + 2, max(4, rightw - 4)
-
-                # Dieselbe Routine wie die Projektansicht (Mitte) → BYTE-GLEICHE
-                # Darstellung. Ohne Cursor/Fokus-Marke; proj_cache ist ohnehin nur
-                # der eine fokussierte Knoten (oder leer → Box wird gar nicht erst
-                # gezeichnet, da proj_h dann 0 ist).
-                y, rendered = top + life_h + 1, 0
-                for p in proj_cache:
-                    if y > y_max or not isinstance(p, dict):
-                        break
-                    y = proj_render(p, x0, y, w0, y_max)
-                    rendered += 1
-                if rendered < len(proj_cache):         # Rest passt nicht → ehrlich anzeigen
-                    safe_addstr(top + life_h + proj_h - 1, rx + rightw - 6,
-                                "+%d" % (len(proj_cache) - rendered), C["faint"])
-
-            oy = top + life_h + proj_h
-            draw_box(oy, rx, out_h, rightw, "outbound", C["warn"])
-            if nets:
-                inner = out_h - 2
-                for i, e in enumerate(nets[-inner:]):
-                    if not isinstance(e, dict):
-                        continue
-                    yy = oy + 1 + i
-                    t = (e.get("time") or "")[:8]
-                    safe_addstr(yy, rx + 2, t, C["faint"])
-                    px = rx + 2 + len(t) + 1
-                    avail = (rx + rightw - 1) - px
-                    addclip(yy, px, e.get("text") or "", avail, C["warn"])
-            else:
-                safe_addstr(oy + 1, rx + 2, "// offline ✓", C["acc"] | curses.A_DIM)
+            dashboard.zeichne_rechts(top, rx, body_h, rightw, gs_cache, gv_cache, cyc_cache,
+                                     proj_cache, nets)
 
         # ── Befehls-Overlay (klappt über den Body nach oben auf) ──────────
         if bz.cmd_mode or bz.help_latched:
@@ -1395,22 +1300,7 @@ def run_ui(stdscr, store):
         addclip(footer_row, 0, fuss, W - 1, C["faint"])
 
         # ── Graph-Reminder-Nag (zuletzt → liegt über allem) ───────────────
-        if nag_active and nag_items:
-            lines = ["heute noch nicht geloggt:"]
-            for r in nag_items:
-                at = r.get("remind_at") or ""
-                lines.append("  • " + str(r.get("name") or r.get("id") or "")
-                             + (("  @" + at) if at else ""))
-            lines.append("")
-            lines.append("g = eintragen · sonst wegklicken")
-            nw = min(W - 4, max(26, max(len(s) for s in lines) + 4))
-            nh = len(lines) + 2
-            nx = max(0, (W - nw) // 2)
-            ny = max(0, (H - nh) // 2)
-            draw_box(ny, nx, nh, nw, "bitte eintragen", C["warn"])
-            for i, s in enumerate(lines):
-                addclip(ny + 1 + i, nx + 2, s, nw - 4,
-                        C["bright"] if i == 0 else C["faint"])
+        erinnerung.zeichnen(H, W)
 
         stdscr.refresh()
 
