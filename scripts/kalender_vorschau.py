@@ -3,8 +3,8 @@
 
 Warum: die Ansichten sind noch nicht in die TUI eingehängt — Sasha soll sie
 vorher sehen und entscheiden können. Gezeichnet wird mit denselben reinen
-Funktionen, die die TUI später ruft (tui/kalender_ansichten.py), und den
-Beispiel-Terminen aus dem Entwurf (tui/kalender_beispiel.py).
+Funktionen, die die TUI später ruft (tui/ansichten/kalender_ansichten.py), und den
+Beispiel-Terminen aus dem Entwurf (tui/ansichten/kalender_beispiel.py).
 
     scripts/kalender_vorschau.py                    # alle drei, 136×32, farbig
     scripts/kalender_vorschau.py --breite 70        # schmaler Mittelkasten
@@ -20,8 +20,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tui import kalender_ansichten as ka  # noqa: E402
-from tui import kalender_beispiel as kb  # noqa: E402
+from tui.ansichten import kalender_ansichten as ka  # noqa: E402
+from tui.ansichten import kalender_beispiel as kb  # noqa: E402
 
 # Farbrolle → ANSI (256 Farben, Nacht-Theme der TUI angenähert).
 ANSI = {"acc": 108, "warn": 226, "net": 51, "graph": 213, "span": 216,
