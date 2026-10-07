@@ -30,6 +30,12 @@
 # ohne lokale KI (ZENTRALE_LOKALE_KI=aus, ai_backends.lokale_ki_aus()) — es
 # spricht nie ein Ollama an, eine Cloud-KI darf es aber nutzen.
 #
+# Aufbau (seit 06.10.2026): diese Datei ist Einstieg, Daten-Poller (Store),
+# Hot Reload, Lebenslauf und die Hauptschleife (run_ui → taste_verteilen /
+# bild_zeichnen). Jede Ansicht — Chat, Kalender, Post, Karte, Klavier … — ist
+# eine Klasse in tui/ansichten/ und bekommt einen Kontext statt Closure-
+# Variablen. Wohin etwas Neues gehört: memory/system/tui_bauplan.md.
+#
 # Start: scripts/start_tui.sh bzw. der Symlink `zentrale-tui` fährt das
 # Backend (ohne lokale KI) hoch und startet dann diese TUI im Vordergrund.
 # Standalone gegen ein laufendes Backend:  venv/bin/python tui/zentrale_tui.py
@@ -37,24 +43,16 @@
 # ════════════════════════════════════════════════════════════════════════
 
 import os
-import re
 import sys
 import atexit
 import json
 import time
 import threading
 import types
-import queue
-from datetime import date, timedelta
 import subprocess
 import urllib.request
 import urllib.error
 import urllib.parse
-
-try:                                    # Pixel-Baustein (tui/pixel.py)
-    from tui import pixel
-except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
-    import pixel
 
 try:                                    # die Ansichten (tui/ansichten/, memory/system/tui_bauplan.md)
     from tui import ansichten
