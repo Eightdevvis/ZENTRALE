@@ -64,6 +64,9 @@ _DATEN_TMP = tempfile.mkdtemp(prefix="zentrale_daten_test_")
 os.environ.setdefault("ZENTRALE_TRANSKRIPT_DIR", os.path.join(_DATEN_TMP, "ai_transcripts"))
 os.environ.setdefault("ZENTRALE_GEDAECHTNIS_DIR", os.path.join(_DATEN_TMP, "gedaechtnis"))
 atexit.register(lambda: shutil.rmtree(_DATEN_TMP, ignore_errors=True))
+# Die Sandbox-Arbeitsordner (core/sandbox.py) liegen im Betrieb unter
+# ~/.cache/zentrale/sandbox — Testläufe legen ihre in den Wegwerf-Ordner.
+os.environ.setdefault("ZENTRALE_SANDBOX_DIR", os.path.join(_DATEN_TMP, "sandbox"))
 
 # 4c. KI-Einstellungen und Keys: nie die echten.
 #

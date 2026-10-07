@@ -444,3 +444,12 @@ def test_ki_einstellungen_und_keys_sind_nicht_die_echten():
     gesetzt = [p["key_env"] for p in providers.PROVIDERS.values()
                if os.environ.get(p["key_env"])]
     assert gesetzt == [], gesetzt
+
+
+def test_sandbox_arbeitsordner_liegt_im_test_nicht_im_echten_cache():
+    """Code-Läufe aus Tests legen ihre Arbeitsordner nie in Sashas echten
+    ~/.cache/zentrale/sandbox und nie ins Repo (2026-10-07, Phase 7)."""
+    import sandbox
+    basis = os.path.realpath(sandbox.basis_ordner())
+    assert not basis.startswith(os.path.realpath(os.path.expanduser("~/.cache"))), basis
+    assert not basis.startswith(os.path.realpath(ROOT)), basis

@@ -323,6 +323,7 @@ und nimmt beide Schreibweisen an (siehe „Zwei Schienen" weiter unten).
 | `read_mail`   | `lies_mail`  | Stand der Mail-Triage (s. `memory/werkzeuge/mail_system.md`) |
 | `ask_choice`  | `frage_knopf`| Sasha eine Frage mit Knöpfen stellen (s. unten) |
 | `antwort`     | nur `klein`  | Finale Antwort über den Tool-Kanal (Framing-Effekt, 9B-Krücke) |
+| `run_code`    | nur `gross`  | Python/Shell abgeschottet ausführen, jeder Lauf gegatet (s. „Sandbox") |
 
 Gegen das Erlaubnis-Gate wird **nie** direkt geprüft, sondern über
 `erlaubnis.braucht_erlaubnis()` — die normalisiert erst. Ein Schreib-Tool, das unter
@@ -356,6 +357,53 @@ ein Kreis wäre.
 4. Schnappschuss neu ziehen (`venv/bin/python tests/test_werkzeug_schnappschuss.py --neu`)
    und den Diff ansehen: nur das neue Werkzeug darf dazukommen.
    `tests/test_werkzeug_register.py` meldet Waisen in beide Richtungen.
+
+### Sandbox — `run_code` und `core/sandbox.py` (seit 2026-10-07)
+
+Grundlage dafür, dass der Assistent später „wie ein Coder" arbeitet (Phase 7,
+[claude_web_plan.md](claude_web_plan.md)). Das Werkzeug `run_code` (nur
+`gross`, Parameter `code`, `sprache` python|shell, `zeitlimit` ≤ 120 s) ist
+**immer** gegatet; die Frage zeigt Sprache und die ersten vier Zeilen.
+Ausgeführt wird über `sandbox.ausfuehren(code, sprache, zeitlimit_s, dateien,
+lauf_id)` mit **bubblewrap** (`/usr/bin/bwrap`, unprivilegiert).
+
+**Abgeschottet:**
+- Dateisystem: nur `/usr` (+ `/bin` `/lib` … als Verweise) nur-lesend, eigenes
+  `/proc` `/dev`, `/tmp` im Speicher (64 MB, wo bwrap `--size` kann), die
+  Wurzel nur-lesend, `/etc/localtime` (Zeitzone). Beschreibbar ist **nur**
+  `/arbeit` = der Arbeitsordner des Laufs. **Nicht sichtbar:** `/home` (Repo,
+  `data/`, `~/.ssh`, Keys), `/etc`, `/var`, `/run`, `/root`.
+- Netz: `--unshare-all` → nur ein eigenes, totes loopback.
+- Umgebung: leer bis auf `PATH`, `HOME=/arbeit`, `LANG` — keine API-Keys.
+- Prozesse: eigener PID-Namensraum, `--die-with-parent`, `--new-session`
+  (kein Terminal-Einschleusen), keine weiteren Benutzer-Namensräume.
+- Grenzen: Zeitlimit (Standard 30 s, max 120; danach SIGKILL an die ganze
+  Gruppe, der PID-Namensraum nimmt alles mit), 512 MB Adressraum, 64 Prozesse
+  (in der Sandbox gesetzt — vor bwrap ließe RLIMIT_NPROC schon die
+  Namensräume scheitern), 50 MB je Datei, nice 10, Ausgabe je Strom 20.000
+  Zeichen (Kopf + Schwanz, beim Lesen gekappt).
+- **Nie ohne Sandbox:** fehlt bwrap oder startet es nicht (bwrap meldet kein
+  `child-pid` über `--json-status-fd`), kommt `rc=None` + Klartext-Fehler;
+  das Programm läuft dann gar nicht.
+
+**Nicht abgeschottet / bewusst offen:**
+- CPU-Last bis zum Zeitlimit (nur nice), und `/arbeit` hat keine
+  Gesamtgröße (nur je Datei 50 MB).
+- Was in `/usr` liegt, ist lesbar und ausführbar — also auch System-Pakete
+  unter `/usr/lib/python3/dist-packages` (hier z. B. PIL, bs4, lxml, yaml;
+  **kein** numpy/pandas). Dem Modell gesagt wird „nur Standardbibliothek".
+  Die venv des Projekts liegt im Repo und ist NICHT drin.
+- Der Stopp-Knopf im Chat unterbricht einen laufenden Code-Lauf nicht; der
+  läuft bis zum Ende oder Zeitlimit (≤ 120 s).
+
+**Arbeitsordner:** `~/.cache/zentrale/sandbox/<lauf-id>/` (Einstellung
+`sandbox_dir`, Env `ZENTRALE_SANDBOX_DIR`; Tests → tmp). Bewusst NICHT
+`data/sandbox/`: `zentrale-sync` spiegelt alles Ungetrackte unter dem Repo
+(auch `data/`), additiv — KI-Erzeugnisse wanderten sonst auf den anderen
+Rechner und kämen nach dem Aufräumen zurück. Jeder `run_code`-Lauf bekommt
+einen frischen Ordner; Ordner älter als 7 Tage löscht `aufraeumen()` vor
+jedem Lauf. Neue Dateien meldet das Ergebnis mit Name und Größe (Verweise
+werden nicht verfolgt). Das Modell sieht nie den echten Pfad, nur `/arbeit`.
 
 ### Visuelle Stimme – Bild-Marker `[[bild: name]]`
 

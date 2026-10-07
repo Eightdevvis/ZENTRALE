@@ -140,9 +140,13 @@ def test_der_schnitt_haelt():
     # den jemand vergessen hat, sondern der Ersatz fuer den Graph-Block,
     # der frueher UNGECACHT bei jedem Turn mitreiste. Ein Schema im
     # gecachten Praefix kostet ein Zehntel davon.
-    eigen = {w.name for w in werkzeug_register.auf_schiene("gross") if w.klein is None}
+    # 07.10.2026: run_code (Sandbox, Phase 7) ist kein Gedaechtnis-Werkzeug
+    # und hat seinen eigenen Deckel unten — sonst frisst jedes neue
+    # gross-Werkzeug das Budget der Gedaechtnis-Texte.
+    eigen = {w.name for w in werkzeug_register.auf_schiene("gross")
+             if w.klein is None and w.name != "run_code"}
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
-                if t["function"]["name"] not in eigen)
+                if t["function"]["name"] not in eigen | {"run_code"})
     # 18.08.2026 von 3.000 auf 3.300: edit_calendar_routine kam dazu. Es
     # kostet ~250 Zeichen und behebt eine Luecke, die sie nicht ueberspielen
     # konnte — Routinen liessen sich nur ANLEGEN, also stand die verschobene
@@ -170,6 +174,9 @@ def test_der_schnitt_haelt():
     # die Pflicht zu sagen WO es steht. Hundert Zeichen im gecachten Praefix
     # gegen einen Katalog, den hinterher niemand mehr lesen kann.
     assert besch_eigen < 3000
+    besch_code = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                     if t["function"]["name"] == "run_code")
+    assert 0 < besch_code < 500
 
 
 def test_praefix_bleibt_ueber_der_cache_mindestgroesse():

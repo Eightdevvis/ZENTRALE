@@ -207,6 +207,21 @@ def _frage_seite(args: dict) -> str:
     return f'Soll ich die Seite {u} aus dem Internet laden?' if u else "Soll ich eine Webseite laden?"
 
 
+def _frage_code(args: dict) -> str:
+    """Sasha sieht die Sprache und den Anfang des Programms. Die TUI zeigt
+    die Frage einzeilig, deshalb stehen die Zeilen mit ⏎ hintereinander."""
+    sprache = "Shell" if args.get("sprache") == "shell" else "Python"
+    zeilen = [z.rstrip() for z in str(args.get("code") or "").splitlines()
+              if z.strip()]
+    anfang = " ⏎ ".join(z.strip()[:80] for z in zeilen[:4])
+    if len(anfang) > 300:
+        anfang = anfang[:299] + "…"
+    mehr = f" (+{len(zeilen) - 4} Zeilen)" if len(zeilen) > 4 else ""
+    return (f"Soll ich dieses {sprache}-Programm abgeschottet ausführen "
+            f"(ohne Internet, ohne Zugriff auf deine Dateien)? "
+            f"„{anfang}“{mehr}")
+
+
 # ── Die Werkzeuge ──────────────────────────────────────────────────────
 #
 # Reihenfolge = Reihenfolge im Prompt. Nicht umsortieren: das bricht den
@@ -970,6 +985,37 @@ WERKZEUGE = [
                            "description": "YYYY-MM-DD, sonst heute."},
             },
             "required": ["series", "value"],
+        },
+    ),
+    # ── Code ausführen ──
+    # Phase 7 (2026-10-07): Grundlage für „die KI als Coder". Jeder Lauf wird
+    # bestätigt — auch abgeschottet startet hier ein Programm auf Sashas
+    # Rechner, das er nicht geschrieben hat. Abschottung: core/sandbox.py.
+    Werkzeug(
+        name="run_code",
+        erlaubnis=True,
+        frage=_frage_code,
+        klein=None,
+        gross=(
+            "Fuehrt ein kleines Python- oder Shell-Programm abgeschottet "
+            "aus; zurueck kommen Rueckgabewert, Ausgabe, Fehler und neue "
+            "Dateien. Fuer genaues Rechnen, Daten umformen, Skripte "
+            "ausprobieren. KEIN Internet, KEIN Zugriff auf Sashas Dateien "
+            "(nur ein leerer Arbeitsordner, jeder Lauf neu), Python nur mit "
+            "Standardbibliothek, Zeitlimit 30 s (max 120), 512 MB, Ausgabe "
+            "gekuerzt. Wird bestaetigt. Ergebnis mit print ausgeben."
+        ),
+        parameter={
+            "type": "object",
+            "properties": {
+                "code":     {"type": "string",
+                             "description": "Das Programm."},
+                "sprache":  {"type": "string", "enum": ["python", "shell"],
+                             "description": "Standard: python."},
+                "zeitlimit": {"type": "integer",
+                              "description": "Sekunden, 1-120. Standard 30."},
+            },
+            "required": ["code"],
         },
     ),
     # Hinweis: ASCII-Bilder laufen NICHT über ein Werkzeug. Messung

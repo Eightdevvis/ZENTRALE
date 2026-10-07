@@ -26,6 +26,7 @@ import kalender
 import ki_prompt
 import mail
 import news
+import sandbox
 import web
 import werkzeug_register
 
@@ -404,3 +405,22 @@ def _log_series(args: dict) -> str:
     except Exception as e:
         return f"[Fehler beim Eintragen: {e}]"
     return f"{g.get('name')} fuer {tag}: {wert} eingetragen."
+
+
+@ausfuehrer("run_code")
+def _run_code(args: dict) -> str:
+    """Ein Programm abgeschottet ausführen (core/sandbox.py). Das Ergebnis
+    geht als Text ans Modell: Rückgabewert, Ausgabe, Fehler, neue Dateien.
+    Der Pfad des Arbeitsordners auf Sashas Rechner geht NICHT mit — das
+    Modell sieht ihn als /arbeit, mehr braucht es nicht."""
+    code = str(args.get("code") or "")
+    if not code.strip():
+        return "[Fehler: kein Code angegeben]"
+    sprache = (args.get("sprache") or "python").strip().lower()
+    try:
+        zeit = int(args.get("zeitlimit") or sandbox.ZEITLIMIT_STANDARD_S)
+    except (TypeError, ValueError):
+        zeit = sandbox.ZEITLIMIT_STANDARD_S
+    erg = sandbox.ausfuehren(code, sprache=sprache,
+                             zeitlimit_s=max(1, min(zeit, sandbox.ZEITLIMIT_MAX_S)))
+    return sandbox.als_text(erg)

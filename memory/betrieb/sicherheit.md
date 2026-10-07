@@ -60,6 +60,30 @@ Mitigationen (bewusst, kein Modell-Vertrauen):
   Query/URL ist sichtbar, aber lange Querystrings könnten Daten verstecken.
   Akzeptiert; Gegenmaßnahme wäre Längen-/Inhalts-Check der Query vor Anzeige.
 
+## Code ausführen: `run_code` in der Sandbox (seit 2026-10-07)
+
+Neues Risiko: das Cloud-Modell kann ein **Programm auf Sashas Rechner
+starten** (Python oder Shell). Ohne Abschottung hieße das: Keys aus
+`data/ai_config.json` lesen, `~/.ssh` kopieren, ins Netz schicken, Dateien
+löschen — angestoßen auch durch Prompt-Injection aus einer geholten Seite.
+
+Mitigationen (Details: `memory/ki/ki_system.md`, Abschnitt „Sandbox"):
+- **Gate:** jeder Lauf wird bestätigt; die Frage zeigt Sprache + Anfang des
+  Codes.
+- **bubblewrap:** das Programm sieht weder `/home` (Repo, `data/`, Keys,
+  `~/.ssh`) noch `/etc`, hat **kein Netz**, eine leere Umgebung (keine
+  Keys) und als einzigen beschreibbaren Ort einen eigenen Arbeitsordner
+  unter `~/.cache/zentrale/sandbox/` (außerhalb von Repo und Sync).
+- **Grenzen:** Zeit (≤ 120 s, harter Kill), 512 MB, 64 Prozesse, 50 MB je
+  Datei, Ausgabe gekappt.
+- **Kein Rückfall:** fehlt bwrap oder scheitert es, läuft nichts.
+
+Restrisiko: ein Fehler in bubblewrap oder im Kernel (Ausbruch aus
+Namensräumen); CPU-Last bis zum Zeitlimit; „ja" reflexhaft geklickt. Ein
+Programm kann im Arbeitsordner Verweise nach draußen anlegen — die zeigen
+nur ins Leere, solange niemand den Ordner außerhalb der Sandbox mit
+Verweis-Folgen liest (der Code tut es nicht).
+
 ## LUKS – Wovor es schützt, wovor nicht
 
 LUKS schützt **nur Daten-at-rest** (PC aus, Disk verschlüsselt).
@@ -225,3 +249,5 @@ sudo cryptsetup luksKillSlot /dev/nvme0n1p3 <slot-nr>
   Tool-Ergebnisse.
 - **2026-09-14** — Wachplan: Suspend statt Aus, Dropbear nur noch für den
   Aus-Fall.
+- **2026-10-07** — `run_code`: die KI darf Code ausführen, nur abgeschottet
+  (bubblewrap) und gegatet.

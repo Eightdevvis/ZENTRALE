@@ -144,7 +144,7 @@ Prompt-Bau hängt dessen Anweisungen hinter den Gedächtnis-Kopf.
 | **4 Skills** | Skill-Dateien, Liste im Prompt, `load_skill`, erste Skills; **`propose_skill`**: die KI schlägt Skills vor, angelegt wird erst nach Bestätigung (Gate) | billig, passt zur Kostenlogik; Grundlage dafür, dass sie sich später selbst weiterentwickelt | klein |
 | **5 Ablage + Anhänge** | `ablage`-Event + Ablage-Liste in der TUI; Datei anhängen per Pfad; Bilder an die Cloud | Artefakte in Terminal-Form | mittel |
 | **6 Projekte** | Projekt-Ordner, Zuordnung Gespräch→Projekt | erst wenn 2–4 stehen | mittel |
-| **7 Sandbox (Grundlage)** | `run_code` in einem abgeschotteten Arbeitsordner (Python + Shell, Zeitlimit, kein `data/`, keine Keys, Gate); Ergebnis als Werkzeug-Ergebnis, Dateien in die Ablage | Sasha: die KI soll später wie ein Coder arbeiten — jetzt nur das Fundament, keine volle Coding-KI | klein |
+| **7 Sandbox (Grundlage)** ✔ 07.10. | `run_code` in einem abgeschotteten Arbeitsordner (Python + Shell, Zeitlimit, kein `data/`, keine Keys, Gate); Ergebnis als Werkzeug-Ergebnis, Dateien in die Ablage | Sasha: die KI soll später wie ein Coder arbeiten — jetzt nur das Fundament, keine volle Coding-KI | klein |
 | später | echtes Token-Streaming, Konnektoren (MCP), Coding-Werkzeuge über die Sandbox hinaus (Repo lesen/ändern), Ollama über denselben OpenAI-Weg (erst messen) | Sasha: Streaming egal; „erstmal wird der Assistent ordentlich" | — |
 
 Jede Phase: eigener Worktree, Tests, Doku hier nachziehen, Leitplanken-Test
@@ -235,3 +235,26 @@ Angenommen (Sasha war nicht erreichbar): Modell-Liste = Standard + billig
 aus `providers.py` + gespeichertes, ein freier Name geht per `/modell <name>`
 an den aktuellen Anbieter; Budget-Grenze 10.000 €; Eingabe bis 4.000
 Zeichen (vorher 1.000).
+
+### Phase 7 — Sandbox, Grundlage (2026-10-07)
+
+- **`core/sandbox.py`** (Schicht 2): `ausfuehren(code, sprache, zeitlimit_s,
+  dateien, lauf_id) → {ausgabe, fehler, rc, dauer_s, dateien_neu,
+  abgebrochen, ordner}` über bubblewrap; `als_text()` fürs Modell,
+  `aufraeumen()`, `verfuegbar()`. Was abgeschottet ist und was nicht:
+  [ki_system.md](ki_system.md), Abschnitt „Sandbox".
+- **Werkzeug `run_code`** im Register (nur `gross`, hinten an, immer
+  gegatet). Schnappschuss neu gezogen: nur der neue Eintrag, `klein`
+  byte-gleich.
+- Tests: `tests/test_sandbox.py` (Netz zu, Repo/`data/`/`~` unsichtbar,
+  Zeit-, Speicher-, Prozess-, Ausgabe-, `/tmp`-Grenze, neue Dateien, Shell,
+  bwrap fehlt/scheitert → nichts läuft, Gate, Schiene); überspringen sich
+  ohne bwrap. Wächter in `test_keine_seiteneffekte.py`.
+
+Angenommen (Sasha war nicht erreichbar): Arbeitsordner unter
+`~/.cache/zentrale/sandbox/` statt `data/sandbox/` (sonst synct
+`zentrale-sync` ihn); jeder Lauf ein frischer Ordner (Zuordnung zum Gespräch
+kommt, wenn Phase 2 eine Gesprächs-id liefert — `lauf_id` ist dafür schon
+da); Aufbewahrung 7 Tage; Grenzen 30/120 s, 512 MB, 64 Prozesse, 50 MB je
+Datei, 20.000 Zeichen Ausgabe. Offen: Dateien in die Ablage (Phase 5),
+Stoppen eines laufenden Code-Laufs, Pi (bwrap dort nicht geprüft).
