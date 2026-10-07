@@ -145,7 +145,7 @@ def test_v_dreht_durch_alle_ansichten_und_zurueck(tmp_path):
     s, fehler = _lauf(tmp_path, [(b"v", "A"), (b"v", "B"), (b"v", "C"),
                                  (b"v", "jetzt")])
     assert fehler == "", "eine Ansicht wirft beim Zeichnen:\n" + fehler
-    assert "TERMINE" in s["A"].upper()
+    assert "TERMINE" in s["A"].upper() and "KALENDER" in s["A"].upper()
     assert "KALENDER · OKTOBER 2026" in s["B"]
     import datetime as _dt
     assert "WOCHE %d" % _dt.date.today().isocalendar()[1] in s["C"].upper()

@@ -15,7 +15,8 @@ import curses
 # Rahmen ein klar sichtbares Grau (245). Grün NIE bold (= sonst Neon),
 # gedämpftes Salbeigrün (108) statt grellem Standard-Grün.
 ROLES = ["acc", "warn", "net", "graph", "event", "audio", "hook", "span",
-         "num", "amber", "amberhi", "amberdk", "cyc", "dim", "faint", "bright", "ink", "band"]
+         "num", "amber", "amberhi", "amberdk", "cyc", "dim", "faint", "bright", "ink", "band",
+         "kal"]
 
 
 THEMES = {
@@ -30,6 +31,9 @@ THEMES = {
         "audio": (curses.COLOR_GREEN,   108, 0),
         "hook":  (curses.COLOR_YELLOW,  215, 0),
         "span":  (curses.COLOR_YELLOW,  216, 0),    # Mehrtages-Klammer: weiches Orange
+        # Kalender-Ansicht A nach calcurse: dessen Rot als Akzent (Sasha,
+        # 07.10.2026: „wie die calcurse-ansicht halt"). Eine Zeile zum Umstellen.
+        "kal":   (curses.COLOR_RED,     167, 0),
         "num":   (curses.COLOR_YELLOW,  222, 0),
         "amber": (curses.COLOR_YELLOW,  214, curses.A_BOLD),  # Fokus-Leiste: Bernstein
         # Bernsteinleiste (Listen-Werkzeug): Glanzpixel + Schatten/leere Fassung
@@ -70,6 +74,7 @@ THEMES = {
         "audio": (curses.COLOR_GREEN,   65,  0),
         "hook":  (curses.COLOR_RED,     130, 0),
         "span":  (curses.COLOR_RED,     166, 0),    # Mehrtages-Klammer: kräftiges Orange (auf Weiss lesbar)
+        "kal":   (curses.COLOR_RED,     160, 0),    # calcurse-Rot, auf Weiss lesbar
         "num":   (curses.COLOR_BLUE,    26,  0),
         "amber": (curses.COLOR_YELLOW,  172, curses.A_BOLD),  # Fokus-Leiste: Bernstein (auf weiß lesbar)
         # Bernsteinleiste: Glanz heller, Schatten/Fassung dunkler (≥4,5:1 auf weiß)
