@@ -41,11 +41,11 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/projekte.py` | `Projekte`: `/projekt` (Auswahl, zuordnen, anlegen, lösen) und die Übersicht `/projekte` als Überlagerung im Chat-Kasten — Projekte, ein Projekt im Einzelnen (Anweisungen, Wissen, Gespräche), Anweisungen im Editor, Wissen per Pfad; reine Helfer `projekt_name`, `finden`, `wahl`, `liste_zeilen`, `detail_zeilen` | `AI["projekte"]`, `AI["projekt"]` |
 | `ansichten/sprachtutor.py` | `Sprachtutor`: Text-Panel, Zimmer-Fenster | `TUTOR` |
 | `ansichten/post.py` | `Post`: Mail, Antwort-Editor, Mail-Worker | `MAIL` |
-| `ansichten/kalender.py` | `Kalender`: Woche/Monat, Formular, Routinen, Sidebar | `K` |
-| `ansichten/kalender_ansichten.py` | Entwürfe A/B/C als reine Funktionen (Daten rein → Zeilen raus, kein curses); im Kalender per `v` eingehängt (`_kal_stil`), siehe [kalender_ansichten_vorschau.md](../werkzeuge/kalender_ansichten_vorschau.md) | — |
+| `ansichten/kalender.py` | `Kalender`: seit 07.10.2026 nur noch Rahmen für A/B/C (`v` dreht), zeichnet die gewählte Ansicht; der alte Woche/Monat-Kalender mit Formular und Seitenliste ist raus | `K` |
+| `ansichten/kalender_ansichten.py` | Entwürfe A/B/C als reine Funktionen (Daten rein → Zeilen raus, kein curses); alle drei bedienbar, markieren die Auswahl per Identität (`t["roh"] is …`), siehe [kalender_ansichten_vorschau.md](../werkzeuge/kalender_ansichten_vorschau.md) | — |
 | `ansichten/kalender_beispiel.py` | Beispieltermine für Tests und `scripts/kalender_vorschau.py` | — |
-| `ansichten/kalender_werkzeuge.py` | Bearbeiten wie calcurse als reine Logik: Eingaben lesen (Zeit, Dauer, Datum, Wochentage), Dialoge Schritt für Schritt, daraus Backend-Aufrufe; Auswahl in derselben Reihenfolge wie die Ansicht | — |
-| `ansichten/kalender_bedienung.py` | `Bedienung`: Tasten von A (Auswahl Tag/Termin/Kasten, Dialoge ausführen, Kollisions-Rückfrage, Frage-Zeile, Ansehen-Fenster) | `K["w"]` |
+| `ansichten/kalender_werkzeuge.py` | Bearbeiten wie calcurse als reine Logik: Eingaben lesen (Zeit, Dauer, Datum, Wochentage), Formular (Modal) zum Anlegen/Ändern, kurze Rückfragen, daraus Backend-Aufrufe; Auswahl in derselben Reihenfolge wie die Ansicht | — |
+| `ansichten/kalender_bedienung.py` | `Bedienung`: Tasten von A/B/C (EINE Auswahl Tag/Termin/Kasten, Kästen ausführen, Kollisions-Rückfrage, Modal und Ansehen-Fenster zeichnen) | `K["w"]` |
 | `ansichten/graphen.py` | `Graphen`: Graph-Werkzeug, Überlagerung (auch lifestyle-Box) | `G` |
 | `ansichten/fokus.py` | `Fokus`: Listen-/Fokus-Werkzeug, Bernsteinleiste, `proj_render` | `L` |
 | `ansichten/notizen.py` | `Notizen`: Notiz-Werkzeug | `NOTE` |

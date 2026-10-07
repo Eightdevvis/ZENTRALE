@@ -1,5 +1,15 @@
 # Kalender-Ansichten A/B/C — Vorschau
 
+**Stand 2026-10-07 (nachts): fertig.** Alle drei bedienbar (EINE Auswahl,
+dieselben Kästen); Anlegen/Ändern im **Modal** (alle Felder auf einmal:
+Titel, Tag, Ganztägig/Tage, Von, Bis = Uhrzeit oder Dauer, Wiederholung mit
+Intervall/Wochentagen/bis, Ort; ↑↓/Tab Feld, ←→ Auswahl, Enter speichert);
+B: ←→ Tag, ↑↓ Woche, Tab Termin des Tages, m/M Monat; C: ↑↓ Termin, ←→ Tag,
+w/W Woche. Der alte Kalender ist raus, der Kalender startet in A, `v` dreht
+A → B → C. Im Kasten ist „/" Text (öffnete vorher die Befehlszeile).
+Speichern hing nach dem Google-Sync (500+ Dateien, 2 s neu parsen): jetzt
+Datei-Cache im .ics-Speicher, 0,3 s.
+
 **Stand 2026-10-07 (Etappe 1): A ist bedienbar wie calcurse** — Tasten aus
 calcurses eigener Tastendatei und Hilfe: ↑↓ Termin, ←→ Tag, t/T w/W m/M y/Y
 springen, g gehe zu, Tab Kasten (Termine → Kalender → TODO), Enter ansehen,

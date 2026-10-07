@@ -95,7 +95,7 @@ def test_kuerzen_endet_mit_auslassung():
 def test_v_schaltet_zyklisch():
     assert ka.naechste_ansicht("A") == "B"
     assert ka.naechste_ansicht("B") == "C"
-    assert ka.naechste_ansicht("C") is None      # zurück zum jetzigen Kalender
+    assert ka.naechste_ansicht("C") == "A"       # der alte Kalender ist raus
     assert ka.naechste_ansicht(None) == "A"
     assert ka.naechste_ansicht("Q") == "A"
 

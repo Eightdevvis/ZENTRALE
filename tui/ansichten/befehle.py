@@ -36,7 +36,7 @@ TUI_KEYS = [
     ("graph", "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
     ("notizen", "Notizen (Mitte): freie notiz aus blöcken · ↑↓ block · t/l/f text/liste/float · e bearbeiten · d weg (fragt bei inhalt) · r titel · n übersicht · esc speichern & zu"),
     ("karte", "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Overlay (Handel→Politik→aus) · ,/. Zeit ←→ · ; jetzt · w=Fenster"),
-    ("kalender", "Kalender (Mitte): ↑↓ wählen · e bearbeiten · a neu · d löschen/Routine-aus · x erledigte/deaktivierte ein/aus · l Fokus in die Listen-Sidebar (dort a/r/d/space, kein Move) · → blättern · Tab Woche/Monat · v dreht durch die Ansichten Tagesliste/Monatsraster/Zeitachse (nur anschauen) und zurück"),
+    ("kalender", "Kalender (Mitte), bedienbar wie calcurse: v dreht A Tagesliste → B Monat → C Woche · a neu · e ändern (Kasten) · d löschen · r wiederholen · enter ansehen · c/p kopieren · t/w/m/y springen · g gehe zu · x erledigte · in A tab zwischen Terminen/Kalender/TODO"),
     ("post", "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
     ("space", "KI-Chat (Mitte): tippen + enter fragt die KI · alt+enter neue zeile · ←→ pos1 ende entf: cursor · ↑↓ scrollen (in mehrzeiliger eingabe: zeile wechseln, dann bild↑↓) · esc stoppt eine laufende antwort, sonst zu · /hilfe im chat: /neu /modell /anbieter /effort /budget /lokal /cloud /auto"),
     ("tutor", "Persona-Zimmer (eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · ohne DISPLAY → text-panel · /tutor = text-panel"),
@@ -115,26 +115,33 @@ CTX_KEYS = {
         ("Alt+↑↓←→", "land fokussieren"),
         ("o", "handelsrouten"), ("w", "fenster"), ("esc", "zu"),
     ],
-    "cal:week": [
-        ("↑↓", "wählen"), ("e", "bearbeiten"), ("a", "neu"),
-        ("d", "löschen / aus"), ("x", "erledigte zeigen"),
-        ("l", "liste-fokus"), ("←→", "woche"), ("tab", "monat"),
-        ("v", "ansicht a/b/c"),
+    # Kalender (seit 07.10.2026 nur noch A/B/C, alle wie calcurse bedienbar)
+    "cal:a:termine": [
+        ("↑↓", "termin"), ("←→", "tag"), ("a", "neu"), ("e", "ändern"),
+        ("d", "löschen"), ("r", "wiederholen"), ("enter", "ansehen"),
+        ("c/p", "kopieren/einfügen"), ("t/w/m/y", "tag/woche/monat/jahr (groß: zurück)"),
+        ("g", "gehe zu"), ("x", "erledigte zeigen"), ("tab", "kasten"),
+        ("v", "ansicht"), ("esc", "zu"),
     ],
-    "cal:month": [
-        ("←→", "blättern"), ("tab", "woche"), ("v", "ansicht a/b/c"), ("a", "neu"),
-        ("x", "erledigte zeigen"), ("0", "heute"), ("esc", "zu"),
+    "cal:a:kalender": [
+        ("←→", "tag"), ("↑↓", "woche"), ("0/$", "wochenanfang/-ende"),
+        ("a", "neu"), ("enter", "zu den terminen"), ("tab", "kasten"), ("esc", "zu"),
     ],
-    "cal:ansicht": [
-        ("←→", "blättern"), ("0", "heute"), ("x", "erledigte zeigen"),
-        ("v", "nächste ansicht"), ("esc", "zu"),
+    "cal:a:todo": [
+        ("↑↓", "wählen"), ("a", "neu"), ("e", "ändern"), ("d", "löschen"),
+        ("!", "erledigt"), ("+/-", "hoch/runter"), ("tab", "kasten"), ("esc", "zu"),
     ],
-    "cal:list": [
-        ("↑↓", "wählen"), ("space", "abhaken"), ("s", "sortieren"),
-        ("a", "neu"), ("r", "umbenennen"), ("d", "löschen"), ("l/esc", "zurück"),
+    "cal:b": [
+        ("←→", "tag"), ("↑↓", "woche"), ("tab", "termin am tag"), ("a", "neu"),
+        ("e", "ändern"), ("d", "löschen"), ("r", "wiederholen"), ("enter", "ansehen"),
+        ("c/p", "kopieren/einfügen"), ("m/M", "monat"), ("g", "gehe zu"),
+        ("v", "ansicht"), ("esc", "zu"),
     ],
-    "cal:sort": [
-        ("↑↓", "verschieben"), ("s/esc", "fertig"),
+    "cal:c": [
+        ("↑↓", "termin"), ("←→", "tag"), ("a", "neu"), ("e", "ändern"),
+        ("d", "löschen"), ("r", "wiederholen"), ("enter", "ansehen"),
+        ("c/p", "kopieren/einfügen"), ("w/W", "woche"), ("g", "gehe zu"),
+        ("v", "ansicht"), ("esc", "zu"),
     ],
     "mail:cats": [
         ("↑↓", "wählen"), ("enter", "öffnen"), ("e", "eingang"), ("r", "poll"),
@@ -154,9 +161,8 @@ CTX_KEYS = {
 CTX_TITLES = {
     "home": "start", "graph": "graph", "list:forest": "fokus",
     "list:view": "liste", "list:pick": "einordnen", "map": "karte",
-    "cal:week": "kalender · woche", "cal:month": "kalender · monat",
-    "cal:ansicht": "kalender · ansicht",
-    "cal:list": "kalender · liste", "cal:sort": "kalender · sortieren",
+    "cal:a:termine": "kalender · termine", "cal:a:kalender": "kalender · monat",
+    "cal:a:todo": "kalender · todo", "cal:b": "kalender · monat", "cal:c": "kalender · woche",
     "mail:cats": "post", "mail:list": "post · liste", "mail:read": "post · lesen",
     "ai": "ki-chat", "tutor": "tutor",
     "note:edit": "notiz", "note:list": "notizen", "piano": "klavier",

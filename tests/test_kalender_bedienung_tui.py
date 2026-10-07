@@ -116,10 +116,8 @@ def _lauf(tmp_path, tasten):
     threading.Thread(target=drain, daemon=True).start()
     try:
         time.sleep(2.5)
-        os.write(master, b"\r")             # Kalender öffnen
-        time.sleep(1.0)
-        os.write(master, b"v")              # → Ansicht A
-        time.sleep(1.0)
+        os.write(master, b"\r")             # Kalender öffnen (startet in A)
+        time.sleep(1.2)
         for t in tasten:
             os.write(master, t)
             time.sleep(0.35)
@@ -203,3 +201,11 @@ def test_b_und_c_legen_am_gewaehlten_tag_an(tmp_path):
     assert neu.get("InB") == morgen
     # in C wurde vom selben (schon gewählten) Tag noch einen weiter gegangen
     assert neu.get("InC") == (dt.date.today() + dt.timedelta(days=2)).isoformat()
+
+
+def test_schraegstrich_im_kasten_ist_text(tmp_path):
+    """„/" öffnet sonst überall die Befehlszeile — im Termin-Kasten ist es
+    ein Zeichen (07.10.2026 aufgefallen, beim Ausbau des alten Kalenders)."""
+    w, fehler = _lauf(tmp_path, _formular("Vortrag 1/2", "14:00", "15:00"))
+    assert fehler == ""
+    assert [b["label"] for m, p, b in w if p == "/api/calendar/entry"] == ["Vortrag 1/2"]

@@ -863,6 +863,15 @@ Vektorgrafik, gleicher Viewport — wie `/slide` PDFs extern öffnet; dort Taste
 ASCII-Grid in der TUI ist nur die reduzierte Variante. Architektur + die drei
 Achsen (Detail/Layer/Zeit): [memory/maps/maps_system.md](../maps/maps_system.md).
 
+**Kalender (Mitte) — Stand 07.10.2026:** nur noch die drei Ansichten aus
+`tui/ansichten/kalender_ansichten.py`, alle bedienbar wie calcurse (Tasten
+aus calcurses eigener Tastendatei, Anlegen/Ändern im Kasten wie „Termin
+erstellen" bei Google): A Tagesliste (Start), B Monatsraster, C Woche als
+Zeitachse; `v` dreht. Details: [kalender_ansichten_vorschau.md](../werkzeuge/kalender_ansichten_vorschau.md).
+Der folgende Absatz beschreibt den **alten** selbst gebauten Kalender
+(Woche/Monat, Formular, Seitenliste) — am 07.10.2026 ausgebaut, steht hier
+nur noch als Geschichte.
+
 **Kalender (Mitte, Taste `c`):** blätterbare **Woche** (Mo-So-Tagesliste) bzw.
 **Monat** (Zeichen-Gitter), umschaltbar. Wie die Karte reiner Zeichner: holt
 fertig gruppierte Tage über `/api/calendar` (Logik in `core/kalender.py`,
@@ -892,7 +901,7 @@ in die Quelle, Löschen bricht nur den Link. Defensiv wie
 der Karten-Pfad (Fehler-Marker statt Dauer-Refetch). Details + die zwei
 Browser-Fronten: [memory/werkzeuge/kalender_system.md](../werkzeuge/kalender_system.md).
 Drei weitere Ansichten (A Tagesliste, B Monatsraster, C Zeitachse) sind seit
-07.10.2026 eingehängt: `v` dreht jetziger → A → B → C → jetziger, Woche↔Monat
+07.10.2026 die einzigen (der alte Kalender ist raus): `v` dreht A → B → C. Früher: Woche↔Monat
 liegt dafür auf Tab; A/B/C nur zum Anschauen — siehe [kalender_ansichten_vorschau.md](../werkzeuge/kalender_ansichten_vorschau.md).
 
 - **Nur stdlib:** `curses` + `urllib` + `json` + `threading` — null Extra-Deps.

@@ -142,23 +142,19 @@ def _lauf(tmp_path, schritte):
 
 
 def test_v_dreht_durch_alle_ansichten_und_zurueck(tmp_path):
-    s, fehler = _lauf(tmp_path, [(b"v", "A"), (b"v", "B"), (b"v", "C"),
-                                 (b"v", "jetzt")])
+    """Der Kalender startet in A; v dreht A → B → C → A."""
+    s, fehler = _lauf(tmp_path, [(b"v", "B"), (b"v", "C"), (b"v", "A2")])
     assert fehler == "", "eine Ansicht wirft beim Zeichnen:\n" + fehler
-    assert "TERMINE" in s["A"].upper() and "KALENDER" in s["A"].upper()
     assert "KALENDER · OKTOBER 2026" in s["B"]
     import datetime as _dt
     assert "WOCHE %d" % _dt.date.today().isocalendar()[1] in s["C"].upper()
-    assert "Woche" in s["jetzt"] or "Monat" in s["jetzt"], "zurück im jetzigen Kalender"
-    # A/B holen Monats-, C Wochendaten über denselben /api/calendar
-    views = {v for v, _r in ABFRAGEN}
-    assert {"month", "week"} <= views
+    assert "TERMINE" in s["A2"].upper() and "TODO" in s["A2"].upper()
 
 
 def test_blaettern_in_jeder_ansicht_wirft_nicht(tmp_path):
     rechts, links, null = b"\x1bOC", b"\x1bOD", b"0"
     s, fehler = _lauf(tmp_path, [
-        (b"v" + rechts + rechts + links + null, "A"),
+        (rechts + rechts + links + null, "A"),
         (b"v" + rechts + links + b"m" + b"x" + b"x", "B"),
         (b"v" + rechts + rechts + links + null, "C"),
     ])
@@ -167,7 +163,8 @@ def test_blaettern_in_jeder_ansicht_wirft_nicht(tmp_path):
     assert any(r.startswith("2026-11") for r in refs), "m blättert in B in den nächsten Monat"
 
 
-def test_tab_bleibt_woche_monat(tmp_path):
-    s, fehler = _lauf(tmp_path, [(b"\t", "tab")])
+def test_tab_wechselt_in_a_den_kasten(tmp_path):
+    """Tab dreht in A Termine → Kalender → TODO → Termine (wie calcurse)."""
+    s, fehler = _lauf(tmp_path, [(b"\t", "kal"), (b"\t", "todo"), (b"\t", "term")])
     assert fehler == ""
     assert ("month", ) in {(v,) for v, _r in ABFRAGEN}

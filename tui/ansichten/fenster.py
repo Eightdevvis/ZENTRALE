@@ -19,8 +19,9 @@ def in_text_entry(z):
     if L["active"]:
         return L["adding"] or L["view"] == "move_new"
     if K["active"]:
-        # Termin/Routine anlegen+bearbeiten ODER Sidebar-Item neu/umbenennen
-        return K["mode"] == "add" or K["linput"] is not None
+        # Ein Kasten (Termin anlegen/ändern, Rückfrage) ist offen → alles ist
+        # Text, auch „/". Die Fokus-Frage stellt die Bedienung (kalender_bedienung).
+        return (K.get("w") or {}).get("dialog") is not None
     if MAIL["active"]:
         return MAIL["replying"]
     if NOTE["active"]:
@@ -60,13 +61,13 @@ def current_ctx(z):
     if M["active"]:
         return "map"
     if K["active"]:
-        if K["mode"] != "view":
+        w = K.get("w") or {}
+        if w.get("dialog") is not None or w.get("popup"):
             return None
-        if K["listfocus"]:
-            return "cal:sort" if K["lsort"] else "cal:list"
-        if K.get("stil"):
-            return "cal:ansicht"
-        return "cal:week" if K["view"] == "week" else "cal:month"
+        stil = (K.get("stil") or "A").lower()
+        if stil == "a":
+            return "cal:a:" + (w.get("fokus") or "termine")
+        return "cal:" + stil
     if MAIL["active"]:
         if MAIL["replying"] or MAIL.get("picking"):
             return None

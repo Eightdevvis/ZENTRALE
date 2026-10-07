@@ -1076,18 +1076,7 @@ def bild_zeichnen(u):
 
     # ── Trennlinie + Befehlszeile (›) ─────────────────────────────────
     safe_addstr(sep_row, 0, "─" * W, C["faint"])
-    if K["active"] and K.get("linput") is not None:
-        # Eingabe lebt HIER unten (mehr Platz als die schmale Sidebar-Kopf-
-        # zeile): Sidebar neu/umbenennen ODER die Pro-Tag-Uhrzeit einer Spanne.
-        prompt = ({"add": "neuer eintrag: ", "rename": "umbenennen: ",
-                   "spantime": "zeit (leer=ganztags): "}
-                  .get(K["lmode"], "umbenennen: "))
-        safe_addstr(input_row, 1, "›", C["acc"])
-        shown = (prompt + K["linput"])[-(W - 6):]
-        addclip(input_row, 3, shown, W - 6, C["bright"])
-        safe_addstr(input_row, 3 + len(shown), "_", C["bright"])
-    else:
-        bz.zeichne_zeile(input_row, W)
+    bz.zeichne_zeile(input_row, W)
 
     # ── Footer (Tasten + Theme + Backend) ─────────────────────────────
     # Seit 02.10.2026 keine App-Buchstaben mehr (die Apps stehen im

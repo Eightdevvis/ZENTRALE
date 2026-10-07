@@ -69,23 +69,19 @@ MONATE = ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
 Zeile = list  # [(text, rolle), …]
 
 
-def naechste_ansicht(aktuell: str | None) -> str | None:
-    """Taste v (Sasha, 07.10.2026): der jetzige Kalender → A → B → C → zurück
-    zum jetzigen. None steht für den jetzigen Kalender (dort wird bearbeitet).
-    Unbekanntes (alter Zustand, Tippfehler) fängt bei A an, statt zu crashen."""
-    if aktuell is None:
-        return ANSICHTEN[0]
+def naechste_ansicht(aktuell: str | None) -> str:
+    """Taste v: A → B → C → A. Den alten Kalender als vierte Station gibt es
+    seit 07.10.2026 nicht mehr (alle drei sind bedienbar). Unbekanntes fängt
+    bei A an, statt zu crashen."""
     if aktuell not in ANSICHTEN:
         return ANSICHTEN[0]
-    i = ANSICHTEN.index(aktuell) + 1
-    return ANSICHTEN[i] if i < len(ANSICHTEN) else None
+    return ANSICHTEN[(ANSICHTEN.index(aktuell) + 1) % len(ANSICHTEN)]
 
 
 def tasten_hinweis(ansicht: str) -> str:
     """Fußzeile je Ansicht — nur Tasten, die beim Einhängen wirklich gebunden
     sind. A/B/C sind reine Anzeige: bearbeitet wird im jetzigen Kalender."""
-    nxt = naechste_ansicht(ansicht)
-    ziel = ANSICHT_NAMEN[nxt] if nxt else "bearbeiten"
+    ziel = ANSICHT_NAMEN[naechste_ansicht(ansicht)]
     # Alle drei bedienbar wie calcurse (kalender_bedienung.py); gleich sind
     # a/e/d/r/c/p/g/enter, nur das Bewegen unterscheidet sich.
     gleich = "a neu · e ändern · d löschen · r wiederholen · enter ansehen · c/p kopieren · g gehe zu"
