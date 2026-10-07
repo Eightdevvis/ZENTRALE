@@ -301,3 +301,10 @@ def test_waechter_startet_trotz_haengender_anfrage(tmp_path, leer, monkeypatch):
     w.tick()
     assert w.tick() is True
     assert any("ignoriere hängende Anfrage /api/state" in l for l in logs)
+
+
+def test_skill_vorlagen_starten_das_backend_nicht_neu():
+    """Fremder Beispielcode der Skills wird nie importiert — Änderungen dort
+    sind kein Neustart-Grund (2026-10-07)."""
+    import hot_reload
+    assert not [p for p in hot_reload.code_dateien() if "skill_vorlagen" in p]

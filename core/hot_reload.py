@@ -50,7 +50,10 @@ def code_dateien(root=_ROOT, ordner=ORDNER):
     out = []
     for o in ordner:
         for dirpath, dirnames, filenames in os.walk(os.path.join(root, o)):
-            dirnames[:] = [d for d in dirnames if d != '__pycache__']
+            # skill_vorlagen: fremder Beispielcode der Skills (Anthropic), den
+            # das Backend nie importiert — eine Änderung dort ist kein Grund
+            # für einen Neustart (2026-10-07).
+            dirnames[:] = [d for d in dirnames if d not in ('__pycache__', 'skill_vorlagen')]
             for n in filenames:
                 if n.endswith('.py') and not n.startswith('test_'):
                     out.append(os.path.join(dirpath, n))
