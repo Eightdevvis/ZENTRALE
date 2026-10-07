@@ -584,6 +584,10 @@ class Fokus:
                     L["msg"] = ""; L["view"] = "move"
                 else:
                     L["msg"] = "keine andere liste"
+            elif cur:
+                # Die Leiste nennt m — auf einer ganzen Liste sagt es jetzt,
+                # was stattdessen geht, statt stumm zu bleiben (2026-10-07).
+                L["msg"] = "m verschiebt einträge — eine ganze liste ordnet > ein"
         elif ch == ord(">"):                           # Forest-weit einordnen (Liste/Eintrag)
             if cur:
                 L["place_kind"] = "item" if cur.get("iid") is not None else "list"

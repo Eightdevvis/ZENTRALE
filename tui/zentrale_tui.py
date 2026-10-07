@@ -76,6 +76,8 @@ TELE_ROWS = ansichten.technik.TELE_ROWS
 in_text_entry, current_ctx = ansichten.fenster.in_text_entry, ansichten.fenster.current_ctx
 LAUF_TICK_MS = ansichten.technik.LAUF_TICK_MS   # Takt der Schleife, während eine Zeile läuft
 BEENDEN = ansichten.basis.BEENDEN       # 'q' aus einer Ansicht: Hauptschleife verlassen
+STRG_C = 3                              # Strg+C als Zeichen (raw-Modus, run_ui)
+fussleiste = ansichten.fussleiste       # die Tastenzeile ganz unten
 
 
 def _theme_modul():
@@ -774,6 +776,16 @@ def taste_verteilen(u, ch):
     chat, erinnerung, fokus, graphen = u.chat, u.erinnerung, u.fokus, u.graphen
     kalender, karte, klavier, notizen = u.kalender, u.karte, u.klavier, u.notizen
     post, sprachtutor, store, z = u.post, u.sprachtutor, u.store, u.z
+    if ch == STRG_C:
+        # Strg+C kommt seit 07.10.2026 als Zeichen (raw-Modus, siehe run_ui).
+        # Im Chat stoppt es die Antwort und beendet NIE die TUI; überall
+        # sonst bleibt es, was es war: sauber beenden (main() fängt das
+        # KeyboardInterrupt wie früher das echte SIGINT).
+        if current_ctx(z) == "ai" and not (bz.cmd_mode or bz.help_latched
+                                           or erinnerung.nag_active):
+            chat.taste(ch)
+            return None
+        raise KeyboardInterrupt
     if erinnerung.nag_active:              # Reminder-Kästchen offen: jede Taste klickt weg
         erinnerung.taste(ch)
     elif bz.help_latched:
@@ -1076,20 +1088,17 @@ def bild_zeichnen(u):
 
     # ── Trennlinie + Befehlszeile (›) ─────────────────────────────────
     safe_addstr(sep_row, 0, "─" * W, C["faint"])
-    bz.zeichne_zeile(input_row, W)
+    bz.zeichne_zeile(input_row, W, erreichbar=not in_text_entry(z))
 
-    # ── Footer (Tasten + Theme + Backend) ─────────────────────────────
-    # Seit 02.10.2026 keine App-Buchstaben mehr (die Apps stehen im
-    # Rad): nur noch die vier Tasten, die überall gelten. Eine KI-Antwort,
-    # die im Hintergrund fertig wurde, meldet sich hier mit ●.
-    ki = "space ki" + (" ●" if AI.get("neu") else "")
-    if current_ctx(z) == "ai":
-        fuss = chat.fusszeile()       # im Chat: was die Tasten dort tun
-    elif DASH["an"] or current_ctx(z) != "home":
-        fuss = " ←→ drehen · enter öffnen · %s · esc zurück" % ki
-    else:
-        fuss = " ←→ drehen · alt+←→ rad wechseln · enter öffnen · %s · esc zu" % ki
-    addclip(footer_row, 0, fuss, W - 1, C["faint"])
+    # ── Fußleiste: NUR die Tasten, die im Fenster mit dem Fokus wirken ──
+    # (seit 07.10.2026, ansichten/fussleiste.py — vorher stand hier fast
+    # überall dasselbe, auch „space ki", wo die Leertaste etwas anderes
+    # tut). Eine KI-Antwort, die im Hintergrund fertig wurde, meldet sich
+    # auf der Startseite mit ● an der Leertaste.
+    eintr = fussleiste.eintraege(u)
+    if chat.ungelesen() and current_ctx(z) == "home":
+        eintr = [(t, w + " ●" if t == "space" else w) for t, w in eintr]
+    addclip(footer_row, 0, fussleiste.zeile(eintr, W - 1), W - 1, C["faint"])
 
     # ── Graph-Reminder-Nag (zuletzt → liegt über allem) ───────────────
     erinnerung.zeichnen(H, W)
@@ -1101,6 +1110,15 @@ def run_ui(stdscr, store):
     import curses
 
     curses.curs_set(0)
+    # raw statt cbreak (curses.wrapper): Strg+C kommt als Zeichen 3 statt als
+    # SIGINT — sonst beendete es die TUI, auch mitten im Chat, wo es seit
+    # 07.10.2026 die Antwort stoppt (Sasha: „bei claude ist ctrl c
+    # intuitiv"). Außerhalb des Chats beendet taste_verteilen wie vorher.
+    # Nebenwirkung: Strg+Z (anhalten) und Strg+Backslash wirken hier nicht
+    # mehr — ein angehaltenes Vollbild-Fenster war eher eine Falle. Ein
+    # externer Editor (/memory) bekommt über endwin sein Terminal, danach
+    # stellt reset_prog_mode raw wieder her.
+    curses.raw()
     stdscr.nodelay(True)
     stdscr.timeout(250)
 
@@ -1333,7 +1351,9 @@ def main():
                                        "/quit" if ENDE["echt"] else "sauber"))
                 break                 # sauberer Quit (Befehl /quit, oder 'q' ohne Systemeinheit)
             except KeyboardInterrupt:
-                # Ctrl-C = gewollter Quit (wie /quit). Sauberer Exit (rc 0), damit
+                # Ctrl-C = gewollter Quit (wie /quit) — seit 07.10.2026 (raw-
+                # Modus) wirft das taste_verteilen, außer im Chat, wo Ctrl-C
+                # die Antwort stoppt. Sauberer Exit (rc 0), damit
                 # das Start-Skript still aufräumt statt "kein sauberer Quit" samt
                 # Crash-/Backend-Log auszuspucken.
                 lebenslauf("ENDE  ctrl-c (SIGINT)")

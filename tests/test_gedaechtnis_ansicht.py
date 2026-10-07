@@ -294,7 +294,7 @@ def test_befehle_sind_bekannt():
         e = chat_befehle.lesen(roh)
         assert (e.art, e.name) == ("befehl", name), roh
     hilfe = chat_befehle.hilfe_text()
-    assert "/gedaechtnis" in hilfe and "/skills" in hilfe
+    assert "/memory" in hilfe and "/gedaechtnis" not in hilfe and "/skills" in hilfe
 
 
 def test_chat_leitet_befehl_und_tasten_weiter(backend):
@@ -307,7 +307,7 @@ def test_chat_leitet_befehl_und_tasten_weiter(backend):
     c.gedaechtnis = Gedaechtnis(c)
     c.befehl("skills", "")
     assert c.gedaechtnis.abschnitt() == "skills"
-    assert "enter an/aus" in c.fusszeile()
+    assert "enter on/off" in c.fusszeile()
     c.taste(curses.KEY_RIGHT)
     assert c.gedaechtnis.abschnitt() == "hausregeln"
     c.befehl("gedaechtnis", "")

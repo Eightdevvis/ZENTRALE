@@ -21,7 +21,7 @@ try:                                    # Pixel-Baustein (tui/pixel.py)
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     import pixel
 
-from . import chat_befehle, eingabe
+from . import chat_befehle, eingabe, fussleiste
 from .ablage import Ablageliste
 from .chat_ablage import AblageSteuerung, ablage_anzeige, anhang_eintrag
 from .chat_erlaubnis import ErlaubnisSteuerung
@@ -36,6 +36,17 @@ from .text import _md_umbruch, _wrap, md_zeilen
 # Tasten; Chat.taste setzt sie zu diesem einen zusammen. -1 ist „keine
 # Taste", -2 gibt es bei curses nicht.
 TASTE_ALT_ENTER = -2
+
+# Strg+C kommt als Zeichen 3 an, seit die TUI curses im raw-Modus fährt
+# (run_ui, 2026-10-07) — vorher löste es SIGINT aus und beendete die TUI.
+TASTE_STRG_C = 3
+
+# Ein Stoß: was beim Einfügen auf einmal im Tastaturpuffer liegt. Mehr als
+# das wird nicht in einem Rutsch gelesen (der Rest kommt im nächsten Takt).
+STOSS_MAX = 200_000
+# Ein Stoß ab so vielen Zeichen, der mit Enter endet, ist ein Einfügen —
+# das Enter wird dann eine neue Zeile statt abzuschicken.
+STOSS_EINFUEGEN = 10
 
 # Vermerk hinter einer gestoppten Antwort — derselbe wie im Backend
 # (ui/routen/ki.py), damit der Verlauf nach dem nächsten Poll gleich aussieht.
@@ -312,7 +323,11 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
                           "gespraeche": [],
                           # Ablage (Phase 5, 2026-10-07): offene Liste/Lesen
                           # (ablage.py), Anhänge für die nächste Nachricht.
-                          "ablage": None, "anhaenge": []}
+                          "ablage": None, "anhaenge": [],
+                          # Nachbesserung 2026-10-07: Antwort fertig geworden,
+                          # während das Fenster zu war (●); Zeichen, die an der
+                          # Eingabe-Grenze nicht mehr hineinpassten.
+                          "fertig_ungesehen": False, "zu_viel": 0}
         self.AI_LOCK = threading.Lock()
         self.liste = Gespraechsliste(self)
         self.gedaechtnis = Gedaechtnis(self)       # /gedaechtnis, /skills (Phase 3)
@@ -456,8 +471,14 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
                     AI["log"].append(("ai", ans))
                 AI["answer"] = None
                 AI["strom"] = None
-                if AI["msg"] == "stoppe …":   # war schon fertig, als Esc kam
+                if AI["msg"] == "stoppe …":   # war schon fertig, als Strg+C kam
                     AI["msg"] = ""
+                # Fenster war zu (Esc lässt die Antwort weiterlaufen, Sasha
+                # 07.10.2026): ● auf der Startseite, bis der Chat wieder offen
+                # ist. Eigenes Feld, weil der Poll „neu" alle 20 s aus der
+                # Gesprächsliste neu rechnet und es sonst wieder löschte.
+                if ans and not AI["active"]:
+                    AI["fertig_ungesehen"] = True
                 AI["reflect"] = ""
                 AI["perm"] = None
                 AI["streaming"] = False
@@ -471,14 +492,14 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
             return
         if was.art == "unbekannt":
             # Eingabe bleibt stehen: meist ein Tippfehler, den man korrigiert.
-            AI["msg"] = "unbekannter befehl /%s — /hilfe zeigt alle" % was.name
+            AI["msg"] = "unbekannter befehl /%s — /help zeigt alle" % was.name
             return
         if was.art == "befehl":
             AI["input"], AI["cur"] = "", 0
             self.befehl(was.name, was.arg)
             return
         if AI["streaming"]:
-            AI["msg"] = "antwort läuft noch — esc stoppt sie"
+            AI["msg"] = "antwort läuft noch — ctrl+c stoppt sie"
             return
         if AI.get("ersetzt"):              # /bearbeiten: ab dort ersetzen
             self.senden(was.text, ersetzt=AI["ersetzt"])
@@ -503,6 +524,7 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
             AI["ersetzt"] = None
             AI["input"] = ""
             AI["cur"] = 0
+            AI["zu_viel"] = 0
             AI["gestoppt"] = False
             AI["strom"] = None
             AI["answer"] = ""
@@ -547,7 +569,7 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
     # ── Steuerung: stoppen, neu, Einstellungen (Phase 1, 2026-10-07) ──────
 
     def stoppen(self):
-        """Laufende Antwort stoppen (Esc). Das Backend bricht bis in die
+        """Laufende Antwort stoppen (Strg+C). Das Backend bricht bis in die
         Werkzeug-Schleife ab und schickt dann 'gestoppt'; der Strom endet
         von selbst. Im Hintergrund, damit die Taste nie hängt."""
         AI = self.AI
@@ -696,20 +718,49 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
             stdscr.timeout(250)
         return eingabe.esc_folge(folge)
 
+    def tasten(self):
+        """Was die Tasten gerade tun — für die Fußleiste (fussleiste.py) und
+        tests/test_fussleiste.py, das jede davon im Chat drückt. Seit
+        2026-10-07 je Zustand genau das, was wirkt (Sasha: „die leiste zeigt
+        NUR das an was auch tatsächlich … genommen werden kann")."""
+        AI = self.AI
+        stopp = [("ctrl+c", "stop")] if AI.get("streaming") else []
+        if AI.get("perm"):
+            opts = AI["perm"].get("optionen") or ["ja", "nein"]
+            return ([(str(i + 1), o) for i, o in enumerate(opts[:9])]
+                    + [("esc", "decline")] + stopp)
+        if AI.get("wahl"):
+            return self._tasten_wahl(AI["wahl"])
+        for feld, ueber in (("liste", "liste"), ("gedaechtnis", "gedaechtnis"),
+                            ("ablage", "ablageliste"), ("projekte", "projekte")):
+            if AI.get(feld):                   # Überlagerung offen: sie weiß es
+                return stopp + getattr(self, ueber).tasten()
+        if AI.get("ersetzt"):
+            return stopp + [("enter", "send edit"), ("alt+enter", "new line"),
+                            ("esc", "cancel edit")]
+        mehrzeilig = eingabe.mehrzeilig(AI["input"])
+        liste = list(stopp)
+        if not AI["streaming"] and AI["input"].strip():
+            liste = [("enter", "send")]
+        # Wichtigstes zuerst: auf 80 Spalten fällt hinten etwas weg.
+        liste += [("esc", "close (keeps running)" if AI["streaming"] else "close"),
+                  ("alt+enter", "new line"),
+                  ("↑↓", "line") if mehrzeilig else ("↑↓", "scroll")]
+        if mehrzeilig or AI["streaming"]:
+            liste.append(("pgup pgdn", "scroll"))
+        if not AI["input"]:
+            liste.append(("tab", "chats"))
+        liste += [("/help", "commands"), ("ctrl+d", "thinking")]
+        return liste
+
     def fusszeile(self):
-        """Die Tastenzeile ganz unten, solange der Chat den Fokus hat."""
-        if self.AI["streaming"]:
-            return " esc stoppt die antwort · bild↑↓ verlauf · tippen geht weiter"
-        if self.AI["liste"]:
-            return " gespräche: ↑↓ wählen · enter öffnen · esc zurück zum chat"
-        if self.AI.get("gedaechtnis"):
-            return " " + self.gedaechtnis.fusszeile()
-        if self.AI["ablage"]:
-            return " ablage: ↑↓ wählen/blättern · enter lesen · esc zurück"
-        if self.AI.get("projekte"):
-            return " " + self.projekte.fusszeile()
-        return (" enter senden · alt+enter neue zeile · ↑↓ verlauf · tab gespräche · "
-                "strg+d denken · /hilfe befehle · esc zu")
+        """Die Tastenzeile als Text (ohne führendes Leerzeichen)."""
+        return fussleiste.text(self.tasten())
+
+    def ungelesen(self):
+        """● auf der Startseite: Neues in einem anderen Gespräch, oder eine
+        Antwort, die fertig wurde, während das Fenster zu war."""
+        return bool(self.AI.get("neu") or self.AI.get("fertig_ungesehen"))
 
     def ai_titel(self, breite=None):
         """Kasten-Titel: der Titel des offenen Gesprächs (seit 2026-10-07),
@@ -758,6 +809,7 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
         Gespräch (meist „Erinnerungen"), sagt es die Statuszeile."""
         AI, ai_load_history = self.AI, self.ai_load_history
         AI["active"] = True; AI["scroll"] = 0; AI["msg"] = ""
+        AI["fertig_ungesehen"] = False
         if any(e.get("ungelesen") and e.get("id") != AI.get("gid")
                for e in AI.get("gespraeche") or []):
             AI["msg"] = "neues in einem anderen gespräch — tab zeigt die liste"
@@ -768,6 +820,15 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
         """Eine Taste, während der Chat den Fokus hat. Belegung und die
         ↑↓-Regel: ansichten/eingabe.py (Kopf)."""
         AI, ai_answer_perm = self.AI, self.ai_answer_perm
+        if ch == TASTE_STRG_C:
+            # Stoppen (Sasha, 07.10.2026: „bei claude ist ctrl c intuitiv").
+            # Im Chat beendet Strg+C NIE die TUI — auch nicht, wenn die
+            # Antwort gerade fertig wurde und die Taste zu spät kam.
+            if AI["streaming"]:
+                self.stoppen()
+            else:
+                AI["msg"] = "es läuft keine antwort — esc schließt den chat"
+            return
         if ch == 27:
             # Allein stehendes Esc oder Alt+Enter? Andere Alt-Tasten: nichts.
             art = self._esc_lesen()
@@ -801,12 +862,12 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
             self.projekte.taste(ch)
             return
         if ch == 27:
-            # Läuft eine Antwort, stoppt Esc sie (bis in die Schleife, das
-            # spart Geld); wird gerade bearbeitet, bricht Esc das ab; sonst
-            # schließt Esc das Fenster wie bisher.
-            if AI["streaming"]:
-                self.stoppen()
-            elif AI.get("ersetzt"):
+            # Esc schließt das Fenster — auch während einer Antwort, die dann
+            # im Hintergrund weiterläuft (● auf der Startseite, wenn sie fertig
+            # ist). Stoppen ist Strg+C. Sasha, 07.10.2026: „man soll dem
+            # fenster escapen können ohne dass die antwort gestoppt wird".
+            # Nur /bearbeiten bricht Esc zuerst ab (eine Stufe zurück).
+            if AI.get("ersetzt"):
                 AI["ersetzt"], AI["input"], AI["cur"] = None, "", 0
                 AI["msg"] = "bearbeiten abgebrochen"
             else:
@@ -823,7 +884,14 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
             if not AI["input"].strip() and not AI["streaming"] \
                     and self.dokument_oeffnen_letztes():
                 return
-            self.ai_submit()
+            # \ am Zeilenende + Enter = neue Zeile, wie in der Shell.
+            vorher = AI["input"], AI["cur"]
+            art, text, pos = eingabe.enter_deuten(vorher[0], min(vorher[1], len(vorher[0])))
+            AI["input"], AI["cur"] = text, pos
+            if art == "senden":
+                self.ai_submit()
+                if AI["input"] == text:        # nicht abgeschickt (läuft noch,
+                    AI["input"], AI["cur"] = vorher   # Tippfehler): \\ bleibt
             return
         if ch in (curses.KEY_PPAGE, curses.KEY_NPAGE):
             AI["scroll"] = max(0, AI["scroll"] + (5 if ch == curses.KEY_PPAGE else -5))
@@ -856,22 +924,78 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
         läuft — nur Abschicken wartet)."""
         AI = self.AI
         text, pos = AI["input"], min(AI["cur"], len(AI["input"]))
-        zeichen = None
-        if ch == TASTE_ALT_ENTER:
-            zeichen = "\n"
-        elif ch in self._BEARBEITEN:
+        if ch in self._BEARBEITEN:
             text, pos = self._BEARBEITEN[ch](text, pos)
-        elif 32 <= ch <= 126:
-            zeichen = chr(ch)
-        elif ch == 9:
-            zeichen = " "
-        elif 128 <= ch <= 255:             # ein Byte eines Umlauts (UTF-8)
-            AI["u8"], zeichen = eingabe.utf8_byte(AI.get("u8", b""), ch)
-            if zeichen is not None and not eingabe.druckbar(zeichen):
-                zeichen = None
-        if zeichen is not None:
-            text, pos = eingabe.einfuegen(text, pos, zeichen)
-        AI["input"], AI["cur"] = text, pos
+            AI["input"], AI["cur"] = text, pos
+            if len(text) < eingabe.GRENZE:
+                AI["zu_viel"] = 0          # wieder Platz: die Meldung ist erledigt
+            return
+        if ch == TASTE_ALT_ENTER:
+            self._einfuegen("\n")
+        elif ch == 9 or 32 <= ch <= 255:
+            self._stoss(ch)
+
+    def _stoss(self, ch):
+        """Ein Zeichen — und alles, was gleich dahinter im Puffer liegt.
+
+        Ein Einfügen (Strg+Shift+V) kommt als Tausende einzelner Bytes. Jedes
+        einzeln hieße: ein ganzes Bild pro Byte, und ein Zeilenumbruch darin
+        schickte die halbe Nachricht ab. Darum wird der Puffer hier in einem
+        Rutsch geleert (2026-10-07); ein Enter MITTEN im Stoß ist eine neue
+        Zeile. Endet ein langer Stoß mit Enter, war es auch eingefügt; ein
+        kurzer (getippt, während gerade gezeichnet wurde) schickt ab."""
+        AI, stdscr = self.AI, self.z.stdscr
+        codes = [ch]
+        try:
+            stdscr.nodelay(True)
+            while len(codes) < STOSS_MAX:
+                nx = stdscr.getch()
+                if nx == -1:
+                    break
+                codes.append(nx)
+        finally:
+            stdscr.timeout(250)
+        teile, rest = [], []
+        for i, c in enumerate(codes):
+            if c in (10, 13):
+                if i == len(codes) - 1 and len(codes) < STOSS_EINFUEGEN:
+                    rest = [c]                 # getipptes Enter: abschicken
+                    break
+                teile.append("\n")
+            elif c == 9:
+                teile.append(" ")
+            elif 32 <= c <= 126:
+                teile.append(chr(c))
+            elif 128 <= c <= 255:              # ein Byte eines Umlauts (UTF-8)
+                AI["u8"], zeichen = eingabe.utf8_byte(AI.get("u8", b""), c)
+                if zeichen is not None and eingabe.druckbar(zeichen):
+                    teile.append(zeichen)
+            else:                              # Pfeil, Esc, Steuerzeichen: Stoß endet
+                rest = codes[i:]
+                break
+        if teile:
+            self._einfuegen("".join(teile))
+        # Der Rest ist schon aus dem Puffer genommen — ein ESC darin kann
+        # nicht mehr selbst nach seiner Folgetaste schauen (_esc_lesen).
+        i = 0
+        while i < len(rest):
+            if rest[i] == 27 and i + 1 < len(rest):
+                if rest[i + 1] in eingabe.ENTER_CODES:
+                    self.taste(TASTE_ALT_ENTER)
+                    i += 2
+                    continue
+                break                          # andere Alt-Taste: nichts tun
+            self.taste(rest[i])
+            i += 1
+
+    def _einfuegen(self, s):
+        """s an der Cursorstelle einfügen; was über die Grenze ginge, wird
+        gezählt (AI["zu_viel"]) und unten genannt — nie still verworfen."""
+        AI = self.AI
+        text, pos = AI["input"], min(AI["cur"], len(AI["input"]))
+        neu, pos = eingabe.einfuegen(text, pos, s)
+        AI["zu_viel"] = AI.get("zu_viel", 0) + len(s) - (len(neu) - len(text))
+        AI["input"], AI["cur"] = neu, pos
 
     def draw_ai(self, by, bx, bh, bw):
         """Inhalt der MITTE-Box, wenn der KI-Chat Fokus hat. Reiner Zeichner:
@@ -908,6 +1032,7 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
             wahl = AI["wahl"]
             wahl = dict(wahl, optionen=list(wahl["optionen"])) if wahl else None
             denken_offen = AI["denken_offen"]
+            zu_viel = AI.get("zu_viel", 0)
             anh_text = self.anhaenge_text()
 
         # Fußzeilen zuerst: sie bestimmen, wie viel Platz der Verlauf noch hat.
@@ -930,9 +1055,14 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
         elif wahl:
             foot = self._fuss_wahl(wahl, inw, bh)
         else:
-            # Info-Zeile: Denk-Strom > Fehler/Status > Scroll-Hinweis >
-            # was gerade geht (Stoppen, Befehle)
-            if streaming and reflect:
+            # Info-Zeile: Grenze erreicht > Denk-Strom > Fehler/Status >
+            # Scroll-Hinweis > was gerade geht (Stoppen, Befehle). Der Zähler
+            # ab 80 % steht rechts daneben (2026-10-07).
+            grenze = eingabe.grenz_meldung(len(inp), zu_viel)
+            zaehler = eingabe.zaehler(len(inp))
+            if grenze:
+                foot += [(ln, C["warn"] | curses.A_BOLD) for ln in _wrap(grenze, inw)]
+            elif streaming and reflect:
                 foot.append((("denkt: " + reflect.replace("\n", " "))[-inw:],
                              C["faint"]))
             elif msg:
@@ -942,12 +1072,18 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
             elif scroll > 0:
                 foot.append(("↑ verlauf (↓ nach unten)", C["faint"]))
             elif streaming:
-                foot.append(("antwortet … esc stoppt", C["faint"]))
+                foot.append(("antwortet … ctrl+c stoppt · esc schließt (läuft weiter)"[:inw],
+                             C["faint"]))
             elif not inp:
-                foot.append(("enter senden · alt+enter neue zeile · /hilfe befehle"[:inw],
+                foot.append(("enter send · alt+enter or \\ enter new line · /help"[:inw],
                              C["faint"]))
             else:
                 foot.append(("", 0))               # Platz halten, Layout stabil
+            if zaehler and not grenze:
+                links, attr0 = foot[-1]
+                platz = max(0, inw - len(zaehler) - 2)
+                foot[-1] = (links[:platz].ljust(platz) + "  " + zaehler,
+                            attr0 or C["faint"])
             # Darunter das Eingabefeld: wächst bis eingabe.HOEHE Zeilen, dann
             # scrollt es mit dem Cursor. Erste Zeile mit ›, die anderen
             # eingerückt; den Cursor zeichnet der Fuß unten invers.
@@ -1009,7 +1145,7 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
                         if z:
                             safe_addstr(ey + r, ex + c, z[0], pix_attr(z[1], z[2]))
                 if not lines:
-                    hinweis = "frag die ki — tippen + enter · /hilfe"
+                    hinweis = "frag die ki — tippen + enter · /help"
                     addclip(ey + pixel.AUGE_H + 1, bx + max(2, (bw - len(hinweis)) // 2),
                             hinweis, inw, C["faint"])
                     lines = None                       # Hinweis steht schon
@@ -1018,7 +1154,7 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
             pass
         elif not lines:
             addclip(body_top + avail // 2, inx,
-                    "frag die ki — tippen + enter · /hilfe", inw, C["faint"])
+                    "frag die ki — tippen + enter · /help", inw, C["faint"])
         else:
             total = len(lines)
             maxscroll = max(0, total - avail)     # scroll=0 → Boden (neueste)
@@ -1079,7 +1215,15 @@ class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
             nr = "%d) " % (i + 1) if i < 9 and "filter" not in wahl else "   "
             zeilen.append(("%s %s%s" % (zeichen, nr, opts[i][0]),
                            C["bright"] if i == idx else C["dim"]))
-        zeilen.append((("↑↓ wählen · tippen filtert · enter nehmen · esc abbrechen"
-                        if "filter" in wahl else
-                        "↑↓ wählen · enter nehmen · esc abbrechen")[:inw], C["faint"]))
+        zeilen.append((fussleiste.text(self._tasten_wahl(wahl))[:inw], C["faint"]))
         return zeilen
+
+    def _tasten_wahl(self, wahl):
+        """Tasten der offenen Auswahl — Fußleiste und Hinweis darüber."""
+        n = len(wahl.get("optionen") or [])
+        liste = [("↑↓", "select")] if n > 1 else []
+        if "filter" in wahl:                       # /model: tippen filtert
+            liste.append(("type", "filter"))
+        if n:
+            liste.append(("enter", "take"))
+        return liste + [("esc", "cancel")]

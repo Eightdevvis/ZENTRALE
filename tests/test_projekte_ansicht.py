@@ -87,7 +87,7 @@ def test_befehle_sind_bekannt():
                            ("/projekte", "projekte", ""), ("/project geige", "projekt", "geige")):
         e = chat_befehle.lesen(roh)
         assert (e.art, e.name, e.arg) == ("befehl", name, arg), roh
-    assert "/projekt" in chat_befehle.hilfe_text()
+    assert "/project" in chat_befehle.hilfe_text()
 
 
 def test_kastentitel_zeigt_projekt_und_gespraech():
@@ -175,7 +175,7 @@ def test_projekt_ohne_argument_ist_eine_auswahl(backend):
     assert c.AI["projekt"] == "Geige" and "Geige" in c.AI["msg"]
     assert c.AI["gespraeche"][0]["projekt_name"] == "Geige"
     w["aktion"]({"neu": True})
-    assert c.AI["input"] == "/projekt neu " and c.AI["cur"] == len(c.AI["input"])
+    assert c.AI["input"] == "/project new " and c.AI["cur"] == len(c.AI["input"])
 
 
 def test_projekt_mit_namen_neu_und_kein(backend):
@@ -192,7 +192,7 @@ def test_projekt_mit_namen_neu_und_kein(backend):
     assert "angelegt" in c.AI["msg"]
     n = len(backend["aufrufe"])
     p.befehl("projekt", "gibtsnicht")
-    assert "/projekt neu gibtsnicht" in c.AI["msg"]
+    assert "/project new gibtsnicht" in c.AI["msg"]
     assert not [a for a in backend["aufrufe"][n:] if a[0] == "POST"]
 
 
@@ -219,7 +219,7 @@ def test_uebersicht_liste_detail_und_gespraech_oeffnen(backend):
     assert c.AI["projekte"]["liste"][0]["id"] == "geige" and c.AI["liste"] is None
     _tippe(p, curses.KEY_DOWN, curses.KEY_UP, 10)
     assert c.AI["projekte"]["detail"]["id"] == "geige"
-    assert "e anweisungen" in p.fusszeile()
+    assert "e instructions" in p.fusszeile()
     _tippe(p, curses.KEY_DOWN, curses.KEY_DOWN, 10)       # rundum zurück zu g1
     assert c.geoeffnet == ["g1"] and c.AI["projekte"] is None
 
@@ -376,6 +376,6 @@ def test_chat_leitet_projekt_befehle_weiter(backend):
     c.taste(ord("1"))                              # Ziffer nimmt die erste
     assert _posts(backend, "/api/projekte/zuordnen")[-1]["projekt"] == "geige"
     c.befehl("projekte", "")
-    assert "neues projekt" in c.fusszeile()
+    assert "n new project" in c.fusszeile()
     c.projekte.taste(27)          # c.taste(27) läse erst nach (Alt-Taste?)
     assert c.AI["projekte"] is None

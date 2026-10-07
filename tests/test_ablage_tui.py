@@ -50,7 +50,7 @@ def test_lese_zeilen_markdown_code_bild():
 def test_chat_zeilen_fuer_ablage_und_anhang():
     rolle, text = chat_ablage.ablage_eintrag({"id": "d1", "titel": "Plan"})
     assert rolle == "ablage" and chat_ablage.ablage_anzeige(text, True) == "Plan — enter öffnet"
-    assert chat_ablage.ablage_anzeige(text, False) == "Plan — in /ablage"
+    assert chat_ablage.ablage_anzeige(text, False) == "Plan — in /files"
     log = [("user", "x"), ("ablage", "d1\tPlan"), ("ai", "y"), ("ablage", "d2\tListe")]
     assert chat_ablage.letztes_dokument(log) == "d2"
     assert chat_ablage.letztes_dokument([("user", "x")]) is None
@@ -79,7 +79,7 @@ def test_befehle_sind_bekannt():
     assert chat_befehle.lesen("/ablage").art == "befehl"
     a = chat_befehle.lesen("/anhang ~/Downloads/foto.png")
     assert (a.art, a.name, a.arg) == ("befehl", "anhang", "~/Downloads/foto.png")
-    assert "/anhang" in chat_befehle.hilfe_text()
+    assert "/attach" in chat_befehle.hilfe_text()
 
 
 # ── Die Überlagerung mit gefälschtem Backend ──────────────────────────
@@ -222,7 +222,7 @@ def test_befehl_ablage_oeffnet_die_liste(backend, monkeypatch):
     c = _chat(monkeypatch)
     c.befehl("ablage", "")
     assert c.AI["ablage"]["eintraege"] == DOKS
-    assert "ablage" in c.fusszeile()
+    assert "enter read" in c.fusszeile()
 
 
 def test_anhang_lesen_schicken_vormerken(tmp_path, monkeypatch):
@@ -255,7 +255,7 @@ def test_anhang_fehler_sind_klartext(tmp_path, monkeypatch):
     c.anhang_dazu(str(tmp_path / "gibtsnicht.txt"))
     assert "gibt es nicht" in c.AI["msg"]
     c.anhang_dazu("")
-    assert "/anhang <pfad>" in c.AI["msg"]
+    assert "/attach <pfad>" in c.AI["msg"]
     datei = tmp_path / "x.txt"
     datei.write_text("x")
     import io

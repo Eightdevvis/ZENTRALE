@@ -38,124 +38,133 @@ TUI_KEYS = [
     ("karte", "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Overlay (Handel→Politik→aus) · ,/. Zeit ←→ · ; jetzt · w=Fenster"),
     ("kalender", "Kalender (Mitte), bedienbar wie calcurse: v dreht A Tagesliste → B Monat → C Woche · a neu · e ändern (Kasten) · d löschen · r wiederholen · enter ansehen · c/p kopieren · t/w/m/y springen · g gehe zu · x erledigte · in A tab zwischen Terminen/Kalender/TODO"),
     ("post", "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
-    ("space", "KI-Chat (Mitte): tippen + enter fragt die KI · alt+enter neue zeile · ←→ pos1 ende entf: cursor · ↑↓ scrollen (in mehrzeiliger eingabe: zeile wechseln, dann bild↑↓) · esc stoppt eine laufende antwort, sonst zu · /hilfe im chat: /neu /modell /anbieter /effort /budget /lokal /cloud /auto"),
+    ("space", "KI-Chat (Mitte): tippen + enter fragt die KI · alt+enter oder \\ + enter neue zeile · ←→ home end del: cursor · ↑↓ scrollen (in mehrzeiliger eingabe: zeile wechseln, dann pgup/pgdn) · ctrl+c stoppt eine laufende antwort · esc schließt (die antwort läuft weiter, ● wenn fertig) · /help im chat: /new /chats /model /provider /effort /budget /local /cloud /auto"),
     ("tutor", "Persona-Zimmer (eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · ohne DISPLAY → text-panel · /tutor = text-panel"),
     ("fokus", "Fokus (Mitte): oben projekte, drunter alle listen · enter reindiven · a/s neu · space abhaken · r name · d weg · p projekt · f setzt den knoten als alleinigen fokus (rendert dann allein in der FOCUS-box) · m/> verschieben"),
     ("klavier", "Klavier (Mitte): die Tastatur IST die Klaviatur — y x c v b n m , . - weiß, s d g h j l ö schwarz · ←→ oktave · space nimmt eine melodie auf (fragt beim stoppen nach dem namen) · ↑↓ melodie wählen · enter abspielen · r umbenennen · D löschen · k/esc zu"),
     ("/",   "Befehlszeile öffnen"),
 ]
 
-# Kontext-Shortcuts: welche Tasten zeigt '/' im jeweils fokussierten Fenster.
-# Single Source of Truth — die Box-Fußzeilen tragen diese langen Listen NICHT
-# mehr fest ein (sie schnitten ab); '/' blendet sie bei Bedarf auf. Die Tasten
-# selbst greifen weiterhin direkt, ganz ohne Slash. Schlüssel = Kontext aus
-# current_ctx(); Reihenfolge spiegelt die alten Fußzeilen.
+# Kontext-Tasten: was im gerade fokussierten Fenster geht. EINE Tabelle für
+# zwei Anzeigen: das '/'-Overlay UND die Fußleiste ganz unten
+# (fussleiste.py). Seit 07.10.2026 (Sasha: „die leiste zeigt NUR das an was
+# auch tatsächlich in dem modus grad genommen werden kann") prüft
+# tests/test_fussleiste.py für JEDEN Eintrag, dass die Taste im Fenster
+# wirklich etwas tut — eine Zeile hier, die nicht stimmt, macht den Test rot.
+# Beschriftung englisch (Sasha, 07.10.2026); welche Codes eine Beschriftung
+# meint, liest fussleiste.codes(). '/…'-Einträge sind Befehle der
+# Befehlszeile, keine Tasten (die Fußleiste zeigt sie nicht).
+# Schlüssel = Kontext aus current_ctx().
 CTX_KEYS = {
     "home": [
-        ("←→", "rad drehen"), ("alt+←→", "rad wechseln"),
-        ("enter", "app öffnen"), ("space", "ki-chat"), ("esc", "zentrale zuklappen"),
-        ("/dashboard", "altes dashboard"), ("/theme", "theme"),
-        ("/lauf", "stdout-lauf"), ("/quit", "beenden"),
+        ("←→", "turn"), ("alt+←→", "wheel"),
+        ("enter", "open"), ("space", "ai chat"), ("esc", "hide"),
+        ("/dashboard", "old dashboard"), ("/theme", "theme"),
+        ("/lauf", "stdout ticker"), ("/quit", "quit"),
     ],
     "technik": [
-        ("esc", "zurück ins technik-system"),
-    ],
-    "note:edit": [
-        ("↑↓", "block wählen"), ("t/l/f", "neu: text/liste/float"),
-        ("e/enter", "bearbeiten"), ("d", "block weg"), ("r", "titel"),
-        ("n", "übersicht"), ("esc", "speichern & zu"),
-    ],
-    "note:list": [
-        ("↑↓", "wählen"), ("enter", "öffnen"), ("n", "neu"),
-        ("d", "löschen"), ("esc", "zurück"),
-    ],
-    "piano": [
-        ("y x c v b n m , . -", "weiße tasten"), ("s d g h j l ö", "schwarze"),
-        ("←→", "oktave"), ("⌫", "letzte note weg"), ("space", "aufnahme an/aus"),
-        ("↑↓", "melodie wählen"), ("enter", "abspielen / stopp"),
-        ("r", "umbenennen"), ("D", "melodie löschen"),
-        ("L", "licht: neon/regenbogen/aus"), ("t", "theme"), ("k/esc", "zu"),
-    ],
-    "ai": [
-        ("tippen", "frage"), ("enter", "senden"), ("alt+enter", "neue zeile"),
-        ("←→ pos1 ende", "cursor"), ("↑↓", "scrollen / zeile"),
-        ("bild↑↓", "scrollen"), ("esc", "stoppen / zu"),
-        ("/hilfe", "befehle im chat"),
+        ("esc", "back"),
     ],
     "elektronik": [
-        ("esc", "zurück zum rad"),
+        ("esc", "back"),
+    ],
+    "note:edit": [
+        ("↑↓", "block"), ("t/l/f", "new text/list/float"),
+        ("e/enter", "edit"), ("d", "delete block"), ("r", "title"),
+        ("n", "overview"), ("esc", "save & close"),
+    ],
+    "note:list": [
+        ("↑↓", "select"), ("enter", "open"), ("n", "new"),
+        ("d", "delete"), ("esc", "back"),
+    ],
+    "piano": [
+        ("y x c v b n m , . -", "white keys"), ("s d g h j l", "black keys"),
+        ("←→", "octave"), ("⌫", "undo note"), ("space", "record"),
+        ("↑↓", "melody"), ("enter", "play / stop"),
+        ("r", "rename"), ("D", "delete melody"),
+        ("L", "lights"), ("t", "theme"), ("k/esc", "close"),
     ],
     "tutor": [
-        ("enter", "start / reden"), ("/lang", "sprache"),
-        ("/provider", "anbieter"), ("/model", "modell"),
-        ("/models", "wahl zeigen"), ("/tutorstop", "beenden"),
-        ("↑↓", "scrollen"), ("esc", "zu"),
+        ("enter", "start / talk"), ("/lang", "language"),
+        ("/provider", "provider"), ("/model", "model"),
+        ("/models", "models"), ("/tutorstop", "stop"),
+        ("↑↓", "scroll"), ("esc", "close"),
     ],
     "graph": [
-        ("↑↓", "wählen"), ("enter", "öffnen"),
-        ("n", "neu"), ("p", "~vorhersage"), ("r", "reminder"),
-        ("d", "löschen"), ("esc", "zu"),
+        ("↑↓", "select"), ("enter", "open"),
+        ("n", "new"), ("p", "predict"), ("r", "reminder"),
+        ("d", "delete"), ("esc", "close"),
     ],
     "list:forest": [
-        ("↑↓", "wählen"), ("enter", "rein / hak"), ("s", "rein+neu"),
-        ("n", "neue liste"), ("f", "fokus"), ("r", "name"), ("p", "projekt"),
-        ("m/>", "verschieben"), ("d", "weg"), ("esc/l", "zu"),
+        ("↑↓", "select"), ("enter", "open / check"), ("s", "open + add"),
+        ("n", "new list"), ("f", "focus"), ("r", "rename"), ("p", "project"),
+        ("m", "move item"), (">", "place"), ("d", "delete"), ("esc/l", "close"),
     ],
     "list:view": [
-        ("enter", "rein / hak"), ("space", "hak"), ("a/s", "neu"),
-        ("↑ bis oben", "bernstein: enter = abgeschlossene"),
-        ("r", "name"), ("p", "projekt"), ("f", "fokus"), (">", "einordnen"),
-        ("m", "raus"), ("d", "weg"), ("esc", "zurück"),
+        ("enter", "open / check"), ("space", "check"), ("a/s", "add"),
+        ("r", "rename"), ("p", "project"), ("f", "focus"), (">", "place"),
+        ("m", "move out"), ("d", "delete"), ("esc", "back"),
     ],
     "list:pick": [
-        ("↑↓", "wählen"), ("enter", "übernehmen"), ("esc", "abbrechen"),
+        ("↑↓", "select"), ("enter", "take"), ("esc", "cancel"),
     ],
     "map": [
-        ("↑↓←→", "pan (auch hjkl)"), ("+/−", "zoom"), ("0", "reset"),
-        ("Alt+↑↓←→", "land fokussieren"),
-        ("o", "handelsrouten"), ("w", "fenster"), ("esc", "zu"),
+        ("↑↓←→", "pan"), ("+/-", "zoom"), ("0", "reset"),
+        ("alt+↑↓←→", "focus country"),
+        ("o", "overlay"), ("w", "window"), ("esc", "close"),
     ],
-    # Kalender (seit 07.10.2026 nur noch A/B/C, alle wie calcurse bedienbar)
+    # Kalender (seit 07.10.2026 nur noch A/B/C, alle wie calcurse bedienbar;
+    # Belegung von der KALENDER-Sitzung, hier nur englisch beschriftet)
     "cal:a:termine": [
-        ("↑↓", "termin"), ("←→", "tag"), ("a", "neu"), ("e", "ändern"),
-        ("d", "löschen"), ("r", "wiederholen"), ("enter", "ansehen"),
-        ("c/p", "kopieren/einfügen"), ("t/w/m/y", "tag/woche/monat/jahr (groß: zurück)"),
-        ("g", "gehe zu"), ("x", "erledigte zeigen"), ("tab", "kasten"),
-        ("v", "ansicht"), ("esc", "zu"),
+        ("↑↓", "entry"), ("←→", "day"), ("a", "new"), ("e", "edit"),
+        ("d", "delete"), ("r", "repeat"), ("enter", "view"),
+        ("c/p", "copy/paste"), ("t/w/m/y", "day/week/month/year (caps: back)"),
+        ("g", "go to"), ("x", "show done"), ("tab", "box"),
+        ("v", "view"), ("esc", "close"),
     ],
     "cal:a:kalender": [
-        ("←→", "tag"), ("↑↓", "woche"), ("0/$", "wochenanfang/-ende"),
-        ("a", "neu"), ("enter", "zu den terminen"), ("tab", "kasten"), ("esc", "zu"),
+        ("←→", "day"), ("↑↓", "week"), ("0/$", "week start/end"),
+        ("a", "new"), ("enter", "to entries"), ("tab", "box"), ("esc", "close"),
     ],
     "cal:a:todo": [
-        ("↑↓", "wählen"), ("a", "neu"), ("e", "ändern"), ("d", "löschen"),
-        ("!", "erledigt"), ("+/-", "hoch/runter"), ("tab", "kasten"), ("esc", "zu"),
+        ("↑↓", "select"), ("a", "new"), ("e", "edit"), ("d", "delete"),
+        ("!", "done"), ("+/-", "up/down"), ("tab", "box"), ("esc", "close"),
     ],
     "cal:b": [
-        ("←→", "tag"), ("↑↓", "woche"), ("tab", "termin am tag"), ("a", "neu"),
-        ("e", "ändern"), ("d", "löschen"), ("r", "wiederholen"), ("enter", "ansehen"),
-        ("c/p", "kopieren/einfügen"), ("m/M", "monat"), ("g", "gehe zu"),
-        ("v", "ansicht"), ("esc", "zu"),
+        ("←→", "day"), ("↑↓", "week"), ("tab", "entry of day"), ("a", "new"),
+        ("e", "edit"), ("d", "delete"), ("r", "repeat"), ("enter", "view"),
+        ("c/p", "copy/paste"), ("m/M", "month"), ("g", "go to"),
+        ("v", "view"), ("esc", "close"),
     ],
     "cal:c": [
-        ("↑↓", "termin"), ("←→", "tag"), ("a", "neu"), ("e", "ändern"),
-        ("d", "löschen"), ("r", "wiederholen"), ("enter", "ansehen"),
-        ("c/p", "kopieren/einfügen"), ("w/W", "woche"), ("g", "gehe zu"),
-        ("v", "ansicht"), ("esc", "zu"),
+        ("↑↓", "entry"), ("←→", "day"), ("a", "new"), ("e", "edit"),
+        ("d", "delete"), ("r", "repeat"), ("enter", "view"),
+        ("c/p", "copy/paste"), ("w/W", "week"), ("g", "go to"),
+        ("v", "view"), ("esc", "close"),
     ],
     "mail:cats": [
-        ("↑↓", "wählen"), ("enter", "öffnen"), ("e", "eingang"), ("r", "poll"),
-        ("x", "abgleich"), ("z", "neu zählen"), ("esc", "zu"),
+        ("↑↓", "select"), ("enter", "open"), ("e", "inbox"), ("r", "poll"),
+        ("x", "reconcile"), ("z", "recount"), ("esc", "close"),
     ],
     "mail:list": [
-        ("↑↓", "wählen"), ("enter", "lesen"), ("f", "abhaken"), ("a", "antworten"),
-        ("s", "einsortieren"), ("d", "löschen"), ("x", "abgleich"),
-        ("z", "neu zählen"), ("esc", "zurück"),
+        ("↑↓", "select"), ("enter", "read"), ("a", "reply"),
+        ("s", "sort in"), ("d", "delete"), ("x", "reconcile"),
+        ("z", "recount"), ("esc", "back"),
     ],
     "mail:read": [
-        ("←→", "vor/zurück"), ("↓", "ausklappen/scrollen"), ("↑", "scrollen/zu"),
-        ("f", "abhaken"), ("a", "antworten"), ("s", "einsortieren"), ("d", "löschen"),
-        ("v", "liste"), ("x", "abgleich"), ("z", "neu zählen"), ("esc", "zurück"),
+        ("←→", "prev/next"), ("↓", "expand/scroll"), ("↑", "scroll/fold"),
+        ("a", "reply"), ("s", "sort in"), ("d", "delete"),
+        ("v", "list"), ("x", "reconcile"), ("z", "recount"), ("esc", "back"),
+    ],
+    # Im Eingang: f hakt ab (gelesen + einsortieren), löschen geht erst danach.
+    "mail:list:eingang": [
+        ("↑↓", "select"), ("enter", "read"), ("f", "done"), ("a", "reply"),
+        ("s", "sort in"), ("x", "reconcile"), ("z", "recount"), ("esc", "back"),
+    ],
+    "mail:read:eingang": [
+        ("←→", "prev/next"), ("↓", "expand/scroll"), ("↑", "scroll/fold"),
+        ("f", "done"), ("a", "reply"), ("s", "sort in"),
+        ("v", "list"), ("x", "reconcile"), ("z", "recount"), ("esc", "back"),
     ],
 }
 CTX_TITLES = {
@@ -164,6 +173,8 @@ CTX_TITLES = {
     "cal:a:termine": "kalender · termine", "cal:a:kalender": "kalender · monat",
     "cal:a:todo": "kalender · todo", "cal:b": "kalender · monat", "cal:c": "kalender · woche",
     "mail:cats": "post", "mail:list": "post · liste", "mail:read": "post · lesen",
+    "mail:list:eingang": "post · eingang", "mail:read:eingang": "post · eingang",
+    "elektronik": "elektronik",
     "ai": "ki-chat", "tutor": "tutor",
     "note:edit": "notiz", "note:list": "notizen", "piano": "klavier",
     "technik": "technik",
@@ -371,8 +382,10 @@ class Befehlszeile:
             {"acc": C["acc"], "num": C["num"], "dim": C["dim"], "faint": C["faint"]},
         )
 
-    def zeichne_zeile(self, input_row, W):
-        """Die Zeile selbst (›): offener Befehl, sonst Rückmeldung oder Hinweis."""
+    def zeichne_zeile(self, input_row, W, erreichbar=True):
+        """Die Zeile selbst (›): offener Befehl, sonst Rückmeldung oder Hinweis.
+        erreichbar=False (Freitext-Fenster wie der Chat, 2026-10-07): dort
+        öffnet '/' die Zeile nicht, also auch kein Hinweis darauf."""
         z = self.z
         C, addclip, safe_addstr = z.C, z.addclip, z.safe_addstr
         if self.cmd_mode:
@@ -385,4 +398,4 @@ class Befehlszeile:
             if self.cmd_msg:
                 addclip(input_row, 3, self.cmd_msg, W - 6, C["warn"])
             else:
-                safe_addstr(input_row, 3, "/ für befehle", C["faint"])
+                safe_addstr(input_row, 3, "/ for commands" if erreichbar else "", C["faint"])

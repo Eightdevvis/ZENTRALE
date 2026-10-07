@@ -163,7 +163,7 @@ def test_die_nachbarn_stehen_daneben(schirm):
 def test_keine_buchstaben_leiste_mehr(schirm):
     assert "weglegen" not in schirm
     assert "q weglegen" not in schirm
-    assert "space ki" in schirm
+    assert "space ai chat" in schirm
 
 
 def test_pfeil_rechts_dreht_weiter():
@@ -278,7 +278,7 @@ def test_startseite_ist_eine_galaxie(schirm):
     assert "KLAVIER" in schirm or "K L A V I E R" in schirm
     assert "netz" in schirm                  # technik liegt angeschnitten am Rand
     assert "LIFESTYLE" not in schirm         # die Seitenspalten sind weg
-    assert "alt+←→ rad wechseln" in schirm
+    assert "alt+←→ wheel" in schirm
 
 
 def test_alt_pfeil_rechts_waehlt_technik():

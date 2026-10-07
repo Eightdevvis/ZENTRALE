@@ -151,12 +151,18 @@ SZ = {
                     ("k", "Enter"), ("w", 1), ("cap", "d"), ("l", "w"), ("l", "~/noten.md"),
                     ("cap", "e"), ("k", "Escape"), ("l", "e"), ("w", 2), ("cap", "f"),
                     ("k", "Escape"), ("k", "Escape"), ("cap", "g")],
-    # Nachbesserungen (2026-10-07): /modell mit vielen Modellen, tippen
-    # filtert; /erlaubnis zeigt und bietet Zurücknehmen an.
-    "ki_erlaubnis": [("k", "Space"), ("w", 2), ("l", "/modell"), ("k", "Enter"), ("w", 1),
+    # Nachbesserungen (2026-10-07): /model mit vielen Modellen, tippen
+    # filtert; /permissions zeigt und bietet Zurücknehmen an.
+    "ki_erlaubnis": [("k", "Space"), ("w", 2), ("l", "/model"), ("k", "Enter"), ("w", 1),
                      ("cap", "a"), ("l", "qwen3-1"), ("cap", "b"), ("k", "BSpace"),
-                     ("l", "zzz"), ("cap", "c"), ("k", "Escape"), ("l", "/erlaubnis"),
+                     ("l", "zzz"), ("cap", "c"), ("k", "Escape"), ("l", "/permissions"),
                      ("k", "Enter"), ("w", 1), ("cap", "d"), ("k", "Escape"), ("cap", "e")],
+    # Nachbesserungen 07.10.2026: \ + Enter, Strg+C ohne Antwort, Zähler ab
+    # 80 %, Grenze mit gekapptem Einfügen, Esc zurück auf die Startseite.
+    "ki_nachbesserung": [("k", "Space"), ("w", 2), ("l", "eins\\"), ("k", "Enter"),
+                         ("l", "zwei"), ("cap", "a"), ("k", "C-c"), ("cap", "b"),
+                         ("paste", "x" * 16500), ("w", 2), ("cap", "c"), ("paste", "y" * 4000),
+                         ("w", 2), ("cap", "d"), ("k", "Escape"), ("cap", "e")],
     "tech_system": [("k", "M-Right"), ("k", "Enter"), ("cap", "a"), ("k", "/"), ("cap", "b")],
     "tech_stdout": [("k", "M-Right"), ("k", "Right"), ("k", "Enter"), ("cap", "a")],
     "tech_netz": [("k", "M-Right"), ("k", "Right"), ("k", "Right"), ("k", "Enter"), ("cap", "a")],
@@ -244,6 +250,13 @@ def lauf(code, aus, namen, breite=150, hoehe=46):
             elif s[0] == "l":
                 tmux("send-keys", "-t", sess, "-l", s[1])
                 time.sleep(0.5)
+            elif s[0] == "paste":          # großes Einfügen (send-keys -l kappt lange Texte)
+                puffer = os.path.join(st, "paste.txt")
+                with open(puffer, "w") as f:
+                    f.write(s[1])
+                tmux("load-buffer", "-b", "ztui", puffer)
+                tmux("paste-buffer", "-b", "ztui", "-t", sess)
+                time.sleep(1.0)
             elif s[0] == "w":
                 time.sleep(s[1])
             elif s[0] == "resize":

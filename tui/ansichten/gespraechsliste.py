@@ -21,6 +21,7 @@ import urllib.error
 from datetime import datetime, timezone
 
 from . import eingabe
+from . import fussleiste
 from .basis import api_call
 
 ERINNERUNGEN = "erinnerungen"       # dieselbe id wie core/gespraeche.py
@@ -113,7 +114,7 @@ class Gespraechsliste:
     def oeffnen(self, archiv=False):
         AI = self.AI
         if AI["streaming"]:
-            AI["msg"] = "antwort läuft noch — erst danach wechseln (esc stoppt)"
+            AI["msg"] = "antwort läuft noch — erst danach wechseln (ctrl+c stoppt)"
             return
         d = self.holen(archiv)
         if d is None:
@@ -124,6 +125,20 @@ class Gespraechsliste:
         AI["liste"] = {"eintraege": eintraege, "idx": idx, "suche": "", "suchen": False,
                        "umbenennen": None, "archiv": archiv, "aktiv": aktiv}
         AI["msg"] = ""
+
+    def tasten(self):
+        """Tasten je Zustand — Fußleiste und Hinweis im Kasten (2026-10-07)."""
+        L = self.AI["liste"]
+        if L["umbenennen"] is not None:
+            return [("enter", "save"), ("esc", "cancel")]
+        if L["suchen"]:
+            return [("type", "filter"), ("enter", "done"), ("esc", "clear filter")]
+        n = len(self.sichtbar())
+        return (([("↑↓", "select")] if n > 1 else [])
+                + ([("enter", "open"), ("r", "rename")] if n else []) + [("n", "new")]
+                + ([("a", "restore" if L["archiv"] else "archive")] if n else [])
+                + [("z", "back" if L["archiv"] else "archive list"),
+                   ("/", "filter"), ("esc", "close")])
 
     def schliessen(self):
         self.AI["liste"] = None
@@ -253,14 +268,11 @@ class Gespraechsliste:
 
         if L["umbenennen"] is not None:
             fuss = ["neuer titel: " + L["umbenennen"]["text"] + "▌",
-                    "enter speichern · esc abbrechen"]
+                    fussleiste.text(self.tasten())]
         elif L["suchen"]:
-            fuss = ["tippen sucht im titel und projekt · enter fertig · esc suche weg"]
+            fuss = ["tippen sucht im titel und projekt · " + fussleiste.text(self.tasten()[1:])]
         else:
-            fuss = ["↑↓ wählen · enter öffnen · n neu · r umbenennen · "
-                    + ("a zurückholen" if L["archiv"] else "a archivieren")
-                    + " · z " + ("zurück" if L["archiv"] else "archiv")
-                    + " · / suchen · esc zu"]
+            fuss = [fussleiste.text(self.tasten())]
         msg = self.AI.get("msg")
         if msg:
             fuss = [msg] + fuss

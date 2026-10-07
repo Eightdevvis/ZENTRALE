@@ -23,6 +23,7 @@ import curses
 import urllib.error
 import urllib.parse
 
+from . import fussleiste
 from .basis import api_call
 from .gespraechsliste import alter_text
 from .text import md_zeilen
@@ -140,6 +141,19 @@ class Ablageliste:
                                  "fassung": dok.get("fassung") or 1}
         AI["msg"] = ""
 
+    def tasten(self):
+        """Tasten je Zustand — Fußleiste und Hinweis im Kasten (2026-10-07)."""
+        A = self.AI["ablage"]
+        if A["lesen"] is not None:
+            kopf = A["lesen"]["dok"].get("kopf") or {}
+            mehr = int(kopf.get("fassung") or 1) > 1
+            return ([("↑↓", "scroll"), ("pgup pgdn space", "page"), ("home end", "top/end")]
+                    + ([("←→", "versions")] if mehr else []) + [("esc", "back")])
+        return ([("↑↓", "select"), ("enter", "read")]
+                + ([("a", "restore"), ("z", "back")] if A["archiv"]
+                   else [("a", "archive"), ("z", "archive list")])
+                + [("esc", "close")])
+
     def schliessen(self):
         self.AI["ablage"] = None
 
@@ -246,14 +260,13 @@ class Ablageliste:
         inx, inw = bx + 2, max(6, bw - 4)
         addclip(by + 1, inx, "ablage · archiv" if A["archiv"] else "ablage", inw, C["acc"])
         fuss, mit_msg = self._fuss(
-            ["↑↓ wählen · enter lesen · " + ("a zurückholen" if A["archiv"] else "a archivieren")
-             + " · z " + ("zurück" if A["archiv"] else "archiv") + " · esc zu"], inw)
+            [fussleiste.text(self.tasten())], inw)
         oben, unten = by + 3, by + bh - 2 - len(fuss)
         platz = max(1, unten - oben + 1)
         if not A["eintraege"]:
             addclip(oben, inx, "archiv ist leer" if A["archiv"] else
                     "noch nichts abgelegt — die ki legt hier dokumente ab, "
-                    "/anhang <pfad> gibt ihr eine datei", inw, C["faint"])
+                    "/attach <pfad> gibt ihr eine datei", inw, C["faint"])
         else:
             idx = max(0, min(A["idx"], len(A["eintraege"]) - 1))
             start = max(0, min(idx - platz // 2, len(A["eintraege"]) - platz))
@@ -277,7 +290,7 @@ class Ablageliste:
         rechts = " · fassung %d/%d" % (L["fassung"], n) if n > 1 else ""
         addclip(by + 1, inx, (titel[:max(1, inw - len(rechts))] + rechts), inw, C["acc"])
         fuss, mit_msg = self._fuss(
-            ["↑↓ bild↑↓ blättern" + (" · ←→ fassung" if n > 1 else "") + " · esc zurück"], inw)
+            [fussleiste.text(self.tasten())], inw)
         oben, unten = by + 3, by + bh - 2 - len(fuss)
         platz = max(1, unten - oben + 1)
         self._seite = max(1, platz - 1)

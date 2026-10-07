@@ -13,6 +13,9 @@
 #   Pos1/Ende  Anfang/Ende der Zeile, in der der Cursor steht (auch Strg+A/E)
 #   ⌫ / Entf   löscht vor / unter dem Cursor
 #   Alt+Enter  neue Zeile; Enter schickt ab
+#   \ + Enter  neue Zeile wie in der Shell (der \ verschwindet); \\ + Enter
+#              schickt ab und behält EINEN \ (enter_deuten)
+#   Strg+C     stoppt eine laufende Antwort (Esc schließt nur das Fenster)
 #   ↑↓         EINZEILIG (kein Zeilenumbruch drin): scrollen den Verlauf, wie
 #              bisher. MEHRZEILIG: bewegen den Cursor zwischen den Zeilen —
 #              den Verlauf scrollen dann Bild↑/Bild↓.
@@ -22,7 +25,13 @@
 # anzufassen. Ein Umlaut kommt deshalb als zwei Bytes und wird hier
 # zusammengesetzt (utf8_byte) — derselbe Weg wie im Post-Antwort-Editor.
 
-GRENZE = 4000          # Zeichen; mehrzeilig darf es mehr sein als die alten 1000
+# Sasha, 07.10.2026: „…dass man auch dann sieht dass man nich mehr
+# weiterschreiben kann statt dass man sich dann fragt warum der halbe text weg
+# is". Darum 20 000 statt 4 000, ab 80 % ein Zähler, an der Grenze eine
+# deutliche Meldung — und was beim Einfügen nicht mehr passt, wird gezählt
+# und genannt (chat.py), nie still verworfen.
+GRENZE = 20000         # Zeichen
+ZAEHLER_AB = 0.8       # ab diesem Anteil zeigt die Eingabe „12 345 / 20 000"
 HOEHE = 5              # so viele Zeilen wächst das Feld, dann scrollt es
 
 
@@ -33,6 +42,45 @@ def einfuegen(text, pos, s, grenze=GRENZE):
     platz = max(0, grenze - len(text))
     s = s[:platz]
     return text[:pos] + s + text[pos:], pos + len(s)
+
+
+def zaehler(n, grenze=GRENZE):
+    """„12 345 / 20 000" ab 80 % der Grenze, darunter None."""
+    if n < grenze * ZAEHLER_AB:
+        return None
+    return "%s / %s" % (_zahl(n), _zahl(grenze))
+
+
+def grenz_meldung(n, zu_viel=0, grenze=GRENZE):
+    """An der Grenze: die deutliche Meldung (mit dem, was nicht mehr passte).
+    -> Text oder None (noch Platz)."""
+    if n < grenze and not zu_viel:
+        return None
+    teile = ["grenze erreicht — nicht mehr platz"]
+    if zu_viel:
+        teile.append("%s zeichen nicht übernommen" % _zahl(zu_viel))
+    teile.append(zaehler(n, grenze) or "%s / %s" % (_zahl(n), _zahl(grenze)))
+    return " · ".join(teile)
+
+
+def _zahl(n):
+    return "{:,}".format(int(n)).replace(",", " ")
+
+
+def enter_deuten(text, pos):
+    """Was Enter tut. -> ("umbruch" | "senden", text, pos)
+
+    Wie in der Shell (Sasha, 07.10.2026: „für neue zeile … das nutzen wie im
+    terminal man einen umbruch zeichnet"): steht direkt vor dem Cursor am
+    Zeilenende ein \\, wird er zur neuen Zeile. Zwei \\ = ein wörtlicher \\
+    und abschicken (die Shell liest \\\\ auch als einen \\). Mitten in einer
+    Zeile zählt ein \\ nicht — Pfade wie C:\\Daten bleiben heil."""
+    am_zeilenende = pos >= len(text) or text[pos] == "\n"
+    if not am_zeilenende or not text[:pos].endswith("\\"):
+        return "senden", text, pos
+    if text[:pos].endswith("\\\\"):
+        return "senden", text[:pos - 1] + text[pos:], pos - 1
+    return "umbruch", text[:pos - 1] + "\n" + text[pos:], pos
 
 
 def zurueck(text, pos):

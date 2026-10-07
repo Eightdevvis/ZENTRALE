@@ -199,7 +199,7 @@ class GespraechsSteuerung:
         if not AI.get("gid"):
             AI["msg"] = "noch kein gespräch — erst etwas schreiben"
         elif not arg:
-            AI["msg"] = "titel: %s · /titel <neuer titel> ändert ihn" % (AI.get("titel") or "—")
+            AI["msg"] = "titel: %s · /rename <neuer titel> ändert ihn" % (AI.get("titel") or "—")
         elif AI["gid"] == "erinnerungen":
             AI["msg"] = "„erinnerungen“ behält seinen namen"
         else:

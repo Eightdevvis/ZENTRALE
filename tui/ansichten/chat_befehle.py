@@ -1,6 +1,6 @@
 # tui/ansichten/chat_befehle.py
 #
-# Slash-Befehle IM KI-Chat (/neu, /modell, /effort …) — nur das Lesen und
+# Slash-Befehle IM KI-Chat (/new, /model, /effort …) — nur das Lesen und
 # die Liste, ohne curses und ohne HTTP, damit testbar
 # (tests/test_chat_eingabe.py). Was ein Befehl tut, macht Chat.befehl in
 # chat.py über /api/ai/einstellungen bzw. chat_gespraeche.py (Gespräche).
@@ -12,46 +12,59 @@
 # Regel (2026-10-07): ein Befehl ist eine Eingabe, die mit '/' beginnt.
 # '//' am Anfang schickt einen wörtlichen Schrägstrich an die KI ('//etc'
 # → '/etc'). Ein unbekannter Befehl geht NICHT an die KI — ein Tippfehler
-# in „/modell" soll nicht als Frage bezahlt werden.
+# in „/model" soll nicht als Frage bezahlt werden.
 
 from collections import namedtuple
 
-# (Befehl, was er tut) — die Reihenfolge ist die der Hilfe.
+# (Befehl, was er tut) — die Reihenfolge ist die der Hilfe. Seit 07.10.2026
+# englisch (Sasha: „die deutschen sind mir zu weird"); die deutschen Namen
+# gehen weiter, stehen aber nirgends mehr (ANDERE_NAMEN).
 BEFEHLE = [
-    ("/neu",      "neues gespräch (das alte bleibt in der liste)"),
-    ("/liste",    "alle gespräche (auch: tab bei leerer eingabe)"),
-    ("/titel",    "titel zeigen · /titel <text> benennt um"),
-    ("/archiv",   "dieses gespräch ins archiv, dann ein neues"),
-    ("/wiederholen", "letzte antwort neu erzeugen"),
-    ("/bearbeiten", "letzte eigene nachricht ändern und neu schicken"),
-    ("/denken",   "gedachtes auf-/zuklappen (auch: strg+d)"),
-    ("/gedaechtnis", "was die ki über dich weiß — ansehen und ändern"),
+    ("/new",      "neues gespräch (das alte bleibt in der liste)"),
+    ("/chats",    "alle gespräche (auch: tab bei leerer eingabe)"),
+    ("/rename",   "titel zeigen · /rename <text> benennt um"),
+    ("/archive",  "dieses gespräch ins archiv, dann ein neues"),
+    ("/retry",    "letzte antwort neu erzeugen"),
+    ("/edit",     "letzte eigene nachricht ändern und neu schicken"),
+    ("/thinking", "gedachtes auf-/zuklappen (auch: ctrl+d)"),
+    ("/memory",   "was die ki über dich weiß — ansehen und ändern"),
     ("/skills",   "skills der ki — ansehen, an- und ausschalten"),
-    ("/ablage",   "dokumente der ki und anhänge ansehen"),
-    ("/anhang",   "/anhang <pfad> gibt der ki eine datei mit (text, pdf, bild)"),
-    ("/projekt",  "projekt dieses gesprächs · /projekt <name> · neu <name> · kein"),
-    ("/projekte", "alle projekte — anweisungen, wissen, gespräche"),
-    ("/erlaubnis", "was die ki ohne fragen darf — ansehen, zurücknehmen"),
-    ("/modell",   "alle modelle der anbieter (tippen filtert) · /modell <name>"),
-    ("/anbieter", "anbieter wählen · /anbieter <name> oder auto"),
+    ("/files",    "dokumente der ki und anhänge ansehen"),
+    ("/attach",   "/attach <pfad> gibt der ki eine datei mit (text, pdf, bild)"),
+    ("/project",  "projekt dieses gesprächs · /project <name> · new <name> · none"),
+    ("/projects", "alle projekte — anweisungen, wissen, gespräche"),
+    ("/permissions", "was die ki ohne fragen darf — ansehen, zurücknehmen"),
+    ("/model",    "alle modelle der anbieter (tippen filtert) · /model <name>"),
+    ("/provider", "anbieter wählen · /provider <name> oder auto"),
     ("/effort",   "denk-tiefe wählen (nur claude) · /effort low … max"),
-    ("/budget",   "monatsbudget zeigen · /budget 20 setzt · /budget aus"),
-    ("/lokal",    "nur die lokale ki"),
+    ("/budget",   "monatsbudget zeigen · /budget 20 setzt · /budget off"),
+    ("/local",    "nur die lokale ki"),
     ("/cloud",    "nur die cloud-ki"),
     ("/auto",     "lokal, wenn da — sonst cloud"),
-    ("/hilfe",    "diese liste"),
+    ("/help",     "diese liste"),
 ]
 
-# Andere Schreibweisen, die dasselbe meinen. /clear stand früher in der Doku.
-ANDERE_NAMEN = {"help": "hilfe", "clear": "neu", "model": "modell",
-                "provider": "anbieter", "local": "lokal", "list": "liste",
-                "retry": "wiederholen", "edit": "bearbeiten",
-                "gedächtnis": "gedaechtnis", "memory": "gedaechtnis",
-                "dokumente": "ablage", "attach": "anhang", "datei": "anhang",
-                "project": "projekt", "projects": "projekte",
-                "erlaubnisse": "erlaubnis", "permissions": "erlaubnis"}
+# Englischer Name → der Name, unter dem Chat.befehl ihn ausführt. Die inneren
+# Namen bleiben deutsch, damit chat.py & Co. unverändert weiterlaufen.
+INNEN = {"new": "neu", "chats": "liste", "rename": "titel", "archive": "archiv",
+         "retry": "wiederholen", "edit": "bearbeiten", "thinking": "denken",
+         "memory": "gedaechtnis", "files": "ablage", "attach": "anhang",
+         "project": "projekt", "projects": "projekte", "model": "modell",
+         "provider": "anbieter", "local": "lokal", "help": "hilfe",
+         "permissions": "erlaubnis"}
 
-NAMEN = {b[1:] for b, _ in BEFEHLE}
+# Stille Aliase: die deutschen Namen von vorher und alte Schreibweisen
+# (/clear stand früher in der Doku). In keiner Hilfe, keiner Fußleiste.
+ANDERE_NAMEN = {"clear": "neu", "list": "liste", "gedächtnis": "gedaechtnis",
+                "dokumente": "ablage", "datei": "anhang", "denken": "denken",
+                "neu": "neu", "liste": "liste", "titel": "titel", "archiv": "archiv",
+                "wiederholen": "wiederholen", "bearbeiten": "bearbeiten",
+                "gedaechtnis": "gedaechtnis", "ablage": "ablage", "anhang": "anhang",
+                "projekt": "projekt", "projekte": "projekte", "modell": "modell",
+                "anbieter": "anbieter", "lokal": "lokal", "hilfe": "hilfe",
+                "erlaubnis": "erlaubnis", "erlaubnisse": "erlaubnis"}
+
+NAMEN = {INNEN.get(b[1:], b[1:]) for b, _ in BEFEHLE}
 
 Eingabe = namedtuple("Eingabe", "art name arg text")
 #   art "senden":    text geht an die KI
@@ -72,10 +85,10 @@ def lesen(roh):
     teile = text[1:].split(None, 1)
     name = teile[0].lower() if teile else ""
     arg = teile[1].strip() if len(teile) > 1 else ""
-    name = ANDERE_NAMEN.get(name, name)
-    if name in NAMEN:
-        return Eingabe("befehl", name, arg, text)
-    return Eingabe("unbekannt", name, arg, text)
+    innen = INNEN.get(name) or ANDERE_NAMEN.get(name, name)
+    if innen in NAMEN:
+        return Eingabe("befehl", innen, arg, text)
+    return Eingabe("unbekannt", name, arg, text)    # so, wie getippt
 
 
 def hilfe_text():
@@ -84,4 +97,6 @@ def hilfe_text():
     zeilen = ["befehle im chat:"]
     zeilen += ["%s  %s" % (b.ljust(breite), was) for b, was in BEFEHLE]
     zeilen.append("// am anfang schickt einen schrägstrich an die ki")
+    zeilen.append("\\ am zeilenende + enter (oder alt+enter): neue zeile · \\\\ + enter: ein \\ und senden")
+    zeilen.append("ctrl+c stoppt eine antwort · esc schließt, die antwort läuft weiter")
     return "\n".join(zeilen)

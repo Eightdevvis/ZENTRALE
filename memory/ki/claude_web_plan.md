@@ -646,3 +646,23 @@ gewichtigen Antwort (ein `load_skill` je Gespräch) — beobachten, ob Sasha
 das will. `internal-comms` ist für Firmen geschrieben; an, weil nichts
 fehlt, aber vielleicht unnütz. Die alten Dateien in `skills/_alt/` kann
 Sasha irgendwann wegwerfen, wenn beide Rechner umgezogen sind.
+
+### Nachbesserungen nach Sashas Durchsicht — TUI (2026-10-07)
+
+Ausführlich: [../system/tui_bauplan.md](../system/tui_bauplan.md),
+„Nachbesserungen nach Sashas Durchsicht" und „Fußleiste". Kurz:
+
+- **Esc schließt** den Chat immer, die Antwort läuft weiter (● an der
+  Leertaste der Startseite, wenn sie bei geschlossenem Fenster fertig wurde);
+  **Strg+C stoppt** (curses jetzt im raw-Modus; außerhalb des Chats beendet
+  Strg+C die TUI wie vorher, im Chat nie).
+- **`\` + Enter** = neue Zeile, `\\` + Enter = ein `\` und senden.
+- **Eingabe bis 20 000 Zeichen**, Zähler ab 80 %, an der Grenze deutliche
+  Meldung samt Zahl der nicht übernommenen Zeichen; Einfügen wird als ein
+  Stoß gelesen (ein Zeilenumbruch darin schickt nicht mehr ab).
+- **Befehle und Tasten englisch** (`/new /chats /model …`, „esc close ·
+  ctrl+c stop"); die deutschen Befehle gehen still weiter. Inhaltliche
+  Hinweise bleiben deutsch.
+- **Fußleiste zeigt nur, was wirkt**: je Fenster/Überlagerung aus `CTX_KEYS`
+  bzw. `tasten()` der Ansicht; `tests/test_fussleiste.py` drückt jede
+  beworbene Taste in der echten TUI ohne Bildschirm.

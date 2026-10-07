@@ -37,7 +37,7 @@ def ablage_anzeige(text, letzte):
     """Was eine „ablage"-Zeile im Verlauf zeigt. Nur die LETZTE öffnet Enter
     (die Eingabe ist ja leer); ältere findet man in /ablage."""
     titel = text.split(TRENNER, 1)[-1]
-    return titel + (" — enter öffnet" if letzte else " — in /ablage")
+    return titel + (" — enter öffnet" if letzte else " — in /files")
 
 
 def letztes_dokument(log):
@@ -66,7 +66,7 @@ class AblageSteuerung:
         pfad = pfad_aufloesen(arg)
         if not pfad:
             n = len(AI.get("anhaenge") or [])
-            AI["msg"] = ("/anhang <pfad> hängt eine datei an (text, code, pdf, bild)"
+            AI["msg"] = ("/attach <pfad> hängt eine datei an (text, code, pdf, bild)"
                          if not n else "%d anhang/anhänge warten auf die nächste nachricht" % n)
             return
         if not os.path.isfile(pfad):

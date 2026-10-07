@@ -205,4 +205,4 @@ def test_neue_befehle_sind_bekannt():
     for b in ("liste", "titel", "archiv", "wiederholen", "bearbeiten", "denken"):
         assert chat_befehle.lesen("/" + b).art == "befehl"
     assert chat_befehle.lesen("/titel Mein Rad").arg == "Mein Rad"
-    assert "/wiederholen" in chat_befehle.hilfe_text()
+    assert "/retry" in chat_befehle.hilfe_text()

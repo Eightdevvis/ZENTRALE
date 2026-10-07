@@ -31,6 +31,7 @@ import subprocess
 import tempfile
 import urllib.error
 
+from . import fussleiste
 from .basis import api_call
 from .text import md_zeilen
 
@@ -283,13 +284,19 @@ class Gedaechtnis:
         AI["msg"] = "%s gespeichert (die alte fassung bleibt als sicherung)" % akte
 
     # ── Zeichnen ───────────────────────────────────────────────────────
-    def fusszeile(self):
+    def tasten(self):
+        """Tasten je Abschnitt — Fußleiste und Hinweis im Kasten (2026-10-07)."""
         ab = self.abschnitt()
         if ab in KERNAKTEN:
-            return "←→ abschnitt · ↑↓ blättern · e im editor ändern · r neu laden · esc zu"
-        if ab == "skills":
-            return "←→ abschnitt · ↑↓ wählen · enter an/aus · r neu laden · esc zu"
-        return "←→ abschnitt · ↑↓ blättern · r neu laden · esc zu"
+            mitte = [("↑↓", "scroll"), ("e", "edit in editor")]
+        elif ab == "skills":
+            mitte = [("↑↓", "select"), ("enter", "on/off")]
+        else:
+            mitte = [("↑↓", "scroll")]
+        return [("←→", "section")] + mitte + [("r", "reload"), ("esc", "close")]
+
+    def fusszeile(self):
+        return fussleiste.text(self.tasten())
 
     def zeichnen(self, by, bx, bh, bw):
         z = self.chat.z

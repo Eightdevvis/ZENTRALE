@@ -31,14 +31,15 @@ import tempfile
 import urllib.error
 
 from . import eingabe
+from . import fussleiste
 from .basis import api_call
 from .gedaechtnis import editor_befehl
 from .gespraechsliste import alter_text
 from .text import md_zeilen
 
 # Was in /projekt <wort> nicht als Projektname gilt.
-WORTE_KEIN = ("kein", "keins", "keines", "aus", "-")
-WORT_NEU = "neu"
+WORTE_KEIN = ("none", "off", "kein", "keins", "keines", "aus", "-")
+WORTE_NEU = ("new", "neu")     # englisch zuerst (Sasha, 07.10.2026)
 MAX_DATEI = 2_000_000       # wie core/projekte.MAX_WISSEN_BYTES
 SPALTE = 64                 # Listen-Zeilen höchstens so breit (wie die Skills)
 
@@ -185,7 +186,7 @@ class Projekte:
     def befehl(self, name, arg):
         AI = self.AI
         if AI["streaming"]:
-            AI["msg"] = "antwort läuft noch — erst danach (esc stoppt)"
+            AI["msg"] = "antwort läuft noch — erst danach (ctrl+c stoppt)"
             return
         if name == "projekte":
             self.oeffnen()
@@ -195,9 +196,9 @@ class Projekte:
             self.zuordnen(None)
             return
         teile = arg.split(None, 1)
-        if teile and teile[0].lower() == WORT_NEU:
+        if teile and teile[0].lower() in WORTE_NEU:
             if len(teile) < 2:
-                AI["msg"] = "/projekt neu <name> legt ein projekt an"
+                AI["msg"] = "/project new <name> legt ein projekt an"
                 return
             self.anlegen(teile[1], zuordnen=True)
             return
@@ -214,7 +215,7 @@ class Projekte:
             return
         p = finden(liste, arg)
         if p is None:
-            AI["msg"] = "kein projekt „%s“ — /projekt neu %s legt es an" % (arg, arg)
+            AI["msg"] = "kein projekt „%s“ — /project new %s legt es an" % (arg, arg)
             return
         self.zuordnen(p["id"])
 
@@ -222,7 +223,7 @@ class Projekte:
         """Aus der Auswahl von /projekt."""
         if daten.get("neu"):
             AI = self.AI
-            AI["input"] = "/projekt neu "
+            AI["input"] = "/project new "
             AI["cur"] = len(AI["input"])
             AI["msg"] = "namen tippen, enter legt das projekt an"
             return
@@ -478,16 +479,22 @@ class Projekte:
         AI["msg"] = "anweisungen gespeichert (die alte fassung bleibt als sicherung)"
 
     # ── Zeichnen ───────────────────────────────────────────────────────
-    def fusszeile(self):
+    def tasten(self):
+        """Tasten je Zustand — Fußleiste und Hinweis im Kasten (2026-10-07)."""
         P = self.AI["projekte"]
         if P["eingabe"] is not None:
-            return "enter fertig · esc abbrechen"
+            return [("enter", "done"), ("esc", "cancel")]
         if P["detail"] is not None:
-            return ("↑↓ gespräch · enter öffnen · n neues gespräch · e anweisungen · "
-                    "w wissen · esc zurück")
-        return ("↑↓ wählen · enter öffnen · n neues projekt · "
-                + ("a zurückholen · z zurück" if P["archiv"] else "a archivieren · z archiv")
-                + " · esc zu")
+            return [("↑↓", "chat"), ("enter", "open"), ("n", "new chat"),
+                    ("e", "instructions"), ("w", "add knowledge"), ("r", "reload"),
+                    ("esc", "back")]
+        return ([("↑↓", "select"), ("enter", "open"), ("n", "new project")]
+                + ([("a", "restore"), ("z", "back")] if P["archiv"]
+                   else [("a", "archive"), ("z", "archive list")])
+                + [("esc", "close")])
+
+    def fusszeile(self):
+        return fussleiste.text(self.tasten())
 
     def zeichnen(self, by, bx, bh, bw):
         z = self.chat.z

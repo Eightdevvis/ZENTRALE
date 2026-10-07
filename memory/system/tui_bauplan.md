@@ -55,6 +55,7 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/startseite.py` | `Startseite`: Rad, Galaxie + ihre Geometrie | liest `RAD`/`META`/`TRAD` |
 | `ansichten/dashboard.py` | `Dashboard`: rechte Spalte des alten Dashboards | — |
 | `ansichten/befehle.py` | Befehle, `TUI_KEYS`/`CTX_KEYS`, `Befehlszeile` | `cmd_mode` … |
+| `ansichten/fussleiste.py` | Tastenzeile ganz unten: `eintraege(u)` (wer hat den Fokus → welche Tasten), `zeile`, `text`, `codes` (Beschriftung → Tastencodes, für den Test) | — |
 | `ansichten/erinnerung.py` | `Erinnerung`: Graph-Reminder-Kästchen | `nag_*` |
 | `ansichten/fenster.py` | `in_text_entry(z)`, `current_ctx(z)`: wer hat den Fokus | — |
 
@@ -135,8 +136,9 @@ Abschnitt 7). Was für die TUI gilt:
 - **Tasten im Chat:** Enter schickt, Alt+Enter = neue Zeile, ←→ Pos1 Ende
   (Strg+A/E) ⌫ Entf am Cursor. **↑↓-Regel:** ohne Zeilenumbruch in der
   Eingabe scrollen sie den Verlauf (wie vorher), mit Zeilenumbruch bewegen
-  sie den Cursor — der Verlauf geht dann mit Bild↑↓. Esc: läuft eine Antwort,
-  stoppt sie; offene Auswahl/Erlaubnis-Frage: abbrechen/ablehnen; sonst zu.
+  sie den Cursor — der Verlauf geht dann mit Bild↑↓. Esc: offene Auswahl/
+  Erlaubnis-Frage: abbrechen/ablehnen; sonst zu — seit der Durchsicht auch
+  während einer Antwort (sie läuft weiter); Stoppen ist Strg+C (unten).
 - **Esc vs. Alt:** `Chat._esc_lesen` wartet nach ESC 50 ms auf Folgetasten
   (wie `karte.m_alt_arrow`); allein → Esc, + Enter → Alt+Enter, sonst
   nichts. Die Deutung ist `eingabe.esc_folge` (testbar).
@@ -144,8 +146,9 @@ Abschnitt 7). Was für die TUI gilt:
   mit Ganzzahlen); der Chat setzt UTF-8-Bytes in `eingabe.utf8_byte`
   zusammen, wie der Post-Antwort-Editor.
 - **Cursor** zeichnet `draw_ai` selbst (invers), `curs_set` bleibt 0.
-- Die Tastenzeile ganz unten liefert `Chat.fusszeile()`, solange der Chat
-  den Fokus hat.
+- Die Tastenzeile ganz unten liefert `Chat.tasten()`, solange der Chat
+  den Fokus hat (seit 2026-10-07, siehe „Fußleiste"). Esc/Strg+C und die
+  englischen Befehle: „Nachbesserungen nach Sashas Durchsicht".
 - Headless geprüft mit `tests/tui_schirm/lauf.py` (Szenarien `ki_eingabe`,
   `ki_befehle`; Größe per `ZTUI_GROESSE=80x24`), das Abspiel-Backend liefert
   dafür erfundene Einstellungen.
@@ -265,22 +268,95 @@ die TUI gilt:
   Projekte im Abspiel-Backend); ohne Bildschirm:
   `tests/test_projekte_ansicht.py`.
 
-## Chat: Erlaubnis mit Geltung, /erlaubnis, /modell mit Filter (seit 2026-10-07)
+## Chat: Erlaubnis mit Geltung, /permissions, /model mit Filter (seit 2026-10-07)
 
 - Die Erlaubnis-Frage zeigt die Knöpfe aus dem Backend („1) ja, nur dieses
   mal 2) ja, für dieses gespräch 3) ja, immer 4) nein"); j/n/Ziffer/Esc wie
   bisher — kein neuer Code in `chat.py`, die Knöpfe kamen schon als
   `optionen`. Regeln: `memory/ki/ki_system.md`, „Geltungsbereiche".
-- `/erlaubnis` (`tui/ansichten/chat_erlaubnis.py`, Mixin
+- `/permissions` (früher `/erlaubnis`, `tui/ansichten/chat_erlaubnis.py`, Mixin
   `ErlaubnisSteuerung`): listet im Verlauf, was ohne Frage erlaubt ist, und
   öffnet eine Auswahl zum Zurücknehmen.
-- `/modell` bekommt alle Modelle der Anbieter; die Auswahl hat dann
+- `/model` bekommt alle Modelle der Anbieter; die Auswahl hat dann
   `alle` + `filter`: Tippen filtert (alle Wörter müssen vorkommen), ⌫ nimmt
   zurück, Ziffern gehören zum Filter, Titel „· n von m · filter: …"
   (`chat.wahl_filtern`, `_taste_wahl`, `_fuss_wahl`).
 - Headless: Szenario `ki_erlaubnis` in `tests/tui_schirm/lauf.py`; zwei Läufe
   gleichzeitig brauchen `ZTUI_SOCK` und `ZTUI_PORT` je Lauf. Ohne
   Bildschirm: `tests/test_erlaubnis_tui.py`.
+
+## Nachbesserungen nach Sashas Durchsicht (2026-10-07)
+
+- **Esc schließt den Chat immer**, auch während einer Antwort — sie läuft im
+  Hintergrund weiter; wird sie fertig, während das Fenster zu ist, steht ● an
+  der Leertaste der Startseite (`AI["fertig_ungesehen"]`, `Chat.ungelesen()`;
+  eigenes Feld, weil der Poll `neu` alle 20 s neu rechnet). Esc bricht zuerst
+  noch `/edit`, eine Auswahl oder eine Überlagerung ab (eine Stufe zurück).
+- **Strg+C stoppt** eine laufende Antwort. Vorgefunden: `curses.wrapper` fährt
+  cbreak, Strg+C war SIGINT → `KeyboardInterrupt` → `main()` beendete die TUI
+  („ENDE ctrl-c"), auch mitten im Chat. Jetzt `curses.raw()` in `run_ui`:
+  Strg+C kommt als Zeichen 3. `taste_verteilen`: hat der Chat den Fokus, geht
+  es an ihn (stoppt; ohne Antwort nur ein Hinweis — **nie** Ende); sonst
+  wirft es `KeyboardInterrupt` wie früher, `main()` beendet sauber.
+  Nebenwirkung von raw: Strg+Z und Strg+Backslash wirken nicht mehr.
+- **`\` + Enter** = neue Zeile (wie die Shell), `\\` + Enter = ein `\` und
+  senden; nur am Zeilenende (`eingabe.enter_deuten`). Alt+Enter bleibt.
+- **Eingabe-Grenze 20 000** (`eingabe.GRENZE`), ab 80 % Zähler rechts in der
+  Info-Zeile, an der Grenze fett „grenze erreicht — nicht mehr platz · N
+  zeichen nicht übernommen · 20 000 / 20 000" (`AI["zu_viel"]`).
+- **Einfügen als Stoß** (`Chat._stoss`): was gleich hinter einem Zeichen im
+  Puffer liegt, wird in einem Rutsch gelesen (vorher ein ganzes Bild pro
+  Byte, und ein Zeilenumbruch im Eingefügten schickte ab). Enter mitten im
+  Stoß = neue Zeile; ein Stoß unter 10 Zeichen, der mit Enter endet, schickt
+  ab (schnell getippt).
+- **Englische Befehle** im Chat (`/new /chats /rename /archive /retry /edit
+  /thinking /memory /files /attach /project /projects /model /provider /local
+  /help`; `/effort /budget /skills /cloud /auto` bleiben; `/permissions` ist
+  für die Erlaubnis-Seite reserviert). Die deutschen gehen still weiter
+  (`chat_befehle.ANDERE_NAMEN`), innen heißen die Befehle wie vorher
+  (`chat_befehle.INNEN`). `/project new <name>`, `/project none`.
+
+## Fußleiste (seit 2026-10-07)
+
+Sasha: „die leiste zeigt NUR das an was auch tatsächlich in dem modus grad
+genommen werden kann". `fussleiste.eintraege(u)` entscheidet:
+
+1. Überlagerungen der Schleife: Reminder, Hilfe, offene Befehlszeile.
+2. Eine Ansicht mit `tasten()` liefert ihre Liste selbst — heute der Chat
+   (`fussleiste.ANSICHTEN = {"ai": "chat"}`), der seine Überlagerungen fragt
+   (`Gespraechsliste/Gedaechtnis/Ablageliste/Projekte.tasten()`). Dieselbe
+   Liste ergibt den Hinweis IM Kasten (`fusszeile()` = `fussleiste.text(…)`).
+3. Sonst `befehle.CTX_KEYS[current_ctx(z)]` — dieselbe Tabelle wie das
+   `/`-Overlay. Neue Kontexte: `mail:list:eingang`, `mail:read:eingang`
+   (dort hakt f ab, d löscht nicht); der Kalender liefert `cal:a:termine|
+   kalender|todo`, `cal:b`, `cal:c` (Belegung von der Kalender-Sitzung).
+4. `/ commands` nur, wo `/` die Befehlszeile öffnet (`in_text_entry`); die
+   Zeile darüber zeigt „/ for commands" ebenso nur dort.
+
+Freitext-Zustände ohne Kontext (Formular, Antwort-Editor, Namen tippen)
+zeigen keine Leiste — ihr Kasten hat eigene Hinweise.
+
+**Warum Tabelle + Test statt einer Tabelle, aus der auch `taste()` liest:**
+das hieße jede `taste()` (zusammen einige tausend Zeilen in 12 Ansichten)
+umzubauen, mitten in der Kalender-Arbeit der parallelen Sitzung.
+Stattdessen baut `tests/test_fussleiste.py` die echte TUI ohne Bildschirm
+(alle Ansichten, gefälschtes Backend, Hintergrund-Threads synchron), bringt
+sie in jeden Zustand und drückt **jede Taste, die die echte Leiste zeigt**,
+über `taste_verteilen`; ändert sich nichts (Zustand, Backend-Aufruf,
+Fenster, Ende), ist der Test rot. Gefunden und behoben: `f` in Post-Listen
+außerhalb des Eingangs, `m` auf einer ganzen Liste im Fokus-Wald und
+Pfeile in leeren Listen.
+
+**Eine neue Ansicht** (z. B. der geplante Chat nach Claude-Web-Vorbild):
+eine Methode `tasten()` → `[(taste, was), …]`, ein Eintrag in
+`fussleiste.ANSICHTEN`, ein Zustand im Test. Beschriftungen, die
+`fussleiste.codes()` lesen kann: `enter esc tab space ⌫ del home end pgup
+pgdn shift+tab alt+enter`, Pfeile `↑↓←→`, `alt+←→`, `ctrl+x`, einzelne
+Zeichen, mehrere mit `/` oder Leerzeichen (`a/s`, `pgup pgdn`); `type` und
+`any key` sind keine Taste.
+
+Headless: Szenario `ki_nachbesserung` in `tests/tui_schirm/lauf.py` (neuer
+Schritt `paste` = tmux-Puffer einfügen; Socket per `ZTUI_SOCK`).
 
 ## Historie
 

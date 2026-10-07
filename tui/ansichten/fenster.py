@@ -8,6 +8,8 @@
 # gefragt wird, gewinnt, falls einmal zwei Fenster aktiv sind.
 # Bis 06.10.2026 Closures in run_ui, siehe memory/system/tui_bauplan.md.
 
+from .post import MAIL_EINGANG
+
 
 def in_text_entry(z):
     """Tippt der Nutzer gerade einen Freitext (Name, Eintrag, Antwort)?
@@ -73,7 +75,10 @@ def current_ctx(z):
             return None
         if MAIL["level"] == "cats":
             return "mail:cats"
-        return "mail:read" if MAIL["mode2"] == "read" else "mail:list"
+        # Im Eingang hakt f ab und d löscht nicht — anderswo umgekehrt; die
+        # Leiste soll nur zeigen, was geht (2026-10-07).
+        art = "mail:read" if MAIL["mode2"] == "read" else "mail:list"
+        return art + (":eingang" if MAIL["cat"] == MAIL_EINGANG else "")
     if AI["active"]:
         return "ai"
     if TUTOR["active"]:

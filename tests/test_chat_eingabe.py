@@ -196,6 +196,9 @@ class _Schirm:
     def nodelay(self, an):
         pass
 
+    def addstr(self, *a):
+        pass
+
 
 @pytest.fixture
 def ch():
@@ -250,13 +253,145 @@ def test_pfeile_scrollen_einzeilig_und_bewegen_mehrzeilig(ch):
     assert ch.AI["scroll"] == 0 and ch.AI["cur"] == 2
 
 
-def test_esc_stoppt_waehrend_einer_antwort_sonst_zu(ch):
+def test_esc_schliesst_auch_waehrend_einer_antwort_und_stoppt_nicht(ch):
+    # Sasha, 07.10.2026: „man soll dem fenster escapen können ohne dass die
+    # antwort gestoppt wird".
     ch.AI["streaming"] = True
     ch.taste(27)
+    assert ch.gestoppt == [] and not ch.AI["active"]
+
+
+def test_strg_c_stoppt_die_laufende_antwort(ch):
+    ch.AI["streaming"] = True
+    ch.taste(3)
     assert ch.gestoppt == [True] and ch.AI["active"]
-    ch.AI["streaming"] = False
-    ch.taste(27)
-    assert not ch.AI["active"]
+
+
+def test_strg_c_ohne_antwort_tut_nichts_schlimmes(ch):
+    _tasten(ch, "entwurf")
+    ch.taste(3)
+    assert ch.gestoppt == [] and ch.AI["active"] and ch.AI["input"] == "entwurf"
+    assert "keine antwort" in ch.AI["msg"]
+
+
+def test_strg_c_auch_ueber_einer_ueberlagerung(ch):
+    ch.AI["streaming"] = True
+    ch.AI["liste"] = {"umbenennen": None, "suchen": False}
+    ch.taste(3)
+    assert ch.gestoppt == [True]
+
+
+class _Strom:
+    """Gefälschter SSE-Strom: liefert ein paar Zeilen, dann Ende."""
+
+    def __init__(self, zeilen):
+        self.zeilen = [("data: " + z + "\n").encode() for z in zeilen]
+
+    def __iter__(self):
+        return iter(self.zeilen)
+
+    def close(self):
+        pass
+
+
+def test_antwort_laeuft_bei_geschlossenem_fenster_weiter_und_meldet_sich(monkeypatch):
+    """Esc während des Streams, dann kommt der Rest: die Antwort steht im
+    Verlauf, und ● sagt der Startseite, dass sie fertig ist."""
+    c = chat.Chat(SimpleNamespace(stdscr=_Schirm(), C={}))
+    c.AI["active"] = True
+    c.AI["streaming"] = True
+    c.taste(27)                                  # Fenster zu
+    assert not c.AI["active"]
+    strom = _Strom(['{"strom": 4}', '{"token": "fertig "}', '{"token": "gedacht"}',
+                    '{"done": true}'])
+    monkeypatch.setattr(chat.urllib.request, "urlopen", lambda *a, **k: strom)
+    c.ai_stream("frage")                         # läuft sonst im Hintergrund-Thread
+    assert c.AI["log"][-1] == ("ai", "fertig gedacht")
+    assert not c.AI["streaming"] and c.ungelesen()
+    c.oeffnen = chat.Chat.oeffnen.__get__(c)
+    monkeypatch.setattr(chat.threading.Thread, "start", lambda self: None)
+    c.oeffnen()
+    assert not c.ungelesen()
+
+
+# ── Backslash + Enter, Grenze, Einfügen (2026-10-07) ──────────────────
+
+@pytest.mark.parametrize("text,pos,art,neu,neupos", [
+    ("eins\\", 5, "umbruch", "eins\n", 5),
+    ("eins\\\\", 6, "senden", "eins\\", 5),          # \\ = ein wörtlicher \
+    ("C:\\Daten", 8, "senden", "C:\\Daten", 8),        # \ mitten im Text zählt nicht
+    ("a\\\nb", 2, "umbruch", "a\n\nb", 2),             # Zeilenende, nicht Textende
+    ("a\\b", 2, "senden", "a\\b", 2),                  # Cursor hinter \, aber nicht am Ende
+    ("", 0, "senden", "", 0),
+])
+def test_enter_deuten(text, pos, art, neu, neupos):
+    assert eingabe.enter_deuten(text, pos) == (art, neu, neupos)
+
+
+def test_backslash_enter_macht_eine_neue_zeile(ch):
+    _tasten(ch, "eins\\")
+    ch.taste(10)
+    _tasten(ch, "zwei")
+    assert ch.AI["input"] == "eins\nzwei" and ch.gesendet == []
+    ch.taste(10)
+    assert ch.gesendet == ["eins\nzwei"]
+
+
+def test_doppelter_backslash_schickt_einen_ab(ch):
+    _tasten(ch, "pfad C:\\\\")
+    ch.taste(10)
+    assert ch.gesendet == ["pfad C:\\"]
+
+
+def test_doppelter_backslash_waehrend_einer_antwort_bleibt_stehen(ch):
+    ch.AI["streaming"] = True
+    _tasten(ch, "x\\\\")
+    ch.taste(10)
+    assert ch.gesendet == [] and ch.AI["input"] == "x\\\\"
+
+
+def test_zaehler_ab_80_prozent():
+    assert eingabe.GRENZE == 20000
+    assert eingabe.zaehler(15999) is None
+    assert eingabe.zaehler(16000) == "16 000 / 20 000"
+    assert eingabe.grenz_meldung(19999) is None
+    m = eingabe.grenz_meldung(20000, 1234)
+    assert "grenze erreicht" in m and "1 234 zeichen nicht übernommen" in m
+    assert "20 000 / 20 000" in m
+
+
+def test_einfuegen_wird_an_der_grenze_gekappt_und_gezaehlt(ch):
+    ch.AI["input"] = "x" * (eingabe.GRENZE - 3)
+    ch.AI["cur"] = len(ch.AI["input"])
+    ein = "abcdefghij"                           # ein Einfügen: alles auf einmal im Puffer
+    ch.z.stdscr.folge = [ord(z) for z in ein[1:]]
+    ch.taste(ord(ein[0]))
+    assert len(ch.AI["input"]) == eingabe.GRENZE and ch.AI["input"].endswith("abc")
+    assert ch.AI["zu_viel"] == 7
+    ch.taste(ord("k"))                           # weitertippen: wird auch gezählt
+    assert ch.AI["zu_viel"] == 8 and len(ch.AI["input"]) == eingabe.GRENZE
+    ch.taste(curses.KEY_BACKSPACE)               # wieder Platz: Meldung erledigt
+    assert ch.AI["zu_viel"] == 0
+
+
+def test_eingefuegter_zeilenumbruch_schickt_nicht_ab(ch):
+    text = "erste zeile\nzweite zeile\n"
+    ch.z.stdscr.folge = [ord(z) for z in text[1:]]
+    ch.taste(ord(text[0]))
+    assert ch.gesendet == [] and ch.AI["input"] == text
+
+
+def test_getipptes_enter_direkt_nach_einem_zeichen_schickt_ab(ch):
+    _tasten(ch, "hall")
+    ch.z.stdscr.folge = [10]                     # 'o' und Enter im selben Takt
+    ch.taste(ord("o"))
+    assert ch.gesendet == ["hallo"]
+
+
+def test_alt_enter_im_selben_stoss(ch):
+    ch.z.stdscr.folge = [27, 13, ord("b")]
+    ch.taste(ord("a"))
+    assert ch.AI["input"] == "a\nb"
 
 
 def test_andere_alt_taste_tut_nichts(ch):
@@ -287,7 +422,7 @@ def test_waehrend_der_antwort_tippen_aber_nicht_schicken(ch):
     _tasten(ch, "nächste frage")
     ch.taste(10)
     assert ch.gesendet == [] and ch.AI["input"] == "nächste frage"
-    assert "esc stoppt" in ch.AI["msg"]
+    assert "ctrl+c stoppt" in ch.AI["msg"]
 
 
 def test_auswahl_mit_pfeil_und_enter(ch):
