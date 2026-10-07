@@ -322,6 +322,10 @@ def liste(bereich: str) -> list:
 # die gegateten Werkzeuge (core/skills.py), wie bei den Hausregeln.
 
 SKILLS = "skills"
+# Projekte (Phase 6, 2026-10-07, core/projekte.py) aus demselben Grund nicht
+# in BEREICHE: ihre Anweisungen schreibt Sasha, nicht write_note — und die
+# Projekt-Ordner stünden sonst als Titel im Kopf jedes Gesprächs.
+PROJEKTE = "projekte"
 
 
 def bereich_ordner(bereich: str) -> str:

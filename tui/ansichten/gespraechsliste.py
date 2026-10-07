@@ -55,12 +55,15 @@ def alter_text(ts, jetzt=None):
 
 
 def filtern(eintraege, suche):
-    """Einträge, deren Titel alle Wörter der Suche enthält (Groß/klein egal)."""
+    """Einträge, deren Titel (oder Projektname, seit Phase 6) alle Wörter der
+    Suche enthält (Groß/klein egal) — „geige" findet so auch alle Gespräche
+    im Projekt Geige."""
     woerter = (suche or "").lower().split()
     if not woerter:
         return list(eintraege)
     return [e for e in eintraege
-            if all(w in str(e.get("titel") or "").lower() for w in woerter)]
+            if all(w in ("%s %s" % (e.get("titel") or "", e.get("projekt_name") or "")).lower()
+                   for w in woerter)]
 
 
 def listen_zeilen(eintraege, idx, breite, jetzt=None, aktiv=None):
@@ -73,6 +76,8 @@ def listen_zeilen(eintraege, idx, breite, jetzt=None, aktiv=None):
         alter = alter_text(e.get("letzte"), jetzt)
         platz = max(1, breite - 4 - len(alter) - 1)
         titel = str(e.get("titel") or "neues gespräch").replace("\n", " ")
+        if e.get("projekt_name"):          # Projekt vorn an der Zeile (Phase 6)
+            titel = "%s · %s" % (e["projekt_name"], titel)
         if len(titel) > platz:
             titel = titel[:max(1, platz - 1)] + "…"
         text = "%s %s %s" % (zeiger, punkt, titel.ljust(platz))
@@ -101,6 +106,8 @@ class Gespraechsliste:
             return None
         if not isinstance(d, dict):
             return None
+        # Projekt des nächsten neuen Gesprächs (Phase 6) — für den Kasten-Titel.
+        self.AI["neu_projekt"] = d.get("neu_projekt")
         return [e for e in d.get("gespraeche") or [] if isinstance(e, dict)], d.get("aktiv")
 
     def oeffnen(self, archiv=False):
@@ -248,7 +255,7 @@ class Gespraechsliste:
             fuss = ["neuer titel: " + L["umbenennen"]["text"] + "▌",
                     "enter speichern · esc abbrechen"]
         elif L["suchen"]:
-            fuss = ["tippen sucht im titel · enter fertig · esc suche weg"]
+            fuss = ["tippen sucht im titel und projekt · enter fertig · esc suche weg"]
         else:
             fuss = ["↑↓ wählen · enter öffnen · n neu · r umbenennen · "
                     + ("a zurückholen" if L["archiv"] else "a archivieren")

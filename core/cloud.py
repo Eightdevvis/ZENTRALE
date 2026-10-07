@@ -224,7 +224,7 @@ def _to_anthropic_tools(openai_tools: list) -> list:
 
 # ── System-Prompt: statisch vorn (gecacht), Wechselndes hinten ─────────
 
-def _static_system(system: str | None, tutor_mode: bool) -> str:
+def _static_system(system: str | None, tutor_mode: bool, projekt=None) -> str:
     """
     Der statische Kopf: über alle Turns einer Sitzung BYTE-IDENTISCH.
 
@@ -277,6 +277,19 @@ def _static_system(system: str | None, tutor_mode: bool) -> str:
             liste = ""
         if liste:
             teile.append(liste)
+    # Das Projekt des Gesprächs (Phase 6, 2026-10-07): Anweisungen + LISTE der
+    # Wissensdateien, hinter Gedächtnis und Skills. Fest pro Projekt — der
+    # Cache gilt pro Projekt; ein Gespräch ohne Projekt sieht keinen Block.
+    # `projekt` reicht die Chat-Route über kern.chat herein (kein globaler
+    # Zustand). Nur auf einer Schiene mit read_project_file.
+    if projekt and getattr(schiene, "MERKMALE", {}).get("projekte"):
+        try:
+            import projekte
+            block = projekte.prompt_block(projekt)
+        except Exception:
+            block = ""
+        if block:
+            teile.append(block)
     imprint = ki_prompt._imprint_prompt()
     if imprint:
         teile.append(imprint)
@@ -326,12 +339,12 @@ def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
 
 
 def _system_blocks(system: str | None, mem_ctx: str, via_mic: bool,
-                   tutor_mode: bool) -> list:
+                   tutor_mode: bool, projekt=None) -> list:
     """Beide Teile als System-Blöcke — nur noch für Aufrufer, die den Prompt
     am Stück wollen (Tests, Größen-Messung). Der Live-Pfad benutzt
     _static_system und _volatile_text getrennt."""
     return [
-        {"type": "text", "text": _static_system(system, tutor_mode),
+        {"type": "text", "text": _static_system(system, tutor_mode, projekt),
          "cache_control": _cc()},
         {"type": "text", "text": _volatile_text(mem_ctx, via_mic, tutor_mode)},
     ]
@@ -447,7 +460,7 @@ def _text_of(blocks) -> str:
 
 def chat_stream(messages: list, model: str = None, system: str = None,
                 tools: list = None, tool_executor=None, via_mic: bool = False,
-                *, abbruch=None):
+                *, abbruch=None, projekt=None):
     """
     Drop-in für ai.chat_stream() gegen die Anthropic-API.
 
@@ -471,7 +484,10 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     # Tool-Set von der Schiene, nicht aus ai.TOOLS: dort haengt das
     # Set fuer KLEINE Modelle (siehe core/profil/).
     active_tools = tools if tools is not None else cloud_tools()
-    active_exec  = tool_executor if tool_executor is not None else ki_werkzeuge.ausfuehren
+    # projekt (Phase 6): das Projekt des Gesprächs — für den Kopf und für
+    # read_project_file, das nur dieses eine Projekt lesen darf.
+    active_exec  = (tool_executor if tool_executor is not None
+                    else ki_werkzeuge.mit_projekt(projekt))
     store        = None if tutor_mode else CLOUD_GRAPH
 
     user_query = ki_prompt._last_user_query(messages)
@@ -488,7 +504,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
 
     # Statischer Kopf ins system-Feld (gecacht), Wechselndes ans Ende der
     # neuesten User-Nachricht (ungecacht, aber hinter allem Cachebaren).
-    sys_blocks = [{"type": "text", "text": _static_system(system, tutor_mode),
+    sys_blocks = [{"type": "text", "text": _static_system(system, tutor_mode, projekt),
                    "cache_control": _cc()}]
     anthro_msgs = _prepare_messages(messages)
     _append_volatile(anthro_msgs, _volatile_text(mem_ctx, via_mic, tutor_mode))

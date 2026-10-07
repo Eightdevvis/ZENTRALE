@@ -30,6 +30,7 @@ import kalender
 import ki_prompt
 import mail
 import news
+import projekte
 import sandbox
 import skills
 import web
@@ -68,7 +69,7 @@ def _kalender_beweis(tag: str, label: str) -> str:
                "Eintrag" if len(eintraege) == 1 else "Eintraege"))
 
 
-def ausfuehren(name: str, args: dict) -> str:
+def ausfuehren(name: str, args: dict, *, projekt=None) -> str:
     """
     Führt ein Tool aus und gibt das Ergebnis als String zurück.
     Der String wird als 'tool'-Nachricht zurück an das Modell geschickt.
@@ -79,6 +80,10 @@ def ausfuehren(name: str, args: dict) -> str:
     LLMs sonst gerne behaupten "ich speichere das ab", ohne den Tool-
     Call tatsächlich abzusetzen - dieses Log macht den Unterschied
     sichtbar zwischen "AI hat es getan" und "AI hat es behauptet".
+
+    projekt: id des Projekts, zu dem das laufende Gespräch gehört (Phase 6,
+    2026-10-07). Nur Ausführer mit @braucht_projekt bekommen es — als
+    Argument von hier, nie aus den Argumenten des Modells.
     """
     import state  # state.push_log feuert ins UI-Terminal
     try:
@@ -89,7 +94,7 @@ def ausfuehren(name: str, args: dict) -> str:
     state.push_log(f"AI →  TOOL {name}({args_str[:200]})")
 
     try:
-        result = _verteilen(name, args)
+        result = _verteilen(name, args, projekt=projekt)
     except Exception as e:
         state.push_log(f"AI ✗  TOOL {name} FEHLER: {e}")
         raise
@@ -100,7 +105,7 @@ def ausfuehren(name: str, args: dict) -> str:
     return result_str
 
 
-def _verteilen(name: str, args: dict) -> str:
+def _verteilen(name: str, args: dict, projekt=None) -> str:
     """
     Reine Tool-Logik ohne Logging - wird von ausfuehren umschlossen.
 
@@ -113,7 +118,31 @@ def _verteilen(name: str, args: dict) -> str:
     w = werkzeug_register.eintrag(name)
     if w is None or w.ausfuehrer is None:
         return f"[Unbekanntes Tool: {werkzeug_register.kanonisch(name)}]"
+    if getattr(w.ausfuehrer, "braucht_projekt", False):
+        return w.ausfuehrer(args, projekt=projekt)
     return w.ausfuehrer(args)
+
+
+def braucht_projekt(fn):
+    """Markiert einen Ausführer, der das Projekt des laufenden Gesprächs
+    bekommt (Phase 6, 2026-10-07). Das Projekt kommt als Parameter von der
+    Chat-Route über kern.chat und den Cloud-Weg (mit_projekt) — kein
+    globaler Zustand, und das Modell kann es nicht per Argument auf ein
+    anderes Projekt biegen."""
+    fn.braucht_projekt = True
+    return fn
+
+
+def mit_projekt(projekt=None):
+    """Der Ausführer für einen Zug: ohne Projekt `ausfuehren` selbst (so
+    greift ein monkeypatch in Tests wie bisher), mit Projekt eine Hülle, die
+    es mitgibt."""
+    if not projekt:
+        return ausfuehren
+
+    def mit(name, args):
+        return ausfuehren(name, args, projekt=projekt)
+    return mit
 
 
 # ── Die Ausführer ───────────────────────────────────────────────────────
@@ -466,8 +495,16 @@ def _edit_skill(args: dict) -> str:
 
 @ausfuehrer("search_chats")
 def _search_chats(args: dict) -> str:
+    # Optional nur in einem Projekt (Phase 6): Name oder id, wie Sasha es
+    # nennt. Ein unbekanntes Projekt sagt das, statt still alles zu suchen.
+    pid = None
+    if str(args.get("projekt") or "").strip():
+        pid = projekte.finden(args["projekt"])
+        if pid is None:
+            da = ", ".join(p["name"] for p in projekte.liste()) or "keine"
+            return f"[Kein Projekt {args['projekt']!r}. Es gibt: {da}]"
     return chat_suche.suchen_text(str(args.get("query") or ""),
-                                  aktiv=gespraeche.aktiv())
+                                  aktiv=gespraeche.aktiv(), projekt=pid)
 
 
 @ausfuehrer("read_chat")
@@ -567,3 +604,16 @@ def _save_from_sandbox(args: dict) -> str:
         return f"[Nicht abgelegt: {e}]"
     _ablage_melden(k)
     return _ablage_text(k, "Abgelegt")
+# ── Projekte (core/projekte.py, Phase 6 2026-10-07) ──
+# Nur das Projekt des laufenden Gesprächs: `projekt` kommt von
+# _verteilen (siehe braucht_projekt), nicht vom Modell. Ein Pfad im Namen
+# führt nirgendwo hin — projekte.wissen_lesen sucht nur in der Liste.
+
+@ausfuehrer("read_project_file")
+@braucht_projekt
+def _read_project_file(args: dict, projekt=None) -> str:
+    if not projekt or not projekte.gibt_es(projekt):
+        return ("[Dieses Gespräch gehört zu keinem Projekt — es gibt keine "
+                "Projektdateien zu lesen.]")
+    return projekte.wissen_lesen(projekt, str(args.get("name") or ""),
+                                 args.get("ab") or 0)

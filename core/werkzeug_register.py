@@ -1117,6 +1117,9 @@ WERKZEUGE = [
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Suchwoerter."},
+                # Phase 6 (2026-10-07): nur in einem Projekt suchen.
+                "projekt": {"type": "string",
+                            "description": "Optional: nur Gespraeche dieses Projekts."},
             },
             "required": ["query"],
         },
@@ -1212,6 +1215,28 @@ WERKZEUGE = [
                 "titel": {"type": "string", "description": "Titel in der Ablage."},
             },
             "required": ["lauf", "datei"],
+        },
+    ),
+    # ── Projekte ──
+    # Phase 6 (2026-10-07, core/projekte.py): im Kopf steht nur die LISTE der
+    # Wissensdateien des Projekts; den Inhalt holt dieses Werkzeug. Nur
+    # lesen, nur das Projekt des laufenden Gesprächs (ki_werkzeuge gibt es
+    # mit, nicht das Modell) — deshalb frei.
+    Werkzeug(
+        name="read_project_file",
+        klein=None,
+        gross=(
+            "Liest eine Wissensdatei des Projekts, zu dem dieses Gespraech "
+            "gehoert (Liste im Kopf unter 'Projekt')."
+        ),
+        parameter={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Dateiname aus der Liste."},
+                "ab":   {"type": "integer",
+                         "description": "Optional: ab diesem Zeichen weiterlesen."},
+            },
+            "required": ["name"],
         },
     ),
     # Hinweis: ASCII-Bilder laufen NICHT über ein Werkzeug. Messung

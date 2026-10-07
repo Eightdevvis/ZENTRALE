@@ -13,6 +13,7 @@
 from flask import Blueprint, jsonify, request
 
 import gespraeche   # type: ignore
+import projekte     # type: ignore  – Projektname an der Zeile (Phase 6)
 
 bp = Blueprint('gespraeche', __name__)
 
@@ -30,12 +31,26 @@ def _fest(gid):
 
 @bp.route('/api/gespraeche', methods=['GET'])
 def api_gespraeche_liste():
-    """{aktiv, gespraeche: [{id, titel, erstellt, letzte, anzahl, archiviert,
-    ungelesen}]}, neueste Aktivität zuerst, Erinnerungen oben.
-    ?archiv=1 → nur die archivierten."""
+    """{aktiv, neu_projekt, gespraeche: [{id, titel, erstellt, letzte, anzahl,
+    archiviert, ungelesen, projekt, projekt_name}]}, neueste Aktivität zuerst,
+    Erinnerungen oben. ?archiv=1 → nur die archivierten; ?projekt=<id> →
+    nur die Gespräche dieses Projekts (Phase 6). neu_projekt: {id, name} des
+    Projekts, in dem das nächste neue Gespräch beginnt, oder null."""
     archiv = request.args.get('archiv') in ('1', 'true', 'ja')
-    return jsonify({"aktiv": gespraeche.aktiv(),
-                    "gespraeche": gespraeche.liste(archivierte=archiv)})
+    projekt = request.args.get('projekt') or None
+    if projekt and not projekte.gibt_es(projekt):
+        return jsonify({"error": "Dieses Projekt gibt es nicht."}), 404
+    eintraege = gespraeche.liste(archivierte=archiv, projekt=projekt)
+    namen = {}
+    for e in eintraege:
+        pid = e.get("projekt")
+        if pid and pid not in namen:
+            namen[pid] = projekte.name(pid)
+        e["projekt_name"] = namen.get(pid) or None if pid else None
+    neu = gespraeche.neu_projekt()
+    return jsonify({"aktiv": gespraeche.aktiv(), "gespraeche": eintraege,
+                    "neu_projekt": ({"id": neu, "name": projekte.name(neu)}
+                                    if neu and projekte.gibt_es(neu) else None)})
 
 
 @bp.route('/api/gespraeche', methods=['POST'])

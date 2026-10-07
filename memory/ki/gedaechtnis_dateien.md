@@ -67,6 +67,7 @@ die den Rohtext am Graphen halten.
 | **Tagebuch** | `tagebuch/YYYY-MM-DD.md` | Die KI. Was gesagt und getan wurde, in SEINEN Worten. |
 | **Messreihen** | `data/g_*.json` (Zyklus-Werkzeug) | Zahlen über Zeit — Schlaf, Stimmung, Spagat in cm. |
 | **Skills** | `skills/*.md` | Anleitungen für eine Art Aufgabe. Sasha (Datei) oder die KI — die nur nach seinem Ja (`propose_skill`). Siehe unten „Skills“. |
+| **Projekte** | `projekte/<id>/` (`projekt.json`, `anweisungen.md`, `wissen/`) | **Sasha** (TUI `/projekte`). Rahmen für ein Thema; die KI liest nur (`read_project_file`). Wie Skills nicht in `BEREICHE`. Siehe [projekte.md](projekte.md). |
 
 ### Notiz, Dossier oder Katalog?
 

@@ -105,6 +105,21 @@ _DOK = {"kopf": {"id": "d1", "titel": "Packliste Radtour", "art": "markdown", "f
         "inhalt": "# Packliste\n\n" + "\n".join("- Ding Nummer %d" % i for i in range(40))}
 
 
+# Erfundene Projekte (Claude-Web-Plan Phase 6, 2026-10-07).
+_PROJEKTE = {"projekte": [
+    {"id": "geige", "name": "Geige", "wissen": 2, "archiviert": False},
+    {"id": "umzug-berlin", "name": "Umzug Berlin", "wissen": 0, "archiviert": False}]}
+_PROJEKT_GEIGE = {
+    "id": "geige", "name": "Geige", "archiviert": False, "stand": "p1",
+    "anweisungen": "# Wie ich übe\n\n- Immer mit Fingersätzen antworten.\n"
+                   "- Stücke nach Schwierigkeit ordnen.\n",
+    "wissen": [{"name": "noten.md", "groesse": 2300}, {"name": "uebeplan.txt", "groesse": 640}],
+    "gespraeche": [
+        {"id": "g2", "titel": "Partita üben, Satz 3", "letzte": "2026-10-05T08:00:00+00:00"},
+        {"id": "g0", "titel": "Bogenhaltung", "archiviert": True,
+         "letzte": "2026-09-01T08:00:00+00:00"}]}
+
+
 def _synth(path):
     """Erfundene Mail-Daten: die echten gehen nie live (Seen-Flag), aber das
     Post-Panel soll im Vergleich auch mit Mails gezeichnet werden."""
@@ -125,6 +140,12 @@ def _synth(path):
         return _DOK
     if path.startswith("/api/ablage"):
         return _ABLAGE if "archiv" not in path else {"dokumente": []}
+    if path.startswith("/api/projekte?archiv"):
+        return {"projekte": []}
+    if path == "/api/projekte":
+        return _PROJEKTE
+    if path == "/api/projekte/geige":
+        return _PROJEKT_GEIGE
     if path.startswith("/api/chat/history"):
         return _VERLAUF
     if path.startswith(("/api/mail/folder?", "/api/mail/inbox?")) or path == "/api/mail/inbox":
@@ -183,7 +204,11 @@ class H(BaseHTTPRequestHandler):
             pass
 
     def do_POST(self):
-        self._drain(); self._send({})
+        self._drain()
+        if self.path == "/api/projekte/zuordnen":     # /projekt (Phase 6)
+            self._send({"gespraech": "g1", "projekt": "geige", "name": "Geige"})
+            return
+        self._send({})
 
     do_PUT = do_POST
     do_DELETE = do_POST

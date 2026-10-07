@@ -212,6 +212,9 @@ MERKMALE = {
     # Skill-Liste im festen Kopf (cloud._static_system). klein hat den
     # Schlüssel bewusst nicht: dort bleibt alles, wie es gemessen ist.
     "skills":       True,
+    # Projekt-Block (Anweisungen + Wissensliste) im festen Kopf, wenn das
+    # Gespräch zu einem Projekt gehört (Phase 6, 2026-10-07). klein nicht.
+    "projekte":     True,
 }
 
 

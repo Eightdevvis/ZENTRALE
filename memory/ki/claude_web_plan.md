@@ -1,7 +1,7 @@
 # Claude-Web im ZENTRALE-Assistenten — der Plan
 
 Stand 2026-10-07. **Geplant und von Sasha entschieden (Abschnitt 6).
-Phase 0, 1, 2, 3, 4, 5 und 7 sind gebaut (Abschnitte 5 und 7), der Rest noch nicht.** Sasha hat am 06.10. gesagt: erst aufräumen, dann vor dem
+Phase 0, 1, 2, 3, 4, 5, 6 und 7 sind gebaut (Abschnitte 5 und 7), der Rest noch nicht.** Sasha hat am 06.10. gesagt: erst aufräumen, dann vor dem
 Übertragen anhalten und gemeinsam planen. Das ist am 07.10. geschehen.
 
 Grundregel aus [../claude_hinweise.md](../claude_hinweise.md) („Das
@@ -143,7 +143,7 @@ Prompt-Bau hängt dessen Anweisungen hinter den Gedächtnis-Kopf.
 | **3 Gedächtnis sichtbar** ✔ 07.10. | Kernakten in der TUI ansehen/ändern, **`search_chats` über alle Gespräche** | Sasha orientiert sich nach Thema, nicht nach Datum — die Suche quer durch Gespräche ist dafür die Bedingung | klein |
 | **4 Skills** ✔ 07.10. | Skill-Dateien, Liste im Prompt, `load_skill`, erste Skills; **`propose_skill`**: die KI schlägt Skills vor, angelegt wird erst nach Bestätigung (Gate) | billig, passt zur Kostenlogik; Grundlage dafür, dass sie sich später selbst weiterentwickelt | klein |
 | **5 Ablage + Anhänge** ✔ 07.10. | `ablage`-Event + Ablage-Liste in der TUI; Datei anhängen per Pfad; Bilder an die Cloud | Artefakte in Terminal-Form | mittel |
-| **6 Projekte** | Projekt-Ordner, Zuordnung Gespräch→Projekt | erst wenn 2–4 stehen | mittel |
+| **6 Projekte** ✔ 07.10. | Projekt-Ordner, Zuordnung Gespräch→Projekt | erst wenn 2–4 stehen | mittel |
 | **7 Sandbox (Grundlage)** ✔ 07.10. | `run_code` in einem abgeschotteten Arbeitsordner (Python + Shell, Zeitlimit, kein `data/`, keine Keys, Gate); Ergebnis als Werkzeug-Ergebnis, Dateien in die Ablage | Sasha: die KI soll später wie ein Coder arbeiten — jetzt nur das Fundament, keine volle Coding-KI | klein |
 | später | echtes Token-Streaming, Konnektoren (MCP), Coding-Werkzeuge über die Sandbox hinaus (Repo lesen/ändern), Ollama über denselben OpenAI-Weg (erst messen) | Sasha: Streaming egal; „erstmal wird der Assistent ordentlich" | — |
 
@@ -430,3 +430,65 @@ der Suche gehen mit — falls das stört, lassen sie sich ausnehmen.
 | Enter bei leerer Eingabe öffnet das **neueste** Dokument | Zeiger im Verlauf, Enter auf der gewählten Zeile |
 | Zwischenablage **nicht gebaut** (gibt es in der TUI nicht) | xclip/wl-copy einbauen |
 | Grenzen: Text 200.000 Zeichen, Bild 5 MB, Datei 10 MB | — |
+
+### Phase 6 — Projekte (2026-10-07)
+
+Ausführlich: [projekte.md](projekte.md). Kurz:
+
+- **Speicher** `core/projekte.py` (Schicht 2): `data/gedaechtnis/projekte/<id>/`
+  mit `projekt.json`, `anweisungen.md`, `wissen/`. Anlegen, Liste, finden,
+  laden, Anweisungen (atomar, `.bak`, `stand`), Wissen aus Text oder Datei
+  (Sperrliste `context.anhang_gesperrt` wie bei Anhängen: Zugangsdaten,
+  gesperrte Ordner wie `learning/`, ZENTRALEs `data/`; nur Text), archivieren — nie löschen. Nicht in
+  `gedaechtnis.BEREICHE` (Konstante `gedaechtnis.PROJEKTE`).
+- **Gespräch → Projekt**: `kopf.json` → `projekt`;
+  `gespraeche.projekt_setzen/projekt_von`, `liste(projekt=)`; `/neu` bleibt
+  im Projekt (`neu_projekt` pro Rechner im `_knoten`-File).
+- **Prompt**: `projekte.prompt_block(id)` im festen Kopf
+  (`cloud._static_system(…, projekt=)`, hinter Gedächtnis und Skills, nur
+  `MERKMALE["projekte"]` = `gross`). Das Projekt kommt als Parameter
+  (Route → `kern.chat(projekt=)` → Cloud-Weg). Keine neue Meta-Regel.
+- **Werkzeuge**: `read_project_file(name, ab?)` (nur `gross`, frei, nur das
+  Projekt des Zugs über `@braucht_projekt`), `search_chats` mit optionalem
+  `projekt`. Schnappschuss neu gezogen: nur der neue Eintrag und der neue
+  Parameter, `klein` byte-gleich. Eigener Text-Deckel < 200 Zeichen.
+- **Routen** `ui/routen/projekte.py`: Liste, anlegen, laden, Anweisungen PUT
+  (409), Wissen, archivieren, zuordnen; `/api/chat/clear {projekt?}`,
+  `/api/gespraeche?projekt=` + `projekt_name`/`neu_projekt`.
+- **TUI** `tui/ansichten/projekte.py`: `/projekt` (Auswahl/Name/neu/kein),
+  `/projekte` (Übersicht, Editor, Wissen per Pfad, neues Gespräch im
+  Projekt), Kasten-Titel „Projekt · Gespräch", Projektname in der
+  Gesprächsliste.
+- Tests: `test_projekte.py`, `test_projekte_routen.py`,
+  `test_projekte_ansicht.py`, Wächter; headless `ki_projekte` 80×24/136×30.
+
+Angenommen (Sasha war nicht erreichbar) — die Kleinentscheidungen:
+
+| Wahl | Alternative |
+|---|---|
+| Projekte unter dem Gedächtnis, aber **nicht in `BEREICHE`** (wie Skills) | als Bereich (dann schriebe `write_note` ungefragt in Anweisungen, und alle Projekte stünden als Titel in jedem Kopf) |
+| id = **Slug des Namens**; Name umbenennen gibt es (noch) nicht | zufällige id + freier Name (umbenennbar, aber Ordner unlesbar) |
+| Projekt-Block **hinter Skills, vor dem Imprint** | vor dem Gedächtnis-Kopf (dann stünden Projekt-Anweisungen vor Sashas Hausregeln, die Vorrang haben sollen) |
+| **Keine Meta-Regel**; der Block erklärt sich („gelten zusätzlich; Hausregeln gehen vor") | eine Meta-Regel in `gross.system()` (dort fehlen ~26 Zeichen bis zur Grenze) |
+| Anweisungen im Kopf **≤ 4.000 Zeichen**, Datei ≤ 20.000, Rest per `read_project_file("anweisungen")` | ganz in den Kopf (teuer bei jedem Cache-Write) / hart abweisen |
+| Projekt als **Parameter** durch `kern.chat` → Cloud-Weg → Ausführer (`@braucht_projekt`) | `gespraeche.aktiv()` wie bei `search_chats` (globaler Zustand; ein Erinnerungs-Zug bekäme das Projekt des offenen Gesprächs) |
+| `read_project_file` **ungegatet** (nur lesen, nur dieses Projekt) | gegatet |
+| `read_project_file` liefert **20.000 Zeichen je Aufruf**, weiter mit `ab` | ganze Datei (bis 200.000 Zeichen in einem Werkzeug-Ergebnis) |
+| Wissen **nur Text**; PDF/Bild abgewiesen | PDF wie `dokument_holen` extrahieren (später möglich) |
+| Wissen-Sperre = **dieselbe wie für Anhänge** (`context.anhang_gesperrt`, Phase 5) — eine Sperrliste, keine zweite | `context.erlaubt` (dann gingen nur Dateien unter `~/codicus`, nicht aus Downloads) / eigene Liste |
+| Gleicher Wissens-Name **ersetzt, alte Fassung `.bak`** | Fehler „gibt es schon" / Nummer anhängen |
+| Backend liest den Pfad; **fehlt er dort, schickt die TUI den Text** (Sperre prüft trotzdem den Pfad) | nur Backend (Laptop gegen PC-Backend ginge nicht) / immer die TUI (Secret-Inhalt ginge erst über die Leitung) |
+| `/neu` aus einem Projekt **bleibt im Projekt**, vorgemerkt **pro Rechner** im `_knoten`-File bis zum ersten Senden | neues Gespräch sofort anlegen (leere Ordner im Sync) / ohne Projekt |
+| `/projekt <name>` ordnet nur **bestehende** zu; anlegen nur mit `/projekt neu <name>` | unbekannter Name legt an (ein Tippfehler erzeugte ein Projekt) |
+| `kein`/`aus`/`neu` (u. a.) als Projektnamen **reserviert** | Sonderzeichen-Syntax (`/projekt -`) |
+| Übersicht als **eigene Überlagerung** `projekte.py` | Abschnitt der Gedächtnis-Ansicht (zweite Ebene + Eingabefelder wären dort Sonderfälle in jedem Zweig) |
+| „Erinnerungen" **gehört zu keinem Projekt** | frei zuordenbar |
+| Archiviertes Projekt: Gespräche **behalten** Zuordnung **und** Block | Block entfällt mit dem Archivieren |
+| `search_chats(projekt=…)` lässt das **alte Transkript weg** | Transkript immer mit (kennt keine Projekte) |
+| Sichtbar: „projekt", „anweisungen", „wissen", „kein projekt" | „Kontext", „Knowledge" (Claude-Web-Wörter) |
+
+**Offen:** Projekt umbenennen; Wissen entfernen (ginge nur als „aus" mit
+Flag, nie löschen); PDFs als Wissen; die KI kann keine Projekte anlegen
+oder Anweisungen vorschlagen (bewusst — Sasha pflegt sie); Projekt-Block
+für das lokale qwen (erst messen).
+

@@ -27,6 +27,7 @@ from .chat_ablage import AblageSteuerung, ablage_anzeige, anhang_eintrag
 from .chat_gespraeche import GespraechsSteuerung, ai_verlauf_holen, verlauf_aus  # noqa: F401
 from .gespraechsliste import Gespraechsliste
 from .gedaechtnis import Gedaechtnis
+from .projekte import Projekte
 from .basis import BASE_URL, api_call
 from .text import _md_umbruch, _wrap, md_zeilen
 
@@ -298,6 +299,7 @@ class Chat(GespraechsSteuerung, AblageSteuerung):
         self.liste = Gespraechsliste(self)
         self.gedaechtnis = Gedaechtnis(self)       # /gedaechtnis, /skills (Phase 3)
         self.ablageliste = Ablageliste(self)
+        self.projekte = Projekte(self)             # /projekt, /projekte (Phase 6)
 
     def start(self):
         """Hintergrund-Threads anwerfen (run_ui ruft das nach dem Aufbau)."""
@@ -572,6 +574,9 @@ class Chat(GespraechsSteuerung, AblageSteuerung):
         if name == "anhang":
             self.anhang_dazu(arg)
             return
+        if name in ("projekt", "projekte"):        # projekte.py (Phase 6)
+            self.projekte.befehl(name, arg)
+            return
         if name in ("lokal", "cloud", "auto"):
             self.setzen({"weg": name})
             return
@@ -639,7 +644,8 @@ class Chat(GespraechsSteuerung, AblageSteuerung):
                 and ch - ord("1") < n):
             idx = wahl["idx"] if ch in (10, 13, curses.KEY_ENTER) else ch - ord("1")
             AI["wahl"] = None
-            self.setzen(wahl["optionen"][idx][1])
+            # Eine Auswahl kann ihre eigene Aktion mitbringen (/projekt, Phase 6).
+            (wahl.get("aktion") or self.setzen)(wahl["optionen"][idx][1])
 
     def _esc_lesen(self):
         """Nach einem ESC kurz (50 ms) schauen, was folgt — derselbe Weg
@@ -672,6 +678,8 @@ class Chat(GespraechsSteuerung, AblageSteuerung):
             return " " + self.gedaechtnis.fusszeile()
         if self.AI["ablage"]:
             return " ablage: ↑↓ wählen/blättern · enter lesen · esc zurück"
+        if self.AI.get("projekte"):
+            return " " + self.projekte.fusszeile()
         return (" enter senden · alt+enter neue zeile · ↑↓ verlauf · tab gespräche · "
                 "strg+d denken · /hilfe befehle · esc zu")
 
@@ -696,6 +704,10 @@ class Chat(GespraechsSteuerung, AblageSteuerung):
             # Kostenzeile und ein Zeichen dort geht unter.
             neu = "● " if AI.get("neu") else ""
             gtitel = " ".join(str(AI.get("titel") or "").split())
+            # Kasten-Titel „Projekt · Gespräch" (Phase 6, 2026-10-07).
+            ptitel = " ".join(str(AI.get("projekt") or "").split())
+        if ptitel:
+            gtitel = ptitel + (" · " + gtitel if gtitel else "")
         if b == "local":
             rest = f" · lokal ({mdl})".lower()
         elif b != "cloud":
@@ -756,6 +768,9 @@ class Chat(GespraechsSteuerung, AblageSteuerung):
             return
         if AI["ablage"]:                   # Ablage-Liste/Lesen (ablage.py)
             self.ablageliste.taste(ch)
+            return
+        if AI.get("projekte"):             # Projekt-Übersicht (projekte.py)
+            self.projekte.taste(ch)
             return
         if ch == 27:
             # Läuft eine Antwort, stoppt Esc sie (bis in die Schleife, das
@@ -847,6 +862,9 @@ class Chat(GespraechsSteuerung, AblageSteuerung):
             return
         if AI["ablage"]:                   # Ablage ebenso (ablage.py)
             self.ablageliste.zeichnen(by, bx, bh, bw)
+            return
+        if AI.get("projekte"):             # Projekte ebenso
+            self.projekte.zeichnen(by, bx, bh, bw)
             return
 
         with AI_LOCK:

@@ -98,7 +98,7 @@ def is_available(name: str | None = None) -> bool:
         return False
 
 
-def _system_text(system, mem_ctx, via_mic, tutor_mode) -> str:
+def _system_text(system, mem_ctx, via_mic, tutor_mode, projekt=None) -> str:
     """Der statische Kopf — dieselbe Funktion wie im Anthropic-Pfad, damit die
     beiden Dialekte nicht auseinanderlaufen.
 
@@ -108,7 +108,7 @@ def _system_text(system, mem_ctx, via_mic, tutor_mode) -> str:
     Praefix-Caches der Anbieter arbeiten nach derselben Logik — was sich
     aendert, gehoert ans Ende, nicht an den Anfang. Die Parameter bleiben in
     der Signatur, damit die Aufrufstelle in beiden Modulen gleich aussieht."""
-    return cloud._static_system(system, tutor_mode)
+    return cloud._static_system(system, tutor_mode, projekt)
 
 
 def _log_usage(verbrauch, model: str):
@@ -194,7 +194,7 @@ def _anhang_teile(anhaenge: list) -> list:
 
 def chat_stream(messages: list, model: str = None, system: str = None,
                 tools: list = None, tool_executor=None, via_mic: bool = False,
-                *, provider: str = None, abbruch=None):
+                *, provider: str = None, abbruch=None, projekt=None):
     """
     Drop-in fuer ai.chat_stream() gegen einen OpenAI-kompatiblen Provider.
 
@@ -213,7 +213,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     # Tool-Set von der Schiene, nicht aus ai.TOOLS: dort haengt das
     # Set fuer KLEINE Modelle (siehe core/profil/).
     active_tools = tools if tools is not None else cloud.cloud_tools()
-    active_exec  = tool_executor if tool_executor is not None else ki_werkzeuge.ausfuehren
+    active_exec  = (tool_executor if tool_executor is not None
+                    else ki_werkzeuge.mit_projekt(projekt))   # Phase 6, wie cloud.py
     store        = None if tutor_mode else cloud.CLOUD_GRAPH
 
     user_query = ki_prompt._last_user_query(messages)
@@ -229,7 +230,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
 
     msgs   = _prepare_messages(
         messages,
-        _system_text(system, mem_ctx, via_mic, tutor_mode),
+        _system_text(system, mem_ctx, via_mic, tutor_mode, projekt),
         cloud._volatile_text(mem_ctx, via_mic, tutor_mode))
     client = _get_client(prov)
     # Modell aus derselben Quelle wie beim Anthropic-Pfad: pro Anbieter

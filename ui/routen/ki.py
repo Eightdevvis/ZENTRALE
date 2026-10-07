@@ -18,6 +18,7 @@ import ai_backends     # type: ignore  – AI-Backend-Verfügbarkeit (local/clou
 import anhang          # type: ignore  – Anhänge: Verweise prüfen, in den Verlauf einsetzen
 import gespraeche      # type: ignore  – Gespräche: Ordner pro Gespräch, Datei pro Rechner
 import gespraech_titel # type: ignore  – automatischer Titel (billiges Modell)
+import projekte        # type: ignore  – Projekte (Phase 6): /neu bleibt im Projekt
 import kern            # type: ignore  – der eine Einstieg in den Chat (core/kern.py)
 import ki_einstellungen  # type: ignore  – Einstellungen lesen/setzen mit Prüfung
 import providers      # type: ignore  – Cloud-Registry des Kerns (base_url/kind)
@@ -85,7 +86,8 @@ def api_chat():
     if anhang.hat_bild(verweise) and backend != ai_backends.CLOUD:
         return jsonify({"error": "Bilder gehen nur mit der Cloud-KI — /cloud schaltet um."}), 400
     if gid is None:
-        gid = gespraeche.neu()
+        # /neu aus einem Projekt heraus: das neue Gespräch bleibt darin (Phase 6).
+        gid = gespraeche.neu(projekt=gespraeche.neu_projekt())
     gespraeche.aktiv_setzen(gid)
     if ersetzt:
         gespraeche.verwerfen_ab(gid, ersetzt)
@@ -148,8 +150,10 @@ def _zug_starten(gid, message, backend, via_mic, verweise=None):
         # Welcher Weg (lokal, Anthropic, OpenAI-kompatibel) — das entscheidet
         # kern.chat, die eine Stelle dafür. Alle Wege liefern dasselbe
         # Event-Protokoll; die Schleife hier merkt keinen Unterschied.
+        # Das Projekt des Gesprächs (Phase 6) geht als Parameter mit — der
+        # Kern setzt dessen Block in den festen Kopf.
         stream = kern.chat(history, via_mic=via_mic, backend=backend,
-                           abbruch=abbruch)
+                           abbruch=abbruch, projekt=gespraeche.projekt_von(gid))
         try:
             yield _sse({'strom': strom_id})
             # Welches Gespräch, welche Nachricht — die TUI braucht die id
@@ -336,9 +340,19 @@ def api_chat_history():
 def api_chat_clear():
     """Neues Gespräch (/neu im Chat). Seit 2026-10-07 wird nichts mehr
     gelöscht: das alte bleibt in der Liste, das nächste Senden legt ein
-    neues an."""
-    gespraeche.aktiv_setzen(None)
-    return jsonify({"ok": True})
+    neues an. Gehört das offene Gespräch zu einem Projekt, gehört das neue
+    auch dazu (Phase 6) — Body {projekt: id|null} setzt es ausdrücklich."""
+    body = request.get_json(silent=True) or {}
+    if "projekt" in body:
+        projekt = body.get("projekt") or None
+        if projekt and not projekte.gibt_es(str(projekt)):
+            return jsonify({"error": "Dieses Projekt gibt es nicht."}), 404
+    else:
+        alt = gespraeche.aktiv()
+        projekt = gespraeche.projekt_von(alt) if alt else gespraeche.neu_projekt()
+    gespraeche.aktiv_setzen(None, projekt=projekt)
+    return jsonify({"ok": True, "projekt": projekt,
+                    "name": projekte.name(projekt) if projekt else None})
 
 
 @bp.route('/api/permission_answer', methods=['POST'])

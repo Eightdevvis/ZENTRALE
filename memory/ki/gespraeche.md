@@ -17,7 +17,7 @@ data/gespraeche/
   <id>/kopf.json          {titel, titel_von, erstellt, archiviert, projekt}
   <id>/<knoten>.jsonl     Ereignisse DIESES Rechners, nur angehängt
   erinnerungen/…          das feste Gespräch „Erinnerungen"
-  _knoten/<knoten>.json   {aktiv, gelesen: {id: ts}} — nur für diesen Rechner
+  _knoten/<knoten>.json   {aktiv, gelesen: {id: ts}, neu_projekt} — nur für diesen Rechner
 ```
 
 - **id**: `JJJJMMTT-hhmmss-<6 hex>` (sortiert nach Erstellzeit, auf zwei
@@ -27,7 +27,10 @@ data/gespraeche/
   Kalender-Verlauf).
 - **titel_von**: `sasha` (von Hand), `modell` (billiges Modell), `woerter`
   (die ersten Wörter). Automatisch wird nie über einen Hand-Titel geschrieben.
-- **projekt**: immer `null` — für Phase 6 reserviert.
+- **projekt**: id eines Projekts oder `null` (seit Phase 6,
+  [projekte.md](projekte.md)): setzen/lösen mit `projekt_setzen`, lesen mit
+  `projekt_von`; „Erinnerungen" gehört zu keinem. `liste(projekt=…)` filtert,
+  jeder Listen-Eintrag trägt `projekt`.
 - Ordner per `ZENTRALE_GESPRAECHE_DIR` umlenkbar (Tests: `tests/conftest.py`,
   jeder Test einen eigenen Ordner; Wächter in `test_keine_seiteneffekte.py`).
 - gitignored (`data/gespraeche/`), gesichert über `scripts/daten_sichern.py`.
@@ -146,3 +149,14 @@ Kein Index, keine Vektoren: es sind ein paar hundert Nachrichten, das Lesen
 nutzt den Cache von `gespraeche.nachrichten`, und ein Wortfund ist für Sasha
 nachprüfbar, ein Ähnlichkeitswert nicht. Wird es zu langsam (tausende
 Gespräche), ist ein Index pro Rechner der nächste Schritt.
+
+## Projekte (seit 2026-10-07)
+
+Phase 6: ein Gespräch gehört optional zu einem Projekt (`kopf.json` →
+`projekt`). `/neu` aus einem Projekt heraus bleibt darin — bis zum ersten
+Senden merkt sich der Rechner das in `_knoten/<knoten>.json` als
+`neu_projekt` (`aktiv_setzen(None, projekt=…)`, `neu_projekt()`); wer ein
+Gespräch öffnet, löscht die Vormerkung. Die Chat-Route gibt das Projekt als
+Parameter an `kern.chat`; `search_chats` kann mit `projekt` auf dessen
+Gespräche beschränkt werden (dann ohne das alte Transkript). Alles Weitere:
+[projekte.md](projekte.md).

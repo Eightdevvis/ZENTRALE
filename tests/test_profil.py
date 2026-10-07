@@ -150,10 +150,13 @@ def test_der_schnitt_haelt():
     # 07.10.2026: die Ablage-Werkzeuge (Phase 5) ebenso — eigener Deckel unten.
     ablage = {"create_document", "read_document", "update_document",
               "save_from_sandbox"}
+    # 07.10.2026: Projekte (Phase 6) ebenso — eigener Deckel unten.
+    projekt = {"read_project_file"}
     eigen = {w.name for w in werkzeug_register.auf_schiene("gross")
-             if w.klein is None and w.name != "run_code"} - skill - suche - ablage
+             if w.klein is None and w.name != "run_code"} - skill - suche - ablage - projekt
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
-                if t["function"]["name"] not in eigen | {"run_code"} | skill | suche | ablage)
+                if t["function"]["name"] not in
+                eigen | {"run_code"} | skill | suche | ablage | projekt)
     # 18.08.2026 von 3.000 auf 3.300: edit_calendar_routine kam dazu. Es
     # kostet ~250 Zeichen und behebt eine Luecke, die sie nicht ueberspielen
     # konnte — Routinen liessen sich nur ANLEGEN, also stand die verschobene
@@ -206,6 +209,12 @@ def test_der_schnitt_haelt():
     besch_ablage = sum(len(t["function"]["description"]) for t in gross.TOOLS
                        if t["function"]["name"] in ablage)
     assert 0 < besch_ablage < 650
+    # Projekte (07.10.2026, Phase 6): ein Werkzeug, ~90 Zeichen. Deckel 200:
+    # WAS im Projekt steht, sagt der Projekt-Block im Kopf (nur bei einem
+    # Projekt-Gespräch); das Werkzeug sagt nur, dass es von dort liest.
+    besch_projekt = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                        if t["function"]["name"] in projekt)
+    assert 0 < besch_projekt < 200
 
 
 def test_praefix_bleibt_ueber_der_cache_mindestgroesse():

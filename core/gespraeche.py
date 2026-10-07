@@ -143,14 +143,16 @@ def kopf(gid) -> dict:
     return _kopf_lesen(gid)
 
 
-def neu(titel=None, gid=None) -> str:
-    """Ein Gespräch anlegen. -> id. titel None: kommt später (gespraech_titel)."""
+def neu(titel=None, gid=None, projekt=None) -> str:
+    """Ein Gespräch anlegen. -> id. titel None: kommt später (gespraech_titel).
+    projekt: id eines Projekts (core/projekte.py) oder None — geprüft wird
+    es von der Route, dieses Modul kennt keine Projekte."""
     gid = gid or _neue_id()
     if not _gueltig(gid):
         raise ValueError(f"ungültige Gesprächs-id: {gid!r}")
     _kopf_schreiben(gid, {"titel": titel, "titel_von": "sasha" if titel else None,
                           "erstellt": jetzt_ts(), "archiviert": False,
-                          "projekt": None})
+                          "projekt": projekt or None})
     return gid
 
 
@@ -184,6 +186,25 @@ def archivieren(gid, an=True):
         k = _kopf_lesen(gid)
         k["archiviert"] = bool(an)
         _kopf_schreiben(gid, k)
+
+
+def projekt_von(gid):
+    """Die Projekt-id dieses Gesprächs oder None."""
+    return kopf(gid).get("projekt") or None
+
+
+def projekt_setzen(gid, projekt_id):
+    """Gespräch einem Projekt zuordnen (id) oder lösen (None). Phase 6,
+    2026-10-07. „Erinnerungen" gehört zu keinem Projekt — dort sprechen
+    Kalender und Timer, kein Thema. Wirft Unbekannt, ValueError."""
+    _pruefen(gid)
+    if gid == ERINNERUNGEN and projekt_id:
+        raise ValueError("„Erinnerungen“ gehört zu keinem Projekt.")
+    with _lock:
+        k = _kopf_lesen(gid)
+        if (k.get("projekt") or None) != (projekt_id or None):
+            k["projekt"] = projekt_id or None
+            _kopf_schreiben(gid, k)
 
 
 # ── Ereignisse schreiben ───────────────────────────────────────────────
@@ -388,16 +409,27 @@ def aktiv():
     return gid if gid and gibt_es(gid) else None
 
 
-def aktiv_setzen(gid):
+def aktiv_setzen(gid, projekt=None):
     """Gespräch öffnen (None: ein neues beginnt beim nächsten Senden).
     Eigene Datei pro Rechner, damit sich PC und Laptop nicht gegenseitig
-    umschalten."""
+    umschalten.
+
+    projekt (nur mit gid None, Phase 6): das nächste neue Gespräch gehört
+    zu diesem Projekt — /neu aus einem Projekt heraus bleibt im Projekt.
+    Ein neues Gespräch entsteht erst beim ersten Senden; bis dahin merkt
+    sich das der Rechner hier (neu_projekt)."""
     if gid is not None:
         _pruefen(gid)
     with _lock:
         d = _knoten_lesen()
         d["aktiv"] = gid
+        d["neu_projekt"] = (projekt or None) if gid is None else None
         _knoten_schreiben(d)
+
+
+def neu_projekt():
+    """Das Projekt, zu dem das nächste neue Gespräch gehört (oder None)."""
+    return _knoten_lesen().get("neu_projekt") or None
 
 
 def gelesen_setzen(gid):
@@ -411,10 +443,11 @@ def gelesen_setzen(gid):
 
 # ── Liste ───────────────────────────────────────────────────────────────
 
-def liste(archivierte=False) -> list:
+def liste(archivierte=False, projekt=None) -> list:
     """Alle Gespräche, neueste Aktivität zuerst; „Erinnerungen" immer oben.
 
     archivierte=False: nur die nicht archivierten; True: nur die archivierten.
+    projekt: nur die Gespräche dieses Projekts (id).
     Gespräche ohne eine einzige Nachricht fehlen (außer Erinnerungen)."""
     try:
         namen = os.listdir(_DIR)
@@ -427,6 +460,8 @@ def liste(archivierte=False) -> list:
             continue
         k = _kopf_lesen(gid)
         if bool(k.get("archiviert")) != bool(archivierte):
+            continue
+        if projekt and k.get("projekt") != projekt:
             continue
         ns = nachrichten(gid)
         if not ns and gid != ERINNERUNGEN:
@@ -441,6 +476,7 @@ def liste(archivierte=False) -> list:
             "anzahl": len(ns),
             "archiviert": bool(k.get("archiviert")),
             "ungelesen": bool(letzte_ki and letzte_ki > (gelesen.get(gid) or "")),
+            "projekt": k.get("projekt") or None,
         })
     raus.sort(key=lambda g: g["letzte"] or "", reverse=True)
     raus.sort(key=lambda g: g["id"] != ERINNERUNGEN)       # stabil: Erinnerungen oben

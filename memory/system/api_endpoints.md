@@ -206,7 +206,7 @@ Datenmodell + Bedienung: `memory/werkzeuge/notizen_system.md`.
 | `/api/chat/wiederholen` | POST  | Letzte Antwort neu erzeugen (seit 2026-10-07): ab der letzten eigenen Nachricht verwerfen, dieselbe neu schicken. Body `{gespraech?}`. SSE wie `/api/chat`. Nichts zu wiederholen → 400, unbekanntes Gespräch → 404, kein Backend → 503. |
 | `/api/chat/stop`      | POST    | Laufenden Zug stoppen, bis in die Werkzeug-Schleife (seit 2026-10-07). Body `{strom?}` (aus dem ersten SSE-Event; ohne → jeder laufende Zug). Beendet auch eine offene Erlaubnis-Frage mit „nein“. Antwort `{ok, gestoppt: bool}` — `false` heißt, es lief nichts mehr. |
 | `/api/chat/history`   | GET     | Nachrichten eines Gesprächs (`?gespraech=<id>`, sonst das aktive; keins → `[]`): `[{id, role, content, ts, denken?, werkzeuge?, abgebrochen?, anbieter?, modell?}]`, versteckte Aufträge fehlen. Markiert als gelesen. Geht seit 2026-10-07 auch ohne KI-Backend. Unbekannt → 404. |
-| `/api/chat/clear`     | POST    | Neues Gespräch (TUI: `/neu`): das aktive wird abgewählt, das nächste Senden legt eins an. Gelöscht wird nichts. |
+| `/api/chat/clear`     | POST    | Neues Gespräch (TUI: `/neu`): das aktive wird abgewählt, das nächste Senden legt eins an. Gelöscht wird nichts. Seit Phase 6: gehörte das offene Gespräch zu einem Projekt, gehört das neue auch dazu; Body `{projekt: id\|null}` setzt es ausdrücklich (unbekannt → 404). → `{ok, projekt, name}` |
 
 ## Gespräche (seit 2026-10-07)
 
@@ -214,7 +214,7 @@ Datenmodell + Bedienung: `memory/werkzeuge/notizen_system.md`.
 
 | Endpoint | Methode | Beschreibung |
 |---|---|---|
-| `/api/gespraeche` | GET | `{aktiv, gespraeche: [{id, titel, erstellt, letzte, anzahl, archiviert, ungelesen}]}` — neueste Aktivität zuerst, „Erinnerungen“ oben, leere fehlen. `?archiv=1` → nur die archivierten. |
+| `/api/gespraeche` | GET | `{aktiv, neu_projekt, gespraeche: [{id, titel, erstellt, letzte, anzahl, archiviert, ungelesen, projekt, projekt_name}]}` — neueste Aktivität zuerst, „Erinnerungen“ oben, leere fehlen. `?archiv=1` → nur die archivierten; `?projekt=<id>` → nur die eines Projekts (unbekannt → 404). `neu_projekt`: `{id, name}` des Projekts, in dem das nächste neue Gespräch beginnt, oder `null`. |
 | `/api/gespraeche` | POST | Neu anlegen und öffnen. Body `{titel?}` → 201 `{ok, id}`. |
 | `/api/gespraeche/aktiv` | POST | Öffnen (auf diesem Rechner). Body `{id}`; `null` → das nächste Senden beginnt ein neues. Unbekannt → 404. |
 | `/api/gespraeche/<id>` | GET | `{id, kopf, nachrichten}` mit Denken und Werkzeugen. Unbekannt → 404. |
@@ -257,6 +257,21 @@ Doku: `memory/ki/gedaechtnis_dateien.md` → „Für Sasha sichtbar und änderba
 | `/api/skills/<name>/status` | POST | Skill schalten, Body `{status: aktiv\|aus\|vorgeschlagen}` → `{skill}`. Nur der Kopf ändert sich, alte Fassung als `.bak`. Unbekannter Skill (nur der genaue Dateiname) → 404, anderer Status → 400. |
 | `/api/gedaechtnis` | GET | `{kernakten: [{akte, text, stand}], bereiche: [{bereich, titel: [...]}], skills: [...]}` — Kernakten in der Reihenfolge `hausregeln`, `steckbrief`, `ziele` (ganzer Text, `stand` = Fingerabdruck), Bereiche nur mit Titeln. |
 | `/api/gedaechtnis/<akte>` | PUT | Eine Kernakte ersetzen, Body `{text, stand?}` → `{akte, text, stand}`. Nur `hausregeln`, `steckbrief`, `ziele` (sonst 404). Atomar, alte Fassung als `.bak`. `stand` weicht ab (die KI hat inzwischen geschrieben) → 409; kein Text → 400; über 20.000 Zeichen → 400. |
+
+## Projekte (`ui/routen/projekte.py`, seit 2026-10-07)
+
+Claude-Web-Plan Phase 6, Speicher `core/projekte.py`, Doku `memory/ki/projekte.md`.
+Kein KI-Backend nötig; geschrieben wird nur, was Sasha in der TUI tut. Unbekanntes Projekt → 404.
+
+| Endpoint | Methode | Beschreibung |
+|---|---|---|
+| `/api/projekte` | GET | `{projekte: [{id, name, erstellt, archiviert, wissen}]}` nach Name; `?archiv=1` → nur die archivierten. |
+| `/api/projekte` | POST | Anlegen, Body `{name, anweisungen?}` → 201 mit dem Projekt. Leer, reserviert (neu, aus, kein …) oder schon da → 400. |
+| `/api/projekte/<id>` | GET | `{id, name, erstellt, archiviert, anweisungen, stand, wissen: [{name, groesse}], gespraeche: [...]}` (Gespräche wie `/api/gespraeche`, auch archivierte). |
+| `/api/projekte/<id>/anweisungen` | PUT | Body `{text, stand?}` → `{anweisungen, stand}`. Atomar, alte Fassung als `.bak`. `stand` veraltet → 409, kein Text → 400, über 20.000 Zeichen → 400. |
+| `/api/projekte/<id>/wissen` | POST | Body `{name, text}` oder `{pfad, name?, text?}` → 201 `{name, groesse}`. Gesperrt (Zugangsdaten, gesperrte Ordner), keine Textdatei, leer, zu lang → 400. Pfad fehlt auf diesem Rechner → 404 `{fehlt: true}` (dann `text` mitschicken). |
+| `/api/projekte/<id>/archiv` | POST | `{an: true}` (Standard) oder `{an: false}` → das Projekt. Nie löschen. |
+| `/api/projekte/zuordnen` | POST | Body `{gespraech: id\|null, projekt: id\|null}` → `{gespraech, projekt, name}`. `projekt` null löst. `gespraech` null → das nächste neue Gespräch dieses Rechners (ist eins offen → 400). Unbekanntes Gespräch → 404, „Erinnerungen“ → 400. |
 
 ## Fotos (ASCII-Bild-Filter)
 

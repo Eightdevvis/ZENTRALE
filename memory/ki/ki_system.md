@@ -325,6 +325,8 @@ und nimmt beide Schreibweisen an (siehe „Zwei Schienen" weiter unten).
 | `antwort`     | nur `klein`  | Finale Antwort über den Tool-Kanal (Framing-Effekt, 9B-Krücke) |
 | `run_code`    | nur `gross`  | Python/Shell abgeschottet ausführen, jeder Lauf gegatet (s. „Sandbox") |
 | `load_skill` / `propose_skill` / `edit_skill` | nur `gross` | Skill-Anleitung holen; neuen vorschlagen bzw. bestehenden umschreiben (beide gegatet) (s. „Skills") |
+| `search_chats` / `read_chat` | nur `gross` | Frühere Gespräche durchsuchen/nachlesen; `search_chats` mit `projekt` nur in einem Projekt (s. „Frühere Gespräche") |
+| `read_project_file` | nur `gross` | Wissensdatei des Projekts dieses Gesprächs lesen (s. „Projekte") |
 
 Gegen das Erlaubnis-Gate wird **nie** direkt geprüft, sondern über
 `erlaubnis.braucht_erlaubnis()` — die normalisiert erst. Ein Schreib-Tool, das unter
@@ -464,6 +466,37 @@ Beschreibungen: eigener Deckel < 450 Zeichen in `tests/test_profil.py`.
 
 Zwei Werkzeuge statt eines mit Modus: jedes Schema bleibt klein und
 eindeutig, und das Modell muss keinen Modus-Parameter richtig setzen.
+
+Seit Phase 6 hat `search_chats` einen optionalen Parameter `projekt` (Name
+oder id): dann nur die Gespräche dieses Projekts, ohne das alte Transkript.
+
+### Projekte — Projekt-Block und `read_project_file` (seit 2026-10-07)
+
+Phase 6 des [Claude-Web-Plans](claude_web_plan.md), ausführlich
+[projekte.md](projekte.md). Ein Gespräch kann zu einem Projekt gehören
+(eigene Anweisungen + Wissensdateien). Dann steht `projekte.prompt_block(id)`
+im **festen, gecachten Kopf** (`cloud._static_system(…, projekt=)`, hinter
+Gedächtnis-Kopf und Skill-Liste, vor dem Imprint; nur mit
+`MERKMALE["projekte"]`, also `gross`): Name, Anweisungen (≤ 4.000 Zeichen,
+sonst gekürzt) und die LISTE der Wissensdateien mit Größe. Byte-stabil, solange
+Sasha am Projekt nichts ändert — der Cache gilt pro Projekt; ein Gespräch ohne
+Projekt sieht keinen Block, sein Kopf bleibt wie vorher.
+
+Das Projekt reist als **Parameter**: Chat-Route (`gespraeche.projekt_von`) →
+`kern.chat(projekt=)` → `cloud.chat_stream` / `cloud_openai.chat_stream`
+(`projekt=`) → `_static_system` und `ki_werkzeuge.mit_projekt(projekt)`. Kein
+globaler Zustand; der lokale Weg und der Erinnerungs-Takt bekommen keins.
+
+| Werkzeug | Was | Gate |
+|---|---|---|
+| `read_project_file(name, ab?)` | Wissensdatei des Projekts DIESES Gesprächs (≤ 20.000 Zeichen ab `ab`); „anweisungen" → die ungekürzten Anweisungen | nein |
+
+Das Projekt bekommt der Ausführer von `ki_werkzeuge._verteilen` (markiert mit
+`@braucht_projekt`), nie aus den Argumenten des Modells; gefunden wird nur
+über die Dateiliste des Projekts — kein Pfad-Ausbruch, kein fremdes Projekt.
+Keine neue Meta-Regel (der Kopf von `gross.system()` steht bei ~4.974 von
+5.000 Zeichen); der Block erklärt sich selbst. Text-Budget: eigener Deckel
+< 200 Zeichen in `tests/test_profil.py`.
 
 ### Ablage und Anhänge — `create_document` & Co. (seit 2026-10-07)
 
@@ -707,7 +740,8 @@ Die Liste beschreibt den **lokalen** Pfad (`ai.chat_stream`, Schiene `klein`;
 zwischen 2 und 3 stehen dort noch Antwort-Suffix, Bild-Marker, Dashboard-Block
 und `kalender.imprint_for_prompt()`). Der Cloud-Pfad baut seinen Kopf in
 `cloud._static_system` (Schiene `gross` + `gedaechtnis.kopf_block()` +
-Skill-Liste + Imprint) und hängt das Wechselnde (4–6) hinten an die neueste User-Nachricht,
+Skill-Liste + Projekt-Block, wenn das Gespräch zu einem Projekt gehört +
+Imprint) und hängt das Wechselnde (4–6) hinten an die neueste User-Nachricht,
 siehe „Prompt-Cache: statisch vorn, Wechselndes ganz hinten".
 
 1. **`_SYSTEM_PROMPT`** – Persona (entspannt, direkt, deutsch).

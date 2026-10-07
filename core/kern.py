@@ -38,7 +38,7 @@ def cloud_modul():
     return CLOUD_WEGE.get(ai_backends.chat_cloud_kind())
 
 
-def chat(verlauf, *, via_mic=False, backend=None, abbruch=None):
+def chat(verlauf, *, via_mic=False, backend=None, abbruch=None, projekt=None):
     """Einen Chat-Zug fahren. Generator mit dem Event-Protokoll der
     Werkzeug-Schleife (Text-Tokens, reflect, werkzeug, permission, ascii,
     cinema, fehler).
@@ -51,6 +51,11 @@ def chat(verlauf, *, via_mic=False, backend=None, abbruch=None):
     → die Schleife hört vor der nächsten Runde bzw. dem nächsten Werkzeug
     auf, ein laufender Anbieter-Strom wird geschlossen, und es kommt ein
     {"gestoppt": True}-Event. None → nicht stoppbar (Takt).
+
+    projekt: id des Projekts, zu dem das Gespräch gehört (core/projekte.py,
+    Phase 6, 2026-10-07) — die Cloud-Wege setzen dessen Block in den festen
+    Kopf und beschränken read_project_file darauf. Der lokale Weg kennt
+    Projekte nicht (klein bleibt, wie es gemessen ist).
     """
     if backend is None:
         backend = ai_backends.chat_available()
@@ -66,6 +71,7 @@ def chat(verlauf, *, via_mic=False, backend=None, abbruch=None):
                 f"'{ai_backends.cloud_provider()}' nicht.")
             return
         state.push_log(f"AI →  KERN: Cloud ({ai_backends.cloud_provider()})")
-        yield from modul.chat_stream(verlauf, via_mic=via_mic, abbruch=abbruch)
+        extra = {"projekt": projekt} if projekt else {}
+        yield from modul.chat_stream(verlauf, via_mic=via_mic, abbruch=abbruch, **extra)
         return
     yield from ai.chat_stream(verlauf, via_mic=via_mic, abbruch=abbruch)

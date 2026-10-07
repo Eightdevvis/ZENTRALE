@@ -140,6 +140,15 @@ SZ = {
                   ("cap", "c"), ("k", "Left"), ("w", 1), ("cap", "d"), ("k", "Escape"),
                   ("k", "Down"), ("cap", "e"), ("k", "Escape"), ("l", "/anhang /gibt/es/nicht.txt"),
                   ("k", "Enter"), ("cap", "f")],
+    # Projekte (Phase 6, 2026-10-07): /projekt-Auswahl, zuordnen (Kasten-
+    # Titel „Geige · …"), Übersicht, ein Projekt im Einzelnen, Pfad-Eingabe,
+    # Anweisungen im „Editor".
+    "ki_projekte": [("k", "Space"), ("w", 2), ("l", "/projekt"), ("k", "Enter"), ("w", 1),
+                    ("cap", "a"), ("k", "Up"), ("k", "Up"), ("k", "Enter"), ("w", 1),
+                    ("cap", "b"), ("l", "/projekte"), ("k", "Enter"), ("w", 1), ("cap", "c"),
+                    ("k", "Enter"), ("w", 1), ("cap", "d"), ("l", "w"), ("l", "~/noten.md"),
+                    ("cap", "e"), ("k", "Escape"), ("l", "e"), ("w", 2), ("cap", "f"),
+                    ("k", "Escape"), ("k", "Escape"), ("cap", "g")],
     "tech_system": [("k", "M-Right"), ("k", "Enter"), ("cap", "a"), ("k", "/"), ("cap", "b")],
     "tech_stdout": [("k", "M-Right"), ("k", "Right"), ("k", "Enter"), ("cap", "a")],
     "tech_netz": [("k", "M-Right"), ("k", "Right"), ("k", "Right"), ("k", "Enter"), ("cap", "a")],

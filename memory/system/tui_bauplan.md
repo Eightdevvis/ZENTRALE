@@ -38,6 +38,7 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/chat_ablage.py` | Mixin `AblageSteuerung` des Chats: `/anhang` (Datei lesen, an `/api/anhang`), „▤"-Zeilen, Enter auf das neueste Dokument | `AI["anhaenge"]` |
 | `ansichten/gespraechsliste.py` | `Gespraechsliste`: Überlagerung im Chat-Kasten (Tab/`/liste`); reine Helfer `alter_text`, `filtern`, `listen_zeilen` | `AI["liste"]` |
 | `ansichten/gedaechtnis.py` | `Gedaechtnis`: Überlagerung im Chat-Kasten (`/gedaechtnis`, `/skills`) — Kernakten, Bereiche, Skills; Kernakte im Editor ändern, Skill an/aus; reine Helfer `reiter`, `inhalt_zeilen`, `naechster_status`, `editor_befehl` | `AI["gedaechtnis"]` |
+| `ansichten/projekte.py` | `Projekte`: `/projekt` (Auswahl, zuordnen, anlegen, lösen) und die Übersicht `/projekte` als Überlagerung im Chat-Kasten — Projekte, ein Projekt im Einzelnen (Anweisungen, Wissen, Gespräche), Anweisungen im Editor, Wissen per Pfad; reine Helfer `projekt_name`, `finden`, `wahl`, `liste_zeilen`, `detail_zeilen` | `AI["projekte"]`, `AI["projekt"]` |
 | `ansichten/sprachtutor.py` | `Sprachtutor`: Text-Panel, Zimmer-Fenster | `TUTOR` |
 | `ansichten/post.py` | `Post`: Mail, Antwort-Editor, Mail-Worker | `MAIL` |
 | `ansichten/kalender.py` | `Kalender`: Woche/Monat, Formular, Routinen, Sidebar | `K` |
@@ -231,6 +232,37 @@ Claude-Web-Plan Phase 5 ([../ki/ablage.md](../ki/ablage.md)). Was für die TUI g
   Weiche, Enter-Sonderfall, Anhänge im Body — alles Weitere in den zwei Modulen.
 - Headless: Szenario `ki_ablage` in `tests/tui_schirm/lauf.py` (erfundene
   Ablage im Abspiel-Backend); ohne Bildschirm: `tests/test_ablage_tui.py`.
+
+## Chat: Projekte (seit 2026-10-07)
+
+Claude-Web-Plan Phase 6 ([../ki/projekte.md](../ki/projekte.md)). Was für
+die TUI gilt:
+
+- **`/projekt`** ohne Argument: Auswahl im Fuß (wie `/modell`) — die
+  Projekte, „kein projekt", „neues projekt …" (schreibt `/projekt neu ` in
+  die Eingabe). Die Auswahl bringt ihre Aktion mit (`wahl["aktion"]`, sonst
+  wie bisher `setzen`). `/projekt <name>` ordnet direkt zu (Name oder id,
+  Groß/klein egal), `/projekt neu <name>` legt an und ordnet zu,
+  `/projekt kein` (auch `aus`) löst. Ohne offenes Gespräch (nach `/neu`) gilt
+  es für das nächste neue.
+- **`/projekte`**: Überlagerung im Chat-Kasten. Liste: ↑↓ Enter, `n` neues
+  Projekt (Name im Fuß), `a` archivieren/zurückholen, `z` Archiv, Esc zu. Ein
+  Projekt: Anweisungen, Wissen (Name + Größe), Gespräche (auch archivierte);
+  ↑↓ Gespräch, Enter öffnet es, `n` neues Gespräch in diesem Projekt, `e`
+  Anweisungen im externen Editor (wie die Kernakten: Zwischendatei,
+  `stand`, 409 lässt sie liegen), `w` Wissen per Pfad (`~` geht), `r` neu
+  laden, Esc zurück. Listen-Zeilen höchstens 64 Spalten breit.
+- **Kasten-Titel** „ki-chat · Projekt · Gespräch" (`AI["projekt"]`, aus der
+  Gesprächsliste: `projekt_name`, ohne Gespräch `neu_projekt`).
+  **Gesprächsliste**: Projektname vorn an der Zeile („Geige · Partita …"),
+  `/`-Suche findet auch den Projektnamen.
+- `/neu` aus einem Projekt bleibt im Projekt (Backend), die Statuszeile sagt
+  „neues gespräch im projekt „…"".
+- Im Chat-Code nur Haken (Konstruktor, `befehl`, `taste`, `draw_ai`,
+  `fusszeile`, `ai_titel`, `_taste_wahl`); alles andere in `projekte.py`.
+- Headless: Szenario `ki_projekte` in `tests/tui_schirm/lauf.py` (erfundene
+  Projekte im Abspiel-Backend); ohne Bildschirm:
+  `tests/test_projekte_ansicht.py`.
 
 ## Historie
 

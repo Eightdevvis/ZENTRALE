@@ -561,3 +561,32 @@ def test_ein_dokument_im_chat_legt_nichts_im_echten_data_an(monkeypatch):
     assert ablage.liste()
     nachher = sorted(os.listdir(echt)) if os.path.isdir(echt) else None
     assert nachher == vorher
+
+
+def test_projekte_liegen_im_test_nicht_im_echten_data():
+    """Projekte (Phase 6, 2026-10-07) liegen unter der Gedächtnis-Wurzel und
+    hängen an derselben Umlenkung. Ein Anlegen samt Wissen und Zuordnung über
+    die Routen lässt data/gedaechtnis/projekte dieses Checkouts UND des
+    Haupt-Checkouts unverändert."""
+    import gedaechtnis
+    import projekte
+    from ui.app import app
+    haupt = ROOT.split(os.sep + ".claude" + os.sep + "worktrees" + os.sep)[0]
+    echte = [os.path.join(b, "data", "gedaechtnis", "projekte") for b in (ROOT, haupt)]
+
+    def stand():
+        return {p: (sorted(os.listdir(p)) if os.path.isdir(p) else None) for p in echte}
+
+    vorher = stand()
+    pfad = os.path.realpath(projekte.ordner())
+    for echt in (os.path.join(ROOT, "data"), os.path.join(haupt, "data")):
+        assert not pfad.startswith(os.path.realpath(echt)), pfad
+    app.config.update(TESTING=True)
+    c = app.test_client()
+    name = "waechter-probe-%d" % os.getpid()
+    r = c.post("/api/projekte", json={"name": name, "anweisungen": "x"})
+    assert r.status_code == 201
+    pid = r.get_json()["id"]
+    c.post(f"/api/projekte/{pid}/wissen", json={"name": "a", "text": "b"})
+    c.post("/api/chat/clear", json={"projekt": pid})
+    assert stand() == vorher

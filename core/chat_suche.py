@@ -163,11 +163,15 @@ def _tag_titel(tag) -> str:
         return "Früherer Chat"
 
 
-def einheiten(aktiv=None) -> list:
+def einheiten(aktiv=None, projekt=None) -> list:
     """Alles Durchsuchbare: Gespräche (ohne das laufende Fenster) und die
-    Tage des alten Transkripts."""
+    Tage des alten Transkripts. projekt (id, Phase 6): nur die Gespräche
+    dieses Projekts — das alte Transkript kennt keine Projekte und fällt
+    dann weg."""
     raus, bekannt = [], set()
     for eintrag in _gespraechs_liste():
+        if projekt and eintrag.get("projekt") != projekt:
+            continue
         e = _gespraech_einheit(eintrag, aktiv)
         if e is None:
             continue
@@ -178,6 +182,8 @@ def einheiten(aktiv=None) -> list:
                 bekannt.add(_schluessel(n["text"]))
         if e["nachrichten"]:
             raus.append(e)
+    if projekt:
+        return raus
     for tag, ns in sorted(_transkript_tage(frozenset(bekannt)).items()):
         raus.append({"id": TRANSKRIPT + tag, "titel": _tag_titel(tag),
                      "archiviert": False, "nachrichten": ns})
@@ -243,7 +249,7 @@ def _wer(rolle) -> str:
     return "Sasha" if rolle == "user" else "KI"
 
 
-def suchen(anfrage, aktiv=None, jetzt=None, max_treffer=MAX_TREFFER) -> list:
+def suchen(anfrage, aktiv=None, jetzt=None, max_treffer=MAX_TREFFER, projekt=None) -> list:
     """Treffer, bester zuerst: [{id, titel, datum, stellen, rolle,
     ausschnitt, archiviert}]. Leere Anfrage → []."""
     woerter = suchwoerter(anfrage)
@@ -251,7 +257,7 @@ def suchen(anfrage, aktiv=None, jetzt=None, max_treffer=MAX_TREFFER) -> list:
         return []
     jetzt = jetzt or datetime.now(timezone.utc)
     bewertet = []
-    for e in einheiten(aktiv):
+    for e in einheiten(aktiv, projekt):
         b = _bewerten(e, woerter, jetzt)
         if b:
             bewertet.append((b[0], e, b[1], b[2]))
@@ -263,13 +269,14 @@ def suchen(anfrage, aktiv=None, jetzt=None, max_treffer=MAX_TREFFER) -> list:
             for _rang, e, n, stellen in bewertet[:max_treffer]]
 
 
-def suchen_text(anfrage, aktiv=None, jetzt=None) -> str:
+def suchen_text(anfrage, aktiv=None, jetzt=None, projekt=None) -> str:
     """Das Ergebnis von search_chats, kompakt fürs Modell."""
     if not suchwoerter(anfrage):
         return "[Fehler: kein Suchbegriff]"
-    treffer = suchen(anfrage, aktiv=aktiv, jetzt=jetzt)
+    treffer = suchen(anfrage, aktiv=aktiv, jetzt=jetzt, projekt=projekt)
     if not treffer:
-        return (f"Nichts gefunden zu \"{anfrage}\" in früheren Gesprächen. "
+        wo = "in den Gesprächen dieses Projekts" if projekt else "in früheren Gesprächen"
+        return (f"Nichts gefunden zu \"{anfrage}\" {wo}. "
                 f"Alle Wörter müssen vorkommen — mit weniger oder anderen "
                 f"Wörtern versuchen.")
     zeilen = [f"{len(treffer)} Treffer zu \"{anfrage}\" (bester zuerst):"]

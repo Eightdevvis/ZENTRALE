@@ -14,6 +14,7 @@ import urllib.error
 
 from .basis import api_call
 from .chat_ablage import ablage_eintrag, anhang_eintrag
+from .projekte import projekt_name
 
 
 def verlauf_aus(h):
@@ -76,6 +77,7 @@ class GespraechsSteuerung:
                 AI["gid"] = gid or aktiv
                 AI["titel"] = next((e.get("titel") or "" for e in eintraege
                                     if e.get("id") == AI["gid"]), "")
+                AI["projekt"] = projekt_name(eintraege, AI["gid"], AI.get("neu_projekt"))
             elif gid:
                 AI["gid"] = gid
             if geholt is not None:
@@ -123,6 +125,7 @@ class GespraechsSteuerung:
                     mein = next((e for e in eintraege if e.get("id") == AI.get("gid")), None)
                     if mein:
                         AI["titel"] = mein.get("titel") or ""
+                        AI["projekt"] = projekt_name(eintraege, AI["gid"])
                         neu_laden = AI["active"] and (mein.get("anzahl", 0) != AI["n_server"]
                                                       or mein.get("ungelesen"))
                     self._neu_markieren()
@@ -138,6 +141,7 @@ class GespraechsSteuerung:
             AI = self.AI
             AI["log"], AI["n"], AI["scroll"], AI["n_server"] = [], 0, 0, 0
             AI["gid"], AI["titel"], AI["ersetzt"] = None, "", None
+            AI["projekt"] = ""
 
     def neues_gespraech(self):
         """/neu, n in der Liste: das nächste Senden beginnt ein neues
@@ -147,12 +151,15 @@ class GespraechsSteuerung:
             AI["msg"] = "antwort läuft noch — erst stoppen (esc)"
             return
         try:
-            api_call("/api/chat/clear", "POST", {})
+            r = api_call("/api/chat/clear", "POST", {})
         except (urllib.error.URLError, OSError, ValueError):
             AI["msg"] = "keine verbindung — kein neues gespräch"
             return
         self.leeren()
-        AI["msg"] = "neues gespräch"
+        # Aus einem Projekt heraus bleibt das neue Gespräch darin (Phase 6).
+        AI["projekt"] = str((r or {}).get("name") or "") if isinstance(r, dict) else ""
+        AI["msg"] = ("neues gespräch im projekt „%s“" % AI["projekt"]) if AI["projekt"] \
+            else "neues gespräch"
 
     def gespraech_oeffnen(self, gid):
         """Ein Gespräch aus der Liste öffnen (auf diesem Rechner aktiv)."""

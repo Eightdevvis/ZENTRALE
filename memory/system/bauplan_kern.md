@@ -112,6 +112,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `skills` | 2 | Skills der KI: Anleitungen je Art Aufgabe als Dateien im Gedächtnis, Liste für den Prompt, laden/vorschlagen/ändern |
 | `ablage` | 2 | Die Ablage: Dokumente der KI, Sandbox-Dateien, Anhänge — Ordner pro Dokument, jede Fassung eine neue Datei, nie löschen |
 | `anhang` | 2 | Anhänge im Chat: Sperrliste, Art erkennen (PDF → Text), in die Ablage; Verweise für den Verlauf der KI auflösen |
+| `projekte` | 2 | Projekte: Rahmen für ein Thema mit Anweisungen und Wissensdateien im Gedächtnis, Block für den Prompt, Wissen lesen/hinzufügen (Sperrliste), archivieren |
 | `ai` | 3 | Ollama-Weg, Tool-Liste und -Ausführung, Erlaubnis-Abfrage, Prompt-Bausteine |
 | `ai_backends` | 3 | Wer denkt: lokal oder Cloud, Anbieter, Modell, Effort, Rundengrenze |
 | `cloud` | 3 | Anthropic-Weg |
@@ -172,6 +173,7 @@ egal woran, ging durch dieselbe Datei.
 | `mail` | Mail-Triage |
 | `skills` | Skills der KI (Liste, an/aus) und das Gedächtnis für Sasha: Kernakten, Bereiche, Kernakte ändern |
 | `ablage` | Ablage: Liste, Dokument lesen, archivieren; Anhänge annehmen |
+| `projekte` | Projekte: Liste, anlegen, laden, Anweisungen ändern, Wissen hinzufügen, archivieren, Gespräch zuordnen |
 
 ## Türen
 
