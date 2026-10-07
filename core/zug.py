@@ -27,15 +27,21 @@ _aktuell = contextvars.ContextVar("zentrale_zug", default=None)
 
 
 class _Zug:
-    def __init__(self, gespraech):
+    def __init__(self, gespraech, abbruch=None):
         self.gespraech = gespraech
+        self.abbruch = abbruch
         self.ereignisse = []
 
 
-def beginnen(gespraech=None):
+def beginnen(gespraech=None, abbruch=None):
     """Einen Zug öffnen. -> Marke für beenden(). Ohne Zug (Takt, Tutor,
-    Skripte) melden Werkzeuge ins Leere — das ist gewollt."""
-    return _aktuell.set(_Zug(gespraech))
+    Skripte) melden Werkzeuge ins Leere — das ist gewollt.
+
+    abbruch: das Stopp-Signal des Zugs (threading.Event, state.
+    chat_zug_beginnen). Seit 2026-10-07 hier, damit ein Werkzeug, das selbst
+    lange läuft (run_code), mitten drin aufhören kann — die Schleife prüft
+    das Signal nur ZWISCHEN den Werkzeugen."""
+    return _aktuell.set(_Zug(gespraech, abbruch))
 
 
 def beenden(marke) -> None:
@@ -51,6 +57,12 @@ def gespraech():
     """Die Gesprächs-id des laufenden Zugs, oder None."""
     z = _aktuell.get()
     return z.gespraech if z else None
+
+
+def abbruch():
+    """Das Stopp-Signal des laufenden Zugs (hat is_set/wait), oder None."""
+    z = _aktuell.get()
+    return z.abbruch if z else None
 
 
 def melden(ereignis: dict) -> None:

@@ -43,6 +43,7 @@ from typing import Callable
 
 import gedaechtnis
 import kalender
+import sandbox
 import skills
 
 
@@ -66,6 +67,14 @@ class Werkzeug:
                     f(args) -> bool (nur mit Argumenten gefragt).
     frage           f(args) -> str: die Ja/Nein-Frage, die Sasha sieht.
                     Fehlt sie, kommt eine allgemeine.
+    immer_erlaubbar Darf Sasha dieses Werkzeug „immer" erlauben (core/
+                    erlaubnis.py, Geltungsbereiche)? False für alles, was
+                    löscht oder überschreibt, und für Kernakten.
+    alltag          Was das Werkzeug tut, in Alltagswörtern, für Sashas
+                    Liste unter /erlaubnis („termine eintragen").
+    nur_einmal      f(args) -> bool: True = dieser Aufruf braucht ein
+                    eigenes Ja, ein früheres „immer"/„für dieses Gespräch"
+                    gilt nicht, und angeboten wird nur „einmal".
     terminal        Das Ergebnis IST die Antwort, danach keine Runde mehr
                     (Behandlung in werkzeug_schleife.run_tool).
     in_der_schleife Hat keinen Ausführer, die Schleife erledigt es selbst
@@ -79,6 +88,9 @@ class Werkzeug:
     klein_name: str | None = None
     erlaubnis: bool | Callable[[dict], bool] = False
     frage: Callable[[dict], str] | None = None
+    immer_erlaubbar: bool = True
+    alltag: str | None = None
+    nur_einmal: Callable[[dict], bool] | None = None
     terminal: bool = False
     in_der_schleife: bool = False
     ausfuehrer: Callable[[dict], str] | None = None
@@ -102,6 +114,20 @@ class Werkzeug:
 #
 # Die Frage zeigt Sasha im Dialog (und liest sie vor). Sie muss sagen, WAS
 # passiert: Sasha drückt einen Knopf, ohne den Werkzeug-Aufruf zu sehen.
+#
+# Geltungsbereiche (Sasha 2026-10-07: „beides einstellbar machen"): ein Ja
+# gilt „nur dieses Mal", „für dieses Gespräch" oder „immer" (core/
+# erlaubnis.py). „Immer" gibt es NICHT (immer_erlaubbar=False) für
+#   - die Kernakten (write_note auf Hausregeln/Steckbrief/Ziele): sie stehen
+#     in jedem Zug ganz oben im Kopf; was dort landet, steuert die KI auf
+#     Dauer — das soll Sasha jedes Mal sehen, nicht einmal abnicken.
+#   - alles, was löscht oder überschreibt (Termin löschen, Routine ändern/
+#     löschen, Dossier/Skill neu schreiben, fetch_document mit einem schon
+#     benutzten Namen): ein falsches Ja ist dort nicht mit „nein" vom
+#     nächsten Mal wieder gut. Ein Dauer-Ja hiesse, dass ein Missverständnis
+#     der KI still Daten kostet.
+#   - save_from_sandbox: Behalten nur auf Sashas Initiative (07.10.).
+# „Für dieses Gespräch" bleibt überall: es endet von selbst.
 
 def _label(args: dict) -> str:
     return (args.get("label") or "").strip() or "diesen Eintrag"
@@ -209,6 +235,28 @@ def _frage_seite(args: dict) -> str:
     return f'Soll ich die Seite {u} aus dem Internet laden?' if u else "Soll ich eine Webseite laden?"
 
 
+def _code_zeit(args: dict) -> int:
+    """Das verlangte Zeitlimit von run_code in Sekunden (Standard 30)."""
+    try:
+        return int(args.get("zeitlimit") or sandbox.ZEITLIMIT_STANDARD_S)
+    except (TypeError, ValueError):
+        return sandbox.ZEITLIMIT_STANDARD_S
+
+
+def _code_lang(args: dict) -> bool:
+    """run_code über 2 Minuten: eigene Frage, nur „einmal" (2026-10-07).
+    Ein „immer" für Programme soll nicht heimlich halbstündige Läufe decken."""
+    return _code_zeit(args) > sandbox.ZEITLIMIT_OHNE_FRAGE_S
+
+
+def _dauer_text(sekunden: int) -> str:
+    sekunden = min(sekunden, sandbox.ZEITLIMIT_MAX_S)
+    if sekunden % 60 == 0:
+        m = sekunden // 60
+        return "1 Minute" if m == 1 else f"{m} Minuten"
+    return f"{sekunden} Sekunden"
+
+
 def _frage_code(args: dict) -> str:
     """Sasha sieht die Sprache und den Anfang des Programms. Die TUI zeigt
     die Frage einzeilig, deshalb stehen die Zeilen mit ⏎ hintereinander."""
@@ -219,9 +267,18 @@ def _frage_code(args: dict) -> str:
     if len(anfang) > 300:
         anfang = anfang[:299] + "…"
     mehr = f" (+{len(zeilen) - 4} Zeilen)" if len(zeilen) > 4 else ""
+    lang = (f" und darf bis zu {_dauer_text(_code_zeit(args))} laufen"
+            if _code_lang(args) else "")
     return (f"Soll ich dieses {sprache}-Programm abgeschottet ausführen "
-            f"(ohne Internet, ohne Zugriff auf deine Dateien)? "
+            f"(ohne Internet, ohne Zugriff auf deine Dateien){lang}? "
             f"„{anfang}“{mehr}")
+
+
+def _frage_sandbox_ablage(args: dict) -> str:
+    datei = str(args.get("datei") or "").strip() or "die Datei"
+    titel = str(args.get("titel") or "").strip()
+    als = f' als „{titel[:80]}“' if titel else ""
+    return f"Soll ich {datei[:120]} aus dem Programm-Lauf{als} in deine Ablage legen?"
 
 
 def _frage_skill_neu(args: dict) -> str:
@@ -366,6 +423,7 @@ WERKZEUGE = [
         name="add_calendar_entry",
         erlaubnis=True,
         frage=_frage_termin,
+        alltag="termine eintragen",
         klein=(
             "Trägt einen Einmal-Eintrag in einen Kalender-Layer ein. "
             "Nutze dies wenn der User einen Termin nennt, eine Frist, ein "
@@ -403,6 +461,7 @@ WERKZEUGE = [
         name="add_calendar_routine",
         erlaubnis=True,
         frage=_frage_routine,
+        alltag="routinen eintragen",
         klein=(
             "Trägt eine Wiederholungs-Regel in einen Kalender-Layer ein (iCal RRULE). "
             "Nutze dies bei regelmäßigen Aktivitäten: 'jeden Dienstag Geige', "
@@ -442,7 +501,9 @@ WERKZEUGE = [
     Werkzeug(
         name="edit_calendar_routine",
         erlaubnis=True,
+        immer_erlaubbar=False,
         frage=_frage_routine_aendern,
+        alltag="routinen ändern",
         klein=(
             "Ändert oder löscht eine BESTEHENDE Wiederholungs-Regel. Nimm dies, "
             "wenn sich an etwas Regelmäßigem etwas ändert - 'Geige ist jetzt um "
@@ -498,6 +559,7 @@ WERKZEUGE = [
         name="add_calendar_pause",
         erlaubnis=True,
         frage=_frage_pause,
+        alltag="routinen pausieren",
         klein=(
             "Trägt eine Pause/einen Ausfall für eine regelmäßige Aktivität "
             "ein - in dem Zeitraum findet sie NICHT statt (Ferien, Feiertag, "
@@ -537,7 +599,9 @@ WERKZEUGE = [
     Werkzeug(
         name="delete_calendar_entry",
         erlaubnis=True,
+        immer_erlaubbar=False,
         frage=_frage_termin_loeschen,
+        alltag="termine löschen",
         klein=(
             "Löscht einen Einmal-Termin aus dem Kalender. Nutze dies wenn "
             "der User einen Eintrag entfernt haben will ('lösch den Zahnarzt "
@@ -687,6 +751,7 @@ WERKZEUGE = [
         klein_name="web_suche",
         erlaubnis=True,
         frage=_frage_suche,
+        alltag="im internet suchen",
         klein=(
             "Sucht im Internet und gibt die Top-Treffer als Liste zurück "
             "(Titel, URL, kurzer Snippet). Nutze dies für aktuelles Wissen, "
@@ -719,6 +784,7 @@ WERKZEUGE = [
         klein_name="hole_url",
         erlaubnis=True,
         frage=_frage_seite,
+        alltag="webseiten laden",
         klein=(
             "Lädt eine konkrete Webseite und gibt ihren Textinhalt zurück "
             "(gekürzt). Nutze dies, wenn du eine URL hast - aus einer "
@@ -844,6 +910,8 @@ WERKZEUGE = [
         name="write_note",
         erlaubnis=_trifft_kernakte,
         frage=_frage_notiz,
+        alltag="hausregeln, steckbrief, ziele ändern",
+        immer_erlaubbar=False,
         klein=None,
         gross=(
             "Haelt etwas fest — haengt an, loescht nie. Verwendungen: "
@@ -905,7 +973,9 @@ WERKZEUGE = [
     Werkzeug(
         name="rewrite_note",
         erlaubnis=True,
+        immer_erlaubbar=False,
         frage=_frage_dossier_neu,
+        alltag="dossiers neu schreiben",
         klein=None,
         gross=(
             "Schreibt ein Dossier KOMPLETT neu — zum Aufraeumen, wenn aus "
@@ -930,7 +1000,9 @@ WERKZEUGE = [
     Werkzeug(
         name="fetch_document",
         erlaubnis=True,
+        immer_erlaubbar=False,
         frage=_frage_dokument,
+        alltag="dokumente holen und ablegen",
         klein=None,
         gross=(
             "Holt etwas aus dem Netz ODER von der Platte und LEGT ES AB — Modulhandbuch, "
@@ -962,6 +1034,7 @@ WERKZEUGE = [
         name="create_series",
         erlaubnis=True,
         frage=_frage_messkurve,
+        alltag="messkurven anlegen",
         klein=None,
         gross=(
             "Legt eine neue Messkurve an — nur wenn Sasha etwas wirklich "
@@ -1012,15 +1085,18 @@ WERKZEUGE = [
         name="run_code",
         erlaubnis=True,
         frage=_frage_code,
+        alltag="programme abgeschottet ausführen",
+        nur_einmal=_code_lang,
         klein=None,
         gross=(
             "Fuehrt ein kleines Python- oder Shell-Programm abgeschottet "
             "aus; zurueck kommen Rueckgabewert, Ausgabe, Fehler und neue "
             "Dateien. Fuer genaues Rechnen, Daten umformen, Skripte "
             "ausprobieren. KEIN Internet, KEIN Zugriff auf Sashas Dateien "
-            "(nur ein leerer Arbeitsordner, jeder Lauf neu), Python nur mit "
-            "Standardbibliothek, Zeitlimit 30 s (max 120), 512 MB, Ausgabe "
-            "gekuerzt. Wird bestaetigt. Ergebnis mit print ausgeben."
+            "(nur ein leerer Arbeitsordner, jeder Lauf neu), Python mit "
+            "Standardbibliothek plus PIL, bs4, lxml, yaml (kein numpy/pandas), "
+            "Zeitlimit 30 s (bis 120; laenger bis 1800 nur nach Rueckfrage), "
+            "512 MB, Ausgabe gekuerzt. Wird bestaetigt. Ergebnis mit print ausgeben."
         ),
         parameter={
             "type": "object",
@@ -1030,7 +1106,7 @@ WERKZEUGE = [
                 "sprache":  {"type": "string", "enum": ["python", "shell"],
                              "description": "Standard: python."},
                 "zeitlimit": {"type": "integer",
-                              "description": "Sekunden, 1-120. Standard 30."},
+                              "description": "Sekunden, Standard 30. Ueber 120 (max 1800) fragt Sasha extra."},
             },
             "required": ["code"],
         },
@@ -1059,6 +1135,7 @@ WERKZEUGE = [
         name="propose_skill",
         erlaubnis=True,
         frage=_frage_skill_neu,
+        alltag="neue anleitungen anlegen",
         klein=None,
         gross=(
             "Schlaegt einen NEUEN Skill vor: eine Anleitung fuer eine Art "
@@ -1082,7 +1159,9 @@ WERKZEUGE = [
     Werkzeug(
         name="edit_skill",
         erlaubnis=True,
+        immer_erlaubbar=False,
         frage=_frage_skill_aendern,
+        alltag="anleitungen neu schreiben",
         klein=None,
         gross=(
             "Schreibt die Anleitung eines bestehenden Skills neu; der Kopf "
@@ -1200,12 +1279,20 @@ WERKZEUGE = [
             "required": ["id", "inhalt"],
         },
     ),
+    # GEGATET seit 2026-10-07 (Sasha: „wenn ich sag ich will das behalten,
+    # dann sollte das möglich sein — aber nur auf Initiative von mir").
+    # Die Sandbox räumt nach 7 Tagen auf; was bleiben soll, entscheidet er.
     Werkzeug(
         name="save_from_sandbox",
+        erlaubnis=True,
+        frage=_frage_sandbox_ablage,
+        alltag="dateien aus programm-läufen ablegen",
+        immer_erlaubbar=False,
         klein=None,
         gross=(
             "Legt eine Datei aus einem run_code-Lauf in Sashas Ablage (Text "
-            "oder Bild). 'lauf' und 'datei' stehen im Ergebnis von run_code."
+            "oder Bild) — NUR wenn Sasha sie behalten will, nie von dir aus. "
+            "Wird bestaetigt. 'lauf' und 'datei' stehen im Ergebnis von run_code."
         ),
         parameter={
             "type": "object",
@@ -1337,6 +1424,25 @@ def braucht_erlaubnis(name: str, args: dict | None = None) -> bool:
     if w.erlaubnis is True:
         return True
     return bool(args) and bool(w.erlaubnis(args))
+
+
+def alltag(name: str) -> str:
+    """Alltagswörter für ein Werkzeug (Feld alltag), sonst sein Name."""
+    w = eintrag(name)
+    return (w.alltag if w is not None and w.alltag else kanonisch(name))
+
+
+def nur_einmal(name: str, args: dict | None) -> bool:
+    """Braucht DIESER Aufruf ein eigenes Ja (Feld nur_einmal)?"""
+    w = eintrag(name)
+    return bool(w is not None and w.nur_einmal and args and w.nur_einmal(args))
+
+
+def immer_erlaubbar(name: str) -> bool:
+    """Darf ein Ja zu diesem Werkzeug „immer" gelten? (Kopf des Abschnitts
+    „Erlaubnis: Regeln und Fragen".) Unbekannt → nein."""
+    w = eintrag(name)
+    return w is not None and w.erlaubnis is not False and w.immer_erlaubbar
 
 
 def frage(name: str, args: dict) -> str:

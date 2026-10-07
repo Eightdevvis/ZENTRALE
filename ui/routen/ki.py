@@ -16,6 +16,8 @@ from flask import Blueprint, Response, jsonify, request, stream_with_context
 import ai           # type: ignore
 import ai_backends     # type: ignore  – AI-Backend-Verfügbarkeit (local/cloud, EXTERNAL-Box)
 import anhang          # type: ignore  – Anhänge: Verweise prüfen, in den Verlauf einsetzen
+import cloud           # type: ignore  – Längen-Grenze einer Nachricht (nutzer_grenze)
+import erlaubnis       # type: ignore  – Erlaubnis-Gate: Geltungsbereiche, /erlaubnis
 import gespraeche      # type: ignore  – Gespräche: Ordner pro Gespräch, Datei pro Rechner
 import gespraech_titel # type: ignore  – automatischer Titel (billiges Modell)
 import projekte        # type: ignore  – Projekte (Phase 6): /neu bleibt im Projekt
@@ -66,6 +68,16 @@ def api_chat():
     via_mic = bool(body.get('via_mic', False))
     if not message:
         return jsonify({"error": "no message"}), 400
+    # Länge (2026-10-07): bis zur Grenze kommt eine Nachricht VOLLSTÄNDIG bei
+    # der KI an (cloud.nutzer_grenze, Standard 20 000). Darüber lieber
+    # ehrlich ablehnen als still in der Mitte kürzen.
+    grenze = cloud.nutzer_grenze()
+    if len(message) > grenze:
+        def zahl(n):
+            return f"{n:,}".replace(",", ".")
+        return jsonify({"error": f"Die Nachricht ist zu lang ({zahl(len(message))} "
+                                 f"Zeichen, höchstens {zahl(grenze)}). Längeres "
+                                 f"als Datei: /anhang <pfad>."}), 400
     try:
         verweise = anhang.verweise(body.get('anhaenge') or [])
     except anhang.Abgelehnt as e:
@@ -146,7 +158,11 @@ def _zug_starten(gid, message, backend, via_mic, verweise=None):
         strom_id, abbruch = state.chat_zug_beginnen()
         # Der Zug für die Werkzeuge (core/zug.py, Phase 5): Gesprächs-id für
         # run_code/Ablage, und was sie an die TUI melden (Event 'ablage').
-        marke = zug.beginnen(gid)
+        # Das Abbruch-Signal geht mit (2026-10-07): run_code stoppt damit
+        # einen laufenden Prozess sofort.
+        marke = zug.beginnen(gid, abbruch=abbruch)
+        # „Für dieses Gespräch" erlaubt gilt nur, solange es DIESES ist.
+        erlaubnis.gespraech_beginnt(gid)
         # Welcher Weg (lokal, Anthropic, OpenAI-kompatibel) — das entscheidet
         # kern.chat, die eine Stelle dafür. Alle Wege liefern dasselbe
         # Event-Protokoll; die Schleife hier merkt keinen Unterschied.
@@ -351,6 +367,7 @@ def api_chat_clear():
         alt = gespraeche.aktiv()
         projekt = gespraeche.projekt_von(alt) if alt else gespraeche.neu_projekt()
     gespraeche.aktiv_setzen(None, projekt=projekt)
+    erlaubnis.gespraech_beginnt(None)     # neues Gespräch: Gesprächs-Erlaubnis weg
     return jsonify({"ok": True, "projekt": projekt,
                     "name": projekte.name(projekt) if projekt else None})
 
@@ -379,10 +396,34 @@ def api_permission_answer():
     # immer als "ja" beim Gate-Check an, egal wie das Frontend es schickt).
     options = state.get_permission_options()
     match   = next((o for o in options if o.lower() == answer.lower()), None)
+    if match is None and answer.lower() == "ja":
+        # Rückwärts (2026-10-07): die Erlaubnis-Frage hat jetzt Knöpfe mit
+        # Geltung („ja, nur dieses mal" …). Ein Client, der nur „ja" kennt,
+        # meint das einmalige Ja — das steht vorn.
+        match = next((o for o in options if o.lower().startswith("ja, ")), None)
     if match is None:
         return jsonify({"error": f"answer must be one of {options}"}), 400
     state.answer_permission(match)
     return jsonify({"ok": True})
+
+
+@bp.route('/api/erlaubnis', methods=['GET'])
+def api_erlaubnis():
+    """Was gerade ohne Frage erlaubt ist (2026-10-07, /erlaubnis im Chat):
+    {immer: [{name, was}], gespraech: [{name, was}], gespraech_id}."""
+    return jsonify(erlaubnis.uebersicht())
+
+
+@bp.route('/api/erlaubnis/zuruecknehmen', methods=['POST'])
+def api_erlaubnis_zuruecknehmen():
+    """Body {werkzeug: name} oder {alle: true}. -> {weg: [namen], …übersicht}.
+    Nichts zurückzunehmen ist kein Fehler (weg = [])."""
+    body = request.get_json(silent=True) or {}
+    name = str(body.get('werkzeug') or '').strip()
+    if not name and not body.get('alle'):
+        return jsonify({"error": "Welches Werkzeug? (werkzeug oder alle)"}), 400
+    weg = erlaubnis.zuruecknehmen(None if body.get('alle') else name)
+    return jsonify(dict(erlaubnis.uebersicht(), weg=weg))
 
 
 # /api/memory und /api/memory/<id> entfielen mit dem Legacy-LTM-Pfad.

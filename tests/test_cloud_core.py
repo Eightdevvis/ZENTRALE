@@ -128,14 +128,39 @@ def test_system_rollen_fliegen_raus():
 
 
 def test_ueberlange_nachricht_wird_gekappt():
-    """Die ZAHL der Nachrichten ist gedeckelt (state._chat_history, maxlen=50),
-    ihre Länge nicht — eine komplette News-Sendung reitet sonst fünfzig Turns
-    lang mit."""
+    """Die ZAHL der Nachrichten ist gedeckelt (gespraeche.FENSTER), ihre
+    Länge nicht — eine komplette News-Sendung reitet sonst fünfzig Turns
+    lang mit. Seit 2026-10-07 gilt die kurze Grenze nur noch für alles
+    außer Sashas eigenen Nachrichten, und der Vermerk sagt, wie viel fehlt."""
     lang = "x" * 20000
+    msgs = cloud._prepare_messages([{"role": "user", "content": "frage"},
+                                    {"role": "assistant", "content": lang}])
+    text = msgs[1]["content"][0]["text"]
+    assert len(text) <= cloud.verlauf_grenze()
+    assert "Zeichen gekürzt …]" in text
+
+
+def test_nutzer_nachricht_bis_20000_kommt_ganz_an():
+    """Sasha 2026-10-07: was er schreibt, kommt vollständig an — in beiden
+    Dialekten."""
+    import cloud_openai
+    lang = "".join(chr(97 + i % 26) for i in range(20000))
     msgs = cloud._prepare_messages([{"role": "user", "content": lang}])
-    text = msgs[0]["content"][0]["text"]
-    assert len(text) < len(lang)
-    assert "[gekürzt]" in text
+    assert msgs[0]["content"][0]["text"] == lang
+    oai = cloud_openai._prepare_messages([{"role": "user", "content": lang}], "sys")
+    assert oai[1]["content"] == lang
+
+
+def test_zu_lange_nutzer_nachricht_bekommt_vermerk(monkeypatch):
+    """Über der Grenze (hier per Einstellung 1 000) wird gekappt — und die KI
+    liest, wie viel fehlt."""
+    monkeypatch.setenv("ZENTRALE_NUTZER_MSG_CHARS", "1000")
+    text = "A" * 600 + "B" * 3000 + "C" * 600
+    kurz = cloud._prepare_messages([{"role": "user", "content": text}])[0]["content"][0]["text"]
+    assert len(kurz) <= 1000
+    assert kurz.startswith("A") and kurz.endswith("C")
+    weg = len(text) - (len(kurz) - len(kurz[kurz.index("\n[…"):kurz.index("…]\n") + 3]))
+    assert f"[… {weg:,} Zeichen gekürzt …]".replace(",", ".") in kurz
 
 
 def test_kappen_ist_deterministisch():

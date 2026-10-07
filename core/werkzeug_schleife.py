@@ -275,10 +275,25 @@ def _ask_permission(name: str, args: dict):
     """Erlaubnis-Gate: JA/NEIN-Dialog vor einem schreibenden Tool.
     Generator — mit `yield from` aufrufen. True = ausführen."""
     import state
+    # Geltungsbereiche (2026-10-07, core/erlaubnis.py): schon „immer" oder
+    # „für dieses Gespräch" erlaubt → nicht fragen, aber im Log sichtbar.
+    schon = erlaubnis.vorab(name, args)
+    if schon:
+        state.push_log(f"AI ✓  ERLAUBT ({schon}): {werkzeug_register.kanonisch(name)}")
+        return True
     frage = erlaubnis.frage(name, args)
+    opts = erlaubnis.optionen(name, args)
     state.push_log(f"AI →  ERLAUBNIS? {frage[:160]}")
-    state.request_permission()
-    yield {"permission": {"frage": frage}}
+    state.request_permission(options=opts)
+    # optionen + geltung: neu seit 2026-10-07. Ein Client, der nur „frage"
+    # kennt, darf weiter "ja"/"nein" schicken (/api/permission_answer nimmt
+    # die alten Wörter an); geltung sagt maschinenlesbar, was jeder Knopf heißt.
+    yield {"permission": {"frage": frage, "optionen": opts, "erlaubnis": True,
+                          "geltung": erlaubnis.geltungen(name, args) + [erlaubnis.NEIN]}}
     antwort_ = state.wait_permission()    # BLOCKIERT bis Klick/Timeout
+    geltung = erlaubnis.deuten(antwort_)
     state.push_log(f"AI ←  ERLAUBNIS: {antwort_}")
-    return antwort_ == "ja"
+    if geltung == erlaubnis.NEIN:
+        return False
+    erlaubnis.merken(name, geltung, args)
+    return True

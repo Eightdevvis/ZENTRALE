@@ -65,15 +65,50 @@ UNBEKANNT = {"in": 3.00, "out": 15.00, "cache_read": 0.10, "cache_write": 2.00}
 USD_EUR = 0.92   # grobe Umrechnung; für Größenordnungen völlig ausreichend
 
 
+# Seit 2026-10-07 zeigt /modell ALLE Modelle, die ein Anbieter meldet
+# (core/modell_liste.py) — also auch solche, die hier fehlen. Damit die nicht
+# 0 € kosten, bevor jemand die Zeile nachträgt:
+#   1. Datums-Fassungen auf den Grundnamen („claude-sonnet-4-5-20250929",
+#      „gpt-4o-2024-08-06") und „models/…" (Gemini) abschneiden.
+#   2. Gehört der Name sichtbar zu einer teuren Familie (opus, fable), deren
+#      teuerste Zeile — UNBEKANNT läge dort zu niedrig.
+#   3. Sonst UNBEKANNT (Sonnet-Preis: über fast allem anderen auf der Liste).
+_TEUERE_FAMILIEN = ("fable", "opus")
+
+
+def _grundname(model: str) -> str:
+    import re
+    m = (model or "").strip()
+    if m.startswith("models/"):
+        m = m[len("models/"):]
+    m = re.sub(r"-(\d{8}|\d{4}-\d{2}-\d{2})$", "", m)   # -20250929 / -2024-08-06
+    return re.sub(r"-latest$", "", m) if m not in PREISE else m
+
+
+def _zeile(model: str):
+    """Die echte Preiszeile oder None (ohne Schätzung)."""
+    if (model or "") in PREISE:
+        return PREISE[model]
+    return PREISE.get(_grundname(model))
+
+
 def fuer(model: str) -> dict:
     """Preiszeile für ein Modell. Unbekannt → konservative Schätzung."""
-    return PREISE.get(model or "", UNBEKANNT)
+    zeile = _zeile(model)
+    if zeile is not None:
+        return zeile
+    name = (model or "").lower()
+    for familie in _TEUERE_FAMILIEN:
+        if familie in name:
+            return max((p for m, p in PREISE.items() if familie in m),
+                       key=lambda p: p["out"])
+    return UNBEKANNT
 
 
 def bekannt(model: str) -> bool:
     """Steht das Modell wirklich in der Tabelle? (Für ehrliche Anzeige: eine
     geschätzte Zahl soll als geschätzt erkennbar sein.)"""
-    return (model or "") in PREISE
+    return _zeile(model) is not None
 
 
 def euro(model: str, *, input_tokens: int = 0, output_tokens: int = 0,

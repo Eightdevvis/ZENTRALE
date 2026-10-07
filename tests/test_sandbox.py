@@ -196,7 +196,7 @@ def test_tmp_ist_begrenzt():
 def test_zeitlimit_wird_gedeckelt(monkeypatch):
     gesehen = {}
 
-    def laufen(bwrap, arbeit, programm, sprache, zeit, vorher):
+    def laufen(bwrap, arbeit, programm, sprache, zeit, vorher, abbruch=None):
         gesehen["zeit"] = zeit
         return sandbox._ergebnis(rc=0)
     monkeypatch.setattr(sandbox, "_bwrap_pfad", lambda: "/usr/bin/bwrap")
@@ -268,7 +268,7 @@ def test_werkzeug_ergebnis_fuers_modell(monkeypatch):
     import ki_werkzeuge
     gesehen = {}
 
-    def falsch(code, sprache, zeitlimit_s, lauf_id=None):
+    def falsch(code, sprache, zeitlimit_s, lauf_id=None, abbruch=None):
         # lauf_id seit Phase 5 (2026-10-07): Arbeitsordner je Gespräch.
         gesehen.update(code=code, sprache=sprache, zeit=zeitlimit_s)
         return sandbox._ergebnis(ausgabe="42\n", rc=0, dauer_s=0.1,
@@ -276,7 +276,7 @@ def test_werkzeug_ergebnis_fuers_modell(monkeypatch):
                                  ordner="/home/sasha/.cache/geheim")
     monkeypatch.setattr(sandbox, "ausfuehren", falsch)
     text = ki_werkzeuge._verteilen(
-        "run_code", {"code": "print(42)", "sprache": "shell", "zeitlimit": 500})
+        "run_code", {"code": "print(42)", "sprache": "shell", "zeitlimit": 99999})
     assert gesehen == {"code": "print(42)", "sprache": "shell",
                        "zeit": sandbox.ZEITLIMIT_MAX_S}
     assert "Rückgabewert 0" in text and "42" in text

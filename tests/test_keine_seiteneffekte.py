@@ -454,6 +454,17 @@ def test_sandbox_arbeitsordner_liegt_im_test_nicht_im_echten_cache():
     assert not basis.startswith(os.path.realpath(os.path.expanduser("~/.cache"))), basis
     assert not basis.startswith(os.path.realpath(ROOT)), basis
 
+def test_modell_liste_cache_und_netz_sind_im_test_umgelenkt():
+    """Die Modell-Listen der Anbieter (core/modell_liste.py, 2026-10-07):
+    der Cache liegt im Test nie in Sashas ~/.cache oder im Repo, und kein
+    Test fragt von sich aus einen echten Anbieter."""
+    import modell_liste
+    pfad = os.path.realpath(modell_liste._cache_pfad())
+    assert not pfad.startswith(os.path.realpath(os.path.expanduser("~/.cache"))), pfad
+    assert not pfad.startswith(os.path.realpath(ROOT)), pfad
+    assert modell_liste._holen_an() is False
+
+
 def test_gespraeche_zeigen_nie_ins_echte_data():
     """Gespräche (core/gespraeche.py, 2026-10-07) werden von den Chat-Tests
     wirklich geschrieben. Zeigt der Ordner im Test ins echte data/, ist der

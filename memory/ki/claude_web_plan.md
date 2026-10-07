@@ -492,3 +492,66 @@ Flag, nie löschen); PDFs als Wissen; die KI kann keine Projekte anlegen
 oder Anweisungen vorschlagen (bewusst — Sasha pflegt sie); Projekt-Block
 für das lokale qwen (erst messen).
 
+
+### Nachbesserungen nach Sashas Durchsicht (2026-10-07, Backend)
+
+Sashas Worte vom 07.10. und was daraus gebaut ist (TUI-Teil — Esc/Strg+C,
+`\`-Umbruch, Eingabe-Grenze mit Zähler, Fußleiste — baut ein eigener Strang):
+
+- **Erlaubnis mit Geltung** („beides einstellbar machen"): Knöpfe „ja, nur
+  dieses mal" / „ja, für dieses gespräch" / „ja, immer" / „nein"
+  (`core/erlaubnis.py`, Register-Felder `immer_erlaubbar`, `nur_einmal`,
+  `alltag`). Gespräch = bis das Gespräch wechselt (Gesprächs-id über
+  `core/zug.py`, nur im Speicher); immer = `ai_config` `immer_erlaubt`;
+  `/erlaubnis` im Chat listet und nimmt zurück (`/api/erlaubnis`). Kein
+  „immer" für Kernakten, Löschen/Überschreiben und `save_from_sandbox`.
+  Details: [ki_system.md](ki_system.md), „Geltungsbereiche".
+- **/modell zeigt alles** („alle die available is"): `core/modell_liste.py`
+  holt die Liste vom Anbieter, 24 h Cache pro Rechner unter `~/.cache`,
+  Rückfall `providers.py`, nur Chat-Modelle (Wortliste). In der TUI-Auswahl
+  filtert Tippen. Preise: Datums-Fassungen finden ihren Grundpreis,
+  opus/fable den Familienpreis, sonst vorsichtig; Hinweis im Log.
+- **Budget 0–100 €** (`ki_einstellungen.BUDGET_HOECHSTENS`).
+- **20.000 Zeichen kommen an**: `cloud.kappen` mit zwei Grenzen
+  (`nutzer_msg_chars` 20.000 für Sashas Nachrichten, `cloud_msg_chars` 4.000
+  für alte KI-Antworten), Vermerk „[… N Zeichen gekürzt …]"; `/api/chat`
+  lehnt Längeres mit Klartext ab.
+- **Gestoppt bei OpenAI-kompatiblen Anbietern wird gebucht** — geschätzt
+  (Zeichen / 3,5), als `geschaetzt` markiert, mit Log-Zeile.
+- **Sandbox**: Stoppen tötet einen laufenden `run_code` sofort („vom Nutzer
+  gestoppt"); länger als 2 min (bis 30) nur nach eigener Frage mit der
+  Dauer, nur „einmal"; `save_from_sandbox` gegatet, nur auf Sashas Wunsch;
+  das Modell erfährt PIL, bs4, lxml, yaml (kein numpy/pandas).
+- Schnappschuss neu gezogen: `run_code` (Beschreibung + Parameter
+  `zeitlimit`) und `save_from_sandbox` (Beschreibung, jetzt gegatet);
+  `klein` byte-gleich.
+- Tests: `test_erlaubnis_geltung.py`, `test_erlaubnis_tui.py`,
+  `test_modell_liste.py`, `test_stoppen_buchen_laenge.py`, Wächter.
+
+Angenommen (Sasha war nicht erreichbar) — die Kleinentscheidungen:
+
+| Wahl | Alternative |
+|---|---|
+| Geltung **pro Werkzeug** („run_code immer" = jedes Programm bis 2 min) | pro Argument/Befehl wie Claude Code (bei frei geschriebenem Code nicht sinnvoll prüfbar) |
+| „Für dieses Gespräch" **nur im Arbeitsspeicher**, Neustart fragt wieder | auf der Platte pro Gespräch (überlebte Neustarts, wäre aber eine stille Dauer-Erlaubnis) |
+| Gesprächswechsel = jedes Öffnen eines **anderen** Gesprächs (auch hin und zurück) | erst beim nächsten Senden in einem anderen Gespräch |
+| „Immer" in `data/ai_config.json` — **synct** auf alle Rechner | pro Rechner (dann fragt der Laptop, was der PC schon darf) |
+| Kein „immer" auch für `fetch_document` (gleicher Name überschreibt) und `edit_calendar_routine` (auch ändern) | nur für echtes Löschen |
+| „Für dieses Gespräch" **bleibt** bei Kernakten/Löschen erlaubt | dort nur „einmal" |
+| Knöpfe „ja, nur dieses mal / ja, für dieses gespräch / ja, immer / nein" — j/n/Esc wie bisher | eigene Tasten (e/g/i) |
+| Ein altes „ja" (alter Client) = **einmal** | ablehnen (400) |
+| Modell-Cache unter **`~/.cache/zentrale/modelle.json`**, pro Rechner | `data/` (synct sinnlos, zwei Rechner überschreiben sich) |
+| Fehler beim Holen **10 min gemerkt** | jedes Mal neu versuchen (offline wartet /modell 6 s) |
+| Chat-Filter per **Wortliste** im Namen | Felder der Anbieter (uneinheitlich, fehlen oft) |
+| Unbekanntes Modell: **Sonnet-Preis**, opus/fable **Familienhöchstpreis** | immer den teuersten Preis der Tabelle (Budget-Deckel griffe bei billigen Qwen-Modellen 50× zu früh) |
+| Zu lange Nachricht: **400 mit Klartext** | annehmen und mit Vermerk kürzen |
+| Schätzung **3,5 Zeichen je Token**, Denken und halbe Werkzeug-Aufrufe zählen mit | nur Eingabe buchen |
+| Anthropic beim Stopp **unverändert** (Eingabe + Cache, halbe Ausgabe nicht) | Ausgabe auch dort schätzen |
+| run_code-Stopp: Signal alle **0,1 s** geprüft | eigener Wächter-Thread |
+| Lange Läufe bis **30 min** | 10 min / unbegrenzt |
+| Lokal (Ollama) **nicht** gekappt; `num_ctx` 8.192 Token begrenzt | lokal eigene Grenze |
+
+**Offen:** Fähigkeiten im Kopf — `gross.system()` hat keinen Fähigkeiten-
+Block (Budget fast voll, 4.974/5.000); was die KI kann, steht in den
+Werkzeug-Beschreibungen (Sandbox, Ablage, Skills, Suche, Projekte je dort).
+Anhänge brauchen kein Werkzeug, sie stehen als Blöcke in der Nachricht.

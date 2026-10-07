@@ -461,12 +461,18 @@ def _run_code(args: dict) -> str:
         zeit = sandbox.ZEITLIMIT_STANDARD_S
     # Arbeitsordner nach dem Gespräch benannt (Phase 5, 2026-10-07).
     lauf = sandbox.lauf_kennung(zug.gespraech())
+    # Das Stopp-Signal des Zugs (2026-10-07): Stoppen in der TUI tötet den
+    # laufenden Prozess sofort, nicht erst nach dem Zeitlimit. Über 2
+    # Minuten hat das Gate schon mit der Dauer gefragt (Register:
+    # nur_einmal); hier nur noch die harte Obergrenze.
     erg = sandbox.ausfuehren(code, sprache=sprache, lauf_id=lauf,
-                             zeitlimit_s=max(1, min(zeit, sandbox.ZEITLIMIT_MAX_S)))
+                             zeitlimit_s=max(1, min(zeit, sandbox.ZEITLIMIT_MAX_S)),
+                             abbruch=zug.abbruch())
     text = sandbox.als_text(erg)
     if erg.get("dateien_neu"):
-        text += (f"\nLauf: {lauf} — mit save_from_sandbox in Sashas Ablage "
-                 f"legen, wenn er eine Datei behalten soll.")
+        # Behalten nur auf Sashas Wunsch (2026-10-07), nicht als Einladung.
+        text += (f"\nLauf: {lauf} — will Sasha eine Datei behalten: "
+                 f"save_from_sandbox.")
     return text
 
 

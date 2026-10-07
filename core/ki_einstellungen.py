@@ -17,13 +17,16 @@
 import os
 
 import ai_backends
+import modell_liste
 import providers
 
 # Was „auto" bei der Wahl des Wegs heißen darf — Sasha tippt Deutsch.
 _WEGE = {"lokal": ai_backends.LOCAL, "local": ai_backends.LOCAL,
          "cloud": ai_backends.CLOUD, "auto": "auto"}
 
-BUDGET_HOECHSTENS = 10000.0     # Euro im Monat; alles darüber ist ein Tippfehler
+# Euro im Monat. Sasha 2026-10-07: „budget kann ruhig auf max 100 euro
+# sein" — darüber ist es ein Tippfehler (vorher 10.000).
+BUDGET_HOECHSTENS = 100.0
 
 
 class Ungueltig(ValueError):
@@ -37,15 +40,14 @@ def hat_schluessel(name: str) -> bool:
 
 
 def modelle(name: str) -> list:
-    """Die Modelle, die zur Wahl stehen: Standard und billig aus der
-    Anbieter-Tabelle, dazu das gespeicherte. Ohne Dopplungen, in dieser
-    Reihenfolge."""
-    p = providers.get(name)
-    raus = []
-    for m in (p.get("default_model"), p.get("cheap_model"),
-              ai_backends.chat_model(name)):
-        if m and m not in raus:
-            raus.append(m)
+    """Die Modelle, die zur Wahl stehen: seit 2026-10-07 alle Chat-Modelle,
+    die der Anbieter meldet (core/modell_liste.py, gecacht; ohne Schlüssel
+    oder bei Fehlern Standard + billig aus providers.py), dazu das
+    gespeicherte, falls es fehlt. Ohne Dopplungen."""
+    raus = list(modell_liste.holen(name)[0])
+    eigen = ai_backends.chat_model(name)
+    if eigen and eigen not in raus:
+        raus.append(eigen)
     return raus
 
 
@@ -60,6 +62,8 @@ def lesen() -> dict:
             "spricht": bool(ai_backends.cloud_kind_for(name)),
             "modell": ai_backends.chat_model(name),
             "modelle": modelle(name),
+            # "anbieter" = Liste vom Anbieter, "tabelle" = nur providers.py
+            "modelle_quelle": modell_liste.holen(name)[1],
         })
     return {
         "anbieter": ai_backends.chat_provider(),

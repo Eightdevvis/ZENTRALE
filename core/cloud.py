@@ -46,6 +46,7 @@
 
 import os
 
+import ai_config     # Einstellungen (Längen-Grenzen der Nachrichten)
 import ki_prompt     # Prompt-Bausteine (Jetzt, Imprint, Alarme, Schalter)
 import ki_werkzeuge  # Tool-Ausführung — lokal, egal wer denkt
 import graph
@@ -127,7 +128,37 @@ _CTX_CHARS = int(os.environ.get("ZENTRALE_CLOUD_CTX_CHARS", "2500"))
 # den Cache weg, den der ganze Umbau gerade aufgebaut hat. Eine einzelne
 # Nachricht zu kürzen ist dagegen deterministisch aus dem gespeicherten Text
 # und damit über alle Turns byte-stabil.
-_MSG_CHARS = int(os.environ.get("ZENTRALE_CLOUD_MSG_CHARS", "4000"))
+#
+# Seit 2026-10-07 zwei Grenzen (Sasha: Nachrichten bis ~20 000 Zeichen
+# müssen vollständig ankommen):
+#   nutzer_msg_chars (20 000) für Sashas EIGENE Nachrichten — was er schreibt
+#     oder einfügt, ist der Auftrag; in der Mitte gekürzt hieße, die KI
+#     antwortet auf etwas anderes, als er gefragt hat. Bezahlt wird das
+#     einmal voll und danach als Cache-Treffer (10 %).
+#   cloud_msg_chars (4 000) für alles andere im Verlauf (alte Antworten der
+#     KI, News-Sendungen): das reitet 50 Züge lang mit, und die KI hat es
+#     selbst geschrieben — der Anfang und das Fazit reichen ihr.
+# Beide über ai_config.setting (Env ZENTRALE_NUTZER_MSG_CHARS bzw. wie
+# bisher ZENTRALE_CLOUD_MSG_CHARS).
+_MSG_CHARS_STANDARD = 4000
+NUTZER_MSG_CHARS_STANDARD = 20000
+
+
+def _zahl_einstellung(name: str, standard: int) -> int:
+    try:
+        return int(ai_config.setting(name, standard))
+    except (TypeError, ValueError):
+        return standard
+
+
+def nutzer_grenze() -> int:
+    """Höchstlänge einer Nachricht von Sasha, die ungekürzt ankommt."""
+    return _zahl_einstellung("nutzer_msg_chars", NUTZER_MSG_CHARS_STANDARD)
+
+
+def verlauf_grenze() -> int:
+    """Höchstlänge jeder anderen Verlauf-Nachricht (alte KI-Antworten)."""
+    return _zahl_einstellung("cloud_msg_chars", _MSG_CHARS_STANDARD)
 
 
 def _cc() -> dict:
@@ -352,7 +383,7 @@ def _system_blocks(system: str | None, mem_ctx: str, via_mic: bool,
 
 # ── History-Aufbereitung ───────────────────────────────────────────────
 
-def kappen(text: str, grenze: int = None) -> str:
+def kappen(text: str, grenze: int = None, rolle: str = None) -> str:
     """Eine einzelne Verlauf-Nachricht auf `grenze` Zeichen bringen.
 
     Deterministisch aus dem gespeicherten Text — dieselbe Nachricht ergibt in
@@ -364,13 +395,24 @@ def kappen(text: str, grenze: int = None) -> str:
 
     Das Gespräch (core/gespraeche.py) bleibt unangetastet — die TUI zeigt den
     vollen Text. Gekürzt wird nur, was an die API geht.
+
+    rolle "user" → nutzer_grenze(), sonst verlauf_grenze(); `grenze` gewinnt.
+    Der Vermerk sagt der KI, DASS und wie viel fehlt (2026-10-07; vorher nur
+    „[gekürzt]"): sie soll nicht so tun, als kenne sie den ganzen Text.
+    Wechsel des Vermerks = einmal neue Bytes für schon gekürzte alte
+    Nachrichten, danach wieder stabil.
     """
-    grenze = _MSG_CHARS if grenze is None else grenze
+    if grenze is None:
+        grenze = nutzer_grenze() if rolle == "user" else verlauf_grenze()
     if grenze <= 0 or len(text) <= grenze:
         return text
-    marke = "\n…[gekürzt]…\n"
-    rest  = grenze - len(marke)
+    # Die Zahl hängt nur vom Text ab → deterministisch. Sie wird zuerst mit
+    # einer Schätzung gebaut; die echte Zahl hat höchstens so viele Ziffern.
+    marke = f"\n[… {len(text):,} Zeichen gekürzt …]\n"
+    rest  = max(0, grenze - len(marke))
     kopf  = rest * 2 // 3
+    weg   = len(text) - rest
+    marke = f"\n[… {weg:,} Zeichen gekürzt …]\n".replace(",", ".")
     return text[:kopf] + marke + text[len(text) - (rest - kopf):]
 
 
@@ -397,7 +439,7 @@ def _prepare_messages(messages: list) -> list:
         if not content and not anhaenge:
             continue          # leere Turns lehnt die API ab
         if isinstance(content, str):
-            content = [{"type": "text", "text": kappen(content)}] if content else []
+            content = [{"type": "text", "text": kappen(content, rolle=role)}] if content else []
         if anhaenge:
             # Anhänge (Phase 5, core/anhang.py) VOR dem Text — so empfiehlt
             # es Anthropic für Bilder. Der Anhang hat seinen eigenen Deckel;

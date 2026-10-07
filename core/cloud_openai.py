@@ -137,15 +137,36 @@ def _log_usage(verbrauch, model: str):
         print(f"[usage] Buchung fehlgeschlagen ({model}): {e}")
 
 
-def _nichts_gebucht(model: str):
-    """Gestoppt, bevor der Anbieter Zahlen geschickt hat: ehrlich sagen,
-    dass diese Runde ungebucht bleibt, statt zu schätzen."""
+# Zeichen je Token für die Schätzung unten. 3,5 liegt für deutschen Text
+# und JSON eher zu niedrig (= mehr Token, teurer) — gewollt vorsichtig.
+ZEICHEN_JE_TOKEN = 3.5
+
+
+def _geschaetzt_buchen(model: str, msgs: list, tools, text: str):
+    """Gestoppt, bevor der Anbieter Zahlen geschickt hat (2026-10-07).
+
+    Bis dahin blieb so eine Runde ungebucht — gestoppte Antworten waren
+    gratis, auch wenn der Anbieter die Eingabe längst berechnet hatte. Die
+    Zahlen kommen in diesem Dialekt erst im letzten Stück (stream_options
+    include_usage ist gesetzt, hilft beim Abbruch also nicht). Deshalb:
+    Eingabe aus der Länge des Gesendeten (Nachrichten + Werkzeug-Liste),
+    Ausgabe aus dem Empfangenen (Text + Denken), je ZEICHEN_JE_TOKEN.
+    Gebucht als geschätzt, mit Log-Zeile."""
     try:
         import state
-        state.push_log(f"CLOUD ✗ {model} gestoppt, bevor der Anbieter "
-                       f"Zahlen geschickt hat — nichts gebucht")
-    except Exception:
-        pass
+        import usage
+        gesendet = len(_json.dumps(msgs, ensure_ascii=False, default=str)) \
+            + len(_json.dumps(tools or [], ensure_ascii=False, default=str))
+        rein = int(gesendet / ZEICHEN_JE_TOKEN)
+        raus = int(len(text or "") / ZEICHEN_JE_TOKEN)
+        eur = usage.buchen(model, input_tokens=rein, output_tokens=raus,
+                           geschaetzt=True)
+        state.push_log(
+            f"CLOUD ← {model} gestoppt, Anbieter schickte keine Zahlen — "
+            f"geschätzt in≈{rein} out≈{raus} ≈{eur:.4f}€ "
+            f"(heute {usage.heute_euro():.2f}€)")
+    except Exception as e:
+        print(f"[usage] Schätzung fehlgeschlagen ({model}): {e}")
 
 
 def _prepare_messages(messages: list, system_text: str,
@@ -159,12 +180,12 @@ def _prepare_messages(messages: list, system_text: str,
         if anhaenge:
             # Anhänge (Phase 5): Inhalt als Liste von Teilen — Text der
             # Nachricht, dann je Anhang ein Text- oder image_url-Teil.
-            teile = [{"type": "text", "text": cloud.kappen(m.get("content") or "")}] \
+            teile = [{"type": "text", "text": cloud.kappen(m.get("content") or "", rolle="user")}] \
                 if m.get("content") else []
             out.append({"role": "user", "content": teile + _anhang_teile(anhaenge)})
         elif m.get("role") in ("user", "assistant") and m.get("content"):
             out.append({"role": m["role"],
-                        "content": cloud.kappen(m["content"])})
+                        "content": cloud.kappen(m["content"], rolle=m["role"])})
     if not any(m["role"] == "user" for m in out):
         out.append({"role": "user", "content": "(kein Text)"})
     if volatile and out[-1]["role"] == "user":
@@ -259,6 +280,7 @@ class _OpenAIAdapter:
     def runde(self):
         round_text = []
         tool_calls = {}       # index → {id, name, args}
+        denken = []           # reasoning_content — kostet auch (Schätzung beim Stopp)
         verbrauch = None
         # Devtools: den vollstaendigen Request mitschneiden, bevor er rausgeht.
         # Dieser Dialekt hat den System-Prompt als erste Message; kidebug
@@ -293,7 +315,10 @@ class _OpenAIAdapter:
                 if verbrauch is not None:
                     _log_usage(verbrauch, self.modell)
                 else:
-                    _nichts_gebucht(self.modell)
+                    _geschaetzt_buchen(self.modell, self.msgs, self.tools,
+                                       "".join(round_text) + "".join(denken)
+                                       + "".join(s["name"] + s["args"]
+                                                 for s in tool_calls.values()))
                 raise werkzeug_schleife.Gestoppt("".join(round_text))
             # Der Usage-Chunk kommt am Ende und hat KEINE choices - er
             # darf nicht als leerer Delta durchrutschen.
@@ -307,6 +332,7 @@ class _OpenAIAdapter:
             # Wenn ja: ins HUD spiegeln, wie Ollamas thinking-Feld.
             denk = getattr(delta, "reasoning_content", None)
             if denk:
+                denken.append(denk)
                 yield {"reflect": denk}
 
             if getattr(delta, "content", None):

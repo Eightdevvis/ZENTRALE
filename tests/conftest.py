@@ -74,6 +74,13 @@ os.environ.setdefault("ZENTRALE_SANDBOX_DIR", os.path.join(_DATEN_TMP, "sandbox"
 # Die Ablage (core/ablage.py, Phase 5): Dokumente und Anhänge. Dazu unten
 # pro Test ein eigener Ordner.
 os.environ.setdefault("ZENTRALE_ABLAGE_DIR", os.path.join(_DATEN_TMP, "ablage"))
+# Die Modell-Listen der Anbieter (core/modell_liste.py, 2026-10-07): im
+# Betrieb ~/.cache/zentrale/modelle.json. Und kein Test fragt einen echten
+# Anbieter — ein Test, der einen Schlüssel setzt, löste sonst eine echte
+# Anfrage aus. Tests der Liste schalten das Holen selbst an und ersetzen
+# das Netz.
+os.environ.setdefault("ZENTRALE_MODELL_CACHE_DIR", os.path.join(_DATEN_TMP, "modelle"))
+os.environ.setdefault("ZENTRALE_MODELL_LISTE_HOLEN", "aus")
 
 # 4c. KI-Einstellungen und Keys: nie die echten.
 #

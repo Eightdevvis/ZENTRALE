@@ -31,7 +31,8 @@ BEFEHLE = [
     ("/anhang",   "/anhang <pfad> gibt der ki eine datei mit (text, pdf, bild)"),
     ("/projekt",  "projekt dieses gesprächs · /projekt <name> · neu <name> · kein"),
     ("/projekte", "alle projekte — anweisungen, wissen, gespräche"),
-    ("/modell",   "modell wählen · /modell <name> setzt direkt"),
+    ("/erlaubnis", "was die ki ohne fragen darf — ansehen, zurücknehmen"),
+    ("/modell",   "alle modelle der anbieter (tippen filtert) · /modell <name>"),
     ("/anbieter", "anbieter wählen · /anbieter <name> oder auto"),
     ("/effort",   "denk-tiefe wählen (nur claude) · /effort low … max"),
     ("/budget",   "monatsbudget zeigen · /budget 20 setzt · /budget aus"),
@@ -47,7 +48,8 @@ ANDERE_NAMEN = {"help": "hilfe", "clear": "neu", "model": "modell",
                 "retry": "wiederholen", "edit": "bearbeiten",
                 "gedächtnis": "gedaechtnis", "memory": "gedaechtnis",
                 "dokumente": "ablage", "attach": "anhang", "datei": "anhang",
-                "project": "projekt", "projects": "projekte"}
+                "project": "projekt", "projects": "projekte",
+                "erlaubnisse": "erlaubnis", "permissions": "erlaubnis"}
 
 NAMEN = {b[1:] for b, _ in BEFEHLE}
 

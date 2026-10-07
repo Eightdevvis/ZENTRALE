@@ -28,7 +28,9 @@ import os, sys, time, subprocess, shutil, tempfile
 
 HIER = os.path.dirname(os.path.abspath(__file__))
 PY = sys.executable
-SOCK = "ztui-schirm"
+# Eigener Socket per ZTUI_SOCK, wenn zwei Läufe gleichzeitig gehen (zwei
+# Arbeitsstränge, 2026-10-07): sonst beendet der eine den tmux des anderen.
+SOCK = os.environ.get("ZTUI_SOCK", "ztui-schirm")
 PORT = int(os.environ.get("ZTUI_PORT", "5987"))
 FROZEN = "1791280800"   # 2026-10-06 12:00 Berlin — fest, nah an echten Daten
 NAG_DATEI = os.environ.get("ZTUI_NAG_DATEI") or os.path.join(tempfile.gettempdir(), "ztui-schirm-nag.an")
@@ -149,6 +151,12 @@ SZ = {
                     ("k", "Enter"), ("w", 1), ("cap", "d"), ("l", "w"), ("l", "~/noten.md"),
                     ("cap", "e"), ("k", "Escape"), ("l", "e"), ("w", 2), ("cap", "f"),
                     ("k", "Escape"), ("k", "Escape"), ("cap", "g")],
+    # Nachbesserungen (2026-10-07): /modell mit vielen Modellen, tippen
+    # filtert; /erlaubnis zeigt und bietet Zurücknehmen an.
+    "ki_erlaubnis": [("k", "Space"), ("w", 2), ("l", "/modell"), ("k", "Enter"), ("w", 1),
+                     ("cap", "a"), ("l", "qwen3-1"), ("cap", "b"), ("k", "BSpace"),
+                     ("l", "zzz"), ("cap", "c"), ("k", "Escape"), ("l", "/erlaubnis"),
+                     ("k", "Enter"), ("w", 1), ("cap", "d"), ("k", "Escape"), ("cap", "e")],
     "tech_system": [("k", "M-Right"), ("k", "Enter"), ("cap", "a"), ("k", "/"), ("cap", "b")],
     "tech_stdout": [("k", "M-Right"), ("k", "Right"), ("k", "Enter"), ("cap", "a")],
     "tech_netz": [("k", "M-Right"), ("k", "Right"), ("k", "Right"), ("k", "Enter"), ("cap", "a")],

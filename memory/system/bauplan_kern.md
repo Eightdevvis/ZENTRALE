@@ -72,7 +72,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `theme` | 1 | Tag/Nacht-Modus, die Datei als einzige Wahrheit |
 | `tone` | 1 | Ton-Erzeuger fürs TUI-Klavier |
 | `pc_status` | 1 | Ist der andere Knoten gerade da? |
-| `zug` | 1 | Der laufende Chat-Zug: Gesprächs-id für die Werkzeuge, Ereignisse von Werkzeugen an die TUI (z. B. `ablage`) |
+| `zug` | 1 | Der laufende Chat-Zug: Gesprächs-id und Stopp-Signal für die Werkzeuge, Ereignisse von Werkzeugen an die TUI (z. B. `ablage`) |
 | `kalender` | 2 | Termine, Routinen, Konflikt-Alarm — die Fassade, Speicher austauschbar |
 | `kalender_zeitraum` | 2 | Relative Zeiträume („diese_woche") in Daten übersetzen |
 | `kalender_regel` | 2 | Wann eine Routine stattfindet (RRULE → Tage), eine Stelle für Fassade und .ics |
@@ -113,6 +113,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `ablage` | 2 | Die Ablage: Dokumente der KI, Sandbox-Dateien, Anhänge — Ordner pro Dokument, jede Fassung eine neue Datei, nie löschen |
 | `anhang` | 2 | Anhänge im Chat: Sperrliste, Art erkennen (PDF → Text), in die Ablage; Verweise für den Verlauf der KI auflösen |
 | `projekte` | 2 | Projekte: Rahmen für ein Thema mit Anweisungen und Wissensdateien im Gedächtnis, Block für den Prompt, Wissen lesen/hinzufügen (Sperrliste), archivieren |
+| `modell_liste` | 2 | Welche Chat-Modelle ein Anbieter wirklich hat: vom Anbieter geholt, 24 h gecacht (pro Rechner unter `~/.cache`), Rückfall auf `providers.py` |
 | `ai` | 3 | Ollama-Weg, Tool-Liste und -Ausführung, Erlaubnis-Abfrage, Prompt-Bausteine |
 | `ai_backends` | 3 | Wer denkt: lokal oder Cloud, Anbieter, Modell, Effort, Rundengrenze |
 | `cloud` | 3 | Anthropic-Weg |
@@ -120,7 +121,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `werkzeug_schleife` | 3 | Die eine Tool-Schleife aller Wege |
 | `profil` | 3 | Prompt-Schienen klein und gross |
 | `consolidation` | 3 | Nach dem Zug: Transkript (und Graph-Extraktion, wenn an) |
-| `erlaubnis` | 3 | Das Erlaubnis-Gate: die Tür, durch die die Schleife fragt (Regeln und Fragen stehen im Werkzeug-Register) |
+| `erlaubnis` | 3 | Das Erlaubnis-Gate: die Tür, durch die die Schleife fragt (Regeln und Fragen stehen im Werkzeug-Register); Geltungsbereiche einmal / dieses Gespräch / immer |
 | `ki_antwort` | 3 | Fertige Antwort: Bild-Marker ziehen, Zug zum Merken vormerken |
 | `ki_prompt` | 3 | Prompt-Bausteine für jeden Weg: Jetzt-Block, Imprint, Alarme, Denk-Heuristik, Schalter |
 | `ki_einstellungen` | 3 | Chat-Einstellungen (Anbieter, Modell, Effort, Budget, Weg) lesen und mit Klartext-Prüfung setzen — für `/api/ai/einstellungen` |

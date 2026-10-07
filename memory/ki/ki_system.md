@@ -365,10 +365,22 @@ ein Kreis wäre.
 
 Grundlage dafür, dass der Assistent später „wie ein Coder" arbeitet (Phase 7,
 [claude_web_plan.md](claude_web_plan.md)). Das Werkzeug `run_code` (nur
-`gross`, Parameter `code`, `sprache` python|shell, `zeitlimit` ≤ 120 s) ist
+`gross`, Parameter `code`, `sprache` python|shell, `zeitlimit`) ist
 **immer** gegatet; die Frage zeigt Sprache und die ersten vier Zeilen.
 Ausgeführt wird über `sandbox.ausfuehren(code, sprache, zeitlimit_s, dateien,
-lauf_id)` mit **bubblewrap** (`/usr/bin/bwrap`, unprivilegiert).
+lauf_id, abbruch)` mit **bubblewrap** (`/usr/bin/bwrap`, unprivilegiert).
+
+**Zeitlimit (seit 2026-10-07, Sasha):** Standard 30 s, bis 120 s mit dem
+normalen Ja (auch „immer"/„für dieses Gespräch"). Länger (bis 30 min,
+`ZEITLIMIT_MAX_S`) nur nach **eigener** Frage mit der Dauer im Text („… und
+darf bis zu 10 Minuten laufen"), die NUR „ja, nur dieses mal" anbietet —
+Register-Feld `nur_einmal`; ein altes „immer" deckt das nicht.
+
+**Stoppen (seit 2026-10-07):** das Stopp-Signal des Zugs geht über
+`core/zug.py` (`zug.beginnen(gid, abbruch=…)`, `zug.abbruch()`) an
+`run_code`; `sandbox._warten` schaut alle 0,1 s nach und tötet dann die ganze
+Prozessgruppe (SIGKILL). Ergebnis: „[Abgebrochen: vom Nutzer gestoppt.]",
+Kopf „VOM NUTZER GESTOPPT", Feld `gestoppt`.
 
 **Abgeschottet:**
 - Dateisystem: nur `/usr` (+ `/bin` `/lib` … als Verweise) nur-lesend, eigenes
@@ -380,7 +392,7 @@ lauf_id)` mit **bubblewrap** (`/usr/bin/bwrap`, unprivilegiert).
 - Umgebung: leer bis auf `PATH`, `HOME=/arbeit`, `LANG` — keine API-Keys.
 - Prozesse: eigener PID-Namensraum, `--die-with-parent`, `--new-session`
   (kein Terminal-Einschleusen), keine weiteren Benutzer-Namensräume.
-- Grenzen: Zeitlimit (Standard 30 s, max 120; danach SIGKILL an die ganze
+- Grenzen: Zeitlimit (Standard 30 s, s. o.; danach SIGKILL an die ganze
   Gruppe, der PID-Namensraum nimmt alles mit), 512 MB Adressraum, 64 Prozesse
   (in der Sandbox gesetzt — vor bwrap ließe RLIMIT_NPROC schon die
   Namensräume scheitern), 50 MB je Datei, nice 10, Ausgabe je Strom 20.000
@@ -393,11 +405,10 @@ lauf_id)` mit **bubblewrap** (`/usr/bin/bwrap`, unprivilegiert).
 - CPU-Last bis zum Zeitlimit (nur nice), und `/arbeit` hat keine
   Gesamtgröße (nur je Datei 50 MB).
 - Was in `/usr` liegt, ist lesbar und ausführbar — also auch System-Pakete
-  unter `/usr/lib/python3/dist-packages` (hier z. B. PIL, bs4, lxml, yaml;
-  **kein** numpy/pandas). Dem Modell gesagt wird „nur Standardbibliothek".
+  unter `/usr/lib/python3/dist-packages` (hier PIL, bs4, lxml, yaml;
+  **kein** numpy/pandas). Seit 2026-10-07 sagt die Beschreibung von
+  `run_code` dem Modell genau das (vorher „nur Standardbibliothek").
   Die venv des Projekts liegt im Repo und ist NICHT drin.
-- Der Stopp-Knopf im Chat unterbricht einen laufenden Code-Lauf nicht; der
-  läuft bis zum Ende oder Zeitlimit (≤ 120 s).
 
 **Arbeitsordner:** `~/.cache/zentrale/sandbox/<lauf-id>/` (Einstellung
 `sandbox_dir`, Env `ZENTRALE_SANDBOX_DIR`; Tests → tmp). Bewusst NICHT
@@ -407,6 +418,9 @@ Rechner und kämen nach dem Aufräumen zurück. Jeder `run_code`-Lauf bekommt
 einen frischen Ordner; Ordner älter als 7 Tage löscht `aufraeumen()` vor
 jedem Lauf. Neue Dateien meldet das Ergebnis mit Name und Größe (Verweise
 werden nicht verfolgt). Das Modell sieht nie den echten Pfad, nur `/arbeit`.
+Behalten über 7 Tage hinaus = `save_from_sandbox` in die Ablage — seit
+2026-10-07 **gegatet** und nur auf Sashas Wunsch (steht so in der
+Beschreibung; „immer" wird dafür nicht angeboten).
 
 ### Skills — `load_skill`, `propose_skill`, `edit_skill` (seit 2026-10-07)
 
@@ -509,9 +523,9 @@ Phase 5 des [Claude-Web-Plans](claude_web_plan.md), ausführlich in
 | `create_document(titel, inhalt, art?, sprache?)` | neues Dokument (markdown/text/code/csv) | nein |
 | `read_document(id)` | Inhalt lesen | nein |
 | `update_document(id, inhalt)` | neue Fassung, alte bleibt | nein |
-| `save_from_sandbox(lauf, datei, titel?)` | Datei aus einem `run_code`-Lauf dieses Gesprächs | nein |
+| `save_from_sandbox(lauf, datei, titel?)` | Datei aus einem `run_code`-Lauf dieses Gesprächs — nur auf Sashas Wunsch | **ja** (seit 2026-10-07, ohne „immer") |
 
-Ungegatet, weil nur in den eigenen Ordner geschrieben, nie überschrieben,
+Die ersten drei ungegatet, weil nur in den eigenen Ordner geschrieben, nie überschrieben,
 nie gelöscht wird und nichts nach draußen geht. Ein Werkzeug meldet ein neues
 Dokument über **`core/zug.py`** (der laufende Zug, Schicht 1): die Chat-Route
 öffnet ihn mit der Gesprächs-id, holt nach jedem `werkzeug`-Event die
@@ -682,7 +696,40 @@ gibt den bei `request_permission` gesetzten `timeout_default` zurück: beim Gate
 `frage_knopf` ein neutrales `(keine Antwort)`. Log: `AI → ERLAUBNIS?`/`FRAGE …`
 bzw. `AI ← ERLAUBNIS:`/`WAHL: …`. Frontend-Details (perm-bar, N-Knopf-Nav):
 [memory/system/dashboard.md](../system/dashboard.md). Tutor-Modus: beides aus (fremdes Tool-Set). Neues
-Tool gaten = `erlaubnis=` + `frage=` in seinem Eintrag im Werkzeug-Register.
+Tool gaten = `erlaubnis=` + `frage=` + `alltag=` in seinem Eintrag im Werkzeug-Register.
+
+#### Geltungsbereiche: einmal / dieses Gespräch / immer (seit 2026-10-07)
+
+Sasha: „beides einstellbar machen" (wie bei Claude Code). Die Gate-Frage hat
+seitdem Knöpfe statt Ja/Nein: **„ja, nur dieses mal"**, **„ja, für dieses
+gespräch"**, **„ja, immer"**, **„nein"** (das permission-Event trägt
+`optionen`, `erlaubnis: true` und `geltung: [einmal, gespraech, immer,
+nein]`; j = erster Ja-Knopf, n/Esc = nein wie bisher). Logik in
+`core/erlaubnis.py` (`optionen`, `deuten`, `vorab`, `merken`,
+`zuruecknehmen`), aufgerufen in `werkzeug_schleife._ask_permission`:
+
+- **einmal** — das alte Ja. Ein Client, der nur „ja" schickt, bekommt das
+  (`/api/permission_answer` übersetzt).
+- **für dieses Gespräch** — nur im Arbeitsspeicher, an die Gesprächs-id des
+  Zugs (`core/zug.py`) gebunden. Aufgehoben, sobald ein anderes Gespräch
+  dran ist: `erlaubnis.gespraech_beginnt(gid)` in `/api/chat`,
+  `/api/gespraeche` (neu), `/api/gespraeche/aktiv`, `/api/chat/clear`. Ohne
+  Gespräch (Erinnerungen vom Takt) kein Knopf dafür. Neustart = weg.
+- **immer** — `ai_config` Schlüssel `immer_erlaubt` (Liste kanonischer
+  Namen, `data/ai_config.json`, synct mit den anderen Einstellungen).
+  Zurücknehmen: `/erlaubnis` im Chat (`GET /api/erlaubnis`,
+  `POST /api/erlaubnis/zuruecknehmen`).
+- **Kein „immer"** (Register `immer_erlaubbar=False`): Kernakten
+  (`write_note` auf Hausregeln/Steckbrief/Ziele — steuern die KI auf Dauer),
+  alles was löscht oder überschreibt (`delete_calendar_entry`,
+  `edit_calendar_routine`, `rewrite_note`, `edit_skill`, `fetch_document`
+  bei gleichem Namen) und `save_from_sandbox` (nur auf Sashas Initiative).
+  Auch beim Prüfen: steht so ein Werkzeug von Hand in der Liste, wird
+  trotzdem gefragt.
+- **Nur „einmal"** (Register `nur_einmal(args)`): `run_code` über 120 s.
+- Pro Werkzeug, nicht pro Argument („run_code immer" = jedes Programm bis
+  2 Minuten). Erlaubt ohne Frage steht als `AI ✓ ERLAUBT (immer|gespraech)`
+  im Log.
 
 `save_memory` ist mit dem Legacy-Pfad rausgeflogen – der Graph-Extraktor
 läuft eh nach jedem Turn automatisch. Kalender-Tools (`read_calendar`,
@@ -866,6 +913,23 @@ Beide sind Drop-ins für `ai.chat_stream()` mit identischem Event-Protokoll.
 Der statische System-Prompt kommt aus derselben Funktion
 (`cloud._static_system()`), die ihn bei der aktiven Schiene holt.
 
+**Gestoppt = geschätzt gebucht (seit 2026-10-07).** Der OpenAI-Dialekt
+schickt die Zahlen erst im letzten Stück (`stream_options.include_usage` ist
+gesetzt, hilft beim Abbruch also nicht). Wird gestoppt, bevor sie da sind,
+bucht `cloud_openai._geschaetzt_buchen`: Eingabe = Länge der gesendeten
+Nachrichten + Werkzeug-Liste / 3,5 Zeichen je Token, Ausgabe = empfangener
+Text + Denken + halbe Werkzeug-Aufrufe / 3,5. `usage.buchen(…,
+geschaetzt=True)` zählt normal mit (Budget-Deckel) und zusätzlich im Topf
+`geschaetzt` pro Monat; Log „CLOUD ← … gestoppt, … geschätzt in≈ out≈".
+Anthropic bucht beim Stopp weiter nur, was `message_start` gemeldet hat
+(Eingabe + Cache), die halbe Ausgabe nicht.
+
+**Modelle, die nicht in `prices.py` stehen** (seit `/modell` alles zeigt):
+Datums-Fassungen und `models/…` finden ihren Grundnamen, `opus`/`fable` im
+Namen bekommen den teuersten Preis ihrer Familie, sonst `UNBEKANNT`
+(Sonnet-Preis). Nie 0 €; einmal je Lauf steht „PREIS ? <modell>: nicht in
+der Preistabelle …" im Log (`usage.buchen`).
+
 ### Eine Werkzeug-Schleife – `core/werkzeug_schleife.py` (seit 10/2026)
 
 Bis Oktober 2026 stand die Tool-Schleife **dreimal** da (lokal, Anthropic,
@@ -957,9 +1021,18 @@ Der Präfix wird einmal geschrieben, danach gelesen; geschrieben wird pro Turn
 nur noch das Delta. Die 250 ungecachten Token sind das Wechselnde.
 
 Deckel gegen Aufblähen: `ZENTRALE_CLOUD_CTX_CHARS` (Graph-Kontext, Default
-2.500) und `ZENTRALE_CLOUD_MSG_CHARS` (eine einzelne Verlauf-Nachricht,
-Default 4.000 — `cloud.kappen()` kürzt in der Mitte, deterministisch, damit
-der Präfix byte-stabil bleibt). Das Nachrichten-FENSTER wird bewusst nicht
+2.500) und die Länge einer einzelnen Verlauf-Nachricht — `cloud.kappen()`
+kürzt in der Mitte, deterministisch, damit der Präfix byte-stabil bleibt, mit
+dem Vermerk „[… N Zeichen gekürzt …]" (seit 2026-10-07; vorher nur
+„[gekürzt]"). Seit 2026-10-07 zwei Grenzen über `ai_config.setting`:
+`nutzer_msg_chars` (Sashas eigene Nachrichten, Standard **20.000** — sie
+kommen vollständig an; `/api/chat` lehnt Längeres mit Klartext ab und
+verweist auf `/anhang`) und `cloud_msg_chars` (alles andere: alte
+KI-Antworten, News-Sendungen; Standard 4.000 — die reiten 50 Züge mit, und
+Anfang + Fazit reichen der KI). Beide Dialekte (Anthropic, OpenAI-kompatibel)
+nutzen dieselbe Funktion. Lokal (Ollama) wird nicht gekappt; dort begrenzt
+`num_ctx` (8.192 Token) — eine 20.000-Zeichen-Nachricht passt knapp, mit
+langem Verlauf schneidet Ollama vorne ab. Das Nachrichten-FENSTER wird bewusst nicht
 beschnitten: vorne etwas wegzuwerfen verschiebt den Präfix-Anfang und wirft
 genau diesen Cache weg.
 
@@ -1343,10 +1416,17 @@ Tests: `scripts/test_net_internet.py` (48 Cases, untracked).
 - Slash-Befehle im TUI-Chat (seit 2026-10-07, `tui/ansichten/chat_befehle.py`):
   `/neu` (neues Gespräch, früher `/clear` — geht weiter), `/modell [name]`,
   `/anbieter [name|auto]`, `/effort [stufe]`, `/budget [euro|aus]`,
-  `/lokal` `/cloud` `/auto`, `/hilfe`; seit Phase 2 auch `/liste`,
+  `/lokal` `/cloud` `/auto`, `/hilfe`, `/erlaubnis` (was ohne Frage
+  erlaubt ist, zurücknehmen); seit Phase 2 auch `/liste`,
   `/titel [text]`, `/archiv`, `/wiederholen`, `/bearbeiten`, `/denken`. `//` am Anfang = wörtlicher
   Schrägstrich. Die Einstellungen laufen über `/api/ai/einstellungen`
-  (`core/ki_einstellungen.py`).
+  (`core/ki_einstellungen.py`). `/modell` zeigt seit 2026-10-07 **alle**
+  Chat-Modelle jedes Anbieters mit Schlüssel (`core/modell_liste.py`: vom
+  Anbieter geholt — Anthropic `GET /v1/models`, sonst `GET {base_url}/models`
+  —, 24 h gecacht in `~/.cache/zentrale/modelle.json` pro Rechner, Fehler
+  10 min gemerkt, Rückfall auf `providers.py`; Embedding/Audio/Bild/
+  Moderation per Wortliste im Namen herausgefiltert); in der Auswahl filtert
+  Tippen. Budget: 0–100 € im Monat (Sasha).
   (`/memory` und `/forget N` sind mit dem Legacy-LTM-Pfad entfallen.)
 - ESC – stoppt eine laufende Antwort, sonst zurück zum Haupt-Dashboard.
 - **Gespräche** (seit 2026-10-07, Claude-Web-Plan Phase 2): der Verlauf

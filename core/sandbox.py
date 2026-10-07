@@ -56,7 +56,12 @@ import ai_config
 # Grenzen. Bewusst knapp: rechnen, Daten umformen, kleine Skripte — nicht
 # kompilieren oder Modelle trainieren (Entscheidungen 2026-10-07, Bericht).
 ZEITLIMIT_STANDARD_S = 30
-ZEITLIMIT_MAX_S = 120
+# Bis hierhin reicht das normale Ja (auch „immer"/„für dieses Gespräch").
+# Länger nur nach eigener Rückfrage mit der Dauer im Text, die NUR „einmal"
+# anbietet (Sasha 2026-10-07: „wenn die ai mich anfragen kann für mehr zeit
+# und ich es per hand dann bestätige"; Regel im Werkzeug-Register).
+ZEITLIMIT_OHNE_FRAGE_S = 120
+ZEITLIMIT_MAX_S = 30 * 60
 SPEICHER_BYTES = 512 * 1024 * 1024      # Adressraum je Prozess
 PROZESSE_MAX = 64                        # gegen Fork-Bomben
 DATEI_MAX_BYTES = 50 * 1024 * 1024       # größte einzelne Datei
@@ -348,7 +353,8 @@ def aufraeumen(tage: int = AUFBEWAHREN_TAGE) -> int:
 
 def _ergebnis(**felder) -> dict:
     erg = {"ausgabe": "", "fehler": "", "rc": None, "dauer_s": 0.0,
-           "dateien_neu": [], "abgebrochen": False, "ordner": None}
+           "dateien_neu": [], "abgebrochen": False, "gestoppt": False,
+           "ordner": None}
     erg.update(felder)
     return erg
 
@@ -356,12 +362,18 @@ def _ergebnis(**felder) -> dict:
 def ausfuehren(code: str, sprache: str = "python",
                zeitlimit_s: float = ZEITLIMIT_STANDARD_S,
                dateien: dict | None = None,
-               lauf_id: str | None = None) -> dict:
+               lauf_id: str | None = None,
+               abbruch=None) -> dict:
     """Code in der Sandbox laufen lassen.
 
     Rückgabe: ausgabe, fehler (stdout/stderr, gekappt), rc (None = gar nicht
     gelaufen), dauer_s, dateien_neu ([{name, bytes}] neu oder geändert),
-    abgebrochen (Zeitlimit), ordner (Arbeitsordner auf dem Rechner).
+    abgebrochen (Zeitlimit ODER gestoppt), gestoppt (Sasha hat gestoppt),
+    ordner (Arbeitsordner auf dem Rechner).
+
+    `abbruch`: Stopp-Signal (hat is_set(), z. B. threading.Event). Wird es
+    gesetzt, stirbt die ganze Prozessgruppe sofort (2026-10-07, Sasha:
+    „stoppknopf verlässlich machen").
 
     `dateien`: {name: text}, wird vor dem Lauf in den Arbeitsordner gelegt.
     `lauf_id`: gleiche id = gleicher Ordner (Dateien bleiben zwischen Läufen);
@@ -404,12 +416,35 @@ def ausfuehren(code: str, sprache: str = "python",
         programm = os.path.join(eingabe, SPRACHEN[sprache][0])
         with open(programm, "w", encoding="utf-8") as f:
             f.write(code or "")
-        return _laufen(bwrap, arbeit, programm, sprache, zeitlimit_s, vorher)
+        return _laufen(bwrap, arbeit, programm, sprache, zeitlimit_s, vorher,
+                       abbruch)
     finally:
         shutil.rmtree(eingabe, ignore_errors=True)
 
 
-def _laufen(bwrap, arbeit, programm, sprache, zeitlimit_s, vorher) -> dict:
+# So oft schaut der Lauf nach dem Stopp-Signal. 0,1 s: Esc fühlt sich
+# sofort an, und ein wartender Python-Prozess kostet dabei nichts.
+_STOPP_TAKT_S = 0.1
+
+
+def _warten(proc, zeitlimit_s, abbruch):
+    """Warten, bis das Programm endet, die Zeit um ist oder gestoppt wird.
+    -> (rc oder None, grund: None | "zeit" | "gestoppt")"""
+    frist = time.monotonic() + zeitlimit_s
+    while True:
+        if abbruch is not None and abbruch.is_set():
+            return None, "gestoppt"
+        rest = frist - time.monotonic()
+        if rest <= 0:
+            return None, "zeit"
+        try:
+            return proc.wait(timeout=min(_STOPP_TAKT_S, rest)), None
+        except subprocess.TimeoutExpired:
+            continue
+
+
+def _laufen(bwrap, arbeit, programm, sprache, zeitlimit_s, vorher,
+            abbruch=None) -> dict:
     status_r, status_w = os.pipe()
     start = time.monotonic()
     try:
@@ -427,14 +462,12 @@ def _laufen(bwrap, arbeit, programm, sprache, zeitlimit_s, vorher) -> dict:
     os.close(status_w)
     aus = _Kappe(proc.stdout, AUSGABE_MAX_ZEICHEN)
     err = _Kappe(proc.stderr, AUSGABE_MAX_ZEICHEN)
-    abgebrochen = False
-    try:
-        rc = proc.wait(timeout=zeitlimit_s)
-    except subprocess.TimeoutExpired:
+    rc, grund = _warten(proc, zeitlimit_s, abbruch)
+    abgebrochen = grund is not None
+    if abgebrochen:
         # Ganze Prozessgruppe hart beenden. bwrap ist PID 1 seines
         # Prozess-Namensraums nicht selbst, aber --die-with-parent und der
         # eigene PID-Namensraum nehmen alles darin mit.
-        abgebrochen = True
         try:
             os.killpg(proc.pid, signal.SIGKILL)
         except ProcessLookupError:
@@ -452,7 +485,9 @@ def _laufen(bwrap, arbeit, programm, sprache, zeitlimit_s, vorher) -> dict:
                                 + (fehler.strip() or f"Fehlercode {rc}"),
                          dauer_s=dauer, ordner=arbeit)
     rc = _echter_rc(status, rc)
-    if abgebrochen:
+    if grund == "gestoppt":
+        fehler = (fehler + "\n[Abgebrochen: vom Nutzer gestoppt.]").lstrip("\n")
+    elif abgebrochen:
         fehler = (fehler + f"\n[Abgebrochen: Zeitlimit {zeitlimit_s:g} s "
                            f"überschritten.]").lstrip("\n")
     nachher = _bestand(arbeit)
@@ -460,7 +495,8 @@ def _laufen(bwrap, arbeit, programm, sprache, zeitlimit_s, vorher) -> dict:
            if vorher.get(n) != (g, m)]
     return _ergebnis(ausgabe=ausgabe, fehler=fehler, rc=rc, dauer_s=dauer,
                      dateien_neu=neu[:DATEIEN_LISTE_MAX],
-                     abgebrochen=abgebrochen, ordner=arbeit)
+                     abgebrochen=abgebrochen, gestoppt=grund == "gestoppt",
+                     ordner=arbeit)
 
 
 def _echter_rc(status: str, rc: int) -> int:
@@ -502,7 +538,9 @@ def als_text(erg: dict) -> str:
     if erg.get("rc") is None:
         return f"[Nicht ausgeführt: {erg.get('fehler') or 'unbekannter Fehler'}]"
     kopf = f"Rückgabewert {erg['rc']}, {erg.get('dauer_s', 0):g} s"
-    if erg.get("abgebrochen"):
+    if erg.get("gestoppt"):
+        kopf += " — VOM NUTZER GESTOPPT"
+    elif erg.get("abgebrochen"):
         kopf += " — ABGEBROCHEN (Zeitlimit)"
     teile = [kopf]
     if erg.get("ausgabe"):

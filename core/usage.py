@@ -75,15 +75,44 @@ def _bump(topf: dict, schluessel: str, euro: float, calls: int = 1):
     e["calls"] += calls
 
 
+# Modelle, deren Preis schon als unbekannt gemeldet wurde (einmal je Lauf).
+_unbekannt_gemeldet = set()
+
+
+def _unbekannten_preis_melden(model: str):
+    """Ein Modell ohne Preiszeile (2026-10-07: /modell zeigt jetzt alles,
+    was der Anbieter hat) wird vorsichtig geschätzt, nicht mit 0 € — und
+    das soll man im Log sehen, damit jemand die Zeile in prices.py nachträgt."""
+    if not model or prices.bekannt(model) or model in _unbekannt_gemeldet:
+        return
+    _unbekannt_gemeldet.add(model)
+    p = prices.fuer(model)
+    zeile = (f"PREIS ? {model}: nicht in der Preistabelle — gerechnet mit "
+             f"{p['in']:g} $ / {p['out']:g} $ je Mio. Token (vorsichtig)")
+    try:
+        import state
+        state.push_log(zeile)
+    except Exception:
+        print(f"[usage] {zeile}")
+
+
 def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
-           cache_read: int = 0, cache_write: int = 0) -> float:
+           cache_read: int = 0, cache_write: int = 0,
+           geschaetzt: bool = False) -> float:
     """
     Einen Call verbuchen. Gibt die geschätzten Kosten dieses Calls in Euro
     zurück (damit der Aufrufer sie gleich loggen kann).
 
+    geschaetzt=True: die Token-Zahlen hat nicht der Anbieter gemeldet,
+    sondern wir aus der Textlänge geschätzt (gestoppte Antwort bei einem
+    OpenAI-kompatiblen Anbieter, 2026-10-07). Zählt ganz normal mit — der
+    Budget-Deckel soll sie sehen — und zusätzlich im Topf „geschaetzt" pro
+    Monat, damit erkennbar bleibt, wie viel davon Schätzung ist.
+
     Schluckt Fehler: eine kaputte Buchhaltung darf niemals ein Gespräch
     abbrechen. Im schlimmsten Fall stimmt die Statistik nicht.
     """
+    _unbekannten_preis_melden(model)
     try:
         eur = prices.euro(model, input_tokens=input_tokens,
                           output_tokens=output_tokens,
@@ -99,6 +128,8 @@ def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
             _bump(d["tage"], heute, eur)
             _bump(d["monate"], monat, eur)
             _bump(d["modelle"], model or "unbekannt", eur)
+            if geschaetzt:
+                _bump(d.setdefault("geschaetzt", {}), monat, eur)
             # Tagesdetails kappen; Monate bleiben (die sind winzig).
             tage = d["tage"]
             if len(tage) > KEEP_TAGE:

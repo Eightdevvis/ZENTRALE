@@ -46,7 +46,13 @@ _EINSTELLUNGEN = {
         {"name": "claude", "schluessel": True, "spricht": True, "modell": "claude-sonnet-5",
          "modelle": ["claude-sonnet-5", "claude-haiku-4-5"]},
         {"name": "qwen", "schluessel": True, "spricht": True, "modell": "qwen-plus",
-         "modelle": ["qwen-plus", "qwen-turbo"]}]}
+         # Seit 2026-10-07 die ganze Liste des Anbieters (Blättern/Filtern).
+         "modelle": ["qwen-plus", "qwen-turbo"] + ["qwen3-%d-instruct" % i for i in range(40)]}]}
+
+# /erlaubnis (2026-10-07): was ohne Frage erlaubt ist.
+_ERLAUBNIS = {"immer": [{"name": "run_code", "was": "programme abgeschottet ausführen"}],
+              "gespraech": [{"name": "web_search", "was": "im internet suchen"}],
+              "gespraech_id": "g1"}
 
 
 # Erfundene Gespräche (Claude-Web-Plan Phase 2, 2026-10-07): Liste mit
@@ -130,6 +136,8 @@ def _synth(path):
         return None
     if path == "/api/ai/einstellungen":      # Chat-Befehle /modell, /effort
         return _EINSTELLUNGEN
+    if path == "/api/erlaubnis":
+        return _ERLAUBNIS
     if path == "/api/gespraeche":
         return _GESPRAECHE
     if path.startswith("/api/gespraeche?archiv"):

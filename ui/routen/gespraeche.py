@@ -12,6 +12,7 @@
 
 from flask import Blueprint, jsonify, request
 
+import erlaubnis    # type: ignore  – „für dieses Gespräch" endet beim Wechsel
 import gespraeche   # type: ignore
 import projekte     # type: ignore  – Projektname an der Zeile (Phase 6)
 
@@ -60,6 +61,7 @@ def api_gespraeche_neu():
     titel = " ".join(str(body.get('titel') or '').split()) or None
     gid = gespraeche.neu(titel)
     gespraeche.aktiv_setzen(gid)
+    erlaubnis.gespraech_beginnt(gid)
     return jsonify({"ok": True, "id": gid}), 201
 
 
@@ -72,6 +74,8 @@ def api_gespraeche_aktiv():
     if gid is not None and not gespraeche.gibt_es(str(gid)):
         return _unbekannt()
     gespraeche.aktiv_setzen(str(gid) if gid is not None else None)
+    # Gesprächswechsel hebt „für dieses Gespräch" auf (2026-10-07).
+    erlaubnis.gespraech_beginnt(str(gid) if gid is not None else None)
     return jsonify({"ok": True, "aktiv": gid})
 
 

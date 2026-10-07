@@ -143,7 +143,19 @@ def test_werkzeuge_nur_auf_der_grossen_schiene_und_ungegatet():
     for name in ("create_document", "read_document", "update_document", "save_from_sandbox"):
         w = werkzeug_register.eintrag(name)
         assert w.klein is None and w.gross and w.ausfuehrer is not None
+    for name in ("create_document", "read_document", "update_document"):
         assert not werkzeug_register.braucht_erlaubnis(name, {"titel": "x", "inhalt": "y"})
+
+
+def test_save_from_sandbox_ist_gegatet_und_nur_auf_wunsch():
+    """Sasha 2026-10-07: behalten „nur auf initiative von mir" — gefragt,
+    ohne „immer", und die Beschreibung sagt es dem Modell."""
+    assert werkzeug_register.braucht_erlaubnis("save_from_sandbox", {"lauf": "x", "datei": "a"})
+    assert not werkzeug_register.immer_erlaubbar("save_from_sandbox")
+    assert "NUR wenn Sasha" in werkzeug_register.eintrag("save_from_sandbox").gross
+    frage = werkzeug_register.frage("save_from_sandbox", {"lauf": "x", "datei": "plot.png",
+                                                          "titel": "Kurve"})
+    assert "plot.png" in frage and "Kurve" in frage and "Ablage" in frage
 
 
 def test_create_document_meldet_ein_ablage_ereignis():
@@ -315,7 +327,7 @@ def test_sandbox_groessengrenze(lauf, monkeypatch):
 def test_run_code_benennt_den_lauf_nach_dem_gespraech(monkeypatch):
     gesehen = {}
 
-    def falsch(code, sprache, zeitlimit_s, lauf_id=None):
+    def falsch(code, sprache, zeitlimit_s, lauf_id=None, abbruch=None):
         gesehen["lauf"] = lauf_id
         return sandbox._ergebnis(rc=0, dateien_neu=[{"name": "a.txt", "bytes": 1}])
     monkeypatch.setattr(sandbox, "ausfuehren", falsch)

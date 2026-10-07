@@ -24,6 +24,7 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
 from . import chat_befehle, eingabe
 from .ablage import Ablageliste
 from .chat_ablage import AblageSteuerung, ablage_anzeige, anhang_eintrag
+from .chat_erlaubnis import ErlaubnisSteuerung
 from .chat_gespraeche import GespraechsSteuerung, ai_verlauf_holen, verlauf_aus  # noqa: F401
 from .gespraechsliste import Gespraechsliste
 from .gedaechtnis import Gedaechtnis
@@ -198,7 +199,11 @@ def auswahl(name, stand):
                     idx = len(optionen)
                 optionen.append(("%s · %s" % (a["name"], m),
                                  {"anbieter": a["name"], "modell": m}))
-    elif name == "anbieter":
+        # Seit 2026-10-07 alle Modelle der Anbieter (Qwen hat Hunderte):
+        # tippen filtert (wahl_filtern), Ziffern gehören dann zum Filter.
+        return {"titel": titel, "optionen": optionen, "idx": idx,
+                "alle": list(optionen), "filter": ""}
+    if name == "anbieter":
         titel = "anbieter wählen"
         for n in ["auto"] + [a["name"] for a in anbieter]:
             if n == stand.get("anbieter"):
@@ -212,6 +217,19 @@ def auswahl(name, stand):
                 idx = len(optionen)
             optionen.append((st, {"effort": st}))
     return {"titel": titel, "optionen": optionen, "idx": idx}
+
+
+def wahl_filtern(wahl, text):
+    """Die Auswahl auf Optionen eingrenzen, die alle Wörter von `text`
+    enthalten (Groß/klein egal). Die gewählte bleibt gewählt, wenn sie
+    noch drin ist."""
+    alt = wahl["optionen"][wahl["idx"]] if wahl["optionen"] else None
+    woerter = text.lower().split()
+    wahl["filter"] = text
+    wahl["optionen"] = [o for o in wahl["alle"]
+                        if all(w in o[0].lower() for w in woerter)]
+    wahl["idx"] = wahl["optionen"].index(alt) if alt in wahl["optionen"] else 0
+    return wahl
 
 
 def budget_text(stand):
@@ -240,7 +258,7 @@ def stand_text(daten, stand):
     return "anbieter: %s" % (stand.get("anbieter") or "—")
 
 
-class Chat(GespraechsSteuerung, AblageSteuerung):
+class Chat(GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
     """Der KI-Chat (Mitte, Leertaste auf der Startseite). Thin Client: die
     TUI rechnet keine KI, sie spricht nur HTTP mit /api/chat (SSE) und zeigt
     den Verlauf. Zustand in self.AI (auch z.AI), geschützt durch AI_LOCK,
@@ -574,6 +592,9 @@ class Chat(GespraechsSteuerung, AblageSteuerung):
         if name == "anhang":
             self.anhang_dazu(arg)
             return
+        if name == "erlaubnis":             # chat_erlaubnis.py (2026-10-07)
+            self.befehl_erlaubnis(arg)
+            return
         if name in ("projekt", "projekte"):        # projekte.py (Phase 6)
             self.projekte.befehl(name, arg)
             return
@@ -629,12 +650,19 @@ class Chat(GespraechsSteuerung, AblageSteuerung):
 
     def _taste_wahl(self, ch):
         """Offene Auswahl (/modell, /anbieter, /effort): ↑↓ wählen, Enter
-        oder Ziffer nimmt, Esc bricht ab."""
+        oder Ziffer nimmt, Esc bricht ab. Bei /modell (Schlüssel „filter")
+        filtert Tippen, ⌫ nimmt zurück, Ziffern gehören zum Filter."""
         AI = self.AI
         wahl = AI["wahl"]
         n = len(wahl["optionen"])
         if ch == 27:
             AI["wahl"] = None
+        elif "filter" in wahl and ch in (curses.KEY_BACKSPACE, 127, 8):
+            wahl_filtern(wahl, wahl["filter"][:-1])
+        elif "filter" in wahl and isinstance(ch, int) and 32 <= ch < 127:
+            wahl_filtern(wahl, wahl["filter"] + chr(ch))
+        elif n == 0:
+            pass
         elif ch == curses.KEY_UP:
             wahl["idx"] = (wahl["idx"] - 1) % n
         elif ch == curses.KEY_DOWN:
@@ -1036,13 +1064,22 @@ class Chat(GespraechsSteuerung, AblageSteuerung):
         Optionen um die gewählte herum, Hinweis."""
         C = self.z.C
         opts, idx = wahl["optionen"], wahl["idx"]
-        platz = max(1, min(len(opts), bh - 6))
+        platz = max(1, min(len(opts), bh - 6)) if opts else 0
         oben = max(0, min(idx - platz // 2, len(opts) - platz))
-        zeilen = [(wahl["titel"][:inw], C["acc"])]
+        titel = wahl["titel"]
+        if "filter" in wahl:                       # /modell: tippen filtert
+            titel += " · %d von %d" % (len(opts), len(wahl["alle"]))
+            if wahl["filter"]:
+                titel += " · filter: " + wahl["filter"]
+        zeilen = [(titel[:inw], C["acc"])]
+        if not opts:
+            zeilen.append(("  nichts passt", C["dim"]))
         for i in range(oben, oben + platz):
             zeichen = "›" if i == idx else " "
-            nr = "%d) " % (i + 1) if i < 9 else "   "
+            nr = "%d) " % (i + 1) if i < 9 and "filter" not in wahl else "   "
             zeilen.append(("%s %s%s" % (zeichen, nr, opts[i][0]),
                            C["bright"] if i == idx else C["dim"]))
-        zeilen.append(("↑↓ wählen · enter nehmen · esc abbrechen"[:inw], C["faint"]))
+        zeilen.append((("↑↓ wählen · tippen filtert · enter nehmen · esc abbrechen"
+                        if "filter" in wahl else
+                        "↑↓ wählen · enter nehmen · esc abbrechen")[:inw], C["faint"]))
         return zeilen

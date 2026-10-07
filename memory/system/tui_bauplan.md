@@ -264,6 +264,23 @@ die TUI gilt:
   Projekte im Abspiel-Backend); ohne Bildschirm:
   `tests/test_projekte_ansicht.py`.
 
+## Chat: Erlaubnis mit Geltung, /erlaubnis, /modell mit Filter (seit 2026-10-07)
+
+- Die Erlaubnis-Frage zeigt die Knöpfe aus dem Backend („1) ja, nur dieses
+  mal 2) ja, für dieses gespräch 3) ja, immer 4) nein"); j/n/Ziffer/Esc wie
+  bisher — kein neuer Code in `chat.py`, die Knöpfe kamen schon als
+  `optionen`. Regeln: `memory/ki/ki_system.md`, „Geltungsbereiche".
+- `/erlaubnis` (`tui/ansichten/chat_erlaubnis.py`, Mixin
+  `ErlaubnisSteuerung`): listet im Verlauf, was ohne Frage erlaubt ist, und
+  öffnet eine Auswahl zum Zurücknehmen.
+- `/modell` bekommt alle Modelle der Anbieter; die Auswahl hat dann
+  `alle` + `filter`: Tippen filtert (alle Wörter müssen vorkommen), ⌫ nimmt
+  zurück, Ziffern gehören zum Filter, Titel „· n von m · filter: …"
+  (`chat.wahl_filtern`, `_taste_wahl`, `_fuss_wahl`).
+- Headless: Szenario `ki_erlaubnis` in `tests/tui_schirm/lauf.py`; zwei Läufe
+  gleichzeitig brauchen `ZTUI_SOCK` und `ZTUI_PORT` je Lauf. Ohne
+  Bildschirm: `tests/test_erlaubnis_tui.py`.
+
 ## Historie
 
 - **2026-10-05** — Kern-Bauplan friert `run_ui` (7.701 Zeilen) als Riese ein.

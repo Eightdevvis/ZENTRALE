@@ -52,9 +52,9 @@ data/ablage/<id>/v<n>-<rechner><endung>  eine Fassung, nie überschrieben
 | `create_document(titel, inhalt, art?, sprache?)` | neues Dokument, art markdown/text/code/csv | frei |
 | `read_document(id)` | Inhalt lesen (für eine Änderung nötig) | frei |
 | `update_document(id, inhalt)` | neue Fassung, die alte bleibt | frei |
-| `save_from_sandbox(lauf, datei, titel?)` | Datei aus einem `run_code`-Lauf in die Ablage | frei |
+| `save_from_sandbox(lauf, datei, titel?)` | Datei aus einem `run_code`-Lauf in die Ablage — nur auf Sashas Wunsch | **gefragt** (seit 07.10. abends, ohne „immer") |
 
-**Ungegatet** (Entscheidung 07.10.): geschrieben wird nur in `data/ablage/`,
+Die ersten drei **ungegatet** (Entscheidung 07.10.): geschrieben wird nur in `data/ablage/`,
 nie überschrieben, nie gelöscht, nichts geht nach draußen; das Dokument
 erscheint sofort als Zeile im Chat. Ein Ja/Nein vor jedem Dokument wäre wie
 bei `write_note` eine Zumutung.
@@ -70,14 +70,20 @@ die id nicht mehr, um das Dokument später zu ändern.
 
 - `run_code` benennt seinen Arbeitsordner nach dem Gespräch:
   `<gesprächs-id>--<zeit>-<hex>` (`sandbox.lauf_kennung`). Hat ein Lauf neue
-  Dateien, steht im Ergebnis „Lauf: <kennung> — mit save_from_sandbox …".
+  Dateien, steht im Ergebnis „Lauf: <kennung> — will Sasha eine Datei
+  behalten: save_from_sandbox."
 - `save_from_sandbox` nimmt **nur Läufe dieses Gesprächs** (Präfix) und liest
   über `sandbox.datei_lesen`: kein absoluter Pfad, kein `..`, **kein Verweis**
   (weder die Datei noch ein Ordner davor — ein Programm kann einen Symlink auf
   `/home/…` anlegen, draußen würde er aufgelöst), nur normale Dateien, Größe
   begrenzt. Text oder Bild; Binäres wird abgelehnt.
 - Gewählt statt „automatisch alles in die Ablage": ein Lauf hinterlässt oft
-  Zwischendateien; die KI entscheidet, was Sasha behalten soll.
+  Zwischendateien. **Behalten entscheidet Sasha** (07.10., nach seiner
+  Durchsicht: „aber nur auf initiative von mir"): `save_from_sandbox` ist
+  gegatet („Soll ich <datei> aus dem Programm-Lauf in deine Ablage legen?"),
+  die Beschreibung sagt dem Modell „NUR wenn Sasha sie behalten will, nie von
+  dir aus", und „ja, immer" gibt es dafür nicht (nur einmal / dieses
+  Gespräch). Was nicht abgelegt wird, räumt die Sandbox nach 7 Tagen weg.
 
 ## Anhänge
 
