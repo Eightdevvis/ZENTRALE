@@ -125,7 +125,17 @@ eine Prüfung lang (~2 s) und kompiliert, ersetzt sich der Prozess per `exec`
 durch sich selbst — gleiche pid, systemd merkt nichts, :5000 ist nach ein,
 zwei Sekunden wieder da. Nie während eines laufenden Requests (Chat-Stream
 samt Erlaubnis-Frage) oder einer aktiven Tutor-Session — dann steht
-`HOT RELOAD wartet: …` im Log. Kaputter Code → `HOT RELOAD verworfen`, der
+`HOT RELOAD wartet: /api/chat seit 3 min` im Log (Pfad + Alter jeder
+laufenden Anfrage). Gezählt wird seit 2026-10-07 von einer Schicht außen um
+die WSGI-App (`requests_zaehlen`): rein beim Betreten, raus genau einmal,
+wenn die Antwort durch ist, abbricht oder geschlossen wird. Das alte
+before/after_request-Zählen blieb bei `send_file`, bei Ausnahmen in
+after_request/teardown und im Leselauf des Dev-Servers für immer stehen
+(07.10.: ab 23:26 kein Reload mehr). Sicherung: eine Anfrage, die
+`STILL_GRENZE_S` (10 min) kein Stück Antwort geliefert hat, gilt als hängend
+und blockiert nicht mehr (`HOT RELOAD ignoriere hängende Anfrage …`); für
+`/api/chat` 35 min, weil `run_code` bis 30 min still laufen darf — ein Chat,
+der Tokens liefert, ist nie „still". Kaputter Code → `HOT RELOAD verworfen`, der
 alte läuft weiter. Falle: werkzeug macht den Lausch-Socket vererbbar, deshalb
 schließt `neu_starten()` vor dem `exec` alle fds ab 3. Abschalten:
 `ZENTRALE_HOT_RELOAD=aus`. Der harte Fall bleibt `/reboot`.
