@@ -108,7 +108,7 @@ def test_jede_ansicht_sagt_welche_daten_sie_braucht():
 # ── A: Tagesliste (wie calcurse, Sasha 07.10.2026) ─────────────────────
 @pytest.mark.parametrize("breite", BREITEN)
 def test_a_jeder_tag_der_spanne_in_spannenfarbe(breite):
-    zeilen = ka.ansicht_a(daten("month"), breite, 120)
+    zeilen = ka.ansicht_a(daten("month"), breite, 120, tage=7)
     urlaub = finde(zeilen, "Urlaub")
     titel = [i for i in urlaub if text(zeilen[i]).strip().startswith(("Urlaub", "│    Urlaub"))
              or "    Urlaub" in text(zeilen[i])[:12]]
@@ -118,21 +118,19 @@ def test_a_jeder_tag_der_spanne_in_spannenfarbe(breite):
 
 
 def test_a_von_bis_wie_calcurse_auch_ueber_tage():
-    zeilen = [text(z) for z in ka.ansicht_a(daten("month"), 110, 160)]
+    zeilen = [text(z) for z in ka.ansicht_a(daten("month", ref="2026-10-05"), 110, 200, tage=8)]
     alles = "\n".join(zeilen)
     assert "- 14:00 -> 15:00" in alles          # einfacher Termin, zweizeilig
     assert "18:00 -> ..:.." in alles            # Spanne fängt abends an …
     assert "..:.. -> ..:.." in alles            # … läuft durch …
     assert "..:.. -> 14:00" in alles            # … und endet mittags
-    assert "Fr 18:00 → So 14:00" in alles       # Kasten „Spannen"
-    assert "Mi 07. – Fr 09." in alles
 
 
 def test_a_kaesten_mit_titel_innen_und_statuszeile():
     zeilen = [text(z) for z in ka.ansicht_a(daten("month"), 110, 40)]
     assert "Termine" in zeilen[1] and "Kalender" in zeilen[1]
     assert zeilen[2].startswith("├") and "┤" in zeilen[2]
-    assert zeilen[-1].startswith("──[ Mo 2026-10-05 |")
+    assert zeilen[-1].startswith(" [ Mo 2026-10-05 |")
     assert any("[ 5]" in z for z in zeilen)        # heute im Mini-Monat
 
 
@@ -143,11 +141,39 @@ def test_a_schmal_nur_die_terminliste():
 
 
 def test_a_ueberschneidung_steht_untereinander():
-    zeilen = [text(z) for z in ka.ansicht_a(daten("month"), 110, 60)]
+    zeilen = [text(z) for z in ka.ansicht_a(daten("month", ref="2026-10-05"), 110, 60)]
     za, ar = finde_text(zeilen, "Zahnarzt"), finde_text(zeilen, "Arbeit")
     assert za and ar and 0 < abs(ar[0] - za[0]) <= 3
     a, b = sorted((za[0], ar[0]))
     assert not any("──────" in z for z in zeilen[a:b]), "selber Tagesblock"
+
+
+def test_a_drei_tage_gleich_hoch_ab_ref():
+    zeilen = [text(z) for z in ka.ansicht_a(daten("month"), 110, 40)]
+    koepfe = [i for i, z in enumerate(zeilen) if "Oktober 2026" in z and "│" in z[:2]
+              and z.rstrip().endswith("│") and ", " in z]
+    assert len(koepfe) == 3                              # ab ref 07.10.: Mi, Do, Fr
+    assert "Mittwoch, 7. Oktober" in zeilen[koepfe[0]]
+    assert koepfe[1] - koepfe[0] == koepfe[2] - koepfe[1], "gleich hoch verteilt"
+    assert not any("noch" in z and "tage" in z for z in zeilen), "kein Überlauf-Hinweis"
+
+
+def test_a_todo_zeigt_offene_punkte_der_wochenliste():
+    d = daten("month")
+    d["weekplan"] = {"lid": "l_week", "items": [
+        {"id": 1, "text": "Steuer abgeben", "done": False},
+        {"id": 2, "text": "Blumen gießen", "done": True}]}
+    zeilen = [text(z) for z in ka.ansicht_a(d, 110, 40)]
+    alles = "\n".join(zeilen)
+    assert "TODO" in alles and "1. Steuer abgeben" in alles
+    assert "Blumen" not in alles                          # abgehakt: weg
+    assert "Blumen" in "\n".join(text(z) for z in ka.ansicht_a(d, 110, 40, erledigte=True))
+
+
+def test_a_statusbalken_ist_eine_rote_flaeche():
+    z = ka.ansicht_a(daten("month"), 110, 40)[-1]
+    assert all(r == ka.ROLLE["a_akzent"] + ka.INV for _t, r in z)
+    assert ka.zeilen_breite(z) == 110                     # über die ganze Breite
 
 
 def finde_text(zeilen, wort):
@@ -156,8 +182,8 @@ def finde_text(zeilen, wort):
 
 def test_a_deaktiviertes_nur_mit_erledigte():
     d = daten("month")
-    assert not finde(ka.ansicht_a(d, 110, 80), "Weg")
-    assert finde(ka.ansicht_a(d, 110, 80, erledigte=True), "✗ Weg")
+    assert not finde(ka.ansicht_a(d, 110, 200, tage=31), "Weg")
+    assert finde(ka.ansicht_a(d, 110, 200, erledigte=True, tage=31), "✗ Weg")
 
 
 # ── B: Monatsraster ────────────────────────────────────────────────────

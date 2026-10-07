@@ -169,10 +169,12 @@ class Kalender:
         K["sdata"]["_for"] = (K["stil"], K["ref"])
 
     def k_stil_step(self, delta):
-        """Blättern in A/B/C: Monatsdaten (A, B) monatsweise, C wochenweise."""
+        """Blättern in A/B/C: A tageweise, B monatsweise, C wochenweise."""
         K = self.K
         r = date.fromisoformat(K["ref"])
-        if DATENANSICHT.get(K["stil"]) == "week":
+        if K["stil"] == "A":                    # A zeigt ein paar Tage → tageweise
+            r = r + timedelta(days=delta)
+        elif DATENANSICHT.get(K["stil"]) == "week":
             r = r + timedelta(days=7 * delta)
         else:
             m = r.month - 1 + delta

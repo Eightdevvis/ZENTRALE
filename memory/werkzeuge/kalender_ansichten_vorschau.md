@@ -28,17 +28,19 @@ Listen-Sidebar heraus).
 ## Die drei Ansichten
 
 - **A — Tagesliste + Kästen, wie calcurse** (Monatsdaten; seit 07.10.2026
-  nach Sashas calcurse-Bild umgebaut): Kastentitel mittig IM Kasten mit
-  `├──┤` darunter, der aktive Kasten „Termine" mit Rahmen in Akzentfarbe
-  (Rolle `kal`, calcurse-Rot, in `farben.py` je Theme eine Zeile). Je Tag
-  ein Block mit rechtsbündigem Datum („Dienstag, 6. Oktober 2026", heute
-  „heute · …"), Termine zweizeilig (`- 14:00 -> 15:00`, darunter der
-  Titel; Routinen mit `*`), Spannen mit calcurse-Pfeilen
-  (`18:00 -> ..:..` / `..:.. -> ..:..` / `..:.. -> 14:00`), leere Tage `--`,
-  Linie zwischen den Tagen. Rechts „Kalender" (Monat mittig, Wochentage und
-  KW in Akzentfarbe, heute `[ 7]`) und „Spannen" (nummeriert, wo calcurse
-  „TODO" hat). Unten die Statuszeile `──[ Mi 2026-10-07 | 09:40 ]──> 18:00
-  :: Parkour <──`. Unter 86 Spalten bleibt nur die Terminliste.
+  nach Sashas calcurse-Bild): Kastentitel mittig IM Kasten mit `├──┤`
+  darunter, der aktive Kasten „Termine" mit rotem Rahmen (Rolle `kal`,
+  kräftiges Rot 196 nachts / 160 tags, `farben.py`). **Nur 3 Tage ab `ref`,
+  gleich hoch verteilt** (Sasha: lieber wenige mit Luft als viele gequetscht,
+  Woche/Monat sind B/C) — ←→ blättert in A deshalb **tageweise**; was in
+  einen Tagesblock nicht passt, wird still abgeschnitten (kein „noch n
+  tage"). Je Tag: Datum rechtsbündig, Termine zweizeilig (`- 14:00 ->
+  15:00` / Titel; Routinen `*`), Spannen mit `..:..`-Pfeilen, leere Tage
+  `--`, Linie zwischen den Tagen. Rechts „Kalender" (KW, heute `[ 7]`) und
+  **„TODO"** = offene Punkte der Wochenliste (`weekplan` aus
+  `/api/calendar`, nummeriert; abgehakte nur mit `x`). Unten der **rote
+  Statusbalken** über die ganze Breite (`[ Mi 2026-10-07 | 09:40 ] ──>
+  18:00 :: Parkour <`). Unter 86 Spalten bleibt nur die Terminliste.
 - **B — Monatsraster** (nach calcure, Monatsdaten): Termine in den Zellen mit
   Anfangszeit, Ganztägiges als farbiges Band, jede Spanne als **ein** Balken
   über ihre Zellen samt Trennern („ Fr 18:00 ━━ Wochenende Berlin ━━ So 14:00 ").
@@ -71,34 +73,34 @@ Listen-Sidebar heraus).
 ┌───────────────────────────────────────────────────────────────────────────────────────────────┐ ┌────────────────────────────────────┐
 │                                            Termine                                            │ │              Kalender              │
 ├───────────────────────────────────────────────────────────────────────────────────────────────┤ ├────────────────────────────────────┤
-│                                                                   heute · Samstag, 3. Oktober │ │            Oktober 2026            │
-│    Tag der Dt. Einheit                                                                        │ │       Mo  Di  Mi  Do  Fr  Sa  So   │
-│                                                                                               │ │  40   28  29  30   1   2 [ 3]  4   │
-│  * 18:30 -> 20:00                                                                             │ │  41    5   6   7   8   9  10  11   │
-│    Parkour                                                                                    │ │  42   12  13  14  15  16  17  18   │
+│                                                                     Mittwoch, 7. Oktober 2026 │ │            Oktober 2026            │
+│  - 10:00 -> 18:00                                                                             │ │       Mo  Di  Mi  Do  Fr  Sa  So   │
+│    Messe                                                                                      │ │  40   28  29  30   1   2 [ 3]  4   │
+│                                                                                               │ │  41    5   6   7   8   9  10  11   │
+│                                                                                               │ │  42   12  13  14  15  16  17  18   │
 │                                                                                               │ │  43   19  20  21  22  23  24  25   │
-│───────────────────────────────────────────────────────────────────────────────────────────────│ │  44   26  27  28  29  30  31   1   │
-│                                                                      Sonntag, 4. Oktober 2026 │ └────────────────────────────────────┘
-│   --                                                                                          │ ┌────────────────────────────────────┐
-│                                                                                               │ │              Spannen               │
-│───────────────────────────────────────────────────────────────────────────────────────────────│ ├────────────────────────────────────┤
-│                                                                       Montag, 5. Oktober 2026 │ │ 1. Messe                           │
-│  - 14:00 -> 15:00                                                                             │ │    Mi 10:00 → Fr 14:00             │
-│    Zahnarzt                                                                                   │ │    10–18 · 09–17 · 10–14           │
-│                                                                                               │ │                                    │
-│───────────────────────────────────────────────────────────────────────────────────────────────│ │ 2. Wochenende Berlin               │
-│                                                                     Dienstag, 6. Oktober 2026 │ │    Fr 18:00 → So 14:00             │
-│  * 10:00 -> 11:00                                                                             │ │    Fr     ██ Sa ██████ So ████     │
+│                                                                                               │ │  44   26  27  28  29  30  31   1   │
+│───────────────────────────────────────────────────────────────────────────────────────────────│ └────────────────────────────────────┘
+│                                                                   Donnerstag, 8. Oktober 2026 │ ┌────────────────────────────────────┐
+│  - 09:00 -> 17:00                                                                             │ │                TODO                │
+│    Messe                                                                                      │ ├────────────────────────────────────┤
+│                                                                                               │ │ nichts offen                       │
+│  * 10:00 -> 11:00                                                                             │ │                                    │
 │    Geige                                                                                      │ │                                    │
 │                                                                                               │ │                                    │
 │───────────────────────────────────────────────────────────────────────────────────────────────│ │                                    │
-│                                                                     Mittwoch, 7. Oktober 2026 │ │                                    │
-│  - 10:00 -> 18:00                                                                             │ │                                    │
+│                                                                      Freitag, 9. Oktober 2026 │ │                                    │
+│  - 10:00 -> 14:00                                                                             │ │                                    │
 │    Messe                                                                                      │ │                                    │
-│                                                                   Donnerstag, 8. Oktober 2026 │ │                                    │
+│                                                                                               │ │                                    │
+│  - 18:00 -> ..:..                                                                             │ │                                    │
+│    Wochenende Berlin                                                                          │ │                                    │
+│                                                                                               │ │                                    │
+│                                                                                               │ │                                    │
+│                                                                                               │ │                                    │
 └───────────────────────────────────────────────────────────────────────────────────────────────┘ └────────────────────────────────────┘
-──[ Sa 2026-10-03 | 09:54 ]──> 18:30 :: Parkour <───────────────────────────────────────────────────────────────────────────────────────
- ←→ monat · 0 heute · v monat · esc zurück
+ [ Sa 2026-10-03 | 10:41 ] ──> 18:30 :: Parkour <
+ ←→ tag · 0 heute · v monat · esc zurück
 
 ── Ansicht B (monat) · 136×30 ────────────────────────────────────────────────────────────────────────────────────────────────────────
  KALENDER · OKTOBER 2026
@@ -175,34 +177,34 @@ Listen-Sidebar heraus).
 ┌────────────────────────────────────────────────────────────────────────┐ ┌─────────────────────────────────┐
 │                                Termine                                 │ │            Kalender             │
 ├────────────────────────────────────────────────────────────────────────┤ ├─────────────────────────────────┤
-│                                            heute · Samstag, 3. Oktober │ │          Oktober 2026           │
-│    Tag der Dt. Einheit                                                 │ │     Mo  Di  Mi  Do  Fr  Sa  So  │
-│                                                                        │ │40   28  29  30   1   2 [ 3]  4  │
-│  * 18:30 -> 20:00                                                      │ │41    5   6   7   8   9  10  11  │
-│    Parkour                                                             │ │42   12  13  14  15  16  17  18  │
+│                                              Mittwoch, 7. Oktober 2026 │ │          Oktober 2026           │
+│  - 10:00 -> 18:00                                                      │ │     Mo  Di  Mi  Do  Fr  Sa  So  │
+│    Messe                                                               │ │40   28  29  30   1   2 [ 3]  4  │
+│                                                                        │ │41    5   6   7   8   9  10  11  │
+│                                                                        │ │42   12  13  14  15  16  17  18  │
 │                                                                        │ │43   19  20  21  22  23  24  25  │
-│────────────────────────────────────────────────────────────────────────│ │44   26  27  28  29  30  31   1  │
-│                                               Sonntag, 4. Oktober 2026 │ └─────────────────────────────────┘
-│   --                                                                   │ ┌─────────────────────────────────┐
-│                                                                        │ │             Spannen             │
-│────────────────────────────────────────────────────────────────────────│ ├─────────────────────────────────┤
-│                                                Montag, 5. Oktober 2026 │ │ 1. Messe                        │
-│  - 14:00 -> 15:00                                                      │ │    Mi 10:00 → Fr 14:00          │
-│    Zahnarzt                                                            │ │    10–18 · 09–17 · 10–14        │
-│                                                                        │ │                                 │
-│────────────────────────────────────────────────────────────────────────│ │ 2. Wochenende Berlin            │
-│                                              Dienstag, 6. Oktober 2026 │ │    Fr 18:00 → So 14:00          │
-│  * 10:00 -> 11:00                                                      │ │    Fr     ██ Sa ██████ So ████  │
+│                                                                        │ │44   26  27  28  29  30  31   1  │
+│────────────────────────────────────────────────────────────────────────│ └─────────────────────────────────┘
+│                                            Donnerstag, 8. Oktober 2026 │ ┌─────────────────────────────────┐
+│  - 09:00 -> 17:00                                                      │ │              TODO               │
+│    Messe                                                               │ ├─────────────────────────────────┤
+│                                                                        │ │ nichts offen                    │
+│  * 10:00 -> 11:00                                                      │ │                                 │
 │    Geige                                                               │ │                                 │
 │                                                                        │ │                                 │
 │────────────────────────────────────────────────────────────────────────│ │                                 │
-│                                              Mittwoch, 7. Oktober 2026 │ │                                 │
-│  - 10:00 -> 18:00                                                      │ │                                 │
+│                                               Freitag, 9. Oktober 2026 │ │                                 │
+│  - 10:00 -> 14:00                                                      │ │                                 │
 │    Messe                                                               │ │                                 │
-│                                            Donnerstag, 8. Oktober 2026 │ │                                 │
+│                                                                        │ │                                 │
+│  - 18:00 -> ..:..                                                      │ │                                 │
+│    Wochenende Berlin                                                   │ │                                 │
+│                                                                        │ │                                 │
+│                                                                        │ │                                 │
+│                                                                        │ │                                 │
 └────────────────────────────────────────────────────────────────────────┘ └─────────────────────────────────┘
-──[ Sa 2026-10-03 | 09:54 ]──> 18:30 :: Parkour <─────────────────────────────────────────────────────────────
- ←→ monat · 0 heute · v monat · esc zurück
+ [ Sa 2026-10-03 | 10:41 ] ──> 18:30 :: Parkour <
+ ←→ tag · 0 heute · v monat · esc zurück
 
 ── Ansicht B (monat) · 110×30 ──────────────────────────────────────────────────────────────────────────────
  KALENDER · OKTOBER 2026
@@ -279,34 +281,34 @@ Listen-Sidebar heraus).
 ┌────────────────────────────────────────────────────────────────────┐
 │                              Termine                               │
 ├────────────────────────────────────────────────────────────────────┤
-│                                        heute · Samstag, 3. Oktober │
-│    Tag der Dt. Einheit                                             │
+│                                          Mittwoch, 7. Oktober 2026 │
+│  - 10:00 -> 18:00                                                  │
+│    Messe                                                           │
 │                                                                    │
-│  * 18:30 -> 20:00                                                  │
-│    Parkour                                                         │
 │                                                                    │
-│────────────────────────────────────────────────────────────────────│
-│                                           Sonntag, 4. Oktober 2026 │
-│   --                                                               │
+│                                                                    │
 │                                                                    │
 │────────────────────────────────────────────────────────────────────│
-│                                            Montag, 5. Oktober 2026 │
-│  - 14:00 -> 15:00                                                  │
-│    Zahnarzt                                                        │
+│                                        Donnerstag, 8. Oktober 2026 │
+│  - 09:00 -> 17:00                                                  │
+│    Messe                                                           │
 │                                                                    │
-│────────────────────────────────────────────────────────────────────│
-│                                          Dienstag, 6. Oktober 2026 │
 │  * 10:00 -> 11:00                                                  │
 │    Geige                                                           │
 │                                                                    │
 │────────────────────────────────────────────────────────────────────│
-│                                          Mittwoch, 7. Oktober 2026 │
-│  - 10:00 -> 18:00                                                  │
+│                                           Freitag, 9. Oktober 2026 │
+│  - 10:00 -> 14:00                                                  │
 │    Messe                                                           │
-│                                        Donnerstag, 8. Oktober 2026 │
+│                                                                    │
+│  - 18:00 -> ..:..                                                  │
+│    Wochenende Berlin                                               │
+│                                                                    │
+│                                                                    │
+│                                                                    │
 └────────────────────────────────────────────────────────────────────┘
-──[ Sa 2026-10-03 | 09:54 ]──> 18:30 :: Parkour <─────────────────────
- ←→ monat · 0 heute · v monat · esc zurück
+ [ Sa 2026-10-03 | 10:41 ] ──> 18:30 :: Parkour <
+ ←→ tag · 0 heute · v monat · esc zurück
 
 ── Ansicht B (monat) · 70×30 ──────────────────────────────────────
  KALENDER · OKTOBER 2026

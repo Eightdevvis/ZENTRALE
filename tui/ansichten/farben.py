@@ -33,7 +33,7 @@ THEMES = {
         "span":  (curses.COLOR_YELLOW,  216, 0),    # Mehrtages-Klammer: weiches Orange
         # Kalender-Ansicht A nach calcurse: dessen Rot als Akzent (Sasha,
         # 07.10.2026: „wie die calcurse-ansicht halt"). Eine Zeile zum Umstellen.
-        "kal":   (curses.COLOR_RED,     167, 0),
+        "kal":   (curses.COLOR_RED,     196, 0),    # kräftiges Rot wie im calcurse-Bild
         "num":   (curses.COLOR_YELLOW,  222, 0),
         "amber": (curses.COLOR_YELLOW,  214, curses.A_BOLD),  # Fokus-Leiste: Bernstein
         # Bernsteinleiste (Listen-Werkzeug): Glanzpixel + Schatten/leere Fassung
