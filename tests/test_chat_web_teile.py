@@ -237,9 +237,11 @@ def test_verlauf_mit_tasten(welt):
 def test_kopieren_ohne_zwischenablage_sagt_wo_der_text_liegt(welt, monkeypatch, tmp_path):
     c = welt()
     monkeypatch.setattr(chat_bedienung, "zwischenablage", lambda: None)
-    monkeypatch.setattr(chat_bedienung.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setenv("ZENTRALE_KOPIE_DIR", str(tmp_path))
     c.ziel_ausloesen(("kopieren", 4))
-    assert (tmp_path / "zentrale-kopie.txt").read_text() == "Mit Flickzeug."
+    datei = tmp_path / "kopie.txt"
+    assert datei.read_text() == "Mit Flickzeug."
+    assert (datei.stat().st_mode & 0o777) == 0o600     # nicht für andere lesbar
     assert "keine zwischenablage" in c.AI["msg"]
 
 

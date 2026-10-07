@@ -350,7 +350,7 @@ Inneres (Skizze: `chat_layout.py`).
   Enter/Klick eins), unter jeder Antwort „copy", unter der letzten auch
   „retry". **👍/👎 bewusst nicht**: das Backend kennt keine Bewertung, ein
   Knopf ohne Wirkung wäre gelogen. Kopieren: wl-copy/xclip/xsel, sonst liegt
-  der Text in `/tmp/zentrale-kopie.txt` und die Statuszeile sagt es.
+  der Text in `~/.cache/zentrale/kopie.txt` (nur für Sasha lesbar) und die Statuszeile sagt es.
 - **Eingabekasten**: Rahmen (Fokus = Akzentfarbe), Platzhalter „Reply",
   Anhänge als `[▤ name]` darüber, darunter „+ attach" und rechts Modell ·
   Effort (Klick oder Strg+P / Strg+T öffnet die vorhandene Auswahl).

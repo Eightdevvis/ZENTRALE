@@ -14,7 +14,6 @@ import curses
 import os
 import shutil
 import subprocess
-import tempfile
 
 from . import maus
 from .chat_ablage import TRENNER
@@ -136,10 +135,18 @@ class ChatBedienung:
                 return
             except (OSError, subprocess.SubprocessError):
                 pass
-        pfad = os.path.join(tempfile.gettempdir(), "zentrale-kopie.txt")
+        # Nicht nach /tmp: dort könnte jeder Nutzer des Rechners mitlesen, und
+        # kopiert werden auch private Antworten. Eigener Cache-Ordner, Datei
+        # nur für Sasha lesbar (2026-10-08).
+        ordner = os.environ.get("ZENTRALE_KOPIE_DIR") or \
+            os.path.join(os.path.expanduser("~"), ".cache", "zentrale")
+        pfad = os.path.join(ordner, "kopie.txt")
         try:
-            with open(pfad, "w", encoding="utf-8") as f:
+            os.makedirs(ordner, exist_ok=True)
+            fd = os.open(pfad, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(text)
+            os.chmod(pfad, 0o600)
         except OSError:
             AI["msg"] = "kopieren geht hier nicht — keine zwischenablage (xclip fehlt)"
             return
