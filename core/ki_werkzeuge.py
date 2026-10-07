@@ -238,7 +238,10 @@ def _read_time(args: dict) -> str:
 @ausfuehrer("add_calendar_routine")
 def _add_calendar_routine(args: dict) -> str:
     ok = kalender.add_routine(
-        layer     = args.get("layer", "routinen"),
+        # Seit 07.10.2026 EIN Kalender (Sasha: „ich brauche einen einheitlichen"):
+        # Routinen stehen mit in „termine"; ein altes „routinen" wird umgeleitet.
+        layer     = ("termine" if args.get("layer") in (None, "", "routinen")
+                     else args.get("layer")),
         label     = args.get("label", ""),
         rrule_str = args.get("rrule", ""),
         time      = args.get("time"),

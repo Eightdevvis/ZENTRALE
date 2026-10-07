@@ -225,7 +225,7 @@ def api_calendar_routine_skip():
     gleichnamigen Routinen die richtige ein. Antwort {changed:bool}.
     """
     body = request.get_json(silent=True) or {}
-    layer = (body.get('layer') or 'routinen').strip() or 'routinen'
+    layer = (body.get('layer') or 'termine').strip() or 'termine'
     label = (body.get('label') or '').strip()
     day = (body.get('day') or '').strip()
     if not label or not day:
@@ -247,7 +247,7 @@ def api_calendar_add_routine():
     Wochentage als MO..SU (Liste ODER kommagetrennt). Daraus bauen wir
     `FREQ=WEEKLY;BYDAY=…`; krummere Wiederholungen (monatlich/jährlich) bleiben
     dem KI-Tool vorbehalten. NICHT KI-gegatet (direkte Nutzeraktion).
-    Antwort {ok:true} bzw. 400. Default-Layer `routinen`.
+    Antwort {ok:true} bzw. 400. Default-Layer `termine` (ein Kalender, seit 07.10.2026).
     """
     body = request.get_json(silent=True) or {}
     label = (body.get('label') or '').strip()
@@ -256,7 +256,7 @@ def api_calendar_add_routine():
     if body.get('freq'):
         # calcurse „r": Typ (t/w/m/j), alle wie viele, Ende, ab dem gewählten Tag.
         ok = kalender_bearbeiten.routine_neu(
-            (body.get('layer') or 'routinen'), label, body.get('seit') or '',
+            (body.get('layer') or 'termine'), label, body.get('seit') or '',
             body.get('freq'), body.get('intervall') or 1, body.get('bis') or None,
             body.get('wochentage') or None, body.get('time') or None,
             body.get('ende') or None, body.get('ort') or None)
@@ -272,7 +272,7 @@ def api_calendar_add_routine():
         return jsonify({"error": "byday (MO..SU) nötig"}), 400
     rrule = "FREQ=WEEKLY;BYDAY=" + ",".join(days)
     time = (body.get('time') or '').strip() or None
-    layer = (body.get('layer') or 'routinen').strip() or 'routinen'
+    layer = (body.get('layer') or 'termine').strip() or 'termine'
     extras = {}
     for k in ('ende', 'ort'):
         v = (body.get(k) or '').strip()
@@ -295,7 +295,7 @@ def api_calendar_delete_routine():
     Antwort {deleted:n}.
     """
     body = request.get_json(silent=True) or {}
-    layer = (body.get('layer') or 'routinen').strip() or 'routinen'
+    layer = (body.get('layer') or 'termine').strip() or 'termine'
     label = (body.get('label') or '').strip()
     if not label:
         return jsonify({"error": "label nötig"}), 400
@@ -319,7 +319,7 @@ def api_calendar_edit_routine():
     wochentage}}}. day/time bestimmen, WELCHE Routine gemeint ist."""
     b = request.get_json(silent=True) or {}
     return _antwort(kalender_bearbeiten.routine_bearbeiten(
-        b.get('layer') or 'routinen', b.get('label') or '', b.get('day') or '',
+        b.get('layer') or 'termine', b.get('label') or '', b.get('day') or '',
         b.get('time') or None, b.get('new') or {}), "routine nicht gefunden/abgelehnt")
 
 
@@ -329,7 +329,7 @@ def api_calendar_routine_abweichung():
     new:{tag?, time?, ende?, label?, ort?}}."""
     b = request.get_json(silent=True) or {}
     return _antwort(kalender_bearbeiten.routine_abweichung(
-        b.get('layer') or 'routinen', b.get('label') or '', b.get('day') or '',
+        b.get('layer') or 'termine', b.get('label') or '', b.get('day') or '',
         b.get('time') or None, b.get('new') or {}), "vorkommen nicht gefunden/abgelehnt")
 
 

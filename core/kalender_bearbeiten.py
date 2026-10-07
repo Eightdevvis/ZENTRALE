@@ -93,7 +93,7 @@ def routine_neu(layer: str, label: str, seit: str, freq: str, intervall: int = 1
         extras["ende"] = _hhmm(ende)
     if ort:
         extras["ort"] = ort.strip()
-    return kalender.add_routine(layer or "routinen", label.strip(), regel,
+    return kalender.add_routine(layer or "termine", label.strip(), regel,
                                 time=_hhmm(time) if time else None, **extras)
 
 
@@ -146,7 +146,7 @@ def routine_bearbeiten(layer: str, label: str, day: str, time: str | None,
     d = _iso(day)
     with kalender._lock:
         data = kalender._load_raw()
-        lobj = data.get("layers", {}).get(layer or "routinen")
+        lobj = data.get("layers", {}).get(layer or "termine")
         if not lobj:
             return False
         r = _routine_ziel(lobj, label, d, _hhmm(time) if time else None)
@@ -196,7 +196,7 @@ def routine_abweichung(layer: str, label: str, day: str, time: str | None,
         return False
     with kalender._lock:
         data = kalender._load_raw()
-        lobj = data.get("layers", {}).get(layer or "routinen")
+        lobj = data.get("layers", {}).get(layer or "termine")
         if not lobj:
             return False
         r = _routine_ziel(lobj, label, d, _hhmm(time) if time else None)
