@@ -12,10 +12,17 @@ Warum nicht vdirsyncer direkt (memory/werkzeuge/kalender_ics_bauplan.md):
   3. Danach zählen: sind auf einen Schlag viele Termine verschwunden, laut
      melden (rückgängig machen kann man es dann aus Snapshot/git/Verlauf).
 
+  4. (07.10.2026, Sasha: „bitte bitte lösch nix aus google calendar aus
+     versehen") Vorher eine Nur-Lese-Kopie von Google holen (Paar
+     google_probe) und einmal am Tag als Archiv ablegen. Und: fehlen lokal
+     seit dem letzten Sync mehr Termine als die Löschsperre erlaubt, wird
+     NICHT gesynct — sonst trüge vdirsyncer die Lücke als Löschung zu Google.
+     Gewollt? Dann einmal mit ZENTRALE_KALENDER_SYNC_LOESCHEN_OK=1.
 Alle Argumente werden an `vdirsyncer sync` durchgereicht (z. B. ein Paar).
 Exit-Code = der von vdirsyncer (1, wenn ZENTRALE nicht auf ics steht).
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -46,6 +53,53 @@ def _spiegeln(grund: str) -> None:
                               ziel, grund, warten=True)
 
 
+STAND = os.path.expanduser("~/.local/share/vdirsyncer/zentrale_stand.json")
+SICHERUNG = os.path.expanduser("~/.local/share/zentrale/google-sicherung")
+KOPIE = os.path.expanduser("~/.local/share/vdirsyncer/google_kopie")
+
+
+def _namen(vdir) -> set:
+    return {str(p.relative_to(vdir)) for p in vdir.rglob("*.ics")} if vdir.exists() else set()
+
+
+def _fehlende(vdir) -> list:
+    """Termine, die seit dem letzten erfolgreichen Sync lokal verschwunden sind."""
+    try:
+        with open(STAND, encoding="utf-8") as f:
+            alt = set(json.load(f).get("dateien") or [])
+    except (OSError, ValueError):
+        return []                      # erster Lauf: nichts kann fehlen
+    return sorted(alt - _namen(vdir))
+
+
+def _stand_merken(vdir) -> None:
+    os.makedirs(os.path.dirname(STAND), exist_ok=True)
+    tmp = STAND + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"dateien": sorted(_namen(vdir))}, f)
+    os.replace(tmp, STAND)
+
+
+def _google_sichern(exe) -> bool:
+    """Nur-Lese-Kopie von Google holen; einmal am Tag als Archiv (14 Tage)."""
+    import datetime
+    import tarfile
+    r = subprocess.run([exe, "sync", "google_probe"])
+    if r.returncode != 0:
+        return False
+    os.makedirs(SICHERUNG, exist_ok=True)
+    heute = datetime.date.today().isoformat()
+    if not any(n.startswith("google_" + heute) for n in os.listdir(SICHERUNG)):
+        ziel = os.path.join(SICHERUNG, "google_%s.tar.gz" % heute)
+        with tarfile.open(ziel, "w:gz") as t:
+            t.add(KOPIE, arcname="google_kopie")
+        os.chmod(ziel, 0o600)
+        alle = sorted(n for n in os.listdir(SICHERUNG) if n.startswith("google_"))
+        for alt in alle[:-14]:
+            os.remove(os.path.join(SICHERUNG, alt))
+    return True
+
+
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if kalender_speicher.modus() != "ics":
@@ -66,7 +120,23 @@ def main(argv=None) -> int:
     _spiegeln("vor vdirsyncer")
     vorher = _anzahl(sp.vdir)
 
+    fehlen = _fehlende(sp.vdir)
+    if len(fehlen) > sp.loeschsperre and os.environ.get("ZENTRALE_KALENDER_SYNC_LOESCHEN_OK") != "1":
+        print(f"ABBRUCH: {len(fehlen)} Termine fehlen lokal seit dem letzten Sync "
+              f"(Sperre {sp.loeschsperre}). Ohne Prüfung würden sie bei Google "
+              f"gelöscht. Stand davor: heutiger Snapshot / git-Spiegel. Gewollt? "
+              f"Einmal mit ZENTRALE_KALENDER_SYNC_LOESCHEN_OK=1.")
+        for n in fehlen[:10]:
+            print("   fehlt:", n)
+        return 2
+    if not _google_sichern(exe):
+        print("ABBRUCH: die Sicherungskopie von Google ließ sich nicht holen — "
+              "ohne frische Sicherung wird nicht gesynct.")
+        return 3
+
     code = subprocess.run([exe, "sync", *argv]).returncode
+    if code == 0:
+        _stand_merken(sp.vdir)
 
     kalender_ics.cache_leeren()
     nachher = _anzahl(sp.vdir)
