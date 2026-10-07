@@ -20,11 +20,15 @@
 # pro Turn geschrieben wird.
 #
 # ── Was das ausdrücklich NICHT ist ──────────────────────────────────────
-# Kein zweiter Suchindex. Hier wird nie gesucht, nie embedded, nie etwas in
-# den Prompt geladen. Die Datei ist ein Archiv, auf das der Graph zeigt —
-# nachschlagen kann man sie, wenn man wissen will, woher ein Knoten kommt.
-# Würde sie durchsucht, hätten wir zwei konkurrierende Gedächtnisse mit
-# unterschiedlichen Antworten; genau das soll der Graph verhindern.
+# Kein zweiter Suchindex: nie embedded, nie etwas in den Prompt geladen.
+# Die Datei ist ein Archiv, auf das der Graph zeigt — nachschlagen kann man
+# sie, wenn man wissen will, woher ein Knoten kommt.
+#
+# Seit 2026-10-07 (Claude-Web-Plan Phase 3) LIEST das Werkzeug search_chats
+# sie mit (core/chat_suche.py, über alle()): sie ist der Verlauf von vor den
+# Gesprächen (core/gespraeche.py). Das ist kein konkurrierendes Gedächtnis —
+# die Suche liefert wörtlich, was gesagt wurde, mit Datum, und behauptet
+# nichts darüber hinaus. Geschrieben wird hier weiter nur angehängt.
 #
 # ── Trennung der Graphen ────────────────────────────────────────────────
 # Der Cloud-Graph bekommt eigene Dateien (`cloud-YYYY-MM.jsonl`). Beide
@@ -123,3 +127,33 @@ def lesen(tid: str, store: str | None = None) -> dict | None:
     except Exception:
         return None
     return None
+
+
+def alle():
+    """Jede lesbare Zeile aller Transkript-Dateien (lokal und Cloud), in
+    Datei- und Zeilenfolge: [(store, zeile)], store "" oder "cloud".
+
+    Nur lesen, für search_chats (core/chat_suche.py). Kaputte Zeilen und
+    unlesbare Dateien werden übersprungen — die Suche soll an einer halben
+    Zeile nach einem Absturz nicht scheitern."""
+    try:
+        namen = sorted(os.listdir(_DIR))
+    except OSError:
+        return []
+    raus = []
+    for name in namen:
+        if not name.endswith(".jsonl"):
+            continue
+        store = "cloud" if name.startswith("cloud-") else ""
+        try:
+            with open(os.path.join(_DIR, name), encoding="utf-8") as f:
+                for zeile in f:
+                    try:
+                        e = json.loads(zeile)
+                    except ValueError:
+                        continue
+                    if isinstance(e, dict):
+                        raus.append((store, e))
+        except OSError:
+            continue
+    return raus

@@ -122,6 +122,17 @@ SZ = {
                       ("k", "Enter"), ("w", 1), ("cap", "i"), ("k", "Escape"), ("l", "/liste"),
                       ("k", "Enter"), ("w", 1), ("k", "Down"), ("k", "Enter"), ("w", 1),
                       ("cap", "j")],
+    # Gedächtnis (Phase 3, 2026-10-07): Abschnitte durchblättern, Skill
+    # umschalten, Kernakte im „Editor" (ein Skript, das eine Zeile anhängt),
+    # /skills springt zu den Skills.
+    "ki_gedaechtnis": [("k", "Space"), ("w", 2), ("l", "/gedaechtnis"), ("k", "Enter"),
+                       ("w", 1), ("cap", "a"), ("k", "Right"), ("cap", "b"), ("k", "Down"),
+                       ("k", "Down"), ("cap", "c"), ("k", "Right"), ("cap", "d"),
+                       ("k", "Right"), ("k", "Right"), ("cap", "e"), ("k", "Down"),
+                       ("k", "Enter"), ("w", 1), ("cap", "f"), ("k", "Left"), ("k", "Left"),
+                       ("k", "Left"), ("k", "Left"), ("l", "e"), ("w", 2), ("cap", "g"),
+                       ("k", "Escape"), ("cap", "h"), ("l", "/skills"), ("k", "Enter"),
+                       ("w", 1), ("cap", "i"), ("k", "Escape")],
     "tech_system": [("k", "M-Right"), ("k", "Enter"), ("cap", "a"), ("k", "/"), ("cap", "b")],
     "tech_stdout": [("k", "M-Right"), ("k", "Right"), ("k", "Enter"), ("cap", "a")],
     "tech_netz": [("k", "M-Right"), ("k", "Right"), ("k", "Right"), ("k", "Enter"), ("cap", "a")],
@@ -179,7 +190,12 @@ def lauf(code, aus, namen, breite=150, hoehe=46):
             "ZENTRALE_MAP_WINDOW_LOG": os.path.join(st, "map.log"),
             "ZENTRALE_ROOM_WINDOW_LOG": os.path.join(st, "room.log"),
             "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "TZ": "Europe/Berlin",
+            # Gedächtnis-Ansicht: „Editor", der nur eine Zeile anhängt.
+            "VISUAL": os.path.join(st, "editor.sh"),
         }
+        with open(os.path.join(st, "editor.sh"), "w") as f:
+            f.write('#!/bin/sh\necho "- neue zeile aus dem editor" >> "$1"\n')
+        os.chmod(os.path.join(st, "editor.sh"), 0o755)
         with open(skript, "w") as f:
             f.write("#!/bin/sh\n")
             f.write("unset DISPLAY WAYLAND_DISPLAY ZENTRALE_TUI_SUPERVISED TMUX ZENTRALE_TUI_RELOADED ZENTRALE_TUI_RAD ZENTRALE_TUI_META ZENTRALE_ROOM_PARENT\n")

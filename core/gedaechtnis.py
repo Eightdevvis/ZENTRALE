@@ -91,9 +91,13 @@
 # per Werkzeug. Der alte Graph-Block ging bei JEDEM Turn ungecacht raus
 # und kostete damit dauerhaft, während er Rauschen lieferte.
 
+import hashlib
 import os
 import re
 from datetime import date, datetime
+
+import datasync
+import dateien
 
 # ZENTRALE_GEDAECHTNIS_DIR ist eine reine TEST-Umlenkung (tests/conftest.py),
 # damit kein Testlauf in Sashas echtes Gedächtnis greift.
@@ -226,6 +230,47 @@ def schreibt_kernakte(name) -> str | None:
     if bereich == "" and schluessel in _KERNAKTEN:
         return _KERNAKTEN[schluessel]
     return None
+
+
+# ── Kernakten für Sasha: ansehen und von Hand ändern ──────────────────
+#
+# 2026-10-07, Phase 3 des Claude-Web-Plans: das Gedächtnis wird in der TUI
+# sichtbar (tui/ansichten/gedaechtnis.py über /api/gedaechtnis). Sasha soll
+# seine Kernakten nicht im Dateisystem suchen müssen. Die Namen hier sind
+# die, die er sieht; die Datei des Steckbriefs heißt aus alter Zeit sasha.md.
+
+KERNAKTEN = {"hausregeln": HAUSREGELN, "steckbrief": STECKBRIEF, "ziele": ZIELE}
+MAX_KERNAKTE = MAX_DOSSIER   # Steht ganz im gecachten Kopf — nur gegen Versehen.
+
+
+def kernakte_lesen(akte: str) -> str:
+    """Der ganze Text einer Kernakte (mit Titelzeile), leer wenn es sie
+    nicht gibt. Wirft KeyError bei einem anderen Namen als den dreien."""
+    return _lesen(_pfad("", KERNAKTEN[akte]))
+
+
+def kernakte_stand(text: str) -> str:
+    """Kurzer Fingerabdruck einer Fassung. Die TUI schickt ihn beim
+    Speichern mit: hat die KI die Akte inzwischen geändert (write_note),
+    würde Sashas Speichern das sonst stillschweigend überschreiben."""
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()[:16]
+
+
+def kernakte_schreiben(akte: str, text: str) -> str:
+    """Eine Kernakte ganz ersetzen (Sasha von Hand). Atomar; die alte
+    Fassung liegt danach als .bak daneben (wie dossier_ersetzen).
+    → der neue Stand. Wirft KeyError (unbekannte Akte), ValueError (zu lang)."""
+    pfad = _pfad("", KERNAKTEN[akte])
+    text = (text or "").replace("\r\n", "\n")
+    if len(text) > MAX_KERNAKTE:
+        raise ValueError(f"zu lang ({len(text)} Zeichen, höchstens {MAX_KERNAKTE})")
+    alt = _lesen(pfad)
+    if alt:
+        dateien.atomar_schreiben(pfad + ".bak", alt)
+    neu = text.rstrip() + "\n" if text.strip() else ""
+    dateien.atomar_schreiben(pfad, neu)
+    datasync.notify_change(pfad)
+    return kernakte_stand(neu)
 
 
 def regel_notieren(text: str) -> str:

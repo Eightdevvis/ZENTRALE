@@ -494,3 +494,33 @@ def test_skill_ordner_liegt_im_test_nicht_im_echten_data():
     haupt = ROOT.split(os.sep + ".claude" + os.sep + "worktrees" + os.sep)[0]
     for echt in (os.path.join(ROOT, "data"), os.path.join(haupt, "data")):
         assert not pfad.startswith(os.path.realpath(echt)), pfad
+
+
+def test_gedaechtnis_routen_und_suche_lassen_das_echte_data_in_ruhe():
+    """Phase 3 (2026-10-07): PUT /api/gedaechtnis schreibt Sashas Kernakten —
+    im Test nur in den Wegwerf-Ordner. Und search_chats liest Gespräche und
+    Transkript nur aus der Umlenkung. Geprüft gegen data/ dieses Checkouts
+    UND des Haupt-Checkouts: dort ändert sich keine Kernakten-Datei."""
+    import chat_suche
+    import gedaechtnis
+    from ui.app import app
+    haupt = ROOT.split(os.sep + ".claude" + os.sep + "worktrees" + os.sep)[0]
+
+    def stand():
+        raus = {}
+        for basis in (ROOT, haupt):
+            for name in ("hausregeln", "sasha", "ziele"):
+                for endung in (".md", ".md.bak"):
+                    p = os.path.join(basis, "data", "gedaechtnis", name + endung)
+                    raus[p] = os.stat(p).st_mtime_ns if os.path.exists(p) else None
+        return raus
+
+    vorher = stand()
+    app.config.update(TESTING=True)
+    c = app.test_client()
+    assert c.put("/api/gedaechtnis/ziele", json={"text": "- Probe"}).status_code == 200
+    c.get("/api/gedaechtnis")
+    chat_suche.suchen_text("probe")
+    assert stand() == vorher
+    for echt in (os.path.join(ROOT, "data"), os.path.join(haupt, "data")):
+        assert not os.path.realpath(gedaechtnis._DIR).startswith(os.path.realpath(echt))

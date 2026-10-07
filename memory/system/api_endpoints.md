@@ -234,11 +234,18 @@ Datenmodell + Bedienung: `memory/werkzeuge/notizen_system.md`.
 > `/api/memory` + `/api/memory/<id>` (Legacy-LTM) sind entfallen – Memory
 > läuft jetzt über den Konzept-Graphen (siehe `memory/ki/ki_system.md`).
 
-## Skills der KI (`ui/routen/skills.py`, seit 2026-10-07)
+## Skills und Gedächtnis (`ui/routen/skills.py`, seit 2026-10-07)
+
+Für Sashas Gedächtnis-Ansicht in der TUI (`/gedaechtnis`, `/skills`). Geschrieben
+wird hier nur, was Sasha selbst tut; die KI schreibt über ihre Werkzeuge.
+Doku: `memory/ki/gedaechtnis_dateien.md` → „Für Sasha sichtbar und änderbar".
 
 | Endpoint      | Methode | Beschreibung |
 |---------------|---------|--------------|
-| `/api/skills` | GET     | Alle Skills (`core/skills.py`), nach Name: `{skills: [{name, beschreibung, status, herkunft, erstellt}]}` — auch ausgeschaltete und vorgeschlagene. Nur lesen; angelegt/geändert wird über die gegateten Werkzeuge oder in der Datei. Siehe `memory/ki/ki_system.md` → Skills. |
+| `/api/skills` | GET     | Alle Skills (`core/skills.py`), nach Name: `{skills: [{name, beschreibung, status, herkunft, erstellt}]}` — auch ausgeschaltete und vorgeschlagene. Siehe `memory/ki/ki_system.md` → Skills. |
+| `/api/skills/<name>/status` | POST | Skill schalten, Body `{status: aktiv\|aus\|vorgeschlagen}` → `{skill}`. Nur der Kopf ändert sich, alte Fassung als `.bak`. Unbekannter Skill (nur der genaue Dateiname) → 404, anderer Status → 400. |
+| `/api/gedaechtnis` | GET | `{kernakten: [{akte, text, stand}], bereiche: [{bereich, titel: [...]}], skills: [...]}` — Kernakten in der Reihenfolge `hausregeln`, `steckbrief`, `ziele` (ganzer Text, `stand` = Fingerabdruck), Bereiche nur mit Titeln. |
+| `/api/gedaechtnis/<akte>` | PUT | Eine Kernakte ersetzen, Body `{text, stand?}` → `{akte, text, stand}`. Nur `hausregeln`, `steckbrief`, `ziele` (sonst 404). Atomar, alte Fassung als `.bak`. `stand` weicht ab (die KI hat inzwischen geschrieben) → 409; kein Text → 400; über 20.000 Zeichen → 400. |
 
 ## Fotos (ASCII-Bild-Filter)
 

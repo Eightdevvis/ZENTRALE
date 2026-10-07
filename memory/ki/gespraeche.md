@@ -110,3 +110,39 @@ wie bisher.
 
 Siehe [../system/tui_bauplan.md](../system/tui_bauplan.md), Abschnitt
 „Chat: Gespräche".
+
+## Suche quer durch die Gespräche (seit 2026-10-07)
+
+Phase 3 des Plans. Sasha: „mein kopf kann sich thematisch viel besser
+orientieren als datiert. solang der assistant eh einfach crossgespräche
+suchen kann wie claude web." Die KI sucht mit `search_chats(query)` und liest
+mit `read_chat(id, query?, anzahl?)` nach ([ki_system.md](ki_system.md),
+„Frühere Gespräche"). Code: `core/chat_suche.py` (Schicht 2).
+
+- **Was:** alle Gespräche aus `gespraeche.liste()` und
+  `liste(archivierte=True)` (also auch „Erinnerungen") und das alte
+  Transkript (`transkript.alle()`, `data/ai_transcripts/`, lokal + Cloud),
+  dort **ein Treffer pro Tag** (id `transkript:JJJJ-MM-TT`, Titel „Früherer
+  Chat vom …"). Testmüll im Transkript (von vor dem Riegel in
+  `tests/conftest.py`) bleibt drin — er ist nicht sicher erkennbar.
+- **Was nicht:** Denken, Werkzeug-Listen, versteckte Aufträge (Gespräche:
+  Flag `versteckt`; Transkript: Nutzertext, der mit „Erinnere Sasha" oder dem
+  Auftrags-Vorsatz beginnt). Ein Transkript-Zug, dessen KI-Antwort es als
+  Gesprächs-Nachricht gibt, fällt raus (die Konsolidierung schreibt jeden
+  Zug weiter ins Transkript). Vom **aktiven** Gespräch fehlen die letzten
+  `FENSTER` Nachrichten — die hat die KI schon im Verlauf; Älteres daraus
+  wird gefunden. „Aktiv" = `gespraeche.aktiv()`, das die Chat-Route vor
+  jedem Zug setzt.
+- **Wie:** Wörter normalisiert (klein, ä→ae, ö→oe, ü→ue, ß→ss, Akzente weg,
+  Satzzeichen weg), Füllwörter (der, das, mit, letztens …) und Einzelzeichen
+  fallen weg; **alle** übrigen Wörter müssen als Teilwort in der Einheit
+  (Gespräch / Tag) stehen — verteilt über mehrere Nachrichten ist erlaubt.
+- **Rang:** Stellen / √(Wörter + 20) × (0,4 + 0,6 · ½^(Alter/60 Tage)); das
+  Alter zählt ab der besten Nachricht (die mit den meisten verschiedenen
+  Suchwörtern). Höchstens 8 Treffer, je ein Ausschnitt um die erste
+  Fundstelle.
+
+Kein Index, keine Vektoren: es sind ein paar hundert Nachrichten, das Lesen
+nutzt den Cache von `gespraeche.nachrichten`, und ein Wortfund ist für Sasha
+nachprüfbar, ein Ähnlichkeitswert nicht. Wird es zu langsam (tausende
+Gespräche), ist ein Index pro Rechner der nächste Schritt.

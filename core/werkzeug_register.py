@@ -1099,6 +1099,46 @@ WERKZEUGE = [
             "required": ["name", "inhalt"],
         },
     ),
+    # ── Frühere Gespräche ──
+    # Phase 3 (2026-10-07): Sasha orientiert sich nach Thema, nicht nach
+    # Datum — die Suche quer durch die Gespräche ist dafür die Bedingung
+    # (core/chat_suche.py). Nur lesen, deshalb frei. Zwei Werkzeuge statt
+    # eines mit Modus: jedes hat ein kleines, eindeutiges Schema.
+    Werkzeug(
+        name="search_chats",
+        klein=None,
+        gross=(
+            "Sucht in allen frueheren Gespraechen mit Sasha (auch "
+            "archivierten und dem alten Verlauf): was er oder du gesagt "
+            "habt. Alle Woerter muessen vorkommen; nimm seine Begriffe. "
+            "Treffer: Titel, id, Datum, Ausschnitt. Notizen: search_memory."
+        ),
+        parameter={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Suchwoerter."},
+            },
+            "required": ["query"],
+        },
+    ),
+    Werkzeug(
+        name="read_chat",
+        klein=None,
+        gross=(
+            "Liest ein frueheres Gespraech nach (id aus search_chats): die "
+            "letzten Nachrichten, mit query die um die Fundstelle."
+        ),
+        parameter={
+            "type": "object",
+            "properties": {
+                "id":     {"type": "string", "description": "Gespraechs-id."},
+                "query":  {"type": "string", "description": "Optional: Suchwoerter."},
+                "anzahl": {"type": "integer",
+                           "description": "Nachrichten, Standard 20, max 40."},
+            },
+            "required": ["id"],
+        },
+    ),
     # Hinweis: ASCII-Bilder laufen NICHT über ein Werkzeug. Messung
     # (scripts/bench_ascii.py, Baseline N=200) zeigte: als Tool feuerte die KI
     # bei impliziten Prompts nur ~3 % - und tippte den Aufruf oft als Text-

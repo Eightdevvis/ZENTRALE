@@ -32,7 +32,8 @@
 #
 #   <Anleitung>
 #
-# Sasha schaltet einen Skill ab, indem er `status: aus` setzt. Gelöscht wird
+# Sasha schaltet einen Skill in der TUI an/aus (Gedächtnis-Ansicht,
+# status_setzen; seit 2026-10-07), notfalls `status: aus` in der Datei. Gelöscht wird
 # nie (der Sync ist additiv, eine gelöschte Datei käme vom anderen Rechner
 # zurück).
 #
@@ -42,6 +43,7 @@ import os
 import shutil
 from datetime import date, datetime
 
+import datasync
 import dateien
 import gedaechtnis
 
@@ -266,4 +268,36 @@ def anfang(text: str, zeilen: int = 3, max_zeichen: int = 240) -> str:
     if len(teile) > zeilen:
         kurz += f" (+{len(teile) - zeilen} Zeilen)"
     return kurz
+
+
+# ── Schalten (nur Sasha, über die TUI) ────────────────────────────────
+
+def status_setzen(name: str, status: str) -> dict:
+    """Einen Skill an- oder ausschalten (oder auf „vorgeschlagen" setzen).
+
+    2026-10-07, Phase 3: Sasha soll dafür nicht in die Datei müssen — die
+    TUI schaltet über POST /api/skills/<name>/status. Nur der Kopf ändert
+    sich, die Anleitung bleibt; die alte Fassung liegt als .bak daneben.
+    Kein Werkzeug der KI ruft das: was Sasha abschaltet, bleibt aus.
+    → der Skill wie in alle(). Wirft KeyError (unbekannt), ValueError
+    (unbekannter Status)."""
+    status = (status or "").strip().lower()
+    if status not in STATUS:
+        raise ValueError(f"unbekannter Status {status!r} (erlaubt: {', '.join(STATUS)})")
+    schluessel = gedaechtnis.slug(name)
+    # Nur der genaue Dateiname: eine Route soll keinen Skill über eine
+    # Schreibvariante („Wochen Plan") treffen, den Sasha so nie sah.
+    if not schluessel or schluessel != name or not os.path.exists(_pfad(schluessel)):
+        raise KeyError(name)
+    pfad = _pfad(schluessel)
+    with open(pfad, encoding="utf-8") as f:
+        alt = f.read()
+    kopf, inhalt = _zerlegen(alt)
+    kopf = dict(kopf or {})
+    if (kopf.get("status") or "").strip().lower() != status:
+        kopf["status"] = status
+        dateien.atomar_schreiben(pfad + ".bak", alt)
+        dateien.atomar_schreiben(pfad, _rendern(schluessel, kopf, inhalt))
+        datasync.notify_change(pfad)
+    return next(s for s in alle() if s["name"] == schluessel)
 

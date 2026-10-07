@@ -353,6 +353,36 @@ Ordner (auch leer), passiert nichts mehr. Die kopierten Dateien bekommen als
 zum ersten Mal startet, gegen eine Änderung, die Sasha auf dem anderen schon
 gemacht hat.
 
+## Für Sasha sichtbar und änderbar (seit 2026-10-07)
+
+Phase 3 des [Claude-Web-Plans](claude_web_plan.md). Vorher lag das
+Gedächtnis nur als Dateien da — Sasha hätte seine Hausregeln im Dateisystem
+suchen müssen. Jetzt im TUI-Chat `/gedaechtnis` (oder `/skills`): eine
+Überlagerung mit fünf Abschnitten — Hausregeln, Steckbrief, Ziele (ganzer
+Text), Bereiche (nur Titel), Skills (Name, an/aus/vorgeschlagen, von dir /
+von der ki). Tasten und Aufbau: [../system/tui_bauplan.md](../system/tui_bauplan.md),
+„Chat: Gedächtnis".
+
+- **Kernakte ändern:** `e` (oder Enter) öffnet sie im Editor (`$VISUAL`,
+  `$EDITOR`, sonst nano, sonst vi). Nach dem Speichern geht der Text über
+  `PUT /api/gedaechtnis/<akte>` zurück (`hausregeln`, `steckbrief`, `ziele`
+  — sonst 404). `gedaechtnis.kernakte_schreiben` schreibt atomar
+  (`dateien.atomar_schreiben`), legt die alte Fassung als `.bak` daneben (wie
+  `rewrite_note`) und stößt den Sync an. Mit geschickt wird der `stand`
+  (Fingerabdruck) vom Öffnen: hat die KI die Akte inzwischen per
+  `write_note` ergänzt, antwortet das Backend 409, statt ihre Zeile
+  stillschweigend zu überschreiben; Sashas Text bleibt dann in der
+  Zwischendatei liegen, die Meldung nennt den Pfad. Obergrenze 20.000
+  Zeichen (`MAX_KERNAKTE`, nur gegen Versehen — die Akte steht ganz im
+  gecachten Kopf).
+- **Skill an/aus:** Enter oder Leertaste; `skills.status_setzen` ändert nur
+  den Kopf (`.bak` daneben), über `POST /api/skills/<name>/status`. Ein
+  `vorgeschlagen`er Skill wird damit freigegeben. Die KI hat dafür kein
+  Werkzeug: was Sasha abschaltet, bleibt aus.
+
+Die TUI kann auf dem Laptop gegen das PC-Backend laufen; deshalb geht der
+Text über HTTP und die Zwischendatei liegt auf dem Rechner der TUI.
+
 ## Grenzen, die absichtlich drin sind
 
 - **Anhängen statt Ersetzen.** Ein Modell, das eine Datei neu schreibt, löscht

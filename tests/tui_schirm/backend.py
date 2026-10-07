@@ -69,6 +69,32 @@ _VERLAUF = [
      "werkzeuge": [{"name": "read_note", "args": "name=fahrrad"}]}]
 
 
+# Erfundenes Gedächtnis (Claude-Web-Plan Phase 3, 2026-10-07): die echten
+# Kernakten sind persönlich und gehen nie in den Cache.
+_GEDAECHTNIS = {
+    "kernakten": [
+        {"akte": "hausregeln", "stand": "a1", "text": "# Hausregeln\n\n- Nicht duzen "
+         "lassen, sondern selbst duzen.  _(seit 01.10.2026)_\n- Kurz antworten, "
+         "ausser ich frage nach Details.  _(seit 03.10.2026)_\n"},
+        {"akte": "steckbrief", "stand": "b2", "text": "# Sasha\n\n## Alltag\n"
+         + "Studiert, faehrt Rad, spielt Geige. " * 8 + "\n\n## Wege\n- Uni: 20 min Rad\n"},
+        {"akte": "ziele", "stand": "", "text": ""}],
+    "bereiche": [
+        {"bereich": "dossiers", "titel": ["umzug", "geige", "fahrrad-werkstatt"]},
+        {"bereich": "notizen", "titel": ["wegzeiten"]},
+        {"bereich": "kataloge", "titel": ["ideen"]},
+        {"bereich": "quellen", "titel": []},
+        {"bereich": "vorlagen", "titel": ["dossier", "katalog"]}],
+    "skills": [
+        {"name": "kurz", "beschreibung": "Wenn Sasha eine schnelle Auskunft will.",
+         "status": "aktiv", "herkunft": "sasha", "erstellt": "2026-10-07"},
+        {"name": "recherche", "beschreibung": "Wenn etwas im Netz nachgesehen und "
+         "mit Quellen belegt werden soll.", "status": "aus", "herkunft": "sasha",
+         "erstellt": "2026-10-07"},
+        {"name": "wochenplan", "beschreibung": "Wenn die Woche geplant wird.",
+         "status": "vorgeschlagen", "herkunft": "ki", "erstellt": "2026-10-07"}]}
+
+
 def _synth(path):
     """Erfundene Mail-Daten: die echten gehen nie live (Seen-Flag), aber das
     Post-Panel soll im Vergleich auch mit Mails gezeichnet werden."""
@@ -83,6 +109,8 @@ def _synth(path):
         return _GESPRAECHE
     if path.startswith("/api/gespraeche?archiv"):
         return _ARCHIV
+    if path == "/api/gedaechtnis":
+        return _GEDAECHTNIS
     if path.startswith("/api/chat/history"):
         return _VERLAUF
     if path.startswith(("/api/mail/folder?", "/api/mail/inbox?")) or path == "/api/mail/inbox":

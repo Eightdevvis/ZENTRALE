@@ -145,10 +145,12 @@ def test_der_schnitt_haelt():
     # gross-Werkzeug das Budget der Gedaechtnis-Texte.
     # 07.10.2026: die Skill-Werkzeuge (Phase 4) ebenso — eigener Deckel unten.
     skill = {"load_skill", "propose_skill", "edit_skill"}
+    # 07.10.2026: die Gesprächs-Suche (Phase 3) ebenso — eigener Deckel unten.
+    suche = {"search_chats", "read_chat"}
     eigen = {w.name for w in werkzeug_register.auf_schiene("gross")
-             if w.klein is None and w.name != "run_code"} - skill
+             if w.klein is None and w.name != "run_code"} - skill - suche
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
-                if t["function"]["name"] not in eigen | {"run_code"} | skill)
+                if t["function"]["name"] not in eigen | {"run_code"} | skill | suche)
     # 18.08.2026 von 3.000 auf 3.300: edit_calendar_routine kam dazu. Es
     # kostet ~250 Zeichen und behebt eine Luecke, die sie nicht ueberspielen
     # konnte — Routinen liessen sich nur ANLEGEN, also stand die verschobene
@@ -186,6 +188,13 @@ def test_der_schnitt_haelt():
     besch_skill = sum(len(t["function"]["description"]) for t in gross.TOOLS
                       if t["function"]["name"] in skill)
     assert 0 < besch_skill < 600
+    # Gesprächs-Suche (07.10.2026, Phase 3): zwei Werkzeuge, zusammen ~350
+    # Zeichen. Deckel 450: sie sagen nur, WAS durchsucht wird und wie die
+    # Treffer aussehen — WANN suchen, steht in Meta-Regel 7 (ein Satz). Wer
+    # hier Beispiele nachschiebt, bezahlt sie in jedem Zug.
+    besch_suche = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                      if t["function"]["name"] in suche)
+    assert 0 < besch_suche < 450
 
 
 def test_praefix_bleibt_ueber_der_cache_mindestgroesse():

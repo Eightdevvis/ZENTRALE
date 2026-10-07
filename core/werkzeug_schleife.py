@@ -37,6 +37,7 @@ import ai_backends
 import erlaubnis
 import ki_antwort
 import kidebug
+import werkzeug_register
 
 
 @dataclass
@@ -177,29 +178,15 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
     # nicht mehr raten. Seit der gemeinsamen Schleife auch lokal.
     yield {"werkzeug": {"phase": "start", "name": name, "args": args}}
 
-    # antwort-Tool ist TERMINAL: der Text IST die finale Antwort.
-    if not tutor_mode and name == "antwort":
-        text = str(args.get("text", "")).strip()
-        yield from ki_antwort.mit_bildern(text, user_query, store=store)
-        return ("stop",)
-
-    # read_news ist TERMINAL: das Briefing ist schon moderiert und wird
-    # direkt gestreamt, statt es nacherzählen zu lassen. KEIN Auto-Save:
-    # Welt-News gehören nicht ins Gedächtnis.
-    if not tutor_mode and name == "read_news":
-        yield {"cinema": True}
-        show = active_exec(name, args)
-        # Meta-Kopf ("Sendung (Stand …):") wegschneiden - der gesprochene
-        # Broadcast soll mit dem Moderationstext beginnen, nicht mit Meta.
-        if show.startswith("Sendung (Stand") and "\n\n" in show:
-            show = show.split("\n\n", 1)[1]
-        yield show
-        return ("stop",)
-
-    # ask_choice: die KI baut selbst einen Knopf-Dialog.
-    if not tutor_mode and name == "ask_choice":
-        wahl = yield from _ask_buttons(args)
-        return ("result", f"Sasha hat gewählt: {wahl}.", False)
+    # Werkzeuge, die die Schleife SELBST erledigt (antwort, ask_choice), und
+    # terminale mit Ausführer (read_news): welche das sind, sagt das Register
+    # (in_der_schleife, terminal) — seit 2026-10-07, vorher stand hier jeder
+    # Name einzeln. Fremde Tool-Sets (Tutor) kennen das Register nicht.
+    w = None if tutor_mode else werkzeug_register.eintrag(name)
+    if w is not None and w.in_der_schleife:
+        return (yield from SELBST[w.name](args, user_query=user_query, store=store))
+    if w is not None and w.terminal:
+        return (yield from _terminal_ausgeben(name, args, active_exec))
 
     # Erlaubnis-Gate: Python-seitig, NICHT modellgetrieben. Fremde Tool-Sets
     # (Tutor) gaten wir nicht.
@@ -230,6 +217,41 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
         kidebug.emit("ai.tool", name=name, args=args, fehler=str(e))
         yield {"werkzeug": {"phase": "fehler", "name": name, "text": str(e)}}
         return ("result", f"Tool '{name}' ist fehlgeschlagen: {e}", True)
+
+
+# ── Was die Schleife selbst erledigt ───────────────────────────────────
+
+def _antwort_werkzeug(args: dict, *, user_query, store=None):
+    """antwort (nur klein) ist TERMINAL: der Text IST die finale Antwort."""
+    text = str(args.get("text", "")).strip()
+    yield from ki_antwort.mit_bildern(text, user_query, store=store)
+    return ("stop",)
+
+
+def _knopf_werkzeug(args: dict, *, user_query, store=None):
+    """ask_choice: die KI baut selbst einen Knopf-Dialog."""
+    wahl = yield from _ask_buttons(args)
+    return ("result", f"Sasha hat gewählt: {wahl}.", False)
+
+
+# Ein Eintrag je Register-Werkzeug mit in_der_schleife=True. Der Test
+# (tests/test_werkzeug_register.py) hält beide Seiten deckungsgleich.
+SELBST = {"antwort": _antwort_werkzeug, "ask_choice": _knopf_werkzeug}
+
+
+def _terminal_ausgeben(name: str, args: dict, active_exec):
+    """Ein terminales Werkzeug mit Ausführer (heute nur read_news): sein
+    Ergebnis ist schon moderiert und wird direkt als Antwort gestreamt, statt
+    es nacherzählen zu lassen. KEIN Auto-Save: Welt-News gehören nicht ins
+    Gedächtnis."""
+    yield {"cinema": True}
+    show = active_exec(name, args)
+    # Meta-Kopf ("Sendung (Stand …):") wegschneiden - der gesprochene
+    # Broadcast soll mit dem Moderationstext beginnen, nicht mit Meta.
+    if show.startswith("Sendung (Stand") and "\n\n" in show:
+        show = show.split("\n\n", 1)[1]
+    yield show
+    return ("stop",)
 
 
 def _ask_buttons(args: dict):

@@ -1,7 +1,7 @@
 # Claude-Web im ZENTRALE-Assistenten — der Plan
 
 Stand 2026-10-07. **Geplant und von Sasha entschieden (Abschnitt 6).
-Phase 0, 1 und 2 sind gebaut (Abschnitte 5 und 7), der Rest noch nicht.** Sasha hat am 06.10. gesagt: erst aufräumen, dann vor dem
+Phase 0, 1, 2, 3, 4 und 7 sind gebaut (Abschnitte 5 und 7), der Rest noch nicht.** Sasha hat am 06.10. gesagt: erst aufräumen, dann vor dem
 Übertragen anhalten und gemeinsam planen. Das ist am 07.10. geschehen.
 
 Grundregel aus [../claude_hinweise.md](../claude_hinweise.md) („Das
@@ -140,7 +140,7 @@ Prompt-Bau hängt dessen Anweisungen hinter den Gedächtnis-Kopf.
 | ~~**0 Fundament**~~ | ~~TUI-Zerlegung~~ (erledigt 07.10.); ~~Werkzeug-Register~~ (erledigt 07.10., siehe unten) | Ohne ein Register wächst jedes neue Werkzeug an drei Stellen | mittel |
 | **1 Steuerung** ✔ 07.10. | Stoppen (bis in die Schleife), mehrzeilige Eingabe mit Cursor, Slash-Befehle im Chat (`/neu`, `/modell`, `/effort`), Kabel für die vorhandenen Setter (Route + TUI) | sofort spürbar, kleines Risiko, Setter liegen schon da | klein |
 | **2 Gespräche** ✔ 07.10. | `core/gespraeche.py` (Ordner pro Gespräch, Datei pro Rechner), Gesprächsliste in der TUI, neu/wechseln/umbenennen/archivieren, automatischer Titel, Wiederholen + letzte Nachricht bearbeiten, **Denken mitgespeichert und aufklappbar**, Gespräch „Erinnerungen" | das Fundament für alles Weitere; Verlauf überlebt Neustarts | mittel |
-| **3 Gedächtnis sichtbar** | Kernakten in der TUI ansehen/ändern, **`search_chats` über alle Gespräche** | Sasha orientiert sich nach Thema, nicht nach Datum — die Suche quer durch Gespräche ist dafür die Bedingung | klein |
+| **3 Gedächtnis sichtbar** ✔ 07.10. | Kernakten in der TUI ansehen/ändern, **`search_chats` über alle Gespräche** | Sasha orientiert sich nach Thema, nicht nach Datum — die Suche quer durch Gespräche ist dafür die Bedingung | klein |
 | **4 Skills** ✔ 07.10. | Skill-Dateien, Liste im Prompt, `load_skill`, erste Skills; **`propose_skill`**: die KI schlägt Skills vor, angelegt wird erst nach Bestätigung (Gate) | billig, passt zur Kostenlogik; Grundlage dafür, dass sie sich später selbst weiterentwickelt | klein |
 | **5 Ablage + Anhänge** | `ablage`-Event + Ablage-Liste in der TUI; Datei anhängen per Pfad; Bilder an die Cloud | Artefakte in Terminal-Form | mittel |
 | **6 Projekte** | Projekt-Ordner, Zuordnung Gespräch→Projekt | erst wenn 2–4 stehen | mittel |
@@ -261,10 +261,9 @@ Angenommen (Sasha war nicht erreichbar): Vorlagen unter
 `core/skill_vorlagen/` (nicht `memory/`, das ist Doku); `propose_skill`
 legt nach Ja sofort `aktiv` an (`vorgeschlagen` bleibt für später);
 `load_skill` gibt ausgeschaltete nicht heraus; Grenzen 160 Zeichen
-Beschreibung, 6.000 Inhalt. **Offen:** `/skills` im TUI-Chat — ging nicht
-ohne Änderung an `chat.py` (Phase 2 baut dort gerade), wird danach
-eingehängt; Skills ansehen/schalten in der TUI; die KI kann einen Skill
-nicht abschalten (nur Sasha in der Datei).
+Beschreibung, 6.000 Inhalt. ~~Offen: `/skills` im TUI-Chat, Skills
+ansehen/schalten in der TUI~~ — erledigt in Phase 3. Die KI kann einen Skill
+weiterhin nicht abschalten (nur Sasha, jetzt in der TUI).
 
 ### Phase 7 — Sandbox, Grundlage (2026-10-07)
 
@@ -341,3 +340,59 @@ Angenommen (Sasha war nicht erreichbar) — die Kleinentscheidungen:
 | Auftrag einer Erinnerung **gespeichert, aber versteckt** und für die KI als automatischer Auftrag gekennzeichnet | gar nicht speichern (so war es vorher; dann fehlt der KI später, worauf sie antwortete) |
 | `/api/chat/history` und die Gesprächs-Routen gehen **ohne KI-Backend** | wie vorher `[]` ohne Backend |
 | `state._chat_history` **ganz entfernt** | als Spiegel behalten |
+
+### Phase 3 — Gedächtnis sichtbar, Suche quer durch Gespräche (2026-10-07)
+
+- **`search_chats(query)` + `read_chat(id, query?, anzahl?)`** (Register,
+  nur `gross`, ungegatet, hinten an) über `core/chat_suche.py` (Schicht 2):
+  alle Gespräche inkl. Archiv und „Erinnerungen" plus das alte Transkript
+  (ein Treffer pro Tag); kein Denken, keine versteckten Aufträge, das
+  laufende Fenster des aktiven Gesprächs nicht doppelt, Transkript-Züge, die
+  es als Gespräch gibt, auch nicht. Normalisierte Wörter, alle müssen
+  vorkommen, Rang Dichte × Aktualität, ≤ 8 Treffer. Ausführlich:
+  [gespraeche.md](gespraeche.md), „Suche". `transkript.alle()` liest dafür.
+- **Meta-Regel 7** in `profil/gross.py` (ein Satz): bezieht sich Sasha auf
+  Früheres, erst `search_chats`. Kopf jetzt 4.974 von 5.000 Zeichen.
+  Schnappschuss neu gezogen: nur die zwei Einträge, `klein` byte-gleich.
+  Eigener Text-Deckel < 450 Zeichen in `tests/test_profil.py`.
+- **Gedächtnis in der TUI:** `tui/ansichten/gedaechtnis.py`, Überlagerung im
+  Chat-Kasten über `/gedaechtnis` bzw. `/skills`: Hausregeln, Steckbrief,
+  Ziele, Bereiche (Titel), Skills (Name · an/aus · von wem). Kernakte im
+  Editor ändern (`$VISUAL`/`$EDITOR`/nano/vi), Skill an/aus per Enter.
+- **Routen** (in `ui/routen/skills.py`): `GET /api/gedaechtnis`,
+  `PUT /api/gedaechtnis/<akte>` (nur die drei Kernakten, atomar + `.bak`,
+  409 bei veraltetem `stand`), `POST /api/skills/<name>/status`.
+  Dahinter `gedaechtnis.kernakte_lesen/_schreiben/_stand`,
+  `skills.status_setzen`.
+- **Aufräumen aus Phase 0:** `werkzeug_schleife.run_tool` fragt das
+  Register (`in_der_schleife` → `SELBST`, `terminal` →
+  `_terminal_ausgeben`) statt fester Namen; die Verhaltens-Tests liefen auch
+  gegen den alten Code grün.
+- Tests: `test_chat_suche.py`, `test_gedaechtnis_routen.py`,
+  `test_gedaechtnis_ansicht.py`, `test_werkzeug_schleife_register.py`,
+  Wächter in `test_keine_seiteneffekte.py`; headless `ki_gedaechtnis` bei
+  80×24 und 136×30.
+
+Angenommen (Sasha war nicht erreichbar) — die Kleinentscheidungen:
+
+| Wahl | Alternative |
+|---|---|
+| **Zwei Werkzeuge** `search_chats` + `read_chat` | ein Werkzeug mit Modus-Parameter `gespraech` (größeres Schema, Modus muss richtig gesetzt werden) |
+| `read_chat` mit optionalem **`query`**: Fenster um die Fundstelle statt nur die letzten N | nur die letzten N (dann fehlt der Treffer in langen Gesprächen) |
+| Einheit = **ein Gespräch** (Wörter dürfen über Nachrichten verteilt sein); Transkript = **ein Tag** | jede Nachricht einzeln (ein Gespräch füllte alle 8 Plätze; „geige ferien" über zwei Nachrichten fände nichts) |
+| **Teilwort**-Treffer („geige" findet „Geigenstunde") + kleine **Füllwort**-Liste | ganze Wörter (Deutsch setzt zusammen); keine Füllwörter („das mit dem umzug" verlangte „das") |
+| Rang **Dichte × (0,4 + 0,6 · Halbwert 60 Tage)** | nur Datum (Sasha: Thema vor Datum) oder nur Dichte (Uraltes gleichauf mit Gestern) |
+| „Laufendes Gespräch" = **`gespraeche.aktiv()`** (die Route setzt es vor jedem Zug); nur sein **Fenster** wird ausgelassen | Gesprächs-id per Thread-Kontext durchreichen (hätte `ui/routen/ki.py` angefasst, an dem Phase 5 baut); ganzes Gespräch auslassen |
+| Doppeltes aus dem Transkript über **gleiche KI-Antwort** erkennen | nach Datum abschneiden (Transkript nur vor dem ersten Gespräch — verlöre Züge, die es nicht als Gespräch gibt) |
+| Versteckte Aufträge im Transkript am **Wortlaut** („Erinnere Sasha", Auftrags-Vorsatz) erkannt | Transkript-Nutzertext ganz weglassen |
+| Gedächtnis als **Überlagerung im Chat-Kasten** | eigene Ansicht in der Mitte mit Rad-Platz (Pixel-Symbol, Taste, Rad-Index verschiebt sich) — offen, ob Sasha es dort will |
+| Ändern über den **externen Editor** ($VISUAL → $EDITOR → nano → vi) | Inline-Editor in der TUI (gibt es noch nicht; ein mehrzeiliger Editor wäre ein eigenes Projekt) |
+| **`stand`** (Fingerabdruck) beim Speichern, 409 bei Abweichung, Text bleibt in der Zwischendatei | blind überschreiben (eine Hausregel der KI aus derselben Minute wäre still weg) |
+| Kernakte höchstens **20.000 Zeichen** (wie ein Dossier) | keine Grenze |
+| Skill-Schalter: **an ↔ aus**, vorgeschlagen → an; Status-Route nimmt nur den **genauen Dateinamen** | dreistufig durchschalten; Namen über `slug` auflösen |
+| Gedächtnis-Routen **in `ui/routen/skills.py`** | eigene `ui/routen/gedaechtnis.py` (fasst `ui/routen/__init__.py` an, wo Phase 5 einhängt) |
+| Für Sasha sichtbar: „an/aus", „von dir/von der ki" | die Datei-Wörter „aktiv", „sasha/ki" |
+
+**Offen:** Platz im Rad/auf der Startseite (siehe oben); Bereiche nur als
+Titel (Inhalte liest die KI, Sasha noch nicht in der TUI); Erinnerungen in
+der Suche gehen mit — falls das stört, lassen sie sich ausnehmen.

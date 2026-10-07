@@ -20,8 +20,10 @@
 import json as _json
 import datetime as _dt
 
+import chat_suche
 import context
 import gedaechtnis
+import gespraeche
 import kalender
 import ki_prompt
 import mail
@@ -446,3 +448,20 @@ def _propose_skill(args: dict) -> str:
 @ausfuehrer("edit_skill")
 def _edit_skill(args: dict) -> str:
     return skills.aendern(args.get("name") or "", str(args.get("inhalt") or ""))
+
+
+# ── Frühere Gespräche (core/chat_suche.py, Phase 3 2026-10-07) ──
+# „Das laufende Gespräch" ist das aktive dieses Rechners: die Chat-Route
+# setzt es vor jedem Zug (gespraeche.aktiv_setzen). Dessen Fenster hat die
+# KI schon im Verlauf; die Suche liefert es nicht doppelt.
+
+@ausfuehrer("search_chats")
+def _search_chats(args: dict) -> str:
+    return chat_suche.suchen_text(str(args.get("query") or ""),
+                                  aktiv=gespraeche.aktiv())
+
+
+@ausfuehrer("read_chat")
+def _read_chat(args: dict) -> str:
+    return chat_suche.lesen_text(args.get("id") or "", str(args.get("query") or ""),
+                                 args.get("anzahl") or chat_suche.LESEN_STANDARD)

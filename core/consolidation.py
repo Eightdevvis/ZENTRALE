@@ -502,7 +502,8 @@ def extract_turn_into_graph(user_msg: str, ai_msg: str,
 
     # Rohmaterial wegschreiben, BEVOR der Extraktor destilliert. Was er
     # wegwirft, waere sonst weg — der Graph merkt sich, DASS eine Beziehung
-    # besteht, nicht WAS gesagt wurde. Append-only, wird nie durchsucht.
+    # besteht, nicht WAS gesagt wurde. Append-only; gelesen nur von
+    # search_chats (core/chat_suche.py, seit 2026-10-07).
     quellen = transkript.schreiben(turns, store=store)
 
     # Ab hier beginnt die Tripel-Extraktion. Ist sie aus, endet der Weg

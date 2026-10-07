@@ -35,6 +35,7 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/chat_befehle.py` | Slash-Befehle im Chat lesen (`/neu`, `/modell` …), Hilfe-Text | — |
 | `ansichten/chat_gespraeche.py` | Mixin `GespraechsSteuerung` des Chats: neu, öffnen, umbenennen, archivieren, wiederholen, bearbeiten, Verlauf laden, Poll; `verlauf_aus` (History → Verlaufszeilen) | (in `AI`) |
 | `ansichten/gespraechsliste.py` | `Gespraechsliste`: Überlagerung im Chat-Kasten (Tab/`/liste`); reine Helfer `alter_text`, `filtern`, `listen_zeilen` | `AI["liste"]` |
+| `ansichten/gedaechtnis.py` | `Gedaechtnis`: Überlagerung im Chat-Kasten (`/gedaechtnis`, `/skills`) — Kernakten, Bereiche, Skills; Kernakte im Editor ändern, Skill an/aus; reine Helfer `reiter`, `inhalt_zeilen`, `naechster_status`, `editor_befehl` | `AI["gedaechtnis"]` |
 | `ansichten/sprachtutor.py` | `Sprachtutor`: Text-Panel, Zimmer-Fenster | `TUTOR` |
 | `ansichten/post.py` | `Post`: Mail, Antwort-Editor, Mail-Worker | `MAIL` |
 | `ansichten/kalender.py` | `Kalender`: Woche/Monat, Formular, Routinen, Sidebar | `K` |
@@ -174,6 +175,37 @@ für die TUI gilt:
 - Headless: Szenario `ki_gespraeche` in `tests/tui_schirm/lauf.py` (das
   Abspiel-Backend liefert erfundene Gespräche); ohne Bildschirm:
   `tests/test_gespraechsliste.py`.
+
+## Chat: Gedächtnis (seit 2026-10-07)
+
+Claude-Web-Plan Phase 3 ([../ki/gedaechtnis_dateien.md](../ki/gedaechtnis_dateien.md),
+„Für Sasha sichtbar und änderbar"). Was für die TUI gilt:
+
+- **Überlagerung im Chat-Kasten** wie die Gesprächsliste, geöffnet mit
+  `/gedaechtnis` (auch `/gedächtnis`, `/memory`) oder `/skills` (dann gleich
+  bei den Skills). Im Chat-Code nur fünf Haken (Konstruktor, `befehl`,
+  `taste`, `draw_ai`, `fusszeile`); alles andere steht in `gedaechtnis.py`.
+- **Abschnitte** hausregeln · steckbrief · ziele · bereiche · skills in einer
+  Leiste oben (zu schmal → nur der gewählte als „‹ name › n/5"). ←→ oder
+  Tab/Shift+Tab wechseln, 1–5 springen, ↑↓ Bild↑↓ blättern, `r` neu laden,
+  Esc zurück zum Chat.
+- **Kernakte ändern:** `e` oder Enter → `curses.def_prog_mode` + `endwin`,
+  Editor auf einer Zwischendatei (`$VISUAL`, `$EDITOR`, sonst nano, sonst
+  vi), danach `reset_prog_mode` und neu zeichnen; unverändert → nichts
+  geschickt; sonst `PUT /api/gedaechtnis/<akte>` mit `stand`. Scheitert das
+  (409, keine Verbindung), bleibt die Zwischendatei liegen und die
+  Statuszeile nennt ihren Pfad.
+- **Skills:** ↑↓ wählen, Enter/Leertaste schaltet an ↔ aus (vorgeschlagen →
+  an). Zeile: `● name … an · von dir` (○ aus, ◌ vorgeschlagen), darunter die
+  Beschreibung; auf breiten Schirmen höchstens 64 Spalten, damit der Status
+  beim Namen bleibt.
+- **Nicht im Rad:** ein Rad-Platz braucht ein Pixel-Symbol, eine Taste und
+  verschiebt die gespeicherte Rad-Stellung (`ZENTRALE_TUI_RAD`); offen, ob
+  Sasha es dort will.
+- Headless: Szenario `ki_gedaechtnis` in `tests/tui_schirm/lauf.py` (das
+  Abspiel-Backend liefert ein erfundenes Gedächtnis, der „Editor" ist ein
+  Skript, das eine Zeile anhängt); ohne Bildschirm:
+  `tests/test_gedaechtnis_ansicht.py`.
 
 ## Historie
 

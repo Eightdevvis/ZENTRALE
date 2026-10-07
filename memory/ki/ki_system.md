@@ -214,11 +214,11 @@ Die id ist Monat + Zeilennummer — ohne Index und ohne Zufallszahl auffindbar.
 Jeder berührte Knoten trägt sie in `quellen` (max. `MAX_QUELLEN=20`, ohne
 Dubletten).
 
-**Das ist ausdrücklich kein zweiter Suchindex.** Hier wird nie gesucht, nie
-embedded, nie etwas in den Prompt geladen. Würde die Datei durchsucht, hätte
-ZENTRALE zwei konkurrierende Gedächtnisse mit unterschiedlichen Antworten —
-genau das soll der Graph verhindern. Sie ist ein Archiv, auf das der Graph
-zeigt.
+**Das ist kein zweiter Suchindex:** nie embedded, nie etwas in den Prompt
+geladen. Sie ist ein Archiv, auf das der Graph zeigt. Seit 2026-10-07 liest
+sie das Werkzeug `search_chats` mit (Abschnitt „Frühere Gespräche" unten) —
+als Verlauf von vor den Gesprächen, wörtlich und mit Datum, nicht als
+Gedächtnis, das etwas behauptet.
 
 Gitignored (`data/ai_transcripts/` — `.jsonl` fällt nicht unter `data/*.json`):
 noch persönlicher als der Graph, weil roh.
@@ -436,8 +436,34 @@ entsteht keine Datei. Ein vom Modell mitgeschickter Kopf wird bei
 der Datei. Grenzen: Beschreibung ≤ 160 Zeichen (sie steht bei jedem Zug im
 Kopf), Inhalt ≤ 6.000. Text-Budget der drei Beschreibungen: eigener Deckel
 < 600 Zeichen in `tests/test_profil.py`. Anzeige: `GET /api/skills`
-([api_endpoints.md](../system/api_endpoints.md)); ein `/skills` im TUI-Chat
-fehlt noch.
+([api_endpoints.md](../system/api_endpoints.md)). Seit Phase 3 sieht und
+schaltet Sasha Skills in der TUI (`/skills` im Chat, Gedächtnis-Ansicht;
+`POST /api/skills/<name>/status`) — die KI kann einen Skill weiterhin nicht
+abschalten.
+
+### Frühere Gespräche — `search_chats`, `read_chat` (seit 2026-10-07)
+
+Phase 3 des [Claude-Web-Plans](claude_web_plan.md). Sasha orientiert sich
+nach Thema, nicht nach Datum; seit es viele Gespräche gibt
+([gespraeche.md](gespraeche.md)), muss die KI aus jedem Gespräch heraus
+finden, was in einem anderen gesagt wurde. Modul `core/chat_suche.py`
+(Schicht 2), beide Werkzeuge nur `gross`, **ungegatet** (nur lesen).
+
+| Werkzeug | Was |
+|---|---|
+| `search_chats(query)` | höchstens 8 Treffer: Titel, id, Datum, Zahl der Stellen, ein Ausschnitt (~220 Zeichen, Sasha oder KI) |
+| `read_chat(id, query?, anzahl?)` | ein Gespräch nachlesen: die letzten `anzahl` (20, max 40) Nachrichten, mit `query` das Fenster um die beste Fundstelle; jede Nachricht ≤ 1.500 Zeichen |
+
+Durchsucht werden alle Gespräche (auch archivierte, „Erinnerungen") und das
+alte Transkript, nach Tag gruppiert (id `transkript:JJJJ-MM-TT`). Wie
+gesucht wird, was ausgelassen wird (Denken, versteckte Aufträge, das
+laufende Fenster, Doppeltes aus dem Transkript): [gespraeche.md](gespraeche.md),
+Abschnitt „Suche". Wann suchen: Meta-Regel 7 in `profil/gross.py` („bezieht
+sich Sasha auf Früheres … erst search_chats"). Text-Budget der zwei
+Beschreibungen: eigener Deckel < 450 Zeichen in `tests/test_profil.py`.
+
+Zwei Werkzeuge statt eines mit Modus: jedes Schema bleibt klein und
+eindeutig, und das Modell muss keinen Modus-Parameter richtig setzen.
 
 ### Visuelle Stimme – Bild-Marker `[[bild: name]]`
 
@@ -797,6 +823,16 @@ Jeder Adapter hat `runde()` (ein Modell-Aufruf → `Runde(text, calls)`),
 `assistent_anhaengen()` und `ergebnisse_anhaengen()`. Den Prompt baut weiter
 jeder Weg selbst. Was ein Tool-Call **bedeutet**, steht genau einmal, in
 `werkzeug_schleife.run_tool()`.
+
+**Sonderwege nach Register (seit 2026-10-07, Phase 3).** `run_tool` nennt
+keinen Werkzeug-Namen mehr: `in_der_schleife` → der Weg aus
+`werkzeug_schleife.SELBST` (`antwort` = Text ist die Antwort, `ask_choice` =
+Knopf-Dialog); `terminal` mit Ausführer → `_terminal_ausgeben` (heute nur
+`read_news`: `cinema`-Event, Kopf „Sendung (Stand …)" weg, direkt als
+Antwort, nicht gemerkt). Im Tutor greift beides nicht.
+`tests/test_werkzeug_schleife_register.py` hält Register und `SELBST`
+deckungsgleich und beweist gleiches Verhalten (lief auch gegen den alten
+Code grün).
 
 **Fehler sind keine Antwort.** API-Fehler, Cloud-Ablehnung (`refusal`) und
 die Rundengrenze kommen als `{"fehler": …}`. `ui/routen/ki.py` reicht das als SSE

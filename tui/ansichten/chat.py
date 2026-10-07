@@ -24,6 +24,7 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
 from . import chat_befehle, eingabe
 from .chat_gespraeche import GespraechsSteuerung, ai_verlauf_holen, verlauf_aus  # noqa: F401
 from .gespraechsliste import Gespraechsliste
+from .gedaechtnis import Gedaechtnis
 from .basis import BASE_URL, api_call
 from .text import _md_umbruch, _wrap, md_zeilen
 
@@ -289,6 +290,7 @@ class Chat(GespraechsSteuerung):
                           "gespraeche": []}
         self.AI_LOCK = threading.Lock()
         self.liste = Gespraechsliste(self)
+        self.gedaechtnis = Gedaechtnis(self)       # /gedaechtnis, /skills (Phase 3)
 
     def start(self):
         """Hintergrund-Threads anwerfen (run_ui ruft das nach dem Aufbau)."""
@@ -545,6 +547,9 @@ class Chat(GespraechsSteuerung):
         if name == "titel":
             self.befehl_titel(arg)
             return
+        if name in ("gedaechtnis", "skills"):      # gedaechtnis.py (Phase 3)
+            self.gedaechtnis.oeffnen("skills" if name == "skills" else None)
+            return
         if name in ("lokal", "cloud", "auto"):
             self.setzen({"weg": name})
             return
@@ -641,6 +646,8 @@ class Chat(GespraechsSteuerung):
             return " esc stoppt die antwort · bild↑↓ verlauf · tippen geht weiter"
         if self.AI["liste"]:
             return " gespräche: ↑↓ wählen · enter öffnen · esc zurück zum chat"
+        if self.AI.get("gedaechtnis"):
+            return " " + self.gedaechtnis.fusszeile()
         return (" enter senden · alt+enter neue zeile · ↑↓ verlauf · tab gespräche · "
                 "strg+d denken · /hilfe befehle · esc zu")
 
@@ -719,6 +726,9 @@ class Chat(GespraechsSteuerung):
             return
         if AI["liste"]:                    # Gesprächsliste (gespraechsliste.py)
             self.liste.taste(ch)
+            return
+        if AI.get("gedaechtnis"):          # Gedächtnis-Ansicht (gedaechtnis.py)
+            self.gedaechtnis.taste(ch)
             return
         if ch == 27:
             # Läuft eine Antwort, stoppt Esc sie (bis in die Schleife, das
@@ -800,6 +810,9 @@ class Chat(GespraechsSteuerung):
         body_top = by + 1
         if AI["liste"]:                    # Gesprächsliste liegt über dem Verlauf
             self.liste.zeichnen(by, bx, bh, bw)
+            return
+        if AI.get("gedaechtnis"):          # Gedächtnis ebenso
+            self.gedaechtnis.zeichnen(by, bx, bh, bw)
             return
 
         with AI_LOCK:

@@ -25,6 +25,8 @@ BEFEHLE = [
     ("/wiederholen", "letzte antwort neu erzeugen"),
     ("/bearbeiten", "letzte eigene nachricht ändern und neu schicken"),
     ("/denken",   "gedachtes auf-/zuklappen (auch: strg+d)"),
+    ("/gedaechtnis", "was die ki über dich weiß — ansehen und ändern"),
+    ("/skills",   "skills der ki — ansehen, an- und ausschalten"),
     ("/modell",   "modell wählen · /modell <name> setzt direkt"),
     ("/anbieter", "anbieter wählen · /anbieter <name> oder auto"),
     ("/effort",   "denk-tiefe wählen (nur claude) · /effort low … max"),
@@ -38,7 +40,8 @@ BEFEHLE = [
 # Andere Schreibweisen, die dasselbe meinen. /clear stand früher in der Doku.
 ANDERE_NAMEN = {"help": "hilfe", "clear": "neu", "model": "modell",
                 "provider": "anbieter", "local": "lokal", "list": "liste",
-                "retry": "wiederholen", "edit": "bearbeiten"}
+                "retry": "wiederholen", "edit": "bearbeiten",
+                "gedächtnis": "gedaechtnis", "memory": "gedaechtnis"}
 
 NAMEN = {b[1:] for b, _ in BEFEHLE}
 
