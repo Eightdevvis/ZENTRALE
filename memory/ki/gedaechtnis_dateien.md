@@ -66,7 +66,7 @@ die den Rohtext am Graphen halten.
 | **Quellen** | `quellen/*.md` (+ `quellen/dateien/`) | Abgelegte Dokumente, aus PDF/HTML extrahiert. |
 | **Tagebuch** | `tagebuch/YYYY-MM-DD.md` | Die KI. Was gesagt und getan wurde, in SEINEN Worten. |
 | **Messreihen** | `data/g_*.json` (Zyklus-Werkzeug) | Zahlen über Zeit — Schlaf, Stimmung, Spagat in cm. |
-| **Skills** | `skills/*.md` | Anleitungen für eine Art Aufgabe. Sasha (Datei) oder die KI — die nur nach seinem Ja (`propose_skill`). Siehe unten „Skills“. |
+| **Skills** | `skills/<name>/SKILL.md` (+ `_zentrale.json`, optional `scripts/` `references/` `assets/`) | Anleitungen für eine Art Aufgabe, im Format von Claude. Sasha (hineinkopieren, an/aus) oder die KI — die nur nach seinem Ja (`propose_skill`). Siehe unten „Skills“. |
 | **Projekte** | `projekte/<id>/` (`projekt.json`, `anweisungen.md`, `wissen/`) | **Sasha** (TUI `/projekte`). Rahmen für ein Thema; die KI liest nur (`read_project_file`). Wie Skills nicht in `BEREICHE`. Siehe [projekte.md](projekte.md). |
 
 ### Notiz, Dossier oder Katalog?
@@ -313,30 +313,52 @@ Dateien liegen.
 Abgrenzung, an der es kippt: **Hausregeln gelten immer** („antworte kürzer"),
 ein **Skill nur für seine Aufgabe** („wenn er eine Woche planen will: …").
 Sasha, 07.10.2026: „ki soll sogar welche vorschlagen totally, damit sie später
-wenn sie gut aufgestellt ist sich von alleine weiterentwickeln kann."
+wenn sie gut aufgestellt ist sich von alleine weiterentwickeln kann." Und am
+selben Abend: „skills sind eher komplexere abläufe" — eine Stil-Regel wie
+„kurz" ist keine.
 
-**Die Datei** `data/gedaechtnis/skills/<name>.md`, Kopf im Katalog-Schema
-(`gedaechtnis.kopf_lesen`), darunter die Anleitung:
+### Das Format — das von Claude (seit 2026-10-07 abends)
+
+Sasha: Claudes Skill-Format übernehmen, damit echte Claude-Skills sich
+**ohne Umbau hineinkopieren** lassen. Ein Skill ist ein Ordner
+`data/gedaechtnis/skills/<name>/`:
 
 ```
-## wochenplan
-- beschreibung: Sasha will wissen, was diese oder nächste Woche ansteht …
-- erstellt:     2026-10-07
-- herkunft:     sasha        (sasha | ki)
-- status:       aktiv        (aktiv | vorgeschlagen | aus)
-
-1. Kalender lesen …
+wochenplan/
+├── SKILL.md         ---
+│                    name: wochenplan
+│                    description: "Sasha will wissen, was diese oder nächste Woche ansteht …"
+│                    ---
+│
+│                    1. Kalender lesen …
+├── _zentrale.json   {"status": "aktiv", "herkunft": "sasha", "erstellt": "2026-10-07"}
+├── scripts/         optional — laufen NUR in der Sandbox (run_code skill=…)
+├── references/      optional — liest die KI per load_skill(name, datei=…)
+└── assets/          optional — Vorlagen, Schriften, Bilder für Ausgaben
 ```
 
-- `beschreibung` ist EINE Zeile: wann er passt. Sie steht bei jedem Zug im
-  gecachten Kopf — deshalb höchstens 160 Zeichen.
-- **Abschalten statt löschen:** `status: aus`. Der Sync ist additiv; eine
-  gelöschte Datei käme vom anderen Rechner zurück. Eine Datei ohne gültigen
-  Kopf zählt als aus.
-- `vorgeschlagen` ist vorgesehen für Vorschläge, die nicht sofort aktiv
-  werden; heute legt `propose_skill` nach Sashas Ja direkt `aktiv` an.
-- `edit_skill` lässt die alte Fassung als `.bak` daneben (wie
-  `rewrite_note`); `.bak`-Dateien sind keine Skills.
+- **`SKILL.md`** ist Wort für Wort Claudes Format: YAML-Kopf mit `name`
+  (Kleinbuchstaben, Ziffern, Bindestrich, ≤ 64, = Ordnername) und
+  `description` (der Auslöser: wann der Skill passt, ≤ 1.024 Zeichen, kein
+  `<` `>`), optional `license`, `compatibility`, `allowed-tools`, `metadata`
+  — fremde Felder stören nicht und bleiben beim Ändern erhalten
+  (`core/skill_format.py`; liest mit PyYAML, ohne PyYAML mit einem eigenen
+  kleinen Leser für die flachen Felder).
+- **`_zentrale.json`** — was nur ZENTRALE wissen muss, **nicht** in der
+  SKILL.md (sonst wäre sie nicht mehr Claude-tauglich): `status` (`aktiv` |
+  `vorgeschlagen` | `aus`), `herkunft` (`sasha` | `ki` | `anthropic`),
+  `erstellt`, optional `braucht` (was ZENTRALE dafür fehlt, sichtbar in der
+  TUI und in `/api/skills`), `vermerk`, `quelle`. **Eine Datei pro Skill**
+  statt einer gemeinsamen Statusdatei: der Sync ist „neueste Datei
+  gewinnt" — schaltet Sasha am PC einen Skill und am Laptop einen anderen,
+  überleben beide Schalter.
+- **Ohne `_zentrale.json`** (von Hand hineinkopierter Claude-Skill) gilt der
+  Skill als **an**. Ohne `description` oder ohne gültigen Kopf zählt er als
+  aus (er rutschte sonst leer in den Prompt). Ordner mit ungültigem Namen und
+  solche, die mit `_` oder `.` beginnen (`_alt/`), sind keine Skills.
+- **Abschalten statt löschen.** Der Sync ist additiv; ein gelöschter Ordner
+  käme vom anderen Rechner zurück.
+- `edit_skill` lässt die alte Fassung als `SKILL.md.bak` daneben.
 
 **Warum nicht in `BEREICHE`:** Skills liegen unter derselben Wurzel (gleiche
 Test-Umlenkung `ZENTRALE_GEDAECHTNIS_DIR`, gleicher Sync), aber
@@ -344,15 +366,47 @@ Test-Umlenkung `ZENTRALE_GEDAECHTNIS_DIR`, gleicher Sync), aber
 Skill ist eine Anweisung der KI an sich selbst; geschrieben wird er nur über
 die gegateten Werkzeuge. Zugriff von außen: `gedaechtnis.bereich_ordner()`.
 
-**Erstbefüllung:** Die ersten drei Skills (`wochenplan`, `recherche`, `kurz`)
-liegen im Repo unter `core/skill_vorlagen/`. Beim ersten Zugriff
-(`skills.ordner()`), wenn `skills/` noch **nicht existiert**, werden sie
-hineinkopiert — nur fehlende Dateien, nie eine überschrieben. Existiert der
-Ordner (auch leer), passiert nichts mehr. Die kopierten Dateien bekommen als
-Änderungszeit fest den 07.10.2026: sonst gewänne beim Sync (`rsync
---update`, neueste gewinnt) die frische Vorlage eines Rechners, der später
-zum ersten Mal startet, gegen eine Änderung, die Sasha auf dem anderen schon
-gemacht hat.
+### Umzug aus dem alten Format (`core/skill_umzug.py`)
+
+Bis 07.10. abends war ein Skill eine Datei `skills/<name>.md` mit Kopf im
+Katalog-Schema (`## name`, `- beschreibung/erstellt/herkunft/status`). Bei
+**jedem** Zugriff auf den Skill-Ordner (`skills.ordner()`) zieht jede solche
+Datei um: `<name>/SKILL.md` (Kopf aus `beschreibung`) + `_zentrale.json`
+(status, herkunft, erstellt aus dem alten Kopf). Die alte Datei wird **nicht
+gelöscht**, sondern wandert nach `skills/_alt/` (alte `.md.bak` ebenso). Die
+neuen Dateien tragen die Änderungszeit der alten — zieht der zweite Rechner
+später selbst um, überschreibt er so keinen Schalter, den Sasha auf dem
+ersten schon umgelegt hat. Bringt der Sync eine alte Datei zurück (der
+andere Rechner ist noch nicht umgezogen), wird sie nur wieder beiseitegelegt
+(gleiche Fassung ersetzt die gleiche, eine andere bekommt `.2`, `.3` …).
+
+Sonderfälle (Sasha, 07.10.):
+- **`kurz`** ist kein Skill. Ihr Inhalt wird **eine Hausregel** in Sashas Ton
+  („Bin ich im Stress, unterwegs oder sag „kurz": Antwort zuerst …"),
+  angehängt über `gedaechtnis.kernakte_schreiben` (atomar, `.bak`), nur
+  einmal (steht sie schon da, passiert nichts) und nur, wenn `kurz` an war.
+  Der Skill selbst zieht um und ist **aus**, mit Vermerk — gelöscht wird er
+  nicht.
+- **`recherche`** zieht um, mit Vermerk „Kandidat zum Ersetzen — Claude im
+  Web recherchiert selbst".
+
+### Erstbefüllung (eigene + Anthropic)
+
+Mitgelieferte Skills liegen im Repo unter `core/skill_vorlagen/`: eigene
+(`wochenplan/`, `recherche/` — `kurz` ist raus) direkt dort, die von
+Anthropic unter `anthropic/` (14 Skills, nur Apache 2.0, je mit
+`LICENSE.txt`; Herkunft, Commit und Lizenz in `anthropic/README.md`, dazu
+`THIRD_PARTY_NOTICES.md`). Welche davon an oder aus sind und was einem
+fehlt, steht in `anthropic/zentrale.json` — nur dort Eingetragenes wird
+ausgeliefert, und daraus entsteht je Skill die `_zentrale.json`.
+
+Bei jedem Zugriff wird **je Skill** nachgeliefert, wessen Ordner fehlt —
+nie überschrieben (bis 07.10. abends: nur, wenn der ganze Ordner fehlte; dann
+bekäme ein Rechner mit Skills die neuen nie). Kopiert wird unter einem
+Punkt-Namen und dann umbenannt (nie ein halber Skill sichtbar). Alle Dateien
+bekommen als Änderungszeit fest den 07.10.2026: sonst gewänne beim Sync
+(`rsync --update`) die frische Vorlage eines Rechners, der später zum ersten
+Mal startet, gegen Sashas Änderung auf dem anderen.
 
 ## Für Sasha sichtbar und änderbar (seit 2026-10-07)
 
@@ -377,9 +431,11 @@ von der ki). Tasten und Aufbau: [../system/tui_bauplan.md](../system/tui_bauplan
   Zeichen (`MAX_KERNAKTE`, nur gegen Versehen — die Akte steht ganz im
   gecachten Kopf).
 - **Skill an/aus:** Enter oder Leertaste; `skills.status_setzen` ändert nur
-  den Kopf (`.bak` daneben), über `POST /api/skills/<name>/status`. Ein
-  `vorgeschlagen`er Skill wird damit freigegeben. Die KI hat dafür kein
-  Werkzeug: was Sasha abschaltet, bleibt aus.
+  `_zentrale.json` (die SKILL.md bleibt unberührt), über
+  `POST /api/skills/<name>/status`. Ein `vorgeschlagen`er Skill wird damit
+  freigegeben. Die KI hat dafür kein Werkzeug: was Sasha abschaltet, bleibt
+  aus. Unter jedem Skill steht, falls vorhanden, „braucht: …" (warum ein
+  Anthropic-Skill aus ist) und „hinweis: …" (Vermerk, z. B. bei recherche).
 
 Die TUI kann auf dem Laptop gegen das PC-Backend laufen; deshalb geht der
 Text über HTTP und die Zwischendatei liegt auf dem Rechner der TUI.

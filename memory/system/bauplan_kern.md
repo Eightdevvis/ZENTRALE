@@ -109,7 +109,9 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `map` | 2 | Geo-Layer-System der Weltkarte |
 | `ollama` | 2 | Anbindung an Ollama: Adresse, Modell, Kontext, Sampling, Erreichbarkeit, Warmup — einmal |
 | `sandbox` | 2 | Code abgeschottet ausführen (bubblewrap): eigener Arbeitsordner, kein Netz, keine Dateien von Sasha, Zeit-/Speicher-/Ausgabe-Grenzen |
-| `skills` | 2 | Skills der KI: Anleitungen je Art Aufgabe als Dateien im Gedächtnis, Liste für den Prompt, laden/vorschlagen/ändern |
+| `skills` | 2 | Skills der KI im Claude-Format (Ordner mit SKILL.md): Liste für den Prompt, laden samt Dateien, vorschlagen/ändern, an/aus, Erstbefüllung (eigene + Anthropic-Vorlagen) |
+| `skill_format` | 2 | Das Skill-Format von Claude: SKILL.md mit YAML-Kopf lesen (auch fremde Felder) und schreiben, gültige Namen |
+| `skill_umzug` | 2 | Umzug alter Skill-Dateien (`<name>.md`) ins Claude-Format, alte beiseite nach `_alt/`; „kurz“ → Hausregel |
 | `ablage` | 2 | Die Ablage: Dokumente der KI, Sandbox-Dateien, Anhänge — Ordner pro Dokument, jede Fassung eine neue Datei, nie löschen |
 | `anhang` | 2 | Anhänge im Chat: Sperrliste, Art erkennen (PDF → Text), in die Ablage; Verweise für den Verlauf der KI auflösen |
 | `projekte` | 2 | Projekte: Rahmen für ein Thema mit Anweisungen und Wissensdateien im Gedächtnis, Block für den Prompt, Wissen lesen/hinzufügen (Sperrliste), archivieren |

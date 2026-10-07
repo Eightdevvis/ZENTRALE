@@ -251,6 +251,8 @@ Zeichen (vorher 1.000).
   `propose_skill` und `edit_skill` (gegatet; `.bak` beim Ändern).
   Schnappschuss neu gezogen: nur die drei Einträge, `klein` byte-gleich.
   Eigener Text-Deckel (< 600 Zeichen) in `tests/test_profil.py`.
+- *(Seit dem Abend im Format von Claude, siehe „Skills im Format von
+  Claude" unten; `kurz` ist jetzt eine Hausregel.)*
 - **Erste Skills** `wochenplan`, `recherche`, `kurz` in
   `core/skill_vorlagen/`; kommen beim ersten Zugriff nach `skills/`, wenn der
   Ordner noch fehlt, nie überschreibend, mit altem Datei-Datum (Sync).
@@ -555,3 +557,92 @@ Angenommen (Sasha war nicht erreichbar) — die Kleinentscheidungen:
 Block (Budget fast voll, 4.974/5.000); was die KI kann, steht in den
 Werkzeug-Beschreibungen (Sandbox, Ablage, Skills, Suche, Projekte je dort).
 Anhänge brauchen kein Werkzeug, sie stehen als Blöcke in der Nachricht.
+
+### Skills im Format von Claude + Skills von Anthropic (2026-10-07, abends)
+
+Sasha: Claudes Skill-Format übernehmen (echte Claude-Skills ohne Umbau
+hineinkopieren), die offenen Skills von Anthropic übernehmen, `kurz` ist kein
+Skill („skills sind eher komplexere abläufe"), `recherche` ist ein Kandidat
+zum Ersetzen (Claude im Web recherchiert selbst). Ausführlich:
+[gedaechtnis_dateien.md](gedaechtnis_dateien.md) „Skills",
+[ki_system.md](ki_system.md) „Skills" und „Sandbox".
+
+- **Format** (`core/skill_format.py`, Schicht 2): Ordner `<name>/` mit
+  `SKILL.md` (YAML-Kopf `name`, `description`, fremde Felder erlaubt) und
+  optional `scripts/`, `references/`, `assets/`. ZENTRALEs Angaben (status,
+  herkunft, erstellt, braucht, vermerk, quelle) in `<name>/_zentrale.json`.
+- **Prompt-Liste** = name + description, je ≤ 1.024, ganze Liste ≤ 6.000
+  Zeichen, darüber gleichmäßig gekürzt (deterministisch). Start: ~4.300.
+- **`load_skill(name, datei?, ab?)`**: Anleitung + Dateiliste, Dateien aus
+  dem Skill ohne Pfad-Ausbruch, seitenweise 20.000 Zeichen.
+  **`run_code(skill=…)`**: Skill-Ordner nur lesend unter `/skills/<name>`.
+  `propose_skill`/`edit_skill` schreiben Claude-taugliche SKILL.md, edit
+  behält den Kopf wörtlich. Schnappschuss neu gezogen: nur `load_skill`,
+  `propose_skill`, `run_code` (Beschreibung/Parameter), `klein` byte-gleich,
+  Gate und Fragen unverändert.
+- **Umzug** (`core/skill_umzug.py`, Schicht 2) bei jedem Zugriff, alte
+  Dateien nach `skills/_alt/`, nichts gelöscht; `kurz` → Hausregel (über
+  `kernakte_schreiben`, `.bak`, einmal) + aus; `recherche` mit Vermerk.
+- **Anthropic**: 14 Skills (nur Apache 2.0, Commit 683bc88) in
+  `core/skill_vorlagen/anthropic/` mit `README.md` (Quelle, Lizenz,
+  Änderungen) und `THIRD_PARTY_NOTICES.md`; Erstbefüllung je Skill, nie
+  überschreibend, alt datiert. skill-creator bekam `references/zentrale.md`.
+- **TUI** (nur `tui/ansichten/gedaechtnis.py`): „von anthropic", Zeilen
+  „braucht: …" und „hinweis: …".
+- Tests: `test_skills.py` (neu), `test_skill_format.py`,
+  `test_skill_umzug.py`, `test_skill_skripte.py` (quick_validate.py echt in
+  bwrap), Wächter in `test_keine_seiteneffekte.py`; `test_kern_bauplan.py`
+  überspringt `core/skill_vorlagen/` (fremder Code, nie importiert).
+
+Start-Status der Anthropic-Skills (aus `core/skill_vorlagen/anthropic/zentrale.json`):
+
+| Skill | Status | Warum |
+|---|---|---|
+| skill-creator | an | Sasha: an. Skripte ohne `claude`/Netz laufen in der Sandbox (geprüft: quick_validate, package_skill); Rest steht in `references/zentrale.md` |
+| academy-guide | an | braucht nur `fetch_url` (Academy-Katalog lesen) — hat ZENTRALE |
+| claude-api | an | Nachschlagewerk; Text, eigene Dateien per `load_skill(datei=…)` (SKILL.md ist 103 KB → 6 Seiten) |
+| discernment-nudge | an | reine Antwort-Anleitung (2–3 Rückfragen nach gewichtigen Antworten), braucht nichts |
+| frontend-design | an | Gestaltungs-Anleitung für Code/Text; braucht nichts |
+| internal-comms | an | Text-Vorlagen (`examples/`), braucht nichts — inhaltlich für Firmen gedacht |
+| algorithmic-art | aus | Ergebnis ist eine HTML-Seite mit p5.js aus dem Netz → Browser zum Ansehen |
+| brand-guidelines | aus | Farben/Schriften für Folien und Seiten — die Ablage kann nur Text |
+| canvas-design | aus | Bildausgabe PNG/PDF (Schriften liegen bei), nichts zum Ansehen |
+| mcp-builder | aus | MCP gibt es noch nicht; Node/npm und Internet beim Bauen |
+| slack-gif-creator | aus | Slack, GIF-Ausgabe, numpy/imageio fehlen in der Sandbox |
+| theme-factory | aus | Folien/Seiten mit Farben und Schriften, `theme-showcase.pdf` zeigen |
+| webapp-testing | aus | Playwright-Browser und Netz zur Seite — Sandbox hat beides nicht |
+| web-artifacts-builder | aus | Node/npm/pnpm mit Internet, Browser zum Ansehen |
+
+Angenommen (Sasha war nicht erreichbar) — die Kleinentscheidungen:
+
+| Wahl | Alternative |
+|---|---|
+| ZENTRALE-Felder in **`_zentrale.json` je Skill-Ordner** | eine zentrale Statusdatei (Sync „neueste gewinnt" verlöre Schalter, die auf zwei Rechnern umgelegt wurden) |
+| Skill **ohne `_zentrale.json` = an** (hineinkopiert = gewollt) | = vorgeschlagen (Sasha müsste jeden kopierten erst einschalten) |
+| `load_skill` mit Parameter **`datei`** (+ `ab`) | eigenes Werkzeug `read_skill_file` (größeres Schema im Kopf, ein Werkzeug mehr zum Verwechseln) |
+| Skill-Ordner in der Sandbox unter **`/skills/<name>`** | `/skill` (package_skill.py benennte das Paket dann „skill") |
+| `run_code(skill=…)` nur für **aktive** Skills | jeder Skill (dann liefen Skripte eines abgeschalteten) |
+| Listen-Deckel **6.000 Zeichen**, Kürzen gleichmäßig, dann nur Namen | kein Deckel (jeder kopierte Skill machte jeden Zug teurer) / ältere zuerst weglassen (nicht deterministisch über Rechner) |
+| Anleitung **≤ 20.000** Zeichen für propose/edit (eine `load_skill`-Seite) | 6.000 wie bisher (Claude empfiehlt < 500 Zeilen; der skill-creator schriebe sonst keine üblichen Skills) |
+| `description` mit **`<` `>` abgelehnt** | durchlassen (dann fiele der Skill durch Claudes Prüfung) |
+| `edit_skill` ändert **nicht** die description | mit optionalem `beschreibung` (Sasha bestimmt bisher den Auslöser) |
+| Erstbefüllung **je Skill** (fehlender Ordner → nachliefern) | nur bei ganz fehlendem Ordner (dann kämen die Anthropic-Skills auf Sashas Rechnern nie an) |
+| Anthropic-Skills **unverändert** im Repo, Status in `anthropic/zentrale.json`; einzige Zutat `skill-creator/references/zentrale.md` | `_zentrale.json` in jeden Vorlagen-Ordner (Vorlagen wichen vom Original ab) / Hinweis als zweiter Ordner, beim Kopieren drübergelegt (mehr Mechanik) |
+| Alles übernommen inkl. **Schriften von canvas-design** (Repo +8,7 MB, Daten +8,7 MB je Rechner) | Schriften weglassen (Skill wäre nicht mehr „ohne Umbau"; ist ohnehin aus) |
+| `test_kern_bauplan` überspringt `core/skill_vorlagen/` | Anthropic-Code als Riesen-Altlast eintragen (er ist kein Kern-Code) |
+| `load_skill` weist vorn auf **`references/zentrale.md`** hin, wo vorhanden | SKILL.md des skill-creator ändern (dann nicht mehr Claude-gleich) |
+| Umzug bei **jedem Zugriff** (billig), alte Dateien nach **`_alt/`**, gleiche Fassung ersetzt gleiche, andere bekommt `.2` | einmal mit Merker (der Sync brächte alte Dateien trotzdem zurück) / umbenennen an Ort und Stelle (`kurz.md.alt` läge zwischen den Skills) |
+| Neue Dateien tragen die **Zeit der alten Datei** | jetzt (ein später umziehender Rechner überschriebe Sashas Schalter) |
+| `kurz` → Hausregel **nur, wenn kurz an war** | immer (ein abgeschalteter Stil würde über die Hausregel wieder wirksam) |
+| Hausregel-Text: „Bin ich im Stress, unterwegs oder sag „kurz": Antwort zuerst, in ein bis drei Sätzen, eine Sache nach der anderen, höchstens eine Rückfrage." | die ganze alte Anleitung (fünf Punkte) als Regel |
+| Ein-Zeilen-Herkunft „**von anthropic**", Vermerk als „**hinweis:**" | eigene Spalte / „vermerk" (kein Alltagswort) |
+| YAML: **PyYAML wenn da**, sonst eigener kleiner Leser | nur PyYAML (steht nicht in requirements.txt; der Pi könnte es nicht haben) / nur eigener Leser (weicht bei Sonderfällen von Claude ab) |
+
+**Offen:** Die KI kann nur die SKILL.md schreiben — keine `references/`
+oder `scripts/` (der skill-creator sagt es ihr in `references/zentrale.md`).
+Beschreibungs-Optimierung des skill-creator braucht einen eigenen Weg statt
+`claude -p` („ZENTRALE Code"). `discernment-nudge` greift nach fast jeder
+gewichtigen Antwort (ein `load_skill` je Gespräch) — beobachten, ob Sasha
+das will. `internal-comms` ist für Firmen geschrieben; an, weil nichts
+fehlt, aber vielleicht unnütz. Die alten Dateien in `skills/_alt/` kann
+Sasha irgendwann wegwerfen, wenn beide Rechner umgezogen sind.

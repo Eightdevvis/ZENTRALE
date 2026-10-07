@@ -269,8 +269,10 @@ def _frage_code(args: dict) -> str:
     mehr = f" (+{len(zeilen) - 4} Zeilen)" if len(zeilen) > 4 else ""
     lang = (f" und darf bis zu {_dauer_text(_code_zeit(args))} laufen"
             if _code_lang(args) else "")
+    skill = gedaechtnis.slug(args.get("skill"))
+    mit = (f" — dazu sieht es den Skill „{skill}“ (nur lesen)" if skill else "")
     return (f"Soll ich dieses {sprache}-Programm abgeschottet ausführen "
-            f"(ohne Internet, ohne Zugriff auf deine Dateien){lang}? "
+            f"(ohne Internet, ohne Zugriff auf deine Dateien){mit}{lang}? "
             f"„{anfang}“{mehr}")
 
 
@@ -285,7 +287,7 @@ def _frage_skill_neu(args: dict) -> str:
     """Sasha sieht Name, wofür der Skill ist und den Anfang der Anleitung —
     er soll entscheiden können, ohne den Werkzeug-Aufruf zu lesen."""
     name = gedaechtnis.slug(args.get("name")) or "?"
-    wofuer = " ".join(str(args.get("beschreibung") or "").split())[:160]
+    wofuer = " ".join(str(args.get("beschreibung") or "").split())[:240]
     return (f'Soll ich mir die Anleitung „{name}“ merken? Wofür: {wofuer or "-"}. '
             f'„{skills.anfang(args.get("inhalt"))}“')
 
@@ -1107,6 +1109,9 @@ WERKZEUGE = [
                              "description": "Standard: python."},
                 "zeitlimit": {"type": "integer",
                               "description": "Sekunden, Standard 30. Ueber 120 (max 1800) fragt Sasha extra."},
+                # 2026-10-07: Skill-Skripte (Claude-Format, scripts/).
+                "skill":    {"type": "string",
+                             "description": "Name eines aktiven Skills: sein Ordner liegt dann nur lesend unter /skills/<name> (fuer seine scripts/)."},
             },
             "required": ["code"],
         },
@@ -1119,14 +1124,19 @@ WERKZEUGE = [
         name="load_skill",
         klein=None,
         gross=(
-            "Holt die Anleitung eines Skills aus der Skill-Liste im Kopf. "
-            "Passt die Aufgabe zu seiner Beschreibung: zuerst laden, dann "
-            "danach arbeiten."
+            "Holt die Anleitung eines Skills aus der Skill-Liste im Kopf "
+            "(mit Liste seiner Dateien). Passt die Aufgabe zu seiner "
+            "Beschreibung: zuerst laden, dann danach arbeiten. Mit 'datei' "
+            "eine Datei daraus, z.B. references/x.md."
         ),
         parameter={
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Name aus der Liste."},
+                "datei": {"type": "string",
+                          "description": "Pfad im Skill-Ordner; ohne: die Anleitung."},
+                "ab":   {"type": "integer",
+                         "description": "Weiterlesen ab diesem Zeichen."},
             },
             "required": ["name"],
         },
@@ -1140,8 +1150,8 @@ WERKZEUGE = [
         gross=(
             "Schlaegt einen NEUEN Skill vor: eine Anleitung fuer eine Art "
             "Aufgabe, die sich mit Sasha bewaehrt hat. Wird bestaetigt; "
-            "lehnt er ab, entsteht nichts. 'beschreibung' ist EINE Zeile: "
-            "wann er passt. Inhalt knapp, in Schritten."
+            "lehnt er ab, entsteht nichts. 'beschreibung': wann er passt "
+            "(der Ausloeser). Inhalt knapp, in Schritten."
         ),
         parameter={
             "type": "object",
@@ -1149,7 +1159,7 @@ WERKZEUGE = [
                 "name":         {"type": "string",
                                  "description": "Kurz, z.B. 'wochenplan'."},
                 "beschreibung": {"type": "string",
-                                 "description": "Eine Zeile: wann benutzen."},
+                                 "description": "Wann benutzen, bis 1024 Zeichen."},
                 "inhalt":       {"type": "string",
                                  "description": "Die Anleitung."},
             },

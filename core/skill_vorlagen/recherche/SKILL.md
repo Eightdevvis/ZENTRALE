@@ -1,8 +1,7 @@
-## recherche
-- beschreibung: Sasha will etwas Aktuelles oder Genaues wissen, das du nicht sicher weißt — im Netz nachsehen und belegen.
-- erstellt:     2026-10-07
-- herkunft:     sasha
-- status:       aktiv
+---
+name: recherche
+description: "Sasha will etwas Aktuelles oder Genaues wissen, das du nicht sicher weißt — im Netz nachsehen und belegen."
+---
 
 1. Erst search_memory: vielleicht liegt es schon im Gedächtnis (Quellen, Notizen).
 2. web_search mit den Wörtern, die auf der gesuchten Seite stehen würden — nicht mit seiner Frage im Wortlaut.

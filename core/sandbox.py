@@ -77,6 +77,7 @@ SPRACHEN = {
 }
 
 _BWRAP = "/usr/bin/bwrap"
+SKILL_ZIEL = "/skills"    # darunter <name>/, wie bei Claude /mnt/skills/…
 
 
 def _bwrap_pfad() -> str | None:
@@ -134,9 +135,22 @@ def _tmp_argumente(bwrap: str) -> list:
     return ["--tmpfs", "/tmp"]
 
 
+def skill_pfad(skill_ordner: str) -> str:
+    """Wo ein Skill-Ordner in der Sandbox liegt: /skills/<name>. Der Name
+    bleibt, damit Skripte wie package_skill.py ihn richtig benennen."""
+    return SKILL_ZIEL + "/" + os.path.basename(os.path.normpath(skill_ordner))
+
+
 def _bwrap_befehl(bwrap: str, arbeit: str, programm: str, sprache: str,
-                  status_fd: int) -> list:
+                  status_fd: int, skill_ordner: str | None = None) -> list:
     datei, aufruf = SPRACHEN[sprache]
+    # Ein Skill-Ordner (scripts/, references/ …) nur lesend unter
+    # /skills/<name> —
+    # die eine Ausnahme vom „nichts von Sasha" (2026-10-07): ohne sie liefen
+    # Skill-Skripte nur, wenn das Modell sie abtippt. Nur DIESER Ordner,
+    # nichts daneben; schreiben geht weiter nur nach /arbeit.
+    skill = (["--ro-bind", skill_ordner, skill_pfad(skill_ordner)]
+             if skill_ordner else [])
     return [
         bwrap,
         "--unshare-all", "--die-with-parent", "--new-session",
@@ -146,6 +160,7 @@ def _bwrap_befehl(bwrap: str, arbeit: str, programm: str, sprache: str,
         *_tmp_argumente(bwrap),
         "--bind", arbeit, "/arbeit",
         "--ro-bind", programm, "/eingabe/" + datei,
+        *skill,
         # Die Wurzel selbst ist ein Speicher-Dateisystem von bwrap; ohne das
         # hier könnte ein Programm dort beliebig viel ablegen (RAM).
         "--remount-ro", "/",
@@ -363,7 +378,8 @@ def ausfuehren(code: str, sprache: str = "python",
                zeitlimit_s: float = ZEITLIMIT_STANDARD_S,
                dateien: dict | None = None,
                lauf_id: str | None = None,
-               abbruch=None) -> dict:
+               abbruch=None,
+               skill_ordner: str | None = None) -> dict:
     """Code in der Sandbox laufen lassen.
 
     Rückgabe: ausgabe, fehler (stdout/stderr, gekappt), rc (None = gar nicht
@@ -377,7 +393,9 @@ def ausfuehren(code: str, sprache: str = "python",
 
     `dateien`: {name: text}, wird vor dem Lauf in den Arbeitsordner gelegt.
     `lauf_id`: gleiche id = gleicher Ordner (Dateien bleiben zwischen Läufen);
-    ohne = ein frischer."""
+    ohne = ein frischer.
+    `skill_ordner`: ein Skill-Ordner, nur lesend unter /skills/<name> (skills.
+    skript_ordner prüft vorher, dass der Skill aktiv ist)."""
     if sprache not in SPRACHEN:
         return _ergebnis(fehler=f"Unbekannte Sprache {sprache!r} "
                                 f"(geht: {', '.join(SPRACHEN)}).")
@@ -389,6 +407,8 @@ def ausfuehren(code: str, sprache: str = "python",
     zeitlimit_s = max(1.0, min(float(zeitlimit_s or ZEITLIMIT_STANDARD_S),
                                ZEITLIMIT_MAX_S))
 
+    if skill_ordner is not None and not os.path.isdir(skill_ordner):
+        return _ergebnis(fehler=f"Kein Skill-Ordner {skill_ordner!r}.")
     aufraeumen()
     lauf_id = lauf_id or lauf_kennung()
     if _sicherer_name(lauf_id) != lauf_id or os.sep in lauf_id:
@@ -417,7 +437,7 @@ def ausfuehren(code: str, sprache: str = "python",
         with open(programm, "w", encoding="utf-8") as f:
             f.write(code or "")
         return _laufen(bwrap, arbeit, programm, sprache, zeitlimit_s, vorher,
-                       abbruch)
+                       abbruch, skill_ordner)
     finally:
         shutil.rmtree(eingabe, ignore_errors=True)
 
@@ -444,12 +464,13 @@ def _warten(proc, zeitlimit_s, abbruch):
 
 
 def _laufen(bwrap, arbeit, programm, sprache, zeitlimit_s, vorher,
-            abbruch=None) -> dict:
+            abbruch=None, skill_ordner=None) -> dict:
     status_r, status_w = os.pipe()
     start = time.monotonic()
     try:
         proc = subprocess.Popen(
-            _bwrap_befehl(bwrap, arbeit, programm, sprache, status_w),
+            _bwrap_befehl(bwrap, arbeit, programm, sprache, status_w,
+                          skill_ordner),
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, pass_fds=(status_w,),
             start_new_session=True, preexec_fn=_grenzen_setzen,

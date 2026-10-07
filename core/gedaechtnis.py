@@ -273,6 +273,16 @@ def kernakte_schreiben(akte: str, text: str) -> str:
     return kernakte_stand(neu)
 
 
+# Kopf einer neuen Hausregel-Datei und eine Regel-Zeile — eine Stelle für
+# regel_notieren und den Skill-Umzug (core/skill_umzug.py, 2026-10-07).
+HAUSREGELN_KOPF = ("# Hausregeln\n\n> Von Sasha im Gespräch gesetzt. Er darf "
+                   "hier jederzeit streichen und ändern.\n\n")
+
+
+def regel_zeile(text: str) -> str:
+    return f"- {text}  _(seit {date.today().strftime('%d.%m.%Y')})_\n"
+
+
 def regel_notieren(text: str) -> str:
     """Eine Hausregel anhaengen, mit Datum.
 
@@ -288,10 +298,9 @@ def regel_notieren(text: str) -> str:
     pfad = _pfad("", HAUSREGELN)
     if not os.path.exists(pfad):
         with open(pfad, "w", encoding="utf-8") as f:
-            f.write("# Hausregeln\n\n> Von Sasha im Gespräch gesetzt. Er darf "
-                    "hier jederzeit streichen und ändern.\n\n")
+            f.write(HAUSREGELN_KOPF)
     with open(pfad, "a", encoding="utf-8") as f:
-        f.write(f"- {text}  _(seit {date.today().strftime('%d.%m.%Y')})_\n")
+        f.write(regel_zeile(text))
     return f"Als Hausregel festgehalten: {text}"
 
 

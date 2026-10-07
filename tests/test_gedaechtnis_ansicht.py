@@ -314,3 +314,20 @@ def test_chat_leitet_befehl_und_tasten_weiter(backend):
     assert c.AI["gedaechtnis"] is not None
     c.taste(-1)
     assert c.AI["gedaechtnis"] is not None
+
+
+def test_inhalt_skills_zeigt_braucht_und_hinweis():
+    """2026-10-07: Anthropic-Skills, die ZENTRALE nicht kann, sind aus — und
+    Sasha sieht warum („braucht: …"), dazu Vermerke wie bei recherche."""
+    daten = {"skills": [
+        {"name": "webapp-testing", "beschreibung": "Browser-Tests", "status": "aus",
+         "herkunft": "anthropic", "braucht": "einen Browser, den die KI steuern kann"},
+        {"name": "recherche", "beschreibung": "im netz", "status": "aktiv",
+         "herkunft": "sasha", "vermerk": "Kandidat zum Ersetzen"}]}
+    z, _ = inhalt_zeilen(daten, "skills", 60, wahl=0)
+    texte = [t for t, _ in z]
+    assert texte[0].endswith("aus · von anthropic")
+    assert any(t.startswith("    braucht: einen Browser") for t in texte)
+    assert "steuern kann" in " ".join(texte)              # umbrochen, nicht abgeschnitten
+    assert "    hinweis: Kandidat zum Ersetzen" in texte
+    assert all(len(t) <= 60 for t in texte)

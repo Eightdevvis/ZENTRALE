@@ -1,0 +1,20 @@
+{
+  "quelle": "github.com/anthropics/skills, Commit 683bc88, Apache-2.0 (LICENSE.txt im Skill-Ordner)",
+  "stand": "2026-10-07",
+  "skills": {
+    "academy-guide":         {"status": "aktiv"},
+    "algorithmic-art":       {"status": "aus", "braucht": "einen Browser zum Ansehen (die Kunst ist eine Webseite, die ihr Zeichenprogramm aus dem Netz lädt)"},
+    "brand-guidelines":      {"status": "aus", "braucht": "Ausgaben mit Farben und Schriften (Folien, Seiten) — die Ablage kann nur Text"},
+    "canvas-design":         {"status": "aus", "braucht": "Bilder als Ausgabe (PNG/PDF) und eine Möglichkeit, sie anzusehen; die Schriften aus canvas-fonts/ (5,5 MB, SIL OFL) sind nicht mitgeliefert — bei Bedarf aus dem Anthropic-Repo nachholen"},
+    "claude-api":            {"status": "aktiv"},
+    "discernment-nudge":     {"status": "aktiv"},
+    "frontend-design":       {"status": "aktiv"},
+    "internal-comms":        {"status": "aktiv"},
+    "mcp-builder":           {"status": "aus", "braucht": "Anschlüsse an fremde Dienste (MCP), die ZENTRALE noch nicht hat, und Internet beim Bauen"},
+    "skill-creator":         {"status": "aktiv"},
+    "slack-gif-creator":     {"status": "aus", "braucht": "Slack und Bilder als Ausgabe (GIF); der Sandbox fehlen die nötigen Bild-Bibliotheken"},
+    "theme-factory":         {"status": "aus", "braucht": "Folien oder Seiten mit Farben und Schriften und ein PDF zum Ansehen — die Ablage kann nur Text"},
+    "webapp-testing":        {"status": "aus", "braucht": "einen Browser, den die KI steuern kann, und Netz zur getesteten Seite"},
+    "web-artifacts-builder": {"status": "aus", "braucht": "Programmier-Werkzeuge für Webseiten (Node/npm) mit Internet und einen Browser zum Ansehen"}
+  }
+}

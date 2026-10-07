@@ -39,7 +39,10 @@ RIESEN_BEREICHE = ("core", "ui", "tui", "tutor")
 RIESE_FUNKTION = 250
 RIESE_DATEI = 1500
 
-UEBERSPRINGEN = ("__pycache__",)
+# skill_vorlagen/: mitgelieferte Skills, darunter fremder Code von Anthropic
+# (core/skill_vorlagen/anthropic/, 2026-10-07) — Daten für die Sandbox, kein
+# Teil des Kerns und nie importiert.
+UEBERSPRINGEN = ("__pycache__", "skill_vorlagen")
 
 
 # ── Bauplan lesen ──────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ Geprüft: was die Ansicht bekommt; nur die drei Kernakten sind schreibbar
 geschrieben hat (409); Skill an/aus wirkt auf Prompt und load_skill;
 Fehlerfälle mit Klartext.
 """
+import json
 import os
 
 import pytest
@@ -21,6 +22,11 @@ import state
 def eigener_ordner(tmp_path, monkeypatch):
     monkeypatch.setattr(gedaechtnis, "_DIR", str(tmp_path / "gedaechtnis"))
     monkeypatch.setattr(state, "push_log", lambda *a, **k: None)
+    # Ohne mitgelieferte Skills (Erstbefüllung) — nur die des Tests.
+    leer = tmp_path / "keine_vorlagen"
+    leer.mkdir()
+    monkeypatch.setattr(skills, "VORLAGEN_DIR", str(leer))
+    monkeypatch.setattr(skills, "ANTHROPIC_STATUS", str(leer / "x.json"))
 
 
 @pytest.fixture
@@ -41,11 +47,14 @@ def _schreiben(name, text):
 
 
 def _skill(name, status="aktiv"):
-    ordner = gedaechtnis.bereich_ordner(gedaechtnis.SKILLS)
+    """Ein Skill im Claude-Format (seit 2026-10-07): Ordner mit SKILL.md,
+    ZENTRALEs Status daneben in _zentrale.json."""
+    ordner = os.path.join(gedaechtnis.bereich_ordner(gedaechtnis.SKILLS), name)
     os.makedirs(ordner, exist_ok=True)
-    with open(os.path.join(ordner, name + ".md"), "w", encoding="utf-8") as f:
-        f.write(f"## {name}\n- beschreibung: wenn {name}\n- erstellt: 2026-10-07\n"
-                f"- herkunft: sasha\n- status: {status}\n\nSchritt eins.\n")
+    with open(os.path.join(ordner, "SKILL.md"), "w", encoding="utf-8") as f:
+        f.write(f"---\nname: {name}\ndescription: wenn {name}\n---\n\nSchritt eins.\n")
+    with open(os.path.join(ordner, "_zentrale.json"), "w", encoding="utf-8") as f:
+        json.dump({"status": status, "herkunft": "sasha", "erstellt": "2026-10-07"}, f)
 
 
 # ── GET ────────────────────────────────────────────────────────────────
@@ -55,7 +64,7 @@ def test_get_liefert_kernakten_bereiche_und_skills(client):
     _schreiben("sasha", "# Sasha\n\nStudiert.\n")
     os.makedirs(os.path.join(gedaechtnis._DIR, "dossiers"), exist_ok=True)
     _schreiben("dossiers/umzug", "# umzug\n")
-    _skill("kurz")
+    _skill("plan")
     d = client.get("/api/gedaechtnis").get_json()
     assert [k["akte"] for k in d["kernakten"]] == ["hausregeln", "steckbrief", "ziele"]
     akten = {k["akte"]: k for k in d["kernakten"]}
@@ -65,7 +74,7 @@ def test_get_liefert_kernakten_bereiche_und_skills(client):
     bereiche = {b["bereich"]: b["titel"] for b in d["bereiche"]}
     assert bereiche["dossiers"] == ["umzug"] and bereiche["notizen"] == []
     assert "skills" not in bereiche
-    assert [s["name"] for s in d["skills"]] == ["kurz"]
+    assert [s["name"] for s in d["skills"]] == ["plan"]
 
 
 # ── PUT Kernakte ───────────────────────────────────────────────────────
@@ -135,38 +144,41 @@ def test_leerer_text_leert_die_akte(client):
 # ── Skill-Status ───────────────────────────────────────────────────────
 
 def test_skill_ausschalten_und_wieder_an(client):
-    _skill("kurz")
-    r = client.post("/api/skills/kurz/status", json={"status": "aus"})
+    _skill("plan")
+    r = client.post("/api/skills/plan/status", json={"status": "aus"})
     assert r.status_code == 200 and r.get_json()["skill"]["status"] == "aus"
-    assert "kurz" not in skills.prompt_block()
-    assert "nicht aktiv" in skills.laden("kurz")
-    ordner = gedaechtnis.bereich_ordner(gedaechtnis.SKILLS)
-    assert os.path.exists(os.path.join(ordner, "kurz.md.bak"))
-    with open(os.path.join(ordner, "kurz.md"), encoding="utf-8") as f:
+    assert "plan" not in skills.prompt_block()
+    assert "nicht aktiv" in skills.laden("plan")
+    ordner = os.path.join(gedaechtnis.bereich_ordner(gedaechtnis.SKILLS), "plan")
+    with open(os.path.join(ordner, "SKILL.md"), encoding="utf-8") as f:
         text = f.read()
-    assert "Schritt eins." in text and "herkunft:" in text   # Inhalt + Kopf bleiben
-    r = client.post("/api/skills/kurz/status", json={"status": "aktiv"})
+    assert "Schritt eins." in text and "status" not in text   # Claude-Datei bleibt
+    with open(os.path.join(ordner, "_zentrale.json"), encoding="utf-8") as f:
+        assert json.load(f)["status"] == "aus"
+    r = client.post("/api/skills/plan/status", json={"status": "aktiv"})
     assert r.get_json()["skill"]["status"] == "aktiv"
-    assert "kurz" in skills.prompt_block()
+    assert "plan" in skills.prompt_block()
 
 
 def test_skill_status_fehlerfaelle(client):
-    _skill("kurz")
+    _skill("plan")
     assert client.post("/api/skills/gibtsnicht/status",
                        json={"status": "aus"}).status_code == 404
-    # Nur der genaue Dateiname — keine Schreibvarianten.
-    assert client.post("/api/skills/Kurz/status", json={"status": "aus"}).status_code == 404
+    # Nur der genaue Ordnername — keine Schreibvarianten.
+    assert client.post("/api/skills/Plan/status", json={"status": "aus"}).status_code == 404
     for body in ({"status": "kaputt"}, {}, None):
-        r = client.post("/api/skills/kurz/status", json=body)
+        r = client.post("/api/skills/plan/status", json=body)
         assert r.status_code == 400, body
     assert skills.alle()[0]["status"] == "aktiv"
 
 
 def test_gleicher_status_schreibt_nichts():
-    _skill("kurz")
-    skills.status_setzen("kurz", "aktiv")
-    ordner = gedaechtnis.bereich_ordner(gedaechtnis.SKILLS)
-    assert not os.path.exists(os.path.join(ordner, "kurz.md.bak"))
+    _skill("plan")
+    datei = os.path.join(gedaechtnis.bereich_ordner(gedaechtnis.SKILLS), "plan",
+                         "_zentrale.json")
+    os.utime(datei, (1_000_000, 1_000_000))
+    skills.status_setzen("plan", "aktiv")
+    assert os.path.getmtime(datei) == 1_000_000
 
 
 def test_vorgeschlagen_laesst_sich_freigeben():

@@ -255,8 +255,8 @@ Doku: `memory/ki/gedaechtnis_dateien.md` → „Für Sasha sichtbar und änderba
 
 | Endpoint      | Methode | Beschreibung |
 |---------------|---------|--------------|
-| `/api/skills` | GET     | Alle Skills (`core/skills.py`), nach Name: `{skills: [{name, beschreibung, status, herkunft, erstellt}]}` — auch ausgeschaltete und vorgeschlagene. Siehe `memory/ki/ki_system.md` → Skills. |
-| `/api/skills/<name>/status` | POST | Skill schalten, Body `{status: aktiv\|aus\|vorgeschlagen}` → `{skill}`. Nur der Kopf ändert sich, alte Fassung als `.bak`. Unbekannter Skill (nur der genaue Dateiname) → 404, anderer Status → 400. |
+| `/api/skills` | GET     | Alle Skills (`core/skills.py`, Claude-Format), nach Name: `{skills: [{name, beschreibung, status, herkunft, erstellt, braucht, vermerk}]}` — auch ausgeschaltete und vorgeschlagene. `beschreibung` = `description` der SKILL.md; `herkunft` sasha\|ki\|anthropic\|`-`; `braucht` = was ZENTRALE fehlt (warum aus), sonst `""`. Siehe `memory/ki/ki_system.md` → Skills. |
+| `/api/skills/<name>/status` | POST | Skill schalten, Body `{status: aktiv\|aus\|vorgeschlagen}` → `{skill}`. Nur `_zentrale.json` ändert sich, die SKILL.md bleibt. Unbekannter Skill (nur der genaue Ordnername) → 404, anderer Status → 400. |
 | `/api/gedaechtnis` | GET | `{kernakten: [{akte, text, stand}], bereiche: [{bereich, titel: [...]}], skills: [...]}` — Kernakten in der Reihenfolge `hausregeln`, `steckbrief`, `ziele` (ganzer Text, `stand` = Fingerabdruck), Bereiche nur mit Titeln. |
 | `/api/gedaechtnis/<akte>` | PUT | Eine Kernakte ersetzen, Body `{text, stand?}` → `{akte, text, stand}`. Nur `hausregeln`, `steckbrief`, `ziele` (sonst 404). Atomar, alte Fassung als `.bak`. `stand` weicht ab (die KI hat inzwischen geschrieben) → 409; kein Text → 400; über 20.000 Zeichen → 400. |
 

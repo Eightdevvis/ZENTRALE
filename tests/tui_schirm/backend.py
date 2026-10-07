@@ -98,7 +98,12 @@ _GEDAECHTNIS = {
          "mit Quellen belegt werden soll.", "status": "aus", "herkunft": "sasha",
          "erstellt": "2026-10-07"},
         {"name": "wochenplan", "beschreibung": "Wenn die Woche geplant wird.",
-         "status": "vorgeschlagen", "herkunft": "ki", "erstellt": "2026-10-07"}]}
+         "status": "vorgeschlagen", "herkunft": "ki", "erstellt": "2026-10-07"},
+        # 2026-10-07: Anthropic-Skill, aus, mit „braucht" (Gedächtnis-Ansicht).
+        {"name": "webapp-testing", "beschreibung": "Toolkit for interacting with and "
+         "testing local web applications using Playwright.", "status": "aus",
+         "herkunft": "anthropic", "erstellt": "2026-10-07",
+         "braucht": "einen Browser, den die KI steuern kann, und Netz zur getesteten Seite"}]}
 # Erfundene Ablage (Phase 5, 2026-10-07): ein Dokument mit zwei Fassungen,
 # ein Bild-Anhang.
 _ABLAGE = {"dokumente": [

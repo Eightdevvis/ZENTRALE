@@ -1,8 +1,7 @@
-## wochenplan
-- beschreibung: Sasha will wissen, was diese oder nächste Woche ansteht, oder eine Woche planen.
-- erstellt:     2026-10-07
-- herkunft:     sasha
-- status:       aktiv
+---
+name: wochenplan
+description: "Sasha will wissen, was diese oder nächste Woche ansteht, oder eine Woche planen."
+---
 
 1. Kalender lesen: read_calendar mit zeitraum "diese_woche" bzw. "naechste_woche". Nichts aus dem Kopf.
 2. Zusammenfassen Tag für Tag, nur Tage mit etwas drauf, je Termin eine kurze Zeile (Uhrzeit, was, wo). Routinen nur nennen, wenn sie diese Woche anders liegen oder ausfallen.

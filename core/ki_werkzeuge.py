@@ -465,9 +465,17 @@ def _run_code(args: dict) -> str:
     # laufenden Prozess sofort, nicht erst nach dem Zeitlimit. Über 2
     # Minuten hat das Gate schon mit der Dauer gefragt (Register:
     # nur_einmal); hier nur noch die harte Obergrenze.
+    # Skill-Skripte (2026-10-07): der Ordner eines AKTIVEN Skills nur lesend
+    # unter /skills/<name> — sonst nichts von Sasha.
+    extra = {}
+    if str(args.get("skill") or "").strip():
+        skill_ordner, fehler = skills.skript_ordner(str(args["skill"]))
+        if fehler:
+            return fehler
+        extra["skill_ordner"] = skill_ordner
     erg = sandbox.ausfuehren(code, sprache=sprache, lauf_id=lauf,
                              zeitlimit_s=max(1, min(zeit, sandbox.ZEITLIMIT_MAX_S)),
-                             abbruch=zug.abbruch())
+                             abbruch=zug.abbruch(), **extra)
     text = sandbox.als_text(erg)
     if erg.get("dateien_neu"):
         # Behalten nur auf Sashas Wunsch (2026-10-07), nicht als Einladung.
@@ -482,7 +490,8 @@ def _run_code(args: dict) -> str:
 
 @ausfuehrer("load_skill")
 def _load_skill(args: dict) -> str:
-    return skills.laden(args.get("name") or "")
+    return skills.laden(args.get("name") or "", str(args.get("datei") or ""),
+                        args.get("ab"))
 
 
 @ausfuehrer("propose_skill")

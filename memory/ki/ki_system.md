@@ -324,7 +324,7 @@ und nimmt beide Schreibweisen an (siehe „Zwei Schienen" weiter unten).
 | `ask_choice`  | `frage_knopf`| Sasha eine Frage mit Knöpfen stellen (s. unten) |
 | `antwort`     | nur `klein`  | Finale Antwort über den Tool-Kanal (Framing-Effekt, 9B-Krücke) |
 | `run_code`    | nur `gross`  | Python/Shell abgeschottet ausführen, jeder Lauf gegatet (s. „Sandbox") |
-| `load_skill` / `propose_skill` / `edit_skill` | nur `gross` | Skill-Anleitung holen; neuen vorschlagen bzw. bestehenden umschreiben (beide gegatet) (s. „Skills") |
+| `load_skill` / `propose_skill` / `edit_skill` | nur `gross` | Skill-Anleitung (oder mit `datei` eine Datei daraus) holen; neuen vorschlagen bzw. bestehenden umschreiben (beide gegatet) (s. „Skills") |
 | `search_chats` / `read_chat` | nur `gross` | Frühere Gespräche durchsuchen/nachlesen; `search_chats` mit `projekt` nur in einem Projekt (s. „Frühere Gespräche") |
 | `read_project_file` | nur `gross` | Wissensdatei des Projekts dieses Gesprächs lesen (s. „Projekte") |
 
@@ -365,10 +365,18 @@ ein Kreis wäre.
 
 Grundlage dafür, dass der Assistent später „wie ein Coder" arbeitet (Phase 7,
 [claude_web_plan.md](claude_web_plan.md)). Das Werkzeug `run_code` (nur
-`gross`, Parameter `code`, `sprache` python|shell, `zeitlimit`) ist
+`gross`, Parameter `code`, `sprache` python|shell, `zeitlimit`, `skill`) ist
 **immer** gegatet; die Frage zeigt Sprache und die ersten vier Zeilen.
 Ausgeführt wird über `sandbox.ausfuehren(code, sprache, zeitlimit_s, dateien,
-lauf_id, abbruch)` mit **bubblewrap** (`/usr/bin/bwrap`, unprivilegiert).
+lauf_id, abbruch, skill_ordner)` mit **bubblewrap** (`/usr/bin/bwrap`, unprivilegiert).
+
+**Skill-Skripte (seit 2026-10-07):** mit `skill="<name>"` hängt die Sandbox
+den Ordner dieses Skills **nur lesend** unter `/skills/<name>` ein (wie
+Claudes `/mnt/skills/…`) — die einzige Ausnahme von „nichts von Sasha", und
+nur für einen **aktiven** Skill (`skills.skript_ordner`); sonst läuft nichts.
+Die Frage nennt den Skill („… dazu sieht es den Skill „x" (nur lesen)").
+Geschrieben wird weiter nur nach `/arbeit`. Geprobt mit `quick_validate.py`
+und `package_skill.py` des skill-creator (`tests/test_skill_skripte.py`).
 
 **Zeitlimit (seit 2026-10-07, Sasha):** Standard 30 s, bis 120 s mit dem
 normalen Ja (auch „immer"/„für dieses Gespräch"). Länger (bis 30 min,
@@ -424,38 +432,67 @@ Beschreibung; „immer" wird dafür nicht angeboten).
 
 ### Skills — `load_skill`, `propose_skill`, `edit_skill` (seit 2026-10-07)
 
-Phase 4 des [Claude-Web-Plans](claude_web_plan.md). Ein Skill ist eine
-**Anleitung für eine Art Aufgabe** („Woche planen", „recherchieren"), keine
-Regel: was immer gilt, sind Hausregeln. Modul `core/skills.py` (Schicht 2),
-Dateien `data/gedaechtnis/skills/<name>.md` — Aufbau und Erstbefüllung in
+Phase 4 des [Claude-Web-Plans](claude_web_plan.md); seit dem Abend des
+07.10. im **Format von Claude** (Sasha: echte Claude-Skills sollen ohne
+Umbau hineinpassen). Ein Skill ist eine **Anleitung für eine Art Aufgabe**
+(„Woche planen", „einen Skill bauen"), keine Regel: was immer gilt, sind
+Hausregeln. Module `core/skills.py`, `core/skill_format.py`,
+`core/skill_umzug.py` (Schicht 2), Ordner `data/gedaechtnis/skills/<name>/`
+mit `SKILL.md` — Aufbau, Status, Umzug und Erstbefüllung in
 [gedaechtnis_dateien.md](gedaechtnis_dateien.md), Abschnitt „Skills".
 
-**Im Prompt nur die Liste.** `skills.prompt_block()` steht im festen,
-gecachten Kopf (`cloud._static_system`, hinter dem Gedächtnis-Kopf, nur wenn
-die Schiene `MERKMALE["skills"]` hat — `gross` ja, `klein` nicht): eine Zeile
-`- name — beschreibung` je **aktivem** Skill, nach Name sortiert, ohne Datum
-oder Zähler. Sie ändert sich nur, wenn sich eine Skill-Datei ändert. Der
-Inhalt kommt per `load_skill` als Werkzeug-Ergebnis und wandert mit dem
-Verlauf, ohne den Cache-Anfang zu berühren. Wann laden, wann vorschlagen:
-Meta-Regel 6 in `profil/gross.py`.
+**Drei Stufen wie bei Claude („Progressive Disclosure"):**
+1. **Liste im Kopf.** `skills.prompt_block()` steht im festen, gecachten
+   Kopf (`cloud._static_system`, hinter dem Gedächtnis-Kopf, nur wenn die
+   Schiene `MERKMALE["skills"]` hat — `gross` ja, `klein` nicht): eine
+   Zeile `- name — description` je **aktivem** Skill, nach Name sortiert,
+   ohne Datum oder Zähler. Die `description` ist Claudes Auslöser und darf
+   bis 1.024 Zeichen lang sein. **Deckel für die ganze Liste: 6.000
+   Zeichen** (`LISTE_MAX`, ≈ 1.700 Token, gecacht ≈ 0,05 Cent je Zug; nicht
+   größer als der übrige feste Kopf). Die Start-Skills brauchen ~4.300.
+   Darüber werden alle Beschreibungen gleichmäßig gekürzt (nicht unter 160),
+   danach stehen die letzten nur noch mit Namen da — deterministisch.
+2. **Anleitung per `load_skill(name)`** als Werkzeug-Ergebnis (wandert mit
+   dem Verlauf, berührt den Cache-Anfang nicht): der Text der SKILL.md ohne
+   Kopf, je Aufruf 20.000 Zeichen (weiter mit `ab`), dazu die Liste seiner
+   Dateien (ohne Lizenz und `_zentrale.json`). Liegt `references/zentrale.md`
+   im Skill (ZENTRALEs Zusatz zu einem fremden Skill), steht vorne der
+   Hinweis, sie zuerst zu lesen.
+3. **Dateien per `load_skill(name, datei=…)`** (references/, assets/,
+   scripts/ lesen); kein Weg aus dem Skill-Ordner (echter Pfad muss drin
+   liegen, Verweise aufgelöst), Binärdateien nur als Hinweis. **Skripte
+   laufen nur über `run_code(skill=…)`** in der Sandbox (s. „Sandbox").
+
+Wann laden, wann vorschlagen: Meta-Regel 6 in `profil/gross.py`.
 
 | Werkzeug | Was | Gate |
 |---|---|---|
-| `load_skill(name)` | Inhalt eines aktiven Skills; ausgeschaltete/vorgeschlagene geben nichts heraus | nein |
-| `propose_skill(name, beschreibung, inhalt)` | neuen Skill anlegen (`herkunft: ki`, `status: aktiv`); bestehender Name → Fehler | **ja** — Frage zeigt Name, Beschreibung, erste drei Zeilen |
-| `edit_skill(name, inhalt)` | Anleitung eines bestehenden ersetzen; Kopf bleibt, alte Fassung als `.bak` | **ja** |
+| `load_skill(name, datei?, ab?)` | Anleitung bzw. Datei eines aktiven Skills; ausgeschaltete/vorgeschlagene geben nichts heraus | nein |
+| `propose_skill(name, beschreibung, inhalt)` | neuen Skill anlegen: `SKILL.md` (Kopf nur `name` + `description`) + `_zentrale.json` (`herkunft: ki`, `status: aktiv`); bestehender Name → Fehler | **ja** — Frage zeigt Name, Beschreibung, erste drei Zeilen |
+| `edit_skill(name, inhalt)` | Anleitung ersetzen; der YAML-Kopf bleibt Zeichen für Zeichen (auch fremde Felder), alte Fassung als `SKILL.md.bak` | **ja** |
 
 Sagt Sasha nein, läuft der Ausführer gar nicht: die Schleife meldet dem
 Modell „abgelehnt — nichts ausführen" (`werkzeug_schleife.run_tool`), es
-entsteht keine Datei. Ein vom Modell mitgeschickter Kopf wird bei
-`edit_skill` verworfen: Beschreibung, Herkunft und Status ändert nur Sasha in
-der Datei. Grenzen: Beschreibung ≤ 160 Zeichen (sie steht bei jedem Zug im
-Kopf), Inhalt ≤ 6.000. Text-Budget der drei Beschreibungen: eigener Deckel
-< 600 Zeichen in `tests/test_profil.py`. Anzeige: `GET /api/skills`
-([api_endpoints.md](../system/api_endpoints.md)). Seit Phase 3 sieht und
-schaltet Sasha Skills in der TUI (`/skills` im Chat, Gedächtnis-Ansicht;
-`POST /api/skills/<name>/status`) — die KI kann einen Skill weiterhin nicht
-abschalten.
+entsteht keine Datei. Ein vom Modell mitgeschickter Kopf (mit `name` oder
+`description`) wird bei `edit_skill` verworfen: Name und Beschreibung ändert
+nur Sasha, Status und Herkunft stehen ohnehin in `_zentrale.json`. Grenzen:
+Beschreibung ≤ 1.024 Zeichen ohne `<` `>` (Claudes Regeln), Anleitung ≤
+20.000. Die KI kann nur die SKILL.md schreiben, keine weiteren Dateien.
+Text-Budget der drei Beschreibungen: eigener Deckel < 600 Zeichen in
+`tests/test_profil.py`. Anzeige: `GET /api/skills` mit `braucht` und
+`vermerk` ([api_endpoints.md](../system/api_endpoints.md)). Sasha sieht und
+schaltet Skills in der TUI (`/skills` im Chat, Gedächtnis-Ansicht;
+`POST /api/skills/<name>/status`) — die KI kann keinen Skill abschalten.
+
+**Skills von Anthropic** (seit 2026-10-07): 14 Skills aus
+github.com/anthropics/skills (Commit 683bc88, nur Apache 2.0) liegen als
+Vorlagen in `core/skill_vorlagen/anthropic/` (Herkunft und Lizenz:
+`README.md` dort). An: skill-creator, academy-guide, claude-api,
+discernment-nudge, frontend-design, internal-comms. Aus mit „braucht: …"
+(Browser, Bildausgabe, Node/npm, MCP, Slack): die übrigen acht. Der
+skill-creator bekam `references/zentrale.md` dazu — was davon hier geht
+(Testläufe selbst ausführen, Ergebnisse in die Ablage, kein `claude -p`,
+kein Browser).
 
 ### Frühere Gespräche — `search_chats`, `read_chat` (seit 2026-10-07)
 

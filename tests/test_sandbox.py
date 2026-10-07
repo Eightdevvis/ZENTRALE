@@ -196,7 +196,8 @@ def test_tmp_ist_begrenzt():
 def test_zeitlimit_wird_gedeckelt(monkeypatch):
     gesehen = {}
 
-    def laufen(bwrap, arbeit, programm, sprache, zeit, vorher, abbruch=None):
+    def laufen(bwrap, arbeit, programm, sprache, zeit, vorher, abbruch=None,
+               skill_ordner=None):
         gesehen["zeit"] = zeit
         return sandbox._ergebnis(rc=0)
     monkeypatch.setattr(sandbox, "_bwrap_pfad", lambda: "/usr/bin/bwrap")

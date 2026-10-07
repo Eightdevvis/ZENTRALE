@@ -601,3 +601,37 @@ def test_projekte_liegen_im_test_nicht_im_echten_data():
     c.post(f"/api/projekte/{pid}/wissen", json={"name": "a", "text": "b"})
     c.post("/api/chat/clear", json={"projekt": pid})
     assert stand() == vorher
+
+
+def test_skill_umzug_und_erstbefuellung_lassen_das_echte_data_in_ruhe():
+    """Seit 2026-10-07 zieht jeder Zugriff alte Skill-Dateien ins Claude-
+    Format um, liefert Vorlagen nach und hängt für „kurz" eine Hausregel an.
+    Im Test geschieht das nur in der Umlenkung: unter data/gedaechtnis/ dieses
+    Checkouts und des Haupt-Checkouts ändert sich nichts (Skills, Hausregeln)."""
+    import gedaechtnis
+    import skills
+    haupt = ROOT.split(os.sep + ".claude" + os.sep + "worktrees" + os.sep)[0]
+
+    def stand():
+        raus = {}
+        for basis in (ROOT, haupt):
+            wurzel = os.path.join(basis, "data", "gedaechtnis")
+            for name in ("hausregeln.md", "hausregeln.md.bak"):
+                p = os.path.join(wurzel, name)
+                raus[p] = os.stat(p).st_mtime_ns if os.path.exists(p) else None
+            ordner = os.path.join(wurzel, "skills")
+            for ort, _, dateien in (os.walk(ordner) if os.path.isdir(ordner) else ()):
+                for d in dateien:
+                    p = os.path.join(ort, d)
+                    raus[p] = os.stat(p).st_mtime_ns
+            raus[ordner] = sorted(os.listdir(ordner)) if os.path.isdir(ordner) else None
+        return raus
+
+    vorher = stand()
+    skills.alle()
+    skills.prompt_block()
+    skills.laden("skill-creator")
+    assert stand() == vorher
+    for echt in (os.path.join(ROOT, "data"), os.path.join(haupt, "data")):
+        assert not os.path.realpath(skills.ordner()).startswith(os.path.realpath(echt))
+        assert not os.path.realpath(gedaechtnis._DIR).startswith(os.path.realpath(echt))

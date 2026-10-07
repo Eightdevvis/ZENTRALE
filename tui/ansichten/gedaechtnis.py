@@ -40,7 +40,7 @@ KERNAKTEN = ("hausregeln", "steckbrief", "ziele")
 
 # Wörter, die Sasha sieht (keine Fachwörter aus der Datei).
 STATUS_WORT = {"aktiv": "an", "aus": "aus", "vorgeschlagen": "vorgeschlagen"}
-HERKUNFT_WORT = {"sasha": "von dir", "ki": "von der ki"}
+HERKUNFT_WORT = {"sasha": "von dir", "ki": "von der ki", "anthropic": "von anthropic"}
 
 
 # ── Reine Helfer ─────────────────────────────────────────────────────────
@@ -133,6 +133,12 @@ def inhalt_zeilen(daten, abschnitt, breite, wahl=0):
         zeilen.append(((links + " " * luecke + rechts)[:breite], art))
         for z in md_zeilen(s.get("beschreibung") or "", breite - 4)[:2]:
             zeilen.append(("    " + z[0], "leise"))
+        # 2026-10-07: warum ein Skill aus ist („braucht: …") oder was Sasha
+        # zu ihm wissen soll (vermerk) — je eine Zeile, aus /api/skills.
+        for wort, feld in (("braucht", "braucht"), ("hinweis", "vermerk")):
+            if s.get(feld):
+                for z in md_zeilen("%s: %s" % (wort, s[feld]), breite - 4)[:2]:
+                    zeilen.append(("    " + z[0], "leise"))
     return zeilen, ziel
 
 
