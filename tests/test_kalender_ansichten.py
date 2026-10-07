@@ -1,4 +1,4 @@
-"""Kalender-Ansichten A/B/C (tui/kalender_ansichten.py) — ohne Terminal.
+"""Kalender-Ansichten A/B/C (tui/ansichten/kalender_ansichten.py) — ohne Terminal.
 
 Was zählt: keine Zeile wird breiter als erlaubt (sonst zerreißt es die TUI),
 und Spannen sind als EIN zusammenhängendes Ding zu sehen — Sashas
@@ -7,8 +7,8 @@ entscheidet Sasha; geprüft wird nur, was sie tragen muss.
 """
 import pytest
 
-from tui import kalender_ansichten as ka
-from tui import kalender_beispiel as kb
+from tui.ansichten import kalender_ansichten as ka
+from tui.ansichten import kalender_beispiel as kb
 
 BREITEN = (40, 70, 110, 136)
 HOEHEN = (12, 30, 45)

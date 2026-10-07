@@ -892,7 +892,7 @@ in die Quelle, Löschen bricht nur den Link. Defensiv wie
 der Karten-Pfad (Fehler-Marker statt Dauer-Refetch). Details + die zwei
 Browser-Fronten: [memory/werkzeuge/kalender_system.md](../werkzeuge/kalender_system.md).
 Drei neue Ansichten (A Tagesliste, B Monatsraster, C Zeitachse; `v` zyklisch)
-liegen fertig in `tui/kalender_ansichten.py`, sind aber **noch nicht
+liegen fertig in `tui/ansichten/kalender_ansichten.py`, sind aber **noch nicht
 eingehängt** — siehe [kalender_ansichten_vorschau.md](../werkzeuge/kalender_ansichten_vorschau.md).
 
 - **Nur stdlib:** `curses` + `urllib` + `json` + `threading` — null Extra-Deps.

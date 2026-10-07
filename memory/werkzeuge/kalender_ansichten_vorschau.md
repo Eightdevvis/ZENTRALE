@@ -1,12 +1,18 @@
 # Kalender-Ansichten A/B/C — Vorschau
 
 **Stand 2026-10-06:** Die drei Entwürfe für den TUI-Kalender sind gebaut, aber
-**noch nicht eingehängt**: reine Funktionen in `tui/kalender_ansichten.py`
+**noch nicht eingehängt**: reine Funktionen in `tui/ansichten/kalender_ansichten.py`
 (Daten von `/api/calendar` rein → Zeilen aus (Text, Farbrolle) raus), Taste `v`
 schaltet A → B → C → A (`naechste_ansicht`). Ob und wie sie in die (gerade
 zerlegte) TUI kommen, entscheidet Sasha. Unten die Ausgabe für die
 Beispieltermine des Entwurfs, als reiner Text (Farben fehlen hier; farbig:
 `scripts/kalender_vorschau.py` im Terminal).
+
+**2026-10-07:** Modul nach `tui/ansichten/` gezogen (reine Helfer neben
+`kalender.py`, Bauplan [tui_bauplan.md](../system/tui_bauplan.md)), samt
+Beispieldaten. Einhängen wartet auf eine Entscheidung: **`v` ist im
+Kalender schon belegt** (`v`/`V`/Tab = Woche↔Monat, auch aus der
+Listen-Sidebar heraus).
 
 ## Die drei Ansichten
 
@@ -351,4 +357,4 @@ Beispieltermine des Entwurfs, als reiner Text (Farben fehlen hier; farbig:
 ```
 
 Neu erzeugen: `venv/bin/python scripts/kalender_vorschau.py --farbe aus --breite 136 --hoehe 30`
-(Beispieltermine: `tui/kalender_beispiel.py`).
+(Beispieltermine: `tui/ansichten/kalender_beispiel.py`).
