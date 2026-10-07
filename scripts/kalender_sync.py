@@ -53,7 +53,10 @@ def _spiegeln(grund: str) -> None:
                               ziel, grund, warten=True)
 
 
-STAND = os.path.expanduser("~/.local/share/vdirsyncer/zentrale_stand.json")
+# Umlenkbar, damit ein Testlauf nie den echten Merkzettel liest/schreibt
+# (tests/conftest.py und der venv-Riegel setzen die Variable).
+STAND = os.path.expanduser(os.environ.get("ZENTRALE_KALENDER_SYNC_STAND")
+                           or "~/.local/share/vdirsyncer/zentrale_stand.json")
 SICHERUNG = os.path.expanduser("~/.local/share/zentrale/google-sicherung")
 KOPIE = os.path.expanduser("~/.local/share/vdirsyncer/google_kopie")
 
@@ -129,7 +132,9 @@ def main(argv=None) -> int:
         for n in fehlen[:10]:
             print("   fehlt:", n)
         return 2
-    if not _google_sichern(exe):
+    # Die Google-Sicherung gehört zum echten Paar „zentrale" (so ruft es der
+    # Timer). Andere Aufrufe (ein Paar von Hand, Tests) lassen sie aus.
+    if "zentrale" in argv and not _google_sichern(exe):
         print("ABBRUCH: die Sicherungskopie von Google ließ sich nicht holen — "
               "ohne frische Sicherung wird nicht gesynct.")
         return 3

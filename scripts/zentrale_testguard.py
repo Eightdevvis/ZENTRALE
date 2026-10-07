@@ -123,6 +123,7 @@ def anwenden(umgebung, kommandozeile, tempdir, pid, cwd=""):
     # ZENTRALE war damit spurlos (02.10.2026).
     umgebung.setdefault("ZENTRALE_TUI_LOG", ziel + "/tui.log")
     umgebung.setdefault("ZENTRALE_TUI_CRASH_LOG", ziel + "/tui-crash.log")
+    umgebung.setdefault("ZENTRALE_KALENDER_SYNC_STAND", ziel + "/sync_stand.json")
     # Kein Testlauf meldet sich auf Sashas Desktop.
     #
     # Die Umlenkungen darueber schuetzen DATEIEN. Eine Benachrichtigung ist

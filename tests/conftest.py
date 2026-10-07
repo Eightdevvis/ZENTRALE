@@ -134,6 +134,8 @@ os.environ.setdefault("ZENTRALE_TUI_CRASH_LOG",
                       os.path.join(_THEME_TMP, "tui-crash.log"))
 # PC-Status (core/pc_status.py) nie in die echte Datei der Maschine schreiben.
 os.environ.setdefault("ZENTRALE_PEER_STATUS", os.path.join(_THEME_TMP, "peer.json"))
+# Merkzettel des Kalender-Sync-Wächters (scripts/kalender_sync.py) nie echt.
+os.environ.setdefault("ZENTRALE_KALENDER_SYNC_STAND", os.path.join(_THEME_TMP, "sync_stand.json"))
 # Dashboard-Wunsch (/dashboard an|aus): Tests sehen immer das Meta-Rad,
 # egal was Sasha gerade eingestellt hat, und schreiben nie seine Datei.
 os.environ.setdefault("ZENTRALE_DASHBOARD_FILE", os.path.join(_THEME_TMP, "dashboard"))

@@ -10,6 +10,7 @@
 
 import curses
 import json
+import time
 import urllib.error
 from datetime import date, timedelta
 
@@ -46,7 +47,11 @@ class Bedienung:
         schluessel = (K["stil"], K["ref"])
         d = K.get("sdata")
         if d and d.get("_for") == schluessel:
-            return d
+            # Ein Fehlschlag bleibt nicht kleben: nach ein paar Sekunden neu
+            # versuchen (07.10.2026: nach dem Speichern blieb „kalender:
+            # backend?" stehen, bis man blätterte).
+            if not d.get("failed") or time.monotonic() - d.get("_um", 0) < 3:
+                return d
         d = self._holen("month", ref)
         if not d.get("failed") and K["stil"] == "A":
             rand = ref + timedelta(days=FENSTER_TAGE - 1)
@@ -60,12 +65,13 @@ class Bedienung:
             except ValueError:
                 pass
         d["_for"] = schluessel
+        d["_um"] = time.monotonic()
         K["sdata"] = d
         return d
 
     def _holen(self, view, ref):
         try:
-            r = api_call("/api/calendar?view=%s&ref=%s" % (view, ref.isoformat()), timeout=2.0)
+            r = api_call("/api/calendar?view=%s&ref=%s" % (view, ref.isoformat()), timeout=8.0)
             return r if isinstance(r, dict) else {"failed": True}
         except Exception:
             return {"failed": True}
@@ -294,7 +300,7 @@ class Bedienung:
         if pruefen and plan.get("konflikt"):
             try:
                 k = (api_call("/api/calendar/konflikte", method="POST",
-                              body=plan["konflikt"]) or {}).get("konflikte") or []
+                              body=plan["konflikt"], timeout=8.0) or {}).get("konflikte") or []
             except Exception:
                 k = []
             if k:
@@ -307,7 +313,7 @@ class Bedienung:
                 return
         for methode, pfad, body in plan.get("aufrufe", []):
             try:
-                api_call(pfad, method=methode, body=body)
+                api_call(pfad, method=methode, body=body, timeout=15.0)
             except urllib.error.HTTPError as e:
                 try:
                     grund = json.loads(e.read().decode("utf-8")).get("error") or str(e)

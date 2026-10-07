@@ -99,9 +99,33 @@ def _kopie(obj):
     return obj
 
 
+# Zweite Stufe: geparste Dateien einzeln, nach (Größe, mtime). Ohne sie
+# las jede Änderung ALLE Dateien neu — mit Google im Kalender (500+ Dateien)
+# 2 s, und die TUI lief nach dem Speichern in ihren Timeout (07.10.2026,
+# „kurz freeze dann alles weg: kalender backend?"). So wird nur die
+# geänderte Datei neu geparst.
+_datei_cache: dict = {}
+
+
 def cache_leeren() -> None:
+    """Den Gesamt-Cache verwerfen. Der Datei-Cache bleibt: er prüft sich
+    selbst (Größe + mtime je Datei) und ist nach dem Schreiben genau das,
+    was das nächste Lesen schnell macht."""
     with _cache_lock:
         _cache.clear()
+
+
+def _datei_gelesen(f: Path) -> list:
+    st = f.stat()
+    schluessel = str(f)
+    with _cache_lock:
+        t = _datei_cache.get(schluessel)
+    if t and t[0] == (st.st_mtime_ns, st.st_size):
+        return _kopie(t[1])
+    gelesen = abb.datei_lesen(f.read_bytes())
+    with _cache_lock:
+        _datei_cache[schluessel] = ((st.st_mtime_ns, st.st_size), _kopie(gelesen))
+    return gelesen
 
 
 class IcsSpeicher:
@@ -196,7 +220,7 @@ class IcsSpeicher:
             name = ordner_zu_name.get(o.name) or o.name
             for f in sorted(o.glob("*.ics")):
                 try:
-                    gelesen = abb.datei_lesen(f.read_bytes())
+                    gelesen = _datei_gelesen(f)
                 except Exception as ex:
                     # Kaputte Datei: liegen lassen, nicht anzeigen, nie
                     # löschen (sie kommt nicht in den Index, also kann
