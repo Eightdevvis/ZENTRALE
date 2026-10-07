@@ -11,6 +11,7 @@ from flask import Blueprint, jsonify, request
 
 import cycle        # type: ignore  – Zyklus/PMS-Vorhersage aus dem »periode«-Graphen
 import kalender     # type: ignore  – Kalender-Layer (Woche/Monat, data/ai_calendar.json)
+import kalender_bearbeiten  # type: ignore  – Wiederholung, „nur dieser Tag", Spannen
 import kalender_sicherung  # type: ignore  – Schutzsperren (Massenlöschung, Rückfall)
 import lists        # type: ignore  – dynamische Listen-Registry (Todo/Sammel-Listen)
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
@@ -252,6 +253,15 @@ def api_calendar_add_routine():
     label = (body.get('label') or '').strip()
     if not label:
         return jsonify({"error": "label fehlt"}), 400
+    if body.get('freq'):
+        # calcurse „r": Typ (t/w/m/j), alle wie viele, Ende, ab dem gewählten Tag.
+        ok = kalender_bearbeiten.routine_neu(
+            (body.get('layer') or 'routinen'), label, body.get('seit') or '',
+            body.get('freq'), body.get('intervall') or 1, body.get('bis') or None,
+            body.get('wochentage') or None, body.get('time') or None,
+            body.get('ende') or None, body.get('ort') or None)
+        return (jsonify({"ok": True}) if ok
+                else (jsonify({"error": "wiederholung abgelehnt"}), 400))
     raw = body.get('byday')
     if isinstance(raw, list):
         cand = [str(x).strip().upper() for x in raw]
@@ -293,3 +303,88 @@ def api_calendar_delete_routine():
     time = (body.get('time') or '').strip() or None
     n = kalender.delete_routine(layer, label, day=day, time=time)
     return jsonify({"deleted": n})
+
+
+# ── Bearbeiten wie calcurse / Handy-Kalender (seit 07.10.2026) ─────────
+# Dünne Adapter auf core/kalender_bearbeiten.py; die TUI-Ansichten A/B/C
+# benutzen sie alle gleich (ein Kalender, mehrere Ansichten).
+def _antwort(ok, fehler):
+    return jsonify({"ok": True}) if ok else (jsonify({"error": fehler}), 400)
+
+
+@bp.route('/api/calendar/routine', methods=['PUT'])
+def api_calendar_edit_routine():
+    """ALLE Vorkommen einer Routine ändern. Body: {layer, label, day, time?,
+    new:{label?, time?, ende?, ort?, wiederholung?:{freq, intervall, bis,
+    wochentage}}}. day/time bestimmen, WELCHE Routine gemeint ist."""
+    b = request.get_json(silent=True) or {}
+    return _antwort(kalender_bearbeiten.routine_bearbeiten(
+        b.get('layer') or 'routinen', b.get('label') or '', b.get('day') or '',
+        b.get('time') or None, b.get('new') or {}), "routine nicht gefunden/abgelehnt")
+
+
+@bp.route('/api/calendar/routine/abweichung', methods=['POST'])
+def api_calendar_routine_abweichung():
+    """NUR dieses Vorkommen ändern. Body: {layer, label, day, time?,
+    new:{tag?, time?, ende?, label?, ort?}}."""
+    b = request.get_json(silent=True) or {}
+    return _antwort(kalender_bearbeiten.routine_abweichung(
+        b.get('layer') or 'routinen', b.get('label') or '', b.get('day') or '',
+        b.get('time') or None, b.get('new') or {}), "vorkommen nicht gefunden/abgelehnt")
+
+
+@bp.route('/api/calendar/spanne', methods=['POST'])
+def api_calendar_spanne_neu():
+    """Mehrtägig anlegen. Body: {layer?, von, bis, label, start_zeit?,
+    end_zeit?, tageszeit?:[von, bis], ort?}."""
+    b = request.get_json(silent=True) or {}
+    tz = b.get('tageszeit')
+    return _antwort(kalender_bearbeiten.spanne_neu(
+        b.get('layer') or 'termine', b.get('von') or '', b.get('bis') or '',
+        b.get('label') or '', b.get('start_zeit') or None, b.get('end_zeit') or None,
+        tuple(tz) if isinstance(tz, list) and len(tz) == 2 else None,
+        b.get('ort') or None), "spanne abgelehnt")
+
+
+@bp.route('/api/calendar/spanne', methods=['PUT'])
+def api_calendar_spanne_aendern():
+    """Alle Tage einer Spanne. Body: {layer?, von, label, new:{label?, ort?,
+    verschieben?, bis?}}."""
+    b = request.get_json(silent=True) or {}
+    n = b.get('new') or {}
+    try:
+        schub = int(n.get('verschieben') or 0)
+    except (TypeError, ValueError):
+        return jsonify({"error": "verschieben muss eine Zahl sein"}), 400
+    return _antwort(kalender_bearbeiten.spanne_aendern(
+        b.get('layer') or 'termine', b.get('von') or '', b.get('label') or '',
+        n.get('label') or None, schub, n.get('bis') or None, n.get('ort')),
+        "spanne nicht gefunden/abgelehnt")
+
+
+@bp.route('/api/calendar/spanne/tag', methods=['POST'])
+def api_calendar_spanne_tag():
+    """Uhrzeit EINES Tages einer Spanne. Body: {layer?, von, label, day,
+    time?, ende?} — leer = an dem Tag ganztägig."""
+    b = request.get_json(silent=True) or {}
+    return _antwort(kalender_bearbeiten.spanne_tag(
+        b.get('layer') or 'termine', b.get('von') or '', b.get('label') or '',
+        b.get('day') or '', b.get('time') or None, b.get('ende') or None),
+        "spannen-tag nicht gefunden")
+
+
+@bp.route('/api/calendar/konflikte', methods=['POST'])
+def api_calendar_konflikte():
+    """VOR dem Speichern prüfen, ob ein geplanter Termin kollidiert (gleiche
+    Logik wie die KI-Rückfrage). Body: {layer?, day, label, time?, ende?} —
+    ohne Ende kein Intervall, also keine Überlappung (find_collisions).
+    Antwort {konflikte:[zeile, …]} — schreibt nichts."""
+    b = request.get_json(silent=True) or {}
+    try:
+        k = kalender.conflicts_for_proposed(b.get('layer') or 'termine',
+                                            b.get('day') or '', b.get('label') or '',
+                                            time=b.get('time') or None,
+                                            ende=b.get('ende') or None)
+    except Exception as e:
+        return jsonify({"konflikte": [], "error": str(e)})
+    return jsonify({"konflikte": k})

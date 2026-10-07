@@ -745,7 +745,7 @@ def entries_in_range(start: date, end: date,
                     # Reise-Konflikt-Check (_conflict_lines) nutzt das: regelmäßige
                     # Termine fallen auf Reisen sowieso aus → kein Alarm.
                     entry: dict = {"layer": layer_name, "label": r["label"],
-                                   "recurring": True}
+                                   "recurring": True, "rrule": r["rrule"]}
                     if r.get("time"):
                         entry["time"] = r["time"]
                     # Ende + Ort mitschleppen, sonst sieht weder die Kollisions-
@@ -1411,7 +1411,7 @@ def imprint_for_prompt(tage: int | None = None) -> str:
 
 
 def conflicts_for_proposed(layer: str, day: str, label: str,
-                           time: str | None = None) -> list[str]:
+                           time: str | None = None, ende: str | None = None) -> list[str]:
     """
     Prüft einen NOCH NICHT geschriebenen Einmal-Termin HYPOTHETISCH auf Konflikte
     mit dem schon belegten Tag - ohne ihn zu speichern. Gedacht für die Erlaubnis-
@@ -1445,6 +1445,8 @@ def conflicts_for_proposed(layer: str, day: str, label: str,
     t = (time or "").strip()
     if t:
         phantom["time"] = t
+        if (ende or "").strip():          # erst mit Ende ein Intervall (find_collisions)
+            phantom["ende"] = ende.strip()
     entries = sorted(existing + [phantom], key=lambda e: e.get("time", "00:00"))
     away = _away_blocks(d, d)
     return day_warnings(entries) + _conflict_lines(d, entries, away)
