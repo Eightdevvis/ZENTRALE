@@ -210,14 +210,25 @@ def _sse(obj):
     return f"data: {json.dumps(obj)}\n\n"
 
 
+# So viel vom Ergebnis eines Werkzeugs bleibt im Verlauf (2026-10-07): die
+# TUI klappt einen Schritt „Used memory ›" auf und zeigt es gekürzt — wie
+# Claude Web. Mehr braucht die Anzeige nicht, und der Verlauf bleibt klein.
+ERGEBNIS_MAX = 300
+
+
 def _werkzeug_merken(werkzeuge, w):
     """Kurze Zusammenfassung der Werkzeuge eines Zugs für den Verlauf."""
     if w.get("phase") == "start":
         args = ", ".join("%s=%s" % (k, " ".join(str(v).split())[:60])
                          for k, v in (w.get("args") or {}).items())
         werkzeuge.append({"name": str(w.get("name") or "?"), "args": args[:200]})
-    elif w.get("phase") == "fehler" and werkzeuge:
-        werkzeuge[-1]["fehler"] = True
+    elif w.get("phase") in ("fertig", "fehler") and werkzeuge:
+        if w.get("phase") == "fehler":
+            werkzeuge[-1]["fehler"] = True
+        text = " ".join(str(w.get("text") or "").split())
+        if text:
+            werkzeuge[-1]["ergebnis"] = (text[:ERGEBNIS_MAX - 1] + "…"
+                                         if len(text) > ERGEBNIS_MAX else text)
 
 
 def _wer_antwortet(backend):

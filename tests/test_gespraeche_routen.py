@@ -37,6 +37,24 @@ def _events(r):
 
 # ── /api/chat schreibt ins aktive Gespräch ────────────────────────────
 
+def test_werkzeug_ergebnis_wird_gekuerzt_mitgespeichert(client, monkeypatch):
+    """Seit 2026-10-07: der Schritt „Used … ›" in der TUI klappt das Ergebnis
+    auf — es bleibt gekürzt im Verlauf, auch ein Fehler."""
+    from ui.routen import ki as ki_routen
+    lang = "x" * 1000
+    _antwort(monkeypatch,
+             {"werkzeug": {"phase": "start", "name": "read_note", "args": {"name": "a"}}},
+             {"werkzeug": {"phase": "fertig", "name": "read_note", "text": lang}},
+             {"werkzeug": {"phase": "start", "name": "web_search", "args": {"query": "b"}}},
+             {"werkzeug": {"phase": "fehler", "name": "web_search", "text": "kein netz"}},
+             "fertig")
+    client.post("/api/chat", json={"message": "los"}).get_data()
+    w = gespraeche.nachrichten(gespraeche.aktiv())[1]["werkzeuge"]
+    assert len(w[0]["ergebnis"]) == ki_routen.ERGEBNIS_MAX and w[0]["ergebnis"].endswith("…")
+    assert w[1] == {"name": "web_search", "args": "query=b", "fehler": True,
+                    "ergebnis": "kein netz"}
+
+
 def test_chat_legt_ein_gespraech_an_und_speichert_antwort_mit_denken(client, monkeypatch):
     _antwort(monkeypatch, {"reflect": "erst "}, {"reflect": "nachdenken"},
              {"werkzeug": {"phase": "start", "name": "read_note", "args": {"name": "ideen"}}},

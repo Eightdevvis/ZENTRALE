@@ -37,10 +37,13 @@ def verlauf_aus(h):
         for w in m.get("werkzeuge") or []:
             if isinstance(w, dict):
                 name = str(w.get("name") or "?")
+                # Seit 2026-10-07 mit gekürztem Ergebnis (ui/routen/ki.py,
+                # ERGEBNIS_MAX): der Schritt „Used … ›" klappt es auf.
+                log.append(("werkzeug", "%s(%s)" % (name, w.get("args") or "")))
                 if w.get("fehler"):
-                    log.append(("werkzeug_fehler", "%s(%s) ✗" % (name, w.get("args") or "")))
-                else:
-                    log.append(("werkzeug", "%s(%s)" % (name, w.get("args") or "")))
+                    log.append(("werkzeug_fehler", "%s ✗ %s" % (name, w.get("ergebnis") or "")))
+                elif w.get("ergebnis"):
+                    log.append(("werkzeug_ergebnis", "↳ " + str(w["ergebnis"])))
         log += [ablage_eintrag(d) for d in m.get("dokumente") or [] if isinstance(d, dict)]
         if txt:
             log.append(("ai", txt))

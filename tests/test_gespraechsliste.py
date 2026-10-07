@@ -170,10 +170,13 @@ def test_verlauf_aus_mit_denken_und_werkzeugen():
     h = [{"role": "user", "content": "frage"},
          {"role": "assistant", "content": "antwort", "denken": "hm",
           "werkzeuge": [{"name": "read_note", "args": "name=x"},
-                        {"name": "web", "args": "", "fehler": True}]}]
+                        {"name": "web", "args": "", "fehler": True, "ergebnis": "kaputt"},
+                        {"name": "read_time", "args": "", "ergebnis": "12:00"}]}]
+    # Seit 2026-10-07 mit gekürztem Ergebnis, damit „Used … ›" es aufklappt.
     assert chat_gespraeche.verlauf_aus(h) == [
         ("user", "frage"), ("denken", "hm"), ("werkzeug", "read_note(name=x)"),
-        ("werkzeug_fehler", "web() ✗"), ("ai", "antwort")]
+        ("werkzeug", "web()"), ("werkzeug_fehler", "web ✗ kaputt"),
+        ("werkzeug", "read_time()"), ("werkzeug_ergebnis", "↳ 12:00"), ("ai", "antwort")]
 
 
 def test_denken_eingeklappt_eine_zeile_aufgeklappt_alles():
