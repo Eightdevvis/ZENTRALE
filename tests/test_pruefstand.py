@@ -139,7 +139,7 @@ def test_knopf_ohne_antwort_und_gate_mit_ja(lauf):
     assert "knopf" in arten and "erlaubnis" in arten
     knopf = next(f for f in zug["fragen"] if f["art"] == "knopf")
     assert knopf["antwort"] is None
-    assert zug["werkzeuge"][2]["ergebnis"] == "Sasha hat gewählt: None."
+    assert zug["werkzeuge"][2]["ergebnis"].startswith("Sasha hat NICHT geantwortet")
 
 
 def test_endzustand_findet_die_falsche_erfolgsmeldung(lauf):
