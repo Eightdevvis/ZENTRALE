@@ -62,11 +62,18 @@ MAX_BESCHREIBUNG = skill_format.BESCHREIBUNG_MAX   # 1024, wie bei Claude
 # (gecacht: ~0,3 $ je Million Token gelesen, beim Ändern einmal voll
 # geschrieben). 6.000 Zeichen ≈ 1.700 Token ≈ 0,05 Cent je Zug — und nicht
 # größer als der übrige feste Kopf (gross.system < 5.000), damit die Liste
-# Sashas Regeln nicht übertönt. Die Start-Skills brauchen ~4.500. Wird es
-# mehr, werden alle Beschreibungen gleichmäßig gekürzt (nie unter
-# MIN_BESCHREIBUNG), erst danach fallen Beschreibungen ganz weg.
+# Sashas Regeln nicht übertönt. Die Start-Skills brauchen ~4.500.
+#
+# Wird es mehr (seit 2026-10-08, Sasha: gleichmäßig kürzen verschlechtert
+# ALLE Beschreibungen): die Beschreibungen bleiben vollständig, Sasha sieht
+# in Customize → Skills „Liste zu lang" und schaltet aus, was er nicht
+# braucht. Nur als letzte Rettung bekommen die LÄNGSTEN nacheinander eine
+# Kurzfassung (erster Satz, nie unter MIN_BESCHREIBUNG, höchstens
+# KURZ_MAX), bis es passt — die kurzen bleiben unangetastet. Reicht auch das
+# nicht, stehen die längsten nur mit Namen da.
 LISTE_MAX = 6_000
 MIN_BESCHREIBUNG = 160
+KURZ_MAX = 320
 MAX_INHALT = 20_000      # eine Anleitung, die propose/edit_skill schreiben
 SEITE = 20_000           # so viel liefert load_skill je Aufruf (wie
                          # read_project_file); weiter mit `ab`
@@ -240,36 +247,84 @@ def _kuerzen(text: str, n: int) -> str:
     return text if len(text) <= n else text[:n - 1].rstrip() + "…"
 
 
+def kurzfassung(text: str) -> str:
+    """Der erste Satz — aber nie unter MIN_BESCHREIBUNG Zeichen (ein „PDF
+    bearbeiten." allein sagt nicht, wann er passt) und höchstens KURZ_MAX."""
+    text = " ".join(str(text or "").split())
+    ende = min((i + 1 for i in (text.find(". "), text.find("! "), text.find("? "))
+                if i >= 0), default=len(text))
+    n = max(MIN_BESCHREIBUNG, min(ende, KURZ_MAX))
+    if len(text) <= n:
+        return text
+    if ende == n:
+        return text[:n]                      # genau der Satz, mit Punkt
+    return _kuerzen(text, n)
+
+
+_KOPF = ("## Skills\n"
+         "Anleitungen für bestimmte Arten von Aufgaben. Den Inhalt holst "
+         "du mit load_skill(name) — hier steht nur, wann einer passt.\n")
+
+
+def _liste(liste: list) -> tuple:
+    """Die Liste für den Prompt und wie es um sie steht.
+    -> (text, {laenge, grenze, zu_lang, gekuerzt, nur_name}); laenge ist die
+    Länge MIT vollen Beschreibungen — das, was Sasha durch Ausschalten
+    senkt. Deterministisch: Reihenfolge nach Name, gekürzt wird nach
+    (Länge absteigend, Name)."""
+    if not liste:
+        return "", {"laenge": 0, "grenze": LISTE_MAX, "zu_lang": False,
+                    "gekuerzt": [], "nur_name": []}
+    text_von = {s["name"]: _kuerzen(" ".join(s["beschreibung"].split()), MAX_BESCHREIBUNG)
+                for s in liste}
+
+    def bauen(nur_name=()):
+        zeilen = [f"- {s['name']} — {text_von[s['name']]}" for s in liste
+                  if s["name"] not in nur_name]
+        text = _KOPF + "\n".join(zeilen)
+        if nur_name:
+            text += ("\n- ohne Beschreibung (zu viele): "
+                     + ", ".join(s["name"] for s in liste if s["name"] in nur_name))
+        return text
+
+    text = bauen()
+    laenge = len(text)
+    gekuerzt, nur_name = [], []
+    # Letzte Rettung 1: die längsten bekommen nacheinander die Kurzfassung.
+    for s in sorted(liste, key=lambda s: (-len(text_von[s["name"]]), s["name"])):
+        if len(text) <= LISTE_MAX:
+            break
+        kurz = kurzfassung(text_von[s["name"]])
+        if len(kurz) < len(text_von[s["name"]]):
+            text_von[s["name"]] = kurz
+            gekuerzt.append(s["name"])
+            text = bauen()
+    # Letzte Rettung 2: die längsten nur mit Namen — vorhanden bleiben alle,
+    # laden kann sie das Modell weiterhin.
+    for s in sorted(liste, key=lambda s: (-len(text_von[s["name"]]), s["name"])):
+        if len(text) <= LISTE_MAX:
+            break
+        nur_name.append(s["name"])
+        text = bauen(set(nur_name))
+    return text, {"laenge": laenge, "grenze": LISTE_MAX, "zu_lang": laenge > LISTE_MAX,
+                  "gekuerzt": sorted(gekuerzt), "nur_name": sorted(nur_name)}
+
+
 def prompt_block() -> str:
     """Die Skill-Liste für den FESTEN Teil des Cloud-Prompts.
 
     Byte-stabil, solange sich kein Skill ändert: nach Name sortiert, nur
     aktive, nur Name und Beschreibung (einzeilig). Kein Datum, kein Zähler —
     sonst bräche der Prompt-Cache bei jedem Zug. Höchstens LISTE_MAX
-    Zeichen; was darüber ginge, wird gleichmäßig gekürzt."""
-    liste = aktive()
-    if not liste:
-        return ""
-    kopf = ("## Skills\n"
-            "Anleitungen für bestimmte Arten von Aufgaben. Den Inhalt holst "
-            "du mit load_skill(name) — hier steht nur, wann einer passt.\n")
-    deckel = MAX_BESCHREIBUNG
-    while True:
-        zeilen = [f"- {s['name']} — {_kuerzen(s['beschreibung'], deckel)}"
-                  for s in liste]
-        text = kopf + "\n".join(zeilen)
-        if len(text) <= LISTE_MAX or deckel <= MIN_BESCHREIBUNG:
-            break
-        deckel = max(MIN_BESCHREIBUNG, deckel - 32)
-    # Auch mit kurzen Beschreibungen zu lang: die hinteren nur mit Namen —
-    # vorhanden bleiben alle, laden kann sie das Modell weiterhin.
-    n = len(zeilen)
-    while len(text) > LISTE_MAX and n > 0:
-        n -= 1
-        text = (kopf + "".join(z + "\n" for z in zeilen[:n])
-                + "- ohne Beschreibung (zu viele): "
-                + ", ".join(s["name"] for s in liste[n:]))
-    return text
+    Zeichen; was darüber ginge, siehe LISTE_MAX oben."""
+    return _liste(aktive())[0]
+
+
+def liste_lage() -> dict:
+    """Wie lang die Liste der aktiven Skills ist und ob sie passt — für
+    Customize → Skills (/api/skills, /api/gedaechtnis): {laenge, grenze,
+    zu_lang, gekuerzt, nur_name}."""
+    return _liste(aktive())[1]
 
 
 def _ab(ab) -> int:

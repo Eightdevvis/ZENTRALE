@@ -8,7 +8,8 @@ Sashas Ja.
 
 Geprüft wird Verhalten:
   - die Liste im Prompt ist deterministisch, zeigt nur aktive, bleibt unter
-    LISTE_MAX (gleichmäßig gekürzt),
+    LISTE_MAX — Beschreibungen vollständig; nur als letzte Rettung bekommen
+    die längsten eine Kurzfassung, dann nur den Namen (seit 2026-10-08),
   - load_skill liefert Anleitung + Dateiliste, Dateien ohne Pfad-Ausbruch,
     und nur von aktiven,
   - propose/edit_skill schreiben Claude-taugliche SKILL.md, gegatet, .bak,
@@ -170,25 +171,80 @@ def test_ohne_aktive_skills_kein_block():
     assert skills.prompt_block() == ""
 
 
-def test_liste_bleibt_unter_der_grenze_und_kuerzt_gleichmaessig():
-    for i in range(12):
-        _skill(f"s{i:02d}", beschreibung=f"Anfang {i} " + "x" * 900)
+def _lang(i, n=900):
+    """Eine lange Beschreibung mit erkennbarem erstem Satz."""
+    return f"Wenn es um Thema {i} geht. " + "x" * (n - 24)
+
+
+def _zeile(block, name):
+    return [z for z in block.splitlines() if z.startswith(f"- {name} — ")][0]
+
+
+def test_liste_passt_beschreibungen_vollstaendig():
+    """Sasha 08.10.2026: gleichmäßig kürzen verschlechtert alle — passt die
+    Liste, steht jede Beschreibung ganz da."""
+    for i in range(5):
+        _skill(f"s{i}", beschreibung=_lang(i))
+    block = skills.prompt_block()
+    assert len(block) <= skills.LISTE_MAX and "…" not in block
+    assert _zeile(block, "s3") == "- s3 — " + _lang(3)
+    lage = skills.liste_lage()
+    assert lage["laenge"] == len(block) and not lage["zu_lang"]
+    assert lage["gekuerzt"] == lage["nur_name"] == []
+
+
+def test_zu_lang_kuerzt_nur_die_laengsten_und_laesst_kurze_ganz():
+    for i in range(7):
+        _skill(f"lang{i}", beschreibung=_lang(i, 900 + i * 10))   # lang6 am längsten
+    for i in range(3):
+        _skill(f"kurz{i}", beschreibung=f"Kurz und klar {i}.")
     block = skills.prompt_block()
     assert len(block) <= skills.LISTE_MAX
-    # Alle zwölf stehen drin, alle gleich gekürzt (deterministisch).
-    zeilen = [z for z in block.splitlines() if z.startswith("- s")]
-    assert len(zeilen) == 12
-    assert len({len(z) for z in zeilen}) == 1 and zeilen[0].endswith("…")
+    lage = skills.liste_lage()
+    assert lage["zu_lang"] and lage["laenge"] > skills.LISTE_MAX
+    assert lage["grenze"] == skills.LISTE_MAX and lage["nur_name"] == []
+    # Die längsten zuerst, nur so viele wie nötig — der Rest bleibt ganz.
+    assert lage["gekuerzt"] and "lang6" in lage["gekuerzt"] and "lang0" not in lage["gekuerzt"]
+    assert _zeile(block, "lang0") == "- lang0 — " + _lang(0, 900)
+    for i in range(3):
+        assert _zeile(block, f"kurz{i}") == f"- kurz{i} — Kurz und klar {i}."
+    # Kurzfassung = erster Satz, aber nie unter MIN_BESCHREIBUNG
+    kurz = _zeile(block, "lang6")[len("- lang6 — "):]
+    assert kurz.startswith("Wenn es um Thema 6 geht.") and len(kurz) == skills.MIN_BESCHREIBUNG
     assert block == skills.prompt_block()
 
 
-def test_liste_viel_zu_lang_nennt_den_rest_nur_mit_namen():
+def test_gleich_lange_werden_nach_name_gekuerzt():
+    """Deterministisch auch bei Gleichstand — sonst bräche der Prompt-Cache."""
+    for i in range(7):
+        _skill(f"s{i}", beschreibung=_lang(i))
+    lage = skills.liste_lage()
+    n = len(lage["gekuerzt"])
+    assert 0 < n < 7 and lage["gekuerzt"] == [f"s{i}" for i in range(n)]
+
+
+def test_liste_viel_zu_lang_nennt_die_laengsten_nur_mit_namen():
     for i in range(60):
         _skill(f"s{i:02d}", beschreibung="y" * 500)
     block = skills.prompt_block()
     assert len(block) <= skills.LISTE_MAX
     assert "ohne Beschreibung (zu viele): " in block
-    assert "s59" in block and "s00 — " in block
+    assert all(f"s{i:02d}" in block for i in range(60))
+    lage = skills.liste_lage()
+    assert lage["nur_name"] and len(lage["gekuerzt"]) == 60
+    assert lage["nur_name"][0] == "s00"                  # Gleichstand: nach Name
+
+
+def test_kurzfassung():
+    satz = "Erstellt Tabellen aus Daten. " + "Mehr dazu " * 40
+    assert skills.kurzfassung(satz).startswith("Erstellt Tabellen aus Daten. Mehr")
+    # bis MIN_BESCHREIBUNG (ein Leerzeichen am Schnitt fällt weg)
+    assert skills.MIN_BESCHREIBUNG - 1 <= len(skills.kurzfassung(satz)) <= skills.MIN_BESCHREIBUNG
+    mittel = "a" * 200 + ". " + "b" * 400
+    assert skills.kurzfassung(mittel) == "a" * 200 + "."
+    ohne_ende = "c" * 900
+    assert len(skills.kurzfassung(ohne_ende)) == skills.KURZ_MAX
+    assert skills.kurzfassung("kurz") == "kurz"
 
 
 def test_eine_beschreibung_hoechstens_1024_im_kopf():
@@ -590,3 +646,5 @@ def test_route_listet_alle_skills_mit_braucht():
     assert set(liste[0]) == {"name", "beschreibung", "status", "herkunft",
                              "erstellt", "braucht", "vermerk"}
     assert liste[0]["braucht"] == "einen Browser"
+    lage = r.get_json()["skill_liste"]
+    assert lage["grenze"] == skills.LISTE_MAX and lage["laenge"] > 0 and not lage["zu_lang"]

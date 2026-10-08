@@ -30,14 +30,16 @@ bp = Blueprint('skills', __name__)
 def api_skills():
     """Alle Skills, nach Name: [{name, beschreibung, status, herkunft,
     erstellt}]. Auch ausgeschaltete und vorgeschlagene — Sasha soll sehen,
-    was da ist, nicht nur, was die KI gerade sieht."""
-    return jsonify({"skills": skills.alle()})
+    was da ist, nicht nur, was die KI gerade sieht. Dazu `skill_liste`:
+    wie lang die Liste der aktiven im Prompt wäre und ob sie über die
+    Grenze geht ({laenge, grenze, zu_lang, gekuerzt, nur_name}, 2026-10-08)."""
+    return jsonify({"skills": skills.alle(), "skill_liste": skills.liste_lage()})
 
 
 @bp.route('/api/skills/<name>/status', methods=['POST'])
 def api_skill_status(name):
     """Body {status: aktiv|aus|vorgeschlagen}. 404 unbekannter Skill, 400
-    unbekannter Status. → {skill}"""
+    unbekannter Status. → {skill, skill_liste}"""
     status = (request.get_json(silent=True) or {}).get("status")
     try:
         skill = skills.status_setzen(name, str(status or ""))
@@ -45,7 +47,7 @@ def api_skill_status(name):
         return jsonify({"error": f"Den Skill „{name}“ gibt es nicht."}), 404
     except ValueError:
         return jsonify({"error": "Status muss aktiv, aus oder vorgeschlagen sein."}), 400
-    return jsonify({"skill": skill})
+    return jsonify({"skill": skill, "skill_liste": skills.liste_lage()})
 
 
 def _kernakte(akte):
@@ -56,13 +58,14 @@ def _kernakte(akte):
 @bp.route('/api/gedaechtnis')
 def api_gedaechtnis():
     """Alles auf einen Blick: {kernakten: [{akte, text, stand}],
-    bereiche: [{bereich, titel: [...]}], skills: [...]}. Kernakten in der
+    bereiche: [{bereich, titel: [...]}], skills: [...], skill_liste}. Kernakten in der
     festen Reihenfolge Hausregeln, Steckbrief, Ziele."""
     return jsonify({
         "kernakten": [_kernakte(a) for a in gedaechtnis.KERNAKTEN],
         "bereiche": [{"bereich": b, "titel": gedaechtnis.liste(b)}
                      for b in gedaechtnis.BEREICHE],
         "skills": skills.alle(),
+        "skill_liste": skills.liste_lage(),
     })
 
 
