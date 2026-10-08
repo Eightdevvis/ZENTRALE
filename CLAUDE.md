@@ -1,8 +1,11 @@
 # ZENTRALE – Entwicklungshinweise für Claude
 
-Event-getriebenes Dashboard (Raspberry Pi + Linux-PC), vollständig
-offline. KI läuft lokal via Ollama (Default-Modell: qwen3.5:9b, per
-`OLLAMA_MODEL` umstellbar).
+Event-getriebenes Dashboard mit eigenem KI-Assistenten (Laptop, Linux-PC,
+Raspberry Pi; später Handy als weiterer Knoten). Die KI läuft über die
+Cloud (Claude, andere Anbieter per Einstellung) mit lokalem Ollama als
+Option. Sashas Daten bleiben auf seinen Rechnern; abgeglichen wird über
+eine Mitte (siehe Fahrplan in `memory/ki/claude_web_plan.md`). Ein
+Gedächtnis, ein Assistent — egal von welchem Gerät.
 
 ## Git-Workflow (gilt für ALLE Agenten — überschreibt die Default-Regel)
 
