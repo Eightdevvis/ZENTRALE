@@ -1,7 +1,8 @@
 """Nachbesserungen nach Sashas Durchsicht (2026-10-07):
 
 * Gestoppte Antworten bei OpenAI-kompatiblen Anbietern werden geschätzt
-  gebucht (vorher: gar nicht).
+  gebucht (vorher: gar nicht). Seit 2026-10-08 auch bei Claude die Ausgabe
+  bis zum Stopp (Eingabe + Cache meldet Anthropic schon vorher).
 * Der Stoppknopf erreicht einen laufenden run_code: die Prozessgruppe stirbt
   sofort (echter bwrap-Lauf, übersprungen ohne bwrap).
 * Eine Nachricht bis 20 000 Zeichen kommt vollständig bei der KI an; die
@@ -17,6 +18,7 @@ from types import SimpleNamespace
 import pytest
 
 import ai_backends
+import cloud
 import cloud_openai
 import sandbox
 import usage
@@ -101,6 +103,102 @@ def test_mit_zahlen_wird_nicht_geschaetzt(monkeypatch):
     with pytest.raises(werkzeug_schleife.Gestoppt):
         list(a.runde())
     assert gebucht == [{"input_tokens": 50, "output_tokens": 5, "cache_read": 0}]
+
+
+# ── Claude: Ausgabe bis zum Stopp schätzen (2026-10-08) ─────────────────
+
+def _ev(typ, **k):
+    return SimpleNamespace(type=typ, **k)
+
+
+def _delta(art, **k):
+    return _ev("content_block_delta", delta=SimpleNamespace(type=art, **k))
+
+
+class _ClaudeStrom:
+    """Anthropic-Strom aus einer Liste von Events; danach Stopp."""
+
+    def __init__(self, abbruch, events):
+        self.abbruch, self.events = abbruch, events
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def __iter__(self):
+        yield from self.events
+        self.abbruch.set()
+        yield _ev("ping")
+        raise AssertionError("nach dem Stopp weitergelesen")
+
+
+def _claude_stoppen(monkeypatch, events):
+    gebucht, log = [], []
+    monkeypatch.setattr(usage, "buchen", lambda m, **k: gebucht.append(k) or 0.01)
+    import state
+    monkeypatch.setattr(state, "push_log", log.append)
+    abbruch = threading.Event()
+    strom = _ClaudeStrom(abbruch, events)
+    client = SimpleNamespace(messages=SimpleNamespace(stream=lambda **k: strom))
+    a = cloud._AnthropicAdapter(client, "claude-sonnet-5", [], [], [], abbruch=abbruch)
+    with pytest.raises(werkzeug_schleife.Gestoppt):
+        list(a.runde())
+    assert len(gebucht) == 1
+    return gebucht[0], log
+
+
+def _start(out=1):
+    return _ev("message_start", message=SimpleNamespace(usage=SimpleNamespace(
+        input_tokens=1200, output_tokens=out, cache_read_input_tokens=300,
+        cache_creation_input_tokens=50)))
+
+
+def test_claude_gestoppt_schaetzt_text_denken_und_halbe_werkzeuge(monkeypatch):
+    k, log = _claude_stoppen(monkeypatch, [
+        _start(),
+        _delta("thinking_delta", thinking="D" * 350),
+        _delta("text_delta", text="T" * 700),
+        _ev("content_block_start", content_block=SimpleNamespace(type="tool_use", name="web_search")),
+        _delta("input_json_delta", partial_json='{"q": "fahr'),
+    ])
+    zeichen = 350 + 700 + len("web_search") + len('{"q": "fahr')
+    rest = int(zeichen / usage.ZEICHEN_JE_TOKEN)
+    assert k["input_tokens"] == 1200 and k["cache_read"] == 300 and k["cache_write"] == 50
+    assert k["output_tokens"] == 1 + rest and k["output_geschaetzt"] == rest
+    assert any("geschätzt" in z for z in log)
+
+
+def test_claude_letzte_gemeldete_ausgabe_zaehlt_nur_der_rest_geschaetzt(monkeypatch):
+    k, _log = _claude_stoppen(monkeypatch, [
+        _start(),
+        _delta("text_delta", text="A" * 1000),
+        _ev("message_delta", usage=SimpleNamespace(output_tokens=280)),
+        _delta("text_delta", text="B" * 70),
+    ])
+    assert k["output_tokens"] == 280 + 20 and k["output_geschaetzt"] == 20
+
+
+def test_claude_vor_message_start_gestoppt_bucht_nichts(monkeypatch):
+    gebucht, log = [], []
+    monkeypatch.setattr(usage, "buchen", lambda m, **k: gebucht.append(k) or 0.0)
+    import state
+    monkeypatch.setattr(state, "push_log", log.append)
+    cloud._gestoppt_buchen({}, "claude-sonnet-5", 500)
+    assert gebucht == [] and any("nichts gebucht" in z for z in log)
+
+
+def test_nur_der_geschaetzte_teil_steht_im_topf(monkeypatch, tmp_path):
+    monkeypatch.setattr(usage, "_FILE", str(tmp_path / "u.json"))
+    eur = usage.buchen("claude-sonnet-4-5", input_tokens=100000, output_tokens=1100,
+                       output_geschaetzt=100)
+    d = json.loads((tmp_path / "u.json").read_text())
+    monat = next(iter(d["monate"]))
+    teil = d["geschaetzt"][monat]["euro"]
+    assert 0 < teil < eur and d["monate"][monat]["calls"] == 1
+    import prices
+    assert abs(teil - prices.euro("claude-sonnet-4-5", output_tokens=100)) < 1e-6
 
 
 # ── run_code stoppen ───────────────────────────────────────────────────

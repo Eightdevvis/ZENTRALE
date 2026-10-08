@@ -592,13 +592,17 @@ class _AnthropicAdapter:
             # Strom gestoppt, gibt es kein final.usage — die Eingabe ist
             # aber schon bezahlt und gehört in die Buchung (Budget-Deckel).
             # message_start trägt Eingabe + Cache, message_delta die
-            # bisherige Ausgabe (meist erst am Ende).
+            # bisherige Ausgabe (laut Anthropic kumuliert, in der Praxis nur
+            # einmal am Ende). Was seit der letzten gemeldeten Zahl kam
+            # (Text, Denken, halbe Werkzeug-Aufrufe), zählt `seit_zahl` in
+            # Zeichen — beim Stopp wird nur dieser Rest geschätzt.
             verbrauch = {}
+            seit_zahl = 0
             for event in stream:
                 if werkzeug_schleife.gestoppt(self.abbruch):
                     # Raus aus dem with schließt die Verbindung: Anthropic
                     # hört auf zu erzeugen, und wir hören auf zu zahlen.
-                    _gestoppt_buchen(verbrauch, self.modell)
+                    _gestoppt_buchen(verbrauch, self.modell, seit_zahl)
                     raise werkzeug_schleife.Gestoppt("".join(round_text))
                 if event.type == "message_start":
                     verbrauch.update(_usage_dict(
@@ -608,7 +612,13 @@ class _AnthropicAdapter:
                     out = getattr(getattr(event, "usage", None),
                                   "output_tokens", None)
                     if out is not None:
-                        verbrauch["output_tokens"] = out
+                        verbrauch["output_tokens"] = int(out)
+                        seit_zahl = 0
+                    continue
+                if event.type == "content_block_start":
+                    block = getattr(event, "content_block", None)
+                    if getattr(block, "type", "") in ("tool_use", "server_tool_use"):
+                        seit_zahl += len(getattr(block, "name", "") or "")
                     continue
                 if event.type != "content_block_delta":
                     continue
@@ -616,9 +626,13 @@ class _AnthropicAdapter:
                 if d.type == "thinking_delta":
                     # Innerer Monolog → HUD. Landet NICHT im Text,
                     # also weder in der History noch im TTS.
+                    seit_zahl += len(d.thinking or "")
                     yield {"reflect": d.thinking}
                 elif d.type == "text_delta":
+                    seit_zahl += len(d.text or "")
                     round_text.append(d.text)
+                elif d.type == "input_json_delta":
+                    seit_zahl += len(getattr(d, "partial_json", "") or "")
             final = stream.get_final_message()
 
         _log_usage(final, self.modell)
@@ -703,23 +717,35 @@ def _usage_dict(u) -> dict:
              "cache_creation_input_tokens")}
 
 
-def _gestoppt_buchen(verbrauch: dict, model: str):
-    """Ein gestoppter Strom liefert kein final.usage. Buchen, was der
-    Anbieter bis dahin gemeldet hat — nicht schätzen, was er nicht gemeldet
-    hat (Sasha 07.10.: das Verbrauchte nicht verlieren)."""
+def _gestoppt_buchen(verbrauch: dict, model: str, rest_zeichen: int = 0):
+    """Ein gestoppter Strom liefert kein final.usage. Gebucht wird, was
+    Anthropic bis dahin gemeldet hat (Eingabe + Cache aus message_start,
+    Ausgabe aus dem letzten message_delta) — und seit 2026-10-08 (Sasha ok)
+    die bis zum Stopp erzeugte Ausgabe danach geschätzt: rest_zeichen
+    (Text + Denken + halbe Werkzeug-Aufrufe) je usage.ZEICHEN_JE_TOKEN, als
+    geschätzt im Topf „geschaetzt". Vorher war die halbe Ausgabe gratis."""
+    import state
     if not verbrauch:
-        try:
-            import state
-            state.push_log(f"CLOUD ✗ {model} gestoppt, bevor der Anbieter "
-                           f"Zahlen geschickt hat — nichts gebucht")
-        except Exception:
-            pass
+        # Vor message_start: es gibt weder Zahlen noch Ausgabe.
+        state.push_log(f"CLOUD ✗ {model} gestoppt, bevor der Anbieter "
+                       f"Zahlen geschickt hat — nichts gebucht")
         return
-    from types import SimpleNamespace
-    _log_usage(SimpleNamespace(usage=SimpleNamespace(**{
-        "input_tokens": 0, "output_tokens": 0,
-        "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
-        **verbrauch})), model)
+    try:
+        import usage
+        rest = usage.tokens_geschaetzt(rest_zeichen)
+        gemeldet = int(verbrauch.get("output_tokens", 0) or 0)
+        rein = int(verbrauch.get("input_tokens", 0) or 0)
+        rd = int(verbrauch.get("cache_read_input_tokens", 0) or 0)
+        wr = int(verbrauch.get("cache_creation_input_tokens", 0) or 0)
+        eur = usage.buchen(model, input_tokens=rein, output_tokens=gemeldet + rest,
+                           cache_read=rd, cache_write=wr, output_geschaetzt=rest)
+        state.push_log(
+            f"CLOUD ← {model} gestoppt in={rein} cache_read={rd} cache_write={wr} "
+            f"out={gemeldet}+≈{rest} (geschätzt) ≈{eur:.4f}€ "
+            f"(heute {usage.heute_euro():.2f}€)")
+    except Exception as e:
+        # Nicht still: eine verlorene Buchung macht den Budget-Deckel blind.
+        print(f"[usage] Buchung beim Stopp fehlgeschlagen ({model}): {e}")
 
 
 def _log_usage(final, model: str):

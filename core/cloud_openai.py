@@ -137,9 +137,9 @@ def _log_usage(verbrauch, model: str):
         print(f"[usage] Buchung fehlgeschlagen ({model}): {e}")
 
 
-# Zeichen je Token für die Schätzung unten. 3,5 liegt für deutschen Text
-# und JSON eher zu niedrig (= mehr Token, teurer) — gewollt vorsichtig.
-ZEICHEN_JE_TOKEN = 3.5
+# Zeichen je Token für die Schätzung unten — die Regel steht seit
+# 2026-10-08 in usage.py (der Anthropic-Weg schätzt beim Stopp auch).
+from usage import ZEICHEN_JE_TOKEN  # noqa: E402
 
 
 def _geschaetzt_buchen(model: str, msgs: list, tools, text: str):

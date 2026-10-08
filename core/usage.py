@@ -96,9 +96,21 @@ def _unbekannten_preis_melden(model: str):
         print(f"[usage] {zeile}")
 
 
+# Zeichen je Token, wenn der Anbieter nichts gezählt hat (gestoppte
+# Antworten). 3,5 liegt für deutschen Text und JSON eher zu niedrig (= mehr
+# Token, teurer) — gewollt vorsichtig. Eine Regel für beide Wege
+# (cloud_openai, cloud), seit 2026-10-08 hier.
+ZEICHEN_JE_TOKEN = 3.5
+
+
+def tokens_geschaetzt(zeichen: int) -> int:
+    """Token aus der Zahl der Zeichen (ZEICHEN_JE_TOKEN)."""
+    return int(max(0, zeichen or 0) / ZEICHEN_JE_TOKEN)
+
+
 def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
            cache_read: int = 0, cache_write: int = 0,
-           geschaetzt: bool = False) -> float:
+           geschaetzt: bool = False, output_geschaetzt: int = 0) -> float:
     """
     Einen Call verbuchen. Gibt die geschätzten Kosten dieses Calls in Euro
     zurück (damit der Aufrufer sie gleich loggen kann).
@@ -109,6 +121,11 @@ def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
     Budget-Deckel soll sie sehen — und zusätzlich im Topf „geschaetzt" pro
     Monat, damit erkennbar bleibt, wie viel davon Schätzung ist.
 
+    output_geschaetzt=N (2026-10-08): nur N der output_tokens sind geschätzt
+    (gestoppte Claude-Antwort: Eingabe und Cache hat Anthropic gemeldet, die
+    Ausgabe bis zum Stopp nicht). In den Topf „geschaetzt" geht dann nur der
+    Preis dieser N Token.
+
     Schluckt Fehler: eine kaputte Buchhaltung darf niemals ein Gespräch
     abbrechen. Im schlimmsten Fall stimmt die Statistik nicht.
     """
@@ -117,6 +134,8 @@ def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
         eur = prices.euro(model, input_tokens=input_tokens,
                           output_tokens=output_tokens,
                           cache_read=cache_read, cache_write=cache_write)
+        teil_eur = (prices.euro(model, output_tokens=output_geschaetzt)
+                    if output_geschaetzt > 0 and not geschaetzt else 0.0)
     except Exception:
         return 0.0
 
@@ -128,8 +147,9 @@ def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
             _bump(d["tage"], heute, eur)
             _bump(d["monate"], monat, eur)
             _bump(d["modelle"], model or "unbekannt", eur)
-            if geschaetzt:
-                _bump(d.setdefault("geschaetzt", {}), monat, eur)
+            if geschaetzt or output_geschaetzt > 0:
+                _bump(d.setdefault("geschaetzt", {}), monat,
+                      eur if geschaetzt else min(eur, teil_eur))
             # Tagesdetails kappen; Monate bleiben (die sind winzig).
             tage = d["tage"]
             if len(tage) > KEEP_TAGE:
