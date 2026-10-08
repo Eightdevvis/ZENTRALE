@@ -76,7 +76,8 @@ def test_datensicherung_nutzt_dieselbe_liste():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     assert mod.SICHERN is auswahl.SICHERN
-    assert set(auswahl.ABGLEICH) == set(auswahl.SICHERN) - set(auswahl.NICHT_ABGLEICHEN)
+    assert set(auswahl.ABGLEICH) == (set(auswahl.SICHERN) - set(auswahl.NICHT_ABGLEICHEN)
+                                     | set(auswahl.NUR_ABGLEICH))
 
 
 # ── Der Haken in datasync ──────────────────────────────────────────────

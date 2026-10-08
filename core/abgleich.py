@@ -27,8 +27,10 @@ import contextlib
 import datetime
 import fcntl
 import hashlib
+import base64
 import json
 import os
+import re
 import shutil
 import time
 
@@ -43,6 +45,7 @@ VORGABE_DIR = "~/.local/share/zentrale/abgleich"
 VORGABE_MITTE = "git@github.com:Eightdevvis/data.git"
 INHALT = "inhalt.enc"
 LIESMICH = "LIESMICH.md"
+EINGANG = "knoten"        # knoten/<name>/<versteckter name>.enc — Eingang fremder Knoten
 WEGE = ("rsync", "mitte")
 MAX_HINWEISE = 50
 
@@ -184,14 +187,78 @@ def _mitte_lesen(tresor, stand, lesen, basis):
     return inhalt, raus
 
 
+# ── Eingang fremder Knoten (Handy, 2026-10-08) ─────────────────────────
+# Das Handy (eigene App, Dart) liest die Mitte, schreibt aber NIE ins
+# Inhaltsverzeichnis — sonst stritten es und die Rechner um eine Datei.
+# Es legt nur eigene Dateien in seinen Eingang knoten/<name>/, jede als
+# verschlüsselter Umschlag {format, pfad, inhalt}. Format für fremde Knoten:
+# memory/betrieb/abgleich.md.
+
+_KNOTEN_NAME = re.compile(r"^[A-Za-z0-9@.\-]+$")
+
+
+def eigene_datei(rel: str, knoten: str) -> bool:
+    """Gehört die Datei allein diesem Knoten? Dann schreibt sie nur er —
+    konfliktfrei durch Bauart (gespraeche/<id>/<knoten>.jsonl,
+    gespraeche/_knoten/<knoten>.json, rueckmeldungen/<knoten>.jsonl)."""
+    teile = rel.split("/")
+    name = teile[-1]
+    if rel.startswith("data/gespraeche/") and len(teile) == 4:
+        return name == knoten + ".jsonl" or (teile[2] == "_knoten" and name == knoten + ".json")
+    return rel == f"data/rueckmeldungen/{knoten}.jsonl"
+
+
+def _vorschlag(rel: str) -> bool:
+    """Der Kopf eines neuen Gesprächs darf aus dem Eingang kommen — gilt aber
+    nur, solange die Mitte noch keinen hat."""
+    teile = rel.split("/")
+    return (len(teile) == 4 and rel.startswith("data/gespraeche/")
+            and teile[2][:1] not in ("_", ".") and teile[3] == "kopf.json")
+
+
+def _eingang_lesen(tresor, namen, lesen, rechner, bericht):
+    """→ (fremd {rel: bytes}, vorschlaege {rel: bytes}). Was nicht passt
+    (falscher Pfad, kaputt, fremde Datei), wird übergangen — mit Hinweis."""
+    fremd, vorschlaege = {}, {}
+    for name in namen:
+        teile = name.split("/")
+        if len(teile) != 3 or teile[0] != EINGANG or not teile[2].endswith(".enc"):
+            continue
+        knoten = teile[1]
+        if not _KNOTEN_NAME.match(knoten) or knoten == rechner:
+            continue
+        try:
+            u = json.loads(tresor.auf(lesen(name) or b""))
+            rel, inhalt = u["pfad"], base64.b64decode(u["inhalt"], validate=True)
+        except schluessel.SchluesselFehler:
+            raise
+        except (ValueError, KeyError, TypeError):
+            bericht.hinweise.append(f"Eingang {knoten}: eine Datei ist unlesbar — übergangen")
+            continue
+        if not auswahl.passt(rel, auswahl.ABGLEICH) or teile[2] != tresor.name(rel) + ".enc":
+            bericht.hinweise.append(f"Eingang {knoten}: {rel!r} gehört nicht dorthin — übergangen")
+        elif eigene_datei(rel, knoten):
+            fremd[rel] = inhalt
+        elif _vorschlag(rel):
+            vorschlaege[rel] = inhalt
+        else:
+            bericht.hinweise.append(f"Eingang {knoten}: {_kurz(rel)} darf er nicht schreiben — übergangen")
+    return fremd, vorschlaege
+
+
 # ── Planen ─────────────────────────────────────────────────────────────
 
-def _planen(basis, lokal, mitte, grabsteine, art, rechner, bericht):
+def _planen(basis, lokal, mitte, grabsteine, art, rechner, bericht, fremd=None):
     """→ (ergebnis {rel: bytes|None}, aufheben {rel: bytes}).
-    aufheben = eigene Fassungen, die weichen mussten."""
+    aufheben = eigene Fassungen, die weichen mussten. fremd = Dateien aus dem
+    Eingang eines anderen Knotens: die gelten, wie sie sind — nie überschrieben."""
     erg, aufheben = {}, {}
+    fremd = fremd or {}
     for rel in sorted(set(basis) | set(lokal) | set(mitte)):
         b, l, m = basis.get(rel), lokal.get(rel), mitte.get(rel)
+        if rel in fremd:
+            erg[rel] = fremd[rel]
+            continue
         stein = grabsteine.get(rel)
         tot = l is not None and stein is not None and stein.get("sha") == _sha(l)
         if art == "erstabgleich":
@@ -313,13 +380,15 @@ def _vorhaben_nachholen(wurzel, mitte):
 
 # ── Der Abgleich ───────────────────────────────────────────────────────
 
-def _neues_inhalt(tresor, inhalt, erg, mitte, rechner):
-    """→ (neues inhalt, schreiben {name: bytes}, loeschen [name])."""
+def _neues_inhalt(tresor, inhalt, erg, mitte, rechner, fremd=()):
+    """→ (neues inhalt, schreiben {name: bytes}, loeschen [name]).
+    `mitte` = was im Inhaltsverzeichnis steht; Dateien fremder Knoten
+    (`fremd`) bleiben in deren Eingang und kommen nie hinein."""
     neu = {"format": 1, "dateien": dict(inhalt.get("dateien", {})),
            "geloescht": dict(inhalt.get("geloescht", {}))}
     schreiben, loeschen = {}, []
     for rel, r in erg.items():
-        if r == mitte.get(rel):
+        if r == mitte.get(rel) or rel in fremd:
             continue
         name = tresor.name(rel)
         if r is None:
@@ -352,22 +421,28 @@ def abgleichen(wurzel, trocken=False, warten=120.0) -> Bericht:
                 stand, lesen, namen = mitte.holen()
                 basis_stand, basis = _basis_lesen()
                 inhalt, m = _mitte_lesen(tresor, stand, lesen, basis)
+                bericht.hinweise, bericht.geholt, bericht.beiseite = [], [], []
+                fremd, vorschlaege = _eingang_lesen(tresor, namen, lesen, rechner, bericht)
+                sicht = dict(m)                 # was die Mitte insgesamt sagt
+                sicht.update(fremd)
+                for rel, c in vorschlaege.items():
+                    sicht.setdefault(rel, c)
                 lokal = {rel: _lesen(os.path.join(wurzel, rel))
                          for rel in auswahl.auswahl(wurzel, auswahl.ABGLEICH)}
                 bericht.art = ("erstbefuellung" if stand is None else
                                "erstabgleich" if basis_stand is None else "")
                 if bericht.art == "erstbefuellung":
                     basis = {}
-                bericht.hinweise, bericht.geholt, bericht.beiseite = [], [], []
-                erg, aufheben = _planen(basis, lokal, m, inhalt.get("geloescht", {}),
-                                        bericht.art, rechner, bericht)
-                bericht.gesendet = sorted(r for r in erg if erg[r] != m.get(r))
+                erg, aufheben = _planen(basis, lokal, sicht, inhalt.get("geloescht", {}),
+                                        bericht.art, rechner, bericht, fremd)
+                bericht.gesendet = sorted(r for r in erg
+                                          if erg[r] != m.get(r) and r not in fremd)
                 if trocken:
                     bericht.geholt = sorted(r for r in erg if erg[r] != lokal.get(r))
                     return bericht
                 kennung = stand
                 if bericht.gesendet or LIESMICH not in namen:
-                    _, schreiben, loeschen = _neues_inhalt(tresor, inhalt, erg, m, rechner)
+                    _, schreiben, loeschen = _neues_inhalt(tresor, inhalt, erg, m, rechner, fremd)
                     schreiben[LIESMICH] = LIESMICH_TEXT.encode("utf-8")
                     kennung = mitte.vorbereiten(schreiben, loeschen,
                                                 f"Abgleich {_jetzt()} von {rechner}")

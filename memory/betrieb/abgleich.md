@@ -12,6 +12,9 @@ Drei Wörter, die hier immer dasselbe heißen:
 - **Mitte** — der eine Ort, gegen den jeder Rechner abgleicht. Heute das
   private GitHub-Repo `Eightdevvis/data` (Zweig `abgleich`), später der PC
   als Server.
+- **fremder Knoten** — ein Gerät, das die Mitte selbst liest, aber nur
+  eigene Dateien schreibt (das Handy, unten). Rechner führen zusammen,
+  fremde Knoten nicht.
 - **abgleichen** — den eigenen Stand mit der Mitte zusammenführen: holen,
   zusammenführen, das Ergebnis zurück in die Mitte und auf den Rechner.
 
@@ -89,10 +92,20 @@ Auf GitHub liegen nur unlesbare Daten. Bewertet wurden drei Wege:
 So liegt es in der Mitte:
 
 ```
-LIESMICH.md        fester Erklärtext, kein Inhalt
-inhalt.enc         verschlüsselt: welche Datei wie heißt, ihr Prüfwert, Grabsteine
-d/<name>.enc       jede Datei einzeln verschlüsselt
+LIESMICH.md                 fester Erklärtext, kein Inhalt
+inhalt.enc                  verschlüsselt: welche Datei wie heißt, ihr Prüfwert, Grabsteine
+d/<name>.enc                jede Datei einzeln verschlüsselt (schreiben nur die Rechner)
+knoten/<knoten>/<name>.enc  Eingang eines fremden Knotens, z. B. des Handys
 ```
+
+**Warum Fernet, auch mit Blick aufs Handy (Dart):** Fernet ist ein
+offengelegtes, kleines Format (AES-128-CBC + HMAC-SHA256, unten Byte für Byte).
+In Dart gibt es es fertig (`package:encrypt`, Klasse `Fernet`), und notfalls
+ist es mit `package:cryptography`/`pointycastle` in zwanzig Zeilen
+nachgebaut — `tests/test_abgleich_handy.py` tut genau das in Python aus
+Grundbausteinen. AES-GCM wäre gleich gut machbar gewesen, hätte aber eine
+eigene Schlüsselableitung und eine zweite Schreibweise neben `mail_secrets`
+gebracht. git-crypt/gpg gehen auf dem Handy nicht.
 
 - **Auch die Dateinamen sind versteckt.** `<name>` ist ein Prüfwert aus
   Schlüssel und Pfad (HMAC) — `gedaechtnis/dossiers/<person>.md` verrät auf
@@ -129,8 +142,12 @@ in `~/.config/zentrale/abgleich.schluessel` (nur für Sasha lesbar), **nie in
 5. Auf dem PC: den Befehl mit `schluessel-eingeben` aufrufen und die Zeile
    aus KeePass einfügen. Er prüft sie gegen die Mitte, bevor er sie ablegt.
 
-Neuer Rechner = Schritt 5. Schlüssel wechseln ist bewusst nicht gebaut (alles
-neu verschlüsseln) — braucht es erst, wenn er einmal draußen war.
+Neuer Rechner = Schritt 5. Das Handy bekommt die Zeile ebenfalls aus KeePass
+(in den sicheren Speicher der App). Schlüssel wechseln ist bewusst nicht
+gebaut (alles neu verschlüsseln) — braucht es erst, wenn er einmal draußen
+war. ⚠ Das Handy trägt Schlüssel und GitHub-Token mit sich: geht es
+verloren, den Token bei GitHub sperren und den Schlüssel als „draußen"
+behandeln.
 
 ## Was abgeglichen wird
 
@@ -161,7 +178,8 @@ Inventar über `data/` (08.10.2026) und die Regel je Art:
 
 | Art | Dateien | Regel |
 |---|---|---|
-| **Pro Rechner** | `gespraeche/<id>/<rechner>.jsonl`, `gespraeche/_knoten/<rechner>.json`, `ablage/<id>/v<n>-<rechner>.*`, `rueckmeldungen/<rechner>.jsonl` | Schreibt nur ein Rechner — kann nicht kollidieren. Läuft durch dieselbe Regel, sie greift nie. |
+| **Pro Rechner** | `gespraeche/<id>/<rechner>.jsonl`, `gespraeche/_knoten/<rechner>.json`, `ablage/<id>/v<n>-<rechner>.*`, `rueckmeldungen/<rechner>.jsonl` | Schreibt nur ein Rechner — kann nicht kollidieren. Läuft durch dieselbe Regel, sie greift nie. Dateien des Handys (`handy.jsonl` …) kommen aus seinem Eingang und gelten unverändert (unten). |
+| **Abgeleitet** | `mobil/kontext.json` (Kontextpaket fürs Handy) | Die frische Fassung von hier gilt, ohne Hinweis. |
 | **Nur anhängen** (`.jsonl`) | `ai_transcripts/*.jsonl` (beide Rechner hängen an) | Zeilen: was in der Mitte steht, plus was hier dazukam, minus was hier gelöscht wurde. Reihenfolge: Mitte zuerst. |
 | **JSON mit Einträgen** | `lists.json`, `features.json`, `notes.json`, `graphs.json`, `g_*.json`, `melodies.json`, `sleep_quality.json`, `mail_rules.json`, `kalender_neben.json`, `gespraeche/*/kopf.json`, `ablage/*/kopf.json`, Tutor-Stände | Eintrag für Eintrag, Feld für Feld (unten). |
 | **Zähler-JSON** | `ai_usage.json` (Kostenbuch) | Wie JSON, aber haben beide eine Zahl verändert, werden beide Zuwächse addiert — sonst verschluckt der eine Rechner die Kosten des anderen. |
@@ -275,6 +293,132 @@ alle paar Minuten statt einmal am Tag. Nach der Umstellung kann der Timer
 ([datensicherung.md](datensicherung.md)). Ob sie gelöscht werden, entscheidet
 Sasha (das löscht Geschichte — Claude tut es nicht).
 
+## Das Handy und andere fremde Knoten
+
+Sasha, 08.10.2026: **das Handy wird ein eigener Knoten an der Mitte** (eigene
+App in Dart/Flutter). Es liest und schreibt die Mitte selbst (GitHub-API mit
+einem eng begrenzten Token, nur dieses Repo), ruft das Sprachmodell selbst
+auf und schreibt **nur eigene Dateien**.
+
+Ein fremder Knoten ist anders gebaut als ein Rechner: er **führt nie
+zusammen und schreibt nie ins Inhaltsverzeichnis.** Sonst stritten Handy und
+Rechner um `inhalt.enc`. Stattdessen legt er seine Dateien in seinen
+**Eingang** `knoten/<knoten>/`. Die Rechner lesen jeden Eingang bei jedem
+Abgleich und übernehmen daraus:
+
+| Datei im Eingang | Was der Rechner tut |
+|---|---|
+| **eigene Datei** des Knotens: `data/gespraeche/<id>/<knoten>.jsonl`, `data/gespraeche/_knoten/<knoten>.json`, `data/rueckmeldungen/<knoten>.jsonl` | gilt so, wie sie ist; auf jeden Rechner geschrieben, **nie überschrieben**, nie ins Inhaltsverzeichnis. Eine örtliche Änderung daran wird beim nächsten Abgleich zurückgesetzt. Konfliktfrei durch Bauart: nur dieser Knoten schreibt sie. |
+| `data/gespraeche/<id>/kopf.json` (neues Gespräch) | **Vorschlag**: gilt nur, solange die Mitte für dieses Gespräch noch keinen Kopf hat. Dann übernimmt ihn der erste Rechner ins Inhaltsverzeichnis; ab da gilt der dort (Umbenennen usw. machen die Rechner). |
+| alles andere, falscher Name, unlesbar | übergangen, mit Hinweis |
+
+**Abweichung vom Vorschlag „Pfad-Spiegel" (Klartext-Pfade):** die Pfade
+bleiben auch für das Handy versteckt (`<name>` = HMAC des Pfads, unten).
+Klartext-Pfade verrieten auf GitHub Gesprächszeiten, Rechnernamen und die
+Namen der Dossiers (Personen). Das Handy kann den Namen genauso leicht
+berechnen; zum Aufzählen liest es das Inhaltsverzeichnis.
+
+### Format für fremde Knoten
+
+Alles, was ein Client braucht, ohne Python-Code zu lesen. Prüfstein:
+`tests/test_abgleich_handy.py` baut einen Knoten nur nach diesem Abschnitt.
+
+**Die Mitte:** git-Repo `Eightdevvis/data`, Zweig **`abgleich`**. Über die
+GitHub-API: Dateien lesen mit der Contents- oder Trees-API, schreiben mit
+`PUT /repos/Eightdevvis/data/contents/<pfad>` (`branch: abgleich`, Inhalt
+base64, bei vorhandener Datei deren `sha`). Gibt es den Zweig noch nicht,
+hat noch kein Rechner abgeglichen — warten.
+
+**Der Schlüssel:** eine Zeile aus 44 ASCII-Zeichen (Base64url **mit**
+`=`-Auffüllung) = 32 Bytes. Bytes 0–15 = Signierschlüssel, Bytes 16–31 =
+Verschlüsselungsschlüssel (Fernet-Standard). Auf dem Handy im sicheren
+Speicher der App, eingegeben aus KeePass.
+
+**Verschlüsseln (Fernet, Version 0x80):** Eine `.enc`-Datei enthält genau
+ein Token als ASCII-Text (Base64url mit Auffüllung, kein Zeilenumbruch):
+
+```
+token = base64url( 0x80 ‖ zeit ‖ iv ‖ chiffrat ‖ hmac )
+  zeit    8 Bytes, Sekunden seit 1970 (UTC), Big-Endian
+  iv      16 zufällige Bytes
+  chiffrat AES-128-CBC(Verschlüsselungsschlüssel, iv, PKCS7(klartext))
+  hmac    HMAC-SHA256(Signierschlüssel, 0x80 ‖ zeit ‖ iv ‖ chiffrat), 32 Bytes
+```
+
+Entschlüsseln: erst den HMAC prüfen (stimmt er nicht → falscher Schlüssel),
+dann AES-CBC, PKCS7 entfernen. Die Zeit wird nicht geprüft.
+
+**Versteckte Namen:**
+
+```
+namen_schluessel = SHA256( "zentrale-abgleich-namen" ‖ 0x00 ‖ <die 44 Zeichen der Schlüssel-Zeile als ASCII> )
+name(pfad)       = die ersten 32 Zeichen von hex( HMAC-SHA256(namen_schluessel, pfad als UTF-8) )   (klein geschrieben)
+```
+
+`pfad` ist immer relativ zum ZENTRALE-Ordner mit `/`, z. B.
+`data/gespraeche/20261008-101500-a1b2c3/handy.jsonl`.
+
+**Das Inhaltsverzeichnis** `inhalt.enc` entschlüsselt ist UTF-8-JSON:
+
+```json
+{"format": 1,
+ "dateien":   {"<pfad>": {"name": "<name(pfad)>", "sha": "<SHA256-hex des Klartexts>"}},
+ "geloescht": {"<pfad>": {"sha": "…", "von": "<knoten>", "am": "<ISO-Zeit>"}}}
+```
+
+Den Inhalt einer Datei liest man aus `d/<name>.enc`; der `sha` muss zum
+entschlüsselten Klartext passen. Nur lesen — ein fremder Knoten schreibt
+weder `inhalt.enc` noch `d/`.
+
+**Schreiben in den Eingang:** für jede eigene Datei genau eine Datei
+`knoten/<knoten>/<name(pfad)>.enc`. Der Klartext darin ist ein Umschlag
+(UTF-8-JSON), verschlüsselt wie oben:
+
+```json
+{"format": 1, "pfad": "data/gespraeche/<id>/handy.jsonl", "inhalt": "<Datei-Bytes, Standard-Base64 mit Auffüllung>"}
+```
+
+Immer die **ganze** Datei (eine `.jsonl` wächst, die Eingangsdatei wird
+ersetzt). Da nur dieser Knoten in `knoten/<knoten>/` schreibt, kann ein `PUT`
+nur scheitern, wenn er selbst gleichzeitig schreibt; die Rechner fassen den
+Eingang nie an. Löschen gibt es nicht (Gespräche werden archiviert).
+
+**Der Knotenname:** Rechner heißen wie ihr Hostname (`0RAMMachine`,
+`pop-os`). Das Handy heißt fest **`handy`**. Ein weiterer Knoten wählt
+einmal einen eigenen Namen aus `A–Z a–z 0–9 @ . -`, der weder als
+`knoten/<name>/` noch als `data/gespraeche/_knoten/<name>.json` schon
+vorkommt — und behält ihn für immer (er steht in Dateinamen).
+
+**Gespräche aus Sicht des Handys** (abgeglichen mit `core/gespraeche.py`,
+08.10.2026 — passt): Gesprächs-id `%Y%m%d-%H%M%S-<6 hex>` (UTC);
+Ereignis-Zeilen JSON je Zeile mit `id` (uuid4-hex), `ts` (UTC, ISO mit
+Mikrosekunden und `+00:00`), `knoten: "handy"`; `kopf.json` mit `titel`,
+`titel_von` (`"sasha"` | `"modell"` | `"woerter"` | null), `erstellt`,
+`archiviert`, `projekt`; `_knoten/handy.json` mit `aktiv`, `gelesen` {id:
+ts}, `neu_projekt`. Hinweis: ein Kopf mit `titel_von` `"woerter"` oder null
+darf ein Rechner später automatisch umbenennen (`"modell"`); `"sasha"` nie.
+
+### Das Kontextpaket fürs Handy
+
+Damit das Handy wie ZENTRALE spricht, legt jeder Rechner bei jedem Abgleich
+`data/mobil/kontext.json` ab (`core/mobil_kontext.py`; gelesen wie jede
+Datei über das Inhaltsverzeichnis):
+
+```json
+{"version": 1, "stand": "<UTC-ISO>", "anbieter": "claude", "modell": "claude-sonnet-5",
+ "effort": "low", "system": "<fester System-Prompt der Cloud-Schiene als ein Text>"}
+```
+
+- `system` = der feste Teil, den die Cloud-Schiene jedem Zug voranstellt
+  (Persona, Gedächtnis-Kopf, Hausregeln, Skill-Liste, Tagesübersicht) —
+  **ohne Werkzeug-Beschreibungen**. Das Handy hängt selbst einen Absatz an
+  (keine Werkzeuge, ehrlich sagen, was es nicht sehen kann).
+- `anbieter`/`modell`/`effort` aus den Einstellungen des Rechners.
+  **Nie Schlüssel** — den API-Key hat das Handy selbst.
+- Neu geschrieben nur, wenn sich außer `stand` etwas ändert. Schreiben zwei
+  Rechner verschiedene Fassungen, gilt ohne Hinweis die zuletzt abgeglichene
+  (abgeleitete Datei, kein echter Widerspruch).
+
 ## Bedienen
 
 Der Befehl `scripts/abgleich.py` (Sasha tippt ihn selbst):
@@ -310,7 +454,8 @@ zuletzt, Hinweise) und über `GET /api/abgleich`.
 | `core/abgleich_schluessel.py` | Schlüssel anlegen, laden, ver-/entschlüsseln, versteckte Namen |
 | `core/abgleich_zusammenfuehren.py` | die Regeln oben: JSON, Zeilen, Text, Ganzes |
 | `core/abgleich_mitte.py` | die vier Handgriffe, Umsetzung git |
-| `core/abgleich.py` | ein Abgleich von vorn bis hinten: Basis, Vorhaben, Hinweise, Zustand |
+| `core/abgleich.py` | ein Abgleich von vorn bis hinten: Basis, Eingang fremder Knoten, Vorhaben, Hinweise, Zustand |
+| `core/mobil_kontext.py` | Kontextpaket fürs Handy (Schicht 3) |
 | `scripts/abgleich.py` | der Befehl |
 | `ui/routen/abgleich.py` | `GET /api/abgleich` |
 | `deploy/zentrale-abgleich.{service,timer}` | alle 5 Minuten |

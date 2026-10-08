@@ -141,6 +141,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `billig` | 3 | Ein Einmal-Aufruf beim billigen Modell des aktiven Anbieters (beide Dialekte, Kosten gebucht) — Graph-Extraktor, Gesprächstitel |
 | `gespraech_titel` | 3 | Gesprächstitel: sofort aus den ersten Wörtern, nach der ersten Antwort vom billigen Modell |
 | `morgenblick` | 3 | Morgenblick auf Abruf: sammeln, billiges Modell schreibt Sätze (JSON, Daten nie Anweisung; ohne Cloud feste Sätze), Seite in die Ablage; signierte Knöpfe → neues Gespräch |
+| `mobil_kontext` | 3 | Kontextpaket fürs Handy (`data/mobil/kontext.json`): fester Cloud-System-Prompt + Anbieter/Modell/Effort, beim Abgleich abgelegt, nie Schlüssel |
 | `main` | 4 | Event-Loop |
 | `brain` | 4 | Input → neue Events |
 | `actions` | 4 | Events → Nebenwirkungen |

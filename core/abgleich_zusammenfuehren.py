@@ -36,7 +36,9 @@ class Ergebnis:
 
 
 def art(rel: str, *fassungen) -> str:
-    """json | zaehler | zeilen | text | ganz — nach Endung und Inhalt."""
+    """json | zaehler | zeilen | text | ganz | abgeleitet — nach Pfad, Endung, Inhalt."""
+    if rel.startswith("data/mobil/"):
+        return "abgeleitet"
     if rel.endswith("ai_usage.json"):
         return "zaehler"
     if rel.endswith(".json"):
@@ -72,6 +74,10 @@ def zusammenfuehren(rel, basis, lokal, mitte, name_lokal="hier") -> Ergebnis:
         return Ergebnis(lokal, [] if basis is None else
                         ["in der Mitte gelöscht, hier geändert — bleibt"])
     a = art(rel, basis, lokal, mitte)
+    if a == "abgeleitet":
+        # Neu erzeugt aus den Daten dieses Rechners (Kontextpaket fürs Handy):
+        # die frische Fassung von hier gilt, ein Widerspruch ist keiner.
+        return Ergebnis(lokal)
     try:
         if a in ("json", "zaehler"):
             return _json_datei(basis, lokal, mitte, zaehler=(a == "zaehler"))

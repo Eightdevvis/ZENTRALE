@@ -53,9 +53,22 @@ def _status():
     return 0
 
 
+def _kontext_schreiben(wurzel):
+    """Das Kontextpaket fürs Handy auffrischen (core/mobil_kontext.py). Darf
+    den Abgleich nie aufhalten: geht es schief, fährt das Handy mit dem
+    letzten Paket aus der Mitte weiter."""
+    try:
+        import mobil_kontext
+        mobil_kontext.schreiben(wurzel)
+    except Exception as e:  # noqa: BLE001 — bewusst alles: nur ein Zusatz
+        print(f"Kontextpaket fürs Handy nicht aufgefrischt: {e}"[:200], file=sys.stderr)
+
+
 def _jetzt(trocken, automatisch):
     if automatisch and abgleich.weg() != "mitte":
         return 0                           # Timer läuft, aber noch nicht umgestellt
+    if not trocken:
+        _kontext_schreiben(_wurzel())
     try:
         b = abgleich.abgleichen(_wurzel(), trocken=trocken,
                                 warten=60.0 if automatisch else 120.0)

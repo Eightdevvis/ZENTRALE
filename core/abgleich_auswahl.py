@@ -46,7 +46,10 @@ SICHERN = [
 # Doppelte und Geister. kalender_neben.json (Reisezeiten, Puffer, Ebenen)
 # kennt Google nicht — die bleibt drin. Begründung: memory/betrieb/abgleich.md.
 NICHT_ABGLEICHEN = ["data/ai_calendar.json", "data/kalender/**"]
-ABGLEICH = [m for m in SICHERN if m not in NICHT_ABGLEICHEN]
+# Nur im Abgleich: das Kontextpaket fürs Handy (core/mobil_kontext.py) —
+# abgeleitet, eine Sicherung braucht es nicht.
+NUR_ABGLEICH = ["data/mobil/kontext.json"]
+ABGLEICH = [m for m in SICHERN if m not in NICHT_ABGLEICHEN] + NUR_ABGLEICH
 
 
 def passt(rel, muster=SICHERN):
