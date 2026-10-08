@@ -737,3 +737,30 @@ Claude Web"; Pixelstil: [../system/pixelstil.md](../system/pixelstil.md).
   (ki_system.md, „Gestoppt = geschätzt gebucht").
 - **Offen, für später:** bei sehr vielen Skills ein Werkzeug „Skill suchen"
   statt einer langen Liste im Kopf.
+
+### Skill `import-memory` — Erinnerungen aus einer anderen KI (2026-10-08)
+
+Sasha: seine Erinnerungen aus Claude (ggf. ChatGPT/Gemini) nach ZENTRALE
+holen, als Vorbereitung für den Umzug. Vorlage war Claudes eingebauter Skill
+gleichen Namens, sinngemäß für ZENTRALE neu geschrieben. Ausführlich:
+[gedaechtnis_dateien.md](gedaechtnis_dateien.md), „Import aus einer anderen KI".
+
+- **Skill** `core/skill_vorlagen/import-memory/`: `SKILL.md` (deutsch,
+  Ablauf in sechs Schritten + Regeln) und `references/` (Export-Text für die
+  andere KI, Datenschutz-Filter, Abbildung auf ZENTRALEs Gedächtnis).
+  Erstbefüllung wie die anderen eigenen Skills, an, `herkunft: zentrale`
+  (neu; TUI zeigt „mitgeliefert"), ehrlicher `quelle`-Vermerk.
+- **Werkzeug-Lücke geschlossen** mit einem Parameter statt eines neuen
+  Werkzeugs: `write_note(…, herkunft)` → `gedaechtnis.import_ergaenzen` —
+  zeilenweise nur Neues (Dubletten auch in anderer Schreibweise), Vermerk
+  `[import <herkunft> <Datum>]` vom Code, nie Kataloge/Tagebuch, keine
+  Link-Zeilen, ≤ 30 Zeilen je Aufruf, atomar. Kernakten über das
+  vorhandene Gate (Frage nennt Herkunft und Zeilen).
+- **Schnappschuss** neu gezogen: nur der `write_note`-Parameter auf `gross`
+  (+217 Zeichen), `klein` byte-gleich, Gate und Fragen der Schnappschuss-
+  Argumente unverändert. Textbudget: eigener Deckel < 200 Zeichen für die
+  Parameter-Beschreibung (`tests/test_profil.py`).
+- **Probelauf** mit erfundenem Export und gefälschtem Modell
+  (`tests/test_import_memory.py`, `tests/fixtures/import_memory_beispiel.txt`).
+- **Offen:** ein „Import-Modus", der `rewrite_note`/`edit_skill` während
+  eines Imports verweigert (beide fragen ohnehin jedes Mal).

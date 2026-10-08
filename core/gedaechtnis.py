@@ -541,6 +541,141 @@ def dossier_ersetzen(name: str, inhalt: str) -> str:
             + (f". {hinweis}." if hinweis else "."))
 
 
+# ── Import aus einer anderen KI (write_note mit herkunft) ─────────────
+#
+# 2026-10-08, Skill import-memory (core/skill_vorlagen/import-memory/):
+# Sasha holt seine Erinnerungen aus Claude (oder ChatGPT/Gemini) herüber.
+# Ein Import ist NUR ERGÄNZEN — und das ist hier im Code verankert, nicht
+# nur eine Bitte im Skill:
+#   - zeilenweise; eine Zeile, die (bis auf Aufzählungszeichen, Datum,
+#     Vermerk, Groß/klein) schon in der Zieldatei oder im selben Aufruf
+#     steht, wird übersprungen. write_note prüfte nur den GANZEN Text — bei
+#     zehn Zeilen, von denen eine schon da ist, stünde die doppelt.
+#   - nie in Kataloge: dort ERSETZT write_note einen gleichnamigen Eintrag
+#     (upsert) — ein Import würde Sashas Fassung still überschreiben.
+#   - nie ins Tagebuch: das ist, was hier passiert ist, kein Wissen.
+#   - Zeilen mit Link oder Bild werden nicht übernommen (der Export ist
+#     Daten von außen; ein Link darin wird nicht zur Adresse für später).
+#   - jede Zeile bekommt den Herkunftsvermerk vom CODE (Datum stimmt immer).
+#   - alles oder nichts: die Datei wird einmal atomar geschrieben.
+# Kernakten bleiben über das Gate geschützt (werkzeug_register: write_note
+# auf Hausregeln/Steckbrief/Ziele fragt jedes Mal).
+
+IMPORT_MAX_ZEILEN = 30     # je Aufruf — der Skill schreibt in Etappen
+IMPORT_MAX_ZEILE = 500     # Zeichen je Zeile
+_IMPORT_LINK = re.compile(r"https?://|www\.|!\[|\]\(", re.I)
+_IMPORT_DATUM = re.compile(r"^\[(\d{4}-\d{2}-\d{2})\]\s*(?:[-–:]\s*)?")
+_IMPORT_VERMERK = re.compile(r"\s*(\[import [^\]]*\]|_\(seit [^)]*\)_)\s*$", re.I)
+
+
+def _import_kern(zeile: str) -> str:
+    """Vergleichsform einer Zeile: ohne Aufzählung, Datum, Vermerk, Satzende."""
+    z = (zeile or "").strip().lstrip("-*• ").strip()
+    z = _IMPORT_DATUM.sub("", z)
+    while True:
+        kuerzer = _IMPORT_VERMERK.sub("", z)
+        if kuerzer == z:
+            break
+        z = kuerzer
+    return " ".join(z.split()).rstrip(".!;").casefold()
+
+
+def _import_herkunft(herkunft: str) -> str:
+    h = re.sub(r"[^a-z0-9-]+", "-", (herkunft or "").strip().lower()).strip("-")
+    return h[:20]
+
+
+def _import_auswahl(text: str, vorhanden: str, wer: str) -> tuple:
+    """→ (neue fertige Zeilen, übersprungen als [(grund, zeile)])."""
+    schon = {_import_kern(z) for z in vorhanden.splitlines() if _import_kern(z)}
+    heute = date.today().isoformat()
+    neu, weg = [], []
+    for roh in (text or "").splitlines():
+        zeile = roh.strip().lstrip("-*• ").strip()
+        if not zeile:
+            continue
+        kern = _import_kern(zeile)
+        if not kern:
+            continue
+        if _IMPORT_LINK.search(zeile):
+            weg.append(("enthält einen Link oder ein Bild", zeile))
+        elif len(zeile) > IMPORT_MAX_ZEILE:
+            weg.append((f"länger als {IMPORT_MAX_ZEILE} Zeichen", zeile))
+        elif kern in schon:
+            weg.append(("steht schon da", zeile))
+        else:
+            schon.add(kern)
+            m = _IMPORT_DATUM.match(zeile)
+            vom = f", Eintrag vom {m.group(1)}" if m else ""
+            zeile = _IMPORT_DATUM.sub("", zeile).strip()
+            neu.append(f"- {zeile}  [import {wer} {heute}{vom}]")
+    return neu, weg
+
+
+def import_ergaenzen(name: str, text: str, herkunft: str) -> str:
+    """Zeilen aus einem Import anhängen — nur, was noch nicht da ist.
+    `text` = eine Tatsache je Zeile. Siehe Block oben."""
+    wer = _import_herkunft(herkunft)
+    if not wer:
+        return "[Fehler: herkunft fehlt — z.B. 'claude' oder 'chatgpt']"
+    roh = (name or "").strip().lower()
+    if roh in ("", "tagebuch", "diary"):
+        return ("[Ein Import gehört nicht ins Tagebuch — nimm eine Notiz, ein "
+                "Dossier oder (nach Sashas Ja) Steckbrief/Ziele. Nichts geschrieben.]")
+    bereich, schluessel = ("", HAUSREGELN) if roh in ("hausregeln", "regeln") \
+        else _finden(name)
+    if not schluessel:
+        return "[Fehler: kein Name]"
+    if bereich in ("kataloge", "quellen", "vorlagen"):
+        return (f"[Ein Import schreibt nicht nach {bereich}/ — dort würde Vorhandenes "
+                f"ersetzt oder es ist kein Ort für Fakten. Nimm eine Notiz. "
+                f"Nichts geschrieben.]")
+    zeilen = [z for z in (text or "").splitlines() if z.strip()]
+    if not zeilen:
+        return "[Fehler: keine Zeilen]"
+    if len(zeilen) > IMPORT_MAX_ZEILEN:
+        return (f"[{len(zeilen)} Zeilen sind zu viele für einen Schritt (höchstens "
+                f"{IMPORT_MAX_ZEILEN}) — teil es auf. Nichts geschrieben.]")
+    if bereich == "notizen":
+        anderswo = _wo_steht_der_titel(schluessel)
+        if anderswo:
+            return (f"[Zu '{schluessel}' gibt es schon einen Katalog-Eintrag in "
+                    f"{anderswo} — nimm einen anderen Namen oder frag Sasha. "
+                    f"Nichts geschrieben.]")
+    pfad = _pfad(bereich, schluessel)
+    alt = _lesen(pfad)
+    neu, weg = _import_auswahl(text, alt, wer)
+    ort = f"{bereich}/{schluessel}" if bereich else schluessel
+    if neu:
+        _import_schreiben(pfad, alt, bereich, schluessel, neu, wer)
+    teile = [f"{'Ergänzt in' if alt else 'Neu angelegt:'} {ort}: {len(neu)} Zeile(n)"
+             + (f", je mit [import {wer} {date.today().isoformat()}]" if neu else "")
+             if neu else f"Nichts geschrieben in {ort}"]
+    for grund, zeile in weg:
+        kurz = zeile if len(zeile) <= 80 else zeile[:79] + "…"
+        teile.append(f"übersprungen ({grund}): {kurz!r}")
+    if neu:
+        teile.append(f"Die Datei hat jetzt {len(_lesen(pfad).splitlines())} Zeilen.")
+    return " · ".join(teile)
+
+
+def _import_schreiben(pfad, alt, bereich, schluessel, neu, wer) -> None:
+    if alt:
+        text = alt.rstrip("\n") + "\n"
+    else:
+        text = HAUSREGELN_KOPF if schluessel == HAUSREGELN and not bereich \
+            else f"# {schluessel}\n\n"
+    if bereich == "dossiers":
+        # Wie dossier_notieren unter einer Überschrift — einmal je Tag und
+        # Herkunft, nicht über jeder Etappe neu.
+        kopf = f"## {date.today().isoformat()} · import {wer}"
+        letzte = [z for z in text.splitlines() if z.startswith("## ")][-1:]
+        if letzte != [kopf]:
+            text += ("" if text.endswith("\n\n") else "\n") + kopf + "\n"
+    dateien.atomar_schreiben(pfad, text + "\n".join(neu) + "\n")
+    datasync.notify_change(pfad)
+
+
 # ── Vorlagen, Katalog-Kopf und Abgleich ───────────────────────────────
 #
 # Das Problem, das Sasha gemeldet hat: schreibt sie ein Dossier, taucht

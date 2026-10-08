@@ -41,7 +41,8 @@ KERNAKTEN = ("hausregeln", "steckbrief", "ziele")
 
 # Wörter, die Sasha sieht (keine Fachwörter aus der Datei).
 STATUS_WORT = {"aktiv": "an", "aus": "aus", "vorgeschlagen": "vorgeschlagen"}
-HERKUNFT_WORT = {"sasha": "von dir", "ki": "von der ki", "anthropic": "von anthropic"}
+HERKUNFT_WORT = {"sasha": "von dir", "ki": "von der ki", "anthropic": "von anthropic",
+                 "zentrale": "mitgeliefert"}
 
 
 # ── Reine Helfer ─────────────────────────────────────────────────────────

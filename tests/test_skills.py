@@ -532,10 +532,13 @@ ANTHROPIC_ERLAUBT = {
 
 def test_erster_zugriff_bringt_eigene_und_anthropic_vorlagen(echte_vorlagen):
     alle = {s["name"]: s for s in skills.alle()}
-    assert set(alle) == ANTHROPIC_ERLAUBT | {"wochenplan", "recherche"}
+    assert set(alle) == ANTHROPIC_ERLAUBT | {"wochenplan", "recherche", "import-memory"}
     assert "kurz" not in alle                      # kein Skill mehr (Sasha 07.10.)
     for name in ("wochenplan", "recherche"):
         assert (alle[name]["status"], alle[name]["herkunft"]) == ("aktiv", "sasha")
+    # 2026-10-08: von ZENTRALE selbst geschrieben, nach Claudes Vorbild.
+    assert (alle["import-memory"]["status"], alle["import-memory"]["herkunft"]) \
+        == ("aktiv", "zentrale")
     assert "Kandidat zum Ersetzen" in alle["recherche"]["vermerk"]
     for name in ANTHROPIC_ERLAUBT:
         assert alle[name]["herkunft"] == "anthropic"

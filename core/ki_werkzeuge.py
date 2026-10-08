@@ -360,6 +360,10 @@ def _read_note(args: dict) -> str:
 def _write_note(args: dict) -> str:
     wie  = (args.get("name") or "").strip()
     text = args.get("text") or ""
+    # 2026-10-08: mit herkunft ist es ein Import (Skill import-memory) —
+    # zeilenweise, nur Neues, nie ins Tagebuch oder in Kataloge.
+    if str(args.get("herkunft") or "").strip():
+        return gedaechtnis.import_ergaenzen(wie, text, str(args["herkunft"]))
     if wie.lower() in ("tagebuch", "diary", ""):
         return gedaechtnis.tagebuch_notieren(text)
     if wie.lower() in ("hausregeln", "regeln"):

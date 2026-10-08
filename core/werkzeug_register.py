@@ -143,6 +143,17 @@ def _trifft_kernakte(args: dict) -> bool:
 
 def _frage_notiz(args: dict) -> str:
     akte = gedaechtnis.schreibt_kernakte(args.get("name")) or "die Notiz"
+    herkunft = " ".join(str(args.get("herkunft") or "").split())
+    if herkunft:
+        # Import (2026-10-08): Zeilen bleiben als Zeilen lesbar, und Sasha
+        # sieht, woher sie kommen.
+        zeilen = [" ".join(z.split()) for z in str(args.get("text") or "").splitlines()
+                  if z.strip()]
+        text = " / ".join(zeilen)
+        if len(text) > 300:
+            text = text[:299] + "…"
+        return (f'Soll ich aus dem Import von {herkunft} {len(zeilen)} '
+                f'Zeile(n) in {akte} ergänzen: "{text}"?')
     text = " ".join(str(args.get("text") or "").split())
     if len(text) > 200:
         text = text[:199] + "…"
@@ -949,6 +960,13 @@ WERKZEUGE = [
                                         "formlose Notiz."},
                 "text": {"type": "string",
                          "description": "Der Eintrag, in ganzen Saetzen."},
+                # 2026-10-08, Skill import-memory: nur ergänzen, zeilenweise.
+                "herkunft": {"type": "string",
+                             "description": "Nur beim Import aus einer anderen "
+                                            "KI, z.B. 'claude': dann eine "
+                                            "Tatsache je Zeile, Vorhandenes und "
+                                            "Links werden uebersprungen, jede "
+                                            "Zeile bekommt den Herkunftsvermerk."},
             },
             "required": ["name", "text"],
         },

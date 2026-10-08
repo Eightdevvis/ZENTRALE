@@ -215,7 +215,7 @@ Claude-Web-Plan Phase 3 ([../ki/gedaechtnis_dateien.md](../ki/gedaechtnis_dateie
   Statuszeile nennt ihren Pfad.
 - **Skills:** ↑↓ wählen, Enter/Leertaste schaltet an ↔ aus (vorgeschlagen →
   an). Zeile: `● name … an · von dir` (○ aus, ◌ vorgeschlagen; Herkunft
-  auch „von anthropic"), darunter die Beschreibung (2 Zeilen) und, falls da,
+  auch „von anthropic", „mitgeliefert" für ZENTRALEs eigene wie import-memory), darunter die Beschreibung (2 Zeilen) und, falls da,
   `braucht: …` / `hinweis: …` (seit 2026-10-07); auf breiten Schirmen
   höchstens 64 Spalten, damit der Status beim Namen bleibt.
 - **Nicht im Rad:** ein Rad-Platz braucht ein Pixel-Symbol, eine Taste und

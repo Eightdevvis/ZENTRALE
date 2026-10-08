@@ -217,6 +217,19 @@ def test_der_schnitt_haelt():
     assert 0 < besch_projekt < 200
 
 
+def test_import_parameter_bleibt_klein():
+    """write_note.herkunft (08.10.2026, Skill import-memory): ein Parameter
+    statt eines eigenen Werkzeugs — er reist in jedem Zug im gecachten
+    Präfix mit, für eine Aufgabe, die selten vorkommt. Deckel 200: WIE ein
+    Import läuft, steht im Skill, nicht im Schema; write_notes eigene
+    Beschreibung bleibt unverändert (zählt in besch_eigen oben)."""
+    w = next(t["function"] for t in gross.TOOLS
+             if t["function"]["name"] == "write_note")
+    text = w["parameters"]["properties"]["herkunft"]["description"]
+    assert 0 < len(text) < 200
+    assert "herkunft" not in w["parameters"]["required"]
+
+
 def test_praefix_bleibt_ueber_der_cache_mindestgroesse():
     """Anthropic cacht erst ab 1.024 Token (Sonnet 5) bzw. 512 (Opus 5). Wer
     weiter eindampft, spart Zeichen und verliert dafuer den Cache — das waere

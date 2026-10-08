@@ -501,6 +501,13 @@ skill-creator bekam `references/zentrale.md` dazu — was davon hier geht
 (Testläufe selbst ausführen, Ergebnisse in die Ablage, kein `claude -p`,
 kein Browser).
 
+**`import-memory`** (seit 2026-10-08, `herkunft: zentrale`): Erinnerungen aus
+einer anderen KI übernehmen, nach Claudes Skill gleichen Namens neu
+geschrieben. Geschrieben wird nur über `write_note(…, herkunft="claude")` —
+zeilenweise, nur Neues, mit Herkunftsvermerk, nie Kataloge/Tagebuch
+([gedaechtnis_dateien.md](gedaechtnis_dateien.md), „Import aus einer
+anderen KI").
+
 ### Frühere Gespräche — `search_chats`, `read_chat` (seit 2026-10-07)
 
 Phase 3 des [Claude-Web-Plans](claude_web_plan.md). Sasha orientiert sich

@@ -29,7 +29,7 @@
 #
 # ── Was nur ZENTRALE weiß ──────────────────────────────────────────────
 # steht in <name>/_zentrale.json, nie in der SKILL.md: status (aktiv |
-# vorgeschlagen | aus), herkunft (sasha | ki | anthropic), erstellt, und
+# vorgeschlagen | aus), herkunft (sasha | ki | anthropic | zentrale), erstellt, und
 # optional braucht (was ZENTRALE dafür fehlt), vermerk, quelle. Eine Datei
 # PRO SKILL statt einer gemeinsamen Statusdatei: der Sync ist „neueste Datei
 # gewinnt" — schaltet Sasha am PC einen Skill und am Laptop einen anderen,
@@ -55,7 +55,8 @@ import skill_format
 import skill_umzug
 
 STATUS = ("aktiv", "vorgeschlagen", "aus")
-HERKUNFT = ("sasha", "ki", "anthropic")
+# zentrale: mitgeliefert, von ZENTRALE selbst geschrieben (import-memory, 2026-10-08)
+HERKUNFT = ("sasha", "ki", "anthropic", "zentrale")
 
 MAX_BESCHREIBUNG = skill_format.BESCHREIBUNG_MAX   # 1024, wie bei Claude
 # Die ganze Liste im festen Kopf (2026-10-07). Sie geht bei jedem Zug mit
