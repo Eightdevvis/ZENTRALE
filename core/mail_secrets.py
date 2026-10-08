@@ -191,12 +191,14 @@ def save_accounts(accounts):
         try:
             import shutil
             shutil.copy2(_STORE, _STORE + ".bak")
+            os.chmod(_STORE + ".bak", 0o600)
         except Exception:
             pass
-    tmp = _STORE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(json.dumps(envelope))
-    os.replace(tmp, _STORE)
+    # Immer nur für Sasha lesbar (600), auch neu angelegt — vorher erbte die
+    # Zwischendatei die Standardrechte und os.replace machte den Store bei
+    # jedem Speichern wieder gruppenlesbar (2026-10-08).
+    import dateien
+    dateien.atomar_schreiben(_STORE, json.dumps(envelope), geheim=True)
 
 
 # ── kleines CLI, damit man Konten anlegt ohne Klartext-JSON von Hand ──

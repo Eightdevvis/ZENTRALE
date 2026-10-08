@@ -8,6 +8,19 @@ import pytest
 import dateien
 
 
+def test_geheim_ist_immer_nur_fuer_den_besitzer(tmp_path):
+    """Keys und Passphrasen-Stores: 600, auch wenn die alte Datei lockerer
+    war und auch neu angelegt (2026-10-08)."""
+    neu = tmp_path / "keys.json"
+    dateien.json_schreiben(neu, {"k": 1}, geheim=True)
+    assert stat.S_IMODE(neu.stat().st_mode) == 0o600
+    alt = tmp_path / "alt.json"
+    alt.write_text("{}", encoding="utf-8")
+    os.chmod(alt, 0o664)
+    dateien.atomar_schreiben(alt, "{}", geheim=True)
+    assert stat.S_IMODE(alt.stat().st_mode) == 0o600
+
+
 def test_json_landet_wie_vorher_mit_json_dump(tmp_path):
     p = tmp_path / "listen.json"
     daten = {"name": "Einkauf", "punkte": ["Brot", "Käse"]}

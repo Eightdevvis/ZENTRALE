@@ -140,6 +140,6 @@ def _save():
     # Datei — und damit eine Maschine ohne Keys.
     try:
         import dateien
-        dateien.json_schreiben(_CONFIG_PATH, _config)
+        dateien.json_schreiben(_CONFIG_PATH, _config, geheim=True)   # API-Keys: immer 600
     except Exception as e:
         print(f"[ai_config] Speichern fehlgeschlagen: {e}")

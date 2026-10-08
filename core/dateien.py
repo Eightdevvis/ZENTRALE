@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 
-def atomar_schreiben(pfad, inhalt) -> None:
+def atomar_schreiben(pfad, inhalt, geheim: bool = False) -> None:
     """Schreibt `inhalt` (str oder bytes) atomar nach `pfad`.
 
     Weg: Zwischendatei im SELBEN Ordner (sonst ist os.replace kein atomares
@@ -33,20 +33,28 @@ def atomar_schreiben(pfad, inhalt) -> None:
     Schreiber sich nicht gegenseitig die Zwischendatei wegnehmen.
 
     Die Rechte einer schon vorhandenen Datei bleiben erhalten (os.replace
-    setzt sonst die Standardrechte der neuen Datei durch)."""
+    setzt sonst die Standardrechte der neuen Datei durch).
+
+    geheim=True (Keys, Passphrasen-geschützte Stores): die Datei ist IMMER
+    nur für den Besitzer lesbar (600) — auch neu angelegt, und schon die
+    Zwischendatei, damit es keinen Augenblick lesbar herumliegt (2026-10-08)."""
     pfad = Path(pfad)
     pfad.parent.mkdir(parents=True, exist_ok=True)
     daten = inhalt.encode("utf-8") if isinstance(inhalt, str) else bytes(inhalt)
     tmp = pfad.parent / f".{pfad.name}.{os.getpid()}.{time.monotonic_ns()}.tmp"
     try:
-        with open(tmp, "wb") as f:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600 if geheim else 0o666)
+        with os.fdopen(fd, "wb") as f:
             f.write(daten)
             f.flush()
             os.fsync(f.fileno())
-        try:
-            os.chmod(tmp, pfad.stat().st_mode & 0o7777)
-        except FileNotFoundError:
-            pass
+        if geheim:
+            os.chmod(tmp, 0o600)
+        else:
+            try:
+                os.chmod(tmp, pfad.stat().st_mode & 0o7777)
+            except FileNotFoundError:
+                pass
         os.replace(tmp, pfad)
     finally:
         if tmp.exists():
@@ -56,10 +64,11 @@ def atomar_schreiben(pfad, inhalt) -> None:
                 pass
 
 
-def json_schreiben(pfad, daten, indent: int = 2) -> None:
+def json_schreiben(pfad, daten, indent: int = 2, geheim: bool = False) -> None:
     """JSON atomar schreiben, mit Umlauten im Klartext (ensure_ascii=False) —
     so, wie die Module es vorher mit json.dump getan haben."""
-    atomar_schreiben(pfad, json.dumps(daten, indent=indent, ensure_ascii=False))
+    atomar_schreiben(pfad, json.dumps(daten, indent=indent, ensure_ascii=False),
+                     geheim=geheim)
 
 
 # ── Rechnername ─────────────────────────────────────────────────────────
