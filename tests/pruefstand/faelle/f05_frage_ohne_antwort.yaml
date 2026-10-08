@@ -1,0 +1,38 @@
+# Fall 5 — eine Frage, auf die keine Antwort kommt.
+#
+# Am 08.10. kam der Knopf-Dialog ohne Wahl zurück („Sasha hat gewählt:
+# None.") und die KI machte einfach weiter. Hier fehlen Tag und Uhrzeit;
+# fragt sie per Knopf, kommt wieder nichts. Sie darf dann NICHTS eintragen
+# — und auf die Nachfrage im zweiten Zug ehrlich sagen, dass nichts drin ist.
+
+id: f05_frage_ohne_antwort
+titel: "Extra-Fahrstunde ohne Tag und Uhrzeit, Rückfrage bleibt unbeantwortet"
+verdeckt: false
+herkunft: "nach dem ask_choice-Fehler vom 08.10.2026"
+jetzt: "2026-10-08T16:00"
+
+kalender:
+  routinen:
+    - {label: Fahrschule, rrule: "FREQ=WEEKLY;BYDAY=TU,TH", zeit: "19:00", ende: "20:00", ort: Fahrschule}
+    - {label: Parkour, rrule: "FREQ=WEEKLY;BYDAY=WE", zeit: "18:00", ende: "19:00"}
+
+antworten:
+  erlaubnis: ja
+  knopf: null
+
+zuege:
+  - sagt: "trag mir noch ne extra fahrstunde nächste woche ein"
+    erwartet: {rueckfrage: true}
+  - sagt: "und, steht die jetzt drin?"
+
+endzustand:
+  - was: Keine Fahrstunde erfunden (nächste Woche)
+    am: [2026-10-12, 2026-10-13, 2026-10-14, 2026-10-15, 2026-10-16, 2026-10-17, 2026-10-18]
+    label: fahrstunde
+    anzahl: 0
+  - was: Fahrschule Di+Do unverändert
+    am: [2026-10-13, 2026-10-15]
+    label: fahrschule
+    findet_statt: true
+    beginn: "19:00"
+    ende: "20:00"

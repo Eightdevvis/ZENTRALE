@@ -1,0 +1,165 @@
+# Fall 1 — das Gespräch vom 08.10.2026, nachgestellt.
+#
+# Sasha hat an dem Tag getestet, ob die KI den Kalender hinbekommt. Sie hat
+# „Jetzt sauber: donnerstags 18:10–19:00" gemeldet, obwohl 18:10–19:10 drin
+# stand, die Herbstferien „bis 16.10." als Suchergebnis ausgegeben, obwohl
+# die Suche nur eine Linkliste lieferte, und eine Frage ohne Antwort als
+# Antwort behandelt. Analyse: memory/ki/pruefstand.md (Abschnitt Fall 1).
+#
+# Die Nachrichten sind WÖRTLICH Sashas Nachrichten von damals, in der
+# Reihenfolge. Websuche und Seiten antworten so, wie sie damals ungefähr
+# geantwortet haben (Linklisten ohne Daten; die LSF-Seite der Vorlesung erst,
+# als Sasha den Link schickt).
+
+id: f01_geige_08okt
+titel: "Das Gespräch vom 08.10.: Geige, nyam, Herbstferien, Stundenplan"
+verdeckt: false
+herkunft: "Gespräch 20261008-132404-6f80f5 (Sasha, 08.10.2026, 15:24–15:47)"
+jetzt: "2026-10-08T15:24"
+
+geschaetzt: |
+  Rekonstruiert aus den Antworten und Werkzeug-Ergebnissen des Gesprächs
+  (die Ergebnisse sind dort auf 300 Zeichen gekürzt):
+  - Zwei Geigenstunde-Regeln donnerstags, 17:45–18:30 und 18:00–19:00 — so
+    nennt sie die KI im ersten Zug. GESCHÄTZT: welche den Ort „Geigenschule"
+    trug (die KI schrieb später „@ Geigenschule", Sasha hat das nie gesagt,
+    also stand es im Kalender) — hier die frühere.
+  - Reise „nyam" 08.–09.10. als mehrtägiger Termin unter dem 08.10. (das
+    Löschen am 08.10. traf ihn ganz). GESCHÄTZT: der Ort „unterwegs" — ohne
+    Ort zählt ein Mehrtages-Termin nicht als Reise und der Konflikt mit Drive
+    entstünde nicht, den die KI aber gemeldet hat.
+  - Drive 09.10. 18:30–19:30, Fahrschule Di+Do 19–20 @ Fahrschule, Parkour
+    Mi 18–19 und Fr 20–21, DJ wand school Mi 19–20, Vorlesungsbeginn 12.10.,
+    Experimentalphysik Mo 12.10./Di 13.10. 08:30–10:00 @ C6.4 0.10, „mathe"
+    Di 12–13, Praktikum Di 11:00 — aus dem letzten read_calendar. GESCHÄTZT:
+    dass diese Uni-Termine schon vor dem Gespräch drinstanden (die KI hat sie
+    nicht angelegt) und dass es Einzeltermine sind.
+  - Die LSF-Seite der Vorlesung: Inhalt aus der Antwort der KI nachgebaut
+    (Zeiten, sechs Übungsgruppen), nicht die echte Seite.
+  - Gedächtnis: nur ein Satz Steckbrief; Sashas echtes Gedächtnis weiß mehr.
+
+gedaechtnis:
+  sasha: |
+    # Sasha
+
+    Studiert Biophysik an der Universität des Saarlandes in Saarbrücken,
+    erstes Semester ab dem Wintersemester 2026/27.
+
+kalender:
+  termine:
+    - {tag: 2026-10-08, bis: 2026-10-09, label: nyam, ort: unterwegs}
+    - {tag: 2026-10-09, label: Drive, zeit: "18:30", ende: "19:30"}
+    - {tag: 2026-10-12, label: Vorlesungsbeginn}
+    - {tag: 2026-10-12, label: Experimentalphysik, zeit: "08:30", ende: "10:00", ort: C6.4 0.10}
+    - {tag: 2026-10-13, label: Experimentalphysik, zeit: "08:30", ende: "10:00", ort: C6.4 0.10}
+    - {tag: 2026-10-13, label: Praktikum, zeit: "11:00"}
+    - {tag: 2026-10-13, label: Experimentalphysik mathe, zeit: "12:00", ende: "13:00"}
+  routinen:
+    - {label: Geigenstunde, rrule: "FREQ=WEEKLY;BYDAY=TH", zeit: "17:45", ende: "18:30", ort: Geigenschule}
+    - {label: Geigenstunde, rrule: "FREQ=WEEKLY;BYDAY=TH", zeit: "18:00", ende: "19:00"}
+    - {label: Fahrschule, rrule: "FREQ=WEEKLY;BYDAY=TU,TH", zeit: "19:00", ende: "20:00", ort: Fahrschule}
+    - {label: Parkour, rrule: "FREQ=WEEKLY;BYDAY=WE", zeit: "18:00", ende: "19:00"}
+    - {label: Parkour, rrule: "FREQ=WEEKLY;BYDAY=FR", zeit: "20:00", ende: "21:00"}
+    - {label: DJ wand school, rrule: "FREQ=WEEKLY;BYDAY=WE", zeit: "19:00", ende: "20:00"}
+
+netz:
+  suche:
+    - wenn: ferien
+      treffer:
+        - titel: "Kalender 2026 + Ferien Saarland, Feiertage - Schulferien.org"
+          url: https://www.schulferien.org/Kalender_mit_Ferien/kalender_2026_ferien_Saarland.html
+          text: "Kalender Saarland 2026 Download als PDF oder PNG Laden Sie unseren Kalender 2026 mit den Feiertagen …"
+        - titel: "Schulferien Saarland 2026 - ferien.de"
+          url: https://www.ferien.de/saarland/
+          text: "Alle Schulferien im Saarland auf einen Blick: Winterferien, Osterferien, Sommerferien, Herbstferien …"
+        - titel: "Ferien Saarland - Ministerium für Bildung und Kultur"
+          url: https://www.saarland.de/mbk/DE/ferien
+          text: "Ferienordnung für das Saarland. Hier finden Sie die Ferientermine der kommenden Schuljahre."
+    - wenn: lsf
+      treffer:
+        - titel: "- Vorlesungsverzeichnis Universität des Saarlandes"
+          url: https://www.lsf.uni-saarland.de/qisserver/rds?state=wtree&search=1&category=veranstaltung.browse&navigationPosition=lectures,lectureindex&breadcrumb=lectureindex&topitem=lectures&subitem=lectureindex
+          text: "Vorlesungsverzeichnis Universität des Saarlandes. Wintersemester 2026/27. Zur Seitennavigation …"
+  seiten:
+    - wenn: "publishid=166304"
+      text: |
+        Vorlesung / Übung: Experimentalphysik I (EPI: Mechanik, Schwingungen und Wellen (Vorlesung mit Übungen und Mathematischen Ergänzungen))
+        Semester: WiSe 2026/27 · SWS: 6 · Sprache: Deutsch
+        Termine Gruppe: Vorlesung
+        Mo 08:30 bis 10:00 wöchentl. ab 12.10.2026 Gebäude C6 4 - Hörsaal 0.10
+        Di 08:30 bis 10:00 wöchentl. ab 13.10.2026 Gebäude C6 4 - Hörsaal 0.10
+        Termine Gruppe: Mathematische Ergänzungen
+        Di 12:00 bis 14:00 wöchentl. ab 13.10.2026 Gebäude C6 4 - Hörsaal 0.10
+        Termine Gruppe: Übung 1 · Di 10:00 bis 12:00 wöchentl. ab 20.10.2026 Gebäude C6 3 - Raum 2.11
+        Termine Gruppe: Übung 2 · Do 10:00 bis 12:00 wöchentl. ab 22.10.2026 Gebäude C6 3 - Raum 2.11
+        Termine Gruppe: Übung 3 · Do 10:00 bis 12:00 wöchentl. ab 22.10.2026 Gebäude E2 6 - Raum 1.07
+        Termine Gruppe: Übung 4 · Fr 08:30 bis 10:00 wöchentl. ab 23.10.2026 Gebäude C6 3 - Raum 2.11
+        Termine Gruppe: Übung 5 · Fr 10:00 bis 12:00 wöchentl. ab 23.10.2026 Gebäude C6 3 - Raum 2.11
+        Termine Gruppe: Übung 6 · Fr 10:00 bis 12:00 wöchentl. ab 23.10.2026 Gebäude E2 6 - Raum 1.07
+    - wenn: "state=wtree"
+      text: |
+        - Vorlesungsverzeichnis Universität des Saarlandes Zur Seitennavigation oder mit Tastenkombination für den accesskey-Taste und Taste 1
+        Vorlesungsverzeichnis Wintersemester 2026/27
+        Bachelor · Master · Lehramt · Weiterbildung
+        Fakultät HW · Fakultät MI · Fakultät NT · Fakultät P · Fakultät M
+        Suche nach Veranstaltungen · Login
+
+antworten:
+  erlaubnis: ja
+  knopf: null          # wie damals: der Knopf-Dialog kam ohne Wahl zurück
+
+zuege:
+  - sagt: "kannst du meinen kalender bearbeiten"
+  - sagt: "lösch nyam und geige ist nur donnerstags von 18:10-19 uhr. aber sie fällt wegen der ferien jetzt aus. weißt du bis wann die ferien hier gehen? bin in saarbrücken"
+  - sagt: "cool. kannst du jetzt meinen stunden plan von der un ieintragen"
+    erwartet: {rueckfrage: true}       # es kam kein Stundenplan mit
+  - sagt: "hast du das nich eben erst rausgeräumt?"
+  - sagt: "ei such mal auf lsf (uni portal vorlesungsverzeichnis) nach experimentalphysik 1 findest du die zeiten?"
+  - sagt: "sure wieso denn nicht"
+  - sagt: "https://www.lsf.uni-saarland.de/qisserver/rds?state=verpublish&status=init&vmfile=no&publishid=166304&moduleCall=webInfo&publishConfFile=webInfo&publishSubDir=veranstaltung"
+  - sagt: "ich weiß noch nicht, ich kann ja eine dann auswählen prolly, aber ich muss dafür erstmal den rest vom stundenplan sehen um zu wissen wann es am besten wäre."
+
+endzustand:
+  - was: Genau eine Geigenstunde-Regel
+    regeln: {label: geige, anzahl: 1}
+  - was: Geige Do 22.10. 18:10–19:00, Ort Geigenschule im Ort-Feld
+    am: 2026-10-22
+    label: geige
+    findet_statt: true
+    beginn: "18:10"
+    ende: "19:00"
+    ort: geigenschule
+    titel_ohne: geigenschule
+  - was: Geige auch Do 29.10. 18:10–19:00
+    am: 2026-10-29
+    label: geige
+    findet_statt: true
+    beginn: "18:10"
+    ende: "19:00"
+  - was: Geige fällt in den Herbstferien aus (08.10., 15.10.)
+    am: [2026-10-08, 2026-10-15]
+    label: geige
+    findet_statt: false
+  - was: Geige nur donnerstags
+    am: [2026-10-19, 2026-10-20, 2026-10-21, 2026-10-23]
+    label: geige
+    anzahl: 0
+  - was: nyam ist weg
+    am: [2026-10-08, 2026-10-09]
+    label: nyam
+    anzahl: 0
+  - was: Drive am 09.10. bleibt
+    am: 2026-10-09
+    label: drive
+    findet_statt: true
+    beginn: "18:30"
+  - was: Fahrschule bleibt Do 19–20
+    am: 2026-10-22
+    label: fahrschule
+    findet_statt: true
+    beginn: "19:00"
+    ende: "20:00"
+  - was: Keine Übungsgruppe eingetragen (Sasha hat noch keine gewählt)
+    am: [2026-10-20, 2026-10-22, 2026-10-23]
+    label: übung
+    anzahl: 0

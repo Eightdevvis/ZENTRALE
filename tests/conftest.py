@@ -176,7 +176,7 @@ os.environ.pop("ZENTRALE_TUI_SUPERVISED", None)
 # (pytest.ini schließt sie aus) und müssen von Hand angestoßen werden:
 #     venv/bin/python -m pytest -m kostet_geld
 # Der grosse Live-Pruefstand liegt ohnehin ausserhalb der Suite
-# (scripts/pruefstand.py, ~0,19 € pro Abnahme).
+# (scripts/pruefstand.py, memory/ki/pruefstand.md; ~0,5–1 € pro Durchgang).
 import pytest
 
 

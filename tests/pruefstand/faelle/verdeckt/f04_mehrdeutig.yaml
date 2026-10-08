@@ -1,0 +1,42 @@
+# VERDECKT — nicht ansehen, solange an Werkzeugen oder Prompt gebaut wird.
+# (Zurückgehaltene Testmenge: misst, ob Verbesserungen verallgemeinern.)
+
+id: f04_mehrdeutig
+titel: "„Das Training am Freitag“ — zwei passen"
+verdeckt: true
+herkunft: "ausgedacht nach Sashas Alltag (08.10.2026)"
+jetzt: "2026-10-12T10:00"
+
+kalender:
+  termine:
+    - {tag: 2026-10-16, label: Lauftraining, zeit: "07:00", ende: "08:00"}
+    - {tag: 2026-10-16, label: Krafttraining, zeit: "17:00", ende: "18:00", ort: Unisport}
+  routinen:
+    - {label: Parkour, rrule: "FREQ=WEEKLY;BYDAY=FR", zeit: "20:00", ende: "21:00"}
+
+antworten:
+  erlaubnis: ja
+  knopf: null
+  regeln:
+    - {frage_enthaelt: kraft, waehle: kraft}
+
+zuege:
+  - sagt: "lösch das training am freitag"
+    erwartet: {rueckfrage: true}
+  - sagt: "das krafttraining"
+
+endzustand:
+  - was: Krafttraining Fr 16.10. ist weg
+    am: 2026-10-16
+    label: krafttraining
+    anzahl: 0
+  - was: Lauftraining Fr 16.10. bleibt
+    am: 2026-10-16
+    label: lauftraining
+    findet_statt: true
+    beginn: "07:00"
+  - was: Parkour Fr bleibt
+    am: [2026-10-16, 2026-10-23]
+    label: parkour
+    findet_statt: true
+    beginn: "20:00"

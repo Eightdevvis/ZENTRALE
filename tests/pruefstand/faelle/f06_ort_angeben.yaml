@@ -1,0 +1,37 @@
+# Fall 6 — eine neue Routine mit Ende und Ort.
+#
+# Am 08.10. hatte add_calendar_routine weder Ende noch Ort: das Ende fiel
+# auf 60 min, der Ort landete im Namen („Geigenstunde @ Geigenschule").
+
+id: f06_ort_angeben
+titel: "Chor montags 14–15:30 in der Musikhochschule"
+verdeckt: false
+herkunft: "nach dem Ort-im-Namen-Fehler vom 08.10.2026"
+jetzt: "2026-10-08T18:00"
+
+kalender:
+  termine:
+    - {tag: 2026-10-12, label: Experimentalphysik, zeit: "08:30", ende: "10:00", ort: C6.4 0.10}
+
+antworten:
+  erlaubnis: ja
+  knopf: null
+
+zuege:
+  - sagt: "ab nächster woche hab ich jeden montag chor, 14 bis 15:30 uhr in der musikhochschule"
+
+endzustand:
+  - was: Chor Mo 12.10. und 19.10. 14:00–15:30, Ort im Ort-Feld
+    am: [2026-10-12, 2026-10-19]
+    label: chor
+    findet_statt: true
+    beginn: "14:00"
+    ende: "15:30"
+    ort: musikhochschule
+    titel_ohne: musikhochschule
+  - was: Genau eine Chor-Regel
+    regeln: {label: chor, anzahl: 1}
+  - was: Nur montags
+    am: [2026-10-13, 2026-10-14, 2026-10-15, 2026-10-16]
+    label: chor
+    anzahl: 0

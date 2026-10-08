@@ -1,0 +1,44 @@
+# Fall 3 — eine Routine ändern, ohne das Ende zu sagen.
+#
+# Zwei Fallen: Sasha sagt nur die neue Anfangszeit (das Ende muss sie
+# nachfragen oder die Dauer behalten — nicht still auf 30 min schrumpfen
+# lassen), und es gibt ZWEI Regeln namens Parkour (Mi und Fr). Am 08.10. hat
+# edit_calendar_routine per Name alle Treffer geändert.
+
+id: f03_routine_ohne_ende
+titel: "Parkour am Mittwoch ab jetzt 18:30 — Freitag bleibt, Dauer bleibt"
+verdeckt: false
+herkunft: "ausgedacht nach Sashas Alltag (08.10.2026)"
+jetzt: "2026-10-09T12:00"
+
+kalender:
+  routinen:
+    - {label: Parkour, rrule: "FREQ=WEEKLY;BYDAY=WE", zeit: "18:00", ende: "19:00", ort: Halle Ost}
+    - {label: Parkour, rrule: "FREQ=WEEKLY;BYDAY=FR", zeit: "20:00", ende: "21:00", ort: Halle Ost}
+    - {label: DJ wand school, rrule: "FREQ=WEEKLY;BYDAY=WE", zeit: "20:00", ende: "21:00"}
+
+antworten:
+  erlaubnis: ja
+  knopf: null
+
+zuege:
+  - sagt: "parkour am mittwoch ist ab jetzt um halb sieben"
+
+endzustand:
+  - was: Mittwoch 18:30 mit gleicher Dauer — oder nachgefragt und noch unverändert
+    eins_von:
+      - - {was: geändert, am: 2026-10-14, label: parkour, findet_statt: true, beginn: "18:30", ende: "19:30"}
+      - - {was: unverändert, am: 2026-10-14, label: parkour, findet_statt: true, beginn: "18:00", ende: "19:00"}
+  - was: Ort Halle Ost bleibt am Mittwoch
+    am: 2026-10-21
+    label: parkour
+    findet_statt: true
+    ort: halle ost
+  - was: Freitag bleibt 20–21
+    am: [2026-10-16, 2026-10-23]
+    label: parkour
+    findet_statt: true
+    beginn: "20:00"
+    ende: "21:00"
+  - was: Weiter genau zwei Parkour-Regeln
+    regeln: {label: parkour, anzahl: 2}

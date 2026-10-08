@@ -22,6 +22,7 @@ Messungen dazu existiert.
 | Warum die KI nicht raten soll, sondern nachschaut — Recherche zum Grounding | [grounding_recherche.md](grounding_recherche.md) |
 | Dialogischer Action-Scaffold fürs lokale 9b (WIP, geparkt) | [logic_loop_plan.md](logic_loop_plan.md) |
 | Gemessenes statt Gefühltes: Benchmark-Protokolle, Sampling, Modell-Vergleiche | [bench_history.md](bench_history.md) |
+| **Prüfstand** — arbeitet die Cloud-KI ehrlich und richtig? Fälle aus Sashas Alltag (YAML) über den echten Weg gegen Wegwerf-Daten: Endzustand, Belegpflicht (jede Behauptung mit Zitat), Metriken, verdeckte Fälle, Ist-Stand vom 08.10. | [pruefstand.md](pruefstand.md) |
 
 ## Wo sonst noch KI drinsteckt
 

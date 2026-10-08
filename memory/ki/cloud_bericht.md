@@ -70,7 +70,7 @@ Kasten zu ist.
 ZENTRALE offen / zu, aber er ist da / niemand da. Das entscheidet Ton **und**
 Kanal. Die KI bekommt daraus einen Satz, keine Sensordaten.
 
-**Prüfstand.** `scripts/pruefstand.py`, 17 Live-Prüfungen gegen das echte
+**Prüfstand.** `scripts/pruefstand_verhalten.py` (bis 08.10.2026 `pruefstand.py`; der heutige Prüfstand mit Fällen: [pruefstand.md](pruefstand.md)), 17 Live-Prüfungen gegen das echte
 Modell, vollständig isoliert (per SHA1 belegt, kein Byte unter `data/`
 angefasst). Abnahme 18.08.: 17/17, 0,19 €.
 

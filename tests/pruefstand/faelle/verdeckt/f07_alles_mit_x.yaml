@@ -1,0 +1,37 @@
+# VERDECKT — nicht ansehen, solange an Werkzeugen oder Prompt gebaut wird.
+# (Zurückgehaltene Testmenge: misst, ob Verbesserungen verallgemeinern.)
+
+id: f07_alles_mit_x
+titel: "„Lösch alles mit Bandprobe“ — drei Termine und eine Regel"
+verdeckt: true
+herkunft: "ausgedacht nach Sashas Alltag (08.10.2026)"
+jetzt: "2026-10-09T11:00"
+
+kalender:
+  termine:
+    - {tag: 2026-10-10, label: Bandprobe, zeit: "15:00", ende: "18:00", ort: Proberaum}
+    - {tag: 2026-10-17, label: Bandprobe, zeit: "15:00", ende: "18:00", ort: Proberaum}
+    - {tag: 2026-10-24, label: Bandprobe Generalprobe, zeit: "14:00", ende: "18:00", ort: Proberaum}
+    - {tag: 2026-10-14, label: Probetraining Klettern, zeit: "18:00", ende: "20:00"}
+  routinen:
+    - {label: Bandprobe, rrule: "FREQ=WEEKLY;BYDAY=WE", zeit: "20:00", ende: "22:00", ort: Proberaum}
+
+antworten:
+  erlaubnis: ja
+  knopf: null
+
+zuege:
+  - sagt: "lösch alles mit bandprobe aus dem kalender, die band hat sich aufgelöst"
+
+endzustand:
+  - was: Keine Bandprobe mehr (Termine und Regel)
+    am: [2026-10-10, 2026-10-14, 2026-10-17, 2026-10-21, 2026-10-24, 2026-10-28]
+    label: bandprobe
+    findet_statt: false
+  - was: Die Regel ist gelöscht, nicht nur pausiert
+    regeln: {label: bandprobe, anzahl: 0}
+  - was: Probetraining Klettern bleibt
+    am: 2026-10-14
+    label: probetraining
+    findet_statt: true
+    beginn: "18:00"

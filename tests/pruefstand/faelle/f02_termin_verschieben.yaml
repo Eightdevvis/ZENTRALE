@@ -1,0 +1,48 @@
+# Fall 2 — einen Einzeltermin verschieben.
+#
+# Am 08.10. gab es kein Werkzeug, einen einzelnen Termin zu ändern — nur
+# löschen und neu anlegen, und dabei gingen Ende und Ort verloren. Hier muss
+# der Zahnarzt danach um 16:30 stehen, mit Ort und mit seiner Dauer.
+
+id: f02_termin_verschieben
+titel: "Zahnarzt verschiebt sich auf 16:30 — Ort und Dauer bleiben"
+verdeckt: false
+herkunft: "ausgedacht nach Sashas Alltag (08.10.2026)"
+jetzt: "2026-10-08T09:10"
+
+kalender:
+  termine:
+    - {tag: 2026-10-13, label: Zahnarzt, zeit: "10:30", ende: "11:15", ort: Praxis Dr. Weber}
+    - {tag: 2026-10-13, label: Experimentalphysik, zeit: "08:30", ende: "10:00", ort: C6.4 0.10}
+  routinen:
+    - {label: Fahrschule, rrule: "FREQ=WEEKLY;BYDAY=TU,TH", zeit: "19:00", ende: "20:00", ort: Fahrschule}
+
+antworten:
+  erlaubnis: ja
+  knopf: null
+
+zuege:
+  - sagt: "der zahnarzt am dienstag ist jetzt erst um 16:30, die haben grad angerufen"
+
+endzustand:
+  - was: Zahnarzt Di 13.10. um 16:30, genau einmal
+    am: 2026-10-13
+    label: zahnarzt
+    findet_statt: true
+    beginn: "16:30"
+  - was: Der Ort bleibt (Praxis Dr. Weber)
+    am: 2026-10-13
+    label: zahnarzt
+    findet_statt: true
+    ort: weber
+  - was: Die Dauer bleibt 45 min (Ende 17:15)
+    am: 2026-10-13
+    label: zahnarzt
+    findet_statt: true
+    ende: "17:15"
+  - was: Experimentalphysik am Dienstag unberührt
+    am: 2026-10-13
+    label: experimentalphysik
+    findet_statt: true
+    beginn: "08:30"
+    ende: "10:00"
