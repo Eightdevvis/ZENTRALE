@@ -952,15 +952,22 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None):
                 lo, hi = min(lo, s), max(hi, s + 1)
             if t["ende"] is not None:
                 lo, hi = min(lo, e - 1), max(hi, e)
-    m = next((st for st in _SCHRITTE if math.ceil((hi - (lo - lo % 60)) / st) <= reihen),
-             _SCHRITTE[-1])
-    lab = next(x for x in (60, 120, 180, 240, 360, 720, 1440) if x >= 2 * m and x % m == 0)
-    lo -= lo % (lab if m >= 60 else 60)
+    # Takt m (Minuten je Zeile) und Beschriftung lab: der Anfang muss auf dem
+    # Beschriftungstakt liegen, sonst trifft keine Zeile eine beschriftete
+    # Stunde — dann fehlten ALLE Uhrzeiten und Punktlinien (Sasha, 08.10.2026:
+    # „woche vom 19. bis 25 oktober hat irgendwie nen bug"; Takt 40 min,
+    # Anfang 7:00, Beschriftung alle 2 h → nie getroffen). Passt die Woche mit
+    # dem ausgerichteten Anfang nicht mehr in die Höhe, der nächstgröbere Takt.
+    lo0 = lo
+    for m in _SCHRITTE:
+        lab = next(x for x in (60, 120, 180, 240, 360, 720, 1440) if x >= 2 * m and x % m == 0)
+        lo = lo0 - lo0 % lab
+        if math.ceil((hi - lo) / m) <= reihen:
+            break
     # Reicht die Höhe über Mitternacht hinaus, früher anfangen statt unten
-    # leere Zeilen zu lassen.
+    # leere Zeilen zu lassen — wieder auf dem Beschriftungstakt.
     if lo + reihen * m > 24 * 60:
-        lo = max(0, 24 * 60 - reihen * m)
-        lo = -(-lo // 60) * 60             # auf volle Stunde, damit 06:00 oben steht
+        lo = min(lo, -(-max(0, 24 * 60 - reihen * m) // lab) * lab)
     n = min(reihen, max(1, math.ceil((24 * 60 - lo) / m)))
     sicht_ende = lo + n * m
     farbe: dict = {}

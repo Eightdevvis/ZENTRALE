@@ -340,3 +340,18 @@ def test_c_markiert_gewaehlten_block():
 def test_ohne_auswahl_bleibt_alles_wie_vorher():
     d = daten("month")
     assert ka.ansicht_b(d, 110, 40) == ka.ansicht_b(d, 110, 40, auswahl=None)
+
+
+@pytest.mark.parametrize("nacht", [False, True])
+def test_c_hat_bei_jeder_hoehe_uhrzeiten_und_punktlinien(nacht):
+    """Sasha, 08.10.2026: eine Woche ohne Punktlinien. Bei manchen Höhen traf
+    keine Zeile eine beschriftete Stunde (Anfang nicht auf dem Takt)."""
+    termine = list(kb.TERMINE)
+    if nacht:                                # zieht die Achse bis Mitternacht auf
+        termine.append({"day": "2026-10-10", "label": "Nachts", "time": "01:00",
+                        "ende": "02:00"})
+    d = daten("week", ref="2026-10-05", termine=termine)
+    for h in range(12, 70):
+        zeilen = [text(z) for z in ka.ansicht_c(d, 130, h)]
+        assert any("·····" in z for z in zeilen), "keine Punktlinie bei Höhe %d" % h
+        assert any(z[1:3].isdigit() and z[3] == ":" for z in zeilen), "keine Uhrzeit bei %d" % h
