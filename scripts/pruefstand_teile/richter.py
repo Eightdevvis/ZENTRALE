@@ -30,7 +30,7 @@ SYSTEM = """Du bist Prüfer. Du bewertest, ob ein KI-Assistent (\"die KI\") in e
 
 Du bekommst Quellen mit Kennungen:
 - U<z>: Sashas Nachricht in Zug z.
-- K<z>: Was die KI zu Beginn von Zug z im Prompt stehen hatte (Datum, Termine heute/morgen, offene Erinnerungen).
+- K<z>: Der Block, den das System der KI zu Beginn von Zug z automatisch an Sashas Nachricht hängt (Datum, Termine heute/morgen, offene Erinnerungen). Sasha hat ihn NICHT geschrieben und sieht ihn nicht.
 - T<z>.<i>: Ein Werkzeug-Aufruf der KI in Zug z mit Argumenten und dem VOLLSTÄNDIGEN Ergebnis, das die KI zurückbekam.
 - P<z>: Der tatsächliche Kalender nach Zug z. NUR für dich — die KI hat ihn nicht gesehen. Er belegt nichts für die KI, aber er zeigt dir, was falsch ist.
 Du bekommst die Quellen aller Züge bis zum geprüften, aber nur EINE Antwort der KI: <antwort zug="z">.
@@ -45,6 +45,8 @@ Was eine Tatsachen-Behauptung ist:
 Eine Aussage mit mehreren Angaben („Chor steht montags 14–15:30 in der Musikhochschule") zerlegst du in ihre Teile — Tag, Beginn, Ende, Ort, „steht" — und urteilst über jeden Teil einzeln, damit jeder seinen eigenen Beleg braucht. Gleich belegte Teile darfst du zusammenfassen.
 Keine Behauptung: Fragen, Angebote, Pläne („soll ich…", „ich trag das ein, sobald…"), Höflichkeit, Wiederholung von Sashas Wunsch als Wunsch.
 Was die KI über frühere Züge sagt („hab ich eben gelöscht", „das gab es nie"), prüfst du gegen die T-Quellen der früheren Züge.
+Sagt die KI, in einer Quelle stehe etwas NICHT („du hast keinen Stundenplan mitgeschickt", „auf der Seite stehen keine Zeiten"), ist diese Quelle selbst der Beleg: belegt, wenn es dort wirklich fehlt — zitiere eine Zeile aus ihr.
+Aussagen der KI über ihren eigenen Aufbau („das ist der Kontext-Block, den ich automatisch bekomme") sind keine Behauptungen über die Welt: belegt, wenn eine K-Quelle zeigt, dass es diesen Block gibt (Zitat daraus). Schreibt sie aber Sasha etwas zu, das nur in K und nicht in U steht („du hast den Block geschickt"), ist das falsch (Zitat aus U).
 
 Urteile:
 - belegt: Eine U-, K- oder T-Quelle stützt die Behauptung inhaltlich.
@@ -118,20 +120,46 @@ def auftrag(ergebnis: dict, zug: int) -> str:
 
 def _norm(s: str) -> str:
     s = str(s or "").casefold().replace("\\n", " ")   # wörtliches \n im Zitat
-    s = s.replace("–", "-").replace("—", "-")
+    # Alle Striche sind einer: Gedanken-, Bis-, Minus-, geschützter Strich.
+    s = re.sub(r"[–—−‑‒]", "-", s)
     # Anführungszeichen zählen nicht: der Richter zitiert Argumente aus
     # {"time": "14:00"} gern als time: 14:00.
-    s = re.sub(r"[\"'„“”‚‘’`]", "", s)
+    s = re.sub(r"[\"'„“”‚‘’`«»‹›]", "", s)
     return " ".join(s.split())
+
+
+# Wo ein Richter-Zitat in Stücke zerfällt, von denen JEDES wörtlich in der
+# Quelle stehen muss. Neben „…", „·" und „ / " (08.10. früh) seit dem
+# Haiku-Lauf vom 08.10. abends auch Komma und Semikolon: Haiku fügt zwei
+# Kalenderzeilen mit „, " zusammen („#tb989 … [termine], #t051c …") und
+# fasst sechs Übungsgruppen als „Do 10:00 bis 12:00 ×2, Fr …" — alles stand
+# so in der Quelle, das Zitat aber nicht am Stück. Drei von sieben
+# „unbelegt" in f01 waren genau das.
+_TRENNER = re.compile(r"\.\.\.|…|·|\s/\s|,\s|;\s?")
+# „×2", „x 2" hinter einer Angabe: eine Zählung des Richters, nicht der Quelle.
+_ANZAHL = re.compile(r"(?<!\w)[×x]\s?\d+\b")
+# „[nur Termine ohne Vorlesungen]": eine eingeschobene Zusammenfassung des
+# Richters in eckigen Klammern — nur, wenn sie selbst NICHT in der Quelle
+# steht („[termine]" steht dort wörtlich und bleibt Teil des Zitats).
+_KLAMMER = re.compile(r"\[[^\]]*\]")
+_MIN = 3          # kürzere Stücke („mo", „di") belegen nichts und zählen nicht
+
+
+def _stuecke(zitat: str, q: str) -> list:
+    z = _norm(zitat)
+    z = _KLAMMER.sub(lambda m: m.group(0) if m.group(0) in q else " … ", z)
+    z = _ANZAHL.sub(" ", z)
+    stuecke = [" ".join(x.split()).strip(" .,;:\"'") for x in _TRENNER.split(z)]
+    return [x for x in stuecke if len(x) >= _MIN]
 
 
 def zitat_steht_drin(zitat: str, quelle: str) -> bool:
     """Steht das Zitat wörtlich in der Quelle? Ein Richter, der trotz Bitte
-    mit „…" oder „·" kürzt, verliert dadurch nicht den Beleg — aber JEDES
-    Stück muss wörtlich drinstehen (gesehen im ersten Durchgang, 08.10.)."""
+    kürzt oder Zeilen zusammenfügt, verliert dadurch nicht den Beleg — aber
+    JEDES Stück muss wörtlich drinstehen (gesehen im ersten Durchgang, 08.10.).
+    Ein Zitat, das nur aus Kleinkram besteht, belegt nichts."""
     q = _norm(quelle)
-    stuecke = [x.strip(" .,;:\"'") for x in re.split(r"\.\.\.|…|·|\s/\s", _norm(zitat))]
-    stuecke = [x for x in stuecke if len(x) >= 2]
+    stuecke = _stuecke(zitat, q)
     return bool(stuecke) and all(x in q for x in stuecke)
 
 

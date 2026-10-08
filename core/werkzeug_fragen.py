@@ -155,7 +155,8 @@ def _frage_routine(args: dict) -> str:
 def _frage_pause(args: dict) -> str:
     von = (args.get("von") or "").strip()
     bis = (args.get("bis") or "").strip()
-    spanne = f' von {von} bis {bis}' if von and bis else ''
+    spanne = (f' von {von} bis {bis}' if von and bis
+              else f' am {von} (Ende noch offen)' if von else '')
     return f'Soll ich {_ziel(args, "routine")}{spanne} pausieren?'
 
 

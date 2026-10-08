@@ -187,6 +187,35 @@ def test_pause_per_kennung_trifft(gross):
     assert kalender.entries_in_range(DO, DO)[DO_ISO][0]["ausfall"] == "Herbstferien"
 
 
+def test_pause_mit_offenem_ende_traegt_den_tag_ein(gross):
+    """Prüfstand f01, 08.10. abends: „fällt wegen der Ferien jetzt aus, weißt
+    du bis wann?" — ohne Ende ging nichts, die Geige am Abend blieb stehen."""
+    tun("add_calendar_routine", label="Geigenstunde", rrule="FREQ=WEEKLY;BYDAY=TH",
+        time="18:10", ende="19:00")
+    r = tun("add_calendar_pause", kennung=routinen()[0].kennung, von=DO_ISO,
+            grund="Herbstferien")
+    assert r.status == "ok"
+    assert "NUR am" in r.beleg and "Ende noch offen" in r.beleg and "frag" in r
+    assert kalender.entries_in_range(DO, DO)[DO_ISO][0]["ausfall"] == "Herbstferien"
+    naechste = DO + timedelta(days=7)
+    assert not kalender.entries_in_range(naechste, naechste)[naechste.isoformat()][0].get("ausfall")
+
+
+def test_pause_ohne_ende_bleibt_auf_klein_ein_fehler():
+    """Die klein-Schiene ist gemessen; ihr Vertrag (von UND bis) bleibt."""
+    tun("add_calendar_routine", label="Geigenstunde", rrule="FREQ=WEEKLY;BYDAY=TH",
+        time="18:10", ende="19:00")
+    r = tun("add_calendar_pause", label="Geigenstunde", von=DO_ISO)
+    assert werkzeug_befund.status_von(r) == "fehlgeschlagen"
+    assert not kalender.entries_in_range(DO, DO)[DO_ISO][0].get("ausfall")
+
+
+def test_pause_frage_nennt_das_offene_ende():
+    import werkzeug_fragen
+    f = werkzeug_fragen._frage_pause({"label": "Geigenstunde", "von": DO_ISO})
+    assert DO_ISO in f and "Ende noch offen" in f
+
+
 # ── Einzeltermine ──────────────────────────────────────────────────────
 
 def test_einzeltermin_aendern_nur_genannte_felder(gross):

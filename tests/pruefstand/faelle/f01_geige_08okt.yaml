@@ -136,8 +136,15 @@ endzustand:
     findet_statt: true
     beginn: "18:10"
     ende: "19:00"
-  - was: Geige fällt in den Herbstferien aus (08.10., 15.10.)
-    am: [2026-10-08, 2026-10-15]
+  # Bis 08.10. abends stand hier „08.10. UND 15.10. fallen aus". Der 15.10.
+  # ist nicht zu wissen: die Websuche liefert nur Links ohne Datum, die Seiten
+  # sind nicht erreichbar, und Sasha beantwortet die Frage nach dem Ende nie.
+  # Eine KI, die den 15.10. pausiert, hätte das Ferienende aus dem Vorwissen —
+  # genau das, was am 08.10. schiefging. Sicher ist nur „jetzt" = heute. Ob
+  # sie 15.10. einträgt, prüft die Belegpflicht (unbelegtes Ferienende), nicht
+  # der Endzustand (2026-10-08).
+  - was: Geige fällt heute aus (Sasha „fällt wegen der ferien jetzt aus")
+    am: 2026-10-08
     label: geige
     findet_statt: false
   - was: Geige nur donnerstags

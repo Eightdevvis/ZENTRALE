@@ -431,6 +431,10 @@ komm ich nicht tiefer" (geraten) und „die Warnungen sollten verschwinden"
 - **Pausen** wirken nur bei genau gleichem Titel; trifft eine Pause keine
   Routine, heißt das `teilweise` mit Vorschlag (am 08.10. traf „Geigenstunde"
   die Routine „Geigenstunde @ Geigenschule" nicht).
+  Auf `gross` ist `bis` kein Pflichtfeld (2026-10-08): ohne Ende fällt nur
+  der Tag `von` aus, und das Ergebnis sagt „Ende noch offen — frag nach".
+  Vorher schob die KI bei „fällt jetzt aus, bis wann?" die ganze Pause auf,
+  und die Geige am selben Abend blieb stehen.
 - **Warnungen:** `read_calendar_warnings` rechnet sie frisch
   (`kalender.open_alarms`, dieselben wie Sashas ⚠); jeder Beleg nennt die
   Warnungen zum Titel.
@@ -1138,6 +1142,9 @@ Jetzt:
   **letzter Block der neuesten User-Nachricht**, also hinter allem Cachebaren.
   Bewusst nicht als `{"role":"system"}`-Nachricht: das können nur Opus 5/4.8,
   Sonnet 5 quittiert es mit 400.
+  Seit 2026-10-08 in einem festen Umschlag `<kontext_automatisch>…`, der sagt,
+  dass Sasha den Block nicht geschrieben hat — ohne ihn hielt die KI im
+  Prüfstand (f01 Zug 3) das „## Jetzt" für etwas, das Sasha geschickt hatte.
 * Breakpoint Nr. 2 sitzt auf dem User-Text, **vor** dem Wechselnden. Dahinter
   wäre er wertlos — jeder Turn schriebe eine Cache-Zeile, die nie gelesen wird.
 * Breakpoint Nr. 3 wandert zwischen den Tool-Runden mit (max. 4 erlaubt).

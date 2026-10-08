@@ -366,7 +366,26 @@ def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
             parts.append(alarm)
         if via_mic:
             parts.append(ki_prompt._MIC_INPUT_HINT)
-    return "\n\n".join(parts)
+    return _umschlag("\n\n".join(parts))
+
+
+# Der Umschlag um das Wechselnde (2026-10-08, Prüfstand f01 Zug 3): der Block
+# hängt als Text-Block an Sashas neuester Nachricht, und ohne Markierung hielt
+# die KI ihn für etwas, das Sasha geschickt hat — „Du hast den Block ## Jetzt
+# geschickt, aber keinen Stundenplan dahinter". Eine Prompt-Regel dagegen
+# wäre eine Bitte; der Umschlag sagt es an der Stelle, an der es passiert.
+# Der Wortlaut ist fest (gleiche Bytes jeden Zug), und er steht hinter dem
+# Cache-Breakpoint — kostet also nur die paar Zeichen selbst.
+_UMSCHLAG_AUF = ("<kontext_automatisch>\n(Diesen Block hängt ZENTRALE automatisch an "
+                 "jede neue Nachricht an. Sasha hat ihn NICHT geschrieben und sieht ihn "
+                 "nicht im Chat — sprich ihn nicht darauf an, als hätte er ihn geschickt.)")
+_UMSCHLAG_ZU = "</kontext_automatisch>"
+
+
+def _umschlag(text: str) -> str:
+    if not text.strip():
+        return text
+    return f"{_UMSCHLAG_AUF}\n\n{text}\n{_UMSCHLAG_ZU}"
 
 
 def _system_blocks(system: str | None, mem_ctx: str, via_mic: bool,

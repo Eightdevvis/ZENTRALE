@@ -80,6 +80,25 @@ def test_jetzt_block_steht_nicht_im_statischen_teil():
     assert "## Jetzt" in blocks[1]["text"]
 
 
+def test_wechselnder_teil_sagt_dass_er_nicht_von_sasha_ist():
+    """Prüfstand f01, 08.10.: der Block hängt an Sashas Nachricht, und ohne
+    Umschlag hielt die KI ihn für etwas, das Sasha geschickt hat."""
+    t = cloud._volatile_text("", via_mic=False, tutor_mode=False)
+    assert t.startswith("<kontext_automatisch>") and t.endswith("</kontext_automatisch>")
+    assert "NICHT geschrieben" in t and "## Jetzt" in t
+    # fester Wortlaut: der Umschlag selbst ändert sich nie
+    assert cloud._umschlag("XX1").replace("XX1", "") == cloud._umschlag("XX2").replace("XX2", "")
+    assert cloud._umschlag("") == ""
+
+
+def test_umschlag_steht_hinter_dem_cache_breakpoint():
+    msgs = [{"role": "user", "content": [{"type": "text", "text": "hallo"}]}]
+    cloud._append_volatile(msgs, cloud._volatile_text("", False, False))
+    bloecke = msgs[0]["content"]
+    assert "cache_control" in bloecke[0] and bloecke[0]["text"] == "hallo"
+    assert bloecke[1]["text"].startswith("<kontext_automatisch>")
+
+
 def test_graph_kontext_steht_im_wechselnden_teil():
     mem = "## Erinnerung\nSasha mag Karten."
     blocks = cloud._system_blocks(None, mem, False, tutor_mode=False)

@@ -422,7 +422,9 @@ WERKZEUGE = [
             "Trägt eine Pause für eine Routine ein - in dem Zeitraum findet "
             "sie NICHT statt (Ferien, Lehrerin im Urlaub). Am besten per "
             "'kennung'; ein 'label' muss GENAU dem Routinen-Titel entsprechen. "
-            "Datum YYYY-MM-DD."
+            "Datum YYYY-MM-DD. Ende unbekannt (\"fällt jetzt aus\"): 'bis' "
+            "weglassen — dann fällt nur der Tag 'von' aus, und du fragst nach "
+            "dem Ende."
         ),
         parameter={
             "type": "object",
@@ -1312,8 +1314,11 @@ _erweitern("edit_calendar_routine", {
     "nur_am": {"type": "string",
                "description": "YYYY-MM-DD: nur dieses eine Datum der Serie."},
 }, vorn={"kennung": _KENNUNG}, required=["aktion"])
-_erweitern("add_calendar_pause", {}, vorn={"kennung": _KENNUNG},
-           required=["von", "bis"])
+# bis ist auf gross nicht mehr Pflicht (2026-10-08, Prüfstand f01): „fällt
+# jetzt aus, bis wann weiß ich nicht" scheiterte am fehlenden Ende — die KI
+# trug gar nichts ein. Ohne bis fällt nur der Tag von aus (ki_kalender_aendern);
+# gesagt wird das im gross-Text oben (die klein-Felder bleiben byte-gleich).
+_erweitern("add_calendar_pause", {}, vorn={"kennung": _KENNUNG}, required=["von"])
 _erweitern("delete_calendar_entry", {}, vorn={"kennung": _KENNUNG}, required=[])
 
 

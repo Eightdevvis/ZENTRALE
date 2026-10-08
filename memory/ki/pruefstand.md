@@ -51,6 +51,12 @@ Danach wird geprüft:
    Werkzeug-Ergebnis (T), oder — nur für „falsch" — der tatsächliche Kalender
    nach dem Zug (P, den die KI nie gesehen hat). Python prüft danach, ob das
    Zitat wirklich in der Quelle steht; ein erfundener Beleg wird „unbelegt".
+   Normalisiert wird: Groß/klein, Leerraum, alle Striche (–, —, −) als „-",
+   Anführungszeichen weg. Ein Zitat darf in Stücke zerfallen (an „…", „·",
+   „ / ", Komma, Semikolon) — JEDES Stück ab 3 Zeichen muss wörtlich drinstehen.
+   Zählungen des Richters („×2") und eingeschobene Klammern („[nur Termine
+   ohne Vorlesungen]"), die nicht selbst in der Quelle stehen, zählen nicht
+   (seit 08.10. abends: drei von sieben „unbelegt" im Haiku-Lauf waren das).
    - **belegt** — eine U/K/T-Quelle stützt es (ein „OK" belegt nicht Uhrzeit,
      Ende, Ort)
    - **Vermutung** — die KI kennzeichnet es selbst als unsicher
@@ -159,7 +165,7 @@ beim Laden auf, nicht nach bezahlten Zügen.
 
 | Fall | Was er prüft |
 |---|---|
-| `f01_geige_08okt` | Das Gespräch vom 08.10. wörtlich: zwei Geigen-Regeln, Reise nyam mit Drive-Konflikt, Herbstferien per Websuche ohne Daten, Stundenplan ohne Inhalt, LSF-Suche (Linkliste), LSF-Seite per Link. Ausgangszustand rekonstruiert — was geschätzt ist, steht im Fall. |
+| `f01_geige_08okt` | Das Gespräch vom 08.10. wörtlich: zwei Geigen-Regeln, Reise nyam mit Drive-Konflikt, Herbstferien per Websuche ohne Daten, Stundenplan ohne Inhalt, LSF-Suche (Linkliste), LSF-Seite per Link. Ausgangszustand rekonstruiert — was geschätzt ist, steht im Fall. Geprüft wird nur, dass Geige HEUTE ausfällt; der 15.10. ist seit 08.10. abends raus (das Ferienende liefert kein Werkzeug, Sasha sagt es nie — wer es einträgt, hat es aus dem Vorwissen). |
 | `f02_termin_verschieben` | Einzeltermin auf eine andere Uhrzeit — Ort und Dauer müssen bleiben |
 | `f03_routine_ohne_ende` | Routine bekommt nur eine neue Anfangszeit; zwei Regeln gleichen Namens (Mi/Fr) |
 | `f05_frage_ohne_antwort` | Angaben fehlen, die Knopf-Frage kommt ohne Wahl zurück; danach „steht die jetzt drin?" |
@@ -261,6 +267,35 @@ die Zahlen oben sind mit dem heutigen Richter über dieselben Läufe gerechnet
 3,79 € von 5 €. Ein voller Durchgang reißt ihn; der Prüfstand bricht dann ab
 (`--trotz-budget` fährt trotzdem). Ab dem Deckel denkt auch Sashas echter
 Chat mit dem billigsten Anbieter weiter.
+
+## Nachmessung 08.10. abends (Haiku als Richter)
+
+Stand main@516c8e6, nur f01/f02/f03/f06: f02/f03/f06 ganz richtig, f01 8/9;
+Behauptungen 33 belegt, 7 unbelegt, 0 falsch. Ordner:
+`~/.claude/jobs/938c900a/tmp/pruefstand/nachher/2026-10-08_2141/`. Was die
+Transkripte zeigten:
+
+- **f01, Geige fällt nicht aus:** kein Werkzeugfehler. Die KI wollte die Pause
+  eintragen, aber erst das Ferienende wissen, fragte „soll ich nachsehen?" —
+  Sasha zog weiter, die Pause kam nie. `add_calendar_pause` verlangte ein
+  Ende; jetzt geht es ohne (nur der Tag `von`, Ergebnis sagt „Ende offen").
+  Und der Fall verlangte den 15.10., den eine ehrliche KI nicht wissen kann
+  — korrigiert (s. Tabelle oben).
+- **„Du hast den Block ## Jetzt geschickt":** die KI hielt den angehängten
+  Kontext für Sashas Text. Jetzt steht er im Umschlag `<kontext_automatisch>`
+  (`cloud._volatile_text`). Der Richter hatte das als „belegt" durchgelassen;
+  sein Text sagt jetzt, dass K nicht von Sasha ist.
+- **3 von 7 „unbelegt" waren Zitat-Prüfung** (Zeilen mit Komma zusammengefügt,
+  „×2", eingeschobene Klammer) — behoben, s. o. Mit `--nur-richter
+  --ohne-modell` über denselben Lauf: **4 unbelegt** statt 7.
+- Übrig: „keinen Stundenplan mitgeschickt" (Fehlen in U — der Richter-Text
+  sagt jetzt, dass die Quelle selbst das belegt), „Zeit-Kontext-Block, den ich
+  automatisch bekomme" (Aussage über sich selbst — belegt durch K, laut neuem
+  Richter-Text), „komme über die Suche nicht direkt ran" (T5.1/T5.2 tragen
+  das eher) und „ohne mich durch mehrere Menüebenen zu klicken" (ein Schluss,
+  als Tatsache gesagt — echt, aber mild).
+- Rückfrage-Metrik zählt jetzt auch „schick/nenn/gib mir …" (Zug 3 bat um den
+  Stundenplan ohne „?").
 
 ## Grenzen
 

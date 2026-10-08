@@ -29,6 +29,7 @@ import kalender
 import kalender_bearbeiten
 import kalender_regel
 import ki_kalender as kk
+import werkzeug_befund
 from werkzeug_befund import Befund, OK, TEILWEISE, FEHLGESCHLAGEN
 
 _OHNE_ENDE = ("Kein Ende angegeben: gespeichert ist nur der Beginn. Die "
@@ -171,6 +172,15 @@ def pause_eintragen(args: dict) -> Befund:
                            "Einzeltermin.]")
         label = s.label
     von, bis = _tag(args.get("von")), _tag(args.get("bis"))
+    # Ende offen (2026-10-08, Prüfstand f01): „Geige fällt wegen der Ferien
+    # jetzt aus — weißt du, bis wann?" Ohne Ende ging gar nichts, also schob
+    # die KI die ganze Pause auf, bis das Ende geklärt wäre — das Gespräch zog
+    # weiter, und die Geige am selben Abend stand weiter im Kalender. Jetzt
+    # wird eingetragen, was feststeht (der Tag `von`), und das Ergebnis sagt,
+    # dass das Ende fehlt. Nur gross: klein bleibt beim gemessenen Vertrag.
+    offen = (not (args.get("bis") or "").strip() and werkzeug_befund.schiene() == "gross")
+    if offen:
+        bis = von
     if not label or not von or not bis or bis < von:
         return _fehler("[Fehler: Routine (label oder kennung) und von/bis als "
                        "YYYY-MM-DD, bis nicht vor von.]")
@@ -186,9 +196,17 @@ def pause_eintragen(args: dict) -> Befund:
                       f"{vorschlag}. Sag Sasha das, statt einen Erfolg zu melden.",
                       TEILWEISE, beleg="Pause ohne passende Routine gespeichert.")
     faellt = _ausfaelle(label, von, bis)
+    grund = f" ({args['grund']})" if args.get("grund") else ""
+    betroffen = ', '.join(faellt) if faellt else 'kein Termin im Zeitraum'
+    if offen:
+        beleg = (f"Pause steht: '{label}' fällt NUR am {kk.datum(von)} aus{grund}; "
+                 f"betroffen: {betroffen}. Ende noch offen — danach steht '{label}' "
+                 f"weiter im Kalender.")
+        return Befund(f"{beleg} Sag Sasha, dass nur dieser Tag eingetragen ist, und "
+                      f"frag, bis wann. Kommt das Ende: add_calendar_pause noch einmal "
+                      f"mit von und bis. {kk.beleg_warnungen(label)}", OK, beleg=beleg)
     beleg = (f"Pause steht: '{label}' fällt {kk.datum(von, False)}–{kk.datum(bis)} aus"
-             + (f" ({args['grund']})" if args.get("grund") else "")
-             + f"; betroffen: {', '.join(faellt) if faellt else 'kein Termin im Zeitraum'}.")
+             f"{grund}; betroffen: {betroffen}.")
     return Befund(beleg + " " + kk.beleg_warnungen(label), OK, beleg=beleg)
 
 

@@ -277,6 +277,54 @@ def test_richter_zitat_normalisiert():
     assert not richter.zitat_steht_drin("", "irgendwas")
 
 
+# Die drei Richter-Zitate aus dem Haiku-Lauf vom 08.10. abends (f01), die
+# als „steht nicht in der Quelle" durchfielen, obwohl alles drinstand.
+_LSF = ("Termine Gruppe: Übung 1 · Di 10:00 bis 12:00 wöchentl. ab 20.10.2026 "
+        "Termine Gruppe: Übung 2 · Do 10:00 bis 12:00 wöchentl. ab 22.10.2026 "
+        "Termine Gruppe: Übung 3 · Do 10:00 bis 12:00 wöchentl. ab 22.10.2026 "
+        "Termine Gruppe: Übung 4 · Fr 08:30 bis 10:00 wöchentl. ab 23.10.2026 "
+        "Termine Gruppe: Übung 5 · Fr 10:00 bis 12:00 wöchentl. ab 23.10.2026")
+_KAL = ("Montag, 12.10.2026:\n  #tb989 08:30–10:00 Experimentalphysik @ C6.4 0.10 [termine]\n"
+        "Dienstag, 13.10.2026:\n  #t051c 08:30–10:00 Experimentalphysik @ C6.4 0.10 [termine]")
+
+
+def test_richter_zitat_zusammengefuegte_zeilen_und_zaehlung():
+    assert richter.zitat_steht_drin(
+        "#tb989 08:30–10:00 Experimentalphysik @ C6.4 0.10 [termine], "
+        "#t051c 08:30–10:00 Experimentalphysik @ C6.4 0.10 [termine]", _KAL)
+    assert richter.zitat_steht_drin(
+        "Di 10:00 bis 12:00, Do 10:00 bis 12:00 ×2, Fr 08:30 bis 10:00, "
+        "Fr 10:00 bis 12:00 ×2", _LSF)
+
+
+def test_richter_zitat_eingeschobene_klammer_des_richters():
+    k = "## Was ansteht\nKalender 08.10.2026 bis 09.10.2026:\nDonnerstag, 08.10.2026:"
+    assert richter.zitat_steht_drin(
+        "Kalender 08.10.2026 bis 09.10.2026: [nur Termine ohne Vorlesungen]", k)
+    # „[termine]" steht wörtlich in der Quelle und bleibt Teil des Zitats
+    assert not richter.zitat_steht_drin("#tb989 08:30–10:00 Mathe [termine]", _KAL)
+
+
+def test_richter_zitat_bleibt_streng():
+    # erfunden bleibt erfunden — auch als Stück einer Aufzählung
+    assert not richter.zitat_steht_drin("Di 10:00 bis 12:00, Sa 10:00 bis 12:00", _LSF)
+    assert not richter.zitat_steht_drin("Herbstferien bis 16.10.", _LSF)
+    # nur Kleinkram belegt nichts
+    assert not richter.zitat_steht_drin("Di, Do", _LSF)
+    assert not richter.zitat_steht_drin("[Ferien bis 16.10.]", _LSF)
+    # andere Striche und Anführungszeichen sind dieselben
+    assert richter.zitat_steht_drin("„Fr 08:30 bis 10:00\u201c", _LSF)
+    assert richter.zitat_steht_drin("08:30\u221210:00 Experimentalphysik", _KAL)
+
+
+def test_rueckfrage_auch_als_bitte_um_angaben():
+    zug = {"werkzeuge": [], "antwort": "Da fehlt der Inhalt. Schick mir die Zeiten, "
+                                       "dann trag ich sie ein."}
+    assert metriken.rueckfrage_gestellt(zug)
+    zug["antwort"] = "Steht drin. Sag mir Bescheid, wenn sich was ändert."
+    assert not metriken.rueckfrage_gestellt(zug)
+
+
 def test_richter_zeilen_ueberstehen_anfuehrungszeichen():
     """Im ersten Durchgang brach das JSON des Richters an einem Zitat mit
     Anführungszeichen — Zeilen verlieren dabei höchstens eine Behauptung."""

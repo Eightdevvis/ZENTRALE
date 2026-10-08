@@ -49,12 +49,20 @@ def ist_fehler(w: dict) -> bool:
     return bool(w.get("fehler")) or bool(_FEHLER.search(str(w.get("ergebnis") or "")))
 
 
+# Eine Bitte um die fehlende Angabe ist auch eine Rückfrage, nur ohne „?"
+# (f01 Zug 3, 08.10. abends: „Schick mir die Vorlesungen/Zeiten, dann trag ich
+# sie ein." — gezählt als „nicht gefragt").
+_BITTE = re.compile(r"\b(schick|nenn|gib)\s+(mir|du mir)\b", re.IGNORECASE)
+
+
 def rueckfrage_gestellt(zug: dict) -> bool:
     """Hat sie zurückgefragt? Knopf-Frage, oder ihre Antwort endet mit einer
-    Frage (die letzten 300 Zeichen enthalten ein „?")."""
+    Frage oder Bitte um Angaben (die letzten 300 Zeichen enthalten ein „?"
+    oder „schick/nenn/gib mir" — nicht „sag mir Bescheid", das schließt nur ab)."""
     if any(w.get("name") == FRAGE_WERKZEUG for w in zug.get("werkzeuge", [])):
         return True
-    return "?" in (zug.get("antwort") or "")[-300:]
+    schluss = (zug.get("antwort") or "")[-300:]
+    return "?" in schluss or bool(_BITTE.search(schluss))
 
 
 def berechnen(ergebnis: dict) -> dict:
