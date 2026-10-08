@@ -18,6 +18,7 @@ und wie die Fronten daran hängen.
 | Die REST-Endpoints, die alle Fronten benutzen | [api_endpoints.md](api_endpoints.md) |
 | Dashboard & Frontend: Modi, Polling, KI-Kern, SSE-Events | [dashboard.md](dashboard.md) |
 | Tastatur-Belegung in jedem Modus | [tastatur.md](tastatur.md) |
+| **ZEN-MOBILE** — die Handy-App (`mobile/`): Auge, KI-Chat, Handy als eigener Knoten an der Mitte | [zen_mobile.md](zen_mobile.md) |
 
 ## Stand der Fronten (2026-10-06)
 
