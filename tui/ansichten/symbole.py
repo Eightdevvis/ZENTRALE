@@ -1,98 +1,97 @@
 # tui/ansichten/symbole.py
 #
 # Die Symbole der Chat-Seitenleiste (Search, New, Projects, Files,
-# Customize und das Auf/Zu der Leiste) in zwei umschaltbaren Arten
-# (Einstellung `tui_symbole`, 2026-10-08):
+# Customize und das Auf/Zu der Leiste) als Braille-Punkte: 4 Felder breit,
+# 2 Zeilen hoch, je Feld 2×4 Punkte — zusammen 8×8 Punkte.
 #
-#   pixel2   Pixel-Symbole im Pixelstil der TUI (pixel.py), 4 Felder breit
-#            und 2 Zeilen hoch — je Feld 2×3 Sextant-Pixel, zusammen 8×6
-#            Pixel, also etwa 36×36 Bildpunkte: ein quadratisches Symbol.
-#   zeichen  ein einzelnes klares Unicode-Zeichen in der Akzentfarbe.
+# Warum Braille (Sasha, 08.10.2026, nach einem Bildvergleich aller
+# Varianten): Sextanten zeichnet das Terminal (VTE) selbst als volle Blöcke —
+# bei so kleinen Formen wirkt das grob, „dickflüssig". Braille kommt aus der
+# Ersatzschrift (DejaVu Sans) als feine runde Punkte mit Luft dazwischen:
+# filigran, und mit 8×8 Punkten genug für Lupe, Ordner, Blatt und Zahnrad.
+# Die Varianten davor (Sextant-Pixel 4×2, ein Unicode-Zeichen je Symbol,
+# umschaltbar über `tui_symbole`) sind damit raus. Regel:
+# memory/system/pixelstil.md. Prüfen nur mit scripts/icon_probe.py, das
+# die Ersatzschriften nachbildet.
 #
-# Warum zwei Zeilen (Sasha, 08.10.2026: „die icons oben links sehen echt..
-# schlecht aus. man erkennt gar nichts."): bis dahin war ein Symbol 3×1
-# Felder = 6×3 Pixel. Drei Pixel Höhe reichen für keine Form — eine Lupe,
-# ein Ordner und ein Blatt sahen gleich aus. Regel seitdem
-# (memory/system/pixelstil.md): Pixel-Symbole nie kleiner als 2 Zeilen.
-# Die Zeichen-Art gibt es daneben, damit Sasha vergleichen kann.
-#
-# Jedes Feld wird direkt als Sextant gesetzt, eine Farbe je Feld: Grund
-# '#' oder Akzent '+' (wer im Feld einen Akzent-Pixel hat, ist Akzent).
-# Deshalb liegen die Akzent-Teile der Bilder auf Feldgrenzen (Spalten 0-1,
-# 2-3, 4-5, 6-7; Zeilen 0-2, 3-5).
+# Farbe gilt je Feld: Grund '#' oder Akzent '+'. Ein Feld mit beidem gibt es
+# nicht (ein Zeichen hat eine Farbe) — Akzent liegt deshalb auf Feldgrenzen
+# (Spalten 0-1, 2-3, 4-5, 6-7; Zeilen 0-3, 4-7).
 #
 # Reine Funktionen, kein curses.
 
 from functools import lru_cache
 
-try:                                    # Pixel-Baustein (tui/pixel.py)
-    from tui import pixel
-except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
-    import pixel
+BREITE, HOEHE = 4, 2                    # Felder je Symbol
+PUNKTE_X, PUNKTE_Y = 2, 4               # Braille-Punkte je Feld
 
-ARTEN = ("pixel2", "zeichen")
-STANDARD = "pixel2"
+# Braille-Punkt (x, y) im Feld → Bit (Unicode-Block U+2800: Punkte 1-2-3
+# links oben nach unten, 4-5-6 rechts, 7 und 8 die untere Reihe).
+BITS = {(0, 0): 1, (0, 1): 2, (0, 2): 4, (1, 0): 8,
+        (1, 1): 16, (1, 2): 32, (0, 3): 64, (1, 3): 128}
 
-BREITE, HOEHE = 4, 2                    # pixel2: Felder je Symbol
-
-# 6 Zeilen × 8 Spalten. '#' Grund, '+' Akzent, '.' leer. Ein Pixel ist
-# etwa 4,5 breit und 6 hoch — Kreise sind deshalb breiter als hoch gezeichnet.
-# Die unterste Pixelzeile bleibt meist leer: so stoßen zwei Symbole
-# untereinander nicht aneinander, ohne dass eine ganze Leerzeile nötig ist.
+# 8 Zeilen × 8 Spalten. '#' Grund, '+' Akzent, '.' leer. Ein Braille-Punkt
+# sitzt in einem Raster von etwa 4×4 Bildpunkten — Kreise dürfen rund sein.
 BILDER = {
-    # Lupe: Glas oben links, Stiel schräg nach unten rechts
-    "search":    [".####...",
-                  "#....#..",
-                  "#....#..",
-                  ".####.#.",
+    # Lupe: rundes Glas, Stiel schräg nach unten rechts
+    "search":    ["..####..",
+                  ".#....#.",
+                  "#......#",
+                  "#......#",
+                  ".#....#.",
+                  "..####..",
                   "......##",
-                  "........"],
+                  ".......#"],
     # Plus, ganz in Akzent — das Einzige, was etwas Neues macht
     "new":       ["...++...",
                   "...++...",
+                  "...++...",
                   "++++++++",
+                  "...++...",
                   "...++...",
                   "...++...",
                   "........"],
     # Ordner mit Reiter
     "projects":  ["###.....",
+                  "#..#....",
                   "########",
+                  "#......#",
                   "#......#",
                   "#......#",
                   "########",
                   "........"],
-    # Blatt mit Eselsohr (Textzeilen darin machten es am 08.10. unruhig)
-    "files":     [".####...",
-                  ".#..##..",
-                  ".#...#..",
-                  ".#...#..",
-                  ".#####..",
-                  "........"],
-    # Zahnrad mit Loch, Zähne auch schräg. Als einziges alle 6 Zeilen hoch:
-    # in 5 sah es aus wie ein Käfer, gerade Zähne allein wie #, Regler wie ⇆
-    # (alles am 08.10. als Bild verglichen). Es steht im Menü zuletzt, also
-    # stößt nichts von unten an.
-    "customize": ["#.####.#",
-                  ".######.",
-                  "###..###",
-                  "###..###",
-                  ".######.",
-                  "#.####.#"],
-    # Auf/Zu der Leiste: ein Fenster mit Spalte links (Akzent)
-    "seite":     ["########",
-                  "++#....#",
-                  "++#....#",
-                  "++#....#",
+    # Blatt mit Eselsohr
+    "files":     ["#####...",
+                  "#...##..",
+                  "#...#.#.",
+                  "#...####",
+                  "#......#",
+                  "#......#",
                   "########",
+                  "........"],
+    # Zahnrad (Sashas Wahl „z3" aus vier Entwürfen, 08.10.2026)
+    "customize": ["...##...",
+                  "#.####.#",
+                  ".##..##.",
+                  "##....##",
+                  "##....##",
+                  ".##..##.",
+                  "#.####.#",
+                  "...##..."],
+    # Auf/Zu der Leiste: ein Fenster, links davon eine abgesetzte Spalte
+    # (Akzent). Die Spalte ist eine Punktreihe dünn wie die übrigen Linien
+    # (eine 2 Punkte breite wirkte am 08.10. im Bild zu schwer) und liegt
+    # allein in den Feldern der Spalten 0-1 — so bleibt jedes Feld einfarbig.
+    # Ein geschlossener Rahmen um beides hätte grüne Ecken gegeben.
+    "seite":     ["+.######",
+                  "+.#....#",
+                  "+.#....#",
+                  "+.#....#",
+                  "+.#....#",
+                  "+.#....#",
+                  "+.######",
                   "........"],
 }
-
-# Die Zeichen-Art: in DejaVu Sans Mono (Monospace in xfce4-terminal)
-# vorhanden und einspaltig — East-Asian-Width N oder A (VTE zeichnet A
-# schmal, solange „ambiguous width" nicht auf breit steht; ● ▤ nutzt die
-# TUI schon lange). Keine Emoji, kein ＋ (Vollbreite). Geprüft 2026-10-08.
-ZEICHEN = {"search": "⌕", "new": "✚", "projects": "▦", "files": "▤",
-           "customize": "⚙", "seite": "◧"}
 
 # Farben je Thema: (grund, akzent, hintergrund) — die Grundfarbe ist die
 # Schrift der Leiste, der Akzent das Grün des Auges (dieselbe KI).
@@ -107,48 +106,38 @@ FARBEN_AN = {
 }
 
 # Das Zeichen hinter einem Gespräch mit Dokument — dasselbe Blatt wie bei
-# Files und bei Dokumenten im Verlauf. Bis 08.10. ein Sextant (1 Feld, nicht
-# zu erkennen); in einer Listenzeile ist für ein Pixel-Symbol kein Platz.
+# Dokumenten im Verlauf. In einer Listenzeile ist für ein 4×2-Symbol kein Platz.
 DOKU = "▤"
 
 
-def art(wert):
-    """Einstellungswert → "pixel2" | "zeichen"; Unbekanntes → Standard."""
-    w = str(wert or "").strip().lower()
-    return w if w in ARTEN else STANDARD
-
-
-def groesse(wie):
-    """(Breite, Höhe) eines Symbols in Feldern."""
-    return (BREITE, HOEHE) if art(wie) == "pixel2" else (1, 1)
+def codieren(bild):
+    """Raster aus '#'/'+'/'.' → Zeilen von (Braille-Zeichen, akzent?).
+    Ein Feld ist Akzent, sobald ein Punkt darin '+' ist."""
+    hoehe, breite = len(bild), max((len(z) for z in bild), default=0)
+    zeilen = []
+    for zr in range(0, hoehe, PUNKTE_Y):
+        raus = []
+        for zc in range(0, breite, PUNKTE_X):
+            bits, akzent = 0, False
+            for (x, y), bit in BITS.items():
+                r, c = zr + y, zc + x
+                p = bild[r][c] if r < hoehe and c < len(bild[r]) else "."
+                if p != ".":
+                    bits |= bit
+                    akzent = akzent or p == "+"
+            raus.append((chr(0x2800 + bits), akzent))
+        zeilen.append(tuple(raus))
+    return tuple(zeilen)
 
 
 @lru_cache(maxsize=64)
 def symbol_zellen(name, thema="nacht", an=False):
-    """Ein Pixel-Symbol als Zeilen von Feldern:
+    """Ein Symbol als Zeilen von Feldern:
     (((zeichen, fg, bg) × BREITE) × HOEHE). Unbekannter Name → leer."""
     thema = "tag" if thema == "tag" else "nacht"
     grund, akzent, bg = (FARBEN_AN if an else FARBEN)[thema]
     bild = BILDER.get(name)
     if not bild:
         return tuple(tuple((" ", bg, bg) for _ in range(BREITE)) for _ in range(HOEHE))
-    zeilen = []
-    for r in range(HOEHE):
-        raus = []
-        for c in range(BREITE):
-            bits, farbe = 0, grund
-            for y in range(3):
-                for x in range(2):
-                    p = bild[r * 3 + y][c * 2 + x]
-                    if p != ".":
-                        bits |= 1 << (y * 2 + x)
-                    if p == "+":
-                        farbe = akzent
-            raus.append((pixel.sextant(bits), farbe, bg))
-        zeilen.append(tuple(raus))
-    return tuple(zeilen)
-
-
-def zeichen(name):
-    """Das Zeichen der Zeichen-Art (unbekannt → ·)."""
-    return ZEICHEN.get(name, "·")
+    return tuple(tuple((zeichen, akzent if akz else grund, bg) for zeichen, akz in zeile)
+                 for zeile in codieren(bild))

@@ -42,8 +42,7 @@ class ChatZeichnen:
     def aufteilung(self, bx, bw):
         AI = self.AI
         art = self.rechts.art()
-        a = chat_layout.aufteilen(bx, bw, self.seite.offen(bw), art, AI.get("gross"),
-                                  self.seite.leiste_breite())
+        a = chat_layout.aufteilen(bx, bw, self.seite.offen(bw), art, AI.get("gross"))
         AI["seite_voll"] = bool(a.seite and a.mitte is None and a.rechts is None)
         self._letzte = a                     # für Tab und F6 (chat_bedienung.py)
         return a

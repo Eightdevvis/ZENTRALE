@@ -724,12 +724,12 @@ Claude Web"; Pixelstil: [../system/pixelstil.md](../system/pixelstil.md).
 ### Nachbesserungen 08.10.2026 (Symbole, Skill-Liste, Stopp bei Claude)
 
 - **Symbole der Seitenleiste** waren nicht zu erkennen (3×1 Felder = 6×3
-  Pixel). Jetzt umschaltbar (Einstellung `tui_symbole`, Customize →
-  Appearance): `pixel2` (Standard) Pixel-Symbole 4 Felder breit, 2 Zeilen
-  hoch (Lupe, Plus, Ordner, Blatt, Zahnrad, Leiste) oder `zeichen`
-  (⌕ ✚ ▦ ▤ ⚙ ◧ in Akzentfarbe). Regel in
-  [../system/pixelstil.md](../system/pixelstil.md): Pixel-Symbole nie
-  kleiner als 2 Zeilen. Das Blatt hinter Gesprächen mit Dokument ist jetzt ▤.
+  Pixel). Kurz umschaltbar (Sextanten 4×2 oder ein Zeichen), nach Sashas
+  Bildvergleich am selben Tag entschieden: **Braille, 4 Felder × 2 Zeilen =
+  8×8 Punkte** (Lupe, Plus, Ordner, Blatt, Zahnrad, Leiste); Umschaltung
+  `tui_symbole` und Customize → Appearance wieder entfernt. Regel und Warum
+  in [../system/pixelstil.md](../system/pixelstil.md). Das Blatt hinter
+  Gesprächen mit Dokument ist ▤.
 - **Skill-Liste**: Beschreibungen vollständig, Hinweis „Liste zu lang" in
   Customize → Skills, Kürzen nur noch als letzte Rettung und nur die
   längsten (ki_system.md, „Skills").

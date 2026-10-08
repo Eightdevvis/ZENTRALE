@@ -456,9 +456,6 @@ def api_ai_status():
     import usage as _usage
     kosten = {"heute": _usage.heute_euro(), "monat": _usage.monat_euro(),
               "budget": ai_backends.budget_lage()}
-    # Die TUI holt hier beim Start auch, wie sie ihre Symbole zeichnet
-    # (2026-10-08) — ein Abruf statt eines zweiten.
-    symbole = ki_einstellungen.tui_symbole()
 
     backend = ai_backends.chat_available()
     if backend == ai_backends.CLOUD:
@@ -473,7 +470,6 @@ def api_ai_status():
             "provider":  prov,
             "effort":    ai_backends.chat_effort(),
             "kosten":    kosten,
-            "tui_symbole": symbole,
         })
     if backend == ai_backends.LOCAL:
         return jsonify({
@@ -482,10 +478,9 @@ def api_ai_status():
             "url":       ai.OLLAMA_URL,
             "model":     ai.OLLAMA_MODEL,
             "kosten":    kosten,     # lokal kostet nichts, der Monat aber schon
-            "tui_symbole": symbole,
         })
     return jsonify({"available": False, "backend": None, "url": None,
-                    "model": "—", "kosten": kosten, "tui_symbole": symbole})
+                    "model": "—", "kosten": kosten})
 
 
 @bp.route('/api/ai/kosten')
@@ -537,7 +532,7 @@ def api_ai_einstellungen():
     """Chat-Einstellungen lesen (GET) oder setzen (POST) — für die
     Slash-Befehle im TUI-Chat (/modell, /anbieter, /effort, /budget,
     /lokal, /cloud, /auto). POST nimmt beliebige der Felder
-    {anbieter, modell, effort, budget, weg, tui_symbole}, prüft alle und setzt sie
+    {anbieter, modell, effort, budget, weg}, prüft alle und setzt sie
     dauerhaft (core/ki_einstellungen.py). Unsinn → 400 mit Klartext in
     'error'; dann ist NICHTS gesetzt."""
     if request.method == 'POST':

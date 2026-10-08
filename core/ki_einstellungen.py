@@ -1,8 +1,7 @@
 # core/ki_einstellungen.py
 #
 # Die Chat-Einstellungen lesen und setzen: Anbieter, Modell, Effort, Budget,
-# Weg (lokal/Cloud/auto) — und seit 2026-10-08 die Art der Symbole in der
-# Seitenleiste des TUI-Chats (tui_symbole). Für die Route /api/ai/einstellungen und damit für
+# Weg (lokal/Cloud/auto). Für die Route /api/ai/einstellungen und damit für
 # die Slash-Befehle im TUI-Chat (/modell, /anbieter, /effort, /budget,
 # /lokal, /cloud, /auto).
 #
@@ -18,7 +17,6 @@
 import os
 
 import ai_backends
-import ai_config
 import modell_liste
 import providers
 
@@ -29,13 +27,6 @@ _WEGE = {"lokal": ai_backends.LOCAL, "local": ai_backends.LOCAL,
 # Euro im Monat. Sasha 2026-10-07: „budget kann ruhig auf max 100 euro
 # sein" — darüber ist es ein Tippfehler (vorher 10.000).
 BUDGET_HOECHSTENS = 100.0
-
-# Symbole der Chat-Seitenleiste (tui/ansichten/symbole.py): Pixel zwei
-# Zeilen hoch oder ein Zeichen. Hier und nicht in der TUI gespeichert, weil
-# die TUI nur über die API spricht und Einstellungen über ai_config.setting
-# laufen (Env ZENTRALE_TUI_SYMBOLE übersteuert). Sasha 08.10.2026 will beide
-# vergleichen — deshalb umschaltbar statt entschieden.
-SYMBOLE = ("pixel2", "zeichen")
 
 
 class Ungueltig(ValueError):
@@ -58,12 +49,6 @@ def modelle(name: str) -> list:
     if eigen and eigen not in raus:
         raus.append(eigen)
     return raus
-
-
-def tui_symbole() -> str:
-    """Die Art der Seitenleisten-Symbole; Unbekanntes → pixel2."""
-    wert = str(ai_config.setting("tui_symbole") or "").strip().lower()
-    return wert if wert in SYMBOLE else SYMBOLE[0]
 
 
 def lesen() -> dict:
@@ -90,7 +75,6 @@ def lesen() -> dict:
         "budget": ai_backends.budget_monat(),
         "budget_lage": ai_backends.budget_lage(),
         "weg": ai_backends.chat_backend(),
-        "tui_symbole": tui_symbole(),
         "anbieter_liste": liste,
     }
 
@@ -177,16 +161,9 @@ def _weg_pruefen(wert) -> str:
     return weg
 
 
-def _symbole_pruefen(wert) -> str:
-    art = str(wert or "").strip().lower()
-    if art not in SYMBOLE:
-        raise Ungueltig("Die Symbole gibt es als " + " oder ".join(SYMBOLE) + ".")
-    return art
-
-
 # ── Setzen ─────────────────────────────────────────────────────────────
 
-FELDER = ("anbieter", "modell", "effort", "budget", "weg", "tui_symbole")
+FELDER = ("anbieter", "modell", "effort", "budget", "weg")
 
 
 def setzen(daten: dict) -> dict:
@@ -213,8 +190,6 @@ def setzen(daten: dict) -> dict:
         plan["budget"] = budget_lesen(daten["budget"])
     if "weg" in daten:
         plan["weg"] = _weg_pruefen(daten["weg"])
-    if "tui_symbole" in daten:
-        plan["tui_symbole"] = _symbole_pruefen(daten["tui_symbole"])
 
     if "anbieter" in plan:
         ai_backends.set_chat_provider(plan["anbieter"], persist=True)
@@ -226,6 +201,4 @@ def setzen(daten: dict) -> dict:
         ai_backends.set_budget_monat(plan["budget"], persist=True)
     if "weg" in plan:
         ai_backends.set_chat_backend(plan["weg"], persist=True)
-    if "tui_symbole" in plan:
-        ai_config.set_override("tui_symbole", plan["tui_symbole"], persist=True)
     return lesen()

@@ -1,7 +1,6 @@
 """Der Chat nach dem Vorbild von Claude Web (2026-10-07): Aufteilung des
-Kastens, Verlauf mit Schritten/Denken/Aktionen, Pixel-Symbole — reine
+Kastens, Verlauf mit Schritten/Denken/Aktionen, Symbole — reine
 Funktionen ohne Bildschirm."""
-from tui import pixel
 from tui.ansichten import chat_layout as L
 from tui.ansichten import symbole, verlauf as V
 
@@ -134,48 +133,58 @@ def test_zeilen_passen_in_die_breite():
 
 # ── Symbole ───────────────────────────────────────────────────────────
 
-def test_pixel_symbole_sind_zwei_zeilen_hoch_aus_sextanten():
-    """Sasha 08.10.2026: 3×1 Felder waren nicht zu erkennen — Pixel-Symbole
-    sind seitdem 4 Felder breit und 2 Zeilen hoch (pixelstil.md)."""
-    erlaubt = {pixel.sextant(b) for b in range(64)}
+def test_braille_codierung_bekannter_raster():
+    """Bits je Feld (x, y): (0,0)=1 (0,1)=2 (0,2)=4 (1,0)=8 (1,1)=16
+    (1,2)=32 (0,3)=64 (1,3)=128 — Zeichen = U+2800 + Bits."""
+    voll = ["##", "##", "##", "##"]
+    assert symbole.codieren(voll) == ((("⣿", False),),)
+    assert symbole.codieren(["..", "..", "..", ".."]) == (((chr(0x2800), False),),)
+    assert symbole.codieren(["#.", "..", "..", ".."])[0][0][0] == "⠁"     # Punkt 1
+    assert symbole.codieren(["..", "..", "..", ".#"])[0][0][0] == "⢀"     # Punkt 8
+    assert symbole.codieren(["#.", "#.", "#.", "#."])[0][0][0] == "⡇"     # linke Spalte
+    # zwei Felder nebeneinander, eins mit Akzent
+    assert symbole.codieren(["#.+.", "....", "....", "...."]) == ((("⠁", False), ("⠁", True)),)
+
+
+def test_echte_symbole_codiert():
+    """Die Lupe aus Sashas Raster ergibt genau diese Zeichen."""
+    assert "".join(f[0] for f in symbole.codieren(symbole.BILDER["search"])[0]) == "⡔⠉⠉⢢"
+    assert "".join(f[0] for f in symbole.codieren(symbole.BILDER["search"])[1]) == "⠈⠒⠒⢥"
+
+
+def test_symbole_braille_4x2_alle_da_und_einspaltig():
+    """Sasha 08.10.2026: Braille, 4 Felder breit × 2 Zeilen = 8×8 Punkte."""
+    import unicodedata
+    assert set(symbole.BILDER) == {"search", "new", "projects", "files", "customize", "seite"}
     for name, bild in symbole.BILDER.items():
-        assert len(bild) == 6 and all(len(r) == 8 for r in bild), name
+        assert len(bild) == 8 and all(len(r) == 8 for r in bild), name
         z = symbole.symbol_zellen(name, "nacht")
         assert len(z) == symbole.HOEHE == 2, name
         for zeile in z:
-            assert len(zeile) == symbole.BREITE and all(f[0] in erlaubt for f in zeile), name
-        assert any(f[0] != " " for f in z[1]), "untere Zeile leer: " + name
+            assert len(zeile) == symbole.BREITE == 4, name
+            for zeichen, _fg, _bg in zeile:
+                assert 0x2800 <= ord(zeichen) <= 0x28FF, name
+                assert unicodedata.east_asian_width(zeichen) == "N", name   # eine Spalte
         assert symbole.symbol_zellen(name, "tag") != z
         assert symbole.symbol_zellen(name, "nacht", True) != z     # gewählt leuchtet
     leer = symbole.symbol_zellen("gibtsnicht")
     assert len(leer) == 2 and all(f[0] == " " for zeile in leer for f in zeile)
-
-
-def test_pixel_symbole_sind_verschieden():
-    bilder = [tuple(b) for b in symbole.BILDER.values()]
-    assert len(set(bilder)) == len(bilder)
-
-
-def test_zeichen_sind_einspaltig_und_keine_emoji():
-    """Die Zeichen-Art: je ein Zeichen, das das Terminal einspaltig zeichnet
-    (keine Voll-/Doppelbreite, keine Emoji-Darstellung)."""
-    import unicodedata
-    for name in list(symbole.BILDER) + ["gibtsnicht"]:
-        z = symbole.zeichen(name)
-        assert len(z) == 1, name
-        assert unicodedata.east_asian_width(z) not in ("W", "F"), (name, z)
-        assert ord(z) < 0x1F000, (name, z)             # kein Emoji-Block
-    assert set(symbole.ZEICHEN) == set(symbole.BILDER)
     assert len(symbole.DOKU) == 1 and unicodedata.east_asian_width(symbole.DOKU) != "W"
 
 
-def test_symbol_art_und_groesse():
-    assert symbole.art(None) == symbole.art("quatsch") == "pixel2"
-    assert symbole.art(" Zeichen ") == "zeichen"
-    assert symbole.groesse("pixel2") == (4, 2) and symbole.groesse("zeichen") == (1, 1)
+def test_symbole_verschieden_und_akzent_nie_halb_im_feld():
+    """Ein Zeichen hat eine Farbe: kein Feld mischt Grund und Akzent."""
+    bilder = [tuple(b) for b in symbole.BILDER.values()]
+    assert len(set(bilder)) == len(bilder)
+    for name, bild in symbole.BILDER.items():
+        for zr in range(0, 8, 4):
+            for zc in range(0, 8, 2):
+                feld = {bild[zr + y][zc + x] for y in range(4) for x in range(2)}
+                assert not {"#", "+"} <= feld, (name, zr, zc)
+    gruen = symbole.FARBEN["nacht"][1]
+    assert all(f[1] == gruen for zeile in symbole.symbol_zellen("new") for f in zeile
+               if f[0] != chr(0x2800))                         # leere Felder egal
 
 
 def test_zugeklappte_spalte_so_breit_wie_die_symbole():
-    a = L.aufteilen(0, 80, leiste_w=L.LEISTE_ZEICHEN)
-    assert a.leiste.w == L.LEISTE_ZEICHEN and a.leiste.w + 1 + a.mitte.w == 78
-    assert L.LEISTE >= symbole.BREITE + 2
+    assert L.LEISTE == 1 + symbole.BREITE + 1

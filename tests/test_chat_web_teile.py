@@ -204,12 +204,11 @@ def test_klick_in_der_seitenleiste_oeffnet_gespraech(welt, monkeypatch):
     assert c.AI["einstellungen"]
 
 
-def _farbig(c, art):
-    """Der Test-Schirm hat keine Farben (dann gäbe es nur Zeichen) — für
-    die Pixel-Art einen schwarzen Grund und Farbpaare vortäuschen."""
-    c.AI["symbole"] = art
+def _farbig(c):
+    """Der Test-Schirm hat keine Farben — für die farbigen Symbole einen
+    schwarzen Grund und Farbpaare vortäuschen (Attribut 7 = farbig)."""
     c.z.C["pix_bg"] = (0, 0, 0)
-    c.z.pix_attr = lambda fg, bg: 0
+    c.z.pix_attr = lambda fg, bg: 7
 
 
 def _menue_zeilen(c, text):
@@ -219,29 +218,31 @@ def _menue_zeilen(c, text):
 
 
 @pytest.mark.parametrize("groesse", [(24, 80), (30, 136)])
-def test_symbol_arten_zeichnen_offen_und_zu(welt, groesse):
-    """Sasha 08.10.2026 vergleicht zwei Arten: pixel2 (2 Zeilen hoch) und
-    zeichen (eine Zeile). Beide offen und zugeklappt, ohne Absturz; offen
-    stehen die Einträge im Abstand der Symbolhöhe."""
-    for art, abstand, zeichen in (("pixel2", 2, None), ("zeichen", 1, "⌕")):
-        c = welt(*groesse)
-        _farbig(c, art)
-        c.seite.aufklappen(fokus=False)
-        _zeichnen(c)
-        search, new = _menue_zeilen(c, "Search"), _menue_zeilen(c, "New")
-        assert search and new and new[0] - search[0] == abstand, art
-        if zeichen:
-            assert zeichen in c.z.stdscr.zeile(search[0])
-        c.seite.zuklappen()
-        _zeichnen(c)
-        if groesse[1] >= 60 and not c.AI.get("seite_voll"):
-            assert c._letzte.leiste.w == c.seite.leiste_breite()
-        assert c.klicks
+@pytest.mark.parametrize("farbig", [True, False])
+def test_braille_symbole_offen_und_zu(welt, groesse, farbig):
+    """Sasha 08.10.2026: Braille 4×2. Offen stehen die Einträge zwei Zeilen
+    auseinander, die Beschriftung auf der oberen Zeile neben dem Symbol;
+    zugeklappt ist die Spalte 6 breit. Ohne Farben dieselben Zeichen."""
+    c = welt(*groesse)
+    if farbig:
+        _farbig(c)
+    c.seite.aufklappen(fokus=False)
+    _zeichnen(c)
+    search, new = _menue_zeilen(c, "Search"), _menue_zeilen(c, "New")
+    assert search and new and new[0] - search[0] == 2
+    oben, unten = (symbole.codieren(symbole.BILDER["search"])[i] for i in (0, 1))
+    assert "".join(f[0] for f in oben) + " Search" in c.z.stdscr.zeile(search[0])
+    assert "".join(f[0] for f in unten) in c.z.stdscr.zeile(search[0] + 1)
+    c.seite.zuklappen()
+    _zeichnen(c)
+    if groesse[1] >= 60 and not c.AI.get("seite_voll"):
+        assert c._letzte.leiste.w == 6
+    assert c.klicks
 
 
-def test_zugeklappt_klick_auf_beide_zeilen_eines_pixel_symbols(welt, monkeypatch):
+def test_zugeklappt_klick_auf_beide_zeilen_eines_symbols(welt, monkeypatch):
     c = welt(24, 80)
-    _farbig(c, "pixel2")
+    _farbig(c)
     _zeichnen(c)
     a = c._letzte.leiste
     flaechen = [(y, x0, x1) for y, x0, x1, _f in c.klicks if x0 == a.x]
@@ -250,25 +251,10 @@ def test_zugeklappt_klick_auf_beide_zeilen_eines_pixel_symbols(welt, monkeypatch
     assert len(zeilen) == 12
 
 
-def test_ohne_farben_oder_im_halbblock_modus_zeichen(welt):
-    c = welt()
-    _farbig(c, "pixel2")
-    assert c.seite.groesse() == (4, 2) and c.seite.leiste_breite() == 6
-    c.z.PIX_MODUS = "half"
-    assert c.seite.groesse() == (1, 1) and c.seite.leiste_breite() == 3
-    c.z.PIX_MODUS = "mix"
-    c.z.C["pix_bg"] = None                         # Terminal ohne 256 Farben
-    assert c.seite.groesse() == (1, 1)
-
-
-def test_customize_appearance_schaltet_symbole(welt):
-    c = welt()
-    c.einstellungen.oeffnen("appearance")
-    c.AI["symbole"] = "pixel2"
-    zeilen, klicks = c.einstellungen._inhalt("appearance", 60)
-    assert any("(●) pixel" in t for t, _a in zeilen)
-    c.einstellungen.ausloesen(1)
-    assert ("POST", "/api/ai/einstellungen", {"tui_symbole": "zeichen"}) in c.aufrufe
+def test_customize_hat_kein_appearance_mehr(welt):
+    """Mit nur einer Art Symbole gibt es nichts mehr umzuschalten."""
+    from tui.ansichten import einstellungen
+    assert "appearance" not in dict(einstellungen.ABSCHNITTE)
 
 
 def test_skills_hinweis_liste_zu_lang():

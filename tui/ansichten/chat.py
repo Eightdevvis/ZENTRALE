@@ -269,9 +269,6 @@ def stand_text(daten, stand):
                 "auto": "lokal, wenn da — sonst cloud"}.get(stand.get("weg"), "weg gesetzt")
     if "budget" in daten:
         return budget_text(stand)
-    if "tui_symbole" in daten:
-        return "symbole: %s" % ("zeichen" if stand.get("tui_symbole") == "zeichen"
-                                else "pixel, zwei zeilen hoch")
     if "effort" in daten:
         return "denk-tiefe: %s%s" % (stand.get("effort"), "" if stand.get("effort_wirkt")
                                      else " (wirkt nur bei claude)")
@@ -591,8 +588,6 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
                     AI["effort"] = st.get("effort") or ""
                     AI["kosten_heute"] = k.get("heute") or 0.0
                     AI["budget"] = k.get("budget") or {}
-                    if st.get("tui_symbole"):        # Symbole der Seitenleiste (symbole.py)
-                        AI["symbole"] = st["tui_symbole"]
         except (urllib.error.URLError, OSError, ValueError):
             pass
 
@@ -699,10 +694,7 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
         except (urllib.error.URLError, OSError, ValueError):
             AI["msg"] = "keine verbindung zum backend"
             return
-        stand = stand if isinstance(stand, dict) else {}
-        if stand.get("tui_symbole"):                 # sofort neu zeichnen, nicht erst beim Poll
-            AI["symbole"] = stand["tui_symbole"]
-        AI["msg"] = stand_text(daten, stand)
+        AI["msg"] = stand_text(daten, stand if isinstance(stand, dict) else {})
         threading.Thread(target=self.status_holen, daemon=True).start()
 
     def _taste_wahl(self, ch):

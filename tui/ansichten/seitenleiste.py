@@ -2,8 +2,7 @@
 #
 # Die Seitenleiste des Chats wie bei Claude Web (2026-10-07): oben Search,
 # New, Projects, Files, Customize — je mit Symbol (symbole.py: seit
-# 08.10.2026 Pixel zwei Zeilen hoch oder ein Zeichen, Einstellung
-# tui_symbole) —, darunter die Gespräche, gruppiert nach Today / Yesterday /
+# 08.10.2026 Braille-Punkte, 4 Felder breit und 2 Zeilen hoch) —, darunter die Gespräche, gruppiert nach Today / Yesterday /
 # Datum, ● bei Ungelesenem, ▤ bei einem Gespräch mit Dokument,
 # Projektname leise davor. Zugeklappt bleibt eine Spalte Symbole.
 #
@@ -23,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 
 from . import symbole
 from .basis import api_call
+from .chat_layout import LEISTE
 from .symbole import DOKU
 
 # (Symbol, Beschriftung, Aktion) — die Reihenfolge von Claude Web.
@@ -234,36 +234,20 @@ class Seitenleiste:
             AI["fokus"] = "eingabe"              # n: neues Gespräch → tippen
 
     # ── Zeichnen ───────────────────────────────────────────────────────
-    def _pixel(self):
-        """Pixel-Symbole? Nur in der Art pixel2 und wo es Farben und
-        Sextanten gibt (sonst — ZENTRALE_PIXEL=half, ohne Farben — Zeichen)."""
-        z = self.chat.z
-        return (symbole.art(self.AI.get("symbole")) == "pixel2"
-                and z.C.get("pix_bg") is not None
-                and getattr(z, "PIX_MODUS", "mix") != "half")
-
-    def groesse(self):
-        """(Breite, Höhe) eines Symbols in Feldern."""
-        return symbole.groesse("pixel2" if self._pixel() else "zeichen")
-
-    def leiste_breite(self):
-        """Breite der zugeklappten Spalte (chat_layout.aufteilen)."""
-        from .chat_layout import LEISTE, LEISTE_ZEICHEN
-        return LEISTE if self._pixel() else LEISTE_ZEICHEN
-
     def _symbol(self, y, x, name, an, unten):
-        """Ein Symbol ab (y, x); Zeilen ab `unten` werden nicht gemalt."""
+        """Ein Symbol ab (y, x); Zeilen ab `unten` werden nicht gemalt. Mit
+        Farben in Grund/Akzent (symbole.FARBEN); ohne Farben oder im
+        Halbblock-Modus (ZENTRALE_PIXEL=half) dieselben Punkte in der
+        Schriftfarbe der Leiste — Braille kann jedes Terminal."""
         z = self.chat.z
-        if not self._pixel():
-            z.safe_addstr(y, x, symbole.zeichen(name),
-                          (z.C["bright"] | curses.A_BOLD) if an else z.C["acc"])
-            return
+        farbig = z.C.get("pix_bg") is not None and getattr(z, "PIX_MODUS", "mix") != "half"
         thema = "nacht" if sum(z.C.get("pix_bg") or (0, 0, 0)) < 384 else "tag"
+        schlicht = (z.C["bright"] | curses.A_BOLD) if an else z.C["dim"]
         for r, zeile in enumerate(symbole.symbol_zellen(name, thema, an)):
             if y + r >= unten:
                 break
             for i, (zeichen, fg, bg) in enumerate(zeile):
-                z.safe_addstr(y + r, x + i, zeichen, z.pix_attr(fg, bg))
+                z.safe_addstr(y + r, x + i, zeichen, z.pix_attr(fg, bg) if farbig else schlicht)
 
     def _klickbar(self, y, hoehe, x, w, aktion, unten):
         for r in range(hoehe):
@@ -273,8 +257,8 @@ class Seitenleiste:
     def zeichnen_leiste(self, top, x, h):
         """Zugeklappt: eine Spalte Symbole, jedes anklickbar."""
         chat, AI = self.chat, self.AI
-        sb, sh = self.groesse()
-        lw = self.leiste_breite()
+        sb, sh = symbole.BREITE, symbole.HOEHE
+        lw = LEISTE
         sx, unten = x + (lw - sb) // 2, top + h
         self._symbol(top, sx, "seite", False, unten)
         self._klickbar(top, sh, x, lw, lambda: self.aufklappen(), unten)
@@ -295,7 +279,7 @@ class Seitenleiste:
         hat_fokus = AI.get("fokus") == "seite"
         L = AI.get("liste")
         m = AI.get("seite_menu") if hat_fokus else None
-        sb, sh = self.groesse()
+        sb, sh = symbole.BREITE, symbole.HOEHE
         unten = top + h
         y = top
         for k, (name, text, aktion) in enumerate(MENUE):
@@ -305,8 +289,7 @@ class Seitenleiste:
             if aktion == "suchen" and L and (L.get("suchen") or L.get("suche")):
                 text = "search: " + L["suche"] + ("▌" if L.get("suchen") else "")
             self._symbol(y, x + 1, name, an, unten)
-            # Beschriftung auf der oberen Zeile: dort liegt bei den
-            # Pixel-Symbolen die Mitte der Form (die unterste Pixelzeile ist leer).
+            # Beschriftung auf der oberen Zeile, wie bei Claude Web oben bündig.
             addclip(y, x + 2 + sb, text, w - 3 - sb,
                     (C["bright"] | curses.A_REVERSE) if an else C["dim"])
             self._klickbar(y, sh, x, w, lambda a=aktion: self.menue(a), unten)

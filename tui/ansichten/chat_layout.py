@@ -23,8 +23,8 @@
 #   │                 │   + attach        sonnet · low    │                    │
 #   └─────────────────────────────────────────────────────────────────────────┘
 #
-# (Die Symbole links sind seit 08.10.2026 zwei Zeilen hoch oder ein Zeichen —
-# symbole.py; die Skizze zeigt nur die Aufteilung.)
+# (Die Symbole links sind seit 08.10.2026 Braille-Punkte, 4 breit und zwei
+# Zeilen hoch — symbole.py; die Skizze zeigt nur die Aufteilung.)
 #
 # Schmal (80×24): Seitenleiste zu (nur eine Spalte Symbole), rechts nichts;
 # ein Dokument oder die Outputs ERSETZEN den Verlauf, solange sie offen sind.
@@ -40,9 +40,7 @@ Bereich = namedtuple("Bereich", "x w")
 Aufteilung = namedtuple("Aufteilung", "seite leiste mitte rechts")
 
 SEITE = 28              # offene Seitenleiste
-LEISTE = 6              # zugeklappt: eine Spalte Symbole (4 breit + Rand)
-LEISTE_ZEICHEN = 3      # dieselbe Spalte, wenn die Symbole Zeichen sind
-                        # (Einstellung tui_symbole, symbole.py, 2026-10-08)
+LEISTE = 6              # zugeklappt: eine Spalte Symbole (1 Rand + 4 + 1)
 LEISTE_AB = 60          # darunter nicht einmal die Symbole
 OUTPUTS = 34            # rechte Leiste „Outputs"
 MITTE_MIN = 38          # schmaler wird der Verlauf nie — dann ersetzt rechts ihn
@@ -51,11 +49,10 @@ DOKU_NEBEN_AB = 96      # so breit muss der Platz rechts der Seite sein, damit
 TEXT_MAX = 92           # der Verlauf wird nicht breiter (lesbar, wie Claude)
 
 
-def aufteilen(bx, bw, seite_offen=False, rechts=None, gross=False, leiste_w=LEISTE):
+def aufteilen(bx, bw, seite_offen=False, rechts=None, gross=False):
     """Das Innere des Kastens (bx, bw = Kasten mit Rahmen) aufteilen.
     rechts: None | "outputs" | "dokument"; gross: Dokument nimmt Mitte und
-    rechts; leiste_w: Breite der zugeklappten Symbol-Spalte.
-    -> Aufteilung(seite, leiste, mitte, rechts)."""
+    rechts. -> Aufteilung(seite, leiste, mitte, rechts)."""
     x0, w = bx + 1, max(0, bw - 2)
     seite = leiste = mitte = rechts_b = None
     if seite_offen:
@@ -64,8 +61,8 @@ def aufteilen(bx, bw, seite_offen=False, rechts=None, gross=False, leiste_w=LEIS
         seite = Bereich(x0, SEITE)
         x0, w = x0 + SEITE + 1, w - SEITE - 1
     elif bw >= LEISTE_AB:
-        leiste = Bereich(x0, leiste_w)
-        x0, w = x0 + leiste_w + 1, w - leiste_w - 1
+        leiste = Bereich(x0, LEISTE)
+        x0, w = x0 + LEISTE + 1, w - LEISTE - 1
     if rechts == "dokument":
         if gross or w < DOKU_NEBEN_AB:
             return Aufteilung(seite, leiste, None, Bereich(x0, w))
