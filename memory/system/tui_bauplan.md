@@ -322,7 +322,9 @@ die TUI gilt:
 - **Englische Befehle** im Chat (`/new /chats /rename /archive /retry /edit
   /thinking /memory /files /attach /project /projects /model /provider /local
   /help`; `/effort /budget /skills /cloud /auto` bleiben; `/permissions` ist
-  für die Erlaubnis-Seite reserviert). Die deutschen gehen still weiter
+  für die Erlaubnis-Seite reserviert). `/morning` (seit 2026-10-08,
+  `chat_morgenblick.py`): Morgenblick im Hintergrund erstellen, im Browser
+  öffnen ([../werkzeuge/morgenblick.md](../werkzeuge/morgenblick.md)). Die deutschen gehen still weiter
   (`chat_befehle.ANDERE_NAMEN`), innen heißen die Befehle wie vorher
   (`chat_befehle.INNEN`). `/project new <name>`, `/project none`.
 

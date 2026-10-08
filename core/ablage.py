@@ -38,10 +38,13 @@ import datasync
 import dateien
 
 # Was es gibt und welche Endung es bekommt. code: Endung nach Sprache.
-ARTEN = ("markdown", "text", "code", "csv", "bild")
-HERKUENFTE = ("ki", "sandbox", "anhang")
+# html: der Morgenblick (core/morgenblick.py, 2026-10-08) — eine fertige Seite,
+# die GET /api/ablage/<id>/roh unter strenger CSP ausliefert. Die KI legt
+# selbst keine html-Dokumente an (create_document kennt die Art nicht).
+ARTEN = ("markdown", "text", "code", "csv", "bild", "html")
+HERKUENFTE = ("ki", "sandbox", "anhang", "morgenblick")
 
-_ENDUNG = {"markdown": ".md", "text": ".txt", "csv": ".csv"}
+_ENDUNG = {"markdown": ".md", "text": ".txt", "csv": ".csv", "html": ".html"}
 _CODE_ENDUNG = {
     "python": ".py", "py": ".py", "shell": ".sh", "bash": ".sh", "sh": ".sh",
     "javascript": ".js", "js": ".js", "typescript": ".ts", "ts": ".ts",

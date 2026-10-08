@@ -229,8 +229,18 @@ Speicher `core/ablage.py`, Anhänge `core/anhang.py`, Doku `memory/ki/ablage.md`
 |---|---|---|
 | `/api/ablage` | GET | `{dokumente: [{id, titel, art, herkunft, gespraech, gespraech_titel?, erstellt, geaendert, fassung, archiviert}]}`, neueste Änderung zuerst. `?archiv=1` → nur archivierte. |
 | `/api/ablage/<id>` | GET | `{kopf, fassung, inhalt (Text) \| null (Bild), bytes, mime?, pfad}`; `?fassung=n` für eine ältere. Unbekannt → 404. |
+| `/api/ablage/<id>/roh` | GET | Die neueste Fassung einer **html**-Seite (der Morgenblick) als `text/html`, mit strenger CSP (`default-src 'none'`, kein Skript, `sandbox`). Andere Arten / unbekannt → 404. Seit 2026-10-08, `memory/werkzeuge/morgenblick.md`. |
 | `/api/ablage/<id>/archiv` | POST | `{an: true}` archivieren (Standard), `{an: false}` zurückholen. Nie löschen. |
 | `/api/anhang` | POST | `{pfad, daten (base64), gespraech?}` — die TUI schickt die Bytes, das Backend öffnet den Pfad nie, prüft ihn aber gegen die Sperrliste. → `{id, titel, art, zeichen, gekappt, hinweis}`; gesperrt/zu groß/unlesbar/kaputt → 400 mit Klartext. |
+
+## Morgenblick (`ui/routen/morgenblick.py`, seit 2026-10-08)
+
+Kern `core/morgenblick.py`, Doku `memory/werkzeuge/morgenblick.md`.
+
+| Endpoint | Methode | Beschreibung |
+|---|---|---|
+| `/api/morgenblick` | POST | Body `{ki?: bool}` (Standard true). Sammelt lokal (kein Netz), lässt das billige Modell Sätze schreiben (ohne Cloud: feste Sätze), legt die Seite in die Ablage. → `{id, titel, url: "/api/ablage/<id>/roh", mit_ki, modell}`. Dauert mit KI einige Sekunden. |
+| `/api/morgenblick/auftrag` | GET | Ein Knopf aus dem Morgenblick: `?d=&b=&a=&s=` (Datum, Beschriftung, Auftrag, HMAC-Signatur aus dem Speicher dieses Prozesses). Nur von localhost UND an localhost gerichtet (sonst 403), nur gültig signiert, heute/gestern, nichts zu Geld/Gesundheit/Zugangsdaten (sonst 400). Legt EIN Gespräch an (Auftrag als Vorschlag der KI), setzt es aktiv; derselbe Link zweimal → dasselbe Gespräch. Antwort: kleine HTML-Seite. |
 
 ## KI-Status & Erlaubnis
 

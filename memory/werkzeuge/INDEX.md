@@ -12,6 +12,7 @@ hier ist ein Ding, das man aufmacht und benutzt — im Unterschied zu
 | **Mail** | IMAP-Triage per Sender-Keymap; der Ordner IST der Status, kein Flag | [mail_system.md](mail_system.md) |
 | **News** | persönliche Tagesschau aus Bausteinen, KI-moderiertes Briefing | [news_system.md](news_system.md) |
 | **Notizen** | freie Notiz aus gestapelten Blöcken (text / liste / float) | [notizen_system.md](notizen_system.md) |
+| **Morgenblick** | `/morning` im Chat: der Tag als HTML-Seite (Gelände, drei Akte, „Braucht dich"/„Erledigt"), Knöpfe → neues Gespräch | [morgenblick.md](morgenblick.md) |
 | **Zyklus/PMS** | Vorhersage aus dem »periode«-Graphen | [zyklus_pms.md](zyklus_pms.md) |
 
 ## Was die KI davon anfassen darf

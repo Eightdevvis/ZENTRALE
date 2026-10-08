@@ -21,7 +21,7 @@ try:                                    # Pixel-Baustein (tui/pixel.py)
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     import pixel
 
-from . import chat_befehle, eingabe, fussleiste, maus
+from . import chat_befehle, chat_morgenblick, eingabe, fussleiste, maus
 from . import verlauf as V
 from .ablage import Ablageliste
 from .chat_ablage import AblageSteuerung, ablage_anzeige, anhang_eintrag
@@ -640,6 +640,9 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
             return
         if name == "anhang":
             self.anhang_dazu(arg)
+            return
+        if name == "morgenblick":           # chat_morgenblick.py (2026-10-08)
+            chat_morgenblick.starten(self)
             return
         if name == "erlaubnis":             # chat_erlaubnis.py (2026-10-07)
             self.befehl_erlaubnis(arg)

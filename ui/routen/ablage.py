@@ -10,7 +10,7 @@
 import base64
 import binascii
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request
 
 import ablage        # type: ignore  – in core/, aber durch sys.path.insert auffindbar
 import ai_backends   # type: ignore
@@ -47,6 +47,32 @@ def api_ablage_lesen(doc_id):
         return jsonify({"error": "Dieses Dokument gibt es nicht."}), 404
     d["kopf"] = _mit_gespraech(d["kopf"])
     return jsonify(d)
+
+
+# Eine html-Seite aus der Ablage (der Morgenblick) im Browser. Sie läuft im
+# Ursprung des Backends — ohne Schutz könnte ein Skript darin jede /api-
+# Route aufrufen. Deshalb (2026-10-08): nur Art „html", und die CSP sperrt
+# Skripte, Formulare, Nachladen und macht die Seite per `sandbox` zu einem
+# fremden Ursprung. Links (die Knöpfe) gehen weiter.
+ROH_CSP = ("default-src 'none'; style-src 'unsafe-inline'; font-src data:; "
+           "img-src data:; form-action 'none'; base-uri 'none'; "
+           "frame-ancestors 'none'; sandbox allow-top-navigation-by-user-activation")
+
+
+@bp.route('/api/ablage/<doc_id>/roh')
+def api_ablage_roh(doc_id):
+    """Die neueste Fassung eines html-Dokuments als Seite."""
+    try:
+        d = ablage.lesen(doc_id)
+    except ablage.Unbekannt:
+        return jsonify({"error": "Dieses Dokument gibt es nicht."}), 404
+    if d["kopf"].get("art") != "html":
+        return jsonify({"error": "Nur Seiten (html) lassen sich so öffnen."}), 404
+    r = Response(d["inhalt"], mimetype="text/html")
+    r.headers["Content-Security-Policy"] = ROH_CSP
+    r.headers["X-Content-Type-Options"] = "nosniff"
+    r.headers["Cache-Control"] = "no-store"
+    return r
 
 
 @bp.route('/api/ablage/<doc_id>/archiv', methods=['POST'])

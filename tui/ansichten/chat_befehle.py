@@ -33,6 +33,7 @@ BEFEHLE = [
     ("/attach",   "/attach <pfad> gibt der ki eine datei mit (text, pdf, bild)"),
     ("/project",  "projekt dieses gesprächs · /project <name> · new <name> · none"),
     ("/projects", "alle projekte — anweisungen, wissen, gespräche"),
+    ("/morning",  "morgenblick: der tag auf einen blick, im browser"),
     ("/permissions", "was die ki ohne fragen darf — ansehen, zurücknehmen"),
     ("/customize", "einstellungen: skills, gedächtnis, kosten, was sie kann, modell"),
     ("/mouse",    "maus im chat an/aus (shift + ziehen markiert immer)"),
@@ -53,7 +54,8 @@ INNEN = {"new": "neu", "chats": "liste", "rename": "titel", "archive": "archiv",
          "memory": "gedaechtnis", "files": "ablage", "attach": "anhang",
          "project": "projekt", "projects": "projekte", "model": "modell",
          "provider": "anbieter", "local": "lokal", "help": "hilfe",
-         "permissions": "erlaubnis", "customize": "einstellungen", "mouse": "maus"}
+         "permissions": "erlaubnis", "customize": "einstellungen", "mouse": "maus",
+         "morning": "morgenblick"}
 
 # Stille Aliase: die deutschen Namen von vorher und alte Schreibweisen
 # (/clear stand früher in der Doku). In keiner Hilfe, keiner Fußleiste.

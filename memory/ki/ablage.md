@@ -8,6 +8,10 @@ Sasha gibt der KI Dateien mit.
 
 - **Ablage** (`core/ablage.py`, Schicht 2): Dokumente der KI (Markdown, Text,
   Code, CSV), Dateien aus einem Sandbox-Lauf, Kopien von Anhängen (auch Bilder).
+  Seit 2026-10-08 auch Art `html` (Herkunft `morgenblick`): der Morgenblick,
+  im Browser über `GET /api/ablage/<id>/roh` (strenge CSP) —
+  [../werkzeuge/morgenblick.md](../werkzeuge/morgenblick.md). Die KI selbst
+  legt keine html-Dokumente an.
 - **Anhänge** (`core/anhang.py`, Schicht 2): `/anhang <pfad>` im Chat; Text,
   Code, PDF (als Text) und Bilder (nur Cloud).
 - **Zug** (`core/zug.py`, Schicht 1): was zum laufenden Chat-Zug gehört —
@@ -24,7 +28,7 @@ Sasha gibt der KI Dateien mit.
 
 ```
 data/ablage/<id>/kopf.json               titel, art, erstellt, gespraech,
-                                         herkunft (ki|sandbox|anhang),
+                                         herkunft (ki|sandbox|anhang|morgenblick),
                                          archiviert, sprache?, quelle?
 data/ablage/<id>/v<n>-<rechner><endung>  eine Fassung, nie überschrieben
 ```

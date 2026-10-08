@@ -764,3 +764,24 @@ gleichen Namens, sinngemäß für ZENTRALE neu geschrieben. Ausführlich:
   (`tests/test_import_memory.py`, `tests/fixtures/import_memory_beispiel.txt`).
 - **Offen:** ein „Import-Modus", der `rewrite_note`/`edit_skill` während
   eines Imports verweigert (beide fragen ohnehin jedes Mal).
+
+### Morgenblick (2026-10-08)
+
+Nach dem Vorbild von Claudes „morning", in ZENTRALEs Form; nur auf Abruf
+(`/morning` im Chat). Ausführlich:
+[../werkzeuge/morgenblick.md](../werkzeuge/morgenblick.md).
+
+- `core/morgenblick_daten.py` (Schicht 2): Sammler je Quelle (Kalender über
+  die Fassade, Mail aus dem lokalen Triage-Stand, Erinnerungen, Gespräche,
+  Listen, Projekte, Ablage) — nur lesen, kein Netz; neue Quelle = ein
+  Eintrag. Form HEAVY/NORMAL/OPEN und die drei Akte deterministisch.
+- `core/morgenblick.py` (Schicht 3): billiges Modell schreibt Sätze als JSON
+  (Daten in `<daten>`, nie Anweisung), ohne Cloud feste Sätze; signierte
+  Knöpfe → `GET /api/morgenblick/auftrag` legt ein Gespräch mit dem Auftrag
+  als Vorschlag an (nur localhost).
+- `core/morgenblick_bild.py` (Schicht 2): HTML aus Python, alles escaped,
+  Gelände-SVG, Fraunces eingebettet (`core/morgenblick_assets/`, OFL).
+- Ablage: Art `html`, `GET /api/ablage/<id>/roh` mit strenger CSP.
+- TUI: `chat_morgenblick.py`, eine Zeile in `Chat.befehl`.
+- Offen: „wartet auf Antwort" (Rückfall ungelesen 2 Tage), Fälligkeit in
+  Listen, Chat-Quellen (Slack/Teams) möglich später.

@@ -157,6 +157,11 @@ SZ = {
                      ("cap", "a"), ("l", "qwen3-1"), ("cap", "b"), ("k", "BSpace"),
                      ("l", "zzz"), ("cap", "c"), ("k", "Escape"), ("l", "/permissions"),
                      ("k", "Enter"), ("w", 1), ("cap", "d"), ("k", "Escape"), ("cap", "e")],
+    # Morgenblick (2026-10-08): /morning — das Abspiel-Backend antwortet
+    # auf POST mit {}, also die Meldung „ging nicht"; kein Absturz.
+    "ki_morgenblick": [("k", "Space"), ("w", 2), ("l", "/morning"), ("k", "Enter"),
+                       ("cap", "a"), ("w", 2), ("cap", "b"), ("l", "/help"), ("k", "Enter"),
+                       ("w", 1), ("cap", "c")],
     # Nachbesserungen 07.10.2026: \ + Enter, Strg+C ohne Antwort, Zähler ab
     # 80 %, Grenze mit gekapptem Einfügen, Esc zurück auf die Startseite.
     "ki_nachbesserung": [("k", "Space"), ("w", 2), ("l", "eins\\"), ("k", "Enter"),
