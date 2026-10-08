@@ -8,13 +8,15 @@
 # griff also in die Tabelle eines Addons, um seine eigene EXTERNAL-Box zu füllen.
 # Pfeil verkehrt herum. Diese Registry gehört dem Kern.
 #
-# ── Verhältnis zu tutor_providers ───────────────────────────────────────
-# Der Tutor hat seine EIGENE, größere Liste (inkl. Skizzen + Policy-Notizen),
-# weil er am Ende andere Modelle nutzt als der Kern. Bewusste Entscheidung
-# (2026-07-16): lieber zwei kleine Tabellen als eine geteilte, an der beide
-# zerren — so ist tutor/ später ohne Rückgriff auf core/providers.py rausziehbar.
-# Preis: die paar Welt-Fakten unten (base_url/key_env) stehen an zwei Stellen.
-# Ändert ein Anbieter seinen Endpunkt, beide prüfen.
+# ── Die EINE Anbieter-Liste (seit 2026-10-08) ───────────────────────────
+# Bis 2026-10-08 hatte der Tutor eine eigene, größere Liste (tutor/providers.py)
+# mit eigenen Endpunkten und eigenen Cloud-Schleifen (tutor/cloud.py,
+# tutor/openai_compat.py) — „lieber zwei kleine Tabellen" (Entscheidung
+# 2026-07-16). Die Welt-Fakten standen dadurch doppelt und liefen auseinander
+# (Tutor: claude-opus-5, Kern: claude-sonnet-5; Gemini-URL mit/ohne Schrägstrich).
+# Jetzt gilt Sashas „eine Straße": diese Tabelle ist die einzige, der Tutor fährt
+# über kern.fahrzeug()/kern.fahren() darauf. Die Datenschutz-Angabe
+# `trains_on_data`, die nur der Tutor führte, steht deshalb jetzt HIER.
 #
 # Der Kern redet seit 2026-09 selbst mit der Cloud: kern.chat() wählt nach
 # `kind` den Dialekt (cloud.py / cloud_openai.py), und beide holen sich Endpunkt,
@@ -48,6 +50,7 @@ PROVIDERS = {
         "default_model": "claude-sonnet-5",
         "cheap_model":   "claude-haiku-4-5",
         "jurisdiction":  "US",
+        "trains_on_data": False,          # Anthropic trainiert nicht auf API-Daten
         "note":          "Anthropic — der Ziel-Pfad des Kerns. Einziger "
                          "Anbieter mit steuerbarem Prompt-Cache "
                          "(cache_control) und effort-Regler.",
@@ -60,6 +63,7 @@ PROVIDERS = {
         "cheap_model":   "qwen-turbo",
         "embed_model":   "text-embedding-v3",
         "jurisdiction":  "SG",
+        "trains_on_data": False,          # DashScope trainiert explizit NICHT auf API-Daten
         "note":          "Alibaba Qwen (intl/Singapur), no-train verifiziert. "
                          "Billig — die Rückfallebene, wenn das Budget alle ist.",
     },
@@ -71,6 +75,7 @@ PROVIDERS = {
         "cheap_model":   "gpt-4o-mini",
         "embed_model":   "text-embedding-3-small",
         "jurisdiction":  "US",
+        "trains_on_data": False,          # OpenAI trainiert seit 2023 nicht auf API-Daten
     },
     "grok": {
         "base_url":      "https://api.x.ai/v1",
@@ -78,6 +83,7 @@ PROVIDERS = {
         "kind":          "openai_compat",
         "default_model": "grok-4",
         "jurisdiction":  "US",
+        "trains_on_data": None,           # UNVERIFIZIERT → wird wie True geflaggt
         "note":          "xAI, OpenAI-kompatibler Endpoint.",
     },
     "gemini": {
@@ -89,6 +95,7 @@ PROVIDERS = {
         "default_model": "gemini-2.5-pro",
         "cheap_model":   "gemini-2.5-flash",
         "jurisdiction":  "US",
+        "trains_on_data": True,           # ⚠ Free-Tier trainiert + menschliche Reviewer (paid nicht)
     },
     "deepseek": {
         "base_url":      "https://api.deepseek.com/v1",
@@ -96,6 +103,7 @@ PROVIDERS = {
         "kind":          "openai_compat",
         "default_model": "deepseek-chat",
         "jurisdiction":  "CN",
+        "trains_on_data": True,           # ⚠ trainiert (Opt-out, default an) + Daten in China
         "note":          "⚠ Jurisdiktion CN — bewusst wählen.",
     },
     "groq": {
@@ -104,6 +112,7 @@ PROVIDERS = {
         "kind":          "openai_compat",
         "default_model": "llama-3.3-70b-versatile",
         "jurisdiction":  "US",
+        "trains_on_data": None,           # UNVERIFIZIERT → wird wie True geflaggt
         "note":          "Groq — sehr schnell, offene Modelle.",
     },
     "mistral": {
@@ -113,14 +122,51 @@ PROVIDERS = {
         "default_model": "mistral-large-latest",
         "embed_model":   "mistral-embed",
         "jurisdiction":  "EU",
+        "trains_on_data": False,          # PAID trainiert nicht (Free-Tier trainiert!)
     },
 }
 
 
 def get(name: str) -> dict:
-    """Provider-Eintrag oder {} — anders als beim Tutor gibt es hier KEINEN
-    local-Fallback: wer hier fragt, fragt nach einem Cloud-Endpunkt."""
+    """Provider-Eintrag oder {} — KEIN local-Fallback: wer hier fragt, fragt
+    nach einem Cloud-Endpunkt. Wer auch Ollama meint, fragt eintrag()."""
     return PROVIDERS.get(name) or {}
+
+
+# Das lokale Ollama als Eintrag derselben Form (2026-10-08). Bewusst NICHT in
+# PROVIDERS: alles, was dort iteriert (Keys, Budget-Rückfall, Embedder,
+# Einstellungs-Liste), meint Cloud-Endpunkte. Wer „irgendein Auto" meint —
+# kern.fahrzeug(), die Tutor-Liste —, fragt eintrag() und bekommt beides.
+LOKAL = "local"
+LOKAL_EINTRAG = {
+    "kind":           "ollama",
+    "base_url":       None,      # core/ollama.py kennt die Adresse
+    "key_env":        None,
+    "default_model":  None,      # core/ollama.py kennt das Modell
+    "trains_on_data": False,
+    "jurisdiction":   "local",
+    "note":           "Lokales Ollama — offline.",
+}
+
+
+def eintrag(name: str | None) -> dict:
+    """Eintrag für JEDEN Anbieter, das lokale Ollama eingeschlossen; {} wenn
+    unbekannt."""
+    if name == LOKAL:
+        return LOKAL_EINTRAG
+    return get(name or "")
+
+
+def alle() -> dict:
+    """{name: eintrag} — lokal zuerst, dann die Cloud-Anbieter."""
+    return {LOKAL: LOKAL_EINTRAG, **PROVIDERS}
+
+
+def trains_on_data(name: str) -> bool:
+    """Trainiert der Anbieter laut Policy auf Nutzdaten (→ laut warnen)?
+    Unbekannt/unverifiziert (None, fehlender Eintrag) zählt vorsichtshalber
+    als ja — übernommen aus dem Tutor (2026-10-08)."""
+    return eintrag(name).get("trains_on_data") is not False
 
 
 def cheap_model(name: str) -> str | None:

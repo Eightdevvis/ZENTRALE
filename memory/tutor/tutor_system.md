@@ -60,8 +60,8 @@ zh + es sind aus dem Master abgeleitet und gegen echtes qwen-plus getestet
   gelegentlich knapp ein — kein Reiseführer, kein Geschichts-/Politik-Vortrag.
 - **Wie es zuverlässig wird (WICHTIG):** der Prompt ist **in der Zielsprache**
   verfasst (hält qwen in der Sprache), mit **Few-Shot-Beispielen + harten
-  Verboten**; dazu **`TUTOR_TEMPERATURE` (0.4) + `TUTOR_MAX_TOKENS` (200)** im
-  Cloud-Pfad (`tutor.openai_compat`/`tutor.cloud`). Prompt-Wording ALLEIN war
+  Verboten**; dazu **`TUTOR_TEMPERATURE` (0.4) + `TUTOR_MAX_TOKENS` (140)**
+  (`tutor/anbieter.py`, über die eine Straße). Prompt-Wording ALLEIN war
   Glückssache — qwen driftete sonst in deutsche Monologe.
 - **Skizzen** nutzen die schlanke generische `_build_prompt`; beim Aktivieren
   einer Sprache: eigenen Prompt IN DER ZIELSPRACHE hand-tunen wie zh/es.
@@ -368,18 +368,21 @@ Stand → Sprache → Profil → Provider → Modell.
   ru=Betonung, ar=Translit, es/de=—), STT/TTS-Lang, Default-Provider+Modell.
   **Keine Vokabel-Datei** — die ist LERNSTAND und liegt im Stand (gitignored);
   `langs/` ist die SPRACHE und wird getrackt.
-- `tutor/providers.py` – **Provider-Registry** des Tutors (`kind`
-  `ollama|anthropic|openai_compat`, `base_url`, `key_env`, `default_model`,
-  **`trains_on_data`**, `jurisdiction`, `enabled`). LIVE: `local` (Ollama),
-  `claude` (Sashas Pfad), `qwen` (Verteil-Default). Skizzen: `openai`,
-  `mistral`, `groq`, `deepseek`, `gemini`. Bewusst getrennt von
-  `core/providers.py` (Kern: nur Erreichbarkeit) — Preis: base_url/key_env an
-  zwei Stellen.
-- `tutor/openai_compat.py` – Drop-in für `ai.chat_stream()`, bedient JEDEN
-  OpenAI-`/v1`-kompatiblen Provider durch Tausch von base_url+Key+Modell; Tools
-  aus `tools.tools_for(lang)` (schon OpenAI-Schema). Streaming-Tool-Loop.
-- `tutor/cloud.py` – Anthropic-SDK-Pfad (Claude), Sashas persönliche
-  Verifikation; übersetzt die Tools ins Anthropic-Format.
+- **Die eine Straße (seit 2026-10-08):** es gibt KEINE eigene Anbieter-Liste
+  und KEINE eigenen Cloud-Schleifen mehr im Tutor. `tutor/anbieter.py` ist die
+  einzige Naht: Anbieter-Liste = `core/providers.py` (dort steht jetzt auch
+  **`trains_on_data`**; `local` = Ollama über `providers.eintrag`), gefahren
+  wird über `kern.fahrzeug(anbieter, modell)` + `kern.fahren(…)` — dieselbe
+  Werkzeug-Schleife wie der Chat (Kosten werden gebucht, Fehler kommen als
+  Event statt als Rede, ein krachendes Tool reißt den Zug nicht ab). Ein
+  fremdes Tool-Set (`tools.tools_for(lang)`) schaltet im Kern Gedächtnis,
+  Gate und Bild-Marker ab; im Tutor gibt es auch keinen deutschen Jetzt-Block.
+  „Wählbar" (`enabled` in `/api/tutor/config`) heißt jetzt: lokal oder Key da.
+  Ersetzt `tutor/providers.py`, `tutor/cloud.py`, `tutor/openai_compat.py`.
+- Regler (`tutor/config.py`, Env `TUTOR_<NAME>`): `max_tokens` (Profil >
+  Einstellung > 140 OpenAI-kompatibel / 2000 Anthropic), `temperature` (0.4),
+  `effort` (`low`, nur Anthropic). `TUTOR_CLOUD_MODEL`/`TUTOR_CLOUD_EFFORT`
+  gibt es nicht mehr (Modell = `model`, Tiefe = `effort`).
 
 **Steuerung:** `tutor/data/tutor_config.json` (`tutor/config.py`) hält
 `provider` / `model` / `history_window` / `native` — **kein `lang`, KEINE
@@ -430,13 +433,13 @@ STT und TTS leben zentral in `services/` und sind sprachneutral nutzbar via
 sie als Aufrufer, die Sprache kommt aus dem Profil. Die einzige Naht ist
 `core/tutor_port.py`; kein Core-/UI-Modul importiert `tutor.*` (verifiziert
 mit physisch entferntem Ordner: ZENTRALE startet, `present()` → False). Was
-`tutor/` vom Kern braucht (Liste im Kopf von `tutor/__init__.py`):
-`ai.chat_stream`/`ai.is_available`, optional `ai_backends.status`,
-`state.push_log`. Der Cloud-Pfad braucht nichts aus ZENTRALE.
+`tutor/` vom Kern braucht (Liste im Kopf von `tutor/__init__.py`, erzwungen
+über die „Türen" in `../system/bauplan_kern.md`): `kern` + `providers` (nur
+über `tutor/anbieter.py`), `ai_backends`, `state.push_log`.
 
 **Warum ein Paket und nicht flach** (nachgemessen 2026-07-16): kurze Namen
-kollidieren still und reihenfolge-abhängig (`core/providers.py` vs.
-`tutor/providers.py` — es gewinnt der erste `sys.path`-Eintrag, kein Fehler,
+kollidieren still und reihenfolge-abhängig (damals `core/providers.py` vs.
+`tutor/providers.py` — es gewann der erste `sys.path`-Eintrag, kein Fehler,
 nur die falsche Tabelle); und ein Ordner `tutor/` neben einem Modul `tutor.py`
 liefert nach PEP 420 **immer** das Modul (Namespace-Package ist Fallback
 letzter Instanz) → `from tutor import session` bräche deterministisch. Als

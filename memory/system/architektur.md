@@ -100,7 +100,7 @@ ZENTRALE/
 │   ├── ai.py                # Ollama-Client (Chat, Streaming, Tools)
 │   ├── ai_backends.py       # AI-Backend-Verfügbarkeit (local/cloud, Modul-Gating, EXTERNAL-Box)
 │   ├── ai_config.py         # Kill-Switches (cloud/local) + API-Key-Store, data/ai_config.json
-│   ├── providers.py         # Cloud-Registry des KERNS (Erreichbarkeit; ≠ tutor/providers.py)
+│   ├── providers.py         # die EINE Anbieter-Liste (Kern + Tutor, seit 2026-10-08)
 │   ├── net.py               # HTTP-Wrapper mit Terminal-Logging
 │   ├── graph.py             # KONZEPT-Graph Memory der KI (PRIMARY, data/ai_graph.json)
 │   ├── transkript.py        # Rohes Gesagtes unter dem Graphen (append-only jsonl)

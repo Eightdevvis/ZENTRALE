@@ -16,7 +16,7 @@
 # Gleiche Bauart, bewusst eine eigene Datei. Der Tutor ist ein Addon und muss
 # am Stück rausziehbar bleiben (core/tutor_port.py ist die einzige Naht) — der
 # Kern darf nicht aus tutor/ importieren. Dieselbe Entscheidung wie bei
-# providers.py vs. tutor_providers.py: lieber zwei kleine Busse als einer, an
+# früher bei providers.py vs. tutor_providers.py: lieber zwei kleine Busse als einer, an
 # dem beide zerren.
 #
 # ── Events ──────────────────────────────────────────────────────────────

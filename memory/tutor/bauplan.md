@@ -25,7 +25,7 @@ selben Commit ändern, sonst wird der Test rot.
  │  session (Turn, Prompt-Bau)  tools (Vokabel, Spiel, Tool-Calls)         │
  │  skills (Situations-Auslöser)  memory (Persona-Gedächtnis)  srs (FSRS)  │
  │  staende (Spielstand = Sprache + Level)  config (Einstellungen)         │
- │  providers/cloud/openai_compat (Modell-Anbindung)  debug (Devtool-Bus)  │
+ │  anbieter (Naht zur EINEN Straße: kern.fahren)  debug (Devtool-Bus)     │
  └───────────────┬──────────────────────────────────────────┬─────────────┘
                  │ einzige Naht                              │ HTTP (/api/tutor/*, /api/speak, /api/transcribe)
         core/tutor_port.py ──► ui/routen/tutor.py            │
@@ -60,9 +60,7 @@ Diese Tabelle liest der Drift-Test: jeder Pfad muss existieren.
 | `tutor/srs.py` | Langzeit-Wiederholung (FSRS) je Stand |
 | `tutor/staende.py` | Spielstände: `stand.json {name, lang, level}`, `stand_lock`, `pfad()` weigert fremde Sprache, `token()/pruefen()`, Migration |
 | `tutor/config.py` | Einstellungen: provider, model, history_window, native — **kein** lang |
-| `tutor/providers.py` | Provider-Registry (qwen, …), trains_on_data, Jurisdiktion |
-| `tutor/cloud.py` | Anthropic-Pfad (Tool-Loop, Streaming) |
-| `tutor/openai_compat.py` | OpenAI-kompatible Cloud (DashScope/qwen u.a.) |
+| `tutor/anbieter.py` | Naht zur einen Straße des Kerns (seit 2026-10-08): Anbieter-Liste aus `core/providers.py` (inkl. trains_on_data), Fahren über `kern.fahrzeug()/fahren()`; Regler max_tokens/temperature/effort. Ersetzt `providers.py`, `cloud.py`, `openai_compat.py` |
 | `tutor/debug.py` | Devtool-Ereignisbus (`emit`, SSE über `ui/routen/tutor.py`, geholt per `tutor_port.debug_bus()`) |
 | `tutor/room.py` | Das Zimmer: pygame-Fenster, Mikro-Schleife (VAD → Whisper), Stimme, Persona-Figur, Esc-Menü, Hauptmenü (Stände), Drill als Spiel |
 | `tutor/room_zugang.py` | Das Zimmer schickt den Zugangsschlüssel des Backends mit (lädt `tui/ansichten/zugang_klient.py`, `memory/betrieb/zugang.md`) |

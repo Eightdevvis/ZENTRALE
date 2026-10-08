@@ -91,7 +91,7 @@ Baseline-Roman.
   Aktivieren pro Sprache genauso hand-tunen.
 - `tutor/session.py`: hängt den Vokabel-Kontext in der ZIELSPRACHE ans
   Prompt-Ende (ein deutscher Block kippt qwen zurück ins Deutsche — verifiziert).
-- `tutor/openai_compat.py` + `tutor/cloud.py`: `TUTOR_TEMPERATURE`
+- (damals `tutor/openai_compat.py` + `tutor/cloud.py`, seit 2026-10-08 `tutor/anbieter.py`): `TUTOR_TEMPERATURE`
   (0.4) + `TUTOR_MAX_TOKENS` (200), per Env übersteuerbar.
 
 **Offen / Follow-up:** die Auto-Progression (correct_use hochzählen, introduce_new

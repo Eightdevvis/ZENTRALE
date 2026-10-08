@@ -150,7 +150,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `werkzeug_fragen` | 3 | Die Ja/Nein-Fragen an Sasha vor bestätigungspflichtigen Werkzeugen und die Regeln, die von den Argumenten abhängen |
 | `ki_kalender` | 3 | Der Kalender, wie die KI ihn liest: Kennungen (`#r3f9c`), alle Felder, Warnungen frisch, Belege nach dem Schreiben |
 | `ki_kalender_aendern` | 3 | Die schreibenden Kalender-Werkzeuge der KI: genau EIN Eintrag, nur genannte Felder, mit Beleg und Status |
-| `kern` | 3 | Der eine Einstieg: kern.chat(verlauf) wählt den Weg (lokal/Anthropic/OpenAI) und fährt ihn |
+| `kern` | 3 | Der eine Einstieg: kern.chat(verlauf) wählt den Weg (lokal/Anthropic/OpenAI) und fährt ihn; `fahrzeug()`/`fahren()` = die Straße für fremde Prompts (Tutor) |
 | `billig` | 3 | Ein Einmal-Aufruf beim billigen Modell des aktiven Anbieters (beide Dialekte, Kosten gebucht) — Graph-Extraktor, Gesprächstitel |
 | `gespraech_titel` | 3 | Gesprächstitel: sofort aus den ersten Wörtern, nach der ersten Antwort vom billigen Modell |
 | `morgenblick` | 3 | Morgenblick auf Abruf: sammeln, billiges Modell schreibt Sätze (JSON, Daten nie Anweisung; ohne Cloud feste Sätze), Seite in die Ablage; signierte Knöpfe → neues Gespräch |
@@ -211,7 +211,7 @@ Kern. Was sie aus dem Kern importieren dürfen, steht hier und **nur** hier:
 | Bereich | Darf aus dem Kern | Warum |
 |---|---|---|
 | `tui/` | `theme`, `tone`, `pc_status` | Reine Helfer ohne Kern-Abhängigkeit. Alles andere holt die TUI per HTTP von den Routen (`ui/routen/`). |
-| `tutor/` | `ai`, `ai_backends`, `state` | Der Tutor ist ein eigenes Programm, nutzt aber die Modell-Anbindung und das Log des Kerns. Wird mit der „Straße“ zu einem einzigen Einstieg. |
+| `tutor/` | `kern`, `providers`, `ai_backends`, `state` | Der Tutor ist ein eigenes Programm, fährt aber auf der einen „Straße“ des Kerns: `kern.fahrzeug()`/`kern.fahren()` und die eine Anbieter-Liste, beides nur über `tutor/anbieter.py` (seit 2026-10-08; vorher `ai` + eigene Cloud-Schleifen). Dazu Kapazität (`ai_backends`) und das Log. |
 
 Umgekehrt erreichen Kern und Routen den Tutor **nur** über
 `core/tutor_port.py`.

@@ -10,10 +10,9 @@
 # ── Framework, nicht Chinesisch-Tutor ─────────────────────────────────
 # Welche Sprache (System-Prompt, Vokabeln, Lesehilfe) kommt aus dem
 # LanguageProfile (tutor/langs/); welcher Anbieter/welches Modell aus der
-# Provider-Registry (tutor/providers.py). Backend-Dispatch nach provider.kind:
-#   ollama        → core/ai.py (lokal, Default, offline)
-#   anthropic     → tutor/cloud.py (Claude, Sashas Pfad)
-#   openai_compat → tutor/openai_compat.py (Qwen/DeepSeek/Mistral/…)
+# EINEN Anbieter-Liste des Kerns, gefahren über die eine Straße
+# (tutor/anbieter.py → kern.fahren; bis 2026-10-08 eigene Liste + eigene
+# Cloud-Schleifen tutor/providers.py, cloud.py, openai_compat.py).
 #
 # ── Privacy ───────────────────────────────────────────────────────────
 # Provider mit trains_on_data werden NICHT verboten, aber bei Session-Beginn
@@ -29,10 +28,9 @@ import threading
 from threading import Lock
 from collections import deque
 from urllib.parse import urlparse
-import ai                       # basic core: chat_stream + is_available
 from . import tools             # Vokabel-Tools + Sandbox-Allowlist
 from . import langs             # Sprach-/Persona-Profile
-from . import providers         # Provider-Registry des Tutors
+from . import anbieter          # die Naht zur einen Straße des Kerns
 from . import config            # tutor/data/tutor_config.json (Sprache/Provider/Modell)
 from . import skills            # Situations-Auslöser (no_entiendo), erst nur loggen
 from . import memory            # eigenes Grob-Gedächtnis pro Persona
@@ -237,7 +235,9 @@ def _resolve():
     lang          = active_lang()          # aus dem Spielstand, nicht aus der Config
     prof          = langs.get(lang)
     provider_name = config.setting("provider", prof["provider"])
-    provider      = providers.get(provider_name)
+    if not anbieter.bekannt(provider_name):
+        provider_name = anbieter.LOKAL       # wie früher: Unbekanntes → lokal
+    provider      = anbieter.eintrag(provider_name)
     model         = config.setting("model", None)
     if not model:
         model = prof["model"] if provider_name == prof["provider"] else provider.get("default_model")
@@ -314,7 +314,8 @@ def available() -> bool:
     Port, nicht das hier."""
     _prof, _pname, provider, _model = _resolve()
     if provider.get("kind") == "ollama":
-        return ai.is_available()
+        import ai_backends
+        return ai_backends.local_ok()
     key = provider.get("key_env")
     if key and not os.environ.get(key):
         return False
@@ -348,7 +349,7 @@ def activate():
     lang = active_lang()
 
     notice = None
-    if providers.trains_on_data(pname):
+    if anbieter.trains_on_data(pname):
         notice = (f"⚠ DATENSCHUTZ: Provider '{pname}' ({provider.get('jurisdiction')}) "
                   f"trainiert/nutzt offiziell deine Eingaben. Modell {model}, "
                   f"Sprache {prof['name']}.")
@@ -608,30 +609,18 @@ def respond_stream(user_text: str = None, nudge: bool = False,
                system=system, messages=history,
                tools=[t['function']['name'] for t in tools.tools_for(lang)])
 
-    # Backend-Dispatch nach provider.kind. Alle haben dieselbe chat_stream()-
-    # Signatur (yieldet Plain-Text-Tokens); der Tutor bleibt sauberes Addon.
-    kind = provider.get("kind")
-    if kind == "anthropic":
-        from . import cloud as tutor_cloud
-        stream = tutor_cloud.chat_stream(
-            messages=history, model=model, system=system,
-            tools=tools.tools_for(lang), tool_executor=tools.execute_tool)
-    elif kind == "openai_compat":
-        from . import openai_compat as tutor_openai_compat
-        stream = tutor_openai_compat.chat_stream(
-            messages=history, model=model, system=system,
-            tools=tools.tools_for(lang), tool_executor=tools.execute_tool,
-            _provider=provider, max_tokens=prof.get("max_tokens"))
-    else:  # 'ollama' → lokaler Default über core/ai.py
-        stream = ai.chat_stream(
-            messages=history, system=system,
-            tools=tools.tools_for(lang), tool_executor=tools.execute_tool)
+    # Die eine Straße (2026-10-08): Anbieter + Modell sind Werte, der Weg
+    # (lokal/Anthropic/OpenAI-kompatibel) ist Sache des Kerns.
+    stream = anbieter.fahren(
+        pname, model, history, system=system,
+        tools=tools.tools_for(lang), tool_executor=tools.execute_tool,
+        max_tokens=prof.get("max_tokens"))
 
     full_response = []
     for token in stream:
-        # Der lokale Weg laeuft seit 10/2026 durch die gemeinsame Werkzeug-
-        # Schleife und meldet dort auch werkzeug-, reflect- und fehler-Events.
-        # Das Zimmer will nur Text: Events loggen bzw. ueberspringen.
+        # Alle Wege laufen durch die gemeinsame Werkzeug-Schleife und melden
+        # dort auch werkzeug-, reflect- und fehler-Events. Das Zimmer will nur
+        # Text: Events loggen bzw. ueberspringen.
         if isinstance(token, dict):
             if "fehler" in token:
                 print(f"[tutor.session] {token['fehler']}", flush=True)

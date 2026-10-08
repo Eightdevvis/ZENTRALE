@@ -3,7 +3,7 @@
 # Der Tutor ist KEIN Chinesisch-Tutor, sondern ein Framework, auf das Sprachen
 # als PERSONAS draufgelegt werden. Jede Sprache = ein Ordner hier drin = eine
 # benannte Figur mit eigenem Charakter, eigenem Land und eigenem AI-Anbieter
-# (Provider/Modell ist entkoppelt, siehe tutor/providers.py).
+# (Provider/Modell ist entkoppelt, siehe tutor/anbieter.py).
 #
 # ── Eine Sprache dazubauen ──────────────────────────────────────────────
 #   1. Ordner tutor/langs/<code>/ anlegen, __init__.py mit PROFILE = profile(…)

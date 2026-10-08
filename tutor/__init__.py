@@ -11,14 +11,15 @@
 # (tutor_port.present() → False).
 #
 # ── Was der Tutor vom „basic core" braucht (bewusst klein) ──────────────
-#   ai.chat_stream(...)   – lokaler Ollama-Pfad (tutor/session.py, tutor/memory.py)
-#   ai.is_available()     – Ollama-Ping für die Kapazitäts-Frage
-#   ai_backends.status()  – nur tutor/memory.py, lazy + in try/except (degradiert
-#                           still zu „diesen Turn nicht merken", wenn es fehlt)
+#   kern.fahrzeug/fahren  – die EINE Straße zu allen Modellen (lokal + Cloud),
+#   providers             – die eine Anbieter-Liste; beides NUR über
+#                           tutor/anbieter.py (seit 2026-10-08, vorher eigene
+#                           Liste + eigene Cloud-Schleifen hier im Tutor)
+#   ai_backends           – Ollama-Ping und status() (Kapazitäts-Frage)
 #   state.push_log(...)   – nur Logging, lazy + in try/except
-# Der Cloud-Pfad (tutor/openai_compat.py, tutor/cloud.py) braucht NICHTS aus
-# ZENTRALE. Wächst diese Liste, wächst die Kopplung — also nicht wachsen lassen.
-#
+# Erlaubt ist genau das, was in memory/system/bauplan_kern.md unter „Türen"
+# steht (der Test tests/test_kern_bauplan.py wacht darüber).
+
 # ── Sprache = Ordner (tutor/langs/<code>/) ──────────────────────────────
 # Der Tutor ist ein FRAMEWORK, kein Chinesisch-Tutor. Alles, was eine Sprache
 # ausmacht, liegt in ihrem Paket: Prompt (in der ZIELSPRACHE), Tool-Beschriftung,
@@ -33,4 +34,4 @@
 #
 # ── Secrets ─────────────────────────────────────────────────────────────
 # Hier liegt KEIN API-Key. Der Key-Store gehört dem Core (data/ai_config.json)
-# und injiziert in os.environ; tutor/config.py hält nur Sprache/Provider/Modell.
+# und injiziert in os.environ; tutor/config.py hält nur Provider/Modell/Regler.

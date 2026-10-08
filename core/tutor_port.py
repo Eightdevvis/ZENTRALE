@@ -26,12 +26,14 @@
 #                   respond_stream, room_state, privacy_notice, presence_ping,
 #                   _resolve
 #   tutor.config  : setting, set_override
-#   tutor.providers / tutor.langs : die Registries (nur fürs UI-Listing)
+#   tutor.anbieter / tutor.langs : Anbieter-Liste (aus core/providers.py) und
+#                   Sprach-Registry (nur fürs UI-Listing)
 #   tutor.debug   : der Ereignisbus fürs Devtools-Terminal (debug_bus())
 # Das ist die GANZE Schnittstelle zwischen ZENTRALE und tutor/. Wächst sie,
 # wächst die Kopplung — also nicht wachsen lassen. Umgekehrt braucht tutor/ vom
-# Kern nur ai.chat_stream/is_available (+ optional ai_backends, state.push_log);
-# siehe Kopf von tutor/__init__.py.
+# Kern nur die Straße (kern.fahrzeug/fahren über tutor/anbieter.py), die
+# Anbieter-Liste (providers), ai_backends und state.push_log; siehe Kopf von
+# tutor/__init__.py und die Türen in memory/system/bauplan_kern.md.
 
 import os
 import sys
@@ -263,7 +265,7 @@ def config(changes: dict | None = None, persist: bool = False) -> dict:
         return {"present": False}
 
     from tutor import config as tutor_config
-    from tutor import providers as tutor_providers
+    from tutor import anbieter as tutor_anbieter
     from tutor import langs as tutor_langs
 
     if changes and "lang" in changes:
@@ -289,13 +291,10 @@ def config(changes: dict | None = None, persist: bool = False) -> dict:
         "avatar":         prof.get("avatar") or "lucia",
         "provider":       pname,
         "model":          model,
-        "trains_on_data": tutor_providers.trains_on_data(pname),
-        "providers": [
-            {"name": n, "default_model": p.get("default_model"),
-             "trains_on_data": tutor_providers.trains_on_data(n),
-             "jurisdiction": p.get("jurisdiction"), "enabled": p.get("enabled")}
-            for n, p in tutor_providers.PROVIDERS.items()
-        ],
+        "trains_on_data": tutor_anbieter.trains_on_data(pname),
+        # Die EINE Anbieter-Liste des Kerns (seit 2026-10-08); enabled heißt
+        # jetzt „wählbar" (lokal oder Key vorhanden).
+        "providers": tutor_anbieter.liste(),
         # Sortierung: fertige Sprachen zuerst, dann alphabetisch. Die Registry
         # findet die Pakete alphabetisch (ar, es, fr, ru, zh) — ohne das stünde
         # die einzige LIVE-Sprache im UI ganz unten.

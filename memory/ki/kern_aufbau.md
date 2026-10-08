@@ -74,3 +74,14 @@ Danach: die Regler sauber (Env-Wirrwarr aus dem Abgleich vom 05.10.), die
 Hausregeln/Steckbrief hinter die Erlaubnis-Abfrage, und — wenn alles steht —
 die „Straße" weiter: Ollama als normaler Anbieter in der Anbieter-Liste und
 `fahrzeug()` als die eine Stelle, die Anbieter, Modell und Schiene auflöst.
+
+**Straße, Stand 2026-10-08:** `kern.fahrzeug(anbieter, modell)` löst Anbieter +
+Modell zu einem `Fahrzeug(anbieter, art, modell)` auf (`local` = Ollama,
+Eintrag `providers.LOKAL_EINTRAG`, abrufbar über `providers.eintrag()`;
+`PROVIDERS` selbst bleibt die Cloud-Liste, weil Keys, Budget-Rückfall und
+Embedder darüber laufen). `kern.fahren(fz, verlauf, system=…, tools=…,
+max_tokens/temperatur/effort)` fährt einen Zug mit FREMDEM Prompt — darauf
+fährt der Tutor (`tutor/anbieter.py`); seine eigene Anbieter-Liste und seine
+zwei Cloud-Schleifen sind weg. Noch offen: der Chat selbst (`kern.chat`) löst
+seinen Weg weiter über `ai_backends` auf statt über `fahrzeug()`, und die
+Schiene (klein/gross) hängt noch am Weg statt am Fahrzeug.

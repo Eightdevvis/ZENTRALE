@@ -26,7 +26,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)                      # tutor/ als Paket
 sys.path.insert(0, os.path.join(ROOT, 'core'))  # basic core (ai, ai_backends)
 
-from tutor import memory, langs, tools, config, providers
+from tutor import memory, langs, tools, config
 
 _fails = 0
 

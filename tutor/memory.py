@@ -180,26 +180,27 @@ def remember(user_text: str, ai_text: str, lang: str | None = None,
 
 
 def _distill(backend: str, provider: str | None, model: str | None, user_msg: str) -> str:
-    """Ein knapper, tool-loser LLM-Call → Roh-Text (erwartet JSON). Nutzt denselben
-    Dispatch wie das Reden (Cloud openai-compat / lokal Ollama)."""
+    """Ein knapper, tool-loser LLM-Call → Roh-Text (erwartet JSON). Fährt über
+    dieselbe Straße wie das Reden (tutor/anbieter.py → kern.fahren).
+
+    Bis 2026-10-08 lief der lokale Fall über ai.chat_stream(tools=None) — das
+    ist der VOLLE Chat des Kerns: Kern-Werkzeuge, Sashas Graph im Prompt und
+    Auto-Save der Antwort in SEIN Gedächtnis. tools=[] heißt jetzt: fremdes,
+    leeres Tool-Set → kein Gedächtnis, kein Gate, nichts Kern-Eigenes."""
+    from . import anbieter
     msgs = [{"role": "user", "content": user_msg}]
+    if backend == "cloud":
+        if not provider:
+            return ""
+        name = provider
+    else:
+        name, model = anbieter.LOKAL, None
     parts = []
     try:
-        if backend == "cloud":
-            from . import providers as tutor_providers, openai_compat as oc
-            prov = tutor_providers.get(provider) if provider else None
-            if not prov:
-                return ""
-            mdl = model or prov.get("default_model")
-            for tok in oc.chat_stream(msgs, model=mdl, system=_DISTILL_SYS,
-                                      tools=None, tool_executor=None, _provider=prov):
+        for tok in anbieter.fahren(name, model, msgs, system=_DISTILL_SYS,
+                                   tools=[], tool_executor=None):
+            if isinstance(tok, str):   # Events (reflect, fehler …) sind kein Text
                 parts.append(tok)
-        else:  # local ollama
-            import ai
-            for tok in ai.chat_stream(msgs, system=_DISTILL_SYS,
-                                      tools=None, tool_executor=None):
-                if isinstance(tok, str):   # Events (reflect, fehler …) sind kein Text
-                    parts.append(tok)
     except Exception:
         return ""
     return "".join(parts)

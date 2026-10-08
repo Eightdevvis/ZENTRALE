@@ -94,8 +94,9 @@ ständig; die Struktur muss mit dem Wachstum **besser** werden, nicht schlechter
 
 ### Tutor vs. Chat
 
-- Beide nutzen dieselbe `ai.chat_stream()`-Infrastruktur (lokal) bzw. ihre
-  eigenen Cloud-Pfade (`tutor/openai_compat.py`, `tutor/cloud.py`).
+- Beide fahren auf derselben Straße: der Chat über `kern.chat()`, der Tutor
+  über `kern.fahren()` (`tutor/anbieter.py`, seit 2026-10-08) — dieselben drei
+  Wege, dieselbe Werkzeug-Schleife.
 - Unterschied: anderer System-Prompt + andere Tool-Liste
   (`tutor.tools.tools_for(lang)`) – die Standard-Tools sind im Tutor-Modus
   **deaktiviert**, nicht zusätzlich aktiv.
@@ -129,8 +130,10 @@ mehr nicht, nie die Core-KI. Durchgesetzt durch:
 - **`ai.py`-Gates** (`if tools is None`): bei gesetzten Tools KEINE
   Gedächtnis-Injektion und KEINE Consolidation → Tutor-Gespräche landen NIE
   im lokalen Memory.
-- **Cloud-Backends** (`tutor/openai_compat.py`, `tutor/cloud.py`) importieren
-  `ai`/`graph`/`consolidation`/`context` NICHT und führen selbst keine Tools aus.
+- Dieselben Gates in `core/cloud.py`/`core/cloud_openai.py` (`tutor_mode =
+  tools is not None`): kein Graph, kein Gate, keine Bild-Marker, kein
+  Jetzt-Block. `kern.fahren()` macht aus `tools=None` immer eine Liste — nie
+  rutscht ein Tutor-Zug in den vollen Chat.
 
 Umgekehrt gilt für den **Cloud-Kern**: lokal sieht alles von Cloud, Cloud
 nichts von lokal (eigener Store; `memory/ki/ki_system.md` → Isolations-Invariante).

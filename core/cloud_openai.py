@@ -215,13 +215,17 @@ def _anhang_teile(anhaenge: list) -> list:
 
 def chat_stream(messages: list, model: str = None, system: str = None,
                 tools: list = None, tool_executor=None, via_mic: bool = False,
-                *, provider: str = None, abbruch=None, projekt=None):
+                *, provider: str = None, abbruch=None, projekt=None,
+                max_tokens: int = None, temperatur: float = None):
     """
     Drop-in fuer ai.chat_stream() gegen einen OpenAI-kompatiblen Provider.
 
     Gleiche Signatur und gleiches Event-Protokoll wie core/cloud.py. Runden,
     Gate und terminale Tools kommen aus core/werkzeug_schleife.py; hier
     steht nur der Prompt und der Dialekt (_OpenAIAdapter).
+
+    max_tokens/temperatur: nur für fremde Aufrufer (Tutor über kern.fahren,
+    2026-10-08: sein harter Deckel gegen Monologe) — None → Werte des Kerns.
     """
     prov = _provider(provider)
     if prov.get("kind") != "openai_compat":
@@ -263,7 +267,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         mdl = ai_backends.chat_model(provider or _aktueller_anbieter()) \
             or prov.get("default_model")
 
-    adapter = _OpenAIAdapter(client, mdl, msgs, active_tools, abbruch=abbruch)
+    adapter = _OpenAIAdapter(client, mdl, msgs, active_tools, abbruch=abbruch,
+                             max_tokens=max_tokens, temperatur=temperatur)
     yield from werkzeug_schleife.laufen(
         adapter, tutor_mode=tutor_mode, active_exec=active_exec,
         user_query=user_query, store=store, abbruch=abbruch,
@@ -276,9 +281,12 @@ class _OpenAIAdapter:
     """OpenAI-kompatibler Dialekt für die gemeinsame Werkzeug-Schleife:
     Tool-Calls kommen stückweise im Stream, Ergebnisse als role=tool."""
 
-    def __init__(self, client, mdl, msgs, tools, abbruch=None):
+    def __init__(self, client, mdl, msgs, tools, abbruch=None,
+                 max_tokens=None, temperatur=None):
         self.client, self.modell, self.msgs, self.tools = client, mdl, msgs, tools
         self.abbruch = abbruch      # threading.Event: Sasha hat gestoppt
+        self.max_tokens = int(max_tokens or _MAX_TOKENS)
+        self.temperatur = _TEMP if temperatur is None else float(temperatur)
 
     def runde(self):
         round_text = []
@@ -296,8 +304,8 @@ class _OpenAIAdapter:
             messages=self.msgs,
             tools=self.tools or None,   # ai.TOOLS ist schon OpenAI-Schema
             stream=True,
-            temperature=_TEMP,
-            max_tokens=_MAX_TOKENS,
+            temperature=self.temperatur,
+            max_tokens=self.max_tokens,
             # Verbrauch am Stream-Ende mitschicken lassen — sonst wüssten
             # wir bei jedem Nicht-Anthropic-Anbieter nicht, was der Turn
             # gekostet hat. Anbieter, die das Feld nicht kennen, ignorieren

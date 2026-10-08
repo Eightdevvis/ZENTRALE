@@ -3,7 +3,8 @@
 # Lokale Tutor-Konfiguration aus tutor/data/tutor_config.json – damit man NICHT
 # bei jedem Start die Modell-Wahl per `export` ins Terminal halten muss.
 # Ideal zum Durchprobieren mehrerer Modelle: Datei editieren, neu starten.
-# Hält NUR: provider / model / history_window / native.
+# Hält NUR: provider / model / history_window / native und die Regler
+# max_tokens / temperature / effort (tutor/anbieter.py).
 # Seit 2026-09-17 KEIN 'lang' mehr: die Sprache kommt aus dem aktiven Spielstand
 # (tutor/staende.py) — ein Wert hier würde ignoriert. 'native' = Muttersprache
 # (Glosse auf Karten/Gedanken), Default 'en'.
@@ -11,7 +12,7 @@
 # ── KEINE Keys hier (Umbau 2026-07-16) ──────────────────────────────────
 # Der API-Key-Store gehört dem KERN (core/ai_config.py → data/ai_config.json)
 # und injiziert die Keys beim Import in os.environ; der Cloud-Pfad
-# (tutor/openai_compat.py, tutor/cloud.py) liest sie von dort. Vorher lagen die
+# (seit 2026-10-08 der Kern selbst, tutor/anbieter.py → kern.fahren) liest sie von dort. Vorher lagen die
 # Keys hier — und weil ai_backends dafür in den Tutor griff, hing der halbe Kern
 # an einer Tutor-Datei. Das ist jetzt getrennt: tutor/data/ enthält NIE ein
 # Secret, damit ein vergessener .gitignore-Eintrag hier nichts leaken kann.

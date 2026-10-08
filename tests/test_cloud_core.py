@@ -121,8 +121,11 @@ def test_tutor_modus_ohne_kern_bloecke():
     blocks = cloud._system_blocks("EIGENER PROMPT", "", False, tutor_mode=True)
     assert blocks[0]["text"] == "EIGENER PROMPT"
     assert ai._ASCII_MARKER_PROMPT not in blocks[0]["text"]
-    # Den Jetzt-Block kriegt der Tutor trotzdem.
-    assert "## Jetzt" in blocks[1]["text"]
+    # Kein deutscher Jetzt-Block im Tutor (2026-10-08, seit er über
+    # kern.fahren hier fährt): er kippt die Persona ins Deutsche
+    # (memory/tutor/tutor_persona_tuning.md); seine alten Cloud-Wege
+    # schickten auch keinen.
+    assert blocks[1]["text"] == ""
 
 
 def test_statischer_block_ueberschreitet_die_cache_mindestgroesse():

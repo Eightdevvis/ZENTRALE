@@ -920,3 +920,14 @@ Ausführlich, mit allen Entscheidungen: [pdf_word.md](pdf_word.md).
   `klein` byte-gleich, Gate und Fragen der alten Werkzeuge unverändert.
 - **Offen:** Formulare ausfüllen, OCR für Scans, Schriften außerhalb
   Westeuropas im PDF, Word-Formatierung ändern, Anhänge über 10 MB.
+
+### Straße: der Tutor fährt auf dem Kern (2026-10-08)
+
+Gebaut: `kern.fahrzeug()` + `kern.fahren()` (Ablauf und Grenzen:
+[kern_aufbau.md](kern_aufbau.md), Ende). Eine Anbieter-Liste (`core/providers.py`,
+jetzt mit `trains_on_data` und dem lokalen Eintrag); `tutor/providers.py`,
+`tutor/cloud.py`, `tutor/openai_compat.py` gelöscht, der Tutor fährt über
+`tutor/anbieter.py`. Nebenbei behoben: die Gedächtnis-Verdichtung des Tutors lief
+lokal über den vollen Chat (`ai.chat_stream(tools=None)`) — mit Sashas Graph im
+Prompt und Auto-Save der Antwort in sein Gedächtnis. Tests:
+`tests/test_tutor_strasse.py`.

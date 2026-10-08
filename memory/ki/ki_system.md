@@ -1138,8 +1138,9 @@ Event legt `/api/chat` pro Zug an (`state.chat_zug_beginnen`),
 `/api/chat/stop` setzt es. Takt und Tutor übergeben keins und sind nicht
 stoppbar. Ausführlich: [claude_web_plan.md](claude_web_plan.md) Abschnitt 7.
 
-Der Tutor hat in `tutor/cloud.py` und `tutor/openai_compat.py` weiterhin
-eigene Schleifen.
+Der Tutor hat seit 2026-10-08 keine eigenen Schleifen mehr: er fährt über
+`kern.fahrzeug()`/`kern.fahren()` dieselben Wege (`tutor/anbieter.py`,
+[../tutor/tutor_system.md](../tutor/tutor_system.md)).
 
 ### Prompt-Cache: statisch vorn, Wechselndes ganz hinten
 
@@ -1523,8 +1524,8 @@ dem Vorgeplänkel vor einem Tool-Call, das der Chat sonst schluckt), `ai.tool`,
 - **Endpunkt:** `GET /api/ai/debug/stream` (SSE).
 - **Eigener Bus, nicht der des Tutors.** `tutor/debug.py` bleibt getrennt: der
   Tutor ist ein Addon und muss am Stück rausziehbar bleiben, der Kern darf
-  nicht aus `tutor/` importieren. Dieselbe Entscheidung wie `providers.py` vs.
-  `tutor_providers.py`.
+  nicht aus `tutor/` importieren. (Die Anbieter-Liste dagegen ist seit
+  2026-10-08 nur noch eine: `core/providers.py`.)
 
 ⚠ Hier geht der komplette Prompt raus, inklusive Graph-Kontext — also Sashas
 Zustände und Erlebnisse. So privat wie der Graph selbst.

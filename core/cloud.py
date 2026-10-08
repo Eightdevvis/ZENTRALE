@@ -3,10 +3,11 @@
 # Cloud-Backend des KERNS (Anthropic). Drop-in für ai.chat_stream() — gleiche
 # Signatur, gleiches Event-Protokoll, gleiches Erlaubnis-Gate.
 #
-# ── Verhältnis zu tutor/cloud.py ────────────────────────────────────────
-# tutor/cloud.py war die Vorlage, konnte aber nur Text-Strings yielden und
-# hatte bewusst weder Memory noch Gate (geschlossene Vokabel-Allowlist, keine
-# lokalen Tools). Der Kern braucht das volle Programm:
+# ── Verhältnis zum Tutor ────────────────────────────────────────────────
+# tutor/cloud.py war die Vorlage und hatte bis 2026-10-08 eine eigene Schleife.
+# Seitdem fährt der Tutor über kern.fahren() hier durch: ein fremdes Tool-Set
+# (tools=…) schaltet Memory, Gate und Bild-Marker ab; max_tokens/effort darf er
+# selbst setzen. Der Kern braucht das volle Programm:
 #
 #   {"reflect": …}     Denk-Tokens live ins HUD
 #   {"ascii": …, "name": …}  Inline-Bild aus einem [[bild: …]]-Marker
@@ -87,8 +88,9 @@ def _effort() -> str:
 _DENKT_ADAPTIV = ("claude-opus-5", "claude-sonnet-5", "claude-opus-4.8")
 
 
-def _denk_opts(mdl: str) -> dict:
-    """Denk-Parameter für dieses Modell — oder gar keine."""
+def _denk_opts(mdl: str, effort: str | None = None) -> dict:
+    """Denk-Parameter für dieses Modell — oder gar keine. effort: eigener
+    Wert des Aufrufers (Tutor: 'low'), sonst die Chat-Einstellung."""
     if not any(mdl.startswith(m) for m in _DENKT_ADAPTIV):
         return {}
     return {
@@ -97,7 +99,7 @@ def _denk_opts(mdl: str) -> dict:
         # nach…". Kostet nichts extra — gedacht (und abgerechnet) wird so
         # oder so.
         "thinking": {"type": "adaptive", "display": "summarized"},
-        "output_config": {"effort": _effort()},
+        "output_config": {"effort": effort or _effort()},
     }
 
 # max_tokens deckelt Denken UND Antwort zusammen. Zu knapp → die Antwort bricht
@@ -353,6 +355,13 @@ def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
     hinter allem Cachebaren. Es bleibt ungecacht — aber nur es.
     Reihenfolge wie im lokalen Pfad (siehe _PROMPT_ORDER in ki_prompt.py).
     """
+    if tutor_mode:
+        # Fremder Prompt (Tutor): kein deutscher Jetzt-Block. Die eigenen
+        # Cloud-Wege des Tutors schickten nie einen, und gegen echtes qwen
+        # ist belegt, dass ein deutscher Block die Persona ins Deutsche kippt
+        # (memory/tutor/tutor_persona_tuning.md). Beim Umzug auf die eine
+        # Straße (2026-10-08) bleibt das so.
+        return ""
     parts = []
     if mem_ctx:
         parts.append(mem_ctx)
@@ -521,9 +530,13 @@ def _text_of(blocks) -> str:
 
 def chat_stream(messages: list, model: str = None, system: str = None,
                 tools: list = None, tool_executor=None, via_mic: bool = False,
-                *, abbruch=None, projekt=None):
+                *, abbruch=None, projekt=None, max_tokens: int = None,
+                effort: str = None):
     """
     Drop-in für ai.chat_stream() gegen die Anthropic-API.
+
+    max_tokens/effort: nur für fremde Aufrufer (Tutor, über kern.fahren) —
+    None → die Werte des Kerns.
 
     Gleiche Signatur, gleiches Event-Protokoll (siehe Kopf dieser Datei).
     tools/tool_executor: None → Kern-Tools (Schiene + ki_werkzeuge.ausfuehren).
@@ -573,7 +586,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
 
     adapter = _AnthropicAdapter(_get_client(), model or _model(),
                                 sys_blocks, anthro_msgs, anthro_tools,
-                                abbruch=abbruch)
+                                abbruch=abbruch, max_tokens=max_tokens,
+                                effort=effort)
     yield from werkzeug_schleife.laufen(
         adapter, tutor_mode=tutor_mode, active_exec=active_exec,
         user_query=user_query, store=store, abbruch=abbruch,
@@ -586,9 +600,12 @@ class _AnthropicAdapter:
     """Anthropic-Dialekt für die gemeinsame Werkzeug-Schleife: tool_use-
     Blöcke, alle tool_results in EINER user-Message, wandernder Breakpoint."""
 
-    def __init__(self, client, mdl, sys_blocks, msgs, tools, abbruch=None):
+    def __init__(self, client, mdl, sys_blocks, msgs, tools, abbruch=None,
+                 max_tokens=None, effort=None):
         self.client, self.modell = client, mdl
         self.abbruch = abbruch      # threading.Event: Sasha hat gestoppt
+        self.max_tokens = int(max_tokens or _MAX_TOKENS)
+        self.effort = effort
         self.sys_blocks, self.msgs, self.tools = sys_blocks, msgs, tools
         # Dritter Breakpoint, der zwischen den Tool-Runden mitwandert: ohne ihn
         # zahlt Runde 3 die Ergebnisse von Runde 2 noch einmal voll. Der alte
@@ -602,13 +619,16 @@ class _AnthropicAdapter:
         kidebug.request(modell=self.modell, schiene=_profil().NAME,
                         system=self.sys_blocks, messages=self.msgs,
                         tools=self.tools)
+        # Ohne Werkzeuge (Tutor-Gedächtnis verdichtet nur Text) das Feld
+        # ganz weglassen statt eine leere Liste zu schicken.
+        extra = {"tools": self.tools} if self.tools else {}
         with self.client.messages.stream(
             model=self.modell,
-            max_tokens=_MAX_TOKENS,
+            max_tokens=self.max_tokens,
             system=self.sys_blocks,
-            tools=self.tools,
             messages=self.msgs,
-            **_denk_opts(self.modell),
+            **extra,
+            **_denk_opts(self.modell, self.effort),
         ) as stream:
             # Verbrauch mitzählen, solange er reinkommt: wird mitten im
             # Strom gestoppt, gibt es kein final.usage — die Eingabe ist
