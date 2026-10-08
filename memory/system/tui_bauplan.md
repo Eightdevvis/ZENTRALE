@@ -27,6 +27,7 @@ hineinbauen kann, ohne den Rest zu lesen.
 |---|---|---|
 | `tui/zentrale_tui.py` | `main()`, `Store` (Poller), Hot Reload, Lebenslauf, Weglegen, Selbsttest, Lauf-/Dashboard-Wunsch (Dateien), Zustand der Räder; `befehl_ausfuehren`, `taste_verteilen`, `bild_zeichnen`, `run_ui` | `RAD`, `META`, `TRAD`, `PEER`, `RELOAD`, `ENDE`, `NEUSTART` |
 | `ansichten/basis.py` | `BASE_URL`, `api_call`, `venv_python`, `PROJEKT`, `BEENDEN`, Uhrzeit-Helfer | — |
+| `ansichten/zugang_klient.py` | Zugangsschlüssel an jede Anfrage an `BASE_URL` (urllib-Handler, von `basis` eingerichtet; das Zimmer lädt dieselbe Datei), `memory/betrieb/zugang.md` | — |
 | `ansichten/farben.py` | Rollen und Paletten Tag/Nacht | — |
 | `ansichten/kontext.py` | `Kontext`: stdscr, store, Farben `C`, Pixel-Paare `PIX`, Theme, `safe_addstr`/`addclip`/`draw_box` | `C`, `PIX` |
 | `ansichten/text.py` | Umbruch, Markdown (Chat, Tutor, Post) | — |

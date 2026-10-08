@@ -13,6 +13,11 @@ import urllib.request
 
 BASE_URL = (os.environ.get("ZENTRALE_URL") or "http://localhost:5000").rstrip("/")
 
+# Jede Anfrage an BASE_URL trägt ab hier den Zugangsschlüssel, wenn auf
+# diesem Rechner einer liegt (tui/ansichten/zugang_klient.py, 2026-10-08).
+from . import zugang_klient  # noqa: E402
+zugang_klient.einrichten(BASE_URL)
+
 # Die Projekt-Wurzel (…/ZENTRALE): für scripts/ (Karten-Fenster, Zimmer) und
 # core/ (Ton). Achtung: von hier aus sind es DREI Ebenen (tui/ansichten/
 # basis.py), von zentrale_tui.py aus zwei. Ansichten nehmen deshalb nie ihr

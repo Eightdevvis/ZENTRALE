@@ -13,10 +13,11 @@ from flask import Blueprint, Response, jsonify, request
 
 import morgenblick   # type: ignore  – in core/, aber durch sys.path.insert auffindbar
 
-bp = Blueprint('morgenblick', __name__)
+# „Von diesem Rechner?" — dieselbe Prüfung wie die Tür vor allen Routen
+# (2026-10-08 dorthin gezogen): Adresse UND Host-Kopf, gegen DNS-Rebinding.
+from ui.routen.zugang import lokal  # noqa: E402
 
-_LOKAL_ADRESSEN = ("127.0.0.1", "::1", "::ffff:127.0.0.1")
-_LOKAL_NAMEN = ("localhost", "127.0.0.1", "[::1]")
+bp = Blueprint('morgenblick', __name__)
 
 
 @bp.route('/api/morgenblick', methods=['POST'])
@@ -28,15 +29,6 @@ def api_morgenblick():
         return jsonify(morgenblick.erstellen(ki=body.get("ki", True) is not False))
     except morgenblick.Fehler as e:
         return jsonify({"error": str(e)}), 500
-
-
-def lokal() -> bool:
-    """Kommt die Anfrage von diesem Rechner — und war sie an localhost
-    gerichtet? Der Host-Kopf zählt mit: sonst könnte eine fremde Seite
-    über einen umgebogenen Namen (DNS-Rebinding) hier anklopfen."""
-    host = (request.host or "").lower()
-    host = host[:host.find("]") + 1] if host.startswith("[") else host.split(":")[0]
-    return request.remote_addr in _LOKAL_ADRESSEN and host in _LOKAL_NAMEN
 
 
 def _seite(titel, text, code):

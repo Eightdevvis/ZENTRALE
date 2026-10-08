@@ -8,7 +8,8 @@ Remote-Unlock über Dropbear im Initramfs ist eingerichtet und funktioniert
 Bewusst akzeptierte Lücken: Evil Maid (`/boot` unverschlüsselt),
 Disk-PW = User-PW. Seit 2026-06 gibt es einen gewollten Ausgangskanal
 (KI-Tools `web_search`/`fetch_url`, hart gegated), seit 2026-08 optional den
-Cloud-Kern (`memory/ki/ki_system.md`). Offen: Firewall, SSH-Hardening,
+Cloud-Kern (`memory/ki/ki_system.md`). Seit 2026-10-08 braucht das Backend
+von anderen Geräten einen Zugangsschlüssel ([zugang.md](zugang.md)). Offen: Firewall, SSH-Hardening,
 Notfall-Passphrase auf Papier, Live-USB.
 
 Sammelpunkt für Security-Themen rund um den ZENTRALE-Stack. Konkrete
@@ -109,6 +110,30 @@ wissen, was er anhängt. Die KI selbst kann keine Anhänge auslösen.
 `save_from_sandbox` holt nur aus dem Arbeitsordner eines Laufs desselben
 Gesprächs und folgt keinem Verweis (`sandbox.datei_lesen`) — damit bleibt der
 Satz oben wahr, dass niemand Verweise aus dem Arbeitsordner draußen auflöst.
+
+## Zugang zum Backend (seit 2026-10-08)
+
+Das Backend lauscht auf `0.0.0.0:5000`. Bis 2026-10-08 ohne jede Anmeldung:
+jeder im WLAN (Mitbewohner, Gast, ein Gerät mit Schadsoftware) konnte Chat,
+Kalender, Gedächtnis und Mail lesen und schreiben — und der KI Aufträge
+geben. Jetzt prüft eine Tür vor allen Routen (`ui/routen/zugang.py`):
+
+- **frei** von diesem Rechner (Adresse 127.0.0.1/::1 **und** Host
+  „localhost" — gegen DNS-Rebinding); dazu gehört der SSH-Tunnel vom Laptop;
+- **sonst nur mit Zugangsschlüssel** (`Authorization: Bearer …`,
+  zeitkonstant verglichen) oder mit einem Browser-Keks aus einem
+  10-Minuten-Link;
+- Stellungen `aus | melden | an`, Vorgabe **`melden`** (lässt durch,
+  schreibt auf), bis der Pi den Schlüssel hat.
+
+Schlüssel: `~/.config/zentrale/zugang.schluessel` (600), nie in `data/`,
+Repo oder Abgleich; Sicherung in KeePass. Bedienung, Einrichten auf dem Pi,
+Handy: **[zugang.md](zugang.md)**.
+
+Restrisiko: HTTP im LAN ist unverschlüsselt — ein Lauscher im selben Netz
+sieht den Schlüssel. Abhilfe wäre HTTPS oder das VPN aus dem Heimnetz-Plan.
+Bewusst frei bleibt das Code-Paket des Pi (`/api/aussenposten/*`, nur Code,
+keine Daten).
 
 ## LUKS – Wovor es schützt, wovor nicht
 
@@ -250,6 +275,8 @@ sudo cryptsetup luksKillSlot /dev/nvme0n1p3 <slot-nr>
   Initramfs-Reparatur falls's mal nicht bootet. Verschoben auf später.
 - [x] **Dropbear im Initramfs**: eingerichtet und belegt funktionierend
   (Details + Historie in `memory/betrieb/auto_unlock.md`).
+- [ ] **Zugang auf `an` stellen**, sobald der Pi den Schlüssel hat und das
+  Log still ist ([zugang.md](zugang.md)).
 - [ ] **Firewall** (`nftables`/`ufw`) durchgehen – welche Ports sind
   offen, welche müssen offen sein, was loggt was.
 - [ ] **SSH-Hardening**: Key-only-Auth bestätigen
@@ -277,3 +304,5 @@ sudo cryptsetup luksKillSlot /dev/nvme0n1p3 <slot-nr>
   Aus-Fall.
 - **2026-10-07** — `run_code`: die KI darf Code ausführen, nur abgeschottet
   (bubblewrap) und gegatet.
+- **2026-10-08** — Zugangsschlüssel fürs Backend: von draußen nur noch mit
+  Schlüssel (Vorgabe erst „melden", [zugang.md](zugang.md)).

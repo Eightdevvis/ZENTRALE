@@ -680,3 +680,15 @@ def test_abgleich_zeigt_nie_auf_echten_zustand_schluessel_oder_github():
     for var in ("ZENTRALE_ABGLEICH_DIR", "ZENTRALE_ABGLEICH_SCHLUESSEL"):
         assert not os.environ[var].startswith(os.path.realpath(ROOT))
     assert abgleich.weg() == "rsync"
+
+
+def test_zugang_schluessel_nie_der_echte():
+    """Zugangsschlüssel des Backends (core/zugang.py, 2026-10-08): in Tests
+    umgelenkt — kein Test liest Sashas Schlüssel, keine Test-TUI schickt ihn
+    mit, und „anlegen/erneuern" in einem Test trifft nie die echte Datei."""
+    import zugang
+    echt = os.path.expanduser(zugang.VORGABE_PFAD)
+    assert os.path.realpath(zugang.pfad()) != os.path.realpath(echt)
+    assert not os.environ["ZENTRALE_ZUGANG_SCHLUESSEL"].startswith(os.path.realpath(ROOT))
+    from tui.ansichten import zugang_klient
+    assert os.path.realpath(zugang_klient.pfad()) != os.path.realpath(echt)

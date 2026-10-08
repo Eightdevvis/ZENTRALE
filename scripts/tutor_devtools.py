@@ -22,6 +22,17 @@ import sys
 import time
 import urllib.request
 
+
+def _zugang_kopf() -> dict:
+    """Den Zugangsschlüssel dieses Rechners mitschicken (memory/betrieb/zugang.md,
+    2026-10-08) — nötig mit --url auf ein Backend an einem anderen Rechner."""
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core"))
+        import zugang
+        return zugang.klient_kopf()
+    except Exception:
+        return {}
+
 C = {  # ANSI-Farben (leer, wenn kein TTY)
     'dim': '\033[2m', 'rst': '\033[0m', 'b': '\033[1m',
     'ts': '\033[90m', 'vocab': '\033[36m', 'req': '\033[35m', 'out': '\033[32m',
@@ -115,7 +126,7 @@ def render(ev):
 
 
 def stream(url):
-    req = urllib.request.Request(url, headers={'Accept': 'text/event-stream'})
+    req = urllib.request.Request(url, headers={'Accept': 'text/event-stream', **_zugang_kopf()})
     with urllib.request.urlopen(req, timeout=60) as r:
         for raw in r:
             line = raw.decode('utf-8', 'replace').rstrip('\r\n')

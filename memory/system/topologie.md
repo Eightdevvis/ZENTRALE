@@ -374,6 +374,12 @@ Der „Frontend↔AI"-Weg läuft bewusst über den **SSH-Tunnel** statt direkt
 auf `:5000` (verschlüsselt; `:5000` am PC kann später auf `localhost`
 eingeschränkt werden, dann geht es nur noch via SSH).
 
+**Zugangsschlüssel (seit 2026-10-08):** wer `:5000` nicht von localhost aus
+anspricht — heute nur der Pi (TUI, Zimmer, Sensor-Bridge) —, schickt den
+Zugangsschlüssel mit; der Tunnel vom Laptop zählt als localhost. Frei bleibt
+das Code-Paket (`/api/aussenposten/*`). Einrichten auf dem Pi:
+[../betrieb/zugang.md](../betrieb/zugang.md).
+
 ## Was der Pi NICHT macht
 
 - Kein `zentrale.service` (stopped + disabled), kein `whisper.service`,

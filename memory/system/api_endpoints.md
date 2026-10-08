@@ -13,6 +13,25 @@ Chat und Tutor hängen an Kill-Switches (`/api/ai/backends`). Die
 Diese Liste hat **keinen** Drift-Test; zuletzt gegen `ui/routen/`
 abgeglichen 2026-09-18.
 
+## Zugang (vor ALLEN Routen, `ui/routen/zugang.py`, seit 2026-10-08)
+
+Jede Anfrage läuft zuerst durch die Tür (Details: `memory/betrieb/zugang.md`):
+
+- **frei:** von diesem Rechner (`remote_addr` 127.0.0.1/::1 **und** Host
+  `localhost`/`127.0.0.1`/`[::1]`); `/api/aussenposten/manifest` und `/paket`.
+- **von draußen:** Kopf `Authorization: Bearer <zugangsschlüssel>` oder Keks
+  `zentrale_zugang` (gesetzt über einen Link `?zugang=<marke>`, 10 min
+  gültig → `303` auf dieselbe Adresse ohne Marke + Keks, 30 Tage).
+- Stellung `zugang` = `aus | melden | an` (Vorgabe `melden`). Bei `an` ohne
+  passenden Schlüssel: `401`, `WWW-Authenticate: Bearer`, JSON `{error}` (bzw.
+  eine kleine Seite, wenn der Browser `text/html` will). Bei `melden`:
+  durchgelassen, Log-Zeile `ZUGANG: …` (je Absender+Pfad höchstens alle 10 min).
+
+| Endpoint | Methode | Beschreibung |
+|---|---|---|
+| `/api/zugang` | GET | Nur lokal (sonst 403, auch mit Schlüssel). `{modus, schluessel_da, ohne_schluessel: [{am, von, pfad, grund, durchgelassen}]}` — die letzten 50 seit dem Start. |
+| `/api/zugang` | POST | Nur lokal. Body `{modus: aus\|melden\|an}` → live + dauerhaft in `ai_config.json`. 400 bei anderem Wert. |
+
 ## Dashboard / State
 
 | Endpoint              | Methode | Beschreibung                          |
@@ -427,3 +446,4 @@ ungeprüft in den Tutor-Kanal und hing im 503 fest, die TUI riet
   der Tutor lief), `present`/`reason` im Status, `vocab` aus `/api/state`.
 - **2026-09-04** — Aussenposten-Versorgung (`manifest`/`paket`).
 - **2026-09-17** — Tutor-Routen in den Bauplan mit Drift-Test verschoben.
+- **2026-10-08** — Zugangsschlüssel vor allen Routen, `/api/zugang`.

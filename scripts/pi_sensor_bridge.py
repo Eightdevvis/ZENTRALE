@@ -38,6 +38,11 @@
 #   ZENTRALE_BRIDGE_KB    "1" = Tastatur-Reader an, "0" = aus. Default "1".
 #   ZENTRALE_TELEMETRY        "1" = Telemetrie-Push an, "0" = aus. Default "1".
 #   ZENTRALE_TELEMETRY_POLL   Sekunden zwischen Telemetrie-Pushes. Default 30.
+#   ZENTRALE_ZUGANG_SCHLUESSEL  Datei mit dem Zugangsschlüssel des Backends
+#                         (memory/betrieb/zugang.md). Default
+#                         ~/.config/zentrale/zugang.schluessel — der Dienst
+#                         läuft als root, also die von root, oder hier den
+#                         Pfad zu Sashas Datei setzen.
 #
 # Telemetrie: der Pi POSTet zusaetzlich periodisch CPU/Temp/RAM/SD an
 #   POST /api/telemetry/pi  (das Backend kann der Pi nicht selbst anzeigen,
@@ -112,6 +117,24 @@ KEYBOARD_MAP = {
 _kb_last_state = {name: False for name in KEYBOARD_MAP}
 
 
+# ── Zugangsschlüssel (memory/betrieb/zugang.md, 2026-10-08) ──────────
+# Kopie der kleinen Funktion aus tui/ansichten/zugang_klient.py (die Bridge
+# importiert nichts aus der TUI); tests/test_zugang.py hält Name und Vorgabe
+# gleich. Jedes Mal frisch gelesen: ein erneuerter Schlüssel gilt sofort.
+ZUGANG_ENV = "ZENTRALE_ZUGANG_SCHLUESSEL"
+ZUGANG_VORGABE = "~/.config/zentrale/zugang.schluessel"
+
+
+def _zugang_kopf() -> dict:
+    try:
+        with open(os.path.expanduser(os.environ.get(ZUGANG_ENV) or ZUGANG_VORGABE),
+                  encoding="ascii") as f:
+            k = f.read().strip()
+    except (OSError, UnicodeDecodeError):
+        return {}
+    return {"Authorization": f"Bearer {k}"} if k else {}
+
+
 # ── HTTP-Push ────────────────────────────────────────────────────────
 def _post_sensor(name: str):
     """
@@ -123,7 +146,7 @@ def _post_sensor(name: str):
     try:
         # timeout=2: lange genug fuer Hotspot-Wackler, kurz genug damit
         # ein totes Backend nicht den ganzen Poll-Loop blockiert.
-        r = requests.post(url, timeout=2, json={})
+        r = requests.post(url, timeout=2, json={}, headers=_zugang_kopf())
         print(f"PUSH {name} -> {url} = {r.status_code}", flush=True)
     except Exception as e:
         print(f"PUSH {name} -> {url} FAIL: {e}", flush=True)
@@ -150,7 +173,7 @@ def _post_telemetry():
     """Telemetrie an das PC-Backend pushen. Fehler tolerant (wie _post_sensor)."""
     url = f"{BACKEND_URL}/api/telemetry/pi"
     try:
-        r = requests.post(url, timeout=2, json=_build_telemetry())
+        r = requests.post(url, timeout=2, json=_build_telemetry(), headers=_zugang_kopf())
         print(f"TELEMETRY -> {url} = {r.status_code}", flush=True)
     except Exception as e:
         print(f"TELEMETRY -> {url} FAIL: {e}", flush=True)

@@ -61,6 +61,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `abgleich_schluessel` | 1 | Der Schlüssel der Mitte: anlegen, laden, ablegen, Fernet, versteckte Dateinamen |
 | `abgleich_zusammenfuehren` | 1 | Drei-Wege-Regeln über die Basis: JSON nach Eintrag/Feld, Zähler, Zeilen, Text mit beiden Fassungen |
 | `abgleich_mitte` | 1 | Die Mitte hinter vier Handgriffen (holen, vorbereiten, senden, enthaelt); Umsetzung git |
+| `zugang` | 1 | Zugangsschlüssel des Backends: anlegen, laden, zeitkonstant vergleichen, Modus aus/melden/an, Keks und Browser-Link (Prüfung selbst: `ui/routen/zugang.py`) |
 | `dateien` | 1 | Atomar schreiben (alte oder neue Fassung, nie eine halbe) — für alle Datendateien; Rechnername für Dateien pro Rechner |
 | `ai_config` | 1 | Kill-Switches und API-Keys aus `data/ai_config.json`, `setting()`-Rangfolge |
 | `providers` | 1 | Anbieter-Liste des Kerns (URL, Key, Dialekt, Modelle) |

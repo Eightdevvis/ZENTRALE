@@ -37,6 +37,8 @@ core/host_metrics.py
 # ueber /api/tutor/*, /api/speak, /api/transcribe mit dem PC. Der Launcher
 # faehrt hier bewusst keine Audio-Dienste hoch — die gehoeren zum Backend.
 tutor/room.py
+# Schickt den Zugangsschlüssel mit (lädt tui/ansichten/zugang_klient.py).
+tutor/room_zugang.py
 scripts/open_tutor_room.py
 # Die Handschrift fuer das Vokabelwort auf der Karte. Muss mitgeliefert
 # werden — sie ist nirgends installiert, und ohne sie faellt das Zimmer still

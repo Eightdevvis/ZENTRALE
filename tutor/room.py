@@ -15,7 +15,6 @@
 #
 # Start:
 #   venv/bin/python tutor/room.py [--url http://host:5000]
-#
 # Steuerung:
 #   tippen + Enter   an die Persona reden
 #   Backspace        löschen
@@ -349,6 +348,7 @@ def _sym(text):
 class Backend:
     def __init__(self, url):
         self.url = url.rstrip('/')
+        __import__('room_zugang').einrichten(self.url)   # Zugangsschlüssel mitschicken (memory/betrieb/zugang.md)
 
     def _get(self, path, timeout=3.0):
         try:

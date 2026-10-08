@@ -65,6 +65,7 @@ Diese Tabelle liest der Drift-Test: jeder Pfad muss existieren.
 | `tutor/openai_compat.py` | OpenAI-kompatible Cloud (DashScope/qwen u.a.) |
 | `tutor/debug.py` | Devtool-Ereignisbus (`emit`, SSE über `ui/routen/tutor.py`, geholt per `tutor_port.debug_bus()`) |
 | `tutor/room.py` | Das Zimmer: pygame-Fenster, Mikro-Schleife (VAD → Whisper), Stimme, Persona-Figur, Esc-Menü, Hauptmenü (Stände), Drill als Spiel |
+| `tutor/room_zugang.py` | Das Zimmer schickt den Zugangsschlüssel des Backends mit (lädt `tui/ansichten/zugang_klient.py`, `memory/betrieb/zugang.md`) |
 | `tutor/sprites.py` | Lädt die Figur (Rig + gemalte Teile) |
 | `tutor/gelenke.py` | Drehpunkte/Posen der Figur |
 | `tutor/schablone.py` | Mal-Schablone für neue Figuren |

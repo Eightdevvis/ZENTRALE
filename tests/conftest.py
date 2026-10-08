@@ -85,6 +85,12 @@ os.environ.setdefault("ZENTRALE_ABGLEICH_DIR", os.path.join(_DATEN_TMP, "abgleic
 os.environ.setdefault("ZENTRALE_ABGLEICH_SCHLUESSEL", os.path.join(_DATEN_TMP, "abgleich.schluessel"))
 os.environ.setdefault("ZENTRALE_ABGLEICH_MITTE", os.path.join(_DATEN_TMP, "keine-mitte.git"))
 os.environ.pop("ZENTRALE_ABGLEICH_WEG", None)
+# Zugangsschlüssel des Backends (core/zugang.py, 2026-10-08): nie der echte —
+# weder liest ein Test ihn, noch schickt eine Test-TUI ihn mit, noch legt
+# ein Test einen neuen über den echten. Den Modus bestimmt kein Rest aus der
+# Shell; Tests setzen ihn selbst.
+os.environ.setdefault("ZENTRALE_ZUGANG_SCHLUESSEL", os.path.join(_DATEN_TMP, "zugang.schluessel"))
+os.environ.pop("ZENTRALE_ZUGANG", None)
 # Die Modell-Listen der Anbieter (core/modell_liste.py, 2026-10-07): im
 # Betrieb ~/.cache/zentrale/modelle.json. Und kein Test fragt einen echten
 # Anbieter — ein Test, der einen Schlüssel setzt, löste sonst eine echte
