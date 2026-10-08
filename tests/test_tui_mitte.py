@@ -50,6 +50,10 @@ class _Handler(BaseHTTPRequestHandler):
             pass
 
     def do_GET(self):
+        if self.path.startswith("/api/abgleich"):     # Technik-Zeile (2026-10-08)
+            import datetime
+            return self._json({"weg": "mitte", "hinweise": [],
+                               "letzter_erfolg": datetime.datetime.now().isoformat()})
         self._json({} if not self.path.startswith("/api/state")
                    else {"logs": []})
 
@@ -65,7 +69,7 @@ def _strip_ansi(s):
     return re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]|\x1b[()][B0]|\x1b[=>]", "", s)
 
 
-def _lauf(tasten=b"", nach=1.5):
+def _lauf(tasten=b"", nach=1.5, groesse=(40, 140)):
     """Die TUI kurz laufen lassen, nach 2 s `tasten` schicken
     -> alles, was ueber den Schirm ging."""
     import fcntl
@@ -78,7 +82,7 @@ def _lauf(tasten=b"", nach=1.5):
     url = "http://127.0.0.1:%d" % srv.server_address[1]
 
     master, slave = pty.openpty()
-    _set_winsize(slave, 40, 140)
+    _set_winsize(slave, *groesse)
     env = dict(os.environ, TERM="xterm-256color", ZENTRALE_URL=url,
                ZENTRALE_NO_AUDIO="1")
     env.pop("DISPLAY", None)
@@ -309,6 +313,16 @@ def test_technik_rad_oeffnet_die_systemansicht():
     schirm = _lauf(b"\x1b[1;3C\r")
     assert "TECHNIK · SYSTEM" in schirm
     assert "EXTERNAL" in schirm and "TELEMETRIE" in schirm
+
+
+@pytest.mark.parametrize("groesse", [(24, 80), (30, 136)])
+def test_technik_zeigt_den_abgleich(groesse):
+    """Die Zeile zum Abgleich über die Mitte (2026-10-08) steht in der
+    Systemansicht — und nichts stürzt ab, auch nicht im kleinen Fenster."""
+    schirm = _lauf(b"\x1b[1;3C\r", nach=2.5, groesse=groesse)
+    assert "TECHNIK · SYSTEM" in schirm
+    assert "ABGLEICH" in schirm and "über die Mitte" in schirm
+    assert "Traceback" not in schirm
 
 
 def test_dashboard_an_holt_die_alten_spalten_zurueck(tmp_path, monkeypatch):

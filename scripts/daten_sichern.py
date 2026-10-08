@@ -27,7 +27,6 @@ Aufruf (Sasha tippt Shell-Befehle selbst; hier nur in Worten):
 
 import argparse
 import datetime
-import fnmatch
 import os
 import re
 import shutil
@@ -40,35 +39,12 @@ KLON = os.path.expanduser(os.environ.get(
     "ZENTRALE_SICHERUNG_KLON", "~/.local/share/zentrale/daten-sicherung"))
 REMOTE = "git@github.com:Eightdevvis/data.git"
 
-# Was gesichert wird — relativ zum ZENTRALE-Ordner. Bewusst NICHT dabei:
-#   data/ai_config.json            Klartext-API-Schlüssel
-#   data/mail_secrets.enc(.bak)    verschlüsselte Mail-Zugänge (Sasha entscheidet)
-#   data/mail_state/_folders/_counts, data/news_*   Caches, neu erzeugbar
-#   data/tts_model, data/ascii     Modell bzw. im Code-Repo versioniert
-#   data/_beiseite                 Sasha geht es gerade durch
-SICHERN = [
-    "data/features.json",
-    "data/lists.json",
-    "data/notes.json",
-    "data/graphs.json",
-    "data/g_*.json",
-    "data/melodies.json",
-    "data/sleep_quality.json",
-    "data/mail_rules.json",
-    "data/ai_usage.json",
-    "data/ai_calendar.json",
-    "data/kalender_neben.json",
-    "data/kalender/**",
-    "data/gedaechtnis/**",
-    "data/ai_transcripts/*.jsonl",
-    "data/gespraeche/**",
-    "data/ablage/**",
-    "data/rueckmeldungen/*.jsonl",
-    "tutor/data/tutor_config.json",
-    "tutor/data/aktiver_stand",
-    "tutor/data/staende/**",
-    "tutor/data/es/**",
-]
+# Was gesichert wird: die Positivliste steht seit 2026-10-08 in
+# core/abgleich_auswahl.py — der Abgleich über die Mitte nutzt dieselbe.
+sys.path.insert(0, os.path.join(ROOT, "core"))
+import abgleich_auswahl  # noqa: E402
+
+SICHERN = abgleich_auswahl.SICHERN
 
 # Wonach der Scanner sucht. Lieber einmal zu viel abbrechen als einen
 # Schlüssel auf einem fremden Server haben.
@@ -92,25 +68,9 @@ def _git(args, cwd=None, check=True):
                           capture_output=True, text=True)
 
 
-def auswahl(root=ROOT, muster=SICHERN):
+def auswahl(root=ROOT, muster=None):
     """Relative Pfade aller Dateien, die gesichert werden."""
-    raus = []
-    for wurzel, dirs, files in os.walk(root):
-        rel_w = os.path.relpath(wurzel, root)
-        if rel_w.startswith((".git", ".claude", "venv")) or "__pycache__" in rel_w:
-            dirs[:] = []
-            continue
-        for f in files:
-            rel = os.path.normpath(os.path.join(rel_w, f))
-            for m in muster:
-                if m.endswith("/**"):
-                    if rel.startswith(m[:-3] + "/"):
-                        raus.append(rel)
-                        break
-                elif fnmatch.fnmatch(rel, m) and "/" not in rel[len(os.path.dirname(m)) + 1:]:
-                    raus.append(rel)
-                    break
-    return sorted(raus)
+    return abgleich_auswahl.auswahl(root, SICHERN if muster is None else muster)
 
 
 def schluessel_funde(pfade, root):

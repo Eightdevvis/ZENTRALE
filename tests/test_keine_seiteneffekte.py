@@ -662,3 +662,21 @@ def test_rueckmeldungen_liegen_im_test_nicht_im_echten_data():
     for e in echte:
         assert not pfad.startswith(os.path.realpath(os.path.dirname(e)))
     assert not os.environ["ZENTRALE_RUECKMELDUNGEN_DIR"].startswith(os.path.realpath(ROOT))
+
+
+def test_abgleich_zeigt_nie_auf_echten_zustand_schluessel_oder_github():
+    """Abgleich über die Mitte (core/abgleich.py, 2026-10-08): örtlicher
+    Zustand, Schlüssel und Mitte sind in Tests umgelenkt — kein Testlauf
+    erreicht GitHub, liest Sashas Schlüssel oder überschreibt seine Basis."""
+    import abgleich
+    import abgleich_schluessel
+    echt_dir = os.path.expanduser(abgleich.VORGABE_DIR)
+    echt_key = os.path.expanduser(abgleich_schluessel.VORGABE_PFAD)
+    assert os.path.realpath(abgleich.ordner()) != os.path.realpath(echt_dir)
+    assert os.path.realpath(abgleich_schluessel.pfad()) != os.path.realpath(echt_key)
+    adresse = os.environ["ZENTRALE_ABGLEICH_MITTE"]
+    assert "github" not in adresse and "@" not in adresse
+    assert not os.path.exists(adresse)
+    for var in ("ZENTRALE_ABGLEICH_DIR", "ZENTRALE_ABGLEICH_SCHLUESSEL"):
+        assert not os.environ[var].startswith(os.path.realpath(ROOT))
+    assert abgleich.weg() == "rsync"

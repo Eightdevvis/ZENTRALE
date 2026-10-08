@@ -55,7 +55,12 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `state` | 1 | Geteilter Zustand, thread-safe — die einzige Brücke zwischen Event-Loop und Flask |
 | `events` | 1 | Event-Konstanten |
 | `net` | 1 | HTTP-Wrapper mit Terminal-Logging |
-| `datasync` | 1 | Push-on-write zum Peer nach echter Daten-Änderung |
+| `datasync` | 1 | Nach echter Daten-Änderung: Abgleich über die Mitte anstoßen (gedrosselt) bzw. alter Push-on-write zum Peer |
+| `abgleich` | 1 | Abgleich über die Mitte, ein Lauf von vorn bis hinten: Basis, Vorhaben (absturzsicher), Hinweise, Zustand, Weg umstellen |
+| `abgleich_auswahl` | 1 | Positivliste: was den Rechner verlassen darf (Datensicherung und Abgleich) |
+| `abgleich_schluessel` | 1 | Der Schlüssel der Mitte: anlegen, laden, ablegen, Fernet, versteckte Dateinamen |
+| `abgleich_zusammenfuehren` | 1 | Drei-Wege-Regeln über die Basis: JSON nach Eintrag/Feld, Zähler, Zeilen, Text mit beiden Fassungen |
+| `abgleich_mitte` | 1 | Die Mitte hinter vier Handgriffen (holen, vorbereiten, senden, enthaelt); Umsetzung git |
 | `dateien` | 1 | Atomar schreiben (alte oder neue Fassung, nie eine halbe) — für alle Datendateien; Rechnername für Dateien pro Rechner |
 | `ai_config` | 1 | Kill-Switches und API-Keys aus `data/ai_config.json`, `setting()`-Rangfolge |
 | `providers` | 1 | Anbieter-Liste des Kerns (URL, Key, Dialekt, Modelle) |
@@ -182,6 +187,7 @@ egal woran, ging durch dieselbe Datei.
 | `ablage` | Ablage: Liste, Dokument lesen, archivieren; Anhänge annehmen |
 | `projekte` | Projekte: Liste, anlegen, laden, Anweisungen ändern, Wissen hinzufügen, archivieren, Gespräch zuordnen |
 | `morgenblick` | Morgenblick erstellen, Knopf einlösen (nur localhost, signiert) |
+| `abgleich` | Zustand des Abgleichs über die Mitte (letzter Lauf, Fehler, Hinweise) |
 
 ## Türen
 

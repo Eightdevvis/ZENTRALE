@@ -1,0 +1,15 @@
+# Alle 5 Minuten mit der Mitte abgleichen (und 1 Minute nach dem Anmelden).
+# Dazu stößt jede Änderung in der App selbst einen Abgleich an
+# (core/datasync.py) — der Timer fängt ab, was dabei nicht ankam, und holt,
+# was der andere Rechner geändert hat. Ein oneshot-Dienst läuft nie doppelt.
+
+[Unit]
+Description=ZENTRALE regelmäßig mit der Mitte abgleichen
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -25,8 +25,22 @@
 import os
 import shutil
 import subprocess
+import sys
+import threading
+import time
 
 _HELPER = "zentrale-push-data"
+
+# Abgleich über die Mitte (seit 2026-10-08, memory/betrieb/abgleich.md):
+# steht die Einstellung `abgleich_weg` auf „mitte", stößt eine Änderung statt
+# des rsync-Helfers scripts/abgleich.py an. Gedrosselt: höchstens ein Start
+# pro DROSSEL Sekunden. Eine Änderung im Fenster geht nicht verloren — sie
+# merkt sich einen Nachzügler, der am Ende des Fensters startet.
+DROSSEL = 20.0
+_SKRIPT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                       "scripts", "abgleich.py")
+_drossel = {"zuletzt": float("-inf"), "nachzuegler": None}
+_drossel_lock = threading.Lock()
 
 
 def notify_change(path=None):
@@ -38,6 +52,13 @@ def notify_change(path=None):
     """
     if os.environ.get("ZENTRALE_AUTOPUSH") != "1":
         return
+    try:
+        import ai_config
+        if (ai_config.setting("abgleich_weg") or "").strip().lower() == "mitte":
+            abgleich_anstossen()
+            return
+    except Exception:
+        pass
     try:
         exe = shutil.which(_HELPER)
         if not exe:
@@ -51,3 +72,31 @@ def notify_change(path=None):
         )
     except Exception:
         pass   # Sync darf das Backend nie stören
+
+
+def _abgleich_starten():
+    with _drossel_lock:
+        _drossel["zuletzt"] = time.monotonic()
+        _drossel["nachzuegler"] = None
+    try:
+        subprocess.Popen(
+            [sys.executable, _SKRIPT, "jetzt", "--automatisch"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, start_new_session=True)
+    except Exception:
+        pass   # der Timer holt es nach
+
+
+def abgleich_anstossen():
+    """Einen Abgleich über die Mitte anstoßen — sofort, oder (innerhalb der
+    Drossel) einmal am Ende des Fensters. Wirft nie."""
+    with _drossel_lock:
+        rest = DROSSEL - (time.monotonic() - _drossel["zuletzt"])
+        if rest > 0:
+            if _drossel["nachzuegler"] is None:
+                t = threading.Timer(rest, _abgleich_starten)
+                t.daemon = True
+                _drossel["nachzuegler"] = t
+                t.start()
+            return
+    _abgleich_starten()

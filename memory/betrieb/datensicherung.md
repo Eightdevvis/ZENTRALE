@@ -1,5 +1,13 @@
 # Datensicherung — das private Daten-Repo
 
+> **Wird abgelöst (2026-10-08):** der Abgleich über die Mitte
+> ([abgleich.md](abgleich.md)) legt dieselben Dateien verschlüsselt und mit
+> ganzer Geschichte ins selbe Repo (Zweig `abgleich`), alle paar Minuten.
+> Nach Sashas Umstellung kann der tägliche Sicherungs-Timer aus. ⚠ Die
+> Zweige `knoten/<rechner>` dieser Sicherung liegen **im Klartext** auf
+> GitHub — ob sie gelöscht werden, entscheidet Sasha. Die Positivliste steht
+> seit heute in `core/abgleich_auswahl.py` (eine Stelle für beide).
+
 **Stand 2026-10-07.** Sasha legte am 06.10. das private Repo
 `git@github.com:Eightdevvis/data.git` an: *„wo wir backup und alles was so an
 sensible daten in ne cloud will reinschmeißen können."* Code und Daten bleiben

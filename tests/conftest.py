@@ -77,6 +77,14 @@ os.environ.setdefault("ZENTRALE_ABLAGE_DIR", os.path.join(_DATEN_TMP, "ablage"))
 # Bewertungen der Antworten (core/rueckmeldungen.py, 2026-10-08). Dazu unten
 # pro Test ein eigener Ordner.
 os.environ.setdefault("ZENTRALE_RUECKMELDUNGEN_DIR", os.path.join(_DATEN_TMP, "rueckmeldungen"))
+# Abgleich über die Mitte (core/abgleich.py, 2026-10-08): örtlicher Zustand,
+# Schlüssel und Mitte nie die echten. Die Mitte zeigt auf ein Verzeichnis,
+# das es nicht gibt — ein Test, der vergisst, seine eigene Wegwerf-Mitte zu
+# setzen, scheitert, statt GitHub zu erreichen.
+os.environ.setdefault("ZENTRALE_ABGLEICH_DIR", os.path.join(_DATEN_TMP, "abgleich"))
+os.environ.setdefault("ZENTRALE_ABGLEICH_SCHLUESSEL", os.path.join(_DATEN_TMP, "abgleich.schluessel"))
+os.environ.setdefault("ZENTRALE_ABGLEICH_MITTE", os.path.join(_DATEN_TMP, "keine-mitte.git"))
+os.environ.pop("ZENTRALE_ABGLEICH_WEG", None)
 # Die Modell-Listen der Anbieter (core/modell_liste.py, 2026-10-07): im
 # Betrieb ~/.cache/zentrale/modelle.json. Und kein Test fragt einen echten
 # Anbieter — ein Test, der einen Schlüssel setzt, löste sonst eine echte

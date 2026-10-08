@@ -62,7 +62,7 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/notizen.py` | `Notizen`: Notiz-Werkzeug | `NOTE` |
 | `ansichten/klavier.py` | `Klavier` + Klaviatur-Geometrie (`piano_*`) | `PIANO` |
 | `ansichten/karte.py` | `Karte`: Weltkarte, Overlays, Länder-Fokus | `M` |
-| `ansichten/technik.py` | `Technik`: external, telemetrie, stdout (Laufschrift), outbound | `TECH` |
+| `ansichten/technik.py` | `Technik`: external, telemetrie, stdout (Laufschrift), outbound; Zeile „Abgleich" (holt `/api/abgleich` selbst im Hintergrund, alle 30 s) | `TECH` |
 | `ansichten/startseite.py` | `Startseite`: Rad, Galaxie + ihre Geometrie | liest `RAD`/`META`/`TRAD` |
 | `ansichten/dashboard.py` | `Dashboard`: rechte Spalte des alten Dashboards | — |
 | `ansichten/befehle.py` | Befehle, `TUI_KEYS`/`CTX_KEYS`, `Befehlszeile` | `cmd_mode` … |

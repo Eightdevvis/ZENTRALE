@@ -1,0 +1,18 @@
+# Daten über die Mitte abgleichen (scripts/abgleich.py).
+# systemd-USER-Einheit, gehört zu zentrale-abgleich.timer.
+# Tut nur etwas, wenn die Einstellung abgleich_weg = mitte ist (--automatisch);
+# vorher läuft er leer durch. Warum und wie: memory/betrieb/abgleich.md
+#
+# Einrichten: diese Datei und die .timer in den Ordner für User-Einheiten
+# verlinken, systemd neu einlesen lassen, den Timer aktivieren und starten.
+[Unit]
+Description=ZENTRALE: Daten über die Mitte abgleichen
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/codicus/ZENTRALE
+ExecStart=%h/codicus/ZENTRALE/venv/bin/python %h/codicus/ZENTRALE/scripts/abgleich.py jetzt --automatisch
+Nice=10
+TimeoutStartSec=300

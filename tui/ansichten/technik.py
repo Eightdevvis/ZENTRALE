@@ -7,10 +7,12 @@
 # Modulebene dort; siehe memory/system/tui_bauplan.md.
 
 import curses
+import datetime
 import os
+import threading
 import time
 
-from .basis import _num
+from .basis import _num, api_call
 
 
 # Telemetrie-Reihen: (label, key, einheit). Quelle ist /api/telemetry.pc
@@ -167,6 +169,38 @@ def lauf_ausschnitt(text, breite, schritt):
     return (ring + ring)[off:off + breite]
 
 
+def abgleich_zeile(z, jetzt=None):
+    """Eine Zeile zum Abgleich über die Mitte (GET /api/abgleich, 2026-10-08,
+    memory/betrieb/abgleich.md) → (text, warnen). Defensiv: Müll → None."""
+    if not isinstance(z, dict) or not z:
+        return None
+    if z.get("weg") != "mitte":
+        return "alter Weg (direkt zum PC)", False
+    if z.get("fehler"):
+        return "Problem: " + str(z["fehler"]), True
+    zuletzt = z.get("letzter_erfolg")
+    try:
+        t = datetime.datetime.fromisoformat(zuletzt)
+        jetzt = jetzt or datetime.datetime.now()
+        minuten = max(0, int((jetzt - t).total_seconds() // 60))
+        wann = ("gerade eben" if minuten < 1 else f"vor {minuten} Min" if minuten < 120
+                else f"vor {minuten // 60} Std" if minuten < 2880 else t.strftime("%d.%m."))
+    except (TypeError, ValueError):
+        return "über die Mitte · noch nie abgeglichen", True
+    hinweise = z.get("hinweise") if isinstance(z.get("hinweise"), list) else []
+    neu = 0
+    for h in hinweise:
+        try:
+            if (jetzt - datetime.datetime.fromisoformat(h.get("am"))).total_seconds() < 86400:
+                neu += 1
+        except (AttributeError, TypeError, ValueError):
+            pass
+    text = "über die Mitte · " + wann
+    if neu:
+        text += f" · {neu} Hinweis" + ("e" if neu > 1 else "") + " (Abgleich-Befehl: status)"
+    return text, bool(neu)
+
+
 class Technik:
     """Die Technik-Bausteine: external (KI-Backends), telemetrie, stdout
     (mit Laufschrift), outbound — als Technik-Ansicht aus dem Technik-Rad
@@ -178,6 +212,9 @@ class Technik:
         # ── Technik (Vollbild, aus dem Technik-Rad) — Sasha 03.10.2026: was früher
         # in den Seitenspalten klebte. view = system | stdout | netz.
         self.TECH = z.TECH = {"active": False, "view": "system"}
+        # Zustand des Abgleichs: im Hintergrund geholt, höchstens alle 30 s —
+        # Zeichnen darf nie auf HTTP warten.
+        self._abgleich = {"daten": None, "geholt": 0.0, "laeuft": False}
 
     # ── Technik-Bausteine: früher fest in der linken Spalte, seit 03.10.2026
     # auch in der Technik-Ansicht und auf der Startseite des Meta-Rads. ──
@@ -279,6 +316,31 @@ class Technik:
         else:
             safe_addstr(y + 1, x + 2, "// offline ✓", C["acc"] | curses.A_DIM)
 
+    def _abgleich_holen(self):
+        a = self._abgleich
+        if a["laeuft"] or time.monotonic() - a["geholt"] < 30:
+            return
+        a["laeuft"] = True
+
+        def los():
+            try:
+                a["daten"] = api_call("/api/abgleich", timeout=2.0)
+            except Exception:
+                pass
+            finally:
+                a["geholt"], a["laeuft"] = time.monotonic(), False
+        threading.Thread(target=los, daemon=True).start()
+
+    def draw_abgleich(self, y, x, w):
+        """Eine Zeile: abgleich · wie · wann · Hinweise."""
+        self._abgleich_holen()
+        zeile = abgleich_zeile(self._abgleich["daten"])
+        if not zeile:
+            return
+        C = self.z.C
+        self.z.safe_addstr(y, x, "ABGLEICH", C["acc"])
+        self.z.addclip(y, x + 10, zeile[0], max(0, w - 10), C["warn"] if zeile[1] else C["dim"])
+
     def draw_tech(self, top, x, h, w, state, metrics, nets):
         """Technik-Ansicht (Vollbild, Kasten steht schon). -> läuft stdout?"""
         C, TECH, addclip, draw_box = self.z.C, self.TECH, self.z.addclip, self.z.draw_box
@@ -301,7 +363,11 @@ class Technik:
         kw = max(24, min(44, (w - 6) // 2))
         draw_external(top + 1, x + 2, kw, bk)
         if w - 6 >= 2 * kw:
-            draw_telemetrie(top + 1, x + 4 + kw, kw, metrics)
+            th = draw_telemetrie(top + 1, x + 4 + kw, kw, metrics)
+            unten = top + 1 + max(4, th) + 1
         else:
-            draw_telemetrie(top + 5, x + 2, kw, metrics)
+            th = draw_telemetrie(top + 5, x + 2, kw, metrics)
+            unten = top + 5 + th + 1
+        if unten < top + h - 1:
+            self.draw_abgleich(unten, x + 2, w - 4)
         return False

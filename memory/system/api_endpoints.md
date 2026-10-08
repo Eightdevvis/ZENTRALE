@@ -244,6 +244,15 @@ Kern `core/morgenblick.py`, Doku `memory/werkzeuge/morgenblick.md`.
 | `/api/morgenblick` | POST | Body `{ki?: bool}` (Standard true). Sammelt lokal (kein Netz), lässt das billige Modell Sätze schreiben (ohne Cloud: feste Sätze), legt die Seite in die Ablage. → `{id, titel, url: "/api/ablage/<id>/roh", mit_ki, modell}`. Dauert mit KI einige Sekunden. |
 | `/api/morgenblick/auftrag` | GET | Ein Knopf aus dem Morgenblick: `?d=&b=&a=&s=` (Datum, Beschriftung, Auftrag, HMAC-Signatur aus dem Speicher dieses Prozesses). Nur von localhost UND an localhost gerichtet (sonst 403), nur gültig signiert, heute/gestern, nichts zu Geld/Gesundheit/Zugangsdaten (sonst 400). Legt EIN Gespräch an (Auftrag als Vorschlag der KI), setzt es aktiv; derselbe Link zweimal → dasselbe Gespräch. Antwort: kleine HTML-Seite. |
 
+## Abgleich über die Mitte (`ui/routen/abgleich.py`, seit 2026-10-08)
+
+Kern `core/abgleich.py`, Doku `memory/betrieb/abgleich.md`. Nur anschauen;
+abgleichen tun Timer, Änderungs-Haken und `scripts/abgleich.py`.
+
+| Endpoint | Methode | Beschreibung |
+|---|---|---|
+| `/api/abgleich` | GET | `{weg: "rsync"\|"mitte", rechner, schluessel_da, letzter_versuch, letzter_erfolg, fehler, geholt, gesendet, hinweise: [{am, text}] (neueste zuletzt, höchstens 50), konflikte_ordner}`. Die TUI zeigt daraus eine Zeile in Technik · System. |
+
 ## KI-Status & Erlaubnis
 
 | Endpoint                 | Methode | Beschreibung                          |

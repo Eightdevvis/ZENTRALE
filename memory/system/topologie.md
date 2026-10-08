@@ -219,6 +219,22 @@ syncen):
 | `zentrale-sync-boot` | **Einmaliger Abgleich beim Start** (siehe unten). Kein Daemon. |
 | `zentrale-launch` | Wrapper hinter den Startern `zentrale`/`zentrale-tui` (beide starten die TUI direkt); hängt den Boot-Sync ein. |
 
+### Abgleich über die Mitte (gebaut 2026-10-08, löst den rsync-Weg ab)
+
+Sasha: *„der sync zum pc war immer iwie etwas cursed"*. Neu: kein Rechner
+redet mehr direkt mit dem anderen, jeder gleicht nur mit einer **Mitte** ab
+(heute das private Repo `Eightdevvis/data`, verschlüsselt; später der PC als
+Server). Zusammenführen Eintrag für Eintrag über die zuletzt gemeinsame
+Fassung statt „neueste Datei gewinnt"; Gelöschtes bleibt gelöscht.
+Alles dazu: [../betrieb/abgleich.md](../betrieb/abgleich.md).
+
+**Bis Sasha umstellt, gilt alles unten weiter.** Schalter ist die
+Einstellung `abgleich_weg` (`rsync` | `mitte`). Auf `mitte` stößt
+`datasync.notify_change` statt `zentrale-push-data` den Abgleich an
+(gedrosselt), dazu ein 5-Minuten-Timer. Boot-Sync und `zentrale-sync` in
+`~/.local/bin` liegen nicht in git und wissen nichts von dem Schalter — bei
+der Umstellung müssen sie von Hand aus (Schritte in abgleich.md).
+
 ### Boot-Sync (einmalig beim Start, KEIN Daemon)
 
 Modell nach mehreren Fehlschlägen mit Dauer-Sync (ein inotify/Reconcile-Daemon
