@@ -79,6 +79,17 @@ _VERLAUF = [
      "dokumente": [{"id": "d1", "titel": "Packliste Radtour"}]}]
 
 
+# Erfundene Bewertungen (2026-10-08) für Customize → Feedback. Gefiltert nach
+# Gespräch kommt nichts: der Chat startet unbewertet, das Bewerten zeigt sich
+# im Mitschnitt (POST beantwortet das Backend mit {}).
+_RUECKMELDUNGEN = {"rueckmeldungen": [
+    {"ts": "2026-10-06T08:01:00+00:00", "gespraech": "g1", "nachricht": "n2", "wert": -1,
+     "kommentar": "zu knapp — ohne Wasserbad findet man das Loch so nicht",
+     "gespraech_titel": "Fahrradschlauch flicken unterwegs",
+     "ausschnitt": "Mit Flickzeug: Loch suchen, anrauen, Kleber, warten, Flicken drauf."},
+    {"ts": "2026-10-03T08:05:00+00:00", "gespraech": "g2", "nachricht": "m7", "wert": 1,
+     "gespraech_titel": "Steuererklärung Belege sortieren", "verworfen": True}]}
+
 # Erfundenes Gedächtnis (Claude-Web-Plan Phase 3, 2026-10-07): die echten
 # Kernakten sind persönlich und gehen nie in den Cache.
 _GEDAECHTNIS = {
@@ -190,6 +201,8 @@ def _synth(path):
         return _PROJEKTE
     if path == "/api/projekte/geige":
         return _PROJEKT_GEIGE
+    if path.startswith("/api/rueckmeldungen"):
+        return {"rueckmeldungen": []} if "gespraech=" in path else _RUECKMELDUNGEN
     if path.startswith("/api/chat/history"):
         return _VERLAUF
     if path.startswith(("/api/mail/folder?", "/api/mail/inbox?")) or path == "/api/mail/inbox":

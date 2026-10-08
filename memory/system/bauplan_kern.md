@@ -100,6 +100,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `graph` | 2 | Konzept-Graph der KI (seit 18.08.2026 aus) |
 | `gedaechtnis` | 2 | Das Datei-Gedächtnis, das die KI liest und fortschreibt |
 | `gespraeche` | 2 | Chat-Gespräche auf der Platte: Ordner pro Gespräch, Datei pro Rechner, Ereignisse (nachricht/verwerfen), Liste, aktiv pro Rechner |
+| `rueckmeldungen` | 2 | Bewertungen der KI-Antworten (gut/schlecht + Kommentar): eine jsonl pro Rechner, nur anhängen, das letzte Ereignis je Antwort gilt; mit Anbieter, Modell, Werkzeugen und Skills der Antwort |
 | `chat_suche` | 2 | Suche quer durch alle Gespräche und das alte Transkript (search_chats, read_chat): normalisierte Wörter, Rang nach Dichte und Aktualität |
 | `ascii_lib` | 2 | ASCII-Bibliothek für Bild-Marker |
 | `audio` | 2 | HTTP-Client für Whisper und TTS |
@@ -173,7 +174,7 @@ egal woran, ging durch dieselbe Datei.
 | `karte` | Weltkarte |
 | `kalender` | Kalender |
 | `ki` | Chat-Stream, Wiederholen, Stoppen, Verlauf, Erlaubnis, Status, Backend-Wahl, Einstellungen, Devtools |
-| `gespraeche` | Gesprächs-Liste, neu, öffnen, laden, umbenennen, archivieren |
+| `gespraeche` | Gesprächs-Liste, neu, öffnen, laden, umbenennen, archivieren; Bewertungen der Antworten |
 | `stimme` | Sprechen und Zuhören |
 | `tutor` | alles unter `/api/tutor/` |
 | `mail` | Mail-Triage |

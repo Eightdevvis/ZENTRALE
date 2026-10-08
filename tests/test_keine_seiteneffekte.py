@@ -635,3 +635,30 @@ def test_skill_umzug_und_erstbefuellung_lassen_das_echte_data_in_ruhe():
     for echt in (os.path.join(ROOT, "data"), os.path.join(haupt, "data")):
         assert not os.path.realpath(skills.ordner()).startswith(os.path.realpath(echt))
         assert not os.path.realpath(gedaechtnis._DIR).startswith(os.path.realpath(echt))
+
+
+def test_rueckmeldungen_liegen_im_test_nicht_im_echten_data():
+    """Bewertungen (core/rueckmeldungen.py, 2026-10-08) werden von den Tests
+    wirklich geschrieben — nie unter data/rueckmeldungen dieses Checkouts
+    oder des Haupt-Checkouts. Ende zu Ende über die Route."""
+    import gespraeche
+    import rueckmeldungen
+    from ui.app import app
+    haupt = ROOT.split(os.sep + ".claude" + os.sep + "worktrees" + os.sep)[0]
+    echte = [os.path.join(b, "data", "rueckmeldungen") for b in (ROOT, haupt)]
+
+    def stand():
+        return [sorted((n, os.stat(os.path.join(e, n)).st_mtime_ns) for n in os.listdir(e))
+                if os.path.isdir(e) else None for e in echte]
+    vorher = stand()
+    gid = gespraeche.neu("t")
+    nid = gespraeche.anhaengen(gid, "assistant", "x")["id"]
+    app.config.update(TESTING=True)
+    r = app.test_client().post("/api/rueckmeldung",
+                               json={"gespraech": gid, "nachricht": nid, "wert": 1})
+    assert r.status_code == 200 and rueckmeldungen.ereignisse()
+    assert stand() == vorher
+    pfad = os.path.realpath(rueckmeldungen.ordner())
+    for e in echte:
+        assert not pfad.startswith(os.path.realpath(os.path.dirname(e)))
+    assert not os.environ["ZENTRALE_RUECKMELDUNGEN_DIR"].startswith(os.path.realpath(ROOT))

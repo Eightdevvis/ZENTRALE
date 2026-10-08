@@ -77,6 +77,9 @@ class ChatZeichnen:
             if a.mitte:
                 self._trenner(top, a.rechts.x - 1, h)
             self.rechts.zeichnen(top, a.rechts.x, h, a.rechts.w)
+        if self.AI.get("bewertung"):          # kleines Fenster obenauf (bewertung.py)
+            m = a.mitte or reste[0]
+            self.bewertung.zeichnen(top, m.x, h, m.w)
 
     def _ueberlagerung(self):
         """Was den Inhalt ganz überdeckt (Einstellungen, Gedächtnis, Projekte,
@@ -269,7 +272,7 @@ class ChatZeichnen:
             log, sp.w, offen=AI.get("offen") or frozenset(),
             denken_alle=AI.get("denken_offen"), letzte_ai=V.letzte_antwort(log),
             antwort=answer, adern=n_adern, streaming=streaming,
-            adern_bei=self._adern_bei(log, streaming))
+            adern_bei=self._adern_bei(log, streaming), bewertet=self.bewertung.marken(log))
         self._ziele = V.ziele(zeilen)
         if not zeilen:
             hinweis = "frag die ki — tippen + enter · /help"
@@ -323,6 +326,7 @@ class ChatZeichnen:
                 "ai_code": C["dim"], "ai_liste": C["bright"], "schritt": C["faint"],
                 "schritt_fehler": C["warn"], "denken": C["faint"], "dok": C["acc"],
                 "anhang": C["acc"], "aktion": C["faint"], "leise": C["faint"],
+                "aktion_an": C["acc"] | curses.A_BOLD,
                 "hinweis": C["dim"]}
 
     def _adern_lage(self, streaming, answer, jetzt):

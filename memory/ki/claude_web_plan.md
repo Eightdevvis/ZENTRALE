@@ -717,7 +717,8 @@ Claude Web"; Pixelstil: [../system/pixelstil.md](../system/pixelstil.md).
   zurück (`tui/ansichten/denkadern.py`).
 - Backend dazu: `/api/ai/kosten`, `/api/ai/werkzeuge` (nur lesen), Ergebnis
   eines Werkzeugs gekürzt im Verlauf (`werkzeuge[].ergebnis`).
-- Nicht gebaut: 👍/👎 (das Backend kennt keine Bewertung), Zeitstempel beim
+- Nicht gebaut: ~~👍/👎 (das Backend kennt keine Bewertung)~~ — seit
+  08.10. gebaut, siehe „Bewertungen" unten; Zeitstempel beim
   Darüberfahren (braucht Bewegungsmeldungen der Maus — kosten Akku), „Code"-
   Schalter oben (nur als Platz gedacht, wie gewünscht).
 
@@ -785,3 +786,47 @@ Nach dem Vorbild von Claudes „morning", in ZENTRALEs Form; nur auf Abruf
 - TUI: `chat_morgenblick.py`, eine Zeile in `Chat.befehl`.
 - Offen: „wartet auf Antwort" (Rückfall ungelesen 2 Tage), Fälligkeit in
   Listen, Chat-Quellen (Slack/Teams) möglich später.
+
+### Bewertungen (2026-10-08)
+
+Sasha: „bewertungen für uns um unser eigenes system zu verbessern.. ja safe.
+machs rein, so dass ich nen kommentar hinzufügen könnte wenn ich wollte. also
+am besten einfach so n kleines modal das aufgeht." Wofür und was nicht:
+[ki_system.md](ki_system.md) „Bewertungen"; Bedienung:
+[../system/tui_bauplan.md](../system/tui_bauplan.md) „Bewerten".
+
+- **Speicher** `core/rueckmeldungen.py` (Schicht 2):
+  `data/rueckmeldungen/<rechner>.jsonl`, je Bewertung ein Ereignis {id, ts,
+  knoten, gespraech, nachricht, wert ±1, kommentar?, anbieter, modell,
+  werkzeuge, skills}; ändern = neues Ereignis, das letzte gilt; nie löschen.
+  Umlenkbar per `rueckmeldungen_dir` (Env `ZENTRALE_RUECKMELDUNGEN_DIR`),
+  gitignored, in der Datensicherung (`data/rueckmeldungen/*.jsonl`).
+- **Routen** (in `ui/routen/gespraeche.py`): `POST /api/rueckmeldung`,
+  `GET /api/rueckmeldungen[?gespraech=]` mit Gesprächstitel und Ausschnitt.
+- **TUI**: „copy · retry · good · bad" unter jeder Antwort, kleines Fenster
+  mit Kommentar (`tui/ansichten/bewertung.py`), Customize → Feedback.
+- Tests: `test_rueckmeldungen.py`, `test_bewertung_tui.py`,
+  `test_chat_web.py`, `test_fussleiste.py` (neue Zustände), Wächter in
+  `test_keine_seiteneffekte.py`; headless `ki_bewertung` 80×24,
+  `ki_bewertung_breit` 136×30.
+
+Angenommen (Sasha war nicht erreichbar) — die Kleinentscheidungen:
+
+| Wahl | Alternative |
+|---|---|
+| Wörter **„good · bad"**, bewertet „good ✓" / „bad ✗" | 👍/👎 (zwei Spalten breit, verschöben die Klickflächen) / ▲▼ (in Unicode „mehrdeutig" breit) |
+| **Esc bricht ab** und speichert nichts | Esc speichert ohne Kommentar (ein Fehlklick hinterließe eine Bewertung) |
+| Enter speichert **auch ohne Kommentar** | Kommentar Pflicht |
+| **Tab** wechselt im Fenster gut ↔ schlecht | Fenster schließen und den anderen Knopf nehmen |
+| Taste **+ / −** im Verlauf, wenn ein Ziel unter einer Antwort gewählt ist | eigene Buchstaben (g/b) — kollidieren mit nichts, sind aber nicht so eindeutig |
+| Kommentar höchstens **2.000 Zeichen** | 20.000 wie die Eingabe |
+| Nachricht-id über die **Reihenfolge der Antworten** im geladenen Verlauf; fehlt sie, einmal frisch holen | ids in jeden Verlaufseintrag (hätte das Tupel-Format des ganzen Chats geändert) / id im SSE-Ende mitschicken (`ui/routen/ki.py` anfassen) |
+| Routen in **`ui/routen/gespraeche.py`** | eigenes `ui/routen/rueckmeldungen.py` (fasst `ui/routen/__init__.py` an, woran parallel gebaut wird) |
+| Bewertung einer später **verworfenen** Antwort bleibt, Liste zeigt „(antwort später ersetzt)" | mit dem Verwerfen ausblenden (gerade „schlecht, deshalb retry" ist lehrreich) |
+| Skills = was `load_skill` lud und `run_code(skill=…)` nutzte | nur `load_skill` |
+| Ausschnitt **beim Lesen** aus dem Gespräch | in der Bewertung mitspeichern (doppelte Kopie privater Antworten) |
+| Keine KI liest die Bewertungen (kein Werkzeug, kein Prompt) | ein Werkzeug „read_feedback" (erst wenn Sasha das will) |
+
+**Offen:** eine Bewertung ganz zurücknehmen (nur umdrehen geht);
+Einfügen mit Zeilenumbruch ins Fenster; eine Auswertung (z. B. „schlecht je
+Werkzeug/Modell") — kommt, wenn genug Bewertungen da sind.

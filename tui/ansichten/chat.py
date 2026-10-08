@@ -24,6 +24,7 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
 from . import chat_befehle, chat_morgenblick, eingabe, fussleiste, maus
 from . import verlauf as V
 from .ablage import Ablageliste
+from .bewertung import Bewertung
 from .chat_ablage import AblageSteuerung, ablage_anzeige, anhang_eintrag
 from .chat_erlaubnis import ErlaubnisSteuerung
 from .chat_bedienung import ChatBedienung
@@ -353,6 +354,7 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
         self.seite = Seitenleiste(self)            # links (seitenleiste.py)
         self.rechts = Rechts(self)                 # Dokument / Outputs (rechts.py)
         self.einstellungen = Einstellungen(self)   # Customize (einstellungen.py)
+        self.bewertung = Bewertung(self)           # good/bad + Kommentar (bewertung.py)
 
     def start(self):
         """Hintergrund-Threads anwerfen (run_ui ruft das nach dem Aufbau)."""
@@ -759,6 +761,8 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
             opts = AI["perm"].get("optionen") or ["ja", "nein"]
             return ([(str(i + 1), o) for i, o in enumerate(opts[:9])]
                     + [("esc", "decline")] + stopp)
+        if AI.get("bewertung"):                # das kleine Fenster (bewertung.py)
+            return stopp + self.bewertung.tasten()
         if AI.get("wahl"):
             return self._tasten_wahl(AI["wahl"])
         ueber = self._ueberlagerung()
@@ -888,6 +892,9 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
             return
         if ch == curses.KEY_MOUSE:         # Klick, Rad (maus.py)
             self.maus_ereignis()
+            return
+        if AI.get("bewertung"):            # Bewertungs-Fenster nimmt alle Tasten
+            self.bewertung.taste(ch)
             return
         if AI["wahl"]:
             self._taste_wahl(ch)

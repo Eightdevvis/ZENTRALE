@@ -90,10 +90,27 @@ def test_verlauf_wie_claude():
     assert "Used memory ›" in t and "Used web search ✗ ›" in t
     assert "▤ Packliste ›" in t
     assert "Mit Flickzeug." in t and "ki:" not in "".join(t)
-    # copy unter jeder Antwort, retry nur unter der letzten
-    assert t.count("copy") == 1 and t.count("copy · retry") == 1
+    # copy · good · bad unter jeder Antwort, retry nur unter der letzten
+    # (bewerten seit 2026-10-08)
+    assert t.count("copy · good · bad") == 1 and t.count("copy · retry · good · bad") == 1
     assert V.ziele(z) == [("denken", 2), ("schritt", 3), ("schritt", 5), ("dok", 7),
-                          ("kopieren", 8), ("kopieren", 10), ("wiederholen", 10)]
+                          ("kopieren", 8), ("gut", 8), ("schlecht", 8),
+                          ("kopieren", 10), ("wiederholen", 10), ("gut", 10), ("schlecht", 10)]
+
+
+def test_bewertete_antwort_zeigt_ihre_wahl():
+    """good/bad sind einspaltig (keine Emoji: die verschöben die
+    Klickflächen); die gewählte Bewertung steht mit ✓/✗ hervorgehoben."""
+    import unicodedata
+    z = V.verlauf_zeilen(LOG, 60, letzte_ai=10, bewertet={8: 1, 10: -1})
+    t = _text(z)
+    assert "copy · good ✓ · bad" in t and "copy · retry · good · bad ✗" in t
+    an = [(x, s) for zeile in z for x, s, _z in zeile if s == "aktion_an"]
+    assert an == [("good ✓", "aktion_an"), ("bad ✗", "aktion_an")]
+    for zeile in z:
+        for x, _s, ziel in zeile:
+            if ziel and ziel[0] in ("gut", "schlecht"):
+                assert all(unicodedata.east_asian_width(c) in ("N", "Na") for c in x), x
 
 
 def test_aufklappen_zeigt_argumente_und_ergebnis():

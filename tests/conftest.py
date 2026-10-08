@@ -74,6 +74,9 @@ os.environ.setdefault("ZENTRALE_SANDBOX_DIR", os.path.join(_DATEN_TMP, "sandbox"
 # Die Ablage (core/ablage.py, Phase 5): Dokumente und Anhänge. Dazu unten
 # pro Test ein eigener Ordner.
 os.environ.setdefault("ZENTRALE_ABLAGE_DIR", os.path.join(_DATEN_TMP, "ablage"))
+# Bewertungen der Antworten (core/rueckmeldungen.py, 2026-10-08). Dazu unten
+# pro Test ein eigener Ordner.
+os.environ.setdefault("ZENTRALE_RUECKMELDUNGEN_DIR", os.path.join(_DATEN_TMP, "rueckmeldungen"))
 # Die Modell-Listen der Anbieter (core/modell_liste.py, 2026-10-07): im
 # Betrieb ~/.cache/zentrale/modelle.json. Und kein Test fragt einen echten
 # Anbieter — ein Test, der einen Schlüssel setzt, löste sonst eine echte
@@ -227,6 +230,13 @@ def _gespraeche_frisch(tmp_path_factory, monkeypatch):
 @pytest.fixture(autouse=True)
 def _ablage_frisch(tmp_path_factory, monkeypatch):
     monkeypatch.setenv("ZENTRALE_ABLAGE_DIR", str(tmp_path_factory.mktemp("ablage")))
+    yield
+
+
+# 7d. Jeder Test hat seine eigenen Bewertungen (core/rueckmeldungen.py, 2026-10-08).
+@pytest.fixture(autouse=True)
+def _rueckmeldungen_frisch(tmp_path_factory, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_RUECKMELDUNGEN_DIR", str(tmp_path_factory.mktemp("rueckmeldungen")))
     yield
 
 

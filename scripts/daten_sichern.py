@@ -63,6 +63,7 @@ SICHERN = [
     "data/ai_transcripts/*.jsonl",
     "data/gespraeche/**",
     "data/ablage/**",
+    "data/rueckmeldungen/*.jsonl",
     "tutor/data/tutor_config.json",
     "tutor/data/aktiver_stand",
     "tutor/data/staende/**",

@@ -89,6 +89,9 @@ class GespraechsSteuerung:
                 AI["n"] = len(AI["log"])
             AI["loaded"] = True
             self._neu_markieren()
+            gid_jetzt = AI.get("gid")
+        if geholt is not None:             # ids + Bewertungen (bewertung.py)
+            self.bewertung.geladen(gid_jetzt, geholt[1])
 
     def ai_load_history(self):
         """Beim Öffnen des Chats: Status für den Titel, dann den Verlauf."""

@@ -1,6 +1,7 @@
 # ui/routen/gespraeche.py
 #
-# Gesprächs-Verwaltung: Liste, neu, öffnen, laden, umbenennen, archivieren.
+# Gesprächs-Verwaltung: Liste, neu, öffnen, laden, umbenennen, archivieren —
+# und seit 2026-10-08 die Bewertungen der Antworten (core/rueckmeldungen.py).
 # Der Chat-Strom selbst (/api/chat, /api/chat/wiederholen) steht in ki.py.
 # Speicher und Regeln: core/gespraeche.py (Claude-Web-Plan Phase 2,
 # 2026-10-07).
@@ -15,6 +16,7 @@ from flask import Blueprint, jsonify, request
 import erlaubnis    # type: ignore  – „für dieses Gespräch" endet beim Wechsel
 import gespraeche   # type: ignore
 import projekte     # type: ignore  – Projektname an der Zeile (Phase 6)
+import rueckmeldungen  # type: ignore  – Bewertungen der Antworten (2026-10-08)
 
 bp = Blueprint('gespraeche', __name__)
 
@@ -117,3 +119,34 @@ def api_gespraeche_archiv(gid):
     if an and gespraeche.aktiv() == gid:
         gespraeche.aktiv_setzen(None)
     return jsonify({"ok": True, "archiviert": bool(an), "aktiv": gespraeche.aktiv()})
+
+
+# ── Bewertungen (2026-10-08) ────────────────────────────────────────────
+# Hier und nicht in einem eigenen Bereich: eine Bewertung gehört zu einer
+# Antwort eines Gesprächs, und ein eigenes Modul hieße ui/routen/__init__.py
+# anfassen, woran parallel gebaut wird.
+
+@bp.route('/api/rueckmeldung', methods=['POST'])
+def api_rueckmeldung():
+    """Eine Antwort bewerten oder die Bewertung ändern. Body {gespraech,
+    nachricht, wert: 1|-1, kommentar?}. -> {ok, rueckmeldung}. 400 bei
+    falschem Wert/zu langem Kommentar, 404 ohne Gespräch/Antwort."""
+    body = request.get_json(silent=True) or {}
+    try:
+        e = rueckmeldungen.bewerten(str(body.get('gespraech') or ''),
+                                    str(body.get('nachricht') or ''),
+                                    body.get('wert'), body.get('kommentar') or '')
+    except rueckmeldungen.Ungueltig as fehler:
+        return jsonify({"error": str(fehler)}), 400
+    except rueckmeldungen.Unbekannt:
+        return jsonify({"error": "Diese Antwort gibt es nicht (mehr)."}), 404
+    return jsonify({"ok": True, "rueckmeldung": e})
+
+
+@bp.route('/api/rueckmeldungen', methods=['GET'])
+def api_rueckmeldungen():
+    """{rueckmeldungen: [...]}: die geltende Bewertung je Antwort, neueste
+    zuerst, mit gespraech_titel und ausschnitt (bzw. verworfen).
+    ?gespraech=<id>: nur die eines Gesprächs."""
+    gid = request.args.get('gespraech') or None
+    return jsonify({"rueckmeldungen": rueckmeldungen.mit_kontext(rueckmeldungen.aktuelle(gid))})

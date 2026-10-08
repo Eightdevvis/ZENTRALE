@@ -220,6 +220,8 @@ Datenmodell + Bedienung: `memory/werkzeuge/notizen_system.md`.
 | `/api/gespraeche/<id>` | GET | `{id, kopf, nachrichten}` mit Denken und Werkzeugen. Unbekannt → 404. |
 | `/api/gespraeche/<id>/titel` | POST | Umbenennen, Body `{titel}`. Leer → 400, `erinnerungen` → 400, unbekannt → 404. |
 | `/api/gespraeche/<id>/archiv` | POST | Archivieren `{an: true}` (Standard) oder zurückholen `{an: false}`. Nie löschen. War es das aktive, wird es abgewählt. `erinnerungen` → 400, unbekannt → 404. |
+| `/api/rueckmeldung` | POST | Eine Antwort der KI bewerten oder die Bewertung ändern (seit 2026-10-08, `core/rueckmeldungen.py`). Body `{gespraech, nachricht, wert: 1\|-1, kommentar?}` → `{ok, rueckmeldung: {id, ts, knoten, gespraech, nachricht, wert, kommentar?, anbieter?, modell?, werkzeuge?, skills?}}`. Falscher Wert / Kommentar über 2.000 Zeichen → 400; Gespräch oder Antwort (Rolle assistant, geltend) unbekannt → 404. Ändern = neues Ereignis, das letzte gilt. |
+| `/api/rueckmeldungen` | GET | `{rueckmeldungen: [...]}`: die geltende Bewertung je Antwort, neueste zuerst, dazu `gespraech_titel` und `ausschnitt` (160 Zeichen der Antwort) bzw. `verworfen: true` (Antwort inzwischen wiederholt/bearbeitet). `?gespraech=<id>` → nur die eines Gesprächs. |
 
 ## Ablage und Anhänge (`ui/routen/ablage.py`, seit 2026-10-07)
 

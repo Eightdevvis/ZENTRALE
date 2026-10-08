@@ -1496,6 +1496,22 @@ Tests: `scripts/test_net_internet.py` (48 Cases, untracked).
   ersten Wörter, dann das billige Modell (`core/billig.py`). Alles Weitere:
   [gespraeche.md](gespraeche.md).
 
+## Bewertungen (seit 2026-10-08)
+
+Unter jeder Antwort im TUI-Chat: „good · bad", optional mit Kommentar
+(Bedienung: [../system/tui_bauplan.md](../system/tui_bauplan.md) „Bewerten").
+**Wofür:** Sasha und Claude gehen sie gemeinsam durch, um Prompt (`profil/`),
+Skills und Werkzeug-Beschreibungen zu verbessern — „bewertungen für uns um
+unser eigenes system zu verbessern" (Sasha, 08.10.). Deshalb steht bei jeder
+Bewertung, wer geantwortet hat (Anbieter, Modell) und welche Werkzeuge und
+Skills die Antwort benutzt hat. **Sie gehen nirgendwohin raus:** kein
+Anbieter bekommt sie, sie stehen in keinem Prompt, kein Werkzeug liest sie;
+sie liegen nur in `data/rueckmeldungen/<rechner>.jsonl` (gitignored, in der
+Datensicherung, synct wie die Gespräche — eine Datei pro Rechner, nur
+anhängen, das letzte Ereignis je Antwort gilt). Speicher
+`core/rueckmeldungen.py`, Routen `POST /api/rueckmeldung`,
+`GET /api/rueckmeldungen` ([../system/api_endpoints.md](../system/api_endpoints.md)).
+
 ## Voice-Pipeline (Core, sprachneutral)
 
 STT und TTS hängen nicht mehr am Tutor, sondern an der Core-AI:

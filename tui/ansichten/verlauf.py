@@ -3,19 +3,19 @@
 # Der Verlauf des Chats wie bei Claude Web (2026-10-07): Antworten ohne
 # Blasen und ohne „ki:", Sashas Nachrichten abgesetzt (rechts, auf eigener
 # Fläche), Werkzeug-Schritte als eingeklappte graue Zeilen „Used memory ›",
-# Denken eingeklappt, unter jeder Antwort „copy · retry".
+# Denken eingeklappt, unter jeder Antwort „copy · retry · good · bad".
 #
 # Reine Funktionen ohne curses (tests/test_chat_web.py): aus dem Verlauf
 # (Liste von (rolle, text), wie Chat.AI["log"] ihn führt) werden Zeilen aus
 # Stücken (text, stil, ziel). `ziel` ist None oder ein Tupel (art, index) —
 # alles mit Ziel kann man anklicken oder mit ↑↓ anwählen und mit Enter
 # auslösen: ("schritt", i) auf/zu, ("denken", i) auf/zu, ("kopieren", i),
-# ("wiederholen", i), ("dok", i) öffnen. i ist der Index im Verlauf.
+# ("wiederholen", i), ("dok", i) öffnen, ("gut", i) / ("schlecht", i)
+# bewerten. i ist der Index im Verlauf.
 #
-# 👍/👎 gibt es bewusst nicht: das Backend kann damit nichts anfangen (kein
-# Ort, an dem eine Bewertung landet oder etwas bewirkt) — ein Knopf, der
-# nichts tut, wäre gelogen (Sasha zur Fußleiste: „zeigt NUR das an was auch
-# tatsächlich … genommen werden kann").
+# Bewerten seit 2026-10-08 (bewertung.py, core/rueckmeldungen.py) — vorher
+# bewusst weggelassen, solange nichts eine Bewertung speicherte. Wörter statt
+# 👍/👎: Emoji sind zwei Spalten breit und verschöben die Klickflächen.
 
 from .chat_ablage import TRENNER
 from .text import _md_umbruch, md_zeilen
@@ -123,7 +123,7 @@ def _nutzer(text, breite):
 
 
 def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=None,
-                   antwort=None, adern=0, streaming=False, adern_bei=None):
+                   antwort=None, adern=0, streaming=False, adern_bei=None, bewertet=None):
     """Der Verlauf als Zeilen aus Stücken (text, stil, ziel).
 
     offen: Ziele, die aufgeklappt sind ({("schritt", i), ("denken", i)});
@@ -131,7 +131,10 @@ def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=
     Antwort (nur sie bekommt „retry"); antwort: die laufende Antwort (Text)
     oder None; adern: so viele leere Zeilen für die Denk-Animation, vor dem
     Eintrag adern_bei (None: am Ende, vor der laufenden Antwort) — nach dem
-    Ende des Stroms zieht sie sich dort zurück, wo die Antwort beginnt."""
+    Ende des Stroms zieht sie sich dort zurück, wo die Antwort beginnt;
+    bewertet: {index: 1|-1} — so bewertete Antworten zeigen „good ✓" bzw.
+    „bad ✗" hervorgehoben."""
+    bewertet = bewertet or {}
     breite = max(8, int(breite))
     zeilen = []
     gruppen = schritte(log)
@@ -194,7 +197,16 @@ def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=
             aktionen = [("copy", "aktion", ("kopieren", i))]
             if i == letzte_ai and not streaming:
                 aktionen += [(" · ", "leise", None), ("retry", "aktion", ("wiederholen", i))]
-            zeilen.append(aktionen)
+            bewerten = []
+            for wert, wort_, art in ((1, "good", "gut"), (-1, "bad", "schlecht")):
+                an = bewertet.get(i) == wert
+                bewerten += [(" · ", "leise", None),
+                             (wort_ + (" ✓" if wert > 0 else " ✗") if an else wort_,
+                              "aktion_an" if an else "aktion", (art, i))]
+            if sum(len(t) for t, _s, _z in aktionen + bewerten) <= breite:
+                zeilen.append(aktionen + bewerten)
+            else:                                # sehr schmal: zweite Zeile
+                zeilen += [aktionen, bewerten[1:]]
         elif rolle == "hinweis":
             for z_text in str(text).split("\n"):
                 for k in range(0, max(1, len(z_text)), breite):

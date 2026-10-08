@@ -25,6 +25,9 @@ data/gespraeche/
 # von Anhaengen in UNTERORDNERN (.md, .py, .png …) — faellt nicht unter
 # data/*.json. Anhaenge sind Sashas Dateien, genauso privat.
 data/ablage/
+# Bewertungen der KI-Antworten (core/rueckmeldungen.py, seit 2026-10-08):
+# eine .jsonl pro Rechner, mit Kommentaren von Sasha — privat wie die Gespraeche.
+data/rueckmeldungen/
 # Das DATEI-GEDAECHTNIS (Steckbrief, Ziele, Dossiers, Tagebuch). Markdown,
 # faellt also NICHT unter data/*.json — deshalb eine eigene Zeile, und
 # deshalb steht sie hier als erstes: das ist der persoenlichste Inhalt im

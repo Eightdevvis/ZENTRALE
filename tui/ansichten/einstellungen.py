@@ -13,6 +13,9 @@
 #   Permissions  was ohne Frage erlaubt ist, mit Zurücknehmen
 #   Model        Anbieter, Modell, Denk-Tiefe, Weg — öffnet die vorhandene
 #                Auswahl (/model, /provider, /effort)
+#   Feedback     die Bewertungen der Antworten (seit 2026-10-08,
+#                bewertung.py): Datum, ✓/✗, Gespräch, Kommentar; Enter
+#                springt ins Gespräch zur bewerteten Antwort
 # Eine Überlagerung über dem Inhalt rechts der Seitenleiste, wie Gedächtnis
 # und Projekte. Zustand AI["einstellungen"] (None = zu).
 #
@@ -32,7 +35,7 @@ from .text import md_zeilen
 
 ABSCHNITTE = [("skills", "Skills"), ("memory", "Memory"), ("usage", "Usage"),
               ("capabilities", "Capabilities"), ("permissions", "Permissions"),
-              ("model", "Model")]
+              ("model", "Model"), ("feedback", "Feedback")]
 AKTEN = ["hausregeln", "steckbrief", "ziele", "bereiche"]
 NAV = 18                                  # Breite der Leiste links
 VON = {"sasha": "you", "ki": "the ki", "anthropic": "Anthropic"}   # „Created by"
@@ -130,6 +133,23 @@ def kosten_zeilen(k, breite):
     return zeilen
 
 
+def feedback_zeilen(e, breite):
+    """Eine Bewertung für Customize → Feedback. -> [(text, art)]; die erste
+    Zeile trägt Datum, ✓/✗ und den Gesprächstitel."""
+    from .bewertung import ZEICHEN
+    ts = str(e.get("ts") or "")
+    datum = "%s.%s." % (ts[8:10], ts[5:7]) if len(ts) >= 10 else "—"
+    titel = e.get("gespraech_titel") or "(ohne titel)"
+    zeilen = [("%s %s  %s" % (datum, ZEICHEN.get(e.get("wert"), "?"), titel),
+               "" if e.get("wert") == 1 else "warn")]
+    if e.get("kommentar"):
+        zeilen += [("      " + t, "") for t, _s in md_zeilen(e["kommentar"], max(6, breite - 6))[:3]]
+    rest = "(antwort später ersetzt)" if e.get("verworfen") else e.get("ausschnitt") or ""
+    if rest:
+        zeilen.append(("      " + rest[:max(1, breite - 6)], "leise"))
+    return zeilen
+
+
 # ── Die Überlagerung ─────────────────────────────────────────────────────
 
 class Einstellungen:
@@ -178,6 +198,9 @@ class Einstellungen:
             E["daten"]["erlaubnis"] = self._holen("/api/erlaubnis") or {}
         elif ab == "model":
             E["daten"]["stand"] = self._holen("/api/ai/einstellungen") or {}
+        elif ab == "feedback":
+            E["daten"]["rueckmeldungen"] = (self._holen("/api/rueckmeldungen") or {}).get(
+                "rueckmeldungen") or []
 
     def _skills(self):
         return (self.AI["einstellungen"]["daten"].get("gedaechtnis") or {}).get("skills") or []
@@ -214,6 +237,8 @@ class Einstellungen:
             return len(self._erlaubt())
         if ab == "model":
             return len(self._modell_reihen())
+        if ab == "feedback":
+            return len(self.AI["einstellungen"]["daten"].get("rueckmeldungen") or [])
         return 0
 
     # ── Tasten ─────────────────────────────────────────────────────────
@@ -236,6 +261,8 @@ class Einstellungen:
             mitte.append(("enter", "change"))
         elif ab == "usage":
             mitte = [("r", "reload")]
+        elif ab == "feedback" and n:
+            mitte.append(("enter", "open chat"))
         return mitte + [("←", "sections"), ("esc", "back")]
 
     def taste(self, ch):
@@ -305,6 +332,19 @@ class Einstellungen:
             E["wahl"] = max(0, min(E["wahl"], self._waehlbar() - 1))
         elif ab == "model":
             self._modell(self._modell_reihen()[i][2])
+        elif ab == "feedback":
+            self.feedback_oeffnen(i)
+
+    def feedback_oeffnen(self, i):
+        """Enter auf einer Bewertung: ins Gespräch, die Antwort angewählt
+        (bewertung.geladen springt hin, sobald der Verlauf da ist)."""
+        liste = self.AI["einstellungen"]["daten"].get("rueckmeldungen") or []
+        if not 0 <= i < len(liste):
+            return
+        e = liste[i]
+        self.schliessen()
+        self.AI["springen"] = e.get("nachricht")
+        self.chat.gespraech_oeffnen(e.get("gespraech"))
 
     def _modell(self, was):
         AI = self.AI
@@ -513,4 +553,14 @@ class Einstellungen:
         elif ab == "model":
             for i, (name, wert, _was) in enumerate(self._modell_reihen()):
                 dazu("%-9s %s" % (name, wert), "", i)
+        elif ab == "feedback":
+            liste = E["daten"].get("rueckmeldungen") or []
+            if not liste:
+                dazu("noch keine bewertungen — unter jeder antwort: good · bad", "leise")
+            for i, e in enumerate(liste):
+                for k, (text, art) in enumerate(feedback_zeilen(e, w)):
+                    dazu(text, art, i)
+            if liste:
+                dazu("")
+                dazu("bleiben bei dir — sie gehen nirgendwohin raus", "leise")
         return zeilen, klicks

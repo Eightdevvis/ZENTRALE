@@ -455,6 +455,23 @@ def _verlauf(u):
     _chat(u); zeichnen(u); u.AI["fokus"] = "verlauf"
 
 
+def _verlauf_antwort(u):              # eine Antwort gewählt: + / − bewerten
+    _verlauf(u)
+    i = A.verlauf.letzte_antwort(u.AI["log"])
+    assert i is not None
+    u.AI["vwahl"] = ("kopieren", i)
+
+
+def _bewertung(u):                    # das kleine Fenster (2026-10-08)
+    _chat(u); zeichnen(u)
+    u.chat.bewertung.oeffnen(A.verlauf.letzte_antwort(u.AI["log"]), -1)
+
+
+def _bewertung_text(u):
+    _bewertung(u)
+    u.AI["bewertung"].update(text="zu knapp", cur=8)
+
+
 def _dokument(u):
     _chat(u); u.chat.rechts.dokument_zeigen("d1")
     assert u.AI["fokus"] == "rechts"
@@ -532,7 +549,9 @@ UEBERLAGERUNGEN = {
     "ai:erlaubnis": _chat_erlaubnis, "ai:frage": _chat_frage,
     "ai:bearbeiten": _chat_bearbeiten, "ai:liste": _liste, "ai:liste:suche": _liste_suche,
     "ai:liste:umbenennen": _liste_umbenennen, "ai:liste:archiv": _liste_archiv,
-    "ai:seite:menue": _seite_menue, "ai:verlauf": _verlauf, "ai:dokument": _dokument,
+    "ai:seite:menue": _seite_menue, "ai:verlauf": _verlauf,
+    "ai:verlauf:antwort": _verlauf_antwort, "ai:bewertung": _bewertung,
+    "ai:bewertung:text": _bewertung_text, "ai:dokument": _dokument,
     "ai:outputs": _outputs, "ai:einstellungen": _einstellungen(),
     "ai:einstellungen:skills": _einstellungen("skills"),
     "ai:einstellungen:memory": _einstellungen("memory"),
@@ -540,6 +559,7 @@ UEBERLAGERUNGEN = {
     "ai:einstellungen:capabilities": _einstellungen("capabilities"),
     "ai:einstellungen:permissions": _einstellungen("permissions"),
     "ai:einstellungen:model": _einstellungen("model"),
+    "ai:einstellungen:feedback": _einstellungen("feedback"),
     "ai:gedaechtnis": _gedaechtnis, "ai:skills": _skills, "ai:ablage": _ablage,
     "ai:ablage:lesen": _ablage_lesen, "ai:projekte": _projekte, "ai:projekt": _projekt,
     "ai:projekt:name": _projekt_name, "erinnerung": _erinnerung, "hilfe": _hilfe,
@@ -636,3 +656,14 @@ def test_strg_c_im_chat_beendet_nie(welt):
 
 def test_jeder_kontext_hat_einen_zustand_im_test():
     assert set(befehle.CTX_KEYS) <= {c for c, _ in ZUSTAENDE.values()}
+
+
+def test_bewerten_zustaende_bieten_ihre_tasten_an(welt):
+    """Die neuen Zustände (2026-10-08) zeigen, was sie können — sonst prüfte
+    der Test oben eine leere Leiste."""
+    e = fussleiste.eintraege(_aufgebaut(welt, _verlauf_antwort))
+    assert ("+/-", "rate") in e
+    e = fussleiste.eintraege(_aufgebaut(welt, _bewertung))
+    assert ("enter", "save") in e and ("tab", "good/bad") in e and ("esc", "cancel") in e
+    e = fussleiste.eintraege(_aufgebaut(welt, _einstellungen("feedback")))
+    assert ("enter", "open chat") in e and ("↑↓", "select") in e

@@ -186,6 +186,21 @@ SZ = {
                      ("k", "Left"), ("k", "Down"), ("w", 1), ("k", "Right"), ("cap", "i"),
                      ("k", "Enter"), ("w", 1), ("cap", "j"), ("k", "Escape"), ("k", "Escape"),
                      ("k", "Escape"), ("cap", "k")],
+    # Bewerten (2026-10-08): F6 in den Verlauf (letztes Ziel = „bad"), Enter
+    # öffnet das Fenster, Kommentar, Tab auf good, Enter speichert; + auf
+    # der Antwort öffnet es wieder, Esc bricht ab; Customize → Feedback.
+    "ki_bewertung": [("k", "Space"), ("w", 2), ("k", "F6"), ("cap", "a"), ("k", "Enter"),
+                     ("cap", "b"), ("l", "zu knapp"), ("k", "M-Enter"), ("l", "zweite zeile"),
+                     ("cap", "c"), ("k", "Tab"), ("cap", "d"), ("k", "Enter"), ("w", 1),
+                     ("cap", "e"), ("l", "-"), ("cap", "f"), ("k", "Escape"), ("w", 1),
+                     ("cap", "g"), ("k", "Escape"), ("l", "/customize"), ("k", "Enter"),
+                     ("w", 1), ("k", "Down"), ("k", "Down"), ("k", "Down"), ("k", "Down"),
+                     ("k", "Down"), ("k", "Down"), ("w", 1), ("k", "Right"), ("cap", "h")],
+    # Dasselbe ab ~100 Spalten: dort ist die Seitenleiste offen, F6 kommt
+    # erst über sie in den Verlauf.
+    "ki_bewertung_breit": [("k", "Space"), ("w", 2), ("k", "F6"), ("k", "F6"), ("cap", "a"),
+                           ("k", "Enter"), ("l", "zu knapp"), ("cap", "b"), ("k", "Enter"),
+                           ("w", 1), ("cap", "c")],
     # Symbole der Seitenleiste (2026-10-08): wie es von selbst steht, dann
     # Tab (auf bzw. zu) und noch einmal Tab.
     "ki_symbole": [("k", "Space"), ("w", 2), ("cap", "a"), ("k", "Tab"), ("w", 1), ("cap", "b"),

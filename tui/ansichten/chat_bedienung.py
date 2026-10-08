@@ -2,7 +2,7 @@
 #
 # Bedienung des Chats nach dem Vorbild von Claude Web (2026-10-07): Fokus
 # zwischen Seitenleiste / Verlauf / Eingabe / rechts, Ziele im Verlauf
-# (aufklappen, kopieren, wiederholen, Dokument öffnen), Strg-Tasten, Maus.
+# (aufklappen, kopieren, wiederholen, bewerten, Dokument öffnen), Strg-Tasten, Maus.
 # Ein Mixin für Chat (chat.py), wie chat_gespraeche.py.
 #
 # Fokuswechsel ist F6 (wie im Browser zwischen den Bereichen einer Seite):
@@ -20,7 +20,11 @@ from .chat_ablage import TRENNER
 
 # Was Enter auf einem Ziel im Verlauf tut — für die Fußleiste.
 WAS = {"schritt": "open/close", "denken": "open/close", "kopieren": "copy",
-       "wiederholen": "retry", "dok": "open"}
+       "wiederholen": "retry", "dok": "open", "gut": "rate good", "schlecht": "rate bad"}
+
+# Ziele unter einer Antwort: ist eines davon gewählt, bewerten + / − sie
+# (bewertung.py, 2026-10-08) — „wenn eine Antwort im Verlauf gewählt ist".
+UNTER_ANTWORT = ("kopieren", "wiederholen", "gut", "schlecht")
 
 
 def zwischenablage(umgebung=None, finden=shutil.which):
@@ -81,6 +85,8 @@ class ChatBedienung:
         liste = [("↑↓", "select")] if len(self._ziele) > 1 else []
         if z in self._ziele:
             liste.append(("enter", WAS.get(z[0], "do")))
+            if z[0] in UNTER_ANTWORT:
+                liste.append(("+/-", "rate"))
         return liste + [("pgup pgdn", "scroll"), ("esc", "back to reply")]
 
     def _taste_verlauf(self, ch):
@@ -98,6 +104,9 @@ class ChatBedienung:
             AI["scroll"] = max(0, AI["scroll"] + (5 if ch == curses.KEY_PPAGE else -5))
         elif ch == 4:
             self.denken_umschalten()
+        elif ch in (ord("+"), ord("-")) and AI.get("vwahl") in ziele \
+                and AI["vwahl"][0] in UNTER_ANTWORT:
+            self.bewertung.oeffnen(AI["vwahl"][1], 1 if ch == ord("+") else -1)
 
     def ziel_ausloesen(self, z):
         """Ein Ziel im Verlauf (Klick oder Enter): auf/zu, kopieren,
@@ -118,6 +127,8 @@ class ChatBedienung:
             self.kopieren(AI["log"][i][1])
         elif art == "wiederholen":
             self.wiederholen()
+        elif art in ("gut", "schlecht"):
+            self.bewertung.oeffnen(i, 1 if art == "gut" else -1)
         elif art == "dok" and 0 <= i < len(AI["log"]):
             self.rechts.dokument_zeigen(str(AI["log"][i][1]).split(TRENNER, 1)[0])
 

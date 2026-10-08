@@ -357,9 +357,9 @@ Inneres (Skizze: `chat_layout.py`).
   auf eigener Fläche, Schritte „Used memory ›" (Enter/Klick: Name,
   Argumente, Ergebnis gekürzt — das Backend speichert seit 07.10. 300
   Zeichen des Ergebnisses), Denken „▸ thought · n chars" (Strg+D alles,
-  Enter/Klick eins), unter jeder Antwort „copy", unter der letzten auch
-  „retry". **👍/👎 bewusst nicht**: das Backend kennt keine Bewertung, ein
-  Knopf ohne Wirkung wäre gelogen. Kopieren: wl-copy/xclip/xsel, sonst liegt
+  Enter/Klick eins), unter jeder Antwort „copy · good · bad", unter der
+  letzten auch „retry" (Bewerten seit 2026-10-08, siehe „Bewerten" unten).
+  Kopieren: wl-copy/xclip/xsel, sonst liegt
   der Text in `~/.cache/zentrale/kopie.txt` (nur für Sasha lesbar) und die Statuszeile sagt es.
 - **Eingabekasten**: Rahmen (Fokus = Akzentfarbe), Platzhalter „Reply",
   Anhänge als `[▤ name]` darüber, darunter „+ attach" und rechts Modell ·
@@ -374,7 +374,8 @@ Inneres (Skizze: `chat_layout.py`).
   `/memory`), Usage (`/api/ai/kosten`), Capabilities (`/api/ai/werkzeuge`,
   gruppiert; Schalter nur für Cloud/lokal), Permissions (zurücknehmen),
   Model (öffnet `/model`, `/provider`, `/effort`; Weg dreht
-  auto → cloud → local).
+  auto → cloud → local), Feedback (seit 2026-10-08: die Bewertungen, siehe
+  „Bewerten").
   Skills zeigt oben „Liste zu lang: N von 6 000 Zeichen — …", wenn die
   Skill-Liste für die KI über der Grenze ist (`skill_liste` aus
   `/api/gedaechtnis`).
@@ -404,6 +405,49 @@ Inneres (Skizze: `chat_layout.py`).
   Abspiel-Backend denkt `ZTUI_DENK_S` Sekunden) in `tests/tui_schirm/lauf.py`;
   ohne Bildschirm `tests/test_chat_web.py`, `tests/test_chat_web_teile.py`,
   `tests/test_denkadern.py`, neue Zustände in `tests/test_fussleiste.py`.
+
+## Bewerten (seit 2026-10-08)
+
+Sasha: „bewertungen für uns um unser eigenes system zu verbessern … so dass
+ich nen kommentar hinzufügen könnte wenn ich wollte. also am besten einfach so
+n kleines modal das aufgeht." Speicher und Wofür: `core/rueckmeldungen.py`,
+[../ki/ki_system.md](../ki/ki_system.md) „Bewertungen".
+
+- **Unter jeder Antwort** „copy · retry · good · bad" (`verlauf.py`; Ziele
+  `("gut", i)` / `("schlecht", i)`). Wörter statt 👍/👎: Emoji sind zwei
+  Spalten breit und verschöben die Klickflächen; die Zeichen ✓ ✗ sind laut
+  `unicodedata` einspaltig („N"). Bewertet: „good ✓" bzw. „bad ✗" in der
+  Akzentfarbe, fett. Bei sehr schmaler Spalte rutschen good · bad in eine
+  zweite Zeile.
+- **Öffnen**: Klick, oder im Verlauf (F6) Enter auf good/bad, oder **+ / −**,
+  solange ein Ziel unter einer Antwort gewählt ist (copy, retry, good, bad).
+- **Das Fenster** (`bewertung.py`, Zustand `AI["bewertung"]`): mittig über
+  dem Verlauf, höchstens 60 breit. Kopf „good ✓ bad ✗" (das gewählte
+  invertiert, Klick oder **Tab** wechselt), „Was war gut/schlecht?
+  (optional)", Eingabe mit den Funktionen aus `eingabe.py` (Cursor, Umlaute,
+  Alt+Enter bzw. `\`+Enter = neue Zeile, bis 2.000 Zeichen, 4 Zeilen hoch),
+  „[save] [cancel]". **Enter speichert** (auch leer), **Esc bricht ab und
+  speichert nichts** — ein Fehlklick soll keine Spur lassen, ohne Kommentar
+  speichern ist ohnehin nur ein Enter. Das Fenster nimmt alle Tasten und
+  alle Klicks (es leert `klicks` beim Zeichnen). Noch einmal auf eine
+  bewertete Antwort klicken öffnet es mit dem alten Kommentar.
+- **Welche Antwort**: der Verlauf kennt keine ids. `bewertung.geladen` merkt
+  sich beim Laden (`verlauf_laden`) die ids der Antworten mit Text — die
+  k-te „ai"-Zeile ist die k-te davon — und holt
+  `/api/rueckmeldungen?gespraech=`. Fehlt die id (eben gestreamt) oder kommt
+  404 (nach retry), wird der Verlauf einmal frisch geholt.
+- **Customize → Feedback**: je Bewertung „08.10. ✗  Gesprächstitel", der
+  Kommentar (bis 3 Zeilen) und leise ein Ausschnitt der Antwort bzw.
+  „(antwort später ersetzt)". Enter öffnet das Gespräch, die bewertete
+  Antwort ist dann im Verlauf angewählt (`AI["springen"]`).
+- Tests: `tests/test_bewertung_tui.py` (Klicks 80×24/136×30, Tasten, ids,
+  Fehler), `tests/test_chat_web.py`, Zustände `ai:verlauf:antwort`,
+  `ai:bewertung`, `ai:bewertung:text`, `ai:einstellungen:feedback` in
+  `tests/test_fussleiste.py`. Headless: `ki_bewertung` (80×24),
+  `ki_bewertung_breit` (ab ~100 Spalten, dort führt F6 erst durch die Leiste).
+- Offen: eine Bewertung ganz zurücknehmen geht nicht (nur umdrehen);
+  Einfügen mit Zeilenumbruch ins Fenster speichert beim ersten Umbruch
+  (der Stoß-Trick des Eingabefelds ist dort nicht eingebaut).
 
 ## Fußleiste (seit 2026-10-07)
 

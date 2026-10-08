@@ -300,6 +300,9 @@ def test_verlauf_mit_tasten(welt):
     _zeichnen(c)
     c.AI["fokus"] = "verlauf"
     c.taste(curses.KEY_UP)                             # vom Ende: das letzte Ziel
+    assert c.AI["vwahl"] == ("schlecht", 4)            # „bad" (seit 2026-10-08)
+    c.taste(curses.KEY_UP)
+    c.taste(curses.KEY_UP)
     assert c.AI["vwahl"] == ("wiederholen", 4)
     c.taste(curses.KEY_UP)
     c.taste(curses.KEY_UP)
