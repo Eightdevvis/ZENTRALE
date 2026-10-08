@@ -35,7 +35,8 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/chat_befehle.py` | Slash-Befehle im Chat lesen (`/neu`, `/modell` …), Hilfe-Text | — |
 | `ansichten/chat_gespraeche.py` | Mixin `GespraechsSteuerung` des Chats: neu, öffnen, umbenennen, archivieren, wiederholen, bearbeiten, Verlauf laden, Poll; `verlauf_aus` (History → Verlaufszeilen) | (in `AI`) |
 | `ansichten/ablage.py` | `Ablageliste`: Überlagerung im Chat-Kasten (`/ablage`), Liste + Lesen eines Dokuments; reine Helfer `listen_zeilen`, `lese_zeilen` | `AI["ablage"]` |
-| `ansichten/chat_ablage.py` | Mixin `AblageSteuerung` des Chats: `/anhang` (Datei lesen, an `/api/anhang`), „▤"-Zeilen, Enter auf das neueste Dokument | `AI["anhaenge"]` |
+| `ansichten/chat_ablage.py` | Mixin `AblageSteuerung` des Chats: `/anhang` (Datei lesen, an `/api/anhang`), `/paste` und Strg+V (Zwischenablage), „▤"-Zeilen, Enter auf das neueste Dokument | `AI["anhaenge"]` |
+| `ansichten/zwischenablage.py` | Zwischenablage LESEN (xclip, wl-paste): Bild, Text, leer oder Grund — ohne curses | — |
 | `ansichten/chat_layout.py` | Aufteilung des Chat-Kastens wie Claude Web (Skizze im Kopf): `aufteilen` → Seitenleiste / Symbolspalte / Mitte / rechts, `spalte` (Textspalte mittig ≤ 92), `seite_auto` | — |
 | `ansichten/chat_zeichnen.py` | Mixin `ChatZeichnen`: `draw_ai` (Leiste, Kopf „Titel ▾ … ▤ n", Verlauf, Fuß, Eingabekasten, „+ attach … Modell · Effort"), Klickflächen, Denk-Adern im Verlauf, Auge im leeren Chat | `AI["fokus"]` … |
 | `ansichten/chat_bedienung.py` | Mixin `ChatBedienung`: Fokus (F6), Tab = Gespräche auf/zu, Ziele im Verlauf (auf/zu, copy, retry, Dokument), Strg-Tasten, Maus, Zwischenablage | — |
@@ -246,6 +247,31 @@ Claude-Web-Plan Phase 5 ([../ki/ablage.md](../ki/ablage.md)). Was für die TUI g
   Weiche, Enter-Sonderfall, Anhänge im Body — alles Weitere in den zwei Modulen.
 - Headless: Szenario `ki_ablage` in `tests/tui_schirm/lauf.py` (erfundene
   Ablage im Abspiel-Backend); ohne Bildschirm: `tests/test_ablage_tui.py`.
+
+## Chat: Bild aus der Zwischenablage (seit 2026-10-08)
+
+Sasha: „ich wollte jetzt mal nen bild in die ki reinpasten damit sie es sich
+anschaut aber da passiert nix." Ein Terminal fügt nur Text ein; liegt ein
+Bild in der Zwischenablage (CopyQ, flameshot), schickt Strg+Shift+V nichts —
+und die TUI kann das nicht bemerken. Darum fragt sie selbst
+(`ansichten/zwischenablage.py`), aber nur auf Anfrage, nie im Takt der Schleife.
+
+- **`/paste`**: Bild (png, jpg, webp, gif; png bevorzugt) → Anhang der
+  nächsten Nachricht über den Anhang-Weg (`/api/anhang`, Name
+  `zwischenablage-<datum-uhrzeit>.png`), Kärtchen
+  `[▤ bild aus der zwischenablage · 312 KB]` im Eingabekasten. Text → in die
+  Eingabe wie Einfügen. Über 5 MB, leer, fremdes Bildformat (bmp …), kein
+  xclip, kein Bildschirm (SSH), Zwischenablage hängt (3 s) → Satz in der
+  Statuszeile.
+- **Strg+V** (raw-Modus: kommt als Zeichen 22, wenn das Terminal es nicht
+  selbst belegt): Bild → nur der Hinweis „bild in der zwischenablage —
+  /paste hängt es an" (Bytes werden dafür nicht gelesen); Text → eingefügt.
+  Einen LEEREN Einfügen-Stoß (Strg+Shift+V mit Bild) sieht die TUI nicht —
+  dafür steht der Weg in `/help`.
+- Fußleiste `ctrl+v paste`, Hilfe `/paste attach image from clipboard`.
+- Headless: Szenario `ki_paste` in `tests/tui_schirm/lauf.py` (ein „xclip"
+  im PATH mit einem 312-KB-Bild, `DISPLAY=:99`); ohne Bildschirm:
+  `tests/test_zwischenablage.py`.
 
 ## Chat: Projekte (seit 2026-10-07)
 

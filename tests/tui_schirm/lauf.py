@@ -142,6 +142,12 @@ SZ = {
                   ("cap", "c"), ("k", "Left"), ("w", 1), ("cap", "d"), ("k", "Escape"),
                   ("k", "Down"), ("cap", "e"), ("k", "Escape"), ("l", "/anhang /gibt/es/nicht.txt"),
                   ("k", "Enter"), ("cap", "f")],
+    # Zwischenablage (2026-10-08): xclip ist eine Attrappe mit einem Bild
+    # (zwischenablage_attrappe). Strg+V sagt „bild in der zwischenablage",
+    # /paste hängt es an (Kärtchen im Eingabekasten), /help nennt /paste.
+    "ki_paste": [("k", "Space"), ("w", 2), ("k", "C-v"), ("cap", "a"), ("l", "/help"),
+                 ("k", "Enter"), ("w", 1), ("cap", "b"), ("l", "/paste"), ("k", "Enter"),
+                 ("w", 1), ("cap", "c"), ("l", "was siehst du?"), ("cap", "d")],
     # Projekte (Phase 6, 2026-10-07): /projekt-Auswahl, zuordnen (Kasten-
     # Titel „Geige · …"), Übersicht, ein Projekt im Einzelnen, Pfad-Eingabe,
     # Anweisungen im „Editor".
@@ -226,6 +232,22 @@ SZ = {
 }
 
 
+def zwischenablage_attrappe(st, env):
+    """Ein „xclip" im PATH, das ein Bild (312 KB) in der Zwischenablage hat,
+    und ein DISPLAY, das es nicht gibt — nur damit die TUI xclip fragt."""
+    bin_ = os.path.join(st, "bin")
+    os.makedirs(bin_, exist_ok=True)
+    bild = os.path.join(st, "ablage.png")
+    with open(bild, "wb") as f:
+        f.write(b"\x89PNG\r\n\x1a\n" + b"\0" * (312 * 1024 - 8))
+    with open(os.path.join(bin_, "xclip"), "w") as f:
+        f.write('#!/bin/sh\ncase "$*" in\n  *TARGETS*) printf "TARGETS\\nimage/png\\n";;\n'
+                '  *image/png*) cat "%s";;\n  *) exit 1;;\nesac\n' % bild)
+    os.chmod(os.path.join(bin_, "xclip"), 0o755)
+    env["PATH"] = bin_ + ":" + os.environ.get("PATH", "/usr/bin:/bin")
+    env["DISPLAY"] = ":99"
+
+
 def tmux(*a, check=True):
     return subprocess.run(["tmux", "-L", SOCK, "-f", "/dev/null"] + list(a),
                           capture_output=True, text=True, check=check)
@@ -276,6 +298,8 @@ def lauf(code, aus, namen, breite=150, hoehe=46):
         with open(os.path.join(st, "editor.sh"), "w") as f:
             f.write('#!/bin/sh\necho "- neue zeile aus dem editor" >> "$1"\n')
         os.chmod(os.path.join(st, "editor.sh"), 0o755)
+        if name.startswith("ki_paste"):
+            zwischenablage_attrappe(st, env)
         with open(skript, "w") as f:
             f.write("#!/bin/sh\n")
             f.write("unset DISPLAY WAYLAND_DISPLAY ZENTRALE_TUI_SUPERVISED TMUX ZENTRALE_TUI_RELOADED ZENTRALE_TUI_RAD ZENTRALE_TUI_META ZENTRALE_ROOM_PARENT\n")

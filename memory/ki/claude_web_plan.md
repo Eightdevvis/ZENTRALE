@@ -459,7 +459,7 @@ der Suche gehen mit — falls das stört, lassen sie sich ausnehmen.
 | Anhänge gehen **bei jedem Zug** mit (gecacht), Text ≤ 30.000 Zeichen Cloud / 8.000 lokal | nur im Zug, in dem angehängt wurde |
 | Lesen **im Chat-Kasten** | `$PAGER`/less (curses verlassen; Pi-Kiosk ohne less) |
 | Enter bei leerer Eingabe öffnet das **neueste** Dokument | Zeiger im Verlauf, Enter auf der gewählten Zeile |
-| Zwischenablage **nicht gebaut** (gibt es in der TUI nicht) | xclip/wl-copy einbauen |
+| Zwischenablage **nicht gebaut** (gibt es in der TUI nicht) — seit 08.10. gibt es Kopieren und `/paste` (Bild aus der Zwischenablage als Anhang, [../system/tui_bauplan.md](../system/tui_bauplan.md)) | xclip/wl-copy einbauen |
 | Grenzen: Text 200.000 Zeichen, Bild 5 MB, Datei 10 MB | — |
 
 ### Phase 6 — Projekte (2026-10-07)

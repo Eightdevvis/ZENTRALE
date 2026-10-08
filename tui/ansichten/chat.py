@@ -50,7 +50,7 @@ TASTE_STRG_C = 3
 
 # Strg-Tasten des Chats nach dem Vorbild von Claude Web (2026-10-07): curses
 # im raw-Modus liefert Strg+Buchstabe als 1 … 26.
-STRG = {"n": 14, "o": 15, "p": 16, "t": 20, "u": 21}
+STRG = {"n": 14, "o": 15, "p": 16, "t": 20, "u": 21, "v": 22}
 
 # Ein Stoß: was beim Einfügen auf einmal im Tastaturpuffer liegt. Mehr als
 # das wird nicht in einem Rutsch gelesen (der Rest kommt im nächsten Takt).
@@ -643,6 +643,9 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
         if name == "anhang":
             self.anhang_dazu(arg)
             return
+        if name == "einfuegen":             # /paste: Zwischenablage (2026-10-08)
+            self.einfuegen_aus_ablage()
+            return
         if name == "morgenblick":           # chat_morgenblick.py (2026-10-08)
             chat_morgenblick.starten(self)
             return
@@ -793,7 +796,7 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
             liste.append(("tab", "hide chats" if self._seite_sichtbar() else "chats"))
         liste += [("/help", "commands"), ("ctrl+d", "thinking"), ("f6", "next pane"),
                   ("ctrl+o", "outputs"), ("ctrl+p", "model"), ("ctrl+t", "effort"),
-                  ("ctrl+u", "attach"), ("ctrl+n", "new chat")]
+                  ("ctrl+u", "attach"), ("ctrl+v", "paste"), ("ctrl+n", "new chat")]
         return liste
 
     def fusszeile(self):

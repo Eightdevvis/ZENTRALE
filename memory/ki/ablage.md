@@ -119,6 +119,12 @@ die id nicht mehr, um das Dokument später zu ändern.
   Anthropic gecacht). Der Verweis trägt die Fassung, damit dieselbe Nachricht
   in jedem Zug dieselben Bytes ergibt.
 - **Wiederholen** und **Bearbeiten** behalten die Anhänge der Nachricht.
+- **Bild aus der Zwischenablage** (seit 2026-10-08): `/paste` im Chat liest
+  die Zwischenablage über xclip bzw. wl-paste und geht denselben Weg
+  (Bytes an `POST /api/anhang`, Name `zwischenablage-<datum-uhrzeit>.png`);
+  Grenze 5 MB wie für Bilder in der Ablage. Text aus der Zwischenablage kommt
+  in die Eingabe. Strg+V sagt nur, ob ein Bild drin ist. Einzelheiten:
+  [../system/tui_bauplan.md](../system/tui_bauplan.md).
 
 ## TUI
 
@@ -131,11 +137,11 @@ die id nicht mehr, um das Dokument später zu ändern.
 - Im Verlauf: „▤ Titel — enter öffnet" für das neueste Dokument (Enter bei
   leerer Eingabe), ältere „— in /ablage". Anhänge als „▤ anhang: name" unter
   der eigenen Nachricht; wartende Anhänge in der Statuszeile.
-- Kein externer Pager, keine Zwischenablage (die TUI hat beides nicht; offen).
+- Kein externer Pager (offen). Zwischenablage: Antworten kopieren (copy) und
+  Bilder einfügen (`/paste`, 2026-10-08).
 
 ## Offen
 
-- Kopieren in die Zwischenablage (xclip/wl-copy) — gibt es in der TUI noch nicht.
 - Bilder in der TUI zeigen (Pixel-Baustein?), Bilder aus der Ablage an die KI
   geben (`/anhang` nimmt nur Pfade).
 - Grenze für Dokumente pro Zug, falls die KI zu viel ablegt.

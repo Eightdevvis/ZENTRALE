@@ -15,11 +15,14 @@ import base64
 import json
 import os
 import threading
+import time
 import urllib.error
 
+from . import zwischenablage
 from .basis import api_call
 
 ANHANG_MAX_BYTES = 10 * 1024 * 1024        # wie core/anhang.DATEI_MAX_BYTES
+BILD_MAX_BYTES = 5 * 1024 * 1024           # wie core/ablage.BILD_MAX_BYTES
 TRENNER = "\t"                             # Log-Zeile „ablage": id⇥titel
 
 
@@ -31,6 +34,12 @@ def ablage_eintrag(dok):
 
 def anhang_eintrag(a):
     return ("anhang", "anhang: %s" % str(a.get("titel") or "datei").replace("\n", " "))
+
+
+def kaertchen_text(a):
+    """Was ein wartender Anhang im Eingabekasten heißt: das Kärtchen (Bild
+    aus der Zwischenablage, mit Größe) oder der Titel."""
+    return str(a.get("kaertchen") or a.get("titel") or "datei").replace("\n", " ")
 
 
 def ablage_anzeige(text, letzte):
@@ -91,6 +100,12 @@ class AblageSteuerung:
             with AI_LOCK:
                 AI["msg"] = "lesen ging nicht: %s" % (e.strerror or e)
             return
+        self._anhang_schicken(pfad, daten)
+
+    def _anhang_schicken(self, pfad, daten, kaertchen=None):
+        """Bytes an POST /api/anhang, die id vormerken. kaertchen: was im
+        Eingabekasten steht statt des Titels (Bild aus der Zwischenablage)."""
+        AI, AI_LOCK = self.AI, self.AI_LOCK
         body = {"pfad": pfad, "daten": base64.b64encode(daten).decode("ascii")}
         if AI.get("gid"):
             body["gespraech"] = AI["gid"]
@@ -111,11 +126,56 @@ class AblageSteuerung:
             return
         if not isinstance(r, dict) or not r.get("id"):
             return
+        eintrag = {"id": r["id"], "titel": r.get("titel"), "art": r.get("art")}
+        if kaertchen:
+            eintrag["kaertchen"] = kaertchen
         with AI_LOCK:
-            AI.setdefault("anhaenge", []).append(
-                {"id": r["id"], "titel": r.get("titel"), "art": r.get("art")})
+            AI.setdefault("anhaenge", []).append(eintrag)
             AI["msg"] = "angehängt: %s — geht mit der nächsten nachricht%s" % (
-                r.get("titel"), (" · " + r["hinweis"]) if r.get("hinweis") else "")
+                kaertchen or r.get("titel"), (" · " + r["hinweis"]) if r.get("hinweis") else "")
+
+    # ── Zwischenablage (2026-10-08) ─────────────────────────────────────
+    # Ein Terminal fügt nur Text ein; ein Bild in der Zwischenablage holt
+    # /paste selbst (zwischenablage.py: warum).
+
+    def einfuegen_aus_ablage(self):
+        """/paste: ein Bild wird Anhang der nächsten Nachricht, Text kommt
+        in die Eingabe (wie Einfügen)."""
+        AI = self.AI
+        z = zwischenablage.lesen()
+        if z.art == "nein":
+            AI["msg"] = z.grund
+        elif z.art == "leer":
+            AI["msg"] = "die zwischenablage ist leer"
+        elif z.art == "text":
+            self._einfuegen(z.daten)
+            AI["msg"] = "text aus der zwischenablage eingefügt"
+        elif len(z.daten) > BILD_MAX_BYTES:
+            AI["msg"] = "bild zu groß (%s) — höchstens %d mb" % (
+                zwischenablage.groesse_text(len(z.daten)), BILD_MAX_BYTES // 1024 // 1024)
+        else:
+            # Ein Name mit Uhrzeit: in /files sind zwei Bilder auseinanderzuhalten.
+            # Kein echter Pfad — das Backend öffnet ihn nie, prüft nur den Namen.
+            name = time.strftime("zwischenablage-%Y-%m-%d-%H%M%S") + zwischenablage.ENDUNG[z.mime]
+            kaertchen = "bild aus der zwischenablage · " + zwischenablage.groesse_text(len(z.daten))
+            AI["msg"] = "hänge an …"
+            threading.Thread(target=self._anhang_schicken, args=(name, z.daten, kaertchen),
+                             daemon=True).start()
+
+    def strg_v(self):
+        """Strg+V im Eingabefeld (raw-Modus: das Terminal reicht es als
+        Zeichen 22 durch; eingefügt wird dort mit Strg+Shift+V). Text: wie
+        Einfügen. Bild: nur der Hinweis — angehängt wird bewusst mit /paste."""
+        AI = self.AI
+        z = zwischenablage.lesen(bild_holen=False)
+        if z.art == "bild":
+            AI["msg"] = "bild in der zwischenablage — /paste hängt es an"
+        elif z.art == "text":
+            self._einfuegen(z.daten)
+        elif z.art == "leer":
+            AI["msg"] = "die zwischenablage ist leer"
+        else:
+            AI["msg"] = z.grund
 
     def anhaenge_nehmen(self):
         """Die vorgemerkten Anhänge für die nächste Nachricht (und leeren).
@@ -129,7 +189,7 @@ class AblageSteuerung:
         a = self.AI.get("anhaenge") or []
         if not a:
             return ""
-        return "▤ " + ", ".join(str(x.get("titel")) for x in a) + " · geht mit der nächsten nachricht"
+        return "▤ " + ", ".join(kaertchen_text(x) for x in a) + " · geht mit der nächsten nachricht"
 
     def ablage_event(self, dok):
         """SSE 'ablage': ein Dokument ist entstanden. Unter AI_LOCK."""

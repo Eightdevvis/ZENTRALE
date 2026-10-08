@@ -18,6 +18,7 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
 
 from . import chat_layout, denkadern, eingabe, fussleiste
 from . import verlauf as V
+from .chat_ablage import kaertchen_text
 from .text import _wrap
 
 
@@ -203,7 +204,7 @@ class ChatZeichnen:
         innen = max(4, w - 4)
         zeilen = []
         if anhaenge:
-            chips = "  ".join("[▤ %s]" % str(a.get("titel") or "datei") for a in anhaenge)
+            chips = "  ".join("[▤ %s]" % kaertchen_text(a) for a in anhaenge)
             zeilen.append((chips[:innen], "chip"))
         hoehe = max(1, min(eingabe.HOEHE, h - 8))
         self._cursor = None

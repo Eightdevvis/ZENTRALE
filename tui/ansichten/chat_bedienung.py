@@ -207,6 +207,8 @@ class ChatBedienung:
             self.befehl("effort", "")
         elif ch == STRG["u"]:
             self.anhang_vorbereiten()
+        elif ch == STRG["v"]:               # Zwischenablage (chat_ablage.strg_v)
+            self.strg_v()
         elif ch == STRG["n"]:
             self.neues_gespraech()
         else:

@@ -31,6 +31,7 @@ BEFEHLE = [
     ("/skills",   "skills der ki — ansehen, an- und ausschalten"),
     ("/files",    "dokumente der ki und anhänge ansehen"),
     ("/attach",   "/attach <pfad> gibt der ki eine datei mit (text, pdf, bild)"),
+    ("/paste",    "attach image from clipboard (text goes into the input)"),
     ("/project",  "projekt dieses gesprächs · /project <name> · new <name> · none"),
     ("/projects", "alle projekte — anweisungen, wissen, gespräche"),
     ("/morning",  "morgenblick: der tag auf einen blick, im browser"),
@@ -55,7 +56,7 @@ INNEN = {"new": "neu", "chats": "liste", "rename": "titel", "archive": "archiv",
          "project": "projekt", "projects": "projekte", "model": "modell",
          "provider": "anbieter", "local": "lokal", "help": "hilfe",
          "permissions": "erlaubnis", "customize": "einstellungen", "mouse": "maus",
-         "morning": "morgenblick"}
+         "morning": "morgenblick", "paste": "einfuegen"}
 
 # Stille Aliase: die deutschen Namen von vorher und alte Schreibweisen
 # (/clear stand früher in der Doku). In keiner Hilfe, keiner Fußleiste.
@@ -67,7 +68,8 @@ ANDERE_NAMEN = {"clear": "neu", "list": "liste", "gedächtnis": "gedaechtnis",
                 "projekt": "projekt", "projekte": "projekte", "modell": "modell",
                 "anbieter": "anbieter", "lokal": "lokal", "hilfe": "hilfe",
                 "erlaubnis": "erlaubnis", "erlaubnisse": "erlaubnis",
-                "settings": "einstellungen", "einstellungen": "einstellungen", "maus": "maus"}
+                "settings": "einstellungen", "einstellungen": "einstellungen", "maus": "maus",
+                "einfuegen": "einfuegen", "einfügen": "einfuegen"}
 
 NAMEN = {INNEN.get(b[1:], b[1:]) for b, _ in BEFEHLE}
 
@@ -104,4 +106,7 @@ def hilfe_text():
     zeilen.append("// am anfang schickt einen schrägstrich an die ki")
     zeilen.append("\\ am zeilenende + enter (oder alt+enter): neue zeile · \\\\ + enter: ein \\ und senden")
     zeilen.append("ctrl+c stoppt eine antwort · esc schließt, die antwort läuft weiter")
+    # Ein Terminal fügt nur Text ein (2026-10-08, zwischenablage.py).
+    zeilen.append("ctrl+shift+v fügt text ein · ein bild aus der zwischenablage hängt /paste an "
+                  "(ctrl+v sagt, ob eins drin ist)")
     return "\n".join(zeilen)

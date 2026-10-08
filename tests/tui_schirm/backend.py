@@ -291,6 +291,9 @@ class H(BaseHTTPRequestHandler):
         if self.path == "/api/chat":
             self._denken_strom()
             return
+        if self.path == "/api/anhang":                # /paste, /attach (2026-10-08)
+            self._send({"id": "a9", "titel": "zwischenablage.png", "art": "bild", "hinweis": ""})
+            return
         if self.path == "/api/projekte/zuordnen":     # /projekt (Phase 6)
             self._send({"gespraech": "g1", "projekt": "geige", "name": "Geige"})
             return
