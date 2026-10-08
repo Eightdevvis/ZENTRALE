@@ -610,6 +610,7 @@ def _signal_handler(signum, _frame):
 # 04.10.2026 seinen eigenen Hot Reload (core/hot_reload.py); /reboot bleibt
 # für den harten Fall.
 RELOAD = {"an": False}
+OFFEN = {"merken": None}      # run_ui hängt ein, was beim Hot Reload offen war
 TUI_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -1220,6 +1221,45 @@ def run_ui(stdscr, store):
 
     # Was die beiden Hälften der Schleife brauchen, ausdrücklich gebündelt:
     # taste_verteilen(u, ch) und bild_zeichnen(u) lesen nur von hier.
+    # Hot Reload: welche App offen war, reist mit (Sasha, 08.10.2026: Termin
+    # gespeichert, TUI lud neu — „und ich bin auf der hauptseite mit dem
+    # wheel wieder gelandet"). Nur der Kalender nimmt auch Ansicht und Tag mit.
+    _offen_apps = (("c", K, kalender), ("g", G, graphen), ("m", M, karte),
+                   ("p", MAIL, post), ("a", AI, chat), ("n", NOTE, notizen),
+                   ("f", L, fokus))
+
+    def offen_merken():
+        for name, zustand, _ansicht in _offen_apps:
+            if zustand.get("active"):
+                d = {"app": name}
+                if name == "c":
+                    d.update(stil=K.get("stil"), ref=K.get("ref"),
+                             tag=kalender.bedienung.tag().isoformat())
+                return d
+        return None
+
+    OFFEN["merken"] = offen_merken
+    try:
+        wieder = json.loads(os.environ.pop("ZENTRALE_TUI_OFFEN", "") or "null")
+    except ValueError:
+        wieder = None
+    if isinstance(wieder, dict):
+        for name, _zustand, ansicht in _offen_apps:
+            if wieder.get("app") == name:
+                try:
+                    ansicht.oeffnen()
+                    if name == "c":
+                        from datetime import date as _d
+                        if wieder.get("stil") in ("A", "B", "C"):
+                            K["stil"] = wieder["stil"]
+                        if wieder.get("ref"):
+                            K["ref"] = wieder["ref"]
+                        if wieder.get("tag"):
+                            kalender.bedienung.setze_tag(_d.fromisoformat(wieder["tag"]))
+                    lebenslauf("HOT RELOAD: wieder offen: %s" % name)
+                except Exception as e:      # lieber Startseite als Absturz
+                    lebenslauf("HOT RELOAD: %s nicht wieder geöffnet: %s" % (name, e))
+
     u = types.SimpleNamespace(
         AI=AI, C=C, DASH=DASH, ELEK=ELEK, G=G, K=K, L=L, LAUF=LAUF, M=M, MAIL=MAIL,
         NOTE=NOTE, PIANO=PIANO, PIX=PIX, TECH=TECH, TUTOR=TUTOR, addclip=addclip, bz=bz,
@@ -1413,6 +1453,11 @@ def main():
         os.environ["ZENTRALE_TUI_RAD"] = str(RAD["sel"])
         os.environ["ZENTRALE_TUI_META"] = "%d,%d,%d" % (
             META["gsel"], 0, TRAD["sel"])
+        try:
+            os.environ["ZENTRALE_TUI_OFFEN"] = json.dumps(
+                OFFEN["merken"]() if OFFEN.get("merken") else None)
+        except Exception:
+            pass
         sys.stdout.flush()
         atexit._run_exitfuncs()       # exec überspringt atexit (z.B. Tasten-Wiederholung zurück)
         os.execv(sys.executable, [sys.executable] + sys.argv)

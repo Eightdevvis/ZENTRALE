@@ -53,7 +53,7 @@ class _Handler(BaseHTTPRequestHandler):
 class _Tui:
     """Eine TUI aus einer Kopie des Codes, im Pseudo-Terminal."""
 
-    def __init__(self, tmp_path):
+    def __init__(self, tmp_path, extra_env=None):
         import fcntl
         import pty
         import termios
@@ -71,8 +71,9 @@ class _Tui:
                    ZENTRALE_TUI_LOG=str(self.log),
                    ZENTRALE_TUI_CRASH_LOG=str(tmp_path / "crash.log"))
         for k in ("DISPLAY", "WAYLAND_DISPLAY", "ZENTRALE_TUI_RELOADED",
-                  "ZENTRALE_TUI_RAD"):
+                  "ZENTRALE_TUI_RAD", "ZENTRALE_TUI_OFFEN"):
             env.pop(k, None)
+        env.update(extra_env or {})
 
         def preexec():
             os.setsid()
@@ -208,3 +209,21 @@ def test_frische_prozesse_findet_einen_frischen():
 def test_reload_befehl():
     action, _m, _msg = befehle.parse_command("/reload", "auto")
     assert action == "RELOAD"
+
+
+def test_hot_reload_behaelt_die_offene_app(tmp_path):
+    """Sasha, 08.10.2026: nach dem Neuladen landete man auf der Startseite.
+    Jetzt: Kalender offen → nach dem Hot Reload wieder offen."""
+    if not pty_supported():
+        pytest.skip("braucht Linux-PTY mit Controlling-TTY")
+    t = _Tui(tmp_path, extra_env={"ZENTRALE_TUI_RAD": "2"})
+    try:
+        assert t.warte("START  frisch")
+        time.sleep(1.5)
+        os.write(t.master, b"\r")          # Kalender aus dem Rad öffnen
+        time.sleep(1.5)
+        _aendern(t, "\n# hot-reload-probe-app\n")
+        assert t.warte("HOT RELOAD  neuer Code"), t.text()
+        assert t.warte("wieder offen: c"), t.text()
+    finally:
+        t.zu()
