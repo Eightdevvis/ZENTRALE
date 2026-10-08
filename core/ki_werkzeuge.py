@@ -27,6 +27,8 @@ import context
 import gedaechtnis
 import gespraeche
 import kalender
+import ki_kalender
+import ki_kalender_aendern
 import ki_prompt
 import mail
 import news
@@ -36,37 +38,7 @@ import skills
 import web
 import werkzeug_register
 import zug
-
-
-def _kalender_beweis(tag: str, label: str) -> str:
-    """Nachlesen, was an dem Tag jetzt WIRKLICH steht. -> ein Satz.
-
-    Der Nachpruef-Schritt im Code statt in einer zweiten Modell-Runde
-    (Sasha, 20.08.2026: "kosten niedrig wie moeglich aber nich auf kosten
-    von qualitaet"). Das Tool-Ergebnis geht ohnehin ans Modell zurueck —
-    steht dort der Beweis statt "OK, eingetragen", hat sie nachgesehen,
-    ohne dass ein Aufruf mehr anfaellt.
-
-    Wichtig ist der Fall, in dem der Beweis NICHT aufgeht: dann steht das
-    ausdruecklich da, statt dass sie einen Erfolg meldet.
-    """
-    try:
-        from datetime import date as _date
-        tage = kalender.entries_in_range(_date.fromisoformat(tag),
-                                         _date.fromisoformat(tag))
-    except Exception as e:
-        return ("[Eingetragen gemeldet, aber Nachlesen ging schief (%s) — "
-                "sag Sasha, dass es nicht bestätigt ist.]" % e)
-    eintraege = tage.get(tag) or []
-    treffer = [e for e in eintraege
-               if (label or "").lower() in (e.get("label") or "").lower()]
-    if not treffer:
-        return ("[Eingetragen gemeldet, aber am %s steht es NICHT — sag "
-                "das, statt einen Erfolg zu melden.]" % tag)
-    wann = treffer[0].get("time") or "ganztags"
-    return ("Steht jetzt am %s: %s (%s). Der Tag hat %d %s."
-            % (tag, treffer[0].get("label"), wann, len(eintraege),
-               "Eintrag" if len(eintraege) == 1 else "Eintraege"))
+from werkzeug_befund import Befund, OK, FEHLGESCHLAGEN, status_von
 
 
 def ausfuehren(name: str, args: dict, *, projekt=None) -> str:
@@ -164,58 +136,27 @@ def _list_files(args: dict) -> str:
     return "Verfügbare Dateien:\n" + "\n".join(f"  {f}" for f in files)
 
 
+# ── Kalender ──
+# Seit 2026-10-08 in core/ki_kalender.py (Lesen, Kennungen, Belege) und
+# core/ki_kalender_aendern.py (Schreiben): nach Sashas Testlauf lesen alle
+# Schreib-Werkzeuge nach, was dasteht, und treffen nur noch EINEN Eintrag.
+
 @ausfuehrer("read_calendar")
 def _read_calendar(args: dict) -> str:
-    from datetime import date as _date
-    layers = args.get("layers") or None
-    suche  = (args.get("suche") or "").strip() or None
-    zeitraum = (args.get("zeitraum") or "").strip()
-    has_dates = bool(args.get("start_date")) and bool(args.get("end_date"))
-    if zeitraum:
-        # Bevorzugt: relativer Bucket -> Python rechnet die Grenzen.
-        rng = kalender.resolve_range(zeitraum)
-        if rng is None:
-            return (f"[Fehler: unbekannter zeitraum {zeitraum!r}. "
-                    f"Erlaubt: {', '.join(kalender.RANGE_BUCKETS)} "
-                    f"- oder start_date+end_date angeben.]")
-        start, end = rng
-    elif has_dates:
-        # Explizite ISO-Daten (für krumme Spannen).
-        try:
-            start = _date.fromisoformat(args["start_date"])
-            end   = _date.fromisoformat(args["end_date"])
-        except ValueError as e:
-            return (f"[Fehler: ungültiges start/end-Datum – {e}. "
-                    f"Besser 'zeitraum' nutzen: {', '.join(kalender.RANGE_BUCKETS)}.]")
-    else:
-        # NICHTS angegeben -> nicht bestrafen, sinnvoll defaulten. "wann hab
-        # ich X?" (mit suche) ist die natürlichste Formulierung und kommt oft
-        # ganz ohne Zeitraum; ein Fehler hier schickt das Modell in eine
-        # Korrektur-Schleife (es schreibt den Retry-Call dann als Roh-XML ins
-        # Thinking, der verpufft -> leere Antwort). Also: mit suche weiter nach
-        # vorn schauen (Quartal, fängt wiederkehrende Termine), sonst nahe Zukunft.
-        start, end = kalender.resolve_range(
-            "naechste_90_tage" if suche else "diese_und_naechste_woche")
-    if start > end:                      # vertauschte Grenzen tolerieren
-        start, end = end, start
-    return kalender.render_range_for_tool(start, end, layers=layers, suche=suche)
+    return ki_kalender.lesen(args)
+
+
+@ausfuehrer("read_calendar_warnings")
+def _read_calendar_warnings(args: dict) -> str:
+    return ki_kalender.warnungen_lesen(args)
 
 
 @ausfuehrer("add_calendar_entry")
 def _add_calendar_entry(args: dict) -> str:
     # Konflikt-Warnung passiert VOR dem Schreiben im Erlaubnis-Dialog
     # (Frage im Register → conflicts_for_proposed), damit Sasha informiert
-    # JA/NEIN klickt. Hier nach dem Schreiben nur noch schlicht quittieren -
-    # kein erneuter Hinweis (sonst Doppel-Warnung).
-    ok = kalender.add_entry(
-        layer = args.get("layer", "termine"),
-        day   = args.get("day", ""),
-        label = args.get("label", ""),
-        time  = args.get("time"),
-    )
-    if not ok:
-        return "[Fehler: Layer existiert nicht oder Eingabe ungültig]"
-    return _kalender_beweis(args.get("day", ""), args.get("label", ""))
+    # JA/NEIN klickt. Hier der Beleg: was danach wirklich dasteht.
+    return ki_kalender_aendern.termin_eintragen(args)
 
 
 @ausfuehrer("read_time")
@@ -237,78 +178,27 @@ def _read_time(args: dict) -> str:
 
 @ausfuehrer("add_calendar_routine")
 def _add_calendar_routine(args: dict) -> str:
-    ok = kalender.add_routine(
-        # Seit 07.10.2026 EIN Kalender (Sasha: „ich brauche einen einheitlichen"):
-        # Routinen stehen mit in „termine"; ein altes „routinen" wird umgeleitet.
-        layer     = ("termine" if args.get("layer") in (None, "", "routinen")
-                     else args.get("layer")),
-        label     = args.get("label", ""),
-        rrule_str = args.get("rrule", ""),
-        time      = args.get("time"),
-    )
-    if not ok:
-        return "[Fehler: Layer existiert nicht oder rrule ungültig]"
-    gefunden = kalender.routine_finden(args.get("label", ""))
-    if len(gefunden) > 1:
-        # Sie hat gerade eine ZWEITE Regel gleichen Namens angelegt. Das
-        # ist der Geigenstunden-Fall vom 18.08.2026 — er soll ihr im
-        # Ergebnis auffallen, nicht Sasha drei Tage spaeter.
-        zeiten = ", ".join((r.get("time") or "ganztags")
-                           for _l, _i, r in gefunden)
-        return (f"Eingetragen — ABER es gibt jetzt {len(gefunden)} Regeln "
-                f"namens '{args.get('label','')}' ({zeiten}). Wollte er "
-                f"eine AENDERN? Dann die alte mit edit_calendar_routine "
-                f"loeschen und das sagen.")
-    return f"OK, Routine eingetragen: {args.get('label','')}."
+    return ki_kalender_aendern.routine_eintragen(args)
 
 
 @ausfuehrer("add_calendar_pause")
 def _add_calendar_pause(args: dict) -> str:
-    ok = kalender.add_pause(
-        label = args.get("label", ""),
-        von   = args.get("von", ""),
-        bis   = args.get("bis", ""),
-        grund = args.get("grund"),
-    )
-    return "OK, Pause eingetragen." if ok else "[Fehler: ungültige Datumsangabe]"
+    return ki_kalender_aendern.pause_eintragen(args)
 
 
 @ausfuehrer("edit_calendar_routine")
 def _edit_calendar_routine(args: dict) -> str:
-    label  = (args.get("label") or "").strip()
-    aktion = (args.get("aktion") or "").strip()
-    if not label:
-        return "[Fehler: label ist nötig.]"
-    if aktion == "loeschen":
-        n = kalender.routine_loeschen(label)
-        if n == 0:
-            return f"Keine Routine '{label}' gefunden - nichts gelöscht."
-        return f"{n} Routine(n) '{label}' gelöscht."
-    if aktion != "aendern":
-        return "[Fehler: aktion muss 'aendern' oder 'loeschen' sein.]"
-    felder = {k: args.get(k) for k in ("time", "ende", "ort", "rrule")
-              if args.get(k)}
-    neu_titel = (args.get("neuer_titel") or "").strip() or None
-    if not felder and not neu_titel:
-        return "[Fehler: nichts zu ändern - gib an, was neu ist.]"
-    n = kalender.routine_aendern(label, neues_label=neu_titel, **felder)
-    if n == 0:
-        return (f"Keine Routine '{label}' geändert - entweder nicht "
-                f"gefunden oder die Wiederholungs-Regel war ungültig.")
-    return f"OK, {n} Routine(n) '{label}' geändert."
+    return ki_kalender_aendern.routine_aendern(args)
 
 
 @ausfuehrer("delete_calendar_entry")
 def _delete_calendar_entry(args: dict) -> str:
-    day   = (args.get("day") or "").strip()
-    label = (args.get("label") or "").strip()
-    layer = (args.get("layer") or "").strip() or None
-    if not day or not label:
-        return "[Fehler: day und label sind nötig zum Löschen.]"
-    n = kalender.delete_entry(day, label, layer)
-    if n == 0:
-        return f"Kein Termin '{label}' am {day} gefunden - nichts gelöscht."
-    return f"{n} Termin(e) '{label}' am {day} gelöscht."
+    return ki_kalender_aendern.termin_loeschen(args)
+
+
+@ausfuehrer("edit_calendar_entry")
+def _edit_calendar_entry(args: dict) -> str:
+    return ki_kalender_aendern.termin_aendern(args)
 
 
 @ausfuehrer("web_search")
@@ -329,6 +219,40 @@ def _read_news(args: dict) -> str:
 @ausfuehrer("read_mail")
 def _read_mail(args: dict) -> str:
     return mail.lies(args.get("modus", ""))
+
+
+# ── Belege (2026-10-08) ──
+# Jedes schreibende Werkzeug liest nach dem Schreiben nach, was dasteht
+# (Feld `beweis` im Register; tests/test_werkzeug_belege.py prüft jedes).
+# Steht es NICHT da, sagt das Ergebnis das — mit Status „fehlgeschlagen",
+# statt dass die KI einen Erfolg meldet, den es nicht gab.
+
+def _belegt(roh, beleg, fehlt: str = "es steht NICHT da") -> Befund:
+    """roh: was der Dienst gemeldet hat. beleg: was nachgelesen wurde
+    (None = nicht gefunden)."""
+    if status_von(roh) == FEHLGESCHLAGEN:
+        return Befund(str(roh), FEHLGESCHLAGEN)
+    if beleg is None:
+        return Befund(f"{roh}\nNachgelesen: {fehlt} — melde keinen Erfolg.",
+                      FEHLGESCHLAGEN)
+    return Befund(f"{roh}\nNachgelesen: {beleg}", OK, beleg=beleg)
+
+
+def _eine_zeile(text: str, n: int = 60) -> str:
+    """Die erste Zeile mit Inhalt, Leerraum zusammengefaltet, gekürzt."""
+    for z in str(text or "").splitlines():
+        z = " ".join(z.strip().lstrip("-").split())
+        if z:
+            return z[:n]
+    return ""
+
+
+def _steht_drin(text: str, inhalt: str, ort: str):
+    """Beleg-Satz, wenn der Anfang von `text` in `inhalt` steht, sonst None."""
+    probe = _eine_zeile(text)
+    if probe and probe in " ".join(str(inhalt or "").split()):
+        return f'steht {ort} („{probe}…“).'
+    return None
 
 
 # ── Gedächtnis: Notizen statt Tripel (siehe core/gedaechtnis.py) ──
@@ -363,18 +287,29 @@ def _write_note(args: dict) -> str:
     # 2026-10-08: mit herkunft ist es ein Import (Skill import-memory) —
     # zeilenweise, nur Neues, nie ins Tagebuch oder in Kataloge.
     if str(args.get("herkunft") or "").strip():
-        return gedaechtnis.import_ergaenzen(wie, text, str(args["herkunft"]))
-    if wie.lower() in ("tagebuch", "diary", ""):
-        return gedaechtnis.tagebuch_notieren(text)
-    if wie.lower() in ("hausregeln", "regeln"):
-        return gedaechtnis.regel_notieren(text)
-    return gedaechtnis.dossier_notieren(wie, text)
+        roh = gedaechtnis.import_ergaenzen(wie, text, str(args["herkunft"]))
+        lesen, ort = (lambda: gedaechtnis.dossier_lesen(wie)), f"in '{wie}'"
+    elif wie.lower() in ("tagebuch", "diary", ""):
+        roh = gedaechtnis.tagebuch_notieren(text)
+        lesen, ort = gedaechtnis.tagebuch_lesen, "im Tagebuch von heute"
+    elif wie.lower() in ("hausregeln", "regeln"):
+        roh = gedaechtnis.regel_notieren(text)
+        lesen, ort = gedaechtnis.hausregeln, "in den Hausregeln"
+    else:
+        roh = gedaechtnis.dossier_notieren(wie, text)
+        lesen, ort = (lambda: gedaechtnis.dossier_lesen(wie)), f"in '{wie}'"
+    return _belegt(roh, _steht_drin(text, lesen(), ort), f"der Text steht NICHT {ort}")
 
 
 @ausfuehrer("rewrite_note")
 def _rewrite_note(args: dict) -> str:
-    return gedaechtnis.dossier_ersetzen(args.get("name") or "",
-                                        args.get("content") or "")
+    wie, inhalt = args.get("name") or "", args.get("content") or ""
+    roh = gedaechtnis.dossier_ersetzen(wie, inhalt)
+    jetzt = gedaechtnis.dossier_lesen(wie)
+    beleg = _steht_drin(inhalt, jetzt, f"in '{wie}'")
+    if beleg:
+        beleg += f" Das Dossier hat jetzt {len(jetzt)} Zeichen."
+    return _belegt(roh, beleg, f"'{wie}' hat NICHT den neuen Inhalt")
 
 
 @ausfuehrer("search_memory")
@@ -384,8 +319,12 @@ def _search_memory(args: dict) -> str:
 
 @ausfuehrer("fetch_document")
 def _fetch_document(args: dict) -> str:
-    return gedaechtnis.dokument_holen(args.get("url") or "",
-                                      args.get("name") or "")
+    name = args.get("name") or ""
+    roh = gedaechtnis.dokument_holen(args.get("url") or "", name)
+    ort = "quellen/" + gedaechtnis.slug(name)
+    jetzt = gedaechtnis.dossier_lesen(ort) if gedaechtnis.slug(name) else ""
+    return _belegt(roh, f"{ort} hat {len(jetzt)} Zeichen." if jetzt else None,
+                   f"in {ort} steht nichts")
 
 
 # ── Messreihen ──
@@ -404,14 +343,19 @@ def _create_series(args: dict) -> str:
         return "[Fehler: kein Name]"
     if any(g.get("name", "").casefold() == wie.casefold()
            for g in graphs.list_graphs()):
-        return f"[Die Reihe {wie!r} gibt es schon.]"
+        return Befund(f"[Die Reihe {wie!r} gibt es schon — nichts angelegt.]",
+                      FEHLGESCHLAGEN)
     try:
         graphs.create_graph(wie, gtype=(args.get("typ") or "number"),
                             unit=(args.get("einheit") or ""))
     except Exception as e:
         return f"[Anlegen fehlgeschlagen: {e}]"
-    return (f"Messreihe {wie!r} angelegt. Trag Werte mit log_series ein und "
-            f"verlink sie im Dossier der Sache.")
+    da = [g for g in graphs.list_graphs() if g.get("name", "").casefold() == wie.casefold()]
+    beleg = (f"Messkurve {da[0].get('name')!r} steht in der Liste "
+             f"(Typ {da[0].get('type')}).") if da else None
+    return _belegt(f"Messreihe {wie!r} angelegt. Trag Werte mit log_series ein und "
+                   f"verlink sie im Dossier der Sache.", beleg,
+                   f"die Messkurve {wie!r} steht NICHT in der Liste")
 
 
 @ausfuehrer("log_series")
@@ -446,7 +390,11 @@ def _log_series(args: dict) -> str:
         graphs.log_value(g["id"], tag, wert)
     except Exception as e:
         return f"[Fehler beim Eintragen: {e}]"
-    return f"{g.get('name')} fuer {tag}: {wert} eingetragen."
+    da = [e for e in graphs.read_values(g["id"])
+          if isinstance(e, dict) and e.get("date") == tag]
+    return _belegt(f"{g.get('name')} fuer {tag}: {wert} eingetragen.",
+                   f"{g.get('name')} am {tag} = {da[-1].get('value')}." if da else None,
+                   f"für {tag} steht kein Wert")
 
 
 @ausfuehrer("run_code")
@@ -500,14 +448,27 @@ def _load_skill(args: dict) -> str:
 
 @ausfuehrer("propose_skill")
 def _propose_skill(args: dict) -> str:
-    return skills.vorschlagen(args.get("name") or "",
-                              args.get("beschreibung") or "",
-                              str(args.get("inhalt") or ""))
+    inhalt = str(args.get("inhalt") or "")
+    roh = skills.vorschlagen(args.get("name") or "",
+                             args.get("beschreibung") or "", inhalt)
+    return _belegt(roh, _skill_beleg(args.get("name"), inhalt),
+                   "die Anleitung lässt sich NICHT laden")
 
 
 @ausfuehrer("edit_skill")
 def _edit_skill(args: dict) -> str:
-    return skills.aendern(args.get("name") or "", str(args.get("inhalt") or ""))
+    inhalt = str(args.get("inhalt") or "")
+    roh = skills.aendern(args.get("name") or "", inhalt)
+    return _belegt(roh, _skill_beleg(args.get("name"), inhalt),
+                   "die Anleitung hat NICHT den neuen Inhalt")
+
+
+def _skill_beleg(name, inhalt: str):
+    text = skills.laden(name or "")
+    if not text or text.lstrip().startswith("[") or \
+            _eine_zeile(inhalt) not in " ".join(text.split()):
+        return None
+    return f"die Anleitung '{gedaechtnis.slug(name)}' lässt sich laden ({len(text)} Zeichen)."
 
 
 # ── Frühere Gespräche (core/chat_suche.py, Phase 3 2026-10-07) ──
@@ -544,9 +505,19 @@ def _ablage_melden(k: dict) -> None:
     zug.melden({"ablage": ablage.kurz(k)})
 
 
-def _ablage_text(k: dict, was: str) -> str:
-    return (f'{was}: "{k.get("titel")}" (id {k["id"]}, Fassung {k.get("fassung")}). '
+def _ablage_text(k: dict, was: str) -> Befund:
+    text = (f'{was}: "{k.get("titel")}" (id {k["id"]}, Fassung {k.get("fassung")}). '
             f"Sasha sieht es als Eintrag im Chat; wiederhole den Inhalt nicht.")
+    try:
+        d = ablage.lesen(k["id"])
+    except Exception:
+        d = None
+    beleg = None
+    if d is not None and d["fassung"] == k.get("fassung"):
+        groesse = (f"{len(d['inhalt'])} Zeichen" if d["inhalt"] is not None
+                   else f"Bild, {d['bytes']} Bytes")
+        beleg = f"liegt in der Ablage, Fassung {d['fassung']}, {groesse}."
+    return _belegt(text, beleg, "das Dokument liegt NICHT in der Ablage")
 
 
 @ausfuehrer("create_document")

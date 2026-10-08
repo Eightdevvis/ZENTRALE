@@ -830,3 +830,66 @@ Angenommen (Sasha war nicht erreichbar) — die Kleinentscheidungen:
 **Offen:** eine Bewertung ganz zurücknehmen (nur umdrehen geht);
 Einfügen mit Zeilenumbruch ins Fenster; eine Auswertung (z. B. „schlecht je
 Werkzeug/Modell") — kommt, wenn genug Bewertungen da sind.
+
+### Belegt oder gesagt + Kalender ohne Fallen (2026-10-08)
+
+Anlass: Sashas Kalender-Testlauf (Gespräch `20261008-132404`, „die KI muss
+ehrlich sein in dem was funktioniert und was nicht"). Die Fallen und ihre
+Ursachen: Ehrlichkeit war nur eine Bitte, Werkzeuge sagten „OK" statt des
+Ist-Zustands und erlaubten ungenaue Massen-Eingriffe. Ausführlich:
+[ki_system.md](ki_system.md) „Belegt oder gesagt" und „Kalender ohne Fallen".
+
+- **Status maschinenlesbar:** jedes Werkzeug-Ergebnis beginnt mit
+  `[ergebnis: ok|teilweise|fehlgeschlagen|keine_antwort|abgelehnt]`
+  (`core/werkzeug_befund.py`, gesetzt in `werkzeug_schleife.run_tool`).
+- **Belege statt „OK":** Register-Felder `schreibt`/`beweis`; alle 16
+  schreibenden Werkzeuge lesen nach (Kalender, Notizen, Messkurven, Skills,
+  Ablage). `tests/test_werkzeug_belege.py` führt jedes einmal echt aus.
+- **ask_choice:** keine Antwort → `keine_antwort` („nichts ändern,
+  nachfragen"); Ergebnis steht jetzt im Verlauf. Befund zum 08.10.: laut
+  Journal hat Sasha „ja" geklickt — das „None" kam aus dem Verlauf, in dem
+  das ask_choice-Ergebnis fehlte. Gefunden und behoben: ein Rennen in der
+  TUI (`ai_answer_perm` konnte die NÄCHSTE Frage wegräumen).
+- **Kalender:** Kennungen (`#r3f9c`, nur gross), genau EIN Eintrag je
+  Änderung, nur genannte Felder, `nur_am`, neues `edit_calendar_entry`,
+  `read_calendar_warnings`, `ende`/`ort` beim Eintragen, kein still
+  angenommenes Ende, Pausen-Prüfung (`core/ki_kalender.py`,
+  `core/ki_kalender_aendern.py`). Fragen an Sasha nennen Termin, Uhrzeit,
+  Ende, Ort.
+- **Netz:** Suchtreffer als „nicht gelesen" beschriftet, dünne Seiten
+  gemeldet (`core/web.py`).
+- **Prompt gross:** Meta-Regel 2 „Belegt oder gesagt" (Kürzungen an Regel 3
+  und 5 begründet in `core/profil/gross.py`). `klein` unverändert: Liste
+  byte-gleich, Kennungen und neue Felder nur auf gross (`gross_parameter`,
+  darf nur ergänzen).
+- Kalender-Kern unangetastet. **Braucht vom Kalender-Kern** (heute mit dem
+  Vorhandenen gelöst, wo es geht; sonst sagt das Werkzeug ehrlich „geht nur
+  in der Kalender-Ansicht"):
+  1. `kalender.alle_eintraege() -> list[dict]`: alle Termine und Routinen,
+     wie gespeichert (Ebene, Start-Tag, Position, ohne `_ics`). Heute liest
+     `ki_kalender.roh()` über das private `kalender._load_raw`.
+  2. Eine stabile Kennung je Eintrag, die eine Änderung von Zeit/Titel
+     überlebt (`.ics`: aus der UID; JSON: vergeben und gespeichert), z. B.
+     `kalender.kennung(eintrag) -> str`. Heute: Prüfsumme über den Inhalt.
+  3. `routine_aendern_per_id(id, *, time, ende, ort, label, rrule) ->
+     dict | None`: genau eine Routine, nur gesetzte Felder, `rrule` als Text,
+     Rückgabe die Routine danach. Heute `routine_bearbeiten` (genauer Titel +
+     Uhrzeit; Doppel nicht trennbar; Wiederholung nur als {freq …}) bzw.
+     `routine_aendern` (Teilstring — nur benutzt, wenn er eindeutig ist).
+  4. `routine_loeschen_per_id(id)`, `routine_absagen_per_id(id, tag)`,
+     `routine_tag_aendern_per_id(id, tag, **felder)`. Heute
+     `routine_loeschen`/`delete_routine`/`set_routine_skip` per Teilstring
+     (+ Tag/Uhrzeit) und `routine_abweichung` per genauem Titel; zwei gleiche
+     Routinen (wie die doppelte Geigenstunde) sind nicht einzeln zu treffen.
+  5. `termin_aendern_per_id(id, **felder)`, `termin_loeschen_per_id(id)`,
+     auch für mehrtägige mit Uhrzeit je Tag. Heute `eintrag_aendern`/
+     `eintrag_loeschen` (Ebene, Tag, genauer Titel, Uhrzeit), `spanne_aendern`
+     ohne Zeiten.
+  6. Pausen an der Routine (per Kennung) statt per Titel-Gleichheit:
+     `add_pause("Geigenstunde")` wirkt nicht auf „Geigenstunde @
+     Geigenschule", und Umbenennen hängt die Pausen ab.
+  7. Datum in den Warnungen: `open_alarms()` liefert Tages-Kollisionen ohne
+     Tag (dieselbe Zeile fünfmal); ein Feld `tag` (ISO) im Alarm.
+  8. Keine stillen Korrekturen: `routine_bearbeiten`/`eintrag_aendern`
+     werfen ein Ende ≤ Beginn still weg, `routine_aendern` prüft Uhrzeiten
+     nicht. Lieber ablehnen (False + Grund).

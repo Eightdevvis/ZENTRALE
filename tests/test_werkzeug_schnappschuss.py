@@ -55,7 +55,7 @@ ARGUMENTE = [
 ]
 
 
-def _konflikt_attrappe(layer, day, label, time=None):
+def _konflikt_attrappe(layer, day, label, time=None, ende=None):
     """Die Frage zu add_calendar_entry fragt den echten Kalender nach
     Konflikten. Für einen festen Schnappschuss eine feste Antwort."""
     if label == "Zahnarzt":

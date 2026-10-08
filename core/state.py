@@ -236,7 +236,8 @@ def request_permission(options=None, timeout_default="nein"):
              gibt hier eigene Labels rein (z.B. ["Deutsch","Englisch"]).
     timeout_default: was wait_permission bei Timeout zurückgibt. Für das
              Gate "nein" (sicher: keine Antwort erlaubt nie eine Aktion),
-             für freie Fragen ein neutrales Sentinel.
+             für freie Fragen (ask_choice) None — seit 2026-10-08 kein
+             Text mehr, der wie ein Knopf aussieht.
     """
     global _perm_answer, _perm_options, _perm_default
     with _lock:

@@ -565,12 +565,20 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
     def ai_answer_perm(self, option):
         """Erlaubnis-Frage beantworten → entsperrt den wartenden Stream."""
         AI, AI_LOCK = self.AI, self.AI_LOCK
+        with AI_LOCK:
+            beantwortet = AI["perm"]
         try:
             api_call("/api/permission_answer", "POST", {"answer": option})
         except (urllib.error.URLError, OSError, ValueError):
             pass
+        # Nur DIESE Frage wegnehmen (2026-10-08). Der Server macht nach der
+        # Antwort sofort weiter; kommt die nächste Frage (zweites Ja/Nein,
+        # ask_choice) an, bevor dieser POST zurück ist, stand sie schon in
+        # AI["perm"] — und wurde hier gelöscht. Sasha sah dann keine Frage,
+        # und nach 180 s hieß es „keine Antwort".
         with AI_LOCK:
-            AI["perm"] = None
+            if AI["perm"] is beantwortet:
+                AI["perm"] = None
 
     def status_holen(self):
         """Backend-Status für den Kasten-Titel holen (/api/ai/status).

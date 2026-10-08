@@ -557,7 +557,10 @@ def chat_stream(messages: list, model: str = None, system: str = None,
                                 abbruch=abbruch)
     yield from werkzeug_schleife.laufen(
         adapter, tutor_mode=tutor_mode, active_exec=active_exec,
-        user_query=user_query, store=store, abbruch=abbruch)
+        user_query=user_query, store=store, abbruch=abbruch,
+        # Die Schiene für die Ausführer (2026-10-08): Kennungen im Kalender
+        # nur auf gross. Ein fremdes Tool-Set (Tutor) zählt als klein.
+        schiene=(_profil().NAME if tools is None else "klein"))
 
 
 class _AnthropicAdapter:

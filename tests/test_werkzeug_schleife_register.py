@@ -64,11 +64,14 @@ def test_news_ist_terminal_mit_kino_und_ohne_kopf(name):
 def test_knopf_dialog_gibt_die_wahl_zurueck(name, monkeypatch):
     def knopf(args):
         yield {"permission": {"frage": args.get("frage"), "optionen": ["a", "b"]}}
-        return "b"
+        return "b", ["a", "b"]
     monkeypatch.setattr(werkzeug_schleife, "_ask_buttons", knopf)
     ev, aus, auf = _fahren(name, {"frage": "Welche?", "optionen": ["a", "b"]})
     assert ev[1] == {"permission": {"frage": "Welche?", "optionen": ["a", "b"]}}
-    assert aus == ("result", "Sasha hat gewählt: b.", False) and auf == []
+    # Seit 2026-10-08 mit Kopfzeile, und das Ergebnis steht als Event im
+    # Verlauf (vorher fehlte es dort).
+    assert aus == ("result", "[ergebnis: ok]\nSasha hat gewählt: b.", False) and auf == []
+    assert ev[-1]["werkzeug"]["phase"] == "fertig"
 
 
 def test_im_tutor_gibt_es_keine_sonderwege():
@@ -81,7 +84,7 @@ def test_im_tutor_gibt_es_keine_sonderwege():
 
 def test_normales_werkzeug_bleibt_normal():
     ev, aus, auf = _fahren("read_note", {"name": "x"})
-    assert aus == ("result", "ergebnis", False)
+    assert aus == ("result", "[ergebnis: ok]\nergebnis", False)   # Kopfzeile seit 2026-10-08
     assert [e["werkzeug"]["phase"] for e in ev] == ["start", "fertig"]
 
 

@@ -78,6 +78,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `tone` | 1 | Ton-Erzeuger fürs TUI-Klavier |
 | `pc_status` | 1 | Ist der andere Knoten gerade da? |
 | `zug` | 1 | Der laufende Chat-Zug: Gesprächs-id und Stopp-Signal für die Werkzeuge, Ereignisse von Werkzeugen an die TUI (z. B. `ablage`) |
+| `werkzeug_befund` | 1 | Was ein Werkzeug zurückgibt: Status (`[ergebnis: ok/teilweise/…]`) und Beleg; die Schiene des laufenden Werkzeug-Aufrufs |
 | `kalender` | 2 | Termine, Routinen, Konflikt-Alarm — die Fassade, Speicher austauschbar |
 | `kalender_zeitraum` | 2 | Relative Zeiträume („diese_woche") in Daten übersetzen |
 | `kalender_regel` | 2 | Wann eine Routine stattfindet (RRULE → Tage), eine Stelle für Fassade und .ics |
@@ -137,6 +138,9 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `ki_einstellungen` | 3 | Chat-Einstellungen (Anbieter, Modell, Effort, Budget, Weg) lesen und mit Klartext-Prüfung setzen — für `/api/ai/einstellungen` |
 | `ki_werkzeuge` | 3 | Was ein KI-Werkzeug tut: ausfuehren(name, args) → Kalender, Notizen, Netz, Mail, Messreihen |
 | `werkzeug_register` | 3 | Ein Eintrag pro KI-Werkzeug: Schema, Beschreibung je Schiene, Erlaubnis-Regel + Frage; die Ausführer melden sich aus `ki_werkzeuge` an |
+| `werkzeug_fragen` | 3 | Die Ja/Nein-Fragen an Sasha vor bestätigungspflichtigen Werkzeugen und die Regeln, die von den Argumenten abhängen |
+| `ki_kalender` | 3 | Der Kalender, wie die KI ihn liest: Kennungen (`#r3f9c`), alle Felder, Warnungen frisch, Belege nach dem Schreiben |
+| `ki_kalender_aendern` | 3 | Die schreibenden Kalender-Werkzeuge der KI: genau EIN Eintrag, nur genannte Felder, mit Beleg und Status |
 | `kern` | 3 | Der eine Einstieg: kern.chat(verlauf) wählt den Weg (lokal/Anthropic/OpenAI) und fährt ihn |
 | `billig` | 3 | Ein Einmal-Aufruf beim billigen Modell des aktiven Anbieters (beide Dialekte, Kosten gebucht) — Graph-Extraktor, Gesprächstitel |
 | `gespraech_titel` | 3 | Gesprächstitel: sofort aus den ersten Wörtern, nach der ersten Antwort vom billigen Modell |

@@ -152,18 +152,38 @@ def test_der_schnitt_haelt():
               "save_from_sandbox"}
     # 07.10.2026: Projekte (Phase 6) ebenso — eigener Deckel unten.
     projekt = {"read_project_file"}
+    # 08.10.2026: der Kalender (geerbte und eigene Werkzeuge) hat einen
+    # eigenen Deckel unten — sonst fräße „Kalender ohne Fallen" das Budget
+    # aller anderen geerbten Werkzeuge.
+    kalender = {"read_calendar", "read_time", "add_calendar_entry",
+                "add_calendar_routine", "edit_calendar_routine",
+                "add_calendar_pause", "delete_calendar_entry",
+                "edit_calendar_entry", "read_calendar_warnings"}
     eigen = {w.name for w in werkzeug_register.auf_schiene("gross")
-             if w.klein is None and w.name != "run_code"} - skill - suche - ablage - projekt
+             if w.klein is None and w.name != "run_code"} - skill - suche - ablage - projekt - kalender
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
                 if t["function"]["name"] not in
-                eigen | {"run_code"} | skill | suche | ablage | projekt)
+                eigen | {"run_code"} | skill | suche | ablage | projekt | kalender)
     # 18.08.2026 von 3.000 auf 3.300: edit_calendar_routine kam dazu. Es
     # kostet ~250 Zeichen und behebt eine Luecke, die sie nicht ueberspielen
     # konnte — Routinen liessen sich nur ANLEGEN, also stand die verschobene
     # Geigenstunde zweimal im Kalender. Ein Werkzeug, das fehlt, kostet mehr
     # als eins, das im Praefix liegt: es kostet eine Runde Erklaeren und am
     # Ende einen falschen Kalender.
-    assert besch < 3300
+    # 08.10.2026 von 3.300 auf 1.600: der Kalender zählt jetzt getrennt
+    # (darunter). Was übrig ist, lag bei ~1.480.
+    assert besch < 1600
+    # Kalender (08.10.2026, „Kalender ohne Fallen" nach Sashas Testlauf):
+    # neun Werkzeuge, ~2.300 Zeichen; vorher sieben, ~1.730. Dazu kamen
+    # edit_calendar_entry (einen Termin ändern ging nur über Löschen + Neu —
+    # dabei gingen Ende und Ort verloren) und read_calendar_warnings (sie
+    # riet über „5 Warnsymbole"), und die Beschreibungen sagen jetzt, dass
+    # Kennungen zu nehmen sind und nichts angenommen wird. read_calendar
+    # wurde dafür kürzer (783 → ~620): die alte Erklärung der ⚠-Zeilen
+    # beschrieb eine Ausgabe, die es seit dem Alarm-Kanal nicht mehr gibt.
+    besch_kalender = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                         if t["function"]["name"] in kalender)
+    assert 0 < besch_kalender < 2450
     besch_eigen = sum(len(t["function"]["description"]) for t in gross.TOOLS
                       if t["function"]["name"] in eigen)
     # 18.08.2026 von 2.500 auf 2.800: write_note verweist jetzt auf die
@@ -263,7 +283,17 @@ def test_parameter_schemata_laufen_nicht_auseinander():
         passend = [k for k, v in aus_klein.items()
                    if profil.kanonisch(k) == profil.kanonisch(fn["name"])]
         assert len(passend) == 1, fn["name"]
-        assert fn["parameters"] == aus_klein[passend[0]], fn["name"]
+        k, g = aus_klein[passend[0]], fn["parameters"]
+        if werkzeug_register.eintrag(fn["name"]).gross_parameter is None:
+            assert g == k, fn["name"]
+            continue
+        # Seit 08.10.2026 darf gross ERGÄNZEN (Feld gross_parameter: Kennung,
+        # Ende, Ort im Kalender) — aber nichts wegnehmen und nichts anders
+        # verstehen: jedes klein-Feld steht unverändert da, und gross verlangt
+        # höchstens weniger. So versteht der eine Ausführer beide Schienen.
+        for name, schema in k["properties"].items():
+            assert g["properties"].get(name) == schema, (fn["name"], name)
+        assert set(g.get("required", [])) <= set(k.get("required", [])), fn["name"]
 
 
 def test_gross_teilt_die_persona_mit_klein():

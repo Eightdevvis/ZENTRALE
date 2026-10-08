@@ -119,7 +119,7 @@ def test_der_termin_wird_zurueckgelesen(cal):
         "add_calendar_entry",
         {"layer": "termine", "day": "2026-08-21", "label": "Zahnarzt",
          "time": "09:00"})
-    assert "2026-08-21" in antwort
+    assert "21.08.2026" in antwort      # mit Wochentag, wie read_calendar (2026-10-08)
     assert "Zahnarzt" in antwort and "09:00" in antwort
 
 
@@ -134,7 +134,7 @@ def test_die_zweite_gleichnamige_routine_faellt_auf(cal):
                                {"layer": "routinen", "label": "Geige",
                                 "rrule": "FREQ=WEEKLY;BYDAY=TU",
                                 "time": "18:00"})
-    assert "2 Regeln" in antwort
+    assert "2 Routinen" in antwort
     assert "17:45" in antwort and "18:00" in antwort
     assert "edit_calendar_routine" in antwort
 

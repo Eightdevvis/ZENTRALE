@@ -99,7 +99,8 @@ def test_lokal_meldet_werkzeuge_wie_die_cloud(ollama):
     # Runde 2 sieht den Assistant-Zug mit tool_calls und das Ergebnis.
     zweite = gesendet[1]["messages"]
     assert zweite[-2]["role"] == "assistant" and zweite[-2]["tool_calls"]
-    assert zweite[-1] == {"role": "tool", "content": "15:00 Zahnarzt"}
+    # Seit 2026-10-08 mit Kopfzeile (core/werkzeug_befund.py).
+    assert zweite[-1] == {"role": "tool", "content": "[ergebnis: ok]\n15:00 Zahnarzt"}
 
 
 def test_lokal_krachendes_tool_reisst_den_zug_nicht_ab(ollama):
@@ -264,14 +265,17 @@ def test_fehler_landet_nicht_im_verlauf(monkeypatch):
 def test_kalender_beweis_meldet_keinen_erfolg_wenn_nachlesen_scheitert(monkeypatch):
     """Ging das Nachlesen schief, stand früher „OK, eingetragen." da — ein
     Erfolg, den niemand geprüft hatte."""
-    import kalender
+    # Seit 2026-10-08 liest ki_kalender_aendern nach (der alte
+    # _kalender_beweis ist darin aufgegangen). Steht der Termin nach dem
+    # Schreiben nicht da, heißt das Ergebnis „fehlgeschlagen".
+    import ki_kalender
     import ki_werkzeuge
+    import werkzeug_befund
 
-    def kaputt(*a, **k):
-        raise OSError("Platte weg")
-
-    monkeypatch.setattr(kalender, "entries_in_range", kaputt)
-    satz = ki_werkzeuge._kalender_beweis("2026-10-07", "Zahnarzt")
+    monkeypatch.setattr(ki_kalender, "roh", lambda: {"layers": {}})
+    satz = ki_werkzeuge._verteilen("add_calendar_entry", {
+        "layer": "termine", "day": "2026-10-07", "label": "Zahnarzt"})
     assert "OK, eingetragen" not in satz
-    assert "nicht bestätigt" in satz
+    assert "NICHT" in satz
+    assert werkzeug_befund.status_von(satz) == werkzeug_befund.FEHLGESCHLAGEN
 

@@ -37,7 +37,9 @@ import ai_backends
 import erlaubnis
 import ki_antwort
 import kidebug
+import werkzeug_befund
 import werkzeug_register
+from werkzeug_befund import Befund
 
 
 @dataclass
@@ -78,7 +80,7 @@ def fehler(text: str) -> dict:
 
 
 def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
-           fehler_name: str = "Cloud", abbruch=None):
+           fehler_name: str = "Cloud", abbruch=None, schiene: str = "klein"):
     """
     Der ganze Zug. Generator — yieldet dieselben Events wie bisher
     chat_stream (Text-Tokens, reflect, werkzeug, permission, ascii, cinema)
@@ -90,6 +92,8 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
     abbruch: threading.Event (Stoppen, 2026-10-07) — geprüft vor jeder Runde
     und vor jedem Werkzeug; mitten im Strom prüft es der Adapter selbst.
     Gestoppt → {"gestoppt": True}, keine weitere Runde, nichts gemerkt.
+    schiene: klein/gross (2026-10-08) — die Ausführer erfahren sie über
+    werkzeug_befund.schiene() (Kennungen im Kalender nur auf gross).
     """
     grenze = ai_backends.runden_grenze(adapter.modell)
     for _ in range(grenze):
@@ -126,7 +130,7 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
                 return
             ausgang = yield from run_tool(
                 name, args, tutor_mode=tutor_mode, active_exec=active_exec,
-                user_query=user_query, store=store)
+                user_query=user_query, store=store, schiene=schiene)
             if ausgang[0] == "stop":
                 return
             _, text, ist_fehler = ausgang
@@ -150,7 +154,7 @@ def antwort(text: str, *, tutor_mode: bool, user_query, store=None):
 # ── Ein Tool-Call ──────────────────────────────────────────────────────
 
 def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
-             user_query, store=None):
+             user_query, store=None, schiene: str = "klein"):
     """
     Behandelt EINEN Tool-Call: terminale Tools, Knopf-Dialog, Erlaubnis-Gate,
     Ausführung. Generator — yieldet die Events, mit `yield from` aufrufen.
@@ -159,6 +163,10 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
       ("stop",)                  Turn ist zu Ende (terminales Tool hat die
                                  Antwort schon geyieldet)
       ("result", text, is_error) Ergebnis, das als Tool-Ergebnis zurück soll
+
+    Seit 2026-10-08 beginnt jedes Ergebnis an das Modell mit der Kopfzeile
+    „[ergebnis: ok|teilweise|fehlgeschlagen|keine_antwort|abgelehnt]"
+    (core/werkzeug_befund.py) — außer im Tutor (fremdes Tool-Set).
     """
     import profil
     # Auf das Vokabular des Kerns bringen — welche Schiene ihr Tool wie nennt,
@@ -196,27 +204,36 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
             # Der zweite Satz galt bis 10/2026 nur lokal. Der Fall ist aber
             # überall derselbe: sie notiert "Zahnarzt eingetragen" und ruft im
             # selben Zug das Eintragen, das Sasha dann ablehnt.
-            return ("result",
+            return ("result", werkzeug_befund.mit_kopf(Befund(
                     f"Sasha hat die Aktion '{name}' abgelehnt - NICHT "
                     f"ausführen, nichts eintragen. Kurz bestätigen dass du "
                     f"es lässt. Und falls du in derselben Runde schon "
                     f"irgendwo notiert hast, dass es passiert sei: schreib "
                     f"die Richtigstellung hinterher, sonst steht eine "
-                    f"Unwahrheit im Gedächtnis.", False)
+                    f"Unwahrheit im Gedächtnis.", werkzeug_befund.ABGELEHNT)), False)
 
     # Ein krachendes Tool darf den Turn nicht abreißen: die Runde ist bezahlt.
     # Das Modell soll den Fehler SEHEN und reagieren können, statt zu
     # behaupten, es hätte funktioniert.
+    marke = werkzeug_befund.schiene_setzen(schiene)
     try:
         ergebnis = active_exec(name, args)
-        kidebug.emit("ai.tool", name=name, args=args, ergebnis=str(ergebnis))
-        yield {"werkzeug": {"phase": "fertig", "name": name,
-                            "text": str(ergebnis)}}
-        return ("result", ergebnis, False)
     except Exception as e:
         kidebug.emit("ai.tool", name=name, args=args, fehler=str(e))
         yield {"werkzeug": {"phase": "fehler", "name": name, "text": str(e)}}
-        return ("result", f"Tool '{name}' ist fehlgeschlagen: {e}", True)
+        text = f"Tool '{name}' ist fehlgeschlagen: {e}"
+        if not tutor_mode:
+            text = werkzeug_befund.mit_kopf(Befund(text, werkzeug_befund.FEHLGESCHLAGEN))
+        return ("result", text, True)
+    finally:
+        werkzeug_befund.schiene_zuruecksetzen(marke)
+    kidebug.emit("ai.tool", name=name, args=args, ergebnis=str(ergebnis))
+    status = werkzeug_befund.status_von(ergebnis)
+    yield {"werkzeug": {"phase": "fertig", "name": name,
+                        "text": str(ergebnis), "status": status}}
+    if tutor_mode:
+        return ("result", ergebnis, False)
+    return ("result", werkzeug_befund.mit_kopf(ergebnis), False)
 
 
 # ── Was die Schleife selbst erledigt ───────────────────────────────────
@@ -229,9 +246,26 @@ def _antwort_werkzeug(args: dict, *, user_query, store=None):
 
 
 def _knopf_werkzeug(args: dict, *, user_query, store=None):
-    """ask_choice: die KI baut selbst einen Knopf-Dialog."""
-    wahl = yield from _ask_buttons(args)
-    return ("result", f"Sasha hat gewählt: {wahl}.", False)
+    """ask_choice: die KI baut selbst einen Knopf-Dialog.
+
+    Keine Antwort (Zeit um, gestoppt, oder eine Antwort, die keiner der
+    Knöpfe ist) heißt für die KI: nichts ändern, was davon abhängt, im Text
+    nachfragen (2026-10-08). Vorher stand dort „Sasha hat gewählt: None." —
+    das liest sich wie eine Wahl. Das Ergebnis geht jetzt auch als
+    werkzeug-Event raus, damit es im Verlauf steht (vorher fehlte es dort,
+    und wer nachlas, sah bei ask_choice kein Ergebnis)."""
+    wahl, opts = yield from _ask_buttons(args)
+    if wahl is None or str(wahl) not in opts:
+        frage = str(args.get("frage", "")).strip()
+        befund = Befund(
+            f"Sasha hat NICHT geantwortet (Frage: „{frage[:160]}“). Er hat "
+            f"nichts gewählt — ändere nichts, was von der Antwort abhängt, "
+            f"und frag im Text nach.", werkzeug_befund.KEINE_ANTWORT)
+    else:
+        befund = Befund(f"Sasha hat gewählt: {wahl}.", werkzeug_befund.OK)
+    yield {"werkzeug": {"phase": "fertig", "name": "ask_choice",
+                        "text": str(befund), "status": befund.status}}
+    return ("result", werkzeug_befund.mit_kopf(befund), False)
 
 
 # Ein Eintrag je Register-Werkzeug mit in_der_schleife=True. Der Test
@@ -255,8 +289,9 @@ def _terminal_ausgeben(name: str, args: dict, active_exec):
 
 
 def _ask_buttons(args: dict):
-    """frage_knopf: Knopf-Dialog auslösen, blockieren, Wahl zurückgeben.
-    Generator (yieldet das permission-Event) — mit `yield from` aufrufen."""
+    """frage_knopf: Knopf-Dialog auslösen, blockieren. -> (Wahl oder None,
+    angebotene Knöpfe). Generator (yieldet das permission-Event) — mit
+    `yield from` aufrufen."""
     import state
     frage = str(args.get("frage", "")).strip() or "Wie soll ich weitermachen?"
     opts  = [str(o).strip() for o in (args.get("optionen") or []) if str(o).strip()]
@@ -264,11 +299,14 @@ def _ask_buttons(args: dict):
         opts = ["ja", "nein"]
     opts = opts[:4]                       # Leiste fasst max 4 Knöpfe sauber
     state.push_log(f"AI →  FRAGE {opts}: {frage[:140]}")
-    state.request_permission(options=opts, timeout_default="(keine Antwort)")
+    # Bei Zeit-Ende kommt None zurück (nicht mehr „(keine Antwort)" als
+    # Text, 2026-10-08): ein Sentinel, das wie ein Knopf-Label aussieht,
+    # konnte als Wahl durchrutschen.
+    state.request_permission(options=opts, timeout_default=None)
     yield {"permission": {"frage": frage, "optionen": opts}}
     wahl = state.wait_permission()        # BLOCKIERT bis Klick/Timeout
-    state.push_log(f"AI ←  WAHL: {wahl}")
-    return wahl
+    state.push_log(f"AI ←  WAHL: {wahl if wahl is not None else '(keine Antwort)'}")
+    return wahl, opts
 
 
 def _ask_permission(name: str, args: dict):

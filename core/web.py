@@ -32,6 +32,7 @@ from urllib.parse import urlencode, urlparse, parse_qs, unquote
 
 import net    # transparenter HTTP-Wrapper (loggt jeden Call ins Dashboard)
 import state  # für den expliziten Transparenz-Log (s.u. _searxng_search)
+from werkzeug_befund import Befund, TEILWEISE, FEHLGESCHLAGEN
 
 
 # ── Such-Backend: SearXNG (self-hosted, localhost) ────────────────────
@@ -179,6 +180,39 @@ def _searxng_search(query: str, max_results: int):
     return results
 
 
+SUCHE_HINWEIS = ("Treffer = Hinweise, NICHT gelesen. Daten daraus erst nach "
+                 "fetch_url als Tatsache nennen, sonst als 'laut Suchtreffer, "
+                 "nicht nachgelesen' kennzeichnen.")
+
+# Unter so vielen Wörtern bzw. so wenigen ganzen Sätzen ist eine geladene
+# Seite kein Inhalt, sondern Gerüst: Navigation, Menü, Cookie-Hinweis,
+# Anmeldung. Am 08.10.2026 bekam die KI aus dem Vorlesungsverzeichnis nur
+# den Navigationsbaum und schloss daraus „ohne Login komm ich nicht tiefer"
+# — eine Vermutung, als Tatsache gesagt. Jetzt sagt das Werkzeug, was es
+# gesehen hat, und die KI muss nicht raten.
+_DUENN_WOERTER = 80
+_DUENN_SAETZE = 3
+_SATZ_RE = re.compile(r"\w{3,}[.!?](?:\s|$)")
+_ANMELDUNG_RE = re.compile(r"\b(anmelden|login|log in|passwort|password|sign in|einloggen)\b",
+                           re.IGNORECASE)
+
+
+def duenn(text: str) -> str | None:
+    """Warum dieser Seitentext kaum Inhalt ist — oder None, wenn er trägt."""
+    woerter = len(text.split())
+    saetze = len(_SATZ_RE.findall(text))
+    anmeldung = bool(_ANMELDUNG_RE.search(text))
+    if woerter >= _DUENN_WOERTER and saetze >= _DUENN_SAETZE:
+        return None
+    # Nur was zu SEHEN ist: dass Anmelde-Wörter vorkommen, heißt nicht,
+    # dass eine Anmeldung nötig ist.
+    gesehen = " Auf der Seite kommt ein Anmelde-Wort vor (Login/Passwort)." if anmeldung else ""
+    return (f"[Achtung: die Seite hatte kaum lesbaren Inhalt ({woerter} Wörter, "
+            f"{saetze} ganze Sätze) — vermutlich nur Navigation, ein Menü oder "
+            f"eine Anmeldeseite.{gesehen} Was hier nicht steht, weißt du nicht: "
+            f"sag das so, statt einen Grund zu raten.]")
+
+
 def suche(query: str, max_results: int = _DEFAULT_RESULTS) -> str:
     """
     Web-Suche für das KI-Tool `web_suche`. Gibt ein menschen-/modell-lesbares
@@ -206,7 +240,12 @@ def suche(query: str, max_results: int = _DEFAULT_RESULTS) -> str:
     if not results:
         return f"Keine Treffer für '{query}'."
 
-    lines = [f"Web-Suche '{query}' - {len(results)} Treffer:"]
+    # Erste Zeile seit 2026-10-08 (Sashas Kalender-Testlauf): die KI nannte
+    # das Ferienende „bis 16.10." als Suchergebnis — die Suche hatte nur
+    # Links geliefert, gelesen hatte sie keine Seite. Das Datum stimmte
+    # zufällig, kam aber aus ihrem Vorwissen. Das schlimmste daran laut
+    # Sasha: dass sie so tat, als hätte sie es aus dem Netz.
+    lines = [SUCHE_HINWEIS, f"Web-Suche '{query}' - {len(results)} Treffer:"]
     for i, r in enumerate(results, 1):
         lines.append(f"{i}. {r['title']}\n   {r['url']}\n   {r['snippet']}")
     return "\n".join(lines)
@@ -235,7 +274,11 @@ def hole(url: str, max_chars: int = _DEFAULT_MAXCHARS) -> str:
     text = _strip_html(page)
 
     if not text:
-        return f"[Seite {url} geladen, aber kein lesbarer Text gefunden]"
+        return Befund(f"[Seite {url} geladen, aber kein lesbarer Text gefunden]",
+                      FEHLGESCHLAGEN)
+    warnung = duenn(text)
     if len(text) > max_chars:
         text = text[:max_chars] + " […abgeschnitten]"
+    if warnung:
+        return Befund(f"{warnung}\nInhalt von {url}:\n{text}", TEILWEISE)
     return f"Inhalt von {url}:\n{text}"

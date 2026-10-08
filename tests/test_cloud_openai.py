@@ -185,7 +185,7 @@ def test_tool_loop_und_gepuffertes_geschwaetz(fake):
     assert events == ["Heute ist frei."]
     assert "Ich schau nach…" not in events        # Geschwaetz bleibt drin
     letzte = c.calls[1]["messages"][-1]
-    assert letzte["role"] == "tool" and letzte["content"] == "leer"
+    assert letzte["role"] == "tool" and letzte["content"] == "[ergebnis: ok]\nleer"   # Kopfzeile seit 2026-10-08
 
 
 def test_kaputte_argumente_kippen_nicht(fake):

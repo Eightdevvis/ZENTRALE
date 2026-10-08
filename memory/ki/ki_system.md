@@ -316,7 +316,9 @@ und nimmt beide Schreibweisen an (siehe „Zwei Schienen" weiter unten).
 |---|---|---|
 | `read_file`   | =            | Datei aus der Whitelist lesen |
 | `list_files`  | =            | Verfügbare lesbare Dateien auflisten |
-| `read_calendar` / `add_calendar_*` / `delete_calendar_entry` | = | Kalender lesen/schreiben/löschen (s. `memory/werkzeuge/kalender_system.md`) |
+| `read_calendar` / `add_calendar_*` / `edit_calendar_routine` / `delete_calendar_entry` | = | Kalender lesen/schreiben/löschen (s. `memory/werkzeuge/kalender_system.md`); auf `gross` mit Kennungen, Ende/Ort und `nur_am` (s. „Kalender ohne Fallen") |
+| `edit_calendar_entry` | nur `gross` | Einen Einzeltermin ändern, nur genannte Felder (gegatet) |
+| `read_calendar_warnings` | nur `gross` | Die Kalender-Warnungen frisch, dieselben wie Sashas ⚠ |
 | `web_search`  | `web_suche`  | Im Internet suchen (gegatet, s. „Internet-Pipe") |
 | `fetch_url`   | `hole_url`   | Webseite laden + Text holen (gegatet) |
 | `read_news`   | `lies_news`  | Weltpolitik-Briefing lesen (s. `memory/werkzeuge/news_system.md`) |
@@ -357,9 +359,84 @@ ein Kreis wäre.
 2. Schreibt, löscht, geht ins Netz oder kostet Geld → `erlaubnis=True` (oder
    eine Funktion der Argumente) **und** eine eigene `frage=`.
 3. Die Funktion in `core/ki_werkzeuge.py` mit `@ausfuehrer("name")`.
+   Verändert sie Sashas Daten: `schreibt=True` und `beweis=` (was danach
+   nachgelesen wird), und die Funktion gibt einen `werkzeug_befund.Befund`
+   mit `beleg` zurück (s. „Belegt oder gesagt"). `tests/test_werkzeug_belege.py`
+   führt jedes schreibende Werkzeug einmal echt aus — ein neues muss dort in
+   `AUFRUFE`.
 4. Schnappschuss neu ziehen (`venv/bin/python tests/test_werkzeug_schnappschuss.py --neu`)
    und den Diff ansehen: nur das neue Werkzeug darf dazukommen.
    `tests/test_werkzeug_register.py` meldet Waisen in beide Richtungen.
+
+### Belegt oder gesagt — Status und Belege (seit 2026-10-08)
+
+Anlass: Sashas Kalender-Testlauf am 08.10. (Gespräch `20261008-132404`). Die
+KI meldete „Geige donnerstags 18:10–19:00" als erledigt — gespeichert war
+18:10 ohne Ende, das Werkzeug hatte nur „OK, Routine eingetragen" gesagt. Sie
+gab ein Ferienende aus dem Vorwissen als Suchergebnis aus, sagte „ohne Login
+komm ich nicht tiefer" (geraten) und „die Warnungen sollten verschwinden"
+(nie geprüft). Ehrlichkeit war eine Bitte im Prompt; jetzt ist sie Bauweise:
+
+- **Kopfzeile.** Jedes Werkzeug-Ergebnis an die KI beginnt mit
+  `[ergebnis: ok|teilweise|fehlgeschlagen|keine_antwort|abgelehnt]`, gesetzt
+  in `werkzeug_schleife.run_tool` (`core/werkzeug_befund.py`). Ein Ausführer
+  sagt den Status mit einem `Befund` (ein `str` mit `status` und `beleg`);
+  alte Text-Ausführer werden an „[Fehler …]" erkannt. Nie „None": ein leeres
+  Ergebnis heißt `fehlgeschlagen`. Der Tutor (fremdes Tool-Set) bekommt
+  keinen Kopf. Das `werkzeug`-Event „fertig" trägt `status` mit.
+- **Belege.** Jedes schreibende Werkzeug (Register: `schreibt`, `beweis`)
+  liest nach dem Schreiben nach und gibt zurück, was **wirklich** dasteht —
+  Kalender (Zeit von–bis, Ort, Wiederholung, Pausen, Warnungen dazu),
+  Notizen („steht im Tagebuch …"), Messkurven, Skills, Ablage. Steht es nicht
+  da: `fehlgeschlagen` und „melde keinen Erfolg".
+- **ask_choice ohne Antwort** (Zeit um, gestoppt) → `keine_antwort`: „Sasha
+  hat NICHT geantwortet — ändere nichts, was davon abhängt, frag nach".
+  `wait_permission` liefert dafür `None` statt des Texts „(keine Antwort)".
+  Das Ergebnis geht als `werkzeug`-Event raus und steht im Verlauf (vorher
+  fehlte es dort — wer das Gespräch nachlas, sah bei ask_choice nichts und
+  hielt es für „None"). Laut Journal hatte Sasha am 08.10. tatsächlich „ja"
+  geklickt; gefunden und behoben wurde dabei ein echtes Rennen in der TUI:
+  `ai_answer_perm` löschte nach dem POST `AI["perm"]` — auch wenn dort schon
+  die NÄCHSTE Frage stand. Jetzt nur noch die beantwortete.
+- **Websuche** beginnt mit „Treffer = Hinweise, NICHT gelesen …";
+  **fetch_url** meldet `teilweise`, wenn eine Seite kaum Inhalt hatte
+  (unter 80 Wörtern oder 3 ganzen Sätzen: Navigation, Menü, Anmeldung) und
+  sagt nur, was zu sehen war.
+- **Prompt (gross), Meta-Regel 2:** „Als Tatsache sagst du nur, was ein
+  Werkzeug in diesem Gespräch belegt oder Sasha gesagt hat; alles andere als
+  Vermutung oder ‚weiß ich nicht'. Erfolg erst nach dem Beleg." Nach
+  Anthropic: „Reduce hallucinations" (weiß-ich-nicht erlauben, an Belege
+  binden) und „Writing effective tools for agents" (Ergebnisse mit hohem
+  Signal statt „OK", Fehler, die zum richtigen Gebrauch lenken).
+
+### Kalender ohne Fallen — `core/ki_kalender.py`, `ki_kalender_aendern.py` (seit 2026-10-08)
+
+- **Kennungen** (nur `gross`): `read_calendar` zeigt je Zeile `#t…` (Termin)
+  bzw. `#r…` (Routine), dazu die Serien mit allen Feldern. Abgeleitet aus dem
+  Inhalt (Ebene, Tag/Regel, Titel, Uhrzeit; Doppel über einen Zähler), 4
+  Zeichen, bei Kollision länger. Kein Zustand, auf beiden Rechnern gleich;
+  nach einer Änderung von Zeit/Titel neu (steht im Beleg) — eine alte
+  Kennung trifft dann nichts statt das Falsche. `klein` liest wie gemessen.
+- **Genau EIN Eintrag.** Ändern/Löschen per Kennung; per Name nur bei genau
+  einem Treffer (genauer Titel vor Teilstring), sonst nichts ändern und die
+  Treffer mit Kennungen zurück. Wo der Kalender-Kern per Teilstring trifft,
+  wird vorher nachgerechnet, ob er genau das Gemeinte träfe.
+- **Nur genannte Felder.** `edit_calendar_routine` (auch `nur_am`: ein Datum
+  ändern oder absagen), `edit_calendar_entry` (neu). Ende vor Beginn wird
+  abgelehnt statt still verworfen.
+- **Nichts annehmen.** `add_calendar_*` haben auf `gross` `ende` und `ort`;
+  fehlt das Ende, steht im Ergebnis „ohne Ende — die Ansicht zeichnet eine
+  Stunde, frag nach". Kein Pflichtfeld: sonst müsste die KI eins erfinden,
+  wenn Sasha keins genannt hat.
+- **Pausen** wirken nur bei genau gleichem Titel; trifft eine Pause keine
+  Routine, heißt das `teilweise` mit Vorschlag (am 08.10. traf „Geigenstunde"
+  die Routine „Geigenstunde @ Geigenschule" nicht).
+- **Warnungen:** `read_calendar_warnings` rechnet sie frisch
+  (`kalender.open_alarms`, dieselben wie Sashas ⚠); jeder Beleg nennt die
+  Warnungen zum Titel.
+- Die Fragen an Sasha nennen bei einer Kennung den Termin („"Geigenstunde"
+  (wöchentlich do 18:10–19:10)"), bei Routinen auch Uhrzeit, Ende, Ort.
+- Was der Kalender-Kern dafür noch können müsste: `claude_web_plan.md` §7.
 
 ### Sandbox — `run_code` und `core/sandbox.py` (seit 2026-10-07)
 
@@ -744,7 +821,8 @@ Das funktioniert nur, weil Flask **multi-threaded** läuft
 blockierten Stream nicht vorbei → Deadlock. `wait_permission` (180 s Timeout)
 gibt den bei `request_permission` gesetzten `timeout_default` zurück: beim Gate
 **„nein"** (sicher – keine Antwort erlaubt nie eine Schreib-Aktion), bei
-`frage_knopf` ein neutrales `(keine Antwort)`. Log: `AI → ERLAUBNIS?`/`FRAGE …`
+`frage_knopf` `None` → Ergebnis `[ergebnis: keine_antwort]` (seit 2026-10-08,
+s. „Belegt oder gesagt"). Log: `AI → ERLAUBNIS?`/`FRAGE …`
 bzw. `AI ← ERLAUBNIS:`/`WAHL: …`. Frontend-Details (perm-bar, N-Knopf-Nav):
 [memory/system/dashboard.md](../system/dashboard.md). Tutor-Modus: beides aus (fremdes Tool-Set). Neues
 Tool gaten = `erlaubnis=` + `frage=` + `alltag=` in seinem Eintrag im Werkzeug-Register.

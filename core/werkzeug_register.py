@@ -17,9 +17,8 @@
 # (2026-10-07) ki_werkzeuge.ausfuehren muss im Register nachschlagen, welche
 # Funktion zu einem Namen gehört. Importierte das Register umgekehrt die
 # Funktionen aus ki_werkzeuge, wäre das ein Kreis. Also importiert hier
-# niemand den Kern darüber: das Register braucht nur Dienste (kalender für das
-# Schema und die Konflikt-Zeile, gedaechtnis für die Kernakten, skills für
-# die Fragen zu Skills), und
+# niemand den Kern darüber: das Register braucht nur kalender (für das Schema)
+# und die Fragen an Sasha (core/werkzeug_fragen.py), und
 # ki_werkzeuge meldet jede Funktion mit @werkzeug_register.ausfuehrer("name")
 # an. Kein Waisenkind bleibt unbemerkt: der Test (tests/test_werkzeug_register.py)
 # prüft beide Richtungen.
@@ -41,10 +40,7 @@ import copy
 from dataclasses import dataclass
 from typing import Callable
 
-import gedaechtnis
 import kalender
-import sandbox
-import skills
 
 
 SCHIENEN = ("klein", "gross")
@@ -80,6 +76,17 @@ class Werkzeug:
     in_der_schleife Hat keinen Ausführer, die Schleife erledigt es selbst
                     (antwort, ask_choice).
     ausfuehrer      f(args) -> str, angemeldet von ki_werkzeuge.
+    gross_parameter Schema NUR für die gross-Schiene, wenn sie mehr kann
+                    (2026-10-08: Kennungen, Ende und Ort im Kalender). Es
+                    darf nur ERGÄNZEN: jedes klein-Feld bleibt, Pflichtfelder
+                    dürfen höchstens wegfallen — so versteht der Ausführer
+                    beide (tests/test_profil.py). klein bleibt byte-gleich.
+    schreibt        Verändert Sashas Daten (Kalender, Notizen, Ablage …).
+    beweis          Nur bei schreibt: was der Ausführer NACH dem Schreiben
+                    nachliest und als Beleg zurückgibt (2026-10-08, „Belege
+                    statt OK"). Der Ausführer liefert dafür einen
+                    werkzeug_befund.Befund mit `beleg`; der Test
+                    (tests/test_werkzeug_belege.py) prüft jedes.
     """
     name: str
     parameter: dict
@@ -94,9 +101,17 @@ class Werkzeug:
     terminal: bool = False
     in_der_schleife: bool = False
     ausfuehrer: Callable[[dict], str] | None = None
+    gross_parameter: dict | None = None
+    schreibt: bool = False
+    beweis: str | None = None
 
     def beschreibung(self, schiene: str) -> str | None:
         return getattr(self, schiene)
+
+    def parameter_auf(self, schiene: str) -> dict:
+        if schiene == "gross" and self.gross_parameter is not None:
+            return self.gross_parameter
+        return self.parameter
 
     def name_auf(self, schiene: str) -> str:
         if schiene == "klein" and self.klein_name:
@@ -105,208 +120,16 @@ class Werkzeug:
 
 
 # ── Erlaubnis: Regeln und Fragen ───────────────────────────────────────
-#
-# Was vor der Ausführung bestätigt werden muss: alles, was schreibt, löscht,
-# ins Netz geht oder Geld kostet. Das Gate kommt automatisch, das Modell
-# weiß davon nichts und muss nicht selbst nachfragen (ein 9b ruft sowas nicht
-# zuverlässig von selbst). Lesen und Auskunft bleibt frei. Abgefangen wird in
-# werkzeug_schleife.run_tool, gefragt über erlaubnis.frage.
-#
-# Die Frage zeigt Sasha im Dialog (und liest sie vor). Sie muss sagen, WAS
-# passiert: Sasha drückt einen Knopf, ohne den Werkzeug-Aufruf zu sehen.
-#
-# Geltungsbereiche (Sasha 2026-10-07: „beides einstellbar machen"): ein Ja
-# gilt „nur dieses Mal", „für dieses Gespräch" oder „immer" (core/
-# erlaubnis.py). „Immer" gibt es NICHT (immer_erlaubbar=False) für
-#   - die Kernakten (write_note auf Hausregeln/Steckbrief/Ziele): sie stehen
-#     in jedem Zug ganz oben im Kopf; was dort landet, steuert die KI auf
-#     Dauer — das soll Sasha jedes Mal sehen, nicht einmal abnicken.
-#   - alles, was löscht oder überschreibt (Termin löschen, Routine ändern/
-#     löschen, Dossier/Skill neu schreiben, fetch_document mit einem schon
-#     benutzten Namen): ein falsches Ja ist dort nicht mit „nein" vom
-#     nächsten Mal wieder gut. Ein Dauer-Ja hiesse, dass ein Missverständnis
-#     der KI still Daten kostet.
-#   - save_from_sandbox: Behalten nur auf Sashas Initiative (07.10.).
-# „Für dieses Gespräch" bleibt überall: es endet von selbst.
+# Stehen seit 2026-10-08 in core/werkzeug_fragen.py (dort auch, wofür es
+# „immer" nicht gibt). Hier nur die Namen, die die Einträge unten brauchen.
 
-def _label(args: dict) -> str:
-    return (args.get("label") or "").strip() or "diesen Eintrag"
-
-
-def _trifft_kernakte(args: dict) -> bool:
-    """write_note ist im Normalfall frei (mitschreiben ohne Rückfrage — eine
-    KI, die vor jeder Notiz fragt, ist kein Sekretär, sondern eine Zumutung),
-    aber NICHT, wenn es eine Kernakte trifft: Hausregeln, Steckbrief, Ziele
-    (Sasha, 2026-10-06; gedaechtnis.schreibt_kernakte)."""
-    return gedaechtnis.schreibt_kernakte(args.get("name")) is not None
-
-
-def _frage_notiz(args: dict) -> str:
-    akte = gedaechtnis.schreibt_kernakte(args.get("name")) or "die Notiz"
-    herkunft = " ".join(str(args.get("herkunft") or "").split())
-    if herkunft:
-        # Import (2026-10-08): Zeilen bleiben als Zeilen lesbar, und Sasha
-        # sieht, woher sie kommen.
-        zeilen = [" ".join(z.split()) for z in str(args.get("text") or "").splitlines()
-                  if z.strip()]
-        text = " / ".join(zeilen)
-        if len(text) > 300:
-            text = text[:299] + "…"
-        return (f'Soll ich aus dem Import von {herkunft} {len(zeilen)} '
-                f'Zeile(n) in {akte} ergänzen: "{text}"?')
-    text = " ".join(str(args.get("text") or "").split())
-    if len(text) > 200:
-        text = text[:199] + "…"
-    return f'Soll ich in {akte} schreiben: "{text}"?'
-
-
-def _frage_dokument(args: dict) -> str:
-    return (f'Soll ich {args.get("url", "das")} holen und als '
-            f'"{args.get("name", "Dokument")}" ablegen?')
-
-
-def _frage_messkurve(args: dict) -> str:
-    return f'Soll ich eine neue Messkurve "{args.get("name", "?")}" anlegen?'
-
-
-def _frage_dossier_neu(args: dict) -> str:
-    wie = (args.get("name") or "das Dossier").strip()
-    return (f'Soll ich das Dossier "{wie}" komplett neu schreiben? '
-            f'(Die bisherige Fassung bleibt als .bak liegen.)')
-
-
-def _frage_termin(args: dict) -> str:
-    label = _label(args)
-    wann = " ".join(p for p in (
-        (args.get("day") or "").strip(),
-        (args.get("time") or "").strip(),
-    ) if p)
-    wann_txt = f' am {wann}' if wann else ''
-    frage = f'Soll ich "{label}"{wann_txt} eintragen?'
-    # Vorab-Konflikt-Check am GEPLANTEN (noch nicht geschriebenen) Termin:
-    # fällt er in eine Reise oder kollidiert er mit einem bestehenden Termin,
-    # ziehen wir die fertige ⚠-Zeile schon JETZT in die JA/NEIN-Frage - so
-    # entscheidet Sasha informiert, statt erst nach dem Eintragen gewarnt zu
-    # werden. Python rechnet (conflicts_for_proposed), das Modell ist außen
-    # vor: die Zeile wird dem Menschen direkt im Dialog gezeigt.
-    warns = kalender.conflicts_for_proposed(
-        args.get("layer", "termine"),
-        args.get("day", ""),
-        label,
-        args.get("time"),
-    )
-    if warns:
-        frage += " " + " ".join(warns)
-    return frage
-
-
-def _frage_routine(args: dict) -> str:
-    rrule = (args.get("rrule") or "").strip()
-    rrule_txt = f' ({rrule})' if rrule else ''
-    return f'Soll ich die Routine "{_label(args)}"{rrule_txt} eintragen?'
-
-
-def _frage_pause(args: dict) -> str:
-    von = (args.get("von") or "").strip()
-    bis = (args.get("bis") or "").strip()
-    spanne = f' von {von} bis {bis}' if von and bis else ''
-    return f'Soll ich "{_label(args)}"{spanne} pausieren?'
-
-
-def _frage_routine_aendern(args: dict) -> str:
-    label = _label(args)
-    if (args.get("aktion") or "").strip() == "loeschen":
-        return f'Soll ich die Routine "{label}" wirklich dauerhaft löschen?'
-    # Die Frage nennt, WAS sich aendert. "Soll ich die Routine aendern?"
-    # waere nicht zustimmungsfaehig.
-    teile = []
-    for feld, wort in (("time", "Beginn"), ("ende", "Ende"),
-                       ("ort", "Ort"), ("rrule", "Wiederholung"),
-                       ("neuer_titel", "Titel")):
-        wert = (args.get(feld) or "").strip()
-        if wert:
-            teile.append(f"{wort} {wert}")
-    was = ", ".join(teile) if teile else "etwas"
-    return f'Soll ich die Routine "{label}" ändern auf {was}?'
-
-
-def _frage_termin_loeschen(args: dict) -> str:
-    day = (args.get("day") or "").strip()
-    wann_txt = f' am {day}' if day else ''
-    return f'Soll ich "{_label(args)}"{wann_txt} wirklich löschen?'
-
-
-def _frage_suche(args: dict) -> str:
-    q = (args.get("query") or "").strip()
-    return f'Soll ich im Internet nach "{q}" suchen?' if q else "Soll ich im Internet suchen?"
-
-
-def _frage_seite(args: dict) -> str:
-    u = (args.get("url") or "").strip()
-    return f'Soll ich die Seite {u} aus dem Internet laden?' if u else "Soll ich eine Webseite laden?"
-
-
-def _code_zeit(args: dict) -> int:
-    """Das verlangte Zeitlimit von run_code in Sekunden (Standard 30)."""
-    try:
-        return int(args.get("zeitlimit") or sandbox.ZEITLIMIT_STANDARD_S)
-    except (TypeError, ValueError):
-        return sandbox.ZEITLIMIT_STANDARD_S
-
-
-def _code_lang(args: dict) -> bool:
-    """run_code über 2 Minuten: eigene Frage, nur „einmal" (2026-10-07).
-    Ein „immer" für Programme soll nicht heimlich halbstündige Läufe decken."""
-    return _code_zeit(args) > sandbox.ZEITLIMIT_OHNE_FRAGE_S
-
-
-def _dauer_text(sekunden: int) -> str:
-    sekunden = min(sekunden, sandbox.ZEITLIMIT_MAX_S)
-    if sekunden % 60 == 0:
-        m = sekunden // 60
-        return "1 Minute" if m == 1 else f"{m} Minuten"
-    return f"{sekunden} Sekunden"
-
-
-def _frage_code(args: dict) -> str:
-    """Sasha sieht die Sprache und den Anfang des Programms. Die TUI zeigt
-    die Frage einzeilig, deshalb stehen die Zeilen mit ⏎ hintereinander."""
-    sprache = "Shell" if args.get("sprache") == "shell" else "Python"
-    zeilen = [z.rstrip() for z in str(args.get("code") or "").splitlines()
-              if z.strip()]
-    anfang = " ⏎ ".join(z.strip()[:80] for z in zeilen[:4])
-    if len(anfang) > 300:
-        anfang = anfang[:299] + "…"
-    mehr = f" (+{len(zeilen) - 4} Zeilen)" if len(zeilen) > 4 else ""
-    lang = (f" und darf bis zu {_dauer_text(_code_zeit(args))} laufen"
-            if _code_lang(args) else "")
-    skill = gedaechtnis.slug(args.get("skill"))
-    mit = (f" — dazu sieht es den Skill „{skill}“ (nur lesen)" if skill else "")
-    return (f"Soll ich dieses {sprache}-Programm abgeschottet ausführen "
-            f"(ohne Internet, ohne Zugriff auf deine Dateien){mit}{lang}? "
-            f"„{anfang}“{mehr}")
-
-
-def _frage_sandbox_ablage(args: dict) -> str:
-    datei = str(args.get("datei") or "").strip() or "die Datei"
-    titel = str(args.get("titel") or "").strip()
-    als = f' als „{titel[:80]}“' if titel else ""
-    return f"Soll ich {datei[:120]} aus dem Programm-Lauf{als} in deine Ablage legen?"
-
-
-def _frage_skill_neu(args: dict) -> str:
-    """Sasha sieht Name, wofür der Skill ist und den Anfang der Anleitung —
-    er soll entscheiden können, ohne den Werkzeug-Aufruf zu lesen."""
-    name = gedaechtnis.slug(args.get("name")) or "?"
-    wofuer = " ".join(str(args.get("beschreibung") or "").split())[:240]
-    return (f'Soll ich mir die Anleitung „{name}“ merken? Wofür: {wofuer or "-"}. '
-            f'„{skills.anfang(args.get("inhalt"))}“')
-
-
-def _frage_skill_aendern(args: dict) -> str:
-    name = gedaechtnis.slug(args.get("name")) or "?"
-    return (f'Soll ich die Anleitung „{name}“ neu schreiben? (Die bisherige '
-            f'Fassung bleibt als .bak liegen.) „{skills.anfang(args.get("inhalt"))}“')
+from werkzeug_fragen import (  # noqa: E402
+    _trifft_kernakte, _frage_notiz, _frage_dokument, _frage_messkurve,
+    _frage_dossier_neu, _frage_termin, _frage_routine, _frage_pause,
+    _frage_routine_aendern, _frage_termin_loeschen, _frage_termin_aendern,
+    _frage_suche, _frage_seite, _code_lang, _frage_code,
+    _frage_sandbox_ablage, _frage_skill_neu, _frage_skill_aendern,
+)
 
 
 # ── Die Werkzeuge ──────────────────────────────────────────────────────
@@ -320,6 +143,11 @@ def _frage_skill_aendern(args: dict) -> str:
 # Bestaetigungspflicht. Was GEHT ist Erziehung ("Du hast KEINE Termine im
 # Gedaechtnis", "nie aus dem Kopf raten") — das erzwang obendrein
 # Tool-Runden, die es nicht braucht, und jede Runde ist ein voller Call.
+
+# Kennung eines Kalender-Eintrags (ki_kalender.py). Hier oben, weil auch ein
+# Eintrag in der Liste sie braucht.
+_KENNUNG = {"type": "string",
+            "description": "Kennung aus read_calendar, z.B. '#r3f9c'."}
 
 WERKZEUGE = [
     # ── Kalender ──
@@ -366,18 +194,15 @@ WERKZEUGE = [
         ),
         gross=(
             "Liest Kalender-Einträge: TERMINE und Routinen, also Verabredetes. "
-            "Zustände, Krankheiten, Stimmungen oder Erlebtes stehen NICHT im "
-            "Kalender, sondern in seinen Notizen — such hier nicht nach 'Fieber' "
-            "oder 'müde', da kommt nur Leere zurück. Zeitraum "
-            "bevorzugt über 'zeitraum' (z.B. 'dieser_monat'); für krumme Spannen "
-            "start_date+end_date. 'suche' filtert auf ein Stichwort ('Geige'). "
-            "Zeilen mit ⚠ sind fertig berechnete Hinweise - nie selbst "
-            "nachrechnen, nur weitergeben: 'Kollision' / 'Teil-Überlappung' / "
-            "'Knapp' sind Terminüberschneidungen; 'KONFLIKT' = ein lokaler Termin "
-            "fällt in eine Reise; 'ABSAGEN' = eine regelmäßige Pflicht-Absage "
-            "fällt in eine Reise. Bei KONFLIKT/ABSAGEN einmal kurz "
-            "rückversichern, dann deutlich warnen und per ask_choice nachhaken, "
-            "ob schon abgesagt wurde."
+            "Zustände, Krankheiten oder Erlebtes stehen in seinen Notizen, "
+            "nicht hier. Zeitraum bevorzugt über 'zeitraum', für krumme "
+            "Spannen start_date+end_date; 'suche' filtert auf ein Stichwort. "
+            "Jede Zeile beginnt mit einer Kennung (#t… Termin, #r… Routine), "
+            "darunter die Serien mit allen Feldern. Vor jedem Ändern lesen und "
+            "die Kennung nehmen. Warnungen: read_calendar_warnings. Bei "
+            "KONFLIKT (Termin in einer Reise) oder ABSAGEN (Pflicht-Absage in "
+            "einer Reise) einmal kurz rückversichern, dann deutlich warnen und "
+            "per ask_choice nachhaken, ob schon abgesagt wurde."
         ),
         parameter={
             "type": "object",
@@ -437,6 +262,8 @@ WERKZEUGE = [
         erlaubnis=True,
         frage=_frage_termin,
         alltag="termine eintragen",
+        schreibt=True,
+        beweis="liest den Tag nach: steht der Termin mit Zeit, Ende und Ort da",
         klein=(
             "Trägt einen Einmal-Eintrag in einen Kalender-Layer ein. "
             "Nutze dies wenn der User einen Termin nennt, eine Frist, ein "
@@ -445,7 +272,8 @@ WERKZEUGE = [
         ),
         gross=(
             "Trägt einen Einmal-Termin oder eine Frist ein. Im Zweifel Layer "
-            "'termine'. Datum YYYY-MM-DD."
+            "'termine'. Datum YYYY-MM-DD. Ende und Ort mitgeben, wenn bekannt "
+            "— fehlt das Ende, wird keins angenommen; nenn dann auch keins."
         ),
         parameter={
             "type": "object",
@@ -475,6 +303,8 @@ WERKZEUGE = [
         erlaubnis=True,
         frage=_frage_routine,
         alltag="routinen eintragen",
+        schreibt=True,
+        beweis="liest die Routine nach, mit ihrem nächsten Termin",
         klein=(
             "Trägt eine Wiederholungs-Regel in einen Kalender-Layer ein (iCal RRULE). "
             "Nutze dies bei regelmäßigen Aktivitäten: 'jeden Dienstag Geige', "
@@ -486,7 +316,9 @@ WERKZEUGE = [
             "Trägt eine Wiederholungs-Regel ein (iCal RRULE), Layer-Default "
             "'routinen'. Beispiele: FREQ=WEEKLY;BYDAY=TU | "
             "FREQ=WEEKLY;BYDAY=MO,WE,FR | FREQ=MONTHLY;BYMONTHDAY=1 | "
-            "FREQ=MONTHLY;BYDAY=2TU (2. Dienstag im Monat)."
+            "FREQ=MONTHLY;BYDAY=2TU (2. Dienstag im Monat). Der Ort gehört "
+            "in 'ort', nicht in den Titel. Fehlt das Ende, wird keins "
+            "angenommen — frag nach, statt eins zu nennen."
         ),
         parameter={
             "type": "object",
@@ -517,6 +349,8 @@ WERKZEUGE = [
         immer_erlaubbar=False,
         frage=_frage_routine_aendern,
         alltag="routinen ändern",
+        schreibt=True,
+        beweis="liest die Routine (bzw. das eine Datum) nach",
         klein=(
             "Ändert oder löscht eine BESTEHENDE Wiederholungs-Regel. Nimm dies, "
             "wenn sich an etwas Regelmäßigem etwas ändert - 'Geige ist jetzt um "
@@ -527,10 +361,11 @@ WERKZEUGE = [
             "sie sind."
         ),
         gross=(
-            "Ändert oder löscht eine BESTEHENDE Routine. Bei 'Geige ist jetzt "
-            "um 18:00' DIESES Tool, nicht add_calendar_routine - sonst steht "
-            "die Stunde zweimal im Kalender. Titel als Teilstring, "
-            "aktion='aendern' oder 'loeschen'."
+            "Ändert oder löscht EINE bestehende Routine, per 'kennung' aus "
+            "read_calendar (ein Titel geht nur, wenn er genau eine trifft). "
+            "Nur die genannten Felder ändern sich — nie löschen und neu "
+            "anlegen, nie add_calendar_routine dafür. Mit 'nur_am' nur dieses "
+            "eine Datum (ändern, oder bei 'loeschen' absagen)."
         ),
         parameter={
             "type": "object",
@@ -573,6 +408,8 @@ WERKZEUGE = [
         erlaubnis=True,
         frage=_frage_pause,
         alltag="routinen pausieren",
+        schreibt=True,
+        beweis="prüft, welche Routine die Pause trifft und welche Termine ausfallen",
         klein=(
             "Trägt eine Pause/einen Ausfall für eine regelmäßige Aktivität "
             "ein - in dem Zeitraum findet sie NICHT statt (Ferien, Feiertag, "
@@ -582,9 +419,10 @@ WERKZEUGE = [
             "Kalender passen (z.B. 'Geigenstunde'). Datum: YYYY-MM-DD."
         ),
         gross=(
-            "Trägt eine Pause für eine regelmäßige Aktivität ein - in dem "
-            "Zeitraum findet sie NICHT statt (Ferien, Lehrerin im Urlaub). "
-            "'label' muss zum Routinen-Titel im Kalender passen. Datum YYYY-MM-DD."
+            "Trägt eine Pause für eine Routine ein - in dem Zeitraum findet "
+            "sie NICHT statt (Ferien, Lehrerin im Urlaub). Am besten per "
+            "'kennung'; ein 'label' muss GENAU dem Routinen-Titel entsprechen. "
+            "Datum YYYY-MM-DD."
         ),
         parameter={
             "type": "object",
@@ -615,6 +453,8 @@ WERKZEUGE = [
         immer_erlaubbar=False,
         frage=_frage_termin_loeschen,
         alltag="termine löschen",
+        schreibt=True,
+        beweis="prüft, dass der Termin weg ist",
         klein=(
             "Löscht einen Einmal-Termin aus dem Kalender. Nutze dies wenn "
             "der User einen Eintrag entfernt haben will ('lösch den Zahnarzt "
@@ -630,8 +470,9 @@ WERKZEUGE = [
             "Einmal-Termine, nicht auf Routinen oder Pausen."
         ),
         gross=(
-            "Löscht einen Einmal-Termin. Label-Match ist Teilstring, Datum "
-            "YYYY-MM-DD. Wirkt nicht auf Routinen oder Pausen."
+            "Löscht EINEN Einzeltermin, per 'kennung' (oder Tag + Titel, nur "
+            "bei genau einem Treffer). Mehrtägige werden ganz gelöscht. "
+            "Routinen: edit_calendar_routine."
         ),
         parameter={
             "type": "object",
@@ -777,9 +618,9 @@ WERKZEUGE = [
         ),
         gross=(
             "Sucht im Internet und gibt Titel, URL und Snippet zurück. Für alles, "
-            "was weder in Sashas Notizen noch in den Projekt-Dateien steht. Den "
-            "vollen Seitentext gibt es erst über fetch_url. Jede Suche muss Sasha "
-            "bestätigen, also gezielt einsetzen."
+            "was weder in Sashas Notizen noch in den Projekt-Dateien steht. "
+            "Treffer sind Hinweise, nicht gelesen: Angaben daraus erst nach "
+            "fetch_url als Tatsache nennen. Jede Suche muss Sasha bestätigen."
         ),
         parameter={
             "type": "object",
@@ -806,7 +647,8 @@ WERKZEUGE = [
         ),
         gross=(
             "Lädt eine konkrete Webseite und gibt ihren Text zurück (gekürzt). "
-            "Muss Sasha bestätigen."
+            "Sagt, wenn kaum Inhalt kam (Navigation, Anmeldung). Muss Sasha "
+            "bestätigen."
         ),
         parameter={
             "type": "object",
@@ -921,6 +763,8 @@ WERKZEUGE = [
     ),
     Werkzeug(
         name="write_note",
+        schreibt=True,
+        beweis="liest die Notiz nach: steht der Text drin",
         erlaubnis=_trifft_kernakte,
         frage=_frage_notiz,
         alltag="hausregeln, steckbrief, ziele ändern",
@@ -992,6 +836,8 @@ WERKZEUGE = [
     # (write_note) ist es nicht und bleibt ungegatet, ausser auf Kernakten.
     Werkzeug(
         name="rewrite_note",
+        schreibt=True,
+        beweis="liest das Dossier nach: hat es den neuen Inhalt",
         erlaubnis=True,
         immer_erlaubbar=False,
         frage=_frage_dossier_neu,
@@ -1019,6 +865,8 @@ WERKZEUGE = [
     # Schreiben, weil sonst ungefragt Dateien im Gedaechtnis landen.
     Werkzeug(
         name="fetch_document",
+        schreibt=True,
+        beweis="liest die Ablage im Gedächtnis nach (quellen/…)",
         erlaubnis=True,
         immer_erlaubbar=False,
         frage=_frage_dokument,
@@ -1052,6 +900,8 @@ WERKZEUGE = [
     # halbtote Reihe in Sashas Uebersicht.
     Werkzeug(
         name="create_series",
+        schreibt=True,
+        beweis="prüft, dass die Messkurve in der Liste steht",
         erlaubnis=True,
         frage=_frage_messkurve,
         alltag="messkurven anlegen",
@@ -1079,6 +929,8 @@ WERKZEUGE = [
     ),
     Werkzeug(
         name="log_series",
+        schreibt=True,
+        beweis="liest den Wert der Kurve an dem Tag nach",
         klein=None,
         gross=(
             "Traegt einen Messwert in eine bestehende Kurve ein (Schlaf, "
@@ -1161,6 +1013,8 @@ WERKZEUGE = [
     ),
     Werkzeug(
         name="propose_skill",
+        schreibt=True,
+        beweis="lädt die Anleitung nach",
         erlaubnis=True,
         frage=_frage_skill_neu,
         alltag="neue anleitungen anlegen",
@@ -1186,6 +1040,8 @@ WERKZEUGE = [
     ),
     Werkzeug(
         name="edit_skill",
+        schreibt=True,
+        beweis="lädt die Anleitung nach: hat sie den neuen Inhalt",
         erlaubnis=True,
         immer_erlaubbar=False,
         frage=_frage_skill_aendern,
@@ -1258,6 +1114,8 @@ WERKZEUGE = [
     # und das Dokument erscheint ohnehin sofort als Zeile im Chat.
     Werkzeug(
         name="create_document",
+        schreibt=True,
+        beweis="liest das Dokument aus der Ablage nach",
         klein=None,
         gross=(
             "Legt ein Dokument in Sashas Ablage: Plan, Liste, Text, Code, "
@@ -1293,6 +1151,8 @@ WERKZEUGE = [
     ),
     Werkzeug(
         name="update_document",
+        schreibt=True,
+        beweis="liest die neue Fassung aus der Ablage nach",
         klein=None,
         gross=(
             "Neue Fassung eines Dokuments der Ablage; die alte bleibt. Vorher "
@@ -1312,6 +1172,8 @@ WERKZEUGE = [
     # Die Sandbox räumt nach 7 Tagen auf; was bleiben soll, entscheidet er.
     Werkzeug(
         name="save_from_sandbox",
+        schreibt=True,
+        beweis="liest das Dokument aus der Ablage nach",
         erlaubnis=True,
         frage=_frage_sandbox_ablage,
         alltag="dateien aus programm-läufen ablegen",
@@ -1354,6 +1216,62 @@ WERKZEUGE = [
             "required": ["name"],
         },
     ),
+    # ── Kalender ohne Fallen (2026-10-08, nach Sashas Testlauf) ──
+    # Einen einzelnen Termin ändern ging vorher nur über Löschen + Neu, und
+    # dabei gingen Ende und Ort verloren. Die Warnungen sah die KI nur als
+    # Block im Kopf vom Anfang des Zugs — nach einer Änderung riet sie, sie
+    # seien weg. Beide nur gross: klein bleibt, wie es gemessen ist.
+    Werkzeug(
+        name="edit_calendar_entry",
+        erlaubnis=True,
+        immer_erlaubbar=False,
+        frage=_frage_termin_aendern,
+        alltag="termine ändern",
+        schreibt=True,
+        beweis="liest den Termin nach: Tag, Zeit, Ende, Ort",
+        klein=None,
+        gross=(
+            "Ändert EINEN Einzeltermin, per 'kennung' aus read_calendar (oder "
+            "Tag + Titel, nur bei genau einem Treffer). Nur die genannten "
+            "Felder ändern sich; bei mehrtägigen auch 'bis'."
+        ),
+        parameter={
+            "type": "object",
+            "properties": {
+                "kennung":     _KENNUNG,
+                "day":         {"type": "string",
+                                "description": "Ohne kennung: bisheriger Tag YYYY-MM-DD."},
+                "label":       {"type": "string",
+                                "description": "Ohne kennung: bisheriger Titel."},
+                "neuer_tag":   {"type": "string", "description": "YYYY-MM-DD"},
+                "time":        {"type": "string", "description": "Neuer Beginn HH:MM"},
+                "ende":        {"type": "string", "description": "Neues Ende HH:MM"},
+                "ort":         {"type": "string", "description": "Neuer Ort"},
+                "neuer_titel": {"type": "string", "description": "Neuer Titel"},
+                "bis":         {"type": "string",
+                                "description": "Nur mehrtägig: neuer letzter Tag YYYY-MM-DD"},
+            },
+            "required": [],
+        },
+    ),
+    Werkzeug(
+        name="read_calendar_warnings",
+        klein=None,
+        gross=(
+            "Die Kalender-Warnungen (Überschneidungen, zu knapp, Termin in "
+            "einer Reise, Absagen) von heute bis +30 Tage, frisch berechnet "
+            "— dieselben, die Sasha als ⚠ sieht. Nach einer Änderung hier "
+            "nachsehen, statt zu sagen, sie seien weg."
+        ),
+        parameter={
+            "type": "object",
+            "properties": {
+                "suche": {"type": "string",
+                          "description": "Optional: nur Warnungen, die das Wort nennen."},
+            },
+            "required": [],
+        },
+    ),
     # Hinweis: ASCII-Bilder laufen NICHT über ein Werkzeug. Messung
     # (scripts/bench_ascii.py, Baseline N=200) zeigte: als Tool feuerte die KI
     # bei impliziten Prompts nur ~3 % - und tippte den Aufruf oft als Text-
@@ -1366,6 +1284,38 @@ WERKZEUGE = [
 # ── Nachschlagen ───────────────────────────────────────────────────────
 
 _NACH_NAME = {w.name: w for w in WERKZEUGE}
+
+
+# ── Was gross am Kalender mehr kann (2026-10-08) ───────────────────────
+# Die Parameter oben sind der Vertrag mit klein und bleiben byte-gleich. Für
+# gross kommen Felder DAZU (Feld gross_parameter, Regel dort): Kennungen aus
+# read_calendar, Ende und Ort beim Eintragen (der Ort landete am 08.10. im
+# Titel, weil es kein Feld gab), nur_am für ein einzelnes Datum einer Serie.
+
+def _erweitern(name: str, neu: dict, *, vorn: dict | None = None,
+               required: list | None = None) -> None:
+    w = _NACH_NAME[name]
+    p = copy.deepcopy(w.parameter)
+    p["properties"] = {**(vorn or {}), **p["properties"], **neu}
+    if required is not None:
+        p["required"] = required
+    w.gross_parameter = p
+
+
+_ENDE_ORT = {
+    "ende": {"type": "string", "description": "Ende HH:MM (24h), wenn bekannt."},
+    "ort":  {"type": "string", "description": "Ort, wenn bekannt."},
+}
+_erweitern("add_calendar_entry", _ENDE_ORT)
+_erweitern("add_calendar_routine", _ENDE_ORT)
+_erweitern("edit_calendar_routine", {
+    "nur_am": {"type": "string",
+               "description": "YYYY-MM-DD: nur dieses eine Datum der Serie."},
+}, vorn={"kennung": _KENNUNG}, required=["aktion"])
+_erweitern("add_calendar_pause", {}, vorn={"kennung": _KENNUNG},
+           required=["von", "bis"])
+_erweitern("delete_calendar_entry", {}, vorn={"kennung": _KENNUNG}, required=[])
+
 
 # Deutsche Alt-Namen der klein-Schiene → kanonische. Abgeleitet, nicht
 # getippt: welche Schiene ihr Werkzeug wie nennt, steht oben im Eintrag.
@@ -1404,7 +1354,7 @@ def schema(schiene: str) -> list:
         "function": {
             "name":        w.name_auf(schiene),
             "description": w.beschreibung(schiene),
-            "parameters":  copy.deepcopy(w.parameter),
+            "parameters":  copy.deepcopy(w.parameter_auf(schiene)),
         },
     } for w in auf_schiene(schiene)]
 

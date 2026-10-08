@@ -34,8 +34,12 @@ Richtung — von oben (wer einen Chat startet) nach unten (was er dafür braucht
            │     ├── erlaubnis    fragt das Register: bestätigen? und die Frage dazu
            │     └── ki_antwort   Bild-Marker aus der Antwort ziehen, Zug zum Merken geben
            ├── ki_werkzeuge       was ein Tool TUT (Kalender, Notizen, Netz, Mail …)
+           │     ├── ki_kalender(_aendern)  Kalender: Kennungen, genau EIN Eintrag,
+           │     │                          Belege (seit 08.10.)
            │     └── werkzeug_register  ein Eintrag pro Werkzeug: Schema, Schienen,
-           │                            Erlaubnis; profil + erlaubnis lesen auch hier
+           │           │                Erlaubnis; profil + erlaubnis lesen auch hier
+           │           └── werkzeug_fragen  die Ja/Nein-Fragen an Sasha
+           │  werkzeug_befund (Fundament): Status [ergebnis: …] + Beleg, Schiene
            ├── ki_prompt          Prompt-Bausteine: Jetzt-Block, Imprint, Alarme, Denk-Heuristik
            └── ai_backends        Einstellungen: wer darf denken, welches Modell, wie tief
    ki_einstellungen  daneben, nur für die Routen: Einstellungen lesen und

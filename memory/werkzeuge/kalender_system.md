@@ -98,6 +98,13 @@ Public API:
 - `add_pause(label, von, bis, grund=None)` – Routine über eine Spanne aussetzen (Tool `add_calendar_pause`, gegatet).
 - `delete_entry(day, label, layer=None)` → `int` – Einträge an einem Tag löschen, gibt Anzahl zurück (Tool `delete_calendar_entry`, gegatet). Tool-Hinweis: DIREKT rufen, KEIN read_calendar davor – gemessen (2026-06-07): mit vorherigem read lenken die ⚠-Alarm-Zeilen das 9B 5/8-mal von der Löschung ab; direkt = 8/8. Deterministisch die Ablenkung wegnehmen schlägt Prompt-Nudging.
 - `add_layer(name, label, color, default_visible)` – neuer Layer.
+- **Die KI-Werkzeuge** rufen diese Funktionen seit 2026-10-08 nicht mehr
+  direkt aus `ki_werkzeuge`, sondern über `core/ki_kalender.py` (Lesen,
+  Kennungen `#r3f9c`, Belege) und `core/ki_kalender_aendern.py` (genau EIN
+  Eintrag, nur genannte Felder, nachgelesen). Kein Löschen per Teilstring
+  mehr ohne Prüfung, dass es genau einen trifft. Siehe
+  [../ki/ki_system.md](../ki/ki_system.md) „Kalender ohne Fallen"; was der
+  Kern dafür noch braucht: [../ki/claude_web_plan.md](../ki/claude_web_plan.md) §7.
 - `imprint_for_prompt(tage=None)` – „was heute/morgen ansteht" als fertiger
   Prompt-Block, nur SICHTBARE Layer. Ersetzt den gelöschten `auto_capture`
   (siehe unten).

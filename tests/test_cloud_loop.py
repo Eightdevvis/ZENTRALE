@@ -344,7 +344,22 @@ def test_tool_wird_ausgefuehrt_und_ergebnis_geht_zurueck(fake):
     letzte = c.calls[1]["messages"][-1]
     assert letzte["role"] == "user"
     assert letzte["content"][0]["type"] == "tool_result"
-    assert letzte["content"][0]["content"] == "keine Termine"
+    assert letzte["content"][0]["content"] == "[ergebnis: ok]\nkeine Termine"   # Kopfzeile seit 2026-10-08
+
+
+def test_ausfuehrer_erfahren_die_schiene(fake, monkeypatch):
+    """Kennungen im Kalender gibt es nur auf gross (2026-10-08): der
+    Cloud-Weg muss seine Schiene bis zum Ausführer durchreichen."""
+    import werkzeug_befund
+    fake([
+        {"content": [_tool_block("read_calendar", {})], "stop_reason": "tool_use"},
+        {"text": ["fertig"], "stop_reason": "end_turn"},
+    ])
+    monkeypatch.setattr(cloud, "_profil", lambda: __import__("profil").gross)
+    gesehen = []
+    _lauf(cloud.chat_stream(_msgs(), tool_executor=lambda n, a:
+                            gesehen.append(werkzeug_befund.schiene()) or "x"))
+    assert gesehen == ["gross"]
 
 
 def test_mehrere_tools_in_einer_message(fake):

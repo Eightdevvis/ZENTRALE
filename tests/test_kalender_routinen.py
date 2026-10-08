@@ -88,7 +88,7 @@ def test_werkzeug_benennt_um(cal):
     antwort = ai._execute_tool(
         "edit_calendar_routine",
         {"label": "geige", "aktion": "aendern", "neuer_titel": "Violine"})
-    assert "geändert" in antwort
+    assert "Steht jetzt" in antwort and "Violine" in antwort   # Beleg statt „geändert" (2026-10-08)
     assert _routine(cal, "Violine") is not None
 
 
@@ -137,11 +137,11 @@ def test_leerer_titel_trifft_nicht_alles(cal):
 # ── Das Werkzeug, so wie die KI es sieht ──────────────────────────────
 
 def test_werkzeug_aendert_und_loescht(cal):
-    assert "geändert" in ai._execute_tool(
+    assert "Steht jetzt" in ai._execute_tool(
         "edit_calendar_routine",
         {"label": "geige", "aktion": "aendern", "time": "18:00"})
     assert _routine(cal)["time"] == "18:00"
-    assert "gelöscht" in ai._execute_tool(
+    assert "Gelöscht" in ai._execute_tool(
         "edit_calendar_routine", {"label": "geige", "aktion": "loeschen"})
 
 
