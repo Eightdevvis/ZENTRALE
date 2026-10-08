@@ -13,6 +13,8 @@
 #   Permissions  was ohne Frage erlaubt ist, mit Zurücknehmen
 #   Model        Anbieter, Modell, Denk-Tiefe, Weg — öffnet die vorhandene
 #                Auswahl (/model, /provider, /effort)
+#   Appearance   wie die Symbole der Seitenleiste aussehen: Pixel zwei
+#                Zeilen hoch oder Zeichen (tui_symbole, seit 2026-10-08)
 # Eine Überlagerung über dem Inhalt rechts der Seitenleiste, wie Gedächtnis
 # und Projekte. Zustand AI["einstellungen"] (None = zu).
 #
@@ -23,7 +25,7 @@ import curses
 import urllib.error
 import urllib.parse
 
-from . import fussleiste
+from . import fussleiste, symbole
 from . import verlauf as V
 from .basis import api_call
 from . import chat as chatmod      # erst beim Aufruf gelesen: chat importiert uns
@@ -32,7 +34,7 @@ from .text import md_zeilen
 
 ABSCHNITTE = [("skills", "Skills"), ("memory", "Memory"), ("usage", "Usage"),
               ("capabilities", "Capabilities"), ("permissions", "Permissions"),
-              ("model", "Model")]
+              ("model", "Model"), ("appearance", "Appearance")]
 AKTEN = ["hausregeln", "steckbrief", "ziele", "bereiche"]
 NAV = 18                                  # Breite der Leiste links
 VON = {"sasha": "you", "ki": "the ki", "anthropic": "Anthropic"}   # „Created by"
@@ -43,6 +45,8 @@ GRUPPEN = [("calendar", "Calendar"), ("clock", "Calendar"), ("memory", "Memory")
            ("web page", "Web"), ("news", "Web"), ("mail", "Mail"), ("files", "Files"),
            ("document", "Files"), ("code", "Code"), ("series", "Series"),
            ("choice", "Chat"), ("answer", "Chat")]
+# Die Arten der Seitenleisten-Symbole (symbole.ARTEN) mit Beschriftung.
+SYMBOL_ARTEN = [("pixel2", "pixel — two lines high"), ("zeichen", "signs — one character")]
 FRAGT = {"nie": "", "immer": "asks first", "manchmal": "asks if it changes something"}
 
 
@@ -86,6 +90,26 @@ def skill_zeilen(s, breite):
             zeilen += [("", ""), (titel, "kopf")]
             zeilen += [(t, "") for t, _st in md_zeilen(s[feld], breite)]
     return zeilen
+
+
+def liste_hinweis(lage, breite):
+    """Customize → Skills, ganz oben (2026-10-08): ist die Skill-Liste für
+    die KI zu lang, sagt es das — statt still alle Beschreibungen zu kürzen.
+    lage = skill_liste aus /api/gedaechtnis. -> [(text, art)]"""
+    lage = lage if isinstance(lage, dict) else {}
+    if not lage.get("zu_lang"):
+        return []
+
+    def zahl(n):
+        return "{:,}".format(int(n or 0)).replace(",", " ")
+    text = ("Liste zu lang: %s von %s Zeichen — schalte Skills aus, die du nicht brauchst"
+            % (zahl(lage.get("laenge")), zahl(lage.get("grenze"))))
+    zeilen = [(t, "warn") for t, _s in md_zeilen(text, breite)]
+    kurz = list(lage.get("nur_name") or []) + list(lage.get("gekuerzt") or [])
+    if kurz:
+        zeilen += [(t, "leise") for t, _s in
+                   md_zeilen("die ki sieht davon gerade nur kurz: " + ", ".join(kurz), breite)]
+    return zeilen + [("", "")]
 
 
 def kosten_zeilen(k, breite):
@@ -194,6 +218,8 @@ class Einstellungen:
             return len(self._erlaubt())
         if ab == "model":
             return len(self._modell_reihen())
+        if ab == "appearance":
+            return len(SYMBOL_ARTEN)
         return 0
 
     # ── Tasten ─────────────────────────────────────────────────────────
@@ -214,6 +240,8 @@ class Einstellungen:
             mitte.append(("enter", "revoke"))
         elif ab == "model":
             mitte.append(("enter", "change"))
+        elif ab == "appearance":
+            mitte.append(("enter", "choose"))
         elif ab == "usage":
             mitte = [("r", "reload")]
         return mitte + [("←", "sections"), ("esc", "back")]
@@ -285,6 +313,8 @@ class Einstellungen:
             E["wahl"] = max(0, min(E["wahl"], self._waehlbar() - 1))
         elif ab == "model":
             self._modell(self._modell_reihen()[i][2])
+        elif ab == "appearance":
+            self.chat.setzen({"tui_symbole": SYMBOL_ARTEN[i][0]})
 
     def _modell(self, was):
         AI = self.AI
@@ -327,6 +357,8 @@ class Einstellungen:
             return
         if isinstance(d, dict) and isinstance(d.get("skill"), dict):
             s.update(d["skill"])
+            if isinstance(d.get("skill_liste"), dict):     # Hinweis „zu lang" frisch
+                self._gedaechtnis()["skill_liste"] = d["skill_liste"]
         else:
             s["status"] = neu
         AI["msg"] = "skill „%s“ is now %s" % (s["name"], "on" if neu == "aktiv" else "off")
@@ -439,6 +471,8 @@ class Einstellungen:
 
         if ab == "skills":
             skills = self._skills()
+            for text, art in liste_hinweis(self._gedaechtnis().get("skill_liste"), w):
+                dazu(text, art)
             if not skills:
                 dazu("no skills yet", "leise")
             for i, s in enumerate(skills):
@@ -489,4 +523,12 @@ class Einstellungen:
         elif ab == "model":
             for i, (name, wert, _was) in enumerate(self._modell_reihen()):
                 dazu("%-9s %s" % (name, wert), "", i)
+        elif ab == "appearance":
+            jetzt = symbole.art(self.AI.get("symbole"))
+            dazu("Sidebar icons", "kopf")
+            for i, (art, text) in enumerate(SYMBOL_ARTEN):
+                dazu("%s %s" % ("(●)" if art == jetzt else "( )", text),
+                     "schalter" if art == jetzt else "", i)
+            dazu("")
+            dazu("the sidebar on the left changes right away", "leise")
         return zeilen, klicks

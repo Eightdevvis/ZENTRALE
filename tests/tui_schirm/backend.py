@@ -239,7 +239,12 @@ class H(BaseHTTPRequestHandler):
             pass
 
     def do_GET(self):
-        self._send(_hole(self.path))
+        obj = _hole(self.path)
+        # Symbole der Seitenleiste (2026-10-08): pixel2 | zeichen per
+        # ZTUI_SYMBOLE, damit beide Arten nebeneinander mitgeschnitten werden.
+        if self.path == "/api/ai/status" and os.environ.get("ZTUI_SYMBOLE"):
+            obj = dict(obj or {}, tui_symbole=os.environ["ZTUI_SYMBOLE"])
+        self._send(obj)
 
     def _drain(self):
         try:

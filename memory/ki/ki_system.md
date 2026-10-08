@@ -450,8 +450,15 @@ mit `SKILL.md` — Aufbau, Status, Umzug und Erstbefüllung in
    bis 1.024 Zeichen lang sein. **Deckel für die ganze Liste: 6.000
    Zeichen** (`LISTE_MAX`, ≈ 1.700 Token, gecacht ≈ 0,05 Cent je Zug; nicht
    größer als der übrige feste Kopf). Die Start-Skills brauchen ~4.300.
-   Darüber werden alle Beschreibungen gleichmäßig gekürzt (nicht unter 160),
-   danach stehen die letzten nur noch mit Namen da — deterministisch.
+   **Seit 2026-10-08 nicht mehr gleichmäßig gekürzt** (Sasha: das
+   verschlechtert alle Beschreibungen): sie bleiben vollständig, und
+   Customize → Skills zeigt „Liste zu lang: N von 6 000 Zeichen — schalte
+   Skills aus, die du nicht brauchst" (`skills.liste_lage()`, in
+   `/api/skills` und `/api/gedaechtnis` als `skill_liste`). Nur als letzte
+   Rettung bekommen die **längsten** nacheinander eine Kurzfassung
+   (`skills.kurzfassung`: erster Satz, 160–320 Zeichen), bis es passt; die
+   kurzen bleiben unangetastet. Reicht das nicht, stehen die längsten nur mit
+   Namen da. Reihenfolge (Länge absteigend, Name) — deterministisch.
 2. **Anleitung per `load_skill(name)`** als Werkzeug-Ergebnis (wandert mit
    dem Verlauf, berührt den Cache-Anfang nicht): der Text der SKILL.md ohne
    Kopf, je Aufruf 20.000 Zeichen (weiter mit `ab`), dazu die Liste seiner
@@ -958,8 +965,14 @@ Nachrichten + Werkzeug-Liste / 3,5 Zeichen je Token, Ausgabe = empfangener
 Text + Denken + halbe Werkzeug-Aufrufe / 3,5. `usage.buchen(…,
 geschaetzt=True)` zählt normal mit (Budget-Deckel) und zusätzlich im Topf
 `geschaetzt` pro Monat; Log „CLOUD ← … gestoppt, … geschätzt in≈ out≈".
-Anthropic bucht beim Stopp weiter nur, was `message_start` gemeldet hat
-(Eingabe + Cache), die halbe Ausgabe nicht.
+**Seit 2026-10-08 auch bei Claude** (Sasha ok): `cloud._gestoppt_buchen`
+bucht Eingabe + Cache aus `message_start`, die Ausgabe aus dem letzten
+`message_delta` (Anthropic meldet sie kumuliert, in der Praxis nur einmal
+am Ende) und schätzt den Rest — was seit dieser Zahl kam: Text + Denken +
+halbe Werkzeug-Aufrufe (Name aus `content_block_start`, `input_json_delta`)
+/ 3,5 (`usage.ZEICHEN_JE_TOKEN`, eine Regel für beide Wege).
+`usage.buchen(…, output_geschaetzt=N)` legt nur den Preis dieser N Token in
+den Topf `geschaetzt`; Log „CLOUD ← … gestoppt … out=gemeldet+≈N (geschätzt)".
 
 **Modelle, die nicht in `prices.py` stehen** (seit `/modell` alles zeigt):
 Datums-Fassungen und `models/…` finden ihren Grundnamen, `opus`/`fable` im

@@ -204,6 +204,97 @@ def test_klick_in_der_seitenleiste_oeffnet_gespraech(welt, monkeypatch):
     assert c.AI["einstellungen"]
 
 
+def _farbig(c, art):
+    """Der Test-Schirm hat keine Farben (dann gäbe es nur Zeichen) — für
+    die Pixel-Art einen schwarzen Grund und Farbpaare vortäuschen."""
+    c.AI["symbole"] = art
+    c.z.C["pix_bg"] = (0, 0, 0)
+    c.z.pix_attr = lambda fg, bg: 0
+
+
+def _menue_zeilen(c, text):
+    """In welchen Zeilen steht `text`?"""
+    s = c.z.stdscr
+    return [y for y in range(s.h) if text in s.zeile(y)]
+
+
+@pytest.mark.parametrize("groesse", [(24, 80), (30, 136)])
+def test_symbol_arten_zeichnen_offen_und_zu(welt, groesse):
+    """Sasha 08.10.2026 vergleicht zwei Arten: pixel2 (2 Zeilen hoch) und
+    zeichen (eine Zeile). Beide offen und zugeklappt, ohne Absturz; offen
+    stehen die Einträge im Abstand der Symbolhöhe."""
+    for art, abstand, zeichen in (("pixel2", 2, None), ("zeichen", 1, "⌕")):
+        c = welt(*groesse)
+        _farbig(c, art)
+        c.seite.aufklappen(fokus=False)
+        _zeichnen(c)
+        search, new = _menue_zeilen(c, "Search"), _menue_zeilen(c, "New")
+        assert search and new and new[0] - search[0] == abstand, art
+        if zeichen:
+            assert zeichen in c.z.stdscr.zeile(search[0])
+        c.seite.zuklappen()
+        _zeichnen(c)
+        if groesse[1] >= 60 and not c.AI.get("seite_voll"):
+            assert c._letzte.leiste.w == c.seite.leiste_breite()
+        assert c.klicks
+
+
+def test_zugeklappt_klick_auf_beide_zeilen_eines_pixel_symbols(welt, monkeypatch):
+    c = welt(24, 80)
+    _farbig(c, "pixel2")
+    _zeichnen(c)
+    a = c._letzte.leiste
+    flaechen = [(y, x0, x1) for y, x0, x1, _f in c.klicks if x0 == a.x]
+    zeilen = sorted({y for y, _x0, _x1 in flaechen})
+    # Auf/Zu (2 Zeilen) + 5 Einträge à 2 Zeilen, jede Zeile klickbar
+    assert len(zeilen) == 12
+
+
+def test_ohne_farben_oder_im_halbblock_modus_zeichen(welt):
+    c = welt()
+    _farbig(c, "pixel2")
+    assert c.seite.groesse() == (4, 2) and c.seite.leiste_breite() == 6
+    c.z.PIX_MODUS = "half"
+    assert c.seite.groesse() == (1, 1) and c.seite.leiste_breite() == 3
+    c.z.PIX_MODUS = "mix"
+    c.z.C["pix_bg"] = None                         # Terminal ohne 256 Farben
+    assert c.seite.groesse() == (1, 1)
+
+
+def test_customize_appearance_schaltet_symbole(welt):
+    c = welt()
+    c.einstellungen.oeffnen("appearance")
+    c.AI["symbole"] = "pixel2"
+    zeilen, klicks = c.einstellungen._inhalt("appearance", 60)
+    assert any("(●) pixel" in t for t, _a in zeilen)
+    c.einstellungen.ausloesen(1)
+    assert ("POST", "/api/ai/einstellungen", {"tui_symbole": "zeichen"}) in c.aufrufe
+
+
+def test_skills_hinweis_liste_zu_lang():
+    """Customize → Skills sagt, wenn die Liste für die KI zu lang ist
+    (2026-10-08), statt still zu kürzen."""
+    assert einstellungen.liste_hinweis({"zu_lang": False, "laenge": 10}, 60) == []
+    assert einstellungen.liste_hinweis(None, 60) == []
+    z = einstellungen.liste_hinweis({"zu_lang": True, "laenge": 7412, "grenze": 6000,
+                                     "gekuerzt": ["pdf"], "nur_name": []}, 60)
+    text = " ".join(t for t, _a in z)
+    assert "Liste zu lang: 7 412 von 6 000 Zeichen" in text and "schalte Skills aus" in text
+    assert "pdf" in text and z[0][1] == "warn"
+    assert all(len(t) <= 60 for t, _a in z)
+
+
+def test_skills_abschnitt_zeigt_hinweis_oben(welt):
+    c = welt()
+    c.einstellungen.oeffnen("skills")
+    c.AI["einstellungen"]["daten"]["gedaechtnis"] = {
+        "skills": [{"name": "pdf", "status": "aktiv", "beschreibung": "x"}],
+        "skill_liste": {"zu_lang": True, "laenge": 6500, "grenze": 6000}}
+    zeilen, klicks = c.einstellungen._inhalt("skills", 80)
+    assert zeilen[0][0].startswith("Liste zu lang") and klicks[0] is None
+    assert any(k == 0 for k in klicks)                 # der Skill bleibt wählbar
+
+
 def test_tab_klappt_auf_und_zu_f6_wechselt_den_fokus(welt):
     c = welt(24, 80)
     _zeichnen(c)

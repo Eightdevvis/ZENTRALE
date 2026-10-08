@@ -181,6 +181,10 @@ SZ = {
                      ("k", "Left"), ("k", "Down"), ("w", 1), ("k", "Right"), ("cap", "i"),
                      ("k", "Enter"), ("w", 1), ("cap", "j"), ("k", "Escape"), ("k", "Escape"),
                      ("k", "Escape"), ("cap", "k")],
+    # Symbole der Seitenleiste (2026-10-08): wie es von selbst steht, dann
+    # Tab (auf bzw. zu) und noch einmal Tab. Art per ZTUI_SYMBOLE=pixel2|zeichen.
+    "ki_symbole": [("k", "Space"), ("w", 2), ("cap", "a"), ("k", "Tab"), ("w", 1), ("cap", "b"),
+                   ("k", "Tab"), ("w", 1), ("cap", "c")],
     # Denk-Animation (2026-10-07): das Abspiel-Backend denkt ZTUI_DENK_S
     # Sekunden (12); Mitschnitte nach ~3, 6 und 10 s, im Rückzug und danach. Die
     # Uhr läuft hier echt (sonst stünde die Animation).

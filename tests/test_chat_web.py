@@ -134,12 +134,48 @@ def test_zeilen_passen_in_die_breite():
 
 # ── Symbole ───────────────────────────────────────────────────────────
 
-def test_symbole_sind_sextanten_drei_felder():
+def test_pixel_symbole_sind_zwei_zeilen_hoch_aus_sextanten():
+    """Sasha 08.10.2026: 3×1 Felder waren nicht zu erkennen — Pixel-Symbole
+    sind seitdem 4 Felder breit und 2 Zeilen hoch (pixelstil.md)."""
     erlaubt = {pixel.sextant(b) for b in range(64)}
-    for name in symbole.BILDER:
+    for name, bild in symbole.BILDER.items():
+        assert len(bild) == 6 and all(len(r) == 8 for r in bild), name
         z = symbole.symbol_zellen(name, "nacht")
-        assert len(z) == symbole.BREITE and all(f[0] in erlaubt for f in z), name
+        assert len(z) == symbole.HOEHE == 2, name
+        for zeile in z:
+            assert len(zeile) == symbole.BREITE and all(f[0] in erlaubt for f in zeile), name
+        assert any(f[0] != " " for f in z[1]), "untere Zeile leer: " + name
         assert symbole.symbol_zellen(name, "tag") != z
         assert symbole.symbol_zellen(name, "nacht", True) != z     # gewählt leuchtet
-    assert len(symbole.symbol_zellen("gibtsnicht")) == symbole.BREITE
-    assert symbole.DOKU in erlaubt
+    leer = symbole.symbol_zellen("gibtsnicht")
+    assert len(leer) == 2 and all(f[0] == " " for zeile in leer for f in zeile)
+
+
+def test_pixel_symbole_sind_verschieden():
+    bilder = [tuple(b) for b in symbole.BILDER.values()]
+    assert len(set(bilder)) == len(bilder)
+
+
+def test_zeichen_sind_einspaltig_und_keine_emoji():
+    """Die Zeichen-Art: je ein Zeichen, das das Terminal einspaltig zeichnet
+    (keine Voll-/Doppelbreite, keine Emoji-Darstellung)."""
+    import unicodedata
+    for name in list(symbole.BILDER) + ["gibtsnicht"]:
+        z = symbole.zeichen(name)
+        assert len(z) == 1, name
+        assert unicodedata.east_asian_width(z) not in ("W", "F"), (name, z)
+        assert ord(z) < 0x1F000, (name, z)             # kein Emoji-Block
+    assert set(symbole.ZEICHEN) == set(symbole.BILDER)
+    assert len(symbole.DOKU) == 1 and unicodedata.east_asian_width(symbole.DOKU) != "W"
+
+
+def test_symbol_art_und_groesse():
+    assert symbole.art(None) == symbole.art("quatsch") == "pixel2"
+    assert symbole.art(" Zeichen ") == "zeichen"
+    assert symbole.groesse("pixel2") == (4, 2) and symbole.groesse("zeichen") == (1, 1)
+
+
+def test_zugeklappte_spalte_so_breit_wie_die_symbole():
+    a = L.aufteilen(0, 80, leiste_w=L.LEISTE_ZEICHEN)
+    assert a.leiste.w == L.LEISTE_ZEICHEN and a.leiste.w + 1 + a.mitte.w == 78
+    assert L.LEISTE >= symbole.BREITE + 2

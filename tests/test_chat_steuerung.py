@@ -321,7 +321,7 @@ def einst(monkeypatch, tmp_path):
     for p in providers.PROVIDERS.values():
         monkeypatch.delenv(p["key_env"], raising=False)
     for name in ("CHAT_PROVIDER", "CHAT_EFFORT", "CHAT_BACKEND",
-                 "BUDGET_MONAT_EURO", "CHAT_MODELS"):
+                 "BUDGET_MONAT_EURO", "CHAT_MODELS", "TUI_SYMBOLE"):
         monkeypatch.delenv("ZENTRALE_" + name, raising=False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "geheim-123")
     monkeypatch.setenv("DASHSCOPE_API_KEY", "geheim-456")
@@ -392,6 +392,25 @@ def test_weg(einst):
     assert einst.post("/api/ai/einstellungen",
                       json={"weg": "auto"}).get_json()["weg"] == "auto"
     assert einst.post("/api/ai/einstellungen", json={"weg": "mond"}).status_code == 400
+
+
+def test_tui_symbole_umschalten_dauerhaft_und_im_status(einst, tmp_path):
+    """Sasha 08.10.2026 will die zwei Symbol-Arten der Seitenleiste
+    vergleichen: Standard pixel2, umschaltbar, überlebt den Neustart, und die
+    TUI liest es beim Start aus /api/ai/status."""
+    assert einst.get("/api/ai/einstellungen").get_json()["tui_symbole"] == "pixel2"
+    d = einst.post("/api/ai/einstellungen", json={"tui_symbole": "Zeichen"}).get_json()
+    assert d["tui_symbole"] == "zeichen"
+    assert "zeichen" in (tmp_path / "ai_config.json").read_text()
+    assert einst.get("/api/ai/status").get_json()["tui_symbole"] == "zeichen"
+    r = einst.post("/api/ai/einstellungen", json={"tui_symbole": "emoji"})
+    assert r.status_code == 400 and "pixel2" in r.get_json()["error"]
+    assert ki_einstellungen.tui_symbole() == "zeichen"
+
+
+def test_tui_symbole_unsinn_in_der_datei_heisst_standard(einst, monkeypatch):
+    monkeypatch.setitem(ai_config._config, "tui_symbole", "riesig")
+    assert ki_einstellungen.tui_symbole() == "pixel2"
 
 
 def test_unsinn_in_einem_feld_setzt_gar_nichts(einst):

@@ -41,7 +41,7 @@ Was ihn ausmacht, wo der Code liegt und wie ein neues Symbol gebaut wird.
 | Elektronik: `elektronik_pixel`, `elektronik_zellen` | `tui/pixel.py` |
 | Auge: `AUGE_FARBEN`, `auge_zustand`, `auge_zellen` | `tui/pixel.py`, benutzt in `tui/ansichten/chat.py` |
 | Denk-Adern: `adern_zellen(t, dauer, breite, hoehe, thema, ausklang)` | `tui/ansichten/denkadern.py` |
-| Kleine Symbole der Chat-Seitenleiste (3×1 Felder): `BILDER`, `symbol_zellen`, `DOKU` | `tui/ansichten/symbole.py` |
+| Symbole der Chat-Seitenleiste (4×2 Felder = 8×6 Pixel, oder ein Zeichen; Einstellung `tui_symbole`): `BILDER`, `ZEICHEN`, `symbol_zellen`, `art` | `tui/ansichten/symbole.py` |
 | Farbpaare anlegen (begrenztes Budget, 24 Bit wenn möglich): `Kontext.pix_attr`, `pix_farbe`; Modus `ZENTRALE_PIXEL=half` für Terminals ohne Sextanten | `tui/ansichten/kontext.py` |
 
 Alle Pixel-Funktionen sind **curses-frei**: sie liefern Zellen
@@ -51,10 +51,17 @@ Alle Pixel-Funktionen sind **curses-frei**: sie liefern Zellen
 
 ## Regeln für neue Symbole
 
+0. **Pixel-Symbole nie kleiner als 2 Zeilen hoch** (seit 2026-10-08).
+   Sasha zu den 3×1-Symbolen der Seitenleiste: „man erkennt gar nichts" —
+   in 3 Pixel Höhe passt keine Form, Lupe, Ordner und Blatt sahen gleich
+   aus. Wo nur eine Zeile Platz ist (eine Listenzeile), nimmt man ein klares
+   Unicode-Zeichen statt eines Pixel-Symbols.
 1. **Erst die Größe, dann das Raster.** Groß (Rad, Auge): 2×6 Feinpixel je
-   Feld, `pixel.zellen`. Eine Zeile hoch: 2×3 je Feld direkt als Sextant
-   setzen (`symbole.symbol_zellen`) — `zellen` mittelt dort zwei Zeilen und
-   macht Brei.
+   Feld, `pixel.zellen`. Klein (2 Zeilen, z. B. 4×2 Felder = 8×6 Pixel):
+   2×3 je Feld direkt als Sextant setzen (`symbole.symbol_zellen`), eine
+   Farbe je Feld — Akzent-Teile deshalb auf Feldgrenzen legen. Die unterste
+   Pixelzeile leer lassen, dann stoßen untereinander stehende Symbole nicht
+   aneinander.
 2. **Ein Feinpixel ist nicht quadratisch** (Sextant ~4,5×6, Feinpixel 2×6
    ~4,5×3). Kreise vorher strecken (`pixel.AY`, `denkadern.HOCH`).
 3. **Zwei Farben je Symbol** reichen meist (Grund + Akzent); große Motive
@@ -63,4 +70,11 @@ Alle Pixel-Funktionen sind **curses-frei**: sie liefern Zellen
 5. **Reine Funktion mit Cache** (`lru_cache`), Zeit grob rastern. Ein Bild
    pro Tastendruck neu zu rechnen kostet Akku.
 6. **Ansehen, nicht raten:** Zellen als PNG malen (Pillow, je Feld die
-   Sextant-Bits als Rechtecke) und anschauen, bevor es in die TUI geht.
+   Sextant-Bits als Rechtecke) und anschauen, bevor es in die TUI geht. Ohne
+   Pillow geht es auch mit `zlib` + `struct` (eine PNG-Datei ist kurz). Am
+   08.10. so je Symbol 3–6 Entwürfe verglichen (Zahnrad: gerade Zähne allein
+   sahen aus wie #, in 5 Zeilen wie ein Käfer).
+7. **Zeichen statt Pixel** (Art `zeichen`): nur Glyphen, die DejaVu Sans
+   Mono (Monospace in xfce4-terminal) hat und die einspaltig sind —
+   East-Asian-Width N oder A, nie W/F (kein ＋, keine Emoji). Prüfen mit
+   `unicodedata.east_asian_width` und fontconfig.

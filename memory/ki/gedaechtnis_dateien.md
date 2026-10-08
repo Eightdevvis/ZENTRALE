@@ -360,6 +360,14 @@ wochenplan/
   käme vom anderen Rechner zurück.
 - `edit_skill` lässt die alte Fassung als `SKILL.md.bak` daneben.
 
+**Die Liste im Prompt** (`skills.prompt_block`, Details in
+[ki_system.md](ki_system.md) „Skills"): je aktivem Skill Name + volle
+Beschreibung, höchstens 6.000 Zeichen. Wird sie länger (seit 2026-10-08):
+Hinweis in Customize → Skills („Liste zu lang …") — Sasha schaltet aus, was
+er nicht braucht; nur als letzte Rettung werden die längsten Beschreibungen
+gekürzt (erster Satz), dann die längsten nur mit Namen genannt. Die kurzen
+bleiben immer ganz.
+
 **Warum nicht in `BEREICHE`:** Skills liegen unter derselben Wurzel (gleiche
 Test-Umlenkung `ZENTRALE_GEDAECHTNIS_DIR`, gleicher Sync), aber
 `write_note`/`read_note`/`search_memory` erreichen sie bewusst nicht. Ein

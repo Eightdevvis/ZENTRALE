@@ -40,11 +40,11 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/chat_zeichnen.py` | Mixin `ChatZeichnen`: `draw_ai` (Leiste, Kopf „Titel ▾ … ▤ n", Verlauf, Fuß, Eingabekasten, „+ attach … Modell · Effort"), Klickflächen, Denk-Adern im Verlauf, Auge im leeren Chat | `AI["fokus"]` … |
 | `ansichten/chat_bedienung.py` | Mixin `ChatBedienung`: Fokus (F6), Tab = Gespräche auf/zu, Ziele im Verlauf (auf/zu, copy, retry, Dokument), Strg-Tasten, Maus, Zwischenablage | — |
 | `ansichten/verlauf.py` | Verlauf als Zeilen aus Stücken (text, stil, ziel): Nutzer rechts abgesetzt, „Used memory ›", Denken eingeklappt, copy · retry; `benutzt` für „Used in this session" | — |
-| `ansichten/seitenleiste.py` | `Seitenleiste`: Menü (Search, New, Projects, Files, Customize) mit Pixel-Symbolen, Gespräche nach Today/Yesterday/Datum; zugeklappt eine Symbolspalte | `AI["seite"]`, `AI["seite_menu"]` |
+| `ansichten/seitenleiste.py` | `Seitenleiste`: Menü (Search, New, Projects, Files, Customize) mit Symbolen (Pixel 2 Zeilen oder Zeichen), Gespräche nach Today/Yesterday/Datum; zugeklappt eine Symbolspalte | `AI["seite"]`, `AI["seite_menu"]`, `AI["symbole"]` |
 | `ansichten/rechts.py` | `Rechts`: Dokument neben dem Verlauf (▾ Fassungen, ⤢ groß, × zu) und „Outputs" (Kärtchen + „Used in this session") | `AI["rechts"]`, `AI["gross"]` |
 | `ansichten/einstellungen.py` | `Einstellungen` („Customize"): Skills, Memory, Usage, Capabilities, Permissions, Model | `AI["einstellungen"]` |
 | `ansichten/denkadern.py` | Denk-Animation als reine Funktion `adern_zellen(t, dauer, breite, hoehe, thema, ausklang)` | — |
-| `ansichten/symbole.py` | kleine Pixel-Symbole (3×1 Felder) der Seitenleiste | — |
+| `ansichten/symbole.py` | Symbole der Seitenleiste in zwei Arten: `pixel2` (4×2 Felder) und `zeichen` (ein Unicode-Zeichen) | — |
 | `ansichten/maus.py` | Maske, `deuten`, `treffer`, `rad_treffer`; warum Markieren im Terminal heil bleibt | — |
 | `ansichten/gespraechsliste.py` | `Gespraechsliste`: Überlagerung im Chat-Kasten (Tab/`/liste`); reine Helfer `alter_text`, `filtern`, `listen_zeilen` | `AI["liste"]` |
 | `ansichten/gedaechtnis.py` | `Gedaechtnis`: Überlagerung im Chat-Kasten (`/gedaechtnis`, `/skills`) — Kernakten, Bereiche, Skills; Kernakte im Editor ändern, Skill an/aus; reine Helfer `reiter`, `inhalt_zeilen`, `naechster_status`, `editor_befehl` | `AI["gedaechtnis"]` |
@@ -337,12 +337,20 @@ Inneres (Skizze: `chat_layout.py`).
 
 - **Seitenleiste links** (`seitenleiste.py`): Search, New, Projects, Files
   (= Ablage), Customize, darunter die Gespräche nach Today / Yesterday /
-  Datum, ● ungelesen, ▘ (Pixel-Blatt) bei Gesprächen mit Dokument,
+  Datum, ● ungelesen, ▤ bei Gesprächen mit Dokument,
   Projektname davor. **Tab** (leere Eingabe) klappt auf und gibt ihr den
   Fokus, Tab klappt zu; Esc gibt den Fokus an die Eingabe zurück. Von selbst
   offen erst ab 127 Spalten (`seite_auto`), sonst eine Spalte Symbole. Die
   Gespräche selbst (Suche, umbenennen, Archiv) macht weiter
   `Gespraechsliste` mit `AI["liste"]` — nur nicht mehr als Überlagerung.
+  **Symbole** (seit 2026-10-08, Sasha: „man erkennt gar nichts"): Einstellung
+  `tui_symbole` (Backend, `ai_config.setting`, geholt mit `/api/ai/status`
+  nach `AI["symbole"]`, gesetzt über `/api/ai/einstellungen` bzw. Customize
+  → Appearance) — `pixel2` Pixel-Symbole 4 breit × 2 Zeilen hoch (offen:
+  Einträge zweizeilig, Beschriftung auf der oberen Zeile; zugeklappt eine
+  Spalte von 6), `zeichen` ⌕ ✚ ▦ ▤ ⚙ ◧ in Akzentfarbe (Spalte 3). Ohne
+  256 Farben oder mit `ZENTRALE_PIXEL=half` immer Zeichen. Headless:
+  Szenario `ki_symbole`, Art per `ZTUI_SYMBOLE`.
 - **Verlauf** (`verlauf.py`): Antworten ohne „ki:", Sashas Nachrichten rechts
   auf eigener Fläche, Schritte „Used memory ›" (Enter/Klick: Name,
   Argumente, Ergebnis gekürzt — das Backend speichert seit 07.10. 300
@@ -364,7 +372,10 @@ Inneres (Skizze: `chat_layout.py`).
   `/memory`), Usage (`/api/ai/kosten`), Capabilities (`/api/ai/werkzeuge`,
   gruppiert; Schalter nur für Cloud/lokal), Permissions (zurücknehmen),
   Model (öffnet `/model`, `/provider`, `/effort`; Weg dreht
-  auto → cloud → local).
+  auto → cloud → local), Appearance (Symbole der Seitenleiste, seit 08.10.).
+  Skills zeigt oben „Liste zu lang: N von 6 000 Zeichen — …", wenn die
+  Skill-Liste für die KI über der Grenze ist (`skill_liste` aus
+  `/api/gedaechtnis`).
 - **Fokus**: Seitenleiste → Verlauf → Eingabe → rechts mit **F6** (wie im
   Browser zwischen Bereichen; Tab gehört den Gesprächen, Shift+Tab wäre
   „Tab rückwärts"). Im Verlauf ↑↓ wählt Ziele, Enter löst aus.

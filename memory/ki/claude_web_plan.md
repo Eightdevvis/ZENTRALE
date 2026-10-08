@@ -601,7 +601,8 @@ zum Ersetzen (Claude im Web recherchiert selbst). Ausführlich:
   optional `scripts/`, `references/`, `assets/`. ZENTRALEs Angaben (status,
   herkunft, erstellt, braucht, vermerk, quelle) in `<name>/_zentrale.json`.
 - **Prompt-Liste** = name + description, je ≤ 1.024, ganze Liste ≤ 6.000
-  Zeichen, darüber gleichmäßig gekürzt (deterministisch). Start: ~4.300.
+  Zeichen. Start: ~4.300. *(Bis 08.10. darüber gleichmäßig gekürzt; seitdem
+  siehe „Nachbesserungen 08.10." unten.)*
 - **`load_skill(name, datei?, ab?)`**: Anleitung + Dateiliste, Dateien aus
   dem Skill ohne Pfad-Ausbruch, seitenweise 20.000 Zeichen.
   **`run_code(skill=…)`**: Skill-Ordner nur lesend unter `/skills/<name>`.
@@ -719,3 +720,20 @@ Claude Web"; Pixelstil: [../system/pixelstil.md](../system/pixelstil.md).
 - Nicht gebaut: 👍/👎 (das Backend kennt keine Bewertung), Zeitstempel beim
   Darüberfahren (braucht Bewegungsmeldungen der Maus — kosten Akku), „Code"-
   Schalter oben (nur als Platz gedacht, wie gewünscht).
+
+### Nachbesserungen 08.10.2026 (Symbole, Skill-Liste, Stopp bei Claude)
+
+- **Symbole der Seitenleiste** waren nicht zu erkennen (3×1 Felder = 6×3
+  Pixel). Jetzt umschaltbar (Einstellung `tui_symbole`, Customize →
+  Appearance): `pixel2` (Standard) Pixel-Symbole 4 Felder breit, 2 Zeilen
+  hoch (Lupe, Plus, Ordner, Blatt, Zahnrad, Leiste) oder `zeichen`
+  (⌕ ✚ ▦ ▤ ⚙ ◧ in Akzentfarbe). Regel in
+  [../system/pixelstil.md](../system/pixelstil.md): Pixel-Symbole nie
+  kleiner als 2 Zeilen. Das Blatt hinter Gesprächen mit Dokument ist jetzt ▤.
+- **Skill-Liste**: Beschreibungen vollständig, Hinweis „Liste zu lang" in
+  Customize → Skills, Kürzen nur noch als letzte Rettung und nur die
+  längsten (ki_system.md, „Skills").
+- **Stopp bei Claude** bucht die bis dahin erzeugte Ausgabe geschätzt mit
+  (ki_system.md, „Gestoppt = geschätzt gebucht").
+- **Offen, für später:** bei sehr vielen Skills ein Werkzeug „Skill suchen"
+  statt einer langen Liste im Kopf.

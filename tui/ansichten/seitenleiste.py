@@ -1,9 +1,10 @@
 # tui/ansichten/seitenleiste.py
 #
 # Die Seitenleiste des Chats wie bei Claude Web (2026-10-07): oben Search,
-# New, Projects, Files, Customize — je mit kleinem Pixel-Symbol
-# (symbole.py) —, darunter die Gespräche, gruppiert nach Today / Yesterday /
-# Datum, ● bei Ungelesenem, ▘ (Blatt) bei einem Gespräch mit Dokument,
+# New, Projects, Files, Customize — je mit Symbol (symbole.py: seit
+# 08.10.2026 Pixel zwei Zeilen hoch oder ein Zeichen, Einstellung
+# tui_symbole) —, darunter die Gespräche, gruppiert nach Today / Yesterday /
+# Datum, ● bei Ungelesenem, ▤ bei einem Gespräch mit Dokument,
 # Projektname leise davor. Zugeklappt bleibt eine Spalte Symbole.
 #
 # Sasha, 07.10.2026: „tab für gespräche auf und zu klappen find ich still
@@ -20,8 +21,9 @@ import curses
 import urllib.error
 from datetime import datetime, timedelta, timezone
 
+from . import symbole
 from .basis import api_call
-from .symbole import BREITE as SYM_BREITE, DOKU, symbol_zellen
+from .symbole import DOKU
 
 # (Symbol, Beschriftung, Aktion) — die Reihenfolge von Claude Web.
 MENUE = [("search", "Search", "suchen"), ("new", "New", "neu"),
@@ -232,30 +234,59 @@ class Seitenleiste:
             AI["fokus"] = "eingabe"              # n: neues Gespräch → tippen
 
     # ── Zeichnen ───────────────────────────────────────────────────────
-    def _symbol(self, y, x, name, an):
+    def _pixel(self):
+        """Pixel-Symbole? Nur in der Art pixel2 und wo es Farben und
+        Sextanten gibt (sonst — ZENTRALE_PIXEL=half, ohne Farben — Zeichen)."""
         z = self.chat.z
-        thema = "nacht" if sum(z.C.get("pix_bg") or (0, 0, 0)) < 384 else "tag"
-        if z.C.get("pix_bg") is None:
-            z.safe_addstr(y, x, {"search": "⌕", "new": "+", "projects": "▦",
-                                 "files": "▤", "customize": "≡", "seite": "◧"}.get(name, "·"),
-                          z.C["bright"] if an else z.C["dim"])
+        return (symbole.art(self.AI.get("symbole")) == "pixel2"
+                and z.C.get("pix_bg") is not None
+                and getattr(z, "PIX_MODUS", "mix") != "half")
+
+    def groesse(self):
+        """(Breite, Höhe) eines Symbols in Feldern."""
+        return symbole.groesse("pixel2" if self._pixel() else "zeichen")
+
+    def leiste_breite(self):
+        """Breite der zugeklappten Spalte (chat_layout.aufteilen)."""
+        from .chat_layout import LEISTE, LEISTE_ZEICHEN
+        return LEISTE if self._pixel() else LEISTE_ZEICHEN
+
+    def _symbol(self, y, x, name, an, unten):
+        """Ein Symbol ab (y, x); Zeilen ab `unten` werden nicht gemalt."""
+        z = self.chat.z
+        if not self._pixel():
+            z.safe_addstr(y, x, symbole.zeichen(name),
+                          (z.C["bright"] | curses.A_BOLD) if an else z.C["acc"])
             return
-        for i, (zeichen, fg, bg) in enumerate(symbol_zellen(name, thema, an)):
-            z.safe_addstr(y, x + i, zeichen, z.pix_attr(fg, bg))
+        thema = "nacht" if sum(z.C.get("pix_bg") or (0, 0, 0)) < 384 else "tag"
+        for r, zeile in enumerate(symbole.symbol_zellen(name, thema, an)):
+            if y + r >= unten:
+                break
+            for i, (zeichen, fg, bg) in enumerate(zeile):
+                z.safe_addstr(y + r, x + i, zeichen, z.pix_attr(fg, bg))
+
+    def _klickbar(self, y, hoehe, x, w, aktion, unten):
+        for r in range(hoehe):
+            if y + r < unten:
+                self.chat.klickbar(y + r, x, w, aktion)
 
     def zeichnen_leiste(self, top, x, h):
         """Zugeklappt: eine Spalte Symbole, jedes anklickbar."""
         chat, AI = self.chat, self.AI
-        self._symbol(top, x + 1, "seite", False)
-        chat.klickbar(top, x, SYM_BREITE + 2, lambda: self.aufklappen())
-        for k, (name, _text, aktion) in enumerate(MENUE):
-            y = top + 2 + k
-            if y >= top + h:
+        sb, sh = self.groesse()
+        lw = self.leiste_breite()
+        sx, unten = x + (lw - sb) // 2, top + h
+        self._symbol(top, sx, "seite", False, unten)
+        self._klickbar(top, sh, x, lw, lambda: self.aufklappen(), unten)
+        y = top + sh + 1
+        for name, _text, aktion in MENUE:
+            if y >= unten:
                 break
-            self._symbol(y, x + 1, name, False)
-            chat.klickbar(y, x, SYM_BREITE + 2, lambda a=aktion: self.menue(a))
-        if any(e.get("ungelesen") for e in AI.get("gespraeche") or []) and top + 3 + len(MENUE) < top + h:
-            chat.z.safe_addstr(top + 3 + len(MENUE), x + 2, "●", chat.z.C["acc"])
+            self._symbol(y, sx, name, False, unten)
+            self._klickbar(y, sh, x, lw, lambda a=aktion: self.menue(a), unten)
+            y += sh
+        if any(e.get("ungelesen") for e in AI.get("gespraeche") or []) and y + 1 < unten:
+            chat.z.safe_addstr(y + 1, x + lw // 2, "●", chat.z.C["acc"])
 
     def zeichnen(self, top, x, h, w):
         """Offen: Menü, Gespräche nach Tagen, ganz unten ein Hinweis."""
@@ -264,18 +295,23 @@ class Seitenleiste:
         hat_fokus = AI.get("fokus") == "seite"
         L = AI.get("liste")
         m = AI.get("seite_menu") if hat_fokus else None
+        sb, sh = self.groesse()
+        unten = top + h
+        y = top
         for k, (name, text, aktion) in enumerate(MENUE):
-            y = top + k
-            if y >= top + h:
+            if y >= unten:
                 return
             an = m == k
             if aktion == "suchen" and L and (L.get("suchen") or L.get("suche")):
                 text = "search: " + L["suche"] + ("▌" if L.get("suchen") else "")
-            self._symbol(y, x + 1, name, an)
-            addclip(y, x + 2 + SYM_BREITE, text, w - 3 - SYM_BREITE,
+            self._symbol(y, x + 1, name, an, unten)
+            # Beschriftung auf der oberen Zeile: dort liegt bei den
+            # Pixel-Symbolen die Mitte der Form (die unterste Pixelzeile ist leer).
+            addclip(y, x + 2 + sb, text, w - 3 - sb,
                     (C["bright"] | curses.A_REVERSE) if an else C["dim"])
-            chat.klickbar(y, x, w, lambda a=aktion: self.menue(a))
-        oben = top + len(MENUE) + 1
+            self._klickbar(y, sh, x, w, lambda a=aktion: self.menue(a), unten)
+            y += sh
+        oben = y + 1
         if L and L.get("archiv"):
             addclip(oben, x + 1, "Archive · z back", w - 2, C["acc"])
             oben += 1
