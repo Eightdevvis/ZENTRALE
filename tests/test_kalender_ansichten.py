@@ -355,3 +355,17 @@ def test_c_hat_bei_jeder_hoehe_uhrzeiten_und_punktlinien(nacht):
         zeilen = [text(z) for z in ka.ansicht_c(d, 130, h)]
         assert any("·····" in z for z in zeilen), "keine Punktlinie bei Höhe %d" % h
         assert any(z[1:3].isdigit() and z[3] == ":" for z in zeilen), "keine Uhrzeit bei %d" % h
+
+
+def test_c_nachttermin_zieht_die_achse_nicht_auf_sondern_zeigt_pfeil():
+    """Sasha, 08.10.2026: Fenster bleibt 8–22, ein Termin um 01:00 bekommt
+    in seiner Tagesspalte ein ▲; wird er gewählt, rollt das Fenster hin."""
+    termine = list(kb.TERMINE) + [{"day": "2026-10-10", "label": "Nachts",
+                                   "time": "01:00", "ende": "02:00"}]
+    d = daten("week", ref="2026-10-05", termine=termine)
+    zeilen = [text(z) for z in ka.ansicht_c(d, 130, 36)]
+    assert any("▲" in z for z in zeilen)
+    assert not any(z[1:6] == "01:00" for z in zeilen), "Achse aufgezogen"
+    sel = next(e for e in d["days"]["2026-10-10"] if e["label"] == "Nachts")
+    zeilen = [text(z) for z in ka.ansicht_c(d, 130, 36, auswahl={"tag": "2026-10-10", "roh": sel})]
+    assert any("Nachts" in z for z in zeilen), "gewählt: Fenster rollt hin"

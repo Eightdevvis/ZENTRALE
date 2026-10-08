@@ -939,35 +939,36 @@ def ansicht_c(daten, breite: int, hoehe: int, erledigte: bool = False,
 
 
 def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None):
-    """Zeitachse von y0 bis vor y_ende zeichnen. Der Bereich ist 08–22 Uhr,
-    erweitert um jede echte Uhrzeit der Woche; der Zeilen-Takt ist der
-    feinste, mit dem der Bereich in die Höhe passt."""
+    """Zeitachse von y0 bis vor y_ende. Das Fenster ist FEST 08–22 Uhr
+    (Sasha, 08.10.2026: nicht für einen Nachttermin die ganze Woche
+    aufziehen); der Zeilen-Takt ist der feinste, mit dem es in die Höhe
+    passt. Was ganz außerhalb liegt, zeigt der Tag mit ▲ (früher) bzw.
+    ▼ (später). Wird so ein Termin gewählt, rollt das Fenster zu ihm —
+    für die ganze Woche, damit die Uhrzeiten links für alle Tage stimmen."""
     reihen = y_ende - y0
     if reihen < 1:
         return
-    lo, hi = 8 * 60, 22 * 60
-    for bloecke, _g in tage:
-        for s, e, t in bloecke:
-            if t["start"] is not None:
-                lo, hi = min(lo, s), max(hi, s + 1)
-            if t["ende"] is not None:
-                lo, hi = min(lo, e - 1), max(hi, e)
-    # Takt m (Minuten je Zeile) und Beschriftung lab: der Anfang muss auf dem
-    # Beschriftungstakt liegen, sonst trifft keine Zeile eine beschriftete
-    # Stunde — dann fehlten ALLE Uhrzeiten und Punktlinien (Sasha, 08.10.2026:
-    # „woche vom 19. bis 25 oktober hat irgendwie nen bug"; Takt 40 min,
-    # Anfang 7:00, Beschriftung alle 2 h → nie getroffen). Passt die Woche mit
-    # dem ausgerichteten Anfang nicht mehr in die Höhe, der nächstgröbere Takt.
-    lo0 = lo
+    basis_lo, basis_hi = 8 * 60, 22 * 60
     for m in _SCHRITTE:
+        # Beschriftung lab muss ein Vielfaches des Takts sein und der Anfang
+        # auf ihr liegen — sonst trifft keine Zeile eine beschriftete Stunde
+        # und Uhrzeiten wie Punktlinien fehlen ganz.
         lab = next(x for x in (60, 120, 180, 240, 360, 720, 1440) if x >= 2 * m and x % m == 0)
-        lo = lo0 - lo0 % lab
-        if math.ceil((hi - lo) / m) <= reihen:
+        if math.ceil((basis_hi - basis_lo) / m) <= reihen:
             break
-    # Reicht die Höhe über Mitternacht hinaus, früher anfangen statt unten
-    # leere Zeilen zu lassen — wieder auf dem Beschriftungstakt.
-    if lo + reihen * m > 24 * 60:
-        lo = min(lo, -(-max(0, 24 * 60 - reihen * m) // lab) * lab)
+    sicht = reihen * m
+    lo = basis_lo
+    if sel is not None:                      # gewählter Termin ganz draußen → hinrollen
+        for bloecke, _g in tage:
+            for s0, e0, t in bloecke:
+                if t["roh"] is not sel:
+                    continue
+                if e0 <= lo:
+                    lo = s0 - s0 % lab
+                elif s0 >= lo + sicht:
+                    lo = max(s0 - s0 % lab, -(-(e0 - sicht) // lab) * lab)
+    lo = max(0, min(lo, 24 * 60 - sicht))
+    lo -= lo % lab
     n = min(reihen, max(1, math.ceil((24 * 60 - lo) / m)))
     sicht_ende = lo + n * m
     farbe: dict = {}
@@ -1002,3 +1003,9 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None):
             lw.setze(y0 + k0, bx, lab_txt + " " * (bw - text_breite(lab_txt)), r + INV)
             for k in range(k0 + 1, k1 + 1):
                 lw.setze(y0 + k, bx, ("░" if t["aus"] else "█") * bw, r)
+        # Ganz außerhalb des Fensters? Dann ein Pfeil in der Spalte des Tages.
+        rechts = x0 + i * colw + max(0, colw - 2)
+        if any(e <= lo for _bi, s, e, _t in bahnen):
+            lw.setze(y0, rechts, "▲", _a_rolle("a_akzent"))
+        if any(s >= sicht_ende for _bi, s, e, _t in bahnen):
+            lw.setze(y0 + n - 1, rechts, "▼", _a_rolle("a_akzent"))
