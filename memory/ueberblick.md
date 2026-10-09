@@ -39,7 +39,7 @@ Gedächtnis (`memory/ki/gedaechtnis_dateien.md`).
 | Wie die KI denkt und sich erinnert | `memory/ki/INDEX.md` |
 | Kalender, Mail, News, Notizen, Zyklus | `memory/werkzeuge/INDEX.md` |
 | Die Karte | `memory/maps/INDEX.md` |
-| Der Tutor | `memory/tutor/INDEX.md` (Struktur: `memory/tutor/bauplan.md`) |
+| Der Tutor | `memory/tutor/INDEX.md` (Struktur: `memory/tutor/INDEX.md`) |
 | Regeln für diese Doku | `memory/doku_regeln.md` |
 
 ## Prioritäten (Stand 2026-09-14) — Reihenfolge ist verbindlich
@@ -64,7 +64,7 @@ mich an«. Ziel: fertig werden, schnell, in dieser Reihenfolge:
    Ruhe. Am 09-14: nur per Knopf, dann Menü, dann Drill, muss erst
    freigeschaltet werden, sieht insgesamt schlecht aus. Seither: Gate weg,
    Anwesenheit über Mikro/PIR, Skill `no_entiendo` (loggt), Bauplan —
-   der Ausbau steht in `memory/tutor/naturalisierung.md`. **Wichtiger als der
+   der Ausbau steht in `memory/tutor/INDEX.md`. **Wichtiger als der
    Assistent.**
 3. **KI-Assistent.** Memory-Struktur ist überkompliziert und kaputt, die
    Tests dazu taugten nichts, Tool-Calls inkonsistent. Kommt danach.

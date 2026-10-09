@@ -2,12 +2,12 @@
 
 **Warum (Sasha, 2026-09-18):** Die Doku ist Claudes wichtigstes Hilfsmittel —
 und sie driftet. Zwei Fälle an einem Tag: `betrieb/auto_unlock.md` behauptete
-„Reboot-Test offen", `tutor/tutor_system.md` „das Gate ist Pflicht". Beides
+„Reboot-Test offen", `tutor/INDEX.md` „das Gate ist Pflicht". Beides
 wurde zuerst geglaubt. Eine falsche Doku ist schlimmer als keine.
 
 Was die Doku leisten muss, kann der Code nicht: das **Warum** (Entscheidungen,
 Fehlschläge, Absichten). Was der Code kann — Struktur, Dateien, Routen — gehört
-nicht in Prosa, sondern in einen Bauplan mit Test (`tutor/bauplan.md`,
+nicht in Prosa, sondern in einen Bauplan mit Test (`tutor/INDEX.md`,
 `tests/test_tutor_bauplan.py`).
 
 ## Die Regeln (gelten ab jetzt für jede Datei unter `memory/`)
@@ -49,7 +49,7 @@ Pro Datei:
 - Verweise (`siehe …`, Pfade) müssen nach dem Umbau noch stimmen.
 - `INDEX.md`-Zeilen nur anpassen, wenn sich Dateinamen oder Themen ändern.
 
-Nicht anfassen: `tutor/bauplan.md`, `tutor/naturalisierung.md`,
+Nicht anfassen: `tutor/INDEX.md`, `tutor/INDEX.md`,
 `betrieb/wachplan.md`, `system/audio_strasse.md` (frisch, schon in Form).
 
 Ergebnis: ein Commit je Bereich auf dem Arbeits-Branch, nicht gepusht —

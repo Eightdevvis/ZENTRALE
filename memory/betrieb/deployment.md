@@ -4,7 +4,7 @@
 `pi_sensor_bridge.service` (Sensoren + PIR → HTTP an den PC), der Kiosk und
 der Wecker für den PC (`zentrale-wake-pc.service`, Wake-on-LAN). Der
 **Kiosk-Default ist `room`** (seit 2026-09-14): das Persona-Zimmer
-(`tutor/room.py`) als randloses Wandbild, die TUI liegt dahinter (Alt+Z).
+(Zimmer der Tutor-App, im Paket unter `apps/tutor/`) als randloses Wandbild, die TUI liegt dahinter (Alt+Z).
 `tui` und `browser` bleiben als Modi wählbar. Erst-Bespielung per
 `scripts/deploy_pi.sh` (Positivliste `deploy/aussenposten.txt`), danach holt
 sich der Knoten sein Paket alle 5 Minuten selbst vom Backend (kein git). Auf
@@ -167,7 +167,7 @@ Der Pi an der Wand bekommt **nur die Positivliste `deploy/aussenposten.txt`**
 systemd-Units werden **uebersprungen**.
 
 Was drin ist: die TUI (`tui/`, stdlib-only), die Sensor-Bridge samt
-`core/host_metrics.py`, das Persona-Zimmer (`tutor/room.py` +
+`core/host_metrics.py`, das Persona-Zimmer (seit 2026-10-09 aus dem Repo language-tutor, Einträge `app:tutor/…` → `apps/tutor/`; `tutor/room.py` +
 `scripts/open_tutor_room.py` + Handschrift-Font), der Updater und die
 Einrichtungs-Skripte. Die Liste selbst ist die Wahrheit, hier keine Kopie.
 
@@ -563,3 +563,16 @@ crontab -l
   vs. `--voll`); Aussenposten holen ihr Paket per HTTP statt git.
 - **2026-09-14** — Kiosk-Default `room`: das Persona-Zimmer ist das Wandbild,
   die TUI liegt dahinter (Commit f499953).
+
+
+## Tutor-App (seit 2026-10-09)
+
+Der Sprach-Tutor ist ein eigenes Repo (`language-tutor`), das am PC und am
+Laptop **neben** ZENTRALE liegt (Einstellung `app_pfad_tutor`, Standard
+`../language-tutor`). Sein Server (`python -m tutor.server`, Port 5070)
+startet der Starter `scripts/open_tutor_room.py` bei Bedarf mit. Für das
+Zimmer an der Wand muss der Server am PC dauerhaft laufen und im Heimnetz
+lauschen (Tutor-Einstellung `host`), mit derselben Zugangs-Zeile in
+`~/.config/language-tutor/zugang` auf PC und Pi. Der Pi bekommt das Zimmer im
+Aussenposten-Paket (`apps/tutor/`), kein zweiter Clone nötig. Einrichten:
+README des Tutor-Repos.

@@ -60,6 +60,19 @@ def liste_lesen(pfad=None):
     return eintraege
 
 
+def _wurzel_fuer(eintrag, root):
+    """Ein Eintrag „app:<name>/<pfad>" meint eine Datei der App <name>
+    (eigenes Repo, seit 2026-10-09 der Sprach-Tutor). Sie liegt im Ordner der
+    App (core/apps.py) und landet im Paket unter apps/<name>/<pfad> — so
+    bekommt der Pi das Zimmer, obwohl es nicht mehr in ZENTRALE wohnt.
+    -> (Ordner, Präfix im Paket, Pfad im Ordner)"""
+    if not eintrag.startswith("app:"):
+        return root, "", eintrag
+    name, _, rest = eintrag[4:].partition("/")
+    import apps                        # Fundament, wie dieses Modul
+    return apps.pfad(name), os.path.join("apps", name), rest
+
+
 def dateien(root=None):
     """Die Positivliste zu einer sortierten Liste echter Dateien aufloesen.
 
@@ -70,7 +83,8 @@ def dateien(root=None):
     root = root or ROOT
     raus = []
     for eintrag in liste_lesen():
-        abs_ = os.path.join(root, eintrag)
+        basis_abs, basis_rel, eintrag = _wurzel_fuer(eintrag, root)
+        abs_ = os.path.join(basis_abs, eintrag)
         if os.path.isdir(abs_):
             for basis, verzeichnisse, namen in os.walk(abs_):
                 verzeichnisse[:] = [d for d in verzeichnisse
@@ -78,9 +92,10 @@ def dateien(root=None):
                 for name in namen:
                     voll = os.path.join(basis, name)
                     if not _uebergehen(voll):
-                        raus.append((os.path.relpath(voll, root), voll))
+                        rel = os.path.relpath(voll, basis_abs)
+                        raus.append((os.path.join(basis_rel, rel) if basis_rel else rel, voll))
         elif os.path.isfile(abs_) and not _uebergehen(abs_):
-            raus.append((eintrag, abs_))
+            raus.append((os.path.join(basis_rel, eintrag) if basis_rel else eintrag, abs_))
         # Fehlende Eintraege werden still uebergangen: die Liste darf Dinge
         # nennen, die es auf diesem Host (noch) nicht gibt, ohne dass ein
         # Knoten deshalb gar kein Update mehr bekommt.

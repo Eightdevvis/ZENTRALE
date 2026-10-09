@@ -38,7 +38,7 @@ gedacht – das war für die AI-Last zu schwer (Migration Mai 2026).
 │  Pi 3 Model B, armv7l (32-bit!), 921 MB RAM, 29 GB SD        │
 │                                                              │
 │   Kiosk (ZENTRALE_KIOSK_MODE, default 'room')                │
-│      tutor/room.py (Persona-Zimmer) als Wandbild             │
+│      Zimmer der Tutor-App (apps/tutor/) als Wandbild          │
 │      HDMI-Bild + Ton, USB-Mikro; rechnet NICHTS selbst       │
 │      TUI (tui/zentrale_tui.py) dahinter, Alt+Z               │
 │      'tui' / 'browser' = weitere Modi (deployment.md)        │
@@ -68,7 +68,7 @@ gedacht – das war für die AI-Last zu schwer (Migration Mai 2026).
 ## Datenflüsse
 
 **PC → Pi** läuft ausschließlich HTTP-Pull: Zimmer und TUI holen
-`/api/state`, `/api/chat`, `/api/tutor/...`, `/api/speak`, `/api/transcribe`
+`/api/state`, `/api/chat`, `/api/speak`, `/api/transcribe` (das Zimmer spricht seit 2026-10-09 mit dem Tutor-Server am PC, Port 5070: `/api/tutor/...`)
 vom PC-Flask. Keine Push-Verbindung in die Richtung – wenn das Dashboard
 neue Daten will, fragt es einfach erneut. SSE wird für Streaming-Calls
 genutzt (AI-Antworten), das ist immer noch Pull (Browser hält den

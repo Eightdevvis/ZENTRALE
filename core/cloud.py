@@ -360,7 +360,7 @@ def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
         # Fremder Prompt (Tutor): kein deutscher Jetzt-Block. Die eigenen
         # Cloud-Wege des Tutors schickten nie einen, und gegen echtes qwen
         # ist belegt, dass ein deutscher Block die Persona ins Deutsche kippt
-        # (memory/tutor/tutor_persona_tuning.md). Beim Umzug auf die eine
+        # (docs/tutor_persona_tuning.md im Repo language-tutor). Beim Umzug auf die eine
         # Straße (2026-10-08) bleibt das so.
         return ""
     parts = []

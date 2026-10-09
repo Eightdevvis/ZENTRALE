@@ -15,7 +15,7 @@
 #
 # Format: <apt-paket>  # wofuer
 
-# ── pygame (Persona-Zimmer, tutor/room.py) ───────────────────────────────
+# ── pygame (Persona-Zimmer der Tutor-App, apps/tutor/tutor/room.py) ───────────────────────────────
 libsdl2-2.0-0          # das Fenster ueberhaupt
 libsdl2-mixer-2.0-0    # pygame.mixer — Lucias Stimme abspielen
 libsdl2-ttf-2.0-0      # Schrift im Fenster (Sprechblase, Verlaufsleiste)

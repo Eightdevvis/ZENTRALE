@@ -51,7 +51,7 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/gespraechsliste.py` | `Gespraechsliste`: Überlagerung im Chat-Kasten (Tab/`/liste`); reine Helfer `alter_text`, `filtern`, `listen_zeilen` | `AI["liste"]` |
 | `ansichten/gedaechtnis.py` | `Gedaechtnis`: Überlagerung im Chat-Kasten (`/gedaechtnis`, `/skills`) — Kernakten, Bereiche, Skills; Kernakte im Editor ändern, Skill an/aus; reine Helfer `reiter`, `inhalt_zeilen`, `naechster_status`, `editor_befehl` | `AI["gedaechtnis"]` |
 | `ansichten/projekte.py` | `Projekte`: `/projekt` (Auswahl, zuordnen, anlegen, lösen) und die Übersicht `/projekte` als Überlagerung im Chat-Kasten — Projekte, ein Projekt im Einzelnen (Anweisungen, Wissen, Gespräche), Anweisungen im Editor, Wissen per Pfad; reine Helfer `projekt_name`, `finden`, `wahl`, `liste_zeilen`, `detail_zeilen` | `AI["projekte"]`, `AI["projekt"]` |
-| `ansichten/sprachtutor.py` | `Sprachtutor`: Text-Panel, Zimmer-Fenster | `TUTOR` |
+| `ansichten/app_start.py` | `AppStart`: Taste `u` / `/tutor` startet das Zimmer der Tutor-App über `scripts/open_tutor_room.py` (seit 2026-10-09; das Text-Panel ist weg) | — |
 | `ansichten/post.py` | `Post`: Mail, Antwort-Editor, Mail-Worker | `MAIL` |
 | `ansichten/kalender.py` | `Kalender`: seit 07.10.2026 nur noch Rahmen für A/B/C (`v` dreht), zeichnet die gewählte Ansicht; der alte Woche/Monat-Kalender mit Formular und Seitenliste ist raus | `K` |
 | `ansichten/kalender_ansichten.py` | Entwürfe A/B/C als reine Funktionen (Daten rein → Zeilen raus, kein curses); alle drei bedienbar, markieren die Auswahl per Identität (`t["roh"] is …`), siehe [kalender_ansichten_vorschau.md](../werkzeuge/kalender_ansichten_vorschau.md) | — |

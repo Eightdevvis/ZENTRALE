@@ -19,7 +19,7 @@ TUI_COMMANDS = [
     ("/theme", "Theme: auto | hell | dunkel  (auch 't')"),
     ("/cloud", "Cloud-Drossel: on | off  (Datenschutz/Kosten)"),
     ("/local", "Lokale KI drosseln: on | off  (Ollama-Leitung)"),
-    ("/tutor", "Sprach-Tutor TEXT-panel (Mitte, Cloud/Qwen); 'u' öffnet das Zimmer-Fenster"),
+    ("/tutor", "Sprach-Tutor: öffnet das Zimmer (eigene App, wie Taste 'u')"),
     ("/lauf",  "stdout-Laufschrift: an | aus  (auch 's')"),
     ("/dashboard", "altes 3-Spalten-Dashboard: an | aus  (aus = Meta-Rad)"),
     ("/reload", "nur die TUI mit neuem Code laden (passiert bei Code-Änderung auch von selbst)"),
@@ -39,7 +39,7 @@ TUI_KEYS = [
     ("kalender", "Kalender (Mitte), bedienbar wie calcurse: v dreht A Tagesliste → B Monat → C Woche · a neu · e ändern (Kasten) · d löschen · r wiederholen · enter ansehen · c/p kopieren · t/w/m/y springen · g gehe zu · x erledigte · in A tab zwischen Terminen/Kalender/TODO"),
     ("post", "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
     ("space", "KI-Chat (Mitte): tippen + enter fragt die KI · alt+enter oder \\ + enter neue zeile · ←→ home end del: cursor · ↑↓ scrollen (in mehrzeiliger eingabe: zeile wechseln, dann pgup/pgdn) · ctrl+c stoppt eine laufende antwort · esc schließt (die antwort läuft weiter, ● wenn fertig) · /help im chat: /new /chats /model /provider /effort /budget /local /cloud /auto"),
-    ("tutor", "Persona-Zimmer (eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · ohne DISPLAY → text-panel · /tutor = text-panel"),
+    ("tutor", "Persona-Zimmer (eigene App, eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · braucht einen bildschirm"),
     ("fokus", "Fokus (Mitte): oben projekte, drunter alle listen · enter reindiven · a/s neu · space abhaken · r name · d weg · p projekt · f setzt den knoten als alleinigen fokus (rendert dann allein in der FOCUS-box) · m/> verschieben"),
     ("klavier", "Klavier (Mitte): die Tastatur IST die Klaviatur — y x c v b n m , . - weiß, s d g h j l ö schwarz · ←→ oktave · space nimmt eine melodie auf (fragt beim stoppen nach dem namen) · ↑↓ melodie wählen · enter abspielen · r umbenennen · D löschen · k/esc zu"),
     ("/",   "Befehlszeile öffnen"),
@@ -83,12 +83,6 @@ CTX_KEYS = {
         ("↑↓", "melody"), ("enter", "play / stop"),
         ("r", "rename"), ("D", "delete melody"),
         ("L", "lights"), ("t", "theme"), ("k/esc", "close"),
-    ],
-    "tutor": [
-        ("enter", "start / talk"), ("/lang", "language"),
-        ("/provider", "provider"), ("/model", "model"),
-        ("/models", "models"), ("/tutorstop", "stop"),
-        ("↑↓", "scroll"), ("esc", "close"),
     ],
     "graph": [
         ("↑↓", "select"), ("enter", "open"),
@@ -175,7 +169,7 @@ CTX_TITLES = {
     "mail:cats": "post", "mail:list": "post · liste", "mail:read": "post · lesen",
     "mail:list:eingang": "post · eingang", "mail:read:eingang": "post · eingang",
     "elektronik": "elektronik",
-    "ai": "ki-chat", "tutor": "tutor",
+    "ai": "ki-chat",
     "note:edit": "notiz", "note:list": "notizen", "piano": "klavier",
     "technik": "technik",
 }
@@ -212,7 +206,7 @@ def parse_command(buf, theme_mode):
         if arg in ("on", "an"):   return "LOCAL_ON", theme_mode, ""
         if arg in ("off", "aus"): return "LOCAL_OFF", theme_mode, ""
         return "LOCAL_TOGGLE", theme_mode, ""
-    if name in ("tutor", "sprache"):             # Sprach-Tutor-Panel öffnen (Mitte)
+    if name in ("tutor", "sprache"):             # Zimmer der Tutor-App öffnen
         return "TUTOR_OPEN", theme_mode, ""
     if name in ("reload", "neuladen"):           # nur die TUI, neuer Code, Fenster bleibt
         return "RELOAD", theme_mode, ""

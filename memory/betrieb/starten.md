@@ -207,7 +207,7 @@ ZENTRALE_DEFAULT_LANG=de                     # Sprache, wenn ein Aufrufer keine 
 # whisper_service.py verwendet zusätzlich:
 WHISPER_MODEL=small                 # default (tiny|base|small|medium)
 # ⚠ scripts/open_tutor_room.py startet Whisper mit base, wenn WHISPER_MODEL
-#   nicht gesetzt ist (siehe memory/tutor/diagnose_2026-10-08.md)
+#   nicht gesetzt ist (siehe memory/tutor/INDEX.md)
 ```
 
 Beispiel: Whisper läuft auf einer anderen Maschine im LAN.

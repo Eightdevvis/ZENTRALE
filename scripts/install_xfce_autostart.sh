@@ -8,7 +8,7 @@
 # vollflaechig drueber.
 #
 # DREI MODI (ZENTRALE_KIOSK_MODE, Default 'room' seit 2026-09-14):
-#   room    — das Persona-ZIMMER (tutor/room.py) IST das Wandbild: randloses
+#   room    — das Persona-ZIMMER (Tutor-App) IST das Wandbild: randloses
 #             Vollbild, Mikro immer offen, die Persona spricht von sich aus.
 #             Die TUI liegt dahinter und kommt per Alt+Z drueber (q/u = zurueck).
 #             Entscheidung Sasha 2026-09-14: der Tutor ist wichtiger als das
@@ -273,12 +273,13 @@ rm -f "$AUTOSTART_DIR/zentrale.desktop.disabled"
 
 if [ "$KIOSK_MODE" = "room" ]; then
     # --- Zimmer-Variante: das Persona-Zimmer als Wandbild -------------------
-    # scripts/open_tutor_room.py startet tutor/room.py mit dem Pi-venv (pygame,
-    # sounddevice, webrtcvad) und faehrt KEINE Audio-Dienste hoch, weil das
-    # Backend nicht lokal ist (Whisper/TTS laufen am PC). --wand = randloses
+    # scripts/open_tutor_room.py startet das Zimmer der Tutor-App (seit
+    # 2026-10-09 eigenes Repo; im Paket unter apps/tutor/) mit dem Pi-venv
+    # (pygame, sounddevice, webrtcvad) und faehrt KEINE Dienste hoch: Tutor-
+    # Server (Port 5070), Whisper und TTS laufen am PC. --wand = randloses
     # Fenster in Desktop-Groesse (kein echtes Fullscreen, sonst laege die per
-    # Alt+Z geoeffnete TUI dahinter). ZENTRALE_URL fuer die TUI, die das Zimmer
-    # spawnt; --url fuer das Zimmer selbst.
+    # Alt+Z geoeffnete TUI dahinter). --hub = ZENTRALE am PC (fuer die TUI);
+    # den Tutor-Server findet der Starter auf demselben Rechner, Port 5070.
     #
     # Selbstheilung wie beim TUI-Modus: endet das Zimmer (Esc, Crash), kommt es
     # nach 2 s wieder. Backend weg faengt das Zimmer selbst ab (zeigt es an,
@@ -288,8 +289,8 @@ if [ "$KIOSK_MODE" = "room" ]; then
 [Desktop Entry]
 Type=Application
 Name=ZENTRALE Kiosk (Zimmer)
-Comment=Das Persona-Zimmer als Wandbild (tutor/room.py gegen das PC-Backend), TUI per Alt+Z
-Exec=bash -c 'xset s off; xset s noblank; xset -dpms; export ZENTRALE_URL=${BACKEND_URL}; export ZENTRALE_TUI_FONTSIZE=${TUI_FONTSIZE}; cd /opt/zentrale; while true; do python3 scripts/open_tutor_room.py --url ${BACKEND_URL} --wand 2>>/tmp/zentrale-tutor-room.log; sleep 2; done'
+Comment=Das Persona-Zimmer als Wandbild (Tutor-App gegen den Tutor-Server am PC), TUI per Alt+Z
+Exec=bash -c 'xset s off; xset s noblank; xset -dpms; export ZENTRALE_URL=${BACKEND_URL}; export ZENTRALE_TUI_FONTSIZE=${TUI_FONTSIZE}; cd /opt/zentrale; while true; do python3 scripts/open_tutor_room.py --hub ${BACKEND_URL} --wand 2>>/tmp/zentrale-tutor-room.log; sleep 2; done'
 X-GNOME-Autostart-enabled=true
 EOF
     echo "Kiosk-Autostart (Zimmer, randloses Vollbild) geschrieben."

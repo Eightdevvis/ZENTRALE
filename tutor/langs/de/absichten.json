@@ -1,8 +1,0 @@
-{
-  "ankunft": "Sasha ist gerade reingekommen. Begrüß sie und stell EINE ganz leichte Frage, mit Wörtern, die sie schon kennt.",
-  "nachhaken": "Sasha hat auf deinen Satz nicht geantwortet: „{letzte}“. Kein neues Thema. Sag es nochmal, kürzer und leichter, und zeig „{wort}“ mit show_thought.",
-  "stille": "Es ist eine Weile still. Wenn du etwas sagst, dann EINEN ganz kurzen Satz mit „{wort}“ ({bedeutung}); zeig es mit show_thought, wenn es neu für sie ist.",
-  "stille_ohne_ziel": "Es ist eine Weile still. Höchstens ein ganz kurzer Satz, oder nur eine Geste mit express.",
-  "nachfrage": "Sasha hat deinen Satz NICHT verstanden: „{letzte}“. Erklär nicht mit mehr Wörtern. Sag nur „{wort}“ noch einmal, langsam — höchstens drei Wörter —, zeig es mit show_thought ({bedeutung}) und mach mit express eine Geste dazu. Nichts Neues.",
-  "zu_schwer": "(Dein letzter Satz hatte Wörter, die Sasha noch nicht kennt: {woerter}. Jetzt leichter, mit Wörtern, die sie schon kennt.)"
-}

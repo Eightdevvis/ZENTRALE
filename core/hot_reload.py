@@ -4,7 +4,7 @@
 # (tui/zentrale_tui.py, RELOAD).
 #
 # Sasha, 04.10.2026: „hot reload soll auch backend neu laden". Das Backend
-# beobachtet seine eigenen Quellen (core/, ui/, tutor/ — nur *.py, ohne
+# beobachtet seine eigenen Quellen (core/, ui/ — nur *.py, ohne
 # test_*.py); ändern sie sich (Merge nach main, Edit), ersetzt sich der
 # Prozess per exec durch sich selbst: gleiche pid (systemd merkt nichts),
 # frischer Code, nach ein, zwei Sekunden antwortet :5000 wieder.
@@ -19,7 +19,8 @@
 #   - nur wenn er kompiliert — sonst bleibt der alte laufen, laut im Log,
 #     und erst die nächste Änderung zählt,
 #   - nie mitten in etwas: kein laufender Request (ein Chat-Stream samt
-#     Erlaubnis-Frage ist ein laufender Request), keine aktive Tutor-Session.
+#     Erlaubnis-Frage ist ein laufender Request). (Eine Tutor-Session hält
+#     ihn seit 2026-10-09 nicht mehr auf: der Tutor ist ein eigener Prozess.)
 #     Ausnahme: eine Anfrage, die sich zu lange nicht regt, gilt als hängend
 #     und zählt nicht mehr (STILL_GRENZE_S, seit 2026-10-07).
 #     Die Debug-Streams fürs Devtool hängen dauerhaft und zählen nicht.
@@ -32,10 +33,10 @@ import threading
 import time
 
 _ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-ORDNER = ('core', 'ui', 'tutor')
+ORDNER = ('core', 'ui')
 
 # Dauer-Streams, die nie enden — würden den Reload ewig blockieren.
-_IGNORIERT = ('/api/ai/debug/stream', '/api/tutor/debug/stream')
+_IGNORIERT = ('/api/ai/debug/stream',)
 
 _laufend_lock = threading.Lock()
 
@@ -242,12 +243,6 @@ def beschaeftigt(log=None, jetzt=None) -> str | None:
         aktiv.append(f"{pfad} seit {_dauer(t - beginn)}")
     if aktiv:
         return ", ".join(aktiv)
-    try:
-        import tutor_port
-        if tutor_port.is_active():
-            return "Tutor-Session aktiv"
-    except Exception:
-        pass
     return None
 
 

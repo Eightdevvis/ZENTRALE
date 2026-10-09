@@ -1,6 +1,6 @@
 # ui/routen/stimme.py
 #
-# Stimme: Sprechen (TTS) und Zuhören (Whisper), sprachneutral für Kern und Tutor.
+# Stimme: Sprechen (TTS) und Zuhören (Whisper), sprachneutral.
 #
 # Teil der Routen-Schicht (Schicht 5, memory/system/bauplan_kern.md):
 # dünne Adapter von HTTP auf core/. Herausgelöst aus ui/app.py am
@@ -10,9 +10,6 @@ from flask import Blueprint, Response, jsonify, request
 
 import ai_backends     # type: ignore  – AI-Backend-Verfügbarkeit (local/cloud, EXTERNAL-Box)
 import audio        # type: ignore
-import tutor_port    # type: ignore  – EINZIGER Griff am Sprach-Tutor (Addon).
-                     # Nicht tutor_* direkt importieren: der Port haelt den Tutor
-                     # rausziehbar und wendet die ZENTRALE-Drossel an.
 
 from ui.routen.gemeinsam import _ki_nicht_verfuegbar
 
@@ -27,10 +24,9 @@ bp = Blueprint('stimme', __name__)
 # vom geladenen TTS-/Whisper-Modell ab (siehe services/tts_service.py
 # bzw. WHISPER_LANG-env in services/whisper_service.py).
 #
-# Die frueheren Tutor-Aliase (/api/tutor/speak, /api/tutor/transcribe)
-# sind raus – der Mandarin-Tutor ist pausiert (siehe
-# memory/tutor/tutor_system.md). Wer Mandarin sprechen will, ruft die
-# generische API mit `lang='zh'` auf.
+# Der Sprach-Tutor ist seit 2026-10-09 eine eigene App (Repo language-tutor)
+# und redet über seinen eigenen Server mit den Stimm-Diensten. Wer hier
+# eine andere Sprache will, ruft die API mit `lang='zh'` o. ä. auf.
 
 
 @bp.route('/api/speak', methods=['POST'])
@@ -46,12 +42,9 @@ def api_speak():
 
     Response: audio/wav, oder 503 wenn das Modell fuer die Sprache fehlt.
     """
-    # TTS ist LOKALE Synthese (sherpa/Piper) und der Sprach-Tutor laeuft
-    # kapazitaetsbasiert ueber die Cloud – unabhaengig von der lokalen KI.
-    # Nur blocken, wenn AUCH der Tutor kein Backend hat; sonst kriegt die Persona-
-    # Stimme keinen Ton, obwohl der Tutor laeuft (verifiziert: /api/speak gab 503
-    # 'KI deaktiviert', obwohl der Cloud-Tutor verfuegbar war).
-    if ai_backends.lokale_ki_aus() and not tutor_port.available():
+    # Der Sprach-Tutor spricht seit 2026-10-09 über seinen eigenen Server
+    # direkt mit dem TTS-Dienst; hier fragt nur noch ZENTRALE selbst.
+    if ai_backends.lokale_ki_aus():
         return _ki_nicht_verfuegbar()
     body    = request.get_json() or {}
     text    = (body.get('text') or '').strip()
@@ -82,10 +75,7 @@ def api_transcribe():
 
     Response: JSON {"text": "..."}.
     """
-    # STT ist lokale Erkennung; der Sprach-Tutor laeuft kapazitaetsbasiert. Nur
-    # blocken, wenn AUCH der Tutor kein Backend hat — sonst kann das Persona-
-    # Zimmer nicht zuhoeren, obwohl der Tutor laeuft (wie bei /api/speak).
-    if ai_backends.lokale_ki_aus() and not tutor_port.available():
+    if ai_backends.lokale_ki_aus():
         return _ki_nicht_verfuegbar()
     if 'audio' not in request.files:
         return jsonify({"error": "kein 'audio'-Feld"}), 400

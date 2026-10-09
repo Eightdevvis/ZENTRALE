@@ -698,7 +698,7 @@ def dashboard_datei():
 
 
 # ── curses-UI ───────────────────────────────────────────────────────────────
-def befehl_ausfuehren(res, bz, store, LAUF, DASH, TECH, sprachtutor):
+def befehl_ausfuehren(res, bz, store, LAUF, DASH, TECH, app_start):
     """Einen Befehl der Befehlszeile ausführen (Ergebnis von parse_command).
     -> True, wenn die Hauptschleife enden soll (/quit, /reload, /reboot).
 
@@ -761,10 +761,9 @@ def befehl_ausfuehren(res, bz, store, LAUF, DASH, TECH, sprachtutor):
         TECH["active"] = False     # gibt es im alten Layout nicht
         bz.cmd_msg = "dashboard " + ("an (3 spalten)" if DASH["an"] else "aus (meta-rad)")
     if res == "TUTOR_OPEN":
-        # Panel öffnen wie Taste 'u': Status holen + falls Backend da
-        # und keine Session, die Persona SOFORT loslegen lassen.
-        sprachtutor.oeffnen_panel()
-        bz.cmd_msg = "tutor"
+        # Wie Taste 'u': das Zimmer der Tutor-App öffnen (seit 2026-10-09
+        # eine eigene App; das Text-Panel gibt es nicht mehr).
+        app_start.tutor_oeffnen()
     return False
 
 
@@ -773,10 +772,10 @@ def taste_verteilen(u, ch):
     Hauptschleife von run_ui). -> BEENDEN, wenn die TUI enden soll."""
     import curses
     AI, DASH, ELEK, G, K, L, LAUF, M = u.AI, u.DASH, u.ELEK, u.G, u.K, u.L, u.LAUF, u.M
-    MAIL, NOTE, PIANO, TECH, TUTOR, bz = u.MAIL, u.NOTE, u.PIANO, u.TECH, u.TUTOR, u.bz
+    MAIL, NOTE, PIANO, TECH, bz = u.MAIL, u.NOTE, u.PIANO, u.TECH, u.bz
     chat, erinnerung, fokus, graphen = u.chat, u.erinnerung, u.fokus, u.graphen
     kalender, karte, klavier, notizen = u.kalender, u.karte, u.klavier, u.notizen
-    post, sprachtutor, store, z = u.post, u.sprachtutor, u.store, u.z
+    post, app_start, store, z = u.post, u.app_start, u.store, u.z
     if ch == STRG_C:
         # Strg+C kommt seit 07.10.2026 als Zeichen (raw-Modus, siehe run_ui).
         # Im Chat stoppt es die Antwort und beendet NIE die TUI; überall
@@ -798,7 +797,7 @@ def taste_verteilen(u, ch):
         # setzt es um (Backend, Fenster, Neustart — siehe dort).
         res = bz.taste(ch)
         if res is not None:
-            if befehl_ausfuehren(res, bz, store, LAUF, DASH, TECH, sprachtutor):
+            if befehl_ausfuehren(res, bz, store, LAUF, DASH, TECH, app_start):
                 return BEENDEN
     elif ch == ord("/") and not in_text_entry(z):
         # '/' greift JETZT in jedem Fenster (nicht nur Home): blendet die
@@ -833,8 +832,6 @@ def taste_verteilen(u, ch):
             TECH["active"] = False
     elif PIANO["active"]:                  # Klavier hat den Fokus
         klavier.taste(ch)
-    elif TUTOR["active"]:                  # Sprach-Tutor hat den Fokus
-        sprachtutor.taste(ch)
     elif AI["active"]:                     # KI-Chat hat den Fokus
         chat.taste(ch)
     else:                                  # Startseite: das Rad
@@ -883,14 +880,14 @@ def taste_verteilen(u, ch):
             post.oeffnen()
         elif ch in (ord("a"), ord("A")):   # KI-Chat öffnen (Thin-Client übers PC-Hirn)
             chat.oeffnen()
-        elif ch in (ord("u"), ord("U")):   # 'u' öffnet DIREKT das Persona-Zimmer (natives Fenster)
+        elif ch in (ord("u"), ord("U")):   # 'u' öffnet das Zimmer der Tutor-App (eigenes Fenster)
             if os.environ.get("ZENTRALE_ROOM_PARENT"):
                 # Die TUI wurde AUS dem Zimmer heraus geöffnet (Wand-Kiosk,
                 # room.py Alt+Z): das Zimmer liegt darunter und läuft weiter.
                 # 'u' heißt hier »zurück ins Zimmer« — TUI zu, kein zweites
                 # Zimmer, das sich mit dem ersten ums Mikro streitet.
                 return BEENDEN
-            sprachtutor.oeffnen()
+            app_start.tutor_oeffnen()
         elif ch in (ord("n"), ord("N")):   # Notiz-Werkzeug öffnen (direkt in eine Notiz)
             notizen.oeffnen()
         elif ch in (ord("k"), ord("K")):   # Klavier öffnen (wie im Browser: k)
@@ -909,10 +906,10 @@ def bild_zeichnen(u):
     import curses
     AI, C, DASH, ELEK, G, K, L, LAUF = u.AI, u.C, u.DASH, u.ELEK, u.G, u.K, u.L, u.LAUF
     M, MAIL, NOTE, PIANO, PIX, TECH = u.M, u.MAIL, u.NOTE, u.PIANO, u.PIX, u.TECH
-    TUTOR, addclip, bz, chat, dashboard = u.TUTOR, u.addclip, u.bz, u.chat, u.dashboard
+    addclip, bz, chat, dashboard = u.addclip, u.bz, u.chat, u.dashboard
     draw_box, erinnerung, fokus, graphen = u.draw_box, u.erinnerung, u.fokus, u.graphen
     kalender, karte, klavier, notizen = u.kalender, u.karte, u.klavier, u.notizen
-    post, safe_addstr, sprachtutor = u.post, u.safe_addstr, u.sprachtutor
+    post, safe_addstr = u.post, u.safe_addstr
     startseite, stdscr, store, technik, z = u.startseite, u.stdscr, u.store, u.technik, u.z
     # Weiche Kamerafahrt zum fokussierten Land (eine Ease-Stufe pro Frame).
     if M["active"] and M.get("anim"):
@@ -1039,9 +1036,6 @@ def bild_zeichnen(u):
     elif AI["active"]:
         draw_box(top, mx, body_h, midw, chat.ai_titel(midw - 6))
         chat.draw_ai(top, mx, body_h, midw)
-    elif TUTOR["active"]:
-        draw_box(top, mx, body_h, midw, "tutor")
-        sprachtutor.draw_tutor(top, mx, body_h, midw)
     elif NOTE["active"]:
         draw_box(top, mx, body_h, midw, "notiz" if NOTE["view"] == "edit" else "notizen")
         notizen.draw_note_tool(top, mx, body_h, midw)
@@ -1168,6 +1162,7 @@ def run_ui(stdscr, store):
     # die bei der nächsten Taste wieder wegklappt. Zustand, Logik und Zeichnen:
     # ansichten/befehle.py; was ein Befehl BEWIRKT: befehl_ausfuehren() oben.
     bz = ansichten.befehle.Befehlszeile(z)
+    app_start = ansichten.app_start.AppStart(z, bz)   # Taste 'u': Tutor-App (2026-10-09)
 
     # ── stdout-Laufschrift (Taste 's' / '/lauf') ────────────────────────
     # Wunsch aus der Datei, damit ein Aus über den Neustart hält. `laeuft`
@@ -1190,8 +1185,6 @@ def run_ui(stdscr, store):
     chat = ansichten.chat.Chat(z)
     AI = chat.AI
     chat.start()
-    sprachtutor = ansichten.sprachtutor.Sprachtutor(z)
-    TUTOR = sprachtutor.TUTOR
     post = ansichten.post.Post(z)
     MAIL = post.MAIL
     post.start()
@@ -1262,10 +1255,10 @@ def run_ui(stdscr, store):
 
     u = types.SimpleNamespace(
         AI=AI, C=C, DASH=DASH, ELEK=ELEK, G=G, K=K, L=L, LAUF=LAUF, M=M, MAIL=MAIL,
-        NOTE=NOTE, PIANO=PIANO, PIX=PIX, TECH=TECH, TUTOR=TUTOR, addclip=addclip, bz=bz,
+        NOTE=NOTE, PIANO=PIANO, PIX=PIX, TECH=TECH, addclip=addclip, bz=bz,
         chat=chat, dashboard=dashboard, draw_box=draw_box, erinnerung=erinnerung,
         fokus=fokus, graphen=graphen, kalender=kalender, karte=karte, klavier=klavier,
-        notizen=notizen, post=post, safe_addstr=safe_addstr, sprachtutor=sprachtutor,
+        notizen=notizen, post=post, safe_addstr=safe_addstr, app_start=app_start,
         startseite=startseite, stdscr=stdscr, store=store, technik=technik, z=z)
 
     while True:
@@ -1278,8 +1271,7 @@ def run_ui(stdscr, store):
             if code_neu != code_alt:
                 if code_neu != code_kandidat:
                     code_kandidat = code_neu
-                elif not (in_text_entry(z) or bz.cmd_mode or AI["streaming"]
-                          or TUTOR["streaming"]):
+                elif not (in_text_entry(z) or bz.cmd_mode or AI["streaming"]):
                     fehler = code_fehler(code_dateien())
                     if fehler:
                         bz.cmd_msg = "neuer code kaputt, bleibe beim alten: " + fehler
@@ -1300,7 +1292,7 @@ def run_ui(stdscr, store):
         # Terminal so heil bleibt).
         chat.maus_pflegen()
         fast = ((M["active"] and M.get("anim")) or (AI["active"] and AI["streaming"])
-                or (TUTOR["active"] and TUTOR["streaming"]) or PIANO["active"]
+                or PIANO["active"]
                 or RAD["pos"] != RAD["sel"] or RAD["schnell"]
                 or TRAD["pos"] != TRAD["sel"] or META["gpos"] != META["gsel"]
                 or RAD.get("wurf") or TRAD.get("wurf"))
@@ -1308,7 +1300,7 @@ def run_ui(stdscr, store):
         # Sekunde (denkadern.BILDER_JE_S) — solange nur sie sich bewegen,
         # reichen 100 ms statt 33 (gemessen: etwa ein Drittel der CPU).
         adern = AI["active"] and chat.nur_adern()
-        stdscr.timeout(100 if adern and not (M["active"] or PIANO["active"] or TUTOR["active"])
+        stdscr.timeout(100 if adern and not (M["active"] or PIANO["active"])
                        else 33 if fast else 60 if AI["active"]      # das Auge lebt
                        else (LAUF_TICK_MS if LAUF["laeuft"] else 250))
         ch = stdscr.getch()

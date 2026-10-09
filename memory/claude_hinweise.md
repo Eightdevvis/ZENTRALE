@@ -2,11 +2,12 @@
 
 **Stand 2026-09-18:** Was aus dem Code allein nicht hervorgeht und beim
 Mitarbeiten nicht verletzt werden darf: Threads reden nur über `state.py`;
-Events laufen Sensor → `main.py` → `brain.py`/`actions.py`; der Kern fasst
-den Tutor nur über `core/tutor_port.py` an, die Tutor-KI sieht nie den Kern
-(Sandbox `tutor.tools._ALLOWED`, 12 Tools, `ai.py`-Gate `if tools is None`);
+Events laufen Sensor → `main.py` → `brain.py`/`actions.py`; der Tutor ist
+seit 2026-10-09 eine eigene App (Repo `language-tutor`): ZENTRALE importiert
+nichts von ihm, startet ihn nur und schickt ihm Ereignisse per HTTP
+(`core/apps.py`, `core/hub_ereignisse.py`, `memory/system/hub_bauplan.md`);
 Logik lebt front-agnostisch in `core/` hinter einem `/api/`-Kontrakt, Fronten
-zeichnen nur; Struktur des Tutors gehört in `memory/tutor/bauplan.md` (Drift-Test),
+zeichnen nur; Struktur des Tutors gehört in `memory/tutor/INDEX.md` (Drift-Test),
 Doku folgt `memory/doku_regeln.md`; jede Änderung wird erklärt, kommentiert (WARUM)
 und getestet oder als ungetestet benannt. Git-Workflow und Feature-Tracker:
 `CLAUDE.md`.
@@ -56,13 +57,13 @@ ständig; die Struktur muss mit dem Wachstum **besser** werden, nicht schlechter
   seit dem Ende des Morgen-Messengers (2026-09-14) nur noch ein `print`.
 - `PRESENCE_DETECTED` löst **kein** `TUTOR_START` aus — diese Kante gibt es nicht
   (die Konstante hat weder Sender noch Handler). `brain.py` ruft stattdessen
-  `tutor_port.presence_ping()`: eine **nonverbale** Reaktion in eine bereits
-  laufende Session, die nie eine startet. Gates, in dieser Reihenfolge: Env
-  `ZENTRALE_TUTOR_PRESENCE_REACT != "0"` (default AN) → `tutor_port.available()`
-  (Kill-Switch + Backend erreichbar) → Session-interne Guards (Cooldown).
-  Kein Tageszeit-Check. Der Kern fragt nie `tutor.*` direkt, immer den Port.
+  `hub_ereignisse.senden("anwesenheit")` (seit 2026-10-09): das Ereignis geht
+  per HTTP an jede App, die es in ihrer `app.toml` abonniert hat — heute der
+  Tutor. Ob er reagiert (nonverbal, nur in eine laufende Session, Cooldown),
+  entscheidet er selbst (seine Einstellung `presence_react`). Der Hub
+  importiert nie App-Code.
   Dass die Persona von sich aus spricht, entscheidet das **Zimmer** aus
-  Mikro/PIR (`memory/tutor/tutor_system.md`), nicht dieser Pfad.
+  Mikro/PIR (`memory/tutor/INDEX.md`), nicht dieser Pfad.
 - Wann ZENTRALE selbst spricht (Termin-Erinnerung), entscheidet der Takt im
   Code, nie der Prompt (`memory/system/takt.md`). Die Uhrzeit steht bewusst nicht im
   Prompt.
@@ -120,7 +121,7 @@ Die **Cloud-/Tutor-AI darf NICHT in die lokale AI greifen.** Lokale AI =
 Die Tutor-KI (auf einem Cloud-Provider) lebt in ihrem eigenen Environment.
 Was sie sieht/anfassen kann, ist GENAU: ihr Tutor-Prompt, ihre eigene
 Tutor-History, und die **12 Tutor-Tools** (`tutor.tools.tools_for(lang)`,
-Liste in `memory/tutor/bauplan.md`). Die fassen an: die Dateien des aktiven
+Liste in `memory/tutor/INDEX.md`). Die fassen an: die Dateien des aktiven
 Spielstands (`tutor/data/staende/<id>/<lang>/…`) und **UI-State des
 Persona-Zimmers** (`express`, `show_thought`, `watch_tv`, `play_music`) —
 mehr nicht, nie die Core-KI. Durchgesetzt durch:
@@ -148,7 +149,7 @@ hängen), weicht diese Trennung bewusst auf – im Zweifel sein lassen.
   Engine-Registry im TTS: zh/de/es). Nichts ist auf eine Sprache hartkodiert.
 - Drei separate Prozesse (ZENTRALE, Whisper, TTS) sind bewusst – siehe
   `memory/ki/audio_system.md`.
-- Das Zimmer (`tutor/room.py`) nimmt auf dem Pi **selbst** auf
+- Das Zimmer (`tutor/room.py` im Repo language-tutor) nimmt auf dem Pi **selbst** auf
   (`sounddevice` + VAD) und spielt ab; es importiert nichts aus dem Projekt.
   Die Straße für weitere Agenten ist als Design offen
   (`memory/system/audio_strasse.md`). Der Browser-Weg (MediaRecorder) gehört zur
@@ -206,7 +207,7 @@ verletzt dieses Prinzip — Logik gehört nach `core/`, nicht in die Front.
   die das **WARUM** erklären.
 - Lieber zu viele Kommentare als zu wenige – der User möchte den Code
   ohne externe Erklärung lesen können.
-- Struktur des Tutors (neue Datei, Route, Sprachpaket) → `memory/tutor/bauplan.md`
+- Struktur des Tutors (neue Datei, Route, Sprachpaket) → `memory/tutor/INDEX.md`
   im selben Commit, sonst wird `tests/test_tutor_bauplan.py` rot.
 
 ### Doku-Änderungen

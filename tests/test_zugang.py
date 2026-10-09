@@ -315,22 +315,8 @@ def _laden(rel, name):
     return spec, importlib.util.module_from_spec(spec)
 
 
-def test_zimmer_schickt_den_schluessel(merker, schluessel):
-    pytest.importorskip("pygame")
-    import sys
-    sys.path.insert(0, os.path.join(ROOT, "tutor"))     # wie beim Start als Skript
-    try:
-        spec, room = _laden("tutor/room.py", "room_zugang_test")
-        spec.loader.exec_module(room)
-        room.Backend(merker)
-    finally:
-        sys.path.remove(os.path.join(ROOT, "tutor"))
-    urllib.request.urlopen(merker + "/api/tutor/status").read()
-    assert _Merker.koepfe == [f"Bearer {schluessel}"]
-
-
 def test_alle_klienten_lesen_dieselbe_datei():
-    """Die TUI-Umsetzung (das Zimmer lädt dieselbe) und die Kopie in der
+    """Die TUI-Umsetzung und die Kopie in der
     Bridge müssen Name und Vorgabe von core/zugang.py behalten."""
     from tui.ansichten import zugang_klient
     assert zugang_klient.VORGABE_PFAD == zugang.VORGABE_PFAD
@@ -387,5 +373,7 @@ def test_skript_modus_ohne_laufenden_kern(capsys, modus):
 
 def test_pi_bekommt_was_den_schluessel_mitschickt():
     liste = open(os.path.join(ROOT, "deploy", "aussenposten.txt"), encoding="utf-8").read().split("\n")
-    for noetig in ("tutor/room_zugang.py", "tui/ansichten/", "scripts/pi_sensor_bridge.py"):
+    # Das Zimmer der Tutor-App bringt seit 2026-10-09 seinen eigenen
+    # Schlüssel-Klienten mit (app:tutor/tutor/zugang.py).
+    for noetig in ("app:tutor/tutor/zugang.py", "tui/ansichten/", "scripts/pi_sensor_bridge.py"):
         assert noetig in liste, noetig

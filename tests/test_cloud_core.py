@@ -123,7 +123,7 @@ def test_tutor_modus_ohne_kern_bloecke():
     assert ai._ASCII_MARKER_PROMPT not in blocks[0]["text"]
     # Kein deutscher Jetzt-Block im Tutor (2026-10-08, seit er über
     # kern.fahren hier fährt): er kippt die Persona ins Deutsche
-    # (memory/tutor/tutor_persona_tuning.md); seine alten Cloud-Wege
+    # (docs/tutor_persona_tuning.md im Repo language-tutor); seine alten Cloud-Wege
     # schickten auch keinen.
     assert blocks[1]["text"] == ""
 

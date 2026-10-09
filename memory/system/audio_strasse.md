@@ -6,7 +6,7 @@ Straße** sein, auf der mehrere Autos fahren — nicht jeder Agent seine eigene
 Mikro-Logik. Dieses Dokument ist das Design; Stand: **der Tutor fährt schon
 darauf**, der Assistent noch nicht.
 
-## Was heute schon die Straße ist (in `tutor/room.py`)
+## Was heute schon die Straße ist (in `tutor/room.py`, seit 2026-10-09 im Repo language-tutor)
 
 Der Pi ist der **Audio-Knoten**: er hört und spielt ab, rechnet aber nichts.
 

@@ -11,4 +11,4 @@
 # (tui.ansichten, in den Tests) gleich.
 
 from . import basis, farben, kontext, text  # noqa: F401
-from . import chat, sprachtutor, post, kalender, graphen, fokus, notizen, klavier, karte, technik, startseite, befehle, dashboard, erinnerung, fenster, fussleiste  # noqa: F401
+from . import chat, app_start, post, kalender, graphen, fokus, notizen, klavier, karte, technik, startseite, befehle, dashboard, erinnerung, fenster, fussleiste  # noqa: F401

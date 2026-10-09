@@ -34,6 +34,13 @@ UPDATER = os.path.join(ROOT, "scripts", "aussenposten_update.py")
 def test_liste_nennt_nur_vorhandenes():
     """Jeder Eintrag der Positivliste existiert auch wirklich."""
     for eintrag in aussenposten.liste_lesen():
+        if eintrag.startswith("app:"):
+            # Datei einer App (seit 2026-10-09): liegt im Ordner der App —
+            # in den Tests die Test-App (tests/conftest.py).
+            import apps
+            name, _, rest = eintrag[4:].partition("/")
+            assert os.path.exists(os.path.join(apps.pfad(name), rest)), eintrag
+            continue
         assert os.path.exists(os.path.join(ROOT, eintrag)), eintrag
 
 
@@ -132,7 +139,7 @@ def test_knoten_installiert_und_wiederholt_sich_nicht(backend, tmp_path):
     ziel.mkdir()
 
     assert "neue Version" in _lauf(backend, ziel)
-    assert (ziel / "tutor" / "room.py").exists()
+    assert (ziel / "apps" / "tutor" / "tutor" / "room.py").exists()
     assert (ziel / "tui" / "zentrale_tui.py").exists()
     assert not (ziel / "ui").exists(), "Backend-Code darf nicht mitkommen"
 
@@ -148,12 +155,12 @@ def test_neu_repariert_veraenderte_datei(backend, tmp_path):
     ziel.mkdir()
     _lauf(backend, ziel)
 
-    (ziel / "tutor" / "room.py").write_text("kaputt")
+    (ziel / "apps" / "tutor" / "tutor" / "room.py").write_text("kaputt")
     assert _lauf(backend, ziel) == "", "Version stimmt -> kein Eingriff"
-    assert (ziel / "tutor" / "room.py").read_text() == "kaputt"
+    assert (ziel / "apps" / "tutor" / "tutor" / "room.py").read_text() == "kaputt"
 
     _lauf(backend, ziel, "--neu")
-    assert (ziel / "tutor" / "room.py").read_text().startswith("#!")
+    assert (ziel / "apps" / "tutor" / "tutor" / "room.py").read_text().startswith("#!")
 
 
 def test_karteileichen_verschwinden(backend, tmp_path):
@@ -181,7 +188,7 @@ def test_backend_weg_ist_kein_absturz(tmp_path):
     ziel.mkdir()
     aus = _lauf("http://127.0.0.1:9", ziel)
     assert "nicht erreichbar" in aus
-    assert not (ziel / "tutor").exists()
+    assert not (ziel / "apps").exists()
 
 
 @pytest.mark.parametrize("boese", [
@@ -194,7 +201,7 @@ def test_ausbruch_aus_dem_zielordner_blockiert(boese):
 
 
 @pytest.mark.parametrize("gut", [
-    "tui/zentrale_tui.py", "core/host_metrics.py", "tutor/room.py",
+    "tui/zentrale_tui.py", "core/host_metrics.py", "apps/tutor/tutor/room.py",
 ])
 def test_normale_pfade_gehen_durch(gut):
     assert updater.sicher(gut)
@@ -402,7 +409,7 @@ def test_schrift_asset_ist_im_paket():
     MUSS mitgeliefert werden, sonst faellt das Zimmer auf dem Pi still auf die
     normale Schrift zurueck."""
     drin = [rel for rel, _ in aussenposten.dateien()]
-    assert "tutor/assets/PermanentMarker-Regular.ttf" in drin
+    assert "apps/tutor/tutor/assets/PermanentMarker-Regular.ttf" in drin
 
 
 def test_demo_schrift_bleibt_draussen():

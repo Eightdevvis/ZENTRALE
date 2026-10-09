@@ -9,8 +9,8 @@
 # lagen bis 2026-07-16 in core/tutor_config.py und damit in data/tutor_config.json
 # — d.h. der Kern (ai_backends → chat/news/EXTERNAL) hing an einer Tutor-Datei.
 # Das war der Pfeil verkehrt herum: der Tutor ist ein Addon, kein versteckter
-# Core. Jetzt gehört die Drossel dem Core; der Tutor ist nur noch ein Konsument
-# (und wird über core/tutor_port.py gegated, ohne selbst davon zu wissen).
+# Core. Jetzt gehört die Drossel dem Core. (Seit 2026-10-09 ist der Tutor eine
+# eigene App mit eigenen Einstellungen und Schlüsseln — er liest hier nichts.)
 #
 # ── Keys: EINE Quelle (data/ai_config.json), Punkt ──────────────────────
 # Der Key-Store ist MASCHINEN-Ebene, nicht Modul-Ebene: nicht-leere Keys aus
@@ -124,7 +124,6 @@ ALTE_NAMEN = {
     "whisper_url":          "WHISPER_URL",
     "tts_url":              "TTS_URL",
     "default_lang":         "DEFAULT_LANG",
-    "tutor_presence_react": "TUTOR_PRESENCE_REACT",
 }
 _alt_gemeldet = set()
 

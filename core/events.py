@@ -11,7 +11,6 @@ LIGHT_SENSOR_TRIGGER = "LIGHT_SENSOR_TRIGGER"
 SYSTEM_BOOT          = "SYSTEM_BOOT"
 DATA_COLLECTION      = "DATA_COLLECTION"
 PRESENCE_DETECTED    = "PRESENCE_DETECTED"   # Motion-Sensor hat jemanden erkannt
-TUTOR_START          = "TUTOR_START"          # Sprachtutor-Session beginnen
 
 # ── Tür-/Heimkehr-Events ──────────────────────────────────────────────
 # DOOR_TOGGLE feuert jedes Mal wenn der Türsensor durchgeht (auf ODER zu).

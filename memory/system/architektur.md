@@ -8,9 +8,10 @@ die **TUI** (`tui/zentrale_tui.py` + Ansichten in `tui/ansichten/`, Bauplan
 gearbeitet wird und die einzige Front; die Browser-Front (`monolith.html`) ist
 seit 2026-10-06 archiviert (`memory/archive/browser_front.md`).
 Die Kassetten sind entfernt (2026-10-04, Tracker erledigt); lokale KI an/aus
-schaltet allein `ZENTRALE_LOKALE_KI` (`ai_backends.lokale_ki_aus()`). Der Tutor ist ein
-eigenes Projekt in `tutor/`, angebunden allein über `core/tutor_port.py`;
-seine Struktur steht mit Drift-Test in `memory/tutor/bauplan.md`. „Lokal &
+schaltet allein `ZENTRALE_LOKALE_KI` (`ai_backends.lokale_ki_aus()`). Der Tutor ist seit
+2026-10-09 eine eigene App im Repo `language-tutor` (erste App nach
+`hub_bauplan.md`): eigener Prozess, eigener Schlüssel, eigenes Budget;
+ZENTRALE startet ihn und schickt ihm Ereignisse (`memory/tutor/INDEX.md`). „Lokal &
 offline" gilt nur noch als Default: die gegatete Internet-Pipe (2026-06) und
 der Cloud-Kern als Opt-in (2026-08, `memory/ki/ki_system.md`) brechen es
 bewusst. Bausteine docken per Konvention an (KI-Tool in `ai.py` + Route in
@@ -72,11 +73,12 @@ TUI  (pollt /api/state; früher der Browser, heute archiviert)
    └──▶ audio.py ──▶ Whisper (Port 5050) / TTS (Port 5051)
 ```
 
-> Sprach-Tutor: EIGENES PROJEKT im Ordner `tutor/` (rausziehbar am Stück,
-> seit 2026-07-16). ZENTRALE greift NUR über `core/tutor_port.py` rein —
-> kein Core-/UI-Modul importiert `tutor.*` direkt. Fehlt der Ordner, läuft
-> ZENTRALE normal weiter. Struktur: `memory/tutor/bauplan.md`, Verhalten:
-> `memory/tutor/tutor_system.md`.
+> Sprach-Tutor: seit 2026-10-09 eine eigene APP (Repo `language-tutor`
+> neben ZENTRALE, eigener Server auf Port 5070). ZENTRALE importiert nichts
+> von ihr: `core/apps.py` liest ihr Manifest `app.toml`,
+> `scripts/open_tutor_room.py` startet Server + Zimmer, `core/hub_ereignisse.py`
+> schickt ihr „anwesenheit". Fehlt die App, sagt die TUI es freundlich.
+> Übersicht: `memory/tutor/INDEX.md`.
 
 `brain.process_event(e)` und `actions.handle_action(e)` werden vom
 Event-Loop **parallel pro Event** aufgerufen, nicht hintereinander.
@@ -129,7 +131,8 @@ ZENTRALE/
 │   ├── melodies.py          # Melodie-Registry des Klaviers (data/melodies.json)
 │   ├── tone.py              # Ton-Erzeuger fürs TUI-Klavier (Wellenform → sounddevice;
 │   │                        # rein lokal, KEIN Backend-Weg — Lautsprecher sitzt am Knoten)
-│   ├── tutor_port.py        # ★ EINZIGE Naht zum Tutor (Policy/Gate, lazy, sys.path)
+│   ├── apps.py              # installierte Apps: Ordner + Manifest app.toml (Hub)
+│   ├── hub_ereignisse.py    # Ereignisse per HTTP an abonnierte Apps (Hub)
 │   └── map/                 # Geo-Layer-System (front-agnostisch, pure stdlib)
 │       ├── basemap.py       # Basiskarte (Natural Earth, data/*.geojson)
 │       ├── projection.py    # Geo→Pixel-Projektion
@@ -139,7 +142,7 @@ ZENTRALE/
 │   ├── app.py               # Flask-App anlegen, Bereiche einhängen, Takt, Start
 │   └── routen/              # REST-Routen, ein Modul pro Bereich (reiner Adapter auf core/)
 ├── tutor/                   # ★ EIGENES PROJEKT, wohnt hier mit. Rausziehbar am Stück.
-│                            # Baum, Artefakte, Routen, Sprachpakete: memory/tutor/bauplan.md
+│                            # Baum, Artefakte, Routen, Sprachpakete: memory/tutor/INDEX.md
 │                            # (mit Drift-Test tests/test_tutor_bauplan.py) — hier bewusst nicht kopiert.
 ├── tui/                     # Die TUI (curses), einzige Front, redet NUR via HTTP mit den Routen
 │   ├── zentrale_tui.py      # Einstieg: main, Store, Hot Reload, run_ui (Aufbau + Schleife)
@@ -224,6 +227,8 @@ Registry; wer echtes Hot-Plug will, müsste noch das Event-Routing
   (monolith/laptop/tui, bis 2026-10-04); Internet-Pipe mit Gate.
 - **2026-07-16** — Tutor als eigenes Projekt herausgelöst (`tutor/`,
   einzige Naht `core/tutor_port.py`).
+- **2026-10-09** — Tutor ausgezogen: eigenes Repo `language-tutor`, erste
+  App nach `hub_bauplan.md` (Port, `/api/tutor/*` und Text-Panel weg).
 - **2026-08** — Cloud-Kern als Opt-in; Arbeit nur noch an der TUI, Browser-
   Fronten aufgegeben (`INDEX.md`, Stand der Fronten).
 - **2026-10-04** — Kassetten entfernt: ein Schalter ZENTRALE_LOKALE_KI, TUI

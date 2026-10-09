@@ -214,7 +214,7 @@ audio.py  ──HTTP──▶  tts_service.py  (Port 5051)
   über `WHISPER_LANG`-env (default `de`). Haupt-Chat lässt Default
   greifen; für Mandarin schickt der Aufrufer `lang=zh` mit — der Sprach-Tutor
   tut genau das und ist ein **realer, laufender** Nutzer dieser Pipeline
-  (siehe `memory/tutor/tutor_system.md`).
+  (siehe `memory/tutor/INDEX.md`).
 - **VAD-Vorfilter** (Silero VAD über faster-whisper integriert):
   schneidet Stille raus, bevor Whisper transkribiert. Schutz gegen
   YouTube-Halluzinationen aus leeren Aufnahmen („Vielen Dank fürs

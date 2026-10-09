@@ -1,22 +1,21 @@
-# Sprach-Tutor — Index
+# Sprach-Tutor — ausgezogen
 
-Der Tutor ist ein **eigenes Projekt** in `tutor/`, am Stück rausziehbar. Die
-einzige Naht zum Kern ist `core/tutor_port.py`; Keys und die cloud/local-Wahl
-gehören dem Kern, nie dem Tutor.
+Seit 2026-10-09 ist der Sprach-Tutor ein **eigenes Programm** im Repo
+`language-tutor` (liegt neben ZENTRALE, GitHub `Eightdevvis/language-tutor`)
+und die erste App nach dem Hub-Bauplan ([../system/hub_bauplan.md](../system/hub_bauplan.md)).
+Seine ganze Doku ist mitgezogen und liegt dort unter `docs/` (Einstieg
+`docs/INDEX.md`; Bauplan, Verhalten, Persona-Tuning, Zimmer, Diagnose 08.10.).
+Die Geschichte der Dateien ist dort erhalten.
 
-| Was du wissen willst | Datei |
+Was in ZENTRALE vom Tutor bleibt:
+
+| Was | Wo |
 |---|---|
-| **Einstieg.** Aufbau des Persona-Portals, Sprachprofile, Vokabel-Modell, austauschbare Provider | [tutor_system.md](tutor_system.md) |
-| **Bauplan** — der Blueprint: Struktur (Skelett/Inhalt/Naht/Front), Verzeichnisbaum mit Rollen, Routen, Checkliste neue Sprache; `tests/test_tutor_bauplan.py` erzwingt Synchronität | [bauplan.md](bauplan.md) |
-| **Naturalisierung** — die Referenz für den Ausbau: Kern (leicht anfangen, organisch mitlernen), Umgebungs-Kontext, Skill `no_entiendo`, Tools heute/geplant | [naturalisierung.md](naturalisierung.md) |
-| Wie die Persona zuverlässig kurz und in der Zielsprache bleibt — Testläufe gegen echtes qwen-plus | [tutor_persona_tuning.md](tutor_persona_tuning.md) |
-| Die Roleplay-Features (Zimmer, Shop, Kisten) und warum sie so entschieden wurden | [tutor_roleplay_features.md](tutor_roleplay_features.md) |
-| Wie die Persona aussieht: gemalte Puppe statt Polygone, Drehpunkte, Mal-Schablone | [tutor_puppe.md](tutor_puppe.md) |
-| **Diagnose 2026-10-08** — Sashas Beschwerden (Dauergerede, Zufall, Niveau, „que?", Mikro, STT, Optik, Bilder) je mit Ursache (Datei:Zeile), Strategie, was gebaut ist, was offen bleibt | [diagnose_2026-10-08.md](diagnose_2026-10-08.md) |
+| Die App finden, ihr Manifest `app.toml` lesen | `core/apps.py` (Einstellung `app_pfad_tutor`, Standard `../language-tutor`) |
+| App starten: Stimm-Dienste, Tutor-Server, Zimmer | `scripts/open_tutor_room.py` (Taste `u`, `/tutor`, Pi-Wandbild) |
+| Ereignis „anwesenheit" an die App | `core/hub_ereignisse.py` (aus `core/brain.py`) |
+| Das Zimmer auf dem Pi | `deploy/aussenposten.txt`, Einträge `app:tutor/…` → `apps/tutor/` im Paket |
+| Stimm-Dienste (Whisper, TTS) | `services/` — gehören weiter dem Hub, der Tutor kennt nur ihre Adresse |
 
-## Grenze zum Kern
-
-Der Tutor hat sein **eigenes** Gedächtnis (`tutor/memory.py`, Notiz-Modell) —
-**nicht** den Konzept-Graphen der Kern-KI. Die beiden Speicher fassen sich nie
-an. Wie die Kern-KI sich erinnert, steht in
-[../ki/ki_system.md](../ki/ki_system.md).
+Alte Verweise in dieser Doku auf `memory/tutor/…` meinen die Dateien, die
+jetzt im Tutor-Repo unter `docs/` liegen.

@@ -12,13 +12,10 @@
 # Seit es zwei Prompt-Schienen gibt (core/profil/), ist genau das die Frage,
 # die man ständig hat: was schickt `gross` da eigentlich?
 #
-# ── Verhältnis zu tutor/debug.py ────────────────────────────────────────
-# Gleiche Bauart, bewusst eine eigene Datei. Der Tutor ist ein Addon und muss
-# am Stück rausziehbar bleiben (core/tutor_port.py ist die einzige Naht) — der
-# Kern darf nicht aus tutor/ importieren. Dieselbe Entscheidung wie bei
-# früher bei providers.py vs. tutor_providers.py: lieber zwei kleine Busse als einer, an
-# dem beide zerren.
-#
+# ── Verhältnis zum Tutor ────────────────────────────────────────────────
+# Der Sprach-Tutor hatte einen Bus gleicher Bauart. Seit 2026-10-09 ist er
+# eine eigene App (Repo language-tutor) und bringt seinen Bus selbst mit.
+
 # ── Events ──────────────────────────────────────────────────────────────
 #   ai.req   Was die KI KRIEGT: Modell, Schiene, kompletter System-Prompt,
 #            alle Messages, Tool-Namen, Cache-Breakpoints.

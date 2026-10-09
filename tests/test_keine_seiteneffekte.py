@@ -692,3 +692,14 @@ def test_zugang_schluessel_nie_der_echte():
     assert not os.environ["ZENTRALE_ZUGANG_SCHLUESSEL"].startswith(os.path.realpath(ROOT))
     from tui.ansichten import zugang_klient
     assert os.path.realpath(zugang_klient.pfad()) != os.path.realpath(echt)
+
+
+def test_apps_zeigen_auf_die_test_app():
+    """Seit 2026-10-09 schickt der Hub Ereignisse an Apps (core/hub_ereignisse.py)
+    und startet sie. Im Testlauf darf das nie die echte Tutor-App sein —
+    deren Server hält Sashas Lernstände."""
+    import apps
+    wert = apps.pfad("tutor")
+    assert os.path.realpath(wert).startswith(os.path.realpath(os.path.join(ROOT, "tests"))), wert
+    m = apps.manifest("tutor")
+    assert m and m["adresse"].endswith(":9"), "Test-App muss ins Leere zeigen"

@@ -234,7 +234,6 @@ def welt(monkeypatch, tmp_path):
                                   DASH={"an": False}, C=z.C, PIX=z.PIX,
                                   addclip=z.addclip, safe_addstr=z.safe_addstr,
                                   draw_box=z.draw_box, stdscr=z.stdscr, store=z.store)
-        u.sprachtutor = A.sprachtutor.Sprachtutor(z); u.TUTOR = u.sprachtutor.TUTOR
         u.post = A.post.Post(z); u.MAIL = u.post.MAIL
         u.kalender = A.kalender.Kalender(z); u.K = u.kalender.K
         u.graphen = A.graphen.Graphen(z); u.G = u.graphen.G
@@ -247,6 +246,7 @@ def welt(monkeypatch, tmp_path):
         u.dashboard = A.dashboard.Dashboard(z, u.graphen, u.fokus)
         u.erinnerung = A.erinnerung.Erinnerung(z, u.graphen)
         u.bz = A.befehle.Befehlszeile(z)
+        u.app_start = A.app_start.AppStart(z, u.bz)
         u.aufrufe, u.nebenwirkung = aufrufe, nebenwirkung
         return u
     return bauen
@@ -261,7 +261,7 @@ def zeichnen(u):
 
 def fingerabdruck(u):
     teile = []
-    for name in ("AI", "G", "L", "M", "K", "MAIL", "NOTE", "PIANO", "TECH", "TUTOR", "ELEK"):
+    for name in ("AI", "G", "L", "M", "K", "MAIL", "NOTE", "PIANO", "TECH", "ELEK"):
         teile.append(repr(getattr(u, name)))
     teile.append(repr((zt.RAD, zt.META, zt.TRAD)))
     teile.append(repr(vars(u.bz)))
@@ -356,10 +356,6 @@ def _einordnen(u):
     zt.taste_verteilen(u, ord(">"))
 
 
-def _tutor(u):
-    u.TUTOR["active"] = True
-
-
 def _technik(u):
     u.TECH["active"] = True; u.TECH["view"] = "system"
 
@@ -388,7 +384,6 @@ ZUSTAENDE = {
     "list:pick": ("list:pick", _einordnen),
     "piano": ("piano", _klavier),
     "map": ("map", _karte),
-    "tutor": ("tutor", _tutor),
     "technik": ("technik", _technik),
     "elektronik": ("elektronik", _elektronik),
 }

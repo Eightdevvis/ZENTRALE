@@ -13,20 +13,21 @@ Schicht hat, eine Abhängigkeit nach oben zeigt, ein neuer Import-Kreis
 entsteht, jemand an einer Tür vorbeigeht oder ein Riese wächst.
 **Pflegeregel:** Struktur ändern → Bauplan im selben Commit ändern.
 
-Verhalten steht woanders: Gesamtbild in [architektur.md](architektur.md),
-der Tutor hat seinen eigenen Bauplan in
-[../tutor/bauplan.md](../tutor/bauplan.md).
+Verhalten steht woanders: Gesamtbild in [architektur.md](architektur.md).
+Der Tutor ist seit 2026-10-09 eine eigene App (Repo `language-tutor`, mit
+eigenem Bauplan); wie Hub und Apps zusammenhängen, steht in
+[hub_bauplan.md](hub_bauplan.md).
 
 ## Die Schichten
 
 ```
    Fronten — eigene Programme, reden per HTTP mit den Routen
-   tui/zentrale_tui.py · tutor/room.py
+   tui/zentrale_tui.py   (Apps wie der Tutor: eigene Prozesse, eigene Repos)
                      │ HTTP
  ┌───────────────────▼──────────────────────────────────────────────┐
  │ 5  Routen         ui/app.py + ui/routen/ — darf alles darunter   │
  ├──────────────────────────────────────────────────────────────────┤
- │ 4  Ablauf         Event-Loop, Hot Reload, die Tür zum Tutor      │
+ │ 4  Ablauf         Event-Loop, Hot Reload                         │
  ├──────────────────────────────────────────────────────────────────┤
  │ 3  KI-Kern        denken: Modelle, Schleife, Prompt-Schienen     │
  ├──────────────────────────────────────────────────────────────────┤
@@ -74,7 +75,8 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `glossary` | 1 | Kuratiertes Mini-Glossar |
 | `categories` | 1 | Data-Collection-Kategorien |
 | `host_metrics` | 1 | CPU/GPU/VRAM/Temp/RAM des PCs |
-| `aussenposten` | 1 | Pakete für Knoten ohne Backend |
+| `aussenposten` | 1 | Pakete für Knoten ohne Backend (auch Dateien von Apps, `app:<name>/…`) |
+| `apps` | 1 | Installierte Apps (Hub-Bauplan): Ordner (`app_pfad_<name>`), Manifest `app.toml`, Abonnenten eines Ereignisses — liest nur, importiert nie App-Code |
 | `theme` | 1 | Tag/Nacht-Modus, die Datei als einzige Wahrheit |
 | `tone` | 1 | Ton-Erzeuger fürs TUI-Klavier |
 | `pc_status` | 1 | Ist der andere Knoten gerade da? |
@@ -118,6 +120,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `audio` | 2 | HTTP-Client für Whisper und TTS |
 | `telemetry` | 2 | Telemetrie-Aggregat PC + Pi |
 | `anwesenheit` | 2 | Ist Sasha da, schaut er hin? |
+| `hub_ereignisse` | 2 | Ereignisse an Apps schicken, die sie abonniert haben (HTTP POST, im Hintergrund, Fehler nur geloggt) |
 | `takt` | 2 | Wann ZENTRALE von sich aus spricht |
 | `map` | 2 | Geo-Layer-System der Weltkarte |
 | `ollama` | 2 | Anbindung an Ollama: Adresse, Modell, Kontext, Sampling, Erreichbarkeit, Warmup — einmal |
@@ -158,7 +161,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `ki_kalender` | 3 | Der Kalender, wie die KI ihn liest: Kennungen (`#r3f9c`), alle Felder, Warnungen frisch, Belege nach dem Schreiben |
 | `ki_kalender_aendern` | 3 | Die schreibenden Kalender-Werkzeuge der KI: genau EIN Eintrag, nur genannte Felder, mit Beleg und Status |
 | `ehrlichkeit` | 3 | Live-Prüfer eines Zugs: Tat gegen Wort und Kennungen (eine Korrekturrunde), Erledigt-Zeile aus dem Werkzeug-Protokoll, offene Zusagen in den Kontext-Umschlag; Einstellung `ehrlichkeit_pruefer` |
-| `kern` | 3 | Der eine Einstieg: kern.chat(verlauf) wählt den Weg (lokal/Anthropic/OpenAI) und fährt ihn; `fahrzeug()`/`fahren()` = die Straße für fremde Prompts (Tutor) |
+| `kern` | 3 | Der eine Einstieg: kern.chat(verlauf) wählt den Weg (lokal/Anthropic/OpenAI) und fährt ihn |
 | `billig` | 3 | Ein Einmal-Aufruf beim billigen Modell des aktiven Anbieters (beide Dialekte, Kosten gebucht) — Graph-Extraktor, Gesprächstitel |
 | `gespraech_titel` | 3 | Gesprächstitel: sofort aus den ersten Wörtern, nach der ersten Antwort vom billigen Modell |
 | `morgenblick` | 3 | Morgenblick auf Abruf: sammeln, billiges Modell schreibt Sätze (JSON, Daten nie Anweisung; ohne Cloud feste Sätze), Seite in die Ablage; signierte Knöpfe → neues Gespräch |
@@ -169,7 +172,6 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `clock` | 4 | Uhrzeit-Events |
 | `sensors` | 4 | Sensor-Simulation |
 | `hot_reload` | 4 | Hot Reload fürs Backend |
-| `tutor_port` | 4 | Die einzige Tür vom Kern zum Tutor |
 | `takt_treiber` | 4 | Der Takt-Thread: fragt `takt`, spricht über den KI-Kern ins Gespräch „Erinnerungen“, meldet |
 
 Schicht 5 liegt außerhalb von `core/` und steht deshalb nicht in der
@@ -187,7 +189,7 @@ egal woran, ging durch dieselbe Datei.
   `bp`. Jedes Modul steht in `ui/routen/__init__.py` unter `BEREICHE` — der
   Test prüft auch das, sonst gäbe es Routen, die nie eingehängt werden.
 - `ui/routen/gemeinsam.py` hält, was mehrere Bereiche brauchen (Pfad zu
-  `data/`, die 503-Antworten für „keine KI" und „kein Tutor-Backend").
+  `data/`, die 503-Antwort für „keine KI").
 - Routen sind **dünne Adapter**: Anfrage lesen, Kern fragen, Antwort formen.
   Zustand, Caches und Hintergrund-Threads gehören in den Kern.
 
@@ -203,7 +205,6 @@ egal woran, ging durch dieselbe Datei.
 | `ki` | Chat-Stream, Wiederholen, Stoppen, Verlauf, Erlaubnis, Status, Backend-Wahl, Einstellungen, Devtools |
 | `gespraeche` | Gesprächs-Liste, neu, öffnen, laden, umbenennen, archivieren; Bewertungen der Antworten |
 | `stimme` | Sprechen und Zuhören |
-| `tutor` | alles unter `/api/tutor/` |
 | `mail` | Mail-Triage |
 | `skills` | Skills der KI (Liste, an/aus) und das Gedächtnis für Sasha: Kernakten, Bereiche, Kernakte ändern |
 | `ablage` | Ablage: Liste, Dokument lesen, archivieren; Anhänge annehmen |
@@ -213,16 +214,18 @@ egal woran, ging durch dieselbe Datei.
 
 ## Türen
 
-Zwei Fronten und ein Addon wohnen im selben Repo, gehören aber nicht zum
-Kern. Was sie aus dem Kern importieren dürfen, steht hier und **nur** hier:
+Eine Front wohnt im selben Repo, gehört aber nicht zum Kern. Was sie aus dem
+Kern importieren darf, steht hier und **nur** hier. Apps (seit 2026-10-09 der
+Sprach-Tutor) wohnen in eigenen Repos und importieren gar nichts von hier —
+umgekehrt importiert hier niemand ein Modul namens `tutor` (der Test prüft
+das für `core/`, `ui/`, `tui/`, `scripts/`).
 
 | Bereich | Darf aus dem Kern | Warum |
 |---|---|---|
 | `tui/` | `theme`, `tone`, `pc_status` | Reine Helfer ohne Kern-Abhängigkeit. Alles andere holt die TUI per HTTP von den Routen (`ui/routen/`). |
-| `tutor/` | `kern`, `providers`, `ai_backends`, `state` | Der Tutor ist ein eigenes Programm, fährt aber auf der einen „Straße“ des Kerns: `kern.fahrzeug()`/`kern.fahren()` und die eine Anbieter-Liste, beides nur über `tutor/anbieter.py` (seit 2026-10-08; vorher `ai` + eigene Cloud-Schleifen). Dazu Kapazität (`ai_backends`) und das Log. |
 
-Umgekehrt erreichen Kern und Routen den Tutor **nur** über
-`core/tutor_port.py`.
+Mit Apps redet der Hub nur über HTTP: starten (`scripts/open_tutor_room.py`
+liest `app.toml`), Ereignisse schicken (`core/hub_ereignisse.py`).
 
 ## Altlasten
 
@@ -250,8 +253,9 @@ Test stehen; ein neuer Kreis wird rot und darf hier NICHT eingetragen werden.
 
 ### Altlast: Türen
 
-Keine mehr — die letzte (`ui/app.py → tutor.debug`) ist am 2026-10-06 über
-`tutor_port.debug_bus()` gelöst. Die Tabelle bleibt für den Test stehen.
+Keine mehr — die letzte (`ui/app.py → tutor.debug`) ist am 2026-10-06
+gelöst; seit 2026-10-09 ist der Tutor ganz ausgezogen. Die Tabelle bleibt für
+den Test stehen.
 
 | Weg | Wofür |
 |---|---|
@@ -259,14 +263,12 @@ Keine mehr — die letzte (`ui/app.py → tutor.debug`) ist am 2026-10-06 über
 ### Altlast: Riesen
 
 Grenze: eine Funktion über 250 Zeilen, eine Datei über 1.500 Zeilen (in
-`core/`, `ui/`, `tui/`, `tutor/`). Die Zahl rechts ist **eingefroren**: der
+`core/`, `ui/`, `tui/`). Die Zahl rechts ist **eingefroren**: der
 Riese darf nicht wachsen, und wenn er schrumpft, wird die Zahl hier gesenkt.
 Sasha, 05.10.2026: einfrieren, dann zerlegen (Punkt 3).
 
 | Wo | Zeilen höchstens |
 |---|---|
-| `tutor/room.py` | 3932 |
-| `tutor/room.py::main` | 1735 |
 | `core/mail.py` | 1924 |
 
 ## Wenn der Test rot wird
@@ -277,8 +279,8 @@ Sasha, 05.10.2026: einfrieren, dann zerlegen (Punkt 3).
   oder es als Argument hereingeben.
 - **„Neuer Import-Kreis"** — was beide brauchen, in ein eigenes, tieferes
   Modul ziehen. Nicht als Altlast eintragen.
-- **„Tür umgangen"** — TUI: über eine Route in `ui/routen/` gehen. Kern zum
-  Tutor: über `tutor_port`.
+- **„Tür umgangen"** — TUI: über eine Route in `ui/routen/` gehen. Zu einer
+  App: nie per Import, nur per HTTP (`hub_ereignisse`, Starter).
 - **„Riese gewachsen"** — das Neue in eine eigene Funktion oder Datei legen.
   In der TUI heißt das: eine eigene Ansicht in `tui/ansichten/`
   ([tui_bauplan.md](tui_bauplan.md)).

@@ -14,7 +14,7 @@
 requests
 keyboard
 
-# Persona-Zimmer (tutor/room.py): das Fenster selbst.
+# Persona-Zimmer der Tutor-App (apps/tutor/tutor/room.py): das Fenster selbst.
 pygame
 
 # Persona-Zimmer, Mikro-Zweig ("Immer-Zuhoeren"). Beide werden erst IN dem

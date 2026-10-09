@@ -89,17 +89,15 @@ def test_neuer_name_schlaegt_alten(ohne_override, monkeypatch):
     assert g[0] == "http://neu:5050/transcribe"
 
 
-def test_anwesenheit_reaktion_abschaltbar(ohne_override, monkeypatch):
-    import tutor_port
-    gerufen = []
-    monkeypatch.setattr(tutor_port, "presence_ping", lambda: gerufen.append(1) or True)
-    ai_config.set_override("tutor_presence_react", "0")
-    vorher = len(gerufen)
+def test_anwesenheit_geht_als_ereignis_an_die_apps(ohne_override, monkeypatch):
+    """Seit 2026-10-09 ruft brain.py keinen Tutor-Code mehr, sondern schickt
+    das Ereignis „anwesenheit" an die Apps (core/hub_ereignisse.py). Ob die
+    App reagiert, ist ihre Einstellung (beim Tutor: presence_react)."""
+    import hub_ereignisse
+    gesendet = []
+    monkeypatch.setattr(hub_ereignisse, "senden", lambda name, *a, **k: gesendet.append(name) or 1)
     _brain(events.PRESENCE_DETECTED)
-    assert len(gerufen) == vorher, "aus heißt aus"
-    ai_config.set_override("tutor_presence_react", "")
-    _brain(events.PRESENCE_DETECTED)
-    assert len(gerufen) == vorher + 1, "Standard: an"
+    assert gesendet == ["anwesenheit"]
 
 
 def _brain(ev):

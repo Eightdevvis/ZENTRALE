@@ -6,9 +6,9 @@ hängt die Bereiche aus `ui/routen/` ein, je ein Modul pro Bereich (siehe
 `core/`), Streaming per SSE. Die Fronten (TUI, Zimmer, Browser) sind reine
 HTTP-Clients. Direkte Nutzeraktionen (Kalender schreiben, Listen, Graphen,
 Melodien, Karte, Notizen, Aussenposten-Paket) sind **nicht** KI-gegatet;
-Chat und Tutor hängen an Kill-Switches (`/api/ai/backends`). Die
-`/api/tutor/*`-Routen stehen mit Drift-Test in `memory/tutor/bauplan.md`
-(hier nur die Status-Felder). Mail-Endpoints: Details in
+Chat hängt an Kill-Switches (`/api/ai/backends`). Die `/api/tutor/*`-Routen
+gibt es hier seit 2026-10-09 nicht mehr — sie gehören dem Tutor-Server der
+App `language-tutor` (`memory/tutor/INDEX.md`). Mail-Endpoints: Details in
 `memory/werkzeuge/mail_system.md`, Notizen in `memory/werkzeuge/notizen_system.md`.
 Diese Liste hat **keinen** Drift-Test; zuletzt gegen `ui/routen/`
 abgeglichen 2026-09-18.
@@ -407,35 +407,14 @@ Details zu Modellen + Sprachen: `memory/ki/audio_system.md`.
 
 Details: `memory/werkzeuge/mail_system.md` (Panel/Drill-down/Hybrid, Passphrase-Quellen, Keyring-CLI).
 
-## Tutor (Addon, optional)
+## Tutor (eigene App, seit 2026-10-09)
 
-Der Tutor ist ein **Addon**: die Routen (`ui/routen/tutor.py`) fassen ihn nur über `core/tutor_port.py`
-an. Fehlt `tutor/` ganz, läuft ZENTRALE normal weiter und die Routen antworten
-`503 {error:"backend not here", detail:"<Grund>"}`. Voice läuft NICHT hier,
-sondern über die sprachneutralen Core-Endpoints `/api/speak` + `/api/transcribe`
-mit `lang`-Parameter.
-
-**Die Routen-Tabelle steht in `memory/tutor/bauplan.md` (Abschnitt 3)** und
-wird dort von `tests/test_tutor_bauplan.py` gegen `ui/routen/` geprüft — hier
-bewusst keine Kopie. Was hier bleibt, ist die Bedeutung der Status-Felder:
-
-**`/api/tutor/status` — die Felder, auf die die Fronten bauen:**
-
-| Feld              | Bedeutung                                              |
-|-------------------|--------------------------------------------------------|
-| `present`         | Ist `tutor/` auf dieser Maschine überhaupt installiert? |
-| `active`          | Läuft gerade eine Session?                              |
-| `available`       | installiert **und** von der Drossel erlaubt **und** Backend erreichbar |
-| `reason`          | **Warum nicht**, im Klartext: `"Cloud ist per Kill-Switch gedrosselt"` · `"lokale KI ist per Kill-Switch gedrosselt"` · `"Provider-Backend nicht erreichbar"` · `"Tutor nicht installiert (…)"`. Leer, wenn `available`. |
-| `privacy_warning` | != null → Provider trainiert auf die Eingaben: laut anzeigen. |
-
-Fronten sollen `reason` **wörtlich hinschreiben**, nicht selbst formulieren:
-der Grund wird an genau EINER Stelle formuliert
-(`core/tutor_port.unavailable_reason()`). Warum: ohne `present` + `reason`
-(fehlten bis 2026-07-17, der Endpunkt warf sie weg) konnte keine Front
-„gedrosselt" von „gar nicht da" unterscheiden — der Monolith wechselte
-ungeprüft in den Tutor-Kanal und hing im 503 fest, die TUI riet
-(„cloud gedrosselt? /cloud on").
+Der Tutor ist eine eigene App mit eigenem Server (Repo `language-tutor`,
+Port 5070); seine Routen (`/api/tutor/*`, dazu `/hub/ereignis`) und die
+Bedeutung der Status-Felder stehen dort im Bauplan (`docs/bauplan.md`).
+ZENTRALE hat dafür keine Route mehr. `/api/speak` und `/api/transcribe` hier
+bleiben sprachneutral für ZENTRALE selbst; der Tutor spricht direkt mit den
+Stimm-Diensten.
 
 ## Historie
 

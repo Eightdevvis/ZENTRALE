@@ -1,0 +1,14 @@
+# Eine Test-App nach dem Hub-Bauplan (tests/conftest.py lenkt app_pfad_tutor hierher).
+# Adresse zeigt ins Leere: kein Test darf einen echten Tutor-Server erreichen.
+name      = "tutor"
+version   = "0.0.0"
+start     = "python -m tutor.server"
+adresse   = "http://127.0.0.1:9"
+ansichten = ["fenster"]
+rechte    = ["ereignis:anwesenheit"]
+
+[ansicht.fenster]
+start = "python tutor/room.py"
+
+[ereignisse]
+ziel = "/hub/ereignis"

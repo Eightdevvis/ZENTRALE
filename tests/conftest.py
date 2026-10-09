@@ -74,6 +74,11 @@ os.environ.setdefault("ZENTRALE_SANDBOX_DIR", os.path.join(_DATEN_TMP, "sandbox"
 # Die Ablage (core/ablage.py, Phase 5): Dokumente und Anhänge. Dazu unten
 # pro Test ein eigener Ordner.
 os.environ.setdefault("ZENTRALE_ABLAGE_DIR", os.path.join(_DATEN_TMP, "ablage"))
+# Apps (core/apps.py, Hub-Bauplan Schritt 1, 2026-10-09): eine Test-App statt
+# des echten Sprach-Tutors neben dem Repo. Ihre Adresse zeigt ins Leere —
+# kein Testlauf schickt Ereignisse an einen laufenden Tutor-Server.
+os.environ.setdefault("ZENTRALE_APP_PFAD_TUTOR",
+                      os.path.join(ROOT, "tests", "fixtures", "app_tutor"))
 # Bewertungen der Antworten (core/rueckmeldungen.py, 2026-10-08). Dazu unten
 # pro Test ein eigener Ordner.
 os.environ.setdefault("ZENTRALE_RUECKMELDUNGEN_DIR", os.path.join(_DATEN_TMP, "rueckmeldungen"))

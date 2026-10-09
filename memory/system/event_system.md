@@ -7,7 +7,7 @@ Echte Sensor-Quelle ist der **Pi-Webhook** (`POST /api/sensor/<name>`, PIR
 Tastatur-Simulation in `sensors.py` ist der Test-Weg am PC. Mappings heute:
 `TIME_REACHED → MORNING_WAKEUP` (07:00, nur noch ein `print` in
 `actions.py` — der Morgen-Messenger ist seit 2026-09-14 gelöscht),
-`PRESENCE_DETECTED → tutor_port.presence_ping()` (nonverbal, nur in eine
+`PRESENCE_DETECTED → hub_ereignisse.senden("anwesenheit")` (seit 2026-10-09; vorher `tutor_port.presence_ping()`) (nonverbal, nur in eine
 laufende Session). `TUTOR_START` und `HOMECOMING` sind Konstanten ohne
 Sender/Handler. Wann ZENTRALE von sich aus spricht, entscheidet nicht diese
 Pipeline, sondern der Takt (`takt.md`).
@@ -34,7 +34,7 @@ Simulation gegen echten GPIO-Trigger tauschen ohne `brain.py` anzufassen).
   jeweiligen internen Event (`_SENSOR_TO_EVENT`).
 - Verwendet von `scripts/pi_sensor_bridge.py` (Pi → PC): PIR per gpiozero
   → `motion`, Tastatur-Sim, Telemetrie. Ein Presence-Treffer wird zusätzlich
-  vom Backend gemerkt (`presence_age` in `/api/tutor/room_state`), damit das
+  vom Backend gemerkt (`presence_age` in `/api/tutor/room_state` des Tutor-Servers), damit das
   Zimmer ihn wie verstandene Worte werten kann.
 
 ### `core/clock.py`
@@ -56,8 +56,8 @@ Simulation gegen echten GPIO-Trigger tauschen ohne `brain.py` anzufassen).
 - `TUTOR_START` existiert als Konstante weiter, hat aber keinen Sender und
   keinen Handler. **Nicht** weil der Tutor pausiert (er läuft), sondern weil ein
   Auto-**Start** per Event bewusst nicht existiert: `brain.py` schickt bei
-  `PRESENCE_DETECTED` nur einen nonverbalen `tutor_port.presence_ping()` in eine
-  **bereits laufende** Session. Siehe `memory/tutor/tutor_system.md`.
+  `PRESENCE_DETECTED` nur das Ereignis „anwesenheit“ an die Apps (heute der Tutor, der selbst nonverbal reagiert; bis 2026-10-09 `tutor_port.presence_ping()`) in eine
+  **bereits laufende** Session. Siehe `memory/tutor/INDEX.md`.
 - `DOOR_TOGGLE` feuert jedes Mal wenn der Türsensor durchgeht
   (auf ODER zu). `HOMECOMING` ist die abgeleitete Bedeutung, sobald
   `brain.py` daraus „User war > X Std weg und ist jetzt zurück"
@@ -67,11 +67,11 @@ Simulation gegen echten GPIO-Trigger tauschen ohne `brain.py` anzufassen).
 - **Reine Logik-Schicht**: wandelt Input-Events in neue Events um.
 - Aktuelle Mappings:
   - `TIME_REACHED` → `MORNING_WAKEUP`
-  - `PRESENCE_DETECTED` → `tutor_port.presence_ping()`: eine **nonverbale**
+  - `PRESENCE_DETECTED` → Ereignis „anwesenheit“ an die Tutor-App (`core/hub_ereignisse.py`); sie zeigt eine **nonverbale**
     Reaktion (schaut hoch, Mimik) in eine **bereits laufende** Tutor-Session,
     kein Auto-Start, kein verbaler Gruß. Default an, per `ZENTRALE_TUTOR_PRESENCE_REACT=0`
     aus. Kein `TUTOR_START`-Event (die Kante gibt es nicht). Der Kern geht über
-    den Port, nie an `tutor.*` vorbei. Siehe `memory/tutor/tutor_system.md`.
+    den Port, nie an `tutor.*` vorbei. Siehe `memory/tutor/INDEX.md`.
 - Macht selbst keine File-Writes; der `presence_ping` ist ein Port-Aufruf.
 
 ### `core/actions.py`

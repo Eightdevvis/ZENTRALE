@@ -26,24 +26,17 @@ def process_event(event, data=None):
         print("Brain: Light sensor triggered")
 
     elif event == PRESENCE_DETECTED:
-        # Tutor-Auto-START bleibt bewusst pausiert (memory/tutor/tutor_system.md,
-        # Sequencing). Der Presence-Event reicht STANDARDMÄSSIG einen NONVERBALEN
-        # Ping an die Persona weiter — und der wirkt auch dann nur, wenn die
-        # Tutor-Session bereits LÄUFT (er startet nie eine); die Guards dafür
-        # (aktive Session, nonverbal, Cooldown) stecken in presence_ping() selbst
-        # und no-op-en sicher. Abschaltbar über die Einstellung
-        # tutor_presence_react = 0 (Env ZENTRALE_TUTOR_PRESENCE_REACT; bis
-        # 2026-10-08 TUTOR_PRESENCE_REACT, gilt übergangsweise noch).
-        import ai_config
-        if str(ai_config.setting("tutor_presence_react", "1")) != "0":
-            try:
-                import tutor_port
-                reacted = tutor_port.presence_ping()
-                print("Brain: Presence → Persona "
-                      + ("reagiert" if reacted else "ruht (Session inaktiv/Cooldown)"))
-            except Exception as e:
-                print(f"Brain: Presence-Reaktion fehlgeschlagen: {e}")
-        else:
-            print("Brain: Presence erkannt (Reaktion per tutor_presence_react=0 aus)")
+        # Jemand ist im Raum → als Ereignis „anwesenheit" an die Apps, die es
+        # abonniert haben (app.toml, Recht ereignis:anwesenheit). Heute ist das
+        # der Sprach-Tutor; ob und wie er reagiert, entscheidet ER (seine
+        # Einstellung presence_react). Bis 2026-10-09 rief brain.py hier den
+        # Tutor-Code direkt auf (tutor_port.presence_ping) — der Hub kennt
+        # keinen App-Code mehr (memory/system/hub_bauplan.md).
+        try:
+            import hub_ereignisse
+            n = hub_ereignisse.senden("anwesenheit")
+            print(f"Brain: Presence → Ereignis an {n} App(s)")
+        except Exception as e:
+            print(f"Brain: Presence-Ereignis fehlgeschlagen: {e}")
 
     return new_events

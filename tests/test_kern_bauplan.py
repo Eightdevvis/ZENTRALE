@@ -35,7 +35,7 @@ SCHICHT_NAMEN = {1: "Fundament", 2: "Dienste", 3: "KI-Kern",
 
 # Wo die Riesen-Grenze gilt. scripts/ und tests/ sind Werkzeuge, keine
 # Bausubstanz.
-RIESEN_BEREICHE = ("core", "ui", "tui", "tutor")
+RIESEN_BEREICHE = ("core", "ui", "tui")
 RIESE_FUNKTION = 250
 RIESE_DATEI = 1500
 
@@ -292,12 +292,11 @@ def _tuer_verstoesse():
     module = set(kern_module())
     erlaubt = bauplan_tueren()
     raus = set()
-    # Kern und Routen erreichen den Tutor NUR über core/tutor_port.py.
-    for bereich in ("core", "ui"):
+    # Apps (seit 2026-10-09 der Tutor, eigenes Repo) importiert hier
+    # niemand — der Hub redet mit ihnen nur per HTTP (hub_bauplan.md).
+    for bereich in ("core", "ui", "tui", "scripts"):
         for pfad in _py_dateien(bereich):
             rel = os.path.relpath(pfad, ROOT)
-            if rel == os.path.join("core", "tutor_port.py"):
-                continue
             if "tutor" in _importierte_namen(pfad):
                 raus.add((rel, "tutor"))
     # Fronten und Addon: nur die freigegebenen Kern-Module.
@@ -314,8 +313,8 @@ def test_niemand_geht_an_den_tueren_vorbei():
     neu = sorted(_tuer_verstoesse() - altlast_tueren())
     assert not neu, (
         "Tür umgangen:\n  " + "\n  ".join(f"{a} → {b}" for a, b in neu) +
-        "\nDer Kern erreicht den Tutor nur über core/tutor_port.py; TUI und "
-        "Tutor dürfen aus dem Kern nur, was im Bauplan unter 'Türen' steht. "
+        "\nApps (der Tutor) werden nie importiert, nur per HTTP angesprochen; "
+        "die TUI darf aus dem Kern nur, was im Bauplan unter 'Türen' steht. "
         "Die TUI redet sonst per HTTP mit den Routen in ui/routen/.")
 
 

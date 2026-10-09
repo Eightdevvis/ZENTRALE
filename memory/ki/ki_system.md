@@ -1173,7 +1173,7 @@ stoppbar. Ausführlich: [claude_web_plan.md](claude_web_plan.md) Abschnitt 7.
 
 Der Tutor hat seit 2026-10-08 keine eigenen Schleifen mehr: er fährt über
 `kern.fahrzeug()`/`kern.fahren()` dieselben Wege (`tutor/anbieter.py`,
-[../tutor/tutor_system.md](../tutor/tutor_system.md)).
+[../tutor/INDEX.md](../tutor/INDEX.md)).
 
 ### Prompt-Cache: statisch vorn, Wechselndes ganz hinten
 

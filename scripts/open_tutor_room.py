@@ -1,127 +1,182 @@
 #!/usr/bin/env python3
 # scripts/open_tutor_room.py
 #
-# On-demand-Launcher für das Persona-ZIMMER (tutor/room.py) MIT den lokalen
-# Audio-Diensten (Whisper-STT :5050, TTS :5051).
+# Der Hub startet die App „tutor": Stimm-Dienste, Tutor-Server, Zimmer.
 #
-# ── Warum es diesen Wrapper gibt ────────────────────────────────────────
-# 0RAMMachine (der Laptop) hat kaum RAM. Whisper- und TTS-Modelle dürfen
-# deshalb NICHT ab Boot mitlaufen (kein systemd-Autostart wie am PC). Statt-
-# dessen zahlen wir die RAM-Kosten NUR, solange der Tutor offen ist: dieser
-# Launcher fährt die Dienste beim Öffnen des Zimmers hoch und beim Schließen
-# wieder runter.
+# Seit 2026-10-09 ist der Sprach-Tutor eine eigene App (Repo language-tutor,
+# memory/system/hub_bauplan.md). Dieser Starter ist das „App starten" des Hubs:
 #
-# Die TUI (tui/zentrale_tui.py → tutor_window) spawnt diesen Wrapper statt
-# room.py direkt. Der Wrapper ist der langlebige Prozess; room.py ist sein
-# Kind. Wenn das Zimmer-Fenster zugeht, räumt der Wrapper auf und beendet sich.
+#   1. App finden (siehe app_ordner) und ihr Manifest app.toml lesen.
+#   2. Läuft der Tutor-Server auf DIESEM Rechner: Stimm-Dienste (Whisper :5050,
+#      TTS :5051) und den Server selbst hochfahren, falls sie nicht schon laufen.
+#   3. Das Zimmer (laut Manifest) öffnen und warten, bis es zugeht.
+#   4. Nur abräumen, was dieser Starter selbst gestartet hat (am PC laufen die
+#      Dienste als systemd-Units und bleiben unangetastet).
 #
-# ── Sicher überall ──────────────────────────────────────────────────────
-# Der Wrapper startet einen Dienst NUR, wenn dessen Port frei ist, und stoppt
-# beim Aufräumen NUR, was er SELBST gestartet hat. Am PC (Dienste laufen als
-# systemd-Units) sieht er die Ports belegt, fasst nichts an und lässt sie beim
-# Schließen in Ruhe. Am Laptop startet + stoppt er sie.
+# Warum Dienste beim Öffnen hoch und beim Schließen wieder runter: 0RAMMachine
+# (Laptop) hat kaum RAM; die Modelle dürfen dort nicht ab Boot mitlaufen.
 #
-# Aufruf (wie room.py, Argumente werden durchgereicht):
-#   open_tutor_room.py --url http://host:5000
+# Läuft auch auf dem Pi (Aussenposten): dort gibt es kein core/, das Zimmer
+# kommt im Paket unter apps/tutor/ mit, und Server + Dienste laufen am PC.
+# Darum nur Standardbibliothek und kein Import aus core/.
 #
+# Aufruf:
+#   open_tutor_room.py [--url <tutor-server>] [--hub <zentrale>] [--pruefen] [Zimmer-Argumente …]
+#     --url      Adresse des Tutor-Servers. Ohne: TUTOR_URL; sonst, wenn --hub
+#                auf einen anderen Rechner zeigt, derselbe Rechner mit dem
+#                Port aus dem Manifest; sonst die Adresse aus dem Manifest.
+#     --hub      Adresse von ZENTRALE (für die TUI, die das Zimmer per Alt+Z öffnet)
+#     --pruefen  nur prüfen, ob die App da ist (Ausgabe = Satz für Sasha, Code 2)
 # Env:
-#   WHISPER_MODEL   default 'base' (gecacht + leichter als 'small' → 0-RAM);
-#                   override möglich. Wird an den Whisper-Dienst durchgereicht.
-#   ZENTRALE_TUTOR_AUDIO=0   → Audio-Management ganz aus (nur room.py öffnen).
+#   ZENTRALE_APP_PFAD_TUTOR   Ordner der App (sonst apps/tutor, sonst ../language-tutor)
+#   WHISPER_MODEL             default 'base'
+#   ZENTRALE_TUTOR_AUDIO=0    Audio-Dienste ganz aus
 
 import os
 import socket
 import subprocess
 import sys
 import time
+import urllib.request
 from urllib.parse import urlparse
+
+try:
+    import tomllib
+except ImportError:          # Python < 3.11 (alter Pi): Manifest-Standardwerte
+    tomllib = None
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# venv-Ordner heisst nicht ueberall gleich: PC/Laptop 'venv', Pi '.venv'
-# (scripts/deploy_pi.sh, siehe memory/betrieb/deployment.md). Beide probieren,
-# sonst faellt der Pi still auf den System-Python ohne pygame zurueck.
-PY = sys.executable
-for _name in ("venv", ".venv"):
-    _cand = os.path.join(ROOT, _name, "bin", "python")
-    if os.path.exists(_cand):
-        PY = _cand
-        break
-
-# (port, service-datei, label, zusatz-env) — die zwei Audio-Dienste.
+# (port, service-datei, label, zusatz-env) — die zwei Stimm-Dienste des Hubs.
 SERVICES = [
     (5050, "whisper_service.py", "whisper",
      {"WHISPER_MODEL": os.environ.get("WHISPER_MODEL", "base")}),
     (5051, "tts_service.py", "tts", {}),
 ]
 
+# Was gilt, wenn das Manifest nicht lesbar ist (alter Pi ohne tomllib).
+MANIFEST_STANDARD = {"name": "tutor", "start": "python -m tutor.server",
+                     "adresse": "http://127.0.0.1:5070",
+                     "ansicht": {"fenster": {"start": "python tutor/room.py"}}}
 
-def _port_open(port: int, host: str = "127.0.0.1") -> bool:
-    """Lauscht auf host:port schon etwas? (schneller TCP-Connect-Test)."""
+
+def _python(ordner):
+    """venv der App, sonst das von ZENTRALE (PC/Laptop 'venv', Pi '.venv'),
+    sonst dieser Python."""
+    for basis in (ordner, ROOT):
+        for name in ("venv", ".venv"):
+            kandidat = os.path.join(basis, name, "bin", "python")
+            if os.path.exists(kandidat):
+                return kandidat
+    return sys.executable
+
+
+def app_ordner():
+    """Wo die App liegt. Reihenfolge: Env, Einstellung von ZENTRALE (falls
+    core/ da ist), Aussenposten-Paket (apps/tutor), Nachbar-Repo."""
+    kandidaten = [os.environ.get("ZENTRALE_APP_PFAD_TUTOR")]
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "core"))
+        import apps                                   # nur am PC/Laptop da
+        kandidaten.append(apps.pfad("tutor"))
+    except Exception:
+        pass
+    kandidaten += [os.path.join(ROOT, "apps", "tutor"),
+                   os.path.join(ROOT, "..", "language-tutor")]
+    for k in kandidaten:
+        if k and os.path.isdir(os.path.join(k, "tutor")):
+            return os.path.abspath(k)
+    return None
+
+
+def manifest(ordner):
+    datei = os.path.join(ordner, "app.toml")
+    if tomllib is None or not os.path.exists(datei):
+        return dict(MANIFEST_STANDARD)
+    with open(datei, "rb") as f:
+        return tomllib.load(f)
+
+
+def _befehl(ordner, start):
+    teile = str(start).split()
+    if teile and teile[0] == "python":
+        teile[0] = _python(ordner)
+    return teile
+
+
+def _lokal(url):
+    return (urlparse(url).hostname or "") in ("localhost", "127.0.0.1", "::1", "")
+
+
+def _port_open(port, host="127.0.0.1"):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(0.5)
         return s.connect_ex((host, port)) == 0
 
 
-def _backend_is_local():
-    """Zeigt das Zimmer auf ein Backend auf DIESER Maschine?
+def _lebt(url):
+    try:
+        urllib.request.urlopen(url.rstrip("/") + "/hub/gesund", timeout=1.5).read()
+        return True
+    except Exception:
+        return False
 
-    Whisper/TTS gehören zum BACKEND, nicht zum Fenster: room.py schickt Text an
-    <url>/api/speak und Mikro-WAVs an <url>/api/transcribe — synthetisiert und
-    erkannt wird also auf dem Backend-Host. Lokale Dienste hochzufahren ergibt
-    darum nur Sinn, wenn das Backend hier läuft (Laptop-Solo). Zeigt die URL auf
-    einen anderen Rechner (Pi → PC, Laptop → PC per zentrale-remote), wäre es
-    verschwendeter RAM für Modelle, die niemand anspricht — auf dem Pi (1 GB)
-    sogar schädlich.
-    """
-    url = os.environ.get("ZENTRALE_URL") or ""
-    argv = sys.argv[1:]
-    for i, a in enumerate(argv):
-        if a == "--url" and i + 1 < len(argv):
-            url = argv[i + 1]
-        elif a.startswith("--url="):
-            url = a.split("=", 1)[1]
-    if not url:
-        return True                      # ohne Angabe: room.py nimmt localhost
-    host = urlparse(url).hostname or ""
-    return host in ("localhost", "127.0.0.1", "::1", "")
+
+def server_url(m, hub, gegeben):
+    """Welche Adresse hat der Tutor-Server? (siehe Kopf: --url)"""
+    if gegeben:
+        return gegeben
+    if os.environ.get("TUTOR_URL"):
+        return os.environ["TUTOR_URL"]
+    adresse = m.get("adresse") or MANIFEST_STANDARD["adresse"]
+    if hub and not _lokal(hub):
+        port = urlparse(adresse).port or 5070
+        return "http://%s:%d" % (urlparse(hub).hostname, port)
+    return adresse
 
 
 def _start_services():
-    """Startet fehlende Audio-Dienste. Gibt die Liste der SELBST gestarteten
-    Popen-Objekte zurück (nur die räumen wir später wieder ab)."""
+    """Fehlende Stimm-Dienste starten → [(proc, port, label, logf)] (nur eigene)."""
     if os.environ.get("ZENTRALE_TUTOR_AUDIO") == "0":
-        return []
-    if not _backend_is_local():
-        print("[audio] Backend ist remote — Whisper/TTS laufen dort, "
-              "hier wird nichts gestartet", flush=True)
         return []
     started = []
     for port, svc, label, extra_env in SERVICES:
-        if _port_open(port):
-            print(f"[{label}] läuft schon (:{port}) — unangetastet", flush=True)
+        skript = os.path.join(ROOT, "services", svc)
+        if _port_open(port) or not os.path.exists(skript):
             continue
-        env = dict(os.environ, **extra_env)
         logf = open(f"/tmp/zentrale-{label}.log", "a", encoding="utf-8")
         print(f"[{label}] starte (:{port}) ...", flush=True)
-        proc = subprocess.Popen(
-            [PY, os.path.join(ROOT, "services", svc)],
-            stdout=logf, stderr=subprocess.STDOUT, env=env,
-            start_new_session=False)   # Kind des Wrappers, kein detach → sauberes Abräumen
+        proc = subprocess.Popen([_python(ROOT), skript], stdout=logf,
+                                stderr=subprocess.STDOUT,
+                                env=dict(os.environ, **extra_env))
         started.append((proc, port, label, logf))
     return started
 
 
-def _stop_services(started):
-    """NUR die selbst gestarteten Dienste beenden (SIGTERM, dann SIGKILL)."""
-    for proc, port, label, logf in started:
+def _start_server(ordner, m, url):
+    """Tutor-Server starten, falls er auf dieser Adresse nicht schon lebt."""
+    if _lebt(url):
+        return []
+    logf = open("/tmp/language-tutor-server.log", "a", encoding="utf-8")
+    print("[tutor] starte den Tutor-Server ...", flush=True)
+    proc = subprocess.Popen(_befehl(ordner, m.get("start") or MANIFEST_STANDARD["start"]),
+                            cwd=ordner, stdout=logf, stderr=subprocess.STDOUT)
+    for _ in range(40):                      # bis zu ~10 s auf den Server warten
+        if _lebt(url) or proc.poll() is not None:
+            break
+        time.sleep(0.25)
+    return [(proc, 0, "tutor-server", logf)]
+
+
+def _abraeumen(started):
+    for proc, _port, label, _logf in started:
         if proc.poll() is None:
-            print(f"[{label}] stoppe (:{port}) — Zimmer zu, RAM frei", flush=True)
+            print(f"[{label}] stoppe — Zimmer zu", flush=True)
             proc.terminate()
-    deadline = time.time() + 5
-    for proc, port, label, logf in started:
+    frist = time.time() + 5
+    for proc, _port, _label, logf in started:
         try:
-            proc.wait(timeout=max(0.1, deadline - time.time()))
+            proc.wait(timeout=max(0.1, frist - time.time()))
         except subprocess.TimeoutExpired:
             proc.kill()
         try:
@@ -130,26 +185,71 @@ def _stop_services(started):
             pass
 
 
-def main():
-    room = os.path.join(ROOT, "tutor", "room.py")
-    if not os.path.exists(room):
-        print("tutor/room.py fehlt", file=sys.stderr)
-        return 1
+def _argumente(argv):
+    """--url/--hub/--pruefen herausnehmen, der Rest geht ans Zimmer."""
+    url = hub = None
+    pruefen = False
+    rest = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a in ("--url", "--hub") and i + 1 < len(argv):
+            if a == "--url":
+                url = argv[i + 1]
+            else:
+                hub = argv[i + 1]
+            i += 2
+            continue
+        if a.startswith("--url="):
+            url = a.split("=", 1)[1]
+        elif a.startswith("--hub="):
+            hub = a.split("=", 1)[1]
+        elif a == "--pruefen":
+            pruefen = True
+        else:
+            rest.append(a)
+        i += 1
+    return url, hub or os.environ.get("ZENTRALE_URL"), pruefen, rest
 
-    # Dienste im HINTERGRUND hochfahren (Popen blockiert nicht) und das Fenster
-    # SOFORT öffnen — NICHT auf die Audio-Modelle warten. Früher blockierte
-    # _wait_ready hier bis zu 12 s (Whisper+TTS laden frisch am Laptop) → das war
-    # die gefühlte „Tutor braucht ewig zum Öffnen"-Verzögerung. room.py kommt mit
-    # später-Audio klar (pollt tts/available nach, stumm bis bereit).
-    started = _start_services()
 
+def main(argv=None):
+    url, hub, pruefen, rest = _argumente(sys.argv[1:] if argv is None else argv)
+    ordner = app_ordner()
+    if ordner is None:
+        print("Der Sprach-Tutor ist auf diesem Rechner nicht installiert "
+              "(der Ordner language-tutor fehlt neben ZENTRALE).")
+        return 2
+    m = manifest(ordner)
+    fenster = ((m.get("ansicht") or {}).get("fenster") or {}).get("start")
+    if not fenster:
+        print("Der Sprach-Tutor hat kein Fenster (app.toml ohne ansicht.fenster).")
+        return 2
+    if pruefen:
+        return 0
+
+    # Übergang (2026-10-09): ältere Aufrufe (Pi-Autostart vor dem Umzug)
+    # geben mit --url noch die Adresse von ZENTRALE mit. Zeigt --url nicht
+    # auf den Port des Tutor-Servers, ist sie als Hub gemeint.
+    port = urlparse(m.get("adresse") or MANIFEST_STANDARD["adresse"]).port or 5070
+    if url and urlparse(url).port != port:
+        hub, url = hub or url, None
+    url = server_url(m, hub, url)
+    started = []
+    if _lokal(url):
+        # Dienste im Hintergrund hochfahren und das Fenster SOFORT öffnen —
+        # nicht auf die Stimm-Modelle warten (das Zimmer wartet selbst).
+        started = _start_services() + _start_server(ordner, m, url)
+    env = dict(os.environ, TUTOR_URL=url,
+               ZENTRALE_TUI=os.path.join(ROOT, "tui", "zentrale_tui.py"))
+    if hub:
+        env["ZENTRALE_URL"] = hub
     try:
-        # room.py mit denselben Argumenten (--url …) starten und darauf warten.
-        rc = subprocess.call([PY, room] + sys.argv[1:])
+        rc = subprocess.call(_befehl(ordner, fenster) + ["--url", url] + rest,
+                             cwd=ordner, env=env)
     except KeyboardInterrupt:
         rc = 0
     finally:
-        _stop_services(started)
+        _abraeumen(started)
     return rc
 
 

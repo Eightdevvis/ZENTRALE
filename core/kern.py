@@ -17,13 +17,10 @@
 # Oberstes Modul des KI-Kerns (Schicht 3, memory/system/bauplan_kern.md).
 # Aufbau: memory/ki/kern_aufbau.md.
 
-from dataclasses import dataclass
-
 import ai
 import ai_backends
 import cloud
 import cloud_openai
-import providers
 import state
 import werkzeug_schleife
 
@@ -33,66 +30,12 @@ CLOUD_WEGE = {
     "anthropic":     cloud,
     "openai_compat": cloud_openai,
 }
-# Alle Wege, das lokale Ollama eingeschlossen (für fahren()).
-WEGE = {"ollama": ai, **CLOUD_WEGE}
 
 
-# ── Die Straße: Fahrzeug + fahren (2026-10-08) ─────────────────────────
-# Sasha: „anbieter, modell, lokal oder cloud … einfach nur wie variablen."
-# fahrzeug() ist die EINE Stelle, die aus einem Anbieter-Namen (oder der
-# aktuellen Wahl) und einem Modell den Weg auflöst. fahren() fährt ihn mit
-# einem FREMDEN Prompt und Tool-Set — so fährt der Tutor (tutor/anbieter.py)
-# auf derselben Straße wie der Chat, statt eigene Cloud-Schleifen zu halten.
-# Der Chat selbst geht weiter über chat() (sein Prompt hängt an der Schiene).
-
-@dataclass(frozen=True)
-class Fahrzeug:
-    anbieter: str          # 'local', 'claude', 'qwen', …
-    art: str | None        # 'ollama' | 'anthropic' | 'openai_compat' | None (unbekannt)
-    modell: str | None     # None = der Weg nimmt seinen Standard
-
-
-def fahrzeug(anbieter: str | None = None, modell: str | None = None) -> Fahrzeug:
-    """Anbieter + Modell → Fahrzeug. anbieter None/'auto' → wer gerade dran
-    ist (Cloud-Anbieter laut ai_backends, sonst lokal). modell None → das für
-    diesen Anbieter eingestellte (ai_backends.chat_model) bzw. sein Standard."""
-    if anbieter in (None, "", "auto"):
-        anbieter = ai_backends.cloud_provider() or providers.LOKAL
-    e = providers.eintrag(anbieter)
-    art = e.get("kind")
-    if not modell and art in CLOUD_WEGE:
-        modell = ai_backends.chat_model(anbieter) or e.get("default_model")
-    return Fahrzeug(anbieter, art, modell or None)
-
-
-def fahren(fz: Fahrzeug, verlauf, *, system: str, tools: list,
-           tool_executor, max_tokens: int = None, temperatur: float = None,
-           effort: str = None, abbruch=None):
-    """Einen Zug mit fremdem Prompt + Tool-Set fahren (tools=[] = keine).
-    Generator mit dem Event-Protokoll der Werkzeug-Schleife; ein unbekannter
-    Anbieter gibt ein fehler-Event statt eines Absturzes. Kein Gate, kein
-    Gedächtnis, keine Bild-Marker (tutor_mode der Wege). Ob der Aufrufer
-    fahren DARF (Drossel), entscheidet er vorher (core/tutor_port.py)."""
-    modul = WEGE.get(fz.art)
-    if modul is None:
-        yield werkzeug_schleife.fehler(
-            f"Unbekannter Anbieter '{fz.anbieter}' — keine Straße dorthin.")
-        return
-    tools = list(tools or [])
-    if fz.art == "ollama":
-        yield from ai.chat_stream(verlauf, model=fz.modell, system=system,
-                                  tools=tools, tool_executor=tool_executor,
-                                  abbruch=abbruch)
-    elif fz.art == "anthropic":
-        yield from cloud.chat_stream(verlauf, model=fz.modell, system=system,
-                                     tools=tools, tool_executor=tool_executor,
-                                     abbruch=abbruch, max_tokens=max_tokens,
-                                     effort=effort)
-    else:
-        yield from cloud_openai.chat_stream(
-            verlauf, model=fz.modell, system=system, tools=tools,
-            tool_executor=tool_executor, provider=fz.anbieter, abbruch=abbruch,
-            max_tokens=max_tokens, temperatur=temperatur)
+# (Bis 2026-10-09 stand hier fahrzeug()/fahren(): die Straße für fremde
+# Prompts, auf der der Sprach-Tutor fuhr. Der Tutor ist jetzt eine eigene App
+# mit eigener Modell-Leitung, eigenem Schlüssel und Budget — die Straße hatte
+# keinen anderen Nutzer und ist weg.)
 
 
 def cloud_modul():

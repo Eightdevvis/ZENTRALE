@@ -951,7 +951,7 @@ KI-Chat geöffnet wird (`ai_load_history`).
 > weil der Tutor pausiert (er läuft), sondern weil es nichts kostet, den Status
 > **bei Bedarf** zu holen: `startTutor()` fragt ihn einmal vor dem Kanalwechsel
 > (`monolith.html`). Die TUI pollt ihn weiterhin für ihr Panel. Siehe
-> `memory/tutor/tutor_system.md`.
+> `memory/tutor/INDEX.md`.
 
 Kein WebSocket, kein SSE für Statusdaten – Polling reicht für
 ein Single-User-Dashboard und ist deutlich simpler.

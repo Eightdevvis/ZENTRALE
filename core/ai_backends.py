@@ -10,8 +10,9 @@
 #
 # ── Multi-Backend ──────────────────────────────────────────────────────
 # Ein Modul kann MEHRERE Backends akzeptieren (MODULE_BACKENDS) – es ist
-# verfügbar, sobald IRGENDEINES davon da ist. Heute: chat und tutor (local
-# ODER cloud), news nur local. Für den Chat entscheidet zusätzlich die
+# verfügbar, sobald IRGENDEINES davon da ist. Heute: chat (local ODER cloud),
+# news nur local. (Der Sprach-Tutor ist seit 2026-10-09 eine eigene App mit
+# eigenem Schlüssel und Budget und steht hier nicht mehr.) Für den Chat entscheidet zusätzlich die
 # Vorwahl chat_backend() (Code-Default 'auto' = lokal zuerst; data/ai_config.json
 # kann 'cloud' setzen) — und chat_available() ist DIE Frage aller Chat-Endpoints.
 #
@@ -35,11 +36,10 @@ LOCAL = "local"
 CLOUD = "cloud"
 
 # Welche Backends ein Modul nutzen KANN (geordnete Präferenz). Verfügbar, sobald
-# eines davon da ist. Tutor = beide → Multi-Backend strukturell vorbereitet.
+# eines davon da ist.
 MODULE_BACKENDS = {
     "chat":  (LOCAL, CLOUD),   # seit core/cloud.py existiert (Anthropic-Kernpfad)
     "news":  (LOCAL,),
-    "tutor": (LOCAL, CLOUD),
 }
 
 _CACHE_TTL = 5.0
@@ -103,7 +103,7 @@ def cloud_enabled() -> bool:
     """Cloud-Kill-Switch: ist Cloud manuell freigegeben? (Default True.)
     Aus → cloud_ok()=False, egal ob Key/Internet da. Datenschutz-/Kosten-Drossel,
     in der Config (data/ai_config.json, key 'cloud_enabled') persistiert.
-    Gilt ZENTRALE-weit — auch für den Tutor, den core/tutor_port.py hiermit gated."""
+    Gilt für ZENTRALE selbst (Apps wie der Tutor haben ihr eigenes Budget)."""
     v = ai_config.setting("cloud_enabled", True)
     if isinstance(v, str):
         return v.strip().lower() not in ("0", "false", "off", "no", "aus", "nein")
@@ -155,7 +155,7 @@ def status(fresh: bool = False) -> dict:
 
     Rückgabe:
       { "local": bool, "cloud": bool, "cloud_provider": str|None,
-        "any": bool, "modules": { "chat": bool, "news": bool, "tutor": bool } }
+        "any": bool, "modules": { "chat": bool, "news": bool } }
     """
     now = time.time()
     if not fresh and _cache["val"] is not None and (now - _cache["t"]) < _CACHE_TTL:

@@ -2,9 +2,9 @@
 
 **Stand 2026-10-06:** Für die **TUI** steht die Belegung nur im Code
 (`TUI_KEYS`/`CTX_KEYS` in `tui/ansichten/befehle.py`, `/help` bzw. `/`), hier
-nur die Tasten, die nichts öffnen. Für das **Zimmer** (`tutor/room.py`:
+nur die Tasten, die nichts öffnen. Für das **Zimmer** (`tutor/room.py` im Repo language-tutor:
 Esc-Menü, Alt+Z zur TUI, Alt+P Ruhe, Drill-Pfeiltasten) gilt dasselbe —
-siehe `../tutor/tutor_system.md`; Alt+L (Sprachwechsel im Zimmer) gibt es
+siehe `../tutor/INDEX.md`; Alt+L (Sprachwechsel im Zimmer) gibt es
 seit 2026-09-17 nicht mehr, die Sprache kommt aus dem Spielstand. Die
 Tabellen unten für den **Browser-Kiosk** (Canvas, Klavier, Chat mit
 `Alt+T` Tutorkanal, Data-Collection) beschreiben `monolith.html`, an dem
@@ -27,7 +27,7 @@ ohne Inputs).
 |--------|---------------------------------------|
 | `b`    | Button gedrückt (Sensor)              |
 | `l`    | Light Sensor Trigger                  |
-| `m`    | Motion Sensor (Presence) – `PRESENCE_DETECTED` → `tutor_port.presence_ping()`: nonverbale Reaktion (schaut hoch, Mimik) **nur bei laufender Tutor-Session**, kein Auto-Start, kein verbaler Gruß. Default an, per `ZENTRALE_TUTOR_PRESENCE_REACT=0` aus |
+| `m`    | Motion Sensor (Presence) – `PRESENCE_DETECTED` → Ereignis „anwesenheit“ an die Tutor-App: nonverbale Reaktion (schaut hoch, Mimik) **nur bei laufender Tutor-Session**, kein Auto-Start, kein verbaler Gruß. Default an, per `ZENTRALE_TUTOR_PRESENCE_REACT=0` aus |
 | `c`    | Chat-Panel öffnen                     |
 | `ESC`  | Zurück zum Haupt-Dashboard            |
 
@@ -95,7 +95,7 @@ Drei Unterschiede, die aus dem Terminal kommen:
 
 > Der Sprachtutor wird im Browser-Chat per `Alt + T` umgeschaltet (nicht über
 > den Sensor-Trigger `m`). Ein Presence-Auto-Start existiert nicht — siehe
-> `memory/tutor/tutor_system.md`.
+> `memory/tutor/INDEX.md`.
 
 ## In der TUI
 
@@ -122,7 +122,7 @@ Eine Taste, die man sonst nirgends sieht, weil sie nichts öffnet:
 | `Alt + M` | Mikrofon-Toggle (Aufnahme an/aus → Whisper-Transkription)   |
 | `Alt + S` | Stimme stumm/an (Auto-Speak der KI-Antwort, Zustand gemerkt) |
 | `Alt + S` + `↑`/`↓` | Lautstärke lauter/leiser (Schritt 10%, in `localStorage` gemerkt) |
-| `Alt + T` | Tutorkanal an/aus (Sprachtutor). Roter Rahmen um die Mitte, Eingaben gehen an den Tutor statt die Haupt-KI. Toggle. Siehe `memory/tutor/tutor_system.md`. |
+| `Alt + T` | Tutorkanal an/aus (Sprachtutor). Roter Rahmen um die Mitte, Eingaben gehen an den Tutor statt die Haupt-KI. Toggle. Siehe `memory/tutor/INDEX.md`. |
 | `ESC`     | zurück zum Haupt-Dashboard                                  |
 
 Alt-Modifier verhindert dass das `m`/`s` als Buchstabe ins Input-Feld

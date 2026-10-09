@@ -14,8 +14,7 @@ from .post import MAIL_EINGANG
 def in_text_entry(z):
     """Tippt der Nutzer gerade einen Freitext (Name, Eintrag, Antwort)?
     Dann bleibt '/' ein normales Zeichen und öffnet NICHT die Befehlszeile."""
-    AI, G, K, L, MAIL, NOTE, PIANO, TUTOR = (z.AI, z.G, z.K, z.L, z.MAIL, z.NOTE,
-                                             z.PIANO, z.TUTOR)
+    AI, G, K, L, MAIL, NOTE, PIANO = (z.AI, z.G, z.K, z.L, z.MAIL, z.NOTE, z.PIANO)
     if G["active"]:
         return G["view"] in ("new", "view", "remind")   # Name/Wert/Reminder-Uhrzeit
     if L["active"]:
@@ -38,17 +37,13 @@ def in_text_entry(z):
         # nicht die Befehlszeile. (Bei offener Erlaubnis-Frage ignoriert der
         # AI-Zweig alles außer j/n/Zahl/esc.)
         return True
-    if TUTOR["active"]:
-        # Ganze Zeile ist Eingabe (reden ODER '/befehl') → '/' bleibt ein
-        # Zeichen, die Tutor-Zeile parst Slash-Befehle selbst (Browser-Konsole).
-        return True
     return False
 
 def current_ctx(z):
     """Kontext-Schlüssel des fokussierten Fensters für die '/'-Anzeige.
     None = Tipp-Screen ohne eigene Shortcut-Liste."""
     AI, ELEK, G, K, L, M, MAIL = z.AI, z.ELEK, z.G, z.K, z.L, z.M, z.MAIL
-    NOTE, PIANO, TECH, TUTOR = z.NOTE, z.PIANO, z.TECH, z.TUTOR
+    NOTE, PIANO, TECH = z.NOTE, z.PIANO, z.TECH
     if G["active"]:
         return "graph" if G["view"] == "list" else None
     if L["active"]:
@@ -81,8 +76,6 @@ def current_ctx(z):
         return art + (":eingang" if MAIL["cat"] == MAIL_EINGANG else "")
     if AI["active"]:
         return "ai"
-    if TUTOR["active"]:
-        return "tutor"
     if PIANO["active"]:
         return "piano"
     if ELEK["active"]:

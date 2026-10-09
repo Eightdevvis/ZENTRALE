@@ -39,7 +39,7 @@ notes.md
 > darauf hoffen, dass die Whitelist sie zufällig verfehlt.
 >
 > Der Lernstand des Tutors (`tutor/data/staende/<id>/<lang>/vocab.json`, siehe
-> `memory/tutor/bauplan.md`) stand nie in der Whitelist und ist der lokalen
+> `memory/tutor/INDEX.md`) stand nie in der Whitelist und ist der lokalen
 > KI unsichtbar — das passt zur Tutor-Sandbox.
 
 ## Zweite Wurzel: `~/codicus`
@@ -82,8 +82,8 @@ Deckel auf und ausgerechnet das, was sie täglich braucht, fällt heraus.
 
 Die Whitelist gilt für die **lokale Core-KI**. Der Tutor hat eine **eigene,
 strengere** Sandbox (`tutor.tools._ALLOWED`) und kann gar keine Dateien lesen —
-nur seine 12 Tools aufrufen (Liste in `memory/tutor/bauplan.md`, Verhalten in
-`memory/tutor/tutor_system.md`).
+nur seine 12 Tools aufrufen (Liste in `memory/tutor/INDEX.md`, Verhalten in
+`memory/tutor/INDEX.md`).
 
 `notes.md` ist explizit zum freien Reinschreiben gedacht – alles dort
 landet beim nächsten KI-Call im Kontext (sofern die KI das File liest).
@@ -105,7 +105,7 @@ Bedacht, damit das Context-Window des Modells nicht überläuft.
 | `data/ai_config.json` | **API-Keys** + Kill-Switches (`core/ai_config.py`)             |
 | `data/*.enc`          | verschlüsselter Mail-Zugangsdaten-Blob (`core/mail_secrets.py`)|
 | `data/tts_model/`     | Modelldateien, viel zu groß für Git                           |
-| `tutor/data/**`       | Spielstände des Tutors (`staende/<id>/<lang>/…`: vocab, game, srs, persona_mem …), `tutor_config.json` (Provider-Wahl), Persona-Medien — Pfade in `memory/tutor/bauplan.md` |
+| `tutor/data/**`       | (Seit 2026-10-09 nur noch der ALTE Ort, den die Tutor-App `language-tutor` weiter liest, bis Sasha umzieht.) Spielstände des Tutors (`staende/<id>/<lang>/…`: vocab, game, srs, persona_mem …), `tutor_config.json` (Provider-Wahl), Persona-Medien — Pfade in `memory/tutor/INDEX.md` |
 | `venv/`               | Python-Virtualenv (lokal); auf dem Pi heißt der Ordner `.venv` |
 | `core/__pycache__/`   | Python-Bytecode                                               |
 
@@ -119,7 +119,7 @@ ignoriert – lokaler Inhalt, kein Repo-Material.
 | Pfad           | Grund                                                       |
 |----------------|-------------------------------------------------------------|
 | `data/ascii/`  | handgepflegte ASCII-Bibliothek für den Bild-Marker `[[bild: name]]` – Inhalt, kein Privatkram. `.txt` (`# tags:`-Zeile + Art). Ordner per Env `ZENTRALE_ASCII_DIR` überschreibbar. Siehe `memory/ki/ki_system.md`. |
-| `tutor/langs/<lang>/` | die **Sprache** selbst (Pflichtdateien in `memory/tutor/bauplan.md`) – Inhalt, kein Lernstand. Trennlinie: `langs/` = Sprache (getrackt), `tutor/data/` = Fortschritt (ignoriert). |
+| `tutor/langs/<lang>/` (Repo language-tutor) | die **Sprache** selbst (Pflichtdateien in `memory/tutor/INDEX.md`) – Inhalt, kein Lernstand. Trennlinie: `langs/` = Sprache (getrackt), `tutor/data/` = Fortschritt (ignoriert). |
 | `*.example`    | `data/ai_config.json.example`, `tutor/data/tutor_config.json.example` – Vorlagen ohne Secrets. |
 
 ## Auto-erstellte Files

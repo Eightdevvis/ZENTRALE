@@ -1,6 +1,6 @@
 # Hub-Bauplan — ZENTRALE als Plattform, die Module als Apps
 
-**Stand 2026-10-09, Entwurf zum Entscheiden.** Sasha: *„du lädst zentrale
+**Stand 2026-10-09: entschieden, Schritt 1 (Tutor) erledigt.** Sasha: *„du lädst zentrale
 runter, evt kaufst du schon hardware dazu, und am anfang ist zentrale blank.
 dann kann man kalender, mail, ki assistenz, tutor usw reinladen … alle module
 die bisher gebaut wurden sind somit die ersten apps … wenn wir zentrale hub
@@ -86,10 +86,11 @@ schon umziehen.
 
 ## Umzug der heutigen Module (Reihenfolge)
 
-1. **Tutor** — erste App, eigenes Repo, eigener Prozess. Braucht vom Hub nur:
+1. **Tutor** — ✅ erledigt 2026-10-09 (siehe unten „Schritt 1: so ist es
+   gebaut"). Erste App, eigenes Repo, eigener Prozess. Braucht vom Hub nur:
    starten, Ereignis `anwesenheit`, Modell-Zugang (eigener Schlüssel,
-   eigenes Budget). Fällt weg: `core/tutor_port.py`, `/api/tutor/*`, das
-   Text-Panel. Er ist die Probe, ob die Schnittstelle trägt.
+   eigenes Budget). Weggefallen: `core/tutor_port.py`, `/api/tutor/*`, das
+   Text-Panel.
 2. **Hub-Schnittstelle + `zentrale_sdk`** (klein, Python) — entsteht MIT dem
    Tutor, nicht vorher auf Vorrat.
 3. Kalender, Notizen/Listen, Mail (neu), Karte, Morgenblick — je eine App.
@@ -99,9 +100,34 @@ schon umziehen.
 Bis Schritt 5 bleibt alles in einem Repo außer dem Tutor; der Kern-Bauplan
 (`bauplan_kern.md`) gilt weiter für den Hub-Teil.
 
-## Offene Entscheidungen (Sasha)
+## Entscheidungen (Sasha, 2026-10-09)
 
-- Schnittstelle: HTTP (wie heute) oder lokaler Socket? Vorschlag: HTTP auf
-  localhost, gleich wie die Fronten heute.
-- Manifest-Format: toml (lesbar) — ok?
-- Ab wann fremde Apps: erst nach Sandbox + Rechte-Dialog.
+- Schnittstelle: **HTTP auf localhost** (wie die Fronten heute).
+- Manifest: **toml**, Datei `app.toml` im Wurzelordner der App.
+- Fremde Apps: erst nach Sandbox + Rechte-Dialog.
+
+## Schritt 1: so ist es gebaut (2026-10-09)
+
+- **Repo** `language-tutor` (GitHub `Eightdevvis/language-tutor`, privat),
+  liegt neben ZENTRALE; Geschichte von `tutor/`, den Tutor-Tests und
+  `memory/tutor/` (jetzt `docs/`) mitgenommen.
+- **Manifest** `app.toml`: `name`, `version`, `start = "python -m tutor.server"`,
+  `adresse = "http://127.0.0.1:5070"`, `ansichten`, `rechte = ["modell",
+  "ereignis:anwesenheit", "mikro", "lautsprecher"]`, `[ansicht.fenster] start`
+  (das Zimmer), `[ereignisse] ziel = "/hub/ereignis"`.
+- **Hub-Seite** (ZENTRALE): `core/apps.py` (Ordner per Einstellung
+  `app_pfad_<name>`, Manifest lesen, Abonnenten), `core/hub_ereignisse.py`
+  (POST an Abonnenten, im Hintergrund, Fehler nur geloggt; `brain.py` schickt
+  `anwesenheit`), `scripts/open_tutor_room.py` (App starten: Stimm-Dienste,
+  Server, Zimmer; nur Eigenes abräumen), `tui/ansichten/app_start.py`
+  (Taste `u`, `/tutor`), Aussenposten-Paket mit `app:tutor/…` → `apps/tutor/`.
+- **App-Seite**: eigener Server, eigene Modell-Leitung (Ziel `direkt` mit
+  eigenem Schlüssel aus `~/.config/language-tutor/schluessel` oder `hub` =
+  Platzhalter mit klarer Meldung), Kosten je Rechner + Monatsbudget, eigene
+  Einstellungen statt `ai_config`. Ein Test im Tutor-Repo erzwingt: kein
+  Import außerhalb der eigenen Wurzel, und die Leitung bekommt nur den
+  Tutor-Prompt.
+- **Noch nicht**: `zentrale_sdk` (bisher nicht nötig — der Tutor braucht vom
+  Hub nur HTTP), Rechte-Dialog, Datenordner `daten/<app>/` (die Lernstände
+  liegen noch am alten Ort `ZENTRALE/tutor/data`, der Tutor findet sie dort),
+  Sashas Server für Ziel `hub`.

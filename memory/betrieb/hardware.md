@@ -57,7 +57,7 @@ angeschlossen ist, ist aus Code/Commits nicht erkennbar.
 ## Audio am Pi (gemessen 2026-09-03)
 
 Der Pi **spielt ab und nimmt auf**, synthetisiert und erkennt aber nichts
-selbst. `tutor/room.py` schickt Text an `<pc>/api/speak` und bekommt
+selbst. Das Zimmer (`tutor/room.py`, Tutor-App) schickt Text an den Tutor-Server `<pc>:5070/api/speak` (seit 2026-10-09; vorher `<pc>/api/speak`) und bekommt
 WAV-Bytes zurück, und schickt Mikro-WAVs an `<pc>/api/transcribe` — Whisper
 und TTS laufen auf dem PC.
 
