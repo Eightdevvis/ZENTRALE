@@ -395,6 +395,9 @@ def deactivate():
         _history = deque(maxlen=100)
         _expr["stance"] = "idle"; _expr["gesture"] = None; _expr["face"] = "neutral"
         _ruhe.__init__(); _zu_schwer["woerter"] = []; _langsam["bis"] = 0.0
+        # Gedanke vergessen (id bleibt, damit das Fenster nichts doppelt zeigt):
+        # ein Wort aus der alten Session gehört nicht in die nächste.
+        _thought["word"] = ""; _thought["meaning"] = ""
     _verstaendnis.__init__()
 
 
