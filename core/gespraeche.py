@@ -358,16 +358,19 @@ def text_fuer_ki(n) -> str:
     return text
 
 
-def verlauf_fuer_ki(gid, fenster=FENSTER) -> list:
+def verlauf_fuer_ki(gid, fenster=FENSTER, mit_werkzeugen=False) -> list:
     """[{role, content}] der letzten `fenster` Nachrichten — dieselbe Form
     wie früher state.get_chat_history(). Verweise auf Anhänge und Dokumente
-    gehen als 'anhaenge'/'dokumente' mit (aufgelöst von anhang.verlauf_einsetzen)."""
+    gehen als 'anhaenge'/'dokumente' mit (aufgelöst von anhang.verlauf_einsetzen).
+    mit_werkzeugen: die gemerkten Werkzeuge einer Antwort als 'werkzeuge'
+    (daraus macht anhang.verlauf_einsetzen auf der Cloud die Werkzeug-Spur)."""
     if not gid or not gibt_es(gid):
         return []
     raus = []
+    felder = ("anhaenge", "dokumente") + (("werkzeuge",) if mit_werkzeugen else ())
     for n in nachrichten(gid, versteckte=True)[-fenster:]:
         m = {"role": n["rolle"], "content": text_fuer_ki(n)}
-        for feld in ("anhaenge", "dokumente"):
+        for feld in felder:
             if n.get(feld):
                 m[feld] = [dict(x) for x in n[feld]]
         raus.append(m)

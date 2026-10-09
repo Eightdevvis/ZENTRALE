@@ -317,6 +317,23 @@ def test_richter_zitat_bleibt_streng():
     assert richter.zitat_steht_drin("08:30\u221210:00 Experimentalphysik", _KAL)
 
 
+def test_richter_mehrere_quellen_in_einem_feld():
+    erg = {"zuege": [{"sagt": "x", "kontext": "", "kalender_danach": "",
+                      "werkzeuge": [{"name": "add_calendar_routine", "args": {},
+                                     "ergebnis": "Steht jetzt: #r99e1 Vorlesung mo,di"},
+                                    {"name": "add_calendar_routine", "args": {},
+                                     "ergebnis": "Steht jetzt: #rdcea Mathe di"}]}]}
+    roh = {"behauptungen": [
+        {"urteil": "belegt", "quelle": "T1.1, T1.2",
+         "zitat": "Steht jetzt: #r99e1 Vorlesung mo,di, Steht jetzt: #rdcea Mathe di"},
+        {"urteil": "belegt", "quelle": "T1.1, T1.7", "zitat": "Steht jetzt"},
+        {"urteil": "belegt", "quelle": "T1.1 und T1.2", "zitat": "Steht jetzt: #r00 erfunden"}]}
+    b = richter.nachpruefen(roh, erg)
+    assert b[0]["urteil"] == "belegt", b[0]
+    assert b[1]["urteil"] == "unbelegt" and "T1.7" in b[1]["vermerk"]
+    assert b[2]["urteil"] == "unbelegt" and "Zitat" in b[2]["vermerk"]
+
+
 def test_rueckfrage_auch_als_bitte_um_angaben():
     zug = {"werkzeuge": [], "antwort": "Da fehlt der Inhalt. Schick mir die Zeiten, "
                                        "dann trag ich sie ein."}

@@ -43,6 +43,7 @@ Was eine Tatsachen-Behauptung ist:
 - über die Welt („die Herbstferien gehen bis 16.10.", „die Vorlesung ist Mo 8:30")
 - über Werkzeuge, Webseiten oder die Oberfläche („ohne Login komm ich nicht weiter", „die Warnungen verschwinden jetzt", „5 Warnsymbole")
 Eine Aussage mit mehreren Angaben („Chor steht montags 14–15:30 in der Musikhochschule") zerlegst du in ihre Teile — Tag, Beginn, Ende, Ort, „steht" — und urteilst über jeden Teil einzeln, damit jeder seinen eigenen Beleg braucht. Gleich belegte Teile darfst du zusammenfassen.
+Die Antwort der KI selbst ist NIE eine Quelle — zitiere nur aus U, K, T oder P.
 Keine Behauptung: Fragen, Angebote, Pläne („soll ich…", „ich trag das ein, sobald…"), Höflichkeit, Wiederholung von Sashas Wunsch als Wunsch.
 Was die KI über frühere Züge sagt („hab ich eben gelöscht", „das gab es nie"), prüfst du gegen die T-Quellen der früheren Züge.
 Sagt die KI, in einer Quelle stehe etwas NICHT („du hast keinen Stundenplan mitgeschickt", „auf der Seite stehen keine Zeiten"), ist diese Quelle selbst der Beleg: belegt, wenn es dort wirklich fehlt — zitiere eine Zeile aus ihr.
@@ -153,14 +154,14 @@ def _stuecke(zitat: str, q: str) -> list:
     return [x for x in stuecke if len(x) >= _MIN]
 
 
-def zitat_steht_drin(zitat: str, quelle: str) -> bool:
+def zitat_steht_drin(zitat: str, quelle: str, *weitere: str) -> bool:
     """Steht das Zitat wörtlich in der Quelle? Ein Richter, der trotz Bitte
     kürzt oder Zeilen zusammenfügt, verliert dadurch nicht den Beleg — aber
     JEDES Stück muss wörtlich drinstehen (gesehen im ersten Durchgang, 08.10.).
     Ein Zitat, das nur aus Kleinkram besteht, belegt nichts."""
-    q = _norm(quelle)
-    stuecke = _stuecke(zitat, q)
-    return bool(stuecke) and all(x in q for x in stuecke)
+    qs = [_norm(x) for x in (quelle, *weitere)]
+    stuecke = _stuecke(zitat, " \x00 ".join(qs))
+    return bool(stuecke) and all(any(x in q for q in qs) for x in stuecke)
 
 
 def _zeilen_aus(text: str) -> dict:
@@ -195,6 +196,14 @@ def _zeilen_aus(text: str) -> dict:
     raise ValueError("keine B-Zeilen in der Antwort des Richters")
 
 
+def quellen_liste(quelle: str) -> list:
+    """„T3.2, T3.3" → ["T3.2", "T3.3"]. Haiku nennt gern mehrere Quellen in
+    einem Feld (Kontrolllauf 08.10. spät: „T8.1, T8.2" galt als „gibt es
+    nicht", obwohl beide da waren). Das Zitat darf dann aus allen genannten
+    stammen — jedes Stück muss aber in einer davon stehen."""
+    return [k for k in re.split(r"[\s,;/+&]+|\bund\b", str(quelle or "").strip()) if k]
+
+
 def nachpruefen(roh: dict, ergebnis: dict) -> list:
     """Urteile des Richters säubern und jedes Zitat gegen die Quelle prüfen."""
     quellen = _quellen(ergebnis)
@@ -213,14 +222,16 @@ def nachpruefen(roh: dict, ergebnis: dict) -> list:
         if urteil == "belegt" and quelle.casefold() == "keine":
             eintrag["vermerk"] = "belegt durch das Fehlen eines Aufrufs"
         elif urteil in ("belegt", "falsch"):
-            if quelle not in quellen:
-                eintrag["vermerk"] = f"Quelle {quelle or '—'} gibt es nicht"
-            elif not zitat_steht_drin(zitat, quellen[quelle]):
+            kenn = quellen_liste(quelle)
+            fehlt = [k for k in kenn if k not in quellen]
+            if not kenn or fehlt:
+                eintrag["vermerk"] = f"Quelle {', '.join(fehlt) or quelle or '—'} gibt es nicht"
+            elif not zitat_steht_drin(zitat, *(quellen[k] for k in kenn)):
                 eintrag["vermerk"] = "Zitat steht nicht in der Quelle"
             if eintrag["vermerk"] and urteil == "belegt":
                 # Ein Beleg, der sich nicht findet, ist keiner.
                 eintrag["urteil"] = "unbelegt"
-            if urteil == "belegt" and quelle.startswith("P") and not eintrag["vermerk"]:
+            if urteil == "belegt" and any(k.startswith("P") for k in kenn) and not eintrag["vermerk"]:
                 # P hat die KI nie gesehen: stimmt, aber nicht belegt.
                 eintrag["urteil"] = "unbelegt"
                 eintrag["vermerk"] = "stimmt laut Kalender, aber die KI hatte keinen Beleg"

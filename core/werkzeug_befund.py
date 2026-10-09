@@ -99,3 +99,34 @@ def schiene_zuruecksetzen(marke) -> None:
         _schiene.reset(marke)
     except (ValueError, RuntimeError):
         _schiene.set("klein")
+
+
+# ── Die Werkzeug-Spur im Verlauf ───────────────────────────────────────
+# 2026-10-09, Prüfstand f01: Der Verlauf der KI enthielt nur ihre Antworten,
+# nicht ihre Werkzeuge. Sagte die Antwort nichts vom Löschen, wusste die KI
+# im nächsten Zug nicht mehr, dass sie gelöscht hatte — und erzählte Sasha,
+# da sei nie etwas gewesen. Jetzt hängt an jeder gespeicherten Antwort eine
+# Zeile mit dem, was geschrieben wurde oder schiefging (mit Status und dem
+# Anfang des Ergebnisses). Lesende Aufrufe bleiben draußen: ihr Inhalt ist
+# lang und lässt sich neu lesen. Gebaut nur aus Gespeichertem → dieselben
+# Bytes in jedem Zug, der Prompt-Cache bleibt.
+
+SPUR_KOPF = ("[Werkzeug-Spur dieses Zugs — vom System nachgetragen, nicht Teil "
+             "deiner Antwort; Sasha sieht sie nicht:")
+
+
+def spur_zeile(werkzeuge) -> str:
+    """Die Spur aus den gemerkten Werkzeugen einer Antwort ({name, args,
+    ergebnis?, status?, schreibt?, fehler?}); "" wenn nichts zu sagen ist."""
+    zeilen = []
+    for w in werkzeuge or []:
+        status = w.get("status") or (FEHLGESCHLAGEN if w.get("fehler") else "")
+        if not (w.get("schreibt") or w.get("name") == "ask_choice"
+                or status not in ("", OK)):
+            continue
+        ergebnis = " ".join(str(w.get("ergebnis") or "").split()) or "(kein Ergebnis gemerkt)"
+        zeilen.append(f"- {w.get('name')}({w.get('args') or ''}) → "
+                      f"{status or '?'}: {ergebnis}")
+    if not zeilen:
+        return ""
+    return SPUR_KOPF + "\n" + "\n".join(zeilen) + "]"

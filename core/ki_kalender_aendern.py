@@ -235,11 +235,20 @@ def _ziel(args: dict, art: str):
         return s, None
     label = (args.get("label") or "").strip()
     tag = _tag(args.get("day")) if art == "termin" else None
-    if not label or (art == "termin" and not tag):
+    # Termin nur per Name (gross, 2026-10-09, Prüfstand f01): „lösch nyam" —
+    # es gab genau einen, trotzdem kam zweimal „day + label ist nötig", und
+    # im nächsten Zug glaubte die KI, es sei nie etwas gelöscht worden. Ohne
+    # Tag zählen die Termine, die noch nicht vorbei sind; trifft der Name
+    # genau einen, ist er gemeint, sonst die Liste (wie immer).
+    ohne_tag = art == "termin" and not tag and werkzeug_befund.schiene() == "gross"
+    if not label or (art == "termin" and not tag and not ohne_tag):
         noetig = "kennung, oder day + label" if art == "termin" else "kennung oder label"
         return None, _fehler(f"[Fehler: {noetig} ist nötig.]")
     layer = (args.get("layer") or "").strip() or None
     treffer = kk.nach_name(label, art, day=tag, layer=layer)
+    if ohne_tag:
+        heute = date.today().isoformat()
+        treffer = [x for x in treffer if str(x.bis or x.day) >= heute]
     if not treffer:
         wo = f" am {tag}" if tag else ""
         return None, _fehler(f"[Kein{'e Routine' if art == 'routine' else ' Termin'} "
@@ -382,6 +391,15 @@ def _beleg_routine(alt, neu: dict) -> Befund:
         abweichung.append(f"Ort verlangt {neu['ort']}, steht {s.ort or 'keiner'}")
     beleg = f"Steht jetzt: {kk.beschreiben(s)}, {kk.naechstes(s)}."
     hinweis = (" " + _OHNE_ENDE) if s.time and not s.ende else ""
+    # Gleichnamige mit Feldern, die diese nicht hat (2026-10-09, f01): wird
+    # die andere danach gelöscht, wären sie weg — das soll vorher dastehen.
+    andere = [(x, f) for x in kk.stuecke() if x.art == "routine" and x.layer == s.layer
+              and x.label.casefold() == s.label.casefold()
+              and x.schluessel() != s.schluessel() and (f := _was_fehlt(x, s))]
+    if andere:
+        hinweis += (" Die gleichnamige " + "; ".join(f"{_kurz(x)} hat {', '.join(f)}"
+                                                     for x, f in andere)
+                    + " — löschst du sie, ist das weg. Erst übernehmen oder Sasha fragen.")
     if abweichung:
         return Befund(f"{beleg} NICHT wie verlangt: {'; '.join(abweichung)}.{hinweis}",
                       TEILWEISE, beleg=beleg)
@@ -452,7 +470,32 @@ def _routine_loeschen(s) -> Befund:
              + (f"es gibt noch {len(rest)} Routine(n) mit dem Titel: "
                 + "; ".join(kk.beschreiben(x) for x in rest) if rest
                 else f"keine Routine '{s.label}' mehr."))
+    verlust = [f"{_kurz(x)}: {', '.join(f)}" for x in rest if (f := _was_fehlt(s, x))]
+    if verlust:
+        return Befund(f"{beleg} ACHTUNG, mit der gelöschten ging verloren — "
+                      f"{'; '.join(verlust)}. Soll die verbliebene das übernehmen? "
+                      f"Sag es Sasha (oder edit_calendar_routine an der verbliebenen).",
+                      OK, beleg=beleg)
     return Befund(beleg, OK, beleg=beleg)
+
+
+def _was_fehlt(weg, bleibt) -> list:
+    """Was `weg` hatte und die gleichnamige `bleibt` nicht (2026-10-09,
+    Prüfstand f01): zwei Geigen-Regeln, nur eine mit Ort. Die KI löschte die
+    mit Ort und änderte die andere — der Ort war still weg, und kein Ergebnis
+    hatte es gesagt. Uhrzeit und Wiederholung zählen nicht: die ändert man
+    ja gerade."""
+    raus = []
+    if weg.ort and weg.ort != bleibt.ort:
+        raus.append(f"Ort '{weg.ort}' (sie hat {repr(bleibt.ort) if bleibt.ort else 'keinen'})")
+    if weg.ende and not bleibt.ende:
+        raus.append(f"ein Ende (die gelöschte endete {weg.ende}, sie hat keins)")
+    return raus
+
+
+def _kurz(s) -> str:
+    kenn = f"#{s.kennung} " if kk.mit_kennungen() else ""
+    return f"{kenn}{s.label} {kk.regel_text(s.rrule)} {kk.zeit(s.time, s.ende)}".strip()
 
 
 # ── Einzeltermine ändern / löschen ─────────────────────────────────────

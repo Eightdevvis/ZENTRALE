@@ -297,6 +297,28 @@ Transkripte zeigten:
 - Rückfrage-Metrik zählt jetzt auch „schick/nenn/gib mir …" (Zug 3 bat um den
   Stundenplan ohne „?").
 
+## Kontrolllauf 08.10. spät (main@dc60b8a, Haiku)
+
+f01 7/9, 13 unbelegt, 1 falsch. Ordner `…/pruefstand/nachher2/2026-10-08_2224/`.
+
+- **Ort verloren:** die KI löschte die Geigen-Regel MIT Ort und änderte die
+  ohne. Jetzt sagt das Lösch-Ergebnis, was mit der gelöschten verloren geht.
+- **„da war nichts zu löschen, Irrtum meinerseits"** (Zug 4) — falsch: sie
+  HATTE nyam in Zug 2 gelöscht, die Antwort sagte es nur nicht, und der
+  Verlauf trug keine Werkzeuge. Jetzt: Werkzeug-Spur im Verlauf
+  ([ki_system.md](ki_system.md)). Haiku hat diesen echten Fehler übersehen.
+- **Pause wieder aufgeschoben** („trag ich erst ein, wenn ich das Enddatum
+  weiß") — die KI wählt das bewusst, das Werkzeug kann es jetzt anders. Das
+  allgemeine Mittel („offene Versprechen" erkennen und im nächsten Zug
+  erinnern) baut ein eigener Auftrag.
+- **Richter:** mehrere Quellen in einem Feld („T8.1, T8.2") wurden als „gibt
+  es nicht" gewertet — Prüfstand-Lücke, behoben (jedes Zitat-Stück muss in
+  einer der genannten stehen). Die Nummerierung Richter ↔ Prüfung stimmt.
+  Haiku zitiert aber die KI-Antwort selbst als T4.2 (6×) und wertet Pläne
+  als Behauptungen — Richter-Schwäche, die Prüfung fängt es richtig.
+  `--ohne-modell` über eine Kopie: f01 **11 unbelegt, 1 falsch** (vorher 13/1);
+  der Rest ist fast ganz Haiku. Für Urteile, auf die es ankommt: Sonnet richten.
+
 ## Grenzen
 
 - Der Richter ist ein Modell: er kann Behauptungen übersehen oder streng/milde

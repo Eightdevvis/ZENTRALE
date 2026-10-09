@@ -259,6 +259,37 @@ def test_gestoppter_text_bleibt_mit_vermerk_im_verlauf(client, monkeypatch):
         "role": "assistant", "content": "Die Antwort fing so an\n\n(abgebrochen)"}
 
 
+def test_werkzeug_spur_steht_im_naechsten_zug(client, monkeypatch):
+    """Prüfstand f01, 08.10. spät: die Antwort erwähnte das Löschen von
+    „nyam" nicht, und im nächsten Zug sagte die KI Sasha, da sei nie etwas
+    gewesen. Jetzt trägt der Verlauf die Spur der schreibenden Werkzeuge."""
+    def zug1(h, **k):
+        yield {"werkzeug": {"phase": "start", "name": "read_calendar", "args": {"suche": "nyam"}}}
+        yield {"werkzeug": {"phase": "fertig", "name": "read_calendar",
+                            "text": "Kalender … #t614e nyam", "status": "ok"}}
+        yield {"werkzeug": {"phase": "start", "name": "delete_calendar_entry",
+                            "args": {"kennung": "#t614e"}}}
+        yield {"werkzeug": {"phase": "fertig", "name": "delete_calendar_entry",
+                            "text": "Gelöscht: #t614e Termin nyam", "status": "ok"}}
+        yield "Geige ist umgestellt."
+    gesehen = []
+
+    def zug2(h, **k):
+        gesehen.extend(h)
+        yield "ok"
+    _modul(monkeypatch, zug1)
+    client.post("/api/chat", json={"message": "lösch nyam"}).get_data()
+    _modul(monkeypatch, zug2)
+    client.post("/api/chat", json={"message": "hast du das gelöscht?"}).get_data()
+    antwort = [m for m in gesehen if m["role"] == "assistant"][-1]["content"]
+    assert antwort.startswith("Geige ist umgestellt.")
+    assert "Werkzeug-Spur" in antwort and "Gelöscht: #t614e" in antwort
+    assert "read_calendar" not in antwort          # Lesen bleibt draußen
+    # die gespeicherte Antwort selbst bleibt, wie sie war
+    n = gespraeche.nachrichten(gespraeche.aktiv())
+    assert [x["text"] for x in n if x["rolle"] == "assistant"][0] == "Geige ist umgestellt."
+
+
 def test_gestoppt_ohne_text_landet_nicht_im_verlauf(client, monkeypatch):
     _modul(monkeypatch, lambda h, **k: iter([{"gestoppt": True}]))
     client.post("/api/chat", json={"message": "x"}).get_data()

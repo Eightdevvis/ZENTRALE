@@ -148,7 +148,7 @@ def _zug_starten(gid, message, backend, via_mic, verweise=None):
     # Sofort ein Titel aus den ersten Wörtern — die Liste zeigt nie ein
     # namenloses Gespräch; das Modell darf ihn nach der Antwort verbessern.
     gespraech_titel.erster_titel(gid, message)
-    history = anhang.verlauf_einsetzen(gespraeche.verlauf_fuer_ki(gid),
+    history = anhang.verlauf_einsetzen(gespraeche.verlauf_fuer_ki(gid, mit_werkzeugen=True),
                                        cloud=(backend == ai_backends.CLOUD))
 
     def generate():
@@ -222,10 +222,18 @@ def _werkzeug_merken(werkzeuge, w):
     if w.get("phase") == "start":
         args = ", ".join("%s=%s" % (k, " ".join(str(v).split())[:60])
                          for k, v in (w.get("args") or {}).items())
-        werkzeuge.append({"name": str(w.get("name") or "?"), "args": args[:200]})
+        eintrag = {"name": str(w.get("name") or "?"), "args": args[:200]}
+        # schreibt + status: daraus baut der Verlauf der KI ihre Werkzeug-Spur
+        # (werkzeug_befund.spur_zeile, 2026-10-09).
+        reg = werkzeug_register.eintrag(eintrag["name"])
+        if reg is not None and reg.schreibt:
+            eintrag["schreibt"] = True
+        werkzeuge.append(eintrag)
     elif w.get("phase") in ("fertig", "fehler") and werkzeuge:
         if w.get("phase") == "fehler":
             werkzeuge[-1]["fehler"] = True
+        if w.get("status"):
+            werkzeuge[-1]["status"] = str(w["status"])
         text = " ".join(str(w.get("text") or "").split())
         if text:
             werkzeuge[-1]["ergebnis"] = (text[:ERGEBNIS_MAX - 1] + "…"

@@ -30,6 +30,7 @@ import os
 import ablage
 import ablage_text
 import context
+import werkzeug_befund
 
 # Grenzen (2026-10-07).
 DATEI_MAX_BYTES = 10 * 1024 * 1024     # was die TUI überhaupt schicken darf
@@ -191,6 +192,15 @@ def verlauf_einsetzen(verlauf: list, cloud: bool) -> list:
         m = dict(m)
         verw = m.pop("anhaenge", None)
         doks = m.pop("dokumente", None)
+        spur = m.pop("werkzeuge", None)
+        if spur and cloud and m.get("role") == "assistant":
+            # Die Werkzeug-Spur (2026-10-09, Prüfstand f01): die KI sah im
+            # nächsten Zug nur ihren eigenen Text. Hatte der das Löschen von
+            # „nyam" nicht erwähnt, „fand" sie es nicht mehr und sagte Sasha,
+            # da sei nie etwas gewesen. Nur Cloud — klein bleibt, wie gemessen.
+            zeile = werkzeug_befund.spur_zeile(spur)
+            if zeile:
+                m["content"] = (m.get("content") or "").rstrip() + "\n\n" + zeile
         if doks:
             zeile = _dokumente_zeile(doks)
             if zeile:

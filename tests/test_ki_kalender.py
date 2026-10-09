@@ -216,6 +216,61 @@ def test_pause_frage_nennt_das_offene_ende():
     assert DO_ISO in f and "Ende noch offen" in f
 
 
+def test_routine_loeschen_sagt_was_verloren_geht(gross):
+    """Prüfstand f01, 08.10. spät: zwei Geigen-Regeln, nur eine mit Ort. Die
+    KI löschte die mit Ort — und kein Ergebnis sagte, dass der Ort weg ist."""
+    tun("add_calendar_routine", label="Geigenstunde", rrule="FREQ=WEEKLY;BYDAY=TH",
+        time="17:45", ende="18:30", ort="Geigenschule")
+    tun("add_calendar_routine", label="Geigenstunde", rrule="FREQ=WEEKLY;BYDAY=TH",
+        time="18:00")
+    mit_ort = [s for s in routinen() if s.ort][0]
+    ohne = [s for s in routinen() if not s.ort][0]
+    r = tun("edit_calendar_routine", kennung=mit_ort.kennung, aktion="loeschen")
+    assert r.status == "ok"
+    assert "verloren" in r and "Ort 'Geigenschule'" in r and f"#{ohne.kennung}" in r
+    assert "Ende" in r                     # die gelöschte hatte ein Ende, die andere nicht
+
+
+def test_routine_loeschen_ohne_verlust_ohne_hinweis(gross):
+    for t in ("17:45", "18:00"):
+        tun("add_calendar_routine", label="Geigenstunde", rrule="FREQ=WEEKLY;BYDAY=TH",
+            time=t, ende="19:00", ort="Geigenschule")
+    r = tun("edit_calendar_routine", kennung=routinen()[0].kennung, aktion="loeschen")
+    assert r.status == "ok" and "verloren" not in r
+
+
+def test_routine_aendern_nennt_gleichnamige_mit_mehr_feldern(gross):
+    tun("add_calendar_routine", label="Geigenstunde", rrule="FREQ=WEEKLY;BYDAY=TH",
+        time="17:45", ende="18:30", ort="Geigenschule")
+    tun("add_calendar_routine", label="Geigenstunde", rrule="FREQ=WEEKLY;BYDAY=TH",
+        time="18:00", ende="19:00")
+    ohne = [s for s in routinen() if not s.ort][0]
+    r = tun("edit_calendar_routine", kennung=ohne.kennung, aktion="aendern",
+            time="18:10", ende="19:00")
+    assert r.status == "ok"
+    assert "gleichnamige" in r and "Ort 'Geigenschule'" in r and "löschst du sie" in r
+
+
+def test_termin_loeschen_per_name_ohne_tag(gross):
+    """„lösch nyam": es gab genau einen — trotzdem kam zweimal „day + label
+    ist nötig" (Prüfstand f01)."""
+    morgen = (date.today() + timedelta(days=1)).isoformat()
+    tun("add_calendar_entry", layer="termine", day=morgen, label="nyam")
+    r = tun("delete_calendar_entry", label="nyam")
+    assert r.status == "ok" and "Gelöscht" in r
+    for d in (morgen, DO_ISO):
+        tun("add_calendar_entry", layer="termine", day=d, label="Drive")
+    r = tun("delete_calendar_entry", label="Drive")
+    assert werkzeug_befund.status_von(r) == "fehlgeschlagen" and "trifft 2" in r
+
+
+def test_termin_per_name_ohne_tag_bleibt_auf_klein_ein_fehler():
+    morgen = (date.today() + timedelta(days=1)).isoformat()
+    tun("add_calendar_entry", layer="termine", day=morgen, label="nyam")
+    r = tun("delete_calendar_entry", label="nyam")
+    assert werkzeug_befund.status_von(r) == "fehlgeschlagen"
+
+
 # ── Einzeltermine ──────────────────────────────────────────────────────
 
 def test_einzeltermin_aendern_nur_genannte_felder(gross):

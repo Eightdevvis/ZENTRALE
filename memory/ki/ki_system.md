@@ -435,6 +435,12 @@ komm ich nicht tiefer" (geraten) und „die Warnungen sollten verschwinden"
   der Tag `von` aus, und das Ergebnis sagt „Ende noch offen — frag nach".
   Vorher schob die KI bei „fällt jetzt aus, bis wann?" die ganze Pause auf,
   und die Geige am selben Abend blieb stehen.
+- **Was beim Löschen verloren geht** (2026-10-09): löscht `edit_calendar_routine`
+  eine Routine und bleibt eine gleichnamige, sagt das Ergebnis, welche Felder
+  (Ort, Ende) mit der gelöschten weg sind. Beim Ändern nennt es gleichnamige,
+  die mehr Felder haben.
+- **Termin per Name ohne Tag** (gross): trifft der Name genau einen Termin,
+  der noch nicht vorbei ist, ist er gemeint; sonst die Liste.
 - **Warnungen:** `read_calendar_warnings` rechnet sie frisch
   (`kalender.open_alarms`, dieselben wie Sashas ⚠); jeder Beleg nennt die
   Warnungen zum Titel.
@@ -1157,6 +1163,13 @@ Jetzt:
   Seit 2026-10-08 in einem festen Umschlag `<kontext_automatisch>…`, der sagt,
   dass Sasha den Block nicht geschrieben hat — ohne ihn hielt die KI im
   Prüfstand (f01 Zug 3) das „## Jetzt" für etwas, das Sasha geschickt hatte.
+* **Werkzeug-Spur im Verlauf** (2026-10-09, nur Cloud): an jede frühere
+  Antwort hängt `anhang.verlauf_einsetzen` eine Zeile mit den schreibenden
+  (und schiefgegangenen) Werkzeugen des Zugs, Status und Ergebnis-Anfang
+  (`werkzeug_befund.spur_zeile`, Daten aus `gespraeche` → `werkzeuge`, gemerkt
+  in `ui/routen/ki._werkzeug_merken`). Vorher sah die KI nur ihren Text: hatte
+  der ein Löschen nicht erwähnt, behauptete sie im nächsten Zug, da sei nie
+  etwas gewesen. Aus Gespeichertem gebaut → gleiche Bytes, Cache bleibt.
 * Breakpoint Nr. 2 sitzt auf dem User-Text, **vor** dem Wechselnden. Dahinter
   wäre er wertlos — jeder Turn schriebe eine Cache-Zeile, die nie gelesen wird.
 * Breakpoint Nr. 3 wandert zwischen den Tool-Runden mit (max. 4 erlaubt).
