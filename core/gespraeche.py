@@ -26,7 +26,8 @@
 #   art "nachricht": rolle user/assistant, text, optional denken, werkzeuge,
 #                    anbieter, modell, abgebrochen, versteckt, erledigt,
 #                    pruefung, offen (Ehrlichkeits-Prüfer, 2026-10-09),
-#                    ablauf (Ablauf-Protokoll des Zugs, core/zug_ablauf.py)
+#                    ablauf (Ablauf-Protokoll des Zugs, core/zug_ablauf.py),
+#                    fehler (der Zug brach ab: Meldung; Text oft leer, 2026-10-09)
 #   art "verwerfen": ab (Nachricht-id) — diese und alle späteren Nachrichten
 #                    zählen nicht mehr (Wiederholen, Bearbeiten)
 # Lesen = alle Rechner-Dateien zusammenlegen, nach ts sortieren, anwenden.
@@ -234,7 +235,7 @@ def _anhaengen_roh(gid, ereignis, kn=None):
 def anhaengen(gid, rolle, text, *, denken=None, werkzeuge=None, anbieter=None,
               modell=None, abgebrochen=False, versteckt=False, knoten=None,
               anhaenge=None, dokumente=None, erledigt=None, pruefung=None,
-              offen=None, ablauf=None) -> dict:
+              offen=None, ablauf=None, fehler=None) -> dict:
     """Eine Nachricht anhängen. -> das Ereignis (mit id und ts).
 
     anhaenge (Frage) / dokumente (Antwort): VERWEISE in die Ablage
@@ -278,6 +279,11 @@ def anhaengen(gid, rolle, text, *, denken=None, werkzeuge=None, anbieter=None,
     # (dort nur ablauf_n), sondern über …/ablauf/<nachricht>.
     if ablauf:
         e["ablauf"] = [dict(x) for x in ablauf]
+    # Abgebrochener Zug (2026-10-09, Sasha: „sieht die ai eigentlich diese
+    # fehlermeldung?"): vorher wurde er gar nicht gespeichert — Werkzeuge
+    # und Fehler waren weg, die KI wusste im nächsten Zug nichts davon.
+    if fehler:
+        e["fehler"] = str(fehler)[:FEHLER_GRENZE]
     return _anhaengen_roh(gid, e, knoten)
 
 
@@ -385,6 +391,35 @@ def text_fuer_ki(n) -> str:
     return text
 
 
+# So lang darf eine gespeicherte Fehlermeldung sein, so viele Schritte nennt
+# der Systemhinweis höchstens (wie die Werkzeug-Spur: der Anfang reicht).
+FEHLER_GRENZE = 500
+FEHLER_SCHRITTE = 12
+
+
+def fehler_hinweis(n) -> str:
+    """Systemhinweis für die KI zu einem abgebrochenen Zug — ausdrücklich
+    NICHT ihre Worte (wie die Werkzeug-Spur, core/werkzeug_befund.py).
+    "" für eine Nachricht ohne Fehler."""
+    meldung = " ".join(str(n.get("fehler") or "").split())
+    if not meldung:
+        return ""
+    schritte = []
+    for w in (n.get("werkzeuge") or [])[:FEHLER_SCHRITTE]:
+        args = " ".join(str(w.get("args") or "").split())
+        if len(args) > 80:
+            args = args[:79] + "…"
+        schritte.append("%s(%s)%s" % (w.get("name") or "?", args,
+                                      " ✗" if w.get("fehler") else ""))
+    mehr = len(n.get("werkzeuge") or []) - len(schritte)
+    if mehr > 0:
+        schritte.append("… %d weitere" % mehr)
+    gelaufen = ("Bis dahin gelaufen: " + ", ".join(schritte)) if schritte \
+        else "Bis dahin lief kein Werkzeug."
+    return ("[System, nicht deine Worte: Dein letzter Zug brach ab — %s. %s "
+            "Sasha hat die Meldung gesehen.]" % (meldung.rstrip("."), gelaufen))
+
+
 def verlauf_fuer_ki(gid, fenster=FENSTER, mit_werkzeugen=False) -> list:
     """[{role, content}] der letzten `fenster` Nachrichten — dieselbe Form
     wie früher state.get_chat_history(). Verweise auf Anhänge und Dokumente
@@ -397,6 +432,11 @@ def verlauf_fuer_ki(gid, fenster=FENSTER, mit_werkzeugen=False) -> list:
     felder = ("anhaenge", "dokumente") + (("werkzeuge",) if mit_werkzeugen else ())
     for n in nachrichten(gid, versteckte=True)[-fenster:]:
         m = {"role": n["rolle"], "content": text_fuer_ki(n)}
+        hinweis = fehler_hinweis(n)
+        if hinweis:
+            # Hinten an die (oft leere) Antwort: nur der Verlauf ändert sich,
+            # der feste Kopf (Prompt-Cache) bleibt, wie er ist.
+            m["content"] = (m["content"].rstrip() + "\n\n" + hinweis).strip()
         for feld in felder:
             if n.get(feld):
                 m[feld] = [dict(x) for x in n[feld]]

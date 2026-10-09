@@ -242,3 +242,60 @@ def test_neues_gespraech_im_hintergrund_bekommt_seine_id(c, monkeypatch):
                              {"titel": "Neu", "gespraech": "neu1"}, {"token": "x"},
                              {"done": True}])
     assert c.AI["gid"] == "b" and "neu1" in c.AI["ungesehen"]
+
+
+# ── Abgebrochener Zug im Verlauf (2026-10-09) ─────────────────────────
+
+from tui.ansichten import verlauf as V   # noqa: E402
+
+GRENZE = "Maximale Tool-Tiefe erreicht (8 Runden)"
+
+
+def _texte(zeilen):
+    return ["".join(t for t, _s, _z in z) for z in zeilen]
+
+
+def _ziele(zeilen):
+    return [z for zeile in zeilen for _t, _s, z in zeile if z]
+
+
+def test_abbruch_live_wird_eintrag_mit_retry_daran(c, monkeypatch):
+    _laufen(c, monkeypatch, [{"werkzeug": {"phase": "start", "name": "browser_open",
+                                           "args": {"url": "x"}}},
+                             {"fehler": GRENZE}, {"antwort": "m3", "ablauf": 4, "abbruch": GRENZE},
+                             {"done": True}])
+    log = c.AI["log"]
+    assert log[-1] == ("abbruch", GRENZE) and c.AI["msg"] == ""   # nicht mehr unten
+    zeilen = V.verlauf_zeilen(log, 80, letzte_ai=V.retry_bei(log))
+    assert "✗ abgebrochen: " + GRENZE + " · retry" in _texte(zeilen)
+    # retry nur am Abbruch, nicht an der alten Antwort davor
+    assert [z for z in _ziele(zeilen) if z[0] == "wiederholen"] == [("wiederholen", len(log) - 1)]
+
+
+def test_retry_ersetzt_den_abbruch(c, monkeypatch):
+    c.AI["log"] = [("user", "alt"), ("ai", "alte antwort"), ("user", "neu"),
+                   ("werkzeug", "browser_open(url=x)"), ("abbruch", GRENZE)]
+    gesendet = []
+    monkeypatch.setattr(c, "senden", lambda frage, **k: gesendet.append((frage, k)))
+    c.wiederholen()
+    assert gesendet == [("neu", {"wiederholen": True})]
+    assert c.AI["log"] == [("user", "alt"), ("ai", "alte antwort"), ("user", "neu")]
+
+
+def test_alter_abbruch_aus_dem_verlauf_wird_genauso_gezeigt():
+    h = [{"role": "user", "content": "stundenplan"},
+         {"role": "assistant", "content": "", "fehler": GRENZE,
+          "werkzeuge": [{"name": "browser_open", "args": "url=x"}]},
+         {"role": "user", "content": "und jetzt?"},
+         {"role": "assistant", "content": "ok"}]
+    log = chat_gespraeche.verlauf_aus(h)
+    assert log[:3] == [("user", "stundenplan"), ("werkzeug", "browser_open(url=x)"),
+                       ("abbruch", GRENZE)]
+    # Danach kam noch etwas: retry hängt an der letzten Antwort, nicht am Abbruch.
+    assert V.retry_bei(log) == len(log) - 1
+    assert V.retry_bei(log + [("user", "noch was")]) is None
+
+
+def test_gestoppt_ohne_text_heisst_einfach_gestoppt():
+    z = V.verlauf_zeilen([("user", "x"), ("abbruch", "von Sasha gestoppt")], 60, letzte_ai=1)
+    assert "✗ gestoppt · retry" in _texte(z)

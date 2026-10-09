@@ -130,8 +130,8 @@ def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=
     """Der Verlauf als Zeilen aus Stücken (text, stil, ziel).
 
     offen: Ziele, die aufgeklappt sind ({("schritt", i), ("denken", i)});
-    denken_alle: Strg+D — alles Denken offen; letzte_ai: Index der letzten
-    Antwort (nur sie bekommt „retry"); antwort: die laufende Antwort (Text)
+    denken_alle: Strg+D — alles Denken offen; letzte_ai: wo „retry" steht
+    (retry_bei: letzte Antwort oder letzter Abbruch); antwort: die laufende Antwort (Text)
     oder None; adern: so viele leere Zeilen für die Denk-Animation, vor dem
     Eintrag adern_bei (None: am Ende, vor der laufenden Antwort) — nach dem
     Ende des Stroms zieht sie sich dort zurück, wo die Antwort beginnt;
@@ -159,7 +159,7 @@ def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=
             continue
         # Luft zwischen zwei Äußerungen; Schritte und Denken kleben an der Antwort
         if zeilen and (rolle in ("user", "hinweis") or
-                       (rolle == "ai" and vorher not in ("werkzeug", "denken", "ablage",
+                       (rolle in ("ai", "abbruch") and vorher not in ("werkzeug", "denken", "ablage",
                                                          "werkzeug_fehler"))):
             zeilen.append([])
         if rolle == "user":
@@ -229,6 +229,19 @@ def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=
                 zeilen += [aktionen, bewerten[1:]]
             if i in spuren and spur_auf:
                 zeilen += spur.zeilen(ablaeufe.get(spuren[i]), i, offen, breite)
+        elif rolle == "abbruch":                 # der Zug brach ab (2026-10-09)
+            meldung = str(text)
+            kopf = ("✗ gestoppt" if meldung.startswith("von Sasha gestoppt")
+                    else "✗ abgebrochen: " + meldung)
+            stuecke = [(kopf, "abbruch", None)]
+            if i == letzte_ai and not streaming:
+                stuecke += [(" · ", "leise", None), ("retry", "aktion", ("wiederholen", i))]
+            if sum(len(t) for t, _s, _z in stuecke) <= breite:
+                zeilen.append(stuecke)
+            else:
+                zeilen += [[(u, "abbruch", None)] for u in _umbruch(kopf, breite)]
+                if len(stuecke) > 1:
+                    zeilen.append(stuecke[2:])
         elif rolle == "hinweis":
             for z_text in str(text).split("\n"):
                 for k in range(0, max(1, len(z_text)), breite):
@@ -255,6 +268,19 @@ def ziele(zeilen):
             if z is not None and z not in raus:
                 raus.append(z)
     return raus
+
+
+def retry_bei(log):
+    """Wo „retry" steht: an der letzten Antwort oder dem letzten Abbruch —
+    aber nur, wenn danach keine Frage mehr kam (2026-10-09: vorher hing es
+    an der Antwort VOR einem abgebrochenen Auftrag). -> Index oder None."""
+    for i in range(len(log) - 1, -1, -1):
+        rolle = log[i][0]
+        if rolle == "user":
+            return None
+        if rolle in ("ai", "abbruch"):
+            return i
+    return None
 
 
 def letzte_antwort(log):

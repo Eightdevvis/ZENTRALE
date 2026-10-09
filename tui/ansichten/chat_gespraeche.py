@@ -66,6 +66,8 @@ def verlauf_aus(h):
         log += [ablage_eintrag(d) for d in m.get("dokumente") or [] if isinstance(d, dict)]
         if txt:
             log.append(("ai", txt))
+        if m.get("fehler"):        # abgebrochener Zug (2026-10-09): eigener Eintrag
+            log.append(("abbruch", " ".join(str(m["fehler"]).split())))
         log += pruefung_eintraege(m.get("erledigt"), m.get("offen"), log)
     return log
 

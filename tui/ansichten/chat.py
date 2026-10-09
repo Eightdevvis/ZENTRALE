@@ -525,6 +525,8 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
             Z["pruefung"] = evt["ehrlichkeit"] if isinstance(evt["ehrlichkeit"], dict) else None
         elif "antwort" in evt:                    # gespeichert, mit Ablauf („trace", spur.py)
             Z["antwort_live"] = evt["antwort"] if evt.get("ablauf") else None
+            if evt.get("abbruch"):                # der Zug brach ab (2026-10-09)
+                Z["abbruch_live"] = " ".join(str(evt["abbruch"]).split())
         elif "ablage" in evt:                     # ein Dokument liegt in der Ablage
             if isinstance(evt["ablage"], dict) and evt["ablage"].get("id"):
                 Z["log"].append(ablage_eintrag(evt["ablage"]))
@@ -561,6 +563,14 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
             spuren.pop(len(Z["log"]) - 1, None)
             if live:
                 spuren[len(Z["log"]) - 1] = live
+        # Abgebrochen: der Fehler steht als Eintrag an der Stelle des Zugs,
+        # mit „retry" daran — nicht mehr nur unten in der Statuszeile, wo er
+        # klebte, während „retry" an der Antwort DAVOR hing (Sasha, 09.10.).
+        abbruch = Z.pop("abbruch_live", None)
+        if abbruch:
+            Z["log"].append(("abbruch", abbruch))
+            if AI["msg"] in ("fehler: " + abbruch, "gestoppt"):
+                AI["msg"] = ""
         p = Z.pop("pruefung", None)
         if isinstance(p, dict):
             Z["log"] += pruefung_eintraege(

@@ -404,7 +404,13 @@ außerdem `ablauf` tragen: eine Liste von Einträgen `{art, zeit, t, …}` (art:
 `gestoppt`, `antwort`, `kosten`; je Eintrag höchstens 50.000 Zeichen) —
 das Ablauf-Protokoll des Zugs ([../ki/ki_system.md](../ki/ki_system.md),
 „Ablauf-Protokoll"). Nur zum Nachlesen; das Handy muss es weder schreiben
-noch lesen, und es geht nie an die KI. Daneben liegt pro Rechner
+noch lesen, und es geht nie an die KI. Ebenfalls seit 09.10. (abends): ein
+abgebrochener Zug (Fehler, Rundengrenze, gestoppt ohne Text) steht als
+Antwort mit `fehler` (Meldung als Text, höchstens 500 Zeichen) und meist
+leerem `text` da, mit `werkzeuge` und `ablauf` wie sonst. Anzeigen als
+„✗ abgebrochen: <fehler>"; der KI gibt `gespraeche.fehler_hinweis` ihn als
+Systemhinweis „[System, nicht deine Worte: …]" weiter — schreibt das Handy
+selbst Züge, legt es einen Abbruch genauso ab. Daneben liegt pro Rechner
 `gespraeche/<id>/zusagen-<rechner>.json` (offene Zusagen der KI) — das Handy
 schreibt sie nicht und braucht sie nicht. Hinweis: ein Kopf mit `titel_von` `"woerter"` oder null
 darf ein Rechner später automatisch umbenennen (`"modell"`); `"sasha"` nie.

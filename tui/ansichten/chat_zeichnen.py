@@ -283,7 +283,7 @@ class ChatZeichnen:
         n_adern = denkadern.hoehe_fuer(platz) if adern else 0
         zeilen = V.verlauf_zeilen(
             log, sp.w, offen=AI.get("offen") or frozenset(),
-            denken_alle=AI.get("denken_offen"), letzte_ai=V.letzte_antwort(log),
+            denken_alle=AI.get("denken_offen"), letzte_ai=V.retry_bei(log),
             antwort=answer, adern=n_adern, streaming=streaming,
             adern_bei=self._adern_bei(log, streaming), bewertet=self.bewertung.marken(log),
             spuren=AI.get("spuren"), ablaeufe=AI.get("ablaeufe"))
@@ -341,7 +341,7 @@ class ChatZeichnen:
                 "schritt_fehler": C["warn"], "denken": C["faint"], "dok": C["acc"],
                 "anhang": C["acc"], "aktion": C["faint"], "leise": C["faint"],
                 "aktion_an": C["acc"] | curses.A_BOLD,
-                "hinweis": C["dim"]}
+                "hinweis": C["dim"], "abbruch": C["warn"]}
 
     def _adern_lage(self, streaming, answer, jetzt):
         """Läuft die Denk-Animation? -> (an, ausklang 0..1, dauer s).

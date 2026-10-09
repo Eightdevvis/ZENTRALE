@@ -287,7 +287,7 @@ def _sse_zug(stream, gid, backend, frage, erster):
     denken = []
     werkzeuge = []
     dokumente = []
-    fehler_kam = False
+    fehler_text = None
     gestoppt = False
     pruefung = None
 
@@ -331,43 +331,51 @@ def _sse_zug(stream, gid, backend, frage, erster):
                 # Backend-Fehler, Ablehnung, Rundengrenze: DIREKT an Sasha,
                 # NICHT in den Verlauf — sonst läse die KI "[Cloud-Fehler: …]"
                 # im nächsten Zug als ihre eigene Aussage.
-                fehler_kam = True
+                fehler_text = str(token['fehler'])
                 state.push_log(f"AI ✗  {token['fehler']}")
                 yield _sse({'fehler': token['fehler']})
             continue
         collected.append(token)
         yield _sse({'token': token})
 
-    # Ist der Zug an einem Fehler gescheitert, ohne dass Text kam, bleibt die
-    # Frage unbeantwortet stehen — eine leere Antwort wäre eine Behauptung
-    # ("ich habe nichts gesagt"), die nicht stimmt. Gestoppt: was da war,
-    # bleibt mit abgebrochen=True; ohne Text landet nichts im Verlauf.
+    # Seit 2026-10-09 wird jeder Zug gespeichert, auch ein abgebrochener
+    # (Fehler, Rundengrenze, gestoppt ohne Text): mit `fehler`, den
+    # Werkzeugen und dem Ablauf. Vorher blieb die Frage einfach stehen — und
+    # die KI wusste im nächsten Zug nicht, dass und woran es scheiterte
+    # (gespraeche.fehler_hinweis gibt es ihr als Systemhinweis). Gestoppt mit
+    # Text: wie gehabt mit abgebrochen=True.
     text = "".join(collected)
-    speichern = bool(text.strip()) if gestoppt else bool(collected or not fehler_kam)
-    if speichern:
-        anbieter, modell = _wer_antwortet(backend)
-        gespeichert = text.rstrip() if gestoppt else text
-        # Ablauf-Protokoll: Antwort und Kosten dazu, mit der Antwort speichern.
-        # None auf lokal/klein — dann bleibt das Feld weg.
-        ablauf = zug_ablauf.abschliessen(antwort=gespeichert)
-        e = gespraeche.anhaengen(
-            gid, "assistant", gespeichert,
-            denken="".join(denken), werkzeuge=werkzeuge, anbieter=anbieter,
-            modell=modell, abgebrochen=gestoppt, dokumente=dokumente or None,
-            ablauf=ablauf, **_pruefung_felder(pruefung))
-        # Die id der Antwort, damit die TUI ihr „trace" gleich zeigen kann.
-        if ablauf:
-            yield _sse({'antwort': e['id'], 'ablauf': len(ablauf)})
-        # Sasha hat zugeschaut, also gelesen.
-        gespraeche.gelesen_setzen(gid)
-        if erster:
-            if gespraech_titel.braucht_modell(gid):
-                t = gespraech_titel.im_hintergrund(
-                    gid, frage, text, cloud=(backend == ai_backends.CLOUD))
-                t.join(TITEL_WARTEN)
-            titel = gespraeche.kopf(gid).get("titel")
-            if titel:
-                yield _sse({'titel': titel, 'gespraech': gid})
+    if gestoppt and not text.strip():
+        fehler_text = fehler_text or "von Sasha gestoppt"
+    anbieter, modell = _wer_antwortet(backend)
+    gespeichert = text.rstrip() if gestoppt else text
+    # Ablauf-Protokoll: Antwort und Kosten dazu, mit der Antwort speichern.
+    # None auf lokal/klein — dann bleibt das Feld weg.
+    ablauf = zug_ablauf.abschliessen(antwort=gespeichert)
+    e = gespraeche.anhaengen(
+        gid, "assistant", gespeichert,
+        denken="".join(denken), werkzeuge=werkzeuge, anbieter=anbieter,
+        modell=modell, abgebrochen=gestoppt and bool(text.strip()),
+        dokumente=dokumente or None, ablauf=ablauf, fehler=fehler_text,
+        **_pruefung_felder(pruefung))
+    # Die id der Antwort, damit die TUI ihr „trace" gleich zeigen kann —
+    # und bei einem Abbruch den Fehler-Eintrag an seine Stelle setzt.
+    if ablauf or fehler_text:
+        ereignis = {'antwort': e['id'], 'ablauf': len(ablauf or [])}
+        if fehler_text:
+            ereignis['abbruch'] = fehler_text
+        yield _sse(ereignis)
+    # Sasha hat zugeschaut, also gelesen.
+    gespraeche.gelesen_setzen(gid)
+    if erster:
+        # Abbruch ohne Text: kein Modell-Titel aus nichts (kostet nur).
+        if text.strip() and gespraech_titel.braucht_modell(gid):
+            t = gespraech_titel.im_hintergrund(
+                gid, frage, text, cloud=(backend == ai_backends.CLOUD))
+            t.join(TITEL_WARTEN)
+        titel = gespraeche.kopf(gid).get("titel")
+        if titel:
+            yield _sse({'titel': titel, 'gespraech': gid})
 
     # Abschluss-Signal für den Client
     yield _sse({'done': True})
@@ -408,7 +416,7 @@ def api_chat_history():
         m = {"id": n["id"], "role": n["rolle"], "ts": n["ts"],
              "content": gespraeche.text_fuer_ki(n)}
         for feld in ("denken", "werkzeuge", "abgebrochen", "anbieter", "modell",
-                     "anhaenge", "dokumente", "erledigt", "offen"):
+                     "anhaenge", "dokumente", "erledigt", "offen", "fehler"):
             if n.get(feld):
                 m[feld] = n[feld]
         # Das Ablauf-Protokoll selbst ist groß: hier nur, DASS es eins gibt
