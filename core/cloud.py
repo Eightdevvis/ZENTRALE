@@ -54,6 +54,7 @@ import ki_werkzeuge  # Tool-Ausführung — lokal, egal wer denkt
 import graph
 import kidebug   # Devtools-Bus: was WIRKLICH rausgeht (scripts/ai_devtools.py)
 import werkzeug_schleife  # die EINE Tool-Schleife; hier steht nur der Anthropic-Adapter
+import zug_ablauf    # Ablauf-Protokoll des Zugs: nur mitschreiben (2026-10-09)
 
 # ── Der getrennte Cloud-Graph ──────────────────────────────────────────
 # Absoluter Pfad, damit derselbe String immer denselben _Store trifft (graph.py
@@ -529,6 +530,24 @@ def _append_volatile(msgs: list, volatile: str) -> None:
         blocks.append({"type": "text", "text": volatile})
 
 
+def ablauf_melden(fest: str, volatile: str, messages: list, tutor_mode: bool) -> None:
+    """Ablauf-Protokoll (core/zug_ablauf.py, 2026-10-09): der feste Kopf nur
+    als Fingerabdruck, der Umschlag dieses Zugs voll, dazu die Anhänge der
+    neuesten Nachricht (Titel, Art, Länge — Bilddaten nie). Nur gross; nur
+    mitschreiben, was ohnehin rausgeht. Beide Cloud-Wege rufen das."""
+    if tutor_mode or _profil().NAME != "gross" or not zug_ablauf.offen():
+        return
+    zug_ablauf.system(fest)
+    letzte = next((m for m in reversed(messages or []) if m.get("role") == "user"), {})
+    anhaenge = []
+    for a in letzte.get("anhaenge") or []:
+        if isinstance(a, dict):
+            groesse = (f"{len(a.get('text') or '')} Zeichen" if a.get("art") != "bild"
+                       else "Bild")
+            anhaenge.append(f"{a.get('titel')} ({groesse})")
+    zug_ablauf.kontext(volatile, anhaenge=anhaenge)
+
+
 def _text_of(blocks) -> str:
     """Klartext aus einer Anthropic-Content-Liste (thinking/tool_use ignoriert)."""
     return "".join(b.text for b in blocks if getattr(b, "type", None) == "text")
@@ -592,6 +611,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     volatile = _volatile_text(mem_ctx, via_mic, tutor_mode)
     _append_volatile(anthro_msgs, volatile)
     anthro_tools = _to_anthropic_tools(active_tools)
+    ablauf_melden(sys_blocks[0]["text"], volatile, messages, tutor_mode)
 
     adapter = _AnthropicAdapter(_get_client(), model or _model(),
                                 sys_blocks, anthro_msgs, anthro_tools,
@@ -801,6 +821,8 @@ def _gestoppt_buchen(verbrauch: dict, model: str, rest_zeichen: int = 0):
         wr = int(verbrauch.get("cache_creation_input_tokens", 0) or 0)
         eur = usage.buchen(model, input_tokens=rein, output_tokens=gemeldet + rest,
                            cache_read=rd, cache_write=wr, output_geschaetzt=rest)
+        zug_ablauf.verbrauch(eingabe=rein, ausgabe=gemeldet + rest, cache_lesen=rd,
+                             cache_schreiben=wr, euro=eur, geschaetzt=bool(rest))
         state.push_log(
             f"CLOUD ← {model} gestoppt in={rein} cache_read={rd} cache_write={wr} "
             f"out={gemeldet}+≈{rest} (geschätzt) ≈{eur:.4f}€ "
@@ -833,6 +855,9 @@ def _log_usage(final, model: str):
                            input_tokens=int(u.input_tokens or 0),
                            output_tokens=int(u.output_tokens or 0),
                            cache_read=rd, cache_write=wr)
+        zug_ablauf.verbrauch(eingabe=int(u.input_tokens or 0),
+                             ausgabe=int(u.output_tokens or 0),
+                             cache_lesen=rd, cache_schreiben=wr, euro=eur)
         state.push_log(
             f"CLOUD ← {model} in={u.input_tokens} cache_read={rd} "
             f"cache_write={wr} out={u.output_tokens} "

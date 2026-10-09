@@ -76,7 +76,28 @@ _VERLAUF = [
                     "ergebnis": "Flickzeug liegt in der Satteltasche."},
                    {"name": "web_search", "args": "query=schlauch flicken", "fehler": True,
                     "ergebnis": "kein netz"}],
-     "dokumente": [{"id": "d1", "titel": "Packliste Radtour"}]}]
+     "dokumente": [{"id": "d1", "titel": "Packliste Radtour"}],
+     "ablauf_n": 8}]
+
+# Erfundenes Ablauf-Protokoll (2026-10-09, „trace ›" unter der Antwort).
+_ABLAUF = {"gespraech": "g1", "nachricht": "n2", "ablauf": [
+    {"art": "system", "t": 0.0, "fingerabdruck": "3f9a0c11d2e4b5a6", "laenge": 18734},
+    {"art": "kontext", "t": 0.0, "text": "<kontext_automatisch>\n## Jetzt\nMontag, 6. Oktober "
+     "2026, 10:00\n</kontext_automatisch>"},
+    {"art": "text", "t": 1.2, "text": "Ich schau kurz in deine Notizen."},
+    {"art": "werkzeug", "t": 1.3, "name": "read_note", "args": {"name": "fahrrad"},
+     "ergebnis": "[ergebnis: ok]\n" + "Flickzeug liegt in der Satteltasche. " * 12,
+     "status": "ok", "dauer": 0.04},
+    {"art": "werkzeug", "t": 1.4, "name": "web_search", "args": {"query": "schlauch flicken"},
+     "ergebnis": "[ergebnis: fehlgeschlagen]\nkein netz", "status": "fehlgeschlagen",
+     "dauer": 3.1, "fehler": True},
+    {"art": "pruefung", "t": 6.0, "befunde": [{"art": "tat", "satz": "Hab es notiert."}],
+     "hinweis": "<pruefung_automatisch>…</pruefung_automatisch>",
+     "erste_antwort": "Hab es notiert."},
+    {"art": "antwort", "t": 8.0, "text": "Mit Flickzeug: Loch suchen, anrauen, Kleber, "
+     "warten, Flicken drauf."},
+    {"art": "kosten", "t": 8.0, "runden": 3, "eingabe": 1200, "ausgabe": 340,
+     "cache_lesen": 15000, "cache_schreiben": 0, "euro": 0.0123}]}
 
 
 # Erfundene Bewertungen (2026-10-08) für Customize → Feedback. Gefiltert nach
@@ -187,6 +208,8 @@ def _synth(path):
         return _WEGE
     if path == "/api/gespraeche":
         return _GESPRAECHE
+    if path.startswith("/api/gespraeche/g1/ablauf/"):
+        return _ABLAUF
     if path.startswith("/api/gespraeche?archiv"):
         return _ARCHIV
     if path == "/api/gedaechtnis":

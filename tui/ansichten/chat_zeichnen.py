@@ -273,7 +273,8 @@ class ChatZeichnen:
             log, sp.w, offen=AI.get("offen") or frozenset(),
             denken_alle=AI.get("denken_offen"), letzte_ai=V.letzte_antwort(log),
             antwort=answer, adern=n_adern, streaming=streaming,
-            adern_bei=self._adern_bei(log, streaming), bewertet=self.bewertung.marken(log))
+            adern_bei=self._adern_bei(log, streaming), bewertet=self.bewertung.marken(log),
+            spuren=AI.get("spuren"), ablaeufe=AI.get("ablaeufe"))
         self._ziele = V.ziele(zeilen)
         if not zeilen:
             hinweis = "frag die ki — tippen + enter · /help"

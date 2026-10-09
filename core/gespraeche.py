@@ -25,7 +25,8 @@
 # Eine Zeile der jsonl ist ein EREIGNIS: {id, ts, knoten, art, …}.
 #   art "nachricht": rolle user/assistant, text, optional denken, werkzeuge,
 #                    anbieter, modell, abgebrochen, versteckt, erledigt,
-#                    pruefung, offen (Ehrlichkeits-Prüfer, 2026-10-09)
+#                    pruefung, offen (Ehrlichkeits-Prüfer, 2026-10-09),
+#                    ablauf (Ablauf-Protokoll des Zugs, core/zug_ablauf.py)
 #   art "verwerfen": ab (Nachricht-id) — diese und alle späteren Nachrichten
 #                    zählen nicht mehr (Wiederholen, Bearbeiten)
 # Lesen = alle Rechner-Dateien zusammenlegen, nach ts sortieren, anwenden.
@@ -233,7 +234,7 @@ def _anhaengen_roh(gid, ereignis, kn=None):
 def anhaengen(gid, rolle, text, *, denken=None, werkzeuge=None, anbieter=None,
               modell=None, abgebrochen=False, versteckt=False, knoten=None,
               anhaenge=None, dokumente=None, erledigt=None, pruefung=None,
-              offen=None) -> dict:
+              offen=None, ablauf=None) -> dict:
     """Eine Nachricht anhängen. -> das Ereignis (mit id und ts).
 
     anhaenge (Frage) / dokumente (Antwort): VERWEISE in die Ablage
@@ -272,7 +273,22 @@ def anhaengen(gid, rolle, text, *, denken=None, werkzeuge=None, anbieter=None,
         e["pruefung"] = dict(pruefung)
     if offen:
         e["offen"] = [str(x) for x in offen]
+    # Ablauf-Protokoll des Zugs (2026-10-09, core/zug_ablauf.py): nur zum
+    # Nachlesen; geht nie an die KI und nicht mit /api/chat/history raus
+    # (dort nur ablauf_n), sondern über …/ablauf/<nachricht>.
+    if ablauf:
+        e["ablauf"] = [dict(x) for x in ablauf]
     return _anhaengen_roh(gid, e, knoten)
+
+
+def ablauf(gid, nachricht_id) -> list | None:
+    """Das Ablauf-Protokoll einer Antwort, oder None (alte Antwort, lokal).
+    Wirft Unbekannt, wenn es Gespräch oder Nachricht nicht gibt."""
+    n = next((n for n in nachrichten(gid, versteckte=True) if n["id"] == nachricht_id), None)
+    if n is None:
+        raise Unbekannt(nachricht_id)
+    a = n.get("ablauf")
+    return [dict(x) for x in a] if isinstance(a, list) else None
 
 
 def verwerfen_ab(gid, nachricht_id, knoten=None) -> dict:

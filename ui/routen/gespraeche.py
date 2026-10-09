@@ -86,7 +86,65 @@ def api_gespraeche_laden(gid):
     """Kopf und alle sichtbaren Nachrichten (mit Denken und Werkzeugen)."""
     if not gespraeche.gibt_es(gid):
         return _unbekannt()
-    return jsonify(gespraeche.laden(gid))
+    d = gespraeche.laden(gid)
+    # Das Ablauf-Protokoll ist groß (bis 50.000 Zeichen je Schritt) — hier
+    # nur die Zahl, der Inhalt kommt über …/ablauf/<nachricht> (2026-10-09).
+    for n in d["nachrichten"]:
+        a = n.pop("ablauf", None)
+        if a:
+            n["ablauf_n"] = len(a)
+    return jsonify(d)
+
+
+# ── Ablauf-Protokoll (2026-10-09, core/zug_ablauf.py) ──────────────────
+
+def _ablauf_finden(gid, nachricht):
+    """-> (nachricht-id, einträge) oder eine Fehler-Antwort. nachricht
+    „letzte": die letzte Antwort mit Protokoll (für /trace)."""
+    if not gespraeche.gibt_es(gid):
+        return None, _unbekannt()
+    if nachricht == "letzte":
+        for n in reversed(gespraeche.nachrichten(gid)):
+            if n.get("ablauf"):
+                return n["id"], gespraeche.ablauf(gid, n["id"])
+        return None, (jsonify({"error": "In diesem Gespräch gibt es noch keinen "
+                                        "Ablauf zum Nachlesen."}), 404)
+    try:
+        eintraege = gespraeche.ablauf(gid, nachricht)
+    except gespraeche.Unbekannt:
+        return None, (jsonify({"error": "Diese Nachricht gibt es in dem Gespräch nicht."}), 404)
+    if eintraege is None:
+        return None, (jsonify({"error": "Zu dieser Antwort ist kein Ablauf gespeichert "
+                                        "(ältere Antwort oder lokale KI)."}), 404)
+    return nachricht, eintraege
+
+
+@bp.route('/api/gespraeche/<gid>/ablauf/<nachricht>', methods=['GET'])
+def api_gespraeche_ablauf(gid, nachricht):
+    """Das Ablauf-Protokoll einer Antwort: {gespraech, nachricht, ablauf:
+    [{art, zeit, t, …}]}. nachricht „letzte" = die letzte mit Protokoll."""
+    nid, eintraege = _ablauf_finden(gid, nachricht)
+    if nid is None:
+        return eintraege
+    return jsonify({"gespraech": gid, "nachricht": nid, "ablauf": eintraege})
+
+
+@bp.route('/api/gespraeche/<gid>/ablauf/<nachricht>/ablage', methods=['POST'])
+def api_gespraeche_ablauf_ablage(gid, nachricht):
+    """Das Protokoll als Textdatei in die Ablage (/trace im Chat).
+    -> {ok, dokument: {id, titel, art, fassung}}"""
+    import ablage       # type: ignore
+    import zug_ablauf   # type: ignore
+    nid, eintraege = _ablauf_finden(gid, nachricht)
+    if nid is None:
+        return eintraege
+    titel = "Ablauf: " + (gespraeche.kopf(gid).get("titel") or gid)
+    text = zug_ablauf.als_text(eintraege, titel=f"{titel} (Antwort {nid})")
+    try:
+        k = ablage.anlegen(titel, text, "text", herkunft="ablauf", gespraech=gid)
+    except ablage.Fehler as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"ok": True, "dokument": ablage.kurz(k)}), 201
 
 
 @bp.route('/api/gespraeche/<gid>/titel', methods=['POST'])

@@ -348,6 +348,9 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
         # Denk-Tiefe für die Leiste unter der Eingabe, Maus an/aus.
         self.AI.update(fokus="eingabe", offen=set(), vwahl=None, denk_t0=None,
                        denk_ende=None, denk_log_n=0, effort="", maus=maus.gewuenscht())
+        # Ablauf-Protokoll (spur.py, 2026-10-09): welche Antwort (Index im
+        # Verlauf) eins hat → Nachricht-id, und die schon geholten Protokolle.
+        self.AI.update(spuren={}, ablaeufe={})
         self.klicks, self.raeder, self._ziele = [], [], []
         self.AI_LOCK = threading.Lock()
         self.liste = Gespraechsliste(self)
@@ -447,6 +450,8 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
                         AI["log"].append(werkzeug_zeile(evt["werkzeug"]))
                     elif "ehrlichkeit" in evt:     # Erledigt-Zeile, offene Zusagen
                         AI["pruefung"] = evt["ehrlichkeit"]
+                    elif "antwort" in evt:         # gespeichert, mit Ablauf („trace", spur.py)
+                        AI["antwort_live"] = evt["antwort"] if evt.get("ablauf") else None
                     elif "ablage" in evt:          # ein Dokument liegt in der Ablage
                         self.ablage_event(evt["ablage"])
                     elif "permission" in evt:
@@ -494,8 +499,15 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
                 ans = (AI["answer"] or "").strip()
                 if ans and AI["gestoppt"]:
                     ans += "\n\n" + VERMERK_ABGEBROCHEN
+                live = AI.pop("antwort_live", None)
                 if ans:
                     AI["log"].append(("ai", ans))
+                    # „trace ›" gleich unter der eben gestreamten Antwort —
+                    # ein alter Eintrag an diesem Index (nach retry) fliegt.
+                    spuren = AI.setdefault("spuren", {})
+                    spuren.pop(len(AI["log"]) - 1, None)
+                    if live:
+                        spuren[len(AI["log"]) - 1] = live
                 p = AI.pop("pruefung", None)
                 if p:
                     AI["log"] += pruefung_eintraege(
@@ -662,6 +674,9 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
             return
         if name == "einfuegen":             # /paste: Zwischenablage (2026-10-08)
             self.einfuegen_aus_ablage()
+            return
+        if name == "trace":                 # Ablauf-Protokoll in die Ablage (2026-10-09)
+            self.trace_ablegen()
             return
         if name == "morgenblick":           # chat_morgenblick.py (2026-10-08)
             chat_morgenblick.starten(self)

@@ -11,12 +11,14 @@
 # alles mit Ziel kann man anklicken oder mit ↑↓ anwählen und mit Enter
 # auslösen: ("schritt", i) auf/zu, ("denken", i) auf/zu, ("kopieren", i),
 # ("wiederholen", i), ("dok", i) öffnen, ("gut", i) / ("schlecht", i)
-# bewerten. i ist der Index im Verlauf.
+# bewerten, ("trace", i) Ablauf-Protokoll auf/zu und ("spur", (i, k)) einen
+# Eintrag darin ganz zeigen (spur.py, 2026-10-09). i ist der Index im Verlauf.
 #
 # Bewerten seit 2026-10-08 (bewertung.py, core/rueckmeldungen.py) — vorher
 # bewusst weggelassen, solange nichts eine Bewertung speicherte. Wörter statt
 # 👍/👎: Emoji sind zwei Spalten breit und verschöben die Klickflächen.
 
+from . import spur
 from .chat_ablage import TRENNER
 from .text import _md_umbruch, md_zeilen
 
@@ -123,7 +125,8 @@ def _nutzer(text, breite):
 
 
 def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=None,
-                   antwort=None, adern=0, streaming=False, adern_bei=None, bewertet=None):
+                   antwort=None, adern=0, streaming=False, adern_bei=None, bewertet=None,
+                   spuren=None, ablaeufe=None):
     """Der Verlauf als Zeilen aus Stücken (text, stil, ziel).
 
     offen: Ziele, die aufgeklappt sind ({("schritt", i), ("denken", i)});
@@ -133,8 +136,12 @@ def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=
     Eintrag adern_bei (None: am Ende, vor der laufenden Antwort) — nach dem
     Ende des Stroms zieht sie sich dort zurück, wo die Antwort beginnt;
     bewertet: {index: 1|-1} — so bewertete Antworten zeigen „good ✓" bzw.
-    „bad ✗" hervorgehoben."""
+    „bad ✗" hervorgehoben; spuren: {index: nachricht-id} der Antworten mit
+    Ablauf-Protokoll („trace ›", spur.py), ablaeufe: {nachricht-id: Einträge
+    | spur.LAEDT | Fehlertext}."""
     bewertet = bewertet or {}
+    spuren = spuren or {}
+    ablaeufe = ablaeufe or {}
     breite = max(8, int(breite))
     zeilen = []
     gruppen = schritte(log)
@@ -206,6 +213,10 @@ def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=
             aktionen = [("copy", "aktion", ("kopieren", i))]
             if i == letzte_ai and not streaming:
                 aktionen += [(" · ", "leise", None), ("retry", "aktion", ("wiederholen", i))]
+            spur_auf = ("trace", i) in offen
+            if i in spuren:                      # Ablauf-Protokoll (2026-10-09)
+                aktionen += [(" · ", "leise", None),
+                             ("trace ⌄" if spur_auf else "trace ›", "aktion", ("trace", i))]
             bewerten = []
             for wert, wort_, art in ((1, "good", "gut"), (-1, "bad", "schlecht")):
                 an = bewertet.get(i) == wert
@@ -216,6 +227,8 @@ def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=
                 zeilen.append(aktionen + bewerten)
             else:                                # sehr schmal: zweite Zeile
                 zeilen += [aktionen, bewerten[1:]]
+            if i in spuren and spur_auf:
+                zeilen += spur.zeilen(ablaeufe.get(spuren[i]), i, offen, breite)
         elif rolle == "hinweis":
             for z_text in str(text).split("\n"):
                 for k in range(0, max(1, len(z_text)), breite):

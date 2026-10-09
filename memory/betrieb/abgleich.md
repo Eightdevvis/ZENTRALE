@@ -398,7 +398,13 @@ Mikrosekunden und `+00:00`), `knoten: "handy"`; `kopf.json` mit `titel`,
 ts}, `neu_projekt`. Eine Antwort (`rolle: assistant`) kann seit 09.10.
 zusätzlich `erledigt` ({`zeile`, `schritte`}), `pruefung` und `offen` (Liste
 von Sätzen) tragen ([../ki/ehrlichkeit_live.md](../ki/ehrlichkeit_live.md));
-wer sie nicht kennt, übergeht sie. Daneben liegt pro Rechner
+wer sie nicht kennt, übergeht sie. Seit 09.10. (abends) kann eine Antwort
+außerdem `ablauf` tragen: eine Liste von Einträgen `{art, zeit, t, …}` (art:
+`system`, `kontext`, `text`, `werkzeug`, `frage`, `pruefung`, `fehler`,
+`gestoppt`, `antwort`, `kosten`; je Eintrag höchstens 50.000 Zeichen) —
+das Ablauf-Protokoll des Zugs ([../ki/ki_system.md](../ki/ki_system.md),
+„Ablauf-Protokoll"). Nur zum Nachlesen; das Handy muss es weder schreiben
+noch lesen, und es geht nie an die KI. Daneben liegt pro Rechner
 `gespraeche/<id>/zusagen-<rechner>.json` (offene Zusagen der KI) — das Handy
 schreibt sie nicht und braucht sie nicht. Hinweis: ein Kopf mit `titel_von` `"woerter"` oder null
 darf ein Rechner später automatisch umbenennen (`"modell"`); `"sasha"` nie.

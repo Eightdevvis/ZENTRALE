@@ -39,6 +39,7 @@ import ki_antwort
 import kidebug
 import werkzeug_befund
 import werkzeug_register
+import zug_ablauf
 from werkzeug_befund import Befund
 
 
@@ -100,9 +101,13 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
     Sasha sie sieht, über adapter.hinweis_anhaengen) und liefert am Ende das
     Ereignis {"ehrlichkeit": …} (Erledigt-Zeile, Befunde, offene Zusagen).
     """
+    # Ablauf-Protokoll (core/zug_ablauf.py, 2026-10-09): nur mitschreiben,
+    # was ohnehin passiert — Text zwischen Werkzeugen, Aufrufe mit Ergebnis,
+    # Prüfung, Ende. Ohne offenes Protokoll (lokal, Takt) tut es nichts.
     grenze = ai_backends.runden_grenze(adapter.modell)
     for nr in range(grenze):
         if gestoppt(abbruch):
+            zug_ablauf.gestoppt()
             yield dict(GESTOPPT)
             return
         try:
@@ -113,12 +118,15 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
             # gemerkt werden (kein ki_antwort.mit_bildern).
             if g.text.strip():
                 yield g.text
+            zug_ablauf.gestoppt()
             yield dict(GESTOPPT)
             return
         except Abbruch as e:
+            zug_ablauf.fehler(str(e))
             yield fehler(str(e))
             return
         except Exception as e:
+            zug_ablauf.fehler(f"{fehler_name}-Fehler: {e}")
             yield fehler(f"{fehler_name}-Fehler: {e}")
             return
 
@@ -130,6 +138,7 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
                     # Die Antwort geht NICHT raus (der Adapter puffert den
                     # Text einer Runde); die KI bekommt den Befund und
                     # schreibt sie neu — oder ruft jetzt das Werkzeug.
+                    zug_ablauf.pruefung(pruefer.befunde, korrektur, runde.text)
                     adapter.hinweis_anhaengen(runde, korrektur)
                     continue
             yield from antwort(runde.text, tutor_mode=tutor_mode,
@@ -140,17 +149,24 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
             return
 
         adapter.assistent_anhaengen(runde)
+        zug_ablauf.text(runde.text)          # Vorgeplänkel, das der Chat nicht zeigt
         ergebnisse = []
         for call_id, name, args in runde.calls:
             if gestoppt(abbruch):
+                zug_ablauf.gestoppt()
                 yield dict(GESTOPPT)
                 return
+            spur = zug_ablauf.werkzeug_beginnt(_kanonisch(name), args)
             ausgang = yield from run_tool(
                 name, args, tutor_mode=tutor_mode, active_exec=active_exec,
                 user_query=user_query, store=store, schiene=schiene)
             if ausgang[0] == "stop":
+                zug_ablauf.werkzeug_fertig(
+                    spur, "(beendet den Zug — was es lieferte, ist die Antwort)",
+                    status="ok")
                 return
             _, text, ist_fehler = ausgang
+            zug_ablauf.werkzeug_fertig(spur, text, ist_fehler)
             if pruefer is not None:
                 pruefer.werkzeug(name, args, text, ist_fehler)
             ergebnisse.append((call_id, text, ist_fehler))
@@ -161,8 +177,19 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
         # Gerade dann zählt die Erledigt-Zeile: was bis zur Grenze geschrieben
         # wurde, steht sonst nirgends.
         yield schluss
-    yield fehler(f"Maximale Tool-Tiefe erreicht ({grenze} Runden) — "
-                 f"sie hat nicht zu Ende geantwortet.")
+    meldung = (f"Maximale Tool-Tiefe erreicht ({grenze} Runden) — "
+               f"sie hat nicht zu Ende geantwortet.")
+    zug_ablauf.fehler(meldung)
+    yield fehler(meldung)
+
+
+def _kanonisch(name: str) -> str:
+    """Der Name, wie run_tool ihn ausführt (für das Ablauf-Protokoll)."""
+    import profil
+    try:
+        return profil.kanonisch(name)
+    except Exception:
+        return name
 
 
 def antwort(text: str, *, tutor_mode: bool, user_query, store=None):
@@ -332,6 +359,7 @@ def _ask_buttons(args: dict):
     yield {"permission": {"frage": frage, "optionen": opts}}
     wahl = state.wait_permission()        # BLOCKIERT bis Klick/Timeout
     state.push_log(f"AI ←  WAHL: {wahl if wahl is not None else '(keine Antwort)'}")
+    zug_ablauf.frage(frage, opts, wahl, art="knopf")
     return wahl, opts
 
 
@@ -344,6 +372,9 @@ def _ask_permission(name: str, args: dict):
     schon = erlaubnis.vorab(name, args)
     if schon:
         state.push_log(f"AI ✓  ERLAUBT ({schon}): {werkzeug_register.kanonisch(name)}")
+        if zug_ablauf.offen():
+            zug_ablauf.frage(erlaubnis.frage(name, args), [], f"schon erlaubt ({schon})",
+                             art="erlaubnis")
         return True
     frage = erlaubnis.frage(name, args)
     opts = erlaubnis.optionen(name, args)
@@ -357,6 +388,7 @@ def _ask_permission(name: str, args: dict):
     antwort_ = state.wait_permission()    # BLOCKIERT bis Klick/Timeout
     geltung = erlaubnis.deuten(antwort_)
     state.push_log(f"AI ←  ERLAUBNIS: {antwort_}")
+    zug_ablauf.frage(frage, opts, antwort_, art="erlaubnis")
     if geltung == erlaubnis.NEIN:
         return False
     erlaubnis.merken(name, geltung, args)

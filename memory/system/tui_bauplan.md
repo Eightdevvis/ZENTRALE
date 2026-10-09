@@ -42,6 +42,7 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/chat_zeichnen.py` | Mixin `ChatZeichnen`: `draw_ai` (Leiste, Kopf „Titel ▾ … ▤ n", Verlauf, Fuß, Eingabekasten, „+ attach … Modell · Effort"), Klickflächen, Denk-Adern im Verlauf, Auge im leeren Chat | `AI["fokus"]` … |
 | `ansichten/chat_bedienung.py` | Mixin `ChatBedienung`: Fokus (F6), Tab = Gespräche auf/zu, Ziele im Verlauf (auf/zu, copy, retry, Dokument), Strg-Tasten, Maus, Zwischenablage | — |
 | `ansichten/verlauf.py` | Verlauf als Zeilen aus Stücken (text, stil, ziel): Nutzer rechts abgesetzt, „Used memory ›", Denken eingeklappt, copy · retry; `benutzt` für „Used in this session" | — |
+| `ansichten/spur.py` | „trace ›" unter einer Antwort (seit 2026-10-09): welche Antwort ein Ablauf-Protokoll hat (`spuren`), Kopfzeile und ganzer Inhalt je Eintrag, Zeilen für den Verlauf | (in `AI`: `spuren`, `ablaeufe`) |
 | `ansichten/seitenleiste.py` | `Seitenleiste`: Menü (Search, New, Projects, Files, Customize) mit Symbolen (Braille, 2 Zeilen), Gespräche nach Today/Yesterday/Datum; zugeklappt eine Symbolspalte | `AI["seite"]`, `AI["seite_menu"]` |
 | `ansichten/rechts.py` | `Rechts`: Dokument neben dem Verlauf (▾ Fassungen, ⤢ groß, × zu) und „Outputs" (Kärtchen + „Used in this session") | `AI["rechts"]`, `AI["gross"]` |
 | `ansichten/einstellungen.py` | `Einstellungen` („Customize"): Skills, Memory, Usage, Capabilities, Permissions, Model | `AI["einstellungen"]` |
@@ -475,6 +476,31 @@ n kleines modal das aufgeht." Speicher und Wofür: `core/rueckmeldungen.py`,
 - Offen: eine Bewertung ganz zurücknehmen geht nicht (nur umdrehen);
   Einfügen mit Zeilenumbruch ins Fenster speichert beim ersten Umbruch
   (der Stoß-Trick des Eingabefelds ist dort nicht eingebaut).
+
+## Ablauf-Protokoll „trace ›" (seit 2026-10-09)
+
+Sasha: nicht nur sehen, welches Werkzeug lief, sondern was es zurückgab und
+wie die Antwort darauf weiterging. Speicher und was drinsteht:
+[../ki/ki_system.md](../ki/ki_system.md) „Ablauf-Protokoll".
+
+- **Unter jeder Antwort mit Protokoll** „copy · retry · trace › · good ·
+  bad" (Ziel `("trace", i)`); alte Antworten und die lokale KI haben keins,
+  dort steht kein „trace". Welche Antwort eins hat, sagt `ablauf_n` in
+  `/api/chat/history` (`spur.spuren`, k-te „ai"-Zeile = k-te Antwort wie bei
+  Bewerten) bzw. für die eben gestreamte das SSE-Event `antwort`
+  (`AI["spuren"]` {Index: Nachricht-id}).
+- **Aufklappen** holt das Protokoll einmal im Hintergrund
+  (`GespraechsSteuerung.ablauf_holen`, `AI["ablaeufe"]`, solange „… loading");
+  jeder Eintrag erst als Kopfzeile „▸ 4 +1.3s tool read_note · ok · 0.0 s",
+  Enter/Klick (Ziel `("spur", (i, k))`) zeigt ihn ganz (Argumente, volles
+  Ergebnis mit `[ergebnis: …]`, Prüfung mit erster Antwort …). Zu lange
+  Kopfzeilen brechen um. Tastatur wie im Verlauf: F6, ↑↓, Enter.
+- **`/trace`** legt den Ablauf der letzten Antwort als Textdatei in die
+  Ablage (`▤ Ablauf: …` im Verlauf, Herkunft „trace" in `/files`).
+- Tests: `tests/test_zug_ablauf_tui.py` (Zeilen 20/80/136 Spalten, Klick
+  80×24/136×30, Tastatur, /trace), `tests/test_zug_ablauf.py` (Backend).
+  Headless: Szenario `ki_trace` (`ZTUI_GROESSE=80x24` bzw. `136x30`), das
+  Abspiel-Backend liefert ein erfundenes Protokoll.
 
 ## Fußleiste (seit 2026-10-07)
 

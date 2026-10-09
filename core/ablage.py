@@ -46,7 +46,7 @@ import dateien
 # das Original bleibt daneben liegen).
 ARTEN = ("markdown", "text", "code", "csv", "bild", "html", "pdf", "docx")
 BINAER = ("bild", "pdf", "docx")
-HERKUENFTE = ("ki", "sandbox", "anhang", "morgenblick")
+HERKUENFTE = ("ki", "sandbox", "anhang", "morgenblick", "ablauf")
 
 _ENDUNG = {"markdown": ".md", "text": ".txt", "csv": ".csv", "html": ".html",
            "pdf": ".pdf", "docx": ".docx"}
@@ -68,6 +68,10 @@ BILD_ENDUNGEN = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg
 # 200.000 Zeichen sind ~60 Seiten. Bilder bis 5 MB — mehr nimmt Anthropic
 # pro Bild nicht an.
 TEXT_MAX_ZEICHEN = 200_000
+# Ausnahme: ein Ablauf-Protokoll (/trace, core/zug_ablauf.py, 2026-10-09)
+# soll ohne Auslassungen hinein — ein Zug mit vielen Werkzeugen hat bis zu
+# 50.000 Zeichen je Schritt. Nur Herkunft „ablauf"; die KI schreibt so nichts.
+ABLAUF_MAX_ZEICHEN = 2_000_000
 BILD_MAX_BYTES = 5 * 1024 * 1024
 DATEI_MAX_BYTES = 30 * 1024 * 1024       # pdf, docx
 TITEL_MAX = 120
@@ -197,7 +201,7 @@ def _fassung_schreiben(doc_id, inhalt, endung) -> int:
     return n
 
 
-def _pruefen_inhalt(art, inhalt):
+def _pruefen_inhalt(art, inhalt, grenze=TEXT_MAX_ZEICHEN):
     if art in ("pdf", "docx"):
         if not isinstance(inhalt, (bytes, bytearray)) or not inhalt:
             raise Fehler("Eine Datei braucht Bytes.")
@@ -221,8 +225,8 @@ def _pruefen_inhalt(art, inhalt):
     inhalt = str(inhalt or "")
     if not inhalt.strip():
         raise Fehler("Leerer Inhalt — nichts abgelegt.")
-    if len(inhalt) > TEXT_MAX_ZEICHEN:
-        raise Fehler(f"Zu lang: {len(inhalt)} Zeichen, höchstens {TEXT_MAX_ZEICHEN}.")
+    if len(inhalt) > grenze:
+        raise Fehler(f"Zu lang: {len(inhalt)} Zeichen, höchstens {grenze}.")
     return inhalt
 
 
@@ -240,7 +244,8 @@ def anlegen(titel, inhalt, art="markdown", *, herkunft="ki", gespraech=None,
     if herkunft not in HERKUENFTE:
         raise Fehler(f"Unbekannte Herkunft {herkunft!r}.")
     titel = " ".join(str(titel or "").split())[:TITEL_MAX] or "Ohne Titel"
-    inhalt = _pruefen_inhalt(art, inhalt)
+    inhalt = _pruefen_inhalt(art, inhalt, ABLAUF_MAX_ZEICHEN if herkunft == "ablauf"
+                             else TEXT_MAX_ZEICHEN)
     if art == "bild":
         endung = (endung or "").lower()
         if endung not in BILD_ENDUNGEN:

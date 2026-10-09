@@ -48,6 +48,7 @@ import ki_prompt
 import ki_werkzeuge
 import providers
 import werkzeug_schleife  # die EINE Tool-Schleife; hier steht nur der OpenAI-Adapter
+import zug_ablauf    # Ablauf-Protokoll des Zugs: nur mitschreiben (2026-10-09)
 
 _MAX_TOKENS = int(os.environ.get("ZENTRALE_CLOUD_OPENAI_MAX_TOKENS", "2000"))
 _TEMP       = float(os.environ.get("ZENTRALE_CLOUD_OPENAI_TEMP", "0.4"))
@@ -130,6 +131,8 @@ def _log_usage(verbrauch, model: str):
         gecacht = int(getattr(det, "cached_tokens", 0) or 0) if det else 0
         eur = usage.buchen(model, input_tokens=max(rein - gecacht, 0),
                            output_tokens=raus, cache_read=gecacht)
+        zug_ablauf.verbrauch(eingabe=max(rein - gecacht, 0), ausgabe=raus,
+                             cache_lesen=gecacht, euro=eur)
         state.push_log(
             f"CLOUD ← {model} in={rein} cache_read={gecacht} out={raus} "
             f"≈{eur:.4f}€ (heute {usage.heute_euro():.2f}€)")
@@ -162,6 +165,7 @@ def _geschaetzt_buchen(model: str, msgs: list, tools, text: str):
         raus = int(len(text or "") / ZEICHEN_JE_TOKEN)
         eur = usage.buchen(model, input_tokens=rein, output_tokens=raus,
                            geschaetzt=True)
+        zug_ablauf.verbrauch(eingabe=rein, ausgabe=raus, euro=eur, geschaetzt=True)
         state.push_log(
             f"CLOUD ← {model} gestoppt, Anbieter schickte keine Zahlen — "
             f"geschätzt in≈{rein} out≈{raus} ≈{eur:.4f}€ "
@@ -259,6 +263,7 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         messages,
         _system_text(system, mem_ctx, via_mic, tutor_mode, projekt),
         volatile)
+    cloud.ablauf_melden(msgs[0]["content"], volatile, messages, tutor_mode)
     client = _get_client(prov)
     # Modell aus derselben Quelle wie beim Anthropic-Pfad: pro Anbieter
     # gespeichert. Sonst gäbe es zwei Wahrheiten darüber, was gerade läuft.

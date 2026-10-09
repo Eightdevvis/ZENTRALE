@@ -27,6 +27,7 @@ BEFEHLE = [
     ("/retry",    "letzte antwort neu erzeugen"),
     ("/edit",     "letzte eigene nachricht ändern und neu schicken"),
     ("/thinking", "gedachtes auf-/zuklappen (auch: ctrl+d)"),
+    ("/trace",    "ablauf der letzten antwort als textdatei in die ablage"),
     ("/memory",   "was die ki über dich weiß — ansehen und ändern"),
     ("/skills",   "skills der ki — ansehen, an- und ausschalten"),
     ("/files",    "dokumente der ki und anhänge ansehen"),
@@ -69,7 +70,7 @@ ANDERE_NAMEN = {"clear": "neu", "list": "liste", "gedächtnis": "gedaechtnis",
                 "anbieter": "anbieter", "lokal": "lokal", "hilfe": "hilfe",
                 "erlaubnis": "erlaubnis", "erlaubnisse": "erlaubnis",
                 "settings": "einstellungen", "einstellungen": "einstellungen", "maus": "maus",
-                "einfuegen": "einfuegen", "einfügen": "einfuegen"}
+                "einfuegen": "einfuegen", "einfügen": "einfuegen", "ablauf": "trace"}
 
 NAMEN = {INNEN.get(b[1:], b[1:]) for b, _ in BEFEHLE}
 

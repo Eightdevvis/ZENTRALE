@@ -20,11 +20,12 @@ from .chat_ablage import TRENNER
 
 # Was Enter auf einem Ziel im Verlauf tut — für die Fußleiste.
 WAS = {"schritt": "open/close", "denken": "open/close", "voll": "more/less", "kopieren": "copy",
-       "wiederholen": "retry", "dok": "open", "gut": "rate good", "schlecht": "rate bad"}
+       "wiederholen": "retry", "dok": "open", "gut": "rate good", "schlecht": "rate bad",
+       "trace": "open/close trace", "spur": "show all/less"}
 
 # Ziele unter einer Antwort: ist eines davon gewählt, bewerten + / − sie
 # (bewertung.py, 2026-10-08) — „wenn eine Antwort im Verlauf gewählt ist".
-UNTER_ANTWORT = ("kopieren", "wiederholen", "gut", "schlecht")
+UNTER_ANTWORT = ("kopieren", "wiederholen", "gut", "schlecht", "trace")
 
 
 def zwischenablage(umgebung=None, finden=shutil.which):
@@ -114,7 +115,21 @@ class ChatBedienung:
         AI = self.AI
         art, i = z
         AI["vwahl"] = z
-        if art in ("schritt", "denken", "voll"):
+        if art == "trace":
+            # Ablauf-Protokoll (spur.py, 2026-10-09): beim ersten Aufklappen
+            # im Hintergrund holen — gezeichnet wird solange „… loading".
+            offen = AI.setdefault("offen", set())
+            if z in offen:
+                offen.discard(z)
+            else:
+                offen.add(z)
+                nid = (AI.get("spuren") or {}).get(i)
+                if nid:
+                    self.ablauf_holen(nid)
+        elif art == "spur":
+            offen = AI.setdefault("offen", set())
+            offen.symmetric_difference_update({z})
+        elif art in ("schritt", "denken", "voll"):
             offen = AI.setdefault("offen", set())
             if art == "denken" and AI.get("denken_offen"):
                 AI["denken_offen"] = False      # alles war offen: nur dieses bleibt zu

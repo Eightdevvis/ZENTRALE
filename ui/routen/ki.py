@@ -27,6 +27,7 @@ import providers      # type: ignore  – Cloud-Registry des Kerns (base_url/kin
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
 import werkzeug_register  # type: ignore  – was die KI kann (/api/ai/werkzeuge)
 import zug           # type: ignore  – der laufende Zug: Gespräch + Ereignisse der Werkzeuge
+import zug_ablauf    # type: ignore  – Ablauf-Protokoll des Zugs (nur Cloud, gross)
 
 from ui.routen.gemeinsam import _ki_nicht_verfuegbar
 
@@ -164,6 +165,10 @@ def _zug_starten(gid, message, backend, via_mic, verweise=None):
         marke = zug.beginnen(gid, abbruch=abbruch)
         # „Für dieses Gespräch" erlaubt gilt nur, solange es DIESES ist.
         erlaubnis.gespraech_beginnt(gid)
+        # Ablauf-Protokoll (2026-10-09, core/zug_ablauf.py): nur auf der
+        # Cloud offen; scharf wird es erst, wenn der Weg die gross-Schiene
+        # fährt. Lokal schreibt niemand mit.
+        ablauf_marke = zug_ablauf.beginnen() if backend == ai_backends.CLOUD else None
         # Welcher Weg (lokal, Anthropic, OpenAI-kompatibel) — das entscheidet
         # kern.chat, die eine Stelle dafür. Alle Wege liefern dasselbe
         # Event-Protokoll; die Schleife hier merkt keinen Unterschied.
@@ -182,6 +187,8 @@ def _zug_starten(gid, message, backend, via_mic, verweise=None):
             # Generator schließen, statt ihn bis zum GC weiterlaufen zu lassen.
             state.chat_zug_beenden(strom_id)
             stream.close()
+            if ablauf_marke is not None:
+                zug_ablauf.beenden(ablauf_marke)
             zug.beenden(marke)
 
     return Response(
@@ -339,11 +346,18 @@ def _sse_zug(stream, gid, backend, frage, erster):
     speichern = bool(text.strip()) if gestoppt else bool(collected or not fehler_kam)
     if speichern:
         anbieter, modell = _wer_antwortet(backend)
-        gespraeche.anhaengen(
-            gid, "assistant", text.rstrip() if gestoppt else text,
+        gespeichert = text.rstrip() if gestoppt else text
+        # Ablauf-Protokoll: Antwort und Kosten dazu, mit der Antwort speichern.
+        # None auf lokal/klein — dann bleibt das Feld weg.
+        ablauf = zug_ablauf.abschliessen(antwort=gespeichert)
+        e = gespraeche.anhaengen(
+            gid, "assistant", gespeichert,
             denken="".join(denken), werkzeuge=werkzeuge, anbieter=anbieter,
             modell=modell, abgebrochen=gestoppt, dokumente=dokumente or None,
-            **_pruefung_felder(pruefung))
+            ablauf=ablauf, **_pruefung_felder(pruefung))
+        # Die id der Antwort, damit die TUI ihr „trace" gleich zeigen kann.
+        if ablauf:
+            yield _sse({'antwort': e['id'], 'ablauf': len(ablauf)})
         # Sasha hat zugeschaut, also gelesen.
         gespraeche.gelesen_setzen(gid)
         if erster:
@@ -397,6 +411,10 @@ def api_chat_history():
                      "anhaenge", "dokumente", "erledigt", "offen"):
             if n.get(feld):
                 m[feld] = n[feld]
+        # Das Ablauf-Protokoll selbst ist groß: hier nur, DASS es eins gibt
+        # (TUI: „trace ›"); den Inhalt holt GET /api/gespraeche/<id>/ablauf/<n>.
+        if n.get("ablauf"):
+            m["ablauf_n"] = len(n["ablauf"])
         raus.append(m)
     gespraeche.gelesen_setzen(gid)
     return jsonify(raus)

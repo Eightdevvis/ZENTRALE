@@ -8,10 +8,12 @@
 # Zeichnen und Tippen bleibt. Die Methoden lesen self.AI / self.AI_LOCK wie
 # der Rest des Chats. Speicher und Regeln: core/gespraeche.py (Backend).
 
+import json
 import threading
 import time
 import urllib.error
 
+from . import spur
 from .basis import api_call
 from .chat_ablage import ablage_eintrag, anhang_eintrag
 from .projekte import projekt_name
@@ -105,6 +107,8 @@ class GespraechsSteuerung:
                 AI["log"], nachrichten = geholt
                 AI["n_server"] = len(nachrichten)
                 AI["n"] = len(AI["log"])
+                # Welche Antwort ein Ablauf-Protokoll hat („trace ›", spur.py).
+                AI["spuren"] = spur.spuren(AI["log"], nachrichten)
             AI["loaded"] = True
             self._neu_markieren()
             gid_jetzt = AI.get("gid")
@@ -161,6 +165,72 @@ class GespraechsSteuerung:
             except Exception:
                 pass          # ein Poll, der die TUI abschiesst, waere schlimmer
 
+    # ── Ablauf-Protokoll („trace", spur.py, 2026-10-09) ─────────────────
+    def ablauf_holen(self, nid, warten=False):
+        """Das Protokoll einer Antwort holen, einmal je Antwort. Im
+        Hintergrund (warten=True: gleich hier, für Tests); bis es da ist,
+        steht spur.LAEDT in AI["ablaeufe"], bei Fehler ein kurzer Satz."""
+        AI, AI_LOCK = self.AI, self.AI_LOCK
+        gid = AI.get("gid")
+        with AI_LOCK:
+            ablaeufe = AI.setdefault("ablaeufe", {})
+            if not gid or isinstance(ablaeufe.get(nid), list) or ablaeufe.get(nid) == spur.LAEDT:
+                return
+            ablaeufe[nid] = spur.LAEDT
+
+        def los():
+            try:
+                # Länger als die üblichen 3 s: ein Protokoll kann groß sein.
+                d = api_call("/api/gespraeche/%s/ablauf/%s" % (gid, nid), timeout=15)
+                wert = d.get("ablauf") if isinstance(d, dict) else None
+                if not isinstance(wert, list):
+                    wert = "trace not available"
+            except urllib.error.HTTPError:
+                wert = "no trace stored for this answer"
+            except (urllib.error.URLError, OSError, ValueError):
+                wert = "no connection — trace not loaded (click again)"
+            with AI_LOCK:
+                AI.setdefault("ablaeufe", {})[nid] = wert
+                if isinstance(wert, str) and wert.startswith("no connection"):
+                    AI["ablaeufe"].pop(nid, None)       # später noch einmal versuchen
+                    AI["msg"] = wert
+
+        if warten:
+            los()
+        else:
+            threading.Thread(target=los, daemon=True).start()
+
+    def trace_ablegen(self):
+        """/trace: der Ablauf der letzten Antwort als Textdatei in die Ablage."""
+        AI = self.AI
+        if AI["streaming"]:
+            AI["msg"] = "antwort läuft noch — erst danach"
+            return
+        if not AI.get("gid"):
+            AI["msg"] = "noch kein gespräch — nichts nachzulesen"
+            return
+        try:
+            r = api_call("/api/gespraeche/%s/ablauf/letzte/ablage" % AI["gid"], "POST", {},
+                         timeout=15)
+        except urllib.error.HTTPError as e:
+            grund = ""
+            try:
+                grund = json.loads(e.read().decode("utf-8", "replace")).get("error") or ""
+            except Exception:
+                pass
+            AI["msg"] = grund or "kein ablauf zum ablegen"
+            return
+        except (urllib.error.URLError, OSError, ValueError):
+            AI["msg"] = "keine verbindung — nicht abgelegt"
+            return
+        dok = (r or {}).get("dokument") if isinstance(r, dict) else None
+        if not dok:
+            AI["msg"] = "ablegen ging nicht"
+            return
+        with self.AI_LOCK:
+            self.ablage_event(dok)             # „▤ Ablauf: …" im Verlauf
+        AI["msg"] = "trace liegt in der ablage: " + str(dok.get("titel") or "")
+
     # ── Wechseln ───────────────────────────────────────────────────────
     def leeren(self):
         """Anzeige auf „neues Gespräch" (ohne Backend-Aufruf)."""
@@ -169,6 +239,7 @@ class GespraechsSteuerung:
             AI["log"], AI["n"], AI["scroll"], AI["n_server"] = [], 0, 0, 0
             AI["gid"], AI["titel"], AI["ersetzt"] = None, "", None
             AI["projekt"] = ""
+            AI["spuren"] = {}
 
     def neues_gespraech(self):
         """/neu, n in der Liste: das nächste Senden beginnt ein neues
@@ -264,6 +335,7 @@ class GespraechsSteuerung:
                 return
             frage = AI["log"][letzte][1]
             del AI["log"][letzte + 1:]
+            AI["spuren"] = {i: n for i, n in (AI.get("spuren") or {}).items() if i < letzte}
         self.senden(frage, wiederholen=True)
 
     def bearbeiten(self):

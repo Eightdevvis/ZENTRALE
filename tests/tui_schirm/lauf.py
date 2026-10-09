@@ -207,6 +207,13 @@ SZ = {
     "ki_bewertung_breit": [("k", "Space"), ("w", 2), ("k", "F6"), ("k", "F6"), ("cap", "a"),
                            ("k", "Enter"), ("l", "zu knapp"), ("cap", "b"), ("k", "Enter"),
                            ("w", 1), ("cap", "c")],
+    # Ablauf-Protokoll (2026-10-09): F6 in den Verlauf (letztes Ziel „bad"),
+    # zweimal hoch auf „trace ›", Enter klappt auf; runter auf einen Eintrag,
+    # Enter zeigt ihn ganz. Größe per ZTUI_GROESSE (80x24, 136x30).
+    "ki_trace": [("k", "Space"), ("w", 2), ("k", "F6"), ("k", "Up"), ("k", "Up"),
+                 ("cap", "a"), ("k", "Enter"), ("w", 1), ("cap", "b"), ("k", "Down"),
+                 ("k", "Down"), ("k", "Down"), ("k", "Down"), ("k", "Down"), ("k", "Enter"),
+                 ("w", 1), ("cap", "c"), ("k", "PPage"), ("cap", "d")],
     # Symbole der Seitenleiste (2026-10-08): wie es von selbst steht, dann
     # Tab (auf bzw. zu) und noch einmal Tab.
     "ki_symbole": [("k", "Space"), ("w", 2), ("cap", "a"), ("k", "Tab"), ("w", 1), ("cap", "b"),

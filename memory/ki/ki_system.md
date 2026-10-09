@@ -1563,6 +1563,49 @@ dem Vorgeplänkel vor einem Tool-Call, das der Chat sonst schluckt), `ai.tool`,
 ⚠ Hier geht der komplette Prompt raus, inklusive Graph-Kontext — also Sashas
 Zustände und Erlebnisse. So privat wie der Graph selbst.
 
+## Ablauf-Protokoll — „trace ›" unter jeder Antwort (seit 2026-10-09)
+
+Sasha: wie bei „Used …" nicht nur sehen, welches Werkzeug lief, sondern was
+es zurückgab und wie die Antwort darauf weiterging — der ganze Zug von seiner
+Nachricht bis zur fertigen Antwort, in Reihenfolge, ohne Auslassungen. Die
+Devtools (oben) zeigen das live; das Protokoll bleibt mit der Antwort
+gespeichert und ist in der TUI nachzulesen.
+
+- **Nur mitschreiben** (`core/zug_ablauf.py`, Schicht 1, contextvar wie
+  `core/zug.py`). Nichts davon ändert, was ans Modell geht — der Prompt-Cache
+  bleibt, wie er ist (`tests/test_zug_ablauf.py` vergleicht den Request mit
+  und ohne Protokoll byte für byte).
+- **Nur Cloud, Schiene gross.** `/api/chat` öffnet das Protokoll, wenn die
+  Cloud denkt; scharf wird es erst, wenn der Weg `system()` meldet
+  (`cloud.ablauf_melden`, beide Cloud-Wege, nur gross). Lokal/klein bleibt
+  alles, wie es gemessen ist — dort gibt es kein `ablauf`.
+- **Wer meldet was:** `cloud.ablauf_melden` → `system` (nur Fingerabdruck
+  sha256[:16] + Länge, der feste Kopf ist jeden Zug derselbe) und `kontext`
+  (der Umschlag `<kontext_automatisch>` voll: Jetzt, Alarme, offene Zusagen;
+  dazu Titel/Größe der Anhänge der neuesten Nachricht). `werkzeug_schleife.laufen`
+  → `text` (Vorgeplänkel vor/zwischen Werkzeugen, das der Chat nicht zeigt),
+  `werkzeug` (Name, Argumente, Ergebnis **wie an die Schleife zurück**, also
+  mit Kopfzeile `[ergebnis: …]`, Status, Dauer), `pruefung` (Befunde, Hinweis
+  an die KI, die erste verworfene Antwort — danach folgt die zweite),
+  `fehler`/`gestoppt`. `_ask_permission`/`_ask_buttons` → `frage` (Frage,
+  Knöpfe, Sashas Antwort; „schon erlaubt (…)" bei Geltungsbereich).
+  Die Buchungen (`_log_usage` & Co.) zählen in `kosten` mit. Die Route hängt
+  zum Schluss `antwort` (wie gespeichert) und `kosten` an.
+- **Denken** bleibt, wie es war (eigenes Feld `denken`), nicht im Ablauf.
+- **Obergrenze** 50.000 Zeichen je Eintrag (`EINTRAG_MAX`): das längste Feld
+  wird hinten gekürzt, mit Vermerk und `gekuerzt: <Zeichen>`. Sonst wird
+  nichts gekürzt (anders als `werkzeuge[].ergebnis`, 8.000).
+- **Gespeichert** als Feld `ablauf` der Antwort (`core/gespraeche.py`).
+  `/api/chat/history` und `GET /api/gespraeche/<id>` liefern nur
+  `ablauf_n`; den Inhalt `GET /api/gespraeche/<id>/ablauf/<nachricht>`
+  (`letzte` = die letzte Antwort mit Protokoll). SSE: nach dem Speichern
+  `{antwort: id, ablauf: n}`.
+- **Export:** `/trace` im Chat → `POST …/ablauf/letzte/ablage` legt den Ablauf
+  als Textdatei in die Ablage (Herkunft `ablauf`, bis 2.000.000 Zeichen,
+  `zug_ablauf.als_text`).
+- Fehlt: ein Zug, der an einem Fehler ohne jeden Text scheitert, wird nicht
+  gespeichert (wie bisher) — sein Protokoll also auch nicht.
+
 ## Network-Transparenz
 
 Alle HTTP-Requests werden im Dashboard-Terminal sichtbar geloggt

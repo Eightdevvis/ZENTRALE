@@ -30,7 +30,7 @@ from .text import md_zeilen
 
 ART_KURZ = {"markdown": "text", "text": "text", "code": "code", "csv": "tabelle",
             "bild": "bild", "pdf": "pdf", "docx": "word"}
-HERKUNFT_KURZ = {"ki": "", "sandbox": "aus code", "anhang": "anhang"}
+HERKUNFT_KURZ = {"ki": "", "sandbox": "aus code", "anhang": "anhang", "ablauf": "trace"}
 
 
 # ── Reine Helfer ─────────────────────────────────────────────────────────
