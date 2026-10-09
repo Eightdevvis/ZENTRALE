@@ -389,3 +389,33 @@ def test_qwen_erste_runde_erst_lesen_nur_bei_aenderungswunsch():
     nachschauen = [{"role": "user", "content": "wann ist analysis I? schau im lsf nach "
                                                "— nur nachschauen, noch nix eintragen"}]
     assert q.tool_choice(nr=0, verlauf=nachschauen, tools=tools) is None
+
+
+# ── Werkzeug-Auswahl je Gespräch ───────────────────────────────────────
+
+def _namen(tools):
+    return {t["function"]["name"] for t in tools}
+
+
+def test_qwen_auswahl_kern_immer_gruppen_nach_worten(mit_qwen_profil):
+    s = profil.fuer_backend("cloud", modell="qwen-plus")
+    alle = _namen(s.TOOLS)
+    kalender = _namen(s.werkzeuge_fuer([{"role": "user", "content": "lösch den friseur"}]))
+    assert {"read_calendar", "edit_calendar_routine", "ask_choice", "web_search"} <= kalender
+    assert not kalender & {"browser_open", "create_pdf", "read_mail", "run_code"}
+    assert len(kalender) < 25
+    lsf = _namen(s.werkzeuge_fuer([{"role": "user", "content": "schau mal im lsf nach"}]))
+    assert "browser_open" in lsf
+    # Ein Werkzeug ohne Gruppe (z. B. neu dazugekommen) ist immer dabei.
+    assert alle - modelle.qwen._IN_GRUPPE <= kalender
+    # Die Liste wächst im Gespräch nur (Präfix-Cache): frühere Wörter zählen.
+    spaeter = _namen(s.werkzeuge_fuer([
+        {"role": "user", "content": "schau mal im lsf nach"},
+        {"role": "assistant", "content": "steht da"},
+        {"role": "user", "content": "ok trag das ein"}]))
+    assert lsf <= spaeter
+
+
+def test_qwen_gruppen_nennen_nur_echte_werkzeuge(mit_qwen_profil):
+    s = profil.fuer_backend("cloud", modell="qwen-plus")
+    assert modelle.qwen._IN_GRUPPE <= _namen(s.TOOLS)

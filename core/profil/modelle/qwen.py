@@ -132,6 +132,51 @@ def werkzeuge(tools: list) -> list:
     return raus
 
 
+# ── Werkzeug-Auswahl je Gespräch (Runde 9) ──────────────────────────────
+# Die gross-Schiene gibt 54 Werkzeuge mit (~31.000 Zeichen Schema). OpenAI
+# rät zu „unter 20 zu Beginn eines Zugs“, „Less is More“ (arXiv 2411.15399)
+# misst mit dynamisch verkleinerter Liste deutlich bessere Werkzeug-Wahl bei
+# kleineren Modellen. In der Grundmessung griff qwen bei der Ferien-Frage zu
+# list_files und search_memory. Also: ein fester Kern (Kalender, Notizen,
+# Suche, Netz), der Rest in Gruppen, die erst dazukommen, wenn Sasha im
+# Gespräch ein passendes Wort benutzt. Die Liste wächst im Gespräch nur
+# (alle Nachrichten Sashas zählen) — so bleibt der Präfix-Cache meist heil.
+# Ein Werkzeug, das in keiner Gruppe steht (neu dazugekommen), ist immer
+# dabei: lieber ein Werkzeug zu viel als eins, das fehlt.
+_GRUPPEN = {
+    "browser": (r"lsf|portal|browser|klick|webseite|website|seite|http|www\.|"
+                r"vorlesungsverzeichnis|login|online|einloggen",
+                ("browser_open", "browser_click", "browser_type", "browser_find",
+                 "browser_read", "browser_back", "browser_close", "browser_screenshot")),
+    "dateien": (r"datei|ordner|input|output|\bzip|skill|code|python|rechne|sandbox|"
+                r"skript|script|csv|tabelle",
+                ("read_file", "list_files", "find_files", "search_files", "unzip",
+                 "remove_input", "import_skill", "fetch_document", "save_from_sandbox",
+                 "run_code")),
+    "dokumente": (r"pdf|word|docx|dokument|brief|bewerbung|lebenslauf|schreiben|"
+                  r"anschreiben|formular",
+                  ("read_pdf", "create_pdf", "combine_pdf", "read_docx", "create_docx",
+                   "edit_docx", "create_document", "read_document", "update_document",
+                   "fetch_document")),
+    "post": (r"mail|post|nachricht|news|neuigkeit|welt|schlagzeil|zeitung",
+             ("read_mail", "read_news")),
+    "messreihen": (r"mess|reihe|gewicht|kurve|tracke|protokollier|wert",
+                   ("create_series", "log_series")),
+    "skills": (r"skill|anleitung|arbeitsweise|vorgehen",
+               ("propose_skill", "edit_skill")),
+}
+_IN_GRUPPE = {n for _, namen in _GRUPPEN.values() for n in namen}
+
+
+def auswahl(tools: list, verlauf: list) -> list:
+    text = " ".join(str(m.get("content") or "") for m in verlauf
+                    if m.get("role") == "user").casefold()
+    an = {n for muster, namen in _GRUPPEN.values()
+          if _re.search(muster, text) for n in namen}
+    return [t for t in tools
+            if t["function"]["name"] not in _IN_GRUPPE or t["function"]["name"] in an]
+
+
 # ── Zusatz-Prüfer: was Python sehen kann, prüft Python (Runde 4/7) ──────
 # Runde 3 zeigte: auch mit Arbeitsweise-Block fragt qwen zufällig um
 # Erlaubnis, statt zu ändern; Runde 6: es schrieb einmal den Aufruf als Text
