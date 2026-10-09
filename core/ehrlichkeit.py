@@ -8,6 +8,10 @@
 #                  stehen — sonst ist sie erfunden.
 #   2. Tat/Wort:   „hab ich eingetragen" ohne ein Kalender-Werkzeug mit
 #                  [ergebnis: ok] in DIESEM Zug ist eine Behauptung ohne Tat.
+#   2b. Nicht da: „finde ich nicht / gibt es nicht" über eine Datei nur nach
+#                  einer VOLLSTÄNDIGEN Suche ohne Treffer in diesem Zug
+#                  (find_files/search_files, „Suche vollständig: 0 Treffer",
+#                  oder read_file „nicht gefunden"; seit 2026-10-09).
 #                  1 und 2 → EINE Korrekturrunde, bevor Sasha die Antwort
 #                  sieht. Dazu die Erledigt-Zeile, die Python allein aus dem
 #                  Werkzeug-Protokoll schreibt (✓ geändert … · ✗ …).
@@ -82,6 +86,7 @@ BEREICH = {
     "read_docx": "ablage", "read_file": "ablage",
     "create_series": "messreihe", "log_series": "messreihe",
     "propose_skill": "skill", "edit_skill": "skill", "load_skill": "skill",
+    "import_skill": "skill",
     "web_search": "netz", "fetch_url": "netz",
     # Browser (2026-10-09): lesen gehört zum Netz, das Bild zur Ablage.
     "browser_open": "netz", "browser_click": "netz", "browser_type": "netz",
@@ -112,6 +117,7 @@ WORTE = {
     "propose_skill": ("Anleitung vorgeschlagen", "Anleitung vorschlagen"),
     "edit_skill": ("Anleitung geändert", "Anleitung ändern"),
     "browser_screenshot": ("Bild der Seite abgelegt", "Bild der Seite ablegen"),
+    "import_skill": ("Skill übernommen", "Skill übernehmen"),
 }
 
 _KOPF = re.compile(r"^\[ergebnis: (\w+)\]")
@@ -210,6 +216,24 @@ def tat_belegt(tat, protokoll: list, frueher: list = ()) -> bool:
     return False
 
 
+# Kopfzeile einer vollständigen Suche (core/nutzer_suche.py) und das, was
+# read_file bei einem fehlenden Pfad sagt (core/context.py).
+_SUCHE_LEER = re.compile(r"^Suche vollständig: 0 Treffer\b", re.M)
+_SUCHEN = ("find_files", "search_files")
+
+
+def suche_belegt(protokoll: list) -> bool:
+    """Deckt eine Suche dieses Zugs ein „gibt es nicht"? Nur eine
+    VOLLSTÄNDIGE ohne Treffer (find_files/search_files) oder read_file mit
+    „nicht gefunden" (2026-10-09, Prüfer „nicht da")."""
+    for s in protokoll:
+        if s.name in _SUCHEN and _SUCHE_LEER.search(s.text):
+            return True
+        if s.name == "read_file" and "Datei nicht gefunden" in s.text:
+            return True
+    return False
+
+
 def befunde(antwort: str, protokoll: list, *, bekannt_text: str = "",
             frueher: list = ()) -> list:
     """Was an einer Antwort nicht gedeckt ist. -> [{art, satz|kennung}]"""
@@ -217,6 +241,9 @@ def befunde(antwort: str, protokoll: list, *, bekannt_text: str = "",
     for tat in erkennen.taten(antwort):
         if not tat_belegt(tat, protokoll, frueher):
             raus.append({"art": "tat", "satz": tat.satz})
+    if not suche_belegt(protokoll):
+        for satz in erkennen.nicht_da(antwort):
+            raus.append({"art": "nicht_da", "satz": satz})
     bekannt = set(erkennen.kennungen(bekannt_text))
     for s in protokoll:
         bekannt.update(erkennen.kennungen(s.text))
@@ -240,6 +267,10 @@ def hinweis(befunde_: list) -> str:
         if b["art"] == "tat":
             zeilen.append(f"- Du schreibst „{b['satz']}“ — in diesem Zug lief dafür kein "
                           f"passendes schreibendes Werkzeug mit [ergebnis: ok].")
+        elif b["art"] == "nicht_da":
+            zeilen.append(f"- Du sagst „{b['satz']}“ — also ‚nicht da', hast aber keine "
+                          f"vollständige Suche gemacht. Such gezielt mit find_files/"
+                          f"search_files oder sag, dass du es nicht weißt.")
         else:
             zeilen.append(f"- Die Kennung {b['kennung']} steht in keinem Werkzeug-Ergebnis "
                           f"und nirgends im Gespräch.")

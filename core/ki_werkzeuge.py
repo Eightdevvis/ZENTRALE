@@ -32,6 +32,7 @@ import ki_kalender_aendern
 import ki_prompt
 import mail
 import news
+import nutzer_suche
 import projekte
 import sandbox
 import skills
@@ -39,7 +40,7 @@ import web
 import werkzeug_register
 import zug
 import schreib_sicherung
-from werkzeug_befund import Befund, OK, FEHLGESCHLAGEN, status_von, erledigt, abgebrochen
+from werkzeug_befund import Befund, OK, FEHLGESCHLAGEN, status_von, erledigt, abgebrochen, schiene
 
 
 def ausfuehren(name: str, args: dict, *, projekt=None) -> str:
@@ -133,6 +134,11 @@ def _read_file(args: dict) -> str:
 
 @ausfuehrer("list_files")
 def _list_files(args: dict) -> str:
+    # gross (seit 2026-10-09): EIN Ordner in Sashas Nutzerordner, wie ls
+    # (core/nutzer_suche.py). klein liest weiter die alte Gesamtliste.
+    if schiene() == "gross":
+        import ki_nutzer_ordner
+        return ki_nutzer_ordner.befund(nutzer_suche.auflisten(str(args.get("ordner") or "")))
     files = context.list_available_files()
     return "Verfügbare Dateien:\n" + "\n".join(f"  {f}" for f in files)
 
@@ -733,3 +739,5 @@ def _read_project_file(args: dict, projekt=None) -> str:
 import ki_pdf_word  # noqa: E402,F401
 # Browser (2026-10-09): eigene Datei, meldet ihre Ausführer beim Import an.
 import ki_browser  # noqa: E402,F401
+# Suchen im Nutzerordner und Claude-Skills übernehmen (2026-10-09): ebenso.
+import ki_nutzer_ordner  # noqa: E402,F401

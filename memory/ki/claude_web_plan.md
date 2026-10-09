@@ -982,3 +982,23 @@ Abschnitt „Browser"; Einrichten: [../betrieb/ki_browser.md](../betrieb/ki_brow
 - **Offen:** Anmelden mit Passwort (bräuchte eine Eingabe, die an der KI
   vorbeigeht), Bild an die KI zurück (bräuchte Bild-Blöcke in
   Werkzeug-Ergebnissen), Prüfstand-Fall „LSF-Zeiten finden".
+
+### Nutzerordner, Suchen, Claude-Skills übernehmen, Prüfer „nicht da" (2026-10-09)
+
+Anlass: Gespräch 20261009-155510 — Sasha legte „Chefkoch ai-v1.zip" (Claude-
+Plugin) ab; `list_files` war gekappt, die KI sagte „nicht da" und konnte die
+Zip auch nicht übernehmen. Gebaut (nur `gross`):
+- Nutzerordner `~/Zentrale` mit `Input/` und `Output/` (Einstellung
+  `nutzer_ordner`, core/nutzer_ordner.py). Der Assistent sucht nur noch dort.
+- `find_files` (wie find), `search_files` (wie grep), `list_files` auf gross =
+  ein Ordner wie ls; jede Suche nennt ihre Vollständigkeit (Kopfzeile +
+  `Befund.vollstaendig`). klein unverändert.
+- `import_skill(pfad)` aus Input/ — gegatet, sicher auspacken, wie Claude
+  prüfen, atomar, aktiv, nie überschreiben, ganz oder gar nicht. Neun `S-`-Codes.
+- Prüfer „nicht da" (core/ehrlichkeit.py): „gibt es nicht" über eine Datei
+  nur nach vollständiger Suche ohne Treffer, sonst eine Korrekturrunde.
+  Gemessen: 0 Falschtreffer in 73 Antworten, 1 echter Fall (Chefkoch).
+- Schnappschuss neu: drei Einträge hinten an `gross`, `list_files` auf gross
+  neu beschrieben, `klein` byte-gleich.
+  Details: [ki_system.md](ki_system.md), „Nutzerordner, Suchen, Claude-Skills
+  übernehmen"; [ehrlichkeit_live.md](ehrlichkeit_live.md), Prüfer 4.

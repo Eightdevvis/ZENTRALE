@@ -315,7 +315,10 @@ und nimmt beide Schreibweisen an (siehe „Zwei Schienen" weiter unten).
 | kanonisch | in `klein` | Funktion |
 |---|---|---|
 | `read_file`   | =            | Datei aus der Whitelist lesen |
-| `list_files`  | =            | Verfügbare lesbare Dateien auflisten |
+| `list_files`  | =            | `klein`: Gesamtliste der lesbaren Dateien (höchstens 300, wie bisher). `gross` (seit 2026-10-09): EINEN Ordner im Nutzerordner wie ls, `ordner` = Input (Standard) / Output / Unterordner |
+| `find_files`  | nur `gross`  | Dateien/Ordner nach Namen in Input/ und Output/ suchen, wie find (`*.zip`, `*chefkoch*`, Namensteil) — mit Vollständigkeits-Angabe (s. „Nutzerordner, Suchen, Claude-Skills übernehmen") |
+| `search_files` | nur `gross` | Text in Dateien in Input/ und Output/ suchen, wie grep — `pfad:zeile: auszug`, mit Vollständigkeits-Angabe |
+| `import_skill` | nur `gross` | Claude-Skill(s) aus .zip oder Ordner in Input/ übernehmen, gegatet |
 | `read_calendar` / `add_calendar_*` / `edit_calendar_routine` / `delete_calendar_entry` | = | Kalender lesen/schreiben/löschen (s. `memory/werkzeuge/kalender_system.md`); auf `gross` mit Kennungen, Ende/Ort und `nur_am` (s. „Kalender ohne Fallen") |
 | `edit_calendar_entry` | nur `gross` | Einen Einzeltermin ändern, nur genannte Felder (gegatet) |
 | `read_calendar_warnings` | nur `gross` | Die Kalender-Warnungen frisch, dieselben wie Sashas ⚠ |
@@ -632,6 +635,84 @@ geschrieben. Geschrieben wird nur über `write_note(…, herkunft="claude")` —
 zeilenweise, nur Neues, mit Herkunftsvermerk, nie Kataloge/Tagebuch
 ([gedaechtnis_dateien.md](gedaechtnis_dateien.md), „Import aus einer
 anderen KI").
+
+#### Nutzerordner, Suchen, Claude-Skills übernehmen (seit 2026-10-09)
+
+Anlass: Gespräch 20261009-155510. Sasha legte „Chefkoch ai-v1.zip" in den
+ZENTRALE-Ordner; `list_files` war bei 300 von ~5.000 Dateien gekappt (Hinweis
+nur am Ende), die KI sagte „ich seh keine chefkoch-Datei", und übernehmen
+konnte sie ohnehin nicht. Sasha danach: Dateien findet man durch Suchen, nicht
+durch Listen — und der Assistent bekommt keinen Zugriff mehr auf den
+Code-Dschungel unter ~/codicus (das wird eine eigene Coder-App).
+
+**Der Nutzerordner** (`core/nutzer_ordner.py`, Einstellung `nutzer_ordner`,
+Env `ZENTRALE_NUTZER_ORDNER`, Standard `~/Zentrale`): zwei Unterordner,
+`Input/` (was Sasha der KI hineinlegt) und `Output/` (was die KI Sasha gibt),
+beim ersten Zugriff angelegt. Pfade wie „x.zip", „Input/x.zip" oder absolut;
+was (Verweise aufgelöst) hinausführt, gilt nicht. `read_file` liest dort auch
+(„Input/notiz.md"; Secrets und Verstecktes gesperrt). Tests lenken ihn per
+conftest um (Wächter in `tests/test_keine_seiteneffekte.py`).
+
+**Suchen** (`core/nutzer_suche.py`, nur gross, frei), NUR in Input/ und
+Output/ (oder einem Ordner darin), ohne Verstecktes und Secret-Namen:
+- `find_files(muster, ordner?)` — wie find: `*.zip`, `*chefkoch*`; ohne
+  Platzhalter ein Namensteil (Groß/Klein und Trenner egal: „chefkoch-ai" trifft
+  „Chefkoch ai-v1.zip"). Zählt alle, zeigt 50, flache zuerst.
+- `search_files(text, ordner?, muster?)` — wie `grep -i -F`: `pfad:zeile:
+  auszug`, höchstens 100 Treffer, Binärdateien übersprungen, Dateien über 2 MB
+  nicht durchsucht.
+- `list_files(ordner?)` auf gross — EIN Ordner wie ls (Unterordner mit `/`).
+- **Jede Suche sagt, wie vollständig sie war**, in der ersten Zeile und in
+  fester Form: „Suche vollständig: N Treffer — durchsucht: Input/, Output/
+  (K Dateien)." oder „Suche NICHT vollständig: abgebrochen nach 100 Treffern
+  …" / „… 2 Dateien über 2 MB oder unlesbar, nicht durchsucht …".
+  Maschinenlesbar zusätzlich `Befund.vollstaendig` (core/werkzeug_befund.py).
+  Der Prüfer „nicht da" ([ehrlichkeit_live.md](ehrlichkeit_live.md)) lässt
+  „gibt es nicht" nur nach „Suche vollständig: 0 Treffer" durch.
+- Die Ablage (core/ablage.py) durchsuchen die Werkzeuge noch nicht (offen).
+
+**`import_skill(pfad)`** (gegatet, kein „immer"): `core/skill_import.py`.
+So importiert man einen Claude-Skill: Zip oder Ordner in `~/Zentrale/Input/`
+legen, der KI sagen „übernimm den Skill" — sie sucht mit `find_files`, Sasha
+bestätigt „Skill „chefkoch-ai“ aus „Chefkoch ai-v1.zip“ übernehmen?" (die
+Frage packt vorab aus und nennt die echten Namen).
+- **Nur aus Input/**; alles andere → `S-QUELLE-AUSSERHALB`.
+- **Formen:** Plugin (`.claude-plugin/plugin.json` + `skills/<name>/SKILL.md`,
+  auch eigene Skill-Pfade aus plugin.json), Skill-Ordner (`<name>/SKILL.md`,
+  auch mehrere), Zip mit `SKILL.md` in der Wurzel, die `SKILL.md` selbst. Ein
+  einzelner Hüllordner in der Zip wird übersprungen.
+- **Sicher:** erst alle Einträge prüfen — absolute Pfade, `..`, Symlinks →
+  `S-UNSICHER`; > 20 MB entpackt oder > 500 Dateien → `S-ZU-GROSS` (beim
+  Auspacken mitgezählt, die Angabe der Zip kann lügen). Versteckte Dateien,
+  `__MACOSX`, `__pycache__` und Schlüssel-Namen bleiben draußen (gezählt).
+- **Prüfen** wie Claude: `name` (Claudes Regeln) und `description` (≤ 1.024,
+  ohne `<` `>`) im Kopf, Anleitung nicht leer, kein Name doppelt → sonst
+  `S-SKILL-UNGUELTIG`; keine SKILL.md → `S-KEIN-SKILL`.
+- **Gibt es den Namen schon:** `S-SKILL-GIBT-ES`, nichts geschrieben — die KI
+  fragt Sasha, statt umzubenennen oder zu überschreiben.
+- **Ablegen:** ausgepackt in einen versteckten Arbeitsordner IM Skill-Ordner,
+  dann je Skill `os.rename` nach `skills/<name>/` (atomar). `_zentrale.json`:
+  `status: aktiv`, `herkunft: sasha`, `quelle`: „Chefkoch ai-v1.zip (Plugin
+  chefkoch-ai 1.0.0, Autor …, Lizenz …)" — keine Mail-Adressen. Nachgelesen in
+  `skills.aktive()`; fehlt einer, sind ALLE neuen Ordner wieder weg
+  (`W-NICHT-GESPEICHERT`). Mehrere Skills: ganz oder gar nicht.
+- **Ergebnis:** „Skill „chefkoch-ai“ ÜBERNOMMEN (aktiv): SKILL.md + 2
+  Referenzen." Skripte (`scripts/`) kommen mit und werden genannt — sie laufen
+  nur in der Sandbox (`run_code(skill=…)`).
+- **Wann er in der Liste steht:** der feste Kopf wird je Nachricht neu gebaut
+  (`cloud._static_system` → `skills.prompt_block()`), also ab Sashas nächster
+  Nachricht (der Cache-Anfang ändert sich dabei einmal); `load_skill` sofort.
+
+Fehlercodes: `S-QUELLE-FEHLT`, `S-QUELLE-AUSSERHALB`, `S-QUELLE-GESPERRT`,
+`S-ZIP-KAPUTT`, `S-UNSICHER`, `S-ZU-GROSS`, `S-KEIN-SKILL`,
+`S-SKILL-UNGUELTIG`, `S-SKILL-GIBT-ES` (`core/fehlercodes.py`). Einträge in
+`core/werkzeug_nutzer_ordner.py`, Ausführer in `core/ki_nutzer_ordner.py`
+(list_files: `ki_werkzeuge`, nach Schiene). Text-Budget der drei
+Beschreibungen: Deckel < 550 in `tests/test_profil.py`. Tests:
+`tests/test_skill_import.py`, „nicht da" in `tests/test_ehrlichkeit.py`.
+
+**Noch NICHT zurückgebaut** (eigener Schritt): `read_file`/`list_files`
+(klein) erreichen weiter ZENTRALE (Whitelist) und ganz ~/codicus.
 
 ### Frühere Gespräche — `search_chats`, `read_chat` (seit 2026-10-07)
 

@@ -137,6 +137,36 @@ CODES = {
     "S-ABGELEHNT": (
         "Die Anleitung wurde nicht gespeichert (Grund im Ergebnis: Name, Format, schreibgeschützt).",
         "Den Grund beheben; eine mitgelieferte Anleitung nicht überschreiben."),
+    # Skills übernehmen (import_skill, 2026-10-09, core/skill_import.py)
+    "S-QUELLE-FEHLT": (
+        "Die genannte Zip-Datei bzw. der Ordner existiert nicht in Input/ (oder kein Pfad angegeben).",
+        "Mit find_files nach dem Namen suchen und den gefundenen Pfad nehmen."),
+    "S-QUELLE-AUSSERHALB": (
+        "Der Pfad liegt nicht in Sashas Input/-Ordner; übernommen wird nur von dort.",
+        "Sasha bitten, die Zip bzw. den Ordner in seinen Input/-Ordner zu legen."),
+    "S-QUELLE-GESPERRT": (
+        "Die Datei ist versteckt oder sieht nach einem Schlüssel aus.",
+        "Nicht umgehen. Sasha fragen."),
+    "S-ZIP-KAPUTT": (
+        "Die Datei ist keine lesbare Zip (kaputt, verschlüsselt, oder gar keine Zip).",
+        "Sasha sagen; er soll die Zip neu herunterladen oder den ausgepackten Ordner nennen."),
+    "S-UNSICHER": (
+        "Die Zip oder der Ordner enthält einen Pfad nach draußen (absolut oder mit ..) "
+        "oder einen Verweis (Symlink). Es wurde nichts ausgepackt.",
+        "Nicht umgehen. Sasha sagen, dass die Datei so nicht übernommen wird."),
+    "S-ZU-GROSS": (
+        "Zu groß: entpackt über 20 MB oder über 500 Dateien.",
+        "Sasha sagen; ein Skill ist eine Anleitung, kein Archiv."),
+    "S-KEIN-SKILL": (
+        "Darin liegt keine SKILL.md — weder in der Wurzel, noch in skills/<name>/, noch in <name>/.",
+        "Sasha fragen, ob es die richtige Datei ist (mit find_files nach Alternativen suchen)."),
+    "S-SKILL-UNGUELTIG": (
+        "Eine SKILL.md erfüllt Claudes Format nicht (Name oder description im Kopf fehlt/"
+        "ungültig, Anleitung leer, Name doppelt, plugin.json kaputt).",
+        "Den Grund im Ergebnis Sasha nennen; selbst nichts umschreiben."),
+    "S-SKILL-GIBT-ES": (
+        "Einen Skill mit diesem Namen gibt es schon; überschrieben wird nie. Nichts übernommen.",
+        "Sasha fragen, was er will (den alten mit load_skill zeigen). Nicht selbst umbenennen."),
     # ── Internet (lesend) ──
     "I-KEIN-TEXT": (
         "Die Seite war erreichbar, aber ohne lesbaren Text (Skript-Seite, Bild, leer).",

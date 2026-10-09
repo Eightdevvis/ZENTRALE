@@ -44,15 +44,19 @@ class Befund(str):
     die Ergebnisse vergleichen), unverändert weiterläuft. Der Text ist der
     ganze Satz an die KI; `beleg` ist der nachgelesene Stand allein (für
     Tests und die Prüfung „jedes schreibende Werkzeug belegt"). `code` ist
-    der Fehlercode eines Abbruchs (core/fehlercodes.py)."""
+    der Fehlercode eines Abbruchs (core/fehlercodes.py). `vollstaendig` (seit
+    2026-10-09, Suchen im Nutzerordner): True/False, ob eine Suche alles
+    abgelaufen hat; None bei allem, was keine Suche ist."""
 
-    def __new__(cls, text: str, status: str = OK, beleg: str = "", code: str = ""):
+    def __new__(cls, text: str, status: str = OK, beleg: str = "", code: str = "",
+                vollstaendig: bool | None = None):
         if status not in STATUS:
             raise ValueError(f"unbekannter Status: {status!r}")
         obj = super().__new__(cls, text)
         obj.status = status
         obj.beleg = beleg or ""
         obj.code = code or ""
+        obj.vollstaendig = vollstaendig
         return obj
 
 

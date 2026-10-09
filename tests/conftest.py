@@ -81,6 +81,9 @@ os.environ.setdefault("ZENTRALE_APP_PFAD_TUTOR",
                       os.path.join(ROOT, "tests", "fixtures", "app_tutor"))
 # Bewertungen der Antworten (core/rueckmeldungen.py, 2026-10-08). Dazu unten
 # pro Test ein eigener Ordner.
+# Sashas Nutzerordner (core/nutzer_ordner.py, 2026-10-09: Input/ und Output/,
+# im Betrieb ~/Zentrale): kein Test legt dort etwas an oder liest von dort.
+os.environ.setdefault("ZENTRALE_NUTZER_ORDNER", os.path.join(_DATEN_TMP, "nutzer"))
 os.environ.setdefault("ZENTRALE_RUECKMELDUNGEN_DIR", os.path.join(_DATEN_TMP, "rueckmeldungen"))
 # Abgleich über die Mitte (core/abgleich.py, 2026-10-08): örtlicher Zustand,
 # Schlüssel und Mitte nie die echten. Die Mitte zeigt auf ein Verzeichnis,

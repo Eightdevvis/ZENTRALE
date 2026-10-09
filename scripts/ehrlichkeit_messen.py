@@ -86,7 +86,7 @@ def zuege_pruefstand(ordner):
 
 
 def messen(zuege, zeigen=False, name=""):
-    n = taten = taten_offen = zusagen = kenn = kenn_offen = 0
+    n = taten = taten_offen = zusagen = kenn = kenn_offen = nicht_da = nicht_da_offen = 0
     for antwort, prot, bekannt, frueher in zuege:
         n += 1
         for t in erkennen.taten(antwort):
@@ -101,6 +101,14 @@ def messen(zuege, zeigen=False, name=""):
                 eingeloest = ehrlichkeit._zusage_belegt(z.bereiche, prot, z.schreibend)
                 print(f"  ZUSAGE {'(gleich eingelöst)' if eingeloest else ''} "
                       f"{sorted(z.bereiche)} | {z.satz}")
+        # „nicht da" (2026-10-09): Sätze über fehlende Dateien, und wie viele
+        # davon ohne vollständige Suche im selben Zug stehen.
+        for satz in erkennen.nicht_da(antwort):
+            nicht_da += 1
+            ok = ehrlichkeit.suche_belegt(prot)
+            nicht_da_offen += not ok
+            if zeigen:
+                print(f"  NICHT-DA {'belegt  ' if ok else 'UNBELEGT'} | {satz}")
         b = ehrlichkeit.befunde(antwort, prot, bekannt_text=bekannt, frueher=frueher)
         kenn += len(erkennen.kennungen(antwort))
         kenn_offen += sum(1 for x in b if x["art"] == "kennung")
@@ -109,7 +117,8 @@ def messen(zuege, zeigen=False, name=""):
                 if x["art"] == "kennung":
                     print(f"  KENNUNG unbekannt {x['kennung']}")
     print(f"{name}: {n} Antworten · Erledigt-Sätze {taten} (davon ohne Beleg {taten_offen}) · "
-          f"Zusagen {zusagen} · Kennungen {kenn} (unbekannt {kenn_offen})")
+          f"Zusagen {zusagen} · Kennungen {kenn} (unbekannt {kenn_offen}) · "
+          f"Nicht-da-Sätze {nicht_da} (ohne vollständige Suche {nicht_da_offen})")
 
 
 def main():

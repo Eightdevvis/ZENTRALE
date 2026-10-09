@@ -66,7 +66,7 @@ die den Rohtext am Graphen halten.
 | **Quellen** | `quellen/*.md` (+ `quellen/dateien/`) | Abgelegte Dokumente, aus PDF/HTML extrahiert. |
 | **Tagebuch** | `tagebuch/YYYY-MM-DD.md` | Die KI. Was gesagt und getan wurde, in SEINEN Worten. |
 | **Messreihen** | `data/g_*.json` (Zyklus-Werkzeug) | Zahlen über Zeit — Schlaf, Stimmung, Spagat in cm. |
-| **Skills** | `skills/<name>/SKILL.md` (+ `_zentrale.json`, optional `scripts/` `references/` `assets/`) | Anleitungen für eine Art Aufgabe, im Format von Claude. Sasha (hineinkopieren, an/aus) oder die KI — die nur nach seinem Ja (`propose_skill`). Siehe unten „Skills“. |
+| **Skills** | `skills/<name>/SKILL.md` (+ `_zentrale.json`, optional `scripts/` `references/` `assets/`) | Anleitungen für eine Art Aufgabe, im Format von Claude. Sasha (hineinkopieren, an/aus; seit 09.10. auch per Zip/Ordner über die KI, `import_skill`) oder die KI — die nur nach seinem Ja (`propose_skill`). Siehe unten „Skills“. |
 | **Projekte** | `projekte/<id>/` (`projekt.json`, `anweisungen.md`, `wissen/`) | **Sasha** (TUI `/projekte`). Rahmen für ein Thema; die KI liest nur (`read_project_file`). Wie Skills nicht in `BEREICHE`. Siehe [projekte.md](projekte.md). |
 
 ### Notiz, Dossier oder Katalog?

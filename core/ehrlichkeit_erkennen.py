@@ -141,6 +141,40 @@ def taten(text: str) -> list:
     return raus
 
 
+# ── „Nicht da" ──────────────────────────────────────────────────────────
+# 2026-10-09, Gespräch 20261009-155510: „Ich seh in der Liste keine
+# chefkoch-Datei oder ZIP" — dabei war die Liste nur gekappt. Behauptet die
+# KI, eine Datei gebe es nicht, muss eine VOLLSTÄNDIGE Suche das belegen
+# (ehrlichkeit.suche_belegt). Erkannt wird nur, was nach Datei klingt —
+# „den Termin gibt es nicht" ist Sache des Kalenders, nicht dieses Prüfers.
+_DATEI_WORT = re.compile(r"datei|\bzip\b|-zip\b|ordner|verzeichnis|\bpfad|\bpdf\b|"
+                         r"dokument|\.(?:zip|md|txt|pdf|json|csv|docx?|png|jpe?g)\b|"
+                         r"\binput\b|\boutput\b")
+_NICHT_DA = re.compile(
+    r"\b(?:find|finde|fand|seh|sehe|sah|entdecke)\b(?:\s+\S+){0,8}?\s+(?:nicht|nichts|kein\w*)\b|"
+    r"\b(?:nicht|kein\w*)\b(?:\s+\S+){0,6}?\s+(?:gefunden|vorhanden|auffindbar|"
+    r"zu finden|zu sehen|da|dort|drin)\b|"
+    r"\b(?:gibt es|gibt's|existiert|existieren)\b(?:\s+\S+){0,4}?\s+(?:nicht|kein\w*)\b|"
+    r"\b(?:liegt|liegen)\b(?:\s+\S+){0,6}?\s+(?:nicht|kein\w*)\b")
+
+
+def nicht_da(text: str) -> list:
+    """Sätze, die sagen, eine Datei/ein Ordner sei nicht da („finde ich
+    nicht", „gibt es nicht", „liegt nicht in Input/", „keine Zip gefunden").
+    Fragen und Bedingtes („falls die Datei nicht da ist") zählen nicht."""
+    # Punkte IN Dateinamen („rezepte.md") trennen keinen Satz: vorübergehend
+    # durch ein Ersatzzeichen ersetzt, im Ergebnis wieder Punkt.
+    text = re.sub(r"(?<=\w)\.(?=\w)", "․", str(text or ""))
+    raus = []
+    for s in saetze(text):
+        k = s.klein.replace("․", ".")
+        if s.frage or _BEDINGT.search(k):
+            continue
+        if _DATEI_WORT.search(k) and _NICHT_DA.search(k):
+            raus.append(s.text.replace("․", "."))
+    return raus
+
+
 # ── Zusagen ─────────────────────────────────────────────────────────────
 
 # Erste Person Präsens der Verben, mit denen die KI etwas zusagt. Bewusst

@@ -237,6 +237,90 @@ def test_klein_und_tutor_ohne_pruefer(monkeypatch):
     assert ehrlichkeit.modus() == ehrlichkeit.STANDARD
 
 
+# ── „Nicht da" (2026-10-09, Gespräch 20261009-155510) ──────────────────
+
+@pytest.mark.parametrize("satz", [
+    "Ich seh in der Liste keine \"chefkoch\"-Datei oder ZIP – da ist jede Menge Code, "
+    "aber kein Chefkoch-Skill-Zip.",
+    "Die Datei gibt es nicht.",
+    "In Input/ liegt keine Zip.",
+    "Eine Datei namens rezepte.md finde ich nicht.",
+    "Im Ordner ist keine PDF vorhanden.",
+])
+def test_nicht_da_wird_erkannt(satz):
+    assert erkennen.nicht_da(satz), satz
+
+
+@pytest.mark.parametrize("satz", [
+    "Liegt das wirklich schon im richtigen Ordner?",
+    "Falls die Datei nicht da ist, sag Bescheid.",
+    "Den Termin gibt es nicht.",
+    "Ich habe die Datei gelesen.",
+    "Die Zip liegt in Input/.",
+])
+def test_kein_nicht_da(satz):
+    assert not erkennen.nicht_da(satz), satz
+
+
+_GEKUERZT = ("Verfügbare Dateien:\n  … [4700 weitere unter ~/codicus nicht gelistet — "
+             "read_file erreicht sie trotzdem]")
+_CHEFKOCH = ("Ich seh in der Liste keine \"chefkoch\"-Datei oder ZIP – da ist jede Menge "
+             "ZENTRALE-Code, aber kein Chefkoch-Skill-Zip.")
+
+
+def test_chefkoch_fall_gekuerzte_liste_nicht_da_korrekturrunde():
+    """Genau der Fall vom 09.10.: Liste gekappt → „nicht da" → EINE
+    Korrekturrunde; danach sucht die KI und findet die Zip."""
+    import zug_ablauf
+    a = _Skript([werkzeug_schleife.Runde("", [("c1", "list_files", {})]),
+                 werkzeug_schleife.Runde(_CHEFKOCH),
+                 werkzeug_schleife.Runde("", [("c2", "find_files", {"muster": "*chefkoch*"})]),
+                 werkzeug_schleife.Runde("Gefunden: Input/Chefkoch ai-v1.zip.")])
+    ergebnisse = {"list_files": _GEKUERZT,
+                  "find_files": "Suche vollständig: 1 Treffer — durchsucht: Input/, Output/ "
+                                "(3 Dateien).\n  Input/Chefkoch ai-v1.zip  (12 KB)"}
+    m = zug_ablauf.beginnen()
+    try:
+        zug_ablauf.system("fest")
+        ev = _laufen(a, lambda n, x: ergebnisse[n])
+        ablauf = zug_ablauf.abschliessen("x")
+    finally:
+        zug_ablauf.beenden(m)
+    assert [e for e in ev if isinstance(e, str)] == ["Gefunden: Input/Chefkoch ai-v1.zip."]
+    assert len(a.hinweise) == 1
+    hinweis = a.hinweise[0][1]
+    assert "‚nicht da'" in hinweis and "find_files/search_files" in hinweis
+    # Im Ablauf-Protokoll (/trace) steht der Befund im Eintrag „pruefung".
+    pruefung = [e for e in ablauf if e["art"] == "pruefung"]
+    assert pruefung and pruefung[0]["befunde"][0]["art"] == "nicht_da"
+    assert "Chefkoch-Skill-Zip" in zug_ablauf.inhalt(pruefung[0])
+
+
+def test_nicht_da_nach_vollstaendiger_leerer_suche_geht_durch():
+    a = _Skript([werkzeug_schleife.Runde("", [("c1", "find_files", {"muster": "*chefkoch*"})]),
+                 werkzeug_schleife.Runde("In Input/ liegt keine Chefkoch-Zip.")])
+    leer = "[ergebnis: ok]\nSuche vollständig: 0 Treffer — durchsucht: Input/, Output/ (3 Dateien)."
+    ev = _laufen(a, lambda n, x: leer)
+    assert a.hinweise == []
+    assert "In Input/ liegt keine Chefkoch-Zip." in ev
+
+
+def test_nicht_da_nach_unvollstaendiger_suche_wird_korrigiert():
+    a = _Skript([werkzeug_schleife.Runde("", [("c1", "search_files", {"text": "Rezept"})]),
+                 werkzeug_schleife.Runde("Eine Datei mit Rezept gibt es nicht."),
+                 werkzeug_schleife.Runde("Das weiß ich nicht sicher.")])
+    halb = ("Suche NICHT vollständig: 2 Dateien über 2 MB oder unlesbar, nicht durchsucht — "
+            "durchsucht: Input/, Output/ (9 Dateien). 0 Treffer im Rest.")
+    ev = _laufen(a, lambda n, x: halb)
+    assert len(a.hinweise) == 1
+    assert [e for e in ev if isinstance(e, str)] == ["Das weiß ich nicht sicher."]
+
+
+def test_read_file_nicht_gefunden_belegt():
+    assert ehrlichkeit.suche_belegt([_schritt("read_file", text="[Datei nicht gefunden: x.md]")])
+    assert not ehrlichkeit.suche_belegt([_schritt("list_files", text=_GEKUERZT)])
+
+
 # ── Der echte Anthropic-Adapter: die Korrektur als user-Nachricht ───────
 
 def test_anthropic_adapter_haengt_hinweis_als_user_nachricht_an(monkeypatch):

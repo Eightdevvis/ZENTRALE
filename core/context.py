@@ -12,6 +12,8 @@ import os
 import glob
 import fnmatch
 
+import nutzer_ordner
+
 # Absoluter Pfad zum Projektroot (ZENTRALE/)
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -107,6 +109,15 @@ def erlaubt(abs_pfad: str) -> str:
     Sicherheitsluecke, die niemand bemerkt.
     """
     abs_pfad = os.path.abspath(abs_pfad)
+    # Sashas Nutzerordner (Input/, Output/; core/nutzer_ordner.py, seit
+    # 2026-10-09): dort liegt, was er der KI gibt — lesbar bis auf Secrets
+    # und Verstecktes. Verweise werden aufgelöst: wer von dort hinauszeigt,
+    # ist nicht drin.
+    if nutzer_ordner.ist_drin(abs_pfad):
+        rel = os.path.relpath(os.path.realpath(abs_pfad), nutzer_ordner.wurzel(anlegen=False))
+        if any(t.startswith('.') for t in rel.split(os.sep)) or _is_secret(rel):
+            return "Secret- oder versteckte Datei, fuer die KI gesperrt"
+        return ""
     innen = next((w for w in _WURZELN
                   if abs_pfad == w or abs_pfad.startswith(w + os.sep)), None)
     if innen is None:
@@ -248,6 +259,9 @@ def read_file(relative_path: str) -> str:
         kandidaten = [roh]
     else:
         kandidaten = [os.path.join(w, roh) for w in _WURZELN]
+        # „Input/x.md" — relativ zum Nutzerordner (seit 2026-10-09), zuletzt
+        # probiert, damit kein bisheriger Pfad etwas anderes trifft.
+        kandidaten.append(os.path.join(nutzer_ordner.wurzel(anlegen=False), roh))
 
     # Erste Kandidat, den es gibt; sonst der erste ueberhaupt (fuer die
     # Fehlermeldung).

@@ -167,13 +167,15 @@ def test_der_schnitt_haelt():
     # 09.10.2026: der Browser (browser_open & Co.) — eigener Deckel unten.
     browser = {"browser_open", "browser_click", "browser_type", "browser_find",
                "browser_read", "browser_back", "browser_close", "browser_screenshot"}
+    # 09.10.2026: Suchen im Nutzerordner und Claude-Skills übernehmen — eigener Deckel unten.
+    datei_import = {"find_files", "search_files", "import_skill"}
     eigen = {w.name for w in werkzeug_register.auf_schiene("gross")
              if w.klein is None and w.name != "run_code"} - skill - suche - ablage - projekt \
-        - kalender - pdf_word - fehler - browser
+        - kalender - pdf_word - fehler - browser - datei_import
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
                 if t["function"]["name"] not in
                 eigen | {"run_code"} | skill | suche | ablage | projekt | kalender | pdf_word
-                | fehler | browser)
+                | fehler | browser | datei_import)
     # explain_error: eine Zeile, liest nur die Tabelle core/fehlercodes.py.
     assert 0 < sum(len(t["function"]["description"]) for t in gross.TOOLS
                    if t["function"]["name"] in fehler) < 150
@@ -262,6 +264,15 @@ def test_der_schnitt_haelt():
     besch_browser = sum(len(t["function"]["description"]) for t in gross.TOOLS
                         if t["function"]["name"] in browser)
     assert 0 < besch_browser < 800
+    # Suchen im Nutzerordner + Skills übernehmen (09.10.2026, Gespräch
+    # 20261009-155510: die Chefkoch-Zip stand nicht in der gekappten
+    # list_files-Liste, und übernehmen ging gar nicht). Drei Werkzeuge
+    # (find_files, search_files, import_skill), ~460 Zeichen. Deckel 550:
+    # WIE ein Skill geprüft wird und wie vollständig eine Suche war, sagt das
+    # Ergebnis, nicht das Schema.
+    besch_datei_import = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                             if t["function"]["name"] in datei_import)
+    assert 0 < besch_datei_import < 550
 
 
 def test_import_parameter_bleibt_klein():

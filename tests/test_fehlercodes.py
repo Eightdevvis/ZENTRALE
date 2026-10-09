@@ -179,10 +179,26 @@ def _faelle(ids):
     ]
 
 
-def test_abbruch_nach_dem_schreiben_laesst_alles_wie_es_war(wurzeln, monkeypatch):
+def _skill_ordner_bauen(name):
+    """Ein gültiger Skill-Ordner in Input/ für import_skill (2026-10-09)."""
+    import nutzer_ordner
+    from pathlib import Path
+    wo = Path(nutzer_ordner.unterordner()) / name
+    wo.mkdir()
+    (wo / "SKILL.md").write_text(f"---\nname: {wo.name}\ndescription: Wenn z.\n---\n\n1. B.\n",
+                                 encoding="utf-8")
+    return name
+
+
+def test_abbruch_nach_dem_schreiben_laesst_alles_wie_es_war(wurzeln, umgebung, monkeypatch):  # noqa: F811
     ids = _vorbereiten()
     gesehen = set()
-    for name, args, attrappen in _faelle(ids):
+    faelle = _faelle(ids) + [
+        # Nachgelesen nicht in der Liste → der neue Ordner ist wieder weg.
+        ("import_skill", {"pfad": _skill_ordner_bauen("probe-import")},
+         [(skills, "aktive", lambda: [])]),
+    ]
+    for name, args, attrappen in faelle:
         vorher = _stand(wurzeln)
         with monkeypatch.context() as m:
             for modul, attr, ersatz in attrappen:

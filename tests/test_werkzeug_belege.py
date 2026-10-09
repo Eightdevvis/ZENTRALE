@@ -70,6 +70,8 @@ def umgebung(tmp_path, monkeypatch):
     html = b"<html><body><p>" + b"Ein Satz mit Inhalt. " * 40 + b"</p></body></html>"
     monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: Antwort(html))
     monkeypatch.setattr(sandbox, "datei_lesen", lambda lauf, datei, n: b"zeile eins\n")
+    # Sashas Nutzerordner (Input/, Output/; import_skill liest dort, 2026-10-09).
+    monkeypatch.setenv("ZENTRALE_NUTZER_ORDNER", str(tmp_path / "nutzer"))
     return tmp_path
 
 
@@ -104,7 +106,7 @@ def test_jedes_schreibende_werkzeug_belegt_echt(umgebung):
     # browser_screenshot braucht eine offene Seite: belegt in tests/test_browser.py
     # (test_bild_landet_in_der_ablage_mit_beleg, ohne Chromium).
     abgedeckt = {n for n, _ in AUFRUFE} | {"update_document", "combine_pdf", "edit_docx",
-                                          "browser_screenshot"}
+                                           "browser_screenshot", "import_skill"}
     schreibend = {w.name for w in werkzeug_register.WERKZEUGE if w.schreibt}
     assert schreibend <= abgedeckt, schreibend - abgedeckt
     ids = {}
@@ -125,6 +127,15 @@ def test_jedes_schreibende_werkzeug_belegt_echt(umgebung):
     assert isinstance(r, Befund) and r.status == "ok" and r.beleg, r
     r = ki_werkzeuge._verteilen("update_document", {"id": doc_id, "inhalt": "drei"})
     assert isinstance(r, Befund) and r.status == "ok" and "Fassung 2" in r.beleg
+    # import_skill braucht eine Datei (2026-10-09): ein Skill-Ordner in Input/.
+    import nutzer_ordner
+    from pathlib import Path
+    skill = Path(nutzer_ordner.unterordner()) / "beleg-import"
+    skill.mkdir()
+    (skill / "SKILL.md").write_text("---\nname: beleg-import\ndescription: Wenn x.\n---\n\n1. A.\n",
+                                    encoding="utf-8")
+    r = ki_werkzeuge._verteilen("import_skill", {"pfad": "beleg-import"})
+    assert isinstance(r, Befund) and r.status == "ok" and "beleg-import" in r.beleg, r
 
 
 def test_notiz_die_nicht_dasteht_ist_kein_erfolg(monkeypatch):

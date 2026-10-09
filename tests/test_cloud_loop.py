@@ -499,14 +499,17 @@ def test_krachendes_tool_reisst_den_turn_nicht_ab(fake):
     c = fake([
         {"content": [_tool_block("read_file", {"path": "/gibtsnicht"})],
          "stop_reason": "tool_use"},
-        {"text": ["Die Datei gibt es nicht."], "stop_reason": "end_turn"},
+        # Seit 2026-10-09 kein „Die Datei gibt es nicht." mehr: das löste
+        # (zu Recht) den Prüfer „nicht da" aus — ein abgestürztes Lesen ist
+        # keine vollständige Suche. Hier geht es nur um den Absturz.
+        {"text": ["Das Lesen ist schiefgegangen."], "stop_reason": "end_turn"},
     ])
 
     def kaputt(name, args):
         raise FileNotFoundError("/gibtsnicht")
 
     events = _lauf(cloud.chat_stream(_msgs(), tool_executor=kaputt))
-    assert events == ["Die Datei gibt es nicht."]
+    assert events == ["Das Lesen ist schiefgegangen."]
     zurueck = c.calls[1]["messages"][-1]["content"][0]
     assert zurueck["is_error"] is True
     assert "gibtsnicht" in zurueck["content"]

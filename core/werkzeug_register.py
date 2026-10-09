@@ -44,6 +44,7 @@ import kalender
 from werkzeug_eintrag import Werkzeug  # noqa: F401  — Name bleibt hier öffentlich
 import werkzeug_pdf_word
 import werkzeug_browser
+import werkzeug_nutzer_ordner
 
 
 SCHIENEN = ("klein", "gross")
@@ -451,9 +452,11 @@ WERKZEUGE = [
         klein=(
             "Listet alle Dateien auf die gelesen werden können. Aufrufen bevor read_file."
         ),
-        gross=(
-            "Listet die Dateien auf, die gelesen werden können."
-        ),
+        # gross seit 2026-10-09: EIN Ordner im Nutzerordner (Input/ Output/),
+        # wie ls — die 300er-Gesamtliste hat die Chefkoch-Zip verschluckt.
+        # klein behält die alte Liste (Text und Schema byte-gleich).
+        gross=werkzeug_nutzer_ordner.LIST_FILES_GROSS_TEXT,
+        gross_parameter=werkzeug_nutzer_ordner.LIST_FILES_GROSS_PARAMETER,
         parameter={
             "type":       "object",
             "properties": {},
@@ -1234,6 +1237,10 @@ WERKZEUGE.append(Werkzeug(
 # Browser (2026-10-09, core/werkzeug_browser.py): eine Seite wie Sasha sie
 # sieht, über Text bedient. Hinten an, nur gross.
 WERKZEUGE += werkzeug_browser.EINTRAEGE
+
+# Suchen im Nutzerordner und Claude-Skills übernehmen (2026-10-09,
+# core/werkzeug_nutzer_ordner.py): hinten an, nur gross.
+WERKZEUGE += werkzeug_nutzer_ordner.EINTRAEGE
 
 
 # ── Nachschlagen ───────────────────────────────────────────────────────

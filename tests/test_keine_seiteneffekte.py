@@ -703,3 +703,15 @@ def test_apps_zeigen_auf_die_test_app():
     assert os.path.realpath(wert).startswith(os.path.realpath(os.path.join(ROOT, "tests"))), wert
     m = apps.manifest("tutor")
     assert m and m["adresse"].endswith(":9"), "Test-App muss ins Leere zeigen"
+
+
+def test_nutzer_ordner_zeigt_nicht_auf_den_echten():
+    """Input/ und Output/ (core/nutzer_ordner.py, 2026-10-09): im Betrieb
+    ~/Zentrale. Ein Test, der dort sucht oder Unterordner anlegt, fasst
+    Sashas echte Ablage an."""
+    import nutzer_ordner
+    wert = os.environ.get("ZENTRALE_NUTZER_ORDNER")
+    assert wert, "ZENTRALE_NUTZER_ORDNER ist nicht gesetzt"
+    echt = os.path.realpath(os.path.expanduser(nutzer_ordner.STANDARD))
+    assert nutzer_ordner.wurzel(anlegen=False) != echt
+    assert not nutzer_ordner.wurzel(anlegen=False).startswith(os.path.realpath(ROOT))
