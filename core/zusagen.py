@@ -6,7 +6,7 @@
 # memory/ki/ehrlichkeit_live.md).
 #
 #   data/gespraeche/<id>/zusagen-<knoten>.json
-#     {"zusagen":  [{id, satz, bereiche, stichwoerter, schreibend, zug, ts}],
+#     {"zusagen":  [{id, satz, bereiche, stichwoerter, schreibend, zug, ts, art?}],
 #      "erledigt": {id: {grund, zug, ts}},
 #      "bezug":    {id: zug}}
 #
@@ -119,6 +119,23 @@ def hinzufuegen(gid, neue, zug: int) -> list:
     return [e["id"] for e in eintraege]
 
 
+def merken(gid, art: str, satz: str, zug: int) -> str | None:
+    """Eine Zusage, die ein WERKZEUG einträgt, nicht die Erkennung im Text
+    (2026-10-09: „input_aufraeumen: <datei>", core/input_aufraeumen.py).
+    `art` ist ihr Schlüssel: dieselbe Art kommt nicht doppelt, und abgehakt
+    wird sie nur von dem, der sie eingetragen hat — nachfuehren lässt sie
+    in Ruhe (kein Verfall, kein „irgendein Werkzeug lief"). -> id oder None."""
+    if not art or not gespraeche.gibt_es(gid):
+        return None
+    if any(z.get("art") == art for z in offen(gid)):
+        return None
+    eintrag = {"id": uuid.uuid4().hex[:12], "satz": satz, "art": art, "bereiche": [],
+               "stichwoerter": [], "schreibend": True, "zug": int(zug),
+               "ts": gespraeche.jetzt_ts()}
+    _aendern(gid, lambda d: d["zusagen"].append(eintrag))
+    return eintrag["id"]
+
+
 def erledigen(gid, zid, grund: str, zug: int) -> None:
     _aendern(gid, lambda d: d["erledigt"].__setitem__(
         zid, {"grund": grund, "zug": int(zug), "ts": gespraeche.jetzt_ts()}))
@@ -141,8 +158,8 @@ def nachfuehren(gid, zug: int, protokoll, *, nutzer_text: str, belegt, verfall: 
     nutzer = str(nutzer_text or "").lower()
     ablehnung = erkennen.lehnt_ab(nutzer_text)
     for z in offen(gid):
-        if z.get("zug", 0) >= zug:
-            continue            # in diesem Zug erst entstanden
+        if z.get("zug", 0) >= zug or z.get("art"):
+            continue            # in diesem Zug erst entstanden / gehört einem Werkzeug
         if belegt(set(z.get("bereiche") or ()), protokoll, z.get("schreibend", True)):
             erledigen(gid, z["id"], "werkzeug", zug)
         elif ablehnung and z.get("zug", 0) == zug - 1:

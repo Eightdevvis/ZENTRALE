@@ -17,6 +17,7 @@ import os
 import ablage
 import ablage_text
 import context
+import input_aufraeumen
 import pdf_datei
 import pdf_schreiben
 import textbloecke
@@ -61,13 +62,7 @@ def _quelle(quelle, art: str) -> tuple:
             raise _Fehlt("P-FALSCHE-ART", f"„{k.get('titel')}“ ist keine {wort} "
                          f"(Art {k.get('art')})")
         return ablage.roh(q), k.get("titel") or q, q
-    pfad = os.path.expanduser(q)
-    if not os.path.isabs(pfad):
-        for wurzel in context._WURZELN:
-            if os.path.exists(os.path.join(wurzel, pfad)):
-                pfad = os.path.join(wurzel, pfad)
-                break
-    pfad = os.path.abspath(pfad)
+    pfad = context.pfad_aufloesen(q)
     # Dieselbe Sperre wie read_file und fetch_document (context.erlaubt):
     # eine dritte Antwort auf „was darf sie sehen" wäre ein Umweg.
     grund = context.erlaubt(pfad)
@@ -79,6 +74,14 @@ def _quelle(quelle, art: str) -> tuple:
         raise _Fehlt("P-ZU-GROSS", "die Datei ist zu groß (höchstens 30 MB)")
     with open(pfad, "rb") as f:
         return f.read(), os.path.basename(pfad), None
+
+
+def _fertig(ergebnis, quelle, doc_id):
+    """Eine Datei (keine Ablage-id) ganz gelesen: liegt sie direkt in Input/,
+    hängt die Aufräum-Zeile an (core/input_aufraeumen.py, 2026-10-09)."""
+    if doc_id:
+        return ergebnis
+    return input_aufraeumen.nach_verarbeitung(ergebnis, context.pfad_aufloesen(quelle))
 
 
 def _herkunft(name: str, doc_id) -> str:
@@ -163,14 +166,16 @@ def _read_pdf(args: dict) -> str:
     if was == "formular":
         felder = r.get("formular") or []
         if not felder:
-            return Befund(kopf + "\nDas PDF hat keine ausfüllbaren Formularfelder.", OK)
+            return _fertig(Befund(kopf + "\nDas PDF hat keine ausfüllbaren Formularfelder.",
+                                  OK), args.get("quelle"), doc_id)
         zeilen = []
         for f in felder:
             z = f"- {f['name']} ({f['art']}): {f['wert'] or '(leer)'}"
             if f.get("optionen"):
                 z += " — möglich: " + ", ".join(o for o in f["optionen"] if o)
             zeilen.append(z)
-        return Befund(kopf + f"\n{len(felder)} Formularfelder:\n" + "\n".join(zeilen), OK)
+        return _fertig(Befund(kopf + f"\n{len(felder)} Formularfelder:\n" + "\n".join(zeilen),
+                              OK), args.get("quelle"), doc_id)
     text, gezeigt, leer = _seiten_zeigen(r["seiten"], was == "tabellen")
     angefragt = [s["nr"] for s in r["seiten"]]
     # Stückweise lesen ist kein Teil-Ergebnis (2026-10-09): der Aufruf hat
@@ -188,7 +193,11 @@ def _read_pdf(args: dict) -> str:
                                f"vermutlich gescannt (nur Bilder); Texterkennung gibt es "
                                f"nicht", "nichts gelesen")
         hinweise.append(f"Ohne Text (Bild/Scan?): Seiten {pdf_datei.seiten_text(leer)}.")
-    return Befund("\n".join([kopf, text] + hinweise), OK)
+    ergebnis = Befund("\n".join([kopf, text] + hinweise), OK)
+    # Fertig ist eine Datei erst, wenn ALLE ihre Seiten gelesen sind.
+    if len(gezeigt) == r.get("seiten_gesamt"):
+        return _fertig(ergebnis, args.get("quelle"), doc_id)
+    return ergebnis
 
 
 @ausfuehrer("create_pdf")
@@ -281,12 +290,12 @@ def _read_docx(args: dict) -> str:
     if r["hinweise"]:
         kopf += " Hinweis: " + "; ".join(r["hinweise"]) + "."
     if not text.strip():
-        return Befund(kopf + "\nKein Text darin.", OK)
+        return _fertig(Befund(kopf + "\nKein Text darin.", OK), args.get("quelle"), doc_id)
     stueck = text[ab:ab + SEITE_ZEICHEN]
     if ab + SEITE_ZEICHEN < len(text):
         return Befund(f"{kopf}\n{stueck}\n[Zeichen {ab}–{ab + len(stueck)} von "
                       f"{len(text)} gelesen, weiter mit ab={ab + len(stueck)}]", OK)
-    return Befund(f"{kopf}\n{stueck}", OK)
+    return _fertig(Befund(f"{kopf}\n{stueck}", OK), args.get("quelle"), doc_id)
 
 
 def _docx_beleg(doc_id, muss=(), darf_nicht=()):

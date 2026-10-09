@@ -1126,13 +1126,7 @@ def dokument_holen(url: str, name: str) -> str:
         # Ablage-Funktion, die mehr erreicht als die Lese-Funktion, ist ein
         # Umweg um die Sperre.
         import context
-        pfad = os.path.expanduser(quelle)
-        if not os.path.isabs(pfad):
-            for wurzel in context._WURZELN:
-                if os.path.exists(os.path.join(wurzel, pfad)):
-                    pfad = os.path.join(wurzel, pfad)
-                    break
-        pfad = os.path.abspath(pfad)
+        pfad = context.pfad_aufloesen(quelle)
         grund = context.erlaubt(pfad)
         if grund:
             return f"[Zugriff verweigert: {grund}]"

@@ -319,6 +319,8 @@ und nimmt beide Schreibweisen an (siehe „Zwei Schienen" weiter unten).
 | `find_files`  | nur `gross`  | Dateien/Ordner nach Namen in Input/ und Output/ suchen, wie find (`*.zip`, `*chefkoch*`, Namensteil) — mit Vollständigkeits-Angabe (s. „Nutzerordner, Suchen, Claude-Skills übernehmen") |
 | `search_files` | nur `gross` | Text in Dateien in Input/ und Output/ suchen, wie grep — `pfad:zeile: auszug`, mit Vollständigkeits-Angabe |
 | `import_skill` | nur `gross` | Claude-Skill(s) aus .zip oder Ordner in Input/ übernehmen, gegatet |
+| `unzip` | nur `gross` | Eine .zip aus Input/ nach Output/<name>/ auspacken (gegatet), `ansehen=true` zeigt nur den Inhalt (frei) |
+| `remove_input` | nur `gross` | Datei/Ordner direkt aus Input/ in `.Papierkorb/<Datum>/` legen (gegatet, löscht nie) |
 | `read_calendar` / `add_calendar_*` / `edit_calendar_routine` / `delete_calendar_entry` | = | Kalender lesen/schreiben/löschen (s. `memory/werkzeuge/kalender_system.md`); auf `gross` mit Kennungen, Ende/Ort und `nur_am` (s. „Kalender ohne Fallen") |
 | `edit_calendar_entry` | nur `gross` | Einen Einzeltermin ändern, nur genannte Felder (gegatet) |
 | `read_calendar_warnings` | nur `gross` | Die Kalender-Warnungen frisch, dieselben wie Sashas ⚠ |
@@ -710,6 +712,54 @@ Fehlercodes: `S-QUELLE-FEHLT`, `S-QUELLE-AUSSERHALB`, `S-QUELLE-GESPERRT`,
 (list_files: `ki_werkzeuge`, nach Schiene). Text-Budget der drei
 Beschreibungen: Deckel < 550 in `tests/test_profil.py`. Tests:
 `tests/test_skill_import.py`, „nicht da" in `tests/test_ehrlichkeit.py`.
+
+**`unzip(datei, ansehen?)`** (`core/input_dateien.py`, seit 2026-10-09): Zips,
+die kein Skill sind. Nur aus Input/. `ansehen=true` (frei): Pfade, Größen,
+Anzahl, was ausgelassen würde, ob Auspacken ginge — nichts ausgepackt. Sonst
+gegatet: „„Fotos.zip“ nach Output/Fotos/ auspacken? 2 Dateien, 1 KB, 3
+ausgelassen." Dieselben Regeln wie import_skill aus `core/zip_sicher.py`
+(geteilt, nicht kopiert): `..`/absolut/Symlink → `Z-UNSICHER`, > 20 MB oder
+> 500 Dateien → `Z-ZU-GROSS`, Verstecktes/Ballast/Schlüssel-Namen ausgelassen
+und im Ergebnis genannt. Ziel `Output/<name ohne .zip>/`; gibt es das schon →
+`Z-ZIEL-GIBT-ES`, nichts überschrieben. Ganz oder gar nicht: ausgepackt in
+einen versteckten Ordner in Output/, nachgezählt, dann `os.rename`. Ergebnis:
+„„Fotos.zip“ AUSGEPACKT nach Output/Fotos/: N Dateien (…)". Die Zip bleibt in
+Input/.
+
+**`remove_input(datei)`** (gegatet: „„x“ aus Input entfernen? (kommt in den
+Papierkorb)"): VERSCHIEBT einen Eintrag direkt aus Input/ nach
+`<nutzer_ordner>/.Papierkorb/<YYYY-MM-DD>/` — Namenskonflikt → „x (2).pdf";
+gelöscht wird nie (der Abgleich ist additiv). Unterordner → `Z-NICHT-DIREKT`.
+Nachgesehen: am neuen Ort da, am alten weg — sonst zurückgelegt
+(`W-NICHT-GESPEICHERT`). Der Papierkorb ist versteckt, also für Suchen und
+`read_file` unsichtbar.
+
+**Input aufräumen** (`core/input_aufraeumen.py`; Sasha: „damit der ordner nich
+zur halde wird"): Hat ein Werkzeug eine Datei DIREKT aus Input/ fertig
+verarbeitet — `import_skill`, `unzip`, `read_pdf` (alle Seiten), `read_docx`
+(letztes Stück), `read_file`, `fetch_document` mit Input-Pfad —, hängt an sein
+Ergebnis die feste Zeile „Frag Sasha jetzt, ob <datei> aus Input weg soll
+(remove_input)." und im Gespräch steht eine offene Zusage (`core/zusagen.py`,
+Feld `art: "input_aufraeumen: <datei>"`). Sie steht in jedem Zug im
+Kontext-Umschlag („Noch offen von dir zugesagt"), bis `remove_input` für die
+Datei lief, die Datei sonst weg ist, oder Sasha nein sagte — am Gate von
+`remove_input` oder in einem `ask_choice`, dessen Frage die Datei nennt
+(Wahl „Nein"/„behalten"/…). Werkzeug-Zusagen verfallen nicht und werden nicht
+von irgendeinem anderen Werkzeug abgehakt (`zusagen.nachfuehren` lässt Einträge
+mit `art` in Ruhe; abgehakt in `ehrlichkeit.Pruefer` →
+`input_aufraeumen.nachfuehren`). Nicht nach Lesefehlern/Abbrüchen, nicht für
+Dateien in Unterordnern, nur auf gross.
+
+Fehlercodes `Z-…` (Vorsilbe Z = Nutzerordner ~/Zentrale): `Z-QUELLE-FEHLT`,
+`Z-QUELLE-AUSSERHALB`, `Z-QUELLE-GESPERRT`, `Z-KEINE-ZIP`, `Z-ZIP-KAPUTT`,
+`Z-UNSICHER`, `Z-ZU-GROSS`, `Z-LEER`, `Z-ZIEL-GIBT-ES`, `Z-NICHT-DIREKT`,
+`Z-VERSCHIEBEN`. Text-Budget der beiden Beschreibungen: Deckel < 300 in
+`tests/test_profil.py`. Tests: `tests/test_input_aufraeumen.py`.
+
+Relative Pfade lösen `read_file`, `read_pdf`/`read_docx` und `fetch_document`
+seit 2026-10-09 an EINER Stelle auf (`context.pfad_aufloesen`: ZENTRALE,
+~/codicus, zuletzt der Nutzerordner) — vorher kannte nur `read_file`
+„Input/…".
 
 **Noch NICHT zurückgebaut** (eigener Schritt): `read_file`/`list_files`
 (klein) erreichen weiter ZENTRALE (Whitelist) und ganz ~/codicus.

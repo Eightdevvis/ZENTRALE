@@ -26,6 +26,7 @@ import chat_suche
 import context
 import gedaechtnis
 import gespraeche
+import input_aufraeumen
 import kalender
 import ki_kalender
 import ki_kalender_aendern
@@ -129,7 +130,16 @@ ausfuehrer = werkzeug_register.ausfuehrer
 
 @ausfuehrer("read_file")
 def _read_file(args: dict) -> str:
-    return context.read_file(args.get("path", ""))
+    roh = args.get("path", "")
+    text = context.read_file(roh)
+    # Aus Input/ fertig gelesen → Aufräum-Zeile (core/input_aufraeumen.py).
+    # Erfolg an der Datei gemessen, nicht am Text: eine JSON-Datei beginnt
+    # auch mit „[".
+    pfad = context.pfad_aufloesen(roh) if str(roh or "").strip() else ""
+    if pfad and not context.erlaubt(pfad) and _os.path.isfile(pfad) \
+            and not text.startswith("[Lesefehler"):
+        return input_aufraeumen.nach_verarbeitung(text, pfad)
+    return text
 
 
 @ausfuehrer("list_files")
@@ -388,8 +398,12 @@ def _fetch_document(args: dict) -> str:
             return None
         beleg = f"{ort} hat {len(jetzt)} Zeichen."
         return f"Dokument „{name}“ ABGELEGT in {ort}: {len(jetzt)} Zeichen.", beleg
-    return _transaktion(f"Dokument „{name}“ ablegen", "nichts abgelegt", "D-ABGELEHNT",
-                        sicherung, roh, pruefen)
+    ergebnis = _transaktion(f"Dokument „{name}“ ablegen", "nichts abgelegt", "D-ABGELEHNT",
+                            sicherung, roh, pruefen)
+    url = str(args.get("url") or "").strip()
+    if url and not url.lower().startswith(("http://", "https://")):
+        return input_aufraeumen.nach_verarbeitung(ergebnis, context.pfad_aufloesen(url))
+    return ergebnis
 
 
 # ── Messreihen ──

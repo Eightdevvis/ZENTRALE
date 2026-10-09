@@ -14,7 +14,8 @@
 #
 # Vorsilben: W allgemein, K Kalender (K-<CODE> des Kalender-Kerns kommen
 # gleichnamig dazu), N Notizen/Gedächtnis, A Ablage, D Download, M
-# Messreihen, S Skills, P PDF/Word, I Internet (lesend), B Browser.
+# Messreihen, S Skills, P PDF/Word, I Internet (lesend), B Browser, Z Sashas
+# Nutzerordner (~/Zentrale: unzip, remove_input).
 # tests/test_fehlercodes.py hält die
 # Tabelle und den Code deckungsgleich.
 #
@@ -167,6 +168,44 @@ CODES = {
     "S-SKILL-GIBT-ES": (
         "Einen Skill mit diesem Namen gibt es schon; überschrieben wird nie. Nichts übernommen.",
         "Sasha fragen, was er will (den alten mit load_skill zeigen). Nicht selbst umbenennen."),
+    # ── Nutzerordner: unzip, remove_input (2026-10-09, core/input_dateien.py) ──
+    "Z-QUELLE-FEHLT": (
+        "Die genannte Datei gibt es nicht in Input/ (oder kein Name angegeben).",
+        "Mit find_files nach dem Namen suchen und den gefundenen Namen nehmen."),
+    "Z-QUELLE-AUSSERHALB": (
+        "Der Pfad liegt nicht in Sashas Input/-Ordner; nur von dort wird ausgepackt "
+        "bzw. weggeräumt.",
+        "Sasha bitten, die Datei in seinen Input/-Ordner zu legen."),
+    "Z-QUELLE-GESPERRT": (
+        "Die Datei ist versteckt oder sieht nach einem Schlüssel aus.",
+        "Nicht umgehen. Sasha fragen."),
+    "Z-KEINE-ZIP": (
+        "Die Datei ist keine Zip (oder ein Ordner).",
+        "Den Namen prüfen (find_files); andere Dateien mit read_file/read_pdf lesen."),
+    "Z-ZIP-KAPUTT": (
+        "Die Zip ist kaputt oder verschlüsselt. Es wurde nichts ausgepackt.",
+        "Sasha sagen; er soll sie neu herunterladen."),
+    "Z-UNSICHER": (
+        "Die Zip enthält einen Pfad nach draußen (absolut oder mit ..) oder einen "
+        "Verweis (Symlink). Es wurde nichts ausgepackt.",
+        "Nicht umgehen. Sasha sagen, dass die Zip so nicht ausgepackt wird."),
+    "Z-ZU-GROSS": (
+        "Zu groß: entpackt über 20 MB oder über 500 Dateien. Nichts ausgepackt.",
+        "Sasha sagen; mit unzip ansehen=true lässt sich der Inhalt trotzdem zeigen."),
+    "Z-LEER": (
+        "In der Zip liegt nichts, was ausgepackt würde (leer, oder nur Verstecktes/"
+        "Ballast/Schlüssel).",
+        "Sasha sagen, was drin ist (unzip ansehen=true)."),
+    "Z-ZIEL-GIBT-ES": (
+        "Den Ordner Output/<name>/ gibt es schon; überschrieben wird nie. Nichts ausgepackt.",
+        "Sasha fragen: den vorhandenen Ordner ansehen oder erst wegräumen lassen."),
+    "Z-NICHT-DIREKT": (
+        "Die Datei liegt in einem Unterordner von Input/; weggeräumt wird nur, was "
+        "direkt in Input/ liegt.",
+        "Den obersten Ordner in Input/ nennen — nach Sashas Ja."),
+    "Z-VERSCHIEBEN": (
+        "Das Verschieben in den Papierkorb ging nicht (Grund im Ergebnis). Nichts verschoben.",
+        "Sasha sagen; nicht wiederholen."),
     # ── Internet (lesend) ──
     "I-KEIN-TEXT": (
         "Die Seite war erreichbar, aber ohne lesbaren Text (Skript-Seite, Bild, leer).",

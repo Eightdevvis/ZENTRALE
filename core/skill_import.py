@@ -22,7 +22,8 @@
 # Verweise/Symlinks), und nichts über MAX_BYTES / MAX_DATEIEN. Versteckte
 # Dateien und solche, die nach Schlüssel aussehen (context._is_secret),
 # bleiben draußen: was im Skill liegt, kann load_skill an den Anbieter
-# schicken. Ausgepackt wird in einen versteckten Ordner IM Skill-Ordner
+# schicken. Die Zip-Prüfung selbst steht seit 2026-10-09 in core/zip_sicher.py
+# (geteilt mit unzip). Ausgepackt wird in einen versteckten Ordner IM Skill-Ordner
 # (dieselbe Platte → os.rename ist atomar; alle()/Sicherung übersehen
 # Versteckte), geprüft, dann umbenannt. Ein Name, den es schon gibt, bricht
 # ab — überschrieben wird nie (die KI soll Sasha fragen).
@@ -31,7 +32,6 @@
 
 import json
 import os
-import re
 import shutil
 import tempfile
 import uuid
@@ -44,11 +44,11 @@ import dateien
 import nutzer_ordner
 import skill_format
 import skills
+import zip_sicher
 
 MAX_BYTES = 20 * 1024 * 1024      # entpackt, alle Dateien zusammen
 MAX_DATEIEN = 500
 PLUGIN_ORDNER = ".claude-plugin"
-_AUSLASSEN = {"__MACOSX", "__pycache__"}
 
 
 class Fehler(Exception):
@@ -90,57 +90,22 @@ def quelle(pfad) -> str:
 
 def _auslassen(teile) -> bool:
     """Versteckt (außer .claude-plugin), Mac-/Python-Ballast, Schlüssel."""
-    for t in teile:
-        if t in _AUSLASSEN or (t.startswith(".") and t != PLUGIN_ORDNER):
-            return True
-    return context._is_secret(teile[-1])
+    return zip_sicher.auslassen_standard(teile, erlaubt_versteckt=(PLUGIN_ORDNER,))
+
+
+# Die Arten von zip_sicher als Codes dieses Werkzeugs (core/fehlercodes.py).
+_CODE = {zip_sicher.UNSICHER: "S-UNSICHER", zip_sicher.ZU_GROSS: "S-ZU-GROSS",
+         zip_sicher.KAPUTT: "S-ZIP-KAPUTT"}
 
 
 def _zip_auspacken(datei: str, ziel: str) -> int:
-    """→ Zahl der ausgelassenen Dateien. Prüft ALLE Einträge, bevor eine
-    Datei entsteht; die Größe zählt beim Auspacken mit (die Angabe im
-    Verzeichnis der Zip kann lügen)."""
+    """→ Zahl der ausgelassenen Dateien. Das Handwerk (prüfen, zählen,
+    Grenzen) steht seit 2026-10-09 in core/zip_sicher.py, geteilt mit unzip."""
     try:
-        zf = zipfile.ZipFile(datei)
-    except (zipfile.BadZipFile, OSError) as e:
-        raise Fehler("S-ZIP-KAPUTT", f"die Zip lässt sich nicht öffnen ({e})")
-    with zf:
-        eintraege = []
-        for info in zf.infolist():
-            name = info.filename.replace("\\", "/")
-            teile = [t for t in name.split("/") if t not in ("", ".")]
-            if name.startswith("/") or re.match(r"^[A-Za-z]:", name) or ".." in teile:
-                raise Fehler("S-UNSICHER", f"Pfad zeigt nach draußen: {info.filename}")
-            if (info.external_attr >> 16) & 0o170000 == 0o120000:
-                raise Fehler("S-UNSICHER", f"Verweis (Symlink) in der Zip: {info.filename}")
-            if info.flag_bits & 0x1:
-                raise Fehler("S-ZIP-KAPUTT", "die Zip ist verschlüsselt")
-            if teile and not info.is_dir():
-                eintraege.append((info, teile))
-        if len(eintraege) > MAX_DATEIEN:
-            raise Fehler("S-ZU-GROSS", f"{len(eintraege)} Dateien, höchstens {MAX_DATEIEN}")
-        if sum(i.file_size for i, _ in eintraege) > MAX_BYTES:
-            raise Fehler("S-ZU-GROSS", f"entpackt über {MAX_BYTES // 2**20} MB")
-        ausgelassen, summe = 0, 0
-        for info, teile in eintraege:
-            if _auslassen(teile):
-                ausgelassen += 1
-                continue
-            pfad = os.path.join(ziel, *teile)
-            os.makedirs(os.path.dirname(pfad), exist_ok=True)
-            try:
-                with zf.open(info) as q, open(pfad, "wb") as z:
-                    while True:
-                        stueck = q.read(1 << 16)
-                        if not stueck:
-                            break
-                        summe += len(stueck)
-                        if summe > MAX_BYTES:
-                            raise Fehler("S-ZU-GROSS", f"entpackt über {MAX_BYTES // 2**20} MB")
-                        z.write(stueck)
-            except (zipfile.BadZipFile, OSError, EOFError, RuntimeError) as e:
-                raise Fehler("S-ZIP-KAPUTT", f"{info.filename} lässt sich nicht entpacken ({e})")
-    return ausgelassen
+        return len(zip_sicher.auspacken(datei, ziel, max_dateien=MAX_DATEIEN,
+                                        max_bytes=MAX_BYTES, auslassen=_auslassen))
+    except zip_sicher.Fehler as e:
+        raise Fehler(_CODE[e.art], e.grund)
 
 
 def _ordner_kopieren(quelle_: str, ziel: str) -> int:
@@ -367,4 +332,5 @@ def uebernehmen(pfad) -> dict:
     return {"namen": namen,
             "inhalt": {n: inhalt_zaehlen(os.path.join(wurzel, n)) for n in namen},
             "ausgelassen": ausgelassen,
-            "quelle": _quelle_text(echt, plugin, gepruefte[0][2])}
+            "quelle": _quelle_text(echt, plugin, gepruefte[0][2]),
+            "echt": echt}

@@ -1002,3 +1002,19 @@ Zip auch nicht übernehmen. Gebaut (nur `gross`):
   neu beschrieben, `klein` byte-gleich.
   Details: [ki_system.md](ki_system.md), „Nutzerordner, Suchen, Claude-Skills
   übernehmen"; [ehrlichkeit_live.md](ehrlichkeit_live.md), Prüfer 4.
+
+### Zips auspacken und Input/ aufräumen (2026-10-09)
+
+Sasha: „ob sie das file aus dem ordner dann removed afterwards damit der
+ordner nich zur halde wird". Gebaut (nur `gross`):
+- `unzip(datei, ansehen?)` — Zip aus Input/ nach `Output/<name>/`, gegatet
+  (ansehen frei), dieselben Sicherheitsregeln wie import_skill aus dem neuen
+  `core/zip_sicher.py`, ganz oder gar nicht, Ziel vorhanden → Abbruch.
+- `remove_input(datei)` — gegatet, verschiebt nach `.Papierkorb/<Datum>/`,
+  löscht nie.
+- Nach import_skill, unzip, read_pdf/read_docx/read_file, fetch_document mit
+  einer Datei direkt aus Input/: feste Zeile „Frag Sasha jetzt, ob … weg soll
+  (remove_input)." + offene Zusage `input_aufraeumen: <datei>` im Umschlag,
+  bis remove_input lief oder Sasha nein sagte (core/input_aufraeumen.py).
+- Elf `Z-`-Codes; Schnappschuss: zwei Einträge hinten an `gross`, `klein`
+  byte-gleich. Details: [ki_system.md](ki_system.md), „Nutzerordner …".

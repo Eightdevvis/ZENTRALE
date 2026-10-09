@@ -67,6 +67,12 @@ Tutor.
      Zügen, in denen Sasha kein Stichwort der Zusage (großgeschriebene
      Wörter) nennt.
    - TUI: „offen: …" leise unter der letzten Antwort (Feld `offen`).
+   - **Werkzeug-Zusagen** (seit 2026-10-09): ein Werkzeug darf selbst eine
+     Zusage eintragen (`zusagen.merken`, Feld `art`) — heute nur „Input
+     aufräumen" (`core/input_aufraeumen.py`, s. [ki_system.md](ki_system.md),
+     „Nutzerordner …"). Sie verfallen nicht und werden nicht von beliebigen
+     Werkzeugen abgehakt, nur von ihrem eigenen Ablauf (remove_input lief,
+     Datei weg, Sasha sagte in einer Knopf-Frage nein).
 
 4. **„Nicht da"** (seit 2026-10-09, Gespräch 20261009-155510: „Ich seh in
    der Liste keine chefkoch-Datei oder ZIP" — die Liste war nur bei 300 von

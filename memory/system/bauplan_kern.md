@@ -72,6 +72,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `transkript` | 1 | Rohes Gesagtes, append-only jsonl |
 | `context` | 1 | Datei-Zugriff nur über die Whitelist |
 | `nutzer_ordner` | 1 | Sashas Nutzerordner (Einstellung `nutzer_ordner`, Standard ~/Zentrale) mit Input/ und Output/: anlegen, Pfade auflösen ohne Weg hinaus |
+| `zip_sicher` | 1 | Eine Zip sicher lesen und auspacken (kein `..`/absolut/Symlink, Grenzen für Zahl und Größe, Auslassen von Verstecktem/Schlüsseln) — geteilt von `skill_import` und `input_dateien` |
 | `melden` | 1 | Meldung auf dem Desktop |
 | `glossary` | 1 | Kuratiertes Mini-Glossar |
 | `categories` | 1 | Data-Collection-Kategorien |
@@ -132,6 +133,8 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `skill_umzug` | 2 | Umzug alter Skill-Dateien (`<name>.md`) ins Claude-Format, alte beiseite nach `_alt/`; „kurz“ → Hausregel |
 | `skill_import` | 2 | Claude-Skills aus .zip oder Ordner übernehmen (Plugin, Skill-Ordner, SKILL.md in der Wurzel): sicher auspacken, prüfen, atomar in den Skill-Ordner, ganz oder gar nicht; nur aus Input/ |
 | `nutzer_suche` | 2 | Suchen im Nutzerordner wie find (Name, Platzhalter) und grep (Text), ein Ordner wie ls — jede Suche sagt, ob sie vollständig war |
+| `input_dateien` | 2 | Dateien aus Input/: Zip ansehen und nach Output/<name>/ auspacken (ganz oder gar nicht, überschreibt nie), Erledigtes in `.Papierkorb/<Datum>/` verschieben (löscht nie) |
+| `input_aufraeumen` | 2 | Nach fertig verarbeiteter Input-Datei: feste Zeile „Frag Sasha jetzt, ob … weg soll" ans Ergebnis und offene Zusage `input_aufraeumen: <datei>`, abgehakt nach remove_input oder Sashas Nein |
 | `ablage` | 2 | Die Ablage: Dokumente der KI, Sandbox-Dateien, Anhänge — Ordner pro Dokument, jede Fassung eine neue Datei, nie löschen |
 | `anhang` | 2 | Anhänge im Chat: Sperrliste, Art erkennen (PDF/Word als Original, Text dazu), in die Ablage; Verweise für den Verlauf der KI auflösen |
 | `ablage_text` | 2 | Der Text einer PDF- oder Word-Datei (Anhang, Ablage-Vorschau), gemerkt nach Inhalt |
@@ -164,8 +167,8 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `werkzeug_browser` | 3 | Einträge und Fragen der Browser-Werkzeuge; Erlaubnis je Host und Gespräch; hinten ans Register gehängt |
 | `ki_browser` | 3 | Was die Browser-Werkzeuge tun: Seite als Text für die KI (Adresse als Beleg, Inhalt = Daten), Liste, Suchen, Bild in die Ablage |
 | `ki_pdf_word` | 3 | Was die PDF-/Word-Werkzeuge tun: Quelle (Ablage oder Datei), lesen, neue Datei in die Ablage, nachlesen mit Beleg |
-| `werkzeug_nutzer_ordner` | 3 | Einträge und Frage von find_files, search_files, import_skill (hinten ans Register) und die gross-Fassung von list_files |
-| `ki_nutzer_ordner` | 3 | Was find_files, search_files und import_skill tun: Suchen als Befund mit `vollstaendig`, übernehmen über skill_import mit Beleg |
+| `werkzeug_nutzer_ordner` | 3 | Einträge und Fragen von find_files, search_files, import_skill, unzip, remove_input (hinten ans Register) und die gross-Fassung von list_files |
+| `ki_nutzer_ordner` | 3 | Was find_files, search_files, import_skill, unzip und remove_input tun: Suchen als Befund mit `vollstaendig`, übernehmen/auspacken/wegräumen mit Beleg |
 | `werkzeug_fragen` | 3 | Die Ja/Nein-Fragen an Sasha vor bestätigungspflichtigen Werkzeugen und die Regeln, die von den Argumenten abhängen |
 | `ki_kalender` | 3 | Der Kalender, wie die KI ihn liest: Kennungen (`#r3f9c`), alle Felder, Warnungen frisch, Belege nach dem Schreiben |
 | `ki_kalender_aendern` | 3 | Die schreibenden Kalender-Werkzeuge der KI: genau EIN Eintrag, nur genannte Felder, mit Beleg und Status |

@@ -239,6 +239,22 @@ def list_available_files() -> list:
     return aus
 
 
+def pfad_aufloesen(roh: str) -> str:
+    """Ein Pfad, wie die KI ihn nennt → absoluter Pfad (noch NICHT
+    erlaubt-geprüft). Relativ: ZENTRALE, dann ~/codicus, zuletzt der
+    Nutzerordner („Input/x.md", seit 2026-10-09 — zuletzt, damit kein
+    bisheriger Pfad etwas anderes trifft); der erste, den es gibt, sonst der
+    erste überhaupt (für die Fehlermeldung). Eine Stelle für read_file,
+    read_pdf/read_docx und fetch_document (2026-10-09: vorher drei Kopien,
+    und nur read_file kannte Input/)."""
+    roh = os.path.expanduser(str(roh or "").strip())
+    if os.path.isabs(roh):
+        return os.path.abspath(roh)
+    kandidaten = [os.path.join(w, roh) for w in _WURZELN]
+    kandidaten.append(os.path.join(nutzer_ordner.wurzel(anlegen=False), roh))
+    return os.path.abspath(next((k for k in kandidaten if os.path.exists(k)), kandidaten[0]))
+
+
 def read_file(relative_path: str) -> str:
     """
     Liest eine Datei, wenn die KI sie sehen darf.
@@ -255,17 +271,7 @@ def read_file(relative_path: str) -> str:
     if not roh:
         return "[Kein Pfad angegeben]"
 
-    if os.path.isabs(roh):
-        kandidaten = [roh]
-    else:
-        kandidaten = [os.path.join(w, roh) for w in _WURZELN]
-        # „Input/x.md" — relativ zum Nutzerordner (seit 2026-10-09), zuletzt
-        # probiert, damit kein bisheriger Pfad etwas anderes trifft.
-        kandidaten.append(os.path.join(nutzer_ordner.wurzel(anlegen=False), roh))
-
-    # Erste Kandidat, den es gibt; sonst der erste ueberhaupt (fuer die
-    # Fehlermeldung).
-    abs_path = next((k for k in kandidaten if os.path.exists(k)), kandidaten[0])
+    abs_path = pfad_aufloesen(roh)
 
     grund = erlaubt(abs_path)
     if grund:

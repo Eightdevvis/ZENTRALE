@@ -18,6 +18,7 @@ import ablage
 import browser_sitzung
 import fehlercodes
 import gedaechtnis
+import input_dateien
 import ki_pdf_word
 import ki_werkzeuge
 import skills
@@ -26,7 +27,7 @@ import werkzeug_register
 from test_werkzeug_belege import umgebung  # noqa: F401  — Wegwerf-Umgebung
 
 CORE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "core")
-_CODE = re.compile(r"^[KWNADMSPIB]-[A-Z0-9]+(?:-[A-Z0-9]+)*$")
+_CODE = re.compile(r"^[KWNADMSPIBZ]-[A-Z0-9]+(?:-[A-Z0-9]+)*$")
 
 
 def _baeume():
@@ -122,7 +123,9 @@ def _stand(wurzeln):
 @pytest.fixture
 def wurzeln(umgebung):  # noqa: F811
     import graphs
-    return [gedaechtnis._DIR, ablage.ordner(), skills.ordner(), graphs._DATA_DIR]
+    import nutzer_ordner
+    return [gedaechtnis._DIR, ablage.ordner(), skills.ordner(), graphs._DATA_DIR,
+            nutzer_ordner.wurzel()]
 
 
 def _vorbereiten():
@@ -190,6 +193,15 @@ def _skill_ordner_bauen(name):
     return name
 
 
+def _zip_bauen(name):
+    """Eine Zip in Input/ für unzip/remove_input (2026-10-09)."""
+    import zipfile
+    import nutzer_ordner
+    with zipfile.ZipFile(os.path.join(nutzer_ordner.unterordner(), name), "w") as z:
+        z.writestr("a.txt", "eins")
+    return name
+
+
 def test_abbruch_nach_dem_schreiben_laesst_alles_wie_es_war(wurzeln, umgebung, monkeypatch):  # noqa: F811
     ids = _vorbereiten()
     gesehen = set()
@@ -197,6 +209,12 @@ def test_abbruch_nach_dem_schreiben_laesst_alles_wie_es_war(wurzeln, umgebung, m
         # Nachgelesen nicht in der Liste → der neue Ordner ist wieder weg.
         ("import_skill", {"pfad": _skill_ordner_bauen("probe-import")},
          [(skills, "aktive", lambda: [])]),
+        # unzip/remove_input (2026-10-09): nachgezählt falsch → Output/ wie vorher;
+        # nachgesehen nicht im Papierkorb → zurück in Input/.
+        ("unzip", {"datei": _zip_bauen("probe.zip")},
+         [(input_dateien, "nachgezaehlt", lambda ziel: (0, 0))]),
+        ("remove_input", {"datei": _zip_bauen("weg.zip")},
+         [(input_dateien, "liegt", lambda neu, alt: False)]),
     ]
     for name, args, attrappen in faelle:
         vorher = _stand(wurzeln)

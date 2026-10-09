@@ -40,6 +40,7 @@ import re
 
 import ai_config
 import ehrlichkeit_erkennen as erkennen
+import input_aufraeumen
 import werkzeug_register
 import zusagen
 import zug
@@ -87,6 +88,8 @@ BEREICH = {
     "create_series": "messreihe", "log_series": "messreihe",
     "propose_skill": "skill", "edit_skill": "skill", "load_skill": "skill",
     "import_skill": "skill",
+    # Input/ (2026-10-09): Dateien auspacken und wegräumen gehören zur Ablage.
+    "unzip": "ablage", "remove_input": "ablage",
     "web_search": "netz", "fetch_url": "netz",
     # Browser (2026-10-09): lesen gehört zum Netz, das Bild zur Ablage.
     "browser_open": "netz", "browser_click": "netz", "browser_type": "netz",
@@ -118,6 +121,8 @@ WORTE = {
     "edit_skill": ("Anleitung geändert", "Anleitung ändern"),
     "browser_screenshot": ("Bild der Seite abgelegt", "Bild der Seite ablegen"),
     "import_skill": ("Skill übernommen", "Skill übernehmen"),
+    "unzip": ("ausgepackt", "Auspacken"),
+    "remove_input": ("in den Papierkorb gelegt", "In den Papierkorb legen"),
 }
 
 _KOPF = re.compile(r"^\[ergebnis: (\w+)\]")
@@ -132,9 +137,17 @@ def status_aus(text: str, ist_fehler: bool = False) -> str:
     return "fehlgeschlagen" if ist_fehler else "ok"
 
 
-def _schreibt(name: str) -> bool:
+def _schreibt(name: str, args: dict | None = None) -> bool:
     w = werkzeug_register.eintrag(name)
+    if w and w.erlaubnis and callable(w.erlaubnis) and name in _NUR_MIT_GATE_SCHREIBEND:
+        return bool(w.erlaubnis(args or {}))
     return bool(w and w.schreibt)
+
+
+# Werkzeuge, die je nach Argument nur lesen (2026-10-09: unzip mit
+# ansehen=true zeigt nur den Inhalt): schreibend ist ein Aufruf nur, wenn
+# das Gate für ihn fragt. Sonst stünde „✓ ausgepackt" in der Erledigt-Zeile.
+_NUR_MIT_GATE_SCHREIBEND = {"unzip"}
 
 
 def _wen(args: dict) -> str:
@@ -160,7 +173,7 @@ class Schritt:
 
     @property
     def schreibt(self):
-        return _schreibt(self.name)
+        return _schreibt(self.name, self.args)
 
 
 def erledigt_liste(protokoll: list) -> list:
@@ -353,6 +366,8 @@ class Pruefer:
                 neu = [z for z in erkennen.versprechen(text)
                        if not _zusage_belegt(z.bereiche, self.protokoll, z.schreibend)]
                 zusagen.hinzufuegen(self.gespraech, neu, nr)
+            # Zusagen, die ein Werkzeug eintrug (Input aufräumen, 2026-10-09).
+            input_aufraeumen.nachfuehren(self.gespraech, self.protokoll)
             return [z["satz"] for z in zusagen.offen(self.gespraech)], vorher
         except Exception as e:      # ein Prüfer darf den Zug nie kosten
             self._log(f"PRÜFUNG ✗ Zusagen: {e}")

@@ -169,13 +169,15 @@ def test_der_schnitt_haelt():
                "browser_read", "browser_back", "browser_close", "browser_screenshot"}
     # 09.10.2026: Suchen im Nutzerordner und Claude-Skills übernehmen — eigener Deckel unten.
     datei_import = {"find_files", "search_files", "import_skill"}
+    # 09.10.2026: Zips auspacken und Input/ aufräumen — eigener Deckel unten.
+    input_ = {"unzip", "remove_input"}
     eigen = {w.name for w in werkzeug_register.auf_schiene("gross")
              if w.klein is None and w.name != "run_code"} - skill - suche - ablage - projekt \
-        - kalender - pdf_word - fehler - browser - datei_import
+        - kalender - pdf_word - fehler - browser - datei_import - input_
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
                 if t["function"]["name"] not in
                 eigen | {"run_code"} | skill | suche | ablage | projekt | kalender | pdf_word
-                | fehler | browser | datei_import)
+                | fehler | browser | datei_import | input_)
     # explain_error: eine Zeile, liest nur die Tabelle core/fehlercodes.py.
     assert 0 < sum(len(t["function"]["description"]) for t in gross.TOOLS
                    if t["function"]["name"] in fehler) < 150
@@ -273,6 +275,13 @@ def test_der_schnitt_haelt():
     besch_datei_import = sum(len(t["function"]["description"]) for t in gross.TOOLS
                              if t["function"]["name"] in datei_import)
     assert 0 < besch_datei_import < 550
+    # unzip + remove_input (09.10.2026: Zips, die kein Skill sind, und Sasha:
+    # „damit der ordner nich zur halde wird"). Zwei Werkzeuge, ~210 Zeichen.
+    # Deckel 300: WANN aufgeräumt wird, sagt die feste Zeile im Ergebnis der
+    # lesenden Werkzeuge (core/input_aufraeumen.py), nicht das Schema.
+    besch_input = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                      if t["function"]["name"] in input_)
+    assert 0 < besch_input < 300
 
 
 def test_import_parameter_bleibt_klein():
