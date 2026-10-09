@@ -419,3 +419,14 @@ class _OpenAIAdapter:
         for cid, text, _ in ergebnisse:
             self.msgs.append({"role": "tool", "tool_call_id": cid,
                               "content": str(text)})
+
+    def ergebnis_eindampfen(self, call_id, text):
+        # Überholtes Browser-Ergebnis dieses Zugs → eine Zeile
+        # (werkzeug_schleife._seiten_eindampfen, 2026-10-09). role=tool gibt
+        # es nur im laufenden Zug; der Anfang (System, Verlauf) bleibt gleich,
+        # ein impliziter Anbieter-Cache trifft ihn weiter.
+        for m in reversed(self.msgs):
+            if m.get("role") == "tool" and m.get("tool_call_id") == call_id:
+                m["content"] = str(text)
+                return True
+        return False

@@ -73,7 +73,10 @@ def kopf(e):
         return "asked: %s → %s" % (_einzeilig(e.get("frage"), 40),
                                    a if a is not None else "no answer")
     if art == "pruefung":
-        return "check: %d finding(s) → written again" % len(e.get("befunde") or [])
+        runde = " (round %s)" % e["runde"] if e.get("runde") else ""
+        return "check: %d finding(s) → written again%s" % (len(e.get("befunde") or []), runde)
+    if art == "warnung":
+        return "warning: " + str(e.get("text") or "")
     if art == "fehler":
         return "error: " + _einzeilig(e.get("text"))
     if art == "gestoppt":
@@ -149,7 +152,8 @@ def zeilen(eintraege, i, offen, breite):
         zeit = ("+%.1fs " % float(t)) if isinstance(t, (int, float)) else ""
         pfeil = ("▾" if auf else "▸") if voll else " "
         vorne = "  %s %d %s" % (pfeil, k + 1, zeit)
-        stil = "schritt_fehler" if (e.get("art") == "fehler" or e.get("fehler")) else "schritt"
+        stil = ("schritt_fehler" if (e.get("art") in ("fehler", "warnung") or e.get("fehler"))
+                else "schritt")
         # Zu lange Kopfzeilen (Kosten bei 80 Spalten) umbrechen statt kappen.
         teile = _umbrochen(kopf(e), max(4, breite - len(vorne))) or ("",)
         for n, teil in enumerate(teile):

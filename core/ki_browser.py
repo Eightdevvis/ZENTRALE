@@ -15,6 +15,7 @@
 # @ausfuehrer an; ki_werkzeuge importiert dieses Modul.
 
 import os
+import re
 import shutil
 
 import ablage
@@ -26,8 +27,13 @@ from werkzeug_befund import Befund, OK, erledigt, abgebrochen
 
 ausfuehrer = werkzeug_register.ausfuehrer
 
-TEXT_ZEICHEN = 12_000         # so viel Seitentext je Ergebnis
-LISTE_MAX = 150               # so viele Elemente zeigt ein Ergebnis
+# Kosten (2026-10-09): ein LSF-Durchklicken kostete ~1 €, weil jede Runde den
+# ganzen Zug neu schickt und jede Seite bis 12.000 Zeichen + 150 Elemente
+# mitbrachte. Jetzt ein kürzerer Auszug; den Rest holt die KI gezielt mit
+# browser_read(ab=…) und browser_find(text). Ältere Seiten dampft die
+# Schleife ein (eindampfen, unten).
+TEXT_ZEICHEN = 4_000          # so viel Seitentext je Ergebnis
+LISTE_MAX = 60                # so viele Elemente zeigt ein Ergebnis
 FINDEN_MAX = 60
 _DUENN_WOERTER = 60
 
@@ -107,6 +113,45 @@ def seite_als_text(seite: dict, ab: int = 0) -> str:
 
 def _gelesen(seite: dict) -> Befund:
     return Befund(seite_als_text(seite), OK)
+
+
+# ── Ältere Seiten im laufenden Zug eindampfen ───────────────────────────
+# Die Werkzeug-Schleife fragt das nach jeder Runde (werkzeug_schleife.
+# _seiten_eindampfen): ist eine neuere Seite geladen, ersetzt eine Zeile die
+# älteren Browser-Ergebnisse DIESES Zugs, bevor die nächste Runde rausgeht.
+# Die Seite ist ja weg — sie ein zweites, drittes, zehntes Mal mitzuschicken
+# kostet nur. Frühere Züge stehen ohnehin nur als Werkzeug-Spur im Verlauf.
+
+LESEND = ("browser_open", "browser_click", "browser_type", "browser_back",
+          "browser_read", "browser_find")
+_LAEDT = ("browser_open", "browser_click", "browser_type", "browser_back")
+_EINDAMPFEN_AB = 400        # kürzere Ergebnisse (Fehler, kleine Funde) bleiben
+
+_TITEL = re.compile(r"^Seite: „(.*)“\s*$", re.M)
+_ADRESSE = re.compile(r"^(?:Adresse: |Auf )(\S+?):?\s", re.M)
+
+
+def seite_geladen(name: str, text: str) -> bool:
+    """Hat dieses Ergebnis eine (neue) Seite geladen?"""
+    t = str(text or "")
+    return name in _LAEDT and bool(_TITEL.search(t)) and not t.startswith(
+        "[ergebnis: fehlgeschlagen")
+
+
+def eindampfen(name: str, text: str) -> str | None:
+    """Die eine Zeile, die ein älteres Browser-Ergebnis ersetzt — oder None
+    (kein lesendes Browser-Werkzeug, oder ohnehin kurz). Die Kopfzeile
+    „[ergebnis: …]" bleibt, damit Status und Prüfer dasselbe sehen."""
+    t = str(text or "")
+    if name not in LESEND or len(t) < _EINDAMPFEN_AB:
+        return None
+    kopf = t.split("\n", 1)[0] if t.startswith("[ergebnis:") else ""
+    titel = _TITEL.search(t)
+    adresse = _ADRESSE.search(t)
+    was = " ".join(x for x in (f"„{titel.group(1)}“" if titel else "",
+                               adresse.group(1) if adresse else "") if x)
+    zeile = f"[Seite {was or '(ohne Adresse)'} — gelesen, ersetzt durch spätere Seite]"
+    return f"{kopf}\n{zeile}" if kopf else zeile
 
 
 # ── Die Ausführer ───────────────────────────────────────────────────────

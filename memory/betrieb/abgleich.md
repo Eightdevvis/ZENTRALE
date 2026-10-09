@@ -398,9 +398,16 @@ Mikrosekunden und `+00:00`), `knoten: "handy"`; `kopf.json` mit `titel`,
 ts}, `neu_projekt`. Eine Antwort (`rolle: assistant`) kann seit 09.10.
 zusätzlich `erledigt` ({`zeile`, `schritte`}), `pruefung` und `offen` (Liste
 von Sätzen) tragen ([../ki/ehrlichkeit_live.md](../ki/ehrlichkeit_live.md));
-wer sie nicht kennt, übergeht sie. Seit 09.10. (abends) kann eine Antwort
+wer sie nicht kennt, übergeht sie. Seit 09.10. (spät) außerdem `warnungen`
+(Liste von Sätzen, je mit „⚠" vorn — fertig zum Anzeigen, ÜBER der Antwort,
+in Warnfarbe) und `modell_wechsel` ({`von`, `zu`, `von_anbieter`,
+`zu_anbieter`, `grund`, `satz`} — `satz` ist die fertige Zeile, ebenfalls
+über der Antwort). `erledigt` kann dann auch ohne `schritte` kommen, mit
+`zeile` „✗ keine Änderung in diesem Zug"; `pruefung` kann `korrekturen`
+(Zahl) tragen. Das Handy schreibt nichts davon. Seit 09.10. (abends) kann eine Antwort
 außerdem `ablauf` tragen: eine Liste von Einträgen `{art, zeit, t, …}` (art:
-`system`, `kontext`, `text`, `werkzeug`, `frage`, `pruefung`, `fehler`,
+`system`, `kontext`, `text`, `werkzeug`, `frage`, `pruefung` (mit `runde`),
+`warnung` (`text`), `fehler`,
 `gestoppt`, `antwort`, `kosten`; je Eintrag höchstens 50.000 Zeichen) —
 das Ablauf-Protokoll des Zugs ([../ki/ki_system.md](../ki/ki_system.md),
 „Ablauf-Protokoll"). Nur zum Nachlesen; das Handy muss es weder schreiben

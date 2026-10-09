@@ -1,4 +1,4 @@
-# Ehrlichkeit live — vier Prüfer in Python
+# Ehrlichkeit live — vier Prüfer in Python, bis die Antwort besteht
 
 **Stand 2026-10-09.** Der [Prüfstand](pruefstand.md) misst NACH dem Gespräch,
 ob die KI ehrlich war (Richter-Modell + Zitat-Prüfung). Hier steht, was
@@ -16,13 +16,13 @@ Python nachzählen.
 | Quelle | Empfehlung | Bei uns |
 |---|---|---|
 | *Reduce hallucinations* | „Allow Claude to say I don't know"; Behauptungen mit Zitat belegen; nach dem Schreiben jede Behauptung gegen ein Zitat prüfen, sonst zurückziehen | übernommen: Regel 2 (seit 08.10.); der Prüfstand-Richter (Zitat); **live** die Prüfung „Behauptung ↔ Werkzeug-Protokoll" mit Rückzug per Korrekturrunde |
-| ebd., *Iterative refinement* | Ausgabe als Eingabe einer Folgefrage zum Prüfen | übernommen als **eine** Korrekturrunde, nur wenn Python etwas findet (nicht jedes Mal: kostet) |
+| ebd., *Iterative refinement* | Ausgabe als Eingabe einer Folgefrage zum Prüfen | übernommen als Korrekturrunden (seit 09.10. abends bis zu 5, vorher eine), nur wenn Python etwas findet (nicht jedes Mal: kostet) |
 | ebd., *Best-of-N* | mehrfach fragen, Abweichungen suchen | nicht übernommen: N-facher Preis je Zug |
 | *Citations* / *Search results* | Dokumente oder `search_result`-Blöcke (auch in `tool_result`) mit `citations.enabled`; die API liefert `cited_text` mit garantiert gültigem Verweis, zählt nicht als Ausgabe | **nicht übernommen.** Nur Anthropic — OpenAI/Mistral fahren auf derselben Straße und kennen es nicht; nicht mit `output_config.format` kombinierbar; und es belegt Text-Stellen, nicht Taten („eingetragen" steht in keinem Dokument). Wir nehmen die Idee: eine Kennung, die Python prüft. Wäre ein späterer Ausbau für `fetch_url`/Ablage-Texte auf der Anthropic-Strecke. |
 | *Increase output consistency* | festes Ausgabeformat, Beispiele, Retrieval statt Gedächtnis | übernommen: feste Kopfzeile `[ergebnis: …]` (seit 08.10.), Kennungen `#r3f9c` |
 | *Mitigate jailbreaks* | „Don't put your own instructions in tool results … send them in a user turn that follows" | übernommen: der Prüf-Hinweis ist eine eigene Nutzer-Nachricht `<pruefung_automatisch>`, nicht im Werkzeug-Ergebnis |
 | ebd., *chain safeguards*, Harmlessness-Screen mit kleinem Modell | ein zweites Modell prüft | nicht übernommen (Auftrag: kein zweites Modell). Satzmuster genügen für Erledigt/Zusage. |
-| *Building effective agents* | „ground truth from the environment at each step"; Stoppbedingungen (max. Runden); einfach bleiben | übernommen: das Werkzeug-Protokoll IST die Wahrheit; höchstens eine Korrektur, nie in der letzten erlaubten Runde |
+| *Building effective agents* | „ground truth from the environment at each step"; Stoppbedingungen (max. Runden); einfach bleiben | übernommen: das Werkzeug-Protokoll IST die Wahrheit; höchstens `pruefer_runden` Korrekturen, nie in der letzten erlaubten Runde |
 | *Writing effective tools for agents* | sprechende Kennungen statt UUIDs; Fehler, die zum richtigen Gebrauch lenken; Transkripte lesen | übernommen: `#r3f9c` (08.10.), Messung über Transkripte (unten) |
 
 ## Die vier Prüfer
@@ -45,10 +45,11 @@ Tutor.
    Wörtern im Satz) mit Status ok. Bezieht sich der Satz auf früher
    („vorhin", „schon"), reicht ein Lesen jetzt oder ein Schreiben früher im
    Gespräch. Kein Treffer bei Frage, Verneinung, Bedingung („würde", „wenn").
-   - Befund → **eine** Korrekturrunde: die Antwort bleibt im Kontext der KI,
+   - Befund → Korrekturrunde: die Antwort bleibt im Kontext der KI,
      dahinter `<pruefung_automatisch>` mit dem Satz und „Werkzeug aufrufen
-     oder ganz neu schreiben". Sasha sieht nur die zweite Antwort (der Text
-     einer Runde ist ohnehin gepuffert). Nicht in der letzten erlaubten Runde.
+     oder ganz neu schreiben". Sasha sieht nur die Antwort, die besteht (der
+     Text einer Runde ist ohnehin gepuffert). Bis zu 5 Runden, siehe
+     „Prüfen bis bestanden" unten.
    - **Erledigt-Zeile**: Python schreibt aus dem Protokoll „✓ Termin
      eingetragen: Zahnarzt · ✗ Routine ändern ging nicht: Parkour". Feld
      `erledigt` an der Antwort, nie im Text der KI; die TUI zeigt sie leise
@@ -99,6 +100,55 @@ Gespeichert an der Antwort (`core/gespraeche.py`, alles optional):
 `erledigt {zeile, schritte:[{werkzeug, wen, status}]}`, `pruefung {befunde,
 korrigiert}`, `offen [sätze]`; an jedem gespeicherten Werkzeug-Schritt jetzt
 auch `status`. Das Handy liest nur, was es kennt ([abgleich](../betrieb/abgleich.md)).
+
+## Prüfen bis bestanden, dann Warnungen (seit 2026-10-09 abends)
+
+Anlass: Gespräch 20261009-150713. Budget voll → der Chat lief still auf
+qwen-plus. qwen rief kein Werkzeug, schrieb „Alles korrigiert … laufen jetzt
+exakt vom 12.10. bis 18.12.2026" und erfand #r7d2c, #r1a2b, #r3c4d, #r5e6f.
+Der Prüfer fand beides, gab EINE Runde; qwen strich nur die Kennungen, log
+weiter — die zweite Antwort ging ungeprüft raus. Sasha: *„lass ihn prüfen
+was das zeug hält, bis die antwort die prüfung durchhält. wenn sie das nach
+5x oder so immernoch nich tut, geht sie halt raus mit den warnungen."*
+
+- **Jede** fertige Antwort wird voll geprüft (alle Prüfer), auch nach einer
+  Korrektur. Höchstens `pruefer_runden` Korrekturrunden je Zug (Standard 5,
+  0 = nur warnen). Eine Runde ist ein Durchlauf der Werkzeug-Schleife und
+  zählt einmal gegen deren Grenze (`runden_grenze`, 100); in der letzten
+  erlaubten Runde wird nie korrigiert, die Antwort geht dann mit Warnungen.
+- Der Hinweis nennt ALLE offenen Befunde. Ab Runde 2: „Prüfrunde n von 5";
+  kommt eine Art Befund wieder, sagt er, was jetzt zu tun ist — bei Taten
+  ohne jedes Werkzeug: „Du hast in diesem Zug KEIN Werkzeug aufgerufen. Ruf
+  das Werkzeug jetzt auf ODER schreib, dass nichts geändert wurde." In der
+  letzten Runde: „…sieht Sasha sie mit einer Warnung davor."
+- Während der Runden geht `{"pruefung_runde": {runde, von}}` an die TUI
+  (Statuszeile „antwort wird geprüft (runde 2 von 5) …").
+- Besteht sie nach allen Runden nicht: sie geht raus, davor **Warnungen**,
+  die Python schreibt (`ehrlichkeit.warnungen`, Feld `warnungen` an der
+  Antwort, SSE `{"warnungen": […]}`, im Ablauf-Protokoll je ein Eintrag
+  `warnung`, TUI über der Antwort in Warnfarbe). Eine Form für alles, was
+  die KI kann; der Bereich kommt aus `BEREICH`/`BEREICH_NAMEN`:
+  - „⚠ Ohne Beleg: „Alles korrigiert …“ — in diesem Zug lief kein passendes
+    Werkzeug (Kalender), es wurde nichts geändert." (lief ein anderes
+    schreibendes Werkzeug: „dafür wurde nichts geändert")
+  - „⚠ Erfundene Kennung #r7d2c — steht in keinem Werkzeug-Ergebnis."
+  - „⚠ ‚Nicht da' ohne vollständige Suche: „…“ — es kann trotzdem da sein."
+- **Erledigt-Zeile ohne Werkzeug:** behauptet die Antwort Taten und lief
+  kein schreibendes Werkzeug, steht dort „✗ keine Änderung in diesem Zug".
+- **Erkennung nachgezogen:** „Alles korrigiert: …", „Beides erledigt." (Partizip
+  hinter alles/beides/alle) zählt jetzt als Tat — der Satz vom 09.10. rutschte
+  durch.
+- **Modellwechsel:** läuft der Zug nicht mit dem eingestellten Anbieter
+  (heute nur der Budget-Rückfall, `ai_backends.modell_wechsel`), kommt am
+  Anfang `{"modell_wechsel": {von, zu, von_anbieter, zu_anbieter, grund,
+  satz}}`; gespeichert als Feld `modell_wechsel`, im Ablauf als `warnung`.
+  TUI: die Zeile „⚠ Budget voll — antwortet jetzt qwen-plus statt …" über
+  der Antwort und, solange der Rückfall gilt, „⚠ budget voll → qwen-plus" im
+  Kasten-Titel (`/api/ai/status` → `modell_wechsel`).
+
+Tests: `tests/test_ehrlichkeit_runden.py` (der Fall vom 09.10. mit
+Fake-Modell, „bessert sich in Runde 2", Rundengrenze, Route, TUI,
+Modellwechsel, Browser-Eindampfen).
 
 ## Falschtreffer — gemessen 09.10.2026, bevor scharf
 

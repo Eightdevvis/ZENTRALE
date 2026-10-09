@@ -19,8 +19,12 @@
 #   werkzeug  name, args, ergebnis (wie an die Schleife zurück, mit
 #             Kopfzeile [ergebnis: …]), status, dauer
 #   frage     Erlaubnis-/Knopf-Frage, optionen, antwort
-#   pruefung  Befunde des Ehrlichkeits-Prüfers, Hinweis an die KI, die erste
-#             (verworfene) Antwort — danach folgt die zweite
+#   pruefung  Befunde des Ehrlichkeits-Prüfers, Hinweis an die KI, die
+#             verworfene Antwort, die Nummer der Korrekturrunde — je Runde
+#             ein Eintrag (seit 2026-10-09 bis zu `pruefer_runden`)
+#   warnung   was Sasha über der Antwort als Warnung sieht: Befunde, die
+#             nach allen Runden blieben, und ein Modellwechsel (Budget-
+#             Rückfall) — Text wie in der TUI
 #   fehler / gestoppt   wenn der Zug so endete
 #   antwort   die fertige Antwort (wie gespeichert)
 #   kosten    Tokens und € aller Runden des Zugs
@@ -43,7 +47,7 @@ from datetime import datetime, timezone
 EINTRAG_MAX = 50_000
 
 ARTEN = ("system", "kontext", "text", "werkzeug", "frage", "pruefung",
-         "fehler", "gestoppt", "antwort", "kosten")
+         "warnung", "fehler", "gestoppt", "antwort", "kosten")
 
 _aktuell = contextvars.ContextVar("zentrale_zug_ablauf", default=None)
 
@@ -194,9 +198,15 @@ def frage(frage_: str, optionen, antwort, *, art: str = "knopf") -> None:
           keine_antwort=True if antwort is None else None, wie=art)
 
 
-def pruefung(befunde, hinweis: str, erste_antwort: str) -> None:
+def pruefung(befunde, hinweis: str, erste_antwort: str, runde: int = None) -> None:
     _dazu("pruefung", befunde=list(befunde or []), hinweis=str(hinweis or ""),
-          erste_antwort=str(erste_antwort or ""))
+          erste_antwort=str(erste_antwort or ""), runde=runde)
+
+
+def warnungen(texte) -> None:
+    """Warnungen über der Antwort (Prüfer nach allen Runden, Modellwechsel)."""
+    for t in texte or []:
+        _dazu("warnung", text=str(t))
 
 
 def fehler(text_: str) -> None:
@@ -244,7 +254,7 @@ def abschliessen(antwort: str | None = None) -> list | None:
 
 _WORT = {"system": "System-Prompt (fest)", "kontext": "Kontext dieses Zugs",
          "text": "Text der KI", "werkzeug": "Werkzeug", "frage": "Frage an Sasha",
-         "pruefung": "Prüfung", "fehler": "Fehler", "gestoppt": "Gestoppt",
+         "pruefung": "Prüfung", "warnung": "Warnung", "fehler": "Fehler", "gestoppt": "Gestoppt",
          "antwort": "Antwort", "kosten": "Kosten"}
 
 
@@ -262,7 +272,10 @@ def kopfzeile(e: dict) -> str:
         a = e.get("antwort")
         return f"Frage an Sasha → {a if a is not None else '(keine Antwort)'}"
     if art == "pruefung":
-        return f"Prüfung: {len(e.get('befunde') or [])} Befund(e), zweite Runde"
+        runde = f"Korrekturrunde {e['runde']}" if e.get("runde") else "neue Runde"
+        return f"Prüfung: {len(e.get('befunde') or [])} Befund(e), {runde}"
+    if art == "warnung":
+        return f"Warnung · {e.get('text') or ''}"
     if art == "kosten":
         return (f"Kosten · {e.get('runden')} Runde(n) · ein {e.get('eingabe')} · "
                 f"aus {e.get('ausgabe')} · Cache {e.get('cache_lesen')} · "
@@ -293,7 +306,7 @@ def inhalt(e: dict) -> str:
     if art == "kontext":
         anh = e.get("anhaenge")
         return str(e.get("text") or "") + (("\n\nAnhänge: " + ", ".join(map(str, anh))) if anh else "")
-    if art in ("system", "kosten", "gestoppt"):
+    if art in ("system", "kosten", "gestoppt", "warnung"):
         return ""
     return str(e.get("text") or "")
 

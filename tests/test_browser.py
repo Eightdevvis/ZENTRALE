@@ -237,9 +237,10 @@ def test_ergebnis_nennt_adresse_daten_hinweis_und_kappt():
     text = ki_browser.seite_als_text(_seite(text="x" * 30_000, elemente=elemente))
     assert "Adresse: https://lsf.uni-saarland.de/start" in text
     assert "DATEN" in text and "gelesen auf https://lsf.uni-saarland.de/start" in text
-    assert "browser_read(ab=12000)" in text
-    assert "[150] Link „Eintrag 150“" in text and "[151]" not in text
-    assert "51 weitere — browser_find" in text
+    # Auszug seit 2026-10-09 kürzer (Kosten): 4.000 Zeichen, 60 Elemente.
+    assert "browser_read(ab=4000)" in text
+    assert "[60] Link „Eintrag 60“" in text and "[61]" not in text
+    assert "141 weitere — browser_find" in text
 
 
 def test_finden_und_weiterlesen(gespraech):

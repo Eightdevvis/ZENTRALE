@@ -188,12 +188,15 @@ def test_falsche_erledigt_behauptung_loest_eine_korrekturrunde_aus():
     assert schluss["korrigiert"] is True and "befunde" not in schluss
 
 
-def test_nur_eine_korrekturrunde():
+def test_auch_die_korrigierte_antwort_wird_geprueft():
+    # Bis 2026-10-09 gab es nur EINE Korrekturrunde; die zweite Antwort ging
+    # ungeprüft raus. Jetzt wird jede neu geprüft (mehr: test_ehrlichkeit_runden).
     a = _Skript([werkzeug_schleife.Runde("Hab den Termin eingetragen."),
-                 werkzeug_schleife.Runde("Hab den Termin wirklich eingetragen.")])
+                 werkzeug_schleife.Runde("Hab den Termin wirklich eingetragen."),
+                 werkzeug_schleife.Runde("Eingetragen ist noch nichts.")])
     ev = _laufen(a, lambda n, x: "ok")
-    assert [e for e in ev if isinstance(e, str)] == ["Hab den Termin wirklich eingetragen."]
-    assert ev[-1]["ehrlichkeit"]["befunde"][0]["art"] == "tat"     # gemeldet, nicht nochmal
+    assert [e for e in ev if isinstance(e, str)] == ["Eingetragen ist noch nichts."]
+    assert len(a.hinweise) == 2
 
 
 def test_belegte_behauptung_geht_direkt_raus_mit_erledigt_zeile():

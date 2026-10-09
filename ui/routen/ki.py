@@ -265,16 +265,23 @@ def _wer_antwortet(backend):
 
 def _pruefung_felder(p) -> dict:
     """Ereignis des Ehrlichkeits-Prüfers → Felder der gespeicherten Antwort:
-    erledigt {zeile, schritte}, pruefung {befunde, korrigiert}, offen [sätze].
-    Leere Felder bleiben weg (das Handy liest nur, was da ist)."""
+    erledigt {zeile, schritte}, pruefung {befunde, korrigiert, korrekturen},
+    warnungen [sätze], offen [sätze]. Leere Felder bleiben weg (das Handy
+    liest nur, was da ist). erledigt auch ohne Schritte, wenn die Zeile
+    „✗ keine Änderung in diesem Zug" sagt (2026-10-09)."""
     if not p:
         return {}
     felder = {}
-    if p.get("erledigt"):
-        felder["erledigt"] = {"zeile": p.get("zeile") or "", "schritte": p["erledigt"]}
+    if p.get("erledigt") or p.get("zeile"):
+        felder["erledigt"] = {"zeile": p.get("zeile") or "",
+                              "schritte": list(p.get("erledigt") or [])}
     if p.get("befunde") or p.get("korrigiert"):
         felder["pruefung"] = {"befunde": p.get("befunde") or [],
                               "korrigiert": bool(p.get("korrigiert"))}
+        if p.get("korrekturen"):
+            felder["pruefung"]["korrekturen"] = int(p["korrekturen"])
+    if p.get("warnungen"):
+        felder["warnungen"] = [str(w) for w in p["warnungen"]]
     if p.get("offen"):
         felder["offen"] = list(p["offen"])
     return felder
@@ -290,6 +297,7 @@ def _sse_zug(stream, gid, backend, frage, erster):
     fehler_text = None
     gestoppt = False
     pruefung = None
+    wechsel = None
 
     for token in stream:
         if isinstance(token, dict):
@@ -319,9 +327,23 @@ def _sse_zug(stream, gid, backend, frage, erster):
                 yield _sse({'cinema': True})
             elif 'ehrlichkeit' in token:
                 # Live-Prüfer (core/ehrlichkeit.py): Erledigt-Zeile, Befunde,
-                # offene Zusagen — eigenes Feld, nie im Text der KI.
+                # Warnungen, offene Zusagen — eigene Felder, nie im Text der KI.
                 pruefung = token['ehrlichkeit']
+                if pruefung.get('warnungen'):
+                    # Eigenes Event (2026-10-09): die Antwort hat die Prüfung
+                    # nach allen Korrekturrunden nicht bestanden.
+                    for w in pruefung['warnungen']:
+                        state.push_log(f"AI ⚠  {w}")
+                    yield _sse({'warnungen': pruefung['warnungen']})
                 yield _sse({'ehrlichkeit': pruefung})
+            elif 'pruefung_runde' in token:
+                # Der Prüfer lässt die Antwort neu schreiben — die TUI zeigt
+                # das in der Statuszeile, damit lange Züge nicht hängen wirken.
+                yield _sse({'pruefung_runde': token['pruefung_runde']})
+            elif 'modell_wechsel' in token:
+                # Nicht das eingestellte Modell (Budget-Rückfall, core/kern.py).
+                wechsel = token['modell_wechsel']
+                yield _sse({'modell_wechsel': wechsel})
             elif 'gestoppt' in token:
                 # Sasha hat gestoppt (/api/chat/stop); die Schleife ist raus.
                 gestoppt = True
@@ -357,6 +379,7 @@ def _sse_zug(stream, gid, backend, frage, erster):
         denken="".join(denken), werkzeuge=werkzeuge, anbieter=anbieter,
         modell=modell, abgebrochen=gestoppt and bool(text.strip()),
         dokumente=dokumente or None, ablauf=ablauf, fehler=fehler_text,
+        modell_wechsel=wechsel,
         **_pruefung_felder(pruefung))
     # Die id der Antwort, damit die TUI ihr „trace" gleich zeigen kann —
     # und bei einem Abbruch den Fehler-Eintrag an seine Stelle setzt.
@@ -416,7 +439,8 @@ def api_chat_history():
         m = {"id": n["id"], "role": n["rolle"], "ts": n["ts"],
              "content": gespraeche.text_fuer_ki(n)}
         for feld in ("denken", "werkzeuge", "abgebrochen", "anbieter", "modell",
-                     "anhaenge", "dokumente", "erledigt", "offen", "fehler"):
+                     "anhaenge", "dokumente", "erledigt", "offen", "fehler",
+                     "warnungen", "modell_wechsel"):
             if n.get(feld):
                 m[feld] = n[feld]
         # Das Ablauf-Protokoll selbst ist groß: hier nur, DASS es eins gibt
@@ -534,6 +558,9 @@ def api_ai_status():
             "provider":  prov,
             "effort":    ai_backends.chat_effort(),
             "kosten":    kosten,
+            # Budget-Rückfall (2026-10-09): die TUI zeigt ihn im Kasten-Titel,
+            # solange er gilt. None, wenn das eingestellte Modell antwortet.
+            "modell_wechsel": ai_backends.modell_wechsel(),
         })
     if backend == ai_backends.LOCAL:
         return jsonify({

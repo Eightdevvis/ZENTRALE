@@ -36,6 +36,17 @@ def pruefung_eintraege(erledigt, offen, log=None):
     return raus
 
 
+def warn_eintraege(warnungen, wechsel=None):
+    """Warnzeilen ÜBER einer Antwort (2026-10-09): ein Modellwechsel
+    (Budget-Rückfall, Satz vom Backend) und was der Prüfer nach allen
+    Korrekturrunden noch fand. -> [("warnung", text)]"""
+    raus = []
+    if isinstance(wechsel, dict) and wechsel.get("satz"):
+        raus.append(("warnung", str(wechsel["satz"])))
+    raus += [("warnung", str(w)) for w in warnungen or []]
+    return raus
+
+
 def verlauf_aus(h):
     """Die Nachrichten von /api/chat/history als Verlaufs-Zeilen.
     -> [(rolle, text)]. Seit 2026-10-07 mit Denken und Werkzeugen der
@@ -64,6 +75,7 @@ def verlauf_aus(h):
                 elif w.get("ergebnis"):
                     log.append(("werkzeug_ergebnis", "↳ " + str(w["ergebnis"])))
         log += [ablage_eintrag(d) for d in m.get("dokumente") or [] if isinstance(d, dict)]
+        log += warn_eintraege(m.get("warnungen"), m.get("modell_wechsel"))
         if txt:
             log.append(("ai", txt))
         if m.get("fehler"):        # abgebrochener Zug (2026-10-09): eigener Eintrag

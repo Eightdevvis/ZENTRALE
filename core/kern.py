@@ -23,6 +23,7 @@ import cloud
 import cloud_openai
 import state
 import werkzeug_schleife
+import zug_ablauf
 
 # Welcher Cloud-Weg welchen Dialekt spricht (providers.py: `kind`). Ein neuer
 # Dialekt ist eine Zeile hier und ein Adapter für die Werkzeug-Schleife.
@@ -77,6 +78,14 @@ def chat(verlauf, *, via_mic=False, backend=None, abbruch=None, projekt=None):
                 f"'{ai_backends.cloud_provider()}' nicht.")
             return
         state.push_log(f"AI →  KERN: Cloud ({ai_backends.cloud_provider()})")
+        # Modellwechsel sichtbar machen (2026-10-09): läuft der Zug nicht mit
+        # dem eingestellten Anbieter (Budget-Rückfall), sagt das ein eigenes
+        # Ereignis am Anfang — nie der Text der KI.
+        wechsel = ai_backends.modell_wechsel()
+        if wechsel:
+            state.push_log(f"AI ⚠  {wechsel['satz']}")
+            zug_ablauf.warnungen([wechsel["satz"]])
+            yield {"modell_wechsel": wechsel}
         extra = {"projekt": projekt} if projekt else {}
         yield from modul.chat_stream(verlauf, via_mic=via_mic, abbruch=abbruch, **extra)
         return

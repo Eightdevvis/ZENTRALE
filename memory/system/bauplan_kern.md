@@ -172,7 +172,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `werkzeug_fragen` | 3 | Die Ja/Nein-Fragen an Sasha vor bestätigungspflichtigen Werkzeugen und die Regeln, die von den Argumenten abhängen |
 | `ki_kalender` | 3 | Der Kalender, wie die KI ihn liest: Kennungen (`#r3f9c`), alle Felder, Warnungen frisch, Belege nach dem Schreiben |
 | `ki_kalender_aendern` | 3 | Die schreibenden Kalender-Werkzeuge der KI: genau EIN Eintrag, nur genannte Felder, mit Beleg und Status |
-| `ehrlichkeit` | 3 | Live-Prüfer eines Zugs: Tat gegen Wort und Kennungen (eine Korrekturrunde), Erledigt-Zeile aus dem Werkzeug-Protokoll, offene Zusagen in den Kontext-Umschlag; Einstellung `ehrlichkeit_pruefer` |
+| `ehrlichkeit` | 3 | Live-Prüfer eines Zugs: Tat gegen Wort, Kennungen, „nicht da" (Korrekturrunden bis bestanden, höchstens `pruefer_runden`, danach Warnungen), Erledigt-Zeile aus dem Werkzeug-Protokoll, offene Zusagen in den Kontext-Umschlag; Einstellung `ehrlichkeit_pruefer` |
 | `kern` | 3 | Der eine Einstieg: kern.chat(verlauf) wählt den Weg (lokal/Anthropic/OpenAI) und fährt ihn |
 | `billig` | 3 | Ein Einmal-Aufruf beim billigen Modell des aktiven Anbieters (beide Dialekte, Kosten gebucht) — Graph-Extraktor, Gesprächstitel |
 | `gespraech_titel` | 3 | Gesprächstitel: sofort aus den ersten Wörtern, nach der ersten Antwort vom billigen Modell |

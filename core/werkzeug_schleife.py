@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 import ai_backends
 import erlaubnis
 import ki_antwort
+import ki_browser      # nur: welche Browser-Ergebnisse eindampfen (2026-10-09)
 import kidebug
 import werkzeug_befund
 import werkzeug_register
@@ -105,6 +106,7 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
     # was ohnehin passiert — Text zwischen Werkzeugen, Aufrufe mit Ergebnis,
     # Prüfung, Ende. Ohne offenes Protokoll (lokal, Takt) tut es nichts.
     grenze = ai_backends.runden_grenze(adapter.modell)
+    seiten = []          # Browser-Ergebnisse dieses Zugs (_seiten_eindampfen)
     for nr in range(grenze):
         if gestoppt(abbruch):
             zug_ablauf.gestoppt()
@@ -132,13 +134,23 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
 
         if not runde.calls:
             if pruefer is not None and hasattr(adapter, "hinweis_anhaengen"):
+                # Geprüft wird JEDE fertige Antwort, auch die nach einer
+                # Korrektur (2026-10-09; vorher nur die erste). Eine
+                # Korrekturrunde ist ein gewöhnlicher Durchlauf dieser
+                # Schleife und zählt so genau einmal gegen `grenze`; in der
+                # letzten erlaubten Runde korrigiert der Prüfer nie, damit
+                # die Antwort mit Warnungen rausgeht statt mit der Meldung
+                # „Maximale Tool-Tiefe".
                 korrektur = pruefer.nach_antwort(runde.text,
                                                  letzte_runde=(nr >= grenze - 1))
                 if korrektur:
                     # Die Antwort geht NICHT raus (der Adapter puffert den
                     # Text einer Runde); die KI bekommt den Befund und
                     # schreibt sie neu — oder ruft jetzt das Werkzeug.
-                    zug_ablauf.pruefung(pruefer.befunde, korrektur, runde.text)
+                    zug_ablauf.pruefung(pruefer.befunde, korrektur, runde.text,
+                                        runde=pruefer.korrekturen)
+                    yield {"pruefung_runde": {"runde": pruefer.korrekturen,
+                                              "von": pruefer.runden}}
                     adapter.hinweis_anhaengen(runde, korrektur)
                     continue
             yield from antwort(runde.text, tutor_mode=tutor_mode,
@@ -170,7 +182,10 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
             if pruefer is not None:
                 pruefer.werkzeug(name, args, text, ist_fehler)
             ergebnisse.append((call_id, text, ist_fehler))
+            if not tutor_mode:
+                seiten.append((call_id, _kanonisch(name), text))
         adapter.ergebnisse_anhaengen(ergebnisse)
+        seiten = _seiten_eindampfen(adapter, seiten)
 
     schluss = pruefer.abschluss(None) if pruefer is not None else None
     if schluss:
@@ -181,6 +196,32 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
                f"sie hat nicht zu Ende geantwortet.")
     zug_ablauf.fehler(meldung)
     yield fehler(meldung)
+
+
+def _seiten_eindampfen(adapter, seiten: list) -> list:
+    """Browser-Ergebnisse dieses Zugs, die von einer neueren Seite überholt
+    sind, im Gesprächsstand des Adapters auf eine Zeile kürzen (2026-10-09,
+    Kosten: jede Runde schickt den ganzen Zug neu). seiten: [(call_id, name,
+    text)] in Reihenfolge. -> was noch nicht überholt ist.
+
+    Prompt-Cache (Anthropic): der feste Kopf und alles bis zu Sashas
+    Nachricht (Breakpoint vor dem Umschlag, cloud._append_volatile) bleiben
+    unberührt — eingedampft wird nur hinter diesem Breakpoint, in den
+    Werkzeug-Ergebnissen des laufenden Zugs. Was dort danach steht, wird
+    einmal neu geschrieben, dafür nicht in jeder weiteren Runde neu gelesen.
+    Ein Adapter ohne ergebnis_eindampfen (Tests, Tutor) bleibt, wie er ist."""
+    seiten = [s for s in seiten if s[1] in ki_browser.LESEND]
+    if not seiten or not hasattr(adapter, "ergebnis_eindampfen"):
+        return []
+    neueste = max((i for i, (_c, n, t) in enumerate(seiten)
+                   if ki_browser.seite_geladen(n, t)), default=None)
+    if neueste is None:
+        return seiten
+    for call_id, name, text in seiten[:neueste]:
+        kurz = ki_browser.eindampfen(name, text)
+        if kurz:
+            adapter.ergebnis_eindampfen(call_id, kurz)
+    return seiten[neueste:]
 
 
 def _kanonisch(name: str) -> str:

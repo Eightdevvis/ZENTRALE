@@ -758,6 +758,22 @@ class _AnthropicAdapter:
             results[-1]["cache_control"] = _cc()
             self.runden_bp = results[-1]
 
+    def ergebnis_eindampfen(self, call_id, text):
+        # Ein überholtes Browser-Ergebnis dieses Zugs auf eine Zeile kürzen
+        # (werkzeug_schleife._seiten_eindampfen, 2026-10-09). tool_result-
+        # Blöcke gibt es nur im laufenden Zug — frühere Züge stehen als Text
+        # im Verlauf —, also liegt alles hier HINTER dem Breakpoint vor dem
+        # Umschlag; der feste Kopf und der Verlauf bleiben gecacht.
+        for m in reversed(self.msgs):
+            if m.get("role") != "user" or not isinstance(m.get("content"), list):
+                continue
+            for b in m["content"]:
+                if (isinstance(b, dict) and b.get("type") == "tool_result"
+                        and b.get("tool_use_id") == call_id):
+                    b["content"] = str(text)
+                    return True
+        return False
+
 
 # ── Helfer ─────────────────────────────────────────────────────────────
 

@@ -34,7 +34,7 @@ from .einstellungen import Einstellungen
 from .rechts import Rechts
 from .seitenleiste import Seitenleiste
 from .chat_gespraeche import (GespraechsSteuerung, ai_verlauf_holen,  # noqa: F401
-                              pruefung_eintraege, verlauf_aus)
+                              pruefung_eintraege, verlauf_aus, warn_eintraege)
 from .gespraechsliste import Gespraechsliste
 from .gedaechtnis import Gedaechtnis
 from .projekte import Projekte
@@ -521,6 +521,15 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
             _denken_ablegen(Z)
             if isinstance(evt["werkzeug"], dict):
                 Z["log"].append(werkzeug_zeile(evt["werkzeug"]))
+        elif "warnungen" in evt:                  # Prüfung nicht bestanden (2026-10-09)
+            Z["warnungen"] = [str(w) for w in evt["warnungen"] or []]
+        elif "modell_wechsel" in evt:             # Budget-Rückfall: anderes Modell
+            w = evt["modell_wechsel"] if isinstance(evt["modell_wechsel"], dict) else {}
+            Z["wechsel"] = w
+            AI["msg"] = str(w.get("satz") or "")
+        elif "pruefung_runde" in evt:             # der Prüfer lässt neu schreiben
+            r = evt["pruefung_runde"] if isinstance(evt["pruefung_runde"], dict) else {}
+            AI["msg"] = "antwort wird geprüft (runde %s von %s) …" % (r.get("runde"), r.get("von"))
         elif "ehrlichkeit" in evt:                # Erledigt-Zeile, offene Zusagen
             Z["pruefung"] = evt["ehrlichkeit"] if isinstance(evt["ehrlichkeit"], dict) else None
         elif "antwort" in evt:                    # gespeichert, mit Ablauf („trace", spur.py)
@@ -553,7 +562,10 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
         if ans and Z.get("gestoppt"):
             ans += "\n\n" + VERMERK_ABGEBROCHEN
         live = Z.pop("antwort_live", None)
+        # Warnungen ÜBER die Antwort, in Warnfarbe (2026-10-09).
+        warn = warn_eintraege(Z.pop("warnungen", None), Z.pop("wechsel", None))
         if ans:
+            Z["log"] += warn
             Z["log"].append(("ai", ans))
             # „trace ›" gleich unter der eben gestreamten Antwort —
             # ein alter Eintrag an diesem Index (nach retry) fliegt.
@@ -691,6 +703,7 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
                     AI["effort"] = st.get("effort") or ""
                     AI["kosten_heute"] = k.get("heute") or 0.0
                     AI["budget"] = k.get("budget") or {}
+                    AI["modell_wechsel_jetzt"] = st.get("modell_wechsel")
         except (urllib.error.URLError, OSError, ValueError):
             pass
 
@@ -930,6 +943,7 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
         with AI_LOCK:
             b, mdl, prov = AI["backend"], AI["model"], AI["provider"]
             eur, budget = AI.get("kosten_heute") or 0.0, AI.get("budget") or {}
+            wechsel = AI.get("modell_wechsel_jetzt") or None
             # Sie kann von sich aus sprechen; steht der Kasten zu, sieht er
             # es sonst nie. Der Punkt steht VORNE — hinten haengt schon die
             # Kostenzeile und ein Zeichen dort geht unter.
@@ -945,6 +959,9 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
             rest = ""
         else:
             warn = " ⚠" if budget.get("status") in ("warn", "over") else ""
+            if isinstance(wechsel, dict):
+                # Budget-Rückfall: solange er gilt, steht er im Titel (2026-10-09).
+                warn = " ⚠ budget voll → %s" % (wechsel.get("zu") or prov)
             rest = f" · cloud ({prov or mdl}) · {fmt_euro(eur)} heute{warn}".lower()
         kopf = neu + "ki-chat"
         if gtitel:

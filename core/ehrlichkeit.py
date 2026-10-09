@@ -1,6 +1,6 @@
 # core/ehrlichkeit.py
 #
-# Drei Live-Prüfer, die Ehrlichkeit durch Bauweise erzwingen — reines Python,
+# Live-Prüfer, die Ehrlichkeit durch Bauweise erzwingen — reines Python,
 # kein zweites Modell (2026-10-09, memory/ki/ehrlichkeit_live.md):
 #
 #   1. Kennungen:  nennt die Antwort eine Kalender-Kennung (#r3f9c), muss sie
@@ -12,13 +12,21 @@
 #                  einer VOLLSTÄNDIGEN Suche ohne Treffer in diesem Zug
 #                  (find_files/search_files, „Suche vollständig: 0 Treffer",
 #                  oder read_file „nicht gefunden"; seit 2026-10-09).
-#                  1 und 2 → EINE Korrekturrunde, bevor Sasha die Antwort
-#                  sieht. Dazu die Erledigt-Zeile, die Python allein aus dem
+#                  1, 2, 2b → Korrekturrunden, bis die Antwort die Prüfung
+#                  besteht, höchstens `pruefer_runden` (5) je Zug. Besteht sie
+#                  dann noch nicht, geht sie raus — mit Warnungen davor, die
+#                  Python schreibt (Feld `warnungen`, nie im Text der KI).
+#                  Dazu die Erledigt-Zeile, die Python allein aus dem
 #                  Werkzeug-Protokoll schreibt (✓ geändert … · ✗ …).
 #   3. Zusagen:    „trag ich gleich ein" wird als offener Punkt des Gesprächs
 #                  gespeichert (core/zusagen.py) und steht in jedem folgenden
 #                  Zug unsichtbar im Kontext-Umschlag, bis ein passendes
 #                  Werkzeug lief, Sasha ablehnt oder nach N Zügen ohne Bezug.
+#
+# Warum mehrere Runden statt einer (2026-10-09, Gespräch 20261009-150713):
+# qwen im Budget-Rückfall schrieb „Alles korrigiert …" ohne ein Werkzeug und
+# erfand vier Kennungen. Nach der EINEN Korrekturrunde strich es nur die
+# Kennungen, log weiter — und die zweite Antwort ging ungeprüft raus.
 #
 # Warum Python statt einer Bitte im Prompt: „Erfolg meldest du erst nach dem
 # Beleg" steht seit 08.10. im Prompt (Regel 2) — eine Bitte. Der Prüfstand
@@ -27,8 +35,8 @@
 #
 # Einstellung `ehrlichkeit_pruefer` (ai_config.setting):
 #   aus     nichts
-#   melden  Erledigt-Zeile und Befunde im Gespräch/Log, aber KEINE
-#           Korrekturrunde und kein Hinweis an die KI (zum Messen)
+#   melden  Erledigt-Zeile, Befunde und Warnungen im Gespräch/Log, aber
+#           KEINE Korrekturrunde und kein Hinweis an die KI (zum Messen)
 #   an      alles
 # Nur die gross-Schiene; klein (lokales qwen) bleibt, wie es gemessen ist.
 #
@@ -44,6 +52,7 @@ import input_aufraeumen
 import werkzeug_register
 import zusagen
 import zug
+import zug_ablauf
 
 AUS, MELDEN, AN = "aus", "melden", "an"
 MODI = (AUS, MELDEN, AN)
@@ -55,10 +64,27 @@ STANDARD = AN
 # So viele Züge ohne Bezug, dann verfällt eine Zusage still.
 VERFALL_STANDARD = 4
 
+# So viele Korrekturrunden höchstens je Zug (Sasha 2026-10-09: „prüfen was
+# das zeug hält … wenn sie das nach 5x oder so immernoch nich tut, geht sie
+# halt raus mit den warnungen"). Jede Runde ist ein Modell-Aufruf und zählt
+# EINMAL gegen die Rundengrenze der Schleife (ai_backends.runden_grenze).
+RUNDEN_STANDARD = 5
+RUNDEN_HOECHSTENS = 20
+
 
 def modus() -> str:
     wert = str(ai_config.setting("ehrlichkeit_pruefer", STANDARD) or "").strip().lower()
     return wert if wert in MODI else STANDARD
+
+
+def pruefer_runden() -> int:
+    """Höchstens so viele Korrekturrunden je Zug (Einstellung
+    `pruefer_runden`). 0 heißt: prüfen und warnen, aber nie korrigieren."""
+    try:
+        n = int(ai_config.setting("pruefer_runden", RUNDEN_STANDARD))
+    except (TypeError, ValueError):
+        return RUNDEN_STANDARD
+    return max(0, min(RUNDEN_HOECHSTENS, n))
 
 
 def verfall_zuege() -> int:
@@ -95,6 +121,15 @@ BEREICH = {
     "browser_open": "netz", "browser_click": "netz", "browser_type": "netz",
     "browser_find": "netz", "browser_read": "netz", "browser_back": "netz",
     "browser_screenshot": "ablage",
+}
+
+# Wie Sasha einen Bereich liest — für die Warnungen (2026-10-09). Eine
+# Warn-Form für alles, was die KI kann; der Bereich kommt aus BEREICH bzw.
+# den Bereichswörtern des Satzes, nicht aus einem Text je Werkzeug. Ein
+# neuer Bereich braucht hier ein Wort (Test: tests/test_ehrlichkeit_runden.py).
+BEREICH_NAMEN = {
+    "kalender": "Kalender", "notiz": "Notizen/Gedächtnis", "ablage": "Ablage/Dateien",
+    "messreihe": "Messreihen", "skill": "Skills", "netz": "Netz/Browser",
 }
 
 # Für die Erledigt-Zeile: (geklappt, versucht). Sasha liest das — Alltagswörter.
@@ -253,7 +288,10 @@ def befunde(antwort: str, protokoll: list, *, bekannt_text: str = "",
     raus = []
     for tat in erkennen.taten(antwort):
         if not tat_belegt(tat, protokoll, frueher):
-            raus.append({"art": "tat", "satz": tat.satz})
+            b = {"art": "tat", "satz": tat.satz}
+            if tat.bereiche:
+                b["bereiche"] = sorted(tat.bereiche)
+            raus.append(b)
     if not suche_belegt(protokoll):
         for satz in erkennen.nicht_da(antwort):
             raus.append({"art": "nicht_da", "satz": satz})
@@ -271,28 +309,105 @@ _HINWEIS_AUF = ("<pruefung_automatisch>\n(ZENTRALE prüft jede Antwort, bevor Sa
 _HINWEIS_ZU = "</pruefung_automatisch>"
 
 
-def hinweis(befunde_: list) -> str:
+# Was die KI tun soll, wenn dieselbe Art Befund wiederkommt — je ART des
+# Befunds, nicht je Bereich (2026-10-09).
+_WIEDER = {
+    "tat": "In diesem Zug lief kein passendes schreibendes Werkzeug. Ruf das Werkzeug "
+           "jetzt auf ODER schreib, dass nichts geändert wurde.",
+    "nicht_da": "Du hast in diesem Zug keine vollständige Suche gemacht. Such jetzt mit "
+                "find_files/search_files ODER schreib, dass du es nicht weißt.",
+    "kennung": "Nenn keine Kennung, die in keinem Werkzeug-Ergebnis steht — lass sie weg "
+               "oder lies sie mit dem Werkzeug nach.",
+}
+KEIN_WERKZEUG = ("Du hast in diesem Zug KEIN Werkzeug aufgerufen. Ruf das Werkzeug jetzt "
+                 "auf ODER schreib, dass nichts geändert wurde.")
+
+
+def _befund_zeile(b: dict) -> str:
+    if b["art"] == "tat":
+        return (f"- Du schreibst „{b['satz']}“ — in diesem Zug lief dafür kein "
+                f"passendes schreibendes Werkzeug mit [ergebnis: ok].")
+    if b["art"] == "nicht_da":
+        return (f"- Du sagst „{b['satz']}“ — also ‚nicht da', hast aber keine "
+                f"vollständige Suche gemacht. Such gezielt mit find_files/"
+                f"search_files oder sag, dass du es nicht weißt.")
+    if b["art"] == "kennung":
+        return (f"- Die Kennung {b['kennung']} steht in keinem Werkzeug-Ergebnis "
+                f"und nirgends im Gespräch.")
+    return f"- Nicht belegt: {b.get('satz') or b.get('art')}"
+
+
+def hinweis(befunde_: list, *, runde: int = 1, runden: int = 1,
+            wiederholt: tuple = (), werkzeug_lief: bool = True) -> str:
     """Die Korrektur an die KI. Als eigene Nutzer-Nachricht hinter ihrer
     Antwort — nicht in einem Werkzeug-Ergebnis: Anweisungen dort behandelt
-    Claude als fremde Daten (Anthropic, „Mitigate jailbreaks")."""
-    zeilen = []
-    for b in befunde_:
-        if b["art"] == "tat":
-            zeilen.append(f"- Du schreibst „{b['satz']}“ — in diesem Zug lief dafür kein "
-                          f"passendes schreibendes Werkzeug mit [ergebnis: ok].")
-        elif b["art"] == "nicht_da":
-            zeilen.append(f"- Du sagst „{b['satz']}“ — also ‚nicht da', hast aber keine "
-                          f"vollständige Suche gemacht. Such gezielt mit find_files/"
-                          f"search_files oder sag, dass du es nicht weißt.")
-        else:
-            zeilen.append(f"- Die Kennung {b['kennung']} steht in keinem Werkzeug-Ergebnis "
-                          f"und nirgends im Gespräch.")
+    Claude als fremde Daten (Anthropic, „Mitigate jailbreaks").
+
+    Nennt ALLE offenen Befunde. Ab der zweiten Runde wird er deutlicher:
+    welche Runde, und für jede Art Befund, die wiederkommt, was jetzt zu tun
+    ist (2026-10-09 — vorher kam nach einer Runde nichts mehr)."""
+    zeilen = [_befund_zeile(b) for b in befunde_]
+    if runde > 1:
+        zeilen.append(f"Das ist Prüfrunde {runde} von {runden}: auch deine letzte Antwort "
+                      f"hatte Stellen ohne Beleg.")
+        for art in wiederholt:
+            if art == "tat" and not werkzeug_lief:
+                zeilen.append(KEIN_WERKZEUG)
+            elif art in _WIEDER:
+                zeilen.append(_WIEDER[art])
+    if runde >= runden > 1:
+        zeilen.append("Letzte Prüfrunde: hat die neue Antwort wieder Stellen ohne Beleg, "
+                      "sieht Sasha sie mit einer Warnung davor.")
     return "\n".join([
         _HINWEIS_AUF, *zeilen,
         "Entweder jetzt das Werkzeug aufrufen, oder die Antwort so neu schreiben, dass "
         "sie nur sagt, was belegt ist (was noch aussteht, als offen). Schreib die GANZE "
         "Antwort neu — Sasha sieht nur die neue. Kein Wort über diese Prüfung.",
         _HINWEIS_ZU])
+
+
+# ── Warnungen an Sasha ──────────────────────────────────────────────────
+# Besteht eine Antwort die Prüfung nach allen Runden nicht, geht sie raus —
+# mit diesen Zeilen davor (Feld `warnungen`, SSE, TUI in Warnfarbe). Eine
+# Form für alle Bereiche; welcher Bereich, sagt BEREICH_NAMEN.
+
+KEINE_AENDERUNG = "✗ keine Änderung in diesem Zug"
+
+
+def _kurz(satz, n: int = 90) -> str:
+    t = " ".join(str(satz or "").split())
+    return t if len(t) <= n else t[:n - 1] + "…"
+
+
+def bereich_namen(bereiche) -> str:
+    return ", ".join(BEREICH_NAMEN.get(b, b) for b in sorted(bereiche or ()))
+
+
+def warnungen(befunde_: list, protokoll: list = ()) -> list:
+    """Befunde → Sätze für Sasha. -> [str], jeder mit ⚠ vorn."""
+    geschrieben = any(s.schreibt and s.status == "ok" for s in protokoll)
+    raus, kennungen = [], []
+    for b in befunde_ or []:
+        art = b.get("art")
+        if art == "tat":
+            wo = bereich_namen(b.get("bereiche"))
+            folge = ("dafür wurde nichts geändert" if geschrieben
+                     else "es wurde nichts geändert")
+            raus.append(f"⚠ Ohne Beleg: „{_kurz(b.get('satz'))}“ — in diesem Zug lief kein "
+                        f"passendes Werkzeug{f' ({wo})' if wo else ''}, {folge}.")
+        elif art == "nicht_da":
+            raus.append(f"⚠ ‚Nicht da' ohne vollständige Suche: „{_kurz(b.get('satz'))}“ — "
+                        f"es kann trotzdem da sein.")
+        elif art == "kennung":
+            kennungen.append(str(b.get("kennung")))
+        else:
+            raus.append(f"⚠ Ohne Beleg: „{_kurz(b.get('satz') or art)}“.")
+    if len(kennungen) == 1:
+        raus.append(f"⚠ Erfundene Kennung {kennungen[0]} — steht in keinem Werkzeug-Ergebnis.")
+    elif kennungen:
+        raus.append(f"⚠ Erfundene Kennungen {', '.join(kennungen)} — stehen in keinem "
+                    f"Werkzeug-Ergebnis.")
+    return raus
 
 
 # ── Der Prüfer eines Zugs ───────────────────────────────────────────────
@@ -303,53 +418,79 @@ class Pruefer:
     Antwort und liefert am Ende das Ereignis {"ehrlichkeit": …}."""
 
     def __init__(self, modus_: str, *, gespraech=None, bekannt_text: str = "",
-                 frueher: list = (), nutzer_text: str = ""):
+                 frueher: list = (), nutzer_text: str = "", runden: int = None):
         self.modus = modus_
         self.gespraech = gespraech
         self.bekannt_text = bekannt_text
         self.frueher = list(frueher)
         self.nutzer_text = nutzer_text
+        self.runden = pruefer_runden() if runden is None else max(0, int(runden))
         self.protokoll = []
-        self.korrigiert = False
+        self.korrekturen = 0
         self.befunde = []
+        self.gesehen = set()        # Arten von Befunden aus früheren Runden
+
+    @property
+    def korrigiert(self) -> bool:
+        return self.korrekturen > 0
 
     def werkzeug(self, name: str, args: dict, text: str, ist_fehler: bool = False):
         self.protokoll.append(Schritt(werkzeug_register.kanonisch(name), args,
                                       status_aus(text, ist_fehler), str(text or "")))
 
     def nach_antwort(self, text: str, *, letzte_runde: bool) -> str | None:
-        """Die fertige Antwort prüfen. -> Korrektur-Text für EINE weitere
-        Runde, oder None (Antwort geht so raus). Nur einmal je Zug, nie in
-        der letzten erlaubten Runde."""
+        """Die fertige Antwort prüfen — nach JEDER Korrekturrunde wieder ganz
+        (alle Prüfer). -> Korrektur-Text für eine weitere Runde, oder None:
+        die Antwort geht so raus (bestanden, nicht „an", Runden aufgebraucht,
+        oder die letzte erlaubte Runde der Schleife)."""
         b = befunde(text, self.protokoll, bekannt_text=self.bekannt_text,
                     frueher=self.frueher)
         self.befunde = b
-        if not b or self.modus != AN or self.korrigiert or letzte_runde:
+        if (not b or self.modus != AN or letzte_runde
+                or self.korrekturen >= self.runden):
             return None
-        self.korrigiert = True
-        self._log(f"PRÜFUNG ↺ Korrekturrunde: {len(b)} Befund(e)")
-        return hinweis(b)
+        self.korrekturen += 1
+        arten = list(dict.fromkeys(x["art"] for x in b))
+        wiederholt = tuple(a for a in arten if a in self.gesehen)
+        self.gesehen.update(arten)
+        self._log(f"PRÜFUNG ↺ Korrekturrunde {self.korrekturen}/{self.runden}: "
+                  f"{len(b)} Befund(e)")
+        return hinweis(b, runde=self.korrekturen, runden=self.runden,
+                       wiederholt=wiederholt, werkzeug_lief=bool(self.protokoll))
 
     def abschluss(self, text: str | None) -> dict | None:
-        """Das Ereignis für die Route: Erledigt-Zeile, Befunde, offene
-        Zusagen. text None: der Zug endete ohne Antwort (Fehler, Grenze).
+        """Das Ereignis für die Route: Erledigt-Zeile, Befunde, Warnungen,
+        offene Zusagen. text None: der Zug endete ohne Antwort (Fehler,
+        Grenze) — dann keine Warnungen, Sasha sieht ja keine Antwort.
         None, wenn es nichts zu sagen gibt (kein Schreiben, kein Befund,
         keine Zusage — der gewöhnliche Plauder-Zug bleibt ohne Zusatz)."""
         liste = erledigt_liste(self.protokoll)
-        ereignis = {"erledigt": liste, "zeile": erledigt_zeile(liste)}
+        zeile = erledigt_zeile(liste)
+        offen_b = self.befunde if text is not None else []
+        if not liste and any(x["art"] == "tat" for x in offen_b):
+            # Die Antwort behauptet Taten, aber kein schreibendes Werkzeug
+            # lief: das steht jetzt ausdrücklich da (2026-10-09).
+            zeile = KEINE_AENDERUNG
+        ereignis = {"erledigt": liste, "zeile": zeile}
         if self.befunde:
             ereignis["befunde"] = self.befunde
-            self._log(f"PRÜFUNG ✗ {len(self.befunde)} Befund(e) "
-                      f"{'nach Korrektur' if self.korrigiert else '(nur gemeldet)'}")
+            wie = (f"nach {self.korrekturen} Korrektur(en)" if self.korrigiert
+                   else "(nur gemeldet)")
+            self._log(f"PRÜFUNG ✗ {len(self.befunde)} Befund(e) {wie}")
+        warn = warnungen(offen_b, self.protokoll)
+        if warn:
+            ereignis["warnungen"] = warn
+            zug_ablauf.warnungen(warn)
         if self.korrigiert:
             ereignis["korrigiert"] = True
+            ereignis["korrekturen"] = self.korrekturen
         bewegt = False
         if self.gespraech:
             offen, vorher = self._zusagen(text)
             bewegt = bool(offen or vorher)
             if self.modus == AN and bewegt:
                 ereignis["offen"] = offen
-        if not (liste or self.befunde or self.korrigiert or bewegt):
+        if not (liste or zeile or self.befunde or self.korrigiert or bewegt):
             return None
         return {"ehrlichkeit": ereignis}
 

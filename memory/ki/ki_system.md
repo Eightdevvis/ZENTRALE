@@ -438,9 +438,13 @@ komm ich nicht tiefer" (geraten) und „die Warnungen sollten verschwinden"
 Auf gross prüft Python jede fertige Antwort gegen das Werkzeug-Protokoll des
 Zugs (`core/ehrlichkeit.py`): Erledigt-Behauptung ohne passendes
 schreibendes Werkzeug mit ok, oder eine Kalender-Kennung, die nirgends
-steht → EINE Korrekturrunde (`<pruefung_automatisch>` als Nutzer-Nachricht).
-Dazu Erledigt-Zeile aus dem Protokoll und offene Zusagen im Kontext-
-Umschlag. Einstellung `ehrlichkeit_pruefer`. Alles Weitere:
+steht → Korrekturrunden (`<pruefung_automatisch>` als Nutzer-Nachricht),
+bis die Antwort besteht, höchstens `pruefer_runden` (5); danach geht sie mit
+Warnungen davor raus (Feld `warnungen`). Dazu Erledigt-Zeile aus dem
+Protokoll (auch „✗ keine Änderung in diesem Zug") und offene Zusagen im
+Kontext-Umschlag. Läuft der Zug im Budget-Rückfall auf einem anderen Modell,
+meldet `kern.chat` das am Anfang (`{"modell_wechsel": …}`,
+`ai_backends.modell_wechsel`). Einstellung `ehrlichkeit_pruefer`. Alles Weitere:
 [ehrlichkeit_live.md](ehrlichkeit_live.md).
 
 ### Kalender ohne Fallen — `core/ki_kalender.py`, `ki_kalender_aendern.py` (seit 2026-10-08)
@@ -891,13 +895,24 @@ Register), `core/ki_browser.py` die Ausführer und die Textform.
 
 | Werkzeug | tut |
 |---|---|
-| `browser_open(url)` | Seite laden → Titel, Adresse, Text (bis 12.000 Zeichen, sonst „weiter mit browser_read(ab=…)"), nummerierte Liste (Links, Knöpfe, Felder, Auswahlen; höchstens 150, Rest per `browser_find`) |
+| `browser_open(url)` | Seite laden → Titel, Adresse, Text (bis 4.000 Zeichen, sonst „weiter mit browser_read(ab=…)"), nummerierte Liste (Links, Knöpfe, Felder, Auswahlen; höchstens 60, Rest per `browser_find`) — seit 09.10. kürzer (Kosten, s. u. „Eindampfen") |
 | `browser_click(nr)` | Element klicken (auch Skript-Bäume ohne Navigation), danach wie open |
 | `browser_type(nr, text, enter)` | ins Feld tippen bzw. in einer Auswahl wählen; nachgelesen, was drinsteht; `enter` schickt ab |
 | `browser_find(text)` | Elemente nach Text, mit Nummern |
 | `browser_read(ab)` | weiterer Seitentext |
 | `browser_back`, `browser_close` | zurück, schließen |
 | `browser_screenshot(titel)` | PNG der Seite in die Ablage (`schreibt`, nachgelesen) — **für Sasha**: Bilder erreichen die Cloud nur als Anhang einer Nachricht von Sasha, nicht aus einem Werkzeug-Ergebnis, also sieht die KI es nicht und sagt das |
+
+**Eindampfen (2026-10-09, Kosten):** ein LSF-Durchklicken kostete ~1 €, weil
+jede Runde den ganzen Zug neu schickt. Ist im laufenden Zug eine neuere Seite
+geladen (open/click/type mit Enter/back), ersetzt die Schleife ältere
+Browser-Ergebnisse DIESES Zugs durch eine Zeile „[Seite „Titel“ Adresse —
+gelesen, ersetzt durch spätere Seite]" (`werkzeug_schleife._seiten_eindampfen`,
+`ki_browser.eindampfen`, Adapter-Methode `ergebnis_eindampfen` in beiden
+Wegen). Der Prompt-Cache-Anfang bleibt: fester Kopf und Verlauf bis zu
+Sashas Nachricht (Breakpoint vor dem Umschlag) werden nicht berührt —
+`tool_result` gibt es nur im laufenden Zug. Test: 10 Seiten in einem Zug
+gehen mit ~33 % der Zeichen raus (`tests/test_ehrlichkeit_runden.py`).
 
 **Rahmen:** alle Rahmen einer Seite werden gelesen (Text mit Kopf „Rahmen:
 …"), die Nummern laufen über alle Rahmen durch.

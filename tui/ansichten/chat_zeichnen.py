@@ -345,7 +345,7 @@ class ChatZeichnen:
                 "schritt_fehler": C["warn"], "denken": C["faint"], "dok": C["acc"],
                 "anhang": C["acc"], "aktion": C["faint"], "leise": C["faint"],
                 "aktion_an": C["acc"] | curses.A_BOLD,
-                "hinweis": C["dim"], "abbruch": C["warn"]}
+                "hinweis": C["dim"], "abbruch": C["warn"], "warnung": C["warn"]}
 
     def _adern_lage(self, streaming, answer, jetzt):
         """Läuft die Denk-Animation? -> (an, ausklang 0..1, dauer s).

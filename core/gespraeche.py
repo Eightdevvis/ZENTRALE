@@ -25,7 +25,8 @@
 # Eine Zeile der jsonl ist ein EREIGNIS: {id, ts, knoten, art, …}.
 #   art "nachricht": rolle user/assistant, text, optional denken, werkzeuge,
 #                    anbieter, modell, abgebrochen, versteckt, erledigt,
-#                    pruefung, offen (Ehrlichkeits-Prüfer, 2026-10-09),
+#                    pruefung, offen, warnungen (Ehrlichkeits-Prüfer, 2026-10-09),
+#                    modell_wechsel (Budget-Rückfall, 2026-10-09),
 #                    ablauf (Ablauf-Protokoll des Zugs, core/zug_ablauf.py),
 #                    fehler (der Zug brach ab: Meldung; Text oft leer, 2026-10-09)
 #   art "verwerfen": ab (Nachricht-id) — diese und alle späteren Nachrichten
@@ -235,7 +236,8 @@ def _anhaengen_roh(gid, ereignis, kn=None):
 def anhaengen(gid, rolle, text, *, denken=None, werkzeuge=None, anbieter=None,
               modell=None, abgebrochen=False, versteckt=False, knoten=None,
               anhaenge=None, dokumente=None, erledigt=None, pruefung=None,
-              offen=None, ablauf=None, fehler=None) -> dict:
+              offen=None, ablauf=None, fehler=None, warnungen=None,
+              modell_wechsel=None) -> dict:
     """Eine Nachricht anhängen. -> das Ereignis (mit id und ts).
 
     anhaenge (Frage) / dokumente (Antwort): VERWEISE in die Ablage
@@ -274,6 +276,13 @@ def anhaengen(gid, rolle, text, *, denken=None, werkzeuge=None, anbieter=None,
         e["pruefung"] = dict(pruefung)
     if offen:
         e["offen"] = [str(x) for x in offen]
+    # Warnungen über der Antwort (2026-10-09): Befunde, die nach allen
+    # Korrekturrunden blieben, und ein Modellwechsel (Budget-Rückfall:
+    # {von, zu, grund, satz}). Beides schreibt Python, nie die KI.
+    if warnungen:
+        e["warnungen"] = [str(x) for x in warnungen]
+    if modell_wechsel:
+        e["modell_wechsel"] = dict(modell_wechsel)
     # Ablauf-Protokoll des Zugs (2026-10-09, core/zug_ablauf.py): nur zum
     # Nachlesen; geht nie an die KI und nicht mit /api/chat/history raus
     # (dort nur ablauf_n), sondern über …/ablauf/<nachricht>.

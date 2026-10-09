@@ -152,7 +152,7 @@ def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=
         # Luft zwischen zwei Äußerungen; Schritte und Denken kleben an der Antwort
         if zeilen and (rolle in ("user", "hinweis") or
                        (rolle in ("ai", "abbruch") and vorher not in ("werkzeug", "denken", "ablage",
-                                                         "werkzeug_fehler"))):
+                                                         "werkzeug_fehler", "warnung"))):
             zeilen.append([])
         if rolle == "user":
             zeilen += _nutzer(text, breite)
@@ -234,6 +234,9 @@ def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=
                 zeilen += [[(u, "abbruch", None)] for u in _umbruch(kopf, breite)]
                 if len(stuecke) > 1:
                     zeilen.append(stuecke[2:])
+        elif rolle == "warnung":                # Prüfer/Modellwechsel (2026-10-09)
+            for u in _umbruch(text, breite):
+                zeilen.append([(u, "warnung", None)])
         elif rolle == "hinweis":
             for z_text in str(text).split("\n"):
                 for k in range(0, max(1, len(z_text)), breite):

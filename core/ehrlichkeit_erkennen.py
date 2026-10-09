@@ -116,6 +116,11 @@ _STEHT_JETZT = re.compile(r"\bsteh(?:t|en) (?:jetzt|nun|ab sofort)\b(?:\s+\S+){0
                           r"\s+(?:drin|im kalender|eingetragen|in de[mnr]|da\b)")
 _KNAPP = re.compile(r"^(erledigt|eingetragen|gelöscht|verschoben|angelegt|"
                     r"gespeichert|geändert|notiert|festgehalten)\b[.!:]?")
+# „Alles korrigiert: …", „Beides erledigt." — Gespräch 20261009-150713 (qwen
+# im Budget-Rückfall, kein Werkzeug): der Satz rutschte durch, weil das
+# Partizip nicht ganz vorn stand und kein „ist/hab" davor (2026-10-09).
+_ALLES = re.compile(r"^(?:so,? |ok,? |okay,? |gut,? )?(?:alles|beides|alle|beide)\s+"
+                    r"(?:" + _PARTIZIP[1:-1] + r"|erledigt)\s*(?:[.!:,—–-]|$)")
 
 
 @dataclass
@@ -133,7 +138,7 @@ def taten(text: str) -> list:
         if s.frage or _VERNEINT.search(k) or _BEDINGT.search(k):
             continue
         treffer = (_ICH_PERFEKT.search(k) or _STEHT_JETZT.search(k)
-                   or _KNAPP.match(k)
+                   or _KNAPP.match(k) or _ALLES.match(k)
                    or (_ZUSTAND.search(k) and (_ZUSTAND_JETZT.search(k)
                                                or re.search(r"\bwurden?\b", k))))
         if treffer:

@@ -79,6 +79,51 @@ def cloud_provider() -> str:
     return providers.configured()
 
 
+def gewollter_provider() -> str | None:
+    """Der Anbieter, den Sasha eingestellt hat — OHNE Budget-Rückfall."""
+    want = chat_provider()
+    if want != "auto":
+        return want
+    return providers.configured()
+
+
+def _euro(x) -> str:
+    return f"{float(x or 0):.2f}".replace(".", ",") + " €"
+
+
+def modell_wechsel() -> dict | None:
+    """Läuft der Chat gerade NICHT mit dem eingestellten Anbieter/Modell?
+    -> {von, zu, von_anbieter, zu_anbieter, grund} oder None.
+
+    2026-10-09, Gespräch 20261009-150713: das Budget war voll, der Chat lief
+    still auf qwen-plus — und Sasha sah nicht, dass ein anderes, schwächeres
+    Modell antwortete. Der einzige Rückfall, den es heute gibt, ist der
+    Budget-Rückfall (cloud_provider, Punkt 1); eine ausdrückliche Wahl ohne
+    Key fällt NICHT auf einen anderen Anbieter zurück, sondern gibt None.
+    Kommt ein weiterer Rückfall dazu, meldet er sich hier."""
+    try:
+        # cloud_provider() statt status(): dieselbe Entscheidung, ohne den
+        # Netz-Ping (status() wurde für diesen Zug ohnehin schon gefragt).
+        ist = cloud_provider()
+        soll = gewollter_provider()
+        if not ist or not soll or ist == soll:
+            return None
+        lage = budget_lage()
+    except Exception:
+        return None
+    budget = lage.get("status") == "over"
+    if budget:
+        grund = (f"Monatsbudget {_euro(lage.get('ausgegeben'))} von "
+                 f"{_euro(lage.get('limit'))} überschritten")
+    else:
+        grund = "eingestellter Anbieter gerade nicht nutzbar"
+    von, zu = chat_model(soll) or soll, chat_model(ist) or ist
+    # Der Satz, den TUI und Handy gleich zeigen (eine Stelle für den Text).
+    vorn = "Budget voll" if budget else "Anbieter gewechselt"
+    return {"von": von, "zu": zu, "von_anbieter": soll, "zu_anbieter": ist,
+            "grund": grund, "satz": f"⚠ {vorn} — antwortet jetzt {zu} statt {von} ({grund})"}
+
+
 def _erreichbare_provider() -> list:
     """Provider, für die ein Key gesetzt ist UND deren Dialekt der Kern
     spricht. Reine Konfigurations-Frage, kein Netz-Ping."""
