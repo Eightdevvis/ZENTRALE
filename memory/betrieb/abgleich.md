@@ -395,7 +395,12 @@ Ereignis-Zeilen JSON je Zeile mit `id` (uuid4-hex), `ts` (UTC, ISO mit
 Mikrosekunden und `+00:00`), `knoten: "handy"`; `kopf.json` mit `titel`,
 `titel_von` (`"sasha"` | `"modell"` | `"woerter"` | null), `erstellt`,
 `archiviert`, `projekt`; `_knoten/handy.json` mit `aktiv`, `gelesen` {id:
-ts}, `neu_projekt`. Hinweis: ein Kopf mit `titel_von` `"woerter"` oder null
+ts}, `neu_projekt`. Eine Antwort (`rolle: assistant`) kann seit 09.10.
+zusätzlich `erledigt` ({`zeile`, `schritte`}), `pruefung` und `offen` (Liste
+von Sätzen) tragen ([../ki/ehrlichkeit_live.md](../ki/ehrlichkeit_live.md));
+wer sie nicht kennt, übergeht sie. Daneben liegt pro Rechner
+`gespraeche/<id>/zusagen-<rechner>.json` (offene Zusagen der KI) — das Handy
+schreibt sie nicht und braucht sie nicht. Hinweis: ein Kopf mit `titel_von` `"woerter"` oder null
 darf ein Rechner später automatisch umbenennen (`"modell"`); `"sasha"` nie.
 
 ### Das Kontextpaket fürs Handy

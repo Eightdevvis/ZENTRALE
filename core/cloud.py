@@ -48,6 +48,7 @@
 import os
 
 import ai_config     # Einstellungen (Längen-Grenzen der Nachrichten)
+import ehrlichkeit   # Live-Prüfer: Tat gegen Wort, Kennungen, offene Zusagen
 import ki_prompt     # Prompt-Bausteine (Jetzt, Imprint, Alarme, Schalter)
 import ki_werkzeuge  # Tool-Ausführung — lokal, egal wer denkt
 import graph
@@ -375,6 +376,13 @@ def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
             parts.append(alarm)
         if via_mic:
             parts.append(ki_prompt._MIC_INPUT_HINT)
+        # Offene Zusagen (2026-10-09, core/ehrlichkeit.py): wechseln mit dem
+        # Gespräch, also hier hinter dem Cache-Breakpoint, nie im festen Kopf.
+        # Nur auf gross — klein bekommt den Umschlag ohnehin nicht.
+        if _profil().NAME == "gross":
+            offen = ehrlichkeit.umschlag_block()
+            if offen:
+                parts.append(offen)
     return _umschlag("\n\n".join(parts))
 
 
@@ -581,19 +589,24 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     sys_blocks = [{"type": "text", "text": _static_system(system, tutor_mode, projekt),
                    "cache_control": _cc()}]
     anthro_msgs = _prepare_messages(messages)
-    _append_volatile(anthro_msgs, _volatile_text(mem_ctx, via_mic, tutor_mode))
+    volatile = _volatile_text(mem_ctx, via_mic, tutor_mode)
+    _append_volatile(anthro_msgs, volatile)
     anthro_tools = _to_anthropic_tools(active_tools)
 
     adapter = _AnthropicAdapter(_get_client(), model or _model(),
                                 sys_blocks, anthro_msgs, anthro_tools,
                                 abbruch=abbruch, max_tokens=max_tokens,
                                 effort=effort)
+    schiene = _profil().NAME if tools is None else "klein"
     yield from werkzeug_schleife.laufen(
         adapter, tutor_mode=tutor_mode, active_exec=active_exec,
         user_query=user_query, store=store, abbruch=abbruch,
         # Die Schiene für die Ausführer (2026-10-08): Kennungen im Kalender
         # nur auf gross. Ein fremdes Tool-Set (Tutor) zählt als klein.
-        schiene=(_profil().NAME if tools is None else "klein"))
+        schiene=schiene,
+        pruefer=ehrlichkeit.pruefer_fuer(messages, schiene=schiene,
+                                         tutor_mode=tutor_mode,
+                                         kontext=sys_blocks[0]["text"] + "\n" + volatile))
 
 
 class _AnthropicAdapter:
@@ -697,6 +710,13 @@ class _AnthropicAdapter:
                      if getattr(b, "type", None) == "tool_use"]
         text = "".join(round_text) or _text_of(final.content)
         return werkzeug_schleife.Runde(text, calls, roh=final)
+
+    def hinweis_anhaengen(self, runde, text):
+        # Prüf-Hinweis (core/ehrlichkeit.py): ihre Antwort bleibt im Kontext,
+        # dahinter eine user-Nachricht — Anweisungen gehören nicht in ein
+        # tool_result (Anthropic, „Mitigate jailbreaks").
+        self.msgs.append({"role": "assistant", "content": runde.roh.content})
+        self.msgs.append({"role": "user", "content": [{"type": "text", "text": text}]})
 
     def assistent_anhaengen(self, runde):
         # Assistant-Turn (inkl. tool_use-Blöcken) unverändert als Kontext

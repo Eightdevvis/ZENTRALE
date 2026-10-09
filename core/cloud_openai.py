@@ -41,6 +41,7 @@ import json as _json
 import os
 
 import cloud      # geteilt: Graph-Pfad, System-Bloecke
+import ehrlichkeit  # Live-Prüfer (Tat gegen Wort, Kennungen, Zusagen)
 import graph
 import kidebug    # Devtools-Bus (scripts/ai_devtools.py)
 import ki_prompt
@@ -253,10 +254,11 @@ def chat_stream(messages: list, model: str = None, system: str = None,
                                            max_chars=cloud._CTX_CHARS)
                    if ki_prompt.GRAPH_KONTEXT else "")
 
+    volatile = cloud._volatile_text(mem_ctx, via_mic, tutor_mode)
     msgs   = _prepare_messages(
         messages,
         _system_text(system, mem_ctx, via_mic, tutor_mode, projekt),
-        cloud._volatile_text(mem_ctx, via_mic, tutor_mode))
+        volatile)
     client = _get_client(prov)
     # Modell aus derselben Quelle wie beim Anthropic-Pfad: pro Anbieter
     # gespeichert. Sonst gäbe es zwei Wahrheiten darüber, was gerade läuft.
@@ -269,12 +271,16 @@ def chat_stream(messages: list, model: str = None, system: str = None,
 
     adapter = _OpenAIAdapter(client, mdl, msgs, active_tools, abbruch=abbruch,
                              max_tokens=max_tokens, temperatur=temperatur)
+    schiene = cloud._profil().NAME if tools is None else "klein"
     yield from werkzeug_schleife.laufen(
         adapter, tutor_mode=tutor_mode, active_exec=active_exec,
         user_query=user_query, store=store, abbruch=abbruch,
         # Die Schiene für die Ausführer (2026-10-08): Kennungen im Kalender
         # nur auf gross. Ein fremdes Tool-Set (Tutor) zählt als klein.
-        schiene=(cloud._profil().NAME if tools is None else "klein"))
+        schiene=schiene,
+        pruefer=ehrlichkeit.pruefer_fuer(messages, schiene=schiene,
+                                         tutor_mode=tutor_mode,
+                                         kontext=msgs[0]["content"] + "\n" + volatile))
 
 
 class _OpenAIAdapter:
@@ -381,6 +387,13 @@ class _OpenAIAdapter:
             calls.append((s["id"], s["name"], args))
         return werkzeug_schleife.Runde("".join(round_text), calls,
                                        roh=list(tool_calls.values()))
+
+    def hinweis_anhaengen(self, runde, text):
+        # Prüf-Hinweis (core/ehrlichkeit.py): ihre Antwort, dann der Hinweis
+        # als user-Nachricht. Ohne tool_calls-Feld — eine leere Liste lehnen
+        # manche Anbieter ab.
+        self.msgs.append({"role": "assistant", "content": runde.text or ""})
+        self.msgs.append({"role": "user", "content": text})
 
     def assistent_anhaengen(self, runde):
         # Assistant-Turn (mit tool_calls) als Kontext anhaengen — die

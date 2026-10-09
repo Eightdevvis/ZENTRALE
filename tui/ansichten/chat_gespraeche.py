@@ -17,6 +17,23 @@ from .chat_ablage import ablage_eintrag, anhang_eintrag
 from .projekte import projekt_name
 
 
+def pruefung_eintraege(erledigt, offen, log=None):
+    """Die dezenten Zeilen des Ehrlichkeits-Prüfers (core/ehrlichkeit.py)
+    unter einer Antwort: was Python im Werkzeug-Protokoll sah („✓ Termin
+    eingetragen: Zahnarzt") und was die KI zugesagt, aber noch nicht getan
+    hat. „offen" gilt fürs ganze Gespräch, steht also nur einmal: ist `log`
+    gegeben, fliegen ältere offen-Zeilen dort raus. -> [(rolle, text)]"""
+    raus = []
+    zeile = (erledigt or {}).get("zeile") if isinstance(erledigt, dict) else ""
+    if zeile:
+        raus.append(("erledigt", str(zeile)))
+    if log is not None:
+        log[:] = [e for e in log if e[0] != "offen"]
+    if offen:
+        raus.append(("offen", "offen: " + " · ".join(str(x) for x in offen)))
+    return raus
+
+
 def verlauf_aus(h):
     """Die Nachrichten von /api/chat/history als Verlaufs-Zeilen.
     -> [(rolle, text)]. Seit 2026-10-07 mit Denken und Werkzeugen der
@@ -47,6 +64,7 @@ def verlauf_aus(h):
         log += [ablage_eintrag(d) for d in m.get("dokumente") or [] if isinstance(d, dict)]
         if txt:
             log.append(("ai", txt))
+        log += pruefung_eintraege(m.get("erledigt"), m.get("offen"), log)
     return log
 
 

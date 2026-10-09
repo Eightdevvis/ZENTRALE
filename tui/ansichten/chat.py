@@ -32,7 +32,8 @@ from .chat_zeichnen import ChatZeichnen
 from .einstellungen import Einstellungen
 from .rechts import Rechts
 from .seitenleiste import Seitenleiste
-from .chat_gespraeche import GespraechsSteuerung, ai_verlauf_holen, verlauf_aus  # noqa: F401
+from .chat_gespraeche import (GespraechsSteuerung, ai_verlauf_holen,  # noqa: F401
+                              pruefung_eintraege, verlauf_aus)
 from .gespraechsliste import Gespraechsliste
 from .gedaechtnis import Gedaechtnis
 from .projekte import Projekte
@@ -442,6 +443,8 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
                     elif "werkzeug" in evt:
                         denken_ablegen()
                         AI["log"].append(werkzeug_zeile(evt["werkzeug"]))
+                    elif "ehrlichkeit" in evt:     # Erledigt-Zeile, offene Zusagen
+                        AI["pruefung"] = evt["ehrlichkeit"]
                     elif "ablage" in evt:          # ein Dokument liegt in der Ablage
                         self.ablage_event(evt["ablage"])
                     elif "permission" in evt:
@@ -491,6 +494,10 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
                     ans += "\n\n" + VERMERK_ABGEBROCHEN
                 if ans:
                     AI["log"].append(("ai", ans))
+                p = AI.pop("pruefung", None)
+                if p:
+                    AI["log"] += pruefung_eintraege(
+                        {"zeile": p.get("zeile")}, p.get("offen"), AI["log"])
                 AI["answer"] = None
                 AI["strom"] = None
                 if AI["msg"] == "stoppe …":   # war schon fertig, als Strg+C kam

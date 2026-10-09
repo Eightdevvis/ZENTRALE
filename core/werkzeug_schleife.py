@@ -80,7 +80,8 @@ def fehler(text: str) -> dict:
 
 
 def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
-           fehler_name: str = "Cloud", abbruch=None, schiene: str = "klein"):
+           fehler_name: str = "Cloud", abbruch=None, schiene: str = "klein",
+           pruefer=None):
     """
     Der ganze Zug. Generator — yieldet dieselben Events wie bisher
     chat_stream (Text-Tokens, reflect, werkzeug, permission, ascii, cinema)
@@ -94,9 +95,13 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
     Gestoppt → {"gestoppt": True}, keine weitere Runde, nichts gemerkt.
     schiene: klein/gross (2026-10-08) — die Ausführer erfahren sie über
     werkzeug_befund.schiene() (Kennungen im Kalender nur auf gross).
+    pruefer: ehrlichkeit.Pruefer oder None (2026-10-09) — sieht jedes
+    Werkzeug-Ergebnis, prüft die fertige Antwort (eine Korrekturrunde, bevor
+    Sasha sie sieht, über adapter.hinweis_anhaengen) und liefert am Ende das
+    Ereignis {"ehrlichkeit": …} (Erledigt-Zeile, Befunde, offene Zusagen).
     """
     grenze = ai_backends.runden_grenze(adapter.modell)
-    for _ in range(grenze):
+    for nr in range(grenze):
         if gestoppt(abbruch):
             yield dict(GESTOPPT)
             return
@@ -118,8 +123,20 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
             return
 
         if not runde.calls:
+            if pruefer is not None and hasattr(adapter, "hinweis_anhaengen"):
+                korrektur = pruefer.nach_antwort(runde.text,
+                                                 letzte_runde=(nr >= grenze - 1))
+                if korrektur:
+                    # Die Antwort geht NICHT raus (der Adapter puffert den
+                    # Text einer Runde); die KI bekommt den Befund und
+                    # schreibt sie neu — oder ruft jetzt das Werkzeug.
+                    adapter.hinweis_anhaengen(runde, korrektur)
+                    continue
             yield from antwort(runde.text, tutor_mode=tutor_mode,
                                user_query=user_query, store=store)
+            schluss = pruefer.abschluss(runde.text) if pruefer is not None else None
+            if schluss:
+                yield schluss
             return
 
         adapter.assistent_anhaengen(runde)
@@ -134,9 +151,16 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
             if ausgang[0] == "stop":
                 return
             _, text, ist_fehler = ausgang
+            if pruefer is not None:
+                pruefer.werkzeug(name, args, text, ist_fehler)
             ergebnisse.append((call_id, text, ist_fehler))
         adapter.ergebnisse_anhaengen(ergebnisse)
 
+    schluss = pruefer.abschluss(None) if pruefer is not None else None
+    if schluss:
+        # Gerade dann zählt die Erledigt-Zeile: was bis zur Grenze geschrieben
+        # wurde, steht sonst nirgends.
+        yield schluss
     yield fehler(f"Maximale Tool-Tiefe erreicht ({grenze} Runden) — "
                  f"sie hat nicht zu Ende geantwortet.")
 

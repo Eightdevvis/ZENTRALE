@@ -894,6 +894,19 @@ Ist-Zustands und erlaubten ungenaue Massen-Eingriffe. Ausführlich:
      werfen ein Ende ≤ Beginn still weg, `routine_aendern` prüft Uhrzeiten
      nicht. Lieber ablehnen (False + Grund).
 
+### Ehrlichkeit live (2026-10-09)
+
+Drei Prüfer in Python, eingehängt in die Werkzeug-Schleife, nur gross
+([ehrlichkeit_live.md](ehrlichkeit_live.md)): Erledigt-Behauptung ohne
+schreibendes Werkzeug mit ok, und erfundene Kalender-Kennungen → eine
+Korrekturrunde, bevor Sasha die Antwort sieht; Erledigt-Zeile (✓/✗) aus dem
+Protokoll als eigenes Feld der Antwort, leise in der TUI; Zusagen („trag ich
+gleich ein") je Gespräch gemerkt (`zusagen-<knoten>.json`), im Kontext-
+Umschlag wiederholt, abgehakt durch Werkzeug / Ablehnung / Verfall.
+Einstellung `ehrlichkeit_pruefer` an|melden|aus. Neu: `core/ehrlichkeit.py`,
+`core/ehrlichkeit_erkennen.py`, `core/zusagen.py`,
+`scripts/ehrlichkeit_messen.py`, `tests/test_ehrlichkeit.py`.
+
 ### Skills `pdf` und `word` (2026-10-08)
 
 Auftrag in der Nacht (Sasha schlief): die KI soll PDFs lesen (Seiten,

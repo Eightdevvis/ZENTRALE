@@ -24,7 +24,8 @@
 # ── Ereignisse statt Zustand ───────────────────────────────────────────
 # Eine Zeile der jsonl ist ein EREIGNIS: {id, ts, knoten, art, …}.
 #   art "nachricht": rolle user/assistant, text, optional denken, werkzeuge,
-#                    anbieter, modell, abgebrochen, versteckt
+#                    anbieter, modell, abgebrochen, versteckt, erledigt,
+#                    pruefung, offen (Ehrlichkeits-Prüfer, 2026-10-09)
 #   art "verwerfen": ab (Nachricht-id) — diese und alle späteren Nachrichten
 #                    zählen nicht mehr (Wiederholen, Bearbeiten)
 # Lesen = alle Rechner-Dateien zusammenlegen, nach ts sortieren, anwenden.
@@ -231,7 +232,8 @@ def _anhaengen_roh(gid, ereignis, kn=None):
 
 def anhaengen(gid, rolle, text, *, denken=None, werkzeuge=None, anbieter=None,
               modell=None, abgebrochen=False, versteckt=False, knoten=None,
-              anhaenge=None, dokumente=None) -> dict:
+              anhaenge=None, dokumente=None, erledigt=None, pruefung=None,
+              offen=None) -> dict:
     """Eine Nachricht anhängen. -> das Ereignis (mit id und ts).
 
     anhaenge (Frage) / dokumente (Antwort): VERWEISE in die Ablage
@@ -261,6 +263,15 @@ def anhaengen(gid, rolle, text, *, denken=None, werkzeuge=None, anbieter=None,
         e["anhaenge"] = [dict(a) for a in anhaenge]
     if dokumente:
         e["dokumente"] = [dict(d) for d in dokumente]
+    # Ehrlichkeits-Prüfer (2026-10-09, core/ehrlichkeit.py): was Python aus
+    # dem Werkzeug-Protokoll weiß — eigene Felder, NIE im Text, und
+    # text_fuer_ki gibt sie der KI nicht mit.
+    if erledigt:
+        e["erledigt"] = dict(erledigt)
+    if pruefung:
+        e["pruefung"] = dict(pruefung)
+    if offen:
+        e["offen"] = [str(x) for x in offen]
     return _anhaengen_roh(gid, e, knoten)
 
 

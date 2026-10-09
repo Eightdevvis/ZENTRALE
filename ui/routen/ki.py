@@ -233,6 +233,8 @@ def _werkzeug_merken(werkzeuge, w):
         if w.get("phase") == "fehler":
             werkzeuge[-1]["fehler"] = True
         if w.get("status"):
+            # Status aus der Kopfzeile: liest auch der Ehrlichkeits-Prüfer
+            # (core/ehrlichkeit.py) im nächsten Zug.
             werkzeuge[-1]["status"] = str(w["status"])
         text = " ".join(str(w.get("text") or "").split())
         if text:
@@ -251,6 +253,23 @@ def _wer_antwortet(backend):
         return None, None
 
 
+def _pruefung_felder(p) -> dict:
+    """Ereignis des Ehrlichkeits-Prüfers → Felder der gespeicherten Antwort:
+    erledigt {zeile, schritte}, pruefung {befunde, korrigiert}, offen [sätze].
+    Leere Felder bleiben weg (das Handy liest nur, was da ist)."""
+    if not p:
+        return {}
+    felder = {}
+    if p.get("erledigt"):
+        felder["erledigt"] = {"zeile": p.get("zeile") or "", "schritte": p["erledigt"]}
+    if p.get("befunde") or p.get("korrigiert"):
+        felder["pruefung"] = {"befunde": p.get("befunde") or [],
+                              "korrigiert": bool(p.get("korrigiert"))}
+    if p.get("offen"):
+        felder["offen"] = list(p["offen"])
+    return felder
+
+
 def _sse_zug(stream, gid, backend, frage, erster):
     """Die Events eines Kern-Zugs als SSE-Zeilen; am Ende die Antwort ins
     Gespräch. Generator."""
@@ -260,6 +279,7 @@ def _sse_zug(stream, gid, backend, frage, erster):
     dokumente = []
     fehler_kam = False
     gestoppt = False
+    pruefung = None
 
     for token in stream:
         if isinstance(token, dict):
@@ -287,6 +307,11 @@ def _sse_zug(stream, gid, backend, frage, erster):
                 yield _sse({'reflect': token['reflect']})
             elif 'cinema' in token:
                 yield _sse({'cinema': True})
+            elif 'ehrlichkeit' in token:
+                # Live-Prüfer (core/ehrlichkeit.py): Erledigt-Zeile, Befunde,
+                # offene Zusagen — eigenes Feld, nie im Text der KI.
+                pruefung = token['ehrlichkeit']
+                yield _sse({'ehrlichkeit': pruefung})
             elif 'gestoppt' in token:
                 # Sasha hat gestoppt (/api/chat/stop); die Schleife ist raus.
                 gestoppt = True
@@ -314,7 +339,8 @@ def _sse_zug(stream, gid, backend, frage, erster):
         gespraeche.anhaengen(
             gid, "assistant", text.rstrip() if gestoppt else text,
             denken="".join(denken), werkzeuge=werkzeuge, anbieter=anbieter,
-            modell=modell, abgebrochen=gestoppt, dokumente=dokumente or None)
+            modell=modell, abgebrochen=gestoppt, dokumente=dokumente or None,
+            **_pruefung_felder(pruefung))
         # Sasha hat zugeschaut, also gelesen.
         gespraeche.gelesen_setzen(gid)
         if erster:
@@ -348,7 +374,8 @@ def api_chat_stop():
 def api_chat_history():
     """Die Nachrichten eines Gesprächs für die Anzeige (?gespraech=<id>,
     sonst das aktive dieses Rechners). Liste von {id, role, content, ts}
-    plus denken, werkzeuge, abgebrochen, anbieter, modell, wenn vorhanden.
+    plus denken, werkzeuge, abgebrochen, anbieter, modell, wenn vorhanden;
+    erledigt/offen vom Ehrlichkeits-Prüfer (2026-10-09).
     Markiert das Gespräch als gelesen — wer das holt, zeigt es an.
 
     Seit 2026-10-07 auch ohne KI-Backend: alte Gespräche lesen braucht
@@ -364,7 +391,7 @@ def api_chat_history():
         m = {"id": n["id"], "role": n["rolle"], "ts": n["ts"],
              "content": gespraeche.text_fuer_ki(n)}
         for feld in ("denken", "werkzeuge", "abgebrochen", "anbieter", "modell",
-                     "anhaenge", "dokumente"):
+                     "anhaenge", "dokumente", "erledigt", "offen"):
             if n.get(feld):
                 m[feld] = n[feld]
         raus.append(m)

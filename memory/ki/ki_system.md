@@ -409,6 +409,16 @@ komm ich nicht tiefer" (geraten) und „die Warnungen sollten verschwinden"
   binden) und „Writing effective tools for agents" (Ergebnisse mit hohem
   Signal statt „OK", Fehler, die zum richtigen Gebrauch lenken).
 
+### Ehrlichkeit live — Prüfer vor jeder Antwort (seit 2026-10-09)
+
+Auf gross prüft Python jede fertige Antwort gegen das Werkzeug-Protokoll des
+Zugs (`core/ehrlichkeit.py`): Erledigt-Behauptung ohne passendes
+schreibendes Werkzeug mit ok, oder eine Kalender-Kennung, die nirgends
+steht → EINE Korrekturrunde (`<pruefung_automatisch>` als Nutzer-Nachricht).
+Dazu Erledigt-Zeile aus dem Protokoll und offene Zusagen im Kontext-
+Umschlag. Einstellung `ehrlichkeit_pruefer`. Alles Weitere:
+[ehrlichkeit_live.md](ehrlichkeit_live.md).
+
 ### Kalender ohne Fallen — `core/ki_kalender.py`, `ki_kalender_aendern.py` (seit 2026-10-08)
 
 - **Kennungen** (nur `gross`): `read_calendar` zeigt je Zeile `#t…` (Termin)
