@@ -169,8 +169,16 @@ def zug_fahren(client, gid: str, nachricht: str, antworter, kosten: list) -> dic
 
 # ── Der ganze Fall ─────────────────────────────────────────────────────
 
-def fall_fahren(fall: dict, *, code_wurzel: str, app, antworter, kosten: list) -> dict:
-    """-> Rohergebnis des Falls (ohne Richter): Züge, Endzustand, Ansichten."""
+def fall_fahren(fall: dict, *, code_wurzel: str, app, antworter, kosten: list,
+                frueh: bool = False, beobachter=None) -> dict:
+    """-> Rohergebnis des Falls (ohne Richter): Züge, Endzustand, Ansichten.
+
+    frueh=True (--abbruch-frueh): nach jedem Zug aufhören, sobald der Fall
+    sicher verloren ist (frueh.py) — die restlichen Züge kosten nur noch.
+    beobachter (aufnahme.py): vor_zug(n) vor, nach_zug(n) nach jedem Zug;
+    gibt nach_zug einen Text zurück (Abspielen nicht mehr gültig), endet
+    der Fall dort."""
+    from . import frueh as frueh_
     import gespraeche
     import kalender
     import state
@@ -191,6 +199,8 @@ def fall_fahren(fall: dict, *, code_wurzel: str, app, antworter, kosten: list) -
             state.set_alarms(kalender.open_alarms())
             kontext = kontext_der_ki()
             antworter.zug_vorgaben = z.get("antworten") or {}
+            if beobachter:
+                beobachter.vor_zug(len(ergebnis["zuege"]) + 1)
             zug = zug_fahren(client, gid, str(z["sagt"]), antworter, kosten)
             zug["kontext"] = kontext
             zug["erwartet"] = z.get("erwartet") or {}
@@ -198,7 +208,16 @@ def fall_fahren(fall: dict, *, code_wurzel: str, app, antworter, kosten: list) -
             ergebnis["zuege"].append(zug)
             if any(f.startswith("HTTP ") for f in zug["fehler"]):
                 break
-        ergebnis["endzustand"] = endzustand.pruefen(fall["endzustand"])
+            if beobachter and beobachter.nach_zug(len(ergebnis["zuege"])):
+                break
+            if frueh and len(ergebnis["zuege"]) < len(fall["zuege"]):
+                grund = frueh_.verloren(fall, ergebnis)
+                if grund:
+                    ergebnis["frueh_abgebrochen"] = {
+                        "nach_zug": len(ergebnis["zuege"]), "von": len(fall["zuege"]),
+                        "grund": grund}
+                    break
+        ergebnis["endzustand"] = endzustand.pruefen(fall["endzustand"], ergebnis)
     ergebnis["laufzeit_s"] = round(time.monotonic() - start, 1)
     ergebnis["kosten_eur"] = round(sum(k["eur"] for k in kosten), 5)
     ergebnis["modelle"] = sorted({k["modell"] for k in kosten})

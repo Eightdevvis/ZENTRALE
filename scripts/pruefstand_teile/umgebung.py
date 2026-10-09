@@ -1,6 +1,7 @@
 # Die Wegwerf-Umgebung eines Falls: alles, was geschrieben wird, landet in
 # einem Temp-Ordner — Sashas data/ wird nur GELESEN (Schlüssel, Einstellungen)
-# und die Kosten werden in seine echte Buchhaltung gebucht.
+# und die Kosten werden in seine echte Buchhaltung gebucht (eigener Topf
+# „pruefstand", kind.topf_setzen — nicht in seine Chat-Kosten).
 #
 # Zwei Schritte, weil manche Module ihren Ort beim Import festlegen:
 #   vorbereiten()  VOR dem Import des Kerns: Env-Variablen (ZENTRALE_*_DIR),
@@ -43,7 +44,8 @@ def vorbereiten(tmp: str, daten: str, einstellungen: dict | None = None) -> dict
     os.environ["ZENTRALE_NOTIFY"] = "0"
     os.environ["ZENTRALE_KALENDER_GIT_SPIEGEL"] = "aus"
     os.environ["ZENTRALE_MODELL_LISTE_HOLEN"] = "aus"
-    # Kosten in die echte Buchhaltung (die Kosten sind echt).
+    # Kosten in die echte Buchhaltung (die Kosten sind echt) — Topf
+    # „pruefstand", gesetzt in kind.topf_setzen.
     os.environ["ZENTRALE_USAGE_FILE"] = os.path.join(daten, "data", "ai_usage.json")
 
     echt = {}
@@ -54,9 +56,10 @@ def vorbereiten(tmp: str, daten: str, einstellungen: dict | None = None) -> dict
     for name, wert in (echt.get("keys") or {}).items():
         if wert and not os.environ.get(name):
             os.environ[name] = str(wert)
-    # Ohne Monatsdeckel: ab dem Deckel wechselte der Chat auf den billigsten
-    # Anbieter — mitten in einem Durchgang wäre die Messung dann keine. Ob der
-    # Durchgang den Deckel reißt, prüft scripts/pruefstand.py vorher.
+    # Ohne Monatsdeckel: ab Sashas Deckel wechselte der Chat auf den billigsten
+    # Anbieter — mitten in einem Durchgang wäre die Messung dann keine. Der
+    # Prüfstand hat seine eigene Grenze (pruefstand_budget_monat, geprüft in
+    # scripts/pruefstand.py vor dem Durchgang und vor jedem Fall).
     kopie = {k: v for k, v in echt.items() if k not in ("keys", "budget_monat_euro")}
     kopie.update(einstellungen or {})
     cfg_dir = os.path.join(tmp, "ai_config")
@@ -191,6 +194,95 @@ class NetzAttrappe:
 
         def zurueck():
             net.get, net.post, net.stream_post = alt
+        return zurueck
+
+
+# ── Seiten für den Browser ─────────────────────────────────────────────
+#
+# Der Browser der KI (core/browser_sitzung.py) fährt ein echtes Chromium und
+# geht damit NICHT über net — die Netz-Attrappe sieht ihn nicht. Für Fälle
+# mit Browser (2026-10-09, f08) stellt der Prüfstand deshalb einen eigenen
+# kleinen Server auf 127.0.0.1 hin, der nur die Seiten des Falls ausliefert
+# (Vorbild: der Nachbau in tests/test_browser.py). Im Fall heißt seine
+# Adresse {server}; der Fall braucht dazu `einstellungen:
+# {browser_lokal_erlaubt: 1}`, sonst sperrt der Browser 127.0.0.1.
+
+def platzhalter(wert, ersatz: dict):
+    """{server} & Co. in allen Texten eines Falls ersetzen (Kopie)."""
+    if isinstance(wert, str):
+        for alt, neu in ersatz.items():
+            wert = wert.replace(alt, neu)
+        return wert
+    if isinstance(wert, dict):
+        return {k: platzhalter(v, ersatz) for k, v in wert.items()}
+    if isinstance(wert, list):
+        return [platzhalter(v, ersatz) for v in wert]
+    return wert
+
+
+class SeitenServer:
+    """Liefert die Seiten des Abschnitts `browser.seiten` aus:
+
+        browser:
+          seiten:
+            - pfad: /                       # mit ?… genau, sonst ohne Anfrage-Teil
+              html: "<html>…{server}…</html>"
+            - pfad: /alt
+              weiter: /neu                  # Weiterleitung (302)
+
+    Ohne Seiten startet nichts (adresse bleibt None). Unbekannter Pfad: 404.
+    """
+
+    def __init__(self, seiten: list | None):
+        self.seiten = list(seiten or [])
+        self.adresse = None
+        self.protokoll = []            # aufgerufene Pfade
+
+    def _finden(self, pfad: str):
+        ohne = pfad.split("?", 1)[0]
+        for s in self.seiten:
+            if str(s.get("pfad")) == pfad:
+                return s
+        return next((s for s in self.seiten if str(s.get("pfad")) == ohne), None)
+
+    def starten(self):
+        """-> Rückweg (hält den Server an)."""
+        if not self.seiten:
+            return lambda: None
+        import http.server
+        import threading
+        server_selbst = self
+
+        class Antwort(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_GET(self):
+                server_selbst.protokoll.append(self.path)
+                s = server_selbst._finden(self.path)
+                if s and s.get("weiter"):
+                    self.send_response(302)
+                    self.send_header("Location", str(s["weiter"]))
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                text = str(s.get("html", "")) if s else "<p>nicht da</p>"
+                roh = platzhalter(text, {"{server}": server_selbst.adresse}).encode()
+                self.send_response(200 if s else 404)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(roh)))
+                self.end_headers()
+                self.wfile.write(roh)
+
+            do_POST = do_GET
+
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Antwort)
+        self.adresse = f"http://127.0.0.1:{srv.server_address[1]}"
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+        def zurueck():
+            srv.shutdown()
+            srv.server_close()
         return zurueck
 
 

@@ -42,9 +42,22 @@ def _rueckfragen_kurz(m: dict) -> str:
     return f"{sum(1 for r in rf if r['ok'])}/{len(rf)}"
 
 
+def _vermerk(f: dict) -> str:
+    """Kurz, ob der Fall nicht ganz gefahren wurde."""
+    teile = []
+    fr = f.get("frueh_abgebrochen")
+    if fr:
+        teile.append(f"früh abgebrochen nach Zug {fr['nach_zug']}/{fr['von']}")
+    ab = f.get("abspielen")
+    if ab:
+        teile.append("abgespielt" + ("" if ab.get("gueltig")
+                                     else f", ab Zug {ab.get('ungueltig_ab_zug')} nicht mehr gültig"))
+    return f" ({'; '.join(teile)})" if teile else ""
+
+
 def uebersicht_zeile(f: dict) -> str:
     m = f.get("metriken") or {}
-    name = f["id"] + (" (verdeckt)" if f.get("verdeckt") else "")
+    name = f["id"] + (" (verdeckt)" if f.get("verdeckt") else "") + _vermerk(f)
     return (f"| {name} | {_endzustand_kurz(f)} | {_belege_kurz(f)} | "
             f"{m.get('werkzeug_aufrufe', 0)} | {m.get('werkzeug_fehler', 0)} | "
             f"{m.get('unnoetige_aufrufe', 0)} | {len(m.get('handelt_ohne_antwort') or [])} | "
@@ -89,6 +102,17 @@ def _fall_abschnitt(f: dict) -> list:
     z = [f"## {f['id']} — {f.get('titel', '')}", ""]
     if f.get("absturz"):
         z += [f"**Lauf abgestürzt:** `{f['absturz']}`", ""]
+    fr = f.get("frueh_abgebrochen")
+    if fr:
+        z += [f"**Früh abgebrochen** nach Zug {fr['nach_zug']} von {fr['von']} "
+              f"(--abbruch-frueh): {fr['grund']}", ""]
+    ab = f.get("abspielen")
+    if ab:
+        z += [("**Abgespielt** (ohne Modell, ohne Richter): "
+               + ("gültig bis zum Ende" if ab.get("gueltig") else ab.get("grund") or "")
+               + f"; {ab.get('runden_abgespielt')}/{ab.get('runden_aufgezeichnet')} Runden"
+               + (f"; anderer Wortlaut bei gleichem Ausgang: {len(ab['abweichend'])}×"
+                  if ab.get("abweichend") else "")), ""]
     z += ["**Endzustand**", ""]
     for e in f.get("endzustand") or []:
         z.append(f"- {'✓' if e['ok'] else '✗'} {e['was']}"
@@ -143,6 +167,8 @@ def markdown(durchgang: dict) -> str:
          f" · Richter: {durchgang.get('richter') or '—'}", "",
          f"**Kosten:** KI {_eur(s['kosten_ki_eur'])} + Richter {_eur(s['kosten_richter_eur'])}"
          f" = **{_eur(s['kosten_gesamt_eur'])}** · Laufzeit {s['laufzeit_s']:.0f} s", "",
+         *([f"**Prüfstand-Kosten im Monat:** {durchgang['topf']}", ""]
+           if durchgang.get("topf") else []),
          f"**Isolation:** {durchgang.get('isolation', '—')}", "",
          "## Übersicht", "",
          f"- Endzustand: **{s['endzustand_ok']}/{s['faelle']} Fälle ganz richtig** "

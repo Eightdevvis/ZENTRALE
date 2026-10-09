@@ -8,7 +8,8 @@
 import glob
 import json
 import os
-from datetime import datetime
+import re
+from datetime import date, datetime
 
 import yaml
 
@@ -17,7 +18,7 @@ FAELLE_DIR = os.path.join(WURZEL, "tests", "pruefstand", "faelle")
 
 _ERLAUBT = {"id", "titel", "verdeckt", "herkunft", "jetzt", "geschaetzt",
             "worum", "einstellungen", "kalender", "gedaechtnis", "netz",
-            "antworten", "zuege", "endzustand"}
+            "antworten", "zuege", "endzustand", "browser"}
 
 
 class FallFehler(ValueError):
@@ -79,6 +80,45 @@ def pruefen(fall: dict) -> None:
     for i, p in enumerate(fall["endzustand"], 1):
         if not isinstance(p, dict) or not p.get("was"):
             fehler(f"Endzustand {i}: 'was' fehlt")
+        grund = _pruefung_fehlt(p)
+        if grund:
+            fehler(f"Endzustand {i} ({p['was']}): {grund}")
+    for s in (fall.get("browser") or {}).get("seiten") or []:
+        if not isinstance(s, dict) or not str(s.get("pfad", "")).startswith("/"):
+            fehler(f"browser.seiten: jede Seite braucht einen pfad, der mit / beginnt ({s})")
+
+
+def _pruefung_fehlt(p: dict) -> str | None:
+    """Was an einer Endzustand-Prüfung nicht laufen würde — vor dem Lauf
+    sagen, nicht nach bezahlten Zügen (Arten: endzustand.ARTEN)."""
+    from .endzustand import ARTEN
+    if not any(k in p for k in ARTEN):
+        return f"braucht eins von {', '.join(ARTEN)}"
+    for alternative in p.get("eins_von") or []:
+        for q in alternative:
+            g = _pruefung_fehlt(q) if isinstance(q, dict) else "Variante ist keine Prüfung"
+            if g:
+                return g
+    a = p.get("antwort")
+    if a is not None:
+        if not isinstance(a, dict):
+            return "antwort muss ein Abschnitt sein"
+        for feld in ("muster", "eins_von_muster", "nicht_muster"):
+            for m in a.get(feld) or []:
+                try:
+                    re.compile(m)
+                except re.error as e:
+                    return f"{feld} {m!r} ist kein gültiges Muster ({e})"
+    z = (p.get("regeln") or {}).get("zeitraum") if isinstance(p.get("regeln"), dict) else None
+    if z is not None:
+        try:
+            von, bis = (v if isinstance(v, date) else date.fromisoformat(str(v))
+                        for v in (z["von"], z["bis"]))
+        except (KeyError, TypeError, ValueError):
+            return "zeitraum braucht von und bis als Datum (2026-10-12)"
+        if von > bis:
+            return "zeitraum: von liegt nach bis"
+    return None
 
 
 def jetzt_von(fall: dict):

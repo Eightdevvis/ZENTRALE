@@ -16,7 +16,10 @@ abgeschaltet (`ZENTRALE_GRAPH_KONTEXT`/`_EXTRAKTION` holen ihn zurück), sein
 Abschnitt unten beschreibt, wie er arbeitet, wenn er an ist. Der Chat ist
 nicht hart gegatet (`chat_available()`: ohne lokale KI —
 `ZENTRALE_LOKALE_KI=aus` — Cloud ja, lokal nie). Tool-Calls und Denken stehen im Chat, das Devtools-Terminal
-zeigt den vollen Request. Kosten in `data/ai_usage.json`. **Modell:**
+zeigt den vollen Request. Kosten in `data/ai_usage.json` — oben Sashas Chat
+(nur das zählen Deckel, Rückfall und Anzeige), der Prüfstand seit 2026-10-09
+im eigenen Topf `herkunft.pruefstand` ([pruefstand.md](pruefstand.md),
+„Kosten"). **Modell:**
 Code-Default ist `claude-sonnet-5` (`providers.py` `default_model`, Rückfall
 in `cloud._model()`), Denk-Tiefe `low` (`ai_backends.chat_effort`). Beides
 überschreibt `data/ai_config.json` (`chat_models` pro Anbieter,

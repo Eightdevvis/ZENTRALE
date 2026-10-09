@@ -28,7 +28,7 @@ Messungen dazu existiert.
 | Dialogischer Action-Scaffold fürs lokale 9b (WIP, geparkt) | [logic_loop_plan.md](logic_loop_plan.md) |
 | Gemessenes statt Gefühltes: Benchmark-Protokolle, Sampling, Modell-Vergleiche | [bench_history.md](bench_history.md) |
 | **Ehrlichkeit live** — vier Prüfer in Python vor jeder Antwort (gross): Tat gegen Wort mit einer Korrekturrunde, Kennungen, „nicht da“ nur nach vollständiger Suche, offene Zusagen im Kontext-Umschlag; Erledigt-Zeile aus dem Werkzeug-Protokoll; was Anthropic empfiehlt und was wir davon nehmen; Falschtreffer gemessen | [ehrlichkeit_live.md](ehrlichkeit_live.md) |
-| **Prüfstand** — arbeitet die Cloud-KI ehrlich und richtig? Fälle aus Sashas Alltag (YAML) über den echten Weg gegen Wegwerf-Daten: Endzustand, Belegpflicht (jede Behauptung mit Zitat), Metriken, verdeckte Fälle, Ist-Stand vom 08.10. | [pruefstand.md](pruefstand.md) |
+| **Prüfstand** — arbeitet die Cloud-KI ehrlich und richtig? Fälle aus Sashas Alltag (YAML) über den echten Weg gegen Wegwerf-Daten: Endzustand, Belegpflicht (jede Behauptung mit Zitat), Metriken, verdeckte Fälle, Ist-Stand vom 08.10.; Kosten im eigenen Topf, sparen (früh abbrechen, Richter im Batch, abspielen) | [pruefstand.md](pruefstand.md) |
 
 ## Wo sonst noch KI drinsteckt
 

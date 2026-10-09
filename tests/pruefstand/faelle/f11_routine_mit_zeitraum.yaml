@@ -1,0 +1,46 @@
+# Fall 11 — eine Routine mit Anfang und Ende.
+#
+# Sasha nennt alles: Tage, Uhrzeit, Semesteranfang und -ende. Die Routine
+# darf nicht „schon immer" laufen (vor dem 12.10. nichts) und muss nach dem
+# 12.02.2027 aufhören. Wie (seit, UNTIL, …) ist Sache der KI; geprüft wird
+# die Tagesansicht. Eine Regel für Mo+Mi oder zwei einzelne — beides gut.
+
+id: f11_routine_mit_zeitraum
+titel: "Analysis I Mo+Mi 10–12, nur im Wintersemester 12.10.2026–12.02.2027"
+verdeckt: false
+herkunft: "ausgedacht nach dem Semester-Auftrag vom 09.10.2026"
+jetzt: "2026-10-09T12:00"
+
+kalender:
+  termine:
+    - {tag: 2026-10-13, label: Fahrschule, zeit: "19:00", ende: "20:00"}
+
+antworten:
+  erlaubnis: ja
+  knopf: null
+
+zuege:
+  - sagt: "trag mir analysis I ein: montags und mittwochs 10 bis 12, im wintersemester, also vom 12.10.2026 bis 12.02.2027"
+    erwartet: {rueckfrage: false}
+
+endzustand:
+  - was: Wiederholung nur vom 12.10.2026 bis 12.02.2027
+    eins_von:
+      - - {was: eine Regel, regeln: {label: analysis, anzahl: 1, zeitraum: {von: 2026-10-12, bis: 2027-02-12}}}
+      - - {was: zwei Regeln, regeln: {label: analysis, anzahl: 2, zeitraum: {von: 2026-10-12, bis: 2027-02-12}}}
+  - was: Erster Termin Mo 12.10. 10:00–12:00
+    am: 2026-10-12
+    label: analysis
+    findet_statt: true
+    beginn: "10:00"
+    ende: "12:00"
+  - was: Mi 14.10. und Mi 10.02.2027 finden statt
+    am: [2026-10-14, 2027-02-10]
+    label: analysis
+    findet_statt: true
+  - was: Nicht vorher (Mo 05.10.) und nicht danach (Mo 15.02.2027)
+    am: [2026-10-05, 2027-02-15]
+    label: analysis
+    anzahl: 0
+  - was: Keine erfundenen Kennungen
+    antwort: {zug: alle, kennungen_belegt: true}

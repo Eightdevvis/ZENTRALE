@@ -24,7 +24,8 @@ Wegwerf-Ordner für ALLES, was geschrieben wird:
     Transkript   transkript._DIR
 
 Was NICHT umgebogen wird: `data/ai_usage.json`. Dieser Lauf kostet echtes
-Geld, und das gehört in die echte Buchhaltung.
+Geld, und das gehört in die echte Buchhaltung — seit 2026-10-09 in den
+eigenen Topf „pruefstand", nicht in Sashas Chat-Kosten.
 
 Am Ende werden Prüfsummen über ALLE Dateien in data/ von vorher und
 nachher verglichen. Der Grund steht in der Projekt-Historie: eine frühere
@@ -351,7 +352,9 @@ def main():
     vorher = pruefsummen()
     ordner = sandkasten()
     import usage
-    kosten_vorher = usage.heute_euro()
+    # Eigener Topf, nicht Sashas Chat-Kosten (2026-10-09, core/usage.py).
+    usage.herkunft_setzen(usage.PRUEFSTAND)
+    kosten_vorher = usage.heute_euro(usage.PRUEFSTAND)
 
     name = providers.configured()
     modell = None if a.voll else providers.cheap_model(name)
@@ -384,7 +387,7 @@ def main():
 
         print("\n" + "═" * 68)
         print(f"{gelaufen - len(fehler)}/{gelaufen} bestanden"
-              f"   ·   {usage.heute_euro() - kosten_vorher:.4f} € dieser Lauf")
+              f"   ·   {usage.heute_euro(usage.PRUEFSTAND) - kosten_vorher:.4f} € dieser Lauf")
         if fehler:
             print("\nOffen:")
             for gruppe, titel, grund in fehler:

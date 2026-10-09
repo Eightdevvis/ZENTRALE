@@ -15,7 +15,8 @@ Knöpfe drückt ein Skript. Danach:
   3. Metriken    Aufrufe, Fehler, Löschen+Neu, Rückfragen, Kosten, Laufzeit
 
 KOSTET GELD (ein Durchgang mit allen Fällen etwa 0,5–1 €, gebucht in
-data/ai_usage.json). Deshalb nicht in pytest — dort läuft nur ein
+data/ai_usage.json — im eigenen Topf „pruefstand", nicht in Sashas Chat-
+Kosten; Obergrenze im Monat: Einstellung pruefstand_budget_monat). Deshalb nicht in pytest — dort läuft nur ein
 Trockentest mit gefälschtem Modell (tests/test_pruefstand.py).
 Wozu, Format der Fälle, wie man misst: memory/ki/pruefstand.md.
 
@@ -25,6 +26,11 @@ Wozu, Format der Fälle, wie man misst: memory/ki/pruefstand.md.
     venv/bin/python scripts/pruefstand.py --nur-richter <ordner>   # nur neu richten
     venv/bin/python scripts/pruefstand.py --liste
     venv/bin/python scripts/pruefstand.py --entwurf-aus <gespräch-id>[:<nachricht-id>]
+
+Sparen (memory/ki/pruefstand.md, Abschnitt „Sparen"):
+    --abbruch-frueh        einen Fall beenden, sobald er sicher verloren ist
+    --richter-batch        Richter über die Batches-API (halber Preis, später)
+    --abspielen <ordner>   einen aufgezeichneten Durchgang ohne Modell nachfahren (0 €)
 """
 import argparse
 import json
@@ -63,6 +69,38 @@ def richten(a) -> int:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def richter_einzeln(pfad: str, daten: str, richter_modell=None) -> dict:
+    """Den normalen Richter über ein gespeichertes Fall-Ergebnis schicken
+    (eigener Prozess). -> das neu gerichtete Ergebnis."""
+    befehl = [sys.executable, os.path.abspath(__file__), "--richte", pfad,
+              "--daten", daten] + (["--richter", richter_modell] if richter_modell else [])
+    with open(pfad.replace(".json", ".richter.log"), "w", encoding="utf-8") as lf:
+        subprocess.run(befehl, stdout=lf, stderr=subprocess.STDOUT, timeout=1800)
+    with open(pfad, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def richter_im_batch(ergebnisse: list, ordner: str, daten: str, a) -> list:
+    """--richter-batch: alle Richter-Anfragen in einen Batch (halber Preis).
+    Scheitert er, richtet der normale Richter Fall für Fall."""
+    from pruefstand_teile import richter_batch
+    pfade = [os.path.join(ordner, "protokolle", f"{e['id']}.json") for e in ergebnisse]
+    try:
+        topf_lage(daten)                     # Schlüssel und Kern-Pfad wie für die Grenze
+        richter_batch.richten(ergebnisse, modell=a.richter,
+                              warten_s=a.richter_batch_warten * 60)
+        for e, pfad in zip(ergebnisse, pfade):
+            if os.path.exists(pfad):
+                with open(pfad, "w", encoding="utf-8") as f:
+                    json.dump(e, f, ensure_ascii=False, default=str)
+        return ergebnisse
+    except Exception as fehler:
+        print(f"Richter-Batch ging nicht ({fehler}) — richte normal, Fall für Fall.")
+        return [richter_einzeln(pfad, daten, a.richter)
+                if os.path.exists(pfad) and e.get("zuege") else e
+                for e, pfad in zip(ergebnisse, pfade)]
+
+
 def nur_richter(a, daten: str) -> int:
     """Einen schon gefahrenen Durchgang neu richten und den Bericht neu
     schreiben. Kostet nur den Richter."""
@@ -80,12 +118,7 @@ def nur_richter(a, daten: str) -> int:
             with open(pfad, "w", encoding="utf-8") as f:
                 json.dump(fall, f, ensure_ascii=False, default=str)
         elif os.path.exists(pfad) and (nur is None or fall["id"] in nur):
-            befehl = [sys.executable, os.path.abspath(__file__), "--richte", pfad,
-                      "--daten", daten] + (["--richter", a.richter] if a.richter else [])
-            with open(pfad.replace(".json", ".richter.log"), "w", encoding="utf-8") as lf:
-                subprocess.run(befehl, stdout=lf, stderr=subprocess.STDOUT, timeout=1800)
-            with open(pfad, encoding="utf-8") as f:
-                fall = json.load(f)
+            fall = richter_einzeln(pfad, daten, a.richter)
         z = (fall.get("richter") or {}).get("zaehlung") or {}
         print(f"  {fall['id']:<28}Fehler-Behauptungen {z.get('fehler', '—')}  "
               f"Richter {fall.get('richter_kosten_eur') or 0:.3f} €"
@@ -117,7 +150,9 @@ def einzeln(a) -> int:
             pass
         from pruefstand_teile import kind
         erg = kind.ausfuehren(fall, code_wurzel=code, tmp=tmp,
-                              richter_modell=a.richter, ohne_richter=a.ohne_richter)
+                              richter_modell=a.richter, ohne_richter=a.ohne_richter,
+                              frueh=a.abbruch_frueh, aufnahme=a.aufnahme,
+                              abspielen=a.abspiel_datei)
         with open(a.ergebnis, "w", encoding="utf-8") as f:
             json.dump(erg, f, ensure_ascii=False, default=str)
         return 0
@@ -145,26 +180,35 @@ def stand_von(code: str) -> str:
 SCHAETZUNG_EUR = 1.8
 
 
-def budget_lage(daten: str):
-    """(ausgegeben, Deckel) des laufenden Monats oder None ohne Deckel.
+PRUEFSTAND_BUDGET_STANDARD = 5.0   # € im Monat, wenn nichts eingestellt ist
 
-    Warum (2026-10-08): ab dem Deckel fällt der Chat auf den billigsten
-    Anbieter zurück (ai_backends.budget_lage). Im Prüfstand selbst ist der
-    Deckel aus (umgebung.vorbereiten) — sonst wechselte das Modell mitten im
-    Durchgang und die Messung wäre keine. Dafür fragt der Prüfstand VORHER,
-    ob der Durchgang den Deckel reißen würde: der gilt ja auch für Sashas
-    echten Chat."""
+
+def topf_lage(daten: str):
+    """(diesen Monat im Prüfstand-Topf ausgegeben, Obergrenze) — oder None,
+    wenn die Buchhaltung nicht lesbar ist.
+
+    Seit 2026-10-09 bucht der Prüfstand in einen eigenen Topf
+    (core/usage.py, Herkunft „pruefstand"): Sashas Monatsdeckel und sein
+    Rückfall auf den billigsten Anbieter zählen nur noch seinen Chat. Vorher
+    hatten Prüfstand-Läufe seinen Deckel (8 €) gerissen und sein Chat fiel
+    auf qwen-plus zurück. Der Prüfstand hat dafür seine eigene Grenze im
+    Monat, Einstellung `pruefstand_budget_monat` (Standard 5 €)."""
     try:
-        with open(os.path.join(daten, "data", "ai_config.json"), encoding="utf-8") as f:
-            limit = json.load(f).get("budget_monat_euro")
-        if not limit:
-            return None
         os.environ.setdefault("ZENTRALE_USAGE_FILE",
                               os.path.join(daten, "data", "ai_usage.json"))
-        sys.path.insert(0, os.path.join(ROOT, "core"))
+        os.environ.setdefault("ZENTRALE_AI_CONFIG_DIR", os.path.join(daten, "data"))
+        if os.path.join(ROOT, "core") not in sys.path:
+            sys.path.insert(0, os.path.join(ROOT, "core"))
+        import ai_config
         import usage
-        return float(usage.monat_euro()), float(limit)
-    except Exception:
+        try:
+            limit = float(ai_config.setting("pruefstand_budget_monat",
+                                            PRUEFSTAND_BUDGET_STANDARD))
+        except (TypeError, ValueError):
+            limit = PRUEFSTAND_BUDGET_STANDARD
+        return float(usage.monat_euro(usage.PRUEFSTAND)), limit
+    except Exception as e:
+        print(f"Prüfstand-Kosten nicht lesbar: {e}")
         return None
 
 
@@ -187,14 +231,35 @@ def durchgang(liste: list, *, code: str, daten: str, ordner: str, a) -> dict:
     os.makedirs(os.path.join(ordner, "protokolle"), exist_ok=True)
     ergebnisse = []
     for fall in liste:
+        # Die Schätzung vorher kann daneben liegen (ein Fall mit Browser
+        # dauert länger): vor jedem Fall nachsehen, ob die Grenze erreicht ist.
+        lage = None if (a.trotz_budget or a.abspielen) else topf_lage(daten)
+        if lage and lage[0] >= lage[1]:
+            print(f"  {fall['id']:<28}ausgelassen — Prüfstand-Grenze erreicht "
+                  f"({lage[0]:.2f} € von {lage[1]:.2f} €)")
+            ergebnisse.append({"id": fall["id"], "titel": fall.get("titel"),
+                               "verdeckt": bool(fall.get("verdeckt")), "zuege": [],
+                               "endzustand": [{"was": "Lauf", "ok": False,
+                                               "grund": "ausgelassen: Prüfstand-Grenze erreicht"}],
+                               "absturz": "ausgelassen (pruefstand_budget_monat)",
+                               "metriken": {}})
+            continue
         ziel = os.path.join(ordner, "protokolle", f"{fall['id']}.json")
         log = os.path.join(ordner, "protokolle", f"{fall['id']}.log")
         befehl = [sys.executable, os.path.abspath(__file__), "--einzeln", fall["_pfad"],
                   "--code", code, "--daten", daten, "--ergebnis", ziel]
         if a.richter:
             befehl += ["--richter", a.richter]
-        if a.ohne_richter:
+        if a.ohne_richter or a.richter_batch or a.abspielen:
             befehl.append("--ohne-richter")
+        if a.abbruch_frueh:
+            befehl.append("--abbruch-frueh")
+        if a.abspielen:
+            befehl += ["--abspiel-datei", os.path.join(os.path.abspath(a.abspielen),
+                                                       "aufnahmen", f"{fall['id']}.json")]
+        else:
+            os.makedirs(os.path.join(ordner, "aufnahmen"), exist_ok=True)
+            befehl += ["--aufnahme", os.path.join(ordner, "aufnahmen", f"{fall['id']}.json")]
         print(f"  {fall['id']:<28}", end="", flush=True)
         t0 = time.monotonic()
         with open(log, "w", encoding="utf-8") as lf:
@@ -216,11 +281,22 @@ def durchgang(liste: list, *, code: str, daten: str, ordner: str, a) -> dict:
               f"{time.monotonic() - t0:.0f} s"
               + ("  (verdeckt)" if erg.get("verdeckt") else "")
               + ("  ABSTURZ" if erg.get("absturz") else ""))
+    if a.richter_batch and not a.abspielen and any(e.get("zuege") for e in ergebnisse):
+        ergebnisse = richter_im_batch(ergebnisse, ordner, daten, a)
     modelle = sorted({m for e in ergebnisse for m in e.get("modelle") or []})
     richter_modelle = sorted({(e.get("richter") or {}).get("modell") or "" for e in ergebnisse} - {""})
     return {"zeit": datetime.now().strftime("%Y-%m-%d %H:%M"), "code": stand_von(code),
             "modelle": modelle, "richter": ", ".join(richter_modelle),
             "faelle": ergebnisse, "summen": bericht.summen(ergebnisse)}
+
+
+def topf_text(daten: str) -> str:
+    """Eine Zeile für den Bericht: der eigene Topf des Prüfstands."""
+    lage = topf_lage(daten)
+    if not lage:
+        return "nicht lesbar"
+    return (f"diesen Monat {lage[0]:.2f} € von {lage[1]:.2f} € (eigener Topf, "
+            "nicht in Sashas Chat-Kosten)")
 
 
 def isolation_text(vorher: dict, nachher: dict) -> str:
@@ -248,13 +324,25 @@ def main() -> int:
     p.add_argument("--ohne-richter", action="store_true", help="Belegpflicht nicht prüfen")
     p.add_argument("--liste", action="store_true", help="Fälle zeigen und beenden")
     p.add_argument("--trotz-budget", action="store_true",
-                   help="auch fahren, wenn der Durchgang über den Monatsdeckel ginge")
+                   help="auch fahren, wenn der Durchgang über die Prüfstand-Grenze "
+                        "(pruefstand_budget_monat) ginge")
     p.add_argument("--entwurf-aus", metavar="GESPRAECH[:NACHRICHT]",
                    help="Entwurf eines Falls aus einem gespeicherten Gespräch ausgeben")
     p.add_argument("--nur-richter", metavar="ORDNER",
                    help="einen gefahrenen Durchgang nur neu richten (kostet nur den Richter)")
     p.add_argument("--ohne-modell", action="store_true",
                    help="mit --nur-richter: nur die Zitate neu prüfen, Richter nicht fragen")
+    p.add_argument("--abbruch-frueh", action="store_true",
+                   help="einen Fall beenden, sobald er sicher verloren ist (spart die restlichen Züge)")
+    p.add_argument("--richter-batch", action="store_true",
+                   help="Richter über die Message Batches API (halber Preis, Ergebnis später; "
+                        "scheitert er, normal)")
+    p.add_argument("--richter-batch-warten", type=float, default=30, metavar="MIN",
+                   help="so lange höchstens auf den Batch warten (Standard 30 min)")
+    p.add_argument("--abspielen", metavar="ORDNER",
+                   help="einen aufgezeichneten Durchgang ohne Modell nachfahren (kostet nichts)")
+    p.add_argument("--aufnahme", help=argparse.SUPPRESS)
+    p.add_argument("--abspiel-datei", help=argparse.SUPPRESS)
     p.add_argument("--einzeln", help=argparse.SUPPRESS)
     p.add_argument("--richte", help=argparse.SUPPRESS)
     p.add_argument("--code", help=argparse.SUPPRESS)
@@ -286,18 +374,27 @@ def main() -> int:
     if not os.path.exists(os.path.join(daten, "data", "ai_config.json")):
         sys.exit(f"Keine Einstellungen unter {daten}/data/ai_config.json — ohne Schlüssel kein Modell.")
 
-    lage = budget_lage(daten)
+    if a.abspielen:
+        quelle = os.path.join(os.path.abspath(a.abspielen), "aufnahmen")
+        da = {os.path.splitext(n)[0] for n in os.listdir(quelle)} if os.path.isdir(quelle) else set()
+        fehlen = [f["id"] for f in liste if f["id"] not in da]
+        liste = [f for f in liste if f["id"] in da]
+        if fehlen:
+            print(f"Ohne Aufnahme, ausgelassen: {', '.join(fehlen)}")
+        if not liste:
+            sys.exit(f"Keine Aufnahmen unter {quelle}.")
+    lage = None if a.abspielen else topf_lage(daten)
     if lage:
         ausgegeben, limit = lage
         schaetzung = SCHAETZUNG_EUR * len(liste) / 7 * (2 if a.vergleich else 1)
-        print(f"Monat: {ausgegeben:.2f} € von {limit:.2f} € ausgegeben; "
+        print(f"Prüfstand diesen Monat: {ausgegeben:.2f} € von {limit:.2f} € ausgegeben; "
               f"dieser Durchgang etwa {schaetzung:.2f} €.")
         if ausgegeben + schaetzung > limit and not a.trotz_budget:
-            sys.exit("Das ginge über Sashas Monatsdeckel (budget_monat_euro). Ab dem Deckel "
-                     "denkt der Chat mit dem billigsten Anbieter weiter — auch Sashas "
-                     "echter Chat. Abbruch; mit --trotz-budget trotzdem fahren.")
+            sys.exit("Das ginge über die Prüfstand-Grenze im Monat (pruefstand_budget_monat). "
+                     "Abbruch; mit --trotz-budget trotzdem fahren. Sashas Chat-Budget "
+                     "berührt der Prüfstand nicht mehr.")
 
-    stempel = datetime.now().strftime("%Y-%m-%d_%H%M")
+    stempel = datetime.now().strftime("%Y-%m-%d_%H%M") + ("_abgespielt" if a.abspielen else "")
     ordner = os.path.join(os.path.abspath(a.ausgabe), stempel)
     print(f"Prüfstand: {len(liste)} Fälle → {ordner}")
     vorher = fingerabdruck(daten)
@@ -305,6 +402,7 @@ def main() -> int:
     print(f"\n{stand_von(ROOT)}")
     d = durchgang(liste, code=ROOT, daten=daten, ordner=ordner, a=a)
     d["isolation"] = isolation_text(vorher, fingerabdruck(daten))
+    d["topf"] = topf_text(daten)
     pfad = bericht.schreiben(d, ordner)
 
     if a.vergleich:
@@ -333,6 +431,7 @@ def main() -> int:
           f"{s['belegt']} belegt, {s['vermutung']} Vermutung, {s['unbelegt']} unbelegt, "
           f"{s['falsch']} falsch · {s['kosten_gesamt_eur']:.3f} €")
     print(f"Isolation: {d['isolation']}")
+    print(f"Prüfstand-Kosten: {d['topf']}")
     print(f"Bericht: {pfad}")
     return 0
 

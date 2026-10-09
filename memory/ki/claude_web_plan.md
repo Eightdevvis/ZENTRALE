@@ -981,7 +981,8 @@ Abschnitt „Browser"; Einrichten: [../betrieb/ki_browser.md](../betrieb/ki_brow
   byte-gleich, Gate und Fragen der alten Werkzeuge unverändert.
 - **Offen:** Anmelden mit Passwort (bräuchte eine Eingabe, die an der KI
   vorbeigeht), Bild an die KI zurück (bräuchte Bild-Blöcke in
-  Werkzeug-Ergebnissen), Prüfstand-Fall „LSF-Zeiten finden".
+  Werkzeug-Ergebnissen). (Prüfstand-Fall „LSF-Zeiten finden" gebaut:
+  `f08_lsf_browser`, 2026-10-09.)
 
 ### Nutzerordner, Suchen, Claude-Skills übernehmen, Prüfer „nicht da" (2026-10-09)
 
@@ -1018,3 +1019,22 @@ ordner nich zur halde wird". Gebaut (nur `gross`):
   bis remove_input lief oder Sasha nein sagte (core/input_aufraeumen.py).
 - Elf `Z-`-Codes; Schnappschuss: zwei Einträge hinten an `gross`, `klein`
   byte-gleich. Details: [ki_system.md](ki_system.md), „Nutzerordner …".
+
+### Prüfstand: Kosten getrennt, vier neue Fälle, sparen (2026-10-09)
+
+Sasha: „ich will NICH sehen was du zum testen nutzt, jedenfalls nich gemischt
+mit der chat ausgabe." Prüfstand-Läufe hatten seinen Deckel (8 €) gerissen,
+sein Chat fiel auf qwen-plus zurück. Gebaut:
+- `core/usage.py` bucht nach Herkunft: oben chat (wie immer, alte Einträge
+  bleiben chat), andere unter `herkunft.<name>`; gesetzt über einen Kontext
+  (`herkunft_setzen` für den Prozess, `herkunft_block`). Deckel, Rückfall,
+  `budget_lage`, TUI zählen nur chat — ohne Änderung an ai_backends.
+- Prüfstand bucht in `pruefstand` (Lauf + Richter), eigene Grenze
+  `pruefstand_budget_monat` (Standard 5 €), Zeile im Bericht.
+- `scripts/pruefstand_umbuchen.py` holt die alten Läufe aus dem Chat-Topf
+  (zeigt nur; `--wirklich` mit Sicherung).
+- Fälle f08 (LSF per Browser, eigener Seiten-Server, Prompt-Injection), f09
+  (Suchtreffer nicht gelesen), f10 (qwen-Lügenfall vom 09.10.), f11 (Routine
+  mit Zeitraum); neue Prüfungen `antwort`, `fragen`, `regeln.zeitraum`.
+- Sparen: `--abbruch-frueh`, `--richter-batch` (halber Preis),
+  Aufzeichnen + `--abspielen` (0 €). Details: [pruefstand.md](pruefstand.md).

@@ -20,11 +20,25 @@
 #   {
 #     "tage":   {"2026-08-15": {"euro": 0.42, "calls": 37}},
 #     "monate": {"2026-08":    {"euro": 3.10, "calls": 291}},
-#     "modelle": {"claude-sonnet-5": {"euro": 2.80, "calls": 240}}
+#     "modelle": {"claude-sonnet-5": {"euro": 2.80, "calls": 240}},
+#     "herkunft": {"pruefstand": {"tage": {…}, "monate": {…}, "modelle": {…}}}
 #   }
 #
 # Alte Tage werden gekappt (KEEP_TAGE), sonst wächst die Datei ewig.
+#
+# ── Herkunft (2026-10-09) ──────────────────────────────────────────────
+# Oben stehen Sashas Chat-Kosten — so wie seit jeher, alte Einträge sind
+# damit von selbst „chat". Was nicht aus seinem Chat kommt (der Prüfstand),
+# bucht in einen eigenen Topf unter "herkunft". Warum: Prüfstand-Läufe
+# fraßen seinen Monatsdeckel, sein Chat fiel auf qwen-plus zurück, und er
+# will die Test-Kosten nicht gemischt mit seinen sehen („ich will NICH
+# sehen was du zum testen nutzt"). Deckel, Rückfall und Anzeige lesen nur
+# oben. Gesetzt wird die Herkunft über einen Kontext, nicht über Parameter
+# quer durch alle Wege: herkunft_setzen() für einen ganzen Prozess (der
+# Prüfstand), herkunft_block() für einen Block.
 
+import contextlib
+import contextvars
 import json
 import dateien
 import os
@@ -49,6 +63,36 @@ KEEP_TAGE = 90     # Tagesdetails so lange behalten, Monatssummen bleiben
 
 _lock = Lock()
 
+CHAT = "chat"
+PRUEFSTAND = "pruefstand"
+
+# Prozessweit, weil der Chat-Weg Threads startet, die einen ContextVar nicht
+# erben — ein Prüfstand-Aufruf darf nie aus Versehen in Sashas Topf landen.
+_herkunft_prozess = CHAT
+_herkunft_var = contextvars.ContextVar("usage_herkunft", default=None)
+
+
+def herkunft_setzen(name: str) -> str:
+    """Herkunft aller folgenden Buchungen dieses Prozesses. -> die alte
+    (zum Zurückstellen)."""
+    global _herkunft_prozess
+    alt, _herkunft_prozess = _herkunft_prozess, (name or CHAT)
+    return alt
+
+
+@contextlib.contextmanager
+def herkunft_block(name: str):
+    """Buchungen in diesem Block (dieser Thread/Task) unter `name`."""
+    marke = _herkunft_var.set(name or CHAT)
+    try:
+        yield
+    finally:
+        _herkunft_var.reset(marke)
+
+
+def aktuelle_herkunft() -> str:
+    return _herkunft_var.get() or _herkunft_prozess
+
 
 def _leer() -> dict:
     return {"tage": {}, "monate": {}, "modelle": {}}
@@ -67,6 +111,17 @@ def _laden() -> dict:
 
 def _schreiben(d: dict):
     dateien.json_schreiben(_FILE, d)
+
+
+def topf(d: dict, name: str = CHAT) -> dict:
+    """Der Topf einer Herkunft in der geladenen Datei (chat = oben, die
+    anderen unter "herkunft"); legt ihn an, wenn er fehlt."""
+    if (name or CHAT) == CHAT:
+        return d
+    t = d.setdefault("herkunft", {}).setdefault(name, {})
+    for k in ("tage", "monate", "modelle"):
+        t.setdefault(k, {})
+    return t
 
 
 def _bump(topf: dict, schluessel: str, euro: float, calls: int = 1):
@@ -110,7 +165,8 @@ def tokens_geschaetzt(zeichen: int) -> int:
 
 def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
            cache_read: int = 0, cache_write: int = 0,
-           geschaetzt: bool = False, output_geschaetzt: int = 0) -> float:
+           geschaetzt: bool = False, output_geschaetzt: int = 0,
+           faktor: float = 1.0) -> float:
     """
     Einen Call verbuchen. Gibt die geschätzten Kosten dieses Calls in Euro
     zurück (damit der Aufrufer sie gleich loggen kann).
@@ -126,6 +182,9 @@ def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
     Ausgabe bis zum Stopp nicht). In den Topf „geschaetzt" geht dann nur der
     Preis dieser N Token.
 
+    faktor (2026-10-09): Preis-Faktor des Wegs — 0.5 für die Message Batches
+    API von Anthropic (halber Preis; der Prüfstand-Richter mit --richter-batch).
+
     Schluckt Fehler: eine kaputte Buchhaltung darf niemals ein Gespräch
     abbrechen. Im schlimmsten Fall stimmt die Statistik nicht.
     """
@@ -136,6 +195,7 @@ def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
                           cache_read=cache_read, cache_write=cache_write)
         teil_eur = (prices.euro(model, output_tokens=output_geschaetzt)
                     if output_geschaetzt > 0 and not geschaetzt else 0.0)
+        eur, teil_eur = eur * float(faktor), teil_eur * float(faktor)
     except Exception:
         return 0.0
 
@@ -144,14 +204,15 @@ def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
     try:
         with _lock:
             d = _laden()
-            _bump(d["tage"], heute, eur)
-            _bump(d["monate"], monat, eur)
-            _bump(d["modelle"], model or "unbekannt", eur)
+            t = topf(d, aktuelle_herkunft())
+            _bump(t["tage"], heute, eur)
+            _bump(t["monate"], monat, eur)
+            _bump(t["modelle"], model or "unbekannt", eur)
             if geschaetzt or output_geschaetzt > 0:
-                _bump(d.setdefault("geschaetzt", {}), monat,
+                _bump(t.setdefault("geschaetzt", {}), monat,
                       eur if geschaetzt else min(eur, teil_eur))
             # Tagesdetails kappen; Monate bleiben (die sind winzig).
-            tage = d["tage"]
+            tage = t["tage"]
             if len(tage) > KEEP_TAGE:
                 for alt in sorted(tage)[:-KEEP_TAGE]:
                     del tage[alt]
@@ -161,21 +222,25 @@ def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
     return eur
 
 
-def _summe(topf: str, schluessel: str) -> float:
-    return float((_laden().get(topf, {}).get(schluessel) or {}).get("euro", 0.0))
+def _summe(feld: str, schluessel: str, herkunft: str = CHAT) -> float:
+    t = topf(_laden(), herkunft)
+    return float((t.get(feld, {}).get(schluessel) or {}).get("euro", 0.0))
 
 
-def heute_euro() -> float:
-    return _summe("tage", date.today().isoformat())
+def heute_euro(herkunft: str = CHAT) -> float:
+    return _summe("tage", date.today().isoformat(), herkunft)
 
 
-def monat_euro() -> float:
-    return _summe("monate", date.today().isoformat()[:7])
+def monat_euro(herkunft: str = CHAT) -> float:
+    """Die Summe des Monats — Standard: nur Sashas Chat (der Deckel rechnet
+    damit, ai_backends.budget_lage)."""
+    return _summe("monate", date.today().isoformat()[:7], herkunft)
 
 
-def uebersicht() -> dict:
-    """Kompakt für Anzeige: heute, dieser Monat, und was welches Modell kostet."""
-    d = _laden()
+def uebersicht(herkunft: str = CHAT) -> dict:
+    """Kompakt für Anzeige: heute, dieser Monat, und was welches Modell kostet.
+    Standard nur Chat — der Prüfstand zeigt seinen Topf im eigenen Bericht."""
+    d = topf(_laden(), herkunft)
     heute = date.today().isoformat()
     return {
         "heute":  round(float((d["tage"].get(heute) or {}).get("euro", 0.0)), 4),
