@@ -349,7 +349,7 @@ def _sym(text):
 class Backend:
     def __init__(self, url):
         self.url = url.rstrip('/')
-        __import__('room_zugang').einrichten(self.url)   # Zugangsschlüssel mitschicken (memory/betrieb/zugang.md)
+        __import__((__package__ + '.' if __package__ else '') + 'room_zugang', fromlist=['_']).einrichten(self.url)   # Zugangsschlüssel mitschicken (memory/betrieb/zugang.md)
 
     def _get(self, path, timeout=3.0):
         try:
