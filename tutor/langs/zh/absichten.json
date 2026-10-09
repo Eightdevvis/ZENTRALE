@@ -1,0 +1,8 @@
+{
+  "ankunft": "Sasha 刚过来。跟她打个招呼，再问一个很简单的问题，只用她已经会的词。",
+  "nachhaken": "你刚才说的「{letzte}」，Sasha 没回答。别换话题。再说一遍，更短更简单，用 show_thought 把「{wort}」给她看。",
+  "stille": "你们有一会儿没说话了。要说的话，就说一句很短的话，用上「{wort}」（{bedeutung}）；如果是新词，用 show_thought 给她看。",
+  "stille_ohne_ziel": "你们有一会儿没说话了。最多说一句很短的话，或者只用 express 做个动作。",
+  "nachfrage": "Sasha 没听懂你刚才说的「{letzte}」。别用更多的话解释。只把「{wort}」慢慢再说一遍——最多三个词——用 show_thought 给她看（{bedeutung}），再用 express 做个动作表示它。别说新的。",
+  "zu_schwer": "（你上一句里有 Sasha 还不会的词：{woerter}。现在说简单点，用她会的词。）"
+}

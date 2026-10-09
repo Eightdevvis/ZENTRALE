@@ -56,6 +56,9 @@ PROFILE = profile(
     assessment_prompt = load_text(__file__, "assessment_prompt.md"),
     vocab_hint    = load_text(__file__, "vocab_hint.md").strip(),
     expect_ladder = load_json(__file__, "expect.json"),
+    # Anlass + Ziel jeder Ansprache, „que?"-Antwort, Nachkontrolle (Zielsprache,
+    # tutor/ansprache.py, seit 2026-10-08).
+    absichten     = load_json(__file__, "absichten.json", {}),
     tool_texts    = load_json(__file__, "tool_texts.json", {}),
 
     # Kern-Syllabus + der Hinweis, den session ans Prompt-Ende hängt (Zielsprache).

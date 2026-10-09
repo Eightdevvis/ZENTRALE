@@ -13,7 +13,7 @@ abgeschafft** (`tools.GATE_AKTIV = False`): die Persona redet von Anfang an,
 das Drill ist ein Spiel daneben (Alt+D). Vokabel-Modell: nur `spoken`/`listened`
 je Wort → Status `new/understood/learning/learned/intuitive`; die KI zählt
 nie. 12 Tools in der Sandbox (`tools._ALLOWED`). Skill-Catcher `tutor/skills.py`
-erkennt `no_entiendo` und **loggt nur**. An der Wand ist das Zimmer
+erkennt `no_entiendo`; seit 2026-10-08 **handelt** der Tutor darauf (Schlüsselwort, langsamer, Übersetzung) und hat Ruhe-Regeln, Anlass, Niveau und Nachkontrolle (`tutor/ansprache.py`, `diagnose_2026-10-08.md`). An der Wand ist das Zimmer
 (`tutor/room.py`) das Kiosk-Bild des Pi (`../betrieb/deployment.md`);
 Anwesenheit kommt über das Mikro (`../system/audio_strasse.md`); ein PIR
 ist vorbereitet, aber nicht angeschlossen (`../betrieb/hardware.md`). Die
@@ -270,7 +270,7 @@ Session/Sprache/Persona/Memory liegen im Backend.
   sie in Ruhe.
 - **Presence vom Kern:** `brain.py PRESENCE_DETECTED` → `tutor_port.presence_ping()`
   = nonverbale Reaktion (schaut hoch, Mimik happy) nur bei **laufender**
-  Session, Default AN, `TUTOR_PRESENCE_REACT=0` aus. Es STARTET keine Session
+  Session, Default AN, `ZENTRALE_TUTOR_PRESENCE_REACT=0` aus. Es STARTET keine Session
   (der alte Auto-Trigger war genau das Problem). Details: `tutor_roleplay_features.md` §5.
 
 ## Spielstände: ein Stand = eine Sprache + ein Level

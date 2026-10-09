@@ -313,6 +313,33 @@ def note_spoken(text: str, lang: str = None) -> list:
     return hits
 
 
+def note_listened(text: str, lang: str = None) -> list:
+    """DETERMINISTISCH: ihr letzter Satz gegen die Vokabelliste — jedes getrackte
+    Wort darin hat Sasha GEHÖRT, wenn er danach sinnvoll antwortet (der Aufrufer
+    prüft das: kein »que?«). listened +1, höchstens einmal je Wort und Satz.
+    Seit 2026-10-08; vorher zählte listened nur im Drill, im Gespräch blieb ein
+    Wort ewig 'new'."""
+    low = ' ' + re.sub(r"[¿¡!?.,;:…\"«»()]+", ' ', (text or '').lower()) + ' '
+    if not low.strip():
+        return []
+    getroffen = []
+    with _lock:
+        entries = _load_raw(lang)
+        for e in entries:
+            w = (e.get('word') or '').lower()
+            if not w:
+                continue
+            treffer = (w in low) if re.search(r'[一-鿿]', w) else (' ' + w + ' ') in low
+            if treffer:
+                e['listened'] = int(e.get('listened', 0) or 0) + 1
+                getroffen.append(dict(e))
+        if getroffen:
+            _write_raw(entries, lang)
+    for e in getroffen:
+        _dbg_vocab('listened', e['word'], e, lang)
+    return [e['word'] for e in getroffen]
+
+
 def introduce_new(word: str, reading: str = "", lang: str = None, meaning: str = "") -> str:
     """Neues Wort in die Liste (spoken=0/listened=0). Dedupt selbst; Junk (Namen) raus.
     meaning = Bedeutung in der Muttersprache (bei emergenten Wörtern vom Modell,

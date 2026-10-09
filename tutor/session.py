@@ -32,7 +32,8 @@ from . import tools             # Vokabel-Tools + Sandbox-Allowlist
 from . import langs             # Sprach-/Persona-Profile
 from . import anbieter          # die Naht zur einen Straße des Kerns
 from . import config            # tutor/data/tutor_config.json (Sprache/Provider/Modell)
-from . import skills            # Situations-Auslöser (no_entiendo), erst nur loggen
+from . import skills            # Situations-Auslöser (no_entiendo)
+from . import ansprache         # Ruhe, Anlass, Niveau, Nachkontrolle (2026-10-08)
 from . import memory            # eigenes Grob-Gedächtnis pro Persona
 from . import debug             # Devtools-Ereignisbus (zeitgestempelt)
 
@@ -41,7 +42,10 @@ _active   = False
 _history  = deque(maxlen=100)   # Tutor-Gesprächsverlauf (separat vom Chat-History)
 _privacy  = None               # gesetzte Privacy-Warnung der laufenden Session (oder None)
 _session_lang = None           # Sprache/Persona der laufenden Session (für History+Memory)
-_verstaendnis = skills.Verstaendnis()   # Skill-Zustand »Sasha versteht nicht« (nur Log)
+_verstaendnis = skills.Verstaendnis()   # Skill-Zustand »Sasha versteht nicht«
+_ruhe     = ansprache.Ruhe()   # wann darf sie von sich aus reden (pro Session)
+_zu_schwer = {"woerter": []}   # Nachkontrolle: fremde Wörter des letzten Zugs
+_langsam  = {"bis": 0.0}       # nach „que?": langsamer sprechen bis …
 
 # ── Ausdruck im Zimmer (vom Modell per express-Tool gesetzt) ─────────────────
 # Die KI drückt sich selbst aus (statt hardcoded-Random): stance = anhaltende
@@ -195,6 +199,8 @@ def room_state() -> dict:
         # auf „freigeschaltet". Jetzt rein aus assessment_active.
         assess = tools.assessment_active(lang)
         speed = tools.tts_speed_for(lang)
+        if time.time() < _langsam["bis"]:
+            speed = round(max(0.6, speed * 0.8), 2)   # nach „que?" langsamer
     except Exception:
         got, total, assess, speed = 0, 0, False, 1.0
     with _lock:
@@ -371,6 +377,7 @@ def activate():
         _privacy      = notice
         _expr["stance"] = "idle"; _expr["gesture"] = None; _expr["face"] = "neutral"
         _battery["level"] = 55.0; _battery["ts"] = time.time()   # frische Batterie
+        _ruhe.__init__(); _zu_schwer["woerter"] = []; _langsam["bis"] = 0.0
 
 
 def deactivate():
@@ -387,6 +394,7 @@ def deactivate():
         _session_lang = None
         _history = deque(maxlen=100)
         _expr["stance"] = "idle"; _expr["gesture"] = None; _expr["face"] = "neutral"
+        _ruhe.__init__(); _zu_schwer["woerter"] = []; _langsam["bis"] = 0.0
     _verstaendnis.__init__()
 
 
@@ -470,9 +478,10 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     Yieldet Token für Token fürs Browser-Streaming.
 
     user_text=None → KI startet das Gespräch (Session-Beginn).
-    nudge=True     → Stille: statt eines Befehls kriegt sie eine neutrale Lage-
-                     Meldung (mit Fokus-/Ambient-Sensorik), reagiert selbst aus
-                     ihrem Charakter. Nur gesendet, nicht in der History.
+    nudge=True     → sie spricht VON SICH AUS (Stille, Nachhaken). Ob sie darf
+                     und wozu, entscheidet tutor/ansprache.py (Ruhe + Absicht,
+                     seit 2026-10-08) — darf sie nicht, kommt ein leerer Strom.
+                     Nur gesendet, nicht in der History.
     arrival=True   → (mit nudge) jemand kommt gerade rein: die Öffnungs-Lage
                      statt der Stille-Lage, Session läuft weiter (kein Neustart,
                      History bleibt). Der Wand-Tutor spricht so von sich aus an.
@@ -480,6 +489,7 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     if user_text is not None:
         push_message("user", user_text)
         battery_bump(_BAT_REFILL)     # echtes Quatschen lädt die soziale Batterie
+        _ruhe.sasha_sagte()
 
     prof, pname, provider, model = _resolve()
     lang = active_lang()
@@ -488,30 +498,21 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     except Exception:
         _tok = None
 
-    # spoken DETERMINISTISCH aus der User-Eingabe: jedes getrackte Wort, das Sasha
-    # gerade selbst benutzt hat, → spoken +1 (die KI zählt nicht). Vor dem Kontext-
-    # Bau, damit der Status im Prompt schon aktuell ist.
-    hits = []
-    if user_text:
-        try:
-            hits = tools.note_spoken(user_text, lang) or []
-        except Exception:
-            pass
-        # Skill-Auslöser »no_entiendo«: nur ERKENNEN und loggen (Devtool +
-        # journal), noch nicht handeln. Sasha prüft erst, ob der hart kodierte
-        # Catcher passend greift (memory/tutor/naturalisierung.md).
-        try:
-            lage = _verstaendnis.pruefen(user_text, lang, hits)
-            debug.emit('skill', name='no_entiendo', text=user_text, lang=lang, **lage)
-            print(f"[skill] no_entiendo {'ERKANNT' if lage['erkannt'] else 'nicht'}"
-                  f"{' · ' + lage['grund'] if lage.get('grund') else ''}"
-                  f"{' · ' + lage['uebergang'].upper() if lage.get('uebergang') else ''}"
-                  f" · '{user_text[:60]}'", flush=True)
-        except Exception as e:
-            print(f"[skill] no_entiendo prüfung fehlgeschlagen: {e}", flush=True)
+    art = "antwort" if user_text is not None else ("anstoss" if nudge else "start")
+    anlass = ""
+    if nudge:
+        art = _ruhe.art(arrival)
+        darf, grund = _ruhe.darf(art)
+        debug.emit('ruhe', art=art, darf=darf, grund=grund, lang=lang)
+        if not darf:
+            return
+        anlass = ansprache.anstoss_text(prof, art, lang, _letzte_von_ihr())
+
+    lage = _eingabe_auswerten(user_text, lang)
+    nachfrage = bool(lage.get('deutlich'))
 
     # Kosten-Hebel: nur die letzten N Turns senden (zustandslose API).
-    if user_text is None and not nudge:
+    if art == "start":
         # Öffnen/Session-Start: NUR die Lage-Meldung „Sasha kommt rein", KEIN roher
         # Verlauf. Sonst kapert ein (mit „你在吗？"-Fillern) verseuchter Verlauf den
         # Gruß und sie fällt in eine Frage-/Echo-Schleife. Kontinuität kommt aus
@@ -520,95 +521,26 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     else:
         history = get_history()[-_history_window():]
         if nudge:
-            lage = (_opening_situation(prof, focus) if arrival
-                    else _nudge_situation(prof, focus, sound))
-            history = history + [{"role": "user", "content": lage}]
+            situation = (_opening_situation(prof, focus) if arrival
+                         else _nudge_situation(prof, focus, sound))
+            if anlass:
+                situation = situation + " " + anlass
+            history = history + [{"role": "user", "content": situation}]
 
-    # Hartes Assessment-Gate: solange der Kern-Wortschatz NICHT gemeistert ist,
-    # spricht die Persona im DRILL-/Prüf-Prompt (Wort für Wort, kein Zimmer-Leben)
-    # — das Persona-Zimmer bleibt zu, bis ≥GRADUATE_AT gefestigt sind. Trägt die
-    # Sprache keinen assessment_prompt/kein Curriculum, gibt es kein Gate.
-    _gate = bool(prof.get("assessment_prompt")) and tools.assessment_active(lang)
-    system  = prof["assessment_prompt"] if _gate else prof["system_prompt"]
-    # Muttersprache (Glosse) in den Prompt: {native} → Name der Muttersprache in
-    # der Zielsprache (prof['native_names']), Fallback der Code. Einstellung
-    # 'native' (Default en); Deutsch-mit-Glosse-Deutsch ist erlaubt (Test).
-    try:
-        nat = tools.native()
-        nat_name = (prof.get("native_names") or {}).get(nat) or nat
-        system = system.replace("{native}", nat_name)
-    except Exception:
-        pass
-
-    # Vokabel-Kontext ans Prompt-Ende hängen: welche Wörter Sasha lernt, damit
-    # die Persona sich ans begrenzte Set hält. Ersetzt das frühere "ruf zu Beginn
-    # get_confirmed_vocab() auf". WICHTIG: der Hinweis kommt aus dem Profil in der
-    # ZIELSPRACHE (prof['vocab_hint']) — ein deutscher Block hier kippt qwen zurück
-    # ins Deutsche/Monolog (gegen echtes qwen verifiziert). Kein Hinweis im Profil
-    # (Skizzen) → keine Injektion. Tools increment/introduce bleiben verfügbar.
-    hint = prof.get("vocab_hint")
-    if hint:
-        try:
-            # Die KI kriegt die Liste {wort: STATUS} — nie die Zahlen (spoken/listened).
-            # Status-Label kommt in der ZIELSPRACHE (prof['status_labels']); neutral
-            # formuliert (KEINE Drill-Verben — „übe/afiánza" ließ qwen abfragen).
-            # HINWEIS: bei sehr vielen Wörtern wird das lang → Embedding-Auswahl ist der
-            # nächste, noch offene Schritt (dann nur die relevanten Wörter senden).
-            sl = tools.prompt_vocab(lang)               # [(wort, status)] inkl. Kern
-            structs = tools.structure_list(lang)
-            lab = prof.get("vocab_labels") or {}
-            slab = prof.get("status_labels") or {}
-            join = lab.get("join", ", ")
-            sep = lab.get("sep", "; ")
-            parts = []
-            if sl:
-                parts.append(join.join(f"{w} ({slab.get(s, s)})" for w, s in sl))
-            if structs:
-                parts.append(lab.get("structs", "Satzmuster: ") + join.join(structs))
-            if parts:
-                system = system + "\n\n" + hint.format(words=sep.join(parts))
-            # Erwartung skalieren (fast immer leer nach dem Umbau — Register trägt
-            # der Prompt). Paket-DATEN (langs/<lang>/expect.json), Zielsprache.
-            exp = langs.expect(lang, len(sl) + len(structs))
-            if exp:
-                system = system + "\n" + exp
-        except Exception:
-            pass
-
-    # Kern-Syllabus ans Prompt-Ende: WELCHE Kern-Wörter noch dran sind + der
-    # Deckungs-Stand. So arbeitet die Persona das feste Grund-Vokabular aktiv ab
-    # (statt sich rein aufs Emergente zu verlassen). Template aus dem Paket in
-    # der ZIELSPRACHE (prof['core_hint']); fehlt es → keine Injektion. Nach der
-    # Graduierung (Kern gemeistert) fällt der Hinweis weg — kein Nachkarten, ab
-    # da trägt die Konversation sich selbst (Register kommt aus der expect-Leiter).
-    core_hint = prof.get("core_hint")
-    if core_hint and not tools.core_graduated(lang):
-        try:
-            got, total = tools.core_coverage(lang)
-            if total:
-                join = (prof.get("vocab_labels") or {}).get("join", ", ")
-                todo = join.join(e["word"] for e in tools.core_todo(lang, 6))
-                system = system + "\n\n" + core_hint.format(
-                    got=got, total=total, words=todo or "—")
-        except Exception:
-            pass
-
-    # Persona-Gedächtnis: was die Persona aus früheren Gesprächen über Sasha
-    # weiß, an den System-Prompt hängen. Nur ihr EIGENER Store (nie Sashas
-    # Core-Graph) → keine private Info an die Cloud. Query = die neue User-
-    # Nachricht (bei Begrüßung None → Sasha/Heute-Anker).
-    mem_ctx = memory.context(user_text, lang)
-    if mem_ctx:
-        system = system + "\n\n" + mem_ctx
+    system = _system_bauen(prof, lang, user_text, nachfrage)
+    if nachfrage:
+        system = system + "\n\n" + _nachfrage_text(prof, lang)
+        _langsam_setzen()
 
     # Devtools: was die KI KRIEGT — voller System-Prompt (inkl. Vokabel-Kontext +
     # Lage-Meldung + Gedächtnis), die Messages, Provider/Modell, verfügbare Tools.
     debug.emit('ai.req',
-               phase=('start' if (user_text is None and not nudge) else 'nudge' if nudge else 'respond'),
-               lang=lang, provider=pname, model=model,
+               phase=('start' if art == "start" else 'nudge' if nudge else 'respond'),
+               lang=lang, provider=pname, model=model, anlass=art,
                system=system, messages=history,
                tools=[t['function']['name'] for t in tools.tools_for(lang)])
 
+    gedanke_vorher = _thought["id"]
     # Die eine Straße (2026-10-08): Anbieter + Modell sind Werte, der Weg
     # (lokal/Anthropic/OpenAI-kompatibel) ist Sache des Kerns.
     stream = anbieter.fahren(
@@ -633,12 +565,19 @@ def respond_stream(user_text: str = None, nudge: bool = False,
     # versteckt: (Regie-Klammern), geleakte Tool-Zeilen; die Bereinigung passiert
     # erst im Frontend via _clean_speech).
     debug.emit('ai.out', phase=('nudge' if nudge else 'respond'), lang=lang, raw=full)
+    if full.strip():
+        _ruhe.gesprochen(von_sich_aus=nudge)
+        _nachkontrolle(full, lang)
+    if nachfrage and _thought["id"] == gedanke_vorher:
+        _gedanke_nachreichen(lage.get('wort'), lang)
 
     # Nudge-Antworten sind AMBIENTES Verhalten (sie reagiert auf Stille), kein
     # Gespräch — NICHT ins Gedächtnis (sonst füllt sich die persistente History mit
     # „我在"-Fillern und beim nächsten Öffnen plappert sie die nach). Nur echte
     # Turns + der Eröffnungsgruß landen im Verlauf.
     if nudge:
+        if full.strip():
+            _verstaendnis.antwort_merken(full)   # „que?" bezieht sich darauf
         return
     # Stand gewechselt, während sie geantwortet hat? Dann gehört dieser Turn
     # nirgends mehr hin — nicht in den Verlauf, nicht ins Gedächtnis des neuen.
@@ -661,16 +600,180 @@ def respond_stream(user_text: str = None, nudge: bool = False,
         threading.Thread(
             target=memory.remember,
             args=(user_text, full, lang, pname, model), daemon=True).start()
+        _graduierung_pruefen(prof, lang)
 
-        # Kern-Syllabus: einmaliger Graduierungs-Meilenstein (ALLE Kern-Wörter
-        # durch, GRADUATE_AT=1.0). check_graduation() feuert genau EINMAL — der Zustand
-        # liegt in data/<lang>/progress.json, NICHT in den Persona-Notizen.
+
+# ── Bausteine eines Zugs ─────────────────────────────────────────────────
+
+def _letzte_von_ihr() -> str:
+    """Was sie zuletzt gesagt hat (Antwort ODER Anstoß) — Bezug für Nachhaken
+    und „que?"."""
+    return _verstaendnis.letzte_antwort or ""
+
+
+def _eingabe_auswerten(user_text, lang) -> dict:
+    """Sashas Satz deterministisch auswerten, BEVOR der Prompt gebaut wird:
+    spoken zählen (die KI zählt nie), gehört zählen (ihr letzter Satz, wenn er
+    sinnvoll antwortet), und »versteht er nicht?« (skills.Verstaendnis).
+    → das Lage-Dict des Skills, plus 'wort' = Schlüsselwort bei Nachfrage."""
+    if not user_text:
+        return {}
+    hits = []
+    try:
+        hits = tools.note_spoken(user_text, lang) or []
+    except Exception:
+        pass
+    try:
+        lage = _verstaendnis.pruefen(user_text, lang, hits)
+    except Exception as e:
+        print(f"[skill] no_entiendo prüfung fehlgeschlagen: {e}", flush=True)
+        return {}
+    letzte = _letzte_von_ihr()
+    if lage['deutlich']:
+        lage['wort'] = ansprache.schluesselwort(letzte, lang)
+    elif letzte:
+        # Er hat geantwortet, ohne Unverständnis: ihre getrackten Wörter hat er
+        # GEHÖRT (listened +1). Vorher zählte listened nur im Drill — im
+        # Gespräch blieb jedes Wort ewig 'new' (2026-10-08).
         try:
-            if tools.check_graduation(lang):
-                got, total = tools.core_coverage(lang)
-                import state
-                state.push_log(
-                    f"🎓 Kern-Wortschatz gemeistert ({prof.get('name', lang)}): "
-                    f"{got}/{total} Kern-Wörter — ab jetzt freie Konversation.")
+            tools.note_listened(letzte, lang)
         except Exception:
             pass
+    debug.emit('skill', name='no_entiendo', text=user_text, lang=lang, **lage)
+    print(f"[skill] no_entiendo {'ERKANNT' if lage['erkannt'] else 'nicht'}"
+          f"{' · ' + lage['grund'] if lage.get('grund') else ''}"
+          f" · '{user_text[:60]}'", flush=True)
+    return lage
+
+
+def _system_bauen(prof, lang, user_text, nachfrage: bool = False) -> str:
+    """System-Prompt: Persona + Muttersprache + Vokabel-Kontext + Niveau +
+    Kern-Syllabus + Gedächtnis + ggf. Hinweis aus der Nachkontrolle."""
+    # Hartes Assessment-Gate: solange der Kern-Wortschatz NICHT gemeistert ist,
+    # spricht die Persona im DRILL-/Prüf-Prompt (Wort für Wort, kein Zimmer-Leben).
+    # Trägt die Sprache keinen assessment_prompt/kein Curriculum, gibt es kein Gate.
+    _gate = bool(prof.get("assessment_prompt")) and tools.assessment_active(lang)
+    system = prof["assessment_prompt"] if _gate else prof["system_prompt"]
+    # Muttersprache (Glosse) in den Prompt: {native} → Name der Muttersprache in
+    # der Zielsprache (prof['native_names']), Fallback der Code.
+    try:
+        nat = tools.native()
+        nat_name = (prof.get("native_names") or {}).get(nat) or nat
+        system = system.replace("{native}", nat_name)
+    except Exception:
+        pass
+
+    # Vokabel-Kontext ans Prompt-Ende: welche Wörter Sasha lernt, damit die
+    # Persona sich ans begrenzte Set hält. Der Hinweis kommt aus dem Profil in
+    # der ZIELSPRACHE (prof['vocab_hint']) — ein deutscher Block kippt qwen
+    # zurück ins Deutsche/Monolog (gegen echtes qwen verifiziert).
+    hint = prof.get("vocab_hint")
+    if hint:
+        try:
+            # Die KI kriegt {wort: STATUS} — nie die Zahlen (spoken/listened).
+            sl = tools.prompt_vocab(lang)               # [(wort, status)] inkl. Kern
+            structs = tools.structure_list(lang)
+            lab = prof.get("vocab_labels") or {}
+            slab = prof.get("status_labels") or {}
+            join = lab.get("join", ", ")
+            sep = lab.get("sep", "; ")
+            parts = []
+            if sl:
+                parts.append(join.join(f"{w} ({slab.get(s, s)})" for w, s in sl))
+            if structs:
+                parts.append(lab.get("structs", "Satzmuster: ") + join.join(structs))
+            if parts:
+                system = system + "\n\n" + hint.format(words=sep.join(parts))
+        except Exception:
+            pass
+    # Niveau (expect.json): nach den Wörtern, die Sasha WIRKLICH kennt. Bis
+    # 2026-10-08 zählten die 75 freigegebenen Grundwörter mit — die Leiter griff
+    # nie, und Anfänger bekamen volle Sätze (diagnose_2026-10-08.md).
+    n_bekannt = len(ansprache.bekannte(lang))
+    exp = langs.expect(lang, n_bekannt)
+    if exp:
+        system = system + "\n" + exp
+
+    # Kern-Syllabus ans Prompt-Ende: WELCHE Kern-Wörter noch dran sind. Am
+    # Anfang nur EINS (vorher sechs auf einmal → sie warf mit neuen Wörtern).
+    core_hint = prof.get("core_hint")
+    if core_hint and not tools.core_graduated(lang):
+        try:
+            got, total = tools.core_coverage(lang)
+            if total:
+                join = (prof.get("vocab_labels") or {}).get("join", ", ")
+                anzahl = 1 if n_bekannt < 40 else 3
+                todo = join.join(e["word"] for e in tools.core_todo(lang, anzahl))
+                system = system + "\n\n" + core_hint.format(
+                    got=got, total=total, words=todo or "—")
+        except Exception:
+            pass
+
+    # Nachkontrolle vom letzten Zug: zu viele fremde Wörter → kurzer Hinweis.
+    if _zu_schwer["woerter"] and not nachfrage:
+        t = ansprache.text(prof, "zu_schwer", woerter=", ".join(_zu_schwer["woerter"]))
+        if t:
+            system = system + "\n\n" + t
+        _zu_schwer["woerter"] = []
+
+    # Persona-Gedächtnis: nur ihr EIGENER Store (nie Sashas Core-Graph).
+    mem_ctx = memory.context(user_text, lang)
+    if mem_ctx:
+        system = system + "\n\n" + mem_ctx
+    return system
+
+
+def _nachfrage_text(prof, lang) -> str:
+    """„que?" → der Skill-Text in der Zielsprache, mit ihrem letzten Satz und
+    dem Schlüsselwort darin."""
+    letzte = _letzte_von_ihr()
+    wort = ansprache.schluesselwort(letzte, lang)
+    return ansprache.text(prof, "nachfrage", letzte=letzte.strip()[:160],
+                          wort=wort or "…",
+                          bedeutung=ansprache.bedeutung(wort, lang) or "?")
+
+
+def _nachkontrolle(full: str, lang):
+    """Zählt die Wörter ihrer Antwort, die Sasha nicht kennt. Zu viele für
+    sein Niveau → beim nächsten Zug ein Hinweis (_system_bauen). Kein zweiter
+    Modell-Aufruf, nur zählen."""
+    try:
+        ziel = [e["word"] for e in tools.core_todo(lang, 3)]
+        fremd = ansprache.fremde(full, lang, erlaubt=ziel)
+        grenze = ansprache.erlaubt_fremd(len(ansprache.bekannte(lang)))
+        debug.emit('niveau', fremd=fremd, grenze=grenze, lang=lang)
+        _zu_schwer["woerter"] = fremd[:6] if len(fremd) > grenze else []
+    except Exception:
+        _zu_schwer["woerter"] = []
+
+
+def _gedanke_nachreichen(wort, lang):
+    """Nach „que?" MUSS etwas zu sehen sein. Hat das Modell kein show_thought
+    gemacht, zeigt das Programm das Schlüsselwort mit Übersetzung — sofern wir
+    eine haben (eine erfundene Übersetzung wäre schlimmer als keine)."""
+    if not wort:
+        return
+    bed = ansprache.bedeutung(wort, lang)
+    if bed:
+        set_thought(wort, bed)
+
+
+def _langsam_setzen(sekunden: float = 25.0):
+    """Nach „que?" spricht sie die nächste Antwort langsamer (room_state)."""
+    with _lock:
+        _langsam["bis"] = time.time() + sekunden
+
+
+def _graduierung_pruefen(prof, lang):
+    """Kern-Syllabus: einmaliger Graduierungs-Meilenstein (ALLE Kern-Wörter
+    durch). check_graduation() feuert genau EINMAL — der Zustand liegt in
+    data/<lang>/progress.json, NICHT in den Persona-Notizen."""
+    try:
+        if tools.check_graduation(lang):
+            got, total = tools.core_coverage(lang)
+            import state
+            state.push_log(
+                f"🎓 Kern-Wortschatz gemeistert ({prof.get('name', lang)}): "
+                f"{got}/{total} Kern-Wörter — ab jetzt freie Konversation.")
+    except Exception:
+        pass

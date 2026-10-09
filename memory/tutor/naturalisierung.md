@@ -29,7 +29,7 @@ sie?", dann Welt-Kontext, zuletzt Präsenz/Sensorik.
 | 5 | **Viele Menschen, die dauernd miteinander reden** | Sprache als Hintergrund, Muster ohne Druck | fehlt — nur Lucía |
 | 6 | **Musik** | Rhythmus, Wiederholung, Gefühl | `play_music` nach Stimmung (Dateien), kein Bezug zur Sprache |
 | 7 | **Fernsehen** | Level-gerechte Sendungen, Bild + Ton | `watch_tv` zeigt nur Titel (Katalog), kein Inhalt |
-| 8 | **Der Mensch, der merkt, dass du nichts verstehst** | hört auf, viele Wörter zu sagen: einzelne, langsamer, deutlicher, lauter, Grimassen, Zeigen | fehlt — **das ist der erste Zentimeter** (Skill `no_entiendo`) |
+| 8 | **Der Mensch, der merkt, dass du nichts verstehst** | hört auf, viele Wörter zu sagen: einzelne, langsamer, deutlicher, lauter, Grimassen, Zeigen | seit 2026-10-08 gebaut: Schlüsselwort ihres letzten Satzes, langsamer, Übersetzung im Gedanken (`tutor/ansprache.py`) |
 | 9 | **Emotion durch synthetisierte Musik** (neu, Sasha) | Stimmung hörbar, ohne Worte: Tonart/Tempo folgen ihrer Laune | fehlt — Idee: kleine Synth-Motive (Dur/Moll, Tempo, Lautstärke) aus `battery/mood` erzeugen, nicht aus Dateien |
 
 ## Der erste Zentimeter: Skill `no_entiendo`

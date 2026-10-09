@@ -1,0 +1,8 @@
+{
+  "ankunft": "Sasha acaba de llegar. Salúdala y hazle UNA pregunta muy fácil, con palabras que ya conoce.",
+  "nachhaken": "Sasha no ha contestado a lo que dijiste: «{letzte}». No cambies de tema. Dilo otra vez, más corto y más fácil, y enseña «{wort}» con show_thought.",
+  "stille": "Hace un rato que no habláis. Si dices algo, que sea UNA frase muy corta con «{wort}» ({bedeutung}); enséñala con show_thought si es nueva para ella.",
+  "stille_ohne_ziel": "Hace un rato que no habláis. Como mucho una frase muy corta, o solo un gesto con express.",
+  "nachfrage": "Sasha NO ha entendido lo que dijiste: «{letzte}». No expliques con más palabras. Di solo «{wort}» otra vez, despacio —tres palabras como mucho—, enséñalo con show_thought ({bedeutung}) y haz un gesto con express que lo muestre. Nada nuevo.",
+  "zu_schwer": "(Tu última frase tenía palabras que Sasha aún no conoce: {woerter}. Ahora más fácil, con palabras que ya conoce.)"
+}

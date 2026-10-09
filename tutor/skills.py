@@ -8,7 +8,8 @@ zweiter LLM-Aufruf, keine Kappung — abgeschnittene Sätze wären Müll.
 Erster Skill: `no_entiendo` — Sasha versteht nicht. Der Punkt, an dem die KI
 merken muss, dass sie anders reden soll (einzelne Wörter, langsam, zeigen).
 Sasha 2026-09-17: erst nur CATCHEN und im Devtool anzeigen, ob es passend
-greift; das Verhalten kommt danach.
+greift. Seit 2026-10-08 handelt session danach (tutor/ansprache.py): das
+Schlüsselwort ihres letzten Satzes, langsamer, mit Übersetzung im Gedanken.
 
 Regeln (bewusst hart kodiert, Sprache für Sprache erweiterbar):
   1. explizite Unverständnis-Phrasen (siehe _PHRASEN) oder ein nacktes „?"
@@ -27,8 +28,13 @@ import re
 # verglichen (siehe _norm). Ein Eintrag trifft, wenn er als Ganzes in der
 # normalisierten Äußerung vorkommt.
 _PHRASEN = {
+    # '*' gilt in JEDER Sprache: Sasha fragt oft in seiner eigenen nach
+    # („was?", „hä?", „wie bitte?") — 2026-10-08 ergänzt, vorher fing eine
+    # es-Session nur „hä" und „what". Einzelwörter greifen nur, wenn die
+    # Äußerung GENAU das Wort ist (phrase_treffer).
     '*': ["?", "i don't understand", "i dont understand", "what", "sorry what",
-          "hä", "häh"],
+          "hä", "häh", "was", "wie bitte", "huh", "pardon",
+          "ich verstehe nicht", "versteh ich nicht", "nochmal"],
     'es': ["no entiendo", "no comprendo", "no lo entiendo", "no te entiendo",
            "que", "qué", "como", "cómo", "perdón", "perdon", "otra vez",
            "más despacio", "mas despacio", "repite", "no sé", "no se"],
@@ -115,7 +121,7 @@ class Verstaendnis:
 
     `pruefen()` wird nach jeder User-Äußerung aufgerufen und liefert ein Dict
     fürs Log/Devtool: erkannt (diese Äußerung), aktiv (Zustand), grund,
-    uebergang ('an'/'aus'/None). Handeln tut (noch) niemand damit."""
+    uebergang ('an'/'aus'/None). Handeln tut session.respond_stream (seit 2026-10-08)."""
 
     def __init__(self):
         self.aktiv = False
@@ -161,6 +167,11 @@ class Verstaendnis:
             grund = 'anschluss: ' + ', '.join(sorted(woerter & ihre)) if anschluss \
                 else 'bekannte vokabel: ' + ', '.join(hits)
 
-        return {'erkannt': erkannt, 'aktiv': self.aktiv, 'grund': grund,
+        # deutlich = er hat es SELBST gesagt (Regel 1/2). Nur darauf handelt
+        # session (2026-10-08). Regel 3 bleibt Beobachtung: ein Anfänger, der
+        # zweimal „estoy bien" sagt, trifft bei fast leerer Vokabelliste weder
+        # ein bekanntes Wort noch eins von ihr — das ist kein Unverständnis.
+        deutlich = erkannt and not (grund or '').endswith('ohne anschluss')
+        return {'erkannt': erkannt, 'deutlich': deutlich, 'aktiv': self.aktiv, 'grund': grund,
                 'uebergang': uebergang, 'hits': hits,
                 'anschluss': sorted(woerter & ihre), 'vorbei': self.vorbei}

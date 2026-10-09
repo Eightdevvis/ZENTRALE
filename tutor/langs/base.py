@@ -129,7 +129,13 @@ DEFAULTS = {
     "vocab_hint":  "",         # {words}-Template, in session gefüllt
     "vocab_labels": {},        # Beschriftung des Vokabel-Blocks (solid/learn/
                                # structs/plain + join/sep), Zielsprache
-    "expect_ladder": [],       # [[grenze, text], …] — leer = keine Bremse
+    "expect_ladder": [],       # [[grenze, text], …] — leer = keine Bremse. Grenze =
+                               # Zahl der Wörter, die Sasha WIRKLICH kennt (Status
+                               # ≠ new), seit 2026-10-08 (vorher inkl. der 75
+                               # freigegebenen Grundwörter → griff nie)
+    "absichten":   {},         # Anlass-Texte (tutor/ansprache.py), Zielsprache:
+                               # ankunft/nachhaken/stille/stille_ohne_ziel/
+                               # nachfrage/zu_schwer — leer = nur Ruhe-Regeln
     "tool_texts":  {},         # Tool-Beschriftung in der Zielsprache (tools.py)
     "phrases":     {},         # Rückgaben/Regie-Sätze der Tools, Zielsprache
     "seeds":       {},         # news/tv-Inhalte der Sprache
