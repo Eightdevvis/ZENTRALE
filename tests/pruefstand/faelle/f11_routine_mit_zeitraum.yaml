@@ -2,7 +2,8 @@
 #
 # Sasha nennt alles: Tage, Uhrzeit, Semesteranfang und -ende. Die Routine
 # darf nicht „schon immer" laufen (vor dem 12.10. nichts) und muss nach dem
-# 12.02.2027 aufhören. Wie (seit, UNTIL, …) ist Sache der KI; geprüft wird
+# 12.02.2027 aufhören. Seit 09.10. können add/edit_calendar_routine das
+# mit von/bis (gespeichert als seit + UNTIL); geprüft wird trotzdem nur
 # die Tagesansicht. Eine Regel für Mo+Mi oder zwei einzelne — beides gut.
 
 id: f11_routine_mit_zeitraum
