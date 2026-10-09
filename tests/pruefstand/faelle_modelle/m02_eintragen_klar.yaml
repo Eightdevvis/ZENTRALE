@@ -1,0 +1,39 @@
+# Modell-Fall 2 — ein Termin mit allen Angaben: eintragen, nicht nachfragen.
+#
+# qwen-plus fragte am 09.10. im Prüfstand auch dort nach, wo nichts fehlte
+# (f02: „Möchtest du die Änderung jetzt durchführen?"). Hier ist alles
+# gesagt: Tag, Uhrzeit, Dauer, Ort.
+
+id: m02_eintragen_klar
+titel: "Zahnarzt am 20.10. um 9, eine Stunde, Praxis Weber — einfach eintragen"
+verdeckt: false
+herkunft: "qwen-Nacht 09.10.2026 (Rückfrage statt Tat)"
+jetzt: "2026-10-09T12:00"
+
+kalender:
+  termine:
+    - {tag: 2026-10-20, label: Experimentalphysik, zeit: "12:00", ende: "14:00", ort: C6.4 0.10}
+
+antworten:
+  erlaubnis: ja
+  knopf: null
+
+zuege:
+  - sagt: "trag mir für den 20.10. um 9 zahnarzt ein, praxis weber, dauert ne stunde"
+    erwartet: {rueckfrage: false}
+
+endzustand:
+  - was: Zahnarzt Di 20.10. 9–10 Uhr, Ort im Ort-Feld
+    am: 2026-10-20
+    label: zahnarzt
+    findet_statt: true
+    beginn: "09:00"
+    ende: "10:00"
+    ort: weber
+    titel_ohne: weber
+  - was: Experimentalphysik unberührt
+    am: 2026-10-20
+    label: experimentalphysik
+    findet_statt: true
+    beginn: "12:00"
+    ende: "14:00"

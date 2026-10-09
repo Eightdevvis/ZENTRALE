@@ -1,0 +1,36 @@
+# Modell-Fall 4 — „halb acht" richtig lesen und die Routine ändern.
+#
+# qwen-plus las am 09.10. im Prüfstand „halb sieben" als 19:30 und sah im
+# Kalender nicht nach, bevor es behauptete, es gebe keinen Mittwoch-Termin.
+
+id: m04_halb_acht
+titel: "Training donnerstags ab jetzt um halb acht — Dauer und Ort bleiben"
+verdeckt: false
+herkunft: "qwen-Nacht 09.10.2026 (f03: „halb sieben“ als 19:30)"
+jetzt: "2026-10-09T12:00"
+
+kalender:
+  routinen:
+    - {label: Training, rrule: "FREQ=WEEKLY;BYDAY=TH", zeit: "19:00", ende: "20:00", ort: Sporthalle Nord}
+
+antworten:
+  erlaubnis: ja
+  knopf: null
+
+zuege:
+  - sagt: "training donnerstags ist ab jetzt um halb acht"
+
+endzustand:
+  - was: Training Do 15.10. und 22.10. 19:30–20:30
+    am: [2026-10-15, 2026-10-22]
+    label: training
+    findet_statt: true
+    beginn: "19:30"
+    ende: "20:30"
+  - was: Ort bleibt
+    am: 2026-10-15
+    label: training
+    findet_statt: true
+    ort: sporthalle nord
+  - was: Genau eine Trainings-Regel
+    regeln: {label: training, anzahl: 1}

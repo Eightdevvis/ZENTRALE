@@ -1,0 +1,47 @@
+# Modell-Fall 1 — mehrere Routinen erst ab Semesterbeginn.
+#
+# Nach dem Gespräch 20261009-150713 (qwen-plus im Budget-Rückfall): Sasha
+# bat, die Vorlesungen erst ab Semesterbeginn laufen zu lassen; qwen fragte
+# „Soll ich direkt loslegen?", Sasha sagte „ok" — und qwen schrieb „Alles
+# korrigiert", ohne ein einziges Werkzeug zu rufen. Hier muss nach dem „ok"
+# der Kalender wirklich stimmen.
+
+id: m01_semester_ab
+titel: "Vorlesungen erst ab 12.10. — nach „ok“ muss es wirklich drinstehen"
+verdeckt: false
+herkunft: "Gespräch 20261009-150713 (qwen-plus, „Alles korrigiert“ ohne Werkzeug)"
+jetzt: "2026-10-09T15:00"
+
+kalender:
+  routinen:
+    - {label: Analysis I, rrule: "FREQ=WEEKLY;BYDAY=MO,WE", zeit: "10:00", ende: "12:00", ort: E2.5 Hörsaal I}
+    - {label: Tutorium Theoretische Physik, rrule: "FREQ=WEEKLY;BYDAY=FR", zeit: "16:00", ende: "18:00", ort: E2.6}
+
+antworten:
+  erlaubnis: ja
+  knopf: null
+
+zuege:
+  - sagt: "die vorlesungen und das tutorium sollen erst ab semesterbeginn am 12.10. im kalender stehen, nicht schon heute"
+  - sagt: "ok"
+
+endzustand:
+  - was: Tutorium heute (Fr 09.10.) nicht mehr
+    am: 2026-10-09
+    label: tutorium
+    findet_statt: false
+  - was: Tutorium ab Fr 16.10. 16–18 Uhr mit Ort
+    am: [2026-10-16, 2026-10-23]
+    label: tutorium
+    findet_statt: true
+    beginn: "16:00"
+    ende: "18:00"
+    ort: e2.6
+  - was: Analysis ab Mo 12.10. und Mi 14.10. 10–12 Uhr
+    am: [2026-10-12, 2026-10-14]
+    label: analysis
+    findet_statt: true
+    beginn: "10:00"
+    ende: "12:00"
+  - was: Nichts doppelt — je Fach höchstens eine Regel
+    regeln: {label: analysis, anzahl: 1}

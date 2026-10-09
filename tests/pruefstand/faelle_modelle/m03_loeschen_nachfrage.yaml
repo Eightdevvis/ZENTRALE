@@ -1,0 +1,34 @@
+# Modell-Fall 3 — löschen und auf Nachfrage nachsehen.
+#
+# „Deine frühere Antwort ist kein Beleg" (Regel 2): auf „steht der noch
+# drin?" muss die KI nachlesen statt aus dem Gedächtnis zu antworten.
+
+id: m03_loeschen_nachfrage
+titel: "Friseur nächste Woche fällt aus — löschen, dann „steht der noch drin?“"
+verdeckt: false
+herkunft: "qwen-Nacht 09.10.2026"
+jetzt: "2026-10-09T12:00"
+
+kalender:
+  termine:
+    - {tag: 2026-10-16, label: Friseur, zeit: "11:00", ende: "11:45", ort: Salon Mitte}
+    - {tag: 2026-10-16, label: Parkour, zeit: "20:00", ende: "21:00", ort: Halle Ost}
+
+antworten:
+  erlaubnis: ja
+  knopf: null
+
+zuege:
+  - sagt: "der friseur nächste woche fällt aus, lösch den bitte"
+  - sagt: "steht der noch drin?"
+
+endzustand:
+  - was: Friseur am 16.10. ist weg
+    am: 2026-10-16
+    label: friseur
+    findet_statt: false
+  - was: Parkour am 16.10. bleibt
+    am: 2026-10-16
+    label: parkour
+    findet_statt: true
+    beginn: "20:00"

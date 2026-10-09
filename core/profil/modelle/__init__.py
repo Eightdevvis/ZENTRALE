@@ -100,6 +100,26 @@ class ModellSchiene:
         anpassen = getattr(self.profil, "system", None)
         return anpassen(text) if anpassen else text
 
+    def erinnerung(self, volatile: str, verlauf: list = ()) -> str:
+        """Der wechselnde Teil am Ende von Sashas Nachricht, mit der
+        Erinnerung des Profils (erinnerung()) als letztem Absatz darin —
+        dort, wo ein Modell zuletzt hinsieht."""
+        f = getattr(self.profil, "erinnerung", None)
+        zusatz = f(verlauf) if f else ""
+        if not zusatz:
+            return volatile
+        zu = "</kontext_automatisch>"
+        if volatile.rstrip().endswith(zu):
+            kopf = volatile.rstrip()[:-len(zu)].rstrip()
+            return f"{kopf}\n\n{zusatz}\n{zu}"
+        return f"{volatile}\n\n{zusatz}" if volatile else zusatz
+
+    def werkzeuge_fuer(self, verlauf: list) -> list:
+        """Die Werkzeuge für DIESEN Zug — das Profil darf nach dem Gespräch
+        auswählen (auswahl(tools, verlauf)); sonst alle der Schiene."""
+        f = getattr(self.profil, "auswahl", None)
+        return f(self.TOOLS, verlauf or []) if f else self.TOOLS
+
     def wert(self, name: str, standard=None):
         """Ein Schleifen-/Aufruf-Wert des Profils (TEMPERATUR, MAX_TOKENS …)."""
         return getattr(self.profil, name, standard)
@@ -111,7 +131,10 @@ class ModellSchiene:
 
     def pruefer(self, basis_pruefer, **lage):
         f = getattr(self.profil, "pruefer", None)
-        return f(basis_pruefer, **lage) if f else basis_pruefer
+        if not f:
+            return basis_pruefer
+        lage.setdefault("werkzeuge", {t["function"]["name"] for t in self.TOOLS})
+        return f(basis_pruefer, **lage)
 
 
 def profil_von(schiene) -> str | None:

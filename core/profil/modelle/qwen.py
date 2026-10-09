@@ -7,4 +7,8 @@
 # Jede Strategie steht hier mit ihrem Grund. Was nicht half, steht NICHT
 # hier, sondern in der Doku — sonst zahlt qwen für Text, der nichts bringt.
 
+import re as _re
+
+import nutzer_angaben
+
 NAME = "qwen"

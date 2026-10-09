@@ -83,7 +83,16 @@ venv/bin/python scripts/pruefstand.py --fall f01 --fall f05
 venv/bin/python scripts/pruefstand.py --vergleich main     # zusätzlich gegen main, Vergleichstabelle
 venv/bin/python scripts/pruefstand.py --ohne-verdeckte     # beim Bauen
 venv/bin/python scripts/pruefstand.py --liste
+venv/bin/python scripts/pruefstand.py --anbieter qwen --modell qwen-plus      # anderes Modell
+venv/bin/python scripts/pruefstand.py --einstellung 'modell_profile={}'       # Einstellung nur für den Lauf
+venv/bin/python scripts/pruefstand.py --faelle tests/pruefstand/faelle_modelle  # andere Fall-Sammlung
 ```
+
+`--anbieter/--modell/--einstellung` (2026-10-09) ändern nur die Wegwerf-Kopie
+der Einstellungen; Sashas `ai_config.json` bleibt, wie sie ist. Der Richter
+fragt den Anbieter seines eigenen Modells (Haiku als Richter über einen
+qwen-Lauf). `tests/pruefstand/faelle_modelle/` sind vier Fälle aus den
+qwen-Fehlern ([modell_profile.md](modell_profile.md)).
 
 Ausgabe nach `~/.cache/zentrale/pruefstand/<datum_uhrzeit>/` (`--ausgabe`
 ändert das): `bericht.md` (Übersicht, je Fall Endzustand, Belege mit Zitaten,

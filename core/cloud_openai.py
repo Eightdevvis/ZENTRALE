@@ -255,6 +255,9 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     # Tool-Set von der Schiene, nicht aus ai.TOOLS: dort haengt das
     # Set fuer KLEINE Modelle (siehe core/profil/).
     active_tools = tools if tools is not None else schiene_obj.TOOLS
+    if tools is None and _profil_der(schiene_obj) is not None:
+        # Ein Modell-Profil darf je Gespräch auswählen (2026-10-09, qwen).
+        active_tools = schiene_obj.werkzeuge_fuer(messages)
     active_exec  = (tool_executor if tool_executor is not None
                     else ki_werkzeuge.mit_projekt(projekt))   # Phase 6, wie cloud.py
     store        = None if tutor_mode else cloud.CLOUD_GRAPH
@@ -271,6 +274,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
                    if ki_prompt.GRAPH_KONTEXT else "")
 
     volatile = cloud._volatile_text(mem_ctx, via_mic, tutor_mode)
+    if _profil_der(schiene_obj) is not None:
+        volatile = schiene_obj.erinnerung(volatile, messages)
     msgs   = _prepare_messages(
         messages,
         _system_text(system, mem_ctx, via_mic, tutor_mode, projekt, schiene_obj),

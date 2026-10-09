@@ -352,6 +352,9 @@ def main() -> int:
     p.add_argument("--trotz-budget", action="store_true",
                    help="auch fahren, wenn der Durchgang über die Prüfstand-Grenze "
                         "(pruefstand_budget_monat) ginge")
+    p.add_argument("--faelle", metavar="ORDNER",
+                   help="Fälle aus diesem Ordner statt tests/pruefstand/faelle "
+                        "(z. B. tests/pruefstand/faelle_modelle)")
     p.add_argument("--anbieter", help="Chat-Anbieter für diesen Lauf (z. B. qwen)")
     p.add_argument("--modell", help="Chat-Modell für diesen Lauf (z. B. qwen-plus)")
     p.add_argument("--einstellung", action="append", metavar="NAME=WERT",
@@ -380,6 +383,8 @@ def main() -> int:
     p.add_argument("--ergebnis", help=argparse.SUPPRESS)
     p.add_argument("--einstellungen-json", help=argparse.SUPPRESS)
     a = p.parse_args()
+    if a.faelle:
+        faelle.FAELLE_DIR = os.path.abspath(a.faelle)
 
     if a.einzeln:
         return einzeln(a)
