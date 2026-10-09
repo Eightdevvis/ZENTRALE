@@ -144,3 +144,22 @@ def pruefer(basis, messages=None, werkzeuge=frozenset(), **_):
     if basis is None:
         return None
     return _zusatz.ZusatzPruefer(basis, _zusatz.letzte_nachricht(messages), werkzeuge)
+
+
+# ── Erste Runde: erst lesen, wenn Sasha etwas ändern will (Runde 5/7/10)
+# Runde 4: f03 „parkour am mittwoch ist ab jetzt um halb sieben" — qwen las
+# den Block „Was ansteht" (nur heute/morgen) als ganzen Kalender und
+# antwortete „kein Termin für Mittwoch", ohne ein Werkzeug zu rufen.
+# Runde 5 erzwang deshalb in der ersten Runde IRGENDEIN Werkzeug
+# (tool_choice="required" — DashScope nimmt es an, selbst geprüft
+# 09.10.2026, obwohl die Doku nur auto/none/Funktion nennt). Runde 6 zeigte
+# die Kehrseite: gezwungen, irgendetwas zu tun, trug qwen eine Serie mit
+# ausgedachtem Ende ein, statt nach dem Ende zu fragen (f06). Seit Runde 7
+# wird deshalb gezielt read_calendar erzwungen — Lesen schadet nie, und
+# danach entscheidet qwen frei (auch: nachfragen).
+def tool_choice(*, nr: int, verlauf: list, tools=(), **_):
+    if nr != 0 or not _zusatz.will_aendern(verlauf):
+        return None
+    if any(t["function"]["name"] == "read_calendar" for t in tools or ()):
+        return {"type": "function", "function": {"name": "read_calendar"}}
+    return None

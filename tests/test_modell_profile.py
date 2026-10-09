@@ -366,3 +366,26 @@ def test_zusatzpruefer_zeit_nach_aenderung_nur_aus_dem_ergebnis():
     # Ohne Änderung in diesem Zug prüft er Zeiten nicht (Plaudern, Vorschläge).
     p3 = zp.ZusatzPruefer(_BasisPruefer(), "wann ist training?")
     assert p3.nach_antwort("Vielleicht 18:00–19:00?", letzte_runde=False) is None
+
+def test_qwen_erste_runde_erst_lesen_nur_bei_aenderungswunsch():
+    q = modelle.qwen
+    tools = [{"function": {"name": "read_calendar"}}, {"function": {"name": "x"}}]
+    lesen = {"type": "function", "function": {"name": "read_calendar"}}
+    aendern = [{"role": "user", "content": "parkour am mittwoch ist ab jetzt um halb sieben"}]
+    assert q.tool_choice(nr=0, verlauf=aendern, tools=tools) == lesen
+    assert q.tool_choice(nr=1, verlauf=aendern, tools=tools) is None
+    # Ohne read_calendar im Angebot wird nichts erzwungen.
+    assert q.tool_choice(nr=0, verlauf=aendern, tools=tools[1:]) is None
+    plaudern = [{"role": "user", "content": "wie geht's dir heute?"}]
+    assert q.tool_choice(nr=0, verlauf=plaudern, tools=tools) is None
+    zustimmung = [{"role": "user", "content": "lösch die alten"},
+                  {"role": "assistant", "content": "Soll ich alle drei löschen?"},
+                  {"role": "user", "content": "ok"}]
+    assert q.tool_choice(nr=0, verlauf=zustimmung, tools=tools) == lesen
+    ok_ohne_frage = [{"role": "assistant", "content": "Schön."},
+                     {"role": "user", "content": "ok"}]
+    assert q.tool_choice(nr=0, verlauf=ok_ohne_frage, tools=tools) is None
+    # Runde 9, f08: „nur nachschauen, noch nix eintragen“ ist kein Änderungswunsch.
+    nachschauen = [{"role": "user", "content": "wann ist analysis I? schau im lsf nach "
+                                               "— nur nachschauen, noch nix eintragen"}]
+    assert q.tool_choice(nr=0, verlauf=nachschauen, tools=tools) is None
