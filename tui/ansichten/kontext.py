@@ -15,7 +15,7 @@ try:                                    # Pixel-Baustein (tui/pixel.py)
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     import pixel
 
-from .farben import ROLES, THEMES
+from .farben import KAL, ROLES, THEMES
 
 
 class Kontext:
@@ -190,6 +190,17 @@ class Kontext:
             curses.init_pair(pp, curses.COLOR_BLACK, th["acc"][0])
             C["key_press"] = curses.color_pair(pp)
         pp += 1
+        # Kalender: eine Tabelle für alle Ansichten (farben.KAL).
+        for name, (schrift, f_grund, f_schrift, rueck) in KAL[tname].items():
+            if c256:
+                curses.init_pair(pp, schrift, bg)
+                C["k_" + name] = curses.color_pair(pp)
+                curses.init_pair(pp + 1, f_schrift, f_grund)
+                C["k_" + name + "_inv"] = curses.color_pair(pp + 1)
+                pp += 2
+            else:
+                C["k_" + name] = C[rueck]
+                C["k_" + name + "_inv"] = C[rueck] | curses.A_REVERSE
         # Tastenbeleuchtung: je eine Farbe für den RAND der schwarzen Keycap
         # (Neon auf der schwarzen Fläche) und dieselbe Farbe als Glühen für die
         # Buchstaben der weißen Tasten (auf Theme-Grund). Ohne 256 Farben gibt

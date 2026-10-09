@@ -31,9 +31,9 @@ THEMES = {
         "audio": (curses.COLOR_GREEN,   108, 0),
         "hook":  (curses.COLOR_YELLOW,  215, 0),
         "span":  (curses.COLOR_YELLOW,  216, 0),    # Mehrtages-Klammer: weiches Orange
-        # Kalender-Ansicht A nach calcurse: dessen Rot als Akzent (Sasha,
-        # 07.10.2026: „wie die calcurse-ansicht halt"). Eine Zeile zum Umstellen.
-        "kal":   (curses.COLOR_RED,     196, 0),    # kräftiges Rot wie im calcurse-Bild
+        # Kalender-Akzent. Bis 09.10.2026 calcurse-Rot 196; jetzt dieselbe
+        # Farbe wie KAL["akzent"] (unten), damit Kasten und Ansichten eins sind.
+        "kal":   (curses.COLOR_RED,     204, 0),    # Kalender-Akzent = KAL["akzent"] (Neon-Koralle)
         "num":   (curses.COLOR_YELLOW,  222, 0),
         "amber": (curses.COLOR_YELLOW,  214, curses.A_BOLD),  # Fokus-Leiste: Bernstein
         # Bernsteinleiste (Listen-Werkzeug): Glanzpixel + Schatten/leere Fassung
@@ -74,7 +74,7 @@ THEMES = {
         "audio": (curses.COLOR_GREEN,   65,  0),
         "hook":  (curses.COLOR_RED,     130, 0),
         "span":  (curses.COLOR_RED,     166, 0),    # Mehrtages-Klammer: kräftiges Orange (auf Weiss lesbar)
-        "kal":   (curses.COLOR_RED,     160, 0),    # calcurse-Rot, auf Weiss lesbar
+        "kal":   (curses.COLOR_RED,     161, 0),    # Kalender-Akzent = KAL["akzent"] (Beere)
         "num":   (curses.COLOR_BLUE,    26,  0),
         "amber": (curses.COLOR_YELLOW,  172, curses.A_BOLD),  # Fokus-Leiste: Bernstein (auf weiß lesbar)
         # Bernsteinleiste: Glanz heller, Schatten/Fassung dunkler (≥4,5:1 auf weiß)
@@ -100,5 +100,48 @@ THEMES = {
         # Ombre der Sidebar-Liste: nach unten in den (weißen) Hintergrund
         # verblassend → Grau wird heller.
         "ombre": [238, 244, 248, 251, 253],
+    },
+}
+
+
+# ── Kalender (alle drei Ansichten + Kasten) ─────────────────────────────
+# Sasha, 09.10.2026: „das farbtheme in zentrale startansicht ist schön … der
+# kalender passt nicht … mach ihn vorallem einheitlich". Also EIN Schema für
+# A, B, C und den Eingabe-Kasten, in der Sprache der Startseite: nachts
+# Neon auf Schwarz (zentrale-cyber), tagsüber Pastellflächen mit dunkler,
+# pflanzlicher Schrift (zentrale-paper; Schrift ≥ 4,5:1 auf Weiß).
+#
+# Gleiche Art = gleiche Farbe in jeder Ansicht:
+#   akzent   Kastentitel, Datumsköpfe, KW, aktiver Rahmen, Auswahl, Statuszeile
+#   heute    der heutige Tag
+#   termin   Einmal-Termin (Schrift in A/B, Block in C)
+#   routine  Wiederkehrendes — bewusst neutral, damit das Besondere leuchtet
+#   sp1..sp4 Spannen und Ganztägiges, reihum (nebeneinander unterscheidbar)
+#   wochenende  Sa/So-Köpfe
+# Pro Rolle: (Schrift, Fläche-Grund, Fläche-Schrift, Rückfall-Rolle für 8 Farben).
+# Die TUI legt daraus C["k_<rolle>"] (Schrift auf Theme-Grund) und
+# C["k_<rolle>_inv"] (die Fläche) an — kontext.Kontext.apply_theme.
+KAL = {
+    "night": {
+        "akzent":     (204, 204, 16, "kal"),     # Neon-Koralle (Farbe der Kalender-Pille)
+        "heute":      (227, 227, 16, "warn"),    # Neon-Gelb
+        "termin":     (51,  51,  16, "net"),     # Neon-Cyan
+        "routine":    (231, 238, 252, "dim"),    # Weiß / dunkles Grau
+        "sp1":        (141, 141, 16, "graph"),   # Violett (Pink ist schon der Akzent)
+        "sp2":        (48,  48,  16, "acc"),     # Spring-Grün
+        "sp3":        (215, 215, 16, "span"),    # Orange
+        "sp4":        (219, 219, 16, "graph"),   # Flieder-Pink
+        "wochenende": (117, 117, 16, "net"),     # helles Cyan
+    },
+    "day": {
+        "akzent":     (161, 218, 89,  "kal"),    # Beere / Rosé-Fläche
+        "heute":      (130, 229, 94,  "warn"),   # Ocker / Butter-Fläche
+        "termin":     (25,  153, 17,  "net"),    # Wasserblau / Himmel-Fläche
+        "routine":    (16,  254, 235, "dim"),    # Schwarz / Papiergrau
+        "sp1":        (54,  189, 54,  "graph"),  # Pflaume / Lavendel
+        "sp2":        (22,  158, 22,  "acc"),    # Tanne / Minze
+        "sp3":        (94,  223, 94,  "span"),   # Rinde / Pfirsich
+        "sp4":        (125, 225, 125, "graph"),  # Beere / Blütenrosa
+        "wochenende": (24,  153, 17,  "net"),    # Tiefwasser
     },
 }

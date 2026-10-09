@@ -51,8 +51,8 @@ Listen-Sidebar heraus).
 
 - **A — Tagesliste + Kästen, wie calcurse** (Monatsdaten; seit 07.10.2026
   nach Sashas calcurse-Bild): Kastentitel mittig IM Kasten mit `├──┤`
-  darunter, der aktive Kasten „Termine" mit rotem Rahmen (Rolle `kal`,
-  kräftiges Rot 196 nachts / 160 tags, `farben.py`). **Nur 3 Tage ab `ref`,
+  darunter, der aktive Kasten „Termine" mit Rahmen in Akzentfarbe (Rolle
+  `k_akzent`, siehe „Ein Farbschema" unten; bis 09.10.2026 calcurse-Rot 196). **Nur 3 Tage ab `ref`,
   gleich hoch verteilt** (Sasha: lieber wenige mit Luft als viele gequetscht,
   Woche/Monat sind B/C) — ←→ blättert in A deshalb **tageweise**; was in
   einen Tagesblock nicht passt, wird still abgeschnitten (kein „noch n
@@ -77,9 +77,21 @@ Listen-Sidebar heraus).
 
 - **Kein curses im Modul:** testbar ohne Terminal
   (`tests/test_kalender_ansichten.py`) und als Text vorzeigbar. Die Rollen sind
-  die Wörter der TUI-Palette; `…_inv` heißt Fläche (in curses `A_REVERSE`).
+  die Wörter der TUI-Palette; `…_inv` heißt Fläche (eigenes Farbpaar, wenn
+  es eins gibt, sonst `A_REVERSE`).
 - **Eine Stelle für die Optik:** welche Bedeutung welche Farbrolle bekommt,
   steht nur in `ROLLE` / `SPANNEN_FARBEN` oben im Modul.
+- **Ein Farbschema für A, B, C und den Kasten (09.10.2026).** Sasha: „das
+  farbtheme in zentrale startansicht ist schön … der kalender passt nicht …
+  mach ihn vorallem einheitlich". Die Farben stehen in `farben.KAL`, je Rolle
+  Schrift + Fläche (nachts Neon auf Schwarz wie zentrale-cyber, tags
+  Pastellflächen mit dunkler Pflanzenschrift wie zentrale-paper, Schrift
+  ≥ 4,5:1 auf Weiß); `kontext.apply_theme` legt daraus `C["k_…"]` und
+  `C["k_…_inv"]` an. Gleiche Art = gleiche Farbe überall: Akzent (Koralle /
+  Beere) für Titel, Datumsköpfe, Auswahl, Statuszeile; heute Gelb / Butter;
+  Einmal-Termine Cyan / Himmelblau; Routinen bewusst neutral (Grau-Fläche);
+  Spannen und Ganztägiges reihum Violett, Grün, Orange, Pink (tags Lavendel,
+  Minze, Pfirsich, Rosé); Sa/So helles Cyan / Tiefwasser.
 - **Nie breiter als erlaubt:** alles läuft über eine Leinwand, die am Rand
   abschneidet; Titel enden mit „…".
 - **Platz:** offene Apps haben die volle Fensterbreite (`DASH["an"]` aus), der

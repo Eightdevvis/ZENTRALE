@@ -36,31 +36,34 @@ SCHRITT = {"A": "tag", "B": "monat", "C": "woche"}
 
 INV = "_inv"
 
-# Semantik → Palettenrolle. Die Entwürfe haben mehr Farbtöne als die TUI;
-# hier wird entschieden, welche TUI-Rolle einen Ton vertritt.
+# Semantik → Palettenrolle. Seit 09.10.2026 zeigen alle drei Ansichten auf
+# EINE Kalender-Tabelle (tui/ansichten/farben.py, KAL → C["k_…"]): gleiche
+# Art = gleiche Farbe, egal ob Liste, Monat oder Woche. Nur Rahmen, Zeiten
+# und Leeres bleiben in den Grautönen der übrigen TUI.
 ROLLE = {
-    "rahmen": "faint",      # Kastenlinien, Trenner, Punkt-Raster
-    "titel": "acc",         # Kastentitel, Tagesköpfe
-    "heute": "warn",        # heutiger Tag (Entwurf: rot/fett)
-    "zeit": "faint",        # „10:00–18:00" in der Liste
-    "routine": "dim",       # wiederkehrend: normaler Text
-    "termin": "bright",     # Einmal-Termin: hervorgehoben
-    "ganztags": "net",      # ganztägig ohne Spanne (Entwurf: blau)
-    "spanne": "span",       # mehrtägig (Entwurf: bernstein)
-    "werktag": "dim",       # Wochentags-Köpfe im Raster
-    "wochenende": "acc",    # Sa/So im Raster
-    "leer": "faint",        # „—" an leeren Tagen, „+2" bei Überlauf
-    "aus": "faint",         # deaktiviert / Ausfall (nur mit erledigte=True)
-    "block_routine": "faint",   # Zeitachse: Fläche einer Routine (grau)
-    "block_termin": "net",      # Zeitachse: Fläche eines Einmal-Termins
-    "c_wochenende": "amber",    # Zeitachse: Sa/So-Köpfe
-    "a_akzent": "kal",          # A (calcurse): Titel, Datum, KW, Statuszeile
-    "a_aktiv": "kal",           # A: Rahmen des aktiven Kastens
+    "rahmen": "faint",          # Kastenlinien, Trenner, Punkt-Raster
+    "titel": "k_akzent",        # Kastentitel, Tagesköpfe, Monatskopf
+    "heute": "k_heute",         # heutiger Tag
+    "zeit": "faint",            # „10:00–18:00" in der Liste
+    "routine": "k_routine",     # wiederkehrend: neutral
+    "termin": "k_termin",       # Einmal-Termin
+    "ganztags": "k_sp1",        # ganztägig ohne Spanne: wie eine Ein-Tages-Spanne
+    "spanne": "k_sp1",          # mehrtägig (erste Farbe der Reihe)
+    "werktag": "dim",           # Mo–Fr-Köpfe im Raster
+    "tag_belegt": "bright",     # Mini-Monat: Tag mit Einträgen
+    "tag_frei": "dim",          # Mini-Monat: Tag ohne
+    "wochenende": "k_wochenende",   # Sa/So-Köpfe, in B und C gleich
+    "leer": "faint",            # „—" an leeren Tagen, „+2" bei Überlauf
+    "aus": "faint",             # deaktiviert / Ausfall (nur mit erledigte=True)
+    "block_routine": "k_routine",   # Zeitachse: Fläche einer Routine
+    "block_termin": "k_termin",     # Zeitachse: Fläche eines Einmal-Termins
+    "c_wochenende": "k_wochenende",
+    "a_akzent": "k_akzent",     # Titel, Datum, KW, Auswahl, Statuszeile — alle Ansichten
+    "a_aktiv": "k_akzent",      # Rahmen des aktiven Kastens
     "zyklus": "cyc",            # Zyklus-Tönung (aus dem »periode«-Graphen)
 }
-# Zeitachse: nebeneinanderliegende Spannen müssen unterscheidbar sein
-# (Entwurf: Messe bernstein, Berlin grün) → reihum vergeben.
-SPANNEN_FARBEN = ("span", "acc", "graph", "amber")
+# Nebeneinanderliegende Spannen müssen unterscheidbar sein → reihum vergeben.
+SPANNEN_FARBEN = ("k_sp1", "k_sp2", "k_sp3", "k_sp4")
 
 WT = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 MONATE = ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
@@ -543,13 +546,13 @@ def _a_liste(lw, y, x, w, h, daten, ab, heute, erledigte, tage, aw=None):
             zeit = _a_zeit(t)
             if zy + (2 if zeit else 1) > y_ende:
                 break
-            r = _rolle(t)
             inv = INV if (hier and k == sel_idx) else ""
+            r = ROLLE["a_akzent"] if inv else _rolle(t)     # Auswahl: Akzentfläche wie in B/C
             if zeit:
                 mark = "*" if t["routine"] else "-"
                 txt = "%s %s" % (mark, zeit)
                 lw.setze(zy, cx + 1, txt + (" " * (cw - 1 - text_breite(txt)) if inv else ""),
-                         (r if t["spanne"] else ROLLE["zeit"]) + inv)
+                         (r if (t["spanne"] or inv) else ROLLE["zeit"]) + inv)
                 zy += 1
             titel = ("✗ " if t["aus"] else "") + t["label"]
             titel = kuerzen(titel, cw - 3)
@@ -600,9 +603,11 @@ def _a_monat(lw, y, x, w, daten, ab, heute, erledigte, aw=None) -> int:
             elif _a_zyklus(daten, d):
                 r = ROLLE["zyklus"]
             elif _tag_eintraege(daten, d.isoformat(), erledigte):
-                r = ROLLE["termin"]
+                r = ROLLE["tag_belegt"]
             else:
-                r = ROLLE["routine"]
+                r = ROLLE["tag_frei"]
+            if inv:
+                r = ROLLE["a_akzent"]          # gewählter Tag: Akzentfläche wie in B/C
             lw.setze(yy + 2 + wi, xx + 1, "%2d" % d.day, r + inv)
     return h
 
@@ -746,7 +751,7 @@ def _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte
             lw.setze(y, x0, kuerzen(" %d " % d.day, cw), ROLLE["heute"] + INV)
         else:
             lw.setze(y, x0, kuerzen("%d" % d.day, cw),
-                     ROLLE["wochenende"] if d.weekday() >= 5 else ROLLE["termin"])
+                     ROLLE["wochenende"] if d.weekday() >= 5 else ROLLE["tag_belegt"])
         rest = [t for t in _tag_eintraege(daten, d.isoformat(), erledigte)
                 if not t["spanne"]]
         frei = platz - nb
@@ -1002,7 +1007,10 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None):
             lab_txt = _c_label(t, s, e, bw)
             lw.setze(y0 + k0, bx, lab_txt + " " * (bw - text_breite(lab_txt)), r + INV)
             for k in range(k0 + 1, k1 + 1):
-                lw.setze(y0 + k, bx, ("░" if t["aus"] else "█") * bw, r)
+                if t["aus"]:
+                    lw.setze(y0 + k, bx, "░" * bw, r)
+                else:                       # Körper = dieselbe Fläche wie die Kopfzeile
+                    lw.setze(y0 + k, bx, " " * bw, r + INV)
         # Ganz außerhalb des Fensters? Dann ein Pfeil in der Spalte des Tages.
         rechts = x0 + i * colw + max(0, colw - 2)
         if any(e <= lo for _bi, s, e, _t in bahnen):

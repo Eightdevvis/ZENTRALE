@@ -88,7 +88,8 @@ class Kalender:
             x = ix
             for text, rolle in zeile:
                 if rolle.endswith(INV):
-                    attr = C.get(rolle[:-len(INV)], C["dim"]) | curses.A_REVERSE
+                    # eigene Fläche (Kalender-Tabelle), sonst die Schrift invertiert
+                    attr = C.get(rolle) or (C.get(rolle[:-len(INV)], C["dim"]) | curses.A_REVERSE)
                 else:
                     attr = C.get(rolle, C["dim"])
                 if text.strip() or rolle.endswith(INV):

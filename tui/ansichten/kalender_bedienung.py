@@ -409,7 +409,7 @@ class Bedienung:
                 z.addclip(yy, x + 2, besch, bl, kal if aktiv else C["faint"])
                 feld_w = w - bl - 4
                 txt = wert + ("_" if aktiv and not wert.startswith("‹") else "")
-                attr = (C["bright"] | curses.A_REVERSE) if aktiv else C["dim"]
+                attr = C.get("k_akzent_inv", C["bright"] | curses.A_REVERSE) if aktiv else C["dim"]
                 z.addclip(yy, x + 2 + bl, txt.ljust(feld_w)[:feld_w], feld_w, attr)
             unten = y + h - 3
             if dl.fehler:
