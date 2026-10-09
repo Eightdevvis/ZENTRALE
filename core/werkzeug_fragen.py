@@ -137,8 +137,8 @@ def _ziel(args: dict, art: str) -> str:
     if s.art != art:
         return f'"{s.label}" (passt nicht — dann passiert nichts)'
     if art == "routine":
-        return (f'"{s.label}" ({ki_kalender.regel_text(s.rrule)} '
-                f'{ki_kalender.zeit(s.time, s.ende)})')
+        return (f'"{s.label}" ({ki_kalender.regel_text(s.rrule, False)} '
+                f'{ki_kalender.zeit(s.time, s.ende)}{ki_kalender.zeitraum_von(s.roh)})')
     return f'"{s.label}" am {ki_kalender.datum(s.day)} {ki_kalender.zeit(s.time, s.ende)}'
 
 
@@ -149,7 +149,11 @@ def _frage_routine(args: dict) -> str:
     # Seit 2026-10-08 mit Uhrzeit, Ende und Ort: Sasha sieht den Aufruf
     # nicht, und „Routine Geigenstunde eintragen?" sagt nicht, WANN.
     um = f" um {zeit}" if zeit else ""
-    return f'Soll ich die Routine "{_label(args)}"{rrule_txt}{um}{_ende_ort(args)} eintragen?'
+    # Zeitraum (gross, 2026-10-09): Sasha soll sehen, von wann bis wann.
+    spanne = ki_kalender.zeitraum((args.get("von") or "").strip(),
+                                  (args.get("bis") or "").strip())
+    return (f'Soll ich die Routine "{_label(args)}"{rrule_txt}{um}{_ende_ort(args)}'
+            f'{spanne} eintragen?')
 
 
 def _frage_pause(args: dict) -> str:
@@ -174,7 +178,8 @@ def _frage_routine_aendern(args: dict) -> str:
 
 
 _FELDER_ROUTINE = (("time", "Beginn"), ("ende", "Ende"), ("ort", "Ort"),
-                   ("rrule", "Wiederholung"), ("neuer_titel", "Titel"))
+                   ("rrule", "Wiederholung"), ("neuer_titel", "Titel"),
+                   ("von", "erster Tag"), ("bis", "letzter Tag"))
 _FELDER_TERMIN = (("neuer_tag", "Tag"), ("time", "Beginn"), ("ende", "Ende"),
                   ("ort", "Ort"), ("neuer_titel", "Titel"), ("bis", "letzter Tag"))
 

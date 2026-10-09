@@ -249,7 +249,8 @@ WERKZEUGE = [
             "FREQ=WEEKLY;BYDAY=MO,WE,FR | FREQ=MONTHLY;BYMONTHDAY=1 | "
             "FREQ=MONTHLY;BYDAY=2TU (2. Dienstag im Monat). Der Ort gehört "
             "in 'ort', nicht in den Titel. Fehlt das Ende, wird keins "
-            "angenommen — frag nach, statt eins zu nennen."
+            "angenommen — frag nach, statt eins zu nennen. Pflicht: von/bis "
+            "(Zeitraum)."
         ),
         parameter={
             "type": "object",
@@ -296,7 +297,8 @@ WERKZEUGE = [
             "read_calendar (ein Titel geht nur, wenn er genau eine trifft). "
             "Nur die genannten Felder ändern sich — nie löschen und neu "
             "anlegen, nie add_calendar_routine dafür. Mit 'nur_am' nur dieses "
-            "eine Datum (ändern, oder bei 'loeschen' absagen)."
+            "eine Datum (ändern, oder bei 'loeschen' absagen). von/bis: "
+            "Zeitraum."
         ),
         parameter={
             "type": "object",
@@ -1269,10 +1271,25 @@ _ENDE_ORT = {
     "ort":  {"type": "string", "description": "Ort, wenn bekannt."},
 }
 _erweitern("add_calendar_entry", _ENDE_ORT)
-_erweitern("add_calendar_routine", _ENDE_ORT)
+# Zeitraum einer Serie (2026-10-09): Sashas Uni-Fächer liefen ohne ihn „für
+# immer", auch in den Wochen vor Semesterbeginn. Beim Anlegen Pflicht. Die
+# Erklärung steht in den Feldern, nicht im Werkzeug-Text: der zählt gegen den
+# Kalender-Deckel (tests/test_profil.py), die Felder nicht.
+_ZEITRAUM = {
+    "von": {"type": "string",
+            "description": "YYYY-MM-DD: erster Tag der Serie (z. B. Semesteranfang)."},
+    "bis": {"type": "string",
+            "description": "YYYY-MM-DD: letzter Tag der Serie. Das Ende nur hier, nie "
+                           "UNTIL/COUNT in der rrule. Unbekannt? Sasha fragen, nie "
+                           "‚für immer' annehmen. Bei edit_calendar_routine: begrenzt "
+                           "auch Serien, die read_calendar „ohne Enddatum“ zeigt."},
+}
+_erweitern("add_calendar_routine", {**_ENDE_ORT, **_ZEITRAUM},
+           required=["layer", "label", "rrule", "von", "bis"])
 _erweitern("edit_calendar_routine", {
     "nur_am": {"type": "string",
                "description": "YYYY-MM-DD: nur dieses eine Datum der Serie."},
+    **_ZEITRAUM,
 }, vorn={"kennung": _KENNUNG}, required=["aktion"])
 # bis ist auf gross nicht mehr Pflicht (2026-10-08, Prüfstand f01): „fällt
 # jetzt aus, bis wann weiß ich nicht" scheiterte am fehlenden Ende — die KI

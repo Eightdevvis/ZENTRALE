@@ -200,7 +200,10 @@ def test_der_schnitt_haelt():
     # beschrieb eine Ausgabe, die es seit dem Alarm-Kanal nicht mehr gibt.
     besch_kalender = sum(len(t["function"]["description"]) for t in gross.TOOLS
                          if t["function"]["name"] in kalender)
-    assert 0 < besch_kalender < 2450
+    # 09.10.2026 von 2.450 auf 2.520: „Pflicht: von/bis (Zeitraum)." und
+    # „von/bis: Zeitraum." (~50 Zeichen) — Routinen liefen ohne Ende „für
+    # immer". Die eigentliche Erklärung steht in den Feldern (zählen nicht).
+    assert 0 < besch_kalender < 2520
     besch_eigen = sum(len(t["function"]["description"]) for t in gross.TOOLS
                       if t["function"]["name"] in eigen)
     # 18.08.2026 von 2.500 auf 2.800: write_note verweist jetzt auf die
@@ -340,7 +343,11 @@ def test_parameter_schemata_laufen_nicht_auseinander():
         # höchstens weniger. So versteht der eine Ausführer beide Schienen.
         for name, schema in k["properties"].items():
             assert g["properties"].get(name) == schema, (fn["name"], name)
-        assert set(g.get("required", [])) <= set(k.get("required", [])), fn["name"]
+        # Ausnahme (2026-10-09): gross darf eigene Zusatzfelder verlangen —
+        # add_calendar_routine verlangt von/bis. Der Ausführer prüft das nur
+        # auf gross (werkzeug_befund.schiene), klein bleibt beim alten Vertrag.
+        zusatz = set(g["properties"]) - set(k["properties"])
+        assert set(g.get("required", [])) <= set(k.get("required", [])) | zusatz, fn["name"]
 
 
 def test_gross_teilt_die_persona_mit_klein():

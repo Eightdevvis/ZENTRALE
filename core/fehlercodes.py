@@ -78,6 +78,14 @@ CODES = {
     "K-RRULE-UNGUELTIG": (
         "Die Wiederholungsregel (rrule) ist ungültig.",
         "Eine RFC-5545-Regel angeben, z. B. FREQ=WEEKLY;BYDAY=MO."),
+    # 2026-10-09: Serien nur mit Zeitraum (Sashas Uni-Fächer liefen „für immer").
+    "K-ZEITRAUM-FEHLT": (
+        "Eine Routine braucht ihren Zeitraum: von (erster Tag) und bis (letzter Tag).",
+        "Sasha fragen, von wann bis wann es läuft (z. B. Semesteranfang und -ende). "
+        "Nie ‚für immer' annehmen und kein Datum erfinden."),
+    "K-RRULE-MIT-ENDE": (
+        "Die Regel (rrule) enthält UNTIL oder COUNT; das Ende der Serie geht nur über 'bis'.",
+        "UNTIL/COUNT aus der rrule nehmen und den letzten Tag als bis angeben."),
     "K-KEIN-VORKOMMEN": (
         "Die Routine findet an diesem Tag gar nicht statt.",
         "Einen Tag nehmen, an dem sie stattfindet (read_calendar)."),

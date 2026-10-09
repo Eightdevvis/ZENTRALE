@@ -266,8 +266,10 @@ def zeit(time, ende) -> str:
     return "ganztags"
 
 
-def regel_text(rrule: str | None) -> str:
-    """FREQ=WEEKLY;BYDAY=TH → 'wöchentlich do'. Unbekanntes bleibt roh."""
+def regel_text(rrule: str | None, mit_ende: bool = True) -> str:
+    """FREQ=WEEKLY;BYDAY=TH → 'wöchentlich do'. Unbekanntes bleibt roh.
+    mit_ende=False lässt das UNTIL weg — wer zeitraum() anhängt, nennt es
+    dort (sonst stünde das Ende doppelt)."""
     if not rrule:
         return ""
     teile = dict(p.split("=", 1) for p in rrule.upper().split(";") if "=" in p)
@@ -284,10 +286,70 @@ def regel_text(rrule: str | None) -> str:
         text += " " + ",".join(tage)
     if teile.get("BYMONTHDAY"):
         text += f" am {teile['BYMONTHDAY']}."
-    if teile.get("UNTIL"):
+    if teile.get("UNTIL") and mit_ende:
         u = teile["UNTIL"][:8]
         text += f" bis {u[6:8]}.{u[4:6]}.{u[0:4]}"
     return text
+
+
+# ── Zeitraum einer Serie (2026-10-09) ───────────────────────────────────
+# Sasha: die KI trug seine Uni-Fächer als Routinen ein — „für immer", also
+# auch in dieser und letzter Woche. Seitdem verlangt add_calendar_routine
+# auf gross von/bis. Gespeichert wird das so, wie es der Kalender-Kern und
+# jedes .ics-Programm ohnehin verstehen: Anfang als `seit`, Ende als UNTIL
+# in der Regel (bis-Tag 23:59:59, damit der letzte Tag mitzählt).
+
+def _regel_teile(rrule: str | None) -> list:
+    return [p for p in str(rrule or "").split(";") if p.strip()]
+
+
+def regel_hat_ende(rrule: str | None) -> bool:
+    """Steht UNTIL oder COUNT in der Regel?"""
+    return any(p.split("=", 1)[0].strip().upper() in ("UNTIL", "COUNT")
+               for p in _regel_teile(rrule))
+
+
+def regel_mit_ende(rrule: str, bis: str) -> str:
+    """Regel ohne altes UNTIL/COUNT, mit UNTIL=<bis>T235959."""
+    rest = [p for p in _regel_teile(rrule)
+            if p.split("=", 1)[0].strip().upper() not in ("UNTIL", "COUNT")]
+    return ";".join(rest + [f"UNTIL={bis.replace('-', '')}T235959"])
+
+
+def regel_bis(rrule: str | None) -> str | None:
+    """Das UNTIL der Regel als YYYY-MM-DD, sonst None."""
+    for p in _regel_teile(rrule):
+        k, _, v = p.partition("=")
+        if k.strip().upper() == "UNTIL":
+            v = v.strip()
+            try:
+                return date(int(v[0:4]), int(v[4:6]), int(v[6:8])).isoformat()
+            except ValueError:
+                return None
+    return None
+
+
+def _tt(iso: str) -> str:
+    try:
+        return date.fromisoformat(iso).strftime("%d.%m.%Y")
+    except (TypeError, ValueError):
+        return str(iso)
+
+
+def zeitraum(von: str | None, bis: str | None) -> str:
+    """' vom 12.10.2026 bis 13.02.2027' / ' ab …' / ' bis …' / ''."""
+    if von and bis:
+        return f" vom {_tt(von)} bis {_tt(bis)}"
+    if von:
+        return f" ab {_tt(von)}"
+    if bis:
+        return f" bis {_tt(bis)}"
+    return ""
+
+
+def zeitraum_von(roh: dict) -> str:
+    """Der Zeitraum einer gespeicherten Routine (seit + UNTIL)."""
+    return zeitraum(roh.get("seit"), regel_bis(roh.get("rrule")))
 
 
 def _pausen(label: str, daten: dict) -> list:
@@ -308,8 +370,13 @@ def beschreiben(s: Stueck, daten: dict | None = None) -> str:
             wann += f" bis {datum(s.bis)} (mehrtägig)"
         return f"{kenn}Termin {wann} {zeit(s.time, s.ende)} {s.label}{ort}, Ebene {s.layer}"
     daten = roh() if daten is None else daten
-    teile = [f"{kenn}Routine {s.label}: {regel_text(s.rrule)} {zeit(s.time, s.ende)}{ort}",
-             f"Ebene {s.layer}"]
+    # Ohne Enddatum sagt das die gross-Zeile ausdrücklich (2026-10-09): so
+    # sieht die KI, welche Serien noch „für immer" laufen.
+    spanne = zeitraum_von(s.roh)
+    if mit_kennungen() and not regel_hat_ende(s.rrule):
+        spanne += " (ohne Enddatum)"
+    teile = [f"{kenn}Routine {s.label}: {regel_text(s.rrule, False)} "
+             f"{zeit(s.time, s.ende)}{ort}{spanne}", f"Ebene {s.layer}"]
     for p in _pausen(s.label, daten):
         grund = f" ({p['grund']})" if p.get("grund") else ""
         teile.append(f"Pause {datum(p.get('von'), False)}–{datum(p.get('bis'))}{grund}")

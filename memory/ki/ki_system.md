@@ -321,7 +321,7 @@ und nimmt beide Schreibweisen an (siehe „Zwei Schienen" weiter unten).
 | `import_skill` | nur `gross` | Claude-Skill(s) aus .zip oder Ordner in Input/ übernehmen, gegatet |
 | `unzip` | nur `gross` | Eine .zip aus Input/ nach Output/<name>/ auspacken (gegatet), `ansehen=true` zeigt nur den Inhalt (frei) |
 | `remove_input` | nur `gross` | Datei/Ordner direkt aus Input/ in `.Papierkorb/<Datum>/` legen (gegatet, löscht nie) |
-| `read_calendar` / `add_calendar_*` / `edit_calendar_routine` / `delete_calendar_entry` | = | Kalender lesen/schreiben/löschen (s. `memory/werkzeuge/kalender_system.md`); auf `gross` mit Kennungen, Ende/Ort und `nur_am` (s. „Kalender ohne Fallen") |
+| `read_calendar` / `add_calendar_*` / `edit_calendar_routine` / `delete_calendar_entry` | = | Kalender lesen/schreiben/löschen (s. `memory/werkzeuge/kalender_system.md`); auf `gross` mit Kennungen, Ende/Ort, `nur_am` und Pflicht-Zeitraum `von`/`bis` bei Routinen (s. „Kalender ohne Fallen") |
 | `edit_calendar_entry` | nur `gross` | Einen Einzeltermin ändern, nur genannte Felder (gegatet) |
 | `read_calendar_warnings` | nur `gross` | Die Kalender-Warnungen frisch, dieselben wie Sashas ⚠ |
 | `web_search`  | `web_suche`  | Im Internet suchen (gegatet, s. „Internet-Pipe") |
@@ -469,6 +469,18 @@ Umschlag. Einstellung `ehrlichkeit_pruefer`. Alles Weitere:
   fehlt das Ende, steht im Ergebnis „ohne Ende — die Ansicht zeichnet eine
   Stunde, frag nach". Kein Pflichtfeld: sonst müsste die KI eins erfinden,
   wenn Sasha keins genannt hat.
+- **Serien nur mit Zeitraum** (gross, 2026-10-09): Sashas Uni-Fächer liefen
+  „für immer", auch in den Wochen vor Semesterbeginn. `add_calendar_routine`
+  verlangt `von`/`bis` (YYYY-MM-DD); gespeichert als `seit` = von und
+  `UNTIL=<bis>T235959` in der RRULE (Standard, .ics-tauglich). Abbrüche:
+  fehlt eins → `K-ZEITRAUM-FEHLT` (frag Sasha), UNTIL/COUNT schon in der
+  rrule → `K-RRULE-MIT-ENDE` (Ende nur über bis), bis < von →
+  `K-SPANNE-VERDREHT`. Nachgelesen werden auch seit und UNTIL. Rückmeldung,
+  Frage und `read_calendar` nennen den Zeitraum („… vom 12.10.2026 bis
+  13.02.2027"); Serien ohne Ende zeigt `read_calendar` als „(ohne
+  Enddatum)". `edit_calendar_routine` setzt/ändert ihn mit `von`/`bis`
+  (dieselben Prüfungen); eine neue `rrule` behält das bisherige Ende.
+  `klein` unverändert (kein Zeitraum).
 - **Pausen** hängen seit 09.10. per Kennung fest an GENAU einer Routine;
   heißt keine genau so, bricht es ab (`K-PAUSE-KEINE-ROUTINE`, mit
   Vorschlag, nichts gespeichert) — vorher wurde eine wirkungslose Pause

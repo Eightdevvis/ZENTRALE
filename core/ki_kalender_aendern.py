@@ -126,8 +126,8 @@ def termin_satz(e: dict) -> str:
 
 
 def routine_satz(e: dict) -> str:
-    return (f"Routine „{e.get('label')}“ {kk.regel_text(e.get('rrule'))} "
-            f"{kk.zeit(e.get('time'), e.get('ende'))}{_ort(e)}")
+    return (f"Routine „{e.get('label')}“ {kk.regel_text(e.get('rrule'), False)} "
+            f"{kk.zeit(e.get('time'), e.get('ende'))}{_ort(e)}{kk.zeitraum_von(e)}")
 
 
 def _versuch_termin(label, tag, t="", e="", ort="") -> str:
@@ -143,6 +143,30 @@ def _hinweise(e: dict) -> str:
         teile.append(_OHNE_ENDE)
     teile.append(kk.beleg_warnungen(e.get("label") or ""))
     return " ".join(teile)
+
+
+def _zeitraum(args: dict, pflicht: bool, seit_alt: str = "", bis_alt: str = ""):
+    """von/bis (YYYY-MM-DD) einer Serie → (von, bis), '' = nicht genannt.
+    pflicht: beide müssen da sein (Anlegen auf gross, 2026-10-09). Geprüft
+    wird gegen das, was nach der Änderung gilt (alte Werte, wo nichts Neues
+    kommt)."""
+    roh_von = str(args.get("von") or "").strip()
+    roh_bis = str(args.get("bis") or "").strip()
+    if pflicht and not (roh_von and roh_bis):
+        fehlt = " und ".join(f for f, w in (("von", roh_von), ("bis", roh_bis)) if not w)
+        raise _Abbruch("K-ZEITRAUM-FEHLT", f"{fehlt} fehlt — von wann bis wann läuft die Serie?")
+    von = _tag("von", roh_von, pflicht=False)
+    bis = _tag("bis", roh_bis, pflicht=False)
+    a, b = von or seit_alt, bis or bis_alt
+    if a and b and b < a:
+        raise _Abbruch("K-SPANNE-VERDREHT", f"bis {b} liegt vor von {a}")
+    return von, bis
+
+
+def _ohne_regel_ende(rrule: str) -> None:
+    if kk.regel_hat_ende(rrule):
+        raise _Abbruch("K-RRULE-MIT-ENDE", f"Regel {rrule!r} enthält UNTIL oder COUNT — "
+                       "das Ende der Serie gehört in 'bis'")
 
 
 def _passt(e: dict, verlangt: dict) -> list:
@@ -201,7 +225,9 @@ def termin_eintragen(args: dict):
 
 def routine_eintragen(args: dict):
     """add_calendar_routine — mit Ende und Ort (gross), ohne still eine Dauer
-    anzunehmen."""
+    anzunehmen. Auf gross mit Pflicht-Zeitraum von/bis (2026-10-09): eine
+    Serie ohne Ende lief „für immer", auch rückwärts in die Wochen vor ihrem
+    Anfang. klein bleibt beim gemessenen Vertrag (ohne von/bis)."""
     layer, label = _layer(args), (args.get("label") or "").strip()
     rrule = (args.get("rrule") or "").strip()
     ort = (args.get("ort") or "").strip()
@@ -215,16 +241,22 @@ def routine_eintragen(args: dict):
         _reihenfolge(t, e)
         if not kalender_regel.regel_gueltig(rrule):
             raise _Abbruch("K-RRULE-UNGUELTIG", f"Regel {rrule!r} ist ungültig")
+        regel, von = rrule, ""
+        if werkzeug_befund.schiene() == "gross":
+            _ohne_regel_ende(rrule)
+            von, bis = _zeitraum(args, pflicht=True)
+            regel = kk.regel_mit_ende(rrule, bis)
         vorher = _kennungen()
-        extras = {k: v for k, v in (("ende", e), ("ort", ort)) if v}
-        if not kalender.add_routine(layer=layer, label=label, rrule_str=rrule,
+        extras = {k: v for k, v in (("ende", e), ("ort", ort), ("seit", von)) if v}
+        if not kalender.add_routine(layer=layer, label=label, rrule_str=regel,
                                     time=t or None, **extras):
             raise _Abbruch("K-EBENE-UNBEKANNT", f"Ebene {layer!r} gibt es nicht")
         k = _neue_kennung(vorher, routine=True)
         if k is None:
             raise _Abbruch("W-NICHT-GESPEICHERT", "nachgelesen steht die Routine nicht im Kalender")
         x = kalender_kennung.eintrag(k)
-        falsch = _passt(x, {"label": label, "rrule": rrule, "time": t, "ende": e, "ort": ort})
+        falsch = _passt(x, {"label": label, "rrule": regel, "time": t, "ende": e, "ort": ort,
+                            "seit": von})
         if falsch:
             kalender_kennung.routine_loeschen(k)
             raise _Abbruch("W-NICHT-GESPEICHERT", "nachgelesen stand sie anders da ("
@@ -361,8 +393,11 @@ def routine_aendern(args: dict):
         nur_am = _tag("nur_am", args.get("nur_am"), pflicht=False)
         if aktion == "loeschen":
             return _routine_tag_absagen(s, nur_am) if nur_am else _routine_loeschen(s)
-        neu = {k: str(args.get(k) or "").strip()
-               for k in ("time", "ende", "ort", "rrule", "neuer_titel")}
+        # von/bis (Zeitraum der Serie) nur auf gross, wie beim Anlegen.
+        felder = ("time", "ende", "ort", "rrule", "neuer_titel")
+        if werkzeug_befund.schiene() == "gross":
+            felder += ("von", "bis")
+        neu = {k: str(args.get(k) or "").strip() for k in felder}
         neu = {k: v for k, v in neu.items() if v}
         if not neu:
             raise _Abbruch("K-NICHTS-ZU-AENDERN", "gib an, was neu ist")
@@ -370,6 +405,9 @@ def routine_aendern(args: dict):
         e = _uhr("ende", neu["ende"]) if "ende" in neu else (s.ende or "")
         _reihenfolge(t, e)
         if nur_am:
+            if "von" in neu or "bis" in neu:
+                raise _Abbruch("K-UNBEKANNTES-FELD", "der Zeitraum gilt für die ganze Serie — "
+                               "ohne nur_am")
             return _vorkommen_aendern(s, nur_am, neu, t, e)
         return _serie_aendern(s, neu, t, e)
     return _sicher(_was_routine(args), "nichts geändert", arbeit)
@@ -382,22 +420,48 @@ def _was_routine(args: dict) -> str:
     return f"Routine „{wer}“{am} {tun}"
 
 
+def _neue_regel(s, neu: dict) -> tuple:
+    """(rrule, seit) nach der Änderung; None = bleibt. Auf gross (nur dort
+    gibt es von/bis) behält eine neue Wiederholung das bisherige Ende —
+    „nur genannte Felder ändern" gilt auch für den Zeitraum."""
+    if "von" not in neu and "bis" not in neu and not (
+            "rrule" in neu and werkzeug_befund.schiene() == "gross"):
+        return neu.get("rrule"), None
+    if "rrule" in neu:
+        _ohne_regel_ende(neu["rrule"])
+    bis_alt = kk.regel_bis(s.rrule) or ""
+    von, bis = _zeitraum(neu, pflicht=False, seit_alt=str(s.roh.get("seit") or ""),
+                         bis_alt=bis_alt)
+    basis = neu.get("rrule") or s.rrule
+    ende = bis or bis_alt
+    regel = kk.regel_mit_ende(basis, ende) if ende else basis
+    return (regel if regel != s.rrule else None), (von or None)
+
+
 def _serie_aendern(s, neu: dict, t: str, e: str):
+    regel, seit = _neue_regel(s, neu)
+    if regel is not None and not kalender_regel.regel_gueltig(regel):
+        raise _Abbruch("K-RRULE-UNGUELTIG", f"Regel {regel!r} ist ungültig")
     x = kalender_kennung.routine_aendern(
         s.uid, time=t if "time" in neu else None, ende=e if "ende" in neu else None,
-        ort=neu.get("ort"), label=neu.get("neuer_titel"), rrule=neu.get("rrule"))
+        ort=neu.get("ort"), label=neu.get("neuer_titel"), rrule=regel, seit=seit)
     verlangt = {"time": t, "ende": e}
-    for feld, name in (("ort", "ort"), ("rrule", "rrule"), ("neuer_titel", "label")):
+    for feld, name in (("ort", "ort"), ("neuer_titel", "label")):
         if feld in neu:
             verlangt[name] = neu[feld]
+    if regel is not None:
+        verlangt["rrule"] = regel
+    if seit is not None:
+        verlangt["seit"] = seit
     falsch = _passt(x, verlangt)
     if falsch:
         # Der Kern hat geschrieben, aber nicht das Verlangte: zurück auf den
-        # alten Stand, per Kennung (2026-10-09).
+        # alten Stand, per Kennung (2026-10-09) — Zeitraum (seit) inklusive.
         alt = s.roh
         kalender_kennung.routine_aendern(
             s.uid, time=alt.get("time") or "", ende=alt.get("ende") or "",
-            ort=alt.get("ort") or "", label=alt.get("label"), rrule=alt.get("rrule"))
+            ort=alt.get("ort") or "", label=alt.get("label"), rrule=alt.get("rrule"),
+            seit=alt.get("seit") or "")
         raise _Abbruch("W-NICHT-GESPEICHERT", "nachgelesen stand sie anders da ("
                        + "; ".join(falsch) + "); der alte Stand ist wiederhergestellt")
     jetzt = kk.stueck_von(s.uid)

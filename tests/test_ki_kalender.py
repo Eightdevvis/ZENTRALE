@@ -37,8 +37,22 @@ def gross():
     werkzeug_befund.schiene_zuruecksetzen(marke)
 
 
-def tun(name, **args):
+# Seit 2026-10-09 verlangt add_calendar_routine auf gross einen Zeitraum.
+# Die älteren Tests hier prüfen anderes — sie bekommen einen weiten Standard.
+# Wer den Zeitraum selbst prüft, ruft roh() auf.
+VON_STD = (date.today() - timedelta(days=60)).isoformat()
+BIS_STD = (date.today() + timedelta(days=365)).isoformat()
+
+
+def roh(name, **args):
     return ki_werkzeuge._verteilen(name, args)
+
+
+def tun(name, **args):
+    if name == "add_calendar_routine" and werkzeug_befund.schiene() == "gross":
+        args.setdefault("von", VON_STD)
+        args.setdefault("bis", BIS_STD)
+    return roh(name, **args)
 
 
 def kennungen(text, art="r"):
@@ -115,9 +129,9 @@ def test_aendern_per_kennung_laesst_den_rest_stehen(gross):
     r = tun("edit_calendar_routine", kennung="#" + ziel.kennung, aktion="aendern", ende="19:10")
     assert r.status == "ok"
     assert "18:10–19:10 @ Geigenschule" in r.beleg
-    s = [s for s in routinen() if s.rrule.endswith("TH")][0]
+    s = [s for s in routinen() if "BYDAY=TH" in s.rrule][0]
     assert (s.time, s.ende, s.ort) == ("18:10", "19:10", "Geigenschule")
-    assert [s for s in routinen() if s.rrule.endswith("TU")][0].time == "17:00"
+    assert [s for s in routinen() if "BYDAY=TU" in s.rrule][0].time == "17:00"
 
 
 def test_kennung_ueberlebt_aenderung_geloeschte_trifft_nichts(gross):
@@ -342,7 +356,7 @@ def test_frage_mit_kennung_nennt_was_gemeint_ist(gross):
     k = routinen()[0].kennung
     f = erlaubnis.frage("edit_calendar_routine", {"kennung": k, "aktion": "aendern",
                                                   "ende": "19:00"})
-    assert '"Geigenstunde" (wöchentlich do 18:10–19:10)' in f and "Ende 19:00" in f
+    assert '"Geigenstunde" (wöchentlich do 18:10–19:10' in f and "Ende 19:00" in f
     f = erlaubnis.frage("edit_calendar_routine", {"kennung": "r0000", "aktion": "loeschen"})
     assert "gibt es so nicht" in f
 
@@ -392,6 +406,19 @@ def bestand(gross):
      "K-PAUSE-KEINE-ROUTINE"),
     ("add_calendar_pause", {"label": "Geige", "von": DO_ISO, "bis": "2020-01-01"},
      "K-SPANNE-VERDREHT"),
+    ("add_calendar_routine", {"label": "Lauf", "rrule": "FREQ=DAILY", "von": "", "bis": ""},
+     "K-ZEITRAUM-FEHLT"),
+    ("add_calendar_routine", {"label": "Lauf", "rrule": "FREQ=DAILY;COUNT=5"},
+     "K-RRULE-MIT-ENDE"),
+    ("add_calendar_routine", {"label": "Lauf", "rrule": "FREQ=DAILY",
+                              "von": "2026-12-01", "bis": "2026-11-01"}, "K-SPANNE-VERDREHT"),
+    ("edit_calendar_routine", {"label": "Geige", "aktion": "aendern", "bis": "2000-01-01"},
+     "K-SPANNE-VERDREHT"),
+    ("edit_calendar_routine", {"label": "Geige", "aktion": "aendern",
+                               "rrule": "FREQ=WEEKLY;BYDAY=FR;UNTIL=20270101T000000"},
+     "K-RRULE-MIT-ENDE"),
+    ("edit_calendar_routine", {"label": "Geige", "aktion": "aendern", "nur_am": DO_ISO,
+                               "von": DO_ISO}, "K-UNBEKANNTES-FELD"),
     ("delete_calendar_entry", {"day": DO_ISO, "label": "Kino"}, "K-NICHT-GEFUNDEN"),
     ("edit_calendar_entry", {"day": DO_ISO, "label": "Drive"}, "K-NICHTS-ZU-AENDERN"),
     ("edit_calendar_entry", {"day": DO_ISO, "label": "Drive", "bis": DO_ISO},
@@ -437,4 +464,115 @@ def test_feste_form_aus_dem_echten_stand(gross):
             time="18:10", ende="19:00", ort="Schule")
     k = kennungen(r)[0]
     r = tun("edit_calendar_routine", kennung=k, aktion="aendern", ort="Aula")
-    assert r.startswith(f"Routine „Geige“ wöchentlich do 18:10–19:00 @ Aula GEÄNDERT (#{k})")
+    assert r.startswith(f"Routine „Geige“ wöchentlich do 18:10–19:00 @ Aula"
+                        f"{ki_kalender.zeitraum(VON_STD, BIS_STD)} GEÄNDERT (#{k})")
+
+
+# ── Zeitraum einer Serie (2026-10-09) ──────────────────────────────────
+# Sasha: „sie hat meine fächer eingetragen aber die routinen sind jetzt
+# quasi für immer statt eine bestimmte periode, also auch diese und letzte
+# woche". Seitdem verlangt add_calendar_routine auf gross von/bis.
+
+MO = date.today() + timedelta(days=(0 - date.today().weekday()) % 7 + 7)   # Montag in 1–2 Wochen
+
+
+def _montage(von: date, bis: date) -> list:
+    return [t for t, es in kalender.entries_in_range(von, bis).items()
+            if any(e.get("label") == "Analysis I" and not e.get("ausfall") for e in es)]
+
+
+def test_routine_mit_zeitraum_nur_innerhalb(gross):
+    bis = MO + timedelta(days=14)
+    r = roh("add_calendar_routine", label="Analysis I", rrule="FREQ=WEEKLY;BYDAY=MO",
+            time="10:00", ende="12:00", ort="Hörsaal 1", von=MO.isoformat(), bis=bis.isoformat())
+    assert r.status == "ok", r
+    assert (f"10:00–12:00 @ Hörsaal 1 vom {MO.strftime('%d.%m.%Y')} bis "
+            f"{bis.strftime('%d.%m.%Y')} EINGETRAGEN") in r
+    s = routinen()[0]
+    assert s.roh.get("seit") == MO.isoformat()
+    assert ki_kalender.regel_bis(s.rrule) == bis.isoformat()
+    tage = _montage(MO - timedelta(days=21), bis + timedelta(days=21))
+    assert tage == [(MO + timedelta(days=7 * i)).isoformat() for i in range(3)]
+
+
+def test_routine_ohne_zeitraum_schreibt_nichts(gross):
+    for args in ({}, {"von": MO.isoformat()}, {"bis": MO.isoformat()}):
+        r = roh("add_calendar_routine", label="Analysis I", rrule="FREQ=WEEKLY;BYDAY=MO",
+                time="10:00", **args)
+        assert r.code == "K-ZEITRAUM-FEHLT" and "nichts eingetragen" in r, r
+    assert routinen() == []
+
+
+@pytest.mark.parametrize("regel", ["FREQ=WEEKLY;BYDAY=MO;UNTIL=20270213T235959",
+                                   "FREQ=WEEKLY;COUNT=10;BYDAY=MO"])
+def test_routine_ende_nur_ueber_bis(gross, regel):
+    r = roh("add_calendar_routine", label="Analysis I", rrule=regel,
+            von=MO.isoformat(), bis="2027-02-13")
+    assert r.code == "K-RRULE-MIT-ENDE", r
+    assert routinen() == []
+
+
+def test_routine_bis_vor_von(gross):
+    r = roh("add_calendar_routine", label="Analysis I", rrule="FREQ=WEEKLY;BYDAY=MO",
+            von="2027-02-13", bis="2026-10-12")
+    assert r.code == "K-SPANNE-VERDREHT", r
+    assert routinen() == []
+
+
+def test_klein_braucht_keinen_zeitraum():
+    r = roh("add_calendar_routine", layer="routinen", label="Geige",
+            rrule="FREQ=WEEKLY;BYDAY=TH", time="18:10")
+    assert r.status == "ok", r
+    s = routinen()[0]
+    assert s.rrule == "FREQ=WEEKLY;BYDAY=TH" and "seit" not in s.roh
+
+
+def test_aendern_begrenzt_eine_serie_fuer_immer(gross):
+    """Sashas bestehende Uni-Routinen: ohne Zeitraum angelegt, nachträglich
+    begrenzt."""
+    kalender.add_routine(layer="termine", label="Analysis I", rrule_str="FREQ=WEEKLY;BYDAY=MO",
+                         time="10:00", ende="12:00")
+    text = tun("read_calendar", zeitraum="naechste_30_tage", suche="Analysis")
+    assert "(ohne Enddatum)" in text
+    bis = MO + timedelta(days=7)
+    k = routinen()[0].kennung
+    r = roh("edit_calendar_routine", kennung=k, aktion="aendern",
+            von=MO.isoformat(), bis=bis.isoformat())
+    assert r.status == "ok", r
+    assert f"vom {MO.strftime('%d.%m.%Y')} bis {bis.strftime('%d.%m.%Y')} GEÄNDERT" in r
+    s = routinen()[0]
+    assert s.roh.get("seit") == MO.isoformat() and (s.time, s.ende) == ("10:00", "12:00")
+    assert _montage(MO - timedelta(days=14), MO + timedelta(days=28)) == \
+        [MO.isoformat(), bis.isoformat()]
+    text = tun("read_calendar", zeitraum="naechste_30_tage", suche="Analysis")
+    assert "(ohne Enddatum)" not in text
+    assert f"vom {MO.strftime('%d.%m.%Y')} bis {bis.strftime('%d.%m.%Y')}" in text
+    # Neue Wiederholung behält das Ende; nur bis verschiebt es.
+    roh("edit_calendar_routine", kennung=k, aktion="aendern", rrule="FREQ=WEEKLY;BYDAY=TU")
+    s = routinen()[0]
+    assert "BYDAY=TU" in s.rrule and ki_kalender.regel_bis(s.rrule) == bis.isoformat()
+    roh("edit_calendar_routine", kennung=k, aktion="aendern", bis="2027-02-13")
+    s = routinen()[0]
+    assert ki_kalender.regel_bis(s.rrule) == "2027-02-13" and s.rrule.count("UNTIL") == 1
+    assert s.roh.get("seit") == MO.isoformat()
+
+
+def test_zeitraum_anders_nachgelesen_wird_zurueckgenommen(gross, monkeypatch):
+    import kalender_kennung
+    echt = kalender_kennung.eintrag
+    monkeypatch.setattr(kalender_kennung, "eintrag", lambda k: dict(echt(k), seit="2000-01-01"))
+    r = roh("add_calendar_routine", label="Analysis I", rrule="FREQ=WEEKLY;BYDAY=MO",
+            von=MO.isoformat(), bis="2027-02-13")
+    assert r.code == "W-NICHT-GESPEICHERT" and "seit" in r, r
+    assert routinen() == []
+
+
+def test_frage_nennt_den_zeitraum():
+    import erlaubnis
+    f = erlaubnis.frage("add_calendar_routine", {"label": "Analysis I",
+                                                 "rrule": "FREQ=WEEKLY;BYDAY=MO",
+                                                 "von": "2026-10-12", "bis": "2027-02-13"})
+    assert "vom 12.10.2026 bis 13.02.2027 eintragen?" in f
+    f = erlaubnis.frage("edit_calendar_routine", {"label": "Analysis I", "aktion": "aendern",
+                                                  "von": "2026-10-12", "bis": "2027-02-13"})
+    assert "erster Tag 2026-10-12" in f and "letzter Tag 2027-02-13" in f
