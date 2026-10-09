@@ -12,6 +12,7 @@ gehören dem Kern, nie dem Tutor.
 | Wie die Persona zuverlässig kurz und in der Zielsprache bleibt — Testläufe gegen echtes qwen-plus | [tutor_persona_tuning.md](tutor_persona_tuning.md) |
 | Die Roleplay-Features (Zimmer, Shop, Kisten) und warum sie so entschieden wurden | [tutor_roleplay_features.md](tutor_roleplay_features.md) |
 | Wie die Persona aussieht: gemalte Puppe statt Polygone, Drehpunkte, Mal-Schablone | [tutor_puppe.md](tutor_puppe.md) |
+| **Diagnose 2026-10-08** — Sashas Beschwerden (Dauergerede, Zufall, Niveau, „que?", Mikro, STT, Optik, Bilder) je mit Ursache (Datei:Zeile), Strategie, was gebaut ist, was offen bleibt | [diagnose_2026-10-08.md](diagnose_2026-10-08.md) |
 
 ## Grenze zum Kern
 
