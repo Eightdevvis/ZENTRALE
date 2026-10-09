@@ -167,3 +167,42 @@ def test_profil_ohne_werkzeuge_bietet_kein_tool_choice():
                                     [], profil=s)
     _eine_runde(a)
     assert "tool_choice" not in client.aufrufe[0]
+
+
+# ── Was das qwen-Profil tut ────────────────────────────────────────────
+
+def test_qwen_kopf_beginnt_mit_arbeitsweise(mit_qwen_profil):
+    s = profil.fuer_backend("cloud", modell="qwen-plus")
+    kopf = s.system()
+    assert kopf.startswith("## Arbeitsweise")
+    assert kopf.endswith(gross.system())
+
+
+def test_erinnerung_steht_im_umschlag_am_ende(mit_qwen_profil):
+    s = profil.fuer_backend("cloud", modell="qwen-plus")
+    v = cloud._volatile_text("", False, False)
+    mit = s.erinnerung(v)
+    assert mit.endswith("</kontext_automatisch>")
+    assert modelle.qwen.erinnerung() in mit
+    assert mit.index(modelle.qwen.erinnerung()) > mit.index("## Jetzt")
+
+
+def test_qwen_uhrzeiten_vorgerechnet():
+    q = modelle.qwen
+    assert "= 6:30 oder 18:30" in q.uhrzeiten("parkour ist ab jetzt um halb sieben")
+    assert "= 7:15 oder 19:15" in q.uhrzeiten("viertel nach sieben")
+    assert "= 12:30 oder 0:30" in q.uhrzeiten("halb eins")
+    assert q.uhrzeiten("um 18 uhr") == ""
+    mit = q.erinnerung([{"role": "user", "content": "training ab jetzt um halb acht"}])
+    assert mit.startswith(q.erinnerung()) and "19:30" in mit
+
+
+def test_qwen_texte_mit_nutzername(mit_qwen_profil, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_NUTZER_NAME", "Kim")
+    monkeypatch.setenv("ZENTRALE_NUTZER_PRONOMEN", "sie")
+    s = profil.fuer_backend("cloud", modell="qwen-plus")
+    kopf = s.system()
+    arbeitsweise = kopf.split("\n\n## ", 1)[0]
+    assert "Kim" in arbeitsweise and "Sasha" not in arbeitsweise
+    assert "{" not in arbeitsweise
+    assert "Kim" in modelle.qwen.erinnerung()
