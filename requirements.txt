@@ -37,6 +37,12 @@ requests
 # geschätzt). Word (.docx) braucht nichts: nur Standardbibliothek.
 pypdf>=6,<7
 
+# Bilder lesen für die Vorschau auf dem Desk (core/bild_vorschau.py: Sashas
+# ASCII-Filter, 2026-10-10). Nur das Backend; die TUI importiert es nie.
+# Fehlt es, zeigt die Kachel „Pillow fehlt", alles andere läuft. Getestet
+# mit 12.3.0.
+Pillow>=12.3,<13
+
 # Recurrence-Rules (iCal RRULE) für Routinen im Kalender-System
 python-dateutil
 

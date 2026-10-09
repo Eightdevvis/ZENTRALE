@@ -97,11 +97,11 @@ def test_obsidian_lagen_bleiben_wenn_nicht_bewegt():
 
 
 def test_fremde_knoten_bleiben_und_sind_nicht_bearbeitbar():
-    schreibe("f", {"nodes": [{"id": "g", "type": "file", "file": "bild.png", "x": 0, "y": 0,
+    schreibe("f", {"nodes": [{"id": "g", "type": "file", "file": "plan.pdf", "x": 0, "y": 0,
                               "width": 100, "height": 100}],
                    "edges": [], "zusatz": {"bleibt": True}})
     d = desk.laden("f")
-    assert d["elemente"][0]["art"] == "fremd" and d["elemente"][0]["titel"] == "bild.png"
+    assert d["elemente"][0]["art"] == "fremd" and d["elemente"][0]["titel"] == "plan.pdf"
     d["elemente"][0]["text"] = "versuch"
     desk.speichern("f", d["elemente"], [], d["stand"])
     roh = lies("f")
@@ -279,8 +279,10 @@ def test_ansicht_neuer_desk_zettel_anlegen_ablegen_bearbeiten(ansicht):
     d.taste(10)
     assert D["ebene"] == "canvas" and D["desk"] == "Elektronik"
     d.draw_desk(2, 0, 26, 100)
-    d.taste(ord("+"))
-    assert D["canvas"].modus == "greifen"
+    d.taste(ord("+"))                             # Wähler: zettel | bild
+    assert [a.name for a in D["art_wahl"]["arten"]] == ["notiz", "bild"]
+    d.taste(10)
+    assert D["art_wahl"] is None and D["canvas"].modus == "greifen"
     d.taste(curses.KEY_RIGHT)
     d.taste(10)                                   # ablegen → gespeichert
     assert ("PUT", "/api/desk/Elektronik") in d.aufrufe

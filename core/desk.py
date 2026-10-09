@@ -24,8 +24,12 @@
 # Zettel, Art „notiz", erste Zeile = Titel. Ein Text-Knoten mit
 # `zentrale_kachel` ist eine Kachel (Art „kachel", Verweis auf ein Objekt
 # einer anderen App) — Text und Zusatzfeld bleiben unangetastet, nur die
-# Lage ändert sich. Alles andere (file, link, group …) kommt als Art
-# „fremd" an: bleibt, wie es ist, lässt sich verschieben und verbinden,
+# Lage ändert sich. Ein file-Knoten, dessen Datei ein Bild ist, ist ein
+# Bild (Art „bild", 2026-10-10): `file` relativ zum Desk-Ordner, damit
+# Obsidian das echte Bild zeigt (core/desk_bild.py legt es nach bilder/).
+# Eigene Zusatzfelder nur mit Vorsilbe: `zentrale_titel` (sonst gilt der
+# Dateiname) und `zentrale_bildmodus` (mono/farbe der Vorschau im Terminal).
+# Alles andere (file, link, group …) kommt als Art „fremd" an: bleibt, wie es ist, lässt sich verschieben und verbinden,
 # nicht bearbeiten.
 # Felder, die die TUI nicht kennt (color …), bleiben unverändert stehen.
 #
@@ -59,6 +63,11 @@ _KENNUNG = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
 # „Kacheln", entschieden 2026-10-09). App-Namen: fokus (Listen), graph,
 # kalender. Dieses Modul legt keine Kacheln an und ändert sie nie.
 KACHEL = "zentrale_kachel"
+# Bild-Knoten (2026-10-10). Endungen, die Pillow liest UND Obsidian zeigt.
+BILD_ENDUNGEN = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")
+TITEL = "zentrale_titel"
+BILDMODUS = "zentrale_bildmodus"
+BILDMODI = ("mono", "farbe")
 SEITEN = ("top", "right", "bottom", "left")
 
 
@@ -158,6 +167,11 @@ def _element(knoten) -> dict | None:
     elif knoten.get("type") == "text":
         el["art"] = "notiz"
         el["text"] = str(knoten.get("text") or "")
+    elif knoten.get("type") == "file" and ist_bild(knoten.get("file")):
+        el["art"] = "bild"
+        el["datei"] = knoten["file"]
+        el["titel"] = str(knoten.get(TITEL) or "")
+        el["modus"] = knoten.get(BILDMODUS) if knoten.get(BILDMODUS) in BILDMODI else "mono"
     else:
         typ = str(knoten.get("type") or "?")
         el["art"] = "fremd"
@@ -165,6 +179,41 @@ def _element(knoten) -> dict | None:
         el["titel"] = str(knoten.get("label") or knoten.get("file")
                           or knoten.get("url") or typ)
     return el
+
+
+def ist_bild(datei) -> bool:
+    return isinstance(datei, str) and datei.lower().endswith(BILD_ENDUNGEN)
+
+
+def datei_pruefen(datei) -> str:
+    """Pfad eines Bildes, relativ zum Desk-Ordner, ohne Weg hinaus."""
+    d = str(datei or "").replace("\\", "/").strip()
+    teile = d.split("/")
+    if not d or d.startswith("/") or any(t in ("", ".", "..") for t in teile) \
+            or not ist_bild(d) or len(d) > 300:
+        raise DeskFehler("bild-datei ungültig")
+    return d
+
+
+def _bild_felder(k, el):
+    """Titel und Modus eines Bildes aus der TUI in den Knoten (nur, was
+    sie mitschickt; leerer Titel = wieder der Dateiname)."""
+    if "titel" in el:
+        titel = el["titel"]
+        if not isinstance(titel, str) or len(titel) > 200:
+            raise DeskFehler("titel zu lang oder kein text")
+        titel = " ".join(titel.split())
+        if titel:
+            k[TITEL] = titel
+        else:
+            k.pop(TITEL, None)
+    if "modus" in el:
+        if el["modus"] not in BILDMODI:
+            raise DeskFehler("modus: mono oder farbe")
+        if el["modus"] == "mono":
+            k.pop(BILDMODUS, None)
+        else:
+            k[BILDMODUS] = el["modus"]
 
 
 def _verbindung(kante, ids) -> dict | None:
@@ -246,9 +295,12 @@ def _knoten_aus(el, alt) -> dict:
     lage = {"x": _ganz(el.get("x")), "y": _ganz(el.get("y")),
             "w": _ganz(el.get("w"), 3, 2000), "h": _ganz(el.get("h"), 3, 2000)}
     if alt is None:
-        if el.get("art") != "notiz":
-            raise DeskFehler("neu anlegen geht nur mit notizen")
-        k = {"id": el["id"], "type": "text", "text": ""}
+        if el.get("art") == "bild":
+            k = {"id": el["id"], "type": "file", "file": datei_pruefen(el.get("datei"))}
+        elif el.get("art") == "notiz":
+            k = {"id": el["id"], "type": "text", "text": ""}
+        else:
+            raise DeskFehler("neu anlegen geht nur mit notizen und bildern")
         alte_lage = None
     else:
         k = dict(alt)
@@ -261,6 +313,8 @@ def _knoten_aus(el, alt) -> dict:
         if not isinstance(text, str) or len(text) > TEXT_GRENZE:
             raise DeskFehler("notiz-text zu lang oder kein text")
         k["text"] = text
+    if k.get("type") == "file" and ist_bild(k.get("file")):
+        _bild_felder(k, el)
     return k
 
 

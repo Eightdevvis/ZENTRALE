@@ -19,6 +19,12 @@ soll (z. B. ein Wand-Display ohne Terminal). Die Gestaltung (Bernstein,
 Klavier-Panel, ASCII-Exhibit) und `ascii.js` (Bild→ASCII im Canvas) sind die
 wertvollsten Stücke.
 
+**Lebt weiter (2026-10-10):** der Bild→ASCII-Filter (`canvasToAscii` aus
+`ascii.js` und der Foto-Filter aus `monolith.html`: Auto-Levels 1 %/99 %,
+Rampe ` .,:;-~=+ox*#%8B@`, mono/farbe) ist nach Python übertragen in
+`core/bild_vorschau.py` — die Vorschau der Bilder auf dem Desk
+([desk_view.md](../system/desk_view.md) „Bilder").
+
 **Woran sie hing:**
 - Flask-Routen `/`, `/monolith` (`render_template`, `ki_aus`-Flag aus
   `ai_backends.lokale_ki_aus()`), `/api/photos`, `/api/photos/<name>` (Ordner

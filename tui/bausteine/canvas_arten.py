@@ -7,7 +7,8 @@
 #                                 eine Zeile ist ein str oder [(text, rolle)]
 #   modal(element)             -> ein Bearbeiten-Modal oder None
 #   neu(id, x, y)              -> ein frisches Element (nur Arten, die man
-#                                 mit + anlegen kann)
+#                                 mit + anlegen kann; `neu_label` = Name im
+#                                 Wähler von +)
 # Ein Modal hat: titel, taste(ch) -> None|"speichern"|"abbrechen",
 # anzeige(w, h) -> (zeilen, (cursor_zeile, cursor_spalte)), tasten() ->
 # [(taste, was)], aenderungen() -> dict (wird ins Element übernommen).
@@ -31,15 +32,18 @@
 # „kachel" registriert ist, zeichnet „fremd" ihn (typ + Rückfall).
 # Eine Kachel-Art wird hier registriert: `zeichne` zeigt die `zeilen`, die
 # die ANSICHT über `POST /api/kachel` geholt und am Element zwischengelegt
-# hat (nie der Canvas selbst), `bei_enter` meldet („oeffnen", ref) — die
-# Ansicht schickt das an `POST /api/kachel/aktion`.
+# hat (nie der Canvas selbst), `oeffnen` (Taste o) meldet („oeffnen", ref)
+# — die Ansicht schickt das an `POST /api/kachel/aktion`. So gebaut ist
+# schon die Art „bild" (canvas_bild.py, 2026-10-10).
 # Langer Inhalt (z. B. eine Kalender-Kachel) blättert über `blaettern` wie
 # der Zettel unten.
 
 try:
     from tui.bausteine.textfeld import Textfeld
+    from tui.bausteine.canvas_bild import Bild
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     from bausteine.textfeld import Textfeld
+    from bausteine.canvas_bild import Bild
 
 
 def umbrechen(text, breite):
@@ -99,6 +103,7 @@ class Notiz:
     aus farben.ROLES, keine eigene Farbe (2026-10-09)."""
     name = "notiz"
     rolle = "amber"
+    neu_label = "zettel"
     BREITE, HOEHE = 24, 6
 
     def neu(self, eid, x, y):
@@ -146,6 +151,6 @@ class Fremd:
 
 def standard_arten(arten):
     """Die Arten, die jede App mit Canvas heute kennt, in `arten` eintragen."""
-    for art in (Notiz(), Fremd()):
+    for art in (Notiz(), Bild(), Fremd()):
         arten.registrieren(art)
     return arten

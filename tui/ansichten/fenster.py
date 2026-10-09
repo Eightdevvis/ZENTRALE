@@ -34,7 +34,8 @@ def in_text_entry(z):
         return True
     DESK = getattr(z, "DESK", None)       # Desk View (2026-10-09): Name/Modal = Text
     if DESK and DESK["active"]:
-        return DESK["name"] is not None or DESK["modal"] is not None
+        return DESK["name"] is not None or DESK["modal"] is not None \
+            or (DESK.get("bild_wahl") or {}).get("pfad") is not None
     if AI["active"]:
         # Ganzes Panel ist Prompt-Eingabe → '/' bleibt ein Zeichen, öffnet
         # nicht die Befehlszeile. (Bei offener Erlaubnis-Frage ignoriert der
@@ -86,7 +87,17 @@ def current_ctx(z):
             return None
         if D["ebene"] == "wahl":
             return "desk:wahl"
-        modus = D["canvas"].modus if D["canvas"] else "ruhe"
+        # Wähler hinter + (2026-10-10): Art, dann Bild; Pfad tippen = Freitext.
+        if D.get("bild_wahl") is not None:
+            return None if D["bild_wahl"].get("pfad") is not None else "desk:neu"
+        if D.get("art_wahl") is not None:
+            return "desk:neu"
+        c = D["canvas"]
+        modus = c.modus if c else "ruhe"
+        if modus == "ruhe" and c is not None:
+            fokus = c.element(c.fokus)
+            if fokus is not None and fokus.get("art") == "bild":
+                return "desk:bild"          # o öffnen, f mono/farbe
         return "desk:" + {"ruhe": "canvas"}.get(modus, modus)
     if AI["active"]:
         return "ai"

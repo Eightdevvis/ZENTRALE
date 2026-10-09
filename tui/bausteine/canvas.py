@@ -21,9 +21,15 @@
 # die Registrierung — eine neue Art braucht keinen Umbau hier
 # (Beispiele: tui/bausteine/canvas_arten.py). Optional:
 #   rolle                      Farbrolle des Rahmens, solange nicht gewählt
-#   bei_enter(element)         -> None (enter greift, wie beim Zettel) oder
-#                              eine Aktion, die als Ergebnis „aktion" zur
-#                              Ansicht geht; die Art entscheidet
+#   oeffnen(element)           -> None oder eine Aktion: Taste `o` auf dem
+#                              Kasten meldet sie als Ergebnis „aktion" an die
+#                              Ansicht (Bild im Betrachter, Kachel in ihrer
+#                              App). Enter greift IMMER — jedes Element ist
+#                              gleich zu verschieben (2026-10-10).
+#   taste(element, zeichen)    -> True, wenn die Art mit einer eigenen Taste
+#                              (z. B. `f` beim Bild: mono/farbe) das Element
+#                              geändert hat; der Canvas meldet „geaendert"
+#   neu_label                  Name im Wähler von `+` (siehe unten)
 #   blaettern(element, schritt) Bild↑/Bild↓ auf dem gewählten Kasten: im
 #                              Inneren blättern (eigene Lage am Element unter
 #                              „_oben", wird nie gespeichert). Hier docken
@@ -33,7 +39,13 @@
 # memory/system/desk_view.md):
 #   ruhe       ↑↓←→ Fokus springt zum nächsten Kasten in der Richtung,
 #              enter greift, + legt einen neuen an (gleich gegriffen),
-#              e bearbeiten, v verbinden, d löschen (Rückfrage), esc zurück
+#              e bearbeiten, v verbinden, d löschen (Rückfrage), o öffnen
+#              (wenn die Art es kann), esc zurück
+#
+# `+`: hat die Ansicht eine Fabrik `neu` hereingegeben, legt der Canvas
+# selbst an. Ohne Fabrik meldet er „neu_waehlen" — die Ansicht zeigt einen
+# Wähler der Arten mit `neu_label` (Arten.anlegbar()) und legt das Gewählte
+# mit `neu_ablegen(element)` hin (2026-10-10: Zettel ODER Bild).
 #   greifen    ↑↓←→ schiebt um eine Zelle, enter legt ab, esc setzt zurück
 #              (ein neuer verschwindet wieder)
 #   verbinden  ↑↓←→ springt mit dem Ziel, die Schnur wird vorgezeigt,
@@ -56,9 +68,10 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
 #   "geaendert"   Elemente/Verbindungen sind anders → speichern (grund sagt was)
 #   "bearbeiten"  das Modal der Art für `element` öffnen
 #   "zu"          esc in Ruhe: der Canvas will geschlossen werden
-#   "aktion"      enter auf einem Kasten, dessen Art eine eigene Aktion hat
-#                 (`bei_enter` der Art, z. B. eine Kachel: („oeffnen", ref)
-#                 → die Ansicht reicht es weiter); grund = was die Art meldet
+#   "aktion"      o auf einem Kasten, dessen Art etwas öffnen kann
+#                 (`oeffnen` der Art, z. B. ein Bild: ("bild_oeffnen", datei)
+#                 → die Ansicht führt es aus); grund = was die Art meldet
+#   "neu_waehlen" + ohne Fabrik: die Ansicht soll die Arten zur Wahl stellen
 Ergebnis = namedtuple("Ergebnis", "art element grund")
 
 PAN_X, PAN_Y = 6, 3                     # so weit schiebt shift+Pfeil den Ausschnitt
@@ -84,7 +97,7 @@ _PFEILE = {curses.KEY_UP: "hoch", curses.KEY_DOWN: "runter",
 # ESC [ 1 ; 2 A … (xterm-Stil, Modifier 2 = Shift).
 _SHIFT_FOLGE = {"[1;2A": "hoch", "[1;2B": "runter", "[1;2C": "rechts", "[1;2D": "links"}
 _BUCHSTABEN = {ord("+"): "neu", ord("e"): "bearbeiten", ord("v"): "verbinden",
-               ord("d"): "loeschen", curses.KEY_DC: "loeschen",
+               ord("d"): "loeschen", curses.KEY_DC: "loeschen", ord("o"): "oeffnen",
                curses.KEY_PPAGE: "blaettern_hoch", curses.KEY_NPAGE: "blaettern_runter",
                ord("j"): "ja", ord("y"): "ja", ord("n"): "nein",
                10: "enter", 13: "enter", curses.KEY_ENTER: "enter", 27: "esc"}
@@ -122,7 +135,13 @@ def taste_deuten(ch, name=None):
         return "pan_" + p
     if ch in _PFEILE:
         return _PFEILE[ch]
-    return _BUCHSTABEN.get(ch)
+    if ch in _BUCHSTABEN:
+        return _BUCHSTABEN[ch]
+    # Andere druckbare Zeichen gehen als „zeichen:x" an die Art (eigene
+    # Tasten wie `f` beim Bild); der Canvas selbst kennt sie nicht.
+    if 33 <= ch < 127:
+        return "zeichen:" + chr(ch)
+    return None
 
 
 def neue_id():
@@ -161,6 +180,11 @@ class Arten:
 
     def gibt_es(self, name):
         return name in self._arten
+
+    def anlegbar(self):
+        """Arten, die `+` zur Wahl stellt (mit `neu_label`), in der
+        Reihenfolge des Registrierens."""
+        return [a for a in self._arten.values() if getattr(a, "neu_label", None)]
 
 
 # ── Der Canvas ────────────────────────────────────────────────────────
@@ -264,15 +288,13 @@ class Canvas:
                 self.fokus = neu["id"]
                 self.folgen(neu)
             return None
-        if ev == "neu" and self.neu_fabrik:
+        if ev == "neu":
+            if self.neu_fabrik is None:
+                return Ergebnis("neu_waehlen", None, "")
             mx, my = self.mitte_des_ausschnitts()
             e = self.neu_fabrik(mx, my)
             if e:
-                e["x"], e["y"] = mx - e["w"] // 2, my - e["h"] // 2
-                self.elemente.append(e)
-                self.fokus = e["id"]
-                self.griff = {"id": e["id"], "x": e["x"], "y": e["y"], "neu": True}
-                self.modus = "greifen"
+                self.neu_ablegen(e)
             return None
         if ev == "esc":
             return Ergebnis("zu", None, "")
@@ -283,11 +305,17 @@ class Canvas:
             if blaettern:
                 blaettern(fokus, -1 if ev == "blaettern_hoch" else 1)
             return None
+        art = self.arten.holen(fokus.get("art"))
+        if ev == "oeffnen":
+            oeffnen = getattr(art, "oeffnen", None)
+            aktion = oeffnen(fokus) if oeffnen else None
+            return Ergebnis("aktion", fokus, aktion) if aktion is not None else None
+        if ev.startswith("zeichen:"):
+            eigene = getattr(art, "taste", None)
+            if eigene and eigene(fokus, ev[len("zeichen:"):]):
+                return Ergebnis("geaendert", fokus, "art")
+            return None
         if ev == "enter":
-            bei_enter = getattr(self.arten.holen(fokus.get("art")), "bei_enter", None)
-            aktion = bei_enter(fokus) if bei_enter else None
-            if aktion is not None:
-                return Ergebnis("aktion", fokus, aktion)
             self.griff = {"id": fokus["id"], "x": fokus["x"], "y": fokus["y"], "neu": False}
             self.modus = "greifen"
             # Oben liegen lassen, was man in der Hand hat (Reihenfolge = Stapel).
@@ -305,6 +333,16 @@ class Canvas:
             self.frage = {"was": "loeschen", "id": fokus["id"], "text": "löschen?"}
             self.modus = "frage"
         return None
+
+    def neu_ablegen(self, e):
+        """Ein frisches Element mitten in den Ausschnitt legen und gleich
+        greifen (enter legt ab = gespeichert, esc nimmt es wieder weg)."""
+        mx, my = self.mitte_des_ausschnitts()
+        e["x"], e["y"] = mx - e["w"] // 2, my - e["h"] // 2
+        self.elemente.append(e)
+        self.fokus = e["id"]
+        self.griff = {"id": e["id"], "x": e["x"], "y": e["y"], "neu": True}
+        self.modus = "greifen"
 
     def _greifen(self, ev):
         e = self.element(self.griff["id"])

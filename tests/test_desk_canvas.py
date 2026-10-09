@@ -56,7 +56,9 @@ def test_einfache_tasten():
     assert cv.taste_deuten(ord("e"), b"e") == "bearbeiten"
     assert cv.taste_deuten(ord("v"), b"v") == "verbinden"
     assert cv.taste_deuten(ord("d"), b"d") == "loeschen"
-    assert cv.taste_deuten(ord("q"), b"q") is None
+    assert cv.taste_deuten(ord("o"), b"o") == "oeffnen"
+    assert cv.taste_deuten(ord("q"), b"q") == "zeichen:q"
+    assert cv.taste_deuten(-1, b"") is None
 
 
 def test_esc_folgen():
@@ -359,9 +361,9 @@ def test_zettel_modal_aendert_den_text():
     assert m.aenderungen() == {"text": "alt!"}
 
 
-def test_enter_meldet_die_aktion_der_art_statt_zu_greifen():
-    """Eine Art mit `bei_enter` entscheidet selbst (Kachel: in der App
-    öffnen); der Zettel ohne Aktion wird weiter gegriffen."""
+def test_o_meldet_die_aktion_der_art_enter_greift_immer():
+    """2026-10-10: Enter greift JEDES Element (auch eine Kachel), `o` öffnet,
+    wenn die Art `oeffnen` hat; ein Zettel ohne `oeffnen` tut bei `o` nichts."""
     class Kachel:
         name = "kachel"
 
@@ -371,17 +373,54 @@ def test_enter_meldet_die_aktion_der_art_statt_zu_greifen():
         def modal(self, element):
             return None
 
-        def bei_enter(self, element):
+        def oeffnen(self, element):
             return ("oeffnen", element["kachel"]["ref"])
     c = leinwand([zettel("z", 0, 0),
                   {"id": "k", "art": "kachel", "x": 30, "y": 0, "w": 10, "h": 4,
                    "kachel": {"v": 1, "app": "fokus", "art": "liste", "ref": {"id": "l1"}}}])
     c.arten.registrieren(Kachel())
     c.fokus = "k"
-    erg = c.taste("enter")
+    erg = c.taste(cv.taste_deuten(ord("o"), b"o"))
     assert erg.art == "aktion" and erg.grund == ("oeffnen", {"id": "l1"}) and c.modus == "ruhe"
-    c.fokus = "z"
     assert c.taste("enter") is None and c.modus == "greifen"
+    c.taste("esc")
+    c.fokus = "z"
+    assert c.taste("oeffnen") is None and c.modus == "ruhe"
+
+
+def test_eigene_taste_der_art_meldet_geaendert():
+    class Schalter:
+        name = "schalter"
+
+        def zeichne(self, element, w, h):
+            return []
+
+        def modal(self, element):
+            return None
+
+        def taste(self, element, zeichen):
+            if zeichen != "f":
+                return False
+            element["an"] = not element.get("an")
+            return True
+    c = leinwand([{"id": "s", "art": "schalter", "x": 0, "y": 0, "w": 10, "h": 4}])
+    c.arten.registrieren(Schalter())
+    c.fokus = "s"
+    assert cv.taste_deuten(ord("f"), b"f") == "zeichen:f"
+    erg = c.taste("zeichen:f")
+    assert erg.art == "geaendert" and erg.grund == "art" and c.elemente[0]["an"] is True
+    assert c.taste("zeichen:x") is None
+
+
+def test_plus_ohne_fabrik_fragt_nach_der_art_und_legt_dann_ab():
+    c = leinwand(neu=False)
+    erg = c.taste("neu")
+    assert erg.art == "neu_waehlen" and c.modus == "ruhe"
+    notiz = c.arten.holen("notiz")
+    assert [a.name for a in c.arten.anlegbar()] == ["notiz", "bild"]
+    c.neu_ablegen(notiz.neu("n1", 0, 0))
+    assert c.modus == "greifen" and c.fokus == "n1"
+    assert c.taste("enter").grund == "neu"
 
 
 def test_kachel_ohne_registrierte_art_zeigt_den_rueckfall():

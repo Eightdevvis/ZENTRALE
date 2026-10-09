@@ -143,7 +143,10 @@ DESK = {"name": "Elektronik", "stand": "s1", "verbindungen": [], "elemente": [
     {"id": "o", "art": "notiz", "x": 0, "y": -10, "w": 10, "h": 4, "text": "oben"},
     {"id": "u", "art": "notiz", "x": 0, "y": 10, "w": 10, "h": 4, "text": "unten"},
     {"id": "l", "art": "notiz", "x": -30, "y": 0, "w": 10, "h": 4, "text": "links"},
-    {"id": "r", "art": "notiz", "x": 30, "y": 0, "w": 10, "h": 4, "text": "rechts"}]}
+    {"id": "r", "art": "notiz", "x": 30, "y": 0, "w": 10, "h": 4, "text": "rechts"},
+    # Bild (2026-10-10): eigener Zustand desk:bild (o öffnen, f mono/farbe).
+    {"id": "b", "art": "bild", "x": 30, "y": 10, "w": 14, "h": 6, "datei": "bilder/b.png",
+     "titel": "", "modus": "mono"}]}
 
 
 def antwort(pfad, methode):
@@ -154,6 +157,14 @@ def antwort(pfad, methode):
         d = SCHIRM._synth(pfad)
         if d is not None and not p.startswith("/api/graphs/reminders"):
             return copy.deepcopy(d)
+    if p == "/api/desk-bild/quellen":             # Bilder auf dem Desk (2026-10-10)
+        return {"quellen": [{"name": "foto.png", "pfad": "/x/Input/foto.png"}]}
+    if p.startswith("/api/desk-bild"):
+        if p == "/api/desk-bild/vorschau":
+            return {"status": "ok", "zeilen": [[["@", None], ["#", "#ff0000"]]]}
+        if p == "/api/desk-bild/oeffnen":
+            return {"pfad": "/gibt/es/nicht.png", "da": False, "betrachter": "system"}
+        return {"datei": "bilder/foto.png", "titel": "foto", "w": 20, "h": 8}
     if p.startswith("/api/desk"):                # Desk View (2026-10-09)
         if p == "/api/desk" and methode == "GET":
             return {"desks": [{"name": "Elektronik", "elemente": 5, "geaendert": 1.0}]}
@@ -404,6 +415,15 @@ def _desk_frage(u):
     _desk(u); zt.taste_verteilen(u, ord("d"))
 
 
+def _desk_bild(u):
+    _desk(u)
+    u.DESK["canvas"].fokus = "b"
+
+
+def _desk_neu(u):
+    _desk(u); zt.taste_verteilen(u, ord("+"))
+
+
 ZUSTAENDE = {
     "home": ("home", lambda u: None),
     "graph": ("graph", _graph),
@@ -431,6 +451,8 @@ ZUSTAENDE = {
     "desk:greifen": ("desk:greifen", _desk_greifen),
     "desk:verbinden": ("desk:verbinden", _desk_verbinden),
     "desk:frage": ("desk:frage", _desk_frage),
+    "desk:bild": ("desk:bild", _desk_bild),
+    "desk:neu": ("desk:neu", _desk_neu),
 }
 
 

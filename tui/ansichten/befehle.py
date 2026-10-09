@@ -168,8 +168,17 @@ CTX_KEYS = {
         ("↑↓", "select"), ("enter", "open"), ("n", "new desk"), ("esc", "close"),
     ],
     "desk:canvas": [
-        ("↑↓←→", "select"), ("enter", "grab"), ("+", "new note"), ("e", "edit"),
+        ("↑↓←→", "select"), ("enter", "grab"), ("+", "new"), ("e", "edit"),
         ("v", "connect"), ("d", "delete"), ("esc", "back"),
+    ],
+    # Ein Bild hat den Fokus (2026-10-10): o im Bildbetrachter öffnen,
+    # f Vorschau mono/farbe, e Titel.
+    "desk:bild": [
+        ("↑↓←→", "select"), ("enter", "grab"), ("o", "open"), ("f", "mono/colour"),
+        ("e", "title"), ("+", "new"), ("v", "connect"), ("d", "delete"), ("esc", "back"),
+    ],
+    "desk:neu": [
+        ("↑↓", "select"), ("enter", "take"), ("esc", "cancel"),
     ],
     "desk:greifen": [
         ("↑↓←→", "move"), ("enter", "drop"), ("esc", "cancel"),
@@ -194,6 +203,7 @@ CTX_TITLES = {
     "technik": "technik",
     "desk:wahl": "desk", "desk:canvas": "desk", "desk:greifen": "desk · greifen",
     "desk:verbinden": "desk · verbinden", "desk:frage": "desk",
+    "desk:bild": "desk · bild", "desk:neu": "desk · neu",
 }
 
 

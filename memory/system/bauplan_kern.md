@@ -88,6 +88,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `werkzeug_befund` | 1 | Was ein Werkzeug zurückgibt: Status (`[ergebnis: ok/fehlgeschlagen/…]`), Beleg und Fehlercode; feste Formen ERLEDIGT/ABGEBROCHEN; die Schiene des laufenden Werkzeug-Aufrufs |
 | `fehlercodes` | 1 | Die eine Tabelle der Fehlercodes der KI-Werkzeuge (Code → Ursache, was tun); `explain_error` liest sie |
 | `schreib_sicherung` | 1 | „Ganz oder gar nicht" für Dienste ohne eigenes Zurück: Dateien/Ordner vor dem Schreiben merken, bei Abbruch Byte für Byte zurücklegen |
+| `bild_vorschau` | 1 | Sashas ASCII-Filter (aus dem alten Browser-Frontend) in Python: Bild → Zeilen aus [Zeichen, Farbe] für Terminalzellen (2:1), Auto-Levels, mono/farbe, höchstens 32 Farben (xterm-256), LRU nach Datei-Stand; Pillow erst bei Bedarf |
 | `kalender` | 2 | Termine, Routinen, Konflikt-Alarm — die Fassade, Speicher austauschbar |
 | `kalender_zeitraum` | 2 | Relative Zeiträume („diese_woche") in Daten übersetzen |
 | `kalender_regel` | 2 | Wann eine Routine stattfindet (RRULE → Tage), eine Stelle für Fassade und .ics |
@@ -151,6 +152,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `browser_sitzung` | 2 | Ein Browser ohne Fenster (Chromium über Playwright) in eigenem Thread: je Gespräch eine Sitzung, Seite als Text + nummerierte Elemente, klicken/tippen/zurück, Bild; nur erlaubte Hosts, nie das eigene Netz, keine Downloads, 10 min Leerlauf → zu |
 | `morgenblick_bild` | 2 | Der Morgenblick als HTML: Gelände-SVG, Akte, Listen — deterministisch, alles escaped, Fraunces eingebettet |
 | `desk` | 2 | Desk View: eine `.canvas`-Datei (JSON Canvas 1.0) pro Desk in `desk_ordner` (Standard `data/desk/`): auflisten, anlegen, laden in Zellen (1 Spalte = 10 px, 1 Zeile = 20 px), ganz speichern mit `stand`-Schutz; Fremdes in der Datei bleibt stehen |
+| `desk_bild` | 2 | Bilder auf dem Desk: aus `~/Zentrale/Input` (oder einem Pfad) nach `<desk_ordner>/bilder/` kopieren, nur echte Bilder; Vorschau über `bild_vorschau` mit „weg"/„kein bild"; was die TUI zum Öffnen braucht (Pfad, `bild_betrachter`) |
 | `ai` | 3 | Ollama-Weg, Tool-Liste und -Ausführung, Erlaubnis-Abfrage, Prompt-Bausteine |
 | `ai_backends` | 3 | Wer denkt: lokal oder Cloud, Anbieter, Modell, Effort, Rundengrenze |
 | `cloud` | 3 | Anthropic-Weg |

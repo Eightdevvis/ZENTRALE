@@ -44,6 +44,7 @@ Was ihn ausmacht, wo der Code liegt und wie ein neues Symbol gebaut wird.
 | Symbole der Chat-Seitenleiste (Braille, 4×2 Felder = 8×8 Punkte): `BILDER`, `codieren`, `symbol_zellen` | `tui/ansichten/symbole.py` |
 | Probe-Bild wie im Terminal (Sextanten als Blöcke, Braille aus der Ersatzschrift): `python3 scripts/icon_probe.py ZIEL` | `scripts/icon_probe.py` |
 | Farbpaare anlegen (begrenztes Budget, 24 Bit wenn möglich): `Kontext.pix_attr`, `pix_farbe`; Modus `ZENTRALE_PIXEL=half` für Terminals ohne Sextanten | `tui/ansichten/kontext.py` |
+| Fotos als Zeichen (Sashas ASCII-Filter aus dem Browser-Frontend, 2026-10-10): Rampe ` .,:;-~=+ox*#%8B@`, Auto-Levels, mono/farbe, höchstens 32 Farben je Bild (xterm-256, damit die Paare reichen); die Ansicht setzt Farbe als Vordergrund auf den Theme-Grund (`pix_attr(fg, C["pix_bg"])`), auf hellem Grund dreht sie die Rampe um | `core/bild_vorschau.py` (Backend, Pillow), gezeichnet in `tui/ansichten/desk.py` |
 
 Alle Pixel-Funktionen sind **curses-frei**: sie liefern Zellen
 `(zeichen, fg_rgb, bg_rgb)`, die Ansicht setzt sie mit

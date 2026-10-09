@@ -12,30 +12,35 @@
 
 import curses
 import json
+import os
 import urllib.error
 import urllib.parse
+import urllib.request
 
+from . import basis, bild_betrachter
 from .basis import api_call
 
 try:
     from tui.bausteine import canvas as cv
+    from tui.bausteine import canvas_bild
     from tui.bausteine.canvas_arten import standard_arten
     from tui.bausteine.textfeld import Textfeld
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     from bausteine import canvas as cv
+    from bausteine import canvas_bild
     from bausteine.canvas_arten import standard_arten
     from bausteine.textfeld import Textfeld
 
 # Rolle des Canvas → Farbrolle der TUI (ansichten/farben.py).
 FARBEN = {"raster": "faint", "schnur": "dim", "schnur_vor": "acc", "rahmen": "dim",
           "fokus": "acc", "griff": "warn", "ziel": "acc", "text": "ink", "leise": "faint",
-          "notiz_titel": "amberhi"}
-FETT = {"fokus", "griff", "ziel", "notiz_titel"}
+          "notiz_titel": "amberhi", "bild": "ink", "bild_titel": "bright"}
+FETT = {"fokus", "griff", "ziel", "notiz_titel", "bild_titel"}
 
 # Was die Hinweiszeile im Kasten je Zustand zeigt. Die Fußleiste ganz unten
 # kommt aus befehle.CTX_KEYS — „shift+↑↓←→" kann fussleiste.codes() (noch)
 # nicht lesen, darum steht das Schieben nur hier.
-HINWEIS = {"ruhe": "shift+↑↓←→ move view · pgup/pgdn scroll note",
+HINWEIS = {"ruhe": "shift+↑↓←→ move view · pgup/pgdn scroll note · o open image · f colour",
            "greifen": "shift+↑↓←→ move view (note comes along)",
            "verbinden": "↑↓←→ pick target · enter/v connect · esc cancel"}
 
@@ -61,12 +66,17 @@ class Desk:
             "modal": None, "modal_id": None,
             "zentrieren": False,
             "msg": "",
+            # Wähler hinter `+` (2026-10-10): erst die Art, beim Bild dann
+            # die Datei (Input/ oder Pfad tippen).
+            "art_wahl": None,           # {"arten": [...], "sel": i}
+            "bild_wahl": None,          # {"quellen": [...], "sel": i, "pfad": Textfeld|None}
         }
 
     # ── Daten ─────────────────────────────────────────────────────────
     def oeffnen(self):
         D = self.DESK
-        D.update(active=True, ebene="wahl", name=None, modal=None, canvas=None, msg="")
+        D.update(active=True, ebene="wahl", name=None, modal=None, canvas=None, msg="",
+                 art_wahl=None, bild_wahl=None)
         self._liste_laden()
 
     def _liste_laden(self):
@@ -96,12 +106,11 @@ class Desk:
         if not isinstance(d, dict):
             D["msg"] = "„%s\" geht nicht auf" % name
             return
-        notiz = self.arten.holen("notiz")
+        # Ohne Fabrik meldet der Canvas bei + „neu_waehlen": Zettel oder Bild.
         D.update(ebene="canvas", desk=d.get("name", name), stand=d.get("stand"), msg="",
-                 zentrieren=True,
+                 zentrieren=True, art_wahl=None, bild_wahl=None,
                  canvas=cv.Canvas(self.arten, list(d.get("elemente") or []),
-                                  list(d.get("verbindungen") or []),
-                                  neu=lambda x, y: notiz.neu(cv.neue_id(), x, y)))
+                                  list(d.get("verbindungen") or [])))
 
     def _anlegen(self, name):
         D = self.DESK
@@ -118,7 +127,9 @@ class Desk:
         liegen und das nächste Speichern schickt es mit."""
         D = self.DESK
         c = D["canvas"]
-        body = {"elemente": c.elemente, "verbindungen": c.verbindungen_mit_seiten(),
+        # Felder mit „_" legt nur die Ansicht zwischen (Vorschau, Blätterlage).
+        elemente = [{k: v for k, v in e.items() if not k.startswith("_")} for e in c.elemente]
+        body = {"elemente": elemente, "verbindungen": c.verbindungen_mit_seiten(),
                 "stand": D["stand"]}
         try:
             d = api_call(_pfad(D["desk"]), "PUT", body)
@@ -157,11 +168,15 @@ class Desk:
         folge = self._esc_folge() if ch == 27 else None
         if folge:                        # Alt+… / Escape-Folge: nie „abbrechen"
             if D["canvas"] is not None and D["ebene"] == "canvas" and D["modal"] is None \
-                    and D["name"] is None:
+                    and D["name"] is None and D["art_wahl"] is None and D["bild_wahl"] is None:
                 self._canvas_ereignis(cv.esc_folge(folge))
             return None
         if D["modal"] is not None:
             return self._taste_modal(ch)
+        if D["bild_wahl"] is not None:
+            return self._taste_bild_wahl(ch)
+        if D["art_wahl"] is not None:
+            return self._taste_art_wahl(ch)
         if D["name"] is not None:
             return self._taste_name(ch)
         if D["ebene"] == "wahl":
@@ -212,9 +227,150 @@ class Desk:
             D["modal_id"] = erg.element["id"]
         elif erg.art == "geaendert":
             self.speichern()
-        # „aktion" (enter auf einer Kachel, („oeffnen", ref)) kommt erst mit
-        # der ersten Kachel-Art: dann hier POST /api/kachel/aktion
-        # (hub_bauplan.md „Kacheln"). Heute meldet keine Art eine Aktion.
+        elif erg.art == "neu_waehlen":
+            D["art_wahl"] = {"arten": self.arten.anlegbar(), "sel": 0}
+        elif erg.art == "aktion":
+            was = erg.grund[0] if isinstance(erg.grund, tuple) and erg.grund else None
+            if was == "bild_oeffnen":
+                self.bild_oeffnen(erg.grund[1])
+            # Kacheln („oeffnen", ref) gehen später an POST /api/kachel/aktion
+            # (hub_bauplan.md „Kacheln").
+
+    # ── + : Art wählen, Bild wählen (2026-10-10) ──────────────────────
+    def _taste_art_wahl(self, ch):
+        D = self.DESK
+        w = D["art_wahl"]
+        if ch == curses.KEY_UP:
+            w["sel"] = max(0, w["sel"] - 1)
+        elif ch == curses.KEY_DOWN:
+            w["sel"] = min(len(w["arten"]) - 1, w["sel"] + 1)
+        elif ch in (10, 13, curses.KEY_ENTER, ord("+")):
+            art = w["arten"][w["sel"]] if w["arten"] else None
+            D["art_wahl"] = None
+            if art is None:
+                return None
+            if art.name == "bild":
+                self._bild_wahl_oeffnen()
+            else:
+                D["canvas"].neu_ablegen(art.neu(cv.neue_id(), 0, 0))
+        elif ch == 27:
+            D["art_wahl"] = None
+        return None
+
+    def _bild_wahl_oeffnen(self):
+        D = self.DESK
+        try:
+            quellen = (api_call("/api/desk-bild/quellen") or {}).get("quellen") or []
+        except Exception as e:
+            quellen = []
+            D["msg"] = "bilder nicht lesbar: " + self._fehlertext(e)
+        D["bild_wahl"] = {"quellen": quellen, "sel": 0, "pfad": None}
+
+    def _taste_bild_wahl(self, ch):
+        D = self.DESK
+        w = D["bild_wahl"]
+        if w["pfad"] is not None:                   # Pfad wird getippt
+            if ch in (10, 13, curses.KEY_ENTER):
+                text = w["pfad"].text.strip()
+                if text:
+                    self._bild_hinlegen(text)
+                else:
+                    w["pfad"] = None
+            elif w["pfad"].taste(ch) == "abbrechen":
+                w["pfad"] = None
+            return None
+        n = len(w["quellen"])                       # letzte Zeile: Pfad tippen
+        if ch == curses.KEY_UP:
+            w["sel"] = max(0, w["sel"] - 1)
+        elif ch == curses.KEY_DOWN:
+            w["sel"] = min(n, w["sel"] + 1)
+        elif ch in (10, 13, curses.KEY_ENTER):
+            if w["sel"] < n:
+                self._bild_hinlegen(w["quellen"][w["sel"]]["name"])
+            else:
+                w["pfad"] = Textfeld("")
+        elif ch == 27:
+            D["bild_wahl"] = None
+        return None
+
+    def _bild_hinlegen(self, quelle):
+        """Bild in den Desk-Ordner kopieren lassen, dann als neues Element
+        in die Hand (enter legt ab und speichert)."""
+        D = self.DESK
+        try:
+            info = api_call("/api/desk-bild", "POST", {"quelle": quelle}, timeout=15) or {}
+        except Exception as e:
+            D["msg"] = "bild nicht übernommen: " + self._fehlertext(e)
+            D["bild_wahl"] = None
+            return
+        D["bild_wahl"] = None
+        bild = self.arten.holen("bild")
+        D["canvas"].neu_ablegen(bild.neu(cv.neue_id(), 0, 0, info.get("datei", ""),
+                                         int(info.get("w") or 34), int(info.get("h") or 12)))
+        D["msg"] = ""
+
+    # ── Bilder: Vorschau holen, öffnen ────────────────────────────────
+    def _invert(self):
+        """Auf hellem Grund (Tag) ist dicht = dunkel: Rampe umdrehen."""
+        bg = self.z.C.get("pix_bg")
+        return bool(bg) and sum(bg) / 3 > 128
+
+    def vorschauen_holen(self, c):
+        """Für jedes sichtbare Bild ohne passende Vorschau eine holen und am
+        Element zwischenlegen (der Baustein fragt nie das Backend). Das
+        Backend merkt sich fertige Vorschauen; gezeichnet wird von hier."""
+        invert = self._invert()
+        for e in c.elemente:
+            if e.get("art") != "bild":
+                continue
+            if e["x"] + e["w"] <= c.vx or e["x"] >= c.vx + c.vw \
+                    or e["y"] + e["h"] <= c.vy or e["y"] >= c.vy + c.vh:
+                continue
+            sp, ze = canvas_bild.vorschau_groesse(e)
+            fuer = (e.get("datei"), sp, ze, e.get("modus") or "mono", invert)
+            if e.get("_vorschau_fuer") == fuer:
+                continue
+            e["_vorschau_fuer"] = fuer
+            try:
+                e["_vorschau"] = api_call("/api/desk-bild/vorschau", "POST",
+                                          {"datei": fuer[0], "w": sp, "h": ze,
+                                           "modus": fuer[3], "invert": invert}, timeout=10)
+            except Exception as ex:
+                e["_vorschau"] = {"status": "fehler", "text": "keine vorschau: " + self._fehlertext(ex)}
+
+    def bild_oeffnen(self, datei):
+        """Im Bildbetrachter DIESES Rechners öffnen. Liegt das Bild hier nicht
+        (TUI auf einem anderen Rechner als das Backend), erst holen."""
+        D = self.DESK
+        try:
+            info = api_call("/api/desk-bild/oeffnen", "POST", {"datei": datei}) or {}
+        except Exception as e:
+            D["msg"] = "bild geht nicht auf: " + self._fehlertext(e)
+            return
+        pfad = info.get("pfad") or ""
+        if not (info.get("da") and os.path.isfile(pfad)):
+            if not info.get("da"):
+                D["msg"] = "bild fehlt: " + str(datei)
+                return
+            try:
+                pfad = self._bild_holen(datei)
+            except Exception as e:
+                D["msg"] = "bild nicht geholt: " + self._fehlertext(e)
+                return
+        try:
+            prog = bild_betrachter.oeffnen([pfad], info.get("betrachter") or "system")
+        except OSError as e:
+            D["msg"] = str(e)
+            return
+        D["msg"] = "geöffnet mit " + prog
+
+    @staticmethod
+    def _bild_holen(datei):
+        url = basis.BASE_URL + "/api/desk-bild/datei?datei=" + urllib.parse.quote(datei)
+        ziel = os.path.join(bild_betrachter.zwischenordner(), os.path.basename(datei))
+        with urllib.request.urlopen(url, timeout=30) as r, open(ziel, "wb") as f:
+            f.write(r.read())
+        return ziel
 
     def _taste_modal(self, ch):
         D = self.DESK
@@ -284,9 +440,10 @@ class Desk:
         if D["zentrieren"]:
             self._zentrieren(c)
             D["zentrieren"] = False
+        self.vorschauen_holen(c)
         for j, stuecke in enumerate(c.bild(ch_, cw)):
             for x, text, rolle in stuecke:
-                attr = C.get(FARBEN.get(rolle, rolle), 0)
+                attr = self._farbe(rolle)
                 if rolle in FETT:
                     attr |= curses.A_BOLD
                 z.safe_addstr(top + 1 + j, mx + 1 + x, text, attr)
@@ -297,6 +454,62 @@ class Desk:
         z.addclip(top + h - 2, mx + w - 2 - len(lage), lage, len(lage), C["faint"])
         if D["modal"] is not None:
             self._draw_modal(top, mx, h, w)
+        elif D["bild_wahl"] is not None:
+            self._draw_bild_wahl(top, mx, h, w)
+        elif D["art_wahl"] is not None:
+            self._draw_art_wahl(top, mx, h, w)
+
+    def _farbe(self, rolle):
+        """Rolle → curses-Attribut. „#rrggbb" (Bild in Farbe) wird ein
+        Pixel-Farbpaar auf dem Theme-Grund; ohne 256 Farben normale Schrift."""
+        C = self.z.C
+        if rolle and rolle[0] == "#" and len(rolle) == 7:
+            if not C.get("pix_bg"):
+                return C.get("ink", 0)
+            rgb = (int(rolle[1:3], 16), int(rolle[3:5], 16), int(rolle[5:7], 16))
+            return self.z.pix_attr(rgb, C["pix_bg"])
+        return C.get(FARBEN.get(rolle, rolle), 0)
+
+    def _kasten(self, top, mx, h, w, titel, zeilen, sel, fuss, mh=None):
+        """Kleiner Wähler mittig über der Fläche."""
+        C, z = self.z.C, self.z
+        mw = max(24, min(56, w - 6))
+        mh = mh or max(5, min(len(zeilen) + 4, h - 4))
+        y0 = top + (h - mh) // 2
+        x0 = mx + (w - mw) // 2
+        for j in range(mh):
+            z.safe_addstr(y0 + j, x0, " " * mw, C["ink"])
+        z.draw_box(y0, x0, mh, mw, titel, C["acc"])
+        platz = mh - 4
+        oben = max(0, min(sel - platz + 1, len(zeilen) - platz)) if sel >= platz else 0
+        for j, text in enumerate(zeilen[oben:oben + platz]):
+            gewaehlt = oben + j == sel
+            z.addclip(y0 + 1 + j, x0 + 2, ("› " if gewaehlt else "  ") + text, mw - 4,
+                      (C["acc"] | curses.A_BOLD) if gewaehlt else C["ink"])
+        z.addclip(y0 + mh - 2, x0 + 2, fuss, mw - 4, C["faint"])
+        return y0, x0, mw, mh
+
+    def _draw_art_wahl(self, top, mx, h, w):
+        wahl = self.DESK["art_wahl"]
+        self._kasten(top, mx, h, w, "neu", [a.neu_label for a in wahl["arten"]],
+                     wahl["sel"], "enter take · esc cancel")
+
+    def _draw_bild_wahl(self, top, mx, h, w):
+        C, z = self.z.C, self.z
+        wahl = self.DESK["bild_wahl"]
+        zeilen = [q["name"] for q in wahl["quellen"]] + ["pfad tippen …"]
+        leer = [] if wahl["quellen"] else ["(keine bilder in ~/Zentrale/Input)"]
+        if wahl["pfad"] is None:
+            self._kasten(top, mx, h, w, "bild aus Input", leer + zeilen,
+                         wahl["sel"] + len(leer), "enter take · esc cancel")
+            return
+        y0, x0, mw, mh = self._kasten(top, mx, h, w, "bild: pfad", leer + zeilen,
+                                      len(leer) + len(zeilen) - 1, "enter take · esc back")
+        sicht, (_r, s) = wahl["pfad"].anzeige(max(1, mw - 12), 1)
+        text = sicht[0] if sicht else ""
+        z.addclip(y0 + mh - 3, x0 + 2, "pfad: ", 6, C["dim"])
+        z.addclip(y0 + mh - 3, x0 + 8, text, mw - 10, C["bright"])
+        z.addclip(y0 + mh - 3, x0 + 8 + s, (text[s:s + 1] or " "), 1, C["bright"] | curses.A_REVERSE)
 
     @staticmethod
     def _zentrieren(c):

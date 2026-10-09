@@ -77,6 +77,8 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `bausteine/schnur.py` | Schnüre: Andockseite nach Lage, rechtwinkliger Weg, Box-Zeichen, Kreuzungen — reine Geometrie | — |
 | `bausteine/canvas_arten.py` | Arten `notiz` (Zettel, Rahmen `amber`, erste Zeile Titel, blättern) und `fremd`; `TextModal`; hier docken Kacheln an | — |
 | `bausteine/textfeld.py` | `Textfeld`: kleiner mehrzeiliger Editor für Modale (Umlaute, ↑↓ über umbrochene Zeilen, Strg+S/Esc) | — |
+| `bausteine/canvas_bild.py` | Art `bild` (2026-10-10): Titel + Vorschau, die die Ansicht holt und als `_vorschau` am Element ablegt; `f` mono/farbe, `o` → („bild_oeffnen", datei), Titel-Modal | — |
+| `ansichten/bild_betrachter.py` | Bild im Betrachter dieses Rechners öffnen (aus viscope `open_files` kopiert): `system` → xdg-open/gio, sonst ein Befehl; abgelöst gestartet, curses bleibt unberührt | — |
 
 ## Wie eine Ansicht gebaut ist (und eine neue gebaut wird)
 
@@ -615,3 +617,4 @@ Der Ordner steht in `deploy/aussenposten.txt`. Tests ohne Terminal:
   Technik, Startseite, Befehlszeile, Dashboard/Reminder, Fokus-Fragen,
   Schleife). Branch `worktree-agent-ac95c51a142500eaa`.
 - **2026-10-09** — `tui/bausteine/` (Canvas, Schnur, Textfeld) und Desk View (`ansichten/desk.py`, Taste `d`).
+- **2026-10-10** — Desk View: Bilder (`bausteine/canvas_bild.py`, `ansichten/bild_betrachter.py`); Canvas: `o` öffnet (`oeffnen` der Art), Enter greift immer, eigene Tasten der Art (`taste`), `+` ohne Fabrik → Wähler der Arten (`neu_label`, `Arten.anlegbar`); Fußleiste `desk:bild`, `desk:neu`.
