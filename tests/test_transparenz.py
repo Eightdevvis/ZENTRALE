@@ -43,11 +43,17 @@ def test_der_aufruf_zeigt_werkzeug_und_argumente():
 
 
 def test_lange_argumente_werden_gekuerzt_nicht_weggelassen():
+    # Seit 2026-10-09 bleiben Argumente bis 500 Zeichen ganz (der Verlauf
+    # klappt per „… mehr" alles auf); gekürzt wird nur gegen Riesen.
     rolle, text = werkzeug_zeile(
         {"phase": "start", "name": "write_note",
          "args": {"text": "wort " * 100}})
-    assert "wort" in text
-    assert len(text) < 200
+    assert text.count("wort") == 100
+    rolle, text = werkzeug_zeile(
+        {"phase": "start", "name": "write_note",
+         "args": {"text": "wort " * 1000}})
+    assert "wort" in text and text.endswith("…)")
+    assert len(text) < 600
 
 
 def test_das_ergebnis_steht_darunter():

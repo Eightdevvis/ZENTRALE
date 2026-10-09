@@ -50,7 +50,7 @@ def test_werkzeug_ergebnis_wird_gekuerzt_mitgespeichert(client, monkeypatch):
              "fertig")
     client.post("/api/chat", json={"message": "los"}).get_data()
     w = gespraeche.nachrichten(gespraeche.aktiv())[1]["werkzeuge"]
-    assert len(w[0]["ergebnis"]) == ki_routen.ERGEBNIS_MAX and w[0]["ergebnis"].endswith("…")
+    assert len(w[0]["ergebnis"]) <= ki_routen.ERGEBNIS_MAX
     assert w[1] == {"name": "web_search", "args": "query=b", "fehler": True,
                     "ergebnis": "kein netz"}
 

@@ -176,16 +176,25 @@ def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=
                                      "⌄" if auf else "›")
             zeilen.append([(kopf, "schritt_fehler" if s["fehler"] else "schritt", z)])
             if auf:
+                # Erst kurz (4 Zeilen Argumente, 3 Zeilen Ergebnis); „… mehr"
+                # klappt alles auf (2026-10-09, Sasha will das Innere lesen).
+                voll = ("voll", i) in offen
                 zeilen.append([("  %s" % s["name"], "denken", None)])
+                versteckt = 0
                 if s["args"]:
-                    for u in _umbruch(s["args"], breite - 4)[:4]:
+                    arg = _umbruch(s["args"], breite - 4)
+                    for u in (arg if voll else arg[:4]):
                         zeilen.append([("    " + u, "denken", None)])
+                    versteckt += 0 if voll else max(0, len(arg) - 4)
                 if s["ergebnis"]:
                     erg = _umbruch(s["ergebnis"], breite - 4)
-                    for k, u in enumerate(erg[:3]):
+                    for k, u in enumerate(erg if voll else erg[:3]):
                         zeilen.append([(("  → " if k == 0 else "    ") + u, "denken", None)])
-                    if len(erg) > 3:
-                        zeilen.append([("    …", "denken", None)])
+                    versteckt += 0 if voll else max(0, len(erg) - 3)
+                if versteckt:
+                    zeilen.append([("    … mehr (%d Zeilen)" % versteckt, "schritt", ("voll", i))])
+                elif voll:
+                    zeilen.append([("    ‹ weniger", "schritt", ("voll", i))])
                 elif not s["fehler"]:
                     zeilen.append([("    (ergebnis nicht gespeichert)", "denken", None)])
         elif rolle == "ablage":

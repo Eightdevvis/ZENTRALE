@@ -184,8 +184,8 @@ def fmt_euro(eur):
 def werkzeug_zeile(w):
     """Ein Tool-Ereignis als Verlaufs-Zeile. -> (rolle, text)
 
-    Argumente werden gekuerzt, nicht weggelassen: WELCHE Datei sie
-    beschrieben hat, ist genau die Frage, die man hinterher stellt.
+    Argumente werden nur gegen Riesen gekürzt, nicht weggelassen: WELCHE
+    Datei sie beschrieben hat, ist genau die Frage, die man hinterher stellt.
     """
     name = str(w.get("name") or "?")
     phase = w.get("phase")
@@ -194,13 +194,15 @@ def werkzeug_zeile(w):
         teile = []
         for schluessel, wert in args.items():
             text = " ".join(str(wert).split())
-            if len(text) > 60:
-                text = text[:59] + "…"
+            if len(text) > 500:
+                text = text[:499] + "…"
             teile.append("%s=%s" % (schluessel, text))
         return ("werkzeug", "%s(%s)" % (name, ", ".join(teile)))
     text = " ".join(str(w.get("text") or "").split())
-    if len(text) > 200:
-        text = text[:199] + "…"
+    # Der Verlauf klappt erst 3 Zeilen auf, „… mehr" alles (2026-10-09);
+    # gekürzt wird nur gegen Riesen, gleich wie beim Speichern (ERGEBNIS_MAX).
+    if len(text) > 8000:
+        text = text[:7999] + "…"
     if phase == "fehler":
         return ("werkzeug_fehler", "%s ✗ %s" % (name, text))
     return ("werkzeug_ergebnis", "↳ " + text)

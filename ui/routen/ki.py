@@ -211,18 +211,21 @@ def _sse(obj):
     return f"data: {json.dumps(obj)}\n\n"
 
 
-# So viel vom Ergebnis eines Werkzeugs bleibt im Verlauf (2026-10-07): die
-# TUI klappt einen Schritt „Used memory ›" auf und zeigt es gekürzt — wie
-# Claude Web. Mehr braucht die Anzeige nicht, und der Verlauf bleibt klein.
-ERGEBNIS_MAX = 300
+# So viel vom Ergebnis eines Werkzeugs bleibt im Verlauf. Bis 2026-10-09 nur
+# 300 Zeichen; Sasha: „ich würde gerne mehr von dem inneren zeug der ki lesen
+# können" — die TUI zeigt erst drei Zeilen, ein Klick auf „… mehr" alles. Die
+# Grenze schützt nur vor Riesen (ganze Webseiten, PDFs). Die Werkzeug-Spur
+# für die KI kürzt selbst (werkzeug_befund.SPUR_ERGEBNIS_MAX).
+ERGEBNIS_MAX = 8000
+ARGS_MAX = 2000
 
 
 def _werkzeug_merken(werkzeuge, w):
     """Kurze Zusammenfassung der Werkzeuge eines Zugs für den Verlauf."""
     if w.get("phase") == "start":
-        args = ", ".join("%s=%s" % (k, " ".join(str(v).split())[:60])
+        args = ", ".join("%s=%s" % (k, " ".join(str(v).split())[:500])
                          for k, v in (w.get("args") or {}).items())
-        eintrag = {"name": str(w.get("name") or "?"), "args": args[:200]}
+        eintrag = {"name": str(w.get("name") or "?"), "args": args[:ARGS_MAX]}
         # schreibt + status: daraus baut der Verlauf der KI ihre Werkzeug-Spur
         # (werkzeug_befund.spur_zeile, 2026-10-09).
         reg = werkzeug_register.eintrag(eintrag["name"])

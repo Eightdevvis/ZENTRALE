@@ -141,6 +141,9 @@ SPUR_KOPF = ("[Werkzeug-Spur dieses Zugs — vom System nachgetragen, nicht Teil
              "deiner Antwort; Sasha sieht sie nicht:")
 
 
+SPUR_ERGEBNIS_MAX = 300
+
+
 def spur_zeile(werkzeuge) -> str:
     """Die Spur aus den gemerkten Werkzeugen einer Antwort ({name, args,
     ergebnis?, status?, schreibt?, fehler?}); "" wenn nichts zu sagen ist."""
@@ -151,6 +154,10 @@ def spur_zeile(werkzeuge) -> str:
                 or status not in ("", OK)):
             continue
         ergebnis = " ".join(str(w.get("ergebnis") or "").split()) or "(kein Ergebnis gemerkt)"
+        # Der Verlauf hält seit 2026-10-09 das ganze Ergebnis (Sasha will es
+        # lesen können); der KI reicht der Anfang — sonst wird jeder Zug teurer.
+        if len(ergebnis) > SPUR_ERGEBNIS_MAX:
+            ergebnis = ergebnis[:SPUR_ERGEBNIS_MAX - 1] + "…"
         zeilen.append(f"- {w.get('name')}({w.get('args') or ''}) → "
                       f"{status or '?'}: {ergebnis}")
     if not zeilen:

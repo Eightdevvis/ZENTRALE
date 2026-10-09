@@ -19,7 +19,7 @@ from . import maus
 from .chat_ablage import TRENNER
 
 # Was Enter auf einem Ziel im Verlauf tut — für die Fußleiste.
-WAS = {"schritt": "open/close", "denken": "open/close", "kopieren": "copy",
+WAS = {"schritt": "open/close", "denken": "open/close", "voll": "more/less", "kopieren": "copy",
        "wiederholen": "retry", "dok": "open", "gut": "rate good", "schlecht": "rate bad"}
 
 # Ziele unter einer Antwort: ist eines davon gewählt, bewerten + / − sie
@@ -114,7 +114,7 @@ class ChatBedienung:
         AI = self.AI
         art, i = z
         AI["vwahl"] = z
-        if art in ("schritt", "denken"):
+        if art in ("schritt", "denken", "voll"):
             offen = AI.setdefault("offen", set())
             if art == "denken" and AI.get("denken_offen"):
                 AI["denken_offen"] = False      # alles war offen: nur dieses bleibt zu
