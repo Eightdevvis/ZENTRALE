@@ -1596,6 +1596,31 @@ Liefert ein Modell `reasoning_content`, wird es als `reflect`-Event gespiegelt.
 **Beide Provider teilen sich denselben Cloud-Graphen.** Die Grenze verläuft
 zwischen „im Haus" und „draußen", nicht zwischen zwei Anbietern.
 
+### Der Nutzer im Prompt — `core/nutzer_angaben.py` (seit 2026-10-09)
+
+Leerer Erststart (Produkt-Inventur Punkt 1): Persona, Antwortverhalten,
+Meta-Regeln (`core/profil/klein.py`, `gross.py`) und die Bausteine Jetzt-Block
+und Offene Erinnerungen (`core/ki_prompt.py`) tragen Platzhalter statt
+„Sasha": `{nutzer}`, `{nutzers}` (Genitiv), `{NUTZER}`/`{NUTZERS}`, dazu die
+Pronomen `{er}` `{Er}` `{ihn}` `{ihm}` `{sein}` `{seine}` `{seinen}`
+`{seinem}` `{seiner}` und `{ein_muendiger_erwachsener}`. Gefüllt aus den
+Einstellungen `nutzer_name` (Standard „Sasha") und `nutzer_pronomen` („er",
+Standard — so sprachen die Prompts von Sasha; oder „sie"). Mit den
+Standardwerten ist der Prompt byte-gleich wie vorher (Schnappschuss
+`tests/fixtures/prompt_schnappschuss.json`, `tests/test_prompt_nutzer.py`).
+
+Die Vorlagen heißen `_…_VORLAGE`; die alten Namen (`_SYSTEM_PROMPT` …) sind
+beim Import gefüllt (ai.*, bench-Skripte), `system()` füllt bei jedem Aufruf
+neu — pro Installation stabil, der Cache bleibt warm. Bewusst unverändert:
+„meint sie" (Dashboard-Sicht, Alarm-Block) meinte schon vorher den Nutzer.
+
+**Noch fest auf Sasha (offen):** Werkzeug-Beschreibungen und Fragen
+(`core/werkzeug_*.py`), Fehlercode-Texte (`core/fehlercodes.py`),
+Werkzeug-Ergebnisse (z. B. `input_aufraeumen`, `ehrlichkeit`), der
+Gedächtnis-Kopf. Persönliche Fakten im Prompt: „Linux-PC, Wand-Monitor
+(Pi 3)" und das Turn-Beispiel (klein) beschreiben Sashas Geräte — gehört in
+eine Einstellung oder ins Gedächtnis.
+
 ### Memory unterwegs – zwei Embedder, zwei Extraktoren
 
 **Ollama läuft nur daheim.** Ohne Embeddings findet der Graph keine

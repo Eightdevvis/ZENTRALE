@@ -48,8 +48,13 @@ Prüfstand, `bench_*`, Devtools, `zentrale_testguard`, Theme-Skripte
 
 ## Was quer über alles fehlt, bevor verkauft wird
 
-1. **Leerer Erststart:** 94× „Sasha" in Prompts/Profilen; Persona, Hausregeln,
-   Beispiele sind auf ihn geschrieben → Name/Persona aus Nutzer-Einstellungen.
+1. **Leerer Erststart:** ✅ teilweise (09.10.): Persona, Meta-Regeln und
+   Prompt-Bausteine nennen den Nutzer aus den Einstellungen `nutzer_name` /
+   `nutzer_pronomen` (Standard: Sasha, er — byte-gleich;
+   `core/nutzer_angaben.py`). Offen: Werkzeug-Texte, Fehlercodes,
+   Werkzeug-Ergebnisse, Gedächtnis-Kopf nennen Sasha noch; Geräte-Satz
+   („Linux-PC, Pi 3") in der Persona; die Persona selbst (Sarkasmus-Stachel)
+   ist Sashas Wahl — für Kunden eine Voreinstellung.
 2. **Code ↔ Nutzerdaten trennen:** Code in einen Installationsordner,
    sichtbar nur `~/Zentrale/` (Input, Output, Daten je App).
 3. **Lizenzen prüfen:** alle Abhängigkeiten auf GPL; Apache-/OFL-Hinweise

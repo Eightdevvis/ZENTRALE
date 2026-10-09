@@ -11,6 +11,11 @@ Datei nennt oben, in welcher **Code-Datei** und unter welchem **Konstantennamen*
 Generator, der das abgleicht. Wer hier ändert und den Code vergisst, hat nichts
 geändert.
 
+**„Sasha" steht hier für einen Platzhalter.** Seit 2026-10-09 trägt der Code
+`{nutzer}`, `{er}`, `{seinen}` … (core/nutzer_angaben.py, Einstellungen
+`nutzer_name`/`nutzer_pronomen`); mit den Standardwerten kommt genau der Text
+heraus, der hier steht.
+
 > **Keine Tutor-Prompts.** Die liegen seit dem Herauslösen des Tutors in
 > `tutor/prompts/` und in `tutor/langs/<sprache>/`. Das Projekt ist am Stück
 > rausziehbar, seine Prompts gehören dazu. Der frühere Tutor-Teil dieses

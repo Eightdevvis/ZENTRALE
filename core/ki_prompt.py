@@ -14,6 +14,8 @@ import os
 import re
 from datetime import datetime
 
+import nutzer_angaben
+
 # Die beiden Schienen-Texte, die die Cloud-Wege als Rückfall bzw. Mikro-Hinweis
 # brauchen — von hier aus, damit niemand dafür den lokalen Weg importiert.
 from profil.klein import _SYSTEM_PROMPT, _MIC_INPUT_HINT   # noqa: F401
@@ -108,10 +110,12 @@ def _now_prompt() -> str:
         "in Notizen oder im Tagebuch stehen, sind Erinnerungen an frühere "
         "Tage, NICHT der aktuelle Tag.\n\n"
         "Die UHRZEIT steht hier bewusst nicht: du weißt nicht, wie spät es "
-        "ist. Brauchst du sie wirklich - weil Sasha danach fragt oder weil "
+        "ist. Brauchst du sie wirklich - weil {nutzer} danach fragt oder weil "
         "es für eine Entscheidung zählt - ruf read_time. Rate nie, und "
         "rechne nichts aus dem Kopf aus."
     )
+    # {nutzer}: Name aus den Einstellungen (core/nutzer_angaben.py, 2026-10-09).
+    head = nutzer_angaben.einsetzen(head)
     # Der Kalender wird weiterhin NICHT als Ganzes mitgeschleppt — nur der
     # nahe Horizont steht als eigener Block direkt hinter diesem hier
     # (_imprint_prompt). Alles andere kommt über read_calendar.
@@ -174,10 +178,10 @@ def _alarm_prompt() -> str:
         header  = ("## Offene Erinnerungen "
                    "(= die ⚠ Warnsymbole unten links in deinem Dashboard)")
         framing = (
-            "Das sind stehende Erinnerungen für Sasha (vom Kalender automatisch "
-            "berechnet) - UND gleichzeitig das, was Sasha im Dashboard sieht: unten "
+            "Das sind stehende Erinnerungen für {nutzer} (vom Kalender automatisch "
+            "berechnet) - UND gleichzeitig das, was {nutzer} im Dashboard sieht: unten "
             "links an deinem Ausdrucks-Canvas (ki-kern) ist eine Symbol-Ecke, dort "
-            "steht ein ⚠-Warnsymbol PRO offener Erinnerung (gestapelt). Fragt Sasha "
+            "steht ein ⚠-Warnsymbol PRO offener Erinnerung (gestapelt). Fragt {nutzer} "
             "nach „der Warnung\", „den Symbolen\" oder „dem Alarm\" im Dashboard, "
             "meint sie GENAU diese Liste hier - verbinde die Frage damit, nicht mit "
             "etwas Unbekanntem (du siehst den Bildschirm nicht, aber DAS ist es, was "
@@ -185,12 +189,12 @@ def _alarm_prompt() -> str:
     else:
         # Baseline (vor dem Dashboard-Sicht-Experiment) - für A/B via ZENTRALE_DASHVIEW=0.
         header  = "## Offene Erinnerungen (Hintergrund - nur ablesen, nicht ausrechnen)"
-        framing = ("Das sind stehende Erinnerungen für Sasha (vom Kalender "
+        framing = ("Das sind stehende Erinnerungen für {nutzer} (vom Kalender "
                    "automatisch berechnet). " + tail)
     lines = [header]
     for a in alarms:
         lines.append("- " + str(a.get("text", "")).strip())
-    lines.append(framing)
+    lines.append(nutzer_angaben.einsetzen(framing))
     return "\n".join(lines)
 
 

@@ -72,6 +72,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `transkript` | 1 | Rohes Gesagtes, append-only jsonl |
 | `context` | 1 | Datei-Zugriff nur über die Whitelist |
 | `nutzer_ordner` | 1 | Sashas Nutzerordner (Einstellung `nutzer_ordner`, Standard ~/Zentrale) mit Input/ und Output/: anlegen, Pfade auflösen ohne Weg hinaus |
+| `nutzer_angaben` | 1 | Name und Pronomen des Nutzers (Einstellungen `nutzer_name`, `nutzer_pronomen`) für die Platzhalter in den Prompt-Texten; Standard = der alte Text |
 | `zip_sicher` | 1 | Eine Zip sicher lesen und auspacken (kein `..`/absolut/Symlink, Grenzen für Zahl und Größe, Auslassen von Verstecktem/Schlüsseln) — geteilt von `skill_import` und `input_dateien` |
 | `melden` | 1 | Meldung auf dem Desktop |
 | `glossary` | 1 | Kuratiertes Mini-Glossar |
