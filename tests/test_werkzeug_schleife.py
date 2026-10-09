@@ -137,16 +137,16 @@ def test_lokal_rundengrenze_ist_ein_fehler_event(ollama):
 
 
 def test_grenze_haengt_am_modell_nicht_am_weg(ollama, monkeypatch):
-    """Sasha, 05.10.2026: eine Regel für alle, Standard 8; ein kleines Modell
+    """Sasha, 05.10.2026: eine Regel für alle, Standard 8 (seit 09.10. 100); ein kleines Modell
     bekommt per Config weniger."""
     import ai_config
     monkeypatch.setattr(ai_config, "setting",
                         lambda n, d=None: {"qwen3.5:9b": 5, "kaputt": "x"}
                         if n == "runden_grenzen" else d)
     assert ai_backends.runden_grenze("qwen3.5:9b") == 5
-    assert ai_backends.runden_grenze("claude-sonnet-5") == 8
-    assert ai_backends.runden_grenze("kaputt") == 8
-    assert ai_backends.runden_grenze(None) == 8
+    assert ai_backends.runden_grenze("claude-sonnet-5") == ai_backends.STANDARD_RUNDEN
+    assert ai_backends.runden_grenze("kaputt") == ai_backends.STANDARD_RUNDEN
+    assert ai_backends.runden_grenze(None) == ai_backends.STANDARD_RUNDEN
 
     gesendet = ollama([_tool("read_calendar", {})] * 5)
     events = list(ai.chat_stream(_msgs(), model="qwen3.5:9b",

@@ -1322,7 +1322,7 @@ Vorher stand `[Cloud-Fehler: …]` als KI-Antwort im Verlauf, und der Takt
 konnte es sogar als „Initiative“ melden.
 
 **Eine Regel für alle (Sasha, 05.10.2026):** Die Rundengrenze hängt am
-Modell, nicht am Weg (`ai_backends.runden_grenze`, Standard 8, pro Modell in
+Modell, nicht am Weg (`ai_backends.runden_grenze`, Standard 100 (bis 09.10.: 8), pro Modell in
 `runden_grenzen` der Config kleiner). Der Ablehnungstext verlangt überall die
 Richtigstellung, falls sie im selben Zug schon notiert hat, es sei passiert —
 vorher bekam nur der lokale Weg diesen Satz.

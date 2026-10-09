@@ -19,7 +19,7 @@
 #   ergebnisse_anhaengen(liste) [(call_id, text, is_error)] in seinem Format
 #
 # dazu das Attribut `modell`: danach richtet sich die Rundengrenze
-# (ai_backends.runden_grenze — pro Modell, Standard 8).
+# (ai_backends.runden_grenze — pro Modell, Standard 100 seit 2026-10-09).
 #
 # Wie der Prompt gebaut wird, bleibt ganz beim Weg: Schiene, Cache und
 # Graph-Store sind gewollt verschieden.

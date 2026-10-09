@@ -335,12 +335,16 @@ def set_chat_model(model: str, provider: str | None = None) -> str:
 # ── Rundengrenze: pro MODELL, nicht pro Weg ───────────────────────────
 # Wie oft ein Modell in einem Zug hintereinander Werkzeuge rufen darf, bevor
 # die Schleife abbricht (core/werkzeug_schleife.py). Sasha, 05.10.2026: eine
-# Regel für alle, Standard 8; ein kleines Modell, das gern im Kreis dreht,
+# Regel für alle, Standard 8 (seit 09.10. 100, s. u.); ein kleines Modell, das gern im Kreis dreht,
 # bekommt in data/ai_config.json weniger:
 #     "runden_grenzen": {"qwen3.5:9b": 5}
 # Vorher hing die Zahl am Weg (lokal 5, Cloud 8) — ein starkes lokales
 # Modell wäre damit genauso gebremst worden wie das 9B.
-STANDARD_RUNDEN = 8
+# 2026-10-09: 8 → 100. Mit dem Browser braucht ein Zug leicht 10+ Schritte
+# (LSF), und Sasha: „schmeiß es einfach raus". Bleibt nur als Notbremse gegen
+# echte Endlosschleifen (jede Runde schickt das ganze Gespräch, die Kosten
+# wachsen) — im normalen Gebrauch nie zu erreichen.
+STANDARD_RUNDEN = 100
 
 
 def runden_grenze(modell: str | None) -> int:
