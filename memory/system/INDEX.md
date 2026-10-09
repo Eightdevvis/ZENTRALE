@@ -7,6 +7,7 @@ und wie die Fronten daran hängen.
 |---|---|
 | **Einstieg.** Gesamt-Architektur: Threads, Datenfluss, Modul-Übersicht | [architektur.md](architektur.md) |
 | **Bauplan des Kerns** — Schichten, wer wen importieren darf, Türen, Altlasten (mit Prüftest) | [bauplan_kern.md](bauplan_kern.md) |
+| **Produkt-Inventur** — was fertig, beta, Umbau, nur Dev; Lizenz-Ecke frei/Abo/exklusiv; was vor dem Verkauf fehlt (09.10.) | [produkt_inventur.md](produkt_inventur.md) |
 | **Hub-Bauplan** — ZENTRALE als Plattform, Module als Apps: Manifest, Rechte, Datenordner je App, Ereignisse, Modell-Zugang, Umzugs-Reihenfolge; entschieden 09.10., Schritt 1 (Tutor als App) erledigt | [hub_bauplan.md](hub_bauplan.md) |
 | **Bauplan der TUI** — wie `tui/` in Ansichten geschnitten ist, Kontext statt Closures, Reihenfolge, Sicherheitsnetz | [tui_bauplan.md](tui_bauplan.md) |
 | **Pixelstil** der TUI — Sextant-Pixel, Braille-Icons, Paletten Tag/Nacht, Motive, Regeln für neue Symbole | [pixelstil.md](pixelstil.md) |
