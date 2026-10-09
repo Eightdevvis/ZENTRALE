@@ -146,7 +146,11 @@ DESK = {"name": "Elektronik", "stand": "s1", "verbindungen": [], "elemente": [
     {"id": "r", "art": "notiz", "x": 30, "y": 0, "w": 10, "h": 4, "text": "rechts"},
     # Bild (2026-10-10): eigener Zustand desk:bild (o öffnen, f mono/farbe).
     {"id": "b", "art": "bild", "x": 30, "y": 10, "w": 14, "h": 6, "datei": "bilder/b.png",
-     "titel": "", "modus": "mono"}]}
+     "titel": "", "modus": "mono"},
+    # Kachel (2026-10-10): eigener Zustand desk:kachel (o öffnen, blättern).
+    {"id": "k", "art": "kachel", "x": -30, "y": 10, "w": 24, "h": 6, "titel": "Kalender",
+     "kachel": {"v": 1, "app": "kalender", "art": "ausschnitt",
+                "ref": {"modus": "mitlaufend", "tage": 7}}}]}
 
 
 def antwort(pfad, methode):
@@ -159,6 +163,11 @@ def antwort(pfad, methode):
             return copy.deepcopy(d)
     if p == "/api/desk-bild/quellen":             # Bilder auf dem Desk (2026-10-10)
         return {"quellen": [{"name": "foto.png", "pfad": "/x/Input/foto.png"}]}
+    if p == "/api/kachel":                        # Kacheln (2026-10-10)
+        return {"zeilen": [[["Mo 12.10.", "kal"]]], "text": "Kalender", "stand": "s",
+                "ttl": 60, "oben": 0, "oben_max": 3}
+    if p == "/api/kachel/aktion":
+        return {"zeige": {"ansicht": "kalender", "ziel": "2026-10-12"}}
     if p.startswith("/api/desk-bild"):
         if p == "/api/desk-bild/vorschau":
             return {"status": "ok", "zeilen": [[["@", None], ["#", "#ff0000"]]]}
@@ -420,6 +429,14 @@ def _desk_bild(u):
     u.DESK["canvas"].fokus = "b"
 
 
+def _desk_kachel(u):
+    _desk(u)
+    u.desk.starten = lambda f: f()           # Kachel gleich holen, nicht im Thread
+    zeichnen(u)
+    u.DESK["canvas"].fokus = "k"
+    u.DESK["canvas"].element("k")["_oben"] = 1   # damit auch Bild↑ etwas tut
+
+
 def _desk_neu(u):
     _desk(u); zt.taste_verteilen(u, ord("+"))
 
@@ -453,6 +470,7 @@ ZUSTAENDE = {
     "desk:frage": ("desk:frage", _desk_frage),
     "desk:bild": ("desk:bild", _desk_bild),
     "desk:neu": ("desk:neu", _desk_neu),
+    "desk:kachel": ("desk:kachel", _desk_kachel),
 }
 
 

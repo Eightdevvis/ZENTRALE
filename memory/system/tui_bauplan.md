@@ -79,6 +79,9 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `bausteine/textfeld.py` | `Textfeld`: kleiner mehrzeiliger Editor für Modale (Umlaute, ↑↓ über umbrochene Zeilen, Strg+S/Esc) | — |
 | `bausteine/canvas_bild.py` | Art `bild` (2026-10-10): Titel + Vorschau, die die Ansicht holt und als `_vorschau` am Element ablegt; `f` mono/farbe, `o` → („bild_oeffnen", datei), Titel-Modal | — |
 | `ansichten/bild_betrachter.py` | Bild im Betrachter dieses Rechners öffnen (aus viscope `open_files` kopiert): `system` → xdg-open/gio, sonst ein Befehl; abgelöst gestartet, curses bleibt unberührt | — |
+| `ansichten/desk_neu.py` | `KalenderWahl`: Eintrag „kalender" im Wähler hinter `+` (trägt sich in `Arten` ein, `neu_dialog` → `KalenderDialog` mitlaufend/fest, ≤ 31 Tage; legt eine Art-`kachel` an), Startgröße einer Kalender-Kachel (seit 2026-10-10) | (in `DESK`: `modal_neu`) |
+| `ansichten/desk_kacheln.py` | Kacheln holen und puffern: `pflegen` startet fällige im Hintergrund (`POST /api/kachel`), Puffer `_inhalt` am Element, `stand`/`ttl`, Fehler → weg/aus/fehler, `fuer_datei` (ohne „_", mit `rueckfall`) | am Element |
+| `ansichten/sprung.py` | `zeigen_fuer`: welche Ansicht `o` auf einer Kachel öffnen kann (`{"zeige": {ansicht, ziel}}`) — heute der Kalender an einem Tag | — |
 
 ## Wie eine Ansicht gebaut ist (und eine neue gebaut wird)
 
@@ -618,3 +621,4 @@ Der Ordner steht in `deploy/aussenposten.txt`. Tests ohne Terminal:
   Schleife). Branch `worktree-agent-ac95c51a142500eaa`.
 - **2026-10-09** — `tui/bausteine/` (Canvas, Schnur, Textfeld) und Desk View (`ansichten/desk.py`, Taste `d`).
 - **2026-10-10** — Desk View: Bilder (`bausteine/canvas_bild.py`, `ansichten/bild_betrachter.py`); Canvas: `o` öffnet (`oeffnen` der Art), Enter greift immer, eigene Tasten der Art (`taste`), `+` ohne Fabrik → Wähler der Arten (`neu_label`, `Arten.anlegbar`); Fußleiste `desk:bild`, `desk:neu`.
+- **2026-10-10** — Kacheln im Desk: Art `kachel` im Baustein (`o` → („kachel_oeffnen", verweis)), Wahl mit Dialog im `+`-Wähler (`neu_dialog`), `desk_neu.py`, `desk_kacheln.py`, `sprung.py`; Fußleisten-Kontext `desk:kachel` ([desk_view.md](desk_view.md)).

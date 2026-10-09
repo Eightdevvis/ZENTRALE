@@ -98,6 +98,8 @@ def current_ctx(z):
             fokus = c.element(c.fokus)
             if fokus is not None and fokus.get("art") == "bild":
                 return "desk:bild"          # o öffnen, f mono/farbe
+            if fokus is not None and fokus.get("art") == "kachel":
+                return "desk:kachel"        # o öffnen in der App (2026-10-10)
         return "desk:" + {"ruhe": "canvas"}.get(modus, modus)
     if AI["active"]:
         return "ai"

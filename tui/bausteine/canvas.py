@@ -30,6 +30,9 @@
 #                              (z. B. `f` beim Bild: mono/farbe) das Element
 #                              geändert hat; der Canvas meldet „geaendert"
 #   neu_label                  Name im Wähler von `+` (siehe unten)
+#   neu_dialog()               -> Modal: die Ansicht fragt erst (Kalender:
+#                              welcher Bereich) und legt dann
+#                              neu(eid, x, y, werte) hin (2026-10-10)
 #   blaettern(element, schritt) Bild↑/Bild↓ auf dem gewählten Kasten: im
 #                              Inneren blättern (eigene Lage am Element unter
 #                              „_oben", wird nie gespeichert). Hier docken

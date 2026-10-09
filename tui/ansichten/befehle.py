@@ -42,7 +42,7 @@ TUI_KEYS = [
     ("tutor", "Persona-Zimmer (eigene App, eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · braucht einen bildschirm"),
     ("fokus", "Fokus (Mitte): oben projekte, drunter alle listen · enter reindiven · a/s neu · space abhaken · r name · d weg · p projekt · f setzt den knoten als alleinigen fokus (rendert dann allein in der FOCUS-box) · m/> verschieben"),
     ("klavier", "Klavier (Mitte): die Tastatur IST die Klaviatur — y x c v b n m , . - weiß, s d g h j l ö schwarz · ←→ oktave · space nimmt eine melodie auf (fragt beim stoppen nach dem namen) · ↑↓ melodie wählen · enter abspielen · r umbenennen · D löschen · k/esc zu"),
-    ("desk", "Desk View (Mitte): erst die desks wählen (n neu), dann die fläche · ↑↓←→ kasten wählen · enter greifen, pfeile schieben, enter ablegen (esc zurück) · + neue notiz · e bearbeiten (ctrl+s speichert) · v verbinden · d löschen · shift+pfeile ausschnitt schieben"),
+    ("desk", "Desk View (Mitte): erst die desks wählen (n neu), dann die fläche · ↑↓←→ kasten wählen · enter greifen, pfeile schieben, enter ablegen (esc zurück) · + neu (zettel, bild, kalender) · e bearbeiten (ctrl+s speichert) · o öffnen (bild, kachel) · v verbinden · d löschen · shift+pfeile ausschnitt schieben"),
     ("/",   "Befehlszeile öffnen"),
 ]
 
@@ -177,6 +177,12 @@ CTX_KEYS = {
         ("↑↓←→", "select"), ("enter", "grab"), ("o", "open"), ("f", "mono/colour"),
         ("e", "title"), ("+", "new"), ("v", "connect"), ("d", "delete"), ("esc", "back"),
     ],
+    # Eine Kachel hat den Fokus (2026-10-10): o öffnet sie in ihrer App,
+    # Bild↑↓ blättert (alle Tage zugleich).
+    "desk:kachel": [
+        ("↑↓←→", "select"), ("enter", "grab"), ("o", "open"), ("pgup pgdn", "scroll"),
+        ("+", "new"), ("v", "connect"), ("d", "delete"), ("esc", "back"),
+    ],
     "desk:neu": [
         ("↑↓", "select"), ("enter", "take"), ("esc", "cancel"),
     ],
@@ -203,7 +209,7 @@ CTX_TITLES = {
     "technik": "technik",
     "desk:wahl": "desk", "desk:canvas": "desk", "desk:greifen": "desk · greifen",
     "desk:verbinden": "desk · verbinden", "desk:frage": "desk",
-    "desk:bild": "desk · bild", "desk:neu": "desk · neu",
+    "desk:bild": "desk · bild", "desk:neu": "desk · neu", "desk:kachel": "desk · kachel",
 }
 
 

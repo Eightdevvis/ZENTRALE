@@ -280,7 +280,7 @@ def test_ansicht_neuer_desk_zettel_anlegen_ablegen_bearbeiten(ansicht):
     assert D["ebene"] == "canvas" and D["desk"] == "Elektronik"
     d.draw_desk(2, 0, 26, 100)
     d.taste(ord("+"))                             # Wähler: zettel | bild
-    assert [a.name for a in D["art_wahl"]["arten"]] == ["notiz", "bild"]
+    assert [a.name for a in D["art_wahl"]["arten"]] == ["notiz", "bild", "kachel:kalender"]
     d.taste(10)
     assert D["art_wahl"] is None and D["canvas"].modus == "greifen"
     d.taste(curses.KEY_RIGHT)

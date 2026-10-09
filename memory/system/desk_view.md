@@ -1,6 +1,7 @@
 # Desk View — eine unendliche Fläche je Desk
 
-**Stand 2026-10-09: Grundgerüst gebaut** (Branch `worktree-desk-view`).
+**Stand 2026-10-10: Grundgerüst + Kacheln (Kalender) gebaut** (Branches
+`worktree-desk-view`, `worktree-desk-kalender`).
 Im Rad Taste/Platz `d` („desk", zwischen tutor und elektronik). Erst die
 Auswahl der Desks (+ neuer Desk), dann die Fläche: Zettel liegen darauf,
 Schnüre verbinden sie, Shift+Pfeile schieben den Ausschnitt.
@@ -20,15 +21,20 @@ Feature") und „der Desk-Ordner soll IMMER mit ZENTRALE mitgesynct werden".
 | | n | neuer Desk (Name unten tippen, enter legt an, esc bricht ab) |
 | | esc | zurück zum Rad |
 | Fläche, Ruhe | ↑↓←→ | Fokus springt zum nächsten Kasten in der Richtung (der erste Druck nimmt den Kasten nahe der Mitte); der Ausschnitt folgt |
-| | enter | greifen — immer, jedes Element (seit 2026-10-10) |
-| | + | Wähler „neu": zettel oder bild (↑↓ enter, esc). Zettel: mitten im Ausschnitt, gleich gegriffen. Bild: Liste der Bilder in `~/Zentrale/Input` + „pfad tippen …" |
+| | enter | greifen — immer, jedes Element, auch Bilder und Kacheln (seit 2026-10-10) |
+| | + | Wähler „neu": zettel, bild, kalender (↑↓ enter, esc). Zettel: mitten im Ausschnitt, gleich gegriffen (`+` enter = schneller Zettel). Bild: Liste der Bilder in `~/Zentrale/Input` + „pfad tippen …". Kalender: erst der kleine Dialog (unten), dann gegriffen |
 | | e | Zettel bearbeiten (Modal mittig); beim Bild der Titel (leer = Dateiname) |
-| | o | öffnen: Bild im Bildbetrachter (nur Arten mit `oeffnen`) |
+| | o | öffnen: Bild im Bildbetrachter; Kachel in ihrer App an der richtigen Stelle (Kalender an dem Tag) |
 | | f | Bild: Vorschau mono ↔ farbe (gespeichert) |
 | | v | verbinden: Schnur von hier zu einem Ziel |
 | | d / Entf | löschen — Rückfrage unten, j ja, n/esc nein |
-| | Bild↑ Bild↓ | im gewählten Zettel blättern (langer Text) |
+| | Bild↑ Bild↓ | im gewählten Kasten blättern (langer Zettel; Kalender-Kachel: alle Tage zugleich, „+N" zeigt Verstecktes) |
 | | esc | zurück zur Auswahl |
+| Wähler „neu" | ↑↓ enter esc | wählen, anlegen, abbrechen |
+| Kalender-Dialog | ↑↓ / tab | Feld: art, tage bzw. von/bis |
+| | ←→ / leertaste | art: mitlaufend ↔ fest |
+| | ziffern, -, ⌫ | tage bzw. Datum JJJJ-MM-TT tippen |
+| | enter | anlegen (über 31 Tage: klare Meldung, bleibt offen); esc bricht ab |
 | Greifen | ↑↓←→ | eine Zelle je Druck |
 | | enter | ablegen (gespeichert) |
 | | esc | zurück an die alte Stelle; ein neuer Zettel verschwindet |
@@ -44,7 +50,8 @@ Shift+Pfeil erkennt der Baustein am **Namen** (`curses.keyname`: `kLFT2`,
 `kRIT2`, `kUP2`, `kDN2`, `KEY_SLEFT`, `KEY_SR` …), nicht an der Nummer —
 die wechselt mit Terminal und tmux. Rohe Folgen `ESC [1;2A…D` gehen auch.
 Die Fußleiste unten zeigt die Tasten je Zustand (`befehle.CTX_KEYS`,
-Kontexte `desk:wahl|canvas|bild|neu|greifen|verbinden|frage`); „shift+↑↓←→" und
+Kontexte `desk:wahl|canvas|bild|kachel|neu|greifen|verbinden|frage`; Modal
+und Kalender-Dialog sind Freitext ohne Leiste, ihr Kasten zeigt die Tasten); „shift+↑↓←→" und
 „pgup/pgdn" stehen nur in der Hinweiszeile im Kasten, weil
 `fussleiste.codes()` „shift+" nicht lesen kann (Datei gehörte in dieser
 Runde einer anderen Sitzung).
@@ -61,9 +68,11 @@ Runde einer anderen Sitzung).
 - **Arten** über eine Registrierung (`canvas.Arten`): `zeichne`, `modal`,
   `neu`, optional `rolle` (Rahmenfarbe), `oeffnen` (Taste `o`, meldet eine
   Aktion an die Ansicht), `taste(element, zeichen)` (eigene Tasten wie `f`),
-  `neu_label` (Name im Wähler von `+`) und `blaettern` (eigene
-  Scroll-Lage im Kasten, nie gespeichert). Enter greift immer. Unbekannte Arten zeichnen sich
-  als „? art" und gehen nicht verloren.
+  `neu_label` (Name im Wähler von `+`), `neu_dialog()` (erst fragen, dann
+  `neu(eid, x, y, werte)`; seit 2026-10-10 für den Kalender) und `blaettern`
+  (eigene Scroll-Lage im Kasten, nie gespeichert). Enter greift immer
+  (vorher `bei_enter`). Unbekannte Arten zeichnen sich als „? art" und gehen
+  nicht verloren.
 - **Schnüre** werden nie gespeichert, sondern bei jedem Bild aus den
   aktuellen Lagen gelegt: Andockseite nach Lage (senkrecht zählt doppelt),
   einmal abbiegen auf halber Strecke, Box-Zeichen, Kreuzungen ergeben sich
@@ -71,7 +80,22 @@ Runde einer anderen Sitzung).
   nimmt seine Schnüre mit (Baustein und Backend).
 - **App** `tui/ansichten/desk.py`: Auswahl, laden/speichern über HTTP,
   Modal, Hinweise. Speichert nach jedem Ablegen, Verbinden, Lösen, Löschen
-  und Bearbeiten den ganzen Desk.
+  und Bearbeiten den ganzen Desk (ohne Puffer-Felder „_…").
+- **Kalender im `+`-Wähler** `tui/ansichten/desk_neu.py`: der Wähler ist
+  die eine Registrierung `canvas.Arten` (alles mit `neu_label`, in
+  Reihenfolge: zettel, bild, kalender). `KalenderWahl` trägt sich dort unter
+  „kachel:kalender" ein (kein Element heißt so), hat `neu_dialog()` →
+  `KalenderDialog` und legt mit `neu(eid, x, y, werte)` ein Element der
+  allgemeinen Art `kachel` an. Weitere Kachel-Quellen kommen genauso dazu.
+- **Kacheln holen** `tui/ansichten/desk_kacheln.py`: bei jedem Bild prüft
+  `pflegen`, welche Kachel fällig ist (kein Puffer, Frist `ttl` um, Größe
+  oder Blätter-Lage anders) und holt sie im Hintergrund-Thread über
+  `POST /api/kachel`; gezeichnet wird immer aus dem Puffer `_inhalt`. Mit
+  `stand` antwortet der Hub „unverändert". Unbekannte Farbrollen → `dim`.
+- **Springen** `tui/ansichten/sprung.py`: `o` → `POST /api/kachel/aktion`
+  → `{"zeige": {ansicht, ziel}}` → `zeigen(ansicht, ziel)`, das
+  zentrale_tui.py hereingibt. Heute kennt es `kalender` (Kalender öffnen,
+  Tag = ziel). Der Desk kennt keine andere Ansicht.
 - **Backend** `core/desk.py` (Schicht 2) + `ui/routen/desk.py`, Endpunkte in
   [api_endpoints.md](api_endpoints.md).
 
@@ -102,6 +126,43 @@ Eine Datei pro Desk, `<desk_ordner>/<name>.canvas`
 - Speichern mit `stand` (Hash der Datei vom Laden): wurde sie woanders
   geändert, 409 — die TUI lädt neu und sagt es; die letzte Änderung fehlt
   dann. Eine kaputte Datei wird nie überschrieben (422).
+
+## Kacheln (seit 2026-10-10)
+
+Form und Weg: [hub_bauplan.md](hub_bauplan.md) „Kacheln". In der Datei ein
+text-Knoten mit Rückfall-Text und `zentrale_kachel: {v, app, art, ref}` —
+ein Verweis, nie eine Kopie. Der Rückfall-Text ist nur Anzeige für Obsidian:
+beim Speichern schickt die TUI den letzten Klartext der App als `rueckfall`
+mit, `core/desk.py` schreibt ihn in `text`; den Verweis ändert es nie.
+Breite/Höhe stehen wie bei jedem Knoten in `width`/`height`; die App kürzt
+selbst auf das Innere (w−2 × h−2).
+
+**Kalender** (App `kalender`, Art `ausschnitt`, Quelle
+`core/kachel_kalender.py`): Bezug `{"modus": "mitlaufend", "tage": 7}` (ab
+heute, rechnet jeden Tag neu) oder `{"modus": "fest", "von": …, "bis": …}`;
+höchstens 31 Tage. Standard beim Anlegen: mitlaufend 7 Tage.
+- **bis 7 Tage → Woche:** eine Spalte je Tag (│ dazwischen), Kopf
+  „Mo 12.10.", darunter Ganztägiges zuerst (Rolle `span`), dann
+  „HH:MM titel" (`faint` + `ink`). Startgröße 13 Spalten je Tag, 6 Zeilen.
+- **8–31 Tage → Monat:** Raster Mo–So, Wochen als Zeilen, Tageszahl (am
+  Ersten und am ersten Tag mit Monat, „1.11."), darunter so viele Termine
+  wie passen. Tage außerhalb des Bereichs leise und leer. Startgröße 11
+  Spalten × 3 Zeilen je Tag, so viele Wochen, wie der Bereich je nach
+  Wochentag schneiden kann.
+- **Heute** in der Kalender-Farbe `kal`. Passt ein Tag nicht: „+N" (Rolle
+  `acc`) — in der Woche als letzte Zeile der Spalte, im Monat rechts neben
+  der Zahl. Bild↓/↑ blättert alle Tage zugleich um eine Zeile (bis die
+  längste Liste ganz zu sehen ist).
+- **Zu klein:** „zu klein / mind. W×H" statt Inhalt. **App weg/aus:**
+  „nicht mehr da" bzw. der letzte Stand leise.
+- `o` öffnet den Kalender an dem Tag, an dem der Ausschnitt beginnt
+  (mitlaufend: heute). Esc dort führt zur Startseite, nicht zurück zum Desk.
+
+**Entschieden 2026-10-10** (für Sasha, er kann umstellen): **enter greift
+jedes Element**, auch Kacheln — eine Regel für alles, wie Sashas
+Grundregel. **`o` öffnet** die Quelle des gewählten Elements. Damit ist die
+Frage aus der vorigen Runde („wie verschiebt man eine Kachel ohne Enter")
+erledigt; hub_bauplan.md hatte „Enter = öffnen" vorgesehen.
 
 ## Ort und Abgleich
 
@@ -166,19 +227,12 @@ geöffnet kriegen wenn man es selected."*
 - **Zettel später auf echte Notizen umstellen**, sobald das Notiz-Tool ein
   offenes Format hat (Leitlinie: dasselbe Objekt, nicht kopiert). Bis dahin
   sind Zettel Canvas-eigene Text-Knoten.
-- **Kacheln** anderer Apps — Form entschieden in
-  [hub_bauplan.md](hub_bauplan.md) „Kacheln": text-Knoten mit Rückfall-Text
-  und `zentrale_kachel: {v, app, art, ref}`, App-Namen `fokus` (Listen),
-  `graph`, `kalender`. **Schon da:** `core/desk.py` reicht solche Knoten
-  als Art `kachel` durch (Feld `kachel`, Rückfall als `titel`) und ändert
-  nur die Lage, nie Text oder Zusatzfeld; ohne registrierte Kachel-Art
-  zeichnet „fremd" sie. Im Baustein meldet eine Art mit `oeffnen` bei
-  `o` ein Ergebnis `aktion` (z. B. („oeffnen", ref)); Enter greift immer
-  (2026-10-10, vorher `bei_enter`); Blättern im Kasten gibt es
-  (`blaettern`). **Fehlt:** die Kachel-Art selbst, das Holen über
-  `POST /api/kachel` in der Ansicht und das Weiterreichen von `aktion` an
-  `POST /api/kachel/aktion` (Stelle in `desk.py` markiert). Wie man eine
-  Kachel ohne Enter verschiebt, entscheidet die nächste Runde.
+- **Weitere Kacheln:** Listen (`fokus`) und Graphen (`graph`) fehlen noch —
+  je ein Quell-Modul in `core/kacheln.py` QUELLEN, eine Wahl mit
+  `neu_label` (wie `KalenderWahl`), ein Sprungziel in `sprung.py`.
+- Größe einer Kachel ändern geht nicht (Startgröße beim Anlegen); den
+  Bereich einer Kalender-Kachel ändern auch nicht (neu anlegen).
+- Esc im Kalender nach `o` führt zur Startseite, nicht zurück zum Desk.
 - Desks löschen/umbenennen gibt es nicht (Datei von Hand).
 - Größe eines Zettels ändern gibt es nicht (Standard 24×6); auch ein Bild
   behält seine Größe vom Hinlegen.
@@ -197,6 +251,9 @@ geöffnet kriegen wenn man es selected."*
 
 ## Historie
 
+- **2026-10-10** — Kacheln: „kalender" im `+`-Wähler (mit Dialog), Kalender-Kachel
+  (Woche/Monat, fest/mitlaufend, +N, blättern), Holen im Hintergrund über
+  `/api/kachel`, `o` öffnet (Aktion → Sprung), enter greift immer.
 - **2026-10-09** — Grundgerüst: Baustein Canvas, Schnüre, Zettel, Desk View,
   `/api/desk`, Abgleich. Ein Zwischenstand mit Verweisen auf das Notiz-Tool
   wurde am selben Tag zurückgenommen (dessen Format kommt zuerst dran).

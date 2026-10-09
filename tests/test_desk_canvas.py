@@ -8,7 +8,7 @@ import curses
 
 from tui.bausteine import canvas as cv
 from tui.bausteine import schnur
-from tui.bausteine.canvas_arten import Notiz, TextModal, standard_arten, umbrechen
+from tui.bausteine.canvas_arten import Fremd, Kachel, Notiz, TextModal, standard_arten, umbrechen
 from tui.bausteine.textfeld import Textfeld
 
 
@@ -424,8 +424,40 @@ def test_plus_ohne_fabrik_fragt_nach_der_art_und_legt_dann_ab():
 
 
 def test_kachel_ohne_registrierte_art_zeigt_den_rueckfall():
-    c = leinwand([{"id": "k", "art": "kachel", "x": 0, "y": 0, "w": 24, "h": 4,
-                   "typ": "kachel · fokus/liste", "titel": "Einkauf: Milch"}])
+    arten = cv.Arten()
+    for art in (Notiz(), Fremd()):                 # eine TUI ohne Kachel-Art
+        arten.registrieren(art)
+    c = cv.Canvas(arten, [{"id": "k", "art": "kachel", "x": 0, "y": 0, "w": 24, "h": 4,
+                           "typ": "kachel · fokus/liste", "titel": "Einkauf: Milch"}])
     c.vx, c.vy = -1, -1
     text = "".join(t for z in c.bild(8, 40) for _x, t, _r in z)
     assert "kachel · fokus/liste" in text and "Einkauf" in text
+
+
+def test_kachel_art_zeigt_puffer_rueckfall_und_zustaende():
+    """Die Art „kachel" (2026-10-10) zeichnet nur, was die Ansicht unter
+    _inhalt abgelegt hat; o meldet den Verweis; blättern bis oben_max."""
+    k = Kachel()
+    el = {"id": "k", "art": "kachel", "w": 24, "h": 5, "titel": "Kalender 12.10.",
+          "kachel": {"v": 1, "app": "kalender", "art": "ausschnitt", "ref": {"tage": 7}}}
+    assert k.zeichne(el, 22, 3)[0] == [("lädt …", "leise")]
+    assert ("Kalender 12.10.", "leise") in k.zeichne(el, 22, 3)[1]
+    assert k.oeffnen(el) == ("kachel_oeffnen", {"app": "kalender", "art": "ausschnitt",
+                                                "ref": {"tage": 7}})
+    el["_inhalt"] = {"zustand": "ok", "zeilen": [[("Mo 12.10.", "kal")], [("09:00 ", "faint"), ("Arzt", "ink")]],
+                     "oben_max": 2}
+    assert k.zeichne(el, 22, 3) == [[("Mo 12.10.", "kal")], [("09:00 ", "faint"), ("Arzt", "ink")]]
+    k.blaettern(el, 1); k.blaettern(el, 1); k.blaettern(el, 1)
+    assert el["_oben"] == 2                         # nicht weiter als die App sagt
+    k.blaettern(el, -5)
+    assert el["_oben"] == 0
+    el["_inhalt"] = dict(el["_inhalt"], zustand="aus")
+    assert all(r == "leise" for z in k.zeichne(el, 22, 3) for _t, r in z)
+    el["_inhalt"] = {"zustand": "zu_klein", "zu_klein": {"w": 50, "h": 4}}
+    assert "mind. 50×4" in "".join(t for z in k.zeichne(el, 22, 3) for t, _r in z)
+    el["_inhalt"] = {"zustand": "weg"}
+    assert k.zeichne(el, 22, 3)[0] == [("nicht mehr da", "warn")]
+    c = leinwand([dict(el, x=0, y=0)])
+    c.fokus = "k"
+    assert c.taste("oeffnen").grund[0] == "kachel_oeffnen"
+    assert c.taste("enter") is None and c.modus == "greifen"     # enter greift auch Kacheln

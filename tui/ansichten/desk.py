@@ -9,16 +9,24 @@
 # Hinweise. So kann Desk View später als eigene Hub-App ausziehen, ohne den
 # Canvas mitzunehmen, und andere Apps nehmen den Canvas ohne den Desk.
 # Doku: memory/system/desk_view.md.
+#
+# Kacheln (2026-10-10): ihr Inhalt kommt im Hintergrund über den Hub
+# (desk_kacheln.py, `POST /api/kachel`), gezeichnet wird aus dem Puffer.
+# `o` auf einer Kachel fragt `POST /api/kachel/aktion` und springt, wohin
+# die App sagt (`zeigen`, von zentrale_tui.py hereingegeben). Im Wähler
+# hinter `+` steht dazu „kalender" (desk_neu.py, mit Dialog).
 
 import curses
 import json
 import os
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import basis, bild_betrachter
+from . import basis, bild_betrachter, desk_kacheln
 from .basis import api_call
+from .desk_neu import KalenderWahl
 
 try:
     from tui.bausteine import canvas as cv
@@ -40,7 +48,7 @@ FETT = {"fokus", "griff", "ziel", "notiz_titel", "bild_titel"}
 # Was die Hinweiszeile im Kasten je Zustand zeigt. Die Fußleiste ganz unten
 # kommt aus befehle.CTX_KEYS — „shift+↑↓←→" kann fussleiste.codes() (noch)
 # nicht lesen, darum steht das Schieben nur hier.
-HINWEIS = {"ruhe": "shift+↑↓←→ move view · pgup/pgdn scroll note · o open image · f colour",
+HINWEIS = {"ruhe": "shift+↑↓←→ move view · pgup/pgdn scroll · o open (image, tile) · f colour",
            "greifen": "shift+↑↓←→ move view (note comes along)",
            "verbinden": "↑↓←→ pick target · enter/v connect · esc cancel"}
 
@@ -56,6 +64,13 @@ class Desk:
     def __init__(self, z):
         self.z = z
         self.arten = standard_arten(cv.Arten())
+        self.arten.registrieren(KalenderWahl())      # „kalender" im Wähler hinter +
+        # zeigen(ansicht, ziel) -> bool: zu einer anderen Ansicht springen
+        # (o auf einer Kachel). Kommt von außen (zentrale_tui.py), damit diese
+        # Ansicht keine andere kennen muss.
+        self.zeigen = None
+        # Wie im Hintergrund geholt wird; Tests setzen „gleich ausführen".
+        self.starten = lambda f: threading.Thread(target=f, daemon=True).start()
         self.DESK = z.DESK = {
             "active": False,
             "ebene": "wahl",            # wahl | canvas
@@ -64,6 +79,7 @@ class Desk:
             "desk": None, "stand": None,
             "canvas": None,             # cv.Canvas des offenen Desks
             "modal": None, "modal_id": None,
+            "modal_neu": None,          # Wahl hinter +, deren Dialog gerade offen ist
             "zentrieren": False,
             "msg": "",
             # Wähler hinter `+` (2026-10-10): erst die Art, beim Bild dann
@@ -76,7 +92,7 @@ class Desk:
     def oeffnen(self):
         D = self.DESK
         D.update(active=True, ebene="wahl", name=None, modal=None, canvas=None, msg="",
-                 art_wahl=None, bild_wahl=None)
+                 art_wahl=None, bild_wahl=None, modal_neu=None)
         self._liste_laden()
 
     def _liste_laden(self):
@@ -91,7 +107,8 @@ class Desk:
     def _fehlertext(self, e):
         if isinstance(e, urllib.error.HTTPError):
             try:
-                return json.loads(e.read().decode("utf-8")).get("error") or str(e.code)
+                body = json.loads(e.read().decode("utf-8"))
+                return body.get("error") or body.get("text") or body.get("fehler") or str(e.code)
             except Exception:
                 return "fehler %s" % e.code
         return "backend nicht erreichbar"
@@ -128,7 +145,8 @@ class Desk:
         D = self.DESK
         c = D["canvas"]
         # Felder mit „_" legt nur die Ansicht zwischen (Vorschau, Blätterlage).
-        elemente = [{k: v for k, v in e.items() if not k.startswith("_")} for e in c.elemente]
+        # Eine Kachel nimmt ihren Klartext als Rückfall für Obsidian mit.
+        elemente = [desk_kacheln.fuer_datei(e) for e in c.elemente]
         body = {"elemente": elemente, "verbindungen": c.verbindungen_mit_seiten(),
                 "stand": D["stand"]}
         try:
@@ -216,6 +234,8 @@ class Desk:
 
     def _canvas_ereignis(self, ev):
         D = self.DESK
+        if ev is not None and D["msg"] and D["canvas"].modus != "frage":
+            D["msg"] = ""                # eine Meldung gilt bis zur nächsten Taste
         erg = D["canvas"].taste(ev)
         if erg is None:
             return
@@ -233,8 +253,8 @@ class Desk:
             was = erg.grund[0] if isinstance(erg.grund, tuple) and erg.grund else None
             if was == "bild_oeffnen":
                 self.bild_oeffnen(erg.grund[1])
-            # Kacheln („oeffnen", ref) gehen später an POST /api/kachel/aktion
-            # (hub_bauplan.md „Kacheln").
+            elif was == "kachel_oeffnen":
+                self.kachel_oeffnen(erg.grund[1])
 
     # ── + : Art wählen, Bild wählen (2026-10-10) ──────────────────────
     def _taste_art_wahl(self, ch):
@@ -251,6 +271,9 @@ class Desk:
                 return None
             if art.name == "bild":
                 self._bild_wahl_oeffnen()
+            elif getattr(art, "neu_dialog", None):
+                # Erst fragen (Kalender: welcher Bereich), dann hinlegen.
+                D["modal"], D["modal_neu"], D["modal_id"] = art.neu_dialog(), art, None
             else:
                 D["canvas"].neu_ablegen(art.neu(cv.neue_id(), 0, 0))
         elif ch == 27:
@@ -372,9 +395,29 @@ class Desk:
             f.write(r.read())
         return ziel
 
+    def kachel_oeffnen(self, verweis):
+        """o auf einer Kachel: den Hub fragen, wohin (die App entscheidet),
+        dann dorthin springen. Kurz und auf Tastendruck — wie Speichern
+        synchron; das Holen der Inhalte bleibt im Hintergrund."""
+        D = self.DESK
+        try:
+            a = api_call("/api/kachel/aktion", "POST", dict(verweis, aktion="oeffnen"))
+        except Exception as e:
+            D["msg"] = "öffnen geht nicht: " + self._fehlertext(e)
+            return
+        zeige = (a or {}).get("zeige") or {}
+        if not (self.zeigen and self.zeigen(zeige.get("ansicht"), zeige.get("ziel"))):
+            D["msg"] = "„%s“ kann ich von hier nicht öffnen" % (zeige.get("ansicht") or "?")
+
     def _taste_modal(self, ch):
         D = self.DESK
         was = D["modal"].taste(ch)
+        if D["modal_neu"] is not None and was in ("speichern", "abbrechen"):
+            art, werte = D["modal_neu"], D["modal"].aenderungen()
+            D["modal"] = D["modal_neu"] = None
+            if was == "speichern":
+                D["canvas"].neu_ablegen(art.neu(cv.neue_id(), 0, 0, werte))
+            return None
         if was == "speichern":
             el = D["canvas"].element(D["modal_id"])
             if el is not None:
@@ -441,6 +484,7 @@ class Desk:
             self._zentrieren(c)
             D["zentrieren"] = False
         self.vorschauen_holen(c)
+        desk_kacheln.pflegen(c.elemente, lambda *a, **k: api_call(*a, **k), self.starten)
         for j, stuecke in enumerate(c.bild(ch_, cw)):
             for x, text, rolle in stuecke:
                 attr = self._farbe(rolle)
@@ -530,13 +574,13 @@ class Desk:
         """Das Bearbeiten-Modal mittig über der Fläche."""
         D, C, z = self.DESK, self.z.C, self.z
         m = D["modal"]
-        mw = max(20, min(64, w - 6))
-        mh = max(7, min(18, h - 4))
+        mw = max(20, min(getattr(m, "breite", 64), w - 6))
+        mh = max(7, min(getattr(m, "hoehe", 18), h - 4))    # ein Dialog darf kleiner sein
         y0 = top + (h - mh) // 2
         x0 = mx + (w - mw) // 2
         for j in range(mh):
             z.safe_addstr(y0 + j, x0, " " * mw, C["ink"])
-        z.draw_box(y0, x0, mh, mw, m.titel + " bearbeiten", C["acc"])
+        z.draw_box(y0, x0, mh, mw, getattr(m, "kopf", None) or m.titel + " bearbeiten", C["acc"])
         sicht, (cr, cs) = m.anzeige(mw - 4, mh - 4)
         for j, zeile in enumerate(sicht):
             z.addclip(y0 + 1 + j, x0 + 2, zeile, mw - 4, C["bright"])

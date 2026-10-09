@@ -136,7 +136,17 @@ Bis Schritt 5 bleibt alles in einem Repo außer dem Tutor; der Kern-Bauplan
 ## Kacheln (entschieden 2026-10-09)
 
 Anlass: Desk View (Fläche je Projekt, JSON-Canvas-Dateien, in der TUI) legt
-Dinge anderer Apps als Kacheln auf die Fläche. Noch nichts gebaut.
+Dinge anderer Apps als Kacheln auf die Fläche.
+
+**Gebaut 2026-10-10** (Einzelheiten [desk_view.md](desk_view.md) „Kacheln"):
+Hub `core/kacheln.py` mit `QUELLEN` (ein Modul je Quelle, im Prozess, Anfrage
+und Antwort durch `json.dumps`/`loads`), Form/Fehler `core/kachel_form.py`,
+erste Quelle `core/kachel_kalender.py` (App `kalender`, Art `ausschnitt`),
+Routen `POST /api/kachel` und `POST /api/kachel/aktion`
+([api_endpoints.md](api_endpoints.md)), in der TUI Holen im Hintergrund aus
+dem Puffer. Noch nicht: Listen (`fokus`), Graphen (`graph`), Manifest-
+Einträge `liefert`/`[kachel.<art>]` (die eingebauten Quellen tragen `ARTEN`
+und `RECHTE` selbst), Zeitgrenze 0,5 s (erst für Apps hinter HTTP).
 
 - **Begriff:** Eine Kachel ist ein **Verweis** auf ein Objekt einer anderen
   App — **App** + **Art** (z. B. `liste`) + **`ref`** (z. B.
@@ -155,7 +165,8 @@ Dinge anderer Apps als Kacheln auf die Fläche. Noch nichts gebaut.
 - **Manifest:** `liefert = ["kachel:<art>"]`, optional `[kachel.<art>]` mit
   `min` (Zellen w×h) und `ttl`.
 - **Weg:** immer über den Hub (`POST /api/kachel`), nie direkt an die App.
-  Anfrage `{app, art, ref, groesse: {w, h}, stand}`. Antwort: `zeilen` aus
+  Anfrage `{app, art, ref, groesse: {w, h}, stand}` (gebaut: `w`/`h` auch
+  oben, dazu `oben` = Blätter-Lage; die Antwort sagt `oben`/`oben_max`). Antwort: `zeilen` aus
   Stücken `[text, rolle]` mit Rollen aus `farben.ROLES` (unbekannt → `dim`),
   `text` als Klartext-Rückfall, `stand` + `ttl`. Die App kürzt selbst auf
   w×h („… 5 weitere").
@@ -166,13 +177,16 @@ Dinge anderer Apps als Kacheln auf die Fläche. Noch nichts gebaut.
 
 ### Entscheidungen
 
-- **Enter** = nur „in der App öffnen" (`POST /api/kachel/aktion`, Hub reicht
-  weiter, App sagt, wohin gesprungen wird). Kein Abhaken auf der Kachel.
+- **Öffnen** (`POST /api/kachel/aktion`, Hub reicht weiter, App sagt mit
+  `{"zeige": {ansicht, ziel}}`, wohin gesprungen wird). Kein Abhaken auf der
+  Kachel. Geändert 2026-10-10: nicht Enter, sondern **`o`** — Enter greift
+  jedes Element, auch Kacheln (eine Regel für alles; desk_view.md).
 - **Frisch halten:** nur Pull mit TTL (mit `stand` → `{"unveraendert": true}`).
   Push-Meldungen später.
 - **Rohdaten** für Fenster/Handy später; das Feld `roh` ist im
   Antwort-Schema als optional reserviert, damit nichts verbaut wird.
 - **Rechte:** `<app>:lesen` reicht, kein Extra-Recht je Art; geprüft im Hub.
 
-**Offen:** Behält Obsidian beim Speichern unbekannte Knotenfelder? Prüfen,
-bevor Kacheln gebaut werden.
+**Offen:** Behält Obsidian beim Speichern unbekannte Knotenfelder? Noch
+nicht geprüft (Kacheln sind trotzdem gebaut — verliert Obsidian das Feld,
+bleibt ein Zettel mit dem Rückfall-Text übrig, nichts geht kaputt).

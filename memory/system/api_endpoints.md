@@ -420,13 +420,27 @@ Details: `memory/werkzeuge/mail_system.md` (Panel/Drill-down/Hybrid, Passphrase-
 |---|---|---|
 | `/api/desk` | GET | `{desks: [{name, elemente, geaendert}]}`, zuletzt geändert zuerst; `elemente` = None bei kaputter Datei. |
 | `/api/desk` | POST | Leeren Desk anlegen. Body `{name}` → 201 mit dem Desk; `400` Name ungültig, `409` gibt es schon. |
-| `/api/desk/<name>` | GET | `{name, elemente: [{id, x, y, w, h, art, text?, typ?, titel?, datei?, modus?}], verbindungen: [{id, von, nach, label?}], stand}`; `404`, `422` kaputte Datei (wird nie überschrieben). |
-| `/api/desk/<name>` | PUT | Ganzen Desk schreiben. Body `{elemente, verbindungen, stand}` (Verbindungen dürfen `von_seite`/`nach_seite` tragen; ohne `verbindungen` bleiben die Schnüre der Datei). Fehlende Elemente sind gelöscht, ihre Schnüre auch. `409 {error, stand}` wenn die Datei seit dem Laden woanders geändert wurde — nichts geschrieben. |
+| `/api/desk/<name>` | GET | `{name, elemente: [{id, x, y, w, h, art, text?, typ?, titel?, datei?, modus?, kachel?}], verbindungen: [{id, von, nach, label?}], stand}`; `404`, `422` kaputte Datei (wird nie überschrieben). |
+| `/api/desk/<name>` | PUT | Ganzen Desk schreiben. Body `{elemente, verbindungen, stand}` (Verbindungen dürfen `von_seite`/`nach_seite` tragen; ohne `verbindungen` bleiben die Schnüre der Datei). Fehlende Elemente sind gelöscht, ihre Schnüre auch. Neu anlegen: `art` `notiz`, `bild` oder `kachel` (mit `kachel: {v, app, art, ref}`); eine Kachel darf `rueckfall` (Klartext für Obsidian) mitbringen, ihr Verweis ändert sich danach nie. `409 {error, stand}` wenn die Datei seit dem Laden woanders geändert wurde — nichts geschrieben. |
 | `/api/desk-bild/quellen` | GET | Bilder in `~/Zentrale/Input` (und eine Ebene tiefer), neueste zuerst: `{quellen: [{name, pfad}]}` (2026-10-10). |
 | `/api/desk-bild` | POST | Bild in `<desk_ordner>/bilder/` kopieren. Body `{quelle}` (Name in Input/ oder Pfad) → 201 `{datei, titel, w, h}` (`datei` relativ zum Desk-Ordner, w/h Vorschlag in Zellen); `400` keine Bild-Endung, `404` nicht gefunden, `422` kein lesbares Bild, `503` Pillow fehlt. Gleicher Name + gleicher Inhalt → dieselbe Datei, sonst `name-2.png`. |
 | `/api/desk-bild/vorschau` | POST | Body `{datei, w, h, modus: mono\|farbe, invert?}` → `{status: ok, zeilen: [[[zeichen, "#rrggbb"\|null], …], …]}` (Sashas ASCII-Filter, `core/bild_vorschau.py`, höchstens 32 Farben) oder `{status: weg\|kein_bild\|ohne_pillow, text}`; `400` Pfad hinaus / falscher Modus. |
 | `/api/desk-bild/oeffnen` | POST | Body `{datei}` → `{pfad, da, betrachter}` — die TUI öffnet selbst (Einstellung `bild_betrachter`). |
 | `/api/desk-bild/datei` | GET | `?datei=bilder/x.png` → das Bild selbst (für eine TUI auf einem anderen Rechner); `404` fehlt. |
+
+## Kacheln (seit 2026-10-10)
+
+`core/kacheln.py` über `ui/routen/kachel.py` — der Hub, durch den jede Front
+den Inhalt einer Kachel holt (nie direkt bei der App). Form und Regeln:
+[hub_bauplan.md](hub_bauplan.md) „Kacheln", Desk: [desk_view.md](desk_view.md).
+
+| Endpoint | Methode | Beschreibung |
+|---|---|---|
+| `/api/kachel` | POST | Body `{app, art, ref, w, h, oben?, stand?}` (w/h auch als `groesse: {w, h}`; Innenmaß in Zellen). → `200 {zeilen: [[[text, rolle], …], …], text, stand, ttl, oben, oben_max}` (die App kürzt auf w×h; `roh` reserviert) · `200 {unveraendert: true, stand, ttl}` wenn `stand` passt · `200 {zu_klein: {w, h}, ttl}` · `400 {fehler: "ungueltig", text}` (z. B. „höchstens 31 tage") · `403 {fehler: "recht"}` (`<app>:lesen` fehlt) · `404 {fehler: "weg"}` · `503 {fehler: "aus", text}` (App nicht da oder kaputt). |
+| `/api/kachel/aktion` | POST | Body `{app, art, ref, aktion}`; heute nur `aktion: "oeffnen"` → `200 {zeige: {ansicht, ziel}}` (Kalender: `{"ansicht": "kalender", "ziel": "2026-10-12"}`); Fehler wie oben. |
+
+Quellen heute: `kalender`/`ausschnitt` (`core/kachel_kalender.py`, Bezug
+`{"modus": "mitlaufend", "tage": N}` oder `{"modus": "fest", "von", "bis"}`).
 
 ## Tutor (eigene App, seit 2026-10-09)
 
@@ -449,3 +463,4 @@ Stimm-Diensten.
 - **2026-10-08** — Zugangsschlüssel vor allen Routen, `/api/zugang`.
 - **2026-10-09** — `/api/desk` (Desk View).
 - **2026-10-10** — `/api/desk-bild…` (Bilder auf dem Desk).
+- **2026-10-10** — `/api/kachel`, `/api/kachel/aktion` (Kacheln, Kalender).

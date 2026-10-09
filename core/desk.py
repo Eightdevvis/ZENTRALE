@@ -23,8 +23,9 @@
 # Arten (2026-10-09): ein Text-Knoten (type "text", Markdown) ist ein
 # Zettel, Art „notiz", erste Zeile = Titel. Ein Text-Knoten mit
 # `zentrale_kachel` ist eine Kachel (Art „kachel", Verweis auf ein Objekt
-# einer anderen App) — Text und Zusatzfeld bleiben unangetastet, nur die
-# Lage ändert sich. Ein file-Knoten, dessen Datei ein Bild ist, ist ein
+# einer anderen App) — das Zusatzfeld bleibt unangetastet; der Text ist nur
+# Rückfall für Obsidian und kommt als `rueckfall` aus der TUI (2026-10-10).
+# Ein file-Knoten, dessen Datei ein Bild ist, ist ein
 # Bild (Art „bild", 2026-10-10): `file` relativ zum Desk-Ordner, damit
 # Obsidian das echte Bild zeigt (core/desk_bild.py legt es nach bilder/).
 # Eigene Zusatzfelder nur mit Vorsilbe: `zentrale_titel` (sonst gilt der
@@ -61,7 +62,8 @@ _NAME = re.compile(r"^[\w äöüÄÖÜß.,()+\-]{1,60}$")
 _KENNUNG = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
 # Zusatzfeld einer Kachel im text-Knoten: {v, app, art, ref} (hub_bauplan.md
 # „Kacheln", entschieden 2026-10-09). App-Namen: fokus (Listen), graph,
-# kalender. Dieses Modul legt keine Kacheln an und ändert sie nie.
+# kalender. Seit 2026-10-10 legt es neue Kacheln an (Verweis aus der TUI)
+# und schreibt den Rückfall-Text nach; den Verweis selbst ändert es nie.
 KACHEL = "zentrale_kachel"
 # Bild-Knoten (2026-10-10). Endungen, die Pillow liest UND Obsidian zeigt.
 BILD_ENDUNGEN = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")
@@ -287,6 +289,18 @@ def _ganz(x, unten=-KOORD_GRENZE, oben=KOORD_GRENZE):
     return x
 
 
+def _kachel_pruefen(kachel) -> dict:
+    """Der Verweis einer neuen Kachel: {v, app, art, ref} — klein und JSON."""
+    if not isinstance(kachel, dict) or not isinstance(kachel.get("app"), str) \
+            or not isinstance(kachel.get("art"), str) or not isinstance(kachel.get("ref"), dict):
+        raise DeskFehler("kachel ohne app, art oder ref")
+    v = {"v": kachel.get("v", 1), "app": kachel["app"], "art": kachel["art"],
+         "ref": kachel["ref"]}
+    if len(json.dumps(v)) > 2000:
+        raise DeskFehler("kachel-verweis zu groß")
+    return v
+
+
 def _knoten_aus(el, alt) -> dict:
     """Ein Element der TUI → Knoten der Datei, auf dem alten aufgebaut."""
     if not isinstance(el, dict) or not isinstance(el.get("id"), str) \
@@ -297,10 +311,14 @@ def _knoten_aus(el, alt) -> dict:
     if alt is None:
         if el.get("art") == "bild":
             k = {"id": el["id"], "type": "file", "file": datei_pruefen(el.get("datei"))}
+        elif el.get("art") == "kachel":
+            # Neue Kachel (2026-10-10): text-Knoten mit Rückfall-Text und dem
+            # Verweis — danach ändert sich am Verweis nichts mehr.
+            k = {"id": el["id"], "type": "text", "text": "", KACHEL: _kachel_pruefen(el.get("kachel"))}
         elif el.get("art") == "notiz":
             k = {"id": el["id"], "type": "text", "text": ""}
         else:
-            raise DeskFehler("neu anlegen geht nur mit notizen und bildern")
+            raise DeskFehler("neu anlegen geht nur mit notizen, bildern und kacheln")
         alte_lage = None
     else:
         k = dict(alt)
@@ -308,7 +326,14 @@ def _knoten_aus(el, alt) -> dict:
     if lage != alte_lage:
         k.update(x=lage["x"] * PX_SPALTE, y=lage["y"] * PX_ZEILE,
                  width=lage["w"] * PX_SPALTE, height=lage["h"] * PX_ZEILE)
-    if k.get("type") == "text" and KACHEL not in k:
+    if KACHEL in k:
+        # Rückfall-Text = Anzeige-Cache für Obsidian (hub_bauplan.md
+        # „Kacheln"): die TUI schickt, was die App zuletzt als Klartext
+        # lieferte; ohne `rueckfall` bleibt der alte stehen.
+        rueckfall = el.get("rueckfall")
+        if isinstance(rueckfall, str):
+            k["text"] = rueckfall[:TEXT_GRENZE]
+    elif k.get("type") == "text":
         text = el.get("text", k.get("text", ""))
         if not isinstance(text, str) or len(text) > TEXT_GRENZE:
             raise DeskFehler("notiz-text zu lang oder kein text")

@@ -30,13 +30,15 @@
 # als Element mit art „kachel", `kachel` = dieses Feld, `titel` = Rückfall-
 # Text, und ändert daran nie etwas außer der Lage. Solange keine Art
 # „kachel" registriert ist, zeichnet „fremd" ihn (typ + Rückfall).
-# Eine Kachel-Art wird hier registriert: `zeichne` zeigt die `zeilen`, die
-# die ANSICHT über `POST /api/kachel` geholt und am Element zwischengelegt
-# hat (nie der Canvas selbst), `oeffnen` (Taste o) meldet („oeffnen", ref)
-# — die Ansicht schickt das an `POST /api/kachel/aktion`. So gebaut ist
-# schon die Art „bild" (canvas_bild.py, 2026-10-10).
-# Langer Inhalt (z. B. eine Kalender-Kachel) blättert über `blaettern` wie
-# der Zettel unten.
+# Seit 2026-10-10 gibt es die Art „kachel" (unten): `zeichne` zeigt, was
+# die ANSICHT über `POST /api/kachel` geholt und am Element unter „_inhalt"
+# zwischengelegt hat (nie der Canvas selbst), `oeffnen` (Taste o) meldet
+# („kachel_oeffnen", verweis) — die Ansicht schickt den Verweis an
+# `POST /api/kachel/aktion`. Langer Inhalt (Kalender) blättert über
+# `blaettern`: die Lage steht unter „_oben", die Ansicht holt damit neu (die
+# App kürzt selbst). Die Art ist für alle Apps dieselbe; was `+` anbietet
+# (z. B. „kalender"), trägt die Ansicht als eigene Wahl ein
+# (tui/ansichten/desk_neu.py).
 
 try:
     from tui.bausteine.textfeld import Textfeld
@@ -149,8 +151,46 @@ class Fremd:
         return None
 
 
+class Kachel:
+    """Verweis auf ein Objekt einer anderen App (hub_bauplan.md „Kacheln").
+    Weiß nichts von HTTP: die Ansicht legt unter element["_inhalt"] ab, was
+    sie geholt hat — {zustand: laedt|ok|zu_klein|weg|aus|fehler, zeilen?,
+    text?, oben_max?, zu_klein?: {w, h} (Außenmaß mit Rahmen)}. Ohne Inhalt
+    steht der Rückfall-Text aus der Datei da (`titel`). 2026-10-10."""
+    name = "kachel"
+
+    def zeichne(self, element, w, h):
+        inhalt = element.get("_inhalt") or {}
+        zustand = inhalt.get("zustand", "laedt")
+        zeilen = inhalt.get("zeilen") or []
+        if zustand == "ok":
+            return [[(t, r) for t, r in z] for z in zeilen[:h]]
+        if zustand == "zu_klein":
+            k = inhalt.get("zu_klein") or {}
+            return [[("zu klein", "leise")],
+                    [("mind. %s×%s" % (k.get("w", "?"), k.get("h", "?")), "leise")]]
+        if zustand == "aus" and zeilen:
+            # letzter Stand, leise: man sieht, dass er alt ist (hub_bauplan.md)
+            return [[(t, "leise") for t, _r in z] for z in zeilen[:h]]
+        kopf = {"laedt": "lädt …", "weg": "nicht mehr da", "aus": "app antwortet nicht",
+                "fehler": inhalt.get("text") or "geht nicht"}.get(zustand, zustand)
+        rolle = "warn" if zustand in ("weg", "fehler") else "leise"
+        return [[(kopf, rolle)]] + [[(t, "leise")] for t in umbrechen(element.get("titel", ""), w)]
+
+    def blaettern(self, element, schritt):
+        grenze = (element.get("_inhalt") or {}).get("oben_max", 0) or 0
+        element["_oben"] = max(0, min(grenze, element.get("_oben", 0) + schritt))
+
+    def oeffnen(self, element):
+        k = element.get("kachel") or {}
+        return ("kachel_oeffnen", {"app": k.get("app"), "art": k.get("art"), "ref": k.get("ref")})
+
+    def modal(self, element):
+        return None
+
+
 def standard_arten(arten):
     """Die Arten, die jede App mit Canvas heute kennt, in `arten` eintragen."""
-    for art in (Notiz(), Bild(), Fremd()):
+    for art in (Notiz(), Bild(), Fremd(), Kachel()):
         arten.registrieren(art)
     return arten

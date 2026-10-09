@@ -13,3 +13,4 @@
 from . import basis, farben, kontext, text  # noqa: F401
 from . import chat, app_start, post, kalender, graphen, fokus, notizen, klavier, karte, technik, startseite, befehle, dashboard, erinnerung, fenster, fussleiste  # noqa: F401
 from . import desk  # noqa: F401  – Desk View (2026-10-09)
+from . import sprung  # noqa: F401  – Sprungziele für Kacheln (2026-10-10)
