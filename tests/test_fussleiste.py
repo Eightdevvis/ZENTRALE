@@ -136,6 +136,16 @@ MAILS = {"mails": [
     "live": False}
 
 
+# Ein Desk wie ein Kreuz: Mitte und je ein Zettel oben, unten, links, rechts —
+# so führt jeder Pfeil vom gewählten Kasten irgendwohin.
+DESK = {"name": "Elektronik", "stand": "s1", "verbindungen": [], "elemente": [
+    {"id": "m", "art": "notiz", "x": 0, "y": 0, "w": 10, "h": 4, "text": "mitte"},
+    {"id": "o", "art": "notiz", "x": 0, "y": -10, "w": 10, "h": 4, "text": "oben"},
+    {"id": "u", "art": "notiz", "x": 0, "y": 10, "w": 10, "h": 4, "text": "unten"},
+    {"id": "l", "art": "notiz", "x": -30, "y": 0, "w": 10, "h": 4, "text": "links"},
+    {"id": "r", "art": "notiz", "x": 30, "y": 0, "w": 10, "h": 4, "text": "rechts"}]}
+
+
 def antwort(pfad, methode):
     """Das gefälschte Backend: erfundene Daten je Pfad (Chat, Gespräche,
     Gedächtnis, Ablage, Projekte wie im Bildschirm-Werkzeug tests/tui_schirm)."""
@@ -144,6 +154,12 @@ def antwort(pfad, methode):
         d = SCHIRM._synth(pfad)
         if d is not None and not p.startswith("/api/graphs/reminders"):
             return copy.deepcopy(d)
+    if p.startswith("/api/desk"):                # Desk View (2026-10-09)
+        if p == "/api/desk" and methode == "GET":
+            return {"desks": [{"name": "Elektronik", "elemente": 5, "geaendert": 1.0}]}
+        if methode == "GET":
+            return copy.deepcopy(DESK)
+        return dict(copy.deepcopy(DESK), stand="s2")
     if methode != "GET":
         if p == "/api/lists" or p.endswith("/items"):
             return {"id": "l9", "name": "neu", "items": []}
@@ -242,6 +258,7 @@ def welt(monkeypatch, tmp_path):
         u.klavier = A.klavier.Klavier(z); u.PIANO = u.klavier.PIANO
         u.karte = A.karte.Karte(z); u.M = u.karte.M
         u.technik = A.technik.Technik(z); u.TECH = u.technik.TECH
+        u.desk = A.desk.Desk(z); u.DESK = u.desk.DESK
         u.startseite = A.startseite.Startseite(z, zt.RAD, zt.META, zt.TRAD, u.technik)
         u.dashboard = A.dashboard.Dashboard(z, u.graphen, u.fokus)
         u.erinnerung = A.erinnerung.Erinnerung(z, u.graphen)
@@ -261,7 +278,7 @@ def zeichnen(u):
 
 def fingerabdruck(u):
     teile = []
-    for name in ("AI", "G", "L", "M", "K", "MAIL", "NOTE", "PIANO", "TECH", "ELEK"):
+    for name in ("AI", "G", "L", "M", "K", "MAIL", "NOTE", "PIANO", "TECH", "ELEK", "DESK"):
         teile.append(repr(getattr(u, name)))
     teile.append(repr((zt.RAD, zt.META, zt.TRAD)))
     teile.append(repr(vars(u.bz)))
@@ -364,6 +381,29 @@ def _elektronik(u):
     u.ELEK["active"] = True
 
 
+def _desk_wahl(u):
+    u.desk.oeffnen()
+
+
+def _desk(u):
+    u.desk.oeffnen()
+    zt.taste_verteilen(u, 10)                # „Elektronik" öffnen
+    zeichnen(u)
+    u.DESK["canvas"].fokus = "m"
+
+
+def _desk_greifen(u):
+    _desk(u); zt.taste_verteilen(u, 10)
+
+
+def _desk_verbinden(u):
+    _desk(u); zt.taste_verteilen(u, ord("v"))
+
+
+def _desk_frage(u):
+    _desk(u); zt.taste_verteilen(u, ord("d"))
+
+
 ZUSTAENDE = {
     "home": ("home", lambda u: None),
     "graph": ("graph", _graph),
@@ -386,6 +426,11 @@ ZUSTAENDE = {
     "map": ("map", _karte),
     "technik": ("technik", _technik),
     "elektronik": ("elektronik", _elektronik),
+    "desk:wahl": ("desk:wahl", _desk_wahl),
+    "desk:canvas": ("desk:canvas", _desk),
+    "desk:greifen": ("desk:greifen", _desk_greifen),
+    "desk:verbinden": ("desk:verbinden", _desk_verbinden),
+    "desk:frage": ("desk:frage", _desk_frage),
 }
 
 

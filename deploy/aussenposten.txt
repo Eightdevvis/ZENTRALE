@@ -25,6 +25,7 @@ tui/boot_loader.py
 # dem Knoten gar nicht (tests/test_tui_ansichten.py prüft das).
 tui/pixel.py
 tui/ansichten/
+tui/bausteine/
 
 # ── Sensorik: der einzige Push-Weg vom Knoten zum PC ─────────────────────
 # Liest GPIO/Tastatur, POSTet /api/sensor/<name> und alle ~30 s Telemetrie.

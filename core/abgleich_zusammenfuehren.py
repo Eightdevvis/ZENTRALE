@@ -41,7 +41,10 @@ def art(rel: str, *fassungen) -> str:
         return "abgeleitet"
     if rel.endswith("ai_usage.json"):
         return "zaehler"
-    if rel.endswith(".json"):
+    # .canvas (Desk View, JSON Canvas, 2026-10-09) ist JSON: nodes/edges mit
+    # id — als Text zusammengeführt stünden sonst zwei Fassungen in der Datei,
+    # und die wäre kein JSON mehr.
+    if rel.endswith((".json", ".canvas")):
         return "json"
     if rel.endswith(".jsonl"):
         return "zeilen"

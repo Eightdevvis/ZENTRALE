@@ -834,6 +834,8 @@ def taste_verteilen(u, ch):
         klavier.taste(ch)
     elif AI["active"]:                     # KI-Chat hat den Fokus
         chat.taste(ch)
+    elif u.DESK["active"]:                 # Desk View hat den Fokus (2026-10-09)
+        u.desk.taste(ch)
     else:                                  # Startseite: das Rad
         # Seit 02.10.2026 keine Buchstaben-Shortcuts mehr (Sasha): ←/→
         # dreht, enter öffnet die App vorn, space die KI. Theme, Laufschrift
@@ -896,6 +898,8 @@ def taste_verteilen(u, ch):
             ELEK["active"] = True
         elif ch in (ord("f"), ord("F")):   # Fokus-Werkzeug öffnen (primäre Taste)
             fokus.oeffnen()
+        elif ch in (ord("d"), ord("D")):   # Desk View: Auswahl der Desks (2026-10-09)
+            u.desk.oeffnen()
         # '/' wird global oben abgefangen (greift in JEDEM Fenster), darum
         # hier kein eigener Zweig mehr.
 
@@ -1048,6 +1052,9 @@ def bild_zeichnen(u):
         addclip(top + body_h // 2, mx + max(2, (midw - len(leer)) // 2), leer,
                 midw - 4, C["faint"])
         addclip(top + body_h - 2, mx + 2, "esc zurück zum rad", midw - 4, C["faint"])
+    elif u.DESK["active"]:
+        draw_box(top, mx, body_h, midw, u.desk.titel())
+        u.desk.draw_desk(top, mx, body_h, midw)
     elif TECH["active"]:
         draw_box(top, mx, body_h, midw, "technik · " + TECH["view"])
         laeuft_jetzt = technik.draw_tech(top, mx, body_h, midw, state, metrics, nets) or laeuft_jetzt
@@ -1200,6 +1207,8 @@ def run_ui(stdscr, store):
     PIANO = klavier.PIANO
     karte = ansichten.karte.Karte(z)
     M = karte.M
+    desk = ansichten.desk.Desk(z)          # Desk View (2026-10-09)
+    DESK = desk.DESK
     technik = ansichten.technik.Technik(z)
     TECH = technik.TECH
     startseite = ansichten.startseite.Startseite(z, RAD, META, TRAD, technik)
@@ -1219,7 +1228,7 @@ def run_ui(stdscr, store):
     # wheel wieder gelandet"). Nur der Kalender nimmt auch Ansicht und Tag mit.
     _offen_apps = (("c", K, kalender), ("g", G, graphen), ("m", M, karte),
                    ("p", MAIL, post), ("a", AI, chat), ("n", NOTE, notizen),
-                   ("f", L, fokus))
+                   ("f", L, fokus), ("d", DESK, desk))
 
     def offen_merken():
         for name, zustand, _ansicht in _offen_apps:
@@ -1259,7 +1268,8 @@ def run_ui(stdscr, store):
         chat=chat, dashboard=dashboard, draw_box=draw_box, erinnerung=erinnerung,
         fokus=fokus, graphen=graphen, kalender=kalender, karte=karte, klavier=klavier,
         notizen=notizen, post=post, safe_addstr=safe_addstr, app_start=app_start,
-        startseite=startseite, stdscr=stdscr, store=store, technik=technik, z=z)
+        startseite=startseite, stdscr=stdscr, store=store, technik=technik, z=z,
+        DESK=DESK, desk=desk)
 
     while True:
         # Neuer Code in tui/? Erst wenn er eine Sekunde ruht (ein Merge

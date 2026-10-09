@@ -20,7 +20,7 @@ Was ihn ausmacht, wo der Code liegt und wie ein neues Symbol gebaut wird.
   als lesbar (E-Ink-Regel aus Sashas Gedächtnis: nie unter 4,5:1 für Schrift).
 - **Motive.** Der **Bernstein** im Treppenschliff (Fokus-Leiste, Vorlage ein
   16×16-PNG), die **App-Symbole** des Rads (Brief, Globus, Kalenderblatt,
-  Klaviatur, Notizblock, Balken, Zielscheibe, Sprechblase) mit eigener
+  Klaviatur, Notizblock, Balken, Zielscheibe, Sprechblase, seit 2026-10-09 Pinnwand mit Schnur für desk) mit eigener
   Fünf-Farben-Palette je App, die **Elektronik** (ein Kern mit Zacken), das
   **Auge** der KI (grüne Iris, schweres Lid, durchscheinend), seit 07.10.
   die **Denk-Adern** (Spiralen aus dem Kern, in den Farben des Auges).

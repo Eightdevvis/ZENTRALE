@@ -455,6 +455,7 @@ SYM_FARBEN = {
     "graph":    _pal("#22d3b4", "#b6fff0", "#14a08a", "#ffd166", "#0d4f45"),
     "fokus":    _pal("#ff8a3d", "#ffe0c2", "#ffb27a", "#ff3d5a", "#5a2410"),
     "tutor":    _pal("#ff6fb5", "#ffd1e8", "#ff9fcf", "#ffffff", "#5c1238"),
+    "desk":     _pal("#f2e6c9", "#fffaf0", "#b8875a", "#e8505b", "#5a3a22"),
 }
 _GRUND = {"nacht": (_hex("#000000"), _hex("#ffffff")),     # (hintergrund, schrift)
           "tag": (_hex("#ffffff"), _hex("#001a40"))}
@@ -629,9 +630,31 @@ def _m_tutor(P, x, y, g, t):
     return mix(P["core"], P["edge"], .15 * (1 - (y - y0) / (y1 - y0))), .9
 
 
+def _m_desk(P, x, y, g, t):
+    """Desk View (2026-10-09): eine Pinnwand mit drei Karten, eine rote
+    Schnur verbindet sie; die mittlere Karte rutscht leise hin und her."""
+    x0, x1, y0, y1 = 2, 30, 9, 46
+    if not (x0 <= x < x1 and y0 <= y < y1):
+        return None
+    if x in (x0, x1 - 1) or y in (y0, y1 - 1):
+        return P["dunkel"], .95                                    # Rahmen
+    wackel = int(round(math.sin(t / 500) * 1.5)) if g >= 1 else 0
+    karten = ((5, 13, 10, 9), (18 + wackel, 17, 9, 8), (9, 32, 13, 9))
+    for kx, ky, kw, kh in karten:
+        if kx <= x < kx + kw and ky <= y < ky + kh:
+            if g > .4 and y in (ky + 3, ky + 5) and kx + 2 <= x < kx + kw - 2:
+                return P["glow"], .6                               # Zeilen auf der Karte
+            return P["core"], .95
+    mitten = [(kx + kw / 2, ky + kh / 2) for kx, ky, kw, kh in karten]
+    if g > .3 and any(_strich(x, y, a[0], a[1], b[0], b[1], .55)
+                      for a, b in zip(mitten, mitten[1:])):
+        return P["akzent"], .95                                    # die Schnur
+    return mix(P["dunkel"], P["glow"], .55), .9                    # Kork
+
+
 MOTIVE = {"post": _m_post, "karte": _m_karte, "kalender": _m_kalender,
           "klavier": _m_klavier, "notizen": _m_notizen, "graph": _m_graph,
-          "fokus": _m_fokus, "tutor": _m_tutor}
+          "fokus": _m_fokus, "tutor": _m_tutor, "desk": _m_desk}
 
 
 def symbol_pixel(name, offen, t_ms, farben="nacht"):
@@ -702,7 +725,7 @@ def _hell(c):
 # Karte grün wie die Kontinente — Sasha, 04.10.2026).
 PILLE = {"post": "core", "karte": "akzent", "kalender": "akzent",
          "klavier": "glow", "notizen": "core", "graph": "core",
-         "fokus": "core", "tutor": "core"}
+         "fokus": "core", "tutor": "core", "desk": "akzent"}
 
 
 def bunt(c):

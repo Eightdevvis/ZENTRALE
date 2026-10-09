@@ -409,6 +409,20 @@ Details zu Modellen + Sprachen: `memory/ki/audio_system.md`.
 
 Details: `memory/werkzeuge/mail_system.md` (Panel/Drill-down/Hybrid, Passphrase-Quellen, Keyring-CLI).
 
+## Desk View (seit 2026-10-09)
+
+`core/desk.py` über `ui/routen/desk.py`. Ein Desk = eine Datei
+`<desk_ordner>/<name>.canvas` (JSON Canvas 1.0). Die TUI rechnet in Zellen
+(1 Spalte = 10 px, 1 Zeile = 20 px); Format, Arten und Tasten:
+[desk_view.md](desk_view.md).
+
+| Endpoint | Methode | Beschreibung |
+|---|---|---|
+| `/api/desk` | GET | `{desks: [{name, elemente, geaendert}]}`, zuletzt geändert zuerst; `elemente` = None bei kaputter Datei. |
+| `/api/desk` | POST | Leeren Desk anlegen. Body `{name}` → 201 mit dem Desk; `400` Name ungültig, `409` gibt es schon. |
+| `/api/desk/<name>` | GET | `{name, elemente: [{id, x, y, w, h, art, text?, typ?, titel?}], verbindungen: [{id, von, nach, label?}], stand}`; `404`, `422` kaputte Datei (wird nie überschrieben). |
+| `/api/desk/<name>` | PUT | Ganzen Desk schreiben. Body `{elemente, verbindungen, stand}` (Verbindungen dürfen `von_seite`/`nach_seite` tragen; ohne `verbindungen` bleiben die Schnüre der Datei). Fehlende Elemente sind gelöscht, ihre Schnüre auch. `409 {error, stand}` wenn die Datei seit dem Laden woanders geändert wurde — nichts geschrieben. |
+
 ## Tutor (eigene App, seit 2026-10-09)
 
 Der Tutor ist eine eigene App mit eigenem Server (Repo `language-tutor`,
@@ -428,3 +442,4 @@ Stimm-Diensten.
 - **2026-09-04** — Aussenposten-Versorgung (`manifest`/`paket`).
 - **2026-09-17** — Tutor-Routen in den Bauplan mit Drift-Test verschoben.
 - **2026-10-08** — Zugangsschlüssel vor allen Routen, `/api/zugang`.
+- **2026-10-09** — `/api/desk` (Desk View).

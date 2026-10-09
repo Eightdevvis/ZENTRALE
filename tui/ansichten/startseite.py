@@ -27,7 +27,7 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
 RAD_APPS = [
     ("k", "klavier"), ("p", "post"), ("c", "kalender"), ("f", "fokus"),
     ("n", "notizen"), ("g", "graph"), ("m", "karte"), ("u", "tutor"),
-    ("e", "elektronik"),
+    ("d", "desk"), ("e", "elektronik"),
 ]
 # Apps mit Pixel-Symbol (tui/pixel.py): im Rad eine Pille, vorn klappt das
 # Symbol auf. Seit 03.10.2026: elektronik (Sasha), am selben Abend alle

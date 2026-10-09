@@ -25,6 +25,8 @@ data/gespraeche/
 # von Anhaengen in UNTERORDNERN (.md, .py, .png …) — faellt nicht unter
 # data/*.json. Anhaenge sind Sashas Dateien, genauso privat.
 data/ablage/
+# Desk View (core/desk.py, 2026-10-09): .canvas-Dateien, Sashas Notizen.
+data/desk/
 # Bewertungen der KI-Antworten (core/rueckmeldungen.py, seit 2026-10-08):
 # eine .jsonl pro Rechner, mit Kommentaren von Sasha — privat wie die Gespraeche.
 data/rueckmeldungen/

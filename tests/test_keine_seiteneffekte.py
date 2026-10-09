@@ -715,3 +715,12 @@ def test_nutzer_ordner_zeigt_nicht_auf_den_echten():
     echt = os.path.realpath(os.path.expanduser(nutzer_ordner.STANDARD))
     assert nutzer_ordner.wurzel(anlegen=False) != echt
     assert not nutzer_ordner.wurzel(anlegen=False).startswith(os.path.realpath(ROOT))
+
+
+def test_desk_ordner_liegt_im_test_nicht_im_echten_data():
+    """Desk View (core/desk.py, 2026-10-09): im Betrieb data/desk/ mit Sashas
+    Zetteln. Kein Test legt dort einen Desk an oder überschreibt einen."""
+    import desk
+    wert = os.environ.get("ZENTRALE_DESK_ORDNER")
+    assert wert, "ZENTRALE_DESK_ORDNER ist nicht gesetzt"
+    assert not os.path.realpath(desk.ordner()).startswith(os.path.realpath(ROOT))

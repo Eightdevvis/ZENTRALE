@@ -32,6 +32,9 @@ def in_text_entry(z):
         # Beim Namen-Tippen ist '/' ein Zeichen; sonst ist die ganze
         # Tastatur Klaviatur — die Befehlszeile hat da nichts verloren.
         return True
+    DESK = getattr(z, "DESK", None)       # Desk View (2026-10-09): Name/Modal = Text
+    if DESK and DESK["active"]:
+        return DESK["name"] is not None or DESK["modal"] is not None
     if AI["active"]:
         # Ganzes Panel ist Prompt-Eingabe → '/' bleibt ein Zeichen, öffnet
         # nicht die Befehlszeile. (Bei offener Erlaubnis-Frage ignoriert der
@@ -74,6 +77,17 @@ def current_ctx(z):
         # Leiste soll nur zeigen, was geht (2026-10-07).
         art = "mail:read" if MAIL["mode2"] == "read" else "mail:list"
         return art + (":eingang" if MAIL["cat"] == MAIL_EINGANG else "")
+    DESK = getattr(z, "DESK", None)
+    if DESK and DESK["active"]:
+        # Wahl, Ruhe, Greifen, Verbinden, Frage → eigene Tasten; Name tippen
+        # und Modal sind Freitext (None). Die Ansicht weiß es selbst.
+        D = DESK
+        if D["name"] is not None or D["modal"] is not None:
+            return None
+        if D["ebene"] == "wahl":
+            return "desk:wahl"
+        modus = D["canvas"].modus if D["canvas"] else "ruhe"
+        return "desk:" + {"ruhe": "canvas"}.get(modus, modus)
     if AI["active"]:
         return "ai"
     if PIANO["active"]:

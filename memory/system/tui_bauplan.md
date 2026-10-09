@@ -72,6 +72,11 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/fussleiste.py` | Tastenzeile ganz unten: `eintraege(u)` (wer hat den Fokus → welche Tasten), `zeile`, `text`, `codes` (Beschriftung → Tastencodes, für den Test) | — |
 | `ansichten/erinnerung.py` | `Erinnerung`: Graph-Reminder-Kästchen | `nag_*` |
 | `ansichten/fenster.py` | `in_text_entry(z)`, `current_ctx(z)`: wer hat den Fokus | — |
+| `ansichten/desk.py` | `Desk`: Desk View (Taste `d`, seit 2026-10-09) — Auswahl der Desks, dann die Fläche aus dem Baustein `bausteine/canvas.py`; laden/speichern über `/api/desk`, Bearbeiten-Modal mittig, Hinweiszeile | `DESK` |
+| `bausteine/canvas.py` | Baustein `Canvas` (ohne Desk-Wissen): Welt in Zellen, Ausschnitt, Fokus/Greifen/Verbinden/Frage, `Arten`-Registrierung, `bild()` → Zeilen aus (spalte, text, rolle); `taste_deuten`/`shift_pfeil` (Shift+Pfeil über `curses.keyname`) | am Objekt der Ansicht |
+| `bausteine/schnur.py` | Schnüre: Andockseite nach Lage, rechtwinkliger Weg, Box-Zeichen, Kreuzungen — reine Geometrie | — |
+| `bausteine/canvas_arten.py` | Arten `notiz` (Zettel, Rahmen `amber`, erste Zeile Titel, blättern) und `fremd`; `TextModal`; hier docken Kacheln an | — |
+| `bausteine/textfeld.py` | `Textfeld`: kleiner mehrzeiliger Editor für Modale (Umlaute, ↑↓ über umbrochene Zeilen, Strg+S/Esc) | — |
 
 ## Wie eine Ansicht gebaut ist (und eine neue gebaut wird)
 
@@ -589,6 +594,19 @@ Zeichen, mehrere mit `/` oder Leerzeichen (`a/s`, `pgup pgdn`); `type` und
 Headless: Szenario `ki_nachbesserung` in `tests/tui_schirm/lauf.py` (neuer
 Schritt `paste` = tmux-Puffer einfügen; Socket per `ZTUI_SOCK`).
 
+## Bausteine (seit 2026-10-09)
+
+`tui/bausteine/` hält Teile, die keine Ansicht sind und mehreren Apps dienen
+sollen — zuerst der Canvas hinter Desk View
+([desk_view.md](desk_view.md)). Regeln: ein Baustein importiert nichts aus
+`ansichten/`, zeichnet nicht selbst (liefert Zeilen mit Rollen, die Ansicht
+macht Farben daraus), speichert nichts und fragt kein Backend — er meldet
+ein `Ergebnis`, die Ansicht speichert. Importe wie bei `pixel`:
+`try: from tui.bausteine import … / except ImportError: from bausteine import …`.
+Der Ordner steht in `deploy/aussenposten.txt`. Tests ohne Terminal:
+`tests/test_desk_canvas.py`; die Ansicht gegen das echte `core/desk.py`:
+`tests/test_desk.py`; Fußleisten-Zustände `desk:*` in `tests/test_fussleiste.py`.
+
 ## Historie
 
 - **2026-10-05** — Kern-Bauplan friert `run_ui` (7.701 Zeilen) als Riese ein.
@@ -596,3 +614,4 @@ Schritt `paste` = tmux-Puffer einfügen; Socket per `ZTUI_SOCK`).
   Chat, Tutor, Post, Kalender, Graphen, Fokus, Notizen, Klavier, Karte,
   Technik, Startseite, Befehlszeile, Dashboard/Reminder, Fokus-Fragen,
   Schleife). Branch `worktree-agent-ac95c51a142500eaa`.
+- **2026-10-09** — `tui/bausteine/` (Canvas, Schnur, Textfeld) und Desk View (`ansichten/desk.py`, Taste `d`).

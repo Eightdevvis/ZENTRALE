@@ -85,6 +85,9 @@ os.environ.setdefault("ZENTRALE_APP_PFAD_TUTOR",
 # im Betrieb ~/Zentrale): kein Test legt dort etwas an oder liest von dort.
 os.environ.setdefault("ZENTRALE_NUTZER_ORDNER", os.path.join(_DATEN_TMP, "nutzer"))
 os.environ.setdefault("ZENTRALE_RUECKMELDUNGEN_DIR", os.path.join(_DATEN_TMP, "rueckmeldungen"))
+# Desk View (core/desk.py, 2026-10-09): im Betrieb data/desk/. Dazu unten
+# pro Test ein eigener Ordner.
+os.environ.setdefault("ZENTRALE_DESK_ORDNER", os.path.join(_DATEN_TMP, "desk"))
 # Abgleich über die Mitte (core/abgleich.py, 2026-10-08): örtlicher Zustand,
 # Schlüssel und Mitte nie die echten. Die Mitte zeigt auf ein Verzeichnis,
 # das es nicht gibt — ein Test, der vergisst, seine eigene Wegwerf-Mitte zu
@@ -267,6 +270,13 @@ def _ablage_frisch(tmp_path_factory, monkeypatch):
 @pytest.fixture(autouse=True)
 def _rueckmeldungen_frisch(tmp_path_factory, monkeypatch):
     monkeypatch.setenv("ZENTRALE_RUECKMELDUNGEN_DIR", str(tmp_path_factory.mktemp("rueckmeldungen")))
+    yield
+
+
+# 7e. Jeder Test hat seine eigenen Desks (core/desk.py, 2026-10-09).
+@pytest.fixture(autouse=True)
+def _desk_frisch(tmp_path_factory, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_DESK_ORDNER", str(tmp_path_factory.mktemp("desk")))
     yield
 
 

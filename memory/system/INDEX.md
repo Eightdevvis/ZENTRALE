@@ -10,6 +10,7 @@ und wie die Fronten daran hängen.
 | **Produkt-Inventur** — was fertig, beta, Umbau, nur Dev; Lizenz-Ecke frei/Abo/exklusiv; was vor dem Verkauf fehlt (09.10.) | [produkt_inventur.md](produkt_inventur.md) |
 | **Hub-Bauplan** — ZENTRALE als Plattform, Module als Apps: Manifest, Rechte, Datenordner je App, Ereignisse, Modell-Zugang, Umzugs-Reihenfolge; entschieden 09.10., Schritt 1 (Tutor als App) erledigt; Kacheln (entschieden) | [hub_bauplan.md](hub_bauplan.md) |
 | **Bauplan der TUI** — wie `tui/` in Ansichten geschnitten ist, Kontext statt Closures, Reihenfolge, Sicherheitsnetz | [tui_bauplan.md](tui_bauplan.md) |
+| **Desk View** — unendliche Fläche je Desk mit Zetteln und Schnüren (Taste `d`), Canvas-Baustein, Format JSON Canvas, Tasten, offene Punkte (09.10.) | [desk_view.md](desk_view.md) |
 | **Pixelstil** der TUI — Sextant-Pixel, Braille-Icons, Paletten Tag/Nacht, Motive, Regeln für neue Symbole | [pixelstil.md](pixelstil.md) |
 | Wer läuft wo — PC ↔ Pi ↔ Laptop, Sync der `data/*.json` | [topologie.md](topologie.md) |
 | **Heimnetz (Plan)** — PC als Gehirn ohne Bildschirm, eigener Router, VPN, Sunshine; Übergang bis Glasfaser | [heimnetz.md](heimnetz.md) |

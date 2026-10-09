@@ -35,6 +35,9 @@ SICHERN = [
     "data/gespraeche/**",
     "data/ablage/**",
     "data/rueckmeldungen/*.jsonl",
+    # Desk View (core/desk.py, 2026-10-09, Sasha: „immer mitsyncen"):
+    # .canvas-Dateien, JSON — zusammengeführt nach id wie jede JSON-Datei.
+    "data/desk/**",
     "tutor/data/tutor_config.json",
     "tutor/data/aktiver_stand",
     "tutor/data/staende/**",
