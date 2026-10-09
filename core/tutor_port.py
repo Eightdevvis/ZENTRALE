@@ -256,6 +256,17 @@ def status() -> dict:
     }
 
 
+OPTIKEN = ("pixel", "alt")
+
+
+def optik() -> str:
+    """Wie das Zimmer aussieht — Einstellung tutor_optik, Standard pixel.
+    Unbekannte Werte → pixel (ein Tippfehler soll kein leeres Bild machen)."""
+    import ai_config
+    v = str(ai_config.setting("tutor_optik", "pixel") or "pixel").strip().lower()
+    return v if v in OPTIKEN else "pixel"
+
+
 def config(changes: dict | None = None, persist: bool = False) -> dict:
     """Liest (und optional ändert) die Live-Tutor-Konfiguration.
     changes: {lang, provider, model, history_window} — alle optional.
@@ -276,6 +287,11 @@ def config(changes: dict | None = None, persist: bool = False) -> dict:
     for k in ("provider", "model", "history_window", "native"):
         if changes and k in changes:
             tutor_config.set_override(k, changes[k], persist=persist)
+    if changes and changes.get("optik") in OPTIKEN:
+        # Aussehen gehört dem Kern (ai_config), nicht tutor_config: eine
+        # ZENTRALE-Einstellung wie alle anderen (2026-10-08).
+        import ai_config
+        ai_config.set_override("tutor_optik", changes["optik"], persist=persist)
 
     prof, pname, _prov, model = ts._resolve()
     native = tutor_config.setting("native", "en")
@@ -289,6 +305,9 @@ def config(changes: dict | None = None, persist: bool = False) -> dict:
         "persona_name":   prof.get("persona_name", prof["name"]),
         "country":        prof.get("country", ""),
         "avatar":         prof.get("avatar") or "lucia",
+        # Aussehen des Zimmers (2026-10-08): pixel (neu) | alt (das bisherige
+        # Bild als Rückfall). Einstellung tutor_optik, Env ZENTRALE_TUTOR_OPTIK.
+        "optik":          optik(),
         "provider":       pname,
         "model":          model,
         "trains_on_data": tutor_anbieter.trains_on_data(pname),

@@ -47,6 +47,20 @@ except ImportError:      # als Skript gestartet: tutor/ liegt selbst im Pfad
         import sprites as _sprites
     except ImportError:
         _sprites = None
+# Pixel-Optik + Kopfzeilen-Texte (2026-10-08, tutor/pixel_zimmer.py; Pflichtteil).
+try:
+    from tutor import pixel_zimmer as _pixel
+except ImportError:
+    import pixel_zimmer as _pixel
+# Das Ohr (Dauer-Mikro, seit 2026-10-08 eigenes Modul). Fehlt es (altes
+# Paket), bleibt das Zimmer stumm-taub statt abzustürzen.
+try:
+    from tutor import mikro as _mikro
+except ImportError:
+    try:
+        import mikro as _mikro
+    except ImportError:
+        _mikro = None
 
 # Umrechnung zwischen den Einheiten der alten Polygon-Figur und Sashas
 # Mal-Leinwand: eine Einheit hier sind so viele Pixel dort. Ergibt sich aus
@@ -206,26 +220,13 @@ FOLLOWUP_S      = 15.0    # s: sie hat gerade etwas gesagt/gefragt, Sasha ist da
 # Pause (Alt+P): komplett Ruhe — kein Zuhören, kein Anstoß, keine Stimme — bis zum
 # nächsten Alt+P. Überlebt Neustarts (Datei), damit ein Deploy sie nicht weckt.
 PAUSE_DATEI = os.path.join(os.path.expanduser('~'), '.config', 'zentrale', 'tutor_pause')
-# Immer-Zuhören (STT): Mikro im Fenster, webrtcvad segmentiert Sprache, das Mikro
-# ist gegated während die Persona spricht (sonst hört sie sich selbst zu).
-MIC_RATE          = 16000  # Hz (webrtcvad kann 8/16/32k)
-MIC_FRAME_MS      = 20      # ms pro VAD-Frame
-MIC_VAD_AGGR      = 3       # 0..3 (höher = strenger, weniger Fehl-Trigger) — bei
-                            # hohem USB-Pegel hielt Stufe 2 Rauschen für Stimme
-MIC_SILENCE_MS    = 700     # Pause nach Sprache → Äußerung fertig
-MIC_MINSPEECH_MS  = 300     # kürzere „Äußerungen" verwerfen (Blips/Husten)
-MIC_MAX_MS        = 12000   # harte Obergrenze pro Äußerung
+# Immer-Zuhören (STT): tutor/mikro.py (Schwellen, VAD, Gate).
 # Anwesenheit ÜBERS MIKRO (Sasha 2026-09-14: der Geräuschsensor an GPIO schlug
 # je nach Drehung bei allem oder bei nichts an — erstmal nur das Mikro). Zwei
 # Signale aus demselben Strom: Sprache (webrtcvad) und Geräusch (Pegel deutlich
 # über dem mitlaufenden Grundrauschen — Schritte, Tür, Tasse). Beides zählt als
 # „jemand ist da". Daraus: ANKUNFT = Aktivität nach längerer Ruhe → die Persona
 # spricht von sich aus an; LAUFEND = Sensor-Event ans Backend, gedrosselt.
-PRES_NOISE_K      = 5.0     # Pegel > k × Grundrauschen = Geräusch
-PRES_NOISE_MIN    = 400     # ... und mindestens so laut (RMS, int16) — ein leiser
-                            # Raum hat ein winziges Grundrauschen, dann wäre k×floor
-                            # fast nichts und das Nebenzimmer zählte mit
-PRES_NOISE_MS     = 400     # so lange muss der Pegel oben bleiben (kein Knacks)
 PRES_ARRIVE_QUIET_S = 600   # s Ruhe davor, damit Aktivität als ANKUNFT gilt
 PRES_HERE_S       = 120     # s seit letzter Aktivität = „jemand ist da" (Sensor)
 PRES_NUDGE_HERE_S = 40      # s — fürs ANQUATSCHEN muss sie GERADE jemanden hören;
@@ -522,15 +523,6 @@ class Backend:
 
 
 # ── Mikro/STT-Helfer ─────────────────────────────────────────────────────────
-def _pcm_to_wav(pcm_bytes, rate=MIC_RATE):
-    """Rohe int16-mono-Frames → WAV-Bytes (für /api/transcribe)."""
-    bio = io.BytesIO()
-    with wave.open(bio, 'wb') as w:
-        w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate)
-        w.writeframes(pcm_bytes)
-    return bio.getvalue()
-
-
 def _multipart_audio(fields, wav_bytes):
     """Minimaler multipart/form-data-Body (audio-Datei + Felder) — ohne requests,
     passend zu /api/transcribe."""
@@ -2221,6 +2213,8 @@ def main():
     ap.add_argument('--speed', type=float, default=float(os.environ.get('TUTOR_TTS_SPEED', '1.0')))
     ap.add_argument('--mute', action='store_true', help='ohne Stimme starten')
     ap.add_argument('--no-mic', action='store_true', help='ohne Immer-Zuhören (STT) starten')
+    ap.add_argument('--optik', choices=('pixel', 'alt'), default=None,
+                    help='Aussehen (sonst Einstellung tutor_optik vom Backend)')
     a = ap.parse_args()
 
     pygame.init()
@@ -2324,6 +2318,7 @@ def main():
         'provider': '', 'model': '',
         'native': 'en', 'natives': [],   # Muttersprache (Glosse) + Auswahl
         'mic': not a.no_mic,   # Immer-Zuhören an? (Alt+H togglet)
+        'optik': a.optik or 'pixel',   # pixel | alt (Backend-Einstellung tutor_optik)
         'hearing': False,      # gerade Sprache am Mikro?
         'activity_ms': 0,      # letzte Aktivität am Mikro (Sprache ODER Geräusch)
         'voice_ms': 0,         # letzte VERSTANDENE Worte (Whisper) — nur das darf sie
@@ -3070,6 +3065,7 @@ def main():
                 ('Sprech-Tempo', 'automatisch (Lernstand)' if spd is None else f'{spd:.1f}×'),
                 ('Muttersprache (Glosse)', NATIVE_NAMEN.get(S['native'], S['native'])),
                 ('KI-Anbieter',  prov + (f' · {S["model"]}' if S['model'] else '')),
+                ('Aussehen',     'Pixel' if S['optik'] == 'pixel' else 'Klassisch'),
                 ('Zurück', ''),
             ]
 
@@ -3126,6 +3122,12 @@ def main():
                         S['provider'] = cf.get('provider') or neu['name']
                         S['model'] = cf.get('model') or ''
             threading.Thread(target=_set, daemon=True).start()
+        elif idx == 6:
+            # Aussehen: sofort hier umschalten, im Backend merken (tutor_optik).
+            with S['lock']:
+                S['optik'] = 'alt' if S['optik'] == 'pixel' else 'pixel'; neu = S['optik']
+            threading.Thread(target=be.set_config, args=({'optik': neu, 'persist': True},),
+                             daemon=True).start()
 
     def pmenu_key(ev):
         """Tasten im Zwischenmenü: ↑/↓ wählen, Enter/→/← anwenden, Esc zurück."""
@@ -3276,6 +3278,8 @@ def main():
         cf = be.config()
         if cf:
             with S['lock']:
+                if not a.optik and cf.get('optik') in ('pixel', 'alt'):
+                    S['optik'] = cf['optik']
                 if cf.get('persona_name'):
                     S['persona'] = cf['persona_name']
                 if cf.get('lang'):
@@ -3549,113 +3553,20 @@ def main():
             send(t)
 
     def listen_loop():
-        """Immer-Zuhören: Dauer-Mikro, webrtcvad segmentiert Sprache; das Mikro
-        ist GEGATED, solange die Persona spricht/antwortet (sonst hört sie sich
-        selbst). Endpointing: nach MIC_SILENCE_MS Pause → Segment an Whisper.
-        Kein Mikro / STT-Libs fehlen → still deaktivieren."""
-        try:
-            import sounddevice as sd
-            import webrtcvad
-        except Exception:
+        """Immer-Zuhören (tutor/mikro.py): Äußerung fertig → Whisper."""
+        if _mikro is None:
             with S['lock']:
-                S['mic'] = False; S['mic_err'] = 'STT-Libs fehlen (pip install)'
+                S['mic'] = False; S['mic_err'] = 'Mikro-Modul fehlt'
             return
-        n = int(MIC_RATE * MIC_FRAME_MS / 1000)   # samples/Frame
-        try:
-            vad = webrtcvad.Vad(MIC_VAD_AGGR)
-            stream = sd.RawInputStream(samplerate=MIC_RATE, channels=1, dtype='int16', blocksize=n)
-            stream.start()
-        except Exception:
-            with S['lock']:
-                S['mic'] = False; S['mic_err'] = 'kein Mikrofon'
-            return
-        import array
-        buf = []; in_speech = False; silence = 0; speech = 0
-        floor = 0.0; loud_ms = 0      # Grundrauschen + wie lange schon laut
-        log_ms = 0
-        while True:
-            with S['lock']:
-                on = S['mic'] and not S['pause'] and S['pmenu'] is None
-                gated = S['speaking'] or S['busy'] or S['streaming']
-                musik = S['music'] is not None
-            try:
-                data, _ = stream.read(n)
-            except Exception:
-                pygame.time.wait(20); continue
-            if (not on) or gated:
-                if in_speech or buf:
-                    buf, in_speech, silence, speech = [], False, 0, 0
-                    with S['lock']: S['hearing'] = False
-                continue
-            frame = bytes(data)
-            if len(frame) < n * 2:
-                continue
-            try:
-                is_sp = vad.is_speech(frame, MIC_RATE)
-            except Exception:
-                continue
-            # Geräusch-Signal: RMS des Frames gegen ein langsam mitlaufendes
-            # Grundrauschen. Das Grundrauschen lernt nur aus leisen Frames (sonst
-            # zieht ein Gespräch es hoch und danach hört sie nichts mehr). Läuft
-            # Musik aus dem eigenen Lautsprecher, zählt nur Sprache — der Pegel
-            # wäre sonst dauerhaft „laut".
-            try:
-                a = array.array('h', frame)
-                rms = math.sqrt(sum(x * x for x in a) / len(a)) if len(a) else 0.0
-            except Exception:
-                rms = 0.0
-            if floor <= 0.0:
-                floor = max(rms, 1.0)
-            laut = (not musik) and rms > PRES_NOISE_K * floor and rms > PRES_NOISE_MIN
-            if laut:
-                loud_ms += MIC_FRAME_MS
-            else:
-                loud_ms = 0
-            # Der Boden lernt NUR aus stillen Frames (weder Sprache noch laut) —
-            # sonst zieht ein Gespräch ihn auf Sprachpegel hoch (gesehen: floor
-            # 1556) und danach ist nichts mehr „laut". Runter geht es schnell
-            # (Startknacks, Nachhall), rauf nur langsam.
-            if not is_sp and not laut:
-                if rms < floor:
-                    floor = floor * 0.9 + rms * 0.1
-                else:
-                    floor = floor * 0.995 + rms * 0.005
-            # Anwesenheit aus GERÄUSCH hier; aus SPRACHE erst in _do_transcribe,
-            # wenn Whisper echte Wörter daraus gemacht hat. Der VAD allein hielt
-            # bei hohem USB-Pegel Rauschen für Stimme (Log: „sprache" im leeren
-            # Zimmer, RMS ~1500) → Lucía redete ins Leere.
-            if loud_ms >= PRES_NOISE_MS:
-                jetzt = pygame.time.get_ticks()
-                with S['lock']:
-                    S['activity_ms'] = jetzt
-                    S['noise_floor'] = floor
-                # Zum Nachjustieren der Schwellen: höchstens alle 10 s eine Zeile
-                # ins Log (stderr → /tmp/zentrale-tutor-room.log), was gehört wurde.
-                if jetzt - log_ms > 10000:
-                    log_ms = jetzt
-                    print(f"[mikro] aktiv: geräusch rms={rms:.0f} floor={floor:.0f}",
-                          file=sys.stderr, flush=True)
-            if is_sp:
-                buf.append(frame); in_speech = True; speech += MIC_FRAME_MS; silence = 0
-                with S['lock']: S['hearing'] = True
-            elif in_speech:
-                buf.append(frame); silence += MIC_FRAME_MS
-                if silence >= MIC_SILENCE_MS:
-                    with S['lock']: S['hearing'] = False
-                    if speech >= MIC_MINSPEECH_MS:
-                        threading.Thread(target=_do_transcribe,
-                                         args=(_pcm_to_wav(b''.join(buf)),), daemon=True).start()
-                    buf, in_speech, silence, speech = [], False, 0, 0
-            if (speech + silence) >= MIC_MAX_MS:      # harte Obergrenze
-                if speech >= MIC_MINSPEECH_MS:
-                    threading.Thread(target=_do_transcribe,
-                                     args=(_pcm_to_wav(b''.join(buf)),), daemon=True).start()
-                buf, in_speech, silence, speech = [], False, 0, 0
-                with S['lock']: S['hearing'] = False
+        _mikro.hoeren(S, lambda wav: threading.Thread(
+            target=_do_transcribe, args=(wav,), daemon=True).start(),
+            pygame.time.get_ticks)
 
-    threading.Thread(target=listen_loop, daemon=True).start()
+    ohr_faden = threading.Thread(target=listen_loop, daemon=True)
+    ohr_faden.start()
 
     running = True
+    pixel_maler = None     # tutor/pixel_zimmer.Pixelzimmer, beim ersten Pixel-Frame
     caret_t = 0.0
     bub_text = ''      # aktuell in der Blase stehender Text
     bub_age  = 999.0   # s seit letztem Sprechen — steuert das Ausblenden
@@ -3870,6 +3781,14 @@ def main():
             screen.blit(freeze, (0, 0))
         elif asv_snap is not None:
             draw_assessment(screen, w, h, fonts, asv_snap, speaking, caret_t)
+        elif S['optik'] == 'pixel':
+            if pixel_maler is None:
+                pixel_maler = _pixel.Pixelzimmer(_font)
+            pixel_maler.zeichnen(screen, _pixel.bild(
+                S, w, h, caret_t, theme_now, persona, tv_on, tv_title, avail,
+                bub_text, bub_age, thought, thought_t, pname, msg, tts_ok,
+                mic_err, mic, transcribing, hearing, music, mood, battery, log,
+                scroll, inp, compose, PRES_HERE_S, _sym, BUBBLE_LINGER, BUBBLE_FADE))
         else:
             draw_room(screen, w, h, caret_t)
             draw_tv(screen, w, h, tv_on, tv_title, fonts['hud'], caret_t)
@@ -3894,7 +3813,8 @@ def main():
         # Im Drill (asv) ist der Screen bewusst nackt — draw_assessment trägt alles.
         # Bei offenem Zwischenmenü steckt der HUD schon im Standbild — nicht noch
         # einmal scharf drüber (Sasha: »die Leiste unten bleibt scharf«).
-        if asv_snap is None and not (pmenu is not None and freeze is not None):
+        if (asv_snap is None and not (pmenu is not None and freeze is not None)
+                and S['optik'] != 'pixel'):
             # schläft/nicht erreichbar
             if avail is False:
                 zz = fonts['big'].render('zzz…', True, HUD_DIM)
@@ -3905,37 +3825,10 @@ def main():
 
             # HUD oben: Name + kompakte Steuerung/Meldung (unten ist jetzt die Leiste)
             screen.blit(fonts['big'].render(pname, True, HUD_FG), (16, 12))
-            if msg:
-                hint = msg
-            elif avail is False:
-                hint = 'verbinde…'
-            elif avail and not tts_ok:
-                hint = '🔇 keine Stimme (tts-service aus?)'
-            else:
-                hint = 'Esc Menü · ↑/↓ Verlauf · Enter reden · Alt+P Pause · Alt+D Drill · Alt+Z Zentrale'
+            hint, mic_line, mic_kind = _pixel.hud_zeilen(S, msg, avail, tts_ok, mic_err, mic,
+                                                   transcribing, hearing, PRES_HERE_S, _sym)
             screen.blit(fonts['hud'].render(hint, True, HUD_DIM), (16, 44))
-
-            # Mic-Indikator (Immer-Zuhören): Zustand + Alt+H
-            if mic_err:
-                mic_line, mic_col = 'Mic: ' + mic_err, HUD_DIM
-            elif not mic:
-                mic_line, mic_col = 'Mic aus · Alt+H', HUD_DIM
-            elif transcribing:
-                mic_line, mic_col = 'Mic: versteht…', ROLE_USER
-            elif hearing:
-                mic_line, mic_col = 'Mic: hört dich ●', ROLE_USER
-            else:
-                mic_line, mic_col = 'Mic: hört zu · Alt+H', HUD_DIM
-            # Anwesenheit (aus Sprache/Geräusch am Mikro): sichtbar, damit man
-            # an der Wand sieht, ob sie einen gerade „bemerkt" hat.
-            with S['lock']:
-                _act = S['activity_ms']
-            if _act and (pygame.time.get_ticks() - _act) / 1000.0 < PRES_HERE_S:
-                mic_line += ' · da'
-            with S['lock']:
-                _pause = S['pause']
-            if _pause:
-                mic_line, mic_col = 'PAUSE · sie lässt dich in Ruhe · Alt+P', ASSESS_GOLD
+            mic_col = {'aktiv': ROLE_USER, 'pause': ASSESS_GOLD}.get(mic_kind, HUD_DIM)
             screen.blit(fonts['hud'].render(mic_line, True, mic_col), (16, 66))
             if music:
                 screen.blit(fonts['hud'].render(f'♪ {music}', True, ROLE_USER), (16, 88))
@@ -4027,6 +3920,11 @@ def main():
 
         pygame.display.flip()
 
+    # Mikro sauber zu, BEVOR der Prozess endet: ein offener PortAudio-Strom
+    # riss ihn sonst beim Beenden ab (SIGSEGV, 2026-10-08).
+    with S['lock']:
+        S['ende'] = True
+    ohr_faden.join(timeout=1.0)
     pygame.quit()
 
 

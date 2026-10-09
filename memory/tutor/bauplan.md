@@ -53,18 +53,21 @@ Diese Tabelle liest der Drift-Test: jeder Pfad muss existieren.
 | Pfad | Rolle |
 |---|---|
 | `tutor/__init__.py` | Paket |
-| `tutor/session.py` | Ein Turn: History, System-Prompt-Bau (Persona + Vokabel-Status + Kern-Hinweis + Gedächtnis + `{native}`), Streaming, Token-Guard gegen Stand-Wechsel |
+| `tutor/session.py` | Ein Turn: Eingabe auswerten (spoken/listened, „que?"), Ruhe-Regel + Anlass (über `ansprache`), System-Prompt-Bau (Persona + Vokabel-Status + Niveau + Kern-Hinweis + Gedächtnis + `{native}`), Streaming, Nachkontrolle, Token-Guard gegen Stand-Wechsel |
 | `tutor/tools.py` | Vokabel-Modell (spoken/listened → Status), Kernwörter, Spiel (Münzen/Kisten/Teile), Level, Glosse (Muttersprache), die Tool-Calls fürs Modell |
 | `tutor/skills.py` | Situations-Auslöser (deterministisch), erster: `no_entiendo` |
+| `tutor/ansprache.py` | Seit 2026-10-08: WANN sie von sich aus spricht (Ruhe: höchstens 2 Äußerungen ohne Antwort, Abstand, Ankunft erst nach Ruhe), WOZU (Anlass + Lernziel), WIE SCHWER (bekannte Wörter → Leiter, Nachkontrolle fremder Wörter), Schlüsselwort für „que?" |
 | `tutor/memory.py` | Persona-Gedächtnis (Notizen je Stand), Verdichtung nach dem Turn mit Token-Prüfung |
 | `tutor/srs.py` | Langzeit-Wiederholung (FSRS) je Stand |
 | `tutor/staende.py` | Spielstände: `stand.json {name, lang, level}`, `stand_lock`, `pfad()` weigert fremde Sprache, `token()/pruefen()`, Migration |
 | `tutor/config.py` | Einstellungen: provider, model, history_window, native — **kein** lang |
 | `tutor/anbieter.py` | Naht zur einen Straße des Kerns (seit 2026-10-08): Anbieter-Liste aus `core/providers.py` (inkl. trains_on_data), Fahren über `kern.fahrzeug()/fahren()`; Regler max_tokens/temperature/effort. Ersetzt `providers.py`, `cloud.py`, `openai_compat.py` |
 | `tutor/debug.py` | Devtool-Ereignisbus (`emit`, SSE über `ui/routen/tutor.py`, geholt per `tutor_port.debug_bus()`) |
-| `tutor/room.py` | Das Zimmer: pygame-Fenster, Mikro-Schleife (VAD → Whisper), Stimme, Persona-Figur, Esc-Menü, Hauptmenü (Stände), Drill als Spiel |
 | `tutor/room_zugang.py` | Das Zimmer schickt den Zugangsschlüssel des Backends mit (lädt `tui/ansichten/zugang_klient.py`, `memory/betrieb/zugang.md`) |
+| `tutor/room.py` | Das Zimmer: pygame-Fenster, Stimme, Persona-Figur, Esc-Menü, Hauptmenü (Stände), Drill als Spiel |
+| `tutor/mikro.py` | Das Ohr des Zimmers (seit 2026-10-08 aus room.py): Dauer-Mikro → VAD → fertige Äußerung (WAV) + Geräusch-Signal; öffnet das Mikro erst, wenn Zuhören an ist, schließt es beim Beenden. Nur stdlib + sounddevice/webrtcvad, fährt im Aussenposten-Paket mit |
 | `tutor/sprites.py` | Lädt die Figur (Rig + gemalte Teile) |
+| `tutor/pixel_zimmer.py` | Seit 2026-10-08: das Zimmer in Pixel-Optik (ein Raster, feste Palette je Tag/Nacht, harte Kästen, Text ohne Kantenglättung) plus die Kopfzeilen-Texte für beide Optiken. Umschalten: Einstellung `tutor_optik` = `pixel` (Standard) / `alt`, im Esc-Menü „Aussehen", per `--optik`. Das alte Bild (`room.draw_room` …) bleibt unverändert |
 | `tutor/gelenke.py` | Drehpunkte/Posen der Figur |
 | `tutor/schablone.py` | Mal-Schablone für neue Figuren |
 | `tutor/langs/__init__.py` | Paket-Discovery: jeder Ordner mit `PROFILE` ist eine Sprache |
@@ -89,7 +92,9 @@ Diese Tabelle liest der Drift-Test: jeder Pfad muss existieren.
 | `tests/test_tutor_skills.py` | Skill-Auslöser |
 | `tests/test_tutor_wortregel.py` | Nur Wörter der Zielsprache in die Vokabelliste (Grenze gegen das Modell) |
 | `tests/test_tutor_isolation.py` | Stände bluten nicht: Vokabeln, Gedächtnis, SRS, Spiel, Session-Guard, Löschen |
-| `tests/test_tutor_room_flows.py` | Zimmer headless gegen Fake-Backend: Zwischenmenü, Hauptmenü-Stop, Schließen-Dialog, Stand-Wechsel, Stimme folgt Stand |
+| `tests/test_tutor_room_flows.py` | Zimmer headless gegen Fake-Backend: Zwischenmenü, Hauptmenü-Stop, Schließen-Dialog, Stand-Wechsel, Stimme folgt Stand (läuft seit 2026-10-08 wieder in der Suite) |
+| `tests/test_tutor_pixel.py` | Pixel-Optik headless: Raster ganzzahlig, nur Palettenfarben in der Szene, beide Themen und kleine Fenster ohne Absturz, Einstellung tutor_optik |
+| `tests/test_tutor_mikro.py` | Das Ohr ohne Hardware: Äußerung fertig/verworfen, Geräusch, Gate, Mikro nur bei Zuhören offen |
 | `tests/test_tutor_bauplan.py` | Dieser Bauplan gegen den Code |
 | `tutor/test_memory.py` | Prompt-Checks der Pakete (Zielsprache, Länge, Persona) |
 | `memory/tutor/tutor_system.md` | Mechanik + Historie (Verhalten) |
@@ -136,7 +141,8 @@ gibt es nicht.
 | `__init__.py` | `PROFILE = profile(code, …)` mit den Pflichtfeldern unten |
 | `prompt.md` | System-Prompt **in der Zielsprache**, Übersetzung von `PROMPT_TEMPLATE.en.md`; `{native}` bleibt Platzhalter |
 | `vocab_hint.md` | ein Satz mit `{words}` (Zielsprache) |
-| `expect.json` | Register-Leiter, heute `[]` |
+| `expect.json` | Register-Leiter `[[grenze, text], …]` (Zielsprache); Grenze = Zahl der Wörter, die Sasha wirklich kennt (seit 2026-10-08 befüllt für es/de/zh) |
+| `absichten.json` | Optional (fehlt → nur Ruhe-Regeln): Anlass-Texte in der Zielsprache `ankunft, nachhaken, stille, stille_ohne_ziel, nachfrage, zu_schwer` (Platzhalter `{letzte} {wort} {bedeutung} {woerter}`) |
 | `core_vocab.json` | ≈76 Einträge `{word, reading, priority, category, gloss:{en, de}}`, Kategorien aus `room._CAT_DE` |
 | `tool_texts.json` | Beschreibung der lebenden Tools in der Zielsprache (`introduce_new, express, get_structures, introduce_structure, increment_structure, watch_tv, turn_off_tv, play_music, stop_music, get_local_news, get_due_reviews, show_thought`) |
 | `seeds/news.json`, `seeds/tv.json` | 8 leichte Themen, 8 Sendungen `{title, mood, level, note}` |

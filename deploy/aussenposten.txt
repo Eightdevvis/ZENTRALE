@@ -39,6 +39,11 @@ core/host_metrics.py
 tutor/room.py
 # Schickt den Zugangsschlüssel mit (lädt tui/ansichten/zugang_klient.py).
 tutor/room_zugang.py
+# Das Ohr (seit 2026-10-08 aus room.py gezogen, ebenso nur stdlib +
+# sounddevice/webrtcvad). Fehlt es, bleibt das Zimmer taub, stuerzt aber nicht.
+tutor/mikro.py
+# Pixel-Optik + Kopfzeilen-Texte (2026-10-08): Pflicht, room.py importiert sie.
+tutor/pixel_zimmer.py
 scripts/open_tutor_room.py
 # Die Handschrift fuer das Vokabelwort auf der Karte. Muss mitgeliefert
 # werden — sie ist nirgends installiert, und ohne sie faellt das Zimmer still
@@ -67,7 +72,7 @@ scripts/install_pi_sudoers.sh
 
 # ── NICHT dabei (bewusst) ────────────────────────────────────────────────
 # core/ (Backend), ui/ (Flask+Dashboard), services/ (Whisper/TTS), data/,
-# memory/, tests/, tools/, tutor/ ausser room.py.
+# memory/, tests/, tools/, tutor/ ausser room.py, mikro.py, pixel_zimmer.py.
 #
 # Auch nicht: scripts/pi_autopull.sh + deploy/RELEASE. Das war der alte Weg
 # (git-Clone auf dem Knoten, manueller RELEASE-Bump als Ausloeser). Ein

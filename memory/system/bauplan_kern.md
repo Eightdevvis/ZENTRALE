@@ -257,8 +257,8 @@ Sasha, 05.10.2026: einfrieren, dann zerlegen (Punkt 3).
 
 | Wo | Zeilen höchstens |
 |---|---|
-| `tutor/room.py` | 4034 |
-| `tutor/room.py::main` | 1829 |
+| `tutor/room.py` | 3932 |
+| `tutor/room.py::main` | 1735 |
 | `core/mail.py` | 1924 |
 
 ## Wenn der Test rot wird

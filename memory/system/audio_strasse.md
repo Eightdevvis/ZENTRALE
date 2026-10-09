@@ -55,7 +55,11 @@ der Tutor rund laufen, die Architektur kommt danach.
 
 ## Der Umbau in Schritten (nach der Entscheidung)
 
-1. **Modul rausziehen:** `listen_loop` + `speak` + die Filter aus `room.py` in
+1. **Modul rausziehen** — *zur Hälfte erledigt 2026-10-08:* das Hören
+   steckt jetzt in `tutor/mikro.py` (`Ohr` = Zählerei ohne Hardware, getestet;
+   `hoeren()` = Schleife, öffnet das Mikro erst bei „Zuhören an", schließt es
+   beim Beenden). `speak` und die Filter stehen noch in `room.py`. Ursprünglich:
+   `listen_loop` + `speak` + die Filter aus `room.py` in
    ein eigenes, projektfreies Modul (Kandidat `tutor/audio_strasse.py` bzw. im
    Aussenposten-Paket), Schnittstelle: `hoeren(callback)`, `sprechen(text)`,
    `anwesend()`. `room.py` benutzt es, verhält sich exakt wie heute.

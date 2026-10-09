@@ -156,7 +156,9 @@ def fake_flip():
 
 pygame.event.get = fake_get; pygame.display.flip = fake_flip
 room.main()
-print("RESULT " + json.dumps(beobachtet))
+# flush: stdout ist hier eine Pipe (gepuffert). Stirbt der Prozess beim
+# Beenden, war RESULT sonst weg — das war die Hälfte des Wackelns (2026-10-08).
+print("RESULT " + json.dumps(beobachtet), flush=True)
 '''
 
 
