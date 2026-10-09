@@ -206,3 +206,14 @@ def test_qwen_texte_mit_nutzername(mit_qwen_profil, monkeypatch):
     assert "Kim" in arbeitsweise and "Sasha" not in arbeitsweise
     assert "{" not in arbeitsweise
     assert "Kim" in modelle.qwen.erinnerung()
+
+
+
+def test_qwen_werkzeuge_vereinfacht_ohne_gross_zu_aendern(mit_qwen_profil):
+    vorher = copy.deepcopy(gross.TOOLS)
+    s = profil.fuer_backend("cloud", modell="qwen-plus")
+    nach_name = {t["function"]["name"]: t["function"] for t in s.TOOLS}
+    assert "layers" not in nach_name["read_calendar"]["parameters"]["properties"]
+    assert "Dauer bleibt" in nach_name["edit_calendar_routine"]["description"]
+    assert len(s.TOOLS) == len(gross.TOOLS)
+    assert gross.TOOLS == vorher

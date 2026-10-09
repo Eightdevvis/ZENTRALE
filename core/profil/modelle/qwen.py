@@ -93,3 +93,40 @@ def _letzte_nachricht(verlauf) -> str:
         if m.get("role") == "user":
             return str(m.get("content") or "")
     return ""
+
+
+# ── Werkzeuge: weniger Stellschrauben, Dauer mitschieben (Runde 2/3) ────
+# Runde 1: qwen filterte read_calendar auf layers=["routinen"] — die
+# Routinen lagen aber in „termine", es fand nichts und fragte nach (f03).
+# Optionale Felder, die nur selten passen, sind für ein kleineres Modell
+# eher Falle als Hilfe (OpenAI-Leitfaden: wenige, klare Parameter); der
+# Ausführer kommt ohne sie aus. Und beim Verschieben ließ qwen das Ende
+# stehen (Training 19:30–20:00 statt 19:30–20:30, m04): der Satz dazu steht
+# jetzt dort, wo es ihn beim Aufruf liest — in der Beschreibung.
+_WEG = {"read_calendar": ("layers",)}
+_DAUER = (" Verschiebst du nur den Beginn, schieb das Ende um dieselbe Zeit mit "
+          "(die Dauer bleibt) — außer {nutzer} nennt ein neues Ende.")
+# Runde 3: seit main bc304c9 brauchen neue Routinen von/bis. qwen las das
+# auch für edit_calendar_routine als Pflicht und fragte vor einer reinen
+# Uhrzeit-Änderung nach einem Enddatum (m04).
+_NUR_ZEITRAUM = (" von/bis nur mitgeben, wenn sich der Zeitraum der Serie ändern soll; "
+                 "für Uhrzeit, Ende, Ort weglassen.")
+_ZUSATZ = {"edit_calendar_routine": _DAUER + _NUR_ZEITRAUM, "edit_calendar_entry": _DAUER}
+
+
+def werkzeuge(tools: list) -> list:
+    """Die Werkzeug-Liste für qwen: Kopien, gross bleibt unberührt."""
+    import copy
+    raus = []
+    for t in tools:
+        name = t["function"]["name"]
+        if name in _WEG or name in _ZUSATZ:
+            t = copy.deepcopy(t)
+            f = t["function"]
+            for feld in _WEG.get(name, ()):
+                f["parameters"]["properties"].pop(feld, None)
+                if feld in f["parameters"].get("required", []):
+                    f["parameters"]["required"].remove(feld)
+            f["description"] += nutzer_angaben.einsetzen(_ZUSATZ.get(name, ""))
+        raus.append(t)
+    return raus
