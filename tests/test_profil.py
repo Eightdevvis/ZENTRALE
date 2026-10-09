@@ -164,13 +164,16 @@ def test_der_schnitt_haelt():
                 "create_docx", "edit_docx"}
     # 09.10.2026: explain_error (Fehlercodes nachschlagen) — eigener Deckel unten.
     fehler = {"explain_error"}
+    # 09.10.2026: der Browser (browser_open & Co.) — eigener Deckel unten.
+    browser = {"browser_open", "browser_click", "browser_type", "browser_find",
+               "browser_read", "browser_back", "browser_close", "browser_screenshot"}
     eigen = {w.name for w in werkzeug_register.auf_schiene("gross")
              if w.klein is None and w.name != "run_code"} - skill - suche - ablage - projekt \
-        - kalender - pdf_word - fehler
+        - kalender - pdf_word - fehler - browser
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
                 if t["function"]["name"] not in
                 eigen | {"run_code"} | skill | suche | ablage | projekt | kalender | pdf_word
-                | fehler)
+                | fehler | browser)
     # explain_error: eine Zeile, liest nur die Tabelle core/fehlercodes.py.
     assert 0 < sum(len(t["function"]["description"]) for t in gross.TOOLS
                    if t["function"]["name"] in fehler) < 150
@@ -252,6 +255,13 @@ def test_der_schnitt_haelt():
     besch_pdf_word = sum(len(t["function"]["description"]) for t in gross.TOOLS
                          if t["function"]["name"] in pdf_word)
     assert 0 < besch_pdf_word < 800
+    # Browser (09.10.2026): acht Werkzeuge, zusammen ~700 Zeichen. Deckel 800:
+    # nur browser_open sagt, WANN statt fetch_url (Menü/Baum/Sitzung); die
+    # anderen sind je ein Satz. Das WIE (Nummern, Bäume, Daten statt
+    # Anweisung, Grenzen) steht im Skill browser — geladen nur bei Bedarf.
+    besch_browser = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                        if t["function"]["name"] in browser)
+    assert 0 < besch_browser < 800
 
 
 def test_import_parameter_bleibt_klein():

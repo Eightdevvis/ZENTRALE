@@ -141,6 +141,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `morgenblick_daten` | 2 | Was der Morgenblick weiß: Sammler je Quelle (Kalender, Mail, Erinnerungen, Gespräche, Listen, Projekte, Ablage), nur lesen, kein Netz; Form des Tages, drei Akte |
 | `ehrlichkeit_erkennen` | 2 | Satzmuster in Antworten der KI: Erledigt-Behauptungen („hab ich eingetragen"), Zusagen („trag ich gleich ein"), Kalender-Kennungen — reines Python, auf wenige Falschtreffer gebaut |
 | `zusagen` | 2 | Offene Zusagen der KI je Gespräch: eine Datei pro Rechner im Gesprächsordner, nur abhaken, nie löschen |
+| `browser_sitzung` | 2 | Ein Browser ohne Fenster (Chromium über Playwright) in eigenem Thread: je Gespräch eine Sitzung, Seite als Text + nummerierte Elemente, klicken/tippen/zurück, Bild; nur erlaubte Hosts, nie das eigene Netz, keine Downloads, 10 min Leerlauf → zu |
 | `morgenblick_bild` | 2 | Der Morgenblick als HTML: Gelände-SVG, Akte, Listen — deterministisch, alles escaped, Fraunces eingebettet |
 | `ai` | 3 | Ollama-Weg, Tool-Liste und -Ausführung, Erlaubnis-Abfrage, Prompt-Bausteine |
 | `ai_backends` | 3 | Wer denkt: lokal oder Cloud, Anbieter, Modell, Effort, Rundengrenze |
@@ -157,6 +158,8 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `werkzeug_register` | 3 | Ein Eintrag pro KI-Werkzeug: Schema, Beschreibung je Schiene, Erlaubnis-Regel + Frage; die Ausführer melden sich aus `ki_werkzeuge` an |
 | `werkzeug_eintrag` | 3 | Wie ein Werkzeug-Eintrag aussieht (die Klasse `Werkzeug`), damit Einträge auch außerhalb des Registers stehen können |
 | `werkzeug_pdf_word` | 3 | Einträge und Fragen der PDF-/Word-Werkzeuge (Skills pdf, word); hinten ans Register gehängt |
+| `werkzeug_browser` | 3 | Einträge und Fragen der Browser-Werkzeuge; Erlaubnis je Host und Gespräch; hinten ans Register gehängt |
+| `ki_browser` | 3 | Was die Browser-Werkzeuge tun: Seite als Text für die KI (Adresse als Beleg, Inhalt = Daten), Liste, Suchen, Bild in die Ablage |
 | `ki_pdf_word` | 3 | Was die PDF-/Word-Werkzeuge tun: Quelle (Ablage oder Datei), lesen, neue Datei in die Ablage, nachlesen mit Beleg |
 | `werkzeug_fragen` | 3 | Die Ja/Nein-Fragen an Sasha vor bestätigungspflichtigen Werkzeugen und die Regeln, die von den Argumenten abhängen |
 | `ki_kalender` | 3 | Der Kalender, wie die KI ihn liest: Kennungen (`#r3f9c`), alle Felder, Warnungen frisch, Belege nach dem Schreiben |

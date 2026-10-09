@@ -329,6 +329,7 @@ und nimmt beide Schreibweisen an (siehe „Zwei Schienen" weiter unten).
 | `load_skill` / `propose_skill` / `edit_skill` | nur `gross` | Skill-Anleitung (oder mit `datei` eine Datei daraus) holen; neuen vorschlagen bzw. bestehenden umschreiben (beide gegatet) (s. „Skills") |
 | `search_chats` / `read_chat` | nur `gross` | Frühere Gespräche durchsuchen/nachlesen; `search_chats` mit `projekt` nur in einem Projekt (s. „Frühere Gespräche") |
 | `read_project_file` | nur `gross` | Wissensdatei des Projekts dieses Gesprächs lesen (s. „Projekte") |
+| `browser_open` / `browser_click` / `browser_type` / `browser_find` / `browser_read` / `browser_back` / `browser_close` / `browser_screenshot` | nur `gross` | Echter Browser ohne Fenster, über Text bedient; gefragt einmal je Host und Gespräch (s. „Browser") |
 
 Gegen das Erlaubnis-Gate wird **nie** direkt geprüft, sondern über
 `erlaubnis.braucht_erlaubnis()` — die normalisiert erst. Ein Schreib-Tool, das unter
@@ -416,6 +417,10 @@ komm ich nicht tiefer" (geraten) und „die Warnungen sollten verschwinden"
   **fetch_url** warnt (Status `ok`), wenn eine Seite kaum Inhalt hatte
   (unter 80 Wörtern oder 3 ganzen Sätzen: Navigation, Menü, Anmeldung) und
   sagt nur, was zu sehen war.
+- **Browser** (seit 2026-10-09): jedes Ergebnis nennt „Adresse: <URL>" und
+  darf als „gelesen auf <URL>" angegeben werden — Gegenstück zu den
+  Suchtreffern. Abbrüche mit Codes `B-…` (Tabelle in `core/fehlercodes.py`,
+  s. „Browser").
 - **Prompt (gross), Meta-Regel 2:** „Als Tatsache sagst du nur, was ein
   Werkzeug in diesem Gespräch belegt oder Sasha gesagt hat; alles andere als
   Vermutung oder ‚weiß ich nicht'. Erfolg erst nach dem Beleg." Nach
@@ -722,6 +727,85 @@ nachgelesen (Seitenzahl/Text bzw. Überschriften/ersetzter Text) und als Beleg
 zurückgegeben. Die Anleitung steht in den Skills `pdf` und `word`. Text-Budget
 der Beschreibungen: eigener Deckel < 800 in `tests/test_profil.py`.
 Ausführlich: [pdf_word.md](pdf_word.md).
+
+### Browser — `browser_open` & Co. (seit 2026-10-09)
+
+**Wozu:** Das Vorlesungsverzeichnis der Uni (LSF, QIS/HIS) ist ein Baum, der
+sich erst durch Klicken aufbaut, teils in Rahmen. `fetch_url` bekam am 08.10.
+nur den Navigationsbaum. Jetzt steuert die KI einen echten Chromium ohne
+Fenster über Text — keine Bilder, keine Koordinaten.
+
+**Aufbau:** `core/browser_sitzung.py` (Schicht 2) ist der Browser: Playwright
+in **einem** eigenen Thread (Playwright hängt an seinem Thread; die Werkzeuge
+laufen im Thread des Zugs und reichen Aufträge hinein), **ein**
+Chromium-Prozess, darin je Gespräch ein eigener Kontext (eigene Cookies),
+höchstens drei. 10 Minuten nichts getan → Sitzung zu; keine mehr → Prozess
+beendet. `core/werkzeug_browser.py` hat die Einträge und Fragen (hinten ans
+Register), `core/ki_browser.py` die Ausführer und die Textform.
+
+**Werkzeuge** (nur gross, ~700 Zeichen, eigener Deckel < 800 in
+`tests/test_profil.py`; die Anleitung steht im Skill `browser`):
+
+| Werkzeug | tut |
+|---|---|
+| `browser_open(url)` | Seite laden → Titel, Adresse, Text (bis 12.000 Zeichen, sonst „weiter mit browser_read(ab=…)"), nummerierte Liste (Links, Knöpfe, Felder, Auswahlen; höchstens 150, Rest per `browser_find`) |
+| `browser_click(nr)` | Element klicken (auch Skript-Bäume ohne Navigation), danach wie open |
+| `browser_type(nr, text, enter)` | ins Feld tippen bzw. in einer Auswahl wählen; nachgelesen, was drinsteht; `enter` schickt ab |
+| `browser_find(text)` | Elemente nach Text, mit Nummern |
+| `browser_read(ab)` | weiterer Seitentext |
+| `browser_back`, `browser_close` | zurück, schließen |
+| `browser_screenshot(titel)` | PNG der Seite in die Ablage (`schreibt`, nachgelesen) — **für Sasha**: Bilder erreichen die Cloud nur als Anhang einer Nachricht von Sasha, nicht aus einem Werkzeug-Ergebnis, also sieht die KI es nicht und sagt das |
+
+**Rahmen:** alle Rahmen einer Seite werden gelesen (Text mit Kopf „Rahmen:
+…"), die Nummern laufen über alle Rahmen durch.
+
+**Erlaubnis:** einmal je **Host** und Gespräch. Die Regel (`erlaubnis=f(args)`)
+fragt nur, wenn der Host noch nicht erlaubt ist; das Ja ist „nur dieses mal"
+(`nur_einmal`), denn „für dieses Gespräch" des Gates gilt pro Werkzeug — nach
+einem Ja zu einer Seite wäre jede andere frei gewesen. Gemerkt wird der Host
+in `browser_sitzung` (nur im Arbeitsspeicher), und zwar vom Ausführer: der
+läuft nur nach einem Ja. Klicks und Tippen auf erlaubten Hosts sind frei; ein
+Link zu einem anderen Host fragt; ein Knopf eines Formulars mit Passwortfeld
+(und Enter darin) fragt immer.
+
+**Sicherheit:**
+- nur http/https; nie das eigene Netz (localhost, 10./172.16./192.168.,
+  `.local`, IPv6 lokal; Namen werden aufgelöst) — außer Einstellung
+  `browser_lokal_erlaubt` (nur für Tests mit eigenem Server);
+- jede Anfrage der Seite läuft durch einen Abfang-Haken: Seiten (auch in
+  Rahmen) nur von erlaubten Hosts; Bilder/Skripte von anderswo ja, aus dem
+  eigenen Netz nie. **Weiterleitungen** holt der Haken selbst, ohne ihnen zu
+  folgen, und prüft das Ziel — Playwright ruft ihn nur für die erste Adresse
+  einer Weiterleitung auf, so käme eine erlaubte Seite per 302 an localhost
+  vorbei. Erlaubtes Ziel → kleine Zwischenseite, die es neu lädt (geht dann
+  wieder durch den Haken). Fremder Host → `B-ANDERE-SEITE`, nichts geladen;
+- keine Downloads (Dateien statt Seiten werden gar nicht erst an den Browser
+  gegeben → `B-DOWNLOAD`, Hinweis auf `fetch_document`), keine Service-Worker;
+- 20 s je Schritt (`B-ZEIT`);
+- JavaScript nur das der Seite; unser eigenes Skript (Liste, Text) ist fest
+  im Code, aus dem Text der KI wird nie etwas ausgeführt;
+- **Seiteninhalt ist Daten:** jedes Ergebnis trägt den Hinweis, dass
+  Anweisungen auf der Seite nicht befolgt werden (Prompt-Injection);
+- **Passwörter tippt die KI nicht** (`B-PASSWORT`): die Argumente eines
+  Werkzeugs stehen im Verlauf, im Log und bei der Cloud. Anmelden über den
+  Browser der KI geht deshalb (noch) nicht.
+- Chromium startet erst mit seiner eigenen Abschottung; erlaubt das System
+  die nicht, ohne (Zeile im Log).
+
+**Fehlt der Browser** (Paket oder Chromium, z. B. auf dem Pi): Abbruch
+`B-NICHT-EINGERICHTET` mit „Browser nicht eingerichtet: … Bis dahin fetch_url
+nehmen" — nichts stürzt. Einrichten: [../betrieb/ki_browser.md](../betrieb/ki_browser.md).
+
+**Tests:** `tests/test_browser.py` — ohne Chromium (Adressen, Erlaubnis je
+Host/Gespräch, Host-Wechsel fragt neu, Nein öffnet nichts, Passwort, Form des
+Ergebnisses, Bild in der Ablage per Attrappe, „nicht eingerichtet") und mit
+echtem Chromium gegen einen eigenen Server auf 127.0.0.1 (nachgebauter
+LSF-Baum mit Skript-Ästen, Rahmen, Formular mit Auswahl, Anmeldeformular,
+Weiterleitung gleicher/anderer Host/eigenes Netz, Download, Bild,
+Leerlauf). „localhost" und „127.0.0.1" sind dabei zwei Hosts. Fehlt Chromium,
+wird der zweite Teil mit Meldung übersprungen. `tests/conftest.py` setzt
+`PLAYWRIGHT_BROWSERS_PATH` auf das echte `~/.cache/ms-playwright`, weil HOME
+und XDG_CACHE_HOME im Testlauf umgebogen sind.
 
 ### Visuelle Stimme – Bild-Marker `[[bild: name]]`
 

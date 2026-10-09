@@ -15,6 +15,7 @@ import re
 import pytest
 
 import ablage
+import browser_sitzung
 import fehlercodes
 import gedaechtnis
 import ki_pdf_word
@@ -25,7 +26,7 @@ import werkzeug_register
 from test_werkzeug_belege import umgebung  # noqa: F401  — Wegwerf-Umgebung
 
 CORE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "core")
-_CODE = re.compile(r"^[KWNADMSPI]-[A-Z0-9]+(?:-[A-Z0-9]+)*$")
+_CODE = re.compile(r"^[KWNADMSPIB]-[A-Z0-9]+(?:-[A-Z0-9]+)*$")
 
 
 def _baeume():
@@ -169,6 +170,12 @@ def _faelle(ids):
          [(ki_pdf_word, "_docx_beleg", lambda *a, **k: None)]),
         ("edit_docx", {"quelle": ids["docx"], "ersetzen": [{"alt": "Frau Meier", "neu": "Herr K"}]},
          [(ki_pdf_word, "_docx_beleg", lambda *a, **k: None)]),
+        # Browser-Bild (2026-10-09): eine offene Seite als Attrappe.
+        ("browser_screenshot", {},
+         [(browser_sitzung, "offen", lambda gid: True),
+          (browser_sitzung, "bildschirmfoto",
+           lambda gid, n: (b"\x89PNG\r\n\x1a\n" + b"0" * 50, "https://example.org/")),
+          (ablage, "lesen", lambda *a, **k: None)]),
     ]
 
 

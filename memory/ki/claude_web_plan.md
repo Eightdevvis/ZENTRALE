@@ -954,3 +954,31 @@ jetzt mit `trains_on_data` und dem lokalen Eintrag); `tutor/providers.py`,
 lokal über den vollen Chat (`ai.chat_stream(tools=None)`) — mit Sashas Graph im
 Prompt und Auto-Save der Antwort in sein Gedächtnis. Tests:
 `tests/test_tutor_strasse.py`.
+
+### Browser für die KI (2026-10-09)
+
+Anlass: das LSF (Vorlesungsverzeichnis, QIS/HIS) ist baumnavigiert —
+`fetch_url` sah nur das Menü. Ausführlich: [ki_system.md](ki_system.md),
+Abschnitt „Browser"; Einrichten: [../betrieb/ki_browser.md](../betrieb/ki_browser.md).
+
+- **Acht Werkzeuge** (nur `gross`, hinten an): `browser_open`, `browser_click`,
+  `browser_type`, `browser_find`, `browser_read`, `browser_back`,
+  `browser_close`, `browser_screenshot`. Text statt Bild: Seitentext +
+  nummerierte Liste (auch über Rahmen hinweg); jedes Ergebnis nennt die
+  Adresse als Beleg und sagt, dass Seiteninhalt Daten ist.
+- **Module:** `core/browser_sitzung.py` (Schicht 2: Playwright in eigenem
+  Thread, ein Chromium-Prozess, Kontext je Gespräch, 10 min Leerlauf),
+  `core/werkzeug_browser.py` (Einträge, Fragen), `core/ki_browser.py`
+  (Ausführer). Skill `core/skill_vorlagen/browser/`. Fehlercodes `B-…`.
+- **Erlaubnis je Host und Gespräch** (nicht pro Werkzeug); neuer Host fragt
+  neu; Anmeldeformular absenden fragt immer; Passwörter tippt die KI nie.
+- **Sicherheit:** nie das eigene Netz (auch nicht per Weiterleitung), keine
+  Downloads, 20 s je Schritt, nur unser festes Skript in der Seite.
+- **Bild:** in die Ablage für Sasha — die KI sieht es nicht (Bilder gehen nur
+  als Anhang einer Nachricht von Sasha an die Cloud).
+- Abhängigkeit `playwright` optional (auskommentiert in requirements.txt).
+  Schnappschuss neu gezogen: nur die acht Einträge hinten an `gross`, `klein`
+  byte-gleich, Gate und Fragen der alten Werkzeuge unverändert.
+- **Offen:** Anmelden mit Passwort (bräuchte eine Eingabe, die an der KI
+  vorbeigeht), Bild an die KI zurück (bräuchte Bild-Blöcke in
+  Werkzeug-Ergebnissen), Prüfstand-Fall „LSF-Zeiten finden".

@@ -14,7 +14,8 @@
 #
 # Vorsilben: W allgemein, K Kalender (K-<CODE> des Kalender-Kerns kommen
 # gleichnamig dazu), N Notizen/Gedächtnis, A Ablage, D Download, M
-# Messreihen, S Skills, P PDF/Word, I Internet (lesend). tests/test_fehlercodes.py hält die
+# Messreihen, S Skills, P PDF/Word, I Internet (lesend), B Browser.
+# tests/test_fehlercodes.py hält die
 # Tabelle und den Code deckungsgleich.
 #
 # Fundament (Schicht 1, memory/system/bauplan_kern.md): reine Tabelle.
@@ -140,6 +141,46 @@ CODES = {
     "I-KEIN-TEXT": (
         "Die Seite war erreichbar, aber ohne lesbaren Text (Skript-Seite, Bild, leer).",
         "Eine andere Quelle suchen; nicht so tun, als stünde dort etwas."),
+    # ── Browser (core/ki_browser.py, 2026-10-09) ──
+    "B-NICHT-EINGERICHTET": (
+        "Der Browser ist auf diesem Rechner nicht eingerichtet (Paket oder Chromium fehlt, "
+        "oder Chromium startet nicht — Grund im Ergebnis).",
+        "Sasha sagen, dass der Browser hier fehlt. Solange fetch_url nehmen."),
+    "B-ADRESSE": (
+        "Die Adresse taugt nicht: leer, kaputt oder nicht http/https.",
+        "Eine vollständige http(s)-Adresse angeben."),
+    "B-ADRESSE-GESPERRT": (
+        "Die Adresse liegt im eigenen Rechner oder Netz (localhost, 192.168.…) — der Browser "
+        "darf dort nicht hin.",
+        "Nicht umgehen. Sasha sagen, falls er es so wollte."),
+    "B-ANDERE-SEITE": (
+        "Klick oder Weiterleitung führt zu einem anderen Host, für den Sasha in diesem "
+        "Gespräch noch nicht Ja gesagt hat. Nichts geladen.",
+        "browser_open mit der genannten Adresse aufrufen — Sasha wird gefragt."),
+    "B-KEINE-SEITE": (
+        "In diesem Gespräch ist keine Seite offen (nie geöffnet, geschlossen, oder nach "
+        "10 Minuten ohne Benutzung zu).",
+        "Erst browser_open."),
+    "B-NR-UNBEKANNT": (
+        "Diese Nummer steht nicht in der Liste der zuletzt gelesenen Seite, oder die Seite "
+        "hat sich seitdem verändert.",
+        "Die Nummer aus dem letzten Ergebnis nehmen, oder browser_find."),
+    "B-KEIN-FELD": (
+        "Das Element ist kein Eingabefeld (oder nimmt diesen Text nicht an).",
+        "Ein Feld oder eine Auswahl aus der Liste nehmen; Knöpfe und Links mit browser_click."),
+    "B-PASSWORT": (
+        "In Passwortfelder tippt die KI nicht — das Passwort stünde sonst in Verlauf und Log.",
+        "Sasha sagen, dass Anmelden über den Browser der KI nicht geht."),
+    "B-ZEIT": (
+        "Der Schritt hat länger als 20 Sekunden gedauert.",
+        "Einmal neu versuchen; sonst Sasha sagen, dass die Seite nicht antwortet."),
+    "B-LADEN": (
+        "Die Seite ließ sich nicht laden (Grund im Ergebnis: Netz, Name unbekannt, …).",
+        "Adresse prüfen; nicht so tun, als stünde dort etwas."),
+    "B-DOWNLOAD": (
+        "Der Link lädt eine Datei herunter — Downloads sind im Browser aus.",
+        "Für PDFs und Dokumente fetch_document mit der Adresse nehmen."),
+    "B-KEIN-ZURUECK": ("Es gibt keine vorige Seite.", "browser_open mit einer Adresse."),
     # ── PDF / Word ──
     "P-QUELLE-FEHLT": (
         "Keine Quelle angegeben, oder es ist weder eine Ablage-id noch eine Datei.",

@@ -61,7 +61,8 @@ def test_jede_ausfuehrer_funktion_in_ki_werkzeuge_ist_angemeldet():
     Word-Werkzeuge in einer eigenen Datei (ki_pdf_word, von ki_werkzeuge
     importiert) — beide zählen."""
     knoten_alle = []
-    for datei in ("ki_werkzeuge.py", "ki_pdf_word.py"):
+    # Seit 2026-10-09 auch der Browser (ki_browser).
+    for datei in ("ki_werkzeuge.py", "ki_pdf_word.py", "ki_browser.py"):
         with open(os.path.join(CORE, datei), encoding="utf-8") as f:
             knoten_alle += ast.parse(f.read()).body
     dekoriert = {}

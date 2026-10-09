@@ -138,6 +138,14 @@ _THEME_TMP = os.path.join(tempfile.gettempdir(),
 os.makedirs(_THEME_TMP, exist_ok=True)
 os.environ.setdefault("ZENTRALE_THEME_FILE", os.path.join(_THEME_TMP, "theme"))
 os.environ.setdefault("ZENTRALE_THEME_NOW", os.path.join(_THEME_TMP, "theme.now"))
+# Playwright sucht Chromium unter $XDG_CACHE_HOME/ms-playwright — nach der
+# Umlenkung (hier und schon in scripts/zentrale_testguard.py) fände der
+# Browser-Test (tests/test_browser.py) das heruntergeladene Chromium nicht
+# mehr. Auch HOME ist dort schon umgebogen, also das echte Heim aus der
+# Benutzertabelle. Der Ort wird nur gelesen (2026-10-09).
+import pwd  # noqa: E402
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", os.path.join(
+    pwd.getpwuid(os.getuid()).pw_dir, ".cache", "ms-playwright"))
 os.environ.setdefault("XDG_CACHE_HOME", os.path.join(_THEME_TMP, "cache"))
 
 

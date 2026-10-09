@@ -81,3 +81,11 @@ openai
 # nutzt es NICHT). Fehlt es auf einem Knoten, ist die Langzeit-SR still aus
 # (srs.available()==False, No-op) — der Tutor läuft normal weiter.
 fsrs
+
+# Browser der KI (browser_open & Co., core/browser_sitzung.py) — OPTIONAL,
+# darum auskommentiert. Ein echter Chromium ohne Fenster für Seiten, die sich
+# erst durch Klicken aufbauen (Vorlesungsverzeichnis LSF). Fehlt er, melden
+# die Werkzeuge „Browser nicht eingerichtet" (B-NICHT-EINGERICHTET), alles
+# andere läuft. Zwei Schritte: das Paket ins venv, dann Chromium dazu laden
+# (~110 MB) — memory/betrieb/ki_browser.md. Getestet mit 1.63.0.
+# playwright

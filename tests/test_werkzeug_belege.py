@@ -23,7 +23,10 @@ import werkzeug_schleife
 from werkzeug_befund import Befund
 
 # Werkzeuge, die bestätigt werden, aber nichts von Sashas Daten verändern.
-NICHT_SCHREIBEND = {"web_search", "fetch_url", "run_code"}
+# Der Browser (2026-10-09) fragt vor einem neuen Host und vor Anmeldeformularen,
+# liest aber nur — nichts von Sasha ändert sich.
+NICHT_SCHREIBEND = {"web_search", "fetch_url", "run_code",
+                    "browser_open", "browser_click", "browser_type"}
 
 
 def test_jedes_schreibende_werkzeug_sagt_wie_es_belegt():
@@ -98,7 +101,10 @@ AUFRUFE = [
 
 
 def test_jedes_schreibende_werkzeug_belegt_echt(umgebung):
-    abgedeckt = {n for n, _ in AUFRUFE} | {"update_document", "combine_pdf", "edit_docx"}
+    # browser_screenshot braucht eine offene Seite: belegt in tests/test_browser.py
+    # (test_bild_landet_in_der_ablage_mit_beleg, ohne Chromium).
+    abgedeckt = {n for n, _ in AUFRUFE} | {"update_document", "combine_pdf", "edit_docx",
+                                          "browser_screenshot"}
     schreibend = {w.name for w in werkzeug_register.WERKZEUGE if w.schreibt}
     assert schreibend <= abgedeckt, schreibend - abgedeckt
     ids = {}

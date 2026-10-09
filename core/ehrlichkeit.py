@@ -83,6 +83,10 @@ BEREICH = {
     "create_series": "messreihe", "log_series": "messreihe",
     "propose_skill": "skill", "edit_skill": "skill", "load_skill": "skill",
     "web_search": "netz", "fetch_url": "netz",
+    # Browser (2026-10-09): lesen gehört zum Netz, das Bild zur Ablage.
+    "browser_open": "netz", "browser_click": "netz", "browser_type": "netz",
+    "browser_find": "netz", "browser_read": "netz", "browser_back": "netz",
+    "browser_screenshot": "ablage",
 }
 
 # Für die Erledigt-Zeile: (geklappt, versucht). Sasha liest das — Alltagswörter.
@@ -107,6 +111,7 @@ WORTE = {
     "log_series": ("Messwert eingetragen", "Messwert eintragen"),
     "propose_skill": ("Anleitung vorgeschlagen", "Anleitung vorschlagen"),
     "edit_skill": ("Anleitung geändert", "Anleitung ändern"),
+    "browser_screenshot": ("Bild der Seite abgelegt", "Bild der Seite ablegen"),
 }
 
 _KOPF = re.compile(r"^\[ergebnis: (\w+)\]")

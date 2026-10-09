@@ -14,6 +14,7 @@ hier ist „Maschine", nicht „Feature".
 | Pi-Bildschirm bleibt schwarz — Debug-Fährte | [display_debug.md](display_debug.md) |
 | Remote-LUKS-Unlock via Dropbear im Initramfs | [auto_unlock.md](auto_unlock.md) |
 | Browser: Theme-Kopplung, Terminal-Browsing, Tor-Einordnung | [browser.md](browser.md) |
+| **Browser der KI** einrichten: Paket + Chromium nachladen, Pi, Fallen | [ki_browser.md](ki_browser.md) |
 
 ## Sicherheit
 

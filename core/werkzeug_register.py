@@ -43,6 +43,7 @@ import kalender
 # Einträge der Skills pdf/word in werkzeug_pdf_word, unten angehängt).
 from werkzeug_eintrag import Werkzeug  # noqa: F401  — Name bleibt hier öffentlich
 import werkzeug_pdf_word
+import werkzeug_browser
 
 
 SCHIENEN = ("klein", "gross")
@@ -1228,6 +1229,11 @@ WERKZEUGE.append(Werkzeug(
                                        "description": "Der Code, z. B. K-ENDE-VOR-BEGINN."}},
                "required": ["code"]},
 ))
+
+
+# Browser (2026-10-09, core/werkzeug_browser.py): eine Seite wie Sasha sie
+# sieht, über Text bedient. Hinten an, nur gross.
+WERKZEUGE += werkzeug_browser.EINTRAEGE
 
 
 # ── Nachschlagen ───────────────────────────────────────────────────────

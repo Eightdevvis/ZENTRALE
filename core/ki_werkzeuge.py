@@ -731,3 +731,5 @@ def _read_project_file(args: dict, projekt=None) -> str:
 # PDF und Word (Skills pdf/word, 2026-10-08): eigene Datei, meldet ihre
 # Ausführer beim Import an.
 import ki_pdf_word  # noqa: E402,F401
+# Browser (2026-10-09): eigene Datei, meldet ihre Ausführer beim Import an.
+import ki_browser  # noqa: E402,F401
