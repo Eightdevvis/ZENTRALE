@@ -21,6 +21,9 @@
 # die Registrierung — eine neue Art braucht keinen Umbau hier
 # (Beispiele: tui/bausteine/canvas_arten.py). Optional:
 #   rolle                      Farbrolle des Rahmens, solange nicht gewählt
+#   bei_enter(element)         -> None (enter greift, wie beim Zettel) oder
+#                              eine Aktion, die als Ergebnis „aktion" zur
+#                              Ansicht geht; die Art entscheidet
 #   blaettern(element, schritt) Bild↑/Bild↓ auf dem gewählten Kasten: im
 #                              Inneren blättern (eigene Lage am Element unter
 #                              „_oben", wird nie gespeichert). Hier docken
@@ -53,6 +56,9 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
 #   "geaendert"   Elemente/Verbindungen sind anders → speichern (grund sagt was)
 #   "bearbeiten"  das Modal der Art für `element` öffnen
 #   "zu"          esc in Ruhe: der Canvas will geschlossen werden
+#   "aktion"      enter auf einem Kasten, dessen Art eine eigene Aktion hat
+#                 (`bei_enter` der Art, z. B. eine Kachel: („oeffnen", ref)
+#                 → die Ansicht reicht es weiter); grund = was die Art meldet
 Ergebnis = namedtuple("Ergebnis", "art element grund")
 
 PAN_X, PAN_Y = 6, 3                     # so weit schiebt shift+Pfeil den Ausschnitt
@@ -149,7 +155,9 @@ class Arten:
         return art
 
     def holen(self, name):
-        return self._arten.get(name) or _Unbekannt()
+        # Unbekannte Art: wie „fremd" zeichnen, wenn es die gibt (zeigt typ +
+        # titel, z. B. eine Kachel, solange keine Kachel-Art registriert ist).
+        return self._arten.get(name) or self._arten.get("fremd") or _Unbekannt()
 
     def gibt_es(self, name):
         return name in self._arten
@@ -276,6 +284,10 @@ class Canvas:
                 blaettern(fokus, -1 if ev == "blaettern_hoch" else 1)
             return None
         if ev == "enter":
+            bei_enter = getattr(self.arten.holen(fokus.get("art")), "bei_enter", None)
+            aktion = bei_enter(fokus) if bei_enter else None
+            if aktion is not None:
+                return Ergebnis("aktion", fokus, aktion)
             self.griff = {"id": fokus["id"], "x": fokus["x"], "y": fokus["y"], "neu": False}
             self.modus = "greifen"
             # Oben liegen lassen, was man in der Hand hat (Reihenfolge = Stapel).

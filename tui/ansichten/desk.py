@@ -212,6 +212,9 @@ class Desk:
             D["modal_id"] = erg.element["id"]
         elif erg.art == "geaendert":
             self.speichern()
+        # „aktion" (enter auf einer Kachel, („oeffnen", ref)) kommt erst mit
+        # der ersten Kachel-Art: dann hier POST /api/kachel/aktion
+        # (hub_bauplan.md „Kacheln"). Heute meldet keine Art eine Aktion.
 
     def _taste_modal(self, ch):
         D = self.DESK

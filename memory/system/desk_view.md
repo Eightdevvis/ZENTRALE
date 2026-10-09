@@ -57,7 +57,8 @@ Runde einer anderen Sitzung).
   Zeilen aus (spalte, text, rolle). Regeln für Bausteine:
   [tui_bauplan.md](tui_bauplan.md) „Bausteine".
 - **Arten** über eine Registrierung (`canvas.Arten`): `zeichne`, `modal`,
-  `neu`, optional `rolle` (Rahmenfarbe) und `blaettern` (eigene
+  `neu`, optional `rolle` (Rahmenfarbe), `bei_enter` (eigene Aktion statt
+  greifen) und `blaettern` (eigene
   Scroll-Lage im Kasten, nie gespeichert). Unbekannte Arten zeichnen sich
   als „? art" und gehen nicht verloren.
 - **Schnüre** werden nie gespeichert, sondern bei jedem Bild aus den
@@ -111,11 +112,19 @@ Ordner per conftest um (Wächter in `tests/test_keine_seiteneffekte.py`).
 - **Zettel später auf echte Notizen umstellen**, sobald das Notiz-Tool ein
   offenes Format hat (Leitlinie: dasselbe Objekt, nicht kopiert). Bis dahin
   sind Zettel Canvas-eigene Text-Knoten.
-- **Kacheln** anderer Apps (Liste, Graph, Kalender): als neue Art in der
-  Registrierung; Inhalt holt die Ansicht per HTTP, nicht der Canvas. Blättern
-  im Kasten gibt es schon (`blaettern`); „Enter = Ereignis an die App"
-  braucht einen eigenen Rückgabewert im Canvas. Knotenform laut
-  [hub_bauplan.md](hub_bauplan.md) (Kachel-Abschnitt, in Arbeit).
+- **Kacheln** anderer Apps — Form entschieden in
+  [hub_bauplan.md](hub_bauplan.md) „Kacheln": text-Knoten mit Rückfall-Text
+  und `zentrale_kachel: {v, app, art, ref}`, App-Namen `fokus` (Listen),
+  `graph`, `kalender`. **Schon da:** `core/desk.py` reicht solche Knoten
+  als Art `kachel` durch (Feld `kachel`, Rückfall als `titel`) und ändert
+  nur die Lage, nie Text oder Zusatzfeld; ohne registrierte Kachel-Art
+  zeichnet „fremd" sie. Im Baustein meldet eine Art mit `bei_enter` bei
+  Enter ein Ergebnis `aktion` (z. B. („oeffnen", ref)) statt zu greifen —
+  die Art entscheidet, Zettel werden weiter gegriffen; Blättern im Kasten
+  gibt es (`blaettern`). **Fehlt:** die Kachel-Art selbst, das Holen über
+  `POST /api/kachel` in der Ansicht und das Weiterreichen von `aktion` an
+  `POST /api/kachel/aktion` (Stelle in `desk.py` markiert). Wie man eine
+  Kachel ohne Enter verschiebt, entscheidet die nächste Runde.
 - Desks löschen/umbenennen gibt es nicht (Datei von Hand).
 - Größe eines Zettels ändern gibt es nicht (Standard 24×6).
 - Desks und Chat-Projekte sind unabhängig; ob ein Desk zu einem Projekt

@@ -21,9 +21,12 @@
 # Pixel-Lagen aus Obsidian auf das 10er-Raster ziehen.
 #
 # Arten (2026-10-09): ein Text-Knoten (type "text", Markdown) ist ein
-# Zettel, Art „notiz", erste Zeile = Titel. Alles andere (file, link,
-# group …) kommt als Art „fremd" an: bleibt, wie es ist, lässt sich
-# verschieben und verbinden, nicht bearbeiten.
+# Zettel, Art „notiz", erste Zeile = Titel. Ein Text-Knoten mit
+# `zentrale_kachel` ist eine Kachel (Art „kachel", Verweis auf ein Objekt
+# einer anderen App) — Text und Zusatzfeld bleiben unangetastet, nur die
+# Lage ändert sich. Alles andere (file, link, group …) kommt als Art
+# „fremd" an: bleibt, wie es ist, lässt sich verschieben und verbinden,
+# nicht bearbeiten.
 # Felder, die die TUI nicht kennt (color …), bleiben unverändert stehen.
 #
 # ── Ort ───────────────────────────────────────────────────────────────
@@ -52,6 +55,10 @@ TEXT_GRENZE = 20000
 KOORD_GRENZE = 1_000_000
 _NAME = re.compile(r"^[\w äöüÄÖÜß.,()+\-]{1,60}$")
 _KENNUNG = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
+# Zusatzfeld einer Kachel im text-Knoten: {v, app, art, ref} (hub_bauplan.md
+# „Kacheln", entschieden 2026-10-09). App-Namen: fokus (Listen), graph,
+# kalender. Dieses Modul legt keine Kacheln an und ändert sie nie.
+KACHEL = "zentrale_kachel"
 SEITEN = ("top", "right", "bottom", "left")
 
 
@@ -139,7 +146,16 @@ def _element(knoten) -> dict | None:
     if not isinstance(kid, str) or not kid:
         return None
     el = {"id": kid, **_zellen(knoten)}
-    if knoten.get("type") == "text":
+    kachel = knoten.get(KACHEL)
+    if isinstance(kachel, dict):
+        # Kachel einer anderen App (hub_bauplan.md „Kacheln"): ein Verweis,
+        # hier nur durchgereicht. `text` ist Rückfall für Obsidian, nie
+        # bearbeitet; die TUI zeigt ihn, bis eine Kachel-Art ihn ersetzt.
+        el["art"] = "kachel"
+        el["kachel"] = dict(kachel)
+        el["typ"] = "kachel · %s/%s" % (kachel.get("app", "?"), kachel.get("art", "?"))
+        el["titel"] = str(knoten.get("text") or "")
+    elif knoten.get("type") == "text":
         el["art"] = "notiz"
         el["text"] = str(knoten.get("text") or "")
     else:
@@ -240,7 +256,7 @@ def _knoten_aus(el, alt) -> dict:
     if lage != alte_lage:
         k.update(x=lage["x"] * PX_SPALTE, y=lage["y"] * PX_ZEILE,
                  width=lage["w"] * PX_SPALTE, height=lage["h"] * PX_ZEILE)
-    if k.get("type") == "text":
+    if k.get("type") == "text" and KACHEL not in k:
         text = el.get("text", k.get("text", ""))
         if not isinstance(text, str) or len(text) > TEXT_GRENZE:
             raise DeskFehler("notiz-text zu lang oder kein text")

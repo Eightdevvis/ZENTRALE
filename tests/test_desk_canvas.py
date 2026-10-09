@@ -357,3 +357,36 @@ def test_zettel_modal_aendert_den_text():
     tippe(m, "!")
     assert m.taste(19) == "speichern"
     assert m.aenderungen() == {"text": "alt!"}
+
+
+def test_enter_meldet_die_aktion_der_art_statt_zu_greifen():
+    """Eine Art mit `bei_enter` entscheidet selbst (Kachel: in der App
+    öffnen); der Zettel ohne Aktion wird weiter gegriffen."""
+    class Kachel:
+        name = "kachel"
+
+        def zeichne(self, element, w, h):
+            return []
+
+        def modal(self, element):
+            return None
+
+        def bei_enter(self, element):
+            return ("oeffnen", element["kachel"]["ref"])
+    c = leinwand([zettel("z", 0, 0),
+                  {"id": "k", "art": "kachel", "x": 30, "y": 0, "w": 10, "h": 4,
+                   "kachel": {"v": 1, "app": "fokus", "art": "liste", "ref": {"id": "l1"}}}])
+    c.arten.registrieren(Kachel())
+    c.fokus = "k"
+    erg = c.taste("enter")
+    assert erg.art == "aktion" and erg.grund == ("oeffnen", {"id": "l1"}) and c.modus == "ruhe"
+    c.fokus = "z"
+    assert c.taste("enter") is None and c.modus == "greifen"
+
+
+def test_kachel_ohne_registrierte_art_zeigt_den_rueckfall():
+    c = leinwand([{"id": "k", "art": "kachel", "x": 0, "y": 0, "w": 24, "h": 4,
+                   "typ": "kachel · fokus/liste", "titel": "Einkauf: Milch"}])
+    c.vx, c.vy = -1, -1
+    text = "".join(t for z in c.bild(8, 40) for _x, t, _r in z)
+    assert "kachel · fokus/liste" in text and "Einkauf" in text

@@ -22,13 +22,17 @@
 # aufgearbeitet (Sasha, 2026-10-09); umstellen steht als offener Punkt in
 # memory/system/desk_view.md.
 #
-# Nahtstelle für Kacheln anderer Apps (Hub-Bauplan, noch im Entwurf): eine
-# Art „kachel:liste", „kachel:graph" … wird hier genauso registriert. Ihr
-# `zeichne` gibt zurück, was die liefernde App für Art und Größe w×h
-# geliefert hat (Text + Farbrollen) — geholt von der ANSICHT über HTTP und
-# am Element zwischengelegt, nie vom Canvas selbst. Enter auf einer Kachel
-# als Ereignis an die App braucht dann einen eigenen Rückgabewert im
-# Canvas (wie „bearbeiten"); der Rest (Lage, Fokus, Schnüre) bleibt gleich.
+# Nahtstelle für Kacheln anderer Apps (memory/system/hub_bauplan.md
+# „Kacheln", entschieden 2026-10-09): in der Datei ein text-Knoten mit
+# Rückfall-Text und `zentrale_kachel: {v, app, art, ref}` — App-Namen
+# `fokus` (Listen), `graph` (Graphen), `kalender`. core/desk.py liefert ihn
+# als Element mit art „kachel", `kachel` = dieses Feld, `titel` = Rückfall-
+# Text, und ändert daran nie etwas außer der Lage. Solange keine Art
+# „kachel" registriert ist, zeichnet „fremd" ihn (typ + Rückfall).
+# Eine Kachel-Art wird hier registriert: `zeichne` zeigt die `zeilen`, die
+# die ANSICHT über `POST /api/kachel` geholt und am Element zwischengelegt
+# hat (nie der Canvas selbst), `bei_enter` meldet („oeffnen", ref) — die
+# Ansicht schickt das an `POST /api/kachel/aktion`.
 # Langer Inhalt (z. B. eine Kalender-Kachel) blättert über `blaettern` wie
 # der Zettel unten.
 

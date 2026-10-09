@@ -364,3 +364,21 @@ def test_shift_pfeil_als_rohe_folge_schiebt(ansicht):
     d.z.stdscr.folge = [ord(c) for c in "[1;2C"]
     d.taste(27)
     assert D["canvas"].vx > vx and D["ebene"] == "canvas"
+
+
+def test_kachel_knoten_wird_unangetastet_durchgereicht():
+    """Kachel einer anderen App (hub_bauplan.md „Kacheln"): text-Knoten mit
+    zentrale_kachel. Verschieben ändert nur die Lage; Text und Zusatzfeld
+    bleiben, auch wenn die TUI einen Text mitschickt."""
+    kachel = {"v": 1, "app": "fokus", "art": "liste", "ref": {"id": "l_einkauf"}}
+    schreibe("h", {"nodes": [{"id": "k", "type": "text", "text": "Einkauf\n- Milch",
+                              "x": 0, "y": 0, "width": 240, "height": 120,
+                              "zentrale_kachel": kachel}], "edges": []})
+    d = desk.laden("h")
+    (el,) = d["elemente"]
+    assert el["art"] == "kachel" and el["kachel"] == kachel and el["titel"].startswith("Einkauf")
+    el["x"] += 3
+    el["text"] = "überschrieben?"
+    desk.speichern("h", d["elemente"], d["verbindungen"], d["stand"])
+    k = lies("h")["nodes"][0]
+    assert k["zentrale_kachel"] == kachel and k["text"] == "Einkauf\n- Milch" and k["x"] == 30
