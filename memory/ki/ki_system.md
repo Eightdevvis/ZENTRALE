@@ -1367,9 +1367,17 @@ Code grün).
 
 **Fehler sind keine Antwort.** API-Fehler, Cloud-Ablehnung (`refusal`) und
 die Rundengrenze kommen als `{"fehler": …}`. `ui/routen/ki.py` reicht das als SSE
-`fehler` an die TUI (Statuszeile) und schreibt es NICHT ins Gespräch (`core/gespraeche.py`).
+`fehler` an die TUI und schreibt es NICHT als ihren Text ins Gespräch.
 Vorher stand `[Cloud-Fehler: …]` als KI-Antwort im Verlauf, und der Takt
-konnte es sogar als „Initiative“ melden.
+konnte es sogar als „Initiative“ melden. Seit 2026-10-09 wird der
+abgebrochene Zug trotzdem gespeichert — als Antwort mit Feld `fehler`, den
+Werkzeugen und dem Ablauf, Text meist leer (bis dahin war er ganz weg, und
+die KI wusste im nächsten Zug nichts davon). `gespraeche.fehler_hinweis`
+gibt ihn ihr im Verlauf als „[System, nicht deine Worte: Dein letzter Zug
+brach ab — <Meldung>. Bis dahin gelaufen: …]" (höchstens 12 Schritte, Args
+gekürzt); der feste Kopf bleibt (Prompt-Cache). Gestoppt ohne Text zählt
+genauso („von Sasha gestoppt"). Die TUI zeigt „✗ abgebrochen: …" mit
+„retry" daran (SSE `{antwort, abbruch}`).
 
 **Eine Regel für alle (Sasha, 05.10.2026):** Die Rundengrenze hängt am
 Modell, nicht am Weg (`ai_backends.runden_grenze`, Standard 100 (bis 09.10.: 8), pro Modell in

@@ -299,3 +299,55 @@ def test_alter_abbruch_aus_dem_verlauf_wird_genauso_gezeigt():
 def test_gestoppt_ohne_text_heisst_einfach_gestoppt():
     z = V.verlauf_zeilen([("user", "x"), ("abbruch", "von Sasha gestoppt")], 60, letzte_ai=1)
     assert "✗ gestoppt · retry" in _texte(z)
+
+
+# ── „Neues in einem anderen Gespräch" nur, wenn es stimmt (2026-10-09) ──
+
+HINWEIS = "neues in einem anderen gespräch — tab zeigt die gespräche"
+
+
+def _oeffnen_und_laden(c, monkeypatch, liste, aktiv):
+    """Fenster öffnen; der Hintergrund-Ladevorgang läuft hier direkt."""
+    monkeypatch.setattr(chat_gespraeche, "ai_verlauf_holen",
+                        lambda gid=None: ([("user", "x"), ("ai", "y")], []))
+    monkeypatch.setattr(c.liste, "holen", lambda archiv=False: (liste, aktiv))
+    monkeypatch.setattr(c, "status_holen", lambda: None)
+    del c.verlauf_laden                                   # die echte Methode
+    with monkeypatch.context() as m:
+        m.setattr(chat.threading.Thread, "start", lambda self: None)
+        c.AI["active"] = False
+        c.oeffnen()
+    c.verlauf_laden()
+
+
+def test_kein_hinweis_wenn_nur_das_offene_gespraech_neu_ist(c, monkeypatch):
+    # Nach einem Hot Reload: gid noch None, die (alte) Liste sagt „kalender
+    # ungelesen" — das ist das Gespräch, das gleich offen ist.
+    c.AI.update(gid=None, gespraeche=[{"id": "kalender", "ungelesen": True}])
+    _oeffnen_und_laden(c, monkeypatch, [{"id": "kalender", "ungelesen": False}], "kalender")
+    assert c.AI["gid"] == "kalender" and c.AI["msg"] == ""
+
+
+def test_hinweis_wenn_ein_anderes_gespraech_neues_hat(c, monkeypatch):
+    c.AI.update(gid=None)
+    _oeffnen_und_laden(c, monkeypatch, [{"id": "kalender"},
+                                        {"id": "erinnerungen", "ungelesen": True}], "kalender")
+    assert c.AI["msg"] == HINWEIS
+
+
+def test_veraltete_liste_zaehlt_nicht(c, monkeypatch):
+    # Der letzte Poll meinte „erinnerungen ungelesen", inzwischen gelesen.
+    c.AI.update(gid="kalender", gespraeche=[{"id": "erinnerungen", "ungelesen": True}])
+    _oeffnen_und_laden(c, monkeypatch, [{"id": "kalender"}, {"id": "erinnerungen"}], "kalender")
+    assert c.AI["msg"] == ""
+
+
+def test_neu_woanders_mit_hintergrund_antwort(c):
+    c.AI.update(gid="b", gespraeche=[{"id": "a"}, {"id": "b", "ungelesen": True}],
+                ungesehen={"a"})
+    assert c.neu_woanders() == ["a"]
+    # Läuft die Antwort in „a" noch, ist dort noch nichts Neues.
+    c.AI.update(ungesehen=set(), streaming=True, strom_hier=False,
+                strom_puffer={"gid": "a"})
+    c.AI["gespraeche"][0]["ungelesen"] = True
+    assert c.neu_woanders() == []

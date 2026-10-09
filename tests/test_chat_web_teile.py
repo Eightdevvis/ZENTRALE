@@ -6,7 +6,7 @@ import datetime as _dt
 
 import pytest
 
-from tui.ansichten import (chat as chatmod, chat_bedienung, einstellungen, kontext, maus,
+from tui.ansichten import (chat as chatmod, chat_bedienung, denkadern, einstellungen, kontext, maus,
                            rechts, seitenleiste, symbole)
 
 
@@ -347,3 +347,68 @@ def test_denk_adern_laufen_und_ziehen_sich_zurueck(welt, monkeypatch):
     an, aus, _d = c._adern_lage(False, None, 1000.5)
     assert an and 0 < aus < 1
     assert c._adern_lage(False, None, 1002.0)[0] is False and not c.adern_laufen()
+
+
+def _adern_zellen_beim_zeichnen(c, monkeypatch):
+    """Zeichnen und mitschreiben, welche Zellen die Adern belegen.
+    -> (zellen {(y, x): zeichen}, bereich (y0, platz))."""
+    zellen, bereich = {}, []
+    echt = c._adern_hinten
+    z = c.z
+
+    def mitschreiben(y0, platz, sp, belegt, *rest):
+        bereich.append((y0, platz, sp.x, sp.w))
+        alt_s, alt_a = z.safe_addstr, z.addclip
+
+        def s(y, x, t, attr=0):
+            for k, ch in enumerate(t):
+                zellen[(y, x + k)] = ch
+            alt_s(y, x, t, attr)
+        z.safe_addstr = s
+        z.addclip = lambda y, x, t, w, attr=0: s(y, x, t[:w], attr)
+        try:
+            echt(y0, platz, sp, belegt, *rest)
+        finally:
+            z.safe_addstr, z.addclip = alt_s, alt_a
+    monkeypatch.setattr(c, "_adern_hinten", mitschreiben)
+    _zeichnen(c)
+    return zellen, bereich
+
+
+@pytest.mark.parametrize("h,w", [(24, 80), (30, 136)])
+def test_denk_adern_sind_hintergrund_und_bleiben_im_verlauf(welt, monkeypatch, h, w):
+    """Sasha, 09.10.2026: aufgeklappt, und die Spirale rutschte über die
+    Knöpfe und die Eingabe. Seit dem Umbau Hintergrund: feste Lage unten im
+    Verlaufsfeld, nur in freien Zellen, nie über Frage, Eingabe, Leiste."""
+    c = welt(h, w)
+    from tui.ansichten import chat_zeichnen
+    monkeypatch.setattr(chat_zeichnen.time, "monotonic", lambda: 1000.0)
+    c.z.C["pix_bg"] = (0, 0, 0)
+    c.z.PIX_MODUS = "mix"
+    c.z.pix_attr = lambda *a: 0
+    c.AI["log"] += [("user", "noch eine frage"),
+                    ("werkzeug", "browser_open(url=%s)" % ("https://lsf/" + "x" * 300)),
+                    ("werkzeug_ergebnis", "↳ " + "Seite " * 200)]
+    c.AI.update(streaming=True, answer="", denk_t0=990.0, denk_log_n=len(c.AI["log"]),
+                perm={"frage": "Soll ich im Browser lsf öffnen?",
+                      "optionen": ["ja, nur dieses mal", "ja, für dieses gespräch", "nein"]})
+    lagen = []
+    for offen, scroll in ((set(), 0), ({("schritt", len(c.AI["log"]) - 2)}, 0),
+                          ({("schritt", len(c.AI["log"]) - 2), ("voll", len(c.AI["log"]) - 2)}, 3)):
+        c.AI["offen"], c.AI["scroll"] = offen, scroll
+        zellen, bereich = _adern_zellen_beim_zeichnen(c, monkeypatch)
+        (y0, platz, sx, sw), = bereich
+        if not offen:                                  # zugeklappt ist unten Platz
+            assert zellen, "keine Adern gemalt"
+        schirm = c.z.stdscr
+        unten = y0 + platz - denkadern.hoehe_fuer(platz)
+        for (y, x), ch in zellen.items():
+            assert unten <= y < y0 + platz and sx <= x < sx + sw
+            assert schirm.text.get((y, x)) == ch       # nichts darüber: freie Zelle
+        # Frage und Eingabe liegen unter dem Verlaufsfeld, nie darin.
+        frage_y = next(y for y in range(schirm.h) if "Soll ich im Browser" in schirm.zeile(y))
+        assert frage_y >= y0 + platz
+        lagen.append((y0 + platz - 1, sx))
+    # Gleiche Stelle bei Aufklappen und Scrollen; aufgeklappt deckt der Text
+    # die Adern zu (sie sind nur Hintergrund) statt sie zu verschieben.
+    assert len(set(lagen)) == 1

@@ -290,10 +290,14 @@ def test_werkzeug_spur_steht_im_naechsten_zug(client, monkeypatch):
     assert [x["text"] for x in n if x["rolle"] == "assistant"][0] == "Geige ist umgestellt."
 
 
-def test_gestoppt_ohne_text_landet_nicht_im_verlauf(client, monkeypatch):
+def test_gestoppt_ohne_text_steht_als_systemhinweis_im_verlauf(client, monkeypatch):
+    # Seit 2026-10-09 gespeichert (Feld fehler) — die KI liest es als
+    # Systemhinweis, nicht als eigene Worte (tests/test_zug_abbruch.py).
     _modul(monkeypatch, lambda h, **k: iter([{"gestoppt": True}]))
     client.post("/api/chat", json={"message": "x"}).get_data()
-    assert [m["role"] for m in gespraeche.verlauf_fuer_ki(gespraeche.aktiv())] == ["user"]
+    v = gespraeche.verlauf_fuer_ki(gespraeche.aktiv())
+    assert [m["role"] for m in v] == ["user", "assistant"]
+    assert v[1]["content"].startswith("[System, nicht deine Worte:") and "gestoppt" in v[1]["content"]
 
 
 def test_zug_ist_nach_dem_strom_abgemeldet(client, monkeypatch):

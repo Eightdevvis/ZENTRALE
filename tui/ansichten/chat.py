@@ -650,7 +650,7 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
             AI["strom_hier"] = True
             AI.pop("strom_puffer", None)
             t = threading.Thread(target=ai_stream, args=(msg, ersetzt, wiederholen, anhaenge),
-                                 daemon=True, name="ai-strom")
+                                 daemon=True)
             AI["strom_thread"] = t
             AI["streaming"] = True
         t.start()
@@ -963,11 +963,17 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
         AI["active"] = True; AI["scroll"] = 0; AI["msg"] = ""
         AI["fertig_ungesehen"] = False
         AI["fokus"] = "eingabe"
-        if any(e.get("ungelesen") and e.get("id") != AI.get("gid")
-               for e in AI.get("gespraeche") or []):
-            AI["msg"] = "neues in einem anderen gespräch — tab zeigt die gespräche"
+        # „Neues in einem anderen Gespräch" erst sagen, wenn Liste und offenes
+        # Gespräch frisch geladen sind (verlauf_laden). Vorher stand es hier
+        # aus der Liste des letzten Polls — bis 20 s alt, und nach einem Hot
+        # Reload mit gid None, sodass das OFFENE Gespräch als „anderes"
+        # zählte (Sasha, 09.10.2026: „das stimmte gar nicht").
+        AI["neu_hinweis"] = True
         if not AI["streaming"]:
             threading.Thread(target=ai_load_history, daemon=True).start()
+        else:
+            with self.AI_LOCK:
+                self._neu_hinweis_geben()
 
     def taste(self, ch):
         """Eine Taste, während der Chat den Fokus hat. Belegung und die

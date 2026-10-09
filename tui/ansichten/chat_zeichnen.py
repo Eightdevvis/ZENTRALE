@@ -280,15 +280,19 @@ class ChatZeichnen:
             return
         jetzt = time.monotonic()
         adern, ausklang, dauer = self._adern_lage(streaming, answer, jetzt)
-        n_adern = denkadern.hoehe_fuer(platz) if adern else 0
+        # Die Denk-Adern sind seit 2026-10-09 Hintergrund (Sasha: „die
+        # animation ist einfach deko wie ein hintergrund"): kein Platz mehr im
+        # Verlauf — vorher hingen sie als Block darin und wanderten beim
+        # Aufklappen über Knöpfe und Eingabe. Gemalt wird unten (_adern_hinten).
         zeilen = V.verlauf_zeilen(
             log, sp.w, offen=AI.get("offen") or frozenset(),
             denken_alle=AI.get("denken_offen"), letzte_ai=V.retry_bei(log),
-            antwort=answer, adern=n_adern, streaming=streaming,
-            adern_bei=self._adern_bei(log, streaming), bewertet=self.bewertung.marken(log),
+            antwort=answer, streaming=streaming, bewertet=self.bewertung.marken(log),
             spuren=AI.get("spuren"), ablaeufe=AI.get("ablaeufe"))
         self._ziele = V.ziele(zeilen)
         if not zeilen:
+            if adern:
+                self._adern_hinten(y0, platz, sp, {}, jetzt, dauer, ausklang)
             hinweis = "frag die ki — tippen + enter · /help"
             z.addclip(y0 + platz // 2, sp.x, hinweis, sp.w, C["faint"])
             return
@@ -306,13 +310,18 @@ class ChatZeichnen:
         AI["scroll"] = min(AI["scroll"], maxscroll)
         start = max(0, total - platz - AI["scroll"])
         stile = self._stile()
-        adern_y = None
-        for r, zeile in enumerate(zeilen[start:start + platz]):
+        sichtbar = zeilen[start:start + platz]
+        if adern:
+            # Erst der Hintergrund, nur in Zellen, die danach kein Text belegt.
+            belegt = {}
+            for r, zeile in enumerate(sichtbar):
+                breite = sum(len(t) for t, _s, _z in zeile)
+                if breite:
+                    belegt[y0 + r] = (sp.x, sp.x + breite)
+            self._adern_hinten(y0, platz, sp, belegt, jetzt, dauer, ausklang)
+        for r, zeile in enumerate(sichtbar):
             y, x = y0 + r, sp.x
             for text, stil, ziel in zeile:
-                if stil == "adern":
-                    adern_y = y if adern_y is None else adern_y
-                    continue
                 attr = stile.get(stil, C["dim"])
                 if ziel is not None and ziel == vw:
                     attr = C["bright"] | curses.A_REVERSE
@@ -320,11 +329,6 @@ class ChatZeichnen:
                 if ziel is not None:
                     self.klickbar(y, x, len(text), lambda zz=ziel: self.ziel_ausloesen(zz))
                 x += len(text)
-        if n_adern and adern_y is not None:
-            # erste sichtbare Adern-Zeile; oben abgeschnittene fehlen dann
-            vor = max(0, (start - next(i for i, zl in enumerate(zeilen)
-                                        if zl and zl[0][1] == "adern")))
-            self._adern_malen(adern_y, sp, n_adern, vor, jetzt, dauer, ausklang)
 
     def _stile(self):
         C = self.z.C
@@ -363,15 +367,6 @@ class ChatZeichnen:
             return False, 0.0, 0.0
         return True, seit / denkadern.AUSKLANG_S, AI["denk_ende"] - t0
 
-    def _adern_bei(self, log, streaming):
-        """Nach dem Strom: die Adern ziehen sich dort zurück, wo die Antwort
-        dieses Zugs beginnt (vor ihr, hinter den Schritten)."""
-        if streaming:
-            return None
-        n = self.AI.get("denk_log_n") or 0
-        letzte = V.letzte_antwort(log)
-        return letzte if letzte is not None and letzte >= n else None
-
     def adern_laufen(self):
         """Leben die Denk-Adern gerade (Warten oder Rückzug)?"""
         return self.AI.get("denk_t0") is not None
@@ -383,18 +378,34 @@ class ChatZeichnen:
         AI = self.AI
         return self.adern_laufen() and not (AI.get("answer") or "").strip()
 
-    def _adern_malen(self, y, sp, n, vor, jetzt, dauer, ausklang):
+    def _adern_hinten(self, y0, platz, sp, belegt, jetzt, dauer, ausklang):
+        """Die Denk-Adern als Hintergrund des Verlaufsbereichs: feste Lage
+        unten im Feld (y0 … y0+platz-1, Textspalte sp) — unabhängig von
+        Scrollstand und Aufgeklapptem —, nie darüber hinaus. belegt: {y:
+        (x_von, x_bis)} Zellen, die der Text danach selbst zeichnet; dort
+        bleibt der Hintergrund leer."""
         C, z = self.z.C, self.z
+        n = denkadern.hoehe_fuer(platz)
+        if not n:
+            return
+        oben = y0 + platz - n
+
+        def frei(y, x):
+            if not (y0 <= y < y0 + platz and sp.x <= x < sp.x + sp.w):
+                return False
+            b = belegt.get(y)
+            return b is None or not (b[0] <= x < b[1])
         if C.get("pix_bg") is None or z.PIX_MODUS == "off":
-            if vor == 0:
-                z.addclip(y + n // 2, sp.x + sp.w // 2 - 1, "···"[:3], 3, C["acc"])
+            y, x = oben + n // 2, sp.x + sp.w // 2 - 1
+            if all(frei(y, x + k) for k in range(3)):
+                z.addclip(y, x, "···", 3, C["acc"])
             return
         thema = "nacht" if sum(C["pix_bg"]) < 384 else "tag"
         zellen = denkadern.adern_zellen(jetzt, dauer, sp.w, n, thema, ausklang)
-        for r, zeile in enumerate(zellen[vor:]):
+        for r, zeile in enumerate(zellen):
             for c, f in enumerate(zeile):
-                if f:
-                    z.safe_addstr(y + r, sp.x + c, f[0], z.pix_attr(f[1], f[2]))
+                if f and frei(oben + r, sp.x + c):
+                    z.safe_addstr(oben + r, sp.x + c, f[0], z.pix_attr(f[1], f[2]))
 
     def _auge(self, y0, platz, bereich):
         """Leerer Chat: das Auge (Sasha, 04.10.2026) mittig, darunter der

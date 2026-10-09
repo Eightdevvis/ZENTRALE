@@ -125,16 +125,15 @@ def _nutzer(text, breite):
 
 
 def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=None,
-                   antwort=None, adern=0, streaming=False, adern_bei=None, bewertet=None,
+                   antwort=None, streaming=False, bewertet=None,
                    spuren=None, ablaeufe=None):
     """Der Verlauf als Zeilen aus Stücken (text, stil, ziel).
 
     offen: Ziele, die aufgeklappt sind ({("schritt", i), ("denken", i)});
     denken_alle: Strg+D — alles Denken offen; letzte_ai: wo „retry" steht
     (retry_bei: letzte Antwort oder letzter Abbruch); antwort: die laufende Antwort (Text)
-    oder None; adern: so viele leere Zeilen für die Denk-Animation, vor dem
-    Eintrag adern_bei (None: am Ende, vor der laufenden Antwort) — nach dem
-    Ende des Stroms zieht sie sich dort zurück, wo die Antwort beginnt;
+    oder None (die Denk-Animation hat seit 2026-10-09 keinen Platz mehr hier:
+    sie ist Hintergrund, chat_zeichnen._adern_hinten);
     bewertet: {index: 1|-1} — so bewertete Antworten zeigen „good ✓" bzw.
     „bad ✗" hervorgehoben; spuren: {index: nachricht-id} der Antworten mit
     Ablauf-Protokoll („trace ›", spur.py), ablaeufe: {nachricht-id: Einträge
@@ -147,14 +146,7 @@ def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=
     gruppen = schritte(log)
     teil_von = {j for s in gruppen.values() for j in s["teile"][1:]}
     vorher = None
-    def adern_block():
-        if zeilen:
-            zeilen.append([])
-        zeilen.extend([("", "adern", None)] for _ in range(adern))
-
     for i, (rolle, text) in enumerate(log):
-        if adern and i == adern_bei:
-            adern_block()
         if i in teil_von:
             continue
         # Luft zwischen zwei Äußerungen; Schritte und Denken kleben an der Antwort
@@ -250,10 +242,8 @@ def verlauf_zeilen(log, breite, offen=frozenset(), denken_alle=False, letzte_ai=
             for u in _umbruch(text, breite):
                 zeilen.append([(u, "leise", None)])
         vorher = rolle
-    if adern and (adern_bei is None or not 0 <= adern_bei < len(log)):
-        adern_block()
     if antwort is not None and antwort.strip():
-        if zeilen and not adern:
+        if zeilen:
             zeilen.append([])
         for z_text, stil in md_zeilen(antwort + ("▌" if streaming else ""), breite):
             zeilen.append([(z_text, "ai_" + stil if stil else "ai", None)])

@@ -39,8 +39,9 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/chat_ablage.py` | Mixin `AblageSteuerung` des Chats: `/anhang` (Datei lesen, an `/api/anhang`), `/paste` und Strg+V (Zwischenablage), „▤"-Zeilen, Enter auf das neueste Dokument | `AI["anhaenge"]` |
 | `ansichten/zwischenablage.py` | Zwischenablage LESEN (xclip, wl-paste): Bild, Text, leer oder Grund — ohne curses | — |
 | `ansichten/chat_layout.py` | Aufteilung des Chat-Kastens wie Claude Web (Skizze im Kopf): `aufteilen` → Seitenleiste / Symbolspalte / Mitte / rechts, `spalte` (Textspalte mittig ≤ 92), `seite_auto` | — |
-| `ansichten/chat_zeichnen.py` | Mixin `ChatZeichnen`: `draw_ai` (Leiste, Kopf „Titel ▾ … ▤ n", Verlauf, Fuß, Eingabekasten, „+ attach … Modell · Effort"), Klickflächen, Denk-Adern im Verlauf, Auge im leeren Chat | `AI["fokus"]` … |
+| `ansichten/chat_zeichnen.py` | Mixin `ChatZeichnen`: `draw_ai` (Leiste, Kopf „Titel ▾ … ▤ n", Verlauf, Fuß, Eingabekasten, „+ attach … Modell · Effort"), Klickflächen, Denk-Adern als Hintergrund des Verlaufs, Auge im leeren Chat | `AI["fokus"]` … |
 | `ansichten/chat_bedienung.py` | Mixin `ChatBedienung`: Fokus (F6), Tab = Gespräche auf/zu, Ziele im Verlauf (auf/zu, copy, retry, Dokument), Strg-Tasten, Maus, Zwischenablage | — |
+| `ansichten/chat_strom.py` | Mixin `StromSteuerung`: wohin die laufende Antwort schreibt (`strom_ziel`: offenes Gespräch oder Puffer), weg-/zurückwechseln, `strom_aus` (Flag immer aus), `waechter` (Haupt-Loop), `markiert` („…"/● in Leiste und Liste), `neu_woanders` | `AI["strom_hier"]`, `AI["strom_puffer"]`, `AI["strom_thread"]`, `AI["ungesehen"]` |
 | `ansichten/verlauf.py` | Verlauf als Zeilen aus Stücken (text, stil, ziel): Nutzer rechts abgesetzt, „Used memory ›", Denken eingeklappt, copy · retry; `benutzt` für „Used in this session" | — |
 | `ansichten/spur.py` | „trace ›" unter einer Antwort (seit 2026-10-09): welche Antwort ein Ablauf-Protokoll hat (`spuren`), Kopfzeile und ganzer Inhalt je Eintrag, Zeilen für den Verlauf | (in `AI`: `spuren`, `ablaeufe`) |
 | `ansichten/seitenleiste.py` | `Seitenleiste`: Menü (Search, New, Projects, Files, Customize) mit Symbolen (Braille, 2 Zeilen), Gespräche nach Today/Yesterday/Datum; zugeklappt eine Symbolspalte | `AI["seite"]`, `AI["seite_menu"]` |
@@ -420,10 +421,16 @@ Inneres (Skizze: `chat_layout.py`).
   `ZENTRALE_TUI_MAUS=aus` von Anfang an. Jede Fläche wird beim Zeichnen
   angemeldet (`klickbar`), Klick und Bild sind also immer dasselbe.
 - **Denk-Adern** (`denkadern.py`, Stil: [pixelstil.md](pixelstil.md)): solange
-  auf Text gewartet wird, wachsen an der Stelle der kommenden Antwort
+  auf Text gewartet wird, wachsen unten im Verlaufsfeld
   Spiralarme mit eingerollten Windungen aus einem Kern, Reichweite
   `R_max·(1−e^(−dauer/9 s))`, eine Helligkeitswelle läuft nach außen; mit dem
-  ersten Text ziehen sie sich 0,9 s zurück. Bild höchstens 10×/s, die
+  ersten Text ziehen sie sich 0,9 s zurück. Seit 2026-10-09 **Hintergrund**
+  (Sasha: „einfach deko wie ein hintergrund"): zuerst gemalt, feste Lage
+  unten im Verlaufsfeld (unabhängig von Scrollen und Aufgeklapptem), nur in
+  Zellen, die danach kein Text belegt, nie über Frage, Eingabe oder Leiste
+  (`ChatZeichnen._adern_hinten`); im Verlauf haben sie keine Zeilen mehr.
+  Vorher hingen sie als Block im Verlauf und rutschten beim Aufklappen über
+  Knöpfe und Eingabe. Bild höchstens 10×/s, die
   Schleife tickt dann mit 100 ms statt 33 (`Chat.nur_adern`). Gemessen
   (120×35, dieser Laptop): Chat offen 5 % CPU (vorher 29 % — das Auge lief
   oben mit), Denken 9–14 % (vorher 37–51 %); 160×45: 12–19 % (vorher 38–50 %).
@@ -433,6 +440,44 @@ Inneres (Skizze: `chat_layout.py`).
   Abspiel-Backend denkt `ZTUI_DENK_S` Sekunden) in `tests/tui_schirm/lauf.py`;
   ohne Bildschirm `tests/test_chat_web.py`, `tests/test_chat_web_teile.py`,
   `tests/test_denkadern.py`, neue Zustände in `tests/test_fussleiste.py`.
+
+## Laufende Antwort: nie hängen, im Hintergrund weiter (seit 2026-10-09)
+
+- **„antwort läuft" bleibt nie stehen.** Am 09.10. zeigte die TUI nach einem
+  Browser-Zug weiter „answering …", obwohl das Backend fertig war und kein
+  Strom-Thread mehr lebte. Nachgestellt (Abspiel-Backend mit genau der
+  Folge, `ZTUI_STROM=browser`, Szenario `ki_browser`, 44 Läufe mit
+  Zufallstasten gegen den damals laufenden Code): kein Hänger — die Folge
+  selbst ist es nicht. Was den Zustand erzeugt, ist ein Strom-Thread, der an
+  einer Ausnahme stirbt, bevor er das Flag zurücksetzt; deren Traceback
+  landete auf stderr, also unsichtbar im curses-Bild. Jetzt: `ai_stream` in
+  drei Schichten (lesen, abschließen, außen `strom_aus`), kaputte Ereignisse
+  werden übergangen, der Haupt-Loop fragt jedes Bild `chat.waechter()`
+  (Flag an, Thread tot → zurücksetzen, Hinweis, Verlauf neu), und
+  `threading.excepthook` schreibt jeden Thread-Tod in den Lebenslauf.
+- **Wechseln während einer Antwort** (wie Claude Web): Leiste und Liste gehen
+  auf, andere Gespräche lassen sich lesen. Die Antwort schreibt in
+  `strom_ziel()` — das offene Gespräch oder, wenn Sasha weg ist, einen Puffer;
+  zurück sieht er den Stand live weiter. In der Leiste „…" am laufenden
+  Gespräch, ● wenn es fertig wurde oder etwas fragt; unten
+  „„Titel" antwortet noch im hintergrund" bzw. „„Titel" fragt etwas —
+  dorthin wechseln". **Senden woanders bleibt gesperrt** („warte, „Titel"
+  antwortet noch", die Eingabe bleibt stehen): das Backend hat EINE
+  Erlaubnis-Frage (`core/state.py`) und EIN „für dieses Gespräch"
+  (`core/erlaubnis.py`). Beim Backend wird während der Antwort nicht
+  gewechselt (das höbe „für dieses Gespräch" der laufenden Antwort auf);
+  `strom_aus` holt `/api/gespraeche/aktiv` danach nach. Neues Gespräch,
+  Archiv, Projekt bleiben bis dahin gesperrt.
+- **„Neues in einem anderen Gespräch"** steht erst nach dem Laden (Liste und
+  offenes Gespräch frisch, `neu_woanders`): vorher kam es aus der bis zu
+  20 s alten Liste, nach einem Hot Reload mit gid None — das offene
+  Gespräch zählte dann als „anderes".
+- **Abgebrochener Zug**: „✗ abgebrochen: <Meldung>" als Eintrag an seiner
+  Stelle (auch in alten Gesprächen, Feld `fehler`), „retry" daran;
+  „retry" steht nur an der letzten Antwort/dem letzten Abbruch, wenn danach
+  keine Frage kam (`verlauf.retry_bei`).
+- Tests: `tests/test_chat_strom.py`, `tests/test_zug_abbruch.py`, Adern in
+  `tests/test_chat_web_teile.py` (80×24, 136×30).
 
 ## Bewerten (seit 2026-10-08)
 

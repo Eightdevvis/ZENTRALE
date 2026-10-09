@@ -116,6 +116,7 @@ class GespraechsSteuerung:
                 AI["spuren"] = spur.spuren(AI["log"], nachrichten)
             AI["loaded"] = True
             self._neu_markieren()
+            self._neu_hinweis_geben()
             gid_jetzt = AI.get("gid")
         if geholt is not None:             # ids + Bewertungen (bewertung.py)
             self.bewertung.geladen(gid_jetzt, geholt[1])
@@ -127,6 +128,30 @@ class GespraechsSteuerung:
         seite = getattr(self, "seite", None)
         if seite is not None:               # Blatt-Zeichen in der Seitenleiste
             seite.doku_holen()
+
+    def neu_woanders(self):
+        """Gespräche, die gerade NICHT angezeigt werden und eine Antwort
+        haben, die Sasha hier noch nicht gesehen hat (Liste vom Backend
+        + fertig im Hintergrund, chat_strom.py). Das offene Gespräch und das
+        der noch laufenden Antwort zählen nie. Unter AI_LOCK. -> [gid]"""
+        AI = self.AI
+        sichtbar = AI.get("gid")
+        laeuft = self.strom_gid() if not self.strom_laeuft_hier() else None
+        ids = [e.get("id") for e in AI.get("gespraeche") or [] if e.get("ungelesen")]
+        ids += [g for g in AI.get("ungesehen") or () if g not in ids]
+        return [g for g in ids if g and g != sichtbar and g != laeuft]
+
+    def _neu_hinweis_geben(self):
+        """Nach dem Öffnen des Fensters einmal: Hinweis, wenn wirklich etwas
+        Neues woanders liegt (unter AI_LOCK; das offene Gespräch ist bekannt)."""
+        AI = self.AI
+        if not AI.pop("neu_hinweis", False):
+            return
+        if self.neu_woanders():
+            if not AI.get("msg"):
+                AI["msg"] = "neues in einem anderen gespräch — tab zeigt die gespräche"
+        elif AI.get("msg", "").startswith("neues in einem anderen gespräch"):
+            AI["msg"] = ""
 
     def _neu_markieren(self):
         """● im Titel: ungelesen ist etwas in einem Gespräch, das gerade

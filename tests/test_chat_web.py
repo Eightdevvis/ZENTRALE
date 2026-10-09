@@ -126,9 +126,10 @@ def test_ohne_gespeichertes_ergebnis_sagt_es_das():
     assert "    (ergebnis nicht gespeichert)" in t
 
 
-def test_laufende_antwort_und_platz_fuer_die_adern():
-    z = V.verlauf_zeilen([("user", "hallo")], 40, adern=5, streaming=True)
-    assert [s for x in z for _t, s, _z in x].count("adern") == 5
+def test_laufende_antwort_ohne_platz_fuer_die_adern():
+    # Die Adern sind seit 2026-10-09 Hintergrund: keine Zeilen im Verlauf.
+    z = V.verlauf_zeilen([("user", "hallo")], 40, streaming=True)
+    assert "adern" not in [s for x in z for _t, s, _z in x]
     z = V.verlauf_zeilen([("user", "hallo")], 40, antwort="Hal", streaming=True)
     assert _text(z)[-1] == "Hal▌"
     # während einer Antwort kein retry

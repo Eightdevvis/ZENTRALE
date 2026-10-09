@@ -238,7 +238,7 @@ def test_ergebnisse_kommen_mit_call_id_zurueck():
 
 # ── app.py: fehler geht an Sasha, nicht in den Verlauf ────────────────
 
-def test_fehler_landet_nicht_im_verlauf(monkeypatch):
+def test_fehler_landet_nur_als_systemhinweis_im_verlauf(monkeypatch):
     import ai_backends
     import kern
     from ui.app import app
@@ -258,8 +258,10 @@ def test_fehler_landet_nicht_im_verlauf(monkeypatch):
 
     assert '"fehler": "Cloud-Fehler: kein Netz"' in body
     assert '"token"' not in body
+    # Nicht als ihre Worte — seit 2026-10-09 als markierter Systemhinweis.
     verlauf = gespraeche.verlauf_fuer_ki(gespraeche.aktiv())
-    assert [m["role"] for m in verlauf] == ["user"]
+    assert [m["role"] for m in verlauf] == ["user", "assistant"]
+    assert verlauf[1]["content"].startswith("[System, nicht deine Worte: Dein letzter Zug brach ab")
 
 
 def test_kalender_beweis_meldet_keinen_erfolg_wenn_nachlesen_scheitert(monkeypatch):
