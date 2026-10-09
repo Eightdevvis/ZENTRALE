@@ -1,7 +1,7 @@
 # Hub-Bauplan — ZENTRALE als Plattform, die Module als Apps
 
-**Stand 2026-10-09: entschieden, Schritt 1 (Tutor) erledigt; Kacheln nur
-Vorschlag (unten).** Sasha: *„du lädst zentrale
+**Stand 2026-10-09: entschieden, Schritt 1 (Tutor) erledigt; Kacheln
+entschieden (unten), noch nicht gebaut.** Sasha: *„du lädst zentrale
 runter, evt kaufst du schon hardware dazu, und am anfang ist zentrale blank.
 dann kann man kalender, mail, ki assistenz, tutor usw reinladen … alle module
 die bisher gebaut wurden sind somit die ersten apps … wenn wir zentrale hub
@@ -133,154 +133,46 @@ Bis Schritt 5 bleibt alles in einem Repo außer dem Tutor; der Kern-Bauplan
   liegen noch am alten Ort `ZENTRALE/tutor/data`, der Tutor findet sie dort),
   Sashas Server für Ziel `hub`.
 
-## Kacheln (Vorschlag, 2026-10-09 — Sasha entscheidet)
+## Kacheln (entschieden 2026-10-09)
 
-**Stand: nur Vorschlag, nichts gebaut, nichts entschieden.** Anlass: die
-App „Desk View" (unendliche Fläche je Projekt, JSON-Canvas-1.0-Dateien, in
-der TUI) will Dinge anderer Apps als Kacheln auf die Fläche legen — Listen,
-Graphen, allgemein jede Ausgabe einer ZENTRALE-App. Leitplanken aus der
-Assistent-Session sind eingearbeitet; Unentschiedenes ist **(offen)**.
+Anlass: Desk View (Fläche je Projekt, JSON-Canvas-Dateien, in der TUI) legt
+Dinge anderer Apps als Kacheln auf die Fläche. Noch nichts gebaut.
 
-### Begriff
+- **Begriff:** Eine Kachel ist ein **Verweis** auf ein Objekt einer anderen
+  App — **App** + **Art** (z. B. `liste`) + **`ref`** (z. B.
+  `{"id": "l_einkauf"}`) —, keine Kopie. Leitlinie *„dasselbe Objekt, nicht
+  kopiert"* (wie AFFiNE): die Wahrheit bleibt in der liefernden App. Der
+  Rückfall-Text in der Canvas-Datei ist nur Anzeige-Cache für fremde
+  Programme (Obsidian), wird beim Anzeigen überschrieben, nie dort bearbeitet.
+- **Offene Formate:** keine eigenen Datenformate. Die Canvas-Datei bleibt
+  JSON Canvas 1.0; die Kachel ist ein `text`-Knoten mit Rückfall-Text und
+  genau einem Zusatzfeld `zentrale_kachel: {v, app, art, ref}`.
+- **App-Namen:** Listen und Graphen sind schon eigene Apps in ZENTRALE und
+  heißen **`fokus`** (Listen) und **`graph`** (Graphen). Ihr Code liegt noch
+  im Kern, darum zuerst Adapter im Prozess hinter derselben Schnittstelle
+  (Anfrage/Antwort gehen durch `json.dumps`/`loads`); beim Auszug wird nur
+  der Adapter gegen HTTP getauscht.
+- **Manifest:** `liefert = ["kachel:<art>"]`, optional `[kachel.<art>]` mit
+  `min` (Zellen w×h) und `ttl`.
+- **Weg:** immer über den Hub (`POST /api/kachel`), nie direkt an die App.
+  Anfrage `{app, art, ref, groesse: {w, h}, stand}`. Antwort: `zeilen` aus
+  Stücken `[text, rolle]` mit Rollen aus `farben.ROLES` (unbekannt → `dim`),
+  `text` als Klartext-Rückfall, `stand` + `ttl`. Die App kürzt selbst auf
+  w×h („… 5 weitere").
+- **Zu klein / weg / aus:** unter `min` → `{"zu_klein": {w, h}}`, Hinweis
+  statt Inhalt; Bezug gelöscht → 404 `{"fehler": "weg"}`; App aus oder
+  > 0,5 s → `{"fehler": "aus"}`, letzter Stand in `faint`. Abruf im
+  Hintergrund, gezeichnet wird aus dem Puffer.
 
-Eine **Kachel** ist ein Ausschnitt dessen, was eine App weiß, so gezeichnet,
-dass eine *andere* Oberfläche ihn einbetten kann, ohne den Code der App zu
-kennen. Die App rechnet den Inhalt, der Verbraucher (Desk View, später
-Morgenblick, Handy) zeichnet Rahmen und Position. Eine Kachel hat drei
-Kennzeichen: **App** (wer liefert), **Art** (welche Sorte, z. B. `liste`),
-**Bezug** `ref` (welches Ding, z. B. `{"id": "l_einkauf"}`). Auf der Fläche
-ist die Kachel eine Element-Art der Canvas-Registry; der Canvas selbst weiß
-nichts von Listen.
+### Entscheidungen
 
-### Manifest
+- **Enter** = nur „in der App öffnen" (`POST /api/kachel/aktion`, Hub reicht
+  weiter, App sagt, wohin gesprungen wird). Kein Abhaken auf der Kachel.
+- **Frisch halten:** nur Pull mit TTL (mit `stand` → `{"unveraendert": true}`).
+  Push-Meldungen später.
+- **Rohdaten** für Fenster/Handy später; das Feld `roh` ist im
+  Antwort-Schema als optional reserviert, damit nichts verbaut wird.
+- **Rechte:** `<app>:lesen` reicht, kein Extra-Recht je Art; geprüft im Hub.
 
-```
-liefert = ["kachel:liste", "kachel:graph"]
-[kacheln]
-ziel   = "/hub/kachel"          # POST, Standard wie bei [ereignisse]
-aktion = "/hub/kachel/aktion"   # Enter/Klick
-[kachel.liste]
-min = [16, 3]                   # kleinste sinnvolle Größe (Zellen w×h)
-ttl = 30                        # Sekunden, wie lange eine Antwort frisch ist
-```
-
-Ohne `[kachel.<art>]` gelten Standardwerte (min 10×2, ttl 60).
-
-### Anfrage und Antwort
-
-Der Verbraucher fragt **nie die App direkt, sondern den Hub**
-(`POST /api/kachel`); der Hub prüft das Recht und reicht weiter (HTTP oder
-Adapter). Größe = Innenfläche *ohne* Rahmen — den zeichnet der Verbraucher
-(`draw_box`).
-
-```
-→ {"app": "listen", "art": "liste", "ref": {"id": "l_einkauf"},
-   "groesse": {"w": 32, "h": 8}, "ansicht": "terminal",
-   "roh": false, "stand": "a41f"}            # stand = was ich schon habe
-← {"titel": "Einkauf", "stand": "a52c", "ttl": 30,
-   "groesse": {"w": 28, "h": 4},              # tatsächlich belegt, ≤ Anfrage
-   "zeilen": [
-     [["☐ ", "faint"], ["Milch", "dim"]],
-     [["☑ ", "acc"],   ["Brot", "dim", {"durch": true}]],
-     [["… 5 weitere", "faint"]]],
-   "ziele": [{"zeile": 0, "eintrag": 3}, {"zeile": 1, "eintrag": 4}],
-   "text": "Einkauf\n- [ ] Milch\n- [x] Brot\n…",   # Klartext-Rückfall
-   "roh": null}                               # bei roh:true: z. B. die Liste wie /api/lists
-```
-
-- **Farben nur als Rollen** aus `tui/ansichten/farben.py` (`ROLES`: `dim`,
-  `faint`, `bright`, `acc`, `warn`, `graph`, `num`, `kal` …). Nie curses-
-  Nummern oder RGB — Tag/Nacht und Mono-Rückfall bleiben Sache des
-  Verbrauchers (`Kontext.apply_theme`). Unbekannte Rolle → `dim`.
-  `{"durch": true}` = durchgestrichen (wie `addclip(strike=True)`).
-- **Größe aushandeln:** die App füllt höchstens die angefragte Fläche, darf
-  kleiner antworten, kürzt selbst („… 5 weitere"). Ist die Fläche unter
-  `min` → `{"zu_klein": {"w": 16, "h": 3}}`, der Verbraucher zeigt einen
-  Hinweis statt Inhalt.
-- **Fehler / nicht erreichbar:** unbekannter Bezug → 404
-  `{"fehler": "weg", "text": "Liste gelöscht"}`; App aus oder > 0,5 s →
-  der Hub antwortet `{"fehler": "aus"}`, der Verbraucher zeigt den letzten
-  Stand in `faint` mit „‹listen aus›". Nie blockieren: abgerufen wird im
-  Hintergrund (wie der `Store`), gezeichnet wird immer aus dem Puffer.
-- **Frisch halten — Vorschlag: Pull mit TTL, Push nur als Anstoß.** Der
-  Verbraucher fragt neu, wenn die Kachel sichtbar und `ttl` abgelaufen ist;
-  mit `stand` antwortet die App `{"unveraendert": true}`, wenn sich nichts
-  tat (billig). Zusätzlich darf eine App `ereignis:kachel.geaendert`
-  `{art, ref}` liefern; der Hub setzt dann nur die TTL der betroffenen
-  Kacheln auf 0 — der Inhalt kommt trotzdem per Pull. So gibt es *einen*
-  Weg für Daten und Push ist reine Beschleunigung. **(offen, Frage 2)**
-
-### Kachel in der Canvas-Datei
-
-JSON Canvas kennt nur `text`, `file`, `link`, `group`. Eine Kachel wird ein
-**`text`-Knoten mit Rückfall-Text** plus einem eigenen Feld, damit Obsidian
-sie als lesbare Notiz zeigt und ZENTRALE sie als Kachel erkennt:
-
-```
-{"id": "k7", "type": "text", "x": 120, "y": 40, "width": 320, "height": 200,
- "text": "**Einkauf** · _Kachel listen/liste_\n- [ ] Milch\n- [x] Brot",
- "zentrale_kachel": {"v": 1, "app": "listen", "art": "liste",
-                     "ref": {"id": "l_einkauf"}, "stand": "a52c"}}
-```
-
-`text` = letzter Klartext-Rückfall (`text` der Antwort), beim Speichern
-geschrieben. Zellengröße ↔ Pixel (`width`/`height`) rechnet Desk View, nicht
-die Kachel. ⚠ prüfen: ob Obsidian unbekannte Felder beim Speichern behält —
-sonst ist die Kachel nach einem Obsidian-Edit nur noch Text (still verloren,
-kein Absturz).
-
-### Listen und Graphen: Adapter im Prozess
-
-Listen und Graphen sind noch Kern-Module, keine Apps. Damit der Umzug später
-nur den Adapter tauscht:
-
-- `core/kacheln.py` (Hub-Seite): `holen(anfrage) → antwort`,
-  `aktion(anfrage) → antwort`; Tabelle `QUELLEN = {"listen": ImProzess(…),
-  "graphen": ImProzess(…), <app>: Http(manifest)}`. Eingebaute Quellen tragen
-  ein Pseudo-Manifest (`liefert`, `[kachel.*]`), damit Rechte und Standard-
-  werte gleich laufen.
-- `core/kachel_listen.py`, `core/kachel_graphen.py`: je `kachel(anfrage) →
-  dict`, lesen nur `lists.list_lists()` bzw. `graphs.list_graphs()` +
-  `read_values()`; Graph im Terminal als Funken-Zeile in Rolle `graph`.
-- **Regel, per Test:** Anfrage und Antwort gehen beim Adapter durch
-  `json.dumps`/`loads` (nichts, was HTTP nicht könnte); Desk View importiert
-  weder `core/lists` noch `core/graphs`, nur den Hub-Aufruf.
-- **Umzug:** die Listen-App bedient dieselbe Funktion unter
-  `POST /hub/kachel`; in `QUELLEN` wird `ImProzess` zu `Http` — eine Zeile.
-
-### Enter → Ereignis
-
-Enter/Klick auf eine Kachel (oder auf eine Zeile mit Eintrag in `ziele`) →
-Verbraucher an Hub `POST /api/kachel/aktion {app, art, ref, aktion:
-"oeffnen", ziel: {"eintrag": 3}}` → Hub an die App (`[kacheln] aktion`).
-Die App entscheidet, was „öffnen" heißt, und antwortet z. B.
-`{"zeige": {"ansicht": "listen", "ziel": {"lid": "l_einkauf", "iid": 3}}}`;
-der Rahmen (Hub-Oberfläche) springt dorthin. Vorerst nur `oeffnen` — alles,
-was ändert (Abhaken auf der Kachel), erst mit Schreib-Recht. **(offen, Frage 4)**
-
-### Rechte
-
-- Eine Kachel ist Lesen. Wer Kacheln von App X will, braucht dasselbe
-  Recht wie für ihre Daten: `listen:lesen`, `graphen:lesen` … — kein
-  Extra-Recht je Art.
-- Geprüft wird im Hub (`/api/kachel`), nie in der App, nie im Verbraucher.
-- `oeffnen` braucht kein Schreib-Recht (navigiert nur, geändert wird in der
-  Ansicht der App selbst).
-- Der Rückfall-Text in der Canvas-Datei trägt Daten der App aus ihrem
-  Datenordner heraus (in die Projektdatei, evtl. in einen Obsidian-Tresor).
-  **(offen, Frage 3)**
-
-### Offene Fragen an Sasha
-
-1. Heißen die eingebauten Quellen schon jetzt `listen`/`graphen` (wie die
-   künftigen Apps), oder bekommen sie bis zum Umzug einen Kern-Namen?
-2. Frisch halten: nur Pull mit TTL reicht für den Anfang — oder soll
-   `kachel.geaendert` (Push als Anstoß) gleich mit?
-3. Darf der Rückfall-Text (Inhalt der Kachel) in die Canvas-Datei, oder nur
-   ein neutraler Platzhalter („Kachel listen/liste")?
-4. Soll man auf einer Kachel direkt etwas ändern dürfen (abhaken), oder ist
-   Enter immer nur „in der App öffnen"?
-5. Brauchen Kacheln eigene feine Rechte (`kachel:listen/liste`), oder reicht
-   `<app>:lesen` wie vorgeschlagen?
-6. Rohdaten (`roh`) schon jetzt mitdenken (Fenster, Handy) oder erst, wenn
-   eine solche Ansicht wirklich kommt?
+**Offen:** Behält Obsidian beim Speichern unbekannte Knotenfelder? Prüfen,
+bevor Kacheln gebaut werden.
