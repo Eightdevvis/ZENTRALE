@@ -12,6 +12,35 @@ echten Daten (06.10.2026) war fehlerfrei. Google-Sync per vdirsyncer ist
 vorbereitet (`deploy/vdirsyncer.config.example`, `scripts/kalender_sync.py`),
 aber nicht eingerichtet.
 
+## Kennungen und Ablehnungen (09.10.2026)
+
+Anlass: die KI änderte per Titel BEIDE gleichnamigen Geigenstunde-Serien.
+`core/kalender_kennung.py` (Wunschliste von ASSISTANT, claude_web_plan §7):
+- **Kennung** = UID im .ics-Speicher (überlebt Umbenennen/Zeit/Ort), im
+  JSON-Speicher Feld `uid` (beim ersten Zugriff vergeben). `entries_in_range`
+  & Co. liefern sie als `kennung` mit (Routinen-Vorkommen: die der Routine,
+  Spannentage: die der Spanne). `alle_eintraege()` statt `_load_raw`.
+- **Per Kennung:** `eintrag_aendern/_loeschen` (einmal + Spanne mit
+  `times`/`enden` je Tag, `von`/`bis` verschieben), `routine_aendern/
+  _loeschen/_absagen/_tag_aendern/_pause`.
+- **Ablehnen statt still korrigieren:** `KalenderAbgelehnt(code, grund)`,
+  Codes nur in `CODES` (die KI-Werkzeuge reichen sie als „K-…" durch). Jede
+  Funktion ist ein Schreibvorgang; abgelehnt = nichts geschrieben (Test
+  vergleicht alle Dateien vorher/nachher). Auch die alten Wege
+  (`kalender.routine_aendern`, `kalender_bearbeiten.*`) werfen jetzt bei
+  Ende ≤ Beginn statt das Ende still zu verwerfen; die Routen antworten 400
+  mit `{error, code}`.
+- **Pausen** hängen per `routine_uid` an IHRER Routine (Umbenennen nimmt sie
+  mit); alte Pausen ohne sie über den Titel, beim Umbenennen werden sie fest
+  angebunden. `kalender_ics.pause_gehoert` ist die eine Regel.
+- **Alarme** (`open_alarms`) tragen `tag`, wo sie an einem Tag hängen.
+- Konflikt-/Alarm-Rechnung ist nach `core/kalender_konflikte.py` gezogen
+  (kalender.py stand bei 1.499/1.500 Zeilen); `kalender.<name>` gilt weiter.
+- **Ohne Import-Kreise:** `CODES`/`KalenderAbgelehnt`/Zeitprüfung stehen in
+  `core/kalender_fehler.py` (braucht nichts); `kalender_konflikte` importiert
+  `kalender` nicht, `kalender.py` schließt `_load_raw`/`entries_in_range`
+  per `kalender_konflikte.anschliessen()` an.
+
 ## Stand Sync (07.10.2026) — eingerichtet und live
 
 - **Ein Kalender.** Die Ebene `routinen` ist nach `termine` gezogen

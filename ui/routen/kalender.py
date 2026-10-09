@@ -11,12 +11,20 @@ from flask import Blueprint, jsonify, request
 
 import cycle        # type: ignore  – Zyklus/PMS-Vorhersage aus dem »periode«-Graphen
 import kalender     # type: ignore  – Kalender-Layer (Woche/Monat, data/ai_calendar.json)
+import kalender_kennung  # type: ignore  – Fehler-Codes (KalenderAbgelehnt)
 import kalender_bearbeiten  # type: ignore  – Wiederholung, „nur dieser Tag", Spannen
 import kalender_sicherung  # type: ignore  – Schutzsperren (Massenlöschung, Rückfall)
 import lists        # type: ignore  – dynamische Listen-Registry (Todo/Sammel-Listen)
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
 
 bp = Blueprint('kalender', __name__)
+
+
+@bp.errorhandler(kalender_kennung.KalenderAbgelehnt)
+def _abgelehnt(e):
+    """Abgelehnt statt still korrigiert (seit 09.10.2026): 400 mit festem
+    Code und lesbarem Grund — die TUI zeigt den Grund an."""
+    return jsonify({"error": e.grund, "code": e.code}), 400
 
 
 @bp.errorhandler(kalender_sicherung.KalenderGesperrt)

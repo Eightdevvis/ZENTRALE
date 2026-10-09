@@ -19,6 +19,16 @@ from datetime import date, datetime, timedelta
 
 import kalender
 import kalender_regel
+from kalender_fehler import KalenderAbgelehnt
+
+
+def _nicht_vor(beginn, ende):
+    """Seit 09.10.2026 keine stille Korrektur mehr: ein Ende, das nicht nach
+    dem Beginn liegt, wird abgelehnt statt still verworfen."""
+    if ende and not beginn:
+        raise KalenderAbgelehnt("ENDE-OHNE-BEGINN", f"Ende {ende} ohne Beginn-Uhrzeit")
+    if beginn and ende and ende <= beginn:
+        raise KalenderAbgelehnt("ENDE-VOR-BEGINN", f"Ende {ende} liegt nicht nach Beginn {beginn}")
 
 FREQS = {"t": "DAILY", "w": "WEEKLY", "m": "MONTHLY", "j": "YEARLY",
          "DAILY": "DAILY", "WEEKLY": "WEEKLY", "MONTHLY": "MONTHLY", "YEARLY": "YEARLY"}
@@ -181,8 +191,7 @@ def routine_bearbeiten(layer: str, label: str, day: str, time: str | None,
             r["seit"] = seit.isoformat()
             r.pop("aus", None)
             r.pop("abweichungen", None)
-        if r.get("ende") and r.get("time") and r["ende"] <= r["time"]:
-            r.pop("ende", None)
+        _nicht_vor(r.get("time"), r.get("ende"))
         kalender._save_raw(data)
         return True
 
@@ -231,8 +240,7 @@ def routine_abweichung(layer: str, label: str, day: str, time: str | None,
                 a[feld] = neu[feld].strip()
         if "time" not in a and r.get("time") and "ende" in a:
             a["time"] = r["time"]
-        if a.get("ende") and a.get("time") and a["ende"] <= a["time"]:
-            a.pop("ende", None)
+        _nicht_vor(a.get("time"), a.get("ende"))
         abw[rid] = a
         kalender._save_raw(data)
         return True
@@ -261,6 +269,10 @@ def spanne_neu(layer: str, von: str, bis: str, label: str,
     d0, d1 = _iso(von), _iso(bis)
     if d0 is None or d1 is None or d1 < d0 or not (label or "").strip():
         return False
+    # Erst ALLES prüfen, dann schreiben — sonst stünde bei einer Ablehnung
+    # die Spanne schon da, nur ohne ihre Zeiten.
+    if tageszeit:
+        _nicht_vor(_hhmm(tageszeit[0]), _hhmm(tageszeit[1]) if tageszeit[1] else None)
     extras = {"ort": ort.strip()} if ort else {}
     if not kalender.add_span(layer or "termine", von, bis, label.strip(), **extras):
         return False
@@ -276,7 +288,7 @@ def spanne_neu(layer: str, von: str, bis: str, label: str,
             cur = d0
             while cur <= d1 and a:
                 times[cur.isoformat()] = a
-                if b and b > a:
+                if b:
                     enden[cur.isoformat()] = b
                 cur += timedelta(days=1)
         else:
@@ -314,7 +326,8 @@ def spanne_tag(layer: str, von: str, label: str, day: str,
             times[day] = t
         else:
             times.pop(day, None)
-        if en and t and en > t:
+        _nicht_vor(t, en)
+        if en:
             enden[day] = en
         else:
             enden.pop(day, None)
@@ -428,10 +441,9 @@ def eintrag_aendern(layer: str, day: str, label: str, time: str | None,
                     e[feld] = _hhmm(neu[feld])
                 else:
                     e.pop(feld, None)
-        if not e.get("time"):
-            e.pop("ende", None)
-        if e.get("ende") and e["ende"] <= e["time"]:
-            e.pop("ende", None)
+        if not e.get("time") and "time" in neu and not neu["time"]:
+            e.pop("ende", None)            # ganztägig gemacht: Ende fällt mit weg
+        _nicht_vor(e.get("time"), e.get("ende"))
         if "ort" in neu:
             if (neu["ort"] or "").strip():
                 e["ort"] = neu["ort"].strip()

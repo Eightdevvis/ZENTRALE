@@ -91,6 +91,9 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `kalender_spiegel` | 2 | git-Spiegel der Kalenderdaten außerhalb von `data/` |
 | `kalender_migration` | 2 | Umzug JSON → .ics: prüfen (alle Lesefunktionen über beide Speicher, Feld-Inventar), ausführen, Rückweg |
 | `kalender_bearbeiten` | 2 | Bearbeiten wie calcurse/Handy: Wiederholung (Typ/Intervall/Ende), Routine gezielt ändern, „nur dieser Tag", Spannen mit Zeit pro Tag, Einmal-Termine genau treffen |
+| `kalender_konflikte` | 2 | Kollisionen, Fahrzeiten, Pausen-Grund, Abwesenheit, Alarme, Lese-Text und Abdruck für die KI (aus kalender.py ausgezogen, dort weitergereicht) |
+| `kalender_kennung` | 2 | Termine/Routinen per fester Kennung (UID) lesen und ändern; `KalenderAbgelehnt` mit festen Codes (`CODES`), ein Schreibvorgang, Ablehnung schreibt nichts |
+| `kalender_fehler` | 2 | Unterstes Kalender-Modul ohne Kalender-Abhängigkeit: `CODES`, `KalenderAbgelehnt`, Uhrzeit- und Reihenfolge-Prüfung (damit kalender/kalender_kennung/kalender_bearbeiten ohne Import-Kreis dieselbe Ablehnung werfen) |
 | `lists` | 2 | Listen-Registry (To-Do, Checklisten) |
 | `notes` | 2 | Notiz-Registry des TUI-Notiz-Werkzeugs |
 | `melodies` | 2 | Melodie-Registry des Klaviers |

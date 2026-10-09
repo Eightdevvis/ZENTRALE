@@ -71,13 +71,24 @@ def _signatur(layer, art, tag, daten, pausen) -> str:
     return hashlib.sha1(roh.encode("utf-8")).hexdigest()
 
 
+def pause_gehoert(p, r) -> bool:
+    """Gehört Pause p zu Routine r? Dieselbe Regel wie _pause_grund in
+    kalender_konflikte.py: mit `routine_uid` über die Kennung (seit
+    09.10.2026, überlebt Umbenennen), sonst über den gleichen Titel."""
+    if not isinstance(p, dict) or not isinstance(r, dict):
+        return False
+    if p.get("routine_uid"):
+        intern = r.get(FELD)
+        uid = intern.get("uid") if isinstance(intern, dict) else r.get("uid")
+        return bool(uid) and p["routine_uid"] == uid
+    return "label" in r and p.get("label") == r.get("label")
+
+
 def _pausen_fuer(r: dict, pausen: list) -> list:
-    """[(nr, pause)] für eine Routine — dieselbe Zuordnung wie _pause_grund
-    in kalender.py: gleiches Label."""
+    """[(nr, pause)] für eine Routine (Zuordnung: pause_gehoert)."""
     if not isinstance(r, dict) or "label" not in r:
         return []
-    return [(i, p) for i, p in enumerate(pausen)
-            if isinstance(p, dict) and p.get("label") == r.get("label")]
+    return [(i, p) for i, p in enumerate(pausen) if pause_gehoert(p, r)]
 
 
 # Lese-Cache: das Parsen aller .ics kostet bei jedem Aufruf ein paar
@@ -531,7 +542,7 @@ class IcsSpeicher:
         # Pausen ohne eine (als .ics geschriebene) Routine gleichen Namens
         # liegen in den Nebendaten — sonst gingen sie verloren.
         ohne = [[i, ohne_interna(p)] for i, p in enumerate(pausen)
-                if not any(isinstance(p, dict) and p.get("label") == r.get("label")
+                if not any(pause_gehoert(p, r)
                            for r in gemappte_routinen)]
 
         # 2. Löschungen: was beim Laden da war, jetzt fehlt und noch als

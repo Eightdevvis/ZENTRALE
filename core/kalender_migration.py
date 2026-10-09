@@ -222,11 +222,23 @@ def funktionen_vergleichen(sp_a, sp_b, alt: dict, heute: date | None = None,
         with kalender.mit_speicher(sp_b):
             b = _sicher(f)
         n += 1
+        a, b = _ohne_kennung(a), _ohne_kennung(b)
         if json.dumps(a, sort_keys=True, ensure_ascii=False, default=str) != \
                 json.dumps(b, sort_keys=True, ensure_ascii=False, default=str):
             abweichungen.append(f"{name}: alt≠neu " +
                                 "; ".join(_unterschiede(a, b, grenze=3)))
     return n, abweichungen
+
+
+def _ohne_kennung(obj):
+    """Die Kennung (seit 09.10.2026, core/kalender_kennung.py) entsteht in den
+    beiden Speichern bewusst verschieden — .ics hat seine UID, die JSON
+    bekommt erst beim ersten Zugriff eine. Für den Vergleich zählt sie nicht."""
+    if isinstance(obj, dict):
+        return {k: _ohne_kennung(v) for k, v in obj.items() if k != "kennung"}
+    if isinstance(obj, list):
+        return [_ohne_kennung(v) for v in obj]
+    return obj
 
 
 def _sicher(f):
@@ -379,7 +391,7 @@ def pruefen(json_pfad: Path, arbeits_dir: Path | None = None,
             with kalender.mit_speicher(sp_ics):
                 b = _sicher(f)
             n_aufrufe += 1
-            if a != b:
+            if _ohne_kennung(a) != _ohne_kennung(b):
                 abweichungen.append(f"{name}: alt≠neu")
 
         inventar = feld_inventar(alt, sp_ics)

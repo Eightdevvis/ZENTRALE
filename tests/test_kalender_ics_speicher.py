@@ -182,7 +182,9 @@ def test_dieselben_schreibwege_ergeben_dasselbe(tmp_path, monkeypatch):
         monkeypatch.setattr(kalender, "CAL_PATH", tmp_path / art / "ai_calendar.json")
         kalender_ics.cache_leeren()
         raus[art] = _szenario_spielen(kalender)
-    assert raus["json"] == raus["ics"]
+    # Die Kennung entsteht je Speicher verschieden (kalender_kennung.py).
+    assert kalender_migration._ohne_kennung(raus["json"]) == \
+        kalender_migration._ohne_kennung(raus["ics"])
     _aussen_sauber(raus["ics"])
 
 
