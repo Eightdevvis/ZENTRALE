@@ -542,6 +542,10 @@ def _read_document(args: dict) -> str:
     except ablage.Unbekannt:
         return "[Kein Dokument mit dieser id in der Ablage.]"
     k = d["kopf"]
+    if k.get("art") == "pdf":
+        return f'"{k.get("titel")}" ist ein PDF — lies es mit read_pdf(quelle="{k["id"]}").'
+    if k.get("art") == "docx":
+        return f'"{k.get("titel")}" ist eine Word-Datei — lies sie mit read_docx(quelle="{k["id"]}").'
     if d["inhalt"] is None:
         return f'"{k.get("titel")}" ist ein Bild ({d["bytes"]} Bytes) — lesen geht nur bei Text.'
     return f'"{k.get("titel")}" ({k.get("art")}, Fassung {d["fassung"]}):\n' + d["inhalt"]
@@ -610,3 +614,8 @@ def _read_project_file(args: dict, projekt=None) -> str:
                 "Projektdateien zu lesen.]")
     return projekte.wissen_lesen(projekt, str(args.get("name") or ""),
                                  args.get("ab") or 0)
+
+
+# PDF und Word (Skills pdf/word, 2026-10-08): eigene Datei, meldet ihre
+# Ausführer beim Import an.
+import ki_pdf_word  # noqa: E402,F401

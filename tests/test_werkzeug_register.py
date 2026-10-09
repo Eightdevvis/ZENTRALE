@@ -57,11 +57,15 @@ def test_jeder_eintrag_wird_auf_einer_schiene_angeboten():
 def test_jede_ausfuehrer_funktion_in_ki_werkzeuge_ist_angemeldet():
     """Umgekehrte Richtung: eine Werkzeug-Funktion in ki_werkzeuge, die im
     Register fehlt, liefe nie. Gezählt werden die Funktionen mit
-    @ausfuehrer-Dekorator im Quelltext."""
-    with open(os.path.join(CORE, "ki_werkzeuge.py"), encoding="utf-8") as f:
-        baum = ast.parse(f.read())
+    @ausfuehrer-Dekorator im Quelltext. Seit 2026-10-08 stehen die PDF- und
+    Word-Werkzeuge in einer eigenen Datei (ki_pdf_word, von ki_werkzeuge
+    importiert) — beide zählen."""
+    knoten_alle = []
+    for datei in ("ki_werkzeuge.py", "ki_pdf_word.py"):
+        with open(os.path.join(CORE, datei), encoding="utf-8") as f:
+            knoten_alle += ast.parse(f.read()).body
     dekoriert = {}
-    for knoten in baum.body:
+    for knoten in knoten_alle:
         if isinstance(knoten, ast.FunctionDef):
             for d in knoten.decorator_list:
                 if (isinstance(d, ast.Call) and getattr(d.func, "id", "") == "ausfuehrer"):

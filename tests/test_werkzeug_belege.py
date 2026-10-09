@@ -92,21 +92,31 @@ AUFRUFE = [
     ("edit_skill", {"name": "probelauf-belege", "inhalt": "1. Erst Termine lesen.\n2. Dann fragen."}),
     ("create_document", {"titel": "Plan", "inhalt": "eins\nzwei"}),
     ("save_from_sandbox", {"lauf": "x", "datei": "notiz.txt", "titel": "Notiz"}),
+    ("create_pdf", {"titel": "Plan", "inhalt": "# Woche\n\nMontag Geige."}),
+    ("create_docx", {"titel": "Brief", "inhalt": "# Brief\n\nLiebe Frau Meier,"}),
 ]
 
 
 def test_jedes_schreibende_werkzeug_belegt_echt(umgebung):
-    abgedeckt = {n for n, _ in AUFRUFE} | {"update_document"}
+    abgedeckt = {n for n, _ in AUFRUFE} | {"update_document", "combine_pdf", "edit_docx"}
     schreibend = {w.name for w in werkzeug_register.WERKZEUGE if w.schreibt}
     assert schreibend <= abgedeckt, schreibend - abgedeckt
-    doc_id = None
+    ids = {}
     for name, args in AUFRUFE:
         r = ki_werkzeuge._verteilen(name, args)
         assert isinstance(r, Befund), (name, r)
         assert r.status == werkzeug_befund.OK, (name, r)
         assert r.beleg, (name, r)
-        if name == "create_document":
-            doc_id = r.split("(id ", 1)[1].split(",", 1)[0]
+        if name in ("create_document", "create_pdf", "create_docx"):
+            ids[name] = r.split("(id ", 1)[1].split(",", 1)[0].split(")", 1)[0]
+    doc_id = ids["create_document"]
+    # Die zwei, die eine vorhandene Datei brauchen (Skills pdf/word, 08.10.)
+    r = ki_werkzeuge._verteilen("combine_pdf", {"titel": "Doppelt", "teile": [
+        {"quelle": ids["create_pdf"]}, {"quelle": ids["create_pdf"]}]})
+    assert isinstance(r, Befund) and r.status == "ok" and "2 Seiten" in r.beleg, r
+    r = ki_werkzeuge._verteilen("edit_docx", {"quelle": ids["create_docx"], "ersetzen": [
+        {"alt": "Frau Meier", "neu": "Herr Kurz"}]})
+    assert isinstance(r, Befund) and r.status == "ok" and r.beleg, r
     r = ki_werkzeuge._verteilen("update_document", {"id": doc_id, "inhalt": "drei"})
     assert isinstance(r, Befund) and r.status == "ok" and "Fassung 2" in r.beleg
 

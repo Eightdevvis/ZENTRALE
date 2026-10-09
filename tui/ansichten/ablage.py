@@ -29,7 +29,7 @@ from .gespraechsliste import alter_text
 from .text import md_zeilen
 
 ART_KURZ = {"markdown": "text", "text": "text", "code": "code", "csv": "tabelle",
-            "bild": "bild"}
+            "bild": "bild", "pdf": "pdf", "docx": "word"}
 HERKUNFT_KURZ = {"ki": "", "sandbox": "aus code", "anhang": "anhang"}
 
 
@@ -64,6 +64,24 @@ def lese_zeilen(dok, breite):
     stil "" | "kopf" | "code" | "liste" (wie md_zeilen) | "leise"."""
     kopf = dok.get("kopf") or {}
     art = kopf.get("art")
+    if art in ("pdf", "docx"):
+        # PDF/Word (2026-10-08): wo die Datei liegt, dann ihr Text als
+        # Vorschau (das Backend liest ihn, die TUI kann es nicht).
+        groesse = int(dok.get("bytes") or 0)
+        wort = "eine pdf-datei" if art == "pdf" else "eine word-datei"
+        zeilen = ["%s (%d kb) — sie liegt hier:" % (wort, max(1, groesse // 1024)),
+                  str(dok.get("pfad") or "?"), ""]
+        if dok.get("text_fehler"):
+            zeilen.append("lesen ging nicht: " + str(dok["text_fehler"]))
+        elif not str(dok.get("text") or "").strip():
+            zeilen.append("kein text darin (gescannt?)")
+        raus = []
+        for z in zeilen:
+            raus += [(z[i:i + breite], "leise") for i in range(0, len(z), max(1, breite))] or [("", "")]
+        text = str(dok.get("text") or "")
+        if text.strip():
+            raus += [(z, stil or "") for z, stil in md_zeilen(text, max(6, breite))]
+        return raus
     if art == "bild" or dok.get("inhalt") is None:
         groesse = int(dok.get("bytes") or 0)
         zeilen = ["ein bild (%d kb) — im terminal nicht zu zeigen." % max(1, groesse // 1024),

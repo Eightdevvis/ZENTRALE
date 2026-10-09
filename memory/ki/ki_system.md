@@ -672,6 +672,18 @@ Gespräch steht nur ein Verweis, der Inhalt kommt beim Bauen des Verlaufs
 dazu (`anhang.verlauf_einsetzen`). Lokal: Text ja, Bilder nein (400 mit
 Hinweis auf `/cloud`).
 
+### PDF und Word — `read_pdf` & Co. (seit 2026-10-08)
+
+Sechs Werkzeuge nur auf `gross`, hinten an (Einträge in
+`core/werkzeug_pdf_word.py`, Ausführer in `core/ki_pdf_word.py`):
+`read_pdf`, `read_docx` frei; `create_pdf`, `combine_pdf`, `create_docx`,
+`edit_docx` gefragt („immer" möglich — es entsteht nur eine neue Datei in der
+Ablage, nie wird etwas überschrieben). Jede neue Datei wird aus der Ablage
+nachgelesen (Seitenzahl/Text bzw. Überschriften/ersetzter Text) und als Beleg
+zurückgegeben. Die Anleitung steht in den Skills `pdf` und `word`. Text-Budget
+der Beschreibungen: eigener Deckel < 800 in `tests/test_profil.py`.
+Ausführlich: [pdf_word.md](pdf_word.md).
+
 ### Visuelle Stimme – Bild-Marker `[[bild: name]]`
 
 Die KI zeigt Mimik/Gesten, *während* sie mit Worten antwortet: ein

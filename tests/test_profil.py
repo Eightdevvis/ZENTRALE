@@ -159,11 +159,15 @@ def test_der_schnitt_haelt():
                 "add_calendar_routine", "edit_calendar_routine",
                 "add_calendar_pause", "delete_calendar_entry",
                 "edit_calendar_entry", "read_calendar_warnings"}
+    # 08.10.2026: PDF und Word (Skills pdf/word) ebenso — eigener Deckel unten.
+    pdf_word = {"read_pdf", "create_pdf", "combine_pdf", "read_docx",
+                "create_docx", "edit_docx"}
     eigen = {w.name for w in werkzeug_register.auf_schiene("gross")
-             if w.klein is None and w.name != "run_code"} - skill - suche - ablage - projekt - kalender
+             if w.klein is None and w.name != "run_code"} - skill - suche - ablage - projekt \
+        - kalender - pdf_word
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
                 if t["function"]["name"] not in
-                eigen | {"run_code"} | skill | suche | ablage | projekt | kalender)
+                eigen | {"run_code"} | skill | suche | ablage | projekt | kalender | pdf_word)
     # 18.08.2026 von 3.000 auf 3.300: edit_calendar_routine kam dazu. Es
     # kostet ~250 Zeichen und behebt eine Luecke, die sie nicht ueberspielen
     # konnte — Routinen liessen sich nur ANLEGEN, also stand die verschobene
@@ -235,6 +239,13 @@ def test_der_schnitt_haelt():
     besch_projekt = sum(len(t["function"]["description"]) for t in gross.TOOLS
                         if t["function"]["name"] in projekt)
     assert 0 < besch_projekt < 200
+    # PDF und Word (08.10.2026): sechs Werkzeuge, zusammen ~720 Zeichen.
+    # Deckel 800: die Beschreibungen sagen nur WAS, das WIE (Seiten in
+    # Stücken lesen, Tabellen gegenprüfen, Scans ehrlich melden, Markdown-
+    # Umfang) steht in den Skills pdf und word — geladen nur bei Bedarf.
+    besch_pdf_word = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                         if t["function"]["name"] in pdf_word)
+    assert 0 < besch_pdf_word < 800
 
 
 def test_import_parameter_bleibt_klein():

@@ -403,7 +403,7 @@ Sonderfälle (Sasha, 07.10.):
 ### Erstbefüllung (eigene + Anthropic)
 
 Mitgelieferte Skills liegen im Repo unter `core/skill_vorlagen/`: eigene
-(`wochenplan/`, `recherche/`, `import-memory/` — `kurz` ist raus) direkt dort, die von
+(`wochenplan/`, `recherche/`, `import-memory/`, seit 08.10. `pdf/` und `word/` — [pdf_word.md](pdf_word.md); `kurz` ist raus) direkt dort, die von
 Anthropic unter `anthropic/` (14 Skills, nur Apache 2.0, je mit
 `LICENSE.txt`; Herkunft, Commit und Lizenz in `anthropic/README.md`, dazu
 `THIRD_PARTY_NOTICES.md`). Welche davon an oder aus sind und was einem

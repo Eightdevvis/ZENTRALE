@@ -11,9 +11,12 @@ Sasha gibt der KI Dateien mit.
   Seit 2026-10-08 auch Art `html` (Herkunft `morgenblick`): der Morgenblick,
   im Browser über `GET /api/ablage/<id>/roh` (strenge CSP) —
   [../werkzeuge/morgenblick.md](../werkzeuge/morgenblick.md). Die KI selbst
-  legt keine html-Dokumente an.
+  legt keine html-Dokumente an. Seit 2026-10-08 auch Arten `pdf` und `docx`
+  (Bytes, bis 30 MB, keine neue Fassung; `/roh` liefert sie als Download,
+  `GET /api/ablage/<id>` ihren Text als `text`) — [pdf_word.md](pdf_word.md).
 - **Anhänge** (`core/anhang.py`, Schicht 2): `/anhang <pfad>` im Chat; Text,
-  Code, PDF (als Text) und Bilder (nur Cloud).
+  Code, PDF und Word (.docx — seit 2026-10-08 als Original in der Ablage, die
+  KI bekommt den Text, `core/ablage_text.py`) und Bilder (nur Cloud).
 - **Zug** (`core/zug.py`, Schicht 1): was zum laufenden Chat-Zug gehört —
   Gesprächs-id für die Werkzeuge und Ereignisse, die ein Werkzeug an die TUI
   melden will. Die Chat-Route öffnet ihn, holt die Ereignisse nach jedem
@@ -96,8 +99,10 @@ die id nicht mehr, um das Dokument später zu ändern.
    schickt aufgelösten Pfad + Bytes (base64) an `POST /api/anhang` (≤ 10 MB).
 2. **Das Backend prüft** den Pfad gegen `context.anhang_gesperrt`
    ([../betrieb/sicherheit.md](../betrieb/sicherheit.md)), erkennt die Art
-   (Bild an den ersten Bytes, PDF → `gedaechtnis.pdf_text` = derselbe
-   `pdftotext`-Weg wie `fetch_document`, sonst Text/Code; Binäres abgelehnt)
+   (Bild an den ersten Bytes; PDF/Word an den ersten Bytes → Original in die
+   Ablage, Text über `ablage_text` = derselbe pypdf-Weg wie `fetch_document`
+   und `read_pdf`, seit 2026-10-08; sonst Text/Code; Binäres und `.doc`
+   abgelehnt)
    und legt eine **Kopie in die Ablage** (Herkunft `anhang`). Zurück: die id.
 3. Die nächste Nachricht trägt `anhaenge: [id]`. Im Gespräch steht nur der
    **Verweis** `{id, titel, art, fassung}` — nie der Inhalt, nie ein Bild als

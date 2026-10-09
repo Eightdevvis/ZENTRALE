@@ -423,15 +423,30 @@ def test_langer_anhang_wird_mit_hinweis_gekappt():
     assert len(lokal[0]["content"]) < anhang.TEXT_MAX_LOKAL + 300
 
 
-def test_pdf_geht_ueber_den_weg_von_fetch_document(monkeypatch):
+def test_pdf_anhang_bleibt_original_und_die_ki_bekommt_den_text(monkeypatch):
+    """Seit 2026-10-08 (Skills pdf/word): das ORIGINAL liegt in der Ablage
+    (sonst kein Formular, kein Zusammenfügen), der Text kommt über den einen
+    PDF-Weg (ablage_text → pdf_datei, wie fetch_document)."""
+    import ablage_text
+    ablage_text._gemerkt.clear()
     gesehen = []
-    monkeypatch.setattr(gedaechtnis, "pdf_text", lambda d: (gesehen.append(d), ("Seite 1", ""))[1])
+
+    def zerlegen(art, daten):
+        gesehen.append((art, daten))
+        return {"art": art, "text": "--- Seite 1 ---\nMiete 650", "fehler": "",
+                "seiten": 1, "felder": 0, "leer": False}
+    monkeypatch.setattr(ablage_text, "_zerlegen", zerlegen)
     r = anhang.annehmen("/tmp/vertrag.pdf", b"%PDF-1.4 ...")
-    assert gesehen == [b"%PDF-1.4 ..."] and r["art"] == "text"
-    assert ablage.lesen(r["id"])["inhalt"] == "Seite 1"
-    monkeypatch.setattr(gedaechtnis, "pdf_text", lambda d: ("", "Nichts Lesbares drin"))
-    with pytest.raises(anhang.Abgelehnt, match="Nichts Lesbares"):
-        anhang.annehmen("/tmp/scan.pdf", b"%PDF-1.4 ...")
+    assert r["art"] == "pdf" and gesehen == [("pdf", b"%PDF-1.4 ...")]
+    assert ablage.roh(r["id"]) == b"%PDF-1.4 ..."
+    t = anhang.verlauf_einsetzen([{"role": "user", "content": "?",
+                                   "anhaenge": anhang.verweise([r["id"]])}], True)
+    text = t[0]["anhaenge"][0]["text"]
+    assert "Miete 650" in text and r["id"] in text and "read_pdf" in text
+    monkeypatch.setattr(ablage_text, "_zerlegen", lambda a, d: {
+        "art": a, "text": "", "fehler": "Das PDF ist mit einem Passwort geschützt"})
+    with pytest.raises(anhang.Abgelehnt, match="Passwort"):
+        anhang.annehmen("/tmp/zu.pdf", b"%PDF-1.4 anders")
 
 
 def _mini_pdf(text):
@@ -455,10 +470,11 @@ def _mini_pdf(text):
         len(objs) + 1, x)
 
 
-@pytest.mark.skipif(not __import__("shutil").which("pdftotext"), reason="poppler fehlt")
 def test_echtes_pdf_wird_text():
+    import ablage_text
     r = anhang.annehmen("/tmp/mietvertrag.pdf", _mini_pdf("Mietvertrag Seite eins"))
-    assert "Mietvertrag Seite eins" in ablage.lesen(r["id"])["inhalt"]
+    assert r["art"] == "pdf" and r["zeichen"] > 0
+    assert "Mietvertrag Seite eins" in ablage_text.text(r["id"])["text"]
 
 
 def test_binaeres_und_falsche_bilder_werden_abgelehnt():

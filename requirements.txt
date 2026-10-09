@@ -29,6 +29,14 @@ webrtcvad-wheels
 # HTTP-Client (für Whisper/TTS Services, falls nicht über stdlib)
 requests
 
+# PDFs lesen, zusammenfügen, Seiten herausnehmen (Skill pdf, core/pdf_datei.py)
+# und die Zeichenbreiten für neue PDFs (core/pdf_schreiben.py). BSD, reines
+# Python, keine weiteren Abhängigkeiten. Seit 2026-10-08 auch der Weg für
+# PDF-Anhänge und fetch_document (vorher pdftotext/poppler). Unter 7, weil
+# pdf_schreiben die Breiten aus einem internen Modul liest (fehlt es, wird
+# geschätzt). Word (.docx) braucht nichts: nur Standardbibliothek.
+pypdf>=6,<7
+
 # Recurrence-Rules (iCal RRULE) für Routinen im Kalender-System
 python-dateutil
 

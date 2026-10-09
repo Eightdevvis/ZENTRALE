@@ -41,10 +41,18 @@ import dateien
 # html: der Morgenblick (core/morgenblick.py, 2026-10-08) — eine fertige Seite,
 # die GET /api/ablage/<id>/roh unter strenger CSP ausliefert. Die KI legt
 # selbst keine html-Dokumente an (create_document kennt die Art nicht).
-ARTEN = ("markdown", "text", "code", "csv", "bild", "html")
+# pdf, docx: fertige Dateien (Skills pdf und word, 2026-10-08) — wie Bilder
+# Bytes, keine neue Fassung (eine geänderte Datei ist ein neues Dokument,
+# das Original bleibt daneben liegen).
+ARTEN = ("markdown", "text", "code", "csv", "bild", "html", "pdf", "docx")
+BINAER = ("bild", "pdf", "docx")
 HERKUENFTE = ("ki", "sandbox", "anhang", "morgenblick")
 
-_ENDUNG = {"markdown": ".md", "text": ".txt", "csv": ".csv", "html": ".html"}
+_ENDUNG = {"markdown": ".md", "text": ".txt", "csv": ".csv", "html": ".html",
+           "pdf": ".pdf", "docx": ".docx"}
+DATEI_MIME = {"pdf": "application/pdf",
+              "docx": "application/vnd.openxmlformats-officedocument."
+                      "wordprocessingml.document"}
 _CODE_ENDUNG = {
     "python": ".py", "py": ".py", "shell": ".sh", "bash": ".sh", "sh": ".sh",
     "javascript": ".js", "js": ".js", "typescript": ".ts", "ts": ".ts",
@@ -61,6 +69,7 @@ BILD_ENDUNGEN = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg
 # pro Bild nicht an.
 TEXT_MAX_ZEICHEN = 200_000
 BILD_MAX_BYTES = 5 * 1024 * 1024
+DATEI_MAX_BYTES = 30 * 1024 * 1024       # pdf, docx
 TITEL_MAX = 120
 
 _ID_MUSTER = re.compile(r"^[a-z0-9][a-z0-9\-]{0,80}$")
@@ -189,6 +198,15 @@ def _fassung_schreiben(doc_id, inhalt, endung) -> int:
 
 
 def _pruefen_inhalt(art, inhalt):
+    if art in ("pdf", "docx"):
+        if not isinstance(inhalt, (bytes, bytearray)) or not inhalt:
+            raise Fehler("Eine Datei braucht Bytes.")
+        if len(inhalt) > DATEI_MAX_BYTES:
+            raise Fehler(f"Datei zu groß (höchstens {DATEI_MAX_BYTES // 1024 // 1024} MB).")
+        kopf = bytes(inhalt[:1024])
+        if (art == "pdf" and b"%PDF-" not in kopf) or (art == "docx" and kopf[:4] != b"PK\x03\x04"):
+            raise Fehler(f"Das ist keine {art.upper()}-Datei.")
+        return bytes(inhalt)
     if art == "bild":
         if not isinstance(inhalt, (bytes, bytearray)) or not inhalt:
             raise Fehler("Ein Bild braucht Bytes.")
@@ -227,6 +245,8 @@ def anlegen(titel, inhalt, art="markdown", *, herkunft="ki", gespraech=None,
         endung = (endung or "").lower()
         if endung not in BILD_ENDUNGEN:
             raise Fehler("Bilder gehen als png, jpg, webp oder gif.")
+    elif art in ("pdf", "docx"):
+        endung = _ENDUNG[art]
     else:
         endung = endung if (endung and re.fullmatch(r"\.[a-z0-9]{1,8}", endung)) \
             else endung_fuer(art, sprache)
@@ -254,6 +274,9 @@ def neue_fassung(doc_id, inhalt) -> dict:
     k = kopf(doc_id)
     if k.get("art") == "bild":
         raise Fehler("Ein Bild bekommt keine neue Fassung — lege ein neues an.")
+    if k.get("art") in ("pdf", "docx"):
+        raise Fehler("Eine PDF- oder Word-Datei bekommt keine neue Fassung — "
+                     "eine geänderte Kopie ist ein neues Dokument.")
     inhalt = _pruefen_inhalt(k.get("art"), inhalt)
     _fassung_schreiben(doc_id, inhalt, k.get("endung") or endung_fuer(
         k.get("art"), k.get("sprache")))
@@ -277,7 +300,7 @@ def pfad(doc_id, fassung=None) -> str:
 
 
 def lesen(doc_id, fassung=None) -> dict:
-    """{kopf, fassung, inhalt (Text) | None (Bild), bytes, mime?}."""
+    """{kopf, fassung, inhalt (Text) | None (Bild, PDF, Word), bytes, mime?}."""
     k = kopf(doc_id)
     p = pfad(doc_id, fassung)
     nr = int(fassung) if fassung is not None else k["fassung"]
@@ -285,6 +308,9 @@ def lesen(doc_id, fassung=None) -> dict:
     if k.get("art") == "bild":
         raus["inhalt"] = None
         raus["mime"] = BILD_ENDUNGEN.get(os.path.splitext(p)[1].lower())
+    elif k.get("art") in DATEI_MIME:
+        raus["inhalt"] = None
+        raus["mime"] = DATEI_MIME[k["art"]]
     else:
         with open(p, encoding="utf-8", errors="replace") as f:
             raus["inhalt"] = f.read()
@@ -299,6 +325,13 @@ def bild_bytes(doc_id) -> tuple:
         raise Unbekannt(doc_id)
     with open(p, "rb") as f:
         return mime, f.read()
+
+
+def roh(doc_id, fassung=None) -> bytes:
+    """Die Bytes einer Fassung, egal welcher Art (None = neueste). Wirft
+    Unbekannt."""
+    with open(pfad(doc_id, fassung), "rb") as f:
+        return f.read()
 
 
 def archivieren(doc_id, an=True) -> dict:

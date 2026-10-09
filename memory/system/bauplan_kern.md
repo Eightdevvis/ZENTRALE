@@ -121,7 +121,12 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `skill_format` | 2 | Das Skill-Format von Claude: SKILL.md mit YAML-Kopf lesen (auch fremde Felder) und schreiben, gültige Namen |
 | `skill_umzug` | 2 | Umzug alter Skill-Dateien (`<name>.md`) ins Claude-Format, alte beiseite nach `_alt/`; „kurz“ → Hausregel |
 | `ablage` | 2 | Die Ablage: Dokumente der KI, Sandbox-Dateien, Anhänge — Ordner pro Dokument, jede Fassung eine neue Datei, nie löschen |
-| `anhang` | 2 | Anhänge im Chat: Sperrliste, Art erkennen (PDF → Text), in die Ablage; Verweise für den Verlauf der KI auflösen |
+| `anhang` | 2 | Anhänge im Chat: Sperrliste, Art erkennen (PDF/Word als Original, Text dazu), in die Ablage; Verweise für den Verlauf der KI auflösen |
+| `ablage_text` | 2 | Der Text einer PDF- oder Word-Datei (Anhang, Ablage-Vorschau), gemerkt nach Inhalt |
+| `textbloecke` | 2 | Kleines Markdown → Blöcke (Überschrift, Absatz, Liste, Tabelle, Code) und Stücke normal/fett — für PDF- und Word-Schreiber |
+| `pdf_datei` | 2 | PDFs lesen (Text je Seite, Tabellen geraten, Formularfelder), zusammenfügen, Seiten herausnehmen — pypdf im begrenzten Kindprozess |
+| `pdf_schreiben` | 2 | Neues PDF aus Markdown: A4, Grundschriften, Umbruch, Tabellen, Seitenzahlen — ohne Fremdbibliothek |
+| `word_datei` | 2 | Word (.docx) lesen, aus Markdown anlegen, geänderte Kopie (ersetzen über Lauf-Grenzen, anhängen) — nur Standardbibliothek |
 | `projekte` | 2 | Projekte: Rahmen für ein Thema mit Anweisungen und Wissensdateien im Gedächtnis, Block für den Prompt, Wissen lesen/hinzufügen (Sperrliste), archivieren |
 | `modell_liste` | 2 | Welche Chat-Modelle ein Anbieter wirklich hat: vom Anbieter geholt, 24 h gecacht (pro Rechner unter `~/.cache`), Rückfall auf `providers.py` |
 | `morgenblick_daten` | 2 | Was der Morgenblick weiß: Sammler je Quelle (Kalender, Mail, Erinnerungen, Gespräche, Listen, Projekte, Ablage), nur lesen, kein Netz; Form des Tages, drei Akte |
@@ -139,6 +144,9 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `ki_einstellungen` | 3 | Chat-Einstellungen (Anbieter, Modell, Effort, Budget, Weg) lesen und mit Klartext-Prüfung setzen — für `/api/ai/einstellungen` |
 | `ki_werkzeuge` | 3 | Was ein KI-Werkzeug tut: ausfuehren(name, args) → Kalender, Notizen, Netz, Mail, Messreihen |
 | `werkzeug_register` | 3 | Ein Eintrag pro KI-Werkzeug: Schema, Beschreibung je Schiene, Erlaubnis-Regel + Frage; die Ausführer melden sich aus `ki_werkzeuge` an |
+| `werkzeug_eintrag` | 3 | Wie ein Werkzeug-Eintrag aussieht (die Klasse `Werkzeug`), damit Einträge auch außerhalb des Registers stehen können |
+| `werkzeug_pdf_word` | 3 | Einträge und Fragen der PDF-/Word-Werkzeuge (Skills pdf, word); hinten ans Register gehängt |
+| `ki_pdf_word` | 3 | Was die PDF-/Word-Werkzeuge tun: Quelle (Ablage oder Datei), lesen, neue Datei in die Ablage, nachlesen mit Beleg |
 | `werkzeug_fragen` | 3 | Die Ja/Nein-Fragen an Sasha vor bestätigungspflichtigen Werkzeugen und die Regeln, die von den Argumenten abhängen |
 | `ki_kalender` | 3 | Der Kalender, wie die KI ihn liest: Kennungen (`#r3f9c`), alle Felder, Warnungen frisch, Belege nach dem Schreiben |
 | `ki_kalender_aendern` | 3 | Die schreibenden Kalender-Werkzeuge der KI: genau EIN Eintrag, nur genannte Felder, mit Beleg und Status |

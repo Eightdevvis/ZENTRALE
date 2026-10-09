@@ -893,3 +893,30 @@ Ist-Zustands und erlaubten ungenaue Massen-Eingriffe. Ausführlich:
   8. Keine stillen Korrekturen: `routine_bearbeiten`/`eintrag_aendern`
      werfen ein Ende ≤ Beginn still weg, `routine_aendern` prüft Uhrzeiten
      nicht. Lieber ablehnen (False + Grund).
+
+### Skills `pdf` und `word` (2026-10-08)
+
+Auftrag in der Nacht (Sasha schlief): die KI soll PDFs lesen (Seiten,
+Tabellen, Formularfelder), neue PDFs schreiben, zusammenfügen und Seiten
+herausnehmen; Word lesen, neu schreiben und ändern — immer als neue Datei.
+Ausführlich, mit allen Entscheidungen: [pdf_word.md](pdf_word.md).
+
+- **Sechs Werkzeuge** (nur `gross`, hinten an): `read_pdf`, `create_pdf`,
+  `combine_pdf`, `read_docx`, `create_docx`, `edit_docx`; lesen frei, alles
+  Anlegende gefragt („immer" möglich). Jede neue Datei wird aus der Ablage
+  nachgelesen und belegt. Einträge in `core/werkzeug_pdf_word.py` (das
+  Register stand an der Riesen-Grenze; die Klasse `Werkzeug` zog dafür nach
+  `core/werkzeug_eintrag.py`), Ausführer in `core/ki_pdf_word.py`.
+- **Skills** `core/skill_vorlagen/pdf/` und `word/` (an, `herkunft: zentrale`):
+  eigener Text; Anthropics pdf/docx-Skills nur als Ansatz angesehen (nicht
+  Apache — nichts übernommen).
+- **Dienste:** `pdf_datei` (pypdf im begrenzten Kindprozess), `pdf_schreiben`
+  (eigener Schreiber, Grundschriften), `word_datei` (nur Standardbibliothek),
+  `textbloecke` (ein Markdown-Zerleger für beide), `ablage_text`.
+- **Ablage** kennt `pdf`/`docx`; **Anhänge** bleiben als Original liegen;
+  `fetch_document` und Anhänge lesen PDFs jetzt über denselben pypdf-Weg
+  (kein `pdftotext` mehr). Neue Abhängigkeit: `pypdf` (requirements.txt).
+- Schnappschuss neu gezogen: nur die sechs Einträge hinten an `gross`,
+  `klein` byte-gleich, Gate und Fragen der alten Werkzeuge unverändert.
+- **Offen:** Formulare ausfüllen, OCR für Scans, Schriften außerhalb
+  Westeuropas im PDF, Word-Formatierung ändern, Anhänge über 10 MB.

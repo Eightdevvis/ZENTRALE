@@ -13,6 +13,7 @@ import binascii
 from flask import Blueprint, Response, jsonify, request
 
 import ablage        # type: ignore  – in core/, aber durch sys.path.insert auffindbar
+import ablage_text   # type: ignore
 import ai_backends   # type: ignore
 import anhang        # type: ignore
 import gespraeche    # type: ignore
@@ -38,11 +39,16 @@ def api_ablage_liste():
 
 @bp.route('/api/ablage/<doc_id>')
 def api_ablage_lesen(doc_id):
-    """Ein Dokument: {kopf, fassung, inhalt (Text) | null (Bild), bytes,
-    mime?, pfad}. ?fassung=n für eine ältere Fassung."""
+    """Ein Dokument: {kopf, fassung, inhalt (Text) | null (Bild, PDF, Word),
+    bytes, mime?, pfad, text? (PDF/Word: der gelesene Text zur Vorschau),
+    text_fehler?}. ?fassung=n für eine ältere Fassung."""
     try:
         d = ablage.lesen(doc_id, request.args.get('fassung'))
         d["pfad"] = ablage.pfad(doc_id, request.args.get('fassung'))
+        if d["kopf"].get("art") in ("pdf", "docx"):
+            erg = ablage_text.text(doc_id, request.args.get('fassung'))
+            d["text"] = erg.get("text") or ""
+            d["text_fehler"] = erg.get("fehler") or ""
     except ablage.Unbekannt:
         return jsonify({"error": "Dieses Dokument gibt es nicht."}), 404
     d["kopf"] = _mit_gespraech(d["kopf"])
@@ -61,12 +67,23 @@ ROH_CSP = ("default-src 'none'; style-src 'unsafe-inline'; font-src data:; "
 
 @bp.route('/api/ablage/<doc_id>/roh')
 def api_ablage_roh(doc_id):
-    """Die neueste Fassung eines html-Dokuments als Seite."""
+    """Die neueste Fassung eines html-Dokuments als Seite — oder eine PDF-/
+    Word-Datei zum Herunterladen (2026-10-08, Skills pdf/word; immer als
+    Anhang, nie im Ursprung des Backends angezeigt)."""
     try:
         d = ablage.lesen(doc_id)
     except ablage.Unbekannt:
         return jsonify({"error": "Dieses Dokument gibt es nicht."}), 404
-    if d["kopf"].get("art") != "html":
+    art = d["kopf"].get("art")
+    if art in ablage.DATEI_MIME:
+        name = "".join(z for z in str(d["kopf"].get("titel") or doc_id)
+                       if z.isascii() and (z.isalnum() or z in " ._-"))[:80].strip() or doc_id
+        r = Response(ablage.roh(doc_id), mimetype=ablage.DATEI_MIME[art])
+        r.headers["Content-Disposition"] = f'attachment; filename="{name}.{art}"'
+        r.headers["X-Content-Type-Options"] = "nosniff"
+        r.headers["Cache-Control"] = "no-store"
+        return r
+    if art != "html":
         return jsonify({"error": "Nur Seiten (html) lassen sich so öffnen."}), 404
     r = Response(d["inhalt"], mimetype="text/html")
     r.headers["Content-Security-Policy"] = ROH_CSP

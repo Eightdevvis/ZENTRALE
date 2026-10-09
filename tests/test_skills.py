@@ -532,7 +532,8 @@ ANTHROPIC_ERLAUBT = {
 
 def test_erster_zugriff_bringt_eigene_und_anthropic_vorlagen(echte_vorlagen):
     alle = {s["name"]: s for s in skills.alle()}
-    assert set(alle) == ANTHROPIC_ERLAUBT | {"wochenplan", "recherche", "import-memory"}
+    assert set(alle) == ANTHROPIC_ERLAUBT | {"wochenplan", "recherche", "import-memory",
+                                             "pdf", "word"}
     assert "kurz" not in alle                      # kein Skill mehr (Sasha 07.10.)
     for name in ("wochenplan", "recherche"):
         assert (alle[name]["status"], alle[name]["herkunft"]) == ("aktiv", "sasha")

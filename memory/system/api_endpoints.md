@@ -249,8 +249,8 @@ Speicher `core/ablage.py`, Anhänge `core/anhang.py`, Doku `memory/ki/ablage.md`
 | Endpoint | Methode | Beschreibung |
 |---|---|---|
 | `/api/ablage` | GET | `{dokumente: [{id, titel, art, herkunft, gespraech, gespraech_titel?, erstellt, geaendert, fassung, archiviert}]}`, neueste Änderung zuerst. `?archiv=1` → nur archivierte. |
-| `/api/ablage/<id>` | GET | `{kopf, fassung, inhalt (Text) \| null (Bild), bytes, mime?, pfad}`; `?fassung=n` für eine ältere. Unbekannt → 404. |
-| `/api/ablage/<id>/roh` | GET | Die neueste Fassung einer **html**-Seite (der Morgenblick) als `text/html`, mit strenger CSP (`default-src 'none'`, kein Skript, `sandbox`). Andere Arten / unbekannt → 404. Seit 2026-10-08, `memory/werkzeuge/morgenblick.md`. |
+| `/api/ablage/<id>` | GET | `{kopf, fassung, inhalt (Text) \| null (Bild, PDF, Word), bytes, mime?, pfad}`; PDF/Word zusätzlich `text` (gelesener Text, Vorschau) und `text_fehler` (seit 2026-10-08, `memory/ki/pdf_word.md`); `?fassung=n` für eine ältere. Unbekannt → 404. |
+| `/api/ablage/<id>/roh` | GET | Die neueste Fassung einer **html**-Seite (der Morgenblick) als `text/html`, mit strenger CSP (`default-src 'none'`, kein Skript, `sandbox`). **pdf/docx** (seit 2026-10-08) als Download (`Content-Disposition: attachment`, `nosniff`). Andere Arten / unbekannt → 404. Seit 2026-10-08, `memory/werkzeuge/morgenblick.md`. |
 | `/api/ablage/<id>/archiv` | POST | `{an: true}` archivieren (Standard), `{an: false}` zurückholen. Nie löschen. |
 | `/api/anhang` | POST | `{pfad, daten (base64), gespraech?}` — die TUI schickt die Bytes, das Backend öffnet den Pfad nie, prüft ihn aber gegen die Sperrliste. → `{id, titel, art, zeichen, gekappt, hinweis}`; gesperrt/zu groß/unlesbar/kaputt → 400 mit Klartext. |
 

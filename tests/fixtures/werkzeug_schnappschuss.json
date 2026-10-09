@@ -2,8 +2,8 @@
  "listen": {
   "klein_openai": "[{\"type\": \"function\", \"function\": {\"name\": \"read_calendar\", \"description\": \"Liest Kalender-Einträge (Termine, Routinen, Erlebtes). Du hast KEINE Termine im Gedächtnis - rufe dieses Tool bei JEDER Frage nach Plänen, Terminen, freien/vollen Tagen, Vergangenheit oder Zukunft auf, bevor du antwortest. Nie aus dem Kopf raten, nie ohne vorher gelesen zu haben zurückfragen. Zeitraum am liebsten über 'zeitraum' (z.B. 'dieser_monat'); für krumme Spannen ('ab dem 15.', 'in 3 Monaten') stattdessen start_date+end_date. Bei 'diese oder nächste Woche' zwei Aufrufe (diese_woche, naechste_woche) oder naechste_30_tage. Fragt der User nach EINER bestimmten Aktivität ('wann hab ich Fahrschule?', 'wann ist Geige?'), setze 'suche' auf das Stichwort - dann kommen nur die passenden Termine zurück. Zeilen mit '⚠' sind fertig berechnete Hinweise - gib sie aktiv weiter, wenn welche im Zeitraum auftauchen: '⚠ Kollision' = zwei Termine überlappen komplett (entweder/oder); '⚠ Teil-Überlappung' = sie überschneiden sich teils, frag dann wie in der Zeile vorgeschlagen nach; '⚠ Knapp' = die Zeit zwischen zwei Terminen reicht örtlich evtl. nicht. '⚠ KONFLIKT' = du bist laut Kalender verreist, hast aber einen lokalen Termin in der Zeit - DAS ist wichtig: vergewissere dich EINMAL kurz beim User (stimmt die Reise? stimmt der Termin?), und wenn beides bestätigt ist, schlag deutlich Alarm (klare Warnung im Text PLUS Bild-Marker [[bild: alarm]]) - das sind Dinge, die der User leicht vergisst. '⚠ ABSAGEN' = eine regelmäßige Pflicht-Absage (z.B. Geige bei der Lehrerin) fällt in eine Reise - die muss aktiv abgesagt werden; ebenfalls erst rückversichern, dann Alarm mit [[bild: alarm]]. Nach JEDEM Absage-Alarm (ABSAGEN, oder ein Einzeltermin den Sasha absagen müsste) hakst du per frage_knopf nach - eskalierend, ein Knopf nach dem anderen: zuerst Frage 'Hast du <die Sache, z.B. die Geigenstunde> schon abgesagt?' (ohne optionen = ja/nein). Klickt sie 'nein', sofort der nächste: 'Wirst du es jetzt absagen?' (ja/nein). Klickt sie wieder 'nein', ein letzter mit Frage 'Katastrophe.' und optionen ['ja','ja'] (beide gleich, kleiner Schabernack). Sobald irgendwo 'ja' kommt: kurz quittieren und Ruhe geben. Rechne diese Hinweise nie selbst aus, lies nur ab was dasteht.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"zeitraum\": {\"type\": \"string\", \"enum\": [\"heute\", \"morgen\", \"gestern\", \"diese_woche\", \"naechste_woche\", \"diese_und_naechste_woche\", \"letzte_woche\", \"dieser_monat\", \"naechster_monat\", \"letzter_monat\", \"naechste_7_tage\", \"naechste_30_tage\", \"naechste_90_tage\", \"letzte_7_tage\", \"letzte_30_tage\"], \"description\": \"Relativer Zeitraum - bevorzugt nutzen, dann muss kein Datum gerechnet werden. Einer von: heute, morgen, gestern, diese_woche, naechste_woche, diese_und_naechste_woche, letzte_woche, dieser_monat, naechster_monat, letzter_monat, naechste_7_tage, naechste_30_tage, naechste_90_tage, letzte_7_tage, letzte_30_tage.\"}, \"suche\": {\"type\": \"string\", \"description\": \"Optional: nur Termine deren Titel diesen Text enthält (z.B. 'Fahrschule', 'Geige'). Bei Fragen nach einer bestimmten Aktivität nutzen, damit du nicht die ganze Liste durchsuchen musst.\"}, \"start_date\": {\"type\": \"string\", \"description\": \"Nur falls kein 'zeitraum' passt: Start YYYY-MM-DD (inkl.)\"}, \"end_date\": {\"type\": \"string\", \"description\": \"Nur falls kein 'zeitraum' passt: Ende YYYY-MM-DD (inkl.)\"}, \"layers\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Optional: nur diese Layer (z.B. ['termine']). Default: alle.\"}}, \"required\": []}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_time\", \"description\": \"Sagt dir, wie spät es JETZT ist - und was als nächstes ansteht, samt Abstand in Minuten. Du weißt die Uhrzeit nicht von selbst; rate sie nie und rechne sie nie aus dem Kopf aus. Ruf dies, wenn Sasha nach der Zeit fragt, wenn er wissen will wie lange er noch hat, oder wenn die Tageszeit für eine Entscheidung zählt.\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}, {\"type\": \"function\", \"function\": {\"name\": \"add_calendar_entry\", \"description\": \"Trägt einen Einmal-Eintrag in einen Kalender-Layer ein. Nutze dies wenn der User einen Termin nennt, eine Frist, ein Ereignis: 'Arzt am 10. Juni um 14:30', 'TÜV-Frist 3. Juni'. Im Zweifel Layer 'termine'. Datum-Format: YYYY-MM-DD.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"layer\": {\"type\": \"string\", \"description\": \"Layer-Name: 'termine' für Einmal-Termine/Fristen, sonst spezifisch\"}, \"day\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD\"}, \"label\": {\"type\": \"string\", \"description\": \"Kurzer Titel des Eintrags\"}, \"time\": {\"type\": \"string\", \"description\": \"Optional HH:MM (24h). Weglassen wenn ganztags.\"}}, \"required\": [\"layer\", \"day\", \"label\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"add_calendar_routine\", \"description\": \"Trägt eine Wiederholungs-Regel in einen Kalender-Layer ein (iCal RRULE). Nutze dies bei regelmäßigen Aktivitäten: 'jeden Dienstag Geige', 'jeden 1. im Monat Miete', 'Mo/Mi/Fr Sport'. Layer-Default: 'routinen'. RRULE-Beispiele: FREQ=WEEKLY;BYDAY=TU | FREQ=WEEKLY;BYDAY=MO,WE,FR | FREQ=MONTHLY;BYMONTHDAY=1 | FREQ=MONTHLY;BYDAY=2TU (2. Dienstag/Monat).\", \"parameters\": {\"type\": \"object\", \"properties\": {\"layer\": {\"type\": \"string\", \"description\": \"Layer-Name, im Zweifel 'routinen'\"}, \"label\": {\"type\": \"string\", \"description\": \"Kurzer Titel\"}, \"rrule\": {\"type\": \"string\", \"description\": \"iCal RRULE ohne DTSTART, z.B. 'FREQ=WEEKLY;BYDAY=TU'\"}, \"time\": {\"type\": \"string\", \"description\": \"Optional HH:MM (24h)\"}}, \"required\": [\"layer\", \"label\", \"rrule\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"edit_calendar_routine\", \"description\": \"Ändert oder löscht eine BESTEHENDE Wiederholungs-Regel. Nimm dies, wenn sich an etwas Regelmäßigem etwas ändert - 'Geige ist jetzt um 18:00 statt 17:45', 'Sport fällt weg'. NICHT add_calendar_routine dafür nehmen: das legt eine zweite Regel an und die alte bleibt stehen. Der Titel muss nur ein Stück des Eintrags treffen ('geige' findet 'Geigenstunde'). Weggelassene Felder bleiben, wie sie sind.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"label\": {\"type\": \"string\", \"description\": \"Titel der bestehenden Routine (Teilstring genügt)\"}, \"aktion\": {\"type\": \"string\", \"enum\": [\"aendern\", \"loeschen\"], \"description\": \"'aendern' oder 'loeschen'\"}, \"time\": {\"type\": \"string\", \"description\": \"Neue Uhrzeit HH:MM (24h)\"}, \"ende\": {\"type\": \"string\", \"description\": \"Neues Ende HH:MM (24h)\"}, \"rrule\": {\"type\": \"string\", \"description\": \"Neue Wiederholung, z.B. 'FREQ=WEEKLY;BYDAY=MO'\"}, \"ort\": {\"type\": \"string\", \"description\": \"Neuer Ort\"}, \"neuer_titel\": {\"type\": \"string\", \"description\": \"Neuer Titel, falls die Aktivität anders heißt\"}}, \"required\": [\"label\", \"aktion\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"add_calendar_pause\", \"description\": \"Trägt eine Pause/einen Ausfall für eine regelmäßige Aktivität ein - in dem Zeitraum findet sie NICHT statt (Ferien, Feiertag, Lehrerin im Urlaub). Nutze dies, wenn der User sowas sagt: 'Geige fällt in den Sommerferien aus, 1.-15. August', 'nächste Woche keine Fahrschule'. 'label' muss zum Routinen-Titel im Kalender passen (z.B. 'Geigenstunde'). Datum: YYYY-MM-DD.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"label\": {\"type\": \"string\", \"description\": \"Titel der Routine, die ausfällt (wie im Kalender, z.B. 'Geigenstunde')\"}, \"von\": {\"type\": \"string\", \"description\": \"Start der Pause, YYYY-MM-DD (inkl.)\"}, \"bis\": {\"type\": \"string\", \"description\": \"Ende der Pause, YYYY-MM-DD (inkl.)\"}, \"grund\": {\"type\": \"string\", \"description\": \"Optional kurzer Grund, z.B. 'Sommerferien', 'Feiertag'\"}}, \"required\": [\"label\", \"von\", \"bis\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"delete_calendar_entry\", \"description\": \"Löscht einen Einmal-Termin aus dem Kalender. Nutze dies wenn der User einen Eintrag entfernt haben will ('lösch den Zahnarzt am Montag', 'der Fake-Termin morgen kann weg'). Ist unklar welcher Eintrag gemeint ist (z.B. 'lösch den raus'), lies ruhig vorher mit read_calendar nach Tag + Label nach - der Kalender-Read ist saubere Terminliste und lenkt nicht mehr ab. Wenn Tag und Label schon klar sind, ruf direkt. WICHTIG: setz IMMER einen echten Tool-Call ab und behaupte nie, gelöscht zu haben, ohne das Tool gerufen zu haben. Label-Match ist Teilstring, also reicht 'Fake-Termin'. Datum: YYYY-MM-DD, relative Angaben (morgen) rechnest du aus dem Jetzt-Block aus. Wirkt nur auf Einmal-Termine, nicht auf Routinen oder Pausen.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"day\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD des zu löschenden Termins\"}, \"label\": {\"type\": \"string\", \"description\": \"Titel des Termins (wie im Kalender; Teiltreffer reicht)\"}, \"layer\": {\"type\": \"string\", \"description\": \"Optional Layer-Name; weglassen = in allen Layern suchen\"}}, \"required\": [\"day\", \"label\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_file\", \"description\": \"Liest den Inhalt einer Datei aus dem ZENTRALE-Projekt. Nutze list_files zuerst um zu sehen was verfügbar ist. Nützlich wenn der User nach Daten, Code oder Notizen fragt.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"path\": {\"type\": \"string\", \"description\": \"Relativer Pfad zur Datei, z.B. 'data/sleep_quality.json'\"}}, \"required\": [\"path\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"list_files\", \"description\": \"Listet alle Dateien auf die gelesen werden können. Aufrufen bevor read_file.\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lies_news\", \"description\": \"Liefert ein Weltpolitik-Briefing - aus vielen Nachrichtenquellen weltweit zusammengetragen, nach Themen gebündelt und mit gegenübergestellten Perspektiven. Zwei Modi über 'tage': ohne tage (oder 0) = die aktuelle Tagessendung ('was ist heute/grad los'). Mit tage=7 = ein Wochenrückblick ('was ist die Woche/seit ich weg war passiert'). Lies das Ergebnis locker und moderierend vor; du darfst kürzen oder auf einen Aspekt eingehen.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"tage\": {\"type\": \"integer\", \"description\": \"Rückblick-Fenster in Tagen. 0/weglassen = aktuelle Sendung, 7 = Wochenrückblick.\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lies_mail\", \"description\": \"Liefert den Stand der Mail-Triage: wie viele Mails je Kategorie einsortiert wurden und welche unbekannten Absender noch auf eine Zuordnung warten (der 'sasha muss gucken'-Stapel). Zwei Modi über 'modus': ohne modus (oder '') = Überblick mit Zählern + Review-Stapel; modus='review' = nur der Review-Stapel, ausführlicher. Nur lesen — sortiert oder löscht nichts.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"modus\": {\"type\": \"string\", \"description\": \"'' = Überblick (Default), 'review' = nur der Stapel unbekannter Absender.\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"web_suche\", \"description\": \"Sucht im Internet und gibt die Top-Treffer als Liste zurück (Titel, URL, kurzer Snippet). Nutze dies für aktuelles Wissen, Fakten, Nachrichten, Wetter oder alles, was NICHT in deinem Konzept-Graph (Gedächtnis) oder den Projekt-Dateien steht. Du bekommst nur Vorschau-Snippets - brauchst du den vollen Text einer Seite, ruf danach hole_url mit der passenden URL auf. Jede Suche muss Sasha bestätigen (Knopf-Dialog), also sparsam und gezielt einsetzen.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"query\": {\"type\": \"string\", \"description\": \"Die Suchanfrage in Worten, z.B. 'Wetter Berlin morgen'.\"}}, \"required\": [\"query\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"hole_url\", \"description\": \"Lädt eine konkrete Webseite und gibt ihren Textinhalt zurück (gekürzt). Nutze dies, wenn du eine URL hast - aus einer web_suche oder vom User genannt - und den echten Inhalt brauchst, nicht nur den Suchschnipsel. Jeder Abruf muss Sasha bestätigen.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"url\": {\"type\": \"string\", \"description\": \"Die vollständige URL, z.B. https://de.wikipedia.org/wiki/...\"}}, \"required\": [\"url\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"antwort\", \"description\": \"Gib deine finale Antwort an den User über dieses Tool aus - der vollständige Antworttext ins Feld 'text'. Reihenfolge: erst Daten-Tools (z.B. read_calendar) nutzen, dann mit 'antwort' die fertige, formulierte Antwort liefern. Nie nur ankündigen ('ich schaue nach…'), immer die echte Antwort.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"text\": {\"type\": \"string\", \"description\": \"Die fertige Antwort für den User.\"}}, \"required\": [\"text\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"frage_knopf\", \"description\": \"Stellt Sasha eine Frage mit festen Antwort-Knöpfen, wenn du mitten in einer Aufgabe eine knappe, diskrete Entscheidung von ihr brauchst - statt eine freie Texteingabe abzuwarten. Im Dashboard erscheinen statt der Tastatur die Knöpfe, die Sasha mit Pfeiltasten und Enter wählt; du bekommst das gewählte Label zurück und machst dann im selben Zug weiter. Ohne 'optionen' sind es Ja/Nein. Sparsam einsetzen und nur für echte Verzweigungen - nicht aus Höflichkeit rückfragen.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"frage\": {\"type\": \"string\", \"description\": \"Die Frage an Sasha, vollständig ausformuliert.\"}, \"optionen\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Optional 2-4 kurze Knopf-Labels, z.B. ['Deutsch','Englisch']. Weglassen = Ja/Nein.\"}}, \"required\": [\"frage\"]}}}]",
   "klein_anthropic": "[{\"name\": \"read_calendar\", \"description\": \"Liest Kalender-Einträge (Termine, Routinen, Erlebtes). Du hast KEINE Termine im Gedächtnis - rufe dieses Tool bei JEDER Frage nach Plänen, Terminen, freien/vollen Tagen, Vergangenheit oder Zukunft auf, bevor du antwortest. Nie aus dem Kopf raten, nie ohne vorher gelesen zu haben zurückfragen. Zeitraum am liebsten über 'zeitraum' (z.B. 'dieser_monat'); für krumme Spannen ('ab dem 15.', 'in 3 Monaten') stattdessen start_date+end_date. Bei 'diese oder nächste Woche' zwei Aufrufe (diese_woche, naechste_woche) oder naechste_30_tage. Fragt der User nach EINER bestimmten Aktivität ('wann hab ich Fahrschule?', 'wann ist Geige?'), setze 'suche' auf das Stichwort - dann kommen nur die passenden Termine zurück. Zeilen mit '⚠' sind fertig berechnete Hinweise - gib sie aktiv weiter, wenn welche im Zeitraum auftauchen: '⚠ Kollision' = zwei Termine überlappen komplett (entweder/oder); '⚠ Teil-Überlappung' = sie überschneiden sich teils, frag dann wie in der Zeile vorgeschlagen nach; '⚠ Knapp' = die Zeit zwischen zwei Terminen reicht örtlich evtl. nicht. '⚠ KONFLIKT' = du bist laut Kalender verreist, hast aber einen lokalen Termin in der Zeit - DAS ist wichtig: vergewissere dich EINMAL kurz beim User (stimmt die Reise? stimmt der Termin?), und wenn beides bestätigt ist, schlag deutlich Alarm (klare Warnung im Text PLUS Bild-Marker [[bild: alarm]]) - das sind Dinge, die der User leicht vergisst. '⚠ ABSAGEN' = eine regelmäßige Pflicht-Absage (z.B. Geige bei der Lehrerin) fällt in eine Reise - die muss aktiv abgesagt werden; ebenfalls erst rückversichern, dann Alarm mit [[bild: alarm]]. Nach JEDEM Absage-Alarm (ABSAGEN, oder ein Einzeltermin den Sasha absagen müsste) hakst du per frage_knopf nach - eskalierend, ein Knopf nach dem anderen: zuerst Frage 'Hast du <die Sache, z.B. die Geigenstunde> schon abgesagt?' (ohne optionen = ja/nein). Klickt sie 'nein', sofort der nächste: 'Wirst du es jetzt absagen?' (ja/nein). Klickt sie wieder 'nein', ein letzter mit Frage 'Katastrophe.' und optionen ['ja','ja'] (beide gleich, kleiner Schabernack). Sobald irgendwo 'ja' kommt: kurz quittieren und Ruhe geben. Rechne diese Hinweise nie selbst aus, lies nur ab was dasteht.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"zeitraum\": {\"type\": \"string\", \"enum\": [\"heute\", \"morgen\", \"gestern\", \"diese_woche\", \"naechste_woche\", \"diese_und_naechste_woche\", \"letzte_woche\", \"dieser_monat\", \"naechster_monat\", \"letzter_monat\", \"naechste_7_tage\", \"naechste_30_tage\", \"naechste_90_tage\", \"letzte_7_tage\", \"letzte_30_tage\"], \"description\": \"Relativer Zeitraum - bevorzugt nutzen, dann muss kein Datum gerechnet werden. Einer von: heute, morgen, gestern, diese_woche, naechste_woche, diese_und_naechste_woche, letzte_woche, dieser_monat, naechster_monat, letzter_monat, naechste_7_tage, naechste_30_tage, naechste_90_tage, letzte_7_tage, letzte_30_tage.\"}, \"suche\": {\"type\": \"string\", \"description\": \"Optional: nur Termine deren Titel diesen Text enthält (z.B. 'Fahrschule', 'Geige'). Bei Fragen nach einer bestimmten Aktivität nutzen, damit du nicht die ganze Liste durchsuchen musst.\"}, \"start_date\": {\"type\": \"string\", \"description\": \"Nur falls kein 'zeitraum' passt: Start YYYY-MM-DD (inkl.)\"}, \"end_date\": {\"type\": \"string\", \"description\": \"Nur falls kein 'zeitraum' passt: Ende YYYY-MM-DD (inkl.)\"}, \"layers\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Optional: nur diese Layer (z.B. ['termine']). Default: alle.\"}}, \"required\": []}}, {\"name\": \"read_time\", \"description\": \"Sagt dir, wie spät es JETZT ist - und was als nächstes ansteht, samt Abstand in Minuten. Du weißt die Uhrzeit nicht von selbst; rate sie nie und rechne sie nie aus dem Kopf aus. Ruf dies, wenn Sasha nach der Zeit fragt, wenn er wissen will wie lange er noch hat, oder wenn die Tageszeit für eine Entscheidung zählt.\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}, {\"name\": \"add_calendar_entry\", \"description\": \"Trägt einen Einmal-Eintrag in einen Kalender-Layer ein. Nutze dies wenn der User einen Termin nennt, eine Frist, ein Ereignis: 'Arzt am 10. Juni um 14:30', 'TÜV-Frist 3. Juni'. Im Zweifel Layer 'termine'. Datum-Format: YYYY-MM-DD.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"layer\": {\"type\": \"string\", \"description\": \"Layer-Name: 'termine' für Einmal-Termine/Fristen, sonst spezifisch\"}, \"day\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD\"}, \"label\": {\"type\": \"string\", \"description\": \"Kurzer Titel des Eintrags\"}, \"time\": {\"type\": \"string\", \"description\": \"Optional HH:MM (24h). Weglassen wenn ganztags.\"}}, \"required\": [\"layer\", \"day\", \"label\"]}}, {\"name\": \"add_calendar_routine\", \"description\": \"Trägt eine Wiederholungs-Regel in einen Kalender-Layer ein (iCal RRULE). Nutze dies bei regelmäßigen Aktivitäten: 'jeden Dienstag Geige', 'jeden 1. im Monat Miete', 'Mo/Mi/Fr Sport'. Layer-Default: 'routinen'. RRULE-Beispiele: FREQ=WEEKLY;BYDAY=TU | FREQ=WEEKLY;BYDAY=MO,WE,FR | FREQ=MONTHLY;BYMONTHDAY=1 | FREQ=MONTHLY;BYDAY=2TU (2. Dienstag/Monat).\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"layer\": {\"type\": \"string\", \"description\": \"Layer-Name, im Zweifel 'routinen'\"}, \"label\": {\"type\": \"string\", \"description\": \"Kurzer Titel\"}, \"rrule\": {\"type\": \"string\", \"description\": \"iCal RRULE ohne DTSTART, z.B. 'FREQ=WEEKLY;BYDAY=TU'\"}, \"time\": {\"type\": \"string\", \"description\": \"Optional HH:MM (24h)\"}}, \"required\": [\"layer\", \"label\", \"rrule\"]}}, {\"name\": \"edit_calendar_routine\", \"description\": \"Ändert oder löscht eine BESTEHENDE Wiederholungs-Regel. Nimm dies, wenn sich an etwas Regelmäßigem etwas ändert - 'Geige ist jetzt um 18:00 statt 17:45', 'Sport fällt weg'. NICHT add_calendar_routine dafür nehmen: das legt eine zweite Regel an und die alte bleibt stehen. Der Titel muss nur ein Stück des Eintrags treffen ('geige' findet 'Geigenstunde'). Weggelassene Felder bleiben, wie sie sind.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"label\": {\"type\": \"string\", \"description\": \"Titel der bestehenden Routine (Teilstring genügt)\"}, \"aktion\": {\"type\": \"string\", \"enum\": [\"aendern\", \"loeschen\"], \"description\": \"'aendern' oder 'loeschen'\"}, \"time\": {\"type\": \"string\", \"description\": \"Neue Uhrzeit HH:MM (24h)\"}, \"ende\": {\"type\": \"string\", \"description\": \"Neues Ende HH:MM (24h)\"}, \"rrule\": {\"type\": \"string\", \"description\": \"Neue Wiederholung, z.B. 'FREQ=WEEKLY;BYDAY=MO'\"}, \"ort\": {\"type\": \"string\", \"description\": \"Neuer Ort\"}, \"neuer_titel\": {\"type\": \"string\", \"description\": \"Neuer Titel, falls die Aktivität anders heißt\"}}, \"required\": [\"label\", \"aktion\"]}}, {\"name\": \"add_calendar_pause\", \"description\": \"Trägt eine Pause/einen Ausfall für eine regelmäßige Aktivität ein - in dem Zeitraum findet sie NICHT statt (Ferien, Feiertag, Lehrerin im Urlaub). Nutze dies, wenn der User sowas sagt: 'Geige fällt in den Sommerferien aus, 1.-15. August', 'nächste Woche keine Fahrschule'. 'label' muss zum Routinen-Titel im Kalender passen (z.B. 'Geigenstunde'). Datum: YYYY-MM-DD.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"label\": {\"type\": \"string\", \"description\": \"Titel der Routine, die ausfällt (wie im Kalender, z.B. 'Geigenstunde')\"}, \"von\": {\"type\": \"string\", \"description\": \"Start der Pause, YYYY-MM-DD (inkl.)\"}, \"bis\": {\"type\": \"string\", \"description\": \"Ende der Pause, YYYY-MM-DD (inkl.)\"}, \"grund\": {\"type\": \"string\", \"description\": \"Optional kurzer Grund, z.B. 'Sommerferien', 'Feiertag'\"}}, \"required\": [\"label\", \"von\", \"bis\"]}}, {\"name\": \"delete_calendar_entry\", \"description\": \"Löscht einen Einmal-Termin aus dem Kalender. Nutze dies wenn der User einen Eintrag entfernt haben will ('lösch den Zahnarzt am Montag', 'der Fake-Termin morgen kann weg'). Ist unklar welcher Eintrag gemeint ist (z.B. 'lösch den raus'), lies ruhig vorher mit read_calendar nach Tag + Label nach - der Kalender-Read ist saubere Terminliste und lenkt nicht mehr ab. Wenn Tag und Label schon klar sind, ruf direkt. WICHTIG: setz IMMER einen echten Tool-Call ab und behaupte nie, gelöscht zu haben, ohne das Tool gerufen zu haben. Label-Match ist Teilstring, also reicht 'Fake-Termin'. Datum: YYYY-MM-DD, relative Angaben (morgen) rechnest du aus dem Jetzt-Block aus. Wirkt nur auf Einmal-Termine, nicht auf Routinen oder Pausen.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"day\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD des zu löschenden Termins\"}, \"label\": {\"type\": \"string\", \"description\": \"Titel des Termins (wie im Kalender; Teiltreffer reicht)\"}, \"layer\": {\"type\": \"string\", \"description\": \"Optional Layer-Name; weglassen = in allen Layern suchen\"}}, \"required\": [\"day\", \"label\"]}}, {\"name\": \"read_file\", \"description\": \"Liest den Inhalt einer Datei aus dem ZENTRALE-Projekt. Nutze list_files zuerst um zu sehen was verfügbar ist. Nützlich wenn der User nach Daten, Code oder Notizen fragt.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"path\": {\"type\": \"string\", \"description\": \"Relativer Pfad zur Datei, z.B. 'data/sleep_quality.json'\"}}, \"required\": [\"path\"]}}, {\"name\": \"list_files\", \"description\": \"Listet alle Dateien auf die gelesen werden können. Aufrufen bevor read_file.\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}, {\"name\": \"lies_news\", \"description\": \"Liefert ein Weltpolitik-Briefing - aus vielen Nachrichtenquellen weltweit zusammengetragen, nach Themen gebündelt und mit gegenübergestellten Perspektiven. Zwei Modi über 'tage': ohne tage (oder 0) = die aktuelle Tagessendung ('was ist heute/grad los'). Mit tage=7 = ein Wochenrückblick ('was ist die Woche/seit ich weg war passiert'). Lies das Ergebnis locker und moderierend vor; du darfst kürzen oder auf einen Aspekt eingehen.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"tage\": {\"type\": \"integer\", \"description\": \"Rückblick-Fenster in Tagen. 0/weglassen = aktuelle Sendung, 7 = Wochenrückblick.\"}}}}, {\"name\": \"lies_mail\", \"description\": \"Liefert den Stand der Mail-Triage: wie viele Mails je Kategorie einsortiert wurden und welche unbekannten Absender noch auf eine Zuordnung warten (der 'sasha muss gucken'-Stapel). Zwei Modi über 'modus': ohne modus (oder '') = Überblick mit Zählern + Review-Stapel; modus='review' = nur der Review-Stapel, ausführlicher. Nur lesen — sortiert oder löscht nichts.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"modus\": {\"type\": \"string\", \"description\": \"'' = Überblick (Default), 'review' = nur der Stapel unbekannter Absender.\"}}}}, {\"name\": \"web_suche\", \"description\": \"Sucht im Internet und gibt die Top-Treffer als Liste zurück (Titel, URL, kurzer Snippet). Nutze dies für aktuelles Wissen, Fakten, Nachrichten, Wetter oder alles, was NICHT in deinem Konzept-Graph (Gedächtnis) oder den Projekt-Dateien steht. Du bekommst nur Vorschau-Snippets - brauchst du den vollen Text einer Seite, ruf danach hole_url mit der passenden URL auf. Jede Suche muss Sasha bestätigen (Knopf-Dialog), also sparsam und gezielt einsetzen.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"query\": {\"type\": \"string\", \"description\": \"Die Suchanfrage in Worten, z.B. 'Wetter Berlin morgen'.\"}}, \"required\": [\"query\"]}}, {\"name\": \"hole_url\", \"description\": \"Lädt eine konkrete Webseite und gibt ihren Textinhalt zurück (gekürzt). Nutze dies, wenn du eine URL hast - aus einer web_suche oder vom User genannt - und den echten Inhalt brauchst, nicht nur den Suchschnipsel. Jeder Abruf muss Sasha bestätigen.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"url\": {\"type\": \"string\", \"description\": \"Die vollständige URL, z.B. https://de.wikipedia.org/wiki/...\"}}, \"required\": [\"url\"]}}, {\"name\": \"antwort\", \"description\": \"Gib deine finale Antwort an den User über dieses Tool aus - der vollständige Antworttext ins Feld 'text'. Reihenfolge: erst Daten-Tools (z.B. read_calendar) nutzen, dann mit 'antwort' die fertige, formulierte Antwort liefern. Nie nur ankündigen ('ich schaue nach…'), immer die echte Antwort.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"text\": {\"type\": \"string\", \"description\": \"Die fertige Antwort für den User.\"}}, \"required\": [\"text\"]}}, {\"name\": \"frage_knopf\", \"description\": \"Stellt Sasha eine Frage mit festen Antwort-Knöpfen, wenn du mitten in einer Aufgabe eine knappe, diskrete Entscheidung von ihr brauchst - statt eine freie Texteingabe abzuwarten. Im Dashboard erscheinen statt der Tastatur die Knöpfe, die Sasha mit Pfeiltasten und Enter wählt; du bekommst das gewählte Label zurück und machst dann im selben Zug weiter. Ohne 'optionen' sind es Ja/Nein. Sparsam einsetzen und nur für echte Verzweigungen - nicht aus Höflichkeit rückfragen.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"frage\": {\"type\": \"string\", \"description\": \"Die Frage an Sasha, vollständig ausformuliert.\"}, \"optionen\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Optional 2-4 kurze Knopf-Labels, z.B. ['Deutsch','Englisch']. Weglassen = Ja/Nein.\"}}, \"required\": [\"frage\"]}}]",
-  "gross_openai": "[{\"type\": \"function\", \"function\": {\"name\": \"read_calendar\", \"description\": \"Liest Kalender-Einträge: TERMINE und Routinen, also Verabredetes. Zustände, Krankheiten oder Erlebtes stehen in seinen Notizen, nicht hier. Zeitraum bevorzugt über 'zeitraum', für krumme Spannen start_date+end_date; 'suche' filtert auf ein Stichwort. Jede Zeile beginnt mit einer Kennung (#t… Termin, #r… Routine), darunter die Serien mit allen Feldern. Vor jedem Ändern lesen und die Kennung nehmen. Warnungen: read_calendar_warnings. Bei KONFLIKT (Termin in einer Reise) oder ABSAGEN (Pflicht-Absage in einer Reise) einmal kurz rückversichern, dann deutlich warnen und per ask_choice nachhaken, ob schon abgesagt wurde.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"zeitraum\": {\"type\": \"string\", \"enum\": [\"heute\", \"morgen\", \"gestern\", \"diese_woche\", \"naechste_woche\", \"diese_und_naechste_woche\", \"letzte_woche\", \"dieser_monat\", \"naechster_monat\", \"letzter_monat\", \"naechste_7_tage\", \"naechste_30_tage\", \"naechste_90_tage\", \"letzte_7_tage\", \"letzte_30_tage\"], \"description\": \"Relativer Zeitraum - bevorzugt nutzen, dann muss kein Datum gerechnet werden. Einer von: heute, morgen, gestern, diese_woche, naechste_woche, diese_und_naechste_woche, letzte_woche, dieser_monat, naechster_monat, letzter_monat, naechste_7_tage, naechste_30_tage, naechste_90_tage, letzte_7_tage, letzte_30_tage.\"}, \"suche\": {\"type\": \"string\", \"description\": \"Optional: nur Termine deren Titel diesen Text enthält (z.B. 'Fahrschule', 'Geige'). Bei Fragen nach einer bestimmten Aktivität nutzen, damit du nicht die ganze Liste durchsuchen musst.\"}, \"start_date\": {\"type\": \"string\", \"description\": \"Nur falls kein 'zeitraum' passt: Start YYYY-MM-DD (inkl.)\"}, \"end_date\": {\"type\": \"string\", \"description\": \"Nur falls kein 'zeitraum' passt: Ende YYYY-MM-DD (inkl.)\"}, \"layers\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Optional: nur diese Layer (z.B. ['termine']). Default: alle.\"}}, \"required\": []}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_time\", \"description\": \"Wie spät es jetzt ist, plus der nächste Termin mit Abstand in Minuten. Du weißt die Uhrzeit nicht von selbst - rate sie nie.\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}, {\"type\": \"function\", \"function\": {\"name\": \"add_calendar_entry\", \"description\": \"Trägt einen Einmal-Termin oder eine Frist ein. Im Zweifel Layer 'termine'. Datum YYYY-MM-DD. Ende und Ort mitgeben, wenn bekannt — fehlt das Ende, wird keins angenommen; nenn dann auch keins.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"layer\": {\"type\": \"string\", \"description\": \"Layer-Name: 'termine' für Einmal-Termine/Fristen, sonst spezifisch\"}, \"day\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD\"}, \"label\": {\"type\": \"string\", \"description\": \"Kurzer Titel des Eintrags\"}, \"time\": {\"type\": \"string\", \"description\": \"Optional HH:MM (24h). Weglassen wenn ganztags.\"}, \"ende\": {\"type\": \"string\", \"description\": \"Ende HH:MM (24h), wenn bekannt.\"}, \"ort\": {\"type\": \"string\", \"description\": \"Ort, wenn bekannt.\"}}, \"required\": [\"layer\", \"day\", \"label\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"add_calendar_routine\", \"description\": \"Trägt eine Wiederholungs-Regel ein (iCal RRULE), Layer-Default 'routinen'. Beispiele: FREQ=WEEKLY;BYDAY=TU | FREQ=WEEKLY;BYDAY=MO,WE,FR | FREQ=MONTHLY;BYMONTHDAY=1 | FREQ=MONTHLY;BYDAY=2TU (2. Dienstag im Monat). Der Ort gehört in 'ort', nicht in den Titel. Fehlt das Ende, wird keins angenommen — frag nach, statt eins zu nennen.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"layer\": {\"type\": \"string\", \"description\": \"Layer-Name, im Zweifel 'routinen'\"}, \"label\": {\"type\": \"string\", \"description\": \"Kurzer Titel\"}, \"rrule\": {\"type\": \"string\", \"description\": \"iCal RRULE ohne DTSTART, z.B. 'FREQ=WEEKLY;BYDAY=TU'\"}, \"time\": {\"type\": \"string\", \"description\": \"Optional HH:MM (24h)\"}, \"ende\": {\"type\": \"string\", \"description\": \"Ende HH:MM (24h), wenn bekannt.\"}, \"ort\": {\"type\": \"string\", \"description\": \"Ort, wenn bekannt.\"}}, \"required\": [\"layer\", \"label\", \"rrule\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"edit_calendar_routine\", \"description\": \"Ändert oder löscht EINE bestehende Routine, per 'kennung' aus read_calendar (ein Titel geht nur, wenn er genau eine trifft). Nur die genannten Felder ändern sich — nie löschen und neu anlegen, nie add_calendar_routine dafür. Mit 'nur_am' nur dieses eine Datum (ändern, oder bei 'loeschen' absagen).\", \"parameters\": {\"type\": \"object\", \"properties\": {\"kennung\": {\"type\": \"string\", \"description\": \"Kennung aus read_calendar, z.B. '#r3f9c'.\"}, \"label\": {\"type\": \"string\", \"description\": \"Titel der bestehenden Routine (Teilstring genügt)\"}, \"aktion\": {\"type\": \"string\", \"enum\": [\"aendern\", \"loeschen\"], \"description\": \"'aendern' oder 'loeschen'\"}, \"time\": {\"type\": \"string\", \"description\": \"Neue Uhrzeit HH:MM (24h)\"}, \"ende\": {\"type\": \"string\", \"description\": \"Neues Ende HH:MM (24h)\"}, \"rrule\": {\"type\": \"string\", \"description\": \"Neue Wiederholung, z.B. 'FREQ=WEEKLY;BYDAY=MO'\"}, \"ort\": {\"type\": \"string\", \"description\": \"Neuer Ort\"}, \"neuer_titel\": {\"type\": \"string\", \"description\": \"Neuer Titel, falls die Aktivität anders heißt\"}, \"nur_am\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD: nur dieses eine Datum der Serie.\"}}, \"required\": [\"aktion\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"add_calendar_pause\", \"description\": \"Trägt eine Pause für eine Routine ein - in dem Zeitraum findet sie NICHT statt (Ferien, Lehrerin im Urlaub). Am besten per 'kennung'; ein 'label' muss GENAU dem Routinen-Titel entsprechen. Datum YYYY-MM-DD. Ende unbekannt (\\\"fällt jetzt aus\\\"): 'bis' weglassen — dann fällt nur der Tag 'von' aus, und du fragst nach dem Ende.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"kennung\": {\"type\": \"string\", \"description\": \"Kennung aus read_calendar, z.B. '#r3f9c'.\"}, \"label\": {\"type\": \"string\", \"description\": \"Titel der Routine, die ausfällt (wie im Kalender, z.B. 'Geigenstunde')\"}, \"von\": {\"type\": \"string\", \"description\": \"Start der Pause, YYYY-MM-DD (inkl.)\"}, \"bis\": {\"type\": \"string\", \"description\": \"Ende der Pause, YYYY-MM-DD (inkl.)\"}, \"grund\": {\"type\": \"string\", \"description\": \"Optional kurzer Grund, z.B. 'Sommerferien', 'Feiertag'\"}}, \"required\": [\"von\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"delete_calendar_entry\", \"description\": \"Löscht EINEN Einzeltermin, per 'kennung' (oder Tag + Titel, nur bei genau einem Treffer). Mehrtägige werden ganz gelöscht. Routinen: edit_calendar_routine.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"kennung\": {\"type\": \"string\", \"description\": \"Kennung aus read_calendar, z.B. '#r3f9c'.\"}, \"day\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD des zu löschenden Termins\"}, \"label\": {\"type\": \"string\", \"description\": \"Titel des Termins (wie im Kalender; Teiltreffer reicht)\"}, \"layer\": {\"type\": \"string\", \"description\": \"Optional Layer-Name; weglassen = in allen Layern suchen\"}}, \"required\": []}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_file\", \"description\": \"Liest eine Datei aus dem ZENTRALE-Projekt. Vorher list_files.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"path\": {\"type\": \"string\", \"description\": \"Relativer Pfad zur Datei, z.B. 'data/sleep_quality.json'\"}}, \"required\": [\"path\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"list_files\", \"description\": \"Listet die Dateien auf, die gelesen werden können.\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_news\", \"description\": \"Weltpolitik-Briefing aus vielen Quellen, nach Themen gebündelt und mit gegenübergestellten Perspektiven. 'tage' weglassen (oder 0) = heutige Sendung; tage=7 = Wochenrückblick ('was war, seit ich weg war'). Dein Trainingswissen taugt fürs Tagesgeschehen nicht - bei Fragen nach Nachrichten oder Weltlage dieses Tool rufen statt zu raten. Das Ergebnis darfst du kürzen und moderieren.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"tage\": {\"type\": \"integer\", \"description\": \"Rückblick-Fenster in Tagen. 0/weglassen = aktuelle Sendung, 7 = Wochenrückblick.\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_mail\", \"description\": \"Stand der Mail-Triage: Zähler je Kategorie plus die unbekannten Absender, die noch auf Zuordnung warten. modus='review' = nur dieser Stapel, ausführlicher. Nur lesen, sortiert und löscht nichts. Zähler und Absender kennst du nicht aus dir selbst - hier rufen, nicht raten.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"modus\": {\"type\": \"string\", \"description\": \"'' = Überblick (Default), 'review' = nur der Stapel unbekannter Absender.\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"web_search\", \"description\": \"Sucht im Internet und gibt Titel, URL und Snippet zurück. Für alles, was weder in Sashas Notizen noch in den Projekt-Dateien steht. Treffer sind Hinweise, nicht gelesen: Angaben daraus erst nach fetch_url als Tatsache nennen. Jede Suche muss Sasha bestätigen.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"query\": {\"type\": \"string\", \"description\": \"Die Suchanfrage in Worten, z.B. 'Wetter Berlin morgen'.\"}}, \"required\": [\"query\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"fetch_url\", \"description\": \"Lädt eine konkrete Webseite und gibt ihren Text zurück (gekürzt). Sagt, wenn kaum Inhalt kam (Navigation, Anmeldung). Muss Sasha bestätigen.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"url\": {\"type\": \"string\", \"description\": \"Die vollständige URL, z.B. https://de.wikipedia.org/wiki/...\"}}, \"required\": [\"url\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"ask_choice\", \"description\": \"Stellt Sasha eine Frage mit festen Antwort-Knöpfen, wenn du mitten in einer Aufgabe eine knappe Entscheidung brauchst - statt auf eine freie Texteingabe zu warten. Ohne 'optionen' ist es Ja/Nein. Du bekommst das gewählte Label zurück und machst im selben Zug weiter. Nur für echte Verzweigungen, nicht aus Höflichkeit.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"frage\": {\"type\": \"string\", \"description\": \"Die Frage an Sasha, vollständig ausformuliert.\"}, \"optionen\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Optional 2-4 kurze Knopf-Labels, z.B. ['Deutsch','Englisch']. Weglassen = Ja/Nein.\"}}, \"required\": [\"frage\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_note\", \"description\": \"Liest eine Gedaechtnis-Datei am Stueck. 'name' ist ein Dossier-Titel aus dem Kopf-Block (z.B. 'umzug', 'training'), oder 'sasha' fuer den Steckbrief, 'ziele' fuer die Ziele, 'tagebuch' fuer den heutigen Tag. Lies das Dossier, BEVOR du ueber die Sache redest oder planst — der Kopf-Block nennt nur Titel, nicht Inhalte.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Dossier-Titel, oder sasha/ziele/tagebuch.\"}}, \"required\": [\"name\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"write_note\", \"description\": \"Haelt etwas fest — haengt an, loescht nie. Verwendungen: name='tagebuch' fuer das, was gerade passiert ist oder was Sasha erzaehlt hat (in SEINEN Worten, nicht destilliert); ein Dossier-Titel fuer den STAND einer laufenden Sache ('Kueche: Regale haengen, Apparatur fehlt'); ein NEUER Titel fuer alles Uebrige — das landet formlos in notizen/, ohne Vorlage, und ist der Ort fuer einzelne Fakten und kurze Listen (Wegzeiten, Gewohnheiten). Schwankst du: koennte es einen STATUS haben, also etwas sein, das er TUN koennte? Dann Katalog-Eintrag, sonst Notiz. Beides zur selben Sache ist falsch. Wird daraus ein VORHABEN, fuellst du die Vorlage aus (read_note 'vorlagen/dossier' bzw. 'vorlagen/katalog'); die Notiz wird dann zum Dossier und der Katalog-Eintrag entsteht von selbst. name='hausregeln' ist der Sonderfall: dort landen Sashas Verhaltens-Ansagen an dich, und die stehen bei jedem Turn ganz oben im Kopf. Du fragst dafuer nicht um Erlaubnis, du machst es einfach — so wie jemand mitschreibt, der danebensitzt. Und du antwortest danach ganz normal weiter: mitschreiben IST keine Antwort, und ein stummer Turn wirkt wie ein Absturz.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"'tagebuch', ein Dossier-Titel, oder ein neuer Titel fuer eine formlose Notiz.\"}, \"text\": {\"type\": \"string\", \"description\": \"Der Eintrag, in ganzen Saetzen.\"}, \"herkunft\": {\"type\": \"string\", \"description\": \"Nur beim Import aus einer anderen KI, z.B. 'claude': dann eine Tatsache je Zeile, Vorhandenes und Links werden uebersprungen, jede Zeile bekommt den Herkunftsvermerk.\"}}, \"required\": [\"name\", \"text\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"search_memory\", \"description\": \"Volltextsuche ueber das ganze Gedaechtnis. Fuer alles, was laenger her ist als das Gespraech: 'wie war Spanien', 'was hatte ich zum Umzug gesagt'. Stumpfe Wortsuche — nimm den Begriff, den SASHA benutzt haette, nicht eine Umschreibung.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"query\": {\"type\": \"string\", \"description\": \"Suchbegriff.\"}}, \"required\": [\"query\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"rewrite_note\", \"description\": \"Schreibt ein Dossier KOMPLETT neu — zum Aufraeumen, wenn aus vielen angehaengten Absaetzen ein sauberer Stand werden soll. Destruktiv, wird bestaetigt. Der bisherige Inhalt muss vorher mit read_note gelesen werden, sonst wirfst du weg, was du nicht kennst.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Dossier-Titel.\"}, \"content\": {\"type\": \"string\", \"description\": \"Der vollstaendige neue Inhalt.\"}}, \"required\": [\"name\", \"content\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"fetch_document\", \"description\": \"Holt etwas aus dem Netz ODER von der Platte und LEGT ES AB — Modulhandbuch, Stundenplan, Datenblatt, Artikel. PDF wird automatisch zu Text, HTML entrumpelt, Binaeres als Datei mit Vermerk abgelegt. Danach lesbar mit read_note und durchsuchbar mit search_memory. Unterschied zu fetch_url: das liest etwas JETZT und vergisst es; hier wird abgelegt, um es spaeter wiederzufinden. Gib einen sprechenden 'name' — daraus wird der Ablageort.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"url\": {\"type\": \"string\", \"description\": \"http(s)-Adresse ODER ein Pfad auf der Platte (unter ~/codicus).\"}, \"name\": {\"type\": \"string\", \"description\": \"Kurzer Titel, z.B. 'modulhandbuch'.\"}}, \"required\": [\"url\", \"name\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"create_series\", \"description\": \"Legt eine neue Messkurve an — nur wenn Sasha etwas wirklich verfolgen will (Spagat in cm, L-Sit in Sekunden). Wird bestaetigt, damit aus Tippfehlern keine Halde halbtoter Kurven wird. Typen: 'number' (Zahl mit Einheit), 'scale' (1-10), 'time' (nur dass es an dem Tag war), 'period' (von-bis). Danach traegst du Werte mit log_series ein und verlinkst die Reihe im Dossier der Sache.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Name der Reihe.\"}, \"typ\": {\"type\": \"string\", \"enum\": [\"number\", \"scale\", \"time\", \"period\"]}, \"einheit\": {\"type\": \"string\", \"description\": \"z.B. 'cm', 's', 'km'. Optional.\"}}, \"required\": [\"name\", \"typ\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"log_series\", \"description\": \"Traegt einen Messwert in eine bestehende Kurve ein (Schlaf, Stimmung, Training …) — fuer alles, was ueber Monate eine Kurve ergeben soll. Nur vorhandene Reihen; neue legt Sasha selbst an. Ohne 'day' zaehlt heute.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"series\": {\"type\": \"string\", \"description\": \"Name der Reihe.\"}, \"value\": {\"type\": \"number\", \"description\": \"Der Wert.\"}, \"day\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD, sonst heute.\"}}, \"required\": [\"series\", \"value\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"run_code\", \"description\": \"Fuehrt ein kleines Python- oder Shell-Programm abgeschottet aus; zurueck kommen Rueckgabewert, Ausgabe, Fehler und neue Dateien. Fuer genaues Rechnen, Daten umformen, Skripte ausprobieren. KEIN Internet, KEIN Zugriff auf Sashas Dateien (nur ein leerer Arbeitsordner, jeder Lauf neu), Python mit Standardbibliothek plus PIL, bs4, lxml, yaml (kein numpy/pandas), Zeitlimit 30 s (bis 120; laenger bis 1800 nur nach Rueckfrage), 512 MB, Ausgabe gekuerzt. Wird bestaetigt. Ergebnis mit print ausgeben.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"code\": {\"type\": \"string\", \"description\": \"Das Programm.\"}, \"sprache\": {\"type\": \"string\", \"enum\": [\"python\", \"shell\"], \"description\": \"Standard: python.\"}, \"zeitlimit\": {\"type\": \"integer\", \"description\": \"Sekunden, Standard 30. Ueber 120 (max 1800) fragt Sasha extra.\"}, \"skill\": {\"type\": \"string\", \"description\": \"Name eines aktiven Skills: sein Ordner liegt dann nur lesend unter /skills/<name> (fuer seine scripts/).\"}}, \"required\": [\"code\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"load_skill\", \"description\": \"Holt die Anleitung eines Skills aus der Skill-Liste im Kopf (mit Liste seiner Dateien). Passt die Aufgabe zu seiner Beschreibung: zuerst laden, dann danach arbeiten. Mit 'datei' eine Datei daraus, z.B. references/x.md.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Name aus der Liste.\"}, \"datei\": {\"type\": \"string\", \"description\": \"Pfad im Skill-Ordner; ohne: die Anleitung.\"}, \"ab\": {\"type\": \"integer\", \"description\": \"Weiterlesen ab diesem Zeichen.\"}}, \"required\": [\"name\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"propose_skill\", \"description\": \"Schlaegt einen NEUEN Skill vor: eine Anleitung fuer eine Art Aufgabe, die sich mit Sasha bewaehrt hat. Wird bestaetigt; lehnt er ab, entsteht nichts. 'beschreibung': wann er passt (der Ausloeser). Inhalt knapp, in Schritten.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Kurz, z.B. 'wochenplan'.\"}, \"beschreibung\": {\"type\": \"string\", \"description\": \"Wann benutzen, bis 1024 Zeichen.\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Die Anleitung.\"}}, \"required\": [\"name\", \"beschreibung\", \"inhalt\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"edit_skill\", \"description\": \"Schreibt die Anleitung eines bestehenden Skills neu; der Kopf bleibt, die alte Fassung als .bak. Wird bestaetigt. Vorher mit load_skill lesen.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Name aus der Liste.\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Die vollstaendige neue Anleitung.\"}}, \"required\": [\"name\", \"inhalt\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"search_chats\", \"description\": \"Sucht in allen frueheren Gespraechen mit Sasha (auch archivierten und dem alten Verlauf): was er oder du gesagt habt. Alle Woerter muessen vorkommen; nimm seine Begriffe. Treffer: Titel, id, Datum, Ausschnitt. Notizen: search_memory.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"query\": {\"type\": \"string\", \"description\": \"Suchwoerter.\"}, \"projekt\": {\"type\": \"string\", \"description\": \"Optional: nur Gespraeche dieses Projekts.\"}}, \"required\": [\"query\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_chat\", \"description\": \"Liest ein frueheres Gespraech nach (id aus search_chats): die letzten Nachrichten, mit query die um die Fundstelle.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"description\": \"Gespraechs-id.\"}, \"query\": {\"type\": \"string\", \"description\": \"Optional: Suchwoerter.\"}, \"anzahl\": {\"type\": \"integer\", \"description\": \"Nachrichten, Standard 20, max 40.\"}}, \"required\": [\"id\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"create_document\", \"description\": \"Legt ein Dokument in Sashas Ablage: Plan, Liste, Text, Code, Tabelle — was er behalten, lesen oder weiterverwenden will. Er sieht es sofort als Eintrag im Chat. Fuer Laengeres (ab ~15 Zeilen) oder zum Mitnehmen; Kurzes gehoert in die Antwort.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"titel\": {\"type\": \"string\", \"description\": \"Kurzer Titel.\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Der ganze Inhalt.\"}, \"art\": {\"type\": \"string\", \"enum\": [\"markdown\", \"text\", \"code\", \"csv\"], \"description\": \"Standard: markdown.\"}, \"sprache\": {\"type\": \"string\", \"description\": \"Nur bei code, z.B. 'python'.\"}}, \"required\": [\"titel\", \"inhalt\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_document\", \"description\": \"Liest ein Dokument aus der Ablage (id steht im Verlauf).\", \"parameters\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"description\": \"Dokument-id.\"}}, \"required\": [\"id\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"update_document\", \"description\": \"Neue Fassung eines Dokuments der Ablage; die alte bleibt. Vorher mit read_document lesen, 'inhalt' ist der vollstaendige neue Text.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"description\": \"Dokument-id.\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Der ganze neue Inhalt.\"}}, \"required\": [\"id\", \"inhalt\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"save_from_sandbox\", \"description\": \"Legt eine Datei aus einem run_code-Lauf in Sashas Ablage (Text oder Bild) — NUR wenn Sasha sie behalten will, nie von dir aus. Wird bestaetigt. 'lauf' und 'datei' stehen im Ergebnis von run_code.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"lauf\": {\"type\": \"string\", \"description\": \"Lauf-Kennung.\"}, \"datei\": {\"type\": \"string\", \"description\": \"Name in /arbeit.\"}, \"titel\": {\"type\": \"string\", \"description\": \"Titel in der Ablage.\"}}, \"required\": [\"lauf\", \"datei\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_project_file\", \"description\": \"Liest eine Wissensdatei des Projekts, zu dem dieses Gespraech gehoert (Liste im Kopf unter 'Projekt').\", \"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Dateiname aus der Liste.\"}, \"ab\": {\"type\": \"integer\", \"description\": \"Optional: ab diesem Zeichen weiterlesen.\"}}, \"required\": [\"name\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"edit_calendar_entry\", \"description\": \"Ändert EINEN Einzeltermin, per 'kennung' aus read_calendar (oder Tag + Titel, nur bei genau einem Treffer). Nur die genannten Felder ändern sich; bei mehrtägigen auch 'bis'.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"kennung\": {\"type\": \"string\", \"description\": \"Kennung aus read_calendar, z.B. '#r3f9c'.\"}, \"day\": {\"type\": \"string\", \"description\": \"Ohne kennung: bisheriger Tag YYYY-MM-DD.\"}, \"label\": {\"type\": \"string\", \"description\": \"Ohne kennung: bisheriger Titel.\"}, \"neuer_tag\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD\"}, \"time\": {\"type\": \"string\", \"description\": \"Neuer Beginn HH:MM\"}, \"ende\": {\"type\": \"string\", \"description\": \"Neues Ende HH:MM\"}, \"ort\": {\"type\": \"string\", \"description\": \"Neuer Ort\"}, \"neuer_titel\": {\"type\": \"string\", \"description\": \"Neuer Titel\"}, \"bis\": {\"type\": \"string\", \"description\": \"Nur mehrtägig: neuer letzter Tag YYYY-MM-DD\"}}, \"required\": []}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_calendar_warnings\", \"description\": \"Die Kalender-Warnungen (Überschneidungen, zu knapp, Termin in einer Reise, Absagen) von heute bis +30 Tage, frisch berechnet — dieselben, die Sasha als ⚠ sieht. Nach einer Änderung hier nachsehen, statt zu sagen, sie seien weg.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"suche\": {\"type\": \"string\", \"description\": \"Optional: nur Warnungen, die das Wort nennen.\"}}, \"required\": []}}}]",
-  "gross_anthropic": "[{\"name\": \"read_calendar\", \"description\": \"Liest Kalender-Einträge: TERMINE und Routinen, also Verabredetes. Zustände, Krankheiten oder Erlebtes stehen in seinen Notizen, nicht hier. Zeitraum bevorzugt über 'zeitraum', für krumme Spannen start_date+end_date; 'suche' filtert auf ein Stichwort. Jede Zeile beginnt mit einer Kennung (#t… Termin, #r… Routine), darunter die Serien mit allen Feldern. Vor jedem Ändern lesen und die Kennung nehmen. Warnungen: read_calendar_warnings. Bei KONFLIKT (Termin in einer Reise) oder ABSAGEN (Pflicht-Absage in einer Reise) einmal kurz rückversichern, dann deutlich warnen und per ask_choice nachhaken, ob schon abgesagt wurde.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"zeitraum\": {\"type\": \"string\", \"enum\": [\"heute\", \"morgen\", \"gestern\", \"diese_woche\", \"naechste_woche\", \"diese_und_naechste_woche\", \"letzte_woche\", \"dieser_monat\", \"naechster_monat\", \"letzter_monat\", \"naechste_7_tage\", \"naechste_30_tage\", \"naechste_90_tage\", \"letzte_7_tage\", \"letzte_30_tage\"], \"description\": \"Relativer Zeitraum - bevorzugt nutzen, dann muss kein Datum gerechnet werden. Einer von: heute, morgen, gestern, diese_woche, naechste_woche, diese_und_naechste_woche, letzte_woche, dieser_monat, naechster_monat, letzter_monat, naechste_7_tage, naechste_30_tage, naechste_90_tage, letzte_7_tage, letzte_30_tage.\"}, \"suche\": {\"type\": \"string\", \"description\": \"Optional: nur Termine deren Titel diesen Text enthält (z.B. 'Fahrschule', 'Geige'). Bei Fragen nach einer bestimmten Aktivität nutzen, damit du nicht die ganze Liste durchsuchen musst.\"}, \"start_date\": {\"type\": \"string\", \"description\": \"Nur falls kein 'zeitraum' passt: Start YYYY-MM-DD (inkl.)\"}, \"end_date\": {\"type\": \"string\", \"description\": \"Nur falls kein 'zeitraum' passt: Ende YYYY-MM-DD (inkl.)\"}, \"layers\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Optional: nur diese Layer (z.B. ['termine']). Default: alle.\"}}, \"required\": []}}, {\"name\": \"read_time\", \"description\": \"Wie spät es jetzt ist, plus der nächste Termin mit Abstand in Minuten. Du weißt die Uhrzeit nicht von selbst - rate sie nie.\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}, {\"name\": \"add_calendar_entry\", \"description\": \"Trägt einen Einmal-Termin oder eine Frist ein. Im Zweifel Layer 'termine'. Datum YYYY-MM-DD. Ende und Ort mitgeben, wenn bekannt — fehlt das Ende, wird keins angenommen; nenn dann auch keins.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"layer\": {\"type\": \"string\", \"description\": \"Layer-Name: 'termine' für Einmal-Termine/Fristen, sonst spezifisch\"}, \"day\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD\"}, \"label\": {\"type\": \"string\", \"description\": \"Kurzer Titel des Eintrags\"}, \"time\": {\"type\": \"string\", \"description\": \"Optional HH:MM (24h). Weglassen wenn ganztags.\"}, \"ende\": {\"type\": \"string\", \"description\": \"Ende HH:MM (24h), wenn bekannt.\"}, \"ort\": {\"type\": \"string\", \"description\": \"Ort, wenn bekannt.\"}}, \"required\": [\"layer\", \"day\", \"label\"]}}, {\"name\": \"add_calendar_routine\", \"description\": \"Trägt eine Wiederholungs-Regel ein (iCal RRULE), Layer-Default 'routinen'. Beispiele: FREQ=WEEKLY;BYDAY=TU | FREQ=WEEKLY;BYDAY=MO,WE,FR | FREQ=MONTHLY;BYMONTHDAY=1 | FREQ=MONTHLY;BYDAY=2TU (2. Dienstag im Monat). Der Ort gehört in 'ort', nicht in den Titel. Fehlt das Ende, wird keins angenommen — frag nach, statt eins zu nennen.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"layer\": {\"type\": \"string\", \"description\": \"Layer-Name, im Zweifel 'routinen'\"}, \"label\": {\"type\": \"string\", \"description\": \"Kurzer Titel\"}, \"rrule\": {\"type\": \"string\", \"description\": \"iCal RRULE ohne DTSTART, z.B. 'FREQ=WEEKLY;BYDAY=TU'\"}, \"time\": {\"type\": \"string\", \"description\": \"Optional HH:MM (24h)\"}, \"ende\": {\"type\": \"string\", \"description\": \"Ende HH:MM (24h), wenn bekannt.\"}, \"ort\": {\"type\": \"string\", \"description\": \"Ort, wenn bekannt.\"}}, \"required\": [\"layer\", \"label\", \"rrule\"]}}, {\"name\": \"edit_calendar_routine\", \"description\": \"Ändert oder löscht EINE bestehende Routine, per 'kennung' aus read_calendar (ein Titel geht nur, wenn er genau eine trifft). Nur die genannten Felder ändern sich — nie löschen und neu anlegen, nie add_calendar_routine dafür. Mit 'nur_am' nur dieses eine Datum (ändern, oder bei 'loeschen' absagen).\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"kennung\": {\"type\": \"string\", \"description\": \"Kennung aus read_calendar, z.B. '#r3f9c'.\"}, \"label\": {\"type\": \"string\", \"description\": \"Titel der bestehenden Routine (Teilstring genügt)\"}, \"aktion\": {\"type\": \"string\", \"enum\": [\"aendern\", \"loeschen\"], \"description\": \"'aendern' oder 'loeschen'\"}, \"time\": {\"type\": \"string\", \"description\": \"Neue Uhrzeit HH:MM (24h)\"}, \"ende\": {\"type\": \"string\", \"description\": \"Neues Ende HH:MM (24h)\"}, \"rrule\": {\"type\": \"string\", \"description\": \"Neue Wiederholung, z.B. 'FREQ=WEEKLY;BYDAY=MO'\"}, \"ort\": {\"type\": \"string\", \"description\": \"Neuer Ort\"}, \"neuer_titel\": {\"type\": \"string\", \"description\": \"Neuer Titel, falls die Aktivität anders heißt\"}, \"nur_am\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD: nur dieses eine Datum der Serie.\"}}, \"required\": [\"aktion\"]}}, {\"name\": \"add_calendar_pause\", \"description\": \"Trägt eine Pause für eine Routine ein - in dem Zeitraum findet sie NICHT statt (Ferien, Lehrerin im Urlaub). Am besten per 'kennung'; ein 'label' muss GENAU dem Routinen-Titel entsprechen. Datum YYYY-MM-DD. Ende unbekannt (\\\"fällt jetzt aus\\\"): 'bis' weglassen — dann fällt nur der Tag 'von' aus, und du fragst nach dem Ende.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"kennung\": {\"type\": \"string\", \"description\": \"Kennung aus read_calendar, z.B. '#r3f9c'.\"}, \"label\": {\"type\": \"string\", \"description\": \"Titel der Routine, die ausfällt (wie im Kalender, z.B. 'Geigenstunde')\"}, \"von\": {\"type\": \"string\", \"description\": \"Start der Pause, YYYY-MM-DD (inkl.)\"}, \"bis\": {\"type\": \"string\", \"description\": \"Ende der Pause, YYYY-MM-DD (inkl.)\"}, \"grund\": {\"type\": \"string\", \"description\": \"Optional kurzer Grund, z.B. 'Sommerferien', 'Feiertag'\"}}, \"required\": [\"von\"]}}, {\"name\": \"delete_calendar_entry\", \"description\": \"Löscht EINEN Einzeltermin, per 'kennung' (oder Tag + Titel, nur bei genau einem Treffer). Mehrtägige werden ganz gelöscht. Routinen: edit_calendar_routine.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"kennung\": {\"type\": \"string\", \"description\": \"Kennung aus read_calendar, z.B. '#r3f9c'.\"}, \"day\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD des zu löschenden Termins\"}, \"label\": {\"type\": \"string\", \"description\": \"Titel des Termins (wie im Kalender; Teiltreffer reicht)\"}, \"layer\": {\"type\": \"string\", \"description\": \"Optional Layer-Name; weglassen = in allen Layern suchen\"}}, \"required\": []}}, {\"name\": \"read_file\", \"description\": \"Liest eine Datei aus dem ZENTRALE-Projekt. Vorher list_files.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"path\": {\"type\": \"string\", \"description\": \"Relativer Pfad zur Datei, z.B. 'data/sleep_quality.json'\"}}, \"required\": [\"path\"]}}, {\"name\": \"list_files\", \"description\": \"Listet die Dateien auf, die gelesen werden können.\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}, {\"name\": \"read_news\", \"description\": \"Weltpolitik-Briefing aus vielen Quellen, nach Themen gebündelt und mit gegenübergestellten Perspektiven. 'tage' weglassen (oder 0) = heutige Sendung; tage=7 = Wochenrückblick ('was war, seit ich weg war'). Dein Trainingswissen taugt fürs Tagesgeschehen nicht - bei Fragen nach Nachrichten oder Weltlage dieses Tool rufen statt zu raten. Das Ergebnis darfst du kürzen und moderieren.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"tage\": {\"type\": \"integer\", \"description\": \"Rückblick-Fenster in Tagen. 0/weglassen = aktuelle Sendung, 7 = Wochenrückblick.\"}}}}, {\"name\": \"read_mail\", \"description\": \"Stand der Mail-Triage: Zähler je Kategorie plus die unbekannten Absender, die noch auf Zuordnung warten. modus='review' = nur dieser Stapel, ausführlicher. Nur lesen, sortiert und löscht nichts. Zähler und Absender kennst du nicht aus dir selbst - hier rufen, nicht raten.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"modus\": {\"type\": \"string\", \"description\": \"'' = Überblick (Default), 'review' = nur der Stapel unbekannter Absender.\"}}}}, {\"name\": \"web_search\", \"description\": \"Sucht im Internet und gibt Titel, URL und Snippet zurück. Für alles, was weder in Sashas Notizen noch in den Projekt-Dateien steht. Treffer sind Hinweise, nicht gelesen: Angaben daraus erst nach fetch_url als Tatsache nennen. Jede Suche muss Sasha bestätigen.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"query\": {\"type\": \"string\", \"description\": \"Die Suchanfrage in Worten, z.B. 'Wetter Berlin morgen'.\"}}, \"required\": [\"query\"]}}, {\"name\": \"fetch_url\", \"description\": \"Lädt eine konkrete Webseite und gibt ihren Text zurück (gekürzt). Sagt, wenn kaum Inhalt kam (Navigation, Anmeldung). Muss Sasha bestätigen.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"url\": {\"type\": \"string\", \"description\": \"Die vollständige URL, z.B. https://de.wikipedia.org/wiki/...\"}}, \"required\": [\"url\"]}}, {\"name\": \"ask_choice\", \"description\": \"Stellt Sasha eine Frage mit festen Antwort-Knöpfen, wenn du mitten in einer Aufgabe eine knappe Entscheidung brauchst - statt auf eine freie Texteingabe zu warten. Ohne 'optionen' ist es Ja/Nein. Du bekommst das gewählte Label zurück und machst im selben Zug weiter. Nur für echte Verzweigungen, nicht aus Höflichkeit.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"frage\": {\"type\": \"string\", \"description\": \"Die Frage an Sasha, vollständig ausformuliert.\"}, \"optionen\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Optional 2-4 kurze Knopf-Labels, z.B. ['Deutsch','Englisch']. Weglassen = Ja/Nein.\"}}, \"required\": [\"frage\"]}}, {\"name\": \"read_note\", \"description\": \"Liest eine Gedaechtnis-Datei am Stueck. 'name' ist ein Dossier-Titel aus dem Kopf-Block (z.B. 'umzug', 'training'), oder 'sasha' fuer den Steckbrief, 'ziele' fuer die Ziele, 'tagebuch' fuer den heutigen Tag. Lies das Dossier, BEVOR du ueber die Sache redest oder planst — der Kopf-Block nennt nur Titel, nicht Inhalte.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Dossier-Titel, oder sasha/ziele/tagebuch.\"}}, \"required\": [\"name\"]}}, {\"name\": \"write_note\", \"description\": \"Haelt etwas fest — haengt an, loescht nie. Verwendungen: name='tagebuch' fuer das, was gerade passiert ist oder was Sasha erzaehlt hat (in SEINEN Worten, nicht destilliert); ein Dossier-Titel fuer den STAND einer laufenden Sache ('Kueche: Regale haengen, Apparatur fehlt'); ein NEUER Titel fuer alles Uebrige — das landet formlos in notizen/, ohne Vorlage, und ist der Ort fuer einzelne Fakten und kurze Listen (Wegzeiten, Gewohnheiten). Schwankst du: koennte es einen STATUS haben, also etwas sein, das er TUN koennte? Dann Katalog-Eintrag, sonst Notiz. Beides zur selben Sache ist falsch. Wird daraus ein VORHABEN, fuellst du die Vorlage aus (read_note 'vorlagen/dossier' bzw. 'vorlagen/katalog'); die Notiz wird dann zum Dossier und der Katalog-Eintrag entsteht von selbst. name='hausregeln' ist der Sonderfall: dort landen Sashas Verhaltens-Ansagen an dich, und die stehen bei jedem Turn ganz oben im Kopf. Du fragst dafuer nicht um Erlaubnis, du machst es einfach — so wie jemand mitschreibt, der danebensitzt. Und du antwortest danach ganz normal weiter: mitschreiben IST keine Antwort, und ein stummer Turn wirkt wie ein Absturz.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"'tagebuch', ein Dossier-Titel, oder ein neuer Titel fuer eine formlose Notiz.\"}, \"text\": {\"type\": \"string\", \"description\": \"Der Eintrag, in ganzen Saetzen.\"}, \"herkunft\": {\"type\": \"string\", \"description\": \"Nur beim Import aus einer anderen KI, z.B. 'claude': dann eine Tatsache je Zeile, Vorhandenes und Links werden uebersprungen, jede Zeile bekommt den Herkunftsvermerk.\"}}, \"required\": [\"name\", \"text\"]}}, {\"name\": \"search_memory\", \"description\": \"Volltextsuche ueber das ganze Gedaechtnis. Fuer alles, was laenger her ist als das Gespraech: 'wie war Spanien', 'was hatte ich zum Umzug gesagt'. Stumpfe Wortsuche — nimm den Begriff, den SASHA benutzt haette, nicht eine Umschreibung.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"query\": {\"type\": \"string\", \"description\": \"Suchbegriff.\"}}, \"required\": [\"query\"]}}, {\"name\": \"rewrite_note\", \"description\": \"Schreibt ein Dossier KOMPLETT neu — zum Aufraeumen, wenn aus vielen angehaengten Absaetzen ein sauberer Stand werden soll. Destruktiv, wird bestaetigt. Der bisherige Inhalt muss vorher mit read_note gelesen werden, sonst wirfst du weg, was du nicht kennst.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Dossier-Titel.\"}, \"content\": {\"type\": \"string\", \"description\": \"Der vollstaendige neue Inhalt.\"}}, \"required\": [\"name\", \"content\"]}}, {\"name\": \"fetch_document\", \"description\": \"Holt etwas aus dem Netz ODER von der Platte und LEGT ES AB — Modulhandbuch, Stundenplan, Datenblatt, Artikel. PDF wird automatisch zu Text, HTML entrumpelt, Binaeres als Datei mit Vermerk abgelegt. Danach lesbar mit read_note und durchsuchbar mit search_memory. Unterschied zu fetch_url: das liest etwas JETZT und vergisst es; hier wird abgelegt, um es spaeter wiederzufinden. Gib einen sprechenden 'name' — daraus wird der Ablageort.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"url\": {\"type\": \"string\", \"description\": \"http(s)-Adresse ODER ein Pfad auf der Platte (unter ~/codicus).\"}, \"name\": {\"type\": \"string\", \"description\": \"Kurzer Titel, z.B. 'modulhandbuch'.\"}}, \"required\": [\"url\", \"name\"]}}, {\"name\": \"create_series\", \"description\": \"Legt eine neue Messkurve an — nur wenn Sasha etwas wirklich verfolgen will (Spagat in cm, L-Sit in Sekunden). Wird bestaetigt, damit aus Tippfehlern keine Halde halbtoter Kurven wird. Typen: 'number' (Zahl mit Einheit), 'scale' (1-10), 'time' (nur dass es an dem Tag war), 'period' (von-bis). Danach traegst du Werte mit log_series ein und verlinkst die Reihe im Dossier der Sache.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Name der Reihe.\"}, \"typ\": {\"type\": \"string\", \"enum\": [\"number\", \"scale\", \"time\", \"period\"]}, \"einheit\": {\"type\": \"string\", \"description\": \"z.B. 'cm', 's', 'km'. Optional.\"}}, \"required\": [\"name\", \"typ\"]}}, {\"name\": \"log_series\", \"description\": \"Traegt einen Messwert in eine bestehende Kurve ein (Schlaf, Stimmung, Training …) — fuer alles, was ueber Monate eine Kurve ergeben soll. Nur vorhandene Reihen; neue legt Sasha selbst an. Ohne 'day' zaehlt heute.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"series\": {\"type\": \"string\", \"description\": \"Name der Reihe.\"}, \"value\": {\"type\": \"number\", \"description\": \"Der Wert.\"}, \"day\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD, sonst heute.\"}}, \"required\": [\"series\", \"value\"]}}, {\"name\": \"run_code\", \"description\": \"Fuehrt ein kleines Python- oder Shell-Programm abgeschottet aus; zurueck kommen Rueckgabewert, Ausgabe, Fehler und neue Dateien. Fuer genaues Rechnen, Daten umformen, Skripte ausprobieren. KEIN Internet, KEIN Zugriff auf Sashas Dateien (nur ein leerer Arbeitsordner, jeder Lauf neu), Python mit Standardbibliothek plus PIL, bs4, lxml, yaml (kein numpy/pandas), Zeitlimit 30 s (bis 120; laenger bis 1800 nur nach Rueckfrage), 512 MB, Ausgabe gekuerzt. Wird bestaetigt. Ergebnis mit print ausgeben.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"code\": {\"type\": \"string\", \"description\": \"Das Programm.\"}, \"sprache\": {\"type\": \"string\", \"enum\": [\"python\", \"shell\"], \"description\": \"Standard: python.\"}, \"zeitlimit\": {\"type\": \"integer\", \"description\": \"Sekunden, Standard 30. Ueber 120 (max 1800) fragt Sasha extra.\"}, \"skill\": {\"type\": \"string\", \"description\": \"Name eines aktiven Skills: sein Ordner liegt dann nur lesend unter /skills/<name> (fuer seine scripts/).\"}}, \"required\": [\"code\"]}}, {\"name\": \"load_skill\", \"description\": \"Holt die Anleitung eines Skills aus der Skill-Liste im Kopf (mit Liste seiner Dateien). Passt die Aufgabe zu seiner Beschreibung: zuerst laden, dann danach arbeiten. Mit 'datei' eine Datei daraus, z.B. references/x.md.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Name aus der Liste.\"}, \"datei\": {\"type\": \"string\", \"description\": \"Pfad im Skill-Ordner; ohne: die Anleitung.\"}, \"ab\": {\"type\": \"integer\", \"description\": \"Weiterlesen ab diesem Zeichen.\"}}, \"required\": [\"name\"]}}, {\"name\": \"propose_skill\", \"description\": \"Schlaegt einen NEUEN Skill vor: eine Anleitung fuer eine Art Aufgabe, die sich mit Sasha bewaehrt hat. Wird bestaetigt; lehnt er ab, entsteht nichts. 'beschreibung': wann er passt (der Ausloeser). Inhalt knapp, in Schritten.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Kurz, z.B. 'wochenplan'.\"}, \"beschreibung\": {\"type\": \"string\", \"description\": \"Wann benutzen, bis 1024 Zeichen.\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Die Anleitung.\"}}, \"required\": [\"name\", \"beschreibung\", \"inhalt\"]}}, {\"name\": \"edit_skill\", \"description\": \"Schreibt die Anleitung eines bestehenden Skills neu; der Kopf bleibt, die alte Fassung als .bak. Wird bestaetigt. Vorher mit load_skill lesen.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Name aus der Liste.\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Die vollstaendige neue Anleitung.\"}}, \"required\": [\"name\", \"inhalt\"]}}, {\"name\": \"search_chats\", \"description\": \"Sucht in allen frueheren Gespraechen mit Sasha (auch archivierten und dem alten Verlauf): was er oder du gesagt habt. Alle Woerter muessen vorkommen; nimm seine Begriffe. Treffer: Titel, id, Datum, Ausschnitt. Notizen: search_memory.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"query\": {\"type\": \"string\", \"description\": \"Suchwoerter.\"}, \"projekt\": {\"type\": \"string\", \"description\": \"Optional: nur Gespraeche dieses Projekts.\"}}, \"required\": [\"query\"]}}, {\"name\": \"read_chat\", \"description\": \"Liest ein frueheres Gespraech nach (id aus search_chats): die letzten Nachrichten, mit query die um die Fundstelle.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"description\": \"Gespraechs-id.\"}, \"query\": {\"type\": \"string\", \"description\": \"Optional: Suchwoerter.\"}, \"anzahl\": {\"type\": \"integer\", \"description\": \"Nachrichten, Standard 20, max 40.\"}}, \"required\": [\"id\"]}}, {\"name\": \"create_document\", \"description\": \"Legt ein Dokument in Sashas Ablage: Plan, Liste, Text, Code, Tabelle — was er behalten, lesen oder weiterverwenden will. Er sieht es sofort als Eintrag im Chat. Fuer Laengeres (ab ~15 Zeilen) oder zum Mitnehmen; Kurzes gehoert in die Antwort.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"titel\": {\"type\": \"string\", \"description\": \"Kurzer Titel.\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Der ganze Inhalt.\"}, \"art\": {\"type\": \"string\", \"enum\": [\"markdown\", \"text\", \"code\", \"csv\"], \"description\": \"Standard: markdown.\"}, \"sprache\": {\"type\": \"string\", \"description\": \"Nur bei code, z.B. 'python'.\"}}, \"required\": [\"titel\", \"inhalt\"]}}, {\"name\": \"read_document\", \"description\": \"Liest ein Dokument aus der Ablage (id steht im Verlauf).\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"description\": \"Dokument-id.\"}}, \"required\": [\"id\"]}}, {\"name\": \"update_document\", \"description\": \"Neue Fassung eines Dokuments der Ablage; die alte bleibt. Vorher mit read_document lesen, 'inhalt' ist der vollstaendige neue Text.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"description\": \"Dokument-id.\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Der ganze neue Inhalt.\"}}, \"required\": [\"id\", \"inhalt\"]}}, {\"name\": \"save_from_sandbox\", \"description\": \"Legt eine Datei aus einem run_code-Lauf in Sashas Ablage (Text oder Bild) — NUR wenn Sasha sie behalten will, nie von dir aus. Wird bestaetigt. 'lauf' und 'datei' stehen im Ergebnis von run_code.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"lauf\": {\"type\": \"string\", \"description\": \"Lauf-Kennung.\"}, \"datei\": {\"type\": \"string\", \"description\": \"Name in /arbeit.\"}, \"titel\": {\"type\": \"string\", \"description\": \"Titel in der Ablage.\"}}, \"required\": [\"lauf\", \"datei\"]}}, {\"name\": \"read_project_file\", \"description\": \"Liest eine Wissensdatei des Projekts, zu dem dieses Gespraech gehoert (Liste im Kopf unter 'Projekt').\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Dateiname aus der Liste.\"}, \"ab\": {\"type\": \"integer\", \"description\": \"Optional: ab diesem Zeichen weiterlesen.\"}}, \"required\": [\"name\"]}}, {\"name\": \"edit_calendar_entry\", \"description\": \"Ändert EINEN Einzeltermin, per 'kennung' aus read_calendar (oder Tag + Titel, nur bei genau einem Treffer). Nur die genannten Felder ändern sich; bei mehrtägigen auch 'bis'.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"kennung\": {\"type\": \"string\", \"description\": \"Kennung aus read_calendar, z.B. '#r3f9c'.\"}, \"day\": {\"type\": \"string\", \"description\": \"Ohne kennung: bisheriger Tag YYYY-MM-DD.\"}, \"label\": {\"type\": \"string\", \"description\": \"Ohne kennung: bisheriger Titel.\"}, \"neuer_tag\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD\"}, \"time\": {\"type\": \"string\", \"description\": \"Neuer Beginn HH:MM\"}, \"ende\": {\"type\": \"string\", \"description\": \"Neues Ende HH:MM\"}, \"ort\": {\"type\": \"string\", \"description\": \"Neuer Ort\"}, \"neuer_titel\": {\"type\": \"string\", \"description\": \"Neuer Titel\"}, \"bis\": {\"type\": \"string\", \"description\": \"Nur mehrtägig: neuer letzter Tag YYYY-MM-DD\"}}, \"required\": []}}, {\"name\": \"read_calendar_warnings\", \"description\": \"Die Kalender-Warnungen (Überschneidungen, zu knapp, Termin in einer Reise, Absagen) von heute bis +30 Tage, frisch berechnet — dieselben, die Sasha als ⚠ sieht. Nach einer Änderung hier nachsehen, statt zu sagen, sie seien weg.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"suche\": {\"type\": \"string\", \"description\": \"Optional: nur Warnungen, die das Wort nennen.\"}}, \"required\": []}}]"
+  "gross_openai": "[{\"type\": \"function\", \"function\": {\"name\": \"read_calendar\", \"description\": \"Liest Kalender-Einträge: TERMINE und Routinen, also Verabredetes. Zustände, Krankheiten oder Erlebtes stehen in seinen Notizen, nicht hier. Zeitraum bevorzugt über 'zeitraum', für krumme Spannen start_date+end_date; 'suche' filtert auf ein Stichwort. Jede Zeile beginnt mit einer Kennung (#t… Termin, #r… Routine), darunter die Serien mit allen Feldern. Vor jedem Ändern lesen und die Kennung nehmen. Warnungen: read_calendar_warnings. Bei KONFLIKT (Termin in einer Reise) oder ABSAGEN (Pflicht-Absage in einer Reise) einmal kurz rückversichern, dann deutlich warnen und per ask_choice nachhaken, ob schon abgesagt wurde.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"zeitraum\": {\"type\": \"string\", \"enum\": [\"heute\", \"morgen\", \"gestern\", \"diese_woche\", \"naechste_woche\", \"diese_und_naechste_woche\", \"letzte_woche\", \"dieser_monat\", \"naechster_monat\", \"letzter_monat\", \"naechste_7_tage\", \"naechste_30_tage\", \"naechste_90_tage\", \"letzte_7_tage\", \"letzte_30_tage\"], \"description\": \"Relativer Zeitraum - bevorzugt nutzen, dann muss kein Datum gerechnet werden. Einer von: heute, morgen, gestern, diese_woche, naechste_woche, diese_und_naechste_woche, letzte_woche, dieser_monat, naechster_monat, letzter_monat, naechste_7_tage, naechste_30_tage, naechste_90_tage, letzte_7_tage, letzte_30_tage.\"}, \"suche\": {\"type\": \"string\", \"description\": \"Optional: nur Termine deren Titel diesen Text enthält (z.B. 'Fahrschule', 'Geige'). Bei Fragen nach einer bestimmten Aktivität nutzen, damit du nicht die ganze Liste durchsuchen musst.\"}, \"start_date\": {\"type\": \"string\", \"description\": \"Nur falls kein 'zeitraum' passt: Start YYYY-MM-DD (inkl.)\"}, \"end_date\": {\"type\": \"string\", \"description\": \"Nur falls kein 'zeitraum' passt: Ende YYYY-MM-DD (inkl.)\"}, \"layers\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Optional: nur diese Layer (z.B. ['termine']). Default: alle.\"}}, \"required\": []}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_time\", \"description\": \"Wie spät es jetzt ist, plus der nächste Termin mit Abstand in Minuten. Du weißt die Uhrzeit nicht von selbst - rate sie nie.\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}, {\"type\": \"function\", \"function\": {\"name\": \"add_calendar_entry\", \"description\": \"Trägt einen Einmal-Termin oder eine Frist ein. Im Zweifel Layer 'termine'. Datum YYYY-MM-DD. Ende und Ort mitgeben, wenn bekannt — fehlt das Ende, wird keins angenommen; nenn dann auch keins.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"layer\": {\"type\": \"string\", \"description\": \"Layer-Name: 'termine' für Einmal-Termine/Fristen, sonst spezifisch\"}, \"day\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD\"}, \"label\": {\"type\": \"string\", \"description\": \"Kurzer Titel des Eintrags\"}, \"time\": {\"type\": \"string\", \"description\": \"Optional HH:MM (24h). Weglassen wenn ganztags.\"}, \"ende\": {\"type\": \"string\", \"description\": \"Ende HH:MM (24h), wenn bekannt.\"}, \"ort\": {\"type\": \"string\", \"description\": \"Ort, wenn bekannt.\"}}, \"required\": [\"layer\", \"day\", \"label\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"add_calendar_routine\", \"description\": \"Trägt eine Wiederholungs-Regel ein (iCal RRULE), Layer-Default 'routinen'. Beispiele: FREQ=WEEKLY;BYDAY=TU | FREQ=WEEKLY;BYDAY=MO,WE,FR | FREQ=MONTHLY;BYMONTHDAY=1 | FREQ=MONTHLY;BYDAY=2TU (2. Dienstag im Monat). Der Ort gehört in 'ort', nicht in den Titel. Fehlt das Ende, wird keins angenommen — frag nach, statt eins zu nennen.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"layer\": {\"type\": \"string\", \"description\": \"Layer-Name, im Zweifel 'routinen'\"}, \"label\": {\"type\": \"string\", \"description\": \"Kurzer Titel\"}, \"rrule\": {\"type\": \"string\", \"description\": \"iCal RRULE ohne DTSTART, z.B. 'FREQ=WEEKLY;BYDAY=TU'\"}, \"time\": {\"type\": \"string\", \"description\": \"Optional HH:MM (24h)\"}, \"ende\": {\"type\": \"string\", \"description\": \"Ende HH:MM (24h), wenn bekannt.\"}, \"ort\": {\"type\": \"string\", \"description\": \"Ort, wenn bekannt.\"}}, \"required\": [\"layer\", \"label\", \"rrule\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"edit_calendar_routine\", \"description\": \"Ändert oder löscht EINE bestehende Routine, per 'kennung' aus read_calendar (ein Titel geht nur, wenn er genau eine trifft). Nur die genannten Felder ändern sich — nie löschen und neu anlegen, nie add_calendar_routine dafür. Mit 'nur_am' nur dieses eine Datum (ändern, oder bei 'loeschen' absagen).\", \"parameters\": {\"type\": \"object\", \"properties\": {\"kennung\": {\"type\": \"string\", \"description\": \"Kennung aus read_calendar, z.B. '#r3f9c'.\"}, \"label\": {\"type\": \"string\", \"description\": \"Titel der bestehenden Routine (Teilstring genügt)\"}, \"aktion\": {\"type\": \"string\", \"enum\": [\"aendern\", \"loeschen\"], \"description\": \"'aendern' oder 'loeschen'\"}, \"time\": {\"type\": \"string\", \"description\": \"Neue Uhrzeit HH:MM (24h)\"}, \"ende\": {\"type\": \"string\", \"description\": \"Neues Ende HH:MM (24h)\"}, \"rrule\": {\"type\": \"string\", \"description\": \"Neue Wiederholung, z.B. 'FREQ=WEEKLY;BYDAY=MO'\"}, \"ort\": {\"type\": \"string\", \"description\": \"Neuer Ort\"}, \"neuer_titel\": {\"type\": \"string\", \"description\": \"Neuer Titel, falls die Aktivität anders heißt\"}, \"nur_am\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD: nur dieses eine Datum der Serie.\"}}, \"required\": [\"aktion\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"add_calendar_pause\", \"description\": \"Trägt eine Pause für eine Routine ein - in dem Zeitraum findet sie NICHT statt (Ferien, Lehrerin im Urlaub). Am besten per 'kennung'; ein 'label' muss GENAU dem Routinen-Titel entsprechen. Datum YYYY-MM-DD. Ende unbekannt (\\\"fällt jetzt aus\\\"): 'bis' weglassen — dann fällt nur der Tag 'von' aus, und du fragst nach dem Ende.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"kennung\": {\"type\": \"string\", \"description\": \"Kennung aus read_calendar, z.B. '#r3f9c'.\"}, \"label\": {\"type\": \"string\", \"description\": \"Titel der Routine, die ausfällt (wie im Kalender, z.B. 'Geigenstunde')\"}, \"von\": {\"type\": \"string\", \"description\": \"Start der Pause, YYYY-MM-DD (inkl.)\"}, \"bis\": {\"type\": \"string\", \"description\": \"Ende der Pause, YYYY-MM-DD (inkl.)\"}, \"grund\": {\"type\": \"string\", \"description\": \"Optional kurzer Grund, z.B. 'Sommerferien', 'Feiertag'\"}}, \"required\": [\"von\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"delete_calendar_entry\", \"description\": \"Löscht EINEN Einzeltermin, per 'kennung' (oder Tag + Titel, nur bei genau einem Treffer). Mehrtägige werden ganz gelöscht. Routinen: edit_calendar_routine.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"kennung\": {\"type\": \"string\", \"description\": \"Kennung aus read_calendar, z.B. '#r3f9c'.\"}, \"day\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD des zu löschenden Termins\"}, \"label\": {\"type\": \"string\", \"description\": \"Titel des Termins (wie im Kalender; Teiltreffer reicht)\"}, \"layer\": {\"type\": \"string\", \"description\": \"Optional Layer-Name; weglassen = in allen Layern suchen\"}}, \"required\": []}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_file\", \"description\": \"Liest eine Datei aus dem ZENTRALE-Projekt. Vorher list_files.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"path\": {\"type\": \"string\", \"description\": \"Relativer Pfad zur Datei, z.B. 'data/sleep_quality.json'\"}}, \"required\": [\"path\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"list_files\", \"description\": \"Listet die Dateien auf, die gelesen werden können.\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_news\", \"description\": \"Weltpolitik-Briefing aus vielen Quellen, nach Themen gebündelt und mit gegenübergestellten Perspektiven. 'tage' weglassen (oder 0) = heutige Sendung; tage=7 = Wochenrückblick ('was war, seit ich weg war'). Dein Trainingswissen taugt fürs Tagesgeschehen nicht - bei Fragen nach Nachrichten oder Weltlage dieses Tool rufen statt zu raten. Das Ergebnis darfst du kürzen und moderieren.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"tage\": {\"type\": \"integer\", \"description\": \"Rückblick-Fenster in Tagen. 0/weglassen = aktuelle Sendung, 7 = Wochenrückblick.\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_mail\", \"description\": \"Stand der Mail-Triage: Zähler je Kategorie plus die unbekannten Absender, die noch auf Zuordnung warten. modus='review' = nur dieser Stapel, ausführlicher. Nur lesen, sortiert und löscht nichts. Zähler und Absender kennst du nicht aus dir selbst - hier rufen, nicht raten.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"modus\": {\"type\": \"string\", \"description\": \"'' = Überblick (Default), 'review' = nur der Stapel unbekannter Absender.\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"web_search\", \"description\": \"Sucht im Internet und gibt Titel, URL und Snippet zurück. Für alles, was weder in Sashas Notizen noch in den Projekt-Dateien steht. Treffer sind Hinweise, nicht gelesen: Angaben daraus erst nach fetch_url als Tatsache nennen. Jede Suche muss Sasha bestätigen.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"query\": {\"type\": \"string\", \"description\": \"Die Suchanfrage in Worten, z.B. 'Wetter Berlin morgen'.\"}}, \"required\": [\"query\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"fetch_url\", \"description\": \"Lädt eine konkrete Webseite und gibt ihren Text zurück (gekürzt). Sagt, wenn kaum Inhalt kam (Navigation, Anmeldung). Muss Sasha bestätigen.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"url\": {\"type\": \"string\", \"description\": \"Die vollständige URL, z.B. https://de.wikipedia.org/wiki/...\"}}, \"required\": [\"url\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"ask_choice\", \"description\": \"Stellt Sasha eine Frage mit festen Antwort-Knöpfen, wenn du mitten in einer Aufgabe eine knappe Entscheidung brauchst - statt auf eine freie Texteingabe zu warten. Ohne 'optionen' ist es Ja/Nein. Du bekommst das gewählte Label zurück und machst im selben Zug weiter. Nur für echte Verzweigungen, nicht aus Höflichkeit.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"frage\": {\"type\": \"string\", \"description\": \"Die Frage an Sasha, vollständig ausformuliert.\"}, \"optionen\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Optional 2-4 kurze Knopf-Labels, z.B. ['Deutsch','Englisch']. Weglassen = Ja/Nein.\"}}, \"required\": [\"frage\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_note\", \"description\": \"Liest eine Gedaechtnis-Datei am Stueck. 'name' ist ein Dossier-Titel aus dem Kopf-Block (z.B. 'umzug', 'training'), oder 'sasha' fuer den Steckbrief, 'ziele' fuer die Ziele, 'tagebuch' fuer den heutigen Tag. Lies das Dossier, BEVOR du ueber die Sache redest oder planst — der Kopf-Block nennt nur Titel, nicht Inhalte.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Dossier-Titel, oder sasha/ziele/tagebuch.\"}}, \"required\": [\"name\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"write_note\", \"description\": \"Haelt etwas fest — haengt an, loescht nie. Verwendungen: name='tagebuch' fuer das, was gerade passiert ist oder was Sasha erzaehlt hat (in SEINEN Worten, nicht destilliert); ein Dossier-Titel fuer den STAND einer laufenden Sache ('Kueche: Regale haengen, Apparatur fehlt'); ein NEUER Titel fuer alles Uebrige — das landet formlos in notizen/, ohne Vorlage, und ist der Ort fuer einzelne Fakten und kurze Listen (Wegzeiten, Gewohnheiten). Schwankst du: koennte es einen STATUS haben, also etwas sein, das er TUN koennte? Dann Katalog-Eintrag, sonst Notiz. Beides zur selben Sache ist falsch. Wird daraus ein VORHABEN, fuellst du die Vorlage aus (read_note 'vorlagen/dossier' bzw. 'vorlagen/katalog'); die Notiz wird dann zum Dossier und der Katalog-Eintrag entsteht von selbst. name='hausregeln' ist der Sonderfall: dort landen Sashas Verhaltens-Ansagen an dich, und die stehen bei jedem Turn ganz oben im Kopf. Du fragst dafuer nicht um Erlaubnis, du machst es einfach — so wie jemand mitschreibt, der danebensitzt. Und du antwortest danach ganz normal weiter: mitschreiben IST keine Antwort, und ein stummer Turn wirkt wie ein Absturz.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"'tagebuch', ein Dossier-Titel, oder ein neuer Titel fuer eine formlose Notiz.\"}, \"text\": {\"type\": \"string\", \"description\": \"Der Eintrag, in ganzen Saetzen.\"}, \"herkunft\": {\"type\": \"string\", \"description\": \"Nur beim Import aus einer anderen KI, z.B. 'claude': dann eine Tatsache je Zeile, Vorhandenes und Links werden uebersprungen, jede Zeile bekommt den Herkunftsvermerk.\"}}, \"required\": [\"name\", \"text\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"search_memory\", \"description\": \"Volltextsuche ueber das ganze Gedaechtnis. Fuer alles, was laenger her ist als das Gespraech: 'wie war Spanien', 'was hatte ich zum Umzug gesagt'. Stumpfe Wortsuche — nimm den Begriff, den SASHA benutzt haette, nicht eine Umschreibung.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"query\": {\"type\": \"string\", \"description\": \"Suchbegriff.\"}}, \"required\": [\"query\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"rewrite_note\", \"description\": \"Schreibt ein Dossier KOMPLETT neu — zum Aufraeumen, wenn aus vielen angehaengten Absaetzen ein sauberer Stand werden soll. Destruktiv, wird bestaetigt. Der bisherige Inhalt muss vorher mit read_note gelesen werden, sonst wirfst du weg, was du nicht kennst.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Dossier-Titel.\"}, \"content\": {\"type\": \"string\", \"description\": \"Der vollstaendige neue Inhalt.\"}}, \"required\": [\"name\", \"content\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"fetch_document\", \"description\": \"Holt etwas aus dem Netz ODER von der Platte und LEGT ES AB — Modulhandbuch, Stundenplan, Datenblatt, Artikel. PDF wird automatisch zu Text, HTML entrumpelt, Binaeres als Datei mit Vermerk abgelegt. Danach lesbar mit read_note und durchsuchbar mit search_memory. Unterschied zu fetch_url: das liest etwas JETZT und vergisst es; hier wird abgelegt, um es spaeter wiederzufinden. Gib einen sprechenden 'name' — daraus wird der Ablageort.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"url\": {\"type\": \"string\", \"description\": \"http(s)-Adresse ODER ein Pfad auf der Platte (unter ~/codicus).\"}, \"name\": {\"type\": \"string\", \"description\": \"Kurzer Titel, z.B. 'modulhandbuch'.\"}}, \"required\": [\"url\", \"name\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"create_series\", \"description\": \"Legt eine neue Messkurve an — nur wenn Sasha etwas wirklich verfolgen will (Spagat in cm, L-Sit in Sekunden). Wird bestaetigt, damit aus Tippfehlern keine Halde halbtoter Kurven wird. Typen: 'number' (Zahl mit Einheit), 'scale' (1-10), 'time' (nur dass es an dem Tag war), 'period' (von-bis). Danach traegst du Werte mit log_series ein und verlinkst die Reihe im Dossier der Sache.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Name der Reihe.\"}, \"typ\": {\"type\": \"string\", \"enum\": [\"number\", \"scale\", \"time\", \"period\"]}, \"einheit\": {\"type\": \"string\", \"description\": \"z.B. 'cm', 's', 'km'. Optional.\"}}, \"required\": [\"name\", \"typ\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"log_series\", \"description\": \"Traegt einen Messwert in eine bestehende Kurve ein (Schlaf, Stimmung, Training …) — fuer alles, was ueber Monate eine Kurve ergeben soll. Nur vorhandene Reihen; neue legt Sasha selbst an. Ohne 'day' zaehlt heute.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"series\": {\"type\": \"string\", \"description\": \"Name der Reihe.\"}, \"value\": {\"type\": \"number\", \"description\": \"Der Wert.\"}, \"day\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD, sonst heute.\"}}, \"required\": [\"series\", \"value\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"run_code\", \"description\": \"Fuehrt ein kleines Python- oder Shell-Programm abgeschottet aus; zurueck kommen Rueckgabewert, Ausgabe, Fehler und neue Dateien. Fuer genaues Rechnen, Daten umformen, Skripte ausprobieren. KEIN Internet, KEIN Zugriff auf Sashas Dateien (nur ein leerer Arbeitsordner, jeder Lauf neu), Python mit Standardbibliothek plus PIL, bs4, lxml, yaml (kein numpy/pandas), Zeitlimit 30 s (bis 120; laenger bis 1800 nur nach Rueckfrage), 512 MB, Ausgabe gekuerzt. Wird bestaetigt. Ergebnis mit print ausgeben.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"code\": {\"type\": \"string\", \"description\": \"Das Programm.\"}, \"sprache\": {\"type\": \"string\", \"enum\": [\"python\", \"shell\"], \"description\": \"Standard: python.\"}, \"zeitlimit\": {\"type\": \"integer\", \"description\": \"Sekunden, Standard 30. Ueber 120 (max 1800) fragt Sasha extra.\"}, \"skill\": {\"type\": \"string\", \"description\": \"Name eines aktiven Skills: sein Ordner liegt dann nur lesend unter /skills/<name> (fuer seine scripts/).\"}}, \"required\": [\"code\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"load_skill\", \"description\": \"Holt die Anleitung eines Skills aus der Skill-Liste im Kopf (mit Liste seiner Dateien). Passt die Aufgabe zu seiner Beschreibung: zuerst laden, dann danach arbeiten. Mit 'datei' eine Datei daraus, z.B. references/x.md.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Name aus der Liste.\"}, \"datei\": {\"type\": \"string\", \"description\": \"Pfad im Skill-Ordner; ohne: die Anleitung.\"}, \"ab\": {\"type\": \"integer\", \"description\": \"Weiterlesen ab diesem Zeichen.\"}}, \"required\": [\"name\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"propose_skill\", \"description\": \"Schlaegt einen NEUEN Skill vor: eine Anleitung fuer eine Art Aufgabe, die sich mit Sasha bewaehrt hat. Wird bestaetigt; lehnt er ab, entsteht nichts. 'beschreibung': wann er passt (der Ausloeser). Inhalt knapp, in Schritten.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Kurz, z.B. 'wochenplan'.\"}, \"beschreibung\": {\"type\": \"string\", \"description\": \"Wann benutzen, bis 1024 Zeichen.\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Die Anleitung.\"}}, \"required\": [\"name\", \"beschreibung\", \"inhalt\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"edit_skill\", \"description\": \"Schreibt die Anleitung eines bestehenden Skills neu; der Kopf bleibt, die alte Fassung als .bak. Wird bestaetigt. Vorher mit load_skill lesen.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Name aus der Liste.\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Die vollstaendige neue Anleitung.\"}}, \"required\": [\"name\", \"inhalt\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"search_chats\", \"description\": \"Sucht in allen frueheren Gespraechen mit Sasha (auch archivierten und dem alten Verlauf): was er oder du gesagt habt. Alle Woerter muessen vorkommen; nimm seine Begriffe. Treffer: Titel, id, Datum, Ausschnitt. Notizen: search_memory.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"query\": {\"type\": \"string\", \"description\": \"Suchwoerter.\"}, \"projekt\": {\"type\": \"string\", \"description\": \"Optional: nur Gespraeche dieses Projekts.\"}}, \"required\": [\"query\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_chat\", \"description\": \"Liest ein frueheres Gespraech nach (id aus search_chats): die letzten Nachrichten, mit query die um die Fundstelle.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"description\": \"Gespraechs-id.\"}, \"query\": {\"type\": \"string\", \"description\": \"Optional: Suchwoerter.\"}, \"anzahl\": {\"type\": \"integer\", \"description\": \"Nachrichten, Standard 20, max 40.\"}}, \"required\": [\"id\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"create_document\", \"description\": \"Legt ein Dokument in Sashas Ablage: Plan, Liste, Text, Code, Tabelle — was er behalten, lesen oder weiterverwenden will. Er sieht es sofort als Eintrag im Chat. Fuer Laengeres (ab ~15 Zeilen) oder zum Mitnehmen; Kurzes gehoert in die Antwort.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"titel\": {\"type\": \"string\", \"description\": \"Kurzer Titel.\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Der ganze Inhalt.\"}, \"art\": {\"type\": \"string\", \"enum\": [\"markdown\", \"text\", \"code\", \"csv\"], \"description\": \"Standard: markdown.\"}, \"sprache\": {\"type\": \"string\", \"description\": \"Nur bei code, z.B. 'python'.\"}}, \"required\": [\"titel\", \"inhalt\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_document\", \"description\": \"Liest ein Dokument aus der Ablage (id steht im Verlauf).\", \"parameters\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"description\": \"Dokument-id.\"}}, \"required\": [\"id\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"update_document\", \"description\": \"Neue Fassung eines Dokuments der Ablage; die alte bleibt. Vorher mit read_document lesen, 'inhalt' ist der vollstaendige neue Text.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"description\": \"Dokument-id.\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Der ganze neue Inhalt.\"}}, \"required\": [\"id\", \"inhalt\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"save_from_sandbox\", \"description\": \"Legt eine Datei aus einem run_code-Lauf in Sashas Ablage (Text oder Bild) — NUR wenn Sasha sie behalten will, nie von dir aus. Wird bestaetigt. 'lauf' und 'datei' stehen im Ergebnis von run_code.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"lauf\": {\"type\": \"string\", \"description\": \"Lauf-Kennung.\"}, \"datei\": {\"type\": \"string\", \"description\": \"Name in /arbeit.\"}, \"titel\": {\"type\": \"string\", \"description\": \"Titel in der Ablage.\"}}, \"required\": [\"lauf\", \"datei\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_project_file\", \"description\": \"Liest eine Wissensdatei des Projekts, zu dem dieses Gespraech gehoert (Liste im Kopf unter 'Projekt').\", \"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Dateiname aus der Liste.\"}, \"ab\": {\"type\": \"integer\", \"description\": \"Optional: ab diesem Zeichen weiterlesen.\"}}, \"required\": [\"name\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"edit_calendar_entry\", \"description\": \"Ändert EINEN Einzeltermin, per 'kennung' aus read_calendar (oder Tag + Titel, nur bei genau einem Treffer). Nur die genannten Felder ändern sich; bei mehrtägigen auch 'bis'.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"kennung\": {\"type\": \"string\", \"description\": \"Kennung aus read_calendar, z.B. '#r3f9c'.\"}, \"day\": {\"type\": \"string\", \"description\": \"Ohne kennung: bisheriger Tag YYYY-MM-DD.\"}, \"label\": {\"type\": \"string\", \"description\": \"Ohne kennung: bisheriger Titel.\"}, \"neuer_tag\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD\"}, \"time\": {\"type\": \"string\", \"description\": \"Neuer Beginn HH:MM\"}, \"ende\": {\"type\": \"string\", \"description\": \"Neues Ende HH:MM\"}, \"ort\": {\"type\": \"string\", \"description\": \"Neuer Ort\"}, \"neuer_titel\": {\"type\": \"string\", \"description\": \"Neuer Titel\"}, \"bis\": {\"type\": \"string\", \"description\": \"Nur mehrtägig: neuer letzter Tag YYYY-MM-DD\"}}, \"required\": []}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_calendar_warnings\", \"description\": \"Die Kalender-Warnungen (Überschneidungen, zu knapp, Termin in einer Reise, Absagen) von heute bis +30 Tage, frisch berechnet — dieselben, die Sasha als ⚠ sieht. Nach einer Änderung hier nachsehen, statt zu sagen, sie seien weg.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"suche\": {\"type\": \"string\", \"description\": \"Optional: nur Warnungen, die das Wort nennen.\"}}, \"required\": []}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_pdf\", \"description\": \"Liest ein PDF: Text je Seite mit Seitenzahlen; was='tabellen' hält Spalten und erkennt Tabellen, was='formular' liest die Formularfelder. Wie und wo die Grenzen sind: Skill pdf.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"quelle\": {\"type\": \"string\", \"description\": \"Ablage-id (auch Anhang) oder Dateipfad unter ~/codicus.\"}, \"seiten\": {\"type\": \"string\", \"description\": \"z.B. '1-3,7'; leer = von vorn.\"}, \"was\": {\"type\": \"string\", \"enum\": [\"text\", \"tabellen\", \"formular\"], \"description\": \"Standard: text.\"}}, \"required\": [\"quelle\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"create_pdf\", \"description\": \"Erstellt ein neues PDF aus Markdown und legt es in Sashas Ablage. Wird bestätigt.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"titel\": {\"type\": \"string\", \"description\": \"Titel (auch Dateiname).\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Markdown: # Überschriften, Absätze, **fett**, Listen, | Tabellen |, ``` Code.\"}}, \"required\": [\"titel\", \"inhalt\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"combine_pdf\", \"description\": \"Neues PDF aus Teilen anderer PDFs, in dieser Reihenfolge: zusammenfügen oder Seiten herausnehmen. Originale bleiben. Wird bestätigt.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"titel\": {\"type\": \"string\", \"description\": \"Titel des neuen PDFs.\"}, \"teile\": {\"type\": \"array\", \"items\": {\"type\": \"object\", \"properties\": {\"quelle\": {\"type\": \"string\", \"description\": \"Ablage-id (auch Anhang) oder Dateipfad unter ~/codicus.\"}, \"seiten\": {\"type\": \"string\", \"description\": \"z.B. '2-4'; leer = alle.\"}}, \"required\": [\"quelle\"]}}}, \"required\": [\"titel\", \"teile\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"read_docx\", \"description\": \"Liest eine Word-Datei (.docx): Text mit # Überschriften, Listen und Tabellen. Skill word.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"quelle\": {\"type\": \"string\", \"description\": \"Ablage-id (auch Anhang) oder Dateipfad unter ~/codicus.\"}, \"ab\": {\"type\": \"integer\", \"description\": \"Optional: ab diesem Zeichen weiterlesen.\"}}, \"required\": [\"quelle\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"create_docx\", \"description\": \"Erstellt eine neue Word-Datei (.docx) aus Markdown in Sashas Ablage. Wird bestätigt.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"titel\": {\"type\": \"string\", \"description\": \"Titel (auch Dateiname).\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Markdown: # Überschriften, Absätze, **fett**, Listen, | Tabellen |, ``` Code.\"}}, \"required\": [\"titel\", \"inhalt\"]}}}, {\"type\": \"function\", \"function\": {\"name\": \"edit_docx\", \"description\": \"Legt eine geänderte KOPIE einer Word-Datei in die Ablage: Text wörtlich ersetzen und/oder Markdown hinten anhängen. Das Original bleibt. Wird bestätigt.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"quelle\": {\"type\": \"string\", \"description\": \"Ablage-id (auch Anhang) oder Dateipfad unter ~/codicus.\"}, \"ersetzen\": {\"type\": \"array\", \"items\": {\"type\": \"object\", \"properties\": {\"alt\": {\"type\": \"string\", \"description\": \"Genau so im Text.\"}, \"neu\": {\"type\": \"string\"}}, \"required\": [\"alt\", \"neu\"]}}, \"anhaengen\": {\"type\": \"string\", \"description\": \"Markdown: # Überschriften, Absätze, **fett**, Listen, | Tabellen |, ``` Code.\"}, \"titel\": {\"type\": \"string\", \"description\": \"Titel der Kopie; leer = alter + „(geändert)“.\"}}, \"required\": [\"quelle\"]}}}]",
+  "gross_anthropic": "[{\"name\": \"read_calendar\", \"description\": \"Liest Kalender-Einträge: TERMINE und Routinen, also Verabredetes. Zustände, Krankheiten oder Erlebtes stehen in seinen Notizen, nicht hier. Zeitraum bevorzugt über 'zeitraum', für krumme Spannen start_date+end_date; 'suche' filtert auf ein Stichwort. Jede Zeile beginnt mit einer Kennung (#t… Termin, #r… Routine), darunter die Serien mit allen Feldern. Vor jedem Ändern lesen und die Kennung nehmen. Warnungen: read_calendar_warnings. Bei KONFLIKT (Termin in einer Reise) oder ABSAGEN (Pflicht-Absage in einer Reise) einmal kurz rückversichern, dann deutlich warnen und per ask_choice nachhaken, ob schon abgesagt wurde.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"zeitraum\": {\"type\": \"string\", \"enum\": [\"heute\", \"morgen\", \"gestern\", \"diese_woche\", \"naechste_woche\", \"diese_und_naechste_woche\", \"letzte_woche\", \"dieser_monat\", \"naechster_monat\", \"letzter_monat\", \"naechste_7_tage\", \"naechste_30_tage\", \"naechste_90_tage\", \"letzte_7_tage\", \"letzte_30_tage\"], \"description\": \"Relativer Zeitraum - bevorzugt nutzen, dann muss kein Datum gerechnet werden. Einer von: heute, morgen, gestern, diese_woche, naechste_woche, diese_und_naechste_woche, letzte_woche, dieser_monat, naechster_monat, letzter_monat, naechste_7_tage, naechste_30_tage, naechste_90_tage, letzte_7_tage, letzte_30_tage.\"}, \"suche\": {\"type\": \"string\", \"description\": \"Optional: nur Termine deren Titel diesen Text enthält (z.B. 'Fahrschule', 'Geige'). Bei Fragen nach einer bestimmten Aktivität nutzen, damit du nicht die ganze Liste durchsuchen musst.\"}, \"start_date\": {\"type\": \"string\", \"description\": \"Nur falls kein 'zeitraum' passt: Start YYYY-MM-DD (inkl.)\"}, \"end_date\": {\"type\": \"string\", \"description\": \"Nur falls kein 'zeitraum' passt: Ende YYYY-MM-DD (inkl.)\"}, \"layers\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Optional: nur diese Layer (z.B. ['termine']). Default: alle.\"}}, \"required\": []}}, {\"name\": \"read_time\", \"description\": \"Wie spät es jetzt ist, plus der nächste Termin mit Abstand in Minuten. Du weißt die Uhrzeit nicht von selbst - rate sie nie.\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}, {\"name\": \"add_calendar_entry\", \"description\": \"Trägt einen Einmal-Termin oder eine Frist ein. Im Zweifel Layer 'termine'. Datum YYYY-MM-DD. Ende und Ort mitgeben, wenn bekannt — fehlt das Ende, wird keins angenommen; nenn dann auch keins.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"layer\": {\"type\": \"string\", \"description\": \"Layer-Name: 'termine' für Einmal-Termine/Fristen, sonst spezifisch\"}, \"day\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD\"}, \"label\": {\"type\": \"string\", \"description\": \"Kurzer Titel des Eintrags\"}, \"time\": {\"type\": \"string\", \"description\": \"Optional HH:MM (24h). Weglassen wenn ganztags.\"}, \"ende\": {\"type\": \"string\", \"description\": \"Ende HH:MM (24h), wenn bekannt.\"}, \"ort\": {\"type\": \"string\", \"description\": \"Ort, wenn bekannt.\"}}, \"required\": [\"layer\", \"day\", \"label\"]}}, {\"name\": \"add_calendar_routine\", \"description\": \"Trägt eine Wiederholungs-Regel ein (iCal RRULE), Layer-Default 'routinen'. Beispiele: FREQ=WEEKLY;BYDAY=TU | FREQ=WEEKLY;BYDAY=MO,WE,FR | FREQ=MONTHLY;BYMONTHDAY=1 | FREQ=MONTHLY;BYDAY=2TU (2. Dienstag im Monat). Der Ort gehört in 'ort', nicht in den Titel. Fehlt das Ende, wird keins angenommen — frag nach, statt eins zu nennen.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"layer\": {\"type\": \"string\", \"description\": \"Layer-Name, im Zweifel 'routinen'\"}, \"label\": {\"type\": \"string\", \"description\": \"Kurzer Titel\"}, \"rrule\": {\"type\": \"string\", \"description\": \"iCal RRULE ohne DTSTART, z.B. 'FREQ=WEEKLY;BYDAY=TU'\"}, \"time\": {\"type\": \"string\", \"description\": \"Optional HH:MM (24h)\"}, \"ende\": {\"type\": \"string\", \"description\": \"Ende HH:MM (24h), wenn bekannt.\"}, \"ort\": {\"type\": \"string\", \"description\": \"Ort, wenn bekannt.\"}}, \"required\": [\"layer\", \"label\", \"rrule\"]}}, {\"name\": \"edit_calendar_routine\", \"description\": \"Ändert oder löscht EINE bestehende Routine, per 'kennung' aus read_calendar (ein Titel geht nur, wenn er genau eine trifft). Nur die genannten Felder ändern sich — nie löschen und neu anlegen, nie add_calendar_routine dafür. Mit 'nur_am' nur dieses eine Datum (ändern, oder bei 'loeschen' absagen).\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"kennung\": {\"type\": \"string\", \"description\": \"Kennung aus read_calendar, z.B. '#r3f9c'.\"}, \"label\": {\"type\": \"string\", \"description\": \"Titel der bestehenden Routine (Teilstring genügt)\"}, \"aktion\": {\"type\": \"string\", \"enum\": [\"aendern\", \"loeschen\"], \"description\": \"'aendern' oder 'loeschen'\"}, \"time\": {\"type\": \"string\", \"description\": \"Neue Uhrzeit HH:MM (24h)\"}, \"ende\": {\"type\": \"string\", \"description\": \"Neues Ende HH:MM (24h)\"}, \"rrule\": {\"type\": \"string\", \"description\": \"Neue Wiederholung, z.B. 'FREQ=WEEKLY;BYDAY=MO'\"}, \"ort\": {\"type\": \"string\", \"description\": \"Neuer Ort\"}, \"neuer_titel\": {\"type\": \"string\", \"description\": \"Neuer Titel, falls die Aktivität anders heißt\"}, \"nur_am\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD: nur dieses eine Datum der Serie.\"}}, \"required\": [\"aktion\"]}}, {\"name\": \"add_calendar_pause\", \"description\": \"Trägt eine Pause für eine Routine ein - in dem Zeitraum findet sie NICHT statt (Ferien, Lehrerin im Urlaub). Am besten per 'kennung'; ein 'label' muss GENAU dem Routinen-Titel entsprechen. Datum YYYY-MM-DD. Ende unbekannt (\\\"fällt jetzt aus\\\"): 'bis' weglassen — dann fällt nur der Tag 'von' aus, und du fragst nach dem Ende.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"kennung\": {\"type\": \"string\", \"description\": \"Kennung aus read_calendar, z.B. '#r3f9c'.\"}, \"label\": {\"type\": \"string\", \"description\": \"Titel der Routine, die ausfällt (wie im Kalender, z.B. 'Geigenstunde')\"}, \"von\": {\"type\": \"string\", \"description\": \"Start der Pause, YYYY-MM-DD (inkl.)\"}, \"bis\": {\"type\": \"string\", \"description\": \"Ende der Pause, YYYY-MM-DD (inkl.)\"}, \"grund\": {\"type\": \"string\", \"description\": \"Optional kurzer Grund, z.B. 'Sommerferien', 'Feiertag'\"}}, \"required\": [\"von\"]}}, {\"name\": \"delete_calendar_entry\", \"description\": \"Löscht EINEN Einzeltermin, per 'kennung' (oder Tag + Titel, nur bei genau einem Treffer). Mehrtägige werden ganz gelöscht. Routinen: edit_calendar_routine.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"kennung\": {\"type\": \"string\", \"description\": \"Kennung aus read_calendar, z.B. '#r3f9c'.\"}, \"day\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD des zu löschenden Termins\"}, \"label\": {\"type\": \"string\", \"description\": \"Titel des Termins (wie im Kalender; Teiltreffer reicht)\"}, \"layer\": {\"type\": \"string\", \"description\": \"Optional Layer-Name; weglassen = in allen Layern suchen\"}}, \"required\": []}}, {\"name\": \"read_file\", \"description\": \"Liest eine Datei aus dem ZENTRALE-Projekt. Vorher list_files.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"path\": {\"type\": \"string\", \"description\": \"Relativer Pfad zur Datei, z.B. 'data/sleep_quality.json'\"}}, \"required\": [\"path\"]}}, {\"name\": \"list_files\", \"description\": \"Listet die Dateien auf, die gelesen werden können.\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}, {\"name\": \"read_news\", \"description\": \"Weltpolitik-Briefing aus vielen Quellen, nach Themen gebündelt und mit gegenübergestellten Perspektiven. 'tage' weglassen (oder 0) = heutige Sendung; tage=7 = Wochenrückblick ('was war, seit ich weg war'). Dein Trainingswissen taugt fürs Tagesgeschehen nicht - bei Fragen nach Nachrichten oder Weltlage dieses Tool rufen statt zu raten. Das Ergebnis darfst du kürzen und moderieren.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"tage\": {\"type\": \"integer\", \"description\": \"Rückblick-Fenster in Tagen. 0/weglassen = aktuelle Sendung, 7 = Wochenrückblick.\"}}}}, {\"name\": \"read_mail\", \"description\": \"Stand der Mail-Triage: Zähler je Kategorie plus die unbekannten Absender, die noch auf Zuordnung warten. modus='review' = nur dieser Stapel, ausführlicher. Nur lesen, sortiert und löscht nichts. Zähler und Absender kennst du nicht aus dir selbst - hier rufen, nicht raten.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"modus\": {\"type\": \"string\", \"description\": \"'' = Überblick (Default), 'review' = nur der Stapel unbekannter Absender.\"}}}}, {\"name\": \"web_search\", \"description\": \"Sucht im Internet und gibt Titel, URL und Snippet zurück. Für alles, was weder in Sashas Notizen noch in den Projekt-Dateien steht. Treffer sind Hinweise, nicht gelesen: Angaben daraus erst nach fetch_url als Tatsache nennen. Jede Suche muss Sasha bestätigen.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"query\": {\"type\": \"string\", \"description\": \"Die Suchanfrage in Worten, z.B. 'Wetter Berlin morgen'.\"}}, \"required\": [\"query\"]}}, {\"name\": \"fetch_url\", \"description\": \"Lädt eine konkrete Webseite und gibt ihren Text zurück (gekürzt). Sagt, wenn kaum Inhalt kam (Navigation, Anmeldung). Muss Sasha bestätigen.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"url\": {\"type\": \"string\", \"description\": \"Die vollständige URL, z.B. https://de.wikipedia.org/wiki/...\"}}, \"required\": [\"url\"]}}, {\"name\": \"ask_choice\", \"description\": \"Stellt Sasha eine Frage mit festen Antwort-Knöpfen, wenn du mitten in einer Aufgabe eine knappe Entscheidung brauchst - statt auf eine freie Texteingabe zu warten. Ohne 'optionen' ist es Ja/Nein. Du bekommst das gewählte Label zurück und machst im selben Zug weiter. Nur für echte Verzweigungen, nicht aus Höflichkeit.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"frage\": {\"type\": \"string\", \"description\": \"Die Frage an Sasha, vollständig ausformuliert.\"}, \"optionen\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Optional 2-4 kurze Knopf-Labels, z.B. ['Deutsch','Englisch']. Weglassen = Ja/Nein.\"}}, \"required\": [\"frage\"]}}, {\"name\": \"read_note\", \"description\": \"Liest eine Gedaechtnis-Datei am Stueck. 'name' ist ein Dossier-Titel aus dem Kopf-Block (z.B. 'umzug', 'training'), oder 'sasha' fuer den Steckbrief, 'ziele' fuer die Ziele, 'tagebuch' fuer den heutigen Tag. Lies das Dossier, BEVOR du ueber die Sache redest oder planst — der Kopf-Block nennt nur Titel, nicht Inhalte.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Dossier-Titel, oder sasha/ziele/tagebuch.\"}}, \"required\": [\"name\"]}}, {\"name\": \"write_note\", \"description\": \"Haelt etwas fest — haengt an, loescht nie. Verwendungen: name='tagebuch' fuer das, was gerade passiert ist oder was Sasha erzaehlt hat (in SEINEN Worten, nicht destilliert); ein Dossier-Titel fuer den STAND einer laufenden Sache ('Kueche: Regale haengen, Apparatur fehlt'); ein NEUER Titel fuer alles Uebrige — das landet formlos in notizen/, ohne Vorlage, und ist der Ort fuer einzelne Fakten und kurze Listen (Wegzeiten, Gewohnheiten). Schwankst du: koennte es einen STATUS haben, also etwas sein, das er TUN koennte? Dann Katalog-Eintrag, sonst Notiz. Beides zur selben Sache ist falsch. Wird daraus ein VORHABEN, fuellst du die Vorlage aus (read_note 'vorlagen/dossier' bzw. 'vorlagen/katalog'); die Notiz wird dann zum Dossier und der Katalog-Eintrag entsteht von selbst. name='hausregeln' ist der Sonderfall: dort landen Sashas Verhaltens-Ansagen an dich, und die stehen bei jedem Turn ganz oben im Kopf. Du fragst dafuer nicht um Erlaubnis, du machst es einfach — so wie jemand mitschreibt, der danebensitzt. Und du antwortest danach ganz normal weiter: mitschreiben IST keine Antwort, und ein stummer Turn wirkt wie ein Absturz.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"'tagebuch', ein Dossier-Titel, oder ein neuer Titel fuer eine formlose Notiz.\"}, \"text\": {\"type\": \"string\", \"description\": \"Der Eintrag, in ganzen Saetzen.\"}, \"herkunft\": {\"type\": \"string\", \"description\": \"Nur beim Import aus einer anderen KI, z.B. 'claude': dann eine Tatsache je Zeile, Vorhandenes und Links werden uebersprungen, jede Zeile bekommt den Herkunftsvermerk.\"}}, \"required\": [\"name\", \"text\"]}}, {\"name\": \"search_memory\", \"description\": \"Volltextsuche ueber das ganze Gedaechtnis. Fuer alles, was laenger her ist als das Gespraech: 'wie war Spanien', 'was hatte ich zum Umzug gesagt'. Stumpfe Wortsuche — nimm den Begriff, den SASHA benutzt haette, nicht eine Umschreibung.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"query\": {\"type\": \"string\", \"description\": \"Suchbegriff.\"}}, \"required\": [\"query\"]}}, {\"name\": \"rewrite_note\", \"description\": \"Schreibt ein Dossier KOMPLETT neu — zum Aufraeumen, wenn aus vielen angehaengten Absaetzen ein sauberer Stand werden soll. Destruktiv, wird bestaetigt. Der bisherige Inhalt muss vorher mit read_note gelesen werden, sonst wirfst du weg, was du nicht kennst.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Dossier-Titel.\"}, \"content\": {\"type\": \"string\", \"description\": \"Der vollstaendige neue Inhalt.\"}}, \"required\": [\"name\", \"content\"]}}, {\"name\": \"fetch_document\", \"description\": \"Holt etwas aus dem Netz ODER von der Platte und LEGT ES AB — Modulhandbuch, Stundenplan, Datenblatt, Artikel. PDF wird automatisch zu Text, HTML entrumpelt, Binaeres als Datei mit Vermerk abgelegt. Danach lesbar mit read_note und durchsuchbar mit search_memory. Unterschied zu fetch_url: das liest etwas JETZT und vergisst es; hier wird abgelegt, um es spaeter wiederzufinden. Gib einen sprechenden 'name' — daraus wird der Ablageort.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"url\": {\"type\": \"string\", \"description\": \"http(s)-Adresse ODER ein Pfad auf der Platte (unter ~/codicus).\"}, \"name\": {\"type\": \"string\", \"description\": \"Kurzer Titel, z.B. 'modulhandbuch'.\"}}, \"required\": [\"url\", \"name\"]}}, {\"name\": \"create_series\", \"description\": \"Legt eine neue Messkurve an — nur wenn Sasha etwas wirklich verfolgen will (Spagat in cm, L-Sit in Sekunden). Wird bestaetigt, damit aus Tippfehlern keine Halde halbtoter Kurven wird. Typen: 'number' (Zahl mit Einheit), 'scale' (1-10), 'time' (nur dass es an dem Tag war), 'period' (von-bis). Danach traegst du Werte mit log_series ein und verlinkst die Reihe im Dossier der Sache.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Name der Reihe.\"}, \"typ\": {\"type\": \"string\", \"enum\": [\"number\", \"scale\", \"time\", \"period\"]}, \"einheit\": {\"type\": \"string\", \"description\": \"z.B. 'cm', 's', 'km'. Optional.\"}}, \"required\": [\"name\", \"typ\"]}}, {\"name\": \"log_series\", \"description\": \"Traegt einen Messwert in eine bestehende Kurve ein (Schlaf, Stimmung, Training …) — fuer alles, was ueber Monate eine Kurve ergeben soll. Nur vorhandene Reihen; neue legt Sasha selbst an. Ohne 'day' zaehlt heute.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"series\": {\"type\": \"string\", \"description\": \"Name der Reihe.\"}, \"value\": {\"type\": \"number\", \"description\": \"Der Wert.\"}, \"day\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD, sonst heute.\"}}, \"required\": [\"series\", \"value\"]}}, {\"name\": \"run_code\", \"description\": \"Fuehrt ein kleines Python- oder Shell-Programm abgeschottet aus; zurueck kommen Rueckgabewert, Ausgabe, Fehler und neue Dateien. Fuer genaues Rechnen, Daten umformen, Skripte ausprobieren. KEIN Internet, KEIN Zugriff auf Sashas Dateien (nur ein leerer Arbeitsordner, jeder Lauf neu), Python mit Standardbibliothek plus PIL, bs4, lxml, yaml (kein numpy/pandas), Zeitlimit 30 s (bis 120; laenger bis 1800 nur nach Rueckfrage), 512 MB, Ausgabe gekuerzt. Wird bestaetigt. Ergebnis mit print ausgeben.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"code\": {\"type\": \"string\", \"description\": \"Das Programm.\"}, \"sprache\": {\"type\": \"string\", \"enum\": [\"python\", \"shell\"], \"description\": \"Standard: python.\"}, \"zeitlimit\": {\"type\": \"integer\", \"description\": \"Sekunden, Standard 30. Ueber 120 (max 1800) fragt Sasha extra.\"}, \"skill\": {\"type\": \"string\", \"description\": \"Name eines aktiven Skills: sein Ordner liegt dann nur lesend unter /skills/<name> (fuer seine scripts/).\"}}, \"required\": [\"code\"]}}, {\"name\": \"load_skill\", \"description\": \"Holt die Anleitung eines Skills aus der Skill-Liste im Kopf (mit Liste seiner Dateien). Passt die Aufgabe zu seiner Beschreibung: zuerst laden, dann danach arbeiten. Mit 'datei' eine Datei daraus, z.B. references/x.md.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Name aus der Liste.\"}, \"datei\": {\"type\": \"string\", \"description\": \"Pfad im Skill-Ordner; ohne: die Anleitung.\"}, \"ab\": {\"type\": \"integer\", \"description\": \"Weiterlesen ab diesem Zeichen.\"}}, \"required\": [\"name\"]}}, {\"name\": \"propose_skill\", \"description\": \"Schlaegt einen NEUEN Skill vor: eine Anleitung fuer eine Art Aufgabe, die sich mit Sasha bewaehrt hat. Wird bestaetigt; lehnt er ab, entsteht nichts. 'beschreibung': wann er passt (der Ausloeser). Inhalt knapp, in Schritten.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Kurz, z.B. 'wochenplan'.\"}, \"beschreibung\": {\"type\": \"string\", \"description\": \"Wann benutzen, bis 1024 Zeichen.\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Die Anleitung.\"}}, \"required\": [\"name\", \"beschreibung\", \"inhalt\"]}}, {\"name\": \"edit_skill\", \"description\": \"Schreibt die Anleitung eines bestehenden Skills neu; der Kopf bleibt, die alte Fassung als .bak. Wird bestaetigt. Vorher mit load_skill lesen.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Name aus der Liste.\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Die vollstaendige neue Anleitung.\"}}, \"required\": [\"name\", \"inhalt\"]}}, {\"name\": \"search_chats\", \"description\": \"Sucht in allen frueheren Gespraechen mit Sasha (auch archivierten und dem alten Verlauf): was er oder du gesagt habt. Alle Woerter muessen vorkommen; nimm seine Begriffe. Treffer: Titel, id, Datum, Ausschnitt. Notizen: search_memory.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"query\": {\"type\": \"string\", \"description\": \"Suchwoerter.\"}, \"projekt\": {\"type\": \"string\", \"description\": \"Optional: nur Gespraeche dieses Projekts.\"}}, \"required\": [\"query\"]}}, {\"name\": \"read_chat\", \"description\": \"Liest ein frueheres Gespraech nach (id aus search_chats): die letzten Nachrichten, mit query die um die Fundstelle.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"description\": \"Gespraechs-id.\"}, \"query\": {\"type\": \"string\", \"description\": \"Optional: Suchwoerter.\"}, \"anzahl\": {\"type\": \"integer\", \"description\": \"Nachrichten, Standard 20, max 40.\"}}, \"required\": [\"id\"]}}, {\"name\": \"create_document\", \"description\": \"Legt ein Dokument in Sashas Ablage: Plan, Liste, Text, Code, Tabelle — was er behalten, lesen oder weiterverwenden will. Er sieht es sofort als Eintrag im Chat. Fuer Laengeres (ab ~15 Zeilen) oder zum Mitnehmen; Kurzes gehoert in die Antwort.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"titel\": {\"type\": \"string\", \"description\": \"Kurzer Titel.\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Der ganze Inhalt.\"}, \"art\": {\"type\": \"string\", \"enum\": [\"markdown\", \"text\", \"code\", \"csv\"], \"description\": \"Standard: markdown.\"}, \"sprache\": {\"type\": \"string\", \"description\": \"Nur bei code, z.B. 'python'.\"}}, \"required\": [\"titel\", \"inhalt\"]}}, {\"name\": \"read_document\", \"description\": \"Liest ein Dokument aus der Ablage (id steht im Verlauf).\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"description\": \"Dokument-id.\"}}, \"required\": [\"id\"]}}, {\"name\": \"update_document\", \"description\": \"Neue Fassung eines Dokuments der Ablage; die alte bleibt. Vorher mit read_document lesen, 'inhalt' ist der vollstaendige neue Text.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"description\": \"Dokument-id.\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Der ganze neue Inhalt.\"}}, \"required\": [\"id\", \"inhalt\"]}}, {\"name\": \"save_from_sandbox\", \"description\": \"Legt eine Datei aus einem run_code-Lauf in Sashas Ablage (Text oder Bild) — NUR wenn Sasha sie behalten will, nie von dir aus. Wird bestaetigt. 'lauf' und 'datei' stehen im Ergebnis von run_code.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"lauf\": {\"type\": \"string\", \"description\": \"Lauf-Kennung.\"}, \"datei\": {\"type\": \"string\", \"description\": \"Name in /arbeit.\"}, \"titel\": {\"type\": \"string\", \"description\": \"Titel in der Ablage.\"}}, \"required\": [\"lauf\", \"datei\"]}}, {\"name\": \"read_project_file\", \"description\": \"Liest eine Wissensdatei des Projekts, zu dem dieses Gespraech gehoert (Liste im Kopf unter 'Projekt').\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"description\": \"Dateiname aus der Liste.\"}, \"ab\": {\"type\": \"integer\", \"description\": \"Optional: ab diesem Zeichen weiterlesen.\"}}, \"required\": [\"name\"]}}, {\"name\": \"edit_calendar_entry\", \"description\": \"Ändert EINEN Einzeltermin, per 'kennung' aus read_calendar (oder Tag + Titel, nur bei genau einem Treffer). Nur die genannten Felder ändern sich; bei mehrtägigen auch 'bis'.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"kennung\": {\"type\": \"string\", \"description\": \"Kennung aus read_calendar, z.B. '#r3f9c'.\"}, \"day\": {\"type\": \"string\", \"description\": \"Ohne kennung: bisheriger Tag YYYY-MM-DD.\"}, \"label\": {\"type\": \"string\", \"description\": \"Ohne kennung: bisheriger Titel.\"}, \"neuer_tag\": {\"type\": \"string\", \"description\": \"YYYY-MM-DD\"}, \"time\": {\"type\": \"string\", \"description\": \"Neuer Beginn HH:MM\"}, \"ende\": {\"type\": \"string\", \"description\": \"Neues Ende HH:MM\"}, \"ort\": {\"type\": \"string\", \"description\": \"Neuer Ort\"}, \"neuer_titel\": {\"type\": \"string\", \"description\": \"Neuer Titel\"}, \"bis\": {\"type\": \"string\", \"description\": \"Nur mehrtägig: neuer letzter Tag YYYY-MM-DD\"}}, \"required\": []}}, {\"name\": \"read_calendar_warnings\", \"description\": \"Die Kalender-Warnungen (Überschneidungen, zu knapp, Termin in einer Reise, Absagen) von heute bis +30 Tage, frisch berechnet — dieselben, die Sasha als ⚠ sieht. Nach einer Änderung hier nachsehen, statt zu sagen, sie seien weg.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"suche\": {\"type\": \"string\", \"description\": \"Optional: nur Warnungen, die das Wort nennen.\"}}, \"required\": []}}, {\"name\": \"read_pdf\", \"description\": \"Liest ein PDF: Text je Seite mit Seitenzahlen; was='tabellen' hält Spalten und erkennt Tabellen, was='formular' liest die Formularfelder. Wie und wo die Grenzen sind: Skill pdf.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"quelle\": {\"type\": \"string\", \"description\": \"Ablage-id (auch Anhang) oder Dateipfad unter ~/codicus.\"}, \"seiten\": {\"type\": \"string\", \"description\": \"z.B. '1-3,7'; leer = von vorn.\"}, \"was\": {\"type\": \"string\", \"enum\": [\"text\", \"tabellen\", \"formular\"], \"description\": \"Standard: text.\"}}, \"required\": [\"quelle\"]}}, {\"name\": \"create_pdf\", \"description\": \"Erstellt ein neues PDF aus Markdown und legt es in Sashas Ablage. Wird bestätigt.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"titel\": {\"type\": \"string\", \"description\": \"Titel (auch Dateiname).\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Markdown: # Überschriften, Absätze, **fett**, Listen, | Tabellen |, ``` Code.\"}}, \"required\": [\"titel\", \"inhalt\"]}}, {\"name\": \"combine_pdf\", \"description\": \"Neues PDF aus Teilen anderer PDFs, in dieser Reihenfolge: zusammenfügen oder Seiten herausnehmen. Originale bleiben. Wird bestätigt.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"titel\": {\"type\": \"string\", \"description\": \"Titel des neuen PDFs.\"}, \"teile\": {\"type\": \"array\", \"items\": {\"type\": \"object\", \"properties\": {\"quelle\": {\"type\": \"string\", \"description\": \"Ablage-id (auch Anhang) oder Dateipfad unter ~/codicus.\"}, \"seiten\": {\"type\": \"string\", \"description\": \"z.B. '2-4'; leer = alle.\"}}, \"required\": [\"quelle\"]}}}, \"required\": [\"titel\", \"teile\"]}}, {\"name\": \"read_docx\", \"description\": \"Liest eine Word-Datei (.docx): Text mit # Überschriften, Listen und Tabellen. Skill word.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"quelle\": {\"type\": \"string\", \"description\": \"Ablage-id (auch Anhang) oder Dateipfad unter ~/codicus.\"}, \"ab\": {\"type\": \"integer\", \"description\": \"Optional: ab diesem Zeichen weiterlesen.\"}}, \"required\": [\"quelle\"]}}, {\"name\": \"create_docx\", \"description\": \"Erstellt eine neue Word-Datei (.docx) aus Markdown in Sashas Ablage. Wird bestätigt.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"titel\": {\"type\": \"string\", \"description\": \"Titel (auch Dateiname).\"}, \"inhalt\": {\"type\": \"string\", \"description\": \"Markdown: # Überschriften, Absätze, **fett**, Listen, | Tabellen |, ``` Code.\"}}, \"required\": [\"titel\", \"inhalt\"]}}, {\"name\": \"edit_docx\", \"description\": \"Legt eine geänderte KOPIE einer Word-Datei in die Ablage: Text wörtlich ersetzen und/oder Markdown hinten anhängen. Das Original bleibt. Wird bestätigt.\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"quelle\": {\"type\": \"string\", \"description\": \"Ablage-id (auch Anhang) oder Dateipfad unter ~/codicus.\"}, \"ersetzen\": {\"type\": \"array\", \"items\": {\"type\": \"object\", \"properties\": {\"alt\": {\"type\": \"string\", \"description\": \"Genau so im Text.\"}, \"neu\": {\"type\": \"string\"}}, \"required\": [\"alt\", \"neu\"]}}, \"anhaengen\": {\"type\": \"string\", \"description\": \"Markdown: # Überschriften, Absätze, **fett**, Listen, | Tabellen |, ``` Code.\"}, \"titel\": {\"type\": \"string\", \"description\": \"Titel der Kopie; leer = alter + „(geändert)“.\"}}, \"required\": [\"quelle\"]}}]"
  },
  "gate": {
   "read_calendar": [
@@ -7124,6 +7124,1074 @@
     },
     false,
     "Soll ich die Aktion \"read_calendar_warnings\" wirklich ausführen?"
+   ]
+  ],
+  "read_pdf": [
+   [
+    null,
+    false,
+    null
+   ],
+   [
+    {},
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "label": "Zahnarzt",
+     "day": "2026-10-08",
+     "time": "10:00"
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "day": "2026-10-08"
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "label": "  ",
+     "day": " ",
+     "time": ""
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "rrule": "FREQ=WEEKLY;BYDAY=TU"
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "von": "2026-10-01",
+     "bis": "2026-10-10"
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "loeschen"
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "aendern",
+     "time": "18:00",
+     "ende": "19:00",
+     "ort": "Schule",
+     "rrule": "FREQ=WEEKLY",
+     "neuer_titel": "Geige neu"
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "aendern"
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "name": "hausregeln",
+     "text": "Nicht duzen."
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "name": "regeln",
+     "text": "x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x "
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "name": "sasha",
+     "text": "mag Tee"
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "name": "ziele",
+     "text": "Marathon"
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "name": "umzug",
+     "text": "Kisten packen"
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "name": "tagebuch",
+     "text": "heute"
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "name": "umzug",
+     "content": "# neu"
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "url": "https://example.org/a.pdf",
+     "name": "Mietvertrag"
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "url": "  https://example.org  "
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "query": "Wetter Berlin"
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "query": "   "
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ],
+   [
+    {
+     "name": "Schlaf",
+     "typ": "number",
+     "einheit": "h"
+    },
+    false,
+    "Soll ich die Aktion \"read_pdf\" wirklich ausführen?"
+   ]
+  ],
+  "create_pdf": [
+   [
+    null,
+    true,
+    null
+   ],
+   [
+    {},
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "label": "Zahnarzt",
+     "day": "2026-10-08",
+     "time": "10:00"
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "day": "2026-10-08"
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "label": "  ",
+     "day": " ",
+     "time": ""
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "rrule": "FREQ=WEEKLY;BYDAY=TU"
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "von": "2026-10-01",
+     "bis": "2026-10-10"
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "loeschen"
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "aendern",
+     "time": "18:00",
+     "ende": "19:00",
+     "ort": "Schule",
+     "rrule": "FREQ=WEEKLY",
+     "neuer_titel": "Geige neu"
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "aendern"
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "name": "hausregeln",
+     "text": "Nicht duzen."
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "name": "regeln",
+     "text": "x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x "
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "name": "sasha",
+     "text": "mag Tee"
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "name": "ziele",
+     "text": "Marathon"
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "name": "umzug",
+     "text": "Kisten packen"
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "name": "tagebuch",
+     "text": "heute"
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "name": "umzug",
+     "content": "# neu"
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "url": "https://example.org/a.pdf",
+     "name": "Mietvertrag"
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "url": "  https://example.org  "
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "query": "Wetter Berlin"
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "query": "   "
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "name": "Schlaf",
+     "typ": "number",
+     "einheit": "h"
+    },
+    true,
+    "Soll ich das PDF „ohne Titel“ erstellen und in deine Ablage legen?"
+   ]
+  ],
+  "combine_pdf": [
+   [
+    null,
+    true,
+    null
+   ],
+   [
+    {},
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "label": "Zahnarzt",
+     "day": "2026-10-08",
+     "time": "10:00"
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "label": "Geige",
+     "day": "2026-10-08"
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "label": "  ",
+     "day": " ",
+     "time": ""
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "label": "Geige",
+     "rrule": "FREQ=WEEKLY;BYDAY=TU"
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "label": "Geige",
+     "von": "2026-10-01",
+     "bis": "2026-10-10"
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "loeschen"
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "aendern",
+     "time": "18:00",
+     "ende": "19:00",
+     "ort": "Schule",
+     "rrule": "FREQ=WEEKLY",
+     "neuer_titel": "Geige neu"
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "aendern"
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "name": "hausregeln",
+     "text": "Nicht duzen."
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "name": "regeln",
+     "text": "x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x "
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "name": "sasha",
+     "text": "mag Tee"
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "name": "ziele",
+     "text": "Marathon"
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "name": "umzug",
+     "text": "Kisten packen"
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "name": "tagebuch",
+     "text": "heute"
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "name": "umzug",
+     "content": "# neu"
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "url": "https://example.org/a.pdf",
+     "name": "Mietvertrag"
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "url": "  https://example.org  "
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "query": "Wetter Berlin"
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "query": "   "
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ],
+   [
+    {
+     "name": "Schlaf",
+     "typ": "number",
+     "einheit": "h"
+    },
+    true,
+    "Soll ich aus mehreren PDFs ein neues PDF „ohne Titel“ machen und in deine Ablage legen? Die Originale bleiben, wie sie sind."
+   ]
+  ],
+  "read_docx": [
+   [
+    null,
+    false,
+    null
+   ],
+   [
+    {},
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "label": "Zahnarzt",
+     "day": "2026-10-08",
+     "time": "10:00"
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "day": "2026-10-08"
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "label": "  ",
+     "day": " ",
+     "time": ""
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "rrule": "FREQ=WEEKLY;BYDAY=TU"
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "von": "2026-10-01",
+     "bis": "2026-10-10"
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "loeschen"
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "aendern",
+     "time": "18:00",
+     "ende": "19:00",
+     "ort": "Schule",
+     "rrule": "FREQ=WEEKLY",
+     "neuer_titel": "Geige neu"
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "aendern"
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "name": "hausregeln",
+     "text": "Nicht duzen."
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "name": "regeln",
+     "text": "x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x "
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "name": "sasha",
+     "text": "mag Tee"
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "name": "ziele",
+     "text": "Marathon"
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "name": "umzug",
+     "text": "Kisten packen"
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "name": "tagebuch",
+     "text": "heute"
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "name": "umzug",
+     "content": "# neu"
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "url": "https://example.org/a.pdf",
+     "name": "Mietvertrag"
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "url": "  https://example.org  "
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "query": "Wetter Berlin"
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "query": "   "
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ],
+   [
+    {
+     "name": "Schlaf",
+     "typ": "number",
+     "einheit": "h"
+    },
+    false,
+    "Soll ich die Aktion \"read_docx\" wirklich ausführen?"
+   ]
+  ],
+  "create_docx": [
+   [
+    null,
+    true,
+    null
+   ],
+   [
+    {},
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "label": "Zahnarzt",
+     "day": "2026-10-08",
+     "time": "10:00"
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "day": "2026-10-08"
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "label": "  ",
+     "day": " ",
+     "time": ""
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "rrule": "FREQ=WEEKLY;BYDAY=TU"
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "von": "2026-10-01",
+     "bis": "2026-10-10"
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "loeschen"
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "aendern",
+     "time": "18:00",
+     "ende": "19:00",
+     "ort": "Schule",
+     "rrule": "FREQ=WEEKLY",
+     "neuer_titel": "Geige neu"
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "aendern"
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "name": "hausregeln",
+     "text": "Nicht duzen."
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "name": "regeln",
+     "text": "x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x "
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "name": "sasha",
+     "text": "mag Tee"
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "name": "ziele",
+     "text": "Marathon"
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "name": "umzug",
+     "text": "Kisten packen"
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "name": "tagebuch",
+     "text": "heute"
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "name": "umzug",
+     "content": "# neu"
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "url": "https://example.org/a.pdf",
+     "name": "Mietvertrag"
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "url": "  https://example.org  "
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "query": "Wetter Berlin"
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "query": "   "
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ],
+   [
+    {
+     "name": "Schlaf",
+     "typ": "number",
+     "einheit": "h"
+    },
+    true,
+    "Soll ich die Word-Datei „ohne Titel“ erstellen und in deine Ablage legen?"
+   ]
+  ],
+  "edit_docx": [
+   [
+    null,
+    true,
+    null
+   ],
+   [
+    {},
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "label": "Zahnarzt",
+     "day": "2026-10-08",
+     "time": "10:00"
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "label": "Geige",
+     "day": "2026-10-08"
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "label": "  ",
+     "day": " ",
+     "time": ""
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "label": "Geige",
+     "rrule": "FREQ=WEEKLY;BYDAY=TU"
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "label": "Geige",
+     "von": "2026-10-01",
+     "bis": "2026-10-10"
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "loeschen"
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "aendern",
+     "time": "18:00",
+     "ende": "19:00",
+     "ort": "Schule",
+     "rrule": "FREQ=WEEKLY",
+     "neuer_titel": "Geige neu"
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "label": "Geige",
+     "aktion": "aendern"
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "name": "hausregeln",
+     "text": "Nicht duzen."
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "name": "regeln",
+     "text": "x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x "
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "name": "sasha",
+     "text": "mag Tee"
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "name": "ziele",
+     "text": "Marathon"
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "name": "umzug",
+     "text": "Kisten packen"
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "name": "tagebuch",
+     "text": "heute"
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "name": "umzug",
+     "content": "# neu"
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "url": "https://example.org/a.pdf",
+     "name": "Mietvertrag"
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "url": "  https://example.org  "
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "query": "Wetter Berlin"
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "query": "   "
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
+   ],
+   [
+    {
+     "name": "Schlaf",
+     "typ": "number",
+     "einheit": "h"
+    },
+    true,
+    "Soll ich eine geänderte Kopie von „?“ anlegen (nichts angegeben)? Das Original bleibt."
    ]
   ],
   "gibt_es_nicht": [
