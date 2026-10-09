@@ -172,8 +172,6 @@ def erledigt_zeile(liste: list) -> str:
         st = e.get("status")
         if st == "ok":
             teile.append(f"✓ {geklappt}{wen}")
-        elif st == "teilweise":
-            teile.append(f"◐ {geklappt}, nur teilweise{wen}")
         elif st == "abgelehnt":
             teile.append(f"– {versucht}: von dir abgelehnt{wen}")
         else:
@@ -190,20 +188,19 @@ def _passt(bereiche: set, schritt: Schritt) -> bool:
 def tat_belegt(tat, protokoll: list, frueher: list = ()) -> bool:
     """Ist eine Erledigt-Behauptung durch das Protokoll gedeckt?
 
-    Ein schreibendes Werkzeug des passenden Bereichs mit Status ok (oder
-    teilweise — dann ist ETWAS geschehen; was, sagt die Erledigt-Zeile).
+    Ein schreibendes Werkzeug des passenden Bereichs mit Status ok.
     Bezieht sich der Satz auf früher („hab ich vorhin eingetragen"), reicht
     auch ein Lesen dieses Bereichs jetzt oder ein Schreiben früher im
     Gespräch."""
     for s in protokoll:
-        if s.schreibt and s.status in ("ok", "teilweise") and _passt(tat.bereiche, s):
+        if s.schreibt and s.status == "ok" and _passt(tat.bereiche, s):
             return True
     if tat.frueher:
         for s in protokoll:
             if s.status == "ok" and s.bereich and s.bereich in (tat.bereiche or {s.bereich}):
                 return True
         for s in frueher:
-            if s.schreibt and s.status in ("ok", "teilweise") and _passt(tat.bereiche, s):
+            if s.schreibt and s.status == "ok" and _passt(tat.bereiche, s):
                 return True
     return False
 
@@ -339,7 +336,7 @@ def _zusage_belegt(bereiche: set, protokoll: list, schreibend: bool = True) -> b
     ein lesendes."""
     bereiche = set(bereiche or ())
     for s in protokoll:
-        if s.status not in ("ok", "teilweise"):
+        if s.status != "ok":
             continue
         if schreibend and not s.schreibt:
             continue

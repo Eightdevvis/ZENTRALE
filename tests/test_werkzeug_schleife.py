@@ -272,10 +272,13 @@ def test_kalender_beweis_meldet_keinen_erfolg_wenn_nachlesen_scheitert(monkeypat
     import ki_werkzeuge
     import werkzeug_befund
 
-    monkeypatch.setattr(ki_kalender, "roh", lambda: {"layers": {}})
+    # Seit 2026-10-09: findet das Nachlesen den neuen Eintrag nicht, heißt das
+    # ABGEBROCHEN mit W-NICHT-GESPEICHERT.
+    import kalender_kennung
+    monkeypatch.setattr(kalender_kennung, "alle_eintraege", lambda: [])
     satz = ki_werkzeuge._verteilen("add_calendar_entry", {
         "layer": "termine", "day": "2026-10-07", "label": "Zahnarzt"})
-    assert "OK, eingetragen" not in satz
-    assert "NICHT" in satz
+    assert "OK, eingetragen" not in satz and "EINGETRAGEN" not in satz
+    assert satz.code == "W-NICHT-GESPEICHERT" and "ABGEBROCHEN" in satz
     assert werkzeug_befund.status_von(satz) == werkzeug_befund.FEHLGESCHLAGEN
 

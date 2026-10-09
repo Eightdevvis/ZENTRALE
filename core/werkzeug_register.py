@@ -1216,6 +1216,19 @@ WERKZEUGE = [
 # Reihenfolge = Prompt-Reihenfolge, nichts davor verschiebt sich.
 WERKZEUGE += werkzeug_pdf_word.EINTRAEGE
 
+# Fehlercodes nachschlagen (2026-10-09, core/fehlercodes.py): jeder Abbruch
+# trägt einen Code; hier stehen Ursache und was zu tun ist. Hinten an, damit
+# sich davor nichts verschiebt; nur gross, frei (liest nur eine Tabelle).
+WERKZEUGE.append(Werkzeug(
+    name="explain_error",
+    gross=("Erklärt einen Fehlercode aus einem Werkzeug-Ergebnis („Fehler K-…: …“): "
+           "Ursache und was zu tun ist."),
+    parameter={"type": "object",
+               "properties": {"code": {"type": "string",
+                                       "description": "Der Code, z. B. K-ENDE-VOR-BEGINN."}},
+               "required": ["code"]},
+))
+
 
 # ── Nachschlagen ───────────────────────────────────────────────────────
 

@@ -189,7 +189,7 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
       ("result", text, is_error) Ergebnis, das als Tool-Ergebnis zurück soll
 
     Seit 2026-10-08 beginnt jedes Ergebnis an das Modell mit der Kopfzeile
-    „[ergebnis: ok|teilweise|fehlgeschlagen|keine_antwort|abgelehnt]"
+    „[ergebnis: ok|fehlgeschlagen|keine_antwort|abgelehnt]"
     (core/werkzeug_befund.py) — außer im Tutor (fremdes Tool-Set).
     """
     import profil
@@ -247,7 +247,9 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
         yield {"werkzeug": {"phase": "fehler", "name": name, "text": str(e)}}
         text = f"Tool '{name}' ist fehlgeschlagen: {e}"
         if not tutor_mode:
-            text = werkzeug_befund.mit_kopf(Befund(text, werkzeug_befund.FEHLGESCHLAGEN))
+            text = werkzeug_befund.mit_kopf(werkzeug_befund.abgebrochen(
+                f"Werkzeug {name}", "W-AUSNAHME", str(e),
+                "ob es etwas geändert hat, ist nicht belegt — nachlesen"))
         return ("result", text, True)
     finally:
         werkzeug_befund.schiene_zuruecksetzen(marke)

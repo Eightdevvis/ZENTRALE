@@ -162,12 +162,18 @@ def test_der_schnitt_haelt():
     # 08.10.2026: PDF und Word (Skills pdf/word) ebenso — eigener Deckel unten.
     pdf_word = {"read_pdf", "create_pdf", "combine_pdf", "read_docx",
                 "create_docx", "edit_docx"}
+    # 09.10.2026: explain_error (Fehlercodes nachschlagen) — eigener Deckel unten.
+    fehler = {"explain_error"}
     eigen = {w.name for w in werkzeug_register.auf_schiene("gross")
              if w.klein is None and w.name != "run_code"} - skill - suche - ablage - projekt \
-        - kalender - pdf_word
+        - kalender - pdf_word - fehler
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
                 if t["function"]["name"] not in
-                eigen | {"run_code"} | skill | suche | ablage | projekt | kalender | pdf_word)
+                eigen | {"run_code"} | skill | suche | ablage | projekt | kalender | pdf_word
+                | fehler)
+    # explain_error: eine Zeile, liest nur die Tabelle core/fehlercodes.py.
+    assert 0 < sum(len(t["function"]["description"]) for t in gross.TOOLS
+                   if t["function"]["name"] in fehler) < 150
     # 18.08.2026 von 3.000 auf 3.300: edit_calendar_routine kam dazu. Es
     # kostet ~250 Zeichen und behebt eine Luecke, die sie nicht ueberspielen
     # konnte — Routinen liessen sich nur ANLEGEN, also stand die verschobene

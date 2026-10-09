@@ -88,7 +88,8 @@ def test_werkzeug_benennt_um(cal):
     antwort = ai._execute_tool(
         "edit_calendar_routine",
         {"label": "geige", "aktion": "aendern", "neuer_titel": "Violine"})
-    assert "Steht jetzt" in antwort and "Violine" in antwort   # Beleg statt „geändert" (2026-10-08)
+    # Feste Form aus dem nachgelesenen Stand (2026-10-09)
+    assert "GEÄNDERT" in antwort and "„Violine“" in antwort
     assert _routine(cal, "Violine") is not None
 
 
@@ -137,11 +138,11 @@ def test_leerer_titel_trifft_nicht_alles(cal):
 # ── Das Werkzeug, so wie die KI es sieht ──────────────────────────────
 
 def test_werkzeug_aendert_und_loescht(cal):
-    assert "Steht jetzt" in ai._execute_tool(
+    assert "GEÄNDERT" in ai._execute_tool(
         "edit_calendar_routine",
         {"label": "geige", "aktion": "aendern", "time": "18:00"})
     assert _routine(cal)["time"] == "18:00"
-    assert "Gelöscht" in ai._execute_tool(
+    assert "GELÖSCHT" in ai._execute_tool(
         "edit_calendar_routine", {"label": "geige", "aktion": "loeschen"})
 
 
@@ -149,7 +150,7 @@ def test_werkzeug_ohne_neue_werte_meldet_fehler(cal):
     """Sonst quittiert es einen Erfolg, ohne etwas getan zu haben."""
     antwort = ai._execute_tool("edit_calendar_routine",
                                {"label": "geige", "aktion": "aendern"})
-    assert antwort.startswith("[Fehler")
+    assert "ABGEBROCHEN – nichts geändert. Fehler K-NICHTS-ZU-AENDERN" in antwort
 
 
 def test_werkzeug_braucht_freigabe(cal):

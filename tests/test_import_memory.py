@@ -87,7 +87,7 @@ def test_zweiter_gleicher_import_schreibt_nichts():
     vorher = _datei("notizen/vorlieben")
     aus = _import("vorlieben", "Mag Tee.\nHört Techno.")
     assert _datei("notizen/vorlieben") == vorher
-    assert aus.startswith("Nichts geschrieben in notizen/vorlieben")
+    assert "Nichts geschrieben in notizen/vorlieben" in aus
 
 
 def test_zeilen_mit_link_oder_bild_werden_nicht_uebernommen():

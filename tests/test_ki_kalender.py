@@ -120,13 +120,17 @@ def test_aendern_per_kennung_laesst_den_rest_stehen(gross):
     assert [s for s in routinen() if s.rrule.endswith("TU")][0].time == "17:00"
 
 
-def test_alte_kennung_trifft_nichts(gross):
+def test_kennung_ueberlebt_aenderung_geloeschte_trifft_nichts(gross):
+    """Seit 2026-10-09 aus der festen Kennung des Kerns: nach einer Änderung
+    dieselbe; nach dem Löschen trifft sie nichts mehr (K-KENNUNG-UNBEKANNT)."""
     tun("add_calendar_routine", label="Geige", rrule="FREQ=WEEKLY;BYDAY=TH", time="18:00")
     alt = routinen()[0].kennung
-    tun("edit_calendar_routine", kennung=alt, aktion="aendern", time="18:10")
+    r = tun("edit_calendar_routine", kennung=alt, aktion="aendern", time="18:10")
+    assert r.status == "ok" and f"(#{alt})" in r and routinen()[0].kennung == alt
+    assert tun("edit_calendar_routine", kennung=alt, aktion="loeschen").status == "ok"
     r = tun("edit_calendar_routine", kennung=alt, aktion="aendern", time="19:00")
-    assert r.status == "fehlgeschlagen" and "gibt es nicht (mehr)" in r
-    assert routinen()[0].time == "18:10"
+    assert r.status == "fehlgeschlagen" and r.code == "K-KENNUNG-UNBEKANNT"
+    assert "gibt es nicht (mehr)" in r and routinen() == []
 
 
 def test_ende_vor_beginn_wird_abgelehnt(gross):
@@ -173,9 +177,12 @@ def test_loeschen_trifft_nicht_den_aehnlichen_namen(gross):
 def test_pause_ohne_passende_routine_ist_kein_erfolg(gross):
     tun("add_calendar_routine", label="Geigenstunde @ Geigenschule",
         rrule="FREQ=WEEKLY;BYDAY=TH", time="18:10")
+    vorher = kalender._load_raw()
     r = tun("add_calendar_pause", label="Geigenstunde", von=DO_ISO, bis=DO_ISO)
-    assert r.status == "teilweise"
-    assert "KEINE Routine" in r and "Geigenstunde @ Geigenschule" in r
+    # Seit 2026-10-09 kein „teilweise": abgebrochen, NICHTS gespeichert.
+    assert r.status == "fehlgeschlagen" and r.code == "K-PAUSE-KEINE-ROUTINE"
+    assert "ABGEBROCHEN – nichts eingetragen" in r and "Geigenstunde @ Geigenschule" in r
+    assert kalender._load_raw() == vorher
 
 
 def test_pause_per_kennung_trifft(gross):
@@ -257,7 +264,7 @@ def test_termin_loeschen_per_name_ohne_tag(gross):
     morgen = (date.today() + timedelta(days=1)).isoformat()
     tun("add_calendar_entry", layer="termine", day=morgen, label="nyam")
     r = tun("delete_calendar_entry", label="nyam")
-    assert r.status == "ok" and "Gelöscht" in r
+    assert r.status == "ok" and "„nyam“" in r and "GELÖSCHT" in r
     for d in (morgen, DO_ISO):
         tun("add_calendar_entry", layer="termine", day=d, label="Drive")
     r = tun("delete_calendar_entry", label="Drive")
@@ -278,7 +285,8 @@ def test_einzeltermin_aendern_nur_genannte_felder(gross):
         time="18:30", ende="19:30", ort="Halle")
     k = kennungen(tun("read_calendar", start_date=DO_ISO, end_date=DO_ISO), "t")[0]
     r = tun("edit_calendar_entry", kennung=k, time="19:00", ende="20:00")
-    assert r.status == "ok" and "19:00–20:00 Drive @ Halle" in r.beleg
+    assert r.status == "ok" and r.beleg.startswith(
+        f"Kalendereintrag „Drive“ am {ki_kalender.datum(DO_ISO)} 19:00–20:00 @ Halle GEÄNDERT (#{k})")
     neu = (DO + timedelta(days=1)).isoformat()
     k2 = kennungen(r, "t")[0]
     r = tun("edit_calendar_entry", kennung=k2, neuer_tag=neu)
@@ -337,3 +345,96 @@ def test_frage_mit_kennung_nennt_was_gemeint_ist(gross):
     assert '"Geigenstunde" (wöchentlich do 18:10–19:10)' in f and "Ende 19:00" in f
     f = erlaubnis.frage("edit_calendar_routine", {"kennung": "r0000", "aktion": "loeschen"})
     assert "gibt es so nicht" in f
+
+
+# ── Ganz oder gar nicht (2026-10-09) ───────────────────────────────────
+# Bricht ein Kalender-Werkzeug ab, ist der Datenstand wie vorher: das Dict
+# des Speichers gleich, und im JSON-Speicher die Datei Byte für Byte.
+
+def _stand():
+    import copy
+    roh = copy.deepcopy(kalender._load_raw())
+    datei = kalender.CAL_PATH.read_bytes() if kalender._speicher().art != "ics" \
+        and kalender.CAL_PATH.exists() else None
+    return roh, datei
+
+
+@pytest.fixture
+def bestand(gross):
+    tun("add_calendar_routine", label="Geige", rrule="FREQ=WEEKLY;BYDAY=TH",
+        time="18:10", ende="19:00", ort="Schule")
+    tun("add_calendar_routine", label="Chor", rrule="FREQ=WEEKLY;BYDAY=MO", time="14:00")
+    tun("add_calendar_routine", label="Chor", rrule="FREQ=WEEKLY;BYDAY=WE", time="14:00")
+    tun("add_calendar_entry", layer="termine", day=DO_ISO, label="Drive",
+        time="18:30", ende="19:30")
+    import kalender_kennung
+    kalender_kennung.alle_eintraege()          # feste Kennungen vergeben (schreibt einmal)
+
+
+@pytest.mark.parametrize("name, args, code", [
+    ("add_calendar_entry", {"day": DO_ISO, "label": "Arzt", "time": "10:00", "ende": "09:00"},
+     "K-ENDE-VOR-BEGINN"),
+    ("add_calendar_entry", {"day": "morgen", "label": "Arzt"}, "K-DATUM-UNGUELTIG"),
+    ("add_calendar_entry", {"day": DO_ISO, "label": "Arzt", "layer": "gibtsnicht"},
+     "K-EBENE-UNBEKANNT"),
+    ("add_calendar_routine", {"label": "Lauf", "rrule": "FREQ=QUATSCH"}, "K-RRULE-UNGUELTIG"),
+    ("add_calendar_routine", {"label": "Lauf", "rrule": "FREQ=DAILY", "time": "25:00"},
+     "K-ZEIT-UNGUELTIG"),
+    ("edit_calendar_routine", {"label": "Chor", "aktion": "aendern", "time": "15:00"},
+     "K-MEHRDEUTIG"),
+    ("edit_calendar_routine", {"label": "Geige", "aktion": "aendern", "time": "19:30"},
+     "K-ENDE-VOR-BEGINN"),
+    ("edit_calendar_routine", {"label": "Geige", "aktion": "umbauen"}, "K-AKTION-UNGUELTIG"),
+    ("edit_calendar_routine", {"kennung": "#r0000", "aktion": "loeschen"}, "K-KENNUNG-UNBEKANNT"),
+    ("edit_calendar_routine", {"label": "Geige", "aktion": "aendern", "nur_am": "2026-01-02",
+                               "time": "17:00", "ende": "18:00"}, "K-KEIN-VORKOMMEN"),
+    ("add_calendar_pause", {"label": "Geigenstunde", "von": DO_ISO, "bis": DO_ISO},
+     "K-PAUSE-KEINE-ROUTINE"),
+    ("add_calendar_pause", {"label": "Geige", "von": DO_ISO, "bis": "2020-01-01"},
+     "K-SPANNE-VERDREHT"),
+    ("delete_calendar_entry", {"day": DO_ISO, "label": "Kino"}, "K-NICHT-GEFUNDEN"),
+    ("edit_calendar_entry", {"day": DO_ISO, "label": "Drive"}, "K-NICHTS-ZU-AENDERN"),
+    ("edit_calendar_entry", {"day": DO_ISO, "label": "Drive", "bis": DO_ISO},
+     "K-UNBEKANNTES-FELD"),
+])
+def test_abbruch_laesst_den_kalender_wie_er_war(bestand, name, args, code):
+    vorher = _stand()
+    r = tun(name, **args)
+    assert r.status == "fehlgeschlagen" and r.code == code, r
+    assert "ABGEBROCHEN – nichts" in r and f"Fehler {code}:" in r
+    assert _stand() == vorher
+
+
+def test_anders_als_verlangt_wird_zurueckgenommen(bestand, monkeypatch):
+    """Steht ein neuer Eintrag nachgelesen anders da als verlangt, wird er
+    wieder gelöscht — nichts bleibt, Code W-NICHT-GESPEICHERT."""
+    import kalender_kennung
+    vorher = _stand()
+    echt = kalender_kennung.eintrag
+    monkeypatch.setattr(kalender_kennung, "eintrag",
+                        lambda k: dict(echt(k), ende="23:59"))
+    for name, args in (("add_calendar_entry", {"day": DO_ISO, "label": "Arzt",
+                                               "time": "10:00", "ende": "11:00"}),
+                       ("add_calendar_routine", {"label": "Lauf", "rrule": "FREQ=DAILY",
+                                                 "time": "07:00", "ende": "07:30"})):
+        r = tun(name, **args)
+        assert r.code == "W-NICHT-GESPEICHERT" and "wieder gelöscht" in r, r
+        # kalender_kennung.routine_loeschen legt ein leeres „pausen" an, wo
+        # keins war — inhaltlich dasselbe (gemeldet an die Kalender-Sitzung).
+        jetzt = dict(_stand()[0])
+        if jetzt.get("pausen") == [] and "pausen" not in vorher[0]:
+            del jetzt["pausen"]
+        assert jetzt == vorher[0]
+
+
+def test_feste_form_aus_dem_echten_stand(gross):
+    r = tun("add_calendar_entry", layer="termine", day=DO_ISO, label="Geigenstunde",
+            time="18:10", ende="19:00", ort="Geigenschule")
+    k = kennungen(r, "t")[0]
+    assert r.startswith(f"Kalendereintrag „Geigenstunde“ am {ki_kalender.datum(DO_ISO)} "
+                        f"18:10–19:00 @ Geigenschule EINGETRAGEN (#{k}).")
+    r = tun("add_calendar_routine", label="Geige", rrule="FREQ=WEEKLY;BYDAY=TH",
+            time="18:10", ende="19:00", ort="Schule")
+    k = kennungen(r)[0]
+    r = tun("edit_calendar_routine", kennung=k, aktion="aendern", ort="Aula")
+    assert r.startswith(f"Routine „Geige“ wöchentlich do 18:10–19:00 @ Aula GEÄNDERT (#{k})")

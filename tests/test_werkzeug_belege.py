@@ -127,7 +127,7 @@ def test_notiz_die_nicht_dasteht_ist_kein_erfolg(monkeypatch):
     monkeypatch.setattr(gedaechtnis, "tagebuch_lesen", lambda: "")
     r = ki_werkzeuge._verteilen("write_note", {"name": "tagebuch", "text": "Geige"})
     assert r.status == werkzeug_befund.FEHLGESCHLAGEN
-    assert "NICHT" in r and "melde keinen Erfolg" in r
+    assert "ABGEBROCHEN" in r and r.code == "W-NICHT-GESPEICHERT"
 
 
 # ── Die Kopfzeile ──────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ def _fahren(name, args, exec_, **kw):
 @pytest.mark.parametrize("ergebnis, status", [
     ("Liste: a, b", "ok"),
     ("[Fehler: kaputt]", "fehlgeschlagen"),
-    (Befund("halb", "teilweise"), "teilweise"),
+    (Befund("nein", "abgelehnt"), "abgelehnt"),
     ("", "fehlgeschlagen"),
     (None, "fehlgeschlagen"),
 ])
@@ -162,8 +162,9 @@ def test_krachendes_werkzeug_ist_fehlgeschlagen():
     def kracht(n, a):
         raise OSError("weg")
     _, aus = _fahren("read_file", {"path": "x"}, kracht)
-    assert aus == ("result", "[ergebnis: fehlgeschlagen]\nTool 'read_file' ist "
-                             "fehlgeschlagen: weg", True)
+    assert aus[0] == "result" and aus[2] is True
+    assert aus[1].startswith("[ergebnis: fehlgeschlagen]\nWerkzeug read_file ABGEBROCHEN")
+    assert "Fehler W-AUSNAHME: weg" in aus[1]
 
 
 def test_abgelehnt_hat_seinen_status(monkeypatch):
@@ -254,7 +255,9 @@ def test_duenne_seite_wird_gemeldet(monkeypatch):
     monkeypatch.setattr(web.net, "get", lambda *a, **k:
                         b"<html><a>Start</a> <a>Lehre</a> <a>Anmelden</a></html>")
     r = web.hole("https://lsf.example/baum")
-    assert werkzeug_befund.status_von(r) == "teilweise"
+    # Seit 2026-10-09 kein „teilweise": gelesen ist, was da ist; die
+    # Warnung sagt, wie wenig.
+    assert werkzeug_befund.status_von(r) == "ok"
     assert "kaum lesbaren Inhalt" in r and "Anmelde-Wort" in r
 
 

@@ -69,7 +69,7 @@ poppler wird nicht mehr gebraucht.
 | pypdf im **Kindprozess mit Grenzen** | im Backend (ein bösartiges PDF hielte einen Thread fest, den niemand beenden kann) |
 | Schreiben **gefragt, „immer" möglich** | frei wie `create_document` (Auftrag: schreibende Aktionen durchs Gate; es wird nie überschrieben, daher „immer" erlaubt) |
 | Ändern = **neues Dokument**, Titel „… (geändert)" | neue Fassung desselben Dokuments (Auftrag: „immer als NEUE Datei") |
-| Zeichen außerhalb Windows-1252 im PDF → „?", **gezählt und als `teilweise` gemeldet**; Pfeile/≤≥ umschrieben | Schrift einbetten (DejaVu liegt nicht auf jedem Rechner; Teilmengen bräuchten fonttools) |
+| Zeichen außerhalb Windows-1252 im PDF → „?", **seit 09.10. ABGEBROCHEN mit `P-ZEICHEN`, nichts angelegt** (vorher „teilweise"); Pfeile/≤≥ umschrieben | Schrift einbetten (DejaVu liegt nicht auf jedem Rechner; Teilmengen bräuchten fonttools) |
 | Passwort-PDFs: nur „leeres Passwort" geht auf | Passwort als Parameter (stünde im Verlauf und im Log) |
 | Tabellen aus spaltentreuem Text **geraten**, mit Hinweis „gegen den Text prüfen" | keine Tabellen |
 | Formulare **nur lesen** | ausfüllen (eigene Arbeit: Erscheinungsbild der Felder; offen) |

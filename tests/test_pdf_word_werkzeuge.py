@@ -59,8 +59,10 @@ def test_langes_pdf_kommt_in_stuecken(monkeypatch):
     monkeypatch.setattr(ki_pdf_word, "SEITE_ZEICHEN", 3000)
     doc = _ablegen(text_pdf("A", "B", "C"), "pdf")
     r = lauf("read_pdf", {"quelle": doc})
-    assert r.status == "teilweise" and "Weiter mit seiten='2-" in r
-    weiter = re.search(r"seiten='([0-9-]+)'", r).group(1)
+    # Stückweise ist kein Teil-Ergebnis (2026-10-09): ok, und der Text sagt genau,
+    # was gelesen ist und wie es weitergeht.
+    assert r.status == "ok" and "Seiten 1 von 6 gelesen, weiter mit seiten=2-" in r
+    weiter = re.search(r"seiten=([0-9-]+)", r).group(1)
     r2 = lauf("read_pdf", {"quelle": doc, "seiten": weiter})
     assert "--- Seite 2 ---" in r2
 
@@ -75,10 +77,10 @@ def test_read_pdf_tabellen_und_formular():
 
 def test_scan_und_passwort_werden_ehrlich_gemeldet():
     r = lauf("read_pdf", {"quelle": _ablegen(scan_pdf(), "pdf")})
-    assert r.status == "fehlgeschlagen" and "gescannt" in r
+    assert r.status == "fehlgeschlagen" and "gescannt" in r and r.code == "P-KEIN-TEXT"
     from test_pdf_word_dateien import verschluesselt
     r = lauf("read_pdf", {"quelle": _ablegen(verschluesselt(text_pdf("x"), "pw"), "pdf")})
-    assert r.startswith("[Fehler") and "Passwort" in r
+    assert r.code == "P-DATEI-KAPUTT" and "Passwort" in r
 
 
 def test_quelle_als_pfad_nur_mit_derselben_sperre_wie_read_file(tmp_path, monkeypatch):
@@ -86,11 +88,11 @@ def test_quelle_als_pfad_nur_mit_derselben_sperre_wie_read_file(tmp_path, monkey
     datei.write_bytes(text_pdf("Plan"))
     monkeypatch.setattr(context, "erlaubt", lambda p: "ausserhalb von ZENTRALE und ~/codicus")
     r = lauf("read_pdf", {"quelle": str(datei)})
-    assert r.startswith("[Nicht erlaubt") and "anhängen" in r
+    assert r.code == "P-QUELLE-GESPERRT" and "anhängen" in r
     monkeypatch.setattr(context, "erlaubt", lambda p: "")
     r = lauf("read_pdf", {"quelle": str(datei)})
     assert r.status == "ok" and "„plan.pdf“ (Datei)" in r
-    assert lauf("read_pdf", {"quelle": str(tmp_path / "gibtsnicht.pdf")}).startswith("[Fehler")
+    assert lauf("read_pdf", {"quelle": str(tmp_path / "gibtsnicht.pdf")}).code == "P-QUELLE-FEHLT"
 
 
 def test_alter_text_anhang_sagt_dass_das_original_fehlt():
@@ -113,7 +115,7 @@ def test_read_docx_mit_hinweisen_und_weiterlesen():
     assert r.status == "ok" and "# Kapitel" in r and "Kopf-/Fußzeilen" in r
     lang = _ablegen(deutsches_docx("".join(_p("Wort " * 100) for _ in range(60))), "docx")
     r = lauf("read_docx", {"quelle": lang})
-    assert r.status == "teilweise" and "weiter mit ab=20000" in r
+    assert r.status == "ok" and "gelesen, weiter mit ab=20000" in r
 
 
 # ── Schreiben: neue Datei, Beleg, Ereignis ──────────────────────────────
@@ -136,9 +138,11 @@ def test_create_pdf_legt_ab_belegt_und_meldet():
     assert ereignisse == [{"ablage": ablage.kurz(k)}]
 
 
-def test_create_pdf_mit_fremden_zeichen_ist_teilweise():
+def test_create_pdf_mit_fremden_zeichen_bricht_ab_ohne_datei():
+    vorher = ablage.liste()
     r = lauf("create_pdf", {"titel": "Vokabeln", "inhalt": "你好 heißt Hallo"})
-    assert r.status == "teilweise" and "你" in r and r.beleg
+    assert r.status == "fehlgeschlagen" and r.code == "P-ZEICHEN" and "你" in r
+    assert "nichts angelegt" in r and ablage.liste() == vorher
 
 
 def test_combine_pdf_neu_aus_teilen_originale_bleiben():
@@ -151,7 +155,7 @@ def test_combine_pdf_neu_aus_teilen_originale_bleiben():
     texte = [s["text"] for s in pdf_datei.lesen(ablage.roh(_id(r)))["seiten"]]
     assert "Deckblatt" in texte[0] and "Haupt" in texte[1]
     falsch = lauf("combine_pdf", {"titel": "x", "teile": [{"quelle": a, "seiten": "5"}]})
-    assert falsch.startswith("[Nicht erstellt") and "gibt es nicht" in falsch
+    assert falsch.code == "P-DATEI-KAPUTT" and "gibt es nicht" in falsch
 
 
 def test_create_docx_und_edit_docx_als_kopie():
@@ -168,15 +172,16 @@ def test_create_docx_und_edit_docx_als_kopie():
     assert ablage.kopf(_id(e))["titel"] == "Brief (geändert)"
 
 
-def test_edit_docx_tippfehler_ist_teilweise_nichts_ist_fehlgeschlagen():
+def test_edit_docx_tippfehler_bricht_ganz_ab():
+    """Ganz oder gar nicht (2026-10-09): ein Treffer fehlt → keine Kopie."""
     quelle = _ablegen(deutsches_docx(_p("Hallo Welt")), "docx")
     vorher = len(ablage.liste())
     r = lauf("edit_docx", {"quelle": quelle, "ersetzen": [{"alt": "Hallo Welt", "neu": "Moin"},
                                                           {"alt": "Hallo welt", "neu": "x"}]})
-    assert r.status == "teilweise" and "kommt nicht vor" in r
+    assert r.status == "fehlgeschlagen" and r.code == "P-ERSETZEN-FEHLT" and "Hallo welt" in r
     r = lauf("edit_docx", {"quelle": quelle, "ersetzen": [{"alt": "gibt es nicht", "neu": "x"}]})
     assert r.status == "fehlgeschlagen" and "keine Kopie" in r
-    assert len(ablage.liste()) == vorher + 1
+    assert len(ablage.liste()) == vorher
 
 
 # ── Erlaubnis ───────────────────────────────────────────────────────────

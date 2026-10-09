@@ -128,6 +128,15 @@ Runde (bei 0/48 Befunden in den alten Läufen: kaum). Nicht berührt:
 Behauptungen über die Welt (Ferien aus dem Vorwissen) — die fängt weiter nur
 Regel 2 und der Richter.
 
+## Zwei Ausgänge und Fehlercodes (09.10. nachgezogen)
+
+Sasha: *„das programm macht etwas richtig ODER bricht KONTROLLIERT KOMPLETT
+AB mit genauem fehlercode!"* — deshalb gibt es keinen Status `teilweise`
+mehr; jedes schreibende Werkzeug endet ERLEDIGT (Satz aus dem nachgelesenen
+Stand) oder ABGEBROCHEN mit Code (`core/fehlercodes.py`, `explain_error`).
+Die Erledigt-Zeile kennt damit nur ✓, ✗ und „– von dir abgelehnt". Details:
+[ki_system.md](ki_system.md), „Belegt oder gesagt".
+
 ## Grenzen
 
 - Satzmuster kennen nur, was sie kennen; eine Behauptung in ungewöhnlicher

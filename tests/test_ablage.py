@@ -185,12 +185,12 @@ def test_read_und_update_document():
         zug.beenden(marke)
     assert "Fassung 2" in text and ev[0]["ablage"]["fassung"] == 2
     assert ablage.lesen(k["id"])["inhalt"] == "neu" and ablage.lesen(k["id"], 1)["inhalt"] == "alt"
-    assert "Kein Dokument" in ki_werkzeuge._verteilen("update_document", {"id": "x-1", "inhalt": "y"})
+    assert "A-DOK-UNBEKANNT" in ki_werkzeuge._verteilen("update_document", {"id": "x-1", "inhalt": "y"})
     assert "Kein Dokument" in ki_werkzeuge._verteilen("read_document", {"id": "../../etc"})
 
 
 def test_create_document_fehler_sind_text_kein_absturz():
-    assert "Nicht abgelegt" in ki_werkzeuge._verteilen(
+    assert "ABGEBROCHEN – nichts abgelegt. Fehler A-ABGELEHNT" in ki_werkzeuge._verteilen(
         "create_document", {"titel": "x", "inhalt": "x" * (ablage.TEXT_MAX_ZEICHEN + 1)})
     assert ablage.liste() == []
 
@@ -296,7 +296,7 @@ def _speichern(args, gid="g1"):
 def test_sandbox_datei_kommt_in_die_ablage(lauf):
     text, ev = _speichern({"lauf": lauf, "datei": "ergebnis.csv", "titel": "Zahlen"})
     k = ablage.liste()[0]
-    assert "Abgelegt" in text and k["titel"] == "Zahlen" and k["art"] == "csv"
+    assert "ABGELEGT" in text and k["titel"] == "Zahlen" and k["art"] == "csv"
     assert k["herkunft"] == "sandbox" and k["gespraech"] == "g1"
     assert ablage.lesen(k["id"])["inhalt"] == "a,b\n1,2\n" and ev[0]["ablage"]["id"] == k["id"]
     text, _ = _speichern({"lauf": lauf, "datei": "unter/plot.png"})
@@ -308,14 +308,14 @@ def test_sandbox_datei_kommt_in_die_ablage(lauf):
                                    "roh.bin", "unter"])
 def test_sandbox_ausbruch_wird_verhindert(lauf, datei):
     text, ev = _speichern({"lauf": lauf, "datei": datei})
-    assert text.startswith("[Nicht abgelegt") and ev == []
+    assert "ABGEBROCHEN – nichts abgelegt" in text and text.code and ev == []
     assert ablage.liste() == []
 
 
 @pytest.mark.parametrize("fremd", ["../x", "/tmp", "g2--20261007-000000-abc", "", ".probe"])
 def test_nur_laeufe_dieses_gespraechs(lauf, fremd):
     text, _ = _speichern({"lauf": fremd, "datei": "ergebnis.csv"})
-    assert text.startswith("[Nicht abgelegt") and ablage.liste() == []
+    assert "ABGEBROCHEN – nichts abgelegt" in text and ablage.liste() == []
 
 
 def test_sandbox_groessengrenze(lauf, monkeypatch):
@@ -354,7 +354,7 @@ def test_echter_lauf_und_dann_in_die_ablage():
             "save_from_sandbox", {"lauf": kennung, "datei": "hallo.md"})
     finally:
         zug.beenden(marke)
-    assert "Abgelegt" in ergebnis
+    assert "ABGELEGT" in ergebnis
     assert ablage.lesen(ablage.liste()[0]["id"])["inhalt"] == "# Hallo"
 
 

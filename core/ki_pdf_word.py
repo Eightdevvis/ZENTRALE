@@ -23,7 +23,9 @@ import textbloecke
 import word_datei
 import werkzeug_register
 import zug
-from werkzeug_befund import Befund, OK, TEILWEISE, FEHLGESCHLAGEN
+import shutil
+
+from werkzeug_befund import Befund, OK, FEHLGESCHLAGEN, erledigt, abgebrochen
 from werkzeug_pdf_word import quelle_name
 
 ausfuehrer = werkzeug_register.ausfuehrer
@@ -33,7 +35,11 @@ MAX_TEILE = 30
 
 
 class _Fehlt(Exception):
-    """Quelle nicht zu haben — der Text geht so an die KI."""
+    """Quelle nicht zu haben. code: core/fehlercodes.py (seit 2026-10-09)."""
+
+    def __init__(self, code: str, grund: str):
+        super().__init__(grund)
+        self.code, self.grund = code, grund
 
 
 # ── Quelle: Ablage-id oder Datei ────────────────────────────────────────
@@ -43,17 +49,17 @@ def _quelle(quelle, art: str) -> tuple:
     q = str(quelle or "").strip()
     wort = "PDF" if art == "pdf" else "Word-Datei"
     if not q:
-        raise _Fehlt("[Fehler: keine Quelle angegeben — Ablage-id oder Dateipfad.]")
+        raise _Fehlt("P-QUELLE-FEHLT", "keine Quelle angegeben — Ablage-id oder Dateipfad")
     if ablage.gibt_es(q):
         k = ablage.kopf(q)
         if k.get("art") != art:
             if k.get("herkunft") == "anhang" and str(k.get("quelle") or "").lower() \
                     .endswith("." + art):
-                raise _Fehlt(f"[Fehler: dieser Anhang wurde früher nur als Text abgelegt — "
-                             f"das Original fehlt. Sasha muss die Datei neu anhängen; "
-                             f"den Text gibt read_document(id).]")
-            raise _Fehlt(f"[Fehler: „{k.get('titel')}“ ist keine {wort} "
-                         f"(Art {k.get('art')}).]")
+                raise _Fehlt("P-ORIGINAL-FEHLT", "dieser Anhang wurde früher nur als Text "
+                             "abgelegt — das Original fehlt. Sasha muss die Datei neu "
+                             "anhängen; den Text gibt read_document(id)")
+            raise _Fehlt("P-FALSCHE-ART", f"„{k.get('titel')}“ ist keine {wort} "
+                         f"(Art {k.get('art')})")
         return ablage.roh(q), k.get("titel") or q, q
     pfad = os.path.expanduser(q)
     if not os.path.isabs(pfad):
@@ -66,11 +72,11 @@ def _quelle(quelle, art: str) -> tuple:
     # eine dritte Antwort auf „was darf sie sehen" wäre ein Umweg.
     grund = context.erlaubt(pfad)
     if grund:
-        raise _Fehlt(f"[Nicht erlaubt: {q} — {grund}. Sasha kann die Datei anhängen.]")
+        raise _Fehlt("P-QUELLE-GESPERRT", f"{q} — {grund}. Sasha kann die Datei anhängen")
     if not os.path.isfile(pfad):
-        raise _Fehlt(f"[Fehler: weder eine Ablage-id noch eine Datei: {q}]")
+        raise _Fehlt("P-QUELLE-FEHLT", f"weder eine Ablage-id noch eine Datei: {q}")
     if os.path.getsize(pfad) > pdf_datei.MAX_BYTES:
-        raise _Fehlt("[Fehler: die Datei ist zu groß (höchstens 30 MB).]")
+        raise _Fehlt("P-ZU-GROSS", "die Datei ist zu groß (höchstens 30 MB)")
     with open(pfad, "rb") as f:
         return f.read(), os.path.basename(pfad), None
 
@@ -80,17 +86,20 @@ def _herkunft(name: str, doc_id) -> str:
 
 
 def _ablegen(titel: str, daten: bytes, art: str, quelle: str | None = None) -> dict:
-    k = ablage.anlegen(titel, daten, art, herkunft="ki", gespraech=zug.gespraech(),
-                       quelle=quelle)
-    zug.melden({"ablage": ablage.kurz(k)})
-    return k
+    # Gemeldet (zug.melden) wird erst nach dem Beleg, in _belegt.
+    return ablage.anlegen(titel, daten, art, herkunft="ki", gespraech=zug.gespraech(),
+                          quelle=quelle)
 
 
-def _belegt(text: str, status: str, beleg: str | None, fehlt: str) -> Befund:
+def _belegt(k: dict, was: str, satz: str, beleg: str | None, zusatz: str = "") -> Befund:
+    """ERLEDIGT mit dem nachgelesenen Beleg — oder die eben angelegte Datei
+    wieder weg (es gab sie vorher nicht) und ABGEBROCHEN (2026-10-09)."""
     if beleg is None:
-        return Befund(f"{text}\nNachgelesen: {fehlt} — melde keinen Erfolg.",
-                      FEHLGESCHLAGEN)
-    return Befund(f"{text}\nNachgelesen: {beleg}", status, beleg=beleg)
+        shutil.rmtree(os.path.join(ablage.ordner(), k["id"]), ignore_errors=True)
+        return abgebrochen(was, "W-NICHT-GESPEICHERT", "nachgelesen liegt sie nicht "
+                           "lesbar in der Ablage; sie ist wieder entfernt", "nichts abgelegt")
+    zug.melden({"ablage": ablage.kurz(k)})
+    return erledigt(f"{satz} Nachgelesen: {beleg}", beleg, zusatz=zusatz)
 
 
 def _anfang(text: str, n: int = 60) -> str:
@@ -141,14 +150,15 @@ def _read_pdf(args: dict) -> str:
     try:
         daten, name, doc_id = _quelle(args.get("quelle"), "pdf")
     except _Fehlt as e:
-        return str(e)
+        return abgebrochen("PDF lesen", e.code, e.grund, "nichts gelesen")
     was = str(args.get("was") or "text").strip().lower()
     if was not in ("text", "tabellen", "formular"):
         was = "text"
     try:
         r = pdf_datei.lesen(daten, args.get("seiten"), was)
     except pdf_datei.Fehler as e:
-        return f"[Fehler: {e}]"
+        return abgebrochen(f"PDF {_herkunft(name, doc_id)} lesen", "P-DATEI-KAPUTT", str(e),
+                           "nichts gelesen")
     kopf = _pdf_kopf(r, name, doc_id)
     if was == "formular":
         felder = r.get("formular") or []
@@ -163,41 +173,45 @@ def _read_pdf(args: dict) -> str:
         return Befund(kopf + f"\n{len(felder)} Formularfelder:\n" + "\n".join(zeilen), OK)
     text, gezeigt, leer = _seiten_zeigen(r["seiten"], was == "tabellen")
     angefragt = [s["nr"] for s in r["seiten"]]
-    hinweise, status = [], OK
+    # Stückweise lesen ist kein Teil-Ergebnis (2026-10-09): der Aufruf hat
+    # genau das getan, was er sagt — Seiten a–b gelesen, Rest per seiten=.
+    hinweise = []
     if len(gezeigt) < len(angefragt):
         rest = angefragt[len(gezeigt):]
-        hinweise.append(f"Gezeigt: Seiten {pdf_datei.seiten_text(gezeigt)}. Weiter mit "
-                        f"seiten='{pdf_datei.seiten_text(rest).replace(' ', '')}'.")
-        status = TEILWEISE
+        hinweise.append(f"Seiten {pdf_datei.seiten_text(gezeigt)} von "
+                        f"{r.get('seiten_gesamt')} gelesen, weiter mit "
+                        f"seiten={pdf_datei.seiten_text(rest).replace(' ', '')}.")
     if leer:
         if len(leer) == len(gezeigt):
-            return Befund(kopf + "\nKein Text auf den Seiten "
-                          f"{pdf_datei.seiten_text(leer)} — vermutlich gescannt (nur "
-                          "Bilder). Texterkennung habe ich nicht; sag Sasha das so.",
-                          FEHLGESCHLAGEN)
+            return abgebrochen(f"PDF {_herkunft(name, doc_id)} lesen", "P-KEIN-TEXT",
+                               f"kein Text auf den Seiten {pdf_datei.seiten_text(leer)} — "
+                               f"vermutlich gescannt (nur Bilder); Texterkennung gibt es "
+                               f"nicht", "nichts gelesen")
         hinweise.append(f"Ohne Text (Bild/Scan?): Seiten {pdf_datei.seiten_text(leer)}.")
-        status = TEILWEISE
-    return Befund("\n".join([kopf, text] + hinweise), status)
+    return Befund("\n".join([kopf, text] + hinweise), OK)
 
 
 @ausfuehrer("create_pdf")
 def _create_pdf(args: dict) -> str:
     titel = " ".join(str(args.get("titel") or "").split()) or "Dokument"
+    was = f"PDF „{titel}“ anlegen"
     try:
         roh, info = pdf_schreiben.erzeugen(titel, str(args.get("inhalt") or ""))
-        k = _ablegen(titel, roh, "pdf")
-    except (ValueError, ablage.Fehler) as e:
-        return f"[Nicht erstellt: {e}]"
-    text = (f'PDF „{k["titel"]}“ erstellt und abgelegt (id {k["id"]}, '
-            f'{info["seiten"]} Seiten). Sasha sieht es im Chat; wiederhole den Inhalt nicht.')
-    status = OK
+    except ValueError as e:
+        return abgebrochen(was, "P-DATEI-KAPUTT", str(e), "nichts angelegt")
+    # Zeichen, die die Schrift nicht kann, stünden als „?" da — das wäre
+    # „anders als verlangt". Also gar nicht erst ablegen (2026-10-09).
     if info["ersetzt"]:
-        text += (f"\nAchtung: {info['ersetzt']} Zeichen kann die PDF-Schrift nicht "
-                 f"darstellen (z. B. {' '.join(info['beispiele'])}) — sie stehen als „?“ "
-                 f"da. Sag Sasha das.")
-        status = TEILWEISE
-    return _belegt(text, status, _pdf_beleg(k["id"], info["seiten"]),
-                   "das PDF liegt NICHT lesbar in der Ablage")
+        return abgebrochen(was, "P-ZEICHEN", f"{info['ersetzt']} Zeichen kann die "
+                           f"PDF-Schrift nicht darstellen (z. B. "
+                           f"{' '.join(info['beispiele'])})", "nichts angelegt")
+    try:
+        k = _ablegen(titel, roh, "pdf")
+    except ablage.Fehler as e:
+        return abgebrochen(was, "P-ABGELEHNT", str(e), "nichts angelegt")
+    return _belegt(k, was, f'PDF „{k["titel"]}“ ANGELEGT (id {k["id"]}, {info["seiten"]} '
+                   f'Seiten).', _pdf_beleg(k["id"], info["seiten"]),
+                   zusatz="Sasha sieht es im Chat; wiederhole den Inhalt nicht.")
 
 
 def _pdf_beleg(doc_id, seiten_soll: int):
@@ -216,30 +230,34 @@ def _pdf_beleg(doc_id, seiten_soll: int):
 @ausfuehrer("combine_pdf")
 def _combine_pdf(args: dict) -> str:
     teile_args = args.get("teile") if isinstance(args.get("teile"), list) else []
+    titel = " ".join(str(args.get("titel") or "").split()) or "Zusammengefügt"
+    was = f"PDF „{titel}“ zusammenfügen"
     if not teile_args:
-        return "[Fehler: keine Teile angegeben.]"
+        return abgebrochen(was, "P-TEILE-FEHLEN", "keine Teile angegeben", "nichts angelegt")
     if len(teile_args) > MAX_TEILE:
-        return f"[Fehler: höchstens {MAX_TEILE} Teile.]"
+        return abgebrochen(was, "P-ZU-VIELE-TEILE", f"höchstens {MAX_TEILE} Teile",
+                           "nichts angelegt")
     teile, namen = [], []
     for t in teile_args:
         t = t if isinstance(t, dict) else {"quelle": t}
         try:
             daten, name, doc_id = _quelle(t.get("quelle"), "pdf")
         except _Fehlt as e:
-            return str(e)
+            return abgebrochen(was, e.code, e.grund, "nichts angelegt")
         seiten = str(t.get("seiten") or "").strip() or None
         teile.append((daten, seiten))
         namen.append(name + (f" (Seiten {seiten})" if seiten else ""))
-    titel = " ".join(str(args.get("titel") or "").split()) or "Zusammengefügt"
     try:
         roh, anzahl = pdf_datei.zusammenfuegen(teile, titel)
+    except pdf_datei.Fehler as e:
+        return abgebrochen(was, "P-DATEI-KAPUTT", str(e), "nichts angelegt")
+    try:
         k = _ablegen(titel, roh, "pdf", quelle="aus: " + "; ".join(namen))
-    except (pdf_datei.Fehler, ablage.Fehler) as e:
-        return f"[Nicht erstellt: {e}]"
-    text = (f'Neues PDF „{k["titel"]}“ abgelegt (id {k["id"]}) aus: {"; ".join(namen)}. '
-            f'Die Originale sind unverändert.')
-    return _belegt(text, OK, _pdf_beleg(k["id"], anzahl),
-                   "das neue PDF liegt NICHT lesbar in der Ablage")
+    except ablage.Fehler as e:
+        return abgebrochen(was, "P-ABGELEHNT", str(e), "nichts angelegt")
+    return _belegt(k, was, f'PDF „{k["titel"]}“ ANGELEGT (id {k["id"]}, {anzahl} Seiten) '
+                   f'aus: {"; ".join(namen)}. Die Originale sind unverändert.',
+                   _pdf_beleg(k["id"], anzahl))
 
 
 # ── Word ────────────────────────────────────────────────────────────────
@@ -250,9 +268,9 @@ def _read_docx(args: dict) -> str:
         daten, name, doc_id = _quelle(args.get("quelle"), "docx")
         r = word_datei.lesen(daten)
     except _Fehlt as e:
-        return str(e)
+        return abgebrochen("Word-Datei lesen", e.code, e.grund, "nichts gelesen")
     except word_datei.Fehler as e:
-        return f"[Fehler: {e}]"
+        return abgebrochen("Word-Datei lesen", "P-DATEI-KAPUTT", str(e), "nichts gelesen")
     try:
         ab = max(0, int(args.get("ab") or 0))
     except (TypeError, ValueError):
@@ -266,8 +284,8 @@ def _read_docx(args: dict) -> str:
         return Befund(kopf + "\nKein Text darin.", OK)
     stueck = text[ab:ab + SEITE_ZEICHEN]
     if ab + SEITE_ZEICHEN < len(text):
-        return Befund(f"{kopf}\n{stueck}\n[… Zeichen {ab}–{ab + len(stueck)} von "
-                      f"{len(text)}; weiter mit ab={ab + len(stueck)}]", TEILWEISE)
+        return Befund(f"{kopf}\n{stueck}\n[Zeichen {ab}–{ab + len(stueck)} von "
+                      f"{len(text)} gelesen, weiter mit ab={ab + len(stueck)}]", OK)
     return Befund(f"{kopf}\n{stueck}", OK)
 
 
@@ -301,15 +319,18 @@ def _erster_text(markdown: str) -> str:
 def _create_docx(args: dict) -> str:
     titel = " ".join(str(args.get("titel") or "").split()) or "Dokument"
     inhalt = str(args.get("inhalt") or "")
+    was = f"Word-Datei „{titel}“ anlegen"
     try:
         roh = word_datei.erzeugen(titel, inhalt)
+    except word_datei.Fehler as e:
+        return abgebrochen(was, "P-DATEI-KAPUTT", str(e), "nichts angelegt")
+    try:
         k = _ablegen(titel, roh, "docx")
-    except (word_datei.Fehler, ablage.Fehler) as e:
-        return f"[Nicht erstellt: {e}]"
-    text = (f'Word-Datei „{k["titel"]}“ erstellt und abgelegt (id {k["id"]}). Sasha '
-            f'sieht sie im Chat; wiederhole den Inhalt nicht.')
-    return _belegt(text, OK, _docx_beleg(k["id"], [_erster_text(inhalt)]),
-                   "die Word-Datei liegt NICHT lesbar in der Ablage")
+    except ablage.Fehler as e:
+        return abgebrochen(was, "P-ABGELEHNT", str(e), "nichts angelegt")
+    return _belegt(k, was, f'Word-Datei „{k["titel"]}“ ANGELEGT (id {k["id"]}).',
+                   _docx_beleg(k["id"], [_erster_text(inhalt)]),
+                   zusatz="Sasha sieht sie im Chat; wiederhole den Inhalt nicht.")
 
 
 @ausfuehrer("edit_docx")
@@ -317,38 +338,41 @@ def _edit_docx(args: dict) -> str:
     try:
         daten, name, doc_id = _quelle(args.get("quelle"), "docx")
     except _Fehlt as e:
-        return str(e)
+        return abgebrochen("Geänderte Word-Kopie", e.code, e.grund, "nichts angelegt")
     roh_paare = args.get("ersetzen") if isinstance(args.get("ersetzen"), list) else []
     paare = [(str(p.get("alt") or ""), str(p.get("neu") or "")) for p in roh_paare
              if isinstance(p, dict)]
     anhaengen = str(args.get("anhaengen") or "")
     titel = " ".join(str(args.get("titel") or "").split()) or f"{os.path.splitext(name)[0]} (geändert)"
+    was = f"Geänderte Kopie „{titel}“ von {_herkunft(name, doc_id)}"
+    if not paare and not anhaengen.strip():
+        return abgebrochen(was, "P-NICHTS-ZU-AENDERN", "weder ersetzen noch anhängen "
+                           "angegeben", "keine Kopie angelegt")
     try:
         neu, bericht = word_datei.aendern(daten, paare, anhaengen, titel=titel)
     except word_datei.Fehler as e:
-        return f"[Nicht geändert: {e}]"
-    zeilen, fehlend, status = [], [], OK
-    for alt, n, ausgelassen in bericht["ersetzt"]:
-        z = f"„{alt[:50]}“: {n}× ersetzt"
-        if ausgelassen:
-            z += f", {ausgelassen}× NICHT (geht über einen Tab/Zeilenumbruch)"
-            status = TEILWEISE
-        if n == 0:
-            fehlend.append(alt)
-            z += " — kommt nicht vor (genau so geschrieben?)"
-            status = TEILWEISE
-        zeilen.append(z)
-    if not bericht["angehaengt"] and not any(n for _, n, _ in bericht["ersetzt"]):
-        return Befund(f"[Nichts geändert — keine Kopie angelegt.]\n" + "\n".join(zeilen),
-                      FEHLGESCHLAGEN)
+        return abgebrochen(was, "P-DATEI-KAPUTT", str(e), "keine Kopie angelegt")
+    # Ganz oder gar nicht (2026-10-09): kommt ein Text nicht vor, oder ließe
+    # sich ein Treffer nicht ersetzen, gibt es KEINE Kopie — eine Kopie, in
+    # der die Hälfte fehlt, ist „anders als verlangt".
+    fehlt = [alt for alt, n, _ in bericht["ersetzt"] if n == 0]
+    if fehlt:
+        return abgebrochen(was, "P-ERSETZEN-FEHLT", "kommt nicht vor: "
+                           + "; ".join(f"„{a[:50]}“" for a in fehlt), "keine Kopie angelegt")
+    geteilt = [(alt, aus) for alt, _n, aus in bericht["ersetzt"] if aus]
+    if geteilt:
+        return abgebrochen(was, "P-ERSETZEN-GETEILT", "; ".join(
+            f"„{a[:50]}“ {aus}× über Tab/Zeilenumbruch" for a, aus in geteilt),
+            "keine Kopie angelegt")
+    zeilen = [f"„{alt[:50]}“: {n}× ersetzt" for alt, n, _ in bericht["ersetzt"]]
     try:
         k = _ablegen(titel, neu, "docx", quelle=f"geändert aus {quelle_name(args.get('quelle'))}")
     except ablage.Fehler as e:
-        return f"[Nicht abgelegt: {e}]"
+        return abgebrochen(was, "P-ABGELEHNT", str(e), "keine Kopie angelegt")
     if bericht["angehaengt"]:
         zeilen.append(f"angehängt: {bericht['angehaengt']} Absätze/Tabellen")
-    text = (f'Geänderte Kopie „{k["titel"]}“ abgelegt (id {k["id"]}); das Original '
-            f'{_herkunft(name, doc_id)} ist unverändert.\n' + "\n".join(zeilen))
+    satz = (f'Geänderte Kopie „{k["titel"]}“ ANGELEGT (id {k["id"]}); das Original '
+            f'{_herkunft(name, doc_id)} ist unverändert. ' + "; ".join(zeilen) + ".")
     # Beleg: jeder neue Text steht da; ein ersetzter alter nicht mehr, wenn er
     # nicht im neuen steckt und kein Treffer ausgelassen wurde.
     muss = [n for (a, n), (_, z, _) in zip(paare, bericht["ersetzt"]) if z and n.strip()]
@@ -356,5 +380,4 @@ def _edit_docx(args: dict) -> str:
            if z and not aus and a not in n and a not in anhaengen]
     if anhaengen.strip():
         muss.append(_erster_text(anhaengen))
-    return _belegt(text, status, _docx_beleg(k["id"], muss, weg),
-                   "die Kopie liegt NICHT wie verlangt in der Ablage")
+    return _belegt(k, was, satz, _docx_beleg(k["id"], muss, weg))

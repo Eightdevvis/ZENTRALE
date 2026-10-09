@@ -83,6 +83,11 @@ class Stueck:
     def bis(self):
         return self.roh.get("bis") or None
 
+    @property
+    def uid(self):
+        """Die feste Kennung des Kalender-Kerns (core/kalender_kennung.py)."""
+        return kalender.kennung(self.roh)
+
     def schluessel(self) -> str:
         if self.art == "routine":
             return f"r|{self.layer}|{self.label}|{self.rrule}|{self.time or ''}"
@@ -108,7 +113,14 @@ def roh() -> dict:
 
 def stuecke(daten: dict | None = None) -> list:
     """Alle Termine und Routinen mit ihrer Kennung, in Speicher-Reihenfolge."""
-    daten = roh() if daten is None else daten
+    if daten is None:
+        daten = roh()
+        if _ohne_uid(daten):
+            # Der JSON-Speicher vergibt feste Kennungen erst beim ersten
+            # Zugriff über den Kern (kalender_kennung.alle_eintraege).
+            import kalender_kennung
+            kalender_kennung.alle_eintraege()
+            daten = roh()
     liste = []
     for lname, lyr in (daten.get("layers") or {}).items():
         for tag, eintraege in (lyr.get("entries") or {}).items():
@@ -122,11 +134,48 @@ def stuecke(daten: dict | None = None) -> list:
     return liste
 
 
+def _ohne_uid(daten: dict) -> bool:
+    for lyr in (daten.get("layers") or {}).values():
+        for eintraege in (lyr.get("entries") or {}).values():
+            for e in eintraege or []:
+                if isinstance(e, dict) and not kalender.kennung(e):
+                    return True
+        for r in lyr.get("routines") or []:
+            if isinstance(r, dict) and not kalender.kennung(r):
+                return True
+    return False
+
+
+def _hash(uid) -> str:
+    return hashlib.sha1(str(uid).encode("utf-8")).hexdigest()
+
+
+def kurz_von(uid, art: str | None = None) -> str:
+    """Die kurze Kennung (#r3f9c) zu einer festen Kennung des Kerns — wie
+    read_calendar sie zeigt (bei Kollision länger, also nachschlagen)."""
+    for s in stuecke():
+        if s.uid == uid:
+            return s.kennung
+    return (art or "t")[0] + _hash(uid)[:4]
+
+
+def stueck_von(uid):
+    """Das Stück mit dieser festen Kennung (oder None)."""
+    return next((s for s in stuecke() if s.uid == uid), None)
+
+
 def _kennungen_vergeben(liste: list) -> None:
-    """Gleiche Einträge (Doppel) bekommen über einen Zähler verschiedene
-    Kennungen; kollidieren verschiedene in 4 Zeichen, werden sie länger."""
+    """Seit 2026-10-09 aus der FESTEN Kennung des Kerns (UID): sie überlebt
+    Umbenennen, neue Uhrzeit, neuen Ort — die kurze Kennung bleibt also
+    dieselbe, auch nach einer Änderung. Vorher war sie aus dem Inhalt
+    abgeleitet und änderte sich mit jeder Änderung. Ohne UID (Daten, die
+    nicht über den Kern gelesen wurden) wie vorher aus dem Inhalt.
+    Kollidieren zwei in 4 Zeichen, werden sie länger."""
     zaehler, hashes = {}, []
     for s in liste:
+        if s.uid:
+            hashes.append(_hash(s.uid))
+            continue
         k = s.schluessel()
         n = zaehler.get(k, 0)
         zaehler[k] = n + 1
@@ -409,6 +458,11 @@ class _Zuordnung:
         self.benutzt = {}
 
     def stueck(self, e: dict, tag: str):
+        # Seit 2026-10-09 tragen die Vorkommen die feste Kennung selbst.
+        if e.get("kennung"):
+            treffer = [s for s in self.alle if s.uid == e["kennung"]]
+            if treffer:
+                return treffer[0]
         if e.get("recurring"):
             return self._routine(e, tag)
         anker = e.get("von") if e.get("spanning") else tag

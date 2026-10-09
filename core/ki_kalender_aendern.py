@@ -1,9 +1,7 @@
 # core/ki_kalender_aendern.py
 #
 # Die schreibenden Kalender-Werkzeuge der KI: eintragen, ändern, löschen,
-# pausieren — jedes mit Beleg (nach dem Schreiben nachgelesen, was WIRKLICH
-# dasteht) und Status (core/werkzeug_befund.py). Lesen, Kennungen, Formate:
-# core/ki_kalender.py.
+# pausieren. Lesen, Kennungen, Formate: core/ki_kalender.py.
 #
 # 2026-10-08, nach Sashas Kalender-Testlauf. Drei Regeln, alle aus einem
 # belegten Fehler:
@@ -15,22 +13,30 @@
 #   3. Nichts wird still angenommen. Fehlt das Ende, steht das im Ergebnis —
 #      die 18:10–19:00, die sie Sasha meldete, waren nie gespeichert.
 #
-# Der Kalender-Kern trifft Einträge teils per Teilstring (routine_aendern,
-# routine_loeschen, set_routine_skip). Hier wird VOR jedem solchen Aufruf
-# nachgerechnet, ob er genau das gemeinte Stück träfe; sonst lieber nicht
-# schreiben und es sagen. Was der Kern dafür noch können müsste: Claude-Web-
-# Plan §7, „braucht vom Kalender-Kern".
+# 2026-10-09, Sasha: „das programm macht etwas richtig ODER bricht
+# KONTROLLIERT KOMPLETT AB mit genauem fehlercode!" Seitdem:
+#   - nur zwei Ausgänge: ERLEDIGT — der Satz kommt aus dem nachgelesenen
+#     Stand („Kalendereintrag „Geige" am Do 08.10.2026 18:10–19:00 @ Schule
+#     EINGETRAGEN (#t3f9c).") — oder ABGEBROCHEN mit Code (core/fehlercodes.py),
+#     und dann ist nichts geändert;
+#   - geändert, gelöscht, pausiert wird per KENNUNG über den Kalender-Kern
+#     (core/kalender_kennung.py): er prüft vorher und schreibt ganz oder gar
+#     nicht; seine Ablehnung (KalenderAbgelehnt) kommt als „K-<CODE>" durch;
+#   - Neu-Anlegen kann der Kern per Kennung nicht; hier wird nachgelesen und
+#     ein Eintrag, der nicht so dasteht wie verlangt, per Kennung wieder
+#     gelöscht (W-NICHT-GESPEICHERT).
 #
 # KI-Kern (Schicht 3, memory/system/bauplan_kern.md).
 
-from datetime import date, timedelta
+from datetime import date
 
 import kalender
-import kalender_bearbeiten
+import kalender_kennung
 import kalender_regel
 import ki_kalender as kk
 import werkzeug_befund
-from werkzeug_befund import Befund, OK, TEILWEISE, FEHLGESCHLAGEN
+from kalender_kennung import KalenderAbgelehnt
+from werkzeug_befund import abgebrochen, erledigt
 
 _OHNE_ENDE = ("Kein Ende angegeben: gespeichert ist nur der Beginn. Die "
               "Kalender-Ansicht zeichnet dafür eine Stunde, Überschneidungen "
@@ -38,44 +44,56 @@ _OHNE_ENDE = ("Kein Ende angegeben: gespeichert ist nur der Beginn. Die "
               "statt eins zu nennen.")
 
 
-def _fehler(text: str) -> Befund:
-    return Befund(text, FEHLGESCHLAGEN)
+class _Abbruch(Exception):
+    """Ein Abbruch mit Code — gefangen in _sicher."""
+
+    def __init__(self, code: str, grund: str):
+        super().__init__(grund)
+        self.code, self.grund = code, grund
 
 
-def _uhr(wert, ende: bool = False):
-    """'9:05' → '09:05'; leer → ''; Murks → None."""
+def _sicher(was: str, nichts: str, arbeit):
+    """arbeit() → Befund; jede Ablehnung wird ABGEBROCHEN mit Code."""
+    try:
+        return arbeit()
+    except _Abbruch as e:
+        return abgebrochen(was, e.code, e.grund, nichts)
+    except KalenderAbgelehnt as e:
+        return abgebrochen(was, "K-" + e.code, e.grund, nichts)
+
+
+def _uhr(feld: str, wert) -> str:
+    """'9:05' → '09:05'; leer → ''; Murks → _Abbruch(K-ZEIT-UNGUELTIG)."""
     s = str(wert or "").strip()
     if not s:
         return ""
-    if s == "24:00" and ende:
-        return s
     try:
         h, m = s.split(":", 1)
         h, m = int(h), int(m)
     except ValueError:
-        return None
+        raise _Abbruch("K-ZEIT-UNGUELTIG", f"{feld} {s!r} ist keine Uhrzeit (HH:MM, 24 h)")
     if not (0 <= h <= 23 and 0 <= m <= 59):
-        return None
+        raise _Abbruch("K-ZEIT-UNGUELTIG", f"{feld} {s!r} gibt es nicht")
     return f"{h:02d}:{m:02d}"
 
 
-def _tag(wert):
-    try:
-        return date.fromisoformat(str(wert or "").strip()).isoformat()
-    except ValueError:
-        return None
-
-
-def _zeiten(args: dict):
-    """(time, ende) geprüft, oder ein Fehler-Befund."""
-    t, e = _uhr(args.get("time")), _uhr(args.get("ende"), ende=True)
-    if t is None or e is None:
-        return _fehler("[Fehler: Uhrzeiten als HH:MM (24h), z.B. '18:10'.]")
+def _reihenfolge(t: str, e: str) -> None:
     if e and not t:
-        return _fehler("[Fehler: ein Ende ohne Beginn geht nicht — gib 'time' mit an.]")
+        raise _Abbruch("K-ENDE-OHNE-BEGINN", f"Ende {e} ohne Beginn — gib 'time' mit an")
     if t and e and e <= t:
-        return _fehler(f"[Fehler: Ende {e} liegt nicht nach Beginn {t}.]")
-    return t, e
+        raise _Abbruch("K-ENDE-VOR-BEGINN", f"Ende {e} liegt nicht nach Beginn {t}")
+
+
+def _tag(feld: str, wert, pflicht: bool = True) -> str:
+    s = str(wert or "").strip()
+    if not s and not pflicht:
+        return ""
+    try:
+        return date.fromisoformat(s).isoformat()
+    except ValueError:
+        if not s:
+            raise _Abbruch("K-PFLICHTFELD", f"{feld} fehlt (YYYY-MM-DD)")
+        raise _Abbruch("K-DATUM-UNGUELTIG", f"{feld} {s!r} ist kein Datum (YYYY-MM-DD)")
 
 
 def _layer(args: dict, standard="termine") -> str:
@@ -85,129 +103,202 @@ def _layer(args: dict, standard="termine") -> str:
     return standard if l in ("", "routinen") else l
 
 
+# ── Sätze aus dem echten Stand ─────────────────────────────────────────
+# Name, Datum, Uhrzeit, Ort und Kennung kommen aus dem nachgelesenen
+# Eintrag (kalender_kennung.eintrag), nie aus den Argumenten.
+
+def _kenn(e: dict) -> str:
+    if not kk.mit_kennungen():
+        return ""
+    return f" (#{kk.kurz_von(e.get('kennung'))})"
+
+
+def _ort(e: dict) -> str:
+    return f" @ {e['ort']}" if e.get("ort") else ""
+
+
+def termin_satz(e: dict) -> str:
+    if e.get("art") == "spanne":
+        return (f"Kalendereintrag „{e.get('label')}“ {kk.datum(e.get('von'))} bis "
+                f"{kk.datum(e.get('bis'))} (mehrtägig){_ort(e)}")
+    return (f"Kalendereintrag „{e.get('label')}“ am {kk.datum(e.get('tag'))} "
+            f"{kk.zeit(e.get('time'), e.get('ende'))}{_ort(e)}")
+
+
+def routine_satz(e: dict) -> str:
+    return (f"Routine „{e.get('label')}“ {kk.regel_text(e.get('rrule'))} "
+            f"{kk.zeit(e.get('time'), e.get('ende'))}{_ort(e)}")
+
+
+def _versuch_termin(label, tag, t="", e="", ort="") -> str:
+    """Wie termin_satz, aber aus dem Verlangten (für Abbrüche vor dem Schreiben)."""
+    wann = f" am {kk.datum(tag)}" if tag else ""
+    zeit = (f" {t}" + (f"–{e}" if e else "")) if t else ""
+    return f"Kalendereintrag „{label}“{wann}{zeit}" + (f" @ {ort}" if ort else "")
+
+
+def _hinweise(e: dict) -> str:
+    teile = []
+    if e.get("time") and not e.get("ende"):
+        teile.append(_OHNE_ENDE)
+    teile.append(kk.beleg_warnungen(e.get("label") or ""))
+    return " ".join(teile)
+
+
+def _passt(e: dict, verlangt: dict) -> list:
+    """Felder, die nachgelesen anders dastehen als verlangt."""
+    return [f"{k} verlangt {v!r}, steht {e.get(k)!r}"
+            for k, v in verlangt.items() if (e.get(k) or "") != (v or "")]
+
+
+def _kennungen() -> set:
+    return {x["kennung"] for x in kalender_kennung.alle_eintraege()}
+
+
+def _neue_kennung(vorher: set, routine: bool) -> str | None:
+    neu = [x for x in kalender_kennung.alle_eintraege()
+           if x["kennung"] not in vorher and (x["art"] == "routine") == routine]
+    return neu[-1]["kennung"] if neu else None
+
+
 # ── Eintragen ──────────────────────────────────────────────────────────
 
-def termin_eintragen(args: dict) -> Befund:
+def termin_eintragen(args: dict):
     """add_calendar_entry. Konflikte sieht Sasha schon in der Ja/Nein-Frage
-    (werkzeug_fragen._frage_termin); hier der Beleg."""
+    (werkzeug_fragen._frage_termin); hier der Satz aus dem echten Stand."""
     layer = (args.get("layer") or "termine").strip() or "termine"
-    tag, label = _tag(args.get("day")), (args.get("label") or "").strip()
-    if not tag or not label:
-        return _fehler("[Fehler: day (YYYY-MM-DD) und label sind nötig.]")
-    zeiten = _zeiten(args)
-    if isinstance(zeiten, Befund):
-        return zeiten
-    t, e = zeiten
-    extras = {k: v for k, v in (("ende", e), ("ort", (args.get("ort") or "").strip())) if v}
-    if not kalender.add_entry(layer=layer, day=tag, label=label, time=t or None, **extras):
-        return _fehler(f"[Fehler: Ebene '{layer}' gibt es nicht oder die Eingabe "
-                       f"ist ungültig — nichts eingetragen.]")
-    treffer = [s for s in kk.stuecke() if s.art == "termin" and s.layer == layer
-               and s.day == tag and s.label == label and (s.time or "") == t]
-    if not treffer:
-        return _fehler(f"[Eingetragen gemeldet, aber am {tag} steht '{label}' NICHT — "
-                       f"sag das, statt einen Erfolg zu melden.]")
-    s = treffer[-1]
-    n = len(kalender.entries_in_range(date.fromisoformat(tag),
-                                      date.fromisoformat(tag)).get(tag) or [])
-    beleg = f"Steht jetzt: {kk.beschreiben(s)}. Der Tag hat {n} {'Eintrag' if n == 1 else 'Einträge'}."
-    return _mit_hinweisen(beleg, s, t, e)
+    label = (args.get("label") or "").strip()
+    ort = (args.get("ort") or "").strip()
+
+    def arbeit():
+        if not label:
+            raise _Abbruch("K-TITEL-LEER", "label fehlt")
+        tag = _tag("day", args.get("day"))
+        t, e = _uhr("time", args.get("time")), _uhr("ende", args.get("ende"))
+        _reihenfolge(t, e)
+        vorher = _kennungen()
+        extras = {k: v for k, v in (("ende", e), ("ort", ort)) if v}
+        if not kalender.add_entry(layer=layer, day=tag, label=label, time=t or None, **extras):
+            raise _Abbruch("K-EBENE-UNBEKANNT", f"Ebene {layer!r} gibt es nicht")
+        k = _neue_kennung(vorher, routine=False)
+        if k is None:
+            raise _Abbruch("W-NICHT-GESPEICHERT", "nachgelesen steht der Eintrag nicht im Kalender")
+        x = kalender_kennung.eintrag(k)
+        falsch = _passt(x, {"label": label, "tag": tag, "time": t, "ende": e, "ort": ort})
+        if falsch:
+            kalender_kennung.eintrag_loeschen(k)
+            raise _Abbruch("W-NICHT-GESPEICHERT", "nachgelesen stand er anders da ("
+                           + "; ".join(falsch) + "); wieder gelöscht")
+        n = len(kalender.entries_in_range(date.fromisoformat(tag),
+                                          date.fromisoformat(tag)).get(tag) or [])
+        satz = (f"{termin_satz(x)} EINGETRAGEN{_kenn(x)}. Der Tag hat {n} "
+                f"{'Eintrag' if n == 1 else 'Einträge'}.")
+        return erledigt(satz, satz, zusatz=_hinweise(x))
+    return _sicher(_versuch_termin(label, str(args.get("day") or ""),
+                                   str(args.get("time") or ""), str(args.get("ende") or ""), ort),
+                   "nichts eingetragen", arbeit)
 
 
-def _mit_hinweisen(beleg: str, s, t, e) -> Befund:
-    teile = [beleg]
-    if t and not e:
-        teile.append(_OHNE_ENDE)
-    teile.append(kk.beleg_warnungen(s.label))
-    return Befund(" ".join(teile), OK, beleg=beleg)
-
-
-def routine_eintragen(args: dict) -> Befund:
+def routine_eintragen(args: dict):
     """add_calendar_routine — mit Ende und Ort (gross), ohne still eine Dauer
     anzunehmen."""
     layer, label = _layer(args), (args.get("label") or "").strip()
     rrule = (args.get("rrule") or "").strip()
-    if not label or not rrule:
-        return _fehler("[Fehler: label und rrule sind nötig.]")
-    zeiten = _zeiten(args)
-    if isinstance(zeiten, Befund):
-        return zeiten
-    t, e = zeiten
-    extras = {k: v for k, v in (("ende", e), ("ort", (args.get("ort") or "").strip())) if v}
-    if not kalender.add_routine(layer=layer, label=label, rrule_str=rrule, time=t or None, **extras):
-        return _fehler("[Fehler: Ebene existiert nicht oder die rrule ist ungültig "
-                       "— nichts eingetragen.]")
-    treffer = [s for s in kk.stuecke() if s.art == "routine" and s.layer == layer
-               and s.label == label and s.rrule == rrule and (s.time or "") == t]
-    if not treffer:
-        return _fehler(f"[Eingetragen gemeldet, aber die Routine '{label}' steht NICHT "
-                       f"im Kalender — melde keinen Erfolg.]")
-    s = treffer[-1]
-    beleg = f"Steht jetzt: {kk.beschreiben(s)}, {kk.naechstes(s)}."
-    befund = _mit_hinweisen(beleg, s, t, e)
-    gleich = [x for x in kk.stuecke() if x.art == "routine"
-              and x.label.casefold() == label.casefold()]
-    if len(gleich) > 1:
-        # Der Geigenstunden-Fall vom 18.08.2026: eine ZWEITE Regel gleichen
-        # Namens. Er soll hier auffallen, nicht Sasha drei Tage später.
-        liste = "; ".join(kk.beschreiben(x) for x in gleich)
-        return Befund(f"{befund} ACHTUNG: es gibt jetzt {len(gleich)} Routinen "
-                      f"namens '{label}': {liste}. Sollte das eine ÄNDERUNG sein? "
-                      f"Dann frag Sasha, und lösch die alte mit "
-                      f"edit_calendar_routine.", OK, beleg=beleg)
-    return befund
+    ort = (args.get("ort") or "").strip()
+
+    def arbeit():
+        if not label:
+            raise _Abbruch("K-TITEL-LEER", "label fehlt")
+        if not rrule:
+            raise _Abbruch("K-PFLICHTFELD", "rrule fehlt (z. B. FREQ=WEEKLY;BYDAY=MO)")
+        t, e = _uhr("time", args.get("time")), _uhr("ende", args.get("ende"))
+        _reihenfolge(t, e)
+        if not kalender_regel.regel_gueltig(rrule):
+            raise _Abbruch("K-RRULE-UNGUELTIG", f"Regel {rrule!r} ist ungültig")
+        vorher = _kennungen()
+        extras = {k: v for k, v in (("ende", e), ("ort", ort)) if v}
+        if not kalender.add_routine(layer=layer, label=label, rrule_str=rrule,
+                                    time=t or None, **extras):
+            raise _Abbruch("K-EBENE-UNBEKANNT", f"Ebene {layer!r} gibt es nicht")
+        k = _neue_kennung(vorher, routine=True)
+        if k is None:
+            raise _Abbruch("W-NICHT-GESPEICHERT", "nachgelesen steht die Routine nicht im Kalender")
+        x = kalender_kennung.eintrag(k)
+        falsch = _passt(x, {"label": label, "rrule": rrule, "time": t, "ende": e, "ort": ort})
+        if falsch:
+            kalender_kennung.routine_loeschen(k)
+            raise _Abbruch("W-NICHT-GESPEICHERT", "nachgelesen stand sie anders da ("
+                           + "; ".join(falsch) + "); wieder gelöscht")
+        satz = f"{routine_satz(x)} EINGETRAGEN{_kenn(x)}, {kk.naechstes(kk.stueck_von(k))}."
+        zusatz = _hinweise(x)
+        gleich = [y for y in kk.stuecke() if y.art == "routine"
+                  and y.label.casefold() == label.casefold()]
+        if len(gleich) > 1:
+            # Der Geigenstunden-Fall vom 18.08.2026: eine ZWEITE Regel gleichen
+            # Namens. Er soll hier auffallen, nicht Sasha drei Tage später.
+            zusatz += (f" ACHTUNG: es gibt jetzt {len(gleich)} Routinen namens '{label}': "
+                       + "; ".join(kk.beschreiben(y) for y in gleich)
+                       + ". Sollte das eine ÄNDERUNG sein? Dann frag Sasha, und lösch "
+                         "die alte mit edit_calendar_routine.")
+        return erledigt(satz, satz, zusatz=zusatz)
+    return _sicher(f"Routine „{label}“ {kk.regel_text(rrule)}".strip(),
+                   "nichts eingetragen", arbeit)
 
 
-def pause_eintragen(args: dict) -> Befund:
-    """add_calendar_pause. Eine Pause wirkt nur auf eine Routine mit GENAU
-    diesem Titel (kalender._pause_grund) — am 08.10. landete „Geigenstunde"
-    neben der Routine „Geigenstunde @ Geigenschule" und wirkte auf nichts."""
+def pause_eintragen(args: dict):
+    """add_calendar_pause, per Kennung fest an GENAU eine Routine
+    (kalender_kennung.routine_pause). Am 08.10. landete „Geigenstunde" neben
+    der Routine „Geigenstunde @ Geigenschule" und wirkte auf nichts — seit
+    09.10. bricht das ab (K-PAUSE-KEINE-ROUTINE), statt still eine
+    wirkungslose Pause zu speichern."""
     label = (args.get("label") or "").strip()
+
+    def arbeit():
+        s = _routine_fuer_pause(args, label)
+        von = _tag("von", args.get("von"))
+        # Ende offen (2026-10-08, Prüfstand f01): eingetragen wird, was
+        # feststeht (der Tag `von`), und das Ergebnis sagt, dass das Ende
+        # fehlt. Nur gross: klein bleibt beim gemessenen Vertrag.
+        offen = (not str(args.get("bis") or "").strip()
+                 and werkzeug_befund.schiene() == "gross")
+        bis = von if offen else _tag("bis", args.get("bis"))
+        if bis < von:
+            raise _Abbruch("K-SPANNE-VERDREHT", f"bis {bis} liegt vor von {von}")
+        x = kalender_kennung.routine_pause(s.uid, von, bis, args.get("grund") or None)
+        name = x.get("label") or ""
+        faellt = _ausfaelle(name, von, bis)
+        betroffen = ", ".join(faellt) if faellt else "kein Termin im Zeitraum"
+        grund = f" ({args['grund']})" if args.get("grund") else ""
+        if offen:
+            satz = (f"Pause für Routine „{name}“ NUR am {kk.datum(von)}{grund} "
+                    f"EINGETRAGEN{_kenn(x)}: betroffen {betroffen}. Ende noch offen — "
+                    f"danach steht '{name}' weiter im Kalender.")
+            return erledigt(satz, satz, zusatz=(
+                "Sag Sasha, dass nur dieser Tag eingetragen ist, und frag, bis wann. "
+                "Kommt das Ende: add_calendar_pause noch einmal mit von und bis. "
+                + kk.beleg_warnungen(name)))
+        satz = (f"Pause für Routine „{name}“ {kk.datum(von, False)}–{kk.datum(bis)}{grund} "
+                f"EINGETRAGEN{_kenn(x)}: betroffen {betroffen}.")
+        return erledigt(satz, satz, zusatz=kk.beleg_warnungen(name))
+    wer = label or "#" + str(args.get("kennung") or "?").lstrip("#")
+    return _sicher(f"Pause für „{wer}“", "nichts eingetragen", arbeit)
+
+
+def _routine_fuer_pause(args: dict, label: str):
     if (args.get("kennung") or "").strip():
-        s, fehler = kk.finden(args["kennung"])
-        if fehler:
-            return _fehler(fehler)
-        if s.art != "routine":
-            return _fehler("[Fehler: Pausen gibt es nur für Routinen; das ist ein "
-                           "Einzeltermin.]")
-        label = s.label
-    von, bis = _tag(args.get("von")), _tag(args.get("bis"))
-    # Ende offen (2026-10-08, Prüfstand f01): „Geige fällt wegen der Ferien
-    # jetzt aus — weißt du, bis wann?" Ohne Ende ging gar nichts, also schob
-    # die KI die ganze Pause auf, bis das Ende geklärt wäre — das Gespräch zog
-    # weiter, und die Geige am selben Abend stand weiter im Kalender. Jetzt
-    # wird eingetragen, was feststeht (der Tag `von`), und das Ergebnis sagt,
-    # dass das Ende fehlt. Nur gross: klein bleibt beim gemessenen Vertrag.
-    offen = (not (args.get("bis") or "").strip() and werkzeug_befund.schiene() == "gross")
-    if offen:
-        bis = von
-    if not label or not von or not bis or bis < von:
-        return _fehler("[Fehler: Routine (label oder kennung) und von/bis als "
-                       "YYYY-MM-DD, bis nicht vor von.]")
-    if not kalender.add_pause(label=label, von=von, bis=bis, grund=args.get("grund")):
-        return _fehler("[Fehler: ungültige Datumsangabe — nichts eingetragen.]")
-    routinen = [s for s in kk.stuecke() if s.art == "routine" and s.label == label]
-    if not routinen:
-        aehnlich = kk.nach_name(label, "routine")
-        vorschlag = ("; in Frage kommt: " + "; ".join(kk.beschreiben(s) for s in aehnlich[:4])
-                     if aehnlich else "")
-        return Befund(f"Pause '{label}' {kk.datum(von, False)}–{kk.datum(bis)} gespeichert, "
-                      f"wirkt aber auf KEINE Routine: keine heißt genau '{label}'"
-                      f"{vorschlag}. Sag Sasha das, statt einen Erfolg zu melden.",
-                      TEILWEISE, beleg="Pause ohne passende Routine gespeichert.")
-    faellt = _ausfaelle(label, von, bis)
-    grund = f" ({args['grund']})" if args.get("grund") else ""
-    betroffen = ', '.join(faellt) if faellt else 'kein Termin im Zeitraum'
-    if offen:
-        beleg = (f"Pause steht: '{label}' fällt NUR am {kk.datum(von)} aus{grund}; "
-                 f"betroffen: {betroffen}. Ende noch offen — danach steht '{label}' "
-                 f"weiter im Kalender.")
-        return Befund(f"{beleg} Sag Sasha, dass nur dieser Tag eingetragen ist, und "
-                      f"frag, bis wann. Kommt das Ende: add_calendar_pause noch einmal "
-                      f"mit von und bis. {kk.beleg_warnungen(label)}", OK, beleg=beleg)
-    beleg = (f"Pause steht: '{label}' fällt {kk.datum(von, False)}–{kk.datum(bis)} aus"
-             f"{grund}; betroffen: {betroffen}.")
-    return Befund(beleg + " " + kk.beleg_warnungen(label), OK, beleg=beleg)
+        return _ziel(args, "routine")
+    if not label:
+        raise _Abbruch("K-PFLICHTFELD", "Routine fehlt (label oder kennung)")
+    genau = [s for s in kk.stuecke() if s.art == "routine" and s.label == label]
+    if len(genau) == 1:
+        return genau[0]
+    if len(genau) > 1:
+        raise _Abbruch("K-MEHRDEUTIG", kk.mehrdeutig(genau, label))
+    aehnlich = kk.nach_name(label, "routine")
+    vorschlag = ("; in Frage kommt: " + "; ".join(kk.beschreiben(s) for s in aehnlich[:4])
+                 if aehnlich else "")
+    raise _Abbruch("K-PAUSE-KEINE-ROUTINE",
+                   f"keine Routine heißt genau '{label}'{vorschlag}")
 
 
 def _ausfaelle(label: str, von: str, bis: str) -> list:
@@ -222,261 +313,162 @@ def _ausfaelle(label: str, von: str, bis: str) -> list:
 # ── Ziel finden: Kennung, oder ein Name mit genau EINEM Treffer ─────────
 
 def _ziel(args: dict, art: str):
-    """-> (Stueck, None) oder (None, Befund)."""
+    """-> Stueck, sonst _Abbruch."""
     if (args.get("kennung") or "").strip():
         s, fehler = kk.finden(args["kennung"])
         if fehler:
-            return None, _fehler(fehler)
+            raise _Abbruch("K-KENNUNG-UNBEKANNT", fehler)
         if s.art != art:
             andere = ("edit_calendar_entry / delete_calendar_entry" if s.art == "termin"
                       else "edit_calendar_routine")
-            return None, _fehler(f"[Fehler: #{s.kennung} ist ein{'e Routine' if s.art == 'routine' else ' Einzeltermin'} "
-                                 f"— dafür {andere}. Nichts geändert.]")
-        return s, None
+            raise _Abbruch("K-FALSCHE-ART", f"#{s.kennung} ist "
+                           f"{'eine Routine' if s.art == 'routine' else 'ein Einzeltermin'} "
+                           f"— dafür {andere}")
+        return s
     label = (args.get("label") or "").strip()
-    tag = _tag(args.get("day")) if art == "termin" else None
+    tag = _tag("day", args.get("day"), pflicht=False) if art == "termin" else ""
     # Termin nur per Name (gross, 2026-10-09, Prüfstand f01): „lösch nyam" —
-    # es gab genau einen, trotzdem kam zweimal „day + label ist nötig", und
-    # im nächsten Zug glaubte die KI, es sei nie etwas gelöscht worden. Ohne
-    # Tag zählen die Termine, die noch nicht vorbei sind; trifft der Name
-    # genau einen, ist er gemeint, sonst die Liste (wie immer).
+    # es gab genau einen. Ohne Tag zählen die Termine, die noch nicht vorbei
+    # sind; trifft der Name genau einen, ist er gemeint, sonst die Liste.
     ohne_tag = art == "termin" and not tag and werkzeug_befund.schiene() == "gross"
     if not label or (art == "termin" and not tag and not ohne_tag):
         noetig = "kennung, oder day + label" if art == "termin" else "kennung oder label"
-        return None, _fehler(f"[Fehler: {noetig} ist nötig.]")
+        raise _Abbruch("K-PFLICHTFELD", f"{noetig} ist nötig")
     layer = (args.get("layer") or "").strip() or None
-    treffer = kk.nach_name(label, art, day=tag, layer=layer)
+    treffer = kk.nach_name(label, art, day=tag or None, layer=layer)
     if ohne_tag:
         heute = date.today().isoformat()
         treffer = [x for x in treffer if str(x.bis or x.day) >= heute]
     if not treffer:
         wo = f" am {tag}" if tag else ""
-        return None, _fehler(f"[Kein{'e Routine' if art == 'routine' else ' Termin'} "
-                             f"'{label}'{wo} gefunden — nichts geändert.]")
+        raise _Abbruch("K-NICHT-GEFUNDEN", f"kein{'e Routine' if art == 'routine' else ' Termin'} "
+                       f"'{label}'{wo}")
     if len(treffer) > 1:
-        return None, _fehler(kk.mehrdeutig(treffer, label))
-    return treffer[0], None
-
-
-def _vorkommen_tag(s, um: date | None = None):
-    """Ein Tag, an dem die Routine vorkommt (für die Kern-Aufrufe, die eine
-    Routine über einen Tag eingrenzen)."""
-    um = um or date.today()
-    try:
-        occ = kalender_regel.vorkommen(s.roh, um - timedelta(days=400), um + timedelta(days=400))
-    except Exception:
-        return None
-    return occ[0].date().isoformat() if occ else None
-
-
-def _findet_statt(r: dict, d: date) -> bool:
-    """Hat die Routine an d ein Vorkommen? (wie kalender._routine_hits_day)"""
-    try:
-        return bool(kalender_regel.vorkommen(r, d, d))
-    except Exception:
-        return False
-
-
-def _termin_eindeutig(s) -> bool:
-    """Träfe kalender_bearbeiten._eintrag_ziel (genauer Titel, bei mehreren
-    die Uhrzeit) genau s — oder ein gleiches Doppel davon?"""
-    kand = [x for x in kk.stuecke() if x.art == "termin" and x.layer == s.layer
-            and x.day == s.day and x.label.strip().lower() == s.label.strip().lower()]
-    if s.time and len(kand) > 1:
-        kand = [x for x in kand if (x.time or "") == s.time] or kand
-    return bool(kand) and kand[0].schluessel() == s.schluessel()
-
-
-def _trifft_genau(s, tag: str | None) -> bool:
-    """Träfe ein Kern-Aufruf mit Teilstring-Suche (+Tag, +Uhrzeit) genau s?
-    Nachgerechnet wie set_routine_skip/delete_routine es tun."""
-    nadel = s.label.strip().lower()
-    kand = [x for x in kk.stuecke() if x.art == "routine" and x.layer == s.layer
-            and nadel in x.label.strip().lower()]
-    if tag is not None:
-        d = date.fromisoformat(tag)
-        kand = [x for x in kand if _findet_statt(x.roh, d)]
-        if s.time and any((x.time or "") == s.time for x in kand):
-            kand = [x for x in kand if (x.time or "") == s.time]
-    return len(kand) == 1 and kand[0].schluessel() == s.schluessel()
-
-
-_BEDARF = ("Der Kalender-Kern kann diese Routine gerade nicht einzeln treffen "
-           "(es gibt gleichnamige). Nichts geändert — sag Sasha, dass das in der "
-           "Kalender-Ansicht geht.")
-
-
-_BEDARF_TERMIN = ("Der Kalender-Kern kann diesen Termin gerade nicht einzeln "
-                  "treffen (am selben Tag gibt es einen gleichnamigen). Nichts "
-                  "geändert — sag Sasha, dass das in der Kalender-Ansicht geht.")
+        raise _Abbruch("K-MEHRDEUTIG", kk.mehrdeutig(treffer, label))
+    return treffer[0]
 
 
 # ── Routinen ändern / löschen ──────────────────────────────────────────
 
-def routine_aendern(args: dict) -> Befund:
+def routine_aendern(args: dict):
     """edit_calendar_routine: nur die genannten Felder, nur EINE Routine;
     mit nur_am nur das eine Vorkommen."""
-    aktion = (args.get("aktion") or "").strip()
-    if aktion not in ("aendern", "loeschen"):
-        return _fehler("[Fehler: aktion muss 'aendern' oder 'loeschen' sein.]")
-    s, fehler = _ziel(args, "routine")
-    if fehler:
-        return fehler
-    nur_am = (args.get("nur_am") or "").strip()
-    if nur_am and not _tag(nur_am):
-        return _fehler("[Fehler: nur_am als YYYY-MM-DD.]")
-    if aktion == "loeschen":
-        return _routine_tag_absagen(s, _tag(nur_am)) if nur_am else _routine_loeschen(s)
-    neu = {k: (args.get(k) or "").strip() for k in ("time", "ende", "ort", "rrule", "neuer_titel")}
-    neu = {k: v for k, v in neu.items() if v}
-    if not neu:
-        return _fehler("[Fehler: nichts zu ändern — gib an, was neu ist.]")
-    t = _uhr(neu.get("time", s.time))
-    e = _uhr(neu.get("ende", s.ende), ende=True)
-    if t is None or e is None:
-        return _fehler("[Fehler: Uhrzeiten als HH:MM (24h).]")
-    if t and e and e <= t:
-        return _fehler(f"[Fehler: Ende {e} läge nicht nach Beginn {t} — nichts geändert. "
-                       f"Gib Beginn und Ende zusammen an.]")
-    if nur_am:
-        return _vorkommen_aendern(s, _tag(nur_am), neu)
-    return _serie_aendern(s, neu)
+    def arbeit():
+        aktion = (args.get("aktion") or "").strip()
+        if aktion not in ("aendern", "loeschen"):
+            raise _Abbruch("K-AKTION-UNGUELTIG", "aktion muss 'aendern' oder 'loeschen' sein")
+        s = _ziel(args, "routine")
+        nur_am = _tag("nur_am", args.get("nur_am"), pflicht=False)
+        if aktion == "loeschen":
+            return _routine_tag_absagen(s, nur_am) if nur_am else _routine_loeschen(s)
+        neu = {k: str(args.get(k) or "").strip()
+               for k in ("time", "ende", "ort", "rrule", "neuer_titel")}
+        neu = {k: v for k, v in neu.items() if v}
+        if not neu:
+            raise _Abbruch("K-NICHTS-ZU-AENDERN", "gib an, was neu ist")
+        t = _uhr("time", neu["time"]) if "time" in neu else (s.time or "")
+        e = _uhr("ende", neu["ende"]) if "ende" in neu else (s.ende or "")
+        _reihenfolge(t, e)
+        if nur_am:
+            return _vorkommen_aendern(s, nur_am, neu, t, e)
+        return _serie_aendern(s, neu, t, e)
+    return _sicher(_was_routine(args), "nichts geändert", arbeit)
 
 
-def _serie_aendern(s, neu: dict) -> Befund:
-    if "rrule" in neu:
-        if not kalender_regel.regel_gueltig(neu["rrule"]):
-            return _fehler("[Fehler: die rrule ist ungültig — nichts geändert.]")
-        # routine_aendern trifft per Teilstring: nur wenn das genau diese ist.
-        if len(kalender.routine_finden(s.label, s.layer)) != 1:
-            return _fehler(f"[{_BEDARF}]")
-        felder = {k: neu[k] for k in ("ort", "rrule") if k in neu}
-        for k in ("time", "ende"):
-            if k in neu:
-                felder[k] = _uhr(neu[k], k == "ende")
-        n = kalender.routine_aendern(s.label, s.layer,
-                                     neues_label=neu.get("neuer_titel"), **felder)
-        ok = n == 1
-    else:
-        felder = {"label": neu.get("neuer_titel")} if neu.get("neuer_titel") else {}
-        for k in ("time", "ende"):
-            if k in neu:
-                felder[k] = _uhr(neu[k], k == "ende")
-        if "ort" in neu:
-            felder["ort"] = neu["ort"]
-        ok = kalender_bearbeiten.routine_bearbeiten(s.layer, s.label, None, s.time, felder)
-        if not ok and len(kk.gleiche(s)) > 1:
-            return _fehler(f"[Es gibt diese Routine {len(kk.gleiche(s))}-mal genau gleich "
-                           f"({kk.beschreiben(s)}). {_BEDARF}]")
-    if not ok:
-        return _fehler(f"[Nicht geändert: der Kalender hat die Änderung an "
-                       f"{kk.beschreiben(s)} abgelehnt.]")
-    return _beleg_routine(s, neu)
+def _was_routine(args: dict) -> str:
+    wer = (args.get("label") or "").strip() or ("#" + str(args.get("kennung") or "?").lstrip("#"))
+    am = f" am {args['nur_am']}" if args.get("nur_am") else ""
+    tun = "löschen" if args.get("aktion") == "loeschen" else "ändern"
+    return f"Routine „{wer}“{am} {tun}"
 
 
-def _beleg_routine(alt, neu: dict) -> Befund:
-    label = neu.get("neuer_titel") or alt.label
-    rrule = neu.get("rrule") or alt.rrule
-    t = _uhr(neu.get("time", alt.time)) or None
-    jetzt = [s for s in kk.stuecke() if s.art == "routine" and s.layer == alt.layer
-             and s.label == label and s.rrule == rrule and (s.time or None) == t]
-    if not jetzt:
-        return _fehler(f"[Geändert gemeldet, aber die Routine '{label}' ist so NICHT "
-                       f"zu finden — melde keinen Erfolg, lies nach.]")
-    s = jetzt[0]
-    abweichung = []
-    if "ende" in neu and s.ende != _uhr(neu["ende"], True):
-        abweichung.append(f"Ende verlangt {neu['ende']}, steht {s.ende or 'keins'}")
-    if "ort" in neu and s.ort != neu["ort"]:
-        abweichung.append(f"Ort verlangt {neu['ort']}, steht {s.ort or 'keiner'}")
-    beleg = f"Steht jetzt: {kk.beschreiben(s)}, {kk.naechstes(s)}."
-    hinweis = (" " + _OHNE_ENDE) if s.time and not s.ende else ""
+def _serie_aendern(s, neu: dict, t: str, e: str):
+    x = kalender_kennung.routine_aendern(
+        s.uid, time=t if "time" in neu else None, ende=e if "ende" in neu else None,
+        ort=neu.get("ort"), label=neu.get("neuer_titel"), rrule=neu.get("rrule"))
+    verlangt = {"time": t, "ende": e}
+    for feld, name in (("ort", "ort"), ("rrule", "rrule"), ("neuer_titel", "label")):
+        if feld in neu:
+            verlangt[name] = neu[feld]
+    falsch = _passt(x, verlangt)
+    if falsch:
+        # Der Kern hat geschrieben, aber nicht das Verlangte: zurück auf den
+        # alten Stand, per Kennung (2026-10-09).
+        alt = s.roh
+        kalender_kennung.routine_aendern(
+            s.uid, time=alt.get("time") or "", ende=alt.get("ende") or "",
+            ort=alt.get("ort") or "", label=alt.get("label"), rrule=alt.get("rrule"))
+        raise _Abbruch("W-NICHT-GESPEICHERT", "nachgelesen stand sie anders da ("
+                       + "; ".join(falsch) + "); der alte Stand ist wiederhergestellt")
+    jetzt = kk.stueck_von(s.uid)
+    satz = f"{routine_satz(x)} GEÄNDERT{_kenn(x)}, {kk.naechstes(jetzt)}."
+    zusatz = _OHNE_ENDE if x.get("time") and not x.get("ende") else ""
     # Gleichnamige mit Feldern, die diese nicht hat (2026-10-09, f01): wird
     # die andere danach gelöscht, wären sie weg — das soll vorher dastehen.
-    andere = [(x, f) for x in kk.stuecke() if x.art == "routine" and x.layer == s.layer
-              and x.label.casefold() == s.label.casefold()
-              and x.schluessel() != s.schluessel() and (f := _was_fehlt(x, s))]
+    andere = [(y, f) for y in kk.stuecke() if y.art == "routine" and y.layer == jetzt.layer
+              and y.label.casefold() == jetzt.label.casefold()
+              and y.uid != jetzt.uid and (f := _was_fehlt(y, jetzt))]
     if andere:
-        hinweis += (" Die gleichnamige " + "; ".join(f"{_kurz(x)} hat {', '.join(f)}"
-                                                     for x, f in andere)
-                    + " — löschst du sie, ist das weg. Erst übernehmen oder Sasha fragen.")
-    if abweichung:
-        return Befund(f"{beleg} NICHT wie verlangt: {'; '.join(abweichung)}.{hinweis}",
-                      TEILWEISE, beleg=beleg)
-    return Befund(f"{beleg}{hinweis} {kk.beleg_warnungen(s.label)}", OK, beleg=beleg)
+        zusatz += (" Die gleichnamige " + "; ".join(f"{_kurz(y)} hat {', '.join(f)}"
+                                                    for y, f in andere)
+                   + " — löschst du sie, ist das weg. Erst übernehmen oder Sasha fragen.")
+    zusatz += " " + kk.beleg_warnungen(x.get("label") or "")
+    return erledigt(satz, satz, zusatz=zusatz.strip())
 
 
-def _vorkommen_aendern(s, tag: str, neu: dict) -> Befund:
+def _vorkommen_aendern(s, tag: str, neu: dict, t: str, e: str):
     if "rrule" in neu:
-        return _fehler("[Fehler: die Wiederholung gilt für die ganze Serie — ohne nur_am.]")
-    if not _findet_statt(s.roh, date.fromisoformat(tag)):
-        return _fehler(f"[Fehler: {s.label} findet am {kk.datum(tag)} gar nicht statt.]")
-    felder = {k: _uhr(neu[k], k == "ende") for k in ("time", "ende") if k in neu}
+        raise _Abbruch("K-UNBEKANNTES-FELD", "die Wiederholung gilt für die ganze Serie — "
+                       "ohne nur_am")
+    felder = {}
+    if "time" in neu:
+        felder["time"] = t
+    if "ende" in neu:
+        felder["ende"] = e
     if neu.get("ort"):
         felder["ort"] = neu["ort"]
     if neu.get("neuer_titel"):
         felder["label"] = neu["neuer_titel"]
-    if not kalender_bearbeiten.routine_abweichung(s.layer, s.label, tag, s.time, felder):
-        return _fehler(f"[Nicht geändert: {kk.beschreiben(s)} ließ sich für den "
-                       f"{kk.datum(tag)} nicht einzeln ändern.]")
-    tage = kalender.entries_in_range(date.fromisoformat(tag), date.fromisoformat(tag))
-    label = felder.get("label") or s.label
-    zeit_neu = felder.get("time") or s.time
-    da = [e for e in tage.get(tag) or [] if e.get("recurring") and e.get("rrule") == s.rrule
-          and e.get("label") == label and (e.get("time") or None) == (zeit_neu or None)]
-    if not da:
-        return _fehler(f"[Geändert gemeldet, aber am {tag} ist das Vorkommen NICHT zu "
-                       f"sehen — melde keinen Erfolg.]")
-    e = da[0]
-    beleg = (f"Nur am {kk.datum(tag)} steht jetzt: {kk.zeit(e.get('time'), e.get('ende'))} "
-             f"{e.get('label')}" + (f" @ {e['ort']}" if e.get("ort") else "")
-             + "; die übrigen Termine der Serie bleiben.")
-    return Befund(beleg, OK, beleg=beleg)
+    x = kalender_kennung.routine_tag_aendern(s.uid, tag, **felder)
+    abw = next((a for a in (x.get("abweichungen") or {}).values()
+                if isinstance(a, dict) and a.get("tag") == tag), {})
+    zeit_ = abw.get("time") or x.get("time")
+    ende_ = abw.get("ende") or (None if "time" in abw else x.get("ende"))
+    label = abw.get("label") or x.get("label")
+    ort = abw.get("ort") or x.get("ort")
+    satz = (f"Routine „{x.get('label')}“ NUR am {kk.datum(tag)} GEÄNDERT{_kenn(x)}: jetzt "
+            f"{kk.zeit(zeit_, ende_)} {label}" + (f" @ {ort}" if ort else "")
+            + "; die übrigen Termine der Serie bleiben.")
+    return erledigt(satz, satz)
 
 
-def _routine_tag_absagen(s, tag: str) -> Befund:
-    if not _findet_statt(s.roh, date.fromisoformat(tag)):
-        return _fehler(f"[Fehler: {s.label} findet am {kk.datum(tag)} gar nicht statt.]")
-    if not _trifft_genau(s, tag):
-        return _fehler(f"[{_BEDARF}]")
-    kalender.set_routine_skip(s.layer, s.label, tag, off=True, time=s.time)
-    tage = kalender.entries_in_range(date.fromisoformat(tag), date.fromisoformat(tag))
-    weg = [e for e in tage.get(tag) or [] if e.get("rrule") == s.rrule
-           and e.get("label") == s.label and e.get("deaktiviert")]
-    if not weg:
-        return _fehler(f"[Abgesagt gemeldet, aber am {tag} steht {s.label} weiter "
-                       f"an — melde keinen Erfolg.]")
-    beleg = (f"Abgesagt nur am {kk.datum(tag)}: {s.label} findet an dem Tag nicht "
-             f"statt; die Serie bleibt ({kk.naechstes(s)}).")
-    return Befund(beleg, OK, beleg=beleg)
+def _routine_tag_absagen(s, tag: str):
+    x = kalender_kennung.routine_absagen(s.uid, tag, an=False)
+    if tag not in (x.get("aus") or []):
+        raise _Abbruch("W-NICHT-GESPEICHERT", f"nachgelesen ist der {tag} nicht abgesagt")
+    satz = (f"Routine „{x.get('label')}“ NUR am {kk.datum(tag)} ABGESAGT{_kenn(x)}; die "
+            f"Serie bleibt ({kk.naechstes(kk.stueck_von(s.uid))}).")
+    return erledigt(satz, satz)
 
 
-def _routine_loeschen(s) -> Befund:
-    vorher = len(kk.gleiche(s))
-    if len(kalender.routine_finden(s.label, s.layer)) == 1:
-        kalender.routine_loeschen(s.label, s.layer)
-    else:
-        tag = _vorkommen_tag(s)
-        if tag is None or not _trifft_genau(s, tag):
-            return _fehler(f"[{_BEDARF}]")
-        kalender.delete_routine(s.layer, s.label, day=tag, time=s.time)
-    nachher = len(kk.gleiche(s))
-    if nachher >= vorher:
-        return _fehler(f"[Gelöscht gemeldet, aber {kk.beschreiben(s)} steht noch da "
-                       f"— melde keinen Erfolg.]")
+def _routine_loeschen(s):
+    vorher = kalender_kennung.eintrag(s.uid)
+    kalender_kennung.routine_loeschen(s.uid)
+    if s.uid in _kennungen():
+        raise _Abbruch("W-NICHT-GESPEICHERT", "nachgelesen steht die Routine noch da")
     rest = [x for x in kk.stuecke() if x.art == "routine"
             and x.label.casefold() == s.label.casefold()]
-    beleg = (f"Gelöscht: {kk.beschreiben(s)}. Nachgelesen: "
-             + (f"es gibt noch {len(rest)} Routine(n) mit dem Titel: "
-                + "; ".join(kk.beschreiben(x) for x in rest) if rest
-                else f"keine Routine '{s.label}' mehr."))
+    satz = (f"{routine_satz(vorher)} GELÖSCHT. Nachgelesen: "
+            + (f"es gibt noch {len(rest)} Routine(n) mit dem Titel: "
+               + "; ".join(kk.beschreiben(x) for x in rest) if rest
+               else f"keine Routine '{s.label}' mehr."))
     verlust = [f"{_kurz(x)}: {', '.join(f)}" for x in rest if (f := _was_fehlt(s, x))]
+    zusatz = ""
     if verlust:
-        return Befund(f"{beleg} ACHTUNG, mit der gelöschten ging verloren — "
-                      f"{'; '.join(verlust)}. Soll die verbliebene das übernehmen? "
-                      f"Sag es Sasha (oder edit_calendar_routine an der verbliebenen).",
-                      OK, beleg=beleg)
-    return Befund(beleg, OK, beleg=beleg)
+        zusatz = (f"ACHTUNG, mit der gelöschten ging verloren — {'; '.join(verlust)}. "
+                  f"Soll die verbliebene das übernehmen? Sag es Sasha (oder "
+                  f"edit_calendar_routine an der verbliebenen).")
+    return erledigt(satz, satz, zusatz=zusatz)
 
 
 def _was_fehlt(weg, bleibt) -> list:
@@ -500,104 +492,72 @@ def _kurz(s) -> str:
 
 # ── Einzeltermine ändern / löschen ─────────────────────────────────────
 
-def termin_loeschen(args: dict) -> Befund:
+def termin_loeschen(args: dict):
     """delete_calendar_entry: GENAU ein Termin (Kennung, oder Tag + Name mit
-    einem Treffer). Mehrtägige werden ganz gelöscht — das steht im Beleg."""
-    s, fehler = _ziel(args, "termin")
-    if fehler:
-        return fehler
-    vorher = len(kk.gleiche(s))
-    if not _termin_eindeutig(s):
-        return _fehler(f"[{_BEDARF_TERMIN}]")
-    if not kalender_bearbeiten.eintrag_loeschen(s.layer, s.day, s.label, s.time):
-        return _fehler(f"[Nicht gelöscht: {kk.beschreiben(s)} ließ sich nicht löschen.]")
-    if len(kk.gleiche(s)) >= vorher:
-        return _fehler(f"[Gelöscht gemeldet, aber {kk.beschreiben(s)} steht noch da "
-                       f"— melde keinen Erfolg.]")
-    n = len(kalender.entries_in_range(date.fromisoformat(s.day),
-                                      date.fromisoformat(s.day)).get(s.day) or [])
-    ganz = " (mehrtägig — ganz gelöscht)" if s.bis else ""
-    beleg = (f"Gelöscht: {kk.beschreiben(s)}{ganz}. Nachgelesen: weg; am "
-             f"{kk.datum(s.day)} stehen jetzt {n} Einträge.")
-    return Befund(beleg, OK, beleg=beleg)
+    einem Treffer). Mehrtägige werden ganz gelöscht — das steht im Satz."""
+    def arbeit():
+        s = _ziel(args, "termin")
+        vorher = kalender_kennung.eintrag(s.uid)
+        kalender_kennung.eintrag_loeschen(s.uid)
+        if s.uid in _kennungen():
+            raise _Abbruch("W-NICHT-GESPEICHERT", "nachgelesen steht der Termin noch da")
+        n = len(kalender.entries_in_range(date.fromisoformat(s.day),
+                                          date.fromisoformat(s.day)).get(s.day) or [])
+        ganz = " (mehrtägig — ganz gelöscht)" if s.bis else ""
+        satz = (f"{termin_satz(vorher)} GELÖSCHT{ganz}. Nachgelesen: weg; am "
+                f"{kk.datum(s.day)} stehen jetzt {n} Einträge.")
+        return erledigt(satz, satz)
+    wer = (args.get("label") or "").strip() or "#" + str(args.get("kennung") or "?").lstrip("#")
+    return _sicher(f"Kalendereintrag „{wer}“ löschen", "nichts gelöscht", arbeit)
 
 
-def termin_aendern(args: dict) -> Befund:
+def termin_aendern(args: dict):
     """edit_calendar_entry: einen Einzeltermin ändern, nur genannte Felder."""
-    s, fehler = _ziel(args, "termin")
-    if fehler:
-        return fehler
-    neu_tag = (args.get("neuer_tag") or "").strip()
-    if neu_tag and not _tag(neu_tag):
-        return _fehler("[Fehler: neuer_tag als YYYY-MM-DD.]")
-    felder = {k: (args.get(k) or "").strip() for k in ("time", "ende", "ort", "neuer_titel", "bis")}
-    felder = {k: v for k, v in felder.items() if v}
-    if not felder and not neu_tag:
-        return _fehler("[Fehler: nichts zu ändern — gib an, was neu ist.]")
-    if s.bis:
-        return _spanne_aendern(s, felder, neu_tag)
-    if "bis" in felder:
-        return _fehler("[Fehler: 'bis' gibt es nur bei mehrtägigen Terminen.]")
-    t = _uhr(felder.get("time", s.time))
-    e = _uhr(felder.get("ende", s.ende), ende=True)
-    if t is None or e is None:
-        return _fehler("[Fehler: Uhrzeiten als HH:MM (24h).]")
-    if e and not t:
-        return _fehler("[Fehler: ein Ende ohne Beginn geht nicht.]")
-    if t and e and e <= t:
-        return _fehler(f"[Fehler: Ende {e} läge nicht nach Beginn {t} — nichts geändert.]")
-    neu = {}
-    if "time" in felder:
-        neu["time"] = t
-    if "ende" in felder:
-        neu["ende"] = e
-    if "ort" in felder:
-        neu["ort"] = felder["ort"]
-    if "neuer_titel" in felder:
-        neu["label"] = felder["neuer_titel"]
-    if neu_tag:
-        neu["day"] = neu_tag
-    if not _termin_eindeutig(s):
-        return _fehler(f"[{_BEDARF_TERMIN}]")
-    if not kalender_bearbeiten.eintrag_aendern(s.layer, s.day, s.label, s.time, neu):
-        return _fehler(f"[Nicht geändert: der Kalender hat die Änderung an "
-                       f"{kk.beschreiben(s)} abgelehnt.]")
-    ziel = dict(day=neu_tag or s.day, label=neu.get("label") or s.label, time=t or None)
-    jetzt = [x for x in kk.stuecke() if x.art == "termin" and x.layer == s.layer
-             and x.day == ziel["day"] and x.label == ziel["label"] and (x.time or None) == ziel["time"]]
-    if not jetzt:
-        return _fehler("[Geändert gemeldet, aber der Termin ist so NICHT zu finden — "
-                       "melde keinen Erfolg, lies nach.]")
-    x = jetzt[0]
-    beleg = f"Steht jetzt: {kk.beschreiben(x)}."
-    if "ort" in felder and x.ort != felder["ort"]:
-        return Befund(f"{beleg} NICHT wie verlangt: Ort steht {x.ort or 'keiner'}.",
-                      TEILWEISE, beleg=beleg)
-    return _mit_hinweisen(beleg, x, x.time, x.ende)
+    def arbeit():
+        s = _ziel(args, "termin")
+        neu_tag = _tag("neuer_tag", args.get("neuer_tag"), pflicht=False)
+        felder = {k: str(args.get(k) or "").strip()
+                  for k in ("time", "ende", "ort", "neuer_titel", "bis")}
+        felder = {k: v for k, v in felder.items() if v}
+        if not felder and not neu_tag:
+            raise _Abbruch("K-NICHTS-ZU-AENDERN", "gib an, was neu ist")
+        if s.bis:
+            return _spanne_aendern(s, felder, neu_tag)
+        if "bis" in felder:
+            raise _Abbruch("K-UNBEKANNTES-FELD", "'bis' gibt es nur bei mehrtägigen Terminen")
+        t = _uhr("time", felder["time"]) if "time" in felder else (s.time or "")
+        e = _uhr("ende", felder["ende"]) if "ende" in felder else (s.ende or "")
+        _reihenfolge(t, e)
+        x = kalender_kennung.eintrag_aendern(
+            s.uid, label=felder.get("neuer_titel"), tag=neu_tag or None,
+            time=t if "time" in felder else None, ende=e if "ende" in felder else None,
+            ort=felder.get("ort"))
+        verlangt = {"time": t, "ende": e, "tag": neu_tag or s.day}
+        if "ort" in felder:
+            verlangt["ort"] = felder["ort"]
+        if "neuer_titel" in felder:
+            verlangt["label"] = felder["neuer_titel"]
+        falsch = _passt(x, verlangt)
+        if falsch:
+            alt = s.roh
+            kalender_kennung.eintrag_aendern(
+                s.uid, label=alt.get("label"), tag=s.day, time=alt.get("time") or "",
+                ende=alt.get("ende") or "", ort=alt.get("ort") or "")
+            raise _Abbruch("W-NICHT-GESPEICHERT", "nachgelesen stand er anders da ("
+                           + "; ".join(falsch) + "); der alte Stand ist wiederhergestellt")
+        satz = f"{termin_satz(x)} GEÄNDERT{_kenn(x)}."
+        return erledigt(satz, satz, zusatz=_hinweise(x))
+    wer = (args.get("label") or "").strip() or "#" + str(args.get("kennung") or "?").lstrip("#")
+    return _sicher(f"Kalendereintrag „{wer}“ ändern", "nichts geändert", arbeit)
 
 
-def _spanne_aendern(s, felder: dict, neu_tag: str) -> Befund:
+def _spanne_aendern(s, felder: dict, neu_tag: str):
     if "time" in felder or "ende" in felder:
-        return _fehler("[Nicht geändert: Uhrzeiten einzelner Tage eines mehrtägigen "
-                       "Termins kann ich nicht ändern — das geht in der Kalender-Ansicht.]")
-    schub = (date.fromisoformat(neu_tag) - date.fromisoformat(s.day)).days if neu_tag else 0
-    bis = felder.get("bis")
-    if bis and not _tag(bis):
-        return _fehler("[Fehler: bis als YYYY-MM-DD.]")
-    if bis and schub:
-        return _fehler("[Fehler: verschieben und neues Ende bitte nacheinander.]")
-    if not kalender_bearbeiten.spanne_aendern(s.layer, s.day, s.label,
-                                              neu_label=felder.get("neuer_titel"),
-                                              verschieben=schub, neu_bis=bis,
-                                              ort=felder.get("ort")):
-        return _fehler(f"[Nicht geändert: der Kalender hat die Änderung an "
-                       f"{kk.beschreiben(s)} abgelehnt.]")
-    von = (date.fromisoformat(s.day) + timedelta(days=schub)).isoformat()
-    label = felder.get("neuer_titel") or s.label
-    jetzt = [x for x in kk.stuecke() if x.art == "termin" and x.layer == s.layer
-             and x.day == von and x.label == label and x.bis]
-    if not jetzt:
-        return _fehler("[Geändert gemeldet, aber der Termin ist so NICHT zu finden — "
-                       "melde keinen Erfolg, lies nach.]")
-    beleg = f"Steht jetzt: {kk.beschreiben(jetzt[0])}."
-    return Befund(f"{beleg} {kk.beleg_warnungen(label)}", OK, beleg=beleg)
+        raise _Abbruch("K-SPANNE-UHRZEIT", "Uhrzeiten einzelner Tage eines mehrtägigen "
+                       "Termins ändert dieses Werkzeug nicht — das geht in der Kalender-Ansicht")
+    bis = _tag("bis", felder["bis"]) if "bis" in felder else None
+    x = kalender_kennung.eintrag_aendern(
+        s.uid, label=felder.get("neuer_titel"), ort=felder.get("ort"),
+        von=neu_tag or None, bis=bis)
+    satz = f"{termin_satz(x)} GEÄNDERT{_kenn(x)}."
+    return erledigt(satz, satz, zusatz=kk.beleg_warnungen(x.get("label") or ""))

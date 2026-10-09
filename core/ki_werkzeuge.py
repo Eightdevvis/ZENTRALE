@@ -38,7 +38,8 @@ import skills
 import web
 import werkzeug_register
 import zug
-from werkzeug_befund import Befund, OK, FEHLGESCHLAGEN, status_von
+import schreib_sicherung
+from werkzeug_befund import Befund, OK, FEHLGESCHLAGEN, status_von, erledigt, abgebrochen
 
 
 def ausfuehren(name: str, args: dict, *, projekt=None) -> str:
@@ -227,15 +228,30 @@ def _read_mail(args: dict) -> str:
 # Steht es NICHT da, sagt das Ergebnis das — mit Status „fehlgeschlagen",
 # statt dass die KI einen Erfolg meldet, den es nicht gab.
 
-def _belegt(roh, beleg, fehlt: str = "es steht NICHT da") -> Befund:
-    """roh: was der Dienst gemeldet hat. beleg: was nachgelesen wurde
-    (None = nicht gefunden)."""
-    if status_von(roh) == FEHLGESCHLAGEN:
-        return Befund(str(roh), FEHLGESCHLAGEN)
-    if beleg is None:
-        return Befund(f"{roh}\nNachgelesen: {fehlt} — melde keinen Erfolg.",
-                      FEHLGESCHLAGEN)
-    return Befund(f"{roh}\nNachgelesen: {beleg}", OK, beleg=beleg)
+# Seit 2026-10-09 nur noch zwei Ausgänge (core/fehlercodes.py): ERLEDIGT —
+# der Satz kommt aus dem nachgelesenen Stand — oder ABGEBROCHEN mit Code,
+# und dann ist der alte Stand wiederhergestellt (core/schreib_sicherung.py).
+
+def _transaktion(was: str, nichts: str, code: str, sicherung, roh, pruefen) -> Befund:
+    """Nach dem Schreiben: hat der Dienst abgelehnt (`roh` beginnt mit „[")
+    oder steht es nachgelesen nicht da, wird der alte Stand zurückgelegt
+    und abgebrochen. pruefen() -> (satz, beleg) oder None."""
+    roh = str(roh or "").strip()
+    if status_von(roh) == FEHLGESCHLAGEN or roh.startswith("["):
+        sicherung.zurueck()
+        return abgebrochen(was, code, roh, nichts)
+    ergebnis = pruefen()
+    if ergebnis is None:
+        sicherung.zurueck()
+        # „… Nichts geschrieben." ohne Klammer: der Dienst hat abgelehnt und
+        # es gesagt (gedaechtnis: zweite Ablage derselben Sache).
+        if "nichts geschrieben" in roh.lower() or "nichts geaendert" in roh.lower():
+            return abgebrochen(was, code, roh, nichts)
+        return abgebrochen(was, "W-NICHT-GESPEICHERT",
+                           f"nachgelesen stand es nicht so da ({roh}); der alte "
+                           f"Stand ist wiederhergestellt", nichts)
+    satz, beleg = ergebnis
+    return erledigt(satz, beleg, zusatz=f"({roh})" if roh and roh not in satz else "")
 
 
 def _eine_zeile(text: str, n: int = 60) -> str:
@@ -247,15 +263,21 @@ def _eine_zeile(text: str, n: int = 60) -> str:
     return ""
 
 
-def _steht_drin(text: str, inhalt: str, ort: str):
-    """Beleg-Satz, wenn der Anfang von `text` in `inhalt` steht, sonst None."""
+def _steht_drin(text: str, inhalt: str):
+    """Der Anfang von `text`, wenn er in `inhalt` steht, sonst None."""
     probe = _eine_zeile(text)
     if probe and probe in " ".join(str(inhalt or "").split()):
-        return f'steht {ort} („{probe}…“).'
+        return probe
     return None
 
 
 # ── Gedächtnis: Notizen statt Tripel (siehe core/gedaechtnis.py) ──
+
+@ausfuehrer("explain_error")
+def _explain_error(args: dict) -> str:
+    import fehlercodes
+    return fehlercodes.erklaeren(args.get("code") or "")
+
 
 @ausfuehrer("read_note")
 def _read_note(args: dict) -> str:
@@ -284,6 +306,9 @@ def _read_note(args: dict) -> str:
 def _write_note(args: dict) -> str:
     wie  = (args.get("name") or "").strip()
     text = args.get("text") or ""
+    if not str(text).strip():
+        return abgebrochen("Notiz", "N-TEXT-LEER", "kein Text angegeben", "nichts geschrieben")
+    sicherung = schreib_sicherung.Sicherung(ordner=[gedaechtnis._DIR])
     # 2026-10-08: mit herkunft ist es ein Import (Skill import-memory) —
     # zeilenweise, nur Neues, nie ins Tagebuch oder in Kataloge.
     if str(args.get("herkunft") or "").strip():
@@ -298,18 +323,45 @@ def _write_note(args: dict) -> str:
     else:
         roh = gedaechtnis.dossier_notieren(wie, text)
         lesen, ort = (lambda: gedaechtnis.dossier_lesen(wie)), f"in '{wie}'"
-    return _belegt(roh, _steht_drin(text, lesen(), ort), f"der Text steht NICHT {ort}")
+
+    if str(args.get("herkunft") or "").strip():
+        # Ein Import filtert zeilenweise (Doppeltes, Links); belegt ist er,
+        # wenn sich die Datei geändert hat — oder alles schon dastand.
+        def pruefen():
+            if not (sicherung.geaendert() or str(roh).startswith("Nichts geschrieben in")):
+                return None
+            return f"Import {ort} ERLEDIGT: {roh}", f"{ort}: {roh}"
+        return _transaktion(f"Import {ort}", "nichts geschrieben", "N-ABGELEHNT",
+                            sicherung, roh, pruefen)
+
+    def pruefen():
+        probe = _steht_drin(text, lesen())
+        return (f"Notiz {ort} GESPEICHERT — steht jetzt drin: „{probe}…“.",
+                f"steht {ort} („{probe}…“).") if probe else None
+    return _transaktion(f"Notiz {ort}", "nichts geschrieben", "N-ABGELEHNT",
+                        sicherung, roh, pruefen)
 
 
 @ausfuehrer("rewrite_note")
 def _rewrite_note(args: dict) -> str:
-    wie, inhalt = args.get("name") or "", args.get("content") or ""
+    wie, inhalt = (args.get("name") or "").strip(), args.get("content") or ""
+    if not wie:
+        return abgebrochen("Notiz neu schreiben", "N-NAME-LEER", "kein Name angegeben")
+    if not str(inhalt).strip():
+        return abgebrochen(f"Notiz '{wie}' neu schreiben", "N-TEXT-LEER",
+                           "kein neuer Inhalt angegeben")
+    sicherung = schreib_sicherung.Sicherung(ordner=[gedaechtnis._DIR])
     roh = gedaechtnis.dossier_ersetzen(wie, inhalt)
-    jetzt = gedaechtnis.dossier_lesen(wie)
-    beleg = _steht_drin(inhalt, jetzt, f"in '{wie}'")
-    if beleg:
-        beleg += f" Das Dossier hat jetzt {len(jetzt)} Zeichen."
-    return _belegt(roh, beleg, f"'{wie}' hat NICHT den neuen Inhalt")
+
+    def pruefen():
+        jetzt = gedaechtnis.dossier_lesen(wie)
+        probe = _steht_drin(inhalt, jetzt)
+        if not probe:
+            return None
+        beleg = f"'{wie}' hat jetzt {len(jetzt)} Zeichen und beginnt mit „{probe}…“."
+        return f"Notiz '{wie}' NEU GESCHRIEBEN: {beleg}", beleg
+    return _transaktion(f"Notiz '{wie}' neu schreiben", "nichts geändert", "N-ABGELEHNT",
+                        sicherung, roh, pruefen)
 
 
 @ausfuehrer("search_memory")
@@ -320,11 +372,18 @@ def _search_memory(args: dict) -> str:
 @ausfuehrer("fetch_document")
 def _fetch_document(args: dict) -> str:
     name = args.get("name") or ""
+    sicherung = schreib_sicherung.Sicherung(ordner=[gedaechtnis._DIR])
     roh = gedaechtnis.dokument_holen(args.get("url") or "", name)
     ort = "quellen/" + gedaechtnis.slug(name)
-    jetzt = gedaechtnis.dossier_lesen(ort) if gedaechtnis.slug(name) else ""
-    return _belegt(roh, f"{ort} hat {len(jetzt)} Zeichen." if jetzt else None,
-                   f"in {ort} steht nichts")
+
+    def pruefen():
+        jetzt = gedaechtnis.dossier_lesen(ort) if gedaechtnis.slug(name) else ""
+        if not jetzt:
+            return None
+        beleg = f"{ort} hat {len(jetzt)} Zeichen."
+        return f"Dokument „{name}“ ABGELEGT in {ort}: {len(jetzt)} Zeichen.", beleg
+    return _transaktion(f"Dokument „{name}“ ablegen", "nichts abgelegt", "D-ABGELEHNT",
+                        sicherung, roh, pruefen)
 
 
 # ── Messreihen ──
@@ -339,23 +398,41 @@ def _create_series(args: dict) -> str:
     """
     import graphs
     wie = (args.get("name") or "").strip()
+    was = f"Messreihe „{wie}“ anlegen"
     if not wie:
-        return "[Fehler: kein Name]"
+        return abgebrochen("Messreihe anlegen", "M-NAME-LEER", "kein Name angegeben",
+                           "nichts angelegt")
     if any(g.get("name", "").casefold() == wie.casefold()
            for g in graphs.list_graphs()):
-        return Befund(f"[Die Reihe {wie!r} gibt es schon — nichts angelegt.]",
-                      FEHLGESCHLAGEN)
+        return abgebrochen(was, "M-GIBT-ES-SCHON", f"die Reihe {wie!r} gibt es schon",
+                           "nichts angelegt")
+    vorher = {g.get("id") for g in graphs.list_graphs()}
+    sicherung = schreib_sicherung.Sicherung(dateien=[graphs._REGISTRY])
+
+    def zurueck():
+        for g in graphs.list_graphs():
+            if g.get("id") not in vorher:
+                try:
+                    _os.remove(graphs._values_path(g["id"]))
+                except (OSError, KeyError):
+                    pass
+        sicherung.zurueck()
     try:
         graphs.create_graph(wie, gtype=(args.get("typ") or "number"),
                             unit=(args.get("einheit") or ""))
     except Exception as e:
-        return f"[Anlegen fehlgeschlagen: {e}]"
+        zurueck()
+        return abgebrochen(was, "M-ABGELEHNT", str(e), "nichts angelegt")
     da = [g for g in graphs.list_graphs() if g.get("name", "").casefold() == wie.casefold()]
-    beleg = (f"Messkurve {da[0].get('name')!r} steht in der Liste "
-             f"(Typ {da[0].get('type')}).") if da else None
-    return _belegt(f"Messreihe {wie!r} angelegt. Trag Werte mit log_series ein und "
-                   f"verlink sie im Dossier der Sache.", beleg,
-                   f"die Messkurve {wie!r} steht NICHT in der Liste")
+    if not da:
+        zurueck()
+        return abgebrochen(was, "W-NICHT-GESPEICHERT", "nachgelesen steht sie nicht in "
+                           "der Liste; der alte Stand ist wiederhergestellt", "nichts angelegt")
+    g = da[0]
+    beleg = f"Messkurve {g.get('name')!r} steht in der Liste (Typ {g.get('type')})."
+    return erledigt(f"Messreihe „{g.get('name')}“ ANGELEGT (Typ {g.get('type')}"
+                    + (f", Einheit {g.get('unit')}" if g.get("unit") else "") + ").", beleg,
+                    zusatz="Trag Werte mit log_series ein und verlink sie im Dossier der Sache.")
 
 
 @ausfuehrer("log_series")
@@ -376,25 +453,33 @@ def _log_series(args: dict) -> str:
     name = (args.get("series") or "").strip()
     wert = args.get("value")
     if not name:
-        return "[Fehler: keine Reihe angegeben]"
+        return abgebrochen("Messwert eintragen", "M-NAME-LEER", "keine Reihe angegeben",
+                           "nichts eingetragen")
     treffer = [g for g in graphs.list_graphs()
                if g.get("name", "").casefold() == name.casefold()
                or g.get("id") == name]
     if not treffer:
         da = ", ".join(g.get("name", "?") for g in graphs.list_graphs()) or "keine"
-        return (f"[Keine Messreihe {name!r}. Vorhanden: {da}. "
-                f"Neue Reihen legt Sasha selbst an.]")
+        return abgebrochen(f"Messwert für „{name}“", "M-UNBEKANNT",
+                           f"keine Messreihe {name!r}; vorhanden: {da}", "nichts eingetragen")
     g = treffer[0]
     tag = (args.get("day") or "").strip() or _dt.date.today().isoformat()
+    was = f"Messwert {g.get('name')} am {tag}"
+    sicherung = schreib_sicherung.Sicherung(dateien=[graphs._values_path(g["id"])])
     try:
         graphs.log_value(g["id"], tag, wert)
     except Exception as e:
-        return f"[Fehler beim Eintragen: {e}]"
+        sicherung.zurueck()
+        return abgebrochen(was, "M-ABGELEHNT", str(e), "nichts eingetragen")
     da = [e for e in graphs.read_values(g["id"])
           if isinstance(e, dict) and e.get("date") == tag]
-    return _belegt(f"{g.get('name')} fuer {tag}: {wert} eingetragen.",
-                   f"{g.get('name')} am {tag} = {da[-1].get('value')}." if da else None,
-                   f"für {tag} steht kein Wert")
+    if not da:
+        sicherung.zurueck()
+        return abgebrochen(was, "W-NICHT-GESPEICHERT", "nachgelesen steht für den Tag "
+                           "kein Wert; der alte Stand ist wiederhergestellt",
+                           "nichts eingetragen")
+    beleg = f"{g.get('name')} am {tag} = {da[-1].get('value')}."
+    return erledigt(f"{was} EINGETRAGEN: {da[-1].get('value')}.", beleg)
 
 
 @ausfuehrer("run_code")
@@ -449,26 +534,30 @@ def _load_skill(args: dict) -> str:
 @ausfuehrer("propose_skill")
 def _propose_skill(args: dict) -> str:
     inhalt = str(args.get("inhalt") or "")
-    roh = skills.vorschlagen(args.get("name") or "",
-                             args.get("beschreibung") or "", inhalt)
-    return _belegt(roh, _skill_beleg(args.get("name"), inhalt),
-                   "die Anleitung lässt sich NICHT laden")
+    name = args.get("name") or ""
+    sicherung = schreib_sicherung.Sicherung(ordner=[skills.ordner()])
+    roh = skills.vorschlagen(name, args.get("beschreibung") or "", inhalt)
+    return _transaktion(f"Anleitung „{name}“ anlegen", "nichts angelegt", "S-ABGELEHNT",
+                        sicherung, roh, lambda: _skill_beleg(name, inhalt, "ANGELEGT"))
 
 
 @ausfuehrer("edit_skill")
 def _edit_skill(args: dict) -> str:
     inhalt = str(args.get("inhalt") or "")
-    roh = skills.aendern(args.get("name") or "", inhalt)
-    return _belegt(roh, _skill_beleg(args.get("name"), inhalt),
-                   "die Anleitung hat NICHT den neuen Inhalt")
+    name = args.get("name") or ""
+    sicherung = schreib_sicherung.Sicherung(ordner=[skills.ordner()])
+    roh = skills.aendern(name, inhalt)
+    return _transaktion(f"Anleitung „{name}“ ändern", "nichts geändert", "S-ABGELEHNT",
+                        sicherung, roh, lambda: _skill_beleg(name, inhalt, "GEÄNDERT"))
 
 
-def _skill_beleg(name, inhalt: str):
+def _skill_beleg(name, inhalt: str, wort: str):
     text = skills.laden(name or "")
     if not text or text.lstrip().startswith("[") or \
             _eine_zeile(inhalt) not in " ".join(text.split()):
         return None
-    return f"die Anleitung '{gedaechtnis.slug(name)}' lässt sich laden ({len(text)} Zeichen)."
+    beleg = f"die Anleitung '{gedaechtnis.slug(name)}' lässt sich laden ({len(text)} Zeichen)."
+    return f"Anleitung „{gedaechtnis.slug(name)}“ {wort}: {beleg}", beleg
 
 
 # ── Frühere Gespräche (core/chat_suche.py, Phase 3 2026-10-07) ──
@@ -505,19 +594,33 @@ def _ablage_melden(k: dict) -> None:
     zug.melden({"ablage": ablage.kurz(k)})
 
 
-def _ablage_text(k: dict, was: str) -> Befund:
-    text = (f'{was}: "{k.get("titel")}" (id {k["id"]}, Fassung {k.get("fassung")}). '
-            f"Sasha sieht es als Eintrag im Chat; wiederhole den Inhalt nicht.")
+def _ablage_zurueck(k: dict, neu: bool, sicherung=None) -> None:
+    """Abbruch nach dem Ablegen: ein neues Dokument ganz weg (es gab es
+    vorher nicht), eine neue Fassung über die Sicherung des Ordners."""
+    import shutil
+    if neu:
+        shutil.rmtree(_os.path.join(ablage.ordner(), k["id"]), ignore_errors=True)
+    elif sicherung is not None:
+        sicherung.zurueck()
+
+
+def _ablage_ergebnis(k: dict, was: str, wort: str, neu: bool, sicherung=None) -> Befund:
+    """Nachlesen, was in der Ablage liegt; sonst zurück und abbrechen."""
     try:
         d = ablage.lesen(k["id"])
     except Exception:
         d = None
-    beleg = None
-    if d is not None and d["fassung"] == k.get("fassung"):
-        groesse = (f"{len(d['inhalt'])} Zeichen" if d["inhalt"] is not None
-                   else f"Bild, {d['bytes']} Bytes")
-        beleg = f"liegt in der Ablage, Fassung {d['fassung']}, {groesse}."
-    return _belegt(text, beleg, "das Dokument liegt NICHT in der Ablage")
+    if d is None or d["fassung"] != k.get("fassung"):
+        _ablage_zurueck(k, neu, sicherung)
+        return abgebrochen(was, "W-NICHT-GESPEICHERT", "nachgelesen liegt es nicht in der "
+                           "Ablage; der alte Stand ist wiederhergestellt", "nichts abgelegt")
+    _ablage_melden(k)
+    groesse = (f"{len(d['inhalt'])} Zeichen" if d["inhalt"] is not None
+               else f"Bild, {d['bytes']} Bytes")
+    beleg = f"liegt in der Ablage, Fassung {d['fassung']}, {groesse}."
+    return erledigt(f'Dokument „{d["kopf"].get("titel")}“ {wort} (id {k["id"]}, Fassung '
+                    f'{d["fassung"]}, {groesse}).', beleg,
+                    zusatz="Sasha sieht es als Eintrag im Chat; wiederhole den Inhalt nicht.")
 
 
 @ausfuehrer("create_document")
@@ -525,14 +628,15 @@ def _create_document(args: dict) -> str:
     art = (args.get("art") or "markdown").strip().lower()
     if art not in ("markdown", "text", "code", "csv"):
         art = "markdown"
+    titel = str(args.get("titel") or "").strip()
+    was = f"Dokument „{titel}“ ablegen"
     try:
-        k = ablage.anlegen(args.get("titel") or "", str(args.get("inhalt") or ""), art,
+        k = ablage.anlegen(titel, str(args.get("inhalt") or ""), art,
                            herkunft="ki", gespraech=zug.gespraech(),
                            sprache=args.get("sprache"))
     except ablage.Fehler as e:
-        return f"[Nicht abgelegt: {e}]"
-    _ablage_melden(k)
-    return _ablage_text(k, "Abgelegt")
+        return abgebrochen(was, "A-ABGELEHNT", str(e), "nichts abgelegt")
+    return _ablage_ergebnis(k, was, "ABGELEGT", neu=True)
 
 
 @ausfuehrer("read_document")
@@ -553,15 +657,19 @@ def _read_document(args: dict) -> str:
 
 @ausfuehrer("update_document")
 def _update_document(args: dict) -> str:
+    doc_id = str(args.get("id") or "").strip()
+    was = f"Neue Fassung von {doc_id or '?'}"
+    if not doc_id or not ablage.gibt_es(doc_id):
+        return abgebrochen(was, "A-DOK-UNBEKANNT", "kein Dokument mit dieser id in der Ablage")
+    sicherung = schreib_sicherung.Sicherung(ordner=[_os.path.join(ablage.ordner(), doc_id)])
     try:
-        k = ablage.neue_fassung(str(args.get("id") or "").strip(),
-                                str(args.get("inhalt") or ""))
+        k = ablage.neue_fassung(doc_id, str(args.get("inhalt") or ""))
     except ablage.Unbekannt:
-        return "[Kein Dokument mit dieser id in der Ablage.]"
+        return abgebrochen(was, "A-DOK-UNBEKANNT", "kein Dokument mit dieser id in der Ablage")
     except ablage.Fehler as e:
-        return f"[Nicht geändert: {e}]"
-    _ablage_melden(k)
-    return _ablage_text(k, "Neue Fassung abgelegt")
+        sicherung.zurueck()
+        return abgebrochen(was, "A-ABGELEHNT", str(e))
+    return _ablage_ergebnis(k, was, "ABGELEGT", neu=False, sicherung=sicherung)
 
 
 # Was aus einem Lauf höchstens in die Ablage darf (Text: 4 Bytes je Zeichen).
@@ -577,12 +685,14 @@ def _save_from_sandbox(args: dict) -> str:
     lauf = str(args.get("lauf") or "").strip()
     datei = str(args.get("datei") or "").strip()
     gid = zug.gespraech()
+    was = f"Datei „{datei}“ ablegen"
     if gid and not lauf.startswith(sandbox.lauf_vorsatz(gid)):
-        return "[Nicht abgelegt: dieser Lauf gehört nicht zu diesem Gespräch.]"
+        return abgebrochen(was, "A-LAUF-FREMD", "dieser Lauf gehört nicht zu diesem Gespräch",
+                           "nichts abgelegt")
     try:
         roh = sandbox.datei_lesen(lauf, datei, _SANDBOX_MAX_BYTES)
     except ValueError as e:
-        return f"[Nicht abgelegt: {e}]"
+        return abgebrochen(was, "A-DATEI-NICHT-LESBAR", str(e), "nichts abgelegt")
     name = _os.path.basename(datei)
     endung = _os.path.splitext(name)[1].lower()
     titel = str(args.get("titel") or "").strip() or name
@@ -592,15 +702,17 @@ def _save_from_sandbox(args: dict) -> str:
             k = ablage.anlegen(titel, roh, "bild", herkunft="sandbox", gespraech=gid,
                                endung=endung, quelle=quelle)
         elif b"\x00" in roh[:8192]:
-            return "[Nicht abgelegt: das ist weder Text noch ein Bild.]"
+            return abgebrochen(was, "A-KEIN-TEXT-ODER-BILD", "das ist weder Text noch ein Bild",
+                               "nichts abgelegt")
         else:
             art = {".md": "markdown", ".csv": "csv", ".txt": "text"}.get(endung, "code")
             k = ablage.anlegen(titel, roh, art, herkunft="sandbox", gespraech=gid,
                                endung=endung or ".txt", quelle=quelle)
     except ablage.Fehler as e:
-        return f"[Nicht abgelegt: {e}]"
-    _ablage_melden(k)
-    return _ablage_text(k, "Abgelegt")
+        return abgebrochen(was, "A-ABGELEHNT", str(e), "nichts abgelegt")
+    return _ablage_ergebnis(k, was, "ABGELEGT", neu=True)
+
+
 # ── Projekte (core/projekte.py, Phase 6 2026-10-07) ──
 # Nur das Projekt des laufenden Gesprächs: `projekt` kommt von
 # _verteilen (siehe braucht_projekt), nicht vom Modell. Ein Pfad im Namen

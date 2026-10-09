@@ -378,7 +378,7 @@ komm ich nicht tiefer" (geraten) und „die Warnungen sollten verschwinden"
 (nie geprüft). Ehrlichkeit war eine Bitte im Prompt; jetzt ist sie Bauweise:
 
 - **Kopfzeile.** Jedes Werkzeug-Ergebnis an die KI beginnt mit
-  `[ergebnis: ok|teilweise|fehlgeschlagen|keine_antwort|abgelehnt]`, gesetzt
+  `[ergebnis: ok|fehlgeschlagen|keine_antwort|abgelehnt]`, gesetzt
   in `werkzeug_schleife.run_tool` (`core/werkzeug_befund.py`). Ein Ausführer
   sagt den Status mit einem `Befund` (ein `str` mit `status` und `beleg`);
   alte Text-Ausführer werden an „[Fehler …]" erkannt. Nie „None": ein leeres
@@ -389,6 +389,20 @@ komm ich nicht tiefer" (geraten) und „die Warnungen sollten verschwinden"
   Kalender (Zeit von–bis, Ort, Wiederholung, Pausen, Warnungen dazu),
   Notizen („steht im Tagebuch …"), Messkurven, Skills, Ablage. Steht es nicht
   da: `fehlgeschlagen` und „melde keinen Erfolg".
+- **Zwei Ausgänge, feste Codes** (seit 2026-10-09). Ein schreibendes
+  Werkzeug ist ERLEDIGT (`ok`, Satz aus dem nachgelesenen Stand: „Notiz in
+  den Hausregeln GESPEICHERT — steht jetzt drin: …") oder ABGEBROCHEN
+  (`fehlgeschlagen`, nichts geändert): „<was> ABGEBROCHEN – nichts
+  eingetragen. Fehler K-ENDE-VOR-BEGINN: …". `teilweise` gibt es nicht mehr
+  — es hieß, das Werkzeug tat etwas anderes als verlangt. Erst prüfen, dann
+  schreiben, dann nachlesen; steht es nicht so da, wird der alte Stand
+  zurückgelegt (`core/schreib_sicherung.py`; der Kalender-Kern kann das per
+  Kennung selbst). Codes an EINER Stelle: `core/fehlercodes.py`; die KI
+  schlägt sie mit `explain_error` nach (gross, frei). Lesen in Stücken
+  (read_pdf/read_docx über 20.000 Zeichen) ist `ok` mit „Seiten 1–20 von 45
+  gelesen, weiter mit seiten=21-45". Tests: `tests/test_fehlercodes.py`
+  (jeder Code erklärt, kein Abbruch ohne Code, Abbruch nach dem Schreiben
+  lässt die Daten Byte für Byte wie vorher).
 - **ask_choice ohne Antwort** (Zeit um, gestoppt) → `keine_antwort`: „Sasha
   hat NICHT geantwortet — ändere nichts, was davon abhängt, frag nach".
   `wait_permission` liefert dafür `None` statt des Texts „(keine Antwort)".
@@ -399,7 +413,7 @@ komm ich nicht tiefer" (geraten) und „die Warnungen sollten verschwinden"
   `ai_answer_perm` löschte nach dem POST `AI["perm"]` — auch wenn dort schon
   die NÄCHSTE Frage stand. Jetzt nur noch die beantwortete.
 - **Websuche** beginnt mit „Treffer = Hinweise, NICHT gelesen …";
-  **fetch_url** meldet `teilweise`, wenn eine Seite kaum Inhalt hatte
+  **fetch_url** warnt (Status `ok`), wenn eine Seite kaum Inhalt hatte
   (unter 80 Wörtern oder 3 ganzen Sätzen: Navigation, Menü, Anmeldung) und
   sagt nur, was zu sehen war.
 - **Prompt (gross), Meta-Regel 2:** „Als Tatsache sagst du nur, was ein
@@ -422,11 +436,18 @@ Umschlag. Einstellung `ehrlichkeit_pruefer`. Alles Weitere:
 ### Kalender ohne Fallen — `core/ki_kalender.py`, `ki_kalender_aendern.py` (seit 2026-10-08)
 
 - **Kennungen** (nur `gross`): `read_calendar` zeigt je Zeile `#t…` (Termin)
-  bzw. `#r…` (Routine), dazu die Serien mit allen Feldern. Abgeleitet aus dem
-  Inhalt (Ebene, Tag/Regel, Titel, Uhrzeit; Doppel über einen Zähler), 4
-  Zeichen, bei Kollision länger. Kein Zustand, auf beiden Rechnern gleich;
-  nach einer Änderung von Zeit/Titel neu (steht im Beleg) — eine alte
-  Kennung trifft dann nichts statt das Falsche. `klein` liest wie gemessen.
+  bzw. `#r…` (Routine), dazu die Serien mit allen Feldern. Seit 2026-10-09
+  abgeleitet aus der FESTEN Kennung des Kalender-Kerns
+  (`core/kalender_kennung.py`, UID): 4 Zeichen, bei Kollision länger, und
+  dieselbe auch nach Umbenennen, neuer Uhrzeit, neuem Ort. Eine gelöschte
+  trifft nichts mehr (`K-KENNUNG-UNBEKANNT`). `klein` liest wie gemessen.
+- **Per Kennung schreiben** (2026-10-09): ändern, löschen, absagen, pausieren
+  laufen über die Funktionen von `kalender_kennung` — der Kern prüft vorher
+  und schreibt ganz oder gar nicht; seine Ablehnung kommt als `K-<CODE>`
+  durch. Neu anlegen: nachlesen, und steht es anders da als verlangt, per
+  Kennung wieder löschen (`W-NICHT-GESPEICHERT`). Rückmeldung in fester
+  Form aus dem echten Stand: „Kalendereintrag „Geigenstunde" am Do
+  08.10.2026 18:10–19:00 @ Geigenschule EINGETRAGEN (#t3f9c)."
 - **Genau EIN Eintrag.** Ändern/Löschen per Kennung; per Name nur bei genau
   einem Treffer (genauer Titel vor Teilstring), sonst nichts ändern und die
   Treffer mit Kennungen zurück. Wo der Kalender-Kern per Teilstring trifft,
@@ -438,9 +459,11 @@ Umschlag. Einstellung `ehrlichkeit_pruefer`. Alles Weitere:
   fehlt das Ende, steht im Ergebnis „ohne Ende — die Ansicht zeichnet eine
   Stunde, frag nach". Kein Pflichtfeld: sonst müsste die KI eins erfinden,
   wenn Sasha keins genannt hat.
-- **Pausen** wirken nur bei genau gleichem Titel; trifft eine Pause keine
-  Routine, heißt das `teilweise` mit Vorschlag (am 08.10. traf „Geigenstunde"
-  die Routine „Geigenstunde @ Geigenschule" nicht).
+- **Pausen** hängen seit 09.10. per Kennung fest an GENAU einer Routine;
+  heißt keine genau so, bricht es ab (`K-PAUSE-KEINE-ROUTINE`, mit
+  Vorschlag, nichts gespeichert) — vorher wurde eine wirkungslose Pause
+  gespeichert (am 08.10. traf „Geigenstunde" die Routine „Geigenstunde @
+  Geigenschule" nicht).
   Auf `gross` ist `bis` kein Pflichtfeld (2026-10-08): ohne Ende fällt nur
   der Tag `von` aus, und das Ergebnis sagt „Ende noch offen — frag nach".
   Vorher schob die KI bei „fällt jetzt aus, bis wann?" die ganze Pause auf,

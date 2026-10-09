@@ -10,7 +10,7 @@
 # Ehrlichkeit war eine Bitte im Prompt, keine Bauweise. Jetzt:
 #
 #   - jedes Werkzeug-Ergebnis an die KI beginnt mit einer Kopfzeile
-#     „[ergebnis: ok|teilweise|fehlgeschlagen|keine_antwort|abgelehnt]"
+#     „[ergebnis: ok|fehlgeschlagen|keine_antwort|abgelehnt]"
 #     (gesetzt in werkzeug_schleife.run_tool) — maschinenlesbar, nicht aus
 #     der Wortwahl zu erraten;
 #   - schreibende Werkzeuge lesen nach dem Schreiben nach und geben den
@@ -24,12 +24,17 @@
 
 import contextvars
 
+# „teilweise" gibt es seit 2026-10-09 nicht mehr (Sasha: „das programm macht
+# etwas richtig ODER bricht KONTROLLIERT KOMPLETT AB mit genauem
+# fehlercode"). Ein schreibendes Werkzeug ist ERLEDIGT (ok) oder ABGEBROCHEN
+# (fehlgeschlagen, nichts geändert, mit Code aus core/fehlercodes.py).
+# „teilweise" hieß: das Werkzeug hat etwas anderes getan als verlangt — ein
+# Fehler des Werkzeugs, den die KI ausbaden sollte.
 OK = "ok"
-TEILWEISE = "teilweise"
 FEHLGESCHLAGEN = "fehlgeschlagen"
 KEINE_ANTWORT = "keine_antwort"
 ABGELEHNT = "abgelehnt"
-STATUS = (OK, TEILWEISE, FEHLGESCHLAGEN, KEINE_ANTWORT, ABGELEHNT)
+STATUS = (OK, FEHLGESCHLAGEN, KEINE_ANTWORT, ABGELEHNT)
 
 
 class Befund(str):
@@ -38,15 +43,36 @@ class Befund(str):
     Ein str, damit alles, was bisher Texte weiterreicht (Log, Verlauf, Tests,
     die Ergebnisse vergleichen), unverändert weiterläuft. Der Text ist der
     ganze Satz an die KI; `beleg` ist der nachgelesene Stand allein (für
-    Tests und die Prüfung „jedes schreibende Werkzeug belegt")."""
+    Tests und die Prüfung „jedes schreibende Werkzeug belegt"). `code` ist
+    der Fehlercode eines Abbruchs (core/fehlercodes.py)."""
 
-    def __new__(cls, text: str, status: str = OK, beleg: str = ""):
+    def __new__(cls, text: str, status: str = OK, beleg: str = "", code: str = ""):
         if status not in STATUS:
             raise ValueError(f"unbekannter Status: {status!r}")
         obj = super().__new__(cls, text)
         obj.status = status
         obj.beleg = beleg or ""
+        obj.code = code or ""
         return obj
+
+
+def erledigt(satz: str, beleg: str = "", zusatz: str = "") -> Befund:
+    """ERLEDIGT: `satz` sagt in fester Form, was jetzt dasteht — aus dem
+    nachgelesenen Stand, nicht aus den Argumenten. `zusatz`: Hinweise
+    dahinter (Warnungen), die nicht zum Beleg gehören."""
+    text = satz + (" " + zusatz if zusatz else "")
+    return Befund(text.strip(), OK, beleg=beleg or satz)
+
+
+def abgebrochen(was: str, code: str, grund: str, nichts: str = "nichts geändert") -> Befund:
+    """ABGEBROCHEN, kontrolliert: nichts ist geändert (oder der alte Stand
+    ist wiederhergestellt), und der Code sagt, warum. Feste Form:
+    „<was> ABGEBROCHEN – <nichts>. Fehler <CODE>: <grund>"."""
+    grund = str(grund or "").strip().strip("[]").strip()
+    text = f"{was} ABGEBROCHEN – {nichts}. Fehler {code}: {grund}".rstrip()
+    if not text.endswith((".", "!", "?", ")")):
+        text += "."
+    return Befund(text, FEHLGESCHLAGEN, code=code)
 
 
 def status_von(ergebnis) -> str:

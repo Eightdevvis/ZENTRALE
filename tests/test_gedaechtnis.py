@@ -380,7 +380,7 @@ def test_neue_kurve_ist_gegatet():
 def test_log_series_legt_nichts_von_selbst_an():
     import ki_werkzeuge
     antwort = ki_werkzeuge._log_series({"series": "gibtsnicht", "value": 3})
-    assert "Keine Messreihe" in antwort
+    assert "M-UNBEKANNT" in antwort and "keine Messreihe" in antwort
 
 
 # ── Nichts als erledigt notieren, was noch aussteht ───────────────────

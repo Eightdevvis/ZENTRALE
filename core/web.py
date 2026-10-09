@@ -32,7 +32,7 @@ from urllib.parse import urlencode, urlparse, parse_qs, unquote
 
 import net    # transparenter HTTP-Wrapper (loggt jeden Call ins Dashboard)
 import state  # für den expliziten Transparenz-Log (s.u. _searxng_search)
-from werkzeug_befund import Befund, TEILWEISE, FEHLGESCHLAGEN
+from werkzeug_befund import Befund, OK, abgebrochen
 
 
 # ── Such-Backend: SearXNG (self-hosted, localhost) ────────────────────
@@ -274,11 +274,13 @@ def hole(url: str, max_chars: int = _DEFAULT_MAXCHARS) -> str:
     text = _strip_html(page)
 
     if not text:
-        return Befund(f"[Seite {url} geladen, aber kein lesbarer Text gefunden]",
-                      FEHLGESCHLAGEN)
+        return abgebrochen(f"Seite {url} lesen", "I-KEIN-TEXT",
+                           "geladen, aber kein lesbarer Text gefunden", "nichts gelesen")
     warnung = duenn(text)
     if len(text) > max_chars:
         text = text[:max_chars] + " […abgeschnitten]"
     if warnung:
-        return Befund(f"{warnung}\nInhalt von {url}:\n{text}", TEILWEISE)
+        # Dünner Inhalt ist kein Teil-Ergebnis (2026-10-09): gelesen ist,
+        # was da ist; die Warnung sagt, wie wenig das ist.
+        return Befund(f"{warnung}\nInhalt von {url}:\n{text}", OK)
     return f"Inhalt von {url}:\n{text}"

@@ -840,7 +840,7 @@ Ist-Zustands und erlaubten ungenaue Massen-Eingriffe. Ausführlich:
 [ki_system.md](ki_system.md) „Belegt oder gesagt" und „Kalender ohne Fallen".
 
 - **Status maschinenlesbar:** jedes Werkzeug-Ergebnis beginnt mit
-  `[ergebnis: ok|teilweise|fehlgeschlagen|keine_antwort|abgelehnt]`
+  `[ergebnis: ok|fehlgeschlagen|keine_antwort|abgelehnt]` (`teilweise` seit 09.10. abgeschafft)
   (`core/werkzeug_befund.py`, gesetzt in `werkzeug_schleife.run_tool`).
 - **Belege statt „OK":** Register-Felder `schreibt`/`beweis`; alle 16
   schreibenden Werkzeuge lesen nach (Kalender, Notizen, Messkurven, Skills,
@@ -906,6 +906,16 @@ Umschlag wiederholt, abgehakt durch Werkzeug / Ablehnung / Verfall.
 Einstellung `ehrlichkeit_pruefer` an|melden|aus. Neu: `core/ehrlichkeit.py`,
 `core/ehrlichkeit_erkennen.py`, `core/zusagen.py`,
 `scripts/ehrlichkeit_messen.py`, `tests/test_ehrlichkeit.py`.
+
+Nachgezogen am selben Tag (Sasha: „richtig ODER kontrolliert komplett
+abbrechen mit genauem fehlercode"): Status `teilweise` abgeschafft; jedes
+schreibende Werkzeug endet ERLEDIGT (Satz aus dem nachgelesenen Stand) oder
+ABGEBROCHEN mit Code, bei Abbruch nach dem Schreiben alter Stand zurück
+(`core/schreib_sicherung.py`; Kalender per Kennung über
+`core/kalender_kennung.py`). Codes an einer Stelle (`core/fehlercodes.py`,
+Kern-Codes als `K-<CODE>`), nachschlagbar mit `explain_error` (gross).
+Kurze Kalender-Kennungen jetzt aus der festen UID (stabil über Änderungen).
+Tests: `tests/test_fehlercodes.py`, Abbruch-Fälle in `tests/test_ki_kalender.py`.
 
 ### Skills `pdf` und `word` (2026-10-08)
 

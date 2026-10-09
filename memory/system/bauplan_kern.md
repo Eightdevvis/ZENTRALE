@@ -79,7 +79,9 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `tone` | 1 | Ton-Erzeuger fürs TUI-Klavier |
 | `pc_status` | 1 | Ist der andere Knoten gerade da? |
 | `zug` | 1 | Der laufende Chat-Zug: Gesprächs-id und Stopp-Signal für die Werkzeuge, Ereignisse von Werkzeugen an die TUI (z. B. `ablage`) |
-| `werkzeug_befund` | 1 | Was ein Werkzeug zurückgibt: Status (`[ergebnis: ok/teilweise/…]`) und Beleg; die Schiene des laufenden Werkzeug-Aufrufs |
+| `werkzeug_befund` | 1 | Was ein Werkzeug zurückgibt: Status (`[ergebnis: ok/fehlgeschlagen/…]`), Beleg und Fehlercode; feste Formen ERLEDIGT/ABGEBROCHEN; die Schiene des laufenden Werkzeug-Aufrufs |
+| `fehlercodes` | 1 | Die eine Tabelle der Fehlercodes der KI-Werkzeuge (Code → Ursache, was tun); `explain_error` liest sie |
+| `schreib_sicherung` | 1 | „Ganz oder gar nicht" für Dienste ohne eigenes Zurück: Dateien/Ordner vor dem Schreiben merken, bei Abbruch Byte für Byte zurücklegen |
 | `kalender` | 2 | Termine, Routinen, Konflikt-Alarm — die Fassade, Speicher austauschbar |
 | `kalender_zeitraum` | 2 | Relative Zeiträume („diese_woche") in Daten übersetzen |
 | `kalender_regel` | 2 | Wann eine Routine stattfindet (RRULE → Tage), eine Stelle für Fassade und .ics |
