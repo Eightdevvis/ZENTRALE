@@ -41,6 +41,7 @@ import werkzeug_register
 
 from . import klein
 from . import gross
+from . import modelle
 
 PROFILE = {
     "klein": klein,
@@ -57,17 +58,23 @@ def hol(name: str):
     return PROFILE.get(name) or klein
 
 
-def fuer_backend(backend: str):
+def fuer_backend(backend: str, modell: str | None = None):
     """Welche Schiene gehoert zu diesem Backend?
 
     lokal → klein, cloud → gross. Uebersteuerbar per `chat_profil` in
     data/ai_config.json bzw. ZENTRALE_CHAT_PROFIL — zuruecktauschen ist eine
     Zeile, das ist der Sinn der Sache.
+
+    modell (2026-10-09): hat das Modell ein Profil (Einstellung
+    `modell_profile`, profil/modelle/), kommt die Schiene mit Profil darüber
+    zurück; sonst die Schiene selbst, unverändert.
     """
     wahl = _aus_config()
     if wahl:
-        return hol(wahl)
-    return gross if backend == "cloud" else klein
+        basis = hol(wahl)
+    else:
+        basis = gross if backend == "cloud" else klein
+    return modelle.fuer(modell, basis) if modell else basis
 
 
 def _aus_config() -> str | None:

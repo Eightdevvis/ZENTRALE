@@ -259,7 +259,8 @@ def _to_anthropic_tools(openai_tools: list) -> list:
 
 # ── System-Prompt: statisch vorn (gecacht), Wechselndes hinten ─────────
 
-def _static_system(system: str | None, tutor_mode: bool, projekt=None) -> str:
+def _static_system(system: str | None, tutor_mode: bool, projekt=None,
+                   schiene=None) -> str:
     """
     Der statische Kopf: über alle Turns einer Sitzung BYTE-IDENTISCH.
 
@@ -286,7 +287,9 @@ def _static_system(system: str | None, tutor_mode: bool, projekt=None) -> str:
 
     # Die Schiene entscheidet, was hier drinsteht — nicht dieser Modul.
     # Hier draussen faehrt ein Frontier-Modell, also `gross`.
-    schiene = _profil()
+    # schiene: mit Modell-Profil, wenn der Weg das Modell kennt (2026-10-09,
+    # cloud_openai); ohne die Schiene des Backends wie bisher.
+    schiene = schiene or _profil()
     teile = [schiene.system(system, dashview=ki_prompt._DASHVIEW,
                             graph=ki_prompt.GRAPH_KONTEXT)]
     # Das Datei-Gedaechtnis: Steckbrief, Ziele, Dossier-TITEL. Gehoert in
@@ -331,10 +334,11 @@ def _static_system(system: str | None, tutor_mode: bool, projekt=None) -> str:
     return "\n\n".join(teile)
 
 
-def _profil():
-    """Die Schiene für den Cloud-Pfad (siehe core/profil/)."""
+def _profil(modell: str | None = None):
+    """Die Schiene für den Cloud-Pfad (siehe core/profil/) — mit Modell das
+    Modell-Profil darüber, falls es eins gibt (core/profil/modelle/)."""
     import profil
-    return profil.fuer_backend("cloud")
+    return profil.fuer_backend("cloud", modell=modell)
 
 
 def cloud_tools() -> list:

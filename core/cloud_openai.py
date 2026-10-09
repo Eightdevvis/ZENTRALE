@@ -100,7 +100,8 @@ def is_available(name: str | None = None) -> bool:
         return False
 
 
-def _system_text(system, mem_ctx, via_mic, tutor_mode, projekt=None) -> str:
+def _system_text(system, mem_ctx, via_mic, tutor_mode, projekt=None,
+                 schiene=None) -> str:
     """Der statische Kopf — dieselbe Funktion wie im Anthropic-Pfad, damit die
     beiden Dialekte nicht auseinanderlaufen.
 
@@ -110,7 +111,7 @@ def _system_text(system, mem_ctx, via_mic, tutor_mode, projekt=None) -> str:
     Praefix-Caches der Anbieter arbeiten nach derselben Logik — was sich
     aendert, gehoert ans Ende, nicht an den Anfang. Die Parameter bleiben in
     der Signatur, damit die Aufrufstelle in beiden Modulen gleich aussieht."""
-    return cloud._static_system(system, tutor_mode, projekt)
+    return cloud._static_system(system, tutor_mode, projekt, schiene=schiene)
 
 
 def _log_usage(verbrauch, model: str):
@@ -240,9 +241,20 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         return
 
     tutor_mode   = tools is not None
+    # Modell aus derselben Quelle wie beim Anthropic-Pfad: pro Anbieter
+    # gespeichert. Sonst gäbe es zwei Wahrheiten darüber, was gerade läuft.
+    # Seit 2026-10-09 VOR dem Prompt: das Modell wählt sein Profil
+    # (core/profil/modelle/), und das Profil darf Prompt und Werkzeuge ändern.
+    if model:
+        mdl = model
+    else:
+        import ai_backends
+        mdl = ai_backends.chat_model(provider or _aktueller_anbieter()) \
+            or prov.get("default_model")
+    schiene_obj = None if tutor_mode else cloud._profil(mdl)
     # Tool-Set von der Schiene, nicht aus ai.TOOLS: dort haengt das
     # Set fuer KLEINE Modelle (siehe core/profil/).
-    active_tools = tools if tools is not None else cloud.cloud_tools()
+    active_tools = tools if tools is not None else schiene_obj.TOOLS
     active_exec  = (tool_executor if tool_executor is not None
                     else ki_werkzeuge.mit_projekt(projekt))   # Phase 6, wie cloud.py
     store        = None if tutor_mode else cloud.CLOUD_GRAPH
@@ -261,31 +273,32 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     volatile = cloud._volatile_text(mem_ctx, via_mic, tutor_mode)
     msgs   = _prepare_messages(
         messages,
-        _system_text(system, mem_ctx, via_mic, tutor_mode, projekt),
+        _system_text(system, mem_ctx, via_mic, tutor_mode, projekt, schiene_obj),
         volatile)
     cloud.ablauf_melden(msgs[0]["content"], volatile, messages, tutor_mode)
     client = _get_client(prov)
-    # Modell aus derselben Quelle wie beim Anthropic-Pfad: pro Anbieter
-    # gespeichert. Sonst gäbe es zwei Wahrheiten darüber, was gerade läuft.
-    if model:
-        mdl = model
-    else:
-        import ai_backends
-        mdl = ai_backends.chat_model(provider or _aktueller_anbieter()) \
-            or prov.get("default_model")
 
     adapter = _OpenAIAdapter(client, mdl, msgs, active_tools, abbruch=abbruch,
-                             max_tokens=max_tokens, temperatur=temperatur)
-    schiene = cloud._profil().NAME if tools is None else "klein"
+                             max_tokens=max_tokens, temperatur=temperatur,
+                             profil=_profil_der(schiene_obj), messages=messages)
+    schiene = schiene_obj.NAME if tools is None else "klein"
+    pruefer = ehrlichkeit.pruefer_fuer(messages, schiene=schiene,
+                                       tutor_mode=tutor_mode,
+                                       kontext=msgs[0]["content"] + "\n" + volatile)
+    if adapter.profil is not None:
+        pruefer = adapter.profil.pruefer(pruefer, messages=messages)
     yield from werkzeug_schleife.laufen(
         adapter, tutor_mode=tutor_mode, active_exec=active_exec,
         user_query=user_query, store=store, abbruch=abbruch,
         # Die Schiene für die Ausführer (2026-10-08): Kennungen im Kalender
         # nur auf gross. Ein fremdes Tool-Set (Tutor) zählt als klein.
-        schiene=schiene,
-        pruefer=ehrlichkeit.pruefer_fuer(messages, schiene=schiene,
-                                         tutor_mode=tutor_mode,
-                                         kontext=msgs[0]["content"] + "\n" + volatile))
+        schiene=schiene, pruefer=pruefer)
+
+
+def _profil_der(schiene_obj):
+    """Die Schiene, wenn sie ein Modell-Profil trägt — sonst None (dann fährt
+    der Adapter genau wie vor 2026-10-09)."""
+    return schiene_obj if getattr(schiene_obj, "PROFIL", None) else None
 
 
 class _OpenAIAdapter:
@@ -293,11 +306,31 @@ class _OpenAIAdapter:
     Tool-Calls kommen stückweise im Stream, Ergebnisse als role=tool."""
 
     def __init__(self, client, mdl, msgs, tools, abbruch=None,
-                 max_tokens=None, temperatur=None):
+                 max_tokens=None, temperatur=None, profil=None, messages=None):
         self.client, self.modell, self.msgs, self.tools = client, mdl, msgs, tools
         self.abbruch = abbruch      # threading.Event: Sasha hat gestoppt
-        self.max_tokens = int(max_tokens or _MAX_TOKENS)
+        # Modell-Profil (core/profil/modelle/, 2026-10-09): eigene Werte für
+        # Ausgabe-Länge und Temperatur, und wann ein Werkzeug Pflicht ist.
+        # Ein Wert des Aufrufers (Tutor) geht vor.
+        self.profil = profil
+        self.verlauf = messages or []
+        self.nr = 0                 # wievielte Runde dieses Zugs
+        p = profil.wert if profil is not None else (lambda n, s=None: s)
+        self.max_tokens = int(max_tokens or p("MAX_TOKENS") or _MAX_TOKENS)
+        if temperatur is None:
+            temperatur = p("TEMPERATUR")
         self.temperatur = _TEMP if temperatur is None else float(temperatur)
+
+    def _extra(self) -> dict:
+        """Zusätze des Profils zum Aufruf (tool_choice, extra_body …)."""
+        if self.profil is None:
+            return {}
+        extra = dict(self.profil.wert("EXTRA", None) or {})
+        wahl = self.profil.tool_choice(nr=self.nr, msgs=self.msgs,
+                                       verlauf=self.verlauf, tools=self.tools)
+        if wahl and self.tools:
+            extra["tool_choice"] = wahl
+        return extra
 
     def runde(self):
         round_text = []
@@ -322,7 +355,9 @@ class _OpenAIAdapter:
             # gekostet hat. Anbieter, die das Feld nicht kennen, ignorieren
             # es; deshalb steht es in stream_options und nicht als Pflicht.
             stream_options={"include_usage": True},
+            **self._extra(),
         )
+        self.nr += 1
         for chunk in stream:
             if werkzeug_schleife.gestoppt(self.abbruch):
                 # Strom schließen: der Anbieter merkt den Abriss und hört auf

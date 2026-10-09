@@ -161,7 +161,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `cloud` | 3 | Anthropic-Weg |
 | `cloud_openai` | 3 | OpenAI-kompatibler Weg |
 | `werkzeug_schleife` | 3 | Die eine Tool-Schleife aller Wege |
-| `profil` | 3 | Prompt-Schienen klein und gross |
+| `profil` | 3 | Prompt-Schienen klein und gross, Modell-Profile darüber (`profil/modelle/`, z. B. qwen) |
 | `consolidation` | 3 | Nach dem Zug: Transkript (und Graph-Extraktion, wenn an) |
 | `erlaubnis` | 3 | Das Erlaubnis-Gate: die Tür, durch die die Schleife fragt (Regeln und Fragen stehen im Werkzeug-Register); Geltungsbereiche einmal / dieses Gespräch / immer |
 | `ki_antwort` | 3 | Fertige Antwort: Bild-Marker ziehen, Zug zum Merken vormerken |
