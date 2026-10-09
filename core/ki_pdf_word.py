@@ -66,6 +66,10 @@ def _quelle(quelle, art: str) -> tuple:
     # Dieselbe Sperre wie read_file und fetch_document (context.erlaubt):
     # eine dritte Antwort auf „was darf sie sehen" wäre ein Umweg.
     grund = context.erlaubt(pfad)
+    if grund == context.AUSSERHALB:
+        # gross seit 2026-10-09: nur Input/ und Output/ (core/context.py).
+        raise _Fehlt("P-QUELLE-AUSSERHALB", f"{q} liegt nicht in Input/ oder Output/ "
+                     "des Nutzerordners")
     if grund:
         raise _Fehlt("P-QUELLE-GESPERRT", f"{q} — {grund}. Sasha kann die Datei anhängen")
     if not os.path.isfile(pfad):

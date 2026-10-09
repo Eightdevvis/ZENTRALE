@@ -13,6 +13,23 @@ import glob
 import fnmatch
 
 import nutzer_ordner
+import werkzeug_befund
+
+# ── ZWEI REICHWEITEN (seit 2026-10-09) ───────────────────────────────────
+# Sasha: der Assistent arbeitet nur mit dem Nutzerordner (~/Zentrale: Input/,
+# Output/) und seinem Gedächtnis; Datei- und Code-Zugriff auf ~/codicus gehört
+# später zur Coder-App „Codicus". Auf der gross-Schiene (der laufende
+# Werkzeug-Aufruf sagt sie, werkzeug_befund.schiene) gilt deshalb NUR Input/
+# und Output/ — für read_file, read_pdf/read_docx und fetch_document, die alle
+# hier fragen. klein behält vorerst die alte Reichweite (ZENTRALE-Whitelist +
+# ~/codicus): das qwen ist darauf gemessen, es zieht später nach.
+AUSSERHALB = "Z-AUSSERHALB: liegt nicht in Input/ oder Output/ des Nutzerordners"
+
+
+def nur_nutzer_ordner() -> bool:
+    """Gilt für den laufenden Werkzeug-Aufruf die enge Reichweite?"""
+    return werkzeug_befund.schiene() == "gross"
+
 
 # Absoluter Pfad zum Projektroot (ZENTRALE/)
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -109,6 +126,8 @@ def erlaubt(abs_pfad: str) -> str:
     Sicherheitsluecke, die niemand bemerkt.
     """
     abs_pfad = os.path.abspath(abs_pfad)
+    if nur_nutzer_ordner() and not nutzer_ordner.im_unterordner(abs_pfad):
+        return AUSSERHALB
     # Sashas Nutzerordner (Input/, Output/; core/nutzer_ordner.py, seit
     # 2026-10-09): dort liegt, was er der KI gibt — lesbar bis auf Secrets
     # und Verstecktes. Verweise werden aufgelöst: wer von dort hinauszeigt,
@@ -241,7 +260,9 @@ def list_available_files() -> list:
 
 def pfad_aufloesen(roh: str) -> str:
     """Ein Pfad, wie die KI ihn nennt → absoluter Pfad (noch NICHT
-    erlaubt-geprüft). Relativ: ZENTRALE, dann ~/codicus, zuletzt der
+    erlaubt-geprüft). gross (2026-10-09): relativ zum Nutzerordner
+    („Input/x.md", „Output/y.pdf"; ein bloßer Name meint Input/). klein:
+    relativ zu ZENTRALE, dann ~/codicus, zuletzt der
     Nutzerordner („Input/x.md", seit 2026-10-09 — zuletzt, damit kein
     bisheriger Pfad etwas anderes trifft); der erste, den es gibt, sonst der
     erste überhaupt (für die Fehlermeldung). Eine Stelle für read_file,
@@ -250,6 +271,9 @@ def pfad_aufloesen(roh: str) -> str:
     roh = os.path.expanduser(str(roh or "").strip())
     if os.path.isabs(roh):
         return os.path.abspath(roh)
+    if nur_nutzer_ordner():
+        # gross: relativ heißt im Nutzerordner, ein bloßer Name in Input/.
+        return nutzer_ordner.pfad(roh)
     kandidaten = [os.path.join(w, roh) for w in _WURZELN]
     kandidaten.append(os.path.join(nutzer_ordner.wurzel(anlegen=False), roh))
     return os.path.abspath(next((k for k in kandidaten if os.path.exists(k)), kandidaten[0]))
@@ -259,8 +283,8 @@ def read_file(relative_path: str) -> str:
     """
     Liest eine Datei, wenn die KI sie sehen darf.
 
-    Der Pfad darf relativ zu ZENTRALE, relativ zu ~/codicus oder absolut
-    sein. Ueber die Erlaubnis entscheidet allein `erlaubt()` — dort stehen
+    Der Pfad darf relativ (pfad_aufloesen: auf gross zum Nutzerordner, auf
+    klein zu ZENTRALE bzw. ~/codicus) oder absolut sein. Ueber die Erlaubnis entscheidet allein `erlaubt()` — dort stehen
     Wurzeln, gesperrte Ordner und Secret-Sperre an einer Stelle.
 
     `..` braucht keine eigene Pruefung mehr: der Pfad wird aufgeloest und
@@ -277,6 +301,9 @@ def read_file(relative_path: str) -> str:
     if grund:
         return f"[Zugriff verweigert: {grund}]"
     if not os.path.exists(abs_path):
+        if nur_nutzer_ordner():
+            # Sagen, WO gesucht wurde: „core/x.py" heißt hier Input/core/x.py.
+            return f"[Datei nicht gefunden: {nutzer_ordner.anzeige(abs_path)}]"
         return f"[Datei nicht gefunden: {roh}]"
     if os.path.isdir(abs_path):
         return f"[{roh} ist ein Verzeichnis — nutz list_files]"

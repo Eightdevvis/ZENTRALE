@@ -171,13 +171,15 @@ def test_der_schnitt_haelt():
     datei_import = {"find_files", "search_files", "import_skill"}
     # 09.10.2026: Zips auspacken und Input/ aufräumen — eigener Deckel unten.
     input_ = {"unzip", "remove_input"}
+    # 09.10.2026: Messreihen lesen (Ersatz für read_file auf data/) — eigener Deckel unten.
+    reihen = {"read_series"}
     eigen = {w.name for w in werkzeug_register.auf_schiene("gross")
              if w.klein is None and w.name != "run_code"} - skill - suche - ablage - projekt \
-        - kalender - pdf_word - fehler - browser - datei_import - input_
+        - kalender - pdf_word - fehler - browser - datei_import - input_ - reihen
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
                 if t["function"]["name"] not in
                 eigen | {"run_code"} | skill | suche | ablage | projekt | kalender | pdf_word
-                | fehler | browser | datei_import | input_)
+                | fehler | browser | datei_import | input_ | reihen)
     # explain_error: eine Zeile, liest nur die Tabelle core/fehlercodes.py.
     assert 0 < sum(len(t["function"]["description"]) for t in gross.TOOLS
                    if t["function"]["name"] in fehler) < 150
@@ -285,6 +287,12 @@ def test_der_schnitt_haelt():
     besch_input = sum(len(t["function"]["description"]) for t in gross.TOOLS
                       if t["function"]["name"] in input_)
     assert 0 < besch_input < 300
+    # read_series (09.10.2026): seit read_file auf gross nur Input/ und
+    # Output/ sieht, der einzige Weg zu Schlaf & Co. Ein Werkzeug, ~140
+    # Zeichen; Deckel 200.
+    besch_reihen = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                       if t["function"]["name"] in reihen)
+    assert 0 < besch_reihen < 200
 
 
 def test_import_parameter_bleibt_klein():
@@ -341,8 +349,14 @@ def test_parameter_schemata_laufen_nicht_auseinander():
         # Ende, Ort im Kalender) — aber nichts wegnehmen und nichts anders
         # verstehen: jedes klein-Feld steht unverändert da, und gross verlangt
         # höchstens weniger. So versteht der eine Ausführer beide Schienen.
+        # Die Beschreibung eines Felds darf gross selbst formulieren (seit
+        # 09.10.2026: read_file.path nennt Input/ statt data/) — sie ist
+        # Anrede, kein Vertrag. Typ, enum & Co. müssen gleich bleiben.
         for name, schema in k["properties"].items():
-            assert g["properties"].get(name) == schema, (fn["name"], name)
+            ohne = {x: y for x, y in schema.items() if x != "description"}
+            g_ohne = {x: y for x, y in (g["properties"].get(name) or {}).items()
+                      if x != "description"}
+            assert name in g["properties"] and g_ohne == ohne, (fn["name"], name)
         # Ausnahme (2026-10-09): gross darf eigene Zusatzfelder verlangen —
         # add_calendar_routine verlangt von/bis. Der Ausführer prüft das nur
         # auf gross (werkzeug_befund.schiene), klein bleibt beim alten Vertrag.

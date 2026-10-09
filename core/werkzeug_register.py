@@ -435,9 +435,20 @@ WERKZEUGE = [
             "Nutze list_files zuerst um zu sehen was verfügbar ist. "
             "Nützlich wenn der User nach Daten, Code oder Notizen fragt."
         ),
+        # gross seit 2026-10-09: nur Input/ und Output/ (core/context.py) —
+        # ~/codicus gehört später der Coder-App. klein bleibt byte-gleich.
         gross=(
-            "Liest eine Datei aus dem ZENTRALE-Projekt. Vorher list_files."
+            "Liest eine Textdatei aus Input/ oder Output/ (bloßer Name = "
+            "Input/). Finden: list_files, find_files."
         ),
+        gross_parameter={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string",
+                         "description": "z.B. 'Input/brief.md'."},
+            },
+            "required": ["path"],
+        },
         parameter={
             "type": "object",
             "properties": {
@@ -810,7 +821,7 @@ WERKZEUGE = [
         alltag="dokumente holen und ablegen",
         klein=None,
         gross=(
-            "Holt etwas aus dem Netz ODER von der Platte und LEGT ES AB — Modulhandbuch, "
+            "Holt etwas aus dem Netz ODER aus Input/ und LEGT ES AB — Modulhandbuch, "
             "Stundenplan, Datenblatt, Artikel. PDF wird automatisch zu "
             "Text, HTML entrumpelt, Binaeres als Datei mit Vermerk "
             "abgelegt. Danach lesbar mit read_note und durchsuchbar mit "
@@ -824,8 +835,7 @@ WERKZEUGE = [
             "properties": {
                 "url":  {"type": "string",
                          "description": "http(s)-Adresse ODER ein "
-                                        "Pfad auf der Platte "
-                                        "(unter ~/codicus)."},
+                                        "Pfad in Input/ oder Output/."},
                 "name": {"type": "string",
                          "description": "Kurzer Titel, z.B. 'modulhandbuch'."},
             },
@@ -1243,6 +1253,22 @@ WERKZEUGE += werkzeug_browser.EINTRAEGE
 # Suchen im Nutzerordner und Claude-Skills übernehmen (2026-10-09,
 # core/werkzeug_nutzer_ordner.py): hinten an, nur gross.
 WERKZEUGE += werkzeug_nutzer_ordner.EINTRAEGE
+
+# Messreihen lesen (2026-10-09): bis dahin las die KI Schlaf, Stimmung & Co.
+# per read_file aus data/<reihe>.json. Seit read_file auf gross nur noch
+# Input/ und Output/ sieht (core/context.py), ist das der Weg. Nur lesen,
+# frei; hinten an, nur gross.
+WERKZEUGE.append(Werkzeug(
+    name="read_series",
+    gross=("Liest Messreihen (Schlaf, Stimmung, Training …): ohne series die "
+           "Liste mit letztem Wert, mit series die Werte (Standard: letzte 30 Tage)."),
+    parameter={"type": "object",
+               "properties": {
+                   "series": {"type": "string", "description": "Name der Reihe."},
+                   "von": {"type": "string", "description": "YYYY-MM-DD."},
+                   "bis": {"type": "string", "description": "YYYY-MM-DD, sonst heute."},
+               }},
+))
 
 
 # ── Nachschlagen ───────────────────────────────────────────────────────

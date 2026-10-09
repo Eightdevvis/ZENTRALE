@@ -53,22 +53,34 @@ def aufloesen(pfad, erlaubt=UNTERORDNER, standard: str = INPUT) -> str | None:
 
     „x.zip" → <standard>/x.zip; „Input/x.zip" / „Output/a/b.md" → dort;
     absolut nur, wenn er (Verweise aufgelöst) in einem erlaubten liegt."""
-    roh = os.path.expanduser(str(pfad or "").strip())
     w = wurzel()
+    echt = os.path.realpath(_kandidat(pfad, w, standard))
+    return echt if im_unterordner(echt, erlaubt) else None
+
+
+def _kandidat(pfad, w: str, standard: str) -> str:
+    roh = os.path.expanduser(str(pfad or "").strip())
     if os.path.isabs(roh):
-        kandidat = roh
-    else:
-        teile = roh.replace("\\", "/").strip("/").split("/")
-        oben = next((u for u in UNTERORDNER if teile and teile[0].lower() == u.lower()), None)
-        if oben:
-            kandidat = os.path.join(w, oben, *teile[1:])
-        else:
-            kandidat = os.path.join(w, standard, roh)
-    echt = os.path.realpath(kandidat)
-    for u in erlaubt:
-        if _drin(echt, os.path.join(w, u)):
-            return echt
-    return None
+        return roh
+    teile = roh.replace("\\", "/").strip("/").split("/")
+    oben = next((u for u in UNTERORDNER if teile and teile[0].lower() == u.lower()), None)
+    if oben:
+        return os.path.join(w, oben, *teile[1:])
+    return os.path.join(w, standard, roh)
+
+
+def pfad(roh, standard: str = INPUT) -> str:
+    """Wie `aufloesen`, aber ohne Prüfung und ohne Ordner anzulegen: der
+    absolute Pfad, den ein Name meint („x.md" → Input/x.md). Ob er drin
+    liegt, entscheidet der Aufrufer (context.erlaubt, 2026-10-09)."""
+    return os.path.abspath(_kandidat(roh, wurzel(anlegen=False), standard))
+
+
+def im_unterordner(abs_pfad: str, erlaubt=UNTERORDNER) -> bool:
+    """Liegt der Pfad (Verweise aufgelöst) in einem der Unterordner?"""
+    echt = os.path.realpath(abs_pfad)
+    w = wurzel(anlegen=False)
+    return any(_drin(echt, os.path.join(w, u)) for u in erlaubt)
 
 
 def anzeige(abs_pfad: str) -> str:

@@ -15,7 +15,7 @@
 # Vorsilben: W allgemein, K Kalender (K-<CODE> des Kalender-Kerns kommen
 # gleichnamig dazu), N Notizen/Gedächtnis, A Ablage, D Download, M
 # Messreihen, S Skills, P PDF/Word, I Internet (lesend), B Browser, Z Sashas
-# Nutzerordner (~/Zentrale: unzip, remove_input).
+# Nutzerordner (~/Zentrale: unzip, remove_input; read_file und fetch_document auf gross).
 # tests/test_fehlercodes.py hält die
 # Tabelle und den Code deckungsgleich.
 #
@@ -184,6 +184,12 @@ CODES = {
         "Der Pfad liegt nicht in Sashas Input/-Ordner; nur von dort wird ausgepackt "
         "bzw. weggeräumt.",
         "Sasha bitten, die Datei in seinen Input/-Ordner zu legen."),
+    # read_file und fetch_document auf gross (2026-10-09, core/context.py):
+    # gelesen wird nur noch in Input/ und Output/, nicht mehr im Projektbaum.
+    "Z-AUSSERHALB": (
+        "Der Pfad liegt nicht in Input/ oder Output/ des Nutzerordners; Dateien "
+        "liest du nur dort (und Anhänge/Dokumente aus der Ablage per id).",
+        "Nicht umgehen. Darum bitten, die Datei in Input/ zu legen oder im Chat anzuhängen."),
     "Z-QUELLE-GESPERRT": (
         "Die Datei ist versteckt oder sieht nach einem Schlüssel aus.",
         "Nicht umgehen. Sasha fragen."),
@@ -262,6 +268,10 @@ CODES = {
     "P-QUELLE-FEHLT": (
         "Keine Quelle angegeben, oder es ist weder eine Ablage-id noch eine Datei.",
         "Ablage-id oder Dateipfad angeben."),
+    "P-QUELLE-AUSSERHALB": (
+        "Der Dateipfad liegt nicht in Input/ oder Output/ des Nutzerordners; nur dort "
+        "(oder per Ablage-id) wird gelesen.",
+        "Darum bitten, die Datei in Input/ zu legen oder im Chat anzuhängen."),
     "P-QUELLE-GESPERRT": (
         "Diese Datei darf die KI nicht lesen.",
         "Sasha bitten, die Datei anzuhängen."),

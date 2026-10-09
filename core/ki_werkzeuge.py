@@ -502,6 +502,59 @@ def _log_series(args: dict) -> str:
     return erledigt(f"{was} EINGETRAGEN: {da[-1].get('value')}.", beleg)
 
 
+def _wert_text(g: dict, e: dict) -> str:
+    """Ein Messwert lesbar: time/period als Uhrzeit (gespeichert als Minuten)."""
+    def uhr(m):
+        try:
+            m = int(m)
+        except (TypeError, ValueError):
+            return str(m)
+        return f"{m // 60:02d}:{m % 60:02d}"
+    typ, wert = g.get("type"), e.get("value")
+    if typ == "time":
+        return uhr(wert)
+    if typ == "period":
+        return f"{uhr(wert)}–{uhr(e.get('end'))}"
+    return f"{wert} {g.get('unit')}".strip() if g.get("unit") else str(wert)
+
+
+@ausfuehrer("read_series")
+def _read_series(args: dict) -> str:
+    """Messreihen lesen (2026-10-09). Vorher las die KI data/<reihe>.json per
+    read_file; das sieht auf gross nur noch den Nutzerordner."""
+    import graphs
+    reihen = graphs.list_graphs()
+    name = (args.get("series") or "").strip()
+    if not name:
+        if not reihen:
+            return "Es gibt noch keine Messreihen."
+        zeilen = []
+        for g in reihen:
+            werte = [e for e in graphs.read_values(g["id"]) if isinstance(e, dict)]
+            letzt = max(werte, key=lambda e: str(e.get("date") or ""), default=None)
+            zeilen.append(f"- {g.get('name')} ({g.get('type')}): {len(werte)} Werte"
+                          + (f", zuletzt {letzt.get('date')}: {_wert_text(g, letzt)}"
+                             if letzt else ""))
+        return "Messreihen:\n" + "\n".join(zeilen)
+    treffer = [g for g in reihen if g.get("name", "").casefold() == name.casefold()
+               or g.get("id") == name]
+    if not treffer:
+        da = ", ".join(g.get("name", "?") for g in reihen) or "keine"
+        return abgebrochen(f"Messreihe „{name}“ lesen", "M-UNBEKANNT",
+                           f"keine Messreihe {name!r}; vorhanden: {da}", "nichts gelesen")
+    g = treffer[0]
+    bis = (args.get("bis") or "").strip() or _dt.date.today().isoformat()
+    von = (args.get("von") or "").strip() or \
+        (_dt.date.today() - _dt.timedelta(days=29)).isoformat()
+    werte = sorted((e for e in graphs.read_values(g["id"])
+                    if isinstance(e, dict) and von <= str(e.get("date") or "") <= bis),
+                   key=lambda e: str(e.get("date")))
+    kopf = f"{g.get('name')} ({g.get('type')}), {von} bis {bis}: {len(werte)} Werte"
+    if not werte:
+        return kopf + "."
+    return kopf + "\n" + "\n".join(f"{e.get('date')}: {_wert_text(g, e)}" for e in werte)
+
+
 @ausfuehrer("run_code")
 def _run_code(args: dict) -> str:
     """Ein Programm abgeschottet ausführen (core/sandbox.py). Das Ergebnis

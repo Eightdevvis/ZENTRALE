@@ -16,8 +16,9 @@ weder die Ablage noch Sashas Dateien.
 ## Woher die Datei kommt
 
 `quelle` ist eine **Ablage-id** (auch Anhänge — die id steht beim Anhang)
-oder ein **Pfad unter `~/codicus`**. Liegt sie woanders, bitte Sasha, sie
-anzuhängen. Alte `.doc`-Dateien und Dateien mit Passwort gehen nicht auf; Sasha
+oder ein **Pfad in `Input/` oder `Output/`** des Nutzerordners (z. B.
+`Input/brief.docx`). Liegt sie woanders, bitte Sasha, sie nach `Input/` zu
+legen oder anzuhängen. Alte `.doc`-Dateien und Dateien mit Passwort gehen nicht auf; Sasha
 kann sie in Word oder LibreOffice als `.docx` ohne Passwort speichern.
 
 ## Lesen

@@ -317,7 +317,8 @@ und nimmt beide Schreibweisen an (siehe „Zwei Schienen" weiter unten).
 
 | kanonisch | in `klein` | Funktion |
 |---|---|---|
-| `read_file`   | =            | Datei aus der Whitelist lesen |
+| `read_file`   | =            | `klein`: Datei aus der Whitelist bzw. ~/codicus lesen. `gross` (seit 2026-10-09): NUR Input/ und Output/ des Nutzerordners (s. „Reichweite von gross") |
+| `read_series` | nur `gross`  | Messreihen lesen (Liste mit letztem Wert, oder Werte einer Reihe, Standard letzte 30 Tage) — ersetzt `read_file` auf `data/<reihe>.json` |
 | `list_files`  | =            | `klein`: Gesamtliste der lesbaren Dateien (höchstens 300, wie bisher). `gross` (seit 2026-10-09): EINEN Ordner im Nutzerordner wie ls, `ordner` = Input (Standard) / Output / Unterordner |
 | `find_files`  | nur `gross`  | Dateien/Ordner nach Namen in Input/ und Output/ suchen, wie find (`*.zip`, `*chefkoch*`, Namensteil) — mit Vollständigkeits-Angabe (s. „Nutzerordner, Suchen, Claude-Skills übernehmen") |
 | `search_files` | nur `gross` | Text in Dateien in Input/ und Output/ suchen, wie grep — `pfad:zeile: auszug`, mit Vollständigkeits-Angabe |
@@ -776,12 +777,32 @@ Fehlercodes `Z-…` (Vorsilbe Z = Nutzerordner ~/Zentrale): `Z-QUELLE-FEHLT`,
 `tests/test_profil.py`. Tests: `tests/test_input_aufraeumen.py`.
 
 Relative Pfade lösen `read_file`, `read_pdf`/`read_docx` und `fetch_document`
-seit 2026-10-09 an EINER Stelle auf (`context.pfad_aufloesen`: ZENTRALE,
-~/codicus, zuletzt der Nutzerordner) — vorher kannte nur `read_file`
-„Input/…".
+seit 2026-10-09 an EINER Stelle auf (`context.pfad_aufloesen`) — vorher kannte
+nur `read_file` „Input/…".
 
-**Noch NICHT zurückgebaut** (eigener Schritt): `read_file`/`list_files`
-(klein) erreichen weiter ZENTRALE (Whitelist) und ganz ~/codicus.
+#### Reichweite von gross: nur der Nutzerordner (Rückbau 2026-10-09)
+
+Sasha: der Assistent arbeitet nur mit `~/Zentrale` (Input/, Output/) und
+seinem Gedächtnis; Datei- und Code-Zugriff auf ~/codicus gehört später zur
+Coder-App „Codicus". Umgesetzt an der einen Stelle, die alle fragen
+(`context.erlaubt`, `context.pfad_aufloesen`), abhängig von der Schiene des
+laufenden Werkzeug-Aufrufs (`werkzeug_befund.schiene()`):
+
+- **gross:** `read_file`, `read_pdf`/`read_docx` (Dateipfad) und
+  `fetch_document` (lokal) lesen NUR in Input/ und Output/; relativ heißt im
+  Nutzerordner, ein bloßer Name meint Input/ („[Datei nicht gefunden:
+  Input/core/x.py]" sagt, wo gesucht wurde). Absolut oder per Verweis hinaus →
+  `Z-AUSSERHALB` (read_file, fetch_document) bzw. `P-QUELLE-AUSSERHALB`
+  (read_pdf/read_docx). Ablage-ids (Anhänge, eigene Dokumente) gehen weiter.
+  `unzip`/`import_skill`/`remove_input` waren schon auf Input/ begrenzt.
+- **klein:** unverändert (Whitelist + ~/codicus, Gesamtliste in `list_files`);
+  das qwen ist auf die Texte gemessen. Zieht später nach.
+- **Was wegfällt und wodurch ersetzt:** `data/*.json` (Schlaf, Messreihen) →
+  `read_series`; `notes.md` → das Gedächtnis (`read_note`/`write_note`,
+  Bereich `notizen`; die Datei war nur noch die leere Vorlage);
+  `core/*.py`, `ui/app.py`, ~/codicus → nichts (Coder-App). Kalender, Notizen,
+  Mail, News lesen ohnehin ihre eigenen Werkzeuge.
+- Tests: `tests/test_reichweite_gross.py`.
 
 ### Frühere Gespräche — `search_chats`, `read_chat` (seit 2026-10-07)
 
