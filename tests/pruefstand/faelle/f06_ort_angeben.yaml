@@ -19,6 +19,10 @@ antworten:
 
 zuege:
   - sagt: "ab nächster woche hab ich jeden montag chor, 14 bis 15:30 uhr in der musikhochschule"
+  # 2026-10-10: Seit bc304c9 brauchen Routinen von/bis — ohne Ende fragt die
+  # KI zu Recht nach (Messung 10.10.: Knopf-Frage, keine Antwort, nichts
+  # eingetragen). Sasha nennt das Ende im nächsten Zug, wie er es täte.
+  - sagt: "geht bis ende februar 2027"
 
 endzustand:
   - was: Chor Mo 12.10. und 19.10. 14:00–15:30, Ort im Ort-Feld
