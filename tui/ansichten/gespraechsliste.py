@@ -73,7 +73,8 @@ def listen_zeilen(eintraege, idx, breite, jetzt=None, aktiv=None):
     raus = []
     for i, e in enumerate(eintraege):
         zeiger = "›" if i == idx else " "
-        punkt = "●" if e.get("ungelesen") else ("·" if e.get("id") == aktiv else " ")
+        punkt = ("●" if e.get("ungelesen") else "…" if e.get("laeuft")
+                 else "·" if e.get("id") == aktiv else " ")
         alter = alter_text(e.get("letzte"), jetzt)
         platz = max(1, breite - 4 - len(alter) - 1)
         titel = str(e.get("titel") or "neues gespräch").replace("\n", " ")
@@ -113,9 +114,8 @@ class Gespraechsliste:
 
     def oeffnen(self, archiv=False):
         AI = self.AI
-        if AI["streaming"]:
-            AI["msg"] = "antwort läuft noch — erst danach wechseln (ctrl+c stoppt)"
-            return
+        # Seit 2026-10-09 auch während einer Antwort: sie läuft im
+        # Hintergrund weiter (chat_strom.py).
         d = self.holen(archiv)
         if d is None:
             AI["msg"] = "keine verbindung — liste nicht geladen"
@@ -293,7 +293,7 @@ class Gespraechsliste:
             start = max(0, min(idx - platz // 2, len(s) - platz))
             stile = {"gewaehlt": C["bright"] | curses.A_BOLD, "ungelesen": C["acc"],
                      "normal": C["dim"]}
-            for i, (text, art) in enumerate(listen_zeilen(s, idx, inw, aktiv=self.AI.get("gid"))
+            for i, (text, art) in enumerate(listen_zeilen(self.chat.markiert(s), idx, inw, aktiv=self.AI.get("gid"))
                                             [start:start + platz]):
                 addclip(oben + i, inx, text, inw, stile[art])
         y = by + bh - 1 - len(zeilen_fuss)

@@ -1291,6 +1291,9 @@ def run_ui(stdscr, store):
         # Maus nur im offenen Chat (ansichten/maus.py: warum das Markieren im
         # Terminal so heil bleibt).
         chat.maus_pflegen()
+        # „antwort läuft" ohne lebenden Strom-Thread → zurücksetzen
+        # (2026-10-09, ansichten/chat_strom.py).
+        chat.waechter()
         fast = ((M["active"] and M.get("anim")) or (AI["active"] and AI["streaming"])
                 or PIANO["active"]
                 or RAD["pos"] != RAD["sel"] or RAD["schnell"]
@@ -1361,6 +1364,15 @@ def main():
         "neu geladen" if os.environ.get("ZENTRALE_TUI_RELOADED") else "frisch",
         BASE_URL, os.getppid(),
         "  (unter start_tui.sh)" if neustart_moeglich() else ""))
+    # Stirbt ein Hintergrund-Thread an einer Ausnahme, landete der Traceback
+    # bisher auf stderr — also mitten im curses-Bild, übermalt beim nächsten
+    # Zeichnen. Am 09.10.2026 blieb so „antwort läuft" stehen, ohne Spur.
+    # Jetzt steht er im Lebenslauf.
+    def _thread_fehler(a):
+        lebenslauf("FEHLER im Thread %s (TUI lebt weiter)\n%s" % (
+            getattr(a.thread, "name", "?"),
+            "".join(traceback.format_exception(a.exc_type, a.exc_value, a.exc_traceback))))
+    threading.excepthook = _thread_fehler
     store = Store()
     poller = threading.Thread(target=store.run, daemon=True)
     poller.start()

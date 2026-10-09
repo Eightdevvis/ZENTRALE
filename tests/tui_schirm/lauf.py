@@ -224,6 +224,11 @@ SZ = {
     "ki_denken": [("k", "Space"), ("w", 2), ("l", "wie flicke ich unterwegs?"), ("k", "Enter"),
                   ("w", 1), ("cap", "a"), ("w", 2.5), ("cap", "b"), ("w", 3), ("cap", "c"),
                   ("w", 0.4), ("cap", "d"), ("w", 3), ("cap", "e")],
+    # Browser-Zug vom 09.10.2026 (Antwort „lief" ewig weiter): mit
+    # ZTUI_STROM=browser spielt das Backend genau diese Folge ab (≈ 6 s).
+    "ki_browser": [("k", "Space"), ("w", 2), ("l", "probier ob du reinkommst"), ("k", "Enter"),
+                   ("w", 2), ("cap", "a"), ("l", "1"), ("w", 2), ("cap", "b"), ("w", 6),
+                   ("cap", "c")],
     "tech_system": [("k", "M-Right"), ("k", "Enter"), ("cap", "a"), ("k", "/"), ("cap", "b")],
     "tech_stdout": [("k", "M-Right"), ("k", "Right"), ("k", "Enter"), ("cap", "a")],
     "tech_netz": [("k", "M-Right"), ("k", "Right"), ("k", "Right"), ("k", "Enter"), ("cap", "a")],

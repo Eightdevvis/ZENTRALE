@@ -66,7 +66,7 @@ def zeilen(eintraege, breite, jetzt=None, aktiv=None, mit_doku=frozenset()):
                 raus.append(("luft", None, ""))
             raus.append(("kopf", None, g))
             letzte = g
-        punkt = "●" if e.get("ungelesen") else " "
+        punkt = "●" if e.get("ungelesen") else ("…" if e.get("laeuft") else " ")
         doku = " " + DOKU if e.get("id") in mit_doku else ""
         titel = " ".join(str(e.get("titel") or "new chat").split())
         if e.get("projekt_name"):
@@ -138,8 +138,8 @@ class Seitenleiste:
         """Was die Leiste zeigt: die offene Liste (gefiltert) oder, solange
         sie nicht geladen ist, die Gespräche aus dem letzten Poll."""
         if self.AI.get("liste"):
-            return self.chat.liste.sichtbar()
-        return list(self.AI.get("gespraeche") or [])
+            return self.chat.markiert(self.chat.liste.sichtbar())
+        return self.chat.markiert(list(self.AI.get("gespraeche") or []))
 
     # ── Menü ───────────────────────────────────────────────────────────
     def menue(self, aktion):
@@ -269,7 +269,7 @@ class Seitenleiste:
             self._symbol(y, sx, name, False, unten)
             self._klickbar(y, sh, x, lw, lambda a=aktion: self.menue(a), unten)
             y += sh
-        if any(e.get("ungelesen") for e in AI.get("gespraeche") or []) and y + 1 < unten:
+        if any(e.get("ungelesen") for e in self.eintraege()) and y + 1 < unten:
             chat.z.safe_addstr(y + 1, x + lw // 2, "●", chat.z.C["acc"])
 
     def zeichnen(self, top, x, h, w):

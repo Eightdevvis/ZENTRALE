@@ -25,8 +25,9 @@ from . import chat_befehle, chat_morgenblick, eingabe, fussleiste, maus
 from . import verlauf as V
 from .ablage import Ablageliste
 from .bewertung import Bewertung
-from .chat_ablage import AblageSteuerung, ablage_anzeige, anhang_eintrag
+from .chat_ablage import AblageSteuerung, ablage_anzeige, ablage_eintrag, anhang_eintrag
 from .chat_erlaubnis import ErlaubnisSteuerung
+from .chat_strom import StromSteuerung
 from .chat_bedienung import ChatBedienung
 from .chat_zeichnen import ChatZeichnen
 from .einstellungen import Einstellungen
@@ -74,6 +75,17 @@ def echte_nachrichten(log):
     sichtbar gemacht werden sollten.
     """
     return sum(1 for rolle, _t in log if rolle in ("user", "ai"))
+
+
+def _denken_ablegen(Z):
+    """Gesammeltes Denken in den Verlauf schieben — in der richtigen
+    Reihenfolge. Aufgerufen, sobald etwas ANDERES passiert (ein Werkzeug,
+    Text, eine Rueckfrage): dann ist der Gedankengang zu Ende, und er steht
+    vor dem, was daraus folgte. Z: AI oder der Puffer des Stroms."""
+    gedacht = (Z.get("denken") or "").strip()
+    if gedacht:
+        Z["log"].append(("denken", gedacht))
+        Z["denken"] = ""
 
 
 def zahl(n):
@@ -283,7 +295,8 @@ def stand_text(daten, stand):
     return "anbieter: %s" % (stand.get("anbieter") or "—")
 
 
-class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung):
+class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, ErlaubnisSteuerung,
+           StromSteuerung):
     """Der KI-Chat (Mitte, Leertaste auf der Startseite). Thin Client: die
     TUI rechnet keine KI, sie spricht nur HTTP mit /api/chat (SSE) und zeigt
     den Verlauf. Zustand in self.AI (auch z.AI), geschützt durch AI_LOCK,
@@ -374,32 +387,50 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
         Stream weiterlaufen lässt.
 
         ersetzt: Nachricht-id (/bearbeiten). wiederholen: statt einer neuen
-        Frage /api/chat/wiederholen (dieselbe SSE-Form)."""
+        Frage /api/chat/wiederholen (dieselbe SSE-Form).
+
+        Drei Schichten (2026-10-09): lesen, abschließen (Antwort in den
+        Verlauf), und ganz außen strom_aus — das Flag „antwort läuft" geht
+        IMMER aus, auch wenn lesen oder abschließen eine Ausnahme werfen.
+        Vorher konnte ein sterbender Thread die TUI auf „answering …"
+        festnageln (chat_strom.py)."""
+        kaputt = False
+        try:
+            try:
+                self._strom_lesen(message, ersetzt, wiederholen, anhaenge)
+            finally:
+                with self.AI_LOCK:
+                    self._strom_abschliessen()
+        except Exception:
+            # Sichtbar statt still: der Verlauf kommt frisch vom Server, der
+            # die Antwort ohnehin gespeichert hat. Der Traceback geht über
+            # threading.excepthook in den Lebenslauf (zentrale_tui.py).
+            kaputt = True
+            with self.AI_LOCK:
+                self.AI["msg"] = "die antwort kam nicht ganz an — verlauf neu geladen"
+            raise
+        finally:
+            self.strom_aus(nachladen=kaputt)
+
+    def _strom_lesen(self, message, ersetzt, wiederholen, anhaenge):
+        """Die SSE-Ereignisse lesen und in strom_ziel() schreiben (das offene
+        Gespräch oder, wenn Sasha weggewechselt ist, dessen Puffer)."""
         AI, AI_LOCK = self.AI, self.AI_LOCK
         body = {"message": message}
-        if AI.get("gid"):
-            body["gespraech"] = AI["gid"]
+        with AI_LOCK:
+            gid = self.strom_ziel().get("gid")
+        if gid:
+            body["gespraech"] = gid
         if ersetzt:
             body["ersetzt"] = ersetzt
         if anhaenge:
             body["anhaenge"] = [a["id"] for a in anhaenge]
         url = BASE_URL + ("/api/chat/wiederholen" if wiederholen else "/api/chat")
-        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        data = json.dumps(body, ensure_ascii=False).encode("utf-8", "replace")
         req = urllib.request.Request(
             url, data=data, method="POST",
             headers={"Content-Type": "application/json",
                      "Accept": "text/event-stream"})
-        def denken_ablegen():
-            """Gesammeltes Denken in den Verlauf schieben — in der richtigen
-            Reihenfolge. Aufgerufen, sobald etwas ANDERES passiert (ein
-            Werkzeug, Text, eine Rueckfrage): dann ist der Gedankengang zu
-            Ende, und er steht vor dem, was daraus folgte. Haengt man ihn
-            erst am Turn-Ende an, steht das Denken hinter den Taten."""
-            gedacht = (AI.get("denken") or "").strip()
-            if gedacht:
-                AI["log"].append(("denken", gedacht))
-                AI["denken"] = ""
-
         resp = None
         try:
             # 300 s, und die Zahl ist NICHT frei gewaehlt: der Timeout gilt
@@ -422,50 +453,11 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
                     evt = json.loads(line[5:].strip())
                 except ValueError:
                     continue
+                if not isinstance(evt, dict):
+                    continue
                 with AI_LOCK:
-                    if "strom" in evt:
-                        AI["strom"] = evt["strom"]   # damit Esc genau ihn stoppt
-                    elif "titel" in evt:
-                        AI["titel"] = str(evt["titel"])
-                    elif "gespraech" in evt:
-                        # Ein eben angelegtes Gespräch: ab jetzt geht alles dorthin.
-                        AI["gid"] = evt["gespraech"]
-                    elif "gestoppt" in evt:
-                        denken_ablegen()
-                        AI["gestoppt"] = True
-                        AI["msg"] = "gestoppt"
-                    elif "token" in evt:
-                        denken_ablegen()
-                        AI["answer"] = (AI["answer"] or "") + str(evt["token"])
-                        AI["perm"] = None          # es fließt wieder Text
-                    elif "reflect" in evt:
-                        # Zweimal aufheben: gekuerzt fuer die Lauf-Anzeige,
-                        # vollstaendig fuer den Verlauf. Wer hinterher wissen
-                        # will, warum sie etwas getan hat, braucht das ganze
-                        # Denken, nicht die letzten 400 Zeichen.
-                        AI["reflect"] = (AI["reflect"] + str(evt["reflect"]))[-400:]
-                        AI["denken"] = (AI["denken"] + str(evt["reflect"]))[-20000:]
-                    elif "werkzeug" in evt:
-                        denken_ablegen()
-                        AI["log"].append(werkzeug_zeile(evt["werkzeug"]))
-                    elif "ehrlichkeit" in evt:     # Erledigt-Zeile, offene Zusagen
-                        AI["pruefung"] = evt["ehrlichkeit"]
-                    elif "antwort" in evt:         # gespeichert, mit Ablauf („trace", spur.py)
-                        AI["antwort_live"] = evt["antwort"] if evt.get("ablauf") else None
-                    elif "ablage" in evt:          # ein Dokument liegt in der Ablage
-                        self.ablage_event(evt["ablage"])
-                    elif "permission" in evt:
-                        denken_ablegen()
-                        AI["perm"] = evt["permission"]
-                    elif "fehler" in evt:
-                        # Backend-Fehler, Ablehnung, Rundengrenze: in die
-                        # Statuszeile, NICHT in den Verlauf — das hat nicht
-                        # sie gesagt (core/werkzeug_schleife.py).
-                        denken_ablegen()
-                        AI["msg"] = "fehler: " + str(evt["fehler"])
-                    elif "done" in evt:
+                    if self._strom_ereignis(evt):
                         break
-                    # ascii/cinema: im Terminal ohne Bild/Sound → ignorieren
         except urllib.error.HTTPError as e:
             # 503 heißt nicht mehr automatisch "lokale ki aus" - es kann auch
             # heißen, dass gar kein Backend da ist (weder Ollama noch Cloud).
@@ -483,48 +475,108 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
                 AI["anhaenge"] = list(anhaenge or []) + list(AI.get("anhaenge") or [])
         except (urllib.error.URLError, OSError):
             with AI_LOCK:
+                Z = self.strom_ziel()
                 # Unterscheiden: gar nicht erst drangekommen vs. mittendrin
                 # abgerissen. "keine verbindung" auf einen halb gelaufenen
                 # Turn zu schreiben, schickt einen auf die falsche Faehrte.
-                if (AI["answer"] or "").strip() or AI["perm"]:
+                if (Z.get("answer") or "").strip() or Z.get("perm"):
                     AI["msg"] = "verbindung abgerissen — antwort unvollstaendig"
                 else:
                     AI["msg"] = "keine verbindung zur ki (zentrale-remote?)"
         finally:
             if resp is not None:
-                try: resp.close()
-                except OSError: pass
-            with AI_LOCK:
-                denken_ablegen()
-                ans = (AI["answer"] or "").strip()
-                if ans and AI["gestoppt"]:
-                    ans += "\n\n" + VERMERK_ABGEBROCHEN
-                live = AI.pop("antwort_live", None)
-                if ans:
-                    AI["log"].append(("ai", ans))
-                    # „trace ›" gleich unter der eben gestreamten Antwort —
-                    # ein alter Eintrag an diesem Index (nach retry) fliegt.
-                    spuren = AI.setdefault("spuren", {})
-                    spuren.pop(len(AI["log"]) - 1, None)
-                    if live:
-                        spuren[len(AI["log"]) - 1] = live
-                p = AI.pop("pruefung", None)
-                if p:
-                    AI["log"] += pruefung_eintraege(
-                        {"zeile": p.get("zeile")}, p.get("offen"), AI["log"])
-                AI["answer"] = None
-                AI["strom"] = None
-                if AI["msg"] == "stoppe …":   # war schon fertig, als Strg+C kam
-                    AI["msg"] = ""
-                # Fenster war zu (Esc lässt die Antwort weiterlaufen, Sasha
-                # 07.10.2026): ● auf der Startseite, bis der Chat wieder offen
-                # ist. Eigenes Feld, weil der Poll „neu" alle 20 s aus der
-                # Gesprächsliste neu rechnet und es sonst wieder löschte.
-                if ans and not AI["active"]:
-                    AI["fertig_ungesehen"] = True
-                AI["reflect"] = ""
-                AI["perm"] = None
-                AI["streaming"] = False
+                try:
+                    resp.close()
+                except Exception:
+                    pass
+
+    def _strom_ereignis(self, evt):
+        """Ein SSE-Ereignis übernehmen (unter AI_LOCK). -> True bei 'done'.
+        Was zum Gespräch gehört, geht nach strom_ziel(); die Statuszeile
+        (msg) und die Strom-Nummer zum Stoppen bleiben in AI."""
+        AI, Z = self.AI, self.strom_ziel()
+        if "strom" in evt:
+            AI["strom"] = evt["strom"]           # damit Strg+C genau ihn stoppt
+        elif "titel" in evt:
+            Z["titel"] = str(evt["titel"])
+        elif "gespraech" in evt:
+            # Ein eben angelegtes Gespräch: ab jetzt geht alles dorthin.
+            Z["gid"] = evt["gespraech"]
+        elif "gestoppt" in evt:
+            _denken_ablegen(Z)
+            Z["gestoppt"] = True
+            AI["msg"] = "gestoppt"
+        elif "token" in evt:
+            _denken_ablegen(Z)
+            Z["answer"] = (Z.get("answer") or "") + str(evt["token"])
+            Z["perm"] = None                      # es fließt wieder Text
+        elif "reflect" in evt:
+            # Zweimal aufheben: gekuerzt fuer die Lauf-Anzeige,
+            # vollstaendig fuer den Verlauf. Wer hinterher wissen
+            # will, warum sie etwas getan hat, braucht das ganze
+            # Denken, nicht die letzten 400 Zeichen.
+            Z["reflect"] = ((Z.get("reflect") or "") + str(evt["reflect"]))[-400:]
+            Z["denken"] = ((Z.get("denken") or "") + str(evt["reflect"]))[-20000:]
+        elif "werkzeug" in evt:
+            _denken_ablegen(Z)
+            if isinstance(evt["werkzeug"], dict):
+                Z["log"].append(werkzeug_zeile(evt["werkzeug"]))
+        elif "ehrlichkeit" in evt:                # Erledigt-Zeile, offene Zusagen
+            Z["pruefung"] = evt["ehrlichkeit"] if isinstance(evt["ehrlichkeit"], dict) else None
+        elif "antwort" in evt:                    # gespeichert, mit Ablauf („trace", spur.py)
+            Z["antwort_live"] = evt["antwort"] if evt.get("ablauf") else None
+        elif "ablage" in evt:                     # ein Dokument liegt in der Ablage
+            if isinstance(evt["ablage"], dict) and evt["ablage"].get("id"):
+                Z["log"].append(ablage_eintrag(evt["ablage"]))
+        elif "permission" in evt:
+            _denken_ablegen(Z)
+            Z["perm"] = evt["permission"] if isinstance(evt["permission"], dict) else None
+        elif "fehler" in evt:
+            # Backend-Fehler, Ablehnung, Rundengrenze: in die
+            # Statuszeile, NICHT in den Verlauf — das hat nicht
+            # sie gesagt (core/werkzeug_schleife.py).
+            _denken_ablegen(Z)
+            AI["msg"] = "fehler: " + str(evt["fehler"])
+        elif "done" in evt:
+            return True
+        # ascii/cinema: im Terminal ohne Bild/Sound → ignorieren
+        return False
+
+    def _strom_abschliessen(self):
+        """Die fertige Antwort in den Verlauf ihres Gesprächs (unter AI_LOCK):
+        Denken, Text (mit Vermerk, wenn gestoppt), „trace ›", Prüfer-Zeilen."""
+        AI, Z = self.AI, self.strom_ziel()
+        _denken_ablegen(Z)
+        ans = (Z.get("answer") or "").strip()
+        if ans and Z.get("gestoppt"):
+            ans += "\n\n" + VERMERK_ABGEBROCHEN
+        live = Z.pop("antwort_live", None)
+        if ans:
+            Z["log"].append(("ai", ans))
+            # „trace ›" gleich unter der eben gestreamten Antwort —
+            # ein alter Eintrag an diesem Index (nach retry) fliegt.
+            spuren = Z.get("spuren")
+            if not isinstance(spuren, dict):
+                spuren = Z["spuren"] = {}
+            spuren.pop(len(Z["log"]) - 1, None)
+            if live:
+                spuren[len(Z["log"]) - 1] = live
+        p = Z.pop("pruefung", None)
+        if isinstance(p, dict):
+            Z["log"] += pruefung_eintraege(
+                {"zeile": p.get("zeile")}, p.get("offen"), Z["log"])
+        Z["answer"] = None
+        Z["reflect"] = ""
+        Z["perm"] = None
+        AI["strom"] = None
+        if AI["msg"] == "stoppe …":   # war schon fertig, als Strg+C kam
+            AI["msg"] = ""
+        # Fenster war zu (Esc lässt die Antwort weiterlaufen, Sasha
+        # 07.10.2026): ● auf der Startseite, bis der Chat wieder offen
+        # ist. Eigenes Feld, weil der Poll „neu" alle 20 s aus der
+        # Gesprächsliste neu rechnet und es sonst wieder löschte.
+        if ans and not AI["active"]:
+            AI["fertig_ungesehen"] = True
 
     def ai_submit(self):
         """Eingabe abschicken: ein Slash-Befehl wird hier ausgeführt
@@ -542,7 +594,11 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
             self.befehl(was.name, was.arg)
             return
         if AI["streaming"]:
-            AI["msg"] = "antwort läuft noch — ctrl+c stoppt sie"
+            # Im anderen Gespräch: Eingabe bleibt stehen, sie geht ab, wenn
+            # die laufende Antwort fertig ist (chat_strom.py, warum nicht
+            # zwei zugleich).
+            AI["msg"] = ("antwort läuft noch — ctrl+c stoppt sie" if self.strom_laeuft_hier()
+                         else self.warte_text())
             return
         if AI.get("ersetzt"):              # /bearbeiten: ab dort ersetzen
             self.senden(was.text, ersetzt=AI["ersetzt"])
@@ -579,9 +635,15 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
             AI["perm"] = None
             AI["msg"] = ""
             AI["scroll"] = 0
+            # Der Strom gehört zum offenen Gespräch; der Thread steht in AI,
+            # damit waechter() merkt, wenn er stirbt (chat_strom.py).
+            AI["strom_hier"] = True
+            AI.pop("strom_puffer", None)
+            t = threading.Thread(target=ai_stream, args=(msg, ersetzt, wiederholen, anhaenge),
+                                 daemon=True, name="ai-strom")
+            AI["strom_thread"] = t
             AI["streaming"] = True
-        threading.Thread(target=ai_stream, args=(msg, ersetzt, wiederholen, anhaenge),
-                         daemon=True).start()
+        t.start()
 
     def ai_answer_perm(self, option):
         """Erlaubnis-Frage beantworten → entsperrt den wartenden Stream."""
@@ -838,7 +900,9 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
     def ungelesen(self):
         """● auf der Startseite: Neues in einem anderen Gespräch, oder eine
         Antwort, die fertig wurde, während das Fenster zu war."""
-        return bool(self.AI.get("neu") or self.AI.get("fertig_ungesehen"))
+        p = self.strom_woanders()
+        return bool(self.AI.get("neu") or self.AI.get("fertig_ungesehen")
+                    or self.AI.get("ungesehen") or (p and p.get("perm")))
 
     def ai_titel(self, breite=None):
         """Kasten-Titel: der Titel des offenen Gesprächs (seit 2026-10-07),

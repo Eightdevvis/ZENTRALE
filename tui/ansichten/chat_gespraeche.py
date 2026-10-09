@@ -92,8 +92,11 @@ class GespraechsSteuerung:
         geholt = ai_verlauf_holen(gid)
         stand = self.liste.holen()
         with AI_LOCK:
-            if AI["streaming"]:
+            if AI["streaming"] and (self.strom_laeuft_hier() or not gid
+                                    or gid == self.strom_gid()):
                 return                 # eine laufende Antwort nie zerreißen
+            if gid and AI.get("gid") not in (None, gid):
+                return                 # inzwischen woanders hin gewechselt
             if stand is not None:
                 eintraege, aktiv = stand
                 AI["gespraeche"] = eintraege
@@ -142,7 +145,9 @@ class GespraechsSteuerung:
             time.sleep(20)
             try:
                 with AI_LOCK:
-                    if AI["streaming"] or not AI["loaded"]:
+                    # Läuft die Antwort woanders, darf das offene Gespräch
+                    # (ein anderes) wie sonst nachladen (chat_strom.py).
+                    if self.strom_laeuft_hier() or not AI["loaded"]:
                         continue
                 stand = self.liste.holen()
                 if stand is None:
@@ -150,7 +155,7 @@ class GespraechsSteuerung:
                 eintraege, aktiv = stand
                 neu_laden = False
                 with AI_LOCK:
-                    if AI["streaming"]:
+                    if self.strom_laeuft_hier():
                         continue
                     AI["gespraeche"] = eintraege
                     mein = next((e for e in eintraege if e.get("id") == AI.get("gid")), None)
@@ -160,7 +165,7 @@ class GespraechsSteuerung:
                         neu_laden = AI["active"] and (mein.get("anzahl", 0) != AI["n_server"]
                                                       or mein.get("ungelesen"))
                     self._neu_markieren()
-                if neu_laden:
+                if neu_laden and AI.get("gid") != self.strom_gid():
                     self.verlauf_laden(AI["gid"])
             except Exception:
                 pass          # ein Poll, der die TUI abschiesst, waere schlimmer
@@ -241,12 +246,18 @@ class GespraechsSteuerung:
             AI["projekt"] = ""
             AI["spuren"] = {}
 
+    def _laeuft_text(self):
+        """Warum das gerade nicht geht: hier läuft eine Antwort, oder woanders."""
+        if self.strom_laeuft_hier():
+            return "antwort läuft noch — erst stoppen (ctrl+c)"
+        return self.warte_text()
+
     def neues_gespraech(self):
         """/neu, n in der Liste: das nächste Senden beginnt ein neues
         Gespräch. Das alte bleibt in der Liste (seit 2026-10-07)."""
         AI = self.AI
         if AI["streaming"]:
-            AI["msg"] = "antwort läuft noch — erst stoppen (esc)"
+            AI["msg"] = self._laeuft_text()
             return
         try:
             r = api_call("/api/chat/clear", "POST", {})
@@ -263,8 +274,9 @@ class GespraechsSteuerung:
         """Ein Gespräch aus der Liste öffnen (auf diesem Rechner aktiv)."""
         AI = self.AI
         if AI["streaming"]:
-            AI["msg"] = "antwort läuft noch — erst stoppen (esc)"
+            self._oeffnen_waehrend_antwort(gid)
             return
+        AI.setdefault("ungesehen", set()).discard(gid)
         try:
             api_call("/api/gespraeche/aktiv", "POST", {"id": gid})
         except urllib.error.HTTPError:
@@ -273,6 +285,30 @@ class GespraechsSteuerung:
         except (urllib.error.URLError, OSError, ValueError):
             AI["msg"] = "keine verbindung — nicht gewechselt"
             return
+        self.leeren()
+        with self.AI_LOCK:
+            AI["gid"] = gid
+            AI["msg"] = ""
+        threading.Thread(target=self.verlauf_laden, args=(gid,), daemon=True).start()
+
+    def _oeffnen_waehrend_antwort(self, gid):
+        """Wechseln, während eine Antwort läuft (2026-10-09, wie Claude Web):
+        sie läuft im Hintergrund weiter (chat_strom.py). Beim Backend wird
+        NICHT gewechselt — das hebt „für dieses Gespräch" auf, und die
+        laufende Antwort fragte sonst bei jedem Schritt neu; strom_aus holt
+        das nach, wenn sie fertig ist."""
+        AI = self.AI
+        with self.AI_LOCK:
+            if gid == AI.get("gid"):
+                return
+            if gid is not None and gid == self.strom_gid():
+                self.strom_zurueckholen()          # zurück: live weiter
+                AI["msg"] = ""
+                return
+            if self.strom_laeuft_hier():
+                self.strom_wegstellen()
+            AI["aktiv_nachholen"] = True
+            AI.setdefault("ungesehen", set()).discard(gid)
         self.leeren()
         with self.AI_LOCK:
             AI["gid"] = gid
@@ -308,7 +344,7 @@ class GespraechsSteuerung:
         AI = self.AI
         gid = AI.get("gid")
         if AI["streaming"]:
-            AI["msg"] = "antwort läuft noch — erst stoppen (esc)"
+            AI["msg"] = self._laeuft_text()
         elif not gid:
             AI["msg"] = "noch kein gespräch — nichts zu archivieren"
         elif gid == "erinnerungen":
@@ -326,7 +362,7 @@ class GespraechsSteuerung:
         """/wiederholen: letzte Antwort verwerfen, letzte eigene Nachricht neu."""
         AI, AI_LOCK = self.AI, self.AI_LOCK
         if AI["streaming"]:
-            AI["msg"] = "antwort läuft noch — erst stoppen (esc)"
+            AI["msg"] = self._laeuft_text()
             return
         with AI_LOCK:
             letzte = max((i for i, (r, _t) in enumerate(AI["log"]) if r == "user"), default=None)
@@ -344,7 +380,7 @@ class GespraechsSteuerung:
         mehr, bleibt aber gespeichert)."""
         AI = self.AI
         if AI["streaming"]:
-            AI["msg"] = "antwort läuft noch — erst stoppen (esc)"
+            AI["msg"] = self._laeuft_text()
             return
         if not AI.get("gid"):
             AI["msg"] = "noch nichts zu bearbeiten"

@@ -67,6 +67,9 @@ class FakeChat:
     def leeren(self):
         self.geleert += 1
 
+    def markiert(self, eintraege):
+        return list(eintraege)
+
 
 @pytest.fixture
 def backend(monkeypatch):
@@ -157,11 +160,13 @@ def test_esc_und_tab_schliessen(backend):
         assert c.AI["liste"] is None
 
 
-def test_waehrend_einer_antwort_keine_liste(backend):
+def test_waehrend_einer_antwort_geht_die_liste_auf(backend):
+    """Seit 2026-10-09 (wie Claude Web): die Antwort läuft im Hintergrund
+    weiter, Sasha darf die Gespräche sehen und wechseln (chat_strom.py)."""
     c = FakeChat()
     c.AI["streaming"] = True
     gespraechsliste.Gespraechsliste(c).oeffnen()
-    assert c.AI["liste"] is None and "antwort läuft" in c.AI["msg"]
+    assert c.AI["liste"] is not None and c.AI["liste"]["eintraege"]
 
 
 # ── Verlauf, Denken, Titel, Befehle ───────────────────────────────────

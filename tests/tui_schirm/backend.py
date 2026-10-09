@@ -16,6 +16,7 @@ NIE_LIVE = ("/api/mail/body", "/api/mail/inbox-body", "/api/mail/poll",
             "/api/mail/reconcile", "/api/mail/refresh-counts", "/api/chat?",
             "/api/tutor/start", "/api/tutor/respond", "/api/tutor/stop")
 _lock = threading.Lock()
+ERLAUBT = threading.Event()   # Browser-Zug: Erlaubnis beantwortet
 try:
     with open(CACHE) as f:
         _cache = json.load(f)
@@ -309,10 +310,57 @@ class H(BaseHTTPRequestHandler):
         except OSError:
             pass
 
+    def _browser_strom(self):
+        """POST /api/chat wie Sashas Browser-Zug vom 09.10.2026 (Gespräch
+        20261009-150713-e03002): sechs Werkzeuge, Text, Ehrlichkeits-Event,
+        antwort+ablauf, done. ZTUI_STROM_S: Pause je Ereignis."""
+        import time as _time
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        pause = float(os.environ.get("ZTUI_STROM_S", "0.3"))
+
+        def ev(obj):
+            self.wfile.write(("data: %s\n\n" % json.dumps(obj, ensure_ascii=False)).encode())
+            self.wfile.flush()
+            _time.sleep(pause)
+        try:
+            ev({"strom": "s2"})
+            ev({"reflect": "ich schaue ins LSF "})
+            # Wie im echten Zug: das erste browser_open fragt. Die Antwort
+            # (Taste 1) kommt als POST /api/permission_answer → ERLAUBT.
+            ERLAUBT.clear()
+            ev({"permission": {"frage": "Soll ich im Browser www.lsf.uni-saarland.de öffnen?",
+                               "optionen": ["ja, nur dieses mal", "ja, für dieses gespräch", "nein"],
+                               "erlaubnis": True}})
+            ERLAUBT.wait(30)
+            for name, args in (("browser_open", {"url": "https://www.lsf.uni-saarland.de"}),
+                               ("browser_click", {"ref": "3"}), ("browser_click", {"ref": "12"}),
+                               ("browser_type", {"ref": "5", "text": "Experimentalphysik"}),
+                               ("browser_click", {"ref": "7"}), ("browser_click", {"ref": "9"})):
+                ev({"werkzeug": {"phase": "start", "name": name, "args": args}})
+                ev({"werkzeug": {"phase": "fertig", "name": name,
+                                 "text": "Seite: „Universität des Saarlandes“ …"}})
+            ev({"token": "Bin rein ohne Login – "})
+            ev({"token": "hier der Plan für Experimentalphysik I."})
+            ev({"ehrlichkeit": {"erledigt": [], "zeile": "", "offen": []}})
+            ev({"antwort": "m9", "ablauf": 15})
+            ev({"done": True})
+        except OSError:
+            pass
+
     def do_POST(self):
         self._drain()
         if self.path == "/api/chat":
-            self._denken_strom()
+            if os.environ.get("ZTUI_STROM") == "browser":
+                self._browser_strom()
+            else:
+                self._denken_strom()
+            return
+        if self.path == "/api/permission_answer":
+            ERLAUBT.set()
+            self._send({"ok": True})
             return
         if self.path == "/api/anhang":                # /paste, /attach (2026-10-08)
             self._send({"id": "a9", "titel": "zwischenablage.png", "art": "bild", "hinweis": ""})

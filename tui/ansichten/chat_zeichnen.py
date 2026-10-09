@@ -120,7 +120,11 @@ class ChatZeichnen:
             log = list(AI["log"])
             answer = AI["answer"]
             reflect = AI["reflect"]
-            streaming = AI["streaming"]
+            # Läuft die Antwort in einem anderen Gespräch, ist es hier still;
+            # unten steht nur, dass und wo sie läuft (chat_strom.py).
+            streaming = self.strom_laeuft_hier()
+            hinten = self.strom_woanders()
+            hinten = (self.strom_titel(), bool(hinten.get("perm"))) if hinten is not None else None
             perm = dict(AI["perm"]) if AI["perm"] else None
             inp = AI["input"]
             cur = min(AI["cur"], len(inp))
@@ -147,7 +151,7 @@ class ChatZeichnen:
         self.klickbar(top, rx, len(rechts_txt), self.rechts.outputs_umschalten)
 
         # Unten: Fuß (Frage/Auswahl/Info), Eingabekasten, Leiste darunter
-        fuss = self._fuss(perm, wahl, msg, reflect, streaming, inp, zu_viel, sp.w)
+        fuss = self._fuss(perm, wahl, msg, reflect, streaming, inp, zu_viel, sp.w, hinten)
         kasten = self._kasten_zeilen(inp, cur, anhaenge, sp.w, h, streaming)
         unten = top + h                      # erste Zeile NACH dem Bereich
         leiste_y = unten - 1
@@ -170,9 +174,11 @@ class ChatZeichnen:
         self.rad_flaeche(v_oben, bereich.x, platz, bereich.w, "verlauf")
         self._verlauf(v_oben, platz, sp, log, answer, streaming, bereich)
 
-    def _fuss(self, perm, wahl, msg, reflect, streaming, inp, zu_viel, w):
+    def _fuss(self, perm, wahl, msg, reflect, streaming, inp, zu_viel, w, hinten=None):
         """Zeilen über dem Eingabekasten: Erlaubnis-Frage, Auswahl oder eine
-        Info-Zeile (Grenze > Denk-Strom > Hinweis > was gerade geht)."""
+        Info-Zeile (Grenze > Denk-Strom > Hinweis > was gerade geht).
+        hinten: (titel, fragt) der Antwort, die in einem anderen Gespräch
+        läuft — ihre Frage darf nie untergehen."""
         C = self.z.C
         if perm:
             opts = perm.get("optionen") or ["ja", "nein"]
@@ -185,12 +191,18 @@ class ChatZeichnen:
         zaehler = eingabe.zaehler(len(inp))
         if grenze:
             return [(ln, C["warn"] | curses.A_BOLD) for ln in _wrap(grenze, w)]
-        if streaming and reflect:
+        if hinten and hinten[1]:
+            zeile = (("? „%s“ fragt etwas — dorthin wechseln, um zu antworten" % hinten[0])[:w],
+                     C["warn"] | curses.A_BOLD)
+        elif streaming and reflect:
             zeile = (("thinking: " + reflect.replace("\n", " "))[-w:], C["faint"])
         elif msg:
             zeile = (msg[:w], C["warn"])
         elif streaming:
             zeile = ("answering … ctrl+c stops · esc closes (keeps running)"[:w], C["faint"])
+        elif hinten:
+            zeile = (("„%s“ antwortet noch im hintergrund · ctrl+c stoppt" % hinten[0])[:w],
+                     C["faint"])
         else:
             zeile = ("", 0)
         if zaehler:
@@ -397,7 +409,7 @@ class ChatZeichnen:
         seit = jetzt - AI["auge_t0"]
         farben = "nacht" if sum(C["pix_bg"]) < 384 else "tag"
         auge = pixel.auge_zellen(round(min(1.0, seit / .45), 2), int(seit * 1000),
-                                 AI["streaming"], farben, "half" if z.PIX_MODUS == "half" else "mix")
+                                 self.strom_laeuft_hier(), farben, "half" if z.PIX_MODUS == "half" else "mix")
         ey = y0 + max(0, (platz - pixel.AUGE_H - 2) // 2)
         ex = bereich.x + (bereich.w - pixel.AUGE_W) // 2
         for r, line in enumerate(auge):
