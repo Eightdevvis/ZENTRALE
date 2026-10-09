@@ -7,7 +7,9 @@ Vorwahl `chat_backend` in `data/ai_config.json` (`auto|local|cloud`; seit
 (Anthropic, Drop-in für `ai.chat_stream()`, Code-Default `claude-sonnet-5`,
 adaptives Denken, Prompt-Cache statisch vorn) oder `core/cloud_openai.py`
 (zweiter Dialekt für qwen/openai/mistral); lokal = Ollama `qwen3.5:9b`
-(`think=false`, Prompt-Schiene `profil/klein`, Cloud nimmt `profil/gross`).
+(`think=false`, Prompt-Schiene `profil/klein`, Cloud nimmt `profil/gross`;
+qwen über die Cloud bekommt darüber sein Modell-Profil `profil/modelle/qwen`,
+Einstellung `modell_profile` → [modell_profile.md](modell_profile.md)).
 **Tools laufen immer lokal**, nur die Entscheidung wandert. Schreib-Tools
 gehen durchs Erlaubnis-Gate (Regel im Werkzeug-Register, nicht
 modellgetrieben). **Das Gedächtnis ist das Datei-Gedächtnis**

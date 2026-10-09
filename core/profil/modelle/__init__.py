@@ -35,8 +35,11 @@ PROFILE = {
 }
 
 # Ohne Einstellung: welches Modell welches Profil bekommt. Claude-Modelle
-# stehen bewusst nicht drin.
-STANDARD = {}
+# stehen bewusst nicht drin. qwen seit 2026-10-10 an: im Prüfstand arbeitet
+# qwen-plus mit Profil deutlich besser als auf der nackten gross-Schiene
+# (memory/ki/modell_profile.md) — und qwen fährt vor allem dann, wenn Sasha
+# nicht hinsieht: im Budget-Rückfall.
+STANDARD = {"qwen-*": "qwen"}
 
 
 def zuordnung() -> dict:

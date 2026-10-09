@@ -69,6 +69,11 @@ class FakeClient:
 
 @pytest.fixture
 def fake(monkeypatch):
+    # Diese Tests prüfen den Dialekt, nicht das qwen-Profil, das seit
+    # 2026-10-10 für qwen-* gilt (tests/test_modell_profile.py und unten
+    # test_qwen_profil_greift_im_dialekt).
+    monkeypatch.setenv("ZENTRALE_MODELL_PROFILE", "{}")
+
     def bauen(runden):
         c = FakeClient(runden)
         monkeypatch.setattr(cloud_openai, "_get_client", lambda prov: c)
@@ -151,6 +156,22 @@ def test_tools_gehen_ohne_uebersetzung_raus(fake):
     _lauf(cloud_openai.chat_stream(_msgs()))
     assert c.calls[0]["tools"] is gross.TOOLS
     assert c.calls[0]["messages"][0]["role"] == "system"
+
+
+def test_qwen_profil_greift_im_dialekt(fake, monkeypatch):
+    """Mit Profil (Standard für qwen-*): Kopf mit Arbeitsweise vorn,
+    Erinnerung im Umschlag, eigene Werkzeug-Liste, erst lesen erzwungen."""
+    c = fake([_text("ok"), _text("ok")])
+    monkeypatch.delenv("ZENTRALE_MODELL_PROFILE")
+    _lauf(cloud_openai.chat_stream(
+        [{"role": "user", "content": "der zahnarzt ist ab jetzt um 16:30"}]))
+    aufruf = c.calls[0]
+    assert aufruf["messages"][0]["content"].startswith("## Arbeitsweise")
+    assert "erst Werkzeug, dann Antwort" in aufruf["messages"][-1]["content"]
+    from profil import gross
+    assert aufruf["tools"] is not gross.TOOLS
+    assert aufruf["tool_choice"] == {"type": "function",
+                                     "function": {"name": "read_calendar"}}
 
 
 def test_system_prompt_hat_dieselbe_reihenfolge_wie_anthropic(fake):
