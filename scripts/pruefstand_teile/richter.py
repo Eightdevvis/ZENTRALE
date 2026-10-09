@@ -267,6 +267,29 @@ def zaehlen(behauptungen: list) -> dict:
     return z
 
 
+def _mit_anbieter_von(mdl: str, aufruf):
+    """billig.einmal fragt den Anbieter, der für den Chat dran ist. Läuft der
+    Chat auf qwen und richtet Haiku (--modell qwen-plus --richter claude-…,
+    2026-10-09), ginge der Claude-Name sonst an DashScope. Für die Dauer des
+    Aufrufs: der Anbieter, dessen Modell der Richter ist (nur im Prozess)."""
+    import ai_config
+    import providers
+    anbieter = next((n for n, p in providers.PROVIDERS.items()
+                     if mdl and (p.get("default_model") == mdl
+                                 or p.get("cheap_model") == mdl
+                                 or mdl.startswith(n))), None)
+    if mdl and mdl.startswith("claude"):
+        anbieter = "claude"
+    if not anbieter:
+        return aufruf()
+    vorher = ai_config._overrides.get("chat_provider")
+    ai_config.set_override("chat_provider", anbieter)
+    try:
+        return aufruf()
+    finally:
+        ai_config.set_override("chat_provider", vorher)
+
+
 def urteilen(ergebnis: dict, fragen=None, modell: str | None = None) -> dict:
     """-> {behauptungen, zaehlung, modell, roh?, fehler?}
 
@@ -283,8 +306,8 @@ def urteilen(ergebnis: dict, fragen=None, modell: str | None = None) -> dict:
                 # mehr pro Durchgang sind die bessere Wahl (2026-10-08).
                 import ai_backends
                 mdl = ai_backends.chat_model(ai_backends.cloud_provider())
-            return billig.einmal(system, text, modell=mdl, max_tokens=8000,
-                                 log="PRÜFSTAND-RICHTER")
+            return _mit_anbieter_von(mdl, lambda: billig.einmal(
+                system, text, modell=mdl, max_tokens=8000, log="PRÜFSTAND-RICHTER"))
     behauptungen, fehler, benutzt = [], [], modell
     for zi, z in enumerate(ergebnis.get("zuege", []), 1):
         if not (z.get("antwort") or "").strip():

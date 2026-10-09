@@ -137,7 +137,11 @@ def einzeln(a) -> int:
     code = os.path.abspath(a.code or ROOT)
     tmp = tempfile.mkdtemp(prefix="zentrale_pruefstand_")
     try:
-        umgebung.vorbereiten(tmp, a.daten, fall.get("einstellungen"))
+        # Einstellungen des Laufs (--anbieter/--modell/--einstellung) gelten
+        # über denen des Falls: sie wählen, WER fährt, der Fall nur die Lage.
+        einst = dict(fall.get("einstellungen") or {})
+        einst.update(json.loads(a.einstellungen_json or "{}"))
+        umgebung.vorbereiten(tmp, a.daten, einst)
         sys.path[:0] = [os.path.join(code, "core"), code]
         # Fremde Bibliotheken VOR dem Kern laden: so behalten sie die echten
         # date/datetime-Klassen, wenn die Uhr des Falls verstellt wird (uhr.py).
@@ -260,6 +264,8 @@ def durchgang(liste: list, *, code: str, daten: str, ordner: str, a) -> dict:
         else:
             os.makedirs(os.path.join(ordner, "aufnahmen"), exist_ok=True)
             befehl += ["--aufnahme", os.path.join(ordner, "aufnahmen", f"{fall['id']}.json")]
+        if lauf_einstellungen(a):
+            befehl += ["--einstellungen-json", json.dumps(lauf_einstellungen(a))]
         print(f"  {fall['id']:<28}", end="", flush=True)
         t0 = time.monotonic()
         with open(log, "w", encoding="utf-8") as lf:
@@ -299,6 +305,26 @@ def topf_text(daten: str) -> str:
             "nicht in Sashas Chat-Kosten)")
 
 
+def lauf_einstellungen(a) -> dict:
+    """Was --anbieter/--modell/--einstellung für diesen Lauf setzen — nur in
+    der Wegwerf-Kopie der Einstellungen, Sashas ai_config.json bleibt, wie
+    sie ist (2026-10-09: qwen-plus messen, ohne Sashas Wahl zu ändern)."""
+    aus = {}
+    if a.anbieter:
+        aus["chat_provider"] = a.anbieter
+        aus["chat_backend"] = "cloud"
+    if a.modell:
+        anbieter = a.anbieter or "claude"
+        aus["chat_models"] = {anbieter: a.modell}
+    for paar in a.einstellung or []:
+        name, _, wert = paar.partition("=")
+        try:
+            aus[name.strip()] = json.loads(wert)
+        except ValueError:
+            aus[name.strip()] = wert
+    return aus
+
+
 def isolation_text(vorher: dict, nachher: dict) -> str:
     anders = sorted(p for p in set(vorher) | set(nachher)
                     if vorher.get(p) != nachher.get(p) and not p.endswith("ai_usage.json"))
@@ -326,6 +352,10 @@ def main() -> int:
     p.add_argument("--trotz-budget", action="store_true",
                    help="auch fahren, wenn der Durchgang über die Prüfstand-Grenze "
                         "(pruefstand_budget_monat) ginge")
+    p.add_argument("--anbieter", help="Chat-Anbieter für diesen Lauf (z. B. qwen)")
+    p.add_argument("--modell", help="Chat-Modell für diesen Lauf (z. B. qwen-plus)")
+    p.add_argument("--einstellung", action="append", metavar="NAME=WERT",
+                   help="Einstellung nur für diesen Lauf (WERT als JSON, sonst Text)")
     p.add_argument("--entwurf-aus", metavar="GESPRAECH[:NACHRICHT]",
                    help="Entwurf eines Falls aus einem gespeicherten Gespräch ausgeben")
     p.add_argument("--nur-richter", metavar="ORDNER",
@@ -348,6 +378,7 @@ def main() -> int:
     p.add_argument("--code", help=argparse.SUPPRESS)
     p.add_argument("--daten", help=argparse.SUPPRESS)
     p.add_argument("--ergebnis", help=argparse.SUPPRESS)
+    p.add_argument("--einstellungen-json", help=argparse.SUPPRESS)
     a = p.parse_args()
 
     if a.einzeln:

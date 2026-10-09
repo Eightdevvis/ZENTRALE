@@ -68,7 +68,11 @@ def vorbereiten(tmp: str, daten: str, einstellungen: dict | None = None) -> dict
         json.dump(kopie, f, ensure_ascii=False, indent=1)
     os.environ["ZENTRALE_AI_CONFIG_DIR"] = cfg_dir
     for k, v in (einstellungen or {}).items():
-        os.environ["ZENTRALE_" + k.upper()] = str(v)
+        # Nur einfache Werte in die Env: ein dict (chat_models, modell_profile)
+        # käme dort als Python-Text an und stäche die Datei-Kopie aus, die es
+        # richtig enthält (2026-10-09, --modell im Prüfstand).
+        if isinstance(v, (str, int, float, bool)):
+            os.environ["ZENTRALE_" + k.upper()] = str(v)
     return kopie
 
 
