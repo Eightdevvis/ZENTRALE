@@ -27,7 +27,7 @@ ohne Inputs).
 |--------|---------------------------------------|
 | `b`    | Button gedrückt (Sensor)              |
 | `l`    | Light Sensor Trigger                  |
-| `m`    | Motion Sensor (Presence) – `PRESENCE_DETECTED` → `tutor_port.presence_ping()`: nonverbale Reaktion (schaut hoch, Mimik) **nur bei laufender Tutor-Session**, kein Auto-Start, kein verbaler Gruß. Default an, per `TUTOR_PRESENCE_REACT=0` aus |
+| `m`    | Motion Sensor (Presence) – `PRESENCE_DETECTED` → `tutor_port.presence_ping()`: nonverbale Reaktion (schaut hoch, Mimik) **nur bei laufender Tutor-Session**, kein Auto-Start, kein verbaler Gruß. Default an, per `ZENTRALE_TUTOR_PRESENCE_REACT=0` aus |
 | `c`    | Chat-Panel öffnen                     |
 | `ESC`  | Zurück zum Haupt-Dashboard            |
 

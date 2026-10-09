@@ -50,10 +50,12 @@ def notify_change(path=None):
     `path` ist nur informativ (aktuell ungenutzt — der Helfer pusht den ganzen
     untracked-Datensatz per rsync-Delta, das ist billig und coalesced sauber).
     """
-    if os.environ.get("ZENTRALE_AUTOPUSH") != "1":
+    import ai_config
+    # Einstellung autopush (Env ZENTRALE_AUTOPUSH, wie in den Service-Dateien)
+    # — seit 2026-10-08 über ai_config statt direkt aus der Env.
+    if str(ai_config.setting("autopush", "") or "") != "1":
         return
     try:
-        import ai_config
         if (ai_config.setting("abgleich_weg") or "").strip().lower() == "mitte":
             abgleich_anstossen()
             return

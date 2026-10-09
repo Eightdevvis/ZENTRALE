@@ -15,20 +15,31 @@
 # Whisper-Service: http://<WHISPER_HOST>:5050/transcribe
 # TTS-Service:     http://<TTS_HOST>:5051/speak
 #
-# Konfiguration via Umgebungsvariablen:
-#   WHISPER_URL    – default: http://localhost:5050
-#   TTS_URL        – default: http://localhost:5051
-#   DEFAULT_LANG   – default: 'de'  (Fallback wenn Aufrufer kein lang angibt)
+# Einstellungen (ai_config.setting, Env ZENTRALE_<NAME>, seit 2026-10-08;
+# vorher eigene Env-Namen ohne ZENTRALE_, die gelten übergangsweise noch):
+#   whisper_url    – default: http://localhost:5050
+#   tts_url        – default: http://localhost:5051
+#   default_lang   – default: 'de'  (Fallback wenn Aufrufer kein lang angibt)
+# Gelesen bei JEDEM Aufruf, nicht beim Import — so greift Live-Umschalten.
 
 import os
 import urllib.request
 import urllib.error
 import json as _json
+import ai_config
 import state  # für Terminal-Logging
 
-WHISPER_URL  = os.environ.get("WHISPER_URL",  "http://localhost:5050")
-TTS_URL      = os.environ.get("TTS_URL",      "http://localhost:5051")
-DEFAULT_LANG = os.environ.get("DEFAULT_LANG", "de")
+
+def _whisper_url() -> str:
+    return str(ai_config.setting("whisper_url", "http://localhost:5050")).rstrip("/")
+
+
+def _tts_url() -> str:
+    return str(ai_config.setting("tts_url", "http://localhost:5051")).rstrip("/")
+
+
+def _default_lang() -> str:
+    return str(ai_config.setting("default_lang", "de"))
 
 
 def transcribe(audio_bytes: bytes, filename: str = "audio.wav",
@@ -39,14 +50,14 @@ def transcribe(audio_bytes: bytes, filename: str = "audio.wav",
 
     audio_bytes: WAV-Datei als bytes (kommt vom Browser via Flask)
     filename:    Dateiname für den multipart-Upload (nur für Logging)
-    lang:        Sprach-Hint für Whisper. None → DEFAULT_LANG (env-bar).
+    lang:        Sprach-Hint für Whisper. None → Einstellung default_lang.
                  Werte z.B. 'de' (deutsch), 'zh' (mandarin), 'en' (englisch).
     Rückgabe:    erkannter Text, oder Fehlermeldung
     """
     if lang is None:
-        lang = DEFAULT_LANG
+        lang = _default_lang()
 
-    url = f"{WHISPER_URL}/transcribe"
+    url = f"{_whisper_url()}/transcribe"
     state.push_log(f"STT →  POST {url} ({len(audio_bytes)//1024} KB, lang={lang})")
 
     # multipart/form-data manuell bauen – urllib hat keine eingebaute Hilfe dafür.
@@ -94,7 +105,7 @@ def synthesize(text: str, lang: str = None,
     Flask proxied die Bytes direkt an den Browser.
 
     text:    der zu sprechende Text
-    lang:    Zielsprache. None → DEFAULT_LANG. Werte: 'de', 'zh', …
+    lang:    Zielsprache. None → Einstellung default_lang. Werte: 'de', 'zh', …
              Welche Sprachen wirklich gehen, entscheidet tts_service.py
              (abhängig von den geladenen Modellen).
     speed:   Sprechgeschwindigkeit (ZENTRALE-Chat-Default 1.2 = etwas flotter;
@@ -104,9 +115,9 @@ def synthesize(text: str, lang: str = None,
     Rückgabe: WAV-Datei als bytes, oder leeres bytes bei Fehler
     """
     if lang is None:
-        lang = DEFAULT_LANG
+        lang = _default_lang()
 
-    url = f"{TTS_URL}/speak"
+    url = f"{_tts_url()}/speak"
     kurz = " / ".join(t.strip() for t in text.splitlines() if t.strip())[:60]
     state.push_log(f"TTS →  POST {url} '{kurz}' (lang={lang})")
 
@@ -135,7 +146,7 @@ def synthesize(text: str, lang: str = None,
 def whisper_available() -> bool:
     """Health-Check für Whisper-Service."""
     try:
-        urllib.request.urlopen(f"{WHISPER_URL}/health", timeout=2)
+        urllib.request.urlopen(f"{_whisper_url()}/health", timeout=2)
         return True
     except Exception:
         return False
@@ -144,7 +155,7 @@ def whisper_available() -> bool:
 def tts_available() -> bool:
     """Health-Check für TTS-Service."""
     try:
-        urllib.request.urlopen(f"{TTS_URL}/health", timeout=2)
+        urllib.request.urlopen(f"{_tts_url()}/health", timeout=2)
         return True
     except Exception:
         return False

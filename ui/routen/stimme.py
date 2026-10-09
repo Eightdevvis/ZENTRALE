@@ -40,7 +40,7 @@ def api_speak():
 
     Body (JSON):
       text     – Pflichtfeld
-      lang     – Sprachcode (default 'de' via DEFAULT_LANG in core/audio.py)
+      lang     – Sprachcode (default: Einstellung default_lang, core/audio.py)
       speed    – Sprechgeschwindigkeit (default 1.2 = ZENTRALE-Chat; 1.0 natuerlich, <1.0 langsamer)
       speaker  – Sprecher-ID (default 0; bedeutung modellabhaengig)
 

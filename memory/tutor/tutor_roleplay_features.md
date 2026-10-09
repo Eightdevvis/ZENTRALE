@@ -4,7 +4,7 @@
 heute im Code steht: Mimik/Gesten/Schlafen über `express`, soziale Batterie
 (`mood` in `room_state`), Satz-Strukturen (3 Tools), Gedanken-Blase
 (`show_thought`, Bilder als Drop-in), nonverbaler Presence-Ping (Default AN,
-`TUTOR_PRESENCE_REACT=0` aus), Landes-News/TV/Musik als Seeds bzw. Drop-in-Ordner.
+`ZENTRALE_TUTOR_PRESENCE_REACT=0` aus), Landes-News/TV/Musik als Seeds bzw. Drop-in-Ordner.
 Überholt seit dem Bau: das Vokabel-Feinmodell aus §3 (`correct_use`/`confirmed`,
 `vocab_split`) ist durch `spoken`/`listened` ersetzt; die Vokabel-Tools
 `get_confirmed_vocab`/`get_testing_vocab`/`increment_correct_use`/`mark_known`
@@ -124,7 +124,7 @@ dokumentieren, morgen gemeinsam reviewen.
   schon, reagiert die Persona **nonverbal** — schaut hoch (`look`), Mimik `happy`,
   +6 Batterie. Gedrosselt (`_PRESENCE_COOLDOWN=90s`) gegen PIR-Zucken. Der Laptop-
   Raum sieht die Reaktion über den `room_state`-Poll.
-- `brain.py` PRESENCE_DETECTED: Hook hinter Env-Flag `TUTOR_PRESENCE_REACT`.
+- `brain.py` PRESENCE_DETECTED: Hook hinter Env-Flag `ZENTRALE_TUTOR_PRESENCE_REACT`.
   (In der Nacht als „`=1`, default AUS" gebaut; seit 2026-07-17 ist der Default
   **AN**, `=0` schaltet ab — `brain.py` prüft `!= "0"`.) Nonverbale Reaktion nur
   bei aktiver Session.

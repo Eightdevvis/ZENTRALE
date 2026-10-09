@@ -1,6 +1,5 @@
 # core/brain.py
 
-import os
 
 from events import (
     TIME_REACHED, MORNING_WAKEUP, BUTTON_PRESS,
@@ -32,8 +31,11 @@ def process_event(event, data=None):
         # Ping an die Persona weiter — und der wirkt auch dann nur, wenn die
         # Tutor-Session bereits LÄUFT (er startet nie eine); die Guards dafür
         # (aktive Session, nonverbal, Cooldown) stecken in presence_ping() selbst
-        # und no-op-en sicher. Über TUTOR_PRESENCE_REACT=0 explizit abschaltbar.
-        if os.getenv("TUTOR_PRESENCE_REACT") != "0":
+        # und no-op-en sicher. Abschaltbar über die Einstellung
+        # tutor_presence_react = 0 (Env ZENTRALE_TUTOR_PRESENCE_REACT; bis
+        # 2026-10-08 TUTOR_PRESENCE_REACT, gilt übergangsweise noch).
+        import ai_config
+        if str(ai_config.setting("tutor_presence_react", "1")) != "0":
             try:
                 import tutor_port
                 reacted = tutor_port.presence_ping()
@@ -42,6 +44,6 @@ def process_event(event, data=None):
             except Exception as e:
                 print(f"Brain: Presence-Reaktion fehlgeschlagen: {e}")
         else:
-            print("Brain: Presence erkannt (Reaktion per TUTOR_PRESENCE_REACT=0 aus)")
+            print("Brain: Presence erkannt (Reaktion per tutor_presence_react=0 aus)")
 
     return new_events

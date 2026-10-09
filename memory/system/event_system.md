@@ -69,7 +69,7 @@ Simulation gegen echten GPIO-Trigger tauschen ohne `brain.py` anzufassen).
   - `TIME_REACHED` → `MORNING_WAKEUP`
   - `PRESENCE_DETECTED` → `tutor_port.presence_ping()`: eine **nonverbale**
     Reaktion (schaut hoch, Mimik) in eine **bereits laufende** Tutor-Session,
-    kein Auto-Start, kein verbaler Gruß. Default an, per `TUTOR_PRESENCE_REACT=0`
+    kein Auto-Start, kein verbaler Gruß. Default an, per `ZENTRALE_TUTOR_PRESENCE_REACT=0`
     aus. Kein `TUTOR_START`-Event (die Kante gibt es nicht). Der Kern geht über
     den Port, nie an `tutor.*` vorbei. Siehe `memory/tutor/tutor_system.md`.
 - Macht selbst keine File-Writes; der `presence_ping` ist ein Port-Aufruf.

@@ -58,7 +58,7 @@ ständig; die Struktur muss mit dem Wachstum **besser** werden, nicht schlechter
   (die Konstante hat weder Sender noch Handler). `brain.py` ruft stattdessen
   `tutor_port.presence_ping()`: eine **nonverbale** Reaktion in eine bereits
   laufende Session, die nie eine startet. Gates, in dieser Reihenfolge: Env
-  `TUTOR_PRESENCE_REACT != "0"` (default AN) → `tutor_port.available()`
+  `ZENTRALE_TUTOR_PRESENCE_REACT != "0"` (default AN) → `tutor_port.available()`
   (Kill-Switch + Backend erreichbar) → Session-interne Guards (Cooldown).
   Kein Tageszeit-Check. Der Kern fragt nie `tutor.*` direkt, immer den Port.
   Dass die Persona von sich aus spricht, entscheidet das **Zimmer** aus

@@ -197,17 +197,23 @@ OLLAMA_MODEL=qwen3.5:9b             # default
 ZENTRALE_THINK=1                    # default an: adaptives Thinking im Chat
                                     # (Frage→denkt+sichtbare Reflexion im Kern,
                                     # Aktion→aus). =0 schaltet komplett aus.
-WHISPER_URL=http://localhost:5050   # default (gegen den Whisper-Service)
-TTS_URL=http://localhost:5051       # default (gegen den TTS-Service)
+ZENTRALE_WHISPER_URL=http://localhost:5050   # default (gegen den Whisper-Service)
+ZENTRALE_TTS_URL=http://localhost:5051       # default (gegen den TTS-Service)
+ZENTRALE_DEFAULT_LANG=de                     # Sprache, wenn ein Aufrufer keine nennt
+# (seit 2026-10-08 über ai_config.setting, also auch in data/ai_config.json
+#  als whisper_url/tts_url/default_lang setzbar; die alten Namen WHISPER_URL,
+#  TTS_URL, DEFAULT_LANG gelten übergangsweise noch, mit Hinweis im Log)
 
 # whisper_service.py verwendet zusätzlich:
 WHISPER_MODEL=small                 # default (tiny|base|small|medium)
+# ⚠ scripts/open_tutor_room.py startet Whisper mit base, wenn WHISPER_MODEL
+#   nicht gesetzt ist (siehe memory/tutor/diagnose_2026-10-08.md)
 ```
 
 Beispiel: Whisper läuft auf einer anderen Maschine im LAN.
 
 ```bash
-WHISPER_URL=http://192.168.1.42:5050 sudo venv/bin/python core/main.py
+ZENTRALE_WHISPER_URL=http://192.168.1.42:5050 sudo venv/bin/python core/main.py
 ```
 
 ## Reihenfolge des Hochfahrens

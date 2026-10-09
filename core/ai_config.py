@@ -106,11 +106,39 @@ def setting(name: str, default=None):
     env = os.environ.get("ZENTRALE_" + name.upper())
     if env not in (None, ""):
         return env
+    env = _alter_name(name)
+    if env not in (None, ""):
+        return env
     for src in (_config, _legacy):
         val = src.get(name)
         if val not in (None, ""):
             return val
     return default
+
+
+# Alte Env-Namen aus der Zeit, als Audio und Tutor-Schalter ihre Env selbst
+# lasen (aufgeräumt 2026-10-08). Sie gelten noch, damit ein Rechner mit altem
+# Startskript nicht still umfällt — mit einer Zeile im Log, einmal je Name.
+# Wenn nirgends mehr gesetzt: Zeile hier streichen.
+ALTE_NAMEN = {
+    "whisper_url":          "WHISPER_URL",
+    "tts_url":              "TTS_URL",
+    "default_lang":         "DEFAULT_LANG",
+    "tutor_presence_react": "TUTOR_PRESENCE_REACT",
+}
+_alt_gemeldet = set()
+
+
+def _alter_name(name: str):
+    alt = ALTE_NAMEN.get(name)
+    if not alt:
+        return None
+    wert = os.environ.get(alt)
+    if wert not in (None, "") and alt not in _alt_gemeldet:
+        _alt_gemeldet.add(alt)
+        print(f"[ai_config] Umgebungsvariable {alt} ist veraltet — heißt jetzt "
+              f"ZENTRALE_{name.upper()} (gilt vorerst noch).", flush=True)
+    return wert
 
 
 def set_override(name: str, value, persist: bool = False):

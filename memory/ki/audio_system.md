@@ -197,7 +197,7 @@ audio.py  ──HTTP──▶  tts_service.py  (Port 5051)
   - `synthesize(text, lang=None, speed=1.2, speaker=0)` → WAV via TTS.
   - `whisper_available()` / `tts_available()` – Health-Checks gegen
     `/health`.
-- `lang=None` → fällt auf `DEFAULT_LANG` (env-Variable, default `de`).
+- `lang=None` → fällt auf die Einstellung `default_lang` (`ai_config.setting`, Env `ZENTRALE_DEFAULT_LANG`, default `de`; seit 2026-10-08).
 - Loggt direkt in `state.push_log` (`STT →` / `STT ←` / `TTS →` /
   `TTS ←`) – nutzt **nicht** `net.py`, weil multipart-Upload
   Sonderbehandlung braucht.
