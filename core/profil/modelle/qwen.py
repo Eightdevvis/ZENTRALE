@@ -130,3 +130,17 @@ def werkzeuge(tools: list) -> list:
             f["description"] += nutzer_angaben.einsetzen(_ZUSATZ.get(name, ""))
         raus.append(t)
     return raus
+
+
+# ── Zusatz-Prüfer: was Python sehen kann, prüft Python (Runde 4/7) ──────
+# Runde 3 zeigte: auch mit Arbeitsweise-Block fragt qwen zufällig um
+# Erlaubnis, statt zu ändern; Runde 6: es schrieb einmal den Aufruf als Text
+# hin und schloss aus einer leeren Stichwort-Suche „gibt es nicht“. Je eine
+# Korrekturrunde, Einzelheiten in zusatzpruefer.py.
+from . import zusatzpruefer as _zusatz  # noqa: E402
+
+
+def pruefer(basis, messages=None, werkzeuge=frozenset(), **_):
+    if basis is None:
+        return None
+    return _zusatz.ZusatzPruefer(basis, _zusatz.letzte_nachricht(messages), werkzeuge)

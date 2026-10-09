@@ -217,3 +217,152 @@ def test_qwen_werkzeuge_vereinfacht_ohne_gross_zu_aendern(mit_qwen_profil):
     assert "Dauer bleibt" in nach_name["edit_calendar_routine"]["description"]
     assert len(s.TOOLS) == len(gross.TOOLS)
     assert gross.TOOLS == vorher
+
+
+# ── Zusatz-Prüfer „soll ich?" statt tun ────────────────────────────────
+
+from profil.modelle import zusatzpruefer as zp  # noqa: E402
+
+
+class _BasisPruefer:
+    modus = "an"
+
+    def __init__(self, korrektur=None):
+        self.protokoll = []
+        self.korrekturen = 0
+        self.befunde = []
+        self._k = korrektur
+
+    def nach_antwort(self, text, *, letzte_runde):
+        return self._k
+
+    def abschluss(self, text):
+        return {"basis": True}
+
+
+class _Schritt:
+    def __init__(self, schreibt, status):
+        self.schreibt, self.status = schreibt, status
+
+
+def test_fragt_statt_tut_erkennt_erlaubnisfrage():
+    assert zp.fragt_statt_tut(
+        "der zahnarzt am dienstag ist jetzt erst um 16:30",
+        "Ich ändere den Termin auf 16:30. Soll ich das jetzt durchführen?")
+    assert zp.fragt_statt_tut(
+        "parkour am mittwoch ist ab jetzt um halb sieben",
+        "Sag kurz Bescheid — dann mach ich's.")
+
+
+def test_echte_rueckfrage_und_plaudern_bleiben():
+    # Angabe fehlt: die Frage nach dem Tag ist keine Erlaubnis-Frage.
+    assert not zp.fragt_statt_tut(
+        "trag mir noch ne extra fahrstunde nächste woche ein",
+        "An welchem Tag und um wie viel Uhr?")
+    # Sasha will nichts ändern.
+    assert not zp.fragt_statt_tut(
+        "wie war dein tag", "Soll ich dir was erzählen?")
+
+
+def test_nachfrage_pruefer_eine_runde_dann_ruhe():
+    b = _BasisPruefer()
+    p = zp.ZusatzPruefer(b, "verschieb den zahnarzt auf 16:30")
+    erst = p.nach_antwort("Soll ich das so ändern?", letzte_runde=False)
+    assert erst == nutzer_angaben.einsetzen(zp.ERLAUBNIS) and b.korrekturen == 1
+    assert p.nach_antwort("Soll ich das so ändern?", letzte_runde=False) is None
+    assert p.abschluss("x") == {"basis": True}
+
+
+def test_nachfrage_pruefer_schweigt_nach_schreiben_und_laesst_basis_vor():
+    b = _BasisPruefer()
+    b.protokoll.append(_Schritt(True, "ok"))
+    p = zp.ZusatzPruefer(b, "verschieb den zahnarzt")
+    assert p.nach_antwort("Soll ich noch was ändern?", letzte_runde=False) is None
+    p2 = zp.ZusatzPruefer(_BasisPruefer(korrektur="BASIS"), "verschieb den zahnarzt")
+    assert p2.nach_antwort("Soll ich?", letzte_runde=False) == "BASIS"
+    p3 = zp.ZusatzPruefer(_BasisPruefer(), "verschieb den zahnarzt")
+    assert p3.nach_antwort("Soll ich?", letzte_runde=True) is None
+
+
+def test_qwen_profil_legt_nachfrage_pruefer_um_den_basis_pruefer(mit_qwen_profil):
+    s = profil.fuer_backend("cloud", modell="qwen-plus")
+    b = _BasisPruefer()
+    p = s.pruefer(b, messages=[{"role": "user", "content": "lösch den friseur"}])
+    assert isinstance(p, zp.ZusatzPruefer)
+    assert s.pruefer(None, messages=[]) is None
+    # Ohne Profil (Claude) bleibt der Prüfer der Schiene, wie er ist.
+    assert gross is profil.fuer_backend("cloud", modell="claude-sonnet-5")
+
+
+class _KSchritt:
+    def __init__(self, name, args, status, text):
+        self.name, self.args, self.status, self.text = name, args, status, text
+        self.schreibt = False
+
+
+def test_zusatzpruefer_aufruf_als_text():
+    b = _BasisPruefer()
+    p = zp.ZusatzPruefer(b, "steht der noch drin?", {"read_calendar"})
+    assert p.nach_antwort("read_calendar(zeitraum=naechste_woche)",
+                          letzte_runde=False) == nutzer_angaben.einsetzen(zp.ALS_TEXT)
+    # Ein Satz, der ein Werkzeug nur erwähnt, ist kein Aufruf als Text.
+    p2 = zp.ZusatzPruefer(_BasisPruefer(), "x", {"read_calendar"})
+    assert p2.nach_antwort("Ich habe read_calendar (nächste Woche) gelesen: frei.",
+                           letzte_runde=False) is None
+
+
+def test_zusatzpruefer_leere_stichwortsuche():
+    b = _BasisPruefer()
+    b.protokoll.append(_KSchritt("read_calendar", {"suche": "uni"}, "ok",
+                                 "Keine Einträge mit 'uni' in diesem Zeitraum."))
+    p = zp.ZusatzPruefer(b, "die uni-sachen sollen nur im semester stehen")
+    assert p.nach_antwort("Keine Uni-Sachen im Kalender gefunden.",
+                          letzte_runde=False) == nutzer_angaben.einsetzen(zp.STICHWORT)
+    # Hat sie auch ohne Stichwort gelesen, darf sie „nichts da“ sagen.
+    b2 = _BasisPruefer()
+    b2.protokoll += [_KSchritt("read_calendar", {"suche": "uni"}, "ok", "Keine Einträge"),
+                     _KSchritt("read_calendar", {"zeitraum": "naechste_30_tage"}, "ok",
+                               "Kalender …: Montag …")]
+    p2 = zp.ZusatzPruefer(b2, "die uni-sachen")
+    assert p2.nach_antwort("Keine Uni-Sachen im Kalender gefunden.",
+                           letzte_runde=False) is None
+
+
+def test_zusatzpruefer_tat_ohne_werkzeug():
+    # Runde 7, m03: „ist gelöscht.“ ohne delete_calendar_entry.
+    p = zp.ZusatzPruefer(_BasisPruefer(), "der friseur fällt aus, lösch den bitte")
+    assert p.nach_antwort("Der Friseurtermin am Freitag ist gelöscht.",
+                          letzte_runde=False) == nutzer_angaben.einsetzen(zp.TAT)
+    # Gespräch 20261009-150713: „Alles korrigiert“ nach „ok“.
+    p2 = zp.ZusatzPruefer(_BasisPruefer(), "ok")
+    assert p2.nach_antwort("Alles korrigiert: alle Vorlesungen laufen ab 12.10.",
+                           letzte_runde=False) == nutzer_angaben.einsetzen(zp.TAT)
+
+
+def test_zusatzpruefer_tat_schweigt_bei_beleg_frage_und_ohne_wunsch():
+    b = _BasisPruefer()
+    b.protokoll.append(_Schritt(True, "ok"))
+    p = zp.ZusatzPruefer(b, "lösch den friseur")
+    assert p.nach_antwort("Friseur ist gelöscht.", letzte_runde=False) is None
+    p2 = zp.ZusatzPruefer(_BasisPruefer(), "lösch den friseur")
+    assert p2.nach_antwort("Er ist noch nicht gelöscht — welcher Friseur, Fr oder Sa?",
+                           letzte_runde=False) is None
+    p3 = zp.ZusatzPruefer(_BasisPruefer(), "steht der noch drin?")
+    assert p3.nach_antwort("Nein, der ist weg.", letzte_runde=False) is None
+
+
+def test_zusatzpruefer_zeit_nach_aenderung_nur_aus_dem_ergebnis():
+    # Abschlusslauf m04: gespeichert 19:30–20:00, gesagt „19:30 bis 20:30“.
+    b = _BasisPruefer()
+    s = _KSchritt("edit_calendar_routine", {}, "ok",
+                  "Routine „Training“ wöchentlich do 19:30–20:00 GEÄNDERT")
+    s.schreibt = True
+    b.protokoll.append(s)
+    p = zp.ZusatzPruefer(b, "training ist ab jetzt um halb acht")
+    k = p.nach_antwort("Training ist ab jetzt 19:30 bis 20:30.", letzte_runde=False)
+    assert k and "19:30–20:30" in k
+    p2 = zp.ZusatzPruefer(b, "training ist ab jetzt um halb acht")
+    assert p2.nach_antwort("Training ist jetzt 19:30–20:00.", letzte_runde=False) is None
+    # Ohne Änderung in diesem Zug prüft er Zeiten nicht (Plaudern, Vorschläge).
+    p3 = zp.ZusatzPruefer(_BasisPruefer(), "wann ist training?")
+    assert p3.nach_antwort("Vielleicht 18:00–19:00?", letzte_runde=False) is None
