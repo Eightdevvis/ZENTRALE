@@ -17,6 +17,11 @@
 #   wenn     optional {feld: wert}: das Feld gilt nur, wenn ein anderes Feld
 #            diesen Wert hat (sonst fehlt es in der Adresse)
 #   werte    nur wahl: [{wert, titel}]
+#   dynamisch  nur wahl, optional true: die Werte wechseln zur Laufzeit (z. B.
+#            „welche Liste") — die Quelle liefert sie mit `werte(art, name)`,
+#            der Katalog trägt sie frisch ein. Geprüft wird dann nur die Form
+#            (ein Text); gibt es den Wert nicht mehr, sagt die Quelle „weg"
+#            (2026-10-10).
 #   grenzen  optional, je Typ:
 #              zahl   {min, max}
 #              text   {max_laenge}
@@ -70,6 +75,10 @@ def _wert(feld, roh):
         if str(roh) in ("true", "false"):
             return str(roh) == "true"
         raise KachelFehler("%s: ja oder nein" % titel)
+    if typ == "wahl" and feld.get("dynamisch"):
+        if not isinstance(roh, str) or not roh.strip():
+            raise KachelFehler("%s fehlt" % titel)
+        return roh
     if typ == "wahl":
         erlaubt = [w.get("wert") for w in feld.get("werte") or []]
         if roh not in erlaubt:
@@ -128,6 +137,6 @@ def form_pruefen(felder):
     for f in felder:
         if not isinstance(f.get("name"), str) or f.get("typ") not in TYPEN:
             raise ValueError("feld ohne name oder mit unbekanntem typ: %r" % (f,))
-        if f["typ"] == "wahl" and not f.get("werte"):
+        if f["typ"] == "wahl" and not f.get("werte") and not f.get("dynamisch"):
             raise ValueError("wahl ohne werte: %r" % (f,))
     return felder

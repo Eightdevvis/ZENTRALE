@@ -1,6 +1,6 @@
 # Desk View — eine unendliche Fläche je Desk
 
-**Stand 2026-10-10: Grundgerüst + Kacheln (Kalender) gebaut** (Branches
+**Stand 2026-10-10: Grundgerüst + Kacheln (Kalender, Listen, Graphen) gebaut** (Branches
 `worktree-desk-view`, `worktree-desk-kalender`).
 Im Rad Taste/Platz `d` („desk", zwischen tutor und elektronik). Erst die
 Auswahl der Desks (+ neuer Desk), dann die Fläche: Zettel liegen darauf,
@@ -22,7 +22,7 @@ Feature") und „der Desk-Ordner soll IMMER mit ZENTRALE mitgesynct werden".
 | | esc | zurück zum Rad |
 | Fläche, Ruhe | ↑↓←→ | Fokus springt zum nächsten Kasten in der Richtung (der erste Druck nimmt den Kasten nahe der Mitte); der Ausschnitt folgt |
 | | enter | greifen — immer, jedes Element, auch Bilder und Kacheln (seit 2026-10-10) |
-| | + | Wähler „neu": zettel, bild, kalender (↑↓ enter, esc). Zettel: mitten im Ausschnitt, gleich gegriffen (`+` enter = schneller Zettel). Bild: Liste der Bilder in `~/Zentrale/Input` + „pfad tippen …". Kalender: erst der kleine Dialog (unten), dann gegriffen |
+| | + | Wähler „neu": zettel, bild, liste, graph, kalender (↑↓ enter, esc). Zettel: mitten im Ausschnitt, gleich gegriffen (`+` enter = schneller Zettel). Bild: Liste der Bilder in `~/Zentrale/Input` + „pfad tippen …". Kalender: erst der kleine Dialog (unten), dann gegriffen |
 | | e | Zettel bearbeiten (Modal mittig); beim Bild der Titel (leer = Dateiname) |
 | | o | öffnen: Bild im Bildbetrachter; Kachel in ihrer App an der richtigen Stelle (Kalender an dem Tag) |
 | | f | Bild: Vorschau mono ↔ farbe (gespeichert) |
@@ -216,6 +216,19 @@ den `felder` des Katalog-Eintrags. Standard beim Anlegen: mitlaufend 7 Tage.
 - `o` öffnet den Kalender an dem Tag, an dem der Ausschnitt beginnt
   (mitlaufend: heute). Esc dort führt zur Startseite, nicht zurück zum Desk.
 
+**Liste** (App `fokus`, Art `liste`, `core/kachel_fokus.py`, seit
+2026-10-10): Dialog „liste" (←→ durch die Listen von jetzt), „erledigte"
+(ja/nein), „ebenen" (1–9). Kopf = Name, Steine, „1/5"; darunter `○`
+offen, `✓` erledigt (nur mit „erledigte"), Ordner `▾`/`▸` mit „d/t",
+eingerückt; Reihenfolge wie in der Listen-Ansicht. Bild↓/↑ blättert, „+N
+weitere" zeigt Verstecktes. `o` öffnet die Listen-Ansicht in genau der
+Liste. Abhaken geht nur dort, nie auf der Kachel.
+
+**Graph** (App `graph`, Art `verlauf`, `core/kachel_graph.py`, seit
+2026-10-10): Dialog „graph" (←→) und „tage" (Standard 14). Kopf = Name +
+Einheit, rechts der letzte Wert; Balken je Tag, heute rechts; unten min/max.
+`o` öffnet das Graph-Werkzeug mit genau diesem Graphen.
+
 **Entschieden 2026-10-10** (für Sasha, er kann umstellen): **enter greift
 jedes Element**, auch Kacheln — eine Regel für alles, wie Sashas
 Grundregel. **`o` öffnet** die Quelle des gewählten Elements. Damit ist die
@@ -285,10 +298,9 @@ geöffnet kriegen wenn man es selected."*
 - **Zettel später auf echte Notizen umstellen**, sobald das Notiz-Tool ein
   offenes Format hat (Leitlinie: dasselbe Objekt, nicht kopiert). Bis dahin
   sind Zettel Canvas-eigene Text-Knoten.
-- **Weitere Kacheln:** Listen (`fokus`) und Graphen (`graph`) fehlen noch —
-  je ein Quell-Modul in `core/kacheln.py` QUELLEN (der Katalog bringt sie
-  dann von selbst in den `+`-Wähler) und ein Handler im Router `sprung.py`.
 - Den Bereich einer Kalender-Kachel ändern geht nicht (neu anlegen).
+- Esc in Listen-Ansicht/Graph-Werkzeug nach `o` führt (wie beim Kalender)
+  zur Startseite, nicht zurück zum Desk.
 - Esc im Kalender nach `o` führt zur Startseite, nicht zurück zum Desk.
 - Desks löschen/umbenennen gibt es nicht (Datei von Hand).
 - Größe ändern geht nur von oben links aus (die Ecke unten rechts
@@ -308,6 +320,8 @@ geöffnet kriegen wenn man es selected."*
 
 ## Historie
 
+- **2026-10-10** — Kacheln „liste" (`fokus`) und „graph" im `+`-Wähler, mit
+  Dialog aus dem Katalog (Werte von jetzt); `o` öffnet Liste bzw. Graph.
 - **2026-10-10** — Größe ändern (`r`): Zettel, Bild, Kachel; Grenzen je
   Art bzw. aus dem Katalog (`max` liefert der Hub jetzt immer), Lage und
   Größe in der Datei getrennt geschrieben.

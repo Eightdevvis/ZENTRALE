@@ -9,6 +9,7 @@ import curses
 from datetime import date, timedelta
 
 from .basis import BEENDEN, _num, api_call, fmt_clock, parse_clock
+import graph_reihen  # noqa: E402  – core/, eingehängt von basis.kern_pfad
 
 
 def _tlabel(tid):
@@ -18,17 +19,13 @@ def _tlabel(tid):
     return tid
 
 
-def blockspark(vals):
-    """ASCII-Sparkline ▁▂▃▄▅▆▇█ aus Zahlenwerten (wie viz.js blockSpark).
-    Robust: filtert alles raus, was keine endliche Zahl ist."""
-    blocks = "▁▂▃▄▅▆▇█"
-    nums = [n for n in (_num(v) for v in vals) if n is not None] \
-        if isinstance(vals, (list, tuple)) else []
-    if not nums:
-        return ""
-    lo, hi = min(nums), max(nums)
-    rng = (hi - lo) or 1
-    return "".join(blocks[round((v - lo) / rng * (len(blocks) - 1))] for v in nums)
+# Die reinen Reihen-Helfer wohnen seit 2026-10-10 in core/graph_reihen.py —
+# die Graph-Kachel (core/kachel_graph.py) rechnet mit denselben. Hier unter
+# den alten Namen.
+blockspark = graph_reihen.blockspark
+period_duration = graph_reihen.periode_dauer
+graph_series = graph_reihen.reihe
+graph_last = graph_reihen.letzter
 
 
 # Graph-Typen fürs Werkzeug: (id, kurz-label, ein-zeilen-hinweis)
@@ -47,31 +44,6 @@ GRAPH_TYPES = [
 # Farbe unterscheiden. Bewusst nur einfach-breite Dingbats (keine Emoji-Breite),
 # lange Liste → genug zum Durchzykeln.
 TIME_SYMBOLS = "★✦✿❀❁✽✻✷✶✴✳❈❉❋✼✾✩✫✭✮✯❆"
-
-
-def period_duration(start, end):
-    """Dauer in Minuten; End < Start = über Mitternacht (Schlaf)."""
-    return (int(end) - int(start)) % 1440
-
-
-def graph_series(gtype, rows):
-    """Zahlenreihe für die Sparkline, je nach Typ (period → Dauer). Robust:
-    überspringt Einträge, die keine sauberen Zahlen sind (statt zu crashen)."""
-    out = []
-    for e in rows if isinstance(rows, list) else []:
-        if not isinstance(e, dict):
-            continue
-        v = _num(e.get("value"))
-        if v is None:
-            continue
-        if gtype == "period":
-            end = _num(e.get("end"))
-            if end is None:
-                continue
-            out.append(period_duration(v, end))
-        else:
-            out.append(float(v))
-    return out
 
 
 def cycle_axis(cyc):
@@ -100,28 +72,6 @@ def cycle_axis(cyc):
         dd += timedelta(days=1)
     marks[c_next.isoformat()] = "next"
     return marks
-
-
-def graph_last(g, rows):
-    """Letzter Wert als Text für die lifestyle-Box (type-abhängig formatiert)."""
-    if not isinstance(g, dict):
-        g = {}
-    vals = [e for e in (rows if isinstance(rows, list) else [])
-            if isinstance(e, dict) and e.get("value") is not None]
-    if not vals:
-        return "—"
-    e, t = vals[-1], g.get("type")
-    if t == "time":
-        return fmt_clock(e.get("value"))
-    if t == "period":
-        if e.get("end") is None:
-            return fmt_clock(e.get("value"))
-        return fmt_clock(e.get("value")) + "–" + fmt_clock(e.get("end"))
-    v = _num(e.get("value"))
-    if v is None:
-        return "—"
-    unit = (" " + str(g.get("unit"))) if g.get("unit") else ""
-    return "%g%s" % (v, unit)
 
 
 # Farb-Palette der Überlagerung, je Graph eine (durchgezykelt).
@@ -386,6 +336,28 @@ class Graphen:
         G["active"] = True; G["view"] = "list"; G["msg"] = ""
         G["shown"] = set(); G["gscroll"] = 0; g_load()  # übersicht, heute rechts
 
+    def g_waehlen(self):
+        """Den Graphen unter dem Cursor (G["sel"]) solo zeigen, zum Eintragen."""
+        G = self.G
+        G["def"] = G["graphs"][G["sel"]]; G["input"] = ""; G["msg"] = ""
+        G["input2"] = ""; G["pstage"] = 0; G["dayoff"] = 0
+        G["shown"] = {G["def"]["id"]}   # solo: nur dieser gezeigt
+        G["view"] = "view"; self.g_load_vals()
+
+    def zeige_graph(self, gid):
+        """Von außen (Adresse zentrale://graph/<gid>, tui/ansichten/sprung.py,
+        2026-10-10): Werkzeug öffnen und genau diesen Graphen zeigen. Gibt es
+        ihn nicht mehr, bleibt die Übersicht offen und sagt es."""
+        G = self.G
+        self.oeffnen()
+        for i, g in enumerate(G["graphs"]):
+            if isinstance(g, dict) and g.get("id") == gid:
+                G["sel"] = i
+                self.g_waehlen()
+                return True
+        G["msg"] = "diesen graphen gibt es nicht mehr"
+        return True
+
     def taste(self, ch):
         """Eine Taste, während das Graph-Werkzeug den Fokus hat (früher ein Zweig
         der Hauptschleife in run_ui). Gibt BEENDEN zurück, wenn die TUI enden soll."""
@@ -417,10 +389,7 @@ class Graphen:
                 G["gscroll"] = max(0, G.get("gscroll", 0) - 7); G["msg"] = ""
             elif ch in (10, 13, curses.KEY_ENTER):
                 if G["graphs"]:
-                    G["def"] = G["graphs"][G["sel"]]; G["input"] = ""; G["msg"] = ""
-                    G["input2"] = ""; G["pstage"] = 0; G["dayoff"] = 0
-                    G["shown"] = {G["def"]["id"]}   # solo: nur dieser gezeigt
-                    G["view"] = "view"; g_load_vals()
+                    self.g_waehlen()
             elif ch in (ord("n"), ord("N")):
                 G["view"] = "new"; G["input"] = ""; G["newtype"] = "number"; G["msg"] = ""
             elif ch in (ord("d"), ord("D")):

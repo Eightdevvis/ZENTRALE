@@ -54,8 +54,11 @@ def test_paket_bleibt_klein_und_ohne_backend():
     assert drin, "Paket ist leer"
     for verboten in ("ui/", "services/", "data/", "core/map/", "tests/"):
         assert not any(r.startswith(verboten) for r in drin), verboten
-    # core/ nur als einzelne, backend-freie Datei (host_metrics fuer Telemetrie)
-    assert [r for r in drin if r.startswith("core/")] == ["core/host_metrics.py"]
+    # core/ nur als einzelne, backend-freie Dateien: host_metrics fuer
+    # Telemetrie, und (seit 2026-10-10) die reinen Helfer, die TUI-Ansichten
+    # und Kacheln teilen (stdlib-only, ohne Kern-Imports)
+    assert sorted(r for r in drin if r.startswith("core/")) == [
+        "core/graph_reihen.py", "core/host_metrics.py", "core/listen_baum.py"]
     assert aussenposten.manifest()["bytes"] < 5 * 1024 * 1024
 
 

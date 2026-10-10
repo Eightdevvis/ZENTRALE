@@ -14,6 +14,7 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
     import pixel
 
 from .basis import BEENDEN, api_call
+import listen_baum  # noqa: E402  – core/, eingehängt von basis.kern_pfad
 
 
 def bar(pct, length=10):
@@ -22,143 +23,24 @@ def bar(pct, length=10):
     return "█" * n + "░" * (length - n)
 
 
-def liste_zaehlen(items):
-    """(erledigt, gesamt) über die BLÄTTER einer Eintragsliste. Ordner zählen
-    nicht selbst mit — sie sind nur Gruppierung."""
-    d = t = 0
-    for it in items or []:
-        if not isinstance(it, dict):
-            continue
-        kids = it.get("items")
-        if isinstance(kids, list) and kids:
-            cd, ct = liste_zaehlen(kids)
-            d += cd
-            t += ct
-        else:
-            t += 1
-            if it.get("done"):
-                d += 1
-    return d, t
-
-
-def liste_erledigt(it):
-    """Effektiver Erledigt-Status (Spiegel von core.lists.is_done): Blatt =
-    eigenes 'done'; Ordner = erledigt, wenn ALLE Kinder erledigt sind."""
-    kids = it.get("items")
-    if isinstance(kids, list) and kids:
-        return all(liste_erledigt(c) for c in kids if isinstance(c, dict))
-    return bool(it.get("done"))
-
-
-def liste_hat_fokus(it):
-    """Trägt der Eintrag selbst oder irgendwas darunter den Fokus?"""
-    if it.get("focus"):
-        return True
-    return any(liste_hat_fokus(c) for c in (it.get("items") or [])
-               if isinstance(c, dict))
-
-
-def liste_ordnen(items, erledigte=False):
-    """Anzeige-Reihenfolge einer Ebene im Listen-Werkzeug.
-
-    erledigte=False: nur OFFENE Einträge — der Fokus (oder ein Ordner, in dem
-    er steckt) klebt oben, der Rest nach Anzahl OFFENER Punkte aufsteigend
-    (was kaum noch Saft braucht, steht oben — 31/37 vor 1/2), bei gleich
-    vielen offenen das mit mehr Erledigtem zuerst; danach bleibt die
-    gespeicherte Reihenfolge.
-    erledigte=True: nur die abgeschlossenen (Inhalt der Bernsteinleiste)."""
-    rows = [it for it in (items or []) if isinstance(it, dict)]
-    if erledigte:
-        return [it for it in rows if liste_erledigt(it)]
-
-    def rest(it):
-        d, t = liste_zaehlen([it])
-        return t - d, -d
-
-    offen = [it for it in rows if not liste_erledigt(it)]
-    return sorted(offen, key=lambda it: (not liste_hat_fokus(it), rest(it)))
-
-
-def bernstein_steine(done, total, breite):
-    """Spalten der Bernsteinleiste: je Spalte 'L' (leuchtender Stein), 'U'
-    (leerer Stein) oder ' ' (Fuge). Ein Stein = ein Punkt; die Steinbreite
-    rechnet sich aus Breite/Anzahl. Passen nicht alle Punkte als eigene Spalte
-    rein, steht jede Spalte anteilig für mehrere (dann ohne Fugen)."""
-    try:
-        total, done, breite = int(total), int(done), int(breite)
-    except (TypeError, ValueError):
-        return []
-    if total <= 0 or breite <= 0:
-        return []
-    done = max(0, min(done, total))
-    if total > breite:                          # zu viele Punkte → skalieren
-        lit = done * breite // total
-        return ["L"] * lit + ["U"] * (breite - lit)
-    fuge = breite // total >= 2                 # 1 Spalte Fuge, wenn Platz ist
-    out = []
-    for i in range(total):                      # Steine über die VOLLE Breite verteilen
-        zelle = (i + 1) * breite // total - i * breite // total
-        last = i == total - 1
-        stein = zelle if (not fuge or last) else zelle - 1
-        out += ["L" if i < done else "U"] * stein
-        out += [" "] * (zelle - stein)
-    return out
-
-
-def l_path_to(items, iid, acc=None):
-    """id-Kette von der Listen-Wurzel bis zu iid (inklusive) — oder None."""
-    if acc is None:
-        acc = []
-    for it in items or []:
-        if not isinstance(it, dict):
-            continue
-        if it.get("id") == iid:
-            return acc + [iid]
-        kids = it.get("items")
-        if isinstance(kids, list) and kids:
-            sub = l_path_to(kids, iid, acc + [it.get("id")])
-            if sub is not None:
-                return sub
-    return None
-
-
-def l_flatten(items, depth=0, out=None):
-    """Den Eintrags-Baum in eine flache [(item, tiefe), …]-Liste klopfen,
-    Eltern vor Kindern. Cursor (isel) und Rendering laufen über diese
-    flache Sicht; die Tiefe steuert nur die Einrückung."""
-    if out is None:
-        out = []
-    for it in items or []:
-        if not isinstance(it, dict):
-            continue
-        out.append((it, depth))
-        kids = it.get("items")
-        if isinstance(kids, list) and kids:
-            l_flatten(kids, depth + 1, out)
-    return out
-
-
-def l_count(items):
-    """(erledigt, gesamt) über die BLÄTTER (siehe liste_zaehlen)."""
-    return liste_zaehlen(items)
-
-
-def l_done(it):
-    """Effektiver Erledigt-Status (siehe liste_erledigt)."""
-    return liste_erledigt(it)
+# Die reinen Baum-Helfer wohnen seit 2026-10-10 in core/listen_baum.py — die
+# Listen-Kachel (core/kachel_fokus.py) zeigt eine Liste damit genauso wie
+# diese Ansicht. Hier unter den alten Namen.
+liste_zaehlen = listen_baum.zaehlen
+liste_erledigt = listen_baum.erledigt
+liste_hat_fokus = listen_baum.hat_fokus
+liste_ordnen = listen_baum.ordnen
+bernstein_steine = listen_baum.steine
+l_path_to = listen_baum.pfad_zu
+l_flatten = listen_baum.flach
+l_count = listen_baum.zaehlen
+l_done = listen_baum.erledigt
+l_find_item = listen_baum.finden
 
 
 def l_toggle_msg(it):
     """Rückmeldung nach dem Abhaken: abgehakt wandert's in den Bernstein."""
     return "wieder offen" if it.get("done") else "◆ in den bernstein"
-
-
-def l_find_item(items, iid):
-    """Den Eintrag mit iid irgendwo im Baum (oder None)."""
-    for it, _d in l_flatten(items):
-        if it.get("id") == iid:
-            return it
-    return None
 
 
 class Fokus:
@@ -434,6 +316,34 @@ class Fokus:
         L, l_load = self.L, self.l_load
         L["active"] = True; L["view"] = "forest"; L["fsel"] = 0
         L["adding"] = False; L["confirm"] = False; L["msg"] = ""; l_load()
+
+    def zeige_liste(self, lid, iid=None):
+        """Von außen (Adresse zentrale://fokus/<lid>[/<iid>],
+        tui/ansichten/sprung.py, 2026-10-10): Werkzeug öffnen und in die Liste
+        gehen — mit Eintrag: ein Ordner wird geöffnet, bei einem Punkt steht
+        der Cursor auf ihm. Gibt es die Liste nicht mehr, bleibt die Wurzel
+        offen und sagt es."""
+        L = self.L
+        self.oeffnen()
+        lst = next((l for l in L["lists"]
+                    if isinstance(l, dict) and l.get("id") == lid), None)
+        if lst is None:
+            L["msg"] = "diese liste gibt es nicht mehr"
+            return True
+        pfad = l_path_to(lst.get("items"), iid) if iid is not None else None
+        if not pfad:
+            self.l_open_desc({"lid": lid, "iid": None})
+            return True
+        item = l_find_item(lst.get("items"), iid)
+        if isinstance(item.get("items"), list) and item.get("items"):
+            self.l_open_desc({"lid": lid, "iid": iid})            # Ordner: hinein
+            return True
+        eltern = pfad[-2] if len(pfad) > 1 else None
+        self.l_open_desc({"lid": lid, "iid": eltern})
+        if l_done(item):
+            L["showdone"] = True                                  # steckt im Bernstein
+        L["isel"] = self.l_index_in_container(iid)
+        return True
 
     def taste(self, ch):
         """Eine Taste, während das Fokus-Werkzeug den Fokus hat (früher ein Zweig

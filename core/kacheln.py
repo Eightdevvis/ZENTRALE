@@ -8,9 +8,10 @@
 # fragt hier über `POST /api/kachel` — nie direkt bei der App — und erfährt
 # über `GET /api/kacheln` (Katalog), was es überhaupt gibt.
 #
-# Quellen: Listen (`fokus`), Graphen (`graph`) und der Kalender sind noch
-# Kern-Module. Darum wohnen ihre Kachel-Quellen im Prozess (ein Modul je
-# Quelle, eingetragen in QUELLEN) — hinter derselben Schnittstelle, die
+# Quellen: Listen (`fokus`, core/kachel_fokus.py), Graphen (`graph`,
+# core/kachel_graph.py) und der Kalender sind noch Kern-Module. Darum
+# wohnen ihre Kachel-Quellen im Prozess (ein Modul je Quelle, eingetragen
+# in QUELLEN) — hinter derselben Schnittstelle, die
 # später eine ausgezogene App über HTTP bedient: Anfrage und Antwort gehen
 # hier durch json.dumps/loads, als lägen sie auf der Leitung. Beim Auszug
 # wird nur der Eintrag in QUELLEN gegen einen HTTP-Adapter getauscht, und
@@ -23,6 +24,10 @@
 #                              max?: (w, h), ttl, felder: [...]}} — der
 #                              Katalog-Eintrag (Felder: core/kachel_felder.py)
 #   RECHTE                    was die eingebaute App kann, z. B. ("lesen",)
+#   werte(art, name)          -> [{wert, titel}] für ein Feld mit
+#                              `dynamisch` (nur dann nötig): beim Katalog
+#                              frisch gefragt; leer = es gibt nichts zu
+#                              wählen, der Eintrag fehlt dann im Katalog
 #   kachel(art, ref, w, h, oben) -> {zeilen, text, oben?, oben_max?}
 #   bevorzugt(art, ref)       -> (w, h) für genau diesen Bezug (optional)
 #   aktion(art, ref, was)     -> {"zeige": {"adresse"}} (optional)
@@ -45,6 +50,8 @@ import time
 
 import adressen
 import kachel_felder
+import kachel_fokus
+import kachel_graph
 import kachel_kalender
 import state
 from kachel_form import (KachelFehler, KachelWeg, KachelZuKlein, stand_von,
@@ -68,6 +75,8 @@ def registrieren(quelle):
 
 
 registrieren(kachel_kalender)
+registrieren(kachel_fokus)
+registrieren(kachel_graph)
 
 
 def _recht(app, recht="lesen"):
@@ -95,12 +104,35 @@ def _wh(paar):
 
 # ── Katalog ───────────────────────────────────────────────────────────
 
+def _felder_jetzt(q, art, felder):
+    """Felder mit `dynamisch` bekommen ihre Werte frisch von der Quelle.
+    → Felder, oder None, wenn es bei einem nichts zu wählen gibt (keine
+    Liste, kein Graph) — dann lässt sich keine Kachel anlegen."""
+    raus = []
+    for f in felder:
+        if f.get("typ") == "wahl" and f.get("dynamisch"):
+            try:
+                werte = [{"wert": str(w["wert"]), "titel": str(w.get("titel") or w["wert"])}
+                         for w in _gemessen(q.APP, q.werte, art, f["name"]) or []]
+            except Exception as e:                   # eine Quelle darf den Katalog nie reißen
+                state.push_log("KACHEL ✗  %s: werte für %s: %s" % (q.APP, f["name"], e))
+                return None
+            if not werte:
+                return None
+            f = dict(f, werte=werte)
+        raus.append(f)
+    return raus
+
+
 def _eintrag(q, art, info):
+    felder = _felder_jetzt(q, art, kachel_felder.form_pruefen(list(info.get("felder") or [])))
+    if felder is None:
+        return None
     e = {"app": q.APP, "art": art, "titel": str(info.get("titel") or art),
          "min": _wh(info.get("min", (1, 1))),
          "bevorzugt": _wh(info.get("bevorzugt") or info.get("min", (1, 1))),
          "ttl": int(info.get("ttl", TTL_VORGABE)),
-         "felder": kachel_felder.form_pruefen(list(info.get("felder") or [])),
+         "felder": felder,
          "aktionen": list(AKTIONEN) if getattr(q, "aktion", None) else [],
          "formen": list(FORMEN)}
     # max immer (2026-10-10, Größe ändern im Desk): sagt die Quelle keins,
@@ -120,7 +152,9 @@ def katalog():
             continue
         q = QUELLEN[app]
         for art, info in getattr(q, "ARTEN", {}).items():
-            raus.append(_eintrag(q, art, info))
+            e = _eintrag(q, art, info)
+            if e is not None:
+                raus.append(e)
     return _leitung(raus)
 
 

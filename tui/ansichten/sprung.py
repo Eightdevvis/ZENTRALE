@@ -6,8 +6,9 @@
 # einer Kachel, POST /api/kachel/aktion). Welche Ansicht das in der TUI
 # wird, steht hier: je App ein Handler (pfad, abfrage) -> bool, eingetragen
 # in einem Router. Der Desk kennt keine davon — er bekommt nur `zeigen`.
-# Neue Ziele (Listen, Graphen …) kommen als `registrieren(app, handler)`
-# dazu, keine if-Kette. Später nutzen Links in Notizen denselben Router.
+# Neue Ziele kommen als `registrieren(app, handler)` dazu, keine if-Kette
+# (Listen `fokus` und Graphen `graph` seit 2026-10-10). Später nutzen Links
+# in Notizen denselben Router.
 
 from datetime import date
 from urllib.parse import parse_qsl, unquote, urlsplit
@@ -61,7 +62,13 @@ def kalender_tag(pfad, abfrage):
     return None
 
 
-def router_fuer(DESK, kalender):
+def eintrag_id(text):
+    """Abschnitt einer Adresse → id eines Listen-Eintrags. Einträge zählen
+    in core/lists.py als ganze Zahlen; was keine ist, bleibt Text."""
+    return int(text) if str(text).isdigit() else text
+
+
+def router_fuer(DESK, kalender, fokus=None, graphen=None):
     """Der Router der TUI mit allem, was heute ansprungbar ist."""
     router = Router()
 
@@ -73,5 +80,24 @@ def router_fuer(DESK, kalender):
             kalender.bedienung.setze_tag(tag)
         return True
 
+    def fokus_zeigen(pfad, abfrage):
+        """zentrale://fokus/<liste>[/<eintrag>] → das Listen-Werkzeug dort
+        (2026-10-10). Ohne Pfad (z. B. eine Kachel-Adresse) → nicht meins."""
+        if not pfad or pfad[0] == "liste":
+            return False
+        DESK["active"] = False
+        return fokus.zeige_liste(pfad[0], eintrag_id(pfad[1]) if len(pfad) > 1 else None)
+
+    def graph_zeigen(pfad, abfrage):
+        """zentrale://graph/<gid> → das Graph-Werkzeug mit genau dem Graphen."""
+        if len(pfad) != 1 or pfad[0] == "verlauf":
+            return False
+        DESK["active"] = False
+        return graphen.zeige_graph(pfad[0])
+
     router.registrieren("kalender", kalender_zeigen)
+    if fokus is not None:
+        router.registrieren("fokus", fokus_zeigen)
+    if graphen is not None:
+        router.registrieren("graph", graph_zeigen)
     return router

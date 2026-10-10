@@ -66,6 +66,8 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `kachel_felder` | 1 | Felder einer Kachel-Art im Katalog (datum/zahl/wahl/text/bool, `wenn`, `grenzen`): Vorgaben, Prüfung und Typen — dieselben Regeln, aus denen jede Oberfläche ihren Dialog baut (seit 2026-10-10) |
 | `adressen` | 1 | „Ein Objekt, eine Adresse": `zentrale://<app>/<pfad>?…` bauen, lesen, kanonisch machen (nur `urllib.parse`); alter Kachel-Verweis → Adresse (seit 2026-10-10) |
 | `farbrollen` | 1 | Wörterbuch der Farbrollen (Name + Bedeutung), das Apps und Oberflächen teilen; die Farbe wählt jede Oberfläche selbst (seit 2026-10-10) |
+| `listen_baum` | 1 | Reine Helfer über den Eintrags-Baum einer Liste (zählen, erledigt, Reihenfolge einer Ebene, flach, Pfad, Bernstein-Steine) — geteilt von Listen-Ansicht der TUI und Listen-Kachel, ohne Imports (seit 2026-10-10) |
+| `graph_reihen` | 1 | Reine Helfer über die Messwerte eines Graphen (Zahl prüfen, Uhrzeit, Dauer, Reihe je Typ, letzter Wert, Sparkline) — geteilt von Graph-Werkzeug der TUI und Graph-Kachel, ohne Imports (seit 2026-10-10) |
 | `zugang` | 1 | Zugangsschlüssel des Backends: anlegen, laden, zeitkonstant vergleichen, Modus aus/melden/an, Keks und Browser-Link (Prüfung selbst: `ui/routen/zugang.py`) |
 | `dateien` | 1 | Atomar schreiben (alte oder neue Fassung, nie eine halbe) — für alle Datendateien; Rechnername für Dateien pro Rechner |
 | `ai_config` | 1 | Kill-Switches und API-Keys aus `data/ai_config.json`, `setting()`-Rangfolge |
@@ -159,6 +161,8 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `desk_bild` | 2 | Bilder auf dem Desk: aus `~/Zentrale/Input` (oder einem Pfad) nach `<desk_ordner>/bilder/` kopieren, nur echte Bilder; Vorschau über `bild_vorschau` mit „weg"/„kein bild"; was die TUI zum Öffnen braucht (Pfad, `bild_betrachter`) |
 | `kacheln` | 2 | Hub für Kacheln (seit 2026-10-10): Anfrage prüfen, Recht `<app>:lesen`, Quelle aus `QUELLEN` fragen (im Prozess, Anfrage/Antwort durch JSON wie über HTTP), kürzen, `stand`/`ttl`, zu klein/weg/aus; Aktion „oeffnen“ → `zeige` |
 | `kachel_kalender` | 2 | Kachel-Quelle `kalender`/`ausschnitt`: Bereich fest oder mitlaufend (≤ 31 Tage), Woche bis 7 Tage, sonst Monatsraster; liest nur über `kalender.month_view`, schreibt nie |
+| `kachel_fokus` | 2 | Kachel-Quelle `fokus`/`liste` (seit 2026-10-10): eine Liste mit Punkten (offen/abgehakt, eingerückt bis N Ebenen, Fortschritt oben), blättern mit „+N“; Liste im Katalog frisch zur Wahl (`werte`); liest nur über `lists.read_lists`, schreibt nie |
+| `kachel_graph` | 2 | Kachel-Quelle `graph`/`verlauf` (seit 2026-10-10): letzte N Tage eines Graphen als Blockbalken, letzter Wert, min/max; Graph im Katalog frisch zur Wahl; liest nur über `graphs.list_graphs`/`read_values` |
 | `ai` | 3 | Ollama-Weg, Tool-Liste und -Ausführung, Erlaubnis-Abfrage, Prompt-Bausteine |
 | `ai_backends` | 3 | Wer denkt: lokal oder Cloud, Anbieter, Modell, Effort, Rundengrenze |
 | `cloud` | 3 | Anthropic-Weg |
@@ -246,7 +250,7 @@ das für `core/`, `ui/`, `tui/`, `scripts/`).
 
 | Bereich | Darf aus dem Kern | Warum |
 |---|---|---|
-| `tui/` | `theme`, `tone`, `pc_status` | Reine Helfer ohne Kern-Abhängigkeit. Alles andere holt die TUI per HTTP von den Routen (`ui/routen/`). |
+| `tui/` | `theme`, `tone`, `pc_status`, `listen_baum`, `graph_reihen` | Reine Helfer ohne Kern-Abhängigkeit. Alles andere holt die TUI per HTTP von den Routen (`ui/routen/`). `listen_baum`/`graph_reihen` seit 2026-10-10: Ansicht und Kachel rechnen dasselbe; beide stehen in `deploy/aussenposten.txt`. |
 
 Mit Apps redet der Hub nur über HTTP: starten (`scripts/open_tutor_room.py`
 liest `app.toml`), Ereignisse schicken (`core/hub_ereignisse.py`).

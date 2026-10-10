@@ -487,3 +487,50 @@ def test_kachel_groesse_ohne_katalog_sagt_es(ansicht, termine, monkeypatch):
     d.taste(ord("r"))
     assert D["canvas"].modus == "ruhe" and "größe geht gerade nicht" in d.tasten_text()
     assert echt is d.aufrufe
+
+
+# ── Listen- und Graph-Kacheln (2026-10-10) ───────────────────────────
+
+def _aus_dem_katalog(d, name, label):
+    desk.anlegen(name)
+    d.oeffnen()
+    d.taste(10)
+    zeichne(d)
+    d.taste(ord("+"))
+    labels = [a.neu_label for a in d.DESK["art_wahl"]["arten"]]
+    d.DESK["art_wahl"]["sel"] = labels.index(label)
+    d.taste(10)
+    return d.DESK["modal"]
+
+
+def test_liste_und_graph_aus_dem_katalog_anlegen_und_oeffnen(ansicht):
+    import curses
+    import graphs
+    import lists
+    d = ansicht
+    lists.create_list("Einkauf")
+    zweite = lists.create_list("Ideen")["id"]
+    lists.add_item(zweite, "Kacheln bauen")
+    gid = graphs.create_graph("Gewicht", "number", unit="kg")["id"]
+    graphs.log_value(gid, date.today().isoformat(), 80)
+    m = _aus_dem_katalog(d, "lg", "liste")
+    assert [f["name"] for f in m.sichtbar()] == ["liste", "erledigte", "tiefe"]
+    m.taste(curses.KEY_RIGHT)                     # liste: → Ideen (Werte von jetzt)
+    d.taste(10)                                   # erledigte nein, 3 Ebenen
+    d.taste(10)                                   # ablegen
+    zeichne(d)
+    (el,) = lies("lg")["nodes"]
+    assert el["zentrale_kachel"]["adresse"] == \
+        "zentrale://fokus/liste?erledigte=false&liste=%s&tiefe=3" % zweite
+    assert "Kacheln bauen" in sichtbar(d)
+    d.taste(ord("o"))
+    assert d.gesprungen == ["zentrale://fokus/" + zweite]
+    m = _aus_dem_katalog(d, "gr", "graph")
+    assert [f["name"] for f in m.sichtbar()] == ["graph", "tage"]
+    d.taste(10)
+    d.taste(10)
+    zeichne(d)
+    assert "Gewicht kg" in sichtbar(d) and "80 kg" in sichtbar(d)
+    d.taste(ord("o"))
+    assert d.gesprungen[-1] == "zentrale://graph/" + gid
+    assert len(lies("gr")["nodes"]) == 1

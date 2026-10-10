@@ -146,7 +146,8 @@ Routen `POST /api/kachel` und `POST /api/kachel/aktion`
 ([api_endpoints.md](api_endpoints.md)), in der TUI Holen im Hintergrund aus
 dem Puffer. **Neutral gemacht 2026-10-10** (die Schnittstelle kennt keine
 Oberfläche mehr): Adressen, Katalog und Farbrollen — die drei Abschnitte
-unten, alle gebaut. Noch nicht: Listen (`fokus`), Graphen (`graph`),
+unten, alle gebaut. **Listen (`fokus`) und Graphen (`graph`) gebaut
+2026-10-10** (Abschnitt „Quellen: Listen und Graphen" unten). Noch nicht:
 Manifest-Einträge `liefert`/`[kachel.<art>]` (die eingebauten Quellen
 tragen `ARTEN` und `RECHTE` selbst), Abbruch nach 0,5 s (erst für Apps
 hinter HTTP; im Prozess wird gemessen und geloggt).
@@ -262,6 +263,42 @@ macht aus Unbekanntem `text`). Jede Oberfläche bildet jede Rolle auf ihre
 Farben ab — die TUI in `tui/ansichten/farben.py` `FARBROLLEN` (ein Test
 verlangt, dass jede Rolle abgedeckt ist); Unbekanntes zeichnet sie neutral
 wie `text`. Neue Rolle = Eintrag im Wörterbuch + in jeder Oberfläche.
+
+### Quellen: Listen und Graphen (gebaut 2026-10-10)
+
+Wie der Kalender ein Modul je Quelle im Prozess, eingetragen in `QUELLEN`;
+beide **lesen nur** (Sasha: `o` = nur öffnen, kein Abhaken auf der Kachel).
+
+- **`fokus`/`liste`** (`core/kachel_fokus.py`): Felder `liste` (wahl,
+  `dynamisch`), `erledigte` (bool, Standard nein), `tiefe` (zahl 1–9,
+  Standard 3, „ebenen"). Adresse z. B.
+  `zentrale://fokus/liste?erledigte=false&liste=l_einkauf&tiefe=3`. Kopf =
+  Name, Bernstein-Steine, „erledigt/alle" (Blätter); darunter die Punkte
+  wie in der Listen-Ansicht geordnet (offen, Fokus oben, wenig Offenes
+  zuerst; Erledigtes dahinter, wenn gewünscht), `○`/`✓`, Ordner `▾`/`▸`
+  mit „d/t", 2 Zellen Einrückung je Ebene; blättern mit `oben`, „+N
+  weitere". `oeffnen` → `zentrale://fokus/<liste>`; der Router der TUI
+  versteht auch `zentrale://fokus/<liste>/<eintrag>`. Gelesen über
+  `lists.read_lists()` (neu: schreibt garantiert nie, auch nicht die
+  einmalige »week«-Migration).
+- **`graph`/`verlauf`** (`core/kachel_graph.py`): Felder `graph` (wahl,
+  `dynamisch`), `tage` (zahl 2–365, Standard 14). Kopf = Name (+ Einheit),
+  rechts der letzte Wert; darunter Balken aus `▁▂▃▄▅▆▇█`, je Tag eine
+  Spalte (bis 3 breit), heute rechts in `heute`, Tage ohne Wert als leiser
+  Punkt; mehr Tage als Spalten → Mittel je Spalte; unten min/max (und der
+  Zeitraum, wenn Platz ist). Typen: number/scale als Zahl (scale fest
+  0–5), time als Uhrzeit, period als Dauer („7h30"). Keine Werte im
+  Zeitraum → „keine werte in N tagen". `oeffnen` →
+  `zentrale://graph/<gid>`.
+- **Werte zur Laufzeit** (`dynamisch` in `core/kachel_felder.py`): welche
+  Liste/welcher Graph steht erst beim Fragen fest — der Katalog holt die
+  Werte frisch bei der Quelle (`werte(art, name)`); gibt es keine, fehlt der
+  Eintrag im Katalog. Der Hub prüft dann nur die Form (Text); gibt es den
+  Wert nicht mehr → 404 `weg`.
+- **Geteilte Helfer:** die Ansicht der TUI und die Kachel rechnen mit
+  denselben reinen Funktionen (`core/listen_baum.py`,
+  `core/graph_reihen.py`, umgezogen aus `tui/ansichten/fokus.py`,
+  `graphen.py`, `basis.py`) — Leitlinie „dasselbe Objekt, nicht kopiert".
 
 **Offen:** Behält Obsidian beim Speichern unbekannte Knotenfelder? Noch
 nicht geprüft (Kacheln sind trotzdem gebaut — verliert Obsidian das Feld,

@@ -1210,7 +1210,7 @@ def run_ui(stdscr, store):
     desk = ansichten.desk.Desk(z)          # Desk View (2026-10-09)
     DESK = desk.DESK
     # o auf einer Kachel: Adresse → Ansicht (Adress-Router, 2026-10-10)
-    desk.zeigen = ansichten.sprung.router_fuer(DESK, kalender).zeigen
+    desk.zeigen = ansichten.sprung.router_fuer(DESK, kalender, fokus, graphen).zeigen
     technik = ansichten.technik.Technik(z)
     TECH = technik.TECH
     startseite = ansichten.startseite.Startseite(z, RAD, META, TRAD, technik)

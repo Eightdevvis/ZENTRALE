@@ -284,6 +284,25 @@ def _desk_frisch(tmp_path_factory, monkeypatch):
     yield
 
 
+# 7f. Listen und Graphen eines Testlaufs liegen nie in Sashas data/
+# (2026-10-10). Seit es Listen- und Graph-Kacheln gibt, liest schon der
+# Katalog (`GET /api/kacheln`) beide Registries — ohne diese Fixture sähe
+# jeder Desk-Test Sashas echte Listen, und ein Test, der eine anlegt,
+# schriebe in data/lists.json. Wie beim Kalender: jeder Test bekommt einen
+# leeren Ordner; Tests, die selbst umbiegen, gewinnen.
+@pytest.fixture(autouse=True)
+def _listen_und_graphen_nie_in_echten_daten(tmp_path_factory, monkeypatch):
+    import graphs
+    import lists
+    ordner = tmp_path_factory.mktemp("listen_graphen")
+    monkeypatch.setattr(lists, "_DATA_DIR", str(ordner))
+    monkeypatch.setattr(lists, "_REGISTRY", str(ordner / "lists.json"))
+    monkeypatch.setattr(lists, "_FEATURES", str(ordner / "features.json"))
+    monkeypatch.setattr(graphs, "_DATA_DIR", str(ordner))
+    monkeypatch.setattr(graphs, "_REGISTRY", str(ordner / "graphs.json"))
+    yield
+
+
 # 8. Kalender-Tests laufen gegen BEIDE Speicher.
 #
 # Der Umstieg auf .ics (memory/werkzeuge/kalender_ics_bauplan.md) verspricht:

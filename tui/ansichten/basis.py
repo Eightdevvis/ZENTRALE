@@ -24,6 +24,21 @@ zugang_klient.einrichten(BASE_URL)
 # eigenes __file__, sondern PROJEKT (tests/test_tui_ansichten.py prüft das).
 PROJEKT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
+def kern_pfad():
+    """core/ HINTEN an den Suchpfad hängen — für die wenigen reinen Helfer,
+    die TUI und Kern teilen (Tür `tui/` in memory/system/bauplan_kern.md;
+    seit 2026-10-10 auch listen_baum und graph_reihen, damit Kachel und
+    Ansicht dasselbe rechnen). Hinten, damit nichts aus core/ ein Modul der
+    TUI verdeckt."""
+    kern = os.path.join(PROJEKT, "core")
+    if kern not in sys.path:
+        sys.path.append(kern)
+
+
+kern_pfad()
+import graph_reihen  # noqa: E402  – core/graph_reihen.py, stdlib-only
+
 # Was eine Ansicht aus taste(ch) zurückgibt, wenn die ganze TUI enden soll
 # ('q' in einem Werkzeug). Früher stand dort ein `break` direkt in der
 # Hauptschleife; als Methode kann der Zweig die Schleife nicht mehr selbst
@@ -97,23 +112,7 @@ def parse_clock(s):
     return h * 60 + m
 
 
-def _num(x):
-    """x als ENDLICHE Zahl zurück, sonst None. Bool/Text/Liste/None/NaN/Inf →
-    None. Alle Werte kommen über JSON rein, da kann Müll dabei sein — diese
-    Schleuse hält ihn von den Rechenpfaden (int()/round()/float()) fern."""
-    if isinstance(x, bool) or not isinstance(x, (int, float)):
-        return None
-    if x != x or x in (float("inf"), float("-inf")):   # NaN (x!=x) oder Inf
-        return None
-    return x
-
-
-def fmt_clock(m):
-    """Minuten → 'HH:MM' (24:00 für 1440). Müll → '—' statt Crash."""
-    m = _num(m)
-    if m is None:
-        return "—"
-    m = int(round(m))
-    if m >= 1440:
-        return "24:00"
-    return "%02d:%02d" % (m // 60, m % 60)
+# _num und fmt_clock wohnen seit 2026-10-10 in core/graph_reihen.py (die
+# Graph-Kachel rechnet mit denselben) — hier nur unter den alten Namen.
+_num = graph_reihen.zahl
+fmt_clock = graph_reihen.uhr

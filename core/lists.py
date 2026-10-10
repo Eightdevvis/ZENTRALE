@@ -321,6 +321,18 @@ def list_lists():
     return _load()
 
 
+def read_lists():
+    """Alle Listen wie list_lists() — aber garantiert OHNE zu schreiben. Für
+    reine Leser (die Listen-Kachel, core/kachel_fokus.py, 2026-10-10): steht
+    die einmalige »week«-Migration noch aus, wird sie nur im Speicher
+    angewendet; die Dateien bleiben unberührt (das erledigt der nächste
+    schreibende Zugriff)."""
+    lists = _load_file(_REGISTRY) + _load_file(_FEATURES)
+    if not _week_migrated:
+        _migrate_week_flat(lists)
+    return lists
+
+
 def create_list(name):
     """
     Neue Liste anlegen. Liefert die Definition zurück.

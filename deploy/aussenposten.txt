@@ -26,6 +26,10 @@ tui/boot_loader.py
 tui/pixel.py
 tui/ansichten/
 tui/bausteine/
+# Reine Helfer, die Ansichten und Kacheln teilen (2026-10-10): stdlib-only,
+# ohne Kern-Imports. Ohne sie starten Listen- und Graph-Werkzeug nicht.
+core/listen_baum.py
+core/graph_reihen.py
 
 # ── Sensorik: der einzige Push-Weg vom Knoten zum PC ─────────────────────
 # Liest GPIO/Tastatur, POSTet /api/sensor/<name> und alle ~30 s Telemetrie.
