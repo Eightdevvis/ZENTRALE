@@ -894,6 +894,18 @@ Ist-Zustands und erlaubten ungenaue Massen-Eingriffe. Ausführlich:
      werfen ein Ende ≤ Beginn still weg, `routine_aendern` prüft Uhrzeiten
      nicht. Lieber ablehnen (False + Grund).
 
+### Ehrlichkeit sprachfrei — Selbstauskunft (2026-10-10, erledigt)
+
+Sasha: Wortlisten skalieren schlecht und versagen bei anderen Sprachen. Auf
+gross gibt die KI jede Antwort über `antwort(text, erledigt, fragt_erlaubnis,
+schiebt_auf, ungeprueft)` ab; Python vergleicht die Felder mit dem Werkzeug-
+Protokoll, die Wortlisten bleiben Rückfall (freier Text) und Netz
+(Widerspruch → „unsicher" → Klassifikator, Standard aus). Jede geprüfte
+Antwort → Beispiel in `data/klassifikator_beispiele/` (lokal, nicht im
+Abgleich), Skript `scripts/beispiele_etikettieren.py` (SetFit). Kurzfall
+`f01k` zum Messen. Neu: `core/selbstauskunft.py`, `core/klassifikator.py`,
+`core/klassifikator_beispiele.py`; Details [ehrlichkeit_live.md](ehrlichkeit_live.md).
+
 ### Ehrlichkeit live (2026-10-09)
 
 Drei Prüfer in Python, eingehängt in die Werkzeug-Schleife, nur gross

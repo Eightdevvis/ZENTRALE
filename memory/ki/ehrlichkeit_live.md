@@ -336,7 +336,7 @@ Sasha: „für jeden bereich eine wortliste … skaliert nur so mäßig, wörter
 passiert wenn zentrale später von anders sprachlern benutzt wird, dann sind
 wir done for." Stand heute: BEREICH/WORTE in core/ehrlichkeit.py, nur Deutsch.
 
-Zwei Schritte, wenn es soweit ist:
+Zwei Schritte, wenn es soweit ist (Schritt 2 gebaut am 10.10., s. unten):
 1. **Wörter gehören zum Werkzeug:** jeder Register-Eintrag (später jedes
    App-Manifest) bringt seine Verben je Sprache mit (`worte: {de: […], en: […]}`);
    der Prüfer fragt das Register statt einer zentralen Liste. Neue Werkzeuge
@@ -345,3 +345,122 @@ Zwei Schritte, wenn es soweit ist:
    unsichtbares, festes Feld (`behauptet: [bereiche]`, `fragt_erlaubnis`,
    `schiebt_auf`); Python vergleicht es mit dem Werkzeug-Protokoll. Widerspruch
    = Befund. Die Erledigt-Zeile (aus dem Protokoll) bleibt das Netz.
+
+## Selbstauskunft über `antwort` — sprachfrei (seit 2026-10-10)
+
+Sasha: *„langfristig ganz ohne wörter ist irgendwie schlauer"*; Anthropic
+arbeitet mit strukturierten Daten + Klassifikatoren. Schritt 2 des Ausblicks.
+
+- **Das Werkzeug.** `antwort` gibt es jetzt auch auf gross, mit festen
+  Feldern (`core/selbstauskunft.py`, Schema dort): `text`, `erledigt`
+  (Bereiche aus `selbstauskunft.BEREICHE` = kalender, notiz, ablage,
+  messreihe, skill — die schreibenden Bereiche von `ehrlichkeit.BEREICH`;
+  „netz" fehlt, dort wird nur gelesen), `fragt_erlaubnis`, `schiebt_auf`,
+  `ungeprueft` (optional). Beschreibung: „Gib JEDE Antwort hierüber ab, als
+  letzten Aufruf des Zugs und allein"; im Prompt Meta-Regel 2 „Jede Antwort
+  gibst du über antwort ab." (Platz dafür: „nur in Werkzeug-Aufrufen" bei den
+  Kennungen und ein Beispiel in Regel 4 gestrichen, Kopf 4.981 Zeichen).
+  klein bleibt byte-gleich (dort weiter die 9B-Krücke).
+- **Die Schleife** (`werkzeug_schleife.laufen`, nur gross): ein Aufruf
+  `antwort` ALLEIN ist die fertige Antwort — genau wie freier Text, mit
+  denselben Prüfern, ohne Werkzeug-Ereignis (Sasha sieht keinen Unterschied).
+  Kommt `antwort` zusammen mit anderen Werkzeugen, laufen die anderen, und
+  `antwort` bekommt „ABGEBROCHEN … W-ANTWORT-NICHT-ALLEIN" zurück (die
+  Antwort wäre vor deren Ergebnissen geschrieben). Korrektur nach einer
+  Antwort über `antwort`: erst ein Ergebnis für den Aufruf
+  (`W-ANTWORT-GEPRUEFT`, beide Dialekte verlangen zu jedem Aufruf eins),
+  DANN der Hinweis als eigene Nachricht (`adapter.nachricht_anhaengen`;
+  Anthropic: hinter dem tool_result in derselben user-Nachricht, OpenAI: eine
+  user-Nachricht nach role=tool). Fehlt `text`, gilt der freie Text der
+  Runde.
+- **Der Vergleich** (`ehrlichkeit.mit_auskunft`):
+  - `erledigt` nennt einen Bereich ohne schreibendes Werkzeug dieses
+    Bereichs mit ok → Befund `tat` (quelle `auskunft`; ohne passenden Satz
+    heißt es „Du meldest im Feld erledigt eine Änderung (kalender) …", die
+    Warnung „die Antwort meldet eine Änderung").
+  - `fragt_erlaubnis` → wie „Frag nicht, tu": erkennen die Satzmuster die
+    Frage, entscheiden sie wie bisher; sonst Befund, wenn Sasha beauftragt
+    oder zugestimmt hat (oder gefragt hat und noch GAR kein Werkzeug lief)
+    und kein Werkzeug mit Erlaubnis-Gate lief.
+  - `schiebt_auf` + klarer Auftrag (`erkennen.auftrag`) + kein schreibendes
+    Werkzeug → Befund wie „Aufschub".
+  - Schreibendes Werkzeug lief ok, `erledigt` leer → kein Befund (die
+    Erledigt-Zeile zeigt es).
+  - **Widerspruch:** die Satzmuster sehen eine Tat/Erlaubnis-Frage/einen
+    Aufschub, das Feld verneint → Befund `unsicher`. Klassifikator aus
+    (Standard): es gilt die Wortliste wie bisher. Umgekehrt (Feld ja,
+    Satzmuster nichts) ist KEIN Widerspruch: das Modell sagt es selbst, die
+    Wortliste kennt nur die Sprache nicht — geprüft wird das Feld.
+  - Freier Text ohne `antwort`: alles wie bisher (Wortlisten).
+- Auf der Sasha-Seite (Auftrag, Zustimmung, Frage) sind es weiter
+  Satzmuster — nächster Schritt, wenn ZENTRALE mehrsprachig wird.
+- Im Ereignis `ehrlichkeit` steht `auskunft` (die Felder), an den Befunden
+  `quelle` (auskunft | wortliste | beide), `unsicher`, `entscheid`.
+
+**Text-Streaming geprüft:** auf gross puffern BEIDE Adapter den Text einer
+Runde (`cloud._AnthropicAdapter.runde`, `cloud_openai._OpenAIAdapter.runde`:
+Vorgeplänkel vor einem Werkzeug soll Sasha nicht sehen und nicht vorgelesen
+bekommen) — die TUI bekommt die Antwort schon heute erst am Ende des Zugs.
+Eine Antwort über `antwort` kommt genauso am Ende (`ki_antwort.mit_bildern`
+wie beim freien Text). Kein Unterschied in der Anzeige; Werkzeug-Eingaben
+live zu streamen (Anthropic `input_json_delta`) wäre ein eigener Umbau, der
+erst mit Live-Text überhaupt etwas brächte.
+
+**qwen:** bekommt `antwort` mit, freier Text bleibt erlaubt (Rückfall). Mit
+`antwort_pflicht` = an erzwingt das Profil in jeder Runde einen Aufruf
+(`tool_choice "required"`); Standard aus, bis gemessen
+([modell_profile.md](modell_profile.md)).
+
+## Klassifikator bei Zweifel (seit 2026-10-10, Standard aus)
+
+`core/klassifikator.py`: `satzarten(text, sprache) -> [{satz, art, sicher}]`
+(art: behauptung_tat | fakt | frage | erlaubnisfrage | aufschub | sonst),
+`gedeckt(aussage, belege) -> 0…1`, `entscheiden(satz, art) -> ja/nein/None`.
+Einstellung `klassifikator` = aus | cloud | lokal:
+
+- **aus** — nur die Wortlisten (Backend `Wortlisten`).
+- **cloud** — ein günstiges Modell (`klassifikator_modell`, Standard das
+  billige des aktiven Anbieters, z. B. claude-haiku-4-5 oder qwen-turbo),
+  ein kurzer Ja/Nein-Auftrag je Satz über `billig.einmal` (eigener Anbieter
+  je Modell), im Prozess gecacht. Kosten im Topf des Gesprächs (Deckel und
+  Rückfall sehen sie), dazu je Monat unter `zwecke.klassifikator`
+  (`usage.buchen(zweck=…)`). Grob ≈ 90 Token rein, 1 raus je Frage — mit
+  Haiku unter 0,01 Cent.
+- **lokal** — vorbereitet, nicht installiert: mDeBERTa-Zero-Shot
+  (`MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7`, MIT, 100
+  Sprachen) für Satzarten, LettuceDetect
+  (`KRLabsOrg/lettucedect-210m-eurobert-de-v1`, MIT) für die Deckung. Zu
+  installieren wäre `transformers` + `torch` (CPU genügt, ~1–1,5 GB RAM) und
+  die Modelle einmal laden; der Code lädt nur mit `local_files_only`, nie
+  aus dem Netz. Fehlt etwas, gilt die Wortliste (Log `KLASSIFIKATOR ✗`).
+
+Gefragt wird **nur** bei „unsicher", nie je Antwort pauschal, und ein Satz
+einmal je Zug. Sagt der Klassifikator „nein", fällt der Befund weg; „ja"
+oder „weiß nicht" → er bleibt. Recherche (Kandidaten, Lizenzen, Grenzen):
+im Bericht des 10.10.; Kurzfassung: für „hab ich erledigt" und „soll ich?"
+gibt es kein fertiges Modell — eigener kleiner Klassifikator (SetFit, 50–100
+Beispiele je Klasse und Sprache) aus den gesammelten Beispielen.
+
+## Beispiele sammeln (seit 2026-10-10)
+
+Jede geprüfte Antwort der gross-Schiene (jede Runde, auch die korrigierten)
+schreibt eine Zeile nach `data/klassifikator_beispiele/<YYYY-MM>-<knoten>.jsonl`
+(`core/klassifikator_beispiele.py`): Sätze mit Satzart laut Wortliste,
+Selbstauskunft, Befunde, Klassifikator-Urteile, Protokoll-Kurzform
+(Werkzeug, Status, schreibt, Bereich), Gespräch, Runde. Atomar angehängt,
+eine Datei pro Rechner und Monat. Einstellung `beispiele_sammeln` (Standard
+an); Ort umlenkbar (`klassifikator_beispiele_dir`, Tests:
+`ZENTRALE_KLASSIFIKATOR_BEISPIELE_DIR`).
+
+**Datenschutz:** nur lokal. Gitignored, NICHT im Abgleich (Positivliste
+`core/abgleich_auswahl.py` bewusst nicht erweitert — jeder Rechner hat seine
+eigenen), geht an keinen Anbieter. Die Sätze sind Antworten der KI an
+Sasha, also so privat wie die Gespräche.
+
+`scripts/beispiele_etikettieren.py --aus etiketten.jsonl` macht daraus
+SetFit-Zeilen `{text, label, quelle}`: sichere Satzarten der Wortliste,
+`fragt_erlaubnis`/`schiebt_auf` → letzter Satz. Mit `--modell X` zeigt es
+die geschätzten Kosten fürs Vor-Etikettieren der übrigen Sätze; gefragt wird
+nur mit `--wirklich`. Etiketten sind eine Vorlage — Stichproben prüfen, bevor
+trainiert wird.
+

@@ -69,6 +69,14 @@ der Schiene.
 4. **Erst lesen erzwungen.** In der ersten Runde eines Zugs, in dem Sasha den
    Kalender ändern will oder einer Frage zustimmt (nicht bei „nix eintragen",
    „nur nachschauen"): `tool_choice = read_calendar`.
+4b. **antwort als Pflicht (Schalter, Standard aus, 2026-10-10).** Mit der
+   Einstellung `antwort_pflicht` = an muss qwen in jeder Runde ein Werkzeug
+   rufen (`tool_choice "required"`, außer Runde 0 mit erzwungenem
+   `read_calendar`) — die Antwort selbst dann über `antwort` mit den Feldern
+   der Selbstauskunft ([ehrlichkeit_live.md](ehrlichkeit_live.md)). Anders
+   als „irgendein Werkzeug" in Runde 6 hat qwen damit einen Ausgang, der
+   nichts ändert. Ungemessen; messen mit
+   `--einstellung antwort_pflicht=an` gegen ohne (f01k).
 5. **Werkzeug-Auswahl je Gespräch.** Fester Kern (Kalender, Notizen, Suche,
    Netz, Knopf …) plus Gruppen (Browser, Dateien, Dokumente, Post,
    Messreihen, Skills), die erst bei passenden Wörtern in Sashas Nachrichten

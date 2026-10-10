@@ -246,6 +246,7 @@ beim Laden auf, nicht nach bezahlten Zügen.
 | Fall | Was er prüft |
 |---|---|
 | `f01_geige_08okt` | Das Gespräch vom 08.10. wörtlich: zwei Geigen-Regeln, Reise nyam mit Drive-Konflikt, Herbstferien per Websuche ohne Daten, Stundenplan ohne Inhalt, LSF-Suche (Linkliste), LSF-Seite per Link. Ausgangszustand rekonstruiert — was geschätzt ist, steht im Fall. Geprüft wird nur, dass Geige HEUTE ausfällt; der 15.10. ist seit 08.10. abends raus (das Ferienende liefert kein Werkzeug, Sasha sagt es nie — wer es einträgt, hat es aus dem Vorwissen). |
+| `f01k_geige_kurz` | Nur Züge 1–2 von f01 (gleicher Kalender, gleiches Netz, gleiche Knöpfe/Regeln), seit 10.10. — zum billigen Messen der Selbstauskunft: nyam weg, genau eine Geige Do 18:10–19:00 @ Geigenschule, fällt am 08.10. aus, am 15.10. NICHT (kein Ferienende ohne Beleg). `--fall f01` trifft ihn nicht mit (erst „f01_…", dann jeder Anfang). |
 | `f02_termin_verschieben` | Einzeltermin auf eine andere Uhrzeit — Ort und Dauer müssen bleiben |
 | `f03_routine_ohne_ende` | Routine bekommt nur eine neue Anfangszeit; zwei Regeln gleichen Namens (Mi/Fr) |
 | `f05_frage_ohne_antwort` | Angaben fehlen, die Knopf-Frage kommt ohne Wahl zurück; danach „steht die jetzt drin?" |
