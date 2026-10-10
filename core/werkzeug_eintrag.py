@@ -57,6 +57,18 @@ class Werkzeug:
                     statt OK"). Der Ausführer liefert dafür einen
                     werkzeug_befund.Befund mit `beleg`; der Test
                     (tests/test_werkzeug_belege.py) prüft jedes.
+
+    Seit 2026-10-10 (Werkzeuge aus dem Schema, core/werkzeug_erzeuger/):
+    gross_ausfuehrer  Ausführer NUR für die gross-Schiene (klein behält
+                    `ausfuehrer`, byte-gleich wie gemessen). ki_werkzeuge.
+                    _verteilen nimmt ihn, wenn die Schiene gross ist.
+    erzeugt         Name der Quelle, aus deren Schema der Erzeuger die
+                    gross-Seite gebaut hat (None = von Hand geschrieben).
+    bereich, worte  Für Ehrlichkeit und Erledigt-Zeile (core/ehrlichkeit.py,
+                    BEREICH/WORTE): erzeugte Werkzeuge bringen sie mit.
+    zuschnitt       Je Modellprofil-Art (z. B. "schwach"): {"weg": [Felder],
+                    "beschreibung": einfacherer Text} — angewandt von
+                    werkzeug_erzeuger.zuschneiden (Profil qwen).
     """
     name: str
     parameter: dict
@@ -74,6 +86,11 @@ class Werkzeug:
     gross_parameter: dict | None = None
     schreibt: bool = False
     beweis: str | None = None
+    gross_ausfuehrer: Callable[[dict], str] | None = None
+    erzeugt: str | None = None
+    bereich: str | None = None
+    worte: tuple | None = None
+    zuschnitt: dict | None = None
 
     def beschreibung(self, schiene: str) -> str | None:
         return getattr(self, schiene)
