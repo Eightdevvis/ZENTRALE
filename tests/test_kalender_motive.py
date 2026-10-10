@@ -89,7 +89,7 @@ def test_c_malt_hintergrund_unter_den_terminen():
     # Analysis 10–12 liegt deckend über „Hunger" 10:00–10:30: in seiner
     # Fläche steht kein Musterzeichen
     zeile = next(z for z in _text(zeilen) if "Analysis I" in z)
-    start = zeile.index("10–12 Analysis I")
+    start = zeile.index("Analysis I")       # Zeile 1 = nur der Titel (seit d75f21a)
     assert not any(ch in zeile[start:start + 18] for ch in "∘◦∪")
 
 
