@@ -41,6 +41,7 @@ from pathlib import Path
 
 import state  # Logging in den UI-Terminal-Stream
 import kalender_kategorie
+import kalender_quelle
 import kalender_regel
 import kalender_rhythmus
 import kalender_speicher
@@ -207,6 +208,22 @@ def _mit_kategorie(extras: dict) -> dict:
     return rest
 
 
+def _mit_quelle(layer: str, label, extras: dict):
+    """`quelle` ({art, id}: Titel live aus Liste/Projekt, kalender_quelle)
+    geprüft übernehmen → (label, extras). Ohne label wird der Name der
+    Quelle der Rückfall-Titel. Wirft KalenderAbgelehnt vor dem Laden
+    (QUELLE-ART-UNBEKANNT, QUELLE-UNBEKANNT …; Phasen: IST-PHASE)."""
+    if extras.get("quelle") is None:
+        extras.pop("quelle", None)
+        return label, extras
+    from kalender_fehler import KalenderAbgelehnt
+    if layer == kalender_rhythmus.EBENE:
+        raise KalenderAbgelehnt("IST-PHASE", "eine Phase hat keine Quelle")
+    q, name = kalender_quelle.pruefen(extras["quelle"])
+    label = label.strip() if isinstance(label, str) and label.strip() else name
+    return label, {**extras, "quelle": q}
+
+
 def add_entry(layer: str, day: str, label: str,
               time: str | None = None, **extras) -> bool:
     """
@@ -218,6 +235,7 @@ def add_entry(layer: str, day: str, label: str,
       time   – HH:MM (optional, sonst ganztags)
       extras – beliebige Zusatzfelder (tags, location, ...)
     """
+    label, extras = _mit_quelle(layer, label, _mit_kategorie(extras))
     with _lock:
         data = _load_raw()
         if layer not in data.get("layers", {}):
@@ -227,7 +245,7 @@ def add_entry(layer: str, day: str, label: str,
         entry: dict = {"label": label}
         if time:
             entry["time"] = time
-        entry.update(_mit_kategorie(extras))
+        entry.update(extras)
         entries.setdefault(day, []).append(entry)
         _save_raw(data)
         return True
@@ -254,6 +272,7 @@ def add_span(layer: str, von: str, bis: str, label: str, **extras) -> bool:
     if d1 < d0:
         state.push_log(f"[calendar] Spanne verdreht: bis {bis} < von {von}")
         return False
+    label, extras = _mit_quelle(layer, label, _mit_kategorie(extras))
     with _lock:
         data = _load_raw()
         if layer not in data.get("layers", {}):
@@ -261,7 +280,7 @@ def add_span(layer: str, von: str, bis: str, label: str, **extras) -> bool:
             return False
         entries = data["layers"][layer].setdefault("entries", {})
         entry: dict = {"label": label, "bis": bis}
-        entry.update(_mit_kategorie(extras))
+        entry.update(extras)
         entries.setdefault(von, []).append(entry)
         _save_raw(data)
         return True
@@ -617,6 +636,7 @@ def add_routine(layer: str, label: str, rrule_str: str,
     if not kalender_regel.regel_gueltig(rrule_str):
         state.push_log(f"[calendar] ungültige rrule {rrule_str!r}")
         return False
+    label, extras = _mit_quelle(layer, label, _mit_kategorie(extras))
 
     with _lock:
         data = _load_raw()
@@ -626,7 +646,7 @@ def add_routine(layer: str, label: str, rrule_str: str,
         routine: dict = {"label": label, "rrule": rrule_str}
         if time:
             routine["time"] = time
-        routine.update(_mit_kategorie(extras))
+        routine.update(extras)
         data["layers"][layer].setdefault("routines", []).append(routine)
         _save_raw(data)
         return True
@@ -712,7 +732,7 @@ def kennung(e: dict) -> str | None:
 
 # Felder einer Routine, die jedes Vorkommen mitbekommt (zusätzlich zu Zeit,
 # Ende, Ort …): Motiv der Phase, Gruppe.
-_MITGEGEBEN = ("motiv", "kategorie", "kategorie_name", "kategorien_weitere")
+_MITGEGEBEN = ("motiv", "kategorie", "kategorie_name", "kategorien_weitere", "quelle")
 
 
 def _ueber_nacht_markieren(e: dict) -> None:
@@ -875,6 +895,8 @@ def entries_in_range(start: date, end: date,
 
     for day_iso in out:
         out[day_iso].sort(key=lambda e: e.get("time", "00:00"))
+    # Titel aus Liste/Projekt live auflösen (einmal je Quelle, nie geschrieben).
+    kalender_quelle.anreichern([e for es in out.values() for e in es])
 
     return dict(sorted(out.items()))
 

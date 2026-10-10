@@ -110,6 +110,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `kalender_kennung` | 2 | Termine/Routinen per fester Kennung (UID) lesen und ändern; `KalenderAbgelehnt` mit festen Codes (`CODES`), ein Schreibvorgang, Ablehnung schreibt nichts |
 | `kalender_rhythmus` | 2 | Tagesrhythmus (seit 2026-10-10): Ebene `rhythmus`, fester Katalog `MOTIVE`, Motiv prüfen, „über Mitternacht" — nur Konstanten und reine Prüfungen (braucht nur `kalender_fehler`); Schreiben in `kalender_kennung` |
 | `kalender_kategorie` | 2 | Gruppen (CATEGORIES, seit 2026-10-10): fester Katalog `KATEGORIEN` + keine/custom, prüfen/setzen, Anzeigename, ↔ .ics-Namen; Kurs-Schlüssel eines Titels (`titel_schluessel`, `KURZFORMEN`) — rein (braucht nur `kalender_fehler`) |
+| `kalender_quelle` | 2 | Titel aus Liste/Projekt (seit 2026-10-10): Feld `quelle` {art: liste/projekt, id} prüfen (Form, Existenz), ↔ .ics (`X-ZENTRALE-QUELLE`, `URL:zentrale://fokus/…`), live auflösen = oberstes offenes Blatt (`listen_baum.ordnen`), leer/fehlt, an Ausgaben hängen (Listen einmal je Abruf über `lists.read_lists`), Auswahl für die Route |
 | `kalender_fehler` | 2 | Unterstes Kalender-Modul ohne Kalender-Abhängigkeit: `CODES`, `KalenderAbgelehnt`, Uhrzeit- und Reihenfolge-Prüfung (damit kalender/kalender_kennung/kalender_bearbeiten ohne Import-Kreis dieselbe Ablehnung werfen) |
 | `lists` | 2 | Listen-Registry (To-Do, Checklisten) |
 | `notes` | 2 | Notiz-Registry des TUI-Notiz-Werkzeugs |

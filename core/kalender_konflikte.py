@@ -15,6 +15,7 @@ import os
 from datetime import date, timedelta
 
 import kalender_kategorie
+import kalender_quelle
 import kalender_rhythmus
 
 # Kein `import kalender` (das wäre ein Import-Kreis, kalender reicht dieses
@@ -480,7 +481,8 @@ def render_range_for_tool(start: date, end: date,
             day_iso: matches
             for day_iso, entries in days.items()
             if (matches := [e for e in entries
-                            if needle in e.get("label", "").casefold()])
+                            if needle in e.get("label", "").casefold()
+                            or needle in kalender_quelle.anzeige_titel(e).casefold()])
         }
     span = (f"Kalender {start.strftime('%d.%m.%Y')} bis "
             f"{end.strftime('%d.%m.%Y')}")
@@ -530,7 +532,9 @@ def render_range_for_tool(start: date, end: date,
                     bis = f" (bis {date.fromisoformat(e['bis']).strftime('%d.%m.')})"
                 except ValueError:
                     pass
-            lines.append(f"  [{_ebene_text(e)}] {t}{e['label']}{bis}{ort}")
+            # Titel aus Liste/Projekt: das oberste Item, dahinter dezent die
+            # Liste — „10:00-12:00 Steuern planen (aus Liste: todo)".
+            lines.append(f"  [{_ebene_text(e)}] {t}{kalender_quelle.anzeige_titel(e)}{bis}{ort}")
         # (Keine ⚠-Warnzeilen mehr hier - die laufen über den Alarm-Kanal,
         #  siehe open_alarms. Der Read bleibt saubere Terminliste.)
     return "\n".join(lines)
@@ -615,6 +619,12 @@ def imprint_for_prompt(tage: int | None = None) -> str:
               "zählen; nur nutzen, um besser einzuschätzen (z. B. nichts "
               "ungefragt in die Schlafzeit legen). Er ist variabel und darf "
               "geändert werden, wenn Sasha es sagt.")
+    if "(aus Liste: " in liste or "(aus Projekt: " in liste:
+        grenze += ("\n\n„… (aus Liste: X)“ bzw. „(aus Projekt: X)“: ein "
+                   "Zeitfenster, das Sasha für diese Liste reserviert hat. Der "
+                   "Titel davor ist der Punkt, der dort gerade oben steht — er "
+                   "wechselt von selbst, wenn Sasha umsortiert oder abhakt. Es "
+                   "ist ein normaler Termin (belegt).")
     return f"## Was ansteht\n{liste}\n\n{grenze}"
 
 

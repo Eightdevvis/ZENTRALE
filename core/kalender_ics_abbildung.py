@@ -20,6 +20,8 @@
 #   absage_noetig            -> X-ZENTRALE-ABSAGE-NOETIG
 #   motiv (Phase)            -> X-ZENTRALE-MOTIV
 #   kategorie (Gruppe)       -> CATEGORIES (Anzeigename, RFC 5545)
+#   quelle (Liste/Projekt)   -> X-ZENTRALE-QUELLE:<art>:<id> + URL:zentrale://…
+#                               (Adresse des Objekts; core/kalender_quelle.py)
 #   Ebene rhythmus           -> TRANSP:TRANSPARENT, Ende vor Beginn = DTEND
 #                               am Folgetag (Schlaf 23:00–07:00)
 #
@@ -41,6 +43,7 @@ from zoneinfo import ZoneInfo
 from icalendar import Calendar, Event, Timezone, vRecur
 
 import kalender_kategorie
+import kalender_quelle
 import kalender_regel
 
 TZ_NAME = "Europe/Berlin"
@@ -59,6 +62,7 @@ X_OHNE_ANFANG = "X-ZENTRALE-OHNE-ANFANG"
 X_RRULE_ROH = "X-ZENTRALE-RRULE-ROH"
 X_ZEIT_ROH = "X-ZENTRALE-ZEIT-ROH"
 X_MOTIV = "X-ZENTRALE-MOTIV"
+X_QUELLE = "X-ZENTRALE-QUELLE"
 
 # Was ZENTRALE an einem Ereignis selbst verwaltet. Alles ANDERE an einer
 # vorhandenen Datei (DESCRIPTION, VALARM, Google-Eigenheiten, ...) wird beim
@@ -229,6 +233,10 @@ def _kopf(ev: Event, e: dict, rest: dict) -> None:
     if isinstance(e.get("motiv"), str) and re.fullmatch(r"[a-z0-9_-]{1,40}", e["motiv"]):
         ev.add(X_MOTIV, e["motiv"])
         rest.pop("motiv", None)
+    if "quelle" in e and kalender_quelle.sauber(e["quelle"]):
+        ev.add(X_QUELLE, kalender_quelle.als_text(e["quelle"]))
+        ev.add("URL", kalender_quelle.adresse(e["quelle"]))
+        rest.pop("quelle", None)
     namen = _kategorie_namen(e)
     if namen:
         ev.add("CATEGORIES", namen)
@@ -793,6 +801,10 @@ def _kopf_lesen(ev, daten: dict) -> None:
         daten["absage_noetig"] = True
     if ev.get(X_MOTIV) is not None and str(ev.get(X_MOTIV)):
         daten["motiv"] = str(ev.get(X_MOTIV))
+    quelle = kalender_quelle.aus_text(ev.get(X_QUELLE)) if ev.get(X_QUELLE) is not None \
+        else (kalender_quelle.aus_adresse(ev.get("URL")) if ev.get("URL") is not None else None)
+    if quelle:
+        daten["quelle"] = quelle
     namen = []
     for c in _liste(ev.get("CATEGORIES")):
         namen += [str(x) for x in getattr(c, "cats", [c])]
@@ -1028,6 +1040,11 @@ def zusammenfuehren(alt: bytes | None, neu: Calendar, uid: str) -> bytes:
                 if name in ("BEGIN", "END") or name in verwaltet or name in schon_da:
                     continue
                 if name.startswith("X-ZENTRALE-"):
+                    continue
+                # Unsere eigene Adresse (quelle) verwaltet ZENTRALE: wurde die
+                # Quelle gelöst, darf die alte URL nicht zurückkommen. Fremde
+                # URLs (vom Handy, von Google) bleiben.
+                if name == "URL" and str(wert).startswith("zentrale://"):
                     continue
                 ev.add(name, wert)
             if not ev.subcomponents:

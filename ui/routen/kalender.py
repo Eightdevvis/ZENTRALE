@@ -14,6 +14,7 @@ import kalender     # type: ignore  – Kalender-Layer (Woche/Monat, data/ai_cal
 import kalender_kennung  # type: ignore  – Fehler-Codes (KalenderAbgelehnt)
 import kalender_bearbeiten  # type: ignore  – Wiederholung, „nur dieser Tag", Spannen
 import kalender_kategorie  # type: ignore  – Gruppen-Katalog (CATEGORIES)
+import kalender_quelle  # type: ignore  – Titel live aus Liste/Projekt
 import kalender_rhythmus  # type: ignore  – Motive der Phasen (Tagesrhythmus)
 import kalender_sicherung  # type: ignore  – Schutzsperren (Massenlöschung, Rückfall)
 import lists        # type: ignore  – dynamische Listen-Registry (Todo/Sammel-Listen)
@@ -124,7 +125,7 @@ def api_calendar_add_entry():
     body = request.get_json(silent=True) or {}
     label = (body.get('label') or '').strip()
     day = (body.get('day') or '').strip()
-    if not label:
+    if not label and not body.get('quelle'):
         return jsonify({"error": "label fehlt"}), 400
     try:
         date.fromisoformat(day)
@@ -137,6 +138,8 @@ def api_calendar_add_entry():
         v = (body.get(k) or '').strip()
         if v:
             extras[k] = v
+    if body.get('quelle'):
+        extras['quelle'] = body['quelle']    # {art, id}; label darf dann fehlen
     # Mehrtägiger (ganztägiger) Termin: `bis`-Datum gesetzt → Spanne statt
     # Einmal-Termin. Kein Konflikt-Check (ganztägig, kein Zeit-Slot).
     bis = (body.get('bis') or '').strip()
@@ -294,6 +297,8 @@ def api_calendar_add_routine():
         v = (body.get(k) or '').strip()
         if v:
             extras[k] = v
+    if body.get('quelle'):
+        extras['quelle'] = body['quelle']
     ok = kalender.add_routine(layer, label, rrule, time=time, **extras)
     if not ok:
         return jsonify({"error": "routine abgelehnt (layer/rrule?)"}), 400
@@ -520,3 +525,33 @@ def api_calendar_kategorie_kurs():
     return jsonify(kalender_kennung.kategorie_fuer_kurs(
         b.get('schluessel') or '', b.get('kategorie'), b.get('kategorie_name'),
         probe=bool(b.get('probe'))))
+
+
+# ── Titel aus Liste/Projekt (quelle, seit 10.10.2026) ──────────────────
+# Ein Zeitfenster wählt eine Liste bzw. ein Projekt; der Titel ist live der
+# oberste offene Punkt (core/kalender_quelle.py). Antworten wie
+# kalender_kennung.eintrag (+ quelle, titel_live, quelle_name,
+# quelle_zustand, quelle_eintrag); Ablehnung 400 {error, code}.
+@bp.route('/api/calendar/quellen')
+def api_calendar_quellen():
+    """Zur Auswahl: {listen: [...], projekte: [...]}, je {art, id, name,
+    titel (was jetzt oben steht), zustand}."""
+    return jsonify(kalender_quelle.auswahl())
+
+
+@bp.route('/api/calendar/quelle', methods=['POST'])
+def api_calendar_quelle_setzen():
+    """Body: {kennung, art: liste|projekt, id, label?} — label = Rückfall-
+    Titel (Standard: Name der Liste/des Projekts)."""
+    b = request.get_json(silent=True) or {}
+    return jsonify(kalender_kennung.quelle_setzen(
+        b.get('kennung') or '', b.get('art'), b.get('id'), label=b.get('label')))
+
+
+@bp.route('/api/calendar/quelle', methods=['DELETE'])
+def api_calendar_quelle_loesen():
+    """Body: {kennung, titel_uebernehmen?} — ohne Quelle heißt der Termin
+    wieder label; titel_uebernehmen schreibt vorher den aktuellen Titel fest."""
+    b = request.get_json(silent=True) or {}
+    return jsonify(kalender_kennung.quelle_loesen(
+        b.get('kennung') or '', titel_uebernehmen=bool(b.get('titel_uebernehmen'))))

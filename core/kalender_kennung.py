@@ -23,6 +23,7 @@ from datetime import date
 
 import kalender
 import kalender_kategorie
+import kalender_quelle
 import kalender_regel
 import kalender_rhythmus
 from kalender_ics import ohne_interna
@@ -106,6 +107,13 @@ def _aussen(art, lname, ort, obj, pausen) -> dict:
     return d
 
 
+def _mit_titel(eintraege: list) -> list:
+    """Titel aus Liste/Projekt live dazu (titel_live, quelle_name …) — die
+    Listen werden dafür einmal gelesen, egal wie viele Einträge."""
+    kalender_quelle.anreichern(eintraege)
+    return eintraege
+
+
 def kennung(eintrag: dict) -> str | None:
     """Die Kennung eines Eintrags — gespeichert oder aus entries_in_range."""
     if isinstance(eintrag, dict) and eintrag.get("kennung"):
@@ -122,14 +130,14 @@ def alle_eintraege() -> list[dict]:
             kalender._save_raw(data)
             data = kalender._load_raw()
     pausen = data.get("pausen") or []
-    return [_aussen(a, l, o, obj, pausen) for a, l, o, obj in _alle_objekte(data)]
+    return _mit_titel([_aussen(a, l, o, obj, pausen) for a, l, o, obj in _alle_objekte(data)])
 
 
 def eintrag(k: str) -> dict:
     """Ein Eintrag per Kennung (wie in alle_eintraege)."""
     data = kalender._load_raw()
     a, l, o, obj = _finden(data, k)
-    return _aussen(a, l, o, obj, data.get("pausen") or [])
+    return _mit_titel([_aussen(a, l, o, obj, data.get("pausen") or [])])[0]
 
 
 # ── Schreiben (alles nach demselben Muster) ────────────────────────────
@@ -147,7 +155,7 @@ def _schreiben(k, arbeit, arten=None):
             return None
         data = kalender._load_raw()
         a, l, o, obj = _finden(data, k)
-        return _aussen(a, l, o, obj, data.get("pausen") or [])
+    return _mit_titel([_aussen(a, l, o, obj, data.get("pausen") or [])])[0]
 
 
 def _aus_liste_nehmen(data, lname, ort, obj):
@@ -626,5 +634,47 @@ def kategorie_fuer_kurs(schluessel: str, kategorie: str, kategorie_name=None, *,
     pausen = data.get("pausen") or []
     return {"schluessel": kurs, "kategorie": kat or kalender_kategorie.KEINE,
             "kategorie_name": name, "geaendert": geaendert, "probe": probe,
-            "eintraege": [_aussen(a, l, o, obj, pausen) for a, l, o, obj in _alle_objekte(data)
-                          if kalender.kennung(obj) in ziel]}
+            "eintraege": _mit_titel([_aussen(a, l, o, obj, pausen)
+                                     for a, l, o, obj in _alle_objekte(data)
+                                     if kalender.kennung(obj) in ziel])}
+
+
+# ── Titel aus Liste/Projekt (quelle, 10.10.2026) ───────────────────────
+# Der Termin verweist auf eine Liste bzw. ein Projekt; der Titel wird beim
+# Lesen live aufgelöst (core/kalender_quelle.py). `label` bleibt gespeichert
+# als Rückfall (Google, Handy, gelöschte Liste).
+def quelle_setzen(k: str, art: str, qid, label: str | None = None) -> dict:
+    """Dem Eintrag (Termin, Spanne, Routine — keine Phase) eine Quelle geben:
+    Titel = oberster offener Punkt der Liste bzw. nächster Schritt des
+    Projekts, live. `label` = Rückfall-Titel; None = Name der Quelle.
+    Codes: QUELLE-ART-UNBEKANNT, QUELLE-UNGUELTIG, QUELLE-UNBEKANNT, IST-PHASE.
+    Ein Schreibvorgang; abgelehnt = nichts geschrieben."""
+    q, name = kalender_quelle.pruefen({"art": art, "id": qid})   # vor dem Laden
+    if label is not None and not str(label).strip():
+        raise KalenderAbgelehnt("TITEL-LEER")
+    rueckfall = str(label).strip() if label is not None else name
+
+    def arbeit(data, a, lname, o, obj):
+        if kalender_rhythmus.ist_phase(obj, lname):
+            raise KalenderAbgelehnt("IST-PHASE", f"{k} ist eine Phase des Tagesrhythmus")
+        obj["quelle"] = q
+        obj["label"] = rueckfall
+        return False
+    return _schreiben(k, arbeit)
+
+
+def quelle_loesen(k: str, titel_uebernehmen: bool = False) -> dict:
+    """Die Quelle entfernen; der Termin heißt danach wieder `label` (der
+    Rückfall). `titel_uebernehmen`: vorher den aufgelösten Titel als label
+    festschreiben (z. B. „Steuern planen" bleibt stehen). OHNE-QUELLE, wenn
+    keine da ist."""
+    def arbeit(data, a, lname, o, obj):
+        if not obj.get("quelle"):
+            raise KalenderAbgelehnt("OHNE-QUELLE", f"{k} hat keine Quelle")
+        if titel_uebernehmen:
+            r = kalender_quelle.aufloesen(obj["quelle"], obj.get("label"))
+            if r["zustand"] == kalender_quelle.OK and r["titel"]:
+                obj["label"] = r["titel"]
+        obj.pop("quelle", None)
+        return False
+    return _schreiben(k, arbeit)

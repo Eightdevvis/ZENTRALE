@@ -44,6 +44,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import kalender
+import kalender_quelle
 import werkzeug_befund
 
 _WOTAG_LANG = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag",
@@ -360,6 +361,15 @@ def _pausen(label: str, daten: dict) -> list:
             if p.get("label") == label and str(p.get("bis") or "") >= heute]
 
 
+def _quelle_text(s: Stueck) -> str:
+    """„, Titel live aus Liste l_todo" — label ist dann nur der Rückfall."""
+    q = s.roh.get("quelle")
+    if not isinstance(q, dict):
+        return ""
+    wort = "Projekt" if q.get("art") == kalender_quelle.PROJEKT else "Liste"
+    return f", Titel live aus {wort} {q.get('id')}"
+
+
 def beschreiben(s: Stueck, daten: dict | None = None) -> str:
     """Eine Zeile mit allen Feldern. Mit Kennung nur auf der gross-Schiene."""
     kenn = f"#{s.kennung} " if mit_kennungen() else ""
@@ -368,7 +378,8 @@ def beschreiben(s: Stueck, daten: dict | None = None) -> str:
         wann = datum(s.day)
         if s.bis:
             wann += f" bis {datum(s.bis)} (mehrtägig)"
-        return f"{kenn}Termin {wann} {zeit(s.time, s.ende)} {s.label}{ort}, Ebene {s.layer}"
+        return (f"{kenn}Termin {wann} {zeit(s.time, s.ende)} {s.label}{ort}, Ebene {s.layer}"
+                + _quelle_text(s))
     daten = roh() if daten is None else daten
     # Ohne Enddatum sagt das die gross-Zeile ausdrücklich (2026-10-09): so
     # sieht die KI, welche Serien noch „für immer" laufen.
@@ -377,6 +388,8 @@ def beschreiben(s: Stueck, daten: dict | None = None) -> str:
         spanne += " (ohne Enddatum)"
     teile = [f"{kenn}Routine {s.label}: {regel_text(s.rrule, False)} "
              f"{zeit(s.time, s.ende)}{ort}{spanne}", f"Ebene {s.layer}"]
+    if s.roh.get("quelle"):
+        teile.append(_quelle_text(s)[2:])
     for p in _pausen(s.label, daten):
         grund = f" ({p['grund']})" if p.get("grund") else ""
         teile.append(f"Pause {datum(p.get('von'), False)}–{datum(p.get('bis'))}{grund}")
@@ -472,7 +485,8 @@ def _lesen_gross(start, end, layers, suche) -> str:
     if suche:
         nadel = suche.casefold()
         tage = {t: treffer for t, es in tage.items()
-                if (treffer := [e for e in es if nadel in (e.get("label") or "").casefold()])}
+                if (treffer := [e for e in es if nadel in (e.get("label") or "").casefold()
+                                or nadel in kalender_quelle.anzeige_titel(e).casefold()])}
     spanne = f"Kalender {start.strftime('%d.%m.%Y')} bis {end.strftime('%d.%m.%Y')}"
     kopf = f"{spanne} (gefiltert nach {suche!r}):" if suche else f"{spanne}:"
     if not tage:
@@ -511,7 +525,8 @@ def _vorkommen_zeile(e: dict, s) -> str:
     if e.get("spanning"):
         bis = f" (mehrtägig {datum(e['von'], False)}–{datum(e['bis'], False)})"
     serie = " ↻" if e.get("recurring") else ""
-    return f"{kenn}{zeit(e.get('time'), e.get('ende'))} {e['label']}{bis}{ort} [{e['layer']}]{serie}"
+    titel = kalender_quelle.anzeige_titel(e)      # Liste/Projekt: oberstes Item (aus Liste: …)
+    return f"{kenn}{zeit(e.get('time'), e.get('ende'))} {titel}{bis}{ort} [{e['layer']}]{serie}"
 
 
 class _Zuordnung:

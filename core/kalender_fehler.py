@@ -34,6 +34,11 @@ CODES = {
     "KATEGORIE-UNBEKANNT": "Diese Gruppe gibt es nicht (Liste: /api/calendar/kategorien; eigene: custom + kategorie_name).",
     "KATEGORIE-NAME-FEHLT": "Bei custom fehlt der eigene Name (kategorie_name).",
     "KEIN-TREFFER": "Kein Eintrag passt.",
+    # Titel aus Liste/Projekt (kalender_quelle), seit 10.10.2026
+    "QUELLE-ART-UNBEKANNT": "Diese Art von Quelle gibt es nicht (liste, projekt).",
+    "QUELLE-UNGUELTIG": "Die Quelle ist kein {art, id} mit gültiger id.",
+    "QUELLE-UNBEKANNT": "Diese Liste bzw. dieses Projekt gibt es nicht (Auswahl: /api/calendar/quellen).",
+    "OHNE-QUELLE": "Der Eintrag hat keine Quelle.",
 }
 
 

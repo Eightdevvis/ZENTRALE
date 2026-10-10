@@ -150,6 +150,55 @@ zusammen („Uni 08:30–16:00"), sonst nichts; Standard keine.
   (`tests/test_kalender_gruppen_tui.py`) hält beide gleich.
 - Tests: `tests/test_kalender_rhythmus.py` (beide Speicher).
 
+## Titel aus Liste/Projekt „quelle" (10.10.2026)
+
+Sasha: „ich hab im kalender den variablen container der todo liste drin
+stehen, und im kalender wird als termintitel einfach das höchste item
+angezeigt. wenn ich die liste umsortiere dann ändert sich der containertitel
+mit … diese zeit ist für genau diesen schritt von diesem projekt … man wählt
+ja eigentlich einfach nur ne liste für nen termin slot aus, ansonsten soll
+sich das ganze ganz normal als termin bearbeiten lassen."
+- **Feld** an Einmal-Termin, Spanne, Routine (nicht an Phasen, IST-PHASE):
+  `quelle = {"art": "liste"|"projekt", "id": …}`. Liste: id der Liste
+  (`l_todo`). Projekt: ein als Projekt markierter Knoten der Listen
+  (`lists.projects_tree`, PROJECTS-Box) — `l_haus` (ganze Liste) oder
+  `l_haus/7` (Eintrag 7). Die KI-Projekte (`core/projekte.py`) haben keine
+  Schritte und zählen hier nicht. `label` bleibt gespeichert als
+  **Rückfall-Titel** (Name der Liste/des Projekts): das zeigen Google/Handy,
+  das gilt bei gelöschter Liste.
+- **.ics:** `X-ZENTRALE-QUELLE:liste:l_todo` + `URL:zentrale://fokus/l_todo`
+  (Adresse des Objekts wie bei der Listen-Kachel; Projekt-Eintrag
+  `zentrale://fokus/l_haus/7`). Gelesen wird X-ZENTRALE-QUELLE, fehlt sie,
+  die URL. Unsere `zentrale://`-URL wird beim Zusammenführen nicht von der
+  alten Datei übernommen (sonst käme eine gelöste Quelle zurück); fremde URLs
+  bleiben.
+- **Live** (`core/kalender_quelle.py`): Titel = oberstes OFFENES Blatt in
+  Anzeige-Reihenfolge (`listen_baum.ordnen`, wie Listen-Ansicht und Kachel;
+  Ordner oben → sein oberstes offenes Blatt; ein Projekt-Eintrag ohne
+  Unterpunkte ist selbst der Schritt). Leer → „<Name> — alles erledigt",
+  `leer`; weg → label, `fehlt`. Umsortieren/Abhaken schreibt den Kalender NIE.
+  Listen werden je `entries_in_range` höchstens einmal gelesen
+  (`lists.read_lists`, schreibt nie).
+- **Ausgaben:** `entries_in_range`, `/api/calendar`, `kalender_kennung`-Dicts
+  tragen bei solchen Einträgen `quelle`, `titel_live`, `quelle_name`,
+  `quelle_zustand` (ok/leer/fehlt), `quelle_eintrag` ({liste, id} des
+  angezeigten Punkts, zum Abhaken; sonst null). Lesetext/Imprint:
+  `10:00-12:00 Steuern planen (aus Liste: todo)`; der Imprint erklärt das nur,
+  wenn so eine Zeile drinsteht. gross-Schiene (`ki_kalender`) genauso.
+- **Setzen:** `kalender_kennung.quelle_setzen(k, art, id, label=None)` (label
+  None = Name der Quelle), `quelle_loesen(k, titel_uebernehmen=False)`;
+  `kalender.add_entry/add_span/add_routine(..., quelle={art, id})` prüfen
+  (ohne label → Name der Quelle). Codes QUELLE-ART-UNBEKANNT,
+  QUELLE-UNGUELTIG, QUELLE-UNBEKANNT (auch: Knoten ist kein Projekt),
+  OHNE-QUELLE.
+- **Routen:** `GET /api/calendar/quellen` (Listen + Projekte mit dem, was
+  jetzt oben steht), `POST /api/calendar/quelle {kennung, art, id, label?}`,
+  `DELETE /api/calendar/quelle {kennung, titel_uebernehmen?}`;
+  `POST /api/calendar/entry` und die Wochen-Routine nehmen `quelle` (label
+  darf dann fehlen).
+- Kollisionen/Alarme: ganz normaler Termin (reservierte Zeit); `uncommitted`
+  und Gruppen funktionieren unverändert. Tests: `tests/test_kalender_quelle.py`.
+
 ## Stand Sync (07.10.2026) — eingerichtet und live
 
 - **Ein Kalender.** Die Ebene `routinen` ist nach `termine` gezogen
