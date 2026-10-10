@@ -453,7 +453,10 @@ meldet `kern.chat` das am Anfang (`{"modell_wechsel": …}`,
 `ai_backends.modell_wechsel`). Einstellung `ehrlichkeit_pruefer`. Seit
 2026-10-10 dazu die **Quellen-Zeile** (`core/quellen.py`, Feld `quellen`):
 welche Seiten der Zug wirklich gelesen hat — Python, nicht die KI, nennt die
-Adresse. Alles Weitere: [ehrlichkeit_live.md](ehrlichkeit_live.md).
+Adresse. Und „frag nicht im Text, ruf das Werkzeug": endet die Antwort mit
+„Soll ich im Netz suchen?" o. ä., obwohl Sasha gefragt/beauftragt hat, gibt
+es eine Korrekturrunde (alle Modelle, vorher nur qwen). Alles Weitere:
+[ehrlichkeit_live.md](ehrlichkeit_live.md).
 
 ### Kalender ohne Fallen — `core/ki_kalender.py`, `ki_kalender_aendern.py` (seit 2026-10-08)
 

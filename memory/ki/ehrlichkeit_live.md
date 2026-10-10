@@ -207,6 +207,49 @@ Runde (bei 0/48 Befunden in den alten Läufen: kaum). Nicht berührt:
 Behauptungen über die Welt (Ferien aus dem Vorwissen) — die fängt weiter nur
 Regel 2 und der Richter.
 
+## Frag nicht im Text, ruf das Werkzeug (seit 2026-10-10)
+
+Prüfstand 10.10., f09: Sasha fragt nach der Rückmeldefrist, die KI schreibt
+„Soll ich im Netz nach … suchen?" und ruft nichts. Das Erlaubnis-Gate fragt
+Sasha ohnehin per Knopf, wo nötig (`erlaubnis=True` im Register) — eine
+Frage im Text kostet ihn einen Zug. Bisher prüfte das nur der qwen-
+Zusatzprüfer; jetzt der Prüfer der Schiene für **alle** Modelle
+(`ehrlichkeit.erlaubnis_befund`, Satzmuster `ehrlichkeit_erkennen.
+erlaubnis_frage`), und im qwen-Profil ist der Doppel-Check raus.
+
+- **Erkannt** wird nur der LETZTE Satz, und nur in Erlaubnis-Form: „soll
+  ich", „darf ich", „sollen wir", „möchtest/willst/magst du, dass ich" mit
+  „?" — oder „sag Bescheid, dann mach ich's". Dazu muss der Satz eine Tat
+  nennen, die ein Werkzeug kann (`aktion`: netz, seite, nachsehen | pause,
+  eintragen, loeschen, aendern, notieren, tun). „Soll ich dir was
+  erzählen?" ist keine.
+- **Keine Erlaubnis-Frage** ist eine Wahl („… oder …?"; „…, oder?" am Ende
+  zählt nicht als Wahl) und — bei Änderungen — eine Frage nach einer Angabe
+  (Zahl, Wochentag, Monat, wann, welche, wo): „Soll ich ihn um 14 Uhr
+  eintragen?" ist eine echte Rückfrage.
+- **Nur wenn Sasha es wollte:** bei Änderungen ein Auftrag
+  (`erkennen.auftrag`, eng: Imperativ „trag/lösch/verschieb …", „fällt …
+  aus", „ist ab jetzt …", „kannst du … eintragen"; nicht bei „nur
+  nachschauen", „noch nix eintragen") oder eine Zustimmung („ja", „ok",
+  „sure" am Anfang); bei Lesen/Suchen eine Frage oder ein „schau/such mal".
+- **Nur wenn nichts Passendes lief** (`TATEN`): Lesen — irgendein Versuch
+  zählt; Ändern — ein passendes schreibendes Werkzeug mit ok oder von Sasha
+  abgelehnt.
+- Folge: EINE Korrekturrunde je Zug („Frag nicht im Text um Erlaubnis — ruf
+  web_search auf; das Programm fragt Sasha per Knopf, wenn nötig. Fehlt
+  wirklich eine Angabe, frag genau danach — ohne „soll ich“."). Bleibt die
+  KI dabei, geht die Antwort ohne Warnung raus — Zögern ist keine
+  Unwahrheit (`WEICH`).
+
+**Falschtreffer, gemessen 10.10.2026** (`scripts/ehrlichkeit_messen.py`
+zählt jetzt „Erlaubnis-Fragen (Korrektur n)"): gespeicherte Gespräche 31
+Antworten → 2 Erlaubnis-Fragen, 0 Korrekturen; Prüfstand-Durchgänge 08.–10.10.
+(67 Antworten) → 4 Erlaubnis-Fragen, 3 Korrekturen. Selbst beurteilt: alle 3
+Korrekturen echte Fälle (Sasha fragte nach Ferien/Frist, die KI bot die
+Suche an, statt zu suchen), **0 Falschtreffer in 98 Antworten**. Die beiden
+„ruhigen" in den Gesprächen: einmal lief schon ein Lesewerkzeug, einmal
+wollte Sasha nichts ändern. Stichprobe klein — nachmessen.
+
 ## Quellen-Zeile — die Adresse schreibt Python (seit 2026-10-10)
 
 Prüfstand 10.10., f08: Zeiten richtig, aber die Adresse der Seite fehlte im

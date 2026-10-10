@@ -245,31 +245,15 @@ class _Schritt:
         self.schreibt, self.status = schreibt, status
 
 
-def test_fragt_statt_tut_erkennt_erlaubnisfrage():
-    assert zp.fragt_statt_tut(
-        "der zahnarzt am dienstag ist jetzt erst um 16:30",
-        "Ich ändere den Termin auf 16:30. Soll ich das jetzt durchführen?")
-    assert zp.fragt_statt_tut(
-        "parkour am mittwoch ist ab jetzt um halb sieben",
-        "Sag kurz Bescheid — dann mach ich's.")
-
-
-def test_echte_rueckfrage_und_plaudern_bleiben():
-    # Angabe fehlt: die Frage nach dem Tag ist keine Erlaubnis-Frage.
-    assert not zp.fragt_statt_tut(
-        "trag mir noch ne extra fahrstunde nächste woche ein",
-        "An welchem Tag und um wie viel Uhr?")
-    # Sasha will nichts ändern.
-    assert not zp.fragt_statt_tut(
-        "wie war dein tag", "Soll ich dir was erzählen?")
-
-
-def test_nachfrage_pruefer_eine_runde_dann_ruhe():
+def test_erlaubnisfrage_korrigiert_nur_noch_der_allgemeine_pruefer():
+    """Seit 2026-10-10 prüft „soll ich …?" statt tun der Prüfer der Schiene
+    für alle Modelle (tests/test_frag_nicht_tu.py). Der qwen-Zusatz darf es
+    nicht ein zweites Mal korrigieren."""
+    assert not hasattr(zp, "ERLAUBNIS") and not hasattr(zp, "fragt_statt_tut")
     b = _BasisPruefer()
     p = zp.ZusatzPruefer(b, "verschieb den zahnarzt auf 16:30")
-    erst = p.nach_antwort("Soll ich das so ändern?", letzte_runde=False)
-    assert erst == nutzer_angaben.einsetzen(zp.ERLAUBNIS) and b.korrekturen == 1
     assert p.nach_antwort("Soll ich das so ändern?", letzte_runde=False) is None
+    assert b.korrekturen == 0
     assert p.abschluss("x") == {"basis": True}
 
 

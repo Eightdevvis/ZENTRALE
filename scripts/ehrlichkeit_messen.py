@@ -41,7 +41,8 @@ def _schritt(w):
 
 
 def zuege_gespraeche(ordner):
-    """-> [(antwort, protokoll, bekannt_text, frueher)] je Antwort der KI."""
+    """-> [(antwort, protokoll, bekannt_text, frueher, nutzer)] je Antwort der KI
+    (nutzer: Sashas Nachricht davor — für „frag nicht, tu" und „Aufschub")."""
     for kopf in sorted(glob.glob(os.path.join(ordner, "*", "kopf.json"))):
         zeilen = []
         for p in glob.glob(os.path.join(os.path.dirname(kopf), "*.jsonl")):
@@ -52,14 +53,16 @@ def zuege_gespraeche(ordner):
                     except ValueError:
                         pass
         zeilen.sort(key=lambda e: e.get("ts") or "")
-        bisher, frueher = [], []
+        bisher, frueher, nutzer = [], [], ""
         for e in zeilen:
             if e.get("art") != "nachricht":
                 continue
             if e.get("rolle") == "assistant":
                 prot = [_schritt(w) for w in e.get("werkzeuge") or []]
-                yield e.get("text") or "", prot, "\n".join(bisher), list(frueher)
+                yield e.get("text") or "", prot, "\n".join(bisher), list(frueher), nutzer
                 frueher.extend(prot)
+            else:
+                nutzer = e.get("text") or ""
             bisher.append(e.get("text") or "")
 
 
@@ -80,15 +83,27 @@ def zuege_pruefstand(ordner):
                 if antwort and schluessel not in gesehen:
                     gesehen.add(schluessel)
                     yield (antwort, prot, "\n".join(bisher + [z.get("kontext") or ""]),
-                           list(frueher))
+                           list(frueher), z.get("sagt") or "")
                 frueher.extend(prot)
                 bisher.append(antwort)
 
 
 def messen(zuege, zeigen=False, name=""):
     n = taten = taten_offen = zusagen = kenn = kenn_offen = nicht_da = nicht_da_offen = 0
-    for antwort, prot, bekannt, frueher in zuege:
+    fragen = fragen_befund = 0
+    for antwort, prot, bekannt, frueher, nutzer in zuege:
         n += 1
+        # „Frag nicht, tu" (2026-10-10): jede Erlaubnis-Frage am Ende, und
+        # wie viele davon der Prüfer korrigieren würde (Sasha wollte es,
+        # kein passendes Werkzeug lief).
+        frage = erkennen.erlaubnis_frage(antwort)
+        if frage:
+            fragen += 1
+            befund = ehrlichkeit.erlaubnis_befund(antwort, prot, nutzer)
+            fragen_befund += befund is not None
+            if zeigen:
+                print(f"  FRAGE {'KORREKTUR' if befund else 'ruhig    '} {frage.aktion} | "
+                      f"{frage.satz} || Sasha: {' '.join(nutzer.split())[:120]}")
         for t in erkennen.taten(antwort):
             taten += 1
             ok = ehrlichkeit.tat_belegt(t, prot, frueher)
@@ -118,7 +133,8 @@ def messen(zuege, zeigen=False, name=""):
                     print(f"  KENNUNG unbekannt {x['kennung']}")
     print(f"{name}: {n} Antworten · Erledigt-Sätze {taten} (davon ohne Beleg {taten_offen}) · "
           f"Zusagen {zusagen} · Kennungen {kenn} (unbekannt {kenn_offen}) · "
-          f"Nicht-da-Sätze {nicht_da} (ohne vollständige Suche {nicht_da_offen})")
+          f"Nicht-da-Sätze {nicht_da} (ohne vollständige Suche {nicht_da_offen}) · "
+          f"Erlaubnis-Fragen {fragen} (Korrektur {fragen_befund})")
 
 
 def main():

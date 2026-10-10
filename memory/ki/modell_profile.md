@@ -57,8 +57,9 @@ der Schiene.
    „routinen" und fand nichts); `edit_calendar_*` mit „Ende mitschieben" und
    „von/bis nur, wenn sich der Zeitraum ändert".
 3. **Zusatz-Prüfer** (Python, je Fehlerart höchstens eine Korrekturrunde,
-   nur wenn der Prüfer der Schiene nichts hat): *Erlaubnis statt Tat* („soll
-   ich …?" auf einen klaren Auftrag, nichts geschrieben), *Aufruf als Text*
+   nur wenn der Prüfer der Schiene nichts hat): ~~*Erlaubnis statt Tat*~~
+   (seit 2026-10-10 im Prüfer der Schiene für ALLE Modelle,
+   `ehrlichkeit.erlaubnis_befund` — hier entfernt, sonst doppelt), *Aufruf als Text*
    (`read_calendar(zeitraum=…)` als Antwort), *nur Stichwort gesucht* („gibt
    es nicht" nach leerer `suche`), *Tat ohne Werkzeug* („ist gelöscht",
    „Alles korrigiert" ohne schreibendes Werkzeug — strenger als der

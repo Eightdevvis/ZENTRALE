@@ -10,12 +10,13 @@
 # ändere den Termin auf 16:30–17:15. Soll ich das jetzt durchführen?".
 # Welcher Fall es traf, war Zufall: eine Bitte im Prompt ist eine Bitte.
 #
-# Drei Prüfungen, jede höchstens EINMAL je Zug, und nur, wenn der Prüfer der
+# Vier Prüfungen, jede höchstens EINMAL je Zug, und nur, wenn der Prüfer der
 # Schiene selbst nichts zu sagen hatte:
 #
-#   erlaubnis   Sasha wollte eine Änderung, die Antwort bittet um Erlaubnis
-#               („soll ich …?", „sag Bescheid, dann mach ich's"), und in
-#               diesem Zug wurde nichts geschrieben. (Runde 4)
+#   (erlaubnis  „soll ich …?" statt tun, Runde 4 — seit 2026-10-10 im
+#               allgemeinen Prüfer für ALLE Modelle, ehrlichkeit.
+#               erlaubnis_befund; hier entfernt, damit nicht doppelt
+#               korrigiert wird.)
 #   als_text    Die Antwort IST ein Werkzeug-Aufruf als Text
 #               („read_calendar(zeitraum=naechste_woche)") — qwen schreibt
 #               den Aufruf manchmal hin, statt ihn zu machen. (Runde 7)
@@ -49,12 +50,6 @@ _WILL = re.compile(
     r"umleg\w*|fällt|faellt|ab jetzt|ist jetzt|sind jetzt|soll(en)?|mach\w*|"
     r"ok|okay|ja|jo|passt|genau|bitte|gerne?)\b")
 
-# Die Antwort bittet um Erlaubnis, statt zu handeln.
-_FRAGT_ERLAUBNIS = re.compile(
-    r"(soll ich|möchtest du,? dass ich|willst du,? dass ich|darf ich|sollen wir|"
-    r"jetzt durchführen|soll das so)[^?]{0,240}\?|"
-    r"sag (kurz |einfach |mir )?bescheid[^.?!]{0,40}(dann|und) (mach|trag|änder|pass|leg)")
-
 # Ein Werkzeug-Aufruf als Text: name(…) und sonst (fast) nichts.
 _AUFRUF_TEXT = re.compile(r"^\W*`?([a-z_]{4,})\s*\((.{0,400})\)`?\W*$", re.S)
 
@@ -72,13 +67,6 @@ _NICHT_ODER_WENN = re.compile(
     r"\b(nicht|nichts|kein\w*|noch nicht|wenn|falls|sobald|soll|sollen|würde|"
     r"könnte|kann|möchtest|willst)\b")
 
-ERLAUBNIS = (
-    "[Prüfung] Du bittest {nutzer} um Erlaubnis für etwas, das {er} schon verlangt "
-    "hat, und hast in diesem Zug nichts geändert. Die Ja/Nein-Frage vor jeder "
-    "Änderung stellt ZENTRALE selbst, sobald du das Werkzeug rufst. Führ es "
-    "jetzt aus (vorher read_calendar, wenn dir die Kennung fehlt). Fehlt "
-    "wirklich eine Angabe (Tag, Uhrzeit, Ende einer Serie, welcher von zwei "
-    "Terminen), frag genau danach — ohne „soll ich“.")
 ALS_TEXT = (
     "[Prüfung] Deine Antwort ist ein Werkzeug-Aufruf als Text — {nutzer} sieht "
     "nur diese Zeile, ausgeführt wurde nichts. Ruf das Werkzeug wirklich auf "
@@ -130,11 +118,6 @@ def unbelegte_spannen(antwort: str, protokoll: list) -> list:
     return sorted(spannen(antwort) - belegt)
 
 
-def fragt_statt_tut(nutzer: str, antwort: str) -> bool:
-    return bool(_WILL.search((nutzer or "").casefold())
-                and _FRAGT_ERLAUBNIS.search((antwort or "").casefold()))
-
-
 def aufruf_als_text(antwort: str, werkzeuge: set) -> bool:
     m = _AUFRUF_TEXT.match((antwort or "").strip())
     return bool(m and m.group(1) in werkzeuge)
@@ -171,8 +154,6 @@ class ZusatzPruefer:
         if (not geschrieben and _WILL.search(self._nutzer.casefold())
                 and meldet_erledigt(text)):
             return "tat"
-        if not geschrieben and fragt_statt_tut(self._nutzer, text):
-            return "erlaubnis"
         if nur_stichwort_leer(text, protokoll):
             return "stichwort"
         if geschrieben and unbelegte_spannen(text, protokoll):
@@ -199,7 +180,7 @@ class ZusatzPruefer:
             pass
         import nutzer_angaben
         return nutzer_angaben.einsetzen(
-            {"erlaubnis": ERLAUBNIS, "als_text": ALS_TEXT, "stichwort": STICHWORT,
+            {"als_text": ALS_TEXT, "stichwort": STICHWORT,
              "tat": TAT, "zeit": zeit if art == "zeit" else ""}[art])
 
 

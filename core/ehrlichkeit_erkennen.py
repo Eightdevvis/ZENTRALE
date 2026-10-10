@@ -301,3 +301,146 @@ _ABLEHNUNG = re.compile(r"^\s*(nein|nee|ne|nö|lass (es|das|mal|gut sein)|"
 def lehnt_ab(nachricht: str) -> bool:
     """Sagt Sasha am Anfang seiner Nachricht nein / lass es?"""
     return bool(_ABLEHNUNG.search(str(nachricht or "").lower()))
+
+
+# ── Was Sasha will (2026-10-10) ─────────────────────────────────────────
+# Für „frag nicht, tu" und „Sicheres sofort": nur wenn Sasha etwas
+# beauftragt hat, darf der Prüfer Taten verlangen. Bewusst eng — ein
+# übersehener Auftrag kostet nichts, ein erfundener ließe die KI etwas tun,
+# das niemand wollte.
+
+def _klein(text) -> str:
+    return " ".join(str(text or "").lower().split())
+
+
+# „noch nix eintragen", „nicht löschen", „nur nachschauen" (wie qwen,
+# zusatzpruefer._VERNEINT): dann ist es kein Auftrag zu ändern.
+_NUR_SCHAUEN = re.compile(
+    r"\b(nicht|nix|nichts|kein\w*)\s+(\w+\s+){0,2}(ein)?(trag|lösch|loesch|änder|aender|"
+    r"verschieb)\w*|\bnur\s+(nach)?(schau|guck|seh|such|wissen)\w*")
+_IMPERATIV = re.compile(
+    r"\b(trag|lösch|lösche|loesch|verschieb|verschiebe|änder|ändere|aender|streich|"
+    r"notier|pausier|setz)\b|\bleg\b[^.?!]{0,40}\ban\b|\bmerk dir\b|"
+    r"\bschreib\b[^.?!]{0,40}\b(auf|ein|rein)\b")
+_AENDERUNG = re.compile(r"\bf(?:ä|ae)llt\b[^.?!]{0,60}\baus\b|\bab (jetzt|sofort)\b|"
+                        r"\b(ist|sind) jetzt\b|\bverschiebt sich\b")
+_BITTE = re.compile(r"\b(kannst|könntest|würdest) du\b[^?]{0,80}\b(eintragen|löschen|"
+                    r"ändern|verschieben|anlegen|notieren|streichen|pausieren|rausnehmen)\b")
+_JA = re.compile(r"^\W*(ja|jo|jup|jep|ok|okay|passt|genau|mach( das| es| mal)?|gerne?|"
+                 r"bitte|los|sure|klar|yes)\b")
+_WISSEN = re.compile(r"\?|\b(wann|wie|was|wo|wer|welche\w*|wieso|warum|weshalb|"
+                     r"weißt du|gibt es|gibt's|hast du)\b|"
+                     r"\b(such|schau|guck|find|check|lies|öffne|recherchier)\w*\b")
+
+
+def auftrag(nachricht: str) -> bool:
+    """Beauftragt Sasha eine Änderung? Imperativ („trag … ein", „lösch …"),
+    eine Änderung als Tatsache („fällt … aus", „ist ab jetzt …") oder eine
+    Bitte („kannst du … eintragen"). Nicht bei „nur nachschauen" / „noch nix
+    eintragen" und nicht, wenn er ablehnt."""
+    t = _klein(nachricht)
+    if not t or lehnt_ab(t) or _NUR_SCHAUEN.search(t):
+        return False
+    return bool(_IMPERATIV.search(t) or _AENDERUNG.search(t) or _BITTE.search(t))
+
+
+def zustimmung(nachricht: str) -> bool:
+    """Beginnt Sasha mit ja / ok / mach / sure …?"""
+    t = _klein(nachricht)
+    return bool(t and _JA.search(t)) and not lehnt_ab(t)
+
+
+def will_wissen(nachricht: str) -> bool:
+    """Fragt Sasha etwas oder schickt die KI nachsehen?"""
+    return bool(_WISSEN.search(_klein(nachricht)))
+
+
+# ── Erlaubnis-Frage statt Tat (2026-10-10, Prüfstand f09) ───────────────
+# „Soll ich im Netz nach der Frist suchen?" — statt web_search zu rufen.
+# Das Erlaubnis-Gate fragt Sasha ohnehin per Knopf, wo es nötig ist; eine
+# Frage im Text kostet ihn einen Zug und die KI vergisst danach oft, was sie
+# vorhatte. Vorher nur bei qwen (profil/modelle/zusatzpruefer.py), jetzt für
+# alle Modelle der gross-Schiene.
+#
+# Erkannt wird nur die LETZTE Satz einer Antwort, und nur in Erlaubnis-Form
+# („soll ich", „darf ich", „möchtest du, dass ich", „sag Bescheid, dann mach
+# ich's"). Keine Erlaubnis-Frage ist eine Wahl („… oder …?") — und bei
+# Änderungen eine Frage nach einer Angabe (Zahl, Wochentag, wann, welche).
+
+_ERLAUBNIS = re.compile(r"\b(soll ich|darf ich|sollen wir|"
+                        r"(möchtest|willst|magst) du,? dass ich)\b")
+_BESCHEID = re.compile(r"\bsag (kurz |einfach |mir |gern |gerne )?bescheid\b[^.?!]{0,40}"
+                       r"\b(dann|und) (mach|trag|änder|pass|leg|lösch|such|schau)")
+_WAHL = re.compile(r"\boder\b(?!\s*(nicht|lieber nicht)?\s*[?!.…]*\s*$)")
+_ANGABE = re.compile(r"\d|\b(wann|welch\w*|wie (viel|lange|spät)|wo|wohin|um wie viel)\b|"
+                     r"\b(" + _WOCHENTAG + r"|januar|februar|märz|april|mai|juni|juli|"
+                     r"august|september|oktober|november|dezember)\b")
+
+_NETZ_WORT = r"(im netz|im internet|online|im web|bei google|web)"
+_SUCHEN = r"(such|googl|recherchier|nachseh|nachschau|schau|guck)\w*"
+_SEITE_WORT = r"(seite|link|url|adresse|website|webseite|lsf|portal|browser)"
+_LADEN = (r"(öffn|lad|aufruf|aufrufen|abruf|les|lese|nachles|anschau|reinschau|nachseh|"
+          r"nachschau|schau|guck)\w*")
+# (aktion, muster, schreibend) — die erste passende gewinnt.
+_AKTIONEN = (
+    ("netz", re.compile(rf"\b{_SUCHEN}\b[^?]*\b{_NETZ_WORT}\b|\b{_NETZ_WORT}\b[^?]*\b{_SUCHEN}"),
+     False),
+    ("seite", re.compile(rf"\b{_LADEN}\b[^?]*\b{_SEITE_WORT}\b|\b{_SEITE_WORT}\b[^?]*\b{_LADEN}"),
+     False),
+    ("pause", re.compile(r"\b(pause|pausier\w*|ausfall|ausfallen)\b"), True),
+    ("eintragen", re.compile(r"\b(eintrag\w*|einträg\w*|anleg\w*|anlegen|hinzufüg\w*|"
+                             r"reinschreib\w*|einplan\w*|eintragen)\b"), True),
+    ("loeschen", re.compile(r"\b(lösch\w*|loesch\w*|entfern\w*|streich\w*|rausnehm\w*|"
+                            r"rausnimm\w*)\b"), True),
+    ("aendern", re.compile(r"\b(änder\w*|aender\w*|verschieb\w*|anpass\w*|korrigier\w*|"
+                           r"umstell\w*|verleg\w*|zusammenleg\w*|setzen)\b"), True),
+    ("notieren", re.compile(r"\b(notier\w*|festhalt\w*|festhalten|merk\w*|aufschreib\w*|"
+                            r"speicher\w*)\b"), True),
+    ("nachsehen", re.compile(r"\b(such\w*|nachseh\w*|nachschau\w*|nachguck\w*|schau\w*|"
+                             r"guck\w*|check\w*|prüf\w*|nachles\w*|raussuch\w*|"
+                             r"herausfind\w*|rausfind\w*)\b"), False),
+    ("tun", re.compile(r"\b(durchführ\w*|umsetz\w*|erledig\w*|mach\w*|ausführ\w*)\b"), True),
+)
+
+
+@dataclass
+class Frage:
+    satz: str
+    aktion: str          # netz, seite, nachsehen | pause, eintragen, loeschen, aendern, notieren, tun
+    schreibend: bool
+
+
+def aktion(satz: str) -> tuple:
+    """Welche Art Tat ein Satz meint. -> (aktion, schreibend) oder (None, False).
+    Ein Satz mit Notiz-Wörtern („in deine Notizen eintragen") ist notieren."""
+    k = _klein(satz)
+    for name, rx, schreibend in _AKTIONEN:
+        if rx.search(k):
+            if schreibend and name in ("eintragen", "aendern", "loeschen") \
+                    and "notiz" in bereiche(k) and "kalender" not in bereiche(k):
+                return "notieren", True
+            return name, schreibend
+    return None, False
+
+
+def erlaubnis_frage(antwort: str) -> Frage | None:
+    """Endet die Antwort damit, um Erlaubnis für eine Tat zu bitten, die ein
+    Werkzeug erledigen könnte? -> Frage oder None."""
+    alle = saetze(antwort)
+    if not alle:
+        return None
+    # Der letzte Satz — saetze() trennt nach einer Uhrzeit nicht („auf
+    # 16:30. Soll ich …?"), hier zählt aber nur die Frage selbst.
+    text = re.split(r"(?<=[.!?…])\s+(?=[A-ZÄÖÜ„\"])", alle[-1].text)[-1]
+    s = Satz(text, _klein(text), text.rstrip().endswith("?"))
+    k = s.klein
+    if not ((s.frage and _ERLAUBNIS.search(k)) or _BESCHEID.search(k)):
+        return None
+    if _WAHL.search(k):
+        return None
+    name, schreibend = aktion(k)
+    if name is None:
+        return None
+    if schreibend and _ANGABE.search(k):
+        return None
+    return Frage(s.text, name, schreibend)

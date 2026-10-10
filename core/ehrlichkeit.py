@@ -18,6 +18,11 @@
 #                  Python schreibt (Feld `warnungen`, nie im Text der KI).
 #                  Dazu die Erledigt-Zeile, die Python allein aus dem
 #                  Werkzeug-Protokoll schreibt (✓ geändert … · ✗ …).
+#   2c. Frag nicht: endet die Antwort mit „Soll ich im Netz suchen?" o. ä.,
+#                  obwohl Sasha gefragt/beauftragt hat und kein passendes
+#                  Werkzeug lief → EINE Korrekturrunde „ruf das Werkzeug, das
+#                  Gate fragt per Knopf" (seit 2026-10-10, Prüfstand f09;
+#                  vorher nur im qwen-Zusatzprüfer). Keine Warnung danach.
 #   3. Zusagen:    „trag ich gleich ein" wird als offener Punkt des Gesprächs
 #                  gespeichert (core/zusagen.py) und steht in jedem folgenden
 #                  Zug unsichtbar im Kontext-Umschlag, bis ein passendes
@@ -282,8 +287,68 @@ def suche_belegt(protokoll: list) -> bool:
     return False
 
 
+# ── Frag nicht, tu (2026-10-10) ─────────────────────────────────────────
+# Welche Werkzeuge eine Art Tat (ehrlichkeit_erkennen.aktion) erledigen, und
+# wie der Hinweis sie nennt. None: jedes Werkzeug passender Richtung (lesend
+# bzw. schreibend). Gilt für alle Modelle der gross-Schiene; vorher stand
+# die Erlaubnis-Frage nur im qwen-Zusatzprüfer.
+TATEN = {
+    "netz": ({"web_search", "fetch_url", "fetch_document", "browser_open", "browser_click"},
+             "web_search"),
+    "seite": ({"fetch_url", "fetch_document", "browser_open", "browser_click", "browser_read",
+               "browser_back", "browser_type"}, "fetch_url oder browser_open"),
+    "nachsehen": (None, "das passende Werkzeug (read_calendar, read_note, web_search …)"),
+    "pause": ({"add_calendar_pause"}, "add_calendar_pause"),
+    "eintragen": ({"add_calendar_entry", "add_calendar_routine", "add_calendar_pause"},
+                  "add_calendar_entry bzw. add_calendar_routine"),
+    "loeschen": ({"delete_calendar_entry", "edit_calendar_routine"},
+                 "delete_calendar_entry bzw. edit_calendar_routine"),
+    "aendern": ({"edit_calendar_entry", "edit_calendar_routine"},
+                "edit_calendar_entry bzw. edit_calendar_routine"),
+    "notieren": ({"write_note", "rewrite_note"}, "write_note"),
+    "tun": (None, "das passende Werkzeug"),
+}
+
+# Befunde, die höchstens EINE Korrekturrunde je Zug bekommen und nie als
+# Warnung bei Sasha landen: die Antwort lügt nicht, sie zögert nur. Bleibt
+# die KI nach dem Hinweis dabei, ist es vielleicht doch eine echte Rückfrage.
+WEICH = ("erlaubnis_frage", "aufschub")
+
+
+def tat_lief(art: str, schreibend: bool, protokoll: list) -> bool:
+    """Lief in diesem Zug schon ein Werkzeug für diese Art Tat? Lesend: jeder
+    Versuch zählt. Schreibend: ok, oder Sasha hat am Knopf abgelehnt."""
+    namen = TATEN.get(art, (None, ""))[0]
+    for s in protokoll:
+        if namen is not None and s.name not in namen:
+            continue
+        if not schreibend:
+            if namen is not None or not s.schreibt:
+                return True
+        elif s.schreibt and s.status in ("ok", "abgelehnt"):
+            return True
+    return False
+
+
+def erlaubnis_befund(antwort: str, protokoll: list, nutzer_text: str) -> dict | None:
+    """Bittet die Antwort im Text um Erlaubnis für etwas, das ein Werkzeug
+    tun könnte — obwohl Sasha es verlangt oder gefragt hat?"""
+    f = erkennen.erlaubnis_frage(antwort)
+    if f is None:
+        return None
+    if f.schreibend:
+        if not (erkennen.auftrag(nutzer_text) or erkennen.zustimmung(nutzer_text)):
+            return None
+    elif not (erkennen.will_wissen(nutzer_text) or erkennen.auftrag(nutzer_text)
+              or erkennen.zustimmung(nutzer_text)):
+        return None
+    if tat_lief(f.aktion, f.schreibend, protokoll):
+        return None
+    return {"art": "erlaubnis_frage", "satz": f.satz, "werkzeug": TATEN[f.aktion][1]}
+
+
 def befunde(antwort: str, protokoll: list, *, bekannt_text: str = "",
-            frueher: list = ()) -> list:
+            frueher: list = (), nutzer_text: str = "") -> list:
     """Was an einer Antwort nicht gedeckt ist. -> [{art, satz|kennung}]"""
     raus = []
     for tat in erkennen.taten(antwort):
@@ -300,6 +365,9 @@ def befunde(antwort: str, protokoll: list, *, bekannt_text: str = "",
         bekannt.update(erkennen.kennungen(s.text))
     for k in erkennen.unbekannte_kennungen(antwort, bekannt):
         raus.append({"art": "kennung", "kennung": "#" + k})
+    frage = erlaubnis_befund(antwort, protokoll, nutzer_text)
+    if frage:
+        raus.append(frage)
     return raus
 
 
@@ -334,6 +402,11 @@ def _befund_zeile(b: dict) -> str:
     if b["art"] == "kennung":
         return (f"- Die Kennung {b['kennung']} steht in keinem Werkzeug-Ergebnis "
                 f"und nirgends im Gespräch.")
+    if b["art"] == "erlaubnis_frage":
+        return (f"- Du fragst „{b['satz']}“ — frag nicht im Text um Erlaubnis: ruf "
+                f"{b.get('werkzeug') or 'das Werkzeug'} auf; das Programm fragt Sasha per "
+                f"Knopf, wenn nötig. Fehlt wirklich eine Angabe, frag genau danach — ohne "
+                f"„soll ich“.")
     return f"- Nicht belegt: {b.get('satz') or b.get('art')}"
 
 
@@ -389,6 +462,8 @@ def warnungen(befunde_: list, protokoll: list = ()) -> list:
     raus, kennungen = [], []
     for b in befunde_ or []:
         art = b.get("art")
+        if art in WEICH:           # Zögern ist keine Unwahrheit — keine Warnung
+            continue
         if art == "tat":
             wo = bereich_namen(b.get("bereiche"))
             folge = ("dafür wurde nichts geändert" if geschrieben
@@ -444,8 +519,10 @@ class Pruefer:
         die Antwort geht so raus (bestanden, nicht „an", Runden aufgebraucht,
         oder die letzte erlaubte Runde der Schleife)."""
         b = befunde(text, self.protokoll, bekannt_text=self.bekannt_text,
-                    frueher=self.frueher)
+                    frueher=self.frueher, nutzer_text=self.nutzer_text)
         self.befunde = b
+        # Weiche Befunde (Erlaubnis-Frage, Aufschub) nur EINE Runde je Zug.
+        b = [x for x in b if not (x["art"] in WEICH and x["art"] in self.gesehen)]
         if (not b or self.modus != AN or letzte_runde
                 or self.korrekturen >= self.runden):
             return None
