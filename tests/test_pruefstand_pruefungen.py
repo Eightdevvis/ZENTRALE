@@ -188,8 +188,10 @@ def _trocken(fall_id, aufrufe):
     werkzeug_register.erzeugte_einsetzen(True)
     marke = werkzeug_befund.schiene_setzen("gross")
     try:
+        import lists
         for name, args in aufrufe:
             k = {s.label: s.kennung for s in ki_kalender.stuecke()}
+            k.update({"liste:" + li["name"]: li["id"] for li in lists.read_lists()})
             args = {f: (k[w[1:]] if isinstance(w, str) and w.startswith("@") else w)
                     for f, w in args.items()}
             r = ki_werkzeuge._verteilen(name, args)
@@ -220,3 +222,16 @@ def test_f13_zu_viel_faellt_durch():
                               ("set_calendar_group", {"kennung": "@Lineare Algebra",
                                                       "kategorie": "uni"})])
     assert [x["was"] for x in falsch] == ["Lineare Algebra bleibt ohne Gruppe"]
+
+
+def test_f14_richtig_besteht():
+    assert _trocken("f14", [("add_calendar_entry", {
+        "day": "2026-10-13", "time": "10:00", "ende": "12:00", "kategorie": "keine",
+        "quelle_art": "liste", "quelle_id": "@liste:todo"})]) == []
+
+
+def test_f14_ohne_quelle_faellt_durch():
+    falsch = _trocken("f14", [("add_calendar_entry", {
+        "day": "2026-10-13", "label": "todo", "time": "10:00", "ende": "12:00",
+        "kategorie": "keine"})])
+    assert [x["was"] for x in falsch] == ["Der Block nimmt seinen Titel aus der Liste"]

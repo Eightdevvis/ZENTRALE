@@ -68,6 +68,13 @@ def ausgangszustand(fall: dict) -> None:
         if not kalender.add_pause(_text(p["label"]), _text(p["von"]),
                                   _text(p["bis"]), p.get("grund")):
             raise faelle.FallFehler(f"Pause nicht anlegbar: {p}")
+    # Listen (2026-10-10, f14): Name → offene Punkte, in Reihenfolge.
+    if fall.get("listen"):
+        import lists
+        for name, punkte in fall["listen"].items():
+            liste = lists.create_list(_text(name))
+            for p in punkte or []:
+                lists.add_item(liste["id"], _text(p))
     for name, inhalt in (fall.get("gedaechtnis") or {}).items():
         bereich, _, datei = str(name).rpartition("/")
         with open(gedaechtnis._pfad(bereich, datei), "w", encoding="utf-8") as f:

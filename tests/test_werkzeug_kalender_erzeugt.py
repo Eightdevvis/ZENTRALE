@@ -282,8 +282,9 @@ def test_aus_heisst_die_alten_werkzeuge():
     add = werkzeug_register.eintrag("add_calendar_entry")
     assert add.erzeugt == "kalender" and "kategorie" in add.parameter_auf("gross")["required"]
     namen = [t["function"]["name"] for t in werkzeug_register.schema("gross")]
-    assert namen[-5:] == ["set_calendar_phase", "edit_calendar_phase", "delete_calendar_phase",
-                          "set_calendar_group", "set_calendar_layer"]
+    assert namen[-8:] == ["set_calendar_phase", "edit_calendar_phase", "delete_calendar_phase",
+                          "set_calendar_group", "set_calendar_layer", "read_calendar_sources",
+                          "set_calendar_source", "clear_calendar_source"]
 
 
 def test_klein_bekommt_nichts_neues():
@@ -314,3 +315,59 @@ def test_qwen_zuschnitt():
     assert "kategorie" in add["parameters"]["required"]
     assert tools["set_calendar_phase"]["function"]["description"].startswith(
         "Trägt eine Phase des Tagesrhythmus ein (z.B. Schlaf")
+
+
+# ── Titel aus Liste/Projekt (Kern kalender_quelle, 2026-10-10) ─────────
+
+@pytest.fixture
+def todo():
+    import lists
+    liste = lists.create_list("todo")
+    lists.add_item(liste["id"], "Steuern planen")
+    lists.add_item(liste["id"], "Bad putzen")
+    return liste["id"]
+
+
+def test_quellen_lesen_zeigt_ids(todo):
+    text = tun("read_calendar_sources")
+    assert f"quelle_art=liste quelle_id={todo}: todo — oben: Steuern planen" in text
+
+
+def test_block_fuer_die_todo_liste(todo):
+    """Prüfstand f14: „blocke mir morgen 2 Stunden für meine todo liste"."""
+    morgen = (HEUTE + timedelta(days=1)).isoformat()
+    r = tun("add_calendar_entry", day=morgen, time="10:00", ende="12:00", kategorie="keine",
+            quelle_art="liste", quelle_id=todo)
+    assert r.status == "ok", r
+    assert "„todo“" in r and "EINGETRAGEN (#t" in r
+    assert "(aus Liste: todo, jetzt: „Steuern planen“)" in r
+    text = tun("read_calendar", start_date=morgen, end_date=morgen)
+    assert "Steuern planen (aus Liste: todo)" in text
+
+
+@pytest.mark.parametrize("args, code", [
+    ({"quelle_art": "liste", "quelle_id": "gibtsnicht"}, "K-QUELLE-UNBEKANNT"),
+    ({"quelle_art": "liste"}, "K-QUELLE-UNGUELTIG"),
+    ({"quelle_art": "ordner", "quelle_id": "x"}, "K-QUELLE-ART-UNBEKANNT"),
+])
+def test_quelle_abbruch_schreibt_nichts(todo, args, code):
+    vorher = _stand()
+    r = tun("add_calendar_entry", day=MO.isoformat(), kategorie="keine", **args)
+    assert r.code == code, r
+    assert _stand() == vorher
+
+
+def test_quelle_setzen_und_loesen(todo):
+    r = tun("add_calendar_entry", day=MO.isoformat(), label="Lernen", time="10:00",
+            kategorie="keine")
+    k = kennung(r, "t")
+    r = tun("set_calendar_source", kennung=k, quelle_art="liste", quelle_id=todo)
+    assert r.status == "ok" and "jetzt: „Steuern planen“" in r, r
+    r = tun("clear_calendar_source", kennung=k, titel_uebernehmen=True)
+    assert r.status == "ok" and "ohne Quelle" in r, r
+    assert [e["label"] for e in _tag(MO)] == ["Steuern planen"]
+    r = tun("clear_calendar_source", kennung=k)
+    assert r.code == "K-OHNE-QUELLE", r
+    p = _schlaf()
+    r = tun("set_calendar_source", kennung=p, quelle_art="liste", quelle_id=todo)
+    assert r.code == "K-IST-PHASE", r

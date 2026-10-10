@@ -29,6 +29,7 @@
 
 import kalender_kategorie
 import kalender_kennung
+import kalender_quelle
 import kalender_rhythmus
 import ki_kalender_adapter
 import werkzeug_erzeuger
@@ -61,6 +62,12 @@ _GRUPPE = {
 }
 _GRUPPE_NAME = _s("Nur bei kategorie 'custom': der eigene Name der Gruppe.",
                   wort="Gruppenname", schwach=False)
+_QUELLE_ART = {"type": "string", "enum": list(kalender_quelle.ARTEN),
+               "description": ("Optional: der Titel kommt live aus einer Liste ('liste') oder "
+                               "einem Projekt ('projekt') — angezeigt wird ihr oberster offener "
+                               "Punkt. Mit quelle_id; die Auswahl liefert read_calendar_sources."),
+               X: {"wort": "aus", "ungueltig": "QUELLE-ART-UNBEKANNT"}}
+_QUELLE_ID = _s("id aus read_calendar_sources (nie raten).", wort="Quelle")
 _ENDE = _s("Ende HH:MM (24h), wenn bekannt.")
 _ORT = _s("Ort, wenn bekannt.")
 _ZEITRAUM_VON = _s(f"{_DATUM}: erster Tag der Serie (z. B. Semesteranfang).", fehlt="ZEITRAUM-FEHLT")
@@ -95,12 +102,13 @@ AKTIONEN = [
             "layer": _s("Ebene: 'termine' (Standard, fest zugesagt) oder 'uncommitted' "
                         "(vielleicht).", schwach=False),
             "day": _s(_DATUM),
-            "label": _s("Kurzer Titel, ohne Ort", fehlt="TITEL-LEER"),
+            "label": _s("Kurzer Titel, ohne Ort (mit quelle: Rückfall-Titel, darf fehlen)"),
             "time": _s("Optional HH:MM (24h). Weglassen wenn ganztags."),
             "ende": _ENDE, "ort": _ORT,
             "kategorie": _GRUPPE, "kategorie_name": _GRUPPE_NAME,
+            "quelle_art": _QUELLE_ART, "quelle_id": _QUELLE_ID,
         },
-        pflicht=("day", "label", "kategorie"),
+        pflicht=("day", "kategorie"),
         art="anlegen", alltag="termine eintragen", worte=("Termin eingetragen", "Termin eintragen"),
         immer_erlaubbar=True,
         beweis="liest den Termin per Kennung nach: Tag, Zeit, Ende, Ort, Gruppe",
@@ -112,14 +120,15 @@ AKTIONEN = [
         "Uhrzeit, wird keins angenommen — frag nach, statt eins zu nennen.",
         {
             "layer": _s("Ebene, im Zweifel weglassen (termine).", schwach=False),
-            "label": _s("Kurzer Titel, ohne Ort", fehlt="TITEL-LEER"),
+            "label": _s("Kurzer Titel, ohne Ort (mit quelle: Rückfall-Titel, darf fehlen)"),
             "rrule": _RRULE,
             "time": _s("Optional HH:MM (24h)"),
             "ende": _ENDE, "ort": _ORT,
             "von": _ZEITRAUM_VON, "bis": _ZEITRAUM_BIS,
             "kategorie": _GRUPPE, "kategorie_name": _GRUPPE_NAME,
+            "quelle_art": _QUELLE_ART, "quelle_id": _QUELLE_ID,
         },
-        pflicht=("label", "rrule", "von", "bis", "kategorie"),
+        pflicht=("rrule", "von", "bis", "kategorie"),
         art="anlegen", alltag="routinen eintragen",
         worte=("Routine eingetragen", "Routine eintragen"), immer_erlaubbar=True,
         beweis="liest die Routine per Kennung nach, mit ihrem nächsten Termin",
@@ -274,6 +283,37 @@ AKTIONEN = [
         pflicht=("kennung", "ebene"),
         art="aendern", alltag="termine fest/vielleicht setzen", frage="umlegen",
         worte=("Ebene gewechselt", "Ebene wechseln"),
+    ),
+    # ── Titel aus Liste/Projekt (2026-10-10, Kern: kalender_quelle) ──
+    _aktion(
+        "read_calendar_sources",
+        "Listen und Projekte, aus denen ein Termin seinen Titel nehmen kann "
+        "(quelle_art, quelle_id).",
+        {}, art="lesen",
+    ),
+    _aktion(
+        "set_calendar_source",
+        "Gibt EINEM Eintrag per kennung eine Quelle: sein Titel ist dann live der oberste "
+        "offene Punkt der Liste/des Projekts.",
+        {"kennung": _KENNUNG_PFLICHT,
+         "quelle_art": {**_QUELLE_ART, "description": "'liste' oder 'projekt'."},
+         "quelle_id": {**_QUELLE_ID, X: {"wort": "Quelle", "fehlt": "QUELLE-UNGUELTIG"}},
+         "label": _s("Optional Rückfall-Titel; weglassen = Name der Quelle.",
+                     wort="Rückfall-Titel", schwach=False)},
+        pflicht=("kennung", "quelle_art", "quelle_id"),
+        art="aendern", alltag="termintitel aus listen", frage="den Titel live nehmen lassen für",
+        worte=("Quelle gesetzt", "Quelle setzen"),
+    ),
+    _aktion(
+        "clear_calendar_source",
+        "Löst die Quelle EINES Eintrags per kennung.",
+        {"kennung": _KENNUNG_PFLICHT,
+         "titel_uebernehmen": {"type": "boolean",
+                               "description": "true = den jetzigen Punkt als festen Titel behalten.",
+                               X: {"wort": "Titel behalten"}}},
+        pflicht=("kennung",),
+        art="aendern", alltag="termintitel aus listen", frage="die Quelle lösen für",
+        worte=("Quelle gelöst", "Quelle lösen"),
     ),
 ]
 

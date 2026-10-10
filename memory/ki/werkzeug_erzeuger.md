@@ -124,6 +124,15 @@ Das Modell sieht reines JSON Schema — `x-zentrale` wird entfernt.
 | `set_calendar_phase`, `edit_calendar_phase`, `delete_calendar_phase` | | neu: Tagesrhythmus (Motiv, über Mitternacht, ab jetzt / ein Tag / Zeitraum) |
 | `set_calendar_group` | ändern | neu: Gruppe eines Eintrags |
 | `set_calendar_layer` | ändern | neu: fest (`termine`) ↔ vielleicht (`uncommitted`) |
+| `read_calendar_sources` | lesen | neu: wählbare Listen/Projekte mit `quelle_art`/`quelle_id` (Kern `kalender_quelle.auswahl`) — die KI erfindet keine id |
+| `set_calendar_source`, `clear_calendar_source` | ändern | neu: Titel live aus Liste/Projekt setzen bzw. lösen (`titel_uebernehmen`) |
+
+Anlegen (`add_calendar_entry`/`_routine`) nimmt optional `quelle_art` +
+`quelle_id` (flach statt eines Objekts: für schwache Modelle einfacher);
+`label` ist dann Rückfall-Titel und darf fehlen (dann Name der Quelle).
+Satz aus dem Nachgelesenen: „… EINGETRAGEN (#t…) (aus Liste: todo, jetzt:
+„Steuern planen“)." Codes `K-QUELLE-ART-UNBEKANNT`, `-UNGUELTIG`,
+`-UNBEKANNT`, `K-OHNE-QUELLE`; Phase mit Quelle → `K-IST-PHASE`.
 
 `read_calendar` bleibt handgeschrieben; die Zeilen zeigen seit 10.10. Motiv,
 Gruppe und „(bis Folgetag)": `23:00–07:00 (bis Folgetag) Schlaf [rhythmus ·
@@ -157,7 +166,7 @@ handgeschriebenen gross-Werkzeuge von vorher (ohne Phasen/Gruppe/Ebene).
 Standard `an`, weil alle bisherigen Kalender-Fälle (`tests/test_ki_kalender.py`,
 beide Speicher) mit den erzeugten Werkzeugen dieselben Codes, Sätze,
 Belege und Rücknahmen liefern. Mit echten Modellen ist es noch NICHT
-gemessen (f01k, f02, f03, f06, f10, f11, f12, f13 mit Haiku und qwen).
+gemessen (f01k, f02, f03, f06, f10, f11, f12, f13, f14 mit Haiku und qwen).
 
 ## Zuschnitt für schwache Modelle
 
@@ -165,5 +174,6 @@ gemessen (f01k, f02, f03, f06, f10, f11, f12, f13 mit Haiku und qwen).
 (`core/profil/modelle/qwen.py`) vor seinen eigenen Zusätzen angewandt:
 Felder mit `schwach: false` weg (`layer`, `kategorie_name`, seltene
 Phasen-Felder), `einfach` statt der Beschreibung. Dazu im qwen-Profil zwei
-Gruppen der Werkzeug-Auswahl: `rhythmus` (Schlaf, Bett, Phase …) und
-`gruppe` (Gruppe, Uni, vielleicht, fest …). Ungemessen.
+Gruppen der Werkzeug-Auswahl: `rhythmus` (Schlaf, Bett, Phase …),
+`gruppe` (Gruppe, Uni, vielleicht, fest …) und `quelle` (Liste, Todo,
+Projekt, blocken …). Ungemessen.

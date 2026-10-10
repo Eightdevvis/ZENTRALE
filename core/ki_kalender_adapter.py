@@ -23,6 +23,7 @@ from datetime import date
 import kalender
 import kalender_kategorie
 import kalender_kennung
+import kalender_quelle
 import kalender_regel
 import kalender_rhythmus
 import ki_kalender as kk
@@ -48,6 +49,38 @@ def _gruppe_verlangt(k: str, n) -> dict:
     if n:
         v["kategorie_name"] = n
     return v
+
+
+def _quelle(args: dict) -> tuple:
+    """(quelle, name) aus quelle_art/quelle_id — geprüft, ob es sie gibt; (None,
+    None) ohne. Nur eins von beiden → QUELLE-UNGUELTIG."""
+    art, qid = _text(args, "quelle_art"), _text(args, "quelle_id")
+    if not art and not qid:
+        return None, None
+    if not (art and qid):
+        raise Ablehnung("K-QUELLE-UNGUELTIG", "quelle_art und quelle_id gehören zusammen")
+    return kalender_quelle.pruefen({"art": art, "id": qid})
+
+
+def _titel(args: dict, name) -> str:
+    label = _text(args, "label") or (name or "")
+    if not label:
+        raise Ablehnung("K-TITEL-LEER", "label fehlt")
+    return label
+
+
+def quelle_satz(x: dict) -> str:
+    """' (aus Liste: todo, jetzt: „Steuern planen“)' — aus dem Nachgelesenen."""
+    if not x.get("quelle"):
+        return ""
+    wort = "Projekt" if x["quelle"].get("art") == kalender_quelle.PROJEKT else "Liste"
+    name = x.get("quelle_name") or x.get("label")
+    zustand = x.get("quelle_zustand")
+    if zustand == "fehlt":
+        return f" ({wort} {name} gibt es nicht mehr)"
+    if zustand == "leer":
+        return f" (aus {wort}: {name}, jetzt: alles erledigt)"
+    return f" (aus {wort}: {name}, jetzt: „{x.get('titel_live')}“)"
 
 
 def _ist_phase(s) -> bool:
@@ -178,7 +211,9 @@ def _was(name: str, args: dict) -> str:
         return f"Phase „{_text(args, 'label')}“"
     tun = {"edit_calendar_phase": "Phase {} ändern", "delete_calendar_phase": "Phase {} löschen",
            "set_calendar_group": "Gruppe für {} setzen",
-           "set_calendar_layer": "Ebene von {} wechseln"}.get(name, name + " {}")
+           "set_calendar_layer": "Ebene von {} wechseln",
+           "set_calendar_source": "Quelle für {} setzen",
+           "clear_calendar_source": "Quelle von {} lösen"}.get(name, name + " {}")
     return tun.format(f"„{_wer(args)}“")
 
 
@@ -186,7 +221,8 @@ def _was(name: str, args: dict) -> str:
 
 def termin_eintragen(args: dict) -> Ergebnis:
     layer = _text(args, "layer") or "termine"
-    label, ort = _text(args, "label"), _text(args, "ort")
+    q, name = _quelle(args)
+    label, ort = _titel(args, name), _text(args, "ort")
     tag = ka._tag("day", args.get("day"))
     t, e = ka._uhr("time", args.get("time")), ka._uhr("ende", args.get("ende"))
     ka._reihenfolge(t, e)
@@ -194,6 +230,8 @@ def termin_eintragen(args: dict) -> Ergebnis:
     vorher = ka._kennungen()
     extras = {k: v for k, v in (("ende", e), ("ort", ort)) if v}
     extras.update(_gruppe_verlangt(k_gruppe, n_gruppe))
+    if q:
+        extras["quelle"] = q
     if not kalender.add_entry(layer=layer, day=tag, label=label, time=t or None, **extras):
         raise Ablehnung("K-EBENE-UNBEKANNT", f"Ebene {layer!r} gibt es nicht")
     k = ka._neue_kennung(vorher, routine=False)
@@ -202,9 +240,10 @@ def termin_eintragen(args: dict) -> Ergebnis:
 
     def nachsatz(x):
         n = kk.termine_am(x.get("tag") or tag)
-        return f". Der Tag hat {n} {'Eintrag' if n == 1 else 'Einträge'}"
+        return f"{quelle_satz(x)}. Der Tag hat {n} {'Eintrag' if n == 1 else 'Einträge'}"
     return Ergebnis(kennung=k, verlangt={"label": label, "tag": tag, "time": t, "ende": e,
-                                         "ort": ort, **_gruppe_verlangt(k_gruppe, n_gruppe)},
+                                         "ort": ort, "quelle": q,
+                                         **_gruppe_verlangt(k_gruppe, n_gruppe)},
                     nachsatz=nachsatz, zusatz=ka._hinweise)
 
 
@@ -254,7 +293,8 @@ def termin_loeschen(args: dict) -> Ergebnis:
 # ── Routinen ───────────────────────────────────────────────────────────
 
 def routine_eintragen(args: dict) -> Ergebnis:
-    layer, label = ka._layer(args), _text(args, "label")
+    q, name = _quelle(args)
+    layer, label = ka._layer(args), _titel(args, name)
     rrule, ort = _text(args, "rrule"), _text(args, "ort")
     t, e = ka._uhr("time", args.get("time")), ka._uhr("ende", args.get("ende"))
     ka._reihenfolge(t, e)
@@ -267,6 +307,8 @@ def routine_eintragen(args: dict) -> Ergebnis:
     vorher = ka._kennungen()
     extras = {k: v for k, v in (("ende", e), ("ort", ort), ("seit", von)) if v}
     extras.update(_gruppe_verlangt(k_gruppe, n_gruppe))
+    if q:
+        extras["quelle"] = q
     if not kalender.add_routine(layer=layer, label=label, rrule_str=regel, time=t or None,
                                 **extras):
         raise Ablehnung("K-EBENE-UNBEKANNT", f"Ebene {layer!r} gibt es nicht")
@@ -275,8 +317,8 @@ def routine_eintragen(args: dict) -> Ergebnis:
         raise Ablehnung("W-NICHT-GESPEICHERT", "nachgelesen steht die Routine nicht im Kalender")
     return Ergebnis(
         kennung=k, verlangt={"label": label, "rrule": regel, "time": t, "ende": e, "ort": ort,
-                             "seit": von, **_gruppe_verlangt(k_gruppe, n_gruppe)},
-        nachsatz=lambda x: f", {kk.naechstes(kk.stueck_von(k))}",
+                             "seit": von, "quelle": q, **_gruppe_verlangt(k_gruppe, n_gruppe)},
+        nachsatz=lambda x: f"{quelle_satz(x)}, {kk.naechstes(kk.stueck_von(k))}",
         zusatz=lambda x: _doppelt_hinweis(x, label))
 
 
@@ -578,6 +620,36 @@ def ebene_setzen(args: dict) -> Ergebnis:
                     nachsatz=f": jetzt {wie} ({args['ebene']})")
 
 
+# ── Titel aus Liste/Projekt ────────────────────────────────────────────
+
+def quellen_lesen(args: dict) -> Ergebnis:
+    a = kalender_quelle.auswahl()
+    zeilen = []
+    for wort, schl in (("Listen", "listen"), ("Projekte", "projekte")):
+        zeilen.append(f"{wort}:")
+        zeilen += [f"  quelle_art={x['art']} quelle_id={x['id']}: {x['name']} — oben: "
+                   f"{x['titel']}" + ("" if x["zustand"] == "ok" else f" ({x['zustand']})")
+                   for x in a.get(schl) or []] or ["  (keine)"]
+    return Ergebnis(text="\n".join(zeilen))
+
+
+def quelle_setzen(args: dict) -> Ergebnis:
+    s = _irgendein(args)
+    q, name = _quelle(args)
+    label = _text(args, "label") or None
+    kalender_kennung.quelle_setzen(s.uid, q["art"], q["id"], label=label)
+    return Ergebnis(kennung=s.uid, verlangt={"quelle": q, "label": label or name},
+                    vorher=_vorher(s), nachsatz=lambda x: quelle_satz(x))
+
+
+def quelle_loesen(args: dict) -> Ergebnis:
+    s = _irgendein(args)
+    kalender_kennung.quelle_loesen(s.uid, titel_uebernehmen=bool(args.get("titel_uebernehmen")))
+    return Ergebnis(kennung=s.uid, vorher=_vorher(s),
+                    pruefe=lambda x: ["die Quelle steht noch da"] if x.get("quelle") else [],
+                    nachsatz=": ohne Quelle")
+
+
 # ── Zurücknehmen (ganz oder gar nicht) ─────────────────────────────────
 
 def _wiederherstellen(k: str, vorher: dict) -> None:
@@ -590,6 +662,12 @@ def _wiederherstellen(k: str, vorher: dict) -> None:
             (alt.get("kategorie", kalender_kategorie.KEINE), alt.get("kategorie_name")):
         kalender_kennung.kategorie_setzen(k, alt.get("kategorie") or kalender_kategorie.KEINE,
                                           alt.get("kategorie_name"))
+    if (jetzt.get("quelle") or None) != (alt.get("quelle") or None):
+        if alt.get("quelle"):
+            kalender_kennung.quelle_setzen(k, alt["quelle"]["art"], alt["quelle"]["id"],
+                                           label=alt.get("label"))
+        else:
+            kalender_kennung.quelle_loesen(k)
     if vorher.get("tage"):
         _tage_zurueck(k, vorher)
         return
@@ -629,4 +707,7 @@ _AKTIONEN = {
     "delete_calendar_phase": phase_loeschen,
     "set_calendar_group": gruppe_setzen,
     "set_calendar_layer": ebene_setzen,
+    "read_calendar_sources": quellen_lesen,
+    "set_calendar_source": quelle_setzen,
+    "clear_calendar_source": quelle_loesen,
 }

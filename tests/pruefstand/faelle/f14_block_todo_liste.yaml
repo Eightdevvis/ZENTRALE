@@ -1,0 +1,47 @@
+# Fall 14 — Zeit für eine Liste blocken (Titel live aus der Liste).
+#
+# Sasha, 10.10.2026: der Termin ist ein „variabler Container" — sein Titel
+# ist der oberste offene Punkt der Todo-Liste. Die KI muss die Liste über
+# read_calendar_sources finden (die id ist nicht zu raten; es gibt zwei
+# Listen) und den Termin mit quelle_art=liste, quelle_id=<todo> anlegen.
+# Sasha nennt zuerst keine Uhrzeit: nachfragen ist richtig, eine eigene
+# Uhrzeit wählen auch — im zweiten Zug sagt er „um 10", danach muss der
+# Block 10–12 stehen, genau einmal.
+
+id: f14_block_todo_liste
+titel: "„blocke mir morgen 2 Stunden für meine todo liste“ — Termin mit Quelle Liste todo"
+verdeckt: false
+herkunft: "Sashas Beispiel für Listen-Container im Kalender (10.10.2026)"
+jetzt: "2026-10-12T09:00"
+
+listen:
+  todo: ["Steuern planen", "Bad putzen"]
+  einkauf: ["Milch", "Brot"]
+
+kalender:
+  termine:
+    - {tag: 2026-10-13, label: Fahrschule, zeit: "19:00", ende: "20:00"}
+
+antworten:
+  erlaubnis: ja
+  knopf: null
+
+zuege:
+  - sagt: "blocke mir morgen 2 stunden für meine todo liste"
+  - sagt: "um 10 uhr"
+
+endzustand:
+  - was: Di 13.10. 10:00–12:00 ein Block aus der Liste todo
+    am: 2026-10-13
+    label: ""
+    findet_statt: true
+    anzahl: 2
+  - was: Der Block nimmt seinen Titel aus der Liste
+    am: 2026-10-13
+    label: todo
+    findet_statt: true
+    beginn: "10:00"
+    ende: "12:00"
+    quelle: liste
+  - was: Keine erfundenen Kennungen
+    antwort: {zug: alle, kennungen_belegt: true}

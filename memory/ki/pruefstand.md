@@ -179,6 +179,8 @@ kalender:
               kategorie: uni}]    # Gruppe optional (2026-10-10)
   phasen:   [{label: Schlaf, motiv: schlaf, zeit: "23:00", ende: "07:00", von: 2026-10-01}]
                                    # Tagesrhythmus (2026-10-10), Ende vor Beginn = Folgetag
+listen: {todo: ["Steuern planen", "Bad putzen"]}   # Listen des Falls (2026-10-10); im
+                                   # Prüfstand liegen Listen seitdem im Temp-Ordner, nie Sashas
   pausen:   [{label: …, von: …, bis: …, grund: …}]
 netz:                              # Attrappe; ohne Regel: keine Treffer / Seite nicht erreichbar
   suche:  [{wenn: ferien, treffer: [{titel: …, url: …, text: …}]}]
@@ -260,6 +262,7 @@ beim Laden auf, nicht nach bezahlten Zügen.
 | `f10_semester_zeitraum_behauptet` | qwen-Lügenfall vom 09.10. (Gespräch 20261009-150713-e03002): „trag sie alle nur von Semesterbeginn bis Ende ein" — Routinen mit Zeitraum ODER unverändert ohne Erledigt-Behauptung; kein erfundenes Ende (18.12.), keine erfundenen Kennungen |
 | `f11_routine_mit_zeitraum` | Analysis I Mo+Mi 10–12, 12.10.2026–12.02.2027: Routine mit Anfang und Ende |
 | `f12_schlaf_drei_tage` | Schlaf (Phase 23:00–07:00) die nächsten 3 Tage ab 2 Uhr: nur diese Tage, Phase bleibt (2026-10-10, erzeugte Werkzeuge; ungefahren) |
+| `f14_block_todo_liste` | „blocke mir morgen 2 Stunden für meine todo liste" (+ „um 10 uhr"): Termin 10–12 mit Titel live aus der Liste todo (2026-10-10; ungefahren) |
 | `f13_gruppe_uni` | „Analysis I gehört zur Uni-Gruppe": nur Analysis bekommt die Gruppe (2026-10-10; ungefahren) |
 | `verdeckt/f04_…`, `verdeckt/f07_…` | zurückgehalten (s. u.) |
 

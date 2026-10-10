@@ -176,6 +176,19 @@ CODES = {
     "K-KEIN-TREFFER": (
         "Kein Eintrag passt zu der Angabe.",
         "read_calendar mit suche aufrufen und die Kennung nehmen."),
+    # Titel aus Liste/Projekt (Kern kalender_quelle, 2026-10-10)
+    "K-QUELLE-ART-UNBEKANNT": (
+        "Diese Art von Quelle gibt es nicht (nur liste oder projekt).",
+        "quelle_art 'liste' oder 'projekt' nehmen."),
+    "K-QUELLE-UNGUELTIG": (
+        "Die Quelle ist unvollständig oder die id hat die falsche Form.",
+        "quelle_art und quelle_id zusammen angeben, die id aus read_calendar_sources."),
+    "K-QUELLE-UNBEKANNT": (
+        "Diese Liste bzw. dieses Projekt gibt es nicht.",
+        "read_calendar_sources aufrufen und eine id von dort nehmen — nie raten."),
+    "K-OHNE-QUELLE": (
+        "Der Eintrag hat keine Quelle, die man lösen könnte.",
+        "Nichts zu tun; mit read_calendar nachsehen."),
     # Erzeugte Werkzeuge (2026-10-10, core/werkzeug_erzeuger/): ein Wert passt
     # nicht zum Schema (Typ, Auswahl). Die Vorsilbe ist die der Quelle.
     "K-WERT-UNGUELTIG": (

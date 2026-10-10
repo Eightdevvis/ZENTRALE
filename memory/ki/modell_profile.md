@@ -191,4 +191,5 @@ bringen ihren Zuschnitt für schwache Modelle mit; `qwen.werkzeuge` wendet
 ihn vor den eigenen Zusätzen an (Felder `layer`, `kategorie_name` und
 seltene Phasen-Felder weg, kürzere Texte). Die neuen Werkzeuge stehen in
 zwei Gruppen der Auswahl: `rhythmus` (Schlaf, Bett, Phase …) und `gruppe`
-(Gruppe, Uni, vielleicht, fest …).
+(Gruppe, Uni, vielleicht, fest …), dazu `quelle` (Liste, Todo, Projekt …)
+für Termine mit Titel aus einer Liste.

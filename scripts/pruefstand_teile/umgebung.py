@@ -110,6 +110,14 @@ def umlenken(tmp: str):
     setzen(gedaechtnis, "_DIR", os.path.join(tmp, "gedaechtnis"))
     setzen(gespraeche, "_DIR", os.path.join(tmp, "gespraeche"))
     setzen(transkript, "_DIR", os.path.join(tmp, "ai_transcripts"))
+    # Listen (2026-10-10): Termine können ihren Titel aus einer Liste nehmen
+    # (kalender_quelle) — die KI liest und der Fall legt Listen an. Nie Sashas.
+    import lists
+    listen = os.path.join(tmp, "listen")
+    os.makedirs(listen, exist_ok=True)
+    setzen(lists, "_DATA_DIR", listen)
+    setzen(lists, "_REGISTRY", os.path.join(listen, "lists.json"))
+    setzen(lists, "_FEATURES", os.path.join(listen, "features.json"))
     # Nach der Antwort: Transkript/Graph merken. Für die Prüfung belanglos,
     # und mit eingeschaltetem Graphen kostete es pro Zug einen Aufruf.
     setzen(consolidation, "zug_vormerken", lambda *a, **k: None)

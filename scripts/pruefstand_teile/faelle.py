@@ -18,7 +18,7 @@ FAELLE_DIR = os.path.join(WURZEL, "tests", "pruefstand", "faelle")
 
 _ERLAUBT = {"id", "titel", "verdeckt", "herkunft", "jetzt", "geschaetzt",
             "worum", "einstellungen", "kalender", "gedaechtnis", "netz",
-            "antworten", "zuege", "endzustand", "browser"}
+            "antworten", "zuege", "endzustand", "browser", "listen"}
 
 
 class FallFehler(ValueError):

@@ -17,6 +17,7 @@
 #     ende: "19:00"           # fehlt das Ende im Kalender, ist das ein Fehler
 #     ort: geigenschule       # Teilwort des ORT-Felds (nicht des Titels)
 #     titel_ohne: geigenschule  # darf NICHT im Titel stehen (Ort im Namen versteckt)
+#     quelle: liste           # Titel kommt aus einer Liste bzw. einem Projekt (2026-10-10)
 #     anzahl: 0               # ohne findet_statt: Treffer überhaupt
 #
 #   - was: Nur eine Geigen-Regel
@@ -117,6 +118,8 @@ def _tag_pruefen(p: dict, tag: date) -> str | None:
             if p.get("ende") and e.get("ende") != _uhr(p["ende"]):
                 ist = e.get("ende") or "kein Ende eingetragen (zählt als 60 min)"
                 return f"Ende {ist} statt {_uhr(p['ende'])} — {wo}"
+            if p.get("quelle") and (e.get("quelle") or {}).get("art") != p["quelle"]:
+                return f"Quelle {e.get('quelle')!r} statt {p['quelle']} — {wo}"
             if p.get("titel_ohne") and str(p["titel_ohne"]).casefold() in str(e.get("label", "")).casefold():
                 return f"{p['titel_ohne']!r} steht im Titel {e.get('label')!r} — {wo}"
             if p.get("ort") and str(p["ort"]).casefold() not in str(e.get("ort") or "").casefold():

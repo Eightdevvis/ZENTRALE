@@ -180,6 +180,8 @@ _GRUPPEN = {
     "gruppe": (r"gruppe|kategorie|block|\buni\b|arbeit|schicht|vielleicht|"
                r"unverbindlich|\bfest\b|zugesagt|monatsansicht",
                ("set_calendar_group", "set_calendar_layer")),
+    "quelle": (r"liste|todo|to-do|projekt|aufgabe|blocke|block",
+               ("read_calendar_sources", "set_calendar_source", "clear_calendar_source")),
 }
 _IN_GRUPPE = {n for _, namen in _GRUPPEN.values() for n in namen}
 
