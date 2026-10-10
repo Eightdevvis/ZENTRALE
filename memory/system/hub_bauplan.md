@@ -337,3 +337,41 @@ jetzt immer. Nennt die Quelle keins, setzt der Hub seine neutrale Grenze
 `{w: 400, h: 400}` (`GROESSE_GRENZE`) ein — eine Oberfläche braucht dafür
 keine eigene Zahl. Die TUI holt `min`/`max` beim Druck auf `r` und lässt
 eine Kachel nicht kleiner als `min` ziehen.
+
+## KI-Werkzeuge aus dem Schema erzeugen (Sasha, 2026-10-10)
+
+Sasha: „wir wollen unseren agenten so fit machen, dass er auch mit anderen
+kalendern arbeiten könnte … kalender api gibt format für termin anlegen — ki
+harness wird aus den feldern GEBAUT — ki tool ist so strukturiert damit ki
+keine scheiße macht — auch schwächere ki kann mit fremden kalender/anderem
+programm arbeiten, weil unser programm die schnittstelle zum fremden programm
+so ergänzt, dass die ki damit arbeiten MUSS."
+
+Heute sind die KI-Werkzeuge je Bereich von Hand geschrieben
+(core/ki_kalender*.py, werkzeug_register.py). Ziel: sie werden ERZEUGT.
+
+```
+Quelle (Schema)  →  Adapter (Grundaktionen)  →  Werkzeug-Erzeuger (Harness)  →  KI
+JSON Schema /       lesen · anlegen · ändern    Felder/Pflicht/Enums aus Schema
+OpenAPI / MCP /     löschen · nachlesen(id)     + Gate · Nachlesen · ganz-oder-gar-nicht
+CalDAV / Kern                                   + Kennungen · Fehlercodes · Erledigt-Zeile
+                                                + Selbstauskunft · Auftrags-Abrechnung
+                                                + Zuschnitt je Modellprofil (schwach: weniger
+                                                  Felder, einfache Texte, erst nachsehen)
+```
+
+- **Quelle:** eine App oder ein fremdes Programm beschreibt seine Aktionen als
+  Schema (Standard statt Eigenformat: JSON Schema, OpenAPI 3.1, MCP-Server).
+- **Adapter:** dünn, je Quelle; übersetzt auf die Grundaktionen. Pflicht:
+  Nachlesen per Kennung (sonst kein Beleg) und Ablehnung mit Code statt
+  stiller Korrektur.
+- **Erzeuger:** baut die Werkzeug-Einträge (Name, Beschreibung, Parameter je
+  Schiene) und hängt die Schutzschichten an, die heute pro Werkzeug von Hand
+  stehen. Prompt-Cache: das erzeugte Schema ist pro Prozess fest.
+- **Prüfstein:** zuerst der eigene Kalender — erzeugte Werkzeuge müssen auf
+  dem Prüfstand mindestens so gut sein wie die handgeschriebenen (f01k, f02,
+  f03, f06, f10, f11). Danach Tagesphasen/Kategorien direkt so, dann ein
+  fremder Kalender (CalDAV/Google), später Mail.
+- **MCP:** Fremde MCP-Server lassen sich so anbinden — ZENTRALE nimmt deren
+  Werkzeug-Schemas und legt dieselben Schutzschichten darum; ein MCP-Server,
+  der kein Nachlesen kann, bekommt nur Lesen frei.
