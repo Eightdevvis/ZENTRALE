@@ -207,6 +207,33 @@ Runde (bei 0/48 Befunden in den alten Läufen: kaum). Nicht berührt:
 Behauptungen über die Welt (Ferien aus dem Vorwissen) — die fängt weiter nur
 Regel 2 und der Richter.
 
+## Quellen-Zeile — die Adresse schreibt Python (seit 2026-10-10)
+
+Prüfstand 10.10., f08: Zeiten richtig, aber die Adresse der Seite fehlte im
+Text („LSF, Seite Analysis I"). Sasha: *„besser wenn die adresse bei sowas
+einfach gar nich von der ki runtergezwungen wird, weil wir können die ja
+einfach durch code rausziehen lassen"*. Also wie die Erledigt-Zeile:
+`core/quellen.py` liest die Werkzeug-Ergebnisse des Zugs und baut daraus
+`[{titel, url, werkzeug}]` — **nur tatsächlich gelesene Seiten**:
+
+- Browser: die Seite, auf der die KI **stehen blieb** (letzte Seite einer
+  Klick-Kette, oder vor einem neuen `browser_open`/`browser_close`), dazu
+  jede mit `browser_read` gelesene. Seiten, von denen sie weiterklickte oder
+  zurückging, waren Durchgang (Startseite, Fakultät, Suchmaske) und stehen
+  nicht drin. Grenze: las sie auf einer Zwischenseite etwas und klickte dann
+  weiter, fehlt diese Seite.
+- `fetch_url` mit Status ok (Titel aus `<title>`, seit 10.10. als Zeile
+  „Titel: „…“" im Ergebnis), `fetch_document` nur per http(s)-Adresse.
+- **Nie** `web_search` (Treffer sind Hinweise), nie Fehlgeschlagenes.
+- Gleiche Adresse (ohne #…) einmal, höchstens 6.
+
+Feld `quellen` an der Antwort, SSE `{"quellen": […]}`, Eintrag `quellen` im
+Ablauf-Protokoll, TUI leise unter der Antwort („Quellen: „Analysis I“ –
+http://…"), nur gross. Prompt entschärft: Browser-Ergebnis („Gelesen auf … —
+die Adresse zeigt ZENTRALE selbst als Quelle an"), Skill `browser`, qwen-
+Arbeitsweise Regel 7/8. Der Skill liegt bei Sasha schon unter
+`data/gedaechtnis/skills/browser/` — die Vorlage ersetzt ihn dort nicht.
+
 ## Zwei Ausgänge und Fehlercodes (09.10. nachgezogen)
 
 Sasha: *„das programm macht etwas richtig ODER bricht KONTROLLIERT KOMPLETT

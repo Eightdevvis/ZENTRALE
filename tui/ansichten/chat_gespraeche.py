@@ -36,6 +36,16 @@ def pruefung_eintraege(erledigt, offen, log=None):
     return raus
 
 
+def quellen_eintraege(quellen):
+    """Die gelesenen Seiten eines Zugs als dezente Zeile unter der Antwort
+    (Feld `quellen`, core/quellen.py, 2026-10-10): „Quellen: „Titel“ –
+    Adresse · …". Python zieht sie aus den Werkzeug-Ergebnissen, die KI
+    schreibt keine Adressen ab. -> [("quellen", text)] oder []."""
+    teile = ["„%s“ – %s" % (q.get("titel") or q.get("url"), q.get("url"))
+             for q in quellen or [] if isinstance(q, dict) and q.get("url")]
+    return [("quellen", "Quellen: " + " · ".join(teile))] if teile else []
+
+
 def warn_eintraege(warnungen, wechsel=None):
     """Warnzeilen ÜBER einer Antwort (2026-10-09): ein Modellwechsel
     (Budget-Rückfall, Satz vom Backend) und was der Prüfer nach allen
@@ -80,6 +90,7 @@ def verlauf_aus(h):
             log.append(("ai", txt))
         if m.get("fehler"):        # abgebrochener Zug (2026-10-09): eigener Eintrag
             log.append(("abbruch", " ".join(str(m["fehler"]).split())))
+        log += quellen_eintraege(m.get("quellen"))
         log += pruefung_eintraege(m.get("erledigt"), m.get("offen"), log)
     return log
 

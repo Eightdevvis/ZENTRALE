@@ -38,6 +38,7 @@ import erlaubnis
 import ki_antwort
 import ki_browser      # nur: welche Browser-Ergebnisse eindampfen (2026-10-09)
 import kidebug
+import quellen
 import werkzeug_befund
 import werkzeug_register
 import zug_ablauf
@@ -101,12 +102,17 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
     Werkzeug-Ergebnis, prüft die fertige Antwort (eine Korrekturrunde, bevor
     Sasha sie sieht, über adapter.hinweis_anhaengen) und liefert am Ende das
     Ereignis {"ehrlichkeit": …} (Erledigt-Zeile, Befunde, offene Zusagen).
+    Auf gross am Ende außerdem {"quellen": [{titel, url, werkzeug}]}, wenn
+    in diesem Zug Seiten gelesen wurden (core/quellen.py, 2026-10-10).
     """
     # Ablauf-Protokoll (core/zug_ablauf.py, 2026-10-09): nur mitschreiben,
     # was ohnehin passiert — Text zwischen Werkzeugen, Aufrufe mit Ergebnis,
     # Prüfung, Ende. Ohne offenes Protokoll (lokal, Takt) tut es nichts.
     grenze = ai_backends.runden_grenze(adapter.modell)
     seiten = []          # Browser-Ergebnisse dieses Zugs (_seiten_eindampfen)
+    # Alle Aufrufe des Zugs für die Quellen-Zeile — nur gross: klein bleibt,
+    # wie es gemessen ist, und der Tutor hat ein fremdes Werkzeug-Set.
+    gelesen = [] if (schiene == "gross" and not tutor_mode) else None
     for nr in range(grenze):
         if gestoppt(abbruch):
             zug_ablauf.gestoppt()
@@ -155,6 +161,7 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
                     continue
             yield from antwort(runde.text, tutor_mode=tutor_mode,
                                user_query=user_query, store=store)
+            yield from _quellen_melden(gelesen)
             schluss = pruefer.abschluss(runde.text) if pruefer is not None else None
             if schluss:
                 yield schluss
@@ -181,12 +188,15 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
             zug_ablauf.werkzeug_fertig(spur, text, ist_fehler)
             if pruefer is not None:
                 pruefer.werkzeug(name, args, text, ist_fehler)
+            if gelesen is not None:
+                gelesen.append((_kanonisch(name), args, text, ist_fehler))
             ergebnisse.append((call_id, text, ist_fehler))
             if not tutor_mode:
                 seiten.append((call_id, _kanonisch(name), text))
         adapter.ergebnisse_anhaengen(ergebnisse)
         seiten = _seiten_eindampfen(adapter, seiten)
 
+    yield from _quellen_melden(gelesen)
     schluss = pruefer.abschluss(None) if pruefer is not None else None
     if schluss:
         # Gerade dann zählt die Erledigt-Zeile: was bis zur Grenze geschrieben
@@ -196,6 +206,15 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
                f"sie hat nicht zu Ende geantwortet.")
     zug_ablauf.fehler(meldung)
     yield fehler(meldung)
+
+
+def _quellen_melden(gelesen):
+    """Die gelesenen Seiten des Zugs als Ereignis {"quellen": […]} und
+    Eintrag im Ablauf-Protokoll — nichts, wenn keine gelesen wurde."""
+    liste = quellen.aus_schritten(gelesen) if gelesen else []
+    if liste:
+        zug_ablauf.quellen(liste)
+        yield {"quellen": liste}
 
 
 def _seiten_eindampfen(adapter, seiten: list) -> list:

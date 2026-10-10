@@ -237,7 +237,7 @@ def anhaengen(gid, rolle, text, *, denken=None, werkzeuge=None, anbieter=None,
               modell=None, abgebrochen=False, versteckt=False, knoten=None,
               anhaenge=None, dokumente=None, erledigt=None, pruefung=None,
               offen=None, ablauf=None, fehler=None, warnungen=None,
-              modell_wechsel=None) -> dict:
+              modell_wechsel=None, quellen=None) -> dict:
     """Eine Nachricht anhängen. -> das Ereignis (mit id und ts).
 
     anhaenge (Frage) / dokumente (Antwort): VERWEISE in die Ablage
@@ -283,6 +283,12 @@ def anhaengen(gid, rolle, text, *, denken=None, werkzeuge=None, anbieter=None,
         e["warnungen"] = [str(x) for x in warnungen]
     if modell_wechsel:
         e["modell_wechsel"] = dict(modell_wechsel)
+    # Die gelesenen Seiten des Zugs (2026-10-10, core/quellen.py): Python zieht
+    # sie aus den Werkzeug-Ergebnissen, die KI muss keine Adresse abschreiben.
+    if quellen:
+        e["quellen"] = [{"titel": str(q.get("titel") or ""), "url": str(q.get("url") or ""),
+                         "werkzeug": str(q.get("werkzeug") or "")}
+                        for q in quellen if isinstance(q, dict) and q.get("url")]
     # Ablauf-Protokoll des Zugs (2026-10-09, core/zug_ablauf.py): nur zum
     # Nachlesen; geht nie an die KI und nicht mit /api/chat/history raus
     # (dort nur ablauf_n), sondern über …/ablauf/<nachricht>.

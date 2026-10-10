@@ -64,6 +64,32 @@ def test_erfundene_kennung_faellt_auf_gesehene_nicht():
     assert endzustand.eine({"antwort": {"kennungen_belegt": True}}, erg) is None
 
 
+def test_quellen_zeile_statt_antworttext():
+    """f08 seit 2026-10-10: die Adresse steht in der Quellen-Zeile, die
+    Python schreibt — nicht mehr im Text der KI."""
+    erg = _erg("Analysis I: Mo 10–12, Do 8:30–10.")
+    erg["zuege"][0]["quellen"] = [{"titel": "Analysis I", "werkzeug": "browser_click",
+                                   "url": "http://127.0.0.1:5/veranstaltung?id=4711"}]
+    p = {"quellen": {"zug": 1, "enthaelt": ["127.0.0.1:5/veranstaltung?id=4711"],
+                     "nicht_enthaelt": ["id=4712"]}}
+    assert endzustand.eine(p, erg) is None
+    assert endzustand.eine({"quellen": {"anzahl": 1}}, erg) is None
+    g = endzustand.eine({"quellen": {"enthaelt": ["lsf.uni-saarland.de"]}}, erg)
+    assert "fehlt in den Quellen" in g and "id=4711" in g
+    assert "darf nicht" in endzustand.eine({"quellen": {"nicht_enthaelt": ["4711"]}}, erg)
+    leer = _erg("weiß ich nicht")
+    assert "keine" in endzustand.eine({"quellen": {"enthaelt": ["x"]}}, leer)
+    assert endzustand.eine({"quellen": {"anzahl": 0}}, leer) is None
+    assert endzustand.eine({"quellen": {}}, None) == "Quellen-Prüfung ohne Lauf"
+
+
+def test_f08_prueft_die_quellen_zeile():
+    f08 = next(f for f in faelle.alle() if f["id"] == "f08_lsf_browser")
+    arten = [p for p in f08["endzustand"] if "quellen" in p]
+    assert arten and "{server}/veranstaltung?id=4711" in arten[0]["quellen"]["enthaelt"]
+    assert not any("enthaelt" in (p.get("antwort") or {}) for p in f08["endzustand"])
+
+
 def test_fragen_zaehlen():
     erg = _erg("ok", fragen=[{"art": "erlaubnis", "frage": "Browser 127.0.0.1?"},
                              {"art": "knopf", "frage": "welche?"}])

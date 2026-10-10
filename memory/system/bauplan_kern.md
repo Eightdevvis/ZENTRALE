@@ -154,6 +154,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `modell_liste` | 2 | Welche Chat-Modelle ein Anbieter wirklich hat: vom Anbieter geholt, 24 h gecacht (pro Rechner unter `~/.cache`), Rückfall auf `providers.py` |
 | `morgenblick_daten` | 2 | Was der Morgenblick weiß: Sammler je Quelle (Kalender, Mail, Erinnerungen, Gespräche, Listen, Projekte, Ablage), nur lesen, kein Netz; Form des Tages, drei Akte |
 | `ehrlichkeit_erkennen` | 2 | Satzmuster in Antworten der KI: Erledigt-Behauptungen („hab ich eingetragen"), Zusagen („trag ich gleich ein"), Kalender-Kennungen — reines Python, auf wenige Falschtreffer gebaut |
+| `quellen` | 2 | Quellen-Zeile eines Zugs: welche Seiten tatsächlich gelesen wurden (Browser: wo die KI stehen blieb oder browser_read; fetch_url; fetch_document per URL — nie web_search), aus den Werkzeug-Ergebnissen |
 | `zusagen` | 2 | Offene Zusagen der KI je Gespräch: eine Datei pro Rechner im Gesprächsordner, nur abhaken, nie löschen |
 | `browser_sitzung` | 2 | Ein Browser ohne Fenster (Chromium über Playwright) in eigenem Thread: je Gespräch eine Sitzung, Seite als Text + nummerierte Elemente, klicken/tippen/zurück, Bild; nur erlaubte Hosts, nie das eigene Netz, keine Downloads, 10 min Leerlauf → zu; im Prüfstand nur die Adressen des Falls (`nur_erlauben`) |
 | `morgenblick_bild` | 2 | Der Morgenblick als HTML: Gelände-SVG, Akte, Listen — deterministisch, alles escaped, Fraunces eingebettet |

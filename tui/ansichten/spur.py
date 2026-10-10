@@ -77,6 +77,8 @@ def kopf(e):
         return "check: %d finding(s) → written again%s" % (len(e.get("befunde") or []), runde)
     if art == "warnung":
         return "warning: " + str(e.get("text") or "")
+    if art == "quellen":
+        return "sources: %d page(s) read" % len(e.get("liste") or [])
     if art == "fehler":
         return "error: " + _einzeilig(e.get("text"))
     if art == "gestoppt":
@@ -118,6 +120,9 @@ def inhalt(e):
     if art == "system":
         return "fingerprint %s — the fixed part is the same every turn and is not " \
                "stored per turn" % e.get("fingerabdruck")
+    if art == "quellen":
+        return "\n".join("„%s“ – %s (%s)" % (q.get("titel"), q.get("url"), q.get("werkzeug"))
+                         for q in e.get("liste") or [] if isinstance(q, dict))
     if art in ("text", "fehler", "antwort"):
         return str(e.get("text") or "")
     return ""

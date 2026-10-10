@@ -30,7 +30,7 @@ from .basis import api_call
 ANSICHT = ("gid", "titel", "projekt", "log", "n", "n_server", "spuren",
            "answer", "reflect", "denken", "perm", "gestoppt", "pruefung",
            "antwort_live", "abbruch_live", "denk_t0", "denk_ende", "denk_log_n",
-           "warnungen", "wechsel")
+           "warnungen", "wechsel", "quellen")
 
 
 class StromSteuerung:
@@ -106,6 +106,7 @@ class StromSteuerung:
         AI.pop("abbruch_live", None)
         AI.pop("warnungen", None)
         AI.pop("wechsel", None)
+        AI.pop("quellen", None)
 
     def strom_zurueckholen(self):
         """Sasha kommt ins Gespräch der laufenden Antwort zurück: der Puffer

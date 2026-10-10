@@ -40,6 +40,13 @@
 #                               # Werkzeug-Ergebnis oder im Kontext
 #     # Text wird vorher vereinfacht: klein, alle Striche als „-", Leerraum eins.
 #
+#   - was: Die Seite steht als Quelle unter der Antwort
+#     quellen:                # die Quellen-Zeile, die PYTHON schreibt (2026-10-10,
+#       zug: 1                # core/quellen.py) — Standard letzter Zug, "alle" = jeder
+#       enthaelt: ["{server}/veranstaltung"]   # jedes Teilwort in einer Adresse
+#       nicht_enthaelt: [uni-saarland.de]      # in keiner Adresse
+#       anzahl: 0             # so viele Seiten genau (z. B. 0: nichts gelesen)
+#
 #   - was: Genau eine Erlaubnis-Frage
 #     fragen: {art: erlaubnis, anzahl: 1}   # über alle Züge; art: erlaubnis|knopf
 #
@@ -222,6 +229,29 @@ def _antwort_pruefen(a: dict, erg: dict | None) -> str | None:
     return None
 
 
+def _quellen_pruefen(q: dict, erg: dict | None) -> str | None:
+    """Die Quellen-Zeile eines Zugs (Feld `quellen` im Zug, lauf.py)."""
+    if erg is None:
+        return "Quellen-Prüfung ohne Lauf"
+    zuege = _zuege_fuer(q, erg)
+    if not zuege:
+        return f"Zug {q.get('zug')} gibt es nicht"
+    for n, zug in zuege:
+        urls = [str(x.get("url") or "") for x in zug.get("quellen") or []
+                if isinstance(x, dict)]
+        klein = [u.casefold() for u in urls]
+        wo = f"Zug {n}: Quellen {', '.join(urls) or '— (keine)'}"
+        for teil in q.get("enthaelt") or []:
+            if not any(str(teil).casefold() in u for u in klein):
+                return f"„{teil}“ fehlt in den Quellen — {wo}"
+        for teil in q.get("nicht_enthaelt") or []:
+            if any(str(teil).casefold() in u for u in klein):
+                return f"„{teil}“ darf nicht in den Quellen stehen — {wo}"
+        if "anzahl" in q and len(urls) != int(q["anzahl"]):
+            return f"{len(urls)} statt {q['anzahl']} Quellen — {wo}"
+    return None
+
+
 def _fragen_pruefen(f: dict, erg: dict | None) -> str | None:
     if erg is None:
         return "Fragen-Prüfung ohne Lauf"
@@ -251,16 +281,18 @@ def eine(p: dict, erg: dict | None = None) -> str | None:
         return _antwort_pruefen(p["antwort"], erg)
     if "fragen" in p:
         return _fragen_pruefen(p["fragen"], erg)
+    if "quellen" in p:
+        return _quellen_pruefen(p["quellen"], erg)
     if "am" in p:
         for tag in _tage(p["am"]):
             g = _tag_pruefen(p, tag)
             if g:
                 return g
         return None
-    return "Prüfung ohne am/regeln/eins_von/antwort/fragen"
+    return "Prüfung ohne am/regeln/eins_von/antwort/fragen/quellen"
 
 
-ARTEN = ("am", "regeln", "eins_von", "antwort", "fragen")
+ARTEN = ("am", "regeln", "eins_von", "antwort", "fragen", "quellen")
 
 
 def pruefen(liste: list, erg: dict | None = None) -> list:

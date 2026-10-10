@@ -450,8 +450,10 @@ Warnungen davor raus (Feld `warnungen`). Dazu Erledigt-Zeile aus dem
 Protokoll (auch „✗ keine Änderung in diesem Zug") und offene Zusagen im
 Kontext-Umschlag. Läuft der Zug im Budget-Rückfall auf einem anderen Modell,
 meldet `kern.chat` das am Anfang (`{"modell_wechsel": …}`,
-`ai_backends.modell_wechsel`). Einstellung `ehrlichkeit_pruefer`. Alles Weitere:
-[ehrlichkeit_live.md](ehrlichkeit_live.md).
+`ai_backends.modell_wechsel`). Einstellung `ehrlichkeit_pruefer`. Seit
+2026-10-10 dazu die **Quellen-Zeile** (`core/quellen.py`, Feld `quellen`):
+welche Seiten der Zug wirklich gelesen hat — Python, nicht die KI, nennt die
+Adresse. Alles Weitere: [ehrlichkeit_live.md](ehrlichkeit_live.md).
 
 ### Kalender ohne Fallen — `core/ki_kalender.py`, `ki_kalender_aendern.py` (seit 2026-10-08)
 

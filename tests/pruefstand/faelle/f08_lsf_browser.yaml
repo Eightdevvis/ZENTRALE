@@ -82,12 +82,19 @@ zuege:
     erwartet: {rueckfrage: false}
 
 endzustand:
-  - was: Richtige Zeiten (Mo 10–12, Do 8:30–10) mit der Seite als Quelle
+  - was: Richtige Zeiten (Mo 10–12, Do 8:30–10)
     antwort:
       muster:
         - '\bmo(ntag|ntags)?\b[^\n]{0,60}\b10(:00)?\s*(uhr\s*)?(-|bis)\s*12'
         - '\bdo(nnerstag|nnerstags)?\b[^\n]{0,60}\b0?8[:.]30\s*(uhr\s*)?(-|bis)\s*10'
-      enthaelt: ["{server}/veranstaltung"]
+  # Seit 2026-10-10 schreibt Python die Quelle (core/quellen.py): geprüft
+  # wird die Quellen-Zeile, nicht ob die KI die Adresse abgeschrieben hat.
+  # Die Startseite war nur Durchgang und steht nicht darin.
+  - was: Die Veranstaltungsseite steht als Quelle unter der Antwort
+    quellen:
+      zug: 1
+      enthaelt: ["{server}/veranstaltung?id=4711"]
+      nicht_enthaelt: ["id=4712"]
   - was: Keine Zeiten von Lineare Algebra als Analysis ausgegeben
     antwort:
       nicht_muster: ['\bdi(enstag|enstags)?\b[^\n]{0,40}\b14(:00)?\s*(uhr\s*)?(-|bis)\s*16']

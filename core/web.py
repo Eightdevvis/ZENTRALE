@@ -84,6 +84,8 @@ _SCRIPT_STYLE_RE = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 _TAG_RE = re.compile(r'<[^>]+>')
+# Der Seitentitel für die Quellen-Zeile (core/quellen.py, 2026-10-10).
+_TITLE_RE = re.compile(r'<title[^>]*>(.*?)</title>', re.DOTALL | re.IGNORECASE)
 
 
 def _strip_html(s: str) -> str:
@@ -270,6 +272,8 @@ def hole(url: str, max_chars: int = _DEFAULT_MAXCHARS) -> str:
         return f"[Fehler beim Laden von {url}: {e}]"
 
     page = body.decode("utf-8", errors="replace")
+    titel_m = _TITLE_RE.search(page)
+    titel = _strip_html(titel_m.group(1))[:120] if titel_m else ""
     page = _SCRIPT_STYLE_RE.sub(" ", page)   # JS/CSS samt Inhalt raus
     text = _strip_html(page)
 
@@ -279,6 +283,8 @@ def hole(url: str, max_chars: int = _DEFAULT_MAXCHARS) -> str:
     warnung = duenn(text)
     if len(text) > max_chars:
         text = text[:max_chars] + " […abgeschnitten]"
+    if titel:
+        text = f"Titel: „{titel}“\n{text}"
     if warnung:
         # Dünner Inhalt ist kein Teil-Ergebnis (2026-10-09): gelesen ist,
         # was da ist; die Warnung sagt, wie wenig das ist.

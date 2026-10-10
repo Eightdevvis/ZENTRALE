@@ -109,6 +109,9 @@ def _pruefung_fehlt(p: dict) -> str | None:
                     re.compile(m)
                 except re.error as e:
                     return f"{feld} {m!r} ist kein gültiges Muster ({e})"
+    q = p.get("quellen")
+    if q is not None and not isinstance(q, dict):
+        return "quellen muss ein Abschnitt sein"
     z = (p.get("regeln") or {}).get("zeitraum") if isinstance(p.get("regeln"), dict) else None
     if z is not None:
         try:

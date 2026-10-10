@@ -119,7 +119,7 @@ def _sse_ereignisse(antwort):
 def zug_fahren(client, gid: str, nachricht: str, antworter, kosten: list) -> dict:
     """Eine Nutzer-Nachricht schicken und alles mitschreiben."""
     zug = {"sagt": nachricht, "antwort": "", "denken": "", "werkzeuge": [],
-           "fragen": [], "fehler": [], "gestoppt": False}
+           "fragen": [], "fehler": [], "gestoppt": False, "quellen": []}
     start, k0 = time.monotonic(), len(kosten)
     antwort = client.post("/api/chat", json={"message": nachricht, "gespraech": gid},
                           buffered=False)
@@ -156,6 +156,10 @@ def zug_fahren(client, gid: str, nachricht: str, antworter, kosten: list) -> dic
                         # das Ergebnis direkt ans Modell (werkzeug_schleife.
                         # _knopf_werkzeug). Mitschreiben, was dort steht.
                         zug["werkzeuge"][-1]["ergebnis"] = f"Sasha hat gewählt: {gewaehlt}."
+            elif "quellen" in ev:
+                # Die Quellen-Zeile, die Python unter die Antwort setzt
+                # (core/quellen.py, 2026-10-10) — prüfbar mit `quellen:`.
+                zug["quellen"] = list(ev["quellen"] or [])
             elif "fehler" in ev:
                 zug["fehler"].append(_text(ev["fehler"]))
             elif "gestoppt" in ev:

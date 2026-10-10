@@ -236,7 +236,8 @@ def test_ergebnis_nennt_adresse_daten_hinweis_und_kappt():
     elemente.append(_el(201, text="Uni", href="https://www.uni-saarland.de/"))
     text = ki_browser.seite_als_text(_seite(text="x" * 30_000, elemente=elemente))
     assert "Adresse: https://lsf.uni-saarland.de/start" in text
-    assert "DATEN" in text and "gelesen auf https://lsf.uni-saarland.de/start" in text
+    assert "DATEN" in text and "Gelesen auf https://lsf.uni-saarland.de/start" in text
+    assert "selbst als Quelle" in text         # die KI muss die Adresse nicht abschreiben
     # Auszug seit 2026-10-09 kürzer (Kosten): 4.000 Zeichen, 60 Elemente.
     assert "browser_read(ab=4000)" in text
     assert "[60] Link „Eintrag 60“" in text and "[61]" not in text

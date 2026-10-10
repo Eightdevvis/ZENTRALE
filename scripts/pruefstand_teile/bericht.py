@@ -216,8 +216,11 @@ def transkript(f: dict) -> str:
             z += ["```", str(w.get("ergebnis")), "```", ""]
         for fe in zug.get("fehler", []):
             z += [f"**Fehler:** {fe}", ""]
-        z += [f"**KI:** {zug.get('antwort') or '(keine Antwort)'}", "",
-              f"_{zug.get('laufzeit_s', 0)} s, {_eur(zug.get('kosten_eur'))}_", "",
+        z += [f"**KI:** {zug.get('antwort') or '(keine Antwort)'}", ""]
+        if zug.get("quellen"):            # Quellen-Zeile, von Python (2026-10-10)
+            z += ["_Quellen: " + " · ".join(f"„{q.get('titel')}“ – {q.get('url')}"
+                                            for q in zug["quellen"]) + "_", ""]
+        z += [f"_{zug.get('laufzeit_s', 0)} s, {_eur(zug.get('kosten_eur'))}_", "",
               "<details><summary>Kalender danach (Prüfer-Sicht)</summary>", "", "```",
               zug.get("kalender_danach", ""), "```", "</details>", ""]
     return "\n".join(z)

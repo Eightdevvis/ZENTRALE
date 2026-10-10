@@ -34,7 +34,8 @@ from .einstellungen import Einstellungen
 from .rechts import Rechts
 from .seitenleiste import Seitenleiste
 from .chat_gespraeche import (GespraechsSteuerung, ai_verlauf_holen,  # noqa: F401
-                              pruefung_eintraege, verlauf_aus, warn_eintraege)
+                              pruefung_eintraege, quellen_eintraege, verlauf_aus,
+                              warn_eintraege)
 from .gespraechsliste import Gespraechsliste
 from .gedaechtnis import Gedaechtnis
 from .projekte import Projekte
@@ -532,6 +533,8 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
             AI["msg"] = "antwort wird geprüft (runde %s von %s) …" % (r.get("runde"), r.get("von"))
         elif "ehrlichkeit" in evt:                # Erledigt-Zeile, offene Zusagen
             Z["pruefung"] = evt["ehrlichkeit"] if isinstance(evt["ehrlichkeit"], dict) else None
+        elif "quellen" in evt:                    # gelesene Seiten (2026-10-10)
+            Z["quellen"] = evt["quellen"] if isinstance(evt["quellen"], list) else None
         elif "antwort" in evt:                    # gespeichert, mit Ablauf („trace", spur.py)
             Z["antwort_live"] = evt["antwort"] if evt.get("ablauf") else None
             if evt.get("abbruch"):                # der Zug brach ab (2026-10-09)
@@ -583,6 +586,7 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
             Z["log"].append(("abbruch", abbruch))
             if AI["msg"] in ("fehler: " + abbruch, "gestoppt"):
                 AI["msg"] = ""
+        Z["log"] += quellen_eintraege(Z.pop("quellen", None))
         p = Z.pop("pruefung", None)
         if isinstance(p, dict):
             Z["log"] += pruefung_eintraege(

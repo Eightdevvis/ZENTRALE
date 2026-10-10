@@ -404,10 +404,14 @@ in Warnfarbe) und `modell_wechsel` ({`von`, `zu`, `von_anbieter`,
 `zu_anbieter`, `grund`, `satz`} — `satz` ist die fertige Zeile, ebenfalls
 über der Antwort). `erledigt` kann dann auch ohne `schritte` kommen, mit
 `zeile` „✗ keine Änderung in diesem Zug"; `pruefung` kann `korrekturen`
-(Zahl) tragen. Das Handy schreibt nichts davon. Seit 09.10. (abends) kann eine Antwort
+(Zahl) tragen. Seit 10.10. außerdem `quellen`: Liste `{titel, url, werkzeug}`
+— die Seiten, die die KI in diesem Zug wirklich gelesen hat (Python zieht sie
+aus den Werkzeug-Ergebnissen, nie aus Suchtreffern). Anzeigen dezent UNTER der
+Antwort als eine Zeile „Quellen: „<titel>“ – <url> · …"; die Adresse steht
+nicht mehr unbedingt im Text der KI. Das Handy schreibt nichts davon. Seit 09.10. (abends) kann eine Antwort
 außerdem `ablauf` tragen: eine Liste von Einträgen `{art, zeit, t, …}` (art:
 `system`, `kontext`, `text`, `werkzeug`, `frage`, `pruefung` (mit `runde`),
-`warnung` (`text`), `fehler`,
+`warnung` (`text`), `quellen` (`liste`, seit 10.10.), `fehler`,
 `gestoppt`, `antwort`, `kosten`; je Eintrag höchstens 50.000 Zeichen) —
 das Ablauf-Protokoll des Zugs ([../ki/ki_system.md](../ki/ki_system.md),
 „Ablauf-Protokoll"). Nur zum Nachlesen; das Handy muss es weder schreiben

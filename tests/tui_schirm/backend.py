@@ -344,6 +344,10 @@ class H(BaseHTTPRequestHandler):
                                  "text": "Seite: „Universität des Saarlandes“ …"}})
             ev({"token": "Bin rein ohne Login – "})
             ev({"token": "hier der Plan für Experimentalphysik I."})
+            # Quellen-Zeile (2026-10-10): lang genug, dass sie bei 80 Spalten umbricht.
+            ev({"quellen": [{"titel": "Experimentalphysik I", "werkzeug": "browser_click",
+                             "url": "https://www.lsf.uni-saarland.de/qisserver/rds?state=verpublish"
+                                    "&publishid=166304&moduleCall=webInfo"}]})
             ev({"ehrlichkeit": {"erledigt": [], "zeile": "", "offen": []}})
             ev({"antwort": "m9", "ablauf": 15})
             ev({"done": True})

@@ -298,6 +298,7 @@ def _sse_zug(stream, gid, backend, frage, erster):
     gestoppt = False
     pruefung = None
     wechsel = None
+    quellen = None
 
     for token in stream:
         if isinstance(token, dict):
@@ -336,6 +337,11 @@ def _sse_zug(stream, gid, backend, frage, erster):
                         state.push_log(f"AI ⚠  {w}")
                     yield _sse({'warnungen': pruefung['warnungen']})
                 yield _sse({'ehrlichkeit': pruefung})
+            elif 'quellen' in token:
+                # Die gelesenen Seiten (core/quellen.py, 2026-10-10): eigenes
+                # Feld unter der Antwort, nie im Text der KI.
+                quellen = list(token['quellen'] or [])
+                yield _sse({'quellen': quellen})
             elif 'pruefung_runde' in token:
                 # Der Prüfer lässt die Antwort neu schreiben — die TUI zeigt
                 # das in der Statuszeile, damit lange Züge nicht hängen wirken.
@@ -379,7 +385,7 @@ def _sse_zug(stream, gid, backend, frage, erster):
         denken="".join(denken), werkzeuge=werkzeuge, anbieter=anbieter,
         modell=modell, abgebrochen=gestoppt and bool(text.strip()),
         dokumente=dokumente or None, ablauf=ablauf, fehler=fehler_text,
-        modell_wechsel=wechsel,
+        modell_wechsel=wechsel, quellen=quellen,
         **_pruefung_felder(pruefung))
     # Die id der Antwort, damit die TUI ihr „trace" gleich zeigen kann —
     # und bei einem Abbruch den Fehler-Eintrag an seine Stelle setzt.
@@ -423,7 +429,8 @@ def api_chat_history():
     """Die Nachrichten eines Gesprächs für die Anzeige (?gespraech=<id>,
     sonst das aktive dieses Rechners). Liste von {id, role, content, ts}
     plus denken, werkzeuge, abgebrochen, anbieter, modell, wenn vorhanden;
-    erledigt/offen vom Ehrlichkeits-Prüfer (2026-10-09).
+    erledigt/offen vom Ehrlichkeits-Prüfer (2026-10-09), quellen (gelesene
+    Seiten, 2026-10-10).
     Markiert das Gespräch als gelesen — wer das holt, zeigt es an.
 
     Seit 2026-10-07 auch ohne KI-Backend: alte Gespräche lesen braucht
@@ -440,7 +447,7 @@ def api_chat_history():
              "content": gespraeche.text_fuer_ki(n)}
         for feld in ("denken", "werkzeuge", "abgebrochen", "anbieter", "modell",
                      "anhaenge", "dokumente", "erledigt", "offen", "fehler",
-                     "warnungen", "modell_wechsel"):
+                     "warnungen", "modell_wechsel", "quellen"):
             if n.get(feld):
                 m[feld] = n[feld]
         # Das Ablauf-Protokoll selbst ist groß: hier nur, DASS es eins gibt

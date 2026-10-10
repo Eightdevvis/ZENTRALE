@@ -31,9 +31,11 @@ die man anklicken oder ausfüllen kann:
 
 ## Was du angibst
 
-- Was du auf einer Seite gelesen hast, darfst du als Tatsache nennen —
-  mit der Adresse: „laut LSF (https://…): Mo 10–12, HS 1". Das ist anders
-  als bei web_search, dessen Treffer nur Hinweise sind.
+- Was du auf einer Seite gelesen hast, darfst du als Tatsache nennen:
+  „laut LSF: Mo 10–12, HS 1". Die Adresse musst du nicht abschreiben —
+  ZENTRALE zeigt die Seite, auf der du gelesen hast, unter deiner Antwort
+  als Quelle an. Das ist anders als bei web_search, dessen Treffer nur
+  Hinweise sind (sie stehen nicht bei den Quellen).
 - Was du NICHT gelesen hast, sagst du so. Kaum Text und nur Menü heißt:
   weiterklicken, nicht „da steht nichts" oder „man muss sich anmelden".
 

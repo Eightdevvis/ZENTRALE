@@ -25,6 +25,8 @@
 #   warnung   was Sasha über der Antwort als Warnung sieht: Befunde, die
 #             nach allen Runden blieben, und ein Modellwechsel (Budget-
 #             Rückfall) — Text wie in der TUI
+#   quellen   die gelesenen Seiten des Zugs (liste [{titel, url, werkzeug}],
+#             core/quellen.py, seit 2026-10-10) — wie die Quellen-Zeile
 #   fehler / gestoppt   wenn der Zug so endete
 #   antwort   die fertige Antwort (wie gespeichert)
 #   kosten    Tokens und € aller Runden des Zugs
@@ -209,6 +211,11 @@ def warnungen(texte) -> None:
         _dazu("warnung", text=str(t))
 
 
+def quellen(liste) -> None:
+    """Die gelesenen Seiten des Zugs (Quellen-Zeile unter der Antwort)."""
+    _dazu("quellen", liste=[dict(q) for q in liste or [] if isinstance(q, dict)])
+
+
 def fehler(text_: str) -> None:
     _dazu("fehler", text=str(text_ or ""))
 
@@ -276,6 +283,8 @@ def kopfzeile(e: dict) -> str:
         return f"Prüfung: {len(e.get('befunde') or [])} Befund(e), {runde}"
     if art == "warnung":
         return f"Warnung · {e.get('text') or ''}"
+    if art == "quellen":
+        return f"Quellen · {len(e.get('liste') or [])} gelesene Seite(n)"
     if art == "kosten":
         return (f"Kosten · {e.get('runden')} Runde(n) · ein {e.get('eingabe')} · "
                 f"aus {e.get('ausgabe')} · Cache {e.get('cache_lesen')} · "
@@ -303,6 +312,9 @@ def inhalt(e: dict) -> str:
                         for b in e.get("befunde") or [] if isinstance(b, dict))
         return (f"Befunde:\n{bef or '-'}\n\nHinweis an die KI:\n{e.get('hinweis')}\n\n"
                 f"Erste (verworfene) Antwort:\n{e.get('erste_antwort')}")
+    if art == "quellen":
+        return "\n".join(f"„{q.get('titel')}“ – {q.get('url')} ({q.get('werkzeug')})"
+                         for q in e.get("liste") or [] if isinstance(q, dict))
     if art == "kontext":
         anh = e.get("anhaenge")
         return str(e.get("text") or "") + (("\n\nAnhänge: " + ", ".join(map(str, anh))) if anh else "")

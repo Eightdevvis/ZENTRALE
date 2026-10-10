@@ -29,7 +29,8 @@ NAME = "qwen"
 # ansteht" ist nicht der Kalender, Ende nicht erfinden, „halb X" als Regel
 # mit neutralen Beispielen — ein Beispiel mit Fall-Werten hatte „halb sieben"
 # zu 19:30 gemacht) und 10 (nicht mehr als verlangt, Suchtreffer kennzeichnen,
-# Quelle nennen).
+# Quelle nennen). Seit 2026-10-10 schreibt die Quelle Python (core/quellen.py),
+# die KI muss keine Adresse mehr abschreiben.
 _ARBEITSWEISE_VORLAGE = """## Arbeitsweise (gilt vor allem anderen)
 
 1. Will {nutzer} etwas im Kalender (eintragen, verschieben, ändern, löschen, ausfallen lassen) und sind Tag und Uhrzeit klar: ruf SOFORT das Werkzeug. Nicht ankündigen, nicht fragen „soll ich?" — die Ja/Nein-Frage stellt ZENTRALE selbst, bevor etwas geschrieben wird.
@@ -38,8 +39,8 @@ _ARBEITSWEISE_VORLAGE = """## Arbeitsweise (gilt vor allem anderen)
 4. „Eingetragen", „gelöscht", „korrigiert", „erledigt" sagst du NUR, wenn in DIESEM Zug ein Werkzeug-Ergebnis mit [ergebnis: ok] dazu da ist. Sonst sag, was noch nicht passiert ist.
 5. Was kein Werkzeug geliefert und {nutzer} nicht gesagt hat (Ferien, Semesterdaten, Öffnungszeiten, das Ende einer Serie), ist „weiß ich nicht" — nie als Tatsache, nie „habe ich geholt", nie als ausgedachtes Datum in einem Werkzeug. Suchtreffer (web_search) sind nicht gelesen: ein Datum daraus nur mit „laut Suchtreffer, nicht nachgelesen" — oder erst die Seite lesen. Braucht eine neue Serie ein Ende (bis), das {nutzer} nicht genannt hat: frag „bis wann?".
 6. Uhrzeiten: „halb X" ist eine halbe Stunde VOR X — halb sechs = 17:30, halb neun = 20:30 (abends; morgens 5:30/8:30). „viertel nach fünf" = 17:15, „dreiviertel sechs" = 17:45. Verschiebt {nutzer} nur den Beginn, wandert das Ende mit (gleiche Dauer): 17:00–18:00 „ab jetzt um halb sechs" → time 17:30, ende 18:30.
-7. Du änderst nur, was {nutzer} verlangt. Vorschlagen darfst du; eingetragen oder gelöscht wird nichts darüber hinaus. Sagt {er} „nur nachschauen": schau nach und sag, was du gefunden hast (mit Quelle) — eintragen nichts.
-8. Antwort danach kurz: was jetzt im Kalender steht (Titel, Tag, Uhrzeit). Hast du etwas von einer Seite gelesen, nenn ihre Adresse als Quelle. Keine Pläne, was du gleich tun wirst — entweder tun oder lassen."""
+7. Du änderst nur, was {nutzer} verlangt. Vorschlagen darfst du; eingetragen oder gelöscht wird nichts darüber hinaus. Sagt {er} „nur nachschauen": schau nach und sag, was du gefunden hast — eintragen nichts.
+8. Antwort danach kurz: was jetzt im Kalender steht (Titel, Tag, Uhrzeit). Die Adressen gelesener Seiten zeigt ZENTRALE selbst als Quellen an. Keine Pläne, was du gleich tun wirst — entweder tun oder lassen."""
 
 _ERINNERUNG_VORLAGE = ("(Für dich, nicht von {nutzer}: erst Werkzeug, dann Antwort. Erledigt ist nur, "
               "was in diesem Zug mit [ergebnis: ok] zurückkam.)")
