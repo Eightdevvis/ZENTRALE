@@ -96,6 +96,8 @@ os.environ.setdefault("ZENTRALE_DESK_ORDNER", os.path.join(_DATEN_TMP, "desk"))
 # Schaufenster (core/shop.py, 2026-10-10): im Betrieb data/shop/ mit dem,
 # was Sasha geholt hat. Dazu unten pro Test ein eigener Ordner.
 os.environ.setdefault("ZENTRALE_SHOP_ORDNER", os.path.join(_DATEN_TMP, "shop"))
+# Selbst gebaute Apps (core/werkstatt.py, 2026-10-10): im Betrieb data/apps/.
+os.environ.setdefault("ZENTRALE_APPS_ORDNER", os.path.join(_DATEN_TMP, "apps"))
 # Abgleich über die Mitte (core/abgleich.py, 2026-10-08): örtlicher Zustand,
 # Schlüssel und Mitte nie die echten. Die Mitte zeigt auf ein Verzeichnis,
 # das es nicht gibt — ein Test, der vergisst, seine eigene Wegwerf-Mitte zu
@@ -297,6 +299,7 @@ def _beispiele_frisch(tmp_path_factory, monkeypatch):
 @pytest.fixture(autouse=True)
 def _desk_frisch(tmp_path_factory, monkeypatch):
     monkeypatch.setenv("ZENTRALE_DESK_ORDNER", str(tmp_path_factory.mktemp("desk")))
+    monkeypatch.setenv("ZENTRALE_APPS_ORDNER", str(tmp_path_factory.mktemp("apps")))
     yield
 
 

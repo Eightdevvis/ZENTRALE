@@ -12,6 +12,12 @@
 # Standard: ein Ordner gleichen Namens neben diesem Repo (für den Tutor
 # ../language-tutor). Mehr Apps = eine Zeile in BEKANNT; eine echte
 # App-Verwaltung (installieren, Rechte fragen) kommt erst mit Schritt 2.
+#
+# Selbst gebaute Apps (2026-10-10, Werkstatt, memory/system/werkstatt.md):
+# ein Ordner mit derselben app.toml unter `apps_ordner` (Standard data/apps/,
+# abgeglichen), aber ohne `start` — sie sind kein Prozess, sondern eine
+# Vorlage (`vorlage = "desk"`) mit Inhalt. Gefunden werden sie hier durch
+# Nachsehen im Ordner, nicht über BEKANNT: Sasha baut sie selbst, ohne Code.
 
 import os
 import tomllib
@@ -24,11 +30,21 @@ _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 BEKANNT = {"tutor": "language-tutor"}
 
 
+def eigene_ordner() -> str:
+    """Wo die selbst gebauten Apps liegen (Einstellung apps_ordner)."""
+    eigen = ai_config.setting("apps_ordner")
+    if eigen:
+        return os.path.abspath(os.path.expanduser(str(eigen)))
+    return os.path.join(_ROOT, "data", "apps")
+
+
 def pfad(name: str) -> str:
     """Ordner der App (auch wenn er fehlt)."""
     gesetzt = ai_config.setting("app_pfad_" + name)
     if gesetzt:
         return os.path.abspath(os.path.expanduser(str(gesetzt)))
+    if name not in BEKANNT and os.path.isfile(os.path.join(eigene_ordner(), name, "app.toml")):
+        return os.path.join(eigene_ordner(), name)
     return os.path.abspath(os.path.join(_ROOT, "..", BEKANNT.get(name, name)))
 
 
@@ -48,9 +64,33 @@ def manifest(name: str):
     return m
 
 
+def eigene_namen() -> list:
+    """Ordnernamen (= Kurzname, slug) der selbst gebauten Apps, sortiert.
+    Versteckte Ordner und Ordner ohne app.toml zählen nicht."""
+    o = eigene_ordner()
+    try:
+        namen = os.listdir(o)
+    except (FileNotFoundError, NotADirectoryError):
+        return []
+    return sorted(n for n in namen if not n.startswith((".", "_")) and n not in BEKANNT
+                  and os.path.isfile(os.path.join(o, n, "app.toml")))
+
+
+def eigene() -> list:
+    """Manifeste der selbst gebauten Apps (mit `_slug`)."""
+    raus = []
+    for n in eigene_namen():
+        m = manifest(n)
+        if m:
+            m["_slug"] = n
+            raus.append(m)
+    return raus
+
+
 def installiert() -> list:
-    """Manifeste aller gefundenen Apps."""
-    return [m for m in (manifest(n) for n in BEKANNT) if m]
+    """Manifeste aller gefundenen Apps: Prozess-Apps aus BEKANNT, dann die
+    selbst gebauten."""
+    return [m for m in (manifest(n) for n in BEKANNT) if m] + eigene()
 
 
 def abonnenten(ereignis: str) -> list:

@@ -99,6 +99,10 @@ SZ = {
                         ("l", "-"), ("w", 3), ("cap", "f"), ("l", "0"), ("w", 3), ("cap", "g")],
     "tutor": rad(7) + [("cap", "a")],
     "elektronik": rad(8) + [("cap", "a"), ("k", "/"), ("cap", "b")],
+    # Erschaffen-Rad (2026-10-10): zweimal alt+→, dann Werkstatt und Shop-Platz.
+    "werkstatt": [("k", "M-Right"), ("w", 2), ("k", "M-Right"), ("w", 3), ("cap", "a"), ("k", "Enter"),
+                  ("cap", "b"), ("k", "Enter"), ("l", "Geige"), ("cap", "c"), ("k", "Escape"),
+                  ("k", "Escape"), ("k", "Escape"), ("k", "Right"), ("w", 2), ("cap", "d")],
     "ki": [("k", "Space"), ("w", 2), ("cap", "a"), ("k", "/"), ("cap", "b"), ("l", "hallo welt"), ("cap", "c"),
            ("k", "Up"), ("k", "Up"), ("cap", "d")],
     # Chat-Steuerung (Phase 1, 2026-10-07): Umlaute, Alt+Enter, Cursor,

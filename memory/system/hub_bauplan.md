@@ -142,6 +142,25 @@ Bis Schritt 5 bleibt alles in einem Repo außer dem Tutor; der Kern-Bauplan
   liegen noch am alten Ort `ZENTRALE/tutor/data`, der Tutor findet sie dort),
   Sashas Server für Ziel `hub`.
 
+## Selbst gebaute Apps: Manifest ohne Prozess (2026-10-10)
+
+Die Werkstatt ([werkstatt.md](werkstatt.md)) baut Apps ohne Code aus einer
+Vorlage. Sie tragen **dasselbe `app.toml`** wie eine Prozess-App, nur ohne
+`start` (kein Prozess) und mit `vorlage`:
+
+```toml
+name = "Geige"           # Anzeige
+version = "0.1.0"
+vorlage = "desk"         # was beim Öffnen aufgeht (heute nur desk)
+icon = "icon.png"        # Pixel-Icon neben app.toml — oder icon_motiv = "post"
+desk = "Geige"           # Vorlage desk: Name des Desks (Verweis, keine Kopie)
+```
+
+Ort: `<apps_ordner>/<slug>/` (Standard `data/apps/`, abgeglichen). Gefunden
+über `core/apps.py` (`eigene()` durchsucht den Ordner; `BEKANNT` bleibt für
+Prozess-Apps). Adresse `zentrale://<slug>/` — der TUI-Router öffnet den Desk.
+Sie haben keine `rechte`, abonnieren also nichts.
+
 ## Kacheln (entschieden 2026-10-09)
 
 Anlass: Desk View (Fläche je Projekt, JSON-Canvas-Dateien, in der TUI) legt

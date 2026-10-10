@@ -92,14 +92,32 @@ class Desk:
             # die Datei (Input/ oder Pfad tippen).
             "art_wahl": None,           # {"arten": [...], "sel": i}
             "bild_wahl": None,          # {"quellen": [...], "sel": i, "pfad": Textfeld|None}
+            # Direkt geöffnet (Elektronik im Rad, eigene Apps; 2026-10-10):
+            # Esc auf der Fläche schließt dann ganz statt zur Desk-Auswahl.
+            "direkt": False,
         }
 
     # ── Daten ─────────────────────────────────────────────────────────
     def oeffnen(self):
         D = self.DESK
         D.update(active=True, ebene="wahl", name=None, modal=None, canvas=None, msg="",
-                 art_wahl=None, bild_wahl=None, modal_neu=None)
+                 art_wahl=None, bild_wahl=None, modal_neu=None, direkt=False)
         self._liste_laden()
+
+    def direkt(self, name):
+        """Einen Desk gleich auf der Fläche öffnen, ohne Auswahl; fehlt er,
+        wird er angelegt (2026-10-10, Sasha: Elektronik im Rad öffnet „seinen"
+        Desk; eine selbst gebaute App ihren). Esc führt dorthin zurück, woher
+        man kam."""
+        D = self.DESK
+        D.update(active=True, ebene="wahl", name=None, modal=None, canvas=None, msg="",
+                 art_wahl=None, bild_wahl=None, modal_neu=None, direkt=True, desks=[])
+        self.desk_oeffnen(name)
+        if D["ebene"] != "canvas":
+            zuerst = D["msg"]
+            self._anlegen(name)
+            if D["ebene"] != "canvas" and "gibt es schon" in D["msg"]:
+                D["msg"] = zuerst            # kaputt statt fehlend: der erste Grund zählt
 
     def _liste_laden(self):
         D = self.DESK
@@ -260,7 +278,10 @@ class Desk:
             return
         if erg.art == "zu":
             D.update(ebene="wahl", canvas=None, desk=None, msg="")
-            self._liste_laden()
+            if D["direkt"]:
+                D["active"] = False
+            else:
+                self._liste_laden()
         elif erg.art == "bearbeiten":
             D["modal"] = self.arten.holen(erg.element.get("art")).modal(erg.element)
             D["modal_id"] = erg.element["id"]

@@ -284,6 +284,31 @@ def anlegen(name) -> dict:
     return laden(name)
 
 
+def umbenennen(alt, neu) -> dict:
+    """Desk umbenennen (= Datei umbenennen, 2026-10-10, Verwaltung in der
+    Werkstatt). Fehlt er: 404; gibt es den neuen Namen schon: 409. Der
+    Abgleich sieht das als „alte gelöscht, neue da" (Grabstein)."""
+    von, nach = _pfad(alt), _pfad(neu)
+    if not os.path.exists(von):
+        raise DeskFehler("desk gibt es nicht", 404)
+    if von != nach and os.path.exists(nach):
+        raise DeskFehler("desk gibt es schon", 409)
+    os.replace(von, nach)
+    datasync.notify_change(nach)
+    return laden(neu)
+
+
+def loeschen(name) -> None:
+    """Desk-Datei löschen. Bilder in bilder/ bleiben (andere Desks dürfen
+    dasselbe Bild zeigen). Fehlt er: 404."""
+    pfad = _pfad(name)
+    try:
+        os.remove(pfad)
+    except FileNotFoundError:
+        raise DeskFehler("desk gibt es nicht", 404)
+    datasync.notify_change(pfad)
+
+
 def _ganz(x, unten=-KOORD_GRENZE, oben=KOORD_GRENZE):
     if isinstance(x, bool) or not isinstance(x, int):
         raise DeskFehler("lage muss eine ganze zahl sein")

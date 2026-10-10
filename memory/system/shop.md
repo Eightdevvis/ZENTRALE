@@ -4,9 +4,10 @@
 und „holen"; bezahlen kommt später über Sashas eigenen Server. Katalog als
 schema.org-`ItemList` (JSON-LD) in `core/shop_katalog.jsonld`, Dienst
 `core/shop.py`, Routen `ui/routen/shop.py` (`/api/shop*`, in `openapi.yaml`),
-Ansicht `tui/ansichten/shop.py` (`Shop.oeffnen()`). Einen Platz im Rad hat
-das Schaufenster noch nicht — den bringt die Werkstatt (Rad-Platz `shop` →
-`u.shop.oeffnen()`).
+Ansicht `tui/ansichten/shop.py` (`Shop.oeffnen()`). Platz im Rad: `shop` im
+Erschaffen-Rad (seit 2026-10-10, [werkstatt.md](werkstatt.md),
+`rad_wahl.OEFFNEN` → `u.shop.oeffnen()`). Geholte Icons bietet der Schmied
+beim Symbol-Schritt an.
 
 ## Warum so
 
@@ -95,7 +96,6 @@ Schaufenster wieder auf (`_offen_apps`).
 
 ## Offen
 
-- Ein Rad-Platz (kommt mit der Werkstatt).
 - `zentrale://shop/…` im Adress-Router der TUI (`sprung.py`) — eine Adresse
   aus einer Notiz öffnet das Stück noch nicht.
 - Echte Apps, Agenten, Avatare, sobald es sie gibt.

@@ -29,6 +29,8 @@ tags:
     description: Desks laden und speichern (core/desk.py)
   - name: desk-bild
     description: Bilder auf dem Desk (core/desk_bild.py)
+  - name: werkstatt
+    description: Selbst gebaute Apps aus Vorlagen (core/werkstatt.py)
   - name: shop
     description: Schaufenster — Katalog, holen, Besitz (core/shop.py)
 
@@ -178,6 +180,44 @@ paths:
         "404": {$ref: "#/components/responses/DeskFehler"}
         "409": {$ref: "#/components/responses/DeskFehler"}
         "422": {$ref: "#/components/responses/DeskFehler"}
+
+    patch:
+      tags: [desk]
+      operationId: deskUmbenennen
+      summary: Desk umbenennen (Verwaltung in der Werkstatt)
+      description: >
+        Benennt die Datei um; selbst gebaute Apps, die auf den Desk zeigen
+        (`desk` in ihrer app.toml), ziehen mit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string}
+      responses:
+        "200":
+          description: Der neue Name
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [name]
+                properties:
+                  name: {type: string}
+        "400": {$ref: "#/components/responses/DeskFehler"}
+        "404": {$ref: "#/components/responses/DeskFehler"}
+        "409": {$ref: "#/components/responses/DeskFehler"}
+    delete:
+      tags: [desk]
+      operationId: deskLoeschen
+      summary: Desk löschen — nicht, solange eine App auf ihm steht (409)
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "404": {$ref: "#/components/responses/DeskFehler"}
+        "409": {$ref: "#/components/responses/DeskFehler"}
 
   /api/desk-bild/quellen:
     get:
@@ -401,6 +441,169 @@ paths:
         "400": {$ref: "#/components/responses/ShopFehler"}
         "503": {$ref: "#/components/responses/ShopFehler"}
 
+  /api/werkstatt/apps:
+    get:
+      tags: [werkstatt]
+      operationId: werkstattApps
+      summary: Selbst gebaute Apps (Reihenfolge = im App-Rad)
+      responses:
+        "200":
+          description: Die Apps
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [apps]
+                properties:
+                  apps:
+                    type: array
+                    items: {$ref: "#/components/schemas/EigeneApp"}
+    post:
+      tags: [werkstatt]
+      operationId: werkstattAnlegen
+      summary: Neue App aus einer Vorlage bauen
+      description: >
+        Legt <apps_ordner>/<slug>/app.toml an (+ icon.png aus einem Bild in
+        ~/Zentrale/Input) und bei der Vorlage `desk` einen Desk gleichen
+        Namens (ein vorhandener wird übernommen).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, icon]
+              properties:
+                name: {type: string, examples: [Geige]}
+                icon: {$ref: "#/components/schemas/IconWahl"}
+                vorlage: {type: string, enum: [desk], default: desk}
+      responses:
+        "201":
+          description: Die neue App
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/EigeneApp"}
+        "400": {$ref: "#/components/responses/WerkstattFehler"}
+        "404": {$ref: "#/components/responses/WerkstattFehler"}
+        "409": {$ref: "#/components/responses/WerkstattFehler"}
+
+  /api/werkstatt/apps/{slug}:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: {type: string, pattern: "^[a-z][a-z0-9-]{0,15}$"}
+    patch:
+      tags: [werkstatt]
+      operationId: werkstattAendern
+      summary: Name und/oder Symbol ändern (der Kurzname bleibt)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: {type: string}
+                icon: {$ref: "#/components/schemas/IconWahl"}
+      responses:
+        "200":
+          description: Die geänderte App
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/EigeneApp"}
+        "400": {$ref: "#/components/responses/WerkstattFehler"}
+        "404": {$ref: "#/components/responses/WerkstattFehler"}
+        "409": {$ref: "#/components/responses/WerkstattFehler"}
+    delete:
+      tags: [werkstatt]
+      operationId: werkstattLoeschen
+      summary: App löschen, mit `?desk=1` auch ihren Desk
+      parameters:
+        - name: desk
+          in: query
+          required: false
+          schema: {type: string, enum: ["0", "1"]}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "404": {$ref: "#/components/responses/WerkstattFehler"}
+
+  /api/werkstatt/name:
+    post:
+      tags: [werkstatt]
+      operationId: werkstattName
+      summary: Taugt der Name für eine neue App? (frei, nicht reserviert)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string}
+                ausser: {type: string, description: Kurzname der App, die umbenannt wird}
+      responses:
+        "200":
+          description: Name taugt; so heißt der Kurzname
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [name, slug]
+                properties:
+                  name: {type: string}
+                  slug: {type: string}
+        "400": {$ref: "#/components/responses/WerkstattFehler"}
+        "409": {$ref: "#/components/responses/WerkstattFehler"}
+
+  /api/werkstatt/vorlagen:
+    get:
+      tags: [werkstatt]
+      operationId: werkstattVorlagen
+      summary: Vorlagen, aus denen der Schmied baut
+      responses:
+        "200":
+          description: Die Vorlagen
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [vorlagen]
+                properties:
+                  vorlagen:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, titel, text]
+                      properties:
+                        id: {type: string}
+                        titel: {type: string}
+                        text: {type: string}
+
+  /api/werkstatt/bilder:
+    get:
+      tags: [werkstatt]
+      operationId: werkstattBilder
+      summary: Bilder in ~/Zentrale/Input, die ein Symbol werden können
+      responses:
+        "200":
+          description: Die Bilder
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bilder]
+                properties:
+                  bilder:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, pfad]
+                      properties:
+                        name: {type: string, description: relativ zu Input/}
+                        pfad: {type: string}
+
 components:
   responses:
     Ungueltig:
@@ -433,6 +636,21 @@ components:
       content:
         application/json:
           schema: {$ref: "#/components/schemas/ShopFehler"}
+
+    WerkstattFehler:
+      description: Fehler der Werkstatt (Name vergeben, Bild fehlt …)
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/DeskFehler"}
+    Ok:
+      description: Erledigt
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [ok]
+            properties:
+              ok: {const: true}
 
   schemas:
     Adresse:
@@ -846,3 +1064,44 @@ components:
       required: [error]
       properties:
         error: {type: string}
+
+    IconWahl:
+      description: Symbol einer selbst gebauten App — ein Bild aus Input/ oder ein Motiv des Rads
+      oneOf:
+        - type: object
+          required: [bild]
+          properties:
+            bild: {type: string, description: Name in ~/Zentrale/Input}
+        - type: object
+          required: [motiv]
+          properties:
+            motiv: {type: string, pattern: "^[a-z]{1,20}$"}
+
+    EigeneApp:
+      type: object
+      required: [slug, name, version, vorlage, desk, adresse, icon]
+      properties:
+        slug: {type: string, pattern: "^[a-z][a-z0-9-]{0,15}$"}
+        name: {type: string}
+        version: {type: string}
+        vorlage: {type: string}
+        desk: {type: string, description: Name des Desks, auf den die App zeigt}
+        adresse: {type: string, pattern: "^zentrale://"}
+        icon:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [art, raster]
+              properties:
+                art: {const: bild}
+                raster:
+                  type: array
+                  description: 16 Zeilen zu 16 Feldern, Farbe oder durchsichtig
+                  items:
+                    type: array
+                    items: {type: [string, "null"], pattern: "^#[0-9a-f]{6}$"}
+            - type: object
+              required: [art, motiv]
+              properties:
+                art: {const: motiv}
+                motiv: {type: string}

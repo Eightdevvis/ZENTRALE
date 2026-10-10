@@ -154,7 +154,10 @@ behandeln.
 **Dieselbe Positivliste wie die Datensicherung** (eine Stelle:
 `core/abgleich_auswahl.py`), ohne den Kalender. Nur was dort steht, verlässt
 den Rechner. Nie dabei: `ai_config.json` (Keys), `mail_secrets*`,
-Zwischenspeicher (Mail-Zähler, News), Sandbox, `_beiseite/`.
+Zwischenspeicher (Mail-Zähler, News), Sandbox, `_beiseite/`. Seit 2026-10-10
+dabei: `data/apps/**` — die selbst gebauten Apps der Werkstatt
+(`app.toml` + `icon.png`, [../system/werkstatt.md](../system/werkstatt.md));
+ihr Desk liegt ohnehin in `data/desk/`.
 
 **Kalender: bleibt bei seinem eigenen Weg.** Jeder Rechner gleicht seinen
 Kalender selbst mit Google ab (vdirsyncer, seit 07.10.2026,
@@ -183,8 +186,8 @@ Inventar über `data/` (08.10.2026) und die Regel je Art:
 | **Nur anhängen** (`.jsonl`) | `ai_transcripts/*.jsonl` (beide Rechner hängen an) | Zeilen: was in der Mitte steht, plus was hier dazukam, minus was hier gelöscht wurde. Reihenfolge: Mitte zuerst. |
 | **JSON mit Einträgen** | `lists.json`, `features.json`, `notes.json`, `graphs.json`, `g_*.json`, `melodies.json`, `sleep_quality.json`, `mail_rules.json`, `kalender_neben.json`, `gespraeche/*/kopf.json`, `ablage/*/kopf.json`, Tutor-Stände, `desk/*.canvas` (seit 2026-10-09: JSON Canvas, `nodes`/`edges` nach `id`) | Eintrag für Eintrag, Feld für Feld (unten). |
 | **Zähler-JSON** | `ai_usage.json` (Kostenbuch) | Wie JSON, aber haben beide eine Zahl verändert, werden beide Zuwächse addiert — sonst verschluckt der eine Rechner die Kosten des anderen. |
-| **Text** | `gedaechtnis/**/*.md`, Skills, Ablage-Fassungen `.md` | Zeilen-Zusammenführen über die Basis (Drei-Wege). |
-| **Sonstiges** (Bilder, PDFs, kaputtes JSON) | Anhänge in der Ablage | Als Ganzes. |
+| **Text** | `gedaechtnis/**/*.md`, Skills, Ablage-Fassungen `.md`, `apps/*/app.toml` (selbst gebaute Apps, seit 2026-10-10: ein Schlüssel je Zeile) | Zeilen-Zusammenführen über die Basis (Drei-Wege). |
+| **Sonstiges** (Bilder, PDFs, kaputtes JSON) | Anhänge in der Ablage, Symbole `apps/*/icon.png` | Als Ganzes. |
 
 ### JSON, Eintrag für Eintrag
 

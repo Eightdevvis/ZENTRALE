@@ -456,6 +456,8 @@ SYM_FARBEN = {
     "fokus":    _pal("#ff8a3d", "#ffe0c2", "#ffb27a", "#ff3d5a", "#5a2410"),
     "tutor":    _pal("#ff6fb5", "#ffd1e8", "#ff9fcf", "#ffffff", "#5c1238"),
     "desk":     _pal("#f2e6c9", "#fffaf0", "#b8875a", "#e8505b", "#5a3a22"),
+    "werkstatt": _pal("#7d8a99", "#dfe7ef", "#a9b6c4", "#ff8a1f", "#2c333b"),
+    "shop":     _pal("#f4d9a6", "#fff7e6", "#ffd27a", "#e8505b", "#4a2c1a"),
 }
 _GRUND = {"nacht": (_hex("#000000"), _hex("#ffffff")),     # (hintergrund, schrift)
           "tag": (_hex("#ffffff"), _hex("#001a40"))}
@@ -652,9 +654,117 @@ def _m_desk(P, x, y, g, t):
     return mix(P["dunkel"], P["glow"], .55), .9                    # Kork
 
 
+def _m_werkstatt(P, x, y, g, t):
+    """Werkstatt (2026-10-10): ein Amboss, darüber der Hammer des Schmieds;
+    offen schlägt er im Takt zu und es sprühen Funken."""
+    hub = abs(math.sin(t / 260)) if g >= 1 else 1.0               # 0 = aufgeschlagen
+    if g > .5 and hub < .35:
+        for i, (fx, fy) in enumerate(((9, 22), (12, 18), (25, 21), (22, 17), (16, 15))):
+            if (x, y) == (fx + i % 2, fy - int((1 - hub) * 3)):
+                return P["akzent"], 1.0                            # Funken
+    hy = 6 + int((1 - hub) * 10 * g)                               # Hammerkopf fällt
+    if 15 <= x < 27 and hy <= y < hy + 7:
+        return (P["edge"] if y == hy else P["glow"]), .95
+    if g > .3 and _strich(x, y, 21, hy + 3, 30, hy - 5, .9):
+        return P["akzent"], .9                                     # Stiel
+    if 29 <= y < 34 and (5 <= x < 28 or (1 <= x < 5 and y - 29 < (x - 1) * 1.3)):
+        return (P["edge"] if y == 29 else P["core"]), .95          # Bahn mit Horn
+    if 34 <= y < 41 and 11 <= x < 21:
+        return P["dunkel"], .95                                    # Taille
+    if 41 <= y < 47 and 7 <= x < 25:
+        return (P["glow"] if y == 41 else P["core"]), .95          # Fuss
+    return None
+
+
+def _m_shop(P, x, y, g, t):
+    """Shop (2026-10-10): ein kleiner Laden mit gestreifter Markise, Tür und
+    Schaufenster; offen glimmt das Fenster."""
+    if 6 <= y < 15 and 2 <= x < 30:
+        return (P["akzent"] if (x // 4) % 2 == 0 else P["edge"]), .95   # Markise
+    if y == 15 and 2 <= x < 30 and x % 4 in (1, 2):
+        return (P["akzent"] if (x // 4) % 2 == 0 else P["edge"]), .95   # Zacken
+    x0, x1, y0, y1 = 4, 28, 16, 47
+    if not (x0 <= x < x1 and y0 <= y < y1):
+        return None
+    if x in (x0, x1 - 1) or y == y1 - 1:
+        return P["dunkel"], .95
+    if g > .3 and 18 <= x < 25 and 27 <= y < y1 - 1:
+        return (P["glow"] if (x, y) == (23, 37) else P["dunkel"]), .95  # Tür, Klinke
+    if g > .5 and 7 <= x < 16 and 22 <= y < 35:
+        glimm = .7 + .3 * math.sin(t / 400) if g >= 1 else .8
+        return mix(P["glow"], P["edge"], .3), glimm                # Schaufenster
+    return P["core"], .9
+
+
 MOTIVE = {"post": _m_post, "karte": _m_karte, "kalender": _m_kalender,
           "klavier": _m_klavier, "notizen": _m_notizen, "graph": _m_graph,
-          "fokus": _m_fokus, "tutor": _m_tutor, "desk": _m_desk}
+          "fokus": _m_fokus, "tutor": _m_tutor, "desk": _m_desk,
+          "werkstatt": _m_werkstatt, "shop": _m_shop}
+# Motive, die der Schmied als „zufälliges Symbol" vergibt (2026-10-10):
+# alle festen, nicht die eigenen Apps (die kommen per symbol_eintragen dazu).
+FESTE_MOTIVE = tuple(MOTIVE)
+
+
+# ── Eigene Apps aus der Werkstatt (2026-10-10) ──────────────────────────────
+# Eine selbst gebaute App bringt entweder ein festes Motiv mit (dann leiht
+# sie dessen Zeichnung und Farben) oder ein kleines Pixelbild (Raster aus
+# dem Backend, core/bild_vorschau.icon_raster: Zeilen aus "#rrggbb" | None).
+# Das Raster wird zum Motiv wie alle anderen — es klappt genauso auf, die
+# Schriftplatte liegt drüber. Eingetragen unter dem Namen im Rad (slug).
+def _raster_motiv(raster):
+    """Raster → Motiv-Funktion: quadratisch (Pixel ≈ 2 × 3 Feinpixel) in der
+    Mitte des 32×54-Feldes. Das Aufklappen macht symbol_pixel wie bei allen."""
+    n = len(raster) or 1
+    sx, sy = _W / n, (_W / AY) / n
+    y0 = (_H - _W / AY) / 2
+
+    def motiv(P, x, y, g, t):
+        r, c = int((y - y0) // sy), int(x // sx)
+        if not (0 <= r < n and 0 <= c < len(raster[r])) or raster[r][c] is None:
+            return None
+        return _hex(raster[r][c]), .97
+    return motiv
+
+
+def _raster_farben(raster):
+    """Palette aus dem Raster: häufigste bunte Farbe als Pille."""
+    farben = [_hex(f) for zeile in raster for f in zeile if f]
+    if not farben:
+        return _pal("#888888", "#cccccc", "#aaaaaa", "#888888", "#333333")
+    haeufig = max(set(farben), key=lambda f: (max(f) - min(f) > 40, farben.count(f)))
+    h = "#%02x%02x%02x" % haeufig
+    return _pal(h, "#ffffff", h, h, "#202020")
+
+
+def symbol_eintragen(name, icon):
+    """Symbol einer eigenen App eintragen (icon wie aus /api/werkstatt/apps:
+    {"art": "bild", "raster"} | {"art": "motiv", "motiv"}). -> True, wenn
+    die App jetzt ein Symbol hat. Leert die Bild-Puffer."""
+    if name in FESTE_MOTIVE or name == "elektronik":
+        return True                                    # feste Namen nie überschreiben
+    icon = icon or {}
+    if icon.get("art") == "motiv" and icon.get("motiv") in FESTE_MOTIVE:
+        quelle = icon["motiv"]
+        MOTIVE[name], SYM_FARBEN[name], PILLE[name] = MOTIVE[quelle], SYM_FARBEN[quelle], PILLE[quelle]
+    elif icon.get("art") == "bild" and icon.get("raster"):
+        MOTIVE[name], SYM_FARBEN[name], PILLE[name] = (_raster_motiv(icon["raster"]),
+                                                       _raster_farben(icon["raster"]), "core")
+    else:
+        symbol_austragen(name)
+        return False
+    symbol_zellen.cache_clear()
+    return True
+
+
+def symbol_austragen(name):
+    if name not in FESTE_MOTIVE:
+        for d in (MOTIVE, SYM_FARBEN, PILLE):
+            d.pop(name, None)
+        symbol_zellen.cache_clear()
+
+
+def hat_symbol(name):
+    return name == "elektronik" or name in MOTIVE
 
 
 def symbol_pixel(name, offen, t_ms, farben="nacht"):
@@ -725,7 +835,8 @@ def _hell(c):
 # Karte grün wie die Kontinente — Sasha, 04.10.2026).
 PILLE = {"post": "core", "karte": "akzent", "kalender": "akzent",
          "klavier": "glow", "notizen": "core", "graph": "core",
-         "fokus": "core", "tutor": "core", "desk": "akzent"}
+         "fokus": "core", "tutor": "core", "desk": "akzent",
+         "werkstatt": "akzent", "shop": "akzent"}
 
 
 def bunt(c):

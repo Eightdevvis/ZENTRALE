@@ -744,3 +744,11 @@ def test_shop_ordner_liegt_im_test_nicht_im_echten_data():
     wert = os.environ.get("ZENTRALE_SHOP_ORDNER")
     assert wert, "ZENTRALE_SHOP_ORDNER ist nicht gesetzt"
     assert not os.path.realpath(shop.ordner()).startswith(os.path.realpath(ROOT))
+
+
+def test_apps_ordner_liegt_im_test_nicht_im_echten_data():
+    """Selbst gebaute Apps (core/werkstatt.py, 2026-10-10): im Betrieb
+    data/apps/ mit Sashas Apps — im Test nie."""
+    import apps
+    assert os.environ.get("ZENTRALE_APPS_ORDNER"), "ZENTRALE_APPS_ORDNER ist nicht gesetzt"
+    assert not os.path.realpath(apps.eigene_ordner()).startswith(os.path.realpath(ROOT))

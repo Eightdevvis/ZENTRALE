@@ -274,7 +274,7 @@ def welt(monkeypatch, tmp_path):
     def kein_netz(*a, **k):
         raise urllib.error.URLError("kein netz im test")
     monkeypatch.setattr(urllib.request, "urlopen", kein_netz)
-    for rad in ("RAD", "META", "TRAD"):          # Räder je Test frisch
+    for rad in ("RAD", "META", "TRAD", "ERAD"):  # Räder je Test frisch
         monkeypatch.setattr(zt, rad, copy.deepcopy(getattr(zt, rad)))
 
     def bauen():
@@ -285,9 +285,8 @@ def welt(monkeypatch, tmp_path):
         z.theme_mode_now = lambda: "auto"
         z.set_theme_mode = lambda m: None
         z.LAUF = {"an": False, "laeuft": False}
-        z.ELEK = {"active": False}
         chat = A.chat.Chat(z)
-        u = types.SimpleNamespace(z=z, chat=chat, AI=chat.AI, ELEK=z.ELEK, LAUF=z.LAUF,
+        u = types.SimpleNamespace(z=z, chat=chat, AI=chat.AI, LAUF=z.LAUF,
                                   DASH={"an": False}, C=z.C, PIX=z.PIX,
                                   addclip=z.addclip, safe_addstr=z.safe_addstr,
                                   draw_box=z.draw_box, stdscr=z.stdscr, store=z.store)
@@ -301,7 +300,10 @@ def welt(monkeypatch, tmp_path):
         u.technik = A.technik.Technik(z); u.TECH = u.technik.TECH
         u.desk = A.desk.Desk(z); u.DESK = u.desk.DESK
         u.shop = A.shop.Shop(z); u.SHOP = u.shop.SHOP
-        u.startseite = A.startseite.Startseite(z, zt.RAD, zt.META, zt.TRAD, u.technik)
+        u.router = A.sprung.router_fuer(u.DESK, u.kalender, u.fokus, u.graphen)
+        u.eigene = A.eigene_apps.EigeneApps(z, u.router, u.desk)     # Werkstatt (2026-10-10)
+        u.werkstatt = A.werkstatt.Werkstatt(z, u.eigene, u.desk, u.router); u.WERK = u.werkstatt.W
+        u.startseite = A.startseite.Startseite(z, zt.RAD, zt.META, zt.TRAD, u.technik, zt.ERAD)
         u.dashboard = A.dashboard.Dashboard(z, u.graphen, u.fokus)
         u.erinnerung = A.erinnerung.Erinnerung(z, u.graphen)
         u.bz = A.befehle.Befehlszeile(z)
@@ -320,10 +322,10 @@ def zeichnen(u):
 
 def fingerabdruck(u):
     teile = []
-    for name in ("AI", "G", "L", "M", "K", "MAIL", "NOTE", "PIANO", "TECH", "ELEK", "DESK",
-                 "SHOP"):
+    for name in ("AI", "G", "L", "M", "K", "MAIL", "NOTE", "PIANO", "TECH", "DESK",
+                 "SHOP", "WERK"):
         teile.append(repr(getattr(u, name)))
-    teile.append(repr((zt.RAD, zt.META, zt.TRAD)))
+    teile.append(repr((zt.RAD, zt.META, zt.TRAD, zt.ERAD)))
     teile.append(repr(vars(u.bz)))
     teile.append(repr((u.erinnerung.nag_active, u.post.MAIL_Q.qsize())))
     teile.append(repr(list(u.aufrufe)) + repr(list(u.nebenwirkung)))
@@ -420,8 +422,8 @@ def _technik(u):
     u.TECH["active"] = True; u.TECH["view"] = "system"
 
 
-def _elektronik(u):
-    u.ELEK["active"] = True
+def _werkstatt(u):                          # Werkstatt (2026-10-10)
+    u.werkstatt.oeffnen()
 
 
 def _desk_wahl(u):
@@ -489,7 +491,7 @@ ZUSTAENDE = {
     "piano": ("piano", _klavier),
     "map": ("map", _karte),
     "technik": ("technik", _technik),
-    "elektronik": ("elektronik", _elektronik),
+    "werkstatt": ("werkstatt", _werkstatt),
     "desk:wahl": ("desk:wahl", _desk_wahl),
     "desk:canvas": ("desk:canvas", _desk),
     "desk:greifen": ("desk:greifen", _desk_greifen),

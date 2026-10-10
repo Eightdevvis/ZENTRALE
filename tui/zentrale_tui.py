@@ -655,9 +655,10 @@ def code_fehler(dateien):
 # Der ZUSTAND bleibt hier auf Modulebene: er überlebt einen run_ui-Neustart
 # (Weglegen, abgefangener Fehler), und main() schreibt ihn beim Hot Reload in
 # die Umgebung (ZENTRALE_TUI_RAD/META), damit das Rad nach exec dasteht, wo es war.
+# Seit 2026-10-10 drei Räder: Apps (RAD), Technik (TRAD), Erschaffen (ERAD).
 RAD_APPS, TECH_APPS = ansichten.startseite.RAD_APPS, ansichten.startseite.TECH_APPS
 meta_taste, rad_anstoss = ansichten.startseite.meta_taste, ansichten.startseite.rad_anstoss
-rad_index = ansichten.startseite.rad_index
+rad_index, rad_apps = ansichten.startseite.rad_index, ansichten.startseite.rad_apps
 
 
 def _rad_start():
@@ -668,27 +669,27 @@ def _rad_start():
         return 0
 
 
-RAD = {"sel": _rad_start(), "pos": float(_rad_start()),  # sel = Ziel, pos = wo das Rad gerade steht
-       "offen": {}, "offen_seit": {},     # je Symbol-App: 0 zu … 1 offen, seit wann ganz offen
-       "takt": 0.0, "schnell": False}     # letzter Frame; klappt gerade etwas (→ schneller Takt)
+RAD = ansichten.startseite.symbol_rad(_rad_start())   # sel = Ziel, pos = wo das Rad steht
 
 
 def _meta_start():
-    """Nach einem Hot Reload: Galaxie-Stellung, drin oder nicht, Technik-Stellung."""
+    """Nach einem Hot Reload: Galaxie-Stellung, drin oder nicht, Technik-
+    und Erschaffen-Stellung (die vierte Zahl seit 2026-10-10; fehlt sie, 0)."""
     try:
-        fokus, drin, sel = (int(t) for t in
-                            os.environ.get("ZENTRALE_TUI_META", "0,0,0").split(","))
+        teile = [int(t) for t in os.environ.get("ZENTRALE_TUI_META", "0,0,0").split(",")]
+        fokus, drin, sel = teile[:3]
     except ValueError:
-        return 0, False, 0
-    return (1 if fokus == 1 else 0), bool(drin), sel
+        return 0, False, 0, 0
+    return max(0, min(2, fokus)), bool(drin), sel, (teile[3] if len(teile) > 3 else 0)
 
 
 _M0 = _meta_start()
 META = {"gsel": _M0[0], "gpos": float(_M0[0]),   # Galaxie: Ziel + wo sie gerade steht
         "fahrt": None,          # laufende Drehung: (von, nach, startzeit) oder None
-        "fokus": _M0[0],        # welches System gewählt ist: 0 = Apps, 1 = Technik
+        "fokus": _M0[0],        # welches System gewählt ist: 0 = Apps, 1 = Technik, 2 = Erschaffen
         }
 TRAD = {"sel": _M0[2], "pos": float(_M0[2])}   # Technik-Rad, wie RAD
+ERAD = ansichten.startseite.symbol_rad(_M0[3])  # Erschaffen-Rad (Werkstatt, Shop), mit Symbolen
 
 
 def dashboard_datei():
@@ -771,7 +772,7 @@ def taste_verteilen(u, ch):
     """Eine Taste an das Fenster mit dem Fokus (früher die erste Hälfte der
     Hauptschleife von run_ui). -> BEENDEN, wenn die TUI enden soll."""
     import curses
-    AI, DASH, ELEK, G, K, L, LAUF, M = u.AI, u.DASH, u.ELEK, u.G, u.K, u.L, u.LAUF, u.M
+    AI, DASH, G, K, L, LAUF, M = u.AI, u.DASH, u.G, u.K, u.L, u.LAUF, u.M
     MAIL, NOTE, PIANO, TECH, bz = u.MAIL, u.NOTE, u.PIANO, u.TECH, u.bz
     chat, erinnerung, fokus, graphen = u.chat, u.erinnerung, u.fokus, u.graphen
     kalender, karte, klavier, notizen = u.kalender, u.karte, u.klavier, u.notizen
@@ -824,9 +825,6 @@ def taste_verteilen(u, ch):
     elif NOTE["active"]:                   # Notiz-Werkzeug hat den Fokus
         if notizen.taste(ch) == BEENDEN:
             return BEENDEN
-    elif ELEK["active"]:                   # Elektronik-Bereich hat den Fokus
-        if ch == 27:
-            ELEK["active"] = False
     elif TECH["active"]:                   # Technik-Ansicht hat den Fokus
         if ch == 27:
             TECH["active"] = False
@@ -835,15 +833,17 @@ def taste_verteilen(u, ch):
     elif AI["active"]:                     # KI-Chat hat den Fokus
         chat.taste(ch)
     elif u.DESK["active"]:                 # Desk View hat den Fokus (2026-10-09)
-        u.desk.taste(ch)
+        u.desk.taste(ch)                   # (auch über der Werkstatt, die darunter wartet)
     elif getattr(u, "SHOP", None) and u.SHOP["active"]:   # Schaufenster (2026-10-10)
         u.shop.taste(ch)
+    elif u.WERK["active"]:                 # Werkstatt (2026-10-10)
+        u.werkstatt.taste(ch)
     else:                                  # Startseite: das Rad
         # Seit 02.10.2026 keine Buchstaben-Shortcuts mehr (Sasha): ←/→
         # dreht, enter öffnet die App vorn, space die KI. Theme, Laufschrift
         # und Beenden gehen über die Befehlszeile (/theme, /lauf, /quit),
-        # Weglegen über Cmd+z. `taste` übersetzt die Wahl in den alten
-        # Buchstaben, damit die Öffnen-Zweige unten unverändert bleiben.
+        # Weglegen über Cmd+z. `taste` ist der Schlüssel der Wahl in der
+        # Tabelle ansichten/rad_wahl.OEFFNEN (seit 2026-10-10).
         taste = None
         if not DASH["an"]:
             # Galaxie (seit 03.10.2026): ←/→ dreht das gewählte Rad,
@@ -858,11 +858,11 @@ def taste_verteilen(u, ch):
             if ch == ord(" "):
                 taste = "a"
             elif was:
-                wahl = meta_taste(META, RAD, TRAD, was)
-                if wahl and wahl[0] == "app":
-                    taste = wahl[1]
-                elif wahl:
+                wahl = meta_taste(META, RAD, TRAD, was, ERAD)
+                if wahl and wahl[0] == "technik":
                     TECH["active"] = True; TECH["view"] = wahl[1]
+                elif wahl:                     # App oder Erschaffen: rad_wahl.OEFFNEN
+                    taste = wahl[1]
         elif ch == 27:                         # altes Dashboard: Esc klappt auch zu
             fenster_zuklappen()
         elif ch == curses.KEY_LEFT:
@@ -872,36 +872,10 @@ def taste_verteilen(u, ch):
         elif ch == ord(" "):
             taste = "a"
         elif ch in (10, 13, curses.KEY_ENTER):
-            taste = RAD_APPS[rad_index(RAD["sel"])][0]
-        ch = ord(taste) if taste else -1
-        if ch in (ord("g"), ord("G")):     # Graph-Werkzeug öffnen
-            graphen.oeffnen()
-        elif ch in (ord("m"), ord("M")):   # Karte öffnen
-            karte.oeffnen()
-        elif ch in (ord("c"), ord("C")):   # Kalender öffnen
-            kalender.oeffnen()
-        elif ch in (ord("p"), ord("P")):   # Post/Mail-Panel öffnen (Ebene Kategorien)
-            post.oeffnen()
-        elif ch in (ord("a"), ord("A")):   # KI-Chat öffnen (Thin-Client übers PC-Hirn)
-            chat.oeffnen()
-        elif ch in (ord("u"), ord("U")):   # 'u' öffnet das Zimmer der Tutor-App (eigenes Fenster)
-            if os.environ.get("ZENTRALE_ROOM_PARENT"):
-                # Die TUI wurde AUS dem Zimmer heraus geöffnet (Wand-Kiosk,
-                # room.py Alt+Z): das Zimmer liegt darunter und läuft weiter.
-                # 'u' heißt hier »zurück ins Zimmer« — TUI zu, kein zweites
-                # Zimmer, das sich mit dem ersten ums Mikro streitet.
-                return BEENDEN
-            app_start.tutor_oeffnen()
-        elif ch in (ord("n"), ord("N")):   # Notiz-Werkzeug öffnen (direkt in eine Notiz)
-            notizen.oeffnen()
-        elif ch in (ord("k"), ord("K")):   # Klavier öffnen (wie im Browser: k)
-            klavier.oeffnen()
-        elif ch in (ord("e"), ord("E")):   # Elektronik-Bereich (noch leer)
-            ELEK["active"] = True
-        elif ch in (ord("f"), ord("F")):   # Fokus-Werkzeug öffnen (primäre Taste)
-            fokus.oeffnen()
-        elif ch in (ord("d"), ord("D")):   # Desk View: Auswahl der Desks (2026-10-09)
-            u.desk.oeffnen()
+            taste = rad_apps()[rad_index(RAD["sel"])][0]
+        # Öffnen: eine Tabelle statt if-Kette (2026-10-10, ansichten/rad_wahl.py).
+        if taste and ansichten.rad_wahl.oeffnen(u, taste) == BEENDEN:
+            return BEENDEN
         # '/' wird global oben abgefangen (greift in JEDEM Fenster), darum
         # hier kein eigener Zweig mehr.
 
@@ -910,7 +884,7 @@ def bild_zeichnen(u):
     """Ein Bild: Daten holen, Kopf, Spalten, Mitte, Befehlszeile, Fuß,
     Reminder (früher die zweite Hälfte der Hauptschleife von run_ui)."""
     import curses
-    AI, C, DASH, ELEK, G, K, L, LAUF = u.AI, u.C, u.DASH, u.ELEK, u.G, u.K, u.L, u.LAUF
+    AI, C, DASH, G, K, L, LAUF = u.AI, u.C, u.DASH, u.G, u.K, u.L, u.LAUF
     M, MAIL, NOTE, PIANO, PIX, TECH = u.M, u.MAIL, u.NOTE, u.PIANO, u.PIX, u.TECH
     addclip, bz, chat, dashboard = u.addclip, u.bz, u.chat, u.dashboard
     draw_box, erinnerung, fokus, graphen = u.draw_box, u.erinnerung, u.fokus, u.graphen
@@ -1048,17 +1022,14 @@ def bild_zeichnen(u):
     elif PIANO["active"]:
         draw_box(top, mx, body_h, midw, "klavier")
         klavier.draw_piano_tool(top, mx, body_h, midw)
-    elif ELEK["active"]:
-        draw_box(top, mx, body_h, midw, "elektronik")
-        leer = "hier entsteht der elektronik-bereich"
-        addclip(top + body_h // 2, mx + max(2, (midw - len(leer)) // 2), leer,
-                midw - 4, C["faint"])
-        addclip(top + body_h - 2, mx + 2, "esc zurück zum rad", midw - 4, C["faint"])
     elif u.DESK["active"]:
         draw_box(top, mx, body_h, midw, u.desk.titel())
         u.desk.draw_desk(top, mx, body_h, midw)
     elif getattr(u, "SHOP", None) and u.SHOP["active"]:   # Schaufenster (2026-10-10)
         u.shop.draw_shop(top, mx, body_h, midw)          # mit eigenem Kasten
+    elif u.WERK["active"]:
+        draw_box(top, mx, body_h, midw, u.werkstatt.titel())
+        u.werkstatt.draw(top, mx, body_h, midw)
     elif TECH["active"]:
         draw_box(top, mx, body_h, midw, "technik · " + TECH["view"])
         laeuft_jetzt = technik.draw_tech(top, mx, body_h, midw, state, metrics, nets) or laeuft_jetzt
@@ -1078,7 +1049,7 @@ def bild_zeichnen(u):
         # UNTER der Mitte: der Platz darüber ist für das, was ZENTRALE
         # künftig von sich aus zeigt (kommt Stück für Stück).
         draw_box(top, mx, body_h, midw, "zentrale")
-        startseite.draw_rad(top, body_h, mx, midw, [a[1] for a in RAD_APPS], RAD, symbole_an=True)
+        startseite.draw_rad(top, body_h, mx, midw, [a[1] for a in rad_apps()], RAD, symbole_an=True)
 
     # Zappelt gerade wirklich etwas? Nur dann tickt die Schleife schneller
     # (siehe oben) — ein breites Fenster bleibt bei den ruhigen 250 ms.
@@ -1183,9 +1154,6 @@ def run_ui(stdscr, store):
     LAUF = {"an": lauf_lesen(), "laeuft": False}
     z.LAUF = LAUF            # draw_stdout (ansichten/technik.py) liest den Wunsch
 
-    # ── Elektronik (Mitte, aus dem Rad) — Sasha 03.10.2026: neuer Bereich,
-    # bleibt erst mal leer; der Auftritt ist das Pixel-Symbol im Rad.
-    ELEK = z.ELEK = {"active": False}
     # Altes 3-Spalten-Dashboard als Backup (/dashboard an). Aus = Meta-Rad.
     DASH = {"an": schalter_lesen(dashboard_datei(), False)}
 
@@ -1218,9 +1186,13 @@ def run_ui(stdscr, store):
     desk.zeigen = router.zeigen
     shop = ansichten.shop.Shop(z)          # Schaufenster (2026-10-10): u.shop.oeffnen()
     SHOP = shop.SHOP
+    # Werkstatt + selbst gebaute Apps im Rad (2026-10-10, memory/system/werkstatt.md)
+    eigene = ansichten.eigene_apps.EigeneApps(z, router, desk)
+    eigene.laden()
+    werkstatt = ansichten.werkstatt.Werkstatt(z, eigene, desk, router)
     technik = ansichten.technik.Technik(z)
     TECH = technik.TECH
-    startseite = ansichten.startseite.Startseite(z, RAD, META, TRAD, technik)
+    startseite = ansichten.startseite.Startseite(z, RAD, META, TRAD, technik, ERAD)
     dashboard = ansichten.dashboard.Dashboard(z, graphen, fokus)
     # Graph-Reminder („bitte eintragen", einmal pro Sitzung): ansichten/erinnerung.py
     erinnerung = ansichten.erinnerung.Erinnerung(z, graphen)
@@ -1272,13 +1244,14 @@ def run_ui(stdscr, store):
                     lebenslauf("HOT RELOAD: %s nicht wieder geöffnet: %s" % (name, e))
 
     u = types.SimpleNamespace(
-        AI=AI, C=C, DASH=DASH, ELEK=ELEK, G=G, K=K, L=L, LAUF=LAUF, M=M, MAIL=MAIL,
+        AI=AI, C=C, DASH=DASH, G=G, K=K, L=L, LAUF=LAUF, M=M, MAIL=MAIL,
         NOTE=NOTE, PIANO=PIANO, PIX=PIX, TECH=TECH, addclip=addclip, bz=bz,
         chat=chat, dashboard=dashboard, draw_box=draw_box, erinnerung=erinnerung,
         fokus=fokus, graphen=graphen, kalender=kalender, karte=karte, klavier=klavier,
         notizen=notizen, post=post, safe_addstr=safe_addstr, app_start=app_start,
         startseite=startseite, stdscr=stdscr, store=store, technik=technik, z=z,
-        DESK=DESK, desk=desk, router=router, SHOP=SHOP, shop=shop)
+        DESK=DESK, desk=desk, router=router, SHOP=SHOP, shop=shop,
+        WERK=werkstatt.W, werkstatt=werkstatt, eigene=eigene)
 
     while True:
         # Neuer Code in tui/? Erst wenn er eine Sekunde ruht (ein Merge
@@ -1317,7 +1290,8 @@ def run_ui(stdscr, store):
                 or PIANO["active"]
                 or RAD["pos"] != RAD["sel"] or RAD["schnell"]
                 or TRAD["pos"] != TRAD["sel"] or META["gpos"] != META["gsel"]
-                or RAD.get("wurf") or TRAD.get("wurf")
+                or ERAD["pos"] != ERAD["sel"] or ERAD["schnell"]
+                or RAD.get("wurf") or TRAD.get("wurf") or ERAD.get("wurf")
                 or desk.bewegt_sich())       # Desk-Ausschnitt gleitet (2026-10-10)
         # Denk-Adern (2026-10-07): ihr Bild ändert sich höchstens 10× pro
         # Sekunde (denkadern.BILDER_JE_S) — solange nur sie sich bewegen,
@@ -1330,6 +1304,7 @@ def run_ui(stdscr, store):
 
         if taste_verteilen(u, ch) == BEENDEN:
             break
+        eigene.pflegen()             # eigene Apps ab und zu frisch (Abgleich)
         # Mit `o` geöffnete Ansicht zu (Esc)? Dann zurück zum Öffner, z. B.
         # auf denselben Desk (sprung.Router, 2026-10-10).
         router.nachsehen()
@@ -1478,8 +1453,8 @@ def main():
         lebenslauf("HOT RELOAD  neuer Code in tui/")
         os.environ["ZENTRALE_TUI_RELOADED"] = "1"
         os.environ["ZENTRALE_TUI_RAD"] = str(RAD["sel"])
-        os.environ["ZENTRALE_TUI_META"] = "%d,%d,%d" % (
-            META["gsel"], 0, TRAD["sel"])
+        os.environ["ZENTRALE_TUI_META"] = "%d,%d,%d,%d" % (
+            META["gsel"], 0, TRAD["sel"], ERAD["sel"])
         try:
             os.environ["ZENTRALE_TUI_OFFEN"] = json.dumps(
                 OFFEN["merken"]() if OFFEN.get("merken") else None)

@@ -36,6 +36,9 @@ def in_text_entry(z):
     if DESK and DESK["active"]:
         return DESK["name"] is not None or DESK["modal"] is not None \
             or (DESK.get("bild_wahl") or {}).get("pfad") is not None
+    WERK = getattr(z, "WERK", None)       # Werkstatt (2026-10-10): Name tippen = Text
+    if WERK and WERK["active"]:
+        return WERK["feld"] is not None
     if AI["active"]:
         # Ganzes Panel ist Prompt-Eingabe → '/' bleibt ein Zeichen, öffnet
         # nicht die Befehlszeile. (Bei offener Erlaubnis-Frage ignoriert der
@@ -46,7 +49,7 @@ def in_text_entry(z):
 def current_ctx(z):
     """Kontext-Schlüssel des fokussierten Fensters für die '/'-Anzeige.
     None = Tipp-Screen ohne eigene Shortcut-Liste."""
-    AI, ELEK, G, K, L, M, MAIL = z.AI, z.ELEK, z.G, z.K, z.L, z.M, z.MAIL
+    AI, G, K, L, M, MAIL = z.AI, z.G, z.K, z.L, z.M, z.MAIL
     NOTE, PIANO, TECH = z.NOTE, z.PIANO, z.TECH
     if G["active"]:
         return "graph" if G["view"] == "list" else None
@@ -104,12 +107,13 @@ def current_ctx(z):
     SHOP = getattr(z, "SHOP", None)       # Schaufenster (2026-10-10)
     if SHOP and SHOP["active"]:
         return "shop"
+    WERK = getattr(z, "WERK", None)
+    if WERK and WERK["active"]:           # Werkstatt (2026-10-10): tippen = Freitext
+        return None if WERK["feld"] is not None else "werkstatt"
     if AI["active"]:
         return "ai"
     if PIANO["active"]:
         return "piano"
-    if ELEK["active"]:
-        return "elektronik"
     if TECH["active"]:
         return "technik"
     if NOTE["active"]:

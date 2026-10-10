@@ -260,3 +260,68 @@ def zellen_fuer(breite_px, hoehe_px, spalten):
     if not breite_px or not hoehe_px:
         return max(1, spalten // 3)
     return max(1, round(spalten * hoehe_px / breite_px / ZELLE_HOCH))
+
+
+# ── Pixel-Icon fürs Rad (2026-10-10, Werkstatt) ───────────────────────
+# Eine selbst gebaute App (core/werkstatt.py) bekommt ihr Symbol aus einem
+# Bild in ~/Zentrale/Input. Das Rad zeichnet Symbole aus Feinpixeln
+# (tui/pixel.py); ein Foto passt da nur als kleines, hartes Pixelbild:
+# quadratisch beschnitten, ICON_SEITE² Pixel, wenige Farben (xterm-256 wie
+# oben — jede Farbe kostet in curses ein Paar), Durchsichtiges ganz oder gar
+# nicht. Gespeichert wird es als gewöhnliches PNG (icon.png neben app.toml),
+# kein eigenes Format; die TUI bekommt es als Raster über HTTP.
+ICON_SEITE = 16
+ICON_FARBEN = 16
+
+
+def _pixel_liste(img):
+    """Alle Pixel als Liste (Pillow ≥ 12: get_flattened_data, getdata veraltet)."""
+    f = getattr(img, "get_flattened_data", None) or img.getdata
+    return list(f())
+
+
+def icon_machen(quelle, seite=ICON_SEITE, farben=ICON_FARBEN) -> bytes:
+    """Bild-Datei → PNG-Bytes des Pixel-Icons (seite × seite, RGBA).
+    KeinBild, wenn Pillow die Datei nicht lesen kann."""
+    import io
+    Image, ImageOps = _pil()
+    try:
+        with Image.open(quelle) as roh:
+            roh.draft("RGB", (seite * 8, seite * 8))
+            img = ImageOps.exif_transpose(roh).convert("RGBA")
+    except (FileNotFoundError, OhnePillow):
+        raise
+    except Exception:
+        raise KeinBild("das ist kein bild, das sich lesen lässt")
+    iw, ih = img.size
+    k = min(iw, ih)                              # quadratisch, mittig beschnitten
+    img = img.crop(((iw - k) // 2, (ih - k) // 2, (iw - k) // 2 + k, (ih - k) // 2 + k))
+    img = img.resize((seite, seite), Image.LANCZOS)
+    px = _pixel_liste(img)
+    sichtbar = [i for i, p in enumerate(px) if p[3] >= 128]
+    gekappt = palette_kappen([px[i][:3] for i in sichtbar], farben)
+    neu = [(0, 0, 0, 0)] * len(px)
+    for i, c in zip(sichtbar, gekappt):
+        neu[i] = tuple(c) + (255,)
+    img.putdata(neu)
+    puffer = io.BytesIO()
+    img.save(puffer, "PNG")
+    return puffer.getvalue()
+
+
+def icon_raster(pfad, seite=ICON_SEITE) -> list:
+    """Icon-PNG → seite Zeilen zu je seite Feldern: "#rrggbb" oder None
+    (durchsichtig). Fremde Größen werden hart (NEAREST) angepasst."""
+    Image, _ = _pil()
+    try:
+        with Image.open(pfad) as roh:
+            img = roh.convert("RGBA")
+    except (FileNotFoundError, OhnePillow):
+        raise
+    except Exception:
+        raise KeinBild("das ist kein bild, das sich lesen lässt")
+    if img.size != (seite, seite):
+        img = img.resize((seite, seite), Image.NEAREST)
+    px = _pixel_liste(img)
+    return [[_hex(p[:3]) if p[3] >= 128 else None for p in px[r * seite:(r + 1) * seite]]
+            for r in range(seite)]

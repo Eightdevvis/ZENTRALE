@@ -28,7 +28,7 @@ TUI_COMMANDS = [
 ]
 TUI_KEYS = [
     ("←→",    "Startseite: das gewählte Rad drehen — vorn steht die App, die enter öffnet"),
-    ("alt+←→", "Startseite: das Rad wechseln (apps | technik), die Galaxie dreht mit"),
+    ("alt+←→", "Startseite: das Rad wechseln (apps | technik | erschaffen), die Galaxie dreht mit"),
     ("enter", "Startseite: die App vorn im gewählten Rad öffnen"),
     ("esc",   "zurück, Stufe für Stufe bis zur Startseite; dort klappt esc ZENTRALE zu (wie $mod+z)"),
     # Die Apps im Rad — seit 02.10.2026 nicht mehr per Buchstabe,
@@ -42,7 +42,9 @@ TUI_KEYS = [
     ("tutor", "Persona-Zimmer (eigene App, eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · braucht einen bildschirm"),
     ("fokus", "Fokus (Mitte): oben projekte, drunter alle listen · enter reindiven · a/s neu · space abhaken · r name · d weg · p projekt · f setzt den knoten als alleinigen fokus (rendert dann allein in der FOCUS-box) · m/> verschieben"),
     ("klavier", "Klavier (Mitte): die Tastatur IST die Klaviatur — y x c v b n m , . - weiß, s d g h j l ö schwarz · ←→ oktave · space nimmt eine melodie auf (fragt beim stoppen nach dem namen) · ↑↓ melodie wählen · enter abspielen · r umbenennen · D löschen · k/esc zu"),
-    ("desk", "Desk View (Mitte): erst die desks wählen (n neu), dann die fläche · ↑↓←→ kasten wählen · enter greifen, pfeile schieben, enter ablegen (esc zurück) · + neu (zettel, bild, kalender) · e bearbeiten (ctrl+s speichert) · o öffnen (bild, kachel) · v verbinden · d löschen · r größe ändern (pfeile, enter behält, esc zurück) · shift+pfeile ausschnitt schieben"),
+    ("elektronik", "Elektronik: öffnet direkt den desk „Elektronik“ (legt ihn beim ersten mal an) · esc zurück zum rad"),
+    ("werkstatt", "Werkstatt (Rad erschaffen): der schmied baut eine eigene app — name, symbol (bild aus ~/Zentrale/Input oder zufällig), vorlage (desk view) · dazu deine apps und desks: öffnen, umbenennen, symbol ändern, wegwerfen · ↑↓ wählen · enter · esc einen schritt zurück"),
+    ("desk", "Desk View (Mitte, aus elektronik, einer eigenen app oder der werkstatt) · ↑↓←→ kasten wählen · enter greifen, pfeile schieben, enter ablegen (esc zurück) · + neu (zettel, bild, kalender) · e bearbeiten (ctrl+s speichert) · o öffnen (bild, kachel) · v verbinden · d löschen · r größe ändern (pfeile, enter behält, esc zurück) · shift+pfeile ausschnitt schieben"),
     ("/",   "Befehlszeile öffnen"),
 ]
 
@@ -66,8 +68,8 @@ CTX_KEYS = {
     "technik": [
         ("esc", "back"),
     ],
-    "elektronik": [
-        ("esc", "back"),
+    "werkstatt": [
+        ("↑↓", "select"), ("enter", "choose"), ("esc", "back"),
     ],
     "note:edit": [
         ("↑↓", "block"), ("t/l/f", "new text/list/float"),
@@ -216,7 +218,7 @@ CTX_TITLES = {
     "cal:a:todo": "kalender · todo", "cal:b": "kalender · monat", "cal:c": "kalender · woche",
     "mail:cats": "post", "mail:list": "post · liste", "mail:read": "post · lesen",
     "mail:list:eingang": "post · eingang", "mail:read:eingang": "post · eingang",
-    "elektronik": "elektronik",
+    "werkstatt": "werkstatt",
     "ai": "ki-chat",
     "note:edit": "notiz", "note:list": "notizen", "piano": "klavier",
     "technik": "technik",

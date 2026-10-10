@@ -86,7 +86,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `categories` | 1 | Data-Collection-Kategorien |
 | `host_metrics` | 1 | CPU/GPU/VRAM/Temp/RAM des PCs |
 | `aussenposten` | 1 | Pakete für Knoten ohne Backend (auch Dateien von Apps, `app:<name>/…`) |
-| `apps` | 1 | Installierte Apps (Hub-Bauplan): Ordner (`app_pfad_<name>`), Manifest `app.toml`, Abonnenten eines Ereignisses — liest nur, importiert nie App-Code |
+| `apps` | 1 | Installierte Apps (Hub-Bauplan): Ordner (`app_pfad_<name>`), Manifest `app.toml`, Abonnenten eines Ereignisses; seit 2026-10-10 auch die selbst gebauten (`apps_ordner`, Standard `data/apps/*/app.toml`) — liest nur, importiert nie App-Code |
 | `theme` | 1 | Tag/Nacht-Modus, die Datei als einzige Wahrheit |
 | `tone` | 1 | Ton-Erzeuger fürs TUI-Klavier |
 | `pc_status` | 1 | Ist der andere Knoten gerade da? |
@@ -95,7 +95,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `werkzeug_befund` | 1 | Was ein Werkzeug zurückgibt: Status (`[ergebnis: ok/fehlgeschlagen/…]`), Beleg und Fehlercode; feste Formen ERLEDIGT/ABGEBROCHEN; die Schiene des laufenden Werkzeug-Aufrufs |
 | `fehlercodes` | 1 | Die eine Tabelle der Fehlercodes der KI-Werkzeuge (Code → Ursache, was tun); `explain_error` liest sie |
 | `schreib_sicherung` | 1 | „Ganz oder gar nicht" für Dienste ohne eigenes Zurück: Dateien/Ordner vor dem Schreiben merken, bei Abbruch Byte für Byte zurücklegen |
-| `bild_vorschau` | 1 | Sashas ASCII-Filter (aus dem alten Browser-Frontend) in Python: Bild → Zeilen aus [Zeichen, Farbe] für Terminalzellen (2:1), Auto-Levels, mono/farbe, höchstens 32 Farben (xterm-256), LRU nach Datei-Stand; Pillow erst bei Bedarf |
+| `bild_vorschau` | 1 | Sashas ASCII-Filter (aus dem alten Browser-Frontend) in Python: Bild → Zeilen aus [Zeichen, Farbe] für Terminalzellen (2:1), Auto-Levels, mono/farbe, höchstens 32 Farben (xterm-256), LRU nach Datei-Stand; Pixel-Icon fürs Rad (16×16-PNG, wenige Farben) und sein Raster (seit 2026-10-10); Pillow erst bei Bedarf |
 | `kalender` | 2 | Termine, Routinen, Konflikt-Alarm — die Fassade, Speicher austauschbar |
 | `kalender_zeitraum` | 2 | Relative Zeiträume („diese_woche") in Daten übersetzen |
 | `kalender_regel` | 2 | Wann eine Routine stattfindet (RRULE → Tage), eine Stelle für Fassade und .ics |
@@ -164,8 +164,9 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `zusagen` | 2 | Offene Zusagen der KI je Gespräch: eine Datei pro Rechner im Gesprächsordner, nur abhaken, nie löschen |
 | `browser_sitzung` | 2 | Ein Browser ohne Fenster (Chromium über Playwright) in eigenem Thread: je Gespräch eine Sitzung, Seite als Text + nummerierte Elemente, klicken/tippen/zurück, Bild; nur erlaubte Hosts, nie das eigene Netz, keine Downloads, 10 min Leerlauf → zu; im Prüfstand nur die Adressen des Falls (`nur_erlauben`) |
 | `morgenblick_bild` | 2 | Der Morgenblick als HTML: Gelände-SVG, Akte, Listen — deterministisch, alles escaped, Fraunces eingebettet |
-| `desk` | 2 | Desk View: eine `.canvas`-Datei (JSON Canvas 1.0) pro Desk in `desk_ordner` (Standard `data/desk/`): auflisten, anlegen, laden in Zellen (1 Spalte = 10 px, 1 Zeile = 20 px), ganz speichern mit `stand`-Schutz; Fremdes in der Datei bleibt stehen |
+| `desk` | 2 | Desk View: eine `.canvas`-Datei (JSON Canvas 1.0) pro Desk in `desk_ordner` (Standard `data/desk/`): auflisten, anlegen, laden in Zellen (1 Spalte = 10 px, 1 Zeile = 20 px), ganz speichern mit `stand`-Schutz, umbenennen, löschen (seit 2026-10-10); Fremdes in der Datei bleibt stehen |
 | `desk_bild` | 2 | Bilder auf dem Desk: aus `~/Zentrale/Input` (oder einem Pfad) nach `<desk_ordner>/bilder/` kopieren, nur echte Bilder; Vorschau über `bild_vorschau` mit „weg"/„kein bild"; was die TUI zum Öffnen braucht (Pfad, `bild_betrachter`) |
+| `werkstatt` | 2 | Werkstatt (seit 2026-10-10): selbst gebaute Apps aus Vorlagen — `<apps_ordner>/<slug>/app.toml` (dasselbe Manifest wie Prozess-Apps, ohne `start`, mit `vorlage`/`desk`) + `icon.png` aus einem Bild in Input/ (über `bild_vorschau`); anlegen, umbenennen, Symbol ändern, löschen; Kurzname prüfen (reserviert, vergeben); Desks umbenennen/löschen mit Blick auf Apps, die auf sie zeigen |
 | `kacheln` | 2 | Hub für Kacheln (seit 2026-10-10): Anfrage prüfen, Recht `<app>:lesen`, Quelle aus `QUELLEN` fragen (im Prozess, Anfrage/Antwort durch JSON wie über HTTP), kürzen, `stand`/`ttl`, zu klein/weg/aus; Aktion „oeffnen“ → `zeige` |
 | `kachel_kalender` | 2 | Kachel-Quelle `kalender`/`ausschnitt`: Bereich fest oder mitlaufend (≤ 31 Tage), Woche bis 7 Tage, sonst Monatsraster; liest nur über `kalender.month_view`, schreibt nie; Spanne zwischen zwei Daten (≤ 31 Tage, „bis" nicht vor „von") in `pruefen()`, weil JSON Schema sie nicht ausdrücken kann |
 | `kachel_fokus` | 2 | Kachel-Quelle `fokus`/`liste` (seit 2026-10-10): eine Liste mit Punkten (offen/abgehakt, eingerückt bis N Ebenen, Fortschritt oben), blättern mit „+N“; Liste im Katalog frisch zur Wahl (`parameter_jetzt`); liest nur über `lists.read_lists`, schreibt nie |
@@ -247,9 +248,10 @@ egal woran, ging durch dieselbe Datei.
 | `projekte` | Projekte: Liste, anlegen, laden, Anweisungen ändern, Wissen hinzufügen, archivieren, Gespräch zuordnen |
 | `morgenblick` | Morgenblick erstellen, Knopf einlösen (nur localhost, signiert) |
 | `abgleich` | Zustand des Abgleichs über die Mitte (letzter Lauf, Fehler, Hinweise) |
-| `desk` | Desk View: Desks auflisten, anlegen, laden, ganz speichern (409 bei Änderung von woanders) |
+| `desk` | Desk View: Desks auflisten, anlegen, laden, ganz speichern (409 bei Änderung von woanders), umbenennen, löschen (über `werkstatt`, 2026-10-10) |
 | `kachel` | Kacheln: Inhalt einer Kachel holen, Aktion weiterreichen (über `core/kacheln.py`, seit 2026-10-10) |
 | `shop` | Schaufenster: Katalog, Kategorien/Themen, ein Stück, holen, Besitz (über `core/shop.py`, seit 2026-10-10) |
+| `werkstatt` | Werkstatt: eigene Apps auflisten, Namen prüfen, bauen, ändern, löschen; Vorlagen, Bilder fürs Symbol (über `core/werkstatt.py`, seit 2026-10-10) |
 
 ## Türen
 

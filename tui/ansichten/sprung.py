@@ -49,6 +49,11 @@ class Router:
             self._zustand[app] = zustand
         return handler
 
+    def abmelden(self, app):
+        """Eine App ist weg (gelöscht in der Werkstatt, 2026-10-10)."""
+        self._apps.pop(app, None)
+        self._zustand.pop(app, None)
+
     def kennt(self, adresse):
         a = lesen(adresse)
         return bool(a and a[0] in self._apps)

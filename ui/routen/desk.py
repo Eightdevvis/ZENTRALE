@@ -16,6 +16,7 @@ from flask import Blueprint, jsonify, request, send_file
 
 import desk          # type: ignore  – in core/, aber durch sys.path.insert auffindbar
 import desk_bild     # type: ignore
+import werkstatt     # type: ignore  – Desks verwalten (2026-10-10)
 
 bp = Blueprint('desk', __name__)
 
@@ -60,6 +61,27 @@ def api_desk_speichern(name):
                                       body.get("verbindungen"), body.get("stand")))
     except desk.DeskFehler as e:
         return _fehler(e)
+
+
+@bp.route('/api/desk/<name>', methods=['PATCH'])
+def api_desk_umbenennen(name):
+    """Body: {"name": "Neu"} (Verwaltung in der Werkstatt, 2026-10-10).
+    Apps, die auf den Desk zeigen, ziehen mit."""
+    body = request.get_json(silent=True) or {}
+    try:
+        return jsonify(werkstatt.desk_umbenennen(name, body.get("name")))
+    except werkstatt.WerkstattFehler as e:
+        return jsonify({"error": str(e)}), e.code
+
+
+@bp.route('/api/desk/<name>', methods=['DELETE'])
+def api_desk_loeschen(name):
+    """Desk löschen — 409, solange eine App auf ihm steht."""
+    try:
+        werkstatt.desk_loeschen(name)
+    except werkstatt.WerkstattFehler as e:
+        return jsonify({"error": str(e)}), e.code
+    return jsonify({"ok": True})
 
 
 # ── Bilder auf dem Desk (core/desk_bild.py, 2026-10-10) ───────────────

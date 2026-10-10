@@ -2,8 +2,14 @@
 
 **Stand 2026-10-10: Grundgerüst + Kacheln (Kalender, Listen, Graphen) gebaut** (Branches
 `worktree-desk-view`, `worktree-desk-kalender`).
-Im Rad Taste/Platz `d` („desk", zwischen tutor und elektronik). Erst die
-Auswahl der Desks (+ neuer Desk), dann die Fläche: Zettel liegen darauf,
+**Seit 2026-10-10 keine App im Rad mehr** (Sasha: der Desk ist ein Baustein):
+Desks gehen auf über **Elektronik** (fester Platz, öffnet direkt den Desk
+„Elektronik"), über eine **selbst gebaute App** aus der Werkstatt (Vorlage
+„Desk View", ihr Desk) und über **Werkstatt → deine desks** (öffnen,
+umbenennen, wegwerfen; [werkstatt.md](werkstatt.md)). Direkt geöffnet
+(`Desk.direkt(name)`, fehlt er: angelegt) führt Esc dorthin zurück, woher man
+kam, nicht in die Auswahl. Die Auswahl (bis dahin Platz `d`) gibt es im Code
+noch. Auf der Fläche: Zettel liegen darauf,
 Schnüre verbinden sie, W A S D (Großbuchstaben) schieben den Ausschnitt.
 
 Sasha: *„ich klappe z.B. ‚Elektronik' auf und habe einen infinity canvas vor

@@ -41,6 +41,9 @@ SICHERN = [
     # Schaufenster (core/shop.py, 2026-10-10): was geholt ist, eine
     # JSON-LD-Datei pro Rechner (besitz-<rechner>.jsonld) — nie zusammengeführt.
     "data/shop/**",
+    # Selbst gebaute Apps (core/werkstatt.py, 2026-10-10): app.toml + icon.png
+    # je App — Sasha baut sie auf einem Rechner und will sie überall im Rad.
+    "data/apps/**",
     "tutor/data/tutor_config.json",
     "tutor/data/aktiver_stand",
     "tutor/data/staende/**",

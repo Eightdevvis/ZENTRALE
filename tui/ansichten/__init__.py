@@ -15,3 +15,4 @@ from . import chat, app_start, post, kalender, graphen, fokus, notizen, klavier,
 from . import desk  # noqa: F401  – Desk View (2026-10-09)
 from . import sprung  # noqa: F401  – Sprungziele für Kacheln (2026-10-10)
 from . import shop  # noqa: F401  – Schaufenster (2026-10-10)
+from . import rad_wahl, eigene_apps, werkstatt  # noqa: F401  – Erschaffen-Rad: Werkstatt, eigene Apps (2026-10-10)

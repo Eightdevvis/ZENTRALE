@@ -1,7 +1,8 @@
 # tui/ansichten/startseite.py
 #
-# Die Startseite der TUI: das App-Rad, das Technik-Rad und die Galaxie, auf
-# der beide liegen (seit 02./03.10.2026, memory/system/dashboard.md). Hier
+# Die Startseite der TUI: das App-Rad, das Technik-Rad, das Erschaffen-Rad
+# (seit 2026-10-10) und die Galaxie, auf der sie liegen (seit 02./03.10.2026,
+# memory/system/dashboard.md). Hier
 # wohnen die reine Geometrie (rad_zeilen, galaxie_lage, der Schleuder-Gag …)
 # und das Zeichnen. Den Zustand der Räder (RAD, META, TRAD) besitzt weiter
 # tui/zentrale_tui.py: er überlebt dort run_ui-Neustarts und reist beim Hot
@@ -24,15 +25,33 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
 # Die Apps sitzen auf einem liegenden Ring, den man leicht von oben sieht:
 # vorne = unten, gross und hell; hinten = oben, klein und blass. Gedreht
 # wird über `pos` (Kommazahl), damit der Übergang gleitet statt springt.
+# 2026-10-10 (Sasha): `desk` ist keine App, sondern ein Baustein — er steht
+# nicht mehr im Rad, verwaltet wird er in der Werkstatt. `elektronik` bleibt
+# fest und öffnet direkt den Desk „Elektronik".
 RAD_APPS = [
     ("k", "klavier"), ("p", "post"), ("c", "kalender"), ("f", "fokus"),
     ("n", "notizen"), ("g", "graph"), ("m", "karte"), ("u", "tutor"),
-    ("d", "desk"), ("e", "elektronik"),
+    ("e", "elektronik"),
 ]
 # Apps mit Pixel-Symbol (tui/pixel.py): im Rad eine Pille, vorn klappt das
 # Symbol auf. Seit 03.10.2026: elektronik (Sasha), am selben Abend alle
 # anderen auch (pixel.MOTIVE: Brief, Globus, Kalenderblatt, Klaviatur …).
 RAD_SYMBOLE = tuple(a[1] for a in RAD_APPS)
+# Selbst gebaute Apps aus der Werkstatt (2026-10-10): hinter den festen, in
+# der Reihenfolge des Backends. Schlüssel "app:<slug>", Name = slug.
+# ansichten/eigene_apps.py füllt die Liste (an Ort und Stelle).
+EIGENE_APPS = []
+
+
+def rad_apps():
+    """Was im App-Rad steht: die festen Apps, dann die eigenen."""
+    return RAD_APPS + EIGENE_APPS
+
+
+# Das Erschaffen-Rad (2026-10-10, Sasha): das dritte Sonnensystem, rechts
+# neben dem Technik-Rad. Hier wird gebaut statt benutzt — Werkstatt (der
+# Schmied baut Apps aus Vorlagen) und Shop. Später: Agent-Macher.
+ERSCHAFFEN_APPS = ["werkstatt", "shop"]
 
 
 # ── Die Galaxie (Startseite seit 03.10.2026) ─────────────────────────────────
@@ -47,16 +66,21 @@ TECH_APPS = [("system", "external + telemetrie"), ("stdout", "das ganze log"),
              ("netz", "outbound + laufzeit")]
 
 
-def meta_taste(meta, rad, trad, taste):
-    """Eine Taste auf der Galaxie-Startseite. PURE bis auf die drei
-    Zustands-Dicts. Sasha: ←/→ dreht direkt das gewählte Rad, alt+←/→
-    wechselt das Rad, enter öffnet die App vorn.
+def meta_taste(meta, rad, trad, taste, erad=None):
+    """Eine Taste auf der Galaxie-Startseite. PURE bis auf die Zustands-
+    Dicts. Sasha: ←/→ dreht direkt das gewählte Rad, alt+←/→ wechselt das
+    Rad, enter öffnet die App vorn.
     taste: "links" | "rechts" | "alt_links" | "alt_rechts" | "enter".
-    -> None | ("app", buchstabe) | ("technik", name)"""
-    if taste in ("alt_links", "alt_rechts"):   # nebeneinander: links = apps, rechts = technik
-        meta["gsel"] = meta["fokus"] = 1 if taste == "alt_rechts" else 0
+    -> None | ("app", schluessel) | ("technik", name) | ("erschaffen", name)
+    Seit 2026-10-10 drei Räder nebeneinander (apps, technik, erschaffen):
+    alt+←/→ geht einen Schritt, am Rand bleibt es stehen. Ohne `erad` (alte
+    Aufrufer) sind es zwei."""
+    if taste in ("alt_links", "alt_rechts"):
+        letztes = 1 if erad is None else 2
+        schritt = 1 if taste == "alt_rechts" else -1
+        meta["gsel"] = meta["fokus"] = max(0, min(letztes, meta["fokus"] + schritt))
         return None
-    ziel = rad if meta["fokus"] == 0 else trad
+    ziel = (rad, trad, erad)[meta["fokus"]]
     if taste == "links":
         ziel["sel"] -= 1
         rad_anstoss(ziel, -1)
@@ -65,7 +89,10 @@ def meta_taste(meta, rad, trad, taste):
         rad_anstoss(ziel, 1)
     elif taste == "enter":
         if meta["fokus"] == 0:
-            return ("app", RAD_APPS[rad_index(rad["sel"])][0])
+            apps = rad_apps()
+            return ("app", apps[rad_index(rad["sel"], len(apps))][0])
+        if meta["fokus"] == 2:
+            return ("erschaffen", ERSCHAFFEN_APPS[rad_index(erad["sel"], len(ERSCHAFFEN_APPS))])
         return ("technik", TECH_APPS[rad_index(trad["sel"], len(TECH_APPS))][0])
     return None
 
@@ -185,7 +212,7 @@ def rad_schritt(pos, sel):
 def rad_index(sel, n=None):
     """Welche App steht bei Auswahl `sel` vorn? `sel` zählt frei weiter
     (auch negativ), damit das Rad beim Umlauf nicht zurückspult."""
-    return sel % (n or len(RAD_APPS))
+    return sel % (n or len(rad_apps()))
 
 
 def rad_zeilen(labels, pos, breite, hoehe, symbole=None):
@@ -245,35 +272,47 @@ def rad_zeilen(labels, pos, breite, hoehe, symbole=None):
     return aus
 
 
+def symbol_rad(sel=0):
+    """Frischer Zustand eines Rads mit Pixel-Symbolen (App-Rad, Erschaffen-
+    Rad): sel = Ziel, pos = wo es gerade steht; je Symbol-App 0 zu … 1 offen
+    und seit wann ganz offen; letzter Frame; klappt gerade etwas (→ schneller
+    Takt)."""
+    return {"sel": sel, "pos": float(sel), "offen": {}, "offen_seit": {},
+            "takt": 0.0, "schnell": False}
+
+
 class Startseite:
     """Die Startseite: Galaxie mit App-Rad und Technik-Rad (oder im alten
     Dashboard nur das App-Rad). Zeichnet; welche Taste was öffnet, entscheidet
     run_ui, weil es dafür alle Ansichten kennen muss."""
 
-    def __init__(self, z, rad, meta, trad, technik):
+    def __init__(self, z, rad, meta, trad, technik, erad=None):
         self.z = z
         # Die Räder gehören zentrale_tui.py (überleben run_ui und Hot Reload).
         self.RAD, self.META, self.TRAD = rad, meta, trad
+        self.ERAD = erad if erad is not None else symbol_rad()
         self.technik = technik              # die letzten Log-Zeilen unten
 
-    def rad_symbol_vorn(self):
+    @staticmethod
+    def rad_symbol_vorn(rad, labels):
         """Name der Symbol-App, die gerade vorn STEHT (Rad in Ruhe) — sonst None."""
-        RAD = self.RAD
-        pos = RAD["pos"]
-        if abs(pos - round(pos)) >= 0.08:
+        pos = rad["pos"]
+        if abs(pos - round(pos)) >= 0.08 or not labels:
             return None
-        name = RAD_APPS[rad_index(int(round(pos)))][1]
-        return name if name in RAD_SYMBOLE else None
+        name = labels[rad_index(int(round(pos)), len(labels))]
+        return name if pixel.hat_symbol(name) else None
 
     def draw_rad(self, y0, h, bx, bw, labels, rad, symbole_an=False, gedimmt=False,
                  mitte=None, mass=None, blass=False):
         """Ein Rad in den Kasten (y0, bx, h, bw) zeichnen, Mitte bei 5/8 der
-        Höhe. `rad` = {"sel", "pos"}; symbole_an nur fürs App-Rad (RAD).
+        Höhe. `rad` = {"sel", "pos"}; symbole_an nur für Räder mit
+        Symbolen (App-Rad, Erschaffen-Rad) — die tragen dafür die Felder
+        aus symbol_rad() (offen, offen_seit, takt, schnell).
         Galaxie: `mitte` (y, x) setzt den Mittelpunkt frei, `mass` (breite,
         hoehe) die Grösse; der Kasten bleibt die Grenze.
         Zu schmal für die Ellipse → eine schlichte Liste, vorn mit ▸."""
-        C, PIX_MODUS, RAD, addclip = self.z.C, self.z.PIX_MODUS, self.RAD, self.z.addclip
-        pix_attr, rad_symbol_vorn = self.z.pix_attr, self.rad_symbol_vorn
+        C, PIX_MODUS, RAD, addclip = self.z.C, self.z.PIX_MODUS, rad, self.z.addclip
+        pix_attr = self.z.pix_attr
         safe_addstr = self.z.safe_addstr
         rad["pos"] = rad_schritt(rad["pos"], rad["sel"])
         cyc, ccx = mitte or (y0 + (h * 5) // 8, bx + bw // 2)
@@ -306,9 +345,9 @@ class Startseite:
             dt = min(0.1, jetzt - RAD["takt"]) if RAD["takt"] else 0.0
             RAD["takt"] = jetzt
             if pix_bg is not None and PIX_MODUS != "off":
-                vorn = rad_symbol_vorn()
+                vorn = self.rad_symbol_vorn(rad, labels)
                 symbole = {}
-                for name in RAD_SYMBOLE:
+                for name in (n for n in labels if pixel.hat_symbol(n)):
                     alt = RAD["offen"].get(name, 0.0)
                     neu = rad_offen_schritt(alt, vorn == name, dt)
                     if neu >= 1 and alt < 1:
@@ -382,7 +421,7 @@ class Startseite:
         flacher Bogen, die beiden liegen praktisch nebeneinander. ✦ = Sonne
         des Systems, GROSS = gewählt, ● = man ist drin.
         -> läuft unten gerade eine Log-Zeile als Laufschrift?"""
-        C, META, RAD, TRAD = self.z.C, self.META, self.RAD, self.TRAD
+        C, META, RAD, TRAD, ERAD = self.z.C, self.META, self.RAD, self.TRAD, self.ERAD
         addclip, draw_box, safe_addstr = self.z.addclip, self.z.draw_box, self.z.safe_addstr
         draw_rad, draw_stdout = self.draw_rad, self.technik.draw_stdout
         draw_box(top, 0, body_h, W, "zentrale")
@@ -398,9 +437,10 @@ class Startseite:
         gcy = top + (body_h * 9) // 16
         bogen = max(1, body_h // 12)              # so viel sackt der Bogen zum Rand ab
         innen = lambda yy, xx: top < yy < top + body_h - 1 and 0 < xx < W - 1  # noqa: E731
-        systeme = [("apps", [a[1] for a in RAD_APPS], RAD),
-                   ("technik", [a[0] for a in TECH_APPS], TRAD)]
-        breiten = (0.55, 0.36)                    # das App-Rad trägt 9 Apps, Technik 3
+        systeme = [("apps", [a[1] for a in rad_apps()], RAD),
+                   ("technik", [a[0] for a in TECH_APPS], TRAD),
+                   ("erschaffen", list(ERSCHAFFEN_APPS), ERAD)]
+        breiten = (0.55, 0.36, 0.36)              # das App-Rad trägt 9+ Apps, die anderen 2–3
         rad_h = max(6, body_h // 2)
         lage = []                                 # (i, naehe, cy, cx, rx, ry, rad_b)
         for i, quer, naehe in galaxie_lage(META["gpos"], breiten):
@@ -431,7 +471,7 @@ class Startseite:
                 safe_addstr(cy, sx, sonne, sonne_attr)
             # Pixel-Symbole nur im nahen Rad — weit draussen und blass
             # wäre ein leuchtend blaues Feld genau falsch.
-            draw_rad(top, body_h, 0, W, labels, rad, symbole_an=(i == 0 and naehe >= 0.5),
+            draw_rad(top, body_h, 0, W, labels, rad, symbole_an=(i != 1 and naehe >= 0.5),
                      gedimmt=not gewaehlt, mitte=(cy, cx),
                      mass=(rad_b, rad_h), blass=naehe < 0.5)
         lz = "up %s · net %s" % (up, "traffic !" if nets else "offline ✓")

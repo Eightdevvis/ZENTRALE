@@ -17,7 +17,11 @@ telemetrie, `stdout` = ganzes Log, `netz` = outbound + laufzeit) sind zwei
 **Sonnensysteme** auf einer riesigen Galaxie-Bahn — so gross, dass man im
 Ausschnitt nur einen flachen, kaum gepunkteten Bogen sieht und beide
 **nebeneinander** liegen (App-Rad 55 % der Breite, Technik 36 %).
-**alt+←/→** wechselt das Rad (links = apps, rechts = technik; Erkennung wie
+**Seit 2026-10-10 drei Räder:** rechts neben technik das **Erschaffen-Rad**
+(`ERAD`, `ERSCHAFFEN_APPS` = `werkstatt`, `shop`; mit Pixel-Symbolen wie das
+App-Rad, Breite 36 %; [werkstatt.md](werkstatt.md)).
+**alt+←/→** geht ein Rad weiter (apps | technik | erschaffen, am Rand bleibt
+es stehen; Erkennung wie
 die Karte, `m_alt_arrow`), **←/→ dreht direkt** das gewählte Rad, **enter**
 öffnet dessen App vorn — keine Rein/Raus-Stufe mehr. **Esc auf der Startseite
 klappt ZENTRALE zu** wie $mod+z (`fenster_zuklappen` → `zentrale-fenster
@@ -64,7 +68,14 @@ ZENTRALE künftig von sich aus zeigt. Keine Buchstaben-Shortcuts mehr auf der
 Startseite; Theme/Laufschrift/Beenden über `/theme`, `/lauf`, `/quit`,
 weglegen über Cmd+z. Apps im Rad: Klavier, Post, Kalender, Fokus, Notizen,
 Graph, Karte, Tutor (öffnet das Zimmer), **Elektronik** (seit 03.10.2026;
-Bereich `ELEK`, noch leer, esc zurück). Die Tasten-Angaben bei den
+seit 2026-10-10 öffnet es direkt den Desk „Elektronik", beim ersten Mal
+angelegt, esc zurück aufs Rad), danach die **selbst gebauten Apps** aus der
+Werkstatt (`EIGENE_APPS`, `rad_apps()`; Enter → ihre Adresse
+`zentrale://<slug>/` → ihr Desk). `desk` steht seit 2026-10-10 nicht mehr im
+Rad (ein Baustein, verwaltet in der Werkstatt). Geöffnet wird über die
+Tabelle `ansichten/rad_wahl.OEFFNEN`, nicht mehr über eine if-Kette. Die
+Stellung aller drei Räder reist beim Hot Reload in `ZENTRALE_TUI_META`
+(`gsel,0,technik,erschaffen`; alte Form mit drei Zahlen geht weiter). Die Tasten-Angaben bei den
 Werkzeugen unten (`g`, `c` …) sind seitdem nur noch Namen.
 **Pixel-Symbole im Rad** (`RAD_SYMBOLE`, `rad_zeilen(..., symbole)`): eine
 Symbol-App ist hinten eine getönte **Pille** (`▐ name ▌`); steht sie vorn,

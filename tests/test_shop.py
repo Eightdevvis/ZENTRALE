@@ -72,7 +72,10 @@ def test_icons_sind_alle_motive_des_rads():
     from tui import pixel
     from tui.ansichten import startseite
     icons = {s["item"]["identifier"]: s["item"] for s in shop.katalog("icons")["itemListElement"]}
-    assert set(icons) == set(startseite.RAD_SYMBOLE) == set(pixel.MOTIVE) | {"elektronik"}
+    # Seit 2026-10-10 (Werkstatt) steht desk nicht mehr im Rad, sein Motiv
+    # bleibt holbar; die Motive des Erschaffen-Rads (werkstatt, shop) sind
+    # (noch) keine Ware. Darum: jedes App-Rad-Symbol ist da, nichts Erfundenes.
+    assert set(startseite.RAD_SYMBOLE) <= set(icons) <= set(pixel.FESTE_MOTIVE) | {"elektronik"}
     for kennung, it in icons.items():
         assert it["@type"] == "ImageObject"
         assert {"@type": "PropertyValue", "name": "pixel_motiv", "value": kennung} \

@@ -423,6 +423,8 @@ Details: `memory/werkzeuge/mail_system.md` (Panel/Drill-down/Hybrid, Passphrase-
 | `/api/desk` | POST | Leeren Desk anlegen. Body `{name}` → 201 mit dem Desk; `400` Name ungültig, `409` gibt es schon. |
 | `/api/desk/<name>` | GET | `{name, elemente: [{id, x, y, w, h, art, text?, typ?, titel?, datei?, modus?, kachel?}], verbindungen: [{id, von, nach, label?}], stand}`; `404`, `422` kaputte Datei (wird nie überschrieben). |
 | `/api/desk/<name>` | PUT | Ganzen Desk schreiben. Body `{elemente, verbindungen, stand}` (Verbindungen dürfen `von_seite`/`nach_seite` tragen; ohne `verbindungen` bleiben die Schnüre der Datei). Fehlende Elemente sind gelöscht, ihre Schnüre auch. Neu anlegen: `art` `notiz`, `bild` oder `kachel` (mit `kachel: {v, app, art, ref}`); eine Kachel darf `rueckfall` (Klartext für Obsidian) mitbringen, ihr Verweis ändert sich danach nie. `409 {error, stand}` wenn die Datei seit dem Laden woanders geändert wurde — nichts geschrieben. |
+| `/api/desk/<name>` | PATCH | Desk umbenennen. Body `{name}` → `{name}`; selbst gebaute Apps, die auf ihn zeigen, ziehen mit (2026-10-10); `404`, `409` Name vergeben. |
+| `/api/desk/<name>` | DELETE | Desk löschen → `{ok: true}`; `409`, solange eine App auf ihm steht; Bilder in `bilder/` bleiben (2026-10-10). |
 | `/api/desk-bild/quellen` | GET | Bilder in `~/Zentrale/Input` (und eine Ebene tiefer), neueste zuerst: `{quellen: [{name, pfad}]}` (2026-10-10). |
 | `/api/desk-bild` | POST | Bild in `<desk_ordner>/bilder/` kopieren. Body `{quelle}` (Name in Input/ oder Pfad) → 201 `{datei, titel, w, h}` (`datei` relativ zum Desk-Ordner, w/h Vorschlag in Zellen); `400` keine Bild-Endung, `404` nicht gefunden, `422` kein lesbares Bild, `503` Pillow fehlt. Gleicher Name + gleicher Inhalt → dieselbe Datei, sonst `name-2.png`. |
 | `/api/desk-bild/vorschau` | POST | Body `{datei, w, h, modus: mono\|farbe, invert?}` → `{status: ok, zeilen: [[[zeichen, "#rrggbb"\|null], …], …]}` (Sashas ASCII-Filter, `core/bild_vorschau.py`, höchstens 32 Farben) oder `{status: weg\|kein_bild\|ohne_pillow, text}`; `400` Pfad hinaus / falscher Modus. |
@@ -442,6 +444,21 @@ in JSON-LD (`application/ld+json`); **Autorität ist `openapi.yaml`**
 | `/api/shop/<kategorie>/<kennung>` | GET | Ein Stück (mit `@context`); `404` gibt es nicht. |
 | `/api/shop/holen` | POST | Body `{adresse: "zentrale://shop/icons/post"}` → `{adresse, geholt, neu, am}`; idempotent. `400` keine Shop-Adresse, `404` Stück fehlt, `402` kostet etwas. |
 | `/api/shop/besitz` | GET | Geholtes als `ItemList` von `OwnershipInfo` (alle Rechner); `?kategorie=icons` (die Werkstatt). |
+
+## Werkstatt (seit 2026-10-10)
+
+`core/werkstatt.py` über `ui/routen/werkstatt.py`: selbst gebaute Apps aus
+Vorlagen ([werkstatt.md](werkstatt.md)). Genau in `openapi.yaml`.
+
+| Endpoint | Methode | Beschreibung |
+|---|---|---|
+| `/api/werkstatt/apps` | GET | `{apps: [{slug, name, version, vorlage, desk, adresse, icon}]}` nach Kurzname; `icon` = `{art: bild, raster: 16×16 "#rrggbb"\|null}` oder `{art: motiv, motiv}` oder null. |
+| `/api/werkstatt/apps` | POST | Bauen. Body `{name, icon: {bild: "<Name in Input/>"}\|{motiv}, vorlage?: "desk"}` → 201 die App; `400` Name/Symbol ungültig, `404` Bild fehlt, `409` Name vergeben oder reserviert. |
+| `/api/werkstatt/apps/<slug>` | PATCH | `{name?, icon?}` → die App; Kurzname bleibt. |
+| `/api/werkstatt/apps/<slug>` | DELETE | App wegwerfen, `?desk=1` mit ihrem Desk → `{ok: true}`; `404`. |
+| `/api/werkstatt/name` | POST | Taugt der Name? `{name, ausser?}` → `{name, slug}`; `400`, `409`. |
+| `/api/werkstatt/vorlagen` | GET | `{vorlagen: [{id, titel, text}]}` (heute nur `desk`). |
+| `/api/werkstatt/bilder` | GET | `{bilder: [{name, pfad}]}` — Bilder in `~/Zentrale/Input`. |
 
 ## Kacheln (seit 2026-10-10)
 
