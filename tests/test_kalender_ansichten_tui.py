@@ -58,6 +58,14 @@ class _Handler(BaseHTTPRequestHandler):
             q = dict(urllib.parse.parse_qsl(u.query))
             ABFRAGEN.append((q.get("view"), q.get("ref")))
             self._json(kb.api_daten(q.get("view", "week"), q.get("ref", kb.HEUTE)))
+        elif u.path == "/api/calendar/phasen":
+            self._json({"phasen": [
+                {"kennung": "u1", "label": "coming down", "time": "21:30", "ende": "23:00",
+                 "motiv": "nachthimmel", "rrule": "FREQ=DAILY", "seit": "2026-10-01",
+                 "layer": "rhythmus"}]})
+        elif u.path == "/api/calendar/motive":
+            self._json({"motive": [{"schluessel": "nachthimmel", "name": "Nachthimmel"},
+                                   {"schluessel": "schlaf", "name": "Schlaf"}]})
         elif u.path.startswith("/api/state"):
             self._json({"logs": []})
         else:
@@ -168,3 +176,15 @@ def test_tab_wechselt_in_a_den_kasten(tmp_path):
     s, fehler = _lauf(tmp_path, [(b"\t", "kal"), (b"\t", "todo"), (b"\t", "term")])
     assert fehler == ""
     assert ("month", ) in {(v,) for v, _r in ABFRAGEN}
+
+
+def test_r_oeffnet_den_rhythmus_kasten(tmp_path):
+    """R (10.10.2026): Kasten mit den Phasen; n öffnet das Formular, Esc
+    führt zurück in die Liste, noch ein Esc schließt."""
+    s, fehler = _lauf(tmp_path, [(b"R", "liste"), (b"n", "neu"), (b"\x1b", "zurueck"),
+                                 (b"\x1b", "zu")])
+    assert fehler == ""
+    assert "RHYTHMUS" in s["liste"].upper() and "coming down" in s["liste"]
+    assert "21:30–23:00" in s["liste"]
+    assert "NEUE PHASE" in s["neu"].upper() and "Motiv" in s["neu"]
+    assert "coming down" in s["zurueck"]

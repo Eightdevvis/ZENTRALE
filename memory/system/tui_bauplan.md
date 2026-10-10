@@ -59,6 +59,9 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/kalender_ansichten.py` | Entwürfe A/B/C als reine Funktionen (Daten rein → Zeilen raus, kein curses); alle drei bedienbar, markieren die Auswahl per Identität (`t["roh"] is …`), siehe [kalender_ansichten_vorschau.md](../werkzeuge/kalender_ansichten_vorschau.md) | — |
 | `ansichten/kalender_beispiel.py` | Beispieltermine für Tests und `scripts/kalender_vorschau.py` | — |
 | `ansichten/kalender_werkzeuge.py` | Bearbeiten wie calcurse als reine Logik: Eingaben lesen (Zeit, Dauer, Datum, Wochentage), Formular (Modal) zum Anlegen/Ändern, kurze Rückfragen, daraus Backend-Aufrufe; Auswahl in derselben Reihenfolge wie die Ansicht | — |
+| `ansichten/kalender_motive.py` | Tagesphasen als leiser Hintergrund der Woche C: Phasen eines Tages (auch über Mitternacht), Muster je Motiv als Regler-Tabelle, deterministisch gestreut; A-Hinweis im Tageskopf | — |
+| `ansichten/kalender_gruppen.py` | Gruppen (CATEGORIES) im Monat B: gleiche Gruppe eines Tages → eine Zeile „08:30–16:00 Uni", Namen vom Backend, Farbschlüssel `gruppe:…` | — |
+| `ansichten/kalender_phasen.py` | Kasten „Rhythmus" (Taste R): Liste der Phasen, Formular anlegen/ab jetzt ändern, nur an einem Tag, Zeitraum, löschen → Backend-Aufrufe | — |
 | `ansichten/kalender_bedienung.py` | `Bedienung`: Tasten von A/B/C (EINE Auswahl Tag/Termin/Kasten, Kästen ausführen, Kollisions-Rückfrage, Modal und Ansehen-Fenster zeichnen) | `K["w"]` |
 | `ansichten/graphen.py` | `Graphen`: Graph-Werkzeug, Überlagerung (auch lifestyle-Box) | `G` |
 | `ansichten/fokus.py` | `Fokus`: Listen-/Fokus-Werkzeug, Bernsteinleiste, `proj_render` | `L` |

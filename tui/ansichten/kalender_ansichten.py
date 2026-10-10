@@ -27,6 +27,8 @@ import unicodedata
 import zlib
 from datetime import date, timedelta
 
+from . import kalender_gruppen, kalender_motive
+
 # ── Ansichten und Taste v ──────────────────────────────────────────────
 ANSICHTEN = ("A", "B", "C")
 ANSICHT_NAMEN = {"A": "tagesliste", "B": "monat", "C": "woche"}
@@ -89,7 +91,13 @@ RANGFOLGE = (0, 3, 1, 11, 2, 8, 5, 4, 9, 6, 10, 7)
 
 
 def titel_schluessel(label) -> str:
-    """Der Kurs hinter einem Titel: erstes Wort, ohne Ort, klein."""
+    """Der Kurs hinter einem Titel: erstes Wort, ohne Ort, klein.
+
+    Bewusst eine KOPIE von core/kalender_kategorie.titel_schluessel (10.10.2026):
+    die TUI läuft auch auf dem Aussenposten ohne Kern, und kalender_kategorie
+    hängt an kalender_fehler — kein „reiner Helfer" für die Tür `tui/` in
+    memory/system/bauplan_kern.md. tests/test_kalender_gruppen_tui.py prüft,
+    dass beide gleich rechnen (auch KURZFORMEN)."""
     name = (label or "").split(" @ ")[0].strip().lower()
     wort = re.split(r"[\s\-–:/,.()]+", name)[0] if name else ""
     return KURZFORMEN.get(wort, wort)
@@ -98,6 +106,18 @@ def titel_schluessel(label) -> str:
 def _rechenplatz(schluessel: str) -> int:
     # crc32, nicht hash(): der ist je Prozess anders
     return zlib.crc32(schluessel.encode("utf-8")) % len(TITEL_FARBEN)
+
+
+def gruppe_rolle(roh) -> str:
+    """Feste Farbe einer Gruppe (B): Schlüssel „gruppe:uni" in derselben
+    FARBTABELLE wie die Kurse (farben_vergeben)."""
+    k = kalender_gruppen.farb_schluessel(roh)
+    if not k:
+        return ROLLE["termin"]
+    platz = FARBTABELLE.get(k)
+    if not isinstance(platz, int) or not 0 <= platz < len(TITEL_FARBEN):
+        platz = _rechenplatz(k)
+    return TITEL_FARBEN[platz]
 
 
 def titel_rolle(label) -> str:
@@ -114,15 +134,18 @@ def farben_vergeben(daten: dict, tabelle: dict) -> bool:
     """Jeder Kurs, der in `daten` mindestens zweimal vorkommt und noch keine
     Farbe hat, bekommt die nächste freie in RANGFOLGE. Häufigere zuerst,
     damit die echten Kurse die deutlichsten Farben haben. Ändert
-    `tabelle`; True, wenn etwas dazukam (dann speichern)."""
+    `tabelle`; True, wenn etwas dazukam (dann speichern). Gruppen zählen
+    als „gruppe:<schlüssel>" mit (eigene Farbe in B), Phasen des
+    Tagesrhythmus gar nicht (sie sind Hintergrund, kein Kurs)."""
     zahl: dict = {}
     tage = daten.get("days") if isinstance(daten, dict) else None
     for liste in (tage.values() if isinstance(tage, dict) else []):
         for e in liste if isinstance(liste, list) else []:
-            if isinstance(e, dict) and not (e.get("span") or e.get("von")):
-                k = titel_schluessel(e.get("label"))
-                if k:
-                    zahl[k] = zahl.get(k, 0) + 1
+            if isinstance(e, dict) and not (e.get("span") or e.get("von")) \
+                    and not kalender_motive.ist_phase(e):
+                for k in (titel_schluessel(e.get("label")), kalender_gruppen.farb_schluessel(e)):
+                    if k:
+                        zahl[k] = zahl.get(k, 0) + 1
     neu = sorted((k for k, n in zahl.items() if n >= 2 and k not in tabelle),
                  key=lambda k: (-zahl[k], k))
     for k in neu:
@@ -154,7 +177,7 @@ def tasten_hinweis(ansicht: str) -> str:
     # Alle drei bedienbar wie calcurse (kalender_bedienung.py); gleich sind
     # a/e/d/r/c/p/g/enter, nur das Bewegen unterscheidet sich.
     gleich = ("a neu · e ändern · d löschen · r wiederholen · u (un)committed · "
-              "enter ansehen · c/p kopieren · g gehe zu")
+              "enter ansehen · c/p kopieren · g gehe zu · R rhythmus · G gruppe")
     if ansicht == "A":
         return "↑↓ termin · ←→ tag · %s · tab kasten · v %s" % (gleich, ziel)
     if ansicht == "B":
@@ -402,6 +425,10 @@ def _tag_eintraege(daten: dict, iso: str, erledigte: bool) -> list:
     for e in roh if isinstance(roh, list) else []:
         if not isinstance(e, dict):
             continue
+        # Phasen des Tagesrhythmus sind kein Termin (10.10.2026): nicht wählbar,
+        # keine Zeile, kein Block — C malt sie als Hintergrund (kalender_motive).
+        if kalender_motive.ist_phase(e):
+            continue
         aus = bool(e.get("deaktiviert") or e.get("ausfall"))
         if aus and not erledigte:
             continue
@@ -410,6 +437,13 @@ def _tag_eintraege(daten: dict, iso: str, erledigte: bool) -> list:
     out.sort(key=lambda t: (not t["spanne"], t["start"] is not None,
                             t["start"] if t["start"] is not None else 0))
     return out
+
+
+def monat_eintraege(daten: dict, iso: str, erledigte: bool) -> list:
+    """Die Liste eines Tages in B: wie _tag_eintraege, nur gleiche Gruppen
+    als EINE Zeile (kalender_gruppen.zusammenfassen). Die Bedienung wählt in
+    B aus genau dieser Liste."""
+    return kalender_gruppen.zusammenfassen(_tag_eintraege(daten, iso, erledigte))
 
 
 def _vonbis(t: dict, kurz: bool = False) -> str:
@@ -448,11 +482,15 @@ def _rolle(t: dict) -> str:
         return ROLLE["aus"]
     if t["spanne"]:
         return blass(ROLLE["spanne"], t)
+    if t.get("gruppe"):
+        return blass(gruppe_rolle(t["roh"]), t)
     return blass(titel_rolle(t.get("label")), t)
 
 
 def _glasrolle(t: dict) -> str:
     """Die Farbe, in der ein uncommitted-Eintrag als Glas über allem liegt."""
+    if t.get("gruppe"):
+        return gruppe_rolle(t["roh"])
     return ROLLE["spanne"] if t["spanne"] else titel_rolle(t.get("label"))
 
 
@@ -649,6 +687,7 @@ def _a_liste(lw, y, x, w, h, daten, ab, heute, erledigte, tage, aw=None):
                 rk = ROLLE["zyklus"]
         kopf = kuerzen(kopf, cw)
         lw.setze(y0, cx + cw - text_breite(kopf), kopf, rk)
+        _a_phasen(lw, y0, cx, cw - text_breite(kopf) - 2, daten, d)
         zy = y0 + 1
         eintr = _tag_eintraege(daten, d.isoformat(), erledigte)
         hier = zeigen and sel_tag == d.isoformat()
@@ -681,6 +720,16 @@ def _a_liste(lw, y, x, w, h, daten, ab, heute, erledigte, tage, aw=None):
             zy += 2                          # Luft zwischen Terminen, wie calcurse
         if i < n - 1:
             lw.setze(y0 + bh - 1, cx - 1, "─" * (cw + 2), ROLLE["rahmen"])
+
+
+def _a_phasen(lw, y, x, platz, daten, d):
+    """Leiser Hinweis auf den Tagesrhythmus links im Tageskopf („☾ 21:30
+    ᶻ 23:00", kalender_motive.a_hinweis) — nur, wenn er ganz hinpasst."""
+    teile = kalender_motive.a_hinweis(daten, d)
+    if not teile or sum(text_breite(t) + 2 for t, _r in teile) - 2 > platz:
+        return
+    for text, rolle in teile:
+        x = lw.setze(y, x, text, rolle) + 2
 
 
 def _a_monat(lw, y, x, w, daten, ab, heute, erledigte, aw=None) -> int:
@@ -875,21 +924,20 @@ def _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte
         else:
             lw.setze(y, x0, kuerzen("%d" % d.day, cw),
                      ROLLE["wochenende"] if d.weekday() >= 5 else ROLLE["tag_belegt"])
-        rest = [t for t in _tag_eintraege(daten, d.isoformat(), erledigte)
+        rest = [t for t in monat_eintraege(daten, d.isoformat(), erledigte)
                 if not t["spanne"]]
         frei = platz - nb
         zeige = rest if len(rest) + versteckt[d] <= frei else rest[:max(0, frei - 1)]
         # Ist der gewählte Termin weggekürzt, nimmt er den letzten Platz ein.
         if d == sel_tag and sel is not None and zeige and \
-                not any(t["roh"] is sel for t in zeige):
-            gew = [t for t in rest if t["roh"] is sel]
+                not any(_selbe(t["roh"], sel) for t in zeige):
+            gew = [t for t in rest if _selbe(t["roh"], sel)]
             if gew:
                 zeige = zeige[:-1] + gew
         for k, t in enumerate(zeige):
             yy = y + 1 + nb + k
-            if d == sel_tag and sel is not None and t["roh"] is sel:
-                txt = ((_hm(t["start"]) + " ") if t["start"] is not None and cw >= 9 else "") + t["label"]
-                txt = kuerzen(txt, cw)
+            if d == sel_tag and sel is not None and _selbe(t["roh"], sel):
+                txt = _b_text(t, cw)
                 lw.setze(yy, x0, txt + " " * (cw - text_breite(txt)), _a_rolle("a_akzent") + INV)
                 continue
             if t["start"] is None and t["ende"] is None:
@@ -901,13 +949,27 @@ def _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte
                 band += " " * (cw - text_breite(band))
                 lw.setze(yy, x0, band, _rolle(t) + ("" if t["aus"] else INV))
             else:
-                # Unter 9 Spalten wäre „10:…" alles, was übrig bleibt — dann
-                # lieber den Titel; die Uhrzeit zeigen A und C.
-                zeit = _hm(t["start"]) + " " if t["start"] is not None and cw >= 9 else ""
-                lw.setze(yy, x0, kuerzen(zeit + t["label"], cw), _rolle(t))
+                txt = _b_text(t, cw)
+                if t.get("gruppe") and t["unv"]:
+                    lw.glas(yy, x0, cw, _glasrolle(t), txt)
+                    continue
+                lw.setze(yy, x0, txt, _rolle(t))
         mehr = len(rest) - len(zeige) + versteckt[d]
         if mehr and frei > 0:
             lw.setze(y + 1 + nb + len(zeige), x0, kuerzen("+%d" % mehr, cw), ROLLE["leer"])
+
+
+_selbe = kalender_gruppen.selbe
+
+
+def _b_text(t: dict, cw: int) -> str:
+    """Zellentext in B: Anfangszeit + Titel; eine Gruppe als „08:30–16:00
+    Uni" (kalender_gruppen.text). Unter 9 Spalten wäre „10:…" alles, was
+    übrig bleibt — dann lieber den Titel; die Uhrzeit zeigen A und C."""
+    if t.get("gruppe"):
+        return kuerzen(kalender_gruppen.text(t, cw), cw)
+    zeit = _hm(t["start"]) + " " if t["start"] is not None and cw >= 9 else ""
+    return kuerzen(zeit + t["label"], cw)
 
 
 def _balken_text(sp: dict, a: date, b: date, n: int) -> str:
@@ -1077,11 +1139,23 @@ def ansicht_c(daten, breite: int, hoehe: int, erledigte: bool = False,
                 else:
                     lw.glas(y0, xx, colw - 1, _glasrolle(t), band)
         y0 += 1
-    _c_achse(lw, y0, hoehe - 1, x0, g, colw, tage, breite, sel)
+    # Tagesphasen: leiser Hintergrund HINTER Punktlinien und Terminen
+    phasen = [kalender_motive.tag_phasen(daten, d) for d in woche]
+    _c_achse(lw, y0, hoehe - 1, x0, g, colw, tage, breite, sel, (woche, phasen))
     return lw.zeilen()
 
 
-def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None):
+def _punktlinie_um_muster(lw, y, x, n):
+    """Punktlinie, die einem Phasen-Zeichen Platz lässt (sonst verschwände
+    eine halbe Stunde „essen" um 10:00 ganz unter der Linie)."""
+    if not 0 <= y < lw.h:
+        return
+    for cx in range(max(0, x), min(lw.b, x + n)):
+        if lw.z[y][cx] == Leinwand.LEER:
+            lw.z[y][cx] = ("·", ROLLE["rahmen"])
+
+
+def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None, hintergrund=None):
     """Zeitachse von y0 bis vor y_ende. Das Fenster ist FEST 08–22 Uhr
     (Sasha, 08.10.2026: nicht für einen Nachttermin die ganze Woche
     aufziehen); der Zeilen-Takt ist der feinste, mit dem es in die Höhe
@@ -1114,13 +1188,24 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None):
     lo -= lo % lab
     n = min(reihen, max(1, math.ceil((24 * 60 - lo) / m)))
     sicht_ende = lo + n * m
+    # Zuerst die Phasen (kalender_motive): was danach kommt — Punktlinien,
+    # Termine, Glas — liegt darüber. Sie verschieben das Fenster nicht und
+    # zählen nicht für ▲/▼ (Sasha, 08.10.2026: fest 08–22).
+    if hintergrund:
+        for i, (d, ph) in enumerate(zip(*hintergrund)):
+            if ph:
+                kalender_motive.zeichne_spalte(lw, y0, n, lo, m, x0 + i * colw,
+                                               colw - 1, d, ph)
     farbe: dict = {}
     for k in range(n):
         t = lo + k * m
         if t % lab == 0:
             lw.setze(y0 + k, 1, kuerzen(_hm(t) if g >= 6 else "%02d" % (t // 60), g - 1),
                      ROLLE["rahmen"])
-            lw.setze(y0 + k, x0, "·" * (7 * colw), ROLLE["rahmen"])
+            if hintergrund and kalender_motive.PUNKTLINIE_WEICHT:
+                _punktlinie_um_muster(lw, y0 + k, x0, 7 * colw)
+            else:
+                lw.setze(y0 + k, x0, "·" * (7 * colw), ROLLE["rahmen"])
     pw = colw - 1
     for i, (bloecke, _g) in enumerate(tage):
         # Sasha, 10.10.2026: „immer den uncommitted kalender AUF den normalen

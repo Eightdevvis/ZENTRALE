@@ -117,6 +117,54 @@ Listen-Sidebar heraus).
   holt das Paar über `z.pix_attr`; ohne 256 Farben oder bei vollen Paaren die
   alte blasse Fläche (`k_…_blass_inv`). In C bekommen uncommitted eigene Bahnen
   über die volle Spalte, nach den festen gezeichnet; der gewählte bleibt deckend.
+- **Tagesrhythmus (Phasen, 10.10.2026).** Sasha: „fürs coming down ein paar
+  sterne, wolken usw eingemalt wie ein nachthimmel, ab 10 uhr ein par z z z …
+  eine leichte hintergrund ebene". Phasen (Ebene `rhythmus`, Feld `motiv`,
+  Kern: `kalender_ics_bauplan.md`) sind **keine Termine**: `_tag_eintraege`
+  lässt sie weg (nicht wählbar, keine Zeile in A/B, kein Block, keine Kursfarbe).
+  In **C** malt `kalender_motive.zeichne_spalte` ihren Zeitbereich in der
+  Tagesspalte mit wenigen einspaltigen Zeichen (nachthimmel ⋆✦✧☁☾, schlaf zZᶻ,
+  essen ∘◦∪, sonne ✺✹✶, fokus ⋄▫, sport ⌃∧, ruhe ~∼, unterwegs ›⇢⋯) — vor
+  den Terminen, die deckend darüber liegen; die Punktlinien lassen den Zeichen
+  Platz. Gestreut deterministisch (crc32 aus Tag, Uhrzeit der Zeile, Spalte;
+  Schachbrett), also still beim Neuzeichnen und Scrollen. Über Mitternacht:
+  am Tag des Beginns bis 24:00, am Folgetag ab 0:00 (für den Montag holt die
+  Bedienung den Sonntag davor nach). Das Fenster 08–22 bleibt fest, Phasen
+  zählen nicht für ▲/▼. **Regler** in `tui/ansichten/kalender_motive.py`
+  (`MUSTER`: Zeichen + Dichte je Motiv, `SCHACHBRETT`, `PUNKTLINIE_WEICHT`,
+  `OHNE_ENDE_MINUTEN`, `A_HINWEIS`, `A_ZEICHEN`), Farben in
+  `farben.MOTIV_FARBEN` (gedämpft: nachts ≈ 3–5:1 auf Schwarz, tags ≈ 2–3:1
+  auf Weiß; ein Farbpaar je Motiv, Rolle `k_m_<motiv>`). In **A** steht
+  (abschaltbar, `A_HINWEIS`) leise links im Tageskopf „∘ 10:00 ☾ 21:30 ᶻ 23:00".
+- **Rhythmus einstellen (Taste R, 10.10.2026).** Sasha: „bau einfach das
+  gerüst dafür in dem ich es selbst dann einstellen kann, mach alles möglich".
+  R öffnet in A/B/C den Kasten „Rhythmus" (`kalender_phasen.PhasenListe`, Daten
+  von `GET /api/calendar/phasen` und `/motive`): ↑↓ wählen, **n** neu, **e**/Enter
+  ab jetzt ändern, **d** löschen, **t** nur am gewählten Tag, **z** für einen
+  Zeitraum (Vorgabe: 3 Tage). Formular: Name, Motiv, Von, Bis (vor Von = endet
+  am Folgetag), Wiederholung (täglich / werktags / wochenende / an Tagen + Abstand;
+  eine nicht abbildbare Regel bleibt „wie bisher"), gültig ab/bis. t/z gehen
+  beide über `POST /api/calendar/routine/zeitraum` (ein Tag = von gleich bis;
+  „Wie die Regel: ja" setzt die Tage zurück); Zeit gilt am Tag des Beginns.
+  Nach dem Speichern und bei Esc im Formular geht die Liste wieder auf.
+- **Gruppen im Monat (B, 10.10.2026).** Sasha: „in der monatsansicht seh ich
+  einfach lieber uni uni uni statt jeden tag welche fächer genau" — Form
+  „08:30–16:00 Uni". `kalender_gruppen.zusammenfassen` macht aus allen
+  Einträgen eines Tages mit gleicher `kategorie` (≠ „keine"; Spannen,
+  Ganztägiges, Ausgeschaltetes bleiben einzeln) EINE Zeile: erste
+  Anfangszeit bis letztes Ende, Name aus `/api/calendar/kategorien` (Rückfall
+  `kalender_gruppen.NAMEN`) bzw. `kategorie_name`. Wird es eng: „08:30–16 Uni",
+  „08:30 Uni", „Uni". Farbe: eigener Platz in derselben Farbtabelle
+  (`gruppe:uni`). A und C zeigen weiter jedes Fach. Die Bedienung wählt in B
+  aus genau dieser Liste (`kw.eintraege(…, monat=True)`): Tab springt auf die
+  Gruppe, Enter zeigt die Glieder, e/d/r/c/u sagen „einzeln ändern in A oder C".
+- **Gruppe setzen (10.10.2026):** im Formular (a/e) das Feld **Gruppe**
+  (keine / Uni / Arbeit / eigene → Name; nicht im Kasten „nur dieser Tag" —
+  die Gruppe gilt für die ganze Serie); geändert wird per Kennung
+  (`POST /api/calendar/kategorie`), neu angelegt mit `kategorie` im Body.
+  Taste **G** auf einem Termin: Gruppe für den ganzen Kurs (erstes Wort des
+  Titels, Kurzformen) — erst `POST /api/calendar/kategorie/kurs` mit
+  `probe:true`, dann „trifft N Einträge: … — setzen? (j/n)".
 - **Platz:** offene Apps haben die volle Fensterbreite (`DASH["an"]` aus), der
   Kalender-Kasten ist bei 140 Spalten innen 136 breit, bei 200 dann 196. Im
   alten 3-Spalten-Dashboard wären es ~67 (140) bzw. ~96 (200).

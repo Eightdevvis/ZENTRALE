@@ -15,7 +15,7 @@ try:                                    # Pixel-Baustein (tui/pixel.py)
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     import pixel
 
-from .farben import DECKKRAFT, KAL, ROLES, THEMES
+from .farben import DECKKRAFT, KAL, MOTIV_FARBEN, ROLES, THEMES
 
 
 class Kontext:
@@ -87,6 +87,8 @@ class Kontext:
             C["cycbg"] = curses.A_DIM
             C["cyc_is_bg"] = False
             C["kal_glas"] = None               # Glas braucht Farben
+            for motiv in MOTIV_FARBEN["night"]:   # Tagesphasen: leise
+                C["k_m_" + motiv] = curses.A_DIM
             return
         c256 = curses.COLORS >= 256
         th = THEMES[tname]
@@ -244,6 +246,18 @@ class Kontext:
                 C["k_" + name + "_inv"] = C[rueck] | curses.A_REVERSE
                 C["k_" + name + "_blass"] = C[rueck] | curses.A_DIM
                 C["k_" + name + "_blass_inv"] = C[rueck] | curses.A_DIM | curses.A_REVERSE
+        # Tagesphasen (farben.MOTIV_FARBEN, Hintergrund der Woche): je Motiv
+        # nur eine gedämpfte Schrift auf dem Grund — ein Paar pro Motiv. Auch
+        # in `paare`, damit Glas (uncommitted) über einem Muster mischen kann.
+        for motiv, farbe in MOTIV_FARBEN[tname].items():
+            k = "k_m_" + motiv
+            if c256:
+                curses.init_pair(pp, farbe, bg)
+                C[k] = curses.color_pair(pp)
+                paare[k] = (rgb(farbe), rgb(bg), 0)
+                pp += 1
+            else:
+                C[k] = C["faint"]
         C["kal_glas"] = ({"thema": tname, "paare": paare, "flaeche": flaeche}
                          if c256 else None)
         # Tastenbeleuchtung: je eine Farbe für den RAND der schwarzen Keycap

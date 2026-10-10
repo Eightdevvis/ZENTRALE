@@ -23,7 +23,8 @@ from __future__ import annotations
 import re
 from datetime import date, datetime, timedelta
 
-from .kalender_ansichten import _tag_eintraege
+from . import kalender_gruppen
+from .kalender_ansichten import _tag_eintraege, monat_eintraege, titel_schluessel
 
 WT_KURZ = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 WT_CODE = ("MO", "TU", "WE", "TH", "FR", "SA", "SU")
@@ -145,11 +146,12 @@ def regel_text(rrule: str | None) -> str:
 
 
 # ── Was ist ausgewählt? ────────────────────────────────────────────────
-def eintraege(daten: dict, tag: date, erledigte: bool) -> list:
+def eintraege(daten: dict, tag: date, erledigte: bool, monat: bool = False) -> list:
     """Die Termine eines Tages, so wie die Ansicht sie zeigt (gleiche
-    Reihenfolge, gleiche Filter). Jeder hat t["roh"] = API-Eintrag."""
-    return _tag_eintraege(daten if isinstance(daten, dict) else {},
-                          tag.isoformat(), erledigte)
+    Reihenfolge, gleiche Filter). Jeder hat t["roh"] = API-Eintrag. `monat`:
+    die Liste von B, in der eine Gruppe EINE Zeile ist (roh["gruppe"])."""
+    holen = monat_eintraege if monat else _tag_eintraege
+    return holen(daten if isinstance(daten, dict) else {}, tag.isoformat(), erledigte)
 
 
 def art(roh: dict) -> str:
@@ -276,12 +278,18 @@ class Dialog:
         return self._plan(self.antworten)
 
 
-def _plan(aufrufe=(), meldung="", konflikt=None, danach=None, weiter=None):
+def _plan(aufrufe=(), meldung="", konflikt=None, danach=None, weiter=None,
+          vorab=None, zurueck=None):
     """aufrufe: [(methode, pfad, body)]; konflikt: Body für die Vorprüfung
     (/api/calendar/konflikte) — kommt etwas zurück, fragt die Ansicht erst
-    nach; danach: {"tag": date} o.ä. für die Auswahl nach dem Speichern."""
+    nach; danach: {"tag": date} o.ä. für die Auswahl nach dem Speichern.
+    vorab: {"aufruf": (methode, pfad, body), "dann": antwort → Dialog|Plan}
+    — erst fragen, dann entscheiden (Gruppe für den Kurs: Probe, dann j/n).
+    zurueck: () → Dialog, der nach den Aufrufen wieder aufgeht (der
+    Rhythmus-Kasten nach dem Speichern einer Phase)."""
     return {"aufrufe": list(aufrufe), "meldung": meldung,
-            "konflikt": konflikt, "danach": danach or {}, "weiter": weiter}
+            "konflikt": konflikt, "danach": danach or {}, "weiter": weiter,
+            "vorab": vorab, "zurueck": zurueck}
 
 
 def _l_zeit(leer_ok=True):
@@ -466,9 +474,73 @@ def _l_wtage(s):
     return (True, w) if w is not None else (False, "tage wie di do oder mo-fr")
 
 
+# ── Gruppe (CATEGORIES, 10.10.2026) ────────────────────────────────────
+# Sasha: „in der monatsansicht seh ich einfach lieber uni uni uni". Das Feld
+# „Gruppe" im Formular; die Namen kommen aus kalender_gruppen.NAMEN (vom
+# Backend nachgeladen). Gilt für den ganzen Eintrag/die ganze Serie — darum
+# nicht im Kasten „nur dieser Tag".
+GRUPPE_KEINE, GRUPPE_EIGENE = "keine", "eigene"
+
+
+def _gruppe_optionen() -> tuple:
+    return (GRUPPE_KEINE,) + tuple(kalender_gruppen.NAMEN.values()) + (GRUPPE_EIGENE,)
+
+
+def _gruppe_felder(roh=None) -> list:
+    k = (roh or {}).get("kategorie") or kalender_gruppen.KEINE
+    name = ""
+    if k == kalender_gruppen.CUSTOM:
+        wert, name = GRUPPE_EIGENE, (roh.get("kategorie_name") or "")
+    else:
+        wert = kalender_gruppen.NAMEN.get(k, GRUPPE_KEINE)
+    ist_eigene = lambda w: w.get("gruppe") == GRUPPE_EIGENE
+    return [Feld("gruppe", "Gruppe", art="wahl", wert=wert, optionen=_gruppe_optionen(),
+                 hilfe="der Monat zeigt eine Gruppe je Tag als eine Zeile · G: ganzer Kurs"),
+            Feld("gruppe_name", "Name der Gruppe", wert=name, zeigen=ist_eigene,
+                 lesen=lambda s: (True, s.strip()) if s.strip() else (False, "name fehlt"))]
+
+
+def _gruppe_wert(w) -> tuple:
+    """Formularwerte → (kategorie, kategorie_name) wie die API sie nimmt."""
+    g = w.get("gruppe") or GRUPPE_KEINE
+    if g == GRUPPE_EIGENE:
+        return kalender_gruppen.CUSTOM, w.get("gruppe_name") or ""
+    for k, n in kalender_gruppen.NAMEN.items():
+        if n == g:
+            return k, None
+    return kalender_gruppen.KEINE, None
+
+
+def _gruppe_body(w) -> dict:
+    """Zusatzfelder für einen NEUEN Eintrag (leer = keine Gruppe)."""
+    if "gruppe" not in w:
+        return {}
+    k, n = _gruppe_wert(w)
+    if k == kalender_gruppen.KEINE:
+        return {}
+    return {"kategorie": k, **({"kategorie_name": n} if n else {})}
+
+
+def _gruppe_aufruf(roh, w) -> list:
+    """Hat sich die Gruppe eines bestehenden Eintrags geändert → ein Aufruf
+    per Kennung (POST /api/calendar/kategorie), sonst keiner."""
+    if "gruppe" not in w or not roh.get("kennung"):
+        return []
+    k, n = _gruppe_wert(w)
+    alt_k = roh.get("kategorie") or kalender_gruppen.KEINE
+    alt_n = roh.get("kategorie_name") if alt_k == kalender_gruppen.CUSTOM else None
+    if (k, n or None) == (alt_k, alt_n or None):
+        return []
+    body = {"kennung": roh["kennung"], "kategorie": k}
+    if n:
+        body["kategorie_name"] = n
+    return [("POST", "/api/calendar/kategorie", body)]
+
+
 def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
                    wiederholung="keine", alle="1", wtage="", wbis="",
-                   mit_regel=True, mit_ganz=True, mit_datum=True, datum_name="Tag"):
+                   mit_regel=True, mit_ganz=True, mit_datum=True, datum_name="Tag",
+                   mit_gruppe=True, roh=None):
     ganz_an = lambda w: w.get("ganz") == "ja"
     regel_an = lambda w: w.get("wied", "keine") != "keine"
     felder = [Feld("titel", "Titel", wert=titel, lesen=_l_titel)]
@@ -499,6 +571,8 @@ def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
                  zeigen=regel_an, hilfe="leer = endlos"),
         ]
     felder.append(Feld("ort", "Ort", wert=ort))
+    if mit_gruppe:
+        felder += _gruppe_felder(roh)
     return felder
 
 
@@ -524,6 +598,7 @@ def _neu_plan(w, tag, layer="termine"):
     sichtbar, Tage einzeln änderbar); sonst Wiederholung = Routine."""
     tag = w.get("datum") or tag
     titel, ort = w["titel"], (w.get("ort") or None)
+    gruppe = _gruppe_body(w)
     start, e_dt = _zeiten(tag, w)
     ende = e_dt.strftime("%H:%M") if e_dt else None
     wied = w.get("wied", "keine")
@@ -536,35 +611,38 @@ def _neu_plan(w, tag, layer="termine"):
                 body["tageszeit"] = [start, ende]
             if ort:
                 body["ort"] = ort
+            body.update(gruppe)
             return [("POST", "/api/calendar/spanne", body)], "täglich bis %s: %s" % (
                 datum_text(w["wbis"]), titel), None
         body = {"layer": layer, "label": titel, "seit": tag.isoformat(),
                 "freq": _FREQ_KURZ[wied], "intervall": alle,
                 "bis": w["wbis"].isoformat() if w.get("wbis") else None,
                 "wochentage": w.get("wtage") or None, "time": start,
-                "ende": ende if (e_dt and e_dt.date() == tag) else None, "ort": ort}
+                "ende": ende if (e_dt and e_dt.date() == tag) else None, "ort": ort,
+                **gruppe}
         return [("POST", "/api/calendar/routine", body)], "wiederholt sich: " + titel, None
     if start is None:
         n = w.get("tage") or 1
         if n == 1:
-            body = {"layer": layer, "day": tag.isoformat(), "label": titel}
+            body = {"layer": layer, "day": tag.isoformat(), "label": titel, **gruppe}
             if ort:
                 body["ort"] = ort
             return [("POST", "/api/calendar/entry", body)], "angelegt: " + titel, None
         bis = tag + timedelta(days=n - 1)
-        body = {"layer": layer, "von": tag.isoformat(), "bis": bis.isoformat(), "label": titel}
+        body = {"layer": layer, "von": tag.isoformat(), "bis": bis.isoformat(), "label": titel,
+                **gruppe}
         if ort:
             body["ort"] = ort
         return [("POST", "/api/calendar/spanne", body)], "angelegt: %s bis %s" % (
             titel, datum_text(bis)), None
     if e_dt is not None and e_dt.date() > tag:
         body = {"layer": layer, "von": tag.isoformat(), "bis": e_dt.date().isoformat(),
-                "label": titel, "start_zeit": start, "end_zeit": ende}
+                "label": titel, "start_zeit": start, "end_zeit": ende, **gruppe}
         if ort:
             body["ort"] = ort
         return [("POST", "/api/calendar/spanne", body)], "angelegt: %s bis %s %s" % (
             titel, WT_KURZ[e_dt.weekday()], ende), None
-    body = {"layer": layer, "day": tag.isoformat(), "label": titel, "time": start}
+    body = {"layer": layer, "day": tag.isoformat(), "label": titel, "time": start, **gruppe}
     if ende:
         body["ende"] = ende
     if ort:
@@ -651,10 +729,11 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None):
                     "ende": neu["ende"]} if neu["time"] and neu["ende"] else None)
             return _plan([("PUT", "/api/calendar/eintrag",
                            {"layer": layer, "day": iso, "label": label,
-                            "time": t0 or None, "new": neu})],
+                            "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w),
                          "geändert: " + w["titel"], konflikt=kon, danach={"tag": w["datum"]})
         return Formular("termin ändern", _termin_felder(
-            tag, heute, titel=label, ganz=not t0, von=t0, bis=e0, ort=ort0), plan, fokus=fokus)
+            tag, heute, titel=label, ganz=not t0, von=t0, bis=e0, ort=ort0, roh=roh),
+            plan, fokus=fokus)
 
     if a_ == "routine":
         def nur_dieser(w):
@@ -690,7 +769,7 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None):
                     neu["wiederholung"] = neu_regel
             aufrufe = [("PUT", "/api/calendar/routine",
                         {"layer": layer, "label": label, "day": iso,
-                         "time": t0 or None, "new": neu})]
+                         "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w)
             if wied == "keine":                         # Wiederholung aus = ganz löschen?
                 return _plan(meldung="Wiederholung „keine“: zum Löschen d benutzen")
             return _plan(aufrufe, "alle geändert: " + w["titel"])
@@ -698,11 +777,12 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None):
         r = _regel_felder(roh.get("rrule"))
         form_dieser = lambda: Formular("nur dieser tag · " + datum_text(tag), _termin_felder(
             tag, heute, titel=label, von=t0, bis=e0, ort=ort0, mit_regel=False,
-            mit_ganz=False, datum_name="Verschieben auf"), nur_dieser, fokus=fokus)
+            mit_ganz=False, datum_name="Verschieben auf", mit_gruppe=False),
+            nur_dieser, fokus=fokus)
         form_alle = lambda: Formular("alle termine der serie", _termin_felder(
             tag, heute, titel=label, von=t0, bis=e0, ort=ort0, mit_ganz=False,
             mit_datum=False, wiederholung=r["wiederholung"], alle=r["alle"],
-            wtage=r["wtage"], wbis=r["wbis"]), alle, fokus=fokus)
+            wtage=r["wtage"], wbis=r["wbis"], roh=roh), alle, fokus=fokus)
         if fokus == "wied":
             return form_alle()
         return Dialog("ändern", [_wahl_umfang(roh)], lambda a: _plan(
@@ -730,7 +810,8 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None):
         if w["letzter"] != bis_d + timedelta(days=schub):
             neu["bis"] = (w["letzter"] - timedelta(days=schub)).isoformat()
         return _plan([("PUT", "/api/calendar/spanne",
-                       {"layer": layer, "von": von_iso, "label": label, "new": neu})],
+                       {"layer": layer, "von": von_iso, "label": label, "new": neu})]
+                     + _gruppe_aufruf(roh, w),
                      "alle tage geändert: " + w["titel"], danach={"tag": w["erster"]})
 
     def alle_pruefen(w):
@@ -750,7 +831,7 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None):
         Feld("erster", "Erster Tag", wert=datum_text(von_d), lesen=_l_datum(heute)),
         Feld("letzter", "Letzter Tag", wert=datum_text(bis_d), lesen=_l_datum(heute)),
         Feld("ort", "Ort", wert=ort0),
-    ], alle_plan, pruefen=alle_pruefen)
+    ] + _gruppe_felder(roh), alle_plan, pruefen=alle_pruefen)
     return Dialog("ändern", [_wahl_umfang(roh)], lambda a: _plan(
         weiter=form_tag() if a["umfang"] == "dieser" else form_alle()))
 
@@ -806,7 +887,10 @@ def dialog_loeschen(roh: dict, tag: date) -> Dialog:
 def kopie(roh: dict) -> dict:
     """calcurse „c": was beim Einfügen wieder entsteht (immer ein Einmal-
     Termin am gewählten Tag, auch aus einer Routine)."""
-    return {k: roh[k] for k in ("label", "time", "ende", "ort", "layer") if roh.get(k)}
+    k = {f: roh[f] for f in ("label", "time", "ende", "ort", "layer") if roh.get(f)}
+    if kalender_gruppen.schluessel(roh):       # die Gruppe kommt mit
+        k.update({f: roh[f] for f in ("kategorie", "kategorie_name") if roh.get(f)})
+    return k
 
 
 def plan_einfuegen(k: dict, tag: date) -> dict:
@@ -869,5 +953,70 @@ def details(roh: dict, tag: date) -> list:
         zeilen.append("Fällt aus: " + str(roh["ausfall"]))
     if roh.get("deaktiviert"):
         zeilen.append("An diesem Tag ausgeschaltet")
+    if kalender_gruppen.anzeige(roh):
+        zeilen.append("Gruppe   " + kalender_gruppen.anzeige(roh))
     zeilen.append("Ebene    " + str(roh.get("layer", "")))
     return zeilen
+
+
+def details_gruppe(roh: dict, tag: date) -> list:
+    """Enter auf einer Gruppe in B: was sie zusammenfasst."""
+    zeilen = ["%s  %s%s" % (roh.get("label", "?"), roh.get("time") or "",
+                             ("–" + roh["ende"]) if roh.get("ende") else ""),
+              "%s, %s · %d Termine" % (WT_LANG[tag.weekday()], datum_text(tag),
+                                       len(roh.get("glieder") or [])), ""]
+    for g in roh.get("glieder") or []:
+        t, e = g.get("time") or "", g.get("ende") or ""
+        zeilen.append("%-11s %s" % (t + ("–" + e if e else ""), g.get("label", "?")))
+    zeilen += ["", "einzeln ändern: v (Liste oder Woche)"]
+    return zeilen
+
+
+# ── G: Gruppe für den ganzen Kurs ──────────────────────────────────────
+def dialog_kurs_gruppe(roh: dict) -> Dialog:
+    """Allen Einträgen des Kurses (erstes Wort des Titels, Kurzformen —
+    titel_schluessel) dieselbe Gruppe geben. Erst fragt die TUI das Backend
+    mit probe:true, was getroffen würde, dann „setzen? (j/n)"."""
+    kurs = titel_schluessel(roh.get("label"))
+    namen = list(kalender_gruppen.NAMEN.items())
+    wahl = {"0": kalender_gruppen.KEINE, "e": kalender_gruppen.CUSTOM}
+    teile = ["(0) keine"]
+    for i, (k, n) in enumerate(namen[:9], start=1):
+        wahl[str(i)] = k
+        teile.append("(%d) %s" % (i, n))
+    teile.append("(e) eigene")
+
+    def plan(a):
+        body = {"schluessel": roh.get("label") or kurs, "kategorie": a["gruppe"]}
+        if a.get("name"):
+            body["kategorie_name"] = a["name"]
+        return _plan(vorab={"aufruf": ("POST", "/api/calendar/kategorie/kurs",
+                                       {**body, "probe": True}),
+                            "dann": lambda antwort: _kurs_bestaetigen(body, antwort)})
+    return Dialog("gruppe für kurs", [
+        Schritt("gruppe", "Gruppe für alle „%s“: %s" % (kurs, "  ".join(teile)),
+                art="wahl", wahl=wahl),
+        Schritt("name", "Name der Gruppe", lesen=_l_titel,
+                wenn=lambda a: a.get("gruppe") == kalender_gruppen.CUSTOM),
+    ], plan)
+
+
+def _kurs_bestaetigen(body: dict, antwort) -> Dialog:
+    """Die Probe-Antwort ({eintraege, geaendert, …}) → „trifft N Einträge:
+    Analysis I, … — setzen? (j/n)"."""
+    antwort = antwort if isinstance(antwort, dict) else {}
+    eintr = [e for e in antwort.get("eintraege") or [] if isinstance(e, dict)]
+    titel = []
+    for e in eintr:
+        if e.get("label") and e["label"] not in titel:
+            titel.append(e["label"])
+    liste = ", ".join(titel[:3]) + (" …" if len(titel) > 3 else "")
+    name = body.get("kategorie_name") or kalender_gruppen.NAMEN.get(
+        body["kategorie"], "keine Gruppe")
+    frage = "trifft %d Einträge: %s — „%s“ setzen? (j/n)" % (len(eintr), liste, name)
+    return Dialog("gruppe für kurs", [Schritt("ok", frage, art="wahl",
+                                               wahl={"j": True, "n": False})],
+                  lambda a: _plan([("POST", "/api/calendar/kategorie/kurs", body)]
+                                  if a["ok"] else [],
+                                  "%s: %d Einträge" % (name, len(eintr)) if a["ok"]
+                                  else "nicht gesetzt"))

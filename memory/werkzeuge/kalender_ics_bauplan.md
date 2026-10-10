@@ -105,6 +105,11 @@ gerüst, dann is das gleich für jeden anderen auch nutzbar."
 - **KI:** `render_range_for_tool`/Imprint zeigen `[rhythmus · schlaf]
   23:00-07:00 (bis Folgetag) Schlaf`; der Imprint sagt dazu, dass das Sashas
   Tagesrhythmus ist, kein Termin, stiller Hintergrund.
+- **TUI** (seit 10.10.2026 abends): Phasen sind dort keine Zeilen/Blöcke,
+  sondern ein Muster im Hintergrund der Woche (C), Taste **R** öffnet den
+  Kasten „Rhythmus" (neu, ab jetzt ändern, löschen, nur an einem Tag, für einen
+  Zeitraum — alles über die Routen oben). Beides beschrieben in
+  `kalender_ansichten_vorschau.md` (Abschnitt „Tagesrhythmus").
 
 ## Gruppen (CATEGORIES, 10.10.2026)
 
@@ -134,8 +139,15 @@ zusammen („Uni 08:30–16:00"), sonst nichts; Standard keine.
 - **Routen:** `GET /api/calendar/motive`, `GET /api/calendar/kategorien`,
   `GET /api/calendar/phasen`, `POST|PUT|DELETE /api/calendar/phase`,
   `POST /api/calendar/routine/zeitraum`, `POST /api/calendar/kategorie`,
-  `POST /api/calendar/kategorie/kurs`; `POST /api/calendar/entry` und die
-  Wochen-Routine nehmen `kategorie`/`kategorie_name` mit.
+  `POST /api/calendar/kategorie/kurs`; `POST /api/calendar/entry`, die
+  Wochen-Routine und (seit 10.10.2026 abends, fürs TUI-Formular) auch die
+  calcurse-Routine (`freq`, `kalender_bearbeiten.routine_neu`) und
+  `POST /api/calendar/spanne` (`spanne_neu`) nehmen `kategorie`/`kategorie_name` mit.
+- **TUI:** B fasst je Tag zusammen, Formularfeld „Gruppe", Taste **G** = Gruppe
+  für den ganzen Kurs (erst `probe`, dann j/n) — `kalender_ansichten_vorschau.md`.
+  `titel_schluessel` bleibt in der TUI eine Kopie (die Tür `tui/` erlaubt nur
+  reine Helfer, `kalender_kategorie` hängt an `kalender_fehler`); ein Test
+  (`tests/test_kalender_gruppen_tui.py`) hält beide gleich.
 - Tests: `tests/test_kalender_rhythmus.py` (beide Speicher).
 
 ## Stand Sync (07.10.2026) — eingerichtet und live

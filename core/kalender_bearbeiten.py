@@ -90,10 +90,20 @@ def regel_bauen(freq: str, seit: date, intervall: int = 1,
     return regel if kalender_regel.regel_gueltig(regel) else None
 
 
+def _gruppe(kategorie, kategorie_name) -> dict:
+    """Gruppe als Zusatzfelder — nur, was angegeben ist (kalender.add_*
+    prüft sie über _mit_kategorie)."""
+    return {k: v for k, v in (("kategorie", kategorie), ("kategorie_name", kategorie_name))
+            if isinstance(v, str) and v.strip()}
+
+
 def routine_neu(layer: str, label: str, seit: str, freq: str, intervall: int = 1,
                 bis: str | None = None, wochentage=None, time: str | None = None,
-                ende: str | None = None, ort: str | None = None) -> bool:
-    """Neue Routine ab `seit` (dem gewählten Tag), wie calcurse „r"."""
+                ende: str | None = None, ort: str | None = None,
+                kategorie: str | None = None, kategorie_name: str | None = None) -> bool:
+    """Neue Routine ab `seit` (dem gewählten Tag), wie calcurse „r".
+    `kategorie`/`kategorie_name`: Gruppe (seit 10.10.2026, TUI-Formular;
+    geprüft in kalender._mit_kategorie)."""
     d = _iso(seit)
     regel = regel_bauen(freq, d, intervall, _iso(bis) if bis else None, wochentage)
     if not regel or not (label or "").strip():
@@ -103,6 +113,7 @@ def routine_neu(layer: str, label: str, seit: str, freq: str, intervall: int = 1
         extras["ende"] = _hhmm(ende)
     if ort:
         extras["ort"] = ort.strip()
+    extras.update(_gruppe(kategorie, kategorie_name))
     return kalender.add_routine(layer or "termine", label.strip(), regel,
                                 time=_hhmm(time) if time else None, **extras)
 
@@ -258,7 +269,8 @@ def _spanne_ziel(lobj: dict, von: str, label: str):
 
 def spanne_neu(layer: str, von: str, bis: str, label: str,
                start_zeit: str | None = None, end_zeit: str | None = None,
-               tageszeit: tuple | None = None, ort: str | None = None) -> bool:
+               tageszeit: tuple | None = None, ort: str | None = None,
+               kategorie: str | None = None, kategorie_name: str | None = None) -> bool:
     """Mehrtägig anlegen.
 
     - start_zeit/end_zeit: durchgehend, z.B. Fr 18:00 → So 14:00 (calcurse:
@@ -274,6 +286,7 @@ def spanne_neu(layer: str, von: str, bis: str, label: str,
     if tageszeit:
         _nicht_vor(_hhmm(tageszeit[0]), _hhmm(tageszeit[1]) if tageszeit[1] else None)
     extras = {"ort": ort.strip()} if ort else {}
+    extras.update(_gruppe(kategorie, kategorie_name))
     if not kalender.add_span(layer or "termine", von, bis, label.strip(), **extras):
         return False
     with kalender._lock:

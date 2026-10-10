@@ -194,3 +194,36 @@ DECKKRAFT = {"night": {"flaeche": 0.38, "schrift": 0.60, "glas": 0.30},
 # Das Mischen selbst macht kontext.apply_theme (durchscheinend) bzw. für Glas
 # kalender.py — beide runden über pixel.bunt, damit ein dunkles Orange orange
 # bleibt statt auf die Graurampe zu fallen.
+
+
+# ── Tagesphasen (Hintergrund der Woche, 10.10.2026) ─────────────────────
+# Sasha: „eine leichte hintergrund ebene". Die Zeichen der Phasen
+# (kalender_motive.MUSTER) stehen in einer GEDÄMPFTEN Farbe je Motiv auf dem
+# Theme-Grund — leiser als die Punktlinien (nachts Grau 245 ≈ 7:1), aber
+# sichtbar: nachts um 3–5:1 auf Schwarz, tags um 2–3:1 auf Weiß. Es ist
+# Schmuck, keine Schrift; wer es kräftiger will, dreht hier.
+# Pro Motiv: 256er-Farbe; ohne 256 Farben zeichnet alles in „faint".
+MOTIV_FARBEN = {
+    "night": {
+        "nachthimmel": 61,    # Schieferblau
+        "schlaf":      60,    # gedämpftes Violettgrau
+        "essen":       95,    # Altrosa-Braun
+        "sonne":       130,   # warmes Ocker
+        "fokus":       30,    # stilles Petrol
+        "sport":       29,    # Tannengrün
+        "ruhe":        59,    # Grau
+        "unterwegs":   24,    # Tiefblau
+        "rueckfall":   59,
+    },
+    "day": {
+        "nachthimmel": 104,   # Flieder-Grau
+        "schlaf":      139,   # Malve
+        "essen":       173,   # Terrakotta, hell
+        "sonne":       172,   # Orange-Ocker
+        "fokus":       73,    # Wasser
+        "sport":       71,    # Blattgrün
+        "ruhe":        247,   # Grau
+        "unterwegs":   110,   # Taubenblau
+        "rueckfall":   247,
+    },
+}

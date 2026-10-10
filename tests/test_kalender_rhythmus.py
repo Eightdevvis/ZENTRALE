@@ -208,6 +208,24 @@ def test_kategorie_an_routine_vorkommen_und_beim_anlegen(cal):
     assert p["kategorie"] == "uni"
 
 
+def test_kategorie_beim_anlegen_aus_der_tui(cal):
+    """Das TUI-Formular (Feld „Gruppe") legt Routine und Spanne über
+    kalender_bearbeiten an — die Gruppe kommt gleich mit (10.10.2026)."""
+    import kalender_bearbeiten as kb
+    assert kb.routine_neu("termine", "Analysis Übung", VON, "w", 1, None, ["WE"], "12:00",
+                          "14:00", None, "uni")
+    assert kk.eintrag(_k("Analysis Übung"))["kategorie"] == "uni"
+    assert kb.spanne_neu("termine", "2026-10-20", "2026-10-21", "Exkursion",
+                         tageszeit=("09:00", "17:00"), kategorie="custom",
+                         kategorie_name="Feldarbeit")
+    e = kk.eintrag(_k("Exkursion"))
+    assert (e["kategorie"], e["kategorie_name"]) == ("custom", "Feldarbeit")
+    vorher = _stand(cal)
+    with pytest.raises(kk.KalenderAbgelehnt):
+        kb.spanne_neu("termine", "2026-10-22", "2026-10-23", "X", kategorie="hobby")
+    assert _stand(cal) == vorher
+
+
 def test_kategorie_fuer_kurs(cal):
     kalender.add_entry("termine", "2026-10-15", "Analysis I @ HS 1", time="10:00")
     kalender.add_routine("termine", "Analysis Übung", "FREQ=WEEKLY;BYDAY=WE", time="12:00")

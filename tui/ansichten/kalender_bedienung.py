@@ -15,10 +15,17 @@ import urllib.error
 from datetime import date, timedelta
 
 from .basis import BEENDEN, api_call
+from . import kalender_gruppen, kalender_motive, kalender_phasen
 from . import kalender_werkzeuge as kw
 
 FENSTER_TAGE = 3            # so viele Tage zeigt A (kalender_ansichten.ansicht_a)
 FOKUS = ("termine", "kalender", "todo")
+# Tasten für Rhythmus und Gruppe (10.10.2026). Groß, damit sie keine der
+# calcurse-Tasten (r wiederholen, g gehe zu) überschreiben; in A, B und C
+# gleich. Andere Belegung → hier, Fußzeilen in kalender_ansichten.tasten_hinweis
+# und befehle.py mitziehen.
+TASTE_RHYTHMUS = ord("R")   # Kasten „Rhythmus": Phasen einstellen
+TASTE_KURSGRUPPE = ord("G")  # Gruppe für den ganzen Kurs des gewählten Termins
 
 
 def _monat(d: date, delta: int) -> date:
@@ -64,10 +71,42 @@ class Bedienung:
                         d["end"] = d2.get("end", d["end"])
             except ValueError:
                 pass
+        if not d.get("failed") and K["stil"] == "C":
+            self._vortag_phasen(d, ref)
+        if not d.get("failed"):
+            self._katalog_laden()
         d["_for"] = schluessel
         d["_um"] = time.monotonic()
         K["sdata"] = d
         return d
+
+    def _vortag_phasen(self, d, ref):
+        """C: eine Phase über Mitternacht (Schlaf 23–07) steht nur am Tag
+        ihres Beginns. Fehlt der Sonntag vor der Woche in den Daten, seine
+        Phasen nachholen — sonst begänne der Montag ohne den Rest der Nacht."""
+        vortag = ref - timedelta(days=ref.weekday() + 1)
+        tage = d.setdefault("days", {})
+        if not isinstance(tage, dict) or vortag.isoformat() in tage:
+            return
+        d2 = self._holen("month", vortag)
+        if d2.get("failed"):
+            return
+        nacht = [e for e in (d2.get("days") or {}).get(vortag.isoformat()) or []
+                 if kalender_motive.ist_phase(e)]
+        if nacht:
+            tage[vortag.isoformat()] = nacht
+
+    def _katalog_laden(self):
+        """Die Namen der Gruppen einmal je Sitzung vom Backend (Rückfall:
+        kalender_gruppen.NAMEN)."""
+        if getattr(self, "_katalog", False):
+            return
+        self._katalog = True
+        try:
+            r = api_call("/api/calendar/kategorien", timeout=4.0)
+            kalender_gruppen.namen_setzen((r or {}).get("kategorien"))
+        except Exception:
+            pass
 
     def _holen(self, view, ref):
         try:
@@ -106,7 +145,9 @@ class Bedienung:
             K["ref"] = (d - timedelta(days=FENSTER_TAGE - 1)).isoformat()
 
     def termine(self, d: date | None = None) -> list:
-        return kw.eintraege(self.daten(), d or self.tag(), self.K["showhidden"])
+        """Die Liste, aus der gewählt wird — in B mit Gruppen als einer Zeile."""
+        return kw.eintraege(self.daten(), d or self.tag(), self.K["showhidden"],
+                            monat=self.K.get("stil") == "B")
 
     def gewaehlt(self) -> dict | None:
         ts = self.termine()
@@ -152,6 +193,9 @@ class Bedienung:
             W["fokus"] = FOKUS[(FOKUS.index(W["fokus"]) - 1) % len(FOKUS)]
             return True
         if self._springen(ch):
+            return True
+        if ch == TASTE_RHYTHMUS:
+            self._rhythmus()
             return True
         if stil == "B":
             return self._taste_monat(ch)
@@ -225,6 +269,25 @@ class Bedienung:
     def _aktion(self, ch) -> bool:
         """a/e/d/r/c/p/Enter — in A, B und C genau gleich."""
         W, d = self.W, self.tag()
+        roh = self.gewaehlt()
+        if roh and roh.get("gruppe") and ch in (10, 13, curses.KEY_ENTER, ord("e"), ord("E"),
+                                                 ord("d"), ord("D"), ord("r"), ord("c"),
+                                                 ord("u"), ord("U"), TASTE_KURSGRUPPE):
+            # Eine Gruppe in B ist eine Zusammenfassung, kein Termin: Enter
+            # zeigt, was drinsteckt; ändern geht am einzelnen Fach (A/C).
+            if ch in (10, 13, curses.KEY_ENTER):
+                W["popup"] = kw.details_gruppe(roh, d)
+            else:
+                W["msg"] = ("„%s“ fasst %d Termine zusammen — enter zeigt sie, "
+                            "einzeln ändern in A oder C (v)" % (roh["label"],
+                                                                len(roh.get("glieder") or [])))
+            return True
+        if ch == TASTE_KURSGRUPPE:
+            if roh:
+                self._starte(kw.dialog_kurs_gruppe(roh))
+            else:
+                W["msg"] = "kein termin gewählt"
+            return True
         if ch in (ord("a"), ord("A"), 1):      # Strg-A wie calcurse
             self._starte(kw.formular_neu(d, date.today()))
         elif ch in (10, 13, curses.KEY_ENTER):
@@ -315,6 +378,26 @@ class Bedienung:
             return False
         return True
 
+    # ── Rhythmus (Tagesphasen) ─────────────────────────────────────────
+    def _rhythmus(self):
+        """R: der Kasten mit allen Phasen (kalender_phasen.PhasenListe)."""
+        kasten = self._rhythmus_kasten()
+        if kasten is not None:
+            self._starte(kasten)
+
+    def _rhythmus_kasten(self):
+        try:
+            phasen = (api_call("/api/calendar/phasen", timeout=8.0) or {}).get("phasen")
+        except Exception as e:
+            self.W["msg"] = "⚠ rhythmus: backend? " + str(e)[:50]
+            return None
+        try:
+            motive = (api_call("/api/calendar/motive", timeout=4.0) or {}).get("motive")
+        except Exception:
+            motive = None
+        return kalender_phasen.PhasenListe(phasen or [], motive, self.tag(), date.today(),
+                                           zurueck=self._rhythmus_kasten)
+
     # ── Dialoge und Aufrufe ────────────────────────────────────────────
     def _starte(self, dialog):
         self.W["dialog"] = dialog
@@ -326,7 +409,11 @@ class Bedienung:
         r = dl.taste(ch)
         if r == "abbruch":
             W["dialog"] = None
-            W["msg"] = "abgebrochen"
+            zurueck = getattr(dl, "bei_abbruch", None)
+            if zurueck is not None:            # aus dem Rhythmus-Kasten: dorthin
+                self._starte(zurueck())
+                return
+            W["msg"] = "" if getattr(dl, "liste", False) else "abgebrochen"
             return
         if r != "fertig":
             return
@@ -359,20 +446,25 @@ class Bedienung:
         if plan.get("weiter") is not None:     # „nur dieser Tag?" → der Kasten
             self._starte(plan["weiter"])
             return
+        if plan.get("vorab"):                  # erst fragen (Probe), dann entscheiden
+            ok, antwort = self._rufen(*plan["vorab"]["aufruf"])
+            if ok:
+                folge = plan["vorab"]["dann"](antwort)
+                if isinstance(folge, dict):
+                    self._ausfuehren(folge, pruefen=False)
+                else:
+                    self._starte(folge)
+            return
         for methode, pfad, body in plan.get("aufrufe", []):
-            try:
-                api_call(pfad, method=methode, body=body, timeout=15.0)
-            except urllib.error.HTTPError as e:
-                try:
-                    grund = json.loads(e.read().decode("utf-8")).get("error") or str(e)
-                except Exception:
-                    grund = str(e)
-                W["msg"] = "⚠ " + grund
+            ok, _antwort = self._rufen(methode, pfad, body)
+            if not ok:
                 self.neu_laden()
-                return
-            except Exception as e:
-                W["msg"] = "⚠ backend? " + str(e)[:60]
-                self.neu_laden()
+                if plan.get("zurueck"):        # Rhythmus-Kasten: Fehler dort zeigen
+                    msg = W["msg"]
+                    kasten = plan["zurueck"]()
+                    if kasten is not None:
+                        kasten.fehler = msg
+                        self._starte(kasten)
                 return
         if plan.get("aufrufe"):
             self.neu_laden()
@@ -380,13 +472,31 @@ class Bedienung:
             W["msg"] = plan["meldung"]
         if plan.get("danach", {}).get("tag"):
             self.setze_tag(plan["danach"]["tag"])
+        if plan.get("zurueck"):
+            kasten = plan["zurueck"]()
+            if kasten is not None:
+                self._starte(kasten)
+
+    def _rufen(self, methode, pfad, body):
+        """Ein Aufruf; ein Fehler landet lesbar in der Meldung. → (ok, antwort)"""
+        try:
+            return True, api_call(pfad, method=methode, body=body, timeout=15.0)
+        except urllib.error.HTTPError as e:
+            try:
+                grund = json.loads(e.read().decode("utf-8")).get("error") or str(e)
+            except Exception:
+                grund = str(e)
+            self.W["msg"] = "⚠ " + grund
+        except Exception as e:
+            self.W["msg"] = "⚠ backend? " + str(e)[:60]
+        return False, None
 
     # ── Zeichnen: Kasten (Formular/Rückfrage) und Ansehen-Fenster ─────
     def zeile_unten(self):
         """(text, rolle) für die unterste Zeile: nur noch Meldungen — Fragen
         stehen im Kasten (Sasha, 07.10.2026: „ich will das modal")."""
         W = self.W
-        if W["msg"] and W["dialog"] is None:
+        if W["msg"] and (W["dialog"] is None or getattr(W["dialog"], "liste", False)):
             return W["msg"], "faint"
         return None
 
@@ -428,11 +538,35 @@ class Bedienung:
             z.addclip(y + h - 2, x + 2, "↑↓/tab feld · ←→ auswahl · enter speichern · esc abbrechen",
                       w - 4, C["faint"])
             return
+        if getattr(dl, "liste", False):
+            self._zeichne_liste(dl, by, bx, bh, bw)
+            return
         # kurze Rückfrage
         frage = dl.zeile()
         w = max(44, min(bw - 4, len(frage) + 6))
         y, x, w, h = self._kasten(by, bx, bh, bw, w, 5, dl.titel)
         z.addclip(y + 2, x + 2, frage, w - 4, C["bright"])
+
+    def _zeichne_liste(self, dl, by, bx, bh, bw):
+        """Der Rhythmus-Kasten: eine Zeile je Phase, Zeichen in Motivfarbe,
+        die gewählte in Akzentfläche; unten Hilfe bzw. Fehler."""
+        z, C = self.z, self.z.C
+        zeilen = dl.liste_zeilen()
+        platz = max(1, min(len(zeilen) or 1, bh - 9))
+        breit = max([len(t) for _z, _r, t, _a in zeilen] + [len(dl.hilfe())])
+        y, x, w, h = self._kasten(by, bx, bh, bw, max(60, breit + 8), platz + 6, dl.titel)
+        erst = max(0, dl.i - platz + 1)
+        aktiv = C.get("k_akzent_inv", C["bright"] | curses.A_REVERSE)
+        if not zeilen:
+            z.addclip(y + 2, x + 2, "noch keine phase — n legt eine an", w - 4, C["faint"])
+        for k, (zeichen, rolle, text, an) in enumerate(zeilen[erst:erst + platz]):
+            yy = y + 2 + k
+            z.addclip(yy, x + 2, zeichen, 2, aktiv if an else C.get(rolle, C["faint"]))
+            z.addclip(yy, x + 4, " " + text.ljust(w - 7)[:w - 7], w - 6,
+                      aktiv if an else C["dim"])
+        if dl.fehler:
+            z.addclip(y + h - 3, x + 2, "⚠ " + dl.fehler, w - 4, C["warn"])
+        z.addclip(y + h - 2, x + 2, dl.hilfe(), w - 4, C["faint"])
 
     def zeichne_popup(self, by, bx, bh, bw):
         W, z, C = self.W, self.z, self.z.C
