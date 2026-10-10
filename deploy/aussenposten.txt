@@ -30,6 +30,9 @@ tui/bausteine/
 # ohne Kern-Imports. Ohne sie starten Listen- und Graph-Werkzeug nicht.
 core/listen_baum.py
 core/graph_reihen.py
+# Farbwähler und Stylebox (tui/bausteine/) prüfen CSS mit core/stil.py
+# (2026-10-10, stdlib-only).
+core/stil.py
 
 # ── Sensorik: der einzige Push-Weg vom Knoten zum PC ─────────────────────
 # Liest GPIO/Tastatur, POSTet /api/sensor/<name> und alle ~30 s Telemetrie.

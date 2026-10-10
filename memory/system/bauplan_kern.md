@@ -65,6 +65,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `kachel_form` | 1 | Form einer Kachel-Antwort ohne Fachwissen: Fehler (ungültig, weg, zu klein), kürzen auf w×h, `stand` als Fingerabdruck (seit 2026-10-10) |
 | `kachel_parameter` | 1 | Parameter einer Kachel-Art im Katalog als JSON Schema 2020-12 (seit 2026-10-10, vorher eigene `felder`): Werte aus der Adresse typen, gegen das Schema prüfen (Paket `jsonschema`), Fehler als ein deutscher Satz; Auswahl/Vorgaben zur Fragezeit eintragen |
 | `adressen` | 1 | „Ein Objekt, eine Adresse": `zentrale://<app>/<pfad>?…` bauen, lesen, kanonisch machen (nur `urllib.parse`); alter Kachel-Verweis → Adresse (seit 2026-10-10) |
+| `stil` | 1 | Aussehen als CSS-Eigenschaften (seit 2026-10-10): Wörter (Rahmen, Farben als #rrggbb, Muster `--zentrale-muster`, Icon gesperrt), JSON Schema des Angebots, Prüfung, Hex lesen — stdlib-only, geteilt von Farbwähler/Stylebox der TUI und dem Backend |
 | `farbrollen` | 1 | Wörterbuch der Farbrollen (Name + Bedeutung), das Apps und Oberflächen teilen; die Farbe wählt jede Oberfläche selbst (seit 2026-10-10) |
 | `listen_baum` | 1 | Reine Helfer über den Eintrags-Baum einer Liste (zählen, erledigt, Reihenfolge einer Ebene, flach, Pfad, Bernstein-Steine) — geteilt von Listen-Ansicht der TUI und Listen-Kachel, ohne Imports (seit 2026-10-10) |
 | `graph_reihen` | 1 | Reine Helfer über die Messwerte eines Graphen (Zahl prüfen, Uhrzeit, Dauer, Reihe je Typ, letzter Wert, Sparkline) — geteilt von Graph-Werkzeug der TUI und Graph-Kachel, ohne Imports (seit 2026-10-10) |
@@ -260,7 +261,7 @@ das für `core/`, `ui/`, `tui/`, `scripts/`).
 
 | Bereich | Darf aus dem Kern | Warum |
 |---|---|---|
-| `tui/` | `theme`, `tone`, `pc_status`, `listen_baum`, `graph_reihen` | Reine Helfer ohne Kern-Abhängigkeit. Alles andere holt die TUI per HTTP von den Routen (`ui/routen/`). `listen_baum`/`graph_reihen` seit 2026-10-10: Ansicht und Kachel rechnen dasselbe; beide stehen in `deploy/aussenposten.txt`. |
+| `tui/` | `theme`, `tone`, `pc_status`, `listen_baum`, `graph_reihen`, `stil` | Reine Helfer ohne Kern-Abhängigkeit. Alles andere holt die TUI per HTTP von den Routen (`ui/routen/`). `listen_baum`/`graph_reihen` seit 2026-10-10: Ansicht und Kachel rechnen dasselbe; `stil` seit 2026-10-10: Farbwähler und Stylebox prüfen CSS wie das Backend; alle drei stehen in `deploy/aussenposten.txt`. |
 
 Mit Apps redet der Hub nur über HTTP: starten (`scripts/open_tutor_room.py`
 liest `app.toml`), Ereignisse schicken (`core/hub_ereignisse.py`).

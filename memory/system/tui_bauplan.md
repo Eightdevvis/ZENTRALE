@@ -87,6 +87,8 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/desk_kacheln.py` | Kacheln holen und puffern: `pflegen` startet fällige im Hintergrund (`POST /api/kachel`), Puffer `_inhalt` am Element, `stand`/`ttl`, Fehler → weg/aus/fehler, `fuer_datei` (ohne „_", mit `rueckfall`) | am Element |
 | `ansichten/sprung.py` | Adress-Router: `Router` (App → Handler(pfad, abfrage)), `router_fuer(DESK, kalender, fokus, graphen)`, `lesen(adresse)` — öffnet zu `zentrale://<app>/…` die passende Ansicht (Kalender, Liste, Graph); `zeigen(adresse, zurueck)` + `nachsehen()` bringen den Öffner zurück, wenn die Ansicht zugeht (seit 2026-10-10) | — |
 | `bausteine/feld_dialog.py` | `FeldDialog`: Dialog aus einem JSON Schema (Katalog `parameter`, seit 2026-10-10 statt eigener `felder`): liest ohne Paket die Teilmenge des Hubs (properties mit type/title/description/default/minimum/maximum/format date/oneOf/enum, required, allOf if/then), prüft leicht, der Hub ist Herr (`core/kachel_parameter.py`); nur Tastatur | — |
+| `bausteine/farbwaehler.py` | `Farbwaehler`: Modal, Regenbogen-Kreis (HSV: Winkel = Farbton, Radius = Sättigung) mit Cursor-Kreis, Pfeile, `+`/`-` Zoom bis 16×, Helligkeit Bild↑↓/`[ ]`, `#` Hex tippen; Raster passt sich den freien Farbpaaren an ([bausteine_farbe_stil.md](bausteine_farbe_stil.md), seit 2026-10-10) | am Objekt der Ansicht |
+| `bausteine/stylebox.py` | `Stylebox`: Modal für das Aussehen eines Objekts als CSS-dict; zeigt nur die angebotenen Eigenschaften (Liste oder JSON Schema aus `core/stil.py`), Farben über den Farbwähler, Icon gesperrt, Vorschau mit Rahmenzeichen und Muster (seit 2026-10-10) | am Objekt der Ansicht |
 
 ## Wie eine Ansicht gebaut ist (und eine neue gebaut wird)
 
@@ -617,6 +619,15 @@ Der Ordner steht in `deploy/aussenposten.txt`. Tests ohne Terminal:
 `tests/test_desk_canvas.py`; die Ansicht gegen das echte `core/desk.py`:
 `tests/test_desk.py`; Fußleisten-Zustände `desk:*` in `tests/test_fussleiste.py`.
 
+**Ausnahme Farbe (2026-10-10):** Farbwähler und Stylebox zeichnen selbst —
+über den Kontext `z` (`zeichne(z, y, x, h, w)`: `safe_addstr`, `pix_attr`,
+`draw_box`), weil jede Zelle eine echte Farbe hat, die keine Rolle ausdrückt,
+und weil nur sie wissen, wie viele Farbpaare sie brauchen. Gerechnet wird
+trotzdem rein (`rad_zellen`, `zeilen`, `vorschau`), ohne Terminal getestet
+(`tests/test_farbe_stil.py`). Sie prüfen CSS mit `core/stil.py` — durch die
+Tür `tui/`; den Pfad zu `core/` hängt `bausteine/__init__.py` hinten an.
+API und Tasten: [bausteine_farbe_stil.md](bausteine_farbe_stil.md).
+
 ## Historie
 
 - **2026-10-05** — Kern-Bauplan friert `run_ui` (7.701 Zeilen) als Riese ein.
@@ -630,3 +641,4 @@ Der Ordner steht in `deploy/aussenposten.txt`. Tests ohne Terminal:
 - **2026-10-10** — Canvas weich: Anzeige-Lage gleitet auf `vx/vy` zu (`gleiten()`, `gleit_schritt`, höchstens 6 Bilder), Ansicht schaltet `weich`/`uhr` ein; `Desk.bewegt_sich()` hält die schnelle Kadenz (33 ms) in `zentrale_tui.py` nur, solange es gleitet. Schieben: W A S D (groß) als Hauptbelegung, dazu shift+ und alt+Pfeile (`alt_pfeil`, `ALT_NAMEN`), Beschleunigung beim Gedrückthalten ([desk_view.md](desk_view.md)).
 - **2026-10-10** — Kacheln neutral: `bausteine/feld_dialog.py` (Dialog aus dem Katalog), `desk_neu.KatalogWahl` statt `KalenderWahl`, `sprung.Router` (Adresse → Ansicht) statt `zeigen_fuer`, `farben.FARBROLLEN` (Farbrollen der Apps → TUI-Palette, deckt `core/farbrollen.py` ganz ab). Canvas: das Gegriffene gleitet mit der Ansicht (`_in_der_hand`), die Lage unten rechts folgt der Anzeige-Lage ([desk_view.md](desk_view.md), [hub_bauplan.md](hub_bauplan.md)).
 - **2026-10-10** — `feld_dialog.py` baut aus JSON Schema (Katalog `parameter`) statt aus der eigenen `felder`-Liste; `sprung.Router` bringt den Öffner zurück (`zeigen(adresse, zurueck=…)`, `registrieren(app, handler, zustand)`, `nachsehen()` nach jeder Taste in der Hauptschleife): Esc in einer mit `o` geöffneten Ansicht führt zurück auf denselben Desk.
+- **2026-10-10** — Bausteine `farbwaehler.py` und `stylebox.py` (Farbe und Stil für alle Apps, CSS-dict, `core/stil.py`), noch in keiner Ansicht; ausprobieren mit `scripts/stil_probe.py` ([bausteine_farbe_stil.md](bausteine_farbe_stil.md)).
