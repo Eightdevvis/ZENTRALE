@@ -469,6 +469,20 @@ Teil eines Auftrags fällt still weg, „offen: …" steht unter der Antwort —
 und „nicht gefunden" nach nur einer Stichwortsuche für alle Modelle. Alles
 Weitere: [ehrlichkeit_live.md](ehrlichkeit_live.md).
 
+### Werkzeuge aus dem Schema — `core/werkzeug_erzeuger/` (seit 2026-10-10)
+
+Die schreibenden Kalender-Werkzeuge der gross-Schiene werden aus Aktions-
+Schemas (MCP-Form, `core/werkzeug_kalender.py`) ERZEUGT; Schutzschicht
+(Schema-Prüfung, Gate-Frage aus Feldern, Nachlesen, Zurücknehmen, feste
+Satzform) einmal im Erzeuger, Fach im Adapter (`core/ki_kalender_adapter.py`).
+Neu: Phasen (`set/edit/delete_calendar_phase`), `set_calendar_group`,
+`set_calendar_layer`, Gruppe Pflicht beim Anlegen, `nur_von`/`nur_bis` an
+`edit_calendar_routine`. Eintrag-Felder `gross_ausfuehrer`, `erzeugt`,
+`bereich`, `worte`, `zuschnitt` (`core/werkzeug_eintrag.py`);
+`ki_werkzeuge._verteilen` nimmt auf gross den `gross_ausfuehrer`.
+Einstellung `werkzeuge_erzeugt` (an|aus). Alles Weitere:
+[werkzeug_erzeuger.md](werkzeug_erzeuger.md).
+
 ### Kalender ohne Fallen — `core/ki_kalender.py`, `ki_kalender_aendern.py` (seit 2026-10-08)
 
 - **Kennungen** (nur `gross`): `read_calendar` zeigt je Zeile `#t…` (Termin)

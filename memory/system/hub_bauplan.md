@@ -397,3 +397,13 @@ CalDAV / Kern                                   + Kennungen · Fehlercodes · Er
 - **MCP:** Fremde MCP-Server lassen sich so anbinden — ZENTRALE nimmt deren
   Werkzeug-Schemas und legt dieselben Schutzschichten darum; ein MCP-Server,
   der kein Nachlesen kann, bekommt nur Lesen frei.
+
+**Schritt 1 gebaut (2026-10-10):** der eigene Kalender als erste Quelle,
+mit Tagesphasen, Gruppen und Ebene „vielleicht". Erzeuger
+`core/werkzeug_erzeuger/` (Aktion = MCP-Werkzeug-Definition + `x-zentrale`),
+Schemas `core/werkzeug_kalender.py`, Adapter `core/ki_kalender_adapter.py`;
+Einstellung `werkzeuge_erzeugt` (Standard an), klein byte-gleich. Mechanik,
+Anbinden einer neuen Quelle, was „sauber" für einen Adapter heißt:
+[werkzeug_erzeuger.md](../ki/werkzeug_erzeuger.md). Offen: Messung mit
+echten Modellen (Prüfstand inkl. neuer Fälle f12 Phase, f13 Gruppe), dann
+der handgeschriebene gross-Weg weg; danach ein fremder Kalender.

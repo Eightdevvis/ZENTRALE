@@ -183,3 +183,12 @@ fragen. Zier-Symbole (✦ ★ ❄) streut qwen in fast jede Antwort (Persona:
 (Zusatz-Prüfer, Änderungswunsch-Erkennung), Haken in `core/cloud_openai.py`
 und `core/cloud.py` (`_static_system(…, schiene=)`, `_profil(modell)`).
 Tests: `tests/test_modell_profile.py`. Fälle: `tests/pruefstand/faelle_modelle/`.
+
+## Erzeugte Werkzeuge (2026-10-10, ungemessen)
+
+Werkzeuge aus dem Schema ([werkzeug_erzeuger.md](werkzeug_erzeuger.md))
+bringen ihren Zuschnitt für schwache Modelle mit; `qwen.werkzeuge` wendet
+ihn vor den eigenen Zusätzen an (Felder `layer`, `kategorie_name` und
+seltene Phasen-Felder weg, kürzere Texte). Die neuen Werkzeuge stehen in
+zwei Gruppen der Auswahl: `rhythmus` (Schlaf, Bett, Phase …) und `gruppe`
+(Gruppe, Uni, vielleicht, fest …).
