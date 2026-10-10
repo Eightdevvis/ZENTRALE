@@ -39,6 +39,8 @@ CODES = {
     "QUELLE-UNGUELTIG": "Die Quelle ist kein {art, id} mit gültiger id.",
     "QUELLE-UNBEKANNT": "Diese Liste bzw. dieses Projekt gibt es nicht (Auswahl: /api/calendar/quellen).",
     "OHNE-QUELLE": "Der Eintrag hat keine Quelle.",
+    # Aussehen des Kastens (core/stil.py, Stylebox der TUI), seit 10.10.2026
+    "STIL-UNGUELTIG": "Der Stil ist kein gültiges dict aus CSS-Eigenschaften (Farben als #rrggbb).",
 }
 
 

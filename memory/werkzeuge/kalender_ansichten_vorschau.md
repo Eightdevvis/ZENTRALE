@@ -542,3 +542,44 @@ soll sich das ganze ganz normal als termin bearbeiten lassen".
 - **Fußzeile** (`tasten_hinweis(ansicht, breite)`): drei Stufen, die längste,
   die passt (vorher in B/C bei 150 Spalten abgeschnitten); vollständig in der
   Fußleiste (`befehle.py`). Tests: `tests/test_kalender_quellen_tui.py`.
+
+## Stylebox im Formular und der gestylte Kasten (10.10.2026)
+Kern: Abschnitt „stil" in [kalender_ics_bauplan.md](kalender_ics_bauplan.md);
+Bausteine: [bausteine_farbe_stil.md](../system/bausteine_farbe_stil.md).
+Sasha: „Im Terminformular gibt es NUR eine Option ‚Stylebox' … In der
+Stylebox kann man den Kasten genau stylen: Rahmenstil + Rahmenfarbe,
+Innenfarbe, Schriftfarbe, Innenmuster; ‚Icon hochladen' wird angezeigt,
+bleibt aber gesperrt."
+- **Formular** (`kalender_werkzeuge.py`, Feld-Art `stil`): genau EIN Feld
+  „Stylebox" in a, A (für Liste), e, r und im Kasten „ganze Spanne"/„alle
+  termine der serie" — nicht in „nur dieser Tag" (gilt für die Serie, wie
+  Gruppe/Liste). Die Zeile zeigt eine Vorschau: die drei Rahmenzeichen in
+  Rahmen- und Flächenfarbe, dann „rand #ff8800 · fläche #202030 · schrift … ·
+  Punkte" bzw. „keine"; der Kasten wird so breit wie die Zeile.
+- **Bedienung:** auf dem Feld öffnen Enter, Leertaste oder → die Stylebox
+  (Enter speichert hier also NICHT — Strg-S oder Enter auf einem anderen
+  Feld); ⌫/Entf = kein Stil. Die Box liegt als Kasten über dem Formular
+  (`Formular.box`, gezeichnet in `kalender_bedienung.zeichne_kasten`), alle
+  Tasten gehen an sie; ihr „fertig" übernimmt das Geänderte ins Feld, „abbruch"
+  lässt es. Den Farbwähler öffnet die Box selbst. Gespeichert wird erst mit
+  dem Formular: neu → `stil` im Body, bestehend → `POST /api/calendar/stil`
+  per Kennung, nur wenn er sich geändert hat. Kopieren (c/p) nimmt ihn mit,
+  Ansehen (Enter) zeigt „Stil …".
+- **Anzeige** (`kalender_stil.py`, reine Funktionen): Rolle
+  `$<schrift>$<grund>$<rückfall>` (Hex ohne #, leer = aus der Rückfall-Rolle);
+  `kalender.py _stil_attr` macht daraus ein Paar über `pix_attr` (bunte Farben
+  im 256er-Modus über `pixel.bunt`, sonst `pix_farbe`), ohne 256 Farben oder
+  wenn die Paare ausgehen der Rückfall (Kursfarbe).
+  - **C** der Block: Rahmen rundherum ab 4×4 Zellen, sonst nur links/rechts
+    (ab 3 Spalten), darunter keiner; Fläche statt Kursfarbe (ohne Fläche
+    bleibt die Kursfläche, nur der Rahmen färbt), Schrift (ohne: schwarz/weiß
+    nach Helligkeit der Fläche), Muster in der leisen Schrift. Gewählt: die
+    Akzentfarben, die Rahmenform bleibt.
+  - **A** der Titel: davor das senkrechte Rahmenzeichen in der Rahmenfarbe,
+    mit Fläche als Schild „ Uni " (+ zwei Musterzeichen), sonst in der
+    Schriftfarbe.
+  - **B** die Zeile in der Stilfarbe (Schrift, sonst Rahmen, sonst Fläche);
+    Ganztägiges und Spannen-Balken als Fläche. Gruppen-Zeilen bleiben.
+  - Ohne Stil alles wie vorher. uncommitted MIT Stil: der Stil gewinnt (kein
+    Glas) — offen, ob Sasha dort lieber Glas sähe.
+- Tests: `tests/test_kalender_stil_tui.py`.

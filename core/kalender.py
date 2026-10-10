@@ -45,6 +45,7 @@ import kalender_quelle
 import kalender_regel
 import kalender_rhythmus
 import kalender_speicher
+import stil as stil_kern
 from kalender_ics import FELD as _ICS_FELD, ohne_interna
 
 # ── Pfad & Locking ─────────────────────────────────────────────────────
@@ -224,6 +225,35 @@ def _mit_quelle(layer: str, label, extras: dict):
     return label, {**extras, "quelle": q}
 
 
+def stil_pruefen(layer: str, stil) -> dict:
+    """`stil` (Aussehen des Kastens: dict CSS-Eigenschaft → Wert, core/stil.py,
+    Angebot stil.KASTEN) → gesäubertes dict; {} = kein Stil. Phasen haben
+    keinen (IST-PHASE), Kaputtes → STIL-UNGUELTIG. Seit 10.10.2026 (Sasha:
+    „Im Terminformular gibt es NUR eine Option ‚Stylebox'")."""
+    from kalender_fehler import KalenderAbgelehnt
+    try:
+        sauber = stil_kern.pruefen(stil, stil_kern.KASTEN)
+    except ValueError as e:
+        raise KalenderAbgelehnt("STIL-UNGUELTIG", f"stil: {e}")
+    if sauber and layer == kalender_rhythmus.EBENE:
+        raise KalenderAbgelehnt("IST-PHASE", "eine Phase hat keinen Stil")
+    return sauber
+
+
+def _mit_stil(layer: str, extras: dict) -> dict:
+    """`stil` in den Zusatzfeldern geprüft übernehmen (vor dem Laden); leer
+    oder None = kein Feld."""
+    if "stil" not in extras:
+        return extras
+    rest = {k: v for k, v in extras.items() if k != "stil"}
+    if extras["stil"] is None:
+        return rest
+    sauber = stil_pruefen(layer, extras["stil"])
+    if sauber:
+        rest["stil"] = sauber
+    return rest
+
+
 def add_entry(layer: str, day: str, label: str,
               time: str | None = None, **extras) -> bool:
     """
@@ -235,7 +265,7 @@ def add_entry(layer: str, day: str, label: str,
       time   – HH:MM (optional, sonst ganztags)
       extras – beliebige Zusatzfelder (tags, location, ...)
     """
-    label, extras = _mit_quelle(layer, label, _mit_kategorie(extras))
+    label, extras = _mit_quelle(layer, label, _mit_stil(layer, _mit_kategorie(extras)))
     with _lock:
         data = _load_raw()
         if layer not in data.get("layers", {}):
@@ -272,7 +302,7 @@ def add_span(layer: str, von: str, bis: str, label: str, **extras) -> bool:
     if d1 < d0:
         state.push_log(f"[calendar] Spanne verdreht: bis {bis} < von {von}")
         return False
-    label, extras = _mit_quelle(layer, label, _mit_kategorie(extras))
+    label, extras = _mit_quelle(layer, label, _mit_stil(layer, _mit_kategorie(extras)))
     with _lock:
         data = _load_raw()
         if layer not in data.get("layers", {}):
@@ -636,7 +666,7 @@ def add_routine(layer: str, label: str, rrule_str: str,
     if not kalender_regel.regel_gueltig(rrule_str):
         state.push_log(f"[calendar] ungültige rrule {rrule_str!r}")
         return False
-    label, extras = _mit_quelle(layer, label, _mit_kategorie(extras))
+    label, extras = _mit_quelle(layer, label, _mit_stil(layer, _mit_kategorie(extras)))
 
     with _lock:
         data = _load_raw()
@@ -731,8 +761,9 @@ def kennung(e: dict) -> str | None:
 
 
 # Felder einer Routine, die jedes Vorkommen mitbekommt (zusätzlich zu Zeit,
-# Ende, Ort …): Motiv der Phase, Gruppe.
-_MITGEGEBEN = ("motiv", "kategorie", "kategorie_name", "kategorien_weitere", "quelle")
+# Ende, Ort …): Motiv der Phase, Gruppe, Quelle, Stil des Kastens.
+_MITGEGEBEN = ("motiv", "kategorie", "kategorie_name", "kategorien_weitere", "quelle",
+               "stil")
 
 
 def _ueber_nacht_markieren(e: dict) -> None:

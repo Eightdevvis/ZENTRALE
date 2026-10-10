@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime, timedelta
 
-from . import kalender_gruppen, kalender_quellen
+from . import kalender_gruppen, kalender_quellen, kalender_stil
 from .kalender_ansichten import _tag_eintraege, monat_eintraege, titel_schluessel
 
 WT_KURZ = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
@@ -340,13 +340,15 @@ _KURZ_FREQ = {"DAILY": "täglich", "WEEKLY": "wöchentlich", "MONTHLY": "monatli
 
 
 class Feld:
-    """art: 'text' (tippen) oder 'wahl' (←→ zwischen `optionen`).
+    """art: 'text' (tippen), 'wahl' (←→ zwischen `optionen`) oder 'stil'
+    (Enter öffnet die Stylebox, Wert = dict aus CSS-Eigenschaften).
     `lesen(text)` → (ok, wert|fehlertext); `zeigen(werte)` → sichtbar?"""
 
     def __init__(self, name, beschriftung, art="text", wert="", optionen=(),
                  lesen=None, zeigen=None, hilfe=""):
         self.name, self.beschriftung, self.art = name, beschriftung, art
         self.text = str(wert or "") if art == "text" else ""
+        self.stil = dict(wert or {}) if art == "stil" else None
         self.optionen = tuple(optionen)
         self.wahl = self.optionen.index(wert) if wert in self.optionen else 0
         self.lesen = lesen or (lambda s: (True, s.strip()))
@@ -354,6 +356,8 @@ class Feld:
         self.hilfe = hilfe
 
     def roh(self):
+        if self.art == "stil":
+            return dict(self.stil)
         return self.optionen[self.wahl] if self.art == "wahl" else self.text
 
 
@@ -370,6 +374,7 @@ class Formular:
         self._u8 = b""
         self.fertig = False
         self.antworten: dict = {}
+        self.box = None                 # offene Stylebox (Feld art 'stil')
         sicht = self.sichtbar()
         self.i = next((k for k, f in enumerate(sicht) if f.name == fokus), 0)
 
@@ -409,10 +414,18 @@ class Formular:
 
     def taste(self, ch: int) -> str:
         """→ 'weiter' | 'fertig' | 'abbruch'."""
+        if self.box is not None:
+            return self._box_taste(ch)
         if ch == 27:
             return "abbruch"
         f = self.feld
         n = len(self.sichtbar())
+        if f.art == "stil" and ch in (10, 13, 343, 32, 261):    # Enter/Leertaste/→: Stylebox
+            self._box_oeffnen(f)
+            return "weiter"
+        if f.art == "stil" and ch in (8, 127, 263, 330):       # ⌫/Entf: kein Stil
+            f.stil = {}
+            return "weiter"
         if ch in (10, 13, 343, 19):              # Enter / KEY_ENTER / Strg-S
             return "fertig" if self._speichern() else "weiter"
         if ch in (9, 258):                       # Tab, ↓
@@ -443,11 +456,38 @@ class Formular:
             self.fehler, self.fehler_feld = "", None
         return "weiter"
 
+    # ── Stylebox über dem Formular (10.10.2026) ────────────────────────
+    # Sasha: „Im Terminformular gibt es NUR eine Option ‚Stylebox'. Von dort
+    # öffnen sich die Bausteine." Solange sie offen ist, gehen alle Tasten an
+    # sie (tui/bausteine/stylebox.py); „fertig" übernimmt das Geänderte ins
+    # Feld, „abbruch" lässt es, wie es war. Gespeichert wird erst mit dem
+    # Formular.
+    def _box_oeffnen(self, f):
+        try:
+            from tui.bausteine.stylebox import Stylebox
+        except ImportError:             # als Skript gestartet: tui/ liegt im Pfad
+            from bausteine.stylebox import Stylebox
+        text = (self.roh_werte().get("titel") or "").strip() or "Termin"
+        self.box = Stylebox(f.stil, list(kalender_stil.ANGEBOT), titel="stylebox", text=text)
+        self._box_feld = f
+
+    def _box_taste(self, ch) -> str:
+        if ch in (-1, 410):              # Takt der Hauptschleife / KEY_RESIZE: keine Taste
+            return "weiter"
+        erg = self.box.taste(ch)
+        if erg and erg[0] == "fertig":
+            self._box_feld.stil.update(erg[1])
+        if erg:
+            self.box = None
+        return "weiter"
+
     def zeilen(self) -> list:
         """[(beschriftung, wert, aktiv, hilfe)] für den Kasten."""
         aus = []
         for k, f in enumerate(self.sichtbar()):
-            if f.art == "wahl":
+            if f.art == "stil":
+                wert = kalender_stil.vorschau_text(f.stil)
+            elif f.art == "wahl":
                 wert = "‹ %s ›" % f.roh()
             else:
                 wert = f.text
@@ -537,6 +577,33 @@ def _gruppe_aufruf(roh, w) -> list:
     return [("POST", "/api/calendar/kategorie", body)]
 
 
+# ── Stylebox (Feld `stil`, 10.10.2026) ─────────────────────────────────
+# EIN Feld für das ganze Aussehen des Kastens (kalender_stil.py). Gilt wie
+# Gruppe und Liste für den ganzen Eintrag/die ganze Serie — darum nicht im
+# Kasten „nur dieser Tag".
+STIL_HILFE = "enter öffnet die Stylebox · ⌫ kein stil · strg-s speichert"
+
+
+def _stil_feld(roh=None) -> Feld:
+    return Feld("stil", "Stylebox", art="stil", wert=kalender_stil.von(roh),
+                lesen=lambda d: (True, dict(d or {})), hilfe=STIL_HILFE)
+
+
+def _stil_body(w) -> dict:
+    """Zusatzfeld für einen NEUEN Eintrag (leer = keins)."""
+    return {"stil": dict(w["stil"])} if w.get("stil") else {}
+
+
+def _stil_aufruf(roh, w) -> list:
+    """Hat sich der Stil eines bestehenden Eintrags geändert → EIN Aufruf
+    per Kennung (POST /api/calendar/stil ersetzt ihn; {} entfernt)."""
+    if "stil" not in w or not roh.get("kennung"):
+        return []
+    if dict(w["stil"] or {}) == kalender_stil.von(roh):
+        return []
+    return [("POST", "/api/calendar/stil", {"kennung": roh["kennung"], "stil": dict(w["stil"] or {})})]
+
+
 def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
                    wiederholung="keine", alle="1", wtage="", wbis="",
                    mit_regel=True, mit_ganz=True, mit_datum=True, datum_name="Tag",
@@ -572,7 +639,7 @@ def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
         ]
     felder.append(Feld("ort", "Ort", wert=ort))
     if mit_gruppe:
-        felder += _gruppe_felder(roh)
+        felder += _gruppe_felder(roh) + [_stil_feld(roh)]
     return felder
 
 
@@ -600,7 +667,7 @@ def _neu_plan(w, tag, layer="termine", quelle=None):
     Body mit; ein leerer Titel wird ihr Name (der Rückfall)."""
     tag = w.get("datum") or tag
     titel, ort = (w.get("titel") or (quelle or {}).get("name") or ""), (w.get("ort") or None)
-    gruppe = _gruppe_body(w)
+    gruppe = {**_gruppe_body(w), **_stil_body(w)}
     if quelle:
         gruppe = {**gruppe, "quelle": {"art": quelle["art"], "id": quelle["id"]}}
     start, e_dt = _zeiten(tag, w)
@@ -802,7 +869,8 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quelle_wa
                     "ende": neu["ende"]} if neu["time"] and neu["ende"] else None)
             return _plan([("PUT", "/api/calendar/eintrag",
                            {"layer": layer, "day": iso, "label": label,
-                            "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w),
+                            "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w)
+                         + _stil_aufruf(roh, w),
                          "geändert: " + w["titel"], konflikt=kon, danach={"tag": w["datum"]},
                          zurueck=_quelle_folge(roh, w, quelle_wahl))
         felder = _termin_felder(tag, heute, titel=label, ganz=not t0, von=t0, bis=e0,
@@ -844,7 +912,8 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quelle_wa
                     neu["wiederholung"] = neu_regel
             aufrufe = [("PUT", "/api/calendar/routine",
                         {"layer": layer, "label": label, "day": iso,
-                         "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w)
+                         "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w) \
+                + _stil_aufruf(roh, w)
             if wied == "keine":                         # Wiederholung aus = ganz löschen?
                 return _plan(meldung="Wiederholung „keine“: zum Löschen d benutzen")
             return _plan(aufrufe, "alle geändert: " + w["titel"],
@@ -890,7 +959,7 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quelle_wa
             neu["bis"] = (w["letzter"] - timedelta(days=schub)).isoformat()
         return _plan([("PUT", "/api/calendar/spanne",
                        {"layer": layer, "von": von_iso, "label": label, "new": neu})]
-                     + _gruppe_aufruf(roh, w),
+                     + _gruppe_aufruf(roh, w) + _stil_aufruf(roh, w),
                      "alle tage geändert: " + w["titel"], danach={"tag": w["erster"]},
                      zurueck=_quelle_folge(roh, w, quelle_wahl))
 
@@ -911,7 +980,8 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quelle_wa
         Feld("erster", "Erster Tag", wert=datum_text(von_d), lesen=_l_datum(heute)),
         Feld("letzter", "Letzter Tag", wert=datum_text(bis_d), lesen=_l_datum(heute)),
         Feld("ort", "Ort", wert=ort0),
-    ] + _gruppe_felder(roh) + _quelle_felder(roh, quelle_wahl), alle_plan, pruefen=alle_pruefen)
+    ] + _gruppe_felder(roh) + [_stil_feld(roh)] + _quelle_felder(roh, quelle_wahl), alle_plan,
+        pruefen=alle_pruefen)
     return Dialog("ändern", [_wahl_umfang(roh)], lambda a: _plan(
         weiter=form_tag() if a["umfang"] == "dieser" else form_alle()))
 
@@ -973,6 +1043,8 @@ def kopie(roh: dict) -> dict:
     q = kalender_quellen.quelle_von(roh)
     if q:                                      # die Liste kommt mit (Titel bleibt live)
         k["quelle"] = {"art": q["art"], "id": q["id"]}
+    if kalender_stil.von(roh):                 # das Aussehen kommt mit
+        k["stil"] = kalender_stil.von(roh)
     return k
 
 
@@ -1042,6 +1114,8 @@ def details(roh: dict, tag: date, vorschau: dict | None = None) -> list:
     if kalender_gruppen.anzeige(roh):
         zeilen.append("Gruppe   " + kalender_gruppen.anzeige(roh))
     zeilen += quelle
+    if kalender_stil.von(roh):
+        zeilen.append("Stil     " + kalender_stil.vorschau_text(kalender_stil.von(roh)))
     zeilen.append("Ebene    " + str(roh.get("layer", "")))
     return zeilen
 

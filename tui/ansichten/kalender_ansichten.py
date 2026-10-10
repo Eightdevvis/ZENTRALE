@@ -27,7 +27,7 @@ import unicodedata
 import zlib
 from datetime import date, timedelta
 
-from . import kalender_gruppen, kalender_motive
+from . import kalender_gruppen, kalender_motive, kalender_stil
 
 # ── Ansichten und Taste v ──────────────────────────────────────────────
 ANSICHTEN = ("A", "B", "C")
@@ -471,6 +471,8 @@ def _normiere(e: dict, iso: str, aus: bool) -> dict:
         "bis": e.get("bis") if isinstance(e.get("bis"), str) else iso,
         "key": (e.get("von"), e.get("bis"), gespeichert, e.get("layer")),
         "quelle": quelle,
+        # Aussehen des Kastens aus der Stylebox (kalender_stil.py); {} = wie immer
+        "stil": kalender_stil.von(e),
         "routine": bool(e.get("recurring")), "aus": aus,
         # Ebene „uncommitted": liegt durchscheinend über den Terminen
         "unv": e.get("layer") == UNVERBINDLICH,
@@ -779,9 +781,12 @@ def _a_liste(lw, y, x, w, h, daten, ab, heute, erledigte, tage, aw=None):
                 zy += 1
             titel = ("✗ " if t["aus"] else "") + t["label"]
             titel = kuerzen(titel, cw - 3)
-            lw.setze(zy, cx + 1 if inv else cx + 3,
-                     ("  " + titel + " " * (cw - 3 - text_breite(titel))) if inv else titel,
-                     r + inv)
+            if t["stil"] and not inv and not t["aus"]:      # Stylebox: Rahmenzeichen + Farbe
+                kalender_stil.a_titel(lw, zy, cx + 3, cw - 3, titel, r, t["stil"])
+            else:
+                lw.setze(zy, cx + 1 if inv else cx + 3,
+                         ("  " + titel + " " * (cw - 3 - text_breite(titel))) if inv else titel,
+                         r + inv)
             # Quellen-Termin: darunter dezent die Liste (eine Zeile mehr, die
             # Luft zum nächsten Termin bleibt — calcurse-Takt bleibt erkennbar).
             unter = quelle_unterzeile(t)
@@ -984,11 +989,13 @@ def _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte
         breite = (b.weekday() - a.weekday() + 1) * (cw + 1) - 1
         ist = sel is not None and any(t["roh"] is sel for t in sp["tage"].values())
         erst_t = next(iter(sp["tage"].values()))
-        if erst_t["unv"] and not ist:            # uncommitted: Glas statt Fläche
+        if erst_t["unv"] and not ist and not erst_t["stil"]:   # uncommitted: Glas statt Fläche
             lw.glas(y + 1 + bi, x0, breite, ROLLE["spanne"], _balken_text(sp, a, b, breite))
             continue
-        lw.setze(y + 1 + bi, x0, _balken_text(sp, a, b, breite),
-                 (_a_rolle("a_akzent") if ist else ROLLE["spanne"]) + INV)
+        r_balken = (_a_rolle("a_akzent") if ist else ROLLE["spanne"]) + INV
+        if erst_t["stil"] and not ist:
+            r_balken = kalender_stil.flaechen_rolle(r_balken, erst_t["stil"])
+        lw.setze(y + 1 + bi, x0, _balken_text(sp, a, b, breite), r_balken)
     nb = min(len(bahnen_ende), platz)
     for d in sichtbar:
         x0 = 2 + d.weekday() * (cw + 1)
@@ -1019,17 +1026,21 @@ def _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte
             if t["start"] is None and t["ende"] is None:
                 # Ganztägig als Band: Fläche über die ganze Zellenbreite.
                 band = kuerzen(t["label"], cw)
-                if t["unv"] and not t["aus"]:
+                gestylt = t["stil"] and not t["aus"] and not t.get("gruppe")
+                if t["unv"] and not t["aus"] and not gestylt:
                     lw.glas(yy, x0, cw, _glasrolle(t), band)
                     continue
                 band += " " * (cw - text_breite(band))
-                lw.setze(yy, x0, band, _rolle(t) + ("" if t["aus"] else INV))
+                r_band = _rolle(t) + ("" if t["aus"] else INV)
+                lw.setze(yy, x0, band, kalender_stil.flaechen_rolle(r_band, t["stil"])
+                         if gestylt else r_band)
             else:
                 txt = _b_text(t, cw)
                 if t.get("gruppe") and t["unv"]:
                     lw.glas(yy, x0, cw, _glasrolle(t), txt)
                     continue
-                lw.setze(yy, x0, txt, _rolle(t))
+                lw.setze(yy, x0, txt, kalender_stil.text_rolle(_rolle(t), t["stil"])
+                         if t["stil"] and not t["aus"] and not t.get("gruppe") else _rolle(t))
         mehr = len(rest) - len(zeige) + versteckt[d]
         if mehr and frei > 0:
             lw.setze(y + 1 + nb + len(zeige), x0, kuerzen("+%d" % mehr, cw), ROLLE["leer"])
@@ -1212,8 +1223,10 @@ def ansicht_c(daten, breite: int, hoehe: int, erledigte: bool = False,
                     lw.setze(y0, xx, band + " " * (colw - 1 - text_breite(band)),
                              _a_rolle("a_akzent") + INV)
                 elif fest or not glas:
-                    lw.setze(y0, xx, band + " " * (colw - 1 - text_breite(band)),
-                             _rolle(t) + ("" if t["aus"] else INV))
+                    r_band = _rolle(t) + ("" if t["aus"] else INV)
+                    if t["stil"] and not t["aus"]:
+                        r_band = kalender_stil.flaechen_rolle(r_band, t["stil"])
+                    lw.setze(y0, xx, band + " " * (colw - 1 - text_breite(band)), r_band)
                     if glas:
                         lw.glas(y0, xx, colw - 1, _glasrolle(glas[0]))
                 else:
@@ -1317,6 +1330,11 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None, hintergrund=No
                 if gewaehlt:                    # gewählter Termin: Akzent, deckend
                     r = _a_rolle("a_akzent")
                 texte = _c_zeilen(t, s, e, bw, k1 - k0 + 1)
+                if t["stil"] and not t["aus"]:  # Stylebox: Rahmen, Fläche, Muster
+                    kalender_stil.c_block(lw, y0 + k0, bx, bw, k1 - k0 + 1, texte, r + INV,
+                                          t["stil"], leise_basis=r + INV + LEISE,
+                                          gewaehlt=gewaehlt)
+                    continue
                 if t["unv"] and not gewaehlt and not t["aus"]:
                     for k in range(k0, k1 + 1):
                         txt = texte[k - k0] if k - k0 < len(texte) else ""

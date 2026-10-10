@@ -22,7 +22,7 @@ try:                                    # Pixel-Baustein (tui/pixel.py)
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     import pixel
 
-from . import kalender_ansichten
+from . import kalender_ansichten, kalender_stil
 from .basis import BEENDEN
 from .farben import DECKKRAFT
 from .kalender_ansichten import (ANSICHT_NAMEN, GLAS, INV, LEISE, glas_teile,
@@ -173,16 +173,9 @@ class Kalender:
         for i, zeile in enumerate(zeilen[:hoehe]):
             x = ix
             for text, rolle in zeile:
-                if GLAS in rolle:
-                    attr = self._glas_attr(rolle)
-                elif rolle.endswith(LEISE):
-                    attr = self._leise_attr(rolle[:-len(LEISE)])
-                elif rolle.endswith(INV):
-                    # eigene Fläche (Kalender-Tabelle), sonst die Schrift invertiert
-                    attr = C.get(rolle) or (C.get(rolle[:-len(INV)], C["dim"]) | curses.A_REVERSE)
-                else:
-                    attr = C.get(rolle, C["dim"])
-                if text.strip() or rolle.endswith((INV, LEISE)) or GLAS in rolle:
+                stil = rolle.startswith(kalender_stil.MARKE)
+                attr = self._stil_attr(rolle) if stil else self._attr(rolle)
+                if text.strip() or rolle.endswith((INV, LEISE)) or GLAS in rolle or stil:
                     z.addclip(by + 1 + i, x, text, ix + iw - x, attr)
                 x += text_breite(text)
         unten = bed.zeile_unten()
@@ -193,6 +186,56 @@ class Kalender:
             z.addclip(bottom, ix, tasten_hinweis(K["stil"], iw), iw, C["faint"])
         bed.zeichne_popup(by, bx, bh, bw)
         bed.zeichne_kasten(by, bx, bh, bw)
+
+    def _attr(self, rolle):
+        """Rolle der Leinwand (kalender_ansichten) → curses-Attribut."""
+        C = self.z.C
+        if GLAS in rolle:
+            return self._glas_attr(rolle)
+        if rolle.endswith(LEISE):
+            return self._leise_attr(rolle[:-len(LEISE)])
+        if rolle.endswith(INV):
+            # eigene Fläche (Kalender-Tabelle), sonst die Schrift invertiert
+            return C.get(rolle) or (C.get(rolle[:-len(INV)], C["dim"]) | curses.A_REVERSE)
+        return C.get(rolle, C["dim"])
+
+    def _stil_attr(self, rolle):
+        """„$schrift$grund$rückfall" (kalender_stil.rolle, Stylebox eines
+        Termins) → Farbpaar über Kontext.pix_attr. Was der Stil offen lässt,
+        kommt aus dem Paar der Rückfall-Rolle (z. B. die Kursfläche unter einem
+        farbigen Rahmen). Im 256er-Modus werden bunte Farben über
+        pixel.bunt gerundet (sonst kippten sie auf die Graurampe), graue über
+        pix_farbe. Ohne 256 Farben oder wenn die Paare ausgehen: der Rückfall."""
+        C, z = self.z.C, self.z
+        basis, schrift, grund = kalender_stil.teile(rolle)
+        rueckfall = self._attr(basis)
+        info = C.get("kal_glas")
+        if not info:
+            return rueckfall
+        schl = ("stil", rolle, info["thema"], bool(C.get("pix_true")))
+        farben = self._glas_farben.get(schl)
+        if farben is None:
+            paare = info["paare"]
+            kern = basis[:-len(LEISE)] if basis.endswith(LEISE) else basis
+            paar = paare.get(kern)
+            if paar is None and kern.endswith(INV) and kern[:-len(INV)] in paare:
+                f, b, _e = paare[kern[:-len(INV)]]
+                paar = (b, f, 0)
+            fg0, bg0, _e = paar or paare.get("dim") or ((200, 200, 200), C.get("pix_bg") or (0, 0, 0), 0)
+
+            def rgb(h, sonst):
+                if not h:
+                    return sonst
+                c = kalender_stil.stil_kern.hex_zu_rgb(h)
+                if not C.get("pix_true") and max(c) - min(c) >= 40:
+                    c = pixel.bunt(c)
+                return c
+            farben = self._glas_farben[schl] = (rgb(schrift, fg0), rgb(grund, bg0))
+        fg, bg = farben
+        attr = z.pix_attr(fg, bg)
+        if (z.pix_farbe(fg), z.pix_farbe(bg)) not in z.PIX["pairs"]:
+            return rueckfall                    # Paare voll → lieber Kursfarbe als Bernstein
+        return attr
 
     def _glas_attr(self, rolle):
         """„<darunter>~<glas>[~<schrift>]" (Leinwand.glas) → curses-Attribut:

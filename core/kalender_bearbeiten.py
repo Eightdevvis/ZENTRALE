@@ -101,11 +101,12 @@ def routine_neu(layer: str, label: str, seit: str, freq: str, intervall: int = 1
                 bis: str | None = None, wochentage=None, time: str | None = None,
                 ende: str | None = None, ort: str | None = None,
                 kategorie: str | None = None, kategorie_name: str | None = None,
-                quelle: dict | None = None) -> bool:
+                quelle: dict | None = None, stil: dict | None = None) -> bool:
     """Neue Routine ab `seit` (dem gewählten Tag), wie calcurse „r".
     `kategorie`/`kategorie_name`: Gruppe (seit 10.10.2026, TUI-Formular;
     geprüft in kalender._mit_kategorie). `quelle`: Titel live aus
-    Liste/Projekt (kalender._mit_quelle; TUI „neu für eine Liste", 10.10.2026)."""
+    Liste/Projekt (kalender._mit_quelle; TUI „neu für eine Liste", 10.10.2026).
+    `stil`: Aussehen des Kastens (CSS-dict, geprüft in kalender._mit_stil)."""
     d = _iso(seit)
     regel = regel_bauen(freq, d, intervall, _iso(bis) if bis else None, wochentage)
     if not regel or not (label or "").strip():
@@ -118,6 +119,8 @@ def routine_neu(layer: str, label: str, seit: str, freq: str, intervall: int = 1
     extras.update(_gruppe(kategorie, kategorie_name))
     if quelle:
         extras["quelle"] = quelle
+    if stil:
+        extras["stil"] = stil
     return kalender.add_routine(layer or "termine", label.strip(), regel,
                                 time=_hhmm(time) if time else None, **extras)
 
@@ -275,8 +278,9 @@ def spanne_neu(layer: str, von: str, bis: str, label: str,
                start_zeit: str | None = None, end_zeit: str | None = None,
                tageszeit: tuple | None = None, ort: str | None = None,
                kategorie: str | None = None, kategorie_name: str | None = None,
-               quelle: dict | None = None) -> bool:
-    """Mehrtägig anlegen. `quelle`: Titel live aus Liste/Projekt.
+               quelle: dict | None = None, stil: dict | None = None) -> bool:
+    """Mehrtägig anlegen. `quelle`: Titel live aus Liste/Projekt; `stil`:
+    Aussehen des Kastens (CSS-dict).
 
     - start_zeit/end_zeit: durchgehend, z.B. Fr 18:00 → So 14:00 (calcurse:
       Startzeit + Dauer über Mitternacht).
@@ -294,6 +298,8 @@ def spanne_neu(layer: str, von: str, bis: str, label: str,
     extras.update(_gruppe(kategorie, kategorie_name))
     if quelle:
         extras["quelle"] = quelle
+    if stil:
+        extras["stil"] = stil
     if not kalender.add_span(layer or "termine", von, bis, label.strip(), **extras):
         return False
     with kalender._lock:

@@ -140,6 +140,8 @@ def api_calendar_add_entry():
             extras[k] = v
     if body.get('quelle'):
         extras['quelle'] = body['quelle']    # {art, id}; label darf dann fehlen
+    if body.get('stil'):
+        extras['stil'] = body['stil']        # {css: wert}, geprüft in kalender.add_*
     # Mehrtägiger (ganztägiger) Termin: `bis`-Datum gesetzt → Spanne statt
     # Einmal-Termin. Kein Konflikt-Check (ganztägig, kein Zeit-Slot).
     bis = (body.get('bis') or '').strip()
@@ -279,7 +281,7 @@ def api_calendar_add_routine():
             body.get('wochentage') or None, body.get('time') or None,
             body.get('ende') or None, body.get('ort') or None,
             body.get('kategorie') or None, body.get('kategorie_name') or None,
-            body.get('quelle') or None)
+            body.get('quelle') or None, stil=body.get('stil') or None)
         return (jsonify({"ok": True}) if ok
                 else (jsonify({"error": "wiederholung abgelehnt"}), 400))
     raw = body.get('byday')
@@ -300,6 +302,8 @@ def api_calendar_add_routine():
             extras[k] = v
     if body.get('quelle'):
         extras['quelle'] = body['quelle']
+    if body.get('stil'):
+        extras['stil'] = body['stil']
     ok = kalender.add_routine(layer, label, rrule, time=time, **extras)
     if not ok:
         return jsonify({"error": "routine abgelehnt (layer/rrule?)"}), 400
@@ -359,7 +363,7 @@ def api_calendar_routine_abweichung():
 def api_calendar_spanne_neu():
     """Mehrtägig anlegen. Body: {layer?, von, bis, label, start_zeit?,
     end_zeit?, tageszeit?:[von, bis], ort?, kategorie?, kategorie_name?,
-    quelle?: {art, id}}."""
+    quelle?: {art, id}, stil?: {css: wert}}."""
     b = request.get_json(silent=True) or {}
     tz = b.get('tageszeit')
     return _antwort(kalender_bearbeiten.spanne_neu(
@@ -367,7 +371,8 @@ def api_calendar_spanne_neu():
         b.get('label') or '', b.get('start_zeit') or None, b.get('end_zeit') or None,
         tuple(tz) if isinstance(tz, list) and len(tz) == 2 else None,
         b.get('ort') or None, b.get('kategorie') or None,
-        b.get('kategorie_name') or None, b.get('quelle') or None), "spanne abgelehnt")
+        b.get('kategorie_name') or None, b.get('quelle') or None,
+        stil=b.get('stil') or None), "spanne abgelehnt")
 
 
 @bp.route('/api/calendar/spanne', methods=['PUT'])
@@ -569,3 +574,17 @@ def api_calendar_quelle_loesen():
     b = request.get_json(silent=True) or {}
     return jsonify(kalender_kennung.quelle_loesen(
         b.get('kennung') or '', titel_uebernehmen=bool(b.get('titel_uebernehmen'))))
+
+
+# ── Aussehen des Kastens (stil, seit 10.10.2026) ───────────────────────
+# Die Stylebox der TUI: ein dict aus CSS-Eigenschaften (core/stil.py,
+# Angebot stil.KASTEN). Gilt für den ganzen Eintrag bzw. die ganze Serie.
+@bp.route('/api/calendar/stil', methods=['POST'])
+def api_calendar_stil():
+    """Body: {kennung, stil: {css: wert}} — ERSETZT den Stil; {} entfernt
+    ihn. Antwort wie kalender_kennung.eintrag; Ablehnung 400 {error, code}
+    (STIL-UNGUELTIG, IST-PHASE, KENNUNG-UNBEKANNT)."""
+    b = request.get_json(silent=True) or {}
+    stil = b.get('stil')
+    return jsonify(kalender_kennung.stil_setzen(
+        b.get('kennung') or '', {} if stil is None else stil))

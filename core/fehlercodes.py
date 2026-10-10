@@ -113,6 +113,9 @@ CODES = {
     "K-OHNE-QUELLE": (
         "Der Eintrag hängt an keiner Liste und keinem Projekt.",
         "Nichts zu lösen — oder erst eine Quelle setzen."),
+    "K-STIL-UNGUELTIG": (
+        "Der Stil ist kein gültiges dict aus CSS-Eigenschaften (oder bei einer Phase).",
+        "Nur border-style, border-color, background-color, color, --zentrale-muster; Farben als #rrggbb; {} entfernt den Stil."),
     "K-KEIN-TREFFER": (
         "Kein Eintrag passt.",
         "read_calendar aufrufen und die Kennung aus dem Ergebnis nehmen."),

@@ -22,6 +22,10 @@
 #   kategorie (Gruppe)       -> CATEGORIES (Anzeigename, RFC 5545)
 #   quelle (Liste/Projekt)   -> X-ZENTRALE-QUELLE:<art>:<id> + URL:zentrale://…
 #                               (Adresse des Objekts; core/kalender_quelle.py)
+#   stil (Aussehen, CSS)     -> X-ZENTRALE-STIL:<CSS-Deklarationsliste> (TEXT,
+#                               ; und , escaped) + COLOR:<CSS3-Name> (RFC 7986,
+#                               nächster Name zur Fläche/Rahmen/Schrift);
+#                               nur COLOR von außen -> background-color
 #   Ebene rhythmus           -> TRANSP:TRANSPARENT, Ende vor Beginn = DTEND
 #                               am Folgetag (Schlaf 23:00–07:00)
 #
@@ -40,11 +44,12 @@ import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from icalendar import Calendar, Event, Timezone, vRecur
+from icalendar import Calendar, Event, Timezone, vRecur, vText
 
 import kalender_kategorie
 import kalender_quelle
 import kalender_regel
+import stil as stil_kern
 
 TZ_NAME = "Europe/Berlin"
 TZ = ZoneInfo(TZ_NAME)
@@ -63,6 +68,7 @@ X_RRULE_ROH = "X-ZENTRALE-RRULE-ROH"
 X_ZEIT_ROH = "X-ZENTRALE-ZEIT-ROH"
 X_MOTIV = "X-ZENTRALE-MOTIV"
 X_QUELLE = "X-ZENTRALE-QUELLE"
+X_STIL = "X-ZENTRALE-STIL"
 
 # Was ZENTRALE an einem Ereignis selbst verwaltet. Alles ANDERE an einer
 # vorhandenen Datei (DESCRIPTION, VALARM, Google-Eigenheiten, ...) wird beim
@@ -70,7 +76,7 @@ X_QUELLE = "X-ZENTRALE-QUELLE"
 # Notiz, die Sasha am Handy dazugeschrieben hat.
 VERWALTET = {"UID", "DTSTAMP", "LAST-MODIFIED", "SUMMARY", "LOCATION",
              "DTSTART", "DTEND", "DURATION", "RRULE", "EXDATE",
-             "RECURRENCE-ID", "CATEGORIES"}
+             "RECURRENCE-ID", "CATEGORIES", "COLOR"}
 VERWALTET_ABWEICHUNG = VERWALTET | {"STATUS"}
 
 # Eine kompakte, regelbasierte Zeitzone. icalendar würde sonst eine Fassung
@@ -237,11 +243,60 @@ def _kopf(ev: Event, e: dict, rest: dict) -> None:
         ev.add(X_QUELLE, kalender_quelle.als_text(e["quelle"]))
         ev.add("URL", kalender_quelle.adresse(e["quelle"]))
         rest.pop("quelle", None)
+    css = _stil_text(e)
+    if css:
+        ev.add(X_STIL, vText(css))
+        name = stil_kern.css_name(stil_kern.kastenfarbe(e["stil"]) or "")
+        if name:
+            ev.add("COLOR", vText(name))
+        rest.pop("stil", None)
     namen = _kategorie_namen(e)
     if namen:
         ev.add("CATEGORIES", namen)
         for feld in ("kategorie", "kategorie_name", "kategorien_weitere"):
             rest.pop(feld, None)
+
+
+def _stil_text(e: dict) -> str | None:
+    """Der Stil als CSS-Deklarationsliste — nur wenn er sich exakt
+    zurücklesen lässt (geprüft, kein Zeilenumbruch); sonst bleibt er in den
+    Extras (10.10.2026, Stylebox)."""
+    st = e.get("stil")
+    if not isinstance(st, dict) or not st:
+        return None
+    try:
+        if stil_kern.pruefen(st, stil_kern.KASTEN) != st:
+            return None
+        css = stil_kern.als_css(st)
+        if "\n" in css or "\r" in css or stil_kern.aus_css(css) != st:
+            return None
+    except ValueError:
+        return None
+    return css
+
+
+def _text_lesen(roh: str) -> str:
+    """iCalendar-TEXT ent-escapen (RFC 5545 §3.3.11: \\\\ \\; \\, \\n).
+    Eine unbekannte X-Property liefert icalendar roh zurück."""
+    return re.sub(r"\\([\\;,nN])", lambda m: "\n" if m.group(1) in "nN" else m.group(1), roh)
+
+
+def _stil_lesen(ev) -> dict | None:
+    """X-ZENTRALE-STIL (TEXT, ent-escaped) → dict; ohne die Zeile, aber mit
+    COLOR (Handy, anderer Kalender) → {"background-color": hex}. Kaputtes →
+    None (dann eben kein Stil)."""
+    roh = ev.get(X_STIL)
+    if roh is not None:
+        try:
+            text = _text_lesen(roh.to_ical().decode("utf-8") if hasattr(roh, "to_ical")
+                               else str(roh))
+            return stil_kern.pruefen(stil_kern.aus_css(text), stil_kern.KASTEN) or None
+        except (ValueError, UnicodeDecodeError):
+            return None
+    if ev.get("COLOR") is not None:
+        h = stil_kern.hex_aus_name(str(ev.get("COLOR")))
+        return {"background-color": h} if h else None
+    return None
 
 
 def _kategorie_namen(e: dict) -> list | None:
@@ -805,6 +860,9 @@ def _kopf_lesen(ev, daten: dict) -> None:
         else (kalender_quelle.aus_adresse(ev.get("URL")) if ev.get("URL") is not None else None)
     if quelle:
         daten["quelle"] = quelle
+    stil = _stil_lesen(ev)
+    if stil:
+        daten["stil"] = stil
     namen = []
     for c in _liste(ev.get("CATEGORIES")):
         namen += [str(x) for x in getattr(c, "cats", [c])]

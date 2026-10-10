@@ -18,6 +18,7 @@ from datetime import date, timedelta
 from .basis import BEENDEN, api_call
 from . import kalender_gruppen, kalender_motive, kalender_phasen
 from . import kalender_quellen as kq
+from . import kalender_stil
 from . import kalender_werkzeuge as kw
 
 FENSTER_TAGE = 3            # so viele Tage zeigt A (kalender_ansichten.ansicht_a)
@@ -602,16 +603,21 @@ class Bedienung:
         if isinstance(dl, kw.Formular):
             zeilen = dl.zeilen()
             bl = max(len(b) for b, *_ in zeilen) + 2
-            w = max(56, bl + 40)
+            # breit genug für die längste Zeile (Stylebox-Vorschau), höchstens der Platz
+            w = min(bw - 4, max(56, bl + 40, bl + 6 + max(len(wt) for _b, wt, *_r in zeilen)))
             h = len(zeilen) + 6
             y, x, w, h = self._kasten(by, bx, bh, bw, w, h, dl.titel)
+            felder = dl.sichtbar()
             for i, (besch, wert, aktiv, hilfe) in enumerate(zeilen):
                 yy = y + 2 + i
                 z.addclip(yy, x + 2, besch, bl, kal if aktiv else C["faint"])
                 feld_w = w - bl - 4
-                txt = wert + ("_" if aktiv and not wert.startswith("‹") else "")
+                art = felder[i].art if i < len(felder) else "text"
+                txt = wert + ("_" if aktiv and art == "text" else "")
                 attr = C.get("k_akzent_inv", C["bright"] | curses.A_REVERSE) if aktiv else C["dim"]
                 z.addclip(yy, x + 2 + bl, txt.ljust(feld_w)[:feld_w], feld_w, attr)
+                if art == "stil":                # Rahmenzeichen in Rahmen- und Flächenfarbe
+                    self._stil_vorschau(yy, x + 2 + bl, felder[i].stil)
             unten = y + h - 3
             if dl.fehler:
                 z.addclip(unten, x + 2, "⚠ " + dl.fehler, w - 4, C["warn"])
@@ -621,6 +627,10 @@ class Bedienung:
                     z.addclip(unten, x + 2, hilfe, w - 4, C["faint"])
             z.addclip(y + h - 2, x + 2, "↑↓/tab feld · ←→ auswahl · enter speichern · esc abbrechen",
                       w - 4, C["faint"])
+            if dl.box is not None:               # Stylebox als Kasten über dem Formular
+                hb, wb = min(bh - 2, 22), min(bw - 4, 72)
+                yb, xb, hb, wb = dl.box.mittig(bh, bw, hb, wb)
+                dl.box.zeichne(z, by + yb, bx + xb, hb, wb)
             return
         if getattr(dl, "liste", False):
             self._zeichne_liste(dl, by, bx, bh, bw)
@@ -630,6 +640,16 @@ class Bedienung:
         w = max(44, min(bw - 4, len(frage) + 6))
         y, x, w, h = self._kasten(by, bx, bh, bw, w, 5, dl.titel)
         z.addclip(y + 2, x + 2, frage, w - 4, C["bright"])
+
+    def _stil_vorschau(self, y, x, st):
+        """Die drei Rahmenzeichen vorn in der Zeile „Stylebox" farbig (wie
+        der Kasten im Kalender aussehen wird)."""
+        vr = kalender_stil.vorschau_rahmen(st)
+        if vr is None:
+            return
+        zeichen, rolle = vr
+        attr = self.kal._stil_attr(rolle) if hasattr(self.kal, "_stil_attr") else self.z.C["dim"]
+        self.z.addclip(y, x, zeichen, 3, attr)
 
     def _zeichne_liste(self, dl, by, bx, bh, bw):
         """Der Rhythmus-Kasten: eine Zeile je Phase, Zeichen in Motivfarbe,

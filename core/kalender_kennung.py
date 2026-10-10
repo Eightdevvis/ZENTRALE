@@ -678,3 +678,26 @@ def quelle_loesen(k: str, titel_uebernehmen: bool = False) -> dict:
         obj.pop("quelle", None)
         return False
     return _schreiben(k, arbeit)
+
+
+# ── Aussehen des Kastens (stil, 10.10.2026) ────────────────────────────
+# Sasha: „Im Terminformular gibt es NUR eine Option ‚Stylebox' … das Ergebnis
+# wird auf den Termin (seinen Kasten im Kalender) angewendet." Ein Stil ist
+# ein dict aus CSS-Eigenschaften (core/stil.py, Angebot stil.KASTEN); er gilt
+# für den ganzen Eintrag bzw. die ganze Serie, wie Gruppe und Quelle.
+def stil_setzen(k: str, stil) -> dict:
+    """Den Stil eines Termins, einer Spanne oder Routine ERSETZEN (kein
+    Zusammenführen: die TUI schickt den ganzen Stil). Leeres dict = Stil
+    entfernen. Codes: STIL-UNGUELTIG, IST-PHASE, KENNUNG-UNBEKANNT. Ein
+    Schreibvorgang; abgelehnt = nichts geschrieben."""
+    sauber = kalender.stil_pruefen("", stil)          # vor dem Laden
+
+    def arbeit(data, a, lname, o, obj):
+        if kalender_rhythmus.ist_phase(obj, lname):
+            raise KalenderAbgelehnt("IST-PHASE", f"{k} ist eine Phase des Tagesrhythmus")
+        if sauber:
+            obj["stil"] = sauber
+        else:
+            obj.pop("stil", None)
+        return False
+    return _schreiben(k, arbeit)

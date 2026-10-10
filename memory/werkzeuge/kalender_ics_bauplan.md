@@ -202,6 +202,44 @@ sich das ganze ganz normal als termin bearbeiten lassen."
 - Kollisionen/Alarme: ganz normaler Termin (reservierte Zeit); `uncommitted`
   und Gruppen funktionieren unverändert. Tests: `tests/test_kalender_quelle.py`.
 
+## Aussehen des Kastens „stil" (10.10.2026)
+
+Sasha: „Im Terminformular gibt es NUR eine Option ‚Stylebox' (kein eigenes
+‚color'-Feld). Von dort öffnen sich die Bausteine, und das Ergebnis wird auf
+den Termin (seinen Container/Kasten im Kalender) angewendet."
+- **Feld** an Einmal-Termin, Spanne, Routine (nicht an Phasen, IST-PHASE):
+  `stil = {css-name: wert}` — kein eigenes Format, CSS-Eigenschaften aus
+  `core/stil.py`, Angebot `stil.KASTEN`: `border-style`, `border-color`,
+  `background-color`, `color`, `--zentrale-muster`, `background-image`
+  (Icon, gesperrt). Farben `#rrggbb`. Gilt für den ganzen Eintrag bzw. die
+  ganze Serie (Routinen geben es jedem Vorkommen mit, `_MITGEGEBEN`).
+- **.ics:** EINE Zeile `X-ZENTRALE-STIL:border-style: double\; border-color:
+  #ff8800\; …` — eine CSS-Deklarationsliste wie im HTML-`style`-Attribut
+  (`stil.als_css`/`aus_css`, `;` in Klammern trennt nicht), als iCalendar-TEXT
+  escaped (`\;` `\,` `\\`, gelesen mit `_text_lesen`, weil icalendar eine
+  unbekannte X-Property roh liefert). Dazu der Standard **`COLOR`** (RFC
+  7986): der nächste der 147 CSS3-Farbnamen (`stil.css_name`, Abstand
+  „redmean") zur Fläche, sonst zum Rahmen, sonst zur Schrift
+  (`stil.kastenfarbe`); den genauen Hex trägt die Stil-Zeile. Andere
+  Kalender lesen den Termin unverändert, Thunderbird & Co. färben nach COLOR.
+- **Zurück:** X-ZENTRALE-STIL gewinnt; fehlt sie, wird ein `COLOR` von außen
+  zu `{"background-color": <hex des Namens>}`. `COLOR` ist verwaltet
+  (`VERWALTET`): ein entfernter Stil bringt die alte Farbe beim
+  Zusammenführen nicht zurück. Was sich nicht exakt als CSS zurücklesen
+  lässt (ungeprüfter Altwert), bleibt verlustfrei in X-ZENTRALE-EXTRAS.
+- **Setzen:** `kalender_kennung.stil_setzen(k, stil)` ERSETZT den Stil (die
+  TUI schickt ihn ganz), `{}` entfernt ihn; ein Schreibvorgang.
+  `kalender.add_entry/add_span/add_routine(..., stil={…})` und
+  `kalender_bearbeiten.routine_neu/spanne_neu(..., stil=…)` prüfen vor dem
+  Laden (`kalender.stil_pruefen`). Code **STIL-UNGUELTIG** (auch K- in
+  `core/fehlercodes.py`), Phasen IST-PHASE.
+- **Routen:** `POST /api/calendar/stil {kennung, stil}`; `POST
+  /api/calendar/entry`, `/api/calendar/spanne`, `/api/calendar/routine`
+  nehmen `stil`. `/api/calendar` und die `kalender_kennung`-Dicts liefern
+  ihn mit. TUI: Abschnitt in
+  [kalender_ansichten_vorschau.md](kalender_ansichten_vorschau.md). Tests:
+  `tests/test_kalender_stil.py` (beide Speicher).
+
 ## Stand Sync (07.10.2026) — eingerichtet und live
 
 - **Ein Kalender.** Die Ebene `routinen` ist nach `termine` gezogen
