@@ -151,44 +151,6 @@ CODES = {
     "K-UNBEKANNTES-FELD": (
         "Ein Feld, das der Kalender nicht kennt.",
         "Nur die Felder des Werkzeugs benutzen."),
-    # Tagesrhythmus (Phasen) und Gruppen, Kern seit 2026-10-10
-    "K-MOTIV-UNBEKANNT": (
-        "Diese Art Phase (motiv) gibt es nicht.",
-        "Eins der Motive aus der Feldbeschreibung nehmen (schlaf, essen, fokus …)."),
-    "K-KEINE-PHASE": (
-        "Das geht nur bei einer Phase des Tagesrhythmus — die Kennung gehört zu etwas anderem.",
-        "Für Termine und Routinen edit_calendar_entry bzw. edit_calendar_routine nehmen."),
-    "K-IST-PHASE": (
-        "Eine Phase des Tagesrhythmus ist kein Termin — das geht mit ihr nicht (z. B. vielleicht/fest).",
-        "Die Phase mit edit_calendar_phase ändern."),
-    "K-PHASE-OHNE-ZEIT": (
-        "Eine Phase braucht eine Beginn-Uhrzeit (time).",
-        "time als HH:MM angeben."),
-    "K-ZEITRAUM-ZU-LANG": (
-        "Der Zeitraum für einzelne Tage ist zu lang (höchstens 366 Tage).",
-        "Für Dauerhaftes die ganze Serie ändern (ohne nur_von/nur_bis)."),
-    "K-KATEGORIE-UNBEKANNT": (
-        "Diese Gruppe gibt es nicht.",
-        "Eine Gruppe aus der Liste nehmen (keine, uni, arbeit) oder custom + kategorie_name."),
-    "K-KATEGORIE-NAME-FEHLT": (
-        "Bei der Gruppe custom fehlt der eigene Name (kategorie_name).",
-        "kategorie_name angeben oder eine Gruppe aus der Liste nehmen."),
-    "K-KEIN-TREFFER": (
-        "Kein Eintrag passt zu der Angabe.",
-        "read_calendar mit suche aufrufen und die Kennung nehmen."),
-    # Titel aus Liste/Projekt (Kern kalender_quelle, 2026-10-10)
-    "K-QUELLE-ART-UNBEKANNT": (
-        "Diese Art von Quelle gibt es nicht (nur liste oder projekt).",
-        "quelle_art 'liste' oder 'projekt' nehmen."),
-    "K-QUELLE-UNGUELTIG": (
-        "Die Quelle ist unvollständig oder die id hat die falsche Form.",
-        "quelle_art und quelle_id zusammen angeben, die id aus read_calendar_sources."),
-    "K-QUELLE-UNBEKANNT": (
-        "Diese Liste bzw. dieses Projekt gibt es nicht.",
-        "read_calendar_sources aufrufen und eine id von dort nehmen — nie raten."),
-    "K-OHNE-QUELLE": (
-        "Der Eintrag hat keine Quelle, die man lösen könnte.",
-        "Nichts zu tun; mit read_calendar nachsehen."),
     # Erzeugte Werkzeuge (2026-10-10, core/werkzeug_erzeuger/): ein Wert passt
     # nicht zum Schema (Typ, Auswahl). Die Vorsilbe ist die der Quelle.
     "K-WERT-UNGUELTIG": (
