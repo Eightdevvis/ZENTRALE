@@ -22,7 +22,9 @@ die Optik umstellen kann, ohne die Zeichen-Logik anzufassen.
 from __future__ import annotations
 
 import math
+import re
 import unicodedata
+import zlib
 from datetime import date, timedelta
 
 # ── Ansichten und Taste v ──────────────────────────────────────────────
@@ -45,9 +47,11 @@ ROLLE = {
     "titel": "k_akzent",        # Kastentitel, Tagesköpfe, Monatskopf
     "heute": "k_heute",         # heutiger Tag
     "zeit": "faint",            # „10:00–18:00" in der Liste
-    "routine": "k_routine",     # wiederkehrend: neutral
-    "termin": "k_termin",       # Einmal-Termin
-    "ganztags": "k_sp1",        # ganztägig ohne Spanne: wie eine Ein-Tages-Spanne
+    # Termine, Routinen, Ganztägiges: Farbe nach Titel (titel_rolle unten);
+    # diese drei sind nur noch der Rückfall, wenn ein Titel fehlt.
+    "routine": "k_t0",
+    "termin": "k_t0",
+    "ganztags": "k_t0",
     "spanne": "k_sp1",          # mehrtägig (erste Farbe der Reihe)
     "werktag": "dim",           # Mo–Fr-Köpfe im Raster
     "tag_belegt": "bright",     # Mini-Monat: Tag mit Einträgen
@@ -55,8 +59,6 @@ ROLLE = {
     "wochenende": "k_wochenende",   # Sa/So-Köpfe, in B und C gleich
     "leer": "faint",            # „—" an leeren Tagen, „+2" bei Überlauf
     "aus": "faint",             # deaktiviert / Ausfall (nur mit erledigte=True)
-    "block_routine": "k_routine",   # Zeitachse: Fläche einer Routine
-    "block_termin": "k_termin",     # Zeitachse: Fläche eines Einmal-Termins
     "c_wochenende": "k_wochenende",
     "a_akzent": "k_akzent",     # Titel, Datum, KW, Auswahl, Statuszeile — alle Ansichten
     "a_aktiv": "k_akzent",      # Rahmen des aktiven Kastens
@@ -64,6 +66,20 @@ ROLLE = {
 }
 # Nebeneinanderliegende Spannen müssen unterscheidbar sein → reihum vergeben.
 SPANNEN_FARBEN = ("k_sp1", "k_sp2", "k_sp3", "k_sp4")
+TITEL_FARBEN = tuple("k_t%d" % i for i in range(12))   # 12: bei ~10 Kursen kaum Doppelte
+
+
+def titel_rolle(label) -> str:
+    """Feste Farbe je Titel: gleicher Name (ohne Groß/Klein, Rand-Leerzeichen)
+    = gleiche Farbe in jeder Ansicht und bei jedem Start; Ort („@ …") und
+    eine Klammer am Ende („(Mi)") zählen nicht mit (crc32, nicht hash()
+    — der ist je Prozess anders)."""
+    name = (label or "").split(" @ ")[0]               # Ort gehört nicht zum Namen
+    name = re.sub(r"\s*\([^)]*\)\s*$", "", name)      # „… (Mi)" = derselbe Kurs
+    name = name.strip().lower()
+    if not name:
+        return ROLLE["termin"]
+    return TITEL_FARBEN[zlib.crc32(name.encode("utf-8")) % len(TITEL_FARBEN)]
 
 WT = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 MONATE = ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
@@ -332,9 +348,7 @@ def _rolle(t: dict) -> str:
         return ROLLE["aus"]
     if t["spanne"]:
         return ROLLE["spanne"]
-    if t["start"] is None and t["ende"] is None:
-        return ROLLE["ganztags"]
-    return ROLLE["routine"] if t["routine"] else ROLLE["termin"]
+    return titel_rolle(t.get("label"))
 
 
 def _datum(s) -> date | None:
@@ -999,7 +1013,7 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None):
             if t["spanne"]:
                 r = farbe.setdefault(t["key"], SPANNEN_FARBEN[len(farbe) % len(SPANNEN_FARBEN)])
             else:
-                r = ROLLE["block_routine"] if t["routine"] else ROLLE["block_termin"]
+                r = _rolle(t)
             if t["aus"]:
                 r = ROLLE["aus"]
             if sel is not None and t["roh"] is sel:   # gewählter Termin: Akzent

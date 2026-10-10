@@ -87,11 +87,17 @@ Listen-Sidebar heraus).
   Schrift + Fläche (nachts Neon auf Schwarz wie zentrale-cyber, tags
   Pastellflächen mit dunkler Pflanzenschrift wie zentrale-paper, Schrift
   ≥ 4,5:1 auf Weiß); `kontext.apply_theme` legt daraus `C["k_…"]` und
-  `C["k_…_inv"]` an. Gleiche Art = gleiche Farbe überall: Akzent (Koralle /
-  Beere) für Titel, Datumsköpfe, Auswahl, Statuszeile; heute Gelb / Butter;
-  Einmal-Termine Cyan / Himmelblau; Routinen bewusst neutral (Grau-Fläche);
-  Spannen und Ganztägiges reihum Violett, Grün, Orange, Pink (tags Lavendel,
-  Minze, Pfirsich, Rosé); Sa/So helles Cyan / Tiefwasser.
+  `C["k_…_inv"]` an. Akzent (Neongrün / Salbei, seit 10.10.2026 statt
+  Koralle) für Titel, Datumsköpfe, Auswahl, Statuszeile; heute Gelb /
+  Butter; Spannen reihum Violett, Orange, Pink, Himmel; Sa/So helles Cyan /
+  Tiefwasser.
+- **Farbe je Titel (10.10.2026).** Sasha: „im stundenplan sind die meisten
+  felder einfach grau, manche so grell türkis, wieso?" — vorher hieß Grau
+  Routine, Türkis Einmal-Termin. Jetzt bekommt jeder Titel fest eine von 12
+  Farben (`titel_rolle`: crc32 des Namens ohne „@ Ort" und ohne Klammer am
+  Ende, also „Chemie (Mi)" = „Chemie (Do)"), Serie oder einzeln, in A, B und
+  C gleich. Bei Sashas ~10 Kursen bleibt etwa eine Doppelung; wer das fest
+  will, bräuchte eine gespeicherte Farbe je Termin (iCal `COLOR`, RFC 7986).
 - **Nie breiter als erlaubt:** alles läuft über eine Leinwand, die am Rand
   abschneidet; Titel enden mit „…".
 - **Platz:** offene Apps haben die volle Fensterbreite (`DASH["an"]` aus), der

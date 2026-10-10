@@ -42,7 +42,7 @@ THEMES = {
         "span":  (curses.COLOR_YELLOW,  216, 0),    # Mehrtages-Klammer: weiches Orange
         # Kalender-Akzent. Bis 09.10.2026 calcurse-Rot 196; jetzt dieselbe
         # Farbe wie KAL["akzent"] (unten), damit Kasten und Ansichten eins sind.
-        "kal":   (curses.COLOR_RED,     204, 0),    # Kalender-Akzent = KAL["akzent"] (Neon-Koralle)
+        "kal":   (curses.COLOR_GREEN,   47,  0),    # Kalender-Akzent = KAL["akzent"] (Neongrün)
         "num":   (curses.COLOR_YELLOW,  222, 0),
         "amber": (curses.COLOR_YELLOW,  214, curses.A_BOLD),  # Fokus-Leiste: Bernstein
         # Bernsteinleiste (Listen-Werkzeug): Glanzpixel + Schatten/leere Fassung
@@ -83,7 +83,7 @@ THEMES = {
         "audio": (curses.COLOR_GREEN,   65,  0),
         "hook":  (curses.COLOR_RED,     130, 0),
         "span":  (curses.COLOR_RED,     166, 0),    # Mehrtages-Klammer: kräftiges Orange (auf Weiss lesbar)
-        "kal":   (curses.COLOR_RED,     161, 0),    # Kalender-Akzent = KAL["akzent"] (Beere)
+        "kal":   (curses.COLOR_GREEN,   29,  0),    # Kalender-Akzent = KAL["akzent"] (Salbei, dunkel genug)
         "num":   (curses.COLOR_BLUE,    26,  0),
         "amber": (curses.COLOR_YELLOW,  172, curses.A_BOLD),  # Fokus-Leiste: Bernstein (auf weiß lesbar)
         # Bernsteinleiste: Glanz heller, Schatten/Fassung dunkler (≥4,5:1 auf weiß)
@@ -123,34 +123,55 @@ THEMES = {
 # Gleiche Art = gleiche Farbe in jeder Ansicht:
 #   akzent   Kastentitel, Datumsköpfe, KW, aktiver Rahmen, Auswahl, Statuszeile
 #   heute    der heutige Tag
-#   termin   Einmal-Termin (Schrift in A/B, Block in C)
-#   routine  Wiederkehrendes — bewusst neutral, damit das Besondere leuchtet
-#   sp1..sp4 Spannen und Ganztägiges, reihum (nebeneinander unterscheidbar)
+#   t0..t11  Termine und Routinen: Farbe nach TITEL (Sasha, 10.10.2026: „im
+#            stundenplan sind die meisten felder einfach grau, manche grell
+#            türkis") — Analysis ist immer dieselbe Farbe, Serie oder einzeln
+#   sp1..sp4 Spannen, reihum (nebeneinander unterscheidbar)
 #   wochenende  Sa/So-Köpfe
 # Pro Rolle: (Schrift, Fläche-Grund, Fläche-Schrift, Rückfall-Rolle für 8 Farben).
 # Die TUI legt daraus C["k_<rolle>"] (Schrift auf Theme-Grund) und
 # C["k_<rolle>_inv"] (die Fläche) an — kontext.Kontext.apply_theme.
 KAL = {
     "night": {
-        "akzent":     (204, 204, 16, "kal"),     # Neon-Koralle (Farbe der Kalender-Pille)
+        "akzent":     (47,  47,  16, "kal"),     # Neongrün (Sasha, 10.10.2026)
         "heute":      (227, 227, 16, "warn"),    # Neon-Gelb
-        "termin":     (51,  51,  16, "net"),     # Neon-Cyan
-        "routine":    (231, 238, 252, "dim"),    # Weiß / dunkles Grau
-        "sp1":        (141, 141, 16, "graph"),   # Violett (Pink ist schon der Akzent)
-        "sp2":        (48,  48,  16, "acc"),     # Spring-Grün
-        "sp3":        (215, 215, 16, "span"),    # Orange
-        "sp4":        (219, 219, 16, "graph"),   # Flieder-Pink
+        "t0":         (51,  51,  16, "net"),     # Cyan
+        "t1":         (213, 213, 16, "graph"),   # Pink
+        "t2":         (141, 141, 16, "graph"),   # Violett
+        "t3":         (215, 215, 16, "span"),    # Orange
+        "t4":         (117, 117, 16, "net"),     # Himmel
+        "t5":         (210, 210, 16, "hook"),    # Lachs
+        "t6":         (183, 183, 16, "cyc"),     # Lavendel
+        "t7":         (159, 159, 16, "net"),     # Eis
+        "t8":         (222, 222, 16, "num"),     # Gold
+        "t9":         (174, 174, 16, "cyc"),     # Altrosa
+        "t10":        (147, 147, 16, "graph"),   # Immergrün-Blau
+        "t11":        (79,  79,  16, "acc"),     # Meergrün
+        "sp1":        (141, 141, 16, "graph"),   # Violett
+        "sp2":        (215, 215, 16, "span"),    # Orange
+        "sp3":        (213, 213, 16, "graph"),   # Pink
+        "sp4":        (117, 117, 16, "net"),     # Himmel
         "wochenende": (117, 117, 16, "net"),     # helles Cyan
     },
     "day": {
-        "akzent":     (161, 218, 89,  "kal"),    # Beere / Rosé-Fläche
+        "akzent":     (29,  151, 22,  "kal"),    # Salbei / Salbei-Fläche
         "heute":      (130, 229, 94,  "warn"),   # Ocker / Butter-Fläche
-        "termin":     (25,  153, 17,  "net"),    # Wasserblau / Himmel-Fläche
-        "routine":    (16,  254, 235, "dim"),    # Schwarz / Papiergrau
+        "t0":         (24,  159, 23,  "net"),    # Petrol / Eis
+        "t1":         (125, 225, 89,  "graph"),  # Beere / Blütenrosa
+        "t2":         (54,  189, 54,  "graph"),  # Pflaume / Lavendel
+        "t3":         (130, 223, 94,  "span"),   # Rinde / Pfirsich
+        "t4":         (25,  153, 17,  "net"),    # Wasser / Himmel
+        "t5":         (124, 217, 88,  "hook"),   # Ziegel / Lachs
+        "t6":         (61,  183, 54,  "cyc"),    # Iris / Flieder
+        "t7":         (23,  195, 23,  "net"),    # Tiefsee / Wasserhauch
+        "t8":         (94,  230, 94,  "num"),    # Rinde / Creme
+        "t9":         (131, 224, 88,  "cyc"),    # Rost / Rosenhauch
+        "t10":        (18,  147, 18,  "graph"),  # Tinte / Immergrün
+        "t11":        (22,  194, 22,  "acc"),    # Tanne / Blattgrün
         "sp1":        (54,  189, 54,  "graph"),  # Pflaume / Lavendel
-        "sp2":        (22,  158, 22,  "acc"),    # Tanne / Minze
-        "sp3":        (94,  223, 94,  "span"),   # Rinde / Pfirsich
-        "sp4":        (125, 225, 125, "graph"),  # Beere / Blütenrosa
+        "sp2":        (94,  223, 94,  "span"),   # Rinde / Pfirsich
+        "sp3":        (125, 225, 125, "graph"),  # Beere / Blütenrosa
+        "sp4":        (25,  153, 17,  "net"),    # Wasser / Himmel
         "wochenende": (24,  153, 17,  "net"),    # Tiefwasser
     },
 }
