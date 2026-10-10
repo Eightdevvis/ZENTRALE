@@ -295,21 +295,16 @@ def test_zusatzpruefer_aufruf_als_text():
                            letzte_runde=False) is None
 
 
-def test_zusatzpruefer_leere_stichwortsuche():
+def test_zusatzpruefer_prueft_stichwortsuche_nicht_mehr_doppelt():
+    # Seit 2026-10-10 prüft das der allgemeine Prüfer für alle Modelle
+    # (ehrlichkeit.stichwort_befund, tests/test_auftrag_abrechnung.py) —
+    # der qwen-Zusatzprüfer schweigt dazu, sonst gäbe es zwei Runden.
+    assert not hasattr(zp, "STICHWORT") and not hasattr(zp, "nur_stichwort_leer")
     b = _BasisPruefer()
     b.protokoll.append(_KSchritt("read_calendar", {"suche": "uni"}, "ok",
                                  "Keine Einträge mit 'uni' in diesem Zeitraum."))
     p = zp.ZusatzPruefer(b, "die uni-sachen sollen nur im semester stehen")
-    assert p.nach_antwort("Keine Uni-Sachen im Kalender gefunden.",
-                          letzte_runde=False) == nutzer_angaben.einsetzen(zp.STICHWORT)
-    # Hat sie auch ohne Stichwort gelesen, darf sie „nichts da“ sagen.
-    b2 = _BasisPruefer()
-    b2.protokoll += [_KSchritt("read_calendar", {"suche": "uni"}, "ok", "Keine Einträge"),
-                     _KSchritt("read_calendar", {"zeitraum": "naechste_30_tage"}, "ok",
-                               "Kalender …: Montag …")]
-    p2 = zp.ZusatzPruefer(b2, "die uni-sachen")
-    assert p2.nach_antwort("Keine Uni-Sachen im Kalender gefunden.",
-                           letzte_runde=False) is None
+    assert p.nach_antwort("Keine Uni-Sachen im Kalender gefunden.", letzte_runde=False) is None
 
 
 def test_zusatzpruefer_tat_ohne_werkzeug():

@@ -335,7 +335,7 @@ und nimmt beide Schreibweisen an (siehe „Zwei Schienen" weiter unten).
 | `read_news`   | `lies_news`  | Weltpolitik-Briefing lesen (s. `memory/werkzeuge/news_system.md`) |
 | `read_mail`   | `lies_mail`  | Stand der Mail-Triage (s. `memory/werkzeuge/mail_system.md`) |
 | `ask_choice`  | `frage_knopf`| Sasha eine Frage mit Knöpfen stellen (s. unten) |
-| `antwort`     | = | Finale Antwort über den Tool-Kanal — auf `klein` Framing-Effekt (9B-Krücke), auf `gross` seit 2026-10-10 mit **Selbstauskunft** (`erledigt`, `fragt_erlaubnis`, `schiebt_auf`, `ungeprueft`; s. [ehrlichkeit_live.md](ehrlichkeit_live.md)) |
+| `antwort`     | = | Finale Antwort über den Tool-Kanal — auf `klein` Framing-Effekt (9B-Krücke), auf `gross` seit 2026-10-10 mit **Selbstauskunft** (`erledigt`, `fragt_erlaubnis`, `schiebt_auf`, `ungeprueft`, `auftrag`, `nicht_gefunden`; s. [ehrlichkeit_live.md](ehrlichkeit_live.md)) |
 | `run_code`    | nur `gross`  | Python/Shell abgeschottet ausführen, jeder Lauf gegatet (s. „Sandbox") |
 | `load_skill` / `propose_skill` / `edit_skill` | nur `gross` | Skill-Anleitung (oder mit `datei` eine Datei daraus) holen; neuen vorschlagen bzw. bestehenden umschreiben (beide gegatet) (s. „Skills") |
 | `search_chats` / `read_chat` | nur `gross` | Frühere Gespräche durchsuchen/nachlesen; `search_chats` mit `projekt` nur in einem Projekt (s. „Frühere Gespräche") |
@@ -463,8 +463,11 @@ Feldern ab (**Selbstauskunft**, `core/selbstauskunft.py`), Python vergleicht
 sie mit dem Protokoll; freier Text → Wortlisten wie bisher, Widerspruch →
 „unsicher" (`core/klassifikator.py`, Einstellung `klassifikator`, Standard
 aus); jede geprüfte Antwort wird ein lokales Beispiel
-(`core/klassifikator_beispiele.py`). Alles Weitere:
-[ehrlichkeit_live.md](ehrlichkeit_live.md).
+(`core/klassifikator_beispiele.py`). Ebenfalls 10.10.: die **Auftrags-
+Abrechnung** (`auftrag` an `antwort`, `core/auftrag_abrechnung.py`) — kein
+Teil eines Auftrags fällt still weg, „offen: …" steht unter der Antwort —
+und „nicht gefunden" nach nur einer Stichwortsuche für alle Modelle. Alles
+Weitere: [ehrlichkeit_live.md](ehrlichkeit_live.md).
 
 ### Kalender ohne Fallen — `core/ki_kalender.py`, `ki_kalender_aendern.py` (seit 2026-10-08)
 

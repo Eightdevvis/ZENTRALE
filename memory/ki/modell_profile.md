@@ -60,8 +60,10 @@ der Schiene.
    nur wenn der Prüfer der Schiene nichts hat): ~~*Erlaubnis statt Tat*~~
    (seit 2026-10-10 im Prüfer der Schiene für ALLE Modelle,
    `ehrlichkeit.erlaubnis_befund` — hier entfernt, sonst doppelt), *Aufruf als Text*
-   (`read_calendar(zeitraum=…)` als Antwort), *nur Stichwort gesucht* („gibt
-   es nicht" nach leerer `suche`), *Tat ohne Werkzeug* („ist gelöscht",
+   (`read_calendar(zeitraum=…)` als Antwort), ~~*nur Stichwort gesucht*~~
+   („gibt es nicht" nach leerer `suche` — seit 2026-10-10 im Prüfer der
+   Schiene für ALLE Modelle, `ehrlichkeit.stichwort_befund`; Haiku tat es im
+   Prüfstand f10 genauso; hier entfernt), *Tat ohne Werkzeug* („ist gelöscht",
    „Alles korrigiert" ohne schreibendes Werkzeug — strenger als der
    Tat-Prüfer der Schiene, der auf wenige Falschtreffer gebaut ist),
    *Zeit nicht belegt* (nach einer Änderung nennt die Antwort eine
@@ -69,14 +71,17 @@ der Schiene.
 4. **Erst lesen erzwungen.** In der ersten Runde eines Zugs, in dem Sasha den
    Kalender ändern will oder einer Frage zustimmt (nicht bei „nix eintragen",
    „nur nachschauen"): `tool_choice = read_calendar`.
-4b. **antwort als Pflicht (Schalter, Standard aus, 2026-10-10).** Mit der
+4b. **antwort als Pflicht (Schalter, Standard AN seit 2026-10-10).** Mit der
    Einstellung `antwort_pflicht` = an muss qwen in jeder Runde ein Werkzeug
    rufen (`tool_choice "required"`, außer Runde 0 mit erzwungenem
    `read_calendar`) — die Antwort selbst dann über `antwort` mit den Feldern
    der Selbstauskunft ([ehrlichkeit_live.md](ehrlichkeit_live.md)). Anders
    als „irgendein Werkzeug" in Runde 6 hat qwen damit einen Ausgang, der
-   nichts ändert. Ungemessen; messen mit
-   `--einstellung antwort_pflicht=an` gegen ohne (f01k).
+   nichts ändert. **Gemessen 10.10.** (Prüfstand f01k, qwen-plus, je ein
+   Durchgang): ohne 2/7 Endzustand-Prüfungen richtig, mit 4/7 — deshalb
+   Standard an (`qwen.ANTWORT_PFLICHT_STANDARD`); abschalten mit
+   `antwort_pflicht` = aus. Ein Durchgang je Seite ist eine kleine
+   Stichprobe: nachmessen, wenn qwen wieder öfter fährt.
 5. **Werkzeug-Auswahl je Gespräch.** Fester Kern (Kalender, Notizen, Suche,
    Netz, Knopf …) plus Gruppen (Browser, Dateien, Dokumente, Post,
    Messreihen, Skills), die erst bei passenden Wörtern in Sashas Nachrichten

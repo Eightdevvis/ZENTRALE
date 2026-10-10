@@ -180,6 +180,25 @@ def nicht_da(text: str) -> list:
     return raus
 
 
+# „Nicht gefunden" über den Kalender (2026-10-10, aus dem qwen-Zusatzprüfer
+# in den allgemeinen Prüfer gezogen — Prüfstand f10 mit Haiku: „Ich hab die
+# uni-Einträge nicht gefunden" nach read_calendar(suche="uni"); die Kurse
+# heißen „Analysis I"). Nur der Rückfall bei freiem Text: über antwort sagt
+# es das Feld `nicht_gefunden`, sprachfrei. „eingetragen" fehlt bewusst
+# („hab noch nichts eingetragen" ist eine Aussage über die eigene Tat).
+_NICHT_GEFUNDEN = re.compile(
+    r"\b(?:kein\w*|nicht)\b[^.?!\n]{0,60}\b(?:im kalender|gefunden|drin|da)\b|"
+    r"\bnichts gefunden\b")
+_FALLS = re.compile(r"\b(falls|wenn|ob)\b")
+
+
+def nicht_gefunden(text: str) -> list:
+    """Sätze, die sagen, etwas sei nicht gefunden / nicht im Kalender.
+    Fragen und Bedingtes zählen nicht."""
+    return [s.text for s in saetze(text)
+            if not s.frage and not _FALLS.search(s.klein) and _NICHT_GEFUNDEN.search(s.klein)]
+
+
 # ── Zusagen ─────────────────────────────────────────────────────────────
 
 # Erste Person Präsens der Verben, mit denen die KI etwas zusagt. Bewusst

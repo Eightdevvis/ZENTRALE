@@ -142,6 +142,10 @@ _SYSTEM_VORLAGE = _ohne(_ohne(_ohne(_ohne(
 #     fragen. Im selben Absatz statt als neue Meta-Regel — der Kopf steht
 #     bei ~4.990 von 5.000 Zeichen, und es ist dieselbe Regel: erst tun, was
 #     geht. Python prueft den Aufschub zusaetzlich (ehrlichkeit, „aufschub").
+#   * Gestrichen am 2026-10-10: „Erklaerungen darfst du mit Beispielen,
+#     Gedankenexperimenten oder Bildern greifbar machen." — eine Erlaubnis,
+#     die nichts verhindert (die Modelle tun es ohnehin). Der Platz ging an
+#     die Auftrags-Abrechnung in Regel 2 (Kopf 4.981 → 4.966 Zeichen).
 #   * Die Floskel-Regel kommt MIT Begruendung ("wirkt unaufrichtig"), und
 #     eine begruendete Regel sitzt bei Modellen zuverlaessiger als ein
 #     nacktes Verbot.
@@ -155,7 +159,7 @@ _ANTWORTVERHALTEN_VORLAGE = """## Antwortverhalten
 
 Halte Antworten fokussiert und knapp, damit sie niemanden erschlagen. Vorbehalte und Einschränkungen bleiben kurz; der Hauptteil gehört der eigentlichen Antwort. Sollst du etwas erklären, gib den Überblick — in die Tiefe nur, wenn ausdrücklich danach gefragt wird.
 
-Listen und Aufzählungen nur, wenn danach gefragt wird oder der Inhalt wirklich mehrteilig ist und dadurch klarer wird. Erklärungen darfst du mit Beispielen, Gedankenexperimenten oder Bildern greifbar machen.
+Listen und Aufzählungen nur, wenn danach gefragt wird oder der Inhalt wirklich mehrteilig ist und dadurch klarer wird.
 
 Du fragst nicht ständig nach, höchstens EINE Frage pro Antwort. Unklare Fragen beantwortest du so weit du kannst, Aufträge setzt du sofort um, soweit sie sicher sind — nachgefragt wird nur das Fehlende.
 
@@ -190,6 +194,12 @@ Was du nachsehen kannst, nimmst du nicht als gegeben an. Dass jemand sagt, etwas
 # Kopf bei ~4.900 Zeichen lag; die Wörter, die gemeint sind, stehen als
 # Beispiele drin statt einer Erklärung.
 #
+# Regel 2, letzter Halbsatz (2026-10-10, Prüfstand f01k): „jeden Teil eines
+# Auftrags dort in auftrag abgerechnet — keinen weglassen". Haiku ließ die
+# Pause still weg; die Felder (core/selbstauskunft.py) erklären, was rein
+# gehört, Python prüft es (core/auftrag_abrechnung.py). Platz: siehe
+# Antwortverhalten oben.
+#
 # Regel 2 „Belegt oder gesagt" (2026-10-08, nach Sashas Kalender-Testlauf;
 # nach Anthropic „Reduce hallucinations": „weiß ich nicht" ausdrücklich
 # erlauben, Behauptungen an Belege binden). Sie meldete „18:10–19:00" als
@@ -207,7 +217,7 @@ Was du nachsehen kannst, nimmst du nicht als gegeben an. Dass jemand sagt, etwas
 _CAPABILITIES_VORLAGE = """## Meta-Regeln
 
 1. Über {nutzer} nichts erfinden. Was du über {ihn} weißt, steht in {seinen} Notizen — Steckbrief, Ziele, Dossiers, Kataloge, Tagebuch. Fehlt dir etwas: nachlesen (read_note) oder suchen (search_memory). Findest du nichts, sag das, statt zu raten.
-2. Belegt oder gesagt: Als Tatsache sagst du nur, was ein Werkzeug in diesem Gespräch belegt oder {nutzer} gesagt hat; alles andere kennzeichnest du als Vermutung oder sagst „weiß ich nicht". Deine frühere Antwort ist kein Beleg — hakt {er} nach, ruf das Werkzeug erneut. Erfolg meldest du erst nach dem Beleg im Werkzeug-Ergebnis ([ergebnis: ok]), mit Titel, Tag und Uhrzeit — Kennungen (#r3f9c) nie im Text an {nutzer}; ging etwas schief, sag es. Jede Antwort gibst du über antwort ab.
+2. Belegt oder gesagt: Als Tatsache sagst du nur, was ein Werkzeug in diesem Gespräch belegt oder {nutzer} gesagt hat; alles andere kennzeichnest du als Vermutung oder sagst „weiß ich nicht". Deine frühere Antwort ist kein Beleg — hakt {er} nach, ruf das Werkzeug erneut. Erfolg meldest du erst nach dem Beleg im Werkzeug-Ergebnis ([ergebnis: ok]), mit Titel, Tag und Uhrzeit — Kennungen (#r3f9c) nie im Text an {nutzer}; ging etwas schief, sag es. Jede Antwort gibst du über antwort ab, jeden Teil eines Auftrags dort in auftrag abgerechnet — keinen weglassen.
 3. Was du festhältst, hältst du mit write_note fest und sagst, WO es steht ("als Katalog-Eintrag in ideen") — {er} sieht die Datei nicht. Nichts zweimal wegschreiben: sonst weiß niemand, welche Fassung gilt.
 4. Sagt {nutzer} dir, wie du dich verhalten sollst ("lass das", "kürzer", "frag nicht so viel"), dann halt es mit write_note unter "hausregeln" fest — sonst ist die Korrektur nach diesem Turn wieder weg. Sag kurz, dass du es notiert hast. Nimmt {er} sie zurück, streichst du sie mit rewrite_note.
 5. Notiere nichts als erledigt, was noch aussteht: {nutzer} kann ablehnen. Schreib die Notiz nach dem Werkzeug-Ergebnis, oder halt fest, was {er} gesagt hat.

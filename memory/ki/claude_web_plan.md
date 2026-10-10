@@ -894,6 +894,18 @@ Ist-Zustands und erlaubten ungenaue Massen-Eingriffe. Ausführlich:
      werfen ein Ende ≤ Beginn still weg, `routine_aendern` prüft Uhrzeiten
      nicht. Lieber ablehnen (False + Grund).
 
+### Auftrags-Abrechnung, Stichwortsuche, qwen antwort_pflicht (2026-10-10, erledigt)
+
+Aus dem Prüfstand vom 10.10.: `antwort` hat das Pflichtfeld `auftrag` (jeder
+Teil von Sashas Auftrag mit Stand erledigt/offen/abgelehnt, Grund, sicherer
+Teil); Python prüft „erledigt" gegen das Protokoll, gibt für einen offenen
+sicheren Teil eine Runde und verlangt die Abrechnung, wenn die Nachricht
+mehrere Aufträge trägt (sprachfrei erkannt). Sasha sieht „offen: …" unter der
+Antwort. „Nicht gefunden" nach nur einer Stichwortsuche prüft jetzt der
+allgemeine Prüfer (Feld `nicht_gefunden`); qwen fährt mit `antwort_pflicht`
+an. Neu: `core/auftrag_abrechnung.py`, `tests/test_auftrag_abrechnung.py`;
+Details [ehrlichkeit_live.md](ehrlichkeit_live.md).
+
 ### Ehrlichkeit sprachfrei — Selbstauskunft (2026-10-10, erledigt)
 
 Sasha: Wortlisten skalieren schlecht und versagen bei anderen Sprachen. Auf

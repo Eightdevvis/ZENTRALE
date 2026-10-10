@@ -26,6 +26,7 @@
 #   art "nachricht": rolle user/assistant, text, optional denken, werkzeuge,
 #                    anbieter, modell, abgebrochen, versteckt, erledigt,
 #                    pruefung, offen, warnungen (Ehrlichkeits-Prüfer, 2026-10-09),
+#                    auftrag {zeile, punkte} (Auftrags-Abrechnung, 2026-10-10),
 #                    modell_wechsel (Budget-Rückfall, 2026-10-09),
 #                    ablauf (Ablauf-Protokoll des Zugs, core/zug_ablauf.py),
 #                    fehler (der Zug brach ab: Meldung; Text oft leer, 2026-10-09)
@@ -237,7 +238,7 @@ def anhaengen(gid, rolle, text, *, denken=None, werkzeuge=None, anbieter=None,
               modell=None, abgebrochen=False, versteckt=False, knoten=None,
               anhaenge=None, dokumente=None, erledigt=None, pruefung=None,
               offen=None, ablauf=None, fehler=None, warnungen=None,
-              modell_wechsel=None, quellen=None) -> dict:
+              modell_wechsel=None, quellen=None, auftrag=None) -> dict:
     """Eine Nachricht anhängen. -> das Ereignis (mit id und ts).
 
     anhaenge (Frage) / dokumente (Antwort): VERWEISE in die Ablage
@@ -276,6 +277,12 @@ def anhaengen(gid, rolle, text, *, denken=None, werkzeuge=None, anbieter=None,
         e["pruefung"] = dict(pruefung)
     if offen:
         e["offen"] = [str(x) for x in offen]
+    # Auftrags-Abrechnung (2026-10-10, core/auftrag_abrechnung.py): jeder Teil
+    # von Sashas Auftrag mit Stand; zeile = was unter der Antwort steht.
+    if auftrag:
+        e["auftrag"] = {"zeile": str(auftrag.get("zeile") or ""),
+                        "punkte": [dict(p) for p in auftrag.get("punkte") or []
+                                   if isinstance(p, dict)]}
     # Warnungen über der Antwort (2026-10-09): Befunde, die nach allen
     # Korrekturrunden blieben, und ein Modellwechsel (Budget-Rückfall:
     # {von, zu, grund, satz}). Beides schreibt Python, nie die KI.

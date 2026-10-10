@@ -216,6 +216,12 @@ def quellen(liste) -> None:
     _dazu("quellen", liste=[dict(q) for q in liste or [] if isinstance(q, dict)])
 
 
+def auftrag(punkte) -> None:
+    """Die Auftrags-Abrechnung der Antwort (2026-10-10, core/auftrag_abrechnung.py):
+    [{was, stand, werkzeug?, grund?, sicherer_teil?}]."""
+    _dazu("auftrag", punkte=[dict(x) for x in punkte or [] if isinstance(x, dict)])
+
+
 def fehler(text_: str) -> None:
     _dazu("fehler", text=str(text_ or ""))
 
@@ -285,6 +291,8 @@ def kopfzeile(e: dict) -> str:
         return f"Warnung · {e.get('text') or ''}"
     if art == "quellen":
         return f"Quellen · {len(e.get('liste') or [])} gelesene Seite(n)"
+    if art == "auftrag":
+        return "Auftrag · " + _auftrag_zahlen(e.get("punkte"))
     if art == "kosten":
         return (f"Kosten · {e.get('runden')} Runde(n) · ein {e.get('eingabe')} · "
                 f"aus {e.get('ausgabe')} · Cache {e.get('cache_lesen')} · "
@@ -315,12 +323,31 @@ def inhalt(e: dict) -> str:
     if art == "quellen":
         return "\n".join(f"„{q.get('titel')}“ – {q.get('url')} ({q.get('werkzeug')})"
                          for q in e.get("liste") or [] if isinstance(q, dict))
+    if art == "auftrag":
+        return "\n".join(_auftrag_punkt(p) for p in e.get("punkte") or [] if isinstance(p, dict))
     if art == "kontext":
         anh = e.get("anhaenge")
         return str(e.get("text") or "") + (("\n\nAnhänge: " + ", ".join(map(str, anh))) if anh else "")
     if art in ("system", "kosten", "gestoppt", "warnung"):
         return ""
     return str(e.get("text") or "")
+
+
+def _auftrag_zahlen(punkte) -> str:
+    """„2 erledigt, 1 offen" — je Stand, in fester Reihenfolge."""
+    n = {}
+    for p in punkte or []:
+        if isinstance(p, dict):
+            n[p.get("stand")] = n.get(p.get("stand"), 0) + 1
+    return ", ".join(f"{n[s]} {s}" for s in ("erledigt", "offen", "abgelehnt") if n.get(s)) or "leer"
+
+
+def _auftrag_punkt(p: dict) -> str:
+    teile = [f"- {p.get('stand')}: {p.get('was')}"]
+    for k, wort in (("werkzeug", "Werkzeug"), ("grund", "Grund"), ("sicherer_teil", "sicher")):
+        if p.get(k):
+            teile.append(f"{wort}: {p[k]}")
+    return " · ".join(teile)
 
 
 def als_text(eintraege: list, titel: str = "") -> str:

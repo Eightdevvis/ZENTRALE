@@ -79,6 +79,14 @@ def kopf(e):
         return "warning: " + str(e.get("text") or "")
     if art == "quellen":
         return "sources: %d page(s) read" % len(e.get("liste") or [])
+    if art == "auftrag":                  # Auftrags-Abrechnung (2026-10-10)
+        n = {}
+        for p in e.get("punkte") or []:
+            if isinstance(p, dict):
+                n[p.get("stand")] = n.get(p.get("stand"), 0) + 1
+        return "task: " + (", ".join("%d %s" % (n[s], w) for s, w in (
+            ("erledigt", "done"), ("offen", "open"), ("abgelehnt", "declined")) if n.get(s))
+            or "empty")
     if art == "fehler":
         return "error: " + _einzeilig(e.get("text"))
     if art == "gestoppt":
@@ -123,6 +131,10 @@ def inhalt(e):
     if art == "quellen":
         return "\n".join("„%s“ – %s (%s)" % (q.get("titel"), q.get("url"), q.get("werkzeug"))
                          for q in e.get("liste") or [] if isinstance(q, dict))
+    if art == "auftrag":
+        return "\n".join("- %s: %s%s" % (p.get("stand"), p.get("was"), "".join(
+            " · %s: %s" % (k, p[k]) for k in ("werkzeug", "grund", "sicherer_teil") if p.get(k)))
+            for p in e.get("punkte") or [] if isinstance(p, dict))
     if art in ("text", "fehler", "antwort"):
         return str(e.get("text") or "")
     return ""

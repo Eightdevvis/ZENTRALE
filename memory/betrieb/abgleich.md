@@ -408,10 +408,17 @@ in Warnfarbe) und `modell_wechsel` ({`von`, `zu`, `von_anbieter`,
 — die Seiten, die die KI in diesem Zug wirklich gelesen hat (Python zieht sie
 aus den Werkzeug-Ergebnissen, nie aus Suchtreffern). Anzeigen dezent UNTER der
 Antwort als eine Zeile „Quellen: „<titel>“ – <url> · …"; die Adresse steht
-nicht mehr unbedingt im Text der KI. Das Handy schreibt nichts davon. Seit 09.10. (abends) kann eine Antwort
+nicht mehr unbedingt im Text der KI. Seit 10.10. (abends) außerdem `auftrag`:
+{`zeile`, `punkte`} — die Auftrags-Abrechnung der KI; `punkte` ist eine Liste
+`{was, stand, werkzeug?, grund?, sicherer_teil?}` mit `stand` erledigt |
+offen | abgelehnt, `zeile` die fertige Zeile („offen: Geige fällt aus — Ende
+der Ferien unklar · nicht gemacht: …", nur offene und nicht gemachte Teile).
+Anzeigen dezent UNTER der Antwort wie die Erledigt-Zeile; sie gehört zu dieser
+einen Antwort (anders als `offen`, das fürs ganze Gespräch gilt). Das Handy schreibt nichts davon. Seit 09.10. (abends) kann eine Antwort
 außerdem `ablauf` tragen: eine Liste von Einträgen `{art, zeit, t, …}` (art:
 `system`, `kontext`, `text`, `werkzeug`, `frage`, `pruefung` (mit `runde`),
-`warnung` (`text`), `quellen` (`liste`, seit 10.10.), `fehler`,
+`warnung` (`text`), `quellen` (`liste`, seit 10.10.), `auftrag` (`punkte`,
+seit 10.10.), `fehler`,
 `gestoppt`, `antwort`, `kosten`; je Eintrag höchstens 50.000 Zeichen) —
 das Ablauf-Protokoll des Zugs ([../ki/ki_system.md](../ki/ki_system.md),
 „Ablauf-Protokoll"). Nur zum Nachlesen; das Handy muss es weder schreiben

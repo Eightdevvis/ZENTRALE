@@ -27,6 +27,14 @@
 #                  beauftragt hat und kein passendes Werkzeug lief → EINE
 #                  Runde „trag den sicheren Teil jetzt ein, frag nur das
 #                  Fehlende" (2026-10-10, Prüfstand f01).
+#   2e. Stichwort: „nicht gefunden" über den Kalender, obwohl jede Suche
+#                  dieses Zugs nur ein Stichwort probierte und leer kam
+#                  (2026-10-10, Prüfstand f10; vorher nur im qwen-Zusatz-
+#                  prüfer). Feld `nicht_gefunden` oder Satzmuster.
+#   2f. Auftrag:   jeder Teil von Sashas Auftrag im Feld `auftrag` —
+#                  erledigt braucht ein Werkzeug, offen mit sicherem Teil
+#                  bekommt EINE Runde, fehlt die Abrechnung bei mehreren
+#                  Aufträgen, auch (core/auftrag_abrechnung.py, 2026-10-10).
 #   3. Zusagen:    „trag ich gleich ein" wird als offener Punkt des Gesprächs
 #                  gespeichert (core/zusagen.py) und steht in jedem folgenden
 #                  Zug unsichtbar im Kontext-Umschlag, bis ein passendes
@@ -56,6 +64,7 @@
 import re
 
 import ai_config
+import auftrag_abrechnung
 import ehrlichkeit_erkennen as erkennen
 import input_aufraeumen
 import klassifikator
@@ -293,6 +302,31 @@ def suche_belegt(protokoll: list) -> bool:
     return False
 
 
+def nur_stichwort_leer(protokoll: list) -> bool:
+    """Lief in diesem Zug read_calendar, und JEDE dieser Suchen probierte
+    nur ein Stichwort ('suche') und kam leer zurück? Dann belegt sie kein
+    „gibt es nicht" — Titel heißen oft anders („die uni-sachen" sind
+    „Analysis I"). 2026-10-10 aus dem qwen-Zusatzprüfer übernommen."""
+    lesen = [s for s in protokoll if s.name == "read_calendar"]
+    return bool(lesen) and all(isinstance(s.args, dict) and s.args.get("suche")
+                               and "keine einträge" in str(s.text).casefold()
+                               for s in lesen)
+
+
+def stichwort_befund(antwort: str, protokoll: list, auskunft=None) -> dict | None:
+    """Meldet die Antwort „nicht gefunden", obwohl nur Stichworte gesucht
+    wurden? Über antwort sagt es das Feld `nicht_gefunden` (sprachfrei),
+    sonst die Satzmuster."""
+    if not nur_stichwort_leer(protokoll):
+        return None
+    feld = list(getattr(auskunft, "nicht_gefunden", None) or [])
+    saetze_ = erkennen.nicht_gefunden(antwort)
+    if not (feld or saetze_):
+        return None
+    return {"art": "stichwort", "satz": saetze_[0] if saetze_ else feld[0],
+            "quelle": "beide" if feld and saetze_ else ("auskunft" if feld else "wortliste")}
+
+
 # ── Frag nicht, tu (2026-10-10) ─────────────────────────────────────────
 # Welche Werkzeuge eine Art Tat (ehrlichkeit_erkennen.aktion) erledigen, und
 # wie der Hinweis sie nennt. None: jedes Werkzeug passender Richtung (lesend
@@ -318,7 +352,9 @@ TATEN = {
 # Befunde, die höchstens EINE Korrekturrunde je Zug bekommen und nie als
 # Warnung bei Sasha landen: die Antwort lügt nicht, sie zögert nur. Bleibt
 # die KI nach dem Hinweis dabei, ist es vielleicht doch eine echte Rückfrage.
-WEICH = ("erlaubnis_frage", "aufschub")
+# Seit 2026-10-10 auch die Auftrags-Abrechnung: ein offener sicherer Teil
+# und eine fehlende Abrechnung sind Lücken, keine Unwahrheit.
+WEICH = ("erlaubnis_frage", "aufschub", "sicherer_teil", "auftrag_fehlt")
 
 
 def tat_lief(art: str, schreibend: bool, protokoll: list) -> bool:
@@ -395,6 +431,13 @@ def befunde(antwort: str, protokoll: list, *, bekannt_text: str = "",
     if auskunft is not None:
         raus = mit_auskunft(raus, auskunft, antwort, protokoll, frueher=frueher,
                             nutzer_text=nutzer_text)
+    stich = stichwort_befund(antwort, protokoll, auskunft)
+    if stich:
+        raus.append(stich)
+    # Auftrags-Abrechnung (2026-10-10): auch bei freiem Text — dann fehlt
+    # sie, und bei mehreren Aufträgen gibt es eine Runde dafür.
+    raus += auftrag_abrechnung.befunde(getattr(auskunft, "auftrag", None), protokoll,
+                                       nutzer_text)
     return raus
 
 
@@ -507,12 +550,30 @@ _WIEDER = {
                 "find_files/search_files ODER schreib, dass du es nicht weißt.",
     "kennung": "Nenn keine Kennung, die in keinem Werkzeug-Ergebnis steht — lass sie weg "
                "oder lies sie mit dem Werkzeug nach.",
+    "stichwort": "Lies den Zeitraum jetzt mit read_calendar OHNE 'suche' ODER frag nach dem "
+                 "Namen.",
 }
+STICHWORT = ("Eine Stichwortsuche ohne Treffer heißt nicht ‚gibt es nicht' — lies den "
+             "Zeitraum ohne Suchwort oder frag nach dem Namen.")
 KEIN_WERKZEUG = ("Du hast in diesem Zug KEIN Werkzeug aufgerufen. Ruf das Werkzeug jetzt "
                  "auf ODER schreib, dass nichts geändert wurde.")
 
 
 def _befund_zeile(b: dict) -> str:
+    if b["art"] == "tat" and b.get("auftrag"):
+        wer = b.get("werkzeug") or "dafür kein passendes Werkzeug"
+        return (f"- Du rechnest „{b['satz']}“ in auftrag als erledigt ab — in diesem Zug lief "
+                f"{wer} nicht mit [ergebnis: ok]. Ruf das Werkzeug jetzt auf oder setz den "
+                f"Stand auf offen (mit Grund).")
+    if b["art"] == "sicherer_teil":
+        return (f"- „{b['satz']}“ ist offen, aber ein Teil ist sicher. Trag den sicheren Teil "
+                f"jetzt ein ({b.get('sicherer_teil')}), frag nur nach dem Rest.")
+    if b["art"] == "auftrag_fehlt":
+        return ("- Rechne Sashas Auftrag in `auftrag` ab (Antwort über antwort): jeder Teil "
+                "seiner Nachricht mit Stand erledigt, offen oder abgelehnt — keiner "
+                "weggelassen. Was sicher geht, tu jetzt; frag nur nach dem Fehlenden.")
+    if b["art"] == "stichwort":
+        return f"- Du sagst „{b['satz']}“. {STICHWORT}"
     if b["art"] == "tat" and not b.get("satz"):
         return (f"- Du meldest im Feld erledigt eine Änderung "
                 f"({', '.join(b.get('bereiche') or ())}) — in diesem Zug lief dafür kein "
@@ -603,11 +664,17 @@ def warnungen(befunde_: list, protokoll: list = ()) -> list:
                      else "es wurde nichts geändert")
             was = (f"„{_kurz(b.get('satz'))}“" if b.get("satz")
                    else "die Antwort meldet eine Änderung")
+            if b.get("auftrag"):
+                was = f"„{_kurz(b.get('satz'))}“ als erledigt gemeldet"
+                wo = BEREICH_NAMEN.get(BEREICH.get(b.get("werkzeug") or ""), "")
             raus.append(f"⚠ Ohne Beleg: {was} — in diesem Zug lief kein "
                         f"passendes Werkzeug{f' ({wo})' if wo else ''}, {folge}.")
         elif art == "nicht_da":
             raus.append(f"⚠ ‚Nicht da' ohne vollständige Suche: „{_kurz(b.get('satz'))}“ — "
                         f"es kann trotzdem da sein.")
+        elif art == "stichwort":
+            raus.append(f"⚠ ‚Nicht gefunden' nach nur einer Stichwortsuche: "
+                        f"„{_kurz(b.get('satz'))}“ — es kann unter anderem Namen dastehen.")
         elif art == "kennung":
             kennungen.append(str(b.get("kennung")))
         else:
@@ -739,6 +806,7 @@ class Pruefer:
         ereignis = {"erledigt": liste, "zeile": zeile}
         if self.auskunft is not None and text is not None:
             ereignis["auskunft"] = self.auskunft.als_dict()
+        auftrag = self._auftrag(text)
         if self.befunde:
             ereignis["befunde"] = self.befunde
             wie = (f"nach {self.korrekturen} Korrektur(en)" if self.korrigiert
@@ -757,9 +825,21 @@ class Pruefer:
             bewegt = bool(offen or vorher)
             if self.modus == AN and bewegt:
                 ereignis["offen"] = offen
-        if not (liste or zeile or self.befunde or self.korrigiert or bewegt):
+        if auftrag:
+            ereignis["auftrag"] = auftrag
+        if not (liste or zeile or self.befunde or self.korrigiert or bewegt or auftrag):
             return None
         return {"ehrlichkeit": ereignis}
+
+    def _auftrag(self, text) -> dict | None:
+        """Die Auftrags-Abrechnung der letzten Antwort: {zeile, punkte} —
+        zeile für Sasha (nur offen / nicht gemacht), punkte für Handy und
+        Trace. None ohne Abrechnung oder ohne Antwort."""
+        punkte = getattr(self.auskunft, "auftrag", None)
+        if text is None or not punkte:
+            return None
+        zug_ablauf.auftrag(punkte)
+        return {"zeile": auftrag_abrechnung.zeile(punkte), "punkte": [dict(p) for p in punkte]}
 
     def _zusagen(self, text) -> tuple:
         """Alte Zusagen abhaken/verfallen lassen, neue merken.

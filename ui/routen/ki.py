@@ -266,7 +266,8 @@ def _wer_antwortet(backend):
 def _pruefung_felder(p) -> dict:
     """Ereignis des Ehrlichkeits-Prüfers → Felder der gespeicherten Antwort:
     erledigt {zeile, schritte}, pruefung {befunde, korrigiert, korrekturen},
-    warnungen [sätze], offen [sätze]. Leere Felder bleiben weg (das Handy
+    warnungen [sätze], offen [sätze], auftrag {zeile, punkte} (Auftrags-
+    Abrechnung, 2026-10-10). Leere Felder bleiben weg (das Handy
     liest nur, was da ist). erledigt auch ohne Schritte, wenn die Zeile
     „✗ keine Änderung in diesem Zug" sagt (2026-10-09)."""
     if not p:
@@ -284,6 +285,8 @@ def _pruefung_felder(p) -> dict:
         felder["warnungen"] = [str(w) for w in p["warnungen"]]
     if p.get("offen"):
         felder["offen"] = list(p["offen"])
+    if isinstance(p.get("auftrag"), dict) and p["auftrag"].get("punkte"):
+        felder["auftrag"] = dict(p["auftrag"])
     return felder
 
 
@@ -447,7 +450,7 @@ def api_chat_history():
              "content": gespraeche.text_fuer_ki(n)}
         for feld in ("denken", "werkzeuge", "abgebrochen", "anbieter", "modell",
                      "anhaenge", "dokumente", "erledigt", "offen", "fehler",
-                     "warnungen", "modell_wechsel", "quellen"):
+                     "warnungen", "modell_wechsel", "quellen", "auftrag"):
             if n.get(feld):
                 m[feld] = n[feld]
         # Das Ablauf-Protokoll selbst ist groß: hier nur, DASS es eins gibt

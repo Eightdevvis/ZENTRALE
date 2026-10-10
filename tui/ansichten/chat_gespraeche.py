@@ -25,16 +25,21 @@ from .projekte import projekt_name
 ERINNERUNGEN = "erinnerungen"
 
 
-def pruefung_eintraege(erledigt, offen, log=None):
+def pruefung_eintraege(erledigt, offen, log=None, auftrag=None):
     """Die dezenten Zeilen des Ehrlichkeits-Prüfers (core/ehrlichkeit.py)
     unter einer Antwort: was Python im Werkzeug-Protokoll sah („✓ Termin
     eingetragen: Zahnarzt") und was die KI zugesagt, aber noch nicht getan
     hat. „offen" gilt fürs ganze Gespräch, steht also nur einmal: ist `log`
-    gegeben, fliegen ältere offen-Zeilen dort raus. -> [(rolle, text)]"""
+    gegeben, fliegen ältere offen-Zeilen dort raus. auftrag (2026-10-10):
+    was die KI von Sashas Auftrag offen ließ oder nicht tat — gehört zu
+    DIESER Antwort und bleibt stehen. -> [(rolle, text)]"""
     raus = []
     zeile = (erledigt or {}).get("zeile") if isinstance(erledigt, dict) else ""
     if zeile:
         raus.append(("erledigt", str(zeile)))
+    a_zeile = (auftrag or {}).get("zeile") if isinstance(auftrag, dict) else ""
+    if a_zeile:
+        raus.append(("auftrag", str(a_zeile)))
     if log is not None:
         log[:] = [e for e in log if e[0] != "offen"]
     if offen:
@@ -97,7 +102,7 @@ def verlauf_aus(h):
         if m.get("fehler"):        # abgebrochener Zug (2026-10-09): eigener Eintrag
             log.append(("abbruch", " ".join(str(m["fehler"]).split())))
         log += quellen_eintraege(m.get("quellen"))
-        log += pruefung_eintraege(m.get("erledigt"), m.get("offen"), log)
+        log += pruefung_eintraege(m.get("erledigt"), m.get("offen"), log, m.get("auftrag"))
     return log
 
 

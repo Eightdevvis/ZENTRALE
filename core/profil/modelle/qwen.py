@@ -181,7 +181,8 @@ def auswahl(tools: list, verlauf: list) -> list:
 # ── Zusatz-Prüfer: was Python sehen kann, prüft Python (Runde 4/7) ──────
 # Runde 3 zeigte: auch mit Arbeitsweise-Block fragt qwen zufällig um
 # Erlaubnis, statt zu ändern; Runde 6: es schrieb einmal den Aufruf als Text
-# hin und schloss aus einer leeren Stichwort-Suche „gibt es nicht“. Je eine
+# hin und schloss aus einer leeren Stichwort-Suche „gibt es nicht“ (das
+# prüft seit 2026-10-10 der allgemeine Prüfer für alle Modelle). Je eine
 # Korrekturrunde, Einzelheiten in zusatzpruefer.py.
 from . import zusatzpruefer as _zusatz  # noqa: E402
 
@@ -209,12 +210,16 @@ def pruefer(basis, messages=None, werkzeuge=frozenset(), **_):
 # `antwort_pflicht` = an muss qwen in JEDER Runde ein Werkzeug rufen
 # (tool_choice "required") — die Antwort selbst dann über antwort, mit
 # Feldern. Anders als in Runde 6 hat qwen damit einen Ausgang, der nichts
-# ändert (antwort mit einer Rückfrage). Standard aus: ungemessen; der
-# Vergleich läuft mit dem Prüfstand (--einstellung antwort_pflicht=an).
+# ändert (antwort mit einer Rückfrage). Standard seit 2026-10-10 AN:
+# Prüfstand f01k mit qwen-plus 2/7 ohne, 4/7 mit (memory/ki/modell_profile.md).
+# Abschalten: Einstellung antwort_pflicht = aus.
+ANTWORT_PFLICHT_STANDARD = "an"
+
+
 def antwort_pflicht() -> bool:
     try:
         import ai_config
-        wert = ai_config.setting("antwort_pflicht", "aus")
+        wert = ai_config.setting("antwort_pflicht", ANTWORT_PFLICHT_STANDARD)
     except Exception:
         return False
     return str(wert or "").strip().lower() in ("an", "1", "true", "ja")

@@ -26,6 +26,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "core"))
 
+import auftrag_abrechnung               # noqa: E402
 import ehrlichkeit                       # noqa: E402
 import ehrlichkeit_erkennen as erkennen  # noqa: E402
 import werkzeug_befund                   # noqa: E402
@@ -91,6 +92,7 @@ def zuege_pruefstand(ordner):
 def messen(zuege, zeigen=False, name=""):
     n = taten = taten_offen = zusagen = kenn = kenn_offen = nicht_da = nicht_da_offen = 0
     fragen = fragen_befund = aufschub = aufschub_befund = 0
+    pflicht = stichwort = 0
     for antwort, prot, bekannt, frueher, nutzer in zuege:
         n += 1
         # „Sicheres sofort" (2026-10-10): Aufschub-Sätze, und wie viele der
@@ -135,6 +137,20 @@ def messen(zuege, zeigen=False, name=""):
             nicht_da_offen += not ok
             if zeigen:
                 print(f"  NICHT-DA {'belegt  ' if ok else 'UNBELEGT'} | {satz}")
+        # Auftrags-Abrechnung (2026-10-10): wie oft wäre sie Pflicht (mehrere
+        # Aufträge, sprachfrei erkannt)? Alte Züge kamen ohne Feld auftrag —
+        # jede Pflicht wäre also eine Korrekturrunde.
+        if auftrag_abrechnung.noetig(nutzer, prot):
+            pflicht += 1
+            if zeigen:
+                print(f"  ABRECHNUNG PFLICHT | schreibend: "
+                      f"{[s.name for s in prot if s.schreibt]} || Sasha: "
+                      f"{' '.join(nutzer.split())[:160]}")
+        # „Nicht gefunden" nach nur einer Stichwortsuche (2026-10-10).
+        st = ehrlichkeit.stichwort_befund(antwort, prot)
+        stichwort += st is not None
+        if zeigen and st:
+            print(f"  STICHWORT → KORREKTUR | {st['satz']}")
         b = ehrlichkeit.befunde(antwort, prot, bekannt_text=bekannt, frueher=frueher)
         kenn += len(erkennen.kennungen(antwort))
         kenn_offen += sum(1 for x in b if x["art"] == "kennung")
@@ -146,7 +162,8 @@ def messen(zuege, zeigen=False, name=""):
           f"Zusagen {zusagen} · Kennungen {kenn} (unbekannt {kenn_offen}) · "
           f"Nicht-da-Sätze {nicht_da} (ohne vollständige Suche {nicht_da_offen}) · "
           f"Erlaubnis-Fragen {fragen} (Korrektur {fragen_befund}) · "
-          f"Aufschübe {aufschub} (Korrektur {aufschub_befund})")
+          f"Aufschübe {aufschub} (Korrektur {aufschub_befund}) · "
+          f"Abrechnung Pflicht {pflicht} · Stichwort-leer (Korrektur {stichwort})")
 
 
 def main():

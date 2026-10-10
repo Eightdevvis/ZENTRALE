@@ -408,8 +408,78 @@ erst mit Live-Text überhaupt etwas brächte.
 
 **qwen:** bekommt `antwort` mit, freier Text bleibt erlaubt (Rückfall). Mit
 `antwort_pflicht` = an erzwingt das Profil in jeder Runde einen Aufruf
-(`tool_choice "required"`); Standard aus, bis gemessen
-([modell_profile.md](modell_profile.md)).
+(`tool_choice "required"`); seit 10.10. Standard **an** (f01k: 2/7 ohne,
+4/7 mit — [modell_profile.md](modell_profile.md)).
+
+## Auftrags-Abrechnung — kein Teil fällt still weg (seit 2026-10-10)
+
+Prüfstand 10.10., f01k mit Haiku: Sasha „lösch nyam und geige ist nur
+donnerstags von 18:10-19 uhr. aber sie fällt wegen der ferien jetzt aus" —
+die KI löschte, änderte, und ließ die Pause einfach WEG („brauchst du die Info
+akut, um die Pause einzutragen?"). Kein Satz war falsch, also schlug kein
+Prüfer an: was fehlt, findet keine Satz-Prüfung.
+
+- **Das Feld.** `antwort` hat das Pflichtfeld `auftrag`: Liste
+  `{was (kurz, in Sashas Worten), stand: erledigt|offen|abgelehnt, werkzeug
+  (bei erledigt), grund (bei offen/abgelehnt), sicherer_teil (optional: was
+  davon sofort ginge, aber nicht getan ist)}`; leer bei reinen Fragen oder
+  Plaudern (`core/selbstauskunft.py`, tolerant gelesen: unbekannter Stand →
+  offen). Prompt: Regel 2 endet mit „…, jeden Teil eines Auftrags dort in
+  auftrag abgerechnet — keinen weglassen." Platz: „Erklärungen darfst du mit
+  Beispielen, Gedankenexperimenten oder Bildern greifbar machen." gestrichen
+  (eine Erlaubnis, die nichts verhindert) — Kopf 4.981 → 4.966 Zeichen.
+- **Die Prüfung** (`core/auftrag_abrechnung.py`, aus `ehrlichkeit.befunde`):
+  - **erledigt** braucht in DIESEM Zug das genannte Werkzeug mit ok (ohne oder
+    unbekanntes Werkzeug: irgendeins mit ok) → sonst Befund `tat` wie bisher
+    (bis zu 5 Runden, dann Warnung „⚠ Ohne Beleg: „…“ als erledigt gemeldet").
+  - **offen mit sicherem Teil** → EINE Runde „Trag den sicheren Teil jetzt ein
+    (<sicherer_teil>), frag nur nach dem Rest" (`sicherer_teil`, weich: keine
+    Warnung). Nicht, wenn das genannte Werkzeug schon lief.
+  - **offen/abgelehnt ohne sicheren Teil** → kein Befund, aber sichtbar.
+  - **fehlt** (kein Feld, freier Text, oder leer), obwohl die Nachricht
+    mehrere Aufträge trägt → EINE Runde „Rechne Sashas Auftrag in `auftrag`
+    ab" (`auftrag_fehlt`, weich).
+- **„Mehrere Aufträge" sprachfrei, ohne Wortliste:** in diesem Zug lief ein
+  schreibendes Werkzeug (gleich welcher Ausgang) UND Sashas Nachricht hat
+  mindestens zwei Teile, die keine Frage sind (Sätze an . ! ; … und Zeilen,
+  nicht in Uhrzeiten/Daten). Nicht der Klassifikator: er kennt keine Satzart
+  „Auftrag" und wird nur bei Widersprüchen gefragt, nie je Zug (kostet).
+  Grenze: lässt die KI ALLES liegen (kein Schreiben), fängt das nur die
+  Abrechnung selbst, wenn sie über antwort antwortet.
+- **Sichtbar:** Feld `auftrag {zeile, punkte}` an der Antwort (Python schreibt
+  die Zeile: „offen: Geige fällt aus — Ende der Ferien unklar · nicht gemacht:
+  …"), im Ereignis `ehrlichkeit`, im Ablauf-Protokoll als Eintrag `auftrag`
+  (Trace: „Auftrag · 2 erledigt, 1 offen" / TUI „task: 2 done, 1 open"), TUI
+  leise unter der Antwort (Rolle `auftrag`, bleibt an DIESER Antwort stehen).
+  Handy-Format: [abgleich](../betrieb/abgleich.md).
+
+**Falschtreffer „Abrechnung Pflicht", gemessen 10.10.2026**
+(`ehrlichkeit_messen.py`, alte Züge kamen alle ohne Feld — jede Pflicht wäre
+eine Runde): gespeicherte Gespräche 35 Antworten → 1 (f01k-Lage, echt);
+Prüfstand 08.–10.10. 82 Antworten → 8: 7× f01k (echt), 1× f10 („trag sie
+bitte so ein alle …", ein Auftrag über drei Kurse, von denen die KI nur
+einen änderte — als Abrechnung nützlich, streng genommen kein Mehrfach-
+Auftrag). **≤ 1 Falschtreffer in 117 Antworten.** Die erste Fassung zählte
+zusätzlich „zwei verschiedene Ziele geschrieben" — 5 Falschtreffer
+(Verschieben per Löschen+Anlegen, ungefragt mehr getan, „probier nochmal"),
+deshalb gestrichen.
+
+## „Nicht gefunden" nach nur einer Stichwortsuche — alle Modelle (seit 2026-10-10)
+
+Prüfstand 10.10., f10 mit Haiku: „Ich hab die uni-Einträge nicht gefunden"
+nach `read_calendar(suche="uni")` — die Kurse heißen „Analysis I" & Co. Bis
+dahin prüfte das nur der qwen-Zusatzprüfer; jetzt der Prüfer der Schiene
+(`ehrlichkeit.stichwort_befund`), im qwen-Profil ist der Doppel-Check raus.
+
+- Erkannt über das optionale Feld `nicht_gefunden` an `antwort` (sprachfrei),
+  bei freiem Text über Satzmuster (`erkennen.nicht_gefunden`: „nicht/kein …
+  gefunden / im Kalender / drin / da", ohne Frage und Bedingung).
+- Befund `stichwort`, wenn JEDE `read_calendar`-Suche des Zugs nur ein
+  Stichwort probierte und „Keine Einträge" bekam. Korrektur: „Eine
+  Stichwortsuche ohne Treffer heißt nicht ‚gibt es nicht' — lies den
+  Zeitraum ohne Suchwort oder frag nach dem Namen." Hart (bis zu 5 Runden),
+  danach Warnung „⚠ ‚Nicht gefunden' nach nur einer Stichwortsuche …".
+- Gemessen 10.10.: Gespräche 35 → 0; Prüfstand 82 → 1 (genau f10, echt).
 
 ## Klassifikator bei Zweifel (seit 2026-10-10, Standard aus)
 

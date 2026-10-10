@@ -590,7 +590,7 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
         p = Z.pop("pruefung", None)
         if isinstance(p, dict):
             Z["log"] += pruefung_eintraege(
-                {"zeile": p.get("zeile")}, p.get("offen"), Z["log"])
+                {"zeile": p.get("zeile")}, p.get("offen"), Z["log"], p.get("auftrag"))
         Z["answer"] = None
         Z["reflect"] = ""
         Z["perm"] = None

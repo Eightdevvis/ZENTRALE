@@ -42,11 +42,20 @@ def test_praefix_ohne_unterstrich_trifft_weiter():
     assert faelle.finden(["f0"])            # Anfang ohne „_“: wie bisher alle
 
 
-def _antwort(text, erledigt=(), id="a"):
+def _antwort(text, erledigt=(), id="a", auftrag=()):
     return {"stop_reason": "tool_use", "content": [FakeBlock(
         "tool_use", name="antwort", id=id,
         input={"text": text, "erledigt": list(erledigt), "fragt_erlaubnis": False,
-               "schiebt_auf": False})]}
+               "schiebt_auf": False, "auftrag": list(auftrag)})]}
+
+
+# Seit 2026-10-10 rechnet die KI Sashas Auftrag in `auftrag` ab (core/
+# auftrag_abrechnung.py) — ohne Abrechnung gäbe es hier eine Prüfrunde mehr.
+AUFTRAG = [
+    {"was": "nyam löschen", "stand": "erledigt", "werkzeug": "delete_calendar_entry"},
+    {"was": "Geige nur Do 18:10–19:00", "stand": "offen", "grund": "zwei Geigenstunden"},
+    {"was": "Geige fällt aus", "stand": "offen", "grund": "Pause scheiterte: zwei Geigenstunden"},
+]
 
 
 RUNDEN = [
@@ -57,7 +66,7 @@ RUNDEN = [
         FakeBlock("tool_use", name="add_calendar_pause",
                   input={"label": "Geigenstunde", "von": "2026-10-08"}, id="t2")]},
     _antwort("nyam ist gelöscht, Geige fällt heute aus. Bis wann die Ferien gehen, "
-             "weiß ich nicht.", ["kalender"], id="a2"),
+             "weiß ich nicht.", ["kalender"], id="a2", auftrag=AUFTRAG),
 ]
 
 

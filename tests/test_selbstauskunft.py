@@ -332,6 +332,9 @@ def test_openai_hinweis_nach_role_tool():
 def test_qwen_antwort_pflicht(monkeypatch):
     tools = [{"function": {"name": "read_calendar"}}, {"function": {"name": "antwort"}}]
     verlauf = [{"role": "user", "content": "wie war das wetter"}]
+    # Standard seit 2026-10-10 an (Prüfstand f01k: 2/7 ohne, 4/7 mit).
+    assert qwen.tool_choice(nr=1, verlauf=verlauf, tools=tools) == "required"
+    monkeypatch.setenv("ZENTRALE_ANTWORT_PFLICHT", "aus")
     assert qwen.tool_choice(nr=1, verlauf=verlauf, tools=tools) is None
     monkeypatch.setenv("ZENTRALE_ANTWORT_PFLICHT", "an")
     assert qwen.tool_choice(nr=1, verlauf=verlauf, tools=tools) == "required"

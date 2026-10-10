@@ -10,7 +10,7 @@
 # ändere den Termin auf 16:30–17:15. Soll ich das jetzt durchführen?".
 # Welcher Fall es traf, war Zufall: eine Bitte im Prompt ist eine Bitte.
 #
-# Vier Prüfungen, jede höchstens EINMAL je Zug, und nur, wenn der Prüfer der
+# Drei Prüfungen, jede höchstens EINMAL je Zug, und nur, wenn der Prüfer der
 # Schiene selbst nichts zu sagen hatte:
 #
 #   (erlaubnis  „soll ich …?" statt tun, Runde 4 — seit 2026-10-10 im
@@ -20,10 +20,10 @@
 #   als_text    Die Antwort IST ein Werkzeug-Aufruf als Text
 #               („read_calendar(zeitraum=naechste_woche)") — qwen schreibt
 #               den Aufruf manchmal hin, statt ihn zu machen. (Runde 7)
-#   stichwort   „Gibt es nicht / nicht im Kalender", obwohl jede Kalender-
-#               Suche dieses Zugs nur ein Stichwort probierte und leer kam
-#               („die uni-sachen" → suche="uni" → nichts; die Termine heißen
-#               „Analysis I"). (Runde 7)
+#   (stichwort  „Gibt es nicht", obwohl jede Kalender-Suche nur ein
+#               Stichwort probierte, Runde 7 — seit 2026-10-10 im allgemeinen
+#               Prüfer für ALLE Modelle, ehrlichkeit.stichwort_befund; Haiku
+#               tat dasselbe im Prüfstand f10. Hier entfernt.)
 #   tat         Sasha wollte eine Änderung, die Antwort meldet sie als
 #               erledigt („ist gelöscht", „Alles korrigiert"), und in diesem
 #               Zug lief kein schreibendes Werkzeug mit [ergebnis: ok].
@@ -53,11 +53,6 @@ _WILL = re.compile(
 # Ein Werkzeug-Aufruf als Text: name(…) und sonst (fast) nichts.
 _AUFRUF_TEXT = re.compile(r"^\W*`?([a-z_]{4,})\s*\((.{0,400})\)`?\W*$", re.S)
 
-# „gibt es nicht" über den Kalender.
-_NICHT_IM_KALENDER = re.compile(
-    r"\b(kein\w*|nicht)\b[^.?!\n]{0,60}\b(im kalender|gefunden|drin|eingetragen|da)\b|"
-    r"\bnichts gefunden\b")
-
 # „ist gelöscht", „Alles korrigiert", „eingetragen." — ein Erledigt-Wort.
 _ERLEDIGT = re.compile(
     r"\b(eingetragen|gelöscht|entfernt|verschoben|angelegt|geändert|aktualisiert|"
@@ -71,12 +66,6 @@ ALS_TEXT = (
     "[Prüfung] Deine Antwort ist ein Werkzeug-Aufruf als Text — {nutzer} sieht "
     "nur diese Zeile, ausgeführt wurde nichts. Ruf das Werkzeug wirklich auf "
     "und antworte dann.")
-STICHWORT = (
-    "[Prüfung] Du sagst, es gibt nichts — aber jede Kalender-Suche in diesem "
-    "Zug probierte nur ein Stichwort ('suche'), und Titel heißen oft anders "
-    "(„die uni-sachen“ sind „Analysis I“, „Tutorium …“). Lies den Zeitraum "
-    "OHNE 'suche' (z. B. naechste_30_tage) und sieh selbst nach, bevor du "
-    "es behauptest.")
 
 
 TAT = (
@@ -123,15 +112,6 @@ def aufruf_als_text(antwort: str, werkzeuge: set) -> bool:
     return bool(m and m.group(1) in werkzeuge)
 
 
-def nur_stichwort_leer(antwort: str, protokoll: list) -> bool:
-    lesen = [s for s in protokoll if getattr(s, "name", "") == "read_calendar"]
-    if not lesen or not _NICHT_IM_KALENDER.search((antwort or "").casefold()):
-        return False
-    return all((getattr(s, "args", None) or {}).get("suche")
-               and "keine einträge" in str(getattr(s, "text", "")).casefold()
-               for s in lesen)
-
-
 class ZusatzPruefer:
     """Legt sich um den Prüfer der Schiene (ehrlichkeit.Pruefer): alles
     andere reicht er durch."""
@@ -154,8 +134,6 @@ class ZusatzPruefer:
         if (not geschrieben and _WILL.search(self._nutzer.casefold())
                 and meldet_erledigt(text)):
             return "tat"
-        if nur_stichwort_leer(text, protokoll):
-            return "stichwort"
         if geschrieben and unbelegte_spannen(text, protokoll):
             return "zeit"
         return None
@@ -182,8 +160,7 @@ class ZusatzPruefer:
             pass
         import nutzer_angaben
         return nutzer_angaben.einsetzen(
-            {"als_text": ALS_TEXT, "stichwort": STICHWORT,
-             "tat": TAT, "zeit": zeit if art == "zeit" else ""}[art])
+            {"als_text": ALS_TEXT, "tat": TAT, "zeit": zeit if art == "zeit" else ""}[art])
 
 
 # Für tool_choice (qwen, Runde 5): Sasha will am Kalender etwas ändern —
