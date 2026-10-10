@@ -476,7 +476,9 @@ class Formular:
             return "weiter"
         erg = self.box.taste(ch)
         if erg and erg[0] == "fertig":
-            self._box_feld.stil.update(erg[1])
+            # Wert None = Eigenschaft entfernt (Stylebox seit af5915e); update
+            # schriebe None hinein — anwenden lässt sie weg.
+            self._box_feld.stil = kalender_stil.stil_kern.anwenden(self._box_feld.stil, erg[1])
         if erg:
             self.box = None
         return "weiter"

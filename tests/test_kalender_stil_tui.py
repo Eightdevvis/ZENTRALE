@@ -241,3 +241,18 @@ def test_stil_attr_mischt_mit_der_rueckfallrolle():
     ohne = _Z()
     ohne.C["kal_glas"] = None
     assert _kal(ohne)._stil_attr(ks.rolle("k_t0", "#ff8800", None)) == 2
+
+
+def test_stylebox_entfernt_einzelne_eigenschaft():
+    """Rückgabe {"name": None} der Stylebox (af5915e) entfernt die Eigenschaft,
+    statt None in den Stil zu schreiben."""
+    from tui.ansichten import kalender_werkzeuge as kw
+    from tui.ansichten import kalender_stil
+    f = kw.Feld("stil", "Stylebox", art="stil", wert={})
+    f.stil = {"border-style": "double", "color": "#ffffff"}
+    form = kw.Formular("t", [f], lambda w: None)
+    form.box, form._box_feld = type("B", (), {"taste": lambda self, ch: (
+        "fertig", {"border-style": None, "color": "#ff8800"})})(), f
+    form._box_taste(10)
+    assert f.stil == {"color": "#ff8800"}
+    assert kalender_stil.stil_kern.anwenden({"a": 1}, {"a": None}) == {}
