@@ -76,6 +76,7 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/erinnerung.py` | `Erinnerung`: Graph-Reminder-Kästchen | `nag_*` |
 | `ansichten/fenster.py` | `in_text_entry(z)`, `current_ctx(z)`: wer hat den Fokus | — |
 | `ansichten/desk.py` | `Desk`: Desk View (Taste `d`, seit 2026-10-09) — Auswahl der Desks, dann die Fläche aus dem Baustein `bausteine/canvas.py`; laden/speichern über `/api/desk`, Bearbeiten-Modal mittig, Hinweiszeile | `DESK` |
+| `ansichten/shop.py` | `Shop`: Schaufenster (seit 2026-10-10, [shop.md](shop.md)) — Kategorien ←→, Thema tab, Stücke ↑↓ mit Pixel-Vorschau der Icons, enter holt; über `/api/shop*`; geöffnet von außen per `oeffnen()` (Rad-Platz kommt mit der Werkstatt), nach Hot Reload über `_offen_apps` | `SHOP` |
 | `bausteine/canvas.py` | Baustein `Canvas` (ohne Desk-Wissen): Welt in Zellen, Ausschnitt, Fokus/Greifen/Verbinden/Frage, `Arten`-Registrierung, `bild()` → Zeilen aus (spalte, text, rolle); `taste_deuten`/`shift_pfeil` (Shift+Pfeil über `curses.keyname`) | am Objekt der Ansicht |
 | `bausteine/schnur.py` | Schnüre: Andockseite nach Lage, rechtwinkliger Weg, Box-Zeichen, Kreuzungen — reine Geometrie | — |
 | `bausteine/canvas_arten.py` | Arten `notiz` (Zettel, Rahmen `amber`, erste Zeile Titel, blättern) und `fremd`; `TextModal`; hier docken Kacheln an | — |

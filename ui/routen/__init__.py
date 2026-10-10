@@ -5,10 +5,12 @@
 # den passenden Bereich (oder einen neuen), nie zurück in app.py.
 
 from ui.routen import zugang, zustand, erfassung, klavier, listen, notizen, karte, kalender, ki, gespraeche, stimme, mail, skills, ablage, projekte, morgenblick, abgleich, desk, kachel
+from ui.routen import shop  # Schaufenster (2026-10-10)
 
 # zugang zuerst: seine Prüfung (before_app_request) muss vor allem anderen
 # laufen (memory/betrieb/zugang.md, 2026-10-08).
-BEREICHE = (zugang, zustand, erfassung, klavier, listen, notizen, karte, kalender, ki, gespraeche, stimme, mail, skills, ablage, projekte, morgenblick, abgleich, desk, kachel,)
+BEREICHE = (zugang, zustand, erfassung, klavier, listen, notizen, karte, kalender, ki, gespraeche, stimme, mail, skills, ablage, projekte, morgenblick, abgleich, desk, kachel,
+            shop,)
 
 
 def einhaengen(app):

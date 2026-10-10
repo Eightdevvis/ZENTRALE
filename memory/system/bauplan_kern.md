@@ -169,6 +169,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `kachel_kalender` | 2 | Kachel-Quelle `kalender`/`ausschnitt`: Bereich fest oder mitlaufend (≤ 31 Tage), Woche bis 7 Tage, sonst Monatsraster; liest nur über `kalender.month_view`, schreibt nie; Spanne zwischen zwei Daten (≤ 31 Tage, „bis" nicht vor „von") in `pruefen()`, weil JSON Schema sie nicht ausdrücken kann |
 | `kachel_fokus` | 2 | Kachel-Quelle `fokus`/`liste` (seit 2026-10-10): eine Liste mit Punkten (offen/abgehakt, eingerückt bis N Ebenen, Fortschritt oben), blättern mit „+N“; Liste im Katalog frisch zur Wahl (`parameter_jetzt`); liest nur über `lists.read_lists`, schreibt nie |
 | `kachel_graph` | 2 | Kachel-Quelle `graph`/`verlauf` (seit 2026-10-10): letzte N Tage eines Graphen als Blockbalken, letzter Wert, min/max; Graph im Katalog frisch zur Wahl (`parameter_jetzt`); liest nur über `graphs.list_graphs`/`read_values` |
+| `shop` | 2 | Schaufenster (seit 2026-10-10): Katalog als schema.org-`ItemList` (JSON-LD, `core/shop_katalog.jsonld`, Tauschstelle `_katalog_roh` für Sashas Server), Kategorien/Themen, ein Stück je Adresse `zentrale://shop/<kategorie>/<id>`; holen (heute nur Preis 0) schreibt `OwnershipInfo` in `<shop_ordner>/besitz-<rechner>.jsonld`, Besitz = Vereinigung aller Rechner |
 | `ai` | 3 | Ollama-Weg, Tool-Liste und -Ausführung, Erlaubnis-Abfrage, Prompt-Bausteine |
 | `ai_backends` | 3 | Wer denkt: lokal oder Cloud, Anbieter, Modell, Effort, Rundengrenze |
 | `cloud` | 3 | Anthropic-Weg |
@@ -247,6 +248,7 @@ egal woran, ging durch dieselbe Datei.
 | `abgleich` | Zustand des Abgleichs über die Mitte (letzter Lauf, Fehler, Hinweise) |
 | `desk` | Desk View: Desks auflisten, anlegen, laden, ganz speichern (409 bei Änderung von woanders) |
 | `kachel` | Kacheln: Inhalt einer Kachel holen, Aktion weiterreichen (über `core/kacheln.py`, seit 2026-10-10) |
+| `shop` | Schaufenster: Katalog, Kategorien/Themen, ein Stück, holen, Besitz (über `core/shop.py`, seit 2026-10-10) |
 
 ## Türen
 

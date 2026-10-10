@@ -735,3 +735,12 @@ def test_klassifikator_beispiele_zeigen_nie_ins_echte_data():
     assert not os.path.realpath(klassifikator_beispiele.ordner()).startswith(echt), \
         klassifikator_beispiele.ordner()
     assert not os.environ["ZENTRALE_KLASSIFIKATOR_BEISPIELE_DIR"].startswith(echt)
+
+
+def test_shop_ordner_liegt_im_test_nicht_im_echten_data():
+    """Schaufenster (core/shop.py, 2026-10-10): im Betrieb data/shop/ mit dem,
+    was Sasha geholt hat. Kein Test holt dort etwas hinein."""
+    import shop
+    wert = os.environ.get("ZENTRALE_SHOP_ORDNER")
+    assert wert, "ZENTRALE_SHOP_ORDNER ist nicht gesetzt"
+    assert not os.path.realpath(shop.ordner()).startswith(os.path.realpath(ROOT))

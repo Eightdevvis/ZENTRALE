@@ -90,6 +90,9 @@ schon umziehen.
   hält den Schlüssel, zählt pro Nutzer, prüft das Abo.
 - Kundendaten bleiben beim Kunden (wie bei Sasha). Datenschutz (Stimmen,
   Gespräche), Bedingungen der Modell-Anbieter klären, bevor verkauft wird.
+- **Schaufenster** (gebaut 2026-10-10, [shop.md](shop.md)): Katalog als
+  schema.org-ItemList, heute alles Preis 0 und nur „holen"; Tauschstelle für
+  Sashas Server ist `shop._katalog_roh()`.
 
 ## Umzug der heutigen Module (Reihenfolge)
 

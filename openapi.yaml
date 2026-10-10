@@ -1,12 +1,13 @@
-# openapi.yaml — die HTTP-Schnittstelle des Hubs (Kacheln, Katalog, Desk).
+# openapi.yaml — die HTTP-Schnittstelle des Hubs (Kacheln, Katalog, Desk,
+# Schaufenster).
 #
 # OpenAPI 3.1 (Sasha 2026-10-10: Standards statt Eigenformat, „openapi als
 # Vorbild"). Diese Datei ist die Autorität für die Routen unten; die Tabelle
 # in memory/system/api_endpoints.md zeigt nur hierher. Schemas sind JSON
 # Schema 2020-12 — derselbe Dialekt wie `parameter` im Katalog.
 # tests/test_openapi.py hält Routen und Datei gleich (jede Route unter
-# /api/kachel*, /api/kacheln, /api/desk* steht hier und umgekehrt), prüft
-# die Datei selbst und echte Antworten gegen ihre Schemas.
+# /api/kachel*, /api/kacheln, /api/desk*, /api/shop* steht hier und
+# umgekehrt), prüft die Datei selbst und echte Antworten gegen ihre Schemas.
 openapi: 3.1.0
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
@@ -28,6 +29,8 @@ tags:
     description: Desks laden und speichern (core/desk.py)
   - name: desk-bild
     description: Bilder auf dem Desk (core/desk_bild.py)
+  - name: shop
+    description: Schaufenster — Katalog, holen, Besitz (core/shop.py)
 
 paths:
   /api/kacheln:
@@ -304,6 +307,100 @@ paths:
         "400": {$ref: "#/components/responses/DeskFehler"}
         "404": {$ref: "#/components/responses/DeskFehler"}
 
+  /api/shop:
+    get:
+      tags: [shop]
+      operationId: shopKatalog
+      summary: Der Katalog des Schaufensters (schema.org ItemList, JSON-LD)
+      description: >
+        Alle Stücke, auf Wunsch nur eine Kategorie und/oder ein Thema
+        (`keywords`). Heute kostet alles 0 EUR; bezahlen kommt später über
+        Sashas Server (memory/system/shop.md).
+      parameters:
+        - {name: kategorie, in: query, required: false, schema: {$ref: "#/components/schemas/ShopKategorie"}}
+        - {name: thema, in: query, required: false, schema: {type: string}, example: pixel}
+      responses:
+        "200":
+          description: Der (gefilterte) Katalog
+          content:
+            application/ld+json:
+              schema: {$ref: "#/components/schemas/ShopKatalog"}
+        "400": {$ref: "#/components/responses/ShopFehler"}
+        "503": {$ref: "#/components/responses/ShopFehler"}
+
+  /api/shop/kategorien:
+    get:
+      tags: [shop]
+      operationId: shopKategorien
+      summary: Kategorien (auch leere) und Themen, je mit Anzahl
+      responses:
+        "200":
+          description: Die Leiste der Oberfläche
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ShopUebersicht"}
+        "503": {$ref: "#/components/responses/ShopFehler"}
+
+  /api/shop/{kategorie}/{kennung}:
+    parameters:
+      - {name: kategorie, in: path, required: true, schema: {$ref: "#/components/schemas/ShopKategorie"}}
+      - {name: kennung, in: path, required: true, schema: {type: string}}
+    get:
+      tags: [shop]
+      operationId: shopStueck
+      summary: Ein Stück (Adresse zentrale://shop/<kategorie>/<kennung>)
+      responses:
+        "200":
+          description: Das Stück mit `@context`
+          content:
+            application/ld+json:
+              schema: {$ref: "#/components/schemas/ShopStueck"}
+        "400": {$ref: "#/components/responses/ShopFehler"}
+        "404": {$ref: "#/components/responses/ShopFehler"}
+
+  /api/shop/holen:
+    post:
+      tags: [shop]
+      operationId: shopHolen
+      summary: Ein Stück holen (heute kostenlos, idempotent)
+      description: >
+        Schon Geholtes bleibt mit seinem ersten Datum (`neu: false`). Ein
+        Stück mit Preis über 0 lehnt der Hub heute mit 402 ab.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ShopHolenAnfrage"}
+      responses:
+        "200":
+          description: Geholt
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ShopHolenAntwort"}
+        "400": {$ref: "#/components/responses/ShopFehler"}
+        "402": {$ref: "#/components/responses/ShopFehler"}
+        "404": {$ref: "#/components/responses/ShopFehler"}
+
+  /api/shop/besitz:
+    get:
+      tags: [shop]
+      operationId: shopBesitz
+      summary: Was geholt ist (ItemList von OwnershipInfo), auf Wunsch je Kategorie
+      description: >
+        Vereinigung aller Rechner. `typeOfGood` ist das Stück aus dem Katalog;
+        kennt der Katalog es nicht mehr, nur `@id`, `category`, `identifier`.
+        Die Werkstatt liest hier die geholten Icons (`?kategorie=icons`).
+      parameters:
+        - {name: kategorie, in: query, required: false, schema: {$ref: "#/components/schemas/ShopKategorie"}}
+      responses:
+        "200":
+          description: Der Besitz
+          content:
+            application/ld+json:
+              schema: {$ref: "#/components/schemas/ShopBesitz"}
+        "400": {$ref: "#/components/responses/ShopFehler"}
+        "503": {$ref: "#/components/responses/ShopFehler"}
+
 components:
   responses:
     Ungueltig:
@@ -331,6 +428,11 @@ components:
       content:
         application/json:
           schema: {$ref: "#/components/schemas/DeskFehler"}
+    ShopFehler:
+      description: Fehler des Schaufensters (Text in Alltagswörtern)
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/ShopFehler"}
 
   schemas:
     Adresse:
@@ -599,3 +701,148 @@ components:
           properties:
             status: {type: string, enum: [weg, kein_bild, ohne_pillow]}
             text: {type: string}
+
+    # ── Schaufenster (core/shop.py, 2026-10-10) ─────────────────────────
+    # schema.org-Formen, locker beschrieben: was ZENTRALE liest, ist Pflicht;
+    # weitere schema.org-Felder sind erlaubt.
+    ShopKategorie:
+      type: string
+      enum: [icons, hintergruende, apps, bauteile, agenten, avatare]
+
+    ShopAngebot:
+      type: object
+      description: schema.org Offer — heute immer Preis "0" EUR
+      required: ["@type", price, priceCurrency]
+      properties:
+        "@type": {const: Offer}
+        price: {type: string, pattern: "^[0-9]+(\\.[0-9]{1,2})?$"}
+        priceCurrency: {type: string, pattern: "^[A-Z]{3}$"}
+        availability: {type: string, format: uri}
+
+    ShopStueck:
+      type: object
+      description: >
+        Ein Stück: schema.org ImageObject, CreativeWork, SoftwareApplication
+        oder Product. `@id` ist seine Adresse zentrale://shop/<category>/<identifier>.
+      required: ["@type", "@id", identifier, name, description, category, keywords, offers]
+      properties:
+        "@context": {const: "https://schema.org"}
+        "@type": {enum: [ImageObject, CreativeWork, SoftwareApplication, Product]}
+        "@id":
+          allOf:
+            - {$ref: "#/components/schemas/Adresse"}
+            - {pattern: "^zentrale://shop/[a-z]+/[^/?#]+$"}
+        identifier: {type: string, minLength: 1}
+        name: {type: string, minLength: 1}
+        description: {type: string}
+        category: {$ref: "#/components/schemas/ShopKategorie"}
+        keywords: {type: array, items: {type: string}}
+        offers: {$ref: "#/components/schemas/ShopAngebot"}
+        image: {type: string, format: uri}
+        applicationCategory: {type: string}
+        isBasedOn: {$ref: "#/components/schemas/Adresse"}
+        additionalProperty:
+          type: array
+          description: schema.org PropertyValue, z. B. `pixel_motiv` = Name des Motivs in tui/pixel.py
+          items:
+            type: object
+            required: ["@type", name, value]
+            properties:
+              "@type": {const: PropertyValue}
+              name: {type: string}
+              value: {type: string}
+
+    ShopKatalog:
+      type: object
+      description: schema.org ItemList der Stücke
+      required: ["@context", "@type", itemListElement, numberOfItems]
+      properties:
+        "@context": {const: "https://schema.org"}
+        "@type": {const: ItemList}
+        "@id": {$ref: "#/components/schemas/Adresse"}
+        name: {type: string}
+        numberOfItems: {type: integer, minimum: 0}
+        itemListElement:
+          type: array
+          items:
+            type: object
+            required: ["@type", position, item]
+            properties:
+              "@type": {const: ListItem}
+              position: {type: integer, minimum: 1}
+              item: {$ref: "#/components/schemas/ShopStueck"}
+
+    ShopUebersicht:
+      type: object
+      required: [kategorien, themen]
+      properties:
+        kategorien:
+          type: array
+          items:
+            type: object
+            required: [id, name, anzahl]
+            properties:
+              id: {$ref: "#/components/schemas/ShopKategorie"}
+              name: {type: string}
+              anzahl: {type: integer, minimum: 0}
+        themen:
+          type: array
+          items:
+            type: object
+            required: [thema, anzahl]
+            properties:
+              thema: {type: string}
+              anzahl: {type: integer, minimum: 1}
+
+    ShopHolenAnfrage:
+      type: object
+      required: [adresse]
+      properties:
+        adresse: {$ref: "#/components/schemas/Adresse"}
+      examples:
+        - {adresse: "zentrale://shop/icons/post"}
+
+    ShopHolenAntwort:
+      type: object
+      required: [adresse, geholt, neu, am]
+      properties:
+        adresse: {$ref: "#/components/schemas/Adresse"}
+        geholt: {const: true}
+        neu: {type: boolean, description: "false = war schon geholt"}
+        am: {type: string, format: date-time}
+
+    ShopBesitz:
+      type: object
+      description: schema.org ItemList von OwnershipInfo
+      required: ["@context", "@type", itemListElement, numberOfItems]
+      properties:
+        "@context": {const: "https://schema.org"}
+        "@type": {const: ItemList}
+        name: {type: string}
+        numberOfItems: {type: integer, minimum: 0}
+        itemListElement:
+          type: array
+          items:
+            type: object
+            required: ["@type", position, item]
+            properties:
+              "@type": {const: ListItem}
+              position: {type: integer, minimum: 1}
+              item:
+                type: object
+                required: ["@type", ownedFrom, typeOfGood]
+                properties:
+                  "@type": {const: OwnershipInfo}
+                  ownedFrom: {type: string, format: date-time}
+                  typeOfGood:
+                    type: object
+                    required: ["@id", category]
+                    properties:
+                      "@id": {$ref: "#/components/schemas/Adresse"}
+                      category: {$ref: "#/components/schemas/ShopKategorie"}
+
+    ShopFehler:
+      type: object
+      required: [error]
+      properties:
+        error: {type: string}

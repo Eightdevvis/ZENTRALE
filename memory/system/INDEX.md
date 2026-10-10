@@ -11,6 +11,7 @@ und wie die Fronten daran hängen.
 | **Hub-Bauplan** — ZENTRALE als Plattform, Module als Apps: Manifest, Rechte, Datenordner je App, Ereignisse, Modell-Zugang, Umzugs-Reihenfolge; entschieden 09.10., Schritt 1 (Tutor als App) erledigt; Kacheln (Hub + Kalender, Listen, Graphen gebaut 10.10.), Adressen `zentrale://…`, Katalog (Parameter als JSON Schema), Farbrollen; Leitlinie Standards statt Eigenformat | [hub_bauplan.md](hub_bauplan.md) |
 | **Bauplan der TUI** — wie `tui/` in Ansichten geschnitten ist, Kontext statt Closures, Reihenfolge, Sicherheitsnetz | [tui_bauplan.md](tui_bauplan.md) |
 | **Desk View** — unendliche Fläche je Desk mit Zetteln und Schnüren (Taste `d`), Canvas-Baustein, Format JSON Canvas, Tasten, Kacheln (Kalender, Listen, Graphen, `+`-Auswahl, `o` öffnet), offene Punkte (09.–10.10.) | [desk_view.md](desk_view.md) |
+| **Schaufenster** — kleiner Laden: Katalog als schema.org-ItemList (JSON-LD), Kategorien/Themen, holen (heute kostenlos), Besitz je Rechner, später Sashas Server (10.10.) | [shop.md](shop.md) |
 | **Pixelstil** der TUI — Sextant-Pixel, Braille-Icons, Paletten Tag/Nacht, Motive, Regeln für neue Symbole | [pixelstil.md](pixelstil.md) |
 | Wer läuft wo — PC ↔ Pi ↔ Laptop, Sync der `data/*.json` | [topologie.md](topologie.md) |
 | **Heimnetz (Plan)** — PC als Gehirn ohne Bildschirm, eigener Router, VPN, Sunshine; Übergang bis Glasfaser | [heimnetz.md](heimnetz.md) |

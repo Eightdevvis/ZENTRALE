@@ -27,6 +27,8 @@ data/gespraeche/
 data/ablage/
 # Desk View (core/desk.py, 2026-10-09): .canvas-Dateien, Sashas Notizen.
 data/desk/
+# Schaufenster (core/shop.py, 2026-10-10): was Sasha geholt hat, je Rechner.
+data/shop/
 # Bewertungen der KI-Antworten (core/rueckmeldungen.py, seit 2026-10-08):
 # eine .jsonl pro Rechner, mit Kommentaren von Sasha — privat wie die Gespraeche.
 data/rueckmeldungen/

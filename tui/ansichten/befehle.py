@@ -203,6 +203,11 @@ CTX_KEYS = {
         ("←→", "width"), ("↑↓", "height"), ("W/A/S/D", "move view"), ("enter", "keep"),
         ("esc", "undo"),
     ],
+    # Schaufenster (2026-10-10, memory/system/shop.md).
+    "shop": [
+        ("←→", "category"), ("↑↓", "select"), ("tab", "theme"), ("enter", "get"),
+        ("esc", "back"),
+    ],
 }
 CTX_TITLES = {
     "home": "start", "graph": "graph", "list:forest": "fokus",
@@ -219,6 +224,7 @@ CTX_TITLES = {
     "desk:verbinden": "desk · verbinden", "desk:frage": "desk",
     "desk:bild": "desk · bild", "desk:neu": "desk · neu", "desk:kachel": "desk · kachel",
     "desk:groesse": "desk · größe",
+    "shop": "schaufenster",
 }
 
 

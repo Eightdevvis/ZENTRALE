@@ -162,6 +162,22 @@ def antwort(pfad, methode):
             return copy.deepcopy(d)
     if p == "/api/desk-bild/quellen":             # Bilder auf dem Desk (2026-10-10)
         return {"quellen": [{"name": "foto.png", "pfad": "/x/Input/foto.png"}]}
+    if p == "/api/shop/kategorien":               # Schaufenster (2026-10-10)
+        return {"kategorien": [{"id": "icons", "name": "Icons", "anzahl": 2},
+                               {"id": "apps", "name": "Apps", "anzahl": 0}],
+                "themen": [{"thema": "pixel", "anzahl": 2}]}
+    if p == "/api/shop/holen":
+        return {"adresse": "zentrale://shop/icons/post", "geholt": True, "neu": True,
+                "am": "2026-10-10T12:00:00+02:00"}
+    if p == "/api/shop/besitz":
+        return {"@type": "ItemList", "itemListElement": []}
+    if p == "/api/shop":
+        return {"@type": "ItemList", "itemListElement": [] if "kategorie=apps" in pfad else [
+            {"@type": "ListItem", "position": i + 1, "item": {
+                "@type": "ImageObject", "@id": "zentrale://shop/icons/" + n, "identifier": n,
+                "name": n, "description": "", "category": "icons", "keywords": ["pixel", n],
+                "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"}}}
+            for i, n in enumerate(("post", "karte"))]}
     if p == "/api/kacheln":                       # Katalog (2026-10-10)
         return [{"app": "kalender", "art": "ausschnitt", "titel": "kalender",
                  "min": {"w": 6, "h": 2}, "bevorzugt": {"w": 90, "h": 7}, "ttl": 60,
@@ -284,6 +300,7 @@ def welt(monkeypatch, tmp_path):
         u.karte = A.karte.Karte(z); u.M = u.karte.M
         u.technik = A.technik.Technik(z); u.TECH = u.technik.TECH
         u.desk = A.desk.Desk(z); u.DESK = u.desk.DESK
+        u.shop = A.shop.Shop(z); u.SHOP = u.shop.SHOP
         u.startseite = A.startseite.Startseite(z, zt.RAD, zt.META, zt.TRAD, u.technik)
         u.dashboard = A.dashboard.Dashboard(z, u.graphen, u.fokus)
         u.erinnerung = A.erinnerung.Erinnerung(z, u.graphen)
@@ -303,7 +320,8 @@ def zeichnen(u):
 
 def fingerabdruck(u):
     teile = []
-    for name in ("AI", "G", "L", "M", "K", "MAIL", "NOTE", "PIANO", "TECH", "ELEK", "DESK"):
+    for name in ("AI", "G", "L", "M", "K", "MAIL", "NOTE", "PIANO", "TECH", "ELEK", "DESK",
+                 "SHOP"):
         teile.append(repr(getattr(u, name)))
     teile.append(repr((zt.RAD, zt.META, zt.TRAD)))
     teile.append(repr(vars(u.bz)))
@@ -481,6 +499,7 @@ ZUSTAENDE = {
     "desk:neu": ("desk:neu", _desk_neu),
     "desk:kachel": ("desk:kachel", _desk_kachel),
     "desk:groesse": ("desk:groesse", _desk_groesse),
+    "shop": ("shop", lambda u: u.shop.oeffnen()),          # Schaufenster (2026-10-10)
 }
 
 

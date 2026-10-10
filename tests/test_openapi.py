@@ -1,7 +1,7 @@
 """
 Die HTTP-Schnittstelle des Hubs als OpenAPI 3.1 (openapi.yaml, 2026-10-10,
 memory/system/hub_bauplan.md „Standards statt Eigenformat"):
-(a) jede Flask-Route unter /api/kachel*, /api/kacheln, /api/desk* steht in
+(a) jede Flask-Route unter /api/kachel*, /api/kacheln, /api/desk*, /api/shop* steht in
 der Datei und umgekehrt (kein Auseinanderlaufen); (b) die Datei selbst
 taugt: Aufbau, jeder $ref löst sich auf, jedes Schema ist gültiges JSON
 Schema 2020-12; (c) echte Antworten passen zu ihren Schemas; (d) jedes
@@ -22,7 +22,7 @@ import kacheln
 import lists
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PRAEFIXE = ("/api/kachel", "/api/desk")          # /api/kachel* deckt /api/kacheln mit
+PRAEFIXE = ("/api/kachel", "/api/desk", "/api/shop")   # /api/kachel* deckt /api/kacheln mit
 METHODEN = {"get", "put", "post", "delete", "patch"}
 
 

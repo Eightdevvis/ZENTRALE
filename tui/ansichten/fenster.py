@@ -101,6 +101,9 @@ def current_ctx(z):
             if fokus is not None and fokus.get("art") == "kachel":
                 return "desk:kachel"        # o öffnen in der App (2026-10-10)
         return "desk:" + {"ruhe": "canvas"}.get(modus, modus)
+    SHOP = getattr(z, "SHOP", None)       # Schaufenster (2026-10-10)
+    if SHOP and SHOP["active"]:
+        return "shop"
     if AI["active"]:
         return "ai"
     if PIANO["active"]:

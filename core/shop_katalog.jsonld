@@ -1,0 +1,472 @@
+{
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "@id": "zentrale://shop/katalog",
+  "name": "ZENTRALE Schaufenster",
+  "description": "Was es in ZENTRALE zu holen gibt. Heute alles kostenlos; bezahlen kommt später über Sashas Server.",
+  "dateModified": "2026-10-10",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "item": {
+        "@type": "ImageObject",
+        "@id": "zentrale://shop/icons/post",
+        "identifier": "post",
+        "name": "Post",
+        "description": "Ein Brief: Papier, Lasche als V, feine Falze, Wachssiegel. Das Pixel-Symbol der App im Rad.",
+        "category": "icons",
+        "keywords": [
+          "pixel",
+          "rad",
+          "nachrichten"
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "pixel_motiv",
+            "value": "post"
+          }
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "item": {
+        "@type": "ImageObject",
+        "@id": "zentrale://shop/icons/karte",
+        "identifier": "karte",
+        "name": "Karte",
+        "description": "Ein Globus, der sich langsam dreht: Ozean, Kontinente, Gradnetz. Das Pixel-Symbol der App im Rad.",
+        "category": "icons",
+        "keywords": [
+          "pixel",
+          "rad",
+          "welt"
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "pixel_motiv",
+            "value": "karte"
+          }
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "item": {
+        "@type": "ImageObject",
+        "@id": "zentrale://shop/icons/kalender",
+        "identifier": "kalender",
+        "name": "Kalender",
+        "description": "Ein Kalenderblatt: Ringe, rote Kopfleiste, Raster, ein Tag blinkt. Das Pixel-Symbol der App im Rad.",
+        "category": "icons",
+        "keywords": [
+          "pixel",
+          "rad",
+          "planen"
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "pixel_motiv",
+            "value": "kalender"
+          }
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 4,
+      "item": {
+        "@type": "ImageObject",
+        "@id": "zentrale://shop/icons/klavier",
+        "identifier": "klavier",
+        "name": "Klavier",
+        "description": "Eine Klaviatur: sieben weiße Tasten, fünf schwarze; eine nach der anderen leuchtet auf. Das Pixel-Symbol der App im Rad.",
+        "category": "icons",
+        "keywords": [
+          "pixel",
+          "rad",
+          "musik"
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "pixel_motiv",
+            "value": "klavier"
+          }
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 5,
+      "item": {
+        "@type": "ImageObject",
+        "@id": "zentrale://shop/icons/notizen",
+        "identifier": "notizen",
+        "name": "Notizen",
+        "description": "Ein Notizblock mit Linien und einer Zeile, die gerade entsteht; rechts lehnt ein Bleistift. Das Pixel-Symbol der App im Rad.",
+        "category": "icons",
+        "keywords": [
+          "pixel",
+          "rad",
+          "schreiben"
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "pixel_motiv",
+            "value": "notizen"
+          }
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 6,
+      "item": {
+        "@type": "ImageObject",
+        "@id": "zentrale://shop/icons/graph",
+        "identifier": "graph",
+        "name": "Graph",
+        "description": "Ein Balkendiagramm, das steigt; die Balken wippen leise. Das Pixel-Symbol der App im Rad.",
+        "category": "icons",
+        "keywords": [
+          "pixel",
+          "rad",
+          "messen"
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "pixel_motiv",
+            "value": "graph"
+          }
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 7,
+      "item": {
+        "@type": "ImageObject",
+        "@id": "zentrale://shop/icons/fokus",
+        "identifier": "fokus",
+        "name": "Fokus",
+        "description": "Eine Zielscheibe; ein Ring pulst von innen nach außen. Das Pixel-Symbol der App im Rad.",
+        "category": "icons",
+        "keywords": [
+          "pixel",
+          "rad",
+          "planen"
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "pixel_motiv",
+            "value": "fokus"
+          }
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 8,
+      "item": {
+        "@type": "ImageObject",
+        "@id": "zentrale://shop/icons/tutor",
+        "identifier": "tutor",
+        "name": "Tutor",
+        "description": "Eine Sprechblase, in der drei Punkte tippen. Das Pixel-Symbol der App im Rad.",
+        "category": "icons",
+        "keywords": [
+          "pixel",
+          "rad",
+          "lernen"
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "pixel_motiv",
+            "value": "tutor"
+          }
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 9,
+      "item": {
+        "@type": "ImageObject",
+        "@id": "zentrale://shop/icons/desk",
+        "identifier": "desk",
+        "name": "Desk",
+        "description": "Eine Pinnwand mit drei Karten, eine rote Schnur verbindet sie. Das Pixel-Symbol der App im Rad.",
+        "category": "icons",
+        "keywords": [
+          "pixel",
+          "rad",
+          "fläche"
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "pixel_motiv",
+            "value": "desk"
+          }
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 10,
+      "item": {
+        "@type": "ImageObject",
+        "@id": "zentrale://shop/icons/elektronik",
+        "identifier": "elektronik",
+        "name": "Elektronik",
+        "description": "Ein Chip mit Leiterbahnen, die nach außen ausfransen. Das Pixel-Symbol der App im Rad.",
+        "category": "icons",
+        "keywords": [
+          "pixel",
+          "rad",
+          "basteln"
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "pixel_motiv",
+            "value": "elektronik"
+          }
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 11,
+      "item": {
+        "@type": "CreativeWork",
+        "@id": "zentrale://shop/hintergruende/denkadern",
+        "identifier": "denkadern",
+        "name": "Denk-Adern",
+        "description": "Leuchtende Spiralen, die beim Nachdenken der KI hinter dem Chat-Verlauf wachsen und pulsieren.",
+        "category": "hintergruende",
+        "keywords": [
+          "ki",
+          "pixel",
+          "bewegt"
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 12,
+      "item": {
+        "@type": "CreativeWork",
+        "@id": "zentrale://shop/hintergruende/nacht",
+        "identifier": "nacht",
+        "name": "Nacht",
+        "description": "Hartes Schwarz mit reinweißer Schrift — die Nacht-Farben der TUI, maximaler Kontrast.",
+        "category": "hintergruende",
+        "keywords": [
+          "farbe",
+          "nacht"
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 13,
+      "item": {
+        "@type": "CreativeWork",
+        "@id": "zentrale://shop/hintergruende/tag",
+        "identifier": "tag",
+        "name": "Tag",
+        "description": "Weißer Grund mit dunkler Schrift — die Tag-Farben der TUI, kein Gelb auf Weiß.",
+        "category": "hintergruende",
+        "keywords": [
+          "farbe",
+          "tag"
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 14,
+      "item": {
+        "@type": "SoftwareApplication",
+        "@id": "zentrale://shop/bauteile/desk-view",
+        "identifier": "desk-view",
+        "name": "Desk View (Vorlage)",
+        "description": "Die unendliche Fläche mit Kästen und Schnüren als Baustein — jede App kann sie für sich nehmen, ohne den Desk mitzunehmen.",
+        "category": "bauteile",
+        "keywords": [
+          "fläche",
+          "vorlage"
+        ],
+        "applicationCategory": "Vorlage",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 15,
+      "item": {
+        "@type": "SoftwareApplication",
+        "@id": "zentrale://shop/bauteile/kalender-ausschnitt",
+        "identifier": "kalender-ausschnitt",
+        "name": "Kalender-Ausschnitt",
+        "description": "Eine Kachel mit einem Stück Kalender — mitlaufend oder fest, bis 31 Tage.",
+        "category": "bauteile",
+        "keywords": [
+          "kachel",
+          "planen"
+        ],
+        "applicationCategory": "Kachel",
+        "isBasedOn": "zentrale://kalender/ausschnitt",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 16,
+      "item": {
+        "@type": "SoftwareApplication",
+        "@id": "zentrale://shop/bauteile/liste",
+        "identifier": "liste",
+        "name": "Liste",
+        "description": "Eine Kachel mit einer Liste aus Fokus: offene und abgehakte Punkte, Fortschritt oben.",
+        "category": "bauteile",
+        "keywords": [
+          "kachel",
+          "planen"
+        ],
+        "applicationCategory": "Kachel",
+        "isBasedOn": "zentrale://fokus/liste",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 17,
+      "item": {
+        "@type": "SoftwareApplication",
+        "@id": "zentrale://shop/bauteile/graph-verlauf",
+        "identifier": "graph-verlauf",
+        "name": "Graph-Verlauf",
+        "description": "Eine Kachel mit den letzten Tagen eines Graphen als Balken, letzter Wert, min und max.",
+        "category": "bauteile",
+        "keywords": [
+          "kachel",
+          "messen"
+        ],
+        "applicationCategory": "Kachel",
+        "isBasedOn": "zentrale://graph/verlauf",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    }
+  ]
+}

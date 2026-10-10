@@ -178,7 +178,7 @@ Inventar über `data/` (08.10.2026) und die Regel je Art:
 
 | Art | Dateien | Regel |
 |---|---|---|
-| **Pro Rechner** | `gespraeche/<id>/<rechner>.jsonl`, `gespraeche/_knoten/<rechner>.json`, `ablage/<id>/v<n>-<rechner>.*`, `rueckmeldungen/<rechner>.jsonl` | Schreibt nur ein Rechner — kann nicht kollidieren. Läuft durch dieselbe Regel, sie greift nie. Dateien des Handys (`handy.jsonl` …) kommen aus seinem Eingang und gelten unverändert (unten). |
+| **Pro Rechner** | `gespraeche/<id>/<rechner>.jsonl`, `gespraeche/_knoten/<rechner>.json`, `ablage/<id>/v<n>-<rechner>.*`, `rueckmeldungen/<rechner>.jsonl`, `shop/besitz-<rechner>.jsonld` (Schaufenster, seit 2026-10-10: `.jsonld` liefe sonst als Text) | Schreibt nur ein Rechner — kann nicht kollidieren. Läuft durch dieselbe Regel, sie greift nie. Dateien des Handys (`handy.jsonl` …) kommen aus seinem Eingang und gelten unverändert (unten). |
 | **Abgeleitet** | `mobil/kontext.json` (Kontextpaket fürs Handy) | Die frische Fassung von hier gilt, ohne Hinweis. |
 | **Nur anhängen** (`.jsonl`) | `ai_transcripts/*.jsonl` (beide Rechner hängen an) | Zeilen: was in der Mitte steht, plus was hier dazukam, minus was hier gelöscht wurde. Reihenfolge: Mitte zuerst. |
 | **JSON mit Einträgen** | `lists.json`, `features.json`, `notes.json`, `graphs.json`, `g_*.json`, `melodies.json`, `sleep_quality.json`, `mail_rules.json`, `kalender_neben.json`, `gespraeche/*/kopf.json`, `ablage/*/kopf.json`, Tutor-Stände, `desk/*.canvas` (seit 2026-10-09: JSON Canvas, `nodes`/`edges` nach `id`) | Eintrag für Eintrag, Feld für Feld (unten). |

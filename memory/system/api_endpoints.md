@@ -429,6 +429,20 @@ Details: `memory/werkzeuge/mail_system.md` (Panel/Drill-down/Hybrid, Passphrase-
 | `/api/desk-bild/oeffnen` | POST | Body `{datei}` → `{pfad, da, betrachter}` — die TUI öffnet selbst (Einstellung `bild_betrachter`). |
 | `/api/desk-bild/datei` | GET | `?datei=bilder/x.png` → das Bild selbst (für eine TUI auf einem anderen Rechner); `404` fehlt. |
 
+## Schaufenster (seit 2026-10-10)
+
+`core/shop.py` über `ui/routen/shop.py`. Katalog und Besitz sind schema.org
+in JSON-LD (`application/ld+json`); **Autorität ist `openapi.yaml`**
+(Schemas `Shop*`, Drift-Test `tests/test_openapi.py`). Doku: [shop.md](shop.md).
+
+| Endpoint | Methode | Beschreibung |
+|---|---|---|
+| `/api/shop` | GET | Katalog als `ItemList`; `?kategorie=icons&thema=pixel` filtert. `400` Kategorie unbekannt, `503` Katalog kaputt. |
+| `/api/shop/kategorien` | GET | `{kategorien: [{id, name, anzahl}], themen: [{thema, anzahl}]}` — auch leere Kategorien. |
+| `/api/shop/<kategorie>/<kennung>` | GET | Ein Stück (mit `@context`); `404` gibt es nicht. |
+| `/api/shop/holen` | POST | Body `{adresse: "zentrale://shop/icons/post"}` → `{adresse, geholt, neu, am}`; idempotent. `400` keine Shop-Adresse, `404` Stück fehlt, `402` kostet etwas. |
+| `/api/shop/besitz` | GET | Geholtes als `ItemList` von `OwnershipInfo` (alle Rechner); `?kategorie=icons` (die Werkstatt). |
+
 ## Kacheln (seit 2026-10-10)
 
 `core/kacheln.py` über `ui/routen/kachel.py` — der Hub, durch den jede
@@ -490,3 +504,5 @@ Stimm-Diensten.
 - **2026-10-10** — Katalog `felder` (eigenes Format) → `parameter` (JSON
   Schema 2020-12); Kachel- und Desk-Routen in `openapi.yaml` (OpenAPI 3.1)
   beschrieben, mit Drift-Test.
+- **2026-10-10** — Schaufenster: `/api/shop*` (Katalog, Kategorien, Stück,
+  holen, Besitz), in `openapi.yaml` beschrieben.

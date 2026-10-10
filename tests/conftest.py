@@ -93,6 +93,9 @@ os.environ.setdefault("ZENTRALE_KLASSIFIKATOR_BEISPIELE_DIR",
 # Desk View (core/desk.py, 2026-10-09): im Betrieb data/desk/. Dazu unten
 # pro Test ein eigener Ordner.
 os.environ.setdefault("ZENTRALE_DESK_ORDNER", os.path.join(_DATEN_TMP, "desk"))
+# Schaufenster (core/shop.py, 2026-10-10): im Betrieb data/shop/ mit dem,
+# was Sasha geholt hat. Dazu unten pro Test ein eigener Ordner.
+os.environ.setdefault("ZENTRALE_SHOP_ORDNER", os.path.join(_DATEN_TMP, "shop"))
 # Abgleich über die Mitte (core/abgleich.py, 2026-10-08): örtlicher Zustand,
 # Schlüssel und Mitte nie die echten. Die Mitte zeigt auf ein Verzeichnis,
 # das es nicht gibt — ein Test, der vergisst, seine eigene Wegwerf-Mitte zu
@@ -294,6 +297,14 @@ def _beispiele_frisch(tmp_path_factory, monkeypatch):
 @pytest.fixture(autouse=True)
 def _desk_frisch(tmp_path_factory, monkeypatch):
     monkeypatch.setenv("ZENTRALE_DESK_ORDNER", str(tmp_path_factory.mktemp("desk")))
+    yield
+
+
+# 7e2. Jeder Test hat seinen eigenen Besitz im Schaufenster (core/shop.py,
+# 2026-10-10).
+@pytest.fixture(autouse=True)
+def _shop_frisch(tmp_path_factory, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_SHOP_ORDNER", str(tmp_path_factory.mktemp("shop")))
     yield
 
 

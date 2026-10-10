@@ -836,6 +836,8 @@ def taste_verteilen(u, ch):
         chat.taste(ch)
     elif u.DESK["active"]:                 # Desk View hat den Fokus (2026-10-09)
         u.desk.taste(ch)
+    elif getattr(u, "SHOP", None) and u.SHOP["active"]:   # Schaufenster (2026-10-10)
+        u.shop.taste(ch)
     else:                                  # Startseite: das Rad
         # Seit 02.10.2026 keine Buchstaben-Shortcuts mehr (Sasha): ←/→
         # dreht, enter öffnet die App vorn, space die KI. Theme, Laufschrift
@@ -1055,6 +1057,8 @@ def bild_zeichnen(u):
     elif u.DESK["active"]:
         draw_box(top, mx, body_h, midw, u.desk.titel())
         u.desk.draw_desk(top, mx, body_h, midw)
+    elif getattr(u, "SHOP", None) and u.SHOP["active"]:   # Schaufenster (2026-10-10)
+        u.shop.draw_shop(top, mx, body_h, midw)          # mit eigenem Kasten
     elif TECH["active"]:
         draw_box(top, mx, body_h, midw, "technik · " + TECH["view"])
         laeuft_jetzt = technik.draw_tech(top, mx, body_h, midw, state, metrics, nets) or laeuft_jetzt
@@ -1212,6 +1216,8 @@ def run_ui(stdscr, store):
     # o auf einer Kachel: Adresse → Ansicht (Adress-Router, 2026-10-10)
     router = ansichten.sprung.router_fuer(DESK, kalender, fokus, graphen)
     desk.zeigen = router.zeigen
+    shop = ansichten.shop.Shop(z)          # Schaufenster (2026-10-10): u.shop.oeffnen()
+    SHOP = shop.SHOP
     technik = ansichten.technik.Technik(z)
     TECH = technik.TECH
     startseite = ansichten.startseite.Startseite(z, RAD, META, TRAD, technik)
@@ -1231,7 +1237,7 @@ def run_ui(stdscr, store):
     # wheel wieder gelandet"). Nur der Kalender nimmt auch Ansicht und Tag mit.
     _offen_apps = (("c", K, kalender), ("g", G, graphen), ("m", M, karte),
                    ("p", MAIL, post), ("a", AI, chat), ("n", NOTE, notizen),
-                   ("f", L, fokus), ("d", DESK, desk))
+                   ("f", L, fokus), ("d", DESK, desk), ("shop", SHOP, shop))
 
     def offen_merken():
         for name, zustand, _ansicht in _offen_apps:
@@ -1272,7 +1278,7 @@ def run_ui(stdscr, store):
         fokus=fokus, graphen=graphen, kalender=kalender, karte=karte, klavier=klavier,
         notizen=notizen, post=post, safe_addstr=safe_addstr, app_start=app_start,
         startseite=startseite, stdscr=stdscr, store=store, technik=technik, z=z,
-        DESK=DESK, desk=desk, router=router)
+        DESK=DESK, desk=desk, router=router, SHOP=SHOP, shop=shop)
 
     while True:
         # Neuer Code in tui/? Erst wenn er eine Sekunde ruht (ein Merge
