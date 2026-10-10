@@ -331,8 +331,18 @@ def test_kein_hinweis_wenn_nur_das_offene_gespraech_neu_ist(c, monkeypatch):
 def test_hinweis_wenn_ein_anderes_gespraech_neues_hat(c, monkeypatch):
     c.AI.update(gid=None)
     _oeffnen_und_laden(c, monkeypatch, [{"id": "kalender"},
-                                        {"id": "erinnerungen", "ungelesen": True}], "kalender")
+                                        {"id": "uni", "ungelesen": True}], "kalender")
     assert c.AI["msg"] == HINWEIS
+
+
+def test_erinnerungen_zaehlen_nicht_als_neu(c, monkeypatch):
+    """2026-10-10: Erinnerungen hat Sasha gesehen, als sie fällig waren —
+    das feste Erinnerungs-Gespräch löst weder Hinweis noch ● aus."""
+    c.AI.update(gid=None)
+    _oeffnen_und_laden(c, monkeypatch, [{"id": "kalender"},
+                                        {"id": "erinnerungen", "ungelesen": True}], "kalender")
+    assert c.AI["msg"] == ""
+    assert c.neu_woanders() == []
 
 
 def test_veraltete_liste_zaehlt_nicht(c, monkeypatch):

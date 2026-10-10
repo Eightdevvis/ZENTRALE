@@ -18,6 +18,12 @@ from .basis import api_call
 from .chat_ablage import ablage_eintrag, anhang_eintrag
 from .projekte import projekt_name
 
+# Das feste Erinnerungs-Gespräch (core/gespraeche.ERINNERUNGEN). Seine
+# Einträge hat Sasha schon gesehen, als sie fällig waren — als „neu in einem
+# anderen Gespräch" zählen sie nicht (Sasha, 10.10.2026: der Hinweis stand
+# da, „obwohl es nicht stimmt").
+ERINNERUNGEN = "erinnerungen"
+
 
 def pruefung_eintraege(erledigt, offen, log=None):
     """Die dezenten Zeilen des Ehrlichkeits-Prüfers (core/ehrlichkeit.py)
@@ -162,7 +168,7 @@ class GespraechsSteuerung:
         laeuft = self.strom_gid() if not self.strom_laeuft_hier() else None
         ids = [e.get("id") for e in AI.get("gespraeche") or [] if e.get("ungelesen")]
         ids += [g for g in AI.get("ungesehen") or () if g not in ids]
-        return [g for g in ids if g and g != sichtbar and g != laeuft]
+        return [g for g in ids if g and g != sichtbar and g != laeuft and g != ERINNERUNGEN]
 
     def _neu_hinweis_geben(self):
         """Nach dem Öffnen des Fensters einmal: Hinweis, wenn wirklich etwas
@@ -180,7 +186,8 @@ class GespraechsSteuerung:
         """● im Titel: ungelesen ist etwas in einem Gespräch, das gerade
         NICHT vor Sasha liegt (unter AI_LOCK aufrufen)."""
         AI = self.AI
-        AI["neu"] = any(e.get("ungelesen") and not (AI["active"] and e.get("id") == AI.get("gid"))
+        AI["neu"] = any(e.get("ungelesen") and e.get("id") != ERINNERUNGEN
+                        and not (AI["active"] and e.get("id") == AI.get("gid"))
                         for e in AI.get("gespraeche") or [])
 
     def ai_poll(self):
@@ -384,7 +391,7 @@ class GespraechsSteuerung:
             AI["msg"] = "noch kein gespräch — erst etwas schreiben"
         elif not arg:
             AI["msg"] = "titel: %s · /rename <neuer titel> ändert ihn" % (AI.get("titel") or "—")
-        elif AI["gid"] == "erinnerungen":
+        elif AI["gid"] == ERINNERUNGEN:
             AI["msg"] = "„erinnerungen“ behält seinen namen"
         else:
             self.titel_setzen(AI["gid"], arg)
@@ -397,7 +404,7 @@ class GespraechsSteuerung:
             AI["msg"] = self._laeuft_text()
         elif not gid:
             AI["msg"] = "noch kein gespräch — nichts zu archivieren"
-        elif gid == "erinnerungen":
+        elif gid == ERINNERUNGEN:
             AI["msg"] = "„erinnerungen“ bleibt in der liste"
         else:
             try:
