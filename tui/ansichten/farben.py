@@ -18,6 +18,15 @@ ROLES = ["acc", "warn", "net", "graph", "event", "audio", "hook", "span",
          "num", "amber", "amberhi", "amberdk", "cyc", "dim", "faint", "bright", "ink", "band",
          "kal"]
 
+# Farbrollen der Apps (core/farbrollen.py ROLLEN, 2026-10-10): eine App sagt
+# nur, was ein Stück BEDEUTET; hier entscheidet die TUI, welche ihrer Rollen
+# oben es zeichnet. Muss JEDE Rolle des Wörterbuchs abdecken (Test:
+# tests/test_farbrollen.py); Unbekanntes zeichnet die TUI als „text".
+# heute = Kalender-Akzent, wie der heutige Tag im Kalender selbst.
+FARBROLLEN = {"text": "ink", "leise": "faint", "kopf": "dim", "betont": "bright",
+              "heute": "kal", "spanne": "span", "mehr": "acc", "warnung": "warn",
+              "erledigt": "faint"}
+
 
 THEMES = {
     "night": {

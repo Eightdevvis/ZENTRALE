@@ -12,9 +12,12 @@
 #
 # Kacheln (2026-10-10): ihr Inhalt kommt im Hintergrund über den Hub
 # (desk_kacheln.py, `POST /api/kachel`), gezeichnet wird aus dem Puffer.
-# `o` auf einer Kachel fragt `POST /api/kachel/aktion` und springt, wohin
-# die App sagt (`zeigen`, von zentrale_tui.py hereingegeben). Im Wähler
-# hinter `+` steht dazu „kalender" (desk_neu.py, mit Dialog).
+# `o` auf einer Kachel fragt `POST /api/kachel/aktion`; die App antwortet
+# mit einer Adresse, und `zeigen(adresse)` (der Adress-Router aus
+# sprung.py, von zentrale_tui.py hereingegeben) öffnet die passende
+# Ansicht. Im Wähler hinter `+` steht neben Zettel und Bild alles aus dem
+# Katalog des Hubs (`GET /api/kacheln`, desk_neu.py) — mit einem Dialog,
+# den feld_dialog.py aus den Feldern des Eintrags baut (2026-10-10).
 
 import curses
 import json
@@ -25,9 +28,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import basis, bild_betrachter, desk_kacheln
+from . import basis, bild_betrachter, desk_kacheln, desk_neu
 from .basis import api_call
-from .desk_neu import KalenderWahl
 
 try:
     from tui.bausteine import canvas as cv
@@ -67,10 +69,9 @@ class Desk:
     def __init__(self, z):
         self.z = z
         self.arten = standard_arten(cv.Arten())
-        self.arten.registrieren(KalenderWahl())      # „kalender" im Wähler hinter +
-        # zeigen(ansicht, ziel) -> bool: zu einer anderen Ansicht springen
-        # (o auf einer Kachel). Kommt von außen (zentrale_tui.py), damit diese
-        # Ansicht keine andere kennen muss.
+        # zeigen(adresse) -> bool: die Ansicht zu einer Adresse öffnen (o auf
+        # einer Kachel). Kommt von außen (zentrale_tui.py, sprung.Router),
+        # damit diese Ansicht keine andere kennen muss.
         self.zeigen = None
         # Wie im Hintergrund geholt wird; Tests setzen „gleich ausführen".
         self.starten = lambda f: threading.Thread(target=f, daemon=True).start()
@@ -262,7 +263,7 @@ class Desk:
         elif erg.art == "geaendert":
             self.speichern()
         elif erg.art == "neu_waehlen":
-            D["art_wahl"] = {"arten": self.arten.anlegbar(), "sel": 0}
+            D["art_wahl"] = {"arten": self.arten.anlegbar() + self._katalog(), "sel": 0}
         elif erg.art == "aktion":
             was = erg.grund[0] if isinstance(erg.grund, tuple) and erg.grund else None
             if was == "bild_oeffnen":
@@ -271,6 +272,31 @@ class Desk:
                 self.kachel_oeffnen(erg.grund[1])
 
     # ── + : Art wählen, Bild wählen (2026-10-10) ──────────────────────
+    def _katalog(self):
+        """Was der Hub als Kachel kennt → Wahlen für `+`. Jedes Mal frisch
+        (auf Tastendruck, kurz): eine neue App steht so gleich im Wähler.
+        Geht das Backend nicht, bleiben Zettel und Bild."""
+        try:
+            return desk_neu.wahlen(api_call("/api/kacheln"))
+        except Exception as e:
+            self.DESK["msg"] = "kacheln nicht lesbar: " + self._fehlertext(e)
+            return []
+
+    def _kachel_anlegen(self, wahl, werte):
+        """Kachel aus Katalog-Wahl + Dialog-Werten hinlegen. Erst den Hub
+        fragen (0×0 Zellen: nichts wird gezeichnet): er prüft die Werte mit
+        denselben Regeln und sagt die Größe für GENAU diesen Bezug. → None
+        oder der Grund, warum nicht (der Dialog bleibt dann offen)."""
+        D = self.DESK
+        adresse = wahl.adresse(werte.get("werte") or {})
+        try:
+            a = api_call("/api/kachel", "POST", {"adresse": adresse, "w": 0, "h": 0}) or {}
+        except Exception as e:
+            return self._fehlertext(e)
+        innen = a.get("bevorzugt") if isinstance(a.get("bevorzugt"), dict) else None
+        D["canvas"].neu_ablegen(wahl.neu(cv.neue_id(), 0, 0, werte, innen))
+        return None
+
     def _taste_art_wahl(self, ch):
         D = self.DESK
         w = D["art_wahl"]
@@ -285,9 +311,14 @@ class Desk:
                 return None
             if art.name == "bild":
                 self._bild_wahl_oeffnen()
-            elif getattr(art, "neu_dialog", None):
-                # Erst fragen (Kalender: welcher Bereich), dann hinlegen.
-                D["modal"], D["modal_neu"], D["modal_id"] = art.neu_dialog(), art, None
+            elif isinstance(art, desk_neu.KatalogWahl):
+                # Erst fragen (Felder aus dem Katalog), dann hinlegen; ohne
+                # Felder gleich.
+                dialog = art.neu_dialog()
+                if dialog.felder:
+                    D["modal"], D["modal_neu"], D["modal_id"] = dialog, art, None
+                else:
+                    D["msg"] = self._kachel_anlegen(art, {}) or ""
             else:
                 D["canvas"].neu_ablegen(art.neu(cv.neue_id(), 0, 0))
         elif ch == 27:
@@ -409,28 +440,32 @@ class Desk:
             f.write(r.read())
         return ziel
 
-    def kachel_oeffnen(self, verweis):
-        """o auf einer Kachel: den Hub fragen, wohin (die App entscheidet),
-        dann dorthin springen. Kurz und auf Tastendruck — wie Speichern
-        synchron; das Holen der Inhalte bleibt im Hintergrund."""
+    def kachel_oeffnen(self, el):
+        """o auf einer Kachel: den Hub fragen, WAS aufgehen soll (die App
+        antwortet mit einer Adresse), dann den Router die Ansicht öffnen
+        lassen. Kurz und auf Tastendruck — wie Speichern synchron; das Holen
+        der Inhalte bleibt im Hintergrund."""
         D = self.DESK
         try:
-            a = api_call("/api/kachel/aktion", "POST", dict(verweis, aktion="oeffnen"))
+            a = api_call("/api/kachel/aktion", "POST",
+                         dict(desk_kacheln.verweis(el), aktion="oeffnen"))
         except Exception as e:
             D["msg"] = "öffnen geht nicht: " + self._fehlertext(e)
             return
-        zeige = (a or {}).get("zeige") or {}
-        if not (self.zeigen and self.zeigen(zeige.get("ansicht"), zeige.get("ziel"))):
-            D["msg"] = "„%s“ kann ich von hier nicht öffnen" % (zeige.get("ansicht") or "?")
+        adresse = ((a or {}).get("zeige") or {}).get("adresse") or "?"
+        if not (self.zeigen and self.zeigen(adresse)):
+            D["msg"] = "„%s“ kann ich von hier nicht öffnen" % adresse
 
     def _taste_modal(self, ch):
         D = self.DESK
         was = D["modal"].taste(ch)
         if D["modal_neu"] is not None and was in ("speichern", "abbrechen"):
             art, werte = D["modal_neu"], D["modal"].aenderungen()
-            D["modal"] = D["modal_neu"] = None
-            if was == "speichern":
-                D["canvas"].neu_ablegen(art.neu(cv.neue_id(), 0, 0, werte))
+            grund = self._kachel_anlegen(art, werte) if was == "speichern" else None
+            if grund:
+                D["modal"].fehler = grund     # der Hub sagt nein: Dialog bleibt
+            else:
+                D["modal"] = D["modal_neu"] = None
             return None
         if was == "speichern":
             el = D["canvas"].element(D["modal_id"])
@@ -507,7 +542,10 @@ class Desk:
                 if rolle in FETT:
                     attr |= curses.A_BOLD
                 z.safe_addstr(top + 1 + j, mx + 1 + x, text, attr)
-        lage = "%d,%d" % (c.vx + cw // 2, c.vy + ch_ // 2)
+        # Wo die Mitte gerade IST (beim Gleiten unterwegs), nicht wohin sie
+        # will — sonst springt die Zahl voraus (2026-10-10).
+        ax, ay = c.anzeige_lage()
+        lage = "%d,%d" % (ax + cw // 2, ay + ch_ // 2)
         hinweis = self.tasten_text()
         farbe = C["warn"] if (D["msg"] or c.modus == "frage") else C["faint"]
         z.addclip(top + h - 2, mx + 2, hinweis, max(0, w - 6 - len(lage)), farbe)

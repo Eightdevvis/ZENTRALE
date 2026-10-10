@@ -280,7 +280,7 @@ def test_ansicht_neuer_desk_zettel_anlegen_ablegen_bearbeiten(ansicht):
     assert D["ebene"] == "canvas" and D["desk"] == "Elektronik"
     d.draw_desk(2, 0, 26, 100)
     d.taste(ord("+"))                             # Wähler: zettel | bild
-    assert [a.name for a in D["art_wahl"]["arten"]] == ["notiz", "bild", "kachel:kalender"]
+    assert [a.name for a in D["art_wahl"]["arten"]] == ["notiz", "bild", "kachel:kalender/ausschnitt"]
     d.taste(10)
     assert D["art_wahl"] is None and D["canvas"].modus == "greifen"
     d.taste(curses.KEY_RIGHT)
@@ -371,19 +371,23 @@ def test_shift_pfeil_als_rohe_folge_schiebt(ansicht):
 def test_kachel_knoten_wird_unangetastet_durchgereicht():
     """Kachel einer anderen App (hub_bauplan.md „Kacheln"): text-Knoten mit
     zentrale_kachel. Verschieben ändert nur die Lage; Text und Zusatzfeld
-    bleiben, auch wenn die TUI einen Text mitschickt."""
+    bleiben, auch wenn die TUI einen Text mitschickt. Die alte Form des
+    Verweises {v: 1, app, art, ref} wird beim Lesen zur Adresse und beim
+    Speichern so geschrieben (2026-10-10)."""
     kachel = {"v": 1, "app": "fokus", "art": "liste", "ref": {"id": "l_einkauf"}}
+    neu = {"v": 2, "adresse": "zentrale://fokus/liste?id=l_einkauf"}
     schreibe("h", {"nodes": [{"id": "k", "type": "text", "text": "Einkauf\n- Milch",
                               "x": 0, "y": 0, "width": 240, "height": 120,
                               "zentrale_kachel": kachel}], "edges": []})
     d = desk.laden("h")
     (el,) = d["elemente"]
-    assert el["art"] == "kachel" and el["kachel"] == kachel and el["titel"].startswith("Einkauf")
+    assert el["art"] == "kachel" and el["kachel"] == neu and el["titel"].startswith("Einkauf")
+    assert el["typ"] == "kachel · fokus/liste"
     el["x"] += 3
     el["text"] = "überschrieben?"
     desk.speichern("h", d["elemente"], d["verbindungen"], d["stand"])
     k = lies("h")["nodes"][0]
-    assert k["zentrale_kachel"] == kachel and k["text"] == "Einkauf\n- Milch" and k["x"] == 30
+    assert k["zentrale_kachel"] == neu and k["text"] == "Einkauf\n- Milch" and k["x"] == 30
 
 
 def test_desk_meldet_gleiten_nur_solange_es_dauert(ansicht):
@@ -414,3 +418,32 @@ def test_alt_pfeil_als_esc_vorsilbe_schiebt(ansicht):
     d.z.stdscr.folge = [curses.KEY_DOWN]             # ESC + Pfeil = Alt+Pfeil
     d.taste(27)
     assert D["canvas"].vy > vy and D["ebene"] == "canvas"
+
+
+def test_lage_unten_rechts_zeigt_wo_der_ausschnitt_gerade_ist(ansicht):
+    """2026-10-10: die Zahl unten rechts zeigte das Ziel und sprang voraus;
+    jetzt läuft sie mit dem Gleiten mit und kommt am Ziel an."""
+    d, D = ansicht, ansicht.DESK
+    desk.anlegen("l")
+    d.oeffnen(); d.taste(10)
+    geschrieben = []
+    echt = d.z.addclip
+    d.z.addclip = lambda y, x, text, *a, **k: geschrieben.append(text) or echt(y, x, text, *a, **k)
+
+    def lage():
+        geschrieben.clear()
+        d.draw_desk(2, 0, 26, 100)
+        return [t for t in geschrieben if t.count(",") == 1 and t.replace(",", "").lstrip("-").isdigit()][-1]
+    start = lage()
+    c = D["canvas"]
+    for _ in range(3):
+        d.taste(ord("D"))
+    ziel = "%d,%d" % (c.vx + c.vw // 2, c.vy + c.vh // 2)
+    unterwegs = []
+    while d.bewegt_sich():
+        unterwegs.append(lage())
+    unterwegs.append(lage())
+    assert unterwegs[0] != ziel and unterwegs[0] != start     # mittendrin, nicht vorausgesprungen
+    assert unterwegs[-1] == ziel
+    xs = [int(t.split(",")[0]) for t in unterwegs]
+    assert xs == sorted(xs)

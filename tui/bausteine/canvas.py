@@ -30,9 +30,9 @@
 #                              (z. B. `f` beim Bild: mono/farbe) das Element
 #                              geändert hat; der Canvas meldet „geaendert"
 #   neu_label                  Name im Wähler von `+` (siehe unten)
-#   neu_dialog()               -> Modal: die Ansicht fragt erst (Kalender:
-#                              welcher Bereich) und legt dann
-#                              neu(eid, x, y, werte) hin (2026-10-10)
+#   neu_dialog()               -> Modal: die Ansicht fragt erst (z. B. die
+#                              Felder einer Kachel aus dem Katalog) und legt
+#                              dann neu(eid, x, y, werte) hin (2026-10-10)
 #   blaettern(element, schritt) Bild↑/Bild↓ auf dem gewählten Kasten: im
 #                              Inneren blättern (eigene Lage am Element unter
 #                              „_oben", wird nie gespeichert). Hier docken
@@ -64,6 +64,9 @@
 # wird eine Anzeige-Lage (ax, ay), die jedes Bild ein Stück auf (vx, vy)
 # zugleitet (`gleiten()`, die Ansicht ruft es je Bild). Aus, solange die
 # Ansicht `weich` nicht einschaltet — dann zeichnet bild() genau (vx, vy).
+# Was man in der Hand hat, liegt beim Gleiten fest auf dem Schirm (am Ziel
+# des Ausschnitts gerechnet, `_in_der_hand`): es gleitet mit der Ansicht,
+# statt vorzuspringen und zurückzurutschen (2026-10-10).
 
 import curses
 import math
@@ -567,18 +570,33 @@ class Canvas:
             for x in range(self.vw):
                 if (ox + x) % RASTER_X == 0:
                     netz[y][x] = ("·", "raster")
-        self._schnuere(setze)
+        sicht = self._in_der_hand(ox, oy)
+        self._schnuere(setze, sicht)
         oben = [self.griff and self.griff["id"], self.ziel, self.fokus]
         for e in sorted(self.elemente, key=lambda e: e.get("id") in oben):
-            self._kasten(e, setze, ox, oy)
+            self._kasten(sicht.get(e.get("id"), e), setze, ox, oy)
         return self._zeilen(netz)
 
-    def _schnuere(self, setze):
+    def _in_der_hand(self, ox, oy):
+        """{id: Kopie} für das gegriffene Element, um so viel verschoben, wie
+        die Anzeige dem Ziel (vx, vy) noch hinterherläuft — so bleibt es auf
+        dem Schirm, wo es nach dem Gleiten liegt, und reist mit der Ansicht.
+        Die Lage im Element selbst bleibt die Wahrheit."""
+        if not self.griff or (ox, oy) == (self.vx, self.vy):
+            return {}
+        e = self.element(self.griff["id"])
+        if e is None:
+            return {}
+        return {e["id"]: dict(e, x=e["x"] - self.vx + ox, y=e["y"] - self.vy + oy)}
+
+    def _schnuere(self, setze, sicht=None):
+        sicht = sicht or {}
         paare = [(v, "schnur") for v in self.verbindungen]
         if self.modus == "verbinden" and self.ziel:
             paare.append(({"von": self.fokus, "nach": self.ziel}, "schnur_vor"))
         for v, rolle in paare:
             a, b = self.element(v.get("von")), self.element(v.get("nach"))
+            a, b = sicht.get(v.get("von"), a), sicht.get(v.get("nach"), b)
             if a is None or b is None or a is b:
                 continue
             punkte = schnur.weg(a, b)

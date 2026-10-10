@@ -1,162 +1,84 @@
 # tui/ansichten/desk_neu.py
 #
-# Was `+` auf dem Desk außer den Arten des Bausteins anbietet (2026-10-10):
-# die Kalender-Kachel. Der Wähler hinter `+` ist EINE Registrierung — die
-# Arten des Canvas mit `neu_label` (canvas.Arten.anlegbar(), Zettel zuerst,
-# dann Bild …). Eine Wahl, die erst fragen muss, hat `neu_dialog()`: die
-# Ansicht zeigt das Modal und legt danach `neu(eid, x, y, werte)` hin.
+# Was `+` auf dem Desk außer den Arten des Bausteins anbietet: alles, was
+# der Katalog des Hubs als Kachel kennt (`GET /api/kacheln`, 2026-10-10,
+# memory/system/hub_bauplan.md „Katalog"). Der Wähler hinter `+` = die
+# eigenen Arten des Canvas mit `neu_label` (Zettel, Bild) + je Katalog-
+# Eintrag eine KatalogWahl. Eine neue App erscheint so von selbst, ohne
+# dass hier etwas über sie steht.
 #
-# Die Kalender-Wahl ist keine eigene Element-Art: sie trägt sich unter dem
-# Namen „kachel:kalender" ein (kein Element heißt so) und legt Elemente der
-# allgemeinen Art „kachel" an (canvas_arten.Kachel) — eine Kachel ist ein
-# Verweis auf ein Objekt einer anderen App, hier ein Stück Kalender.
-#
-# Kalender-Kachel: Bereich mitlaufend (ab heute N Tage) oder fest (von–bis),
-# höchstens 31 Tage; Standard mitlaufend 7 Tage (Sasha, 2026-10-10). Bis 7
-# Tage zeichnet die App eine Woche, darüber ein Monatsraster
-# (core/kachel_kalender.py) — die Startgröße hier passt zu beidem.
+# Eine KatalogWahl ist keine eigene Element-Art: sie legt Elemente der
+# allgemeinen Art „kachel" an (canvas_arten.Kachel), deren Verweis die
+# Adresse des Objekts ist (zentrale://<app>/<art>?<felder>). Den Dialog
+# baut tui/bausteine/feld_dialog.py aus den `felder` des Eintrags; die
+# Startgröße kommt vom Hub (`bevorzugt`, für genau diese Werte — siehe
+# desk.py), sonst aus dem Katalog. Vorher (bis 2026-10-10) stand hier ein
+# eigener Kalender-Dialog mit Kalender-Regeln.
 
-import curses
-from datetime import date, timedelta
+from urllib.parse import quote, urlencode, urlunsplit
 
-GRENZE_TAGE = 31
-SPALTE = 12                      # Woche: Breite einer Tages-Spalte
-ZELLE_B, ZELLE_H = 11, 3         # Monat: eine Tageszelle
+try:
+    from tui.bausteine.feld_dialog import FeldDialog
+except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
+    from bausteine.feld_dialog import FeldDialog
 
-
-# ── Kalender ──────────────────────────────────────────────────────────
-
-def tage_von(ref, heute):
-    """Anzahl Tage eines Bezugs (wie core/kachel_kalender.bereich)."""
-    if ref.get("modus") == "mitlaufend":
-        return int(ref["tage"])
-    return (date.fromisoformat(ref["bis"]) - date.fromisoformat(ref["von"])).days + 1
+SCHEMA = "zentrale"
 
 
-def kalender_groesse(ref, heute=None):
-    """Startgröße (außen, mit Rahmen). Mitlaufend: für die meisten Wochen,
-    die der Bereich je nach Wochentag schneiden kann — die Größe bleibt
-    stehen, der Bereich wandert."""
-    heute = heute or date.today()
-    n = tage_von(ref, heute)
-    if n <= 7:
-        return n * (SPALTE + 1) - 1 + 2, 1 + 6 + 2
-    if ref.get("modus") == "fest":
-        von, bis = date.fromisoformat(ref["von"]), date.fromisoformat(ref["bis"])
-        wochen = ((bis - (von - timedelta(days=von.weekday()))).days // 7) + 1
-    else:
-        wochen = (n + 6 + 6) // 7
-    return 7 * ZELLE_B + 6 + 2, 1 + wochen * ZELLE_H + 2
+def wert_text(wert):
+    """Wie core/adressen.wert_text: Wahr/Falsch als true/false, sonst str."""
+    if isinstance(wert, bool):
+        return "true" if wert else "false"
+    return str(wert)
 
 
-def bezug_pruefen(modus, tage, von, bis):
-    """Eingaben des Dialogs → (ref, None) oder (None, grund)."""
-    if modus == "mitlaufend":
-        if not tage.isdigit() or int(tage) < 1:
-            return None, "wie viele tage? (1 bis %d)" % GRENZE_TAGE
-        if int(tage) > GRENZE_TAGE:
-            return None, "höchstens %d tage — bitte kürzer" % GRENZE_TAGE
-        return {"modus": "mitlaufend", "tage": int(tage)}, None
-    try:
-        d0, d1 = date.fromisoformat(von), date.fromisoformat(bis)
-    except ValueError:
-        return None, "datum als JJJJ-MM-TT"
-    if d1 < d0:
-        return None, "„bis\" liegt vor „von\""
-    if (d1 - d0).days + 1 > GRENZE_TAGE:
-        return None, "höchstens %d tage — bitte kürzer" % GRENZE_TAGE
-    return {"modus": "fest", "von": d0.isoformat(), "bis": d1.isoformat()}, None
+def adresse(app, art, werte):
+    """Kanonische Adresse (Namen sortiert) — dieselbe Schreibweise wie der
+    Hub (core/adressen.bauen), gebaut nur mit urllib.parse."""
+    abfrage = urlencode(sorted((k, wert_text(v)) for k, v in (werte or {}).items()
+                               if v is not None))
+    return urlunsplit((SCHEMA, app, "/" + quote(str(art), safe=""), abfrage, ""))
 
 
-class KalenderDialog:
-    """Klein, nur Tastatur: ↑↓ Feld, ←→ mitlaufend/fest, Ziffern und „-"
-    tippen, ⌫, enter legt an, esc bricht ab."""
-    titel = "kalender"
-    kopf = "kalender auf den desk"
-    breite, hoehe = 48, 10           # klein: fünf Zeilen Inhalt + Tasten
+class KatalogWahl:
+    """Ein Eintrag des Katalogs im Wähler hinter `+`."""
 
-    def __init__(self, heute=None):
-        heute = heute or date.today()
-        self.modus = "mitlaufend"
-        self.werte = {"tage": "7", "von": heute.isoformat(),
-                      "bis": (heute + timedelta(days=6)).isoformat()}
-        self.feld = 0
-        self.fehler = ""
-        self.ref = None
-
-    def felder(self):
-        return ["modus"] + (["tage"] if self.modus == "mitlaufend" else ["von", "bis"])
-
-    def taste(self, ch):
-        felder = self.felder()
-        name = felder[min(self.feld, len(felder) - 1)]
-        if ch == 27:
-            return "abbrechen"
-        if ch in (10, 13, curses.KEY_ENTER, 19):
-            self.ref, self.fehler = bezug_pruefen(self.modus, self.werte["tage"],
-                                                  self.werte["von"], self.werte["bis"])
-            return "speichern" if self.ref else None
-        if ch in (curses.KEY_UP, curses.KEY_BTAB):
-            self.feld = (self.feld - 1) % len(felder)
-        elif ch in (curses.KEY_DOWN, 9):
-            self.feld = (self.feld + 1) % len(felder)
-        elif name == "modus" and ch in (curses.KEY_LEFT, curses.KEY_RIGHT, ord(" ")):
-            self.modus = "fest" if self.modus == "mitlaufend" else "mitlaufend"
-        elif name != "modus" and ch in (curses.KEY_BACKSPACE, 127, 8):
-            self.werte[name] = self.werte[name][:-1]
-        elif name != "modus" and 0 <= ch < 256 and (chr(ch).isdigit() or chr(ch) == "-") \
-                and len(self.werte[name]) < (2 if name == "tage" else 10):
-            self.werte[name] += chr(ch)
-        else:
-            return None
-        self.fehler = ""
-        return None
-
-    def anzeige(self, breite, hoehe):
-        felder = self.felder()
-        zeilen = ["art   ‹ %s ›" % self.modus]
-        if self.modus == "mitlaufend":
-            zeilen += ["tage  " + self.werte["tage"], "      ab heute, jeden tag neu"]
-        else:
-            zeilen += ["von   " + self.werte["von"], "bis   " + self.werte["bis"]]
-        zeilen.append("")
-        ref, grund = bezug_pruefen(self.modus, self.werte["tage"], self.werte["von"],
-                                   self.werte["bis"])
-        if self.fehler or grund:
-            zeilen.append(self.fehler or grund)
-        else:
-            n = tage_von(ref, date.today())
-            zeilen.append("%d tage · %s" % (n, "woche" if n <= 7 else "monat"))
-        name = felder[min(self.feld, len(felder) - 1)]
-        zeile = {"modus": 0, "tage": 1, "von": 1, "bis": 2}[name]
-        spalte = 6 if name == "modus" else 6 + len(self.werte[name])
-        return [z[:breite] for z in zeilen[:hoehe]], (zeile, min(spalte, max(0, breite - 1)))
-
-    def tasten(self):
-        return [("↑↓", "field"), ("←→", "mode"), ("enter", "add"), ("esc", "cancel")]
-
-    def aenderungen(self):
-        return {"ref": self.ref}
-
-
-class KalenderWahl:
-    """Eintrag „kalender" im Wähler hinter `+` → Kachel der App `kalender`,
-    Art `ausschnitt` — ein Verweis, keine Kopie."""
-    name = "kachel:kalender"
-    neu_label = "kalender"
+    def __init__(self, eintrag):
+        self.eintrag = eintrag
+        self.app, self.art = str(eintrag.get("app")), str(eintrag.get("art"))
+        self.name = "kachel:%s/%s" % (self.app, self.art)     # kein Element heißt so
+        self.neu_label = str(eintrag.get("titel") or self.art)
 
     def neu_dialog(self):
-        return KalenderDialog()
+        return FeldDialog(self.eintrag.get("felder") or [], titel=self.neu_label,
+                          kopf="%s auf den desk" % self.neu_label)
 
-    def neu(self, eid, x, y, werte=None):
-        ref = (werte or {}).get("ref") or {"modus": "mitlaufend", "tage": 7}
-        w, h = kalender_groesse(ref)
+    def adresse(self, werte):
+        return adresse(self.app, self.art, werte)
+
+    def groesse(self, innen=None):
+        """Außenmaß (mit Rahmen) aus einem Innenmaß {w, h}; ohne: bevorzugt
+        aus dem Katalog, nie kleiner als min."""
+        b = innen or self.eintrag.get("bevorzugt") or self.eintrag.get("min") or {}
+        m = self.eintrag.get("min") or {}
+        w = max(int(b.get("w") or 1), int(m.get("w") or 1))
+        h = max(int(b.get("h") or 1), int(m.get("h") or 1))
+        return w + 2, h + 2
+
+    def neu(self, eid, x, y, werte=None, innen=None):
+        w, h = self.groesse(innen)
         return {"id": eid, "art": "kachel", "x": x, "y": y, "w": w, "h": h,
-                "kachel": {"v": 1, "app": "kalender", "art": "ausschnitt", "ref": ref},
-                "typ": "kachel · kalender/ausschnitt", "titel": ""}
+                "kachel": {"v": 2, "adresse": self.adresse((werte or {}).get("werte") or {})},
+                "typ": "kachel · %s/%s" % (self.app, self.art), "titel": ""}
 
     def zeichne(self, element, w, h):        # nie gebraucht: kein Element heißt so
         return []
 
     def modal(self, element):
         return None
+
+
+def wahlen(katalog):
+    """Katalog (Antwort von GET /api/kacheln) → KatalogWahl je Eintrag."""
+    return [KatalogWahl(e) for e in katalog or []
+            if isinstance(e, dict) and e.get("app") and e.get("art")]

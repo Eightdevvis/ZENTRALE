@@ -1,16 +1,20 @@
 # core/kachel_kalender.py
 #
 # Quelle für Kacheln der App `kalender`, Art `ausschnitt`: ein Stück des
-# Kalenders von einem Tag bis zu einem Tag, auf einem Desk (Desk View).
-# Der Hub (core/kacheln.py) fragt hier an — dieselbe Schnittstelle, die
-# später eine ausgezogene Kalender-App über HTTP bedient
-# (memory/system/hub_bauplan.md „Kacheln"). 2026-10-10.
+# Kalenders von einem Tag bis zu einem Tag. Der Hub (core/kacheln.py) fragt
+# hier an — dieselbe Schnittstelle, die später eine ausgezogene
+# Kalender-App über HTTP bedient (memory/system/hub_bauplan.md „Kacheln").
+# Welche Oberfläche die Kachel zeigt (Desk in der TUI, später Fenster oder
+# Handy), weiß dieses Modul nicht. 2026-10-10.
 #
-# Bezug (`ref`), Sasha 2026-10-10:
-#   {"modus": "mitlaufend", "tage": 7}   ab heute N Tage, jeden Tag neu
-#   {"modus": "fest", "von": "2026-10-12", "bis": "2026-10-18"}
-# Höchstens 31 Tage. Bis 7 Tage eine Woche (eine Spalte je Tag), 8–31 ein
-# Monatsraster (Wochen als Zeilen, Mo–So als Spalten).
+# Bezug (`ref`), Sasha 2026-10-10 — als Adresse:
+#   zentrale://kalender/ausschnitt?modus=mitlaufend&tage=7   ab heute N Tage
+#   zentrale://kalender/ausschnitt?bis=2026-10-18&modus=fest&von=2026-10-12
+# Die Regeln dafür (Felder, höchstens 31 Tage) stehen im Katalog-Eintrag
+# ARTEN["ausschnitt"]["felder"]: Oberflächen bauen daraus ihren Dialog, der
+# Hub prüft damit. `bereich()` prüft noch einmal — das Netz darunter.
+# Bis 7 Tage eine Woche (eine Spalte je Tag), 8–31 ein Monatsraster (Wochen
+# als Zeilen, Mo–So als Spalten).
 #
 # Gelesen wird NUR über die vorhandenen Lese-Funktionen von core/kalender.py
 # (month_view: zeigt nur die sichtbaren Ebenen, wie die Kalender-Ansicht).
@@ -26,25 +30,51 @@
 
 from datetime import date, timedelta
 
+import adressen
 import kalender
 from kachel_form import KachelFehler, KachelZuKlein, kuerzen, stueck
 
 APP = "kalender"
 RECHTE = ("lesen",)
-# min = kleinste sinnvolle Innengröße (Zellen); die genaue Grenze hängt am
-# Bereich und kommt als KachelZuKlein. ttl: ein Kalender ändert sich selten
-# von außen, eine Minute reicht (Pull, hub_bauplan.md „Frisch halten").
-ARTEN = {"ausschnitt": {"min": (6, 2), "ttl": 60}}
 GRENZE_TAGE = 31
 WOCHE_BIS = 7
 WT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 SPALTE_MIN = 6                    # Woche: „09:00 " braucht schon 6
 ZELLE_MIN = 5                     # Monat: „12 +3"
+# Bevorzugte Größe (Zellen, innen): eine Woche mit Tages-Spalten zu 12, ein
+# Monat mit Tageszellen 11×3 — so passt „09:00 Termin" lesbar hinein.
+SPALTE_GUT = 12
+ZELLE_GUT_B, ZELLE_GUT_H = 11, 3
 
-# Farbrollen (tui/ansichten/farben.py ROLES). Heute in der Kalender-Farbe
-# „kal" — dieselbe wie im Kalender selbst.
-R_KOPF, R_HEUTE, R_RAND, R_DRAUSSEN = "dim", "kal", "faint", "faint"
-R_ZEIT, R_TITEL, R_GANZ, R_MEHR = "faint", "ink", "span", "acc"
+# Katalog-Eintrag (GET /api/kacheln). min = kleinste sinnvolle Innengröße;
+# die genaue Grenze hängt am Bereich und kommt als KachelZuKlein. ttl: ein
+# Kalender ändert sich selten von außen, eine Minute reicht (Pull,
+# hub_bauplan.md „Frisch halten"). Felder: Sasha 2026-10-10 — mitlaufend
+# (Standard, 7 Tage) oder fest von–bis, höchstens 31 Tage.
+ARTEN = {"ausschnitt": {
+    "titel": "kalender",
+    "min": (6, 2),
+    "bevorzugt": (7 * (SPALTE_GUT + 1) - 1, 1 + 6),
+    "ttl": 60,
+    "felder": [
+        {"name": "modus", "typ": "wahl", "titel": "art", "vorgabe": "mitlaufend",
+         "werte": [{"wert": "mitlaufend", "titel": "mitlaufend"},
+                   {"wert": "fest", "titel": "fest"}]},
+        {"name": "tage", "typ": "zahl", "titel": "tage", "vorgabe": 7,
+         "grenzen": {"min": 1, "max": GRENZE_TAGE}, "wenn": {"modus": "mitlaufend"},
+         "hilfe": "ab heute, jeden tag neu"},
+        {"name": "von", "typ": "datum", "titel": "von", "vorgabe": "heute",
+         "wenn": {"modus": "fest"}},
+        {"name": "bis", "typ": "datum", "titel": "bis", "vorgabe": "heute+6",
+         "grenzen": {"nicht_vor": "von", "tage_max": GRENZE_TAGE}, "wenn": {"modus": "fest"}},
+    ],
+}}
+
+# Farbrollen (core/farbrollen.py): nur die Bedeutung, die Farbe wählt die
+# Oberfläche.
+R_KOPF, R_HEUTE, R_RAND, R_DRAUSSEN = "kopf", "heute", "leise", "leise"
+R_ZEIT, R_TITEL, R_GANZ, R_MEHR = "leise", "text", "spanne", "mehr"
+R_LEER = "text"
 
 
 # ── Bezug → Bereich ───────────────────────────────────────────────────
@@ -116,7 +146,7 @@ def _stuecke(posten, breite):
     return [stueck(z, R_ZEIT), stueck(kuerzen(titel, breite - len(z)).ljust(breite - len(z)), R_TITEL)]
 
 
-def _leer(breite, rolle="dim"):
+def _leer(breite, rolle=R_LEER):
     return [stueck(" " * breite, rolle)]
 
 
@@ -196,7 +226,7 @@ def _zahlzeile(d, erster, ist_heute, versteckt, breite):
     zahl = kuerzen(zahl, breite)
     mehr = mehr[:max(0, breite - len(zahl) - 1)] if mehr else ""
     luecke = breite - len(zahl) - len(mehr)
-    zeile = [stueck(zahl, R_HEUTE if ist_heute else R_KOPF), stueck(" " * luecke, "dim")]
+    zeile = [stueck(zahl, R_HEUTE if ist_heute else R_KOPF), stueck(" " * luecke, R_LEER)]
     if mehr:
         zeile.append(stueck(mehr, R_MEHR))
     return zeile
@@ -264,12 +294,28 @@ def kachel(art, ref, w, h, oben=0, heute=None):
             "oben": oben, "oben_max": oben_max}
 
 
+def bevorzugt(art, ref, heute=None):
+    """Bevorzugte Innengröße für GENAU diesen Bereich → (w, h). Mitlaufend:
+    für die meisten Wochen, die der Bereich je nach Wochentag schneiden kann
+    — die Größe bleibt stehen, der Bereich wandert."""
+    von, bis = bereich(ref, heute)
+    n = (bis - von).days + 1
+    if n <= WOCHE_BIS:
+        return n * (SPALTE_GUT + 1) - 1, 1 + 6
+    if ref.get("modus") == "fest":
+        wochen = ((bis - (von - timedelta(days=von.weekday()))).days // 7) + 1
+    else:
+        wochen = (n + 6 + 6) // 7
+    return 7 * ZELLE_GUT_B + 6, 1 + wochen * ZELLE_GUT_H
+
+
 def aktion(art, ref, was, heute=None):
-    """„oeffnen" → der Kalender an dem Tag, an dem der Ausschnitt beginnt
-    (mitlaufend: heute)."""
+    """„oeffnen" → die Adresse des Tages, an dem der Ausschnitt beginnt
+    (mitlaufend: heute), z. B. zentrale://kalender/2026-10-12. Welche
+    Ansicht das wird, entscheidet die Oberfläche."""
     if art not in ARTEN:
         raise KachelFehler("unbekannte art: %s" % art)
     if was != "oeffnen":
         raise KachelFehler("unbekannte aktion: %s" % was)
     von, _bis = bereich(ref, heute)
-    return {"zeige": {"ansicht": "kalender", "ziel": von.isoformat()}}
+    return {"zeige": {"adresse": adressen.bauen(APP, [von.isoformat()])}}

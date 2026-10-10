@@ -15,9 +15,7 @@ import json
 import time
 import urllib.error
 
-from .farben import ROLES
-
-ROLLEN = set(ROLES)
+from .farben import FARBROLLEN
 NOCHMAL_S = 15                 # nach einem Fehler: so lange bis zum nächsten Versuch
 
 
@@ -30,19 +28,24 @@ def innen(el):
     return max(0, el["w"] - 2), max(0, el["h"] - 2)
 
 
+def verweis(el):
+    """Was den Hub zur Kachel führt: die Adresse (seit 2026-10-10). Ein
+    Element in alter Form (älteres Backend) geht als app/art/ref."""
+    k = el.get("kachel") or {}
+    if isinstance(k.get("adresse"), str):
+        return {"adresse": k["adresse"]}
+    return {"app": k.get("app"), "art": k.get("art"), "ref": k.get("ref")}
+
+
 def schluessel(el):
     """Was den Inhalt bestimmt: Verweis, Größe, Blätter-Lage."""
-    k = el["kachel"]
     w, h = innen(el)
-    return json.dumps([k.get("app"), k.get("art"), k.get("ref"), w, h, el.get("_oben", 0)],
-                      sort_keys=True)
+    return json.dumps([verweis(el), w, h, el.get("_oben", 0)], sort_keys=True)
 
 
 def anfrage(el, stand=None):
-    k = el["kachel"]
     w, h = innen(el)
-    a = {"app": k.get("app"), "art": k.get("art"), "ref": k.get("ref"),
-         "w": w, "h": h, "oben": el.get("_oben", 0)}
+    a = dict(verweis(el), w=w, h=h, oben=el.get("_oben", 0))
     if stand:
         a["stand"] = stand
     return a
@@ -57,15 +60,20 @@ def faellig(el, jetzt):
     return jetzt >= inhalt.get("bis", 0)
 
 
+def farbe(rolle):
+    """Farbrolle der App (core/farbrollen.py) → Rolle der TUI-Palette;
+    Unbekanntes wie „text" (hub_bauplan.md „Farbrollen")."""
+    return FARBROLLEN.get(rolle, FARBROLLEN["text"])
+
+
 def _zeilen(roh):
-    """Zeilen der App → [(text, rolle)]; unbekannte Rollen werden „dim"
-    (hub_bauplan.md), Kaputtes fällt weg."""
+    """Zeilen der App → [(text, tui-rolle)]; Kaputtes fällt weg."""
     raus = []
     for zeile in roh if isinstance(roh, list) else []:
         stuecke = []
         for s in zeile if isinstance(zeile, list) else []:
             if isinstance(s, list) and len(s) == 2:
-                stuecke.append((str(s[0]), s[1] if s[1] in ROLLEN else "dim"))
+                stuecke.append((str(s[0]), farbe(s[1])))
         raus.append(stuecke)
     return raus
 
@@ -84,6 +92,14 @@ def antwort_lesen(alt, a, key, jetzt):
     return {"zustand": "ok", "zeilen": _zeilen(a.get("zeilen")), "text": str(a.get("text") or ""),
             "stand": a.get("stand"), "oben_max": a.get("oben_max", 0) or 0,
             "schluessel": key, "bis": jetzt + ttl}
+
+
+def aussen(wh):
+    """Innenmaß {w, h} des Hubs (Zellen ohne Rahmen) → Außenmaß des Kastens
+    (+ Rahmen) oder None."""
+    if not isinstance(wh, dict) or not all(isinstance(wh.get(n), int) for n in ("w", "h")):
+        return None
+    return wh["w"] + 2, wh["h"] + 2
 
 
 def fehler_lesen(alt, e, key, jetzt):

@@ -1,8 +1,9 @@
 """
 Desk View mit Kacheln (2026-10-10, memory/system/desk_view.md): die
-+-Auswahl (Registrierung), der Kalender-Dialog, Holen im Hintergrund aus dem
-Puffer, blättern, `o` → /api/kachel/aktion → zeigen, enter greift auch
-Kacheln, und die Datei (core/desk.py) mit neuer Kachel und Rückfall-Text.
++-Auswahl (eigene Arten + Katalog des Hubs), der Dialog aus den Feldern des
+Katalogs, Holen im Hintergrund aus dem Puffer, blättern, `o` →
+/api/kachel/aktion → Adresse → zeigen, enter greift auch Kacheln, und die
+Datei (core/desk.py) mit neuer Kachel (Adresse) und Rückfall-Text.
 Die Ansicht spricht über den Flask-Test-Client mit dem echten Backend.
 """
 import io
@@ -15,9 +16,10 @@ import pytest
 
 import desk
 import kalender
-from tui.ansichten import desk_kacheln, desk_neu
+from tui.ansichten import desk_kacheln
 
 WOCHE = {"modus": "fest", "von": "2026-10-12", "bis": "2026-10-18"}
+WOCHE_ADR = "zentrale://kalender/ausschnitt?bis=2026-10-18&modus=fest&von=2026-10-12"
 
 
 class Schirm:
@@ -70,7 +72,7 @@ def ansicht(monkeypatch, client):
     d.starten = lambda f: f()                    # Hintergrund gleich ausführen
     d.aufrufe = aufrufe
     d.gesprungen = []
-    d.zeigen = lambda ansicht, ziel: d.gesprungen.append((ansicht, ziel)) or True
+    d.zeigen = lambda adresse: d.gesprungen.append(adresse) or True
     return d
 
 
@@ -93,8 +95,20 @@ def sichtbar(d):
     return "\n".join("".join(t for _x, t, _r in z) for z in c.bild(c.vh, c.vw))
 
 
+def fest_tippen(m, von, bis):
+    """Im Dialog auf „fest" stellen und von/bis tippen."""
+    import curses
+    m.taste(curses.KEY_RIGHT)                     # art: → fest
+    for wert in (von, bis):
+        m.taste(curses.KEY_DOWN)
+        for _ in range(10):
+            m.taste(127)
+        for c in wert:
+            m.taste(ord(c))
+
+
 def kachel_anlegen(d, name="k"):
-    """Desk anlegen, öffnen, + → „kalender" → Dialog."""
+    """Desk anlegen, öffnen, + → „kalender" (aus dem Katalog) → Dialog."""
     desk.anlegen(name)
     d.oeffnen()
     d.taste(10)
@@ -108,8 +122,48 @@ def kachel_anlegen(d, name="k"):
 
 # ── Wähler hinter + (die Registrierung der Arten) ────────────────────
 
-def test_kalender_steht_im_waehler_nach_zettel_und_bild(ansicht):
-    assert [a.neu_label for a in ansicht.arten.anlegbar()] == ["zettel", "bild", "kalender"]
+def test_waehler_eigene_arten_dann_der_katalog(ansicht):
+    d, D = ansicht, ansicht.DESK
+    desk.anlegen("w")
+    d.oeffnen(); d.taste(10); zeichne(d)
+    d.taste(ord("+"))
+    assert [a.neu_label for a in D["art_wahl"]["arten"]] == ["zettel", "bild", "kalender"]
+    assert ("GET", "/api/kacheln", None) in d.aufrufe
+
+
+def test_neue_app_im_katalog_steht_von_selbst_im_waehler(ansicht, monkeypatch):
+    import types
+    import kacheln
+    probe = types.SimpleNamespace(APP="probe", RECHTE=("lesen",), kachel=lambda *a: {},
+                                  ARTEN={"x": {"titel": "probe", "min": (4, 2)}})
+    monkeypatch.setitem(kacheln.QUELLEN, "probe", probe)
+    d, D = ansicht, ansicht.DESK
+    desk.anlegen("p")
+    d.oeffnen(); d.taste(10); zeichne(d)
+    d.taste(ord("+"))
+    labels = [a.neu_label for a in D["art_wahl"]["arten"]]
+    assert labels == ["zettel", "bild", "kalender", "probe"]
+    D["art_wahl"]["sel"] = 3
+    d.taste(10)                                   # ohne Felder: gleich in die Hand
+    el = D["canvas"].element(D["canvas"].fokus)
+    assert el["kachel"] == {"v": 2, "adresse": "zentrale://probe/x"} and (el["w"], el["h"]) == (6, 4)
+
+
+def test_ohne_backend_bleiben_zettel_und_bild(ansicht, monkeypatch):
+    from tui.ansichten import desk as desk_ansicht
+    d, D = ansicht, ansicht.DESK
+    desk.anlegen("o")
+    d.oeffnen(); d.taste(10); zeichne(d)
+    echt = desk_ansicht.api_call
+
+    def ohne_katalog(pfad, *a, **k):
+        if pfad == "/api/kacheln":
+            raise OSError("aus")
+        return echt(pfad, *a, **k)
+    monkeypatch.setattr(desk_ansicht, "api_call", ohne_katalog)
+    d.taste(ord("+"))
+    assert [a.neu_label for a in D["art_wahl"]["arten"]] == ["zettel", "bild"]
+    assert "kacheln nicht lesbar" in D["msg"]
 
 
 def test_plus_enter_macht_weiter_schnell_einen_zettel(ansicht):
@@ -131,51 +185,26 @@ def test_dialog_esc_legt_nichts_hin(ansicht):
     assert D["modal"] is None and D["modal_neu"] is None and D["canvas"].elemente == []
 
 
-# ── Kalender-Dialog ───────────────────────────────────────────────────
+# ── Dialog aus dem Katalog ────────────────────────────────────────────
 
-def test_dialog_standard_mitlaufend_7_tage_und_grenze_31():
-    import curses
-    m = desk_neu.KalenderDialog(date(2026, 10, 14))
-    zeilen, _cur = m.anzeige(40, 10)
-    assert "mitlaufend" in zeilen[0] and zeilen[1] == "tage  7" and "7 tage · woche" in zeilen
-    m.taste(curses.KEY_DOWN)
-    m.taste(127); m.taste(127)
-    for c in "40":
-        m.taste(ord(c))
-    assert m.taste(10) is None and "höchstens 31 tage" in m.anzeige(40, 10)[0][-1]
-    m.taste(127); m.taste(127); m.taste(ord("9"))
-    assert m.taste(10) == "speichern"
-    assert m.aenderungen() == {"ref": {"modus": "mitlaufend", "tage": 9}}
+def test_dialog_kommt_aus_den_feldern_des_katalogs(ansicht):
+    from tui.bausteine.feld_dialog import FeldDialog
+    m = kachel_anlegen(ansicht, "f")
+    assert isinstance(m, FeldDialog) and m.kopf == "kalender auf den desk"
+    zeilen, _c = m.anzeige(44, 10)
+    assert zeilen[0] == "art   ‹ mitlaufend ›" and zeilen[1] == "tage  7"
 
 
-def test_dialog_fest_von_bis():
-    import curses
-    m = desk_neu.KalenderDialog(date(2026, 10, 14))
-    m.taste(curses.KEY_RIGHT)                     # → fest
-    assert m.felder() == ["modus", "von", "bis"]
-    m.taste(curses.KEY_DOWN); m.taste(curses.KEY_DOWN)   # bis
-    for _ in range(10):
-        m.taste(127)
-    for c in "2026-11-30":
-        m.taste(ord(c))
-    assert m.taste(10) is None and "höchstens 31" in m.fehler
-    for _ in range(2):
-        m.taste(127)
-    for c in "02":
-        m.taste(ord(c))
-    assert m.taste(10) == "speichern"
-    assert m.aenderungen()["ref"] == {"modus": "fest", "von": "2026-10-14", "bis": "2026-11-02"}
-    assert m.taste(27) == "abbrechen"
-
-
-def test_startgroesse_woche_und_monat():
-    assert desk_neu.kalender_groesse({"modus": "mitlaufend", "tage": 7}) == (92, 9)
-    w, h = desk_neu.kalender_groesse(WOCHE)
-    assert (w, h) == (92, 9)
-    w, h = desk_neu.kalender_groesse({"modus": "fest", "von": "2026-10-01", "bis": "2026-10-31"})
-    assert w == 7 * 11 + 6 + 2 and h == 1 + 5 * 3 + 2
-    # mitlaufend 31 Tage: bis zu 6 Wochen, je nach Wochentag
-    assert desk_neu.kalender_groesse({"modus": "mitlaufend", "tage": 31})[1] == 1 + 6 * 3 + 2
+def test_hub_sagt_nein_dialog_bleibt_offen(ansicht, monkeypatch):
+    """Was der Dialog durchlässt, prüft der Hub noch einmal; sagt er nein,
+    bleibt der Dialog mit seinem Grund offen."""
+    import kacheln
+    d, D = ansicht, ansicht.DESK
+    m = kachel_anlegen(d, "h")
+    monkeypatch.setitem(kacheln.kachel_kalender.ARTEN["ausschnitt"]["felder"][1],
+                        "grenzen", {"min": 1, "max": 5})
+    d.taste(10)
+    assert D["modal"] is m and "höchstens 5 tage" in m.fehler and D["canvas"].elemente == []
 
 
 # ── Ganzer Weg in der Ansicht ─────────────────────────────────────────
@@ -184,21 +213,20 @@ def test_kalender_kachel_anlegen_holen_speichern(ansicht, termine):
     import curses
     d, D = ansicht, ansicht.DESK
     m = kachel_anlegen(d)
-    assert isinstance(m, desk_neu.KalenderDialog) and D["modal_neu"] is not None
-    m.taste(curses.KEY_RIGHT)                     # fest, von/bis tippen
-    m.werte.update(von="2026-10-12", bis="2026-10-18")
+    assert D["modal_neu"] is not None
+    fest_tippen(m, "2026-10-12", "2026-10-18")
     d.taste(10)
     c = D["canvas"]
     assert D["modal"] is None and c.modus == "greifen"
     el = c.element(c.fokus)
-    assert el["art"] == "kachel" and el["kachel"]["ref"] == WOCHE and (el["w"], el["h"]) == (92, 9)
+    assert el["art"] == "kachel" and el["kachel"] == {"v": 2, "adresse": WOCHE_ADR}
+    assert (el["w"], el["h"]) == (92, 9)          # bevorzugt vom Hub + Rahmen
     d.taste(10)                                   # ablegen → gespeichert
     knoten = lies("k")["nodes"][0]
-    assert knoten["zentrale_kachel"] == {"v": 1, "app": "kalender", "art": "ausschnitt", "ref": WOCHE}
+    assert knoten["zentrale_kachel"] == {"v": 2, "adresse": WOCHE_ADR}
     assert knoten["type"] == "text" and (knoten["width"], knoten["height"]) == (920, 180)
     zeichne(d)                                    # holt (gleich, im Test)
-    assert ("POST", "/api/kachel", {"app": "kalender", "art": "ausschnitt", "ref": WOCHE,
-                                    "w": 90, "h": 7, "oben": 0}) in d.aufrufe
+    assert ("POST", "/api/kachel", {"adresse": WOCHE_ADR, "w": 90, "h": 7, "oben": 0}) in d.aufrufe
     assert el["_inhalt"]["zustand"] == "ok"
     bild = sichtbar(d)
     assert "Mo 12.10." in bild and "09:00 Arzt" in bild and "+4" in bild
@@ -210,15 +238,24 @@ def test_kalender_kachel_anlegen_holen_speichern(ansicht, termine):
     assert not any(k.startswith("_") for k in knoten)
     # wieder geladen: der Verweis ist derselbe, nicht kopiert
     el2 = desk.laden("k")["elemente"][0]
-    assert el2["kachel"]["ref"] == WOCHE
+    assert el2["kachel"]["adresse"] == WOCHE_ADR
+
+
+def test_monat_kachel_bekommt_die_monatsgroesse_vom_hub(ansicht, termine):
+    """Die Startgröße hängt am Bereich — die App weiß sie, nicht die TUI."""
+    d, D = ansicht, ansicht.DESK
+    m = kachel_anlegen(d, "m")
+    fest_tippen(m, "2026-10-01", "2026-10-31")
+    d.taste(10)
+    el = D["canvas"].element(D["canvas"].fokus)
+    assert (el["w"], el["h"]) == (7 * 11 + 6 + 2, 1 + 5 * 3 + 2)
 
 
 def test_blaettern_holt_neu_und_zeigt_den_rest(ansicht, termine):
     import curses
     d, D = ansicht, ansicht.DESK
     m = kachel_anlegen(d, "b")
-    m.taste(curses.KEY_RIGHT)
-    m.werte.update(von="2026-10-12", bis="2026-10-18")
+    fest_tippen(m, "2026-10-12", "2026-10-18")
     d.taste(10); d.taste(10)
     zeichne(d)
     assert "16:00 Probe" not in sichtbar(d)
@@ -244,7 +281,7 @@ def test_o_oeffnet_den_kalender_enter_greift(ansicht, termine):
     zeichne(d)
     d.taste(ord("o"))
     assert ("POST", "/api/kachel/aktion") in [(a[0], a[1]) for a in d.aufrufe]
-    assert d.gesprungen == [("kalender", date.today().isoformat())]
+    assert d.gesprungen == ["zentrale://kalender/" + date.today().isoformat()]
     vorher = lies("o")["nodes"][0]["x"]
     d.taste(10)                                   # enter greift auch die Kachel
     assert D["canvas"].modus == "greifen"
@@ -266,16 +303,16 @@ def test_unbekanntes_ziel_wird_gesagt(ansicht, termine):
     d, D = ansicht, ansicht.DESK
     kachel_anlegen(d, "u")
     d.taste(10); d.taste(10)
-    d.zeigen = lambda ansicht, ziel: False
+    d.zeigen = lambda adresse: False
     d.taste(ord("o"))
-    assert "kalender" in D["msg"] and "nicht öffnen" in D["msg"]
+    assert "zentrale://kalender/" in D["msg"] and "nicht öffnen" in D["msg"]
 
 
 # ── Puffer: nie warten, Fehler, Rückfall ──────────────────────────────
 
 def kachel_el(**mehr):
     return dict({"id": "k", "art": "kachel", "x": 0, "y": 0, "w": 40, "h": 6,
-                 "kachel": {"v": 1, "app": "kalender", "art": "ausschnitt", "ref": WOCHE}}, **mehr)
+                 "kachel": {"v": 2, "adresse": WOCHE_ADR}}, **mehr)
 
 
 def test_pflegen_startet_nur_was_faellig_ist():
@@ -289,7 +326,7 @@ def test_pflegen_startet_nur_was_faellig_ist():
 
 def test_ttl_und_unveraendert():
     el = kachel_el()
-    antworten = [{"zeilen": [[["a", "dim"], ["b", "erfunden"]]], "text": "a", "stand": "s1",
+    antworten = [{"zeilen": [[["a", "kopf"], ["b", "erfunden"]]], "text": "a", "stand": "s1",
                   "ttl": 60, "oben": 0, "oben_max": 0},
                  {"unveraendert": True, "stand": "s1", "ttl": 60}]
     gesendet = []
@@ -298,7 +335,9 @@ def test_ttl_und_unveraendert():
         gesendet.append(body)
         return antworten.pop(0)
     desk_kacheln.holen(el, api, uhr=lambda: 100)
-    assert el["_inhalt"]["zeilen"] == [[("a", "dim"), ("b", "dim")]]   # unbekannte Rolle → dim
+    # Rolle der App → Rolle der TUI-Palette; Unbekanntes wie „text"
+    assert el["_inhalt"]["zeilen"] == [[("a", "dim"), ("b", "ink")]]
+    assert gesendet[0] == {"adresse": WOCHE_ADR, "w": 38, "h": 4, "oben": 0}
     assert not desk_kacheln.faellig(el, 159) and desk_kacheln.faellig(el, 160)
     desk_kacheln.holen(el, api, uhr=lambda: 160)
     assert gesendet[1]["stand"] == "s1" and el["_inhalt"]["zeilen"][0][0] == ("a", "dim")
@@ -342,14 +381,16 @@ def test_datei_neue_kachel_nur_mit_gueltigem_verweis():
     with pytest.raises(desk.DeskFehler):
         desk.speichern("d", [{"id": "k", "art": "kachel", "x": 0, "y": 0, "w": 10, "h": 4,
                               "kachel": {"app": "kalender"}}])
+    with pytest.raises(desk.DeskFehler):
+        desk.speichern("d", [{"id": "k", "art": "kachel", "x": 0, "y": 0, "w": 10, "h": 4,
+                              "kachel": {"adresse": "https://kalender/ausschnitt"}}])
     d = desk.speichern("d", [{"id": "k", "art": "kachel", "x": 1, "y": 2, "w": 10, "h": 4,
-                              "kachel": {"v": 1, "app": "kalender", "art": "ausschnitt",
-                                         "ref": WOCHE}, "rueckfall": "Kalender"}])
+                              "kachel": {"v": 2, "adresse": WOCHE_ADR}, "rueckfall": "Kalender"}])
     assert d["elemente"][0]["art"] == "kachel" and d["elemente"][0]["titel"] == "Kalender"
     # später: der Verweis ändert sich nie, auch wenn die TUI etwas anderes schickt
     desk.speichern("d", [{"id": "k", "art": "kachel", "x": 1, "y": 2, "w": 10, "h": 4,
-                          "kachel": {"v": 1, "app": "anders", "art": "x", "ref": {}}}])
-    assert lies("d")["nodes"][0]["zentrale_kachel"]["app"] == "kalender"
+                          "kachel": {"v": 2, "adresse": "zentrale://anders/x"}}])
+    assert lies("d")["nodes"][0]["zentrale_kachel"] == {"v": 2, "adresse": WOCHE_ADR}
     assert lies("d")["nodes"][0]["text"] == "Kalender"
 
 
@@ -363,3 +404,26 @@ def test_weitergeblaettert_waehrend_des_holens_holt_gleich_nach():
         return {"zeilen": [], "text": "", "stand": "s", "ttl": 60, "oben": body["oben"], "oben_max": 5}
     desk_kacheln.holen(el, api, uhr=lambda: 0)
     assert desk_kacheln.faellig(el, 1)
+
+
+def test_alte_datei_mit_altem_verweis_laedt_holt_und_wird_neu_geschrieben(ansicht, termine):
+    """Desks von vor 2026-10-10 tragen {v: 1, app, art, ref}: sie laden, die
+    Kachel zeigt ihren Inhalt, und beim Speichern steht die Adresse drin."""
+    d, D = ansicht, ansicht.DESK
+    desk.anlegen("alt")
+    pfad = os.path.join(desk.ordner(), "alt.canvas")
+    with open(pfad, "w", encoding="utf-8") as f:
+        json.dump({"nodes": [{"id": "k", "type": "text", "text": "Kalender alt",
+                              "x": 0, "y": 0, "width": 920, "height": 180,
+                              "zentrale_kachel": {"v": 1, "app": "kalender",
+                                                  "art": "ausschnitt", "ref": WOCHE}}],
+                   "edges": []}, f)
+    d.oeffnen()
+    d.DESK["sel"] = [x["name"] for x in D["desks"]].index("alt")
+    d.taste(10)
+    zeichne(d)
+    el = D["canvas"].element("k")
+    assert el["kachel"] == {"v": 2, "adresse": WOCHE_ADR}
+    assert el["_inhalt"]["zustand"] == "ok" and "09:00 Arzt" in sichtbar(d)
+    d.speichern()
+    assert lies("alt")["nodes"][0]["zentrale_kachel"] == {"v": 2, "adresse": WOCHE_ADR}

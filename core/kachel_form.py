@@ -5,15 +5,22 @@
 # (core/kachel_kalender.py …) dasselbe meinen, ohne sich gegenseitig zu
 # importieren. Was eine Kachel ist: memory/system/hub_bauplan.md „Kacheln".
 #
-# Eine Zeile ist eine Liste von Stücken [text, rolle]; Rollen sind die
-# Farbrollen der TUI (tui/ansichten/farben.py ROLES). Der Kern kennt die
-# Liste nicht (Schichten!) — die Ansicht ersetzt Unbekanntes durch „dim".
-# 2026-10-10.
+# Eine Zeile ist eine Liste von Stücken [text, rolle]; die Rolle sagt, was
+# das Stück BEDEUTET, nie welche Farbe es hat — das Wörterbuch steht in
+# core/farbrollen.py, die Farbe wählt jede Oberfläche selbst. Was eine
+# Quelle Unbekanntes schickt, wird hier „text" (2026-10-10, vorher hingen
+# die Rollen an den Farben der TUI).
+#
+# Maße: w×h sind abstrakte ZELLEN eines Rasters (Spalten × Zeilen), immer
+# das Innere ohne Rahmen. Ein Terminal zeigt eine Zelle als ein Zeichen,
+# ein Fenster oder Handy rechnet sie in sein eigenes Raster um.
 #
 # Fundament (Schicht 1, memory/system/bauplan_kern.md).
 
 import hashlib
 import json
+
+import farbrollen
 
 
 class KachelFehler(ValueError):
@@ -33,7 +40,7 @@ class KachelZuKlein(Exception):
         self.w, self.h = int(w), int(h)
 
 
-def stueck(text, rolle="dim"):
+def stueck(text, rolle=farbrollen.RUECKFALL):
     return [str(text), str(rolle)]
 
 
@@ -57,7 +64,7 @@ def zeilen_kuerzen(zeilen, w, h):
             if rest <= 0:
                 break
             t = str(text)[:rest]
-            neu.append([t, rolle])
+            neu.append([t, farbrollen.rolle(rolle)])
             rest -= len(t)
         raus.append(neu)
     return raus

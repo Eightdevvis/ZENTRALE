@@ -1,29 +1,77 @@
 # tui/ansichten/sprung.py
 #
-# Wohin `o` auf einer Kachel springen kann (2026-10-10). Die App sagt über
-# den Hub, welche Ansicht an welchem Ziel aufgeht ({"zeige": {ansicht,
-# ziel}}, POST /api/kachel/aktion); hier steht, welche Ansichten so
-# ansprungbar sind. Der Desk kennt keine davon — er bekommt nur `zeigen`.
-# Neue Ziele (Listen, Graphen …) kommen als Eintrag in `ziele` dazu.
+# Der Adress-Router der TUI (2026-10-10, „ein Objekt, eine Adresse",
+# memory/system/hub_bauplan.md „Adressen"). Eine App sagt nur, WAS aufgehen
+# soll — eine Adresse zentrale://<app>/<pfad>?… (z. B. als Antwort auf `o`
+# einer Kachel, POST /api/kachel/aktion). Welche Ansicht das in der TUI
+# wird, steht hier: je App ein Handler (pfad, abfrage) -> bool, eingetragen
+# in einem Router. Der Desk kennt keine davon — er bekommt nur `zeigen`.
+# Neue Ziele (Listen, Graphen …) kommen als `registrieren(app, handler)`
+# dazu, keine if-Kette. Später nutzen Links in Notizen denselben Router.
 
 from datetime import date
+from urllib.parse import parse_qsl, unquote, urlsplit
+
+SCHEMA = "zentrale"
 
 
-def zeigen_fuer(DESK, kalender):
-    """-> zeigen(ansicht, ziel) -> bool (False: kenne ich nicht)."""
+def lesen(adresse):
+    """Adresse → (app, pfad, abfrage) oder None, wenn es keine ist. Nur
+    urllib.parse, wie core/adressen.py."""
+    try:
+        t = urlsplit(str(adresse))
+    except ValueError:
+        return None
+    if t.scheme != SCHEMA or not t.netloc:
+        return None
+    pfad = tuple(unquote(p) for p in t.path.split("/")[1:] if p)
+    return t.netloc, pfad, dict(parse_qsl(t.query, keep_blank_values=True))
 
-    def kalender_zeigen(ziel):
+
+class Router:
+    """App → Handler(pfad, abfrage) -> bool (False: kann ich nicht)."""
+
+    def __init__(self):
+        self._apps = {}
+
+    def registrieren(self, app, handler):
+        self._apps[app] = handler
+        return handler
+
+    def kennt(self, adresse):
+        a = lesen(adresse)
+        return bool(a and a[0] in self._apps)
+
+    def zeigen(self, adresse):
+        a = lesen(adresse)
+        if a is None or a[0] not in self._apps:
+            return False
+        app, pfad, abfrage = a
+        return bool(self._apps[app](pfad, abfrage))
+
+
+def kalender_tag(pfad, abfrage):
+    """Welcher Tag zu einer Kalender-Adresse gehört: zentrale://kalender/
+    <JJJJ-MM-TT>, bei einem Ausschnitt dessen `von`; sonst None (= heute)."""
+    for kandidat in ([pfad[0]] if pfad else []) + [abfrage.get("von")]:
+        try:
+            return date.fromisoformat(str(kandidat))
+        except ValueError:
+            continue
+    return None
+
+
+def router_fuer(DESK, kalender):
+    """Der Router der TUI mit allem, was heute ansprungbar ist."""
+    router = Router()
+
+    def kalender_zeigen(pfad, abfrage):
         DESK["active"] = False
         kalender.oeffnen()
-        try:
-            kalender.bedienung.setze_tag(date.fromisoformat(str(ziel)))
-        except ValueError:
-            pass                        # kein Datum: heute, wie beim Öffnen
+        tag = kalender_tag(pfad, abfrage)
+        if tag is not None:
+            kalender.bedienung.setze_tag(tag)
         return True
 
-    ziele = {"kalender": kalender_zeigen}
-
-    def zeigen(ansicht, ziel):
-        f = ziele.get(ansicht)
-        return bool(f and f(ziel))
-    return zeigen
+    router.registrieren("kalender", kalender_zeigen)
+    return router

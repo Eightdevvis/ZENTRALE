@@ -25,20 +25,21 @@
 #
 # Nahtstelle für Kacheln anderer Apps (memory/system/hub_bauplan.md
 # „Kacheln", entschieden 2026-10-09): in der Datei ein text-Knoten mit
-# Rückfall-Text und `zentrale_kachel: {v, app, art, ref}` — App-Namen
-# `fokus` (Listen), `graph` (Graphen), `kalender`. core/desk.py liefert ihn
-# als Element mit art „kachel", `kachel` = dieses Feld, `titel` = Rückfall-
-# Text, und ändert daran nie etwas außer der Lage. Solange keine Art
+# Rückfall-Text und `zentrale_kachel: {v: 2, adresse}` — die eine Adresse
+# des Objekts, z. B. zentrale://kalender/ausschnitt?modus=mitlaufend&tage=7
+# (seit 2026-10-10; die alte Form {v: 1, app, art, ref} schreibt
+# core/desk.py beim Lesen um). core/desk.py liefert ihn als Element mit art
+# „kachel", `kachel` = dieses Feld, `titel` = Rückfall-Text, und ändert
+# daran nie etwas außer der Lage. Solange keine Art
 # „kachel" registriert ist, zeichnet „fremd" ihn (typ + Rückfall).
 # Seit 2026-10-10 gibt es die Art „kachel" (unten): `zeichne` zeigt, was
 # die ANSICHT über `POST /api/kachel` geholt und am Element unter „_inhalt"
 # zwischengelegt hat (nie der Canvas selbst), `oeffnen` (Taste o) meldet
-# („kachel_oeffnen", verweis) — die Ansicht schickt den Verweis an
+# („kachel_oeffnen", element) — die Ansicht schickt den Verweis an
 # `POST /api/kachel/aktion`. Langer Inhalt (Kalender) blättert über
 # `blaettern`: die Lage steht unter „_oben", die Ansicht holt damit neu (die
-# App kürzt selbst). Die Art ist für alle Apps dieselbe; was `+` anbietet
-# (z. B. „kalender"), trägt die Ansicht als eigene Wahl ein
-# (tui/ansichten/desk_neu.py).
+# App kürzt selbst). Die Art ist für alle Apps dieselbe; was `+` anbietet,
+# kommt aus dem Katalog des Hubs (tui/ansichten/desk_neu.py).
 
 try:
     from tui.bausteine.textfeld import Textfeld
@@ -182,8 +183,7 @@ class Kachel:
         element["_oben"] = max(0, min(grenze, element.get("_oben", 0) + schritt))
 
     def oeffnen(self, element):
-        k = element.get("kachel") or {}
-        return ("kachel_oeffnen", {"app": k.get("app"), "art": k.get("art"), "ref": k.get("ref")})
+        return ("kachel_oeffnen", element)
 
     def modal(self, element):
         return None

@@ -49,6 +49,7 @@ import json
 import os
 import re
 
+import adressen
 import ai_config
 import datasync
 import dateien
@@ -60,11 +61,13 @@ TEXT_GRENZE = 20000
 KOORD_GRENZE = 1_000_000
 _NAME = re.compile(r"^[\w äöüÄÖÜß.,()+\-]{1,60}$")
 _KENNUNG = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
-# Zusatzfeld einer Kachel im text-Knoten: {v, app, art, ref} (hub_bauplan.md
-# „Kacheln", entschieden 2026-10-09). App-Namen: fokus (Listen), graph,
-# kalender. Seit 2026-10-10 legt es neue Kacheln an (Verweis aus der TUI)
-# und schreibt den Rückfall-Text nach; den Verweis selbst ändert es nie.
+# Zusatzfeld einer Kachel im text-Knoten (hub_bauplan.md „Kacheln"). Seit
+# 2026-10-10 `{v: 2, adresse: "zentrale://<app>/<art>?…"}` — die eine
+# Adresse des Objekts (core/adressen.py). Die alte Form `{v: 1, app, art,
+# ref}` wird beim Lesen umgeschrieben und beim nächsten Speichern in der
+# neuen Form geschrieben. Den Verweis selbst ändert dieses Modul nie.
 KACHEL = "zentrale_kachel"
+KACHEL_V = 2
 # Bild-Knoten (2026-10-10). Endungen, die Pillow liest UND Obsidian zeigt.
 BILD_ENDUNGEN = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")
 TITEL = "zentrale_titel"
@@ -163,8 +166,8 @@ def _element(knoten) -> dict | None:
         # hier nur durchgereicht. `text` ist Rückfall für Obsidian, nie
         # bearbeitet; die TUI zeigt ihn, bis eine Kachel-Art ihn ersetzt.
         el["art"] = "kachel"
-        el["kachel"] = dict(kachel)
-        el["typ"] = "kachel · %s/%s" % (kachel.get("app", "?"), kachel.get("art", "?"))
+        el["kachel"] = kachel_lesen(kachel)
+        el["typ"] = "kachel · " + _kachel_name(el["kachel"])
         el["titel"] = str(knoten.get("text") or "")
     elif knoten.get("type") == "text":
         el["art"] = "notiz"
@@ -289,16 +292,41 @@ def _ganz(x, unten=-KOORD_GRENZE, oben=KOORD_GRENZE):
     return x
 
 
+def kachel_lesen(kachel) -> dict:
+    """Verweis aus der Datei → neue Form {v: 2, adresse}. Die alte Form
+    {v: 1, app, art, ref} wird zur Adresse; was sich nicht lesen lässt,
+    bleibt, wie es ist (die TUI zeigt dann „geht nicht")."""
+    try:
+        if isinstance(kachel.get("adresse"), str):
+            return {"v": KACHEL_V, "adresse": adressen.kanonisch(kachel["adresse"])}
+        return {"v": KACHEL_V, "adresse": adressen.aus_verweis(
+            kachel.get("app"), kachel.get("art"), kachel.get("ref"))}
+    except adressen.AdresseFehler:
+        return dict(kachel)
+
+
+def _kachel_name(kachel) -> str:
+    """„kalender/ausschnitt" für die Anzeige (typ)."""
+    try:
+        a = adressen.lesen(kachel.get("adresse"))
+        return "/".join((a.app,) + a.pfad)
+    except adressen.AdresseFehler:
+        return "%s/%s" % (kachel.get("app", "?"), kachel.get("art", "?"))
+
+
 def _kachel_pruefen(kachel) -> dict:
-    """Der Verweis einer neuen Kachel: {v, app, art, ref} — klein und JSON."""
-    if not isinstance(kachel, dict) or not isinstance(kachel.get("app"), str) \
-            or not isinstance(kachel.get("art"), str) or not isinstance(kachel.get("ref"), dict):
-        raise DeskFehler("kachel ohne app, art oder ref")
-    v = {"v": kachel.get("v", 1), "app": kachel["app"], "art": kachel["art"],
-         "ref": kachel["ref"]}
-    if len(json.dumps(v)) > 2000:
-        raise DeskFehler("kachel-verweis zu groß")
-    return v
+    """Der Verweis einer neuen Kachel → {v: 2, adresse}. Die Adresse muss
+    zentrale://<app>/<art>?… sein; was darin gilt, prüft der Hub beim Holen."""
+    if not isinstance(kachel, dict):
+        raise DeskFehler("kachel ohne adresse")
+    neu = kachel_lesen(kachel)
+    try:
+        a = adressen.lesen(neu.get("adresse"))
+    except adressen.AdresseFehler as e:
+        raise DeskFehler("kachel ohne gültige adresse: %s" % e)
+    if len(a.pfad) != 1:
+        raise DeskFehler("kachel-adresse: zentrale://<app>/<art>?…")
+    return neu
 
 
 def _knoten_aus(el, alt) -> dict:
@@ -323,6 +351,10 @@ def _knoten_aus(el, alt) -> dict:
     else:
         k = dict(alt)
         alte_lage = _zellen(alt)
+        if isinstance(k.get(KACHEL), dict):
+            # Alte Form beim Speichern in die neue (2026-10-10) — derselbe
+            # Verweis, nur als Adresse geschrieben.
+            k[KACHEL] = kachel_lesen(k[KACHEL])
     if lage != alte_lage:
         k.update(x=lage["x"] * PX_SPALTE, y=lage["y"] * PX_ZEILE,
                  width=lage["w"] * PX_SPALTE, height=lage["h"] * PX_ZEILE)

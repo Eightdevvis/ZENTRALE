@@ -442,8 +442,7 @@ def test_kachel_art_zeigt_puffer_rueckfall_und_zustaende():
           "kachel": {"v": 1, "app": "kalender", "art": "ausschnitt", "ref": {"tage": 7}}}
     assert k.zeichne(el, 22, 3)[0] == [("lädt …", "leise")]
     assert ("Kalender 12.10.", "leise") in k.zeichne(el, 22, 3)[1]
-    assert k.oeffnen(el) == ("kachel_oeffnen", {"app": "kalender", "art": "ausschnitt",
-                                                "ref": {"tage": 7}})
+    assert k.oeffnen(el) == ("kachel_oeffnen", el)      # die Ansicht liest den Verweis
     el["_inhalt"] = {"zustand": "ok", "zeilen": [[("Mo 12.10.", "kal")], [("09:00 ", "faint"), ("Arzt", "ink")]],
                      "oben_max": 2}
     assert k.zeichne(el, 22, 3) == [[("Mo 12.10.", "kal")], [("09:00 ", "faint"), ("Arzt", "ink")]]
@@ -564,9 +563,37 @@ def test_bild_zeichnet_an_der_anzeige_lage_greifen_bleibt_zellgenau():
     assert e["x"] == cv.PAN_X and isinstance(e["x"], int)       # die Welt bleibt ganzzahlig
     c.gleiten()
     ox, oy = c.anzeige_lage()
+    assert ox < c.vx                                # die Ansicht gleitet noch
     zeilen = c.bild(30, 80)
-    spalte = e["x"] - ox
-    assert any(s == spalte and t.startswith("╔") for s, t, _r in zeilen[e["y"] - oy])
+    # in der Hand: liegt auf dem Schirm, wo es nach dem Gleiten liegt
+    spalte = e["x"] - c.vx
+    assert any(s == spalte and t.startswith("╔") for s, t, _r in zeilen[e["y"] - c.vy])
+
+
+def test_gegriffenes_gleitet_mit_der_ansicht_statt_vorzuspringen():
+    """2026-10-10: beim Schieben mit etwas in der Hand sprang der Kasten
+    vor und rutschte zurück. Jetzt steht er auf dem Schirm still, während
+    die Welt (Raster, andere Kästen) unter ihm gleitet."""
+    c = leinwand([zettel("a", 0, 0), zettel("b", 30, 0)])
+    c.weich = True
+    c.vx = c.vy = 0
+    c.gleiten()
+    c.fokus = "a"
+    c.taste("enter")
+
+    def spalte_von(zeilen, zeichen):
+        return next(s for z in zeilen for s, t, r in z if t.startswith(zeichen))
+    vorher = spalte_von(c.bild(30, 80), "╔")
+    c.taste("pan_rechts")
+    spalten_a, spalten_b = [], []
+    for _ in range(cv.GLEIT_BILDER + 1):
+        c.gleiten()
+        zeilen = c.bild(30, 80)
+        spalten_a.append(spalte_von(zeilen, "╔"))
+        spalten_b.append(spalte_von(zeilen, "┌"))
+    assert set(spalten_a) == {vorher}                       # gegriffen: steht still
+    assert spalten_b == sorted(spalten_b, reverse=True) and len(set(spalten_b)) > 2  # Welt gleitet
+    assert spalten_b[-1] == 30 - cv.PAN_X                    # und kommt an
 
 
 class Uhr:

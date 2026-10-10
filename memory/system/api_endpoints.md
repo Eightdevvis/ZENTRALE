@@ -430,17 +430,22 @@ Details: `memory/werkzeuge/mail_system.md` (Panel/Drill-down/Hybrid, Passphrase-
 
 ## Kacheln (seit 2026-10-10)
 
-`core/kacheln.py` über `ui/routen/kachel.py` — der Hub, durch den jede Front
-den Inhalt einer Kachel holt (nie direkt bei der App). Form und Regeln:
-[hub_bauplan.md](hub_bauplan.md) „Kacheln", Desk: [desk_view.md](desk_view.md).
+`core/kacheln.py` über `ui/routen/kachel.py` — der Hub, durch den jede
+Oberfläche den Katalog liest und den Inhalt einer Kachel holt (nie direkt
+bei der App). Verweis = Adresse `zentrale://<app>/<art>?<felder>`
+(`core/adressen.py`). Form und Regeln: [hub_bauplan.md](hub_bauplan.md)
+„Kacheln", „Adressen", „Katalog", „Farbrollen"; Desk:
+[desk_view.md](desk_view.md).
 
 | Endpoint | Methode | Beschreibung |
 |---|---|---|
-| `/api/kachel` | POST | Body `{app, art, ref, w, h, oben?, stand?}` (w/h auch als `groesse: {w, h}`; Innenmaß in Zellen). → `200 {zeilen: [[[text, rolle], …], …], text, stand, ttl, oben, oben_max}` (die App kürzt auf w×h; `roh` reserviert) · `200 {unveraendert: true, stand, ttl}` wenn `stand` passt · `200 {zu_klein: {w, h}, ttl}` · `400 {fehler: "ungueltig", text}` (z. B. „höchstens 31 tage") · `403 {fehler: "recht"}` (`<app>:lesen` fehlt) · `404 {fehler: "weg"}` · `503 {fehler: "aus", text}` (App nicht da oder kaputt). |
-| `/api/kachel/aktion` | POST | Body `{app, art, ref, aktion}`; heute nur `aktion: "oeffnen"` → `200 {zeige: {ansicht, ziel}}` (Kalender: `{"ansicht": "kalender", "ziel": "2026-10-12"}`); Fehler wie oben. |
+| `/api/kacheln` | GET | Katalog: `[{app, art, titel, min: {w, h}, bevorzugt: {w, h}, max?: {w, h}, ttl, felder: [{name, typ (datum\|zahl\|wahl\|text\|bool), titel, vorgabe, hilfe?, wenn?, werte?, grenzen?}], aktionen: ["oeffnen"], formen: ["zeilen"]}]` — nur Apps mit `<app>:lesen`. |
+| `/api/kachel` | POST | Body `{adresse, w, h, oben?, stand?, form?}` (w/h auch als `groesse: {w, h}`; Innenmaß in Zellen; alt statt `adresse`: `app, art, ref`). Der Hub prüft die Abfrage der Adresse gegen die `felder` des Katalogs. → `200 {form: "zeilen", zeilen: [[[text, rolle], …], …], text, stand, ttl, oben, oben_max, bevorzugt?}` (Rollen aus `core/farbrollen.py`; die App kürzt auf w×h; `form: "roh"` reserviert → 400) · `200 {unveraendert: true, stand, ttl}` wenn `stand` passt · `200 {zu_klein: {w, h}, ttl, bevorzugt?}` (w=h=0 fragt nur Prüfung + Größe) · `400 {fehler: "ungueltig", text}` (z. B. „höchstens 31 tage", „unbekannt: x") · `403 {fehler: "recht"}` (`<app>:lesen` fehlt) · `404 {fehler: "weg"}` · `503 {fehler: "aus", text}` (App nicht da oder kaputt). |
+| `/api/kachel/aktion` | POST | Body `{adresse, aktion}` (alt: `app, art, ref, aktion`); heute nur `aktion: "oeffnen"` → `200 {zeige: {adresse}}` (Kalender: `{"adresse": "zentrale://kalender/2026-10-12"}`); welche Ansicht das wird, entscheidet die Oberfläche. Fehler wie oben. |
 
-Quellen heute: `kalender`/`ausschnitt` (`core/kachel_kalender.py`, Bezug
-`{"modus": "mitlaufend", "tage": N}` oder `{"modus": "fest", "von", "bis"}`).
+Quellen heute: `kalender`/`ausschnitt` (`core/kachel_kalender.py`, Adresse
+`zentrale://kalender/ausschnitt?modus=mitlaufend&tage=N` oder
+`…?bis=JJJJ-MM-TT&modus=fest&von=JJJJ-MM-TT`, höchstens 31 Tage).
 
 ## Tutor (eigene App, seit 2026-10-09)
 
@@ -464,3 +469,5 @@ Stimm-Diensten.
 - **2026-10-09** — `/api/desk` (Desk View).
 - **2026-10-10** — `/api/desk-bild…` (Bilder auf dem Desk).
 - **2026-10-10** — `/api/kachel`, `/api/kachel/aktion` (Kacheln, Kalender).
+- **2026-10-10** — `/api/kacheln` (Katalog); Kacheln mit Adresse statt
+  app/art/ref, `oeffnen` antwortet mit einer Adresse.

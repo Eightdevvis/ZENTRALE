@@ -1209,7 +1209,8 @@ def run_ui(stdscr, store):
     M = karte.M
     desk = ansichten.desk.Desk(z)          # Desk View (2026-10-09)
     DESK = desk.DESK
-    desk.zeigen = ansichten.sprung.zeigen_fuer(DESK, kalender)  # o auf einer Kachel
+    # o auf einer Kachel: Adresse → Ansicht (Adress-Router, 2026-10-10)
+    desk.zeigen = ansichten.sprung.router_fuer(DESK, kalender).zeigen
     technik = ansichten.technik.Technik(z)
     TECH = technik.TECH
     startseite = ansichten.startseite.Startseite(z, RAD, META, TRAD, technik)

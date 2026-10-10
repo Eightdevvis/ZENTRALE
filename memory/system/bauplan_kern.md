@@ -63,6 +63,9 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `abgleich_zusammenfuehren` | 1 | Drei-Wege-Regeln über die Basis: JSON nach Eintrag/Feld, Zähler, Zeilen, Text mit beiden Fassungen |
 | `abgleich_mitte` | 1 | Die Mitte hinter vier Handgriffen (holen, vorbereiten, senden, enthaelt); Umsetzung git |
 | `kachel_form` | 1 | Form einer Kachel-Antwort ohne Fachwissen: Fehler (ungültig, weg, zu klein), kürzen auf w×h, `stand` als Fingerabdruck (seit 2026-10-10) |
+| `kachel_felder` | 1 | Felder einer Kachel-Art im Katalog (datum/zahl/wahl/text/bool, `wenn`, `grenzen`): Vorgaben, Prüfung und Typen — dieselben Regeln, aus denen jede Oberfläche ihren Dialog baut (seit 2026-10-10) |
+| `adressen` | 1 | „Ein Objekt, eine Adresse": `zentrale://<app>/<pfad>?…` bauen, lesen, kanonisch machen (nur `urllib.parse`); alter Kachel-Verweis → Adresse (seit 2026-10-10) |
+| `farbrollen` | 1 | Wörterbuch der Farbrollen (Name + Bedeutung), das Apps und Oberflächen teilen; die Farbe wählt jede Oberfläche selbst (seit 2026-10-10) |
 | `zugang` | 1 | Zugangsschlüssel des Backends: anlegen, laden, zeitkonstant vergleichen, Modus aus/melden/an, Keks und Browser-Link (Prüfung selbst: `ui/routen/zugang.py`) |
 | `dateien` | 1 | Atomar schreiben (alte oder neue Fassung, nie eine halbe) — für alle Datendateien; Rechnername für Dateien pro Rechner |
 | `ai_config` | 1 | Kill-Switches und API-Keys aus `data/ai_config.json`, `setting()`-Rangfolge |

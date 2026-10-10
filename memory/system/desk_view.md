@@ -101,21 +101,30 @@ macht beides nur, wenn die Ansicht es einschaltet (`weich`, `uhr`).
 - **App** `tui/ansichten/desk.py`: Auswahl, laden/speichern über HTTP,
   Modal, Hinweise. Speichert nach jedem Ablegen, Verbinden, Lösen, Löschen
   und Bearbeiten den ganzen Desk (ohne Puffer-Felder „_…").
-- **Kalender im `+`-Wähler** `tui/ansichten/desk_neu.py`: der Wähler ist
-  die eine Registrierung `canvas.Arten` (alles mit `neu_label`, in
-  Reihenfolge: zettel, bild, kalender). `KalenderWahl` trägt sich dort unter
-  „kachel:kalender" ein (kein Element heißt so), hat `neu_dialog()` →
-  `KalenderDialog` und legt mit `neu(eid, x, y, werte)` ein Element der
-  allgemeinen Art `kachel` an. Weitere Kachel-Quellen kommen genauso dazu.
+- **Katalog im `+`-Wähler** `tui/ansichten/desk_neu.py` (seit 2026-10-10):
+  der Wähler = eigene Arten des Canvas mit `neu_label` (zettel, bild) + je
+  Eintrag aus `GET /api/kacheln` eine `KatalogWahl` (bei jedem `+` frisch
+  geholt; ohne Backend bleiben zettel und bild). Eine neue App steht so von
+  selbst darin. Ihr Dialog ist `tui/bausteine/feld_dialog.py`, gebaut aus
+  den `felder` des Eintrags (nur Tastatur: ↑↓/tab Feld, ←→/leertaste wählt,
+  tippen, enter legt an, esc bricht ab). Vor dem Hinlegen fragt der Desk
+  den Hub mit 0×0 Zellen: der prüft dieselben Regeln (sagt er nein, bleibt
+  der Dialog mit dem Grund offen) und nennt die Größe für genau diese
+  Werte (`bevorzugt`). Die Kachel ist ein Element der allgemeinen Art
+  `kachel` mit `kachel: {v: 2, adresse}`.
 - **Kacheln holen** `tui/ansichten/desk_kacheln.py`: bei jedem Bild prüft
   `pflegen`, welche Kachel fällig ist (kein Puffer, Frist `ttl` um, Größe
   oder Blätter-Lage anders) und holt sie im Hintergrund-Thread über
   `POST /api/kachel`; gezeichnet wird immer aus dem Puffer `_inhalt`. Mit
-  `stand` antwortet der Hub „unverändert". Unbekannte Farbrollen → `dim`.
-- **Springen** `tui/ansichten/sprung.py`: `o` → `POST /api/kachel/aktion`
-  → `{"zeige": {ansicht, ziel}}` → `zeigen(ansicht, ziel)`, das
-  zentrale_tui.py hereingibt. Heute kennt es `kalender` (Kalender öffnen,
-  Tag = ziel). Der Desk kennt keine andere Ansicht.
+  `stand` antwortet der Hub „unverändert". Die Farbrollen der App
+  (`core/farbrollen.py`) werden über `farben.FARBROLLEN` zu Rollen der
+  TUI-Palette; Unbekanntes wie `text`.
+- **Springen** `tui/ansichten/sprung.py` (Adress-Router, 2026-10-10): `o` →
+  `POST /api/kachel/aktion` → `{"zeige": {"adresse"}}` → `zeigen(adresse)`,
+  das zentrale_tui.py hereingibt. Der Router hat je App einen Handler
+  (pfad, abfrage); heute `kalender` (Kalender öffnen am Tag der Adresse,
+  `zentrale://kalender/2026-10-12`, bei einem Ausschnitt dessen `von`). Der
+  Desk kennt keine andere Ansicht.
 - **Backend** `core/desk.py` (Schicht 2) + `ui/routen/desk.py`, Endpunkte in
   [api_endpoints.md](api_endpoints.md).
 
@@ -149,28 +158,33 @@ Eine Datei pro Desk, `<desk_ordner>/<name>.canvas`
 
 ## Kacheln (seit 2026-10-10)
 
-Form und Weg: [hub_bauplan.md](hub_bauplan.md) „Kacheln". In der Datei ein
-text-Knoten mit Rückfall-Text und `zentrale_kachel: {v, app, art, ref}` —
-ein Verweis, nie eine Kopie. Der Rückfall-Text ist nur Anzeige für Obsidian:
+Form und Weg: [hub_bauplan.md](hub_bauplan.md) „Kacheln", „Adressen",
+„Katalog", „Farbrollen". In der Datei ein text-Knoten mit Rückfall-Text und
+`zentrale_kachel: {v: 2, adresse: "zentrale://kalender/ausschnitt?…"}` —
+ein Verweis, nie eine Kopie. Desks von vorher tragen `{v: 1, app, art,
+ref}`: `core/desk.py` macht beim Lesen die Adresse daraus und schreibt
+beim nächsten Speichern die neue Form. Der Rückfall-Text ist nur Anzeige für Obsidian:
 beim Speichern schickt die TUI den letzten Klartext der App als `rueckfall`
 mit, `core/desk.py` schreibt ihn in `text`; den Verweis ändert es nie.
 Breite/Höhe stehen wie bei jedem Knoten in `width`/`height`; die App kürzt
 selbst auf das Innere (w−2 × h−2).
 
 **Kalender** (App `kalender`, Art `ausschnitt`, Quelle
-`core/kachel_kalender.py`): Bezug `{"modus": "mitlaufend", "tage": 7}` (ab
-heute, rechnet jeden Tag neu) oder `{"modus": "fest", "von": …, "bis": …}`;
-höchstens 31 Tage. Standard beim Anlegen: mitlaufend 7 Tage.
+`core/kachel_kalender.py`): `zentrale://kalender/ausschnitt?modus=
+mitlaufend&tage=7` (ab heute, rechnet jeden Tag neu) oder
+`…?bis=…&modus=fest&von=…`; höchstens 31 Tage — diese Regeln stehen in
+den `felder` des Katalog-Eintrags. Standard beim Anlegen: mitlaufend 7 Tage.
 - **bis 7 Tage → Woche:** eine Spalte je Tag (│ dazwischen), Kopf
-  „Mo 12.10.", darunter Ganztägiges zuerst (Rolle `span`), dann
-  „HH:MM titel" (`faint` + `ink`). Startgröße 13 Spalten je Tag, 6 Zeilen.
+  „Mo 12.10.", darunter Ganztägiges zuerst (Rolle `spanne`), dann
+  „HH:MM titel" (`leise` + `text`). Startgröße 13 Spalten je Tag, 6 Zeilen
+  (sagt der Hub als `bevorzugt`).
 - **8–31 Tage → Monat:** Raster Mo–So, Wochen als Zeilen, Tageszahl (am
   Ersten und am ersten Tag mit Monat, „1.11."), darunter so viele Termine
   wie passen. Tage außerhalb des Bereichs leise und leer. Startgröße 11
   Spalten × 3 Zeilen je Tag, so viele Wochen, wie der Bereich je nach
   Wochentag schneiden kann.
-- **Heute** in der Kalender-Farbe `kal`. Passt ein Tag nicht: „+N" (Rolle
-  `acc`) — in der Woche als letzte Zeile der Spalte, im Monat rechts neben
+- **Heute** in der Rolle `heute` (die TUI zeichnet sie in der
+  Kalender-Farbe `kal`). Passt ein Tag nicht: „+N" (Rolle `mehr`) — in der Woche als letzte Zeile der Spalte, im Monat rechts neben
   der Zahl. Bild↓/↑ blättert alle Tage zugleich um eine Zeile (bis die
   längste Liste ganz zu sehen ist).
 - **Zu klein:** „zu klein / mind. W×H" statt Inhalt. **App weg/aus:**
@@ -248,8 +262,8 @@ geöffnet kriegen wenn man es selected."*
   offenes Format hat (Leitlinie: dasselbe Objekt, nicht kopiert). Bis dahin
   sind Zettel Canvas-eigene Text-Knoten.
 - **Weitere Kacheln:** Listen (`fokus`) und Graphen (`graph`) fehlen noch —
-  je ein Quell-Modul in `core/kacheln.py` QUELLEN, eine Wahl mit
-  `neu_label` (wie `KalenderWahl`), ein Sprungziel in `sprung.py`.
+  je ein Quell-Modul in `core/kacheln.py` QUELLEN (der Katalog bringt sie
+  dann von selbst in den `+`-Wähler) und ein Handler im Router `sprung.py`.
 - Größe einer Kachel ändern geht nicht (Startgröße beim Anlegen); den
   Bereich einer Kalender-Kachel ändern auch nicht (neu anlegen).
 - Esc im Kalender nach `o` führt zur Startseite, nicht zurück zum Desk.
@@ -273,6 +287,11 @@ geöffnet kriegen wenn man es selected."*
 
 - **2026-10-10** — Weich schieben (gleitender Ausschnitt, schneller beim
   Gedrückthalten), W A S D als Hauptbelegung, Alt+Pfeile zusätzlich.
+- **2026-10-10** — Kacheln neutral: Verweis = Adresse, `+` aus dem Katalog
+  mit Dialog aus den Feldern, `o` über den Adress-Router, Farbrollen nach
+  Bedeutung. Dazu: was man in der Hand hat, gleitet beim Schieben mit der
+  Ansicht (sprang vorher vor und rutschte zurück); die Lage unten rechts
+  zeigt, wo der Ausschnitt gerade ist, nicht das Ziel.
 
 - **2026-10-10** — Kacheln: „kalender" im `+`-Wähler (mit Dialog), Kalender-Kachel
   (Woche/Monat, fest/mitlaufend, +N, blättern), Holen im Hintergrund über

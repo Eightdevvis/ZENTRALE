@@ -149,8 +149,7 @@ DESK = {"name": "Elektronik", "stand": "s1", "verbindungen": [], "elemente": [
      "titel": "", "modus": "mono"},
     # Kachel (2026-10-10): eigener Zustand desk:kachel (o öffnen, blättern).
     {"id": "k", "art": "kachel", "x": -30, "y": 10, "w": 24, "h": 6, "titel": "Kalender",
-     "kachel": {"v": 1, "app": "kalender", "art": "ausschnitt",
-                "ref": {"modus": "mitlaufend", "tage": 7}}}]}
+     "kachel": {"v": 2, "adresse": "zentrale://kalender/ausschnitt?modus=mitlaufend&tage=7"}}]}
 
 
 def antwort(pfad, methode):
@@ -163,11 +162,16 @@ def antwort(pfad, methode):
             return copy.deepcopy(d)
     if p == "/api/desk-bild/quellen":             # Bilder auf dem Desk (2026-10-10)
         return {"quellen": [{"name": "foto.png", "pfad": "/x/Input/foto.png"}]}
+    if p == "/api/kacheln":                       # Katalog (2026-10-10)
+        return [{"app": "kalender", "art": "ausschnitt", "titel": "kalender",
+                 "min": {"w": 6, "h": 2}, "bevorzugt": {"w": 90, "h": 7}, "ttl": 60,
+                 "felder": [{"name": "tage", "typ": "zahl", "titel": "tage", "vorgabe": 7}],
+                 "aktionen": ["oeffnen"], "formen": ["zeilen"]}]
     if p == "/api/kachel":                        # Kacheln (2026-10-10)
-        return {"zeilen": [[["Mo 12.10.", "kal"]]], "text": "Kalender", "stand": "s",
+        return {"zeilen": [[["Mo 12.10.", "heute"]]], "text": "Kalender", "stand": "s",
                 "ttl": 60, "oben": 0, "oben_max": 3}
     if p == "/api/kachel/aktion":
-        return {"zeige": {"ansicht": "kalender", "ziel": "2026-10-12"}}
+        return {"zeige": {"adresse": "zentrale://kalender/2026-10-12"}}
     if p.startswith("/api/desk-bild"):
         if p == "/api/desk-bild/vorschau":
             return {"status": "ok", "zeilen": [[["@", None], ["#", "#ff0000"]]]}
