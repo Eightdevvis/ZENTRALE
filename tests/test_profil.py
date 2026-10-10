@@ -93,8 +93,14 @@ def test_klein_behaelt_seine_kruecken():
 # ── Was gross NICHT mehr mitschleppt ───────────────────────────────────
 
 def test_gross_hat_die_kruecken_abgeworfen():
-    namen = {t["function"]["name"] for t in gross.TOOLS}
-    assert "antwort" not in namen
+    # antwort gibt es seit 2026-10-10 auch auf gross — nicht als Krücke
+    # gegen Aussetzer, sondern für die Selbstauskunft (core/selbstauskunft.py):
+    # eigene Beschreibung, eigene Felder. Der Suffix der 9B-Krücke bleibt weg.
+    antwort = next(t["function"] for t in gross.TOOLS if t["function"]["name"] == "antwort")
+    k_antwort = next(t["function"] for t in klein.TOOLS if t["function"]["name"] == "antwort")
+    assert antwort["description"] != k_antwort["description"]
+    assert "erledigt" in antwort["parameters"]["properties"]
+    assert "erledigt" not in k_antwort["parameters"]["properties"]
     assert klein.ANTWORT_SUFFIX not in gross.system()
     assert klein._ASCII_MARKER_PROMPT not in gross.system()
     assert klein._DASHBOARD_VIEW not in gross.system()
@@ -173,13 +179,21 @@ def test_der_schnitt_haelt():
     input_ = {"unzip", "remove_input"}
     # 09.10.2026: Messreihen lesen (Ersatz für read_file auf data/) — eigener Deckel unten.
     reihen = {"read_series"}
+    # 10.10.2026: antwort mit Selbstauskunft — eigener Deckel unten.
+    selbst = {"antwort"}
     eigen = {w.name for w in werkzeug_register.auf_schiene("gross")
              if w.klein is None and w.name != "run_code"} - skill - suche - ablage - projekt \
         - kalender - pdf_word - fehler - browser - datei_import - input_ - reihen
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
                 if t["function"]["name"] not in
                 eigen | {"run_code"} | skill | suche | ablage | projekt | kalender | pdf_word
-                | fehler | browser | datei_import | input_ | reihen)
+                | fehler | browser | datei_import | input_ | reihen | selbst)
+    # antwort (10.10.2026, Selbstauskunft): ~240 Zeichen. Deckel 300: der
+    # Text sagt nur, DASS jede Antwort hierüber geht und allein; was die
+    # Felder bedeuten, steht in den Feldern (zählen nicht).
+    besch_selbst = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                       if t["function"]["name"] in selbst)
+    assert 0 < besch_selbst < 300
     # explain_error: eine Zeile, liest nur die Tabelle core/fehlercodes.py.
     assert 0 < sum(len(t["function"]["description"]) for t in gross.TOOLS
                    if t["function"]["name"] in fehler) < 150

@@ -742,6 +742,17 @@ class _AnthropicAdapter:
         self.msgs.append({"role": "assistant", "content": runde.roh.content})
         self.msgs.append({"role": "user", "content": [{"type": "text", "text": text}]})
 
+    def nachricht_anhaengen(self, text):
+        # Prüf-Hinweis nach einer Antwort über das Werkzeug antwort
+        # (2026-10-10): hinter die tool_results in DIESELBE user-Nachricht —
+        # tool_result-Blöcke vorn, Text danach ist erlaubt, und zwei user-
+        # Nachrichten hintereinander vermeidet es.
+        letzte = self.msgs[-1] if self.msgs else None
+        if letzte and letzte.get("role") == "user" and isinstance(letzte.get("content"), list):
+            letzte["content"].append({"type": "text", "text": text})
+        else:
+            self.msgs.append({"role": "user", "content": [{"type": "text", "text": text}]})
+
     def assistent_anhaengen(self, runde):
         # Assistant-Turn (inkl. tool_use-Blöcken) unverändert als Kontext
         # zurückhängen. final.content enthält auch die thinking-Blöcke; die

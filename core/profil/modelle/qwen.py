@@ -203,9 +203,27 @@ def pruefer(basis, messages=None, werkzeuge=frozenset(), **_):
 # ausgedachtem Ende ein, statt nach dem Ende zu fragen (f06). Seit Runde 7
 # wird deshalb gezielt read_calendar erzwungen — Lesen schadet nie, und
 # danach entscheidet qwen frei (auch: nachfragen).
+#
+# Selbstauskunft (2026-10-10): auf gross gibt es das Werkzeug antwort mit
+# festen Feldern (core/selbstauskunft.py). Mit der Einstellung
+# `antwort_pflicht` = an muss qwen in JEDER Runde ein Werkzeug rufen
+# (tool_choice "required") — die Antwort selbst dann über antwort, mit
+# Feldern. Anders als in Runde 6 hat qwen damit einen Ausgang, der nichts
+# ändert (antwort mit einer Rückfrage). Standard aus: ungemessen; der
+# Vergleich läuft mit dem Prüfstand (--einstellung antwort_pflicht=an).
+def antwort_pflicht() -> bool:
+    try:
+        import ai_config
+        wert = ai_config.setting("antwort_pflicht", "aus")
+    except Exception:
+        return False
+    return str(wert or "").strip().lower() in ("an", "1", "true", "ja")
+
+
 def tool_choice(*, nr: int, verlauf: list, tools=(), **_):
-    if nr != 0 or not _zusatz.will_aendern(verlauf):
-        return None
-    if any(t["function"]["name"] == "read_calendar" for t in tools or ()):
+    namen = {t["function"]["name"] for t in tools or ()}
+    if nr == 0 and _zusatz.will_aendern(verlauf) and "read_calendar" in namen:
         return {"type": "function", "function": {"name": "read_calendar"}}
+    if "antwort" in namen and antwort_pflicht():
+        return "required"
     return None

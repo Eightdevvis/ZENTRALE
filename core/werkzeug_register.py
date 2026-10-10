@@ -39,6 +39,7 @@
 import copy
 
 import kalender
+import selbstauskunft
 # Die Klasse eines Eintrags steht seit 2026-10-08 in werkzeug_eintrag (die
 # Einträge der Skills pdf/word in werkzeug_pdf_word, unten angehängt).
 from werkzeug_eintrag import Werkzeug  # noqa: F401  — Name bleibt hier öffentlich
@@ -616,7 +617,13 @@ WERKZEUGE = [
     # killt die "ich pruefe..."-und-Stopp-Aussetzer. werkzeug_schleife.run_tool
     # behandelt einen antwort-Call terminal (Text = finale Antwort). Das Modell
     # darf weiterhin frei antworten - dann greift der Suffix-Effekt, nicht der
-    # Tool-Pfad. Nur klein: ein starkes Modell antwortet einfach.
+    # Tool-Pfad.
+    # Seit 2026-10-10 auch auf gross, aus einem anderen Grund: die
+    # Selbstauskunft (core/selbstauskunft.py). Die Felder sagen sprachfrei,
+    # was die Antwort tut; der Prüfer vergleicht sie mit dem Werkzeug-
+    # Protokoll. Auf gross erledigt die Schleife den Aufruf selbst
+    # (werkzeug_schleife._abgabe), nicht run_tool. Das Schema dort: unten,
+    # gross_parameter.
     Werkzeug(
         name="antwort",
         terminal=True,
@@ -628,7 +635,12 @@ WERKZEUGE = [
             "die fertige, formulierte Antwort liefern. Nie nur ankündigen "
             "('ich schaue nach…'), immer die echte Antwort."
         ),
-        gross=None,
+        gross=(
+            "Gib JEDE Antwort hierüber ab, als letzten Aufruf des Zugs und allein "
+            "(nach den Ergebnissen der anderen Werkzeuge). 'text' ist die Antwort; "
+            "die übrigen Felder sagen ehrlich, was sie tut — ZENTRALE vergleicht "
+            "sie mit den Werkzeug-Ergebnissen."
+        ),
         parameter={
             "type": "object",
             "properties": {
@@ -1323,6 +1335,10 @@ _erweitern("edit_calendar_routine", {
 # gesagt wird das im gross-Text oben (die klein-Felder bleiben byte-gleich).
 _erweitern("add_calendar_pause", {}, vorn={"kennung": _KENNUNG}, required=["von"])
 _erweitern("delete_calendar_entry", {}, vorn={"kennung": _KENNUNG}, required=[])
+# Selbstauskunft (2026-10-10): die Felder und ihr Vokabular stehen in
+# core/selbstauskunft.py — eine Quelle für Schema und Prüfer.
+_erweitern("antwort", copy.deepcopy(selbstauskunft.FELDER),
+           required=list(selbstauskunft.PFLICHT))
 
 
 # Deutsche Alt-Namen der klein-Schiene → kanonische. Abgeleitet, nicht

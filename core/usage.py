@@ -166,7 +166,7 @@ def tokens_geschaetzt(zeichen: int) -> int:
 def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
            cache_read: int = 0, cache_write: int = 0,
            geschaetzt: bool = False, output_geschaetzt: int = 0,
-           faktor: float = 1.0) -> float:
+           faktor: float = 1.0, zweck: str | None = None) -> float:
     """
     Einen Call verbuchen. Gibt die geschätzten Kosten dieses Calls in Euro
     zurück (damit der Aufrufer sie gleich loggen kann).
@@ -184,6 +184,11 @@ def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
 
     faktor (2026-10-09): Preis-Faktor des Wegs — 0.5 für die Message Batches
     API von Anthropic (halber Preis; der Prüfstand-Richter mit --richter-batch).
+
+    zweck (2026-10-10): wofür, wenn es kein Gesprächszug ist — z. B.
+    „klassifikator" (core/klassifikator.py). Zählt ganz normal im Topf der
+    Herkunft mit (Deckel und Rückfall sehen es) und zusätzlich je Monat
+    unter "zwecke", damit erkennbar bleibt, was die Hilfsaufrufe kosten.
 
     Schluckt Fehler: eine kaputte Buchhaltung darf niemals ein Gespräch
     abbrechen. Im schlimmsten Fall stimmt die Statistik nicht.
@@ -208,6 +213,8 @@ def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
             _bump(t["tage"], heute, eur)
             _bump(t["monate"], monat, eur)
             _bump(t["modelle"], model or "unbekannt", eur)
+            if zweck:
+                _bump(t.setdefault("zwecke", {}).setdefault(str(zweck), {}), monat, eur)
             if geschaetzt or output_geschaetzt > 0:
                 _bump(t.setdefault("geschaetzt", {}), monat,
                       eur if geschaetzt else min(eur, teil_eur))

@@ -724,3 +724,14 @@ def test_desk_ordner_liegt_im_test_nicht_im_echten_data():
     wert = os.environ.get("ZENTRALE_DESK_ORDNER")
     assert wert, "ZENTRALE_DESK_ORDNER ist nicht gesetzt"
     assert not os.path.realpath(desk.ordner()).startswith(os.path.realpath(ROOT))
+
+
+def test_klassifikator_beispiele_zeigen_nie_ins_echte_data():
+    """Jeder geprüfte Zug schreibt ein Beispiel (core/klassifikator_beispiele.py,
+    2026-10-10). Zeigt der Ordner im Test ins echte data/, ist der Riegel in
+    tests/conftest.py weg — und Probesätze landeten in Sashas Trainingsdaten."""
+    import klassifikator_beispiele
+    echt = os.path.realpath(os.path.join(ROOT, "data"))
+    assert not os.path.realpath(klassifikator_beispiele.ordner()).startswith(echt), \
+        klassifikator_beispiele.ordner()
+    assert not os.environ["ZENTRALE_KLASSIFIKATOR_BEISPIELE_DIR"].startswith(echt)

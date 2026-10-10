@@ -160,8 +160,10 @@ class ZusatzPruefer:
             return "zeit"
         return None
 
-    def nach_antwort(self, text: str, *, letzte_runde: bool):
-        k = self._basis.nach_antwort(text, letzte_runde=letzte_runde)
+    def nach_antwort(self, text: str, *, letzte_runde: bool, **mit):
+        # mit: auskunft (Selbstauskunft über antwort, 2026-10-10) — gehört
+        # dem Prüfer der Schiene, hier nur durchgereicht.
+        k = self._basis.nach_antwort(text, letzte_runde=letzte_runde, **mit)
         if k or letzte_runde:
             return k
         if getattr(self._basis, "modus", "an") != "an":

@@ -39,6 +39,7 @@ import ki_antwort
 import ki_browser      # nur: welche Browser-Ergebnisse eindampfen (2026-10-09)
 import kidebug
 import quellen
+import selbstauskunft
 import werkzeug_befund
 import werkzeug_register
 import zug_ablauf
@@ -104,6 +105,9 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
     Ereignis {"ehrlichkeit": …} (Erledigt-Zeile, Befunde, offene Zusagen).
     Auf gross am Ende außerdem {"quellen": [{titel, url, werkzeug}]}, wenn
     in diesem Zug Seiten gelesen wurden (core/quellen.py, 2026-10-10).
+    Auf gross ist ein Aufruf `antwort` allein die fertige Antwort, seine
+    Felder gehen als Selbstauskunft an den Prüfer (core/selbstauskunft.py,
+    2026-10-10); zusammen mit anderen Werkzeugen kommt er zurück.
     """
     # Ablauf-Protokoll (core/zug_ablauf.py, 2026-10-09): nur mitschreiben,
     # was ohnehin passiert — Text zwischen Werkzeugen, Aufrufe mit Ergebnis,
@@ -138,7 +142,18 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
             yield fehler(f"{fehler_name}-Fehler: {e}")
             return
 
-        if not runde.calls:
+        # Selbstauskunft (2026-10-10): auf gross kommt die Antwort über das
+        # Werkzeug `antwort` — dann ist sie die fertige Antwort dieses Zugs,
+        # genau wie freier Text ohne Werkzeug.
+        abgaben = _abgaben(runde.calls) if (schiene == "gross" and not tutor_mode) else []
+        abgabe = abgaben[0] if (len(runde.calls) == 1 and abgaben) else None
+        if not runde.calls or abgabe is not None:
+            text, auskunft = runde.text, None
+            if abgabe is not None:
+                auskunft = selbstauskunft.lesen(abgabe[2])
+                # Vorgeplänkel neben dem Aufruf zählt nicht; fehlt der Text
+                # im Feld, ist der freie Text die Antwort.
+                text = auskunft.text or runde.text
             if pruefer is not None and hasattr(adapter, "hinweis_anhaengen"):
                 # Geprüft wird JEDE fertige Antwort, auch die nach einer
                 # Korrektur (2026-10-09; vorher nur die erste). Eine
@@ -147,22 +162,23 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
                 # letzten erlaubten Runde korrigiert der Prüfer nie, damit
                 # die Antwort mit Warnungen rausgeht statt mit der Meldung
                 # „Maximale Tool-Tiefe".
-                korrektur = pruefer.nach_antwort(runde.text,
-                                                 letzte_runde=(nr >= grenze - 1))
+                mit = {"auskunft": auskunft} if auskunft is not None else {}
+                korrektur = pruefer.nach_antwort(text, letzte_runde=(nr >= grenze - 1),
+                                                 **mit)
                 if korrektur:
                     # Die Antwort geht NICHT raus (der Adapter puffert den
                     # Text einer Runde); die KI bekommt den Befund und
                     # schreibt sie neu — oder ruft jetzt das Werkzeug.
-                    zug_ablauf.pruefung(pruefer.befunde, korrektur, runde.text,
+                    zug_ablauf.pruefung(pruefer.befunde, korrektur, text,
                                         runde=pruefer.korrekturen)
                     yield {"pruefung_runde": {"runde": pruefer.korrekturen,
                                               "von": pruefer.runden}}
-                    adapter.hinweis_anhaengen(runde, korrektur)
+                    _korrektur_anhaengen(adapter, runde, abgabe, korrektur)
                     continue
-            yield from antwort(runde.text, tutor_mode=tutor_mode,
+            yield from antwort(text, tutor_mode=tutor_mode,
                                user_query=user_query, store=store)
             yield from _quellen_melden(gelesen)
-            schluss = pruefer.abschluss(runde.text) if pruefer is not None else None
+            schluss = pruefer.abschluss(text) if pruefer is not None else None
             if schluss:
                 yield schluss
             return
@@ -170,11 +186,18 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
         adapter.assistent_anhaengen(runde)
         zug_ablauf.text(runde.text)          # Vorgeplänkel, das der Chat nicht zeigt
         ergebnisse = []
+        abgabe_ids = {a[0] for a in abgaben}
         for call_id, name, args in runde.calls:
             if gestoppt(abbruch):
                 zug_ablauf.gestoppt()
                 yield dict(GESTOPPT)
                 return
+            if call_id in abgabe_ids:
+                # antwort zusammen mit anderen Werkzeugen: die Antwort wäre
+                # geschrieben, bevor die KI deren Ergebnisse kennt. Die
+                # anderen laufen, antwort kommt zurück (2026-10-10).
+                ergebnisse.append((call_id, NICHT_ALLEIN, True))
+                continue
             spur = zug_ablauf.werkzeug_beginnt(_kanonisch(name), args)
             ausgang = yield from run_tool(
                 name, args, tutor_mode=tutor_mode, active_exec=active_exec,
@@ -206,6 +229,36 @@ def laufen(adapter, *, tutor_mode: bool, active_exec, user_query, store=None,
                f"sie hat nicht zu Ende geantwortet.")
     zug_ablauf.fehler(meldung)
     yield fehler(meldung)
+
+
+# Ergebnisse an die KI für den antwort-Aufruf auf gross, wenn er nicht als
+# Antwort durchgeht. Die Anweisung selbst (Prüf-Hinweis) steht danach als
+# eigene Nutzer-Nachricht, nie im Werkzeug-Ergebnis (Anthropic, „Mitigate
+# jailbreaks"; core/ehrlichkeit.py).
+NICHT_ALLEIN = werkzeug_befund.mit_kopf(werkzeug_befund.abgebrochen(
+    "Antwort", "W-ANTWORT-NICHT-ALLEIN",
+    "antwort geht nur allein, als letzter Aufruf — nach den Ergebnissen der anderen "
+    "Werkzeuge", nichts="nicht abgegeben"))
+ZURUECKGEHALTEN = werkzeug_befund.mit_kopf(werkzeug_befund.abgebrochen(
+    "Antwort", "W-ANTWORT-GEPRUEFT", "vor Sasha geprüft, der Hinweis folgt",
+    nichts="nicht abgegeben"))
+
+
+def _abgaben(calls) -> list:
+    """Die antwort-Aufrufe einer Runde (gross): [(call_id, name, args)]."""
+    return [c for c in calls or () if _kanonisch(c[1]) == "antwort"]
+
+
+def _korrektur_anhaengen(adapter, runde, abgabe, hinweis: str):
+    """Die geprüfte Antwort bleibt im Kontext, dahinter der Hinweis. Kam sie
+    über antwort, braucht der Aufruf erst sein Ergebnis (beide Dialekte
+    verlangen zu jedem Aufruf eins), dann folgt der Hinweis als Nachricht."""
+    if abgabe is None or not hasattr(adapter, "nachricht_anhaengen"):
+        adapter.hinweis_anhaengen(runde, hinweis)
+        return
+    adapter.assistent_anhaengen(runde)
+    adapter.ergebnisse_anhaengen([(abgabe[0], ZURUECKGEHALTEN, False)])
+    adapter.nachricht_anhaengen(hinweis)
 
 
 def _quellen_melden(gelesen):
@@ -352,7 +405,9 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
 # ── Was die Schleife selbst erledigt ───────────────────────────────────
 
 def _antwort_werkzeug(args: dict, *, user_query, store=None):
-    """antwort (nur klein) ist TERMINAL: der Text IST die finale Antwort."""
+    """antwort ist TERMINAL: der Text IST die finale Antwort. Hier nur noch
+    für klein (und fremde Wege) — auf gross nimmt laufen() den Aufruf selbst
+    als Antwort, mit Selbstauskunft und Prüfung (2026-10-10)."""
     text = str(args.get("text", "")).strip()
     yield from ki_antwort.mit_bildern(text, user_query, store=store)
     return ("stop",)

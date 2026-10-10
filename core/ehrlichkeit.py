@@ -58,6 +58,8 @@ import re
 import ai_config
 import ehrlichkeit_erkennen as erkennen
 import input_aufraeumen
+import klassifikator
+import klassifikator_beispiele
 import werkzeug_register
 import zusagen
 import zug
@@ -365,8 +367,12 @@ def aufschub_befund(antwort: str, protokoll: list, nutzer_text: str) -> dict | N
 
 
 def befunde(antwort: str, protokoll: list, *, bekannt_text: str = "",
-            frueher: list = (), nutzer_text: str = "") -> list:
-    """Was an einer Antwort nicht gedeckt ist. -> [{art, satz|kennung}]"""
+            frueher: list = (), nutzer_text: str = "", auskunft=None) -> list:
+    """Was an einer Antwort nicht gedeckt ist. -> [{art, satz|kennung}]
+
+    auskunft (selbstauskunft.Auskunft, 2026-10-10): kam die Antwort über das
+    Werkzeug antwort, zählen dessen Felder mit (mit_auskunft); ohne sie nur
+    die Satzmuster wie bisher."""
     raus = []
     for tat in erkennen.taten(antwort):
         if not tat_belegt(tat, protokoll, frueher):
@@ -386,7 +392,104 @@ def befunde(antwort: str, protokoll: list, *, bekannt_text: str = "",
                   aufschub_befund(antwort, protokoll, nutzer_text)):
         if weich:
             raus.append(weich)
+    if auskunft is not None:
+        raus = mit_auskunft(raus, auskunft, antwort, protokoll, frueher=frueher,
+                            nutzer_text=nutzer_text)
     return raus
+
+
+# ── Selbstauskunft (2026-10-10) ─────────────────────────────────────────
+# Das Modell sagt in festen Feldern, was seine Antwort tut (core/
+# selbstauskunft.py) — sprachfrei. Python vergleicht die Felder mit dem
+# Protokoll; die Satzmuster bleiben das Netz:
+#   Feld behauptet, Protokoll deckt nicht        → Befund (quelle „auskunft")
+#   Feld und Satzmuster sehen dasselbe           → ein Befund (quelle „beide")
+#   Satzmuster sehen etwas, das Feld verneint    → Befund „unsicher": es gilt
+#       die Wortliste wie bisher, außer der Klassifikator (Einstellung
+#       `klassifikator`) entscheidet anders (Pruefer._klaeren)
+#   Feld behauptet, Satzmuster sehen nichts      → kein Widerspruch: das Modell
+#       hat es selbst gesagt, die Wortliste kennt die Form nur nicht (andere
+#       Sprache) — geprüft wird das Feld.
+# Schreibendes Werkzeug lief ok, `erledigt` leer → kein Befund: die
+# Erledigt-Zeile zeigt es ohnehin.
+
+def _schritt_belegt(bereich: str, protokoll: list, frueher: list, frueher_satz: bool) -> bool:
+    tat = erkennen.Tat("", {bereich}, frueher_satz)
+    return tat_belegt(tat, protokoll, frueher)
+
+
+def _gate_lief(protokoll: list) -> bool:
+    """Lief in diesem Zug ein Werkzeug, das Sasha bestätigen muss (ok oder
+    abgelehnt)? Dann hat das Programm schon per Knopf gefragt."""
+    for s in protokoll:
+        if s.status in ("ok", "abgelehnt") and werkzeug_register.braucht_erlaubnis(s.name, s.args):
+            return True
+    return False
+
+
+def _letzter_satz(antwort: str) -> str:
+    alle = erkennen.saetze(antwort)
+    return alle[-1].text if alle else _kurz(antwort)
+
+
+def mit_auskunft(wort: list, auskunft, antwort: str, protokoll: list, *,
+                 frueher: list = (), nutzer_text: str = "") -> list:
+    """Die Befunde der Satzmuster (`wort`) mit der Selbstauskunft verrechnen."""
+    raus = [b for b in wort if b["art"] not in ("tat", "erlaubnis_frage", "aufschub")]
+    erledigt = set(auskunft.erledigt)
+    alle_taten = erkennen.taten(antwort)
+
+    # Taten: je Bereich aus dem Feld, dazu die der Satzmuster.
+    erklaert = set()
+    for b in (x for x in wort if x["art"] == "tat"):
+        bb = set(b.get("bereiche") or ())
+        if erledigt and (not bb or bb & erledigt):
+            raus.append({**b, "quelle": "beide"})
+            erklaert |= (bb & erledigt) if bb else set(erledigt)
+        else:
+            raus.append({**b, "quelle": "wortliste", "unsicher": True})
+    for bereich in auskunft.erledigt:
+        if bereich in erklaert:
+            continue
+        passend = [t for t in alle_taten if not t.bereiche or bereich in t.bereiche]
+        frueher_satz = any(t.frueher for t in passend)
+        if _schritt_belegt(bereich, protokoll, frueher, frueher_satz):
+            continue
+        raus.append({"art": "tat", "satz": passend[0].satz if passend else "",
+                     "bereiche": [bereich], "quelle": "auskunft"})
+
+    # Erlaubnis-Frage: erkennen die Satzmuster die Frage, entscheiden sie wie
+    # bisher; sonst das Feld — vorsichtig (auf Auftrag/Zustimmung, oder auf
+    # eine Frage Sashas, wenn in diesem Zug noch gar kein Werkzeug lief).
+    wort_frage = next((x for x in wort if x["art"] == "erlaubnis_frage"), None)
+    if auskunft.fragt_erlaubnis:
+        if wort_frage:
+            raus.append({**wort_frage, "quelle": "beide"})
+        elif erkennen.erlaubnis_frage(antwort) is None and not _gate_lief(protokoll):
+            klar = erkennen.auftrag(nutzer_text) or erkennen.zustimmung(nutzer_text)
+            if klar or (erkennen.will_wissen(nutzer_text) and not protokoll):
+                raus.append({"art": "erlaubnis_frage", "satz": _letzter_satz(antwort),
+                             "werkzeug": "das passende Werkzeug", "quelle": "auskunft"})
+    elif wort_frage:
+        raus.append({**wort_frage, "quelle": "wortliste", "unsicher": True})
+
+    # Aufschub: dasselbe Muster.
+    wort_auf = next((x for x in wort if x["art"] == "aufschub"), None)
+    if auskunft.schiebt_auf:
+        if wort_auf:
+            raus.append({**wort_auf, "quelle": "beide"})
+        elif not erkennen.aufschuebe(antwort) and erkennen.auftrag(nutzer_text) \
+                and not tat_lief("tun", True, protokoll):
+            raus.append({"art": "aufschub", "satz": "", "aktion": "tun",
+                         "werkzeug": TATEN["tun"][1], "quelle": "auskunft"})
+    elif wort_auf:
+        raus.append({**wort_auf, "quelle": "wortliste", "unsicher": True})
+    return raus
+
+
+# Welche Satzart ein unsicherer Befund behauptet (klassifikator.ARTEN).
+_ART_FUER = {"tat": "behauptung_tat", "erlaubnis_frage": "erlaubnisfrage",
+             "aufschub": "aufschub"}
 
 
 _HINWEIS_AUF = ("<pruefung_automatisch>\n(ZENTRALE prüft jede Antwort, bevor Sasha sie "
@@ -410,6 +513,10 @@ KEIN_WERKZEUG = ("Du hast in diesem Zug KEIN Werkzeug aufgerufen. Ruf das Werkze
 
 
 def _befund_zeile(b: dict) -> str:
+    if b["art"] == "tat" and not b.get("satz"):
+        return (f"- Du meldest im Feld erledigt eine Änderung "
+                f"({', '.join(b.get('bereiche') or ())}) — in diesem Zug lief dafür kein "
+                f"passendes schreibendes Werkzeug mit [ergebnis: ok].")
     if b["art"] == "tat":
         return (f"- Du schreibst „{b['satz']}“ — in diesem Zug lief dafür kein "
                 f"passendes schreibendes Werkzeug mit [ergebnis: ok].")
@@ -428,7 +535,8 @@ def _befund_zeile(b: dict) -> str:
     if b["art"] == "aufschub":
         beispiel = ("z. B. add_calendar_pause nur mit von = heute" if b.get("aktion") == "pause"
                     else f"z. B. {b.get('werkzeug') or 'das Werkzeug'} mit dem, was feststeht")
-        return (f"- Du schreibst „{b['satz']}“ — Sasha hat das klar beauftragt. Trag den "
+        was = f"Du schreibst „{b['satz']}“" if b.get("satz") else "Du schiebst einen Auftrag auf"
+        return (f"- {was} — Sasha hat das klar beauftragt. Trag den "
                 f"sicheren Teil JETZT ein ({beispiel}) und frag nur nach dem, was wirklich "
                 f"fehlt. Ist nichts davon sicher (Tag oder Uhrzeit fehlen), lass den "
                 f"Aufschub weg und frag nur danach.")
@@ -493,7 +601,9 @@ def warnungen(befunde_: list, protokoll: list = ()) -> list:
             wo = bereich_namen(b.get("bereiche"))
             folge = ("dafür wurde nichts geändert" if geschrieben
                      else "es wurde nichts geändert")
-            raus.append(f"⚠ Ohne Beleg: „{_kurz(b.get('satz'))}“ — in diesem Zug lief kein "
+            was = (f"„{_kurz(b.get('satz'))}“" if b.get("satz")
+                   else "die Antwort meldet eine Änderung")
+            raus.append(f"⚠ Ohne Beleg: {was} — in diesem Zug lief kein "
                         f"passendes Werkzeug{f' ({wo})' if wo else ''}, {folge}.")
         elif art == "nicht_da":
             raus.append(f"⚠ ‚Nicht da' ohne vollständige Suche: „{_kurz(b.get('satz'))}“ — "
@@ -529,6 +639,8 @@ class Pruefer:
         self.korrekturen = 0
         self.befunde = []
         self.gesehen = set()        # Arten von Befunden aus früheren Runden
+        self.auskunft = None        # Selbstauskunft der letzten Antwort (oder None)
+        self.entscheide = {}        # unsicherer Satz → Urteil des Klassifikators
 
     @property
     def korrigiert(self) -> bool:
@@ -538,14 +650,20 @@ class Pruefer:
         self.protokoll.append(Schritt(werkzeug_register.kanonisch(name), args,
                                       status_aus(text, ist_fehler), str(text or "")))
 
-    def nach_antwort(self, text: str, *, letzte_runde: bool) -> str | None:
+    def nach_antwort(self, text: str, *, letzte_runde: bool, auskunft=None) -> str | None:
         """Die fertige Antwort prüfen — nach JEDER Korrekturrunde wieder ganz
         (alle Prüfer). -> Korrektur-Text für eine weitere Runde, oder None:
         die Antwort geht so raus (bestanden, nicht „an", Runden aufgebraucht,
-        oder die letzte erlaubte Runde der Schleife)."""
+        oder die letzte erlaubte Runde der Schleife).
+
+        auskunft: die Felder des Werkzeugs antwort (gross, 2026-10-10), None
+        bei freiem Text — dann gelten nur die Satzmuster."""
+        self.auskunft = auskunft
         b = befunde(text, self.protokoll, bekannt_text=self.bekannt_text,
-                    frueher=self.frueher, nutzer_text=self.nutzer_text)
+                    frueher=self.frueher, nutzer_text=self.nutzer_text, auskunft=auskunft)
+        b = self._klaeren(b)
         self.befunde = b
+        self._beispiel(text, b)
         # Weiche Befunde (Erlaubnis-Frage, Aufschub) nur EINE Runde je Zug.
         b = [x for x in b if not (x["art"] in WEICH and x["art"] in self.gesehen)]
         if (not b or self.modus != AN or letzte_runde
@@ -559,6 +677,51 @@ class Pruefer:
                   f"{len(b)} Befund(e)")
         return hinweis(b, runde=self.korrekturen, runden=self.runden,
                        wiederholt=wiederholt, werkzeug_lief=bool(self.protokoll))
+
+    def _klaeren(self, befunde_: list) -> list:
+        """Unsichere Befunde (Feld und Satzmuster widersprechen sich): ist der
+        Klassifikator an, entscheidet er; sonst — oder wenn er es nicht weiß
+        — gilt die Wortliste wie bisher. Nur hier wird er gefragt, nie je
+        Antwort pauschal; ein Satz einmal je Zug."""
+        if not any(b.get("unsicher") for b in befunde_):
+            return befunde_
+        if klassifikator.modus() == klassifikator.AUS:
+            return [{**b, "entscheid": "wortliste"} if b.get("unsicher") else b
+                    for b in befunde_]
+        raus = []
+        for b in befunde_:
+            if not b.get("unsicher"):
+                raus.append(b)
+                continue
+            satz, art = b.get("satz") or "", _ART_FUER.get(b["art"], "sonst")
+            if satz not in self.entscheide:
+                self.entscheide[satz] = klassifikator.entscheiden(satz, art)
+            urteil = self.entscheide[satz]
+            if urteil is False:
+                self._log(f"PRÜFUNG ~ Klassifikator verwirft „{_kurz(satz, 60)}“")
+                continue
+            raus.append({**b, "entscheid": "klassifikator" if urteil else "wortliste"})
+        return raus
+
+    def _beispiel(self, text: str, befunde_: list):
+        """Ein Datensatz für einen späteren eigenen Klassifikator
+        (core/klassifikator_beispiele.py) — nur lokal, wirft nie."""
+        try:
+            saetze = [{"satz": a["satz"], "art": a["art"], "sicher": a["sicher"]}
+                      for a in klassifikator.Wortlisten().satzarten(text)]
+            klassifikator_beispiele.schreiben({
+                "gespraech": self.gespraech,
+                "runde": self.korrekturen,
+                "saetze": saetze,
+                "auskunft": self.auskunft.als_dict() if self.auskunft is not None else None,
+                "befunde": befunde_,
+                "entscheide": {k: v for k, v in self.entscheide.items()},
+                "protokoll": [{"werkzeug": s.name, "status": s.status,
+                               "schreibt": s.schreibt, "bereich": s.bereich}
+                              for s in self.protokoll],
+            })
+        except Exception as e:
+            self._log(f"PRÜFUNG ✗ Beispiel: {e}")
 
     def abschluss(self, text: str | None) -> dict | None:
         """Das Ereignis für die Route: Erledigt-Zeile, Befunde, Warnungen,
@@ -574,6 +737,8 @@ class Pruefer:
             # lief: das steht jetzt ausdrücklich da (2026-10-09).
             zeile = KEINE_AENDERUNG
         ereignis = {"erledigt": liste, "zeile": zeile}
+        if self.auskunft is not None and text is not None:
+            ereignis["auskunft"] = self.auskunft.als_dict()
         if self.befunde:
             ereignis["befunde"] = self.befunde
             wie = (f"nach {self.korrekturen} Korrektur(en)" if self.korrigiert

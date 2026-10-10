@@ -85,6 +85,11 @@ os.environ.setdefault("ZENTRALE_APP_PFAD_TUTOR",
 # im Betrieb ~/Zentrale): kein Test legt dort etwas an oder liest von dort.
 os.environ.setdefault("ZENTRALE_NUTZER_ORDNER", os.path.join(_DATEN_TMP, "nutzer"))
 os.environ.setdefault("ZENTRALE_RUECKMELDUNGEN_DIR", os.path.join(_DATEN_TMP, "rueckmeldungen"))
+# Beispiele für den Klassifikator (core/klassifikator_beispiele.py,
+# 2026-10-10): jeder geprüfte Zug schreibt eine Zeile — in Tests nie nach
+# data/. Dazu unten pro Test ein eigener Ordner.
+os.environ.setdefault("ZENTRALE_KLASSIFIKATOR_BEISPIELE_DIR",
+                      os.path.join(_DATEN_TMP, "klassifikator_beispiele"))
 # Desk View (core/desk.py, 2026-10-09): im Betrieb data/desk/. Dazu unten
 # pro Test ein eigener Ordner.
 os.environ.setdefault("ZENTRALE_DESK_ORDNER", os.path.join(_DATEN_TMP, "desk"))
@@ -274,6 +279,14 @@ def _ablage_frisch(tmp_path_factory, monkeypatch):
 @pytest.fixture(autouse=True)
 def _rueckmeldungen_frisch(tmp_path_factory, monkeypatch):
     monkeypatch.setenv("ZENTRALE_RUECKMELDUNGEN_DIR", str(tmp_path_factory.mktemp("rueckmeldungen")))
+    yield
+
+
+# 7d2. Jeder Test hat seine eigenen Klassifikator-Beispiele (2026-10-10).
+@pytest.fixture(autouse=True)
+def _beispiele_frisch(tmp_path_factory, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_KLASSIFIKATOR_BEISPIELE_DIR",
+                       str(tmp_path_factory.mktemp("klassifikator_beispiele")))
     yield
 
 

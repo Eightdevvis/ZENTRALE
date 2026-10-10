@@ -22,7 +22,7 @@ class KeinWeg(RuntimeError):
 
 
 def einmal(system, nachricht, *, modell=None, max_tokens=500, vorfuellen=None,
-           als_json=False, log="BILLIG", timeout=90):
+           als_json=False, log="BILLIG", timeout=90, anbieter=None, zweck=None):
     """Einen Auftrag schicken, den Text zurückbekommen. -> (text, modell)
 
     Wirft bei jedem Fehler (Netz, Anbieter, kein Weg) — der Aufrufer
@@ -32,8 +32,11 @@ def einmal(system, nachricht, *, modell=None, max_tokens=500, vorfuellen=None,
 
     vorfuellen: Anfang der Antwort (nur Anthropic; zwingt z. B. in JSON).
     Der vorgefüllte Text steht im Ergebnis mit drin.
-    als_json: OpenAI-kompatibel response_format json_object."""
-    name = ai_backends.cloud_provider() or ""
+    als_json: OpenAI-kompatibel response_format json_object.
+    anbieter: ein bestimmter Anbieter statt des aktiven (2026-10-10, der
+    Klassifikator fragt das Modell aus seiner Einstellung).
+    zweck: Vermerk in der Buchung (usage.buchen, „zwecke")."""
+    name = anbieter or ai_backends.cloud_provider() or ""
     prov = providers.get(name)
     mdl = modell or providers.cheap_model(name)
     art = prov.get("kind")
@@ -48,7 +51,7 @@ def einmal(system, nachricht, *, modell=None, max_tokens=500, vorfuellen=None,
                                          system=system, messages=msgs)
         text = "".join(b.text for b in antwort.content
                        if getattr(b, "type", None) == "text")
-        _buchen(mdl, antwort.usage, log)
+        _buchen(mdl, antwort.usage, log, zweck)
         return (vorfuellen or "") + text, mdl
 
     if art == "openai_compat":
@@ -61,13 +64,13 @@ def einmal(system, nachricht, *, modell=None, max_tokens=500, vorfuellen=None,
             messages=[{"role": "system", "content": system},
                       {"role": "user", "content": nachricht}],
             stream=False, timeout=timeout, **extra)
-        _buchen(mdl, getattr(resp, "usage", None), log)
+        _buchen(mdl, getattr(resp, "usage", None), log, zweck)
         return (resp.choices[0].message.content or "").strip(), mdl
 
     raise KeinWeg(f"kein Weg für Anbieter {name!r} ({art!r})")
 
 
-def _buchen(model, verbrauch, log):
+def _buchen(model, verbrauch, log, zweck=None):
     """Den Aufruf mitrechnen. Diese Aufrufe feuern OHNE Sashas Zutun — was
     man nicht sieht, kann man nicht deckeln."""
     if verbrauch is None:
@@ -78,7 +81,7 @@ def _buchen(model, verbrauch, log):
                    or getattr(verbrauch, "prompt_tokens", 0) or 0)
         raus = int(getattr(verbrauch, "output_tokens", 0)
                    or getattr(verbrauch, "completion_tokens", 0) or 0)
-        eur = usage.buchen(model, input_tokens=rein, output_tokens=raus)
+        eur = usage.buchen(model, input_tokens=rein, output_tokens=raus, zweck=zweck)
         state.push_log(f"{log} ← {model} in={rein} out={raus} ≈{eur:.4f}€")
     except Exception as e:
         # Nicht still: eine verlorene Buchung macht den Budget-Deckel blind.

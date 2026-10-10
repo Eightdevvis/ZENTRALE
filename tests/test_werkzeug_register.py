@@ -172,7 +172,8 @@ def test_schema_liefert_eigene_kopien():
 def test_klein_namen_und_terminale():
     assert reg.schema("klein")[-1]["function"]["name"] == "frage_knopf"
     assert reg.terminal("klein") == {"antwort", "lies_news"}
-    assert reg.terminal("gross") == {"read_news"}
+    # antwort seit 2026-10-10 auch auf gross (Selbstauskunft).
+    assert reg.terminal("gross") == {"antwort", "read_news"}
     assert reg.kanonisch("hole_url") == "fetch_url"
     assert reg.kanonisch("fetch_url") == "fetch_url"
 

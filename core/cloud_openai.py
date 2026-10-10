@@ -440,6 +440,11 @@ class _OpenAIAdapter:
         self.msgs.append({"role": "assistant", "content": runde.text or ""})
         self.msgs.append({"role": "user", "content": text})
 
+    def nachricht_anhaengen(self, text):
+        # Prüf-Hinweis nach einer Antwort über das Werkzeug antwort
+        # (2026-10-10): nach den role=tool-Ergebnissen eine user-Nachricht.
+        self.msgs.append({"role": "user", "content": text})
+
     def assistent_anhaengen(self, runde):
         # Assistant-Turn (mit tool_calls) als Kontext anhaengen — die
         # Argumente als ROHER String, so wie das Modell sie geliefert hat.

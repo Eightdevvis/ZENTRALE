@@ -30,6 +30,9 @@ data/desk/
 # Bewertungen der KI-Antworten (core/rueckmeldungen.py, seit 2026-10-08):
 # eine .jsonl pro Rechner, mit Kommentaren von Sasha — privat wie die Gespraeche.
 data/rueckmeldungen/
+# Beispiele für einen späteren Klassifikator (core/klassifikator_beispiele.py,
+# seit 2026-10-10): Sätze aus Antworten der KI, nur lokal, nie ins Repo.
+data/klassifikator_beispiele/
 # Das DATEI-GEDAECHTNIS (Steckbrief, Ziele, Dossiers, Tagebuch). Markdown,
 # faellt also NICHT unter data/*.json — deshalb eine eigene Zeile, und
 # deshalb steht sie hier als erstes: das ist der persoenlichste Inhalt im

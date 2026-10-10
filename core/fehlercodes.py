@@ -30,6 +30,15 @@ CODES = {
         "Nach dem Schreiben nachgelesen: es stand nicht (oder nicht so) da wie verlangt. "
         "Der alte Stand ist wiederhergestellt.",
         "Neu lesen, was jetzt dasteht. Nicht blind wiederholen; Sasha sagen, dass es nicht ging."),
+    # antwort auf gross (Selbstauskunft, 2026-10-10, core/werkzeug_schleife.py)
+    "W-ANTWORT-NICHT-ALLEIN": (
+        "antwort kam zusammen mit anderen Werkzeugen — die Antwort wäre vor deren "
+        "Ergebnissen geschrieben.",
+        "Die Ergebnisse lesen, dann antwort allein als letzten Aufruf."),
+    "W-ANTWORT-GEPRUEFT": (
+        "ZENTRALE hat die Antwort vor Sasha geprüft und Stellen ohne Beleg gefunden; "
+        "der Hinweis folgt als eigene Nachricht.",
+        "Dem Hinweis folgen: Werkzeug aufrufen oder die Antwort neu schreiben."),
     # ── Kalender (Werkzeug) ──
     "K-PFLICHTFELD": (
         "Eine nötige Angabe fehlt (Titel, Tag, Regel oder Kennung).",
