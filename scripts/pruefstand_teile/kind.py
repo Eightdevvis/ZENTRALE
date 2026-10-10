@@ -64,6 +64,8 @@ def ausfuehren(fall: dict, *, code_wurzel: str, tmp: str, richter_modell=None,
         server = umgebung.SeitenServer((fall.get("browser") or {}).get("seiten"))
         rueckwege.append(server.starten())
         fall = umgebung.platzhalter(fall, {"{server}": server.adresse or ""})
+        # Der Browser darf nur an diesen Server, sonst nirgends hin.
+        rueckwege.append(umgebung.browser_einsperren(server.adresse))
     except Exception:
         for zurueck in reversed(rueckwege):
             zurueck()

@@ -33,6 +33,10 @@
 #   prüft das Ziel, bevor der Browser es lädt: Playwright ruft seinen
 #   Abfang-Haken nur für die ERSTE Adresse einer Weiterleitung auf — so
 #   käme eine erlaubte Seite per 302 an localhost vorbei.
+# - Im Prüfstand (nur_erlauben, 2026-10-10) darf der Browser NUR an die
+#   Adressen des Falls (den lokalen Seiten-Server); alles andere — Seiten,
+#   Bilder, Skripte, Weiterleitungen — ist „nicht erreichbar". Vorher lief
+#   f01 am Netz-Ersatz vorbei auf die echte LSF-Seite.
 # - keine Downloads, keine Service-Worker; JavaScript nur das der Seite.
 #   Unser eigenes Skript (Liste der Elemente, Text) ist fest im Code, aus
 #   dem Text der KI wird nie etwas ausgeführt.
@@ -171,10 +175,51 @@ def adresse_pruefen(url, dns: bool = True) -> tuple:
     host = (teile.hostname or "").lower()
     if not host:
         raise BrowserFehler("B-ADRESSE", "in der Adresse fehlt der Rechnername")
-    if not lokal_erlaubt() and ist_lokal(host, dns=dns):
+    # Im Prüfstand nicht einmal eine DNS-Anfrage nach draußen (nur_erlauben).
+    if not lokal_erlaubt() and ist_lokal(host, dns=dns and _nur is None):
         raise BrowserFehler("B-ADRESSE-GESPERRT",
                             f"{host} liegt im eigenen Rechner oder Netz")
     return url, host
+
+
+# ── Nur bestimmte Adressen (Prüfstand) ────────────────────────────────
+# Der Prüfstand (scripts/pruefstand_teile/umgebung.py) fährt die echten
+# Werkzeuge; web_search/fetch_url hängen an net und damit am Netz-Ersatz,
+# der Browser (Chromium) nicht. Deshalb ein Riegel im Abfang-Haken: ist er
+# gesetzt, kommt keine Anfrage durch, deren Ursprung (Schema, Host, Port)
+# nicht in der Menge steht — für die KI sieht das aus wie ein Netzfehler.
+# None (Standard): der Browser verhält sich wie immer. Nur im Speicher.
+
+_nur = None
+
+
+def _ursprung(url) -> str:
+    try:
+        t = urlsplit(str(url or "").strip())
+        port = t.port or {"http": 80, "https": 443}.get(t.scheme.lower(), 0)
+    except ValueError:
+        return ""
+    return f"{t.scheme.lower()}://{(t.hostname or '').lower()}:{port}"
+
+
+def nur_erlauben(adressen):
+    """Ab jetzt nur noch diese Adressen (Ursprünge wie
+    „http://127.0.0.1:42987"; leer = gar nichts). -> Rückweg, der den
+    vorigen Zustand wiederherstellt."""
+    global _nur
+    alt = _nur
+    _nur = {u for u in (_ursprung(a) for a in adressen or ()) if u}
+
+    def zurueck():
+        global _nur
+        _nur = alt
+    return zurueck
+
+
+def erreichbar(url) -> bool:
+    """Darf der Browser diese Adresse überhaupt anfragen? Immer ja, außer
+    nur_erlauben ist gesetzt und der Ursprung steht nicht darin."""
+    return _nur is None or _ursprung(url) in _nur
 
 
 # ── Was Sasha in welchem Gespräch erlaubt hat ─────────────────────────
@@ -329,6 +374,7 @@ class _Sitzung:
         self.umleitung = ""          # erlaubtes Ziel einer Weiterleitung, kommt gleich
         self.download = ""           # Adresse einer Datei statt einer Seite
         self.gesperrt = ""           # Adresse im eigenen Netz
+        self.unerreichbar = ""       # Adresse außerhalb von nur_erlauben (Prüfstand)
         self.rahmen_fremd = 0        # Rahmen anderer Hosts, nicht geladen
         self.neue_seiten = []
 
@@ -467,6 +513,17 @@ class _Arbeiter(threading.Thread):
         teile = urlsplit(url)
         if teile.scheme not in ("http", "https"):
             return route.abort("blockedbyclient")
+        if not erreichbar(url):
+            # Prüfstand: jede Art Anfrage, auch Bilder und Skripte — und vor
+            # ist_lokal, damit nicht einmal eine DNS-Anfrage hinausgeht.
+            if anfrage.resource_type == "document" and anfrage.frame.parent_frame is None:
+                # Eine leere Seite statt Abbruch: ein Abbruch schickt Chromium
+                # auf seine Fehlerseite, und die fiel dem nächsten browser_open
+                # ins Wort („interrupted by another navigation").
+                s.unerreichbar = url
+                return route.fulfill(status=502, content_type="text/html",
+                                     body="<title>nicht erreichbar</title>")
+            return route.abort("failed")
         host = (teile.hostname or "").lower()
         if not lokal_erlaubt() and ist_lokal(host):
             if anfrage.resource_type == "document":
@@ -492,6 +549,12 @@ class _Arbeiter(threading.Thread):
             from urllib.parse import urljoin
             ziel_url = urljoin(url, ziel)
             ziel_host = host_von(ziel_url)
+            if not erreichbar(ziel_url):
+                if hauptrahmen:
+                    s.unerreichbar = ziel_url
+                    return route.fulfill(status=502, content_type="text/html",
+                                         body="<title>nicht erreichbar</title>")
+                return route.abort("failed")
             if urlsplit(ziel_url).scheme not in ("http", "https") or \
                     (not lokal_erlaubt() and ist_lokal(ziel_host)):
                 if hauptrahmen:
@@ -527,7 +590,7 @@ class _Arbeiter(threading.Thread):
 
     # ── Schritte ──
     def _vorher(self, s):
-        s.blockiert = s.gesperrt = s.umleitung = s.download = ""
+        s.blockiert = s.gesperrt = s.umleitung = s.download = s.unerreichbar = ""
         s.rahmen_fremd = 0
         s.neue_seiten = []
 
@@ -569,6 +632,9 @@ class _Arbeiter(threading.Thread):
         return self.lesen(s)
 
     def _sperren_melden(self, s):
+        if s.unerreichbar:
+            raise BrowserFehler("B-LADEN", f"{s.unerreichbar[:200]} nicht erreichbar "
+                                           f"(Verbindung fehlgeschlagen)")
         if s.download:
             raise BrowserFehler("B-DOWNLOAD", f"{s.download[:200]} ist eine Datei, keine Seite "
                                               f"— Downloads sind aus")

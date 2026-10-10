@@ -1074,6 +1074,18 @@ def pdf_text(daten: bytes) -> tuple:
     return pdf_datei.text_alle(daten)
 
 
+def herunterladen(url: str) -> tuple:
+    """-> (bytes, Inhaltstyp) einer http(s)-Adresse, höchstens
+    _MAX_DOKUMENT + 1 Bytes. Eigene Funktion (2026-10-10), damit der
+    Prüfstand fetch_document wie fetch_url auf seinen Netz-Ersatz lenken
+    kann — vorher ging es an ihm vorbei ins echte Netz."""
+    import urllib.request
+    with urllib.request.urlopen(url, timeout=60) as antwort:
+        daten = antwort.read(_MAX_DOKUMENT + 1)
+        typ = (antwort.headers.get("Content-Type") or "").split(";")[0].strip()
+    return daten, typ
+
+
 def dokument_holen(url: str, name: str) -> str:
     """Etwas aus dem Netz holen, lesbar machen, an EINEN Ort legen.
 
@@ -1100,7 +1112,6 @@ def dokument_holen(url: str, name: str) -> str:
     """
     import re as _re
     import html as _html
-    import urllib.request
 
     schluessel = _slug(name)
     if not schluessel:
@@ -1111,9 +1122,7 @@ def dokument_holen(url: str, name: str) -> str:
 
     if aus_dem_netz:
         try:
-            with urllib.request.urlopen(quelle, timeout=60) as antwort:
-                daten = antwort.read(_MAX_DOKUMENT + 1)
-                typ = (antwort.headers.get("Content-Type") or "").split(";")[0].strip()
+            daten, typ = herunterladen(quelle)
         except Exception as e:
             return f"[Download fehlgeschlagen: {e}]"
     else:

@@ -190,15 +190,44 @@ class NetzAttrappe:
     def stream_post(self, *a, **k):
         raise RuntimeError("Prüfstand: kein Netz außer zum Modell")
 
+    def herunterladen(self, url):
+        """Ersatz für gedaechtnis.herunterladen (fetch_document per URL,
+        2026-10-10): dieselben Seiten wie fetch_url, sonst nicht erreichbar."""
+        roh = self.get(url)
+        return roh, "text/html"
+
     def einhaengen(self):
-        """-> Rückweg."""
+        """-> Rückweg. Alle Netzwege der Werkzeuge: net (web_search,
+        fetch_url) und fetch_document; der Browser hat seinen eigenen Riegel
+        (browser_einsperren)."""
+        import gedaechtnis
         import net
         alt = (net.get, net.post, net.stream_post)
         net.get, net.post, net.stream_post = self.get, self.post, self.stream_post
+        # Ein älterer Kern (--vergleich) kennt herunterladen noch nicht.
+        alt_dok = getattr(gedaechtnis, "herunterladen", None)
+        if alt_dok is not None:
+            gedaechtnis.herunterladen = self.herunterladen
 
         def zurueck():
             net.get, net.post, net.stream_post = alt
+            if alt_dok is not None:
+                gedaechtnis.herunterladen = alt_dok
         return zurueck
+
+
+def browser_einsperren(adresse: str | None):
+    """Der Browser der KI (Chromium) geht nicht über net — ohne Riegel lief
+    er im Prüfstand ins echte Netz (2026-10-10, f01: echte LSF-Seite). Ab
+    hier nur noch der Seiten-Server des Falls; ohne Server gar nichts.
+    -> Rückweg."""
+    import browser_sitzung
+    nur = getattr(browser_sitzung, "nur_erlauben", None)
+    if nur is None:            # älterer Kern (--vergleich): kann es nicht
+        print("ACHTUNG: dieser Stand kann den Browser nicht einsperren — "
+              "browser_* könnten ins echte Netz gehen", flush=True)
+        return lambda: None
+    return nur([adresse] if adresse else [])
 
 
 # ── Seiten für den Browser ─────────────────────────────────────────────

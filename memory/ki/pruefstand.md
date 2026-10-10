@@ -32,7 +32,13 @@ Nachrichten von Sasha, und was danach stimmen muss. Ein Fall läuft
 - mit einer **Netz-Attrappe**: Websuche und Seiten antworten nach dem
   Abschnitt `netz` des Falls (ersetzt wird `net.get`, alles darüber — wie
   `web.suche` Treffer formatiert, wie das Werkzeug sie beschriftet — bleibt
-  echt). Kein anderes Netz außer zum Modell.
+  echt). Kein anderes Netz außer zum Modell. Seit 2026-10-10 auch
+  `fetch_document` per URL (über `gedaechtnis.herunterladen`, dieselben
+  Seiten wie `fetch_url`) und der **Browser**: `browser_sitzung.nur_erlauben`
+  lässt Chromium nur noch an den Seiten-Server des Falls (ohne Server an gar
+  nichts) — jede andere Anfrage (Seite, Bild, Skript, Weiterleitung) ist
+  „nicht erreichbar" (B-LADEN), ohne DNS-Anfrage. Vorher lief f01 per
+  `browser_open` auf die echte LSF-Seite.
 - mit einem **Skript an den Knöpfen**: Erlaubnis-Gate und `ask_choice` werden
   nach `antworten` beantwortet (Standard: Erlaubnis „ja, nur dieses mal",
   Knopf-Frage ohne Wahl wie am 08.10.).
@@ -222,7 +228,8 @@ endzustand:
 
 Die Browser-Seiten sieht nur der Browser (echtes Chromium); `fetch_url` auf
 `{server}` geht über die Netz-Attrappe und scheitert. Braucht Playwright +
-Chromium auf dem Rechner.
+Chromium auf dem Rechner. Jede andere Adresse ist für den Browser nicht
+erreichbar (`umgebung.browser_einsperren`, 2026-10-10).
 
 Uhrzeiten immer in Anführungszeichen (YAML liest `18:30` sonst als Zahl; der
 Prüfstand fängt das ab, aber lesbarer ist es so). Ein Fall mit Tippfehler fällt

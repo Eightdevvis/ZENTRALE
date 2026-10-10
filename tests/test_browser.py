@@ -509,3 +509,26 @@ def test_leerlauf_schliesst_die_sitzung(chromium, server, monkeypatch):
     assert browser_sitzung._auftrag(lambda w: w.browser) is None   # Prozess beendet
     _, r = _fahren("browser_click", {"nr": 1}, None)
     assert "B-KEINE-SEITE" in r
+
+
+def test_pruefstand_riegel_laesst_nur_den_fall_server_durch(chromium, server):
+    """Prüfstand (2026-10-10): mit nur_erlauben kommt der Browser nur an den
+    Server des Falls. „localhost" ist hier eine andere Seite als 127.0.0.1 —
+    sie steht für das echte Netz und ist nicht erreichbar, auch wenn Sasha
+    den Host erlaubt hat, auch per Weiterleitung."""
+    port = server.rsplit(":", 1)[1]
+    zurueck = browser_sitzung.nur_erlauben([server])
+    try:
+        _, text = _fahren("browser_open", {"url": server + "/"}, "ja, nur dieses mal")
+        assert text.startswith("[ergebnis: ok]")
+        browser_sitzung.host_erlauben("g-browser", "localhost")
+        _, r = _fahren("browser_open", {"url": f"http://localhost:{port}/"}, None)
+        assert "[ergebnis: fehlgeschlagen]" in r and "nicht erreichbar" in r
+        _, text = _fahren("browser_open", {"url": server + "/"}, None)
+        _, r = _fahren("browser_click", {"nr": _nr(text, "Alte Adresse")}, None)
+        assert "nicht erreichbar" in r and "localhost" in r
+    finally:
+        zurueck()
+    # Ohne Riegel wieder wie immer.
+    _, r = _fahren("browser_open", {"url": f"http://localhost:{port}/"}, None)
+    assert r.startswith("[ergebnis: ok]")
