@@ -78,6 +78,31 @@ CODES = {
     "K-DATUM-UNGUELTIG": (
         "Ein Datum ist nicht im Format YYYY-MM-DD.",
         "Als YYYY-MM-DD angeben, z. B. 2026-10-12."),
+    # Tagesrhythmus und Gruppen (KALENDER, b7534fc, 2026-10-10)
+    "K-MOTIV-UNBEKANNT": (
+        "Dieses Motiv für eine Tagesphase gibt es nicht.",
+        "Eins aus der festen Liste nehmen (nachthimmel, schlaf, essen, sonne, fokus, sport, ruhe, unterwegs)."),
+    "K-KEINE-PHASE": (
+        "Das geht nur bei einer Phase des Tagesrhythmus, der Eintrag ist keine.",
+        "Das Werkzeug für Termine/Routinen nehmen."),
+    "K-IST-PHASE": (
+        "Eine Phase des Tagesrhythmus ist kein Termin — das geht mit ihr nicht.",
+        "Das Werkzeug für Phasen nehmen."),
+    "K-PHASE-OHNE-ZEIT": (
+        "Eine Phase braucht eine Beginn-Uhrzeit.",
+        "Mit time (HH:MM) erneut aufrufen; fehlt sie, Sasha fragen."),
+    "K-ZEITRAUM-ZU-LANG": (
+        "Der Zeitraum ist zu lang (höchstens 366 Tage).",
+        "Kürzeren Zeitraum nehmen oder die Regel selbst ändern."),
+    "K-KATEGORIE-UNBEKANNT": (
+        "Diese Gruppe gibt es nicht.",
+        "uni, arbeit, keine — oder custom mit kategorie_name. Im Zweifel keine."),
+    "K-KATEGORIE-NAME-FEHLT": (
+        "Bei der Gruppe custom fehlt der eigene Name.",
+        "kategorie_name mitgeben oder keine Gruppe (keine) wählen."),
+    "K-KEIN-TREFFER": (
+        "Kein Eintrag passt.",
+        "read_calendar aufrufen und die Kennung aus dem Ergebnis nehmen."),
     "K-ENDE-VOR-BEGINN": (
         "Das Ende liegt nicht nach dem Beginn.",
         "Beginn und Ende zusammen angeben; bei Unklarheit Sasha fragen."),
