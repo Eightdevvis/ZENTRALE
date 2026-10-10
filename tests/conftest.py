@@ -166,6 +166,10 @@ def _theme_tmp_aufraeumen():
 # Jede Test-TUI raeumt beim Start ihr Crash-Log weg — ohne Umlenkung das
 # ECHTE /tmp/zentrale-tui-crash.log der laufenden ZENTRALE.
 os.environ.setdefault("ZENTRALE_TUI_LOG", os.path.join(_THEME_TMP, "tui.log"))
+# Feste Kursfarben des Kalenders (tui/ansichten/kalender.py) — sonst schriebe
+# jede Test-TUI in Sashas echte Farbtabelle.
+os.environ.setdefault("ZENTRALE_KALENDER_FARBEN",
+                      os.path.join(_THEME_TMP, "kalender_farben.json"))
 os.environ.setdefault("ZENTRALE_TUI_CRASH_LOG",
                       os.path.join(_THEME_TMP, "tui-crash.log"))
 # PC-Status (core/pc_status.py) nie in die echte Datei der Maschine schreiben.

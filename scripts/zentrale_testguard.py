@@ -124,6 +124,7 @@ def anwenden(umgebung, kommandozeile, tempdir, pid, cwd=""):
     umgebung.setdefault("ZENTRALE_TUI_LOG", ziel + "/tui.log")
     umgebung.setdefault("ZENTRALE_TUI_CRASH_LOG", ziel + "/tui-crash.log")
     umgebung.setdefault("ZENTRALE_KALENDER_SYNC_STAND", ziel + "/sync_stand.json")
+    umgebung.setdefault("ZENTRALE_KALENDER_FARBEN", ziel + "/kalender_farben.json")
     # Kein Testlauf meldet sich auf Sashas Desktop.
     #
     # Die Umlenkungen darueber schuetzen DATEIEN. Eine Benachrichtigung ist

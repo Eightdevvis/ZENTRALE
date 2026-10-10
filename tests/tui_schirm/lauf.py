@@ -294,6 +294,7 @@ def lauf(code, aus, namen, breite=150, hoehe=46):
             "ZENTRALE_THEME_NOW": os.path.join(st, "theme.now"),
             "XDG_CACHE_HOME": os.path.join(st, "cache"),
             "ZENTRALE_TUI_LOG": os.path.join(st, "tui.log"),
+            "ZENTRALE_KALENDER_FARBEN": os.path.join(st, "kalender_farben.json"),
             "ZENTRALE_TUI_CRASH_LOG": os.path.join(st, "crash.log"),
             "ZENTRALE_TUI_FRAME_ERR_LOG": os.path.join(st, "frame.log"),
             "ZENTRALE_PEER_STATUS": os.path.join(st, "peer.json"),

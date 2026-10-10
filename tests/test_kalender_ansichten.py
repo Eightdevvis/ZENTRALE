@@ -369,3 +369,35 @@ def test_c_nachttermin_zieht_die_achse_nicht_auf_sondern_zeigt_pfeil():
     sel = next(e for e in d["days"]["2026-10-10"] if e["label"] == "Nachts")
     zeilen = [text(z) for z in ka.ansicht_c(d, 130, 36, auswahl={"tag": "2026-10-10", "roh": sel})]
     assert any("Nachts" in z for z in zeilen), "gewählt: Fenster rollt hin"
+
+
+# ── Farbe je Kurs (10.10.2026) ─────────────────────────────────────────
+def test_kurs_schluessel_fasst_varianten_zusammen():
+    s = ka.titel_schluessel
+    assert s("Exphy Mathe") == s("ExPhy Tutorium") == s("Experimentalphysik mathe") \
+        == s("Experimentalphysik")
+    assert s("Analysis Saalübung") == s("Analysis I")
+    assert s("Theoretische Physik Ia Tutorium") == s("Theoretische Physik Ia")
+    assert s("Allgemeine Chemie für Nebenfächler (Mo)") == s("Allgemeine Chemie (Do)")
+    assert s("Geigenstunde @ Geigenschule") == s("Geigenstunde")
+    assert s("") == ""
+
+
+def test_kurse_bekommen_feste_verschiedene_farben():
+    titel = ["Allgemeine Chemie für Nebenfächler (Mi)", "Analysis I",
+             "Experimentalphysik", "Theoretische Physik Ia", "Parkour"]
+    daten = {"days": {"2026-10-%02d" % t: [{"label": l} for l in titel] for t in (5, 6)}}
+    daten["days"]["2026-10-07"] = [{"label": "Lea"}]          # einmalig: kein Platz
+    tab = {}
+    assert ka.farben_vergeben(daten, tab)
+    assert set(tab) == {ka.titel_schluessel(l) for l in titel}
+    assert len(set(tab.values())) == len(titel), "jeder Kurs eine eigene Farbe"
+    vorher = dict(tab)
+    assert not ka.farben_vergeben(daten, tab) and tab == vorher   # nichts wandert
+    alt = dict(ka.FARBTABELLE)
+    try:
+        ka.FARBTABELLE.clear(); ka.FARBTABELLE.update(tab)
+        assert ka.titel_rolle("ExPhy Tutorium") == ka.titel_rolle("Experimentalphysik")
+        assert ka.titel_rolle("Experimentalphysik") != ka.titel_rolle("Allgemeine Chemie (Mo)")
+    finally:
+        ka.FARBTABELLE.clear(); ka.FARBTABELLE.update(alt)

@@ -94,10 +94,19 @@ Listen-Sidebar heraus).
 - **Farbe je Titel (10.10.2026).** Sasha: „im stundenplan sind die meisten
   felder einfach grau, manche so grell türkis, wieso?" — vorher hieß Grau
   Routine, Türkis Einmal-Termin. Jetzt bekommt jeder Titel fest eine von 12
-  Farben (`titel_rolle`: crc32 des Namens ohne „@ Ort" und ohne Klammer am
-  Ende, also „Chemie (Mi)" = „Chemie (Do)"), Serie oder einzeln, in A, B und
-  C gleich. Bei Sashas ~10 Kursen bleibt etwa eine Doppelung; wer das fest
-  will, bräuchte eine gespeicherte Farbe je Termin (iCal `COLOR`, RFC 7986).
+  Farben, Serie oder einzeln, in A, B und C gleich.
+- **Kurse statt Titel (10.10.2026).** Sasha: „manche kurse heißen leicht
+  anderes, sind aber dieselben. exphy = experimentalphysik … ich habe nur 4
+  kurse." Die Farbe hängt am **ersten Wort** ohne „@ Ort"
+  (`titel_schluessel`; „Analysis Saalübung" = „Analysis I"), Kurzformen in
+  `KURZFORMEN` (`exphy` → `experimentalphysik`). Was in den geladenen Daten
+  ≥ 2× vorkommt, bekommt beim ersten Auftauchen fest die nächste freie Farbe
+  in `RANGFOLGE` (Cyan, Orange, Pink, Meergrün, Violett …; häufigste zuerst)
+  — garantiert verschieden, gespeichert in
+  `~/.local/state/zentrale/kalender_farben.json` (`ZENTRALE_KALENDER_FARBEN`,
+  in Tests umgelenkt), damit nichts wandert. Einmaliges rechnet sich seine
+  Farbe (crc32) und belegt keinen Platz. Farbe neu würfeln: Eintrag aus der
+  Datei löschen. Selbst wählbare Farbe je Termin wäre iCal `COLOR` (RFC 7986).
 - **Nie breiter als erlaubt:** alles läuft über eine Leinwand, die am Rand
   abschneidet; Titel enden mit „…".
 - **Platz:** offene Apps haben die volle Fensterbreite (`DASH["an"]` aus), der

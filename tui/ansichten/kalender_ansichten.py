@@ -66,20 +66,70 @@ ROLLE = {
 }
 # Nebeneinanderliegende Spannen müssen unterscheidbar sein → reihum vergeben.
 SPANNEN_FARBEN = ("k_sp1", "k_sp2", "k_sp3", "k_sp4")
-TITEL_FARBEN = tuple("k_t%d" % i for i in range(12))   # 12: bei ~10 Kursen kaum Doppelte
+TITEL_FARBEN = tuple("k_t%d" % i for i in range(12))
+
+# ── Farbe je Kurs ──────────────────────────────────────────────────────
+# Sasha, 10.10.2026: „manche kurse heißen leicht anderes, sind aber
+# dieselben. exphy = experimentalphysik … ich habe nur 4 kurse". Darum zählt
+# nur das ERSTE Wort des Titels („Analysis Saalübung" = „Analysis I",
+# „Theoretische Physik Ia Tutorium" = „Theoretische Physik Ia"), und
+# Kurzformen werden auf den vollen Namen gelegt. Neue Kurzform → hier rein.
+KURZFORMEN = {
+    "exphy": "experimentalphysik",
+}
+# Wiederkehrendes bekommt beim ersten Auftauchen fest eine FREIE Farbe
+# (farben_vergeben); die Tabelle hält tui/ansichten/kalender.py auf Platte,
+# damit eine Farbe nie wandert. Einmaliges nimmt seine Rechen-Farbe (crc32)
+# und belegt keinen Platz.
+FARBTABELLE: dict = {}
+# Vergabe-Reihenfolge der Plätze in farben.KAL (t0…t11): die ersten fünf so
+# verschieden wie möglich (Cyan, Orange, Pink, Meergrün, Violett), damit die
+# häufigsten Kurse sich nie ähneln; danach der Rest.
+RANGFOLGE = (0, 3, 1, 11, 2, 8, 5, 4, 9, 6, 10, 7)
+
+
+def titel_schluessel(label) -> str:
+    """Der Kurs hinter einem Titel: erstes Wort, ohne Ort, klein."""
+    name = (label or "").split(" @ ")[0].strip().lower()
+    wort = re.split(r"[\s\-–:/,.()]+", name)[0] if name else ""
+    return KURZFORMEN.get(wort, wort)
+
+
+def _rechenplatz(schluessel: str) -> int:
+    # crc32, nicht hash(): der ist je Prozess anders
+    return zlib.crc32(schluessel.encode("utf-8")) % len(TITEL_FARBEN)
 
 
 def titel_rolle(label) -> str:
-    """Feste Farbe je Titel: gleicher Name (ohne Groß/Klein, Rand-Leerzeichen)
-    = gleiche Farbe in jeder Ansicht und bei jedem Start; Ort („@ …") und
-    eine Klammer am Ende („(Mi)") zählen nicht mit (crc32, nicht hash()
-    — der ist je Prozess anders)."""
-    name = (label or "").split(" @ ")[0]               # Ort gehört nicht zum Namen
-    name = re.sub(r"\s*\([^)]*\)\s*$", "", name)      # „… (Mi)" = derselbe Kurs
-    name = name.strip().lower()
-    if not name:
+    k = titel_schluessel(label)
+    if not k:
         return ROLLE["termin"]
-    return TITEL_FARBEN[zlib.crc32(name.encode("utf-8")) % len(TITEL_FARBEN)]
+    platz = FARBTABELLE.get(k)
+    if not isinstance(platz, int) or not 0 <= platz < len(TITEL_FARBEN):
+        platz = _rechenplatz(k)
+    return TITEL_FARBEN[platz]
+
+
+def farben_vergeben(daten: dict, tabelle: dict) -> bool:
+    """Jeder Kurs, der in `daten` mindestens zweimal vorkommt und noch keine
+    Farbe hat, bekommt die nächste freie in RANGFOLGE. Häufigere zuerst,
+    damit die echten Kurse die deutlichsten Farben haben. Ändert
+    `tabelle`; True, wenn etwas dazukam (dann speichern)."""
+    zahl: dict = {}
+    tage = daten.get("days") if isinstance(daten, dict) else None
+    for liste in (tage.values() if isinstance(tage, dict) else []):
+        for e in liste if isinstance(liste, list) else []:
+            if isinstance(e, dict) and not (e.get("span") or e.get("von")):
+                k = titel_schluessel(e.get("label"))
+                if k:
+                    zahl[k] = zahl.get(k, 0) + 1
+    neu = sorted((k for k, n in zahl.items() if n >= 2 and k not in tabelle),
+                 key=lambda k: (-zahl[k], k))
+    for k in neu:
+        belegt = set(tabelle.values())
+        frei = [p for p in RANGFOLGE if p not in belegt]
+        tabelle[k] = frei[0] if frei else _rechenplatz(k)
+    return bool(neu)
 
 WT = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 MONATE = ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
