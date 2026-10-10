@@ -37,7 +37,11 @@ def vorbereiten(tmp: str, daten: str, einstellungen: dict | None = None) -> dict
     os.makedirs(tmp, exist_ok=True)
     for name, unter in (("GEDAECHTNIS", "gedaechtnis"), ("GESPRAECHE", "gespraeche"),
                         ("TRANSKRIPT", "ai_transcripts"), ("ABLAGE", "ablage"),
-                        ("SANDBOX", "sandbox"), ("MODELL_CACHE", "modelle")):
+                        ("SANDBOX", "sandbox"), ("MODELL_CACHE", "modelle"),
+                        # 2026-10-10: fehlte — die Messung schrieb 17 Test-Sätze
+                        # in Sashas echtes data/klassifikator_beispiele/.
+                        ("KLASSIFIKATOR_BEISPIELE", "klassifikator_beispiele"),
+                        ("RUECKMELDUNGEN", "rueckmeldungen"), ("ABGLEICH", "abgleich")):
         os.environ[f"ZENTRALE_{name}_DIR"] = os.path.join(tmp, unter)
     os.environ["ZENTRALE_LOKALE_KI"] = "aus"         # kein Ollama, Chat über die Cloud
     os.environ["ZENTRALE_MAIL"] = "off"
