@@ -177,8 +177,10 @@ def test_katalog_form_und_kalender_eintrag():
     k = kacheln.katalog()
     assert json.loads(json.dumps(k)) == k
     (e,) = [x for x in k if x["app"] == "kalender"]
-    assert set(e) == {"app", "art", "titel", "min", "bevorzugt", "ttl", "felder",
+    assert set(e) == {"app", "art", "titel", "min", "bevorzugt", "max", "ttl", "felder",
                       "aktionen", "formen"}
+    # Ohne max der Quelle: die neutrale Grenze des Hubs (2026-10-10)
+    assert e["max"] == {"w": kacheln.GROESSE_GRENZE, "h": kacheln.GROESSE_GRENZE}
     assert e["art"] == "ausschnitt" and e["titel"] == "kalender"
     assert e["min"] == {"w": 6, "h": 2} and e["bevorzugt"] == {"w": 90, "h": 7} and e["ttl"] == 60
     assert e["aktionen"] == ["oeffnen"] and e["formen"] == ["zeilen"]

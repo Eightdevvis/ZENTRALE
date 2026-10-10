@@ -27,6 +27,7 @@ Feature") und „der Desk-Ordner soll IMMER mit ZENTRALE mitgesynct werden".
 | | o | öffnen: Bild im Bildbetrachter; Kachel in ihrer App an der richtigen Stelle (Kalender an dem Tag) |
 | | f | Bild: Vorschau mono ↔ farbe (gespeichert) |
 | | v | verbinden: Schnur von hier zu einem Ziel |
+| | r | Größe ändern (Zettel, Bild, Kachel — jedes Element) |
 | | d / Entf | löschen — Rückfrage unten, j ja, n/esc nein |
 | | Bild↑ Bild↓ | im gewählten Kasten blättern (langer Zettel; Kalender-Kachel: alle Tage zugleich, „+N" zeigt Verstecktes) |
 | | esc | zurück zur Auswahl |
@@ -41,6 +42,10 @@ Feature") und „der Desk-Ordner soll IMMER mit ZENTRALE mitgesynct werden".
 | Verbinden | ↑↓←→ | Ziel springt durch die Kästen, die Schnur wird vorgezeigt |
 | | enter / v | verbinden; ist das Paar schon verbunden: Rückfrage „schnur lösen?" |
 | | esc | abbrechen |
+| Größe (r) | ←→ | schmaler / breiter um eine Zelle (oben links bleibt stehen) |
+| | ↑↓ | niedriger / höher um eine Zelle |
+| | enter | behalten (gespeichert, nur wenn anders) |
+| | esc | alte Größe zurück |
 | Modal | tippen, enter | Text, enter = neue Zeile; ←→↑↓ Pos1 Ende ⌫ Entf |
 | | ctrl+s | speichern |
 | | esc | abbrechen, nichts gespeichert |
@@ -57,7 +62,7 @@ Shift+Pfeil erkennt der Baustein am **Namen** (`curses.keyname`: `kLFT2`,
 `kRIT2`, `kUP2`, `kDN2`, `KEY_SLEFT`, `KEY_SR` …), nicht an der Nummer —
 die wechselt mit Terminal und tmux. Rohe Folgen `ESC [1;2A…D` gehen auch.
 Die Fußleiste unten zeigt die Tasten je Zustand (`befehle.CTX_KEYS`,
-Kontexte `desk:wahl|canvas|bild|kachel|neu|greifen|verbinden|frage`; Modal
+Kontexte `desk:wahl|canvas|bild|kachel|neu|greifen|verbinden|frage|groesse`; Modal
 und Kalender-Dialog sind Freitext ohne Leiste, ihr Kasten zeigt die Tasten).
 Die Leiste zeigt „W/A/S/D move view"; „shift/alt+↑↓←→" und „pgup/pgdn"
 stehen nur in der Hinweiszeile im Kasten, weil `fussleiste.codes()`
@@ -75,6 +80,25 @@ dann tickt `zentrale_tui.py` mit 33 ms, sonst ruhig. Gedrückt halten
 (Wiederholung derselben Richtung unter 80 ms) macht den Schritt je Druck
 ×1,5 bis 4× größer; nach einer Pause wieder der Grundschritt. Der Baustein
 macht beides nur, wenn die Ansicht es einschaltet (`weich`, `uhr`).
+
+**Größe ändern** (2026-10-10, Sasha: die Größe muss man nachträglich
+ändern können — Kachel, Zettel, Bild): `r` auf dem gewählten Kasten. Der
+Rahmen wird gestrichelt mit der Ecke ◢ unten rechts; die Hinweiszeile zeigt
+die Größe live („26×7", Außenmaß mit Rahmen). Grenzen sagt die Art
+(`grenzen(element)` im Baustein, Außenmaß): Zettel und Bild mindestens
+10×4 (Titel + eine Zeile), Bild höchstens 402×203 (Grenze der Vorschau im
+Backend), sonst 400×200. Eine Kachel: `min`/`max` aus dem Katalog des Hubs
+(+ Rahmen), beim Druck auf `r` geholt (ohne Backend: Hinweis, Größe
+bleibt); ohne `max` der Quelle setzt der Hub 400×400. An einer Grenze
+bleibt der Kasten stehen, die Hinweiszeile sagt „kleiner geht nicht
+(mind. 10×4)". Der Ausschnitt folgt der Ecke unten rechts (gleitet weich).
+Schnüre legen sich von selbst neu (sie werden aus den Lagen gerechnet).
+Eine Kachel holt schon beim Ziehen im Hintergrund in der neuen Größe
+(Puffer-Schlüssel = Größe); eine Bild-Vorschau wird erst nach enter/esc
+neu geholt (das Holen wartet auf das Backend). In der Datei stehen
+`width`/`height` (1 Spalte = 10 px, 1 Zeile = 20 px); seit 2026-10-10
+schreibt `core/desk.py` Lage und Größe getrennt — wer nur die Größe
+ändert, lässt eine pixelgenaue Obsidian-Lage stehen.
 
 ## Wie es geschnitten ist
 
@@ -264,12 +288,11 @@ geöffnet kriegen wenn man es selected."*
 - **Weitere Kacheln:** Listen (`fokus`) und Graphen (`graph`) fehlen noch —
   je ein Quell-Modul in `core/kacheln.py` QUELLEN (der Katalog bringt sie
   dann von selbst in den `+`-Wähler) und ein Handler im Router `sprung.py`.
-- Größe einer Kachel ändern geht nicht (Startgröße beim Anlegen); den
-  Bereich einer Kalender-Kachel ändern auch nicht (neu anlegen).
+- Den Bereich einer Kalender-Kachel ändern geht nicht (neu anlegen).
 - Esc im Kalender nach `o` führt zur Startseite, nicht zurück zum Desk.
 - Desks löschen/umbenennen gibt es nicht (Datei von Hand).
-- Größe eines Zettels ändern gibt es nicht (Standard 24×6); auch ein Bild
-  behält seine Größe vom Hinlegen.
+- Größe ändern geht nur von oben links aus (die Ecke unten rechts
+  wächst); das Seitenverhältnis eines Bildes hält niemand fest.
 - Viele farbige Bilder auf einmal können das Farbpaar-Budget der TUI
   (~200 Paare) füllen; dann zeichnen die letzten in Bernstein statt in
   ihren Farben, bis weniger zu sehen ist.
@@ -284,6 +307,10 @@ geöffnet kriegen wenn man es selected."*
 - Breite Zeichen (Emoji) im Zettel verschieben die Zeile um eine Spalte.
 
 ## Historie
+
+- **2026-10-10** — Größe ändern (`r`): Zettel, Bild, Kachel; Grenzen je
+  Art bzw. aus dem Katalog (`max` liefert der Hub jetzt immer), Lage und
+  Größe in der Datei getrennt geschrieben.
 
 - **2026-10-10** — Weich schieben (gleitender Ausschnitt, schneller beim
   Gedrückthalten), W A S D als Hauptbelegung, Alt+Pfeile zusätzlich.

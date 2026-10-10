@@ -135,6 +135,11 @@ class Notiz:
     def blaettern(self, element, schritt):
         element["_oben"] = max(0, element.get("_oben", 0) + schritt)
 
+    def grenzen(self, element):
+        # Kleinster Zettel: Titel + eine Zeile Text, 8 Zeichen breit
+        # (2026-10-10); größer nur die Vorgabe des Canvas.
+        return (10, 4), (400, 200)
+
     def modal(self, element):
         return TextModal("notiz", "text", element.get("text") or "")
 
@@ -177,6 +182,13 @@ class Kachel:
                 "fehler": inhalt.get("text") or "geht nicht"}.get(zustand, zustand)
         rolle = "warn" if zustand in ("weg", "fehler") else "leise"
         return [[(kopf, rolle)]] + [[(t, "leise")] for t in umbrechen(element.get("titel", ""), w)]
+
+    def grenzen(self, element):
+        """Aus dem Katalog des Hubs (min, max — Innenmaß), von der ANSICHT
+        als Außenmaß unter „_grenzen" abgelegt, bevor `r` hier ankommt
+        (2026-10-10). Fehlt es, gilt die Vorgabe des Canvas."""
+        g = element.get("_grenzen")
+        return (tuple(g["min"]), tuple(g["max"])) if g else None
 
     def blaettern(self, element, schritt):
         grenze = (element.get("_inhalt") or {}).get("oben_max", 0) or 0

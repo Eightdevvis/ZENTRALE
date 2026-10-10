@@ -471,3 +471,5 @@ Stimm-Diensten.
 - **2026-10-10** — `/api/kachel`, `/api/kachel/aktion` (Kacheln, Kalender).
 - **2026-10-10** — `/api/kacheln` (Katalog); Kacheln mit Adresse statt
   app/art/ref, `oeffnen` antwortet mit einer Adresse.
+- **2026-10-10** — `/api/kacheln` liefert `max` immer (ohne Angabe der
+  Quelle die Hub-Grenze 400×400; für `r` = Größe ändern im Desk).

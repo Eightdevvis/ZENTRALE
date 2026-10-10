@@ -87,6 +87,12 @@ class Bild:
             zeilen.append(stuecke)
         return zeilen
 
+    def grenzen(self, element):
+        # Titel + eine Zeile Vorschau (2026-10-10); oben die Grenze der
+        # Vorschau im Backend (core/bild_vorschau.py: 400 Spalten, 200
+        # Zeilen) plus Rahmen und Titelzeile.
+        return (10, 4), (402, 203)
+
     def modal(self, element):
         return TitelModal(str(element.get("titel") or ""))
 

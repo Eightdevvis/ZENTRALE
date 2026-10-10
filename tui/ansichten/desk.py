@@ -44,16 +44,16 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
 
 # Rolle des Canvas → Farbrolle der TUI (ansichten/farben.py).
 FARBEN = {"raster": "faint", "schnur": "dim", "schnur_vor": "acc", "rahmen": "dim",
-          "fokus": "acc", "griff": "warn", "ziel": "acc", "text": "ink", "leise": "faint",
+          "fokus": "acc", "griff": "warn", "groesse": "warn", "ziel": "acc", "text": "ink", "leise": "faint",
           "notiz_titel": "amberhi", "bild": "ink", "bild_titel": "bright"}
-FETT = {"fokus", "griff", "ziel", "notiz_titel", "bild_titel"}
+FETT = {"fokus", "griff", "groesse", "ziel", "notiz_titel", "bild_titel"}
 
 # Was die Hinweiszeile im Kasten je Zustand zeigt. Die Fußleiste ganz unten
 # kommt aus befehle.CTX_KEYS — „shift+↑↓←→" kann fussleiste.codes() (noch)
 # nicht lesen, darum steht das Schieben nur hier.
 # W A S D (Großbuchstaben) schiebt überall gleich (2026-10-10); shift+ und
 # alt+Pfeile gehen auch — die stehen nur hier, die Fußleiste zeigt W/A/S/D.
-HINWEIS = {"ruhe": "W A S D move view (also shift/alt+↑↓←→) · pgup/pgdn scroll · o open · f colour",
+HINWEIS = {"ruhe": "W A S D move view (also shift/alt+↑↓←→) · pgup/pgdn scroll · o open · f colour · r size",
            "greifen": "W A S D move view, note comes along (also shift/alt+↑↓←→)",
            "verbinden": "↑↓←→ pick target · enter/v connect · esc cancel"}
 
@@ -251,6 +251,8 @@ class Desk:
         D = self.DESK
         if ev is not None and D["msg"] and D["canvas"].modus != "frage":
             D["msg"] = ""                # eine Meldung gilt bis zur nächsten Taste
+        if ev == "groesse" and not self._groesse_vorbereiten():
+            return
         erg = D["canvas"].taste(ev)
         if erg is None:
             return
@@ -270,6 +272,27 @@ class Desk:
                 self.bild_oeffnen(erg.grund[1])
             elif was == "kachel_oeffnen":
                 self.kachel_oeffnen(erg.grund[1])
+
+    def _groesse_vorbereiten(self):
+        """r auf einer Kachel: erst ihre Grenzen aus dem Katalog des Hubs
+        holen (min, max — die App bestimmt, wie klein sie lesbar ist). Kurz
+        und auf Tastendruck wie `+`. → False, wenn es nicht geht (dann
+        bleibt die Größe, und die Hinweiszeile sagt warum)."""
+        D = self.DESK
+        c = D["canvas"]
+        fokus = c.element(c.fokus) if c.modus == "ruhe" else None
+        if fokus is None or not desk_kacheln.ist_kachel(fokus):
+            return True
+        try:
+            g = desk_kacheln.grenzen(fokus, api_call("/api/kacheln"))
+        except Exception as e:
+            D["msg"] = "größe geht gerade nicht: " + self._fehlertext(e)
+            return False
+        if g is None:
+            D["msg"] = "größe geht nicht: diese kachel kennt der hub nicht"
+            return False
+        fokus["_grenzen"] = g
+        return True
 
     # ── + : Art wählen, Bild wählen (2026-10-10) ──────────────────────
     def _katalog(self):
@@ -388,8 +411,11 @@ class Desk:
         Element zwischenlegen (der Baustein fragt nie das Backend). Das
         Backend merkt sich fertige Vorschauen; gezeichnet wird von hier."""
         invert = self._invert()
+        # Während der Größe-Änderung nicht je Pfeil neu holen (das Holen
+        # hier wartet auf das Backend) — nach enter/esc gilt die neue Größe.
+        in_arbeit = c.groesse["id"] if c.groesse else None
         for e in c.elemente:
-            if e.get("art") != "bild":
+            if e.get("art") != "bild" or e.get("id") == in_arbeit:
                 continue
             if e["x"] + e["w"] <= c.vx or e["x"] >= c.vx + c.vw \
                     or e["y"] + e["h"] <= c.vy or e["y"] >= c.vy + c.vh:
@@ -485,6 +511,12 @@ class Desk:
         c = D["canvas"]
         if c and c.modus == "frage":
             return c.frage["text"] + "  j yes · n no"
+        if c and c.modus == "groesse":
+            # Größe immer sichtbar, auch wenn eine Grenze anschlägt.
+            e = c.element(c.groesse["id"])
+            groesse = "%d×%d" % (e["w"], e["h"]) if e else "?"
+            rest = c.groesse["anschlag"] or "←→ width · ↑↓ height · enter keep · esc undo"
+            return "%s · %s" % (groesse, rest)
         if D["msg"]:
             return D["msg"]
         return HINWEIS.get(c.modus if c else "ruhe", "")
@@ -547,7 +579,8 @@ class Desk:
         ax, ay = c.anzeige_lage()
         lage = "%d,%d" % (ax + cw // 2, ay + ch_ // 2)
         hinweis = self.tasten_text()
-        farbe = C["warn"] if (D["msg"] or c.modus == "frage") else C["faint"]
+        anschlag = c.modus == "groesse" and c.groesse["anschlag"]
+        farbe = C["warn"] if (D["msg"] or c.modus == "frage" or anschlag) else C["faint"]
         z.addclip(top + h - 2, mx + 2, hinweis, max(0, w - 6 - len(lage)), farbe)
         z.addclip(top + h - 2, mx + w - 2 - len(lage), lage, len(lage), C["faint"])
         if D["modal"] is not None:

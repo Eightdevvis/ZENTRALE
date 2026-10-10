@@ -445,6 +445,10 @@ def _desk_neu(u):
     _desk(u); zt.taste_verteilen(u, ord("+"))
 
 
+def _desk_groesse(u):                       # r: Größe ändern (2026-10-10)
+    _desk(u); zt.taste_verteilen(u, ord("r"))
+
+
 ZUSTAENDE = {
     "home": ("home", lambda u: None),
     "graph": ("graph", _graph),
@@ -475,6 +479,7 @@ ZUSTAENDE = {
     "desk:bild": ("desk:bild", _desk_bild),
     "desk:neu": ("desk:neu", _desk_neu),
     "desk:kachel": ("desk:kachel", _desk_kachel),
+    "desk:groesse": ("desk:groesse", _desk_groesse),
 }
 
 

@@ -103,8 +103,10 @@ def _eintrag(q, art, info):
          "felder": kachel_felder.form_pruefen(list(info.get("felder") or [])),
          "aktionen": list(AKTIONEN) if getattr(q, "aktion", None) else [],
          "formen": list(FORMEN)}
-    if info.get("max"):
-        e["max"] = _wh(info["max"])
+    # max immer (2026-10-10, Größe ändern im Desk): sagt die Quelle keins,
+    # gilt die neutrale Grenze des Hubs — eine Oberfläche braucht so keine
+    # eigene Zahl dafür.
+    e["max"] = _wh(info["max"]) if info.get("max") else _wh((GROESSE_GRENZE, GROESSE_GRENZE))
     return e
 
 

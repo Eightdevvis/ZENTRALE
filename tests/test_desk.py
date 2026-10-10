@@ -447,3 +447,52 @@ def test_lage_unten_rechts_zeigt_wo_der_ausschnitt_gerade_ist(ansicht):
     assert unterwegs[-1] == ziel
     xs = [int(t.split(",")[0]) for t in unterwegs]
     assert xs == sorted(xs)
+
+
+# ── Größe ändern (r, 2026-10-10) ──────────────────────────────────────
+
+def test_neue_groesse_rundreise_lage_bleibt_pixelgenau():
+    """Nur width/height werden neu geschrieben; eine Obsidian-Lage (x=13)
+    bleibt stehen."""
+    schreibe("g", {"nodes": [{"id": "n", "type": "text", "text": "x", "x": 13, "y": 7,
+                              "width": 251, "height": 63}], "edges": []})
+    d = desk.laden("g")
+    d["elemente"][0]["w"] += 3
+    d["elemente"][0]["h"] += 1
+    desk.speichern("g", d["elemente"], d["verbindungen"], d["stand"])
+    k = lies("g")["nodes"][0]
+    assert (k["x"], k["y"]) == (13, 7)
+    assert (k["width"], k["height"]) == ((25 + 3) * 10, (3 + 1) * 20)
+    e = desk.laden("g")["elemente"][0]
+    assert (e["w"], e["h"]) == (28, 4)
+
+
+def test_ansicht_zettel_groesse_aendern_speichert_nur_bei_aenderung(ansicht):
+    import curses
+    d, D = ansicht, ansicht.DESK
+    desk.anlegen("z")
+    desk.speichern("z", [{"id": "a1", "art": "notiz", "x": 0, "y": 0, "w": 24, "h": 6,
+                          "text": "# Titel\nhallo"}], [], None)
+    d.oeffnen(); d.taste(10)
+    d.draw_desk(2, 0, 26, 100)
+    D["canvas"].fokus = "a1"
+    d.aufrufe.clear()
+    d.taste(ord("r"))
+    assert D["canvas"].modus == "groesse"
+    assert d.tasten_text().startswith("24×6 ·")
+    d.taste(curses.KEY_RIGHT); d.taste(curses.KEY_RIGHT); d.taste(curses.KEY_DOWN)
+    assert d.tasten_text().startswith("26×7 ·")              # live
+    d.draw_desk(2, 0, 26, 100)
+    assert not any(m == "PUT" for m, _p in d.aufrufe)       # erst enter speichert
+    d.taste(10)
+    assert ("PUT", "/api/desk/z") in d.aufrufe
+    k = lies("z")["nodes"][0]
+    assert (k["width"], k["height"]) == (260, 140)
+    d.aufrufe.clear()
+    d.taste(ord("r")); d.taste(curses.KEY_LEFT)
+    for _ in range(30):
+        d.taste(curses.KEY_UP)
+    assert "kleiner geht nicht" in d.tasten_text()
+    d.taste(27)                                               # esc: alte Größe
+    assert (D["canvas"].element("a1")["w"], D["canvas"].element("a1")["h"]) == (26, 7)
+    assert not any(m == "PUT" for m, _p in d.aufrufe)

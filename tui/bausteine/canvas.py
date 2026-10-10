@@ -37,6 +37,9 @@
 #                              Inneren blättern (eigene Lage am Element unter
 #                              „_oben", wird nie gespeichert). Hier docken
 #                              später Kacheln mit langem Inhalt an (Kalender).
+#   grenzen(element)           -> ((min_w, min_h), (max_w, max_h)) Außenmaß
+#                              mit Rahmen, für `r` (Größe ändern); ohne gilt
+#                              GROESSE_MIN / GROESSE_MAX (2026-10-10)
 #
 # Bedienung (Zustände, Sasha 2026-10-09, Belegung siehe
 # memory/system/desk_view.md):
@@ -55,6 +58,12 @@
 #              enter/v verbindet (schon verbunden → Rückfrage „lösen?"),
 #              esc bricht ab
 #   frage      j ja, n/esc nein
+#   groesse    (r, 2026-10-10, Sasha: „die Größe muss man nachträglich ändern
+#              können") ←→ schmaler/breiter, ↑↓ niedriger/höher um eine
+#              Zelle, oben links bleibt stehen; enter behält (gespeichert),
+#              esc setzt die alte Größe zurück. Unter das Minimum der Art geht
+#              es nicht (Anschlag mit kurzem Hinweis), über das Maximum auch
+#              nicht. Der Ausschnitt folgt der Ecke unten rechts.
 #   überall    W A S D (Großbuchstaben) schiebt den Ausschnitt, ebenso
 #              shift+↑↓←→ und alt+↑↓←→; beim Greifen reist der Kasten mit
 #              (er liegt ja in der Hand)
@@ -103,6 +112,11 @@ GLEIT_BILDER = 6
 # in eine andere Richtung wieder der Grundschritt.
 WIEDERHOLUNG_S = 0.08
 BESCHLEUNIGUNG, BESCHLEUNIGUNG_MAX = 1.5, 4.0
+# Größe ändern (2026-10-10): Grenzen (Außenmaß mit Rahmen) für Arten ohne
+# eigenes `grenzen`. 3×3 ist der kleinste Kasten, den _kasten zeichnet; das
+# Maximum ist nur ein Schutz gegen versehentliches Riesenwachsen.
+GROESSE_MIN = (3, 3)
+GROESSE_MAX = (400, 200)
 
 
 def gleit_schritt(pos, ziel, anteil=GLEIT_ANTEIL):
@@ -148,6 +162,7 @@ _ALT_ROH = {"\x1b[A": "hoch", "\x1b[B": "runter", "\x1b[C": "rechts", "\x1b[D": 
             "\x1bOA": "hoch", "\x1bOB": "runter", "\x1bOC": "rechts", "\x1bOD": "links"}
 _BUCHSTABEN = {ord("+"): "neu", ord("e"): "bearbeiten", ord("v"): "verbinden",
                ord("d"): "loeschen", curses.KEY_DC: "loeschen", ord("o"): "oeffnen",
+               ord("r"): "groesse",
                curses.KEY_PPAGE: "blaettern_hoch", curses.KEY_NPAGE: "blaettern_runter",
                ord("j"): "ja", ord("y"): "ja", ord("n"): "nein",
                10: "enter", 13: "enter", curses.KEY_ENTER: "enter", 27: "esc"}
@@ -257,10 +272,13 @@ class Canvas:
         self.vx = self.vy = 0
         self.vw, self.vh = 60, 20
         self.fokus = None                # id
-        self.modus = "ruhe"              # ruhe | greifen | verbinden | frage
+        self.modus = "ruhe"              # ruhe | greifen | verbinden | frage | groesse
         self.griff = None                # {"id", "x", "y", "neu"}
         self.ziel = None                 # verbinden: id des Ziels
         self.frage = None                # {"was": "loeschen"|"loesen", "id", "text"}
+        # Größe ändern: {"id", "w", "h" (die alte Größe), "min", "max",
+        # "anschlag" (Hinweis, wenn eine Grenze erreicht ist, sonst "")}
+        self.groesse = None
         # Weich (2026-10-10): die Ansicht schaltet es ein; Tests und andere
         # Apps bekommen ohne das den Ausschnitt sofort wie bisher.
         self.weich = False
@@ -274,7 +292,8 @@ class Canvas:
 
     def __repr__(self):                  # Zustand sichtbar machen (Tests vergleichen repr)
         return "Canvas(%r)" % ((self.vx, self.vy, self.fokus, self.modus, self.griff,
-                                self.ziel, self.frage, self.elemente, self.verbindungen),)
+                                self.ziel, self.frage, self.groesse, self.elemente,
+                                self.verbindungen),)
 
     # ── Nachschlagen ──────────────────────────────────────────────────
     def element(self, eid):
@@ -336,8 +355,8 @@ class Canvas:
         if ereignis.startswith("pan_") and self.modus != "frage":
             self._pan(ereignis[4:])
             return None
-        return {"ruhe": self._ruhe, "greifen": self._greifen,
-                "verbinden": self._verbinden, "frage": self._frage}[self.modus](ereignis)
+        return {"ruhe": self._ruhe, "greifen": self._greifen, "verbinden": self._verbinden,
+                "frage": self._frage, "groesse": self._groesse}[self.modus](ereignis)
 
     def _pan_faktor_neu(self, richtung):
         """Schritt-Faktor für dieses Schieben: wächst bei schneller
@@ -416,6 +435,51 @@ class Canvas:
         elif ev == "loeschen":
             self.frage = {"was": "loeschen", "id": fokus["id"], "text": "löschen?"}
             self.modus = "frage"
+        elif ev == "groesse":
+            self.groesse_beginnen(fokus)
+        return None
+
+    # ── Größe ändern (r, 2026-10-10) ──────────────────────────────────
+    def grenzen(self, e):
+        """(min, max) als (w, h) Außenmaß — von der Art, sonst die Vorgabe."""
+        g = getattr(self.arten.holen(e.get("art")), "grenzen", None)
+        g = g(e) if g else None
+        return tuple(g[0]) if g else GROESSE_MIN, tuple(g[1]) if g else GROESSE_MAX
+
+    def groesse_beginnen(self, e):
+        mi, ma = self.grenzen(e)
+        self.groesse = {"id": e["id"], "w": e["w"], "h": e["h"], "min": mi, "max": ma,
+                        "anschlag": ""}
+        self.modus = "groesse"
+
+    def _groesse(self, ev):
+        g = self.groesse
+        e = self.element(g["id"])
+        schritte = {"rechts": (1, 0), "links": (-1, 0), "runter": (0, 1), "hoch": (0, -1)}
+        if ev in schritte:
+            dw, dh = schritte[ev]
+            w, h = e["w"] + dw, e["h"] + dh
+            # Ein Schritt darf nie unter das Minimum oder über das Maximum
+            # führen; liegt der Kasten schon außerhalb (von Obsidian), geht
+            # es nur in Richtung der Grenzen.
+            if (dw < 0 and w < g["min"][0]) or (dh < 0 and h < g["min"][1]):
+                g["anschlag"] = "kleiner geht nicht (mind. %d×%d)" % g["min"]
+                return None
+            if (dw > 0 and w > g["max"][0]) or (dh > 0 and h > g["max"][1]):
+                g["anschlag"] = "größer geht nicht (höchstens %d×%d)" % g["max"]
+                return None
+            e["w"], e["h"], g["anschlag"] = w, h, ""
+            # Der Ecke unten rechts folgen — sie ist es, die wächst.
+            self.folgen({"x": e["x"] + e["w"] - 1, "y": e["y"] + e["h"] - 1, "w": 1, "h": 1})
+            return None
+        if ev == "enter":
+            self.groesse, self.modus = None, "ruhe"
+            if (e["w"], e["h"]) != (g["w"], g["h"]):
+                return Ergebnis("geaendert", e, "groesse")
+            return None
+        if ev == "esc":
+            e["w"], e["h"] = g["w"], g["h"]
+            self.groesse, self.modus = None, "ruhe"
         return None
 
     def neu_ablegen(self, e):
@@ -572,7 +636,8 @@ class Canvas:
                     netz[y][x] = ("·", "raster")
         sicht = self._in_der_hand(ox, oy)
         self._schnuere(setze, sicht)
-        oben = [self.griff and self.griff["id"], self.ziel, self.fokus]
+        oben = [self.griff and self.griff["id"], self.groesse and self.groesse["id"],
+                self.ziel, self.fokus]
         for e in sorted(self.elemente, key=lambda e: e.get("id") in oben):
             self._kasten(sicht.get(e.get("id"), e), setze, ox, oy)
         return self._zeilen(netz)
@@ -614,6 +679,9 @@ class Canvas:
         x, y, w, h = e["x"], e["y"], max(3, e["w"]), max(3, e["h"])
         if self.griff and self.griff["id"] == e["id"]:
             rand, rolle = "╔═╗║╚╝", "griff"
+        elif self.groesse and self.groesse["id"] == e["id"]:
+            # Gestrichelt mit Griff-Ecke unten rechts: die Ecke wächst.
+            rand, rolle = "┏╍┓╏┗◢", "groesse"
         elif e["id"] == self.ziel:
             rand, rolle = "┏━┓┃┗┛", "ziel"
         elif e["id"] == self.fokus:

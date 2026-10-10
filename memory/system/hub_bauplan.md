@@ -266,3 +266,9 @@ wie `text`. Neue Rolle = Eintrag im Wörterbuch + in jeder Oberfläche.
 **Offen:** Behält Obsidian beim Speichern unbekannte Knotenfelder? Noch
 nicht geprüft (Kacheln sind trotzdem gebaut — verliert Obsidian das Feld,
 bleibt ein Zettel mit dem Rückfall-Text übrig, nichts geht kaputt).
+
+**Nachtrag 2026-10-10 (Größe ändern im Desk):** Der Katalog trägt `max`
+jetzt immer. Nennt die Quelle keins, setzt der Hub seine neutrale Grenze
+`{w: 400, h: 400}` (`GROESSE_GRENZE`) ein — eine Oberfläche braucht dafür
+keine eigene Zahl. Die TUI holt `min`/`max` beim Druck auf `r` und lässt
+eine Kachel nicht kleiner als `min` ziehen.

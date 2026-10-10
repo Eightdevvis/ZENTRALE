@@ -14,9 +14,11 @@
 import json
 import time
 import urllib.error
+import urllib.parse
 
 from .farben import FARBROLLEN
 NOCHMAL_S = 15                 # nach einem Fehler: so lange bis zum nächsten Versuch
+HUB_GRENZE = 400               # wie core/kacheln.GROESSE_GRENZE (Innenmaß, Zellen)
 
 
 def ist_kachel(el):
@@ -35,6 +37,37 @@ def verweis(el):
     if isinstance(k.get("adresse"), str):
         return {"adresse": k["adresse"]}
     return {"app": k.get("app"), "art": k.get("art"), "ref": k.get("ref")}
+
+
+def app_art(el):
+    """(app, art) der Kachel — aus der Adresse zentrale://<app>/<art>?…,
+    in alter Form aus app/art. None, wenn nichts zu lesen ist."""
+    k = el.get("kachel") or {}
+    if isinstance(k.get("adresse"), str):
+        teile = urllib.parse.urlsplit(k["adresse"])
+        pfad = urllib.parse.unquote(teile.path.strip("/"))
+        return (teile.netloc, pfad) if teile.netloc and pfad and "/" not in pfad else None
+    if isinstance(k.get("app"), str) and isinstance(k.get("art"), str):
+        return k["app"], k["art"]
+    return None
+
+
+def grenzen(el, katalog):
+    """Grenzen fürs Größe-Ändern (2026-10-10) aus dem Katalog des Hubs:
+    {"min": (w, h), "max": (w, h)} als AUSSENmaß (Innenmaß + Rahmen) oder
+    None, wenn der Katalog die Kachel nicht kennt. Fehlt `max` (ältere
+    Hubs), gilt die Grenze des Hubs 400×400 (core/kacheln.GROESSE_GRENZE)."""
+    aa = app_art(el)
+    eintrag = next((e for e in katalog or [] if isinstance(e, dict)
+                    and (e.get("app"), e.get("art")) == aa), None) if aa else None
+    if eintrag is None:
+        return None
+    raus = {}
+    for name, vorgabe in (("min", 1), ("max", HUB_GRENZE)):
+        wh = eintrag.get(name) if isinstance(eintrag.get(name), dict) else {}
+        raus[name] = tuple((wh.get(n) if isinstance(wh.get(n), int) else vorgabe) + 2
+                           for n in ("w", "h"))
+    return raus
 
 
 def schluessel(el):

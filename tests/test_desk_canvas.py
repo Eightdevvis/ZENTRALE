@@ -632,3 +632,105 @@ def test_ohne_uhr_immer_der_grundschritt():
         vx = c.vx
         c.taste("pan_links")
         assert c.vx - vx == -cv.PAN_X
+
+
+# ── Größe ändern (r, 2026-10-10) ──────────────────────────────────────
+
+def test_r_ist_groesse_und_frei():
+    assert cv.taste_deuten(ord("r"), b"r") == "groesse"
+
+
+def test_groesse_wachsen_schrumpfen_enter_behaelt():
+    c = leinwand([zettel("m", 0, 0, w=20, h=6)])
+    c.fokus = "m"
+    assert c.taste("groesse") is None and c.modus == "groesse"
+    for ev in ("rechts", "rechts", "runter", "links", "rechts"):
+        assert c.taste(ev) is None
+    m = c.element("m")
+    assert (m["x"], m["y"], m["w"], m["h"]) == (0, 0, 22, 7)   # oben links bleibt
+    erg = c.taste("enter")
+    assert erg.art == "geaendert" and erg.grund == "groesse" and c.modus == "ruhe"
+    assert c.groesse is None
+
+
+def test_groesse_esc_setzt_zurueck_und_ohne_aenderung_kein_speichern():
+    c = leinwand([zettel("m", 0, 0, w=20, h=6)])
+    c.fokus = "m"
+    c.taste("groesse"); c.taste("rechts"); c.taste("runter")
+    assert c.taste("esc") is None and c.modus == "ruhe"
+    assert (c.element("m")["w"], c.element("m")["h"]) == (20, 6)
+    c.taste("groesse"); c.taste("rechts"); c.taste("links")
+    assert c.taste("enter") is None                   # gleich groß: nichts speichern
+
+
+def test_groesse_haelt_am_minimum_und_maximum_an():
+    c = leinwand([zettel("m", 0, 0, w=11, h=5)])
+    c.fokus = "m"
+    c.taste("groesse")
+    c.taste("links"); c.taste("hoch")
+    assert (c.element("m")["w"], c.element("m")["h"]) == (10, 4)       # min des Zettels
+    c.taste("links")
+    assert c.element("m")["w"] == 10 and "kleiner geht nicht" in c.groesse["anschlag"]
+    assert "10×4" in c.groesse["anschlag"]
+    c.taste("rechts")
+    assert c.groesse["anschlag"] == ""                                  # wieder frei
+    c.taste("esc")
+    # Kachel: Grenzen aus dem Katalog (von der Ansicht als _grenzen abgelegt)
+    k = {"id": "k", "art": "kachel", "x": 0, "y": 0, "w": 9, "h": 5,
+         "_grenzen": {"min": (8, 4), "max": (10, 5)}}
+    c = leinwand([k])
+    c.fokus = "k"
+    c.taste("groesse")
+    c.taste("rechts"); c.taste("rechts"); c.taste("runter")
+    assert (k["w"], k["h"]) == (10, 5) and "größer geht nicht" in c.groesse["anschlag"]
+    c.taste("links"); c.taste("links"); c.taste("links"); c.taste("hoch"); c.taste("hoch")
+    assert (k["w"], k["h"]) == (8, 4)
+
+
+def test_groesse_vorgabe_ohne_eigene_grenzen():
+    c = leinwand([{"id": "f", "art": "fremd", "x": 0, "y": 0, "w": 4, "h": 3}])
+    c.fokus = "f"
+    c.taste("groesse"); c.taste("links"); c.taste("links")
+    assert c.element("f")["w"] == cv.GROESSE_MIN[0]
+
+
+def test_groesse_ausschnitt_folgt_der_wachsenden_ecke_und_pan_geht():
+    c = leinwand([zettel("m", 0, 0, w=20, h=6)])
+    c.fokus = "m"
+    c.taste("groesse")
+    vx = c.vx
+    for _ in range(80):
+        c.taste("rechts")
+    m = c.element("m")
+    assert c.vx > vx and m["x"] + m["w"] <= c.vx + c.vw          # Ecke sichtbar
+    vy = c.vy
+    c.taste("pan_runter")                                          # S schiebt weiter
+    assert c.vy > vy and c.modus == "groesse" and m["y"] == 0
+
+
+def test_groesse_rahmen_ist_zu_sehen():
+    c = leinwand([zettel("m", 0, 0, w=20, h=6)])
+    c.fokus = "m"
+    c.taste("groesse")
+    rollen = {r for z in c.bild(30, 80) for _x, _t, r in z}
+    text = "".join(t for z in c.bild(30, 80) for _x, t, _r in z)
+    assert "groesse" in rollen and "◢" in text
+
+
+def test_schnur_folgt_der_neuen_groesse():
+    """Schnüre werden aus den Lagen gelegt — nach dem Größer-Machen liegen
+    sie anders, ohne dass jemand sie anfasst."""
+    a, b = zettel("a", 0, 0, w=10, h=4), zettel("b", 30, 20, w=10, h=4)
+    c = leinwand([a, b], [{"id": "v", "von": "a", "nach": "b"}])
+    vorher = schnur.weg(a, b)
+    seiten_vorher = c.verbindungen_mit_seiten()[0]["von_seite"]
+    c.fokus = "a"
+    c.taste("groesse")
+    for _ in range(25):
+        c.taste("runter")
+    assert c.taste("enter").grund == "groesse"
+    assert schnur.weg(a, b) != vorher
+    assert c.verbindungen_mit_seiten()[0]["von_seite"] != seiten_vorher
+    zellen = {(x, y) for y, z in enumerate(c.bild(c.vh, c.vw)) for x0, t, r in z
+              if r == "schnur" for x in range(x0, x0 + len(t))}
+    assert zellen                                                  # gezeichnet

@@ -427,3 +427,63 @@ def test_alte_datei_mit_altem_verweis_laedt_holt_und_wird_neu_geschrieben(ansich
     assert el["_inhalt"]["zustand"] == "ok" and "09:00 Arzt" in sichtbar(d)
     d.speichern()
     assert lies("alt")["nodes"][0]["zentrale_kachel"] == {"v": 2, "adresse": WOCHE_ADR}
+
+
+# ── Größe ändern (r, 2026-10-10) ──────────────────────────────────────
+
+def test_grenzen_aus_dem_katalog_als_aussenmass():
+    el = kachel_el()
+    kat = [{"app": "kalender", "art": "ausschnitt", "min": {"w": 6, "h": 2},
+            "max": {"w": 50, "h": 20}}]
+    assert desk_kacheln.grenzen(el, kat) == {"min": (8, 4), "max": (52, 22)}
+    ohne_max = [dict(kat[0], max=None)]
+    assert desk_kacheln.grenzen(el, ohne_max)["max"] == (402, 402)
+    assert desk_kacheln.grenzen(el, [dict(kat[0], app="post")]) is None
+    assert desk_kacheln.app_art(el) == ("kalender", "ausschnitt")
+
+
+def test_kachel_groesse_aendern_holt_in_neuer_groesse(ansicht, termine):
+    import curses
+    d, D = ansicht, ansicht.DESK
+    m = kachel_anlegen(d, "r")
+    fest_tippen(m, "2026-10-12", "2026-10-18")
+    d.taste(10); d.taste(10)
+    zeichne(d)
+    c = D["canvas"]
+    el = c.element(c.fokus)
+    w0, h0 = el["w"], el["h"]
+    d.taste(ord("r"))
+    assert c.modus == "groesse" and el["_grenzen"]["min"] == (8, 4)
+    d.taste(curses.KEY_DOWN); d.taste(curses.KEY_DOWN); d.taste(curses.KEY_LEFT)
+    zeichne(d)                                    # holt im Hintergrund (hier: gleich)
+    letzte = [a for a in d.aufrufe if a[1] == "/api/kachel"][-1][2]
+    assert (letzte["w"], letzte["h"]) == (w0 - 3, h0)
+    d.taste(10)
+    k = lies("r")["nodes"][0]
+    assert (k["width"], k["height"]) == ((w0 - 1) * 10, (h0 + 2) * 20)
+    assert not any(n.startswith("_") for n in k)
+    # Unter das Minimum der App geht es nicht
+    d.taste(ord("r"))
+    for _ in range(200):
+        d.taste(curses.KEY_LEFT)
+    for _ in range(30):
+        d.taste(curses.KEY_UP)
+    assert (el["w"], el["h"]) == (8, 4) and "kleiner geht nicht" in d.tasten_text()
+    d.taste(27)
+    assert (el["w"], el["h"]) == (w0 - 1, h0 + 2)
+
+
+def test_kachel_groesse_ohne_katalog_sagt_es(ansicht, termine, monkeypatch):
+    d, D = ansicht, ansicht.DESK
+    m = kachel_anlegen(d, "o")
+    fest_tippen(m, "2026-10-12", "2026-10-18")
+    d.taste(10); d.taste(10)
+    echt = d.aufrufe
+    from tui.ansichten import desk as desk_ansicht
+
+    def kaputt(pfad, *a, **k):
+        raise OSError("weg")
+    monkeypatch.setattr(desk_ansicht, "api_call", kaputt)
+    d.taste(ord("r"))
+    assert D["canvas"].modus == "ruhe" and "größe geht gerade nicht" in d.tasten_text()
+    assert echt is d.aufrufe

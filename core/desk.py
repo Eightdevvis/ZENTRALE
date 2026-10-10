@@ -355,9 +355,14 @@ def _knoten_aus(el, alt) -> dict:
             # Alte Form beim Speichern in die neue (2026-10-10) — derselbe
             # Verweis, nur als Adresse geschrieben.
             k[KACHEL] = kachel_lesen(k[KACHEL])
-    if lage != alte_lage:
-        k.update(x=lage["x"] * PX_SPALTE, y=lage["y"] * PX_ZEILE,
-                 width=lage["w"] * PX_SPALTE, height=lage["h"] * PX_ZEILE)
+    # Lage und Größe getrennt (2026-10-10, Größe ändern im Desk): nur, was
+    # sich in Zellen geändert hat, wird neu geschrieben — wer die Größe
+    # ändert, lässt eine pixelgenaue Obsidian-Lage stehen und umgekehrt.
+    alte_lage = alte_lage or {}
+    if (lage["x"], lage["y"]) != (alte_lage.get("x"), alte_lage.get("y")):
+        k.update(x=lage["x"] * PX_SPALTE, y=lage["y"] * PX_ZEILE)
+    if (lage["w"], lage["h"]) != (alte_lage.get("w"), alte_lage.get("h")):
+        k.update(width=lage["w"] * PX_SPALTE, height=lage["h"] * PX_ZEILE)
     if KACHEL in k:
         # Rückfall-Text = Anzeige-Cache für Obsidian (hub_bauplan.md
         # „Kacheln"): die TUI schickt, was die App zuletzt als Klartext
