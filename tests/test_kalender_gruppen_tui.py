@@ -155,7 +155,7 @@ def test_aendern_setzt_gruppe_per_kennung():
 def test_nur_dieser_tag_hat_keine_gruppe():
     roh = _e("Analysis I", "08:30", "10:00", recurring=True, rrule="FREQ=WEEKLY;BYDAY=WE")
     d = kw.formular_bearbeiten(roh, TAG, HEUTE)
-    d.taste(ord("d"))
+    d.taste(ord("t"))
     form = d.plan()["weiter"]
     assert all(f.name != "gruppe" for f in form.felder)
 
@@ -170,7 +170,7 @@ def test_kopie_nimmt_gruppe_mit():
 def test_kurs_gruppe_erst_probe_dann_frage():
     d = kw.dialog_kurs_gruppe(_e("ExPhy Übung", "08:30", "10:00", kat="keine"))
     assert "experimentalphysik" in d.zeile()
-    d.taste(ord("1"))                       # (1) Uni
+    d.taste(ord("u"))                       # (u) Uni
     assert d.fertig
     plan = d.plan()
     methode, pfad, body = plan["vorab"]["aufruf"]

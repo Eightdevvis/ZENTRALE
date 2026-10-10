@@ -164,9 +164,10 @@ class Bedienung:
         if self.termine():
             self.gewaehlt()
         fokus = W["fokus"] if self.K.get("stil") in (None, "A") else "termine"
+        monat = self.K.get("stil") == "B"          # im Monat wird kein Termin gewählt
         return {"fokus": fokus, "tag": self.tag().isoformat(),
                 "idx": W["idx"], "tidx": W["tidx"],
-                "roh": self.gewaehlt() if fokus == "termine" else None}
+                "roh": self.gewaehlt() if fokus == "termine" and not monat else None}
 
     # ── Tasten ─────────────────────────────────────────────────────────
     def taste(self, ch):
@@ -178,9 +179,18 @@ class Bedienung:
             self._dialog_taste(ch)
             return True
         if W["popup"] is not None:
-            W["popup"] = None              # jede Taste schließt, wie calcurse
+            # Jede TASTE schließt, wie calcurse. -1 ist keine Taste, sondern der
+            # Takt der Hauptschleife (getch-Timeout, ~250 ms) — der schloss das
+            # Ansehen-Fenster sofort wieder (Sasha, 10.10.2026: „bleibt nur nen
+            # bruchteil der sekunde sichtbar").
+            if ch in (-1, curses.KEY_RESIZE):
+                return True
+            W["popup"] = None
             return True
         if ch == 27:
+            if K.get("sprung"):                # Tag aus dem Monat geöffnet → zurück in den Monat
+                self.kal.sprung_zurueck()
+                return True
             K["active"] = False
             return True
         if ch in (ord("q"), ord("Q")):
@@ -251,19 +261,24 @@ class Bedienung:
         return True
 
     def _taste_monat(self, ch) -> bool:
-        """B: Pfeile wie calcurses Kalenderkasten (←→ Tag, ↑↓ Woche), Tab
-        wählt den nächsten Termin des Tages (Shift-Tab den vorigen)."""
+        """B: nur ansehen. Pfeile wie calcurses Kalenderkasten (←→ Tag, ↑↓
+        Woche), Enter öffnet den Tag in der Tagesliste (A) zum Bearbeiten.
+        Sasha, 10.10.2026: „besser wenn man auf einem datum im monat enter
+        macht, dass man auf die tagansicht kommt und dort richtig bearbeiten
+        kann, und in monat dann keine"."""
         W, d = self.W, self.tag()
         sprung = {curses.KEY_LEFT: -1, ord("h"): -1, curses.KEY_RIGHT: 1, ord("l"): 1,
                   curses.KEY_UP: -7, ord("k"): -7, curses.KEY_DOWN: 7, ord("j"): 7}.get(ch)
         if sprung is not None:
             self.setze_tag(d + timedelta(days=sprung))
-        elif ch in (9, curses.KEY_BTAB):
-            n = len(self.termine())
-            if n:
-                W["idx"] = (W["idx"] + (1 if ch == 9 else -1)) % n
+        elif ch in (10, 13, curses.KEY_ENTER):
+            self.kal.sprung_zum_tag(d)
+        elif ch in (ord("a"), ord("A"), 1, ord("e"), ord("E"), ord("d"), ord("D"), ord("r"),
+                    ord("c"), ord("p"), 22, ord("u"), ord("U"), TASTE_KURSGRUPPE, 9,
+                    curses.KEY_BTAB):
+            W["msg"] = "im monat nur ansehen — enter öffnet den tag zum bearbeiten"
         else:
-            return self._aktion(ch)
+            return False
         return True
 
     def _aktion(self, ch) -> bool:

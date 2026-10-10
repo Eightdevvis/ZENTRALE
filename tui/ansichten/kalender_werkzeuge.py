@@ -695,9 +695,17 @@ def _regel_felder(rrule):
             "wtage": " ".join(wt), "wbis": bis}
 
 
+# ── Tasten in Rückfragen: EIN Schema für alle Kalenderfunktionen ──────
+# Sasha, 10.10.2026: „wenn man löscht ist 1 = alle das ist inkonsistent …
+# mach sie konsistent, a for all find ich gut". Also überall:
+#   j / n      ja / nein          (Esc = abbrechen, wie n)
+#   a          alle (ganze Serie/Spanne)
+#   t          nur dieser Tag     (wie t im Rhythmus-Kasten)
+#   z          ein Zeitraum       (Rhythmus-Kasten)
+#   Auswahl    Anfangsbuchstabe (u Uni, k keine, e eigene …), nie Ziffern
 def _wahl_umfang(roh):
-    return Schritt("umfang", "„%s“ ändern: (d) nur dieser Tag  (a) alle" % roh.get("label", ""),
-                   art="wahl", wahl={"d": "dieser", "a": "alle"})
+    return Schritt("umfang", "„%s“ ändern: (t) nur dieser Tag  (a) alle" % roh.get("label", ""),
+                   art="wahl", wahl={"t": "dieser", "a": "alle"})
 
 
 def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None):
@@ -871,8 +879,8 @@ def dialog_loeschen(roh: dict, tag: date) -> Dialog:
                              "nur %s gelöscht: %s" % (datum_text(tag), label))
             return _plan()
         return Dialog("löschen", [Schritt(
-            "wie", "„%s“ löschen: (1) alle Vorkommen  (2) nur dieses  (n) nichts" % label,
-            art="wahl", wahl={"1": "alle", "2": "dieses", "n": None})], plan)
+            "wie", "„%s“ löschen: (a) alle  (t) nur dieser Tag  (n) nichts" % label,
+            art="wahl", wahl={"a": "alle", "t": "dieses", "n": None})], plan)
     day = roh.get("von") or iso if a_ == "spanne" else iso
     frage = ("Ganze Spanne „%s“ löschen? (j/n)" if a_ == "spanne"
              else "„%s“ löschen? (j/n)") % label
@@ -979,11 +987,13 @@ def dialog_kurs_gruppe(roh: dict) -> Dialog:
     mit probe:true, was getroffen würde, dann „setzen? (j/n)"."""
     kurs = titel_schluessel(roh.get("label"))
     namen = list(kalender_gruppen.NAMEN.items())
-    wahl = {"0": kalender_gruppen.KEINE, "e": kalender_gruppen.CUSTOM}
-    teile = ["(0) keine"]
-    for i, (k, n) in enumerate(namen[:9], start=1):
-        wahl[str(i)] = k
-        teile.append("(%d) %s" % (i, n))
+    wahl = {"k": kalender_gruppen.KEINE, "e": kalender_gruppen.CUSTOM}
+    teile = ["(k) keine"]
+    for k, n in namen:                   # Anfangsbuchstabe, wie überall (s. oben)
+        b = next((c for c in n.lower() if c.isalpha() and c not in wahl), None)
+        if b:
+            wahl[b] = k
+            teile.append("(%s) %s" % (b, n))
     teile.append("(e) eigene")
 
     def plan(a):

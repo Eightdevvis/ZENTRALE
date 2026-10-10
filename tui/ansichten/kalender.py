@@ -89,14 +89,55 @@ class Kalender:
         K["msg"] = ""
         W["dialog"] = W["popup"] = None
         W["fokus"] = "termine"
+        K["staende"], K["sprung"] = {}, None   # frisch geöffnet: alle Ansichten bei heute
         self.bedienung.setze_tag(date.today())
+
+    # ── Ansicht wechseln: jede merkt sich ihren Tag ───────────────────
+    # Sasha, 10.10.2026: „wenn ich danach wieder drauf wechsel is es
+    # automatisch auf dem tag auf dem ich in der ansicht stehen blieb und nich
+    # auf dem tag wo ich hingesprungen bin durch die monatsansicht". Also hat
+    # jede Ansicht (A/B/C) ihren eigenen Stand (Tag, Termin, Fenster), und der
+    # Sprung aus dem Monat in die Tagesliste ist nur geliehen.
+    def _stand_merken(self):
+        K, W = self.K, self.bedienung.W
+        if not K.get("sprung"):
+            K.setdefault("staende", {})[K["stil"]] = (self.bedienung.tag(), W["idx"], K["ref"])
+
+    def _stand_holen(self, stil, sonst_tag):
+        K, W = self.K, self.bedienung.W
+        K["stil"], K["sdata"] = stil, None
+        st = (K.get("staende") or {}).get(stil)
+        if st:
+            W["tag"], W["idx"], K["ref"] = st
+        else:
+            self.bedienung.setze_tag(sonst_tag, W["idx"])
 
     def k_stil_weiter(self):
         K = self.K
-        K["stil"] = naechste_ansicht(K["stil"])
-        K["sdata"] = None
-        # Der gewählte Tag bleibt; die neue Ansicht rückt so, dass er drin ist.
-        self.bedienung.setze_tag(self.bedienung.tag(), self.bedienung.W["idx"])
+        tag = self.bedienung.tag()
+        self._stand_merken()
+        if K.get("sprung"):                    # geliehene Tagesliste verlassen
+            K["sprung"] = None
+        self._stand_holen(naechste_ansicht(K["stil"]), tag)
+        K["msg"] = "ansicht: " + ANSICHT_NAMEN[K["stil"]]
+
+    def sprung_zum_tag(self, d):
+        """Enter im Monat: diesen Tag in der Tagesliste (A) bearbeiten; der
+        eigene Stand von A bleibt unangetastet, Esc führt zurück."""
+        K, W = self.K, self.bedienung.W
+        self._stand_merken()
+        K["sprung"] = {"von": K["stil"]}
+        K["stil"], K["sdata"] = "A", None
+        W["fokus"] = "termine"
+        self.bedienung.setze_tag(d, 0)
+        K["ref"] = d.isoformat()
+        K["msg"] = "tag aus dem monat — esc zurück"
+
+    def sprung_zurueck(self):
+        K = self.K
+        von = (K.get("sprung") or {}).get("von") or "B"
+        K["sprung"] = None
+        self._stand_holen(von, self.bedienung.tag())
         K["msg"] = "ansicht: " + ANSICHT_NAMEN[K["stil"]]
 
     def taste(self, ch):

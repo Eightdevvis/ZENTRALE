@@ -485,3 +485,17 @@ Listen-Sidebar heraus).
 
 Neu erzeugen: `venv/bin/python scripts/kalender_vorschau.py --farbe aus --breite 136 --hoehe 30`
 (Beispieltermine: `tui/ansichten/kalender_beispiel.py`).
+
+## Monat nur ansehen, Tasten-Schema (10.10.2026)
+- **B ist nur Ansicht.** Sasha: „besser wenn man auf einem datum im monat enter
+  macht, dass man auf die tagansicht kommt und dort richtig bearbeiten kann,
+  und in monat dann keine". Enter öffnet den Tag in A („geliehen", Esc führt
+  zurück in den Monat); Bearbeitungstasten melden nur einen Hinweis.
+- **Jede Ansicht merkt sich ihren Stand** (Tag, Termin, Fenster) in
+  `K["staende"]`; der Sprung aus dem Monat überschreibt den von A nicht.
+  Beim Öffnen des Kalenders stehen alle wieder auf heute.
+- **Ansehen-Fenster** schließt nur noch bei einer echten Taste (der Takt der
+  Hauptschleife, `ch == -1`, schloss es sofort).
+- **Rückfragen, ein Schema** (`kalender_werkzeuge.py`, über `_wahl_umfang`):
+  j/n · a alle · t nur dieser Tag · z Zeitraum · Auswahl per Anfangsbuchstabe
+  (u Uni, k keine, e eigene), keine Ziffern; Esc bricht ab.

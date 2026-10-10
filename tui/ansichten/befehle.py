@@ -128,10 +128,8 @@ CTX_KEYS = {
         ("esc", "close"),
     ],
     "cal:b": [
-        ("←→", "day"), ("↑↓", "week"), ("tab", "entry of day"), ("a", "new"),
-        ("e", "edit"), ("d", "delete"), ("r", "repeat"), ("enter", "view"),
-        ("u", "(un)commit"), ("c/p", "copy/paste"), ("m/M", "month"), ("g", "go to"),
-        ("R", "rhythm"), ("G", "course group"), ("v", "view"), ("esc", "close"),
+        ("←→", "day"), ("↑↓", "week"), ("enter", "edit day"), ("m/M", "month"),
+        ("g", "go to"), ("R", "rhythm"), ("v", "view"), ("esc", "close"),
     ],
     "cal:c": [
         ("↑↓", "entry"), ("←→", "day"), ("a", "new"), ("e", "edit"),

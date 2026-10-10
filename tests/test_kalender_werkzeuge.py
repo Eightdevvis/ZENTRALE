@@ -166,7 +166,7 @@ def test_einmal_vorbelegt_und_gesendet():
 def test_routine_fragt_erst_dieser_oder_alle():
     d = kw.formular_bearbeiten(GEIGE, TAG, HEUTE)
     assert isinstance(d, kw.Dialog)
-    d.taste(ord("d"))
+    d.taste(ord("t"))
     f = d.plan()["weiter"]
     fuelle(f, von="12:00", bis="13:00")
     (_, pfad, body), = f.plan()["aufrufe"]
@@ -192,7 +192,7 @@ def test_routine_alle_wiederholung_aendern():
 
 def test_spanne_einzelner_tag_und_alle():
     d = kw.formular_bearbeiten(MESSE, TAG, HEUTE)
-    d.taste(ord("d"))
+    d.taste(ord("t"))
     f = d.plan()["weiter"]
     fuelle(f, von="09:00")
     (_, pfad, body), = f.plan()["aufrufe"]
@@ -234,9 +234,9 @@ def test_wiederholen_einer_routine_geht_direkt_zur_regel():
 
 # ── d: Löschen ─────────────────────────────────────────────────────────
 def test_loeschen_routine_alle_oder_dieses():
-    d = tippe(kw.dialog_loeschen(GEIGE, TAG), "2")
+    d = tippe(kw.dialog_loeschen(GEIGE, TAG), "t")
     assert d.plan()["aufrufe"][0][1] == "/api/calendar/routine/skip"
-    d = tippe(kw.dialog_loeschen(GEIGE, TAG), "1")
+    d = tippe(kw.dialog_loeschen(GEIGE, TAG), "a")
     assert d.plan()["aufrufe"][0][0:2] == ("DELETE", "/api/calendar/routine")
     d = tippe(kw.dialog_loeschen(GEIGE, TAG), "n")
     assert d.plan()["aufrufe"] == []
@@ -274,3 +274,41 @@ def test_auswahl_folgt_der_reihenfolge_der_ansicht():
     ws = [t["label"] for t in kw.eintraege(d, date(2026, 10, 9), False)]
     an = [t["label"] for t in ka._tag_eintraege(d, "2026-10-09", False)]
     assert ws == an and all("roh" in t for t in kw.eintraege(d, date(2026, 10, 9), False))
+
+
+def test_ansehen_bleibt_offen_bis_zur_taste():
+    """Der Takt der Hauptschleife (ch == -1) darf das Ansehen-Fenster nicht
+    schließen (10.10.2026: es war nur einen Sekundenbruchteil sichtbar)."""
+    from tui.ansichten.kalender_bedienung import Bedienung
+
+    class _Kal:
+        z = None
+        K = {"ref": "2026-10-06", "stil": "A", "showhidden": False}
+    b = Bedienung(_Kal())
+    b.W["popup"] = ["etwas"]
+    assert b.taste(-1) is True and b.W["popup"] is not None
+    assert b.taste(ord("x")) is True and b.W["popup"] is None
+
+
+def test_monat_enter_leiht_die_tagesliste(tmp_path, monkeypatch):
+    """Enter im Monat öffnet den Tag in A; Esc zurück in den Monat; A behält
+    seinen eigenen Tag (Sasha, 10.10.2026)."""
+    import types
+    from datetime import date
+    monkeypatch.setenv("ZENTRALE_KALENDER_FARBEN", str(tmp_path / "f.json"))
+    from tui.ansichten.kalender import Kalender
+    k = Kalender(types.SimpleNamespace())
+    b = k.bedienung
+    k.oeffnen()
+    b.setze_tag(date(2026, 10, 7))                 # A steht am 7.
+    k.k_stil_weiter()                              # → B (übernimmt den 7.)
+    assert k.K["stil"] == "B"
+    b.setze_tag(date(2026, 10, 20))
+    b.taste(10)                                    # Enter: Tag in A bearbeiten
+    assert k.K["stil"] == "A" and b.tag() == date(2026, 10, 20) and k.K["sprung"]
+    b.taste(27)                                    # Esc: zurück in den Monat
+    assert k.K["stil"] == "B" and b.tag() == date(2026, 10, 20) and not k.K["sprung"]
+    b.taste(ord("e"))                              # im Monat wird nichts bearbeitet
+    assert b.W["dialog"] is None
+    k.k_stil_weiter(); k.k_stil_weiter()           # B → C → A
+    assert k.K["stil"] == "A" and b.tag() == date(2026, 10, 7)

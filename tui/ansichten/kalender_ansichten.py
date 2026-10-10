@@ -181,7 +181,7 @@ def tasten_hinweis(ansicht: str) -> str:
     if ansicht == "A":
         return "↑↓ termin · ←→ tag · %s · tab kasten · v %s" % (gleich, ziel)
     if ansicht == "B":
-        return "←→ tag · ↑↓ woche · tab termin · %s · m/M monat · v %s" % (gleich, ziel)
+        return "←→ tag · ↑↓ woche · enter tag bearbeiten · m/M monat · g gehe zu · v %s" % ziel
     if ansicht == "C":
         return "↑↓ termin · ←→ tag · %s · w/W woche · v %s" % (gleich, ziel)
     return "v %s" % ziel
