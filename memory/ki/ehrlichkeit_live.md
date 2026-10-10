@@ -328,3 +328,20 @@ Die Erledigt-Zeile kennt damit nur ✓, ✗ und „– von dir abgelehnt". Detai
   durch jedes schreibende Werkzeug als belegt.
 - Ob der Inhalt stimmt (18:10–19:00 statt 19:10), prüft hier niemand — das
   sagt die Erledigt-Zeile nicht und der Beleg im Werkzeug-Ergebnis schon.
+
+## Ausblick: Prüfer ohne zentrale Wortlisten (Sasha, 10.10.2026)
+
+Sasha: „für jeden bereich eine wortliste … skaliert nur so mäßig, wörter wie
+‚eintragen' ‚pause' könnten auch andere werkzeuge später referenzieren … was
+passiert wenn zentrale später von anders sprachlern benutzt wird, dann sind
+wir done for." Stand heute: BEREICH/WORTE in core/ehrlichkeit.py, nur Deutsch.
+
+Zwei Schritte, wenn es soweit ist:
+1. **Wörter gehören zum Werkzeug:** jeder Register-Eintrag (später jedes
+   App-Manifest) bringt seine Verben je Sprache mit (`worte: {de: […], en: […]}`);
+   der Prüfer fragt das Register statt einer zentralen Liste. Neue Werkzeuge
+   und neue Sprachen erweitern sich selbst.
+2. **Sprachfrei per Selbstauskunft:** das Modell hängt an jede Antwort ein
+   unsichtbares, festes Feld (`behauptet: [bereiche]`, `fragt_erlaubnis`,
+   `schiebt_auf`); Python vergleicht es mit dem Werkzeug-Protokoll. Widerspruch
+   = Befund. Die Erledigt-Zeile (aus dem Protokoll) bleibt das Netz.
